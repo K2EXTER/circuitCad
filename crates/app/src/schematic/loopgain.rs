@@ -111,16 +111,16 @@ impl SchEditor {
 
     pub(super) fn panel_loop(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label("切る部品");
+            ui.label(i18n::tr("切る部品"));
             ui.add(egui::TextEdit::singleline(&mut self.loop_part).desired_width(44.0).hint_text("R1"))
-                .on_hover_text("帰還のループの途中にある抵抗・コンデンサ・コイルの番号。ここでループを1か所切って、1周したときのゲインを測ります。帰還の抵抗 (出力からマイナス入力につながる抵抗) が一番かんたんです");
-            ui.label("出力側");
-            ui.add(egui::TextEdit::singleline(&mut self.loop_from).desired_width(50.0).hint_text("自動"))
-                .on_hover_text("切った部品の、出力に近いほうのネットの名前。空欄なら、両方の向きを試して、ゲインが大きいほうを使います");
+                .on_hover_text(i18n::tr("帰還のループの途中にある抵抗・コンデンサ・コイルの番号。ここでループを1か所切って、1周したときのゲインを測ります。帰還の抵抗 (出力からマイナス入力につながる抵抗) が一番かんたんです"));
+            ui.label(i18n::tr("出力側"));
+            ui.add(egui::TextEdit::singleline(&mut self.loop_from).desired_width(50.0).hint_text(i18n::tr("自動")))
+                .on_hover_text(i18n::tr("切った部品の、出力に近いほうのネットの名前。空欄なら、両方の向きを試して、ゲインが大きいほうを使います"));
         });
         ui.horizontal(|ui| {
             let label = if self.loop_pick { "選択中… (Esc で中止)" } else { "回路図で選ぶ" };
-            if ui.selectable_label(self.loop_pick, label).on_hover_text("押してから、部品の本体をクリックすると切る部品になり、すぐ解析します。ピンや配線をクリックすると、出力側のネットになります").clicked() {
+            if ui.selectable_label(self.loop_pick, label).on_hover_text(i18n::tr("押してから、部品の本体をクリックすると切る部品になり、すぐ解析します。ピンや配線をクリックすると、出力側のネットになります")).clicked() {
                 self.loop_pick = !self.loop_pick;
                 self.noise_pick = self.loop_pick;
                 self.z_pick = false;
@@ -131,7 +131,7 @@ impl SchEditor {
                     self.status = "回路図の、切りたい部品の本体をクリックしてください".into();
                 }
             }
-            if self.lit(ui.button("ループゲインを実行"), "ループゲインを実行").on_hover_text("帰還ループを切って、電圧と電流の試験信号を1回ずつ入れ、1周したときのゲイン (一巡伝達関数) を求めます。0 dB を横切る所の位相余裕で、安定かどうかが分かります。結果は AC解析と同じボード線図に出ます。周波数範囲・点数は AC解析の欄を共用します").clicked() {
+            if self.lit(ui.button(i18n::tr("ループゲインを実行")), "ループゲインを実行").on_hover_text(i18n::tr("帰還ループを切って、電圧と電流の試験信号を1回ずつ入れ、1周したときのゲイン (一巡伝達関数) を求めます。0 dB を横切る所の位相余裕で、安定かどうかが分かります。結果は AC解析と同じボード線図に出ます。周波数範囲・点数は AC解析の欄を共用します")).clicked() {
                 self.run_loop();
             }
         });

@@ -61,7 +61,7 @@ impl SchEditor {
             if crate::widgets::close_button(ui, "スイープの表示") {
                 close = true;
             }
-            ui.small(if view.temp { "横軸: 回路の温度 (℃)。縦軸: 各ノードの電圧 (上) と電流 (下)" } else { "横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)" });
+            ui.small(if view.temp { i18n::tr("横軸: 回路の温度 (℃)。縦軸: 各ノードの電圧 (上) と電流 (下)") } else { i18n::tr("横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)") });
         });
         let SweepView { outcome, selected, show_diag, plot: st, temp } = view;
         let temp = *temp;
@@ -80,7 +80,7 @@ impl SchEditor {
                     ui.vertical(|ui| {
                         ui.set_width(260.0);
                         if let Some((name, m)) = &metrics {
-                            ui.colored_label(crate::theme::WARN, format!("{name} は反転する特性です"));
+                            ui.colored_label(crate::theme::WARN, i18n::trf!("{name} は反転する特性です"));
                             egui::Grid::new("inv_metrics").num_columns(2).show(ui, |ui| {
                                 let row = |ui: &mut egui::Ui, label: &str, val: String, tip: &str| {
                                     ui.label(label).on_hover_text(tip);
@@ -98,17 +98,17 @@ impl SchEditor {
                             });
                             let ratio = (m.nml().min(m.nmh())) / (m.voh - m.vol).max(1e-12);
                             ui.small(if ratio > 0.35 {
-                                "ノイズマージンは十分です。ロジックとして安心して使えます。"
+                                i18n::tr("ノイズマージンは十分です。ロジックとして安心して使えます。")
                             } else if ratio > 0.15 {
-                                "ノイズマージンは小さめです。ノイズの多い所では誤動作に注意しましょう。"
+                                i18n::tr("ノイズマージンは小さめです。ノイズの多い所では誤動作に注意しましょう。")
                             } else {
-                                "ノイズマージンがほとんどありません。回路や部品の組み合わせを見直しましょう。"
+                                i18n::tr("ノイズマージンがほとんどありません。回路や部品の組み合わせを見直しましょう。")
                             });
                         }
                         if !temp {
-                            ui.checkbox(show_diag, "「出力 = 入力」の線").on_hover_text("この線と曲線が交わる所が切替電圧 Vth です");
+                            ui.checkbox(show_diag, i18n::tr("「出力 = 入力」の線")).on_hover_text(i18n::tr("この線と曲線が交わる所が切替電圧 Vth です"));
                         }
-                        if ui.button("選択をクリア").on_hover_text("選んだ信号を、すべて外します").clicked() {
+                        if ui.button(i18n::tr("選択をクリア")).on_hover_text(i18n::tr("選んだ信号を、すべて外します")).clicked() {
                             selected.clear();
                         }
                         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -134,7 +134,7 @@ impl SchEditor {
                     let chosen: Vec<(usize, &DcSweepSignal)> = names.iter().filter(|s| selected.contains(&s.name)).enumerate().map(|(k, s)| (k, *s)).collect();
                     if chosen.is_empty() {
                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
-                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から信号を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から信号を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
                     let mut volts: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "V").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values }).collect();

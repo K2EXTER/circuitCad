@@ -109,13 +109,13 @@ impl BoardEditor {
         if !self.show_sheets {
             return;
         }
-        ui.label(egui::RichText::new("シート (色は右上の「物の表示とロック」の「シートの色」で切り替え)").small().color(Color32::GRAY));
+        ui.label(egui::RichText::new(i18n::tr("シート (色は右上の「物の表示とロック」の「シートの色」で切り替え)")).small().color(Color32::GRAY));
         for (name, col) in colors {
             let parts: Vec<String> = self.board.part_sheets.iter().filter(|(_, s)| **s == name).map(|(r, _)| r.clone()).collect();
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
                 ui.painter().rect_filled(r, 2.0, col);
-                if ui.small_button(format!("{name} ({}個)", parts.len())).on_hover_text(format!("このシートの部品をまとめて選びます。選んだまま動かせば、グループごと動きます: {}", parts.join(" "))).clicked() {
+                if ui.small_button(i18n::trf!("{name} ({}個)", parts.len())).on_hover_text(i18n::trf!("このシートの部品をまとめて選びます。選んだまま動かせば、グループごと動きます: {}", parts.join(" "))).clicked() {
                     self.multi = self.board.parts.iter().enumerate().filter(|(_, p)| parts.contains(&p.refdes)).map(|(i, _)| Item::Part(i)).collect();
                     self.selected = None;
                     self.status = format!("シート「{name}」の部品 {} 個を選びました", self.multi.len());

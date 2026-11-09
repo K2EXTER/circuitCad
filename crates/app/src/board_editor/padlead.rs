@@ -271,8 +271,8 @@ impl BoardEditor {
 
     pub(super) fn panel_pad_entries(&mut self, ui: &mut egui::Ui) {
         ui.separator();
-        ui.label("部品番号の文字").on_hover_text("シルク (白い印刷) の部品番号 (R1 など) が、配線やパッドに重なると読みにくくなります");
-        if ui.button("文字を配線からよける").on_hover_text("配線・パッド・ビア・穴・ほかの文字に重なっている部品番号を、部品の上・下・横の、重ならない場所へ動かします。重なっていない文字と、手で動かした文字はそのままです。元に戻すで取り消せます").clicked() {
+        ui.label(i18n::tr("部品番号の文字")).on_hover_text(i18n::tr("シルク (白い印刷) の部品番号 (R1 など) が、配線やパッドに重なると読みにくくなります"));
+        if ui.button(i18n::tr("文字を配線からよける")).on_hover_text(i18n::tr("配線・パッド・ビア・穴・ほかの文字に重なっている部品番号を、部品の上・下・横の、重ならない場所へ動かします。重なっていない文字と、手で動かした文字はそのままです。元に戻すで取り消せます")).clicked() {
             self.avoid_label_overlaps_button();
         }
     }

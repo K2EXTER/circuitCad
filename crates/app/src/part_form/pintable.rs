@@ -82,16 +82,16 @@ impl PartForm {
         ui.horizontal_wrapped(|ui| {
             crate::icons::help_label(ui, "ピン", "1行が1本のピンです。番号はパッケージのパッドの番号 (データシートのピン番号)、名前は回路図に出る名前です。向きは記号のどちらの辺に出すかで、「自動」なら前半が左、後半が右になります。NC は未接続のピンです");
             if !roles.is_empty() {
-                ui.small("「モデルの端子」は、貼った SPICE モデルの端子が、どのピンにあたるかです (選ばないピンは、シミュレーションではどこにもつながりません)");
+                ui.small(i18n::tr("「モデルの端子」は、貼った SPICE モデルの端子が、どのピンにあたるかです (選ばないピンは、シミュレーションではどこにもつながりません)"));
             }
         });
         egui::Grid::new("pin_table").num_columns(if roles.is_empty() { 5 } else { 6 }).spacing([8.0, 4.0]).striped(true).show(ui, |ui| {
             ui.small("");
-            ui.small("番号");
-            ui.small("名前");
-            ui.small("向き");
+            ui.small(i18n::tr("番号"));
+            ui.small(i18n::tr("名前"));
+            ui.small(i18n::tr("向き"));
             if !roles.is_empty() {
-                ui.small("モデルの端子");
+                ui.small(i18n::tr("モデルの端子"));
             }
             ui.small("");
             ui.end_row();
@@ -101,7 +101,7 @@ impl PartForm {
                 let before = rows[i].number.clone();
                 let r = ui
                     .add(egui::TextEdit::singleline(&mut rows[i].number).desired_width(44.0).font(egui::TextStyle::Monospace))
-                    .on_hover_text(if twice { "同じ番号のピンがあります。番号は重ならないようにします" } else { "パッドの番号 (データシートのピン番号。BGA なら A1 のような名前)。同じ番号は2つ使えません" });
+                    .on_hover_text(if twice { i18n::tr("同じ番号のピンがあります。番号は重ならないようにします") } else { i18n::tr("パッドの番号 (データシートのピン番号。BGA なら A1 のような名前)。同じ番号は2つ使えません") });
                 if r.changed() {
                     clean(&mut rows[i].number);
                     // the model terminals follow the renamed pin
@@ -113,21 +113,21 @@ impl PartForm {
                 }
                 let name_edit = ui
                     .add(egui::TextEdit::singleline(&mut rows[i].name).desired_width(110.0).font(egui::TextStyle::Monospace))
-                    .on_hover_text("ピンの名前 (IN・GND・OUT・IN+ など)。回路図の部品に出ます");
+                    .on_hover_text(i18n::tr("ピンの名前 (IN・GND・OUT・IN+ など)。回路図の部品に出ます"));
                 if name_edit.changed() {
                     clean(&mut rows[i].name);
                 }
                 let shown = SIDES.iter().find(|(k, _)| *k == rows[i].side).map_or("自動", |(_, l)| *l);
                 egui::ComboBox::from_id_salt(("pin_side", i))
-                    .selected_text(shown)
+                    .selected_text(i18n::tr(shown))
                     .width(56.0)
                     .show_ui(ui, |ui| {
                         for (k, label) in SIDES {
-                            ui.selectable_value(&mut rows[i].side, k.to_string(), label);
+                            ui.selectable_value(&mut rows[i].side, k.to_string(), i18n::tr(label));
                         }
                     })
                     .response
-                    .on_hover_text("記号のどちらの辺にこのピンを出すか。「自動」なら、前半が左、後半が右です");
+                    .on_hover_text(i18n::tr("記号のどちらの辺にこのピンを出すか。「自動」なら、前半が左、後半が右です"));
                 if !roles.is_empty() {
                     let mine = if rows[i].number.is_empty() { None } else { sim.iter().position(|s| *s == rows[i].number) };
                     let label = |j: usize| format!("端子 {} ({})", j + 1, roles.get(j).map_or("", |s| s.as_str()));
@@ -136,13 +136,13 @@ impl PartForm {
                         .selected_text(mine.map_or("(使わない)".to_string(), label))
                         .width(130.0)
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut pick, None, "(使わない)");
+                            ui.selectable_value(&mut pick, None, i18n::tr("(使わない)"));
                             for j in 0..roles.len() {
                                 ui.selectable_value(&mut pick, Some(j), label(j));
                             }
                         })
                         .response
-                        .on_hover_text("このピンが、モデルのどの端子にあたるか。同じ端子を2つのピンに選ぶと、前に選んだピンは「使わない」に戻ります");
+                        .on_hover_text(i18n::tr("このピンが、モデルのどの端子にあたるか。同じ端子を2つのピンに選ぶと、前に選んだピンは「使わない」に戻ります"));
                     if pick != mine && !rows[i].number.is_empty() {
                         if let Some(j) = mine {
                             sim[j] = OPEN.into();
@@ -153,13 +153,13 @@ impl PartForm {
                     }
                 }
                 ui.horizontal(|ui| {
-                    if ui.add_enabled(i > 0, egui::Button::new("↑").small()).on_hover_text("1つ上へ").clicked() {
+                    if ui.add_enabled(i > 0, egui::Button::new("↑").small()).on_hover_text(i18n::tr("1つ上へ")).clicked() {
                         swap = Some((i, i - 1));
                     }
-                    if ui.add_enabled(i + 1 < n, egui::Button::new("↓").small()).on_hover_text("1つ下へ").clicked() {
+                    if ui.add_enabled(i + 1 < n, egui::Button::new("↓").small()).on_hover_text(i18n::tr("1つ下へ")).clicked() {
                         swap = Some((i, i + 1));
                     }
-                    if ui.add(egui::Button::new("消す").small()).on_hover_text("このピンを消します").clicked() {
+                    if ui.add(egui::Button::new(i18n::tr("消す")).small()).on_hover_text(i18n::tr("このピンを消します")).clicked() {
                         remove = Some(i);
                     }
                 });
@@ -178,11 +178,11 @@ impl PartForm {
             }
         }
         ui.horizontal(|ui| {
-            if ui.button("＋ ピンを足す").on_hover_text("表の最後に、空のピンを1行足します。番号は、いまの最大の番号の次になります").clicked() {
+            if ui.button(i18n::tr("＋ ピンを足す")).on_hover_text(i18n::tr("表の最後に、空のピンを1行足します。番号は、いまの最大の番号の次になります")).clicked() {
                 let next = rows.iter().filter_map(|r| r.number.parse::<u32>().ok()).max().map_or(1, |m| m + 1);
                 rows.push(PinRow { number: next.to_string(), ..PinRow::default() });
             }
-            if !roles.is_empty() && ui.button("名前で合わせる").on_hover_text("ピンの名前 (か番号) が、モデルの端子の名前と同じものを、自動で選びます。合うものがない端子は、選び直しになります").clicked() {
+            if !roles.is_empty() && ui.button(i18n::tr("名前で合わせる")).on_hover_text(i18n::tr("ピンの名前 (か番号) が、モデルの端子の名前と同じものを、自動で選びます。合うものがない端子は、選び直しになります")).clicked() {
                 for (j, role) in roles.iter().enumerate() {
                     sim[j] = rows.iter().find(|p| p.name.eq_ignore_ascii_case(role) || p.number.eq_ignore_ascii_case(role)).map_or(OPEN.into(), |p| p.number.clone());
                 }
@@ -191,7 +191,7 @@ impl PartForm {
         if !roles.is_empty() {
             let unused: Vec<&str> = rows.iter().filter(|p| !p.number.is_empty() && !sim.contains(&p.number)).map(|p| p.name.as_str()).collect();
             if !unused.is_empty() {
-                ui.small(format!("モデルに使わないピン: {}", unused.join(" "))).on_hover_text("これらのピンは、シミュレーションでは何にもつながりません (基板では、パッドとしてそのまま使えます)。つながない部品なら、回路図で「使わないピン (NC)」にします");
+                ui.small(i18n::trf!("モデルに使わないピン: {}", unused.join(" "))).on_hover_text(i18n::tr("これらのピンは、シミュレーションでは何にもつながりません (基板では、パッドとしてそのまま使えます)。つながない部品なら、回路図で「使わないピン (NC)」にします"));
             }
         }
         if rows != self.pin_rows {

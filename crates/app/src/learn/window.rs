@@ -6,25 +6,25 @@ use super::*;
 pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome> {
     let mut choice = None;
     let mut open = true;
-    egui::Window::new("ようこそ circuitCad へ").open(&mut open).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).default_width(460.0).show(ctx, |ui| {
+    egui::Window::new(i18n::tr("ようこそ circuitCad へ")).open(&mut open).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).default_width(460.0).show(ctx, |ui| {
         ui.label(spaced("回路図を描き、動かして確かめ、基板にして、発注用のデータまで作れるソフトです。電子工作が初めてでも、レッスンを順にたどれば進められます。"));
         ui.label(spaced("最初のレッスンは、描いてある回路を動かして見るところから。自分で部品を置いて描くのは、そのあとのレッスンからです。").color(NOTE));
         ui.add_space(6.0);
         if let Some((next, action)) = next_item(first_path(), progress).and_then(|i| item_action(i).map(|a| (i, a))) {
-            let button = egui::Button::new(egui::RichText::new(format!("▶ 最初のレッスンを始める: {}", next.title)).strong());
-            if ui.add(button).on_hover_text("画面の案内にそって、描いてある回路を解析して、電圧を測ります (部品を置いて配線するのは、このあとのレッスンから)").clicked() {
+            let button = egui::Button::new(egui::RichText::new(i18n::trf!("▶ 最初のレッスンを始める: {}", next.title)).strong());
+            if ui.add(button).on_hover_text(i18n::tr("画面の案内にそって、描いてある回路を解析して、電圧を測ります (部品を置いて配線するのは、このあとのレッスンから)")).clicked() {
                 choice = Some(Welcome::Start(action));
             }
         }
-        if ui.button("学習パス全体を見る").on_hover_text("電圧と電流の基本から、部品を 1 つずつ知る道すじを開きます。安定化電源・マイコンの基板・基板づくりの道も、上のタブから選べます (「学ぶ」メニューからいつでも開けます)").clicked() {
+        if ui.button(i18n::tr("学習パス全体を見る")).on_hover_text(i18n::tr("電圧と電流の基本から、部品を 1 つずつ知る道すじを開きます。安定化電源・マイコンの基板・基板づくりの道も、上のタブから選べます (「学ぶ」メニューからいつでも開けます)")).clicked() {
             choice = Some(Welcome::Path);
         }
-        if ui.button("操作ガイドを開く (F1)").on_hover_text("部品の置き方・配線・シミュレーションのやり方を説明します").clicked() {
+        if ui.button(i18n::tr("操作ガイドを開く (F1)")).on_hover_text(i18n::tr("部品の置き方・配線・シミュレーションのやり方を説明します")).clicked() {
             choice = Some(Welcome::Guide);
         }
         ui.add_space(4.0);
         ui.label(spaced("自由に描きたいときは、このカードを閉じて、左の一覧から部品を選んで画面をクリックします。できあがった回路を先に見たいときは、「ファイル → サンプル回路を開く」から。").color(NOTE));
-        if ui.button("閉じる (次から表示しない)").on_hover_text("このカードを閉じます。次の起動から表示しません。学習パスは、メニューの「学ぶ」からいつでも開けます").clicked() {
+        if ui.button(i18n::tr("閉じる (次から表示しない)")).on_hover_text(i18n::tr("このカードを閉じます。次の起動から表示しません。学習パスは、メニューの「学ぶ」からいつでも開けます")).clicked() {
             choice = Some(Welcome::Close);
         }
     });
@@ -59,7 +59,7 @@ impl LearnWindow {
         let path = &PATHS[chosen];
         // a map is wide: open the window as wide as the screen allows (up to 1200 px) so that it needs no sideways scroll
         let tree_width = (ctx.content_rect().width() * 0.85).clamp(640.0, 1200.0);
-        egui::Window::new("学習パス").open(&mut open).default_width(if is_tree(path) { tree_width } else { 600.0 }).default_height((ctx.content_rect().height() * 0.92).max(480.0)).vscroll(true).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("学習パス")).open(&mut open).default_width(if is_tree(path) { tree_width } else { 600.0 }).default_height((ctx.content_rect().height() * 0.92).max(480.0)).vscroll(true).show(ctx, |ui| {
             if PATHS.len() > 1 {
                 let tabs: Vec<(usize, &str, &str)> = PATHS.iter().enumerate().map(|(k, p)| (k, p.title, "この学習パスに切り替えます (進み具合は、どのパスでも同じレッスンなら共通です)")).collect();
                 crate::widgets::tab_bar(ui, &mut chosen, &tabs);
@@ -71,22 +71,22 @@ impl LearnWindow {
             let next_ids: Vec<&str> = recommended(path, progress).iter().map(|i| i.id).collect();
             if let Some(next) = next_item(path, progress) {
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("次のおすすめ:");
+                    ui.label(i18n::tr("次のおすすめ:"));
                     ui.colored_label(crate::theme::WARN, next.title);
                     if next_ids.len() > 1 {
-                        ui.label(format!("(ほかに {} 件、すぐ学べます)", next_ids.len() - 1));
+                        ui.label(i18n::trf!("(ほかに {} 件、すぐ学べます)", next_ids.len() - 1));
                     }
                 });
             } else {
                 if available == 0 {
                     ui.label(spaced("このパスのレッスンは準備中です。道すじ (地図) だけ先に見られます").color(NOTE));
                 } else {
-                    ui.colored_label(crate::theme::OK, "いま学べるレッスンは、すべて完了しました。残りは準備中です");
+                    ui.colored_label(crate::theme::OK, i18n::tr("いま学べるレッスンは、すべて完了しました。残りは準備中です"));
                 }
             }
             // the lessons are done (or none is left to do): the way on is shown open
             let done_all = available > 0 && finished >= available;
-            egui::CollapsingHeader::new("この先へ: 使いこむための機能").default_open(done_all).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("この先へ: 使いこむための機能")).default_open(done_all).show(ui, |ui| {
                 ui.label(spaced("レッスンで基本を済ませたあと、慣れてきたら試せる機能です。順番も、使うかどうかも自由です").color(NOTE));
                 for s in NEXT_STEPS {
                     ui.add_space(4.0);
@@ -96,17 +96,17 @@ impl LearnWindow {
                         ui.label(spaced(&format!("場所: {}", s.where_)).color(NOTE));
                     });
                 }
-            }).header_response.on_hover_text("基板の仕上げ・発注・故障の試験・ほかのソフトとの連携など、レッスンのあとに使える機能の一覧と、その場所です");
+            }).header_response.on_hover_text(i18n::tr("基板の仕上げ・発注・故障の試験・ほかのソフトとの連携など、レッスンのあとに使える機能の一覧と、その場所です"));
             if is_tree(path) {
                 ui.add_space(6.0);
-                egui::CollapsingHeader::new("学習の地図 (上から下へ進みます。線は「先に済ませると分かりやすい」の関係です)").default_open(true).show(ui, |ui| {
+                egui::CollapsingHeader::new(i18n::tr("学習の地図 (上から下へ進みます。線は「先に済ませると分かりやすい」の関係です)")).default_open(true).show(ui, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 18.0;
-                        ui.colored_label(crate::theme::HIGHLIGHT, "★ 次はこれ");
-                        ui.colored_label(crate::theme::WARN, "橙の枠 = いま学べる");
-                        ui.colored_label(crate::theme::OK, "緑 = 完了");
-                        ui.colored_label(Color32::from_gray(190), "灰色の枠 = 先に済ませるレッスンがある");
-                        ui.colored_label(Color32::from_gray(130), "暗い灰色 = 準備中");
+                        ui.colored_label(crate::theme::HIGHLIGHT, i18n::tr("★ 次はこれ"));
+                        ui.colored_label(crate::theme::WARN, i18n::tr("橙の枠 = いま学べる"));
+                        ui.colored_label(crate::theme::OK, i18n::tr("緑 = 完了"));
+                        ui.colored_label(Color32::from_gray(190), i18n::tr("灰色の枠 = 先に済ませるレッスンがある"));
+                        ui.colored_label(Color32::from_gray(130), i18n::tr("暗い灰色 = 準備中"));
                     });
                     egui::ScrollArea::horizontal().show(ui, |ui| {
                         if let Some(a) = tree_map(ui, path, progress, &next_ids) {
@@ -133,8 +133,8 @@ impl LearnWindow {
                         let title = egui::RichText::new(item.title).strong();
                         ui.label(if item.kind == Kind::Planned { title.color(Color32::from_gray(130)) } else { title });
                         if item.kind == Kind::Planned {
-                            ui.label(egui::RichText::new("(準備中)").weak());
-                        } else if item.kind != Kind::Build && ui.small_button(if done { "もう一度" } else { "始める" }).on_hover_text("この内容のレッスンを開きます").clicked() {
+                            ui.label(egui::RichText::new(i18n::tr("(準備中)")).weak());
+                        } else if item.kind != Kind::Build && ui.small_button(if done { i18n::tr("もう一度") } else { i18n::tr("始める") }).on_hover_text(i18n::tr("この内容のレッスンを開きます")).clicked() {
                             action = Some(match item.kind {
                                 Kind::Lesson(id) => Action::Lesson(id),
                                 Kind::Measure => Action::Measure,
@@ -145,12 +145,12 @@ impl LearnWindow {
                         }
                         if item.build {
                             let passed = progress.is_done(&crate::schematic::challenge_progress_key(item.id));
-                            if ui.small_button(if passed { "✔ 作ってみよう" } else { "作ってみよう" }).on_hover_text("目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあと、判定ボタンで調べます").clicked() {
+                            if ui.small_button(if passed { i18n::tr("✔ 作ってみよう") } else { i18n::tr("作ってみよう") }).on_hover_text(i18n::tr("目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあと、判定ボタンで調べます")).clicked() {
                                 action = Some(Action::Build(item.id));
                             }
                         }
                         if item.real.is_some() {
-                            ui.colored_label(crate::theme::INFO, "[実験あり]").on_hover_text(item.real.unwrap_or_default());
+                            ui.colored_label(crate::theme::INFO, i18n::tr("[実験あり]")).on_hover_text(item.real.unwrap_or_default());
                         }
                     });
                     ui.indent(("path_item", path.id, item.id), |ui| {
@@ -169,7 +169,7 @@ impl LearnWindow {
             if let Some(e) = &progress.error {
                 ui.colored_label(crate::theme::ERROR, e);
             }
-            if ui.button("進み具合をリセット").on_hover_text("完了の印をすべて消して、最初からやり直します").clicked() {
+            if ui.button(i18n::tr("進み具合をリセット")).on_hover_text(i18n::tr("完了の印をすべて消して、最初からやり直します")).clicked() {
                 progress.reset();
             }
         });
@@ -252,7 +252,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
             // a badge on the top edge: this is the one to take next
             let badge = egui::Rect::from_min_size(boxes[k].right_top() + egui::vec2(-80.0, -19.0), egui::vec2(78.0, 18.0));
             ui.painter().rect_filled(badge, 9.0, crate::theme::HIGHLIGHT);
-            ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, "★ 次はこれ", egui::FontId::proportional(12.0), Color32::BLACK);
+            ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, i18n::tr("★ 次はこれ"), egui::FontId::proportional(12.0), Color32::BLACK);
         }
         let response = response.on_hover_text(if item.kind == Kind::Planned { format!("{}
 (準備中)", item.about) } else { item.about.to_string() });

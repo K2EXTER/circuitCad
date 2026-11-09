@@ -7,11 +7,11 @@ impl BoardEditor {
     pub(super) fn layer_count_ui(&mut self, ui: &mut egui::Ui) {
         let total = self.board.inner_layers as usize + 2;
         ui.horizontal(|ui| {
-            ui.label("銅箔の層数").on_hover_text("基板の銅の層の数。2層は表と裏だけ。4層以上は、間に内層が入り、電源やGNDのベタを内層に広げたり、配線の逃げ場にできます。層が増えるほど発注の値段も上がります");
+            ui.label(i18n::tr("銅箔の層数")).on_hover_text(i18n::tr("基板の銅の層の数。2層は表と裏だけ。4層以上は、間に内層が入り、電源やGNDのベタを内層に広げたり、配線の逃げ場にできます。層が増えるほど発注の値段も上がります"));
             let mut pick = total;
-            egui::ComboBox::from_id_salt("layer_count").selected_text(format!("{total} 層")).show_ui(ui, |ui| {
+            egui::ComboBox::from_id_salt("layer_count").selected_text(i18n::trf!("{total} 層")).show_ui(ui, |ui| {
                 for n in [2usize, 4, 6, 8] {
-                    ui.selectable_value(&mut pick, n, format!("{n} 層"));
+                    ui.selectable_value(&mut pick, n, i18n::trf!("{n} 層"));
                 }
             });
             if pick != total {
@@ -19,7 +19,7 @@ impl BoardEditor {
             }
         });
         if total > 2 {
-            ui.small("内層には配線とベタを置けます。スルーホールの部品とビアは、全部の層につながります (ブラインドビアは未対応)");
+            ui.small(i18n::tr("内層には配線とベタを置けます。スルーホールの部品とビアは、全部の層につながります (ブラインドビアは未対応)"));
         }
     }
 
@@ -68,7 +68,7 @@ impl BoardEditor {
                                 (self.vis.keepouts, self.vis.dimensions, self.vis.drc_marks) = (a, a, a);
                                 (self.show_sheets, self.show_req_marks, self.show_req_lines) = (a, a, a);
                             }
-                            ui.label("すべて");
+                            ui.label(i18n::tr("すべて"));
                             let p = self.pick;
                             let mut all_locked = !(p.parts || p.pads || p.tracks || p.vias || p.zones || p.silk);
                             if icon_switch(ui, Icon::Lock, Icon::Unlock, &mut all_locked, "すべての種類を、まとめてロック / 解除します (「反対の面」は別です)。ロックすると、クリックや範囲選択で選べず、ドラッグでも動きません。部品をロックすると、ビアや配線を囲んで選ぶときに部品を巻き込みません").changed() {
@@ -92,13 +92,13 @@ impl BoardEditor {
                                 ui.horizontal(|ui| {
                                     ui.spacing_mut().item_spacing.x = 2.0;
                                     icon_label(ui, icon, name);
-                                    ui.label(name);
+                                    ui.label(i18n::tr_dyn(name));
                                 });
                             };
                             // a small grey heading over a group of rows (in the name column)
                             let head = |ui: &mut egui::Ui, text: &str| {
                                 ui.label("");
-                                ui.label(egui::RichText::new(text).small().color(Color32::from_rgb(85, 100, 115)));
+                                ui.label(egui::RichText::new(i18n::tr_dyn(text)).small().color(Color32::from_rgb(85, 100, 115)));
                                 ui.end_row();
                             };
                             head(ui, "基板の物");
@@ -220,7 +220,7 @@ impl BoardEditor {
                         for l in layers.iter().copied() {
                             ui.horizontal(|ui| {
                                 let mut shown = self.side_visible(l);
-                                if ui.checkbox(&mut shown, "").on_hover_text("この層の銅を表示 / 非表示にします").changed() {
+                                if ui.checkbox(&mut shown, "").on_hover_text(i18n::tr("この層の銅を表示 / 非表示にします")).changed() {
                                     match l {
                                         Side::Top => self.vis.top = shown,
                                         Side::Bottom => self.vis.bottom = shown,
@@ -232,7 +232,7 @@ impl BoardEditor {
                                 }
                                 let (r, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
                                 ui.painter().rect_filled(r, 2.0, self.side_color(l));
-                                if ui.selectable_value(&mut self.side, l, l.label()).on_hover_text("配線を置く層をこの層にします").clicked() {
+                                if ui.selectable_value(&mut self.side, l, l.label()).on_hover_text(i18n::tr("配線を置く層をこの層にします")).clicked() {
                                     // working on a layer shows it
                                     match l {
                                         Side::Top => self.vis.top = true,

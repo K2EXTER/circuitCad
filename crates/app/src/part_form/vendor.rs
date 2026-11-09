@@ -137,7 +137,7 @@ impl PartForm {
 
     /// The maker model section of the chip capacitor part: where the zips are, a search, and the list.
     pub(super) fn vendor_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("メーカーのSPICEモデル (zip) から選ぶ").id_salt("vendor_section").show(ui, |ui| {
+        egui::CollapsingHeader::new(i18n::tr("メーカーのSPICEモデル (zip) から選ぶ")).id_salt("vendor_section").show(ui, |ui| {
             crate::icons::help_small(
                 ui,
                 "村田などが公開しているモデルを、型番ごとに使えます",
@@ -149,7 +149,7 @@ impl PartForm {
             let mut remove = None;
             for (i, z) in zips.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    if ui.small_button("外す").on_hover_text("この zip を一覧から外します (ファイルは消えません)").clicked() {
+                    if ui.small_button(i18n::tr("外す")).on_hover_text(i18n::tr("この zip を一覧から外します (ファイルは消えません)")).clicked() {
                         remove = Some(i);
                     }
                     ui.small(z);
@@ -159,7 +159,7 @@ impl PartForm {
                 zips.remove(i);
                 changed = true;
             }
-            if ui.button("zip を追加…").on_hover_text("メーカーの SPICE モデルの zip を選びます。場所は設定に保存され、次からは自動で読み込みます").clicked()
+            if ui.button(i18n::tr("zip を追加…")).on_hover_text(i18n::tr("メーカーの SPICE モデルの zip を選びます。場所は設定に保存され、次からは自動で読み込みます")).clicked()
                 && let Some(p) = rfd::FileDialog::new().set_title("メーカーの SPICE モデル (zip)").add_filter("zip", &["zip"]).pick_file()
             {
                 let path = p.to_string_lossy().into_owned();
@@ -183,7 +183,7 @@ impl PartForm {
             }
             if self.mu.indexes.is_empty() {
                 if zips.is_empty() {
-                    ui.small("zip はメーカーの「SPICE」「netlist」のページからダウンロードできます (規約への同意が要ります)");
+                    ui.small(i18n::tr("zip はメーカーの「SPICE」「netlist」のページからダウンロードできます (規約への同意が要ります)"));
                 }
                 return;
             }
@@ -194,34 +194,34 @@ impl PartForm {
             dielectrics.dedup();
             let described = self.mu.indexes.iter().map(|i| i.described()).sum::<usize>();
             egui::Grid::new("vendor_grid").num_columns(2).show(ui, |ui| {
-                ui.label("型番の一部").on_hover_text("例: GRM188R6 のように、型番の一部で絞ります。空白で区切ると、全部の語を含むものだけになります");
+                ui.label(i18n::tr("型番の一部")).on_hover_text(i18n::tr("例: GRM188R6 のように、型番の一部で絞ります。空白で区切ると、全部の語を含むものだけになります"));
                 ui.add(egui::TextEdit::singleline(&mut self.mu.text).desired_width(140.0));
                 ui.end_row();
                 if described > 0 {
-                    ui.label("サイズ (インチ)").on_hover_text("0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田・日本ケミコン・ニチコン。サイズ・温度特性は村田だけ) だけです");
-                    egui::ComboBox::from_id_salt("mu_size").selected_text(if self.mu.size.is_empty() { "すべて" } else { self.mu.size.as_str() }).show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.mu.size, String::new(), "すべて");
+                    ui.label(i18n::tr("サイズ (インチ)")).on_hover_text(i18n::tr("0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田・日本ケミコン・ニチコン。サイズ・温度特性は村田だけ) だけです"));
+                    egui::ComboBox::from_id_salt("mu_size").selected_text(if self.mu.size.is_empty() { i18n::tr("すべて") } else { self.mu.size.as_str() }).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.mu.size, String::new(), i18n::tr("すべて"));
                         for s in &sizes {
                             ui.selectable_value(&mut self.mu.size, s.clone(), s);
                         }
                     });
                     ui.end_row();
-                    ui.label("温度特性").on_hover_text("X5R・X7R は容量が大きく、直流電圧で容量が下がります。C0G は容量が小さい代わりに安定です");
-                    egui::ComboBox::from_id_salt("mu_diel").selected_text(if self.mu.dielectric.is_empty() { "すべて" } else { self.mu.dielectric.as_str() }).show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.mu.dielectric, String::new(), "すべて");
+                    ui.label(i18n::tr("温度特性")).on_hover_text(i18n::tr("X5R・X7R は容量が大きく、直流電圧で容量が下がります。C0G は容量が小さい代わりに安定です"));
+                    egui::ComboBox::from_id_salt("mu_diel").selected_text(if self.mu.dielectric.is_empty() { i18n::tr("すべて") } else { self.mu.dielectric.as_str() }).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.mu.dielectric, String::new(), i18n::tr("すべて"));
                         for s in &dielectrics {
                             ui.selectable_value(&mut self.mu.dielectric, s.clone(), s);
                         }
                     });
                     ui.end_row();
-                    ui.label("容量").on_hover_text("下限と上限。同じ値を入れると、その容量だけ探します (例: 10u と 10u)");
+                    ui.label(i18n::tr("容量")).on_hover_text(i18n::tr("下限と上限。同じ値を入れると、その容量だけ探します (例: 10u と 10u)"));
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_min).desired_width(60.0).hint_text("下限 10u"));
+                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_min).desired_width(60.0).hint_text(i18n::tr("下限 10u")));
                         ui.label("〜");
-                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_max).desired_width(60.0).hint_text("上限 10u"));
+                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_max).desired_width(60.0).hint_text(i18n::tr("上限 10u")));
                     });
                     ui.end_row();
-                    ui.label("耐圧 (V 以上)").on_hover_text("定格電圧がこの値以上のものだけ。セラミックは電圧が高いほど容量が下がりにくいので、使う電圧の2倍ほどが目安です");
+                    ui.label(i18n::tr("耐圧 (V 以上)")).on_hover_text(i18n::tr("定格電圧がこの値以上のものだけ。セラミックは電圧が高いほど容量が下がりにくいので、使う電圧の2倍ほどが目安です"));
                     ui.add(egui::TextEdit::singleline(&mut self.mu.v_min).desired_width(60.0).hint_text("16"));
                     ui.end_row();
                 }

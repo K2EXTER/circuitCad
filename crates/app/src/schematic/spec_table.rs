@@ -277,14 +277,14 @@ impl SchEditor {
                         }
                     })
                     .response
-                    .on_hover_text(format!("何を測るか。{} の結果から読みます。過渡の「平均値」「リップル」は、起動直後を避けるため後半半分で測ります", row.spec.kind.needs()));
+                    .on_hover_text(i18n::trf!("何を測るか。{} の結果から読みます。過渡の「平均値」「リップル」は、起動直後を避けるため後半半分で測ります", row.spec.kind.needs()));
                 let list = choices(row.spec.kind);
                 if list.is_empty() {
                     ui.add(egui::TextEdit::singleline(&mut row.spec.target).desired_width(80.0).hint_text(if row.spec.kind.target_is_part() { "R1" } else { "V(out)" }))
-                        .on_hover_text(format!("測る対象の名前。{} を実行すると、一覧から選べるようになります", row.spec.kind.needs()));
+                        .on_hover_text(i18n::trf!("測る対象の名前。{} を実行すると、一覧から選べるようになります", row.spec.kind.needs()));
                 } else {
                     egui::ComboBox::from_id_salt(("spec_target", i))
-                        .selected_text(if row.spec.target.is_empty() { "(選ぶ)" } else { row.spec.target.as_str() })
+                        .selected_text(if row.spec.target.is_empty() { i18n::tr("(選ぶ)") } else { row.spec.target.as_str() })
                         .width(90.0)
                         .show_ui(ui, |ui| {
                             for n in list {
@@ -292,9 +292,9 @@ impl SchEditor {
                             }
                         })
                         .response
-                        .on_hover_text("測る対象。結果にある名前から選びます");
+                        .on_hover_text(i18n::tr("測る対象。結果にある名前から選びます"));
                 }
-                if ui.small_button("🗑").on_hover_text("この項目を消します").clicked() {
+                if ui.small_button("🗑").on_hover_text(i18n::tr("この項目を消します")).clicked() {
                     remove = Some(i);
                 }
             });
@@ -302,39 +302,39 @@ impl SchEditor {
                 ui.add_space(14.0);
                 if row.spec.kind == SpecKind::AcGainAt {
                     ui.label("@");
-                    ui.add(egui::TextEdit::singleline(&mut row.at).desired_width(48.0)).on_hover_text("ゲインを読む周波数 (10k, 1M など)");
+                    ui.add(egui::TextEdit::singleline(&mut row.at).desired_width(48.0)).on_hover_text(i18n::tr("ゲインを読む周波数 (10k, 1M など)"));
                     ui.label("Hz");
                 }
                 let unit = row.spec.kind.unit();
                 let tip = "許される範囲。空欄ならその側は制限なしです (数字は 4.75, 50m, 1k など)";
-                ui.add(egui::TextEdit::singleline(&mut row.lo).desired_width(56.0).hint_text("下限")).on_hover_text(tip);
+                ui.add(egui::TextEdit::singleline(&mut row.lo).desired_width(56.0).hint_text(i18n::tr("下限"))).on_hover_text(tip);
                 ui.label("〜");
-                ui.add(egui::TextEdit::singleline(&mut row.hi).desired_width(56.0).hint_text("上限")).on_hover_text(tip);
+                ui.add(egui::TextEdit::singleline(&mut row.hi).desired_width(56.0).hint_text(i18n::tr("上限"))).on_hover_text(tip);
                 ui.label(unit);
             });
             let detail = match (ev.value, ev.pass) {
                 // a worst-case row shows the whole range it judged, pass or fail
                 _ if row.spec.kind.is_worst() => egui::RichText::new(format!("  {}", ev.note)).color(match ev.pass { Some(true) => PASS, Some(false) => FAIL, None => Color32::from_gray(150) }),
-                (Some(v), Some(true)) => egui::RichText::new(format!("  測った値 {}", eng(v, row.spec.kind.unit()))).color(PASS),
-                (Some(v), _) => egui::RichText::new(format!("  測った値 {}  ({})", eng(v, row.spec.kind.unit()), ev.note)).color(FAIL),
+                (Some(v), Some(true)) => egui::RichText::new(i18n::trf!("  測った値 {}", eng(v, row.spec.kind.unit()))).color(PASS),
+                (Some(v), _) => egui::RichText::new(i18n::trf!("  測った値 {}  ({})", eng(v, row.spec.kind.unit()), ev.note)).color(FAIL),
                 (None, _) => egui::RichText::new(format!("  {}", ev.note)).color(Color32::from_gray(150)),
             };
             ui.small(detail);
             // the bench measurement, compared with the simulated value above
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
-                ui.label("実測");
-                ui.add(egui::TextEdit::singleline(&mut row.measured).desired_width(64.0).hint_text("例 4.93"))
-                    .on_hover_text("実際に作って測った値 (テスタやオシロの読み。4.93 や 50m のように書きます)。シミュレーションの値と比べて、差と、考えられる理由が出ます");
+                ui.label(i18n::tr("実測"));
+                ui.add(egui::TextEdit::singleline(&mut row.measured).desired_width(64.0).hint_text(i18n::tr("例 4.93")))
+                    .on_hover_text(i18n::tr("実際に作って測った値 (テスタやオシロの読み。4.93 や 50m のように書きます)。シミュレーションの値と比べて、差と、考えられる理由が出ます"));
                 ui.label(row.spec.kind.unit());
             });
             if !row.measured.trim().is_empty() {
                 match (parse_value(&row.measured), ev.value) {
                     (None, _) => {
-                        ui.small(egui::RichText::new("  実測の数字を読めません (4.93、50m、1k のように書きます)").color(FAIL));
+                        ui.small(egui::RichText::new(i18n::tr("  実測の数字を読めません (4.93、50m、1k のように書きます)")).color(FAIL));
                     }
                     (Some(_), None) => {
-                        ui.small(egui::RichText::new("  シミュレーションの値が出ると、比べられます (解析を実行してください)").color(Color32::from_gray(150)));
+                        ui.small(egui::RichText::new(i18n::tr("  シミュレーションの値が出ると、比べられます (解析を実行してください)")).color(Color32::from_gray(150)));
                     }
                     (Some(m), Some(sim)) => {
                         let c = compare_measured(row.spec.kind, sim, m);
@@ -346,11 +346,11 @@ impl SchEditor {
                         };
                         let pct = c.rel.map(|r| format!(" ({:+.1}%)", r * 100.0)).unwrap_or_default();
                         ui.label(egui::RichText::new(format!("  {what}{pct}")).color(col).strong());
-                        ui.small(format!("  実測 {} / シミュレーション {} / 差 {}", eng(m, unit), eng(sim, unit), eng(c.diff, unit)));
+                        ui.small(i18n::trf!("  実測 {} / シミュレーション {} / 差 {}", eng(m, unit), eng(sim, unit), eng(c.diff, unit)));
                         if !c.hints.is_empty() {
-                            egui::CollapsingHeader::new("差の理由の手がかり").id_salt(("spec_why", i)).show(ui, |ui| {
+                            egui::CollapsingHeader::new(i18n::tr("差の理由の手がかり")).id_salt(("spec_why", i)).show(ui, |ui| {
                                 for h in &c.hints {
-                                    ui.small(format!("・{h}"));
+                                    ui.small(i18n::trf!("・{h}"));
                                 }
                             });
                         }
@@ -364,7 +364,7 @@ impl SchEditor {
 
         ui.separator();
         ui.horizontal(|ui| {
-            if ui.button("＋ 項目を追加").on_hover_text("目標値を1つ足します。いま画面にある解析 (DC → 過渡 → AC の順) に合う種類が選ばれます").clicked() {
+            if ui.button(i18n::tr("＋ 項目を追加")).on_hover_text(i18n::tr("目標値を1つ足します。いま画面にある解析 (DC → 過渡 → AC の順) に合う種類が選ばれます")).clicked() {
                 let kind = if tran.is_some() {
                     SpecKind::TranMean
                 } else if ac.is_some() {
@@ -375,7 +375,7 @@ impl SchEditor {
                 let target = choices(kind).iter().find(|n| n.eq_ignore_ascii_case("V(out)") || n.eq_ignore_ascii_case("out") || n.eq_ignore_ascii_case("vout")).or(choices(kind).first()).cloned().unwrap_or_default();
                 self.specs.push(SpecRow::new(kind, &target));
             }
-            if !self.specs.is_empty() && ui.button("すべて消す").on_hover_text("目標値の表を空にします").clicked() {
+            if !self.specs.is_empty() && ui.button(i18n::tr("すべて消す")).on_hover_text(i18n::tr("目標値の表を空にします")).clicked() {
                 self.specs.clear();
             }
         });

@@ -1,0 +1,487 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/symbols.rs
+部品が重なるので、そこには置けません	Parts would overlap, so it can't be placed there
+# crates/app/src/schematic/title_block.rs
+版	Rev
+日付	Date
+作者	Author
+メモ	Note
+図枠	Title block
+書き出した図の右下に、枠で入ります。空の欄は出ません。	Goes in a frame at the bottom right of the exported drawing. Empty fields are left out.
+回路図のファイルにも一緒に保存されます。印刷した図が、どの回路のどの版か分かるようにしておくと、あとで見返すときに迷いません	Also saved in the schematic file. If a printed drawing shows which circuit and which revision it is, you won't get lost when you look back at it later
+タイトル	Title
+回路の名前。例: 5 V 電源	Name of the circuit. e.g. 5 V supply
+作り直すたびに上げる印。例: A、1.2	A mark you bump each time you rework it. e.g. A, 1.2
+例: 2026-11-08	e.g. 2026-11-08
+あなたの名前	Your name
+ひとこと。例: 試作 1 回目	A short note. e.g. First prototype
+# crates/app/src/schematic/tran.rs
+終了時間を数値で入力してください (例: 10m)。刻みは空欄なら自動で、入れるなら数値で (例: 10u)	Enter the stop time as a number (e.g. 10m). Leave the step empty for automatic, or enter a number (e.g. 10u)
+過渡解析: 完了 ({} 点, 再試行 {} 回)	Transient analysis: done ({} points, {} retries)
+過渡解析に失敗: {}	Transient analysis failed: {}
+過渡解析の波形	Transient waveforms
+スペクトル表示	Spectrum view
+波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います	Splits the waveform into its frequency components (spectrum). Use it to find the frequency of noise or ripple, and distortion
+解析範囲	Range
+スペクトルを計算する時間の範囲 (秒)。立ち上がり直後を除いた範囲を指定してください。縦軸は 0 dB = 1 V (ピーク値)	Time range (seconds) to compute the spectrum over. Leave out the part just after start-up. Vertical axis: 0 dB = 1 V (peak)
+秒	s
+普通のことです	This is normal
+波形が後半ほとんど動いていません。回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。	The waveform hardly moves in the second half. The circuit may have settled, but if you want to see blinking or charging/discharging, the stop time may be too short (it ends before things start to move).
+終了時間を10倍にして計算し直す	Recalculate with 10x stop time
+終了時間の欄を10倍にして、もう一度過渡解析を実行します	Multiplies the stop time field by 10 and runs the transient analysis again
+部品の定格 (リップル電流・寿命)	Part ratings (ripple current, lifetime)
+リップル電流と寿命の見積もり	Ripple current and lifetime estimate
+リップル電流は、計算の後半の波形の交流分の実効値です。寿命は「温度が 10℃ 下がると 2 倍」の目安で、データシートの条件 (定格電圧・定格リップル電流) での値から見積もります。実際の寿命は、使い方で大きく変わります	Ripple current is the RMS of the AC part of the waveform in the second half of the run. Lifetime is estimated from the datasheet value (at rated voltage and rated ripple current) using the rule of thumb "2x for every 10℃ cooler". Real lifetime varies a lot with how the part is used
+押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)	Press, then click the schematic. A pin or wire adds the voltage at that point; a part body (or Shift+pin) adds that part's current waveform. You can pick as many as you like (Esc or right-click to finish)
+いまの波形を残す	Keep this waveform
+選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます	Keeps a copy of the selected waveform in a faint color. Change a part value and recalculate to compare before (faint line) and after (bold line)
+残してある「前」の波形を消します	Deletes the kept "before" waveforms
+平均	Average
+表示範囲の平均値です	Average over the visible range
+AC実効値	AC RMS
+平均を引いた交流分の実効値 (ノイズ・リップルの大きさ)	RMS of the AC part after subtracting the average (size of noise or ripple)
+最小	Min
+表示中の範囲での最小値です。ズームすると、見ている部分だけの値になります	Minimum over the visible range. When you zoom, it is the value of just the part you see
+最大	Max
+表示中の範囲での最大値です。ズームすると、見ている部分だけの値になります	Maximum over the visible range. When you zoom, it is the value of just the part you see
+振幅 (p-p)	Amplitude (p-p)
+最大と最小の差です	Difference between max and min
+中間の高さを下から上へ横切る間隔から求めています。2周期以上が範囲に入っているときだけ出ます	Found from the spacing of upward crossings of the middle level. Shown only when at least 2 periods are in range
+周波数の逆数です	Inverse of the frequency
+デューティ比	Duty cycle
+1周期のうち、中間の高さより上にいる時間の割合です	Fraction of one period spent above the middle level
+ひずみ率 (THD)	Distortion (THD)
+基本周波数	Fundamental
+入力の正弦波の周波数 (例 1k)。空欄なら波形から自動で見つけます。範囲は、ちょうど整数周期ぶんに切って計算します	Frequency of the input sine wave (e.g. 1k). Leave empty to find it from the waveform. The range is cut to a whole number of periods for the calculation
+スペクトルの「解析範囲」の時間で計算します	Calculated over the spectrum's "Range" time
+いま表示している時間の範囲で計算します。立ち上がりを除いて、数周期〜数十周期が入るようにします	Calculated over the time range now shown. Leave out the start-up and include a few to a few dozen periods
+基本周波数を数値で入力してください (例: 1k)	Enter the fundamental frequency as a number (e.g. 1k)
+基本波の周波数です	Frequency of the fundamental
+全高調波ひずみ率: 2次以上の高調波を二乗して足した平方根 ÷ 基本波の振幅。小さいほど元の正弦波に近く、オーディオアンプなら 0.1% 以下が目安です	Total harmonic distortion: square root of the sum of squares of the 2nd and higher harmonics ÷ amplitude of the fundamental. Smaller means closer to the original sine wave; for an audio amplifier, 0.1% or less is a guide
+高調波に、ノイズや他の成分も足したもの (基本波以外のすべて ÷ 基本波)	Harmonics plus noise and other components (everything except the fundamental ÷ the fundamental)
+2次	2nd
+基本周波数の2倍の成分 (基本波との比)。波の上下が非対称にゆがむと出ます	Component at twice the fundamental (ratio to the fundamental). Appears when the wave is distorted unevenly top and bottom
+3次	3rd
+基本周波数の3倍の成分 (基本波との比)。波の頭が上下とも削られる (クリップ) と出ます	Component at three times the fundamental (ratio to the fundamental). Appears when both peaks of the wave are cut off (clipping)
+1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください	One period has few points, so straight lines between points add distortion. Make the transient analysis "Step" smaller and recalculate
+ステップ応答の指標	Step response figures
+0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)	For waveforms that start at 0 and settle to a constant value (e.g. a supply switching from 0V to 5V)
+波形が落ち着いた先の値です	Value the waveform settles to
+立ち上がり	Rise
+10% から 90% まで変わる時間	Time to go from 10% to 90%
+行き過ぎ	Overshoot
+最終値を超えた量。0% なら滑らかに近づいています	Amount above the final value. 0% means it approaches smoothly
+整定	Settling
+10% に達してから ±2% に収まるまでの時間	Time from reaching 10% until it stays within ±2%
+波形が動き始めてから、最終値との差がこの幅 (ステップの大きさに対する割合) に収まって、そのままになるまでの時間です。精密な測定では、この時間だけ待ってから読みます。解析の終わりまでに収まらないときは「—」です	Time from when the waveform starts moving until its difference from the final value stays within this band (as a fraction of the step size). For precise measurements, wait this long before reading. Shows "—" if it doesn't settle by the end of the analysis
+下の一覧で信号を選んでください	Pick a signal in the list below
+電力と効率	Power and efficiency
+解析範囲を数値で入力してください	Enter the range as numbers
+左の一覧から信号を選んでください (範囲が不正な場合も表示されません)	Pick a signal from the list on the left (nothing is shown if the range is invalid)
+左の一覧から波形を選んでください	Pick a waveform from the list on the left
+# crates/app/src/schematic/variation.rs
+開始・終了・刻みを数値で入力してください (例: -20, 80, 5)	Enter start, stop and step as numbers (e.g. -20, 80, 5)
+温度スイープ: 完了 ({} 点, {} 〜 {} ℃)	Temperature sweep: done ({} points, {} to {} ℃)
+温度スイープに失敗: {}	Temperature sweep failed: {}
+許容差は % の数値で入力してください (例: 5)	Enter the tolerance as a number in % (e.g. 5)
+回数を整数で入力してください (例: 300)	Enter the count as a whole number (e.g. 300)
+AC解析の欄の周波数と点数を数値で入力してください (例: 10, 1Meg, 20)	Enter the AC analysis frequencies and points as numbers (e.g. 10, 1Meg, 20)
+過渡解析の欄の終了時間と刻みを数値で入力してください (例: 10m, 10u)	Enter the transient analysis stop time and step as numbers (e.g. 10m, 10u)
+ばらつき解析: {} 回完了{}	Variation analysis: {} runs done{}
+ ({} 回は収束せず)	 ({} did not converge)
+ばらつき解析に失敗: {}	Variation analysis failed: {}
+ばらつき解析 (部品の誤差でカットオフ周波数がどれだけずれるか)	Variation analysis (how much part tolerances shift the cutoff frequency)
+ばらつき解析 (部品の誤差でステップ応答がどれだけずれるか)	Variation analysis (how much part tolerances shift the step response)
+ばらつき解析 (部品の誤差で出力がどれだけずれるか)	Variation analysis (how much part tolerances shift the output)
+ばらつき解析の表示	Variation analysis display
+どの回も収束しませんでした	No run converged
+{} の設計値	Design value of {}
+部品がすべて表示どおりの値のときの値	Value when every part is exactly its marked value
+ランダムに作った回路の値の平均	Average over the randomly made circuits
+一番小さかった値	Smallest value
+一番大きかった値	Largest value
+標準偏差 σ	Standard deviation σ
+ばらつきの大きさ。約 68% の回路は 平均 ± σ に入ります	Size of the spread. About 68% of circuits fall within average ± σ
+設計値からのずれ: {lo:+.1}% 〜 {hi:+.1}%	Shift from design value: {lo:+.1}% to {hi:+.1}%
+{} 回は計算が収束しませんでした	{} runs did not converge
+最悪ケース (全部品が誤差の端にあるとき)	Worst case (every part at the edge of its tolerance)
+ランダムではなく、結果がいちばん小さく (大きく) なるように、すべての部品を許容差の端に置いて計算した値です。ばらつき解析の最小・最大は「たまたま出た値」ですが、これは「これより外には出ない」値です	Not random: every part is put at the edge of its tolerance so the result is as small (or large) as possible. The min/max of the variation analysis are "values that happened to come up"; these are "it never goes beyond this"
+ 大	 high
+ 小	 low
+そうなる部品の組み合わせ: {}	Part combination that causes it: {}
+部品が無関係にずれるなら、現実的には {} 〜 {} の範囲に収まります	If parts shift independently, realistically it stays within {} to {}
+各部品の効きを二乗して足した平方根 (RSS)。全部がいっぺんに最悪になることはまずない、という見積もりです	Square root of the sum of squares of each part's effect (RSS). An estimate based on all parts almost never being worst at once
+効いている部品	Parts that matter
+その部品だけが許容差ぶん大きくなったとき、結果がどれだけ変わるか。上にある部品ほど効きます	How much the result changes when only that part is larger by its tolerance. Parts higher in the list matter more
+{top} の誤差が一番効いています。精度が必要なら、{top} を許容差の小さい部品 (1% など) にしましょう	The tolerance of {top} matters most. If you need accuracy, use a tighter-tolerance part (such as 1%) for {top}
+設計値	Design value
+最悪(小)	Worst (low)
+最悪(大)	Worst (high)
+{peak:.0}回	{peak:.0} runs
+# crates/app/src/schematic/wave.rs
+DC解析: {}	DC analysis: {}
+過渡解析: {}	Transient analysis: {}
+AC解析: {}	AC analysis: {}
+この値では計算が収束しませんでした。直前の結果を表示しています (原因: {why})。スライダーの「幅」を「細かい」にするか、値を戻してみてください	The calculation did not converge at this value. Showing the previous result (cause: {why}). Set the slider's "Width" to "Fine", or set the value back
+# crates/app/src/schematic/wizard.rs
+LEDの電流制限抵抗	LED current-limiting resistor
+LED を光らせるとき、直列に入れる抵抗の値を決めます。LED は電流を自分では制限しないので、抵抗が必須です	Sets the value of the resistor in series with an LED. An LED doesn't limit its own current, so the resistor is a must
+電源電圧 (V)	Supply voltage (V)
+LED と抵抗を直列につなぐ電源の電圧	Voltage of the supply driving the LED and resistor in series
+LEDの順方向電圧 (V)	LED forward voltage (V)
+LED が光るときにかかる電圧。赤 約2V・緑 約2.2V・青/白 約3V。データシートで確認	Voltage across the LED when it lights. Red about 2V, green about 2.2V, blue/white about 3V. Check the datasheet
+狙う電流 (mA)	Target current (mA)
+LED に流したい電流。5〜15 mA で十分明るく、定格 (20 mA 前後) より控えめにするのが長持ちのコツ	Current you want through the LED. 5-15 mA is bright enough; staying below the rating (around 20 mA) makes it last longer
+分圧 (抵抗2本で電圧を下げる)	Voltage divider (lower a voltage with 2 resistors)
+電源電圧から、決まった低い電圧を取り出す R1 (上側) と R2 (下側) を決めます。センサの信号を下げたいときなどに使います	Chooses R1 (top) and R2 (bottom) to take a fixed lower voltage from the supply voltage. Used e.g. to scale down a sensor signal
+入力電圧 (V)	Input voltage (V)
+分圧する前の電圧	Voltage before dividing
+欲しい出力電圧 (V)	Desired output voltage (V)
+取り出したい電圧。入力より低い値	Voltage you want to take out. Lower than the input
+下側の抵抗は先に決めます。1k〜100k がよく使われます (小さいほど負荷に強く、大きいほど省電力)	Choose the bottom resistor first. 1k-100k is common (smaller copes better with loads, larger saves power)
+RCフィルタの抵抗	RC filter resistor
+ノイズを除く/ゆっくり変化させるための RC フィルタで、欲しいカットオフ周波数から抵抗を決めます	Chooses the resistor of an RC filter (to remove noise or slow down changes) from the cutoff frequency you want
+カットオフ周波数 (Hz)	Cutoff frequency (Hz)
+これより高い周波数が弱まり始める点 (ローパスの場合)	Point above which frequencies start to weaken (for a low-pass)
+コンデンサ (F)	Capacitor (F)
+手持ちの標準値から先に決めます。100n (0.1µF) がよく使われます	Pick it first from standard values you have. 100n (0.1µF) is common
+3端子レギュレータ (78xx) まわり	3-terminal regulator (78xx) basics
+電圧を一定にする 78xx 系のレギュレータに必要なコンデンサと、発熱を確かめます	Checks the capacitors needed by a 78xx-series voltage regulator, and its heating
+レギュレータにつなぐ電源の電圧	Voltage of the supply feeding the regulator
+出力電圧 (V)	Output voltage (V)
+レギュレータの出力 (7805 なら 5)	Regulator output (5 for a 7805)
+出力電流 (mA)	Output current (mA)
+つなぐ回路が使う電流の最大値	Maximum current used by the connected circuit
+熱 (温度と放熱板)	Heat (temperature and heatsink)
+(入力 − 出力) × 電流 が熱になるレギュレータで、部品の温度と、放熱板が要るかを見積もります	For a regulator that turns (input − output) × current into heat, estimates the part's temperature and whether it needs a heatsink
+レギュレータの出力	Regulator output
+流す電流の最大値	Maximum current through it
+熱抵抗 θja (℃/W)	Thermal resistance θja (℃/W)
+放熱板なしで、部品の中から空気までの熱の逃げにくさ。データシートで確認 (TO-220 は約 50)	How hard it is for heat to get from inside the part to the air, without a heatsink. Check the datasheet (about 50 for TO-220)
+熱抵抗 θjc (℃/W)	Thermal resistance θjc (℃/W)
+部品の中からケースまで。放熱板をつけるときの計算に使う (TO-220 は約 5)	From inside the part to its case. Used when calculating with a heatsink (about 5 for TO-220)
+周囲温度 (℃)	Ambient temperature (℃)
+部品のまわりの空気の温度。箱の中では 40〜50 ℃ で考える	Temperature of the air around the part. Inside a box, assume 40-50 ℃
+最大接合温度 (℃)	Max junction temperature (℃)
+部品の中の温度の上限。データシートで確認 (78xx は 125 ℃)	Upper limit of the temperature inside the part. Check the datasheet (125 ℃ for 78xx)
+ヒューズの選び方	Choosing a fuse
+ショートや故障で電流が流れすぎたときに、電源を切るヒューズの定格を決めます	Chooses the rating of a fuse that cuts the supply when too much current flows due to a short or fault
+通常の電流 (mA)	Normal current (mA)
+回路が普通に使う電流の最大値	Maximum current the circuit normally uses
+ヒューズにかかる電源の電圧 (ヒューズの定格電圧を決める)	Supply voltage across the fuse (sets the fuse's rated voltage)
+ショート時の抵抗 (Ω)	Resistance during a short (Ω)
+ショートしたときの、配線と電源の内部抵抗の合計。電池や細い配線だと 0.5〜数 Ω	Total resistance of wiring and supply internals during a short. With batteries or thin wires, 0.5 to a few Ω
+守る部品の最大電流 (mA)	Max current of the protected part (mA)
+ヒューズで守りたい部品 (ダイオードなど) の、データシートの最大電流	Datasheet maximum current of the part (such as a diode) you want the fuse to protect
+トランジスタのスイッチ (ベース抵抗)	Transistor switch (base resistor)
+NPN トランジスタで LED やリレーなどをオン/オフするときの、ベース抵抗を決めます	Chooses the base resistor when switching an LED, relay, etc. on and off with an NPN transistor
+入力の電圧 (V)	Input voltage (V)
+ベース抵抗につなぐ信号の High の電圧 (マイコンの出力電圧など)	High voltage of the signal into the base resistor (such as a microcontroller's output voltage)
+負荷の電流 (mA)	Load current (mA)
+コレクタ側に流したい電流	Current you want on the collector side
+hFE (電流増幅率)	hFE (current gain)
+トランジスタの増幅率。データシートの最小値に近い値を使うと安全	Gain of the transistor. Using a value near the datasheet minimum is safe
+整流の平滑コンデンサ	Rectifier smoothing capacitor
+トランス + ブリッジ整流のあとに入れる平滑コンデンサの容量と耐圧を、許容できるリップルから決めます	Chooses the capacitance and voltage rating of the smoothing capacitor after a transformer + bridge rectifier, from the ripple you can accept
+トランスの出力 (V, 実効値)	Transformer output (V, RMS)
+トランスの2次側の電圧 (実効値)。12V と書いてあるトランスなら 12	Voltage of the transformer secondary (RMS). 12 for a transformer marked 12V
+負荷電流 (mA)	Load current (mA)
+電源周波数 (Hz)	Mains frequency (Hz)
+東日本 50 Hz・西日本 60 Hz	50 Hz in eastern Japan, 60 Hz in western Japan (check your region)
+許容リップル (V, p-p)	Allowed ripple (V, p-p)
+直流に残る波の大きさ。後ろにレギュレータを入れるなら 1〜2 V、そのままマイコンなどにつなぐなら小さく	Size of the wave left on the DC. 1-2 V if a regulator follows; smaller if it feeds a microcontroller directly
+降圧コンバータのコイルとコンデンサ	Buck converter inductor and capacitor
+スイッチングで電圧を下げる降圧 (バック) コンバータの、デューティ比・コイル・出力コンデンサを、許せるリップルから決めます	Chooses the duty cycle, inductor and output capacitor of a switching step-down (buck) converter from the ripple you can accept
+コンバータにつなぐ電源の電圧	Voltage of the supply feeding the converter
+作りたい電圧 (入力より低い値)	Voltage you want to make (lower than the input)
+スイッチング周波数 (kHz)	Switching frequency (kHz)
+降圧ICのスイッチングの周波数。ICのデータシートの値 (多くは 100〜500kHz)	Switching frequency of the buck IC. The value in the IC's datasheet (often 100-500kHz)
+コイル電流の揺れ (出力電流の %)	Inductor current ripple (% of output current)
+コイルの電流がどれだけ上下するか。20〜40 % が定番	How much the inductor current swings up and down. 20-40 % is typical
+出力電圧のリップル (mV)	Output voltage ripple (mV)
+出力に残る細かい波の大きさ (p-p)。マイコン用なら 30〜50mV くらい	Size of the small wave left on the output (p-p). About 30-50mV for a microcontroller
+昇圧コンバータのコイルとコンデンサ	Boost converter inductor and capacitor
+スイッチングで電圧を上げる昇圧 (ブースト) コンバータの、デューティ比・コイル・出力コンデンサを決めます。電池 1〜2 本から 5V を作るときなどに使います (効率は 85 % と仮定します)	Chooses the duty cycle, inductor and output capacitor of a switching step-up (boost) converter. Used e.g. to make 5V from 1-2 batteries (assumes 85 % efficiency)
+コンバータにつなぐ電源の電圧。電池なら、電圧が下がりきったときの値で見積もると安全です	Voltage of the supply feeding the converter. For batteries, estimating with the fully run-down voltage is safe
+作りたい電圧 (入力より高い値)	Voltage you want to make (higher than the input)
+昇圧ICのスイッチングの周波数。ICのデータシートの値	Switching frequency of the boost IC. The value in the IC's datasheet
+コイル電流の揺れ (入力電流の %)	Inductor current ripple (% of input current)
+出力に残る細かい波の大きさ (p-p)	Size of the small wave left on the output (p-p)
+MOSFET のスイッチ (発熱とゲート抵抗)	MOSFET switch (heating and gate resistor)
+N チャネル MOSFET で負荷をオン/オフするときの、オンのときの電圧降下・発熱・ゲート抵抗とプルダウン抵抗の目安を調べます	For switching a load on and off with an N-channel MOSFET, checks the voltage drop and heating when on, and suggests gate and pull-down resistors
+ゲートの駆動電圧 (V)	Gate drive voltage (V)
+マイコンの出力 (High) の電圧。3.3V や 5V が多いです	Output (High) voltage of the microcontroller. Often 3.3V or 5V
+しきい値電圧 Vgs(th) (V)	Threshold voltage Vgs(th) (V)
+MOSFET がオンになり始めるゲート電圧。データシートで確認 (2N7000 は約 2V)	Gate voltage at which the MOSFET starts to turn on. Check the datasheet (about 2V for 2N7000)
+ドレインに流したい電流	Current you want through the drain
+オン抵抗 Rds(on) (mΩ)	On-resistance Rds(on) (mΩ)
+データシートの値 (ゲート電圧が近い条件のもの)。2N7000 は約 5Ω = 5000mΩ、IRLZ44N は約 22mΩ	Datasheet value (at a similar gate voltage). About 5Ω = 5000mΩ for 2N7000, about 22mΩ for IRLZ44N
+負荷の電源電圧 (V)	Load supply voltage (V)
+負荷につなぐ電源の電圧	Voltage of the supply connected to the load
+オペアンプの増幅 (抵抗の値)	Op-amp amplifier (resistor values)
+オペアンプで信号を大きくするときの、帰還抵抗と R2 を決め、使える帯域と出力が電源で頭打ちにならないかを確かめます	Chooses the feedback resistor and R2 for amplifying a signal with an op-amp, and checks the usable bandwidth and whether the output hits the supply limits
+欲しいゲイン (倍)	Desired gain (x)
+出力 ÷ 入力。反転増幅でも正の数で入れます (出力の向きが逆になります)	Output ÷ input. Enter a positive number even for an inverting amplifier (the output is flipped)
+帰還抵抗 Rf (Ω)	Feedback resistor Rf (Ω)
+出力から戻す抵抗。1k〜1M くらいで、先に決めます (10k がよく使われます)	Resistor feeding back from the output. Choose it first, about 1k-1M (10k is common)
+反転増幅にする (0 = 非反転, 1 = 反転)	Inverting amplifier (0 = non-inverting, 1 = inverting)
+非反転は入力が + 側、反転は入力が − 側 (出力の向きが逆になる)	Non-inverting takes the input on +, inverting on − (the output is flipped)
+利得帯域幅積 (kHz)	Gain-bandwidth product (kHz)
+オペアンプのデータシートの GBW。LM358 は約 1MHz = 1000kHz	GBW from the op-amp datasheet. About 1MHz = 1000kHz for LM358
+電源電圧 ± (V)	Supply voltage ± (V)
+オペアンプの電源 (両電源の片側の値)	Op-amp supply (value of one side of a dual supply)
+入力の振幅 (mV)	Input amplitude (mV)
+入力信号の振幅 (ピーク)	Amplitude of the input signal (peak)
+電池の持ち時間	Battery life
+電池の容量と負荷の電流から、持ち時間の目安と、内部抵抗による電圧の下がりを調べます。コイン電池に大きな電流を流してよいかの判断にも使えます	From battery capacity and load current, estimates how long it lasts and the voltage drop from internal resistance. Also helps decide whether a coin cell can supply a large current
+電池の容量 (mAh)	Battery capacity (mAh)
+電池の表示容量。CR2032 は約 230、単3アルカリは約 2500、18650 は約 2600	Rated battery capacity. About 230 for CR2032, about 2500 for an AA alkaline, about 2600 for 18650
+負荷の平均電流 (mA)	Average load current (mA)
+つなぐ回路が流す電流の平均。点滅するものは、平均を見積もります	Average current drawn by the connected circuit. For things that blink, estimate the average
+電池の内部抵抗 (Ω)	Battery internal resistance (Ω)
+CR2032 は約 15、アルカリは約 0.15、リチウムイオンは約 0.06	About 15 for CR2032, about 0.15 for alkaline, about 0.06 for lithium-ion
+電池の電圧 (V)	Battery voltage (V)
+新しいときの電圧	Voltage when new
+使える割合 (%)	Usable fraction (%)
+表示容量のうち、実際に使える割合。電流が大きいほど減ります。70% くらいで見積もると安全です	Fraction of the rated capacity you can really use. Drops as current rises. Estimating at about 70% is safe
+ツェナーダイオードで電圧を一定にする	Fixed voltage with a Zener diode
+ツェナーダイオードと抵抗で、決まった電圧 (5.1V など) を取り出します。小さな電流の基準電圧に向いています	Takes a fixed voltage (such as 5.1V) with a Zener diode and resistor. Good as a reference voltage at small currents
+ツェナーと抵抗をつなぐ電源の電圧	Voltage of the supply feeding the Zener and resistor
+ツェナー電圧 (V)	Zener voltage (V)
+ツェナーダイオードの電圧 (1N4733A なら 5.1)	Voltage of the Zener diode (5.1 for 1N4733A)
+負荷の電流 (最大, mA)	Load current (max, mA)
+取り出す電流の最大値	Maximum current taken out
+ツェナーに残す電流 (mA)	Current left for the Zener (mA)
+ツェナーが働くのに最低限必要な電流。データシートの試験電流 (5〜10mA くらい)	Minimum current the Zener needs to work. The datasheet test current (about 5-10mA)
+基板の配線の太さ (電流から)	Board track width (from current)
+基板の銅の配線に流せる電流から、必要な線幅を決めます。電源やモーターの線を信号線と同じ細さにすると、熱を持って焼けることがあります	Chooses the needed width from the current a copper track on the board can carry. If power or motor tracks are as thin as signal tracks, they can heat up and burn
+流す電流 (A)	Current (A)
+その配線に流れる最大の電流。つなぐ部品のデータシートの最大電流や、電源の容量から見積もります	Maximum current through that track. Estimate it from the datasheet max current of the connected parts or the supply's capacity
+許す温度上昇 (℃)	Allowed temperature rise (℃)
+配線が周囲より何度まで熱くなってよいか。10℃ が一般的で、余裕を見るなら 5〜10℃	How much hotter than its surroundings the track may get. 10℃ is common; 5-10℃ for some margin
+銅箔の厚さ (µm)	Copper thickness (µm)
+ふつうの2層基板は 35µm (1oz)。厚銅は 70µm (2oz)。発注先の仕様で確認します	A normal 2-layer board is 35µm (1oz). Heavy copper is 70µm (2oz). Check the fab's specs
+温度上昇	Temperature rise
+銅箔の厚さ	Copper thickness
+{name}は 0 より大きい数にしてください	{name} must be a number greater than 0
+計算上の線幅 (表面・裏面)	Calculated width (top, bottom)
+使う線幅 (0.05mm 刻みで切り上げ)	Width to use (rounded up to 0.05mm steps)
+内層に配線する場合	For inner-layer tracks
+{w_int:.2} mm (内層は熱が逃げにくい)	{w_int:.2} mm (inner layers shed heat less easily)
+その幅で流せる電流	Current at that width
+IPC-2221 の式: I = k × ΔT^0.44 × A^0.725 (A: 配線の断面積 [mil²]、ΔT: 温度上昇、k: 表面 0.048・内層 0.024)	IPC-2221 formula: I = k × ΔT^0.44 × A^0.725 (A: track cross-section [mil²], ΔT: temperature rise, k: 0.048 outer, 0.024 inner)
+断面積 A = (I ÷ (k × ΔT^0.44))^(1/0.725)。幅 = A ÷ 銅箔の厚さ ({um} µm = {:.2} mil) = {w_ext:.3} mm	Cross-section A = (I ÷ (k × ΔT^0.44))^(1/0.725). Width = A ÷ copper thickness ({um} µm = {:.2} mil) = {w_ext:.3} mm
+2 mm を超える太さです。配線でなく、ゾーン (銅を面で塗る) や基板の両面に同じ配線を重ねることを検討しましょう	Wider than 2 mm. Instead of a track, consider a zone (copper filled as an area) or the same track on both sides of the board
+線幅は配線のいちばん細い所で決まります。パッドにつながる部分や、ビア・コネクタの手前で細くなっていないか確認します	Width is set by the narrowest point of the track. Check that it doesn't narrow where it meets a pad, or just before a via or connector
+ビア1個に流せる電流は小さい (1A 前後)。大電流の線を層替えするときは、ビアを複数並べます	A single via carries little current (around 1A). When a high-current track changes layer, use several vias side by side
+短時間だけ流れる電流 (モーターの起動など) と、ずっと流れる電流を分けて考えます。この式は、ずっと流れる電流が目安です	Treat short bursts of current (e.g. motor start-up) separately from steady current. This formula is a guide for steady current
+線幅を太くすると、隣の配線との間隔が減ります。基板エディタの「配線の太さ」で自動で太くしたあと、DRC で間隔を確かめましょう	Wider tracks leave less gap to neighboring tracks. After widening automatically with "Track width" in the board editor, check the gaps with DRC
+細すぎる配線: 熱を持って基板が変色し、最悪は銅が焼き切れて (ヒューズのように) 断線します	Track too thin: it heats up, discolors the board and, at worst, the copper burns through (like a fuse) and breaks
+ビアが足りない/細い: 大電流の途中で熱を持ちます。電源の層替えにビアを複数使います	Too few or too small vias: they heat up along a high-current path. Use several vias when a supply changes layer
+パッドへの接続部だけ細い: そこが一番熱くなる所 (ボトルネック) になります	Only the pad connection is thin: that becomes the hottest spot (bottleneck)
+銅箔が計画より薄い (安い発注の既定は 35µm): 流せる電流が減ります。仕様を確認しましょう	Copper thinner than planned (cheap orders default to 35µm): less current can flow. Check the specs
+「{label}」を数値で入力してください (例: 5, 3.3, 10k, 100n)	Enter "{label}" as a number (e.g. 5, 3.3, 10k, 100n)
+値の決め方	How to choose values
+選択中の部品の値を {p} にする	Set the selected part's value to {p}
+回路図で抵抗・コンデンサ・コイルを選ぶと押せます。選んだ部品の値を、この結果で置き換えます (Ctrl+Z で戻せます)	Enabled when you select a resistor, capacitor or inductor in the schematic. Replaces the selected part's value with this result (Ctrl+Z to undo)
+計算のしかた	How it is calculated
+・{s}	• {s}
+注意点	Cautions
+こうなると壊れる/おかしくなる (故障パターン)	What breaks or goes wrong (failure patterns)
+回路図で実際に抵抗を外したり値を変えたりして、DC解析の結果がどう変わるか試してみましょう	Try removing a resistor or changing values in the schematic, and see how the DC analysis results change
+# crates/app/src/schematic/panel/mod.rs
+DC動作点 (電圧・電流)	DC operating point (voltages, currents)
+落ち着いたあとの各点の電圧と部品の電流を見ます。まずここから	See the voltage at each point and the part currents after things settle. Start here
+過渡解析 (時間の変化)	Transient analysis (change over time)
+時間とともに電圧・電流がどう変わるかを、オシロスコープのように見ます	See how voltages and currents change over time, like an oscilloscope
+AC解析 (周波数特性)	AC analysis (frequency response)
+周波数ごとの強さ (ゲイン) と位相を見ます。フィルタやアンプの帯域も。入力にする電源の値を「AC 1」にしてください。「安定性の余裕」は、帰還ループを1か所で切って1周したときのゲイン (一巡伝達関数) を測った波形に使います	See the strength (gain) and phase at each frequency, including the bandwidth of filters and amplifiers. Set the value of the source used as input to "AC 1". "Stability margin" is for waveforms measuring the gain once around a feedback loop cut at one point (loop gain)
+DCスイープ (入力→出力)	DC sweep (input → output)
+入力電圧を変えたときの出力の変化 (伝達特性) を見ます。電圧の信号を選ぶと、反転する (インバーターの) 特性なら VOH / VOL / 切替電圧 / ノイズマージンを計算します	See how the output changes as the input voltage changes (transfer characteristic). If you pick a voltage signal with an inverting (inverter) characteristic, VOH / VOL / switching voltage / noise margins are calculated
+パラメータスイープ (値を振る)	Parameter sweep (step a value)
+部品の値を何通りか変えて同じ解析をくり返し、波形を重ねて比べます。「Rを変えるとカットオフがどう動くか」を一度に見られます	Repeats the same analysis with several values of a part and overlays the waveforms to compare. Shows at once "how the cutoff moves when R changes"
+ループゲイン (帰還の安定性)	Loop gain (feedback stability)
+帰還のループを1か所切って、1周したときのゲインを測ります。0 dB を横切る所の位相余裕で、電源やアンプが安定か、振動しそうかが分かります。周波数範囲・点数は AC解析の欄を共用	Cuts the feedback loop at one point and measures the gain once around it. The phase margin where it crosses 0 dB tells whether a supply or amplifier is stable or likely to oscillate. Frequency range and points are shared with the AC analysis fields
+極と零 (伝達関数)	Poles and zeros (transfer function)
+AC解析の結果に分数の式を当てはめて、極と零の周波数を求めます。フィルタのカットオフ・共振の鋭さ (Q)・アンプの補償の効き方が、数字で分かります。周波数範囲・点数は AC解析の欄を共用	Fits a fractional formula to the AC analysis result to find the frequencies of poles and zeros. Gives numbers for a filter's cutoff, the sharpness of resonance (Q) and how well an amplifier's compensation works. Frequency range and points are shared with the AC analysis fields
+熱雑音・ショット雑音が出力にどれだけ出るかを見ます。周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示	See how much thermal noise and shot noise appear at the output. Frequency range and points are shared with the AC analysis fields. Pick an input source to also show input-referred values
+インピーダンス (ネットから見た値)	Impedance (seen from a net)
+あるネットから回路の中を見たインピーダンスを、周波数ごとに求めます。電源ラインの出力インピーダンスとバイパスコンデンサの効き (山と谷)、アンプの出力・入力インピーダンスが分かります。周波数範囲・点数は AC解析の欄を共用	Finds, at each frequency, the impedance looking into the circuit from a net. Shows the output impedance of a supply line and how bypass capacitors work (peaks and dips), and the output/input impedance of amplifiers. Frequency range and points are shared with the AC analysis fields
+温度とばらつき	Temperature and variation
+温度を変える、部品の値を許容差の範囲でランダムに変えて何度も計算する、などで、ずれる範囲を調べます。縦棒が高いところほど、よく出る値です	Finds how far results shift, e.g. by changing temperature or by computing many times with part values randomly varied within their tolerances. Taller bars are values that come up more often
+作りたい回路の目標値 (出力電圧は 4.75〜5.25V、カットオフは 1kHz 前後など) を書いておくと、解析の結果が合格かどうかを ✓/× で表示します。値を変えるたびに判定がやり直されます	Write targets for the circuit (output voltage 4.75-5.25V, cutoff around 1kHz, etc.) and each analysis result is shown as pass/fail with ✓/×. Re-judged every time a value changes
+自己発熱 (部品の温度上昇)	Self-heating (part temperature rise)
+電流が流れる抵抗は、自分の電力で温まります。温度がどれだけ上がるか、温度係数のある抵抗は値がどれだけ動くかを、熱抵抗 (K/W) から計算します。シャント抵抗や、精度が要る分圧の抵抗の確認に	A resistor carrying current warms up from its own power. Calculates from thermal resistance (K/W) how much its temperature rises and, for resistors with a temperature coefficient, how much the value moves. Useful for checking shunt resistors and precision divider resistors
+モデルの前提 (何がわからないか)	Model assumptions (what is unknown)
+シミュレーションが計算に入れていない部品 (モデルがない)、汎用の標準値で計算している部品、モデルの注意書きをまとめて見ます。結果を信じてよい範囲が分かります	Lists parts the simulation leaves out (no model), parts computed with generic standard values, and model notes. Shows how far you can trust the results
+故障シミュレーション	Fault simulation
+部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます	Analyzes the circuit with a part broken (open, short, reversed, wrong value, open or bridged pin, low supply) and compares with the original. Learn "which failure is dangerous" without breaking real parts
+作図	Draw
+部品を置く、配線する、部品の値を変える、配線ミスを点検する (ERC)	Place parts, wire, change part values, check wiring mistakes (ERC)
+シミュレーションを実行して、電圧・波形・周波数特性・ノイズ・温度やばらつきの影響を見る	Run simulations and see voltages, waveforms, frequency response, noise, and the effects of temperature and variation
+選択中の部品{name}	Selected part{name}
+すべて閉じる	Close all
+すべての解析の設定を閉じて、見出しだけにします	Closes all analysis settings, leaving only the headings
+すべて開く	Open all
+すべての解析の設定を開きます。もう一度押すと、すべて閉じます	Opens all analysis settings. Press again to close them all
+レッスン中は、手順に出てくる欄を探せるように、すべて開いています	During a lesson, everything is open so you can find the fields in the steps
+⚠ モデルがなく、計算に入っていない部品: {}	⚠ Parts with no model, left out of the calculation: {}
+この部品は、回路にないものとして計算されます。動作や電流に関わる部品なら、結果は実物と違います。下の「モデルの前提」で、ほかの注意もまとめて見られます	These parts are calculated as if they weren't in the circuit. If they affect how it works or its currents, the results will differ from the real thing. See "Model assumptions" below for other notes too
+部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます	Click a part or wire to select it; drag parts to move them. Once selected, you can change its value (resistance etc.)
+端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります	Click an end point to start a wire. Each click adds a bend, and a double-click ends it. Right-click to finish the wire; right-click when not wiring returns to the select tool
+バス	Bus
+太い青の線でバス(信号の束)を描きます。バスの線は何もつなぎません(見た目と点検のためのものです)。名前は、ラベルツールで D[0..7] と書いて、バスの線の上に置きます。つなぐ各ピンには、ラベルツールで D[0..7] と書いたまま、ピンを順にクリックすると、D0 D1 D2 … と順に付きます	Draws a bus (a bundle of signals) as a thick blue line. Bus lines connect nothing (they are for looks and checking). For the name, write D[0..7] with the label tool and place it on the bus line. For each pin to connect, keep D[0..7] in the label tool and click the pins in order: they get D0 D1 D2 … in turn
+同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします	Places with labels of the same name are the same net even without a wire. Keeps the drawing tidy
+クイック追加 (A)	Quick add (A)
+部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます	Type a part name to search, then pick it with ↑↓ and Enter. Also opens with the A key over the schematic. Favorites and recently used parts come first
+ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります。D[0..7] のように書くと、バスの名前です: バスの線の上をクリックするとバスの名前が付き、ほかの所をクリックすると D0 D1 D2 … と順に付きます	Net name (e.g. VCC, OUT). Places with labels of the same name are the same net even without a wire. Writing it like D[0..7] makes a bus name: click on a bus line to name the bus; click elsewhere to place D0 D1 D2 … in turn
+番号を自動で進める	Auto-increment number
+オンにすると、名前の終わりの数字を、ラベルを付けるたびに 1 つ進めます (D0 → D1 → D2 …)	When on, the number at the end of the name goes up by 1 with each label you place (D0 → D1 → D2 …)
+ERC (電気ルールチェック)	ERC (electrical rules check)
+配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です	Checks for wiring mistakes: unconnected pins or wire ends, shorted supplies, duplicate refdes, etc., and circles them (magenta = error, orange = warning). Click a result row to jump there and see how to fix it. Good to do before moving on to simulation or the board
+ERC: エラー {} 件、注意 {} 件	ERC: {} errors, {} warnings
+設計の要件の表…	Requirements…
+選択を描きかけにする	Mark as unfinished
+「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)	Opens the "Design requirements" table, where you write net roles, groups of parts to keep close, and things to keep apart (same as "Design requirements (table)" in the "Edit" menu)
+選んだ部品・配線を囲む範囲を「描きかけ」にして、その中のERCの指摘を出さなくします。作りながら出るエラーの山を減らすための機能です。範囲は灰色の枠で表示され、完成したら下の×で外します。保存もされます	Marks the area around the selected parts and wires as "unfinished" and hides ERC findings inside it. Cuts down the pile of errors while you build. The area shows as a gray frame; remove it with the × below when done. It is saved too
+✔ 問題は見つかりませんでした	✔ No problems found
+クリックで、その場所へ移動して説明を表示します	Click to jump there and show the explanation
+クリックで説明を表示します	Click to show the explanation
+使わないピン (NC) にする	Mark as unused pin (NC)
+このピンは、つながないのが正しいときに押します (使わない出力、データシートが開放と言うピンなど)。印の × が付いて、ERC はこのピンを聞かなくなります。つなぎ忘れなら、押さずに配線しましょう	Press this when leaving the pin unconnected is correct (an unused output, a pin the datasheet says to leave open, etc.). It gets an × mark and ERC stops asking about it. If you just forgot to connect it, wire it instead
+{refdes} ピン{pin} を「使わない (NC)」にしました。印を外すには、部品を選んで「使わないピン」のチェックを外します	Marked {refdes} pin {pin} as "unused (NC)". To remove the mark, select the part and uncheck "Unused pins"
+部品を編集	Edit part
+部品を作成	Create part
+ライブラリに追加しました	Added to the library
+ライブラリに保存しました: {}	Saved to the library: {}
+このモデルの限界 (実物との違い)	Limits of this model (differences from the real part)
+# crates/app/src/schematic/panel/parts.rs
+電流を一方向に流します。1N400x は電源の整流、1N4148 は小信号の高速スイッチ用です	Lets current flow one way. 1N400x for supply rectifying, 1N4148 for fast small-signal switching
+順方向の電圧降下が小さく (約0.3〜0.5V) 高速。電源の整流や逆流防止に向きます。逆方向の漏れ電流は大きめです	Small forward voltage drop (about 0.3-0.5V) and fast. Good for supply rectifying and reverse-current protection. Reverse leakage is fairly large
+逆向きにつなぐと、決まった電圧 (ツェナー電圧) で電流が流れ、電圧を一定に保ちます。基準電圧や簡単な保護に使います	Connected in reverse, it conducts at a set voltage (the Zener voltage) and holds the voltage steady. Used for reference voltages and simple protection
+ベース電流で、コレクタからエミッタへ流れる電流を制御します。負荷を GND 側で切り替える (ローサイド) のに使います	Base current controls the current from collector to emitter. Used to switch a load on the GND side (low side)
+NPN と電流の向きが逆。電源側で負荷を切り替える (ハイサイド) のに使います	Current flows the opposite way to NPN. Used to switch a load on the supply side (high side)
+ゲート電圧で制御します。ゲートに電流がほとんど要らず、大電流のスイッチに向きます (GND 側で切り替える)	Controlled by gate voltage. The gate needs almost no current, so it suits high-current switches (switching on the GND side)
+N チャネルと極性が逆。電源側で負荷を切り替える (ハイサイド) のに使います	Opposite polarity to N-channel. Used to switch a load on the supply side (high side)
+容量が大きく、電源の平滑に使います。極性があり、逆につなぐと壊れます。ESR が大きめです	Large capacitance, used for supply smoothing. Polarized: it breaks if connected backwards. ESR is fairly large
+小さくて容量が大きく、ESR は電解より小さめ。極性があり、耐圧に余裕を見ないと壊れます	Small with large capacitance; ESR is lower than electrolytic. Polarized; it breaks without enough voltage margin
+極性なし。ESR・ESL が小さく、温度や電圧で容量が変わりにくいので、フィルタやタイミングに向きます	Not polarized. Low ESR and ESL, and capacitance changes little with temperature or voltage, so it suits filters and timing
+極性なし。小さくて高い周波数に強い、チップ部品の定番です。電圧がかかると容量が減ります	Not polarized. Small and good at high frequencies, the standard chip part. Capacitance drops when voltage is applied
+クリックして配置 / Rキーで回転	Click to place / R to rotate
+{} (基本)	{} (basic)
+ライブラリ部品	Library parts
+検索 (名前・説明・ピン名・パッケージ)	Search (name, description, pin names, package)
+部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます	Besides the part name, you can search by description, pin names, or package name (e.g. SOT-23, TO-92)
+すべてのカテゴリ	All categories
+ライブラリ部品の分類。選んだ分類だけを一覧に出します	Library part category. Only parts in the chosen category are listed
+◎のみ	◎ only
+シミュレーションモデルのある部品だけを表示します	Show only parts with a simulation model
+お気に入りから外します	Remove from favorites
+お気に入りに入れます。一覧の先頭に出ます	Add to favorites. They show at the top of the list
+★ お気に入り	★ Favorites
+☆ を押した部品	Parts you starred with ☆
+最近使った部品	Recently used parts
+最近置いた部品 (新しい順)	Parts placed recently (newest first)
+条件に合う部品がありません。検索の文字やカテゴリを変えてみてください	No parts match. Try changing the search text or category
+パッケージ: {}	Package: {}
+編集…	Edit…
+この部品を部品作成の窓で開いて、ピン・部品の形・モデル・定格などを直します。保存すると書き換わります (名前を変えると別の部品として追加)	Opens this part in the part creation window to fix pins, footprint, model, ratings, etc. Saving overwrites it (changing the name adds it as a separate part)
+本当に削除しますか?	Really delete?
+削除する	Delete
+この部品のファイルをライブラリのフォルダから消します。元に戻せません。回路図や基板に置いた部品は、そのまま残ります	Removes this part's file from the library folder. This can't be undone. Parts already placed in schematics or boards stay as they are
+削除…	Delete…
+この部品を、ライブラリから消します (押したあとに、もう一度確かめます)。同梱の部品も消せて、消したものは、次に起動しても戻りません。回路図や基板に置いた部品は、そのまま残ります	Removes this part from the library (you'll be asked again after pressing). Built-in parts can be removed too, and they won't come back on the next start. Parts already placed in schematics or boards stay as they are
+ピン表	Pin table
+シミュレーションモデルあり ◎	Has a simulation model ◎
+シミュレーションモデルなし (基板設計用)	No simulation model (for board design)
+{} を編集します。保存すると書き換わります	Editing {}. Saving overwrites it
+◎ = シミュレーションモデルあり	◎ = has a simulation model
+再読み込み	Reload
+ライブラリのフォルダを読み直します。ファイルを直接直したときに押します	Re-reads the library folder. Press it after editing the files directly
+保存先: ライブラリのフォルダ	Saved to: library folder
+部品を作る…	Create part…
+スニペット…	Snippets…
+＋ 部品を作る…	+ Create part…
+ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます	Make and add a part not in the library yourself while reading its datasheet (symbol, footprint, simulation model, ratings). You can also add from JSON or KiCad files under "① Basics" in the window that opens
+選んだ部品・線・ラベルをファイル (スニペット) に保存します。電源回路やLED点灯回路など、よく使う部分を別の回路でも使えます	Saves the selected parts, wires and labels to a file (snippet). Reuse common pieces such as a supply circuit or LED circuit in other circuits
+保存したスニペットを選んで、いまの回路の空いた所に置きます。部品番号は新しくなります。置いたあと、ドラッグで動かせます	Pick a saved snippet and place it in an empty spot of the current circuit. Refdes are renumbered. After placing, you can drag it to move it
+\n(データシートの代表的な値。使う前に、必ずデータシートで確かめてください)	\n(Typical datasheet values. Always check the datasheet before use)
+\n\nランドパターン: データシートの図面と照らし合わせていない概算です。基板にする前に、パッドの位置・大きさ・ピン番号を確かめてください (発注の準備のチェックも注意します)。	\n\nLand pattern: an estimate not checked against the datasheet drawing. Before making a board, check pad positions, sizes and pin numbers (the order preparation check also warns about this).
+\n\nこのモデルの限界 (実物との違い):	\n\nLimits of this model (differences from the real part):
+\n・	\n•
+# crates/app/src/schematic/panel/properties.rs
+部品番号 (R1、C2、U1 など)。同じ番号が2つあると、どちらかが解析やネットで区別できません	Reference designator (R1, C2, U1, etc.). If two parts share a number, analysis and nets can't tell them apart
+値の決め方…	Choose value…
+この部品の値を計算で決める窓を開きます (LEDの抵抗・分圧・フィルタなど)	Opens a window to calculate this part's value (LED resistor, divider, filter, etc.)
+ピンの名前 (信号名)	Pin names (signal names)
+ピンごとの名前を、記号のそばと基板のシルクに書きます (配線やネットは変わりません)	Writes each pin's name next to the symbol and on the board silkscreen (wires and nets don't change)
+コネクタや端子台の各ピンが何の信号かを書いておくと、配線の間違いが減ります。空にすると、そのピンには名前を書きません	Writing which signal each pin of a connector or terminal block carries reduces wiring mistakes. Leave it empty to write no name for that pin
+このピンの名前 (F+、SA、GND など)	Name of this pin (F+, SA, GND, etc.)
+買える店の型番	Store part numbers
+店のページで確かめた型番だけ入れます。購入リストと部品表に出ます (空欄なら、検索リンクになります)	Only enter part numbers you checked on the store page. They appear in the shopping list and BOM (if empty, a search link is used)
+抵抗やコンデンサのように、ライブラリ部品ではない部品に、買う型番を付けられます。ライブラリ部品が型番を持っているときは、ここに書いた型番が優先されます。間違った型番より、空欄のほうがよいです	You can give a part number to buy for parts that aren't library parts, like resistors and capacitors. If a library part has its own part number, the one written here takes priority. Empty is better than a wrong part number
+秋月	Akizuki
+秋月電子通商の商品コード (例: 100941)	Akizuki Denshi product code (e.g. 100941)
+DigiKey で検索できる型番 (例: RC0805FR-071KL)	Part number searchable on DigiKey (e.g. RC0805FR-071KL)
+LCSC の部品番号 (C + 数字。例: C25804)	LCSC part number (C + digits, e.g. C25804)
+使わないピン (NC) ({marked})	Unused pins (NC) ({marked})
+つながないピンに印を付けます。回路図に × が出て、ERC は「未接続」と言わなくなります	Marks pins that are left unconnected. An × shows in the schematic and ERC stops reporting them as "unconnected"
+データシートが「開放のまま」と言うピンや、使わない出力などに付けます。つなぎ忘れとの区別が付くので、本当のミスだけが ERC に残ります。あとから線やラベルでつなぐと、ERC が印との食い違いを知らせます	Use it for pins the datasheet says to "leave open", unused outputs, etc. This tells them apart from forgotten connections, so only real mistakes stay in ERC. If you later connect it with a wire or label, ERC warns about the mismatch with the mark
+チェックを付けると、このピンは使わない (つながない) ピンになります	Check to make this pin an unused (unconnected) pin
+ドラッグして値を動かします (中央 = 今の値)。動かせる範囲は今の値の 1/10 〜 10 倍で、両端の値を下に出しています。これより大きく変えたいときは、値の欄に直接打ちます。\n下の「自動で再計算」をオンにすると、動かしながら波形や電圧が変わるのを見られます	Drag to move the value (center = current value). The range is 1/10 to 10 times the current value; the end values are shown below. For bigger changes, type into the value field directly.\nTurn on "Auto recalculate" below to watch waveforms and voltages change as you drag
+オンにすると、値を動かすたびに、開いている解析 (DC / 過渡 / AC) をやり直します。重い回路ではオフにしてください	When on, re-runs the open analyses (DC / transient / AC) each time the value moves. Turn it off for heavy circuits
+変える前の線を残す	Keep the line from before
+オンにすると、値を動かし始める前の波形・特性を、うすい線で残します。動かした後のこい線と重ねて、どう変わったかを比べられます。波形の「いまの波形を残す」で残した線は、これで置き換わります	When on, keeps the waveform/response from before you start moving the value as a faint line. Compare it with the bold line after moving to see what changed. Lines kept with "Keep this waveform" are replaced by this
+基板とモデル	Board and model
+モデル: {}	Model: {}
+シミュレーションモデルなし	No simulation model
+基板に載せる部品の形 (パッドの並び)。実物の部品の寸法に合わせて選びます	Footprint placed on the board (pad layout). Choose it to match the real part's dimensions
+シミュレーション専用 (基板に載せない)	Simulation only (not on the board)
+試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)	For parts the real board doesn't need, such as a test supply or a resistor standing in for the thing being measured. When checked, it is left out of board import, BOM and shopping list (it is still used in simulation)
+シートの中を開く	Open sheet
+この記号が表すシートを開きます (記号のダブルクリックでも開きます)。直すと、同じシートを使う全部の記号に効きます	Opens the sheet this symbol stands for (double-clicking the symbol also opens it). Changes apply to every symbol using the same sheet
+このコピーだけの値 ({})	Values for this copy only ({})
+書いた部品だけ別の値 (空欄=シートのまま)	Different values only for the parts you write (empty = as in the sheet)
+同じシートを何回も使うとき、チャンネルごとに抵抗値などを変えたい部品だけ、ここに書きます。シートの中の部品は、そのままです。コピーの部品は R1_CH1 のように別の番号になり、シミュレーションにも基板にも、ここの値が使われます	When you use the same sheet several times, write here only the parts whose values (resistance etc.) should differ per channel. Parts inside the sheet stay as they are. Copied parts get separate numbers like R1_CH1, and the values here are used in both simulation and the board
+シートの値	Sheet value
+このコピーでの値。空欄にすると、シートの値に戻ります	Value in this copy. Leave empty to go back to the sheet's value
+回転 (R)	Rotate (R)
+複製	Duplicate
+部品を 90° 回します (R キーでも同じです)	Rotates the part by 90° (same as the R key)
+コピーしてすぐ貼り付けます (Ctrl+D)	Copies and pastes right away (Ctrl+D)
+選んだものを消します (Delete キーでも同じです)	Deletes the selection (same as the Delete key)
+コピー	Copy
+切り取り	Cut
+貼り付け	Paste
+選んだ部品・線・ラベルをコピーします (Ctrl+C)。部品のピンについているネットラベルも一緒にコピーされます	Copies the selected parts, wires and labels (Ctrl+C). Net labels attached to part pins are copied too
+コピーして、元のものを消します (Ctrl+X)	Copies, then deletes the originals (Ctrl+X)
+コピーしたものを、近くの空いた所に置きます (Ctrl+V)。部品番号は新しくなります。貼ったあと、ドラッグで動かせます	Places what you copied in an empty spot nearby (Ctrl+V). Refdes are renumbered. After pasting, you can drag it to move it
+部品の設定	Part settings
+部品の設定: {}	Part settings: {}
+容量。例: 100n / 4.7u\n100n ESR=20m ESL=5n … 等価直列抵抗・インダクタンスも入れられます\n100u IC=3.2 … 過渡解析を始めるときの電圧 (電池の代わりに使えます)\n22u BIAS=60 … 直流の電圧がかかると、セラミックコンデンサの容量は下がります。その下がる割合 (%) です (例: 16V 品の 22u は、5V で約 60% 下がります)	Capacitance. e.g. 100n / 4.7u\n100n ESR=20m ESL=5n … you can also enter equivalent series resistance and inductance\n100u IC=3.2 … voltage at the start of transient analysis (can stand in for a battery)\n22u BIAS=60 … ceramic capacitors lose capacitance under DC voltage; this is the drop (%) (e.g. a 16V-rated 22u drops about 60% at 5V)
+インダクタンス。例: 10u / 1m\n10u DCR=0.1 … 巻線抵抗も入れられます	Inductance. e.g. 10u / 1m\n10u DCR=0.1 … you can also enter winding resistance
+抵抗値。例: 100 / 4.7k / 1Meg (k = 1000、Meg = 100万、m = 1/1000、u = 1/100万、n、p)	Resistance. e.g. 100 / 4.7k / 1Meg (k = 1000, Meg = 1 million, m = 1/1000, u = 1/1 million, n, p)
+電源の値。例:\n5 … 直流 5V\nSIN(0 1 1k) … 正弦波 (中心 振幅 周波数)\nPULSE(0 5 100u 1u 1u 400u 1m) … 方形波 (低 高 遅延 立上り 立下り 幅 周期)\nPWL(0 0 1m 5) … 折れ線 (時間 電圧 の組)\n5 AC 1 … AC解析の入力にする\nNOISE(0.05 1Meg) … ノイズ (実効値 最高周波数)。5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) のように + でつなげます (+ の前後は空白)	Source value. e.g.:\n5 … 5V DC\nSIN(0 1 1k) … sine wave (offset amplitude frequency)\nPULSE(0 5 100u 1u 1u 400u 1m) … square wave (low high delay rise fall width period)\nPWL(0 0 1m 5) … piecewise line (time voltage pairs)\n5 AC 1 … use as AC analysis input\nNOISE(0.05 1Meg) … noise (RMS max frequency). Combine with +, like 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) (spaces around +)
+部品の値。単位つきの数字は 10k, 100n, 4.7u のように書けます	Part value. Numbers with units can be written like 10k, 100n, 4.7u
+部品選びのヒント (この回路で必要な定格)	Part choice hints (ratings this circuit needs)
+データシートの情報	Datasheet info
+・{l}	• {l}
+この部品には、定格 (データシートの情報) が入っていません。「＋ 部品を作る」の部品フォームの「データシートの情報」で入れられます	This part has no ratings (datasheet info). You can enter them under "Datasheet info" in the part form from "+ Create part"
+DC動作点を解析すると、この回路でこの部品にかかる電流・電力と、必要な定格が出ます	Run the DC operating point to see the current and power on this part in this circuit, and the ratings it needs
+DC動作点が解けていないので、必要な定格を出せません	The DC operating point isn't solved, so the needed ratings can't be shown
+回路を変えたので、いまは前の解析結果です。DC動作点をもう一度解析してください	The circuit changed, so these are the previous analysis results. Run the DC operating point again
+この部品は、解析結果に個別の値がありません (IC の内部モデルなど)	This part has no individual values in the analysis results (e.g. an IC's internal model)
+この回路でかかる値	Values in this circuit
+・電流 {}  電力 {}	• Current {}  Power {}
+・部品の両端の電圧 (Vce / Vds) {}	• Voltage across the part (Vce / Vds) {}
+・回路の最大電圧 {}	• Circuit max voltage {}
+余裕を 2 倍とるなら	With a 2x margin
+部品は、定格ぎりぎりで使うと、熱や劣化で壊れやすくなります。電圧・電流・電力は、最低でも 2 倍の余裕を見るのが、初学者の目安です	Parts used right at their ratings break more easily from heat and wear. As a beginner's rule of thumb, allow at least a 2x margin on voltage, current and power
+・抵抗の定格電力 {} 以上 → {}	• Resistor power rating at least {} → {}
+5W を超えます。電流を減らすか、抵抗を直列・並列に分けてください	Over 5W. Reduce the current, or split the resistor into series/parallel ones
+{} の抵抗が使えます	A {} resistor will do
+・最大電圧 {} 以上 / 最大電流 {} 以上 / 最大電力 {} 以上	• Max voltage at least {} / max current at least {} / max power at least {}
+✔ この部品は、2 倍の余裕を満たしています	✔ This part meets the 2x margin
+✖ この部品は、2 倍の余裕を満たしていません (いずれかの最大定格が足りない、または不明です)	✖ This part doesn't meet the 2x margin (some max rating is too low or unknown)
+この部品の定格が分からないので、判定できません。データシートで、上の条件を満たすか確かめてください	This part's ratings are unknown, so it can't be judged. Check in the datasheet that it meets the conditions above
+同じ種類で、条件を満たすライブラリ部品	Library parts of the same type that meet the conditions

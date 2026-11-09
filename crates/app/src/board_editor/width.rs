@@ -61,21 +61,21 @@ impl BoardEditor {
         crate::widgets::section_heading(ui, "電流と電圧降下");
         let nets = self.board_nets();
         if nets.is_empty() {
-            ui.small("回路図から部品を取り込むと、ネットの一覧が出ます");
+            ui.small(i18n::tr("回路図から部品を取り込むと、ネットの一覧が出ます"));
             return;
         }
         let conn = drc::connectivity(&self.board);
         let thin = net_widths(&self.board, &conn, &CopperSpec::default()).iter().filter(|w| w.too_thin()).count();
-        ui.small("流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます");
+        ui.small(i18n::tr("流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます"));
         ui.horizontal(|ui| {
-            if ui.button("ネットの一覧").on_hover_text("全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。見出しのクリックで並べ替え、CSV でコピーもできます").clicked() {
+            if ui.button(i18n::tr("ネットの一覧")).on_hover_text(i18n::tr("全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。見出しのクリックで並べ替え、CSV でコピーもできます")).clicked() {
                 self.net_table.open = true;
             }
-            if ui.button("電流の一覧を別窓で開く").on_hover_text("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます").clicked() {
+            if ui.button(i18n::tr("電流の一覧を別窓で開く")).on_hover_text(i18n::tr("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます")).clicked() {
                 self.current_win_open = true;
             }
             if thin > 0 {
-                ui.colored_label(crate::theme::ERROR, format!("電流に対して細いネット {thin} 本"));
+                ui.colored_label(crate::theme::ERROR, i18n::trf!("電流に対して細いネット {thin} 本"));
             }
         });
         self.ir_drop_ui(ui);
@@ -117,29 +117,29 @@ impl BoardEditor {
         ui.separator();
         ui.horizontal(|ui| {
             crate::widgets::section_heading(ui, "配線の電圧降下");
-            if ui.button("計算する").on_hover_text("上で入れた電流が流れたとき、電源の入口から各ピンまでの配線 (銅箔・ビア) で何 V 下がるかを求めます。配線を変えたら、もう一度押してください").clicked() {
+            if ui.button(i18n::tr("計算する")).on_hover_text(i18n::tr("上で入れた電流が流れたとき、電源の入口から各ピンまでの配線 (銅箔・ビア) で何 V 下がるかを求めます。配線を変えたら、もう一度押してください")).clicked() {
                 let fp = copper_fingerprint(&self.board);
                 self.ir_drop = Some((fp, pcb_core::irdrop::net_drops(&self.board, &pcb_core::irdrop::IrSpec::default())));
             }
         });
         ui.horizontal(|ui| {
-            if ui.button("シミュレーションに反映").on_hover_text("この基板の配線の抵抗とインダクタンスを、回路図のシミュレーション (DC・過渡・AC・ノイズ) に入れます。電源の入口から各ピンまでの銅箔の抵抗 (DCから効く) とインダクタンス (ACや速い変化で効く。細く長い配線で約 1 nH/mm。近くを並んで走る別のネットの配線とは磁気の結合も入れます) が、ピンの手前に直列に入ります。「配線を細くしたら電圧が落ちた」を波形で確かめられます。配線していないネットは理想の線のままです").clicked() {
+            if ui.button(i18n::tr("シミュレーションに反映")).on_hover_text(i18n::tr("この基板の配線の抵抗とインダクタンスを、回路図のシミュレーション (DC・過渡・AC・ノイズ) に入れます。電源の入口から各ピンまでの銅箔の抵抗 (DCから効く) とインダクタンス (ACや速い変化で効く。細く長い配線で約 1 nH/mm。近くを並んで走る別のネットの配線とは磁気の結合も入れます) が、ピンの手前に直列に入ります。「配線を細くしたら電圧が落ちた」を波形で確かめられます。配線していないネットは理想の線のままです")).clicked() {
                 self.post_layout_request = Some(true);
             }
-            if ui.small_button("やめる").on_hover_text("配線の抵抗を入れない理想の回路に戻します").clicked() {
+            if ui.small_button(i18n::tr("やめる")).on_hover_text(i18n::tr("配線の抵抗を入れない理想の回路に戻します")).clicked() {
                 self.post_layout_request = Some(false);
             }
         });
         let fp = copper_fingerprint(&self.board);
         let Some((made_for, nets)) = self.ir_drop.as_ref() else {
-            ui.small("電流を入れたネットについて、配線の抵抗による電圧降下を調べます (電源とGNDの両方を調べると、部品に届く電圧が分かります)");
+            ui.small(i18n::tr("電流を入れたネットについて、配線の抵抗による電圧降下を調べます (電源とGNDの両方を調べると、部品に届く電圧が分かります)"));
             return;
         };
         if (made_for - fp).abs() > 1e-9 {
-            ui.colored_label(crate::theme::WARN, "配線か電流が変わりました。「計算する」で更新してください");
+            ui.colored_label(crate::theme::WARN, i18n::tr("配線か電流が変わりました。「計算する」で更新してください"));
         }
         if nets.is_empty() {
-            ui.small("電流が入っているネットがありません (上の欄に A を入れてください)");
+            ui.small(i18n::tr("電流が入っているネットがありません (上の欄に A を入れてください)"));
         }
         for nd in nets {
             if let Some(note) = &nd.note {
@@ -156,15 +156,15 @@ impl BoardEditor {
                     r.on_hover_text(self.ir_detail(nd, &src));
                 }
                 None => {
-                    ui.small(format!("{}: 入口 {src} からつながっているピンがありません (配線が切れています)", nd.net));
+                    ui.small(i18n::trf!("{}: 入口 {src} からつながっているピンがありません (配線が切れています)", nd.net));
                 }
             }
             if nd.pads.iter().any(|p| p.ohm.is_none()) {
                 let names: Vec<String> = nd.pads.iter().filter(|p| p.ohm.is_none()).map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
-                ui.colored_label(crate::theme::ERROR, format!("  つながっていない: {}", names.join(", ")));
+                ui.colored_label(crate::theme::ERROR, i18n::trf!("  つながっていない: {}", names.join(", ")));
             }
         }
-        ui.small("目安: 30 mV 未満は問題なし、100 mV 以上は電源の電圧が目に見えて下がります。電源とGNDの降下は足し算で効きます");
+        ui.small(i18n::tr("目安: 30 mV 未満は問題なし、100 mV 以上は電源の電圧が目に見えて下がります。電源とGNDの降下は足し算で効きます"));
     }
 
     fn ir_detail(&self, nd: &pcb_core::irdrop::NetDrop, src: &str) -> String {

@@ -16,21 +16,21 @@ impl PartForm {
         if let Ok(fp) = def.footprint() {
             footprint_preview(ui, &fp);
             if let Some(h) = fp.height {
-                ui.small(format!("本体の高さ {h:.2} mm"));
+                ui.small(i18n::trf!("本体の高さ {h:.2} mm"));
             }
         }
         let issues: Vec<Issue> = def.validate();
         egui::ScrollArea::vertical().id_salt("part_form_issues").max_height(110.0).auto_shrink([false, true]).show(ui, |ui| {
             if issues.iter().any(|i| i.error) {
-                ui.small("赤い項目を直すと、保存できます");
+                ui.small(i18n::tr("赤い項目を直すと、保存できます"));
             }
             if issues.is_empty() {
-                ui.colored_label(crate::theme::OK, "✔ 問題は見つかりません");
+                ui.colored_label(crate::theme::OK, i18n::tr("✔ 問題は見つかりません"));
             }
             for i in &issues {
                 // an "error" here only means "cannot be saved yet": a blank form starts with some, so it is worded as a to-do
                 let (c, mark) = if i.error { (crate::theme::ERROR, "保存前に直す") } else { (crate::theme::WARN, "注意") };
-                ui.colored_label(c, format!("{mark}: {}", i.message));
+                ui.colored_label(c, format!("{mark}: {}", i18n::tr_dyn(&i.message)));
             }
         });
         let ok = !def.has_errors();
@@ -41,7 +41,7 @@ impl PartForm {
             ("保存してライブラリに追加", "この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません")
         };
         if let Some(n) = self.editing().filter(|_| !replaces) {
-            ui.small(format!("「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)"));
+            ui.small(i18n::trf!("「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)"));
         }
         if crate::widgets::primary_button_wide(ui, ok, label).on_hover_text(tip.replace("{}", &def.name)).clicked() {
             return Some(def.clone());

@@ -9,20 +9,20 @@ use eframe::egui;
 /// The "閉じる" button at the top of a result window (the waveforms and tables under the schematic, a lesson window). `what` is the
 /// thing that closes, for the hover text ("波形" gives "波形を閉じます").
 pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
-    ui.button("閉じる").on_hover_text(format!("{what}を閉じます")).clicked()
+    ui.button(i18n::tr("閉じる")).on_hover_text(i18n::trf!("{what}を閉じます")).clicked()
 }
 
 /// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"). Buttons are grey until pressed and the same size, so
 /// this looks like any other button; it exists so the main actions stay easy to find in the code (and to restyle in one place).
 #[allow(dead_code)] // the documented main-action button (ui-rules.md); the panels use `primary_button_wide` right now
 pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
-    ui.add_enabled(enabled, egui::Button::new(label))
+    ui.add_enabled(enabled, egui::Button::new(i18n::tr_dyn(label)))
 }
 
 /// `primary_button` as wide as the space left in its row (the main action of a side panel, under bars of the same width).
 pub fn primary_button_wide(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
     let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-    ui.add_enabled_ui(enabled, |ui| ui.add_sized(size, egui::Button::new(label))).inner
+    ui.add_enabled_ui(enabled, |ui| ui.add_sized(size, egui::Button::new(i18n::tr_dyn(label)))).inner
 }
 
 /// The title of a block inside a panel or window ("回路図の記号"): a step stronger than the body, in the light accent, with a little air above.
@@ -33,7 +33,7 @@ pub fn section_heading(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Resp
 
 /// The same title without the air above, for a title that shares a row with a button (the top row of a result window).
 pub fn heading_inline(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
-    ui.label(egui::RichText::new(text).strong().color(crate::theme::INFO))
+    ui.label(egui::RichText::new(i18n::tr_dyn(&text.into())).strong().color(crate::theme::INFO))
 }
 
 /// The gap between two groups of controls in a side panel: close controls sit 4 px apart, groups 12 px, with a faint line between.
@@ -48,7 +48,7 @@ pub fn group_gap(ui: &mut egui::Ui) {
 pub fn count_title(ui: &egui::Ui, name: &str, count: usize) -> egui::text::LayoutJob {
     let font = egui::TextStyle::Button.resolve(ui.style());
     let mut job = egui::text::LayoutJob::default();
-    job.append(name, 0.0, egui::TextFormat::simple(font.clone(), ui.visuals().text_color()));
+    job.append(&i18n::tr_dyn(name), 0.0, egui::TextFormat::simple(font.clone(), ui.visuals().text_color()));
     job.append(&count.to_string(), 8.0, egui::TextFormat::simple(font, ui.visuals().weak_text_color()));
     job
 }
@@ -126,14 +126,14 @@ pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, ti
     let points = [egui::vec2(-r * 0.5, -r), egui::vec2(r, 0.0), egui::vec2(-r * 0.5, r)].map(|p| centre + spin * p).to_vec();
     ui.painter().add(egui::Shape::convex_polygon(points, colour, egui::Stroke::NONE));
     let font = egui::TextStyle::Button.resolve(ui.style());
-    let galley = ui.painter().layout_no_wrap(title.to_owned(), font, colour);
+    let galley = ui.painter().layout_no_wrap(i18n::tr_dyn(title), font, colour);
     let pos = egui::pos2(row.min.x + 4.0 + ui.spacing().icon_width + 6.0, row.center().y - galley.size().y / 2.0);
     // bold while open: draw twice, a pixel apart (the font has no bold face)
     if open {
         ui.painter().galley(pos + egui::vec2(0.6, 0.0), galley.clone(), colour);
     }
     ui.painter().galley(pos, galley, colour);
-    let hit = hit.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(hint);
+    let hit = hit.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(i18n::tr_dyn(hint));
     // the band already shows what belongs to the section: no guide line, and a narrow indent (the panel is only so wide)
     let mut bottom = row.bottom();
     let out = ui
@@ -219,7 +219,7 @@ pub fn segment_bar(ui: &mut egui::Ui, items: &[(&str, bool)], selected: Option<u
                 ui.painter().vline(rect.max.x - 0.5, rect.y_range().shrink(4.0), egui::Stroke::new(1.0, widgets.noninteractive.bg_stroke.color));
             }
             let colour = if chosen { ui.visuals().strong_text_color() } else if *enabled { ui.style().interact(&resp).text_color() } else { widgets.noninteractive.text_color().gamma_multiply(0.5) };
-            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, *label, egui::TextStyle::Button.resolve(ui.style()), colour);
+            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr_dyn(label), egui::TextStyle::Button.resolve(ui.style()), colour);
             out.push(resp);
         }
     });
@@ -254,14 +254,14 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[
         ui.spacing_mut().item_spacing.x = 3.0;
         for &(value, label, hover) in tabs {
             let selected = *current == value;
-            let text = egui::RichText::new(label).size(14.0);
+            let text = egui::RichText::new(i18n::tr_dyn(label)).size(14.0);
             let (text, fill) = if selected {
                 (text.strong().color(ui.visuals().strong_text_color()), ui.visuals().selection.bg_fill)
             } else {
                 (text, ui.visuals().widgets.inactive.weak_bg_fill)
             };
             let r = ui.add(egui::Button::new(text).fill(fill).min_size(egui::vec2(72.0, 26.0)).corner_radius(egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }));
-            let r = if hover.is_empty() { r } else { r.on_hover_text(hover) };
+            let r = if hover.is_empty() { r } else { r.on_hover_text(i18n::tr_dyn(hover)) };
             if selected {
                 ui.painter().hline(r.rect.x_range(), r.rect.bottom(), egui::Stroke::new(3.0, accent));
             }
@@ -282,24 +282,24 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[
 pub fn warning_lines(ui: &mut egui::Ui, id: &str, lines: &[String], calm: impl Fn(&str) -> bool) {
     let (notes, warns): (Vec<&String>, Vec<&String>) = lines.iter().partition(|w| calm(w));
     for w in notes {
-        ui.colored_label(egui::Color32::from_rgb(130, 170, 210), format!("ⓘ {w}"));
+        ui.colored_label(egui::Color32::from_rgb(130, 170, 210), format!("ⓘ {}", i18n::tr_dyn(w)));
     }
     match warns.len() {
         0 => {}
         1 => {
-            ui.colored_label(crate::theme::WARN, warns[0]);
+            ui.colored_label(crate::theme::WARN, i18n::tr_dyn(warns[0]));
         }
         n => {
-            egui::CollapsingHeader::new(egui::RichText::new(format!("⚠ 警告 {n} 件")).color(crate::theme::WARN))
+            egui::CollapsingHeader::new(egui::RichText::new(i18n::trf!("⚠ 警告 {n} 件")).color(crate::theme::WARN))
                 .id_salt(id)
                 .default_open(false)
                 .show(ui, |ui| {
                     for w in warns {
-                        ui.colored_label(crate::theme::WARN, w);
+                        ui.colored_label(crate::theme::WARN, i18n::tr_dyn(w));
                     }
                 })
                 .header_response
-                .on_hover_text("解析で見つかった注意です。押すと全部を出します");
+                .on_hover_text(i18n::tr("解析で見つかった注意です。押すと全部を出します"));
         }
     }
 }

@@ -170,15 +170,15 @@ impl BoardEditor {
             for (kind, name, what, got, why) in &rows {
                 ui.horizontal_wrapped(|ui| {
                     if *got {
-                        ui.colored_label(crate::theme::OK, "✔").on_hover_text("基板に取り込まれています");
+                        ui.colored_label(crate::theme::OK, "✔").on_hover_text(i18n::tr("基板に取り込まれています"));
                     } else {
-                        ui.colored_label(crate::theme::ERROR, "✖").on_hover_text("基板に届いていません。ネットのパッドが基板にない、部品を取り込んでいない、などが考えられます。名前を確かめて、回路図から取り込み直してください");
+                        ui.colored_label(crate::theme::ERROR, "✖").on_hover_text(i18n::tr("基板に届いていません。ネットのパッドが基板にない、部品を取り込んでいない、などが考えられます。名前を確かめて、回路図から取り込み直してください"));
                     }
-                    ui.label(format!("{kind}「{name}」")).on_hover_text(if why.trim().is_empty() { "(理由が書かれていません)" } else { why });
+                    ui.label(format!("{kind}「{name}」")).on_hover_text(if why.trim().is_empty() { i18n::tr("(理由が書かれていません)") } else { why });
                     ui.label(egui::RichText::new(what).small().color(Color32::GRAY));
                 });
             }
-            if ui.button("回路図で表を開く").on_hover_text("表は回路図の側で直します (基板と回路図で食い違わないように、ここは見るだけです)。直すと基板に自動で取り込まれます").clicked() {
+            if ui.button(i18n::tr("回路図で表を開く")).on_hover_text(i18n::tr("表は回路図の側で直します (基板と回路図で食い違わないように、ここは見るだけです)。直すと基板に自動で取り込まれます")).clicked() {
                 open_sch = true;
             }
         });
@@ -192,33 +192,33 @@ impl BoardEditor {
             return;
         }
         let mut both = self.show_req_marks || self.show_req_lines;
-        if ui.checkbox(&mut both, "組と離す距離を基板の上に出す").on_hover_text("近くに置く組を枠で囲み (守れていれば緑、広がりすぎならピンク)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければピンク)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「物の表示とロック」で別々に切り替えられます").changed() {
+        if ui.checkbox(&mut both, i18n::tr("組と離す距離を基板の上に出す")).on_hover_text(i18n::tr("近くに置く組を枠で囲み (守れていれば緑、広がりすぎならピンク)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければピンク)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「物の表示とロック」で別々に切り替えられます")).changed() {
             (self.show_req_marks, self.show_req_lines) = (both, both);
         }
         let answer = self.cached_requirements();
         let rep = &answer.0;
         let orange = crate::theme::WARN;
         if rep.findings.is_empty() {
-            ui.label(format!("✔ 設計の要件を満たしています ({} 件を確認)", rep.checked)).on_hover_text("回路図の「設計の要件」の表にある、近くに置く組と、離す組を調べました。上限や下限の0のものは調べません");
+            ui.label(i18n::trf!("✔ 設計の要件を満たしています ({} 件を確認)", rep.checked)).on_hover_text(i18n::tr("回路図の「設計の要件」の表にある、近くに置く組と、離す組を調べました。上限や下限の0のものは調べません"));
         } else {
-            ui.colored_label(orange, format!("設計の要件を満たしていない所: {} 件", rep.findings.len())).on_hover_text("回路図の「設計の要件」の表にある、近くに置く組の広がりと、離す組の近さです。部品を動かすか、表の数字を見直してください");
+            ui.colored_label(orange, i18n::trf!("設計の要件を満たしていない所: {} 件", rep.findings.len())).on_hover_text(i18n::tr("回路図の「設計の要件」の表にある、近くに置く組の広がりと、離す組の近さです。部品を動かすか、表の数字を見直してください"));
             ui.horizontal(|ui| {
-                ui.label("承知する理由");
-                ui.add(egui::TextEdit::singleline(&mut self.waive_reason).hint_text("なぜこのままでよいか").desired_width(220.0))
-                    .on_hover_text("下の「承知する」を押すときの理由です。回路図の「設計の要件」の表の「承知した例外」に、理由つきで書き込まれます。理由が空だと押せません (あとで読む人が、なぜかを知るため)");
+                ui.label(i18n::tr("承知する理由"));
+                ui.add(egui::TextEdit::singleline(&mut self.waive_reason).hint_text(i18n::tr("なぜこのままでよいか")).desired_width(220.0))
+                    .on_hover_text(i18n::tr("下の「承知する」を押すときの理由です。回路図の「設計の要件」の表の「承知した例外」に、理由つきで書き込まれます。理由が空だと押せません (あとで読む人が、なぜかを知るため)"));
             });
             for f in &rep.findings {
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(orange, &f.message);
+                    ui.colored_label(orange, i18n::tr_dyn(&f.message));
                     let can = !self.waive_reason.trim().is_empty();
-                    if ui.add_enabled(can, egui::Button::new("承知する").small()).on_hover_text("この指摘を、理由つきで「承知した例外」にします。点検の件数に数えず、基板の上では黄土色で出ます。理由を上の欄に書いてから押します。回路図の側の表にも書き込まれます").clicked() {
+                    if ui.add_enabled(can, egui::Button::new(i18n::tr("承知する")).small()).on_hover_text(i18n::tr("この指摘を、理由つきで「承知した例外」にします。点検の件数に数えず、基板の上では黄土色で出ます。理由を上の欄に書いてから押します。回路図の側の表にも書き込まれます")).clicked() {
                         let w = design_spec::Waiver { kind: f.kind.key().into(), name: f.name.clone(), item: f.item.clone(), note: self.waive_reason.trim().to_string() };
                         self.checkpoint();
                         self.board.waivers.push(w.clone());
                         self.waiver_request = Some((true, w));
                         self.status = "承知した例外にしました。回路図の表にも書きました".into();
                     }
-                    if f.kind == FindingKind::Group && ui.small_button("組を選ぶ").on_hover_text("この組の部品をまとめて選びます。どこに散らばっているかが見えます").clicked() {
+                    if f.kind == FindingKind::Group && ui.small_button(i18n::tr("組を選ぶ")).on_hover_text(i18n::tr("この組の部品をまとめて選びます。どこに散らばっているかが見えます")).clicked() {
                         if let Some(g) = self.board.place_groups.iter().find(|g| g.name == f.name) {
                             self.multi = self.board.parts.iter().enumerate().filter(|(_, p)| g.parts.contains(&p.refdes)).map(|(i, _)| Item::Part(i)).collect();
                             self.selected = None;
@@ -229,12 +229,12 @@ impl BoardEditor {
             }
         }
         if !rep.waived.is_empty() {
-            egui::CollapsingHeader::new(format!("承知した例外 ({})", rep.waived.len())).id_salt("req_waived").default_open(false).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::trf!("承知した例外 ({})", rep.waived.len())).id_salt("req_waived").default_open(false).show(ui, |ui| {
                 for (f, why) in &rep.waived {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(&f.message).color(crate::theme::WARN));
-                        ui.label(egui::RichText::new(format!("理由: {}", if why.trim().is_empty() { "(書かれていません)" } else { why })).small());
-                        if ui.small_button("承知をやめる").on_hover_text("この例外を取り消して、また指摘に戻します。回路図の表からも消えます").clicked() {
+                        ui.label(egui::RichText::new(i18n::tr_dyn(&f.message)).color(crate::theme::WARN));
+                        ui.label(egui::RichText::new(i18n::trf!("理由: {}", if why.trim().is_empty() { "(書かれていません)" } else { why })).small());
+                        if ui.small_button(i18n::tr("承知をやめる")).on_hover_text(i18n::tr("この例外を取り消して、また指摘に戻します。回路図の表からも消えます")).clicked() {
                             let w = design_spec::Waiver { kind: f.kind.key().into(), name: f.name.clone(), item: f.item.clone(), note: String::new() };
                             self.checkpoint();
                             self.board.waivers.retain(|x| !(x.kind == w.kind && x.name == w.name && (x.item.is_empty() || x.item == w.item)));
@@ -245,10 +245,10 @@ impl BoardEditor {
             });
         }
         for note in &self.group_notes {
-            ui.label(egui::RichText::new(format!("配置: {note}")).small().color(Color32::GRAY)).on_hover_text("自動配置のとき、組の部品のうち、コピー (同じ形の繰り返し) や IC のブロックにまとまっている部品は、組の塊に入れられません。その部品は、組の上限を距離のコストで守る形になります");
+            ui.label(egui::RichText::new(i18n::trf!("配置: {note}")).small().color(Color32::GRAY)).on_hover_text(i18n::tr("自動配置のとき、組の部品のうち、コピー (同じ形の繰り返し) や IC のブロックにまとまっている部品は、組の塊に入れられません。その部品は、組の上限を距離のコストで守る形になります"));
         }
         if !rep.missing.is_empty() {
-            ui.label(format!("基板にない名前: {} 件", rep.missing.len())).on_hover_text(format!("表にあるが、基板に部品・パッドがないもの (回路図から取り込み直すと消えることがあります): {}", rep.missing.join("、")));
+            ui.label(i18n::trf!("基板にない名前: {} 件", rep.missing.len())).on_hover_text(i18n::trf!("表にあるが、基板に部品・パッドがないもの (回路図から取り込み直すと消えることがあります): {}", rep.missing.join("、")));
         }
     }
 }

@@ -168,15 +168,15 @@ impl SchEditor {
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width(270.0);
-                        ui.label(format!("出力合計: {}", eng(res.out_rms, "V rms")));
+                        ui.label(i18n::trf!("出力合計: {}", eng(res.out_rms, "V rms")));
                         if let Some(r) = res.in_rms {
-                            ui.label(format!("入力換算: {}", eng(r, "rms"))).on_hover_text("出力のノイズを回路の利得で割って入力側に直した値。入力信号がこれより小さいと、ノイズに埋もれます");
+                            ui.label(i18n::trf!("入力換算: {}", eng(r, "rms"))).on_hover_text(i18n::tr("出力のノイズを回路の利得で割って入力側に直した値。入力信号がこれより小さいと、ノイズに埋もれます"));
                         }
                         if let Some((top, share)) = res.dominant() {
                             let info = describe_source(&top.name);
-                            ui.colored_label(crate::theme::WARN, format!("最大の原因: {} ({}) — 全体の約 {:.0}%", top.name, info.title, share * 100.0));
+                            ui.colored_label(crate::theme::WARN, i18n::trf!("最大の原因: {} ({}) — 全体の約 {:.0}%", top.name, info.title, share * 100.0));
                             if !info.remedy.is_empty() {
-                                ui.small(format!("対策: {}", info.remedy));
+                                ui.small(i18n::trf!("対策: {}", info.remedy));
                             }
                         }
                         {
@@ -186,8 +186,8 @@ impl SchEditor {
                           // name (tick to draw) | rms | share of the total, one row per source
                           egui::Grid::new("noise_list").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                             ui.label("");
-                            ui.label("rms").on_hover_text("その原因だけが出す雑音の実効値 (1Hz 幅あたりではなく、グラフの帯域全体)");
-                            ui.label("割合").on_hover_text("全体の雑音のうち、この原因が占める割合 (電力で足し算)");
+                            ui.label("rms").on_hover_text(i18n::tr("その原因だけが出す雑音の実効値 (1Hz 幅あたりではなく、グラフの帯域全体)"));
+                            ui.label(i18n::tr("割合")).on_hover_text(i18n::tr("全体の雑音のうち、この原因が占める割合 (電力で足し算)"));
                             ui.end_row();
                             for (name, rms) in &order {
                                 let mut on = selected.contains(name);
@@ -234,7 +234,7 @@ impl SchEditor {
                         .collect();
                     if chosen.is_empty() {
                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
-                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から項目を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から項目を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
                     let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v }).collect();

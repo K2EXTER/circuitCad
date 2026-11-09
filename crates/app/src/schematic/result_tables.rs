@@ -46,14 +46,14 @@ impl SchEditor {
         let mut goto_net: Option<String> = None;
         if st.results {
             let mut open = true;
-            egui::Window::new("解析結果の表").open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([440.0, 460.0]).show(ctx, |ui| {
+            egui::Window::new(i18n::tr("解析結果の表")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([440.0, 460.0]).show(ctx, |ui| {
                 self.results_table(ui, &mut st, &mut goto, &mut goto_net);
             });
             st.results = open;
         }
         if st.netlist {
             let mut open = true;
-            egui::Window::new("ネットリスト").open(&mut open).default_pos(crate::widgets::beside_panel() + egui::vec2(24.0, 24.0)).default_size([440.0, 420.0]).show(ctx, |ui| {
+            egui::Window::new(i18n::tr("ネットリスト")).open(&mut open).default_pos(crate::widgets::beside_panel() + egui::vec2(24.0, 24.0)).default_size([440.0, 420.0]).show(ctx, |ui| {
                 self.netlist_table(ui, &mut st, &mut goto_net);
             });
             st.netlist = open;
@@ -69,7 +69,7 @@ impl SchEditor {
 
     fn results_table(&self, ui: &mut egui::Ui, st: &mut State, goto: &mut Option<String>, goto_net: &mut Option<String>) {
         let Some(res) = self.dc.as_ref().and_then(|d| d.outcome.as_ref().ok()) else {
-            ui.label("まだ結果がありません。「DC動作点を解析」を押してから開いてください");
+            ui.label(i18n::tr("まだ結果がありません。「DC動作点を解析」を押してから開いてください"));
             return;
         };
         crate::widgets::tab_bar(
@@ -78,17 +78,17 @@ impl SchEditor {
             &[(Tab::Nodes, "ノード電圧", "回路の各ノード (ネット) の電圧です"), (Tab::Elements, "素子", "素子ごとの電流・電圧・電力です")],
         );
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut st.filter).hint_text("検索 (名前)").desired_width(160.0))
-                .on_hover_text("名前に、この文字が入っているものだけを出します (大文字・小文字は区別しません)");
+            ui.add(egui::TextEdit::singleline(&mut st.filter).hint_text(i18n::tr("検索 (名前)")).desired_width(160.0))
+                .on_hover_text(i18n::tr("名前に、この文字が入っているものだけを出します (大文字・小文字は区別しません)"));
             match st.tab {
                 Tab::Nodes => {
-                    ui.selectable_value(&mut st.node_sort, NodeSort::Name, "名前順").on_hover_text("ノード名の順に並べます");
-                    ui.selectable_value(&mut st.node_sort, NodeSort::VoltageHigh, "電圧が高い順").on_hover_text("電圧の高いノードを上に並べます (電源のレールを探すとき)");
+                    ui.selectable_value(&mut st.node_sort, NodeSort::Name, i18n::tr("名前順")).on_hover_text(i18n::tr("ノード名の順に並べます"));
+                    ui.selectable_value(&mut st.node_sort, NodeSort::VoltageHigh, i18n::tr("電圧が高い順")).on_hover_text(i18n::tr("電圧の高いノードを上に並べます (電源のレールを探すとき)"));
                 }
                 Tab::Elements => {
-                    ui.selectable_value(&mut st.elem_sort, ElemSort::Name, "名前順").on_hover_text("素子名の順に並べます");
-                    ui.selectable_value(&mut st.elem_sort, ElemSort::Power, "電力が大きい順").on_hover_text("電力の大きい素子を上に並べます (熱くなる部品を探すとき)");
-                    ui.selectable_value(&mut st.elem_sort, ElemSort::Current, "電流が大きい順").on_hover_text("電流の大きい素子を上に並べます");
+                    ui.selectable_value(&mut st.elem_sort, ElemSort::Name, i18n::tr("名前順")).on_hover_text(i18n::tr("素子名の順に並べます"));
+                    ui.selectable_value(&mut st.elem_sort, ElemSort::Power, i18n::tr("電力が大きい順")).on_hover_text(i18n::tr("電力の大きい素子を上に並べます (熱くなる部品を探すとき)"));
+                    ui.selectable_value(&mut st.elem_sort, ElemSort::Current, i18n::tr("電流が大きい順")).on_hover_text(i18n::tr("電流の大きい素子を上に並べます"));
                 }
             }
         });
@@ -103,7 +103,7 @@ impl SchEditor {
                 }
                 egui::Grid::new("res_nodes").striped(true).num_columns(2).show(ui, |ui| {
                     for (n, v) in rows {
-                        if ui.link(n.as_str()).on_hover_text("クリックで、このネットにつながる部品を回路図で選びます").clicked() {
+                        if ui.link(n.as_str()).on_hover_text(i18n::tr("クリックで、このネットにつながる部品を回路図で選びます")).clicked() {
                             *goto_net = Some(n.clone());
                         }
                         ui.label(eng(*v, "V"));
@@ -119,13 +119,13 @@ impl SchEditor {
                     ElemSort::Current => rows.sort_by(|a, b| b.current.abs().total_cmp(&a.current.abs())),
                 }
                 egui::Grid::new("res_elems").striped(true).num_columns(4).show(ui, |ui| {
-                    ui.strong("素子");
-                    ui.strong("電流");
-                    ui.strong("電圧");
-                    ui.strong("電力");
+                    ui.strong(i18n::tr("素子"));
+                    ui.strong(i18n::tr("電流"));
+                    ui.strong(i18n::tr("電圧"));
+                    ui.strong(i18n::tr("電力"));
                     ui.end_row();
                     for e in rows {
-                        if ui.link(e.name.as_str()).on_hover_text("クリックで、この部品を回路図で選びます").clicked() {
+                        if ui.link(e.name.as_str()).on_hover_text(i18n::tr("クリックで、この部品を回路図で選びます")).clicked() {
                             *goto = Some(e.name.clone());
                         }
                         ui.label(eng(e.current, "A"));
@@ -134,14 +134,14 @@ impl SchEditor {
                         ui.end_row();
                     }
                 });
-                ui.small("電流は素子の第1端子→第2端子の向き。電源は電力を供給すると負");
+                ui.small(i18n::tr("電流は素子の第1端子→第2端子の向き。電源は電力を供給すると負"));
             }
         });
     }
 
     fn netlist_table(&self, ui: &mut egui::Ui, st: &mut State, goto_net: &mut Option<String>) {
-        ui.add(egui::TextEdit::singleline(&mut st.net_filter).hint_text("検索 (ネット名・部品番号)").desired_width(f32::INFINITY))
-            .on_hover_text("ネットの名前か、そのネットにつながるピン (例: R1) に、この文字が入っているものだけを出します");
+        ui.add(egui::TextEdit::singleline(&mut st.net_filter).hint_text(i18n::tr("検索 (ネット名・部品番号)")).desired_width(f32::INFINITY))
+            .on_hover_text(i18n::tr("ネットの名前か、そのネットにつながるピン (例: R1) に、この文字が入っているものだけを出します"));
         let needle = st.net_filter.to_lowercase();
         let nets = extract(&self.sch);
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
@@ -151,10 +151,10 @@ impl SchEditor {
                     continue;
                 }
                 ui.horizontal_wrapped(|ui| {
-                    if ui.link(egui::RichText::new(&n.name).strong()).on_hover_text("クリックで、このネットにつながる部品を回路図で選びます").clicked() {
+                    if ui.link(egui::RichText::new(&n.name).strong()).on_hover_text(i18n::tr("クリックで、このネットにつながる部品を回路図で選びます")).clicked() {
                         *goto_net = Some(n.name.clone());
                     }
-                    ui.label(format!("({} ピン)", pins.len()));
+                    ui.label(i18n::trf!("({} ピン)", pins.len()));
                     ui.label(pins.join(", "));
                 });
             }

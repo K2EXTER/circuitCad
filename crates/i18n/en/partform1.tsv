@@ -1,0 +1,442 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/part_form/checklist.rs
+最大電圧 = 逆耐圧 (VRRM)、最大電流 = 平均順電流 (IF(AV))。どちらも「絶対最大定格」の表にあります	Max voltage = reverse voltage (VRRM), max current = average forward current (IF(AV)). Both are in the "Absolute maximum ratings" table
+順方向電圧 Vf	Forward voltage Vf
+電気的特性。条件の電流 (IF) も一緒に書く	Electrical characteristics. Also note the test current (IF)
+逆回復時間 trr	Reverse recovery time trr
+電気的特性。スイッチング電源や高い周波数で効く	Electrical characteristics. Matters in switching supplies and at high frequencies
+接合容量 Cj	Junction capacitance Cj
+電気的特性。高い周波数で効く	Electrical characteristics. Matters at high frequencies
+非繰り返しサージ電流 IFSM	Non-repetitive surge current IFSM
+絶対最大定格。電源を入れた瞬間の電流に耐えるか	Absolute maximum ratings. Can it survive the inrush current at power-on?
+逆方向漏れ電流 IR	Reverse leakage current IR
+電気的特性。温度で増える	Electrical characteristics. Rises with temperature
+最大電力 = 許容損失 (Pd)。最大電流は、最大ツェナー電流 (IZM) を入れます	Max power = power dissipation (Pd). For max current, enter the maximum zener current (IZM)
+ツェナー電圧 Vz	Zener voltage Vz
+電気的特性。測定電流 (IZT) と許容差 (±5% など) も書く	Electrical characteristics. Also note the test current (IZT) and tolerance (e.g. ±5%)
+ツェナーインピーダンス Zzt	Zener impedance Zzt
+電気的特性。小さいほど電圧が安定	Electrical characteristics. Smaller means a more stable voltage
+温度係数	Temperature coefficient
+電気的特性。温度で電圧がどれだけ動くか	Electrical characteristics. How much the voltage moves with temperature
+最大ツェナー電流 IZM	Maximum zener current IZM
+絶対最大定格 (または許容損失 ÷ Vz)	Absolute maximum ratings (or power dissipation ÷ Vz)
+トランジスタ (バイポーラ)	Transistor (bipolar)
+最大電圧 = コレクタ・エミッタ間電圧 (VCEO)、最大電流 = コレクタ電流 (IC)、最大電力 = 許容損失 (Ptot)。すべて「絶対最大定格」にあります	Max voltage = collector-emitter voltage (VCEO), max current = collector current (IC), max power = power dissipation (Ptot). All are in "Absolute maximum ratings"
+電流増幅率 hFE	Current gain hFE
+電気的特性。範囲 (最小〜最大) と、条件の電流 (IC) を書く	Electrical characteristics. Note the range (min to max) and the test current (IC)
+コレクタ・エミッタ飽和電圧 VCE(sat)	Collector-emitter saturation voltage VCE(sat)
+電気的特性。スイッチに使うとき	Electrical characteristics. For use as a switch
+ベース・エミッタ間電圧 VBE	Base-emitter voltage VBE
+電気的特性。約 0.7V	Electrical characteristics. About 0.7V
+トランジション周波数 fT	Transition frequency fT
+電気的特性。増幅できる周波数の目安	Electrical characteristics. A rough limit of the frequency it can amplify
+最大電圧 = ドレイン・ソース間電圧 (VDS)、最大電流 = ドレイン電流 (ID)、最大電力 = 許容損失 (PD)。「絶対最大定格」にあります	Max voltage = drain-source voltage (VDS), max current = drain current (ID), max power = power dissipation (PD). They are in "Absolute maximum ratings"
+しきい値電圧 VGS(th)	Threshold voltage VGS(th)
+電気的特性。ゲートをこれ以上にするとオンになり始める	Electrical characteristics. Above this gate voltage it starts to turn on
+オン抵抗 RDS(on)	On-resistance RDS(on)
+電気的特性。ゲート電圧 (VGS) の条件に注意。スイッチの発熱を決める	Electrical characteristics. Mind the gate voltage (VGS) condition. Decides how hot the switch gets
+ゲート・ソース間の最大電圧 VGS	Maximum gate-source voltage VGS
+絶対最大定格。超えるとゲートが壊れる	Absolute maximum ratings. The gate breaks if this is exceeded
+ゲート電荷 Qg	Gate charge Qg
+電気的特性。ゲートを駆動する電流とスイッチング速度に効く	Electrical characteristics. Affects the gate drive current and switching speed
+レギュレータ (三端子・LDO)	Regulator (3-terminal / LDO)
+最大電圧 = 入力電圧の最大、最大電流 = 出力電流の最大。「絶対最大定格」にあります	Max voltage = maximum input voltage, max current = maximum output current. They are in "Absolute maximum ratings"
+出力電圧 Vout	Output voltage Vout
+電気的特性。許容差 (±4% など) も書く	Electrical characteristics. Also note the tolerance (e.g. ±4%)
+ドロップアウト電圧	Dropout voltage
+電気的特性。入力が出力よりこれ以上高くないと安定化しない	Electrical characteristics. The input must be at least this much above the output to regulate
+ライン・レギュレーション	Line regulation
+電気的特性。入力が変わったときの出力の変化	Electrical characteristics. Output change when the input changes
+ロード・レギュレーション	Load regulation
+電気的特性。負荷が変わったときの出力の変化	Electrical characteristics. Output change when the load changes
+熱抵抗 θJA	Thermal resistance θJA
+熱の表。電力 × 熱抵抗 = 温度上昇	Thermal table. Power × thermal resistance = temperature rise
+静止電流 (グラウンド電流)	Quiescent current (ground current)
+電気的特性。電池で使うときの消費	Electrical characteristics. Consumption when running on batteries
+最大電圧 = 電源電圧の最大 (単電源なら合計、両電源なら ± の 2 倍)。「絶対最大定格」にあります	Max voltage = maximum supply voltage (the total for a single supply, 2 × the ± value for a dual supply). It is in "Absolute maximum ratings"
+利得帯域幅積 GBW	Gain-bandwidth product GBW
+電気的特性。ゲインを上げると帯域が狭くなる	Electrical characteristics. Higher gain means narrower bandwidth
+入力オフセット電圧 Vos	Input offset voltage Vos
+電気的特性。直流のずれ	Electrical characteristics. DC error
+入力バイアス電流 Ib	Input bias current Ib
+電気的特性。大きな抵抗を使うと効く	Electrical characteristics. Matters with large resistors
+出力電圧の振れ幅	Output voltage swing
+電気的特性。電源までは届かない (レール・ツー・レールかどうか)	Electrical characteristics. Can't reach the supply rails (check whether it is rail-to-rail)
+電気的特性。大きな信号で追いつける速さ	Electrical characteristics. How fast it can follow large signals
+動作する電源電圧の範囲	Operating supply voltage range
+推奨動作条件。単電源で使えるか	Recommended operating conditions. Can it run on a single supply?
+電解コンデンサ (アルミ・タンタル)	Electrolytic capacitor (aluminum / tantalum)
+最大電圧 = 定格電圧 (Rated Voltage、Vdc)。最大電流・最大電力は空のままでよい。下の「電解コンデンサの項目」に、リップル電流と寿命を入れます	Max voltage = rated voltage (Rated Voltage, Vdc). Max current and max power can stay empty. Enter the ripple current and lifetime in "Electrolytic capacitor items" below
+使用温度範囲	Operating temperature range
+仕様の表。最高温度 (105℃ など) で寿命とリップル電流の値が決まる	Specification table. The maximum temperature (e.g. 105℃) sets the lifetime and ripple current values
+容量許容差	Capacitance tolerance
+仕様の表。±20% (20℃、120Hz) など	Specification table. e.g. ±20% (20℃, 120Hz)
+漏れ電流 LC	Leakage current LC
+仕様の表。0.01CV または 3µA の大きいほど、など。2 分後の値	Specification table. e.g. 0.01CV or 3µA, whichever is larger. The value after 2 minutes
+損失角の正接 tanδ	Dissipation factor tanδ
+仕様の表。電圧ごと、120Hz。ESR に換算できる (ESR = tanδ ÷ 2πfC)	Specification table. Per voltage, 120Hz. Can be converted to ESR (ESR = tanδ ÷ 2πfC)
+インピーダンス Z (100kHz)	Impedance Z (100kHz)
+サイズの表。20℃ と −10℃。電解ではほぼ ESR (「かんたん作成」の「ESR に入れる」)	Size table. At 20℃ and −10℃. For electrolytics it is nearly the ESR ("Quick create" → "Use as ESR")
+低温特性 Z(−25℃)/Z(20℃)	Low-temperature characteristic Z(−25℃)/Z(20℃)
+仕様の表。寒いと ESR が何倍になるか	Specification table. How many times larger the ESR gets in the cold
+外形 φD × L とリード間隔 F	Size φD × L and lead spacing F
+寸法の表。部品の形 (リード間隔、穴径はリード径 d + 0.2〜0.3mm) と高さに使う	Dimensions table. Used for the part's shape (lead spacing; hole diameter is lead diameter d + 0.2–0.3mm) and height
+そのほか	Other
+部品に合わせて、「絶対最大定格」の電圧・電流・電力を入れます	Enter the voltage, current and power from "Absolute maximum ratings" that suit the part
+動作温度範囲	Operating temperature range
+絶対最大定格 / 推奨動作条件	Absolute maximum ratings / recommended operating conditions
+電源電圧の範囲	Supply voltage range
+推奨動作条件	Recommended operating conditions
+消費電流	Supply current
+電気的特性	Electrical characteristics
+# crates/app/src/part_form/chip.rs
+{label}「{t}」を、0 より大きい数で入力してください (例: 20m / 1n / 30M)	Enter a number greater than 0 for {label} "{t}" (e.g. 20m / 1n / 30M)
+値を入力してください (例: 100n / 4.7k / 10u)	Enter a value (e.g. 100n / 4.7k / 10u)
+並列容量	Parallel capacitance
+自己共振周波数	Self-resonant frequency
+ESL は自己共振周波数から {} と求めました	ESL was calculated as {} from the self-resonant frequency
+並列容量は自己共振周波数から {} と求めました	Parallel capacitance was calculated as {} from the self-resonant frequency
+DCバイアスで下がる量「{bias}」を % の数で入力してください (例: 30)	Enter the DC bias drop "{bias}" as a number in % (e.g. 30)
+飽和電流 Isat	Saturation current Isat
+インダクタンスの低下	Inductance drop
+温度係数 TC1	Temperature coefficient TC1
+温度係数 TC2	Temperature coefficient TC2
+ユーザー	
+ピンとモデルを作りました{tail}。このあと、パッケージを選び (0603 など)、定格 (耐圧など) をデータシートから入れて保存します	Pins and model created{tail}. Next, choose a package (e.g. 0603), enter the ratings (e.g. voltage rating) from the datasheet, and save
+かんたん作成: {}をデータシートの数値からつくる	Quick create: make a {} from datasheet values
+チップ部品 (コンデンサ・抵抗・コイル) を、データシートの数値からつくる	Make a chip part (capacitor, resistor, inductor) from datasheet values
+ESR・ESL などを足すと実物に近づきます	Adding ESR, ESL etc. makes it closer to the real part
+容量などの値に、データシートにある ESR・ESL・DCR などを足すと、実物に近いモデルになります。空の欄は入れません。値だけでも作れます	Adding the ESR, ESL, DCR etc. from the datasheet to the value (e.g. capacitance) gives a model close to the real part. Empty fields are left out. You can also make it from the value alone
+値 ({})	Value ({})
+コンデンサは容量 (例: 100n、4.7u)、抵抗は抵抗値 (例: 10k)、コイルはインダクタンス (例: 10u)	Capacitance for a capacitor (e.g. 100n, 4.7u), resistance for a resistor (e.g. 10k), inductance for an inductor (e.g. 10u)
+ESR (等価直列抵抗)	ESR (equivalent series resistance)
+データシートの ESR か、インピーダンスの最小値。大きいほどリップルが大きく、発熱します。下の表から求めることもできます	The datasheet ESR, or the minimum impedance. Larger means more ripple and more heat. You can also calculate it from the table below
+インピーダンス Z (Ω)	Impedance Z (Ω)
+データシートの「インピーダンス」(100kHz の値) を入れて「ESR に入れる」を押すと、上の ESR に写します。電解コンデンサでは、100kHz のインピーダンスはほぼ ESR です (容量の分は、そのころには小さくなっています)。ただし ESR は周波数と温度で大きく変わります (120Hz の tanδ から求めると、もっと大きくなります)	Enter the datasheet "impedance" (the 100kHz value) and press "Use as ESR" to copy it to the ESR above. For electrolytic capacitors, the 100kHz impedance is nearly the ESR (the capacitive part has become small by then). Note that ESR changes a lot with frequency and temperature (calculating it from tanδ at 120Hz gives a larger value)
+→ ESR に入れる	→ Use as ESR
+この値を ESR の欄に入れます (100kHz のときの値として)	Puts this value in the ESR field (as the value at 100kHz)
+ESL (等価直列インダクタンス)	ESL (equivalent series inductance)
+高い周波数で効いてくる直列のインダクタンス。小さいチップほど小さい (0603 で 0.5〜1nH ほど)。自己共振周波数から求めることもできます	Series inductance that matters at high frequencies. Smaller chips have less (about 0.5–1nH for 0603). You can also calculate it from the self-resonant frequency
+自己共振周波数 (Hz)	Self-resonant frequency (Hz)
+容量と ESL が共振する周波数。ESL が空のとき、ここから ESL を求めます。M は MHz (例: 30M)	The frequency where the capacitance and ESL resonate. If ESL is empty, ESL is calculated from this. M means MHz (e.g. 30M)
+DCバイアスで下がる量 (%)	DC bias drop (%)
+セラミックコンデンサは、直流の電圧をかけると容量が減ります。使う電圧での値をデータシートの「DCバイアス特性」の曲線から読み、減った割合を入れると、その分小さい容量で計算します	Ceramic capacitors lose capacitance when a DC voltage is applied. Read the value at your voltage from the datasheet "DC bias characteristics" curve and enter the drop; the calculation then uses the smaller capacitance
+寄生インダクタンス (H)	Parasitic inductance (H)
+高い周波数で効く直列のインダクタンス。チップ抵抗で 1〜2nH ほど	Series inductance that matters at high frequencies. About 1–2nH for chip resistors
+並列容量 (F)	Parallel capacitance (F)
+両端の間の容量。チップ抵抗で 0.05〜0.2pF ほど	Capacitance between the two ends. About 0.05–0.2pF for chip resistors
+DCR (巻線抵抗)	DCR (winding resistance)
+巻線の直流抵抗。損失と発熱の元になります	DC resistance of the winding. Causes loss and heat
+巻線の間の容量。自己共振周波数から求めることもできます	Capacitance between the windings. You can also calculate it from the self-resonant frequency
+コイルがこれより高い周波数でコンデンサのようになる限界。並列容量が空のとき、ここから求めます。M は MHz	The limit above which the inductor behaves like a capacitor. If parallel capacitance is empty, it is calculated from this. M means MHz
+インピーダンスの表	Impedance table
+インピーダンスの表 (データシートの周波数特性。1行に「周波数 インピーダンス」。周波数の M は MHz)	Impedance table (the datasheet frequency response. One "frequency impedance" per line. M in frequency means MHz)
+データシートのグラフから、いくつかの点を読み取って書きます。谷 (コンデンサ) や山 (コイル) の前後も入れると確かです。例: 周波数 1M、インピーダンス 0.05 は「1M 0.05」	Read several points from the datasheet graph. Including points around the dip (capacitor) or peak (inductor) makes it more accurate. Example: frequency 1M, impedance 0.05 is "1M 0.05"
+表から求める	Fit to table
+表に合うように、上の 2 つの値 (ESR と ESL / DCR と並列容量 / 寄生インダクタンスと並列容量) を計算して入れます。「値」を使います	Calculates the two values above (ESR and ESL / DCR and parallel capacitance / parasitic inductance and parallel capacitance) to fit the table. Uses "Value"
+部品を作る (ピンとモデルを入れる)	Make part (add pins and model)
+ピン、記号、値、モデルを入れます。パッケージは下の「パッケージ」で選びます	Adds the pins, symbol, value and model. Choose the package in "Package" below
+# crates/app/src/part_form/datasheet_view.rs
+列間隔	Row spacing
+パッド長	Pad length
+パッド幅	Pad width
+対向パッド間隔	Pad-to-pad spacing
+パッド径	Pad diameter
+穴径	Hole diameter
+本体の幅	Body width
+本体の長さ	Body length
+高さ	Height
+最大電圧	Max voltage
+最大電流	Max current
+最大電力	Max power
+放熱パッドの幅	Thermal pad width
+放熱パッドの長さ	Thermal pad length
+「{}」の数字を、下のページでクリックしてください	Click the number for "{}" on the page below
+「{}」にする語を、下のページでクリックしてください	Click the word to use for "{}" on the page below
+データシート (PDF) を開く…	Open datasheet (PDF)…
+手元のデータシート (PDF) を、別の窓に出します。日本語でも英語でも開けます。見ながらピンや寸法を入れられます。PDF の窓に、PDF ファイルをドラッグしても開けます。ファイルはこのパソコンの中だけで読み、どこにも送りません	Shows a datasheet (PDF) from your computer in a separate window. Japanese and English both work. You can enter pins and dimensions while looking at it. You can also drag a PDF file onto the PDF window. The file is read only on this computer and is not sent anywhere
+データシート (PDF)	Datasheet (PDF)
+窓を出す	Show window
+閉じたデータシートの窓をもう一度出します	Shows the closed datasheet window again
+ピン表の取り込み	Import pin table
+前のページ	Previous page
+ / {pages} ページ	 / {pages} pages
+ページ番号。ドラッグか、数字を入れて切り替えます	Page number. Drag or type a number to change pages
+次のページ	Next page
+－	-
+小さくする (Ctrl + マウスホイールでも変えられます)	Zoom out (Ctrl + mouse wheel also works)
+＋	+
+大きくする (Ctrl + マウスホイールでも変えられます)	Zoom in (Ctrl + mouse wheel also works)
+幅に合わせる	Fit width
+窓の幅にページの幅を合わせます	Fits the page width to the window width
+選ぶのをやめます (Esc キーでも)	Stop picking (Esc also works)
+ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)	Drag a box around the pin table on the page below (include the number and name columns)
+囲むのをやめます (Esc キーでも)	Stop drawing the box (Esc also works)
+検索 (例: SOIC、pin 1)	Search (e.g. SOIC, pin 1)
+データシートの中の文字を探します。大文字・小文字、全角・半角は区別しません。空白で区切ると、続いて並ぶ語を探します (例: pin 1)。Enter で探します	Searches the text in the datasheet. Ignores upper/lower case and full-/half-width. Words separated by spaces are searched as a sequence (e.g. pin 1). Press Enter to search
+探す	Search
+入れた文字を、全ページから探します。見つかった所は黄色の枠で示します	Searches all pages for the text. Matches are shown with a yellow frame
+検索の結果と枠を消します	Clears the search results and frames
+ピン表を囲む	Box the pin table
+ページの上でピン表をドラッグで囲むと、番号と名前を読み取ります。読み取った内容は確認して、ピン表に入れます	Drag a box around the pin table on the page to read the numbers and names. Check what was read, then put it in the pin table
+見出しへ	Go to heading
+{} (英語・日本語の見出しを探します)	{} (searches English and Japanese headings)
+探しています… {}/{} ページ	Searching… page {}/{}
+このPDFには検索できる文字がありません (画像のPDFかもしれません)。絵を見て探してください	This PDF has no searchable text (it may be a scanned image). Look through the pages by eye
+見つかりませんでした。別の書き方 (略さない・省く) で探してみてください	Not found. Try a different wording (spelled out or abbreviated)
+{MAX_HITS} 件以上あります。もっと長い語で絞ってください	{MAX_HITS} or more matches. Use a longer word to narrow it down
+{} 件	{} matches
+「{title}」の見出し: {note}	Heading "{title}": {note}
+前の見つかった所	Previous match
+次の見つかった所	Next match
+[目次] 	[Contents] 
+クリックで、そのページのその場所へ移ります	Click to jump to that spot on that page
+# crates/app/src/part_form/diode.rs
+{}行目: 「電流 電圧」の形で入力してください (例: 10m 0.7)	Line {}: enter as "current voltage" (e.g. 10m 0.7)
+IS = {}A、N = {:.2}、RS = {}Ω と求めました。下の絵で、点とモデルの曲線が重なっているか確かめてください	Calculated IS = {}A, N = {:.2}, RS = {}Ω. Check in the picture below that the points lie on the model curve
+\n注意: {n}	\nNote: {n}
+先に「名前など」の部品名を入れてください (モデルの名前に使います。例: 1N4007)	First enter the part name in "Name etc." (used as the model name, e.g. 1N4007)
+ピン表に、アノード A とカソード K の名前のピンが要ります (「③ ピン」で、名前を A と K にしてください)	The pin table needs pins named A (anode) and K (cathode) (in "③ Pins", name them A and K)
+{label}「{t}」を、0 より大きい数で入力してください	Enter a number greater than 0 for {label} "{t}"
+逆耐圧	Reverse voltage
+漏れ電流	Leakage current
+逆耐圧が空なので、漏れ電流は使いませんでした	Reverse voltage is empty, so the leakage current was not used
+Cj を測った逆電圧を、0 以上の数 (V) で入力してください (例: 4)	Enter the reverse voltage at which Cj was measured, as a number ≥ 0 (V) (e.g. 4)
+接合容量 CJO を求めて入れました (VJ=0.7・M=0.5 と仮定)	Calculated and entered the junction capacitance CJO (assuming VJ=0.7, M=0.5)
+trr の測定条件 IF	trr test condition IF
+trr の測定条件の電流 IF を入れてください (データシートの trr の注に書いてあります)	Enter the current IF of the trr test condition (given in the notes for trr in the datasheet)
+trr の測定条件 IR	trr test condition IR
+trr の測定条件の電流 IR を入れてください (データシートの trr の注に書いてあります)	Enter the current IR of the trr test condition (given in the notes for trr in the datasheet)
+逆回復時間から TT (拡散の遷移時間) を求めて入れました (目安です)	Calculated and entered TT (transit time) from the reverse recovery time (a rough estimate)
+IS・N・RS は、データシートのグラフから読み取った点に合わせた近似です。個体差と温度で、実物は変わります。\n接合容量・逆回復時間は、入れた数値だけの近似です (入れていなければ扱いません)。\n耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。	IS, N and RS are an approximation fitted to the points read from the datasheet graph. Real parts vary from unit to unit and with temperature.\nJunction capacitance and reverse recovery time are approximations from the entered values only (ignored if not entered).\nThe model doesn't break when the voltage rating or rated current is exceeded. Check the datasheet ratings yourself.
+逆耐圧を「① 基本」の定格の最大電圧にも入れました	Also entered the reverse voltage as the max voltage rating in "① Basics"
+モデルを「② シミュレーション」に入れました。そちらの「試し読み」で確かめられます{tail}	Put the model in "② Simulation". You can check it with "Test load" there{tail}
+かんたん作成: ダイオードをデータシートの数値からつくる	Quick create: make a diode from datasheet values
+グラフの数字からモデルを作ります	Makes a model from the numbers on the graph
+メーカーのデータシートには SPICE モデルが載っていないことが多いので、グラフの数字から IS・N・RS を決めて、モデルを作ります	Manufacturer datasheets often don't include a SPICE model, so this sets IS, N and RS from the graph numbers and makes a model
+考え方: IS・N・RS とは? (はじめての人はここから)	The idea: what are IS, N and RS? (start here if you are new)
+ダイオードの電圧と電流の関係は、V = N × 26mV × ln(I / IS) + I × RS という式で近似できます。この 3 つの数 (IS・N・RS) を決めれば、実物に近い曲線になります。	A diode's voltage-current relation can be approximated by V = N × 26mV × ln(I / IS) + I × RS. Choosing these 3 numbers (IS, N, RS) gives a curve close to the real part.
+N (電流の 10 倍で電圧がどれだけ上がるか): 10 倍の電流で、電圧は約 N × 60mV 上がります。グラフで、10mA と 100mA の電圧の差を読むと分かります。1 〜 2 ほどです。	N (how much the voltage rises for 10× the current): at 10× the current, the voltage rises by about N × 60mV. Read the voltage difference between 10mA and 100mA on the graph. It is about 1 to 2.
+IS (曲線の左右の位置): 小さいほど、曲線は右 (高い電圧) へ寄ります。流れ始める電圧を決めます。ショットキーは大きく (ナノアンペア〜)、シリコンは小さい (ピコアンペア) です。	IS (left-right position of the curve): smaller moves the curve to the right (higher voltage). It sets the voltage where current starts to flow. Large for Schottky (nanoamps and up), small for silicon (picoamps).
+RS (大電流での曲がり): 大きい電流で、曲線が急に立ち上がる部分を決めます。定格電流に近い点を読むと決まります。	RS (bend at high current): sets the part where the curve shoots up at high current. Reading a point near the rated current fixes it.
+データシートの表の Vf (たとえば 1.0V @ 1A) は「最大値」で、グラフは「典型値」です。モデルは典型値で作り、回路は最大値でも動くように設計します。	The Vf in the datasheet table (e.g. 1.0V @ 1A) is the "maximum", and the graph is "typical". Make the model with typical values, and design the circuit to work even with the maximum.
+ほかに、逆耐圧 (VRRM) と漏れ電流 (IR) も、表から写します。	Also copy the reverse voltage (VRRM) and leakage current (IR) from the table.
+・{t}	• {t}
+手順1: 順方向特性の点	Step 1: forward characteristic points
+手順1: データシートの「順方向特性 (Forward Characteristics)」のグラフから、電流と電圧の点を読みます (1行に「電流 電圧」、電流が離れた 3 点がおすすめ)	Step 1: read current and voltage points from the datasheet graph "Forward Characteristics" (one "current voltage" per line; 3 points with widely spaced currents are recommended)
+グラフの縦軸 (電流) と横軸 (電圧) を読みます。電流は小・中・大の 3 点 (10mA・100mA・定格電流など)。m は 1000 分の 1。例: 100m 0.79 は 100mA のとき 0.79V	Read the vertical axis (current) and horizontal axis (voltage) of the graph. Use 3 currents: small, medium and large (e.g. 10mA, 100mA, rated current). m means 1/1000. Example: 100m 0.79 means 0.79V at 100mA
+1N4007 の例を入れる	Insert 1N4007 example
+練習用の読み取り例を入れます。自分のデータシートのグラフで、読み直してみてください	Inserts example readings for practice. Try reading them again from your own datasheet graph
+手順2: 点から IS・N・RS を求める	Step 2: calculate IS, N, RS from the points
+点を通る曲線になるように、IS・N・RS を計算します。点が 2 つなら IS と N、3 つ以上なら RS も決まります	Calculates IS, N and RS so the curve passes through the points. 2 points give IS and N; 3 or more also give RS
+曲線を見ながら、スライダーで自分で合わせることもできます	You can also fit it yourself with the sliders while watching the curve
+IS (飽和電流)	IS (saturation current)
+曲線の左右の位置。小さいほど右 (流れ始める電圧が高い) へ動きます	Left-right position of the curve. Smaller moves it right (higher turn-on voltage)
+N (理想係数)	N (ideality factor)
+曲線の傾き。10 倍の電流で、電圧は約 N × 60mV 上がります	Slope of the curve. At 10× the current, the voltage rises by about N × 60mV
+RS (直列抵抗)	RS (series resistance)
+大電流での曲がり。大きいほど、電流が多い所で電圧が高くなります	Bend at high current. Larger means higher voltage where the current is large
+手順3: 表から、逆耐圧と漏れ電流を写します (空でも作れます)	Step 3: copy the reverse voltage and leakage current from the table (can be left empty)
+逆耐圧 VRRM [V]	Reverse voltage VRRM [V]
+「絶対最大定格」の Peak Repetitive Reverse Voltage。型番ごとに違うので、表で自分の型番の列を読みます (1N4007 は 1000)	Peak Repetitive Reverse Voltage in "Absolute maximum ratings". It differs by part number, so read the column for your part number (1000 for 1N4007)
+漏れ電流 IR [A]	Leakage current IR [A]
+逆耐圧をかけたときの逆向きの電流 (Peak Reverse Current、25℃ の値)。1N4007 は 5μA = 5u	Reverse current when the reverse voltage is applied (Peak Reverse Current, value at 25℃). 5μA = 5u for 1N4007
+手順4: 高い周波数で効く値	Step 4: values that matter at high frequencies
+手順4: 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)	Step 4: values that matter at high frequencies (can be left empty. They matter in switching supplies and fast rectifier switching)
+接合容量 Cj [F]	Junction capacitance Cj [F]
+データシートの Typical Junction Capacitance。測った逆電圧とセットで読みます (1N4007 は 8pF 〜 15pF、1MHz、逆電圧 4V)	Typical Junction Capacitance in the datasheet. Read it together with the reverse voltage it was measured at (1N4007: 8pF–15pF, 1MHz, reverse voltage 4V)
+逆電圧 [V]	Reverse voltage [V]
+逆回復時間 trr [s]	Reverse recovery time trr [s]
+データシートの Reverse Recovery Time。電流を順方向から逆向きに切り替えたとき、逆向きの電流が止まるまでの時間。ショットキーには無い (ほぼ 0) ので、空で構いません	Reverse Recovery Time in the datasheet. The time until the reverse current stops when the current is switched from forward to reverse. Schottkys don't have it (nearly 0), so it can be left empty
+手順5: このモデルを「② シミュレーション」に入れる	Step 5: put this model in "② Simulation"
+モデルの文 (.model) を作って、② のシミュレーションの欄に入れます。逆耐圧は ① の定格の最大電圧にも入ります	Makes the model line (.model) and puts it in the simulation field of ②. The reverse voltage also goes into the max voltage rating in ①
+● 赤い点: データシートの点    ─ 青い線: モデルの曲線	● Red dots: datasheet points    ─ Blue line: model curve
+{}A: データ {v:.2}V / モデル {m:.2}V (モデルが {:.0}mV {})	{}A: data {v:.2}V / model {m:.2}V (model is {:.0}mV {})
+高い	higher
+低い	lower
+# crates/app/src/part_form/edit.rs
+保存済みの3Dの形	Saved 3D shape
+# crates/app/src/part_form/glyph_pick.rs
+ゲートが複数入った IC。箱とピン名はそのまま、中央にゲートの記号を1つ描きます	An IC with several gates. Keeps the box and pin names, and draws one gate symbol in the center
+左右に1本ずつの2ピン部品だけ	Only 2-pin parts with one lead on each side
+自動 (名前とピンから決める)	Auto (decided from name and pins)
+部品名とピン名から、合う記号を選びます。同梱の部品はこれで記号になります。当てはまらなければ箱です	Picks a matching symbol from the part name and pin names. Bundled parts get their symbols this way. If nothing matches, a box is used
+箱 (ピン名つきの四角)	Box (rectangle with pin names)
+名前やピンに関わらず、四角の箱にピン名を並べます	Lists the pin names on a rectangular box regardless of name or pins
+整流・スイッチング。ピン名 A K	Rectifier / switching. Pin names A K
+棒の両端が S 形。ピン名 A K	Bar ends shaped like S. Pin names A K
+棒の両端が Z 形。ピン名 A K	Bar ends shaped like Z. Pin names A K
+TVS ダイオード	TVS diode
+ピン名 A K	Pin names A K
+ピン名 A K (光は L)	Pin names A K (light: L)
+NPN トランジスタ	NPN transistor
+ピン名 B C E (左・上・下に1本ずつ)	Pin names B C E (one each on left, top, bottom)
+PNP トランジスタ	PNP transistor
+ピン名 G D S (左・上・下に1本ずつ)	Pin names G D S (one each on left, top, bottom)
+オペアンプ (三角形)	Op-amp (triangle)
+ピン名 IN+ IN- OUT (電源は上下)	Pin names IN+ IN- OUT (supplies on top/bottom)
+コンパレータ (三角形+段の印)	Comparator (triangle + step mark)
+3端子レギュレータ (箱+DC記号)	3-terminal regulator (box + DC symbol)
+ピンの形は箱のまま。ピン名 IN OUT GND なら自動でもこの記号になります	The pins stay as on a box. With pin names IN OUT GND, Auto also picks this symbol
+ゲート AND (箱の中に記号)	Gate AND (symbol in box)
+ゲート OR (箱の中に記号)	Gate OR (symbol in box)
+ゲート NOT (箱の中に記号)	Gate NOT (symbol in box)
+ゲート NAND (箱の中に記号)	Gate NAND (symbol in box)
+ゲート NOR (箱の中に記号)	Gate NOR (symbol in box)
+ゲート XOR (箱の中に記号)	Gate XOR (symbol in box)
+ゲート シュミットNOT (箱の中に記号)	Gate Schmitt NOT (symbol in box)
+ゲート バッファ (箱の中に記号)	Gate buffer (symbol in box)
+フリップフロップ (箱の中に記号)	Flip-flop (symbol in box)
+D型フリップフロップなどの IC。箱とピン名はそのまま、中央にクロックの三角つきの小さな箱を描きます	ICs such as D flip-flops. Keeps the box and pin names, and draws a small box with a clock triangle in the center
+カウンタ (箱の中に記号)	Counter (symbol in box)
+カウンタ IC。箱とピン名はそのまま、中央にクロックの三角と階段を描きます	Counter IC. Keeps the box and pin names, and draws a clock triangle and a staircase in the center
+シフトレジスタ (箱の中に記号)	Shift register (symbol in box)
+シフトレジスタ IC。箱とピン名はそのまま、中央にクロックの三角と矢印を描きます	Shift register IC. Keeps the box and pin names, and draws a clock triangle and an arrow in the center
+シャントレギュレータ (TL431形)	Shunt regulator (TL431 type)
+ピン名 CATHODE REF ANODE	Pin names CATHODE REF ANODE
+ピン名 P1 P2 S1 S2	Pin names P1 P2 S1 S2
+電池	Battery
+ピン名 + -	Pin names + -
+ピン名 X1 X2 (2端子なら 1 2)	Pin names X1 X2 (1 2 for 2 terminals)
+光センサ (LDR)	Light sensor (LDR)
+ピン名 A B (光は L)	Pin names A B (light: L)
+コンデンサ (2ピン専用)	Capacitor (2 pins only)
+電解コンデンサ (2ピン専用)	Electrolytic capacitor (2 pins only)
+抵抗 (2ピン専用)	Resistor (2 pins only)
+コイル (2ピン専用)	Inductor (2 pins only)
+(不明な記号)	(unknown symbol)
+回路図で、この部品を何の記号で描くか。ピンの位置は変わらないので、配線はそのままです。「自動」のままで合っていれば、選ぶ必要はありません	Which symbol draws this part in the schematic. Pin positions don't change, so wires stay as they are. If "Auto" already looks right, you don't need to choose
+ピンが合わないので、箱で描きます	The pins don't match, so it is drawn as a box
+この記号が使うピンの名前・数と合っていません ({need})。ピン名を直すか、別の記号を選んでください (部品: {})	Doesn't match the pin names/count this symbol uses ({need}). Fix the pin names or choose another symbol (part: {})
+# crates/app/src/part_form/kind.rs
+部品の種類	Part type
+「{name}」にすると、入力したピン表・パッケージ・本体などが、{name}の初期値に置き換わります。	Choosing "{name}" replaces the pin table, package, body etc. you entered with the defaults for {name}.
+置き換える	Replace
+入力した内容を捨てて、選んだ種類の初期値にします	Discards what you entered and uses the defaults for the chosen type
+いまの入力をそのまま残します	Keeps what you have entered
+どの種類?	Which type?
+ベース電流でコレクタ→エミッタの電流を制御する。負荷を GND 側で切り替える	The base current controls the collector→emitter current. Switches the load on the GND side
+NPN と電流の向きが逆。電源側で切り替える	Current flows the opposite way to NPN. Switches on the supply side
+ゲート電圧で制御。大電流のスイッチに向く	Controlled by gate voltage. Good for high-current switches
+N チャネルと極性が逆。電源側で切り替える	Opposite polarity to N-channel. Switches on the supply side
+整流・スイッチング	Rectifier / switching
+電流を一方向に流す。記号は三角と線	Lets current flow one way. Symbol is a triangle and a bar
+順方向の電圧降下が小さい。棒の両端が S 形の記号	Small forward voltage drop. Symbol bar ends are S-shaped
+逆向きで電圧を一定に保つ。棒の両端が Z 形の記号	Holds a constant voltage in reverse. Symbol bar ends are Z-shaped
+積層セラミック	Multilayer ceramic
+チップ部品。小さくて高い周波数に強い。極性なし。電圧がかかると容量が減ります	Chip part. Small and good at high frequencies. No polarity. Capacitance drops when voltage is applied
+リード付きの円筒形。容量が大きく、電源の平滑に使う。極性があり、ESR は大きめ	Leaded cylinder. Large capacitance, used to smooth supplies. Polarized, with a fairly large ESR
+タンタル	Tantalum
+小さくて容量が大きい。極性があり、耐圧に余裕を見ないと壊れます	Small with large capacitance. Polarized; it breaks unless you leave margin on the voltage rating
+フィルム	Film
+リード付きの箱形。極性なし。ESR・ESL が小さく、容量が安定します	Leaded box. No polarity. Small ESR and ESL, stable capacitance
+名前の付け方	Naming
+名前は、種類の頭文字から始めると、部品一覧の「コンデンサ」の木で種類ごとに分かれます (電解 CE_ / タンタル CT_ / フィルム CF_)。値は「① 基本」のかんたん作成で入れます	Start the name with the type's initials so the "Capacitor" tree in the part list groups them by type (electrolytic CE_ / tantalum CT_ / film CF_). Enter the value with Quick create in "① Basics"
+どの形?	Which shape?
+チップ	Chip
+面実装の小さい部品 (0603・0805 など)	Small surface-mount parts (0603, 0805 etc.)
+リード付き	Leaded
+足を基板の穴に通す部品	Parts whose leads go through holes in the board
+レギュレータ	Regulator
+# crates/app/src/part_form/mod.rs
+① 基本	① Basics
+部品の名前・番号の頭文字・値・説明と、データシートの数字 (絶対最大定格 = 電圧・電流・電力、電気的特性)。チップ部品や充電ICは、ここの「かんたん作成」で数字を入れるだけで作れます。定格は入れておくと、回路で超えそうなときに警告します	Part name, refdes prefix, value, description, and datasheet numbers (absolute maximum ratings = voltage, current, power; electrical characteristics). Chip parts and charger ICs can be made just by entering numbers in "Quick create" here. If you enter the ratings, you get a warning when the circuit is likely to exceed them
+② シミュレーション	② Simulation
+SPICE モデルを貼ると、種類・ピンを自動で入力します。シミュレーションしない部品 (基板づくりだけ) は「なし」のままです	Paste a SPICE model to fill in the type and pins automatically. For parts you don't simulate (board only), leave it at "None"
+③ ピン	③ Pins
+ピンの番号と名前、記号のどの辺に出すか。データシートの「ピン配置」の表を見ながら入れます	Pin numbers and names, and which side of the symbol each goes on. Enter them while looking at the datasheet "pin configuration" table
+④ 部品の形	④ Part shape
+データシートの推奨ランドパターン (パッド) と外形寸法 (本体の大きさ・高さ) を入れます。右の絵で確かめられます	Enter the datasheet recommended land pattern (pads) and outline dimensions (body size, height). Check them in the picture on the right
+オペアンプ・レギュレータ・マイコンなど。足が2列に並ぶ (SOIC・DIP) 形を例に、ピン・パッケージ・本体の外形を入れます。QFN や放熱パッドは「④ 部品の形」で変えます	Op-amps, regulators, microcontrollers etc. Uses a dual-row (SOIC, DIP) part as an example for the pins, package and body outline. Change to QFN or a thermal pad in "④ Part shape"
+NPN・PNP・MOSFET。足が1列の形 (TO-92 など) を例に入れます。記号は規格の形になります	NPN, PNP, MOSFET. Uses a single-row package (e.g. TO-92) as an example. The symbol uses the standard shape
+整流・ショットキー・ツェナー・LED。足が2本の形 (DO-35 など) を例に入れます。カソードの棒も付きます	Rectifier, Schottky, zener, LED. Uses a 2-lead package (e.g. DO-35) as an example. A cathode band is added too
+積層セラミック・電解・タンタル・フィルム。種類を選ぶと、部品の形 (リード付きかチップか)・極性・高さの例が入ります。「① 基本」の「かんたん作成」に、容量と ESR などの数字を入れてモデルを作ります	Multilayer ceramic, electrolytic, tantalum, film. Choosing a type fills in example shape (leaded or chip), polarity and height. Make the model by entering capacitance, ESR etc. in "Quick create" in "① Basics"
+チップ抵抗 (0603 など) かリード付き。「① 基本」の「かんたん作成」に、抵抗値を入れて作ります	Chip resistor (e.g. 0603) or leaded. Make it by entering the resistance in "Quick create" in "① Basics"
+チップインダクタかリード付き。「① 基本」の「かんたん作成」に、インダクタンスと DCR を入れて作ります	Chip inductor or leaded. Make it by entering the inductance and DCR in "Quick create" in "① Basics"
+ピンヘッダ・端子台など、足が1列に並ぶ部品	Parts with a single row of leads, such as pin headers and terminal blocks
+# crates/app/src/part_form/padtable.rs
+縦	Vert.
+横	
+脚	
+穴	
+脚 {} {} {} {} {} {}{}	leg {} {} {} {} {} {}{}
+パッド {} {} {} {} {}	pad {} {} {} {} {}
+穴 {} {} {}{}	hole {} {} {}{}
+脚 (めっき穴)	Leg (plated hole)
+面実装パッド	SMD pad
+穴 (めっきなし)	Hole (unplated)
+(読めない行)	(unreadable line)
+座標は部品の中心から (右が +X、上が +Y)、単位は mm。ピン名は「③ ピン」の番号と同じにします	Coordinates are from the part center (right is +X, up is +Y), in mm. Pin names must match the numbers in "③ Pins"
+ピン名	Pin name
+長穴の長さ	Slot length
+この表で読めない行です (# で始まるコメントなど)。「文字で編集」で直せます	This table can't read this line (e.g. a comment starting with #). You can fix it with "Edit as text"
+脚はめっきのある穴と銅のパッド (USBのシェル脚など)、面実装パッドは穴のない銅のパッド、穴はめっきなしの穴 (位置決め・ネジ穴) です	A leg is a plated hole with a copper pad (e.g. a USB shell leg), an SMD pad is a copper pad without a hole, and a hole is an unplated hole (locating or screw hole)
+ピン名 (「③ ピン」の番号と同じ。例: SH)	Pin name (same as the number in "③ Pins", e.g. SH)
+X (mm)。部品の中心から右が +	X (mm). Right of the part center is +
+Y (mm)。部品の中心から上が +	Y (mm). Above the part center is +
+パッドの幅 (mm)	Pad width (mm)
+パッドの高さ (mm)	Pad height (mm)
+穴径 (mm)	Hole diameter (mm)
+長穴にするときの長さ (mm)。丸い穴なら空	Length when making a slot (mm). Empty for a round hole
+長穴を縦向きにします (オフなら横向き)	Makes the slot vertical (horizontal when off)
+1つ上へ	Move up
+1つ下へ	Move down
+この行を消します	Deletes this row
+足す:	Add:
+＋ 脚 (めっき穴)	+ Leg (plated hole)
+コネクタの金属の外側 (シェル) をはんだ付けする脚など。穴と、まわりの銅のパッドです	E.g. a leg that solders the metal outside (shell) of a connector. A hole with a copper pad around it
+＋ 面実装パッド	+ SMD pad
+面実装 (SMD) タイプの固定用パッドなど。穴のない銅のパッドです	E.g. a mounting pad of a surface-mount (SMD) part. A copper pad without a hole
+＋ 穴 (めっきなし)	+ Hole (unplated)
+部品の突起が入る位置決めの穴、ネジ穴。回路にはつながりません	A locating hole for a part's peg, or a screw hole. Not connected to the circuit
+{tip}\n入る数字は例です。データシートの推奨ランドパターンの寸法に直してください	{tip}\nThe numbers filled in are examples. Change them to the dimensions of the datasheet recommended land pattern
+# crates/app/src/part_form/parse.rs
+1行に1つ。座標は部品の中心からの mm (右が +X、上が +Y)。\n  脚 ピン名 X Y パッド幅 パッド高さ 穴径 [長穴の長さ] [v]   … めっきのある穴 (USBのシェル脚など)。長穴は長さを足す (縦向きは最後に v)\n  穴 X Y 穴径 [長穴の長さ] [v]                            … めっきなしの穴 (位置決めの突起用の穴、ネジ穴)\n  パッド ピン名 X Y 幅 高さ                                … 面実装の追加パッド (シールドのはんだ付け部分など)\nピン名はピン表の「番号」と同じにします。シェル用のピン (例: SH) をピン表に足して、回路図でGNDなどにつなぎます。	One per line. Coordinates are mm from the part center (right is +X, up is +Y).\n  leg PIN X Y PAD_W PAD_H DRILL [SLOT_LEN] [v]   … plated hole (e.g. a USB shell leg). For a slot add the length (v at the end for vertical)\n  hole X Y DRILL [SLOT_LEN] [v]                   … unplated hole (locating peg hole, screw hole)\n  pad PIN X Y W H                                 … extra SMD pad (e.g. a shield solder tab)\nThe pin name must match a "No." in the pin table. Add a pin for the shell (e.g. SH) to the pin table and connect it to GND etc. in the schematic.
+シェル脚(めっき穴)	Shell leg (plated hole)
+脚 SH -6.5 0 2.0 3.0 1.2	leg SH -6.5 0 2.0 3.0 1.2
+コネクタの金属の外側 (シェル) をはんだ付けする脚。ピン名 SH をピン表にも足します	A leg that solders the metal outside (shell) of a connector. Also add pin name SH to the pin table
+位置決めの穴(めっきなし)	Locating hole (unplated)
+穴 0 -3 1.0	hole 0 -3 1.0
+部品の突起が入る穴。めっきなしなので、回路にはつながりません	A hole for a part's peg. Unplated, so not connected to the circuit
+長穴(めっき)	Slot (plated)
+脚 SH 6.5 0 1.6 3.6 0.8 2.4 v	leg SH 6.5 0 1.6 3.6 0.8 2.4 v
+穴径 0.8mm、長さ 2.4mm の縦の長穴 (USB Type-C の固定脚など)	A vertical slot with 0.8mm drill and 2.4mm length (e.g. a USB Type-C mounting leg)
+長穴(めっきなし)	Slot (unplated)
+穴 0 3 1.0 2.0	hole 0 3 1.0 2.0
+幅 1.0mm、長さ 2.0mm の横の長穴	A horizontal slot 1.0mm wide and 2.0mm long
+面実装のシールド	SMD shield
+パッド SH -4 -2 1.5 2.0	pad SH -4 -2 1.5 2.0
+面実装 (SMD) タイプの固定用パッド	A mounting pad of a surface-mount (SMD) part
+左	Left
+右	Right
+上	Top
+下	Bottom
+.subckt に名前がありません。`.subckt 名前 端子1 端子2 …` の形で書きます	.subckt has no name. Write it as `.subckt name pin1 pin2 …`
+.subckt {name} に端子がありません。名前のあとに端子を並べます (例: .subckt {name} IN OUT GND)	.subckt {name} has no pins. List the pins after the name (e.g. .subckt {name} IN OUT GND)
+`.model` も `.subckt` も見つかりません。SPICEモデルの文をそのまま貼ってください	Neither `.model` nor `.subckt` was found. Paste the SPICE model text as it is
+.model に名前がありません。`.model 名前 種類(パラメータ)` の形で書きます	.model has no name. Write it as `.model name type(parameters)`
+.model {name} の種類「{ty}」は未対応です (D / NPN / PNP / NMOS / PMOS / SW)	.model {name}: type "{ty}" is not supported (D / NPN / PNP / NMOS / PMOS / SW)
+スイッチ {} のモデルとして入力しました。ピンの対応 (制御側 2 本、スイッチ側 2 本) は自分で確かめてください	Entered as the model for switch {}. Check the pin mapping (2 control pins, 2 switch pins) yourself
+{} を入力しました。いまのピン表の名前 ({}) と対応づけました	Entered {}. Matched it to the current pin table names ({})
+{} を入力しました。ピン {} 本 ({}) を作りました。ピン番号はデータシートの番号に直してください (sim の対応も同じ番号に)	Entered {}. Created {} pins ({}). Change the pin numbers to the datasheet numbers (and the sim mapping to the same numbers)
+{} を入力しました。ピンの名前が合わなかったので、ピン表の上から順に端子 ({}) へ対応づけました。順番を確かめてください	Entered {}. The pin names didn't match, so the pins were mapped to the model terminals ({}) from the top of the pin table. Check the order
+モデルの端子は {} 本 ({}) ですが、ピン表は {} 本で、名前も合いません。モデルが使うのが一部のピンだけ (3端子のモデルを8ピンのパッケージに使う、など) なら、このままでかまいません。「ノード順のピン番号」に、モデルの端子の順に、そのピン番号を手で入れてください (使わないピンは書かなくて大丈夫です)。ピン表をモデルの端子だけにしたいときは、ピン表を消してからもう一度押してください	The model has {} terminals ({}), but the pin table has {} pins and the names don't match either. If the model uses only some of the pins (e.g. a 3-terminal model in an 8-pin package), that's fine. In "Pin numbers in node order", enter the pin numbers by hand in the order of the model terminals (unused pins can be left out). To make the pin table only the model terminals, clear the pin table and press again
+{}行目: 「番号 名前」の形式で入力してください	Line {}: enter as "number name"
+{}行目: 向き「{s}」は left/right/top/bottom のいずれかです	Line {}: side "{s}" must be left/right/top/bottom
+{label}「{t}」を、0 より大きい数で入力してください (例: 40 / 1.5 / 500m)	Enter a number greater than 0 for {label} "{t}" (e.g. 40 / 1.5 / 500m)
+データシートの情報 {}行目: 「項目 | 値 | 条件」の形式で入力してください (条件は省略できます。例: 順方向電圧 | 0.9V | IF = 1A)	Datasheet info line {}: enter as "item | value | condition" (the condition is optional. e.g. Forward voltage | 0.9V | IF = 1A)
+定格リップル電流	Rated ripple current
+リップル電流の周波数「{}」を、0 より大きい数で入力してください (例: 100k / 120)	Enter a number greater than 0 for the ripple current frequency "{}" (e.g. 100k / 120)
+リップル電流の補正係数 {}行目: 「周波数 係数」の形で入力してください (例: 120 0.55 / 1k 0.77)	Ripple current correction factor line {}: enter as "frequency factor" (e.g. 120 0.55 / 1k 0.77)
+寿命	Lifetime
+寿命の温度「{}」を数値 (℃) で入力してください (例: 105)	Enter the lifetime temperature "{}" as a number (℃) (e.g. 105)
+追加のパッドと穴 {}行目: {m}	Extra pads and holes line {}: {m}
+{what}を数字 (mm) で入力してください	Enter {what} as a number (mm)
+パッドの幅	Pad width
+パッドの高さ	Pad height
+ピン名がありません	No pin name
+先頭の言葉「{other}」が分かりません。脚 / 穴 / パッド のどれかで始めてください (書き方は下の説明)	Unknown first word "{other}". Start with leg / hole / pad (see the description below)
+放熱パッドのピン番号を入れてください (ピン表に、そのピンの行も書きます。例: 9 EP)	Enter the pin number of the thermal pad (also add a row for that pin in the pin table, e.g. 9 EP)
+放熱パッドのピン「{pin}」が、ピン表にありません。ピン表に「{pin} GND」のように1行足してください	Thermal pad pin "{pin}" is not in the pin table. Add a line like "{pin} GND" to the pin table
+放熱パッドの幅と長さは 0 より大きい値にしてください	Thermal pad width and length must be greater than 0
+フットプリント {name} が見つかりません	Footprint {name} not found

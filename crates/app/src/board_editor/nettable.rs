@@ -40,17 +40,17 @@ impl BoardEditor {
         }
         let mut open = true;
         let mut clicked: Option<String> = None;
-        egui::Window::new("ネットの一覧").id(egui::Id::new("net_table_window")).open(&mut open).default_width(760.0).default_pos([380.0, 140.0]).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("ネットの一覧")).id(egui::Id::new("net_table_window")).open(&mut open).default_width(760.0).default_pos([380.0, 140.0]).show(ctx, |ui| {
             let mut rows = self.net_rows();
             if rows.is_empty() {
-                ui.label("回路図から部品を取り込むと、ネットの一覧が出ます");
+                ui.label(i18n::tr("回路図から部品を取り込むと、ネットの一覧が出ます"));
                 return;
             }
             ui.horizontal(|ui| {
-                ui.label("絞り込み");
-                ui.add(egui::TextEdit::singleline(&mut self.net_table.filter).desired_width(140.0).hint_text("ネット名・クラス"))
-                    .on_hover_text("ネット名かネットクラスの名前に、この文字を含む行だけを出します (大文字・小文字は区別しません)");
-                if ui.button("CSV をコピー").on_hover_text("いま出ている行を CSV (表計算ソフトに貼れる形) でクリップボードに写します").clicked() {
+                ui.label(i18n::tr("絞り込み"));
+                ui.add(egui::TextEdit::singleline(&mut self.net_table.filter).desired_width(140.0).hint_text(i18n::tr("ネット名・クラス")))
+                    .on_hover_text(i18n::tr("ネット名かネットクラスの名前に、この文字を含む行だけを出します (大文字・小文字は区別しません)"));
+                if ui.button(i18n::tr("CSV をコピー")).on_hover_text(i18n::tr("いま出ている行を CSV (表計算ソフトに貼れる形) でクリップボードに写します")).clicked() {
                     ui.ctx().copy_text(table_csv(&self.filtered(&rows)));
                     self.status = "ネットの一覧を CSV でコピーしました (表計算ソフトに貼り付けられます)".into();
                 }
@@ -69,7 +69,7 @@ impl BoardEditor {
             });
             layers.dedup();
             let total_open: usize = rows.iter().map(|r| r.open).sum();
-            ui.small(format!("{} ネット・配線の長さの合計 {:.1} mm・未配線 {total_open} 本。見出しをクリックすると、その列で並べ替えます (もう一度で逆順)。ネット名のクリックで、そのネットの設定の窓が開きます", rows.len(), rows.iter().map(|r| r.length).sum::<f64>()));
+            ui.small(i18n::trf!("{} ネット・配線の長さの合計 {:.1} mm・未配線 {total_open} 本。見出しをクリックすると、その列で並べ替えます (もう一度で逆順)。ネット名のクリックで、そのネットの設定の窓が開きます", rows.len(), rows.iter().map(|r| r.length).sum::<f64>()));
             egui::ScrollArea::both().max_height(460.0).show(ui, |ui| {
                 egui::Grid::new("net_table").striped(true).spacing([12.0, 3.0]).show(ui, |ui| {
                     let cols: [(&str, SortBy, &str); 4] = [
@@ -82,16 +82,16 @@ impl BoardEditor {
                         self.sort_header(ui, name, by, tip);
                     }
                     for l in &layers {
-                        ui.strong(l.as_str()).on_hover_text(format!("{l}の配線の長さ"));
+                        ui.strong(l.as_str()).on_hover_text(i18n::trf!("{l}の配線の長さ"));
                     }
                     self.sort_header(ui, "遠回り", SortBy::Detour, "配線の長さ ÷ パッドを直線で結んだ最短の長さ。1.0 前後がいちばん短く (途中で枝分かれすると 1 より少し小さくなることもあります)、大きいほど遠回り。ベタのあるネットは出しません");
                     self.sort_header(ui, "ビア", SortBy::Vias, "このネットのビア (層をつなぐ穴) の数");
                     self.sort_header(ui, "線幅", SortBy::Thinnest, "このネットの配線の、いちばん細い〜いちばん太い線幅");
-                    ui.strong("ベタ").on_hover_text("このネットのベタ (銅箔ゾーン) がある層");
+                    ui.strong(i18n::tr("ベタ")).on_hover_text(i18n::tr("このネットのベタ (銅箔ゾーン) がある層"));
                     self.sort_header(ui, "未配線", SortBy::Open, "まだ銅でつながっていない接続 (黄色の線) の数");
                     ui.end_row();
                     for r in &rows {
-                        if ui.selectable_label(false, &r.net).on_hover_text("クリックで、このネットの設定の窓を開きます").clicked() {
+                        if ui.selectable_label(false, &r.net).on_hover_text(i18n::tr("クリックで、このネットの設定の窓を開きます")).clicked() {
                             clicked = Some(r.net.clone());
                         }
                         ui.label(if r.class.is_empty() { "—" } else { r.class.as_str() });
@@ -101,7 +101,7 @@ impl BoardEditor {
                             ui.label(r.by_layer.get(l).map_or("—".to_string(), |v| format!("{v:.1}")));
                         }
                         match r.detour() {
-                            Some(d) if d >= 2.0 => ui.colored_label(crate::theme::WARN, format!("{d:.2}")).on_hover_text("最短の 2 倍以上です。遠回りしていないか、「配線を短くする」で引き直せないか見てみましょう"),
+                            Some(d) if d >= 2.0 => ui.colored_label(crate::theme::WARN, format!("{d:.2}")).on_hover_text(i18n::tr("最短の 2 倍以上です。遠回りしていないか、「配線を短くする」で引き直せないか見てみましょう")),
                             Some(d) => ui.label(format!("{d:.2}")),
                             None => ui.label("—"),
                         };

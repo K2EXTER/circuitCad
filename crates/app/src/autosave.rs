@@ -118,19 +118,19 @@ impl App {
     pub(super) fn recovery_window(&mut self, ctx: &egui::Context) {
         let Some(found) = self.recovery.clone() else { return };
         let mut answer = None;
-        egui::Window::new("保存していなかった作業が見つかりました").collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("保存していなかった作業が見つかりました")).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).show(ctx, |ui| {
             let what = match (found.sch, found.board) {
                 (true, true) => "回路図と基板",
                 (true, false) => "回路図",
                 _ => "基板",
             };
-            ui.label(format!("前回、{what}を保存しないまま終了したようです(自動保存は{})。", found.age_text()));
-            ui.label("復元すると、その続きから作業できます。");
+            ui.label(i18n::trf!("前回、{what}を保存しないまま終了したようです(自動保存は{})。", found.age_text()));
+            ui.label(i18n::tr("復元すると、その続きから作業できます。"));
             ui.horizontal(|ui| {
-                if ui.button("復元する").on_hover_text("自動保存したものを開きます。開いたあと、いつもどおり保存してください").clicked() {
+                if ui.button(i18n::tr("復元する")).on_hover_text(i18n::tr("自動保存したものを開きます。開いたあと、いつもどおり保存してください")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("捨てる").on_hover_text("自動保存したものを消して、まっさらな状態で始めます").clicked() {
+                if ui.button(i18n::tr("捨てる")).on_hover_text(i18n::tr("自動保存したものを消して、まっさらな状態で始めます")).clicked() {
                     answer = Some(false);
                 }
             });

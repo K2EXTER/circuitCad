@@ -277,12 +277,12 @@ impl BoardEditor {
     /// The "ビアを縫う" row: stitching vias of GND over the overlap of its pours, or a fence along the edge.
     pub(super) fn panel_stitch(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let grid = ui.button("ビアを縫う").on_hover_text("表と裏の両方に GND のベタがある所に、GND のビアを格子に並べて、表と裏のベタを何か所もつなぎます (ビアの縫い付け)。
+            let grid = ui.button(i18n::tr("ビアを縫う")).on_hover_text(i18n::tr("表と裏の両方に GND のベタがある所に、GND のビアを格子に並べて、表と裏のベタを何か所もつなぎます (ビアの縫い付け)。
 信号の帰りの電流が近くで反対の面へ移れ、ベタの中の孤立した銅もつながります。配線と表面のベタのあとに押します。
-ビアがベタの中に収まり、ルール違反が増えない所だけに置きます。気に入らなければ「元に戻す」で取り消せます");
-            let fence = ui.button("ふちに柵").on_hover_text("基板の外形に沿って、GND のビアを1列に並べます (ビアの柵)。表と裏のベタのふちが同じ電位になり、基板のふちから出る雑音が減ります。高い周波数を使う基板や、ふちに沿って信号が走る基板で使います");
-            ui.add(egui::DragValue::new(&mut self.stitch_pitch).speed(0.1).range(1.0..=20.0).prefix("間隔 ").suffix(" mm"))
-                .on_hover_text("となりのビアとの間隔。狭いほどよくつながりますが、穴の数が増えます。目安は 3〜10 mm (速い信号ほど狭く)。柵は 2〜3 mm がよく使われます");
+ビアがベタの中に収まり、ルール違反が増えない所だけに置きます。気に入らなければ「元に戻す」で取り消せます"));
+            let fence = ui.button(i18n::tr("ふちに柵")).on_hover_text(i18n::tr("基板の外形に沿って、GND のビアを1列に並べます (ビアの柵)。表と裏のベタのふちが同じ電位になり、基板のふちから出る雑音が減ります。高い周波数を使う基板や、ふちに沿って信号が走る基板で使います"));
+            ui.add(egui::DragValue::new(&mut self.stitch_pitch).speed(0.1).range(1.0..=20.0).prefix(i18n::tr("間隔 ")).suffix(" mm"))
+                .on_hover_text(i18n::tr("となりのビアとの間隔。狭いほどよくつながりますが、穴の数が増えます。目安は 3〜10 mm (速い信号ほど狭く)。柵は 2〜3 mm がよく使われます"));
             if grid.clicked() {
                 self.stitch_vias(pcb_core::stitch::StitchMode::Grid);
             }
@@ -299,12 +299,12 @@ impl BoardEditor {
         let has = self.board.pads.iter().any(|p| pcb_core::fiducial::is_fiducial(p) && p.side == Side::Top);
         ui.horizontal(|ui| {
             if !has {
-                if ui.button("フィデューシャルを置く").on_hover_text("基板の3つの角の近くに、実装機のカメラが基板の位置を合わせるための丸い印 (直径 1 mm の銅、まわり直径 3 mm はレジストなし) を置きます。
+                if ui.button(i18n::tr("フィデューシャルを置く")).on_hover_text(i18n::tr("基板の3つの角の近くに、実装機のカメラが基板の位置を合わせるための丸い印 (直径 1 mm の銅、まわり直径 3 mm はレジストなし) を置きます。
 部品の実装を工場に頼むときに使います (手はんだなら要りません)。必要かどうか・大きさは、頼む工場の説明で確かめてください。
-角に部品や配線があるときは、少し内側の空いた所に置きます。印の円の中には、ベタも入りません").clicked() {
+角に部品や配線があるときは、少し内側の空いた所に置きます。印の円の中には、ベタも入りません")).clicked() {
                     self.place_fiducials();
                 }
-            } else if ui.button("フィデューシャルを取り除く").on_hover_text("表面のフィデューシャル (位置合わせの印) を全部取り除きます").clicked() {
+            } else if ui.button(i18n::tr("フィデューシャルを取り除く")).on_hover_text(i18n::tr("表面のフィデューシャル (位置合わせの印) を全部取り除きます")).clicked() {
                 self.checkpoint();
                 let n = pcb_core::fiducial::remove_fiducials(&mut self.board, Side::Top);
                 self.status = format!("フィデューシャルを {n} 個取り除きました");

@@ -108,16 +108,16 @@ impl SchEditor {
 
     pub(super) fn panel_pz(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label("出力");
+            ui.label(i18n::tr("出力"));
             ui.add(egui::TextEdit::singleline(&mut self.pz_out).desired_width(56.0).hint_text("OUT"))
-                .on_hover_text("伝達関数の出力にするネット。名前が分からないときは下の「回路図で選ぶ」を使います");
-            ui.label("入力");
-            ui.add(egui::TextEdit::singleline(&mut self.pz_in).desired_width(56.0).hint_text("空欄"))
-                .on_hover_text("入力のネット (AC の電源がつながっているネット)。出力 ÷ 入力を伝達関数にします。空欄なら出力の電圧そのもの (入力の電源が「AC 1」のとき、それが伝達関数です)");
+                .on_hover_text(i18n::tr("伝達関数の出力にするネット。名前が分からないときは下の「回路図で選ぶ」を使います"));
+            ui.label(i18n::tr("入力"));
+            ui.add(egui::TextEdit::singleline(&mut self.pz_in).desired_width(56.0).hint_text(i18n::tr("空欄")))
+                .on_hover_text(i18n::tr("入力のネット (AC の電源がつながっているネット)。出力 ÷ 入力を伝達関数にします。空欄なら出力の電圧そのもの (入力の電源が「AC 1」のとき、それが伝達関数です)"));
         });
         ui.horizontal(|ui| {
             let label = if self.pz_pick { "選択中… (Esc で中止)" } else { "回路図で選ぶ" };
-            if ui.selectable_label(self.pz_pick, label).on_hover_text("押してから回路図のピンや配線をクリックすると、そのネットが出力になり、すぐ計算します。Shift+クリックで入力のネット").clicked() {
+            if ui.selectable_label(self.pz_pick, label).on_hover_text(i18n::tr("押してから回路図のピンや配線をクリックすると、そのネットが出力になり、すぐ計算します。Shift+クリックで入力のネット")).clicked() {
                 self.pz_pick = !self.pz_pick;
                 self.noise_pick = self.pz_pick;
                 self.z_pick = false;
@@ -128,22 +128,22 @@ impl SchEditor {
                     self.status = "回路図の出力にしたいネットをクリックしてください".into();
                 }
             }
-            if self.lit(ui.button("極と零を求める"), "極と零を求める").on_hover_text("AC解析の結果に、分数の形の式 (多項式 ÷ 多項式) を当てはめて、極と零の周波数を求めます。極は、周波数が上がるとゲインが下がり始める所 (1つごとに -20 dB/dec、位相が 90° 遅れる)。零は、ゲインが上がり始める所です。周波数範囲・点数は AC解析の欄を共用します").clicked() {
+            if self.lit(ui.button(i18n::tr("極と零を求める")), "極と零を求める").on_hover_text(i18n::tr("AC解析の結果に、分数の形の式 (多項式 ÷ 多項式) を当てはめて、極と零の周波数を求めます。極は、周波数が上がるとゲインが下がり始める所 (1つごとに -20 dB/dec、位相が 90° 遅れる)。零は、ゲインが上がり始める所です。周波数範囲・点数は AC解析の欄を共用します")).clicked() {
                 self.run_pz();
             }
         });
         let Some(s) = self.pz.as_ref() else { return };
         let stale = s.signature != self.signature();
         ui.separator();
-        ui.label(format!("{} の伝達関数{}", s.label, if stale { " (回路が変わりました。もう一度実行してください)" } else { "" }));
+        ui.label(i18n::trf!("{} の伝達関数{}", s.label, if stale { " (回路が変わりました。もう一度実行してください)" } else { "" }));
         if s.pz.error >= 0.02 {
-            ui.colored_label(crate::theme::WARN, format!("当てはめの誤差が {:.1}% あります。この範囲の応答は、6次までの分数の式では表せないか、周波数が足りません。範囲を狭める・点数を増やすと良くなることがあります", s.pz.error * 100.0));
+            ui.colored_label(crate::theme::WARN, i18n::trf!("当てはめの誤差が {:.1}% あります。この範囲の応答は、6次までの分数の式では表せないか、周波数が足りません。範囲を狭める・点数を増やすと良くなることがあります", s.pz.error * 100.0));
         }
         let db = 20.0 * s.pz.dc_gain.abs().max(1e-15).log10();
-        ui.label(format!("低い周波数のゲイン: {:.3} 倍 ({:.1} dB)", s.pz.dc_gain, db)).on_hover_text("周波数が一番低いところの値に近い、直流のゲインです");
+        ui.label(i18n::trf!("低い周波数のゲイン: {:.3} 倍 ({:.1} dB)", s.pz.dc_gain, db)).on_hover_text(i18n::tr("周波数が一番低いところの値に近い、直流のゲインです"));
         let list = |ui: &mut egui::Ui, title: &str, roots: &[Root], hover: &str| {
             if roots.is_empty() {
-                ui.label(format!("{title}: なし")).on_hover_text(hover);
+                ui.label(i18n::trf!("{title}: なし")).on_hover_text(hover);
                 return;
             }
             for (i, r) in roots.iter().enumerate() {

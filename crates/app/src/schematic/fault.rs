@@ -304,7 +304,7 @@ impl SchEditor {
             if crate::widgets::close_button(ui, "故障の比較") {
                 close = true;
             }
-            ui.small("白い線 = 正常な回路 / 色つきの線 = 部品を壊した回路。クリックで測定カーソル");
+            ui.small(i18n::tr("白い線 = 正常な回路 / 色つきの線 = 部品を壊した回路。クリックで測定カーソル"));
         });
         match report {
             Err(msgs) => {
@@ -328,7 +328,7 @@ impl SchEditor {
                             }
                         }
                         if let Some(w) = window {
-                            ui.small(format!("測った範囲: {} 〜 {}", eng(w.0, "s"), eng(w.1, "s")));
+                            ui.small(i18n::trf!("測った範囲: {} 〜 {}", eng(w.0, "s"), eng(w.1, "s")));
                         }
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
@@ -510,7 +510,7 @@ impl SchEditor {
         let circuit = self.sim_circuit().ok();
         let parts: Vec<String> = self.sch.flat().components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect();
         ui.horizontal_wrapped(|ui| {
-            ui.label("部品");
+            ui.label(i18n::tr("部品"));
             let shown = if self.fault_part.is_empty() { "選ぶ".to_string() } else { self.fault_part.clone() };
             let before = self.fault_part.clone();
             egui::ComboBox::from_id_salt("fault_part")
@@ -522,12 +522,12 @@ impl SchEditor {
                     }
                 })
                 .response
-                .on_hover_text("壊す部品。抵抗・コンデンサ・コイル・ダイオード・トランジスタ・電源は部品全体を、ICなどはピン単位で壊せます");
+                .on_hover_text(i18n::tr("壊す部品。抵抗・コンデンサ・コイル・ダイオード・トランジスタ・電源は部品全体を、ICなどはピン単位で壊せます"));
             if let Some(Sel::Comp(i)) = self.selected
                 && let Some(c) = self.sch.components.get(i)
                 && parts.contains(&c.refdes)
                 && c.refdes != self.fault_part
-                && ui.small_button("選択中の部品").on_hover_text("回路図で選んでいる部品を壊す対象にします").clicked()
+                && ui.small_button(i18n::tr("選択中の部品")).on_hover_text(i18n::tr("回路図で選んでいる部品を壊す対象にします")).clicked()
             {
                 self.fault_part = c.refdes.clone();
             }
@@ -541,19 +541,19 @@ impl SchEditor {
             .map(fault_applicable)
             .unwrap_or_default();
         ui.horizontal_wrapped(|ui| {
-            ui.label("壊し方");
-            if ui.selectable_label(self.fault_pin.is_empty(), "部品全体").on_hover_text("部品そのものが壊れた/付け間違えた状態にします").clicked() {
+            ui.label(i18n::tr("壊し方"));
+            if ui.selectable_label(self.fault_pin.is_empty(), i18n::tr("部品全体")).on_hover_text(i18n::tr("部品そのものが壊れた/付け間違えた状態にします")).clicked() {
                 self.fault_pin.clear();
             }
             let pins = self.pin_choices(&self.fault_part);
-            if ui.selectable_label(!self.fault_pin.is_empty(), "ピン単位").on_hover_text("1本のピンだけ、はんだ不良 (断線) や、隣とのはんだブリッジ (ショート) にします。ICのピンは、この方法で壊します").clicked() && self.fault_pin.is_empty()
+            if ui.selectable_label(!self.fault_pin.is_empty(), i18n::tr("ピン単位")).on_hover_text(i18n::tr("1本のピンだけ、はんだ不良 (断線) や、隣とのはんだブリッジ (ショート) にします。ICのピンは、この方法で壊します")).clicked() && self.fault_pin.is_empty()
                 && let Some((n, _)) = pins.first() {
                     self.fault_pin = n.clone();
                 }
         });
         if self.fault_pin.is_empty() {
             if whole.is_empty() && !self.fault_part.is_empty() {
-                ui.small("この部品は部品全体としては壊せません (ICなど)。「ピン単位」を選んでください");
+                ui.small(i18n::tr("この部品は部品全体としては壊せません (ICなど)。「ピン単位」を選んでください"));
             }
             ui.horizontal_wrapped(|ui| {
                 for (k, f) in ALL_FAULTS.iter().enumerate() {
@@ -575,7 +575,7 @@ impl SchEditor {
         } else {
             let pins = self.pin_choices(&self.fault_part);
             ui.horizontal_wrapped(|ui| {
-                ui.label("ピン");
+                ui.label(i18n::tr("ピン"));
                 let shown = pins.iter().find(|(n, _)| *n == self.fault_pin).map_or(self.fault_pin.clone(), |(_, d)| d.clone());
                 let shown = match self.pin_net(&self.fault_part, &self.fault_pin) {
                     Some(net) => format!("{shown} ({net})"),
@@ -586,34 +586,34 @@ impl SchEditor {
                         let net = self.pin_net(&self.fault_part, n).map_or(String::new(), |x| format!(" ({x})"));
                         ui.selectable_value(&mut self.fault_pin, n.clone(), format!("{d}{net}"));
                     }
-                }).response.on_hover_text("壊すピン。カッコの中は、そのピンがつながっているネットの名前です");
+                }).response.on_hover_text(i18n::tr("壊すピン。カッコの中は、そのピンがつながっているネットの名前です"));
             });
             ui.horizontal_wrapped(|ui| {
-                ui.selectable_value(&mut self.fault_pin_how, 0, "断線 (オープン)").on_hover_text("ピンの半田がはがれた・接触不良。そのピンだけ回路から切り離します。電源ピンなら「電源が来ない」、出力ピンなら「出力が出ない」状態です");
-                ui.selectable_value(&mut self.fault_pin_how, 1, "GND にショート").on_hover_text("ピンがGNDにつながってしまった (はんだくず・ブリッジ)");
-                ui.selectable_value(&mut self.fault_pin_how, 2, "別のネットにブリッジ").on_hover_text("隣のピンやパターンとはんだでつながってしまった状態。つなぐ相手のネットを選びます");
+                ui.selectable_value(&mut self.fault_pin_how, 0, i18n::tr("断線 (オープン)")).on_hover_text(i18n::tr("ピンの半田がはがれた・接触不良。そのピンだけ回路から切り離します。電源ピンなら「電源が来ない」、出力ピンなら「出力が出ない」状態です"));
+                ui.selectable_value(&mut self.fault_pin_how, 1, i18n::tr("GND にショート")).on_hover_text(i18n::tr("ピンがGNDにつながってしまった (はんだくず・ブリッジ)"));
+                ui.selectable_value(&mut self.fault_pin_how, 2, i18n::tr("別のネットにブリッジ")).on_hover_text(i18n::tr("隣のピンやパターンとはんだでつながってしまった状態。つなぐ相手のネットを選びます"));
             });
             if self.fault_pin_how == 2 {
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("相手のネット");
+                    ui.label(i18n::tr("相手のネット"));
                     let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
                     egui::ComboBox::from_id_salt("fault_bridge").width(100.0).selected_text(if self.fault_bridge.is_empty() { "選ぶ".to_string() } else { self.fault_bridge.clone() }).show_ui(ui, |ui| {
                         for n in &nets {
                             ui.selectable_value(&mut self.fault_bridge, n.clone(), n);
                         }
-                    }).response.on_hover_text("ブリッジ (ピンを別のネットとつなぐ故障) の相手のネット");
+                    }).response.on_hover_text(i18n::tr("ブリッジ (ピンを別のネットとつなぐ故障) の相手のネット"));
                 });
             }
         }
         ui.horizontal_wrapped(|ui| {
-            ui.label("比べる");
-            ui.selectable_value(&mut self.fault_domain, FaultDomain::Dc, "DC (電圧)").on_hover_text("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります");
-            ui.selectable_value(&mut self.fault_domain, FaultDomain::Tran, "過渡 (波形)").on_hover_text("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います");
-            ui.selectable_value(&mut self.fault_domain, FaultDomain::Ac, "AC (周波数特性)").on_hover_text("周波数ごとのゲインを、正常な回路と重ねて比べます。フィルタのカットオフが動く、増幅度が変わる、共振が現れるなどが分かります。AC解析の周波数の設定を使います。入力の電源は「AC 1」にしておきます");
+            ui.label(i18n::tr("比べる"));
+            ui.selectable_value(&mut self.fault_domain, FaultDomain::Dc, i18n::tr("DC (電圧)")).on_hover_text(i18n::tr("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります"));
+            ui.selectable_value(&mut self.fault_domain, FaultDomain::Tran, i18n::tr("過渡 (波形)")).on_hover_text(i18n::tr("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います"));
+            ui.selectable_value(&mut self.fault_domain, FaultDomain::Ac, i18n::tr("AC (周波数特性)")).on_hover_text(i18n::tr("周波数ごとのゲインを、正常な回路と重ねて比べます。フィルタのカットオフが動く、増幅度が変わる、共振が現れるなどが分かります。AC解析の周波数の設定を使います。入力の電源は「AC 1」にしておきます"));
         });
         if self.fault_domain != FaultDomain::Dc {
             ui.horizontal_wrapped(|ui| {
-                ui.label("見る点");
+                ui.label(i18n::tr("見る点"));
                 let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
                 let shown = self.fault_watch_node().unwrap_or_else(|| "選ぶ".to_string());
                 egui::ComboBox::from_id_salt("fault_node")
@@ -625,27 +625,27 @@ impl SchEditor {
                         }
                     })
                     .response
-                    .on_hover_text("波形を比べるノード (ネット) の名前。出力にあたる点を選びます。選ばないときは OUT などを自動で探します");
+                    .on_hover_text(i18n::tr("波形を比べるノード (ネット) の名前。出力にあたる点を選びます。選ばないときは OUT などを自動で探します"));
             });
         }
         ui.horizontal_wrapped(|ui| {
-            if ui.button("故障を試す").on_hover_text("選んだ部品やピンを壊して解析し、変わった電圧と電流を日本語で説明します。回路そのものは変わりません").clicked() {
+            if ui.button(i18n::tr("故障を試す")).on_hover_text(i18n::tr("選んだ部品やピンを壊して解析し、変わった電圧と電流を日本語で説明します。回路そのものは変わりません")).clicked() {
                 self.run_fault();
             }
-            if ui.button("連鎖故障を追う").on_hover_text("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)").clicked() {
+            if ui.button(i18n::tr("連鎖故障を追う")).on_hover_text(i18n::tr("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)")).clicked() {
                 self.run_fault_chain();
             }
-            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new("よくある故障を順に試す")).on_hover_text("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます").clicked() {
+            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new(i18n::tr("よくある故障を順に試す"))).on_hover_text(i18n::tr("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます")).clicked() {
                 self.start_fault_scan();
             }
-            ui.checkbox(&mut self.scan_rare, "まれな故障も含める").on_hover_text("入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります");
+            ui.checkbox(&mut self.scan_rare, i18n::tr("まれな故障も含める")).on_hover_text(i18n::tr("入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります"));
         });
         if let Some(run) = &self.scan_run {
             let done = run.done.load(Ordering::Relaxed);
             ui.horizontal_wrapped(|ui| {
                 let text = if done == 0 { "正常な回路を計算しています…".to_string() } else { format!("故障を試しています: {done} / {}", run.total) };
                 ui.add(egui::ProgressBar::new(done as f32 / run.total.max(1) as f32).text(text).desired_width(220.0));
-                if ui.button("中止").on_hover_text("まだ始めていない故障は試さずにやめます。すでに解いている途中のものは、終わるまで待ちます").clicked() {
+                if ui.button(i18n::tr("中止")).on_hover_text(i18n::tr("まだ始めていない故障は試さずにやめます。すでに解いている途中のものは、終わるまで待ちます")).clicked() {
                     run.cancel.store(true, Ordering::Relaxed);
                 }
             });
@@ -665,7 +665,7 @@ impl SchEditor {
                         ui.label(l);
                     }
                 }
-                if ui.button("閉じる").on_hover_text("連鎖故障の説明を消します").clicked() {
+                if ui.button(i18n::tr("閉じる")).on_hover_text(i18n::tr("連鎖故障の説明を消します")).clicked() {
                     self.fault_chain = None;
                 }
             }
@@ -701,10 +701,10 @@ impl SchEditor {
                         ui.label(if k == 0 { t.strong().color(col) } else { t });
                     }
                     ui.horizontal(|ui| {
-                        if r.faulted.is_ok() && ui.button("故障時の電圧を回路図に表示").on_hover_text("回路図の電圧表示を、壊れた状態の値に切り替えます。元に戻すには右のボタンか、DC解析を実行します").clicked() {
+                        if r.faulted.is_ok() && ui.button(i18n::tr("故障時の電圧を回路図に表示")).on_hover_text(i18n::tr("回路図の電圧表示を、壊れた状態の値に切り替えます。元に戻すには右のボタンか、DC解析を実行します")).clicked() {
                             show_sheet = true;
                         }
-                        if ui.button("元に戻す (DC解析)").on_hover_text("壊した仮定の結果をやめて、いまの回路のDC解析の結果に戻します").clicked() {
+                        if ui.button(i18n::tr("元に戻す (DC解析)")).on_hover_text(i18n::tr("壊した仮定の結果をやめて、いまの回路のDC解析の結果に戻します")).clicked() {
                             restore = true;
                         }
                     });
@@ -719,7 +719,7 @@ impl SchEditor {
         }
         if !self.fault_scan.is_empty() {
             let mut pick = None;
-            egui::CollapsingHeader::new("危険な順 (定格超え → 電圧の変化)").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("危険な順 (定格超え → 電圧の変化)")).default_open(true).show(ui, |ui| {
                 egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                     for (k, row) in self.fault_scan.iter().enumerate() {
                         let effect = if row.severity.is_infinite() {
@@ -738,12 +738,12 @@ impl SchEditor {
                         };
                         let text = format!("{} {}: {}{}", row.part, row.label, effect, mark);
                         let col = if row.severity.is_infinite() || row.danger == Danger::Danger { crate::theme::ERROR } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
-                        if ui.selectable_label(false, egui::RichText::new(text).color(col)).on_hover_text("クリックで、この故障の詳しい結果を表示します").clicked() {
+                        if ui.selectable_label(false, egui::RichText::new(text).color(col)).on_hover_text(i18n::tr("クリックで、この故障の詳しい結果を表示します")).clicked() {
                             pick = Some(k);
                         }
                     }
                 });
-            }).header_response.on_hover_text("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです");
+            }).header_response.on_hover_text(i18n::tr("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです"));
             if let Some(k) = pick {
                 let row = &self.fault_scan[k];
                 (self.fault_part, self.fault_pin, self.fault_kind, self.fault_pin_how) = (row.part.clone(), row.pin.clone(), row.fault_kind, 0);

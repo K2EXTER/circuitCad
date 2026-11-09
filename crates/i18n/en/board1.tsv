@@ -1,0 +1,485 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/board_editor/actions.rs
+先に基板の外形を決めてください	Set the board outline first
+自動配線: 未配線はありません	Autoroute: nothing is unrouted
+表面も GND のベタで埋めました。	Also filled the top with a GND copper pour.
+表面の GND ベタは、ルール違反が増えるので置きませんでした。	Did not place a GND pour on the top, because it would add rule violations.
+パッドの根元 {aligned} か所を垂直にそろえました。	Straightened {aligned} pad entries.
+同じネットの隣り合うパッド {bridged} 組を、先に銅でつなぎました。	Joined {bridged} pairs of neighbouring pads on the same net with copper first.
+同じネットの銅どうしの狭いすき間 {filled} か所を、銅で埋めました。	Filled {filled} narrow gaps between copper of the same net.
+電流が大きいネットは、必要な太さで引きました ({})。	High-current nets were routed at the width they need ({}).
+一直線につながる配線 {joined} か所を1本にまとめました。	Merged {joined} tracks that run in a straight line into one.
+自動配線: {} 本を配線しました。{tail}(格子 {:.3} mm。手で足すときは、配線や端の点に吸い付きます)。DRC で確認しましょう	Autoroute: routed {} connections.{tail} (grid {:.3} mm. When you add tracks by hand, they snap to tracks and end points.) Check with DRC
+自動配線: {} 本を配線、{} 本は通せませんでした (黄色の線のまま)。部品の位置を動かすか、手動で配線してください	Autoroute: routed {}, could not route {} (still yellow lines). Move parts or route them by hand
+ベタのある {} は配置の計算から外し、部品の間隔を詰めました。ベタも新しい外形に合わせました。	Left {} with copper pours out of the placement calculation and moved parts closer together. The pours were fitted to the new outline too.
+・	,
+ベタへのビア {} 個は置き直しました。	Re-placed {} vias to pours.
+固定した {} 個はそのままにして、そのまわりに並べました。	Left {} locked parts where they are and placed the rest around them.
+自動配置: {} 個を並べ、外形を {} × {} mm にしました。{locked}{poured}位置は手で動かして調整できます	Autoplace: placed {} parts and set the outline to {} × {} mm. {locked}{poured}You can adjust positions by dragging
+部品の向き: 回すと短く・交差が減る部品は見つかりませんでした (配線の付いていない部品 {} 個を調べました)	Part rotation: found no part that gets shorter or fewer crossings when rotated (checked {} parts without tracks)
+部品の向き: {} 個を回しました: {}{}。この部品の未配線の長さ {:.0} → {:.0} mm。気に入らなければ「元に戻す」	Part rotation: rotated {} parts: {}{}. Unrouted length of these parts {:.0} → {:.0} mm. If you don't like it, press "Undo"
+ ほか	 and more
+ゲートの入れ替え: これ以上、未配線が短くなる割り当ては見つかりませんでした	Gate swap: found no assignment that makes the unrouted length any shorter
+ゲートの入れ替え: {} は、どのゲートにも配線が付いているので動かせません。入れ替えたいゲートの配線を消してから、もう一度押してください	Gate swap: {} cannot be moved, because every gate has tracks. Delete the tracks of the gates you want to swap, then press again
+{} (未配線 {:.0} → {:.0} mm、交差 {} → {}。長さを優先して選びます)	{} (unrouted {:.0} → {:.0} mm, crossings {} → {}. Length is preferred)
+ゲートの入れ替え: {}。回路は同じです。配線はこれからです	Gate swap: {}. The circuit is the same. Routing is still to do
+部品番号の振り直しを取りやめました: {e}	Renumbering canceled: {e}
+部品番号は、すでに位置の順に並んでいます	The reference designators are already in position order
+部品番号を位置の順に振り直しました: 基板 {n} 個、回路図 {in_schematic} 個。回路図の側を元に戻すときは、回路図で「元に戻す」を押してください	Renumbered reference designators by position: {n} on the board, {in_schematic} in the schematic. To undo the schematic side, press "Undo" in the schematic
+{} は、階層のコピー (同じ子シートから作った部品) なので、回路図には反映しません。1つ直すと全部のコピーに効いてしまうためです。入れ替えは基板だけに残ります	{} are hierarchy copies (parts made from the same child sheet), so they are not changed in the schematic: fixing one would change all copies. The swap stays on the board only
+回路図に反映する入れ替えが見つかりませんでした (回路図にその部品がありません)	Found no swap to apply to the schematic (the part is not in the schematic)
+回路図に反映しました: {} (配線の端 {} 本を動かしました。ピンの間で配線が交差して見えるときは、回路図で描き直せます)	Applied to the schematic: {} (moved {} wire ends. If wires look crossed between pins, you can redraw them in the schematic)
+配線がまだありません。先に配線してください	There are no tracks yet. Route first
+配線を短くする: これ以上短くできる配線は見つかりませんでした (引き直して、短く・きれいになるものだけ採用します)	Shorten tracks: found no track that can be made shorter (only re-routes that are shorter and cleaner are kept)
+配線を短くする: {} 本を引き直しました。配線の長さ {:.0} → {:.0} mm、ビア {} → {} 個。DRC で確認しましょう (気に入らなければ「元に戻す」)	Shorten tracks: re-routed {} tracks. Track length {:.0} → {:.0} mm, vias {} → {}. Check with DRC (if you don't like it, "Undo")
+通らない接続はありません	There are no connections that fail to route
+小さい部品の押しのけ: 動かして通せる接続は見つかりませんでした (試した {} 通り)。大きな部品の位置を変えるか、手で配線してください	Push small parts: found no connection that can be routed by moving parts (tried {} ways). Move the larger parts or route by hand
+時間切れで、まだ試していない接続があります。もう一度押すと続きをします。	Ran out of time; some connections were not tried yet. Press again to continue.
+小さい部品の押しのけ: {} を動かし、通らない接続が {} → {} 本になりました。{more}DRC で確認しましょう (気に入らなければ「元に戻す」)	Push small parts: moved {}; unroutable connections {} → {}. {more}Check with DRC (if you don't like it, "Undo")
+ビアを置けなかったパッドが {} 個あります (自動配線が線でつなぎます)。	{} pads could not get a via (the autorouter will connect them with tracks).
+GND ベタ: 裏面{}を GND の銅箔にして、表面の GND パッド {} 個を短い線とビアでつなぎました ({} 個は元からつながっていました)。{left}このあと「自動配線」で GND 以外の線を引きます	GND pour: made the bottom{} GND copper and connected {} GND pads on the top with short tracks and vias ({} were already connected). {left}Next, use "Autoroute" for the non-GND tracks
+と表面の空いた所	 and the free areas of the top
+GND ベタは、もう置いてあります	The GND pour is already placed
+表と裏の両方に GND のベタがある所に、GND のビアを格子に並べて、表と裏のベタを何か所もつなぎます (ビアの縫い付け)。\n信号の帰りの電流が近くで反対の面へ移れ、ベタの中の孤立した銅もつながります。配線と表面のベタのあとに押します。\nビアがベタの中に収まり、ルール違反が増えない所だけに置きます。気に入らなければ「元に戻す」で取り消せます	Where both top and bottom have a GND pour, places GND vias in a grid to join the top and bottom pours at many points (via stitching).\nReturn currents can switch sides nearby, and isolated copper inside the pours gets connected. Press after routing and the top pour.\nVias are placed only where they fit inside the pour and add no rule violations. If you don't like it, "Undo" removes them
+ふちに柵	Fence the edge
+基板の外形に沿って、GND のビアを1列に並べます (ビアの柵)。表と裏のベタのふちが同じ電位になり、基板のふちから出る雑音が減ります。高い周波数を使う基板や、ふちに沿って信号が走る基板で使います	Places a row of GND vias along the board outline (a via fence). The edges of the top and bottom pours stay at the same potential, and less noise leaves the board edge. Use it on high-frequency boards or boards with signals running along the edge
+間隔 	Spacing 
+となりのビアとの間隔。狭いほどよくつながりますが、穴の数が増えます。目安は 3〜10 mm (速い信号ほど狭く)。柵は 2〜3 mm がよく使われます	Spacing between neighbouring vias. Closer joins better but adds more holes. A guide is 3–10 mm (closer for faster signals). Fences often use 2–3 mm
+フィデューシャルを置く	Place fiducials
+基板の3つの角の近くに、実装機のカメラが基板の位置を合わせるための丸い印 (直径 1 mm の銅、まわり直径 3 mm はレジストなし) を置きます。\n部品の実装を工場に頼むときに使います (手はんだなら要りません)。必要かどうか・大きさは、頼む工場の説明で確かめてください。\n角に部品や配線があるときは、少し内側の空いた所に置きます。印の円の中には、ベタも入りません	Places round marks near three corners of the board that the assembly machine's camera uses to align the board (1 mm copper, 3 mm circle without solder mask).\nUsed when you have a factory assemble the parts (not needed for hand soldering). Check the factory's guide for whether you need them and their size.\nIf a corner has parts or tracks, they go a little inward in a free spot. Copper pours stay out of the mark's circle
+フィデューシャルを取り除く	Remove fiducials
+表面のフィデューシャル (位置合わせの印) を全部取り除きます	Removes all fiducials (alignment marks) on the top
+フィデューシャルを {n} 個取り除きました	Removed {n} fiducials
+{}の角の近くには空きがありませんでした (3 個が勧められます。角を空けてから置き直してください)。	There was no free space near the {} corners (3 are recommended. Clear the corners, then place again).
+フィデューシャルを {} 個置きました。{missed}印のまわりの円の中には、配線やビアを通さないでください	Placed {} fiducials. {missed}Keep tracks and vias out of the circle around each mark
+格子に	in a grid
+外形に沿って	along the outline
+ (ルール違反になる {} か所は外しました)	 (left out {} spots that would break the rules)
+ビアの縫い付け: GND のビアを{what} {} 個置き、{} のベタをつなぎました{dropped}	Via stitching: placed GND vias {what} ({} vias), joining the {} pours{dropped}
+DRC: 違反 {} 件	DRC: {} violations
+# crates/app/src/board_editor/align.rs
+整列 (?)	Align (?)
+選んだ部品の位置をそろえます。端や中心は、パッドを囲んだ四角が基準です。固定した部品は動きません。配線は動かないので、配線のあとに使うと、つながりが切れることがあります (元に戻すで戻せます)	Lines up the selected parts. Edges and centers use the box around the pads. Locked parts don't move. Tracks don't move, so using this after routing can break connections (Undo brings them back)
+左揃え	Align left
+いちばん左の部品に、左端をそろえます	Lines up left edges with the leftmost part
+右揃え	Align right
+いちばん右の部品に、右端をそろえます	Lines up right edges with the rightmost part
+上揃え	Align top
+いちばん上の部品に、上端をそろえます	Lines up top edges with the topmost part
+下揃え	Align bottom
+いちばん下の部品に、下端をそろえます	Lines up bottom edges with the bottommost part
+縦の線に中心	Center on vertical line
+全体の真ん中の縦の線に、部品の中心をそろえます (縦に並べたいとき)	Lines up part centers on the vertical center line of the group (to stack them vertically)
+横の線に中心	Center on horizontal line
+全体の真ん中の横の線に、部品の中心をそろえます (横に1列に並べたいとき)	Lines up part centers on the horizontal center line of the group (to put them in one row)
+横に等間隔	Space evenly across
+いちばん左と右の部品は動かさず、間の部品の間隔を同じにします (3 個以上)	Keeps the leftmost and rightmost parts and makes the gaps between the others equal (3 or more)
+縦に等間隔	Space evenly down
+いちばん上と下の部品は動かさず、間の部品の間隔を同じにします (3 個以上)	Keeps the top and bottom parts and makes the gaps between the others equal (3 or more)
+固定した {} 個は動かしていません。	Did not move {} locked parts.
+配線は動いていないので、DRC で確認しましょう。	Tracks did not move, so check with DRC.
+整列: {} 個の部品を動かしました。{locked}{tracks}	Align: moved {} parts. {locked}{tracks}
+もうそろっています (動かす部品がありませんでした)	Already aligned (no parts to move)
+# crates/app/src/board_editor/canvas.rs
+この部品は固定されています。固定を外すと回せます (選択パネルのボタン)	This part is locked. Unlock it to rotate it (button in the selection panel)
+選んだ {n} 個をグループの中心のまわりに回しました	Rotated the {n} selected parts around the group's center
+# crates/app/src/board_editor/currentwindow.rs
+回路図のシミュレーションから電流を取れませんでした: {e}。電流を自分で入れると、推奨の線幅が出ます	Could not get currents from the schematic simulation: {e}. Enter the current yourself to get a recommended track width
+回路のDC解析の電流を入れました ({a} A)。ピーク電流 (起動時・スイッチング) は入らないので、余裕を見てください	Entered currents from the circuit's DC analysis ({a} A). Peak currents (start-up, switching) are not included, so leave some margin
+回路のDC解析では、このネットに流れる電流が、ほとんどありません。電流を自分で入れると、推奨の線幅が出ます	The circuit's DC analysis shows almost no current in this net. Enter the current yourself to get a recommended track width
+回路のDC解析に、このネットが見つかりません (回路図とつながりが合っているか、基板の「回路図から取り込み」を確かめてください)	This net was not found in the circuit's DC analysis (check that the schematic and connections match, and the board's "Import from schematic")
+ネットの電流一覧	Net currents
+回路図から部品を取り込むと、ネットの一覧が出ます	Import parts from the schematic to see the list of nets
+DC解析の電流を入れる	Use DC analysis currents
+回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、全部のネットに入れます (いま入れてある電流は置き換わります)	Finds the current in each net with the schematic's DC analysis (operating point) and enters it for all nets (replaces the currents entered now)
+過渡解析の電流を入れる	Use transient currents
+回路図で最後に実行した過渡解析の、後半の電流の実効値 (RMS) を、各ネットに入れます。先に回路図で過渡解析を実行してください	Enters for each net the RMS current of the second half of the last transient analysis run in the schematic. Run a transient analysis in the schematic first
+推奨の線幅	Recommended width
+今の最も細い配線	Thinnest track now
+実効 (過渡)	RMS (transient)
+過渡解析の後半の電流の実効値。太さに使うのは、これです	RMS current of the second half of the transient analysis. This is what sets the width
+10 ms の最大	Max over 10 ms
+短くても繰り返す山の熱	Heat from short but repeating peaks
+ピーク	Peak
+一瞬の最大値。参考です	Instant maximum. For reference
+クリックで、このネットの設定の窓を開きます	Click to open this net's settings window
+このネットに流れる最大の電流。0 なら調べません	Maximum current in this net. 0 means not checked
+配線なし	No tracks
+{t:.2} mm ✖ 足りません	{t:.2} mm ✖ too thin
+ピークが実効値の10倍以上です。起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります	The peak is more than 10× the RMS value. It may be a start-up surge or a spike. In a real circuit the supply's internal resistance, ESR and soft start limit it, so sizing the width from it makes tracks wider than needed
+足りない {} ネットを推奨幅にする	Widen {} thin nets to the recommended width
+電流に対して細いネットの配線を、すべて必要な太さまで太くします (Ctrl+Z で戻せます)。太くしたあと、DRC で間隔が足りるか確かめましょう	Widens all tracks of nets that are too thin for their current to the width they need (Ctrl+Z undoes it). After widening, check with DRC that the spacing is still enough
+太さの目安は、銅箔 35µm・温度上昇 10℃ の外層 (IPC-2221) です。ピーク電流 (起動時・スイッチング) は入らないので、余裕を見てください	Widths are a guide for 35 µm copper, 10 ℃ temperature rise, outer layer (IPC-2221). Peak currents (start-up, switching) are not included, so leave some margin
+# crates/app/src/board_editor/dimensions.rs
+横の長さが 0 なので、横の寸法線は作れません (縦なら V、斜めなら Enter)	The horizontal length is 0, so a horizontal dimension cannot be made (V for vertical, Enter for diagonal)
+縦の長さが 0 なので、縦の寸法線は作れません (横なら H、斜めなら Enter)	The vertical length is 0, so a vertical dimension cannot be made (H for horizontal, Enter for diagonal)
+2点が同じ所なので、寸法線は作れません	The two points are the same, so a dimension cannot be made
+横の	horizontal
+縦の	vertical
+{what}寸法線 {len:.2} mm を基板に残しました (DXF と SVG の図に出ます。ガーバーには出ません)。「元に戻す」で取り消せます	Added a {what}dimension of {len:.2} mm to the board (shown in DXF and SVG drawings, not in Gerber). "Undo" removes it
+外形の寸法線	Outline dimensions
+基板の外形の幅と高さを、寸法線にして基板の下と左に置きます (外形を変えたら、もう一度押すと置き直します)。\\nケースを設計する人に渡す DXF と、SVG の図に出ます。ガーバー (工場に渡すデータ) には出ません。\\n好きな2点の寸法線は、「距離を測る」ツールで2点を測ってから Enter (斜めの長さ)・H (横)・V (縦) で残せます	Places dimensions for the board outline's width and height below and left of the board (press again after changing the outline to re-place them).\\nThey appear in the DXF for the case designer and in the SVG drawing, not in Gerber (the data for the factory).\\nFor a dimension between any two points, measure them with the "Measure distance" tool, then press Enter (diagonal), H (horizontal) or V (vertical)
+外形の寸法線を置きました: 幅 {w:.2} mm・高さ {h:.2} mm	Placed outline dimensions: width {w:.2} mm, height {h:.2} mm
+最後の寸法線を消す	Delete last dimension
+いちばん最後に置いた寸法線を1本消します	Deletes the dimension placed last
+寸法線を1本消しました	Deleted one dimension
+寸法線を全部消す ({n})	Delete all dimensions ({n})
+基板の寸法線を全部消します (「元に戻す」で戻せます)	Deletes all dimensions on the board ("Undo" brings them back)
+寸法線を {n} 本消しました	Deleted {n} dimensions
+# crates/app/src/board_editor/draw.rs
+ネット {n}	Net {n}
+ネット未割り当て	No net assigned
+選択中の接続: {net}	Selected connection: {net}
+表面	Top
+赤	red
+裏面	Bottom
+青	blue
+金	gold
+緑	green
+紫	purple
+青緑	teal
+作業中: {name} ({color_name})   Lキーで切り替え  ・  もう一方の面は薄く表示	Working on: {name} ({color_name})   L to switch  ·  the other side is shown faded
+ビア (ネットなし)	Via (no net)
+ビア → ネット {net}	Via → net {net}
+押しのけの計算が重いので、少し遅れて表示します	The push calculation is heavy, so it shows with a short delay
+{pushed} 本を押しのけます	Pushes {pushed} tracks
+# crates/app/src/board_editor/file.rs
+circuitCad 基板	circuitCad board
+保存しました: {}	Saved: {}
+保存失敗: {e}	Save failed: {e}
+開きました	Opened
+保存前の基板を復元しました。保存してください	Restored the board from before saving. Please save it
+DXF (ケース設計用)	DXF (for case design)
+DXF を保存しました: {}	Saved DXF: {}
+DXF の保存に失敗: {e}	Could not save DXF: {e}
+DXF (ケースの図面)	DXF (case drawing)
+DXF から外形と穴 {} 個を取り込みました (元に戻せます)	Imported the outline and {} holes from DXF (can be undone)
+外形の左下を (0, 0) に合わせました。すでに部品を置いていた場合は、外形に収まっているか確かめてください。	Moved the outline's bottom-left corner to (0, 0). If you had already placed parts, check that they fit inside the outline.
+DXF を取り込みました	Imported DXF
+・{n}	• {n}
+DXF を取り込めませんでした: {e}	Could not import DXF: {e}
+SVG を保存しました: {}	Saved SVG: {}
+SVG の保存に失敗: {e}	Could not save SVG: {e}
+開きました: {}	Opened: {}
+読み込み失敗: {e}	Could not load: {e}
+DRC違反が{}件あります。修正してから書き出してください	There are {} DRC violations. Fix them before exporting
+製造ファイルの出力先フォルダ	Output folder for fabrication files
+書き出し完了: {} ({} ファイル + zip)	Export done: {} ({} files + zip)
+回路図の「設計の要件」の変更を、基板に取り込みました	Brought the changes to "Design requirements" in the schematic into the board
+設計の要件を取り込みました。{}	Imported the design requirements. {}
+名前をつけたヘッダがありません。回路図でヘッダを選んで、「ピンの名前」に書いてください	No header has pin names. Select a header in the schematic and fill in its "Pin names"
+ヘッダのピンの名前を、シルクに {n} か所書きました (もう一度押すと書き直します)	Wrote the header pin names on the silkscreen at {n} places (press again to rewrite them)
+{} と {} は、フットプリント名「{}」が同じで、外形やパッド・3Dの形が違います (基板は名前ごとに1つの形しか持てないので、後の {} の形になります)。部品の「フットプリント名」を変えると、別々の形になります	{} and {} have the same footprint name "{}" but different outlines, pads or 3D shapes (the board keeps only one shape per name, so it uses the shape of the later one, {}). Change the part's "Footprint name" to keep them separate
+フットプリント	Footprint
+見つかりません	not found
+{w} (部品ライブラリにこの部品がありません。回路図の「ライブラリ」の「再読み込み」を押すか、部品を作り直してから、もう一度取り込んでください)	{w} (this part is not in the part library. Press "Reload" under "Library" in the schematic, or remake the part, then import again)
+取り込み完了: 追加 {} / 更新 {} / 削除 {} / 警告 {}	Import done: added {} / updated {} / removed {} / warnings {}
+# crates/app/src/board_editor/history.rs
+元に戻しました	Undone
+やり直しました	Redone
+# crates/app/src/board_editor/interact.rs
+{} 個を選択 ({}範囲)	Selected {} items ({})
+接触した物を含む	touching included
+完全に囲んだ	fully enclosed
+幹の選びを取り消しました (もう一度右クリックで選択ツールに戻ります)	Canceled the trunk selection (right-click again to return to the select tool)
+円弧・円・長方形の途中の点を取り消しました (もう一度右クリックで、描きかけの多角形を確定します)	Canceled the in-progress arc, circle or rectangle point (right-click again to finish the polygon being drawn)
+配線を確定しました (もう一度右クリックで選択ツールに戻ります)	Finished the track (right-click again to return to the select tool)
+多角形の入力を取り消しました	Canceled the polygon input
+測った距離を消しました	Cleared the measured distance
+選択ツールに戻りました	Back to the select tool
+# crates/app/src/board_editor/keepouts.rs
+いま {found} 件の配線・ビア・部品が中にあります (赤い × の所)。	{found} tracks, vias or parts are inside now (at the red ×).
+禁止領域 {n} を作りました (配線・ビア・ベタ・部品を、全部の層で禁止)。{inside}禁止するものと層は、左の「禁止領域」の一覧で変えられます	Created keep-out area {n} (tracks, vias, pours and parts are kept out on all layers). {inside}You can change what is kept out and the layers in the "Keep-out areas" list on the left
+形を描いて確定 (ダブルクリック・Enter、または最初の点をクリック) すると、禁止領域になります	Draw a shape and finish it (double-click, Enter, or click the first point) to make a keep-out area
+禁止領域の一覧	Keep-out areas
+名前	Name
+領域の名前 (違反の文に出ます。空でもよい)	Name of the area (shown in violation messages. Can be empty)
+この中に配線を通さない	No tracks inside this area
+この中にビアを置かない	No vias inside this area
+ベタ	Pour
+この中をベタで埋めない (ベタがよけます)	No copper pour inside this area (pours go around it)
+部品	Parts
+この中に部品 (パッドと、パッドを囲む四角) を置かない	No parts (pads and the box around the pads) inside this area
+この禁止領域を消します (「元に戻す」で戻せます)	Deletes this keep-out area ("Undo" brings it back)
+層:	Layers:
+全部	All
+全部の銅の層で禁止します。外すと、層を選べます	Keeps out on all copper layers. Uncheck to choose layers
+禁止領域 {} を消しました	Deleted keep-out area {}
+# crates/app/src/board_editor/layers.rs
+銅箔の層数	Copper layers
+基板の銅の層の数。2層は表と裏だけ。4層以上は、間に内層が入り、電源やGNDのベタを内層に広げたり、配線の逃げ場にできます。層が増えるほど発注の値段も上がります	Number of copper layers on the board. 2 layers are just top and bottom. With 4 or more, inner layers sit in between: you can spread supply or GND pours on them or use them as extra room for routing. More layers cost more to order
+{total} 層	{total} layers
+{n} 層	{n} layers
+内層には配線とベタを置けます。スルーホールの部品とビアは、全部の層につながります (ブラインドビアは未対応)	Inner layers can hold tracks and pours. Through-hole parts and vias connect to all layers (blind vias are not supported)
+{total} 層にすると消える内層に、配線 {n_tracks} 本とベタ {n_zones} 個があります。先に消すか、ほかの層へ移してください	The inner layers removed by going to {total} layers have {n_tracks} tracks and {n_zones} pours. Delete them or move them to other layers first
+銅箔を {total} 層にしました	Set copper layers to {total}
+物の表示とロック	Visibility and locks
+クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」、鍵は「選べないようにロックするか」です。明るい四角が「オン」(見えている / ロック中)です	Click to collapse / expand. For each kind, the eye is "show on screen" and the lock is "lock so it can't be selected". A bright box means "on" (shown / locked)
+すべての表示を、まとめて出す / 隠す (下の目の一括操作)。いまは全部が出ているときだけ明るくなります	Shows / hides everything at once (all the eyes below). Bright only when everything is shown
+すべて	All
+すべての種類を、まとめてロック / 解除します (「反対の面」は別です)。ロックすると、クリックや範囲選択で選べず、ドラッグでも動きません。部品をロックすると、ビアや配線を囲んで選ぶときに部品を巻き込みません	Locks / unlocks every kind at once ("Other side" is separate). Locked items can't be selected by clicking or box select and don't move when dragged. Locking parts keeps them out when you box-select vias or tracks
+基板の物	Board items
+部品 (部品のパッド、外形、部品番号) を表示します。隠すと、部品の下の配線やベタが見やすくなります。隠している間も、配線やビアは、そのまま選べます	Shows parts (pads, outline, reference designator). Hide them to see tracks and pours under parts more easily. While hidden, tracks and vias can still be selected
+部品をロックします。選べず、ドラッグでも動きません (範囲選択になります)	Locks parts. They can't be selected or dragged (dragging makes a box selection)
+パッド・穴	Pads, holes
+部品に属さないパッドと取付穴をロックします	Locks pads and mounting holes that don't belong to a part
+配線 (トラック) を表示します	Shows tracks
+配線をロックします。選べず、動かせません	Locks tracks. They can't be selected or moved
+ビアを表示します	Shows vias
+ビアをロックします。選べず、動かせません	Locks vias. They can't be selected or moved
+ゾーン (銅を面で塗った所) を表示します	Shows zones (areas filled with copper)
+ゾーン	Zones
+ゾーン (ベタ) をロックします	Locks zones (copper pours)
+シルク (白い印刷の文字と枠) を表示します	Shows the silkscreen (white printed text and outlines)
+部品に属さないシルク線をロックします	Locks silkscreen lines that don't belong to a part
+作業の補助	Work aids
+未配線 (まだつながっていない接続を示す黄色の線) を表示します	Shows unrouted connections (yellow lines for connections not made yet)
+パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します	Shows the connection name from the schematic (net name) next to pads
+ネット名	Net names
+禁止領域 (斜線の範囲) を表示します。隠しても領域は効いたままで、DRC は中の配線・ビア・部品を指摘し、自動配線とベタは領域をよけます	Shows keep-out areas (hatched). Hidden areas still apply: DRC flags tracks, vias and parts inside, and autoroute and pours avoid them
+基板に残した寸法線を表示します。隠しても、DXF と SVG の図には出ます	Shows dimensions placed on the board. Even when hidden, they appear in DXF and SVG drawings
+作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認して発注」の「作業中も点検する」です	Shows the marks (red ×) for rule violations found by the live check. When hidden, checking continues and the count is shown at the bottom left. To stop the check itself, use "Check while working" in "③ Check and order"
+点検の印	Check marks
+回路図から	From schematic
+回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます。シートの一覧は、左のパネルにあります	Outlines parts in a color for each schematic sheet (tab) and shows the sheet name at the group's corner, so you can tell on the board which part belongs to which sheet. The list of sheets is in the left panel
+シートの色	Sheet colors
+回路図の「設計の要件」の、近くに置く組を、枠で囲んで表示します (守れていれば緑、広がりすぎならピンク)	Draws a frame around each "keep close" group from the schematic's "Design requirements" (green when met, pink when too spread out)
+要件の組 (枠)	Requirement groups (frames)
+回路図の「設計の要件」の、離す組を、いちばん近い2つのパッドを結ぶ線と距離で表示します (足りなければピンク)	For each "keep apart" pair from the schematic's "Design requirements", shows a line between the two nearest pads and its distance (pink when too close)
+要件の距離 (線)	Requirement distances (lines)
+画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です	Shows rulers with real sizes (mm) at the top and left of the view. The orange mark is the cursor position
+定規 (mm)	Ruler (mm)
+反対の面	Other side
+いま作業している面 (枠の色) と反対の面にある物をロックします。薄く表示している反対の面を誤って選ばなくなります。ビアと、貫通するスルーホール部品は、どちらの面でも選べます	Locks items on the side opposite the one you are working on (frame color), so you don't select the faded other side by mistake. Vias and through-hole parts can be selected from either side
+層	Layers
+層: {}	Layer: {}
+クリックでたたみます / ひらきます。L キーでも作業層を順に切り替えられます	Click to collapse / expand. The L key also cycles through the working layers
+この層の銅を表示 / 非表示にします	Shows / hides copper on this layer
+配線を置く層をこの層にします	Puts new tracks on this layer
+# crates/app/src/board_editor/lengths.rs
+長さ合わせ (蛇行) ({}) (?)	Length matching (meander) ({}) (?)
+配線されたネットがありません	No routed nets
+そろえるネットを選びます (配線の長さ):	Choose nets to match (track length):
+チェックしたネットの長さをそろえます。長さは、そのネットの配線 (ビアは除く) の長さの合計です	Matches the lengths of checked nets. Length is the total length of the net's tracks (vias not included)
+角の形	Corner shape
+四角	Square
+蛇行の角を直角にします。いちばん単純で、同じ長さを少ない場所で稼げます	Makes meander corners right angles. The simplest; gains the same length in the least space
+面取り	Chamfer
+角を 45° で切り落とします。直角がなくなり、きれいで製造しやすい形です	Cuts corners at 45°. No right angles; neat and easy to make
+丸	Round
+角を丸めます。高周波や音響の線で、反射や角の電界集中を減らしたいときに向きます (長さを稼ぐのに、少し広い場所が要ります)	Rounds the corners. Good for high-frequency or audio lines where you want less reflection and field crowding at corners (needs a bit more room to gain length)
+山の高さ 	Height 
+蛇行の山の高さの目安 (上限)。大きいほど山の数が減りますが、周りの配線とぶつかりやすくなります	Guide (maximum) for the height of meander bumps. Larger means fewer bumps but more chance of hitting nearby tracks
+選んだネットを一番長いものに合わせる	Match selected nets to the longest
+選んだネットのうち、いちばん長いものに、ほかのネットの長さをそろえます。短いネットの、まっすぐな長い配線に蛇行を入れます。ルール違反になる所には入れません。元に戻すで取り消せます	Matches the other selected nets to the longest one. Adds meanders on long straight tracks of the shorter nets, but not where it would break rules. Undo removes it
+目標 	Target 
+指定の長さに合わせる	Match to given length
+選んだネットすべてを、指定した長さにします (いちばん長いネットがそれより長いときは、いちばん長いものに合わせます)	Makes all selected nets the given length (if the longest net is longer than that, matches to the longest)
+同時に届いてほしい線 (バス、クロックとデータなど) の長さを、配線の一部に蛇行を入れてそろえます	Makes the lengths of lines that should arrive at the same time (buses, clock and data, etc.) equal by adding meanders to part of the track
+長さはもうそろっています (目標 {:.2} mm)	Lengths are already matched (target {:.2} mm)
+長さを合わせられませんでした。{}	Could not match lengths. {}
+。できなかったもの: {}	. Not matched: {}
+長さ合わせ: 目標 {:.2} mm に、{ok} 本のネットを蛇行で合わせました{tail}	Length matching: matched {ok} nets to the target {:.2} mm with meanders{tail}
+# crates/app/src/board_editor/livedrc.rs
+ルール違反 {n} 件 (赤い × の所。ポインタを合わせると内容)	{n} rule violations (at the red ×. Point at one for details)
+ルール違反 {n} 件 (印は隠しています。右上の「物の表示とロック」の「点検の印」で出せます)	{n} rule violations (marks are hidden. Show them with "Check marks" in "Visibility and locks" at the top right)
+作業中も点検する	Check while working
+配線を引いたり部品を動かしたりするたびに、線どうしの間隔・穴・基板の端などの規則を裏で調べ直して、違反の所に赤い × を出します (ポインタを合わせると内容が出ます)。\n「DRC を実行」は、仕上げの形・ベタの分断・未配線も含めて一覧にします。発注の前には、そちらも実行してください	Each time you route a track or move a part, rechecks rules such as spacing between lines, holes and board edges in the background and puts a red × at violations (point at one for details).\n"Run DRC" lists everything, including final shapes, split pours and unrouted connections. Run that too before ordering
+いま {n} 件	{n} now
+# crates/app/src/board_editor/livepath.rs
+銅箔どうし	
+# crates/app/src/board_editor/measure.rs
+{d:.2} mm (ΔX {:.2} / ΔY {:.2}, 角度 {angle:.1}°, {:.0} mil)	{d:.2} mm (ΔX {:.2} / ΔY {:.2}, angle {angle:.1}°, {:.0} mil)
+距離: {} — Enter で寸法線として残す (H は横だけ・V は縦だけ)。次のクリックで測り直し、Esc で消します	Distance: {} — Enter keeps it as a dimension (H horizontal only, V vertical only). Next click measures again, Esc clears
+始点を置きました。終点をクリックしてください	Start point placed. Click the end point
+# crates/app/src/board_editor/mod.rs
+クリックで選択、部品はドラッグで移動。空いた所を左ドラッグ = 完全に囲んだものを選択、右ドラッグ = 触れたものも選択 (Shiftで追加、Ctrl で足す・外す。Ctrl+クリックも)	Click to select, drag parts to move. Left-drag in empty space = select fully enclosed items, right-drag = also select touched items (Shift to add, Ctrl to add / remove. Ctrl+click too)
+銅の配線 (トラック) を引きます。クリックで始点、クリックで曲がり、ダブルクリックで終了。V でビアを打って裏面に移れます	Draws copper tracks. Click to start, click to bend, double-click to finish. Press V to place a via and move to the bottom
+表面と裏面をつなぐ穴 (ビア) を置きます	Places a hole connecting top and bottom (via)
+広い面を銅で埋めます (ベタ)。GND に使うと配線が楽になり、ノイズにも強くなります	Fills a wide area with copper (copper pour). Used for GND, it makes routing easier and resists noise
+配線・ビア・ベタ・部品を置けない領域 (禁止領域) を、多角形で描きます。クリックで頂点、ダブルクリックか Enter で確定 (ベタと同じく、円や長方形も描けます)。アンテナの下・ねじの頭・ケースの壁が当たる所などに使います。何を禁止するかと層は、描いたあと左の一覧で変えられます	Draws an area as a polygon where tracks, vias, pours and parts can't go (keep-out area). Click for corners, double-click or Enter to finish (circles and rectangles work too, as with pours). Use it under antennas, at screw heads, where the case walls touch, etc. You can change what is kept out and the layers in the list on the left after drawing
+基板の外形を矩形でドラッグして決めます	Drag a rectangle to set the board outline
+基板の外形を多角形で決めます。クリックで頂点、ダブルクリックで確定	Sets the board outline as a polygon. Click for corners, double-click to finish
+穴付き (スルーホール) の単独パッドを置きます	Places a single through-hole pad
+表面実装の単独パッドを置きます	Places a single surface-mount pad
+ネジ止め用の取付穴を置きます	Places a mounting hole for screws
+部品名や目印などの白い印刷 (シルク) の線を引きます。太さは、引いた線を選ぶと変えられます (次に引く線もその太さになります)	Draws white printed (silkscreen) lines such as part names and marks. Select a drawn line to change its width (the next line uses that width too)
+シルク (白い印刷) に、自由な文字 (基板名・版数・注意書きなど) を置きます。クリックした所に置き、内容・大きさ・向き・面は選択パネルで変えます。英数字と一部の記号が使えます (日本語は印刷できません)	Places free text (board name, version, notes, etc.) on the silkscreen (white print). Places it where you click; change text, size, rotation and side in the selection panel. Letters, digits and some symbols can be used (Japanese can't be printed)
+2点の間の距離を測ります。1回目のクリックで始点、2回目で終点。パッド・ビアの中心や配線の端に吸い付きます。測ったあと Enter で寸法線として基板に残せます (H は横の長さだけ・V は縦だけ。DXF と SVG の図に出ます)。残さなければ基板は変わりません (Esc で消します)	Measures the distance between two points. First click is the start, second the end. Snaps to pad and via centers and track ends. After measuring, press Enter to keep it on the board as a dimension (H horizontal length only, V vertical only; shown in DXF and SVG drawings). If you don't keep it, the board doesn't change (Esc clears it)
+選択 / 部品の移動	Select / move parts
+銅箔ゾーン (ベタ)	Copper zone (pour)
+基板外形 (矩形)	Board outline (rectangle)
+基板外形 (多角形)	Board outline (polygon)
+パッド(スルーホール)	Pad (through-hole)
+パッド(SMD)	Pad (SMD)
+取付穴	Mounting hole
+シルク線	Silkscreen line
+シルクの文字	Silkscreen text
+基本	Basic
+選択	Select
+銅・穴	Copper, holes
+禁止	Keep-out
+穴付き	Through-hole
+外形・文字	Outline, text
+矩形	Rectangle
+多角形	Polygon
+文字	Text
+基板パターン: 「回路図から取り込み」で部品を配置します	PCB layout: place parts with "Import from schematic"
+# crates/app/src/board_editor/netclass.rs
+board_sec_層構	
+層構成 (層数・材料)	Layer stack (layers, material)
+基板の層の数と、材料・層の間隔 (誘電率・層の間隔・銅箔)。インピーダンスの目安に使います	Number of board layers and the material and spacing (dielectric constant, layer spacing, copper). Used for impedance estimates
+基板の材料と、層の間隔です。配線の太さから特性インピーダンスの目安を出すのに使います。初期値は、ふつうの厚さ 1.6 mm の2層基板の値です。発注先の公式ページにある積層構成 (層の間隔・誘電率・銅箔の厚さ) に直すと、近づきます	The board material and layer spacing. Used to estimate characteristic impedance from track width. The defaults are for a normal 1.6 mm thick 2-layer board. Changing them to the stack-up on the fab's official page (layer spacing, dielectric constant, copper thickness) makes the estimate closer
+誘電率 	Dielectric constant 
+基板の材料の比誘電率。FR-4 は 4.2〜4.6 ほどで、材料と周波数で変わります	Relative dielectric constant of the board material. FR-4 is about 4.2–4.6 and varies with material and frequency
+外層から基準面まで 	Outer layer to plane 
+外層の配線から、その下の銅 (2層基板なら反対の面、4層基板なら隣の内層のベタ) までの距離。2層の 1.6 mm 基板なら約 1.53 mm、4層基板なら 0.1〜0.2 mm ほどです	Distance from an outer-layer track to the copper below it (the other side on a 2-layer board, the pour on the next inner layer on a 4-layer board). About 1.53 mm for a 2-layer 1.6 mm board, about 0.1–0.2 mm for a 4-layer board
+内層の上下のベタの間 	Between inner planes 
+内層の配線を上下から挟む2枚のベタの間の距離 (ストリップライン)	Distance between the two pours above and below an inner-layer track (stripline)
+銅箔 	Copper 
+銅箔の厚さ。1 oz = 35 µm	Copper thickness. 1 oz = 35 µm
+この構成で、外層の 50 Ω は、線幅 約 {w:.2} mm です	With this stack, 50 Ω on an outer layer is a track width of about {w:.2} mm
+この層数の目安を入れる	Use example for this layer count
+2層なら、1.6 mm の基板の裏の銅までの距離 (1.53 mm)。4層以上なら、外層と隣のベタの間が薄い (0.2 mm) 例を入れます。層の間隔は発注先ごとに違うので、あくまで例です。公式ページの値に直してください	For 2 layers, the distance to the bottom copper of a 1.6 mm board (1.53 mm). For 4 or more, an example with a thin gap (0.2 mm) between the outer layer and the next pour. Layer spacing differs by fab, so this is only an example. Change it to the values on the official page
+初期値に戻す	Reset to defaults
+ふつうの 1.6 mm・2層基板の値に戻します	Goes back to the values for a normal 1.6 mm 2-layer board
+ネットクラス (線幅・間隔・ビア)	Net classes (width, spacing, vias)
+電源は太く広く、信号は細く、のように、ネットのグループごとに配線のルールを決めます。配線ツールと自動配線は、そのネットをクラスの線幅・ビアで引き、DRC はクラスの間隔を守っているか調べます	Sets routing rules for each group of nets, like wide for power and thin for signals. The routing tool and autoroute use the class's track width and vias for those nets, and DRC checks the class spacing
+クラスの名前	Class name
+クラスの名前 (例: 電源、信号、高速)	Name of the class (e.g. Power, Signal, High-speed)
+このクラスを削除	Delete this class
+クラスをなくします。配線はそのままで、ネットは基板全体の設定に戻ります	Removes the class. Tracks stay as they are and the nets go back to the board-wide settings
+線幅 	Width 
+このクラスのネットを引く線の太さ。発注先の最小線幅より細くはできません	Track width for nets in this class. Can't be thinner than the fab's minimum track width
+ほかのネットの銅が、このクラスの銅から離れる距離。高電圧や、ノイズを嫌う線は広く。基板全体の最小間隔より狭くはできません	How far copper of other nets stays from this class's copper. Wider for high voltage or noise-sensitive lines. Can't be less than the board-wide minimum spacing
+ビア径 	Via size 
+このクラスのビアの外径	Outer diameter of vias in this class
+穴 	Hole 
+このクラスのビアの穴径	Hole diameter of vias in this class
+ネット:	Nets:
+このネットをクラスから外します	Removes this net from the class
+＋ ネットを足す	+ Add net
+クラスに入れるネットを選びます。1つのネットが入れるクラスは、先に並んだ1つだけです	Choose nets to put in the class. A net can be in only one class: the first one listed
+クラスを追加	Add class
+新しい空のクラスを作ります。ネットを足して、線幅・間隔・ビアを決めます	Creates a new empty class. Add nets and set width, spacing and vias
+クラス{}	Class{}
+電源のクラスを作る	Make a power class
+GND と、流れる電流を決めたネットを入れた「電源」クラスを作ります (線幅 0.5mm、間隔 0.25mm、ビア 0.8/0.4mm)。値はあとで直せます	Creates a "Power" class with GND and the nets that have a current set (width 0.5mm, spacing 0.25mm, vias 0.8/0.4mm). You can change the values later
+電源のクラスに入れるネットがありません (GND が無いか、すでに別のクラスにあります)。ネットは、クラスの「ネットを足す」から選べます	There are no nets to put in a power class (no GND, or it is already in another class). You can choose nets with the class's "Add net"
+電源	Power
+ネットのグループごとに、線幅・間隔・ビアを決めます (中級者向け)	Sets width, spacing and vias for each group of nets (intermediate)
+# crates/app/src/board_editor/netglow.rs
+ ほか{}	 and {} more
+{net} (回路図で名前のないつながり: {}{more})	{net} (unnamed connection in the schematic: {}{more})
+# crates/app/src/board_editor/nettable.rs
+絞り込み	Filter
+ネット名・クラス	Net name, class
+ネット名かネットクラスの名前に、この文字を含む行だけを出します (大文字・小文字は区別しません)	Shows only rows whose net name or net class name contains this text (not case-sensitive)
+CSV をコピー	Copy CSV
+いま出ている行を CSV (表計算ソフトに貼れる形) でクリップボードに写します	Copies the rows shown now to the clipboard as CSV (a form you can paste into a spreadsheet)
+ネットの一覧を CSV でコピーしました (表計算ソフトに貼り付けられます)	Copied the net list as CSV (you can paste it into a spreadsheet)
+{} ネット・配線の長さの合計 {:.1} mm・未配線 {total_open} 本。見出しをクリックすると、その列で並べ替えます (もう一度で逆順)。ネット名のクリックで、そのネットの設定の窓が開きます	{} nets, total track length {:.1} mm, {total_open} unrouted. Click a heading to sort by that column (again to reverse). Click a net name to open that net's settings window
+ネットの名前 (回路図のネット名)	Net name (from the schematic)
+クラス	Class
+ネットクラス (線幅・間隔・ビアをまとめた設定)。空欄は基板の設定のまま	Net class (a set of width, spacing and vias). Empty means the board settings
+このネットにつながるパッドの数	Number of pads connected to this net
+長さ	Length
+配線 (銅の線) の長さの合計。ベタは入りません	Total length of tracks (copper lines). Pours not included
+{l}の配線の長さ	Track length on {l}
+遠回り	Detour
+配線の長さ ÷ パッドを直線で結んだ最短の長さ。1.0 前後がいちばん短く (途中で枝分かれすると 1 より少し小さくなることもあります)、大きいほど遠回り。ベタのあるネットは出しません	Track length ÷ shortest straight-line length joining the pads. About 1.0 is shortest (with branches it can be a little under 1); larger means a longer detour. Not shown for nets with pours
+このネットのビア (層をつなぐ穴) の数	Number of vias (holes joining layers) on this net
+このネットの配線の、いちばん細い〜いちばん太い線幅	Thinnest to widest track width on this net
+このネットのベタ (銅箔ゾーン) がある層	Layers with a pour (copper zone) for this net
+まだ銅でつながっていない接続 (黄色の線) の数	Number of connections not yet joined by copper (yellow lines)
+最短の 2 倍以上です。遠回りしていないか、「配線を短くする」で引き直せないか見てみましょう	More than 2× the shortest. Check for a detour, or try re-routing with "Shorten tracks"
+# crates/app/src/board_editor/netwindow.rs
+基板に従う ({})	Follow board ({})
+入	on
+切	off
+入れる	On
+切る	Off
+整え方 (基板全体の設定に従う)	Shaping (follows the board-wide settings)
+整え方 (このクラスだけ変えている)	Shaping (changed for this class only)
+配線を整える形 (角の丸み・太さの段差・分かれ目の丸み) を、このクラスのネットだけ変えます。形が特性を決める線 (USB・高周波・インピーダンスを決めた線) は、3つとも「切る」にします	Changes the track shaping (rounded corners, smooth width steps, rounded branches) for this class's nets only. For lines whose shape sets their behavior (USB, high-frequency, lines with set impedance), set all three to "Off"
+角を丸める	Round corners
+同じ太さの配線がつながる角を、円弧にします	Turns corners where tracks of the same width meet into arcs
+太さの段差をなだらかに	Smooth width steps
+太さが変わる所と、パッド・ビアに入る根元に、中間の太さを挟みます	Adds an in-between width where the width changes and where tracks enter pads and vias
+分かれ目を丸める	Round branches
+鋭い角度で分かれる2本の間のくぼみを、銅で埋めて丸くします	Fills the notch between two tracks splitting at a sharp angle with copper to round it
+すき間を埋める	Fill gaps
+並んで走る2本の間の細いすき間を、銅で埋めます	Fills narrow gaps between two tracks running side by side with copper
+角の半径を変える	Change corner radius
+入れると、このクラスの角の丸みの半径を、基板全体の値と別にします	When on, this class's corner radius is set separately from the board-wide value
+角の丸みの半径。配線が短いと、入る大きさまで自動で小さくなります	Corner radius. On short tracks it shrinks automatically to what fits
+基板全体の設定に戻す	Back to board-wide settings
+このクラスの整え方の変更をすべてやめます	Drops all of this class's shaping changes
+線幅の例外 ({count} か所)	Width exceptions ({count})
+クラスの線幅とは別の太さにしたい区間 (ピッチの細い IC のピンに入る所だけ細くする、など) を登録します。登録した区間は、上のスライダー・「配線を推奨幅にする」・電流とインピーダンスのチェックの対象になりません。区間は基板上の位置で決まるので、その配線を動かすと例外から外れます	Registers sections that should have a different width from the class (e.g. thinner only where entering fine-pitch IC pins). Registered sections are skipped by the slider above, "Set tracks to recommended width", and the current and impedance checks. Sections are fixed by position on the board, so moving the track takes it out of the exception
+例外にした区間の両端の位置 (mm)	Positions (mm) of both ends of the exception section
+この区間の線幅。変えると、区間に沿った配線の太さも変わります。発注先の最小線幅より細くはできません	Track width for this section. Changing it also changes the tracks along the section. Can't be thinner than the fab's minimum track width
+該当する配線なし	No matching tracks
+この区間に沿った配線が、いまはありません (配線を動かしたか消しました)。不要なら × で消します	No tracks run along this section now (the track was moved or deleted). Delete it with × if not needed
+{} 本	{} tracks
+例外をやめます。配線の太さは、いまのままです	Removes the exception. Track width stays as it is
+選んだ配線を例外にする ({} 本)	Make selected tracks an exception ({})
+基板で選んだ、このネットの配線を、いまの太さのまま例外にします。選択ツールで配線をクリック (Shift で複数) してから押します	Makes the tracks of this net selected on the board an exception at their current width. Click tracks with the select tool (Shift for several), then press
+ネット {net}: 配線 {} 本を線幅の例外にしました	Net {net}: made {} tracks width exceptions
+ネットの設定…	Net settings…
+このネットの電流・推奨の線幅・ネットクラス (線幅・間隔・ビア・整え方) の窓を開きます	Opens the window for this net's current, recommended width and net class (width, spacing, vias, shaping)
+ネット {net} の設定	Settings for net {net}
+なし (基板全体の設定)	None (board-wide settings)
+このネットを入れるクラスを選びます。クラスの線幅・間隔・ビアで、このネットの配線を引き、DRC がチェックします	Choose the class for this net. Its tracks are routed with the class's width, spacing and vias, and DRC checks them
+この値は、同じクラスのネット ({}) にも効きます	This value also applies to the nets in the same class ({})
+電流と推奨の線幅、線幅のスライダー、インピーダンス、例外の区間	Current and recommended width, width slider, impedance, exception sections
+役割、間隔、ビア。このネットの配線ルール	Role, spacing, vias. Routing rules for this net
+整え方	Shaping
+角の丸み・太さの段差・分かれ目の丸み。このクラスだけ基板全体の設定と変えるとき	Rounded corners, width steps, rounded branches. When this class should differ from the board-wide settings
+流れる電流	Current
+このネットに流れる最大の電流。分からなければ、つなぐ部品のデータシートの最大電流を見ます。0 のままなら、推奨の線幅は出しません	Maximum current in this net. If you don't know, check the maximum current in the datasheets of the connected parts. If left at 0, no recommended width is shown
+回路図の DC 解析で電流を調べる	Get current from schematic DC analysis
+回路図のこの回路を DC で解いて、このネットに流れる電流を入れます。回路が大きいと数秒かかります (一度解くと、回路図を変えるまで、ほかのネットはすぐ出ます)	Solves this circuit in the schematic at DC and enters the current in this net. Large circuits take a few seconds (once solved, other nets show at once until the schematic changes)
+過渡解析: 実効 {:.3} A / ピーク {:.3} A{}	Transient: RMS {:.3} A / peak {:.3} A{}
+ ⚠ ピークが実効値の10倍以上	 ⚠ peak is over 10× the RMS value
+実効値を入れる	Use RMS value
+過渡解析の実効値を、このネットの電流にします	Uses the transient RMS value as this net's current
+推奨の線幅: {rec:.2} mm	Recommended width: {rec:.2} mm
+銅箔 35µm・温度上昇 10℃ の外層で、この電流を流せる太さ (IPC-2221 の式) を、0.05 mm 単位に切り上げたものです。内層や、厚い銅箔、温度上昇を許す場合は、もっと細くできます	The width that can carry this current on an outer layer with 35 µm copper and a 10 ℃ rise (IPC-2221 formula), rounded up to 0.05 mm. On inner layers, with thicker copper, or if a larger rise is OK, it can be thinner
+このネットの配線は、まだありません。配線するときの線幅に使えます	This net has no tracks yet. You can use this as the width when routing
+今の最も細い配線は {t:.2} mm で、足りません	The thinnest track now is {t:.2} mm, too thin
+今の最も細い配線は {t:.2} mm で、足ります ✔	The thinnest track now is {t:.2} mm, enough ✔
+配線を推奨幅にする	Set tracks to recommended width
+このネットの、推奨より細い配線を、推奨の太さまで太くします (元に戻せます)。太くしたあと、DRC で間隔が足りているか確かめましょう	Widens tracks of this net that are thinner than recommended to the recommended width (can be undone). After widening, check with DRC that the spacing is still enough
+この幅で引く	Route at this width
+これから引く、このネットの配線の線幅を、推奨の太さにします (ネットクラスがあれば、そのクラスの線幅を変えます)	Sets the width of new tracks for this net to the recommended width (if the net has a class, changes the class's width)
+電流を入れると、推奨の線幅が出ます:	Enter a current to get a recommended width:
+この電流を入れます	Enters this current
+このネットには、配線もクラスもまだありません。「クラス」タブの「このネット専用のクラスを作る」か、配線を引くと、スライダーが使えます	This net has no tracks or class yet. Use "Make a class for this net" in the "Class" tab, or route a track, to use the slider
+ドラッグすると、このネットの配線の太さが、動かした値にそろって変わります (配線がなければ、これから引く線の太さ)。ネットクラスに入っていれば、クラスの線幅も変わります。元に戻すで、ドラッグの前に戻せます	Dragging changes this net's tracks to the value you set (if there are no tracks, the width of tracks you route next). If the net is in a class, the class width changes too. Undo goes back to before the drag
+推奨 {r:.2} mm 以上で、足ります ✔	At least the recommended {r:.2} mm, enough ✔
+推奨 {r:.2} mm に足りません	Less than the recommended {r:.2} mm
+推奨まで上げる	Raise to recommended
+スライダーを、推奨の線幅にします	Sets the slider to the recommended width
+電流を入れると、推奨の線幅と比べて、足りているか出ます	Enter a current to see whether the width is enough compared with the recommended width
+インピーダンス (目安)	Impedance (estimate)
+線幅 {shown:.2} mm → 約 {z:.0} Ω	Width {shown:.2} mm → about {z:.0} Ω
+{}。教科書の式による目安で、±10% ほどの誤差があります。発注先の積層構成 (基板の厚さ・層の間隔・誘電率) に合わせた値が正確です。左パネルの「層構成 (層数・材料)」で、その値を入れると近づきます	{}. A textbook-formula estimate, about ±10% off. Values matched to the fab's stack-up (board thickness, layer spacing, dielectric constant) are accurate. Enter them in "Layer stack (layers, material)" in the left panel to get closer
+目標	Target
+このネットの配線を、この特性インピーダンスにしたい値。USB や高速信号は 50 Ω (差動なら 90 Ω や 100 Ω) などです	The characteristic impedance you want for this net's tracks. USB and fast signals use 50 Ω (90 Ω or 100 Ω for differential), etc.
+目標の線幅にする	Use target width
+目標のインピーダンスになる線幅を、層構成から求めて、このネットの配線とクラスの線幅にします (クラスがなければ作ります)。そのあと、発注前チェックが、目標から外れた配線を教えます	Finds the width for the target impedance from the layer stack and sets it as the width of this net's tracks and class (creates a class if there is none). After that, the pre-order check tells you about tracks off the target
+目標 {target:.0} Ω の線幅は {w:.3} mm で、基板の最小線幅 {:.2} mm より細くなります。層の間隔を薄くするか、目標を上げてください	The width for the target {target:.0} Ω is {w:.3} mm, thinner than the board's minimum track width {:.2} mm. Make the layer spacing thinner or raise the target
+この層構成では、{target:.0} Ω にできる線幅が見つかりません。左パネルの「層構成 (層数・材料)」の値を確かめてください	With this layer stack, no width gives {target:.0} Ω. Check the values in "Layer stack (layers, material)" in the left panel
+クラスの目標 {zt:.0} Ω から {:.0}% ずれています	{:.0}% off the class target of {zt:.0} Ω
+役割	Role
+このクラスのネットの役割です。自動配線は、役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に引きます。「検出」のネットはビアを使わず、パッドと同じ層だけで引きます	Role of this class's nets. Autoroute routes in role order (high current → switching node → sense → analog → logic). "Sense" nets use no vias and are routed only on the pads' layer
+ほかのネットの銅が、このクラスの銅から離れる距離	How far copper of other nets stays from this class's copper
+線幅は「線幅」タブのスライダーで変えます (いま {:.2} mm)	Change the width with the slider in the "Width" tab (now {:.2} mm)
+いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます	Now routed with the board-wide settings (width {:.2} mm, via {:.2}/{:.2} mm)
+このネット専用のクラスを作る	Make a class for this net
+このネットだけのクラスを作って、入れます。線幅は、推奨の線幅 (電流を入れていれば) か、いまの設定の線幅です。値は、あとで直せます	Creates a class for this net only and puts it in. The width is the recommended width (if a current is entered) or the current setting's width. You can change values later
+整え方は、クラスごとに決めます。「クラス」タブで、このネット専用のクラスを作ってください	Shaping is set per class. Make a class for this net in the "Class" tab
+線幅を {w:.2} mm にしました	Set width to {w:.2} mm
+ネット {net} の線幅: {v:.2} mm ({} 本)	Net {net} width: {v:.2} mm ({} tracks)
+基板で、別のネットの配線やパッドをクリックすると、そのネットの設定に切り替わります。何もない所をクリックすると閉じます	Click another net's track or pad on the board to switch to that net's settings. Click empty space to close

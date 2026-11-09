@@ -71,7 +71,7 @@ impl BoardEditor {
     pub(super) fn panel_dimensions(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         ui.horizontal_wrapped(|ui| {
-            if ui.button("外形の寸法線").on_hover_text("基板の外形の幅と高さを、寸法線にして基板の下と左に置きます (外形を変えたら、もう一度押すと置き直します)。\\nケースを設計する人に渡す DXF と、SVG の図に出ます。ガーバー (工場に渡すデータ) には出ません。\\n好きな2点の寸法線は、「距離を測る」ツールで2点を測ってから Enter (斜めの長さ)・H (横)・V (縦) で残せます").clicked() {
+            if ui.button(i18n::tr("外形の寸法線")).on_hover_text(i18n::tr("基板の外形の幅と高さを、寸法線にして基板の下と左に置きます (外形を変えたら、もう一度押すと置き直します)。\\nケースを設計する人に渡す DXF と、SVG の図に出ます。ガーバー (工場に渡すデータ) には出ません。\\n好きな2点の寸法線は、「距離を測る」ツールで2点を測ってから Enter (斜めの長さ)・H (横)・V (縦) で残せます")).clicked() {
                 self.checkpoint();
                 match add_outline_dimensions(&mut self.board) {
                     Ok((w, h)) => self.status = format!("外形の寸法線を置きました: 幅 {w:.2} mm・高さ {h:.2} mm"),
@@ -83,12 +83,12 @@ impl BoardEditor {
             }
             let n = self.board.dimensions.len();
             if n > 0 {
-                if ui.button("最後の寸法線を消す").on_hover_text("いちばん最後に置いた寸法線を1本消します").clicked() {
+                if ui.button(i18n::tr("最後の寸法線を消す")).on_hover_text(i18n::tr("いちばん最後に置いた寸法線を1本消します")).clicked() {
                     self.checkpoint();
                     self.board.dimensions.pop();
                     self.status = "寸法線を1本消しました".into();
                 }
-                if ui.button(format!("寸法線を全部消す ({n})")).on_hover_text("基板の寸法線を全部消します (「元に戻す」で戻せます)").clicked() {
+                if ui.button(i18n::trf!("寸法線を全部消す ({n})")).on_hover_text(i18n::tr("基板の寸法線を全部消します (「元に戻す」で戻せます)")).clicked() {
                     self.checkpoint();
                     self.board.dimensions.clear();
                     self.status = format!("寸法線を {n} 本消しました");

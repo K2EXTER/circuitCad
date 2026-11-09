@@ -22,6 +22,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
 | `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
 | `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ(`docs/datasheet-viewer-design.md`) |
+| `i18n` | 英語の画面。日本語の文を鍵にした表 `en/*.tsv`、`tr` / `trf!` / `tr_dyn`、`tools/i18n.py`(包む・未訳の一覧)。`docs/code-notes/i18n.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
 | `cli` | `ccad`: 画面なしの操作窓口(1行1コマンドのスクリプト。`ccad mcp` で MCP サーバー。`board/` は基板の命令を話題ごとのファイルに分けてある。`docs/cli.md`、`docs/code-notes/cli.md`) |
 
@@ -67,6 +68,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - レッスン → `schematic/lessons/` に1件の `const` を足して `mod.rs` の `LESSONS` に並べる / チャレンジ → `schematic/challenge/` に1件の `const` を足して `mod.rs` の `CHALLENGES` に並べる (答えが通るテストも) / 学習パス → `learn.rs` の `PATHS`
 - 値の計算 → `sim-core/designcalc.rs` + `schematic/wizard.rs` の `CALCS`
 - DRCルール → `pcb-core/drc/` / 設計ルール既定値 → `model.rs` の `Rules`
+- 英訳 → 画面の日本語は `i18n::tr` / `trf!` で包み(`python tools/i18n.py wrap crates/app/src`)、訳を `crates/i18n/en/*.tsv` に足す
 - ヒント文 → `schematic/hint.rs`, `board_editor/panel.rs` の `hint` / 豆知識 → `tips.rs` の `TIPS` / 操作の説明 → `help.rs`
 
 ## ドキュメント・サンプル

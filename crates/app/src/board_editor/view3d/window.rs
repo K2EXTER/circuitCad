@@ -60,50 +60,50 @@ impl BoardEditor {
             self.linked.part.as_deref().and_then(|r| self.board.parts.iter().position(|p| p.refdes == r))
         };
         let v = &mut self.view3d;
-        egui::Window::new("3Dで見る").open(&mut open).default_size([900.0, 680.0]).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("3Dで見る")).open(&mut open).default_size([900.0, 680.0]).show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button("上から").on_hover_text("真上から見ます (部品の配置・配線の確認)").clicked() {
+                if ui.button(i18n::tr("上から")).on_hover_text(i18n::tr("真上から見ます (部品の配置・配線の確認)")).clicked() {
                     (v.yaw, v.pitch, v.pan) = (0.0, std::f32::consts::FRAC_PI_2, Vec2::ZERO);
                 }
-                if ui.button("斜め").on_hover_text("斜め上から見ます (部品の高さや立体感)").clicked() {
+                if ui.button(i18n::tr("斜め")).on_hover_text(i18n::tr("斜め上から見ます (部品の高さや立体感)")).clicked() {
                     (v.yaw, v.pitch, v.pan) = (0.0, 0.9, Vec2::ZERO);
                 }
-                if ui.button("横から").on_hover_text("真横から見ます (部品の高さや、ケースに入る高さの確認)").clicked() {
+                if ui.button(i18n::tr("横から")).on_hover_text(i18n::tr("真横から見ます (部品の高さや、ケースに入る高さの確認)")).clicked() {
                     (v.yaw, v.pitch, v.pan) = (0.0, 0.12, Vec2::ZERO);
                 }
-                if ui.button("裏から").on_hover_text("基板を裏返して真下から見ます (裏面の部品と配線)").clicked() {
+                if ui.button(i18n::tr("裏から")).on_hover_text(i18n::tr("基板を裏返して真下から見ます (裏面の部品と配線)")).clicked() {
                     (v.yaw, v.pitch, v.pan) = (0.0, -std::f32::consts::FRAC_PI_2, Vec2::ZERO);
                 }
                 ui.separator();
-                ui.checkbox(&mut v.show_parts, "部品").on_hover_text("部品の本体を表示します。形と高さはフットプリントからの目安です");
-                ui.checkbox(&mut v.show_names, "部品名").on_hover_text("部品番号 (R1 など) を表示します");
-                if ui.checkbox(&mut v.mask, "ソルダーレジスト").on_hover_text("基板の緑色の保護膜。オフにすると、銅箔の配線がそのまま見えます").changed() {
+                ui.checkbox(&mut v.show_parts, i18n::tr("部品")).on_hover_text(i18n::tr("部品の本体を表示します。形と高さはフットプリントからの目安です"));
+                ui.checkbox(&mut v.show_names, i18n::tr("部品名")).on_hover_text(i18n::tr("部品番号 (R1 など) を表示します"));
+                if ui.checkbox(&mut v.mask, i18n::tr("ソルダーレジスト")).on_hover_text(i18n::tr("基板の緑色の保護膜。オフにすると、銅箔の配線がそのまま見えます")).changed() {
                     retex = true;
                 }
-                if ui.checkbox(&mut v.silk, "シルク").on_hover_text("白い印刷 (部品の枠や文字)").changed() {
+                if ui.checkbox(&mut v.silk, i18n::tr("シルク")).on_hover_text(i18n::tr("白い印刷 (部品の枠や文字)")).changed() {
                     retex = true;
                 }
-                ui.checkbox(&mut v.check_height, "ケース高さ").on_hover_text("ケースに入る高さを調べます。基板の面からこの高さを超える部品は赤くなり、高さの上限が橙の枠で見えます。0 にした面は調べません");
+                ui.checkbox(&mut v.check_height, i18n::tr("ケース高さ")).on_hover_text(i18n::tr("ケースに入る高さを調べます。基板の面からこの高さを超える部品は赤くなり、高さの上限が橙の枠で見えます。0 にした面は調べません"));
                 if v.check_height {
-                    ui.add(egui::DragValue::new(&mut v.limit_top).range(0.0..=200.0).speed(0.1).prefix("表 ").suffix(" mm")).on_hover_text("表側の、基板の面からケースまでの高さ (部品に使える高さ)");
-                    ui.add(egui::DragValue::new(&mut v.limit_bottom).range(0.0..=200.0).speed(0.1).prefix("裏 ").suffix(" mm")).on_hover_text("裏側の、基板の面からケースまでの高さ");
-                    ui.add(egui::DragValue::new(&mut v.case_w).range(0.0..=500.0).speed(0.5).prefix("内寸 幅 ").suffix(" mm")).on_hover_text("ケースの内側の幅。基板が入るかを調べます (縁との隙間は 0.5 mm を見込みます)。0 にすると調べません。青い枠がケースの内側です");
-                    ui.add(egui::DragValue::new(&mut v.case_d).range(0.0..=500.0).speed(0.5).prefix("奥行 ").suffix(" mm")).on_hover_text("ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)");
+                    ui.add(egui::DragValue::new(&mut v.limit_top).range(0.0..=200.0).speed(0.1).prefix(i18n::tr("表 ")).suffix(" mm")).on_hover_text(i18n::tr("表側の、基板の面からケースまでの高さ (部品に使える高さ)"));
+                    ui.add(egui::DragValue::new(&mut v.limit_bottom).range(0.0..=200.0).speed(0.1).prefix(i18n::tr("裏 ")).suffix(" mm")).on_hover_text(i18n::tr("裏側の、基板の面からケースまでの高さ"));
+                    ui.add(egui::DragValue::new(&mut v.case_w).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("内寸 幅 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の幅。基板が入るかを調べます (縁との隙間は 0.5 mm を見込みます)。0 にすると調べません。青い枠がケースの内側です"));
+                    ui.add(egui::DragValue::new(&mut v.case_d).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("奥行 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)"));
                 }
-                ui.checkbox(&mut v.spin, "自動回転").on_hover_text("ゆっくり回して、いろいろな向きから見せます");
-                if ui.button("更新").on_hover_text("基板エディタで変更した内容を反映します").clicked() {
+                ui.checkbox(&mut v.spin, i18n::tr("自動回転")).on_hover_text(i18n::tr("ゆっくり回して、いろいろな向きから見せます"));
+                if ui.button(i18n::tr("更新")).on_hover_text(i18n::tr("基板エディタで変更した内容を反映します")).clicked() {
                     stale = true;
                 }
-                if ui.add_enabled(selected.is_some(), egui::Button::new("選択部品へ寄る")).on_hover_text("基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます").clicked() {
+                if ui.add_enabled(selected.is_some(), egui::Button::new(i18n::tr("選択部品へ寄る"))).on_hover_text(i18n::tr("基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます")).clicked() {
                     v.focus = selected;
                 }
-                if ui.button("PNG保存").on_hover_text("いま見えている向きの絵を画像ファイルに保存します (発注前の確認や、人に見せるときに)").clicked() {
+                if ui.button(i18n::tr("PNG保存")).on_hover_text(i18n::tr("いま見えている向きの絵を画像ファイルに保存します (発注前の確認や、人に見せるときに)")).clicked() {
                     save_png = true;
                 }
                 if let Some(sc) = &v.scene {
                     let shown = v.net.clone().unwrap_or_else(|| "なし".into());
-                    egui::ComboBox::from_id_salt("view3d_net").selected_text(format!("ネット強調: {shown}")).show_ui(ui, |ui| {
-                        if ui.selectable_label(v.net.is_none(), "なし").clicked() {
+                    egui::ComboBox::from_id_salt("view3d_net").selected_text(i18n::trf!("ネット強調: {shown}")).show_ui(ui, |ui| {
+                        if ui.selectable_label(v.net.is_none(), i18n::tr("なし")).clicked() {
                             new_net = Some(None);
                         }
                         for n in &sc.nets {
@@ -111,9 +111,9 @@ impl BoardEditor {
                                 new_net = Some(Some(n.clone()));
                             }
                         }
-                    }).response.on_hover_text("選んだネットの銅 (配線・パッド・ビア) を桃色に光らせます。基板エディタで配線やパッドを選んでも、そのネットが光ります");
+                    }).response.on_hover_text(i18n::tr("選んだネットの銅 (配線・パッド・ビア) を桃色に光らせます。基板エディタで配線やパッドを選んでも、そのネットが光ります"));
                 }
-                if ui.small_button("操作").on_hover_text("回す・動かす・拡大の操作を開きます").clicked() {
+                if ui.small_button(i18n::tr("操作")).on_hover_text(i18n::tr("回す・動かす・拡大の操作を開きます")).clicked() {
                     want_help = true;
                 }
             });
@@ -136,19 +136,19 @@ impl BoardEditor {
                 let r = pcb_core::case::check(&self.board, &pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, clearance: 0.5, ..Default::default() });
                 if r.fits {
                     let how = if r.turned { " (基板を 90° 回すと)" } else { "" };
-                    ui.colored_label(crate::theme::OK, format!("✔ 基板 {:.1} × {:.1} mm はケースの底に入ります{how}。余り: {:.1} × {:.1} mm", r.board_w, r.board_d, r.spare_w, r.spare_d));
+                    ui.colored_label(crate::theme::OK, i18n::trf!("✔ 基板 {:.1} × {:.1} mm はケースの底に入ります{how}。余り: {:.1} × {:.1} mm", r.board_w, r.board_d, r.spare_w, r.spare_d));
                 } else {
-                    ui.colored_label(crate::theme::ERROR, format!("⚠ 基板 {:.1} × {:.1} mm はケースの底 ({:.1} × {:.1} mm、縁の隙間込み) に入りません (足りない分: 幅 {:.1} / 奥行 {:.1} mm)", r.board_w, r.board_d, v.case_w - 1.0, v.case_d - 1.0, (-r.spare_w).max(0.0), (-r.spare_d).max(0.0)));
+                    ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ 基板 {:.1} × {:.1} mm はケースの底 ({:.1} × {:.1} mm、縁の隙間込み) に入りません (足りない分: 幅 {:.1} / 奥行 {:.1} mm)", r.board_w, r.board_d, v.case_w - 1.0, v.case_d - 1.0, (-r.spare_w).max(0.0), (-r.spare_d).max(0.0)));
                 }
             }
             if v.check_height {
                 let over = scene.over_list();
                 if over.is_empty() {
-                    ui.colored_label(crate::theme::OK, "✔ どの部品もケースの高さに収まっています");
+                    ui.colored_label(crate::theme::OK, i18n::tr("✔ どの部品もケースの高さに収まっています"));
                 } else {
                     let names: Vec<String> = over.iter().take(6).map(|(r, o)| format!("{r} (+{o:.1} mm)")).collect();
                     let more = if over.len() > 6 { format!(" ほか {} 個", over.len() - 6) } else { String::new() };
-                    ui.colored_label(crate::theme::ERROR, format!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
+                    ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
                 }
             }
             let size = ui.available_size().max(Vec2::new(300.0, 240.0));
@@ -267,11 +267,11 @@ impl BoardEditor {
                     egui::Area::new(egui::Id::new("view3d_tip")).order(egui::Order::Tooltip).fixed_pos(resp.hover_pos().unwrap_or_default() + Vec2::new(14.0, 14.0)).show(ui.ctx(), |ui| {
                         egui::Frame::popup(ui.style()).show(ui, |ui| {
                             ui.strong(r);
-                            ui.label(format!("値: {}", if val.is_empty() { "—" } else { val }));
-                            ui.label(format!("フットプリント: {}", if fp.is_empty() { "—" } else { fp }));
-                            ui.label(format!("高さの目安: {hh:.1} mm"));
+                            ui.label(i18n::trf!("値: {}", if val.is_empty() { "—" } else { val }));
+                            ui.label(i18n::trf!("フットプリント: {}", if fp.is_empty() { "—" } else { fp }));
+                            ui.label(i18n::trf!("高さの目安: {hh:.1} mm"));
                             if let Some(o) = scene.over.get(i).filter(|o| **o > 1e-6) {
-                                ui.colored_label(crate::theme::ERROR, format!("ケースの高さを {o:.1} mm 超えています"));
+                                ui.colored_label(crate::theme::ERROR, i18n::trf!("ケースの高さを {o:.1} mm 超えています"));
                             }
                         });
                     });

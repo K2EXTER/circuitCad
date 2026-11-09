@@ -170,14 +170,14 @@ impl SchEditor {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_width(380.0);
                 let before = q.query.clone();
-                let r = ui.add(egui::TextEdit::singleline(&mut q.query).desired_width(f32::INFINITY).hint_text("置きたい部品の名前 (例: 抵抗、LM358、0603、op amp)"));
+                let r = ui.add(egui::TextEdit::singleline(&mut q.query).desired_width(f32::INFINITY).hint_text(i18n::tr("置きたい部品の名前 (例: 抵抗、LM358、0603、op amp)")));
                 r.request_focus();
-                r.on_hover_text("名前・種類・説明・ピン名・パッケージで探せます。↑↓で選び、Enter で置く部品にします。Esc でやめます");
+                r.on_hover_text(i18n::tr("名前・種類・説明・ピン名・パッケージで探せます。↑↓で選び、Enter で置く部品にします。Esc でやめます"));
                 if q.query != before {
                     q.sel = 0;
                 }
                 if hits.is_empty() {
-                    ui.small("見つかりません。別の言葉で探すか、左の「＋ 部品を作る…」で部品をつくれます");
+                    ui.small(i18n::tr("見つかりません。別の言葉で探すか、左の「＋ 部品を作る…」で部品をつくれます"));
                 }
                 for (n, h) in hits.iter().enumerate() {
                     let label = format!("{}    {}", h.title, h.sub);
@@ -185,7 +185,7 @@ impl SchEditor {
                         chosen = Some(h.target);
                     }
                 }
-                ui.small("↑↓ 選ぶ / Enter 決める / Esc やめる");
+                ui.small(i18n::tr("↑↓ 選ぶ / Enter 決める / Esc やめる"));
             });
             // a click outside closes it
             if ui.input(|i| i.pointer.any_pressed()) && !ui.rect_contains_pointer(ui.min_rect()) {

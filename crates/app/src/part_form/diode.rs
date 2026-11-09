@@ -96,7 +96,7 @@ impl PartForm {
     pub(super) fn diode_ui(&mut self, ui: &mut egui::Ui) {
         crate::widgets::section_heading(ui, "かんたん作成: ダイオードをデータシートの数値からつくる");
         crate::icons::help_small(ui, "グラフの数字からモデルを作ります", "メーカーのデータシートには SPICE モデルが載っていないことが多いので、グラフの数字から IS・N・RS を決めて、モデルを作ります");
-        egui::CollapsingHeader::new("考え方: IS・N・RS とは? (はじめての人はここから)").id_salt("dio_howto").show(ui, |ui| {
+        egui::CollapsingHeader::new(i18n::tr("考え方: IS・N・RS とは? (はじめての人はここから)")).id_salt("dio_howto").show(ui, |ui| {
             for t in [
                 "ダイオードの電圧と電流の関係は、V = N × 26mV × ln(I / IS) + I × RS という式で近似できます。この 3 つの数 (IS・N・RS) を決めれば、実物に近い曲線になります。",
                 "N (電流の 10 倍で電圧がどれだけ上がるか): 10 倍の電流で、電圧は約 N × 60mV 上がります。グラフで、10mA と 100mA の電圧の差を読むと分かります。1 〜 2 ほどです。",
@@ -105,55 +105,55 @@ impl PartForm {
                 "データシートの表の Vf (たとえば 1.0V @ 1A) は「最大値」で、グラフは「典型値」です。モデルは典型値で作り、回路は最大値でも動くように設計します。",
                 "ほかに、逆耐圧 (VRRM) と漏れ電流 (IR) も、表から写します。",
             ] {
-                ui.label(egui::RichText::new(format!("・{t}")).small());
+                ui.label(egui::RichText::new(i18n::trf!("・{t}")).small());
             }
         });
         crate::icons::help_label(ui, "手順1: 順方向特性の点", "手順1: データシートの「順方向特性 (Forward Characteristics)」のグラフから、電流と電圧の点を読みます (1行に「電流 電圧」、電流が離れた 3 点がおすすめ)");
         ui.add(egui::TextEdit::multiline(&mut self.dio_points).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("10m 0.70\n100m 0.79\n1 0.92"))
-            .on_hover_text("グラフの縦軸 (電流) と横軸 (電圧) を読みます。電流は小・中・大の 3 点 (10mA・100mA・定格電流など)。m は 1000 分の 1。例: 100m 0.79 は 100mA のとき 0.79V");
+            .on_hover_text(i18n::tr("グラフの縦軸 (電流) と横軸 (電圧) を読みます。電流は小・中・大の 3 点 (10mA・100mA・定格電流など)。m は 1000 分の 1。例: 100m 0.79 は 100mA のとき 0.79V"));
         ui.horizontal(|ui| {
-            if ui.button("1N4007 の例を入れる").on_hover_text("練習用の読み取り例を入れます。自分のデータシートのグラフで、読み直してみてください").clicked() {
+            if ui.button(i18n::tr("1N4007 の例を入れる")).on_hover_text(i18n::tr("練習用の読み取り例を入れます。自分のデータシートのグラフで、読み直してみてください")).clicked() {
                 self.dio_points = EXAMPLE_POINTS.into();
                 self.dio_vrrm = "1000".into();
                 self.dio_ir = "5u".into();
                 self.dio_message = Some(self.dio_fit());
             }
-            if ui.button("手順2: 点から IS・N・RS を求める").on_hover_text("点を通る曲線になるように、IS・N・RS を計算します。点が 2 つなら IS と N、3 つ以上なら RS も決まります").clicked() {
+            if ui.button(i18n::tr("手順2: 点から IS・N・RS を求める")).on_hover_text(i18n::tr("点を通る曲線になるように、IS・N・RS を計算します。点が 2 つなら IS と N、3 つ以上なら RS も決まります")).clicked() {
                 self.dio_message = Some(self.dio_fit());
             }
         });
-        ui.label("曲線を見ながら、スライダーで自分で合わせることもできます");
+        ui.label(i18n::tr("曲線を見ながら、スライダーで自分で合わせることもできます"));
         egui::Grid::new("dio_sliders").num_columns(2).show(ui, |ui| {
-            ui.label("IS (飽和電流)").on_hover_text("曲線の左右の位置。小さいほど右 (流れ始める電圧が高い) へ動きます");
+            ui.label(i18n::tr("IS (飽和電流)")).on_hover_text(i18n::tr("曲線の左右の位置。小さいほど右 (流れ始める電圧が高い) へ動きます"));
             ui.add(egui::Slider::new(&mut self.dio_is, 1e-15..=1e-5).logarithmic(true).custom_formatter(|v, _| format!("{}A", passive::eng(v))).custom_parser(|s| sim_core::parse_value(s.trim_end_matches('A'))));
             ui.end_row();
-            ui.label("N (理想係数)").on_hover_text("曲線の傾き。10 倍の電流で、電圧は約 N × 60mV 上がります");
+            ui.label(i18n::tr("N (理想係数)")).on_hover_text(i18n::tr("曲線の傾き。10 倍の電流で、電圧は約 N × 60mV 上がります"));
             ui.add(egui::Slider::new(&mut self.dio_n, 0.8..=3.0).fixed_decimals(2));
             ui.end_row();
-            ui.label("RS (直列抵抗)").on_hover_text("大電流での曲がり。大きいほど、電流が多い所で電圧が高くなります");
+            ui.label(i18n::tr("RS (直列抵抗)")).on_hover_text(i18n::tr("大電流での曲がり。大きいほど、電流が多い所で電圧が高くなります"));
             ui.add(egui::Slider::new(&mut self.dio_rs, 0.001..=2.0).logarithmic(true).custom_formatter(|v, _| format!("{}Ω", passive::eng(v))).custom_parser(|s| sim_core::parse_value(s.trim_end_matches('Ω'))));
             ui.end_row();
         });
         self.dio_chart(ui);
-        ui.label("手順3: 表から、逆耐圧と漏れ電流を写します (空でも作れます)");
+        ui.label(i18n::tr("手順3: 表から、逆耐圧と漏れ電流を写します (空でも作れます)"));
         egui::Grid::new("dio_rev").num_columns(2).show(ui, |ui| {
-            ui.label("逆耐圧 VRRM [V]").on_hover_text("「絶対最大定格」の Peak Repetitive Reverse Voltage。型番ごとに違うので、表で自分の型番の列を読みます (1N4007 は 1000)");
+            ui.label(i18n::tr("逆耐圧 VRRM [V]")).on_hover_text(i18n::tr("「絶対最大定格」の Peak Repetitive Reverse Voltage。型番ごとに違うので、表で自分の型番の列を読みます (1N4007 は 1000)"));
             ui.add(egui::TextEdit::singleline(&mut self.dio_vrrm).desired_width(80.0).hint_text("1000"));
             ui.end_row();
-            ui.label("漏れ電流 IR [A]").on_hover_text("逆耐圧をかけたときの逆向きの電流 (Peak Reverse Current、25℃ の値)。1N4007 は 5μA = 5u");
+            ui.label(i18n::tr("漏れ電流 IR [A]")).on_hover_text(i18n::tr("逆耐圧をかけたときの逆向きの電流 (Peak Reverse Current、25℃ の値)。1N4007 は 5μA = 5u"));
             ui.add(egui::TextEdit::singleline(&mut self.dio_ir).desired_width(80.0).hint_text("5u"));
             ui.end_row();
         });
         crate::icons::help_label(ui, "手順4: 高い周波数で効く値", "手順4: 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)");
         egui::Grid::new("dio_charge").num_columns(2).show(ui, |ui| {
-            ui.label("接合容量 Cj [F]").on_hover_text("データシートの Typical Junction Capacitance。測った逆電圧とセットで読みます (1N4007 は 8pF 〜 15pF、1MHz、逆電圧 4V)");
+            ui.label(i18n::tr("接合容量 Cj [F]")).on_hover_text(i18n::tr("データシートの Typical Junction Capacitance。測った逆電圧とセットで読みます (1N4007 は 8pF 〜 15pF、1MHz、逆電圧 4V)"));
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut self.dio_cj).desired_width(70.0).hint_text("15p"));
-                ui.label("逆電圧 [V]");
+                ui.label(i18n::tr("逆電圧 [V]"));
                 ui.add(egui::TextEdit::singleline(&mut self.dio_cj_vr).desired_width(50.0).hint_text("4"));
             });
             ui.end_row();
-            ui.label("逆回復時間 trr [s]").on_hover_text("データシートの Reverse Recovery Time。電流を順方向から逆向きに切り替えたとき、逆向きの電流が止まるまでの時間。ショットキーには無い (ほぼ 0) ので、空で構いません");
+            ui.label(i18n::tr("逆回復時間 trr [s]")).on_hover_text(i18n::tr("データシートの Reverse Recovery Time。電流を順方向から逆向きに切り替えたとき、逆向きの電流が止まるまでの時間。ショットキーには無い (ほぼ 0) ので、空で構いません"));
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut self.dio_trr).desired_width(70.0).hint_text("2u"));
                 ui.label("IF [A]");
@@ -163,7 +163,7 @@ impl PartForm {
             });
             ui.end_row();
         });
-        if ui.button("手順5: このモデルを「② シミュレーション」に入れる").on_hover_text("モデルの文 (.model) を作って、② のシミュレーションの欄に入れます。逆耐圧は ① の定格の最大電圧にも入ります").clicked() {
+        if ui.button(i18n::tr("手順5: このモデルを「② シミュレーション」に入れる")).on_hover_text(i18n::tr("モデルの文 (.model) を作って、② のシミュレーションの欄に入れます。逆耐圧は ① の定格の最大電圧にも入ります")).clicked() {
             self.dio_message = Some(self.dio_apply());
         }
         match &self.dio_message {
@@ -219,7 +219,7 @@ impl PartForm {
         for (i, v) in &pts {
             painter.circle_filled(to(*v, *i), 4.0, crate::theme::ERROR);
         }
-        ui.label(egui::RichText::new("● 赤い点: データシートの点    ─ 青い線: モデルの曲線").size(13.5));
+        ui.label(egui::RichText::new(i18n::tr("● 赤い点: データシートの点    ─ 青い線: モデルの曲線")).size(13.5));
         if !pts.is_empty() {
             let rows: Vec<String> = pts.iter().map(|(i, v)| {
                 let m = diode::vf(is, n, rs, *i);

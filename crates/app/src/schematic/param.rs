@@ -54,7 +54,7 @@ impl SchEditor {
             _ => None,
         };
         ui.horizontal(|ui| {
-            ui.label("部品");
+            ui.label(i18n::tr("部品"));
             let mut pick = None;
             let shown = if self.param_part.is_empty() { "選ぶ".to_string() } else { self.param_part.clone() };
             egui::ComboBox::from_id_salt("param_part")
@@ -68,10 +68,10 @@ impl SchEditor {
                     }
                 })
                 .response
-                .on_hover_text("値を変える部品 (抵抗・コンデンサ・コイル)。選ぶと、今の値の 1/10 〜 10倍が範囲に入ります");
+                .on_hover_text(i18n::tr("値を変える部品 (抵抗・コンデンサ・コイル)。選ぶと、今の値の 1/10 〜 10倍が範囲に入ります"));
             if pick.is_none()
                 && let Some(sel) = selected_part.filter(|(r, _)| parts.iter().any(|p| &p.0 == r))
-                && ui.small_button("選択中の部品").on_hover_text("回路図で選んでいる部品をスイープ対象にします").clicked()
+                && ui.small_button(i18n::tr("選択中の部品")).on_hover_text(i18n::tr("回路図で選んでいる部品をスイープ対象にします")).clicked()
             {
                 pick = Some(sel);
             }
@@ -80,16 +80,16 @@ impl SchEditor {
             }
         });
         ui.horizontal(|ui| {
-            ui.label("から");
-            ui.add(egui::TextEdit::singleline(&mut self.param_from).desired_width(48.0)).on_hover_text("最初の値。例: 100, 1k, 10n");
-            ui.label("まで");
-            ui.add(egui::TextEdit::singleline(&mut self.param_to).desired_width(48.0)).on_hover_text("最後の値");
-            ui.label("本数");
-            ui.add(egui::TextEdit::singleline(&mut self.param_n).desired_width(24.0)).on_hover_text(format!("値を何通り試すか (最大 {MAX_RUNS})。5 くらいが見やすいです"));
+            ui.label(i18n::tr("から"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_from).desired_width(48.0)).on_hover_text(i18n::tr("最初の値。例: 100, 1k, 10n"));
+            ui.label(i18n::tr("まで"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_to).desired_width(48.0)).on_hover_text(i18n::tr("最後の値"));
+            ui.label(i18n::tr("本数"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_n).desired_width(24.0)).on_hover_text(i18n::trf!("値を何通り試すか (最大 {MAX_RUNS})。5 くらいが見やすいです"));
         });
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.param_log, "対数で等間隔").on_hover_text("オンにすると 100, 316, 1k, 3.16k, 10k のように倍率が一定になります。部品の値を振るときは普通こちらが見やすいです。オフだと足し算で等間隔です");
-            ui.label("見る点");
+            ui.checkbox(&mut self.param_log, i18n::tr("対数で等間隔")).on_hover_text(i18n::tr("オンにすると 100, 316, 1k, 3.16k, 10k のように倍率が一定になります。部品の値を振るときは普通こちらが見やすいです。オフだと足し算で等間隔です"));
+            ui.label(i18n::tr("見る点"));
             let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
             let shown = if self.param_node.is_empty() { "選ぶ".to_string() } else { self.param_node.clone() };
             egui::ComboBox::from_id_salt("param_node")
@@ -101,13 +101,13 @@ impl SchEditor {
                     }
                 })
                 .response
-                .on_hover_text("波形を見るノード (ネット) の名前。出力にあたる点を選びます");
+                .on_hover_text(i18n::tr("波形を見るノード (ネット) の名前。出力にあたる点を選びます"));
         });
         ui.horizontal(|ui| {
-            ui.label("解析");
-            ui.selectable_value(&mut self.param_ac, false, "過渡").on_hover_text("時間変化 (過渡解析の設定を使います)。ステップ応答のなまり方、発振の減り方などを比べられます");
-            ui.selectable_value(&mut self.param_ac, true, "AC").on_hover_text("周波数特性 (AC解析の設定を使います)。カットオフ周波数や共振の位置がどう動くかを比べられます");
-            if ui.button("スイープを実行").on_hover_text("値を1つずつ入れ替えて解析をくり返し、結果を重ねて表示します。回路そのものは変わりません").clicked() {
+            ui.label(i18n::tr("解析"));
+            ui.selectable_value(&mut self.param_ac, false, i18n::tr("過渡")).on_hover_text(i18n::tr("時間変化 (過渡解析の設定を使います)。ステップ応答のなまり方、発振の減り方などを比べられます"));
+            ui.selectable_value(&mut self.param_ac, true, "AC").on_hover_text(i18n::tr("周波数特性 (AC解析の設定を使います)。カットオフ周波数や共振の位置がどう動くかを比べられます"));
+            if ui.button(i18n::tr("スイープを実行")).on_hover_text(i18n::tr("値を1つずつ入れ替えて解析をくり返し、結果を重ねて表示します。回路そのものは変わりません")).clicked() {
                 self.run_param();
             }
         });
@@ -171,7 +171,7 @@ impl SchEditor {
             if crate::widgets::close_button(ui, "パラメータスイープの表示") {
                 close = true;
             }
-            ui.small(if *ac { "縦軸: ゲイン (dB)。線の色は下の凡例のとおり" } else { "縦軸: 電圧。線の色は下の凡例のとおり" });
+            ui.small(if *ac { i18n::tr("縦軸: ゲイン (dB)。線の色は下の凡例のとおり") } else { i18n::tr("縦軸: 電圧。線の色は下の凡例のとおり") });
         });
         match outcome {
             Err(msgs) => {
@@ -181,7 +181,7 @@ impl SchEditor {
             }
             Ok(res) => {
                 for (v, why) in &res.failed {
-                    ui.colored_label(crate::theme::WARN, format!("{part} = {} は計算できませんでした: {why}", format_value(*v)));
+                    ui.colored_label(crate::theme::WARN, i18n::trf!("{part} = {} は計算できませんでした: {why}", format_value(*v)));
                 }
                 let names: Vec<String> = res.curves.iter().map(|c| format!("{part}={}", format_value(c.value))).collect();
                 ui.horizontal_wrapped(|ui| {

@@ -89,15 +89,15 @@ impl TablePanel {
     pub fn ui(&mut self, ui: &mut egui::Ui, current: &[(String, String)]) -> Action {
         let mut action = Action::None;
         if self.table.columns == 0 {
-            ui.colored_label(egui::Color32::from_rgb(230, 80, 70), "囲んだ中に文字がありませんでした。表をもう一度、ドラッグで囲んでください (画像の表は読めません)");
-            if ui.button("閉じる").clicked() {
+            ui.colored_label(egui::Color32::from_rgb(230, 80, 70), i18n::tr("囲んだ中に文字がありませんでした。表をもう一度、ドラッグで囲んでください (画像の表は読めません)"));
+            if ui.button(i18n::tr("閉じる")).clicked() {
                 action = Action::Cancel;
             }
             return action;
         }
-        ui.small(format!("p.{} の表を読みました ({} 行 × {} 列)", self.page + 1, self.table.cells.len(), self.table.columns));
+        ui.small(i18n::trf!("p.{} の表を読みました ({} 行 × {} 列)", self.page + 1, self.table.cells.len(), self.table.columns));
         if !self.guessed {
-            ui.colored_label(egui::Color32::from_rgb(230, 160, 60), "ピン番号の列が見つかりませんでした。下で、番号の列と名前の列を選んでください");
+            ui.colored_label(egui::Color32::from_rgb(230, 160, 60), i18n::tr("ピン番号の列が見つかりませんでした。下で、番号の列と名前の列を選んでください"));
         }
         let labels: Vec<String> = (0..self.table.columns).map(|c| self.column_label(c)).collect();
         let (mut num, mut name) = (self.num_col, self.name_col);
@@ -122,11 +122,11 @@ impl TablePanel {
         if changed {
             self.recompute();
         }
-        ui.label(format!("ピン ({} 行。直せます)", self.lines()));
+        ui.label(i18n::trf!("ピン ({} 行。直せます)", self.lines()));
         ui.add(egui::TextEdit::multiline(&mut self.text).desired_rows(10).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace))
-            .on_hover_text("1行に「番号 名前」。読み違いがあれば、ここで直してから入れます。向き (left/right) は、入れたあとに「③ ピン」で書き足せます");
+            .on_hover_text(i18n::tr("1行に「番号 名前」。読み違いがあれば、ここで直してから入れます。向き (left/right) は、入れたあとに「③ ピン」で書き足せます"));
         self.compare_ui(ui, current);
-        egui::CollapsingHeader::new("読み取った表").id_salt("pin_import_raw").show(ui, |ui| {
+        egui::CollapsingHeader::new(i18n::tr("読み取った表")).id_salt("pin_import_raw").show(ui, |ui| {
             egui::ScrollArea::both().max_height(160.0).show(ui, |ui| {
                 egui::Grid::new("pin_import_grid").striped(true).show(ui, |ui| {
                     for r in self.table.cells.iter().take(40) {
@@ -140,16 +140,16 @@ impl TablePanel {
         });
         ui.horizontal(|ui| {
             let ok = self.lines() > 0;
-            if ui.add_enabled(ok, egui::Button::new("ピン表に置き換える")).on_hover_text("「③ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます").clicked() {
+            if ui.add_enabled(ok, egui::Button::new(i18n::tr("ピン表に置き換える"))).on_hover_text(i18n::tr("「③ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます")).clicked() {
                 action = Action::Apply(PinMode::Replace);
             }
-            if ui.add_enabled(ok, egui::Button::new("ピン表のあとに足す")).on_hover_text("いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします").clicked() {
+            if ui.add_enabled(ok, egui::Button::new(i18n::tr("ピン表のあとに足す"))).on_hover_text(i18n::tr("いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします")).clicked() {
                 action = Action::Apply(PinMode::Append);
             }
-            if ui.add_enabled(ok, egui::Button::new("この表と比べるだけ")).on_hover_text("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します").clicked() {
+            if ui.add_enabled(ok, egui::Button::new(i18n::tr("この表と比べるだけ"))).on_hover_text(i18n::tr("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します")).clicked() {
                 action = Action::Apply(PinMode::CheckOnly);
             }
-            if ui.button("やめる").clicked() {
+            if ui.button(i18n::tr("やめる")).clicked() {
                 action = Action::Cancel;
             }
         });
@@ -164,9 +164,9 @@ impl TablePanel {
         }
         let c = datasheet::compare_pins(current, &table_pins);
         if c.diffs.is_empty() {
-            ui.colored_label(egui::Color32::from_rgb(90, 190, 120), format!("いまのピン表と比べると、{} 本すべて一致しています", c.same));
+            ui.colored_label(egui::Color32::from_rgb(90, 190, 120), i18n::trf!("いまのピン表と比べると、{} 本すべて一致しています", c.same));
         } else {
-            ui.colored_label(egui::Color32::from_rgb(230, 160, 60), format!("いまのピン表と比べると、一致 {} 本、食い違い {} 件", c.same, c.diffs.len()));
+            ui.colored_label(egui::Color32::from_rgb(230, 160, 60), i18n::trf!("いまのピン表と比べると、一致 {} 本、食い違い {} 件", c.same, c.diffs.len()));
         }
     }
 }

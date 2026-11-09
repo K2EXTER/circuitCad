@@ -255,6 +255,8 @@ pub fn segment_button(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, sel
 
 #[allow(clippy::too_many_arguments)]
 fn icon_button_shaped(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, selected: bool, enabled: bool, tip: &str, shape: Option<(f32, egui::CornerRadius)>) -> egui::Response {
+    let (label, tip) = (i18n::tr_dyn(label), i18n::tr_dyn(tip));
+    let (label, tip) = (label.as_str(), tip.as_str());
     let side = ui.spacing().interact_size.y.max(22.0);
     let pad = ui.spacing().button_padding;
     let (size, galley) = if icon_only() {
@@ -310,7 +312,7 @@ fn icon_button_shaped(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, sel
         }
     }
     let tip = if icon_only() { format!("{label}\n{tip}") } else { tip.to_owned() };
-    let tip = if key.is_empty() { tip } else { format!("{tip}\nショートカット: {key}") };
+    let tip = if key.is_empty() { tip } else { i18n::trf!("{tip}\nショートカット: {key}") };
     resp.on_hover_text(tip)
 }
 
@@ -330,7 +332,7 @@ pub fn icon_switch(ui: &mut egui::Ui, on_icon: Icon, off_icon: Icon, on: &mut bo
         }
         paint(ui.painter(), rect.shrink(4.0), if *on { on_icon } else { off_icon }, if *on { dark } else { dark.gamma_multiply(0.45) });
     }
-    resp.on_hover_text(tip)
+    resp.on_hover_text(i18n::tr_dyn(tip))
 }
 
 /// A fold header for the glass panels: a triangle and the title; a click anywhere on it folds or unfolds.
@@ -338,7 +340,7 @@ pub fn icon_switch(ui: &mut egui::Ui, on_icon: Icon, off_icon: Icon, on: &mut bo
 pub fn fold_header(ui: &mut egui::Ui, id: egui::Id, title: &str, default_open: bool, tip: &str) -> bool {
     let mut open = ui.ctx().data_mut(|d| *d.get_persisted_mut_or_insert_with(id, || default_open));
     let col = Color32::from_rgb(25, 35, 45);
-    let g = ui.painter().layout_no_wrap(title.to_owned(), egui::TextStyle::Body.resolve(ui.style()), col);
+    let g = ui.painter().layout_no_wrap(i18n::tr_dyn(title), egui::TextStyle::Body.resolve(ui.style()), col);
     // as wide as the body was the last time it was open, so the empty space beside the title clicks too
     let wide = if open { ui.ctx().data_mut(|d| d.get_temp::<f32>(id.with("w"))).unwrap_or(0.0) } else { 0.0 };
     let (rect, resp) = ui.allocate_exact_size(vec2((g.size().x + 26.0).max(wide), g.size().y.max(18.0) + 2.0), egui::Sense::click());
@@ -353,7 +355,7 @@ pub fn fold_header(ui: &mut egui::Ui, id: egui::Id, title: &str, default_open: b
     let tri = if open { vec![c + vec2(-4.0, -2.5), c + vec2(4.0, -2.5), c + vec2(0.0, 3.5)] } else { vec![c + vec2(-2.5, -4.0), c + vec2(-2.5, 4.0), c + vec2(3.5, 0.0)] };
     ui.painter().add(egui::Shape::convex_polygon(tri, col, Stroke::NONE));
     ui.painter().galley(pos2(rect.min.x + 20.0, rect.center().y - g.size().y / 2.0), g, col);
-    resp.on_hover_text(tip);
+    resp.on_hover_text(i18n::tr_dyn(tip));
     open
 }
 
@@ -366,20 +368,20 @@ pub fn fold_remember_width(ui: &egui::Ui, id: egui::Id, width: f32) {
 pub fn icon_label(ui: &mut egui::Ui, icon: Icon, tip: &str) {
     let (rect, resp) = ui.allocate_exact_size(vec2(24.0, 24.0), egui::Sense::hover());
     paint(ui.painter(), rect.shrink(3.0), icon, Color32::from_rgb(25, 35, 45));
-    resp.on_hover_text(tip);
+    resp.on_hover_text(i18n::tr_dyn(tip));
 }
 
 /// A small "(?)" mark whose hover text carries an explanation that would otherwise take a line of the panel.
 pub fn help(ui: &mut egui::Ui, text: &str) {
     ui.add(egui::Label::new(egui::RichText::new("(?)").weak()).sense(egui::Sense::hover()))
         .on_hover_cursor(egui::CursorIcon::Help)
-        .on_hover_text(text);
+        .on_hover_text(i18n::tr_dyn(text));
 }
 
 /// A short caption (small text) followed by a "(?)" that holds the long explanation.
 pub fn help_small(ui: &mut egui::Ui, short: &str, long: &str) {
     ui.horizontal(|ui| {
-        ui.small(short);
+        ui.small(i18n::tr_dyn(short));
         help(ui, long);
     });
 }
@@ -387,7 +389,7 @@ pub fn help_small(ui: &mut egui::Ui, short: &str, long: &str) {
 /// The same with normal-size text (for a heading above an input box).
 pub fn help_label(ui: &mut egui::Ui, short: &str, long: &str) {
     ui.horizontal(|ui| {
-        ui.label(short);
+        ui.label(i18n::tr_dyn(short));
         help(ui, long);
     });
 }

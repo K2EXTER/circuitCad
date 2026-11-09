@@ -1,0 +1,474 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/part_form/pdf_check.rs
+データシート p.{} のピン表と比べています	Comparing with the pin table on datasheet p.{}
+表を見る	Show table
+比べている表のページを、データシートの窓に出します	Shows the page of the table being compared in the datasheet window
+比べるのをやめる	Stop comparing
+この表との比べをやめます (ピン表は変わりません)	Stops comparing with this table (the pin table is not changed)
+比べる表を読み直せませんでした (データシートを閉じましたか?)。確認できていません	Could not re-read the table to compare (did you close the datasheet?). Not checked
+✓ 表の {} 本すべてが、ピン表と一致しています	✓ All {} pins in the table match the pin table
+食い違いが {} 件あります (一致 {} 本)	{} mismatches ({} pins match)
+{} 番: 名前が違います (ピン表 {} / データシート {})	Pin {}: different names (pin table {} / datasheet {})
+どちらかの写し間違いです。データシートの表を見て、ピン表の名前を直します	One of them was copied wrong. Look at the datasheet table and fix the name in the pin table
+{} 番 {}: データシートにあるのに、ピン表にありません	Pin {} {}: in the datasheet but not in the pin table
+ピンの入れ忘れです。ピン表にこのピンの行を足します。部品が持たないピンなら、読み取りの列が違っているかもしれません	A pin was left out. Add a row for this pin to the pin table. If the part does not have this pin, the wrong column may have been read
+{} 番 {}: ピン表にあるのに、データシートの表にありません	Pin {} {}: in the pin table but not in the datasheet table
+番号の写し間違いか、囲んだ表がこのピンを含んでいません (放熱パッドなど、別の表にあるピンかもしれません)	The number was copied wrong, or the selected table does not include this pin (it may be in another table, like a thermal pad)
+ほか {} 件	{} more
+寸法をデータシートと照らす	Check dimensions against the datasheet
+入れた寸法が、データシートの「ランドパターン」「外形寸法」のページに書かれている数字の中にあるかを調べます (インチの数字は mm に直して比べます)。数字があることの確認で、その数字がピッチなのかパッド幅なのかは、図面を見て確かめてください	Checks whether the dimensions you entered appear among the numbers on the datasheet's "land pattern" and "package dimensions" pages (inch values are converted to mm). This only confirms the number is there; check the drawing to see whether it is the pitch or the pad width
+「ランドパターン」「外形寸法」の見出しのあるページが見つかりませんでした。窓で見ていたページ ({pages}) の数字と照らしました	No page with a "land pattern" or "package dimensions" heading was found. Checked against the numbers on the pages you viewed in the window ({pages})
+照らしたページ: {pages}	Pages checked: {pages}
+ (インチの数字として)	 (as an inch value)
+✓ {} {} mm: p.{} の「{}」{how}にあります	✓ {} {} mm: found on p.{} under "{}"{how}
+✗ {} {} mm: データシートの図面のページに見つかりません	✗ {} {} mm: not found on the datasheet's drawing pages
+単位のない小さな数字を、インチとして mm に直すと一致しました。偶然の一致もあるので、図面でインチの寸法かを確かめてください	A small number without a unit matched when read as inches and converted to mm. It may be a coincidence, so check on the drawing that it is an inch dimension
+その数字が書かれていることの確認です。同じ数字が別の寸法のこともあるので、図面で確かめてください	This only confirms the number is written there. The same number may be another dimension, so check the drawing
+写し間違いか、インチ・mil で書かれているか、図面に書かれていない計算値かもしれません。データシートの図面を見て、確かめてください	It may be copied wrong, written in inches or mil, or a calculated value not on the drawing. Look at the datasheet drawing to check
+照らす寸法がまだ入っていません	No dimensions to check yet
+{missing} 件が見つかっていません。「ランドパターンは概算」の印は、そのままにしておきます	{missing} not found. The "land pattern is approximate" mark is kept
+入れた寸法は、すべて図面のページにありました	All dimensions you entered were found on the drawing pages
+図面と見比べて確認した: 「概算」の印を外す	Checked against the drawing: remove the "approximate" mark
+数字があることまでは確かめました。ピッチやパッドの寸法が、図面のどの数字かを人が見比べて、合っていると確認したときに押してください	Only the presence of the numbers was checked. Press this after you have compared the drawing yourself and confirmed which numbers are the pitch and pad sizes
+# crates/app/src/part_form/pdf_input.rs
+ピン表は変えずに、p.{} の表 ({read} 本) と比べます。結果は「③ ピン」に出ます	Compares with the table on p.{} ({read} pins) without changing the pin table. The result appears in "③ Pins"
+あとに足しました	Appended
+入れました	Filled in
+ピン表に p.{} の {read} 本のピンを{how} (合計 {n} 本)。向き (left/right) は「③ ピン」で書き足せます	{how} {read} pins from p.{} in the pin table ({n} pins in total). You can add the side (left/right) in "③ Pins"
+「{}」は数字として読めませんでした。数字の部分をクリックしてください	Could not read "{}" as a number. Click on the number part
+{} に {} {unit} を入れました (p.{} の「{}」){note}	Set {} to {} {unit} (p.{}: "{}"){note}
+p.{} の「{word}」から入れました。押すと、選び直せます	Filled in from "{word}" on p.{}. Press to pick again
+データシートの窓で、{}の数字をクリックして入れます。インチ・mil は mm に換算します (単位は数字の右にあるものを使います)	Click the number for {} in the datasheet window to fill it in. Inches and mil are converted to mm (the unit to the right of the number is used)
+データシートの数字を、クリックで入れられます:	You can click numbers in the datasheet to fill them in:
+PDFから入れる	Fill in from PDF
+# crates/app/src/part_form/pin_import.rs
+列{}: {}	Column {}: {}
+囲んだ中に文字がありませんでした。表をもう一度、ドラッグで囲んでください (画像の表は読めません)	No text inside the selected area. Drag around the table again (tables in images cannot be read)
+p.{} の表を読みました ({} 行 × {} 列)	Read the table on p.{} ({} rows × {} columns)
+ピン番号の列が見つかりませんでした。下で、番号の列と名前の列を選んでください	No pin number column found. Choose the number column and the name column below
+番号の列	Number column
+ピン番号 (1, 2, 3 …) が並んでいる列。パッケージごとに列があるときは、使うパッケージの列を選びます。番号と名前が1つのセルにあるときは、名前の列にも同じ列を選びます	The column listing pin numbers (1, 2, 3 …). If there is a column for each package, choose the one for your package. If the number and name are in one cell, choose the same column for the name too
+名前の列	Name column
+ピンの名前 (VCC、GND、1IN+ …) が並んでいる列	The column listing pin names (VCC, GND, 1IN+ …)
+ピン ({} 行。直せます)	Pins ({} rows, editable)
+1行に「番号 名前」。読み違いがあれば、ここで直してから入れます。向き (left/right) は、入れたあとに「③ ピン」で書き足せます	One "number name" per line. Fix any misreadings here before filling in. You can add the side (left/right) in "③ Pins" afterwards
+読み取った表	Table that was read
+ピン表に置き換える	Replace the pin table
+「③ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます	Replaces the pin table in "③ Pins" with this content. The current content is deleted
+ピン表のあとに足す	Append to the pin table
+いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします	Adds this content to the current pin table. Rows with a number already in it are kept as they are
+この表と比べるだけ	Only compare with this table
+いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します	Checks for mismatches with this table without changing the current pin table. Each time you edit the pin table afterwards, it is compared again in "③ Pins"
+いまのピン表と比べると、{} 本すべて一致しています	Compared with the current pin table, all {} pins match
+いまのピン表と比べると、一致 {} 本、食い違い {} 件	Compared with the current pin table: {} pins match, {} mismatches
+# crates/app/src/part_form/pintable.rs
+ピン	Pins
+1行が1本のピンです。番号はパッケージのパッドの番号 (データシートのピン番号)、名前は回路図に出る名前です。向きは記号のどちらの辺に出すかで、「自動」なら前半が左、後半が右になります。NC は未接続のピンです	Each row is one pin. The number is the package's pad number (the pin number in the datasheet), the name is what the schematic shows. The side is which edge of the symbol the pin is on; with "Auto", the first half go left and the second half right. NC is an unconnected pin
+「モデルの端子」は、貼った SPICE モデルの端子が、どのピンにあたるかです (選ばないピンは、シミュレーションではどこにもつながりません)	"Model terminal" is which pin each terminal of the pasted SPICE model maps to (pins you do not choose are not connected to anything in the simulation)
+向き	Side
+モデルの端子	Model terminal
+同じ番号のピンがあります。番号は重ならないようにします	Some pins have the same number. Numbers must not repeat
+パッドの番号 (データシートのピン番号。BGA なら A1 のような名前)。同じ番号は2つ使えません	Pad number (the pin number in the datasheet; for BGA, a name like A1). The same number cannot be used twice
+ピンの名前 (IN・GND・OUT・IN+ など)。回路図の部品に出ます	Pin name (IN, GND, OUT, IN+, etc.). Shown on the part in the schematic
+記号のどちらの辺にこのピンを出すか。「自動」なら、前半が左、後半が右です	Which edge of the symbol this pin is on. With "Auto", the first half go left and the second half right
+端子 {} ({})	Terminal {} ({})
+(使わない)	(unused)
+このピンが、モデルのどの端子にあたるか。同じ端子を2つのピンに選ぶと、前に選んだピンは「使わない」に戻ります	Which model terminal this pin maps to. If you choose the same terminal for two pins, the earlier pin goes back to "Don't use"
+このピンを消します	Deletes this pin
+＋ ピンを足す	+ Add pin
+表の最後に、空のピンを1行足します。番号は、いまの最大の番号の次になります	Adds an empty pin row at the end of the table. Its number is the next after the current highest
+名前で合わせる	Match by name
+ピンの名前 (か番号) が、モデルの端子の名前と同じものを、自動で選びます。合うものがない端子は、選び直しになります	Automatically picks the pin whose name (or number) matches each model terminal's name. Terminals with no match must be chosen by hand
+モデルに使わないピン: {}	Pins not used by the model: {}
+これらのピンは、シミュレーションでは何にもつながりません (基板では、パッドとしてそのまま使えます)。つながない部品なら、回路図で「使わないピン (NC)」にします	These pins are not connected to anything in the simulation (on the board they still work as pads). If they are not connected in the part, mark them "Unused pin (NC)" in the schematic
+# crates/app/src/part_form/preview.rs
+回路図の記号	Schematic symbol
+部品の形 (実寸比)	Part shape (to scale)
+本体の高さ {h:.2} mm	Body height {h:.2} mm
+赤い項目を直すと、保存できます	Fix the red items to be able to save
+✔ 問題は見つかりません	✔ No problems found
+保存前に直す	Fix before saving
+注意	Warnings
+保存して上書き	Save and overwrite
+「{}」をこの内容で書き換えます。すでに回路図に置いた部品は、そのままです (新しく置く部品から変わります)。名前を変えて押すと、別の部品として追加します。エラーが残っていると押せません	Overwrites "{}" with this content. Parts already placed in the schematic stay as they are (new placements use the change). If you change the name and press this, it is added as a separate part. Cannot be pressed while errors remain
+保存してライブラリに追加	Save and add to library
+この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません	Saves this part to the library so you can use it in the schematic right away. Cannot be pressed while errors remain
+「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)	The name was changed from "{n}", so it is added as a separate part (the original part stays)
+# crates/app/src/part_form/step3d.rs
+3D の形 (メーカーの STEP ファイル)	3D shape (maker's STEP file)
+3D の形について	About the 3D shape
+メーカーが配っている部品の STEP ファイル (.step / .stp) を読み込むと、基板の「3Dで見る」で、この部品が実物に近い形で表示されます。形のためだけのデータで、足やパッドの位置は、上のパッケージの寸法で決まります。ファイルは自分でダウンロードしたものを使い、メーカーの使用条件を確かめてください。大きなファイルは、三角形を間引いて保存します	Loading the maker's STEP file (.step / .stp) for the part shows it close to its real shape in the board's "View in 3D". It is only for the look; the lead and pad positions come from the package dimensions above. Use a file you downloaded yourself and check the maker's terms of use. Large files are saved with fewer triangles
+STEP を読み込む…	Load STEP…
+メーカーの STEP ファイルを選びます。ソリッド (立体) の形だけを読みます。色があれば、色も使います	Choose the maker's STEP file. Only solid shapes are read. Colors are used if present
+3D の形を外す	Remove 3D shape
+この部品の3Dの形を消して、基板の3Dでは推測の箱に戻します	Removes this part's 3D shape; the board's 3D view goes back to a guessed box
+読み込むと、ここに上から見た図と横から見た図が出ます	After loading, a top view and a side view appear here
+{}  三角形 {}  大きさ {:.2} × {:.2} × {:.2} mm	{}  {} triangles  size {:.2} × {:.2} × {:.2} mm
+向き:	Orientation:
+{name} 軸に90°回す	Rotate 90° about {name}
+{name} 軸のまわりに、部品を90°回します。STEP の上下が、基板の上下と違うときに使います。横から見た図で、本体が基板の面の上にあれば正しい向きです	Rotates the part 90° about the {name} axis. Use this when the STEP file's up and down differ from the board's. The orientation is right when the side view shows the body above the board surface
+向きを戻す	Reset orientation
+回した向きを、ファイルのままに戻します	Returns the rotation to the one in the file
+本体の中心を、パッドの中心に合わせる	Center the body on the pads
+オンにすると、本体の中心 (上から見て) が、パッドの並びの中心に来ます。オフだと、STEP ファイルの原点のままです	When on, the body's center (seen from above) is placed at the center of the pads. When off, the STEP file's origin is used
+本体の底を、基板の面に付ける	Put the body's bottom on the board surface
+オンにすると、いちばん低い所が基板の面の高さになります。足が基板にささる部品は、足の先が基板を突き抜けるので、オフにして上下を合わせることもできます	When on, the lowest point is placed at the board surface. For parts whose leads go into the board, the lead tips poke through, so you can turn this off to adjust the height
+左: 上から (赤い枠がパッド)  右: 横から (緑の線が基板の面)	Left: top view (red boxes are pads)  Right: side view (green line is the board surface)
+3D の形が空です	The 3D shape is empty
+# crates/app/src/part_form/tabs.rs
+ファイルがあるとき	When you have a file
+JSONから追加…	Add from JSON…
+KiCadから取り込み…	Import from KiCad…
+部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません	Loads a part definition file (.part.json) and adds it to the library. What you entered in this form is not used
+KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます	Loads a KiCad symbol (.kicad_sym, or the old .lib format) and, if present, a footprint (.kicad_mod), and adds them to the library. Zip files downloaded from Ultra Librarian or SnapEDA (in KiCad format) can be chosen as they are (a 3D model inside is attached too). Parts from the official KiCad libraries work too
+名前・値・説明は自動で入ります	Name, value and description are filled in automatically
+下の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません	Press "Create part" below to fill in the name, value and description automatically. You can edit them
+部品名はモデルの名前にも使います	The part name is also used as the model name
+部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)	The part name is also used as the model name. Enter it first (e.g. 1N4007)
+部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます	Part name (e.g. LM358, 2N3904). Shown in the parts list and as the value in the schematic
+PDFから選ぶ	Pick from PDF
+カテゴリ	Category
+一覧のグループ名 (例: オペアンプ、トランジスタ)	Group name in the list (e.g. Op amps, Transistors)
+部品番号の頭文字	Refdes prefix
+回路図で付く部品番号の頭文字。IC は U、トランジスタは Q、抵抗は R、ダイオードは D	Prefix of the reference designator in the schematic: U for ICs, Q for transistors, R for resistors, D for diodes
+値 (省略で部品名)	Value (blank = part name)
+回路図に表示する値。空なら部品名が入ります	Value shown in the schematic. If blank, the part name is used
+記号の形	Symbol shape
+説明	Description
+一覧で部品にポインタを置いたときに出る説明	Description shown when you point at the part in the list
+データシートURL	Datasheet URL
+データシート (メーカーの仕様書) の URL。あとで見返すためのメモです	URL of the datasheet (the maker's specification). A note for looking it up later
+かんたん作成 (ひな形)	Quick create (template)
+入力の順番	Input order
+ほかの IC は、この画面の下の「データシートの数字 (定格)」→ ② シミュレーション → ③ ピン → ④ 部品の形 の順に入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます	For other ICs, fill in "Datasheet values (ratings)" at the bottom of this screen → ② Simulation → ③ Pins → ④ Part shape, in that order. If you paste a SPICE model into ②, the pins are filled in too, so in ③ you only need to check them
+この画面の下の「データシートの数字 (定格)」→ ② シミュレーション → ③ ピン → ④ 部品の形 の順に、データシートを見ながら入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます	Fill in "Datasheet values (ratings)" at the bottom of this screen → ② Simulation → ③ Pins → ④ Part shape, in that order, while looking at the datasheet. If you paste a SPICE model into ②, the pins are filled in too, so in ③ you only need to check them
+かんたん作成 (テンプレート)	Quick create (template)
+種類で入力欄が変わります	Input fields change with the type
+上の「部品の種類」を選ぶと、その種類に合わせた入力欄に変わります。チップ部品や充電IC は、データシートの数字を入れるだけで、下の欄を自動で埋められます	Choosing a "Part type" above changes the input fields to suit that type. For chip parts and charger ICs, just entering the datasheet values fills in the fields below automatically
+データシートの数字 (定格)	Datasheet values (ratings)
+データシートの調べ方	How to read a datasheet
+部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます	When adding a part, open the maker's datasheet. There are two tables to look at: "Absolute Maximum Ratings" = values that break the part if exceeded, and "Electrical Characteristics" = typical values in operation. If you enter them, the simulation results can be compared and a warning shown when they may be exceeded
+調べる項目: {}	Items to look up: {}
+上で選んだ部品の種類に合わせた項目です。変えるときは、いちばん上の「部品の種類」を選び直します	Items for the part type chosen above. To change them, choose the "Part type" at the top again
+どの IC?	Which IC?
+選ぶと、その種類で調べるとよい項目が出ます	Choose one to see the items worth looking up for that type
+調べる項目のチェックリストを入れる	Add a checklist of items to look up
+下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)	Lists the items to look up in "Other information" below. Look at the datasheet and fill in the values (rows you already wrote are kept)
+最大電圧 [V]	Max voltage [V]
+部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大	The highest voltage the part may take. For a diode, the reverse voltage (VRRM); for a transistor, the max Vce (VCEO); for a MOSFET, the max Vds
+例: 40 / 1000	e.g. 40 / 1000
+最大電流 [A]	Max current [A]
+流してよい最大の連続電流 (ダイオードなら平均順電流 IF、トランジスタなら Ic の最大)	The highest continuous current allowed (for a diode, the average forward current IF; for a transistor, the max Ic)
+例: 1 / 200m	e.g. 1 / 200m
+最大電力 [W]	Max power [W]
+部品が熱にしてよい最大の電力 (許容損失 Ptot)。周囲温度が高いと下がります。データシートの条件を確認します	The highest power the part may turn into heat (power dissipation Ptot). It goes down at high ambient temperature. Check the datasheet's conditions
+例: 0.5 / 625m / 1	e.g. 0.5 / 625m / 1
+電解コンデンサの項目 (リップル電流と寿命)	Electrolytic capacitor items (ripple current and life)
+リップル電流・寿命の入れ方	How to enter ripple current and life
+入れると、過渡解析の結果に、このコンデンサに流れたリップル電流が定格を超えていないか、推定寿命がどれくらいかが出ます。データシートの「定格リップル電流」「寿命 (耐久性)」「リップル電流の周波数補正係数」の表から写します	If entered, the transient analysis results show whether the ripple current through this capacitor exceeds its rating and roughly how long it will last. Copy them from the datasheet's "rated ripple current", "endurance (life)" and "ripple current frequency multiplier" tables
+定格リップル電流 [A rms]	Rated ripple current [A rms]
+コンデンサに流してよい、交流分の実効値 (データシートの Rated Ripple Current)。mA rms で書いてあるときは 540m のように入れます。最高温度 (105℃ など) での値です	The RMS of the AC part of the current the capacitor may carry (Rated Ripple Current in the datasheet). If given in mA rms, enter it like 540m. It is the value at the maximum temperature (e.g. 105℃)
+例: 540m / 1.2。データシートの表の、容量と電圧に合う行の値	e.g. 540m / 1.2. The value in the datasheet row matching the capacitance and voltage
+その値が決められている周波数。データシートの表の見出しにあります (たいてい 100kHz。120Hz のこともあります)	The frequency at which that value is given. It is in the datasheet table's heading (usually 100kHz, sometimes 120Hz)
+周波数の補正係数	Frequency multiplier
+リップル電流の定格に掛ける係数の表 (Multiplier for Ripple Current)。低い周波数ほど、流してよい電流が小さくなります。1行に「周波数 係数」	Table of multipliers applied to the ripple current rating (Multiplier for Ripple Current). The lower the frequency, the smaller the allowed current. One "frequency multiplier" per line
+例: 120 0.55 / 1k 0.77 / 10k 0.94 / 100k 1.0。容量の範囲ごとに表が分かれているときは、この部品の容量の行を入れます。空のときは、周波数によらず定格のままです	e.g. 120 0.55 / 1k 0.77 / 10k 0.94 / 100k 1.0. If the table is split by capacitance range, enter the rows for this part's capacitance. If blank, the rating is used at every frequency
+寿命 [時間]	Life [hours]
+定格電圧・定格リップル電流・最高温度で使ったときの寿命 (Endurance)。ケースの大きさで違うことがあります (例: 6000 / 10000)	Life when used at the rated voltage, rated ripple current and maximum temperature (Endurance). It may differ by case size (e.g. 6000 / 10000)
+例: 6000 / 10000	e.g. 6000 / 10000
+温度 [℃]	Temperature [℃]
+その寿命が決められている温度。最高使用温度 (105 など)	The temperature at which that life is given. The maximum operating temperature (e.g. 105)
+そのほかの情報	Other information
+そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。値が空の行は、まだ調べていない項目として残ります)	Other information (one per line: "item | value | condition". Rows with an empty value stay as items not looked up yet)
+順方向電圧 | 0.9V | IF = 1A	Forward voltage | 0.9V | IF = 1A
+定格・代表値を、データシートのまま書き写します。条件 (電流や温度) も一緒に書くと、あとで比べやすくなります。部品の一覧でポインタを置いたときに出ます	Copy the ratings and typical values from the datasheet as written. Writing the conditions (current, temperature) too makes later comparison easier. Shown when you point at the part in the parts list
+入力済み: 最大定格 {max_given} / 3 項目、そのほかの情報 {rows_given} 行{}	Entered: max ratings {max_given} / 3 items, other information {rows_given} rows{}
+ (まだ調べていない項目 {rows_open} 行)	 ({rows_open} rows not looked up yet)
+データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう	The datasheet information is empty. You can save it empty, but the rating check and "part choice hints" will not work. Open the datasheet and look things up
+データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)	The datasheet URL is empty. Keeping the source lets you look it up later ("Datasheet URL" above)
+シミュレーションモデル (部品の特性)	Simulation model (part behavior)
+SPICE モデルを貼ると自動入力	Paste a SPICE model to fill in automatically
+メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します	Paste a SPICE model (`.model` / `.subckt`) found on the maker's site or elsewhere as it is, and the type, name and pins are filled in automatically
+.model (素子1つ)	.model (single device)
+.subckt (ICマクロ)	.subckt (IC macro)
+シミュレーションしない部品にします (基板づくりだけに使う部品)	Part without simulation (used only for boards)
+ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル	A model of a single device such as a diode or transistor, written as a `.model` statement
+IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル	A model that describes the inside of an IC as a combination of several devices (`.subckt`)
+ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends	Paste a SPICE model here: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends
+貼り付けると、モデルの種類・名前・端子からフォームを自動で埋めます。ピン表を自分で書いてあるときは、その名前 (A K / C B E など) に合わせて対応づけます	When pasted, the form is filled in from the model's type, name and terminals. If you wrote the pin table yourself, the terminals are matched to those names (A K / C B E, etc.)
+自動入力	Auto-fill
+試し読み	Test load
+ファイルを読む…	Read file…
+貼ったモデルから自動入力: 上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です	Auto-fill from the pasted model: reads the SPICE text above and fills in the type, model name, device letter, pin table and node order. Safe to press as often as you like
+このモデルをシミュレータに読ませて、動くかを保存の前に確かめます。読めない書き方があれば、直し方を出します	Loads this model into the simulator to check that it works before saving. If something cannot be read, shows how to fix it
+SPICEファイルを読む: メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します	Read a SPICE file: loads a .lib / .mod / .sub / .cir / .txt file downloaded from the maker, puts it in the field above and auto-fills
+SPICE モデル	SPICE model
+ファイルを読めませんでした: {e}。読めないときは、テキストエディタで開いて貼り付けてください	Could not read the file: {e}. If it cannot be read, open it in a text editor and paste it
+素子記号	Device letter
+素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S	Letter for the device type: D for diode, Q for bipolar transistor, M for MOSFET, S for switch
+モデル名	Model name
+`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします	The name given to `.model` or `.subckt`. Use the same name as in the text above
+ノード順のピン番号	Pin numbers in node order
+例: A K	e.g. A K
+モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順	List the part's pin numbers in the order of the model's terminals. e.g. A K (anode cathode) for a diode, C B E for a transistor
+モデルの端子とピンの対応は、「③ ピン」の表の「モデルの端子」の列で選びます。	Map model terminals to pins in the "Model terminal" column of the table in "③ Pins".
+このモデルの限界	Limits of this model
+このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)	Limits of this model (one per line. Differences from the real part you write here are shown when the part is chosen)
+例: 温度による変化は扱いません。\n    接合容量は扱いません。	e.g. Does not model changes with temperature.\n    Does not model junction capacitance.
+PDFのピン表を囲んで取り込む・比べる	Select and import / compare the pin table in a PDF
+データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します	Drag around the pin table in the datasheet window. The numbers and names are read, and after you check them they go into this pin table (replace or append). With "Only compare", the pin table is not changed and mismatches are looked for
+データシートの「ピン配置」の表を囲みます	Select the "pin configuration" table in the datasheet
+まとめて貼り付ける (文字で編集)	Paste in bulk (edit as text)
+1行に「番号 名前 [向き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。データシートや回路図からの貼り付けに使います	One "number name [side]" per line. Side is left / right / top / bottom; if omitted, the first half go left and the second half right. Use this to paste from a datasheet or schematic
+ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。NC は未接続のピンです。上の表と同じものです	Write one pin definition per line. e.g. `1 IN+ left` (number name side). NC is an unconnected pin. Same content as the table above
+パッド (ランドパターン)	Pads (land pattern)
+この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。	This part's pads are set one by one (the dimensions below are not used).
+寸法で作り直す	Rebuild from dimensions
+いまのパッドを捨てて、下の寸法 (ピッチ・列間隔など) からパッドを作り直します。ピンの数と並びが合うか、右の絵で確かめてください。標準のフットプリントを選んでも置き換えられます	Discards the current pads and rebuilds them from the dimensions below (pitch, row spacing, etc.). Check in the picture on the right that the pin count and layout match. Choosing a standard footprint also replaces them
+パッケージ	Package
+パッドの並びの作り方です。「寸法で指定」は、データシートの推奨ランドパターンの寸法 (mm) から作ります (パッド数はピン数に合わせます)。「標準の形」は、0603 のチップや DIP・ピンヘッダなど、あらかじめ用意された形をそのまま使います (ピン番号は形ごとのピン名に合わせます)	How the pads are laid out. "By dimensions" builds them from the datasheet's recommended land pattern dimensions (mm) (the pad count matches the pin count). "Standard shape" uses a ready-made shape such as an 0603 chip, DIP or pin header as it is (pin numbers follow each shape's pin names)
+寸法で指定: {}	By dimensions: {}
+寸法で指定 (下の寸法の欄から作ります)	By dimensions (built from the fields below)
+抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品	Chip parts with two leads, such as resistors, capacitors and diodes
+足が左右の2列に並ぶ IC (SOIC、DIP など)	ICs with leads in two rows, left and right (SOIC, DIP, etc.)
+足が四方に並ぶ IC (QFP、QFN など)	ICs with leads on four sides (QFP, QFN, etc.)
+足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)。ランドパターンが無いリード付き部品は、外形寸法から決める欄も出ます	Parts with leads in one row (pin headers, connectors, etc.). For leaded parts without a land pattern, fields to set it from the package dimensions also appear
+標準の形 (選ぶと、下の寸法の代わりにこの形を使います)	Standard shape (when chosen, this shape is used instead of the dimensions below)
+寸法から作るか、用意された標準の形を使うかを選びます	Choose whether to build from dimensions or use a ready-made standard shape
+標準の形を使っているので、下の寸法は使われません (「寸法で指定」を選ぶと、また効きます)	A standard shape is in use, so the dimensions below are not used (choose "By dimensions" to use them again)
+放熱パッド (ICの裏の大きなパッド) を付ける	Add a thermal pad (large pad under the IC)
+QFN・ESOP・SOT-223 などの、裏や中央にある大きなパッド。ここで大きさとピン番号を入れると、パッケージの中心に置きます。ピン表にもそのピンの行を足してください (例: 9 GND)。発注前チェックで、サーマルビアが足りないと注意します	The large pad under or in the middle of QFN, ESOP, SOT-223, etc. Enter its size and pin number here and it is placed at the package center. Also add a row for that pin to the pin table (e.g. 9 GND). The pre-order check warns if there are too few thermal vias
+ピン番号	Pin number
+放熱パッドのピン番号。ピン表にある番号にします (GND につなぐことが多い)	Pin number of the thermal pad. Use a number in the pin table (often connected to GND)
+データシートの推奨ランドパターンの、放熱パッドの幅	Width of the thermal pad in the datasheet's recommended land pattern
+長さ 	Length 
+データシートの推奨ランドパターンの、放熱パッドの長さ	Length of the thermal pad in the datasheet's recommended land pattern
+追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)	Extra pads and holes (USB mounting legs, locating holes, slots)
+固定用の脚・穴について	About mounting legs and holes
+USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます	USB and DC jacks, pin sockets and the like have legs or holes that hold them to the board, besides the signal pins. Add them here and they come with the part when placed, and follow it when you move or rotate the part. They also appear in the drill files
+文字で編集 (貼り付け・コメント)	Edit as text (paste, comments)
+例を足す:	Add an example:
+{tip}\n数字は例です。データシートの推奨ランドパターンの寸法に直してください	{tip}\nThe numbers are examples. Change them to the datasheet's recommended land pattern dimensions
+追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の表と同じものです	Write one extra pad or hole per line. Lines starting with # are ignored. Same content as the table above
+ランドパターンは概算 (データシートの図面と照らし合わせていない)	Land pattern is approximate (not checked against the datasheet drawing)
+パッドの位置と大きさを、データシートの推奨ランドパターンから読み取ったのではなく、見当で入れたときに付けます。付けた部品を置いた基板は、発注の準備のチェックで「ランドパターンが概算の部品があります」と注意されます。図面と照合したら外してください	Turn this on when the pad positions and sizes were entered by guess rather than read from the datasheet's recommended land pattern. Boards with this part get the warning "Some parts have an approximate land pattern" in the order preparation check. Turn it off once you have checked against the drawing
+スルーホール(DIP)	Through-hole (DIP)
+足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)	Makes leads go through holes in the board (DIP). When off, surface mount (soldered on the surface)
+本体 (シルクの外形と高さ)	Body (silkscreen outline and height)
+外形は、基板のシルク (白い線) になります。高さはシルクには出ず、3D表示とケースに入るかの確認に使います	The outline becomes the board's silkscreen (white lines). The height is not shown on the silkscreen; it is used for the 3D view and for checking whether it fits in a case
+データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います	Height of the body above the board from the datasheet's side view. If left at 0, the 3D view guesses from the name. Used for the case fit check and the body height in the 3D view
+側面図の高さ (0 = 未入力)	Side view height (0 = not entered)
+シルクに本体の外形 (上面図の幅×長さ) を描く	Draw the body outline (top view width × length) on the silkscreen
+データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります	Enter the part body size from the datasheet's package dimensions (top view of the three views). The body outline appears on the board's silkscreen (white lines) with an orientation mark (pin 1 dot, cathode bar, +). Areas over pads are avoided automatically. In the 3D view the body is also this width × length × the height above
+四角い本体 (IC、チップ部品)	Rectangular body (ICs, chip parts)
+丸い本体 (ラジアルの電解コンデンサ、LED)	Round body (radial electrolytic capacitors, LEDs)
+中心X	Center X
+中心Y	Center Y
+向きの印	Orientation mark
+印を付けません	No mark
+点	Dot
+本体の角の内側に点を打ちます。ICの1番ピンの印です	Puts a dot inside a corner of the body. The pin 1 mark of an IC
+棒	Bar
+本体の端の近くに線を引きます。ダイオードのカソードや、LEDの平らな側の印です	Draws a line near one end of the body. The mark for a diode's cathode or an LED's flat side
+極性のあるコンデンサの ＋ 側の印です	Mark for the + side of a polarized capacitor
+のピン	pin
+印を付けるピンの番号。空なら最初のパッド (1番ピン)。ダイオードのカソードなら K、電解コンデンサの＋なら＋側のピン番号	Number of the pin to mark. If blank, the first pad (pin 1). K for a diode's cathode, or the + pin's number for an electrolytic capacitor
+隣り合う足の中心どうしの間隔 (mm)。例: 1.27、0.65、2.54	Distance between the centers of neighboring leads (mm). e.g. 1.27, 0.65, 2.54
+はんだ付けする銅の四角 (パッド) の長さ。データシートの推奨ランドパターンの値	Length of the copper rectangle (pad) that is soldered. The value from the datasheet's recommended land pattern
+パッドの幅。足の幅より少し広くします	Pad width. Make it a little wider than the lead
+向かい合う足の列の中心どうしの間隔 (mm)。DIP の 0.3 インチ幅なら 7.62	Distance between the centers of facing lead rows (mm). 7.62 for a 0.3-inch wide DIP
+向かい合うパッドの外側から外側まで (または中心から中心まで) の距離。データシートの推奨寸法を見ます	Distance from outer edge to outer edge (or center to center) of facing pads. See the datasheet's recommended dimensions
+パッド (丸い銅) の直径	Diameter of the pad (round copper)
+スルーホールの穴の直径。足の太さ + 0.2〜0.3mm	Diameter of the through hole. Lead thickness + 0.2–0.3mm
+データシートの推奨ランドパターンの寸法 (mm)	Dimensions of the datasheet's recommended land pattern (mm)
+本体の横の大きさ (データシートの外形寸法の E など)。パッドの列と直角の向きではなく、基板の X 方向です	Horizontal size of the body (e.g. E in the datasheet's package dimensions). This is the board's X direction, not the direction across the pad rows
+丸い本体の直径 (データシートの D)	Diameter of the round body (D in the datasheet)
+本体の縦の大きさ (基板の Y 方向)	Vertical size of the body (the board's Y direction)
+本体の中心の、部品の原点 (パッケージの中心) からのずれ (X)。ふつうは 0	Offset (X) of the body center from the part origin (package center). Usually 0
+本体の中心の、部品の原点 (パッケージの中心) からのずれ (Y)。ふつうは 0	Offset (Y) of the body center from the part origin (package center). Usually 0
+部品名の候補	Part name suggestions
+データシートの題名やファイル名から見つけた型番です。押すと部品名に入ります。違うときは「PDFから選ぶ」で、PDFの上でクリックして入れます	Part numbers found in the datasheet title or file name. Press one to put it in the part name. If they are wrong, use "Pick from PDF" and click on the PDF to enter it
+分類の候補	Category suggestions
+データシートの題名と本文の言葉からの推測です。押すとカテゴリに入ります	A guess from the words in the datasheet title and text. Press one to put it in the category
+2端子チップ	2-terminal chip
+デュアル (SOIC/DIP)	Dual (SOIC/DIP)
+クアッド (QFP)	Quad (QFP)
+1列 (ヘッダ)	Single row (header)
+# crates/app/src/part_form/template.rs
+電源管理	Power management
+ピン {} 本とモデルを作りました。このあと、下の「パッケージ」をデータシートの寸法に合わせ、ピン番号がデータシートの番号になるよう直して保存します	Created {} pins and the model. Next, set "Package" below to the datasheet's dimensions, fix the pin numbers to match the datasheet, and save
+テンプレートからピンとモデルを作る (リチウムイオン充電IC)	Create pins and model from a template (Li-ion charger IC)
+例から始める:	Start from an example:
+TP4056 風	TP4056-like
+リニア式、電流 = 1200 ÷ R_PROG。まず形を見るのに向いています	Linear, current = 1200 ÷ R_PROG. Good for a first look at the shape
+IP2332 風	IP2332-like
+降圧スイッチング式、電流 = 0.35 + 2.75 ÷ R_ISET[kΩ]、入力 4.3〜6V、温度入力あり	Buck switching, current = 0.35 + 2.75 ÷ R_ISET[kΩ], input 4.3–6V, with temperature input
+方式	Type
+リニア	Linear
+降圧スイッチング	Buck switching
+入力から電池へ、電流をそのまま通します。回路は簡単ですが、入力と電池の電圧差が熱になります (TP4056 など)	Passes current from the input straight to the battery. The circuit is simple, but the voltage difference between input and battery becomes heat (TP4056, etc.)
+コイルを使って電圧を下げながら充電します。効率が良く、大きな電流向き。LX 端子に外付けのコイルをつなぎます (TP5100・IP2332 など)	Charges while lowering the voltage with an inductor. Efficient and suited to large currents. An external inductor connects to the LX pin (TP5100, IP2332, etc.)
+セル数	Cells
+電池を直列につなぐ数。満充電電圧 = セル数 × 1セルの電圧	Number of batteries in series. Full-charge voltage = cells × voltage per cell
+1セルの満充電電圧	Full-charge voltage per cell
+リチウムイオンは 4.2V (高電圧タイプ 4.35V)、リン酸鉄リチウムは 3.6V	4.2V for Li-ion (4.35V for high-voltage types), 3.6V for LiFePO4
+リチウムイオン電池の 1 セルの満充電電圧	Full-charge voltage of one Li-ion cell
+3.6V (リン酸鉄)	3.6V (LiFePO4)
+リン酸鉄リチウム電池の 1 セルの満充電電圧	Full-charge voltage of one LiFePO4 cell
+充電電流の決め方	How charge current is set
+決まった値	Fixed value
+抵抗で設定 (PROG 端子)	Set by resistor (PROG pin)
+データシートに電流が1つだけ書かれている場合	When the datasheet gives only one current
+端子につなぐ抵抗で電流を決める場合。データシートの式 I = 定数 + k ÷ R に合わせます	When a resistor on a pin sets the current. Match the datasheet formula I = constant + k ÷ R
+充電電流	Charge current
+充電電流 (A)。データシートに書かれた値を入れます	Charge current (A). Enter the value given in the datasheet
+電流 I[A] =	Current I[A] =
+式の定数の部分 (無ければ 0)。例: IP2332 は 0.35	The constant part of the formula (0 if none). e.g. 0.35 for IP2332
+TP4056 は 1200 (1.2kΩ で 1A)。式が「2.75 ÷ R[kΩ]」なら、Ω に直して k = 2750	1200 for TP4056 (1A with 1.2kΩ). If the formula is "2.75 ÷ R[kΩ]", convert to Ω: k = 2750
+PROG 開放時の電流	Current with PROG open
+PROG 端子に何もつながないときの電流。0 なら充電しません。IP2332 は 2A	Current when nothing is connected to the PROG pin. 0 means no charging. 2A for IP2332
+プリチャージ: 1セルがこの電圧未満	Precharge: when a cell is below
+空に近い電池は、小さな電流でそっと充電します。0 ならプリチャージなし	A nearly empty battery is charged gently with a small current. 0 means no precharge
+電流の割合	Current ratio
+0.1 = 設定電流の 10%	0.1 = 10% of the set current
+終了電流の割合	Termination current ratio
+定電圧のあと、電流がこの割合まで減ったら満充電とみなします (0.1 = 10%)。状態表示の切替に使います	After constant voltage, the battery counts as full when the current falls to this ratio (0.1 = 10%). Used to switch the status output
+入力電圧	Input voltage
+下限 	Min 
+これを下回ると動きません (低電圧ロックアウト)	Does not work below this (undervoltage lockout)
+上限 	Max 
+これを超えると止まります (過電圧保護)。0 なら上限なし	Stops above this (overvoltage protection). 0 means no limit
+電池より 	At least 
+ V 以上高い	 V above the battery
+入力が電池の電圧よりこれだけ高くないと充電できません	Charging needs the input to be at least this much above the battery voltage
+温度入力 (NTC 端子)	Temperature input (NTC pin)
+電池の温度を見る端子。サーミスタ (NTC) をつなぎ、温度が低すぎる・高すぎるときは充電を止めます	Pin that watches the battery temperature. Connect a thermistor (NTC); charging stops when the temperature is too low or too high
+正常な電圧 	Normal voltage 
+ V から	 V to
+NTC 端子の電圧がこの値より低いと、温度が高すぎる (または低すぎる) として充電を止めます	If the NTC pin voltage is below this, the temperature is taken as too high (or too low) and charging stops
+ V まで	 V
+NTC に 100µA を流したときの電圧がこの範囲なら充電します (電圧 = 100µA × NTC の抵抗)	Charges when the voltage with 100µA through the NTC is in this range (voltage = 100µA × NTC resistance)
+状態出力 (CHRG / STDBY)	Status outputs (CHRG / STDBY)
+充電中は CHRG、満充電は STDBY が Low になる出力 (LED をつなぐ端子)	Outputs that go Low: CHRG while charging, STDBY when full (pins for LEDs)
+ピンとモデルを作る	Create pins and model
+上の数字から、ピンの一覧とシミュレーションモデルを作って、下の欄に書き込みます (すでにある内容は置き換わります)	Creates the pin list and simulation model from the numbers above and writes them into the fields below (existing content is replaced)
+データシートの数字を入れるだけで、充電ICの「外から見た動き」のモデルを作ります。市販のSPICEモデルが無いICに使えます。数字は、データシートの「電気的特性」の表から拾います	Just enter the datasheet values to make a model of how the charger IC "behaves from outside". Useful for ICs without a commercial SPICE model. Take the numbers from the datasheet's "Electrical Characteristics" table
+# crates/app/src/part_form/thru.rs
+{label}を、0 より大きい数 (mm) で入れてください (例: 0.864)	Enter {label} as a number greater than 0 (mm) (e.g. 0.864)
+リード径	Lead diameter
+リードの間隔	Lead spacing
+本体の径	Body diameter
+リード付き部品: 外形寸法から穴とピッチを決める (推奨ランドパターンが無いとき)	Leaded parts: set holes and pitch from package dimensions (when there is no recommended land pattern)
+外形寸法から穴とパッドを決めます	Sets holes and pads from the package dimensions
+ダイオードや抵抗のデータシートには、推奨ランドパターンが無く、外形寸法 (本体の大きさとリードの太さ) だけが載っていることがよくあります。その数字から、穴径・パッド径・穴の間隔を決めます	Datasheets for diodes and resistors often have no recommended land pattern, only package dimensions (body size and lead thickness). From those numbers, the hole diameter, pad diameter and hole spacing are set
+軸方向 (ダイオード・抵抗)	Axial (diodes, resistors)
+ラジアル (LED・電解)	Radial (LEDs, electrolytics)
+本体の両端からリードが出ている形。基板に寝かせて、リードを折り曲げて挿します	Leads come out of both ends of the body. Lay it on the board and bend the leads to insert them
+リードが本体の同じ側から出ている形 (LED・電解コンデンサ)。リードの間隔は、データシートにあります	Leads come out of the same side of the body (LEDs, electrolytic capacitors). The lead spacing is in the datasheet
+DO-41 の例 (1N4007)	DO-41 example (1N4007)
+1N4007 のデータシート (Diodes Inc.) の外形寸法の最大値を入れます。リード径 0.864、本体 5.21 × 2.72	Enters the maximum package dimensions from the 1N4007 datasheet (Diodes Inc.). Lead diameter 0.864, body 5.21 × 2.72
+リード径 (最大)	Lead diameter (max)
+データシートの外形図の、リードの直径 (Lead Diameter) の最大値。1N4007 は 0.71〜0.864 なので 0.864	Maximum lead diameter in the datasheet's package drawing. 1N4007 is 0.71–0.864, so 0.864
+データシートの寸法表の、リードの間隔 (Lead Spacing、F)。電解コンデンサは 2.0 / 2.5 / 3.5 / 5.0 など	Lead spacing (F) in the datasheet's dimension table. For electrolytic capacitors 2.0 / 2.5 / 3.5 / 5.0, etc.
+本体の長さ (最大)	Body length (max)
+外形図の、リードに沿った本体の長さ。1N4007 は 4.06〜5.21 なので 5.21	Body length along the leads in the package drawing. 1N4007 is 4.06–5.21, so 5.21
+本体の径 (最大)	Body diameter (max)
+外形図の、本体の直径。1N4007 は 2.00〜2.72 なので 2.72。基板に寝かせたときの高さにもなります	Body diameter in the package drawing. 1N4007 is 2.00–2.72, so 2.72. It is also the height when laid on the board
+この寸法を入れる	Enter these dimensions
+穴径・パッド径・ピッチを下の欄に入れます。軸方向なら、本体の外形 (長さ × 径) と高さも入ります	Puts the hole diameter, pad diameter and pitch in the fields below. For axial parts, the body outline (length × diameter) and height are entered too
+穴径 {:.2}mm は、リード径 {lead:.3}mm に対して余裕が {:.2}mm しかありません。リードが入らなかったり、はんだが流れなかったりします (目安は リード径 + 0.25mm)	Hole diameter {:.2}mm leaves only {:.2}mm of room over the lead diameter {lead:.3}mm. The lead may not fit, or solder may not flow (aim for lead diameter + 0.25mm)
+# crates/app/src/part_form/trial.rs
+「.func」(自作関数) は読み飛ばされます。関数を使う式は、式を直接書き下してください	".func" (user-defined functions) is skipped. Write out expressions that use functions directly
+「{}」で別ファイルを読む書き方は使えません。そのファイルの中身も貼ってください	Reading another file with "{}" is not supported. Paste that file's content too
+素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G F H D Q J M S B と、X (入れ子) です	Device {c} ("{}") is not supported. Supported are R C L V I E G F H D Q J M S B, and X (nested)
+このモデルは暗号化されていて、ほかのシミュレータでは読めません (メーカーが中身を公開していないモデルです)。メーカーのサイトに、暗号化されていない版 (ngspice 用・LTspice 用の別ファイル) がないか探すか、データシートの数値から作れる部品 (かんたん作成) を使ってください	This model is encrypted and cannot be read by other simulators (the maker does not publish its content). Look on the maker's site for an unencrypted version (a separate file for ngspice or LTspice), or use a part built from datasheet values (Quick create)
+モデルの文が空です。SPICE モデルを貼ってから押してください	The model text is empty. Paste a SPICE model before pressing this
+「ノード順のピン番号」が空です。モデルの端子の数だけ、ピン番号を並べてください (「貼ったモデルから自動入力」で入ります)	"Pin numbers in node order" is empty. List as many pin numbers as the model has terminals ("Auto-fill from the pasted model" fills them in)
+\n心当たり: {}	\nPossible cause: {}
+このモデルは読めませんでした: {m}	Could not read this model: {m}
+素子モデルのパラメータのうち、使わないものがあります ({})。雑音 (KF)・基板容量・バイアスで変わる遷移時間・MOSFET の LEVEL 2 以上の式などで、実物とのずれが出ます	Some device model parameters are not used ({}). Noise (KF), substrate capacitance, bias-dependent transit time, MOSFET LEVEL 2 and higher equations, etc. may differ from the real part
+電源をつながない状態の動作点が求まりませんでした。電源が必要なモデルでは普通ですが、回路に置いたら動作点を計算して確かめてください	The operating point without a supply could not be found. This is normal for models that need power; place it in a circuit and check the operating point
+読めました。端子 {} 本、電源なしの動作点まで計算できました。回路に置いて、電源をつないで動きを確かめましょう	Read successfully. {} terminals; the operating point without a supply was calculated. Place it in a circuit, connect a supply and check how it works
+読めましたが、気になる点があります: {}	Read, but there are concerns: {}
+# crates/app/src/part_form/vendor.rs
+{label}「{t}」を、0 より大きい数で入力してください (例: 10u / 100n / 22p)	Enter {label} "{t}" as a number greater than 0 (e.g. 10u / 100n / 22p)
+{n} 個のモデルを読み込みました	Loaded {n} models
+耐圧「{t}」を V の数で入力してください (例: 16)	Enter the voltage rating "{t}" as a number in V (e.g. 16)
+容量 (下限)	Capacitance (min)
+容量 (上限)	Capacitance (max)
+モデルのzipを読み込んでください	Load a model zip
+{} を入れました。このモデルには容量・耐圧の情報がないので、「値」と「定格」は自分で入れてください。モデルを入れ直してしまうので、このあと下の「部品を作る」は押さずに、そのまま保存してください	Entered {}. This model has no capacitance or voltage rating information, so enter "Value" and "Ratings" yourself. Do not press "Create part" below after this, as it would re-enter the model; just save
+{} を入れました (定格電圧 {}V も「定格」に入れました)。パッケージは、データシートの寸法を「パッケージ」で入れてください。モデルを入れ直してしまうので、このあと下の「部品を作る」は押さずに、そのまま保存してください	Entered {} (the rated voltage {}V was also put in "Ratings"). For the package, enter the datasheet's dimensions in "Package". Do not press "Create part" below after this, as it would re-enter the model; just save
+フットプリントは {fp} にしました	Footprint set to {fp}
+{} 用の組み込みフットプリントはまだ無いので、「パッケージ」で寸法を入れてください	There is no built-in footprint for {} yet, so enter the dimensions in "Package"
+{} を入れました (定格電圧 {}V も「定格」に入れました)。{footprint}。モデルを入れ直してしまうので、このあと下の「部品を作る」は押さずに、そのまま保存してください	Entered {} (the rated voltage {}V was also put in "Ratings"). {footprint}. Do not press "Create part" below after this, as it would re-enter the model; just save
+メーカーのSPICEモデル (zip) から選ぶ	Choose from maker SPICE models (zip)
+村田などが公開しているモデルを、型番ごとに使えます	Use models published by Murata and others by part number
+メーカーのサイトからダウンロードしたSPICEモデルの zip (例: 村田の「SPICE netlist」の GRM シリーズ) を選ぶと、型番で探して、ESR・ESL まで入った等価回路の部品を作れます。村田のモデルは、容量・サイズ・耐圧でも絞れます。zip はメーカーの利用規約で再配布できないため、このソフトには入っていません。場所だけを覚えます。村田のモデルは 25℃・直流電圧 0V の値で、直流電圧で容量が下がる性質は入っていません	Choose a SPICE model zip downloaded from the maker's site (e.g. Murata's "SPICE netlist" GRM series) to search by part number and make an equivalent-circuit part including ESR and ESL. Murata models can also be filtered by capacitance, size and voltage rating. The maker's terms do not allow redistributing the zip, so it is not included in this software; only its location is remembered. Murata models are values at 25℃ and 0V DC, and do not include the capacitance drop with DC voltage
+外す	Remove
+この zip を一覧から外します (ファイルは消えません)	Removes this zip from the list (the file is not deleted)
+zip を追加…	Add zip…
+メーカーの SPICE モデルの zip を選びます。場所は設定に保存され、次からは自動で読み込みます	Choose a maker's SPICE model zip. Its location is saved in the settings and loaded automatically from then on
+メーカーの SPICE モデル (zip)	Maker SPICE models (zip)
+zip はメーカーの「SPICE」「netlist」のページからダウンロードできます (規約への同意が要ります)	Zips can be downloaded from the maker's "SPICE" or "netlist" page (you need to agree to the terms)
+型番の一部	Part of part number
+例: GRM188R6 のように、型番の一部で絞ります。空白で区切ると、全部の語を含むものだけになります	Filter by part of the part number, e.g. GRM188R6. Separate words with spaces to show only those containing all of them
+サイズ (インチ)	Size (inch)
+0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田・日本ケミコン・ニチコン。サイズ・温度特性は村田だけ) だけです	0603 is 1608 (1.6×0.8mm). You can also search by the metric number (1608). Filtering by size, temperature characteristic, capacitance and voltage rating works only for models whose content can be read (currently Murata, Nippon Chemi-Con and Nichicon; size and temperature characteristic only for Murata)
+温度特性	Temp. characteristic
+X5R・X7R は容量が大きく、直流電圧で容量が下がります。C0G は容量が小さい代わりに安定です	X5R and X7R have large capacitance that drops with DC voltage. C0G has small capacitance but is stable
+下限と上限。同じ値を入れると、その容量だけ探します (例: 10u と 10u)	Min and max. Enter the same value to search for that capacitance only (e.g. 10u and 10u)
+下限 10u	Min 10u
+上限 10u	Max 10u
+耐圧 (V 以上)	Voltage rating (V or more)
+定格電圧がこの値以上のものだけ。セラミックは電圧が高いほど容量が下がりにくいので、使う電圧の2倍ほどが目安です	Only parts rated at this voltage or more. Ceramics lose less capacitance at higher ratings, so about twice the working voltage is a good guide
+{SHOWN} 件以上あります。絞り込んでください	More than {SHOWN} results. Narrow the search
+{}  ({}端子)	{}  ({} terminals)
+クリックすると、この部品の記号・モデルをフォームに入れます	Click to put this part's symbol and model in the form
+端子が2個のモデルだけ選べます (ここはコンデンサ・抵抗・コイルなどの2端子部品の作成です)	Only 2-terminal models can be chosen (this creates 2-terminal parts such as capacitors, resistors and inductors)
+# crates/app/src/part_form/zchart.rs
+寄生インダクタンス	Parasitic inductance
+インピーダンスの表 {}行目: 「周波数 インピーダンス」の形で入力してください (例: 1M 0.05)	Impedance table line {}: enter it as "frequency impedance" (e.g. 1M 0.05)
+{label}「{t}」を ppm の数で入力してください (例: 100 / -30)	Enter {label} "{t}" as a number in ppm (e.g. 100 / -30)
+温度の表 {}行目: 「温度 変化率(%)」の形で入力してください (例: 85 -7)	Temperature table line {}: enter it as "temperature change(%)" (e.g. 85 -7)
+抵抗値	Resistance
+先に上の「値」に{what}を入れてください (表の値。DCバイアス時の表ならそのときの値)	First enter {what} in "Value" above (the table's value; for a DC-bias table, the value under that bias)
+{na} = {sa}{ua}、{nb} = {sb}{ub} と求めました (共振 {}Hz、表との差は最大 {err:.0}%)。下の絵で、点と曲線が重なっているか確かめてください。「部品を作る」を押すとモデルに入ります	Found {na} = {sa}{ua}, {nb} = {sb}{ub} (resonance {}Hz, max difference from the table {err:.0}%). Check in the picture below that the points and curve overlap. Press "Create part" to put them in the model
+\n注意: {w}	\nNote: {w}
+温度係数 TC1 = {}ppm/℃、TC2 = {}ppm/℃² と求めました (表との差は最大 {err:.1}ポイント)	Found temperature coefficients TC1 = {}ppm/℃, TC2 = {}ppm/℃² (max difference from the table {err:.1} points)
+\n{t:.0}℃: 表 {p:.1}% / モデル {model:.1}%	\n{t:.0}℃: table {p:.1}% / model {model:.1}%
+\n注意: 2 次式では、表の曲線の形をうまく写せません。実物の曲線は、温度によっては大きく曲がります。使う温度の範囲の点だけで求め直すと、近くなります	\nNote: a quadratic cannot follow the table's curve shape well. Real curves can bend a lot at some temperatures. Fitting again with only the points in your temperature range gets closer
+「値」を入れるとグラフが出ます	Enter "Value" to see the graph
+上の「値」を入れると、表の点とモデルの曲線を重ねた絵が出ます	Enter "Value" above to see the table points and the model curve drawn together
+谷 (一番低い所) の深さ。小さいほど谷が深くなります	Depth of the dip (lowest point). Smaller makes the dip deeper
+谷より高い周波数での立ち上がり。大きいほど、共振が低い周波数になります	Rise at frequencies above the dip. Larger moves the resonance to a lower frequency
+低い周波数でのインピーダンスの下限。大きいほど、低い所が持ち上がります	Lower limit of impedance at low frequencies. Larger raises the low end
+山 (共振) の位置と高さ。大きいほど、共振が低い周波数になります	Position and height of the peak (resonance). Larger moves the resonance to a lower frequency
+高い周波数でインピーダンスが上がる量。大きいほど、早く上がり始めます	How much impedance rises at high frequencies. Larger makes it start rising earlier
+高い周波数でインピーダンスが下がる量。大きいほど、早く下がり始めます	How much impedance falls at high frequencies. Larger makes it start falling earlier
+温度による値の変化 (温度スイープで確かめられます)	Value change with temperature (can be checked with a temperature sweep)
+データシートの TCR (温度係数、ppm/℃) を入れます。金属皮膜抵抗は ±100 ほど、厚膜チップ抵抗は ±100〜200 ほどです。空なら温度で変わりません	Enter the datasheet's TCR (temperature coefficient, ppm/℃). About ±100 for metal film resistors, ±100–200 for thick film chip resistors. If blank, it does not change with temperature
+温度特性のグラフ (縦軸が容量の変化率 %) から、温度と変化率を読んで入れます。C0G は ±30ppm/℃ ほどでほぼ一定、X7R・X5R は温度で数 % 〜 十数 % 動きます。空なら温度で変わりません	Read temperatures and change rates from the temperature characteristic graph (vertical axis: capacitance change %) and enter them. C0G is nearly constant at about ±30ppm/℃; X7R and X5R move from a few % to over 10% with temperature. If blank, it does not change with temperature
+インダクタンスの温度係数 (ppm/℃)。DCR は銅の係数 (1℃ で約 0.4%) が自動で入ります。空ならインダクタンスは温度で変わりません	Temperature coefficient of inductance (ppm/℃). The DCR gets copper's coefficient (about 0.4% per 1℃) automatically. If blank, inductance does not change with temperature
+1℃ あたりの変化 (ppm = 100万分の 1)。+100 なら、温度が 100℃ 上がると 1% 増えます。マイナスもあります	Change per 1℃ (ppm = parts per million). +100 means a 1% increase when the temperature rises 100℃. Can be negative
+温度の 2 乗にかかる係数。曲がりを表すとき以外は空で構いません	Coefficient on the square of temperature. Can be left blank unless you need to show a curve
+温度特性の表	Temperature characteristic table
+温度特性の表 (グラフから読んだ「温度 変化率(%)」を 1 行ずつ。27℃ を 0% とします)	Temperature characteristic table ("temperature change(%)" read from the graph, one per line; 27℃ is 0%)
+例: 125 -9 は、125℃ で容量が 9% 減る、という意味です。27℃ に近い点は要りません。点が 1 つなら直線、2 つ以上なら曲がりも合わせます	e.g. 125 -9 means the capacitance drops 9% at 125℃. Points near 27℃ are not needed. One point gives a straight line; two or more also fit the curve
+表から温度係数を求める	Find temperature coefficients from table
+表に合うように、TC1 と TC2 を計算して上の欄に入れます	Calculates TC1 and TC2 to fit the table and puts them in the fields above
+飽和の表 {}行目: 「電流 変化率(%)」の形で入力してください (例: 3 -30)	Saturation table line {}: enter it as "current change(%)" (e.g. 3 -30)
+飽和電流 Isat = {}A (L が 30% 下がる電流) と求めました (表との差は最大 {err:.1}ポイント)	Found saturation current Isat = {}A (current where L drops 30%) (max difference from the table {err:.1} points)
+\n{}A: 表 {p:.0}% / モデル {model:.0}%	\n{}A: table {p:.0}% / model {model:.0}%
+\n注意: このモデルの曲線の形と、表の形が合っていません。使う電流の範囲 (Isat より少し大きいところまで) の点だけで、求め直してみてください	\nNote: this model's curve shape does not match the table's. Try fitting again with only the points in your current range (up to a little above Isat)
+磁気飽和 (電流が大きいとインダクタンスが下がる)	Magnetic saturation (inductance drops at high current)
+電流で下がる特性 (飽和)	Drop with current (saturation)
+電源用のコイルでは大事な特性です。電流が Isat を超えると、インダクタンスが急に下がり、電流が急に増えます。データシートの Isat (インダクタンスが 30% 下がる電流) か、「インダクタンス - 直流重畳電流」のグラフから読みます。空なら飽和しません	An important property for power inductors. When the current exceeds Isat, the inductance drops sharply and the current rises sharply. Read it from the datasheet's Isat (current where inductance drops 30%) or the "inductance vs DC bias current" graph. If blank, there is no saturation
+インダクタンスが規定の割合だけ下がる電流 (Saturation Current)。データシートでは 30% 低下が多いです	The current at which inductance drops by a given ratio (Saturation Current). Datasheets often use a 30% drop
+そのときの低下 [%]	Drop at that point [%]
+Isat で、インダクタンスが何 % 下がるか。30 が多いですが、20 や 10 のデータシートもあります。空なら 30	How many % the inductance drops at Isat. Usually 30, but some datasheets use 20 or 10. If blank, 30
+インダクタンスと電流の表	Inductance vs current table
+インダクタンスと電流の表 (グラフから読んだ「電流 変化率(%)」を 1 行ずつ。マイナスで下がる)	Inductance vs current table ("current change(%)" read from the graph, one per line; negative means a drop)
+例: 3 -30 は、3A で L が 30% 下がる、という意味です。Isat より少し大きい電流までの点があると確かです	e.g. 3 -30 means L drops 30% at 3A. Points up to a little above Isat make it reliable
+表から Isat を求める	Find Isat from table
+表に合うように、Isat (30% 低下) を計算して上の欄に入れます	Calculates Isat (30% drop) to fit the table and puts it in the field above

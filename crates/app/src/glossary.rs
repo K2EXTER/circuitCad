@@ -357,17 +357,17 @@ impl GlossaryWindow {
         }
         let mut open = true;
         let mut start = None;
-        egui::Window::new("用語集・索引").open(&mut open).default_size([760.0, 520.0]).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("用語集・索引")).open(&mut open).default_size([760.0, 520.0]).show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("さがす:");
-                ui.add(egui::TextEdit::singleline(&mut self.query).hint_text("名前・読み・別名 (例: ぶんあつ、dB、ADC)").desired_width(300.0))
-                    .on_hover_text("ひらがな・カタカナ・英字のどれでも探せます");
-                if ui.small_button("消す").clicked() {
+                ui.label(i18n::tr("さがす:"));
+                ui.add(egui::TextEdit::singleline(&mut self.query).hint_text(i18n::tr("名前・読み・別名 (例: ぶんあつ、dB、ADC)")).desired_width(300.0))
+                    .on_hover_text(i18n::tr("ひらがな・カタカナ・英字のどれでも探せます"));
+                if ui.small_button(i18n::tr("消す")).clicked() {
                     self.query.clear();
                 }
             });
             let found = sorted(search(&self.query));
-            ui.small(format!("{} 件 (全 {} 語)。語を押すと、説明と、その語が出てくるレッスンが右に出ます", found.len(), TERMS.len()));
+            ui.small(i18n::trf!("{} 件 (全 {} 語)。語を押すと、説明と、その語が出てくるレッスンが右に出ます", found.len(), TERMS.len()));
             ui.separator();
             ui.columns(2, |cols| {
                 egui::ScrollArea::vertical().id_salt("glossary_list").show(&mut cols[0], |ui| {
@@ -389,16 +389,16 @@ impl GlossaryWindow {
                         }
                     }
                     if found.is_empty() {
-                        ui.label("見つかりませんでした。別の書き方 (ひらがな・英字) でも試してください");
+                        ui.label(i18n::tr("見つかりませんでした。別の書き方 (ひらがな・英字) でも試してください"));
                     }
                 });
                 egui::ScrollArea::vertical().id_salt("glossary_detail").show(&mut cols[1], |ui| {
                     let Some(term) = self.selected.and_then(|n| TERMS.iter().find(|t| t.name == n)) else {
-                        ui.label("左の一覧から、語を選んでください。");
+                        ui.label(i18n::tr("左の一覧から、語を選んでください。"));
                         return;
                     };
                     ui.heading(term.name);
-                    ui.small(format!(
+                    ui.small(i18n::trf!(
                         "読み: {}　{}",
                         term.reading,
                         match term.kind {
@@ -408,18 +408,18 @@ impl GlossaryWindow {
                         }
                     ));
                     if !term.aliases.is_empty() {
-                        ui.small(format!("別名: {}", term.aliases.join("、")));
+                        ui.small(i18n::trf!("別名: {}", term.aliases.join("、")));
                     }
                     ui.add_space(4.0);
                     ui.label(term.short);
                     ui.add_space(8.0);
                     let lessons = lessons_of(term);
                     if lessons.is_empty() {
-                        ui.small("この語が出てくるレッスンは、まだありません。");
+                        ui.small(i18n::tr("この語が出てくるレッスンは、まだありません。"));
                     } else {
                         crate::widgets::section_heading(ui, "この語が出てくるレッスン");
                         for (target, title) in lessons {
-                            if ui.button(title).on_hover_text("このレッスンを始めます").clicked() {
+                            if ui.button(title).on_hover_text(i18n::tr("このレッスンを始めます")).clicked() {
                                 start = Some(target);
                             }
                         }

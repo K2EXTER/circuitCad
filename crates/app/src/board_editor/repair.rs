@@ -77,20 +77,20 @@ impl BoardEditor {
     pub(super) fn repair_ui(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         let Some(r) = self.repair.as_ref() else {
-            if ui.button("故障を仕込む").on_hover_text("いまの基板に、故障を 1 つ仕込みます。何が壊れたかは、先に見せません (症状だけが出ます)。元に戻す (Ctrl+Z) で取り消せます").clicked() {
+            if ui.button(i18n::tr("故障を仕込む")).on_hover_text(i18n::tr("いまの基板に、故障を 1 つ仕込みます。何が壊れたかは、先に見せません (症状だけが出ます)。元に戻す (Ctrl+Z) で取り消せます")).clicked() {
                 self.repair_inject(Self::fresh_seed());
             }
             return;
         };
         let (symptom, last, base, fixed, revealed) = (r.injected.symptom.clone(), r.last, r.baseline, r.fixed, r.revealed);
         let cause = r.injected.cause.clone();
-        ui.label(egui::RichText::new("症状 (実機で見えること)").strong());
+        ui.label(egui::RichText::new(i18n::tr("症状 (実機で見えること)")).strong());
         ui.label(symptom);
-        ui.small("点検の結果");
+        ui.small(i18n::tr("点検の結果"));
         egui::Grid::new("repair_health").num_columns(3).spacing([14.0, 2.0]).show(ui, |ui| {
             ui.small("");
-            ui.small("いま");
-            ui.small("故障の前");
+            ui.small(i18n::tr("いま"));
+            ui.small(i18n::tr("故障の前"));
             ui.end_row();
             for (name, now, was) in [("DRC の違反", last.drc, base.drc), ("未配線", last.unrouted, base.unrouted), ("基板の外の部品", last.outside, base.outside), ("バイパスが遠い IC", last.bypass, base.bypass)] {
                 ui.small(name);
@@ -101,20 +101,20 @@ impl BoardEditor {
             }
         });
         if fixed {
-            ui.colored_label(crate::theme::OK, "直りました! 点検の結果は、故障の前と同じです");
+            ui.colored_label(crate::theme::OK, i18n::tr("直りました! 点検の結果は、故障の前と同じです"));
         }
         if revealed || fixed {
             crate::widgets::section_heading(ui, "原因と直し方");
             ui.label(cause);
         }
         ui.horizontal_wrapped(|ui| {
-            if ui.button("直ったか確かめる").on_hover_text("点検 (DRC・未配線・基板の外・バイパス) を、もう一度します。故障の前と同じか、それ以下なら、直ったことになります").clicked() {
+            if ui.button(i18n::tr("直ったか確かめる")).on_hover_text(i18n::tr("点検 (DRC・未配線・基板の外・バイパス) を、もう一度します。故障の前と同じか、それ以下なら、直ったことになります")).clicked() {
                 self.repair_check();
             }
-            if !revealed && ui.button("答えを見る").on_hover_text("原因と場所を出します。分からないときに。見ても、直す練習にはなります").clicked() {
+            if !revealed && ui.button(i18n::tr("答えを見る")).on_hover_text(i18n::tr("原因と場所を出します。分からないときに。見ても、直す練習にはなります")).clicked() {
                 self.repair_reveal();
             }
-            if ui.button("別の故障で練習").on_hover_text("基板を故障の前に戻して、別の故障を仕込みます").clicked() {
+            if ui.button(i18n::tr("別の故障で練習")).on_hover_text(i18n::tr("基板を故障の前に戻して、別の故障を仕込みます")).clicked() {
                 self.repair_again();
             }
         });

@@ -7,15 +7,15 @@ use pcb_core::meander::{self, MeanderStyle};
 impl BoardEditor {
     pub(super) fn panel_lengths(&mut self, ui: &mut egui::Ui) {
         let nets: Vec<(String, f64)> = self.board_nets().into_iter().map(|n| (n.clone(), meander::length_of(&self.board, &n))).filter(|(_, l)| *l > 0.0).collect();
-        egui::CollapsingHeader::new(format!("長さ合わせ (蛇行) ({}) (?)", self.meander_nets.len())).id_salt("meander").default_open(false).show(ui, |ui| {
+        egui::CollapsingHeader::new(i18n::trf!("長さ合わせ (蛇行) ({}) (?)", self.meander_nets.len())).id_salt("meander").default_open(false).show(ui, |ui| {
             if nets.is_empty() {
-                ui.small("配線されたネットがありません");
+                ui.small(i18n::tr("配線されたネットがありません"));
                 return;
             }
-            ui.small("そろえるネットを選びます (配線の長さ):");
+            ui.small(i18n::tr("そろえるネットを選びます (配線の長さ):"));
             for (n, l) in &nets {
                 let mut on = self.meander_nets.contains(n);
-                if ui.checkbox(&mut on, format!("{n}  {l:.2} mm")).on_hover_text("チェックしたネットの長さをそろえます。長さは、そのネットの配線 (ビアは除く) の長さの合計です").changed() {
+                if ui.checkbox(&mut on, format!("{n}  {l:.2} mm")).on_hover_text(i18n::tr("チェックしたネットの長さをそろえます。長さは、そのネットの配線 (ビアは除く) の長さの合計です")).changed() {
                     if on {
                         self.meander_nets.push(n.clone());
                     } else {
@@ -24,23 +24,23 @@ impl BoardEditor {
                 }
             }
             ui.horizontal(|ui| {
-                ui.label("角の形");
-                ui.selectable_value(&mut self.meander.style, MeanderStyle::Square, "四角").on_hover_text("蛇行の角を直角にします。いちばん単純で、同じ長さを少ない場所で稼げます");
-                ui.selectable_value(&mut self.meander.style, MeanderStyle::Chamfer, "面取り").on_hover_text("角を 45° で切り落とします。直角がなくなり、きれいで製造しやすい形です");
-                ui.selectable_value(&mut self.meander.style, MeanderStyle::Round, "丸").on_hover_text("角を丸めます。高周波や音響の線で、反射や角の電界集中を減らしたいときに向きます (長さを稼ぐのに、少し広い場所が要ります)");
+                ui.label(i18n::tr("角の形"));
+                ui.selectable_value(&mut self.meander.style, MeanderStyle::Square, i18n::tr("四角")).on_hover_text(i18n::tr("蛇行の角を直角にします。いちばん単純で、同じ長さを少ない場所で稼げます"));
+                ui.selectable_value(&mut self.meander.style, MeanderStyle::Chamfer, i18n::tr("面取り")).on_hover_text(i18n::tr("角を 45° で切り落とします。直角がなくなり、きれいで製造しやすい形です"));
+                ui.selectable_value(&mut self.meander.style, MeanderStyle::Round, i18n::tr("丸")).on_hover_text(i18n::tr("角を丸めます。高周波や音響の線で、反射や角の電界集中を減らしたいときに向きます (長さを稼ぐのに、少し広い場所が要ります)"));
             });
-            ui.add(egui::DragValue::new(&mut self.meander.height_max).speed(0.1).range(0.5..=10.0).prefix("山の高さ ").suffix(" mm")).on_hover_text("蛇行の山の高さの目安 (上限)。大きいほど山の数が減りますが、周りの配線とぶつかりやすくなります");
+            ui.add(egui::DragValue::new(&mut self.meander.height_max).speed(0.1).range(0.5..=10.0).prefix(i18n::tr("山の高さ ")).suffix(" mm")).on_hover_text(i18n::tr("蛇行の山の高さの目安 (上限)。大きいほど山の数が減りますが、周りの配線とぶつかりやすくなります"));
             let picked: Vec<String> = nets.iter().map(|(n, _)| n.clone()).filter(|n| self.meander_nets.contains(n)).collect();
-            if ui.add_enabled(picked.len() >= 2, egui::Button::new("選んだネットを一番長いものに合わせる")).on_hover_text("選んだネットのうち、いちばん長いものに、ほかのネットの長さをそろえます。短いネットの、まっすぐな長い配線に蛇行を入れます。ルール違反になる所には入れません。元に戻すで取り消せます").clicked() {
+            if ui.add_enabled(picked.len() >= 2, egui::Button::new(i18n::tr("選んだネットを一番長いものに合わせる"))).on_hover_text(i18n::tr("選んだネットのうち、いちばん長いものに、ほかのネットの長さをそろえます。短いネットの、まっすぐな長い配線に蛇行を入れます。ルール違反になる所には入れません。元に戻すで取り消せます")).clicked() {
                 self.match_lengths(&picked, None);
             }
             ui.horizontal(|ui| {
-                ui.add(egui::DragValue::new(&mut self.meander_target).speed(0.5).range(0.0..=1000.0).prefix("目標 ").suffix(" mm"));
-                if ui.add_enabled(!picked.is_empty() && self.meander_target > 0.0, egui::Button::new("指定の長さに合わせる")).on_hover_text("選んだネットすべてを、指定した長さにします (いちばん長いネットがそれより長いときは、いちばん長いものに合わせます)").clicked() {
+                ui.add(egui::DragValue::new(&mut self.meander_target).speed(0.5).range(0.0..=1000.0).prefix(i18n::tr("目標 ")).suffix(" mm"));
+                if ui.add_enabled(!picked.is_empty() && self.meander_target > 0.0, egui::Button::new(i18n::tr("指定の長さに合わせる"))).on_hover_text(i18n::tr("選んだネットすべてを、指定した長さにします (いちばん長いネットがそれより長いときは、いちばん長いものに合わせます)")).clicked() {
                     self.match_lengths(&picked, Some(self.meander_target));
                 }
             });
-        }).header_response.on_hover_text("同時に届いてほしい線 (バス、クロックとデータなど) の長さを、配線の一部に蛇行を入れてそろえます");
+        }).header_response.on_hover_text(i18n::tr("同時に届いてほしい線 (バス、クロックとデータなど) の長さを、配線の一部に蛇行を入れてそろえます"));
     }
 
     pub(super) fn match_lengths(&mut self, nets: &[String], target: Option<f64>) {

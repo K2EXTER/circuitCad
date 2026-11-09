@@ -86,16 +86,16 @@ impl SchEditor {
             return;
         }
         let mut on = self.label_port.is_some();
-        if ui.checkbox(&mut on, "ポートにする (子シートの出入口)").on_hover_text("オンにすると、このシートの出入口 (ポート) を置きます。このシートを記号にして別のシートに置くと、ポートが記号のピンになります (シートのタブを右クリック → 記号として置く)。同じシートを何回も使えて、直すのは1か所です").changed() {
+        if ui.checkbox(&mut on, i18n::tr("ポートにする (子シートの出入口)")).on_hover_text(i18n::tr("オンにすると、このシートの出入口 (ポート) を置きます。このシートを記号にして別のシートに置くと、ポートが記号のピンになります (シートのタブを右クリック → 記号として置く)。同じシートを何回も使えて、直すのは1か所です")).changed() {
             self.label_port = on.then_some(PortDir::Io);
         }
         if let Some(dir) = self.label_port.as_mut() {
             ui.horizontal(|ui| {
                 for d in [PortDir::In, PortDir::Out, PortDir::Io] {
                     ui.selectable_value(dir, d, dir_mark(d)).on_hover_text(match d {
-                        PortDir::In => "信号が入ってくるポート。記号の左側にピンが出ます",
-                        PortDir::Out => "信号が出ていくポート。記号の右側にピンが出ます",
-                        PortDir::Io => "入りも出もするポート (電源・双方向の線など)。記号の左側にピンが出ます",
+                        PortDir::In => i18n::tr("信号が入ってくるポート。記号の左側にピンが出ます"),
+                        PortDir::Out => i18n::tr("信号が出ていくポート。記号の右側にピンが出ます"),
+                        PortDir::Io => i18n::tr("入りも出もするポート (電源・双方向の線など)。記号の左側にピンが出ます"),
                     });
                 }
             });
@@ -106,12 +106,12 @@ impl SchEditor {
     pub(super) fn port_editor_ui(&mut self, ui: &mut egui::Ui) {
         let Some(Sel::Port(i)) = self.selected else { return };
         let Some(port) = self.sch.ports.get(i).cloned() else { return };
-        ui.label(egui::RichText::new("選択中のポート").strong());
+        ui.label(egui::RichText::new(i18n::tr("選択中のポート")).strong());
         let mut name = port.name.clone();
         let mut dir = port.dir;
         ui.horizontal(|ui| {
-            ui.label("名前");
-            ui.text_edit_singleline(&mut name).on_hover_text("ポートの名前。このシートを記号にしたとき、同じ名前のピンになります");
+            ui.label(i18n::tr("名前"));
+            ui.text_edit_singleline(&mut name).on_hover_text(i18n::tr("ポートの名前。このシートを記号にしたとき、同じ名前のピンになります"));
         });
         ui.horizontal(|ui| {
             for d in [PortDir::In, PortDir::Out, PortDir::Io] {
@@ -120,14 +120,14 @@ impl SchEditor {
         });
         let taken = self.sch.ports.iter().enumerate().any(|(k, p)| k != i && p.name == name);
         if taken {
-            ui.colored_label(crate::theme::WARN, "同じ名前のポートが、このシートにあります");
+            ui.colored_label(crate::theme::WARN, i18n::tr("同じ名前のポートが、このシートにあります"));
         }
         if name != port.name || dir != port.dir {
             self.sch.ports[i].name = name;
             self.sch.ports[i].dir = dir;
             self.sch.refresh_sheet_symbols();
         }
-        if ui.button("ポートを削除").on_hover_text("このポートを消します。記号のピンも消えます (Delete キーでも同じです)").clicked() {
+        if ui.button(i18n::tr("ポートを削除")).on_hover_text(i18n::tr("このポートを消します。記号のピンも消えます (Delete キーでも同じです)")).clicked() {
             self.delete_selected();
         }
     }

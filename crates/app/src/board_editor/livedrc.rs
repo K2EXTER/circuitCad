@@ -130,7 +130,7 @@ impl BoardEditor {
             }
         }
         if let Some((c, msg)) = tip {
-            let galley = painter.layout(msg.to_string(), egui::FontId::proportional(14.0), Color32::WHITE, 380.0);
+            let galley = painter.layout(i18n::tr_dyn(msg), egui::FontId::proportional(14.0), Color32::WHITE, 380.0);
             let at = c + Vec2::new(12.0, 12.0);
             let bg = Rect::from_min_size(at, galley.size()).expand(5.0);
             painter.rect_filled(bg, 4.0, Color32::from_rgb(90, 20, 20).gamma_multiply(0.95));
@@ -153,11 +153,11 @@ impl BoardEditor {
     pub(super) fn live_drc_toggle(&mut self, ui: &mut egui::Ui) {
         let n = self.live_findings().len();
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.live_drc.on, "作業中も点検する").on_hover_text(
-                "配線を引いたり部品を動かしたりするたびに、線どうしの間隔・穴・基板の端などの規則を裏で調べ直して、違反の所に赤い × を出します (ポインタを合わせると内容が出ます)。\n「DRC を実行」は、仕上げの形・ベタの分断・未配線も含めて一覧にします。発注の前には、そちらも実行してください",
+            ui.checkbox(&mut self.live_drc.on, i18n::tr("作業中も点検する")).on_hover_text(
+                i18n::tr("配線を引いたり部品を動かしたりするたびに、線どうしの間隔・穴・基板の端などの規則を裏で調べ直して、違反の所に赤い × を出します (ポインタを合わせると内容が出ます)。\n「DRC を実行」は、仕上げの形・ベタの分断・未配線も含めて一覧にします。発注の前には、そちらも実行してください"),
             );
             if self.live_drc.on && n > 0 {
-                ui.colored_label(crate::theme::ERROR, format!("いま {n} 件"));
+                ui.colored_label(crate::theme::ERROR, i18n::trf!("いま {n} 件"));
             }
         });
     }

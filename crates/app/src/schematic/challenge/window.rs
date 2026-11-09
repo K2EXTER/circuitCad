@@ -12,21 +12,21 @@ impl SchEditor {
         let mut show_answer = false;
         let mut back = false;
         let mut close = false;
-        egui::Window::new(format!("作ってみよう: {}", ch.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
+        egui::Window::new(i18n::trf!("作ってみよう: {}", ch.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(ch.goal);
             ui.horizontal(|ui| {
-                ui.label("むずかしさ");
-                if ui.selectable_label(level == 0, "配線だけ").on_hover_text("部品は置いてあります。線でつなぐ練習です (やり直すと、最初の状態に戻ります)").clicked() && level != 0 {
+                ui.label(i18n::tr("むずかしさ"));
+                if ui.selectable_label(level == 0, i18n::tr("配線だけ")).on_hover_text(i18n::tr("部品は置いてあります。線でつなぐ練習です (やり直すと、最初の状態に戻ります)")).clicked() && level != 0 {
                     new_level = Some(0);
                 }
-                if ui.selectable_label(level == 1, "部品も置く").on_hover_text("電源だけが置いてあります。部品を選んで置き、配線し、値も決めます (やり直すと、最初の状態に戻ります)").clicked() && level != 1 {
+                if ui.selectable_label(level == 1, i18n::tr("部品も置く")).on_hover_text(i18n::tr("電源だけが置いてあります。部品を選んで置き、配線し、値も決めます (やり直すと、最初の状態に戻ります)")).clicked() && level != 1 {
                     new_level = Some(1);
                 }
             });
             ui.separator();
             let results = self.challenge.as_ref().map(|c| &c.results[..]).unwrap_or(&[]);
             if results.is_empty() {
-                ui.label("作り終えたら、「判定する」を押してください。回路を実際にシミュレーションして、次の項目を調べます");
+                ui.label(i18n::tr("作り終えたら、「判定する」を押してください。回路を実際にシミュレーションして、次の項目を調べます"));
             }
             for r in results.iter() {
                 let (mark, color) = match r.ok {
@@ -46,28 +46,28 @@ impl SchEditor {
             }
             if passed {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "できました!");
-                ui.label("自分で作った回路が、判定のすべての条件を満たしています。値や部品を変えても通るか (答えは 1 つではありません)、条件のぎりぎりを探してみましょう");
+                ui.colored_label(crate::theme::OK, i18n::tr("できました!"));
+                ui.label(i18n::tr("自分で作った回路が、判定のすべての条件を満たしています。値や部品を変えても通るか (答えは 1 つではありません)、条件のぎりぎりを探してみましょう"));
             }
             for (k, h) in ch.hints.iter().enumerate().take(hints) {
                 ui.separator();
-                ui.label(egui::RichText::new(format!("ヒント {}", k + 1)).strong());
+                ui.label(egui::RichText::new(i18n::trf!("ヒント {}", k + 1)).strong());
                 ui.label(*h);
             }
             ui.separator();
             ui.horizontal_wrapped(|ui| {
-                if ui.button("判定する").on_hover_text("いまの回路をシミュレーションして、目標を満たしているか調べます。何度でも押せます").clicked() {
+                if ui.button(i18n::tr("判定する")).on_hover_text(i18n::tr("いまの回路をシミュレーションして、目標を満たしているか調べます。何度でも押せます")).clicked() {
                     judge = true;
                 }
-                if ui.add_enabled(hints < ch.hints.len(), egui::Button::new(format!("ヒントを見る ({hints} / {})", ch.hints.len()))).on_hover_text("行き詰まったら、少しずつヒントを出します。最後のヒントは、答えの目安です").clicked() {
+                if ui.add_enabled(hints < ch.hints.len(), egui::Button::new(i18n::trf!("ヒントを見る ({hints} / {})", ch.hints.len()))).on_hover_text(i18n::tr("行き詰まったら、少しずつヒントを出します。最後のヒントは、答えの目安です")).clicked() {
                     more_hint = true;
                 }
-                if ui.button("答えの回路を見る").on_hover_text("できあがりの回路を、いまの回路と入れ替えます (Ctrl+Z で戻せます)。答えは 1 つではありません。判定を通れば、別の値や形でも正解です").clicked() {
+                if ui.button(i18n::tr("答えの回路を見る")).on_hover_text(i18n::tr("できあがりの回路を、いまの回路と入れ替えます (Ctrl+Z で戻せます)。答えは 1 つではありません。判定を通れば、別の値や形でも正解です")).clicked() {
                     show_answer = true;
                 }
             });
             ui.horizontal(|ui| {
-                if ui.button("レッスンに戻る").on_hover_text("このチャレンジをやめて、レッスンの手順に戻ります").clicked() {
+                if ui.button(i18n::tr("レッスンに戻る")).on_hover_text(i18n::tr("このチャレンジをやめて、レッスンの手順に戻ります")).clicked() {
                     back = true;
                 }
                 if crate::widgets::close_button(ui, "チャレンジの窓") {

@@ -81,7 +81,7 @@ pub fn scale_bar(ui: &mut egui::Ui, st: &mut PlotState, x_unit: &str, groups: &[
         if let Some(r) = range_boxes(ui, &mut st.x_text, st.x, x_unit, "横軸の表示範囲の始まり / 終わり。数字 (10m, 2u など) を入れて Enter で反映します。横軸の数字の上でホイールを回しても拡大縮小できます") {
             st.x = r;
         }
-        if ui.small_button("全体").on_hover_text("横軸を最初の範囲 (全体) に戻します").clicked() {
+        if ui.small_button(i18n::tr("全体")).on_hover_text(i18n::tr("横軸を最初の範囲 (全体) に戻します")).clicked() {
             st.x = st.full_x;
         }
         for (g, unit) in groups {
@@ -91,7 +91,7 @@ pub fn scale_bar(ui: &mut egui::Ui, st: &mut PlotState, x_unit: &str, groups: &[
                 st.y[g] = r;
                 st.auto_y[g] = false;
             }
-            ui.checkbox(&mut st.auto_y[g], "自動").on_hover_text("オンのあいだ、いま見えている範囲に合わせて縦軸を自動で決めます。手で動かすと自動でオフになります");
+            ui.checkbox(&mut st.auto_y[g], i18n::tr("自動")).on_hover_text(i18n::tr("オンのあいだ、いま見えている範囲に合わせて縦軸を自動で決めます。手で動かすと自動でオフになります"));
         }
     });
 }

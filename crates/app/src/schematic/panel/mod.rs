@@ -51,7 +51,7 @@ impl SchEditor {
                     // the settings of the selected part: a band like the part lists below, folded by a click
                     crate::widgets::group_gap(ui);
                     let name = if c.kind.is_power_symbol() { String::new() } else { format!(" {}", c.refdes) };
-                    let title = egui::RichText::new(format!("選択中の部品{name}")).strong();
+                    let title = egui::RichText::new(i18n::trf!("選択中の部品{name}")).strong();
                     let (_, clicked) = crate::widgets::band_header(ui, "props", title, self.props_open, true, |ui| {
                         crate::widgets::well(ui, |ui| self.properties_inner(ui, false));
                     });
@@ -73,7 +73,7 @@ impl SchEditor {
                     // during a lesson every section is open, so the lesson's steps can be found
                     let in_lesson = self.lesson.is_some();
                     let b = crate::widgets::primary_button_wide(ui, !in_lesson, label);
-                    if b.on_hover_text(if in_lesson { "レッスン中は、手順に出てくる欄を探せるように、すべて開いています" } else { tip }).clicked() {
+                    if b.on_hover_text(if in_lesson { i18n::tr("レッスン中は、手順に出てくる欄を探せるように、すべて開いています") } else { tip }).clicked() {
                         self.sec_gen += 1;
                         self.sec_mode = if all_open { 2 } else { 1 };
                     }
@@ -82,8 +82,8 @@ impl SchEditor {
                 let cov = self.model_coverage();
                 if !cov.ignored.is_empty() {
                     let names: Vec<&str> = cov.ignored.iter().map(|p| p.refdes.as_str()).collect();
-                    ui.colored_label(crate::theme::WARN, format!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
-                        .on_hover_text("この部品は、回路にないものとして計算されます。動作や電流に関わる部品なら、結果は実物と違います。下の「モデルの前提」で、ほかの注意もまとめて見られます");
+                    ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
+                        .on_hover_text(i18n::tr("この部品は、回路にないものとして計算されます。動作や電流に関わる部品なら、結果は実物と違います。下の「モデルの前提」で、ほかの注意もまとめて見られます"));
                 }
                 let lesson = self.lesson.is_some();
                 let (open_all, close_all) = (self.sec_mode == 1 || lesson, self.sec_mode == 2 && !lesson);
@@ -126,7 +126,7 @@ impl SchEditor {
             ui.spacing_mut().item_spacing.x = 0.0;
             let tools: [(crate::icons::Icon, &str, Tool, &str); 4] = [
                 (crate::icons::Icon::Select, "選択", Tool::Select, "部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます"),
-                (crate::icons::Icon::Wire, "配線", Tool::Wire, "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"),
+                (crate::icons::Icon::Wire, i18n::tr_ctx("回路図", "配線"), Tool::Wire, "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"),
                 (crate::icons::Icon::Bus, "バス", Tool::Bus, "太い青の線でバス(信号の束)を描きます。バスの線は何もつなぎません(見た目と点検のためのものです)。名前は、ラベルツールで D[0..7] と書いて、バスの線の上に置きます。つなぐ各ピンには、ラベルツールで D[0..7] と書いたまま、ピンを順にクリックすると、D0 D1 D2 … と順に付きます"),
                 (crate::icons::Icon::Label, "ラベル", Tool::Label, "同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします"),
             ];
@@ -154,12 +154,12 @@ impl SchEditor {
                 self.redo();
             }
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "クイック追加 (A)"), "クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "クイック追加 (A)"), "クイック追加 (A)").on_hover_text(i18n::tr("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます")).clicked() {
             self.open_quick_add();
         }
         if self.tool == Tool::Label {
-            ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります。D[0..7] のように書くと、バスの名前です: バスの線の上をクリックするとバスの名前が付き、ほかの所をクリックすると D0 D1 D2 … と順に付きます");
-            ui.checkbox(&mut self.label_step, "番号を自動で進める").on_hover_text("オンにすると、名前の終わりの数字を、ラベルを付けるたびに 1 つ進めます (D0 → D1 → D2 …)");
+            ui.text_edit_singleline(&mut self.label_text).on_hover_text(i18n::tr("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります。D[0..7] のように書くと、バスの名前です: バスの線の上をクリックするとバスの名前が付き、ほかの所をクリックすると D0 D1 D2 … と順に付きます"));
+            ui.checkbox(&mut self.label_step, i18n::tr("番号を自動で進める")).on_hover_text(i18n::tr("オンにすると、名前の終わりの数字を、ラベルを付けるたびに 1 つ進めます (D0 → D1 → D2 …)"));
             self.port_tool_ui(ui);
         }
     }
@@ -167,7 +167,7 @@ impl SchEditor {
     pub(super) fn panel_erc(&mut self, ui: &mut egui::Ui) {
         crate::widgets::group_gap(ui);
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text(i18n::tr("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です")).clicked() {
             self.problems = erc(&self.sch);
             self.problems.extend(self.conversion_problems());
             self.erc_focus = None;
@@ -178,15 +178,15 @@ impl SchEditor {
         // the other two checks of the design: its requirements table, and areas left out of the ERC while drawing
         let skip_enabled = self.selection_box_exists();
         let bar = crate::widgets::segment_row(ui, &[("設計の要件の表…", true), ("選択を描きかけにする", skip_enabled)]);
-        if bar[0].clone().on_hover_text("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)").clicked() {
+        if bar[0].clone().on_hover_text(i18n::tr("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)")).clicked() {
             self.open_requirements();
         }
-        if bar[1].clone().on_hover_text("選んだ部品・配線を囲む範囲を「描きかけ」にして、その中のERCの指摘を出さなくします。作りながら出るエラーの山を減らすための機能です。範囲は灰色の枠で表示され、完成したら下の×で外します。保存もされます").clicked() {
+        if bar[1].clone().on_hover_text(i18n::tr("選んだ部品・配線を囲む範囲を「描きかけ」にして、その中のERCの指摘を出さなくします。作りながら出るエラーの山を減らすための機能です。範囲は灰色の枠で表示され、完成したら下の×で外します。保存もされます")).clicked() {
             self.skip_selection();
         }
         self.erc_skip_ui(ui);
         if self.erc_ran && self.problems.is_empty() {
-            ui.colored_label(crate::theme::OK, "✔ 問題は見つかりませんでした");
+            ui.colored_label(crate::theme::OK, i18n::tr("✔ 問題は見つかりませんでした"));
         }
         let mut jump = None;
         let mut jump_sheet = 0;
@@ -197,7 +197,7 @@ impl SchEditor {
                 Severity::Warning => ("▲", crate::theme::WARN),
             };
             let sheet = if self.sch.sheet_count() > 1 && p.at.is_some() { format!("[{}] ", self.sch.sheet_name(p.sheet)) } else { String::new() };
-            let label = egui::RichText::new(format!("{mark} {sheet}{}", p.message)).color(color);
+            let label = egui::RichText::new(format!("{mark} {sheet}{}", i18n::tr_dyn(&p.message))).color(color);
             let tip = if p.at.is_some() { "クリックで、その場所へ移動して説明を表示します" } else { "クリックで説明を表示します" };
             if ui.link(label).on_hover_text(tip).clicked() {
                 self.erc_focus = Some(k);
@@ -206,9 +206,9 @@ impl SchEditor {
             }
             if self.erc_focus == Some(k) {
                 ui.indent(("erc_hint", k), |ui| {
-                    ui.label(&p.hint);
+                    ui.label(i18n::tr_dyn(&p.hint));
                     if let Some((refdes, pin)) = &p.pin
-                        && ui.small_button("使わないピン (NC) にする").on_hover_text("このピンは、つながないのが正しいときに押します (使わない出力、データシートが開放と言うピンなど)。印の × が付いて、ERC はこのピンを聞かなくなります。つなぎ忘れなら、押さずに配線しましょう").clicked()
+                        && ui.small_button(i18n::tr("使わないピン (NC) にする")).on_hover_text(i18n::tr("このピンは、つながないのが正しいときに押します (使わない出力、データシートが開放と言うピンなど)。印の × が付いて、ERC はこのピンを聞かなくなります。つなぎ忘れなら、押さずに配線しましょう")).clicked()
                     {
                         make_nc = Some((refdes.clone(), pin.clone()));
                     }
@@ -233,7 +233,7 @@ impl SchEditor {
         if let Some(mut form) = self.form.take() {
             let mut open = true;
             let mut saved = None;
-            egui::Window::new(if form.editing().is_some() { "部品を編集" } else { "部品を作成" }).open(&mut open).default_size([980.0, 660.0]).resizable(true).show(ui.ctx(), |ui| {
+            egui::Window::new(if form.editing().is_some() { i18n::tr("部品を編集") } else { i18n::tr("部品を作成") }).open(&mut open).default_size([980.0, 660.0]).resizable(true).show(ui.ctx(), |ui| {
                 saved = form.ui(ui);
             });
             // the file buttons of the form: the library belongs to the editor
@@ -264,7 +264,7 @@ impl SchEditor {
             }
         }
         self.kicad_window(ui.ctx());
-        if ui.button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
+        if ui.button(i18n::tr("操作ガイド (F1)")).on_hover_text(i18n::tr("マウスとキーの操作の一覧を開きます")).clicked() {
             self.help_request = Some(crate::help::HelpTab::Schematic);
         }
     }
@@ -281,10 +281,10 @@ pub(super) fn limits_ui(ui: &mut egui::Ui, limits: &[String], id: &str) {
     if limits.is_empty() {
         return;
     }
-    egui::CollapsingHeader::new("このモデルの限界 (実物との違い)").id_salt(id).show(ui, |ui| {
+    egui::CollapsingHeader::new(i18n::tr("このモデルの限界 (実物との違い)")).id_salt(id).show(ui, |ui| {
         for l in limits {
             ui.horizontal_wrapped(|ui| {
-                ui.label("・");
+                ui.label(i18n::tr("・"));
                 ui.small(l);
             });
         }

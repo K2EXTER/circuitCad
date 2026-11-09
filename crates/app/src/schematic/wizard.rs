@@ -252,7 +252,7 @@ impl SchEditor {
             _ => None,
         };
         let mut apply = None;
-        egui::Window::new("値の決め方").open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("値の決め方")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 for (k, c) in CALCS.iter().enumerate() {
                     if ui.selectable_label(self.wiz_kind == k, c.title).clicked() && self.wiz_kind != k {
@@ -288,27 +288,27 @@ impl SchEditor {
                     });
                     if let Some(p) = &out.primary {
                         ui.horizontal(|ui| {
-                            let b = ui.add_enabled(selected_value.is_some(), egui::Button::new(format!("選択中の部品の値を {p} にする")));
-                            if b.on_hover_text("回路図で抵抗・コンデンサ・コイルを選ぶと押せます。選んだ部品の値を、この結果で置き換えます (Ctrl+Z で戻せます)").clicked() {
+                            let b = ui.add_enabled(selected_value.is_some(), egui::Button::new(i18n::trf!("選択中の部品の値を {p} にする")));
+                            if b.on_hover_text(i18n::tr("回路図で抵抗・コンデンサ・コイルを選ぶと押せます。選んだ部品の値を、この結果で置き換えます (Ctrl+Z で戻せます)")).clicked() {
                                 apply = selected_value.map(|i| (i, p.clone()));
                             }
                         });
                     }
-                    egui::CollapsingHeader::new("計算のしかた").default_open(true).show(ui, |ui| {
+                    egui::CollapsingHeader::new(i18n::tr("計算のしかた")).default_open(true).show(ui, |ui| {
                         for s in &out.steps {
-                            ui.label(format!("・{s}"));
+                            ui.label(i18n::trf!("・{s}"));
                         }
                     });
-                    egui::CollapsingHeader::new("注意点").default_open(true).show(ui, |ui| {
+                    egui::CollapsingHeader::new(i18n::tr("注意点")).default_open(true).show(ui, |ui| {
                         for s in &out.cautions {
                             ui.colored_label(Color32::from_rgb(210, 150, 40), format!("⚠ {s}"));
                         }
                     });
-                    egui::CollapsingHeader::new("こうなると壊れる/おかしくなる (故障パターン)").default_open(false).show(ui, |ui| {
+                    egui::CollapsingHeader::new(i18n::tr("こうなると壊れる/おかしくなる (故障パターン)")).default_open(false).show(ui, |ui| {
                         for s in &out.faults {
-                            ui.label(format!("・{s}"));
+                            ui.label(i18n::trf!("・{s}"));
                         }
-                        ui.small("回路図で実際に抵抗を外したり値を変えたりして、DC解析の結果がどう変わるか試してみましょう");
+                        ui.small(i18n::tr("回路図で実際に抵抗を外したり値を変えたりして、DC解析の結果がどう変わるか試してみましょう"));
                     });
                 }
             }

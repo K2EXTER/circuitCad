@@ -28,13 +28,13 @@ impl PartForm {
     }
 
     pub(super) fn template_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("テンプレートからピンとモデルを作る (リチウムイオン充電IC)").id_salt("tpl_charger").show(ui, |ui| {
+        egui::CollapsingHeader::new(i18n::tr("テンプレートからピンとモデルを作る (リチウムイオン充電IC)")).id_salt("tpl_charger").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label("例から始める:");
-                if ui.small_button("TP4056 風").on_hover_text("リニア式、電流 = 1200 ÷ R_PROG。まず形を見るのに向いています").clicked() {
+                ui.label(i18n::tr("例から始める:"));
+                if ui.small_button(i18n::tr("TP4056 風")).on_hover_text(i18n::tr("リニア式、電流 = 1200 ÷ R_PROG。まず形を見るのに向いています")).clicked() {
                     self.tpl = ChargerTemplate::default();
                 }
-                if ui.small_button("IP2332 風").on_hover_text("降圧スイッチング式、電流 = 0.35 + 2.75 ÷ R_ISET[kΩ]、入力 4.3〜6V、温度入力あり").clicked() {
+                if ui.small_button(i18n::tr("IP2332 風")).on_hover_text(i18n::tr("降圧スイッチング式、電流 = 0.35 + 2.75 ÷ R_ISET[kΩ]、入力 4.3〜6V、温度入力あり")).clicked() {
                     self.tpl = ChargerTemplate {
                         topology: Topology::Buck,
                         setting: CurrentSetting::Resistor,
@@ -51,10 +51,10 @@ impl PartForm {
                 }
             });
             let t = &mut self.tpl;
-            ui.label("方式");
+            ui.label(i18n::tr("方式"));
             let bar = crate::widgets::segment_bar(ui, &[("リニア", true), ("降圧スイッチング", true)], Some(usize::from(t.topology == Topology::Buck)));
-            bar[0].clone().on_hover_text("入力から電池へ、電流をそのまま通します。回路は簡単ですが、入力と電池の電圧差が熱になります (TP4056 など)");
-            bar[1].clone().on_hover_text("コイルを使って電圧を下げながら充電します。効率が良く、大きな電流向き。LX 端子に外付けのコイルをつなぎます (TP5100・IP2332 など)");
+            bar[0].clone().on_hover_text(i18n::tr("入力から電池へ、電流をそのまま通します。回路は簡単ですが、入力と電池の電圧差が熱になります (TP4056 など)"));
+            bar[1].clone().on_hover_text(i18n::tr("コイルを使って電圧を下げながら充電します。効率が良く、大きな電流向き。LX 端子に外付けのコイルをつなぎます (TP5100・IP2332 など)"));
             if bar[0].clicked() {
                 t.topology = Topology::Linear;
             }
@@ -62,22 +62,22 @@ impl PartForm {
                 t.topology = Topology::Buck;
             }
             ui.horizontal_wrapped(|ui| {
-                ui.label("セル数");
-                ui.add(egui::DragValue::new(&mut t.cells).range(1..=8)).on_hover_text("電池を直列につなぐ数。満充電電圧 = セル数 × 1セルの電圧");
-                ui.label("1セルの満充電電圧");
+                ui.label(i18n::tr("セル数"));
+                ui.add(egui::DragValue::new(&mut t.cells).range(1..=8)).on_hover_text(i18n::tr("電池を直列につなぐ数。満充電電圧 = セル数 × 1セルの電圧"));
+                ui.label(i18n::tr("1セルの満充電電圧"));
                 ui.add(egui::DragValue::new(&mut t.cell_voltage).speed(0.01).range(2.0..=5.0).suffix(" V"))
-                    .on_hover_text("リチウムイオンは 4.2V (高電圧タイプ 4.35V)、リン酸鉄リチウムは 3.6V");
-                if ui.small_button("4.2V").on_hover_text("リチウムイオン電池の 1 セルの満充電電圧").clicked() {
+                    .on_hover_text(i18n::tr("リチウムイオンは 4.2V (高電圧タイプ 4.35V)、リン酸鉄リチウムは 3.6V"));
+                if ui.small_button("4.2V").on_hover_text(i18n::tr("リチウムイオン電池の 1 セルの満充電電圧")).clicked() {
                     t.cell_voltage = 4.2;
                 }
-                if ui.small_button("3.6V (リン酸鉄)").on_hover_text("リン酸鉄リチウム電池の 1 セルの満充電電圧").clicked() {
+                if ui.small_button(i18n::tr("3.6V (リン酸鉄)")).on_hover_text(i18n::tr("リン酸鉄リチウム電池の 1 セルの満充電電圧")).clicked() {
                     t.cell_voltage = 3.6;
                 }
             });
-            ui.label("充電電流の決め方");
+            ui.label(i18n::tr("充電電流の決め方"));
             let bar = crate::widgets::segment_bar(ui, &[("決まった値", true), ("抵抗で設定 (PROG 端子)", true)], Some(usize::from(t.setting == CurrentSetting::Resistor)));
-            bar[0].clone().on_hover_text("データシートに電流が1つだけ書かれている場合");
-            bar[1].clone().on_hover_text("端子につなぐ抵抗で電流を決める場合。データシートの式 I = 定数 + k ÷ R に合わせます");
+            bar[0].clone().on_hover_text(i18n::tr("データシートに電流が1つだけ書かれている場合"));
+            bar[1].clone().on_hover_text(i18n::tr("端子につなぐ抵抗で電流を決める場合。データシートの式 I = 定数 + k ÷ R に合わせます"));
             if bar[0].clicked() {
                 t.setting = CurrentSetting::Fixed;
             }
@@ -87,62 +87,62 @@ impl PartForm {
             match t.setting {
                 CurrentSetting::Fixed => {
                     ui.horizontal(|ui| {
-                        ui.label("充電電流");
-                        ui.add(egui::DragValue::new(&mut t.current).speed(0.01).range(0.0..=20.0).suffix(" A")).on_hover_text("充電電流 (A)。データシートに書かれた値を入れます");
+                        ui.label(i18n::tr("充電電流"));
+                        ui.add(egui::DragValue::new(&mut t.current).speed(0.01).range(0.0..=20.0).suffix(" A")).on_hover_text(i18n::tr("充電電流 (A)。データシートに書かれた値を入れます"));
                     });
                 }
                 CurrentSetting::Resistor => {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label("電流 I[A] =");
-                        ui.add(egui::DragValue::new(&mut t.offset).speed(0.01).range(0.0..=20.0)).on_hover_text("式の定数の部分 (無ければ 0)。例: IP2332 は 0.35");
+                        ui.label(i18n::tr("電流 I[A] ="));
+                        ui.add(egui::DragValue::new(&mut t.offset).speed(0.01).range(0.0..=20.0)).on_hover_text(i18n::tr("式の定数の部分 (無ければ 0)。例: IP2332 は 0.35"));
                         ui.label("+ k ÷ R[Ω]    k =");
                         ui.add(egui::DragValue::new(&mut t.k).speed(1.0).range(0.0..=1e6))
-                            .on_hover_text("TP4056 は 1200 (1.2kΩ で 1A)。式が「2.75 ÷ R[kΩ]」なら、Ω に直して k = 2750");
-                        ui.label("PROG 開放時の電流");
+                            .on_hover_text(i18n::tr("TP4056 は 1200 (1.2kΩ で 1A)。式が「2.75 ÷ R[kΩ]」なら、Ω に直して k = 2750"));
+                        ui.label(i18n::tr("PROG 開放時の電流"));
                         ui.add(egui::DragValue::new(&mut t.current).speed(0.01).range(0.0..=20.0).suffix(" A"))
-                            .on_hover_text("PROG 端子に何もつながないときの電流。0 なら充電しません。IP2332 は 2A");
+                            .on_hover_text(i18n::tr("PROG 端子に何もつながないときの電流。0 なら充電しません。IP2332 は 2A"));
                     });
                 }
             }
             ui.horizontal_wrapped(|ui| {
-                ui.label("プリチャージ: 1セルがこの電圧未満");
+                ui.label(i18n::tr("プリチャージ: 1セルがこの電圧未満"));
                 ui.add(egui::DragValue::new(&mut t.precharge_per_cell).speed(0.01).range(0.0..=5.0).suffix(" V"))
-                    .on_hover_text("空に近い電池は、小さな電流でそっと充電します。0 ならプリチャージなし");
-                ui.label("電流の割合");
-                ui.add(egui::DragValue::new(&mut t.precharge_fraction).speed(0.01).range(0.0..=1.0)).on_hover_text("0.1 = 設定電流の 10%");
-                ui.label("終了電流の割合");
+                    .on_hover_text(i18n::tr("空に近い電池は、小さな電流でそっと充電します。0 ならプリチャージなし"));
+                ui.label(i18n::tr("電流の割合"));
+                ui.add(egui::DragValue::new(&mut t.precharge_fraction).speed(0.01).range(0.0..=1.0)).on_hover_text(i18n::tr("0.1 = 設定電流の 10%"));
+                ui.label(i18n::tr("終了電流の割合"));
                 ui.add(egui::DragValue::new(&mut t.termination_fraction).speed(0.01).range(0.0..=0.9))
-                    .on_hover_text("定電圧のあと、電流がこの割合まで減ったら満充電とみなします (0.1 = 10%)。状態表示の切替に使います");
+                    .on_hover_text(i18n::tr("定電圧のあと、電流がこの割合まで減ったら満充電とみなします (0.1 = 10%)。状態表示の切替に使います"));
             });
             ui.horizontal_wrapped(|ui| {
-                ui.label("入力電圧");
-                ui.add(egui::DragValue::new(&mut t.vin_min).speed(0.05).range(0.5..=60.0).prefix("下限 ").suffix(" V"))
-                    .on_hover_text("これを下回ると動きません (低電圧ロックアウト)");
-                ui.add(egui::DragValue::new(&mut t.vin_max).speed(0.05).range(0.0..=60.0).prefix("上限 ").suffix(" V"))
-                    .on_hover_text("これを超えると止まります (過電圧保護)。0 なら上限なし");
-                ui.add(egui::DragValue::new(&mut t.dropout).speed(0.01).range(0.0..=5.0).prefix("電池より ").suffix(" V 以上高い"))
-                    .on_hover_text("入力が電池の電圧よりこれだけ高くないと充電できません");
+                ui.label(i18n::tr("入力電圧"));
+                ui.add(egui::DragValue::new(&mut t.vin_min).speed(0.05).range(0.5..=60.0).prefix(i18n::tr("下限 ")).suffix(" V"))
+                    .on_hover_text(i18n::tr("これを下回ると動きません (低電圧ロックアウト)"));
+                ui.add(egui::DragValue::new(&mut t.vin_max).speed(0.05).range(0.0..=60.0).prefix(i18n::tr("上限 ")).suffix(" V"))
+                    .on_hover_text(i18n::tr("これを超えると止まります (過電圧保護)。0 なら上限なし"));
+                ui.add(egui::DragValue::new(&mut t.dropout).speed(0.01).range(0.0..=5.0).prefix(i18n::tr("電池より ")).suffix(i18n::tr(" V 以上高い")))
+                    .on_hover_text(i18n::tr("入力が電池の電圧よりこれだけ高くないと充電できません"));
             });
             ui.horizontal_wrapped(|ui| {
                 let mut ntc = t.ntc.is_some();
                 if ui
-                    .checkbox(&mut ntc, "温度入力 (NTC 端子)")
-                    .on_hover_text("電池の温度を見る端子。サーミスタ (NTC) をつなぎ、温度が低すぎる・高すぎるときは充電を止めます")
+                    .checkbox(&mut ntc, i18n::tr("温度入力 (NTC 端子)"))
+                    .on_hover_text(i18n::tr("電池の温度を見る端子。サーミスタ (NTC) をつなぎ、温度が低すぎる・高すぎるときは充電を止めます"))
                     .changed()
                 {
                     t.ntc = ntc.then_some((0.3, 2.73));
                 }
                 if let Some((lo, hi)) = &mut t.ntc {
-                    ui.add(egui::DragValue::new(lo).speed(0.01).range(0.0..=5.0).prefix("正常な電圧 ").suffix(" V から")).on_hover_text("NTC 端子の電圧がこの値より低いと、温度が高すぎる (または低すぎる) として充電を止めます");
-                    ui.add(egui::DragValue::new(hi).speed(0.01).range(0.0..=5.0).suffix(" V まで"))
-                        .on_hover_text("NTC に 100µA を流したときの電圧がこの範囲なら充電します (電圧 = 100µA × NTC の抵抗)");
+                    ui.add(egui::DragValue::new(lo).speed(0.01).range(0.0..=5.0).prefix(i18n::tr("正常な電圧 ")).suffix(i18n::tr(" V から"))).on_hover_text(i18n::tr("NTC 端子の電圧がこの値より低いと、温度が高すぎる (または低すぎる) として充電を止めます"));
+                    ui.add(egui::DragValue::new(hi).speed(0.01).range(0.0..=5.0).suffix(i18n::tr(" V まで")))
+                        .on_hover_text(i18n::tr("NTC に 100µA を流したときの電圧がこの範囲なら充電します (電圧 = 100µA × NTC の抵抗)"));
                 }
-                ui.checkbox(&mut t.status, "状態出力 (CHRG / STDBY)").on_hover_text("充電中は CHRG、満充電は STDBY が Low になる出力 (LED をつなぐ端子)");
+                ui.checkbox(&mut t.status, i18n::tr("状態出力 (CHRG / STDBY)")).on_hover_text(i18n::tr("充電中は CHRG、満充電は STDBY が Low になる出力 (LED をつなぐ端子)"));
             });
             ui.horizontal(|ui| {
                 if ui
-                    .button("ピンとモデルを作る")
-                    .on_hover_text("上の数字から、ピンの一覧とシミュレーションモデルを作って、下の欄に書き込みます (すでにある内容は置き換わります)")
+                    .button(i18n::tr("ピンとモデルを作る"))
+                    .on_hover_text(i18n::tr("上の数字から、ピンの一覧とシミュレーションモデルを作って、下の欄に書き込みます (すでにある内容は置き換わります)"))
                     .clicked()
                 {
                     self.apply_template();
@@ -151,6 +151,6 @@ impl PartForm {
                     ui.small(&self.tpl_message);
                 }
             });
-        }).header_response.on_hover_text("データシートの数字を入れるだけで、充電ICの「外から見た動き」のモデルを作ります。市販のSPICEモデルが無いICに使えます。数字は、データシートの「電気的特性」の表から拾います");
+        }).header_response.on_hover_text(i18n::tr("データシートの数字を入れるだけで、充電ICの「外から見た動き」のモデルを作ります。市販のSPICEモデルが無いICに使えます。数字は、データシートの「電気的特性」の表から拾います"));
     }
 }

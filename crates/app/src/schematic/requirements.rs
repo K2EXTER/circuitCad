@@ -26,7 +26,7 @@ fn text_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current
 /// The reason of a row: a longer sentence, so a box of two lines that wraps.
 fn reason_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current: &str, width: f32, hover: &str) -> Option<String> {
     let t = buf.entry(key).or_insert_with(|| current.to_string());
-    let r = ui.add_sized([width, 62.0], egui::TextEdit::multiline(t).desired_rows(3).hint_text("なぜ? (理由を一言)")).on_hover_text(hover);
+    let r = ui.add_sized([width, 62.0], egui::TextEdit::multiline(t).desired_rows(3).hint_text(i18n::tr("なぜ? (理由を一言)"))).on_hover_text(hover);
     r.changed().then(|| t.clone())
 }
 
@@ -83,7 +83,7 @@ impl SchEditor {
                             ui.spacing_mut().item_spacing.x = 2.0;
                             icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。表を開かなくても、回路図を見た人に設計の意図が伝わります");
                             icon_label(ui, Icon::Frame, "要件の枠");
-                            ui.label("要件の枠");
+                            ui.label(i18n::tr("要件の枠"));
                         }))
                         .response
                         .rect
@@ -166,26 +166,26 @@ impl SchEditor {
         let mut changed = false;
         let (mut run_dc, mut apply_now) = (false, false);
         let (mut run_bp, mut apply_bp) = (false, false);
-        egui::Window::new("設計の要件").open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([1200.0, 620.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
-            ui.label("回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。")
-                .on_hover_text("回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます");
+        egui::Window::new(i18n::tr("設計の要件")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([1200.0, 620.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
+            ui.label(i18n::tr("回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。"))
+                .on_hover_text(i18n::tr("回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます"));
             if !self.req_problems.is_empty() {
                 ui.separator();
                 for p in &self.req_problems {
                     ui.colored_label(crate::theme::WARN, format!("⚠ {p}"));
                 }
             }
-            ui.checkbox(&mut self.req_frames, "回路図の上に枠を出す").on_hover_text("近くに置く組を色つきの枠で囲み、離す組を A・B の二重の枠で囲んで、名前と距離を書きます。この表を開かなくても、回路図を見た人に設計の意図が伝わります。回路図にある部品だけが囲まれます (ネット名で書いた側は囲みません)");
+            ui.checkbox(&mut self.req_frames, i18n::tr("回路図の上に枠を出す")).on_hover_text(i18n::tr("近くに置く組を色つきの枠で囲み、離す組を A・B の二重の枠で囲んで、名前と距離を書きます。この表を開かなくても、回路図を見た人に設計の意図が伝わります。回路図にある部品だけが囲まれます (ネット名で書いた側は囲みません)"));
             let unexplained = self.sch.requirements.unexplained();
             if !unexplained.is_empty() {
-                ui.colored_label(crate::theme::WARN, format!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
-                    .on_hover_text("数字だけでは、あとで読む人に「なぜその値か」が伝わりません。「理由」の欄に、なぜそうするかを一言書いておきましょう (例: ループを小さくしてノイズを減らすため)");
+                ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
+                    .on_hover_text(i18n::tr("数字だけでは、あとで読む人に「なぜその値か」が伝わりません。「理由」の欄に、なぜそうするかを一言書いておきましょう (例: ループを小さくしてノイズを減らすため)"));
             }
             ui.separator();
             let buf = &mut self.req_buf;
             let spec = &mut self.sch.requirements;
-            egui::CollapsingHeader::new(format!("ネットの役割 ({}) (?)", spec.net_rules.len())).id_salt("req_nets").default_open(true).show(ui, |ui| {
-                ui.label("同じ役割・同じ太さのネットを、1行にまとめます。基板に取り込むと、行の名前のネットクラスになります。").on_hover_text("ネット名の末尾に * を付けると、その名前で始まるすべてのネットです (例: GN* は GN1〜GN10)。幅と間隔を 0 にすると、基板の既定のままです。電流を書くと、配線の太さの推奨と電圧降下の計算に使われます");
+            egui::CollapsingHeader::new(i18n::trf!("ネットの役割 ({}) (?)", spec.net_rules.len())).id_salt("req_nets").default_open(true).show(ui, |ui| {
+                ui.label(i18n::tr("同じ役割・同じ太さのネットを、1行にまとめます。基板に取り込むと、行の名前のネットクラスになります。")).on_hover_text(i18n::tr("ネット名の末尾に * を付けると、その名前で始まるすべてのネットです (例: GN* は GN1〜GN10)。幅と間隔を 0 にすると、基板の既定のままです。電流を書くと、配線の太さの推奨と電圧降下の計算に使われます"));
                 let mut remove = None;
                 egui::Grid::new("req_net_grid").num_columns(8).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "ネット (, 区切り)", "役割", "線幅", "間隔", "電流", "理由", ""] {
@@ -209,7 +209,7 @@ impl SchEditor {
                             }
                         })
                         .response
-                        .on_hover_text("ネットが何のためのものか。自動配線は、大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に引きます。検出のネットは、ビアなしで引きます");
+                        .on_hover_text(i18n::tr("ネットが何のためのものか。自動配線は、大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に引きます。検出のネットは、ビアなしで引きます"));
                         if pick != now {
                             r.role = if pick == Role::None { String::new() } else { pick.name().to_string() };
                             changed = true;
@@ -223,7 +223,7 @@ impl SchEditor {
                             r.note = t;
                             changed = true;
                         }
-                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この行を消します")).clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -234,17 +234,17 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
-                if ui.button("＋ ネットの役割を足す").on_hover_text("新しい行を足します").clicked() {
+                if ui.button(i18n::tr("＋ ネットの役割を足す")).on_hover_text(i18n::tr("新しい行を足します")).clicked() {
                     spec.net_rules.push(NetRule { name: format!("役割{}", spec.net_rules.len() + 1), ..Default::default() });
                     buf.clear();
                     changed = true;
                 }
-                egui::CollapsingHeader::new("詳細: 配線の性質 (順番・ビア・層・長さ・ビア数・細い配線) (?)").id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty() || !r.layers.is_empty() || r.max_length > 0.0 || r.max_vias > 0 || r.max_neck > 0.0)).show(ui, |ui| {
-                    ui.label("役割がきめている「配線の順番」と「ビアを使うか」と、使う層・長さの上限を、行ごとに決めます。").on_hover_text("役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。
+                egui::CollapsingHeader::new(i18n::tr("詳細: 配線の性質 (順番・ビア・層・長さ・ビア数・細い配線) (?)")).id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty() || !r.layers.is_empty() || r.max_length > 0.0 || r.max_vias > 0 || r.max_neck > 0.0)).show(ui, |ui| {
+                    ui.label(i18n::tr("役割がきめている「配線の順番」と「ビアを使うか」と、使う層・長さの上限を、行ごとに決めます。")).on_hover_text(i18n::tr("役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。
 ・使う層: 自動配線がこの層だけにトラックを引きます (表面なら top、裏面なら bottom、内層は inner1 ... を , で区切る。空ならどの層でも)。ほかの層に配線があると、基板の点検が指摘します
 ・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし
 ・ビアの上限: 1つのネットのビアの数。0 なら上限なし (ビアは、戻り電流の道が切れ、インダクタンスも増える)
-・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし");
+・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし"));
                     egui::Grid::new("req_props_grid").num_columns(7).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
                         for h in ["行", "配線の順番 (小さいほど先)", "ビア", "使う層 (, 区切り)", "長さの上限", "ビアの上限", "細い配線の上限"] {
                             ui.strong(h);
@@ -259,7 +259,7 @@ impl SchEditor {
                                 Some(o) => o.to_string(),
                             };
                             egui::ComboBox::from_id_salt(("prop_order", k)).selected_text(shown).width(150.0).show_ui(ui, |ui| {
-                                if ui.selectable_label(r.order.is_none(), format!("役割のとおり ({by_role})")).clicked() {
+                                if ui.selectable_label(r.order.is_none(), i18n::trf!("役割のとおり ({by_role})")).clicked() {
                                     r.order = None;
                                     changed = true;
                                 }
@@ -291,7 +291,7 @@ impl SchEditor {
                             number_cell(ui, &mut r.max_length, " mm", 1.0, "1つのネットのトラックの長さの合計の上限。0 なら上限なし");
                             changed |= r.max_length != before;
                             let before = r.max_vias;
-                            ui.add(egui::DragValue::new(&mut r.max_vias).speed(0.1).range(0..=1000).suffix(" 個")).on_hover_text("1つのネットのビアの数の上限。0 なら上限なし");
+                            ui.add(egui::DragValue::new(&mut r.max_vias).speed(0.1).range(0..=1000).suffix(i18n::tr(" 個"))).on_hover_text(i18n::tr("1つのネットのビアの数の上限。0 なら上限なし"));
                             changed |= r.max_vias != before;
                             let before = r.max_neck;
                             number_cell(ui, &mut r.max_neck, " mm", 0.5, "線幅が行の線幅より細いトラックの合計の上限 (細い引き出しなど)。0 なら上限なし");
@@ -300,12 +300,12 @@ impl SchEditor {
                         }
                     });
                 });
-                egui::CollapsingHeader::new("詳細: 部品間の線幅 (?)").id_salt("req_links").default_open(spec.net_rules.iter().any(|r| !r.links.is_empty())).show(ui, |ui| {
-                    ui.label("上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。").on_hover_text("例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです");
+                egui::CollapsingHeader::new(i18n::tr("詳細: 部品間の線幅 (?)")).id_salt("req_links").default_open(spec.net_rules.iter().any(|r| !r.links.is_empty())).show(ui, |ui| {
+                    ui.label(i18n::tr("上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。")).on_hover_text(i18n::tr("例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです"));
                     for (k, r) in spec.net_rules.iter_mut().enumerate() {
                         ui.horizontal(|ui| {
                             ui.strong(&r.name);
-                            if ui.small_button("＋ 線を足す").on_hover_text("この行のネットに、部品間の線幅を足します").clicked() {
+                            if ui.small_button(i18n::tr("＋ 線を足す")).on_hover_text(i18n::tr("この行のネットに、部品間の線幅を足します")).clicked() {
                                 r.links.push(LinkWidth { width: r.width.max(0.25), ..Default::default() });
                                 buf.clear();
                                 changed = true;
@@ -326,7 +326,7 @@ impl SchEditor {
                                 let before = l.width;
                                 number_cell(ui, &mut l.width, " mm", 0.05, "この2つの部品の間の線の幅。0 は行の幅のまま");
                                 changed |= before != l.width;
-                                if ui.small_button("削除").on_hover_text("この線の設定を消します").clicked() {
+                                if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この線の設定を消します")).clicked() {
                                     remove = Some(j);
                                 }
                             });
@@ -339,8 +339,8 @@ impl SchEditor {
                     }
                 });
             });
-            egui::CollapsingHeader::new(format!("近くに置く部品の組 ({}) (?)", spec.groups.len())).id_salt("req_groups").default_open(true).show(ui, |ui| {
-                ui.label("端子のそばの保護、小さくしたいループなど、近くにあるべき部品を組にします。").on_hover_text("基板の自動配置は、組の部品を1つの塊にして並べます。基板の画面では、組が上限より広がっていないかを調べます。上限を 0 にすると、チェックはしません (自動配置では塊にします)");
+            egui::CollapsingHeader::new(i18n::trf!("近くに置く部品の組 ({}) (?)", spec.groups.len())).id_salt("req_groups").default_open(true).show(ui, |ui| {
+                ui.label(i18n::tr("端子のそばの保護、小さくしたいループなど、近くにあるべき部品を組にします。")).on_hover_text(i18n::tr("基板の自動配置は、組の部品を1つの塊にして並べます。基板の画面では、組が上限より広がっていないかを調べます。上限を 0 にすると、チェックはしません (自動配置では塊にします)"));
                 let mut remove = None;
                 egui::Grid::new("req_group_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "部品 (, 区切り)", "上限", "理由", ""] {
@@ -363,7 +363,7 @@ impl SchEditor {
                             g.note = t;
                             changed = true;
                         }
-                        if ui.small_button("削除").on_hover_text("この組を消します").clicked() {
+                        if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この組を消します")).clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -374,16 +374,16 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
-                if ui.button("＋ 組を足す").on_hover_text("新しい組を足します。部品は、あとから書きます").clicked() {
+                if ui.button(i18n::tr("＋ 組を足す")).on_hover_text(i18n::tr("新しい組を足します。部品は、あとから書きます")).clicked() {
                     spec.groups.push(PlaceGroup { name: format!("組{}", spec.groups.len() + 1), ..Default::default() });
                     buf.clear();
                     changed = true;
                 }
             });
             let (suggest, suggest_msg) = (&mut self.req_suggest, &self.req_suggest_msg);
-            egui::CollapsingHeader::new("解析から入れる (?)").id_salt("req_from_dc").default_open(!suggest.is_empty()).show(ui, |ui| {
-                ui.label("DC解析で、各ネットに流れる電流を調べて、表に入れます。").on_hover_text("電流が空の行には、その行のネットのうち最大の電流 (2桁に切り上げ) を提案します。どの行にも入っていないネットで 0.1 A 以上流れるものは、行の追加を提案します。表に書いてある電流は、そのままです。チェックを外したものは入れません");
-                if ui.button("DC解析の電流を調べる").on_hover_text("いまの回路を DC 解析して、ネットごとの電流から、表への提案を作ります。回路が解析できないときは、理由が出ます").clicked() {
+            egui::CollapsingHeader::new(i18n::tr("解析から入れる (?)")).id_salt("req_from_dc").default_open(!suggest.is_empty()).show(ui, |ui| {
+                ui.label(i18n::tr("DC解析で、各ネットに流れる電流を調べて、表に入れます。")).on_hover_text(i18n::tr("電流が空の行には、その行のネットのうち最大の電流 (2桁に切り上げ) を提案します。どの行にも入っていないネットで 0.1 A 以上流れるものは、行の追加を提案します。表に書いてある電流は、そのままです。チェックを外したものは入れません"));
+                if ui.button(i18n::tr("DC解析の電流を調べる")).on_hover_text(i18n::tr("いまの回路を DC 解析して、ネットごとの電流から、表への提案を作ります。回路が解析できないときは、理由が出ます")).clicked() {
                     run_dc = true;
                 }
                 if !suggest_msg.is_empty() {
@@ -392,13 +392,13 @@ impl SchEditor {
                 for (on, s) in suggest.iter_mut() {
                     ui.checkbox(on, &s.text);
                 }
-                if suggest.iter().any(|(on, _)| *on) && ui.button("選んだものを表に入れる").on_hover_text("チェックの付いた提案を、上の表に書き込みます。あとから自由に直せます").clicked() {
+                if suggest.iter().any(|(on, _)| *on) && ui.button(i18n::tr("選んだものを表に入れる")).on_hover_text(i18n::tr("チェックの付いた提案を、上の表に書き込みます。あとから自由に直せます")).clicked() {
                     apply_now = true;
                 }
             });
             let (bp, bp_msg) = (&mut self.req_bp_suggest, &self.req_bp_msg);
-            egui::CollapsingHeader::new(format!("バイパスの対応 ({}) (?)", spec.bypass.len())).id_salt("req_bypass").default_open(true).show(ui, |ui| {
-                ui.label("どのコンデンサが、どの IC のためのものかを書きます。").on_hover_text("電源のネットが同じだと、回路図のつなぎ方だけでは、コンデンサがどの IC のためのものか分かりません (ラベルでつなぐと、置いた場所も当てになりません)。ここに書くと、基板の自動配置がそのコンデンサを、その IC の電源ピンのそばに置き、点検もその IC のピンからの距離を調べます。書いていないコンデンサは、これまでどおり自動で決めます");
+            egui::CollapsingHeader::new(i18n::trf!("バイパスの対応 ({}) (?)", spec.bypass.len())).id_salt("req_bypass").default_open(true).show(ui, |ui| {
+                ui.label(i18n::tr("どのコンデンサが、どの IC のためのものかを書きます。")).on_hover_text(i18n::tr("電源のネットが同じだと、回路図のつなぎ方だけでは、コンデンサがどの IC のためのものか分かりません (ラベルでつなぐと、置いた場所も当てになりません)。ここに書くと、基板の自動配置がそのコンデンサを、その IC の電源ピンのそばに置き、点検もその IC のピンからの距離を調べます。書いていないコンデンサは、これまでどおり自動で決めます"));
                 let mut remove = None;
                 egui::Grid::new("req_bypass_grid").num_columns(4).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["IC", "コンデンサ (, 区切り)", "理由", ""] {
@@ -418,7 +418,7 @@ impl SchEditor {
                             b.note = t;
                             changed = true;
                         }
-                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この行を消します")).clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -430,12 +430,12 @@ impl SchEditor {
                     changed = true;
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("＋ 対応を足す").on_hover_text("新しい行を足します").clicked() {
+                    if ui.button(i18n::tr("＋ 対応を足す")).on_hover_text(i18n::tr("新しい行を足します")).clicked() {
                         spec.bypass.push(Bypass::default());
                         buf.clear();
                         changed = true;
                     }
-                    if ui.button("回路から提案を作る").on_hover_text("対応が書かれていないコンデンサについて、どの IC のものかを回路から推測して、提案します。電源のネットを持つ IC のうち、両側の電源を持つもの → 同じシートのもの → コンデンサの数が少ないもの、の順に決めます。提案ごとに、決めた理由が出ます。違うものはチェックを外してください").clicked() {
+                    if ui.button(i18n::tr("回路から提案を作る")).on_hover_text(i18n::tr("対応が書かれていないコンデンサについて、どの IC のものかを回路から推測して、提案します。電源のネットを持つ IC のうち、両側の電源を持つもの → 同じシートのもの → コンデンサの数が少ないもの、の順に決めます。提案ごとに、決めた理由が出ます。違うものはチェックを外してください")).clicked() {
                         run_bp = true;
                     }
                 });
@@ -445,12 +445,12 @@ impl SchEditor {
                 for (on, s) in bp.iter_mut() {
                     ui.checkbox(on, &s.text);
                 }
-                if bp.iter().any(|(on, _)| *on) && ui.button("選んだものを表に入れる").on_hover_text("チェックの付いた提案を、上の表に書き込みます。理由の欄は空で入るので、あとで書いてください").clicked() {
+                if bp.iter().any(|(on, _)| *on) && ui.button(i18n::tr("選んだものを表に入れる")).on_hover_text(i18n::tr("チェックの付いた提案を、上の表に書き込みます。理由の欄は空で入るので、あとで書いてください")).clicked() {
                     apply_bp = true;
                 }
             });
-            egui::CollapsingHeader::new(format!("離す組 ({}) (?)", spec.apart.len())).id_salt("req_apart").default_open(true).show(ui, |ui| {
-                ui.label("降圧のスイッチングノードと、基準・ADC・検出線のように、離しておくものどうしを書きます。").on_hover_text("書くのは部品番号か、ネット名です (部品番号が先に見つかれば部品、なければネットの全パッド。末尾の * も使えます)。基板の画面で、いちばん近い2つのパッドの距離が下限より近くないかを調べます");
+            egui::CollapsingHeader::new(i18n::trf!("離す組 ({}) (?)", spec.apart.len())).id_salt("req_apart").default_open(true).show(ui, |ui| {
+                ui.label(i18n::tr("降圧のスイッチングノードと、基準・ADC・検出線のように、離しておくものどうしを書きます。")).on_hover_text(i18n::tr("書くのは部品番号か、ネット名です (部品番号が先に見つかれば部品、なければネットの全パッド。末尾の * も使えます)。基板の画面で、いちばん近い2つのパッドの距離が下限より近くないかを調べます"));
                 let mut remove = None;
                 egui::Grid::new("req_apart_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "A (, 区切り)", "B (, 区切り)", "下限", "理由", ""] {
@@ -477,7 +477,7 @@ impl SchEditor {
                             a.note = t;
                             changed = true;
                         }
-                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この行を消します")).clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -488,18 +488,18 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
-                if ui.button("＋ 離す組を足す").on_hover_text("新しい行を足します").clicked() {
+                if ui.button(i18n::tr("＋ 離す組を足す")).on_hover_text(i18n::tr("新しい行を足します")).clicked() {
                     spec.apart.push(KeepApart { name: format!("離す{}", spec.apart.len() + 1), min_dist: 10.0, ..Default::default() });
                     buf.clear();
                     changed = true;
                 }
             });
-            egui::CollapsingHeader::new(format!("道筋の測定 ({}) (?)", spec.measures.len())).id_salt("req_measures").default_open(!spec.measures.is_empty()).show(ui, |ui| {
-                ui.label("配線した銅の道筋 (トラックとビア) の長さ・ビア数・分かれ目を測って、上限か下限を決めます。").on_hover_text("基板に配線したあとの点検です。測るのは、2つのパッドの間をトラックとビアでたどった道筋で、ベタは通りません (ベタだけでつながっていると、道筋なしになります)。
+            egui::CollapsingHeader::new(i18n::trf!("道筋の測定 ({}) (?)", spec.measures.len())).id_salt("req_measures").default_open(!spec.measures.is_empty()).show(ui, |ui| {
+                ui.label(i18n::tr("配線した銅の道筋 (トラックとビア) の長さ・ビア数・分かれ目を測って、上限か下限を決めます。")).on_hover_text(i18n::tr("基板に配線したあとの点検です。測るのは、2つのパッドの間をトラックとビアでたどった道筋で、ベタは通りません (ベタだけでつながっていると、道筋なしになります)。
 ・長さ: 道筋の長さ (mm)
 ・ビアの数: 道筋のビアの数 (検出線は 0 に)
 ・分かれ目: 1つ目のパッドから、2つ目・3つ目のパッドへ行く道筋が、一緒に走る長さ (mm)。電流の線と電圧を測る線が、パッドの根元で分かれているかを見るときに (ケルビン接続: 0.5 mm 以下など)
-パッドは「部品.ピン」の形で書きます (例: RS1.1)");
+パッドは「部品.ピン」の形で書きます (例: RS1.1)"));
                 let mut remove = None;
                 egui::Grid::new("req_measures_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "測るもの", "パッド・ネット (, 区切り)", "上限 / 下限", "理由", ""] {
@@ -514,7 +514,7 @@ impl SchEditor {
                         let label = MEASURES.iter().find(|(key, ..)| *key == m.what).map_or("(選ぶ)", |(_, l, ..)| *l);
                         egui::ComboBox::from_id_salt(("measure_what", k)).selected_text(label).width(150.0).show_ui(ui, |ui| {
                             for (key, l, unit, need) in MEASURES {
-                                if ui.selectable_label(m.what == *key, format!("{l} ({unit})")).on_hover_text(format!("パッドが {need} 個要ります")).clicked() {
+                                if ui.selectable_label(m.what == *key, format!("{l} ({unit})")).on_hover_text(i18n::trf!("パッドが {need} 個要ります")).clicked() {
                                     m.what = (*key).to_string();
                                     changed = true;
                                 }
@@ -534,11 +534,11 @@ impl SchEditor {
                         }
                         ui.horizontal(|ui| {
                             let mut min = m.is_min();
-                            egui::ComboBox::from_id_salt(("measure_op", k)).selected_text(if min { "以上" } else { "以下" }).width(60.0).show_ui(ui, |ui| {
-                                if ui.selectable_label(!min, "以下 (上限)").clicked() {
+                            egui::ComboBox::from_id_salt(("measure_op", k)).selected_text(if min { i18n::tr("以上") } else { i18n::tr("以下") }).width(60.0).show_ui(ui, |ui| {
+                                if ui.selectable_label(!min, i18n::tr("以下 (上限)")).clicked() {
                                     min = false;
                                 }
-                                if ui.selectable_label(min, "以上 (下限)").clicked() {
+                                if ui.selectable_label(min, i18n::tr("以上 (下限)")).clicked() {
                                     min = true;
                                 }
                             });
@@ -575,7 +575,7 @@ impl SchEditor {
                             m.note = t;
                             changed = true;
                         }
-                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この行を消します")).clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -586,14 +586,14 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
-                if ui.button("＋ 測定を足す").on_hover_text("新しい行を足します").clicked() {
+                if ui.button(i18n::tr("＋ 測定を足す")).on_hover_text(i18n::tr("新しい行を足します")).clicked() {
                     spec.measures.push(Measure { name: format!("測定{}", spec.measures.len() + 1), what: "length".into(), op: "max".into(), limit: 10.0, ..Default::default() });
                     buf.clear();
                     changed = true;
                 }
             });
-            egui::CollapsingHeader::new(format!("承知した例外 ({}) (?)", spec.waivers.len())).id_salt("req_waivers").default_open(!spec.waivers.is_empty()).show(ui, |ui| {
-                ui.label("基板の点検で指摘されても、承知の上でそのままにするものを、理由つきで書きます。").on_hover_text("基板の点検 (組の広がり・離す距離・バイパスの距離) の指摘のうち、ここに書いたものは「違反」に数えず、「承知した例外」として理由つきで別に出ます。あとで読む人が、直し忘れではなく承知の上だと分かります。基板の点検の一覧の「承知する」ボタンからも書き込めます");
+            egui::CollapsingHeader::new(i18n::trf!("承知した例外 ({}) (?)", spec.waivers.len())).id_salt("req_waivers").default_open(!spec.waivers.is_empty()).show(ui, |ui| {
+                ui.label(i18n::tr("基板の点検で指摘されても、承知の上でそのままにするものを、理由つきで書きます。")).on_hover_text(i18n::tr("基板の点検 (組の広がり・離す距離・バイパスの距離) の指摘のうち、ここに書いたものは「違反」に数えず、「承知した例外」として理由つきで別に出ます。あとで読む人が、直し忘れではなく承知の上だと分かります。基板の点検の一覧の「承知する」ボタンからも書き込めます"));
                 let mut remove = None;
                 egui::Grid::new("req_waivers_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["種類", "行の名前", "コンデンサ", "理由", ""] {
@@ -604,7 +604,7 @@ impl SchEditor {
                         let label = WAIVER_KINDS.iter().find(|(key, _)| *key == w.kind).map_or("(選ぶ)", |(_, l)| *l);
                         egui::ComboBox::from_id_salt(("waiver_kind", k)).selected_text(label).width(90.0).show_ui(ui, |ui| {
                             for (key, l) in WAIVER_KINDS {
-                                if ui.selectable_label(w.kind == *key, *l).on_hover_text("どの種類の指摘を承知するか").clicked() {
+                                if ui.selectable_label(w.kind == *key, *l).on_hover_text(i18n::tr("どの種類の指摘を承知するか")).clicked() {
                                     w.kind = (*key).to_string();
                                     changed = true;
                                 }
@@ -626,7 +626,7 @@ impl SchEditor {
                             w.note = t;
                             changed = true;
                         }
-                        if ui.small_button("削除").on_hover_text("この例外を消します。基板の点検で、また指摘に戻ります").clicked() {
+                        if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この例外を消します。基板の点検で、また指摘に戻ります")).clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -637,7 +637,7 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
-                if ui.button("＋ 例外を足す").on_hover_text("新しい行を足します。種類・行の名前・理由を書きます").clicked() {
+                if ui.button(i18n::tr("＋ 例外を足す")).on_hover_text(i18n::tr("新しい行を足します。種類・行の名前・理由を書きます")).clicked() {
                     spec.waivers.push(Waiver { kind: "apart".into(), ..Default::default() });
                     buf.clear();
                     changed = true;

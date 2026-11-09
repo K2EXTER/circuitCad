@@ -28,17 +28,17 @@ impl BoardEditor {
             return;
         }
         let mut open = true;
-        egui::Window::new("ネットの電流一覧").id(egui::Id::new("current_window")).open(&mut open).default_width(620.0).default_pos([420.0, 160.0]).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("ネットの電流一覧")).id(egui::Id::new("current_window")).open(&mut open).default_width(620.0).default_pos([420.0, 160.0]).show(ctx, |ui| {
             let nets = self.board_nets();
             if nets.is_empty() {
-                ui.label("回路図から部品を取り込むと、ネットの一覧が出ます");
+                ui.label(i18n::tr("回路図から部品を取り込むと、ネットの一覧が出ます"));
                 return;
             }
             ui.horizontal_wrapped(|ui| {
-                if ui.button("DC解析の電流を入れる").on_hover_text("回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、全部のネットに入れます (いま入れてある電流は置き換わります)").clicked() {
+                if ui.button(i18n::tr("DC解析の電流を入れる")).on_hover_text(i18n::tr("回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、全部のネットに入れます (いま入れてある電流は置き換わります)")).clicked() {
                     self.currents_request = Some(CurrentSource::Dc);
                 }
-                if ui.button("過渡解析の電流を入れる").on_hover_text("回路図で最後に実行した過渡解析の、後半の電流の実効値 (RMS) を、各ネットに入れます。先に回路図で過渡解析を実行してください").clicked() {
+                if ui.button(i18n::tr("過渡解析の電流を入れる")).on_hover_text(i18n::tr("回路図で最後に実行した過渡解析の、後半の電流の実効値 (RMS) を、各ネットに入れます。先に回路図で過渡解析を実行してください")).clicked() {
                     self.currents_request = Some(CurrentSource::Tran);
                 }
             });
@@ -53,17 +53,17 @@ impl BoardEditor {
                         ui.strong(h);
                     }
                     if stats {
-                        ui.strong("実効 (過渡)").on_hover_text("過渡解析の後半の電流の実効値。太さに使うのは、これです");
-                        ui.strong("10 ms の最大").on_hover_text("短くても繰り返す山の熱");
-                        ui.strong("ピーク").on_hover_text("一瞬の最大値。参考です");
+                        ui.strong(i18n::tr("実効 (過渡)")).on_hover_text(i18n::tr("過渡解析の後半の電流の実効値。太さに使うのは、これです"));
+                        ui.strong(i18n::tr("10 ms の最大")).on_hover_text(i18n::tr("短くても繰り返す山の熱"));
+                        ui.strong(i18n::tr("ピーク")).on_hover_text(i18n::tr("一瞬の最大値。参考です"));
                     }
                     ui.end_row();
                     for net in &nets {
-                        if ui.selectable_label(false, net).on_hover_text("クリックで、このネットの設定の窓を開きます").clicked() {
+                        if ui.selectable_label(false, net).on_hover_text(i18n::tr("クリックで、このネットの設定の窓を開きます")).clicked() {
                             open_net = Some(net.clone());
                         }
                         let mut a = self.board.net_currents.get(net).copied().unwrap_or(0.0);
-                        ui.add(egui::DragValue::new(&mut a).speed(0.05).range(0.0..=30.0).suffix(" A").max_decimals(3)).on_hover_text("このネットに流れる最大の電流。0 なら調べません");
+                        ui.add(egui::DragValue::new(&mut a).speed(0.05).range(0.0..=30.0).suffix(" A").max_decimals(3)).on_hover_text(i18n::tr("このネットに流れる最大の電流。0 なら調べません"));
                         if a > 0.0 {
                             self.board.net_currents.insert(net.clone(), a);
                         } else {
@@ -73,8 +73,8 @@ impl BoardEditor {
                             Some(w) => {
                                 ui.label(format!("{:.2} mm", round_up_width(w.needed)));
                                 match w.thinnest {
-                                    None => ui.colored_label(Color32::from_gray(160), "配線なし"),
-                                    Some(t) if w.too_thin() => ui.colored_label(crate::theme::ERROR, format!("{t:.2} mm ✖ 足りません")),
+                                    None => ui.colored_label(Color32::from_gray(160), i18n::tr("配線なし")),
+                                    Some(t) if w.too_thin() => ui.colored_label(crate::theme::ERROR, i18n::trf!("{t:.2} mm ✖ 足りません")),
                                     Some(t) => ui.colored_label(Color32::from_rgb(90, 190, 110), format!("{t:.2} mm ✔")),
                                 };
                             }
@@ -90,7 +90,7 @@ impl BoardEditor {
                                     ui.label(format!("{:.3} A", s.burst_rms));
                                     let txt = format!("{:.3} A{}", s.peak, if s.spiky() { " ⚠" } else { "" });
                                     if s.spiky() {
-                                        ui.colored_label(crate::theme::WARN, txt).on_hover_text("ピークが実効値の10倍以上です。起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります");
+                                        ui.colored_label(crate::theme::WARN, txt).on_hover_text(i18n::tr("ピークが実効値の10倍以上です。起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります"));
                                     } else {
                                         ui.label(txt);
                                     }
@@ -107,12 +107,12 @@ impl BoardEditor {
                 });
             });
             let thin: Vec<String> = report.iter().filter(|w| w.too_thin()).map(|w| w.net.clone()).collect();
-            if !thin.is_empty() && ui.button(format!("足りない {} ネットを推奨幅にする", thin.len())).on_hover_text("電流に対して細いネットの配線を、すべて必要な太さまで太くします (Ctrl+Z で戻せます)。太くしたあと、DRC で間隔が足りるか確かめましょう").clicked() {
+            if !thin.is_empty() && ui.button(i18n::trf!("足りない {} ネットを推奨幅にする", thin.len())).on_hover_text(i18n::tr("電流に対して細いネットの配線を、すべて必要な太さまで太くします (Ctrl+Z で戻せます)。太くしたあと、DRC で間隔が足りるか確かめましょう")).clicked() {
                 for n in thin {
                     self.widen_net_to_need(&n);
                 }
             }
-            ui.small("太さの目安は、銅箔 35µm・温度上昇 10℃ の外層 (IPC-2221) です。ピーク電流 (起動時・スイッチング) は入らないので、余裕を見てください");
+            ui.small(i18n::tr("太さの目安は、銅箔 35µm・温度上昇 10℃ の外層 (IPC-2221) です。ピーク電流 (起動時・スイッチング) は入らないので、余裕を見てください"));
             if let Some(n) = open_net {
                 self.open_net_window(&n);
             }

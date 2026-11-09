@@ -1,0 +1,435 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/board_editor/order.rs
+表面の銅箔 (配線とパッド)	Top copper (tracks and pads)
+裏面の銅箔	Bottom copper
+表面のソルダーマスク (緑のレジストの穴あけ)	Top solder mask (openings in the green mask)
+裏面のソルダーマスク	Bottom solder mask
+表面のシルク (白い文字)	Top silkscreen (white text)
+裏面のシルク	Bottom silkscreen
+基板の外形	Board outline
+メッキ穴 (部品の足・ビア)	Plated holes (part leads and vias)
+メッキなしの穴 (取付穴)	Non-plated holes (mounting holes)
+部品表 (部品実装を頼むとき)	Bill of materials (when you order assembly)
+部品の位置 (部品実装を頼むとき)	Part positions (when you order assembly)
+上のガーバーとドリルをまとめた zip。発注先へはこれを渡します	A zip of the Gerber and drill files above. This is what you send to the fab
+{} のルールに合わせました (線幅 {} mm、ビア {} / {} mm)。DRC をやり直してください	Matched the rules of {} (track width {} mm, via {} / {} mm). Run DRC again
+部品の購入リスト (買うもの)	Shopping list (parts to buy)
+基板に載せる部品の一覧です。店のボタンで、その店の部品のページ (型番が分かるもの) か、検索のページ (分からないもの) が開きます。買う前に、店のページで値と大きさを確かめます	A list of the parts on the board. A shop button opens that shop's page for the part (if the part number is known) or a search page (if not). Before buying, check the value and size on the shop's page
+基板の枚数	Number of boards
+この枚数の基板に載せる分を買います	Buy enough parts for this many boards
+予備を足す	Add spares
+小さなチップ部品 (抵抗・コンデンサ・コイル・LED) は、落としたり飛ばしたりしやすいので、2個か全体の1割の多いほうを、多めに買います。ICやコネクタには足しません。目安です	Small chip parts (resistors, capacitors, inductors, LEDs) are easy to drop or lose, so buy extra: 2 or 10% of the total, whichever is more. No extras for ICs or connectors. This is a rough guide
+基板に部品がありません	There are no parts on the board
+値	Value
+形	Package
+番号	No.
+必要	Needed
+予備	Spare
+買う数	To buy
+店	Shop
+この部品が使う場所 (部品番号)	Where this part is used (reference designators)
+この店の部品のページを開きます (部品に登録された型番)	Open this shop's page for the part (the part number registered on the part)
+この店の検索のページを開きます (型番が分からないので、値と大きさで探します)	Open this shop's search page (the part number is unknown, so search by value and size)
+CSVに保存…	Save as CSV…
+この一覧を CSV (表計算ソフトで開けます) に保存します。店のリンクと型番も入ります	Save this list as CSV (opens in spreadsheet apps). Shop links and part numbers are included
+購入リストを保存しました: {}	Saved the shopping list: {}
+購入リストを保存できませんでした: {e}。保存先に書き込めるか確認してください	Could not save the shopping list: {e}. Check that you can write to the destination
+発注の準備	Prepare order
+基板を発注する前の確認です。上から順に見ていきましょう。	Checks before you order the board. Go through them from the top.
+1. 発注先を選ぶ	1. Choose a fab
+選んでください	Choose one
+ルールをこの発注先に合わせる	Match rules to this fab
+DRC の最小線幅・最小間隔・最小穴径などを、この発注先の値にします。配線の太さやビアの大きさの初期値も変わります	Sets the DRC minimum track width, minimum clearance, minimum hole size and so on to this fab's values. The default track width and via size change too
+発注先の最新の仕様を見る	See the fab's latest specs
+数値は目安です。発注の前に、必ず発注先のページで最新の値を確認してください。	The numbers are a rough guide. Before ordering, always check the latest values on the fab's page.
+2. 発注前のチェック	2. Pre-order check
+もう一度チェック	Check again
+いまの基板でチェックをやり直します。直したあとに押します	Run the check again on the current board. Press this after fixing things
+クリックで、基板のその場所へ移動して、印をつけます。基板の上にも、同じ番号の印が出ています	Click to jump to that spot on the board and mark it. The same numbered mark also appears on the board
+直すところはありません。次に進めます	Nothing to fix. You can go on to the next step
+赤い ✖ の項目を直してから、もう一度チェックしてください	Fix the items with a red ✖, then check again
+3. 出来上がりを見る	3. See the result
+書き出すファイルを読み戻して、基板の絵にします。発注先に届くのはこの形です。配線や穴が想定どおりか確認しましょう	Reads back the files to be exported and draws the board from them. This is what the fab will get. Check that tracks and holes are as you expect
+プレビューを更新	Update preview
+プレビューを作る	Make preview
+書き出すファイルを読み戻して、出来上がりの絵を作り直します	Reads back the files to be exported and redraws the finished board
+表面から	From top
+基板の表面 (部品を載せる面) から見た絵にします	Show the board as seen from the top (the side the parts go on)
+裏面から	From bottom
+基板を裏返して、裏面から見た絵にします	Flip the board and show it as seen from the bottom
+ソルダーマスク	Solder mask
+緑のレジスト。オフにすると、銅の配線だけが見えます	The green mask. Turn it off to see only the copper tracks
+シルク (白い印刷の文字と枠) の表示を切り替えます	Show or hide the silkscreen (white printed text and outlines)
+拡大	Zoom
+プレビューの拡大率です	Zoom level of the preview
+基板 {:.1} × {:.1} mm。金色 = むき出しの銅 (はんだが付く所)、緑 = マスクをかぶった配線、黒 = 穴、白 = シルク	Board {:.1} × {:.1} mm. Gold = bare copper (where solder goes), green = tracks under mask, black = holes, white = silkscreen
+穴の一覧	Holes
+直径	Diameter
+個数	Count
+種類	Type
+メッキ穴	Plated
+メッキなし	Non-plated
+4. 製造ファイルを書き出す	4. Export manufacturing files
+ガーバーは、基板の工場に渡す設計図のデータです (銅の層・シルク・外形・穴が、層ごとのファイルになります)。まとめて zip にします	Gerber files are the design data you give to the board factory (copper layers, silkscreen, outline and holes, one file per layer). They are bundled into a zip
+書き出し先のフォルダを選んで書き出す	Choose a folder and export
+ガーバー・ドリル・部品表・部品位置・zip をまとめて作ります	Makes the Gerber, drill, BOM, part positions and zip all at once
+チェックの ✖ を直すと押せます	Available after you fix the ✖ items in the check
+書き出しました: {}	Exported: {}
+発注先に渡すのは「{}_gerber.zip」の1つです (部品の実装も頼むときは、BOM と CPL の csv も)	The one file to send to the fab is "{}_gerber.zip" (if you also order assembly, the BOM and CPL csv files too)
+ファイルの中身	Files inside
+5. {} で注文する	5. Order from {}
+基板名	Board name
+プレビューを作れませんでした: {e}	Could not make the preview: {e}
+書き出し完了	Export finished
+# crates/app/src/board_editor/padlead.rs
+そろえる所がありませんでした (すでに垂直、丸いパッド、すき間が足りない、またはルール違反になる所だけです)	Nothing to straighten (only spots already square, round pads, too little room, or that would break a rule)
+パッドの根元 {n} か所を、辺に垂直にそろえました	Straightened {n} pad entries to be square to the pad edge
+部品番号の文字は、どれも配線やパッドに重なっていません	No reference designator text overlaps a track or pad
+部品番号の文字 {} 個が重なっていますが、よけられる空きがありません (文字を手でドラッグして動かせます)	{} reference designators overlap, but there is no free space to move them (you can drag the text by hand)
+部品番号の文字 {} 個を、配線やパッドから離れた所へ動かしました{}	Moved {} reference designators away from tracks and pads{}
+ ({} 個は、よけられる空きがなく重なったままです)	 ({} still overlap because there is no free space)
+部品番号の文字	Reference designator text
+シルク (白い印刷) の部品番号 (R1 など) が、配線やパッドに重なると読みにくくなります	Silkscreen (white print) reference designators (R1 etc.) are hard to read when they overlap tracks or pads
+文字を配線からよける	Move text off tracks
+配線・パッド・ビア・穴・ほかの文字に重なっている部品番号を、部品の上・下・横の、重ならない場所へ動かします。重なっていない文字と、手で動かした文字はそのままです。元に戻すで取り消せます	Moves reference designators that overlap tracks, pads, vias, holes or other text to a free spot above, below or beside the part. Text that does not overlap and text you moved by hand stay put. Undo reverts this
+# crates/app/src/board_editor/pairs.rs
+差動ペア ({}) (?)	Differential pairs ({}) (?)
+名前から探す	Find by name
+ネット名が USB_DP / USB_DM、TX_P / TX_N、D+ / D- のように対になっているものを、ペアにします	Pairs up nets whose names match, like USB_DP / USB_DM, TX_P / TX_N, D+ / D-
+対になっているネット名が見つかりませんでした。下で2つのネットを選んで追加できます	No matching net names found. You can pick two nets below and add them
+差動ペアを {} 組、追加しました	Added {} differential pairs
+＋側	+ side
+－側	- side
+ペアに追加	Add pair
+選んだ2つのネットを、差動ペアにします	Makes the two selected nets a differential pair
+削除	Delete
+この組を差動ペアから外します (配線はそのまま残ります)	Removes this pair from the differential pairs (the tracks stay)
+2本の線の縁どうしの目標の間隔。発注先の最小間隔より狭くはできません。差動インピーダンスは、この間隔と線幅・基板の厚みで決まります (USB は 90Ω が目安。基板の積層で変わるので、発注先の計算ツールで確かめます)	Target gap between the edges of the two tracks. It can't be narrower than the fab's minimum clearance. The differential impedance depends on this gap, the track width and the board thickness (about 90Ω for USB. It depends on the board stackup, so check with the fab's calculator)
+長さの差 	Length diff 
+ mm以下	 mm max
+2本の長さの差の許容値。信号は銅の上を 1mm あたり約 6〜7ps で進みます。低速 (数 MHz 以下) なら数 mm ずれても問題になりません	Allowed length difference between the two tracks. Signals travel about 6-7ps per 1mm of copper. At low speeds (a few MHz or less) a few mm of difference is no problem
+ペアで配線	Route as pair
+＋側を配線してから、－側をそのすぐ隣に配線します。通せなかった接続は黄色の線のまま残ります	Routes the + side, then routes the - side right next to it. Connections that can't be routed stay as yellow lines
+長さを合わせる	Match length
+短いほうの線にジグザグ (蛇行) を足して、長さを揃えます。まっすぐで長い所が必要です。ルール違反になるときは、何もしません	Adds a zigzag (meander) to the shorter track to even out the lengths. Needs a long straight stretch. Does nothing if it would break a rule
+✔ 長さが合っています	✔ Lengths match
+⚠ 長さの差が大きい	⚠ Length difference is large
+{} {:.1}mm (ビア{})  /  {} {:.1}mm (ビア{})	{} {:.1}mm (vias {})  /  {} {:.1}mm (vias {})
+長さの差 {:.2}mm  並走 {:.0}%{}	Length diff {:.2}mm  side by side {:.0}%{}
+  間隔 {:.2}〜{:.2}mm	  gap {:.2}-{:.2}mm
+いちばん長いペアに、ほかのペアの長さ (2本の平均) をそろえます。短いペアは、2本とも同じだけ蛇行で長くします。2本は入れ子の山でいっしょに曲がるので、間隔が保たれ、ペアの中の長さの差も変わりません (差は「長さを合わせる」で直します)。蛇行の形は「長さ合わせ (蛇行)」の設定を使います。ルール違反になるペアは、何もしません。元に戻すで取り消せます	Matches the length of the other pairs (average of the two tracks) to the longest pair. In a short pair, both tracks are lengthened equally with meanders. The two tracks bend together in nested bumps, so the gap is kept and the length difference within the pair doesn't change (fix that with "Match length"). The meander shape uses the "Length matching (meander)" settings. Pairs that would break a rule are left alone. Undo reverts this
+ペアの長さはもうそろっています ({:.2} mm)	The pair lengths already match ({:.2} mm)
+ペアの長さを合わせられませんでした。{}	Could not match the pair lengths. {}
+目標 {:.2} mm に、{ok} 組のペアを蛇行で合わせました。DRC で確認しましょう	Matched {ok} pairs to the target {:.2} mm with meanders. Check with DRC
+目標 {:.2} mm に、{ok} 組のペアを合わせました。できなかったもの: {}	Matched {ok} pairs to the target {:.2} mm. Could not do: {}
+{} の短いほうに蛇行を足して、{:.2}mm 長くしました。DRC で確認しましょう	Added a meander to the shorter track of {}, making it {:.2}mm longer. Check with DRC
+USB の D+ / D- のように、2本で1つの信号を運ぶ配線です。並べて同じ長さで引くと、ノイズに強くなります。	Tracks that carry one signal on two wires, like USB D+ / D-. Routing them side by side at the same length makes them resistant to noise.
+{}: {} 本を並べて配線しました。DRC で確認しましょう	{}: routed {} tracks side by side. Check with DRC
+{}: {} 本を配線、{} 本は通せませんでした。部品の位置や層数を見直してください	{}: routed {} tracks, {} could not be routed. Review part positions or the layer count
+# crates/app/src/board_editor/panel.rs
+まず回路図タブで回路を作り、ここで「回路図から取り込み」を押すと、部品が基板に読み込まれます	First build a circuit in the schematic tab, then press "Import from schematic" here to load the parts onto the board
+部品が基板の外にあります。左の「部品を並べて外形を決める」で自動的に並べるか、部品をドラッグして基板の中に置きましょう	Some parts are outside the board. Use "Place parts and set outline" on the left to arrange them automatically, or drag the parts onto the board
+基板の外形を決めましょう。左の「矩形にする」か、ツールの「基板外形」で描きます。発注にはこの外形が必要です	Set the board outline. Use "Make rectangle" on the left, or draw it with the "Board outline" tool. You need an outline to order
+黄色の線 (未配線 {unrouted} 本) が残っています。「配線」ツールで手でつなぐか、左の「自動配線」に任せましょう。広い GND は「銅箔ゾーン」にすると簡単です	Yellow lines ({unrouted} unrouted) remain. Connect them by hand with the "Route" tool, or leave it to "Autoroute" on the left. For a wide GND, a "Copper zone" is easy
+配線が終わりました。「DRC を実行」でルール違反がないか確認し、問題なければ「発注の準備」で最終チェックをして、発注用データ (ガーバー) を作れます	Routing is done. Use "Run DRC" to check for rule violations, and if all is fine, do a final check in "Prepare order" and make the order data (Gerber)
+DRC の指摘は、クリックするとその場所に飛びます。直したらもう一度 DRC を実行しましょう。0 件になれば発注データを書き出せます	Click a DRC item to jump to its spot. After fixing, run DRC again. At 0 items you can export the order data
+手順	Steps
+回路図の取り込みから、配置・配線・確認と発注まで、上から順に進めます	Go from the top: import from schematic, placement, routing, checks and ordering
+手で描く	Draw by hand
+ツールで基板に自分で描き込みます。作業する層・グリッド・層構成もここです	Draw on the board yourself with the tools. The working layer, grid and layer stackup are here too
+回路図から取り込み	Import from schematic
+回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します	Loads the schematic's parts and connections (nets) onto the board. The parts are laid out and yellow lines (unrouted) show what to connect. Press again after changing the schematic
+回路図と違います: {}	Differs from schematic: {}
+取り込んだあとに、回路図が変わったか、基板が変わりました。「回路図から取り込み」を押すと、基板の部品の位置と配線は残したまま、値・形・つながりが回路図に合わせて更新されます	The schematic or the board changed after import. Press "Import from schematic" to update values, packages and connections to match the schematic, keeping part positions and tracks on the board
+手順 (上から順に)	Steps (from the top)
+基板づくりの流れです。①から順に進めると、発注用のデータまで作れます。いつでも途中に戻れます	The board-making flow. Go in order from ① to get to the order data. You can go back at any time
+① 部品を並べる	① Place parts
+部品を基板の上に並べて、基板の外形 (大きさ・形) を決めます (部品の取り込みは、パネルの一番上のボタン)。ここまでが「何をどこに置くか」です	Place the parts on the board and set the board outline (size and shape). (To import the parts, use the button at the top of the panel.) This step is "what goes where"
+ピン名をシルクへ	Pin names to silk
+回路図でヘッダ(コネクタ)に付けた「ピンの名前」(F+、SA、GND など)を、基板のシルク(白い文字)として、パッドのそばに書きます。もう一度押すと書き直します。位置は、あとで「文字」ツールで動かせます	Writes the "pin names" (F+, SA, GND, etc.) given to headers (connectors) in the schematic as silkscreen (white text) next to the pads. Press again to rewrite them. You can move them later with the "Text" tool
+未配線: {} 本 (黄色の線)	Unrouted: {} (yellow lines)
+まだ銅の線でつながっていない部分です。黄色の線 (ラッツネスト) が、つなぐべき相手を結んで示します。配線すると減って、0 になれば全部つながっています	Parts not yet connected by copper. Yellow lines (ratsnest) link each pad to what it should connect to. They decrease as you route; at 0 everything is connected
+部品を並べて外形を決める	Place parts and set outline
+すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。コネクタなど置き場所の決まった部品は、先に置いて「固定する」と、動かさずにそのまわりへ残りを並べます。先に「銅箔ゾーン」で GND のベタを塗っておくと、ベタでつながる GND は配線が要らないので、それを除いて部品を近づけ、小さくまとまります (ベタも新しい外形に合わせます)。「GND ベタ」を置いたあとでも使えます (そのビアと短い線は、並べたあとに置き直します)。ほかの配線がある基板では使えません (部品を動かすと配線が合わなくなるため)	Places all parts so that strongly connected ones are close, and fits the board outline to them. This makes a first draft, so tidy up by hand afterwards. Place parts with a fixed spot (connectors etc.) first and "Lock" them; the rest are then placed around them without moving them. If you first fill a GND pour with "Copper zone", GND connected by the pour needs no tracks, so it is left out and the parts move closer into a smaller board (the pour is fitted to the new outline too). It also works after placing a "GND pour" (its vias and short tracks are placed again after arranging). Not available when the board has other tracks (moving parts would break them)
+シートごとに塊にして並べる	Group by sheet
+回路図が複数のシートのとき、シートごとの部品を1つの塊(長方形)にして並べ、塊どうしをつながりの強い順に並べます。塊の中は、足の多い部品から、つながりの強い順です。どの部品がどのシートのものか分かりやすく、手で直しやすくなります。そのぶん、基板が大きくなり、配線が長くなります (マイクロオームメーターの回路 (6 シート・191 部品) で、面積 +37%、自動配線の長さ +13%、コンデンサが電源ピンから遠くなります)。そのため、初めはオフです。オフだと、シートに関係なく並べます	When the schematic has several sheets, each sheet's parts are placed as one block (rectangle), and the blocks are arranged by how strongly they connect. Inside a block, parts with many pins come first, then by connection strength. It's easy to see which part belongs to which sheet and to fix by hand. But the board gets bigger and the tracks longer (on the microohm meter circuit, 6 sheets and 191 parts: area +37%, autoroute length +13%, and capacitors end up farther from the supply pins). So it starts off. When off, parts are placed regardless of sheets
+向きを最適化	Optimize rotation
+ゲートを入れ替え	Swap gates
+回路図に反映	Apply to schematic
+配線がまだ付いていない部品を、0°・90°・180°・270° のうち、未配線の線が短く、交差が少なくなる向きに回します。回してもピンのつなぎは変わりません (回路は同じ)。ほかの部品や配線、基板の外にぶつかる向きは選びません。ロックした部品は回しません。配線を引く前の仕上げに使います。元に戻すで取り消せます	Rotates parts that have no tracks yet to 0°, 90°, 180° or 270°, whichever gives shorter unrouted lines and fewer crossings. Rotating doesn't change which pins connect (same circuit). Rotations that hit other parts, tracks or the board edge are not chosen. Locked parts are not rotated. Use it as a finishing step before routing. Undo reverts this
+74HC32 や 74HC14 のように、同じゲートが何個も入った IC では、どのゲートをどの信号に使っても回路は同じです (OR ゲートの 2 つの入力も同じ)。部品を置いたあとに押すと、未配線の線が短くなる割り当てを探して入れ替えます (交差の多さも点数に入れますが、長さを優先するので、交差が少し増えることもあります)。配線がまだ付いていないゲートだけ動かします。入れ替えは基板に覚えられ、「回路図から取り込み」をしても元に戻りません。回路は変わらないので、シミュレーションはそのままです。元に戻すで取り消せます	In ICs with several identical gates, like the 74HC32 or 74HC14, the circuit is the same whichever gate you use for which signal (the 2 inputs of an OR gate are interchangeable too). Press this after placing parts to find and swap to an assignment with shorter unrouted lines (crossings count in the score too, but length comes first, so crossings may increase a little). Only gates without tracks are moved. The swap is remembered by the board and is not undone by "Import from schematic". The circuit doesn't change, so the simulation stays the same. Undo reverts this
+「ゲートを入れ替え」で入れ替えたピンを、回路図の側にも反映します。回路図の配線の端とネットラベルが、入れ替えたピンへ移ります (部品は描き直さないので、ピンの間で配線が交差して見えることがあります。つながりは基板と同じです)。反映すると、基板が覚えていた入れ替えは要らなくなります。ほかの配線とまざってつながりが変わるときは、何も変えずに理由を出します。回路図の側の「元に戻す」で取り消せます	Applies the pins swapped with "Swap gates" to the schematic too. Wire ends and net labels in the schematic move to the swapped pins (the part is not redrawn, so wires may look crossed between pins; the connections match the board). After applying, the board no longer needs to remember the swap. If it would mix with other wires and change connections, nothing is changed and the reason is shown. Undo in the schematic reverts this
+選択を保存…	Save selection…
+スニペットを置く…	Place snippet…
+選んだ部品と、その間の配線・ビアを、ファイル (.ccbsnip) に保存します。よく使う電源まわりの配置と配線などを、別の基板で使えます。部品の位置と向きは、選んだ範囲の真ん中からの相対で残ります	Saves the selected parts and the tracks and vias between them to a file (.ccbsnip). You can reuse a common layout, like a power section's placement and routing, on another board. Part positions and rotations are kept relative to the center of the selection
+保存したスニペットを、いま見えている画面の真ん中に置きます。同じ部品番号・同じフットプリントの部品を、保存した並べ方に動かし、保存した配線とビアを足します。動かした部品につながっていた古い配線は消えます。この基板にない部品や、固定した部品は動かさず、結果の文に出します。「元に戻す」で戻せます	Places a saved snippet in the center of the current view. Parts with the same refdes and footprint are moved into the saved arrangement, and the saved tracks and vias are added. Old tracks connected to the moved parts are removed. Parts not on this board and locked parts are not moved, and are listed in the result. Undo reverts this
+部品番号を位置順に	Renumber by position
+部品番号 (R1・C2 など) を、基板の上の位置の順に振り直します。上の段から下の段へ、各段は左から右です。回路図の部品番号、要件の表、「接続しない」の印も同じに変わります。固定した部品の番号は変えません。「元に戻す」で戻せます (回路図の側も、回路図で元に戻してください)	Renumbers the reference designators (R1, C2, etc.) in order of position on the board: rows from top to bottom, each row from left to right. Refdes in the schematic, the requirements table and "no connect" marks change too. Locked parts keep their numbers. Undo reverts this (undo in the schematic too, for the schematic side)
+基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります。矩形・円・多角形が選べます	The board's size and shape (yellow frame). This is the board size you order. Choose rectangle, circle or polygon
+幅 	Width 
+基板の幅 (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます	Board width (mm). Applied to the outline when you press "Make rectangle" or "Make circle/oval"
+高さ 	Height 
+基板の高さ (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます	Board height (mm). Applied to the outline when you press "Make rectangle" or "Make circle/oval"
+角R 	Corner R 
+角の丸み (半径)。0 なら角ばった形です。ケースに入れる基板や、手で持つ基板は、角を丸めると角が欠けにくく、安全です。大きすぎる値は、入る大きさまで自動で小さくなります	Corner rounding (radius). 0 means square corners. For boards in a case or held in the hand, rounded corners chip less and are safer. Values that are too large are reduced to what fits
+矩形にする	Make rectangle
+円・長円にする	Make circle/oval
+上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります	Makes the board outline from the width and height above. This is the board size you order. If "Corner R" on the right is more than 0, the corners are rounded
+上の幅と高さに収まる円 (幅=高さ) や長円の外形にします。丸い基板やボタン電池サイズの基板に	Makes a circle (width = height) or oval outline that fits the width and height above. For round boards or coin-cell-sized boards
+いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)	Rounds every corner of the current outline (rectangle or polygon) with the "Corner R" radius above. Corners whose edges are too short get a smaller radius that fits (Undo reverts this)
+基板の外形を円・長円にしました	Set the board outline to a circle/oval
+現在 {:.1} × {:.1} mm ({}点)	Now {:.1} × {:.1} mm ({} points)
+② 自動で配線	② Autoroute
+部品どうしを銅の線でつなぎます (配線)。「ベタ」は、基板の面いっぱいに広げた銅箔のことで、GND (0V の基準) によく使います。自動で引いたあと、手で直せます	Connects the parts with copper lines (tracks). A "pour" is copper spread over the whole board surface, often used for GND (the 0V reference). You can fix things by hand after autorouting
+\n\n(いまは使えません: 先に基板の上のパッドを1つクリックして選んでください)	\n\n(Not available now: first click a pad on the board to select it)
+自動で引く	Autoroute
+上から順に押します	Press from the top down
+選んだネットだけ	Selected net only
+{n} だけ	Only {n}
+全部つなぐ	Connect all
+基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。\n    部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます	Makes the whole bottom side a GND copper pour, and connects the top GND pads to it with short tracks and vias. Long GND tracks are no longer needed, and routing gets easier.\n    You can press it before or after placing parts. If you press it first, the parts move closer, leaving out GND (see the help for "Place parts and set outline"). Either way, press it before "Connect all" autoroute (works on boards with a rectangular outline). If you don't like it, Undo reverts it
+未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。\n    線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。\n    電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「③ 確認して発注」の「電流と電圧降下」で見直せます)。\n    2層・45°配線で、ルール違反になる配線は自動的にやめます	Autoroutes all unrouted connections (yellow lines). Place the parts on the board first.\n    Track width and via size come from the settings shown when you choose the Route or Via tool; connections that can't be routed stay as yellow lines. If you don't like it, Undo reverts it.\n    If currents are not set yet, it first takes the currents from the schematic's DC operating point and routes high-current nets as wide as needed (review them in "Current and voltage drop" under "③ Check and order").\n    2 layers, 45° tracks; tracks that would break a rule are dropped automatically
+パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます{only_tip}	Select a pad to autoroute only that pad's net. You can route important tracks by hand and leave the rest to it{only_tip}
+表面も GND のベタで埋める	Fill top with GND pour too
+「GND ベタ」を押したとき、裏面に加えて、表面の空いた所も GND の銅で埋めます (自動配線は、その上を通る形で配線します。配線のあとに表面のベタを足すこともできます)。配線から隙間をあけて塗るので、配線は変わりません。表面の GND パッドは直接つながり、ノイズに強く、銅の量が表裏でそろって基板が反りにくくなります。ルール違反が増えるときは置きません	When you press "GND pour", the free areas of the top are also filled with GND copper, in addition to the bottom (autoroute routes over it; you can also add the top pour after routing). It is filled with a gap from the tracks, so the tracks don't change. Top GND pads connect directly, noise is reduced, and with similar copper on both sides the board warps less. Not placed if it would add rule violations
+引いた配線の手直し	Touch up tracks
+配線を短くする	Shorten tracks
+通らない接続	Failed connections
+遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます	Tries rerouting tracks that take a detour or have vias that aren't needed. Only results that are shorter, with fewer vias and no new rule violations, are kept (also works on tracks routed by hand). This can take a while. If you don't like it, Undo reverts it
+自動配線で通らなかった(黄色の線が残った)接続のそばの小さい部品 (3 ピンまで) を 1〜4 mm 動かして、配線を引き直してみます。通らない接続が減り、ルール違反が増えないものだけを採用します。最長 40 秒かかります。気に入らなければ「元に戻す」で取り消せます	Moves small parts (up to 3 pins) near connections autoroute couldn't route (yellow lines left) by 1-4 mm and tries routing again. Only results with fewer failed connections and no new rule violations are kept. Takes up to 40 seconds. If you don't like it, Undo reverts it
+パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります){only_tip}	Select a pad to shorten only that pad's net's tracks (nearby tracks may move){only_tip}
+board_sec_仕上	
+仕上げ (任意)	Finishing (optional)
+パッドの根元をそろえる、配線の角を丸める、涙型など、見た目と製造のための仕上げです	Finishing for looks and manufacturing: straighten pad entries, round track corners, teardrops, etc.
+③ 確認して発注	③ Check and order
+「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。問題がなければ、「発注の準備」で、工場に渡すデータ (ガーバー) を作ります	"DRC" checks the rules (design rules) for whether the factory can make the board, such as tracks too close together or running off the board edge. If there are no problems, make the data for the factory (Gerber) in "Prepare order"
+DRC を実行	Run DRC
+設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう	Design rule check. Checks for tracks too close together, copper running off the board edge, and so on. Always run it before ordering
+サーマルビアを置く ({lacking} 個の放熱パッド)	Place thermal vias ({lacking} thermal pads)
+放熱パッド (ICの裏のパッドなど) の中に、熱を裏面へ逃がすビアを格子状に置きます。そのあと、裏面に同じネット (たいてい GND) のゾーンを作ると、熱が基板全体に広がります	Places a grid of vias in thermal pads (such as the pad under an IC) to carry heat to the bottom. Then make a zone of the same net (usually GND) on the bottom to spread the heat over the whole board
+サーマルビアを {n} 個置きました。裏面に同じネットのゾーンを作ってください	Placed {n} thermal vias. Make a zone of the same net on the bottom
+サーマルビアを置けませんでした (パッドが小さい、または他の穴に近すぎます)	Could not place thermal vias (the pad is too small, or too close to other holes)
+3Dで見る…	View in 3D…
+発注の準備…	Prepare order…
+基板を立体で見ます。出来上がりの色 (緑のレジスト・金色のパッド・白いシルク) と、部品の高さの目安が分かります。ドラッグで回せます	View the board in 3D. Shows the finished colors (green mask, gold pads, white silkscreen) and rough part heights. Drag to rotate
+発注先を選び、チェックと出来上がりの確認をして、製造ファイルを書き出します。発注までの手順も表示します	Choose a fab, run the check, preview the result and export the manufacturing files. The steps up to ordering are shown too
+基板名 (出力ファイル名)	Board name (output file name)
+書き出すファイルの名前のもとになります (例: board_gerber.zip)	The base for the exported file names (e.g. board_gerber.zip)
+製造ファイル (Gerber など) の名前に使います。半角の英数字がおすすめです	Used in the names of manufacturing files (Gerber etc.). ASCII letters and digits are best
+操作ガイド (F1)	Controls guide (F1)
+マウスとキーの操作の一覧を開きます	Opens the list of mouse and key controls
+手で描く (ツール)	Draw by hand (tools)
+ここで選んだツールで、基板の上に自分で描き込みます (数字キー 1〜0 でも選べます)	Draw on the board yourself with the tool chosen here (number keys 1-0 work too)
+元に戻す	Undo
+直前の操作を取り消します (Ctrl+Z)	Undo the last action (Ctrl+Z)
+やり直し	Redo
+取り消した操作をやり直します (Ctrl+Y)	Redo the undone action (Ctrl+Y)
+board_sec_作業	
+作業の設定	Work settings
+作業する層・配線のドラッグ・範囲選択・延長線トラッキング・グリッドなど、基板を描くときの設定です	Settings for drawing on the board: working layer, dragging tracks, box selection, extension tracking, grid, etc.
+作業層	Working layer
+画面右上の「層」で切り替えます (L キーでも順に切り替わります)。	Switch it with "Layers" at the top right of the screen (the L key also cycles through them).
+いま配線を置く銅箔の層。部品とシルクは表面か裏面にだけ置けます (内層を選んでいるときは表面)。右上の「層」は、たたんで小さくできます	The copper layer new tracks go on. Parts and silkscreen go only on top or bottom (top when an inner layer is chosen). "Layers" at the top right can be collapsed
+配線をドラッグで動かす	Drag tracks to move them
+選択ツールで配線をつかんで、平行に動かせるようにします (つながった配線は伸び縮みし、邪魔な配線は押しのけます)。うっかり配線を動かさないよう、普段は切ってあります。切ってあっても、配線は部品と同じようにクリックで選べ、範囲選択でまとめて動かせます	Lets you grab tracks with the Select tool and move them in parallel (connected tracks stretch, tracks in the way are pushed aside). Off by default so you don't move tracks by accident. Even when off, tracks can be selected by clicking like parts and moved together with box selection
+範囲選択は反対の面も選ぶ	Box select includes other side
+空いた所をドラッグして囲んだとき、いま作業している面だけでなく、反対の面の配線・ビア・部品も選びます。選んだまま動かすと、表と裏の配線が部品といっしょに動きます。オフにすると、「物の表示とロック」の「反対の面」のロックがかかっているとき、反対の面は選びません (クリックでは、ロックが効きます)。Ctrl を押しながらクリック・ドラッグすると、選択に足したり、外したりできます	When you drag a box over empty space, tracks, vias and parts on the other side are selected too, not just the side you're working on. Moving the selection moves top and bottom tracks along with the parts. When off and the "Other side" lock in "Visibility and locks" is on, the other side is not selected (clicks always respect the lock). Hold Ctrl while clicking or dragging to add to or remove from the selection
+延長線トラッキング (F11)	Extension tracking (F11)
+配線・ビア・外形・ベタのとき、パッドやビアや配線の端にカーソルを少し置くと、その点を拾います (青い +)。そのあと、その点から横と縦に点線のガイドが出て、カーソルがガイドの近くに来ると吸い付きます。2つの点のガイドが交わる所にも吸い付きます。グリッドとは両立します (ガイドに沿う向きはグリッドのままです)。選択ツールで部品をドラッグするときも、部品の位置がガイドに吸い付きます。Esc で拾った点を消します	With tracks, vias, outline or pours, rest the cursor briefly on a pad, via or track end to pick up that point (blue +). Dotted guides then run horizontally and vertically from it, and the cursor snaps to a guide when near it. It also snaps where two points' guides cross. Works together with the grid (positions along a guide still follow the grid). When dragging parts with the Select tool, the part position snaps to guides too. Esc clears the picked points
+グリッド 	Grid 
+カーソルが吸い付く間隔。0 なら吸い付きません。小さいほど細かく置けます (部品の足の間隔は 2.54mm や 1.27mm が多いです)。自動配線の細かさにもなり、足の間隔の狭い IC (TQFP など) で通らない線が残るときは、0.1〜0.2 に小さくします	The spacing the cursor snaps to. 0 means no snapping. Smaller allows finer placement (pin spacing is often 2.54mm or 1.27mm). It also sets autoroute resolution; if lines are left unrouted on fine-pitch ICs (TQFP etc.), lower it to 0.1-0.2
+ (キー {k})	 (key {k})
+幹で引く (2パッド→太い1本)	Trunk (2 pads → 1 wide track)
+入れると、配線ツールで、同じネットで隣り合う2つのパッド (QFN の2本の LX ピンなど) から、太い1本の幹を引き出します。パッドを2つクリックして、最後に幹を伸ばす先をクリックします。パッドの近くは細い首、そのあとが太い幹になります。合流の所に空きができず、すき間を埋める必要がない形です	When on, the Route tool draws one wide trunk out of two neighboring pads of the same net (such as the two LX pins of a QFN). Click the two pads, then click where the trunk should go. Near the pads it is a thin neck, then a wide trunk. The shape leaves no gap where they join, so nothing needs filling
+引き方	Routing style
+配線ツールで引くときの設定です。線幅・ビアは、自動配線にも使われます	Settings for routing with the Route tool. Track width and vias are also used by autoroute
+自動経路 (パッドまで探す)	Auto path (search to pad)
+入れると、配線ツールで、行き先のパッド・ビア・配線の端にカーソルを合わせたとき、出発点からそこまでの経路を、障害物をよけて自動で探して見せます (水色の線)。クリックで、その経路を配線します。探せないとき・行き先が何もない所のときは、いつもの曲げ方の線になります。切ると、押しのけも使わない、手で決めたとおりの配線になります	When on, hovering the Route tool over a target pad, via or track end finds and shows a path from the start to it, avoiding obstacles (light blue line). Click to route that path. If no path is found or the target is empty space, the usual bend style is used. When off, tracks go exactly as you click, without push-and-shove either
+自動経路で通れないとき・行き先が何もない所のときに、邪魔になる別のネットの配線を脇へ寄せて通します。パッドやビアに固定された配線は動かさず、寄せきれないときは普通に引きます。プレビューが橙色なら押しのけ、赤ならルール違反です	When the auto path can't get through, or the target is empty space, tracks of other nets in the way are pushed aside. Tracks fixed to pads or vias are not moved; if they can't be pushed far enough, it routes normally. An orange preview means shoving, red means a rule violation
+配線を 45° の斜めを使って曲げます。基板の標準的な引き方で、角が鈍くなり、きれいで製造もしやすくなります	Bends tracks using 45° diagonals. The standard way to route boards: corners are less sharp, it looks clean and is easier to make
+直角	90°
+配線を縦と横だけで曲げます (斜めは使いません)	Bends tracks only horizontally and vertically (no diagonals)
+自由	Free
+クリックした点どうしを、そのまま直線でつなぎます (どんな角度でも)。鋭い角ができやすいので注意しましょう	Connects clicked points with straight lines as they are (any angle). Watch out: sharp corners happen easily
+配線をパッドから出すとき・パッドへ入れるときに、パッドの辺に垂直な短い区間を必ず付けます (そのあとは、いつもの 45° などで行き先へ向かいます)。斜めに入る根元がなくなり、きれいにそろいます。距離が近すぎるときと、丸いパッド、「自由」の配線では何もしません。長いパッドでは、パッドの両端にも吸い付くので、2本を並べて出せます	When a track leaves or enters a pad, a short section square to the pad edge is always added (then it goes to the target with the usual 45° etc.). No more diagonal entries; everything lines up neatly. Does nothing when too close, on round pads, or with "Free" routing. On long pads it also snaps to both ends of the pad, so two tracks can leave side by side
+パッドの縁から、垂直に出す区間の長さ	Length of the square section out of the pad edge
+配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように	Track width. Make high-current tracks wide. Don't go below the fab's minimum track width (usually 0.15-0.2 mm)
+高度な配線 (中級者向け)	Advanced routing (intermediate)
+中級者向け: ネットクラス・差動ペア・長さ合わせ	Intermediate: net classes, differential pairs, length matching
+自動 (置いた所のネット)	Auto (net where placed)
+置くビアを、どのネットのものにするか。「自動」は、置いた場所の パッド・ビア・配線・ベタのネットになります (何もない所ならネットなし)。ネットを選ぶと、ベタの上でも空いた所でも、そのネットのビアになり、そのネットのベタにつながり、未配線の線 (黄色) の相手にもなります	Which net the placed via belongs to. "Auto" uses the net of the pad, via, track or pour where it is placed (no net in empty space). If you choose a net, the via gets that net whether on a pour or in empty space, connects to that net's pour, and becomes a target for unrouted (yellow) lines
+ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように	Outer diameter of a via (a hole connecting top and bottom): the size of the copper ring. Make it 0.3-0.4mm larger than the hole. Don't go below the fab's minimum
+ビア穴 	Via hole 
+ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう	The via's hole diameter. Smaller holes can make the board more expensive. Check the fab's minimum hole size
+パッド径 	Pad dia 
+パッド (部品の足をはんだ付けする銅の丸) の直径	Diameter of a pad (the copper ring a part's lead is soldered to)
+パッド穴 	Pad hole 
+パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です	The pad's hole diameter (through-hole). About the lead thickness + 0.2-0.3mm
+取付穴 	Mount hole 
+ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です	Hole diameter of a mounting hole for screws. About 3.2mm for an M3 screw
+形を描いて確定 (右クリック・ダブルクリック・Enter、または最初の点をクリック)	Draw a shape and finish (right-click, double-click, Enter, or click the first point)
+足す (+)	Add (+)
+描いた形を、ベタの面に足します。ベタを選んである (同じネット・同じ層) と、そのベタの図形として足します。選んでいなければ、新しいベタを作ります	Adds the drawn shape to a pour. If a pour is selected (same net and layer), it is added as a shape of that pour. If not, a new pour is made
+引く (−)	Subtract (−)
+描いた形を、ベタから引きます (銅のない穴・窓)。ベタを選んである (この層) と、そのベタだけから引きます。選んでいなければ、描いた範囲に触れる、この層のベタから引きます	Subtracts the drawn shape from a pour (a hole or window with no copper). If a pour is selected (on this layer), it subtracts from that pour only. If not, it subtracts from the pours on this layer that touch the drawn area
+選んでいるベタ (ネット {net}) から引きます	Subtracts from the selected pour (net {net})
+選んでいるベタがないので、描いた範囲のベタから引きます	No pour is selected, so it subtracts from the pours in the drawn area
+引く相手のネット	Net to subtract from
+ベタを選んでいないとき、どのネットのベタから引くか。「すべて」なら、描いた範囲に触れる、この層のベタ全部です (ネットを決めなくてよい)	When no pour is selected, which net's pours to subtract from. "All" means every pour on this layer touching the drawn area (no need to pick a net)
+選んでいるベタの図形として足します	Adds as a shape of the selected pour
+新しいベタを作ります (同じネットのベタを選んでおくと、そのベタに足します)	Makes a new pour (select a pour of the same net to add to it instead)
+ベタのネット	Pour net
+ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります	The net the zone connects. Usually GND, filling the spare board area with GND copper
+隙間 	Gap 
+ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)	Distance between the zone copper and other nets' tracks and pads. Small gaps short easily; large gaps reduce copper (usually 0.3-0.5mm)
+スルーホールはサーマルリリーフ	Thermal relief on through-holes
+スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります	Connects through-hole pads to the zone with thin cross-shaped spokes (thermal relief). Heat escapes less, so soldering is easier. When off, they connect fully
+重なるベタを結合	Merge overlapping pours
+同じネット・同じ層で、重なったり接したりしているベタを、1 枚のベタにまとめ、最終の頂点 (直線) に変換します (足す・引くの図形と円弧は、頂点の列になります)。見た目はつながっていても、内部のデータが別々のときに使います	Merges pours of the same net and layer that overlap or touch into one pour and converts it to final vertices (straight lines) (add/subtract shapes and arcs become vertex lists). Use it when they look connected but are separate in the data
+重なるベタを {n} 枚まとめ、余分な頂点 {points} 個と、小さな引く図形 {dropped} 個を整理しました	Merged {n} overlapping pours and cleaned up {points} extra vertices and {dropped} small subtract shapes
+直線	Line
+クリックした点を直線でつなぎます。最初の点をクリックするか、右クリック・ダブルクリック・Enter で、囲んで確定します	Connects clicked points with straight lines. Click the first point, or right-click, double-click or Enter, to close and finish
+3点円弧	3-point arc
+円弧を描きます。最後の点から、途中の点をクリックし、終点をクリックします。直線と切り替えながら描けます	Draws an arc. From the last point, click a middle point, then the end point. You can switch between lines and arcs while drawing
+接線円弧	Tangent arc
+直前の線 (または円弧) になめらかにつながる円弧を、終点を1回クリックするだけで描きます	Draws an arc that joins smoothly to the previous line (or arc) with just one click at the end point
+円	Circle
+中心をクリックし、円周の点をクリックします。その場で確定します	Click the center, then a point on the circle. It is finished right away
+長方形	Rectangle
+反対側の2つの角をクリックします。その場で確定します	Click two opposite corners. It is finished right away
+角の丸め R 	Corner R 
+長方形の角の丸みの半径。0 なら角張ったままです	Radius of the rectangle's rounded corners. 0 keeps them square
+{} 個を選択中	{} selected
+選択を解除 (Esc)	Deselect (Esc)
+選択をやめます (Esc キーでも同じです)	Clears the selection (the Esc key does the same)
+選択中	Selected
+選んだ配線の太さ。大きい電流を流す線は太くします	Width of the selected track. Make high-current tracks wide
+このネットの配線を全部消す	Delete all tracks of this net
+この配線がつながっているネットの、配線とビアをすべて消します (パッドは残り、未配線の線が戻ります)。引き直したいときに使います	Deletes all tracks and vias of the net this track is on (pads stay, and the unrouted lines come back). Use it when you want to route again
+この配線をこの層に移します	Moves this track to this layer
+径 	Dia 
+選んだビアの外径 (銅の丸の大きさ)	Outer diameter of the selected via (size of the copper ring)
+選んだビアの穴径	Hole diameter of the selected via
+ネットなし (触れたもののネット)	No net (net of what it touches)
+このビアのネット。ネットを決めると、ベタ (同じネット) につながり、ほかのパッドや配線に触れると短絡になります	This via's net. With a net set, it connects to the pour (same net); touching other pads or tracks makes a short
+ゾーンのネット	Zone net
+このゾーンでつなぐネット	The net this zone connects
+このゾーンと、ほかのネットの間をあける距離	Distance between this zone and other nets
+サーマルリリーフ	Thermal relief
+スルーホールのパッドを、細い十字の足でゾーンにつなぎます (はんだ付けしやすくなります)	Connects through-hole pads to the zone with thin cross-shaped spokes (easier to solder)
+図形 {} 個 (足す図形の和から、引く図形の和を引いたものがベタです)	{} shapes (the pour is the union of add shapes minus the union of subtract shapes)
+{} {}  頂点 {} 円弧 {}	{} {}  vertices {} arcs {}
+＋足す	+ Add
+−引く	− Subtract
+足す↔引く	Add ↔ Subtract
+この図形が、ベタに足すか、ベタから引くかを入れ替えます	Switches whether this shape adds to the pour or subtracts from it
+この図形を消します (ほかの図形は残ります)	Deletes this shape (other shapes stay)
+頂点に確定	Convert to vertices
+ベタの面 (足す図形の和から、引く図形の和を引いたもの) を、最終の頂点の列 (直線だけ) に変換します。円弧は短い直線になり、図形は面ごと・穴ごとの 1 つずつになります。あとで円弧として直すことはできなくなります	Converts the pour area (union of add shapes minus union of subtract shapes) into final vertex lists (straight lines only). Arcs become short lines, and there is one shape per area and per hole. You can no longer edit them as arcs afterwards
+最前面へ	Bring to front
+別のネットのゾーンと重なったとき、このゾーンの銅を優先します (相手が引き下がり、クリアランスの隙間があきます)	When it overlaps a zone of another net, this zone's copper wins (the other one pulls back, leaving a clearance gap)
+最背面へ	Send to back
+別のネットのゾーンと重なったとき、相手を優先します (このゾーンが引き下がります)	When it overlaps a zone of another net, the other one wins (this zone pulls back)
+裏面実装	Bottom side
+表面実装	Top side
+固定を外す	Unlock
+固定する	Lock
+固定すると、ドラッグ・回転 (R)・面の付け替え (B) ができなくなり、範囲選択に巻き込んで動かす心配もなくなります。「部品を並べて外形を決める」(自動配置) でも動かず、ほかの部品がそのまわりに並びます。コネクタのように置き場所の決まった部品や、配置が済んだ部品に使います。基板ファイルに保存されます	A locked part can't be dragged, rotated (R) or flipped to the other side (B), and won't be moved by accident in a box selection. "Place parts and set outline" (autoplace) doesn't move it either; other parts are placed around it. Use it for parts with a fixed spot, like connectors, or parts already placed. Saved in the board file
+{r} の固定を外しました	Unlocked {r}
+{r} を固定しました	Locked {r}
+表面に移す (B)	Move to top (B)
+裏面に移す (B)	Move to bottom (B)
+部品を反対の面に付け替えます。裏面の部品は左右が反転します (B キーでも)	Moves the part to the other side. Parts on the bottom are mirrored (the B key works too)
+部品番号を印刷する	Print refdes
+この部品の部品番号 (R1 など) をシルクに印刷します。部品が密集して置き場がないときは外せます (組み立てるときは、部品表と位置のファイルで場所が分かります)	Prints this part's reference designator (R1 etc.) on the silkscreen. You can turn it off when parts are crowded and there's no room (for assembly, the BOM and position file show where parts go)
+取付穴 φ{:.2} mm	Mounting hole φ{:.2} mm
+{r} のシルク文字 (部品番号)	Silkscreen text of {r} (refdes)
+ドラッグで、好きな所へ動かせます。部品を動かすと、文字も付いてきます	Drag it anywhere. When you move the part, the text follows
+文字の高さ 	Text height 
+部品番号の文字の高さ。発注先が読めるように印刷できる {min:.2} mm より小さくはできません (下限は、発注の窓で選ぶ発注先で変わります)	Height of the refdes text. It can't be smaller than {min:.2} mm, the smallest the fab can print legibly (the minimum depends on the fab chosen in the order window)
+回す (R)	Rotate (R)
+文字を 90° 回します (R キーでも)	Rotates the text by 90° (the R key works too)
+全部この高さに	Set all to this height
+基板のすべての部品番号の文字を、この高さにそろえます	Sets every refdes text on the board to this height
+印刷しない	Don't print
+この部品番号をシルクに印刷しません (部品が密集して置き場がないとき)。部品を選ぶと「部品番号を印刷する」で戻せます	Doesn't print this refdes on the silkscreen (when parts are crowded and there's no room). Select the part and use "Print refdes" to bring it back
+元の位置に戻す (Delete)	Reset position (Delete)
+動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません	Moves the text back to its automatic position (above the part) (the Delete key works too). The text itself is not deleted
+部品番号 {n} 個の文字を、高さ {h:.2} mm にそろえました	Set {n} refdes texts to a height of {h:.2} mm
+{r} の部品番号を、印刷しないようにしました (部品を選ぶと戻せます)	The refdes of {r} will not be printed (select the part to bring it back)
+シルクの文字 (ピン名)	Silkscreen text (pin names)
+例: MY BOARD V1.0	e.g. MY BOARD V1.0
+印刷する文字。英字 (小文字は大文字で印刷)・数字・空白と、. , - + / : # % ( ) などの記号が使えます。日本語は印刷できません	Text to print. You can use letters (lowercase prints as uppercase), digits, spaces and symbols such as . , - + / : # % ( ). Japanese can't be printed
+文字の高さ。発注先が読めるように印刷できる {min:.2} mm より小さくはできません (下限は、発注の窓で選ぶ発注先で変わります)	Text height. It can't be smaller than {min:.2} mm, the smallest the fab can print legibly (the minimum depends on the fab chosen in the order window)
+表面に移す	Move to top
+裏面に移す	Move to bottom
+文字を反対の面のシルクに移します。裏面の文字は、裏から見て読めるように左右が反転して印刷されます	Moves the text to the silkscreen on the other side. Text on the bottom is printed mirrored so it reads correctly from the bottom
+シルクの線の太さ。発注先が印刷できる {min:.3} mm より細くはできません (下限は、発注の窓で選ぶ発注先で変わります)。次に引く線も、この太さになります	Silkscreen line width. It can't be thinner than {min:.3} mm, the thinnest the fab can print (the minimum depends on the fab chosen in the order window). The next lines you draw use this width too
+削除 (Delete)	Delete (Delete)
+選んだものを消します (Delete キー)。部品は消せません	Deletes the selection (Delete key). Parts can't be deleted
+# crates/app/src/board_editor/repair.rs
+この基板には、仕込める故障がありません (部品と配線のある基板で試します)	There is no fault to plant on this board (try it on a board with parts and tracks)
+故障を仕込みました。症状: {}	Planted a fault. Symptom: {}
+直りました! 点検の結果は、故障の前と同じです	Fixed! The check results are the same as before the fault
+まだ、点検に引っかかる所が残っています。もう少し探してみましょう	Some things still fail the check. Keep looking
+答え: {}	Answer: {}
+いまの基板に、故障を 1 つ仕込みます。何が壊れたかは、先に見せません (症状だけが出ます)。元に戻す (Ctrl+Z) で取り消せます	Plants one fault in the current board. What broke is not shown up front (only the symptom). Undo (Ctrl+Z) reverts it
+症状 (実機で見えること)	Symptom (what you'd see on the real board)
+点検の結果	Check results
+いま	Now
+故障の前	Before fault
+DRC の違反	DRC violations
+基板の外の部品	Parts outside the board
+バイパスが遠い IC	ICs with distant bypass caps
+原因と直し方	Cause and fix
+直ったか確かめる	Check if fixed
+点検 (DRC・未配線・基板の外・バイパス) を、もう一度します。故障の前と同じか、それ以下なら、直ったことになります	Runs the checks (DRC, unrouted, outside the board, bypass) again. If the results are the same as or better than before the fault, it's fixed
+答えを見る	Show answer
+原因と場所を出します。分からないときに。見ても、直す練習にはなります	Shows the cause and location, for when you're stuck. Fixing it is still good practice
+別の故障で練習	Practice with another fault
+基板を故障の前に戻して、別の故障を仕込みます	Returns the board to before the fault and plants a different one
+# crates/app/src/board_editor/requirements.rs
+組「{}」 {:.1} / {} mm{}	Group "{}" {:.1} / {} mm{}
+ (承知)	 (accepted)
+組「{}」	Group "{}"
+個	
+「{}」 {:.1} mm (下限 {})	"{}" {:.1} mm (min {})
+「{}」 {:.1} mm しかない (下限 {}){}	"{}" only {:.1} mm (min {}){}
+ / 幅 {} mm	 / width {} mm
+ / {} mm 以内	 / within {} mm
+組	Group
+{} と {} / {} mm 以上	{} and {} / at least {} mm
+離す	Keep apart
+バイパス	Bypass
+測定	Measure
+設計の要件の表 ({} 行)	Design requirements table ({} rows)
+設計の要件の表 ({} 行、基板に届かない {lost} 行)	Design requirements table ({} rows, {lost} rows not reaching the board)
+基板に取り込まれています	Imported into the board
+基板に届いていません。ネットのパッドが基板にない、部品を取り込んでいない、などが考えられます。名前を確かめて、回路図から取り込み直してください	Not reaching the board. Possibly the net's pads aren't on the board, or the parts haven't been imported. Check the names and import from schematic again
+(理由が書かれていません)	(No reason given)
+回路図で表を開く	Open table in schematic
+表は回路図の側で直します (基板と回路図で食い違わないように、ここは見るだけです)。直すと基板に自動で取り込まれます	Edit the table on the schematic side (this is view-only, so the board and schematic don't disagree). Changes are imported into the board automatically
+組と離す距離を基板の上に出す	Show groups and distances on board
+近くに置く組を枠で囲み (守れていれば緑、広がりすぎならピンク)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければピンク)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「物の表示とロック」で別々に切り替えられます	Draws a frame around each group to keep close (green if met, pink if too spread out), and links the two closest pads of each keep-apart pair with a line showing the distance (pink if too short). This shows the schematic's "Design requirements" table on the board. Frames and lines can be toggled separately in "Visibility and locks" at the top right
+✔ 設計の要件を満たしています ({} 件を確認)	✔ Design requirements met ({} checked)
+回路図の「設計の要件」の表にある、近くに置く組と、離す組を調べました。上限や下限の0のものは調べません	Checked the keep-close groups and keep-apart pairs in the schematic's "Design requirements" table. Those with an upper or lower limit of 0 are not checked
+設計の要件を満たしていない所: {} 件	Design requirements not met: {}
+回路図の「設計の要件」の表にある、近くに置く組の広がりと、離す組の近さです。部品を動かすか、表の数字を見直してください	Spread of keep-close groups and closeness of keep-apart pairs from the schematic's "Design requirements" table. Move parts or review the numbers in the table
+承知する理由	Reason to accept
+なぜこのままでよいか	Why this is OK as is
+下の「承知する」を押すときの理由です。回路図の「設計の要件」の表の「承知した例外」に、理由つきで書き込まれます。理由が空だと押せません (あとで読む人が、なぜかを知るため)	The reason for pressing "Accept" below. It is written, with the reason, to "Accepted exceptions" in the schematic's "Design requirements" table. You can't press it with an empty reason (so later readers know why)
+承知する	Accept
+この指摘を、理由つきで「承知した例外」にします。点検の件数に数えず、基板の上では黄土色で出ます。理由を上の欄に書いてから押します。回路図の側の表にも書き込まれます	Makes this finding an "Accepted exception" with a reason. It is not counted in the check and shows in ocher on the board. Write the reason above, then press. It is also written to the table on the schematic side
+承知した例外にしました。回路図の表にも書きました	Made it an accepted exception. Also written to the schematic's table
+組を選ぶ	Select group
+この組の部品をまとめて選びます。どこに散らばっているかが見えます	Selects all parts of this group, so you can see where they are scattered
+組「{}」の部品 {} 個を選びました	Selected {} parts of group "{}"
+承知した例外 ({})	Accepted exceptions ({})
+理由: {}	Reason: {}
+(書かれていません)	(Not given)
+承知をやめる	Withdraw
+この例外を取り消して、また指摘に戻します。回路図の表からも消えます	Cancels this exception and turns it back into a finding. It is removed from the schematic's table too
+配置: {note}	Placement: {note}
+自動配置のとき、組の部品のうち、コピー (同じ形の繰り返し) や IC のブロックにまとまっている部品は、組の塊に入れられません。その部品は、組の上限を距離のコストで守る形になります	In autoplace, parts of a group that are bundled into a copy (repeated layout) or an IC block can't be put in the group's cluster. For those parts, the group's limit is kept through a distance cost
+基板にない名前: {} 件	Names not on the board: {}
+表にあるが、基板に部品・パッドがないもの (回路図から取り込み直すと消えることがあります): {}	In the table but with no part or pad on the board (may go away if you import from schematic again): {}

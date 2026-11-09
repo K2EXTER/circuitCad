@@ -138,7 +138,7 @@ impl SchEditor {
             }
             Ok(res) => {
                 let Some(st) = res.stats() else {
-                    ui.colored_label(crate::theme::ERROR, "どの回も収束しませんでした");
+                    ui.colored_label(crate::theme::ERROR, i18n::tr("どの回も収束しませんでした"));
                     return;
                 };
                 ui.horizontal_top(|ui| {
@@ -159,27 +159,27 @@ impl SchEditor {
                         if res.nominal.abs() > 1e-12 {
                             let lo = (st.min - res.nominal) / res.nominal.abs() * 100.0;
                             let hi = (st.max - res.nominal) / res.nominal.abs() * 100.0;
-                            ui.label(format!("設計値からのずれ: {lo:+.1}% 〜 {hi:+.1}%"));
+                            ui.label(i18n::trf!("設計値からのずれ: {lo:+.1}% 〜 {hi:+.1}%"));
                         }
                         if res.failed > 0 {
-                            ui.colored_label(crate::theme::WARN, format!("{} 回は計算が収束しませんでした", res.failed));
+                            ui.colored_label(crate::theme::WARN, i18n::trf!("{} 回は計算が収束しませんでした", res.failed));
                         }
                         if let Some(w) = &worst {
                             ui.separator();
-                            ui.label("最悪ケース (全部品が誤差の端にあるとき)").on_hover_text("ランダムではなく、結果がいちばん小さく (大きく) なるように、すべての部品を許容差の端に置いて計算した値です。ばらつき解析の最小・最大は「たまたま出た値」ですが、これは「これより外には出ない」値です");
+                            ui.label(i18n::tr("最悪ケース (全部品が誤差の端にあるとき)")).on_hover_text(i18n::tr("ランダムではなく、結果がいちばん小さく (大きく) なるように、すべての部品を許容差の端に置いて計算した値です。ばらつき解析の最小・最大は「たまたま出た値」ですが、これは「これより外には出ない」値です"));
                             egui::Grid::new("mc_worst").num_columns(2).show(ui, |ui| {
                                 for (label, v, corner) in [("最小", w.min, &w.min_corner), ("最大", w.max, &w.max_corner)] {
                                     let tip: Vec<String> = corner.iter().map(|(n, h)| format!("{n}{}", if *h { " 大" } else { " 小" })).collect();
                                     let pct = if w.nominal.abs() > 1e-12 { format!(" ({:+.1}%)", (v - w.nominal) / w.nominal.abs() * 100.0) } else { String::new() };
-                                    ui.label(label).on_hover_text(format!("そうなる部品の組み合わせ: {}", tip.join("・")));
-                                    ui.label(format!("{}{pct}", fmt_unit(v, w.unit))).on_hover_text(format!("そうなる部品の組み合わせ: {}", tip.join("・")));
+                                    ui.label(label).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip.join("・")));
+                                    ui.label(format!("{}{pct}", fmt_unit(v, w.unit))).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip.join("・")));
                                     ui.end_row();
                                 }
                             });
-                            ui.small(format!("部品が無関係にずれるなら、現実的には {} 〜 {} の範囲に収まります", fmt_unit(w.min_rss, w.unit), fmt_unit(w.max_rss, w.unit))).on_hover_text("各部品の効きを二乗して足した平方根 (RSS)。全部がいっぺんに最悪になることはまずない、という見積もりです");
+                            ui.small(i18n::trf!("部品が無関係にずれるなら、現実的には {} 〜 {} の範囲に収まります", fmt_unit(w.min_rss, w.unit), fmt_unit(w.max_rss, w.unit))).on_hover_text(i18n::tr("各部品の効きを二乗して足した平方根 (RSS)。全部がいっぺんに最悪になることはまずない、という見積もりです"));
                         }
                         ui.separator();
-                        ui.label("効いている部品").on_hover_text("その部品だけが許容差ぶん大きくなったとき、結果がどれだけ変わるか。上にある部品ほど効きます");
+                        ui.label(i18n::tr("効いている部品")).on_hover_text(i18n::tr("その部品だけが許容差ぶん大きくなったとき、結果がどれだけ変わるか。上にある部品ほど効きます"));
                         egui::Grid::new("mc_sens").num_columns(2).show(ui, |ui| {
                             for (name, dv) in res.sensitivity.iter().take(8) {
                                 ui.label(name);
@@ -188,7 +188,7 @@ impl SchEditor {
                             }
                         });
                         if let Some((top, _)) = res.sensitivity.first() {
-                            ui.small(format!("{top} の誤差が一番効いています。精度が必要なら、{top} を許容差の小さい部品 (1% など) にしましょう"));
+                            ui.small(i18n::trf!("{top} の誤差が一番効いています。精度が必要なら、{top} を許容差の小さい部品 (1% など) にしましょう"));
                         }
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
@@ -238,6 +238,6 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     let f = FontId::proportional(11.0);
     p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, fmt_unit(a, res.unit), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, fmt_unit(b, res.unit), f.clone(), Color32::from_gray(190));
-    p.text(Pos2::new(rect.left() + 4.0, plot.top()), Align2::LEFT_TOP, format!("{peak:.0}回"), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(rect.left() + 4.0, plot.top()), Align2::LEFT_TOP, i18n::trf!("{peak:.0}回"), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(rect.left() + 4.0, plot.bottom()), Align2::LEFT_BOTTOM, "0", f, Color32::from_gray(190));
 }

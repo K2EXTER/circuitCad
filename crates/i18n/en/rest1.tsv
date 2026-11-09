@@ -1,0 +1,123 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/source_form.rs
+電圧	Voltage
+オフセット	Offset
+周波数	Frequency
+位相	Phase
+直流	DC
+# crates/app/src/startup.rs
+/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc	
+# crates/app/src/board_editor/actions.rs
+ビアを縫う	Stitch vias
+# crates/app/src/board_editor/currentwindow.rs
+ネット	Net
+電流	Current
+# crates/app/src/board_editor/keepouts.rs
+配線	Tracks
+ビア	Vias
+消す	Delete
+# crates/app/src/board_editor/layers.rs
+シルク	Silkscreen
+未配線	Unrouted
+禁止領域	Keep-out areas
+寸法線	Dimensions
+画面	Display
+# crates/app/src/board_editor/livepath.rs
+銅箔どうし	
+# crates/app/src/board_editor/mod.rs
+距離を測る	Measure distance
+測る	Measure
+# crates/app/src/board_editor/netclass.rs
+board_sec_層構	
+# crates/app/src/board_editor/nettable.rs
+ネットの一覧	Net list
+パッド	Pads
+線幅	Track width
+# crates/app/src/board_editor/pairs.rs
+ペアどうしの長さを合わせる	Match pair lengths
+# crates/app/src/board_editor/panel.rs
+GND ベタ	GND pour
+board_sec_仕上	
+board_sec_作業	
+押しのけ配線	Push-and-shove routing
+パッドに垂直に出入り	Enter pads straight
+# crates/app/src/board_editor/repair.rs
+故障を仕込む	Plant a fault
+# crates/app/src/board_editor/requirements.rs
+個	
+# crates/app/src/board_editor/shoving.rs
+ネット短絡:	
+# crates/app/src/board_editor/smoothing.rs
+配線を整える	Tidy tracks
+# crates/app/src/board_editor/width.rs
+配線の電圧降下	Track voltage drop
+シミュレーションに反映	Apply to simulation
+# crates/app/src/board_editor/view3d/window.rs
+3Dで見る	View in 3D
+# crates/app/src/part_form/checklist.rs
+ダイオード	Diode
+ツェナーダイオード	Zener diode
+オペアンプ	Op-amp
+スルーレート	Slew rate
+# crates/app/src/part_form/chip.rs
+ユーザー	
+インピーダンス	Impedance
+# crates/app/src/part_form/datasheet_view.rs
+ピッチ	Pitch
+データシート	Datasheet
+# crates/app/src/part_form/glyph_pick.rs
+ショットキーダイオード	Schottky diode
+フォトダイオード	Photodiode
+トランス	Transformer
+水晶振動子	Crystal
+# crates/app/src/part_form/kind.rs
+ショットキー	Schottky
+ツェナー	Zener
+電解	Electrolytic
+トランジスタ	Transistor
+電解コンデンサ	Electrolytic capacitor
+# crates/app/src/part_form/mod.rs
+コンデンサ	Capacitor
+抵抗	Resistor
+コイル	Inductor
+コネクタ	Connector
+# crates/app/src/part_form/padtable.rs
+横	
+脚	
+穴	
+# crates/app/src/part_form/vendor.rs
+容量	Capacitance
+# crates/app/src/part_form/zchart.rs
+インダクタンス	Inductance
+# crates/app/src/schematic/ac.rs
+AC解析 (ボード線図)	AC analysis (Bode plot)
+波形	Waveform
+位相余裕	Phase margin
+# crates/app/src/schematic/analysis_panel.rs
+オーバーシュート	Overshoot
+過渡解析	Transient analysis
+# crates/app/src/schematic/draw.rs
+基準	Reference
+# crates/app/src/schematic/fault.rs
+選ぶ	Select
+# crates/app/src/schematic/quick.rs
+resistor r 抵抗 ohm オーム	
+capacitor c condenser コンデンサ キャパシタ	
+inductor l coil コイル インダクタ	
+diode d ダイオード	
+led light 発光 ダイオード	
+source supply battery power v 電源 電池 信号	
+npn transistor bjt q トランジスタ	
+header connector pin コネクタ ヘッダ ピン	
+ground gnd 0v アース グランド	
+vcc vdd 3v3 5v rail 電源ネット	
+# crates/app/src/schematic/requirements.rs
+間隔	Clearance
+# crates/app/src/schematic/result_tables.rs
+電力	Power
+# crates/app/src/schematic/panel/mod.rs
+ノイズ解析	Noise analysis
+スペック (合否の表)	Spec (pass/fail table)
+ラベル	Label
+# crates/pcb-core/src/fab.rs
+上書き	

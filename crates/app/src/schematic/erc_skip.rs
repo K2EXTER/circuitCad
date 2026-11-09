@@ -40,10 +40,10 @@ impl SchEditor {
         let mut remove = None;
         for (k, (lo, hi)) in self.sch.erc_skip.iter().enumerate() {
             ui.horizontal(|ui| {
-                if ui.small_button("×").on_hover_text("この範囲をERCの対象に戻します").clicked() {
+                if ui.small_button("×").on_hover_text(i18n::tr("この範囲をERCの対象に戻します")).clicked() {
                     remove = Some(k);
                 }
-                ui.small(format!("描きかけ {} ({},{})–({},{})", k + 1, lo.0, lo.1, hi.0, hi.1));
+                ui.small(i18n::trf!("描きかけ {} ({},{})–({},{})", k + 1, lo.0, lo.1, hi.0, hi.1));
             });
         }
         if let Some(k) = remove {

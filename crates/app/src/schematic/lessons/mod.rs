@@ -361,11 +361,11 @@ impl SchEditor {
         let hint = self.stuck_hint(ctx, cur);
         // the repair lesson says what was wrong once the learner has mended it
         let cause = self.debug_cause().filter(|_| lesson.id == "debug_circuit" && done.get(1) == Some(&true));
-        egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
+        egui::Window::new(i18n::trf!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
-            ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
+            ui.small(i18n::trf!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             // the explanation: read before the first step, folded once the learner is working, open again when the lesson is finished
-            egui::CollapsingHeader::new("くわしい説明 (先に読むと、手順が分かりやすくなります)")
+            egui::CollapsingHeader::new(i18n::tr("くわしい説明 (先に読むと、手順が分かりやすくなります)"))
                 .id_salt(("summary", idx, cur.is_none()))
                 .default_open(cur.is_none() || done.iter().all(|d| !d))
                 .show(ui, |ui| {
@@ -395,21 +395,21 @@ impl SchEditor {
                         // the guess comes before the doing: the question first; the step's text (which tells the answer) after it
                         if let Some(p) = prediction.filter(|_| predicted[k].is_none()) {
                             egui::Frame::group(ui.style()).show(ui, |ui| {
-                                ui.label(egui::RichText::new("予測してみよう").strong().color(crate::theme::WARN));
+                                ui.label(egui::RichText::new(i18n::tr("予測してみよう")).strong().color(crate::theme::WARN));
                                 ui.label(p.question);
                                 for (o, (label, _)) in p.options.iter().enumerate() {
-                                    if ui.button(*label).on_hover_text("やる前に、結果を予測します。当たっても外れても、やったあとに、理由が出ます").clicked() {
+                                    if ui.button(*label).on_hover_text(i18n::tr("やる前に、結果を予測します。当たっても外れても、やったあとに、理由が出ます")).clicked() {
                                         pick = Some((k, o));
                                     }
                                 }
-                                if ui.small_button("予測せずに進める").on_hover_text("予測を飛ばして、手順の説明を読みます").clicked() {
+                                if ui.small_button(i18n::tr("予測せずに進める")).on_hover_text(i18n::tr("予測を飛ばして、手順の説明を読みます")).clicked() {
                                     pick = Some((k, NO_GUESS));
                                 }
                             });
                         } else {
                             ui.label(step.detail);
                             if let (Some(p), Some(o)) = (prediction, predicted[k].filter(|o| *o != NO_GUESS)) {
-                                ui.small(format!("あなたの予測: 「{}」。手順のとおりにやって、確かめましょう", p.options[o].0));
+                                ui.small(i18n::trf!("あなたの予測: 「{}」。手順のとおりにやって、確かめましょう", p.options[o].0));
                             }
                         }
                     });
@@ -417,19 +417,19 @@ impl SchEditor {
                 if let (Some(p), Some(v)) = (prediction, verdicts[k].as_ref()) {
                     ui.indent(("lesson_verdict", k), |ui| {
                         if v.right {
-                            ui.colored_label(crate::theme::OK, format!("✔ 予測が当たりました。実際は {} でした", p.show(v.actual)));
+                            ui.colored_label(crate::theme::OK, i18n::trf!("✔ 予測が当たりました。実際は {} でした", p.show(v.actual)));
                         } else {
-                            ui.colored_label(crate::theme::WARN, format!("✘ 予測とは違いました (あなたの予測: 「{}」)。実際は {} でした", p.options[v.chosen].0, p.show(v.actual)));
+                            ui.colored_label(crate::theme::WARN, i18n::trf!("✘ 予測とは違いました (あなたの予測: 「{}」)。実際は {} でした", p.options[v.chosen].0, p.show(v.actual)));
                         }
                         ui.small(p.explain);
                     });
                 }
             }
             // the words of the lesson: a click opens the glossary on that word
-            egui::CollapsingHeader::new("このレッスンの用語 (押すと用語集が開きます)").id_salt(("words", idx)).default_open(false).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("このレッスンの用語 (押すと用語集が開きます)")).id_salt(("words", idx)).default_open(false).show(ui, |ui| {
                 let words = crate::glossary::terms_in(&lesson_text(lesson));
                 if words.is_empty() {
-                    ui.small("このレッスンには、用語集の言葉は出てきません");
+                    ui.small(i18n::tr("このレッスンには、用語集の言葉は出てきません"));
                 }
                 ui.horizontal_wrapped(|ui| {
                     for term in words {
@@ -442,27 +442,27 @@ impl SchEditor {
             if let Some(text) = hint.as_ref() {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(crate::theme::WARN, "ヒント");
+                    ui.colored_label(crate::theme::WARN, i18n::tr("ヒント"));
                     ui.label(text);
                 });
             }
             if let Some(cause) = cause {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(crate::theme::OK, "仕込まれていた故障");
+                    ui.colored_label(crate::theme::OK, i18n::tr("仕込まれていた故障"));
                     ui.label(cause);
                 });
             }
             ui.separator();
             // opened by itself once the lesson is finished (the id changes, so egui opens it again)
-            egui::CollapsingHeader::new("実物との違い (このモデルの限界)")
+            egui::CollapsingHeader::new(i18n::tr("実物との違い (このモデルの限界)"))
                 .id_salt(("limits", idx, cur.is_none()))
                 .default_open(cur.is_none())
                 .show(ui, |ui| {
-                    ui.small("シミュレーションは、部品を単純なモデルにして計算します。実物の回路と、次の点が違います");
+                    ui.small(i18n::tr("シミュレーションは、部品を単純なモデルにして計算します。実物の回路と、次の点が違います"));
                     for l in lesson.limits {
                         ui.horizontal_wrapped(|ui| {
-                            ui.label("・");
+                            ui.label(i18n::tr("・"));
                             ui.label(*l);
                         });
                     }
@@ -470,17 +470,17 @@ impl SchEditor {
             if let Some(cid) = challenge_of_lesson(lesson.id) {
                 ui.separator();
                 crate::widgets::section_heading(ui, "自分で作ってみよう");
-                ui.label("見るだけでなく、目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあとは、判定ボタンで、動きを調べます");
-                if ui.button("チャレンジを始める").on_hover_text("いまの回路を空にして、目標から自分で作ります。あとで、このレッスンに戻れます").clicked() {
+                ui.label(i18n::tr("見るだけでなく、目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあとは、判定ボタンで、動きを調べます"));
+                if ui.button(i18n::tr("チャレンジを始める")).on_hover_text(i18n::tr("いまの回路を空にして、目標から自分で作ります。あとで、このレッスンに戻れます")).clicked() {
                     build = Some(cid);
                 }
             }
             if !lesson.real.is_empty() {
-                egui::CollapsingHeader::new("実機で確かめよう (実験)").id_salt(("real", idx)).default_open(false).show(ui, |ui| {
-                    ui.label("シミュレーションの結果を、実際の部品で確かめます。安全のため、12V 以下の低い電圧だけで行い、商用電源 (100V) は使いません");
+                egui::CollapsingHeader::new(i18n::tr("実機で確かめよう (実験)")).id_salt(("real", idx)).default_open(false).show(ui, |ui| {
+                    ui.label(i18n::tr("シミュレーションの結果を、実際の部品で確かめます。安全のため、12V 以下の低い電圧だけで行い、商用電源 (100V) は使いません"));
                     for l in lesson.real {
                         ui.horizontal_wrapped(|ui| {
-                            ui.label("・");
+                            ui.label(i18n::tr("・"));
                             ui.label(*l);
                         });
                     }
@@ -488,14 +488,14 @@ impl SchEditor {
             }
             if cur.is_none() {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了! (上の「くわしい説明」を、もう一度読んでみましょう)");
-                if idx + 1 < LESSONS.len() && ui.button(format!("次のレッスンへ: {}", LESSONS[idx + 1].title)).on_hover_text("このレッスンを終えて、次のレッスンのサンプル回路を開きます").clicked() {
+                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了! (上の「くわしい説明」を、もう一度読んでみましょう)"));
+                if idx + 1 < LESSONS.len() && ui.button(i18n::trf!("次のレッスンへ: {}", LESSONS[idx + 1].title)).on_hover_text(i18n::tr("このレッスンを終えて、次のレッスンのサンプル回路を開きます")).clicked() {
                     next = Some(idx + 1);
                 }
             }
             ui.separator();
             ui.horizontal(|ui| {
-                if ui.button("最初の回路に戻す").on_hover_text("回路を、このレッスンの最初の状態にします").clicked() {
+                if ui.button(i18n::tr("最初の回路に戻す")).on_hover_text(i18n::tr("回路を、このレッスンの最初の状態にします")).clicked() {
                     restart = true;
                 }
                 if crate::widgets::close_button(ui, "レッスンの窓") {

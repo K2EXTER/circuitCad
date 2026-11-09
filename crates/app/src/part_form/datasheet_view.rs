@@ -308,12 +308,12 @@ impl SheetView {
     /// The button of the form that opens a PDF, and the message when that failed.
     pub fn open_button(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if ui.button("データシート (PDF) を開く…").on_hover_text("手元のデータシート (PDF) を、別の窓に出します。日本語でも英語でも開けます。見ながらピンや寸法を入れられます。PDF の窓に、PDF ファイルをドラッグしても開けます。ファイルはこのパソコンの中だけで読み、どこにも送りません").clicked()
+            if ui.button(i18n::tr("データシート (PDF) を開く…")).on_hover_text(i18n::tr("手元のデータシート (PDF) を、別の窓に出します。日本語でも英語でも開けます。見ながらピンや寸法を入れられます。PDF の窓に、PDF ファイルをドラッグしても開けます。ファイルはこのパソコンの中だけで読み、どこにも送りません")).clicked()
                 && let Some(p) = rfd::FileDialog::new().set_title("データシート (PDF)").add_filter("PDF", &["pdf", "PDF"]).pick_file()
             {
                 self.load(&p);
             }
-            if self.doc.is_some() && !self.open && ui.button("窓を出す").on_hover_text("閉じたデータシートの窓をもう一度出します").clicked() {
+            if self.doc.is_some() && !self.open && ui.button(i18n::tr("窓を出す")).on_hover_text(i18n::tr("閉じたデータシートの窓をもう一度出します")).clicked() {
                 self.open = true;
             }
         });
@@ -343,7 +343,7 @@ impl SheetView {
         let Some(doc) = self.doc.as_mut() else { return };
         // beside the form, which is opened at the left of the screen: the window starts at the right edge
         let at = egui::pos2((ctx.content_rect().right() - 660.0).max(0.0), 40.0);
-        egui::Window::new("データシート").open(&mut open).default_pos(at).default_size([640.0, 760.0]).resizable(true).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("データシート")).open(&mut open).default_pos(at).default_size([640.0, 760.0]).resizable(true).show(ctx, |ui| {
             doc.ui(ui);
         });
         self.open = open;
@@ -358,7 +358,7 @@ impl SheetView {
         {
             let mut keep = true;
             let mut action = Action::None;
-            egui::Window::new("ピン表の取り込み").open(&mut keep).default_size([440.0, 460.0]).resizable(true).show(ctx, |ui| {
+            egui::Window::new(i18n::tr("ピン表の取り込み")).open(&mut keep).default_size([440.0, 460.0]).resizable(true).show(ctx, |ui| {
                 action = panel.ui(ui, current);
             });
             match action {
@@ -399,25 +399,25 @@ impl Opened {
             self.selecting = false;
         }
         ui.horizontal_wrapped(|ui| {
-            if ui.add_enabled(self.page > 0, egui::Button::new("◀")).on_hover_text("前のページ").clicked() {
+            if ui.add_enabled(self.page > 0, egui::Button::new("◀")).on_hover_text(i18n::tr("前のページ")).clicked() {
                 self.page -= 1;
             }
             let mut shown = self.page + 1;
-            if ui.add(egui::DragValue::new(&mut shown).range(1..=pages).suffix(format!(" / {pages} ページ"))).on_hover_text("ページ番号。ドラッグか、数字を入れて切り替えます").changed() {
+            if ui.add(egui::DragValue::new(&mut shown).range(1..=pages).suffix(i18n::trf!(" / {pages} ページ"))).on_hover_text(i18n::tr("ページ番号。ドラッグか、数字を入れて切り替えます")).changed() {
                 self.page = shown - 1;
             }
-            if ui.add_enabled(self.page + 1 < pages, egui::Button::new("▶")).on_hover_text("次のページ").clicked() {
+            if ui.add_enabled(self.page + 1 < pages, egui::Button::new("▶")).on_hover_text(i18n::tr("次のページ")).clicked() {
                 self.page += 1;
             }
             ui.separator();
-            if ui.button("－").on_hover_text("小さくする (Ctrl + マウスホイールでも変えられます)").clicked() {
+            if ui.button(i18n::tr("－")).on_hover_text(i18n::tr("小さくする (Ctrl + マウスホイールでも変えられます)")).clicked() {
                 self.zoom = (self.zoom / 1.25).max(ZOOM_MIN);
             }
             ui.label(format!("{:.0}%", self.zoom * 100.0));
-            if ui.button("＋").on_hover_text("大きくする (Ctrl + マウスホイールでも変えられます)").clicked() {
+            if ui.button(i18n::tr("＋")).on_hover_text(i18n::tr("大きくする (Ctrl + マウスホイールでも変えられます)")).clicked() {
                 self.zoom = (self.zoom * 1.25).min(ZOOM_MAX);
             }
-            if ui.button("幅に合わせる").on_hover_text("窓の幅にページの幅を合わせます").clicked() {
+            if ui.button(i18n::tr("幅に合わせる")).on_hover_text(i18n::tr("窓の幅にページの幅を合わせます")).clicked() {
                 self.fit = true;
             }
             ui.small(&self.name);
@@ -425,15 +425,15 @@ impl Opened {
         if let Some(t) = self.target {
             ui.horizontal(|ui| {
                 ui.colored_label(crate::theme::INFO, t.ask());
-                if ui.button("やめる").on_hover_text("選ぶのをやめます (Esc キーでも)").clicked() {
+                if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("選ぶのをやめます (Esc キーでも)")).clicked() {
                     self.target = None;
                 }
             });
         }
         if self.selecting {
             ui.horizontal(|ui| {
-                ui.colored_label(crate::theme::INFO, "ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)");
-                if ui.button("やめる").on_hover_text("囲むのをやめます (Esc キーでも)").clicked() {
+                ui.colored_label(crate::theme::INFO, i18n::tr("ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)"));
+                if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("囲むのをやめます (Esc キーでも)")).clicked() {
                     self.selecting = false;
                 }
             });
@@ -549,14 +549,14 @@ impl Opened {
         let pages = self.ds.page_count();
         let mut start = false;
         ui.horizontal(|ui| {
-            let r = ui.add(egui::TextEdit::singleline(&mut self.query).hint_text("検索 (例: SOIC、pin 1)").desired_width(200.0));
+            let r = ui.add(egui::TextEdit::singleline(&mut self.query).hint_text(i18n::tr("検索 (例: SOIC、pin 1)")).desired_width(200.0));
             // Enter in a one-line box takes the focus away
             start |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            r.on_hover_text("データシートの中の文字を探します。大文字・小文字、全角・半角は区別しません。空白で区切ると、続いて並ぶ語を探します (例: pin 1)。Enter で探します");
-            if ui.button("探す").on_hover_text("入れた文字を、全ページから探します。見つかった所は黄色の枠で示します").clicked() {
+            r.on_hover_text(i18n::tr("データシートの中の文字を探します。大文字・小文字、全角・半角は区別しません。空白で区切ると、続いて並ぶ語を探します (例: pin 1)。Enter で探します"));
+            if ui.button(i18n::tr("探す")).on_hover_text(i18n::tr("入れた文字を、全ページから探します。見つかった所は黄色の枠で示します")).clicked() {
                 start = true;
             }
-            if self.search.is_some() && ui.button("消す").on_hover_text("検索の結果と枠を消します").clicked() {
+            if self.search.is_some() && ui.button(i18n::tr("消す")).on_hover_text(i18n::tr("検索の結果と枠を消します")).clicked() {
                 self.search = None;
             }
         });
@@ -564,13 +564,13 @@ impl Opened {
             self.search = Search::new(Query::new(&self.query).into_iter().collect(), None);
         }
         ui.horizontal_wrapped(|ui| {
-            if ui.button("ピン表を囲む").on_hover_text("ページの上でピン表をドラッグで囲むと、番号と名前を読み取ります。読み取った内容は確認して、ピン表に入れます").clicked() {
+            if ui.button(i18n::tr("ピン表を囲む")).on_hover_text(i18n::tr("ページの上でピン表をドラッグで囲むと、番号と名前を読み取ります。読み取った内容は確認して、ピン表に入れます")).clicked() {
                 self.selecting = true;
                 self.target = None;
             }
-            ui.small("見出しへ");
+            ui.small(i18n::tr("見出しへ"));
             for h in HEADINGS {
-                if ui.small_button(h.label()).on_hover_text(format!("{} (英語・日本語の見出しを探します)", h.help())).clicked() {
+                if ui.small_button(h.label()).on_hover_text(i18n::trf!("{} (英語・日本語の見出しを探します)", h.help())).clicked() {
                     self.search = Search::new(h.queries(), Some(h.label()));
                 }
             }
@@ -608,10 +608,10 @@ impl Opened {
             if !s.hits.is_empty() {
                 let n = s.hits.len();
                 ui.horizontal(|ui| {
-                    if ui.small_button("◀").on_hover_text("前の見つかった所").clicked() {
+                    if ui.small_button("◀").on_hover_text(i18n::tr("前の見つかった所")).clicked() {
                         picked = Some(s.current.map_or(n - 1, |c| (c + n - 1) % n));
                     }
-                    if ui.small_button("▶").on_hover_text("次の見つかった所").clicked() {
+                    if ui.small_button("▶").on_hover_text(i18n::tr("次の見つかった所")).clicked() {
                         picked = Some(s.current.map_or(0, |c| (c + 1) % n));
                     }
                     if let Some(c) = s.current {
@@ -622,7 +622,7 @@ impl Opened {
                 egui::ScrollArea::vertical().id_salt("datasheet_hits").max_height(110.0).auto_shrink([false, true]).show(ui, |ui| {
                     for (i, h) in s.hits.iter().enumerate() {
                         let text = format!("p.{}  {}{}", h.page + 1, if h.in_contents { "[目次] " } else { "" }, h.context);
-                        if ui.selectable_label(s.current == Some(i), text).on_hover_text("クリックで、そのページのその場所へ移ります").clicked() {
+                        if ui.selectable_label(s.current == Some(i), text).on_hover_text(i18n::tr("クリックで、そのページのその場所へ移ります")).clicked() {
                             picked = Some(i);
                         }
                     }

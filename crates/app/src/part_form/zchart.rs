@@ -178,7 +178,7 @@ impl PartForm {
         for (f, z) in &pts {
             painter.circle_filled(to(*f, *z), 4.0, crate::theme::ERROR);
         }
-        ui.label(egui::RichText::new("● 赤い点: データシートの点    ─ 青い線: モデルの曲線").size(13.5));
+        ui.label(egui::RichText::new(i18n::tr("● 赤い点: データシートの点    ─ 青い線: モデルの曲線")).size(13.5));
         self.pas_sliders(ui);
     }
 
@@ -193,7 +193,7 @@ impl PartForm {
             PassiveKind::Inductor => ("低い周波数でのインピーダンスの下限。大きいほど、低い所が持ち上がります", "山 (共振) の位置と高さ。大きいほど、共振が低い周波数になります"),
             PassiveKind::Resistor => ("高い周波数でインピーダンスが上がる量。大きいほど、早く上がり始めます", "高い周波数でインピーダンスが下がる量。大きいほど、早く下がり始めます"),
         };
-        ui.label("曲線を見ながら、スライダーで自分で合わせることもできます");
+        ui.label(i18n::tr("曲線を見ながら、スライダーで自分で合わせることもできます"));
         egui::Grid::new("pas_sliders").num_columns(2).show(ui, |ui| {
             let (pa, pb) = self.pas_pair();
             Self::text_slider(ui, na, tip_a, pa, (la, ha), ua, fallback.0);
@@ -204,24 +204,24 @@ impl PartForm {
     /// The temperature part of the section.
     pub(super) fn pas_temperature(&mut self, ui: &mut egui::Ui) {
         ui.separator();
-        ui.label(egui::RichText::new("温度による値の変化 (温度スイープで確かめられます)").strong());
+        ui.label(egui::RichText::new(i18n::tr("温度による値の変化 (温度スイープで確かめられます)")).strong());
         let kind = self.pas_kind;
         ui.small(match kind {
-            PassiveKind::Resistor => "データシートの TCR (温度係数、ppm/℃) を入れます。金属皮膜抵抗は ±100 ほど、厚膜チップ抵抗は ±100〜200 ほどです。空なら温度で変わりません",
-            PassiveKind::Capacitor => "温度特性のグラフ (縦軸が容量の変化率 %) から、温度と変化率を読んで入れます。C0G は ±30ppm/℃ ほどでほぼ一定、X7R・X5R は温度で数 % 〜 十数 % 動きます。空なら温度で変わりません",
-            PassiveKind::Inductor => "インダクタンスの温度係数 (ppm/℃)。DCR は銅の係数 (1℃ で約 0.4%) が自動で入ります。空ならインダクタンスは温度で変わりません",
+            PassiveKind::Resistor => i18n::tr("データシートの TCR (温度係数、ppm/℃) を入れます。金属皮膜抵抗は ±100 ほど、厚膜チップ抵抗は ±100〜200 ほどです。空なら温度で変わりません"),
+            PassiveKind::Capacitor => i18n::tr("温度特性のグラフ (縦軸が容量の変化率 %) から、温度と変化率を読んで入れます。C0G は ±30ppm/℃ ほどでほぼ一定、X7R・X5R は温度で数 % 〜 十数 % 動きます。空なら温度で変わりません"),
+            PassiveKind::Inductor => i18n::tr("インダクタンスの温度係数 (ppm/℃)。DCR は銅の係数 (1℃ で約 0.4%) が自動で入ります。空ならインダクタンスは温度で変わりません"),
         });
         ui.horizontal(|ui| {
-            ui.label("TC1 (ppm/℃)").on_hover_text("1℃ あたりの変化 (ppm = 100万分の 1)。+100 なら、温度が 100℃ 上がると 1% 増えます。マイナスもあります");
+            ui.label("TC1 (ppm/℃)").on_hover_text(i18n::tr("1℃ あたりの変化 (ppm = 100万分の 1)。+100 なら、温度が 100℃ 上がると 1% 増えます。マイナスもあります"));
             ui.add(egui::TextEdit::singleline(&mut self.pas_tc1).desired_width(70.0).hint_text("100"));
-            ui.label("TC2 (ppm/℃²)").on_hover_text("温度の 2 乗にかかる係数。曲がりを表すとき以外は空で構いません");
+            ui.label("TC2 (ppm/℃²)").on_hover_text(i18n::tr("温度の 2 乗にかかる係数。曲がりを表すとき以外は空で構いません"));
             ui.add(egui::TextEdit::singleline(&mut self.pas_tc2).desired_width(70.0));
         });
         if kind != PassiveKind::Resistor || !self.pas_tctable.trim().is_empty() {
             crate::icons::help_label(ui, "温度特性の表", "温度特性の表 (グラフから読んだ「温度 変化率(%)」を 1 行ずつ。27℃ を 0% とします)");
             ui.add(egui::TextEdit::multiline(&mut self.pas_tctable).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("-55 -3\n85 -4\n125 -9"))
-                .on_hover_text("例: 125 -9 は、125℃ で容量が 9% 減る、という意味です。27℃ に近い点は要りません。点が 1 つなら直線、2 つ以上なら曲がりも合わせます");
-            if ui.button("表から温度係数を求める").on_hover_text("表に合うように、TC1 と TC2 を計算して上の欄に入れます").clicked() {
+                .on_hover_text(i18n::tr("例: 125 -9 は、125℃ で容量が 9% 減る、という意味です。27℃ に近い点は要りません。点が 1 つなら直線、2 つ以上なら曲がりも合わせます"));
+            if ui.button(i18n::tr("表から温度係数を求める")).on_hover_text(i18n::tr("表に合うように、TC1 と TC2 を計算して上の欄に入れます")).clicked() {
                 self.pas_message = Some(self.fit_tc_from_table());
             }
         }
@@ -261,18 +261,18 @@ impl PartForm {
     /// The saturation part of the inductor section: Isat, the table, and the inductance against current.
     pub(super) fn pas_saturation(&mut self, ui: &mut egui::Ui) {
         ui.separator();
-        ui.label(egui::RichText::new("磁気飽和 (電流が大きいとインダクタンスが下がる)").strong());
+        ui.label(egui::RichText::new(i18n::tr("磁気飽和 (電流が大きいとインダクタンスが下がる)")).strong());
         crate::icons::help_small(ui, "電流で下がる特性 (飽和)", "電源用のコイルでは大事な特性です。電流が Isat を超えると、インダクタンスが急に下がり、電流が急に増えます。データシートの Isat (インダクタンスが 30% 下がる電流) か、「インダクタンス - 直流重畳電流」のグラフから読みます。空なら飽和しません");
         ui.horizontal(|ui| {
-            ui.label("Isat [A]").on_hover_text("インダクタンスが規定の割合だけ下がる電流 (Saturation Current)。データシートでは 30% 低下が多いです");
+            ui.label("Isat [A]").on_hover_text(i18n::tr("インダクタンスが規定の割合だけ下がる電流 (Saturation Current)。データシートでは 30% 低下が多いです"));
             ui.add(egui::TextEdit::singleline(&mut self.pas_isat).desired_width(70.0).hint_text("3"));
-            ui.label("そのときの低下 [%]").on_hover_text("Isat で、インダクタンスが何 % 下がるか。30 が多いですが、20 や 10 のデータシートもあります。空なら 30");
+            ui.label(i18n::tr("そのときの低下 [%]")).on_hover_text(i18n::tr("Isat で、インダクタンスが何 % 下がるか。30 が多いですが、20 や 10 のデータシートもあります。空なら 30"));
             ui.add(egui::TextEdit::singleline(&mut self.pas_ldrop).desired_width(50.0).hint_text("30"));
         });
         crate::icons::help_label(ui, "インダクタンスと電流の表", "インダクタンスと電流の表 (グラフから読んだ「電流 変化率(%)」を 1 行ずつ。マイナスで下がる)");
         ui.add(egui::TextEdit::multiline(&mut self.pas_sattable).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("1 -5\n3 -30\n6 -60"))
-            .on_hover_text("例: 3 -30 は、3A で L が 30% 下がる、という意味です。Isat より少し大きい電流までの点があると確かです");
-        if ui.button("表から Isat を求める").on_hover_text("表に合うように、Isat (30% 低下) を計算して上の欄に入れます").clicked() {
+            .on_hover_text(i18n::tr("例: 3 -30 は、3A で L が 30% 下がる、という意味です。Isat より少し大きい電流までの点があると確かです"));
+        if ui.button(i18n::tr("表から Isat を求める")).on_hover_text(i18n::tr("表に合うように、Isat (30% 低下) を計算して上の欄に入れます")).clicked() {
             self.pas_message = Some(self.fit_sat_from_table());
         }
         self.sat_chart(ui);
@@ -322,6 +322,6 @@ impl PartForm {
         for (i, p) in &pts {
             painter.circle_filled(to(*i, 100.0 + p), 4.0, crate::theme::ERROR);
         }
-        ui.label(egui::RichText::new("● 赤い点: データシートの点    ─ 青い線: モデルの曲線").size(13.5));
+        ui.label(egui::RichText::new(i18n::tr("● 赤い点: データシートの点    ─ 青い線: モデルの曲線")).size(13.5));
     }
 }

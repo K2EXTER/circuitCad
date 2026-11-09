@@ -7,10 +7,10 @@ fn pick(ui: &mut egui::Ui, id: &str, label: &str, tip: &str, names: &[&str], cur
     ui.horizontal(|ui| {
         ui.label(label);
         egui::ComboBox::from_id_salt(id)
-            .selected_text(if cur.is_empty() { "(選ぶ)" } else { cur.as_str() })
+            .selected_text(if cur.is_empty() { i18n::tr("(選ぶ)") } else { cur.as_str() })
             .width(86.0)
             .show_ui(ui, |ui| {
-                ui.selectable_value(cur, String::new(), "(なし)");
+                ui.selectable_value(cur, String::new(), i18n::tr("(なし)"));
                 for n in names {
                     ui.selectable_value(cur, n.to_string(), *n);
                 }
@@ -35,24 +35,24 @@ pub(super) fn power_ui(ui: &mut egui::Ui, res: &TranResult, order: &[&str], w: (
     };
     let (pin, pout) = (p(&pw[0], &pw[1]).map(f64::abs), p(&pw[2], &pw[3]).map(f64::abs));
     if let Some(x) = pin {
-        ui.small(format!("  入力の平均電力 {}", eng(x, "W")));
+        ui.small(i18n::trf!("  入力の平均電力 {}", eng(x, "W")));
     }
     if let Some(x) = pout {
-        ui.small(format!("  出力の平均電力 {}", eng(x, "W")));
+        ui.small(i18n::trf!("  出力の平均電力 {}", eng(x, "W")));
     }
     if let (Some(a), Some(b)) = (pin, pout) {
         match efficiency(a, b) {
             Some(e) => {
                 let col = if e > 1.02 { crate::theme::ERROR } else if e >= 0.8 { Color32::from_rgb(90, 190, 110) } else { crate::theme::WARN };
                 let loss = (a - b).max(0.0);
-                ui.label(egui::RichText::new(format!("  効率 {:.1} %   損失 {}", e * 100.0, eng(loss, "W"))).color(col))
-                    .on_hover_text("効率 = 出力の電力 ÷ 入力の電力。損失は熱になります (スイッチング電源は 80〜95%、リニアレギュレータは 出力電圧÷入力電圧 くらい)");
+                ui.label(egui::RichText::new(i18n::trf!("  効率 {:.1} %   損失 {}", e * 100.0, eng(loss, "W"))).color(col))
+                    .on_hover_text(i18n::tr("効率 = 出力の電力 ÷ 入力の電力。損失は熱になります (スイッチング電源は 80〜95%、リニアレギュレータは 出力電圧÷入力電圧 くらい)"));
                 if e > 1.02 {
-                    ui.small("  100% を超えています。電圧と電流の組み合わせか、時間範囲 (起動直後を含む、など) を確かめてください");
+                    ui.small(i18n::tr("  100% を超えています。電圧と電流の組み合わせか、時間範囲 (起動直後を含む、など) を確かめてください"));
                 }
             }
             None => {
-                ui.small("  入力の電力が 0 なので効率は出せません");
+                ui.small(i18n::tr("  入力の電力が 0 なので効率は出せません"));
             }
         }
     }

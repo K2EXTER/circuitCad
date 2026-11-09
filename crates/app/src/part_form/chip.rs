@@ -74,10 +74,10 @@ impl PartForm {
     /// heading and the kind is fixed; with no kind chosen it is a folded section with its own kind selector.
     pub(super) fn passive_ui(&mut self, ui: &mut egui::Ui) {
         if self.ptype.is_some() {
-            ui.label(egui::RichText::new(format!("かんたん作成: {}をデータシートの数値からつくる", self.pas_kind.label())).strong());
+            ui.label(egui::RichText::new(i18n::trf!("かんたん作成: {}をデータシートの数値からつくる", self.pas_kind.label())).strong());
             self.passive_body(ui);
         } else {
-            egui::CollapsingHeader::new("チップ部品 (コンデンサ・抵抗・コイル) を、データシートの数値からつくる").id_salt("pas_section").default_open(!self.glyph.is_empty()).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("チップ部品 (コンデンサ・抵抗・コイル) を、データシートの数値からつくる")).id_salt("pas_section").default_open(!self.glyph.is_empty()).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     for k in [PassiveKind::Capacitor, PassiveKind::Resistor, PassiveKind::Inductor] {
                         ui.selectable_value(&mut self.pas_kind, k, k.label());
@@ -107,10 +107,10 @@ impl PartForm {
                         row(ui, "ESR (等価直列抵抗)", &mut self.pas_esr, "データシートの ESR か、インピーダンスの最小値。大きいほどリップルが大きく、発熱します。下の表から求めることもできます", "20m");
                         // for an electrolytic / tantalum only: there the impedance at 100 kHz is about the ESR
                         if self.pas_polar {
-                            ui.label("インピーダンス Z (Ω)").on_hover_text("データシートの「インピーダンス」(100kHz の値) を入れて「ESR に入れる」を押すと、上の ESR に写します。電解コンデンサでは、100kHz のインピーダンスはほぼ ESR です (容量の分は、そのころには小さくなっています)。ただし ESR は周波数と温度で大きく変わります (120Hz の tanδ から求めると、もっと大きくなります)");
+                            ui.label(i18n::tr("インピーダンス Z (Ω)")).on_hover_text(i18n::tr("データシートの「インピーダンス」(100kHz の値) を入れて「ESR に入れる」を押すと、上の ESR に写します。電解コンデンサでは、100kHz のインピーダンスはほぼ ESR です (容量の分は、そのころには小さくなっています)。ただし ESR は周波数と温度で大きく変わります (120Hz の tanδ から求めると、もっと大きくなります)"));
                             ui.horizontal(|ui| {
                                 ui.add(egui::TextEdit::singleline(&mut self.pas_z100k).desired_width(80.0).hint_text("0.3"));
-                                if ui.small_button("→ ESR に入れる").on_hover_text("この値を ESR の欄に入れます (100kHz のときの値として)").clicked() {
+                                if ui.small_button(i18n::tr("→ ESR に入れる")).on_hover_text(i18n::tr("この値を ESR の欄に入れます (100kHz のときの値として)")).clicked() {
                                     match self.pas_number("インピーダンス", &self.pas_z100k, false) {
                                         Ok(Some(z)) => self.pas_esr = passive::eng(z),
                                         Ok(None) => {}
@@ -141,8 +141,8 @@ impl PartForm {
                 PassiveKind::Inductor => "100k 6.5\n1M 63\n10M 600\n40M 2.5k\n100M 900",
                 PassiveKind::Resistor => "1M 1k\n100M 1.05k\n500M 1.4k\n1G 2k",
             }))
-            .on_hover_text("データシートのグラフから、いくつかの点を読み取って書きます。谷 (コンデンサ) や山 (コイル) の前後も入れると確かです。例: 周波数 1M、インピーダンス 0.05 は「1M 0.05」");
-            if ui.button("表から求める").on_hover_text("表に合うように、上の 2 つの値 (ESR と ESL / DCR と並列容量 / 寄生インダクタンスと並列容量) を計算して入れます。「値」を使います").clicked() {
+            .on_hover_text(i18n::tr("データシートのグラフから、いくつかの点を読み取って書きます。谷 (コンデンサ) や山 (コイル) の前後も入れると確かです。例: 周波数 1M、インピーダンス 0.05 は「1M 0.05」"));
+            if ui.button(i18n::tr("表から求める")).on_hover_text(i18n::tr("表に合うように、上の 2 つの値 (ESR と ESL / DCR と並列容量 / 寄生インダクタンスと並列容量) を計算して入れます。「値」を使います")).clicked() {
                 self.pas_message = Some(self.fit_from_table());
             }
             self.pas_chart(ui);
@@ -150,7 +150,7 @@ impl PartForm {
                 self.pas_saturation(ui);
             }
             self.pas_temperature(ui);
-            if ui.button("部品を作る (ピンとモデルを入れる)").on_hover_text("ピン、記号、値、モデルを入れます。パッケージは下の「パッケージ」で選びます").clicked() {
+            if ui.button(i18n::tr("部品を作る (ピンとモデルを入れる)")).on_hover_text(i18n::tr("ピン、記号、値、モデルを入れます。パッケージは下の「パッケージ」で選びます")).clicked() {
                 self.pas_message = Some(self.apply_passive());
             }
             match &self.pas_message {

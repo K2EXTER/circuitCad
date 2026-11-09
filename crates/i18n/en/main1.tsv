@@ -1,0 +1,286 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/args.rs
+PDF を保存しました: {p}	Saved the PDF: {p}
+PDF を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください	Could not save the PDF: {e}. Check that you can write to the destination folder
+回路図が空なので、PDF に書き出せません	The schematic is empty, so there is nothing to export to PDF
+SVG を保存しました: {p}	Saved the SVG: {p}
+SVG を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください	Could not save the SVG: {e}. Check that you can write to the destination folder
+回路図が空なので、SVG に書き出せません	The schematic is empty, so there is nothing to export to SVG
+書き出し完了: {dir} ({n} ファイル + zip)	Export done: {dir} ({n} files + zip)
+書き出し失敗: {e}	Export failed: {e}
+# crates/app/src/autosave.rs
+前回	earlier
+1 分以内	within the last minute
+{} 分前	{} min ago
+{} 時間前	{} h ago
+{} 日前	{} days ago
+自動保存できませんでした: {e}	Could not autosave: {e}
+保存していなかった作業が見つかりました	Unsaved work was found
+回路図と基板	schematic and board
+回路図	Schematic
+基板	Board
+前回、{what}を保存しないまま終了したようです(自動保存は{})。	It looks like you quit last time without saving the {what} (autosaved {}).
+復元すると、その続きから作業できます。	Restore it to carry on where you left off.
+復元する	Restore
+自動保存したものを開きます。開いたあと、いつもどおり保存してください	Opens the autosaved work. After it opens, save as usual
+捨てる	Discard
+自動保存したものを消して、まっさらな状態で始めます	Deletes the autosaved work and starts fresh
+# crates/app/src/files.rs
+保存していない変更があります	You have unsaved changes
+{what}\n\nはい: 保存してから続ける\nいいえ: 保存せずに続ける (変更は失われます)\nキャンセル: やめる	{what}\n\nYes: save, then continue\nNo: continue without saving (changes are lost)\nCancel: stop
+回路図か基板に、保存していない変更があります。{what}	The schematic or board has unsaved changes. {what}
+{}に、保存していない変更があります。{what}	The {} has unsaved changes. {what}
+circuitCad プロジェクト	circuitCad project
+プロジェクトを保存しました (回路図と基板): {}	Saved the project (schematic and board): {}
+プロジェクトを保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください	Could not save the project: {e}. Check that you can write to the destination folder
+プロジェクトを開くと、いまの回路図と基板は置き換わります。	Opening a project replaces the current schematic and board.
+プロジェクトを開きました: {}	Opened the project: {}
+プロジェクトを開けませんでした: {e}	Could not open the project: {e}
+レッスンの基板を読み込めませんでした	Could not load the lesson's board
+レッスンの回路を読み込めませんでした	Could not load the lesson's circuit
+レッスンのプロジェクトを読み込めませんでした: {e}	Could not load the lesson's project: {e}
+# crates/app/src/icons.rs
+{tip}\nショートカット: {key}	{tip}\nShortcut: {key}
+# crates/app/src/main.rs
+配線の抵抗・インダクタンス・容量を外しました。回路図のシミュレーションは理想の配線に戻ります	Removed the track resistance, inductance and capacitance. The schematic simulation goes back to ideal wiring
+配線されたネットがないので、反映するものがありません。先に配線してください	No net is routed yet, so there is nothing to apply. Route the tracks first
+{} ピンの配線の抵抗を回路図のシミュレーションに反映しました。回路図に戻って解析を実行してください	Applied the track resistance of {} pins to the schematic simulation. Go back to the schematic and run the analysis
+このまま閉じると、変更は失われます。	If you close now, your changes will be lost.
+回路図の画面。部品を置いて配線し、シミュレーションします	The schematic screen. Place parts, wire them and simulate
+基板パターン ●	PCB layout ●
+基板パターン	PCB layout
+回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)	The schematic and board don't match. Press "Import from schematic" on the board screen to apply the changes (see the board's left panel for details)
+基板の画面。回路図から部品を取り込んで、配置・配線します	The board screen. Import parts from the schematic, then place and route them
+ファイル	File
+プロジェクトを開く…	Open project…
+回路図と基板をまとめて保存したファイル (.ccproj) を開きます。いまの回路図と基板は置き換わります	Opens a file (.ccproj) that holds both the schematic and the board. The current schematic and board are replaced
+プロジェクトを保存	Save project
+回路図と基板を、1つのファイル (.ccproj) にまとめて保存します。まだ保存していなければ、保存先を選びます	Saves the schematic and board together in one file (.ccproj). If it has not been saved yet, you choose where to save
+名前を付けてプロジェクトを保存…	Save project as…
+回路図と基板を、別の名前のプロジェクトとして保存します	Saves the schematic and board as a project under another name
+いまの回路図だけ	Current schematic only
+いまの基板だけ	Current board only
+新規	New
+いまの図を空にして、新しく始めます	Clears the current drawing and starts a new one
+新規にすると、いまの図は消えます。	Starting a new one clears the current drawing.
+開く…	Open…
+保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」	Opens a saved file (schematic: .schjson, board: .pcbjson). To open a schematic and board together, use "Open project"
+開くと、いまの図は置き換わります。	Opening replaces the current drawing.
+KiCad の回路図を開く…	Open KiCad schematic…
+KiCad 6 以降の回路図 (.kicad_sch) を取り込みます。部品はこのソフトの記号で並べ直し、つながりはネットの名前で表します (KiCad の図の形・位置は引き継ぎません)。子シート・バスなど読めないものは、取り込んだあとの案内に出ます	Imports a KiCad 6 or later schematic (.kicad_sch). Parts are laid out again with this app's symbols, and connections are shown by net names (the shapes and positions of the KiCad drawing are not kept). Anything that can't be read, such as child sheets and buses, is listed in the guide after importing
+開くと、いまの回路図は置き換わります。	Opening replaces the current schematic.
+サンプル回路を開く	Open sample circuit
+できあがった回路をすぐ開いて、動かしてみます。保存するときは別の名前になるので、サンプルは壊れません	Opens a finished circuit so you can try it right away. Saving uses a different name, so the sample stays intact
+保存	Save
+いまの図を上書き保存します。まだ保存していなければ、保存先を選びます	Saves the current drawing over the file. If it has not been saved yet, you choose where to save
+名前を付けて保存…	Save as…
+別の名前で保存します	Saves under another name
+画面をPNGで保存…	Save screen as PNG…
+いま見えている画面 (回路図・電圧の色・波形・基板) を画像にします。レポートや質問への添付に使えます	Makes an image of what you see now (schematic, voltage colors, waveforms, board). Handy for reports or attaching to questions
+PNG画像	PNG image
+回路図をSVGで保存…	Save schematic as SVG…
+いま見えているシートを、拡大しても粗くならない図 (SVG) にします。ブラウザや Inkscape で開けて、ブラウザの印刷から PDF にもできます。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります	Turns the sheet you see now into a drawing that stays sharp when zoomed (SVG). Opens in a browser or Inkscape, and you can make a PDF from the browser's print. Selection and grid are left out; voltage and current labels are included if shown
+回路図をPDFで保存…	Save schematic as PDF…
+いま見えているシートを、1ページの PDF にします。印刷や提出、メールで送るのに使えます。文字は形(アウトライン)で入るので、どの環境でも同じ見た目ですが、PDF の中で文字の検索やコピーはできません。図枠は右下に入ります。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります	Turns the sheet you see now into a one-page PDF, for printing, handing in or sending by email. Text is stored as shapes (outlines), so it looks the same everywhere, but you can't search or copy text in the PDF. The title block goes at the bottom right. Selection and grid are left out; voltage and current labels are included if shown
+図枠 (タイトル・版・日付)…	Title block (title, revision, date)…
+回路の名前・版・日付・作者を書いておきます。SVG に書き出すと、図の右下に枠で入ります	Write down the circuit's name, revision, date and author. When exported to SVG, they appear in a box at the bottom right of the drawing
+ケースの図面 (DXF) から外形と穴を取り込む…	Import outline and holes from a case drawing (DXF)…
+ケースの CAD で描いた DXF (ASCII 形式) から、基板の外形 (線・円弧・ポリラインがつながって閉じた、いちばん大きい輪) と、その中の円 (取り付け穴) を取り込みます。外形の左下が (0, 0) になります。単位は図面の設定 (INSUNITS) から mm にします。「元に戻す」で戻せます	From a DXF (ASCII format) drawn in the case's CAD, imports the board outline (the largest closed loop of joined lines, arcs and polylines) and the circles inside it (mounting holes). The bottom left of the outline becomes (0, 0). Units are converted to mm from the drawing's setting (INSUNITS). You can revert with "Undo"
+基板の外形・穴・部品の位置をDXFで保存…	Save board outline, holes and part positions as DXF…
+基板の外形、取り付け穴、部品を囲む箱と部品番号を、DXF (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に渡して、基板が収まるか、穴の位置が合うかを確かめるのに使います。画面と同じ向き (上から見た形) で書き出します	Writes the board outline, mounting holes, and a box and refdes for each part to a DXF (mm). Pass it to the CAD you design the case in (Fusion, FreeCAD, SolidWorks, etc.) to check that the board fits and the holes line up. Exported in the same orientation as the screen (seen from above)
+基板の表面をSVGで保存…	Save board top as SVG…
+基板の裏面をSVGで保存…	Save board bottom as SVG…
+基板の絵を、拡大しても粗くならない図 (SVG) にします。銅・シルク・穴は、発注用の Gerber と同じデータから描くので、できあがりの姿です。記事・レポート・印刷に使えます。裏面は、基板を裏返して下から見た向きです	Turns a picture of the board into a drawing that stays sharp when zoomed (SVG). Copper, silkscreen and holes are drawn from the same data as the Gerber for ordering, so it shows the finished board. Use it for articles, reports and printing. The bottom is shown as if the board were flipped over and seen from below
+発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…	Prepare order / export fab files (Gerber / drill / BOM / placement)…
+発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます	Opens a window where you choose a fab and then run the pre-order check, preview the finished board and export the Gerber and other files, step by step
+学ぶ	Learn
+学習パス (地図) を開く…	Open learning path (map)…
+学習パスの窓を開きます。パス (部品の素顔・安定化電源・Arduino 互換ボードなど) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります	Opens the learning path window. Switch between paths (parts up close, regulated supply, Arduino-compatible board, etc.) and see how the lessons connect on the tree-shaped "learning map". Your progress is saved too
+用語集・索引…	Glossary / index…
+電子回路の言葉と、このソフトの言葉を、読みと説明つきで引けます。語を選ぶと、その語が出てくるレッスンも分かります	Look up electronics terms and this app's terms, with readings and explanations. Pick a term to see which lessons use it
+サンプル回路を動かしながら学べます (✔ = 完了)	Learn while running sample circuits (✔ = done)
+🗺 学習の地図 (樹形図) を開く…	🗺 Open learning map (tree)…
+このパスの、レッスンの関係を樹形図で見ます (学習パスの窓が開きます)	See how the lessons in this path connect, as a tree (opens the learning path window)
+そのほかのレッスン	Other lessons
+値の決め方 (計算ツール)…	Choosing values (calculators)…
+LEDの抵抗・分圧・フィルタ・レギュレータ・トランジスタスイッチの値を、計算と注意点・故障パターンつきで決めます。部品の値は、勘ではなく計算で決められます。入力を変えると、結果・計算のしかた・注意点・壊れ方がすぐ下に出ます	Choose values for LED resistors, dividers, filters, regulators and transistor switches, with the math, cautions and failure modes. Decide part values by calculation, not by guessing. Change an input and the result, how it's calculated, cautions and how it fails appear right below
+基板のレッスン	Board lessons
+回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します	Try the whole flow, from making a PCB layout from the schematic to exporting the data for ordering
+細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します	See in simulation how a thin track drops voltage, then choose the needed width from the current and fix it
+わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)	Fix a board with deliberate mistakes, using the pre-order check results as a guide (challenge)
+マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します	On a microcontroller board, move the crystal and bypass capacitors to the right places, and practice fixing tracks that won't route
+USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します	Route USB D+ / D- as a differential pair, side by side and at the same length
+2 組の差動ペアを同じ長さにそろえます。蛇行は 2 本をいっしょに曲げるので、間隔が保たれます	Match two differential pairs to the same length. The meander bends both tracks together, so the gap is kept
+ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、点検の道具で確かめ、直します。何度でも、別の故障で練習できます	Plant one fault in a working board. Find the cause from the symptoms, confirm it with the inspection tools, and fix it. Practice as often as you like with different faults
+自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます	Finish by hand an Arduino Mega-compatible board where autoroute left 18 tracks unrouted
+編集	Edit
+元に戻す (Ctrl+Z)	Undo (Ctrl+Z)
+直前の操作を取り消します	Cancels the last action
+やり直し (Ctrl+Y)	Redo (Ctrl+Y)
+取り消した操作をやり直します	Redoes the action you undid
+設計の要件 (表)…	Design requirements (table)…
+ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます。回路図・基板のどちらからでも開けます	Write net roles, track widths and currents, groups of parts to keep close, and things to keep apart, in one table for the whole design. When imported into the board, it is used for net classes, autoplace and distance checks. Opens from either the schematic or the board
+ヘルプ	Help
+回路図の操作	Schematic controls
+部品の置き方・配線・選択・キー操作	Placing parts, wiring, selecting, keys
+波形の操作	Waveform controls
+ズーム・測定カーソル・信号の選び方	Zoom, measuring cursors, choosing signals
+基板の操作	Board controls
+配置・配線・ビア・層の切り替え	Placing, routing, vias, switching layers
+3D表示の操作	3D view controls
+回す・動かす・拡大	Rotate, pan, zoom
+F1 キーでも開けます	You can also open it with the F1 key
+設定	Settings
+シミュレーション設定…	Simulation settings…
+計算の精度や収束のしやすさを調整します。ふだんは変えなくて大丈夫です。「収束しませんでした」と出たとき、または結果の精度を上げたいときに調整します。変えたあとは、解析をもう一度実行してください (「自動で再計算」がオンなら自動で反映されます)。	Adjusts calculation accuracy and how easily it converges. You normally don't need to change these. Adjust them when you see "did not converge" or want more accurate results. After changing, run the analysis again (if "Auto recalculate" is on, it is applied automatically).
+Language / 言語	Language / 言語
+日本語	日本語
+画面の言語 / The language of the screen (English is partly translated: untranslated text stays in Japanese)	画面の言語 / The language of the screen (English is partly translated: untranslated text stays in Japanese)
+画面下にヒントを出す	Show hints at the bottom
+画面下に、いま何をするとよいかのヒントと豆知識を表示します	Shows a hint about what to do next, and tips, at the bottom of the screen
+ツールをアイコンだけで表示	Show tools as icons only
+ツールボタンの文字を省き、アイコンだけにします。ボタンにカーソルを重ねると名前と説明が出ます。慣れてきたら画面が広く使えます	Drops the text from tool buttons and shows icons only. Hover over a button to see its name and description. Once you're used to it, you get more screen space
+選んだ部品・ネットを回路図・基板・3Dで連動	Link selected parts/nets across schematic, board and 3D
+回路図で選んだ部品やネット (配線・ネットラベル) が、基板と3D表示でも光り、基板や3Dで選んだものが、回路図でも光ります (水色の枠と線)。画面を切り替えたときに、同じものをすぐ探せます。オフにすると、それぞれ別々に選びます	Parts and nets (wires, net labels) you select in the schematic also light up on the board and in 3D, and things you select on the board or in 3D light up in the schematic (light blue outline and lines). Helps you find the same thing quickly when you switch screens. Turn off to select separately in each
+ (次の起動から)	 (from next start)
+線の縁をなめらかにする{note}	Smooth line edges{note}
+画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)	Draws the screen with 4x multisampling (MSAA) so the edges of tracks and silkscreen look smooth. With it on, fewer triangles are drawn, so it is lighter. It is set at startup, so a change takes effect from the next start. If it doesn't suit your graphics card (the screen breaks up or becomes very slow), turn it off (starting with --no-msaa also turns it off for that run only)
+豆知識: {}	Tip: {}
+ヒント	Hint
+# crates/app/src/plot.rs
+横軸の表示範囲の始まり / 終わり。数字 (10m, 2u など) を入れて Enter で反映します。横軸の数字の上でホイールを回しても拡大縮小できます	Start / end of the horizontal axis range. Type a number (10m, 2u, etc.) and press Enter to apply. You can also zoom by turning the wheel over the horizontal axis numbers
+全体	All
+横軸を最初の範囲 (全体) に戻します	Resets the horizontal axis to the initial (full) range
+縦軸の下端 / 上端。数字 (-1, 500m など) を入れて Enter で反映します。縦軸の数字の上でホイールを回しても拡大縮小できます	Bottom / top of the vertical axis. Type a number (-1, 500m, etc.) and press Enter to apply. You can also zoom by turning the wheel over the vertical axis numbers
+自動	Auto
+オンのあいだ、いま見えている範囲に合わせて縦軸を自動で決めます。手で動かすと自動でオフになります	While on, the vertical axis is set automatically to fit the range you see. Moving it by hand turns this off
+B/A = {:.3} 倍 ({:.2} オクターブ)	B/A = {:.3}x ({:.2} octaves)
+# crates/app/src/prefs.rs
+設定を保存できませんでした: {e}。今回の起動中だけ有効です	Could not save the settings: {e}. They apply only until you close the app
+# crates/app/src/project.rs
+プロジェクトの形式が読めません ({e})	Can't read the project format ({e})
+新しい版の circuitCad で作られたプロジェクトです。circuitCad を更新してから開いてください	This project was made with a newer version of circuitCad. Update circuitCad, then open it
+プロジェクトに「{key}」がありません (circuitCad のプロジェクトファイルではないようです)	The project has no "{key}" (it doesn't seem to be a circuitCad project file)
+回路図の部分が読めません ({e})	Can't read the schematic part ({e})
+基板の部分が読めません ({e})	Can't read the board part ({e})
+# crates/app/src/screenshot.rs
+画面を保存しました: {}	Saved the screen: {}
+画像を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください	Could not save the image: {e}. Check that you can write to the destination folder
+# crates/app/src/source_form.rs
+{label}「{s}」を数値にしてください	{label} "{s}" must be a number
+振幅	Amplitude
+遅延	Delay
+減衰	Damping
+周波数は正の値にしてください	Frequency must be a positive value
+低い値	Low value
+高い値	High value
+立上り	Rise
+立下り	Fall
+幅	Width
+周期	Period
+{}を入力してください	Enter the {}
+周期を入れるときは、幅も入力してください	When you enter a period, enter the width too
+値を入力してください	Enter a value
+AC の大きさ	AC magnitude
+AC の位相	AC phase
+電源の種類	Source type
+一定の電圧。電池や電源ライン (5V など) に使います	A constant voltage. Use it for batteries and supply rails (5V, etc.)
+交流 (正弦波)	AC (sine wave)
+なめらかに振動する交流。信号源や、フィルタの動きを見るのに使います	Smoothly oscillating AC. Use it for signal sources or to see how a filter behaves
+パルス	Pulse
+0 と 5V などを繰り返す矩形波。ロジックやスイッチの動作確認に使います	A square wave that repeats, e.g. between 0 and 5V. Use it to check logic or switch behavior
+その他	Other
+PWL (折れ線) やノイズなど。テキストで直接書きます	PWL (piecewise linear), noise, etc. Write it directly as text
+電圧 [V]	Voltage [V]
+一定の電圧。例: 5, 3.3, 12	A constant voltage. Example: 5, 3.3, 12
+オフセット [V]	Offset [V]
+波の中心の電圧 (直流分)。0 なら 0V を中心に振れます	The voltage at the center of the wave (DC part). With 0, it swings around 0V
+振幅 [V]	Amplitude [V]
+中心から山までの高さ。1 なら −1V〜+1V で振れます (山から谷までは 2V)	Height from the center to the peak. With 1, it swings from −1V to +1V (2V from peak to trough)
+周波数 [Hz]	Frequency [Hz]
+1 秒あたりの波の数。例: 50, 1k, 100k	Waves per second. Example: 50, 1k, 100k
+詳細 (遅延・減衰・位相)	Details (delay, damping, phase)
+遅延 [s]	Delay [s]
+この時間まで波を始めません	The wave doesn't start until this time
+減衰 [1/s]	Damping [1/s]
+波がだんだん小さくなる速さ。0 なら減衰しません	How fast the wave gets smaller. With 0, it doesn't decay
+位相 [度]	Phase [deg]
+波の開始位置のずれ。90 でコサイン波	Shift of the wave's starting point. 90 gives a cosine wave
+低い値 [V]	Low value [V]
+パルスが出ていない間の電圧	Voltage while the pulse is off
+高い値 [V]	High value [V]
+パルスの間の電圧	Voltage during the pulse
+幅 [s]	Width [s]
+高い値でいる時間。空欄だとずっと高いままです	Time spent at the high value. If blank, it stays high
+周期 [s]	Period [s]
+繰り返しの間隔。空欄だと 1 回だけです	Repeat interval. If blank, it happens only once
+詳細 (遅延・立上り・立下り)	Details (delay, rise, fall)
+最初のパルスが始まるまでの時間	Time until the first pulse starts
+立上り [s]	Rise [s]
+低い値から高い値に変わるのにかける時間	Time taken to go from the low value to the high value
+立下り [s]	Fall [s]
+高い値から低い値に戻るのにかける時間	Time taken to go back from the high value to the low value
+例: PWL(0 0 1m 5 2m 0) / NOISE(0.05 1Meg) / 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k)\n(+ の前後は空白)	Example: PWL(0 0 1m 5 2m 0) / NOISE(0.05 1Meg) / 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k)\n(spaces around +)
+AC解析の入力にする	Use as AC analysis input
+周波数特性 (AC解析) を測るとき、この電源を入力として使います。\nAC解析のときだけ働く設定で、過渡解析やDC解析の電圧には影響しません	Uses this source as the input when measuring frequency response (AC analysis).\nThis setting works only in AC analysis and does not affect the voltage in transient or DC analysis
+通常は 1。出力がそのまま利得(倍率)になります	Usually 1. The output then reads directly as the gain
+AC の位相 [度]	AC phase [deg]
+通常は 0	Usually 0
+# crates/app/src/startup.rs
+/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc	
+# crates/app/src/widgets.rs
+閉じる	Close
+{what}を閉じます	Closes the {what}
+⚠ 警告 {n} 件	⚠ {n} warnings
+解析で見つかった注意です。押すと全部を出します	Cautions found by the analysis. Click to show them all
+# crates/app/src/xcheck.rs
+一致	Match
+gmin依存	gmin-dependent
+ズレ	Mismatch
+対象外	Skipped
+失敗	Failed
+名前が一致するノードがありません	No node with a matching name
+{} の値を読めません ({}): {m}	Can't read the value of {} ({}): {m}
+シミュレーションモデルのない部品があります	Some parts have no simulation model
+ngspice が読めない部品 (デジタルセルの Y 行、U dff など) があります	Some parts can't be read by ngspice (Y lines of digital cells, U dff, etc.)
+自前エンジン: 回路を作れません ({})	Own engine: can't build the circuit ({})
+自前エンジン: {e} / {m}	Own engine: {e} / {m}
+自前エンジン: {e} / ngspice は解けた ({} ノード)	Own engine: {e} / ngspice solved it ({} nodes)
+作業ファイルを書けません	Can't write the working file
+ngspice を起動できません: {e}	Can't start ngspice: {e}
+結果が出ませんでした	No result came out
+{nodes} 値 (電圧と電流)	{nodes} values (voltages and currents)
+{nodes} 値。ngspice の既定gmin(1e-12)では {node} が 自前={ours:.4e} ngspice={theirs:.4e} とずれるが、gmin=1e-15 なら一致 (自前は gmin→0 の値)	{nodes} values. With ngspice's default gmin (1e-12), {node} differs: ours={ours:.4e} ngspice={theirs:.4e}, but they match with gmin=1e-15 (ours is the gmin→0 value)
+{bad}/{nodes} 値がズレ。最大: {worst} 自前={ours:.6e} ngspice={theirs:.6e} (差 {:.3e})	{bad}/{nodes} values mismatch. Worst: {worst} ours={ours:.6e} ngspice={theirs:.6e} (diff {:.3e})
+DC動作点の検算 (自前エンジン vs ngspice)  許容: 相対{REL_TOL} + 絶対{ABS_TOL}V (電流は{ABS_TOL_I}A)\n\n	DC operating point cross-check (own engine vs ngspice)  Tolerance: relative {REL_TOL} + absolute {ABS_TOL}V (current {ABS_TOL_I}A)\n\n
+読み込めません: {e}	Can't load: {e}
+\n一致 {} / gmin依存 {} / ズレ {} / 対象外 {} / 失敗 {}\n	\nMatch {} / gmin-dependent {} / Mismatch {} / Skipped {} / Failed {}\n
+{} 回路を {} に保存 ({:?})\n保存しなかった: {}\n	Saved {} circuits to {} ({:?})\nNot saved: {}\n
+使い方: circuitCad --xcheck <file.schjson | フォルダ> --ac [--golden <保存先.json>] [--ngspice <exe>] [--out report.txt]\n	Usage: circuitCad --xcheck <file.schjson | folder> --ac [--golden <output.json>] [--ngspice <exe>] [--out report.txt]\n
+ngspice が見つかりません。--ngspice <exe> か環境変数 NGSPICE で指定してください\n	ngspice not found. Specify it with --ngspice <exe> or the NGSPICE environment variable\n
+使い方: circuitCad --xcheck <file.schjson | フォルダ> [--tran [--tstop 秒] [--tstep 秒] [--ourstep 秒] [--ngstep 秒] [--lte 許容]] [--ngspice <exe>] [--out report.txt]\n	Usage: circuitCad --xcheck <file.schjson | folder> [--tran [--tstop sec] [--tstep sec] [--ourstep sec] [--ngstep sec] [--lte tol]] [--ngspice <exe>] [--out report.txt]\n
+# crates/app/src/xcheck_ac.rs
+自前エンジン: {e}	Own engine: {e}
+AC の電源がありません	No AC source
+ngspice: 結果ファイルを読めません	ngspice: can't read the result file
+ngspice: 周波数の点が合いません (自前{}点 ngspice{}点)	ngspice: frequency points don't match (ours {} points, ngspice {} points)
+AC解析の検算 (自前エンジン vs ngspice, {F_START}Hz〜{F_STOP:e}Hz)  合格: 複素数の差が 相対{REL_TOL} + 最大値の{PEAK_TOL}倍 以内\n\n	AC analysis cross-check (own engine vs ngspice, {F_START}Hz to {F_STOP:e}Hz)  Pass: complex difference within relative {REL_TOL} + {PEAK_TOL}x the maximum\n\n
+{nodes} ノード。最大: {worst} (許容の{:.1}%)	{nodes} nodes. Worst: {worst} ({:.1}% of tolerance)
+{bad}/{nodes} ノードがズレ。最大: {worst} (許容の{err:.1}倍)	{bad}/{nodes} nodes mismatch. Worst: {worst} ({err:.1}x tolerance)
+\n一致 {} / ズレ {} / 対象外 {} / 失敗 {}\n	\nMatch {} / Mismatch {} / Skipped {} / Failed {}\n
+# crates/app/src/xcheck_tran.rs
+ノイズや和の波形、周波数0の電源は比べられません	Noise or summed waveforms and 0 Hz sources can't be compared
+振れ幅が小さい	Swing is too small
+エッジの数が違う (自前{} ngspice{})	Different number of edges (ours {} ngspice {})
+初期電圧 (IC=) のある部品は比べられません	Parts with an initial voltage (IC=) can't be compared
+すべてゼロ	All zero
+ngspice: 波形ファイルを読めません	ngspice: can't read the waveform file
+ngspice: 波形が出ませんでした	ngspice: no waveform came out
+{name} 末尾のp-p 自前{pm:.3e} ngspice{pt:.3e}	{name} p-p at the end: ours {pm:.3e} ngspice {pt:.3e}
+{name} は形の差{:.1}%だがエッジ時刻のずれは周期の{:.1}%	{name} differs in shape by {:.1}%, but the edge timing offset is {:.1}% of the period
+エッジのずれ 周期の{:.1}%	Edge offset {:.1}% of the period
+エッジは比べられない: {why}	Edges can't be compared: {why}
+  [リップルの差: {ripple}]	  [Ripple difference: {ripple}]
+{nodes} ノード ({tstop:.3e} 秒)。最大誤差 {worst} {:.3}%{}	{nodes} nodes ({tstop:.3e} s). Max error {worst} {:.3}%{}
+{bad}/{nodes} ノードがズレ [{bad_list}] ({tstop:.3e} 秒)。最大: {worst} 誤差 {:.2}%、ピーク差 {peak:.3e} V (t={at:.4e} 秒){}	{bad}/{nodes} nodes mismatch [{bad_list}] ({tstop:.3e} s). Worst: {worst} error {:.2}%, peak diff {peak:.3e} V (t={at:.4e} s){}
+過渡解析の検算 (自前エンジン vs ngspice)  合格: 規格化RMS誤差 {}% 未満 (幅は{MIN_SPAN}V以上で割る)\n\n	Transient analysis cross-check (own engine vs ngspice)  Pass: normalized RMS error under {}% (divided by a span of at least {MIN_SPAN}V)\n\n

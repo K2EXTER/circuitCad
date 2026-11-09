@@ -71,19 +71,19 @@ impl PartForm {
     }
 
     pub(super) fn step3d_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("3D の形 (メーカーの STEP ファイル)").id_salt("part_step3d").default_open(self.step_base.is_some()).show(ui, |ui| {
+        egui::CollapsingHeader::new(i18n::tr("3D の形 (メーカーの STEP ファイル)")).id_salt("part_step3d").default_open(self.step_base.is_some()).show(ui, |ui| {
             crate::icons::help_small(
                 ui,
                 "3D の形について",
                 "メーカーが配っている部品の STEP ファイル (.step / .stp) を読み込むと、基板の「3Dで見る」で、この部品が実物に近い形で表示されます。形のためだけのデータで、足やパッドの位置は、上のパッケージの寸法で決まります。ファイルは自分でダウンロードしたものを使い、メーカーの使用条件を確かめてください。大きなファイルは、三角形を間引いて保存します",
             );
             ui.horizontal(|ui| {
-                if ui.button("STEP を読み込む…").on_hover_text("メーカーの STEP ファイルを選びます。ソリッド (立体) の形だけを読みます。色があれば、色も使います").clicked()
+                if ui.button(i18n::tr("STEP を読み込む…")).on_hover_text(i18n::tr("メーカーの STEP ファイルを選びます。ソリッド (立体) の形だけを読みます。色があれば、色も使います")).clicked()
                     && let Some(p) = rfd::FileDialog::new().add_filter("STEP", &["step", "stp", "STEP", "STP"]).pick_file()
                 {
                     self.step_load(&p);
                 }
-                if self.step_base.is_some() && ui.button("3D の形を外す").on_hover_text("この部品の3Dの形を消して、基板の3Dでは推測の箱に戻します").clicked() {
+                if self.step_base.is_some() && ui.button(i18n::tr("3D の形を外す")).on_hover_text(i18n::tr("この部品の3Dの形を消して、基板の3Dでは推測の箱に戻します")).clicked() {
                     self.step_base = None;
                     self.step_file.clear();
                     self.model3d = None;
@@ -93,28 +93,28 @@ impl PartForm {
                 ui.colored_label(Color32::from_rgb(230, 80, 70), &self.step_msg);
             }
             let Some(m) = self.model3d.clone() else {
-                ui.small("読み込むと、ここに上から見た図と横から見た図が出ます");
+                ui.small(i18n::tr("読み込むと、ここに上から見た図と横から見た図が出ます"));
                 return;
             };
             let (lo, hi) = m.bounds().unwrap_or(([0.0; 3], [0.0; 3]));
-            ui.small(format!("{}  三角形 {}  大きさ {:.2} × {:.2} × {:.2} mm", self.step_file, m.triangles.len(), hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]));
+            ui.small(i18n::trf!("{}  三角形 {}  大きさ {:.2} × {:.2} × {:.2} mm", self.step_file, m.triangles.len(), hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]));
             let mut changed = false;
             ui.horizontal_wrapped(|ui| {
-                ui.label("向き:");
+                ui.label(i18n::tr("向き:"));
                 for (axis, name) in ["X", "Y", "Z"].iter().enumerate() {
-                    if ui.small_button(format!("{name} 軸に90°回す")).on_hover_text(format!("{name} 軸のまわりに、部品を90°回します。STEP の上下が、基板の上下と違うときに使います。横から見た図で、本体が基板の面の上にあれば正しい向きです")).clicked() {
+                    if ui.small_button(i18n::trf!("{name} 軸に90°回す")).on_hover_text(i18n::trf!("{name} 軸のまわりに、部品を90°回します。STEP の上下が、基板の上下と違うときに使います。横から見た図で、本体が基板の面の上にあれば正しい向きです")).clicked() {
                         self.step_rot[axis] = (self.step_rot[axis] + 1) % 4;
                         changed = true;
                     }
                 }
-                if ui.small_button("向きを戻す").on_hover_text("回した向きを、ファイルのままに戻します").clicked() {
+                if ui.small_button(i18n::tr("向きを戻す")).on_hover_text(i18n::tr("回した向きを、ファイルのままに戻します")).clicked() {
                     self.step_rot = [0; 3];
                     changed = true;
                 }
             });
             ui.horizontal_wrapped(|ui| {
-                changed |= ui.checkbox(&mut self.step_center, "本体の中心を、パッドの中心に合わせる").on_hover_text("オンにすると、本体の中心 (上から見て) が、パッドの並びの中心に来ます。オフだと、STEP ファイルの原点のままです").changed();
-                changed |= ui.checkbox(&mut self.step_drop, "本体の底を、基板の面に付ける").on_hover_text("オンにすると、いちばん低い所が基板の面の高さになります。足が基板にささる部品は、足の先が基板を突き抜けるので、オフにして上下を合わせることもできます").changed();
+                changed |= ui.checkbox(&mut self.step_center, i18n::tr("本体の中心を、パッドの中心に合わせる")).on_hover_text(i18n::tr("オンにすると、本体の中心 (上から見て) が、パッドの並びの中心に来ます。オフだと、STEP ファイルの原点のままです")).changed();
+                changed |= ui.checkbox(&mut self.step_drop, i18n::tr("本体の底を、基板の面に付ける")).on_hover_text(i18n::tr("オンにすると、いちばん低い所が基板の面の高さになります。足が基板にささる部品は、足の先が基板を突き抜けるので、オフにして上下を合わせることもできます")).changed();
             });
             if changed {
                 self.step_apply();
@@ -125,7 +125,7 @@ impl PartForm {
                     mesh_view(ui, m, &pads, false);
                     mesh_view(ui, m, &pads, true);
                 });
-                ui.small("左: 上から (赤い枠がパッド)  右: 横から (緑の線が基板の面)");
+                ui.small(i18n::tr("左: 上から (赤い枠がパッド)  右: 横から (緑の線が基板の面)"));
             }
         });
     }

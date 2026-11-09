@@ -76,21 +76,21 @@ impl SchEditor {
 
     pub(super) fn panel_z(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label("ネット");
+            ui.label(i18n::tr("ネット"));
             ui.add(egui::TextEdit::singleline(&mut self.z_node).desired_width(56.0).hint_text("OUT"))
-                .on_hover_text("どのネットから回路の中を見るか。そのネットに 1 A の交流の電流を流したときの電圧が、インピーダンスです。\n名前が分からないときは下の「回路図で選ぶ」を使います");
-            ui.label("基準");
+                .on_hover_text(i18n::tr("どのネットから回路の中を見るか。そのネットに 1 A の交流の電流を流したときの電圧が、インピーダンスです。\n名前が分からないときは下の「回路図で選ぶ」を使います"));
+            ui.label(i18n::tr("基準"));
             ui.add(egui::TextEdit::singleline(&mut self.z_ref).desired_width(44.0).hint_text("GND"))
-                .on_hover_text("どのネットとの間のインピーダンスか。空欄なら GND との間です");
+                .on_hover_text(i18n::tr("どのネットとの間のインピーダンスか。空欄なら GND との間です"));
         });
         ui.horizontal(|ui| {
-            ui.label("外す部品");
+            ui.label(i18n::tr("外す部品"));
             ui.add(egui::TextEdit::singleline(&mut self.z_remove).desired_width(90.0).hint_text("RL, V1"))
-                .on_hover_text("先に回路から取り除く部品の番号 (カンマで区切る)。\n段の出力インピーダンスを知りたいときは、負荷 (RL など) を外します。\n入力インピーダンスを知りたいときは、信号源とそれに直列の抵抗を外して、その先のネットを見ます。\n空欄なら、電源をすべて切っただけの回路を見ます (電源ラインのインピーダンスはこちら)");
+                .on_hover_text(i18n::tr("先に回路から取り除く部品の番号 (カンマで区切る)。\n段の出力インピーダンスを知りたいときは、負荷 (RL など) を外します。\n入力インピーダンスを知りたいときは、信号源とそれに直列の抵抗を外して、その先のネットを見ます。\n空欄なら、電源をすべて切っただけの回路を見ます (電源ラインのインピーダンスはこちら)"));
         });
         ui.horizontal(|ui| {
             let label = if self.z_pick { "選択中… (Esc で中止)" } else { "回路図で選ぶ" };
-            if ui.selectable_label(self.z_pick, label).on_hover_text("押してから回路図のピンや配線をクリックすると、そのネットを見て、すぐ解析します。\nShift+クリックで基準のネット").clicked() {
+            if ui.selectable_label(self.z_pick, label).on_hover_text(i18n::tr("押してから回路図のピンや配線をクリックすると、そのネットを見て、すぐ解析します。\nShift+クリックで基準のネット")).clicked() {
                 self.z_pick = !self.z_pick;
                 self.noise_pick = self.z_pick;
                 self.loop_pick = false;
@@ -101,7 +101,7 @@ impl SchEditor {
                     self.status = "回路図の見たいネットをクリックしてください".into();
                 }
             }
-            if self.lit(ui.button("インピーダンスを実行"), "インピーダンスを実行").on_hover_text("ネットから見たインピーダンス |Z| と位相を周波数ごとに求めます。山 (並列共振) と谷 (直列共振)、抵抗・コイル・コンデンサのどれに見えるかも出ます。周波数範囲・点数は AC解析の欄を共用します").clicked() {
+            if self.lit(ui.button(i18n::tr("インピーダンスを実行")), "インピーダンスを実行").on_hover_text(i18n::tr("ネットから見たインピーダンス |Z| と位相を周波数ごとに求めます。山 (並列共振) と谷 (直列共振)、抵抗・コイル・コンデンサのどれに見えるかも出ます。周波数範囲・点数は AC解析の欄を共用します")).clicked() {
                 self.run_z();
             }
         });
@@ -111,7 +111,7 @@ impl SchEditor {
         let Some(view) = self.z.as_mut() else { return };
         let mut close = false;
         ui.horizontal(|ui| {
-            crate::widgets::heading_inline(ui, format!("インピーダンス: {}", view.label)).on_hover_text("0 dB = 1 Ω、20 dB = 10 Ω、-20 dB = 0.1 Ω。電源ラインでは、低いほど電圧が揺れにくく、山は「そこで電圧が揺れやすい周波数」です");
+            crate::widgets::heading_inline(ui, format!("インピーダンス: {}", view.label)).on_hover_text(i18n::tr("0 dB = 1 Ω、20 dB = 10 Ω、-20 dB = 0.1 Ω。電源ラインでは、低いほど電圧が揺れにくく、山は「そこで電圧が揺れやすい周波数」です"));
             if crate::widgets::close_button(ui, "インピーダンスの表示") {
                 close = true;
             }
@@ -139,7 +139,7 @@ impl SchEditor {
                         ui.label(format!("{}: {} ({})", eng(res.freq[last], "Hz"), eng(mag[last], "Ω"), kind(ph[last])));
                         let ex = z_extrema(&res.freq, &mag, 3.0);
                         if ex.is_empty() {
-                            ui.small("山や谷はありません (なだらかに変わります)");
+                            ui.small(i18n::tr("山や谷はありません (なだらかに変わります)"));
                         } else {
                             egui::Grid::new("z_extrema").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                 for e in &ex {

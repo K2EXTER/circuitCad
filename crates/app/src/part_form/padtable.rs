@@ -105,7 +105,7 @@ impl PartForm {
         let mut remove: Option<usize> = None;
         let mut swap: Option<(usize, usize)> = None;
         if n > 0 {
-            ui.small("座標は部品の中心から (右が +X、上が +Y)、単位は mm。ピン名は「③ ピン」の番号と同じにします");
+            ui.small(i18n::tr("座標は部品の中心から (右が +X、上が +Y)、単位は mm。ピン名は「③ ピン」の番号と同じにします"));
             egui::Grid::new("extras_table").num_columns(10).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                 for h in ["種類", "ピン名", "X", "Y", "幅", "高さ", "穴径", "長穴の長さ", "縦", ""] {
                     ui.small(h);
@@ -114,7 +114,7 @@ impl PartForm {
                 for i in 0..n {
                     let kind = rows[i].kind;
                     if kind == ExtraKind::Raw {
-                        ui.small(kind_label(kind)).on_hover_text("この表で読めない行です (# で始まるコメントなど)。「文字で編集」で直せます");
+                        ui.small(kind_label(kind)).on_hover_text(i18n::tr("この表で読めない行です (# で始まるコメントなど)。「文字で編集」で直せます"));
                         ui.add(egui::TextEdit::singleline(&mut rows[i].raw).desired_width(330.0).font(egui::TextStyle::Monospace));
                         for _ in 0..7 {
                             ui.label("");
@@ -125,7 +125,7 @@ impl PartForm {
                             for c in [ExtraKind::Leg, ExtraKind::Pad, ExtraKind::Hole] {
                                 ui.selectable_value(&mut k, c, kind_label(c));
                             }
-                        }).response.on_hover_text("脚はめっきのある穴と銅のパッド (USBのシェル脚など)、面実装パッドは穴のない銅のパッド、穴はめっきなしの穴 (位置決め・ネジ穴) です");
+                        }).response.on_hover_text(i18n::tr("脚はめっきのある穴と銅のパッド (USBのシェル脚など)、面実装パッドは穴のない銅のパッド、穴はめっきなしの穴 (位置決め・ネジ穴) です"));
                         rows[i].kind = k;
                         let has_pin = k != ExtraKind::Hole;
                         let has_size = k != ExtraKind::Hole;
@@ -133,23 +133,23 @@ impl PartForm {
                         let field = |ui: &mut egui::Ui, v: &mut String, on: bool, w: f32, tip: &str| {
                             ui.add_enabled(on, egui::TextEdit::singleline(v).desired_width(w).font(egui::TextStyle::Monospace)).on_hover_text(tip);
                         };
-                        field(ui, &mut rows[i].pin, has_pin, 44.0, "ピン名 (「③ ピン」の番号と同じ。例: SH)");
-                        field(ui, &mut rows[i].x, true, 46.0, "X (mm)。部品の中心から右が +");
-                        field(ui, &mut rows[i].y, true, 46.0, "Y (mm)。部品の中心から上が +");
-                        field(ui, &mut rows[i].w, has_size, 46.0, "パッドの幅 (mm)");
-                        field(ui, &mut rows[i].h, has_size, 46.0, "パッドの高さ (mm)");
-                        field(ui, &mut rows[i].drill, has_drill, 46.0, "穴径 (mm)");
-                        field(ui, &mut rows[i].slot, has_drill, 46.0, "長穴にするときの長さ (mm)。丸い穴なら空");
-                        ui.add_enabled(has_drill, egui::Checkbox::without_text(&mut rows[i].vertical)).on_hover_text("長穴を縦向きにします (オフなら横向き)");
+                        field(ui, &mut rows[i].pin, has_pin, 44.0, i18n::tr("ピン名 (「③ ピン」の番号と同じ。例: SH)"));
+                        field(ui, &mut rows[i].x, true, 46.0, i18n::tr("X (mm)。部品の中心から右が +"));
+                        field(ui, &mut rows[i].y, true, 46.0, i18n::tr("Y (mm)。部品の中心から上が +"));
+                        field(ui, &mut rows[i].w, has_size, 46.0, i18n::tr("パッドの幅 (mm)"));
+                        field(ui, &mut rows[i].h, has_size, 46.0, i18n::tr("パッドの高さ (mm)"));
+                        field(ui, &mut rows[i].drill, has_drill, 46.0, i18n::tr("穴径 (mm)"));
+                        field(ui, &mut rows[i].slot, has_drill, 46.0, i18n::tr("長穴にするときの長さ (mm)。丸い穴なら空"));
+                        ui.add_enabled(has_drill, egui::Checkbox::without_text(&mut rows[i].vertical)).on_hover_text(i18n::tr("長穴を縦向きにします (オフなら横向き)"));
                     }
                     ui.horizontal(|ui| {
-                        if ui.add_enabled(i > 0, egui::Button::new("↑").small()).on_hover_text("1つ上へ").clicked() {
+                        if ui.add_enabled(i > 0, egui::Button::new("↑").small()).on_hover_text(i18n::tr("1つ上へ")).clicked() {
                             swap = Some((i, i - 1));
                         }
-                        if ui.add_enabled(i + 1 < n, egui::Button::new("↓").small()).on_hover_text("1つ下へ").clicked() {
+                        if ui.add_enabled(i + 1 < n, egui::Button::new("↓").small()).on_hover_text(i18n::tr("1つ下へ")).clicked() {
                             swap = Some((i, i + 1));
                         }
-                        if ui.add(egui::Button::new("消す").small()).on_hover_text("この行を消します").clicked() {
+                        if ui.add(egui::Button::new(i18n::tr("消す")).small()).on_hover_text(i18n::tr("この行を消します")).clicked() {
                             remove = Some(i);
                         }
                     });
@@ -164,13 +164,13 @@ impl PartForm {
             rows.remove(i);
         }
         ui.horizontal_wrapped(|ui| {
-            ui.label("足す:");
+            ui.label(i18n::tr("足す:"));
             for (label, tip, kind, defaults) in [
                 ("＋ 脚 (めっき穴)", "コネクタの金属の外側 (シェル) をはんだ付けする脚など。穴と、まわりの銅のパッドです", ExtraKind::Leg, ["SH", "-6.5", "0", "2.0", "3.0", "1.2"]),
                 ("＋ 面実装パッド", "面実装 (SMD) タイプの固定用パッドなど。穴のない銅のパッドです", ExtraKind::Pad, ["SH", "-4", "-2", "1.5", "2.0", ""]),
                 ("＋ 穴 (めっきなし)", "部品の突起が入る位置決めの穴、ネジ穴。回路にはつながりません", ExtraKind::Hole, ["", "0", "-3", "", "", "1.0"]),
             ] {
-                if ui.small_button(label).on_hover_text(format!("{tip}\n入る数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
+                if ui.small_button(label).on_hover_text(i18n::trf!("{tip}\n入る数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
                     let [pin, x, y, w, h, drill] = defaults.map(String::from);
                     rows.push(ExtraRow { kind, pin, x, y, w, h, drill, ..ExtraRow::default() });
                 }

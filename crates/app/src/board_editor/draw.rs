@@ -606,7 +606,7 @@ impl BoardEditor {
             Side::Bottom => ("裏面".to_string(), "青"),
             s @ Side::Inner(n) => (s.label(), ["金", "緑", "紫", "青緑"][(n as usize - 1) % 4]),
         };
-        let text = format!("作業中: {name} ({color_name})   Lキーで切り替え  ・  もう一方の面は薄く表示");
+        let text = i18n::trf!("作業中: {name} ({color_name})   Lキーで切り替え  ・  もう一方の面は薄く表示");
         let font = egui::FontId::proportional(14.0);
         let galley = painter.layout_no_wrap(text, font, Color32::WHITE);
         let pos = rect.min + Vec2::new(30.0, 26.0);

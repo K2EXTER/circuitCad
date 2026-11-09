@@ -42,8 +42,8 @@ impl SchEditor {
             return;
         }
         let mut open = true;
-        egui::Window::new("図枠").open(&mut open).default_pos(crate::widgets::beside_panel()).resizable(false).show(ctx, |ui| {
-            ui.label("書き出した図の右下に、枠で入ります。空の欄は出ません。").on_hover_text("回路図のファイルにも一緒に保存されます。印刷した図が、どの回路のどの版か分かるようにしておくと、あとで見返すときに迷いません");
+        egui::Window::new(i18n::tr("図枠")).open(&mut open).default_pos(crate::widgets::beside_panel()).resizable(false).show(ctx, |ui| {
+            ui.label(i18n::tr("書き出した図の右下に、枠で入ります。空の欄は出ません。")).on_hover_text(i18n::tr("回路図のファイルにも一緒に保存されます。印刷した図が、どの回路のどの版か分かるようにしておくと、あとで見返すときに迷いません"));
             let t = &mut self.sch.title_block;
             egui::Grid::new("title_block_grid").num_columns(2).show(ui, |ui| {
                 for (label, field, hint) in [

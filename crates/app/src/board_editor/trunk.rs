@@ -87,10 +87,10 @@ impl BoardEditor {
     /// The wire tool's box in trunk mode: the steps, and what the tool last said (the status line is overwritten with the
     /// cursor position, so a refusal is read here).
     pub(super) fn trunk_help(&self, ui: &mut egui::Ui) {
-        ui.small("① 同じネットで隣り合うパッドを2つクリック (例: QFN の2本の LX ピン)");
-        ui.small("② 幹を伸ばす先をクリック (パッドから 1mm 以上離れた所)");
-        ui.small(format!("パッドの首は下の「線幅」({:.2} mm)、幹は、2つのパッドの外側の縁までの太さになります。右クリックで取り消し", self.track_width));
-        ui.small("近くに別のネットがあって、間隔が足りなくなるときは、引かずに理由を出します");
+        ui.small(i18n::tr("① 同じネットで隣り合うパッドを2つクリック (例: QFN の2本の LX ピン)"));
+        ui.small(i18n::tr("② 幹を伸ばす先をクリック (パッドから 1mm 以上離れた所)"));
+        ui.small(i18n::trf!("パッドの首は下の「線幅」({:.2} mm)、幹は、2つのパッドの外側の縁までの太さになります。右クリックで取り消し", self.track_width));
+        ui.small(i18n::tr("近くに別のネットがあって、間隔が足りなくなるときは、引かずに理由を出します"));
         match &self.trunk_note {
             Some(Ok(m)) => {
                 ui.colored_label(Color32::from_rgb(110, 200, 130), m.as_str());

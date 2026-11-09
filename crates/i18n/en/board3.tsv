@@ -1,0 +1,197 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/board_editor/route.rs
+自動経路: 障害物をよけて配線しました	Auto path: routed around the obstacles
+押しのけ配線: 邪魔な配線 {pushed} 本を脇へ寄せました	Push-and-shove: pushed {pushed} tracks aside
+# crates/app/src/board_editor/select.rs
+{} 個を選択	{} selected
+部品は回路図側で削除してから「回路図から取り込み」を実行してください	Delete parts in the schematic, then run "Import from schematic"
+{n} 個を削除しました (部品は回路図側で削除します)	Deleted {n} items (parts are deleted in the schematic)
+{n} 個を削除しました	Deleted {n} items
+{r} の文字を、元の位置に戻しました	Moved the text of {r} back to its original place
+{r} の文字は、もとの位置にあります	The text of {r} is already in its original place
+# crates/app/src/board_editor/sheets.rs
+シート (色は右上の「物の表示とロック」の「シートの色」で切り替え)	Sheets (change colors with "Sheet colors" under "Visibility and locks" at the top right)
+{name} ({}個)	{name} ({} parts)
+このシートの部品をまとめて選びます。選んだまま動かせば、グループごと動きます: {}	Selects all parts of this sheet. Move them while selected to move the whole group: {}
+シート「{name}」の部品 {} 個を選びました	Selected {} parts of sheet "{name}"
+# crates/app/src/board_editor/shoving.rs
+ネット短絡:	
+ほかのネットにつながってしまいます (ショート: {nets})	This would connect to another net (short: {nets})
+ルール違反になります (間隔が足りません)	This would break a rule (not enough clearance)
+押しのけ配線: 邪魔な配線 {pushed} 本を脇へ寄せています	Push-and-shove: pushing {pushed} tracks aside
+この配線はどのパッドにもつながっていないので、ネットが分かりません。選んで Delete で消します	This track is not connected to any pad, so its net is unknown. Select it and press Delete to remove it
+ネット {net} の配線とビア {n} 個を消しました (未配線の線が戻ります)	Removed the tracks and {n} vias of net {net} (its unrouted lines come back)
+# crates/app/src/board_editor/smoothing.rs
+市販の基板のように、配線の角を丸め、太さが変わる所をなだらかにし、パッドに入る根元を垂直にそろえ、鋭角で分かれる2本の間のくぼみの先を丸くします。配線そのものは変えずに、表示とガーバーだけに反映します。ここは基板全体の設定です。ネットごとに変えるときは、ネットの設定窓 (銅をクリック) のネットクラスで	Like a commercial board: rounds track corners, smooths places where the width changes, straightens the ends entering pads, and rounds the notch between two tracks that split at a sharp angle. The tracks themselves are not changed; only the display and the Gerber are. This is the setting for the whole board. To change it per net, use the net class in the net settings window (click the copper)
+同じ太さの配線がつながる角を、円弧にします。角が丸いと電流が流れやすく、高周波でも反射が減ります。直線に近い角や、短くて入らない角は小さくなるか、そのままです	Turns corners between tracks of the same width into arcs. Rounded corners carry current more easily and reflect less at high frequency. Corners that are nearly straight, or too short to fit an arc, get a smaller arc or stay as they are
+半径 	Radius 
+太い配線と細い配線がつながる所と、配線がパッド・ビアに入る根元に、中間の太さの短い配線を挟みます (パッドより細い配線は、根元がパッドの幅から配線の太さへ徐々に細くなります)。電流が急に絞られず、配線の根元が割れにくくなります	Inserts short tracks of an in-between width where a wide track meets a narrow one, and where a track enters a pad or via (a track narrower than the pad tapers from the pad's width to the track width). The current is not squeezed suddenly, and the track's end is less likely to crack
+1つの点から2本の配線が鋭い角度で出ている所の、細いくぼみ (エッチング液がたまりやすい所) を銅で埋めて、先を凹んだ丸い形にします。T字の内側の角や、同じネットの並走が1本にまとまる所のすき間も同じです。配線の経路は変わらず、表示とガーバーにだけ働きます (確定はできません)	Where two tracks leave one point at a sharp angle, fills the narrow notch (where etchant tends to collect) with copper and gives it a rounded concave tip. The same for the inner corners of T-joints and the gap where parallel tracks of the same net merge into one. The track paths do not change; this affects only the display and the Gerber (it cannot be made permanent)
+同じ所へ並んで走る2本の配線の間の細いすき間 (エッチング液がたまりやすい所) を、銅の多角形で埋めます。見た目と製造の整えだけで、電気には要りません。形が崩れる所があるときは切ります (初期は切)	Fills the narrow gap between two tracks running side by side to the same place (where etchant tends to collect) with a copper polygon. It only tidies the look and manufacturing; it is not needed electrically. Turn it off if it breaks shapes anywhere (off by default)
+パッドの根元をそろえる	Align pad entries
+すべての配線の、四角いパッドへの根元を、パッドの辺に垂直な短い区間にそろえます。配線の経路が、パッドの近くだけ少し変わります。ルール違反が増える所と、接続が切れる所は変えません。整えを切ったネットクラスのネットは除きます。自動配線の直後には、新しい配線に自動で行います (②の「パッドに垂直に出入り」が入っているとき)。元に戻すで取り消せます	Makes every track's end at a rectangular pad a short section perpendicular to the pad's edge. The track path changes slightly, only near the pad. Places where this would add rule violations or break a connection are left as they are. Nets in net classes with tidying turned off are skipped. Right after autoroute this is done automatically for the new tracks (when "Enter and leave pads straight" in ② is on). You can undo it
+# crates/app/src/board_editor/snippet.rs
+スニペットを置きました: 部品 {} 個を動かし、配線 {} 本・ビア {} 個を足しました	Placed the snippet: moved {} parts, added {} tracks and {} vias
+ (動かした部品につながっていた古い配線 {} 本は消しました)	 (removed {} old tracks that were connected to the moved parts)
+この基板にない部品	Parts not on this board
+フットプリントが違うので動かさなかった部品	Parts not moved because the footprint differs
+固定されていて動かさなかった部品	Parts not moved because they are locked
+保存する部品・配線・ビアを選んでください (選択ツールで囲むか、Shift+クリックで選びます)	Select the parts, tracks and vias to save (drag a box with the select tool, or Shift+click)
+書き込めません: {e}	Cannot write: {e}
+基板のスニペットのファイルではありません: {e}	Not a board snippet file: {e}
+中身が空のスニペットです	The snippet is empty
+この基板に置けるものがありませんでした。{}	Nothing could be placed on this board. {}
+基板のスニペット	Board snippet
+スニペットを保存しました (部品 {n} 個): {}	Saved the snippet ({n} parts): {}
+# crates/app/src/board_editor/tools.rs
+この部品は固定されています。固定を外すと付け替えられます (選択パネルのボタン)	This part is locked. Unlock it to swap it (button in the selection panel)
+{r} を{side}に移しました	Moved {r} to the {side}
+多角形には3点以上が必要です	A polygon needs at least 3 points
+基板外形を設定しました	Set the board outline
+{n} 枚のベタから、この形を引きました (ベタを選ぶと、中の図形を消せます)	Cut this shape out of {n} copper pours (select a pour to delete the shapes in it)
+{n} 枚のベタに、引く図形を足しましたが、銅は減りませんでした。その範囲に、このベタの銅がありません (ほかのネットの配線のまわりのすき間や、ベタの外かもしれません)	Added a cut-out shape to {n} copper pours, but no copper was removed. This pour has no copper in that area (it may be the clearance around another net's tracks, or outside the pour)
+引くベタがありません。ベタの上に描いてください (層は、いま作業している面です)	No pour to cut. Draw on top of a copper pour (the layer is the side you are working on)
+選んだベタに、図形を足しました (ネット {})	Added a shape to the selected pour (net {})
+ゾーンを追加しました (ネット {})。続けて描くと、このベタに図形を足せます	Added a zone (net {}). Keep drawing to add shapes to this pour
+図形を足しましたが、銅が増えません。このネット ({}) のパッド・ビア・配線のどれにも触れていないので、孤立した銅として消えています (うすい灰色の破線で見えます)。パッドやビア・配線にかかるように描いてください	Added the shape, but the copper does not grow. It touches no pad, via or track of this net ({}), so it is removed as isolated copper (shown as a light gray dashed line). Draw it so that it overlaps a pad, via or track
+直線: クリックで次の点	Line: click for the next point
+3点円弧: 途中の点、終点の順にクリック	3-point arc: click a middle point, then the end point
+接線円弧: 終点をクリック (直前の線になめらかにつながる)	Tangent arc: click the end point (joins the previous line smoothly)
+円: 中心、円周の点の順にクリック	Circle: click the center, then a point on the circle
+長方形: 反対側の角をクリック	Rectangle: click the opposite corner
+次に描くもの	Next to draw
+直線 (S)	Line (S)
+3点円弧 (A)	3-point arc (A)
+接線円弧 (T)	Tangent arc (T)
+最後の点を戻す (Backspace)	Undo last point (Backspace)
+確定 (閉じて、ベタ・外形にする)	Finish (close it into a pour or outline)
+描きかけを取り消す (Esc)	Cancel drawing (Esc)
+いま描いている図形を、置かずにやめます。すでに置いたものは消えません	Stops the shape you are drawing without placing it. Things already placed stay
+円弧: 終点をクリック (途中の点を通る円弧になります)	Arc: click the end point (the arc passes through the middle point)
+円: 円周の点をクリック (半径が決まります)	Circle: click a point on the circle (sets the radius)
+頂点を選びました (ドラッグで動かせます。Delete で消します。右クリックでメニュー)	Vertex selected (drag to move it, Delete to remove, right-click for a menu)
+{r} のシルク文字: ドラッグで動かせます。R で回転、Delete で元の位置に戻ります。大きさは選択パネルで変えます	Silkscreen text of {r}: drag to move it. R rotates, Delete puts it back in its original place. Change the size in the selection panel
+シルクの文字: ドラッグで動かせます。R で回転、Delete で消します。内容・大きさは選択パネルで変えます	Silkscreen text: drag to move it. R rotates, Delete removes it. Change the content and size in the selection panel
+文字を置きました。選択パネルで内容・大きさ・向きを変えられます (ドラッグで動かせます。R で回転、Delete で消します)	Placed the text. Change its content, size and direction in the selection panel (drag to move it, R rotates, Delete removes it)
+ビアを置きました (ネットなし。配線でつなぐと、そのネットになります)	Placed a via (no net; it takes the net of the track you connect to it)
+ビアを置きました (ネット {net})	Placed a via (net {net})
+# crates/app/src/board_editor/tracking.rs
+延長線トラッキング: 入	Extension tracking: on
+延長線トラッキング: 切	Extension tracking: off
+# crates/app/src/board_editor/trunk.rs
+{} の {} ({})	{} pin {} ({})
+パッドをクリックしてください (表面実装のパッドが対象です)	Click a pad (surface-mount pads only)
+同じパッドです。同じネットの、隣のパッドをクリックしてください	That is the same pad. Click the neighboring pad of the same net
+{} を選びました。次に、同じネットで隣り合うパッドをクリックしてください	Selected {}. Next, click the neighboring pad of the same net
+{} と {} を選びました。幹を伸ばす先をクリックしてください (右クリックで取り消し)	Selected {} and {}. Click where the trunk should go (right-click to cancel)
+{n} 本の配線で、太い幹を引きました (幹の太さ {:.2} mm、パッドの首の太さ {:.2} mm)。続けて、別のパッドの組も選べます	Drew a wide trunk with {n} tracks (trunk width {:.2} mm, pad neck width {:.2} mm). You can go on to pick another pair of pads
+① 同じネットで隣り合うパッドを2つクリック (例: QFN の2本の LX ピン)	① Click two neighboring pads of the same net (e.g. the two LX pins of a QFN)
+② 幹を伸ばす先をクリック (パッドから 1mm 以上離れた所)	② Click where the trunk should go (at least 1mm from the pads)
+パッドの首は下の「線幅」({:.2} mm)、幹は、2つのパッドの外側の縁までの太さになります。右クリックで取り消し	The pad necks use the "Width" below ({:.2} mm); the trunk is as wide as the outer edges of the two pads. Right-click to cancel
+近くに別のネットがあって、間隔が足りなくなるときは、引かずに理由を出します	If another net is nearby and the clearance would be too small, it does not draw and tells you why
+# crates/app/src/board_editor/view.rs
+基板の角を R{r} mm で丸めました ({} 点)	Rounded the board corners with R{r} mm ({} points)
+「角R」に 0 より大きい値を入れてください	Enter a value greater than 0 in "Corner R"
+# crates/app/src/board_editor/width.rs
+{net}: 配線 {n} 本を {width:.2} mm に太くしました。DRC で間隔が足りているか確かめましょう	{net}: widened {n} tracks to {width:.2} mm. Check the clearances with the DRC
+シミュレーションの電流を取れませんでした: {e}	Could not get the simulation currents: {e}
+基板のネットに合う電流がありません。回路図から部品を取り込んだあとで試してください	No currents match the board's nets. Try again after importing the parts from the schematic
+{n} 個のネットに、シミュレーションの電流を入れました。「必要 ○ mm」を見て、足りないネットは「推奨幅にする」で太くできます	Set simulation currents on {n} nets. Check "Needed ○ mm"; nets that fall short can be widened with "Use recommended width"
+電流と電圧降下	Current and voltage drop
+流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます	Sets the needed track width from the current. Enter the current in the window that opens when you click a net's track or pad, or in the list window below
+全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。見出しのクリックで並べ替え、CSV でコピーもできます	Shows every net's track length (also per layer), detour ratio, via count, width, pours, unrouted count and net class in one table. Click a heading to sort; you can also copy it as CSV
+電流の一覧を別窓で開く	Open current list in a window
+全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます	Shows every net's current, recommended width and present track width (and RMS, 10 ms max and peak if you ran a transient analysis) in one table. You can take currents from the schematic's DC or transient analysis, and widen thin tracks to the recommended width
+電流に対して細いネット {thin} 本	{thin} nets too thin for their current
+計算する	Calculate
+上で入れた電流が流れたとき、電源の入口から各ピンまでの配線 (銅箔・ビア) で何 V 下がるかを求めます。配線を変えたら、もう一度押してください	Finds how many volts are lost in the tracks (copper and vias) from the supply entry to each pin when the currents above flow. Press it again after changing tracks
+この基板の配線の抵抗とインダクタンスを、回路図のシミュレーション (DC・過渡・AC・ノイズ) に入れます。電源の入口から各ピンまでの銅箔の抵抗 (DCから効く) とインダクタンス (ACや速い変化で効く。細く長い配線で約 1 nH/mm。近くを並んで走る別のネットの配線とは磁気の結合も入れます) が、ピンの手前に直列に入ります。「配線を細くしたら電圧が落ちた」を波形で確かめられます。配線していないネットは理想の線のままです	Puts this board's track resistance and inductance into the schematic simulation (DC, transient, AC, noise). The copper resistance (matters from DC) and inductance (matters for AC and fast changes; about 1 nH/mm for thin long tracks, plus magnetic coupling with tracks of other nets running alongside) from the supply entry to each pin are added in series in front of the pin. You can see "thinner tracks made the voltage drop" in the waveform. Unrouted nets stay ideal wires
+やめる	Stop
+配線の抵抗を入れない理想の回路に戻します	Goes back to the ideal circuit without track resistance
+電流を入れたネットについて、配線の抵抗による電圧降下を調べます (電源とGNDの両方を調べると、部品に届く電圧が分かります)	Checks the voltage drop from track resistance for nets with a current (check both supply and GND to know the voltage that reaches the parts)
+配線か電流が変わりました。「計算する」で更新してください	Tracks or currents changed. Press "Calculate" to update
+電流が入っているネットがありません (上の欄に A を入れてください)	No net has a current (enter A in the field above)
+{}: 最大 {:.0} mV ({} まで, {:.0} mΩ, {:.0} nH)	{}: max {:.0} mV (to {}, {:.0} mΩ, {:.0} nH)
+{}: 入口 {src} からつながっているピンがありません (配線が切れています)	{}: no pins are connected to the entry {src} (a track is broken)
+  つながっていない: {}	  Not connected: {}
+目安: 30 mV 未満は問題なし、100 mV 以上は電源の電圧が目に見えて下がります。電源とGNDの降下は足し算で効きます	Guide: under 30 mV is fine; at 100 mV or more the supply voltage drops noticeably. The supply and GND drops add up
+電流 {:.2} A が {src}{} から入るとして、各ピンまでの抵抗と電圧降下:\n	Resistance and voltage drop to each pin, with a current of {:.2} A entering at {src}{}:\n
+ (自動で選んだ入口: コネクタがあればそこ、なければ最初のピン)	 (entry picked automatically: a connector if there is one, otherwise the first pin)
+  {}.{}  つながっていません\n	  {}.{}  not connected\n
+各ピンが電流の全部を1つで引くとした、いちばん厳しい見積もりです。	This is the worst-case estimate, as if each pin drew the whole current alone.
+\nベタ (銅の面) は、抵抗の小さい面としておおまかに入れています。	\nCopper pours are included roughly as low-resistance planes.
+\n銅は 35µm、ビアは壁の厚み 25µm の円筒として計算しています	\nCopper is taken as 35µm, and vias as tubes with 25µm walls
+# crates/app/src/board_editor/zoneedit.rs
+辺に頂点を足しました (ドラッグで動かせます。Delete で消せます)	Added a vertex on the edge (drag to move it, Delete to remove)
+この頂点は消せません (図形が、面でなくなります)。図形ごと消すには、ベタの図形の一覧の「消す」を使います	This vertex cannot be removed (the shape would no longer be an area). To delete the whole shape, use "Delete" in the pour's shape list
+頂点を消しました	Removed the vertex
+図形 {} の頂点 {}	Shape {} vertex {}
+図形 {} の辺 {}	Shape {} edge {}
+ここに頂点を足す	Add a vertex here
+この辺の、右クリックした所に、角を1つ足します。そのあと動かして形を変えられます	Adds a corner on this edge where you right-clicked. You can then move it to change the shape
+この頂点を消す	Remove this vertex
+この辺(この頂点から次の頂点まで)を直線にする	Make this edge (this vertex to the next) straight
+この辺(この頂点から次の頂点まで)を円弧にする	Make this edge (this vertex to the next) an arc
+この辺のつなぎ方を、直線と曲線で入れ替えます	Switches this edge between a straight line and a curve
+この図形を、引く図形にする	Make this a cut-out shape
+この図形を、足す図形にする	Make this an added shape
+足す図形はベタの銅を広げ、引く図形はベタに穴をあけます。この図形の役目を入れ替えます	Added shapes extend the pour's copper; cut-out shapes make holes in the pour. Switches this shape's role
+# crates/app/src/board_editor/view3d/scene.rs
+基板の外形が面になっていません。外形を決めてから開いてください	The board outline is not a closed area. Set the outline before opening this
+基板の外形がありません	The board has no outline
+# crates/app/src/board_editor/view3d/window.rs
+上から	Top
+真上から見ます (部品の配置・配線の確認)	Looks straight down (check placement and tracks)
+斜め	Angled
+斜め上から見ます (部品の高さや立体感)	Looks from above at an angle (part heights and depth)
+横から	Side
+真横から見ます (部品の高さや、ケースに入る高さの確認)	Looks straight from the side (part heights, height for fitting a case)
+裏から	Bottom
+基板を裏返して真下から見ます (裏面の部品と配線)	Flips the board and looks straight up (parts and tracks on the bottom)
+部品の本体を表示します。形と高さはフットプリントからの目安です	Shows part bodies. Shapes and heights are estimates from the footprint
+部品名	Refdes
+部品番号 (R1 など) を表示します	Shows reference designators (R1 etc.)
+ソルダーレジスト	Solder mask
+基板の緑色の保護膜。オフにすると、銅箔の配線がそのまま見えます	The board's green protective coating. Turn it off to see the copper tracks as they are
+白い印刷 (部品の枠や文字)	White print (part outlines and text)
+ケース高さ	Case height
+ケースに入る高さを調べます。基板の面からこの高さを超える部品は赤くなり、高さの上限が橙の枠で見えます。0 にした面は調べません	Checks the height that fits in a case. Parts taller than this above the board surface turn red, and the height limit shows as an orange frame. A side set to 0 is not checked
+表 	Top 
+表側の、基板の面からケースまでの高さ (部品に使える高さ)	Height on the top side from the board surface to the case (height available for parts)
+裏 	Bottom 
+裏側の、基板の面からケースまでの高さ	Height on the bottom side from the board surface to the case
+内寸 幅 	Inner width 
+ケースの内側の幅。基板が入るかを調べます (縁との隙間は 0.5 mm を見込みます)。0 にすると調べません。青い枠がケースの内側です	Inner width of the case, to check whether the board fits (allows a 0.5 mm gap to the walls). 0 means not checked. The blue frame is the inside of the case
+奥行 	Depth 
+ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)	Inner depth of the case (with the width, checks whether the board's footprint fits)
+自動回転	Auto-rotate
+ゆっくり回して、いろいろな向きから見せます	Turns slowly to show it from many angles
+更新	Refresh
+基板エディタで変更した内容を反映します	Applies the changes made in the board editor
+選択部品へ寄る	Zoom to selected part
+基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます	Moves close to the part selected in the board editor. For a part on the bottom it flips the board. You can also double-click on a part to zoom to it
+PNG保存	Save PNG
+いま見えている向きの絵を画像ファイルに保存します (発注前の確認や、人に見せるときに)	Saves the current view as an image file (for checking before ordering, or for showing others)
+なし	None
+ネット強調: {shown}	Highlight net: {shown}
+選んだネットの銅 (配線・パッド・ビア) を桃色に光らせます。基板エディタで配線やパッドを選んでも、そのネットが光ります	Lights up the copper (tracks, pads, vias) of the chosen net in pink. Selecting a track or pad in the board editor also lights up its net
+操作	Controls
+回す・動かす・拡大の操作を開きます	Opens the controls for rotating, moving and zooming
+基板 {w:.1} × {h:.1} × {BOARD_THICKNESS} mm	Board {w:.1} × {h:.1} × {BOARD_THICKNESS} mm
+ / 表側の最も高い部品 {r} (基板の面から {t:.1} mm)	 / tallest top part {r} ({t:.1} mm above the board)
+ / 裏側 {r} ({t:.1} mm)	 / bottom {r} ({t:.1} mm)
+ (基板を 90° 回すと)	 (with the board turned 90°)
+✔ 基板 {:.1} × {:.1} mm はケースの底に入ります{how}。余り: {:.1} × {:.1} mm	✔ The {:.1} × {:.1} mm board fits the case floor{how}. Spare: {:.1} × {:.1} mm
+⚠ 基板 {:.1} × {:.1} mm はケースの底 ({:.1} × {:.1} mm、縁の隙間込み) に入りません (足りない分: 幅 {:.1} / 奥行 {:.1} mm)	⚠ The {:.1} × {:.1} mm board does not fit the case floor ({:.1} × {:.1} mm, gap included) (short by: width {:.1} / depth {:.1} mm)
+✔ どの部品もケースの高さに収まっています	✔ All parts fit within the case height
+ ほか {} 個	 and {} more
+⚠ ケースの高さを超える部品 (赤): {}{more}	⚠ Parts taller than the case (red): {}{more}
+3D表示を保存しました: {}	Saved the 3D view: {}
+3D表示を保存できませんでした: {e} (保存先のフォルダに書き込めるか確認してください)	Could not save the 3D view: {e} (check that you can write to the folder)
+ドラッグ: 回す  /  右ドラッグ: 動かす  /  ホイール: 拡大・縮小  /  ダブルクリック: 元の向きに戻す	Drag: rotate  /  Right-drag: pan  /  Wheel: zoom  /  Double-click: reset view
+上の「ケース高さ」を入れると、ケースに入らない高さの部品が赤くなります	Enter "Case height" above to turn parts that do not fit in the case red
+値: {}	Value: {}
+フットプリント: {}	Footprint: {}
+高さの目安: {hh:.1} mm	Estimated height: {hh:.1} mm
+ケースの高さを {o:.1} mm 超えています	{o:.1} mm over the case height
+3D表示から {} を選びました (基板エディタで選択中)	Selected {} from the 3D view (selected in the board editor)

@@ -52,11 +52,11 @@ impl SchEditor {
         let mut start_probe = false;
         let mut open_help = false;
         ui.horizontal(|ui| {
-            crate::widgets::heading_inline(ui, if view.loop_run { "ループゲイン (帰還を1周したゲイン)" } else if view.pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if view.pz_run { "H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります" } else if view.loop_run { "0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)" } else { "ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります" });
+            crate::widgets::heading_inline(ui, if view.loop_run { "ループゲイン (帰還を1周したゲイン)" } else if view.pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if view.pz_run { i18n::tr("H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります") } else if view.loop_run { i18n::tr("0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)") } else { i18n::tr("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります") });
             if crate::widgets::close_button(ui, "波形") {
                 close = true;
             }
-            if ui.small_button("操作").on_hover_text("波形のズーム・測定カーソル・信号の選び方を開きます").clicked() {
+            if ui.small_button(i18n::tr("操作")).on_hover_text(i18n::tr("波形のズーム・測定カーソル・信号の選び方を開きます")).clicked() {
                 open_help = true;
             }
         });
@@ -75,15 +75,15 @@ impl SchEditor {
                     ui.vertical(|ui| {
                         ui.set_width(170.0);
                         ui.horizontal(|ui| {
-                            if ui.button("選択をクリア").clicked() {
+                            if ui.button(i18n::tr("選択をクリア")).clicked() {
                                 selected.clear();
                             }
-                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
+                            if ui.button(i18n::tr("回路図で選ぶ")).on_hover_text(i18n::tr("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)")).clicked() {
                                 start_probe = true;
                             }
                         });
                         ui.horizontal(|ui| {
-                            if ui.button("いまの特性を残す").on_hover_text("選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます").clicked() {
+                            if ui.button(i18n::tr("いまの特性を残す")).on_hover_text(i18n::tr("選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます")).clicked() {
                                 let mut sigs = vec![];
                                 for sg in order.iter().filter(|n| selected.contains(**n)).filter_map(|n| res.signal(n)) {
                                     let name = format!("{} (前)", sg.name);
@@ -92,7 +92,7 @@ impl SchEditor {
                                 }
                                 *ghost = Some(Ghost { x: res.freq.clone(), sigs });
                             }
-                            if ghost.is_some() && ui.button("消す").on_hover_text("残してある「前」の特性を消します").clicked() {
+                            if ghost.is_some() && ui.button(i18n::tr("消す")).on_hover_text(i18n::tr("残してある「前」の特性を消します")).clicked() {
                                 *ghost = None;
                             }
                         });
@@ -114,14 +114,14 @@ impl SchEditor {
                                     ui.strong(name);
                                 }
                                 ui.end_row();
-                                ui.label("-3dB点").on_hover_text("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります");
+                                ui.label(i18n::tr("-3dB点")).on_hover_text(i18n::tr("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります"));
                                 for (_, txt) in &corner {
                                     ui.label(txt);
                                 }
                                 ui.end_row();
                             });
                         }
-                        egui::CollapsingHeader::new("安定性の余裕 (位相余裕・ゲイン余裕)").show(ui, |ui| {
+                        egui::CollapsingHeader::new(i18n::tr("安定性の余裕 (位相余裕・ゲイン余裕)")).show(ui, |ui| {
                             let margins: Vec<(String, sim_core::Margins)> = order
                                 .iter()
                                 .filter(|n| selected.contains(**n))
@@ -142,28 +142,28 @@ impl SchEditor {
                                         ui.strong(name);
                                     }
                                     ui.end_row();
-                                    ui.label("位相余裕").on_hover_text("ゲインが 0dB になる周波数で、位相が -180° までにあと何度残っているか。45° 以上が目安で、小さいとステップ応答で行き過ぎや振動が出ます");
+                                    ui.label(i18n::tr("位相余裕")).on_hover_text(i18n::tr("ゲインが 0dB になる周波数で、位相が -180° までにあと何度残っているか。45° 以上が目安で、小さいとステップ応答で行き過ぎや振動が出ます"));
                                     for (_, m) in &margins {
                                         match m.phase_margin.filter(|_| m.gain_crossover.is_some()) {
                                             Some(pm) => {
                                                 let (word, col) = if pm >= 45.0 { ("十分", green) } else if pm >= 30.0 { ("やや不足", amber) } else if pm > 0.0 { ("不足", crate::theme::ERROR) } else { ("不安定", red) };
                                                 let cell = ui.label(egui::RichText::new(format!("{pm:.1}° ({word})")).color(col));
                                                 if word == "不足" {
-                                                    cell.on_hover_text("不足: 振動しやすい状態です");
+                                                    cell.on_hover_text(i18n::tr("不足: 振動しやすい状態です"));
                                                 }
                                             }
                                             None => {
-                                                ui.label("—").on_hover_text("ゲイン 0dB の交点がありません (ゲインが最初から 1 未満、または範囲内で下がりきらない)");
+                                                ui.label("—").on_hover_text(i18n::tr("ゲイン 0dB の交点がありません (ゲインが最初から 1 未満、または範囲内で下がりきらない)"));
                                             }
                                         }
                                     }
                                     ui.end_row();
-                                    ui.label("  その周波数").on_hover_text("ゲインが 0dB になる周波数 (ゲイン交点)");
+                                    ui.label(i18n::tr("  その周波数")).on_hover_text(i18n::tr("ゲインが 0dB になる周波数 (ゲイン交点)"));
                                     for (_, m) in &margins {
                                         ui.label(m.gain_crossover.map_or_else(|| "—".to_string(), |f| eng(f, "Hz")));
                                     }
                                     ui.end_row();
-                                    ui.label("ゲイン余裕").on_hover_text("位相が -180° になる周波数で、ゲインが 0dB まであと何 dB 残っているか。6dB 以上が目安です");
+                                    ui.label(i18n::tr("ゲイン余裕")).on_hover_text(i18n::tr("位相が -180° になる周波数で、ゲインが 0dB まであと何 dB 残っているか。6dB 以上が目安です"));
                                     for (_, m) in &margins {
                                         match (m.gain_margin, m.phase_crossover) {
                                             (Some(gm), Some(_)) => {
@@ -171,23 +171,23 @@ impl SchEditor {
                                                 ui.label(egui::RichText::new(format!("{gm:.1} dB")).color(col));
                                             }
                                             _ => {
-                                                ui.label("∞").on_hover_text("位相が -180° に達しません (ゲイン余裕は無限大)");
+                                                ui.label("∞").on_hover_text(i18n::tr("位相が -180° に達しません (ゲイン余裕は無限大)"));
                                             }
                                         }
                                     }
                                     ui.end_row();
-                                    ui.label("  その周波数").on_hover_text("位相が -180° になる周波数 (位相交点)");
+                                    ui.label(i18n::tr("  その周波数")).on_hover_text(i18n::tr("位相が -180° になる周波数 (位相交点)"));
                                     for (_, m) in &margins {
                                         ui.label(m.phase_crossover.map_or_else(|| "—".to_string(), |f| eng(f, "Hz")));
                                     }
                                     ui.end_row();
                                 });
                                 if margins.iter().any(|(_, m)| m.inverted) {
-                                    ui.small("位相が 180° から始まる信号は、反転増幅として 180° ずらして計算しました").on_hover_text("反転入力に信号を入れて出力を測ると、位相は 180° から始まります。負帰還では反転は織り込み済みなので、ずらして評価します");
+                                    ui.small(i18n::tr("位相が 180° から始まる信号は、反転増幅として 180° ずらして計算しました")).on_hover_text(i18n::tr("反転入力に信号を入れて出力を測ると、位相は 180° から始まります。負帰還では反転は織り込み済みなので、ずらして評価します"));
                                 }
                                 for (name, m) in margins.iter().filter(|(_, m)| m.gain_crossover.is_some() || m.phase_crossover.is_some()) {
                                     let label = if margins.iter().filter(|(_, m)| m.gain_crossover.is_some() || m.phase_crossover.is_some()).count() > 1 { format!("{name} の交点にカーソルを置く") } else { "交点にカーソルを置く".to_string() };
-                                    if ui.small_button(label).on_hover_text("波形上のカーソル A をゲイン交点 (0dB)、B を位相交点 (-180°) に置きます").clicked() {
+                                    if ui.small_button(label).on_hover_text(i18n::tr("波形上のカーソル A をゲイン交点 (0dB)、B を位相交点 (-180°) に置きます")).clicked() {
                                         st.cursors = [m.gain_crossover, m.phase_crossover];
                                     }
                                 }
@@ -219,7 +219,7 @@ impl SchEditor {
                         .collect();
                     if chosen.is_empty() {
                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
-                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から信号を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から信号を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
                     let mut mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: db }).collect();

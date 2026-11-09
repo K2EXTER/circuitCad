@@ -138,21 +138,21 @@ impl BoardEditor {
             EditTarget::Edge { .. } => format!("図形 {} の辺 {}", shape + 1, vert + 1),
         });
         if let EditTarget::Edge { at, .. } = target
-            && ui.button("ここに頂点を足す").on_hover_text("この辺の、右クリックした所に、角を1つ足します。そのあと動かして形を変えられます").clicked()
+            && ui.button(i18n::tr("ここに頂点を足す")).on_hover_text(i18n::tr("この辺の、右クリックした所に、角を1つ足します。そのあと動かして形を変えられます")).clicked()
         {
             self.insert_zone_vertex(zone, shape, vert, at);
             ui.close();
         }
         if let EditTarget::Corner(h) = target
             && !h.mid
-            && ui.add_enabled(n > 3 || is_arc && n > 2, egui::Button::new("この頂点を消す")).clicked()
+            && ui.add_enabled(n > 3 || is_arc && n > 2, egui::Button::new(i18n::tr("この頂点を消す"))).clicked()
         {
             self.vsel = Some(h);
             self.delete_picked_vertex();
             ui.close();
         }
         let label = if is_arc { "この辺(この頂点から次の頂点まで)を直線にする" } else { "この辺(この頂点から次の頂点まで)を円弧にする" };
-        if ui.button(label).on_hover_text("この辺のつなぎ方を、直線と曲線で入れ替えます").clicked() {
+        if ui.button(label).on_hover_text(i18n::tr("この辺のつなぎ方を、直線と曲線で入れ替えます")).clicked() {
             self.checkpoint();
             if let Some(zs) = self.board.zones.get_mut(zone).and_then(|z| z.shapes.get_mut(shape)) {
                 if is_arc {
@@ -164,7 +164,7 @@ impl BoardEditor {
             ui.close();
         }
         let op = self.board.zones[zone].shapes[shape].op;
-        if ui.button(if op == ShapeOp::Add { "この図形を、引く図形にする" } else { "この図形を、足す図形にする" }).on_hover_text("足す図形はベタの銅を広げ、引く図形はベタに穴をあけます。この図形の役目を入れ替えます").clicked() {
+        if ui.button(if op == ShapeOp::Add { i18n::tr("この図形を、引く図形にする") } else { i18n::tr("この図形を、足す図形にする") }).on_hover_text(i18n::tr("足す図形はベタの銅を広げ、引く図形はベタに穴をあけます。この図形の役目を入れ替えます")).clicked() {
             self.checkpoint();
             self.board.zones[zone].shapes[shape].op = if op == ShapeOp::Add { ShapeOp::Sub } else { ShapeOp::Add };
             ui.close();

@@ -7,17 +7,17 @@ impl SchEditor {
     pub(super) fn label_net_ui(&mut self, ui: &mut egui::Ui) {
         let Some(Sel::Label(i)) = self.selected else { return };
         let Some(shown) = self.sch.labels.get(i).map(|l| l.text.clone()) else { return };
-        ui.label("選択中のラベル");
+        ui.label(i18n::tr("選択中のラベル"));
         // edited in a buffer and applied on Enter / focus loss, so a half-typed name never merges two nets
         let id = egui::Id::new(("label_rename", i));
         let mut buf: String = ui.data(|d| d.get_temp(id)).unwrap_or_else(|| shown.clone());
         let r = ui
             .horizontal(|ui| {
-                ui.label("名前");
+                ui.label(i18n::tr("名前"));
                 ui.text_edit_singleline(&mut buf)
             })
             .inner
-            .on_hover_text("ネットの名前を書き換えます。Enter で確定。同じ名前のラベルがほかにもあれば、まとめて同じ名前になります (つながりは変わりません)。すでにある別のネットの名前にすると、2つのネットがつながります");
+            .on_hover_text(i18n::tr("ネットの名前を書き換えます。Enter で確定。同じ名前のラベルがほかにもあれば、まとめて同じ名前になります (つながりは変わりません)。すでにある別のネットの名前にすると、2つのネットがつながります"));
         if r.lost_focus() {
             let cancelled = ui.input(|i| i.key_pressed(egui::Key::Escape));
             let new = buf.trim().to_string();
@@ -31,13 +31,13 @@ impl SchEditor {
             ui.data_mut(|d| d.remove_temp::<String>(id));
         }
         let Some(net) = self.sch.labels.get(i).map(|l| l.text.clone()).filter(|t| !t.is_empty()) else { return };
-        ui.label(format!("選択中のネット: {net}"));
+        ui.label(i18n::trf!("選択中のネット: {net}"));
         ui.horizontal(|ui| {
-            ui.label("流れる電流");
+            ui.label(i18n::tr("流れる電流"));
             let mut amps = self.sch.net_currents.get(&net).copied().unwrap_or(0.0);
             let r = ui
                 .add(egui::DragValue::new(&mut amps).speed(0.01).range(0.0..=100.0).suffix(" A").max_decimals(3))
-                .on_hover_text("このネットに流れる電流の目安。基板に取り込むと、配線の太さの推奨や電圧降下の計算に使われます。0 にすると指定なし (基板側で決めた値はそのまま)");
+                .on_hover_text(i18n::tr("このネットに流れる電流の目安。基板に取り込むと、配線の太さの推奨や電圧降下の計算に使われます。0 にすると指定なし (基板側で決めた値はそのまま)"));
             if r.changed() {
                 if amps > 0.0 {
                     self.sch.net_currents.insert(net.clone(), amps);
@@ -53,17 +53,17 @@ impl SchEditor {
         let now = partner(&self.sch);
         let mut pick = now.clone();
         ui.horizontal(|ui| {
-            ui.label("差動ペアの相手");
+            ui.label(i18n::tr("差動ペアの相手"));
             egui::ComboBox::from_id_salt("net_pair")
                 .selected_text(pick.clone().unwrap_or_else(|| "なし".into()))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut pick, None, "なし");
+                    ui.selectable_value(&mut pick, None, i18n::tr("なし"));
                     for n in &names {
                         ui.selectable_value(&mut pick, Some(n.clone()), n);
                     }
                 })
                 .response
-                .on_hover_text("USB の D+ と D− のように、2本で1つの信号を運ぶネットの相手を選びます。基板に取り込むと差動ペアとして登録され、並べて配線・長さ合わせの対象になります");
+                .on_hover_text(i18n::tr("USB の D+ と D− のように、2本で1つの信号を運ぶネットの相手を選びます。基板に取り込むと差動ペアとして登録され、並べて配線・長さ合わせの対象になります"));
         });
         if pick != now {
             self.sch.diff_pairs.retain(|(p, n)| *p != net && *n != net);

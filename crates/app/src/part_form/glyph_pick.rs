@@ -60,11 +60,11 @@ pub fn glyph_combo(ui: &mut egui::Ui, id: &str, glyph: &mut String, sym: Option<
                 }
             })
             .response
-            .on_hover_text("回路図で、この部品を何の記号で描くか。ピンの位置は変わらないので、配線はそのままです。「自動」のままで合っていれば、選ぶ必要はありません");
+            .on_hover_text(i18n::tr("回路図で、この部品を何の記号で描くか。ピンの位置は変わらないので、配線はそのままです。「自動」のままで合っていれば、選ぶ必要はありません"));
         if let Some(sym) = sym.filter(|s| !crate::schematic::glyph_fits(glyph, s)) {
             let need = GLYPH_CHOICES.iter().find(|c| c.0 == glyph.as_str()).map_or("", |c| c.2);
-            ui.colored_label(crate::theme::WARN, "ピンが合わないので、箱で描きます")
-                .on_hover_text(format!("この記号が使うピンの名前・数と合っていません ({need})。ピン名を直すか、別の記号を選んでください (部品: {})", sym.name));
+            ui.colored_label(crate::theme::WARN, i18n::tr("ピンが合わないので、箱で描きます"))
+                .on_hover_text(i18n::trf!("この記号が使うピンの名前・数と合っていません ({need})。ピン名を直すか、別の記号を選んでください (部品: {})", sym.name));
         }
     });
 }

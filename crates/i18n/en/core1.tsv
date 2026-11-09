@@ -1,0 +1,455 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/sch-core/src/backannotate.rs
+{refdes}: ピンの入れ替えが輪になっていません (入れ替えた先のピンが、別のピンへ移っていません)。基板の「回路図から取り込み」をやり直してから、入れ替えをもう一度してください	{refdes}: the pin swap does not form a loop (a swapped-to pin has not moved to another pin). Run "Import from schematic" on the board again, then redo the swap
+{refdes}: ピン {p} か {s} が回路図の部品にありません	{refdes}: pin {p} or {s} is not on the part in the schematic
+配線の端を動かすと、別のネットがつながったり切れたりします (入れ替えるピンの間を、ほかの配線が通っているためです)。回路図でピンの配線を描き直してから、基板の「回路図から取り込み」をしてください。回路図は変えていません	Moving the wire ends would connect or break other nets (another wire passes between the pins being swapped). Redraw the pin wires in the schematic, then run "Import from schematic" on the board. The schematic was not changed
+# crates/sch-core/src/bus.rs
+バスのラベル {} が、バスの線の上にありません	Bus label {} is not on a bus line
+バスのラベルは、バスの線の上に置きます (「バス」ツールで線を引けます)。線から離れていると、どの線の名前か分かりません	Put a bus label on a bus line (draw lines with the "Bus" tool). If it is away from the line, it is unclear which line it names
+バス {} の {m} が、どこにもつながっていません	{m} of bus {} is not connected to anything
+バスの範囲に入っているのに、{m} というラベルのついた配線がありません。番号を数え間違えたか、{m} をつなぎ忘れています。使わない番号なら、バスの範囲を狭めましょう	It is inside the bus range, but no wire has the label {m}. You may have miscounted, or forgot to connect {m}. If the number is unused, narrow the bus range
+バス {} の {m} が、部品のピン1つにしかつながっていません	{m} of bus {} connects to only one part pin
+{m} は、もう片方の端に相手がありません。バスは両端をつなぐものです。相手のピンに {m} のラベルを付けましょう	{m} has nothing at its other end. A bus connects both ends. Put the label {m} on the matching pin
+バス {base} の幅が食い違っています: [{}..{}] と [{}..{}]	Bus {base} has mismatched widths: [{}..{}] and [{}..{}]
+同じ名前のバスなのに、番号の範囲が違います。片方の端が足りないか余っています。幅をそろえましょう (別のバスなら、名前を変えます)	Buses with the same name have different number ranges. One end is missing or has extra. Make the widths match (if they are different buses, rename one)
+{} は、バス {base}[{}..{}] の範囲の外です	{} is outside the range of bus {base}[{}..{}]
+同じ名前で始まる番号つきの配線が、バスの範囲に入っていません。バスの範囲を広げるか、名前を変えましょう (関係のない配線なら、このままで構いません)	A numbered wire starting with the same name is not inside the bus range. Widen the bus range or change the name (if the wire is unrelated, you can leave it)
+# crates/sch-core/src/hierarchy.rs
+シートの記号 {} が、自分自身を含むシートを指しています	Sheet symbol {} points to a sheet that contains itself
+シートの記号は、そのシートの中 (孫のシートも含めて) にある自分を指せません。記号が堂々巡りになるので、このシートは展開されず、回路に入りません。この記号を消すか、別のシートを指す記号に置き換えましょう	A sheet symbol cannot point to itself inside that sheet (including grandchild sheets). The symbol would loop forever, so this sheet is not expanded and is left out of the circuit. Delete this symbol or replace it with one that points to another sheet
+シートの記号 {} が指すシート「{}」に、ポートがありません	Sheet "{@2}" pointed to by sheet symbol {@1} has no ports
+ポートは、シートの出入口です。ポートがないと、記号にピンがなく、親のシートとつなげません。「{}」を開き、ラベルツールの「ポートにする」で、信号の出入りする所にポートを置きましょう	Ports are the entrances and exits of a sheet. Without ports the symbol has no pins and cannot connect to the parent sheet. Open "{}" and use "Make port" in the label tool to place ports where signals go in and out
+シート「{}」に、ポート {} が2つあります	Sheet "{}" has two ports named {}
+同じ名前のポートは、記号の1つのピンにまとまってしまいます。片方を選んで、名前を変えるか消しましょう	Ports with the same name merge into one pin on the symbol. Pick one and rename or delete it
+出力のポート {} {} と {} {} が、同じネットにつながっています	Output ports {} {} and {} {} are connected to the same net
+出力どうしをつなぐと、2つが別々の電圧を出そうとして、ぶつかります (実際の回路なら壊れることもあります)。どちらかを入力のポートにするか、つなぎ方を見直しましょう。スイッチで切り替えたいときは、間にスイッチやゲートを入れます	When outputs are connected together, both try to drive different voltages and fight (a real circuit may even break). Make one an input port, or rethink the connection. To switch between them, put a switch or gate in between
+{} の入力のポート {} に、信号を出すものがつながっていません	Nothing drives input port {@2} of {@1}
+入力のポートは、外から信号や電圧をもらう口です。このピンにつながる線の先に、電源・信号源・ICの出力・別の記号の出力のポートが見つかりません (抵抗やコイルを通った先も調べました)。入力が決まらないと、子シートの中が動きません。信号を出す所までつなぎましょう。意図して浮かせるなら、このままで構いません	An input port receives a signal or voltage from outside. No supply, signal source, IC output, or output port of another symbol was found along the wires from this pin (paths through resistors and inductors were checked too). Without a defined input, the child sheet cannot work. Connect it to something that drives a signal. If it is left floating on purpose, you can leave it
+{} のポート {} が、つながっていません	Port {@2} of {@1} is not connected
+シートの記号のピンに、線もラベルもついていません。入力のピンが浮いていると電圧が決まらず、動作が不安定になります。線かラベルでつなぎましょう。使わないポートなら、そのままで構いません	The sheet symbol pin has no wire or label. A floating input pin has no defined voltage and makes the circuit unstable. Connect it with a wire or label. If the port is unused, you can leave it
+ポート {} が、シートの中でどこにもつながっていません	Port {} is not connected to anything inside the sheet
+ポートの場所に、部品のピンも線もラベルもありません。ポートは、シートの中の線や部品のピンの上に置きます。ずれていたら、消して置き直しましょう	There is no part pin, wire, or label at the port's position. Put the port on a wire or part pin inside the sheet. If it is off, delete it and place it again
+# crates/sch-core/src/lib.rs
+NPNトランジスタ	NPN transistor
+ヘッダ {n}P	Header {n}P
+電源ネット(VCC等)	Supply net (VCC etc.)
+電圧 {}	Voltage {}
+電流 {}	Current {}
+電力 {}	Power {}
+最大定格: {}	Max rating: {}
+定格リップル電流: {}A rms ({}Hz)	Rated ripple current: {}A rms ({}Hz)
+寿命: {} 時間 ({}℃)	Life: {} hours ({}°C)
+# crates/sch-core/src/netlist.rs
+部品番号 {r} が重複しています	Refdes {r} is used twice
+同じ番号の部品が2つあります。シミュレーションや基板で区別できなくなります。片方を選んで、左の「番号」を別の番号に変えましょう	Two parts have the same refdes. Simulation and the board cannot tell them apart. Select one and change "No." on the left to another number
+{} ピン{} は「使わない (NC)」の印がありますが、つながっています	{} pin {} is marked "unused (NC)" but is connected
+このピンには、使わない印 (×) が付いていますが、配線かネット名がつながっています。つないだままにするなら、印を外しましょう (部品の設定の「使わないピン」)。つなぐつもりがなかったなら、線かラベルを消しましょう	This pin has the unused mark (×), but a wire or net name is connected. If you want it connected, remove the mark ("Unused pins" in the part settings). If you did not mean to connect it, delete the wire or label
+すぐ近く ({}, {}) に、どこにもつながっていない線の端があります。線をこのピン (赤い点) まで延ばしてつなぎましょう。線の端は、ピンかほかの線の上に置いたときだけつながります	There is a loose wire end close by ({}, {}). Extend the wire to this pin (red dot) to connect it. A wire end connects only when placed on a pin or another wire
+IC の入力ピンが浮いたままだと、電圧が定まらず動作が不安定になります。使わない入力は GND か電源につなぎましょう。本当に使わない端子 (NC) なら、そのままで構いません	A floating IC input pin has no defined voltage and makes the IC unstable. Connect unused inputs to GND or the supply. If the pin is truly not used (NC), you can leave it
+この端子には何もつながっていないので、電流が流れません。配線ツールで相手の部品までつなぎましょう。使わない部品なら削除します	Nothing is connected to this pin, so no current flows. Use the wire tool to connect it to the other part. If the part is not needed, delete it
+{} ピン{} が未接続です	{} pin {} is not connected
+線の端がどこにもつながっていません	Wire end is not connected to anything
+ピン (赤い点) や別の線の上で終わっていない線です。つなぎ忘れかもしれません。ピンまで延ばすか、不要なら選んで Delete で消しましょう	This wire does not end on a pin (red dot) or another wire. You may have forgotten to connect it. Extend it to a pin, or select it and press Delete if not needed
+電源 {} の+と−が同じ配線につながっています (短絡)	The + and − of supply {} are on the same wire (short circuit)
+電源の両端が直接つながると、理論上は無限大の電流が流れ、シミュレーションできません。電源の+と−の間には、必ず抵抗などの負荷を入れましょう	If both ends of a supply are connected directly, in theory infinite current flows and it cannot be simulated. Always put a load such as a resistor between + and − of a supply
+電源ネットが短絡しています: {}	Supply nets are shorted: {}
+ と 	 and 
+違う名前の電源 (GND と VCC など) が1本の配線でつながっています。そのまま電源を入れると大電流が流れて危険です。意図せずつながっている線や、重なって置いた記号を探しましょう	Supplies with different names (such as GND and VCC) are joined by one wire. Turning on the power would let a large current flow, which is dangerous. Look for wires joined by mistake or symbols placed on top of each other
+電源ネット {} に電圧源(または電源コネクタ)がつながっていません。電源記号は名前を付けるだけで、電圧は出しません	No voltage source (or power connector) is connected to supply net {}. A power symbol only gives a name; it does not supply a voltage
+電源記号 (VCC など) は「この線の名前」を付けるだけの記号です。電圧を出すには、「電源」部品を置いて、その+側を同じ名前の電源記号につなぎましょう	A power symbol (VCC etc.) only gives "this wire's name". To supply a voltage, place a "Supply" part and connect its + side to a power symbol with the same name
+{} に電流を制限する抵抗がありません	{} has no current-limiting resistor
+LED は電圧がわずかに上がるだけで電流が急に増え、壊れてしまいます。電源と LED の間に抵抗 (330Ω〜1kΩ くらい) を直列に入れて、電流を決めましょう	The current through an LED shoots up with a tiny rise in voltage, and the LED burns out. Put a resistor (about 330Ω to 1kΩ) in series between the supply and the LED to set the current
+{} の電源ピン {} ({}) が電源につながっていません	Power pin {@2} ({@3}) of {@1} is not connected to a supply
+IC は電源ピンに電圧がかからないと動きません。電源の+側 (または VCC などの名前を付けた線) につなぎましょう	An IC does not work unless its power pin gets a voltage. Connect it to the + side of the supply (or a wire named VCC etc.)
+{} のグランドピン {} ({}) が GND につながっていません	Ground pin {@2} ({@3}) of {@1} is not connected to GND
+IC のグランドピンは、回路の基準 (GND) につなぎます。つながっていないと電流の戻り道がなく、IC が動きません	An IC's ground pin connects to the circuit's reference (GND). Without it, current has no return path and the IC will not work
+{} を含む部分が GND とつながっていません	The part containing {} is not connected to GND
+この部分は、どの部品をたどっても GND に届きません。電圧は GND を基準に決まるので、シミュレーションで値が定まらず、失敗することがあります。どこか1か所を GND につなぎましょう	No path through any part from here reaches GND. Voltages are measured from GND, so the simulation cannot settle the values and may fail. Connect one point to GND
+ラベル「{}」と「{}」は大文字・小文字が違うので、別の配線になります	Labels "{}" and "{}" differ in upper/lower case, so they are different wires
+ラベルの名前は大文字・小文字も区別されます。同じ配線にしたいなら、同じ綴りにそろえましょう (別の配線のつもりなら、このままで構いません)	Label names are case-sensitive. To make them the same wire, use the same spelling (if they are meant to be different wires, you can leave them)
+GNDシンボルがありません	No GND symbol
+電圧は「どこから測るか」の基準 (0V) が必要です。GND 記号を、電源の−側など基準にしたい所に置きましょう。これがないとシミュレーションできません	Voltage needs a reference (0V) to "measure from". Place a GND symbol where you want the reference, such as the − side of the supply. Without it, the circuit cannot be simulated
+# crates/sch-core/src/programming.rs
+{} (足りない: {})	{} (missing: {})
+{} は、プログラムを書き込むピンがコネクタに出ていません ({} が足りません)	{} has no programming pins brought out to a connector ({} missing)
+このチップは、基板に載せたあとで書き込む部品です。書き込みの方法のどれか 1 つ分のピンを、ヘッダ (コネクタ) までつなぎましょう。{}。抵抗やコンデンサを 1 つ挟んでつないでも構いません。ほかの方法で書き込む (書き込み済みのチップを載せる) なら、この指摘は無視して構いません	This chip is programmed after it is mounted on the board. Connect the pins for one programming method to a header (connector). {}. Going through one resistor or capacitor is fine. If you program it another way (mounting a pre-programmed chip), you can ignore this
+# crates/sch-core/src/renumber.rs
+シートの記号(階層)がある回路図は、部品番号の振り直しにまだ対応していません。コピーの部品番号は子シートの部品から決まるためです	Renumbering is not yet supported for schematics with sheet symbols (hierarchy), because the refdes of copies come from the parts in the child sheet
+{n} が2つの部品に付いてしまうので、振り直しを取りやめました	Renumbering was canceled because {n} would be given to two parts
+# crates/sch-core/src/sheets.rs
+シート{}	Sheet {}
+シート1	Sheet 1
+# crates/sch-core/src/spice.rs
+* {r} ({}): シミュレーションモデルなし	* {r} ({}): no simulation model
+# crates/pcb-core/src/align.rs
+等間隔にそろえるには、部品を 3 個以上選んでください	Select 3 or more parts to space them evenly
+整列するには、部品を 2 個以上選んでください (Shift を押しながらクリック、または範囲選択)	Select 2 or more parts to align (Shift+click, or drag a box)
+# crates/pcb-core/src/body.rs
+本体の形「{}」は rect か circle にしてください	Body shape "{}" must be rect or circle
+本体の幅 (円は直径) は 0 より大きい値にしてください	Body width (diameter for a circle) must be greater than 0
+本体の長さは 0 より大きい値にしてください	Body length must be greater than 0
+向きの印のピン「{}」が、ピン表にありません	Orientation mark pin "{}" is not in the pin table
+# crates/pcb-core/src/breakage.rs
+バイパスコンデンサが IC から遠い	Bypass capacitor far from the IC
+配線が 1 本切れている	One track is broken
+配線が細すぎる	Track too thin
+2 つのネットがショートしている	Two nets are shorted
+部品が基板の外にある	A part is outside the board
+この基板では、点検に引っかかる故障にならなかったので、取りやめました	On this board, no fault that the check would catch could be made, so it was canceled
+電源を入れても、動かない部分があります。電気が届いていない部品があるようです	When powered on, part of it does not work. Some parts seem to get no power
+ネット「{net}」の配線が 1 本、切れていました (点 {:.1}, {:.1} mm のあたり)。未配線の黄色の線が手がかりです。その線をなぞって、つなぎ直します	One track of net "{net}" was broken (around {:.1}, {:.1} mm). The yellow unrouted line is the clue. Follow that line and reconnect it
+切っても未配線にならない配線しかありません (配線がありません)	There are no tracks that would become unrouted when cut (no tracks)
+動くことは動きますが、電流を流すと配線が熱くなり、電圧が下がります	It works, but when current flows the track gets hot and the voltage drops
+ネット「{net}」の配線が {thin:.2}mm と、基板の最小線幅 ({:.2}mm) より細くなっていました。DRC が示す配線を選んで、太くします	A track of net "{net}" was {thin:.2}mm, thinner than the board's minimum track width ({:.2}mm). Select the track the DRC points to and make it wider
+細くしても点検に引っかかる配線がありません	No track would be caught by the check when made thinner
+電源を入れると、すぐに熱くなる、または電源が落ちます	When powered on, it quickly gets hot, or the supply shuts off
+ネット「{na}」と「{nb}」の間に、余計な配線が 1 本入っていて、ショートしていました (点 {:.1}, {:.1} mm のあたり)。DRC が赤く示す所の余計な配線を選んで、消します	An extra track between nets "{na}" and "{nb}" was shorting them (around {:.1}, {:.1} mm). Select the extra track where the DRC shows red and delete it
+ショートさせられる、近くのパッドの組がありません	No nearby pad pairs can be shorted
+基板の外形か部品がありません	No board outline or parts
+基板を作ってみたら、部品が 1 つ、基板に載りません	When the board was made, one part did not fit on the board
+部品 {} が基板の外 (右の外) に出ていました。基板の中の空いた所へ動かして、配線をつなぎ直します	Part {} was outside the board (off the right side). Move it to a free spot on the board and reconnect its tracks
+基板の外へ出せる部品がありません	No part can be moved off the board
+ときどき勝手にリセットされる、または動きが不安定です (電源の電圧が揺れているようです)	It sometimes resets by itself or acts unstable (the supply voltage seems to wobble)
+バイパスコンデンサ {cref} が、IC {uref} の電源ピンから {d:.0}mm も離れていました (目安は {MAX_DECOUPLING_DISTANCE:.0}mm 以内)。遠いと、配線のインダクタンスで、速い電流の変化に追いつけません。{uref} のすぐそばへ動かして、配線をつなぎ直します	Bypass capacitor {cref} was {d:.0}mm away from the power pin of IC {uref} (aim for within {MAX_DECOUPLING_DISTANCE:.0}mm). When far, the track's inductance cannot keep up with fast current changes. Move it right next to {uref} and reconnect the tracks
+バイパスコンデンサを遠ざけられる所がありません	No place to move a bypass capacitor away
+# crates/pcb-core/src/copper.rs
+{guard} につながるパッドがありません (ガードのネット名を確かめてください)	No pads connect to {guard} (check the guard net name)
+{net} に配線がありません。先に配線してください	{net} has no tracks. Route it first
+ガードの銅を置くと、ルール違反が増えるので、置きませんでした	Placing the guard copper would add rule violations, so it was not placed
+{net} につながるパッドがありません	No pads connect to {net}
+rect=x0,y0,x1,y1 (x1 > x0 かつ y1 > y0)	rect=x0,y0,x1,y1 (x1 > x0 and y1 > y0)
+銅を置くと、ルール違反が増えるので、置きませんでした	Placing the copper would add rule violations, so it was not placed
+{net} に表面の配線がありません。先に配線してください	{net} has no tracks on the top layer. Route it first
+# crates/pcb-core/src/diffpair.rs
+差動ペア {} の「{net}」というネットが基板にありません。ペアの設定を見直しましょう	Net "{net}" of differential pair {} is not on the board. Check the pair settings
+差動ペア {} は片方だけ配線されています。もう片方も、並べて配線しましょう (ペアで自動配線が使えます)	Only one side of differential pair {} is routed. Route the other side alongside it (pairs can be autorouted)
+差動ペア {} の長さの差が {:.2}mm あります (許容 {:.2}mm)。短いほうに蛇行を足して長さを合わせましょう。差があると、2本の信号が届く時刻がずれて、差動の利点が減ります	The two lines of differential pair {} differ in length by {:.2}mm (allowed {:.2}mm). Add a meander to the shorter one to match lengths. A difference makes the two signals arrive at different times and weakens the benefit of differential signaling
+差動ペア {} の2本の間隔が {:.2}〜{:.2}mm で、目標の {:.2}mm からずれています。並んで走る部分は、間隔を一定にしましょう (ずれると、差動のインピーダンスが変わり、ノイズにも弱くなります)	The gap between the two lines of differential pair {} is {:.2} to {:.2}mm, off the target of {:.2}mm. Keep the gap constant where they run side by side (otherwise the differential impedance changes and noise gets in more easily)
+差動ペア {} は、2本が並んで走っている部分が少ないです (並走 {:.1}mm / 全長 {:.1}mm)。離れた配線では、ノイズを同じように拾えず、差動の利点が出ません。並べて引き直しましょう	The two lines of differential pair {} run side by side only a little ({:.1}mm side by side / {:.1}mm total). Lines far apart do not pick up noise equally, so differential signaling loses its benefit. Reroute them side by side
+長さはもう合っています	The lengths already match
+両方の線が配線されてから、長さを合わせます	Lengths are matched after both lines are routed
+差動ペア {} は、両方の線が配線されてから長さを合わせます	Differential pair {}: lengths are matched after both lines are routed
+# crates/pcb-core/src/dxf_in.rs
+{} 行目: グループコードが数字ではありません。DXF ではないか、バイナリ形式の DXF です (ASCII 形式で保存し直してください)	Line {}: the group code is not a number. This is not a DXF, or it is a binary DXF (save it again in ASCII format)
+つながっていない線の連なり ({:.1}, {:.1}) から ({:.1}, {:.1}) は、閉じた輪になっていないので、外形にしていません。線の端がずれていないか確かめてください。	The chain of lines from ({:.1}, {:.1}) to ({:.1}, {:.1}) is not a closed loop, so it was not used as the outline. Check that the line ends meet.
+DXF の形式ではありません (SECTION がありません)。AutoCAD の ASCII 形式の DXF を選んでください	Not a DXF file (no SECTION). Choose an AutoCAD DXF in ASCII format
+ 層の名前: {}。層を指定すると見つかるかもしれません (layer=名前)。	 Layer names: {}. Naming a layer may help (layer=NAME).
+外形になる閉じた輪が見つかりませんでした。線・円弧・ポリラインが端でつながって閉じている必要があります。{hint}	No closed loop for the board outline was found. Lines, arcs, and polylines must join at their ends and close. {hint}
+ほかに閉じた輪が {} 個あります (切り欠きや長穴など)。外形には、いちばん大きい輪だけを使いました。	There are {} other closed loops (notches, slots, etc.). Only the largest loop was used for the outline.
+外形の外にある円 {} 個は、穴にしていません。	{} circles outside the outline were not made into holes.
+{kind} が {n} 個ありましたが、読んでいません (線・円弧・円・ポリラインだけを読みます)。	{n} {kind} items were not read (only lines, arcs, circles, and polylines are read).
+図面の単位 (INSUNITS) から、{scale} 倍して mm にしました。	Scaled by {scale} to mm based on the drawing units (INSUNITS).
+# crates/pcb-core/src/fab.rs
+標準 (安全側)	Standard (safe side)
+線幅・間隔 0.15mm / 穴 0.3mm。ほとんどの低価格2層で通る控えめな値	Track width/gap 0.15mm / hole 0.3mm. Modest values that pass at most low-cost 2-layer fabs
+発注先が決まっていないときの値です。決まったら、その発注先を選び直してください	Values for when you have not chosen a fab yet. Once you decide, select that fab instead
+発注先のサイトで「ガーバーファイルをアップロード」を選び、書き出した zip を渡します	On the fab's site, choose "Upload Gerber files" and give it the exported zip
+板厚 1.6mm・2層・銅箔 1oz が標準です	1.6mm thick, 2 layers, 1oz copper is the standard
+JLCPCB (2層)	JLCPCB (2 layers)
+線幅 0.127mm / 間隔 0.2mm / ビア穴 0.3mm・外径 0.6mm	Track width 0.127mm / gap 0.2mm / via hole 0.3mm, outer diameter 0.6mm
+線同士は 0.127mm まで近づけられますが、ビア・パッドと線の間は 0.2〜0.25mm 必要なため、間隔は 0.2mm にしています	Tracks can come as close as 0.127mm to each other, but 0.2-0.25mm is needed between tracks and vias/pads, so the gap is set to 0.2mm
+ビア穴の下限は 0.3mm、ビア外径は 0.5mm 以上。製造時にアニュラリングは 0.15mm に広げられます	Minimum via hole 0.3mm, via outer diameter 0.5mm or more. The annular ring is widened to 0.15mm in manufacturing
+100×100mm 以内だと、最も安い料金の枠に入ります	Within 100×100mm you get the cheapest price tier
+jlcpcb.com にログインし、「今すぐ注文」→「ガーバーファイルを追加」で `基板名_gerber.zip` をアップロードします	Log in to jlcpcb.com, then "Order now" → "Add gerber file" and upload `boardname_gerber.zip`
+層数 2・板厚 1.6mm・銅箔 1oz は初期値のままで構いません。プレビューで外形と穴が想定どおりか確認します	Layers 2, thickness 1.6mm, 1oz copper can stay at their defaults. In the preview, check the outline and holes look as expected
+部品実装 (SMT) も頼むときは、`-BOM.csv` と `-CPL.csv` をアップロードします。部品は JLCPCB の部品ライブラリの番号 (LCSC番号) で指定します	If you also order assembly (SMT), upload `-BOM.csv` and `-CPL.csv`. Parts are specified by JLCPCB part library numbers (LCSC numbers)
+見積もりを確認して注文します (画面は変更されることがあります)	Check the quote and order (the site may change)
+PCBWay (2層)	PCBWay (2 layers)
+線幅・間隔 0.15mm / 穴 0.3mm / アニュラリング 0.15mm	Track width/gap 0.15mm / hole 0.3mm / annular ring 0.15mm
+実際の下限は線幅・間隔 0.1mm、穴 0.2mm ほどですが、料金が上がらない余裕のある値 (0.15mm / 0.3mm) にしています	The real minimums are about 0.1mm track width/gap and 0.2mm holes, but values with margin that do not raise the price (0.15mm / 0.3mm) are used
+アニュラリング (穴のまわりの銅の幅) は 0.15mm 以上	Annular ring (copper width around the hole) 0.15mm or more
+pcbway.com で「PCB クイック見積もり」を開き、層数 2・板厚 1.6mm などを選びます	On pcbway.com, open "PCB Instant Quote" and choose 2 layers, 1.6mm thickness, etc.
+「ガーバーファイルを追加」で `基板名_gerber.zip` をアップロードし、プレビューで確認します	Upload `boardname_gerber.zip` with "Add Gerber file" and check the preview
+部品実装も頼むときは、`-BOM.csv` と `-CPL.csv` を追加します	If you also order assembly, add `-BOM.csv` and `-CPL.csv`
+OSH Park (2層)	OSH Park (2 layers)
+線幅・間隔 6mil (0.152mm) / 穴 10mil (0.254mm) / アニュラリング 5mil	Track width/gap 6mil (0.152mm) / hole 10mil (0.254mm) / annular ring 5mil
+基板の面積で値段が決まり、同じ基板が3枚届きます	The price depends on board area, and you get 3 copies of the board
+基板の端から銅までは 15mil (0.381mm) 空けます	Keep 15mil (0.381mm) between the board edge and copper
+oshpark.com にログインし、「New Project」で `基板名_gerber.zip` をアップロードします	Log in to oshpark.com and upload `boardname_gerber.zip` with "New Project"
+表示された基板の絵で、外形と穴を確認します	Check the outline and holes in the board picture shown
+価格を確認して注文します (画面は変更されることがあります)	Check the price and order (the site may change)
+回路図と基板が合っていません	Schematic and board do not match
+{summary}。回路図を直したあと、基板で「回路図から取り込み」を押していないようです。このまま発注すると、シミュレーションした回路と違う基板が届きます。基板の画面の左パネルで「回路図から取り込み」を押し、必要なら配線をやり直しましょう	{summary}. It seems "Import from schematic" was not pressed on the board after fixing the schematic. If you order like this, you will get a board different from the circuit you simulated. Press "Import from schematic" in the left panel of the board screen, and redo tracks if needed
+基板の形 (外形) が決まっていません。左の「矩形にする」か、ツール「基板外形」で決めましょう。発注には外形が必要です	The board shape (outline) is not set. Set it with "Make rectangle" on the left or the "Board outline" tool. An outline is needed to order
+基板の大きさ {:.1} × {:.1} mm	Board size {:.1} × {:.1} mm
+外形が決まっています	The outline is set
+{n} 層の基板です (内層 {} 枚)	{n}-layer board ({} inner layers)
+書き出した zip には内層のファイル (.G1 …) が入ります。発注の画面で層数を {n} 層にし、層構成 (積層) と板厚を発注先の指定に合わせてください。プリセットの寸法の値は 2 層向けなので、内層のある基板は発注先の「多層」の製造能力で確かめましょう	The exported zip includes inner layer files (.G1 …). On the order page set the layer count to {n}, and match the layer stack and thickness to the fab's spec. The preset size values are for 2 layers, so check boards with inner layers against the fab's "multilayer" capabilities
+基板の外に部品があります: {}{}	Parts outside the board: {}{}
+回路図から取り込んだ部品は、最初は基板の右の外側に並びます。ドラッグして基板の上に置きましょう	Parts imported from the schematic start lined up outside the board on the right. Drag them onto the board
+部品 {} 個はすべて基板の上にあります	All {} parts are on the board
+未配線が {} 本あります (黄色の線)	{} unrouted connections (yellow lines)
+つながっていない接続が残っています。「配線」ツールで手でつなぐか、「自動配線」に任せましょう	Some connections are still unconnected. Connect them by hand with the "Track" tool, or leave it to "Autoroute"
+すべて配線されています	Everything is routed
+DRC 違反が {} 件あります	{} DRC violations
+例: {}。一覧の行をクリックすると場所へ移動します	Example: {}. Click a row in the list to go to the spot
+DRC (設計ルールチェック) に違反はありません	No DRC (design rule check) violations
+{} のルールでは違反が {} 件あります	With the {} rules, there are {} violations
+例: {}。線を太く・離す、穴やパッドを大きくするなどで直します。「ルールを{}にする」を押すと、DRC もこのルールで調べます	Example: {}. Fix them by making tracks wider or farther apart, or holes and pads larger. Press "Set rules to {}" so the DRC checks with these rules too
+DRC のルールが {} より緩くなっています	The DRC rules are looser than {}
+今の設計は発注先のルールを満たしていますが、DRC の設定が緩いままです。「ルールを発注先に合わせる」を押しておくと、あとで直したときも守られます	The current design meets the fab's rules, but the DRC settings are still loose. Press "Match rules to fab" so they stay met after later changes
+{} の最小値を満たしています	Meets the minimums of {}
+電流に対して配線が細いネットがあります: {}	Some nets have tracks too thin for their current: {}
+例: {} は {:.1} A を流す設定で、{:.2} mm 以上 (銅箔 35µm・温度上昇 10℃ の目安) が必要ですが、細い所は {:.2} mm です。細い配線は熱を持ち、焼けたり基板が傷んだりします。左の「配線の太さ」で「推奨幅にする」を押しましょう	Example: {} is set to carry {:.1} A and needs {:.2} mm or more (rule of thumb for 35µm copper, 10°C rise), but its thinnest spot is {:.2} mm. Thin tracks get hot and can burn or damage the board. Press "Use recommended width" under "Track width" on the left
+電流を設定したネット {} 本は、配線の太さが足りています	The {} nets with a set current all have wide enough tracks
+目標のインピーダンスから外れた配線があります: {}	Some tracks are off their target impedance: {}
+例: {} は {:.0} Ω を目標にしていますが、{:.2} mm の配線は約 {:.0} Ω (目安) です。ネットの設定の窓の「目標の線幅にする」で、そろえられます。値は教科書の式による ±10% ほどの目安なので、発注先の積層構成と、そこの計算の値を確かめてください	Example: {} targets {:.0} Ω, but a {:.2} mm track is about {:.0} Ω (rough). Use "Use target width" in the net settings window to fix it. The value is a textbook-formula estimate of about ±10%, so check the fab's layer stack and its calculated values
+インピーダンスを決めたネット {} 組の配線は、目標に合っています (目安)	The tracks of the {} nets with a set impedance meet their targets (rough)
+シルク (白い印刷) に気になる所が {} 件あります	{} concerns on the silkscreen (white printing)
+例: {}	Example: {}
+ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります	{} spots where the solder mask strip between pads is too thin
+同じネットの銅箔の間に、最小間隔より狭いすき間が {} 箇所あります	{} spots with gaps narrower than the minimum between copper of the same net
+差動ペアに気になる所が {} 件あります	{} concerns on differential pairs
+放熱パッドにサーマルビアが足りない部品が {} 個あります	{} parts lack thermal vias on their thermal pad
+上書き	
+ベタ (ゾーン) が、あとから置いた別のネットのベタに上書きされている所が {} 個あります	{} spots where a copper pour (zone) is overwritten by a later pour of another net
+ベタ (ゾーン) に、気になる所が {} 箇所あります (細いかけら・孤立した島・他のネットで分断されて、つながっていないパッド)	{} concerns in copper pours (zones) (thin slivers, isolated islands, pads cut off by other nets)
+ICの電源ピンのそばのコンデンサに気になる所が {} 件あります	{} concerns with capacitors near IC power pins
+設計の要件を満たしていない所が {} 件あります	{} design requirements not met
+例: {}。回路図の「設計の要件」の表にある、近くに置く組と離す組です。部品を動かすか、表の数字を見直してください。発注はできますが、設計の意図から外れています	Example: {}. These are the keep-close and keep-apart pairs in the schematic's "Design requirements" table. Move parts or check the numbers in the table. You can still order, but it departs from the design intent
+設計の要件 {} 件を満たしています	All {} design requirements met
+理由は書かれていません	No reason given
+設計の要件のうち、承知した例外が {} 件あります	{} accepted exceptions in the design requirements
+例: {} (承知した理由: {})。回路図の「設計の要件」の表の「承知した例外」で、一覧と理由を見られます	Example: {} (reason accepted: {}). See the list and reasons under "Accepted exceptions" in the schematic's "Design requirements" table
+鋭角に曲がっている配線が {} 箇所あります	{} tracks with sharp-angle bends
+GND のベタ (銅箔ゾーン) がありません	No GND copper pour (copper zone)
+2層基板では、裏面などを GND のゾーンで塗ると、信号の戻り道が短くなってノイズが減り、配線もしやすくなります。ツール「ゾーン」でネット GND を選んで囲みましょう	On a 2-layer board, filling the bottom side or similar with a GND zone shortens signal return paths, reduces noise, and makes routing easier. Use the "Zone" tool, choose net GND, and draw around the area
+{name} の最も安い料金の枠 ({cw:.0}×{ch:.0} mm 以内) に入っています	Fits {name}'s cheapest price tier (within {cw:.0}×{ch:.0} mm)
+基板が {cw:.0}×{ch:.0} mm より大きいので、{name} では料金の枠が上がります	The board is larger than {cw:.0}×{ch:.0} mm, so {name} puts it in a higher price tier
+いまの大きさは {w:.1}×{h:.1} mm です。{cw:.0}×{ch:.0} mm に収まるように部品を詰めるか、外形を小さくすると安くなります。大きいままでよければ、このまま進めて構いません	The current size is {w:.1}×{h:.1} mm. Pack the parts or shrink the outline to fit {cw:.0}×{ch:.0} mm and it gets cheaper. If the larger size is fine, you can go ahead
+配線の電圧降下が大きいネットがあります: {}	Some nets have a large voltage drop along their tracks: {}
+例: {} は {:.1} A を流すと、{} の {} ピンで {:.2} V 落ちます (目安 {} V 以下)。電源が足りなくなり、動作が不安定になります。配線を太く・短くするか、ベタ (ゾーン) で塗りましょう。左の「配線の太さ」で確かめられます	Example: with {} carrying {:.1} A, {} pin {} sees a drop of {:.2} V (aim for {} V or less). The supply falls short and operation becomes unstable. Make the tracks wider and shorter, or fill with a copper pour (zone). Check it under "Track width" on the left
+配線の電圧降下は、どのネットも {MAX_DROP_V} V 以下です	The voltage drop along tracks is {MAX_DROP_V} V or less on every net
+値が空の部品があります: {}	Parts with an empty value: {}
+部品表 (BOM) の「値」が空になります。回路図で部品の値を入れましょう	The "Value" in the bill of materials (BOM) will be empty. Enter the part values in the schematic
+ランドパターンが概算の部品があります: {}{}	Parts with an estimated land pattern: {}{}
+部品ライブラリの寸法が、データシートの推奨ランドパターンから読み取ったものではありません。発注の前に、データシートの図面とパッドの位置・大きさ・ピン番号を照らし合わせてください。確認できたら、部品ファイルの land_unverified を消します	The part library dimensions were not read from the datasheet's recommended land pattern. Before ordering, compare pad position, size, and pin numbers with the datasheet drawing. Once checked, remove land_unverified from the part file
+一番小さい穴は直径 {:.2} mm	The smallest hole is {:.2} mm in diameter
+穴が小さいほど加工が難しく、値段が上がることがあります	Smaller holes are harder to make and may cost more
+取付穴はありません	No mounting holes
+ケースにネジ止めするなら、取付穴 (ツール「取付穴」) を付けておきましょう	If you will screw it into a case, add mounting holes (the "Mounting hole" tool)
+# crates/pcb-core/src/fiducial.rs
+レジストの穴の直径は、印の直径より大きくしてください (目安は印の 2〜3 倍)	Make the solder mask opening diameter larger than the mark diameter (about 2-3 times the mark)
+{}には、もうフィデューシャルがあります。置き直すときは、先に取り除いてください	There is already a fiducial at {}. To place it again, remove it first
+左上	Top left
+右上	Top right
+左下	Bottom left
+フィデューシャルを置ける所が、基板の角の近くにありませんでした (部品・配線・穴でふさがっています)。角を少し空けてから、もう一度押してください	No spot for a fiducial was found near the board corners (blocked by parts, tracks, or holes). Clear a little room at the corners and press again
+フィデューシャル (位置合わせの印) のまわりの、レジストのない円の中に銅があります。実装機のカメラが印を見誤るので、配線・ビア・パッドを円の外へ動かしましょう	There is copper inside the mask-free circle around a fiducial (alignment mark). The assembly machine's camera may misread the mark, so move tracks, vias, and pads outside the circle
+# crates/pcb-core/src/gerber_view.rs
+FS の書式を読めません	Cannot read the FS format
+ADD の書式が不正です	Invalid ADD format
+アパーチャ番号が不正です	Invalid aperture number
+アパーチャの寸法が不正です: {s}	Invalid aperture size: {s}
+未対応のアパーチャです: {rest}	Unsupported aperture: {rest}
+D{code} は定義されていません	D{code} is not defined
+D 命令がありません: {cmd}	No D command: {cmd}
+線は円形のアパーチャで描きます	Lines are drawn with a circular aperture
+アパーチャが選ばれていません	No aperture selected
+未対応の命令です: {other}	Unsupported command: {other}
+読めない行です: {cmd}	Unreadable line: {cmd}
+ドリル番号が不正です	Invalid drill number
+ドリル径が不正です	Invalid drill diameter
+ドリルが選ばれていません	No drill selected
+X 座標がありません	No X coordinate
+Y 座標がありません	No Y coordinate
+X 座標が不正です	Invalid X coordinate
+Y 座標が不正です	Invalid Y coordinate
+{ext} のファイルがありません	No {ext} file
+外形のファイルから基板の形を読めません	Cannot read the board shape from the outline file
+# crates/pcb-core/src/groundpour.rs
+先に基板の外形を決めてください (ベタは基板の外形いっぱいに置きます)	Set the board outline first (the copper pour fills the whole board outline)
+四角い外形の基板にだけ、自動でベタを置けます。ほかの形は「銅箔ゾーン」ツールで、外形の内側に多角形を描いてください	Copper pours can be placed automatically only on rectangular boards. For other shapes, draw a polygon inside the outline with the "Copper zone" tool
+基板が小さすぎて、ベタを置けません	The board is too small for a copper pour
+表面のベタを置くと、ルール違反が増えるか、つながりが切れるので、置きませんでした	Placing the top copper pour would add rule violations or break connections, so it was not placed
+{net} につながるパッドがありません。先に回路図から取り込んで、ネット名を確かめてください	No pads connect to {net}. Import from the schematic first and check the net name
+内層{n} がありません。先に層の数を増やしてください (いまは {} 層)	There is no inner layer {n}. Increase the number of layers first (now {} layers)
+# crates/pcb-core/src/impedance.rs
+外層 (マイクロストリップ)	Outer layer (microstrip)
+内層 (ストリップライン)	Inner layer (stripline)
+# crates/pcb-core/src/irdrop.rs
+パッドが 2 つ以上ないので、電圧降下は調べられません	The voltage drop cannot be checked because there are fewer than 2 pads
+ベタが大きすぎて、電圧降下は調べられません	The copper pour is too large to check the voltage drop
+配線やベタが細かすぎて ({} 点) 調べられません	The tracks or pours are too detailed to check ({} points)
+電圧降下の計算が収束しませんでした (配線かベタの形が極端です)	The voltage drop calculation did not converge (the track or pour shape is extreme)
+# crates/pcb-core/src/keepout.rs
+禁止領域 {}	Keep-out area {}
+禁止領域「{}」	Keep-out area "{}"
+{}に配線が入っています ({})。この領域の外を通るように引き直しましょう	A track enters {} ({}). Reroute it to go outside this area
+{}にビアがあります。領域の外へ動かしましょう	There is a via in {}. Move it outside the area
+{}に部品 {} が入っています。部品を領域の外へ動かしましょう	Part {@2} is inside {@1}. Move the part outside the area
+# crates/pcb-core/src/meander.rs
+ネット {net} はまだ配線されていません。配線してから長さを合わせます	Net {net} is not routed yet. Route it, then match the length
+蛇行を入れられる、まっすぐで長い配線が見つかりませんでした (近くの配線とぶつかるか、短すぎます)。配線を少し直線にするか、周りをあけてからもう一度試してください	No long straight track was found for a meander (it hits nearby tracks or is too short). Make the track a bit straighter or clear space around it, then try again
+ネット {n} はまだ配線されていません	Net {n} is not routed yet
+2本が並んで走るまっすぐな所がありません	No straight section where the two lines run side by side
+2本をいっしょに曲げる蛇行を入れられる、並んだまっすぐな配線が見つかりませんでした (近くの配線とぶつかるか、短すぎます)	No straight side-by-side tracks were found for a meander that bends both lines together (it hits nearby tracks or is too short)
+# crates/pcb-core/src/model.rs
+内層{n}	Inner {n}
+大電流	High current
+スイッチングノード	Switching node
+検出 (ビアなし)	Sense (no vias)
+アナログ信号	Analog signal
+ロジック	Logic
+# crates/pcb-core/src/netlist.rs
+{r} のピン {pin} がフットプリントにありません	Pin {pin} of {r} is not in the footprint
+追加 {}	Added {}
+削除 {}	Removed {}
+値・形が違う {}	Different value/footprint {}
+つなぎが違うパッド {}	Pads connected differently {}
+# crates/pcb-core/src/package.rs
+{name} は正の値にしてください	{name} must be a positive value
+{what}: slot は穴のあるパッドにだけ付けられます (drill を指定してください)	{what}: slot can only be on a pad with a hole (specify drill)
+{what}: slot (長穴の長さ {slot}) は drill (穴の幅 {d}) 以上にしてください	{what}: slot (slot length {slot}) must be at least drill (hole width {d})
+dual のピン数は2以上の偶数にしてください	For dual, the pin count must be an even number of 2 or more
+quad のピン数は4の倍数にしてください	For quad, the pin count must be a multiple of 4
+pins は1以上	pins must be 1 or more
+drill は pad_d より小さくしてください	drill must be smaller than pad_d
+pads が空です	pads is empty
+未知のパッド形状: {other}	Unknown pad shape: {other}
+holes の drill	drill of holes
+# crates/pcb-core/src/parts.rs
+フットプリント {} が見つかりません	Footprint {} not found
+# crates/pcb-core/src/picture.rs
+範囲 x {}〜{} mm、y {}〜{} mm、1 mm = {} px、格子の数字は mm (x は上の縁、y は左の縁)	Range x {} to {} mm, y {} to {} mm, 1 mm = {} px, grid numbers in mm (x on the top edge, y on the left edge)
+ネット {net}: {}	Net {net}: {}
+黄	yellow
+水色	light blue
+ピンク	pink
+黄緑	yellow-green
+橙	orange
+薄紫	light purple
+影 (おすすめの取り回し) {net}: {}、全層の長さ {} mm、ビア {} 個 (この層に描いた線は {} 本)	Shadow (suggested route) {net}: {}, length on all layers {} mm, {} vias ({} lines drawn on this layer)
+部品 {r}: 基板にありません	Part {r}: not on the board
+部品 {r}: ({}, {}) 面 {}	Part {r}: ({}, {}) side {}
+黄色の線: 未配線 {} 本。ピンクの輪と番号: DRC 違反	Yellow lines: {} unrouted. Pink rings and numbers: DRC violations
+# crates/pcb-core/src/ratsnest.rs
+未配線: ネット {} が、(x {:.1}, y {:.1}) と (x {:.1}, y {:.1}) の間でつながっていません。配線かビアでつなぎましょう (ベタの輪郭の中でも、他のネットの配線やパッドで銅が分かれていると、つながっていません)	Unrouted: net {} is not connected between (x {:.1}, y {:.1}) and (x {:.1}, y {:.1}). Connect it with a track or via (even inside a copper pour outline, it is not connected if other nets' tracks or pads split the copper)
+# crates/pcb-core/src/requirements.rs
+設計の要件のネットの役割「{n}」: 基板にそのネットのパッドがないので、取り込めませんでした (ネット名か、回路図の取り込みを確かめてください)	Net role "{n}" in the design requirements: the board has no pads on that net, so it could not be imported (check the net name, or the import from the schematic)
+設計の要件のネットの役割 {l} は、この基板にない層です (層の数を確かめてください)。その層は外しました	Net role {l} in the design requirements is a layer this board does not have (check the number of layers). That layer was removed
+「{}」の {k}	{k} of "{}"
+測定「{}」の種類 `{}` が分かりません	Measurement "{}": unknown type `{}`
+測定「{}」には、ネットが {need} 個要ります	Measurement "{}" needs {need} nets
+測定「{}」のネットの名前が空です	Measurement "{}" has an empty net name
+測定「{}」: {} と {} の銅が、基板にありません	Measurement "{}": the board has no copper for {} and {}
+測定「{}」: {} か {} の銅が、基板にありません	Measurement "{}": the board has no copper for {} or {}
+測定「{}」: {} に配線がありません (先に配線してください)	Measurement "{}": {} has no tracks (route it first)
+測定「{}」: ガードのネット {} につながるパッドが、基板にありません	Measurement "{}": the board has no pads connected to guard net {}
+測定「{}」には、ネットが 1 つ要ります	Measurement "{}" needs 1 net
+測定「{}」: {} の配線が、基板にありません (先に配線してください)	Measurement "{}": the board has no tracks for {} (route it first)
+測定「{}」の1つ目と2つ目には、道筋の両端のパッド (部品.ピン) を書いてください	Measurement "{}": write the pads at both ends of the path (part.pin) as the 1st and 2nd items
+測定「{}」には、道筋の両端のパッド 2 個とグラウンドのネットが要ります	Measurement "{}" needs the 2 pads at both ends of the path and a ground net
+測定「{}」: {from} と {to} をつなぐ銅の道筋がありません (未配線か、ベタだけでつながっています)	Measurement "{}": no copper path connects {from} and {to} (unrouted, or connected only by a copper pour)
+測定「{}」には、パッドが 1 個 (部品.ピン) 要ります	Measurement "{}" needs 1 pad (part.pin)
+測定「{}」: {pad} のパッドが、基板にありません	Measurement "{}": the board has no pad {pad}
+測定「{}」の1つ目には、パッド (部品.ピン) を書いてください	Measurement "{}": write a pad (part.pin) as the 1st item
+測定「{}」には、パッドとガードのネットが要ります	Measurement "{}" needs a pad and a guard net
+測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります	Measurement "{}" needs {need} pads (part.pin)
+測定「{}」: {a} と {b} をつなぐ銅の道筋がありません (未配線か、ベタだけでつながっています)	Measurement "{}": no copper path connects {a} and {b} (unrouted, or connected only by a copper pour)
+測定「{}」: 電流が分かりません。「近さ」の欄に電流 (A) を書くか、ネット {net} の電流を設定してください	Measurement "{}": the current is unknown. Write the current (A) in the "Closeness" field, or set the current for net {net}
+測定「{}」: {} と {} の間に配線がありません	Measurement "{}": no tracks between {} and {}
+測定「{}」: {} か {} のパッドが、基板にありません	Measurement "{}": the board has no pad {} or {}
+測定「{}」: {} から {} か {} へ、銅の道筋がありません (未配線か、ベタだけでつながっています)	Measurement "{}": no copper path from {} to {} or {} (unrouted, or connected only by a copper pour)
+ネット「{}」: 許している層 ({}) の外に配線があります: {}	Net "{}": tracks outside the allowed layers ({}): {}
+ネット {n} (「{}」): 配線の長さが {len:.1} mm です (上限 {} mm)	Net {n} ("{}"): track length is {len:.1} mm (limit {} mm)
+ネット {n} (「{}」): ビアが {count} 個あります (上限 {} 個)	Net {n} ("{}"): {count} vias (limit {})
+ネット {n} (「{}」): 線幅 {} mm より細い配線が {len:.1} mm あります (上限 {} mm)	Net {n} ("{}"): {len:.1} mm of track is thinner than {} mm (limit {} mm)
+測定「{}」: {label}が {shown} {unit} です ({} {} {unit})	Measurement "{}": {label} is {shown} {unit} ({} {} {unit})
+{} (組「{}」)	{} (group "{}")
+組「{}」: {a} と {b} が {d:.1} mm 離れています (上限 {} mm)	Group "{}": {a} and {b} are {d:.1} mm apart (limit {} mm)
+{} (離す組「{}」)	{} (keep-apart group "{}")
+離す組「{}」: {na} と {nb} が {d:.1} mm まで近づいています (下限 {} mm)	Keep-apart group "{}": {na} and {nb} come as close as {d:.1} mm (minimum {} mm)
+{} (バイパスの対応「{}」)	{} (bypass pairing "{}")
+バイパスコンデンサ {cap} ({} 用): {} の電源ピンから {d:.1} mm 離れています (目安 {} mm 以内)	Bypass capacitor {cap} (for {}): {d:.1} mm from the power pin of {} (aim for within {} mm)
+# crates/pcb-core/src/shops.rs
+秋月電子通商	Akizuki Denshi
+# crates/pcb-core/src/silkedit.rs
+文字が空です。印刷する文字を入れてください	The text is empty. Enter the text to print
+「{bad}」はシルクの文字 (英字・数字・記号の一部) で書けません。英数字で書いてください (日本語は印刷できません)	"{bad}" cannot be written in silkscreen text (letters, digits, and some symbols). Use letters and digits (Japanese cannot be printed)
+文字の高さ {h:.2} mm は、発注先が印刷できる {min:.2} mm より小さいです。{min:.2} mm 以上にしてください (下限は発注先の設定で変わります)	Text height {h:.2} mm is smaller than the {min:.2} mm the fab can print. Make it {min:.2} mm or more (the minimum depends on the fab setting)
+文字の高さ {h:.2} mm は大きすぎます ({MAX_TEXT_HEIGHT} mm まで)	Text height {h:.2} mm is too large (up to {MAX_TEXT_HEIGHT} mm)
+シルクの線の太さ {w:.3} mm は、発注先が印刷できる {min:.3} mm より細いです。{min:.3} mm 以上にしてください	Silkscreen line width {w:.3} mm is thinner than the {min:.3} mm the fab can print. Make it {min:.3} mm or more
+シルクの線の太さ {w:.2} mm は太すぎます ({MAX_LINE_WIDTH} mm まで)	Silkscreen line width {w:.2} mm is too thick (up to {MAX_LINE_WIDTH} mm)
+{i} 番の文字は自由な文字ではありません (部品番号は、部品の文字の設定で変えます)	Text #{i} is not free text (change a refdes in the part's text settings)
+{i} 番の文字は自由な文字ではありません (部品番号は消さずに、隠す設定にします)	Text #{i} is not free text (do not delete a refdes; set it to hidden instead)
+部品 {refdes} は基板にありません	Part {refdes} is not on the board
+{i} 番の線は部品の外形です (部品の形から作られるので、太さは変えられません)	Line #{i} is a part outline (it comes from the part's shape, so its width cannot be changed)
+{i} 番のシルクの線はありません	There is no silkscreen line #{i}
+# crates/pcb-core/src/step.rs
+このSTEPは大きすぎます (三角形が {MAX_TRIANGLES} を超えました)。部品1個のデータか確かめてください	This STEP is too large (more than {MAX_TRIANGLES} triangles). Check that it is the data for a single part
+STEPの中に、立体 (MANIFOLD_SOLID_BREP など) が見つかりません。曲面だけのデータや、形を持たないファイルかもしれません	No solid (MANIFOLD_SOLID_BREP etc.) was found in the STEP. It may contain only surfaces, or no shape at all
+STEPの立体から三角形を作れませんでした	Could not make triangles from the STEP solid
+# crates/pcb-core/src/stitch.rs
+ビアの間隔は 1 mm 以上にしてください	Set the via spacing to 1 mm or more
+ビアの外径は、穴の径より大きくしてください	Make the via outer diameter larger than the hole diameter
+{net} のベタが2つ以上の層にありません (いまは {} 層)。ビアの縫い付けは、表と裏など2つの層のベタをつなぐものです。先に「GND ベタ」(表面も埋める) を押してください	The {net} copper pour is not on two or more layers (now {} layers). Via stitching connects pours on two layers, such as top and bottom. Press "GND pour" (also fills the top) first
+{net} のベタが重なる所がありません (片方の層が配線でふさがっています)	The {net} copper pours do not overlap anywhere (one layer is blocked by tracks)
+ビアを置ける所が見つかりませんでした (ベタが狭いか、部品・配線でふさがっています)。間隔を狭くするか、ビアを小さくしてみてください	No spot for vias was found (the pour is narrow, or blocked by parts and tracks). Try a smaller spacing or smaller vias
+縫い付けのビアを置くとルール違反が増えるので、置きませんでした	Placing the stitching vias would add rule violations, so they were not placed
+ビアを置ける所は、どれもルール違反になりました。間隔やビアの大きさを変えてみてください	Every spot for a via caused a rule violation. Try changing the spacing or via size
+# crates/pcb-core/src/svg.rs
+基板に外形も部品もないので、図にできません。先に外形を描いてください	The board has no outline and no parts, so no picture can be made. Draw the outline first
+裏面を下から見た図	Bottom side seen from below
+表面を上から見た図	Top side seen from above
+# crates/pcb-core/src/trunk.rs
+同じパッドが2回選ばれています。もう1つ、別のパッドを選んでください	The same pad was selected twice. Select another, different pad
+2つのパッドのネットが違います ({} と {})。同じネットのパッドを選んでください	The two pads are on different nets ({} and {}). Select pads on the same net
+表面実装の、同じ面のパッドを2つ選んでください (穴のあるパッドは、この機能の対象外です)	Select two surface-mount pads on the same side (pads with holes are not supported by this feature)
+2つのパッドが、縦か横の1列にそろっていません。ピンが1列に並んでいる、隣り合うパッドを選んでください	The two pads are not lined up in one row or column. Select neighboring pads in a row of pins
+パッドの間隔が狭く、2本のネックが重なります。パッドの間隔を確かめてください	The pads are so close that the two necks overlap. Check the pad spacing
+行き先が、パッドに近すぎます。パッドから、1mm 以上離れた所をクリックしてください	The destination is too close to the pads. Click at least 1mm away from the pads
+間隔が足りなくなるので、引けません (ルール違反が {} 件、増えます)。行き先を変えるか、近くのものを動かしてください	Cannot route: the clearance would be too small ({} more rule violations). Change the destination or move nearby items
+# crates/pcb-core/src/zonefill.rs
+ネットなし	No net
+# crates/pcb-core/src/autoplace/mod.rs
+禁止領域が {} 個ある基板は、自動で並べられません (自動配置は外形を作り直すので、領域の場所がずれます)。先に部品を並べてから禁止領域を描くか、禁止領域を消してから並べてください	Boards with {} keep-out areas cannot be autoplaced (autoplace rebuilds the outline, so the areas would shift). Place the parts first and then draw the keep-out areas, or delete the keep-out areas before placing
+配線済みの基板では自動配置できません。先に配線を削除してください (配線は部品の位置に合わせて引かれているため)	Autoplace cannot run on a routed board. Delete the tracks first (tracks follow the part positions)
+部品がありません。先に「回路図から取り込み」をしてください	No parts. Run "Import from schematic" first
+残りだけを塊にしました	Only the remaining parts were grouped into a cluster
+塊にしていません	Not grouped into a cluster
+組「{}」: {} は、コピーまたは IC のブロックにまとまっているため、組の塊に入れられません ({result}。組の上限は距離のコストで守ります)	Group "{}": {} is already in a copy or IC block, so it cannot be put in the group's cluster ({result}. The group's limit is kept by the distance cost)
+パッドを持つ部品がありません	No parts have pads
+# crates/pcb-core/src/drc/acute.rs
+配線が {deg:.0}° の鋭角で曲がっています。鋭角の隙間には、基板をつくる薬品がたまって銅が余計に削れる (酸のたまり)・高速な信号が反射する、といった問題が出ます。曲がり角は 135° (45° の折れ) か 90° にしましょう	The track bends at a sharp {deg:.0}° angle. In a sharp gap, fab chemicals pool and eat away extra copper (acid traps), and fast signals reflect. Make bends 135° (45° turns) or 90°
+# crates/pcb-core/src/drc/decoupling.rs
+{pin} の電源ピンに、GND との間のバイパスコンデンサ (0.1µF 前後) が見当たりません。ICは切り替えの瞬間に大きな電流を引くため、近くにコンデンサがないと電源が揺れて誤動作します。電源ピンのすぐそばに 0.1µF を足しましょう	No bypass capacitor (about 0.1µF) to GND was found at the power pin of {pin}. An IC draws large currents the moment it switches, so without a capacitor nearby the supply wobbles and it misbehaves. Add a 0.1µF right next to the power pin
+{pin} から一番近いバイパスコンデンサまで {d:.1} mm あります。電源ピンから離れるほど配線のインダクタンスが増えて効きが悪くなります。{:.0} mm 以内、できれば数 mm の距離に置きましょう	The nearest bypass capacitor is {d:.1} mm from {pin}. The farther from the power pin, the more track inductance and the less it helps. Place it within {:.0} mm, ideally a few mm away
+# crates/pcb-core/src/drc/mod.rs
+内層1	Inner 1
+内層2	Inner 2
+内層3	Inner 3
+内層	Inner
+基板の外形が3点未満で、面になっていません。「基板外形」ツールか「矩形にする」で外形を決めましょう	The board outline has fewer than 3 points and is not an area. Set the outline with the "Board outline" tool or "Make rectangle"
+配線の幅 {:.3}mm が最小 {:.3}mm より細いです。配線を太くするか、発注先の最小幅に合わせたルールを選びましょう	Track width {:.3}mm is thinner than the minimum {:.3}mm. Make the track wider, or choose rules that match the fab's minimum width
+配線の端が基板の外にあります。基板の内側に引き直すか、外形を広げましょう	A track end is outside the board. Reroute it inside the board or enlarge the outline
+穴の径 {:.3}mm が最小 {:.3}mm より小さいです。穴を大きくするか、発注先に合ったルールを選びましょう	Hole diameter {:.3}mm is smaller than the minimum {:.3}mm. Make the hole larger, or choose rules that match the fab
+穴のまわりの銅 (アニュラリング) {:.3}mm が最小 {:.3}mm より細いです。パッド/ビアの直径を大きくするか、穴を小さくしましょう	The copper around the hole (annular ring) {:.3}mm is thinner than the minimum {:.3}mm. Make the pad/via diameter larger or the hole smaller
+穴が基板の外にあります。基板の内側に動かすか、外形を広げましょう	A hole is outside the board. Move it inside the board or enlarge the outline
+取り付け穴が基板の外にあります。基板の内側に動かすか、外形を広げましょう	A mounting hole is outside the board. Move it inside the board or enlarge the outline
+ゾーン({})の頂点が3点未満です (面になる形がありません)	Zone ({}) has fewer than 3 points (no area)
+ゾーン({})が基板外形の外にあり、銅が残りません。ゾーンを基板の上に描き直すか、外形を広げましょう	Zone ({}) is outside the board outline, so no copper remains. Redraw the zone on the board or enlarge the outline
+ (ネットクラスで、広い間隔を決めたネットです)	 (a net with a wider clearance set by its net class)
+{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ){}	{} Copper clearance {:.3}mm is narrower than the minimum {:.3}mm. Move the tracks or pads apart (another net is too close){}
+銅箔と基板の端の間隔 {:.3}mm が最小 {:.3}mm より狭いです。端から離しましょう (切り出しで銅が欠けたり短絡したりします)	Clearance between copper and the board edge {:.3}mm is narrower than the minimum {:.3}mm. Move it away from the edge (cutting out the board may chip the copper or cause shorts)
+ネット短絡: {}	Net short: {}
+# crates/pcb-core/src/drc/pour.rs
+{side}のゾーン ({name}) に、細い銅のかけら (スリバー、幅 約 {:.2}mm) があります。細すぎる銅は製造中にはがれて、ショートのもとになります。ゾーンの形を変える、配線やパッドの位置を動かす、クリアランスを小さくして、細い所をなくしましょう	The {side} zone ({name}) has a thin copper sliver (about {:.2}mm wide). Copper that thin can peel off in manufacturing and cause shorts. Remove the thin spot by changing the zone shape, moving tracks or pads, or reducing the clearance
+{side}のゾーン ({name}) に、どこにもつながっていない銅の島 ({area:.1} mm²) があります。電気的には何ともつながらず、ノイズを拾うアンテナになります。島にビアかパッドをつなぐ、島を消す (ゾーンの形を変える)、のどちらかにしましょう	The {side} zone ({name}) has a copper island ({area:.1} mm²) not connected to anything. It connects to nothing electrically and becomes an antenna that picks up noise. Either connect a via or pad to the island, or remove the island (change the zone shape)
+ネット {} のベタが、他のネットの配線やパッドで分断されていて、{} が、残りの {} とつながっていません。配線かビアで、つなぎましょう (ベタの見た目は広がっていても、銅はつながっていません)	The copper pour of net {} is split by other nets' tracks or pads, and {} is not connected to the remaining {}. Connect it with a track or via (the pour may look continuous, but the copper is not connected)
+{}のゾーン ({name}) の {:.0}% ({:.1} / {:.1} mm²) が、あとから置いたゾーン ({}) に上書きされています。輪郭どおりの銅は残らないので、ビアやパッドをつないでも放熱や電流の道になりません。上書きしているゾーンの形を変える (その部分をくり抜く)、このゾーンを後に置く、のどちらかにしましょう	{@2}% ({@3} / {@4} mm²) of the {@1} zone ({name}) is overwritten by a later zone ({@5}). The copper does not follow its outline, so vias or pads connected to it do not get a path for heat or current. Either change the shape of the overwriting zone (cut that part out) or place this zone later
+# crates/pcb-core/src/drc/silk.rs
+シルクの線の太さ {:.2}mm が細すぎます (発注先が印刷できるのは {:.2}mm 以上)。太くしましょう	Silkscreen line width {:.2}mm is too thin (the fab can print {:.2}mm or more). Make it thicker
+シルク (白い線) が {} のパッドに重なっています。パッドの上のシルクは製造時に削られ、はんだ付けにも邪魔です。シルクをずらしましょう	Silkscreen (white lines) overlaps pad {}. Silkscreen on a pad is removed in manufacturing and gets in the way of soldering. Move the silkscreen
+穴/パッド	hole/pad
+シルクの文字「{}」の高さ {:.2}mm が小さすぎて読めません (発注先の目安は {:.1}mm 以上)	Silkscreen text "{}" is too small to read at {:.2}mm high (the fab's guide is {:.1}mm or more)
+{} と {} のパッドの間のソルダーマスクの帯が {:.2}mm しかありません ({:.2}mm 以上が目安)。{}パッドを離す、小さくする、または発注先のマスクの設定を確かめましょう	The solder mask strip between pads {} and {} is only {:.2}mm (aim for {:.2}mm or more). {}Move the pads apart, make them smaller, or check the fab's mask settings
+マスクの開口がつながり、はんだがブリッジして短絡することがあります。	The mask openings may merge and solder may bridge and short.
+製造時に帯が剥がれて、はんだがブリッジすることがあります。	The strip may peel off in manufacturing and solder may bridge.
+# crates/pcb-core/src/drc/slit.rs
+{} 同じネットの銅箔どうしの間に、間隔 {:.3}mm (最小 {:.3}mm より狭い) のすき間があります。細いすき間は、エッチングでつぶれたり、酸が溜まったりします。離すか、つないで埋めましょう	{} There is a gap of {:.3}mm (narrower than the minimum {:.3}mm) between copper of the same net. Thin gaps can close up in etching or trap acid. Move them apart, or join and fill them
+# crates/pcb-core/src/drc/thermal.rs
+接しているベタ: 約 {pour:.0}mm² (広いので、目安をベタなしの半分にしています)	Touching pour: about {pour:.0}mm² (large, so the guide is half of the no-pour value)
+接しているベタ: 約 {pour:.0}mm² ({POUR_SPREAD_AREA:.0}mm² に足りず、熱があまり広がらないので、目安はそのままです。ベタが他のネットの銅で細かく切られていないか確認してください)	Touching pour: about {pour:.0}mm² (less than {POUR_SPREAD_AREA:.0}mm², so heat does not spread much and the guide stays the same. Check that the pour is not chopped up by other nets' copper)
+接しているベタ: なし (同じネットのベタ {POUR_SPREAD_AREA:.0}mm² 以上が接していれば、目安は半分になります)	Touching pour: none (if a pour of the same net of {POUR_SPREAD_AREA:.0}mm² or more touches it, the guide is halved)
+{}.{} は放熱パッドです (面積 {area:.1}mm²)。\n推奨: サーマルビア {need} 個以上 (いま {have} 個)\n{pour_note}\n意味: サーマルビアは、部品の熱を裏面の銅へ逃がす穴です。パッドの中に格子状に置き (穴 0.3mm くらい)、裏面の同じネットの銅 (ゾーン) につなぐと、熱が基板全体に広がります。基板エディタの「サーマルビアを置く」で自動で置けます	{}.{} is a thermal pad (area {area:.1}mm²).\nRecommended: {need} or more thermal vias (now {have})\n{pour_note}\nMeaning: thermal vias are holes that carry the part's heat to copper on the bottom side. Place them in a grid inside the pad (about 0.3mm holes) and connect them to the same net's copper (zone) on the bottom, and the heat spreads across the board. "Place thermal vias" in the board editor places them automatically

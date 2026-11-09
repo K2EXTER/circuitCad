@@ -28,20 +28,20 @@ impl PartForm {
         if let Some(t) = self.pending_type {
             let name = PART_TYPES.iter().find(|(k, _, _)| *k == t).map_or("", |(_, l, _)| *l);
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(crate::theme::WARN, format!("「{name}」にすると、入力したピン表・パッケージ・本体などが、{name}の初期値に置き換わります。"));
-                if ui.button("置き換える").on_hover_text("入力した内容を捨てて、選んだ種類の初期値にします").clicked() {
+                ui.colored_label(crate::theme::WARN, i18n::trf!("「{name}」にすると、入力したピン表・パッケージ・本体などが、{name}の初期値に置き換わります。"));
+                if ui.button(i18n::tr("置き換える")).on_hover_text(i18n::tr("入力した内容を捨てて、選んだ種類の初期値にします")).clicked() {
                     self.apply_type(t);
                     self.type_base = Some(self.fingerprint());
                     self.pending_type = None;
                 }
-                if ui.button("やめる").on_hover_text("いまの入力をそのまま残します").clicked() {
+                if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("いまの入力をそのまま残します")).clicked() {
                     self.pending_type = None;
                 }
             });
         }
         match self.ptype {
             Some(PartType::Transistor) => {
-                ui.label("どの種類?");
+                ui.label(i18n::tr("どの種類?"));
                 let options = [
                         ("npn", "NPN", "ベース電流でコレクタ→エミッタの電流を制御する。負荷を GND 側で切り替える"),
                         ("pnp", "PNP", "NPN と電流の向きが逆。電源側で切り替える"),
@@ -59,7 +59,7 @@ impl PartForm {
                 }
             }
             Some(PartType::Diode) => {
-                ui.label("どの種類?");
+                ui.label(i18n::tr("どの種類?"));
                 let options = [
                         ("diode", "整流・スイッチング", "電流を一方向に流す。記号は三角と線"),
                         ("schottky", "ショットキー", "順方向の電圧降下が小さい。棒の両端が S 形の記号"),
@@ -76,7 +76,7 @@ impl PartForm {
                 }
             }
             Some(PartType::Capacitor) => {
-                ui.label("どの種類?");
+                ui.label(i18n::tr("どの種類?"));
                 let options = [
                         ("ceramic", "積層セラミック", "チップ部品。小さくて高い周波数に強い。極性なし。電圧がかかると容量が減ります"),
                         ("electrolytic", "電解", "リード付きの円筒形。容量が大きく、電源の平滑に使う。極性があり、ESR は大きめ"),
@@ -95,7 +95,7 @@ impl PartForm {
                 crate::icons::help_small(ui, "名前の付け方", "名前は、種類の頭文字から始めると、部品一覧の「コンデンサ」の木で種類ごとに分かれます (電解 CE_ / タンタル CT_ / フィルム CF_)。値は「① 基本」のかんたん作成で入れます");
             }
             Some(t @ (PartType::Resistor | PartType::Inductor)) => {
-                ui.label("どの形?");
+                ui.label(i18n::tr("どの形?"));
                 let options = [("chip", "チップ", "面実装の小さい部品 (0603・0805 など)"), ("leaded", "リード付き", "足を基板の穴に通す部品")];
                 let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.ptype_sub == *k));

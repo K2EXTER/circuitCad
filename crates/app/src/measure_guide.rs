@@ -27,10 +27,10 @@ impl MeasureGuide {
         let mut action = None;
         // on the right, so the left panel (where the spec table is) stays in view
         let at = egui::pos2((ctx.content_rect().right() - 580.0).max(0.0), 40.0);
-        egui::Window::new("組み立てて、性能を測る").open(&mut open).default_pos(at).default_pos(crate::widgets::beside_panel()).default_width(560.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new(i18n::tr("組み立てて、性能を測る")).open(&mut open).default_pos(at).default_pos(crate::widgets::beside_panel()).default_width(560.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
             ui.label(spaced("自分で設計した電源 (学習パスの「安定化電源の回路図を自分で設計する」の回路) を実際に作って、シミュレーションとの差を調べます。差が出るのは普通のことで、その理由を考えるのが、このステップの中身です。"));
             ui.add_space(4.0);
-            ui.colored_label(WARN, "安全: 実験は 12V 以下の直流 (電池や小さな AC アダプタ) だけで行います。商用電源 (100V) の配線は行いません。電源は、つなぐ前に極性 (+ と −) を確かめ、できればヒューズや電流制限をつけます。");
+            ui.colored_label(WARN, i18n::tr("安全: 実験は 12V 以下の直流 (電池や小さな AC アダプタ) だけで行います。商用電源 (100V) の配線は行いません。電源は、つなぐ前に極性 (+ と −) を確かめ、できればヒューズや電流制限をつけます。"));
             ui.separator();
 
             crate::widgets::section_heading(ui, "1. 部品表を作る");
@@ -44,8 +44,8 @@ impl MeasureGuide {
             crate::widgets::section_heading(ui, "3. 測る項目を表に入れる");
             ui.label(spaced("下のボタンで、いまの回路図の「スペック」表に、測る項目 (入力電圧・出力電圧・負荷の電流) を入れ、DC 動作点を計算します。回路図には、実験でつなぐ負荷 (例: 100Ω) も描いておきます。").color(NOTE));
             if ui
-                .button("測る項目を表に入れる")
-                .on_hover_text("回路図の「解析」タブの「スペック」表に、入力電圧・出力電圧・電流の行を足して、DC動作点を計算します。回路図に VIN・VOUT という名前 (ラベル) があると、自動で選ばれます")
+                .button(i18n::tr("測る項目を表に入れる"))
+                .on_hover_text(i18n::tr("回路図の「解析」タブの「スペック」表に、入力電圧・出力電圧・電流の行を足して、DC動作点を計算します。回路図に VIN・VOUT という名前 (ラベル) があると、自動で選ばれます"))
                 .clicked()
             {
                 action = Some(GuideAction::AddRows);
@@ -61,7 +61,7 @@ impl MeasureGuide {
             ui.separator();
 
             if done {
-                ui.colored_label(crate::theme::OK, "✔ 完了しました。実測が 3 項目以上、シミュレーションと比べられています");
+                ui.colored_label(crate::theme::OK, i18n::tr("✔ 完了しました。実測が 3 項目以上、シミュレーションと比べられています"));
             } else {
                 ui.label(spaced(&format!("完了の条件: 実測を 3 項目以上、シミュレーションと比べる (いま {compared} / 3)")).color(NOTE));
             }

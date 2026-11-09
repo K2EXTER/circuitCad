@@ -58,7 +58,7 @@ impl BoardEditor {
 
     /// The settings of the keep-out tool: how the shape is drawn, and the list of the areas.
     pub(super) fn panel_keepouts(&mut self, ui: &mut egui::Ui) {
-        ui.label("形を描いて確定 (ダブルクリック・Enter、または最初の点をクリック) すると、禁止領域になります");
+        ui.label(i18n::tr("形を描いて確定 (ダブルクリック・Enter、または最初の点をクリック) すると、禁止領域になります"));
         self.poly_mode_ui(ui);
         if self.board.keepouts.is_empty() {
             return;
@@ -72,7 +72,7 @@ impl BoardEditor {
             let mut k2 = k.clone();
             ui.horizontal_wrapped(|ui| {
                 ui.label(egui::RichText::new(format!("{}.", i + 1)).strong());
-                ui.add(egui::TextEdit::singleline(&mut k2.name).desired_width(70.0).hint_text("名前")).on_hover_text("領域の名前 (違反の文に出ます。空でもよい)");
+                ui.add(egui::TextEdit::singleline(&mut k2.name).desired_width(70.0).hint_text(i18n::tr("名前"))).on_hover_text(i18n::tr("領域の名前 (違反の文に出ます。空でもよい)"));
                 for (flag, text, tip) in [
                     (&mut k2.tracks, "配線", "この中に配線を通さない"),
                     (&mut k2.vias, "ビア", "この中にビアを置かない"),
@@ -81,14 +81,14 @@ impl BoardEditor {
                 ] {
                     ui.checkbox(flag, text).on_hover_text(tip);
                 }
-                if ui.small_button("消す").on_hover_text("この禁止領域を消します (「元に戻す」で戻せます)").clicked() {
+                if ui.small_button(i18n::tr("消す")).on_hover_text(i18n::tr("この禁止領域を消します (「元に戻す」で戻せます)")).clicked() {
                     remove = Some(i);
                 }
             });
             ui.horizontal_wrapped(|ui| {
-                ui.small("層:");
+                ui.small(i18n::tr("層:"));
                 let mut all = k2.layers.is_empty();
-                if ui.checkbox(&mut all, "全部").on_hover_text("全部の銅の層で禁止します。外すと、層を選べます").changed() {
+                if ui.checkbox(&mut all, i18n::tr("全部")).on_hover_text(i18n::tr("全部の銅の層で禁止します。外すと、層を選べます")).changed() {
                     k2.layers = if all { vec![] } else { vec![Side::Top] };
                 }
                 if !all {

@@ -8,10 +8,10 @@ impl PartForm {
         self.kind_bar(ui);
         ui.separator();
         // a part that already exists as a file needs no form at all
-        ui.small("ファイルがあるとき");
+        ui.small(i18n::tr("ファイルがあるとき"));
         let bar = crate::widgets::segment_row(ui, &[("JSONから追加…", true), ("KiCadから取り込み…", true)]);
-        bar[0].clone().on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません");
-        bar[1].clone().on_hover_text("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます");
+        bar[0].clone().on_hover_text(i18n::tr("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません"));
+        bar[1].clone().on_hover_text(i18n::tr("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます"));
         if bar[0].clicked() {
             self.request = Some(FormRequest::ImportJson);
         }
@@ -27,30 +27,30 @@ impl PartForm {
             crate::icons::help_small(ui, "部品名はモデルの名前にも使います", "部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)");
         }
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
-            ui.label("部品名");
+            ui.label(i18n::tr("部品名"));
             ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
+                ui.text_edit_singleline(&mut self.name).on_hover_text(i18n::tr("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます"));
                 self.pick_button(ui, datasheet_view::Target::Name, "PDFから選ぶ");
             });
             ui.end_row();
-            ui.label("カテゴリ");
-            ui.text_edit_singleline(&mut self.category).on_hover_text("一覧のグループ名 (例: オペアンプ、トランジスタ)");
+            ui.label(i18n::tr("カテゴリ"));
+            ui.text_edit_singleline(&mut self.category).on_hover_text(i18n::tr("一覧のグループ名 (例: オペアンプ、トランジスタ)"));
             ui.end_row();
-            ui.label("部品番号の頭文字");
-            ui.text_edit_singleline(&mut self.prefix).on_hover_text("回路図で付く部品番号の頭文字。IC は U、トランジスタは Q、抵抗は R、ダイオードは D");
+            ui.label(i18n::tr("部品番号の頭文字"));
+            ui.text_edit_singleline(&mut self.prefix).on_hover_text(i18n::tr("回路図で付く部品番号の頭文字。IC は U、トランジスタは Q、抵抗は R、ダイオードは D"));
             ui.end_row();
-            ui.label("値 (省略で部品名)");
-            ui.text_edit_singleline(&mut self.value).on_hover_text("回路図に表示する値。空なら部品名が入ります");
+            ui.label(i18n::tr("値 (省略で部品名)"));
+            ui.text_edit_singleline(&mut self.value).on_hover_text(i18n::tr("回路図に表示する値。空なら部品名が入ります"));
             ui.end_row();
-            ui.label("記号の形");
+            ui.label(i18n::tr("記号の形"));
             let sym = self.to_def().ok().map(|d| d.symbol());
             glyph_pick::glyph_combo(ui, "part_glyph", &mut self.glyph, sym.as_ref());
             ui.end_row();
-            ui.label("説明");
-            ui.text_edit_singleline(&mut self.description).on_hover_text("一覧で部品にポインタを置いたときに出る説明");
+            ui.label(i18n::tr("説明"));
+            ui.text_edit_singleline(&mut self.description).on_hover_text(i18n::tr("一覧で部品にポインタを置いたときに出る説明"));
             ui.end_row();
-            ui.label("データシートURL");
-            ui.text_edit_singleline(&mut self.datasheet).on_hover_text("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです");
+            ui.label(i18n::tr("データシートURL"));
+            ui.text_edit_singleline(&mut self.datasheet).on_hover_text(i18n::tr("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです"));
             ui.end_row();
         });
         self.sheet.open_button(ui);
@@ -69,7 +69,7 @@ impl PartForm {
         ui.add_space(6.0);
         match self.ptype {
             Some(PartType::Ic) => {
-                ui.label(egui::RichText::new("かんたん作成 (ひな形)").strong());
+                ui.label(egui::RichText::new(i18n::tr("かんたん作成 (ひな形)")).strong());
                 self.template_ui(ui);
                 crate::icons::help_small(ui, "入力の順番", "ほかの IC は、この画面の下の「データシートの数字 (定格)」→ ② シミュレーション → ③ ピン → ④ 部品の形 の順に入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます");
             }
@@ -78,7 +78,7 @@ impl PartForm {
             }
             Some(_) => {}
             None => {
-                ui.label(egui::RichText::new("かんたん作成 (テンプレート)").strong());
+                ui.label(egui::RichText::new(i18n::tr("かんたん作成 (テンプレート)")).strong());
                 crate::icons::help_small(ui, "種類で入力欄が変わります", "上の「部品の種類」を選ぶと、その種類に合わせた入力欄に変わります。チップ部品や充電IC は、データシートの数字を入れるだけで、下の欄を自動で埋められます");
                 self.passive_ui(ui);
                 self.template_ui(ui);
@@ -87,7 +87,7 @@ impl PartForm {
         // the data sheet's figures come after the name and the easy-make box: the same order for every kind of part
         ui.add_space(8.0);
         ui.separator();
-        egui::CollapsingHeader::new(egui::RichText::new("データシートの数字 (定格)").strong()).id_salt("ratings_section").default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new(egui::RichText::new(i18n::tr("データシートの数字 (定格)")).strong()).id_salt("ratings_section").default_open(true).show(ui, |ui| {
             self.tab_ratings(ui);
         });
     }
@@ -103,9 +103,9 @@ impl PartForm {
             }
             ui.horizontal(|ui| {
                 if decided.is_some() {
-                    ui.label(format!("調べる項目: {}", CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0)).on_hover_text("上で選んだ部品の種類に合わせた項目です。変えるときは、いちばん上の「部品の種類」を選び直します");
+                    ui.label(i18n::trf!("調べる項目: {}", CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0)).on_hover_text(i18n::tr("上で選んだ部品の種類に合わせた項目です。変えるときは、いちばん上の「部品の種類」を選び直します"));
                 } else {
-                    ui.label(if self.ptype == Some(PartType::Ic) { "どの IC?" } else { "部品の種類" });
+                    ui.label(if self.ptype == Some(PartType::Ic) { i18n::tr("どの IC?") } else { i18n::tr("部品の種類") });
                     egui::ComboBox::from_id_salt("rt_kind").selected_text(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0).show_ui(ui, |ui| {
                         for (k, (name, _, _)) in CHECKLISTS.iter().enumerate() {
                             // an IC is a regulator, an op-amp or something else; the diode and transistor lists belong to their own kinds
@@ -114,10 +114,10 @@ impl PartForm {
                             }
                             ui.selectable_value(&mut self.rt_kind, k, *name);
                         }
-                    }).response.on_hover_text("選ぶと、その種類で調べるとよい項目が出ます");
+                    }).response.on_hover_text(i18n::tr("選ぶと、その種類で調べるとよい項目が出ます"));
                 }
             });
-            if crate::widgets::primary_button_wide(ui, true, "調べる項目のチェックリストを入れる").on_hover_text("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)").clicked() {
+            if crate::widgets::primary_button_wide(ui, true, "調べる項目のチェックリストを入れる").on_hover_text(i18n::tr("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)")).clicked() {
                 self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
             }
             ui.label(egui::RichText::new(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1).weak());
@@ -125,16 +125,16 @@ impl PartForm {
                 self.pick_row(ui, &[]);
             }
             egui::Grid::new("part_ratings_grid").num_columns(3).show(ui, |ui| {
-                ui.label("最大電圧 [V]").on_hover_text("部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大");
-                ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0)).on_hover_text("例: 40 / 1000");
+                ui.label(i18n::tr("最大電圧 [V]")).on_hover_text(i18n::tr("部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0)).on_hover_text(i18n::tr("例: 40 / 1000"));
                 self.pick_button(ui, datasheet_view::Target::MaxV, "PDFから選ぶ");
                 ui.end_row();
-                ui.label("最大電流 [A]").on_hover_text("流してよい最大の連続電流 (ダイオードなら平均順電流 IF、トランジスタなら Ic の最大)");
-                ui.add(egui::TextEdit::singleline(&mut self.rt_i).desired_width(80.0)).on_hover_text("例: 1 / 200m");
+                ui.label(i18n::tr("最大電流 [A]")).on_hover_text(i18n::tr("流してよい最大の連続電流 (ダイオードなら平均順電流 IF、トランジスタなら Ic の最大)"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_i).desired_width(80.0)).on_hover_text(i18n::tr("例: 1 / 200m"));
                 self.pick_button(ui, datasheet_view::Target::MaxI, "PDFから選ぶ");
                 ui.end_row();
-                ui.label("最大電力 [W]").on_hover_text("部品が熱にしてよい最大の電力 (許容損失 Ptot)。周囲温度が高いと下がります。データシートの条件を確認します");
-                ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0)).on_hover_text("例: 0.5 / 625m / 1");
+                ui.label(i18n::tr("最大電力 [W]")).on_hover_text(i18n::tr("部品が熱にしてよい最大の電力 (許容損失 Ptot)。周囲温度が高いと下がります。データシートの条件を確認します"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0)).on_hover_text(i18n::tr("例: 0.5 / 625m / 1"));
                 self.pick_button(ui, datasheet_view::Target::MaxP, "PDFから選ぶ");
                 ui.end_row();
             });
@@ -143,54 +143,54 @@ impl PartForm {
             let filled = !self.rt_ripple.trim().is_empty() || !self.rt_life_h.trim().is_empty();
             let polar = self.pas_polar || filled;
             if polar || self.ptype.is_none() {
-            egui::CollapsingHeader::new("電解コンデンサの項目 (リップル電流と寿命)").id_salt("rt_electrolytic").default_open(polar).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("電解コンデンサの項目 (リップル電流と寿命)")).id_salt("rt_electrolytic").default_open(polar).show(ui, |ui| {
                 crate::icons::help_small(ui, "リップル電流・寿命の入れ方", "入れると、過渡解析の結果に、このコンデンサに流れたリップル電流が定格を超えていないか、推定寿命がどれくらいかが出ます。データシートの「定格リップル電流」「寿命 (耐久性)」「リップル電流の周波数補正係数」の表から写します");
                 egui::Grid::new("rt_electrolytic_grid").num_columns(2).show(ui, |ui| {
-                    ui.label("定格リップル電流 [A rms]").on_hover_text("コンデンサに流してよい、交流分の実効値 (データシートの Rated Ripple Current)。mA rms で書いてあるときは 540m のように入れます。最高温度 (105℃ など) での値です");
+                    ui.label(i18n::tr("定格リップル電流 [A rms]")).on_hover_text(i18n::tr("コンデンサに流してよい、交流分の実効値 (データシートの Rated Ripple Current)。mA rms で書いてあるときは 540m のように入れます。最高温度 (105℃ など) での値です"));
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple).desired_width(80.0).hint_text("540m")).on_hover_text("例: 540m / 1.2。データシートの表の、容量と電圧に合う行の値");
-                        ui.label("周波数");
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple_f).desired_width(60.0)).on_hover_text("その値が決められている周波数。データシートの表の見出しにあります (たいてい 100kHz。120Hz のこともあります)");
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple).desired_width(80.0).hint_text("540m")).on_hover_text(i18n::tr("例: 540m / 1.2。データシートの表の、容量と電圧に合う行の値"));
+                        ui.label(i18n::tr("周波数"));
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple_f).desired_width(60.0)).on_hover_text(i18n::tr("その値が決められている周波数。データシートの表の見出しにあります (たいてい 100kHz。120Hz のこともあります)"));
                     });
                     ui.end_row();
-                    ui.label("周波数の補正係数").on_hover_text("リップル電流の定格に掛ける係数の表 (Multiplier for Ripple Current)。低い周波数ほど、流してよい電流が小さくなります。1行に「周波数 係数」");
-                    ui.add(egui::TextEdit::multiline(&mut self.rt_ripple_table).desired_rows(4).desired_width(160.0).hint_text("120 0.55\n1k 0.77\n10k 0.94\n100k 1.0")).on_hover_text("例: 120 0.55 / 1k 0.77 / 10k 0.94 / 100k 1.0。容量の範囲ごとに表が分かれているときは、この部品の容量の行を入れます。空のときは、周波数によらず定格のままです");
+                    ui.label(i18n::tr("周波数の補正係数")).on_hover_text(i18n::tr("リップル電流の定格に掛ける係数の表 (Multiplier for Ripple Current)。低い周波数ほど、流してよい電流が小さくなります。1行に「周波数 係数」"));
+                    ui.add(egui::TextEdit::multiline(&mut self.rt_ripple_table).desired_rows(4).desired_width(160.0).hint_text("120 0.55\n1k 0.77\n10k 0.94\n100k 1.0")).on_hover_text(i18n::tr("例: 120 0.55 / 1k 0.77 / 10k 0.94 / 100k 1.0。容量の範囲ごとに表が分かれているときは、この部品の容量の行を入れます。空のときは、周波数によらず定格のままです"));
                     ui.end_row();
-                    ui.label("寿命 [時間]").on_hover_text("定格電圧・定格リップル電流・最高温度で使ったときの寿命 (Endurance)。ケースの大きさで違うことがあります (例: 6000 / 10000)");
+                    ui.label(i18n::tr("寿命 [時間]")).on_hover_text(i18n::tr("定格電圧・定格リップル電流・最高温度で使ったときの寿命 (Endurance)。ケースの大きさで違うことがあります (例: 6000 / 10000)"));
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_h).desired_width(80.0).hint_text("6000")).on_hover_text("例: 6000 / 10000");
-                        ui.label("温度 [℃]");
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_t).desired_width(50.0)).on_hover_text("その寿命が決められている温度。最高使用温度 (105 など)");
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_h).desired_width(80.0).hint_text("6000")).on_hover_text(i18n::tr("例: 6000 / 10000"));
+                        ui.label(i18n::tr("温度 [℃]"));
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_t).desired_width(50.0)).on_hover_text(i18n::tr("その寿命が決められている温度。最高使用温度 (105 など)"));
                     });
                     ui.end_row();
                 });
             });
             }
             crate::icons::help_label(ui, "そのほかの情報", "そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。値が空の行は、まだ調べていない項目として残ります)");
-            ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(5).desired_width(f32::INFINITY).hint_text("順方向電圧 | 0.9V | IF = 1A"))
-                .on_hover_text("定格・代表値を、データシートのまま書き写します。条件 (電流や温度) も一緒に書くと、あとで比べやすくなります。部品の一覧でポインタを置いたときに出ます");
+            ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(5).desired_width(f32::INFINITY).hint_text(i18n::tr("順方向電圧 | 0.9V | IF = 1A")))
+                .on_hover_text(i18n::tr("定格・代表値を、データシートのまま書き写します。条件 (電流や温度) も一緒に書くと、あとで比べやすくなります。部品の一覧でポインタを置いたときに出ます"));
             let (max_given, rows_given, rows_open) = self.ratings_progress();
             let summary = format!("入力済み: 最大定格 {max_given} / 3 項目、そのほかの情報 {rows_given} 行{}", if rows_open > 0 { format!(" (まだ調べていない項目 {rows_open} 行)") } else { String::new() });
             if max_given == 0 && rows_given == 0 {
-                ui.colored_label(crate::theme::WARN, "データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう");
+                ui.colored_label(crate::theme::WARN, i18n::tr("データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう"));
             } else {
                 ui.label(summary);
             }
             if self.datasheet.trim().is_empty() && (max_given > 0 || rows_given > 0) {
-                ui.colored_label(crate::theme::WARN, "データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)");
+                ui.colored_label(crate::theme::WARN, i18n::tr("データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)"));
             }
     }
 
     /// The tab of the simulation model.
     pub(super) fn tab_sim(&mut self, ui: &mut egui::Ui) {
-            ui.label("シミュレーションモデル (部品の特性)");
+            ui.label(i18n::tr("シミュレーションモデル (部品の特性)"));
             crate::icons::help_small(ui, "SPICE モデルを貼ると自動入力", "メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
             {
                 let choices = [SimChoice::None, SimChoice::Model, SimChoice::Subckt];
                 let bar = crate::widgets::segment_bar(ui, &[("なし", true), (".model (素子1つ)", true), (".subckt (ICマクロ)", true)], choices.iter().position(|c| *c == self.sim));
-                bar[0].clone().on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
-                bar[1].clone().on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
-                bar[2].clone().on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
+                bar[0].clone().on_hover_text(i18n::tr("シミュレーションしない部品にします (基板づくりだけに使う部品)"));
+                bar[1].clone().on_hover_text(i18n::tr("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル"));
+                bar[2].clone().on_hover_text(i18n::tr("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル"));
                 for (n, c) in choices.iter().enumerate() {
                     if bar[n].clicked() {
                         self.sim = *c;
@@ -203,16 +203,16 @@ impl PartForm {
                     .desired_rows(if self.sim == SimChoice::None { 3 } else { 5 })
                     .desired_width(f32::INFINITY)
                     .font(egui::TextStyle::Monospace)
-                    .hint_text("ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends"),
-            ).on_hover_text("貼り付けると、モデルの種類・名前・端子からフォームを自動で埋めます。ピン表を自分で書いてあるときは、その名前 (A K / C B E など) に合わせて対応づけます");
+                    .hint_text(i18n::tr("ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends")),
+            ).on_hover_text(i18n::tr("貼り付けると、モデルの種類・名前・端子からフォームを自動で埋めます。ピン表を自分で書いてあるときは、その名前 (A K / C B E など) に合わせて対応づけます"));
             // a paste into an empty model box fills the form right away
             if pasted.changed() && self.sim == SimChoice::None && !self.sim_text.trim().is_empty() {
                 autofill = true;
             }
             let bar = crate::widgets::segment_row(ui, &[("自動入力", true), ("試し読み", true), ("ファイルを読む…", true)]);
-            bar[0].clone().on_hover_text("貼ったモデルから自動入力: 上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です");
-            bar[1].clone().on_hover_text("このモデルをシミュレータに読ませて、動くかを保存の前に確かめます。読めない書き方があれば、直し方を出します");
-            bar[2].clone().on_hover_text("SPICEファイルを読む: メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します");
+            bar[0].clone().on_hover_text(i18n::tr("貼ったモデルから自動入力: 上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です"));
+            bar[1].clone().on_hover_text(i18n::tr("このモデルをシミュレータに読ませて、動くかを保存の前に確かめます。読めない書き方があれば、直し方を出します"));
+            bar[2].clone().on_hover_text(i18n::tr("SPICEファイルを読む: メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します"));
             if bar[0].clicked() {
                 autofill = true;
             }
@@ -258,22 +258,22 @@ impl PartForm {
             if self.sim != SimChoice::None {
                 ui.horizontal(|ui| {
                     if self.sim == SimChoice::Model {
-                        ui.label("素子記号");
-                        ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S");
+                        ui.label(i18n::tr("素子記号"));
+                        ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text(i18n::tr("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S"));
                     }
-                    ui.label("モデル名");
-                    ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text("`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします");
-                    ui.label("ノード順のピン番号");
-                    ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
+                    ui.label(i18n::tr("モデル名"));
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text(i18n::tr("`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします"));
+                    ui.label(i18n::tr("ノード順のピン番号"));
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text(i18n::tr("例: A K"))).on_hover_text(i18n::tr("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順"));
                 });
-                ui.small("モデルの端子とピンの対応は、「③ ピン」の表の「モデルの端子」の列で選びます。");
+                ui.small(i18n::tr("モデルの端子とピンの対応は、「③ ピン」の表の「モデルの端子」の列で選びます。"));
                 crate::icons::help_label(ui, "このモデルの限界", "このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
                 ui.add(
                     egui::TextEdit::multiline(&mut self.sim_limits)
                         .desired_rows(3)
                         .desired_width(f32::INFINITY)
-                        .hint_text("例: 温度による変化は扱いません。
-    接合容量は扱いません。"),
+                        .hint_text(i18n::tr("例: 温度による変化は扱いません。
+    接合容量は扱いません。")),
                 );
             }
 
@@ -282,18 +282,18 @@ impl PartForm {
     /// The tab of the pins.
     pub(super) fn tab_pins(&mut self, ui: &mut egui::Ui) {
             if self.sheet.has_doc() {
-                if crate::widgets::primary_button_wide(ui, true, "PDFのピン表を囲んで取り込む・比べる").on_hover_text("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します").clicked() {
+                if crate::widgets::primary_button_wide(ui, true, "PDFのピン表を囲んで取り込む・比べる").on_hover_text(i18n::tr("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します")).clicked() {
                     self.pick_msg = None;
                     self.sheet.start_pin_select();
                 }
-                ui.small("データシートの「ピン配置」の表を囲みます");
+                ui.small(i18n::tr("データシートの「ピン配置」の表を囲みます"));
             } else {
                 self.pick_row(ui, &[]);
             }
             self.pin_table_ui(ui);
-            egui::CollapsingHeader::new("まとめて貼り付ける (文字で編集)").id_salt("pins_text").default_open(false).show(ui, |ui| {
-                ui.small("1行に「番号 名前 [向き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。データシートや回路図からの貼り付けに使います");
-                ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。NC は未接続のピンです。上の表と同じものです");
+            egui::CollapsingHeader::new(i18n::tr("まとめて貼り付ける (文字で編集)")).id_salt("pins_text").default_open(false).show(ui, |ui| {
+                ui.small(i18n::tr("1行に「番号 名前 [向き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。データシートや回路図からの貼り付けに使います"));
+                ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text(i18n::tr("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。NC は未接続のピンです。上の表と同じものです"));
             });
             self.pin_check_ui(ui);
     }
@@ -312,11 +312,11 @@ impl PartForm {
     fn pads_section(&mut self, ui: &mut egui::Ui) {
         ui.group(|ui| {
             ui.set_width(ui.available_width());
-            ui.label(egui::RichText::new("パッド (ランドパターン)").strong());
+            ui.label(egui::RichText::new(i18n::tr("パッド (ランドパターン)")).strong());
             if self.keep_package {
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(crate::theme::WARN, "この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。");
-                    if ui.button("寸法で作り直す").on_hover_text("いまのパッドを捨てて、下の寸法 (ピッチ・列間隔など) からパッドを作り直します。ピンの数と並びが合うか、右の絵で確かめてください。標準のフットプリントを選んでも置き換えられます").clicked() {
+                    ui.colored_label(crate::theme::WARN, i18n::tr("この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。"));
+                    if ui.button(i18n::tr("寸法で作り直す")).on_hover_text(i18n::tr("いまのパッドを捨てて、下の寸法 (ピッチ・列間隔など) からパッドを作り直します。ピンの数と並びが合うか、右の絵で確かめてください。標準のフットプリントを選んでも置き換えられます")).clicked() {
                         self.keep_package = false;
                     }
                 });
@@ -329,7 +329,7 @@ impl PartForm {
                     format!("寸法で指定: {}", pkg_label(self.pkg))
                 };
                 egui::ComboBox::from_id_salt("pkg_pick").selected_text(shown).width(260.0).show_ui(ui, |ui| {
-                    ui.small("寸法で指定 (下の寸法の欄から作ります)");
+                    ui.small(i18n::tr("寸法で指定 (下の寸法の欄から作ります)"));
                     for (k, tip) in [
                         (PkgKind::Chip2, "抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品"),
                         (PkgKind::Dual, "足が左右の2列に並ぶ IC (SOIC、DIP など)"),
@@ -342,15 +342,15 @@ impl PartForm {
                         }
                     }
                     ui.separator();
-                    ui.small("標準の形 (選ぶと、下の寸法の代わりにこの形を使います)");
+                    ui.small(i18n::tr("標準の形 (選ぶと、下の寸法の代わりにこの形を使います)"));
                     for n in pcb_core::footprints::names() {
                         ui.selectable_value(&mut self.fp_preset, n.clone(), n);
                     }
-                }).response.on_hover_text("寸法から作るか、用意された標準の形を使うかを選びます");
+                }).response.on_hover_text(i18n::tr("寸法から作るか、用意された標準の形を使うかを選びます"));
             });
             let preset = !self.fp_preset.is_empty();
             if preset {
-                ui.small("標準の形を使っているので、下の寸法は使われません (「寸法で指定」を選ぶと、また効きます)");
+                ui.small(i18n::tr("標準の形を使っているので、下の寸法は使われません (「寸法で指定」を選ぶと、また効きます)"));
             }
             ui.add_enabled_ui(!preset, |ui| {
                 self.pad_dimensions(ui);
@@ -362,25 +362,25 @@ impl PartForm {
                 }
             });
             if matches!(self.pkg, PkgKind::Dual | PkgKind::Quad) {
-                ui.checkbox(&mut self.thermal_on, "放熱パッド (ICの裏の大きなパッド) を付ける").on_hover_text("QFN・ESOP・SOT-223 などの、裏や中央にある大きなパッド。ここで大きさとピン番号を入れると、パッケージの中心に置きます。ピン表にもそのピンの行を足してください (例: 9 GND)。発注前チェックで、サーマルビアが足りないと注意します");
+                ui.checkbox(&mut self.thermal_on, i18n::tr("放熱パッド (ICの裏の大きなパッド) を付ける")).on_hover_text(i18n::tr("QFN・ESOP・SOT-223 などの、裏や中央にある大きなパッド。ここで大きさとピン番号を入れると、パッケージの中心に置きます。ピン表にもそのピンの行を足してください (例: 9 GND)。発注前チェックで、サーマルビアが足りないと注意します"));
                 if self.thermal_on {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label("ピン番号");
-                        ui.add(egui::TextEdit::singleline(&mut self.thermal_pin).desired_width(40.0).hint_text("9")).on_hover_text("放熱パッドのピン番号。ピン表にある番号にします (GND につなぐことが多い)");
-                        ui.add(egui::DragValue::new(&mut self.thermal_w).speed(0.01).range(0.1..=50.0).prefix("幅 ").suffix(" mm")).on_hover_text("データシートの推奨ランドパターンの、放熱パッドの幅");
-                        ui.add(egui::DragValue::new(&mut self.thermal_h).speed(0.01).range(0.1..=50.0).prefix("長さ ").suffix(" mm")).on_hover_text("データシートの推奨ランドパターンの、放熱パッドの長さ");
+                        ui.label(i18n::tr("ピン番号"));
+                        ui.add(egui::TextEdit::singleline(&mut self.thermal_pin).desired_width(40.0).hint_text("9")).on_hover_text(i18n::tr("放熱パッドのピン番号。ピン表にある番号にします (GND につなぐことが多い)"));
+                        ui.add(egui::DragValue::new(&mut self.thermal_w).speed(0.01).range(0.1..=50.0).prefix(i18n::tr("幅 ")).suffix(" mm")).on_hover_text(i18n::tr("データシートの推奨ランドパターンの、放熱パッドの幅"));
+                        ui.add(egui::DragValue::new(&mut self.thermal_h).speed(0.01).range(0.1..=50.0).prefix(i18n::tr("長さ ")).suffix(" mm")).on_hover_text(i18n::tr("データシートの推奨ランドパターンの、放熱パッドの長さ"));
                     });
                 }
             }
-            egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)")).id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
                 crate::icons::help_small(ui, "固定用の脚・穴について", "USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
                 self.extras_table_ui(ui);
-                egui::CollapsingHeader::new("文字で編集 (貼り付け・コメント)").id_salt("extras_text").default_open(false).show(ui, |ui| {
+                egui::CollapsingHeader::new(i18n::tr("文字で編集 (貼り付け・コメント)")).id_salt("extras_text").default_open(false).show(ui, |ui| {
                     ui.small(EXTRAS_HELP);
                     ui.horizontal_wrapped(|ui| {
-                        ui.label("例を足す:");
+                        ui.label(i18n::tr("例を足す:"));
                         for (label, line, tip) in EXTRAS_EXAMPLES {
-                            if ui.small_button(*label).on_hover_text(format!("{tip}\n数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
+                            if ui.small_button(*label).on_hover_text(i18n::trf!("{tip}\n数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
                                 if !self.extras.is_empty() && !self.extras.ends_with('\n') {
                                     self.extras.push('\n');
                                 }
@@ -388,12 +388,12 @@ impl PartForm {
                             }
                         }
                     });
-                    ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
-                        .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の表と同じものです");
+                    ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text(i18n::tr("脚 SH -6.5 0 2.0 3.0 1.2")))
+                        .on_hover_text(i18n::tr("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の表と同じものです"));
                 });
             });
-            ui.checkbox(&mut self.land_unverified, "ランドパターンは概算 (データシートの図面と照らし合わせていない)")
-                .on_hover_text("パッドの位置と大きさを、データシートの推奨ランドパターンから読み取ったのではなく、見当で入れたときに付けます。付けた部品を置いた基板は、発注の準備のチェックで「ランドパターンが概算の部品があります」と注意されます。図面と照合したら外してください");
+            ui.checkbox(&mut self.land_unverified, i18n::tr("ランドパターンは概算 (データシートの図面と照らし合わせていない)"))
+                .on_hover_text(i18n::tr("パッドの位置と大きさを、データシートの推奨ランドパターンから読み取ったのではなく、見当で入れたときに付けます。付けた部品を置いた基板は、発注の準備のチェックで「ランドパターンが概算の部品があります」と注意されます。図面と照合したら外してください"));
         });
     }
 
@@ -422,7 +422,7 @@ impl PartForm {
             }
         });
         if self.pkg == PkgKind::Dual {
-            ui.checkbox(&mut self.tht, "スルーホール(DIP)").on_hover_text("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)");
+            ui.checkbox(&mut self.tht, i18n::tr("スルーホール(DIP)")).on_hover_text(i18n::tr("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)"));
         }
     }
 
@@ -430,16 +430,16 @@ impl PartForm {
     fn body_section(&mut self, ui: &mut egui::Ui) {
         ui.group(|ui| {
             ui.set_width(ui.available_width());
-            ui.label(egui::RichText::new("本体 (シルクの外形と高さ)").strong()).on_hover_text("外形は、基板のシルク (白い線) になります。高さはシルクには出ず、3D表示とケースに入るかの確認に使います");
+            ui.label(egui::RichText::new(i18n::tr("本体 (シルクの外形と高さ)")).strong()).on_hover_text(i18n::tr("外形は、基板のシルク (白い線) になります。高さはシルクには出ず、3D表示とケースに入るかの確認に使います"));
             ui.horizontal_wrapped(|ui| {
-                ui.add(egui::DragValue::new(&mut self.height).speed(0.01).range(0.0..=100.0).prefix("高さ ").suffix(" mm")).on_hover_text("データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います");
-                ui.small("側面図の高さ (0 = 未入力)");
+                ui.add(egui::DragValue::new(&mut self.height).speed(0.01).range(0.0..=100.0).prefix(i18n::tr("高さ ")).suffix(" mm")).on_hover_text(i18n::tr("データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います"));
+                ui.small(i18n::tr("側面図の高さ (0 = 未入力)"));
             });
-            ui.checkbox(&mut self.body_on, "シルクに本体の外形 (上面図の幅×長さ) を描く").on_hover_text("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります");
+            ui.checkbox(&mut self.body_on, i18n::tr("シルクに本体の外形 (上面図の幅×長さ) を描く")).on_hover_text(i18n::tr("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります"));
             if self.body_on {
                 let bar = crate::widgets::segment_bar(ui, &[("四角", true), ("円", true)], Some(usize::from(self.body_circle)));
-                bar[0].clone().on_hover_text("四角い本体 (IC、チップ部品)");
-                bar[1].clone().on_hover_text("丸い本体 (ラジアルの電解コンデンサ、LED)");
+                bar[0].clone().on_hover_text(i18n::tr("四角い本体 (IC、チップ部品)"));
+                bar[1].clone().on_hover_text(i18n::tr("丸い本体 (ラジアルの電解コンデンサ、LED)"));
                 if bar[0].clicked() {
                     self.body_circle = false;
                 }
@@ -457,7 +457,7 @@ impl PartForm {
                     dv(ui, "中心X", &mut self.body_x, -100.0);
                     dv(ui, "中心Y", &mut self.body_y, -100.0);
                 });
-                ui.label("向きの印");
+                ui.label(i18n::tr("向きの印"));
                 let marks = [
                     (BodyMark::None, "なし", "印を付けません"),
                     (BodyMark::Dot, "点", "本体の角の内側に点を打ちます。ICの1番ピンの印です"),
@@ -474,8 +474,8 @@ impl PartForm {
                 }
                 ui.horizontal_wrapped(|ui| {
                     if self.body_mark != BodyMark::None {
-                        ui.label("のピン");
-                        ui.add(egui::TextEdit::singleline(&mut self.body_pin).desired_width(40.0).hint_text("1")).on_hover_text("印を付けるピンの番号。空なら最初のパッド (1番ピン)。ダイオードのカソードなら K、電解コンデンサの＋なら＋側のピン番号");
+                        ui.label(i18n::tr("のピン"));
+                        ui.add(egui::TextEdit::singleline(&mut self.body_pin).desired_width(40.0).hint_text("1")).on_hover_text(i18n::tr("印を付けるピンの番号。空なら最初のパッド (1番ピン)。ダイオードのカソードなら K、電解コンデンサの＋なら＋側のピン番号"));
                     }
                 });
             }
@@ -520,16 +520,16 @@ impl PartForm {
         }
         ui.horizontal_wrapped(|ui| {
             if !names.is_empty() {
-                ui.small("部品名の候補");
+                ui.small(i18n::tr("部品名の候補"));
                 for n in &names {
-                    if ui.small_button(n).on_hover_text("データシートの題名やファイル名から見つけた型番です。押すと部品名に入ります。違うときは「PDFから選ぶ」で、PDFの上でクリックして入れます").clicked() {
+                    if ui.small_button(n).on_hover_text(i18n::tr("データシートの題名やファイル名から見つけた型番です。押すと部品名に入ります。違うときは「PDFから選ぶ」で、PDFの上でクリックして入れます")).clicked() {
                         self.name = n.clone();
                     }
                 }
             }
             if let Some(cat) = category {
-                ui.small("分類の候補");
-                if ui.small_button(cat).on_hover_text("データシートの題名と本文の言葉からの推測です。押すとカテゴリに入ります").clicked() {
+                ui.small(i18n::tr("分類の候補"));
+                if ui.small_button(cat).on_hover_text(i18n::tr("データシートの題名と本文の言葉からの推測です。押すとカテゴリに入ります")).clicked() {
                     self.category = cat.to_string();
                 }
             }

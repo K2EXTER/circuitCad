@@ -268,7 +268,7 @@ impl SchEditor {
         for (lo, hi) in &self.sch.erc_skip {
             let r = Rect::from_two_pos(self.to_screen(rect, (lo.0 as f32, lo.1 as f32)), self.to_screen(rect, (hi.0 as f32, hi.1 as f32)));
             painter.rect(r, 4.0, Color32::from_rgba_unmultiplied(150, 150, 150, 28), Stroke::new(1.2, Color32::from_rgb(130, 130, 130)), egui::StrokeKind::Inside);
-            painter.text(r.left_top() + Vec2::new(4.0, 2.0), Align2::LEFT_TOP, "描きかけ (ERC対象外)", FontId::proportional(11.0), Color32::from_rgb(120, 120, 120));
+            painter.text(r.left_top() + Vec2::new(4.0, 2.0), Align2::LEFT_TOP, i18n::tr("描きかけ (ERC対象外)"), FontId::proportional(11.0), Color32::from_rgb(120, 120, 120));
         }
         for (k, pr) in self.problems.iter().enumerate() {
             if let Some(a) = pr.at.filter(|_| pr.sheet == self.sch.active_sheet) {
@@ -287,7 +287,7 @@ impl SchEditor {
             let c = self.to_screen(rect, (pt.0 as f32, pt.1 as f32));
             let col = if *is_ref { Color32::from_rgb(40, 140, 40) } else { Color32::from_rgb(220, 90, 0) };
             painter.circle_stroke(c, 10.0, Stroke::new(2.5, col));
-            painter.text(c + Vec2::new(12.0, -12.0), Align2::LEFT_BOTTOM, if *is_ref { "基準" } else { "出力" }, FontId::proportional(12.0), col);
+            painter.text(c + Vec2::new(12.0, -12.0), Align2::LEFT_BOTTOM, if *is_ref { i18n::tr("基準") } else { i18n::tr("出力") }, FontId::proportional(12.0), col);
         }
         if self.noise_pick {
             let banner = Rect::from_min_size(rect.min, Vec2::new(rect.width(), 26.0));
@@ -295,7 +295,7 @@ impl SchEditor {
             painter.text(
                 banner.left_center() + Vec2::new(10.0, 0.0),
                 Align2::LEFT_CENTER,
-                if self.loop_pick { "ループを切る部品の本体をクリック (ピン・配線: 出力側のネット / Esc: 中止)" } else if self.pz_pick { "伝達関数の出力にしたいネットをクリック (Shift+クリック: 入力のネット / Esc: 中止)" } else if self.z_pick { "インピーダンスを見たいネットをクリック (Shift+クリック: 基準のネット / Esc: 中止)" } else { "ノイズを測りたいノードをクリック (Shift+クリック: 基準ノード / Esc: 中止)" },
+                if self.loop_pick { i18n::tr("ループを切る部品の本体をクリック (ピン・配線: 出力側のネット / Esc: 中止)") } else if self.pz_pick { i18n::tr("伝達関数の出力にしたいネットをクリック (Shift+クリック: 入力のネット / Esc: 中止)") } else if self.z_pick { i18n::tr("インピーダンスを見たいネットをクリック (Shift+クリック: 基準のネット / Esc: 中止)") } else { i18n::tr("ノイズを測りたいノードをクリック (Shift+クリック: 基準ノード / Esc: 中止)") },
                 FontId::proportional(14.0),
                 Color32::WHITE,
             );

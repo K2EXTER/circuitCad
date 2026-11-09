@@ -1,0 +1,463 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/param.rs
+値を変える部品 (抵抗・コンデンサ・コイル)。選ぶと、今の値の 1/10 〜 10倍が範囲に入ります	The part whose value changes (resistor, capacitor, inductor). When you pick one, the range is set to 1/10 to 10 times its current value
+回路図で選んでいる部品をスイープ対象にします	Use the part selected in the schematic as the sweep target
+から	From
+最初の値。例: 100, 1k, 10n	First value. e.g. 100, 1k, 10n
+まで	To
+最後の値	Last value
+本数	Runs
+値を何通り試すか (最大 {MAX_RUNS})。5 くらいが見やすいです	How many values to try (max {MAX_RUNS}). About 5 is easy to read
+対数で等間隔	Log spacing
+オンにすると 100, 316, 1k, 3.16k, 10k のように倍率が一定になります。部品の値を振るときは普通こちらが見やすいです。オフだと足し算で等間隔です	When on, the ratio between steps is constant, like 100, 316, 1k, 3.16k, 10k. This is usually easier to read when varying part values. When off, steps are evenly spaced by addition
+波形を見るノード (ネット) の名前。出力にあたる点を選びます	Name of the node (net) whose waveform you watch. Pick the point that is the output
+解析	Analysis
+過渡	Transient
+時間変化 (過渡解析の設定を使います)。ステップ応答のなまり方、発振の減り方などを比べられます	Change over time (uses the transient analysis settings). Compare how a step response rounds off, how oscillation dies down, etc.
+周波数特性 (AC解析の設定を使います)。カットオフ周波数や共振の位置がどう動くかを比べられます	Frequency response (uses the AC analysis settings). Compare how the cutoff frequency or resonance moves
+スイープを実行	Run sweep
+値を1つずつ入れ替えて解析をくり返し、結果を重ねて表示します。回路そのものは変わりません	Swaps in the values one at a time, repeats the analysis, and shows the results overlaid. The circuit itself is not changed
+パラメータスイープ: 完了 ({} 本{})	Parameter sweep: done ({} runs{})
+、{} 本は計算できず	, {} runs could not be calculated
+パラメータスイープに失敗: {}	Parameter sweep failed: {}
+値を変える部品を選んでください	Pick the part whose value changes
+波形を見るノードを選んでください (出力にあたる点)	Pick the node whose waveform you watch (the output point)
+「から」「まで」「本数」を数値で入力してください (例: 1k, 100k, 5)	Enter numbers for "From", "To" and "Runs" (e.g. 1k, 100k, 5)
+値は 0 より大きい数にしてください	Values must be greater than 0
+AC解析の周波数の設定を数値で入力してください	Enter numbers for the AC analysis frequency settings
+過渡解析の終了時間を数値で入力してください (刻みは空欄なら自動、入れるなら数値で)	Enter a number for the transient analysis end time (step: leave blank for automatic, or enter a number)
+パラメータスイープ: {part} を変えたときの V({node})	Parameter sweep: V({node}) as {part} changes
+パラメータスイープの表示	Parameter sweep display
+縦軸: ゲイン (dB)。線の色は下の凡例のとおり	Vertical axis: gain (dB). Line colors are as in the legend below
+縦軸: 電圧。線の色は下の凡例のとおり	Vertical axis: voltage. Line colors are as in the legend below
+{part} = {} は計算できませんでした: {why}	{part} = {} could not be calculated: {why}
+# crates/app/src/schematic/polezero.rs
+{} (一対の複素数、Q = {:.2}{})	{} (complex pair, Q = {:.2}{})
+、山ができて振動する	, a peak forms and it rings
+ (複素数)	 (complex)
+入力のネットを {} にしました	Set the input net to {}
+出力のネットの名前を入力してください (「回路図で選ぶ」でも入れられます)	Enter the name of the output net (you can also use "Pick in schematic")
+H 回路の応答	H circuit response
+H 当てはめ	H fit
+極と零: {label} は 極 {} 個・零 {} 個 (当てはめの誤差 {:.2}%)	Poles and zeros: {label} has {} poles, {} zeros (fit error {:.2}%)
+極と零の計算に失敗: {}	Pole-zero calculation failed: {}
+伝達関数の出力にするネット。名前が分からないときは下の「回路図で選ぶ」を使います	The net used as the transfer function's output. If you don't know its name, use "Pick in schematic" below
+空欄	Blank
+入力のネット (AC の電源がつながっているネット)。出力 ÷ 入力を伝達関数にします。空欄なら出力の電圧そのもの (入力の電源が「AC 1」のとき、それが伝達関数です)	The input net (the net the AC source is connected to). The transfer function is output ÷ input. If blank, it is the output voltage itself (when the input source is "AC 1", that is the transfer function)
+押してから回路図のピンや配線をクリックすると、そのネットが出力になり、すぐ計算します。Shift+クリックで入力のネット	Press this, then click a pin or wire in the schematic: that net becomes the output and it calculates right away. Shift+click sets the input net
+回路図の出力にしたいネットをクリックしてください	Click the net in the schematic you want as the output
+極と零を求める	Find poles and zeros
+AC解析の結果に、分数の形の式 (多項式 ÷ 多項式) を当てはめて、極と零の周波数を求めます。極は、周波数が上がるとゲインが下がり始める所 (1つごとに -20 dB/dec、位相が 90° 遅れる)。零は、ゲインが上がり始める所です。周波数範囲・点数は AC解析の欄を共用します	Fits a fraction-shaped formula (polynomial ÷ polynomial) to the AC analysis result and finds the frequencies of the poles and zeros. A pole is where the gain starts to fall as frequency rises (each one gives -20 dB/dec and 90° of phase lag). A zero is where the gain starts to rise. The frequency range and number of points are shared with the AC analysis section
+{} の伝達関数{}	Transfer function of {}{}
+ (回路が変わりました。もう一度実行してください)	 (The circuit has changed. Run it again)
+当てはめの誤差が {:.1}% あります。この範囲の応答は、6次までの分数の式では表せないか、周波数が足りません。範囲を狭める・点数を増やすと良くなることがあります	The fit error is {:.1}%. The response in this range can't be expressed by a fraction formula up to 6th order, or there aren't enough frequency points. Narrowing the range or adding points may help
+低い周波数のゲイン: {:.3} 倍 ({:.1} dB)	Low-frequency gain: {:.3}x ({:.1} dB)
+周波数が一番低いところの値に近い、直流のゲインです	The DC gain, close to the value at the lowest frequency
+{title}: なし	{title}: none
+  (右半面)	  (right half-plane)
+極	Pole
+ここから先、周波数が10倍になるごとにゲインが 20 dB ずつ下がり、位相が遅れていきます。複素数の対は、Q が大きいほど山が鋭く、振動しやすい回路です。右半面 (赤) の極があると、回路は自分で発振します	From here on, the gain falls 20 dB for every 10x in frequency and the phase lags more. For a complex pair, the larger Q is, the sharper the peak and the more the circuit tends to ring. If there is a right half-plane pole (red), the circuit oscillates by itself
+零	Zero
+ここから先、ゲインが上がる (または下がり方がゆるくなる) 所です。右半面の零は、ゲインは上がるのに位相は遅れる、やっかいな零です (昇圧型の電源などに出ます)	From here on, the gain rises (or falls more gently). A right half-plane zero is a troublesome one: the gain rises but the phase lags (it appears in boost converters, etc.)
+右半面に極があります: この回路は、このままでは不安定です	There is a pole in the right half-plane: as it is, this circuit is unstable
+安定ですが、減衰が小さい極の対があります (ステップ応答で長く振動します)	Stable, but there is a pole pair with little damping (it rings for a long time in a step response)
+すべての極が左半面にあります (安定です)	All poles are in the left half-plane (stable)
+# crates/app/src/schematic/power_ui.rs
+(選ぶ)	(pick)
+(なし)	(none)
+電力と効率の出し方	How power and efficiency are found
+入力 (電源) と出力 (負荷) の電圧と電流を選ぶと、表示中の時間範囲での平均電力と効率が出ます	Pick the voltage and current of the input (supply) and output (load) to get the average power and efficiency over the time range shown
+入力の電圧	Input voltage
+電源のプラス側の点の電圧 (V(...))	Voltage at the plus side of the supply (V(...))
+入力の電流	Input current
+電源を流れる電流 (I(V1) など)。向きは気にしなくて大丈夫です (大きさで計算します)	Current through the supply (I(V1) etc.). Don't worry about the direction (the magnitude is used)
+出力の電圧	Output voltage
+負荷にかかる電圧 (V(...))	Voltage across the load (V(...))
+出力の電流	Output current
+負荷を流れる電流 (I(R2) など)	Current through the load (I(R2) etc.)
+  入力の平均電力 {}	  Average input power {}
+  出力の平均電力 {}	  Average output power {}
+  効率 {:.1} %   損失 {}	  Efficiency {:.1} %   Loss {}
+効率 = 出力の電力 ÷ 入力の電力。損失は熱になります (スイッチング電源は 80〜95%、リニアレギュレータは 出力電圧÷入力電圧 くらい)	Efficiency = output power ÷ input power. The loss turns into heat (switching supplies: 80-95%; linear regulators: about output voltage ÷ input voltage)
+  100% を超えています。電圧と電流の組み合わせか、時間範囲 (起動直後を含む、など) を確かめてください	  Over 100%. Check the voltage/current pairing, or the time range (e.g. whether it includes start-up)
+  入力の電力が 0 なので効率は出せません	  Input power is 0, so efficiency can't be calculated
+# crates/app/src/schematic/quick.rs
+resistor r 抵抗 ohm オーム	
+capacitor c condenser コンデンサ キャパシタ	
+inductor l coil コイル インダクタ	
+diode d ダイオード	
+led light 発光 ダイオード	
+source supply battery power v 電源 電池 信号	
+npn transistor bjt q トランジスタ	
+header connector pin コネクタ ヘッダ ピン	
+ground gnd 0v アース グランド	
+vcc vdd 3v3 5v rail 電源ネット	
+基本の部品・{n}ピンのコネクタ	Basic part · {n}-pin connector
+基本の部品・配線につなぐ記号	Basic part · symbol that connects to wires
+基本の部品	Basic part
+最近 	Recent 
+{star}{}・{}{sim}	{star}{} · {}{sim}
+置きたい部品の名前 (例: 抵抗、LM358、0603、op amp)	Name of the part to place (e.g. resistor, LM358, 0603, op amp)
+名前・種類・説明・ピン名・パッケージで探せます。↑↓で選び、Enter で置く部品にします。Esc でやめます	Search by name, type, description, pin name or package. Use ↑↓ to choose and Enter to make it the part to place. Esc cancels
+見つかりません。別の言葉で探すか、左の「＋ 部品を作る…」で部品をつくれます	Nothing found. Try other words, or make a part with "+ Create part…" on the left
+↑↓ 選ぶ / Enter 決める / Esc やめる	↑↓ choose / Enter select / Esc cancel
+# crates/app/src/schematic/requirements.rs
+なぜ? (理由を一言)	Why? (a short reason)
+表示	Show
+クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」です。明るい四角が「出している」です	Click to collapse / expand. For each kind, the eye means "show on screen". A bright square means "shown"
+「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。表を開かなくても、回路図を見た人に設計の意図が伝わります	Shows the "Design requirements" table as frames on the schematic (groups to keep close get colored frames; groups to keep apart get A/B double frames). Anyone looking at the schematic sees the design intent without opening the table
+要件の枠	Requirement frames
+近くに置く: {} ({} mm 以内)	Keep close: {} (within {} mm)
+近くに置く: {}	Keep close: {}
+離す {side}: {} ({} mm 以上)	Keep apart {side}: {} ({} mm or more)
+表に足せる電流は、ありませんでした (入れる電流は、すべて書いてあります)	No currents to add to the table (all the currents to enter are already filled in)
+{} 件の提案があります	{} suggestions
+調べられませんでした: {e}	Could not check: {e}
+設計の要件	Design requirements
+回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。	Write down what the circuit should be like here, as a table. There is one table for all sheets. When imported into the board, it becomes net classes, currents, part groups and distance checks.
+回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます	Kept as a table rather than symbols placed on the schematic. You can read back later which net has what role, which parts to place close, and which to keep apart
+回路図の上に枠を出す	Show frames on the schematic
+近くに置く組を色つきの枠で囲み、離す組を A・B の二重の枠で囲んで、名前と距離を書きます。この表を開かなくても、回路図を見た人に設計の意図が伝わります。回路図にある部品だけが囲まれます (ネット名で書いた側は囲みません)	Surrounds groups to keep close with colored frames and groups to keep apart with A/B double frames, labeled with names and distances. Anyone looking at the schematic sees the design intent without opening this table. Only parts in the schematic are framed (sides written as net names are not)
+⚠ 理由が空の行が {} 件あります: {}	⚠ {} rows have no reason: {}
+数字だけでは、あとで読む人に「なぜその値か」が伝わりません。「理由」の欄に、なぜそうするかを一言書いておきましょう (例: ループを小さくしてノイズを減らすため)	Numbers alone don't tell a later reader "why that value". Write a short reason in the "Reason" column (e.g. to keep the loop small and reduce noise)
+ネットの役割 ({}) (?)	Net roles ({}) (?)
+同じ役割・同じ太さのネットを、1行にまとめます。基板に取り込むと、行の名前のネットクラスになります。	Groups nets with the same role and width into one row. When imported into the board, it becomes a net class named after the row.
+ネット名の末尾に * を付けると、その名前で始まるすべてのネットです (例: GN* は GN1〜GN10)。幅と間隔を 0 にすると、基板の既定のままです。電流を書くと、配線の太さの推奨と電圧降下の計算に使われます	Ending a net name with * means every net starting with that name (e.g. GN* is GN1-GN10). Width and clearance of 0 keep the board's defaults. If you enter a current, it is used for the recommended track width and the voltage drop calculation
+ネット (, 区切り)	Nets (comma separated)
+理由	Reason
+この行の名前。基板ではネットクラスの名前になります	Name of this row. On the board it becomes the net class name
+ネット名を , で区切って書きます。末尾が * なら、その名前で始まるネットすべて	Write net names separated by commas. A name ending in * means every net starting with that name
+ネットが何のためのものか。自動配線は、大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に引きます。検出のネットは、ビアなしで引きます	What the net is for. Autoroute routes in this order: high current → switching node → sense → analog → logic. Sense nets are routed without vias
+配線の太さ。0 は基板の既定のまま	Track width. 0 keeps the board default
+ほかの銅との間隔。0 は基板の既定のまま (基板の最小値より小さくはなりません)	Clearance to other copper. 0 keeps the board default (never smaller than the board minimum)
+このネットに流れる電流の目安。0 は指定なし	Rough current through this net. 0 means not specified
+なぜその値・その役割にするかの理由。数字は「何を」、理由は「なぜ」を伝えます。あとで読み返す人 (自分も) のために書いておきます	The reason for this value or role. Numbers say "what", the reason says "why". Write it for whoever reads it later (including you)
+＋ ネットの役割を足す	+ Add net role
+新しい行を足します	Add a new row
+役割{}	Role{}
+詳細: 配線の性質 (順番・ビア・層・長さ・ビア数・細い配線) (?)	Details: routing properties (order, vias, layers, length, via count, thin tracks) (?)
+役割がきめている「配線の順番」と「ビアを使うか」と、使う層・長さの上限を、行ごとに決めます。	For each row, set the "routing order" and "use vias or not" that the role decides, plus the layers to use and length limits.
+役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。\n・使う層: 自動配線がこの層だけにトラックを引きます (表面なら top、裏面なら bottom、内層は inner1 ... を , で区切る。空ならどの層でも)。ほかの層に配線があると、基板の点検が指摘します\n・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし\n・ビアの上限: 1つのネットのビアの数。0 なら上限なし (ビアは、戻り電流の道が切れ、インダクタンスも増える)\n・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし	A role is a template of properties. Autoroute routes in this order: power 0, switching 1, sense 2, analog 3, logic 4, no role 5 (a wide net with no role is 0, like power). Sense does not use vias. Changing it here lets you give just this row a different order, allow vias for sense, or forbid vias with no role, without changing the role. Set it to "As the role" and the role decides again.\n- Layers: autoroute routes tracks only on these layers (top for the top side, bottom for the bottom, inner1 ... for inner layers, comma separated; blank means any layer). If tracks are on other layers, the board check reports it\n- Length limit: total track length of one net (mm). 0 means no limit\n- Via limit: number of vias in one net. 0 means no limit (vias break the return current path and add inductance)\n- Thin track limit: total length of tracks thinner than the row's width (mm). Keeps thin breakouts from getting too long. 0 means no limit
+行	Row
+配線の順番 (小さいほど先)	Routing order (lower first)
+使う層 (, 区切り)	Layers (comma separated)
+長さの上限	Length limit
+ビアの上限	Via limit
+細い配線の上限	Thin track limit
+役割のとおり ({by_role})	As the role ({by_role})
+使わない	Don't use
+使ってよい	Allowed
+役割のとおり (使わない)	As the role (don't use)
+役割のとおり (使ってよい)	As the role (allowed)
+役割のとおり	As the role
+この行のネットのトラックを引ける層: top (表面)・bottom (裏面)・inner1 ... を , で区切ります。空なら、どの層でも	Layers where this row's nets may be routed: top, bottom, inner1 ..., comma separated. Blank means any layer
+1つのネットのトラックの長さの合計の上限。0 なら上限なし	Limit on the total track length of one net. 0 means no limit
+ 個	 pcs
+1つのネットのビアの数の上限。0 なら上限なし	Limit on the number of vias in one net. 0 means no limit
+線幅が行の線幅より細いトラックの合計の上限 (細い引き出しなど)。0 なら上限なし	Limit on the total length of tracks thinner than the row's width (thin breakouts, etc.). 0 means no limit
+詳細: 部品間の線幅 (?)	Details: track width between parts (?)
+上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。	For advanced users. Gives only the track between two parts in a net a different width.
+例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです	Example: wide 0.6 mm from the battery (CB1) to the buck IC (U7), thin 0.3 mm from U7 to the LDO (U4). Autoroute routes between the two parts written here first, at this width, then connects the rest of the net. Width 0 keeps the row's width
+＋ 線を足す	+ Add track
+この行のネットに、部品間の線幅を足します	Add a track width between parts to this row's nets
+1つめの部品の部品番号	Refdes of the first part
+2つめの部品の部品番号	Refdes of the second part
+この2つの部品の間の線の幅。0 は行の幅のまま	Width of the track between these two parts. 0 keeps the row's width
+この線の設定を消します	Delete this track setting
+近くに置く部品の組 ({}) (?)	Part groups to keep close ({}) (?)
+端子のそばの保護、小さくしたいループなど、近くにあるべき部品を組にします。	Groups parts that should be close together, such as protection near a terminal or a loop you want small.
+基板の自動配置は、組の部品を1つの塊にして並べます。基板の画面では、組が上限より広がっていないかを調べます。上限を 0 にすると、チェックはしません (自動配置では塊にします)	Board autoplace places the parts of a group as one block. The board screen checks whether a group spreads wider than its limit. A limit of 0 means no check (autoplace still makes a block)
+部品 (, 区切り)	Parts (comma separated)
+上限	Limit
+この組の名前	Name of this group
+部品番号を , で区切って書きます (例: J3A,ZT1,FP,FQ)	Write refdes separated by commas (e.g. J3A,ZT1,FP,FQ)
+組の中でいちばん離れた2つの部品の、中心どうしの距離の上限。0 はチェックなし	Limit on the center-to-center distance of the two farthest parts in the group. 0 means no check
+なぜ近くに置くかの理由 (例: 電流の輪を小さくしてノイズを減らす)	Why they are placed close (e.g. keep the current loop small to reduce noise)
+この組を消します	Delete this group
+＋ 組を足す	+ Add group
+新しい組を足します。部品は、あとから書きます	Add a new group. Write the parts later
+組{}	Group{}
+解析から入れる (?)	Fill from analysis (?)
+DC解析で、各ネットに流れる電流を調べて、表に入れます。	Uses DC analysis to find the current in each net and fills it into the table.
+電流が空の行には、その行のネットのうち最大の電流 (2桁に切り上げ) を提案します。どの行にも入っていないネットで 0.1 A 以上流れるものは、行の追加を提案します。表に書いてある電流は、そのままです。チェックを外したものは入れません	For rows with no current, suggests the largest current among that row's nets (rounded up to 2 digits). For nets not in any row carrying 0.1 A or more, suggests adding a row. Currents already in the table stay as they are. Unchecked items are not added
+DC解析の電流を調べる	Check DC analysis currents
+いまの回路を DC 解析して、ネットごとの電流から、表への提案を作ります。回路が解析できないときは、理由が出ます	Runs DC analysis on the current circuit and makes table suggestions from each net's current. If the circuit can't be analyzed, the reason is shown
+選んだものを表に入れる	Add selected to table
+チェックの付いた提案を、上の表に書き込みます。あとから自由に直せます	Writes the checked suggestions into the table above. You can edit them freely afterwards
+バイパスの対応 ({}) (?)	Bypass assignments ({}) (?)
+どのコンデンサが、どの IC のためのものかを書きます。	Write which capacitor is for which IC.
+電源のネットが同じだと、回路図のつなぎ方だけでは、コンデンサがどの IC のためのものか分かりません (ラベルでつなぐと、置いた場所も当てになりません)。ここに書くと、基板の自動配置がそのコンデンサを、その IC の電源ピンのそばに置き、点検もその IC のピンからの距離を調べます。書いていないコンデンサは、これまでどおり自動で決めます	When ICs share a supply net, the schematic connections alone don't show which IC a capacitor is for (with label connections, placement isn't reliable either). Writing it here makes board autoplace put that capacitor next to that IC's supply pin, and the check measures the distance from that IC's pin. Capacitors not written here are decided automatically as before
+コンデンサ (, 区切り)	Capacitors (comma separated)
+IC の部品番号 (例: U3)	IC refdes (e.g. U3)
+この IC のバイパスコンデンサの部品番号を , で区切って書きます (例: C5,C6)	Write the refdes of this IC's bypass capacitors, comma separated (e.g. C5,C6)
+なぜそのコンデンサがその IC のものか (例: 同じシートで、U3 の電源ピン 8 の隣に置く)	Why that capacitor belongs to that IC (e.g. on the same sheet, next to U3's supply pin 8)
+＋ 対応を足す	+ Add assignment
+回路から提案を作る	Suggest from circuit
+対応が書かれていないコンデンサについて、どの IC のものかを回路から推測して、提案します。電源のネットを持つ IC のうち、両側の電源を持つもの → 同じシートのもの → コンデンサの数が少ないもの、の順に決めます。提案ごとに、決めた理由が出ます。違うものはチェックを外してください	For capacitors with no assignment, guesses from the circuit which IC they belong to and suggests it. Among ICs on the supply net, it picks: those with both supply rails → those on the same sheet → those with fewer capacitors. Each suggestion shows why. Uncheck any that are wrong
+チェックの付いた提案を、上の表に書き込みます。理由の欄は空で入るので、あとで書いてください	Writes the checked suggestions into the table above. The reason column is left blank, so fill it in later
+離す組 ({}) (?)	Groups to keep apart ({}) (?)
+降圧のスイッチングノードと、基準・ADC・検出線のように、離しておくものどうしを書きます。	Write things to keep apart, like a buck converter's switching node and the reference, ADC or sense lines.
+書くのは部品番号か、ネット名です (部品番号が先に見つかれば部品、なければネットの全パッド。末尾の * も使えます)。基板の画面で、いちばん近い2つのパッドの距離が下限より近くないかを調べます	Write refdes or net names (a refdes is used if found, otherwise all pads of the net; a trailing * also works). The board screen checks whether the two closest pads are nearer than the minimum
+A (, 区切り)	A (comma separated)
+B (, 区切り)	B (comma separated)
+下限	Minimum
+この行の名前	Name of this row
+部品番号かネット名を , で区切って書きます	Write refdes or net names, comma separated
+AとBのパッドどうしの、中心間の距離の下限	Minimum center-to-center distance between pads of A and B
+なぜ離すかの理由 (例: スイッチングの雑音を帰還に入れない)	Why they are kept apart (e.g. keep switching noise out of the feedback)
+＋ 離す組を足す	+ Add apart group
+離す{}	Apart{}
+道筋の測定 ({}) (?)	Path measurements ({}) (?)
+配線した銅の道筋 (トラックとビア) の長さ・ビア数・分かれ目を測って、上限か下限を決めます。	Measures the length, via count and split point of routed copper paths (tracks and vias) and sets an upper or lower limit.
+基板に配線したあとの点検です。測るのは、2つのパッドの間をトラックとビアでたどった道筋で、ベタは通りません (ベタだけでつながっていると、道筋なしになります)。\n・長さ: 道筋の長さ (mm)\n・ビアの数: 道筋のビアの数 (検出線は 0 に)\n・分かれ目: 1つ目のパッドから、2つ目・3つ目のパッドへ行く道筋が、一緒に走る長さ (mm)。電流の線と電圧を測る線が、パッドの根元で分かれているかを見るときに (ケルビン接続: 0.5 mm 以下など)\nパッドは「部品.ピン」の形で書きます (例: RS1.1)	A check after routing the board. It measures the path traced through tracks and vias between two pads; it does not pass through copper pours (if connected only by a pour, there is no path).\n- Length: path length (mm)\n- Via count: number of vias on the path (0 for sense lines)\n- Split: how far the paths from the 1st pad to the 2nd and 3rd pads run together (mm). Use it to see whether the current line and voltage-sense line split at the root of the pad (Kelvin connection: 0.5 mm or less, etc.)\nWrite pads as "part.pin" (e.g. RS1.1)
+パッド・ネット (, 区切り)	Pads / nets (comma separated)
+上限 / 下限	Upper / lower limit
+この測定の名前	Name of this measurement
+パッドが {need} 個要ります	Needs {need} pads
+銅の面積を測るパッド 1 個 (部品.ピン: 例 Q1.2)。そのパッドにつながった銅 (配線・ビア・ベタ) の面積です。放熱のために、データシートが求める銅の面積があるかを見ます	One pad to measure copper area for (part.pin: e.g. Q1.2). The area of copper (tracks, vias, pours) connected to that pad. Checks that there is as much copper area as the datasheet asks for heat sinking
+1つ目: ガードされる検出のネット、2つ目: ガードのネット (名前か、末尾に * を付けた名前。+ で複数 : 例 A+SA,GRDA)	1st: the guarded sense net, 2nd: the guard net (a name, or a name ending in *. Join several with +: e.g. A+SA,GRDA)
+間隔を測る2つのネット (名前か、末尾に * を付けた名前。+ で複数。例: SA,SW*)	Two nets to measure clearance between (a name, or a name ending in *. Join several with +. e.g. SA,SW*)
+1つ目: 配線の長さを数えるネット、2つ目: それに近づくネット (名前か、末尾に * を付けた名前。+ で複数。例: SA+SB,BKSW)。2つ目の銅が、1つ目の配線の縁から「近さ」以内にある長さを測る	1st: net whose track length is counted, 2nd: net that comes near it (a name, or a name ending in *. Join several with +. e.g. SA+SB,BKSW). Measures the length over which the 2nd net's copper is within "Reach" of the edge of the 1st net's track
+ビアを数えるパッド 1 個 (部品.ピン: 例 Q1.2)。そのパッドの中にあるビアの数です。放熱のパッドの下のサーマルビアが足りているかを見ます	One pad to count vias in (part.pin: e.g. Q1.2). The number of vias inside that pad. Checks there are enough thermal vias under a thermal pad
+4つのパッド: 1つ目と2つ目 = 行きの道筋 (例: U7.3,CB3.1 = IC の電源ピンからコンデンサのプラスへ)、3つ目と4つ目 = 帰りの道筋 (例: CB3.2,U7.4 = コンデンサのマイナスから IC のグラウンドピンへ)。行きと帰りの配線の長さの合計を測る (小さいほどループが小さい)	4 pads: 1st and 2nd = outgoing path (e.g. U7.3,CB3.1 = IC supply pin to capacitor plus), 3rd and 4th = return path (e.g. CB3.2,U7.4 = capacitor minus to IC ground pin). Measures the total track length out and back (smaller means a smaller loop)
+4つのパッド: 1つ目と2つ目 = 1本目の道筋、3つ目と4つ目 = 2本目の道筋。2本の配線の長さの差を測る (対になる経路をそろえたいときに。差が小さいほど対称)	4 pads: 1st and 2nd = first path, 3rd and 4th = second path. Measures the difference in track length between the two (for matching paired routes; a smaller difference is more symmetric)
+1つ目: 囲まれるパッド (例: U4.8)、2つ目: ガードのネット (名前か、末尾に * を付けた名前。+ で複数 : 例 VCC)。パッドのまわり 360° のうち、縁から「近さ」以内にガードの銅がある割合を測る (配線が出ていく所は隙間になる)	1st: the pad being surrounded (e.g. U4.8), 2nd: the guard net (a name, or a name ending in *. Join several with +: e.g. VCC). Measures what share of the 360° around the pad has guard copper within "Reach" of its edge (where the track leaves, there is a gap)
+2つのパッド (部品.ピン: 例 RS1.1,SW1.2)。その間の配線 (トラックとビア) の直流の抵抗を測る。銅の厚さは 35 µm (1 oz) で計算。ベタは通らない道筋だけを数える	Two pads (part.pin: e.g. RS1.1,SW1.2). Measures the DC resistance of the routing (tracks and vias) between them. Calculated with 35 µm (1 oz) copper. Only paths that don't go through pours are counted
+1つ目と2つ目: 調べる道筋の両端のパッド (例: U1.5,J1.2)、3つ目: グラウンドのネット (名前か、末尾に * を付けた名前。例 GND)。その道筋の下 (すぐ上か下の層) に、グラウンドの銅 (ベタ・配線) がある割合。信号の帰り電流の通り道が切れていないかを見る	1st and 2nd: pads at both ends of the path to check (e.g. U1.5,J1.2), 3rd: the ground net (a name, or a name ending in *. e.g. GND). The share of that path with ground copper (pours, tracks) beneath it (on the layer just above or below). Checks that the signal's return current path isn't broken
+重なりを測る2つのネット (名前か、末尾に * を付けた名前。+ で複数。例: SW,SA+SB)。別の層で上下に重なっている銅の面積。雑音の多い配線の真上や真下を、敏感な配線が通っていないかを見る	Two nets to measure overlap between (a name, or a name ending in *. Join several with +. e.g. SW,SA+SB). The area of copper overlapping on different layers. Checks that sensitive tracks don't run right above or below noisy ones
+2つのパッド (部品.ピン: 例 RS1.1,SW1.2)。その間の配線の抵抗 × 電流 = 電圧降下を測る。電流は「近さ」の欄 (A) に書く。0 なら、そのネットに設定した電流を使う	Two pads (part.pin: e.g. RS1.1,SW1.2). Measures the voltage drop = resistance of the routing between them × current. Enter the current in the "Reach" column (A). 0 uses the current set for that net
+1つ目と2つ目: 信号の道筋の両端のパッド (例: U1.5,J1.2)、3つ目: グラウンドのネット (名前か、末尾に * を付けた名前。例 GND)。信号の道筋のすぐ上か下の層のグラウンドの銅の中を、始めから終わりまで通る最短の道の長さが、信号の道筋の何 % か (100 % が理想、切れていると 1000 %)。格子で測るので、8 % ほど長く出る	1st and 2nd: pads at both ends of the signal path (e.g. U1.5,J1.2), 3rd: the ground net (a name, or a name ending in *. e.g. GND). The length of the shortest route from start to end through ground copper on the layer just above or below the signal path, as a % of the signal path (100 % is ideal; 1000 % if broken). Measured on a grid, so it comes out about 8 % long
+調べるネット (名前か、末尾に * を付けた名前。+ で複数。例: SA+SB)。パッドにもビアにもベタにも他の配線にもつながっていない、行き止まりの配線の枝の一番長いものの長さを測る (余った枝はアンテナになる)	Nets to check (a name, or a name ending in *. Join several with +. e.g. SA+SB). Measures the longest dead-end track branch that connects to no pad, via, pour or other track (leftover branches act as antennas)
+4つのパッド: 1つ目と2つ目 = 1本目の道筋、3つ目と4つ目 = 2本目の道筋。ビアの数の差と、折れ曲がりの数の差を足した数を測る (0 なら同じ作り。熱起電力 (ゼーベック効果) で、対にした2本の条件をそろえたいときに)	4 pads: 1st and 2nd = first path, 3rd and 4th = second path. Measures the via count difference plus the bend count difference (0 means built the same way. For matching the conditions of a paired route against thermoelectric EMF (Seebeck effect))
+配線の太さを調べる道筋の、出発のパッドと行き先のパッド (例: Q1.3,RS1.1)。その道筋の中で一番細い所の太さを測る	Start pad and destination pad of the path whose track width you check (e.g. Q1.3,RS1.1). Measures the width at the narrowest point on that path
+1つ目: 実装用パッド (例: RS1.1)、2つ目: 検出の線の行き先のパッド (例: SS1.2)、3つ目: 抵抗のもう片方のパッド (例: RS1.2)。検出の線がパッドの銅につながる点を、もう片方のパッドに向いた縁から測る (0 = 内側の縁)	1st: the mounting pad (e.g. RS1.1), 2nd: the pad the sense line goes to (e.g. SS1.2), 3rd: the resistor's other pad (e.g. RS1.2). Measures where the sense line joins the pad copper, from the edge facing the other pad (0 = inner edge)
+1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)	1st: start pad of the path, 2nd and 3rd: destination pads (e.g. RS1.1,Q1.3,UAB.2)
+出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)	Start pad and destination pad (e.g. RS1.1,UAB.2)
+間隔から除く部品 (コンマ区切り)。その部品のパッドは数えません。pads と書くと、全部のパッドを除いて、配線とビアだけの間隔を見ます。IC のピンどうしは近くて当然なので、配線の間隔を見たいときに使います	Parts excluded from clearance (comma separated). Their pads are not counted. Write pads to exclude all pads and look only at track and via clearance. IC pins are naturally close together, so use this when you want to see track clearance
+以上	or more
+以下	or less
+以下 (上限)	or less (upper limit)
+以上 (下限)	or more (lower limit)
+ A (0 = ネットの電流)	 A (0 = net current)
+電圧降下を出すときの電流です。0 なら、基板でそのネットに設定した電流を使います	The current used for the voltage drop. 0 uses the current set for that net on the board
+ mm 以内 (0 = 全部)	 mm radius (0 = all)
+パッドの中心からこの半径の中の銅だけを数えます。0 なら、つながった銅の全部 (遠くへ伸びる配線も入る)。部品の熱が広がるのは近くの銅なので、10 mm などにすると放熱の目安になります	Counts only copper within this radius of the pad center. 0 counts all connected copper (including tracks running far away). Part heat spreads into nearby copper, so 10 mm or so gives a guide for heat sinking
+ mm 以内	 mm or closer
+ガードの縁が、検出のトラックの縁から、この距離までにあれば「ガードがある」とみなします (空けた隙間 + ガードの幅の目安。0.35 mm の隙間・0.3 mm 幅なら 1 mm)。検出のトラックの両側にあるか、パッドの 2 mm 以内を除いた長さで数えます	Guard copper counts as "present" if its edge is within this distance of the sense track's edge (gap left + guard width as a guide: a 0.35 mm gap and 0.3 mm width give 1 mm). Counted over the length on both sides of the sense track, excluding within 2 mm of the pads
+この値を超えたら (または下回ったら) 指摘します	Reported when the value goes over (or under) this
+なぜこの限度か (例: 電流の線と電圧を測る線は、パッドの根元で分けるため)	Why this limit (e.g. to split the current line and voltage-sense line at the root of the pad)
+＋ 測定を足す	+ Add measurement
+測定{}	Measure{}
+承知した例外 ({}) (?)	Accepted exceptions ({}) (?)
+基板の点検で指摘されても、承知の上でそのままにするものを、理由つきで書きます。	Write findings of the board check that you knowingly leave as they are, with a reason.
+基板の点検 (組の広がり・離す距離・バイパスの距離) の指摘のうち、ここに書いたものは「違反」に数えず、「承知した例外」として理由つきで別に出ます。あとで読む人が、直し忘れではなく承知の上だと分かります。基板の点検の一覧の「承知する」ボタンからも書き込めます	Board check findings (group spread, apart distance, bypass distance) written here aren't counted as "violations"; they are shown separately as "accepted exceptions" with their reason. A later reader can tell they were accepted on purpose, not forgotten. You can also add them with the "Accept" button in the board check list
+行の名前	Row name
+どの種類の指摘を承知するか	Which kind of finding to accept
+表の行の名前です。組なら組の名前、離す距離なら行の名前、バイパスなら IC の部品番号	Name of the table row: the group name for a group, the row name for an apart distance, the IC refdes for a bypass
+承知するコンデンサの部品番号。空なら、その IC の行のコンデンサすべて	Refdes of the capacitor to accept. Blank means all capacitors in that IC's row
+なぜ承知するか (例: 基板が小さく、これ以上近づけられない)。空だと「理由のない行」に数えられます	Why it is accepted (e.g. the board is small and they can't be moved closer). If blank, it counts as a "row with no reason"
+この例外を消します。基板の点検で、また指摘に戻ります	Delete this exception. The board check will report it again
+＋ 例外を足す	+ Add exception
+新しい行を足します。種類・行の名前・理由を書きます	Add a new row. Write the kind, row name and reason
+提案できるコンデンサは、ありませんでした (すべて書いてあるか、電源につながる IC が見つかりません)	No capacitors to suggest (all are written already, or no IC on a supply was found)
+表に入れました	Added to the table
+# crates/app/src/schematic/result_tables.rs
+解析結果の表	Analysis results table
+ネットリスト	Netlist
+まだ結果がありません。「DC動作点を解析」を押してから開いてください	No results yet. Press "Run DC operating point" first, then open this
+ノード電圧	Node voltages
+回路の各ノード (ネット) の電圧です	Voltage at each node (net) in the circuit
+素子	Elements
+素子ごとの電流・電圧・電力です	Current, voltage and power of each element
+検索 (名前)	Search (name)
+名前に、この文字が入っているものだけを出します (大文字・小文字は区別しません)	Shows only names containing this text (not case-sensitive)
+名前順	By name
+ノード名の順に並べます	Sort by node name
+電圧が高い順	Highest voltage
+電圧の高いノードを上に並べます (電源のレールを探すとき)	Puts the highest-voltage nodes at the top (for finding supply rails)
+素子名の順に並べます	Sort by element name
+電力が大きい順	Highest power
+電力の大きい素子を上に並べます (熱くなる部品を探すとき)	Puts the highest-power elements at the top (for finding parts that get hot)
+電流が大きい順	Highest current
+電流の大きい素子を上に並べます	Puts the highest-current elements at the top
+クリックで、このネットにつながる部品を回路図で選びます	Click to select the parts on this net in the schematic
+クリックで、この部品を回路図で選びます	Click to select this part in the schematic
+電流は素子の第1端子→第2端子の向き。電源は電力を供給すると負	Current flows from the element's 1st to 2nd terminal. A source supplying power is negative
+検索 (ネット名・部品番号)	Search (net name, refdes)
+ネットの名前か、そのネットにつながるピン (例: R1) に、この文字が入っているものだけを出します	Shows only nets whose name, or a pin on the net (e.g. R1), contains this text
+({} ピン)	({} pins)
+{refdes} が回路図に見つかりません	{refdes} not found in the schematic
+ネット {name} につながる部品が見つかりません	No parts found on net {name}
+# crates/app/src/schematic/selfheat.rs
+周囲の温度を数値(℃)で入力してください (例: 27)	Enter the ambient temperature as a number (°C) (e.g. 27)
+周囲の温度	Ambient temperature
+部品のまわりの空気の温度 (℃)。部品の温度は、これに「電力 × 熱抵抗」を足したものになります	Temperature of the air around the parts (°C). A part's temperature is this plus "power × thermal resistance"
+自己発熱を計算	Calculate self-heating
+電流が流れる抵抗は、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)	A resistor carrying current is heated by its own power. A resistor whose value changes when warm (one with a temperature coefficient) also changes its current, so it is calculated repeatedly until it settles. This is the DC steady state (short pulses give lower values)
+自己発熱の計算に失敗: {e}	Self-heating calculation failed: {e}
+電流が流れる抵抗の温度上昇と、それで値がどれだけ動くかを見ます	Shows the temperature rise of resistors carrying current, and how much their value shifts because of it
+電源や電流の流れ方を確認してください。DC解析が収束しない回路は計算できません	Check the supplies and how the current flows. Circuits where DC analysis doesn't converge can't be calculated
+電力が出ている抵抗はありません	No resistors are dissipating power
+上昇	Rise
+値の変化	Value change
+熱抵抗 K/W	Thermal res. K/W
+係数 ppm/K	Coeff. ppm/K
+温度 {:.1} ℃ (周囲 {} ℃ + {:.1} K)	Temperature {:.1} °C (ambient {} °C + {:.1} K)
+周囲の温度より、これだけ高くなります	How much hotter it gets than ambient
+温まったことで、抵抗値が冷えているときよりどれだけ変わったか (100 ppm = 0.01 %)。温度係数が 0 なら変わりません	How much the resistance changed from its cold value due to warming (100 ppm = 0.01 %). If the temperature coefficient is 0, it doesn't change
+熱抵抗: 抵抗体から空気までの熱の伝わりにくさ (K/W)。メーカーの値 (抵抗体〜端子間) に、基板の銅箔での放熱ぶんが足されます。放熱の良い大きな銅箔・厚い銅箔・多層にすると小さくなります。変えたら、もう一度計算してください	Thermal resistance: how hard it is for heat to flow from the resistor body to the air (K/W). Heat sinking through the board copper is added to the maker's value (body to terminals). Large or thick copper and more layers make it smaller. After changing it, calculate again
+温度係数: 1 K 温まると抵抗値が何 ppm 変わるか。データシートの値 (シャント抵抗なら ±25 〜 ±100 ppm/K など) を入れます	Temperature coefficient: how many ppm the resistance changes per 1 K of warming. Enter the datasheet value (e.g. ±25 to ±100 ppm/K for a shunt resistor)
+温まって動いたところ	Shifts from warming
+冷えているときの電圧と、温まったあとの電圧の差。大きい順	Difference between the cold voltage and the voltage after warming. Largest first
+熱抵抗を入れていない部品は、パッケージの大きさからの目安 (定格電力から) です。データシートの値に直してください	Parts with no thermal resistance entered use a guide from the package size (from the power rating). Replace it with the datasheet value
+チップ抵抗は、周囲 70 ℃ で定格の電力をかけると 155 ℃ になるものとして、θ ≈ 85 K ÷ 定格電力 としています	Chip resistors are assumed to reach 155 °C at rated power with 70 °C ambient, so θ ≈ 85 K ÷ rated power
+# crates/app/src/schematic/selfheat_tran.rs
+結合「{spec}」は 部品:部品:K/W の形で入力してください (例: Q1:RS1:150)	Enter coupling "{spec}" as part:part:K/W (e.g. Q1:RS1:150)
+結合「{spec}」の熱抵抗は 0 より大きい数 (K/W) にしてください	The thermal resistance of coupling "{spec}" must be greater than 0 (K/W)
+時間を、0 より大きい数で入力してください (例: 0.6 や 600m。秒)	Enter a time greater than 0 (e.g. 0.6 or 600m, in seconds)
+温度を見たい部品の名前を入力してください (例: Q1,RS1。コンマで区切る)	Enter the names of the parts whose temperature you want to see (e.g. Q1,RS1, comma separated)
+温度の時間変化 (短い通電)	Temperature over time (short pulses)
+過渡解析の電力から、部品の温度が時間とともにどう上がるかを計算します。短い通電では、定常の温度より低くなります (熱容量があるため)。2つの部品が基板の銅を通じてお互いを温める分も入れられます	Calculates how part temperatures rise over time from the transient analysis power. With short pulses they stay below the steady temperature (because of heat capacity). You can also include how two parts heat each other through the board copper
+温度を見たい部品の名前 (コンマ区切り)。抵抗・ダイオード・トランジスタが入った部品 (ライブラリ部品も) が対象です	Names of the parts whose temperature you want to see (comma separated). Parts containing a resistor, diode or transistor (library parts too) are supported
+時間	Time
+計算する長さ (秒)。電源のパルスや波形は、この間の動きを使います (例: 0.6 や 600m)	Length to calculate (seconds). The supply pulses and waveforms over this time are used (e.g. 0.6 or 600m)
+結合	Coupling
+2つの部品の間の熱抵抗 (K/W)。部品:部品:K/W の形で、コンマで複数。基板の銅を通って熱が行き来します。空欄なら、お互いは温め合いません。値の目安は、距離が遠いほど大きく (数百 K/W)、同じ銅でつながっていれば小さくなります。データシートにはないので、推測で入れてください	Thermal resistance between two parts (K/W). Write part:part:K/W, several separated by commas. Heat flows back and forth through the board copper. If blank, the parts don't heat each other. As a guide, the farther apart, the larger (hundreds of K/W); connected by the same copper, smaller. It isn't in datasheets, so enter an estimate
+温度の変化を計算	Calculate temperature change
+過渡解析を実行して、各部品の電力から温度の上がり方を出します。温度係数のある抵抗と半導体は、温まった温度で値・モデルを決め直して計算し直します	Runs transient analysis and finds how temperatures rise from each part's power. Resistors with a temperature coefficient and semiconductors are recalculated with their value/model set for the warmed temperature
+温度の変化の計算に失敗: {e}	Temperature change calculation failed: {e}
+部品の名前・時間・電源を確認してください。過渡解析が通らない回路は計算できません	Check the part names, time and supplies. Circuits where transient analysis fails can't be calculated
+電力(最大)	Power (max)
+上昇(最大)	Rise (max)
+熱容量 J/K	Heat cap. J/K
+定常なら	If steady
+最高 {:.1} ℃ (周囲 {} ℃ + {:.1} K、{:.3} 秒)。電力をかけている間の平均 {:.1} ℃	Max {:.1} °C (ambient {} °C + {:.1} K, at {:.3} s). Average while powered {:.1} °C
+相手の部品から受けた熱: {:+.2} K (結合を外したときとの差。熱を逃がす側はマイナス)。値の変化 {:+.0} ppm	Heat received from the other part: {:+.2} K (difference from without coupling; negative for the side losing heat). Value change {:+.0} ppm
+熱抵抗 (K/W): 部品から空気までの熱の伝わりにくさ。データシートの値 (基板の銅の面積で変わります) を入れます。変えたら、もう一度計算してください	Thermal resistance (K/W): how hard it is for heat to flow from the part to the air. Enter the datasheet value (it depends on the board copper area). After changing it, calculate again
+熱容量 (J/K): 部品とそのまわりの銅を 1 K 温めるのに要る熱。短い通電の温度の上がりは、これでほぼ決まります (上昇 ≒ 電力 × 時間 ÷ 熱容量)。データシートに数字がないことが多いので、推測の値です。0 だと定常の温度になります	Heat capacity (J/K): heat needed to warm the part and nearby copper by 1 K. For short pulses this mostly sets the temperature rise (rise ≈ power × time ÷ heat capacity). Datasheets often lack a number, so this is an estimate. 0 gives the steady temperature
+同じ電力を流し続けたとき (定常) の上昇。通電が短いほど、最大の上昇はこれよりずっと低くなります	The rise if the same power flowed continuously (steady state). The shorter the pulse, the lower the max rise is compared to this
+温まって動いた電圧 ({:.3} 秒のとき)	Voltages shifted by warming (at {:.3} s)
+熱容量と、部品どうしの結合は推測の値です。数字の幅を見るために、変えて比べてください	Heat capacity and part-to-part coupling are estimates. Change them and compare to see the range of results
+1つの部品を、熱容量と熱抵抗の1段として扱った簡単な近似です。基板の中の熱の広がりまでは計算していません	A simple approximation treating each part as one stage of heat capacity and thermal resistance. Heat spreading inside the board is not calculated
+各部品の、周囲の温度からの上昇 (K) の時間変化。横軸は時間、縦軸は上昇	Temperature rise above ambient (K) of each part over time. Horizontal axis: time; vertical axis: rise
+# crates/app/src/schematic/settings.rs
+1e-3 (ゆるい・速い)	1e-3 (loose, fast)
+1e-6 (標準)	1e-6 (standard)
+1e-9 (とても厳しい)	1e-9 (very strict)
+10nV (標準)	10nV (standard)
+1pA (標準)	1pA (standard)
+1e-4 (標準)	1e-4 (standard)
+1e-6 (とても細かい)	1e-6 (very fine)
+1e-9 S (収束しやすい)	1e-9 S (converges easily)
+1e-12 S (標準)	1e-12 S (standard)
+1e-14 S (高精度)	1e-14 S (high precision)
+シミュレーション設定	Simulation settings
+標準	Standard
+初期値に戻します	Restore the defaults
+収束しやすく	Easier convergence
+許容誤差をゆるめ、反復回数を増やし、gmin を大きくします。「収束しませんでした」と出るときに試しましょう。精度は少し落ちます	Loosens tolerances, raises the iteration count and makes gmin larger. Try it when you see "did not converge". Accuracy drops slightly
+高精度	High precision
+許容誤差を厳しくします。計算が遅くなり、収束しにくくなることもあります	Tightens tolerances. Calculation gets slower and may converge less easily
+相対許容誤差 (reltol)	Relative tolerance (reltol)
+反復の前後で値の変化がこの割合より小さくなったら「答えが定まった」と判断します。小さいほど正確ですが、反復が増えます	The answer is treated as settled when the change between iterations is smaller than this ratio. Smaller is more accurate but needs more iterations
+電圧の許容誤差 (vntol)	Voltage tolerance (vntol)
+電圧がこの値以下しか変わらなければ収束とみなします。ごく小さい信号を扱うときは小さくします	Treated as converged if voltages change by no more than this. Make it smaller when working with very small signals
+電流の許容誤差 (abstol)	Current tolerance (abstol)
+電流がこの値以下しか変わらなければ収束とみなします。pA 級の漏れ電流を見たいときは小さくします	Treated as converged if currents change by no more than this. Make it smaller to see pA-level leakage currents
+最小コンダクタンス (gmin)	Minimum conductance (gmin)
+すべてのノードとGNDの間に入れるごく小さな導通です。回路が浮いていても計算できるようにする代わりに、ごくわずかに結果をずらします。大きいほど収束しやすく、小さいほど正確です	A tiny conductance placed between every node and GND. It lets floating circuits be calculated, at the cost of shifting the results very slightly. Larger converges more easily; smaller is more accurate
+過渡解析の刻みの誤差	Transient step error
+過渡解析で、コンデンサの電圧・コイルの電流が1ステップで外れてよい割合です。波形の曲がりが急なところでは、指定した時間刻みより自動で細かく刻みます。小さいほど正確ですが、点が増えて遅くなります	In transient analysis, the fraction by which a capacitor voltage or inductor current may be off in one step. Where the waveform bends sharply, steps are automatically made finer than the time step you set. Smaller is more accurate but adds points and is slower
+反復回数の上限	Max iterations
+1回の計算でやり直す最大回数です。増やすと収束しにくい回路が解けることがありますが、解けないときは時間がかかります	Maximum number of retries in one calculation. Raising it can solve hard-to-converge circuits, but takes longer when it can't be solved
+# crates/app/src/schematic/sheets_ui.rs
+この階層の記号をダブルクリックして開いたシートから、もとのシートへ戻ります	Go back from the sheet opened by double-clicking this hierarchy symbol to the original sheet
+← 親へ戻る ({})	← Back to parent ({})
+階層の子シートです。どこかのシートの記号として {copies} 個置かれていて、中を直すと全部に効きます。外とのつながりは、シートのポートが記号のピンになって行います。	A child sheet in the hierarchy. It is placed as a symbol {copies} times on other sheets, and edits inside apply to all of them. Connections to the outside are made by the sheet's ports, which become the symbol's pins.
+階層の親シートです。ほかのシートの記号を {symbols} 個置いています (記号をダブルクリックで中のシートへ)。	A parent sheet in the hierarchy. It has {symbols} symbols of other sheets (double-click a symbol to open its sheet).
+ふつうのシートです (階層の親でも子でもありません)。同じ名前のネットラベルと電源記号は、シートが違っても同じ配線になります。	A normal sheet (neither parent nor child in a hierarchy). Net labels and power symbols with the same name are the same wire even on different sheets.
+右クリックで名前の変更と削除ができます	Right-click to rename or delete
+{name} (親・子)	{name} (parent, child)
+{name} (子)	{name} (child)
+{name} (親)	{name} (parent)
+シートの名前	Sheet name
+いまのシートに、記号として置く	Place in current sheet as symbol
+このシートを、1つの部品 (記号) として、いまのシートに置きます。シートの中のポートが、記号のピンになります。同じシートを何回も置けて、中を直すと全部に効きます。部品番号は R1_CH1 のようになります	Places this sheet in the current sheet as one part (symbol). The ports inside the sheet become the symbol's pins. You can place the same sheet many times, and edits inside apply to all. Refdes look like R1_CH1
+このシートを削除	Delete this sheet
+このシートの部品・線・ラベルをすべて消します (Ctrl+Z で戻せます)	Deletes all parts, wires and labels on this sheet (Ctrl+Z undoes it)
+新しいシートを足します。大きな回路を、電源・アナログ・制御などに分けて描けます。シートをまたぐ配線は、同じ名前のネットラベル (と電源記号) で表します	Add a new sheet. You can split a large circuit into power, analog, control, etc. Wires across sheets are shown with net labels (and power symbols) of the same name
+＋ シートを足す	+ Add sheet
+# crates/app/src/schematic/snippet.rs
+保存するものを選んでください	Select what to save
+スニペットのファイルではありません: {e}	Not a snippet file: {e}
+スニペット	Snippet
+スニペットを保存しました: {}	Snippet saved: {}
+# crates/app/src/schematic/spec_table.rs
+測るノードを選んでください	Pick the node to measure
+許容差は「温度とばらつき」の欄に % の数値で入力してください (例: 5)	Enter the tolerance as a % number in the "Temperature and variation" section (e.g. 5)
+AC解析の欄の周波数と点数を数値で入力してください	Enter numbers for the frequency and points in the AC analysis section
+目標値と合否の見方	Targets and how pass/fail works
+作りたい回路の目標値を書いておくと、解析の結果が合格か ✓/× で分かります。値を変えて計算し直すと、表も変わります	Write the targets for the circuit you want, and the analysis results show pass or fail as ✓/×. Change values and recalculate, and the table updates too
+まだ判定できる項目がありません (解析を実行してください)	Nothing can be judged yet (run an analysis)
+合格 {passed} / {judged}	Passed {passed} / {judged}
+合格 {passed} / {judged}  (× が {} 件)	Passed {passed} / {judged}  ({} ×)
+何を測るか。{} の結果から読みます。過渡の「平均値」「リップル」は、起動直後を避けるため後半半分で測ります	What to measure. Read from the {} results. For transient "Average" and "Ripple", the second half is measured to avoid start-up
+測る対象の名前。{} を実行すると、一覧から選べるようになります	Name of what to measure. After running {}, you can pick it from a list
+測る対象。結果にある名前から選びます	What to measure. Pick from the names in the results
+この項目を消します	Delete this item
+ゲインを読む周波数 (10k, 1M など)	Frequency at which to read the gain (10k, 1M, etc.)
+許される範囲。空欄ならその側は制限なしです (数字は 4.75, 50m, 1k など)	The allowed range. If blank, that side has no limit (numbers like 4.75, 50m, 1k)
+  測った値 {}	  Measured {}
+  測った値 {}  ({})	  Measured {}  ({})
+実測	Real
+例 4.93	e.g. 4.93
+実際に作って測った値 (テスタやオシロの読み。4.93 や 50m のように書きます)。シミュレーションの値と比べて、差と、考えられる理由が出ます	The value you measured on the real circuit (multimeter or scope reading, written like 4.93 or 50m). Compared with the simulation value, it shows the difference and possible reasons
+  実測の数字を読めません (4.93、50m、1k のように書きます)	  Can't read the measured number (write it like 4.93, 50m, 1k)
+  シミュレーションの値が出ると、比べられます (解析を実行してください)	  Once there is a simulation value, they can be compared (run an analysis)
+よく合っています	Good match
+少し差があります	Some difference
+大きく違います	Very different
+  実測 {} / シミュレーション {} / 差 {}	  Real {} / Simulation {} / Diff {}
+差の理由の手がかり	Clues to the difference
+・{h}	- {h}
+＋ 項目を追加	+ Add item
+目標値を1つ足します。いま画面にある解析 (DC → 過渡 → AC の順) に合う種類が選ばれます	Add one target. A kind that matches the analysis on screen (in order DC → transient → AC) is picked
+すべて消す	Clear all
+目標値の表を空にします	Empty the targets table
+# crates/app/src/schematic/svg.rs
+回路図が空なので、SVG に書き出せません。部品を置いてからもう一度お試しください	The schematic is empty, so it can't be exported to SVG. Place some parts and try again
+SVG画像	SVG image
+回路図が空なので、PDF に書き出せません。部品を置いてからもう一度お試しください	The schematic is empty, so it can't be exported to PDF. Place some parts and try again
+PDF を保存しました: {}	PDF saved: {}
+# crates/app/src/schematic/sweep.rs
+開始・終了・刻みを数値で入力してください (例: 0, 5, 0.05)	Enter numbers for start, end and step (e.g. 0, 5, 0.05)
+スイープする電源の番号を入力してください (例: V2)。入力にあたる電源です	Enter the name of the source to sweep (e.g. V2). It is the source acting as the input
+DCスイープ: 完了 ({} 点, {} = {} 〜 {})	DC sweep: done ({} points, {} = {} to {})
+DCスイープに失敗: {}	DC sweep failed: {}
+温度スイープ (温度を変えたときの動作点)	Temperature sweep (operating point vs. temperature)
+DCスイープ (入力を変えたときの出力)	DC sweep (output vs. input)
+スイープの表示	Sweep display
+横軸: 回路の温度 (℃)。縦軸: 各ノードの電圧 (上) と電流 (下)	Horizontal axis: circuit temperature (°C). Vertical axis: node voltages (top) and currents (bottom)
+横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)	Horizontal axis: voltage of the swept source. Vertical axis: node voltages (top) and currents (bottom)
+{name} は反転する特性です	{name} has an inverting characteristic
+VOH (出力 High)	VOH (output high)
+入力が Low のときの出力電圧。電源電圧に近いほど良い High です	Output voltage when the input is low. The closer to the supply voltage, the better the high
+VOL (出力 Low)	VOL (output low)
+入力が High のときの出力電圧。0 V に近いほど良い Low です	Output voltage when the input is high. The closer to 0 V, the better the low
+Vth (切替電圧)	Vth (switching voltage)
+入力と出力が等しくなる電圧。ここを境に出力の High/Low が入れ替わります。電源の半分が理想です	The voltage where input equals output. The output flips between high and low here. Half the supply is ideal
+これより低い入力は確実に Low と見なされます (利得が -1 になる点)	Inputs below this are reliably taken as low (the point where gain is -1)
+これより高い入力は確実に High と見なされます (利得が -1 になる点)	Inputs above this are reliably taken as high (the point where gain is -1)
+NML (Lowの余裕)	NML (low margin)
+ノイズマージン = VIL − VOL。Low の信号に、これだけノイズが乗っても誤動作しません	Noise margin = VIL − VOL. A low signal can pick up this much noise without malfunctioning
+NMH (Highの余裕)	NMH (high margin)
+ノイズマージン = VOH − VIH。High の信号に、これだけノイズが落ち込んでも誤動作しません	Noise margin = VOH − VIH. A high signal can dip by this much from noise without malfunctioning
+最大利得	Max gain
+切り替わり部分の傾き。大きい (絶対値) ほどスパッと切り替わります	Slope of the switching region. The larger (in magnitude), the sharper the switch
+ノイズマージンは十分です。ロジックとして安心して使えます。	Noise margin is ample. Safe to use as logic.
+ノイズマージンは小さめです。ノイズの多い所では誤動作に注意しましょう。	Noise margin is on the small side. Watch for malfunctions in noisy places.
+ノイズマージンがほとんどありません。回路や部品の組み合わせを見直しましょう。	There is almost no noise margin. Review the circuit or the part combination.
+「出力 = 入力」の線	"Output = input" line
+この線と曲線が交わる所が切替電圧 Vth です	Where this line crosses the curve is the switching voltage Vth
+選んだ信号を、すべて外します	Remove all selected signals
+出力=入力	Output=input

@@ -116,17 +116,17 @@ impl BoardEditor {
     /// The floating "発注の準備" window.
     /// "部品の購入リスト": what to buy for the board, with the shops' links; a few spares of the tiny parts; a CSV to keep.
     fn shopping_list(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("部品の購入リスト (買うもの)").id_salt("shopping_list").show(ui, |ui| {
-            ui.small("基板に載せる部品の一覧です。店のボタンで、その店の部品のページ (型番が分かるもの) か、検索のページ (分からないもの) が開きます。買う前に、店のページで値と大きさを確かめます");
+        egui::CollapsingHeader::new(i18n::tr("部品の購入リスト (買うもの)")).id_salt("shopping_list").show(ui, |ui| {
+            ui.small(i18n::tr("基板に載せる部品の一覧です。店のボタンで、その店の部品のページ (型番が分かるもの) か、検索のページ (分からないもの) が開きます。買う前に、店のページで値と大きさを確かめます"));
             ui.horizontal(|ui| {
-                ui.label("基板の枚数");
-                ui.add(egui::DragValue::new(&mut self.order.boards).range(1..=1000)).on_hover_text("この枚数の基板に載せる分を買います");
-                ui.checkbox(&mut self.order.spare, "予備を足す").on_hover_text("小さなチップ部品 (抵抗・コンデンサ・コイル・LED) は、落としたり飛ばしたりしやすいので、2個か全体の1割の多いほうを、多めに買います。ICやコネクタには足しません。目安です");
+                ui.label(i18n::tr("基板の枚数"));
+                ui.add(egui::DragValue::new(&mut self.order.boards).range(1..=1000)).on_hover_text(i18n::tr("この枚数の基板に載せる分を買います"));
+                ui.checkbox(&mut self.order.spare, i18n::tr("予備を足す")).on_hover_text(i18n::tr("小さなチップ部品 (抵抗・コンデンサ・コイル・LED) は、落としたり飛ばしたりしやすいので、2個か全体の1割の多いほうを、多めに買います。ICやコネクタには足しません。目安です"));
             });
             let (boards, spare) = (self.order.boards.max(1), self.order.spare);
             let lines = pcb_core::shops::lines(&self.board);
             if lines.is_empty() {
-                ui.small("基板に部品がありません");
+                ui.small(i18n::tr("基板に部品がありません"));
                 return;
             }
             egui::Grid::new("shopping_grid").striped(true).show(ui, |ui| {
@@ -138,7 +138,7 @@ impl BoardEditor {
                     let (need, extra) = (l.qty * boards, if spare { l.spare(boards) } else { 0 });
                     ui.label(&l.value);
                     ui.small(&l.footprint);
-                    ui.small(l.refdes.join(" ")).on_hover_text("この部品が使う場所 (部品番号)");
+                    ui.small(l.refdes.join(" ")).on_hover_text(i18n::tr("この部品が使う場所 (部品番号)"));
                     ui.label(need.to_string());
                     ui.label(if extra > 0 { format!("+{extra}") } else { String::new() });
                     ui.strong((need + extra).to_string());
@@ -154,7 +154,7 @@ impl BoardEditor {
                     ui.end_row();
                 }
             });
-            if ui.button("CSVに保存…").on_hover_text("この一覧を CSV (表計算ソフトで開けます) に保存します。店のリンクと型番も入ります").clicked()
+            if ui.button(i18n::tr("CSVに保存…")).on_hover_text(i18n::tr("この一覧を CSV (表計算ソフトで開けます) に保存します。店のリンクと型番も入ります")).clicked()
                 && let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(format!("{}-shopping.csv", self.board.name)).save_file()
             {
                 self.status = match std::fs::write(&path, pcb_core::shops::purchase_csv(&self.board, boards, spare)) {
@@ -176,40 +176,40 @@ impl BoardEditor {
         let mut export_now = false;
         let mut make_preview = false;
         let mut repaint = false;
-        egui::Window::new("発注の準備").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(640.0).vscroll(true).show(ctx, |ui| {
-            ui.label("基板を発注する前の確認です。上から順に見ていきましょう。");
+        egui::Window::new(i18n::tr("発注の準備")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(640.0).vscroll(true).show(ctx, |ui| {
+            ui.label(i18n::tr("基板を発注する前の確認です。上から順に見ていきましょう。"));
             ui.separator();
             crate::widgets::section_heading(ui, "1. 発注先を選ぶ");
             egui::ComboBox::from_id_salt("fab_pick")
-                .selected_text(self.selected_fab().map_or("選んでください", |f| f.name))
+                .selected_text(i18n::tr(self.selected_fab().map_or("選んでください", |f| f.name)))
                 .width(300.0)
                 .show_ui(ui, |ui| {
                     for p in fab::PRESETS {
-                        if ui.selectable_value(&mut self.order.fab_id, p.id.to_string(), p.name).on_hover_text(p.summary).clicked() {
+                        if ui.selectable_value(&mut self.order.fab_id, p.id.to_string(), i18n::tr(p.name)).on_hover_text(i18n::tr(p.summary)).clicked() {
                             run = true;
                         }
                     }
                 });
             if let Some(f) = self.selected_fab() {
-                ui.small(f.summary);
+                ui.small(i18n::tr(f.summary));
                 for n in f.notes {
-                    ui.small(format!("・{n}"));
+                    ui.small(format!("・{}", i18n::tr(n)));
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("ルールをこの発注先に合わせる").on_hover_text("DRC の最小線幅・最小間隔・最小穴径などを、この発注先の値にします。配線の太さやビアの大きさの初期値も変わります").clicked() {
+                    if ui.button(i18n::tr("ルールをこの発注先に合わせる")).on_hover_text(i18n::tr("DRC の最小線幅・最小間隔・最小穴径などを、この発注先の値にします。配線の太さやビアの大きさの初期値も変わります")).clicked() {
                         apply = Some(f);
                     }
                     if !f.url.is_empty() {
-                        ui.hyperlink_to("発注先の最新の仕様を見る", f.url);
+                        ui.hyperlink_to(i18n::tr("発注先の最新の仕様を見る"), f.url);
                     }
                 });
-                ui.small("数値は目安です。発注の前に、必ず発注先のページで最新の値を確認してください。");
+                ui.small(i18n::tr("数値は目安です。発注の前に、必ず発注先のページで最新の値を確認してください。"));
             }
 
             ui.separator();
             ui.horizontal(|ui| {
                 crate::widgets::section_heading(ui, "2. 発注前のチェック");
-                if ui.button("もう一度チェック").on_hover_text("いまの基板でチェックをやり直します。直したあとに押します").clicked() {
+                if ui.button(i18n::tr("もう一度チェック")).on_hover_text(i18n::tr("いまの基板でチェックをやり直します。直したあとに押します")).clicked() {
                     run = true;
                 }
             });
@@ -228,9 +228,9 @@ impl BoardEditor {
                         // the same number is drawn on the board at that place
                         ui.colored_label(color, egui::RichText::new(format!("[{number}]")).strong());
                     }
-                    let text = egui::RichText::new(&c.title);
+                    let text = egui::RichText::new(i18n::tr_dyn(&c.title));
                     if c.at.is_some() {
-                        if ui.link(text).on_hover_text("クリックで、基板のその場所へ移動して、印をつけます。基板の上にも、同じ番号の印が出ています").clicked() {
+                        if ui.link(text).on_hover_text(i18n::tr("クリックで、基板のその場所へ移動して、印をつけます。基板の上にも、同じ番号の印が出ています")).clicked() {
                             jump = Some((idx, c.at));
                         }
                     } else {
@@ -240,32 +240,32 @@ impl BoardEditor {
                 if !c.detail.is_empty() && c.level != Level::Ok {
                     ui.indent(("detail", &c.title), |ui| {
                         // the explanation is the part to read: normal size, not the small print
-                        ui.label(&c.detail);
+                        ui.label(i18n::tr_dyn(&c.detail));
                     });
                 }
             }
             let ready = fab::ready(&self.order.checks);
             if self.order.ran {
                 if ready {
-                    ui.colored_label(crate::theme::OK, "直すところはありません。次に進めます");
+                    ui.colored_label(crate::theme::OK, i18n::tr("直すところはありません。次に進めます"));
                 } else {
-                    ui.colored_label(crate::theme::ERROR, "赤い ✖ の項目を直してから、もう一度チェックしてください");
+                    ui.colored_label(crate::theme::ERROR, i18n::tr("赤い ✖ の項目を直してから、もう一度チェックしてください"));
                 }
             }
 
             ui.separator();
             crate::widgets::section_heading(ui, "3. 出来上がりを見る");
-            ui.small("書き出すファイルを読み戻して、基板の絵にします。発注先に届くのはこの形です。配線や穴が想定どおりか確認しましょう");
-            if ui.button(if self.order.preview.is_some() { "プレビューを更新" } else { "プレビューを作る" }).on_hover_text("書き出すファイルを読み戻して、出来上がりの絵を作り直します").clicked() {
+            ui.small(i18n::tr("書き出すファイルを読み戻して、基板の絵にします。発注先に届くのはこの形です。配線や穴が想定どおりか確認しましょう"));
+            if ui.button(if self.order.preview.is_some() { i18n::tr("プレビューを更新") } else { i18n::tr("プレビューを作る") }).on_hover_text(i18n::tr("書き出すファイルを読み戻して、出来上がりの絵を作り直します")).clicked() {
                 make_preview = true;
             }
             if let Some(pv) = self.order.preview.as_mut() {
                 ui.horizontal(|ui| {
-                    repaint |= ui.selectable_value(&mut pv.bottom, false, "表面から").on_hover_text("基板の表面 (部品を載せる面) から見た絵にします").changed();
-                    repaint |= ui.selectable_value(&mut pv.bottom, true, "裏面から").on_hover_text("基板を裏返して、裏面から見た絵にします").changed();
-                    repaint |= ui.checkbox(&mut pv.mask, "ソルダーマスク").on_hover_text("緑のレジスト。オフにすると、銅の配線だけが見えます").changed();
-                    repaint |= ui.checkbox(&mut pv.silk, "シルク").on_hover_text("シルク (白い印刷の文字と枠) の表示を切り替えます").changed();
-                    ui.add(egui::Slider::new(&mut pv.zoom, 0.5..=3.0).text("拡大")).on_hover_text("プレビューの拡大率です");
+                    repaint |= ui.selectable_value(&mut pv.bottom, false, i18n::tr("表面から")).on_hover_text(i18n::tr("基板の表面 (部品を載せる面) から見た絵にします")).changed();
+                    repaint |= ui.selectable_value(&mut pv.bottom, true, i18n::tr("裏面から")).on_hover_text(i18n::tr("基板を裏返して、裏面から見た絵にします")).changed();
+                    repaint |= ui.checkbox(&mut pv.mask, i18n::tr("ソルダーマスク")).on_hover_text(i18n::tr("緑のレジスト。オフにすると、銅の配線だけが見えます")).changed();
+                    repaint |= ui.checkbox(&mut pv.silk, i18n::tr("シルク")).on_hover_text(i18n::tr("シルク (白い印刷の文字と枠) の表示を切り替えます")).changed();
+                    ui.add(egui::Slider::new(&mut pv.zoom, 0.5..=3.0).text(i18n::tr("拡大"))).on_hover_text(i18n::tr("プレビューの拡大率です"));
                 });
                 let w = (ui.available_width() - 8.0).max(200.0) * pv.zoom;
                 let size = Vec2::new(w, w * pv.size_px[1] as f32 / pv.size_px[0] as f32);
@@ -273,17 +273,17 @@ impl BoardEditor {
                 egui::ScrollArea::both().max_height(380.0).min_scrolled_height(380.0).id_salt("preview_scroll").show(ui, |ui| {
                     ui.add(egui::Image::new(egui::load::SizedTexture::new(pv.texture.id(), size)));
                 });
-                ui.small(format!("基板 {:.1} × {:.1} mm。金色 = むき出しの銅 (はんだが付く所)、緑 = マスクをかぶった配線、黒 = 穴、白 = シルク", pv.size_mm.0, pv.size_mm.1));
-                egui::CollapsingHeader::new("穴の一覧").show(ui, |ui| {
+                ui.small(i18n::trf!("基板 {:.1} × {:.1} mm。金色 = むき出しの銅 (はんだが付く所)、緑 = マスクをかぶった配線、黒 = 穴、白 = シルク", pv.size_mm.0, pv.size_mm.1));
+                egui::CollapsingHeader::new(i18n::tr("穴の一覧")).show(ui, |ui| {
                     egui::Grid::new("drill_grid").striped(true).show(ui, |ui| {
-                        ui.small("直径");
-                        ui.small("個数");
-                        ui.small("種類");
+                        ui.small(i18n::tr("直径"));
+                        ui.small(i18n::tr("個数"));
+                        ui.small(i18n::tr("種類"));
                         ui.end_row();
                         for (d, n, plated) in &pv.drills {
                             ui.small(format!("{d:.2} mm"));
                             ui.small(n.to_string());
-                            ui.small(if *plated { "メッキ穴" } else { "メッキなし" });
+                            ui.small(if *plated { i18n::tr("メッキ穴") } else { i18n::tr("メッキなし") });
                             ui.end_row();
                         }
                     });
@@ -292,27 +292,27 @@ impl BoardEditor {
 
             ui.separator();
             crate::widgets::section_heading(ui, "4. 製造ファイルを書き出す");
-            ui.small("ガーバーは、基板の工場に渡す設計図のデータです (銅の層・シルク・外形・穴が、層ごとのファイルになります)。まとめて zip にします");
+            ui.small(i18n::tr("ガーバーは、基板の工場に渡す設計図のデータです (銅の層・シルク・外形・穴が、層ごとのファイルになります)。まとめて zip にします"));
             ui.add_enabled_ui(ready, |ui| {
-                if ui.button("書き出し先のフォルダを選んで書き出す").on_hover_text("ガーバー・ドリル・部品表・部品位置・zip をまとめて作ります").clicked() {
+                if ui.button(i18n::tr("書き出し先のフォルダを選んで書き出す")).on_hover_text(i18n::tr("ガーバー・ドリル・部品表・部品位置・zip をまとめて作ります")).clicked() {
                     export_now = true;
                 }
             });
             if !ready {
-                ui.small("チェックの ✖ を直すと押せます");
+                ui.small(i18n::tr("チェックの ✖ を直すと押せます"));
             }
             if let Some(dir) = &self.order.exported_to {
-                ui.colored_label(crate::theme::OK, format!("書き出しました: {}", dir.display()));
-                ui.colored_label(crate::theme::OK, format!("発注先に渡すのは「{}_gerber.zip」の1つです (部品の実装も頼むときは、BOM と CPL の csv も)", self.board.name));
-                egui::CollapsingHeader::new("ファイルの中身").show(ui, |ui| {
+                ui.colored_label(crate::theme::OK, i18n::trf!("書き出しました: {}", dir.display()));
+                ui.colored_label(crate::theme::OK, i18n::trf!("発注先に渡すのは「{}_gerber.zip」の1つです (部品の実装も頼むときは、BOM と CPL の csv も)", self.board.name));
+                egui::CollapsingHeader::new(i18n::tr("ファイルの中身")).show(ui, |ui| {
                     for (suffix, what) in FILE_KINDS {
                         ui.small(format!("{}{suffix}  …  {what}", self.board.name));
                     }
                 });
                 if let Some(f) = self.selected_fab() {
-                    crate::widgets::section_heading(ui, format!("5. {} で注文する", f.name));
+                    crate::widgets::section_heading(ui, i18n::trf!("5. {} で注文する", f.name));
                     for (k, step) in f.steps.iter().enumerate() {
-                        ui.small(format!("{}. {}", k + 1, step.replace("基板名", &self.board.name)));
+                        ui.small(format!("{}. {}", k + 1, i18n::tr(step).replace("基板名", &self.board.name).replace("boardname", &self.board.name)));
                     }
                 }
             }

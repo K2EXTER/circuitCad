@@ -224,6 +224,7 @@ dependencies = [
  "design-spec",
  "eframe",
  "embed-resource",
+ "i18n",
  "image",
  "part-lib",
  "pcb-core",
@@ -1736,6 +1737,10 @@ checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
 dependencies = [
  "typenum",
 ]
+
+[[package]]
+name = "i18n"
+version = "0.1.0"
 
 [[package]]
 name = "i_float"

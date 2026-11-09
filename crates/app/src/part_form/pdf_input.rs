@@ -111,13 +111,13 @@ impl PartForm {
     pub(super) fn pick_row(&mut self, ui: &mut egui::Ui, targets: &[Target]) {
         if !self.sheet.has_doc() {
             ui.horizontal_wrapped(|ui| {
-                ui.small("データシートの数字を、クリックで入れられます:");
+                ui.small(i18n::tr("データシートの数字を、クリックで入れられます:"));
                 self.sheet.open_button(ui);
             });
             return;
         }
         ui.horizontal_wrapped(|ui| {
-            ui.small("PDFから入れる");
+            ui.small(i18n::tr("PDFから入れる"));
             for t in targets {
                 self.pick_button(ui, *t, t.label());
             }

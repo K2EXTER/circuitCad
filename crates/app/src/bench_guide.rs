@@ -174,7 +174,7 @@ impl BenchGuide {
             ui.add_space(4.0);
             ui.colored_label(WARN, g.safety);
             let ticked = self.ticks.iter().filter(|(id, _, _)| *id == g.id).count();
-            ui.add(egui::ProgressBar::new(ticked as f32 / total.max(1) as f32).text(format!("チェック {ticked} / {total}")));
+            ui.add(egui::ProgressBar::new(ticked as f32 / total.max(1) as f32).text(i18n::trf!("チェック {ticked} / {total}")));
             ui.separator();
             for (ti, task) in g.tasks.iter().enumerate() {
                 ui.strong(task.title);
@@ -182,7 +182,7 @@ impl BenchGuide {
                 for (ci, check) in task.checks.iter().enumerate() {
                     let key = (g.id, ti, ci);
                     let mut on = self.ticks.contains(&key);
-                    if ui.checkbox(&mut on, *check).on_hover_text("やり終えたら、チェックを入れます。全部入れると、学習パスのこの項目が完了になります").changed() {
+                    if ui.checkbox(&mut on, *check).on_hover_text(i18n::tr("やり終えたら、チェックを入れます。全部入れると、学習パスのこの項目が完了になります")).changed() {
                         if on {
                             self.ticks.insert(key);
                         } else {
@@ -193,7 +193,7 @@ impl BenchGuide {
                 ui.add_space(6.0);
             }
             ui.separator();
-            egui::CollapsingHeader::new("うまくいかないとき").show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("うまくいかないとき")).show(ui, |ui| {
                 for (what, look) in g.trouble {
                     ui.label(egui::RichText::new(*what).strong());
                     ui.indent(("bench_trouble", *what), |ui| {
@@ -205,7 +205,7 @@ impl BenchGuide {
             ui.label(spaced(g.limits).color(NOTE));
             if progress.is_done(g.id) || self.ticks.iter().filter(|(id, _, _)| *id == g.id).count() == total {
                 ui.separator();
-                ui.colored_label(OK, "できました! 学習パスのこの項目は完了です");
+                ui.colored_label(OK, i18n::tr("できました! 学習パスのこの項目は完了です"));
             }
         });
         let ticked = self.ticks.iter().filter(|(id, _, _)| *id == g.id).count();

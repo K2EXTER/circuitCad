@@ -199,13 +199,13 @@ fn field(ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str) -> bool {
 /// Draw the form; returns true when anything changed.
 pub fn show(ui: &mut egui::Ui, f: &mut SourceForm) -> bool {
     let mut changed = false;
-    ui.label("電源の種類");
+    ui.label(i18n::tr("電源の種類"));
     ui.horizontal_wrapped(|ui| {
         let before = f.kind;
-        ui.selectable_value(&mut f.kind, WaveKind::Dc, "直流").on_hover_text("一定の電圧。電池や電源ライン (5V など) に使います");
-        ui.selectable_value(&mut f.kind, WaveKind::Sin, "交流 (正弦波)").on_hover_text("なめらかに振動する交流。信号源や、フィルタの動きを見るのに使います");
-        ui.selectable_value(&mut f.kind, WaveKind::Pulse, "パルス").on_hover_text("0 と 5V などを繰り返す矩形波。ロジックやスイッチの動作確認に使います");
-        ui.selectable_value(&mut f.kind, WaveKind::Other, "その他").on_hover_text("PWL (折れ線) やノイズなど。テキストで直接書きます");
+        ui.selectable_value(&mut f.kind, WaveKind::Dc, i18n::tr("直流")).on_hover_text(i18n::tr("一定の電圧。電池や電源ライン (5V など) に使います"));
+        ui.selectable_value(&mut f.kind, WaveKind::Sin, i18n::tr("交流 (正弦波)")).on_hover_text(i18n::tr("なめらかに振動する交流。信号源や、フィルタの動きを見るのに使います"));
+        ui.selectable_value(&mut f.kind, WaveKind::Pulse, i18n::tr("パルス")).on_hover_text(i18n::tr("0 と 5V などを繰り返す矩形波。ロジックやスイッチの動作確認に使います"));
+        ui.selectable_value(&mut f.kind, WaveKind::Other, i18n::tr("その他")).on_hover_text(i18n::tr("PWL (折れ線) やノイズなど。テキストで直接書きます"));
         if f.kind != before {
             changed = true;
             if before == WaveKind::Dc && f.kind == WaveKind::Sin {
@@ -216,45 +216,45 @@ pub fn show(ui: &mut egui::Ui, f: &mut SourceForm) -> bool {
     });
     match f.kind {
         WaveKind::Dc => {
-            changed |= field(ui, "電圧 [V]", &mut f.dc, "一定の電圧。例: 5, 3.3, 12");
+            changed |= field(ui, i18n::tr("電圧 [V]"), &mut f.dc, i18n::tr("一定の電圧。例: 5, 3.3, 12"));
         }
         WaveKind::Sin => {
-            changed |= field(ui, "オフセット [V]", &mut f.sin[0], "波の中心の電圧 (直流分)。0 なら 0V を中心に振れます");
-            changed |= field(ui, "振幅 [V]", &mut f.sin[1], "中心から山までの高さ。1 なら −1V〜+1V で振れます (山から谷までは 2V)");
-            changed |= field(ui, "周波数 [Hz]", &mut f.sin[2], "1 秒あたりの波の数。例: 50, 1k, 100k");
-            ui.collapsing("詳細 (遅延・減衰・位相)", |ui| {
-                changed |= field(ui, "遅延 [s]", &mut f.sin[3], "この時間まで波を始めません");
-                changed |= field(ui, "減衰 [1/s]", &mut f.sin[4], "波がだんだん小さくなる速さ。0 なら減衰しません");
-                changed |= field(ui, "位相 [度]", &mut f.sin[5], "波の開始位置のずれ。90 でコサイン波");
+            changed |= field(ui, i18n::tr("オフセット [V]"), &mut f.sin[0], i18n::tr("波の中心の電圧 (直流分)。0 なら 0V を中心に振れます"));
+            changed |= field(ui, i18n::tr("振幅 [V]"), &mut f.sin[1], i18n::tr("中心から山までの高さ。1 なら −1V〜+1V で振れます (山から谷までは 2V)"));
+            changed |= field(ui, i18n::tr("周波数 [Hz]"), &mut f.sin[2], i18n::tr("1 秒あたりの波の数。例: 50, 1k, 100k"));
+            ui.collapsing(i18n::tr("詳細 (遅延・減衰・位相)"), |ui| {
+                changed |= field(ui, i18n::tr("遅延 [s]"), &mut f.sin[3], i18n::tr("この時間まで波を始めません"));
+                changed |= field(ui, i18n::tr("減衰 [1/s]"), &mut f.sin[4], i18n::tr("波がだんだん小さくなる速さ。0 なら減衰しません"));
+                changed |= field(ui, i18n::tr("位相 [度]"), &mut f.sin[5], i18n::tr("波の開始位置のずれ。90 でコサイン波"));
             });
         }
         WaveKind::Pulse => {
-            changed |= field(ui, "低い値 [V]", &mut f.pulse[0], "パルスが出ていない間の電圧");
-            changed |= field(ui, "高い値 [V]", &mut f.pulse[1], "パルスの間の電圧");
-            changed |= field(ui, "幅 [s]", &mut f.pulse[5], "高い値でいる時間。空欄だとずっと高いままです");
-            changed |= field(ui, "周期 [s]", &mut f.pulse[6], "繰り返しの間隔。空欄だと 1 回だけです");
-            ui.collapsing("詳細 (遅延・立上り・立下り)", |ui| {
-                changed |= field(ui, "遅延 [s]", &mut f.pulse[2], "最初のパルスが始まるまでの時間");
-                changed |= field(ui, "立上り [s]", &mut f.pulse[3], "低い値から高い値に変わるのにかける時間");
-                changed |= field(ui, "立下り [s]", &mut f.pulse[4], "高い値から低い値に戻るのにかける時間");
+            changed |= field(ui, i18n::tr("低い値 [V]"), &mut f.pulse[0], i18n::tr("パルスが出ていない間の電圧"));
+            changed |= field(ui, i18n::tr("高い値 [V]"), &mut f.pulse[1], i18n::tr("パルスの間の電圧"));
+            changed |= field(ui, i18n::tr("幅 [s]"), &mut f.pulse[5], i18n::tr("高い値でいる時間。空欄だとずっと高いままです"));
+            changed |= field(ui, i18n::tr("周期 [s]"), &mut f.pulse[6], i18n::tr("繰り返しの間隔。空欄だと 1 回だけです"));
+            ui.collapsing(i18n::tr("詳細 (遅延・立上り・立下り)"), |ui| {
+                changed |= field(ui, i18n::tr("遅延 [s]"), &mut f.pulse[2], i18n::tr("最初のパルスが始まるまでの時間"));
+                changed |= field(ui, i18n::tr("立上り [s]"), &mut f.pulse[3], i18n::tr("低い値から高い値に変わるのにかける時間"));
+                changed |= field(ui, i18n::tr("立下り [s]"), &mut f.pulse[4], i18n::tr("高い値から低い値に戻るのにかける時間"));
             });
         }
         WaveKind::Other => {
             changed |= ui
                 .add(egui::TextEdit::singleline(&mut f.other).desired_width(220.0))
-                .on_hover_text("例: PWL(0 0 1m 5 2m 0) / NOISE(0.05 1Meg) / 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k)
-(+ の前後は空白)")
+                .on_hover_text(i18n::tr("例: PWL(0 0 1m 5 2m 0) / NOISE(0.05 1Meg) / 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k)
+(+ の前後は空白)"))
                 .changed();
         }
     }
     ui.add_space(2.0);
-    let ac = ui.checkbox(&mut f.ac_on, "AC解析の入力にする").on_hover_text(
-        "周波数特性 (AC解析) を測るとき、この電源を入力として使います。\nAC解析のときだけ働く設定で、過渡解析やDC解析の電圧には影響しません",
+    let ac = ui.checkbox(&mut f.ac_on, i18n::tr("AC解析の入力にする")).on_hover_text(
+        i18n::tr("周波数特性 (AC解析) を測るとき、この電源を入力として使います。\nAC解析のときだけ働く設定で、過渡解析やDC解析の電圧には影響しません"),
     );
     changed |= ac.changed();
     if f.ac_on {
-        changed |= field(ui, "AC の大きさ", &mut f.ac_mag, "通常は 1。出力がそのまま利得(倍率)になります");
-        changed |= field(ui, "AC の位相 [度]", &mut f.ac_phase, "通常は 0");
+        changed |= field(ui, i18n::tr("AC の大きさ"), &mut f.ac_mag, i18n::tr("通常は 1。出力がそのまま利得(倍率)になります"));
+        changed |= field(ui, i18n::tr("AC の位相 [度]"), &mut f.ac_phase, i18n::tr("通常は 0"));
     }
     changed
 }

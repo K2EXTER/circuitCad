@@ -67,10 +67,10 @@ impl SchEditor {
             })
             .filter(|(_, g)| !g.is_empty())
             .collect();
-        let basic_title = if self.basic_open { egui::RichText::new("基本の部品").strong() } else { egui::RichText::new("基本の部品") };
+        let basic_title = if self.basic_open { egui::RichText::new(i18n::tr("基本の部品")).strong() } else { egui::RichText::new(i18n::tr("基本の部品")) };
         let (_, basic_clicked) = crate::widgets::band_header(ui, "basic", basic_title, self.basic_open, true, |ui| {
             crate::widgets::well(ui, |ui| {
-            ui.small("クリックして配置 / Rキーで回転");
+            ui.small(i18n::tr("クリックして配置 / Rキーで回転"));
             for k in Kind::PALETTE {
                 let selected = self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k;
                 let mut click = false;
@@ -86,18 +86,18 @@ impl SchEditor {
                     state.show_header(ui, |ui| {
                         let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 22.0), egui::Sense::click());
                         super::symbols::paint_kind_preview(ui.painter(), rect, *k, ui.visuals().text_color());
-                        toggled = (pic | ui.add(egui::Label::new(title).sense(egui::Sense::click()))).clicked();
+                        toggled = (pic | ui.add(egui::Label::new(i18n::tr_dyn(&title)).sense(egui::Sense::click()))).clicked();
                     }).body(|ui| {
-                        click = kind_row(ui, selected, *k, &format!("{} (基本)", k.label())).on_hover_text(kind_tip(*k)).clicked();
+                        click = kind_row(ui, selected, *k, &i18n::trf!("{} (基本)", k.label())).on_hover_text(i18n::tr_dyn(kind_tip(*k))).clicked();
                         for (family, parts) in cap_kinds.iter() {
-                            egui::CollapsingHeader::new(*family)
+                            egui::CollapsingHeader::new(i18n::tr_dyn(family))
                                 .id_salt(("part_family", k.label(), *family))
                                 .default_open(false)
                                 .show(ui, |ui| {
-                                    ui.small(family_tip(family));
+                                    ui.small(i18n::tr_dyn(family_tip(family)));
                                     for &i in parts {
                                         let sel = self.tool == Tool::Place && self.place_lib == Some(i);
-                                        if ui.selectable_label(sel, &self.library[i].name).on_hover_text(lib_hover(&self.library[i])).clicked() {
+                                        if ui.selectable_label(sel, &self.library[i].name).on_hover_text(i18n::tr_dyn(&lib_hover(&self.library[i]))).clicked() {
                                             chosen = Some(i);
                                         }
                                     }
@@ -110,7 +110,7 @@ impl SchEditor {
                         st.store(ui.ctx());
                     }
                 } else {
-                    click = kind_row(ui, selected, *k, &k.label()).on_hover_text(kind_tip(*k)).clicked();
+                    click = kind_row(ui, selected, *k, &k.label()).on_hover_text(i18n::tr_dyn(kind_tip(*k))).clicked();
                 }
                 if click {
                     self.tool = Tool::Place;
@@ -133,8 +133,8 @@ impl SchEditor {
             // everything inside the library group sits in one sunken well joined to the band; the indent line is not needed there
             crate::widgets::well(ui, |ui| {
             ui.visuals_mut().indent_has_left_vline = false;
-            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)").desired_width(f32::INFINITY).margin(egui::Margin::symmetric(6, 7)))
-                .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
+            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text(i18n::tr("検索 (名前・説明・ピン名・パッケージ)")).desired_width(f32::INFINITY).margin(egui::Margin::symmetric(6, 7)))
+                .on_hover_text(i18n::tr("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます"));
             let cat_of = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
             let mut cats: Vec<String> = self.library.iter().map(cat_of).collect();
             cats.sort();
@@ -147,12 +147,12 @@ impl SchEditor {
                     .width(combo_width)
                     .selected_text(if self.lib_cat.is_empty() { "すべてのカテゴリ".to_string() } else { self.lib_cat.clone() })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.lib_cat, String::new(), "すべてのカテゴリ");
+                        ui.selectable_value(&mut self.lib_cat, String::new(), i18n::tr("すべてのカテゴリ"));
                         for c in &cats {
                             ui.selectable_value(&mut self.lib_cat, c.clone(), c);
                         }
-                    }).response.on_hover_text("ライブラリ部品の分類。選んだ分類だけを一覧に出します");
-                ui.checkbox(&mut self.lib_sim_only, "◎のみ").on_hover_text("シミュレーションモデルのある部品だけを表示します");
+                    }).response.on_hover_text(i18n::tr("ライブラリ部品の分類。選んだ分類だけを一覧に出します"));
+                ui.checkbox(&mut self.lib_sim_only, i18n::tr("◎のみ")).on_hover_text(i18n::tr("シミュレーションモデルのある部品だけを表示します"));
             });
             let f = self.lib_filter.to_lowercase();
             let filtering = !f.is_empty() || !self.lib_cat.is_empty() || self.lib_sim_only;
@@ -183,7 +183,7 @@ impl SchEditor {
                 ui.horizontal(|ui| {
                     let fav = prefs.is_fav(&d.name);
                     if ui.add(egui::Button::new(egui::RichText::new(if fav { "★" } else { "☆" }).color(if fav { Color32::from_rgb(240, 190, 40) } else { Color32::GRAY })).frame(false).small())
-                        .on_hover_text(if fav { "お気に入りから外します" } else { "お気に入りに入れます。一覧の先頭に出ます" })
+                        .on_hover_text(if fav { i18n::tr("お気に入りから外します") } else { i18n::tr("お気に入りに入れます。一覧の先頭に出ます") })
                         .clicked()
                     {
                         toggle_fav = Some(d.name.clone());
@@ -222,7 +222,7 @@ impl SchEditor {
                     }
                 }
                 if groups.is_empty() {
-                    ui.small("条件に合う部品がありません。検索の文字やカテゴリを変えてみてください");
+                    ui.small(i18n::tr("条件に合う部品がありません。検索の文字やカテゴリを変えてみてください"));
                 }
                 for (c, ids) in groups {
                     let holds_selected = ids.iter().any(|&i| sel(i));
@@ -247,28 +247,28 @@ impl SchEditor {
             if let Some(d) = self.place_lib.and_then(|k| self.library.get(k)) {
                 ui.group(|ui| {
                     ui.strong(&d.name);
-                    ui.small(format!("パッケージ: {}", d.footprint_name()));
-                    if ui.small_button("編集…").on_hover_text("この部品を部品作成の窓で開いて、ピン・部品の形・モデル・定格などを直します。保存すると書き換わります (名前を変えると別の部品として追加)").clicked() {
+                    ui.small(i18n::trf!("パッケージ: {}", d.footprint_name()));
+                    if ui.small_button(i18n::tr("編集…")).on_hover_text(i18n::tr("この部品を部品作成の窓で開いて、ピン・部品の形・モデル・定格などを直します。保存すると書き換わります (名前を変えると別の部品として追加)")).clicked() {
                         edit_part = Some(d.clone());
                     }
                     if self.lib_delete.as_deref() == Some(d.name.as_str()) {
                         ui.horizontal(|ui| {
-                            ui.colored_label(crate::theme::ERROR, "本当に削除しますか?");
-                            if ui.small_button("削除する").on_hover_text("この部品のファイルをライブラリのフォルダから消します。元に戻せません。回路図や基板に置いた部品は、そのまま残ります").clicked() {
+                            ui.colored_label(crate::theme::ERROR, i18n::tr("本当に削除しますか?"));
+                            if ui.small_button(i18n::tr("削除する")).on_hover_text(i18n::tr("この部品のファイルをライブラリのフォルダから消します。元に戻せません。回路図や基板に置いた部品は、そのまま残ります")).clicked() {
                                 delete_part = Some(d.name.clone());
                             }
-                            if ui.small_button("やめる").clicked() {
+                            if ui.small_button(i18n::tr("やめる")).clicked() {
                                 self.lib_delete = None;
                             }
                         });
-                    } else if ui.small_button("削除…").on_hover_text("この部品を、ライブラリから消します (押したあとに、もう一度確かめます)。同梱の部品も消せて、消したものは、次に起動しても戻りません。回路図や基板に置いた部品は、そのまま残ります").clicked() {
+                    } else if ui.small_button(i18n::tr("削除…")).on_hover_text(i18n::tr("この部品を、ライブラリから消します (押したあとに、もう一度確かめます)。同梱の部品も消せて、消したものは、次に起動しても戻りません。回路図や基板に置いた部品は、そのまま残ります")).clicked() {
                         self.lib_delete = Some(d.name.clone());
                     }
                     ui.small(&d.description);
                     if let Some(m) = &d.sim {
                         limits_ui(ui, &m.limits, "lib_limits");
                     }
-                    egui::CollapsingHeader::new("ピン表").id_salt("lib_pins").show(ui, |ui| {
+                    egui::CollapsingHeader::new(i18n::tr("ピン表")).id_salt("lib_pins").show(ui, |ui| {
                         egui::Grid::new("lib_pin_grid").num_columns(2).show(ui, |ui| {
                             for p in &d.pins {
                                 ui.small(&p.number);
@@ -277,7 +277,7 @@ impl SchEditor {
                             }
                         });
                     });
-                    ui.small(if d.sim.is_some() { "シミュレーションモデルあり ◎" } else { "シミュレーションモデルなし (基板設計用)" });
+                    ui.small(if d.sim.is_some() { i18n::tr("シミュレーションモデルあり ◎") } else { i18n::tr("シミュレーションモデルなし (基板設計用)") });
                 });
             }
             if let Some(n) = delete_part {
@@ -288,13 +288,13 @@ impl SchEditor {
                 self.status = format!("{} を編集します。保存すると書き換わります", d.name);
                 self.form = Some(PartForm::from_def(&d));
             }
-            ui.small("◎ = シミュレーションモデルあり");
+            ui.small(i18n::tr("◎ = シミュレーションモデルあり"));
             ui.horizontal(|ui| {
-                if self.lit(ui.button("再読み込み"), "再読み込み").on_hover_text("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します").clicked() {
+                if self.lit(ui.button(i18n::tr("再読み込み")), "再読み込み").on_hover_text(i18n::tr("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します")).clicked() {
                     self.reload_library();
                 }
             });
-            ui.small("保存先: ライブラリのフォルダ").on_hover_text(self.lib_dir.display().to_string());
+            ui.small(i18n::tr("保存先: ライブラリのフォルダ")).on_hover_text(self.lib_dir.display().to_string());
             for e in &self.lib_errors {
                 ui.colored_label(crate::theme::ERROR, e);
             }
@@ -310,14 +310,14 @@ impl SchEditor {
         // make or reuse a part: one bar (the parts library's own buttons, then the snippet pair that works on the selection)
         let has = self.has_selection();
         let bar = crate::widgets::segment_row(ui, &[("部品を作る…", true), ("選択を保存…", has), ("スニペット…", true)]);
-        let make = self.lit(bar[0].clone(), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます");
+        let make = self.lit(bar[0].clone(), "＋ 部品を作る…").on_hover_text(i18n::tr("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます"));
         if make.clicked() {
             self.form = Some(PartForm::default());
         }
-        if bar[1].clone().on_hover_text("選んだ部品・線・ラベルをファイル (スニペット) に保存します。電源回路やLED点灯回路など、よく使う部分を別の回路でも使えます").clicked() {
+        if bar[1].clone().on_hover_text(i18n::tr("選んだ部品・線・ラベルをファイル (スニペット) に保存します。電源回路やLED点灯回路など、よく使う部分を別の回路でも使えます")).clicked() {
             self.save_snippet_dialog();
         }
-        if bar[2].clone().on_hover_text("保存したスニペットを選んで、いまの回路の空いた所に置きます。部品番号は新しくなります。置いたあと、ドラッグで動かせます").clicked() {
+        if bar[2].clone().on_hover_text(i18n::tr("保存したスニペットを選んで、いまの回路の空いた所に置きます。部品番号は新しくなります。置いたあと、ドラッグで動かせます")).clicked() {
             self.load_snippet_dialog();
         }
         if let Some(i) = chosen {
@@ -358,7 +358,7 @@ fn kind_row(ui: &mut egui::Ui, selected: bool, kind: Kind, text: &str) -> egui::
         let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 22.0), egui::Sense::click());
         let color = if selected { ui.visuals().selection.stroke.color } else { ui.visuals().text_color() };
         super::symbols::paint_kind_preview(ui.painter(), rect, kind, color);
-        pic | ui.selectable_label(selected, text)
+        pic | ui.selectable_label(selected, i18n::tr_dyn(text))
     })
     .inner
 }

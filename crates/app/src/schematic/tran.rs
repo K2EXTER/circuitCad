@@ -108,20 +108,20 @@ impl SchEditor {
         let mut longer = false;
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, .. } = view;
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("過渡解析の波形").strong().color(crate::theme::INFO));
+            ui.label(egui::RichText::new(i18n::tr("過渡解析の波形")).strong().color(crate::theme::INFO));
             if crate::widgets::close_button(ui, "波形") {
                 close = true;
             }
-            ui.checkbox(spectrum, "スペクトル表示").on_hover_text("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います");
+            ui.checkbox(spectrum, i18n::tr("スペクトル表示")).on_hover_text(i18n::tr("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います"));
             if *spectrum {
-                ui.label("解析範囲");
+                ui.label(i18n::tr("解析範囲"));
                 let tip = "スペクトルを計算する時間の範囲 (秒)。立ち上がり直後を除いた範囲を指定してください。縦軸は 0 dB = 1 V (ピーク値)";
                 ui.add(egui::TextEdit::singleline(spec_t0).desired_width(70.0)).on_hover_text(tip);
                 ui.label("〜");
                 ui.add(egui::TextEdit::singleline(spec_t1).desired_width(70.0)).on_hover_text(tip);
-                ui.label("秒");
+                ui.label(i18n::tr("秒"));
             } else {
-                if ui.small_button("操作").on_hover_text("波形のズーム・測定カーソル・信号の選び方を開きます").clicked() {
+                if ui.small_button(i18n::tr("操作")).on_hover_text(i18n::tr("波形のズーム・測定カーソル・信号の選び方を開きます")).clicked() {
                     open_help = true;
                 }
             }
@@ -149,23 +149,23 @@ impl SchEditor {
                     });
                 if flat {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new("波形が後半ほとんど動いていません。回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。").size(12.0));
-                        if ui.button("終了時間を10倍にして計算し直す").on_hover_text("終了時間の欄を10倍にして、もう一度過渡解析を実行します").clicked() {
+                        ui.label(egui::RichText::new(i18n::tr("波形が後半ほとんど動いていません。回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。")).size(12.0));
+                        if ui.button(i18n::tr("終了時間を10倍にして計算し直す")).on_hover_text(i18n::tr("終了時間の欄を10倍にして、もう一度過渡解析を実行します")).clicked() {
                             longer = true;
                         }
                     });
                 }
                 if !parts.is_empty() {
-                    egui::CollapsingHeader::new("部品の定格 (リップル電流・寿命)").default_open(true).show(ui, |ui| {
+                    egui::CollapsingHeader::new(i18n::tr("部品の定格 (リップル電流・寿命)")).default_open(true).show(ui, |ui| {
                         for r in parts.iter() {
                             let color = match r.level {
                                 Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
                                 Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
                                 None => crate::theme::OK,
                             };
-                            ui.colored_label(color, r.message());
+                            ui.colored_label(color, i18n::tr_dyn(&r.message()));
                             if !r.hint().is_empty() {
-                                ui.small(r.hint());
+                                ui.small(i18n::tr_dyn(&r.hint()));
                             }
                             if let Some(t) = r.life_text() {
                                 ui.label(t);
@@ -193,15 +193,15 @@ impl SchEditor {
                         let columns = order.iter().filter(|n| selected.contains(**n)).take(6).count();
                         ui.set_width((100.0 + 80.0 * columns as f32).clamp(250.0, 520.0));
                         ui.horizontal(|ui| {
-                            if ui.button("選択をクリア").clicked() {
+                            if ui.button(i18n::tr("選択をクリア")).clicked() {
                                 selected.clear();
                             }
-                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
+                            if ui.button(i18n::tr("回路図で選ぶ")).on_hover_text(i18n::tr("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)")).clicked() {
                                 start_probe = true;
                             }
                         });
                         ui.horizontal(|ui| {
-                            if ui.button("いまの波形を残す").on_hover_text("選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます").clicked() {
+                            if ui.button(i18n::tr("いまの波形を残す")).on_hover_text(i18n::tr("選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます")).clicked() {
                                 let sigs = order
                                     .iter()
                                     .filter(|n| selected.contains(**n))
@@ -210,7 +210,7 @@ impl SchEditor {
                                     .collect();
                                 *ghost = Some(Ghost { x: res.time.clone(), sigs });
                             }
-                            if ghost.is_some() && ui.button("消す").on_hover_text("残してある「前」の波形を消します").clicked() {
+                            if ghost.is_some() && ui.button(i18n::tr("消す")).on_hover_text(i18n::tr("残してある「前」の波形を消します")).clicked() {
                                 *ghost = None;
                             }
                         });
@@ -258,7 +258,7 @@ impl SchEditor {
                                         if cells.iter().all(|c| c == "—") {
                                             continue;
                                         }
-                                        ui.label(*label).on_hover_text(*tip);
+                                        ui.label(i18n::tr(label)).on_hover_text(i18n::tr(tip));
                                         for c in cells {
                                             ui.label(c);
                                         }
@@ -267,15 +267,15 @@ impl SchEditor {
                                 });
                             });
                         }
-                        egui::CollapsingHeader::new("ひずみ率 (THD)").show(ui, |ui| {
+                        egui::CollapsingHeader::new(i18n::tr("ひずみ率 (THD)")).show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label("基本周波数");
-                                ui.add(egui::TextEdit::singleline(thd_f0).hint_text("自動").desired_width(60.0)).on_hover_text("入力の正弦波の周波数 (例 1k)。空欄なら波形から自動で見つけます。範囲は、ちょうど整数周期ぶんに切って計算します");
+                                ui.label(i18n::tr("基本周波数"));
+                                ui.add(egui::TextEdit::singleline(thd_f0).hint_text(i18n::tr("自動")).desired_width(60.0)).on_hover_text(i18n::tr("入力の正弦波の周波数 (例 1k)。空欄なら波形から自動で見つけます。範囲は、ちょうど整数周期ぶんに切って計算します"));
                             });
-                            ui.small(if *spectrum { "スペクトルの「解析範囲」の時間で計算します" } else { "いま表示している時間の範囲で計算します。立ち上がりを除いて、数周期〜数十周期が入るようにします" });
+                            ui.small(if *spectrum { i18n::tr("スペクトルの「解析範囲」の時間で計算します") } else { i18n::tr("いま表示している時間の範囲で計算します。立ち上がりを除いて、数周期〜数十周期が入るようにします") });
                             let f0 = if thd_f0.trim().is_empty() { None } else { parse_value(thd_f0) };
                             if f0.is_none() && !thd_f0.trim().is_empty() {
-                                ui.colored_label(crate::theme::ERROR, "基本周波数を数値で入力してください (例: 1k)");
+                                ui.colored_label(crate::theme::ERROR, i18n::tr("基本周波数を数値で入力してください (例: 1k)"));
                             } else {
                                 let mut results = vec![];
                                 let mut failed = vec![];
@@ -302,7 +302,7 @@ impl SchEditor {
                                             ("3次", "基本周波数の3倍の成分 (基本波との比)。波の頭が上下とも削られる (クリップ) と出ます", Box::new(|t| format!("{:.1} dB", 20.0 * (t.harmonics[2].amp / t.fundamental()).max(1e-12).log10()))),
                                         ];
                                         for (label, tip, f) in rows.iter() {
-                                            ui.label(*label).on_hover_text(*tip);
+                                            ui.label(i18n::tr(label)).on_hover_text(i18n::tr(tip));
                                             for (_, t) in &results {
                                                 ui.label(f(t));
                                             }
@@ -310,7 +310,7 @@ impl SchEditor {
                                         }
                                     });
                                     if results.iter().any(|(_, t)| t.points_per_period < 40.0) {
-                                        ui.colored_label(crate::theme::WARN, "1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください");
+                                        ui.colored_label(crate::theme::WARN, i18n::tr("1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください"));
                                     }
                                 }
                                 for f in &failed {
@@ -318,8 +318,8 @@ impl SchEditor {
                                 }
                             }
                         });
-                        egui::CollapsingHeader::new("ステップ応答の指標").show(ui, |ui| {
-                            ui.small("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)");
+                        egui::CollapsingHeader::new(i18n::tr("ステップ応答の指標")).show(ui, |ui| {
+                            ui.small(i18n::tr("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)"));
                             // one column per signal, one row per figure (same layout as the table above)
                             let mut metrics = vec![];
                             let mut settling = vec![];
@@ -345,29 +345,29 @@ impl SchEditor {
                                         ui.strong(name);
                                     }
                                     ui.end_row();
-                                    ui.label("最終値").on_hover_text("波形が落ち着いた先の値です");
+                                    ui.label(i18n::tr("最終値")).on_hover_text(i18n::tr("波形が落ち着いた先の値です"));
                                     for (_, m) in &metrics {
                                         ui.label(eng(m.final_value, "V"));
                                     }
                                     ui.end_row();
-                                    ui.label("立ち上がり").on_hover_text("10% から 90% まで変わる時間");
+                                    ui.label(i18n::tr("立ち上がり")).on_hover_text(i18n::tr("10% から 90% まで変わる時間"));
                                     for (_, m) in &metrics {
                                         ui.label(m.rise_time.map_or_else(dash, |t| eng(t, "s")));
                                     }
                                     ui.end_row();
-                                    ui.label("行き過ぎ").on_hover_text("最終値を超えた量。0% なら滑らかに近づいています");
+                                    ui.label(i18n::tr("行き過ぎ")).on_hover_text(i18n::tr("最終値を超えた量。0% なら滑らかに近づいています"));
                                     for (_, m) in &metrics {
                                         ui.label(format!("{:.1} %", m.overshoot_pct));
                                     }
                                     ui.end_row();
-                                    ui.label("整定").on_hover_text("10% に達してから ±2% に収まるまでの時間");
+                                    ui.label(i18n::tr("整定")).on_hover_text(i18n::tr("10% に達してから ±2% に収まるまでの時間"));
                                     for (_, m) in &metrics {
                                         ui.label(m.settling_time.map_or_else(dash, |t| eng(t, "s")));
                                     }
                                     ui.end_row();
                                     // tighter bands: how long until the waveform is within ±1 %, ±0.1 %, ... of the final value for good
                                     for (k, band) in SETTLE_BANDS.iter().enumerate() {
-                                        ui.label(format!("±{} %", (band * 1e5).round() / 1e3)).on_hover_text("波形が動き始めてから、最終値との差がこの幅 (ステップの大きさに対する割合) に収まって、そのままになるまでの時間です。精密な測定では、この時間だけ待ってから読みます。解析の終わりまでに収まらないときは「—」です");
+                                        ui.label(format!("±{} %", (band * 1e5).round() / 1e3)).on_hover_text(i18n::tr("波形が動き始めてから、最終値との差がこの幅 (ステップの大きさに対する割合) に収まって、そのままになるまでの時間です。精密な測定では、この時間だけ待ってから読みます。解析の終わりまでに収まらないときは「—」です"));
                                         for s in &settling {
                                             ui.label(s.as_ref().and_then(|s| s.times[k].1).map_or_else(dash, |t| eng(t, "s")));
                                         }
@@ -379,10 +379,10 @@ impl SchEditor {
                                 ui.small(why);
                             }
                             if !order.iter().any(|n| selected.contains(*n)) {
-                                ui.small("下の一覧で信号を選んでください");
+                                ui.small(i18n::tr("下の一覧で信号を選んでください"));
                             }
                         });
-                        egui::CollapsingHeader::new("電力と効率").default_open(power.iter().any(|p| !p.is_empty())).show(ui, |ui| power_ui::power_ui(ui, res, &order, st.x, power));
+                        egui::CollapsingHeader::new(i18n::tr("電力と効率")).default_open(power.iter().any(|p| !p.is_empty())).show(ui, |ui| power_ui::power_ui(ui, res, &order, st.x, power));
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {
                                 let mut on = selected.contains(*name);
@@ -408,7 +408,7 @@ impl SchEditor {
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
                     if *spectrum {
                         let (Some(t0), Some(t1)) = (parse_value(spec_t0), parse_value(spec_t1)) else {
-                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "解析範囲を数値で入力してください", FontId::proportional(14.0), crate::theme::ERROR);
+                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("解析範囲を数値で入力してください"), FontId::proportional(14.0), crate::theme::ERROR);
                             return;
                         };
                         let key = format!("{t0:e}|{t1:e}|{selected:?}");
@@ -424,7 +424,7 @@ impl SchEditor {
                         let list = &spec_cache.as_ref().unwrap().1;
                         let (Some(sp_state), false) = (spec_plot.as_mut(), list.is_empty()) else {
                             ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
-                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から信号を選んでください (範囲が不正な場合も表示されません)", FontId::proportional(14.0), Color32::from_gray(150));
+                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から信号を選んでください (範囲が不正な場合も表示されません)"), FontId::proportional(14.0), Color32::from_gray(150));
                             return;
                         };
                         let dbs: Vec<Vec<f64>> = list.iter().map(|(_, sp)| sp.amp.iter().map(|a| 20.0 * a.max(1e-12).log10()).collect()).collect();
@@ -463,7 +463,7 @@ impl SchEditor {
                     let used: Vec<usize> = (0..2).filter(|g| !groups[*g].is_empty()).collect();
                     if used.is_empty() {
                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
-                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から波形を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から波形を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                     }
                     let h = rect.height() / used.len().max(1) as f32;
                     for (n, g) in used.iter().enumerate() {

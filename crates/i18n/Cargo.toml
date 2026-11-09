@@ -1,0 +1,9 @@
+[package]
+name = "i18n"
+version = "0.1.0"
+edition = "2024"
+description = "circuitCad: 画面の文字の英訳 (日本語の文をそのまま鍵にした表)"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/K2EXTER/circuitCad"
+
+[dependencies]

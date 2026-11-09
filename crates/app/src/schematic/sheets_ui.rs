@@ -38,7 +38,7 @@ impl SchEditor {
         ui.horizontal_wrapped(|ui| {
             if let Some(&parent) = self.sheet_trail.last() {
                 let tip = "この階層の記号をダブルクリックして開いたシートから、もとのシートへ戻ります";
-                if ui.button(format!("← 親へ戻る ({})", self.sch.sheet_name(parent))).on_hover_text(tip).clicked() {
+                if ui.button(i18n::trf!("← 親へ戻る ({})", self.sch.sheet_name(parent))).on_hover_text(tip).clicked() {
                     back = true;
                 }
             }
@@ -63,9 +63,9 @@ impl SchEditor {
                     }
                     tip += "右クリックで名前の変更と削除ができます";
                     let label = match (is_child, symbols > 0) {
-                        (true, true) => egui::RichText::new(format!("{name} (親・子)")).color(egui::Color32::from_rgb(150, 130, 220)),
-                        (true, false) => egui::RichText::new(format!("{name} (子)")).color(egui::Color32::from_rgb(90, 150, 220)),
-                        (false, true) => egui::RichText::new(format!("{name} (親)")).color(egui::Color32::from_rgb(220, 150, 70)),
+                        (true, true) => egui::RichText::new(i18n::trf!("{name} (親・子)")).color(egui::Color32::from_rgb(150, 130, 220)),
+                        (true, false) => egui::RichText::new(i18n::trf!("{name} (子)")).color(egui::Color32::from_rgb(90, 150, 220)),
+                        (false, true) => egui::RichText::new(i18n::trf!("{name} (親)")).color(egui::Color32::from_rgb(220, 150, 70)),
                         _ => egui::RichText::new(name.clone()),
                     };
                     let tab = ui.selectable_label(k == self.sch.active_sheet, label).on_hover_text(tip);
@@ -75,14 +75,14 @@ impl SchEditor {
                     let can_place = k != self.sch.active_sheet && count > 1;
                     tab.context_menu(|ui| {
                         let mut n = name.clone();
-                        if ui.text_edit_singleline(&mut n).on_hover_text("シートの名前").changed() {
+                        if ui.text_edit_singleline(&mut n).on_hover_text(i18n::tr("シートの名前")).changed() {
                             self.sch.rename_sheet(k, &n);
                         }
-                        if can_place && ui.button("いまのシートに、記号として置く").on_hover_text("このシートを、1つの部品 (記号) として、いまのシートに置きます。シートの中のポートが、記号のピンになります。同じシートを何回も置けて、中を直すと全部に効きます。部品番号は R1_CH1 のようになります").clicked() {
+                        if can_place && ui.button(i18n::tr("いまのシートに、記号として置く")).on_hover_text(i18n::tr("このシートを、1つの部品 (記号) として、いまのシートに置きます。シートの中のポートが、記号のピンになります。同じシートを何回も置けて、中を直すと全部に効きます。部品番号は R1_CH1 のようになります")).clicked() {
                             place_symbol = Some(k);
                             ui.close();
                         }
-                        if ui.button("このシートを削除").on_hover_text("このシートの部品・線・ラベルをすべて消します (Ctrl+Z で戻せます)").clicked() {
+                        if ui.button(i18n::tr("このシートを削除")).on_hover_text(i18n::tr("このシートの部品・線・ラベルをすべて消します (Ctrl+Z で戻せます)")).clicked() {
                             delete = Some(k);
                             ui.close();
                         }
@@ -90,7 +90,7 @@ impl SchEditor {
                 }
             }
             let tip = "新しいシートを足します。大きな回路を、電源・アナログ・制御などに分けて描けます。シートをまたぐ配線は、同じ名前のネットラベル (と電源記号) で表します";
-            if ui.small_button(if count > 1 { "＋" } else { "＋ シートを足す" }).on_hover_text(tip).clicked() {
+            if ui.small_button(if count > 1 { i18n::tr("＋") } else { i18n::tr("＋ シートを足す") }).on_hover_text(tip).clicked() {
                 add = true;
             }
         });

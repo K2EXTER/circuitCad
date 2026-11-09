@@ -732,9 +732,9 @@ impl BoardEditor {
         let cur = done.iter().position(|d| !d);
         let mut close = false;
         let mut word: Option<&'static str> = None;
-        egui::Window::new(format!("レッスン: {}", title_of(which))).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(crate::PANEL_WIDTH + 14.0, -56.0)).show(ctx, |ui| {
+        egui::Window::new(i18n::trf!("レッスン: {}", title_of(which))).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(crate::PANEL_WIDTH + 14.0, -56.0)).show(ctx, |ui| {
             ui.label(goal_of(which));
-            ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
+            ui.small(i18n::trf!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();
             for (k, step) in steps.iter().enumerate() {
                 let (mark, color) = if done[k] {
@@ -759,11 +759,11 @@ impl BoardEditor {
             }
             ui.separator();
             // the words of the lesson: a click opens the glossary on that word
-            egui::CollapsingHeader::new("このレッスンの用語 (押すと用語集が開きます)").id_salt(("board_words", which)).default_open(false).show(ui, |ui| {
+            egui::CollapsingHeader::new(i18n::tr("このレッスンの用語 (押すと用語集が開きます)")).id_salt(("board_words", which)).default_open(false).show(ui, |ui| {
                 let text = lesson_texts().into_iter().find(|(w, _, _)| *w == which).map(|(_, _, t)| t).unwrap_or_default();
                 let words = crate::glossary::terms_in(&text);
                 if words.is_empty() {
-                    ui.small("このレッスンには、用語集の言葉は出てきません");
+                    ui.small(i18n::tr("このレッスンには、用語集の言葉は出てきません"));
                 }
                 ui.horizontal_wrapped(|ui| {
                     for term in words {
@@ -774,14 +774,14 @@ impl BoardEditor {
                 });
             });
             if !copper && !fix && !arduino && !usb && !mega && !pairs && !repair {
-            egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
+            egui::CollapsingHeader::new(i18n::tr("できること・できないこと (ツールの限界)"))
                 .id_salt(("board_limits", cur.is_none()))
                 .default_open(cur.is_none())
                 .show(ui, |ui| {
-                    ui.small("自動の機能は便利ですが、万能ではありません。次の点は、人が確かめます");
+                    ui.small(i18n::tr("自動の機能は便利ですが、万能ではありません。次の点は、人が確かめます"));
                     for l in BOARD_LIMITS {
                         ui.horizontal_wrapped(|ui| {
-                            ui.label("・");
+                            ui.label(i18n::tr("・"));
                             ui.label(*l);
                         });
                     }
@@ -789,36 +789,36 @@ impl BoardEditor {
             }
             if cur.is_none() && copper {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了!");
-                ui.label("配線は銅の抵抗を持ち、電流が大きいほど、細く長いほど、電圧が落ちます。流れる電流から必要な太さを決め (IPC-2221)、シミュレーションで確かめる、という順で考えます。この見積もりはDCの電流だけで、スイッチングの瞬間の大きな電流や、配線のインダクタンスは入っていません。余裕を見て、実機でも測りましょう。");
+                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了!"));
+                ui.label(i18n::tr("配線は銅の抵抗を持ち、電流が大きいほど、細く長いほど、電圧が落ちます。流れる電流から必要な太さを決め (IPC-2221)、シミュレーションで確かめる、という順で考えます。この見積もりはDCの電流だけで、スイッチングの瞬間の大きな電流や、配線のインダクタンスは入っていません。余裕を見て、実機でも測りましょう。"));
             } else if cur.is_none() && fix {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "チャレンジ達成!");
-                ui.label("発注前チェックの ✖ と ▲ がなくなりました。このチェックは「機械的に見つかる間違い」を調べるもので、回路が正しく動くことは保証しません。発注の前に、回路図のシミュレーションと、発注先のページの最新の条件を、もう一度確かめましょう。");
+                ui.colored_label(crate::theme::OK, i18n::tr("チャレンジ達成!"));
+                ui.label(i18n::tr("発注前チェックの ✖ と ▲ がなくなりました。このチェックは「機械的に見つかる間違い」を調べるもので、回路が正しく動くことは保証しません。発注の前に、回路図のシミュレーションと、発注先のページの最新の条件を、もう一度確かめましょう。"));
             } else if cur.is_none() && pairs {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了!");
-                ui.label("2 組以上の差動ペアを同時に届けたいときは、ペアの長さ (2 本の平均) を揃えます。長さ合わせの蛇行は、2 本を入れ子の山でいっしょに曲げると、間隔 (結合) が保たれます。1 本だけを曲げると、その所で 2 本が離れて、DRC に「間隔のずれ」が出ます。ペアの中の長さの差は、2 本をいっしょに曲げても直らないので、短いほうの 1 本を曲げます (そこは間隔が少しずれます)。速い信号では、拡大して、蛇行が間隔を保っているかを目で確かめましょう。");
+                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了!"));
+                ui.label(i18n::tr("2 組以上の差動ペアを同時に届けたいときは、ペアの長さ (2 本の平均) を揃えます。長さ合わせの蛇行は、2 本を入れ子の山でいっしょに曲げると、間隔 (結合) が保たれます。1 本だけを曲げると、その所で 2 本が離れて、DRC に「間隔のずれ」が出ます。ペアの中の長さの差は、2 本をいっしょに曲げても直らないので、短いほうの 1 本を曲げます (そこは間隔が少しずれます)。速い信号では、拡大して、蛇行が間隔を保っているかを目で確かめましょう。"));
             } else if cur.is_none() && repair {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "直りました!");
-                ui.label("故障を見つける順番は、「症状から、疑う所の見当をつける」→「点検の道具で確かめる」→「直して、もう一度点検」です。「別の故障で練習」で、ほかの種類の故障 (バイパスコンデンサが遠い・配線が切れている・細い・ショート・部品が基板の外) も試せます。");
+                ui.colored_label(crate::theme::OK, i18n::tr("直りました!"));
+                ui.label(i18n::tr("故障を見つける順番は、「症状から、疑う所の見当をつける」→「点検の道具で確かめる」→「直して、もう一度点検」です。「別の故障で練習」で、ほかの種類の故障 (バイパスコンデンサが遠い・配線が切れている・細い・ショート・部品が基板の外) も試せます。"));
             } else if cur.is_none() && mega {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了!");
-                ui.label("自動配線が通せなかった線は、人が仕上げます。足の間が狭い IC では、「先に通したい線から引く」「邪魔な線を一度消して引き直す」「ビアで裏面へ渡す」「部品の位置を直す」の順に考えます。発注の前には、未配線が 0 本で、DRC が 0 件であることを、必ず確かめてください (未配線のまま発注すると、基板は動きません)。");
+                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了!"));
+                ui.label(i18n::tr("自動配線が通せなかった線は、人が仕上げます。足の間が狭い IC では、「先に通したい線から引く」「邪魔な線を一度消して引き直す」「ビアで裏面へ渡す」「部品の位置を直す」の順に考えます。発注の前には、未配線が 0 本で、DRC が 0 件であることを、必ず確かめてください (未配線のまま発注すると、基板は動きません)。"));
             } else if cur.is_none() && usb {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了!");
-                ui.label("USB の配線の基本は、「D+ と D− を並べて、同じ長さで、短く」「ビアや枝分かれを避ける」「ESD 保護部品はコネクタのそば」「下の層を GND のベタにする」です。高速 (ハイスピード 480Mbit/s) では、差動インピーダンス 90Ω の設計が必須で、基板の積層を決めてから配線します。");
+                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了!"));
+                ui.label(i18n::tr("USB の配線の基本は、「D+ と D− を並べて、同じ長さで、短く」「ビアや枝分かれを避ける」「ESD 保護部品はコネクタのそば」「下の層を GND のベタにする」です。高速 (ハイスピード 480Mbit/s) では、差動インピーダンス 90Ω の設計が必須で、基板の積層を決めてから配線します。"));
             } else if cur.is_none() && arduino {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了!");
-                ui.label("マイコンの基板では、「水晶は近く」「バイパスコンデンサは電源ピンのそば」「通らない線は、グリッドを細かくするか、手で引く」の 3 つが基本です。ほかにも、GND はベタで広く取る、リセットやクロックの線にノイズの源 (スイッチング電源など) を近づけない、があります。実機で動かないときは、まずこれらを疑いましょう。");
+                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了!"));
+                ui.label(i18n::tr("マイコンの基板では、「水晶は近く」「バイパスコンデンサは電源ピンのそば」「通らない線は、グリッドを細かくするか、手で引く」の 3 つが基本です。ほかにも、GND はベタで広く取る、リセットやクロックの線にノイズの源 (スイッチング電源など) を近づけない、があります。実機で動かないときは、まずこれらを疑いましょう。"));
             } else if cur.is_none() {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了!");
-                ui.label("基板づくりの流れは「回路図 → 取り込み → 配置 → 配線 → DRC → 発注データ」です。DRC に通らないと発注データは書き出せないので、配線のあとは必ず DRC を実行する習慣をつけましょう。実際に注文するときは、発注先のページで最新の条件を確かめてください。");
+                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了!"));
+                ui.label(i18n::tr("基板づくりの流れは「回路図 → 取り込み → 配置 → 配線 → DRC → 発注データ」です。DRC に通らないと発注データは書き出せないので、配線のあとは必ず DRC を実行する習慣をつけましょう。実際に注文するときは、発注先のページで最新の条件を確かめてください。"));
             }
             ui.separator();
             if crate::widgets::close_button(ui, "レッスン") {

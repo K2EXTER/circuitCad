@@ -43,6 +43,20 @@ pub(super) fn install_japanese_font(ctx: &egui::Context) {
     for fam in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
         fonts.families.entry(fam).or_default().insert(0, "jp".into());
     }
+    // in English the Latin letters come from a proportional font (the Japanese font's are narrow and look typed); Japanese text
+    // left untranslated still falls back to the Japanese font
+    if !i18n::is_ja() {
+        let latin = [r"C:\Windows\Fonts\segoeui.ttf", "/System/Library/Fonts/SFNS.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"].iter().filter(|_| use_system).find_map(|p| std::fs::read(p).ok());
+        let prop = fonts.families.entry(egui::FontFamily::Proportional).or_default();
+        if let Some(bytes) = latin {
+            fonts.font_data.insert("latin".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
+            prop.insert(0, "latin".into());
+        } else {
+            // egui's own proportional font first
+            prop.retain(|f| f != "jp");
+            prop.insert(1.min(prop.len()), "jp".into());
+        }
+    }
     ctx.set_fonts(fonts);
     // the default body / button size (12.5 px) is not a whole pixel count (13 px fails the same way), and with this font the
     // thin hyphen / minus stroke then vanishes ("1e-6" reads "1e 6", "-3dB" reads "3dB")

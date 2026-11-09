@@ -1,0 +1,453 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/ac.rs
+開始・終了周波数と点数/デケードを数値で入力してください (例: 10, 1Meg, 20)	Enter the start and stop frequencies and points per decade as numbers (e.g. 10, 1Meg, 20)
+ / 注意: 基板の配線の抵抗は直流の値です。約 300 kHz 以上では表皮効果で増えます (10 MHz で約 1.4〜1.9 倍、100 MHz で約 3.5〜4.3 倍)	 / Note: the board track resistance is the DC value. Above about 300 kHz it rises due to the skin effect (about 1.4-1.9x at 10 MHz, about 3.5-4.3x at 100 MHz)
+AC解析: 完了 ({} 点){skin}	AC analysis: done ({} points){skin}
+AC解析に失敗: {}	AC analysis failed: {}
+ループゲイン (帰還を1周したゲイン)	Loop gain (gain once around the feedback loop)
+伝達関数と、極・零から作った当てはめ	Transfer function and a fit built from the poles and zeros
+H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります	H = output / input. If the "fit" lies right on top of the circuit's response, the poles and zeros found explain this response. The "Poles and zeros" item in the "Analysis" tab on the left lists their frequencies
+0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)	0 dB = 1x. The circuit is stable if, where the gain crosses 0 dB, the phase still has room before -180° (aim for a phase margin of 45° or more). T is the true loop gain; Tv and Ti are the values with only a voltage or only a current injected (where they differ from T, the impedances on the two sides of the break differ)
+ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります	Gain 0dB = 1 V (or 1 A). Set the input source to "AC 1" and this is the transfer function directly
+波形のズーム・測定カーソル・信号の選び方を開きます	Opens waveform zoom, measurement cursors and signal selection
+選択をクリア	Clear selection
+回路図で選ぶ	Pick in schematic
+押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)	Press, then click the schematic. A pin or wire adds the frequency response of the voltage at that point; a part body (or Shift+pin) adds that of the part's current. You can pick as many as you like in a row (Esc or right-click to finish)
+いまの特性を残す	Keep current response
+選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます	Keeps a faint copy of the selected responses. Change a part value and recalculate to compare before (faint line) and after (bold line)
+{} (前)	{} (before)
+残してある「前」の特性を消します	Removes the kept "before" responses
+範囲内にありません	Not in range
+-3dB点	-3dB point
+ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります	The frequency where the gain is 3dB (about 0.7x) below its maximum. This is a filter's "cutoff frequency"
+安定性の余裕 (位相余裕・ゲイン余裕)	Stability margins (phase margin, gain margin)
+ゲインが 0dB になる周波数で、位相が -180° までにあと何度残っているか。45° 以上が目安で、小さいとステップ応答で行き過ぎや振動が出ます	At the frequency where the gain is 0dB, how many degrees the phase still has before -180°. Aim for 45° or more; if it is small, the step response overshoots or rings
+十分	Enough
+やや不足	A bit low
+不足	Too low
+不安定	Unstable
+不足: 振動しやすい状態です	Too low: the circuit is prone to oscillate
+ゲイン 0dB の交点がありません (ゲインが最初から 1 未満、または範囲内で下がりきらない)	No 0dB gain crossing (the gain is below 1 from the start, or does not fall far enough in the range)
+  その周波数	  At frequency
+ゲインが 0dB になる周波数 (ゲイン交点)	Frequency where the gain is 0dB (gain crossover)
+ゲイン余裕	Gain margin
+位相が -180° になる周波数で、ゲインが 0dB まであと何 dB 残っているか。6dB 以上が目安です	At the frequency where the phase is -180°, how many dB the gain still has before 0dB. Aim for 6dB or more
+位相が -180° に達しません (ゲイン余裕は無限大)	The phase never reaches -180° (gain margin is infinite)
+位相が -180° になる周波数 (位相交点)	Frequency where the phase is -180° (phase crossover)
+位相が 180° から始まる信号は、反転増幅として 180° ずらして計算しました	Signals whose phase starts at 180° were treated as inverting amplifiers and shifted by 180°
+反転入力に信号を入れて出力を測ると、位相は 180° から始まります。負帰還では反転は織り込み済みなので、ずらして評価します	If you feed the inverting input and measure the output, the phase starts at 180°. With negative feedback the inversion is already accounted for, so it is shifted before judging
+{name} の交点にカーソルを置く	Put cursors on the {name} crossings
+交点にカーソルを置く	Put cursors on the crossings
+波形上のカーソル A をゲイン交点 (0dB)、B を位相交点 (-180°) に置きます	Puts cursor A on the waveform at the gain crossover (0dB) and B at the phase crossover (-180°)
+左の一覧から信号を選んでください	Pick a signal from the list on the left
+# crates/app/src/schematic/analysis_panel.rs
+電圧表示	Show voltages
+DC解析の結果を回路図に重ねて表示します。配線は電圧が低いほど青、高いほど赤に色分けされます	Overlays the DC analysis results on the schematic. Wires are colored blue for low voltage through red for high voltage
+電流表示	Show currents
+各部品を流れる電流を数値と矢印 (電流の向き) で表示します。「どこに電流が流れているか」の理解に役立ちます。数値の符号は向きの約束です: 素子の第1端子→第2端子の向きに流れるとプラス、逆向きならマイナス (例: -9.2 mA は、9.2 mA が逆向きに流れている)。電源は、電力を供給しているとマイナスになります	Shows the current through each part as a number and an arrow (its direction). Helps you see "where the current flows". The sign is a direction convention: positive when flowing from the part's 1st terminal to its 2nd, negative the other way (e.g. -9.2 mA means 9.2 mA flowing the opposite way). A supply shows negative while it delivers power
+自動で再計算	Auto recalculate
+回路を変えるたびに、開いている解析 (DC / 過渡 / AC) をやり直します。\n部品の「スライダー」と組み合わせると、値を動かしながら結果がどう変わるかを実験できます。\n重い回路では動きがもたつくのでオフにしてください	Reruns the open analyses (DC / transient / AC) every time you change the circuit.\nCombined with a part's "slider", you can experiment by moving a value and watching the results change.\nTurn it off for heavy circuits, as things get sluggish
+回路の温度	Circuit temperature
+DC・過渡・AC・DCスイープで使う温度 (摂氏、標準は 27)。\n温度が上がるとダイオードやトランジスタの順方向電圧が約 2 mV/℃ ずつ下がります。\n抵抗・コンデンサ・コイルは、ライブラリ部品の温度係数 (TC1・TC2) を入れたものだけ、温度で値が変わります (基本部品は変わりません)	Temperature used by DC, transient, AC and DC sweep (Celsius, default 27).\nAs it rises, the forward voltage of diodes and transistors drops by about 2 mV/℃.\nResistors, capacitors and inductors change with temperature only if they are library parts with temperature coefficients (TC1, TC2) set (basic parts do not change)
+DC動作点を解析	Run DC operating point
+時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います	Finds the voltages and currents at each point once things have settled. The voltage appears next to each pin on the schematic, so this is the most common way to check "is the voltage what I expected?"
+基板の配線抵抗を反映中 ({} ピン、結合 {} 組)	Including board track resistance ({} pins, {} coupled pairs)
+基板の銅箔 (配線・ビア・ベタ) の抵抗とインダクタンスを、電源の入口から各ピンの手前に直列に入れて解析しています。インダクタンスはACや速い変化で効きます。近くを並んで走る別のネットの配線とは、磁気の結合 (相互インダクタンス) も入れてあり、行きと帰りが近いほどループのインダクタンスが小さくなります。配線を変えたら、基板の「配線の電圧降下」から反映し直してください。ネットの電圧は入口側の値で、部品のピンの電圧は少し低くなります	The analysis puts the resistance and inductance of the board copper (tracks, vias, copper pours) in series from the supply entry to just before each pin. Inductance matters in AC and fast changes. Magnetic coupling (mutual inductance) with tracks of other nets running alongside is included too; the closer the outgoing and return paths, the smaller the loop inductance. After changing the tracks, apply it again from the board's "Track voltage drop". Net voltages are the entry-side values; part pin voltages are a little lower
+解除	Remove
+終了	Stop
+どこまで時間を進めるか。例: 10m = 10ミリ秒。見たい波形が数周期入る長さにします	How far to run in time. E.g. 10m = 10 milliseconds. Make it long enough to show a few periods of the waveform you want to see
+刻み	Step
+計算の最大の時間刻み。空欄なら自動で、終了時間の 1/1000 になります (波形の変化が速い所では、自動でもっと細かくします)。波形が角ばって見えるときは、小さい値を入れます	Maximum time step for the calculation. If blank it is automatic: 1/1000 of the stop time (and finer where the waveform changes quickly, even in automatic). If the waveform looks jagged, enter a smaller value
+ゼロ状態から	Start from zero
+コンデンサの電圧などを 0 の状態から始めます。電源を入れた直後の立ち上がりを見たいときに使います	Starts with capacitor voltages and so on at 0. Use this to see the rise right after power-on
+過渡解析を実行	Run transient analysis
+時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います	Calculates how voltages and currents change over time and shows the waveforms like an oscilloscope. Use it for charging and discharging, oscillation, and pulse responses
+開始	Start
+測り始める周波数 (Hz)。例: 10	Frequency to start at (Hz). E.g. 10
+測り終わる周波数 (Hz)。例: 1Meg = 1MHz	Frequency to stop at (Hz). E.g. 1Meg = 1MHz
+点/dec	pts/dec
+周波数が10倍になる間に何点測るか。多いほど滑らかですが、20 もあれば十分です	How many points to calculate per tenfold frequency. More is smoother, but 20 is plenty
+AC解析を実行	Run AC analysis
+入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます	Finds how the output's size and phase change as the input frequency changes (frequency response). Shows a Bode plot for checking the bandwidth of filters and amplifiers
+電圧を変える電源の番号 (例 V2)。インバーターなら入力にあたる電源です。値を少しずつ変えながら、そのつど動作点を求めます	Refdes of the source whose voltage is swept (e.g. V2). For an inverter, the source at its input. The value is changed step by step, finding the operating point each time
+スイープの開始電圧 (V)	Sweep start voltage (V)
+スイープの終了電圧 (V)。ロジックなら電源電圧まで	Sweep stop voltage (V). For logic, up to the supply voltage
+電圧を変える間隔 (V)。切り替わりをなめらかに見るには、電源電圧の 1/100 くらい	Voltage step (V). For a smooth view of the switching, about 1/100 of the supply voltage
+DCスイープを実行	Run DC sweep
+入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します	Measures the output while changing the input voltage and draws the transfer characteristic. For an inverter it also calculates VOH / VOL / switching voltage / noise margins
+出力	Output
+ノイズを測るノードの名前。「A,B」と書くと A と B の電位差を測ります。\n名前が分からないときは右の「回路図で選ぶ」を使うと、クリックするだけで入力できます	Name of the node where noise is measured. Write "A,B" to measure the potential difference between A and B.\nIf you don't know the name, use "Pick in schematic" on the right to fill it in with a click
+入力電源	Input source
+回路の入力にあたる電源の番号 (例 V1)。入れると、ノイズを入力側に換算した値も出ます。\n「このアンプは入力で何 µV のノイズがあるのと同じか」が分かります。空欄でも構いません	Refdes of the source at the circuit's input (e.g. V1). If given, the noise referred to the input is shown too.\nYou can see "this amplifier is like having so many µV of noise at its input". May be left blank
+回路の温度 (摂氏)。熱雑音は絶対温度に比例するので、温度を上げると増えます	Circuit temperature (Celsius). Thermal noise is proportional to absolute temperature, so it grows as the temperature rises
+選択中… (Esc で中止)	Picking… (Esc to cancel)
+押してから回路図のピンや配線をクリックすると、そのノードが出力になり、すぐ解析します。\nShift+クリックで基準ノード (差動出力)	Press, then click a pin or wire on the schematic: that node becomes the output and the analysis runs right away.\nShift+click for the reference node (differential output)
+回路図の測りたいノードをクリックしてください	Click the node you want to measure on the schematic
+ノイズ解析を実行	Run noise analysis
+抵抗の熱雑音や、ダイオード・トランジスタのショット雑音が出力にどれだけ現れるかを周波数ごとに計算します。	Calculates, per frequency, how much of the resistors' thermal noise and the diodes' and transistors' shot noise appears at the output.
+温度	Temperature
+温度スイープの開始温度 (℃)	Temperature sweep start (℃)
+終了温度 (℃)。屋外機器なら -20〜60、車載なら -40〜105 くらいを見ます	Stop temperature (℃). Check about -20 to 60 for outdoor equipment, -40 to 105 for automotive
+温度の間隔 (℃)	Temperature step (℃)
+温度スイープを実行	Run temperature sweep
+温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。\nLED の電流や、トランジスタ回路のバイアスが温度でずれる様子が分かります	Finds the operating point while changing the temperature and plots how each voltage moves.\nShows how an LED's current or a transistor circuit's bias drifts with temperature
+測る点	Point to measure
+選ぶ…	Pick…
+電圧のずれを調べるノード (回路図のラベル名か自動で付いた名前)	Node whose voltage spread is checked (a schematic label name or an automatic name)
+回数	Runs
+ランダムな回路を何個作って計算するか。多いほど分布が滑らかです (300 もあれば十分)	How many random circuits to build and calculate. More gives a smoother distribution (300 is plenty)
+測るもの	Measure
+電圧 (DC)	Voltage (DC)
+選んだ点の直流電圧が、部品の誤差でどれだけずれるか	How much the DC voltage at the chosen point shifts due to part tolerances
+カットオフ (AC)	Cutoff (AC)
+フィルタが -3dB になる周波数が、部品の誤差でどれだけずれるか。入力電源の値を「AC 1」にし、周波数の範囲は AC解析の欄を使います	How much the filter's -3dB frequency shifts due to part tolerances. Set the input source value to "AC 1"; the frequency range comes from the AC analysis fields
+ステップ応答	Step response
+電源が 0V→5V に切り替わったときの応答の速さや行き過ぎが、部品の誤差でどれだけずれるか。入力電源は PULSE(0 5 0 1u 1u 1 2) のようにし、時間は過渡解析の欄を使います。落ち着くまで十分長い終了時間が必要です	How much the speed and overshoot of the response when a supply switches 0V->5V shift due to part tolerances. Set the input source like PULSE(0 5 0 1u 1u 1 2); the time comes from the transient analysis fields. The stop time must be long enough to settle
+指標	Metric
+立ち上がり時間	Rise time
+整定時間	Settling time
+最終値	Final value
+出力が最終値の 10% から 90% まで変わるのにかかる時間。小さいほど速い	Time for the output to go from 10% to 90% of its final value. Smaller is faster
+最終値を行き過ぎる量 (ステップの大きさに対する %)	How far it overshoots the final value (% of the step size)
+10% に達してから、最終値の ±2% に収まるまでの時間	Time from reaching 10% until it stays within ±2% of the final value
+落ち着いたあとの電圧	Voltage after settling
+許容差 %  R	Tolerance %  R
+抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です	Resistor tolerance. 5% is typical for carbon film and 1% for metal film
+コンデンサの誤差。セラミック (X7R) は 10〜20%、電解は 20% ほどです	Capacitor tolerance. About 10-20% for ceramic (X7R) and 20% for electrolytic
+コイルの誤差。10〜20% が一般的です	Inductor tolerance. 10-20% is typical
+直流電源の電圧の誤差。最悪ケースだけに使います (ランダムのばらつきは電源をそのままにします)。0 なら電源は変えません。例: 5V 電源が ±5% なら 5	Tolerance of DC supply voltages. Used only for the worst case (random spread leaves supplies as they are). 0 leaves supplies unchanged. E.g. 5 for a 5V supply of ±5%
+ばらつき解析を実行	Run tolerance analysis
+すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。\n「同じ回路を作っても、実物ごとに電圧が違う」理由と、どの部品を高精度にすべきかが分かります	Varies every part value randomly within its tolerance, calculates the operating point many times, and shows how much the chosen voltage spreads.\nShows why "the same circuit gives different voltages on each real build" and which parts should be high precision
+回路が変更されました。再度解析してください	The circuit has changed. Run the analysis again
+⚠ これは「{f}」と仮定した結果です (実際の回路ではありません)	⚠ This result assumes "{f}" (not the actual circuit)
+DCの1点ではなく、時間を追った波形を計算します。発振回路や2つの状態を持つ回路は、ここで動きが見えます (終了時間と刻みは「過渡解析」の設定が使われます)	Calculates waveforms over time instead of a single DC point. Oscillators and circuits with two states show their behavior here (the stop time and step from the "Transient analysis" settings are used)
+⚠ 定格超え	⚠ Over rating
+⚠ 余裕が少ない	⚠ Little margin
+ノード {nodes} 個・素子 {elems} 個	{nodes} nodes, {elems} elements
+電力が最大: {} ({})	Highest power: {} ({})
+いちばん熱くなる素子です。表を「電力が大きい順」に並べると、続きが分かります	The element that gets hottest. Sort the table by "Highest power" to see the rest
+結果の表…	Result table…
+ネットリスト…	Netlist…
+SPICE書き出し…	SPICE export…
+ノードの電圧と、素子ごとの電流・電圧・電力を、検索と並べ替えのできる窓で開きます。行を押すと、回路図でその部品を選びます	Opens node voltages and per-element current, voltage and power in a window you can search and sort. Clicking a row selects that part on the schematic
+先に「DC動作点を解析」を押すと、結果の表が開けます	Press "Run DC operating point" first to open the result table
+どのピンとどのピンがつながっているか (ネット) の一覧を、検索のできる窓で開きます。回路図の配線ミスや、基板に渡るつながりの確認に使います	Opens a searchable list of which pins connect to which (nets). Use it to check for wiring mistakes on the schematic or the connections passed to the board
+SPICEネットリストを書き出し…	Export SPICE netlist…
+回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います	Exports the circuit as a SPICE netlist (.cir). Use it to run the same circuit in another simulator such as LTspice or ngspice
+# crates/app/src/schematic/canvas.rs
+({}, {})  部品 {}  配線 {}	({}, {})  parts {}  wires {}
+ノードの選択を中止しました	Node picking canceled
+# crates/app/src/schematic/clipboard.rs
+コピーするものを選んでください (部品や線をクリックするか、範囲をドラッグで囲みます)	Select what to copy (click parts or lines, or drag a box around them)
+コピーしました: 部品 {}・線 {}・ラベル {}。Ctrl+V で貼り付けます	Copied: {} parts, {} lines, {} labels. Paste with Ctrl+V
+貼り付けるものがありません。部品や線を選んで、先に Ctrl+C でコピーしてください	Nothing to paste. Select parts or lines and copy them with Ctrl+C first
+貼り付けられる空きが見つかりませんでした。シートを広く使うか、先にほかの部品を動かしてください	No free space found to paste into. Use more of the sheet or move other parts first
+貼り付けました: 部品 {}・線 {}・ラベル {} (ドラッグで動かせます。部品番号は新しくなっています)	Pasted: {} parts, {} lines, {} labels (drag to move them; refdes have been renumbered)
+# crates/app/src/schematic/coverage.rs
+計算に入る部品 {} 個 (記号・ピンヘッダを除く)	{} parts in the calculation (excluding symbols and pin headers)
+モデルのない部品も、汎用の値で計算している部品も、注意書きのあるモデルもありません	No parts without models, none calculated with generic values, and no models with warnings
+抵抗・コンデンサ・コイルは理想の素子 (ESR などは値の欄に書いたぶんだけ) で計算します	Resistors, capacitors and inductors are calculated as ideal elements (ESR etc. only as written in the value field)
+計算に入っていない部品 {} 個	{} parts not in the calculation
+モデルがないので、回路にないものとして計算します。部品の編集で、モデルのある部品に替えるか、ライブラリにモデルを足してください	There is no model, so it is calculated as if absent from the circuit. In part editing, switch to a part with a model or add a model to the library
+汎用の標準値で計算 {} 個	{} parts calculated with generic default values
+ダイオード・LED・NPN の基本の部品は、型番の特性ではなく、標準の値で計算します。型番まで合わせたいときは、ライブラリの部品に替えます	Basic diode, LED and NPN parts are calculated with default values, not the characteristics of a specific part number. To match a part number, switch to a library part
+モデルに注意書きがある部品 {} 個	{} parts with notes on their models
+ライブラリのモデルが、何を含まないか・数値の出どころを書いたものです。結果を見るときに、効きそうなものだけ読めば足ります	Notes written for library models on what they leave out and where the numbers come from. When reading results, you only need to read the ones likely to matter
+シミュレーション専用 {} 個	{} simulation-only parts
+試験用の電源や、測る相手の代わりに置いた部品です。基板には載りません	Test supplies and parts standing in for the thing being measured. They do not go on the board
+# crates/app/src/schematic/dc.rs
+シミュレーションできません: {e}	Cannot simulate: {e}
+部品の値は 10k、4.7u、100n のように、数字のあとに k (キロ)・m (ミリ)・u (マイクロ)・n (ナノ) などを付けて書きます。部品を選んで、左の「値」を直しましょう	Write part values like 10k, 4.7u, 100n: a number followed by k (kilo), m (milli), u (micro), n (nano) and so on. Select the part and fix "Value" on the left
+温度「{t}」を数値(℃)で入力してください (例: 27)	Enter temperature "{t}" as a number (℃) (e.g. 27)
+DC解析ができませんでした: {e}	DC analysis could not be done: {e}
+先に回路図で「過渡解析を実行」してください (電流は、その結果の後半から求めます)	Run "Run transient analysis" on the schematic first (the currents are taken from the second half of its results)
+ヒント: {h}	Hint: {h}
+DC動作点を計算しました (反復 {} 回)	DC operating point calculated ({} iterations)
+DC解析に失敗: {}	DC analysis failed: {}
+# crates/app/src/schematic/draw.rs
+描きかけ (ERC対象外)	Unfinished (excluded from ERC)
+ループを切る部品の本体をクリック (ピン・配線: 出力側のネット / Esc: 中止)	Click the body of the part where the loop is broken (pin/wire: the output-side net / Esc: cancel)
+伝達関数の出力にしたいネットをクリック (Shift+クリック: 入力のネット / Esc: 中止)	Click the net to use as the transfer function output (Shift+click: input net / Esc: cancel)
+インピーダンスを見たいネットをクリック (Shift+クリック: 基準のネット / Esc: 中止)	Click the net whose impedance you want to see (Shift+click: reference net / Esc: cancel)
+ノイズを測りたいノードをクリック (Shift+クリック: 基準ノード / Esc: 中止)	Click the node where noise is measured (Shift+click: reference node / Esc: cancel)
+ノード {n}	Node {n}
+(接続なし)	(not connected)
+# crates/app/src/schematic/edit.rs
+回すと他の部品と重なるので、回せません	Can't rotate: it would overlap other parts
+{text} のメンバーは全部付けました。バスの線の上をクリックすると、バスの名前を付けられます	All members of {text} are labeled. Click on the bus line to give the bus a name
+# crates/app/src/schematic/erc_skip.rs
+選んだ範囲をERCの対象から外しました	The selected area is now excluded from ERC
+この範囲をERCの対象に戻します	Include this area in ERC again
+描きかけ {} ({},{})–({},{})	Unfinished {} ({},{})–({},{})
+範囲をERCの対象に戻しました。ERCを押して確かめてください	The area is back in ERC. Press ERC to check
+# crates/app/src/schematic/fault.rs
+壊す部品を選んでください	Select the part to break
+ブリッジでつなぐ相手のネットを選んでください	Select the net to bridge to
+{part} には「{}」の故障を設定できません。ほかの壊し方を選ぶか、「ピン」で壊してください	The "{}" fault can't be set on {part}. Choose another way to break it, or break it by "Pins"
+ピン {name} を断線	Open pin {name}
+ピン {name} を GND にショート	Short pin {name} to GND
+ピン {name} をネット {net} とブリッジ	Bridge pin {name} to net {net}
+見る点 (ノード) がありません。回路に名前のついた点 (ラベルなど) を付けてください	No point (node) to watch. Give a point in the circuit a name (a label, for example)
+AC解析の開始・終了周波数と点数を数値で入力してください (例: 10, 1Meg, 20)	Enter the AC analysis start and stop frequencies and points as numbers (e.g. 10, 1Meg, 20)
+過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)	Enter the transient analysis stop time and step as numbers (e.g. 10m, 10u)
+故障シミュレーション (過渡): {} を「{}」	Fault simulation (transient): {} "{}"
+故障シミュレーション (AC): {} を「{}」	Fault simulation (AC): {} "{}"
+故障シミュレーションに失敗: {}	Fault simulation failed: {}
+故障シミュレーション (AC): 周波数特性の比較	Fault simulation (AC): frequency response comparison
+故障シミュレーション (過渡): 正常と故障の比較	Fault simulation (transient): normal vs. faulty
+故障の比較	Fault comparison
+白い線 = 正常な回路 / 色つきの線 = 部品を壊した回路。クリックで測定カーソル	White line = normal circuit / colored lines = circuit with a broken part. Click for a measurement cursor
+測った範囲: {} 〜 {}	Measured range: {} to {}
+V({}) 正常	V({}) normal
+故障シミュレーション: {} を「{}」	Fault simulation: {} "{}"
+連鎖故障は、部品全体の故障で調べます。「壊し方」を「部品全体」にしてください	Cascading faults are checked with whole-part faults. Set "How to break" to "Whole part"
+連鎖故障: {} 個の部品が壊れました	Cascading faults: {} parts broke
+連鎖故障の解析に失敗: {}	Cascading fault analysis failed: {}
+回路を計算できないため、故障を試せません。先に DC動作点を解析してエラーを直してください	The circuit can't be calculated, so faults can't be tried. Run the DC operating point first and fix the errors
+故障シミュレーション: {} 通りを試しました	Fault simulation: tried {} cases
+故障シミュレーション: {total} 通りを試しています…	Fault simulation: trying {total} cases…
+ (まれな {skipped} 通りは省略。「まれな故障も含める」で試せます)	 ({skipped} rare cases skipped. Try them with "Include rare faults")
+故障シミュレーションを中止しました	Fault simulation canceled
+故障シミュレーションが途中で止まりました	Fault simulation stopped partway
+{} を「{}」	{} "{}"
+壊す部品。抵抗・コンデンサ・コイル・ダイオード・トランジスタ・電源は部品全体を、ICなどはピン単位で壊せます	The part to break. Resistors, capacitors, inductors, diodes, transistors and supplies can be broken as a whole part; ICs and the like per pin
+選択中の部品	Selected part
+回路図で選んでいる部品を壊す対象にします	Makes the part selected on the schematic the one to break
+壊し方	How to break
+部品全体	Whole part
+部品そのものが壊れた/付け間違えた状態にします	Makes the part itself broken or wrongly fitted
+ピン単位	Per pin
+1本のピンだけ、はんだ不良 (断線) や、隣とのはんだブリッジ (ショート) にします。ICのピンは、この方法で壊します	Gives just one pin a bad solder joint (open) or a solder bridge to its neighbor (short). IC pins are broken this way
+この部品は部品全体としては壊せません (ICなど)。「ピン単位」を選んでください	This part can't be broken as a whole part (an IC, for example). Choose "Per pin"
+足が外れた・はんだ不良・パターン切れ。その部品が回路から消えた状態にします (電源は 0V になります)	A lead came off, a bad solder joint, or a cut trace. The part disappears from the circuit (a supply becomes 0V)
+足同士がつながった (はんだブリッジ・部品の破壊)。ごく小さな抵抗でつなぎます	Leads connected together (solder bridge, destroyed part). Joined with a very small resistance
+コイルの巻線の層と層の絶縁がやぶれて、巻線の一部がショートした状態 (レアショート)。インダクタンスが下がって電流が増え、ショートした部分には大きな電流が回って発熱します。「連鎖故障を追う」で、そのあと何が壊れていくかを見られます	The insulation between layers of an inductor winding breaks down and part of the winding is shorted (shorted turns). The inductance drops and the current rises, and a large current circulates in the shorted part, heating it. Use "Follow cascading faults" to see what breaks next
+向きを逆につけた (ダイオード/LED のアノードとカソード、トランジスタのコレクタとエミッタ)。故障ではなく、組み立てのミスです。部品の向き間違いは、初心者の失敗でいちばん多いものの一つです (「全部品を順に壊す」には含めません)	Fitted the wrong way round (a diode/LED's anode and cathode, a transistor's collector and emitter). An assembly mistake rather than a fault. Wrong part orientation is one of the most common beginner mistakes (not included in "break all parts in turn")
+値の読み間違い・部品の取り違え・電源電圧の上昇。値を大きくします	Misread value, mixed-up part, or supply voltage too high. Makes the value larger
+値の読み間違い・部品の取り違え・容量抜け・電源電圧の低下。値を小さくします	Misread value, mixed-up part, lost capacitance, or supply voltage too low. Makes the value smaller
+壊すピン。カッコの中は、そのピンがつながっているネットの名前です	The pin to break. The name in parentheses is the net that pin connects to
+断線 (オープン)	Open
+ピンの半田がはがれた・接触不良。そのピンだけ回路から切り離します。電源ピンなら「電源が来ない」、出力ピンなら「出力が出ない」状態です	The pin's solder came off or makes poor contact. Only that pin is cut from the circuit. For a power pin that means "no power arrives"; for an output pin, "no output comes out"
+GND にショート	Short to GND
+ピンがGNDにつながってしまった (はんだくず・ブリッジ)	The pin got connected to GND (solder debris, a bridge)
+別のネットにブリッジ	Bridge to another net
+隣のピンやパターンとはんだでつながってしまった状態。つなぐ相手のネットを選びます	The pin got soldered to a neighboring pin or trace. Choose the net it connects to
+相手のネット	Other net
+ブリッジ (ピンを別のネットとつなぐ故障) の相手のネット	The net on the other side of the bridge (a fault joining the pin to another net)
+比べる	Compare
+DC (電圧)	DC (voltage)
+落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります	Compares voltages and currents after settling. Quick to show where the danger is
+過渡 (波形)	Transient (waveform)
+時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います	Overlays waveforms over time with the normal circuit. Shows faults invisible in DC, such as changes in ripple, oscillation or blinking. Uses the transient analysis stop time and step
+AC (周波数特性)	AC (frequency response)
+周波数ごとのゲインを、正常な回路と重ねて比べます。フィルタのカットオフが動く、増幅度が変わる、共振が現れるなどが分かります。AC解析の周波数の設定を使います。入力の電源は「AC 1」にしておきます	Overlays the gain at each frequency with the normal circuit. Shows a filter's cutoff moving, the amplification changing, a resonance appearing and so on. Uses the AC analysis frequency settings. Set the input source to "AC 1"
+見る点	Point to watch
+波形を比べるノード (ネット) の名前。出力にあたる点を選びます。選ばないときは OUT などを自動で探します	Name of the node (net) whose waveforms are compared. Choose the point that acts as the output. If none is chosen, OUT or similar is found automatically
+故障を試す	Try fault
+選んだ部品やピンを壊して解析し、変わった電圧と電流を日本語で説明します。回路そのものは変わりません	Breaks the chosen part or pin, runs the analysis and explains in plain words which voltages and currents changed. The circuit itself is not changed
+連鎖故障を追う	Follow cascading faults
+選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)	After breaking the chosen part, breaks in turn each part whose current or power goes over its rating in transient analysis, and explains in plain words what breaks in what order (checked with whole-part faults, using the transient analysis stop time and step; shorted turns in an inductor are the typical example)
+よくある故障を順に試す	Try common faults in turn
+すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます	Breaks every part, one at a time, in the ways that really happen, and lists them starting with the dangerous ones where a part goes over its rating (compared in DC). Transistors and diodes open/short, capacitors short/open/lost capacitance, resistors open, inductors open and shorted turns, supplies low/high, and every pin of ICs and transistors open (bad solder). Rare faults such as a shorted resistor or a value 10x off are tried only when "Include rare faults" below is on. Wrong orientation (reversed) is an assembly mistake, not a fault, so it is not included here (you can choose it one at a time above). Two simultaneous faults are not tried. Click a row for details. Large circuits take time, but it runs on a separate worker thread so the screen does not freeze and you can stop it partway
+まれな故障も含める	Include rare faults
+入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります	When on, also tries faults that rarely happen, such as a shorted resistor, a value 10x or 1/10, a capacitor 10x, or a shorted inductor. More cases, and it takes longer
+正常な回路を計算しています…	Calculating the normal circuit…
+故障を試しています: {done} / {}	Trying faults: {done} / {}
+中止	Cancel
+まだ始めていない故障は試さずにやめます。すでに解いている途中のものは、終わるまで待ちます	Stops without trying faults not yet started. Ones already being solved are waited for until they finish
+連鎖故障の説明を消します	Clears the cascading fault explanation
+故障時の電圧を回路図に表示	Show fault voltages on schematic
+回路図の電圧表示を、壊れた状態の値に切り替えます。元に戻すには右のボタンか、DC解析を実行します	Switches the schematic voltage display to the broken-state values. To go back, use the button on the right or run DC analysis
+元に戻す (DC解析)	Restore (DC analysis)
+壊した仮定の結果をやめて、いまの回路のDC解析の結果に戻します	Drops the result of the assumed fault and goes back to the DC analysis result of the current circuit
+危険な順 (定格超え → 電圧の変化)	Most dangerous first (over rating -> voltage change)
+計算できない (大電流/不定)	Can't calculate (large current/undefined)
+{node} が {} → {}	{node}: {} -> {}
+DCでは変化なし	No change in DC
+ 🔥定格超え{who}	 🔥Over rating{who}
+ ⚠余裕なし{who}	 ⚠No margin{who}
+クリックで、この故障の詳しい結果を表示します	Click to show the detailed results of this fault
+1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです	Each row is one fault. "VIN: 12V -> 0V" is the before and after of the point whose voltage changed most in that fault. 🔥Over rating = a part goes over its rating (voltage, current, power) and may burn or smoke. ⚠No margin = it comes close to its rating. The part is shown in parentheses. Gray rows don't change in DC
+# crates/app/src/schematic/file.rs
+circuitCad 回路図	circuitCad schematic
+保存前の回路図を復元しました。保存してください	Restored the unsaved schematic. Please save it
+KiCad の回路図 (.kicad_sch)	KiCad schematic (.kicad_sch)
+KiCad の回路図を取り込みました: 部品 {} 個 (基本の部品 {}・記号から作った部品 {})。保存するときは名前を付けます	Imported the KiCad schematic: {} parts ({} basic parts, {} parts made from symbols). Give it a name when you save
+KiCad の回路図を取り込みました	Imported the KiCad schematic
+取り込めませんでした: {e}	Could not import: {e}
+# crates/app/src/schematic/hierarchy_ui.rs
+入力	Input
+入出力	Bidirectional
+ポートの名前が空です。左の欄に、ポートの名前 (IN、OUT、EN など) を書きます	The port name is empty. Write a port name (IN, OUT, EN, etc.) in the field on the left
+このシートには、ポート {name} がもうあります。別の名前にしてください (同じ名前では、記号のピンが1つにまとまります)	This sheet already has a port {name}. Use another name (with the same name, the symbol's pins merge into one)
+ポート {name} を置きました。このシートを記号にして別のシートに置くと、ピンになります	Placed port {name}. When this sheet is made into a symbol and placed on another sheet, it becomes a pin
+{} を開きました。上の「親へ戻る」で、もとのシートに戻れます	Opened {}. Use "Back to parent" above to return to the original sheet
+{} を置きました。ピンに線かラベルをつなぎます。ダブルクリックで、そのシートの中を開けます	Placed {}. Connect wires or labels to its pins. Double-click to open the sheet inside
+このシートの記号は、このシートには置けません (自分自身は入れられません)	This sheet's symbol can't be placed on this sheet (a sheet can't contain itself)
+ポートにする (子シートの出入口)	Make a port (child sheet entry/exit)
+オンにすると、このシートの出入口 (ポート) を置きます。このシートを記号にして別のシートに置くと、ポートが記号のピンになります (シートのタブを右クリック → 記号として置く)。同じシートを何回も使えて、直すのは1か所です	When on, places this sheet's entry/exit points (ports). When this sheet is made into a symbol and placed on another sheet, the ports become the symbol's pins (right-click the sheet tab -> Place as symbol). The same sheet can be used many times and fixed in one place
+信号が入ってくるポート。記号の左側にピンが出ます	A port where signals come in. Its pin appears on the left of the symbol
+信号が出ていくポート。記号の右側にピンが出ます	A port where signals go out. Its pin appears on the right of the symbol
+入りも出もするポート (電源・双方向の線など)。記号の左側にピンが出ます	A port for both in and out (supplies, bidirectional lines, etc.). Its pin appears on the left of the symbol
+選択中のポート	Selected port
+ポートの名前。このシートを記号にしたとき、同じ名前のピンになります	Port name. When this sheet is made into a symbol, it becomes a pin of the same name
+同じ名前のポートが、このシートにあります	This sheet has a port with the same name
+ポートを削除	Delete port
+このポートを消します。記号のピンも消えます (Delete キーでも同じです)	Deletes this port. The symbol's pin goes too (same as the Delete key)
+# crates/app/src/schematic/hint.rs
+ピンや配線をクリックで電圧、部品の本体をクリックで電流の波形を追加します (Shift+ピンでも電流)。続けて何か所でも追加できます。Esc か右クリックで終了	Click a pin or wire to add its voltage waveform, a part body to add its current (Shift+pin also gives current). You can add as many as you like in a row. Esc or right-click to finish
+ループを切りたい部品の本体をクリックします (帰還の抵抗が一番かんたん)。ピンや配線をクリックすると、出力側のネットになります。Esc で中止	Click the body of the part where you want to break the loop (the feedback resistor is easiest). Clicking a pin or wire makes it the output-side net. Esc to cancel
+伝達関数の出力にしたいネットをクリックします。Shift+クリックで入力のネット、Esc で中止	Click the net to use as the transfer function output. Shift+click for the input net, Esc to cancel
+インピーダンスを見たいネットをクリックします。Shift+クリックで基準のネット、Esc で中止	Click the net whose impedance you want to see. Shift+click for the reference net, Esc to cancel
+ノイズを測りたいノードをクリックします。Shift+クリックで基準ノード、Esc で中止	Click the node where noise is measured. Shift+click for the reference node, Esc to cancel
+まず部品を置きましょう。左の一覧から選んで画面をクリック。「ファイル → サンプル回路を開く」で、できあがった回路もすぐ試せます	Start by placing parts. Pick one from the list on the left and click on the canvas. With "File -> Open sample circuit" you can also try finished circuits right away
+配線中: 次の点をクリックして線を延長、ダブルクリックか右クリックで確定します	Wiring: click the next point to extend the line; double-click or right-click to finish
+クリックで部品を置きます。R キーで回転、右クリックで選択ツールに戻ります。置いた後は「選択」で値を変えられます	Click to place a part. R rotates, right-click returns to the select tool. After placing, change values with "Select"
+部品のピン (赤い点) から点へクリックしてつなぎます。T字に分岐する場合は、線の途中に別の線の端を置きます	Click from a part's pin (red dot) to a point to connect them. For a T branch, put the end of another wire on the middle of a wire
+バス(信号の束)の線を引きます。クリックで折れ線、ダブルクリックで終わり。バスは何もつなぎません: 名前はラベルツールで D[0..7] と書いて、線の上に置きます	Draws a bus (a bundle of signals). Click for bends, double-click to finish. A bus connects nothing by itself: write a name like D[0..7] with the label tool and put it on the line
+ラベル名を決めて回路図の点をクリック。同じ名前の場所は線なしでつながります (電源 VCC や GND に便利)	Choose a label name and click a point on the schematic. Places with the same name connect without wires (handy for supplies like VCC and GND)
+値を書き換えるか「スライダー」を動かしてみましょう。「自動で再計算」をオンにすると、電圧や波形が動きに合わせて変わります	Try changing a value or moving the "slider". With "Auto recalculate" on, voltages and waveforms follow your changes
+コンデンサは直流では電流を通さず、周波数が高いほど通しやすくなります。AC解析で効き方を見てみましょう	A capacitor blocks DC and passes current more easily the higher the frequency. Try AC analysis to see its effect
+電源の種類は「直流 / 交流 / パルス」のボタンで切り替えられます。「AC解析の入力にする」をオンにすると周波数特性の測定に使えます (ノイズ解析・DCスイープの入力にも指定できます)	Switch the source type with the "DC / AC / Pulse" buttons. Turn on "Use as AC analysis input" to use it for frequency response measurements (it can also be the input for noise analysis and DC sweep)
+トランジスタはベース電流で大きなコレクタ電流を制御します。ベースに抵抗を付けて電圧を見てみましょう	A transistor controls a large collector current with its base current. Put a resistor on the base and look at the voltages
+選んだ部品の値は左の欄で変えられます。R キーで回転、Delete で削除	Change the selected part's value in the field on the left. R to rotate, Delete to delete
+出力 = 入力の線と曲線が交わる所が切替電圧です。VIL・VIH の間が「どちらとも言えない」領域で、狭いほどスパッと切り替わります。電源電圧や部品を変えて再実行してみましょう	The switching voltage is where the curve crosses the output = input line. Between VIL and VIH is the "undecided" region; the narrower it is, the sharper the switching. Try changing the supply voltage or parts and run again
+ノイズ一覧の素子名にカーソルを合わせると原因と対策が出ます。抵抗値を変えて再実行すると、雑音が √(抵抗値) に比例して変わるのが分かります	Hover over an element name in the noise list to see the cause and the fix. Change a resistor value and run again: the noise changes in proportion to √(resistance)
+インピーダンス: 谷は、コンデンサがよく効く周波数 (電源の揺れを吸う)。山は、コイルとコンデンサが打ち消し合って高くなる所で、電圧が揺れやすい周波数です。コンデンサを足す・容量を変えて再実行して、山と谷の動きを見ましょう	Impedance: valleys are frequencies where the capacitors work well (absorbing supply ripple). Peaks are where inductors and capacitors cancel out and the impedance rises: frequencies where the voltage wobbles easily. Add capacitors or change their values and run again to watch the peaks and valleys move
+ボード線図: 上が大きさ(dB)、下が位相。-3 dB になる周波数がカットオフ周波数です。グラフはドラッグで移動、ホイールで拡大縮小	Bode plot: magnitude (dB) on top, phase below. The frequency at -3 dB is the cutoff frequency. Drag to pan the graph, wheel to zoom
+波形はドラッグで移動、ホイールで拡大縮小、ダブルクリックで全体表示。左の一覧で表示する信号を選べます	Drag to pan the waveform, wheel to zoom, double-click to show all. Choose the signals to show in the list on the left
+同じ回路でも、部品の誤差で実物ごとに電圧が変わります。「効いている部品」の上位を許容差の小さい部品にすると、ばらつきが小さくなります	Even with the same circuit, part tolerances make each real build's voltages different. Using tighter-tolerance parts for the top "Parts that matter" reduces the spread
+温度が上がるとダイオードやトランジスタの電圧が下がります (約 -2 mV/℃)。この変化で回路の動作点がどれだけずれるかを見ましょう	As temperature rises, diode and transistor voltages drop (about -2 mV/℃). See how far this shifts the circuit's operating point
+回路が描けたら、左の「解析」タブの「DC動作点を解析」で各点の電圧と部品の電流 (配線は低電圧が青、高電圧が赤) を見てみましょう。ERC で配線ミスの点検もできます	Once the circuit is drawn, use "Run DC operating point" in the "Analysis" tab on the left to see each point's voltage and the parts' currents (wires low voltage blue, high voltage red). ERC also checks for wiring mistakes
+電圧が想定と違う所から疑ってみましょう。次は過渡解析 (波形)・AC解析 (周波数特性)・ノイズ解析を試せます。回路が完成したら「基板パターン」タブへ	Start by suspecting places where the voltage differs from what you expected. Next you can try transient analysis (waveforms), AC analysis (frequency response) and noise analysis. When the circuit is done, go to the "PCB layout" tab
+# crates/app/src/schematic/impedance.rs
+そこには接続された配線・ピンがありません。部品のピンか配線の上をクリックしてください	No wire or pin is connected there. Click on a part pin or a wire
+見るネットの名前を入力してください (ネットラベル名など。「回路図で選ぶ」でも入れられます)	Enter the name of the net to look at (a net label name, for example. "Pick in schematic" also fills it in)
+{node} 対 {reference}	{node} vs {reference}
+インピーダンス: {label} は {} 〜 {} ({} Hz〜{} Hz)	Impedance: {label} is {} to {} ({} Hz to {} Hz)
+インピーダンス解析に失敗: {}	Impedance analysis failed: {}
+どのネットから回路の中を見るか。そのネットに 1 A の交流の電流を流したときの電圧が、インピーダンスです。\n名前が分からないときは下の「回路図で選ぶ」を使います	The net from which you look into the circuit. The voltage when 1 A of AC current is driven into that net is the impedance.\nIf you don't know the name, use "Pick in schematic" below
+どのネットとの間のインピーダンスか。空欄なら GND との間です	The net the impedance is measured against. If blank, against GND
+外す部品	Parts to remove
+先に回路から取り除く部品の番号 (カンマで区切る)。\n段の出力インピーダンスを知りたいときは、負荷 (RL など) を外します。\n入力インピーダンスを知りたいときは、信号源とそれに直列の抵抗を外して、その先のネットを見ます。\n空欄なら、電源をすべて切っただけの回路を見ます (電源ラインのインピーダンスはこちら)	Refdes of parts to remove from the circuit first (comma separated).\nTo find a stage's output impedance, remove the load (RL etc.).\nTo find an input impedance, remove the signal source and its series resistor and look at the net beyond them.\nIf blank, it looks at the circuit with just all the sources turned off (use this for supply line impedance)
+押してから回路図のピンや配線をクリックすると、そのネットを見て、すぐ解析します。\nShift+クリックで基準のネット	Press, then click a pin or wire on the schematic: it looks at that net and runs the analysis right away.\nShift+click for the reference net
+回路図の見たいネットをクリックしてください	Click the net you want to look at on the schematic
+インピーダンスを実行	Run impedance
+ネットから見たインピーダンス |Z| と位相を周波数ごとに求めます。山 (並列共振) と谷 (直列共振)、抵抗・コイル・コンデンサのどれに見えるかも出ます。周波数範囲・点数は AC解析の欄を共用します	Finds the impedance |Z| and phase seen from a net at each frequency. Also shows peaks (parallel resonance), valleys (series resonance), and whether it looks like a resistor, inductor or capacitor. The frequency range and points are shared with the AC analysis fields
+インピーダンス: {}	Impedance: {}
+0 dB = 1 Ω、20 dB = 10 Ω、-20 dB = 0.1 Ω。電源ラインでは、低いほど電圧が揺れにくく、山は「そこで電圧が揺れやすい周波数」です	0 dB = 1 Ω, 20 dB = 10 Ω, -20 dB = 0.1 Ω. On a supply line, lower means the voltage wobbles less; a peak is "a frequency where the voltage wobbles easily"
+インピーダンスの表示	Impedance display
+コイルのように見える	Looks like an inductor
+コンデンサのように見える	Looks like a capacitor
+抵抗のように見える	Looks like a resistor
+山や谷はありません (なだらかに変わります)	No peaks or valleys (it changes smoothly)
+山	Peak
+並列共振: コイルとコンデンサが打ち消し合って、インピーダンスが高くなる周波数。電源ラインでは電圧が揺れやすい所です。バイパスコンデンサを足す・容量の違うものを並べる、で下げます	Parallel resonance: the frequency where an inductor and capacitor cancel out and the impedance gets high. On a supply line, this is where the voltage wobbles easily. Lower it by adding bypass capacitors or putting different values side by side
+谷	Valley
+直列共振: コンデンサの容量とその足の細かいインダクタンスが打ち消し合って、インピーダンスが最も低くなる周波数。その上は、足のインダクタンスのせいでコイルのように上がります	Series resonance: the frequency where a capacitor's capacitance and the small inductance of its leads cancel out and the impedance is lowest. Above it, the lead inductance makes it rise like an inductor
+# crates/app/src/schematic/interact.rs
+ノードの選択を終了しました	Node picking finished
+# crates/app/src/schematic/kicad_import.rs
+KiCad のライブラリ (.kicad_sym / .lib) か、メーカーの zip	KiCad library (.kicad_sym / .lib) or a manufacturer's zip
+KiCad の取り込みに失敗: {e}	KiCad import failed: {e}
+KiCadから取り込み	Import from KiCad
+{} ({} 個の部品)	{} ({} parts)
+ピン配置とフットプリントのパッドを取り込みます (zip なら、中の 3D モデルも)。KiCad の記号の絵とシミュレーションモデルは取り込みません (記号は箱になります)。	Imports the pinout and the footprint pads (and the 3D model inside, for a zip). KiCad's symbol drawings and simulation models are not imported (the symbol becomes a box).
+検索	Search
+名前・説明に含まれる文字で絞り込みます	Filters by text in the name or description
+{}{} ({}ピン)	{}{} ({} pins)
+KiCad が指定するフットプリント: {}	Footprint specified by KiCad: {}
+フットプリントを選ぶ…	Choose footprint…
+対応する .kicad_mod ファイルを選びます。選ばないと仮のパッド (2.54mm の1列) になります。基板に使うなら必ず選んでください	Choose the matching .kicad_mod file. If none is chosen, placeholder pads (one row at 2.54mm) are used. Always choose one if you will use it on a board
+KiCad フットプリント	KiCad footprint
+フットプリントを読めません: {e}	Can't read the footprint: {e}
+フットプリントを使わず、仮のパッドにします	Don't use a footprint; use placeholder pads
+使う: {}	Using: {}
+未選択 (仮のパッド)	Not chosen (placeholder pads)
+zip の中のフットプリント	Footprints in the zip
+zip に複数のフットプリントが入っています。この部品に合うものを選びます	The zip has several footprints. Choose the one that fits this part
+3D の形に使う: {name}	Use for 3D shape: {name}
+zip に入っていた STEP ファイルを、この部品の3Dの形にします (基板の「3Dで見る」に出ます)。パッドの上に、基板の面に立てて置きます。大きなファイルは三角形を間引いて保存します	Makes the STEP file in the zip this part's 3D shape (shown in the board's "View in 3D"). It stands on the board surface above the pads. Large files are saved with fewer triangles
+この zip には 3D モデル (STEP) が入っていません。ダウンロードのとき STEP も選ぶと、3D の形まで取り込めます	This zip has no 3D model (STEP). If you also select STEP when downloading, the 3D shape can be imported too
+Ultra Librarian や SnapEDA は、ダウンロードの画面で 3D モデルにチェックを入れたときだけ STEP を zip に入れます	Ultra Librarian and SnapEDA put the STEP in the zip only when you check the 3D model on the download screen
+ライブラリに追加	Add to library
+選んだ部品を、ライブラリに保存します	Saves the chosen part to the library
+✔ ライブラリに追加しました: {}{}	✔ Added to library: {}{}
+ (3D の形つき)	 (with 3D shape)
+ライブラリに追加しました: {} (KiCad{})	Added to library: {} (KiCad{})
+、3D の形つき	, with 3D shape
+3D の形 (STEP) を読めません: {e}。チェックを外せば、3D の形なしで追加できます	Can't read the 3D shape (STEP): {e}. Uncheck it to add without a 3D shape
+{} に問題があります: {}	Problem with {}: {}
+# crates/app/src/schematic/library.rs
+{name} のファイルが見つかりませんでした。「再読み込み」を押してから、もう一度ためしてください	The file for {name} was not found. Press "Reload" and try again
+ライブラリから削除しました: {name} (回路図に置いた部品は、そのまま残ります)	Removed from library: {name} (parts placed on the schematic stay as they are)
+削除できませんでした: {e}	Could not delete: {e}
+部品定義 JSON	Part definition JSON
+ライブラリに追加しました: {}	Added to library: {}
+# crates/app/src/schematic/loopgain.rs
+注意: このループには、オペアンプのモデル ({}) があります。同梱のモデルは「増幅 → 極が1つ → 出力抵抗」の簡単な形で、実物の部品が持つ第2の極を持ちません。位相余裕は、そのモデルでの値で、実物より大きく出ます (負荷の容量による分は表れます)。実機の余裕は、メーカーのモデルか、実機で確かめてください	Note: this loop contains an op-amp model ({}). The bundled model is a simple "gain -> one pole -> output resistance" form and lacks the second pole real parts have. The phase margin is for that model and comes out larger than the real part's (the effect of load capacitance does show). Check the real margin with the manufacturer's model or on real hardware
+出力側のネットを {} にしました。切る部品の本体をクリックしてください	Output-side net set to {}. Click the body of the part to break
+部品の本体 (切る部品) か、ピン・配線 (出力側のネット) をクリックしてください	Click a part body (the part to break) or a pin/wire (the output-side net)
+ループを切る部品の名前を入力してください (帰還の抵抗が一番かんたんです。「回路図で選ぶ」でも入れられます)	Enter the name of the part where the loop is broken (the feedback resistor is easiest. "Pick in schematic" also fills it in)
+{} の所でループを切りました (信号は {} → {} の向き)	Loop broken at {} (signal direction {} -> {})
+T ループゲイン	T loop gain
+Tv 電圧注入だけ	Tv voltage injection only
+Ti 電流注入だけ	Ti current injection only
+ループゲイン: 0 dB の周波数 {}、位相余裕 {:.0}°	Loop gain: 0 dB frequency {}, phase margin {:.0}°
+ループゲイン: 計算範囲に 0 dB の交点がありません (周波数の範囲を変えてみてください)	Loop gain: no 0 dB crossing in the calculated range (try changing the frequency range)
+ループゲインに失敗: {}	Loop gain failed: {}
+切る部品	Part to break
+帰還のループの途中にある抵抗・コンデンサ・コイルの番号。ここでループを1か所切って、1周したときのゲインを測ります。帰還の抵抗 (出力からマイナス入力につながる抵抗) が一番かんたんです	Refdes of a resistor, capacitor or inductor in the feedback loop. The loop is broken at this one place and the gain once around it is measured. The feedback resistor (from the output to the minus input) is easiest
+出力側	Output side
+切った部品の、出力に近いほうのネットの名前。空欄なら、両方の向きを試して、ゲインが大きいほうを使います	Name of the net on the output side of the broken part. If blank, both directions are tried and the one with larger gain is used
+押してから、部品の本体をクリックすると切る部品になり、すぐ解析します。ピンや配線をクリックすると、出力側のネットになります	Press, then click a part body to make it the part to break and run the analysis right away. Clicking a pin or wire sets the output-side net
+回路図の、切りたい部品の本体をクリックしてください	Click the body of the part you want to break on the schematic
+ループゲインを実行	Run loop gain
+帰還ループを切って、電圧と電流の試験信号を1回ずつ入れ、1周したときのゲイン (一巡伝達関数) を求めます。0 dB を横切る所の位相余裕で、安定かどうかが分かります。結果は AC解析と同じボード線図に出ます。周波数範囲・点数は AC解析の欄を共用します	Breaks the feedback loop, injects a voltage and a current test signal once each, and finds the gain once around the loop (loop transfer function). The phase margin where it crosses 0 dB tells you whether it is stable. Results appear on the same Bode plot as AC analysis. The frequency range and points are shared with the AC analysis fields
+# crates/app/src/schematic/mod.rs
+抵抗: 電流を制限したり、電圧を分けたりします (V = I × R)	Resistor: limits current or divides voltage (V = I × R)
+コンデンサ: 電気をためます。直流は通さず交流は通すので、ノイズ除去や電源の安定化に使います	Capacitor: stores charge. Blocks DC and passes AC, so it is used for noise removal and stabilizing supplies
+コイル: 電流の変化に逆らいます。直流は通し、速い変化は通しにくい性質があります	Inductor: resists changes in current. Passes DC but resists fast changes
+ダイオード: 電流を一方向 (A→K) にだけ流します。約 0.6〜0.7 V の壁があります	Diode: lets current flow in one direction only (A->K). Has a barrier of about 0.6-0.7 V
+LED: 光るダイオード。必ず抵抗を直列に入れて電流を制限します	LED: a diode that lights up. Always put a resistor in series to limit the current
+電源: 直流・正弦波・パルスなど。値の書き方は、置いて選択すると下に出ます	Source: DC, sine, pulse and more. How to write the value is shown below once you place and select it
+NPN トランジスタ: ベースに小さい電流を流すと、コレクタ→エミッタに大きな電流が流れます	NPN transistor: a small current into the base lets a large current flow from collector to emitter
+GND: 電圧の基準 (0 V)。回路には必ず 1 つ以上必要です	GND: the voltage reference (0 V). Every circuit needs at least one
+電源ラベル: 同じ名前 (VCC など) の場所を線なしでつなぎます	Power label: connects places with the same name (VCC etc.) without wires
+回路図: 部品を選んで配置し、配線ツールで線をつなぎます	Schematic: choose parts and place them, then connect them with the wire tool
+# crates/app/src/schematic/net_hints.rs
+選択中のラベル	Selected label
+ネットの名前を書き換えます。Enter で確定。同じ名前のラベルがほかにもあれば、まとめて同じ名前になります (つながりは変わりません)。すでにある別のネットの名前にすると、2つのネットがつながります	Renames the net. Enter to confirm. Other labels with the same name are renamed together (connections don't change). Using the name of another existing net connects the two nets
+選択中のネット: {net}	Selected net: {net}
+このネットに流れる電流の目安。基板に取り込むと、配線の太さの推奨や電圧降下の計算に使われます。0 にすると指定なし (基板側で決めた値はそのまま)	Estimated current in this net. When imported to the board, it is used for track width suggestions and voltage drop calculations. 0 means unspecified (values set on the board side stay as they are)
+差動ペアの相手	Differential pair partner
+USB の D+ と D− のように、2本で1つの信号を運ぶネットの相手を選びます。基板に取り込むと差動ペアとして登録され、並べて配線・長さ合わせの対象になります	Choose the partner net when two nets carry one signal, like USB D+ and D−. When imported to the board it is registered as a differential pair, for side-by-side routing and length matching
+# crates/app/src/schematic/noise.rs
+GND は電圧の基準なので出力にできません。測りたいノードをクリックしてください (Shift+クリックで基準に使えます)	GND is the voltage reference, so it can't be the output. Click the node you want to measure (Shift+click to use it as the reference)
+ピンや配線をクリック → その点の電圧、部品の本体をクリック (Shift+ピンでも可) → その部品の電流を、波形に追加します。続けて追加できます (Esc か右クリックで終了)	Click a pin or wire -> that point's voltage, click a part body (or Shift+pin) -> that part's current is added to the waveforms. You can keep adding (Esc or right-click to finish)
+そこには何もありません。ピンや配線 (電圧) か、部品の本体 (電流) をクリックしてください	Nothing there. Click a pin or wire (voltage) or a part body (current)
+{sig} を波形に追加しました。続けてクリックできます (Esc か右クリックで終了)	Added {sig} to the waveforms. You can keep clicking (Esc or right-click to finish)
+{sig} (電流) は、いま表示中の解析結果にありません。ICの内部モデルなど、電流の波形を持たない部品もあります。先に過渡解析かAC解析を実行したか確かめてください	{sig} (current) is not in the analysis result shown now. Some parts, such as IC internal models, have no current waveform. Check that you ran transient or AC analysis first
+{sig} は、いま表示中の解析結果にありません。先に過渡解析かAC解析を実行してください (GND は 0V の基準なので波形はありません)	{sig} is not in the analysis result shown now. Run transient or AC analysis first (GND is the 0V reference, so it has no waveform)
+開始・終了周波数、点数/デケード、温度[℃]を数値で入力してください	Enter the start and stop frequencies, points per decade and temperature [℃] as numbers
+出力ノードの名前を入力してください (ネットラベル名など。差動は A,B)	Enter the output node name (a net label name, for example. A,B for differential)
+合計	Total
+ノイズ解析: 出力 {} rms ({} Hz〜{} Hz)	Noise analysis: output {} rms ({} Hz to {} Hz)
+ノイズ解析に失敗: {}	Noise analysis failed: {}
+ノイズ解析 (熱雑音・ショット雑音)	Noise analysis (thermal noise, shot noise)
+ノイズ解析の表示	Noise analysis display
+入力換算	Input-referred
+出力合計: {}	Output total: {}
+入力換算: {}	Input-referred: {}
+出力のノイズを回路の利得で割って入力側に直した値。入力信号がこれより小さいと、ノイズに埋もれます	The output noise divided by the circuit's gain, referred back to the input. An input signal smaller than this gets buried in noise
+最大の原因: {} ({}) — 全体の約 {:.0}%	Largest source: {} ({}) — about {:.0}% of the total
+対策: {}	Fix: {}
+グラフの読み方	How to read the graph
+縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (dB, 0 dB = 1 nV/√Hz)。60 dB で 1 µV/√Hz。rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。	The vertical axis is noise "density": voltage per 1Hz of bandwidth (dB, 0 dB = 1 nV/√Hz). 60 dB is 1 µV/√Hz. The rms value is the noise summed over the whole band of the graph. Noise sources are unrelated, so they add as squares (power sum) and take √ at the end. That is why reducing the biggest source is the shortcut. Hover over an element name to see the cause of its noise and the fix.
+その原因だけが出す雑音の実効値 (1Hz 幅あたりではなく、グラフの帯域全体)	RMS noise from that source alone (over the whole band of the graph, not per 1Hz)
+割合	Share
+全体の雑音のうち、この原因が占める割合 (電力で足し算)	Share of the total noise from this source (added as power)
+ショット雑音	Shot noise
+熱雑音	Thermal noise
+{} [{kind}]\n{}\n対策: {}	{} [{kind}]\n{}\nFix: {}
+左の一覧から項目を選んでください	Pick an item from the list on the left

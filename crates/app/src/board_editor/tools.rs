@@ -193,7 +193,7 @@ impl BoardEditor {
 
     /// The menu of the right click while a shape is drawn.
     pub(super) fn polygon_menu(&mut self, ui: &mut egui::Ui) {
-        ui.label("次に描くもの");
+        ui.label(i18n::tr("次に描くもの"));
         for (m, text) in [(PolyMode::Lines, "直線 (S)"), (PolyMode::ArcThrough, "3点円弧 (A)"), (PolyMode::ArcTangent, "接線円弧 (T)")] {
             if ui.selectable_label(self.poly_mode == m, text).clicked() {
                 self.set_poly_mode(m);
@@ -201,15 +201,15 @@ impl BoardEditor {
             }
         }
         ui.separator();
-        if ui.add_enabled(!self.poly_verts.is_empty(), egui::Button::new("最後の点を戻す (Backspace)")).clicked() {
+        if ui.add_enabled(!self.poly_verts.is_empty(), egui::Button::new(i18n::tr("最後の点を戻す (Backspace)"))).clicked() {
             self.poly_back();
             ui.close();
         }
-        if ui.add_enabled(self.poly.len() >= 3, egui::Button::new("確定 (閉じて、ベタ・外形にする)")).clicked() {
+        if ui.add_enabled(self.poly.len() >= 3, egui::Button::new(i18n::tr("確定 (閉じて、ベタ・外形にする)"))).clicked() {
             self.finish_polygon();
             ui.close();
         }
-        if ui.button("描きかけを取り消す (Esc)").on_hover_text("いま描いている図形を、置かずにやめます。すでに置いたものは消えません").clicked() {
+        if ui.button(i18n::tr("描きかけを取り消す (Esc)")).on_hover_text(i18n::tr("いま描いている図形を、置かずにやめます。すでに置いたものは消えません")).clicked() {
             self.poly.clear();
             self.poly_verts.clear();
             self.arc_mid = None;

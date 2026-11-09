@@ -81,13 +81,13 @@ impl SchEditor {
         let Some(mut k) = self.kicad.take() else { return };
         let mut open = true;
         let mut add = false;
-        egui::Window::new("KiCadから取り込み").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(460.0).vscroll(true).show(ctx, |ui| {
-            ui.label(format!("{} ({} 個の部品)", k.file, k.syms.len()));
+        egui::Window::new(i18n::tr("KiCadから取り込み")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(460.0).vscroll(true).show(ctx, |ui| {
+            ui.label(i18n::trf!("{} ({} 個の部品)", k.file, k.syms.len()));
             let mut clicked = None;
-            ui.small("ピン配置とフットプリントのパッドを取り込みます (zip なら、中の 3D モデルも)。KiCad の記号の絵とシミュレーションモデルは取り込みません (記号は箱になります)。");
+            ui.small(i18n::tr("ピン配置とフットプリントのパッドを取り込みます (zip なら、中の 3D モデルも)。KiCad の記号の絵とシミュレーションモデルは取り込みません (記号は箱になります)。"));
             ui.horizontal(|ui| {
-                ui.label("検索");
-                ui.text_edit_singleline(&mut k.filter).on_hover_text("名前・説明に含まれる文字で絞り込みます");
+                ui.label(i18n::tr("検索"));
+                ui.text_edit_singleline(&mut k.filter).on_hover_text(i18n::tr("名前・説明に含まれる文字で絞り込みます"));
             });
             let f = k.filter.to_lowercase();
             egui::ScrollArea::vertical().max_height(220.0).id_salt("kicad_list").show(ui, |ui| {
@@ -111,11 +111,11 @@ impl SchEditor {
                     ui.small(&s.description);
                 }
                 if !s.footprint.is_empty() {
-                    ui.small(format!("KiCad が指定するフットプリント: {}", s.footprint));
+                    ui.small(i18n::trf!("KiCad が指定するフットプリント: {}", s.footprint));
                 }
             }
             ui.horizontal(|ui| {
-                if ui.button("フットプリントを選ぶ…").on_hover_text("対応する .kicad_mod ファイルを選びます。選ばないと仮のパッド (2.54mm の1列) になります。基板に使うなら必ず選んでください").clicked()
+                if ui.button(i18n::tr("フットプリントを選ぶ…")).on_hover_text(i18n::tr("対応する .kicad_mod ファイルを選びます。選ばないと仮のパッド (2.54mm の1列) になります。基板に使うなら必ず選んでください")).clicked()
                     && let Some(p) = rfd::FileDialog::new().add_filter("KiCad フットプリント", &["kicad_mod"]).pick_file()
                 {
                     match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| kicad::parse_footprint(&s)) {
@@ -127,38 +127,38 @@ impl SchEditor {
                         Err(e) => k.msg = format!("フットプリントを読めません: {e}"),
                     }
                 }
-                if k.fp.is_some() && ui.small_button("外す").on_hover_text("フットプリントを使わず、仮のパッドにします").clicked() {
+                if k.fp.is_some() && ui.small_button(i18n::tr("外す")).on_hover_text(i18n::tr("フットプリントを使わず、仮のパッドにします")).clicked() {
                     k.fp = None;
                 }
                 ui.small(if k.fp.is_some() { format!("使う: {}", k.fp_file) } else { "未選択 (仮のパッド)".into() });
             });
             if k.zip_fps.len() > 1 {
                 let mut pick = None;
-                egui::ComboBox::from_label("zip の中のフットプリント").selected_text(if k.fp.is_some() { k.fp_file.clone() } else { "選んでください".into() }).show_ui(ui, |ui| {
+                egui::ComboBox::from_label(i18n::tr("zip の中のフットプリント")).selected_text(if k.fp.is_some() { k.fp_file.clone() } else { "選んでください".into() }).show_ui(ui, |ui| {
                     for (i, f) in k.zip_fps.iter().enumerate() {
                         if ui.selectable_label(k.fp.as_ref().is_some_and(|c| c.name == f.name), &f.name).clicked() {
                             pick = Some(i);
                         }
                     }
-                }).response.on_hover_text("zip に複数のフットプリントが入っています。この部品に合うものを選びます");
+                }).response.on_hover_text(i18n::tr("zip に複数のフットプリントが入っています。この部品に合うものを選びます"));
                 if let Some(i) = pick {
                     k.fp_file = k.zip_fps[i].name.clone();
                     k.fp = Some(k.zip_fps[i].clone());
                 }
             }
             if let Some((name, _)) = &k.step {
-                ui.checkbox(&mut k.use_step, format!("3D の形に使う: {name}")).on_hover_text("zip に入っていた STEP ファイルを、この部品の3Dの形にします (基板の「3Dで見る」に出ます)。パッドの上に、基板の面に立てて置きます。大きなファイルは三角形を間引いて保存します");
+                ui.checkbox(&mut k.use_step, i18n::trf!("3D の形に使う: {name}")).on_hover_text(i18n::tr("zip に入っていた STEP ファイルを、この部品の3Dの形にします (基板の「3Dで見る」に出ます)。パッドの上に、基板の面に立てて置きます。大きなファイルは三角形を間引いて保存します"));
             } else if k.from_zip {
-                ui.small("この zip には 3D モデル (STEP) が入っていません。ダウンロードのとき STEP も選ぶと、3D の形まで取り込めます").on_hover_text("Ultra Librarian や SnapEDA は、ダウンロードの画面で 3D モデルにチェックを入れたときだけ STEP を zip に入れます");
+                ui.small(i18n::tr("この zip には 3D モデル (STEP) が入っていません。ダウンロードのとき STEP も選ぶと、3D の形まで取り込めます")).on_hover_text(i18n::tr("Ultra Librarian や SnapEDA は、ダウンロードの画面で 3D モデルにチェックを入れたときだけ STEP を zip に入れます"));
             }
             if let Some(s) = k.sel.and_then(|i| k.syms.get(i)) {
                 ui.horizontal(|ui| {
-                    ui.label("記号の形");
+                    ui.label(i18n::tr("記号の形"));
                     let sym = kicad::to_part(s, None).ok().map(|d| d.symbol());
                     crate::part_form::glyph_combo(ui, "kicad_glyph", &mut k.glyph, sym.as_ref());
                 });
             }
-            if ui.add_enabled(k.sel.is_some(), egui::Button::new("ライブラリに追加")).on_hover_text("選んだ部品を、ライブラリに保存します").clicked() {
+            if ui.add_enabled(k.sel.is_some(), egui::Button::new(i18n::tr("ライブラリに追加"))).on_hover_text(i18n::tr("選んだ部品を、ライブラリに保存します")).clicked() {
                 add = true;
             }
             if let Some(d) = &k.done {

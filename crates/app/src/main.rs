@@ -302,41 +302,41 @@ impl eframe::App for App {
         }
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図").on_hover_text("回路図の画面。部品を置いて配線し、シミュレーションします");
+                ui.selectable_value(&mut self.mode, Mode::Schematic, i18n::tr("回路図")).on_hover_text(i18n::tr("回路図の画面。部品を置いて配線し、シミュレーションします"));
                 let stale = !self.board_ed.schematic_diff(&self.sch).is_empty();
-                ui.selectable_value(&mut self.mode, Mode::Board, if stale { "基板パターン ●" } else { "基板パターン" })
-                    .on_hover_text(if stale { "回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)" } else { "基板の画面。回路図から部品を取り込んで、配置・配線します" });
+                ui.selectable_value(&mut self.mode, Mode::Board, if stale { i18n::tr("基板パターン ●") } else { i18n::tr("基板パターン") })
+                    .on_hover_text(if stale { i18n::tr("回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)") } else { i18n::tr("基板の画面。回路図から部品を取り込んで、配置・配線します") });
                 ui.separator();
                 let sch_mode = self.mode == Mode::Schematic;
-                ui.menu_button("ファイル", |ui| {
-                    if ui.button("プロジェクトを開く…").on_hover_text("回路図と基板をまとめて保存したファイル (.ccproj) を開きます。いまの回路図と基板は置き換わります").clicked() {
+                ui.menu_button(i18n::tr("ファイル"), |ui| {
+                    if ui.button(i18n::tr("プロジェクトを開く…")).on_hover_text(i18n::tr("回路図と基板をまとめて保存したファイル (.ccproj) を開きます。いまの回路図と基板は置き換わります")).clicked() {
                         self.open_project();
                         ui.close();
                     }
-                    if ui.button("プロジェクトを保存").on_hover_text("回路図と基板を、1つのファイル (.ccproj) にまとめて保存します。まだ保存していなければ、保存先を選びます").clicked() {
+                    if ui.button(i18n::tr("プロジェクトを保存")).on_hover_text(i18n::tr("回路図と基板を、1つのファイル (.ccproj) にまとめて保存します。まだ保存していなければ、保存先を選びます")).clicked() {
                         self.save_project(false);
                         ui.close();
                     }
-                    if ui.button("名前を付けてプロジェクトを保存…").on_hover_text("回路図と基板を、別の名前のプロジェクトとして保存します").clicked() {
+                    if ui.button(i18n::tr("名前を付けてプロジェクトを保存…")).on_hover_text(i18n::tr("回路図と基板を、別の名前のプロジェクトとして保存します")).clicked() {
                         self.save_project(true);
                         ui.close();
                     }
                     ui.separator();
-                    ui.label(if sch_mode { "いまの回路図だけ" } else { "いまの基板だけ" });
-                    if ui.button("新規").on_hover_text("いまの図を空にして、新しく始めます").clicked() && self.confirm_unsaved_one(sch_mode, "新規にすると、いまの図は消えます。") {
+                    ui.label(if sch_mode { i18n::tr("いまの回路図だけ") } else { i18n::tr("いまの基板だけ") });
+                    if ui.button(i18n::tr("新規")).on_hover_text(i18n::tr("いまの図を空にして、新しく始めます")).clicked() && self.confirm_unsaved_one(sch_mode, "新規にすると、いまの図は消えます。") {
                         if sch_mode { self.sch.new_file() } else { self.board_ed.new_file() }
                         ui.close();
                     }
-                    if ui.button("開く…").on_hover_text("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」").clicked() && self.confirm_unsaved_one(sch_mode, "開くと、いまの図は置き換わります。") {
+                    if ui.button(i18n::tr("開く…")).on_hover_text(i18n::tr("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」")).clicked() && self.confirm_unsaved_one(sch_mode, "開くと、いまの図は置き換わります。") {
                         if sch_mode { self.sch.open() } else { self.board_ed.open() }
                         ui.close();
                     }
-                    if ui.button("KiCad の回路図を開く…").on_hover_text("KiCad 6 以降の回路図 (.kicad_sch) を取り込みます。部品はこのソフトの記号で並べ直し、つながりはネットの名前で表します (KiCad の図の形・位置は引き継ぎません)。子シート・バスなど読めないものは、取り込んだあとの案内に出ます").clicked() && self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") {
+                    if ui.button(i18n::tr("KiCad の回路図を開く…")).on_hover_text(i18n::tr("KiCad 6 以降の回路図 (.kicad_sch) を取り込みます。部品はこのソフトの記号で並べ直し、つながりはネットの名前で表します (KiCad の図の形・位置は引き継ぎません)。子シート・バスなど読めないものは、取り込んだあとの案内に出ます")).clicked() && self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") {
                         self.sch.open_kicad_sch();
                         self.mode = Mode::Schematic;
                         ui.close();
                     }
-                    ui.menu_button("サンプル回路を開く", |ui| {
+                    ui.menu_button(i18n::tr("サンプル回路を開く"), |ui| {
                         for s in samples::SAMPLES {
                             if ui.button(s.title).on_hover_text(s.about).clicked() {
                                 if self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") && self.sch.open_sample(s.title, s.json) {
@@ -345,15 +345,15 @@ impl eframe::App for App {
                                 ui.close();
                             }
                         }
-                    }).response.on_hover_text("できあがった回路をすぐ開いて、動かしてみます。保存するときは別の名前になるので、サンプルは壊れません");
-                    if ui.button("保存").on_hover_text("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます").clicked() {
+                    }).response.on_hover_text(i18n::tr("できあがった回路をすぐ開いて、動かしてみます。保存するときは別の名前になるので、サンプルは壊れません"));
+                    if ui.button(i18n::tr("保存")).on_hover_text(i18n::tr("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます")).clicked() {
                         if sch_mode { self.sch.save(false) } else { self.board_ed.save(false) }
                     }
-                    if ui.button("名前を付けて保存…").on_hover_text("別の名前で保存します").clicked() {
+                    if ui.button(i18n::tr("名前を付けて保存…")).on_hover_text(i18n::tr("別の名前で保存します")).clicked() {
                         if sch_mode { self.sch.save(true) } else { self.board_ed.save(true) }
                     }
                     ui.separator();
-                    if ui.button("画面をPNGで保存…").on_hover_text("いま見えている画面 (回路図・電圧の色・波形・基板) を画像にします。レポートや質問への添付に使えます").clicked() {
+                    if ui.button(i18n::tr("画面をPNGで保存…")).on_hover_text(i18n::tr("いま見えている画面 (回路図・電圧の色・波形・基板) を画像にします。レポートや質問への添付に使えます")).clicked() {
                         if let Some(p) = rfd::FileDialog::new().add_filter("PNG画像", &["png"]).set_file_name("circuitCad.png").save_file() {
                             self.shot_path = Some(p);
                             // the dialog is closed by the time the next frame is drawn, so the capture shows the app only
@@ -361,51 +361,51 @@ impl eframe::App for App {
                         }
                         ui.close();
                     }
-                    if sch_mode && ui.button("回路図をSVGで保存…").on_hover_text("いま見えているシートを、拡大しても粗くならない図 (SVG) にします。ブラウザや Inkscape で開けて、ブラウザの印刷から PDF にもできます。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります").clicked() {
+                    if sch_mode && ui.button(i18n::tr("回路図をSVGで保存…")).on_hover_text(i18n::tr("いま見えているシートを、拡大しても粗くならない図 (SVG) にします。ブラウザや Inkscape で開けて、ブラウザの印刷から PDF にもできます。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります")).clicked() {
                         self.sch.export_svg();
                         ui.close();
                     }
-                    if sch_mode && ui.button("回路図をPDFで保存…").on_hover_text("いま見えているシートを、1ページの PDF にします。印刷や提出、メールで送るのに使えます。文字は形(アウトライン)で入るので、どの環境でも同じ見た目ですが、PDF の中で文字の検索やコピーはできません。図枠は右下に入ります。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります").clicked() {
+                    if sch_mode && ui.button(i18n::tr("回路図をPDFで保存…")).on_hover_text(i18n::tr("いま見えているシートを、1ページの PDF にします。印刷や提出、メールで送るのに使えます。文字は形(アウトライン)で入るので、どの環境でも同じ見た目ですが、PDF の中で文字の検索やコピーはできません。図枠は右下に入ります。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります")).clicked() {
                         self.sch.export_pdf();
                         ui.close();
                     }
-                    if sch_mode && ui.button("図枠 (タイトル・版・日付)…").on_hover_text("回路の名前・版・日付・作者を書いておきます。SVG に書き出すと、図の右下に枠で入ります").clicked() {
+                    if sch_mode && ui.button(i18n::tr("図枠 (タイトル・版・日付)…")).on_hover_text(i18n::tr("回路の名前・版・日付・作者を書いておきます。SVG に書き出すと、図の右下に枠で入ります")).clicked() {
                         self.sch.open_title_block();
                         ui.close();
                     }
-                    if !sch_mode && ui.button("ケースの図面 (DXF) から外形と穴を取り込む…").on_hover_text("ケースの CAD で描いた DXF (ASCII 形式) から、基板の外形 (線・円弧・ポリラインがつながって閉じた、いちばん大きい輪) と、その中の円 (取り付け穴) を取り込みます。外形の左下が (0, 0) になります。単位は図面の設定 (INSUNITS) から mm にします。「元に戻す」で戻せます").clicked() {
+                    if !sch_mode && ui.button(i18n::tr("ケースの図面 (DXF) から外形と穴を取り込む…")).on_hover_text(i18n::tr("ケースの CAD で描いた DXF (ASCII 形式) から、基板の外形 (線・円弧・ポリラインがつながって閉じた、いちばん大きい輪) と、その中の円 (取り付け穴) を取り込みます。外形の左下が (0, 0) になります。単位は図面の設定 (INSUNITS) から mm にします。「元に戻す」で戻せます")).clicked() {
                         self.board_ed.import_dxf();
                         ui.close();
                     }
-                    if !sch_mode && ui.button("基板の外形・穴・部品の位置をDXFで保存…").on_hover_text("基板の外形、取り付け穴、部品を囲む箱と部品番号を、DXF (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に渡して、基板が収まるか、穴の位置が合うかを確かめるのに使います。画面と同じ向き (上から見た形) で書き出します").clicked() {
+                    if !sch_mode && ui.button(i18n::tr("基板の外形・穴・部品の位置をDXFで保存…")).on_hover_text(i18n::tr("基板の外形、取り付け穴、部品を囲む箱と部品番号を、DXF (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に渡して、基板が収まるか、穴の位置が合うかを確かめるのに使います。画面と同じ向き (上から見た形) で書き出します")).clicked() {
                         self.board_ed.export_dxf();
                         ui.close();
                     }
                     if !sch_mode {
                         for (label, side) in [("基板の表面をSVGで保存…", pcb_core::Side::Top), ("基板の裏面をSVGで保存…", pcb_core::Side::Bottom)] {
-                            if ui.button(label).on_hover_text("基板の絵を、拡大しても粗くならない図 (SVG) にします。銅・シルク・穴は、発注用の Gerber と同じデータから描くので、できあがりの姿です。記事・レポート・印刷に使えます。裏面は、基板を裏返して下から見た向きです").clicked() {
+                            if ui.button(label).on_hover_text(i18n::tr("基板の絵を、拡大しても粗くならない図 (SVG) にします。銅・シルク・穴は、発注用の Gerber と同じデータから描くので、できあがりの姿です。記事・レポート・印刷に使えます。裏面は、基板を裏返して下から見た向きです")).clicked() {
                                 self.board_ed.export_svg(side);
                                 ui.close();
                             }
                         }
                         ui.separator();
-                        if ui.button("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…").on_hover_text("発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます").clicked() {
+                        if ui.button(i18n::tr("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…")).on_hover_text(i18n::tr("発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます")).clicked() {
                             self.board_ed.open_order();
                             ui.close();
                         }
                     }
                 });
-                ui.menu_button("学ぶ", |ui| {
-                    if ui.button("学習パス (地図) を開く…").on_hover_text("学習パスの窓を開きます。パス (部品の素顔・安定化電源・Arduino 互換ボードなど) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります").clicked() {
+                ui.menu_button(i18n::tr("学ぶ"), |ui| {
+                    if ui.button(i18n::tr("学習パス (地図) を開く…")).on_hover_text(i18n::tr("学習パスの窓を開きます。パス (部品の素顔・安定化電源・Arduino 互換ボードなど) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります")).clicked() {
                         self.learn.open = true;
                         ui.close();
                     }
-                    if ui.button("用語集・索引…").on_hover_text("電子回路の言葉と、このソフトの言葉を、読みと説明つきで引けます。語を選ぶと、その語が出てくるレッスンも分かります").clicked() {
+                    if ui.button(i18n::tr("用語集・索引…")).on_hover_text(i18n::tr("電子回路の言葉と、このソフトの言葉を、読みと説明つきで引けます。語を選ぶと、その語が出てくるレッスンも分かります")).clicked() {
                         self.glossary.open = true;
                         ui.close();
                     }
                     ui.separator();
-                    ui.label("サンプル回路を動かしながら学べます (✔ = 完了)");
+                    ui.label(i18n::tr("サンプル回路を動かしながら学べます (✔ = 完了)"));
                     // the lessons are many: one submenu per learning path, one per stage of it (the lessons no path lists come last)
                     let ids = schematic::lesson_ids();
                     let titles = schematic::lesson_titles();
@@ -421,7 +421,7 @@ impl eframe::App for App {
                     };
                     for path in learn::PATHS {
                         ui.menu_button(path.title, |ui| {
-                            if ui.button("🗺 学習の地図 (樹形図) を開く…").on_hover_text("このパスの、レッスンの関係を樹形図で見ます (学習パスの窓が開きます)").clicked() {
+                            if ui.button(i18n::tr("🗺 学習の地図 (樹形図) を開く…")).on_hover_text(i18n::tr("このパスの、レッスンの関係を樹形図で見ます (学習パスの窓が開きます)")).clicked() {
                                 open_path = Some(path.id);
                                 ui.close();
                             }
@@ -451,7 +451,7 @@ impl eframe::App for App {
                     }
                     let others: Vec<usize> = (0..ids.len()).filter(|&i| !listed[i]).collect();
                     if !others.is_empty() {
-                        ui.menu_button("そのほかのレッスン", |ui| {
+                        ui.menu_button(i18n::tr("そのほかのレッスン"), |ui| {
                             for &i in &others {
                                 lesson_button(ui, i);
                             }
@@ -466,70 +466,70 @@ impl eframe::App for App {
                         self.sch.start_lesson(i);
                     }
                     ui.separator();
-                    if ui.button("値の決め方 (計算ツール)…").on_hover_text("LEDの抵抗・分圧・フィルタ・レギュレータ・トランジスタスイッチの値を、計算と注意点・故障パターンつきで決めます。部品の値は、勘ではなく計算で決められます。入力を変えると、結果・計算のしかた・注意点・壊れ方がすぐ下に出ます").clicked() {
+                    if ui.button(i18n::tr("値の決め方 (計算ツール)…")).on_hover_text(i18n::tr("LEDの抵抗・分圧・フィルタ・レギュレータ・トランジスタスイッチの値を、計算と注意点・故障パターンつきで決めます。部品の値は、勘ではなく計算で決められます。入力を変えると、結果・計算のしかた・注意点・壊れ方がすぐ下に出ます")).clicked() {
                         self.mode = Mode::Schematic;
                         self.sch.open_wizard(0);
                         ui.close();
                     }
                     ui.separator();
-                    ui.menu_button("基板のレッスン", |ui| {
+                    ui.menu_button(i18n::tr("基板のレッスン"), |ui| {
                         let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
-                        if ui.button(format!("{board_mark}{}", board_editor::lesson::TITLE)).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
+                        if ui.button(format!("{board_mark}{}", board_editor::lesson::TITLE)).on_hover_text(i18n::tr("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します")).clicked() {
                             self.start_board_lesson(0);
                             ui.close();
                         }
                         let copper_mark = if self.progress.is_done(board_editor::lesson::COPPER_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{copper_mark}{}", board_editor::lesson::COPPER_TITLE)).on_hover_text("細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します").clicked() {
+                        if ui.button(format!("{copper_mark}{}", board_editor::lesson::COPPER_TITLE)).on_hover_text(i18n::tr("細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します")).clicked() {
                             self.start_board_lesson(1);
                             ui.close();
                         }
                         let fix_mark = if self.progress.is_done(board_editor::lesson::FIX_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{fix_mark}{}", board_editor::lesson::FIX_TITLE)).on_hover_text("わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)").clicked() {
+                        if ui.button(format!("{fix_mark}{}", board_editor::lesson::FIX_TITLE)).on_hover_text(i18n::tr("わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)")).clicked() {
                             self.start_board_lesson(2);
                             ui.close();
                         }
                         let arduino_mark = if self.progress.is_done(board_editor::lesson::ARDUINO_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{arduino_mark}{}", board_editor::lesson::ARDUINO_TITLE)).on_hover_text("マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します").clicked() {
+                        if ui.button(format!("{arduino_mark}{}", board_editor::lesson::ARDUINO_TITLE)).on_hover_text(i18n::tr("マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します")).clicked() {
                             self.start_board_lesson(3);
                             ui.close();
                         }
                         let usb_mark = if self.progress.is_done(board_editor::lesson::USB_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{usb_mark}{}", board_editor::lesson::USB_TITLE)).on_hover_text("USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します").clicked() {
+                        if ui.button(format!("{usb_mark}{}", board_editor::lesson::USB_TITLE)).on_hover_text(i18n::tr("USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します")).clicked() {
                             self.start_board_lesson(4);
                             ui.close();
                         }
                         let pairs_mark = if self.progress.is_done(board_editor::lesson::PAIRS_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{pairs_mark}{}", board_editor::lesson::PAIRS_TITLE)).on_hover_text("2 組の差動ペアを同じ長さにそろえます。蛇行は 2 本をいっしょに曲げるので、間隔が保たれます").clicked() {
+                        if ui.button(format!("{pairs_mark}{}", board_editor::lesson::PAIRS_TITLE)).on_hover_text(i18n::tr("2 組の差動ペアを同じ長さにそろえます。蛇行は 2 本をいっしょに曲げるので、間隔が保たれます")).clicked() {
                             self.start_board_lesson(6);
                             ui.close();
                         }
                         let repair_mark = if self.progress.is_done(board_editor::lesson::REPAIR_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{repair_mark}{}", board_editor::lesson::REPAIR_TITLE)).on_hover_text("ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、点検の道具で確かめ、直します。何度でも、別の故障で練習できます").clicked() {
+                        if ui.button(format!("{repair_mark}{}", board_editor::lesson::REPAIR_TITLE)).on_hover_text(i18n::tr("ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、点検の道具で確かめ、直します。何度でも、別の故障で練習できます")).clicked() {
                             self.start_board_lesson(7);
                             ui.close();
                         }
                         let mega_mark = if self.progress.is_done(board_editor::lesson::MEGA_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{mega_mark}{}", board_editor::lesson::MEGA_TITLE)).on_hover_text("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます").clicked() {
+                        if ui.button(format!("{mega_mark}{}", board_editor::lesson::MEGA_TITLE)).on_hover_text(i18n::tr("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます")).clicked() {
                             self.start_board_lesson(5);
                             ui.close();
                         }
                     });
                 });
-                ui.menu_button("編集", |ui| {
-                    if ui.button("元に戻す (Ctrl+Z)").on_hover_text("直前の操作を取り消します").clicked() {
+                ui.menu_button(i18n::tr("編集"), |ui| {
+                    if ui.button(i18n::tr("元に戻す (Ctrl+Z)")).on_hover_text(i18n::tr("直前の操作を取り消します")).clicked() {
                         if sch_mode { self.sch.undo() } else { self.board_ed.undo() }
                     }
-                    if ui.button("やり直し (Ctrl+Y)").on_hover_text("取り消した操作をやり直します").clicked() {
+                    if ui.button(i18n::tr("やり直し (Ctrl+Y)")).on_hover_text(i18n::tr("取り消した操作をやり直します")).clicked() {
                         if sch_mode { self.sch.redo() } else { self.board_ed.redo() }
                     }
                     ui.separator();
-                    if ui.button("設計の要件 (表)…").on_hover_text("ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます。回路図・基板のどちらからでも開けます").clicked() {
+                    if ui.button(i18n::tr("設計の要件 (表)…")).on_hover_text(i18n::tr("ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます。回路図・基板のどちらからでも開けます")).clicked() {
                         self.mode = Mode::Schematic;
                         self.sch.open_requirements();
                         ui.close();
                     }
                 });
-                ui.menu_button("ヘルプ", |ui| {
+                ui.menu_button(i18n::tr("ヘルプ"), |ui| {
                     for (t, name, tip) in [
                         (help::HelpTab::Schematic, "回路図の操作", "部品の置き方・配線・選択・キー操作"),
                         (help::HelpTab::Waveform, "波形の操作", "ズーム・測定カーソル・信号の選び方"),
@@ -542,27 +542,43 @@ impl eframe::App for App {
                         }
                     }
                     ui.separator();
-                    ui.label("F1 キーでも開けます");
+                    ui.label(i18n::tr("F1 キーでも開けます"));
                 });
-                ui.menu_button("設定", |ui| {
-                    if ui.button("シミュレーション設定…").on_hover_text("計算の精度や収束のしやすさを調整します。ふだんは変えなくて大丈夫です。「収束しませんでした」と出たとき、または結果の精度を上げたいときに調整します。変えたあとは、解析をもう一度実行してください (「自動で再計算」がオンなら自動で反映されます)。").clicked() {
+                ui.menu_button(i18n::tr("設定"), |ui| {
+                    if ui.button(i18n::tr("シミュレーション設定…")).on_hover_text(i18n::tr("計算の精度や収束のしやすさを調整します。ふだんは変えなくて大丈夫です。「収束しませんでした」と出たとき、または結果の精度を上げたいときに調整します。変えたあとは、解析をもう一度実行してください (「自動で再計算」がオンなら自動で反映されます)。")).clicked() {
                         self.sch.show_sim_opts = true;
                         ui.close();
                     }
                     ui.separator();
-                    let mut changed = ui.checkbox(&mut self.show_hints, "画面下にヒントを出す").on_hover_text("画面下に、いま何をするとよいかのヒントと豆知識を表示します").changed();
+                    // written in both languages on purpose, so it can be found whichever one is showing
+                    ui.horizontal(|ui| {
+                        ui.label(i18n::tr("Language / 言語"));
+                        let now = i18n::lang();
+                        for (l, name) in [(i18n::Lang::Ja, "日本語"), (i18n::Lang::En, "English")] {
+                            if ui.selectable_label(now == l, name).on_hover_text(i18n::tr("画面の言語 / The language of the screen (English is partly translated: untranslated text stays in Japanese)")).clicked() && now != l {
+                                i18n::set_lang(l);
+                                install_japanese_font(ui.ctx());
+                                let file = prefs::Prefs::default_file();
+                                if let Err(e) = (prefs::Prefs { lang: l.code().to_string(), ..prefs::Prefs::load(&file) }).save(&file) {
+                                    self.sch.status = e;
+                                }
+                            }
+                        }
+                    });
+                    ui.separator();
+                    let mut changed = ui.checkbox(&mut self.show_hints, i18n::tr("画面下にヒントを出す")).on_hover_text(i18n::tr("画面下に、いま何をするとよいかのヒントと豆知識を表示します")).changed();
                     let mut only = icons::icon_only();
-                    if ui.checkbox(&mut only, "ツールをアイコンだけで表示").on_hover_text("ツールボタンの文字を省き、アイコンだけにします。ボタンにカーソルを重ねると名前と説明が出ます。慣れてきたら画面が広く使えます").changed() {
+                    if ui.checkbox(&mut only, i18n::tr("ツールをアイコンだけで表示")).on_hover_text(i18n::tr("ツールボタンの文字を省き、アイコンだけにします。ボタンにカーソルを重ねると名前と説明が出ます。慣れてきたら画面が広く使えます")).changed() {
                         icons::set_icon_only(only);
                         changed = true;
                     }
-                    if ui.checkbox(&mut self.link_selection, "選んだ部品・ネットを回路図・基板・3Dで連動").on_hover_text("回路図で選んだ部品やネット (配線・ネットラベル) が、基板と3D表示でも光り、基板や3Dで選んだものが、回路図でも光ります (水色の枠と線)。画面を切り替えたときに、同じものをすぐ探せます。オフにすると、それぞれ別々に選びます").changed() {
+                    if ui.checkbox(&mut self.link_selection, i18n::tr("選んだ部品・ネットを回路図・基板・3Dで連動")).on_hover_text(i18n::tr("回路図で選んだ部品やネット (配線・ネットラベル) が、基板と3D表示でも光り、基板や3Dで選んだものが、回路図でも光ります (水色の枠と線)。画面を切り替えたときに、同じものをすぐ探せます。オフにすると、それぞれ別々に選びます")).changed() {
                         changed = true;
                     }
-                    let note = if self.smooth_edges != self.smooth_edges_running { " (次の起動から)" } else { "" };
+                    let note = if self.smooth_edges != self.smooth_edges_running { i18n::tr(" (次の起動から)") } else { "" };
                     if ui
-                        .checkbox(&mut self.smooth_edges, format!("線の縁をなめらかにする{note}"))
-                        .on_hover_text("画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)")
+                        .checkbox(&mut self.smooth_edges, i18n::trf!("線の縁をなめらかにする{note}"))
+                        .on_hover_text(i18n::tr("画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)"))
                         .changed()
                     {
                         changed = true;
@@ -587,6 +603,7 @@ impl eframe::App for App {
             ui.spacing_mut().item_spacing.y = 4.0;
             ui.horizontal(|ui| {
                 let status = if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status };
+                let status = &i18n::tr_dyn(status);
                 if self.show_hints {
                     // a long status keeps to two thirds of the line (the rest is the tip) and is read in full by pointing at it
                     let width = ui.available_width() * 0.66;
@@ -601,16 +618,16 @@ impl eframe::App for App {
                     // rotate the general tips every 12 seconds
                     let t = ui.input(|i| i.time);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add(egui::Label::new(egui::RichText::new(format!("豆知識: {}", TIPS[(t / 12.0) as usize % TIPS.len()])).weak()).truncate());
+                        ui.add(egui::Label::new(egui::RichText::new(i18n::trf!("豆知識: {}", i18n::tr(TIPS[(t / 12.0) as usize % TIPS.len()]))).weak()).truncate());
                     });
                     ui.request_repaint_after(std::time::Duration::from_secs(2));
                 }
             });
             if self.show_hints {
-                let hint = if self.mode == Mode::Schematic { self.sch.hint() } else { self.board_ed.hint() };
+                let hint = i18n::tr_dyn(&if self.mode == Mode::Schematic { self.sch.hint() } else { self.board_ed.hint() });
                 // the word "ヒント" carries the colour; the sentence is plain text so a long hint stays easy to read
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("ヒント").strong().color(crate::theme::OK));
+                    ui.label(egui::RichText::new(i18n::tr("ヒント")).strong().color(crate::theme::OK));
                     ui.add(egui::Label::new(hint.as_str()).truncate()).on_hover_text(hint.as_str());
                 });
             }
@@ -642,6 +659,13 @@ impl eframe::App for App {
 
 fn main() -> eframe::Result {
     install_crash_log();
+    // the language: `--lang en`, else CCAD_LANG, else the saved setting
+    let arg_lang = std::env::args().skip_while(|a| a != "--lang").nth(1).as_deref().and_then(i18n::Lang::parse);
+    let saved_lang = i18n::Lang::parse(&prefs::Prefs::load(&prefs::Prefs::default_file()).lang);
+    i18n::set_lang(arg_lang.or_else(i18n::lang_from_env).or(saved_lang).unwrap_or(i18n::Lang::Ja));
+    if std::env::var_os("CCAD_I18N_MISSING").is_some() {
+        i18n::record_missing();
+    }
     // developer tool: compare the DC solution with ngspice, no window
     if xcheck::run_cli(&std::env::args().skip(1).collect::<Vec<_>>()) {
         return Ok(());
@@ -649,7 +673,7 @@ fn main() -> eframe::Result {
     // multisampling is fixed when the window is made: read the setting before it (`--no-msaa` leaves it out for this start)
     let smooth_edges = prefs::Prefs::load(&prefs::Prefs::default_file()).smooth_edges && !std::env::args().any(|a| a == "--no-msaa");
     board_editor::set_multisampled(smooth_edges);
-    eframe::run_native(
+    let result = eframe::run_native(
         "circuitCad",
         eframe::NativeOptions {
             viewport: {
@@ -676,12 +700,19 @@ fn main() -> eframe::Result {
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);
             // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)
-            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && !(i > 0 && args[i - 1] == "--screenshot"));
+            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && a != "--lang" && !(i > 0 && (args[i - 1] == "--screenshot" || args[i - 1] == "--lang")));
             if !opens_something {
                 app.look_for_recovery();
             }
             app.welcome = !opens_something && app.recovery.is_none() && app.progress.needs_welcome();
             Ok(Box::new(app))
         }),
-    )
+    );
+    // CCAD_I18N_MISSING=<file>: the Japanese texts shown without English, for the table (docs/code-notes/i18n.md)
+    if let Some(file) = std::env::var_os("CCAD_I18N_MISSING").filter(|f| f != "1") {
+        let _ = std::fs::write(file, i18n::missing().join("
+---
+"));
+    }
+    result
 }
