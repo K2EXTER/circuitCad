@@ -1,0 +1,329 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/help.rs
+3D表示	3D view
+部品と配線	Parts and wires
+左クリック	Left click
+選んでいる部品を置く / 配線の点を置く (斜めは自動で L 字になります)	Place the selected part / place a wire point (diagonals become an L shape automatically)
+ダブルクリック・右クリック	Double click / right click
+描いている配線を確定します	Finish the wire you are drawing
+右クリック (何も描いていないとき)	Right click (when not drawing)
+選択ツールに戻ります。選択ツールでは部品の上で右クリックすると、その部品の設定の小窓が開きます	Go back to the select tool. With the select tool, right-clicking a part opens a small window with its settings
+クイック追加: 部品の名前 (抵抗、LM358、0603 など) を打って探し、↑↓ と Enter で置く部品にします。Esc でやめます	Quick add: type a part name (resistor, LM358, 0603, etc.) to search, then pick the part to place with ↑↓ and Enter. Esc cancels
+置く前・選んだ部品を 90° 回転します	Rotate the part 90° (before placing, or when selected)
+選んだものを消します	Delete the selection
+選んだ部品・線・ラベルのコピー / 切り取り / 貼り付け。貼ったものは近くの空いた所に置かれ、部品番号は新しくなります (部品のピンについたネットラベルも一緒に動きます)	Copy / cut / paste the selected parts, lines and labels. Pasted items go to a free spot nearby and get new reference designators (net labels on the part's pins move with it)
+選んだものを複製します (コピーしてすぐ貼り付け)	Duplicate the selection (copy and paste at once)
+バス (信号の束)	Bus (a bundle of signals)
+「バス」ツールで太い青の線を引き、「ラベル」ツールで D[0..7] のように書いてバスの線の上に置くと、D0〜D7 の 8 本をまとめた名前になります。バスの線は何もつなぎません(見た目と点検のため)。つなぐのは各ピンのラベル D0〜D7 で、ラベルツールで D[0..7] と書いたまま、ピンを順にクリックすると D0 D1 D2 … と付きます(普通の名前の終わりの数字を進めるには、「番号を自動で進める」)。点検(ERC)は、バスの範囲に入っているのにつながっていない番号、片側にしか無い番号、範囲の外の番号、バスの幅の食い違いを教えます。サンプル「バスで 8 本の信号をまとめる」	Draw a thick blue line with the "Bus" tool, then use the "Label" tool to write something like D[0..7] and put it on the bus line: it becomes one name for the 8 signals D0 to D7. The bus line itself connects nothing (it is for looks and checking). What connects are the labels D0 to D7 on each pin: in the label tool, keep D[0..7] written and click the pins in order to get D0 D1 D2 … (to step the trailing number of a normal name, use "Auto-increment number"). The check (ERC) tells you about numbers in the bus range that are not connected, numbers on only one side, numbers outside the range, and mismatched bus widths. Sample: "Bundle 8 signals with a bus"
+シートのタブ (図の上)	Sheet tabs (above the drawing)
+「＋」でシートを足せます。シートが違っても、同じ名前のネットラベルと電源記号は同じ配線になります。右クリックで名前の変更と削除	Add a sheet with "+". Net labels and power symbols with the same name are the same wire, even on different sheets. Right-click to rename or delete
+同じ回路を何回も使う (階層)	Reuse the same circuit (hierarchy)
+使い回したい回路を別のシートに描き、出入口に「ラベル」ツールの「ポートにする」でポートを置きます。そのシートのタブを右クリック →「いまのシートに、記号として置く」で、元のシートに箱 (記号) が置かれ、ポートがピンになります。箱を何個置いても、中は同じシートのコピーです。箱をダブルクリックすると中を開け、「親へ戻る」で戻れます。箱を選ぶと「このコピーだけの値」で、その箱だけ抵抗値などを変えられます。コピーの部品番号は R1_CH1、ラベルは CH1.MID のように、箱ごとに別になります (VCC と GND は全部共通)	Draw the circuit you want to reuse on its own sheet, and put ports at its entrances and exits with "Make port" in the "Label" tool. Right-click that sheet's tab → "Place in current sheet as symbol" puts a box (symbol) on the original sheet, with the ports as pins. However many boxes you place, each one is a copy of the same sheet. Double-click a box to open it, and use "Back to parent" to return. Select a box and use "Values for this copy only" to change resistor values etc. for that box only. Copies get their own reference designators like R1_CH1 and labels like CH1.MID per box (VCC and GND are shared by all)
+編集 → 設計の要件 (表)	Edit → Design requirements (table)
+ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます。ネット名の末尾に * を付けると、その名前で始まるネットすべてです	Write net roles, track widths and currents, groups of parts to place close together, and things to keep apart, in one table for the whole design. When imported into the board, it is used for net classes, autoplace and distance checks. A * at the end of a net name means all nets starting with that name
+「ファイル → KiCad の回路図を開く…」	"File → Open KiCad schematic…"
+KiCad 6 以降の回路図 (.kicad_sch) を取り込みます。部品はこのソフトの記号で並べ直され、つながりはネットの名前で表されます (KiCad の図の形・位置は引き継ぎません)。抵抗・コンデンサ・コイル・ダイオード・LED・NPN・電圧源 (直流・SIN・PULSE) はそのままシミュレーションでき、ほかの部品は記号だけで、モデルは付きません。子シートやバスなど読めなかったものは、取り込んだあとの案内に出ます	Imports a KiCad 6 or later schematic (.kicad_sch). Parts are laid out again with this software's symbols, and connections are shown by net names (KiCad's drawing shapes and positions are not kept). Resistors, capacitors, inductors, diodes, LEDs, NPNs and voltage sources (DC, SIN, PULSE) can be simulated as they are; other parts come as symbols only, without a model. Anything that could not be read, such as child sheets or buses, is listed in the notes after the import
+「ファイル → 回路図をSVGで保存…」	"File → Save schematic as SVG…"
+いま見えているシートを、拡大しても粗くならない図 (SVG) にします。レポートや記事、印刷 (ブラウザから PDF にもできます) に使えます。電圧と電流を出していれば、それも入ります	Turns the current sheet into a picture that stays sharp when zoomed (SVG). Use it for reports, articles or printing (a browser can also make a PDF of it). If voltages and currents are shown, they are included too
+左パネル「選択を保存…」	Left panel "Save selection…"
+選んだ部分をスニペット (.ccsnip) に保存します。「スニペットを置く…」で別の回路に置けます	Saves the selected part of the circuit as a snippet (.ccsnip). Use "Place snippet…" to put it in another circuit
+使わないピン (NC)	Unused pins (NC)
+ICの使わない出力や、データシートが「開放」と言うピンは、部品を選んで左パネル (右クリックの小窓も同じ) の「使わないピン (NC)」にチェックを付けます。回路図に × が出て、ERC は「未接続」と言わなくなります。ERC の結果の行を開いて「使わないピン (NC) にする」を押しても付けられます。あとから線やラベルでつなぐと、ERC が食い違いを知らせます	For unused IC outputs, or pins the datasheet says to leave "open", select the part and tick "Unused pins (NC)" in the left panel (the right-click window has it too). An × appears on the schematic and ERC stops reporting it as "unconnected". You can also open the row in the ERC results and press "Mark as unused pin (NC)". If you later connect it with a wire or label, ERC warns you about the conflict
+ヘッダ (コネクタ) のピンの名前	Pin names of a header (connector)
+ヘッダを選ぶと、左パネルの「ピンの名前」で、ピンごとの名前 (F+、SA、GND など) を書けます。記号のそばに出ます。基板では「ヘッダのピン名をシルクに書く」で、パッドのそばに印刷できます	Select a header and use "Pin names" in the left panel to write a name for each pin (F+, SA, GND, etc.). They appear next to the symbol. On the board, "Pin names to silk" prints them next to the pads
+元に戻す / やり直し (値の変更も戻せます)	Undo / redo (value changes can be undone too)
+左ドラッグ (選択ツール)	Left drag (select tool)
+完全に囲んだものだけを選びます	Selects only what is fully enclosed
+右ドラッグ (選択ツール)	Right drag (select tool)
+触れたものも選びます。Shift を押しながらで、いまの選択に追加します	Also selects what it touches. Hold Shift to add to the current selection
+「通らない接続を通す」	"Route failed connections"
+自動配線で通らなかった接続のそばの小さい部品 (3 ピンまで) を 1〜4 mm 動かして、引き直してみます。通らない接続が減り、ルール違反が増えないものだけを採用します (最長 40 秒。CLI の `board nudge` と同じ)	Moves small parts (up to 3 pins) near connections autoroute couldn't route by 1-4 mm and tries routing again. Only results with fewer failed connections and no new rule violations are kept (up to 40 seconds; same as `board nudge` in the CLI)
+「配線を短くする」	"Shorten tracks"
+遠回りしている配線や、なくてもつながるビアを、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用するので、手で引いた配線にも使えます (自動配線の直後は得が小さいので、自動では行いません)	Tries rerouting tracks that take a detour and vias that are not needed for the connection. Only results that are shorter, have fewer vias and add no rule violations are kept, so it also works on hand-routed tracks (right after autoroute the gain is small, so it is not done automatically)
+部品を 2 個以上選ぶ → 整列	Select 2 or more parts → Align
+左パネルに「整列」が出ます。左・右・上・下揃え、縦・横の線に中心、等間隔 (3 個以上) で、部品の位置をそろえます。固定した部品は動きません。配線は動かないので、配線の前に使うのがおすすめです	"Align" appears in the left panel. Align left, right, top or bottom, center on a vertical or horizontal line, or space evenly (3 or more parts). Locked parts do not move. Tracks do not move, so it is best used before routing
+中ドラッグ	Middle drag
+画面の移動 (配線中などは右ドラッグでも可)	Pan the view (right drag also works, e.g. while drawing a wire)
+ホイール	Wheel
+拡大縮小	Zoom in and out
+回路全体が見えるように表示します	Zoom to show the whole circuit
+選択を外す / 配線や「回路図で選ぶ」をやめる	Clear the selection / stop drawing a wire or "Pick in schematic"
+部品の設定の小窓・レッスン	Part settings window, lessons
+部品の設定の小窓	Part settings window
+選択ツールで部品の上を右クリックすると開きます。値や番号を直すと回路に反映されます。Esc か × で閉じます	Opens when you right-click a part with the select tool. Changing the value or number updates the circuit. Close it with Esc or ×
+値の欄	Value field
+欄にポインタを置くと、書き方の例 (単位、ESR、SIN や PULSE など) が出ます	Hover over the field to see examples of how to write values (units, ESR, SIN, PULSE, etc.)
+レッスン	Lessons
+操作は左パネルで行います。部品の値の変更は「作図」タブ、解析の実行は「解析」タブです (手順に合わせて自動で切り替わります)	You work in the left panel. Change part values in the "Draw" tab and run analyses in the "Analysis" tab (it switches automatically to match the steps)
+部品の値	Part values
+値のスライダー	Value slider
+選んだ部品 (抵抗・コンデンサ・コイル) の値を動かします。今の値の 1/10 〜 10 倍まで動かせて、両端の値がスライダーの下に出ます。もっと大きく変えるときは値の欄に打ちます	Changes the value of the selected part (resistor, capacitor, inductor). It moves from 1/10 to 10 times the current value, and the end values are shown below the slider. For bigger changes, type into the value field
+「自動で再計算」	"Auto recalculate"
+オンにすると、値を動かすたびに開いている解析をやり直します。計算できない値では、直前の結果が残ります	When on, the open analysis is run again each time you move a value. If a value cannot be calculated, the previous result stays
+どの解析を使う? (知りたいことで選ぶ)	Which analysis? (choose by what you want to know)
+各点の電圧・電流	Voltage and current at each point
+DC動作点。回路図に電圧の色と電流の矢印が出ます	DC operating point. Voltage colors and current arrows appear on the schematic
+時間とともに変わる様子	How things change over time
+過渡解析。波形が出ます	Transient analysis. Shows waveforms
+周波数ごとの強さ	Strength at each frequency
+AC解析。ボード線図 (ゲインと位相) が出ます	AC analysis. Shows a Bode plot (gain and phase)
+入力と出力の関係	Input vs. output
+DCスイープ。電源を少しずつ変えて、出力を見ます	DC sweep. Changes a source step by step and shows the output
+雑音の大きさ	How much noise
+実物とのずれ	Difference from the real thing
+温度とばらつき。温度や部品の誤差で、どれだけ動くかを見ます	Temperature and variation. Shows how much things shift with temperature and part tolerances
+抵抗が熱くなるか	Does a resistor get hot?
+自己発熱。電流が流れる抵抗の温度上昇と、それで値がどれだけ動くかを見ます	Self-heating. Shows the temperature rise of resistors carrying current, and how much their values shift because of it
+短い通電で部品が何度になるか	How hot a part gets in a short pulse
+自己発熱の下の「温度の時間変化」。部品名・時間・熱容量を入れると、過渡解析の電力から温度の上がり方 (グラフ) を出します。2つの部品が温め合う分も入れられます	"Temperature over time" under self-heating. Enter the part name, time and heat capacity to get the temperature rise (graph) from the transient analysis power. Two parts heating each other can be included too
+波形の見方	Reading waveforms
+ドラッグ	Drag
+波形を動かします (横も縦も)	Moves the waveform (horizontally and vertically)
+時間軸 (横軸) の拡大縮小。Ctrl を押しながらで縦軸	Zoom the time axis (horizontal). Hold Ctrl for the vertical axis
+縦軸の数字の上でホイール	Wheel over the vertical axis numbers
+縦軸だけを拡大縮小します (ポインタの位置が中心です)	Zooms only the vertical axis (centered on the pointer)
+横軸の数字の上でホイール	Wheel over the horizontal axis numbers
+横軸だけを拡大縮小します	Zooms only the horizontal axis
+ダブルクリック	Double click
+全体表示に戻し、測定カーソルを消します	Returns to the full view and removes the measurement cursors
+クリック	Click
+測定カーソル A、次に B を置きます。2 点の差 (Δt) と周期、各波形の値が出ます。以降のクリックは近いほうのカーソルを動かします	Places measurement cursor A, then B. Shows the difference between the 2 points (Δt), the period, and each waveform's values. Later clicks move the nearer cursor
+波形にポインタを置く	Hover over a waveform
+その位置の値が、波形の色で表示されます	The value at that position is shown in the waveform's color
+左のパネルの数値	Numbers in the left panel
+平均・最小・最大・振幅・周波数・デューティ比は、いま表示している範囲の値です。ズームすると、見ている部分だけの値になります	Average, min, max, amplitude, frequency and duty cycle are for the range currently shown. When you zoom, they are for just the part you see
+範囲の欄と「自動」	Range fields and "Auto"
+開始 〜 終了 の欄	Start to end fields
+表示範囲を数字で入れます (10m, 2u など)。Enter で反映します	Enter the display range as numbers (10m, 2u, etc.). Press Enter to apply
+「全体」	"All"
+横軸を最初の範囲に戻します	Returns the horizontal axis to the initial range
+「自動」	"Auto"
+縦軸をいま見えている範囲に合わせます。手で動かすと切れます	Fits the vertical axis to the range currently visible. Moving it by hand turns this off
+信号を選ぶ	Choosing signals
+左の一覧のチェック	Checkboxes in the list on the left
+見たい信号を選びます。電圧は上、電流は下の別の枠に出ます	Choose the signals you want to see. Voltages go in the upper frame, currents in a separate lower frame
+「回路図で選ぶ」	"Pick in schematic"
+押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (または Shift+ピン) = その部品の電流を追加します。Esc か右クリックで終わります	Press it, then click on the schematic. A pin or wire adds the voltage at that point; a part body (or Shift+pin) adds that part's current. Esc or right click ends it
+電力と効率 (過渡解析)	Power and efficiency (transient analysis)
+使い方	How to use
+左パネルの「電力と効率」を開き、入力 (電源) と出力 (負荷) の電圧と電流の信号を選びます。表示中の時間範囲での平均電力、効率、損失 (熱になる分) が出ます	Open "Power and efficiency" in the left panel and choose the voltage and current signals of the input (supply) and output (load). It shows the average power, efficiency and loss (what becomes heat) over the time range shown
+コツ	Tip
+起動直後を含むと値がぶれるので、ズームして落ち着いた範囲だけを表示してから見ます。電流の向きは気にしなくて大丈夫です	Including the start-up makes the values jump around, so zoom in to show only a settled range before reading them. You don't need to worry about the current direction
+変える前と比べる	Compare with before the change
+「いまの波形を残す」	"Keep this waveform"
+選んでいる波形を、うすい色で残します。部品の値を変えて計算し直す (または「自動で再計算」) と、変える前のうすい線の上に、変えた後のこい線が重なります	Keeps the selected waveforms in a light color. When you change a part value and recalculate (or use "Auto recalculate"), the dark line after the change is drawn over the light line from before
+「消す」	"Delete"
+残してある波形を消します。残した波形は、いま選んでいる信号の分だけ表示されます	Deletes the kept waveforms. Kept waveforms are shown only for the signals currently selected
+「＋ 項目を追加」	"+ Add item"
+解析タブの「スペック」で、目標値を1行ずつ足します。測るもの (電圧・リップル・-3dB点・位相余裕など)、対象、許される範囲 (下限〜上限) を決めます。空欄の側は制限なしです	In "Spec" on the Analysis tab, add target values one row at a time. Choose what to measure (voltage, ripple, -3dB point, phase margin, etc.), the target, and the allowed range (min to max). A blank side means no limit
+✓ と ×	✓ and ×
+✓ は範囲内、× は範囲外 (どれだけ外れたかも出ます)、— は測れていない (その解析をまだ実行していない、など) です。値を変えて解析をやり直すと、判定も変わります	✓ means within range, × means out of range (it also shows by how much), and — means not measured (e.g. that analysis has not been run yet). If you change values and run the analysis again, the verdicts change too
+ゲインの基準	Gain reference
+0 dB = 1 V (または 1 A)。入力の電源を「AC 1」にすると、出力がそのまま伝達関数になります	0 dB = 1 V (or 1 A). If you set the input source to "AC 1", the output is the transfer function itself
+基板の用語	Board terms
+回路図で、つながっている線の1本分のこと (例: GND、VIN)。基板では、同じネットのパッドを銅の線でつなぎます。名前を付けていない線には、ソフトが N$1 のような仮の名前を付けます (基板で、選択ツールでパッドや配線にカーソルを合わせると、そのつながりに入っているピン (R1-2 など) が出るので、回路図で探せます。回路図にネットラベルで名前を付けると、基板にもその名前が出ます)	One connected line in the schematic (e.g. GND, VIN). On the board, pads of the same net are joined with copper tracks. Unnamed lines get a temporary name like N$1 from the software (on the board, hover over a pad or track with the select tool to see the pins in that connection, such as R1-2, so you can find it in the schematic. If you name it with a net label in the schematic, the board shows that name too)
+部品の足をはんだ付けする銅の部分です。表面実装 (SMD) の平らなものと、穴のあるスルーホールがあります	The copper areas where part leads are soldered. There are flat surface-mount (SMD) pads and through-hole pads with a hole
+基板の表と裏の銅の線をつなぐ小さな穴です。裏側へ線を渡したいときに使います	A small hole that connects copper tracks on the top and bottom of the board. Use it when you want a track to cross to the other side
+ベタ (ゾーン)	Copper pour (zone)
+基板の面いっぱいに広げた銅箔です。GND (0V の基準) をベタにすると、配線が減り、電流も流れやすくなります。別のネットとは、すき間をあけます	Copper foil spread across the board surface. Making GND (the 0 V reference) a copper pour means fewer tracks and lets current flow more easily. It keeps a gap from other nets
+未配線 (黄色の線)	Unrouted (yellow lines)
+つなぐべきなのに、まだ銅の線でつながっていない所です。ラッツネストとも呼びます	Places that should be connected but are not yet joined by copper tracks. Also called the ratsnest
+設計ルールチェック。線が近すぎる・基板の端にはみ出しているなど、工場で作れないものを調べます	Design rule check. Finds things the factory cannot make, such as tracks too close together or sticking out past the board edge
+ツールの「禁止」で形を描くと、配線・ビア・ベタ・部品を置けない領域になります (アンテナの下・ねじの頭が当たる所など)。自動配線はよけ、ベタは空け、中のものは DRC が指摘します。何を禁止するかと層は、「禁止」ツールを選ぶと出る一覧で変えられます	Draw a shape with the "Keep-out" tool to make an area where tracks, vias, copper pours and parts cannot go (under an antenna, where a screw head sits, etc.). Autoroute avoids it, copper pours leave it empty, and DRC reports anything inside. Change what is kept out and on which layers in the list that appears when you select the "Keep-out" tool
+作業中の点検	Check while working
+配線や部品を動かすたびに、DRC と同じ規則を裏で調べて、違反の所に赤い × を出します (ポインタを合わせると内容)。画面の左下に件数が出ます。「③ 確認して発注」の「作業中も点検する」で切れます。発注の前には「DRC を実行」も押してください	Every time you move a track or part, the same rules as DRC are checked in the background and a red × marks each violation (hover over it for details). The count appears at the bottom left of the screen. Turn it off with "Check while working" in "③ Check and order". Before ordering, also press "Run DRC"
+基板の表面に白く印刷される文字や図形です (部品番号など)	Text and shapes printed in white on the board surface (reference designators, etc.)
+「ファイル → 基板の表面/裏面をSVGで保存…」	"File → Save board top/bottom as SVG…"
+基板の1つの面を、拡大しても粗くならない図 (SVG) にします。銅・シルク・穴は発注用の Gerber と同じデータから描くので、できあがりの姿です (銅のベタの抜きも出ます)。裏面は、裏返して下から見た向きです。記事・レポート・印刷に使えます	Turns one side of the board into a picture that stays sharp when zoomed (SVG). Copper, silkscreen and holes are drawn from the same data as the Gerber files for ordering, so it shows the finished board (including cut-outs in copper pours). The bottom is shown flipped, as seen from below. Use it for articles, reports or printing
+「ファイル → ケースの図面 (DXF) から外形と穴を取り込む…」	"File → Import outline and holes from case drawing (DXF)…"
+ケースの CAD で描いた DXF (ASCII 形式) から、基板の外形 (線・円弧・ポリラインがつながって閉じた、いちばん大きい輪) と、その中の円 (取り付け穴) を取り込みます。外形の左下が (0, 0) になり、単位は図面の設定から mm にします。「元に戻す」で戻せます。読めなかった線や、閉じていない線は、取り込んだあとの案内に出ます	Imports from a DXF (ASCII format) drawn in your case CAD: the board outline (the largest closed loop of joined lines, arcs and polylines) and the circles inside it (mounting holes). The bottom left of the outline becomes (0, 0), and units are converted to mm from the drawing's settings. "Undo" reverts it. Lines that could not be read or are not closed are listed in the notes after the import
+「ファイル → 基板の外形・穴・部品の位置をDXFで保存…」	"File → Save board outline, holes and part positions as DXF…"
+基板の外形、取り付け穴、部品を囲む箱と部品番号を DXF (mm) にします。ケースの CAD (Fusion・FreeCAD など) に渡して、基板が収まるか、穴の位置が合うかを確かめます。上から見た向きで、層 (BOARD_OUTLINE・HOLES・PAD_DRILLS・PARTS・PART_NAMES) に分かれます	Writes the board outline, mounting holes, and a box with the reference designator for each part to a DXF (mm). Pass it to your case CAD (Fusion, FreeCAD, etc.) to check that the board fits and the holes line up. It is seen from above and split into layers (BOARD_OUTLINE, HOLES, PAD_DRILLS, PARTS, PART_NAMES)
+ガーバー	Gerber
+基板の工場に渡す設計図のデータです。銅の層・シルク・外形などが、層ごとのファイルになります。「発注の準備」で作ります	The design data you send to the board factory. Copper layers, silkscreen, outline, etc. each become a file per layer. Make them with "Prepare order"
+配置・配線	Placement and routing
+ツールに応じて、部品や配線の点を置く・選ぶ	Place or select parts and track points, depending on the tool
+右クリック	Right click
+描いているものを確定します。描いていないときは選択ツールに戻ります	Finish what you are drawing. When not drawing, go back to the select tool
+左のツールを上から順に選びます (1=選択、2=配線、3=ビア …、0=シルク線)。各ボタンの右に数字が出ています	Select the tools on the left from the top (1=Select, 2=Track, 3=Via …, 0=Silk line). The number is shown to the right of each button
+左の「測る」ツールで、2点をクリックすると距離を測れます (mm、ΔX・ΔY、角度、mil)。パッドやビアの中心、配線の端に吸い付きます。3回目のクリックで測り直し、Esc で消します。基板は変わりません	With the "Measure" tool on the left, click 2 points to measure the distance (mm, ΔX, ΔY, angle, mil). It snaps to pad and via centers and track ends. A third click starts a new measurement, and Esc clears it. The board is not changed
+距離を測ったあと Enter を押すと、その長さを寸法線として基板に残せます (H は横の長さだけ、V は縦の長さだけ)。外形の幅と高さは、左パネル「仕上げ (任意)」の「外形の寸法線」で置けます。寸法線は、ケースを設計する人に渡す DXF と SVG の図に出て、ガーバーには出ません	After measuring a distance, press Enter to keep that length on the board as a dimension line (H for the horizontal length only, V for the vertical length only). The outline's width and height can be placed with "Outline dimensions" in "Finishing (optional)" in the left panel. Dimension lines appear in the DXF and SVG drawings for the case designer, not in the Gerber files
+外形やゾーンの多角形を確定します	Finish the outline or zone polygon
+形の描き方	Drawing shapes
+基板外形 (多角形) とゾーンのツールは、左の設定で「直線 / 3点円弧 / 接線円弧 / 円 / 長方形」を選んで描きます。直線と円弧は切り替えながら囲め (描いている途中に、右クリックのメニュー、または S・A・T キー、Backspace で最後の点を戻す)、最初の点のクリック・Enter・ダブルクリック、またはメニューの「確定」で確定します。円と長方形は 2 クリックで確定します (長方形は角の丸め R も決められます)	For the board outline (polygon) and zone tools, choose "Line / 3-point arc / Tangent arc / Circle / Rectangle" in the settings on the left. You can switch between lines and arcs while going around (while drawing: the right-click menu, or the S, A, T keys; Backspace removes the last point), and finish by clicking the first point, Enter, double click, or "Finish" in the menu. Circles and rectangles finish in 2 clicks (rectangles can also have rounded corners R)
+ゲートの入れ替えと回路図への反映	Swapping gates and updating the schematic
+74HC32 のように同じゲートが並ぶ IC は、「ゲートを入れ替え」で、どのゲートをどの信号に使うかを基板の側で決められます (回路は同じ)。決めたあと「入れ替えを回路図に反映」を押すと、回路図の配線の端とネットラベルが入れ替えたピンへ移り、回路図と基板が同じになります。部品は描き直さないので、ピンの間で線が交差して見えることがあります。ほかの配線とまざるときは、何も変えずに理由が出ます	For ICs with several identical gates, like the 74HC32, "Swap gates" lets you decide on the board which gate is used for which signal (the circuit stays the same). Afterwards, press "Apply swaps to schematic" to move the schematic wire ends and net labels to the swapped pins, so the schematic matches the board. Parts are not redrawn, so wires may look crossed between pins. If it would mix with other wires, nothing is changed and the reason is shown
+ベタの図形を直す	Editing copper pour shapes
+選択ツールでベタを選ぶと、頂点とひし形 (円弧の通る点) が出ます。ドラッグで動かし、辺のダブルクリックで頂点を足し、頂点をクリックして Delete で消します。右クリックのメニューで、辺を円弧 / 直線にしたり、図形を足す↔引くに入れ替えたりできます	Select a copper pour with the select tool to show its vertices and diamonds (points the arcs pass through). Drag to move them, double-click an edge to add a vertex, and click a vertex and press Delete to remove it. The right-click menu can turn an edge into an arc or a line, or switch a shape between add and subtract
+ベタの図形	Copper pour shapes
+ベタは図形のリストです。ゾーンのツールの「足す (+)」で描いた形は面に足され、「引く (−)」で描いた形は面から引かれます (窓・穴)。ベタを選んでおくと、そのベタの図形になります。ベタを選ぶと、設定に図形の一覧が出て、足す↔引くの入れ替えと削除ができます。「頂点に確定」は、面を最終の頂点 (直線だけ) に変換します	A copper pour is a list of shapes. Shapes drawn with "Add (+)" in the zone tool are added to the area, and shapes drawn with "Subtract (−)" are cut out of it (windows, holes). If a copper pour is selected, the new shape goes into that pour. Selecting a pour shows its list of shapes in the settings, where you can switch add/subtract or delete them. "Convert to vertices" turns the area into its final vertices (straight lines only)
+配線の折れ曲がる向きを切り替えます	Switch the direction the track bends
+配線中に押すと、カーソルまで引いてビアを置き、反対の面で続けます	Pressing it while routing draws the track to the cursor, places a via, and continues on the other side
+延長線トラッキングの入/切。配線・ビア・外形・ベタのとき、パッドやビアや配線の端にカーソルを少し置くと点を拾い (青い +)、そこから横と縦に点線のガイドが出ます。ガイドの近くで吸い付き、2つのガイドが交わる所にも吸い付きます。Esc で拾った点を消します。選択ツールでも点を拾え、部品をドラッグするときは、部品の位置がガイドに吸い付きます	Turn extension-line tracking on/off. While drawing tracks, vias, outlines or copper pours, rest the cursor briefly on a pad, via or track end to pick up the point (blue +); dotted horizontal and vertical guides then extend from it. The cursor snaps near a guide and where two guides cross. Esc clears the picked points. The select tool can pick points too, and when you drag a part, its position snaps to the guides
+作業する層 (表面・内層・裏面) を順に切り替えます	Cycle through the working layer (top, inner, bottom)
+長さ合わせ (蛇行)	Length matching (meander)
+左パネルで配線ツールを選んだとき出る「高度な配線」の「長さ合わせ (蛇行)」。そろえるネットにチェックを入れて「一番長いものに合わせる」か、目標の長さを指定すると、短いネットの配線に蛇行を入れて長さをそろえます。角の形は四角・面取り・丸。ルール違反になる所には入れません	"Length matching (meander)" in "Advanced routing", shown in the left panel when the track tool is selected. Tick the nets to match and choose "Match the longest one", or give a target length, and meanders are added to the tracks of the shorter nets to even out their lengths. The corner shape can be square, chamfered or round. They are not added where they would break a rule
+配線をパッドから出す・パッドへ入れるときに、パッドの辺に垂直な短い区間が付きます (左パネル「② 自動で配線」の「引き方」のチェックで切れます)。四角いパッドは、4つの角にも吸い付きます (配線の縁がパッドの縁にそろう位置。配線の太さに合わせて動きます。細いピンは両端の2点)。2本を並べて出すこともできます。隣のパッドが近くて、辺から出す余裕がない所 (間隔の狭い IC のピンなど) には、両端の吸い付きもリードも付きません。自動配線の直後は新しい配線も自動でそろい、「配線を整える」の「パッドの根元をそろえる」ボタンで、いまある配線もそろえられます	When a track leaves or enters a pad, it gets a short section perpendicular to the pad edge (turn it off with the checkbox under "Routing style" in "② Autoroute" in the left panel). Square pads also snap at their 4 corners (where the track edge lines up with the pad edge; this moves with the track width; narrow pins have the 2 end points). Two tracks can also leave side by side. Where the next pad is too close to leave from the edge (such as fine-pitch IC pins), there are no end snaps or leads. Right after autoroute, new tracks are aligned automatically, and the "Align pad entries" button in "Tidy tracks" aligns existing tracks too
+自動経路	Auto path
+左パネル「② 自動で配線」の「引き方」の「自動経路」を入れると、配線ツールで、パッド・ビア・配線の端にカーソルを合わせたとき、出発点からそこまでの経路を、障害物をよけて自動で探します (水色の線)。クリックで配線します。探せないときは、いつもの線で、押しのけ配線が入っていれば邪魔な配線を寄せます。切ると、手で決めたとおりの配線になります	Turn on "Auto path" under "Routing style" in "② Autoroute" in the left panel, and when you hover over a pad, via or track end with the track tool, a path from the start point to there is found automatically around obstacles (light blue line). Click to route it. If no path is found, the usual line is used, and if push-and-shove routing is on, tracks in the way are pushed aside. Turn it off to route exactly as you place it
+配線をドラッグで動かすとき、および自動経路で通れないとき、別のネットの配線が近すぎると脇へ寄せます。プレビューの線が橙色 = 押しのけ、赤 = ルール違反。「② 自動で配線」の「引き方」のチェックで切れます	When you drag a track, or when auto path cannot get through, tracks of other nets that are too close are pushed aside. In the preview, orange = pushed, red = rule violation. Turn it off with the checkbox under "Routing style" in "② Autoroute"
+左パネル「仕上げ (任意)」の「配線を整える」。配線は引いたままで、角の丸み・太さの段差・パッドの根元の涙型・鋭角の分かれ目の丸みを、表示とガーバーに反映します (配線を動かしても自動で追従)。ネットごとに変えるときは、ネットの設定窓 (銅をクリック) のネットクラスで、整え方を選びます。ルール違反が増える所は変えません	"Tidy tracks" in "Finishing (optional)" in the left panel. The tracks stay as routed, and rounded corners, width steps, teardrops at pad necks and rounded acute junctions are applied to the display and the Gerber files (they follow automatically when you move tracks). To vary it per net, choose the style in the net class in the net settings window (click the copper). Places where rule violations would increase are left unchanged
+自動配線	Autoroute
+2層・45°配線で、ルール違反になる配線は自動的にやめます (ボタンにポインタを置くと説明が出ます)	Routes on 2 layers with 45° tracks and drops any track that would break a rule (hover over the button for an explanation)
+左パネル「② 自動で配線」の「GND ベタ」で、基板の裏面ぜんぶを GND の銅箔にして、表面の GND パッドを短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなります。部品を並べて外形を決めたあと、自動配線の前に押します (四角い外形の基板で使えます)	"GND pour" in "② Autoroute" in the left panel makes the whole bottom of the board GND copper, and connects the GND pads on top to it with short tracks and vias. Long GND tracks are no longer needed. Press it after placing parts and setting the outline, before autoroute (works on boards with a rectangular outline)
+テストポイント・フィデューシャル	Test points and fiducials
+測る場所は、回路図に同梱部品の TESTPOINT_PAD_1.5 か TESTPOINT_THT_1.0 を置いて、測りたいネットにつなぎます (部品表には出ません)。実装を工場に頼むときは、左パネル「仕上げ (任意)」の「フィデューシャルを置く」で、角に位置合わせの印を3つ置きます	For points to measure, place the bundled part TESTPOINT_PAD_1.5 or TESTPOINT_THT_1.0 in the schematic and connect it to the net you want to measure (it does not appear in the BOM). When you have the factory do assembly, "Place fiducials" in "Finishing (optional)" in the left panel puts 3 alignment marks in the corners
+左パネル「③ 確認して発注」の「ネットの一覧」で、全部のネットの配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・ベタ・未配線の数・ネットクラスを、1つの表で見られます。見出しのクリックで並べ替え、ネット名のクリックでそのネットの設定の窓が開きます	"Net list" in "③ Check and order" in the left panel shows, in one table, every net's track length (also per layer), detour ratio, number of vias, track width, copper pour, unrouted count and net class. Click a header to sort, and click a net name to open that net's settings window
+左パネル「② 自動で配線」の「ビアを縫う」で、表と裏の両方に GND のベタがある所へ、GND のビアを格子に並べます (ビアの縫い付け)。表と裏のベタが何か所もつながり、信号の帰りの電流が近くで反対の面へ移れます。「ふちに柵」は基板の外形に沿って1列に並べます。配線と表面のベタのあとに押します。ルール違反が増える所には置きません	"Stitch vias" in "② Autoroute" in the left panel places GND vias in a grid where there is GND copper pour on both top and bottom (via stitching). The top and bottom pours are joined in many places, so a signal's return current can move to the other side nearby. "Fence the edge" places one row along the board outline. Press it after routing and the top copper pour. Vias are not placed where rule violations would increase
+「③ 確認して発注」の「電流と電圧降下」で、電源とGNDのネットに電流 (A) を入れ、「計算する」を押します。電源の入口から各ピンまでの配線 (銅箔とビア) の抵抗で、何 mV 下がるかが出ます	In "Current and voltage drop" in "③ Check and order", enter currents (A) for the supply and GND nets and press "Calculate". It shows how many mV are lost to the resistance of the tracks (copper and vias) from the supply entry to each pin
+見方	How to read it
+30 mV 未満は問題なし、100 mV 以上は電圧が目に見えて下がります。電源側とGND側の降下は足し算で効くので、両方を調べてください。数字にポインタを置くと、ピンごとの値が出ます	Under 30 mV is fine; at 100 mV or more the voltage visibly drops. The drops on the supply side and the GND side add up, so check both. Hover over a number to see the value for each pin
+「シミュレーションに反映」を押すと、配線の抵抗とインダクタンスが回路図の解析 (DC・過渡・AC・ノイズ) に入ります。インダクタンス (細く長い配線で約 1 nH/mm、ビアは約 0.7 nH) は、DCには効かず、ACの高い周波数や速いスイッチングで効きます。ただし抵抗は直流の値で、約 300 kHz 以上では表皮効果で増えます (10 MHz で約 1.4〜1.9 倍、100 MHz で約 3.5〜4.3 倍)。インダクタンスは約 10 MHz まで当てになります。行きと帰りの配線が近いと磁界が打ち消し合ってループのインダクタンスが小さくなるので、別のネットの配線との結合 (相互インダクタンス) も入れています。配線の下 (上) に別のネットのベタがあると、戻り電流がベタを流れるものとして、インダクタンスが小さくなります (2層基板の 50 mm の細い配線で約 64 nH → 約 39 nH)。回路図の左パネルに「基板の配線抵抗を反映中」と出ます。配線を変えたら押し直します。「やめる」か回路図側の「解除」で理想の配線に戻ります。配線していないネットは理想の線のままなので、先に配線してください	Press "Apply to simulation" to include the track resistance and inductance in the schematic analyses (DC, transient, AC, noise). Inductance (about 1 nH/mm for a thin long track, about 0.7 nH for a via) has no effect at DC, but matters at high AC frequencies and in fast switching. The resistance is the DC value, though; above about 300 kHz it rises due to the skin effect (about 1.4-1.9 times at 10 MHz, about 3.5-4.3 times at 100 MHz). The inductance is reliable up to about 10 MHz. When the outgoing and return tracks are close, their magnetic fields cancel and the loop inductance gets smaller, so coupling with tracks of other nets (mutual inductance) is included too. When there is a copper pour of another net under (or over) a track, the return current is taken to flow in the pour and the inductance gets smaller (a thin 50 mm track on a 2-layer board: about 64 nH → about 39 nH). The schematic's left panel shows "Using board track resistance". Press it again after changing tracks. "Stop", or "Remove" on the schematic side, returns to ideal wires. Nets that are not routed stay as ideal wires, so route them first
+電流をシミュレーションから	Currents from the simulation
+「③ 確認して発注」の「電流の一覧を別窓で開く」を押し、窓の「DC解析の電流を入れる」を押すと、回路図のDC解析で求めた各ネットの電流が欄に入ります。スイッチング電源やパルスの負荷のように、DCでは電流が決まらない回路は、先に回路図で過渡解析を実行して「過渡解析の電流を入れる」を使います。入るのは後半 (起動のあと) の実効値で、ピーク・10 ms の最大も下に出ます。⚠ が付いたネットは、起動時のサージやスパイクかもしれないので、実効値の方を信じて太さを決めます。必要な線幅がすぐ出るので、足りないネットを「推奨幅にする」で太くし、「計算する」で電圧降下を確かめ、「シミュレーションに反映」で配線の抵抗を入れた解析をする、という流れで確かめられます。ピークは太さに使わないので、余裕を見てください。例は docs/examples の thin_power_line.ccproj (ファイル → プロジェクトを開く)	Press "Open current list in a window" in "③ Check and order", then press "Use DC analysis currents" in the window to fill in each net's current from the schematic's DC analysis. For circuits where DC does not set the current, like switching supplies or pulsed loads, run a transient analysis in the schematic first and use "Use transient currents". What goes in is the RMS value of the second half (after start-up); the peak and the 10 ms maximum are shown below. Nets marked ⚠ may have a surge or spike at start-up, so trust the RMS value when choosing the width. The required track width is shown right away, so you can widen nets that fall short with "Set tracks to recommended width", check the voltage drop with "Calculate", and run an analysis with track resistance using "Apply to simulation". The peak is not used for the width, so leave some margin. Example: thin_power_line.ccproj in docs/examples (File → Open project…)
+見積もりの前提	Assumptions of the estimate
+入口は、コネクタ (J・P など) があればそこ、なければ最初のピンです。各ピンが電流の全部を1つで引くとした、厳しめの値です。ベタは正方形のセルの網目にして解きます (他のネットの逃げ穴 (クリアランス) とサーマルリリーフも入ります)	The entry is a connector (J, P, etc.) if there is one, otherwise the first pin. It is a strict value that assumes each pin alone draws the whole current. Copper pours are solved as a mesh of square cells (clearances for other nets and thermal reliefs are included)
+選ぶ・動かす	Select and move
+完全に囲んだものを選びます	Selects what is fully enclosed
+触れたものも選びます。Shift で追加	Also selects what it touches. Shift adds
+ドラッグ (選んだ部品)	Drag (selected parts)
+部品を動かします。複数選んでいれば、まとめて動きます	Moves the parts. If several are selected, they move together
+ドラッグ (配線)	Drag (track)
+左パネルの「配線をドラッグで動かす」を入れたときだけ、配線を1本つかんで平行に動かします (普段は切ってあります)。つながった配線は伸び縮みし、パッドやビアに付いた端には短い配線が足されます。邪魔な配線は押しのけます	Only when "Drag tracks to move them" is on in the left panel: grabs one track and moves it in parallel (normally off). Connected tracks stretch and shrink, and short tracks are added at ends attached to pads or vias. Tracks in the way are pushed aside
+画面の移動 (他のツールでは右ドラッグでも可)	Pan the view (right drag also works in other tools)
+Ctrl+クリック / Ctrl+ドラッグ	Ctrl+click / Ctrl+drag
+選択ツールで、クリックした物 (または囲んだ物) を、いまの選択に足します。もう選んである物は、選択から外れます。部品を選んだあとに、1個だけ足したり、外したりできます。Ctrl を押しているあいだは、物を動かさず、範囲選択になります	With the select tool, adds the clicked (or enclosed) items to the current selection. Items already selected are removed from it. After selecting parts, you can add or remove just one. While Ctrl is held, items are not moved and it becomes a box select
+範囲選択と反対の面	Box select and the other side
+空いた所のドラッグで囲むと、反対の面の配線・ビア・部品も選びます (左パネルの「範囲選択は反対の面も選ぶ」で切り替え)。選んだまま動かすと、表と裏の配線が、部品といっしょに動きます	Dragging around an empty area also selects tracks, vias and parts on the other side (toggle with "Box select includes other side" in the left panel). If you move them while selected, the top and bottom tracks move together with the parts
+選んだ部品を回転します。範囲選択で複数選んでいるときは、グループの中心のまわりにまとめて 90° 回します (配線・ビア・ベタも一緒に回ります)。部品番号やシルクの文字だけを選んだときは、その文字の向きを回します	Rotates the selected part. When several are selected with a box, they are turned 90° together around the group's center (tracks, vias and copper pours turn with them). When only a reference designator or silkscreen text is selected, that text is rotated
+選んだ部品を表と裏で反転します	Flips the selected part between top and bottom
+選んだものを消します (部品は消せません。部品番号のシルク文字は、動かした位置から元に戻します。自由に置いたシルクの文字は消えます)	Deletes the selection (parts cannot be deleted. A reference designator's silkscreen text goes back from where it was moved to its original place. Free silkscreen text is deleted)
+シルクの文字と線	Silkscreen text and lines
+「文字」ツールでクリックした所に自由な文字 (基板名・版数など) を置き、選んで内容・高さ・向き・面を変えます。部品番号は、選ぶと高さ・向き・印刷しないを変えられ、「全部この高さに」でそろえられます。シルク線は、選ぶと太さを変えられます。どれも、発注の窓で選んだ発注先が印刷できる大きさより小さくはできません	The "Text" tool places free text (board name, revision, etc.) where you click; select it to change the content, height, direction and side. A selected reference designator can have its height, direction and "don't print" changed, and "Set all to this height" makes them all the same. A selected silk line can have its width changed. None of these can be made smaller than what the fab chosen in the order window can print
+ネットの設定の窓	Net settings window
+選択ツールで、配線・パッド・ビア・ベタをクリックすると、そのネットの窓が開きます。流れる電流は、回路図のDC解析から自動で入ります (入れ直すこともできます)。推奨の線幅が出て、足りない配線を太くできます。全部のネットの電流と線幅を1つの表で見るときは、左パネルの「配線の太さ」の「電流の一覧を別窓で開く」を使います。ネットクラス (線幅・間隔・ビア) の選択と値の変更もここでできます。何もない所をクリックすると閉じます。左パネルの「ネットを選ぶと設定の窓を開く」で切れます	Clicking a track, pad, via or copper pour with the select tool opens that net's window. The current that flows is filled in automatically from the schematic's DC analysis (you can also re-enter it). The recommended track width is shown, and you can widen tracks that fall short. To see every net's current and track width in one table, use "Open current list in a window" under "Board track width (from current)" in the left panel. You can also choose the net class (track width, clearance, via) and change its values here. Click an empty spot to close it. Turn it off with "Open settings window when selecting a net" in the left panel
+ビアのネット	Via net
+ビアツールの設定の「ネット」で、置くビアのネットを選べます。「自動」にすると、置いた場所のパッド・配線・ベタのネットになります (GND のベタの上なら GND)。ネットのあるビアは、同じネットのベタとつながり、何もつながっていなければ未配線の線 (黄色) の相手になります。選んだビアのパネルでも、ネットを変えられます	Choose the net of the vias you place with "Net" in the via tool's settings. With "Auto", it takes the net of the pad, track or copper pour where it is placed (GND if on a GND pour). A via with a net connects to copper pours of the same net, and if nothing is connected it becomes an end of an unrouted line (yellow). You can also change the net in the selected via's panel
+インピーダンスの目安	Impedance estimate
+ネットの窓の「インピーダンス (目安)」で、いまの線幅の特性インピーダンスが分かり、目標 (50 Ω など) の線幅を求められます。教科書の式による ±10% ほどの目安です。左パネルの「層構成 (層数・材料)」に、発注先の積層構成の値 (層の間隔・誘電率) を入れると近づきます。目標を決めると、発注前チェックが、外れた配線を教えます	"Impedance (estimate)" in the net window shows the characteristic impedance of the current track width and finds the track width for a target (50 Ω, etc.). It is an estimate of about ±10% from textbook formulas. Entering your fab's stack-up values (layer spacing, dielectric constant) in "Layer stack (layers, material)" in the left panel brings it closer. Once a target is set, the pre-order check tells you about tracks that miss it
+ネットクラス	Net classes
+配線ツールの設定の「高度な配線」→「ネットクラス」で、ネットのグループごとに、線幅・間隔・ビアを決めます (例: 電源は 0.5mm で広くあける、信号は 0.2mm)。手で引く配線と自動配線は、そのネットをクラスの線幅・ビアで引き、DRC はクラスの間隔を守っているか調べます	In the track tool's settings, "Advanced routing" → "Net classes" sets the track width, clearance and vias for each group of nets (e.g. power at 0.5mm with a wide gap, signals at 0.2mm). Hand-routed and autorouted tracks use the class's width and vias for that net, and DRC checks that the class's clearance is kept
+ネットを光らせる	Net highlight
+選択ツールで、パッド・配線・ビア・ベタにカーソルを合わせると、同じネットの銅がすべて水色に光り、ネット名が出ます。同じ色のベタが隣り合うときも、どれがどのネットか分かります。大きなベタには、ネット名が文字でも出ます (「ネット名」の目のスイッチで消せます)	With the select tool, hover over a pad, track, via or copper pour and all the copper of the same net glows light blue and the net name appears. Even when pours of the same color sit side by side, you can tell which net is which. Large copper pours also show the net name as text (hide it with the eye switch for "Net names")
+幹で引く	Trunk
+配線ツールの設定の「幹で引く」を入れる。同じネットで隣り合う2つのパッド (QFN の2本の LX ピンなど) をクリックして、最後に幹を伸ばす先をクリックすると、細い首と太い1本の幹を引きます。右クリックで選びを取り消します	Turn on "Trunk" in the track tool's settings. Click two neighboring pads of the same net (such as the two LX pins of a QFN), then click where the trunk should go, and it draws thin necks and one wide trunk. Right-click to undo the picks
+部品番号の文字をドラッグ	Drag reference designator text
+選択ツールで、基板の上の部品番号 (R1 など) をつかんで、好きな所へ動かせます。配線やパッドに重なるときに使います。部品を動かすと、文字も付いてきます	With the select tool, grab a reference designator (R1, etc.) on the board and move it wherever you like. Use it when it overlaps tracks or pads. When you move the part, the text follows
+選択や、描いているものをやめます	Cancel the selection or what you are drawing
+画面と編集	View and editing
+基板全体が見えるように表示します	Zoom to show the whole board
+元に戻す / やり直し	Undo / redo
+左ドラッグ	Left drag
+基板を回します	Rotates the board
+右ドラッグ (または中ドラッグ)	Right drag (or middle drag)
+基板を動かします	Moves the board
+初期の向きに戻します	Returns to the initial view
+部品にポインタ	Hover over a part
+部品の名前を表示します	Shows the part's name
+部品をクリック	Click a part
+基板のエディタでその部品が選ばれます	The part is selected in the board editor
+部品をダブルクリック / 「選択部品へ寄る」	Double-click a part / "Zoom to selected part"
+その部品に近づきます (裏面の部品は裏返して見ます)	Zooms to that part (bottom parts are viewed flipped over)
+回路図・基板との連動	Linked with schematic and board
+回路図や基板で選んだ部品・ネットは、この3D表示でも光ります (ネットの銅が桃色、部品が強調されて「選択部品へ寄る」で近づけます)。3D表示で部品をクリックすると、基板と回路図でも選ばれます。基板と回路図には水色の枠や線が出ます。「設定 → 選んだ部品・ネットを回路図・基板・3Dで連動」でオフにできます	Parts and nets selected in the schematic or board also glow in this 3D view (net copper in pink, parts highlighted; "Zoom to selected part" takes you there). Clicking a part in the 3D view selects it in the board and schematic too. The board and schematic show light blue frames and lines. Turn this off with "Settings → Link selected parts and nets across schematic, board and 3D"
+「ネット強調」	"Highlight net"
+選んだネットの銅を桃色に光らせます。基板エディタで配線・パッド・ビアを選んでも光ります	Makes the selected net's copper glow pink. Selecting a track, pad or via in the board editor also makes it glow
+「PNG保存」	"Save PNG"
+いまの向きの絵を画像として保存します	Saves the picture at the current angle as an image
+「ケース高さ」	"Case height"
+表と裏それぞれ、基板の面からケースまでの高さを入れると、超える部品が赤くなり、上限が橙の枠で見えます	Enter the height from the board surface to the case for the top and bottom; parts that go over it turn red, and the limit is shown as an orange frame
+回している間	While rotating
+回す・動かす・拡大の最中は粗い絵になり、止めると細かい絵に戻ります (大きい基板でも軽く動かすため)	While rotating, moving or zooming, the picture is rough, and returns to full detail when you stop (so even large boards move smoothly)
+ICの上の白い点	White dot on an IC
+1番ピンの側です (ピンの名前が「1」の部品)	Marks the pin 1 side (for parts with a pin named "1")
+ダイオードの白い帯・LEDの緑の端と白い面・電解コンデンサの白い縞	White band on diodes, green end and white face on LEDs, white stripe on electrolytic capacitors
+ダイオードとLEDはカソード(K)側、電解コンデンサは−側の目印です	These mark the cathode (K) side of diodes and LEDs, and the − side of electrolytic capacitors
+操作ガイド	Operation guide
+(F1 でいつでも開けます)	(Open it any time with F1)
+# crates/app/src/tips.rs
+部品やボタンにカーソルを合わせると、使い方の説明が出ます	Hover over parts and buttons to see how to use them
+回路図はホイールで拡大縮小、中ボタンのドラッグで移動できます (中ボタンが使えないときは、Alt を押しながら左ドラッグ)	In the schematic, zoom with the wheel and pan by dragging with the middle button (if you have no middle button, hold Alt and left drag)
+選択ツールで空いた所を左ドラッグすると、完全に囲んだ部品や配線だけを選べます。右ドラッグだと少しでも触れたものも選べます	With the select tool, left-drag over an empty area to select only the parts and wires fully enclosed. Right drag also selects anything it touches even slightly
+「パラメータスイープ」で部品の値を何通りか振ると、カットオフや波形のなまり方の違いを重ねて比べられます	Try a few part values with "Parameter sweep" to overlay and compare differences in cutoff or how waveforms get rounded
+AC解析の「安定性の余裕」で位相余裕・ゲイン余裕が見られます。サンプル opamp_loop_gain で、出力に付けたコンデンサを大きくすると余裕が減る様子を試せます	"Stability margins" in AC analysis shows the phase margin and gain margin. In the sample opamp_loop_gain, try making the capacitor on the output bigger and watch the margin shrink
+レッスン「交流を直流にする」では、トランス (ライブラリの「トランス」) とブリッジ整流でできるリップルを測れます。平滑コンデンサの容量は「値の決め方」で計算できます	In the lesson "Turning AC into DC", you can measure the ripple from a transformer ("Transformer" in the library) and a bridge rectifier. The smoothing capacitor's value can be calculated with "How to choose values"
+基板エディタの「3Dで見る」で、出来上がりの色と部品の高さを立体で確認できます。外形の角を丸める (角R) こともできます	"View in 3D" in the board editor shows the finished colors and part heights in 3D. You can also round the corners of the outline (corner R)
+電池は電圧源ではなく、内部抵抗を持ち、使うほど電圧が下がります。ライブラリの「電池」と、レッスン「電池の内部抵抗と持ち時間」で試せます	A battery is not a voltage source: it has internal resistance, and its voltage drops as you use it. Try "Battery" in the library and the lesson "Battery internal resistance and run time"
+降圧コンバータは、スイッチを高速に入り切りして電圧を下げるので、リニアレギュレータより熱くなりません。レッスン「降圧コンバータ」で、コイルの電流と効率を見られます	A buck converter lowers the voltage by switching on and off very fast, so it runs cooler than a linear regulator. In the lesson "Buck converter", you can see the inductor current and efficiency
+抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます	Change a resistor value and run the analysis again to get a feel for how the circuit's behavior changes
+ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます	Hover over a device name in the noise analysis to read the cause of the noise and how to reduce it
+DCスイープでインバーターの入出力特性を描くと、切替電圧やノイズマージンが分かります	Plot an inverter's input/output characteristic with a DC sweep to see its switching voltage and noise margin
+ERC で配線ミスを点検してから解析や基板に進むと、原因探しが楽です	Checking for wiring mistakes with ERC before moving on to analysis or the board makes finding problems easier
+「ファイル → サンプル回路を開く」から、できあがった回路をすぐ開いて動かせます (docs/examples にも同じものがあります)	"File → Open sample circuit" opens finished circuits you can run right away (the same ones are in docs/examples)
+基板に進む前に、回路図の部品にフットプリント (形) が合っているか確認しましょう	Before moving on to the board, check that each schematic part has the right footprint (shape)
+長い配線は、インダクタンスと対グランドの容量でリンギングします。「シミュレーションに反映」のあと過渡解析を終了時間 100n・刻み 0.1n で実行し、波形の一覧の V(部品.ピン.wire) にチェックを入れると分かります。サンプルは ringing_trace.ccproj (ファイル → プロジェクトを開く)	Long tracks ring because of their inductance and capacitance to ground. After "Apply to simulation", run a transient analysis with end time 100n and step 0.1n, and tick V(part.pin.wire) in the waveform list to see it. Sample: ringing_trace.ccproj (File → Open project…)
+基板で「配線の電圧降下」を計算したら「シミュレーションに反映」を押すと、配線の抵抗を入れた回路図の解析ができます。細い配線で電圧が落ちる様子は、サンプルの thin_power_line.ccproj で試せます	After calculating "Track voltage drop" on the board, press "Apply to simulation" to analyze the schematic with track resistance included. Try the sample thin_power_line.ccproj to see the voltage drop on a thin track
+「ファイル → プロジェクトを保存」で、回路図と基板を1つのファイル (.ccproj) にまとめて保存できます	"File → Save project" saves the schematic and board together in one file (.ccproj)
+基板は DRC が 0 件になってから、製造ファイルを書き出して発注します	Order the board after DRC shows 0 problems and you have exported the manufacturing files
+このヒント欄は、メニューの「ヒント」チェックで消せます	You can hide this hint area with the "Hint" checkbox in the menu
+# crates/app/src/samples.rs
+LED と電流制限抵抗	LED and current-limiting resistor
+電池・抵抗・LED の一番かんたんな回路。「解析」タブの「DC動作点を解析」で、電流が出ます	The simplest circuit: battery, resistor and LED. "Run DC operating point" in the "Analysis" tab shows the current
+12V から 5V を作って LED を光らせる	Make 5V from 12V to light an LED
+三端子レギュレータ (LM7805) の回路。「DC動作点を解析」で、各点の電圧と電流が回路図に重なります	A three-terminal regulator (LM7805) circuit. "Run DC operating point" overlays the voltage and current at each point on the schematic
+電源と負荷を2枚のシートに分ける	Split supply and load over 2 sheets
+上の「12V から 5V」と同じ回路を、電源のシートと負荷のシートに分けたもの。シートが違っても、同じ名前のネットラベル (5V) は同じ配線です。上のタブで切り替え、「DC動作点を解析」で1枚のときと同じ答えを確かめます	The same circuit as "Make 5V from 12V" above, split into a supply sheet and a load sheet. Net labels with the same name (5V) are the same wire even on different sheets. Switch with the tabs at the top, and confirm with "Run DC operating point" that you get the same answer as with one sheet
+同じ回路を3回使う (階層: RC を3段重ねる)	Use the same circuit 3 times (hierarchy: 3 RC stages)
+RC ローパスの「ステージ」を別のシートに1つだけ描き、3つの記号 (CH1〜CH3) で使い回します。「RCステージ」のタブを開くと中身 (R と C、入口と出口のポート) が見えます。「解析」タブの「AC解析を実行」で、3段重ねた特性が出ます (1段より急に落ちます)。シートの中を直すと、3つ全部に効きます	One RC low-pass "stage" is drawn on its own sheet and reused with 3 symbols (CH1 to CH3). Open the "RC stage" tab to see inside (R and C, and the input and output ports). "Run AC analysis" in the "Analysis" tab shows the response of the 3 stages (it falls off faster than one stage). Fixing the sheet's contents affects all 3
+RC ローパスフィルタ	RC low-pass filter
+抵抗とコンデンサで高い周波数を通しにくくする回路。「AC解析を実行」で、ボード線図が出ます	A circuit that uses a resistor and capacitor to block high frequencies. "Run AC analysis" shows the Bode plot
+RLC のパルス応答	RLC pulse response
+パルスを入れると波形が振動して落ち着く回路。「過渡解析を実行」で、波形が出ます	A circuit whose waveform rings and then settles when you feed it a pulse. "Run transient analysis" shows the waveforms
+ツェナーで電圧を一定にする	Constant voltage with a Zener
+もっとも簡単な安定化。入力を変えても出力があまり動きません	The simplest regulator. The output barely moves even when the input changes
+ブリッジ整流 (交流を直流にする)	Bridge rectifier (AC to DC)
+ダイオード 4 個と平滑コンデンサ。「過渡解析を実行」で、リップルが見えます	Four diodes and a smoothing capacitor. "Run transient analysis" shows the ripple
+3相電源と Y 結線の負荷	3-phase supply and Y-connected load
+3相電源 (A・B・C が 120° ずつずれた交流) に抵抗を3つつなぎます。「過渡解析を実行」で、3つの波形のずれが見えます	Three resistors on a 3-phase supply (A, B and C are AC shifted 120° from each other). "Run transient analysis" shows the shift between the 3 waveforms
+3相ブリッジ整流	3-phase bridge rectifier
+3相電源をダイオード 6 個で直流にします。単相のブリッジ整流より、リップルがずっと小さくなります。「過渡解析を実行」で、V(VDC) がほぼ平らな直流になります	Turns a 3-phase supply into DC with 6 diodes. The ripple is much smaller than with a single-phase bridge rectifier. "Run transient analysis" shows V(VDC) as almost flat DC
+エミッタフォロワ (電流を増やす)	Emitter follower (more current)
+トランジスタで、電圧はそのまま流せる電流を増やす回路です	A transistor circuit that keeps the voltage the same but increases the current it can supply
+オペアンプで信号を大きくする	Amplify a signal with an op-amp
+非反転増幅。抵抗の比でゲインが決まります	Non-inverting amplifier. The ratio of the resistors sets the gain
+直列レギュレータ (オペアンプ + 基準電圧)	Series regulator (op-amp + reference)
+出力を測って、ずれたら直す (帰還) 安定化電源。電圧安定化の本質です	A regulated supply that measures its output and corrects it when it drifts (feedback). This is the core of voltage regulation
+保護つきの電源 (逆接続ダイオード + 78xx)	Protected supply (reverse-polarity diode + 78xx)
+電源を逆につないでも壊れにくくする回路です	A circuit that is hard to damage even if the supply is connected backwards
+MOSFET スイッチ	MOSFET switch
+小さな信号で大きな電流を入り切りする回路です	A circuit that switches a large current on and off with a small signal
+NE555 の点滅回路	NE555 blinker
+タイマー IC で LED を点滅させます。「過渡解析を実行」で、充放電の波形が見えます	Blinks an LED with a timer IC. "Run transient analysis" shows the charge and discharge waveforms
+カウンタとデコーダ (LED が順に流れる)	Counter and decoder (running LEDs)
+74HC161 の 4 ビットカウンタと 74HC138 のデコーダ。クロック 1kHz で数えて、LED が 1 つずつ順に光ります。「過渡解析を実行」で、QA〜QD と Y0〜Y7 の波形が見えます	A 74HC161 4-bit counter and a 74HC138 decoder. It counts a 1kHz clock and the LEDs light one by one in turn. "Run transient analysis" shows the QA to QD and Y0 to Y7 waveforms
+シフトレジスタで LED を順に光らせる	Light LEDs in turn with a shift register
+74HC595 に 1 ビットずつデータを送ると、そのビットが QA から QH へ 1 つずつ進み、LED が順に光ります。「過渡解析を実行」で、QA〜QH の波形が見えます	Send data into a 74HC595 one bit at a time, and each bit moves from QA toward QH one step at a time, lighting the LEDs in turn. "Run transient analysis" shows the QA to QH waveforms
+カウンタと 7 セグメント表示 (数字が 0 から 9 まで進む)	Counter and 7-segment display (digits from 0 to 9)
+74HC161 の 4 ビットカウンタの出力を、CD4511B (BCD → 7 セグメントのデコーダ) に入れて、7 つの LED (a〜g) を光らせます。0 から 9 まで数字の形に光り、10 以上は消えます。「過渡解析を実行」で、各セグメントの波形が見えます	The output of a 74HC161 4-bit counter goes into a CD4511B (BCD → 7-segment decoder) to light 7 LEDs (a to g). They light in the shape of the digits 0 to 9, and go dark at 10 and above. "Run transient analysis" shows each segment's waveform
+正弦波をデジタルで作る (カウンタ → ROM → DAC → ADC)	Make a sine wave digitally (counter → ROM → DAC → ADC)
+74HC4040 のカウンタが ROM32x8 (正弦波 1 周期の表) のアドレスを進め、出てきた 8 ビットの値を R-2R のはしごが電圧に変えます (DA 変換)。その電圧を 4 ビットの AD コンバータ ADC4_FLASH が読み取ります。「過渡解析を実行」で、階段状の正弦波 V(N7) と、AD 変換の値 V(Y0)〜V(Y3) が見えます	A 74HC4040 counter steps the address of a ROM32x8 (a table of one sine wave cycle), and an R-2R ladder turns the 8-bit value that comes out into a voltage (D/A conversion). A 4-bit A/D converter, ADC4_FLASH, reads that voltage. "Run transient analysis" shows the stepped sine wave V(N7) and the A/D values V(Y0) to V(Y3)
+バスで 8 本の信号をまとめる	Bundle 8 signals with a bus
+ヘッダの 8 本の信号 D0〜D7 を、太い青のバスの線 D[0..7] でまとめて、8 個の LED につなぎます。バスの線は何もつなぎません。つなぐのは各ピンの D0〜D7 のラベルで、ラベルツールで D[0..7] と書いてピンを順にクリックすると、D0 D1 … と順に付きます。バスの範囲と合わない番号があると、点検(ERC)が教えてくれます	The 8 signals D0 to D7 from a header are bundled with the thick blue bus line D[0..7] and connected to 8 LEDs. The bus line itself connects nothing. What connects are the D0 to D7 labels on each pin: in the label tool, write D[0..7] and click the pins in order to get D0 D1 … in turn. If a number does not match the bus range, the check (ERC) tells you
+セットアップ時間の違反 (データがクロックに間に合わない)	Setup time violation (data misses the clock)
+74HC04 を6個つないで遅らせたデータが、74HC74 のクロックの 7ns 前にしか届かない回路です。「過渡解析を実行」で、足りない時間の警告が出ます。VCK の遅れ (150n) を 180n に変えてもう一度実行すると、警告が消えます	A circuit where data delayed through 6 chained 74HC04s reaches the 74HC74 only 7ns before the clock. "Run transient analysis" gives a warning about the missing time. Change the VCK delay (150n) to 180n and run again, and the warning goes away
+降圧コンバータ (スイッチング電源)	Buck converter (switching supply)
+熱にしないで電圧を下げる電源。スイッチの波形とリップルを見られます	A supply that lowers the voltage without turning it into heat. You can see the switch waveform and the ripple
+総合デモ (電源 + 555 + カウンタ + 温度アラーム + アンプ)	Full demo (supply + 555 + counter + temperature alarm + amplifier)
+部品 41 個 の大きな回路。「過渡解析を実行」で、時計 (CLK) と 1/2・1/4 に割ったカウンタの波形が見えます。計算に 数十秒かかります	A large circuit with 41 parts. "Run transient analysis" shows the clock (CLK) and the counter waveforms divided by 2 and 4. The calculation takes several tens of seconds
+電源ラインのインピーダンス (バイパスコンデンサの効き)	Supply line impedance (how bypass capacitors help)
+ケーブルの先の電源ラインに、電解・10µF・100nF のコンデンサをつけた回路。「解析」タブの「インピーダンス」で、ネットに RAIL と入れて実行すると、谷 (コンデンサがよく効く周波数) と山 (電圧が揺れやすい周波数) が出ます	A supply line at the end of a cable, with electrolytic, 10µF and 100nF capacitors. In "Impedance" in the "Analysis" tab, enter RAIL as the net and run it to see valleys (frequencies where the capacitors work well) and peaks (frequencies where the voltage shakes easily)
+アンプのひずみ (出力が頭打ちになる)	Amplifier distortion (output clipping)
+オペアンプの増幅回路 (ゲイン 11) に 0.4V の正弦波を入れると、出力が電源の範囲を超えて頭が削られます。「過渡解析を実行」→ 波形で「ひずみ率 (THD)」を開くと約 16% と出ます。V1 を 0.1V にすると、ほぼ 0% になります	Feed a 0.4V sine wave into an op-amp amplifier (gain 11) and the output goes beyond the supply range and gets its tops clipped. "Run transient analysis" → open "Distortion (THD)" in the waveform view and it shows about 16%. Set V1 to 0.1V and it is almost 0%
+極と零 (共振する LC フィルタ)	Poles and zeros (resonant LC filter)
+10Ω・1mH・1µF のローパス。「解析」タブの「極と零」で、出力に OUT・入力に IN と入れて実行すると、5.03 kHz に一対の複素数の極 (Q = 3.16) が出て、当てはめの曲線が回路の応答に重なります。抵抗を 10Ω から 100Ω にすると、極が実数の2つに分かれて山が消えます	A 10Ω, 1mH, 1µF low-pass. In "Poles and zeros" in the "Analysis" tab, enter OUT as the output and IN as the input and run it: a pair of complex poles appears at 5.03 kHz (Q = 3.16), and the fitted curve overlays the circuit's response. Change the resistor from 10Ω to 100Ω and the poles split into 2 real ones and the peak disappears
+帰還の安定性 (出力にコンデンサをつけた電源)	Feedback stability (supply with a capacitor on the output)
+直列レギュレータの出力に 10µF をつけた回路。「解析」タブの「ループゲイン」で、切る部品に R3 と入れて実行すると、位相余裕がわずか約 10° と出ます。出力のコンデンサを外す (消す) と、約 90° に戻ります	A series regulator with 10µF on its output. In "Loop gain" in the "Analysis" tab, enter R3 as the part to break and run it: the phase margin is only about 10°. Remove (delete) the output capacitor and it goes back to about 90°
+充電 IC (TP5100)	Charger IC (TP5100)
+電池を充電する IC の回路です。ライブラリ部品の使い方の例になります	A circuit with an IC that charges a battery. It is an example of how to use library parts
+ATtiny85 の書き込み用ヘッダ (ISP)	ATtiny85 programming header (ISP)
+ATtiny85 と、書き込み用の 6 ピンのヘッダ (標準の AVR ISP の並び) の回路です。書き込みに要るピン (RESET・MOSI・MISO・SCK・電源・GND) がヘッダまでつながっていることを、ERC が調べます。ラベル SCK の片方の名前を変えて ERC を実行すると、どのピンが足りないか分かります	An ATtiny85 with a 6-pin programming header (standard AVR ISP layout). ERC checks that the pins needed for programming (RESET, MOSI, MISO, SCK, power, GND) reach the header. Rename one of the SCK labels and run ERC to see which pin is missing

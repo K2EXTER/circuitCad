@@ -224,7 +224,7 @@ pub const NEXT_STEPS: &[NextStep] = &[
     NextStep { title: "配線の見た目と作りやすさを整える", about: "配線の角を丸め、太さが変わる所をなめらかにし、2本が合流する所のすき間を銅で埋めます。製造のとき、エッチングで細いすき間がつぶれたり、液がたまったりするのを防ぎます", where_: "基板エディタの「仕上げ (任意)」" },
     NextStep { title: "配線の太さを、流れる電流から決める", about: "回路の電流から、配線に必要な太さを求め、電圧降下 (配線の抵抗で電圧が下がる量) も確かめます", where_: "基板エディタの「③ 確認して発注」の「電流と電圧降下」" },
     NextStep { title: "差動ペアと長さ合わせ", about: "USB のように2本で信号を送る線を並べて引き、長さをそろえます。高い周波数の信号が乱れにくくなります", where_: "同じ「高度な配線 (中級者向け)」の「差動ペア」「長さ合わせ (蛇行)」" },
-    NextStep { title: "発注と、買うものの一覧", about: "ガーバー・ドリル・部品表・配置ファイルと一緒に、部品ごとの数量と、秋月電子・DigiKey・LCSC のリンク (型番が分かる部品は商品ページ) を書き出します", where_: "基板エディタの「④ 確認して発注」の「発注の準備…」" },
+    NextStep { title: "発注と、買うものの一覧", about: "ガーバー・ドリル・部品表・配置ファイルと一緒に、部品ごとの数量と、秋月電子・DigiKey・LCSC のリンク (型番が分かる部品は商品ページ) を書き出します", where_: "基板エディタの「③ 確認して発注」の「発注の準備…」" },
     NextStep { title: "部品の故障を試す", about: "抵抗が焼ける、コンデンサがショートするなど、部品が壊れたときに回路がどうなるか、ほかの部品が連鎖して壊れないかを調べます", where_: "回路図の左パネルの「故障を試す」「連鎖故障を追う」" },
     NextStep { title: "部品の誤差と温度の影響", about: "抵抗やコンデンサの誤差、温度の変化で、出力がどれだけ動くかを、たくさんの組み合わせで調べます", where_: "回路図の左パネルの「ばらつき解析を実行」「温度スイープを実行」" },
     NextStep { title: "ほかのソフトと行き来する", about: "回路を SPICE のネットリストで書き出して LTspice や ngspice で動かしたり、KiCad の部品を取り込んだり、自分で部品を作って足したりできます", where_: "回路図の左パネルの「SPICEネットリストを書き出し…」「＋ 部品を作る…」(開いた窓の「① 基本」に、KiCad・JSON から取り込むボタンがあります)" },
@@ -249,7 +249,7 @@ pub(crate) const NOTE: Color32 = Color32::from_gray(175);
 
 /// Wrapped Japanese text with a taller line (the font's default line height makes lines touch).
 pub(crate) fn spaced(text: &str) -> egui::RichText {
-    egui::RichText::new(text).line_height(Some(20.0))
+    egui::RichText::new(i18n::tr_dyn(text)).line_height(Some(20.0))
 }
 
 /// The action that opens an item, if it can be opened yet.

@@ -1,0 +1,275 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/part-lib/src/diode.rs
+点が足りません。電流と電圧の組を、2 点以上 (できれば小・中・大の電流で 3 点) 入れてください	Not enough points. Enter at least 2 current/voltage pairs (ideally 3: small, medium and large currents)
+電流と電圧は、0 より大きい数で入れてください (例: 10m と 0.7)	Enter current and voltage as numbers greater than 0 (e.g. 10m and 0.7)
+電流が近すぎる点があります。電流は 10 倍ずつなど、離れた値で読んでください (近いと傾きが決まりません)	Some points have currents too close together. Read currents that are far apart, e.g. 10 times apart (close points don't give a clear slope)
+電流が大きい所で電圧の上がりが小さいので、直列抵抗 RS は 0 にしました。大きい電流の点の読み取りを確かめてください	The voltage rises only a little at high current, so the series resistance RS was set to 0. Check your reading of the high-current point
+計算できませんでした。点の電流を変えて入れ直してください	Could not calculate. Change the currents of the points and enter them again
+2 点だけなので、直列抵抗 RS は 0 にしました。定格電流に近い大電流の点を足すと、RS も決まります	Only 2 points, so the series resistance RS was set to 0. Add a high-current point near the rated current to find RS too
+電流を増やしても電圧が増えていません。電圧の読み取りを確かめてください (電流が大きい点ほど、電圧も大きくなります)	The voltage does not rise as the current increases. Check your voltage readings (a point with more current should have a higher voltage)
+N が {n:.2} になりました。ふつうの整流・スイッチングダイオードは 1〜2 ほどです。読み取った点を確かめてください	N came out as {n:.2}. Normal rectifier and switching diodes are about 1 to 2. Check the points you read
+IS を求められませんでした。点を確かめてください	Could not find IS. Check the points
+接合容量は 0 より大きい数 (F)、そのときの逆電圧は 0 以上の数 (V) で入れてください (例: 15p と 4)	Enter the junction capacitance as a number greater than 0 (F) and the reverse voltage for it as a number 0 or more (V) (e.g. 15p and 4)
+逆回復時間 trr と、測定条件の電流 IF・IR は、0 より大きい数で入れてください (例: 2u と 0.5 と 1)	Enter the reverse recovery time trr and the test currents IF and IR as numbers greater than 0 (e.g. 2u and 0.5 and 1)
+# crates/part-lib/src/kicad.rs
+カッコ ) が多すぎます。KiCad のファイルではないか、途中で壊れています	Too many closing brackets ")". This is not a KiCad file, or it is broken partway
+文字列の " が閉じていません	A string's " is not closed
+ファイルの先頭がカッコで始まっていません。KiCad のファイルではありません	The file does not start with a bracket. It is not a KiCad file
+カッコ ( が閉じていません。ファイルが途中で切れている可能性があります	A bracket "(" is not closed. The file may be cut off partway
+中身が空です	The file is empty
+KiCad のシンボルライブラリ (.kicad_sym) ではありません	This is not a KiCad symbol library (.kicad_sym)
+取り込める部品 (ピンのあるシンボル) がありません	There are no parts to import (symbols with pins)
+KiCad の旧形式のシンボルライブラリ (.lib) ではありません	This is not an old-format KiCad symbol library (.lib)
+KiCad のフットプリント (.kicad_mod) ではありません	This is not a KiCad footprint (.kicad_mod)
+パッドが 1 つもありません。ファイルを確かめてください	There are no pads. Check the file
+台形・自由形状のパッドは四角に置き換えました。ランドの形をデータシートで確かめてください	Trapezoid and free-form pads were replaced with rectangles. Check the land shape in the datasheet
+斜めに回したパッドの角度は無視しました	The angles of pads turned at a slant were ignored
+{} ユニットの部品を 1 つの記号にまとめています。	A part with {} units is merged into one symbol.
+シンボルのピン {} ({}) に対応するパッドが、フットプリント {} にありません。組み合わせが違う可能性があります	The footprint {@3} has no pad for the symbol's pin {@1} ({@2}). They may not belong together
+フットプリントは仮のもの (2.54mm の 1 列) です。基板に使う前に、本物のフットプリントに替えてください。	The footprint is a placeholder (one row at 2.54mm). Replace it with the real footprint before using it on a board.
+(KiCad から取り込み。{} シミュレーションモデルはありません。)	(Imported from KiCad. {} No simulation model.)
+ (KiCad から取り込み。シミュレーションモデルはありません。)	 (Imported from KiCad. No simulation model.)
+zip を開けませんでした: {e}	Could not open the zip: {e}
+zip として読めませんでした: {e}。ダウンロードした zip をそのまま選んでください	Could not read it as a zip: {e}. Choose the downloaded zip as it is
+{base} は大きすぎるので読みませんでした	{base} is too large, so it was not read
+{base} を読めませんでした	Could not read {base}
+この zip には KiCad のシンボル (.kicad_sym か、旧形式の .lib) が見つかりませんでした。ダウンロードのとき、形式に「KiCad」を選んだ zip を選んでください	No KiCad symbols (.kicad_sym or old-format .lib) were found in this zip. Choose a zip downloaded with "KiCad" chosen as the format
+# crates/part-lib/src/kicad_import.rs
+{}: 記号の定義がファイルになかったので、取り込めませんでした。	{}: the symbol definition was not in the file, so it could not be imported.
+{}: 記号を作れませんでした ({e})。	{}: could not make the symbol ({e}).
+{} は参照名が決まっていない (または重なっている) ので、{} にしました。	{} had no reference designator (or a duplicate one), so it became {}.
+{refdes}: フットプリント「{fp}」はこのソフトにありません。基板に取り込む前に選び直してください。	{refdes}: this software has no footprint "{fp}". Choose another before importing to the board.
+{refdes} は KiCad で「実装しない」になっています。シミュレーション専用の部品として取り込みました (基板と部品表には出ません)。	{refdes} is set to "Do not populate" in KiCad. It was imported as a simulation-only part (it won't appear on the board or the BOM).
+{refdes}: ピン {} ({}) は対応する場所がなく、つなぎませんでした。	{refdes}: pin {} ({}) has no matching place, so it was not connected.
+{refdes} は極性のあるコンデンサです。このソフトのコンデンサは極性を記号に出さないので、ピン1が + 側 (KiCad と同じ) であることを覚えておいてください。ESR などは値の欄に書けます。	{refdes} is a polarized capacitor. This software's capacitor symbol does not show polarity, so remember that pin 1 is the + side (same as KiCad). ESR and such can be written in the value field.
+「GND」という名前のネットがありません。シミュレーションするには、0 V の基準にするネットの名前を GND にしてください。	There is no net named "GND". To simulate, name the 0 V reference net GND.
+記号から作った部品 ({}) には、シミュレーションのモデルがありません。計算では、回路にないものとして扱います。モデルを付けるには、同じ名前の部品をライブラリで作り直すか、基本の部品に置き換えてください。	Parts made from symbols ({}) have no simulation model. Simulations treat them as if they were not in the circuit. To add a model, remake a part with the same name in the library, or replace it with a basic part.
+配置は取り込み時に並べ直しています (KiCad の図の位置・形は引き継ぎません)。つながりは、ピンについたネットの名前で表しています。	Parts are rearranged on import (KiCad's positions and shapes are not kept). Connections are shown by the net names on the pins.
+# crates/part-lib/src/kicad_sch.rs
+KiCad の回路図 (.kicad_sch) ではありません。KiCad 6 以降で保存した .kicad_sch を選んでください	This is not a KiCad schematic (.kicad_sch). Choose a .kicad_sch saved with KiCad 6 or later
+記号 {lib_id} の定義がファイルの中に見つからないので、読み飛ばしました	The definition of symbol {lib_id} was not found in the file, so it was skipped
+名前の違うラベル ({}) が同じ配線についています。{name} として読みました	Labels with different names ({}) are on the same wire. It was read as {name}
+(名前なし)	(no name)
+子シート「{name}」は読み込めません (階層のシートは未対応です)。その中の部品は入っていません	The child sheet "{name}" cannot be read (hierarchical sheets are not supported). The parts inside it are missing
+バス (太い線・バスの引き出し) は読み込めません。バスでつながるはずの信号は、つながっていません	Buses (thick lines and bus entries) cannot be read. Signals that should connect through a bus are not connected
+# crates/part-lib/src/lib.rs
+フィルムコンデンサ	
+(name) 部品名が空です。データシートの型番などを入れてください (例: LM358、2N3904)	(name) The part name is empty. Enter something like the datasheet's part number (e.g. LM358, 2N3904)
+(prefix) 部品番号の頭文字が空です。抵抗なら R、コンデンサなら C、IC なら U のように入れてください	(prefix) The refdes prefix is empty. Enter R for a resistor, C for a capacitor, U for an IC, and so on
+ピンがありません	There are no pins
+番号が空のピンがあります	A pin has an empty number
+ピン番号 {} が重複しています	Pin number {} is used twice
+glyph (コンデンサ・抵抗・コイルの記号) は、左右に 1 本ずつの 2 ピンの部品だけに使えます	glyph (the capacitor/resistor/inductor symbol) can only be used for 2-pin parts with one pin on each side
+glyph「{}」は capacitor / electrolytic / resistor / inductor / {} のどれかにしてください	glyph "{}" must be one of capacitor / electrolytic / resistor / inductor / {}
+ピン {} ({}) に対応するパッドがパッケージにありません	The package has no pad for pin {} ({})
+パッド {} は記号のピンに対応していません (サーマルパッド等なら問題ありません)	Pad {} does not match any symbol pin (fine if it is a thermal pad or similar)
+sim.pins の {p} が記号のピンにありません	{p} in sim.pins is not a symbol pin
+sim.element (D, Q, M, J など) が必要です	sim.element (D, Q, M, J, etc.) is required
+sim.text に .model {} がありません	sim.text has no .model {}
+sim.text に .subckt 行がありません	sim.text has no .subckt line
+sim.name {} と .subckt 名 {name} が違います	sim.name {} and the .subckt name {name} differ
+サブサーキットのポート数 {ports} と sim.pins の数 {} が違います	The subcircuit has {ports} ports but sim.pins has {}
+# crates/part-lib/src/passive.rs
+{what}は 0 より大きい数にしてください (空にすると入れません)	{what} must be a number greater than 0 (leave it empty to skip)
+{}の値は 0 より大きい数にしてください (例: 100n / 4.7k / 10u)	The value of {} must be a number greater than 0 (e.g. 100n / 4.7k / 10u)
+インダクタンスの低下は 1〜90% の間で入れてください (データシートの Isat は 30% 低下が多く、20% や 10% のものもあります)	Enter the inductance drop between 1 and 90% (datasheet Isat is often at a 30% drop; some use 20% or 10%)
+{what} は 1℃ あたりの割合で入れてください (例: 100ppm/℃ は 100u)。絶対値が 5% を超える値は入れられません	Enter {what} as a ratio per 1°C (e.g. 100ppm/°C is 100u). Values over 5% in absolute value are not allowed
+DCバイアスによる容量の低下は 0〜95% の間で入れてください (例: 30)	Enter the capacitance drop from DC bias between 0 and 95% (e.g. 30)
+温度による値の変化は、27℃ を基準にした温度係数 (TC1・TC2 の 2 次式) で近似しています。温度スイープで確かめられます。データシートのグラフの形とは、少し違います。	The change of value with temperature is approximated by temperature coefficients around 27°C (TC1, TC2 quadratic). You can check it with a temperature sweep. It differs a little from the shape of the datasheet graph.
+温度による値の変化は扱いません (温度係数を入れると反映できます)。	The change of value with temperature is not modeled (enter temperature coefficients to include it).
+DCバイアス時の容量 {} ({:.0}% 低下)	Capacitance under DC bias {} ({:.0}% drop)
+容量は、かける電圧で下がった値 ({}) の一定値として扱います。電圧が変わっても動きません。	The capacitance is treated as a fixed value, lowered by the applied voltage ({}). It does not change when the voltage changes.
+セラミックコンデンサは、直流の電圧をかけると容量が下がります。このモデルは下がりません (「DCバイアスで下がる量」に入れると反映できます)。	Ceramic capacitors lose capacitance when a DC voltage is applied. This model does not (enter it in "DC bias drop" to include it).
+ESR と ESL を入れていないので、理想のコンデンサと同じ動きです。	No ESR or ESL entered, so it behaves like an ideal capacitor.
+寄生インダクタンス {}	Parasitic inductance {}
+並列容量 {}	Parallel capacitance {}
+抵抗値は電圧や電力では変わりません (電力による温度上昇も扱いません)。	The resistance does not change with voltage or power (heating from power is not modeled either).
+Isat {}A ({:.0}% 低下)	Isat {}A ({:.0}% drop)
+磁気飽和は、インダクタンスが L / (1 + (電流 / i0)²) で下がる式で近似します (Isat で {:.0}% 低下)。実物の曲線の形とは少し違い、温度による Isat の変化は扱いません。	Magnetic saturation is approximated by inductance falling as L / (1 + (current / i0)²) ({:.0}% drop at Isat). It differs a little from the real curve, and the change of Isat with temperature is not modeled.
+電流が大きいと起こる磁気飽和 (インダクタンスの低下) は扱いません (「飽和電流 Isat」を入れると反映できます)。	Magnetic saturation at high current (inductance drop) is not modeled (enter "Saturation current Isat" to include it).
+DCR (巻線の抵抗) を入れていないので、損失のない理想のコイルです。	No DCR (winding resistance) entered, so it is an ideal lossless inductor.
+DCR は銅の温度係数 (1℃ あたり約 0.4%) で、温度とともに増えます。	DCR rises with temperature by copper's temperature coefficient (about 0.4% per 1°C).
+理想の部品	Ideal part
+{} {}{} ({extra})。データシートの数値から作ったモデルです。実物の値は個体差や温度で変わります	{} {}{} ({extra}). A model made from datasheet numbers. Real values vary between parts and with temperature
+容量と自己共振周波数は 0 より大きい数にしてください	Capacitance and self-resonant frequency must be numbers greater than 0
+インダクタンスと自己共振周波数は 0 より大きい数にしてください	Inductance and self-resonant frequency must be numbers greater than 0
+先に容量を入れてください	Enter the capacitance first
+インピーダンスの表が足りません。周波数と |Z| の組を 2 行以上 (できれば谷の前後 3〜5 行) 入れてください	The impedance table is too short. Enter at least 2 rows of frequency and |Z| (ideally 3 to 5 rows around the dip)
+周波数 {} Hz / |Z| {} Ω は 0 より大きい数にしてください	Frequency {} Hz / |Z| {} Ω must be numbers greater than 0
+表の最高周波数 ({}Hz) が自己共振 ({}Hz) よりだいぶ低いので、ESL は目安です。共振を過ぎた高い周波数の行を足すと確かになります	The table's highest frequency ({}Hz) is well below self-resonance ({}Hz), so ESL is a rough guess. Add rows at higher frequencies past resonance to make it reliable
+共振 ({}Hz) の近くの行がないので、ESR は目安です。インピーダンスが一番低い付近の行を足すと確かになります	There are no rows near resonance ({}Hz), so ESR is a rough guess. Add rows near where the impedance is lowest to make it reliable
+表の周波数がすべて共振より高く、容量の値を確かめられません。低い周波数の行も足してください	All frequencies in the table are above resonance, so the capacitance cannot be checked. Add rows at lower frequencies too
+表とモデルの差が最大 {max_error_pct:.0}% あります。容量の値が表と合っているか (DCバイアス時の表なら、その時の容量) 確かめてください	The table and the model differ by up to {max_error_pct:.0}%. Check that the capacitance matches the table (for a DC-bias table, the capacitance at that bias)
+先に値を入れてください	Enter the value first
+インピーダンスの表が足りません。周波数と |Z| の組を 2 行以上 (できれば 3〜5 行) 入れてください	The impedance table is too short. Enter at least 2 rows of frequency and |Z| (ideally 3 to 5 rows)
+表の最高周波数 ({}Hz) が自己共振 ({}Hz) よりだいぶ低いので、求めた値は目安です。共振を過ぎた高い周波数の行を足すと確かになります	The table's highest frequency ({}Hz) is well below self-resonance ({}Hz), so the values found are rough guesses. Add rows at higher frequencies past resonance to make them reliable
+表とモデルの差が最大 {max_error_pct:.0}% あります。値が表と合っているか確かめてください	The table and the model differ by up to {max_error_pct:.0}%. Check that the value matches the table
+温度と変化率の点を入れてください (例: 85 -7 は、85℃ で 7% 減る)	Enter temperature and change points (e.g. 85 -7 means 7% less at 85°C)
+温度と変化率 (%) は数で入れてください。変化率は −100% より大きい値です	Enter temperature and change (%) as numbers. The change must be greater than −100%
+27℃ 以外の温度の点を入れてください	Enter a point at a temperature other than 27°C
+電流と L の変化率の点を入れてください (例: 3 -30 は、3A で L が 30% 下がる)	Enter current and L change points (e.g. 3 -30 means L drops 30% at 3A)
+電流は 0 より大きい数、変化率は −1 〜 −95 (%) の数で入れてください (例: 3 -30)	Enter current as a number greater than 0 and change as a number from −1 to −95 (%) (e.g. 3 -30)
+# crates/part-lib/src/templates.rs
+充電ICのテンプレート: {why}	Charger IC template: {why}
+セル数は 1〜8 にしてください	The number of cells must be 1 to 8
+1セルの満充電電圧は 2〜5V の範囲で入力してください (リチウムイオンは 4.2V、リン酸鉄リチウムは 3.6V)	Enter a full-charge voltage per cell between 2 and 5V (Li-ion is 4.2V, LiFePO4 is 3.6V)
+充電電流を 0 より大きい値で入力してください (データシートの「充電電流」)	Enter a charge current greater than 0 (the datasheet's "charge current")
+電流の式 I = 定数 + k ÷ R の k は 0 より大きく、定数と開放時の電流は 0 以上にしてください	In the current formula I = constant + k ÷ R, k must be greater than 0, and the constant and the open-pin current must be 0 or more
+プリチャージ電流と終了電流の割合は 0〜1 の間にしてください (例: 0.1 は 10%)	The precharge and termination current ratios must be between 0 and 1 (e.g. 0.1 is 10%)
+入力電圧の下限は 0 より大きく、上限は下限より大きい値 (または 0 = 上限なし) にしてください	The minimum input voltage must be greater than 0, and the maximum greater than the minimum (or 0 = no maximum)
+温度入力の正常な範囲は「下限 < 上限」にしてください (例: 0.3V〜2.73V)	The normal range of the temperature input must be "min < max" (e.g. 0.3V to 2.73V)
+部品名を入力してください (モデルの名前に使います)	Enter a part name (used as the model name)
+充電電流 {} A	Charge current {} A
+充電電流 = {}{} ÷ R_PROG[Ω] [A] (PROG 開放時 {} A)	Charge current = {}{} ÷ R_PROG[Ω] [A] ({} A with PROG open)
+充電IC (テンプレート): {}セル {} V、{}、{cur}。{}{}{}動作モデルは外から見た動きだけを再現します (損失・リップル・熱・タイマは扱いません)	Charger IC (template): {} cells {} V, {}, {cur}. {}{}{}The behavioral model only reproduces how it looks from outside (losses, ripple, heat and timers are not modeled)
+降圧スイッチング (LX にコイルをつなぐ)	Buck switching (inductor on LX)
+{} V/セル未満はプリチャージ。	Precharge below {} V/cell.
+温度入力あり。	With temperature input.
+CHRG/STDBY は充電中/満充電で Low。	CHRG/STDBY go Low while charging / when full.
+データシートの数字から作ったテンプレートのモデルです。外から見た動きだけを再現します。充電の3段階 (プリチャージ・定電流・定電圧) と状態表示が動きます。	A template model made from datasheet numbers. It only reproduces how it looks from outside. The three charge stages (precharge, constant current, constant voltage) and the status outputs work.
+扱わないもの: 損失、リップル、熱による制限、充電タイマ、再充電のしきい値。電流が終了電流を下回ると状態表示が「満充電」になりますが、充電そのものは止まらず、電圧が下がれば自然に電流が増えます。	Not modeled: losses, ripple, thermal limiting, the charge timer, the recharge threshold. When the current falls below the termination current the status shows "Full", but charging itself does not stop; if the voltage drops, the current rises again on its own.
+電池は、小さなコンデンサで代用してください (値に IC=3.2 と書くと、その電圧から始まります)。	Use a small capacitor in place of the battery (write IC=3.2 in its value to start from that voltage).
+入力電流は出力電流と同じです (リニア式は、電圧差が熱になります)。熱による電流の低下は扱いません。	The input current equals the output current (in a linear charger, the voltage difference becomes heat). Current reduction from heat is not modeled.
+降圧のスイッチングは「LX の平均の電圧」に置き換えてあります。入力電流は、出力の電力 ÷ 効率 (90%) ÷ 入力電圧です。	The buck switching is replaced by "the average voltage at LX". The input current is output power ÷ efficiency (90%) ÷ input voltage.
+温度入力は、100µA を流した電圧が決めた範囲の外のとき、充電を止めるだけです (低温で電流を減らすような段階的な動きはしません)。	The temperature input only stops charging when the voltage with 100µA flowing is outside the set range (it does not reduce current step by step at low temperature).
+# crates/part-lib/src/thru_hole.rs
+穴径 {drill:.1}mm = リード径の最大 {lead_max:.3}mm + 余裕 {HOLE_CLEARANCE}mm を 0.1mm の単位に切り上げ (きつい穴は、リードが入らず、はんだも流れません)	Hole size {drill:.1}mm = max lead diameter {lead_max:.3}mm + margin {HOLE_CLEARANCE}mm, rounded up to 0.1mm (a tight hole won't take the lead, and solder won't flow)
+パッド径 {pad:.1}mm = 穴径 + 銅の輪 (片側 {ANNULAR_RING}mm) × 2 を切り上げ	Pad size {pad:.1}mm = hole size + copper ring ({ANNULAR_RING}mm each side) × 2, rounded up
+穴の間隔 {pitch:.2}mm = 本体の長さ {body_len:.2}mm + 両側のリードの曲げしろ ((リード径 + {BEND_ALLOWANCE}mm) × 2) = {need:.2}mm 以上の、2.54mm の倍数のうち一番小さいもの (基板の格子に合わせるため)	Hole spacing {pitch:.2}mm = the smallest multiple of 2.54mm (to match the board grid) that is at least body length {body_len:.2}mm + bend room for the leads on both sides ((lead diameter + {BEND_ALLOWANCE}mm) × 2) = {need:.2}mm
+リードを曲げる位置は、本体から離します (根元で曲げると、本体が割れます)。間隔を広げるぶんには問題ありません。基板の面積が許すなら、7.62mm や 10.16mm も使われます	Bend the leads away from the body (bending at the root can crack the body). A wider spacing is fine. If board space allows, 7.62mm and 10.16mm are also used
+穴の間隔は、データシートのリードの間隔 (F または Lead Spacing) {pitch:.2}mm をそのまま使います	The hole spacing uses the datasheet's lead spacing (F or Lead Spacing) {pitch:.2}mm as it is
+パッド径 {pad_d:.1}mm が間隔 {pitch:.2}mm に近すぎます。パッドの間が狭くて、はんだがつながる (ブリッジ) おそれがあります。パッドを小さくするか、細長い (楕円の) パッドにしてください	Pad size {pad_d:.1}mm is too close to the spacing {pitch:.2}mm. The gap between pads is narrow and solder may bridge. Make the pads smaller or use long (oval) pads
+{name}を、0 より大きい数 (mm) で入れてください	Enter {name} as a number greater than 0 (mm)
+# crates/part-lib/src/vendorzip.rs
+このモデルは 25℃・直流電圧 0V・小信号の値です。温度による変化は入っていません。	This model uses values at 25°C, 0V DC and small signal. Changes with temperature are not included.
+直流の電圧をかけると容量が下がる性質 (DCバイアス特性) は入っていません。{size_inch} の {dielectric} は、定格 {}V に近い電圧では容量が半分以下になることもあります。	The capacitance drop under DC voltage (DC bias characteristic) is not included. A {size_inch} {dielectric} part can drop to half its capacitance or less at voltages near its {}V rating.
+周波数は 100Hz〜6GHz (温度補償型は 1MHz〜6GHz) の範囲で合わせたモデルです。範囲の外は信用できません。	This model is fitted for 100Hz to 6GHz (1MHz to 6GHz for temperature-compensating types). It is not reliable outside that range.
+村田 {part} {size_metric}({size_inch}) {dielectric} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です	Murata {part} {size_metric}({size_inch}) {dielectric} {}F {}V. A SPICE model published by the maker (an equivalent circuit including ESR and ESL)
+村田	Murata
+メーカーのRCはしご形モデル (7素子) です。{}の値で、温度による変化・直流電圧・寿命は入っていません。	The maker's RC ladder model (7 elements). Values at {}; changes with temperature, DC voltage and aging are not included.
+ある1つの温度	one fixed temperature
+電解コンデンサは極性があります。モデルは小信号の値で、逆電圧をかけたときや、リップル電流による発熱・寿命は扱いません。	Electrolytic capacitors are polarized. The model uses small-signal values and does not cover reverse voltage, or heating and lifetime from ripple current.
+日本ケミコン {part} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です	Nippon Chemi-Con {part} {}F {}V. A SPICE model published by the maker (an equivalent circuit including ESR and ESL)
+日本ケミコン	Nippon Chemi-Con
+メーカーのRCはしご形モデル (7素子) です。{}・直流電圧 {} の小信号の値で、温度による変化・直流電圧・寿命は入っていません。	The maker's RC ladder model (7 elements). Small-signal values at {} and DC voltage {}; changes with temperature, DC voltage and aging are not included.
+ニチコン {part} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です	Nichicon {part} {}F {}V. A SPICE model published by the maker (an equivalent circuit including ESR and ESL)
+ニチコン	Nichicon
+モデルのzipを開けませんでした ({}): {e}。設定でzipの場所を選び直してください	Could not open the model zip ({}): {e}. Choose the zip location again in the settings
+zipとして読めませんでした: {e}。メーカーのサイトからダウンロードしたzipを選んでください	Could not read it as a zip: {e}. Choose the zip downloaded from the maker's site
+このzipには、SPICEのモデル (.subckt を含む .mod・.lib・.cir など) が見つかりませんでした。メーカーの「SPICE」「netlist」のページからダウンロードしたzipを選んでください	No SPICE models (.mod, .lib, .cir etc. containing .subckt) were found in this zip. Choose a zip downloaded from the maker's "SPICE" or "netlist" page
+モデルのzipを開けませんでした ({}): {err}	Could not open the model zip ({}): {err}
+zipとして読めませんでした: {err}	Could not read it as a zip: {err}
+{} がzipの中にありません: {err}	{} is not in the zip: {err}
+{} を読めませんでした: {err}	Could not read {}: {err}
+{} は端子が {} 個のモデルです。ここで作れるのは、端子が2個 (コンデンサ・抵抗・コイルなど) のモデルだけです	{} is a model with {} terminals. Only 2-terminal models (capacitors, resistors, inductors, etc.) can be made here
+{} の .subckt が .ends で閉じていません	The .subckt in {} is not closed with .ends
+{}。メーカーが公開しているSPICEモデルです	{}. A SPICE model published by the maker
+メーカーのモデルです。どんな条件の値か (温度・直流電圧・周波数の範囲) は、zip の説明か元のファイルで確かめてください。	A model from the maker. Check the zip's notes or the original file for the conditions of its values (temperature, DC voltage, frequency range).
+{s} 用の組み込みフットプリントはまだ無いので、基板に使うには、パッケージの寸法を入れ直してください	There is no built-in footprint for {s} yet. To use it on a board, enter the package dimensions again
+このモデルには大きさの情報がないので、基板に使うには、データシートの寸法でパッケージを入れ直してください	This model has no size information. To use it on a board, enter the package from the datasheet dimensions
+このモデルには容量と耐圧の情報がないので、値 (容量) と定格電圧は自分で入れてください	This model has no capacitance or voltage rating information. Enter the value (capacitance) and the voltage rating yourself
+# crates/datasheet/src/headings.rs
+ピン配置	Pin configuration
+ランドパターン	Land pattern
+外形寸法	Package dimensions
+ピンの番号と名前の表 (③ ピン に使います)	Table of pin numbers and names (used for ③ Pins)
+基板のパッドの推奨寸法 (④ 部品の形 に使います)	Recommended board pad sizes (used for ④ Part shape)
+部品本体の外形寸法 (④ 部品の形 の本体・高さに使います)	Outline dimensions of the part body (used for the body and height in ④ Part shape)
+超えると壊れる電圧・電流・電力 (① 基本の定格 に使います)	Voltage, current and power that break the part if exceeded (used for the ratings in ① Basics)
+条件つきの代表的な値 (① 基本の定格 に使います)	Typical values under given conditions (used for the ratings in ① Basics)
+端子配列	
+ピン構成	
+端子構成	
+ピン機能	
+端子機能	
+ピン説明	
+端子説明	
+ランド パターン	
+ランド・パターン	
+推奨パッド	
+推奨ランド	
+実装パターン	
+パッド寸法	
+推奨はんだ	
+外形図	
+パッケージ寸法	
+パッケージ外形	
+パッケージ情報	
+メカニカル	
+機械的データ	
+絶対最大	
+電気特性	
+# crates/datasheet/src/lib.rs
+このPDFはパスワードで守られているため、開けません。パスワードなしで開けるPDFを使ってください	This PDF is password-protected and cannot be opened. Use a PDF that opens without a password
+PDFとして読めませんでした。壊れているか、PDFではないファイルです	Could not read it as a PDF. It is broken or not a PDF file
+PDFの読み込み中に失敗しました。ファイルが壊れている可能性があります	Failed while reading the PDF. The file may be broken
+このPDFにはページがありません	This PDF has no pages
+ファイルを読めませんでした: {e}	Could not read the file: {e}
+{} ページ目はありません	There is no page {}
+ページの大きさが分かりません	The page size is unknown
+このページを描いている途中で失敗しました	Failed while drawing this page
+# crates/datasheet/src/suggest.rs
+コンパレータ	Comparator
+演算増幅器	
+コンバータ	
+降圧	
+アナログスイッチ	Analog switch
+マルチプレクサ	
+カウンタ	
+# crates/datasheet/src/text.rs
+・・・・	
+# crates/datasheet/src/value.rs
+「{u}」は{what}の単位ではありません。別の数字をクリックしてください	"{u}" is not a unit of {what}. Click a different number
+単位が書かれていないので mm として入れました。インチの値なら直してください	No unit was written, so it was entered as mm. Fix it if the value is in inches
+{} インチを mm に換算しました	Converted {} inches to mm
+{} mil を mm に換算しました	Converted {} mil to mm
+{} µm を mm に換算しました	Converted {} µm to mm
+範囲 (最小〜最大) の真ん中を入れました。決めた値があれば直してください	Entered the middle of the range (min to max). Fix it if you have a set value
+# crates/design-spec/src/lib.rs
+ビアの数	Number of vias
+個	
+分かれ目 (一緒に走る長さ)	Fork (length run together)
+検出の線のつなぎ目 (内側の縁から)	Sense line joint (from the inner edge)
+ネット間の間隔	Gap between nets
+ガードの被覆	Guard coverage
+パッドにつながった銅の面積	Copper area connected to the pad
+配線の最小の太さ	Narrowest track width
+並走する長さ	Parallel run length
+パッドの下のビアの数	Vias under the pad
+ループの長さ (行き + 帰り)	Loop length (out + back)
+2つの道筋の長さの差	Length difference of 2 paths
+ピンのまわりのガードの囲み	Guard ring around the pin
+配線の抵抗	Track resistance
+道筋の隣の層のグラウンドの銅	Ground copper on the layer next to the path
+別の層で重なる銅の面積	Copper area overlapping on another layer
+帰り道の遠回り (信号の道筋に対する長さ)	Return path detour (length relative to the signal path)
+行き止まりの枝の最長	Longest dead-end stub
+2つの道筋の違い (ビアと折れの数の差)	Difference of 2 paths (vias and bends)
+離す距離	Keep-apart distance
+ネットの性質	Net properties
+{kind}「{}」の {}	{@2} of {kind} "{@1}"
+ネットの役割「{}」	Net role "{}"
+近くに置く組「{}」	Group to keep close "{}"
+離す組「{}」	Keep-apart group "{}"
+バイパスの対応「{}」	Bypass assignment "{}"
+測定「{}」	Measure "{}"
+承知した例外 {}	Accepted exception {}
+ネットの役割「{}」の `{n}` というネットは、回路にありません	Net role "{}": the net `{n}` is not in the circuit
+ネットの役割「{}」の部品間の線幅の `{p}` という部品は、回路にありません	Net role "{}": the part `{p}` in the part-to-part track widths is not in the circuit
+ネットの役割「{}」の役割 `{}` は、power / switching / sense / analog / logic のどれかにしてください	Net role "{}": the role `{}` must be one of power / switching / sense / analog / logic
+近くに置く組「{}」の `{n}` という部品は、回路にありません	Group to keep close "{}": the part `{n}` is not in the circuit
+離す組「{}」の `{n}` は、部品にもネットにもありません	Keep-apart group "{}": `{n}` is neither a part nor a net
+バイパスの対応「{}」の `{n}` という部品は、回路にありません	Bypass assignment "{}": the part `{n}` is not in the circuit
+測定「{}」の種類 `{}` は、length / vias / fork / gap / guard / tap / area / width / parallel / thermal_vias / loop / match / ring / resistance / under / overlap / drop / return / stub / balance のどれかにしてください	Measure "{}": the kind `{}` must be one of length / vias / fork / gap / guard / tap / area / width / parallel / thermal_vias / loop / match / ring / resistance / under / overlap / drop / return / stub / balance
+測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります (いま {} 個)	Measure "{}" needs {need} pads (part.pin) (now {})
+測定「{}」の `{n}` というネットは、回路にありません	Measure "{}": the net `{n}` is not in the circuit
+測定「{}」の `{pad}` は、部品.ピン の形で、回路にある部品を指してください	Measure "{}": `{pad}` must point to a part in the circuit as part.pin
+承知した例外 {} に当てはまる行が、表にありません (行の名前を直したか、消した行かもしれません)	No row in the table matches accepted exception {} (the row may have been renamed or deleted)
+「{}」の電流を {up} A にする (解析で {net} に {a:.3} A)	Set the current of "{}" to {up} A (analysis: {a:.3} A in {net})
+ネット {net} の行を足す: 電流 {up} A (解析で {a:.3} A。どの行にも入っていません)	Add a row for net {net}: current {up} A (analysis: {a:.3} A; not in any row)
+その電源につながる IC は、これだけです	This is the only IC connected to that supply
+コンデンサの両側の電源を、ともに持つ IC です	This IC has both supplies on the capacitor's two sides
+同じシートの IC です	An IC on the same sheet
+候補が複数あります (持っているコンデンサの数が少ない IC を選びました。確かめてください)	There are several candidates (chose the IC with the fewest capacitors. Please check)
+{} は {} のバイパスコンデンサ ({why})	{} is the bypass capacitor of {} ({why})
+{net} (解析)	{net} (analysis)

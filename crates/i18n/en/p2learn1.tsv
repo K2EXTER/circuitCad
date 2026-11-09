@@ -1,0 +1,426 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/learn/mod.rs
+進み具合を保存できませんでした: {e}。次に起動すると、この記録は消えます	Could not save your progress: {e}. This record will be lost the next time you start the app
+配線の見た目と作りやすさを整える	Tidy up how tracks look and how easy they are to make
+配線の角を丸め、太さが変わる所をなめらかにし、2本が合流する所のすき間を銅で埋めます。製造のとき、エッチングで細いすき間がつぶれたり、液がたまったりするのを防ぎます	Rounds track corners, smooths places where the width changes, and fills the gaps where two tracks meet with copper. This keeps thin gaps from closing up or trapping liquid during etching at the fab
+基板エディタの「仕上げ (任意)」	"Finishing (optional)" in the board editor
+配線の太さを、流れる電流から決める	Choose track width from the current
+回路の電流から、配線に必要な太さを求め、電圧降下 (配線の抵抗で電圧が下がる量) も確かめます	Finds the track width the circuit's current needs, and also checks the voltage drop (how much the voltage falls because of the track's resistance)
+基板エディタの「③ 確認して発注」の「電流と電圧降下」	"Current and voltage drop" under "③ Check and order" in the board editor
+差動ペアと長さ合わせ	Differential pairs and length matching
+USB のように2本で信号を送る線を並べて引き、長さをそろえます。高い周波数の信号が乱れにくくなります	Routes two-wire signal lines such as USB side by side and makes them the same length. High-frequency signals are then less easily disturbed
+同じ「高度な配線 (中級者向け)」の「差動ペア」「長さ合わせ (蛇行)」	"Differential pairs" and "Length matching (meander)" in the same "Advanced routing (intermediate)"
+発注と、買うものの一覧	Ordering, and a list of what to buy
+ガーバー・ドリル・部品表・配置ファイルと一緒に、部品ごとの数量と、秋月電子・DigiKey・LCSC のリンク (型番が分かる部品は商品ページ) を書き出します	Along with the Gerber, drill, BOM and placement files, writes out the quantity of each part and links to Akizuki Denshi, DigiKey and LCSC (product pages for parts whose part number is known)
+基板エディタの「③ 確認して発注」の「発注の準備…」	"Prepare order…" under "③ Check and order" in the board editor
+部品の故障を試す	Try part faults
+抵抗が焼ける、コンデンサがショートするなど、部品が壊れたときに回路がどうなるか、ほかの部品が連鎖して壊れないかを調べます	Checks what happens to the circuit when a part breaks, such as a resistor burning out or a capacitor shorting, and whether other parts break in a chain
+回路図の左パネルの「故障を試す」「連鎖故障を追う」	"Try fault" and "Follow cascading faults" in the schematic's left panel
+部品の誤差と温度の影響	Effects of part tolerances and temperature
+抵抗やコンデンサの誤差、温度の変化で、出力がどれだけ動くかを、たくさんの組み合わせで調べます	Checks with many combinations how much the output moves with resistor and capacitor tolerances and temperature changes
+回路図の左パネルの「ばらつき解析を実行」「温度スイープを実行」	"Run tolerance analysis" and "Run temperature sweep" in the schematic's left panel
+ほかのソフトと行き来する	Working with other software
+回路を SPICE のネットリストで書き出して LTspice や ngspice で動かしたり、KiCad の部品を取り込んだり、自分で部品を作って足したりできます	You can export the circuit as a SPICE netlist to run it in LTspice or ngspice, import KiCad parts, and create and add your own parts
+回路図の左パネルの「SPICEネットリストを書き出し…」「＋ 部品を作る…」(開いた窓の「① 基本」に、KiCad・JSON から取り込むボタンがあります)	"SPICE export…" and "+ Create part…" in the schematic's left panel (the "① Basics" tab of the window that opens has buttons to import from KiCad and JSON)
+画面なしで動かす (ccad)	Run without a screen (ccad)
+1行1コマンドのスクリプトで、回路づくりから解析・基板・製造データまでを自動で実行します。AI エージェントから使うこともできます	Runs everything automatically from building the circuit to analysis, the board and fab data, with a script of one command per line. AI agents can use it too
+ソフトに付いてくる `ccad`。使い方は docs/cli.md	`ccad`, which comes with the software. Usage is in docs/cli.md
+# crates/app/src/learn/paths.rs
+トランジスタのスイッチ	Transistor switch
+ベース電流でコレクタ電流を制御する。電流を増やす部品の入口	The base current controls the collector current. A first look at parts that amplify current
+トランジスタで LED をオン・オフし、ベース電流とコレクタ電流を測ります	Turn an LED on and off with a transistor, and measure the base and collector currents
+電池の内部抵抗 (負荷で電圧が下がる)	Battery internal resistance (voltage drops under load)
+電源の電圧が、電流を流すと下がる。これを小さくするのが安定化電源の役目	A supply's voltage drops when current flows. Keeping this small is the job of a regulated supply
+電池に抵抗をつないで、つなぐ前後の端子電圧を測り、内部抵抗を求めます	Connect a resistor to a battery, measure the terminal voltage before and after, and find the internal resistance
+電源を守る (逆接続・過電流・ヒューズ)	Protecting the supply (reverse polarity, overcurrent, fuses)
+壊れ方を知って、守る部品を足す	Learn how things fail, and add protection parts
+ヒューズや逆接続保護ダイオードの働きを、安全な条件 (低電圧・電流制限つき) で確かめます	Check how fuses and reverse-polarity protection diodes work under safe conditions (low voltage, current-limited)
+LDO (低ドロップアウト) レギュレータ	LDO (low-dropout) regulator
+入力の余裕 (ドロップアウト電圧) が小さくても動く。USB の 5V や電池から 3.3V を作る。電圧差は熱になる	Works even with little input headroom (dropout voltage). Makes 3.3V from USB 5V or a battery. The voltage difference turns into heat
+入力を下げながら出力を測り、出力が落ち始める入力を、データシートと比べます	Lower the input while measuring the output, find the input where the output starts to fall, and compare with the datasheet
+熱と定格を考える	Thinking about heat and ratings
+電圧差 × 電流 = 熱。放熱板が必要になる理由。定格チェックの見方	Voltage difference × current = heat. Why a heatsink is needed. How to read the rating check
+負荷を増やしながらレギュレータの温度を測り (触って確かめる前に、温度計で)、計算と比べます	Measure the regulator's temperature while increasing the load (with a thermometer, before touching it), and compare with the calculation
+発展: 熱にしない電源。リニアとの効率の違い	Going further: supplies that don't waste power as heat. Efficiency compared with linear
+電解コンデンサの寿命 (リップル電流と温度)	Electrolytic capacitor life (ripple current and temperature)
+ESR の発熱で内部が温まる、寿命は 10℃ で半分、定格リップル電流を超えない	ESR heating warms the inside, life halves every 10℃, don't exceed the rated ripple current
+電解コンデンサを触って温度を感じ、データシートの定格リップルと寿命から、使う条件の寿命を見積もります	Touch an electrolytic capacitor to feel its temperature, and estimate its life under your conditions from the datasheet's rated ripple and life
+ダイオードの逆回復 (切り替えの瞬間に逆向きに流れる)	Diode reverse recovery (reverse current at the moment of switching)
+順方向のとき貯めた電荷が抜けるまで逆向きに流れる、速い品とショットキー、スイッチング電源の損失とノイズ	Current flows backwards until the charge stored in forward conduction is gone; fast types and Schottky; losses and noise in switching supplies
+整流ダイオードの種類 (1N4007、高速、ショットキー) をデータシートの trr で見比べます	Compare kinds of rectifier diodes (1N4007, fast, Schottky) by trr in their datasheets
+MOSFET のスイッチング損失 (ゲートの速さと熱)	MOSFET switching loss (gate speed and heat)
+ゲート容量の充電で遅れる、ミラー期間、切り替え中の V × I が熱になる、損失 = 1 回あたりのエネルギー × 周波数	Charging the gate capacitance causes delay, the Miller plateau, V × I during switching becomes heat, loss = energy per switch × frequency
+ゲート抵抗を変えて、ドレインの立ち下がりの速さと、MOSFET の温度の違いを見ます	Change the gate resistor and see the difference in drain fall speed and MOSFET temperature
+リニアとスイッチングの比較 (熱にするか、貯めて運ぶか)	Linear vs switching (turn it into heat, or store and carry it)
+リニアの効率 = 出力 ÷ 入力の電圧、損失は (Vin − Vout) × I、スイッチングは高い効率で、リップルと部品が増える	Linear efficiency = output ÷ input voltage, loss is (Vin − Vout) × I; switching is highly efficient but adds ripple and parts
+入力と出力の電圧と電流を測って、効率を計算し、リニアとスイッチングの温度を比べます	Measure input and output voltage and current, calculate efficiency, and compare the temperatures of linear and switching
+オペアンプのスルーレート (出力が追いつけない速さ)	Op-amp slew rate (how fast the output can follow)
+出力の電圧の変化の速さには上限 (V/µs) がある、大きく速い信号は三角波にゆがむ、フルパワー帯域 = SR ÷ (2π Vp)	The output voltage can only change so fast (V/µs); large, fast signals distort into triangles; full-power bandwidth = SR ÷ (2π Vp)
+オペアンプのボルテージフォロワに大きさと周波数を変えた正弦波を入れ、出力の形がゆがむ周波数を測ります	Feed sine waves of different sizes and frequencies into an op-amp voltage follower, and measure the frequency where the output shape distorts
+EEPROM (I²C) の素顔 (オープンドレインとプルアップ)	EEPROM (I²C) up close (open drain and pull-ups)
+バスは引き下げだけ・上げるのは抵抗、立ち上がり = 0.85 RC、プルアップの上限と下限、書き込みに数 ms	The bus only pulls down, a resistor pulls up, rise time = 0.85 RC, upper and lower limits for the pull-up, writes take a few ms
+I²C のバス (SDA) をオシロで見て、プルアップの値を変えながら、立ち上がりの形を比べます	Look at the I²C bus (SDA) on a scope and compare rise shapes while changing the pull-up value
+リレーやモータをつなぐ (フライバックダイオード)	Connecting relays and motors (flyback diode)
+コイルの電流を急に切ると、大きな逆起電力が出てトランジスタを壊す。コイルと並列にダイオードを入れて止める	Cutting a coil's current suddenly creates a large back EMF that destroys the transistor. A diode in parallel with the coil stops it
+リレー (または小さなモータ) をトランジスタで駆動し、ダイオードの向きを確かめます	Drive a relay (or a small motor) with a transistor and check the diode's direction
+PWM とフィルタ (analogWrite でアナログ電圧を作る)	PWM and filters (making an analog voltage with analogWrite)
+High と Low の割合 (デューティ) と RC フィルタで、途中の電圧を作る。揺れと反応の速さは引き換え。重い負荷には使えない	The ratio of High to Low (duty) and an RC filter make an in-between voltage. Ripple and response speed are a trade-off. Not for heavy loads
+analogWrite の値を変えて、フィルタの出力をテスタで測ります	Change the analogWrite value and measure the filter output with a multimeter
+回路図から基板をつくる	Making a board from a schematic
+取り込み・配置・配線・DRC・発注の準備	Import, placement, routing, DRC, preparing the order
+発注するなら、少量・少額で試します	If you order, try with a small quantity and low cost
+配線の太さと電圧降下を確かめる	Checking track width and voltage drop
+細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す	See in simulation how voltage drops on a thin track, then pick the needed width from the current and fix it
+電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)	Measure and compare the voltage at the supply input and at the load's pins with a multimeter (with large currents, watch for heating of tracks and parts)
+発注前チェックをすべて通す (チャレンジ)	Pass every pre-order check (challenge)
+部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す	Fix a board with parts outside the board, broken tracks, thin tracks and fab rule violations yourself, guided by what the check shows
+発注の前に、発注先のページで最新の条件を必ず確かめます	Before ordering, always check the latest conditions on the fab's website
+基板にする: 置き方の勘所と配線	Making it a board: placement tips and routing
+水晶はマイコンのそば・バイパスコンデンサは電源ピンのそば。通らない線は、グリッドを細かくして直す。DRC と発注の準備まで	Crystal next to the microcontroller, bypass capacitors next to the power pins. Fix lines that won't route by making the grid finer. Up to DRC and preparing the order
+USB の配線 (差動ペア)	USB routing (differential pair)
+D+ と D− を並べて、同じ長さで、短く引く。差動ペアの機能と、長さの差の確かめ方	Route D+ and D− side by side, the same length, and short. The differential pair feature and how to check the length difference
+差動ペアどうしの長さを合わせる	Matching lengths between differential pairs
+2 レーンの差動信号を同時に届けるため、ペアどうしの長さを蛇行で揃える。2 本をいっしょに曲げるので、間隔が保たれる	To deliver 2 lanes of differential signals at the same time, match the pairs' lengths with meanders. Both tracks bend together, so the spacing is kept
+基板を手で仕上げる (自動配線で通らない線)	Finishing a board by hand (lines autoroute can't route)
+自動配置と自動配線のあと、18 本のネットが残った基板を、手で引く・ビアで渡す・邪魔な線を引き直す、で仕上げる。1 本通すごとに DRC を確かめる	After autoplace and autoroute, finish a board with 18 nets left by routing by hand, crossing with vias and rerouting tracks in the way. Check DRC after each one you route
+壊れた基板を直す (修理屋)	Fixing a broken board (repair shop)
+ちゃんと動く基板に故障を 1 つ仕込み、症状から原因を探して直す。バイパスコンデンサが遠い・配線が切れている・細い・ショート・部品が基板の外。何度でも、別の故障で練習できる	A fault is planted in a working board; find the cause from the symptoms and fix it. Bypass capacitor too far, broken track, thin track, short, part outside the board. Practice as often as you like with different faults
+MOSFET のスイッチ (ゲート電圧とオンの深さ)	MOSFET switch (gate voltage and how fully it turns on)
+電圧で駆動する。ゲート電圧がしきい値のあたりでオンになる。電流を流しすぎると発熱する	Driven by voltage. It turns on when the gate voltage is around the threshold. Too much current makes it heat up
+PNP のハイサイドスイッチ (電源側で入り切り)	PNP high-side switch (switching on the supply side)
+NPN と逆に、入力を Low にするとオンになる。ベース抵抗の大きさが、オンの深さを決める	Opposite to NPN, it turns on when the input is Low. The base resistor value decides how fully it turns on
+リチウムイオン電池の充電 (TP4056)	Charging a lithium-ion battery (TP4056)
+充電の 3 段階 (予備充電・定電流・定電圧)。IC の内部は見ず、外から見た動きで確かめる	The 3 charging stages (pre-charge, constant current, constant voltage). Check the behavior from outside without looking inside the IC
+オペアンプで信号を大きくする (非反転増幅)	Amplifying a signal with an op-amp (non-inverting amplifier)
+帰還の考え方。抵抗の比がゲインを決める	The idea of feedback. The resistor ratio sets the gain
+オペアンプの増幅回路を作り、入力と出力をテスタやオシロで測ります	Build an op-amp amplifier and measure input and output with a multimeter or scope
+オペアンプの反転増幅 (仮想接地)	Op-amp inverting amplifier (virtual ground)
+反転入力が 0V に保たれる仕組み	How the inverting input is held at 0V
+高い周波数だけを弱める。カットオフ周波数は 1 ÷ (2π R C)。抵抗とコンデンサの値で決まる	Weakens only high frequencies. The cutoff frequency is 1 ÷ (2π R C), set by the resistor and capacitor values
+行き過ぎとリンギング (RLC 回路)	Overshoot and ringing (RLC circuit)
+コイルとコンデンサの回路は、ステップに対して行き過ぎて揺れる。抵抗で抑える	A coil-and-capacitor circuit overshoots and oscillates after a step. A resistor damps it
+使い回したい回路を別のシートに1つ描き、記号 (箱) にして何回も置く。中を直すと全部に効く。コピーごとに部品とネットの名前が別になる	Draw a circuit you want to reuse once on a separate sheet, make it a symbol (box) and place it many times. Fixing the inside fixes them all. Each copy gets its own part and net names
+555 で LED を点滅させる	Blinking an LED with a 555
+タイマー IC とコンデンサの充放電で、一定の間隔で点滅する。C や R を変えると、周期が変わる	A timer IC and a capacitor charging and discharging make it blink at a steady interval. Changing C or R changes the period
+極と零 (RLC の共振を式で見る)	Poles and zeros (RLC resonance as equations)
+山の位置は極の周波数、鋭さは Q。抵抗を大きくすると、極が実数になって山が消える	The peak's position is the pole frequency, its sharpness is Q. A larger resistor makes the poles real and the peak disappears
+ノイズ解析 (増幅回路の雑音はどこから来る)	Noise analysis (where an amplifier's noise comes from)
+抵抗の熱雑音とトランジスタのショット雑音を、部品ごとに分けて見る。信号源の抵抗を小さくすると減る	See resistor thermal noise and transistor shot noise part by part. A lower source resistance reduces it
+位相余裕 (容量の負荷でオペアンプが不安定になる)	Phase margin (a capacitive load makes an op-amp unstable)
+ゲインが 0dB になる周波数で、180° に対する余裕。出力の容量負荷が、余裕を食う	The margin to 180° at the frequency where the gain is 0dB. A capacitive load on the output eats into the margin
+安定化電源を作ろう	Build a regulated power supply
+ACアダプタや電池の電圧を、負荷が変わっても一定の 5V にする電源を、原理から理解して、回路図・基板・実機まで自分で作ります。実験は、安全のため 12V 以下の低い電圧だけで行います	Understand from first principles a supply that turns an AC adapter's or battery's voltage into a steady 5V even when the load changes, and build it yourself: schematic, board and real hardware. For safety, experiments use only low voltages of 12V or less
+1. 入門: 電圧・電流と測り方	1. Intro: voltage, current and how to measure them
+電圧を分ける、電流を制限する、電池が負荷で電圧を下げる。安定化電源が「何を一定にするのか」の土台です	Dividing voltage, limiting current, a battery's voltage dropping under load. The basis of "what a regulated supply keeps steady"
+電圧を分ける (分圧回路)	Dividing voltage (voltage divider)
+抵抗2本で好きな電圧を作る。出力が負荷で変わる理由の入口	Make any voltage with 2 resistors. A first look at why the output changes with the load
+テスタで電圧を測る。抵抗2本をブレッドボードにつなぎ、計算値と測定値を比べます	Measure voltage with a multimeter. Connect 2 resistors on a breadboard and compare calculated and measured values
+電流を決めるのは抵抗。電流を測る方法も	The resistor decides the current. Plus how to measure current
+LED の電流をテスタの電流レンジで測り、抵抗を変えて明るさと電流を比べます	Measure an LED's current on the multimeter's current range, and compare brightness and current while changing the resistor
+2. 基礎: 電源をつくる部品	2. Basics: parts that make a supply
+ダイオード・コンデンサ・ツェナー・トランジスタ。電圧を整え、ならし、一定にし、電流を増やす部品の働きです	Diodes, capacitors, Zeners, transistors. What the parts that rectify, smooth, hold steady and boost current do
+ダイオードの特性	Diode characteristics
+約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない	Starts conducting at about 0.7V (about 0.3V for Schottky), after which the voltage barely rises
+ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます	Measure the forward voltage of silicon and Schottky diodes, and warm them to see the change
+交流を直流にする (整流・平滑・リップル)	Turning AC into DC (rectifying, smoothing, ripple)
+整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません	Rectification, smoothing capacitors, ripple size. The simulation uses mains voltage (100V), but the real hardware does not
+実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません	On real hardware, use only low-voltage AC (such as a small transformer's output), measure the ripple with a scope (or the multimeter's AC range), and compare while changing the capacitance. Don't wire mains (100V); it is dangerous
+もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき	The simplest regulation. Hardly moves when the input changes, but collapses under a heavy load. Includes a build-it-yourself challenge
+ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります	Make 5.1V with a Zener and a resistor, and measure how the voltage changes as you vary the load and input
+電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する	Same voltage, more current available. The core of a series-pass supply. Heats up at high current
+ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります	Boost the Zener's voltage to high current with a transistor, and measure output and temperature while changing the load
+動かない回路を直す (デバッグ)	Fixing a circuit that doesn't work (debugging)
+ツェナーの電源に故障が 1 つ仕込まれている。電圧を順に見て原因を探し、直す。故障は始めるたびに変わる	The Zener supply has one planted fault. Check the voltages in order, find the cause and fix it. The fault changes each time you start
+3. 応用: 安定化のしくみ	3. Applied: how regulation works
+出力の電圧を測って、ずれたら直す (帰還)。これが安定化電源の本質です	Measure the output voltage and correct it if it drifts (feedback). This is the heart of a regulated supply
+基準電圧と帰還で安定化する (直列レギュレータ)	Regulating with a reference and feedback (series regulator)
+オペアンプ + 基準電圧 + パストランジスタで、自作の安定化電源を組む	Build your own regulated supply from an op-amp + voltage reference + pass transistor
+負荷を変えたとき (ロードレギュレーション)、入力を変えたとき (ラインレギュレーション) の出力電圧を測ります	Measure the output voltage when the load changes (load regulation) and when the input changes (line regulation)
+三端子レギュレータ (78xx / LDO) を使う	Using a three-terminal regulator (78xx / LDO)
+入出力のコンデンサ、ドロップアウト電圧、使い方と選び方	Input and output capacitors, dropout voltage, how to use and choose one
+7805 で 5V を作り、入力と負荷を変えて出力と温度を測ります	Make 5V with a 7805, and measure output and temperature while changing input and load
+TL431 (シャントレギュレータ): 好きな電圧の基準を作る	TL431 (shunt regulator): making a reference of any voltage
+REF を 2.495V に保つ部品。分圧の比で、出力を 2.5V 以上の好きな値にできる。負荷が重すぎると崩れる	A part that holds REF at 2.495V. The divider ratio sets the output to any value of 2.5V or more. Collapses if the load is too heavy
+TL431 に 2 本の抵抗をつなぎ、出力が 2.495V × (1 + R2 ÷ R3) になるか測ります	Connect 2 resistors to a TL431 and measure whether the output is 2.495V × (1 + R2 ÷ R3)
+コイルのレアショート (連鎖して壊れる)	Coil shorted turns (cascading failure)
+1つの故障が次の部品の故障を呼ぶ連鎖。ヒューズで止められる場合と、止められない場合	A chain where one fault causes the next part to fail. Cases a fuse can stop, and cases it can't
+リレーのコイル抵抗をテスタで測り、定格電流の内側か確かめます。コイルを実際にショートさせる実験はしません	Measure a relay's coil resistance with a multimeter and check it is within the rated current. No experiment actually shorts the coil
+ダイヤルで電圧を変える電源 (トランス + LM317)	A supply whose voltage you set with a knob (transformer + LM317)
+100V → トランス → 整流 → 可変レギュレータ。ダイヤル(ボリューム)で出力が変わる式と、出せない電圧の理由	100V → transformer → rectifier → adjustable regulator. The equation for how the knob (potentiometer) changes the output, and why some voltages can't be reached
+低電圧の電源 (15〜18V の AC アダプタ) で LM317 を組み、ボリュームを回して出力を測ります。100V は実験に使いません	Build an LM317 on a low-voltage supply (a 15-18V AC adapter), turn the potentiometer and measure the output. 100V is not used in experiments
+4. 製作: 回路図から基板、実機まで	4. Build: from schematic to board and real hardware
+設計した電源を、基板にして、組み立てて、性能を測ります	Turn the supply you designed into a board, assemble it and measure its performance
+安定化電源の回路図を自分で設計する (最終課題)	Design the regulated supply's schematic yourself (final project)
+目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する	Only the goal is given (9-12V in → 5V out, survives reverse polarity); choose, place and wire the parts yourself
+組み立てて、性能を測る	Assemble and measure the performance
+部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える	BOM, assembly, measurement. Write the measured values in the "Measured" column of the spec table and think about how and why they differ from the simulation
+完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます	Measure the finished supply's input and output voltage with and without a load connected, and compare with the simulation
+Arduino 互換ボードを作ろう	Build an Arduino-compatible board
+ATmega328P に水晶・リセット・電源まわりをつけた、Arduino 互換のボードを、原理から理解して、回路図・基板・実機まで自分で作ります。マイコンの中身はシミュレーションできないので、周りの回路 (電源・水晶・リセット・LED) を確かめます。先に電源の学習パスの「電圧を分ける」「LED と電流制限抵抗」を済ませておくと進めやすいです	Understand from first principles an Arduino-compatible board, an ATmega328P with a crystal, reset and power circuitry, and build it yourself: schematic, board and real hardware. The microcontroller's insides can't be simulated, so you check the surrounding circuits (power, crystal, reset, LED). It is easier if you first finish "Dividing voltage" and "LED and current-limiting resistor" in the power supply learning path
+1. 土台: 読む・浮かせない・安定させる	1. Foundations: read, don't float, keep stable
+どのマイコン回路でも使う基本の技です。順番は自由です	Basic techniques used in every microcontroller circuit. Any order is fine
+データシートの読み方	How to read a datasheet
+絶対最大定格と推奨動作条件の違い。回路の電流・電力と比べて、2 倍の余裕で部品を選ぶ	The difference between absolute maximum ratings and recommended operating conditions. Choose parts with 2× margin over the circuit's current and power
+手元の部品のデータシートで、電源電圧の範囲・1ピンの電流の上限を探します	In the datasheet of a part you have, find the supply voltage range and the current limit per pin
+プルアップ (ピンを浮かせない)	Pull-ups (don't leave pins floating)
+入力ピンが何にもつながっていないと、電圧が定まらず、ノイズで揺れる。10kΩ で電源に引く理由と、値の決め方	An input pin connected to nothing has no defined voltage and wobbles with noise. Why it is pulled to the supply with 10kΩ, and how to choose the value
+入力ピンをプルアップあり・なしで、テスタで測り比べます	Measure an input pin with and without a pull-up with a multimeter and compare
+電源のバイパスコンデンサ	Supply bypass capacitors
+IC の電源ピンのそばに 0.1µF を置く理由。インピーダンスのグラフで、電解とセラミックの分担と、自己共振を見る	Why 0.1µF goes next to an IC's power pins. On the impedance graph, see how electrolytic and ceramic share the work, and self-resonance
+IC の電源ピンの電圧を、オシロで見て、コンデンサの有無で比べます	Look at the voltage on an IC's power pin with a scope, and compare with and without the capacitor
+2. マイコンが動く条件: クロックとリセット	2. What a microcontroller needs to run: clock and reset
+電源が入っても、クロックとリセットが整っていないとマイコンは動きません	Even with power on, a microcontroller won't run unless the clock and reset are right
+水晶とクロック	Crystals and the clock
+16MHz 水晶の共振の細い山と、すぐ上の深い谷を、AC解析で見る。細い山は刻みが粗いと見落とす	See the 16MHz crystal's narrow resonance peak and the deep notch just above it in AC analysis. A coarse step misses the narrow peak
+水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)	Look at the crystal's oscillation waveform on a scope (the probe's capacitance can stop it)
+リセット回路	Reset circuit
+DTR・100n のコンデンサ・10k のプルアップで、自動リセットのパルスを作る。値を変えるとかからなくなる。跳ね上がりをダイオードで抑える	Make the auto-reset pulse with DTR, a 100n capacitor and a 10k pull-up. Changing the values stops it working. A diode clamps the overshoot
+シリアルモニタを開く瞬間のリセットを、LED (D13) の点滅や、オシロの波形で確かめます	Check the reset at the moment the serial monitor opens by the LED (D13) blinking or the scope waveform
+3. つなぐ: 入出力と通信	3. Connecting: I/O and communication
+ピンで LED を光らせ、パソコンと話し、電圧の違う相手とつなぎます	Light an LED from a pin, talk to a PC, and connect to devices at a different voltage
+ピンで LED を光らせる	Lighting an LED from a pin
+ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED	The current limit a pin can supply (20-40mA) and how to choose the resistor. The LED on D13
+D13 の LED の電流を測って、データシートの上限と比べます	Measure the current of the LED on D13 and compare with the datasheet limit
+電流センサ (シャント抵抗とホール式)	Current sensors (shunt resistor and Hall type)
+シャントの電圧をアンプで増やす方法と、ホール式。小さな電流の読みやすさ、アンプの頭打ち、シャントの選び方	Amplifying the shunt voltage with an amplifier, and the Hall type. Reading small currents, amplifier clipping, choosing a shunt
+シャントの両端の電圧を測り、電流計と比べます (大電流のときは、シャントの発熱に注意)	Measure the voltage across the shunt and compare with an ammeter (with large currents, watch for shunt heating)
+光センサ (LDR とフォトダイオード)	Light sensors (LDR and photodiode)
+LDR は暗いと 1MΩ で、変わり方はゆるやか。フォトダイオードは光に比例するが、強いと飽和する。分圧の抵抗の選び方	An LDR is 1MΩ in the dark and changes gradually. A photodiode is proportional to light but saturates when it is bright. Choosing the divider resistor
+LDR を 10kΩ と分圧して、部屋の明かりと手で隠したときの電圧を測ります	Divide an LDR with 10kΩ and measure the voltage in room light and when covered by your hand
+温度センサを読む (LM35・TMP36・NTC)	Reading temperature sensors (LM35, TMP36, NTC)
+温度に比例する電圧の IC と、抵抗が変わるサーミスタ。感度、0℃ より低い温度、分圧抵抗の選び方	ICs whose voltage is proportional to temperature, and thermistors whose resistance changes. Sensitivity, temperatures below 0℃, choosing the divider resistor
+センサの電圧を測って式で温度にし、温度計と比べます	Measure the sensor voltage, convert it to temperature with the equation, and compare with a thermometer
+ボタンのチャタリング	Button bounce
+接点が数 ms ばたつき、1 回押しただけなのに何回も数えられる。RC で止めると遅れる。大きすぎると押したのが分からない	The contacts chatter for a few ms, so one press is counted many times. Stopping it with RC adds delay; too large and the press is missed
+押した回数を数えるスケッチで、1 回押して、カウントが 2 以上になるか見ます	With a sketch that counts presses, press once and see whether the count reaches 2 or more
+モデルのない IC を、等価回路で再現する (ULN2803A)	Recreating an IC without a model as an equivalent circuit (ULN2803A)
+SPICE モデルがない IC を、データシートの内部回路図から基本の部品で組み直す。データシートの代表値と比べて、ずれの理由を考えて直す	Rebuild an IC that has no SPICE model from basic parts using the internal schematic in its datasheet. Compare with the datasheet's typical values, think about why they differ, and fix it
+ULN2803A でリレーを動かし、出力の電圧をテスタで測って、データシートの表と比べます	Drive a relay with a ULN2803A, measure the output voltage with a multimeter, and compare with the datasheet table
+3.3V と 5V をつなぐ (レベル変換)	Connecting 3.3V and 5V (level shifting)
+電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換と、プルアップによる波形の遅れ	Connecting devices at different voltages directly can damage them or fail to read. Shifting with a divider and a MOSFET (BSS138), and waveform delay from the pull-up
+5V のピンの出力を、分圧してから 3.3V の部品に入れる前に、テスタで測って確かめます	Before feeding a 5V pin's output into a 3.3V part through a divider, measure it with a multimeter to check
+シリアル通信と USB 変換 (発展)	Serial communication and USB conversion (advanced)
+TX/RX の交差、ボーレートと 1 ビットの長さ、配線の抵抗と容量でなまると文字化けする	TX/RX crossover, baud rate and bit length; if the wiring's resistance and capacitance round off the signal, characters get garbled
+端末ソフトで 9600bps と別のボーレートを比べて、文字化けを見ます	Compare 9600bps with another baud rate in a terminal program and see the garbled characters
+3b. 発展: USB につなぐ (電気の基本)	3b. Advanced: connecting to USB (electrical basics)
+USB の電源 (VBUS)、速度の見分け、信号線の波形。USB のプロトコルそのものは扱わず、電気の面を確かめます	USB power (VBUS), speed detection, signal line waveforms. The USB protocol itself is not covered; this checks the electrical side
+USB の電源 (VBUS)	USB power (VBUS)
+ケーブルの抵抗で電圧が下がること、差し込んだ瞬間の突入電流と、VBUS の容量の目安 (10µF 程度)	Voltage drops from cable resistance, inrush current at the moment of plugging in, and a guide to VBUS capacitance (about 10µF)
+USB テスターなどで、機器の端の VBUS の電圧と電流を測ります	Measure the VBUS voltage and current at the device end with a USB tester or similar
+USB の速度の見分け	USB speed detection
+D+ か D− を 1.5kΩ で引くと、ホストが機器の速度を知る。プルアップがないと認識されない	Pulling D+ or D− with 1.5kΩ tells the host the device's speed. Without the pull-up it isn't recognized
+機器をつなぐ前後の D+ / D− の電圧を測ります (止まった状態で)	Measure the D+ / D− voltages before and after connecting a device (while idle)
+USB の信号線と ESD 保護の容量	USB signal lines and ESD protection capacitance
+12Mbit/s の 1 ビットは約 83ns。ESD 保護部品の容量が大きいと、立ち上がりが遅れて読めなくなる	One bit at 12Mbit/s is about 83ns. If the ESD protection part has too much capacitance, the rise slows and it can't be read
+4. 設計して基板に	4. Design it and make a board
+ここまでの部品を1枚にまとめて、基板にします	Combine the parts so far on one sheet and make it a board
+Arduino 互換ボードの回路図を自分で描く (最終課題)	Draw the Arduino-compatible board's schematic yourself (final project)
+ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する。つなぎ方と部品の値を判定する	Wire the ATmega328P, crystal, reset, bypass, LED and programming header yourself from the goal alone. The connections and part values are checked
+5. 作って動かす	5. Build it and run it
+はんだ付けして、ブートローダを書き込み、LED を点滅させます	Solder it, burn the bootloader and blink an LED
+表面実装のはんだ付け	Surface-mount soldering
+0805 のチップ部品と TQFP-32 (0.8mm ピッチ) のはんだ付けのコツ。ブリッジの直し方と、電源を入れる前の点検	Tips for soldering 0805 chip parts and TQFP-32 (0.8mm pitch). How to fix bridges, and checks before powering up
+まず練習用の基板で、0805 のチップ部品から始めます	Start on a practice board with 0805 chip parts
+ブートローダを書き込んで LED を点滅させる	Burn the bootloader and blink an LED
+ICSP ヘッダでの書き込み、Arduino IDE の設定、シリアルでのスケッチの書き込み。うまくいかないときの見方	Programming over the ICSP header, Arduino IDE settings, uploading sketches over serial. What to look at when it doesn't work
+Arduino Mega 互換ボードを作ろう	Build an Arduino Mega-compatible board
+ATmega2560 (100 ピン) に、USB-シリアル変換 (CH340G)・12MHz と 16MHz の 2 つの水晶・電源まわりをつけた、Arduino Mega 互換のボードを、回路図・基板・実機まで作ります。Arduino 互換ボードの学習パスで、水晶・リセット・バイパス・シリアル・基板の置き方を済ませてから進めると分かりやすいです。ピンの数が多いので、基板は自動配線で通らない線を、手で仕上げます	Build an Arduino Mega-compatible board, an ATmega2560 (100 pins) with USB-serial conversion (CH340G), two crystals (12MHz and 16MHz) and power circuitry: schematic, board and real hardware. It is easier to follow after the Arduino-compatible board learning path covers crystals, reset, bypass, serial and board placement. With so many pins, you finish by hand the lines autoroute can't route
+1. Mega ならではの電気	1. Electrical points specific to the Mega
+ピンの数と部品の数が増えると、新しく考えることが出てきます。順番は自由です	More pins and parts bring new things to think about. Any order is fine
+ADC の入力 (信号源の抵抗は 10kΩ 以下)	ADC input (source resistance 10kΩ or less)
+ADC は、入力のコンデンサを短い時間で充電して読む。信号源の抵抗が大きいと充電しきれず、読み違える。ピンに大きなコンデンサをつけて直す。Mega は 16 チャンネル	The ADC reads by charging its input capacitor in a short time. With a high source resistance it can't fully charge and misreads. Fix it with a large capacitor on the pin. The Mega has 16 channels
+1MΩ 2 本で分圧した 2.5V を A0 で読み、コンデンサをつけて値の変化を見ます	Read 2.5V from a divider of two 1MΩ resistors on A0, then add a capacitor and see how the value changes
+電源ピンが 5 組ある (バイパスは、容量より近さ)	5 pairs of power pins (for bypass, closeness beats capacitance)
+ATmega2560 は VCC と GND が 5 組。すべてのペアのそばにバイパスコンデンサを置く。遠い 100nF より、近い 1nF のほうが効く。AVCC・AREF にも 0.1µF	The ATmega2560 has 5 VCC/GND pairs. Put a bypass capacitor next to every pair. A close 1nF works better than a distant 100nF. 0.1µF on AVCC and AREF too
+電源ピンの電圧を、バイパスコンデンサの有無でオシロで見比べます	Compare the power pin voltage on a scope with and without bypass capacitors
+水晶の負荷容量 (22pF の理由と周波数のずれ)	Crystal load capacitance (why 22pF, and frequency offset)
+水晶の両端の 22pF は、水晶から見た負荷容量 CL を決める。小さいほど周波数が高く、数百 ppm ずれる。データシートの CL に合わせる	The 22pF on each side of the crystal sets the load capacitance CL the crystal sees. Smaller means a higher frequency, off by hundreds of ppm. Match the CL in the datasheet
+水晶の周波数を、プローブを当てる前後で比べます	Compare the crystal frequency before and after touching it with a probe
+CH340G と USB の信号 (差動で受けるとノイズに強い)	CH340G and USB signals (differential reception resists noise)
+USB の D+ と D− は逆向きの 2 本で、受け側は差を読む。同じノイズが 2 本に乗れば消え、片方だけだと信号の余裕を超えたところで読み違える。仮のモデルの CH340G を使う	USB D+ and D− are 2 opposite lines and the receiver reads the difference. Noise on both lines cancels; noise on one alone causes misreads once it exceeds the signal margin. Uses a provisional CH340G model
+PC につなぎ、シリアルモニタに文字が出るか確かめます。オシロで D+ と D− の差の波形を見ます	Connect to a PC and check that text appears in the serial monitor. Look at the D+ minus D− difference waveform on a scope
+2. 100 ピンの基板	2. The 100-pin board
+0.5mm ピッチの 100 ピンの IC は、自動配線が通せない線が残ります。残った線を、手で仕上げます	A 100-pin IC at 0.5mm pitch leaves lines autoroute can't route. Finish the remaining lines by hand
+3. 作って動かす	3. Build it and run it
+100 ピンのチップを、はんだ付けします	Solder the 100-pin chip
+100 ピン (0.5mm ピッチ) のはんだ付け	Soldering 100 pins (0.5mm pitch)
+TQFP-100 のはんだ付け。ブリッジの直し方、フラックスの使い方、電源ピンの点検と、CH340 の COM ポートが出るまで	Soldering a TQFP-100. How to fix bridges, using flux, checking the power pins, up to the CH340's COM port appearing
+まず練習用の基板で、0.5mm ピッチのチップを試します	First try a 0.5mm-pitch chip on a practice board
+基板づくりの道	The board-making path
+回路図から基板を作り、発注前チェックを通し、マイコンの基板の置き方・USB の差動ペア・100 ピンの IC のような難しい基板も扱い、壊れた基板の故障を探して直せるようになります。	Make boards from schematics, pass the pre-order check, handle hard boards such as microcontroller placement, USB differential pairs and 100-pin ICs, and learn to find and fix faults in broken boards.
+1. はじめての基板	1. Your first board
+取り込み・配置・配線・DRC・発注の準備の一巡と、電流に合わせた配線の太さ、発注前チェックの直し方	One round of import, placement, routing, DRC and preparing the order, track width for the current, and fixing pre-order check issues
+2. 置き方と配線の勘所	2. Placement and routing tips
+マイコンの基板で水晶とバイパスコンデンサを寄せる。USB の D+ / D− を差動ペアで引く。2 組のペアの長さを揃える	Bring the crystal and bypass capacitors close on a microcontroller board. Route USB D+ / D− as a differential pair. Match the lengths of 2 pairs
+3. 難しい基板と、壊れた基板	3. Hard boards, and broken boards
+自動配線が通せない 100 ピンの基板を手で仕上げる。故障を仕込んだ基板の原因を、症状から探して直す	Finish by hand a 100-pin board autoroute can't complete. Find the cause from the symptoms on a board with a planted fault and fix it
+スイッチで負荷を動かそう	Driving loads with switches
+トランジスタや MOSFET で、LED・リレー・モーターのような負荷を入り切りし、コイルの逆起電力から守り、PWM で加減し、スイッチングで電圧を変える (降圧) ところまで、原理から理解します。	Understand from first principles how to switch loads such as LEDs, relays and motors with transistors and MOSFETs, protect against coil back EMF, adjust with PWM, and change voltage by switching (step-down).
+1. 半導体のスイッチ	1. Semiconductor switches
+ベース電流やゲート電圧で、負荷を入り切りする。NPN・PNP・MOSFET の違いと、オンの深さ	Switch a load with base current or gate voltage. Differences between NPN, PNP and MOSFET, and how fully they turn on
+2. 負荷を守って、加減する	2. Protecting and adjusting the load
+コイル (リレー・モーター) を切ると出る逆起電力から守る。入り切りの割合で、電圧を加減する (PWM)	Protect against the back EMF when a coil (relay, motor) is switched off. Adjust the voltage by the on/off ratio (PWM)
+3. スイッチングで電圧を変える	3. Changing voltage by switching
+スイッチを高速に入り切りして、熱にせずに電圧を下げる降圧コンバータ。損失はどこで出るか (MOSFET の切り替え、ダイオードの逆回復) と、リニアとの比較	A buck converter that lowers voltage without turning it into heat by switching fast. Where the losses arise (MOSFET switching, diode reverse recovery), and a comparison with linear
+4. 基板にする	4. Making it a board
+大きな電流が流れる基板の、配線の太さと電圧降下	Track width and voltage drop on a board carrying large currents
+電池で動かそう	Running on batteries
+電池の性質 (内部抵抗・残量) から、リチウムイオン電池の充電、守り (逆接続・ヒューズ)、低い電圧の作り方 (LDO・降圧)、熱と定格まで、電池で動く機器の電源を考えられるようになります。	From battery properties (internal resistance, charge level) to charging lithium-ion batteries, protection (reverse polarity, fuses), making lower voltages (LDO, buck), and heat and ratings: learn to design the supply for battery-powered devices.
+1. 電池を知る	1. Knowing batteries
+電池は理想の電圧源ではない。内部抵抗と残量。リチウムイオン電池の充電の 3 段階	A battery isn't an ideal voltage source. Internal resistance and charge level. The 3 stages of lithium-ion charging
+2. 守って、電圧を整える	2. Protecting and regulating the voltage
+逆接続・ショートから守る。電池の電圧から、機器に必要な電圧を作る。電圧差は熱になる	Protect against reverse polarity and shorts. Make the voltage the device needs from the battery voltage. The voltage difference turns into heat
+3. 電池を長持ちさせる	3. Making the battery last
+電圧差を熱にしないスイッチング電源。リニアとの効率の違い	Switching supplies that don't turn the voltage difference into heat. Efficiency compared with linear
+部品の素顔: 動作と特性と計算式	Parts up close: behavior, characteristics and equations
+部品を 1 種類ずつ取り上げて、何をする部品か、特性を表す数字は何か、その数字を決める式は何かを、シミュレーションで確かめながら学びます。	Take one kind of part at a time and learn, checking with simulation, what it does, which numbers describe its characteristics, and which equations set those numbers.
+0. はじめに: 電圧・電流と、回路図の読み方	0. Getting started: voltage, current, and reading schematics
+電圧・電流・抵抗の関係 (オームの法則) と、回路図の線・ラベル・GND、部品の値の書き方 (k / M / µ)。部品を 1 つずつ学ぶ前の、最初の 2 本です	The relation of voltage, current and resistance (Ohm's law), schematic wires, labels and GND, and how part values are written (k / M / µ). The first 2 lessons before learning parts one by one
+はじめに 1: 電圧・電流・抵抗 (オームの法則)	Getting started 1: voltage, current, resistance (Ohm's law)
+電圧を上げると電流が増え、抵抗を大きくすると電流が減る。I = V ÷ R	Raise the voltage and the current rises; increase the resistance and the current falls. I = V ÷ R
+電池と抵抗 1 本で、テスタの電圧レンジ・電流レンジを使い、計算と測定を比べます (電流は電池 1.5V 以下で)	With a battery and one resistor, use the multimeter's voltage and current ranges and compare calculation with measurement (for current, use a battery of 1.5V or less)
+はじめに 2: 回路図の読み方と、値の書き方	Getting started 2: reading schematics, and writing values
+ラベルは線の代わり、GND は 0V の基準、値は 4.7k・100n・1Meg のように書く (M は 1/1000 なので注意)	A label replaces a wire, GND is the 0V reference, values are written like 4.7k, 100n, 1Meg (careful: M means 1/1000)
+手元の抵抗のカラーコードと、値の表記 (4k7、472 など) を読みます	Read the color code of resistors you have and value notations (4k7, 472, etc.)
+1. 抵抗・コンデンサ・コイル	1. Resistors, capacitors, coils
+電気回路の三つの基本の部品。電圧・電流・時間の関係を、式と数字で確かめます	The three basic parts of electric circuits. Check the relations of voltage, current and time with equations and numbers
+抵抗の素顔 (オームの法則・直列・並列・電力)	Resistors up close (Ohm's law, series, parallel, power)
+V = I × R、P = V × I、直列は足し算・並列は小さくなる、定格電力と許容差	V = I × R, P = V × I, series adds up, parallel gets smaller, power rating and tolerance
+抵抗の値をテスタで測り、直列・並列の合成と、中点の電圧を計算と比べます	Measure resistor values with a multimeter, and compare series and parallel combinations and the midpoint voltage with calculation
+コンデンサの素顔 (電流は電圧の変化に比例する)	Capacitors up close (current is proportional to the change in voltage)
+I = C × dV/dt、充電の時定数 τ = R × C、ためるエネルギー ½CV²、並列と直列の容量	I = C × dV/dt, charging time constant τ = R × C, stored energy ½CV², parallel and series capacitance
+大きな電解コンデンサを抵抗で充電し、63% に達する時間を測って τ = R × C と比べます	Charge a large electrolytic capacitor through a resistor, measure the time to reach 63%, and compare with τ = R × C
+コイルの素顔 (電流は急には変えられない)	Coils up close (current can't change suddenly)
+V = L × di/dt、時定数 τ = L ÷ R、ためるエネルギー ½LI²、飽和電流	V = L × di/dt, time constant τ = L ÷ R, stored energy ½LI², saturation current
+コイルの DCR を測り、抵抗といっしょにした立ち上がりの時間から L ÷ R を確かめます	Measure a coil's DCR and check L ÷ R from the rise time together with a resistor
+2. ダイオードの仲間	2. The diode family
+一方通行の部品。電流で変わる抵抗、光る LED、電圧を止めるツェナー	One-way parts. A resistance that changes with current, LEDs that light, Zeners that clamp voltage
+ダイオードの素顔 (一方通行と、電流で変わる抵抗)	Diodes up close (one-way, and a resistance that changes with current)
+I = Is (e^(V / nVt) − 1)、V は電流の対数、動的な抵抗 rd = 26mV ÷ I	I = Is (e^(V / nVt) − 1), V goes with the log of the current, dynamic resistance rd = 26mV ÷ I
+1N4148 の電流を変えて電圧を測り、順向きと逆向きの違いを確かめます	Measure a 1N4148's voltage while changing its current, and check the difference between forward and reverse
+LED の素顔 (電圧ではなく電流で光る)	LEDs up close (they light by current, not voltage)
+I = (電源 − Vf) ÷ R、Vf は色で違う、電流の上限、抵抗の発熱	I = (supply − Vf) ÷ R, Vf differs by color, current limit, resistor heating
+赤と青の LED を 5V と 3.3V で光らせ、電流と明るさを比べます	Light red and blue LEDs at 5V and 3.3V, and compare current and brightness
+7 セグメント LED の素顔 (共通の抵抗は明るさをばらつかせる)	7-segment LEDs up close (a shared resistor makes brightness uneven)
+光る線の数で変わる電流、セグメントごとの抵抗、共通ピンに流れる合計の電流	Current that changes with the number of lit segments, a resistor per segment, total current in the common pin
+7 セグメント LED の 1 つの数字を、共通の抵抗とセグメントごとの抵抗で光らせ、明るさを比べます	Light one 7-segment digit with a shared resistor and with one resistor per segment, and compare brightness
+ツェナーダイオードの素顔 (逆向きで電圧が止まる)	Zener diodes up close (voltage stops in reverse)
+降伏電圧 Vz、動作抵抗 rz、Iz = (Vin − Vz) ÷ R、電力 P = Vz × Iz と定格	Breakdown voltage Vz, dynamic resistance rz, Iz = (Vin − Vz) ÷ R, power P = Vz × Iz and rating
+1N4733A に抵抗をつないで、電源を変えながら Z の電圧を測り、止まる様子を確かめます	Connect a resistor to a 1N4733A, measure the Zener voltage while changing the supply, and see it level off
+3. 増やす部品	3. Amplifying parts
+電流を増やすトランジスタ、電圧で制御する MOSFET、信号を増やすオペアンプ	Transistors that amplify current, MOSFETs controlled by voltage, op-amps that amplify signals
+トランジスタの素顔 (電流を増やす部品)	Transistors up close (parts that amplify current)
+Ic = hFE × Ib、Vbe 約 0.65V、飽和 (Vce(sat))、損失 Vce × Ic	Ic = hFE × Ib, Vbe about 0.65V, saturation (Vce(sat)), loss Vce × Ic
+2N3904 のベース抵抗を変えて、Ic ÷ Ib の hFE と、飽和したときのコレクタ電圧を測ります	Change a 2N3904's base resistor and measure hFE as Ic ÷ Ib and the collector voltage when saturated
+MOSFET の素顔 (電圧で電流を制御する)	MOSFETs up close (controlling current with voltage)
+しきい値 Vth、オン抵抗 Rds(on)、Id ∝ (Vgs − Vth)²、中途半端な電圧は損失が大きい	Threshold Vth, on-resistance Rds(on), Id ∝ (Vgs − Vth)², in-between voltages cause big losses
+2N7000 のゲートの電圧を変えながらドレインの電圧を測り、しきい値とオン抵抗を確かめます	Measure the drain voltage while changing a 2N7000's gate voltage, and check the threshold and on-resistance
+オペアンプの素顔 (増幅の式・帯域・振れ幅の限界)	Op-amps up close (gain equation, bandwidth, swing limits)
+倍率 1 + Rf ÷ Rg、GBW = 倍率 × 帯域、出力は電源で頭打ち	Gain 1 + Rf ÷ Rg, GBW = gain × bandwidth, the output tops out at the supply
+LM358 の非反転増幅で倍率と −3dB の周波数を測り、入力を大きくして出力が切れるのを見ます	Measure gain and the −3dB frequency of an LM358 non-inverting amplifier, and make the input larger to see the output clip
+4. センサと光の部品	4. Sensors and optical parts
+温度や光を電気に変える部品と、光で信号を絶縁して伝えるフォトカプラ	Parts that turn temperature or light into electricity, and optocouplers that pass signals with light while isolating them
+サーミスタの素顔 (温度で抵抗が桁で変わる)	Thermistors up close (resistance changes by orders of magnitude with temperature)
+R(T) = R25 × exp(B (1/T − 1/T25))、感度 −B/T² ≒ −4.4%/K、分圧の抵抗は R25 に合わせる	R(T) = R25 × exp(B (1/T − 1/T25)), sensitivity −B/T² ≈ −4.4%/K, match the divider resistor to R25
+NTC の抵抗を、氷水・室温・お湯で測り、B 定数を計算して、データシートの値と比べます	Measure an NTC's resistance in ice water, at room temperature and in hot water, calculate the B constant and compare with the datasheet value
+フォトトランジスタの素顔 (光電流が hFE 倍になる)	Phototransistors up close (photocurrent multiplied by hFE)
+Ic = hFE × 光電流、感度はフォトダイオードの数百倍、強い光で飽和、応答は遅い	Ic = hFE × photocurrent, hundreds of times more sensitive than a photodiode, saturates in strong light, slow response
+フォトトランジスタに LED の光を当て、距離を変えて、出力の電圧が飽和する様子を測ります	Shine an LED on a phototransistor, change the distance, and measure how the output voltage saturates
+フォトカプラの素顔 (光で信号を絶縁して伝える)	Optocouplers up close (passing signals with light while isolating)
+Ic = CTR × If、絶縁、CTR の個体差と、負荷が重いと飽和する	Ic = CTR × If, isolation, CTR varies between units, and saturates under a heavy load
+PC817 の LED の電流を変えて、出力のトランジスタの電流と電圧を測り、CTR を求めます	Change the current of a PC817's LED, measure the output transistor's current and voltage, and find the CTR
+ホールセンサの素顔 (磁界に比例して出力が振れる)	Hall sensors up close (output swings in proportion to the magnetic field)
+ゼロ磁界で電源の半分、感度 mV/ガウス、極性、電源に比例 (レシオメトリック)	Half the supply at zero field, sensitivity mV/gauss, polarity, proportional to the supply (ratiometric)
+磁石を近づけ・遠ざけながら、出力の電圧を測り、極性と、距離による変化を見ます	Measure the output voltage while moving a magnet closer and farther, and see the polarity and the change with distance
+5. 電源と保護の部品	5. Power and protection parts
+電圧を変えるトランス、電圧を安定にするレギュレータ、回路を守るヒューズ	Transformers that change voltage, regulators that stabilize it, fuses that protect circuits
+電池の素顔 (内部抵抗が電池の種類を分ける)	Batteries up close (internal resistance sets battery types apart)
+端子電圧 = 開放電圧 − 電流 × 内部抵抗、種類による違い、最大電力は内部抵抗と同じ抵抗のとき	Terminal voltage = open-circuit voltage − current × internal resistance, differences by type, maximum power when the load equals the internal resistance
+単3電池とコイン電池に同じ抵抗をつなぎ、電圧の下がり方を比べます (ショートさせる実験はしません)	Connect the same resistor to an AA battery and a coin cell, and compare how the voltage drops (no experiment shorts them)
+三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)	Three-terminal regulators up close (the power to cancel supply ripple, and its limits)
+リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする	Ripple rejection (PSRR), dropout voltage, without input headroom the ripple passes straight through
+7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます	Connect a battery or AC adapter to a 7805, measure the output while lowering the input, and check the dropout
+トランスの素顔 (電圧は巻数比、電流は逆比)	Transformers up close (voltage by turns ratio, current by the inverse)
+Vs ÷ Vp = Ns ÷ Np、Is ÷ Ip = Np ÷ Ns、定格 VA、無負荷と全負荷の電圧の差	Vs ÷ Vp = Ns ÷ Np, Is ÷ Ip = Np ÷ Ns, VA rating, voltage difference between no load and full load
+小さなトランスの巻線の抵抗をテスタで測り、一次と二次の比と電圧降下を計算と比べます (商用電源につなぐ実験はしません)	Measure a small transformer's winding resistances with a multimeter, and compare the primary-to-secondary ratio and voltage drop with calculation (no experiment connects it to mains)
+ダイオードブリッジの素顔 (整流の損失とピーク電流)	Diode bridges up close (rectifier loss and peak current)
+全波は半波の半分のリップル、ダイオード 2 本ぶんの電圧降下、平滑コンデンサに流れる短く大きな電流	Full-wave has half the ripple of half-wave, the voltage drop of 2 diodes, short large currents into the smoothing capacitor
+低電圧の交流 (トランスの出力) を整流し、半波と全波のリップルを、オシロで比べます (商用電源の整流は行いません)	Rectify low-voltage AC (a transformer's output) and compare half-wave and full-wave ripple on a scope (mains is not rectified)
+ヒューズの素顔 (大電流ほど速く切れる)	Fuses up close (the larger the current, the faster it blows)
+定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない	The rating is the current it won't blow at, time-current characteristics, load at 70% of rating or less, it doesn't recover once blown
+ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします	Measure a fuse's resistance, and check how to choose a load within the rated current against the datasheet's time-current curve
+バリスタの素顔 (電圧が高くなると導通して守る)	Varistors up close (conducting at high voltage to protect)
+V ∝ I^(1/α) の曲線、動作電圧の手前の漏れ、サージを吸収して制限電圧に止める、劣化	The V ∝ I^(1/α) curve, leakage below the operating voltage, absorbing surges and clamping at the limit voltage, wear-out
+バリスタの抵抗を測り、定格の連続電圧が回路の電圧より十分高いことを、データシートで確かめます (サージを実際に加える実験はしません)	Measure a varistor's resistance and check in the datasheet that its rated continuous voltage is well above the circuit voltage (no experiment applies real surges)
+6. スイッチ・時計・音・ロジック	6. Switches, clocks, sound, logic
+コイルで動くリレー、周波数を決める水晶、音を出すスピーカーとブザー、High と Low を扱うロジック IC	Relays moved by a coil, crystals that set frequency, speakers and buzzers that make sound, logic ICs that handle High and Low
+スイッチの素顔 (閉じた接点は小さな抵抗)	Switches up close (a closed contact is a small resistance)
+接点抵抗と電圧降下・発熱、小さな電流の信号には金メッキ、定格と寿命	Contact resistance with voltage drop and heating, gold plating for small signal currents, ratings and life
+スイッチを閉じた状態の抵抗を測り、押すたびに変わるか、電流を流して電圧降下を見ます	Measure the resistance of a closed switch, see whether it changes with each press, and pass current to see the voltage drop
+アナログスイッチの素顔 (オン抵抗と、サンプル用のコンデンサ)	Analog switches up close (on-resistance, and the sampling capacitor)
+オン抵抗 Ron の分圧誤差、オフ時の漏れが小さい、サンプルホールドの時定数 (Rs + Ron) × C	Divider error from on-resistance Ron, low leakage when off, sample-and-hold time constant (Rs + Ron) × C
+アナログスイッチ IC で信号を通し、負荷の抵抗を変えて、電圧の下がりを測ります	Pass a signal through an analog switch IC, change the load resistance, and measure the voltage drop
+リレーの素顔 (コイルの電流で接点が動く)	Relays up close (the coil's current moves the contacts)
+コイル = 抵抗 + インダクタンス、動作電圧 (定格の約 75%)、τ = L ÷ R、電力 V² ÷ R	Coil = resistance + inductance, pull-in voltage (about 75% of rated), τ = L ÷ R, power V² ÷ R
+5V 用リレーのコイルの抵抗を測り、電圧を上げながらカチッと動作する電圧を探します	Measure the coil resistance of a 5V relay, and raise the voltage to find where it clicks on
+水晶の素顔 (Q が桁違いに大きい共振)	Crystals up close (resonance with an enormously high Q)
+等価回路 Rm・Lm・Cm・C0、fs = 1 ÷ (2π√(Lm Cm))、Q = ωL ÷ R、帯域幅 = fs ÷ Q	Equivalent circuit Rm, Lm, Cm, C0, fs = 1 ÷ (2π√(Lm Cm)), Q = ωL ÷ R, bandwidth = fs ÷ Q
+水晶を LC 共振回路と並べ、ふつうの LC より山が桁違いに細いことを、発振器の周波数の安定として確かめます	Put a crystal next to an LC resonant circuit and confirm, as oscillator frequency stability, that its peak is orders of magnitude narrower than an ordinary LC
+スピーカーとブザーの素顔 (インピーダンスは 8Ω 一定ではない)	Speakers and buzzers up close (impedance isn't a constant 8Ω)
+共振で上がるインピーダンス、高い周波数でコイルとして上がる、圧電ブザーは容量+共振	Impedance rises at resonance and rises at high frequencies as a coil; a piezo buzzer is capacitance + resonance
+スピーカーのインピーダンスを、テスタで測る直流の抵抗 (約 8Ω ではなく 6〜7Ω) と、アンプの表示を比べます	Compare a speaker's DC resistance measured with a multimeter (6-7Ω, not about 8Ω) with the rating printed on it
+ロジック IC の素顔 (しきい値・ヒステリシス・出力の力)	Logic ICs up close (threshold, hysteresis, output drive)
+しきい値は電源の半分、シュミットトリガは 0.6 / 0.4 Vcc、出力は電源につながる約 60Ω の抵抗	The threshold is half the supply, a Schmitt trigger is 0.6 / 0.4 Vcc, the output is about a 60Ω resistance to the supply
+74HC04 と 74HC14 にゆっくり変わる信号とノイズを入れ、出力が揺れるか確かめます	Feed slowly changing signals and noise into a 74HC04 and a 74HC14, and see whether the output chatters
+信号を扱おう: フィルタ・増幅・発振	Working with signals: filters, amplifiers, oscillators
+周波数ごとに信号を弱める (フィルタ)、大きくする (増幅)、自分で振動させる (発振) を、AC 解析と過渡解析で見ます。山の正体 (極と Q) と、増幅が不安定になる理由 (位相余裕) まで、原理から理解します。	See in AC and transient analysis how to weaken signals by frequency (filters), make them larger (amplifiers) and make them oscillate by themselves (oscillators). Understand from first principles what a peak really is (poles and Q) and why amplifiers become unstable (phase margin).
+1. フィルタ	1. Filters
+抵抗とコンデンサで高い周波数を弱める。コイルを足すと、行き過ぎて揺れる。その山を、極と零で読む	A resistor and capacitor weaken high frequencies. Adding a coil makes it overshoot and ring. Read that peak with poles and zeros
+2. 増幅と安定	2. Amplifying and stability
+オペアンプの帰還でゲインを決める。出力に容量をつなぐと、位相余裕が減って不安定になる	Op-amp feedback sets the gain. A capacitance on the output reduces the phase margin and makes it unstable
+3. 発振	3. Oscillators
+コンデンサの充放電で、自分で一定の間隔を作る	Make a steady interval by yourself with a capacitor charging and discharging
+# crates/app/src/learn/window.rs
+ようこそ circuitCad へ	Welcome to circuitCad
+回路図を描き、動かして確かめ、基板にして、発注用のデータまで作れるソフトです。電子工作が初めてでも、レッスンを順にたどれば進められます。	Software to draw schematics, run them to check them, turn them into boards, and make the data for ordering. Even if electronics is new to you, you can get there by following the lessons in order.
+最初のレッスンは、描いてある回路を動かして見るところから。自分で部品を置いて描くのは、そのあとのレッスンからです。	The first lesson starts by running a circuit that is already drawn. Placing parts and drawing yourself comes in the lessons after that.
+▶ 最初のレッスンを始める: {}	▶ Start the first lesson: {}
+画面の案内にそって、描いてある回路を解析して、電圧を測ります (部品を置いて配線するのは、このあとのレッスンから)	Following the on-screen guide, analyze a circuit that is already drawn and measure voltages (placing parts and wiring come in later lessons)
+学習パス全体を見る	See all learning paths
+電圧と電流の基本から、部品を 1 つずつ知る道すじを開きます。安定化電源・マイコンの基板・基板づくりの道も、上のタブから選べます (「学ぶ」メニューからいつでも開けます)	Opens the path from voltage and current basics to getting to know parts one by one. The regulated supply, microcontroller board and board-making paths can also be chosen from the tabs at the top (you can open this any time from the "Learn" menu)
+操作ガイドを開く (F1)	Open operation guide (F1)
+部品の置き方・配線・シミュレーションのやり方を説明します	Explains how to place parts, wire and run simulations
+自由に描きたいときは、このカードを閉じて、左の一覧から部品を選んで画面をクリックします。できあがった回路を先に見たいときは、「ファイル → サンプル回路を開く」から。	To draw freely, close this card, pick a part from the list on the left and click on the canvas. To see a finished circuit first, use "File → Open sample circuit".
+閉じる (次から表示しない)	Close (don't show again)
+このカードを閉じます。次の起動から表示しません。学習パスは、メニューの「学ぶ」からいつでも開けます	Closes this card. It won't be shown from the next start. You can open the learning path any time from "Learn" in the menu
+学習パス	Learning path
+この学習パスに切り替えます (進み具合は、どのパスでも同じレッスンなら共通です)	Switch to this learning path (progress is shared for the same lesson in any path)
+完了 {finished} / {available} レッスン (準備中 {} 件)	Done {finished} / {available} lessons ({} in preparation)
+完了 {finished} / {available} レッスン	Done {finished} / {available} lessons
+次のおすすめ:	Next suggestion:
+(ほかに {} 件、すぐ学べます)	({} more you can start now)
+このパスのレッスンは準備中です。道すじ (地図) だけ先に見られます	This path's lessons are in preparation. You can view just the route (map) first
+いま学べるレッスンは、すべて完了しました。残りは準備中です	You have finished every lesson available now. The rest are in preparation
+この先へ: 使いこむための機能	Going further: features for heavier use
+レッスンで基本を済ませたあと、慣れてきたら試せる機能です。順番も、使うかどうかも自由です	Features to try once you have the basics from the lessons and feel at home. The order, and whether to use them at all, is up to you
+場所: {}	Where: {}
+基板の仕上げ・発注・故障の試験・ほかのソフトとの連携など、レッスンのあとに使える機能の一覧と、その場所です	A list of features to use after the lessons, such as board finishing, ordering, fault testing and working with other software, and where to find them
+学習の地図 (上から下へ進みます。線は「先に済ませると分かりやすい」の関係です)	Learning map (goes from top to bottom; lines mean "easier if you finish this first")
+★ 次はこれ	★ Next up
+橙の枠 = いま学べる	Orange frame = available now
+緑 = 完了	Green = done
+灰色の枠 = 先に済ませるレッスンがある	Gray frame = has lessons to finish first
+暗い灰色 = 準備中	Dark gray = in preparation
+緑 = 完了、橙の枠 = いますぐ学べる、灰 = 準備中。順番は強制ではなく、どれからでも始められます	Green = done, orange frame = available now, gray = in preparation. The order isn't enforced; you can start anywhere
+(準備中)	(in preparation)
+もう一度	Again
+始める	Start
+この内容のレッスンを開きます	Opens the lesson for this topic
+✔ 作ってみよう	✔ Build it yourself
+作ってみよう	Build it yourself
+目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあと、判定ボタンで調べます	Practice placing parts, wiring and choosing values yourself with only the goal given. When done, check it with the judge button
+[実験あり]	[Experiment]
+先に済ませると分かりやすい: {}	Easier if you finish first: {}
+[実験あり] = 実機で確かめられる実験があります (ポインタを置くと内容が出ます)。実験は、安全のため低い電圧 (12V 以下) だけで行い、商用電源 (100V) の配線は行いません	[Experiment] = there is an experiment you can try on real hardware (hover to see what it is). For safety, experiments use only low voltages (12V or less), and mains (100V) is never wired
+進み具合をリセット	Reset progress
+完了の印をすべて消して、最初からやり直します	Clear all completion marks and start over

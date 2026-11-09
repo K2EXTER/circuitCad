@@ -5,6 +5,8 @@
   python tools/i18n.py keys  crates [...]           every Japanese string literal (the possible keys), one per line
   python tools/i18n.py todo  OUT.tsv crates [...]   the keys with no English yet, as table lines to fill in
   python tools/i18n.py stats crates [...]           how many keys each file has and how many are translated
+  python tools/i18n.py terms OUT.tsv                the term dictionary for translators: the short entries already
+                                                    translated (buttons, menus, tab names, glossary words)
 
 Only the Japanese mode is the original; `wrap` changes nothing it shows (tr/trf! give the Japanese back in that mode).
 """
@@ -319,6 +321,13 @@ def main():
         with open(out, "w", encoding="utf-8", newline="\n") as fh:
             fh.writelines(lines)
         print(f"{len(lines)} keys to translate -> {out}")
+    elif cmd == "terms":
+        # short and without placeholders: names of things, which a longer text quotes and must spell the same way
+        rows = sorted((ja, en) for ja, en in translated().items() if len(ja) <= 20 and "{" not in ja and "\\n" not in en and JP.search(ja))
+        with open(args[0], "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("# 日本語<TAB>English: the names already used on the screen (tools/i18n.py terms)\n")
+            fh.writelines(f"{escape_tsv(ja)}\t{en}\n" for ja, en in rows)
+        print(f"{len(rows)} terms -> {args[0]}")
     elif cmd == "stats":
         done = translated()
         per = {}

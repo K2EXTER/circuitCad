@@ -335,6 +335,33 @@ pub fn lessons_of(term: &Term) -> Vec<(Target, &'static str)> {
     all_lessons().iter().filter(|e| occurs_in(term, &e.text)).map(|e| (e.target, e.title)).collect()
 }
 
+/// The search in English mode: the English name, the Latin aliases, and the Japanese ways as well (a word read in an
+/// untranslated lesson).
+fn english_search(query: &str) -> Vec<&'static Term> {
+    let q = query.trim().to_lowercase();
+    let mut found = search(query);
+    for t in TERMS {
+        if !q.is_empty() && i18n::tr(t.name).to_lowercase().contains(&q) && !found.iter().any(|f| f.name == t.name) {
+            found.push(t);
+        }
+    }
+    found
+}
+
+fn english_sorted(mut v: Vec<&'static Term>) -> Vec<&'static Term> {
+    v.sort_by_key(|t| i18n::tr(t.name).to_lowercase());
+    v
+}
+
+/// The index row in English mode: the first letter of the English name ("#" for a digit or a sign).
+fn english_row(t: &Term) -> &'static str {
+    const LETTERS: [&str; 26] = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
+    match i18n::tr(t.name).chars().next().map(|c| c.to_ascii_uppercase()) {
+        Some(c @ 'A'..='Z') => LETTERS[(c as u8 - b'A') as usize],
+        _ => "#",
+    }
+}
+
 #[derive(Default)]
 pub struct GlossaryWindow {
     pub open: bool,
@@ -362,18 +389,18 @@ impl GlossaryWindow {
                 ui.label(i18n::tr("さがす:"));
                 ui.add(egui::TextEdit::singleline(&mut self.query).hint_text(i18n::tr("名前・読み・別名 (例: ぶんあつ、dB、ADC)")).desired_width(300.0))
                     .on_hover_text(i18n::tr("ひらがな・カタカナ・英字のどれでも探せます"));
-                if ui.small_button(i18n::tr("消す")).clicked() {
+                if ui.small_button(i18n::tr_ctx("用語集", "消す")).clicked() {
                     self.query.clear();
                 }
             });
-            let found = sorted(search(&self.query));
+            let found = if i18n::is_ja() { sorted(search(&self.query)) } else { english_sorted(english_search(&self.query)) };
             ui.small(i18n::trf!("{} 件 (全 {} 語)。語を押すと、説明と、その語が出てくるレッスンが右に出ます", found.len(), TERMS.len()));
             ui.separator();
             ui.columns(2, |cols| {
                 egui::ScrollArea::vertical().id_salt("glossary_list").show(&mut cols[0], |ui| {
                     let mut row = "";
                     for term in &found {
-                        let r = row_of(term.reading);
+                        let r = if i18n::is_ja() { row_of(term.reading) } else { english_row(term) };
                         if r != row {
                             row = r;
                             ui.add_space(4.0);
@@ -384,7 +411,8 @@ impl GlossaryWindow {
                             Kind::Board => "  (基板)",
                             Kind::Circuit => "",
                         };
-                        if ui.selectable_label(self.selected == Some(term.name), format!("{} ({}){mark}", term.name, term.reading)).clicked() {
+                        let label = if i18n::is_ja() { format!("{} ({}){mark}", term.name, term.reading) } else { format!("{}{}", i18n::tr(term.name), i18n::tr(mark)) };
+                        if ui.selectable_label(self.selected == Some(term.name), label).clicked() {
                             self.selected = Some(term.name);
                         }
                     }
@@ -397,21 +425,28 @@ impl GlossaryWindow {
                         ui.label(i18n::tr("左の一覧から、語を選んでください。"));
                         return;
                     };
-                    ui.heading(term.name);
-                    ui.small(i18n::trf!(
-                        "読み: {}　{}",
-                        term.reading,
-                        match term.kind {
-                            Kind::Operation => "(このソフトの言葉)",
-                            Kind::Board => "(基板の言葉)",
-                            Kind::Circuit => "(回路の言葉)",
+                    let kind = match term.kind {
+                        Kind::Operation => "(このソフトの言葉)",
+                        Kind::Board => "(基板の言葉)",
+                        Kind::Circuit => "(回路の言葉)",
+                    };
+                    if i18n::is_ja() {
+                        ui.heading(term.name);
+                        ui.small(format!("読み: {}　{kind}", term.reading));
+                        if !term.aliases.is_empty() {
+                            ui.small(format!("別名: {}", term.aliases.join("、")));
                         }
-                    ));
-                    if !term.aliases.is_empty() {
-                        ui.small(i18n::trf!("別名: {}", term.aliases.join("、")));
+                    } else {
+                        // the Japanese word stays beside the English one: the lessons not yet translated use it
+                        ui.heading(format!("{} ({})", i18n::tr(term.name), term.name));
+                        ui.small(i18n::tr(kind));
+                        let latin: Vec<&str> = term.aliases.iter().copied().filter(|a| a.is_ascii()).collect();
+                        if !latin.is_empty() {
+                            ui.small(format!("Also: {}", latin.join(", ")));
+                        }
                     }
                     ui.add_space(4.0);
-                    ui.label(term.short);
+                    ui.label(i18n::tr(term.short));
                     ui.add_space(8.0);
                     let lessons = lessons_of(term);
                     if lessons.is_empty() {
@@ -419,7 +454,7 @@ impl GlossaryWindow {
                     } else {
                         crate::widgets::section_heading(ui, "この語が出てくるレッスン");
                         for (target, title) in lessons {
-                            if ui.button(title).on_hover_text(i18n::tr("このレッスンを始めます")).clicked() {
+                            if ui.button(i18n::tr(title)).on_hover_text(i18n::tr("このレッスンを始めます")).clicked() {
                                 start = Some(target);
                             }
                         }

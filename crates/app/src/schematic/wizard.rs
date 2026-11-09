@@ -255,34 +255,34 @@ impl SchEditor {
         egui::Window::new(i18n::tr("値の決め方")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 for (k, c) in CALCS.iter().enumerate() {
-                    if ui.selectable_label(self.wiz_kind == k, c.title).clicked() && self.wiz_kind != k {
+                    if ui.selectable_label(self.wiz_kind == k, i18n::tr(c.title)).clicked() && self.wiz_kind != k {
                         self.open_wizard(k);
                     }
                 }
             });
             ui.separator();
             let calc = &CALCS[self.wiz_kind];
-            ui.label(calc.about);
+            ui.label(i18n::tr(calc.about));
             if self.wiz_in.len() != calc.inputs.len() {
                 self.wiz_in = calc.inputs.iter().map(|i| i.1.to_string()).collect();
             }
             egui::Grid::new("wiz_inputs").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                 for (k, (label, _, tip)) in calc.inputs.iter().enumerate() {
-                    ui.label(*label).on_hover_text(*tip);
-                    ui.add(egui::TextEdit::singleline(&mut self.wiz_in[k]).desired_width(90.0)).on_hover_text(*tip);
+                    ui.label(i18n::tr(label)).on_hover_text(i18n::tr(tip));
+                    ui.add(egui::TextEdit::singleline(&mut self.wiz_in[k]).desired_width(90.0)).on_hover_text(i18n::tr(tip));
                     ui.end_row();
                 }
             });
             ui.separator();
             match self.wizard_result() {
                 Err(msg) => {
-                    ui.colored_label(crate::theme::ERROR, msg);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(&msg));
                 }
                 Ok(out) => {
                     egui::Grid::new("wiz_rows").num_columns(2).spacing([14.0, 4.0]).show(ui, |ui| {
                         for (k, v) in &out.rows {
-                            ui.label(k);
-                            ui.strong(v);
+                            ui.label(i18n::tr_dyn(k));
+                            ui.strong(i18n::tr_dyn(v));
                             ui.end_row();
                         }
                     });
@@ -301,7 +301,7 @@ impl SchEditor {
                     });
                     egui::CollapsingHeader::new(i18n::tr("注意点")).default_open(true).show(ui, |ui| {
                         for s in &out.cautions {
-                            ui.colored_label(Color32::from_rgb(210, 150, 40), format!("⚠ {s}"));
+                            ui.colored_label(Color32::from_rgb(210, 150, 40), format!("⚠ {}", i18n::tr_dyn(s)));
                         }
                     });
                     egui::CollapsingHeader::new(i18n::tr("こうなると壊れる/おかしくなる (故障パターン)")).default_open(false).show(ui, |ui| {

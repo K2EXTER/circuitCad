@@ -1,0 +1,329 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/samples.rs
+Arduino 互換ボード (最小構成)	Arduino-compatible board (minimal)
+ATmega328P + 16MHz 水晶 + シリアル書き込み用ヘッダ + 13番ピンの LED。マイコンの中はシミュレーションできませんが、電源・リセット・水晶の周りは確かめられます。そのまま「基板」タブで部品を取り込み、配置・配線・発注データまで進められます	ATmega328P + 16MHz crystal + serial programming header + an LED on pin 13. The inside of the microcontroller can't be simulated, but you can check the power, reset and crystal circuits. You can go straight on to the "Board" tab to import the parts, then place, route and make the order data
+Arduino Mega 互換ボード (USB つき、シールドなし)	Arduino Mega-compatible board (with USB, no shield)
+ATmega2560 (TQFP-100) と、USB-シリアル変換 CH340G、USB コネクタ、水晶 2 つ、リセット、ICSP、ポートごとの引き出しヘッダ。部品 36 個の大きな回路です。マイコンの中はシミュレーションできませんが、回路図 (ERC) と、基板づくり (配置・配線) の練習に使えます。基板は 100 ピンの IC のため、自動配線では通らない線が残ります (手で引くか、配置を工夫します)	ATmega2560 (TQFP-100) with a CH340G USB-serial converter, USB connector, 2 crystals, reset, ICSP and breakout headers for each port. A big circuit with 36 parts. The inside of the microcontroller can't be simulated, but it is good practice for the schematic (ERC) and for making a board (placing and routing). Because of the 100-pin IC, autoroute leaves some tracks unrouted (route them by hand or improve the placement)
+# crates/app/src/glossary.rs
+電気を押し出す力。回路の 2 点の間の「高さの差」で、単位はボルト (V)。	The force that pushes electricity. It is the "difference in height" between 2 points in a circuit, measured in volts (V).
+流れる電気の量。単位はアンペア (A)。1A = 1000mA。	The amount of electricity flowing. Measured in amperes (A). 1A = 1000mA.
+電流の流れにくさ。この働きをもつ部品の名前でもあります。単位はオーム (Ω)。	How hard it is for current to flow. Also the name of the part that does this. Measured in ohms (Ω).
+オームの法則	Ohm's law
+電圧・電流・抵抗の関係。V = I × R (電圧 = 電流 × 抵抗)。どれか 2 つが分かれば、残りが決まります。	The relation between voltage, current and resistance: V = I × R (voltage = current × resistance). If you know any 2, the third is fixed.
+電気が 1 秒あたりにする仕事 (熱や光になる量)。P = V × I。単位はワット (W)。	The work electricity does per second (the amount that becomes heat or light). P = V × I. Measured in watts (W).
+直列	Series
+部品を 1 本の道に順に並べること。同じ電流が流れ、抵抗は足し算になります。	Putting parts one after another on a single path. The same current flows through each, and resistances add up.
+並列	Parallel
+部品の道を分けて並べること。同じ電圧がかかり、電流は足し算になります。	Putting parts on separate paths side by side. Each gets the same voltage, and the currents add up.
+分圧	Voltage divider
+直列の抵抗で電圧を分けること。中点の電圧 = 入力 × R2 ÷ (R1 + R2)。	Splitting a voltage with resistors in series. Midpoint voltage = input × R2 ÷ (R1 + R2).
+合成の抵抗	Equivalent resistance
+2 本以上の抵抗を、1 本とみなしたときの抵抗値。直列は足し算、並列は (R1 × R2) ÷ (R1 + R2)。	The value of 2 or more resistors seen as a single resistor. In series they add; in parallel it is (R1 × R2) ÷ (R1 + R2).
+電圧を測る基準の点 (0V)。回路図では、GND の記号やラベルで表します。電圧は「GND からいくつ高いか」で言います。	The reference point (0V) for measuring voltage. In a schematic it is shown with the GND symbol or a label. A voltage means "how much higher than GND".
+向きも大きさも変わらない電気。電池などです。	Electricity whose direction and size don't change, like from a battery.
+交流	Alternating current (AC)
+向きと大きさが、周期的に入れ替わる電気。家庭のコンセントなど。	Electricity whose direction and size swap back and forth periodically, like a home wall outlet.
+交流が 1 秒間に繰り返す回数。単位はヘルツ (Hz)。50Hz は 1 秒に 50 回。	How many times AC repeats per second. Measured in hertz (Hz). 50Hz means 50 times a second.
+実効値	RMS value
+交流の大きさを、同じ熱を出す直流の電圧で表した値。家庭の 100V は実効値で、ピークは約 141V。	The size of an AC signal given as the DC voltage that would make the same heat. Home 100V is an RMS value; its peak is about 141V.
+定格	Rating
+部品が安全に使える電圧・電流・電力などの上限の目安。データシートに書かれています。	The upper limit of voltage, current, power and so on at which a part can be used safely. It is written in the datasheet.
+許容差	Tolerance
+表示の値と、実際の値とのずれが許される範囲。±5% など。	How far the actual value may differ from the marked value, such as ±5%.
+値の大きさの印。k = 1000 倍、Meg = 100 万倍、m = 1/1000、u (µ) = 100 万分の 1、n = 10 億分の 1、p = 1 兆分の 1。シミュレーションでは M と m を区別せず、どちらも 1/1000 なので、メガは Meg と書きます。	A mark for the size of a value. k = ×1000, Meg = ×1 million, m = 1/1000, u (µ) = 1 millionth, n = 1 billionth, p = 1 trillionth. The simulator does not tell M from m (both mean 1/1000), so write mega as Meg.
+電気をためる部品。直流は通さず、電圧が変わるあいだだけ電流が流れます。	A part that stores electricity. It does not pass DC; current flows only while the voltage is changing.
+コンデンサがためられる電気の量を表す値。単位はファラド (F)。µF (マイクロ)、nF (ナノ)、pF (ピコ) がよく使われます。	The value showing how much electricity a capacitor can store. Measured in farads (F). µF (micro), nF (nano) and pF (pico) are common.
+電流が流れると、磁界にエネルギーをためる部品。電流が急に変わるのをいやがります。	A part that stores energy in a magnetic field when current flows. It resists sudden changes in current.
+コイルの、電流の変わりにくさを表す値。単位はヘンリー (H)。mH (ミリ) や µH がよく使われます。	The value showing how hard it is to change an inductor's current. Measured in henries (H). mH (milli) and µH are common.
+時定数	Time constant
+充電や、電流の増え方の速さを表す時間。抵抗とコンデンサで τ = R × C、抵抗とコイルで τ = L ÷ R。τ の時間で、最終値の約 63% に達します。	The time that shows how fast charging, or the rise of a current, happens. τ = R × C for a resistor and capacitor, τ = L ÷ R for a resistor and inductor. After τ it reaches about 63% of the final value.
+2 つのコイルで、交流の電圧を巻数の比で変える部品。一次側と二次側は電気的につながっていません。	A part with 2 coils that changes an AC voltage by the ratio of their turns. The primary and secondary sides are not electrically connected.
+コンデンサの中にある抵抗。リップル電流が流れると、ここで熱が出ます。	The resistance inside a capacitor. When ripple current flows, heat is made here.
+DCバイアス	DC bias
+セラミックコンデンサに直流の電圧をかけると、容量が下がる現象です。耐圧いっぱいに近いほど大きく下がり、16V 品の 22µF は 5V で約 60% 下がります。電源の平滑や安定化に使うときは、かける電圧での容量で考えます。部品の値に BIAS=60 のように書くと、シミュレーションに入ります。	When a DC voltage is put across a ceramic capacitor, its capacitance drops. The closer to the rated voltage, the bigger the drop: a 16V, 22µF part loses about 60% at 5V. When using it for power smoothing or stabilizing, think in terms of the capacitance at the applied voltage. Writing e.g. BIAS=60 in the part's value puts this into the simulation.
+交流に対する抵抗のようなもの。周波数で変わります。単位はΩ。	Something like resistance for AC. It changes with frequency. Measured in Ω.
+電流を一方向 (アノードからカソード) にだけ流す部品。	A part that lets current flow only one way (from anode to cathode).
+順方向電圧	Forward voltage
+ダイオードや LED に、電流を流しているときの、両端の電圧。シリコンのダイオードで約 0.7V、LED で約 2V。	The voltage across a diode or LED while current flows through it. About 0.7V for a silicon diode, about 2V for an LED.
+電流を流すと光るダイオード。明るさは、電圧ではなく電流で決まります。	A diode that lights up when current flows. Its brightness is set by the current, not the voltage.
+逆向きの降伏を使って、電圧を一定に保つダイオード。	A diode that uses reverse breakdown to hold a voltage steady.
+降伏	Breakdown
+逆向きの電圧が、ある値を超えたとき、急に逆向きに電流が流れ出す現象。	When the reverse voltage goes above a certain value and current suddenly starts to flow backwards.
+順方向電圧が低く、逆回復がほとんどないダイオード。	A diode with a low forward voltage and almost no reverse recovery.
+逆回復	Reverse recovery
+ダイオードに、急に逆電圧をかけたとき、蓄えられた電荷が抜けるまで、短い間、逆向きに電流が流れる現象。	When a reverse voltage is suddenly put on a diode, current flows backwards for a short time until the stored charge is gone.
+小さな信号で、大きな電流を制御する部品。増幅やスイッチに使います。	A part that controls a large current with a small signal. Used for amplifying and switching.
+トランジスタの、ベースに流す電流に対する、コレクタに流れる電流の倍率。	The ratio of a transistor's collector current to the current put into its base.
+飽和	Saturation
+それ以上は増えなくなる状態。トランジスタが完全に ON になり、負荷が電流の上限を決める状態など。	A state where something can't increase any more. For example, a transistor fully ON, with the load setting the current limit.
+ゲートの電圧で電流を制御するトランジスタ。ゲートには、直流では電流が流れません。	A transistor whose current is controlled by its gate voltage. No DC current flows into the gate.
+しきい値	Threshold
+切り替わる境目の電圧。MOSFET では、電流が流れ始めるゲートの電圧。ロジック IC では、High と Low を分ける電圧。	The voltage at the border where something switches. In a MOSFET, the gate voltage where current starts to flow. In a logic IC, the voltage that separates High from Low.
+オン抵抗	On-resistance
+MOSFET やスイッチが ON のときの、内部の抵抗。小さいほど、損失が少なくなります。	The internal resistance of a MOSFET or switch when it is ON. The smaller it is, the lower the loss.
+2 つの入力の電圧の差を、とても大きな倍率で増やす部品。	A part that multiplies the difference between its 2 input voltages by a very large factor.
+負帰還	Negative feedback
+出力の一部を入力に戻すこと。倍率が、抵抗の比で決まる、安定した回路になります。	Feeding part of the output back to the input. It makes a stable circuit whose gain is set by a ratio of resistors.
+仮想短絡	Virtual short
+負帰還がかかったオペアンプで、+ と − の入力の電圧が、ほぼ等しくなること。	In an op amp with negative feedback, the + and − inputs end up at almost the same voltage.
+ゲイン	Gain
+出力が、入力の何倍かを表す値。	The value showing how many times larger the output is than the input.
+帯域	Bandwidth
+信号を正しく扱える、周波数の範囲。	The range of frequencies a signal can be handled correctly in.
+オペアンプで、倍率 × 帯域が、ほぼ一定になる値。LM358 は約 1MHz。	For an op amp, the value of gain × bandwidth, which stays roughly constant. About 1MHz for the LM358.
+出力の電圧が、変われる速さの上限 (V/µs)。大きく速い信号は、これを超えるとゆがみます。	The fastest the output voltage can change (V/µs). Large, fast signals get distorted when they exceed it.
+ボルテージフォロワ	Voltage follower
+出力を − 入力につないで、入力と同じ電圧を出す、倍率 1 倍の回路。	A gain-of-1 circuit that connects the output to the − input and outputs the same voltage as the input.
+大きさの比を表す単位。0dB = 1 倍、6dB ≒ 2 倍、20dB = 10 倍、40dB = 100 倍、−20dB = 1/10。	A unit for ratios of size. 0dB = ×1, 6dB ≈ ×2, 20dB = ×10, 40dB = ×100, −20dB = 1/10.
+クリップ	Clipping
+出力が、電源の電圧に届いて、波形の上や下が平らに切れること。	When the output reaches the supply voltage and the top or bottom of the waveform is cut flat.
+整流	Rectification
+交流を、一方向の電流 (直流) に直すこと。	Turning AC into current that flows one way (DC).
+全波整流	Full-wave rectification
+交流の両方の半周期を使う整流 (ブリッジ)。ダイオード 1 本で半周期だけ使うのは、半波整流。	Rectification that uses both half-cycles of AC (a bridge). Using only one half-cycle with 1 diode is half-wave rectification.
+平滑コンデンサ	Smoothing capacitor
+整流した電圧のゆれを、ならすコンデンサ。	A capacitor that evens out the ripple in a rectified voltage.
+リップル	Ripple
+電源の電圧に残る、小さな周期的なゆれ。	The small periodic wobble left in a supply voltage.
+ドロップアウト	Dropout
+レギュレータが、出力を保つのに必要な、入力と出力の最低の差。入力がそれを下回ると、出力が下がります。	The minimum difference between input and output that a regulator needs to hold its output. If the input goes below it, the output drops.
+リニアレギュレータ	Linear regulator
+入力と出力の差を熱にして、出力を一定に保つ電源 IC。部品が少なく、ノイズが小さい。	A power IC that holds its output steady by turning the input-output difference into heat. Few parts and low noise.
+スイッチングレギュレータ	Switching regulator
+トランジスタを高速に入り切りして、熱にせずに電圧を変える電源。効率が高い。	A power supply that changes voltage by switching a transistor on and off quickly, without turning it into heat. High efficiency.
+入力のゆれが、出力にどれだけ伝わるかの比 (dB)。大きいほど、ゆれを消せます。	The ratio (dB) of how much input ripple gets through to the output. The larger, the better it removes ripple.
+効率	Efficiency
+入力の電力のうち、出力に使えた割合。	The share of the input power that ends up usable at the output.
+ヒューズ	Fuse
+決まった電流を超えると、溶けて切れ、回路を守る部品。一度切れたら、元に戻りません。	A part that melts and breaks when a set current is exceeded, protecting the circuit. Once blown, it does not recover.
+突入電流	Inrush current
+電源を入れた瞬間に、一時的に流れる大きな電流。空のコンデンサを充電するときなど。	A large current that flows briefly the moment power is turned on, for example while charging empty capacitors.
+サージ	Surge
+雷などで、一瞬だけ加わる、とても高い電圧や大きな電流。	A very high voltage or large current that appears for an instant, from lightning and so on.
+バリスタ	Varistor
+電圧が高くなると、急に電流を流して、電圧の上昇を止める部品。サージから回路を守ります。	A part that suddenly passes current when the voltage gets high, stopping the voltage from rising. Protects circuits from surges.
+バイパスコンデンサ	Bypass capacitor
+ICの電源ピンのそばに置いて、電源の細かいゆれを吸収するコンデンサ。	A capacitor placed next to an IC's power pin to absorb small wobbles in the supply.
+リレー	Relay
+コイルに電流を流して、接点を動かす部品。コイルと接点は、電気的に離れています。	A part that moves contacts by passing current through a coil. The coil and contacts are electrically separate.
+接点抵抗	Contact resistance
+スイッチやリレーの接点が閉じているときに残る、小さな抵抗。	The small resistance left in the contacts of a switch or relay when they are closed.
+バウンス	Bounce
+スイッチを押した瞬間に、接点が細かく入り切りを繰り返すこと。	When a switch is pressed, its contacts rapidly open and close many times for a moment.
+アーク	Arc
+スイッチを切るときに、接点の間に出る火花。	The spark that jumps between contacts when a switch is turned off.
+プルアップ	Pull-up
+信号の線を、抵抗で電源に引き上げておくこと。何もつながっていない入力を、High に決めます。	Pulling a signal line up to the supply through a resistor. It makes an unconnected input read High.
+オープンドレイン	Open drain
+足を GND に引き下げる働きだけを持つ出力。High は、外につけたプルアップ抵抗が作ります。	An output that can only pull the pin down to GND. High is made by an external pull-up resistor.
+ロジック IC	Logic IC
+High と Low の 2 つの値で、論理を扱う IC。	An IC that handles logic with 2 values, High and Low.
+ロジックの 2 つの値。High は電源に近い電圧 (「1」)、Low は 0V に近い電圧 (「0」)。	The 2 values of logic. High is a voltage near the supply ("1"), Low is a voltage near 0V ("0").
+ヒステリシス	Hysteresis
+上がるときと、下がるときで、切り替わる境目を変えること。ノイズで出力が揺れるのを防ぎます。	Using a different switching border when rising than when falling. It stops noise from making the output flicker.
+シュミットトリガ	Schmitt trigger
+入力のしきい値に、ヒステリシスを持たせた回路。	A circuit whose input threshold has hysteresis.
+共振	Resonance
+特定の周波数で、よく振動したり、電気をよく通したりすること。	Vibrating strongly, or passing electricity well, at one particular frequency.
+Q 値	Q factor
+共振の鋭さを表す値。大きいほど、共振の山が細くなります。	A value for how sharp a resonance is. The larger it is, the narrower the resonance peak.
+正確な周波数で共振する部品。マイコンのクロック (時計) の元になります。	A part that resonates at a precise frequency. It is the source of a microcontroller's clock.
+等価回路	Equivalent circuit
+同じ働きをする、部品の組み合わせで表した回路。	A circuit drawn as a combination of parts that does the same job.
+サンプルホールド	Sample and hold
+信号の電圧を、コンデンサにためて、その値を保つ回路。	A circuit that stores a signal's voltage in a capacitor and keeps that value.
+A/D コンバータ	A/D converter
+電圧を、数字に変える回路。	A circuit that turns a voltage into a number.
+絶縁	Isolation
+電気的に切り離すこと。つながっていないので、グラウンドも別にできます。	Separating things electrically. Since they aren't connected, each side can have its own ground.
+フォトカプラ	Optocoupler
+LED と光センサを 1 つにして、光で信号を伝える部品。入力と出力が絶縁されます。	A part combining an LED and a light sensor that passes a signal by light. The input and output are isolated.
+フォトカプラの、出力の電流 ÷ 入力の電流。	For an optocoupler, output current ÷ input current.
+レシオメトリック	Ratiometric
+出力が、電源電圧に比例すること。A/D コンバータの基準が同じ電源なら、電源が変わっても読みは変わりません。	When an output is proportional to the supply voltage. If the A/D converter's reference is the same supply, the reading doesn't change when the supply changes.
+磁束密度	Magnetic flux density
+磁界の強さ。単位はガウス (G) やテスラ (T)。1G = 0.1mT。	The strength of a magnetic field. Measured in gauss (G) or tesla (T). 1G = 0.1mT.
+ホールセンサ	Hall sensor
+磁界の強さを、電圧で出すセンサ。	A sensor that outputs the strength of a magnetic field as a voltage.
+サーミスタ	Thermistor
+温度で抵抗が変わる部品。NTC は、温度が上がると抵抗が下がるタイプ。	A part whose resistance changes with temperature. An NTC type's resistance goes down as the temperature goes up.
+B 定数	B constant
+サーミスタの、温度による抵抗の変わり方を表す定数。	The constant that shows how a thermistor's resistance changes with temperature.
+感度	Sensitivity
+入力の変化に対する、出力の変化の大きさ。	How much the output changes for a change in the input.
+ミラー期間	Miller plateau
+MOSFET を切り替えるとき、ゲートの電圧が一定に止まる期間。この間にドレインの電圧が下がります。	The period while a MOSFET switches during which the gate voltage stays flat. The drain voltage falls during this time.
+スイッチング損失	Switching loss
+切り替えの最中に、電圧と電流が同時に大きいために出る熱。	Heat made during switching because voltage and current are both large at the same time.
+部品のメーカーが出す、性能・限界・使い方を書いた資料 (PDF)。部品を選ぶときと、使うときに、必ず見ます。	A document (PDF) from the part maker describing its performance, limits and how to use it. Always read it when choosing and using a part.
+マイコン	Microcontroller
+プログラムで動く、小さなコンピュータの IC。Arduino の ATmega328P など。	A small computer on an IC, run by a program. For example the ATmega328P in an Arduino.
+マイコンを載せた、電子工作の定番のボード。USB でパソコンにつなぎ、プログラムを書き込みます。	A popular board for electronics projects with a microcontroller on it. You connect it to a PC by USB and upload programs.
+Arduino Uno に使われているマイコンの IC。	The microcontroller IC used in the Arduino Uno.
+ブレッドボード	Breadboard
+はんだ付けなしで、部品を差して回路を組める、穴の開いた板。実験に使います。	A board full of holes where you plug in parts to build a circuit without soldering. Used for experiments.
+テスタ	Multimeter
+電圧・電流・抵抗を測る、手のひらサイズの測定器。	A palm-sized meter that measures voltage, current and resistance.
+オシロスコープ	Oscilloscope
+電圧が時間とともに変わる様子を、波形で見る測定器。	A meter that shows how a voltage changes over time as a waveform.
+プローブ	Probe
+オシロスコープなどを、回路につなぐための棒やコード。	The rod or lead used to connect an oscilloscope or similar to a circuit.
+シャント抵抗	Shunt resistor
+電流を、両端の電圧に変えて測るための、小さな抵抗。電圧 ÷ 抵抗で、電流が分かります。	A small resistor used to measure current by turning it into the voltage across it. Voltage ÷ resistance gives the current.
+アノード	Anode
+ダイオードの足の名前。電流は、アノードから入り、カソードから出ます。カソード側に、印の線があります。	The names of a diode's leads. Current goes in at the anode and out at the cathode. The cathode side has a marking line.
+エミッタ	Emitter
+バイポーラトランジスタの 3 本の足 (ベース・コレクタ・エミッタ)。小さなベース電流で、コレクタからエミッタへの大きな電流を制御します。	The 3 leads of a bipolar transistor (base, collector, emitter). A small base current controls a large current from collector to emitter.
+ドレイン	Drain
+MOSFET の 3 本の足 (ゲート・ドレイン・ソース)。ゲートの電圧で、ドレインからソースへの電流を制御します。	The 3 leads of a MOSFET (gate, drain, source). The gate voltage controls the current from drain to source.
+エミッタフォロワ	Emitter follower
+出力が入力に付いて動き、電圧はほぼ変えずに、流せる電流を増やすトランジスタの回路。	A transistor circuit whose output follows the input, keeping almost the same voltage while increasing the current it can supply.
+パストランジスタ	Pass transistor
+レギュレータで、入力から出力へ電流を通す側の、大きなトランジスタ。	In a regulator, the large transistor that carries current from the input to the output.
+ボディダイオード	Body diode
+MOSFET の中に、もともと入っているダイオード。ソースからドレインへ電流を通します。	A diode built into a MOSFET from the start. It passes current from source to drain.
+光が当たると、電流が流れるダイオード。光の強さに比例する電流が得られます。	A diode that passes current when light hits it. The current is proportional to the light's strength.
+光が当たると、抵抗が下がる部品。明るさのセンサ。変わり方はゆるやかです。	A part whose resistance drops when light hits it. A brightness sensor. It responds slowly.
+本来は 0 のはずの所に残る、一定のずれ。	A constant error left where there should be 0.
+負荷	Load
+電源から電力を受けて、働く側の回路や部品。「負荷が重い」は、電流が大きいこと。	The circuit or part that receives power from the supply and does the work. "A heavy load" means a large current.
+電圧源	Voltage source
+一定の電圧を出す電源の、回路上の表し方。理想は、電流を流しても電圧が変わりません。	How a supply that outputs a constant voltage is shown in a circuit. Ideally its voltage doesn't change however much current flows.
+内部抵抗	Internal resistance
+電池や電源の中にある抵抗。電流を流すと、ここで電圧が下がります。	The resistance inside a battery or power supply. When current flows, the voltage drops here.
+電圧降下	Voltage drop
+電流が抵抗を流れるとき、その両端で電圧が下がること。V = I × R。	When current flows through a resistance, the voltage falls across it. V = I × R.
+基準電圧	Voltage reference
+正確で、一定の電圧。比べる基準や、電源の出力を決めるのに使います。	An accurate, constant voltage. Used as a reference to compare against or to set a supply's output.
+短絡	Short circuit
+つないではいけない所が、つながって、大きな電流が流れること。	When points that must not be connected get connected and a large current flows.
+交流の波の、ずれ具合 (角度)。入力と出力の波が、どれだけずれているかを表します。	How far an AC wave is shifted (as an angle). Shows how much the input and output waves are offset.
+増幅回路が、不安定になる (勝手に振動する) までの余裕。小さいと、過渡の波形が揺れ、ゼロだと発振します。	How much margin an amplifier has before it becomes unstable (oscillates by itself). If small, the transient waveform rings; at zero it oscillates.
+発振	Oscillation
+入力がなくても、自分で周期的に振動すること。意図して使う (発振器) 場合と、増幅回路の不具合の場合があります。	Vibrating periodically by itself with no input. Sometimes used on purpose (an oscillator), sometimes a fault in an amplifier.
+出力が、目標の値を、一時的に行き過ぎること。	When the output briefly goes past its target value.
+リンギング	Ringing
+信号が急に変わったあとに残る、細かい揺れ。	Small wobbles left after a signal changes suddenly.
+フィルタ	Filter
+特定の周波数の信号を通し、ほかを弱める回路。ローパスは、低い周波数を通します。	A circuit that passes signals of certain frequencies and weakens the rest. A low-pass passes low frequencies.
+カットオフ周波数	Cutoff frequency
+フィルタで、信号が約 0.7 倍 (−3dB) に弱まる周波数。	The frequency at which a filter weakens a signal to about 0.7 times (−3dB).
+アナログ	Analog
+電圧のように、連続して変わる量。	A quantity that changes continuously, like a voltage.
+デジタル	Digital
+High と Low の 2 つの値 (0 と 1) で表す信号。	A signal expressed with 2 values, High and Low (0 and 1).
+ロジックレベル	Logic level
+High と Low にあたる電圧の値。5V の系と 3.3V の系があります。	The voltages that count as High and Low. There are 5V systems and 3.3V systems.
+スイッチを入り切りする時間の割合 (デューティ) を変えて、平均の電圧や電力を調整する方法。	A way to adjust average voltage or power by changing the share of time a switch is on (the duty).
+デューティ	Duty cycle
+信号が High の時間の割合 (デューティ比)。50% は、High と Low が半々。	The share of time a signal is High (duty ratio). 50% means half High, half Low.
+クロック	Clock
+マイコンなどの動きの基準になる、一定の周期の信号。	A signal with a fixed period that sets the pace for a microcontroller and similar.
+リセット	Reset
+マイコンを、最初の状態に戻す信号。RESET ピンを Low にすると、プログラムが最初から始まります。	The signal that returns a microcontroller to its starting state. Pulling the RESET pin Low starts the program from the beginning.
+プルダウン	Pull-down
+信号の線を、抵抗で GND に引き下げておくこと。何もつながっていない入力を、Low に決めます。	Pulling a signal line down to GND through a resistor. It makes an unconnected input read Low.
+シリアル通信	Serial communication
+1 本の線で、1 ビットずつ順番にデータを送る通信。マイコンとパソコンの通信などに使います。	Communication that sends data one bit at a time in order over 1 line. Used for example between a microcontroller and a PC.
+ボーレート	Baud rate
+シリアル通信の速さ。1 秒に送る信号の数 (9600 や 115200)。送る側と受ける側で、合わせます。	The speed of serial communication: the number of signals sent per second (9600, 115200). The sender and receiver must match.
+スタートビット	Start bit
+シリアル通信で、1 文字の始まりと終わりを知らせる信号。	In serial communication, the signals that mark the start and end of one character.
+パソコンと機器をつなぐ規格。5V の電源 (VBUS) と、2 本のデータ線 (D+、D−) があります。	The standard for connecting devices to a PC. It has a 5V supply (VBUS) and 2 data lines (D+, D−).
+フルスピード	Full speed
+USB の通信の速さの種類。ロー 1.5Mbit/s、フル 12Mbit/s、ハイ 480Mbit/s。	The kinds of USB communication speed: low 1.5Mbit/s, full 12Mbit/s, high 480Mbit/s.
+静電気による放電。USB の信号線などに触れて、部品を壊すことがあります。	Discharge of static electricity. Touching USB signal lines and the like can destroy parts.
+コンデンサの中にある、コイルの成分。高い周波数では、これのせいで、コンデンサとして働かなくなります。	The inductor-like part inside a capacitor. Because of it, at high frequencies a capacitor stops working as a capacitor.
+セラミックコンデンサ	Ceramic capacitor
+セラミックで作ったコンデンサ。小さく、高い周波数に強い。電圧をかけると容量が減ります。	A capacitor made of ceramic. Small and good at high frequencies. Its capacitance drops when voltage is applied.
+大きな容量が作れるコンデンサ。極性 (+ と −) があり、逆にすると壊れます。寿命があります。	A capacitor that can have a large capacitance. It has polarity (+ and −) and breaks if reversed. It has a limited life.
+負荷容量	Load capacitance
+水晶の両端につける、コンデンサの容量 (22pF など)。発振の周波数を決めます。	The capacitors placed at both ends of a crystal (22pF, etc.). They set the oscillation frequency.
+放熱板	Heat sink
+部品の熱を、空気に逃がすための、金属の板。	A metal plate that lets a part's heat escape into the air.
+熱抵抗	Thermal resistance
+熱の伝わりにくさ (℃/W)。電力 × 熱抵抗が、温度の上がり方になります。	How hard it is for heat to pass (°C/W). Power × thermal resistance gives the temperature rise.
+絶対最大定格	Absolute maximum rating
+超えると壊れるかもしれない、限界の値。ふだんの使い方では、ここまで使いません。	The limit values beyond which a part may break. In normal use you never go this far.
+逆起電力	Back EMF
+コイルの電流を急に切ったとき、電流を保とうとして出る、高い電圧。	The high voltage an inductor makes, trying to keep its current going, when the current is cut suddenly.
+フライバックダイオード	Flyback diode
+コイル (リレーやモータ) と並列に入れて、逆起電力を逃がし、トランジスタを守るダイオード。	A diode placed in parallel with a coil (relay or motor) that drains the back EMF and protects the transistor.
+ソフトスタート	Soft start
+電源を入れたとき、出力をゆっくり立ち上げて、突入電流を減らす機能。	A feature that raises the output slowly at power-on to reduce inrush current.
+ハイサイド	High side
+負荷の電源側 (+ 側) に、スイッチを入れる方式。	Putting the switch on the supply (+) side of the load.
+2.495V の基準電圧を作る部品。2 本の抵抗で、好きな電圧の基準が作れます。	A part that makes a 2.495V reference voltage. With 2 resistors you can make a reference of any voltage.
+出力電圧を、2 本の抵抗で決められる、可変の三端子レギュレータ。	An adjustable three-terminal regulator whose output voltage is set by 2 resistors.
+部品をのせて、銅の配線でつなぐ板。回路図ができたら、これを作って、製造メーカーに発注します。	A board that carries parts connected by copper tracks. Once the schematic is done, you design this and order it from a fab.
+パターン	Pattern
+基板の上の、銅でできた配線や、パッドの形。「基板パターン」は、その設計。	The shapes of copper tracks and pads on a board. "PCB layout" is the design of them.
+部品の足どうしをつなぐ、基板の上の銅の線。	A copper line on the board that connects part leads.
+配線の太さ。太いほど、抵抗が小さく、大きな電流を流せます。電流から、必要な太さが分かります。	The width of a track. The wider, the lower the resistance and the more current it can carry. The current tells you the width needed.
+配線やパッドの間の距離。近すぎると、ショートしたり、製造できなかったりします。	The distance between tracks and pads. Too close, and they may short or be impossible to make.
+部品の足を、はんだ付けする、基板の上の銅の部分。	The copper area on a board that a part's lead is soldered to.
+基板の表と裏の配線を、穴の中の銅でつなぐ所。	A spot that connects tracks on the top and bottom of the board with copper inside a hole.
+まだ配線でつながっていない、つなぐべき接続。細い線で、表示されます。	A connection that should be made but isn't routed yet. Shown as a thin line.
+自動配置	Autoplace
+部品の位置を、ソフトが自動で決める機能。叩き台なので、人が手直しします。	A feature where the software decides where the parts go. It is a first draft, so a person adjusts it.
+ソフトが、配線を自動で引く機能。通せない所は、人が手で引きます。	A feature where the software draws the tracks. Where it can't get through, a person routes by hand.
+基板の配線が、間隔・幅などの製造のルールを守っているかを調べる機能。守っていない所は、違反として、表示されます。	A feature that checks whether the board's tracks follow the manufacturing rules for spacing, width and so on. Places that don't are shown as violations.
+発注前チェック	Pre-order check
+基板を製造メーカーに注文する前の点検。部品が基板の外にないか、配線が細すぎないかなどを調べます。	The check before ordering a board from a fab. It looks for things like parts outside the board or tracks that are too thin.
+基板の製造メーカーに渡す、層ごとの図面のデータ。	The per-layer drawing data you hand to the board fab.
+外形	Board outline
+基板を切り抜く輪郭の線。部品は、外形の内側に置きます。	The line that the board is cut out along. Parts go inside the outline.
+差動ペア	Differential pair
+2 本の線で 1 つの信号を運ぶ組。USB の D+ と D−。並べて、同じ長さで、引きます。	A pair of 2 lines that carries one signal, like USB D+ and D−. Route them side by side with the same length.
+長さ合わせ	Length matching
+ペアや複数の線の長さをそろえるため、線をくねらせて長くすること。	Making a line longer by snaking it, so that the lengths of a pair or several lines match.
+ヘッダ	Header
+ピンが並んだ部品。基板どうしや、ケーブルをつなぐのに使います。	A part with a row of pins. Used to connect boards to each other or to cables.
+ピンや穴の、中心どうしの間隔。0.5mm ピッチ、2.54mm ピッチなど。小さいほど、配線が難しい。	The distance between the centers of pins or holes, such as 0.5mm pitch or 2.54mm pitch. The smaller, the harder to route.
+浮遊容量	Stray capacitance
+配線やパッドの間に、意図せずできる、小さなコンデンサ。高い周波数の信号に影響します。	A small, unintended capacitor formed between tracks or pads. It affects high-frequency signals.
+ノイズ	Noise
+信号に混ざる、じゃまな、不要な変動。	Unwanted, disturbing changes mixed into a signal.
+部品の記号と線で、回路のつながりを描いた図。基板を作る元になります。	A drawing of a circuit's connections using part symbols and lines. It is the basis for making the board.
+グリッド	Grid
+画面の点や線の、位置をそろえる格子。部品や配線は、格子の点に吸い付きます。	The lattice of dots or lines on screen that lines things up. Parts and wires snap to its points.
+DC動作点	DC operating point
+回路が落ち着いた状態の、各点の電圧と各部品の電流を計算する解析。「解析」タブの「DC動作点を解析」ボタン。	An analysis that calculates the voltage at each point and the current in each part once the circuit has settled. The "Run DC operating point" button on the "Analysis" tab.
+時間が進むにつれて、電圧や電流がどう変わるかを計算する解析。波形がグラフに出ます。	An analysis that calculates how voltages and currents change as time goes on. The waveforms appear in a graph.
+AC解析	AC analysis
+周波数を変えながら、小さな交流が、各点にどれだけ出てくるかを調べる解析。グラフは大きさ (dB) と位相。	An analysis that checks how much of a small AC signal appears at each point while changing the frequency. The graphs show size (dB) and phase.
+DCスイープ	DC sweep
+電源の電圧を、少しずつ変えながら、出力を調べる解析。	An analysis that checks the output while changing a supply's voltage little by little.
+温度スイープ	Temperature sweep
+回路の温度を、少しずつ変えながら、電圧がどう変わるかを調べる解析。	An analysis that checks how voltages change while changing the circuit's temperature little by little.
+ばらつき解析	Variation analysis
+部品の誤差 (許容差) で、結果がどれだけ動くかを、たくさんの組み合わせで調べる解析。	An analysis that checks, over many combinations, how much the results move with part errors (tolerances).
+回路図の配線ミス (つながっていない、ショートなど) を点検する機能。	A feature that checks the schematic for wiring mistakes (unconnected pins, shorts and so on).
+同じ名前の点を、線を引かずにつなぐ札。ラベルがついた点は、同じ名前のラベルとつながっています。	A tag that connects points with the same name without drawing a wire. A point with a label is connected to every label of the same name.
+階層設計	Hierarchical design
+使い回したい回路を別のシートに1つ描き、その「記号」(箱) を何個も置いて使う方法。シートの中を直すと、全部の記号に効きます。記号ごとに、部品番号 (R1_CH1) とネット名 (CH1.MID) が別になります。	A way to draw a circuit you want to reuse once on its own sheet, then place its "symbol" (a box) many times. Fixing the inside of the sheet affects every symbol. Each symbol gets its own refdes (R1_CH1) and net names (CH1.MID).
+ポート	Port
+子のシートの出入口。ポートの名前が、そのシートを記号にしたときのピンの名前になります。	An entry/exit of a child sheet. A port's name becomes the pin name when the sheet is used as a symbol.
+モデル	Model
+部品の働きを、式や簡単な回路で表したもの。シミュレーションは、これで計算するので、実物と細かく違う所があります。	A description of how a part behaves using equations or a simple circuit. The simulation calculates with this, so it differs from the real part in small ways.
+回路シミュレーションの、世界共通の書き方と計算の方法。値の書き方 (4.7k、100n) も、これに従います。	The worldwide standard way of writing and calculating circuit simulations. The way values are written (4.7k, 100n) also follows it.
+ライブラリ	Library
+あらかじめ用意された、部品の一覧。左の部品の欄から、置けます。	The list of parts prepared in advance. You can place them from the parts list on the left.
+英数	
+用語集・索引	Glossary / index
+さがす:	Search:
+名前・読み・別名 (例: ぶんあつ、dB、ADC)	Name or alias (e.g. divider, dB, ADC)
+ひらがな・カタカナ・英字のどれでも探せます	You can search in English or Japanese
+{} 件 (全 {} 語)。語を押すと、説明と、その語が出てくるレッスンが右に出ます	{} items ({} terms in all). Click a term to see its explanation and the lessons that use it on the right
+  (操作)	  (operation)
+  (基板)	  (board)
+見つかりませんでした。別の書き方 (ひらがな・英字) でも試してください	Nothing found. Try another spelling or a different word
+左の一覧から、語を選んでください。	Pick a term from the list on the left.
+(このソフトの言葉)	(a word in this software)
+(基板の言葉)	(a board word)
+(回路の言葉)	(a circuit word)
+読み: {}　{kind}	
+別名: {}	
+この語が出てくるレッスンは、まだありません。	No lesson uses this term yet.
+この語が出てくるレッスン	Lessons that use this term
+このレッスンを始めます	Start this lesson

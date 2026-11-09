@@ -204,7 +204,12 @@ fn fill(ja: &[Seg], en: &[Seg], vals: &[&str]) -> Option<String> {
                     idx
                 };
                 let v = vals.get(idx)?;
-                out.push_str(lookup_exact(v).unwrap_or(v));
+                // a value is often a sentence made elsewhere ("・{s}"): translated the same way, when it has Japanese
+                match lookup_exact(v) {
+                    Some(e) => out.push_str(e),
+                    None if has_japanese(v) && !is_ja() => out.push_str(&tr_dyn(v)),
+                    None => out.push_str(v),
+                }
             }
         }
     }

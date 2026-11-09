@@ -1,0 +1,412 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/sim-core/src/ac.rs
+開始周波数は正の値にしてください	Start frequency must be a positive value
+終了周波数は開始周波数以上にしてください	End frequency must be at least the start frequency
+1デケードあたりの点数は 1〜100000 にしてください	Points per decade must be 1 to 100000
+点数は 2〜100000 にしてください	Number of points must be 2 to 100000
+周波数の点数が多すぎます	Too many frequency points
+AC解析には AC を持つ電源が必要です (電源の値に「AC 1」のように入力)	AC analysis needs a source with an AC value (enter e.g. "AC 1" in the source value)
+周波数 {f:.4e} Hz で方程式が解けません	The equations can't be solved at frequency {f:.4e} Hz
+# crates/sim-core/src/chain.rs
+{r} のピーク電流 {} が最大定格 {} を超えた	Peak current {} of {r} exceeded its maximum rating {}
+{r} (LED) のピーク電流 {} が上限の目安 30 mA を超えた	Peak current {} of {r} (LED) exceeded the 30 mA guideline limit
+{r} にかかる逆電圧 {rev:.0} V が耐圧 {vmax:.0} V を超えた	Reverse voltage {rev:.0} V across {r} exceeded its voltage rating {vmax:.0} V
+{r} (コイル) の巻線の発熱 {} が目安 {} を超えた	Winding heat {} of {r} (inductor) exceeded the guideline {}
+{r} の平均消費電力 {} が定格・目安 {} を超えた	Average power {} of {r} exceeded its rating/guideline {}
+{element} には「{}」の故障を設定できません	The fault "{}" can't be set on {element}
+最初に壊した部品	First part broken
+ショートした巻線の発熱 {} が目安 {} を超えた	Heat in the shorted winding {} exceeded the guideline {}
+焼損して断線	Burned open
+過熱・過電流で断線	Opened by overheating/overcurrent
+破損してショート	Broke into a short
+{} が「{}」になると、次の順に壊れていきます:	When {} becomes "{}", parts fail in this order:
+  ・{} のショートした巻線には、コイル電流 {} の {:.1} 倍の {} が回ります(ショートした輪は変圧器の二次側と同じ働きをします)	  - In the shorted winding of {}, the coil current {} is multiplied {:.1} times to {} (a shorted loop acts like a transformer secondary)
+。その部分の発熱は {} で、正常なコイル全体の {} と比べて、細い線の一部に熱が集まります	. The heat there is {}, compared with {} for the whole healthy coil, so the heat concentrates in a small part of the thin wire
+連鎖は起きません: ほかの部品は定格内に収まります(動作は変わるので、波形で確かめましょう)	No chain reaction: the other parts stay within their ratings (the behavior changes, so check the waveforms)
+最初の故障を含めて {} 個壊れたところで、定格を超える部品がなくなり、連鎖が止まります	After {} parts break, including the first fault, no part is over its rating and the chain stops
+このあと回路は計算できなくなります。実機では大電流が流れ続け、電源や配線まで傷むおそれがあります	After this the circuit can no longer be calculated. In a real circuit a large current keeps flowing and may damage even the supply and wiring
+{MAX_CHAIN} 個壊れてもまだ続きます。ここで打ち切りました	Still going after {MAX_CHAIN} parts broke. Stopped here
+電源 {n} のピーク電流は {} → {} になります。電源の直後にヒューズを入れると、連鎖が広がる前に切れて止められます	The peak current of supply {n} goes from {} to {}. A fuse right after the supply blows and stops the chain before it spreads
+# crates/sim-core/src/coverage.rs
+シミュレーション専用です (基板には載りません)。実物では、この部品のかわりに測る相手や電源につながります	Simulation only (not placed on the board). In reality this part is replaced by what you measure or the supply it connects to
+汎用のダイオードの標準値で計算します (IS・N など)。実物の型番の特性ではありません	Calculated with standard values for a generic diode (IS, N, etc.). Not the characteristics of a real part number
+汎用の LED の標準値で計算します (順方向電圧は 2 V 前後)。色や型番による違いは入っていません	Calculated with standard values for a generic LED (forward voltage about 2 V). Differences by color or part number are not included
+汎用の NPN (hFE 200) で計算します。実物の型番の特性ではありません	Calculated as a generic NPN (hFE 200). Not the characteristics of a real part number
+シミュレーションモデルがありません。計算では、回路にないものとして扱います。動作や電流に関わる部品なら、結果は実物と違います	No simulation model. The calculation treats it as not in the circuit. If the part affects behavior or current, the result will differ from reality
+# crates/sim-core/src/dcsweep.rs
+開始・終了・刻みを有限の数値にしてください (刻みは 0 以外)	Start, end and step must be finite numbers (step not 0)
+点数が多すぎます (最大 {MAX_POINTS} 点)。刻みを大きくしてください	Too many points (max {MAX_POINTS}). Use a larger step
+スイープする電源 {} が見つかりません (V / I 電源の番号を指定)	Source {} to sweep not found (give the name of a V / I source)
+{} = {val} で収束しませんでした	Did not converge at {} = {val}
+# crates/sim-core/src/designcalc.rs
+電源電圧	Supply voltage
+LEDの順方向電圧	LED forward voltage
+電源電圧 ({vs} V) が LED の順方向電圧 ({vf} V) 以下です。これでは LED は光りません。電源を上げるか、LED の数を減らしましょう	The supply voltage ({vs} V) is not above the LED forward voltage ({vf} V). The LED won't light. Raise the supply or use fewer LEDs
+計算上の抵抗	Calculated resistance
+使う抵抗 (E24, 切り上げ)	Resistor to use (E24, rounded up)
+実際に流れる電流	Actual current
+抵抗の消費電力	Resistor power
+抵抗にかかる電圧 = 電源 − LED電圧 = {vs} − {vf} = {:.2} V	Voltage across the resistor = supply - LED voltage = {vs} - {vf} = {:.2} V
+オームの法則 R = V ÷ I = {:.2} ÷ {} mA = {}	Ohm's law R = V / I = {:.2} / {} mA = {}
+市販の値 (E24) の中で、電流が目標を超えないように大きいほうへ丸めて {}	Rounded up to the next standard value (E24) so the current does not exceed the target: {}
+20 mA を超えています。一般的な 5mm LED の定格は 20 mA 程度なので、電流を下げてください	Over 20 mA. A typical 5 mm LED is rated around 20 mA, so lower the current
+抵抗の発熱が {:.0} mW あります。1/4 W (250 mW) の抵抗でも余裕が少ないので、W数の大きい抵抗にしましょう	The resistor dissipates {:.0} mW. Even a 1/4 W (250 mW) resistor has little margin, so use a higher-wattage resistor
+電流が 1 mA を下回ると、ほとんどの LED はとても暗くなります	Below 1 mA, most LEDs become very dim
+LED の順方向電圧は色で違います (赤 約2V・緑 約2.2V・青/白 約3V)。データシートの値を使いましょう。電流は目標より少し小さくても十分明るく見えます (5 mA でも見えます)	LED forward voltage depends on color (red about 2 V, green about 2.2 V, blue/white about 3 V). Use the datasheet value. A current a little below the target still looks bright enough (even 5 mA is visible)
+抵抗を入れ忘れる/ショートする: LED に電流が制限なく流れ、一瞬で焼損します (電流の上限は LED ではなく抵抗が決めています)	Resistor forgotten or shorted: unlimited current flows through the LED and it burns out instantly (the resistor, not the LED, sets the current limit)
+抵抗が大きすぎる: 暗い、または光らない	Resistor too large: dim, or no light
+LED の向きが逆: 電流が流れず光りません (壊れることはほぼありません。アノード/カソードを確認)	LED reversed: no current flows and it doesn't light (it rarely gets damaged; check anode/cathode)
+電源電圧が上がった (電池 → ACアダプタなど): 抵抗の電圧が増え、電流が増えて LED が傷みます	Supply voltage raised (battery -> AC adapter, etc.): more voltage across the resistor, more current, and the LED is damaged
+出力電圧	Output voltage
+出力電圧は入力電圧より小さくしてください。分圧で電圧を上げることはできません	Make the output voltage lower than the input voltage. A divider can't raise voltage
+計算上のR1	Calculated R1
+使うR1 (E24)	R1 to use (E24)
+実際の出力電圧	Actual output voltage
+分圧に流れ続ける電流	Current constantly flowing through the divider
+分圧の式: Vout = Vin × R2 ÷ (R1 + R2)	Divider formula: Vout = Vin × R2 / (R1 + R2)
+R1 について解くと R1 = R2 × (Vin − Vout) ÷ Vout = {} × {:.3} ÷ {} = {}	Solving for R1: R1 = R2 × (Vin - Vout) / Vout = {} × {:.3} / {} = {}
+E24 の最も近い値 {} を使うと、出力は {real:.3} V (目標との差 {:+.1} %)	Using the nearest E24 value {}, the output is {real:.3} V ({:+.1} % from the target)
+出力につなぐ負荷の抵抗が R2 ({}) より十分大きい (10 倍以上) ことを確認してください。小さいと電圧が大きく下がります	Make sure the load resistance on the output is much larger (10 times or more) than R2 ({}). If smaller, the voltage drops a lot
+分圧に 1 mA 以上流れ続けます。電池駆動なら R1・R2 を 10 倍にして電流を減らすのも手です (その代わり負荷の影響を受けやすくなります)	Over 1 mA flows through the divider all the time. For battery use, you can make R1 and R2 10 times larger to cut the current (but the load affects it more)
+分圧は電源には使えません。大きな電流を取り出すとすぐ電圧が落ちます。電力が必要ならレギュレータを使いましょう	A divider can't be used as a power supply. Drawing a large current drops the voltage at once. If you need power, use a regulator
+負荷をつないだ: 負荷が R2 と並列になり、出力電圧が設計より下がります (「負荷効果」。DC解析で確かめられます)	Load connected: the load is in parallel with R2 and the output drops below the design ("loading effect"; you can check it with DC analysis)
+R1 が断線 (オープン): 出力が 0 V になります。R2 が断線なら出力が入力電圧まで上がり、後ろの回路を壊すことがあります	R1 open: the output becomes 0 V. If R2 opens, the output rises to the input voltage and may damage the circuit after it
+R1 か R2 がショート: 出力が入力電圧または 0 V に張り付きます	R1 or R2 shorted: the output sticks to the input voltage or 0 V
+抵抗の誤差 (±5 % など) で出力もずれます。「温度とばらつき」のばらつき解析で何 V ずれるか見られます	Resistor tolerance (±5 %, etc.) shifts the output too. The variation analysis in "Temperature and variation" shows how many volts it shifts
+計算上のR	Calculated R
+使うR (E24)	R to use (E24)
+実際のカットオフ	Actual cutoff
+時定数 τ = RC	Time constant τ = RC
+カットオフ周波数 fc = 1 ÷ (2π × R × C)  (ここでゲインが約 0.7 倍 = −3 dB)	Cutoff frequency fc = 1 / (2π × R × C)  (gain is about 0.7 times = -3 dB here)
+抵抗は 1 kΩ〜1 MΩ に収めると扱いやすくなります。外れるときはコンデンサの値を変えて計算し直しましょう (R が小さいと前段の負担が大きく、大きいとノイズを拾いやすい)	Resistors between 1 kΩ and 1 MΩ are easy to work with. If outside, change the capacitor value and recalculate (a small R loads the previous stage heavily; a large R picks up noise easily)
+後ろにつなぐ回路の入力抵抗が R の 10 倍以上ないと、カットオフがずれます	If the input resistance of the next circuit is not 10 times R or more, the cutoff shifts
+ローパスは「R を直列・C を GND 側」、ハイパスは「C を直列・R を GND 側」です。同じ式でカットオフが決まります	Low-pass is "R in series, C to GND"; high-pass is "C in series, R to GND". The same formula sets the cutoff
+コンデンサの容量抜けや誤差 (セラミックは ±20 % や、電圧で容量が減るものもあります): カットオフが動きます	Capacitor capacitance loss or tolerance (ceramics can be ±20 %, and some lose capacitance with voltage): the cutoff moves
+C が断線: ローパスは何も減衰しません。C がショート: 出力が GND に落ちます	C open: a low-pass doesn't attenuate at all. C shorted: the output falls to GND
+電解コンデンサを逆向きにつなぐ: 発熱・破裂の恐れがあります。極性に注意	Electrolytic capacitor connected backwards: may overheat or burst. Mind the polarity
+出力電流	Output current
+入力電圧は出力電圧より高くする必要があります (78xx 系はあと 2〜3 V 以上の余裕が必要です)	The input voltage must be higher than the output voltage (78xx types need at least 2-3 V more)
+入力側コンデンサ	Input capacitor
+0.33 µF 以上 (セラミック 330n〜10µ)	0.33 µF or more (ceramic 330n-10µ)
+出力側コンデンサ	Output capacitor
+0.1 µF 以上 (100n。電解 10µ〜100µ を追加すると負荷変動に強い)	0.1 µF or more (100n; adding an electrolytic 10µ-100µ handles load changes better)
+レギュレータの発熱	Regulator heat
+効率 (出力 ÷ 入力)	Efficiency (output / input)
+リニアレギュレータは余った電圧を熱にします: 発熱 = (Vin − Vout) × I = ({vin} − {vout}) × {i_ma} mA = {p:.2} W	A linear regulator turns the extra voltage into heat: heat = (Vin - Vout) × I = ({vin} - {vout}) × {i_ma} mA = {p:.2} W
+コンデンサは、入力側は配線が長いときの発振防止、出力側は負荷が急に変わったときの電圧の揺れ抑制が目的です (データシート推奨値を優先)	The input capacitor prevents oscillation when the input wiring is long; the output capacitor reduces voltage swings when the load changes suddenly (prefer the datasheet's recommended values)
+入力と出力の差が 2 V 未満です。78xx 系は差が小さいと出力が下がります。低ドロップアウト (LDO) 品を検討してください	The input-output difference is under 2 V. 78xx types drop their output when the difference is small. Consider a low-dropout (LDO) part
+発熱が 1 W を超えます。TO-220 でも放熱板がほぼ必須です。入力電圧を下げる、スイッチングレギュレータにする、などを検討しましょう	Heat exceeds 1 W. Even a TO-220 almost always needs a heat sink. Consider lowering the input voltage or using a switching regulator
+発熱が 0.5 W を超えます。小さなパッケージでは熱くなるので、触って確かめましょう	Heat exceeds 0.5 W. Small packages get hot, so check by touch
+78xx の入力は 35 V が上限の品が多いです。データシートで最大入力電圧を確認してください	Many 78xx parts have a 35 V input limit. Check the maximum input voltage in the datasheet
+コンデンサはレギュレータの足のすぐ近くに置きます。基板では配線が長いと効果が減ります	Place the capacitors right next to the regulator pins. On a board, long tracks reduce their effect
+出力コンデンサが無い/遠い: 発振して出力がノイズだらけになることがあります	Output capacitor missing or far away: it may oscillate and the output fills with noise
+放熱が足りない: 熱保護で出力が止まる/不安定になる。長く使うと寿命が縮みます	Not enough heat sinking: thermal protection stops the output or makes it unstable. Long use shortens its life
+入力の電源より出力が高くなる (出力側に電源が残る): 逆流でレギュレータが壊れることがあります。大きな出力コンデンサがある場合は保護ダイオードを検討	Output higher than the input supply (supply left on the output side): reverse current may destroy the regulator. With a large output capacitor, consider a protection diode
+入出力の向きを逆にする: 壊れます。ピン配置 (IN・GND・OUT) を確認	Input and output swapped: it breaks. Check the pinout (IN, GND, OUT)
+熱抵抗 θja	Thermal resistance θja
+熱抵抗 θjc	Thermal resistance θjc
+入力電圧は出力電圧より高くしてください (差が熱になります)	Make the input voltage higher than the output voltage (the difference becomes heat)
+最大接合温度 ({t_jmax} ℃) は周囲温度 ({t_amb} ℃) より高くしてください	Make the maximum junction temperature ({t_jmax} ℃) higher than the ambient temperature ({t_amb} ℃)
+発熱 P	Heat P
+温度上昇 (放熱板なし)	Temperature rise (no heat sink)
+接合部の温度 Tj	Junction temperature Tj
+{tj:.0} ℃ (上限 {t_jmax:.0} ℃)	{tj:.0} ℃ (limit {t_jmax:.0} ℃)
+放熱板なしで使える電力	Power usable without a heat sink
+発熱 P = (Vin − Vout) × I = ({vin} − {vout}) × {i_ma} mA = {p:.2} W	Heat P = (Vin - Vout) × I = ({vin} - {vout}) × {i_ma} mA = {p:.2} W
+温度上昇 = P × θja = {p:.2} × {theta_ja} = {rise:.0} ℃。Tj = 周囲 {t_amb} ℃ + {rise:.0} = {tj:.0} ℃	Temperature rise = P × θja = {p:.2} × {theta_ja} = {rise:.0} ℃. Tj = ambient {t_amb} ℃ + {rise:.0} = {tj:.0} ℃
+余裕を見て、Tj を {tj_goal:.0} ℃ (上限の手前 2 割) 以下にしたい。放熱板なしで使えるのは P ≦ ({tj_goal:.0} − {t_amb}) ÷ {theta_ja} = {p_free:.2} W	For margin, keep Tj at or below {tj_goal:.0} ℃ (20% below the limit). Without a heat sink you can use P ≦ ({tj_goal:.0} - {t_amb}) / {theta_ja} = {p_free:.2} W
+判定	Verdict
+放熱板なしで使えます	Usable without a heat sink
+必要な放熱板の熱抵抗	Required heat sink thermal resistance
+{theta_sa:.1} ℃/W 以下	{theta_sa:.1} ℃/W or less
+放熱板をつけると、熱は 接合部 → ケース (θjc {theta_jc}) → 放熱板 (取り付け {theta_cs}) → 空気 の順に逃げる。全体 {theta_total:.1} ℃/W 以下にするので、放熱板は {theta_total:.1} − {theta_jc} − {theta_cs} = {theta_sa:.1} ℃/W 以下	With a heat sink, heat escapes junction -> case (θjc {theta_jc}) -> heat sink (mounting {theta_cs}) -> air. The total must be {theta_total:.1} ℃/W or less, so the heat sink must be {theta_total:.1} - {theta_jc} - {theta_cs} = {theta_sa:.1} ℃/W or less
+放熱板をつけても足りないほどの熱です。入力電圧を下げる、スイッチングレギュレータにする、電流を減らす、のほうが現実的です	Too much heat even with a heat sink. Lowering the input voltage, using a switching regulator, or reducing the current is more practical
+放熱板をつけても足りません	Not enough even with a heat sink
+熱が大きすぎて、放熱板でも間に合いません。入力電圧を下げる (差を小さくする)、スイッチングレギュレータにする、のどちらかです	Too much heat even for a heat sink. Either lower the input voltage (reduce the difference) or use a switching regulator
+放熱板なしだと Tj が上限 {t_jmax:.0} ℃ を超えます。多くのレギュレータは、熱保護で出力が止まります	Without a heat sink, Tj exceeds the {t_jmax:.0} ℃ limit. Most regulators stop their output by thermal protection
+θja は、基板の銅箔の広さや風で大きく変わります。データシートの値は目安として使い、実際は温度を測って確かめます	θja changes a lot with the board's copper area and airflow. Use the datasheet value as a guide and measure the actual temperature
+放熱が足りない: 熱保護で出力が止まる、止まっては復帰を繰り返す (出力が震える)。保護がない部品は壊れる	Not enough heat sinking: thermal protection stops the output, or it keeps stopping and recovering (the output shakes). Parts without protection break
+放熱板の取り付けがゆるい/グリスなし: θcs が大きくなって温度が下がらない	Heat sink loosely mounted / no thermal grease: θcs grows and the temperature doesn't drop
+周囲が高温 (箱の中): 周囲温度の分だけ Tj が上がる。25 ℃ でなく 40〜50 ℃ で見積もる	Hot surroundings (inside a box): Tj rises by the ambient temperature. Estimate with 40-50 ℃, not 25 ℃
+通常の電流	Normal current
+ショート時の抵抗	Resistance during a short
+守る部品の最大電流	Max current of the protected part
+通常の電流 {i_ma} mA に合う、ふつうのヒューズ (10 A まで) がありません。電流がとても大きいので、専用の部品とデータシートで選びます	No ordinary fuse (up to 10 A) fits the normal current of {i_ma} mA. The current is very large, so choose a dedicated part from its datasheet
+ヒューズの定格電流	Fuse current rating
+ヒューズの定格電圧	Fuse voltage rating
+{:.0} V 以上 (直流の定格で)	{:.0} V or more (DC rating)
+ショート時に流れる電流	Current during a short
+{i_short:.1} A (抵抗 {rf} Ω のとき)	{i_short:.1} A (with {rf} Ω resistance)
+ヒューズが切れる目安	When the fuse blows (guide)
+定格の 2 倍 = {:.2} A で、数秒以内	Within a few seconds at twice the rating = {:.2} A
+通常の電流 {i:.3} A は、ヒューズの定格の 7 割以下にする (熱と寿命のため)。定格 ≧ {i:.3} ÷ 0.7 = {need:.2} A。標準の値で、それ以上の最小は {rating} A	Keep the normal current {i:.3} A at 70% of the fuse rating or less (for heat and life). Rating ≧ {i:.3} / 0.7 = {need:.2} A. The smallest standard value above that is {rating} A
+ショート時の電流 = 電源電圧 ÷ 回路の抵抗 = {v} ÷ {rf} = {i_short:.1} A。この電流が流れ続けると、配線や部品が焼ける	Short-circuit current = supply voltage / circuit resistance = {v} / {rf} = {i_short:.1} A. If this current keeps flowing, wiring and parts burn
+ヒューズは、定格の約 2 倍の電流で数秒以内に切れる。守りたい部品の最大電流は {imax:.2} A	A fuse blows within a few seconds at about twice its rating. The max current of the part to protect is {imax:.2} A
+定格の 2 倍 ({:.2} A) が、守る部品の最大電流 ({imax:.2} A) を超えます。ヒューズが切れる前に、部品が壊れるかもしれません。もっと小さいヒューズか、電流を制限する抵抗を足しましょう	Twice the rating ({:.2} A) exceeds the max current of the protected part ({imax:.2} A). The part may break before the fuse blows. Use a smaller fuse or add a current-limiting resistor
+ヒューズの定格が、通常の電流よりかなり大きいです。小さな過電流では切れず、守れない範囲があります	The fuse rating is much larger than the normal current. Small overcurrents won't blow it, leaving a range it can't protect
+ショート時の電流 ({i_short:.1} A) が、ヒューズが切れる電流 ({:.2} A) に届きません。電源が弱い場合 (電池など) は、ヒューズが切れずに、部品が熱くなり続けます	The short-circuit current ({i_short:.1} A) doesn't reach the fuse's blowing current ({:.2} A). With a weak supply (a battery, etc.) the fuse won't blow and the parts keep heating up
+ヒューズの定格電圧は、使う電源の電圧以上にします。直流は、交流より切れたあとの火花 (アーク) が消えにくいので、直流の定格を確かめます	The fuse voltage rating must be at least the supply voltage. With DC, the spark (arc) after blowing is harder to put out than with AC, so check the DC rating
+切れたヒューズは、原因を直してから交換します。定格の大きいものや、針金で代用してはいけません	Replace a blown fuse only after fixing the cause. Never use a larger rating or a piece of wire instead
+ヒューズがない: ショートで電流が流れ続け、配線や部品が焼ける。発煙・発火のもと	No fuse: current keeps flowing in a short and wiring or parts burn. A cause of smoke and fire
+定格が大きすぎる: 配線や部品が先に焼ける	Rating too large: wiring or parts burn first
+定格が小さすぎる: 通常の動作 (起動時の突入電流) で切れる。遅く切れるタイプ (スローブロー) を検討	Rating too small: it blows in normal operation (inrush current at power-on). Consider a slow-blow type
+回復型 (ポリスイッチ) は、切れずに抵抗が上がって電流を減らす。繰り返し使えるが、切れる電流の精度は低い	A resettable fuse (polyswitch) doesn't open but raises its resistance to reduce the current. Reusable, but its trip current is not precise
+負荷電流	Load current
+入力電圧が 0.7 V 以下ではトランジスタが ON になりません。入力電圧を上げてください	With an input voltage of 0.7 V or less the transistor doesn't turn ON. Raise the input voltage
+ベース電流の目標	Target base current
+計算上のRb	Calculated Rb
+使うRb (E24)	Rb to use (E24)
+実際のベース電流	Actual base current
+スイッチとして使うので、確実に ON (飽和) させるため、増幅率を {beta:.0} 倍まで控えめに見て設計します (hFE が {hfe} でも、そこまで頼りません)	Since it's used as a switch, design with a conservative gain of {beta:.0} to make sure it turns fully ON (saturates) (even if hFE is {hfe}, don't rely on that much)
+ベース電流 Ib = Ic ÷ {beta:.0} = {:.2} mA	Base current Ib = Ic / {beta:.0} = {:.2} mA
+負荷電流が 100 mA を超えます。2N3904 などの小信号品では足りません。定格 (コレクタ電流) を確認するか、MOSFET を使いましょう	The load current exceeds 100 mA. Small-signal parts like 2N3904 are not enough. Check the collector current rating, or use a MOSFET
+リレーやモーターなどコイル負荷には、逆起電力を逃がすダイオードを負荷に並列に入れます (向きは電源側がカソード)	For coil loads like relays and motors, put a diode in parallel with the load to absorb the back EMF (cathode toward the supply)
+マイコンのピンから駆動するなら、ピンが出せる電流 (多くは 20 mA 前後) 以下に収めます	When driving from a microcontroller pin, stay within the current the pin can supply (often around 20 mA)
+Rb を入れない: ベースに大電流が流れ、トランジスタや駆動側のピンが壊れます	No Rb: a large current flows into the base and the transistor or the driving pin breaks
+Rb が大きすぎる: 十分に ON にならず (飽和しない)、トランジスタが熱くなり負荷も動きません	Rb too large: it doesn't turn fully ON (doesn't saturate), the transistor gets hot and the load doesn't run
+ベースがオープン (入力が浮く): ノイズで勝手に ON/OFF します。ベースと GND の間に 10k〜100k を入れると安定します	Base open (input floating): noise turns it ON/OFF by itself. 10k-100k between base and GND makes it stable
+コイル負荷のダイオードが無い: OFF 時の高電圧でトランジスタが壊れます	No diode on a coil load: the high voltage at turn-OFF breaks the transistor
+エミッタとコレクタを逆につなぐ: 増幅率が極端に低く、正しく動きません	Emitter and collector swapped: the gain is extremely low and it doesn't work properly
+トランスの出力 (実効値)	Transformer output (RMS)
+電源周波数	Mains frequency
+許容リップル	Allowed ripple
+許容リップル ({dv} V) が大きすぎます。直流の電圧 (約 {vmax:.1} V) の半分より小さくしてください	The allowed ripple ({dv} V) is too large. Make it less than half the DC voltage (about {vmax:.1} V)
+計算上の容量	Calculated capacitance
+使う容量 (E24, 切り上げ)	Capacitance to use (E24, rounded up)
+直流電圧の目安 (平均)	Approximate DC voltage (average)
+コンデンサの耐圧	Capacitor voltage rating
+{rating:.0} V 以上 (ピーク {vpk:.1} V の 1.25 倍以上)	{rating:.0} V or more (at least 1.25 times the peak {vpk:.1} V)
+ダイオードの逆耐圧	Diode reverse voltage rating
+{:.0} V 以上 (余裕を見て ピークの 2 倍以上)	{:.0} V or more (with margin, at least twice the peak)
+交流のピーク電圧 = 実効値 × √2 = {vrms} × 1.414 = {vpk:.1} V。ブリッジはダイオード2個ぶん (約 1.4 V) 下がるので、直流の最大は約 {vmax:.1} V	AC peak voltage = RMS × √2 = {vrms} × 1.414 = {vpk:.1} V. A bridge drops two diodes' worth (about 1.4 V), so the DC maximum is about {vmax:.1} V
+ブリッジ整流 (全波) のリップルの周波数は電源の 2 倍。山と山の間の時間は 1 ÷ (2 × f)	The ripple frequency of a bridge (full-wave) rectifier is twice the mains frequency. The time between peaks is 1 / (2 × f)
+その間、コンデンサだけが電流 I を出します: ΔV = I × 時間 ÷ C から C = I ÷ (2 × f × ΔV) = {i} ÷ (2 × {f} × {dv}) = {}F	During that time only the capacitor supplies the current I: from ΔV = I × time / C, C = I / (2 × f × ΔV) = {i} / (2 × {f} × {dv}) = {}F
+式は少し大きめに出ます (ダイオードが電流を流す時間があるため)。そのぶん安全側です	The formula gives a slightly large value (because the diodes conduct for part of the time). That is on the safe side
+容量が大きいので、電源を入れた瞬間に大きな突入電流が流れます。ヒューズが切れたりダイオードが傷んだりしないよう、ダイオードの定格 (サージ電流) とヒューズ (スローブロー) を確認しましょう	With a large capacitance, a large inrush current flows at power-on. So the fuse doesn't blow and the diodes aren't damaged, check the diode rating (surge current) and the fuse (slow-blow)
+リップル電流で電解コンデンサが発熱します。負荷電流 {i_ma} mA の 1.5〜2 倍のリップル電流を流せる品 (データシートの許容リップル電流) を選びます	Ripple current heats the electrolytic capacitor. Choose one that can carry 1.5-2 times the load current of {i_ma} mA as ripple current (the allowed ripple current in its datasheet)
+電解コンデンサには極性があります。+ を電圧の高いほうにつなぎます。逆につなぐと発熱・破裂のおそれがあります	Electrolytic capacitors have polarity. Connect + to the higher voltage. Connected backwards they may overheat or burst
+負荷がかかると、トランスの巻線抵抗の分だけ電圧は下がります (レッスン「交流を直流にする」で確認できます)。安定した電圧が必要なら、このあとにレギュレータを入れます	Under load, the voltage drops by the transformer's winding resistance (you can check it in the lesson "Turning AC into DC"). If you need a stable voltage, add a regulator after this
+ダイオード1個が断線: 半波整流になり、リップルが約 2 倍になります (周波数は電源と同じ)。	One diode open: it becomes half-wave rectification and the ripple about doubles (at the same frequency as the mains).
+ダイオード1個がショート: 交流の半周期ごとにトランスの出力が短絡され、大電流・発熱・ヒューズ断になります。	One diode shorted: the transformer output is shorted every half cycle, causing large current, heat and a blown fuse.
+コンデンサの容量抜け/ESR の増加 (電解コンデンサの劣化): リップルが増え、後ろの回路が誤動作します。古い機器で最初に壊れやすい部品です。	Capacitor capacitance loss / higher ESR (electrolytic aging): ripple increases and the following circuit misbehaves. Often the first part to fail in old equipment.
+コンデンサが断線: 平滑されず、脈流 (全波整流の山の連なり) のままになります。	Capacitor open: no smoothing; the output stays as pulsating DC (a train of full-wave humps).
+コンデンサのショート: 出力が 0 V になり、ダイオードとトランスに過電流が流れます。	Capacitor shorted: the output becomes 0 V and overcurrent flows through the diodes and transformer.
+電池の容量	Battery capacity
+負荷の電流	Load current
+電池の電圧	Battery voltage
+使える割合	Usable fraction
+使える割合は 100 % 以下にしてください	Make the usable fraction 100 % or less
+持ち時間の目安	Estimated run time
+{hours:.0} 時間 (約 {days:.1} 日)	{hours:.0} hours (about {days:.1} days)
+{hours:.1} 時間	{hours:.1} hours
+内部抵抗での電圧降下	Voltage drop across internal resistance
+電流を流したときの端子電圧	Terminal voltage under load
+電池が出す電力	Power from the battery
+持ち時間 = 容量 × 使える割合 ÷ 電流 = {cap} mAh × {pct} % ÷ {i} mA = {hours:.1} 時間	Run time = capacity × usable fraction / current = {cap} mAh × {pct} % / {i} mA = {hours:.1} hours
+内部抵抗の電圧降下 = 電流 × 内部抵抗 = {} A × {rint} Ω = {drop:.2} V (そのぶん、負荷にかかる電圧が下がります)	Internal resistance drop = current × internal resistance = {} A × {rint} Ω = {drop:.2} V (the load voltage drops by that much)
+電圧降下が電池の電圧の {:.0} % あります。内部抵抗の大きい電池 (コイン電池など) に、これだけの電流を流すのは向きません。電流を減らすか、内部抵抗の小さい電池 (アルカリ・リチウムイオン) にしましょう	The voltage drop is {:.0} % of the battery voltage. Batteries with high internal resistance (coin cells, etc.) are not suited to this much current. Reduce the current or use a battery with low internal resistance (alkaline, Li-ion)
+使える割合が高めです。電流が大きいほど、電池の容量は表示より減ります (データシートの容量は小さい電流のときの値)。余裕を見て 50〜80 % で見積もりましょう	The usable fraction is high. The larger the current, the less capacity than labeled (datasheet capacity is for small currents). Estimate 50-80 % for margin
+電池の電圧は、使うにつれて下がります。回路が動く最低電圧 (たとえば 3.3V のマイコンなら 2.7V 前後) になったら「空」と考えます。アルカリ電池は 1.5V → 0.9V、コイン電池は 3V → 2V、リチウムイオンは 4.2V → 3.0V が目安です	Battery voltage falls as it's used. Consider it "empty" when it reaches the lowest voltage the circuit runs at (e.g. about 2.7 V for a 3.3 V microcontroller). Typical: alkaline 1.5 V -> 0.9 V, coin cell 3 V -> 2 V, Li-ion 4.2 V -> 3.0 V
+低温では、容量が減って内部抵抗が増えます。屋外で使う機器は、余裕を多めに見ます	At low temperatures capacity falls and internal resistance rises. For outdoor devices, allow extra margin
+電池を逆向きに入れる: 多くの回路で動きません。ダイオードを入れて守ると、そのぶん電圧が下がります	Battery inserted backwards: many circuits won't work. A protection diode costs some voltage
+電池をショートする: 内部抵抗だけで電流が決まり、大きな電流で発熱・膨張・破裂のおそれがあります (特にリチウムイオン)。電池の近くにヒューズや保護回路を入れます	Battery shorted: only the internal resistance limits the current; the large current may cause heat, swelling or bursting (especially Li-ion). Put a fuse or protection circuit near the battery
+古い電池と新しい電池を混ぜる: 古いほうが先に空になり、逆に充電されたり、液漏れしたりします	Mixing old and new batteries: the old one empties first and may get reverse-charged or leak
+電池が弱ってきた: 内部抵抗が増え、負荷をつなぐと電圧が大きく下がって、無負荷では元気そうに見えます (電圧だけでは残量が分かりません)	Weak battery: internal resistance rises, so the voltage drops a lot under load but looks fine with no load (voltage alone doesn't tell the remaining charge)
+ツェナー電圧	Zener voltage
+負荷電流 (最大)	Load current (max)
+ツェナーに残す電流	Current left for the Zener
+入力電圧はツェナー電圧より高くしてください (差が数 V 以上あると安定します)	Make the input voltage higher than the Zener voltage (a difference of several V makes it stable)
+使う抵抗 (E24)	Resistor to use (E24)
+負荷最大のときツェナーに流れる電流	Zener current at maximum load
+負荷なしのときツェナーに流れる電流	Zener current with no load
+抵抗の発熱	Resistor heat
+ツェナーの発熱 (負荷なし)	Zener heat (no load)
+ツェナーダイオードは、逆向きに電圧をかけると一定の電圧 (ツェナー電圧) で電流を通します。抵抗で電流を制限して、その電圧を取り出します	A Zener diode conducts at a fixed voltage (the Zener voltage) when reverse biased. A resistor limits the current, and that voltage is taken off
+抵抗の電流 = 負荷電流 + ツェナーに残す電流。R = (Vin − Vz) ÷ (I負荷 + Iz) = ({vin} − {vz}) ÷ {} = {}	Resistor current = load current + current left for the Zener. R = (Vin - Vz) / (Iload + Iz) = ({vin} - {vz}) / {} = {}
+負荷を外すと、電流がすべてツェナーに流れます: {:.1} mA。そのときの発熱 = Vz × I = {:.0} mW	With the load removed, all current flows into the Zener: {:.1} mA. Heat then = Vz × I = {:.0} mW
+負荷が最大のとき、ツェナーに十分な電流が残りません。電圧がずれます。抵抗を小さくするか、入力電圧を上げましょう	At maximum load, not enough current is left for the Zener. The voltage shifts. Use a smaller resistor or raise the input voltage
+ツェナーの発熱が 0.4 W を超えます。一般的な 0.5 W 品では余裕が少ないので、1 W 品にするか、入力電圧を下げましょう	Zener heat exceeds 0.4 W. A typical 0.5 W part has little margin; use a 1 W part or lower the input voltage
+抵抗の発熱が 0.2 W を超えます。1/2 W 以上の抵抗にしましょう	Resistor heat exceeds 0.2 W. Use a 1/2 W or larger resistor
+ツェナーの電圧は電流や温度で少しずれます (数 %)。精度が必要なら、リニアレギュレータを使います	The Zener voltage shifts a little with current and temperature (a few %). If you need accuracy, use a linear regulator
+大きな電流には向きません。電流が大きく変わる負荷には、ツェナーの後ろにトランジスタを付けるか、レギュレータ IC を使います。電力のほとんどを抵抗とツェナーが熱にします	Not suited to large currents. For loads whose current changes a lot, add a transistor after the Zener or use a regulator IC. The resistor and Zener turn most of the power into heat
+ツェナーを逆向きにつなぐ: 普通のダイオードとして 0.7 V で導通し、出力が 0.7 V になります	Zener connected backwards: it conducts at 0.7 V like an ordinary diode and the output becomes 0.7 V
+ツェナーが断線: 電圧が安定せず、入力電圧 (または負荷で決まる電圧) が、そのまま負荷にかかります	Zener open: the voltage isn't regulated; the input voltage (or a voltage set by the load) goes straight to the load
+ツェナーがショート: 出力が 0 V になり、抵抗に大きな電流が流れて発熱します	Zener shorted: the output becomes 0 V and a large current heats the resistor
+抵抗が大きすぎる: 負荷が重いときにツェナーが働かず、電圧が下がります	Resistor too large: with a heavy load the Zener stops regulating and the voltage drops
+スイッチング周波数	Switching frequency
+コイル電流のリップル	Inductor current ripple
+出力電圧のリップル	Output voltage ripple
+出力電圧は入力電圧より低くしてください。降圧コンバータは、電圧を下げるだけです	Make the output voltage lower than the input voltage. A buck converter only lowers voltage
+デューティ比 (ONの割合)	Duty cycle (ON fraction)
+コイル (E24, 切り上げ)	Inductor (E24, rounded up)
+{}H  (計算上 {}H)	{}H  (calculated {}H)
+そのときのコイル電流の揺れ	Inductor current swing at that value
+コイルに流れる最大の電流	Peak inductor current
+{:.2} A  (コイルの定格はこれ以上に)	{:.2} A  (inductor rating at least this)
+出力コンデンサ (E24, 切り上げ)	Output capacitor (E24, rounded up)
+{}F 以上 (ESR の小さいもの)	{}F or more (low ESR)
+ダイオードの電流 (平均)	Diode current (average)
+デューティ比 D = Vout ÷ Vin = {vout} ÷ {vin} = {:.2}	Duty cycle D = Vout / Vin = {vout} / {vin} = {:.2}
+コイル: L = (Vin − Vout) × D ÷ (f × ΔI)。ΔI は出力電流の {:.0} % = {:.0} mA とすると、L = {:.1} V × {:.2} ÷ ({} Hz × {:.3} A) = {}H	Inductor: L = (Vin - Vout) × D / (f × ΔI). Taking ΔI as {:.0} % of the output current = {:.0} mA, L = {:.1} V × {:.2} / ({} Hz × {:.3} A) = {}H
+出力コンデンサ: C = ΔI ÷ (8 × f × ΔV) = {:.3} A ÷ (8 × {} Hz × {} mV) = {}F	Output capacitor: C = ΔI / (8 × f × ΔV) = {:.3} A / (8 × {} Hz × {} mV) = {}F
+コイル電流の揺れを小さくしすぎると、大きなコイルが必要で、応答も遅くなります。出力電流の 20〜40 % が定番です	Making the inductor current swing too small needs a large inductor and slows the response. 20-40 % of the output current is standard
+コイル電流の揺れが大きいと、軽負荷で電流が 0 まで下がる (不連続) ことがあり、リップルも増えます。20〜40 % が定番です	A large inductor current swing can make the current drop to 0 at light load (discontinuous mode) and increases ripple. 20-40 % is standard
+コイルは、最大の電流で飽和しない (インダクタンスが落ちない) 定格電流のものにします。飽和すると電流が急に増え、スイッチやダイオードを壊します	Choose an inductor whose current rating keeps it from saturating (losing inductance) at the peak current. If it saturates, the current jumps and breaks the switch or diode
+ダイオードはショットキー (順方向電圧が小さい) を使い、逆耐圧は入力電圧より十分高く、電流はコイルの最大電流以上にします。ダイオードの損失が、効率を左右します	Use a Schottky diode (low forward voltage), with a reverse rating well above the input voltage and a current rating at least the peak inductor current. Diode loss largely sets the efficiency
+出力コンデンサは、容量だけでなく ESR (内部抵抗) でもリップルが決まります (ESR × コイル電流の揺れ)。ESR の小さいセラミックか低ESRの電解を選びます	Output ripple depends not only on capacitance but also on ESR (internal resistance) (ESR × inductor current swing). Choose low-ESR ceramics or low-ESR electrolytics
+基板では、スイッチ → ダイオード → コイルの電流が速く流れる輪を小さくし、配線を短く太くします (ノイズと損失を減らします)	On the board, keep the fast current loop switch -> diode -> inductor small, with short, wide tracks (less noise and loss)
+ダイオードの付け忘れ/断線: コイルの電流の逃げ場がなくなり、スイッチがOFFになった瞬間に SW の電圧が跳ね上がって、IC が壊れます	Diode missing or open: the inductor current has nowhere to go, the SW voltage spikes the moment the switch turns OFF, and the IC breaks
+ダイオードを逆向きにつなぐ: 常に短絡のようになり、スイッチに大電流が流れます (発熱・破損)	Diode connected backwards: it acts like a constant short and a large current flows through the switch (heat, damage)
+コイルが飽和する・小さすぎる: 電流が大きく揺れ、ピーク電流で保護が働いたり、素子が壊れたりします	Inductor saturating or too small: the current swings a lot; the peak current trips the protection or breaks parts
+出力コンデンサの容量抜け (劣化): リップルが増え、出力が不安定になります。電解コンデンサは熱で劣化します	Output capacitor losing capacitance (aging): ripple increases and the output becomes unstable. Electrolytic capacitors age with heat
+フィードバック分圧の抵抗が断線: FB の電圧が分からず、出力が入力電圧近くまで上がることがあります (出力に付ける回路を壊します)	Feedback divider resistor open: the FB voltage is unknown and the output may rise close to the input voltage (damaging the circuits on the output)
+出力電圧は入力電圧より高くしてください。昇圧コンバータは、電圧を上げるだけです (下げるなら降圧コンバータ)	Make the output voltage higher than the input voltage. A boost converter only raises voltage (to lower it, use a buck converter)
+入力側に流れる平均電流	Average input current
+{:.2} A  (出力電流の {:.1} 倍)	{:.2} A  ({:.1} times the output current)
+{:.2} A  (コイル・スイッチの定格はこれ以上に)	{:.2} A  (inductor and switch ratings at least this)
+電力はほぼ保存されるので、入力電流は出力電流より大きくなります: Iin = Iout × Vout ÷ (Vin × 効率 {EFF}) = {:.2} A	Power is nearly conserved, so the input current is larger than the output current: Iin = Iout × Vout / (Vin × efficiency {EFF}) = {:.2} A
+デューティ比 D = 1 − Vin × 効率 ÷ Vout = 1 − {vin} × {EFF} ÷ {vout} = {:.2}	Duty cycle D = 1 - Vin × efficiency / Vout = 1 - {vin} × {EFF} / {vout} = {:.2}
+コイル: L = Vin × D ÷ (f × ΔI)。ΔI は入力電流の {:.0} % = {:.0} mA とすると、L = {}H	Inductor: L = Vin × D / (f × ΔI). Taking ΔI as {:.0} % of the input current = {:.0} mA, L = {}H
+出力コンデンサ: C = Iout × D ÷ (f × ΔV) = {:.3} A × {:.2} ÷ ({} Hz × {} mV) = {}F	Output capacitor: C = Iout × D / (f × ΔV) = {:.3} A × {:.2} / ({} Hz × {} mV) = {}F
+デューティ比が 80 % を超えます。昇圧の比が大きすぎて、効率が落ち、IC の限界を超えることがあります。昇圧の比は 4〜5 倍くらいまでが目安です	The duty cycle exceeds 80 %. The boost ratio is too large; efficiency falls and it may exceed the IC's limits. Keep the boost ratio up to about 4-5 times
+入力側の電流が 3 A を超えます。コイル・スイッチ・配線をそれに合わせて太くし、入力電源が出せるかも確認しましょう	The input current exceeds 3 A. Make the inductor, switch and wiring heavy enough, and check that the input supply can provide it
+昇圧は、入力電圧が出力に素通しになる経路 (コイル → ダイオード) があります。出力の負荷が短絡すると、電流を止められません。ヒューズや過電流保護を検討します	A boost converter has a path (inductor -> diode) that passes the input voltage straight to the output. If the output load shorts, the current can't be stopped. Consider a fuse or overcurrent protection
+電池で使うときは、電池の電圧が下がると入力電流が増えます。電池が減った状態 (電圧が低いとき) でも、計算が成り立つか確認します	On batteries, the input current rises as the battery voltage falls. Check that the calculation still holds with a low battery (low voltage)
+ダイオードはショットキーにし、逆耐圧は出力電圧より十分高くします。コイルは最大の電流で飽和しない定格のものを選びます	Use a Schottky diode with a reverse rating well above the output voltage. Choose an inductor rated not to saturate at the peak current
+コイルが飽和する・小さすぎる: 電流が急に増え、スイッチやダイオードを壊したり、IC の保護が働いて出力が不安定になったりします	Inductor saturating or too small: the current jumps, breaking the switch or diode, or the IC's protection trips and the output becomes unstable
+ダイオードの断線/逆向き: 出力に電気が出ません。コイルのエネルギーの逃げ場がなく、スイッチの電圧が跳ね上がって壊れます	Diode open or backwards: no output. The inductor's energy has nowhere to go, and the switch voltage spikes and breaks it
+出力コンデンサの容量抜け: リップルが増えます。昇圧は出力電流が途切れ途切れなので、降圧よりリップルが大きく出ます	Output capacitor losing capacitance: ripple increases. A boost's output current comes in pulses, so its ripple is larger than a buck's
+負荷を短絡する: 入力電源からコイルとダイオード経由で直接電流が流れ続けます (降圧と違い、スイッチを切っても止まりません)	Load shorted: current keeps flowing straight from the input supply through the inductor and diode (unlike a buck, turning the switch off doesn't stop it)
+ゲートの駆動電圧	Gate drive voltage
+しきい値電圧	Threshold voltage
+負荷の電源電圧	Load supply voltage
+ゲートの駆動電圧 ({vg} V) がしきい値 ({vth} V) 以下です。これではオンになりません。ゲートを上げるか、しきい値の低い (ロジックレベル) MOSFET を選びましょう	The gate drive voltage ({vg} V) is not above the threshold ({vth} V). It won't turn on. Raise the gate voltage or choose a low-threshold (logic-level) MOSFET
+オンのときのドレイン電圧の降下	Drain voltage drop when on
+MOSFET の発熱 (導通損失)	MOSFET heat (conduction loss)
+ゲート抵抗	Gate resistor
+100Ω 前後 (47〜330Ω)	About 100Ω (47-330Ω)
+ゲートのプルダウン抵抗	Gate pull-down resistor
+10kΩ (ゲートと GND の間)	10kΩ (between gate and GND)
+負荷にかかる電圧	Voltage across the load
+{:.2} V  (電源 {vl} V − 降下)	{:.2} V  (supply {vl} V - drop)
+オンのときの降下 = I × Rds(on) = {} A × {} Ω = {:.3} V	Drop when on = I × Rds(on) = {} A × {} Ω = {:.3} V
+発熱 = I² × Rds(on) = {} A² × {} Ω = {:.0} mW	Heat = I² × Rds(on) = {} A² × {} Ω = {:.0} mW
+ゲート抵抗: マイコンの出力と MOSFET のゲート容量の間に入れて、立ち上がりの電流と振動 (リンギング) を抑えます。小さな MOSFET なら 100Ω 前後で十分です	Gate resistor: placed between the microcontroller output and the MOSFET gate capacitance to limit the rising current and ringing. For a small MOSFET, about 100Ω is enough
+プルダウン: マイコンが起動する前や入力が浮いているときに、ゲートを 0V に引いて、勝手にオンにならないようにします	Pull-down: pulls the gate to 0V before the microcontroller starts or when the input floats, so it doesn't turn on by itself
+ゲート電圧 {vg} V がしきい値 {vth} V の 1.5 倍に届きません。しきい値のぎりぎりでは、オン抵抗がデータシートの値 (多くはゲート 4.5〜10 V のときの値) より大きくなり、発熱します。データシートの「Rds(on) at Vgs=…」の条件を確認します	The gate voltage {vg} V doesn't reach 1.5 times the threshold {vth} V. Just above the threshold, the on-resistance is larger than the datasheet value (usually given at a gate voltage of 4.5-10 V) and it heats up. Check the datasheet's "Rds(on) at Vgs=…" condition
+発熱が 0.25 W を超えます。小さな面実装・TO-92 では熱くなるので、オン抵抗の小さい MOSFET を選ぶか、放熱を考えます	Heat exceeds 0.25 W. Small SMD or TO-92 parts get hot; choose a MOSFET with lower on-resistance or plan for cooling
+誘導性の負荷 (リレー・モーター・ソレノイド) には、負荷と並列に、ダイオードを逆向きに入れます。スイッチが切れる瞬間に出る高い電圧で、MOSFET が壊れます	For inductive loads (relays, motors, solenoids), put a reverse diode in parallel with the load. The high voltage at the moment the switch opens breaks the MOSFET
+ドレインの最大電圧 Vds・連続電流 Id は、電源電圧と負荷電流に余裕を持たせます。MOSFET によっては、ボディダイオードで逆向きにも電流が流れます	Give the maximum drain voltage Vds and continuous current Id margin over the supply voltage and load current. Some MOSFETs also conduct in reverse through the body diode
+プルダウン抵抗がない: 起動時にゲートが浮き、負荷が勝手にオン/オフしたり、MOSFET が中途半端にオンになって発熱したりします	No pull-down resistor: the gate floats at startup, so the load turns on/off by itself, or the MOSFET turns half on and heats up
+ゲート電圧が足りない (しきい値ぎりぎり): 中途半端にオンになり、オン抵抗が大きいまま、大きく発熱します	Gate voltage too low (just at the threshold): it turns half on and heats up a lot with a high on-resistance
+誘導性負荷の保護ダイオードがない: オフの瞬間に出る高い電圧 (逆起電力) で、MOSFET が壊れます	No protection diode on an inductive load: the high voltage at turn-off (back EMF) breaks the MOSFET
+ゲートの静電気/過電圧: ゲートは薄い絶縁膜で、20V (多くの品の上限) を超えたり、静電気が加わったりすると壊れます	Static or overvoltage on the gate: the gate is a thin insulating film and breaks above 20V (the limit for most parts) or from static electricity
+帰還抵抗	Feedback resistor
+利得帯域幅積	Gain-bandwidth product
+入力の振幅	Input amplitude
+非反転増幅のゲインは 1 以上です (1 倍はボルテージフォロワで、R2 は不要です)。1 より小さくしたいときは、反転増幅か分圧を使います	A non-inverting amplifier's gain is 1 or more (gain 1 is a voltage follower, R2 not needed). For less than 1, use an inverting amplifier or a divider
+反転増幅: ゲイン −{g}	Inverting amplifier: gain −{g}
+非反転増幅: ゲイン {g}	Non-inverting amplifier: gain {g}
+帰還抵抗 Rf (E24)	Feedback resistor Rf (E24)
+もう一方の抵抗 R2 (E24)	Other resistor R2 (E24)
+不要 (R2 は外す)	Not needed (remove R2)
+実際のゲイン	Actual gain
+{}{:.2} 倍 ({:.1} dB)	{}{:.2} times ({:.1} dB)
+使える帯域 (−3dB)	Usable bandwidth (-3dB)
+約 {}Hz	About {}Hz
+出力の振幅	Output amplitude
+{:.2} V (電源 ±{vs} V)	{:.2} V (supply ±{vs} V)
+反転増幅: ゲイン = −Rf ÷ Rin。入力は Rin (= R2) を通して反転入力に入れ、Rf で出力から戻します。入力インピーダンスは Rin で決まるので、大きくしすぎないよう注意	Inverting amplifier: gain = −Rf / Rin. The input goes through Rin (= R2) into the inverting input, and Rf feeds back from the output. Rin sets the input impedance, so don't make it too large
+非反転増幅: ゲイン = 1 + Rf ÷ R2 (R2 は反転入力と GND の間)。入力は非反転入力に入れるので、入力インピーダンスが非常に大きくなります	Non-inverting amplifier: gain = 1 + Rf / R2 (R2 between the inverting input and GND). The input goes into the non-inverting input, so the input impedance is very large
+R2 = {}。E24 に丸めると {}、実際のゲインは {:.2} 倍	R2 = {}. Rounded to E24: {}, actual gain {:.2} times
+Rf ÷ ゲイン	Rf / gain
+Rf ÷ (ゲイン − 1)	Rf / (gain - 1)
+不要	Not needed
+帯域: 利得帯域幅積 ÷ ゲイン = {}Hz ÷ {:.1} = 約 {}Hz	Bandwidth: gain-bandwidth product / gain = {}Hz / {:.1} = about {}Hz
+出力の振幅 {vout:.2} V が、電源 ±{vs} V から 1.5 V ほど引いた範囲 (±{:.1} V くらい) を超えます。LM358 などの出力は電源まで届かず、波形の山が削れます (クリップ)。ゲインを下げるか、電源電圧を上げます	The output amplitude {vout:.2} V exceeds the range of about 1.5 V inside the supply ±{vs} V (about ±{:.1} V). The output of parts like LM358 doesn't reach the supply, so the waveform peaks get cut off (clipping). Lower the gain or raise the supply voltage
+使える帯域が 20 kHz より狭いです。音声を扱うなら、ゲインを分けて 2 段にするか、利得帯域幅積の大きいオペアンプにします	The usable bandwidth is narrower than 20 kHz. For audio, split the gain into 2 stages or use an op-amp with a larger gain-bandwidth product
+帰還抵抗は 1kΩ〜1MΩ くらいにします。小さすぎるとオペアンプの出力に負担がかかり、大きすぎると入力のバイアス電流・ノイズ・基板の容量の影響が出ます	Keep the feedback resistor around 1kΩ-1MΩ. Too small loads the op-amp output; too large brings in effects of input bias current, noise and board capacitance
+抵抗の許容差でゲインがずれます。精度が必要なら、許容差 1% の金属皮膜を使います (「温度とばらつき」で試せます)	Resistor tolerance shifts the gain. If you need accuracy, use 1% metal film resistors (try it in "Temperature and variation")
+帰還抵抗が断線: 帰還がなくなり、ゲインが非常に大きくなって、出力が電源に張り付きます	Feedback resistor open: there's no feedback, the gain becomes huge and the output sticks to the supply
+R2 が断線 (非反転): ゲインが 1 倍 (ボルテージフォロワ) になります	R2 open (non-inverting): the gain becomes 1 (voltage follower)
+電源の片方がない (片電源で両電源を前提に設計): 負の入力で出力が 0 V に張り付き、波形の半分が出ません	One supply missing (designed for dual supply but used on single): with negative input the output sticks at 0 V and half the waveform is missing
+容量性の負荷 (長いケーブルなど) をつなぐ: 位相余裕が減り、発振することがあります。出力に数十Ωの抵抗を直列に入れます	Capacitive load (long cable, etc.): phase margin falls and it may oscillate. Put a resistor of a few tens of Ω in series with the output
+# crates/sim-core/src/diagnose.rs
+GND記号を置いて、電源のマイナス側など基準にしたい点につないでください。電圧は「GNDからいくつ高いか」で決まるので、基準がないと計算できません	Place a GND symbol and connect it to the reference point, such as the supply's minus side. Voltages are "how much higher than GND", so they can't be calculated without a reference
+電圧源・コイルがループになっています ({})。電源を並列につないだり、電源とコイルだけで輪を作ると、電圧が決まらず矛盾します。間に小さな抵抗を入れるか、つなぎ方を見直しましょう	Voltage sources/inductors form a loop ({}). Sources in parallel, or a loop of only sources and inductors, leave the voltage undefined and contradict. Add a small resistor between them or check the connections
+方程式が解けません。電源を短絡していないか、部品の端子が同じネットにまとまっていないかを確認しましょう	The equations can't be solved. Check that no supply is shorted and that a part's pins aren't all on the same net
+電源が1つもありません。電圧源か電流源を置きましょう	There is no supply. Place a voltage source or current source
+{u} は 555 タイマーです。555 で作る点滅 (無安定) 回路は、出力が High と Low を行き来し続けるので、DC では 1 点に定まりません (これは異常ではありません)。「過渡解析を実行」で、コンデンサの充放電と出力の波形を見ましょう	{u} is a 555 timer. A 555 blinking (astable) circuit keeps switching its output between High and Low, so DC doesn't settle at one point (this is not an error). Use "Run transient analysis" to see the capacitor charging/discharging and the output waveform
+ダイオードやトランジスタなどの非線形部品は、計算を繰り返して答えを探します。向き(アノード/カソード、C/B/E)や、電流制限抵抗の有無を確認しましょう。抵抗なしで電源に直接つなぐと電流が無限大になって収束しません	Nonlinear parts like diodes and transistors are solved by repeating the calculation. Check their direction (anode/cathode, C/B/E) and whether a current-limiting resistor is present. Connected straight to a supply without a resistor, the current becomes infinite and it doesn't converge
+発振回路や、2つの状態を持つ回路(555・フリップフロップなど)は、DCでは1点に定まらないことがあります。「過渡解析」で時間を追って見てください	Oscillators and circuits with two states (555, flip-flops, etc.) may not settle at one point in DC. Follow them over time with "Transient analysis"
+部品の値が極端に大きい/小さくないか(0Ωや1TΩなど)を確認しましょう	Check that no part value is extremely large or small (0Ω, 1TΩ, etc.)
+# crates/sim-core/src/expr.rs
+式「{}」を読み取れません: {why} (「{near}」の付近)	Can't read the expression "{}": {why} (near "{near}")
+式が途中で終わっています	The expression ends too early
+閉じ括弧 ) がありません	Missing closing parenthesis )
+ここに置けない文字です	This character can't go here
+数値「{tok}」を読み取れません	Can't read the number "{tok}"
+「{id}」は使えません。電圧は V(ノード名)、電流は I(電源名)、時間は time、温度(℃)は temp と書きます	"{id}" can't be used. Write voltage as V(node name), current as I(source name), time as time, temperature (℃) as temp
+V(ノード) / V(ノード1,ノード2) / I(電源名) の形で書いてください	Write it as V(node) / V(node1,node2) / I(source name)
+引数は , で区切り、最後に ) で閉じます	Separate arguments with , and close with ) at the end
+tbl(x, x1,y1, x2,y2, ...) は、数値の点を 2 つ以上並べて書きます	tbl(x, x1,y1, x2,y2, ...) needs 2 or more numeric points
+関数「{id}」は使えません (abs min max limit sqrt exp ln pow tanh if step)	The function "{id}" can't be used (abs min max limit sqrt exp ln pow tanh if step)
+関数「{id}」の引数は {} 個必要です (いまは {} 個)	The function "{id}" needs {} arguments (now {})
+式の後ろに余分な文字があります	Extra characters after the expression
+# crates/sim-core/src/fault.rs
+値が {} 倍	Value × {}
+値が 1/{}	Value 1/{}
+逆向きにつなぐ	Connected backwards
+巻線のレアショート ({:.0}% の巻数)	Shorted turns in the winding ({:.0}% of turns)
+電源が切れる (0V)	Supply off (0V)
+電圧が {k} 倍	Voltage × {k}
+{} にピン {} がありません	{} has no pin {}
+{} を「{}」にしたとき	When {} is set to "{}"
+{head}、回路は DC では計算できませんでした ({e})。実機でも動作が定まらない、または大電流が流れる状態です	{head}, the circuit could not be calculated in DC ({e}). In reality too, the behavior is undefined or a large current flows
+{head}、DC の電圧と電流はほとんど変わりませんでした。	{head}, the DC voltages and currents hardly changed.
+この部品には DC では電流が流れていないためです (コンデンサは DC では元から断線扱い)。過渡解析・AC解析なら違いが見えます	This is because no DC current flows through this part (a capacitor is already treated as open in DC). Transient or AC analysis shows the difference
+コイルは DC では元からショート扱いなので、レアショートで変わるのはインダクタンス(電流の立ち上がり)です。過渡解析か「連鎖故障を追う」で見えます	An inductor is already treated as a short in DC, so shorted turns change only the inductance (how the current rises). See it with transient analysis or "Follow cascading faults"
+コイルは DC では元からショート扱いです。過渡解析・AC解析なら違いが見えます	An inductor is already treated as a short in DC. Transient or AC analysis shows the difference
+{head}、次のように変わりました:	{head}, these changed:
+ノード {n}: {} → {} ({:+.2} V)	Node {n}: {} -> {} ({:+.2} V)
+{}: 電流 {} → {}	{}: current {} -> {}
+、消費電力 {:.0} mW → {:.0} mW	, power {:.0} mW -> {:.0} mW
+ (1W 超: 焼損・発煙のおそれ)	 (over 1W: may burn or smoke)
+ (一般的な 1/4 W 抵抗の定格を超えます)	 (exceeds the rating of a typical 1/4 W resistor)
+ (電流が止まります)	 (current stops)
+安全性: 危険。DC では状態が定まりません。実機では大電流が流れたり、部品が壊れたりするおそれがあります	Safety: dangerous. The state is undefined in DC. In reality a large current may flow or parts may break
+対策: 電源にヒューズや電流制限をつけ、故障しても電流が上がりきらないようにします	Fix: add a fuse or current limit to the supply so the current can't run away in a fault
+安全性: 定格を超える部品は新しく出ませんでした (壊れても部品は無事な範囲です)	Safety: no new parts over their rating (the parts survive the fault)
+安全性: 注意。余裕がなくなる部品があります	Safety: caution. Some parts lose their margin
+安全性: 危険。定格を超える部品があり、焼損・発煙のおそれがあります	Safety: dangerous. Some parts are over their rating and may burn or smoke
+・{}	- {}
+電源側にヒューズを入れると、故障のときに電流を切って被害を止められます (レッスン「保護回路」)	A fuse on the supply side cuts the current in a fault and limits the damage (lesson "Protection circuits")
+ノード {node} が見つかりません	Node {node} not found
+{} を「{}」にしたときの V({})	V({@3}) when {@1} is set to "{@2}"
+{head}: 過渡解析が計算できませんでした ({e})。大電流が流れるか、動作が定まらない状態です	{head}: the transient analysis could not be calculated ({e}). A large current flows or the behavior is undefined
+{head}: 範囲内の波形が短くて測れませんでした。終了時間を長くしてください	{head}: the waveform in the range is too short to measure. Make the end time longer
+{head} (終了時間の後半での値)	{head} (values in the second half up to the end time)
+平均電圧: {} → {}	Average voltage: {} -> {}
+ ({:.1} 倍)	 ({:.1} times)
+振幅 (p-p): {}V → {}V{ratio}	Amplitude (p-p): {}V -> {}V{ratio}
+周波数: {}Hz → {}Hz	Frequency: {}Hz -> {}Hz
+周期的な波形 ({}Hz) が見られなくなりました	The periodic waveform ({}Hz) is no longer seen
+周期的な波形 ({}Hz) が現れました	A periodic waveform ({}Hz) appeared
+デューティ比: {:.0} % → {:.0} %	Duty cycle: {:.0} % -> {:.0} %
+この点の波形はほとんど変わりませんでした。別の点を見るか、解析の範囲を変えてみましょう	The waveform at this point hardly changed. Look at another point or change the analysis range
+{} を「{}」にしたときの V({}) の周波数特性	Frequency response of V({@3}) when {@1} is set to "{@2}"
+{head}: AC解析が計算できませんでした ({e})	{head}: the AC analysis could not be calculated ({e})
+最大ゲイン: {hp:.1} dB ({}) → {fp:.1} dB ({})	Max gain: {hp:.1} dB ({}) -> {fp:.1} dB ({})
+ゲインが最大になる周波数: {} → {}	Frequency of max gain: {} -> {}
+-3dB点 (カットオフ): {} → {}	-3dB point (cutoff): {} -> {}
+-3dB点 ({}) が範囲内になくなりました (ゲインが下がらない、または全域で低い)	The -3dB point ({}) is no longer in range (the gain doesn't drop, or it's low everywhere)
+-3dB点が {} に現れました	A -3dB point appeared at {}
+低い周波数 ({}) のゲイン: {a:.1} dB → {b:.1} dB	Gain at low frequency ({}): {a:.1} dB -> {b:.1} dB
+高い周波数 ({}) のゲイン: {a:.1} dB → {b:.1} dB	Gain at high frequency ({}): {a:.1} dB -> {b:.1} dB
+周波数特性はほとんど変わりませんでした。別の点を見るか、周波数の範囲を変えてみましょう	The frequency response hardly changed. Look at another point or change the frequency range
+# crates/sim-core/src/from_schematic.rs
+抵抗値は正の値にしてください	Resistance must be a positive value
+{k} はこの部品では使えません (使えるもの: {})	{k} can't be used with this part (allowed: {})
+BIAS (DCバイアスで下がる容量) は 0〜95 (%) で入れてください (例: BIAS=60)	Enter BIAS (capacitance lost to DC bias) as 0-95 (%) (e.g. BIAS=60)
+電源の値「{}」: {m}	Supply value "{}": {m}
+{r} ({}): シミュレーションモデルがないため無視します	{r} ({}): ignored because it has no simulation model

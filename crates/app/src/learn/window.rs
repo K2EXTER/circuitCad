@@ -11,7 +11,7 @@ pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome>
         ui.label(spaced("最初のレッスンは、描いてある回路を動かして見るところから。自分で部品を置いて描くのは、そのあとのレッスンからです。").color(NOTE));
         ui.add_space(6.0);
         if let Some((next, action)) = next_item(first_path(), progress).and_then(|i| item_action(i).map(|a| (i, a))) {
-            let button = egui::Button::new(egui::RichText::new(i18n::trf!("▶ 最初のレッスンを始める: {}", next.title)).strong());
+            let button = egui::Button::new(egui::RichText::new(i18n::trf!("▶ 最初のレッスンを始める: {}", i18n::tr(next.title))).strong());
             if ui.add(button).on_hover_text(i18n::tr("画面の案内にそって、描いてある回路を解析して、電圧を測ります (部品を置いて配線するのは、このあとのレッスンから)")).clicked() {
                 choice = Some(Welcome::Start(action));
             }
@@ -64,15 +64,15 @@ impl LearnWindow {
                 let tabs: Vec<(usize, &str, &str)> = PATHS.iter().enumerate().map(|(k, p)| (k, p.title, "この学習パスに切り替えます (進み具合は、どのパスでも同じレッスンなら共通です)")).collect();
                 crate::widgets::tab_bar(ui, &mut chosen, &tabs);
             }
-            ui.heading(path.title);
+            ui.heading(i18n::tr(path.title));
             ui.label(spaced(path.goal));
             let (finished, available, all) = summary(path, progress);
-            ui.add(egui::ProgressBar::new(finished as f32 / available.max(1) as f32).text(if all > available { format!("完了 {finished} / {available} レッスン (準備中 {} 件)", all - available) } else { format!("完了 {finished} / {available} レッスン") }));
+            ui.add(egui::ProgressBar::new(finished as f32 / available.max(1) as f32).text(if all > available { i18n::trf!("完了 {finished} / {available} レッスン (準備中 {} 件)", all - available) } else { i18n::trf!("完了 {finished} / {available} レッスン") }));
             let next_ids: Vec<&str> = recommended(path, progress).iter().map(|i| i.id).collect();
             if let Some(next) = next_item(path, progress) {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(i18n::tr("次のおすすめ:"));
-                    ui.colored_label(crate::theme::WARN, next.title);
+                    ui.colored_label(crate::theme::WARN, i18n::tr(next.title));
                     if next_ids.len() > 1 {
                         ui.label(i18n::trf!("(ほかに {} 件、すぐ学べます)", next_ids.len() - 1));
                     }
@@ -90,7 +90,7 @@ impl LearnWindow {
                 ui.label(spaced("レッスンで基本を済ませたあと、慣れてきたら試せる機能です。順番も、使うかどうかも自由です").color(NOTE));
                 for s in NEXT_STEPS {
                     ui.add_space(4.0);
-                    ui.strong(s.title);
+                    ui.strong(i18n::tr(s.title));
                     ui.indent(("next_step", s.title), |ui| {
                         ui.label(spaced(s.about));
                         ui.label(spaced(&format!("場所: {}", s.where_)).color(NOTE));
@@ -118,7 +118,7 @@ impl LearnWindow {
             }
             for stage in path.stages {
                 ui.add_space(8.0);
-                ui.strong(stage.name);
+                ui.strong(i18n::tr(stage.name));
                 ui.label(spaced(stage.about).color(NOTE));
                 for item in stage.items {
                     let done = item_done(progress, item);
@@ -130,7 +130,7 @@ impl LearnWindow {
                     };
                     ui.horizontal_wrapped(|ui| {
                         ui.colored_label(color, mark);
-                        let title = egui::RichText::new(item.title).strong();
+                        let title = egui::RichText::new(i18n::tr(item.title)).strong();
                         ui.label(if item.kind == Kind::Planned { title.color(Color32::from_gray(130)) } else { title });
                         if item.kind == Kind::Planned {
                             ui.label(egui::RichText::new(i18n::tr("(準備中)")).weak());
@@ -150,14 +150,14 @@ impl LearnWindow {
                             }
                         }
                         if item.real.is_some() {
-                            ui.colored_label(crate::theme::INFO, i18n::tr("[実験あり]")).on_hover_text(item.real.unwrap_or_default());
+                            ui.colored_label(crate::theme::INFO, i18n::tr("[実験あり]")).on_hover_text(i18n::tr(item.real.unwrap_or_default()));
                         }
                     });
                     ui.indent(("path_item", path.id, item.id), |ui| {
                         ui.label(spaced(item.about).color(NOTE));
                         if item.requires.is_some_and(|r| !r.is_empty()) {
-                            let names: Vec<&str> = requirements(path, item).iter().map(|p| p.title).collect();
-                            ui.label(spaced(&format!("先に済ませると分かりやすい: {}", names.join("、"))).color(NOTE));
+                            let names: Vec<&str> = requirements(path, item).iter().map(|p| i18n::tr(p.title)).collect();
+                            ui.label(spaced(&format!("先に済ませると分かりやすい: {}", names.join(if i18n::is_ja() { "、" } else { ", " }))).color(NOTE));
                         }
                     });
                     ui.add_space(6.0);
@@ -246,7 +246,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         painter.rect_filled(boxes[k], 4.0, fill);
         let width = if is_recommended { 3.5 } else if next_ids.contains(&item.id) { 2.0 } else { 1.0 };
         painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(width, if is_recommended { crate::theme::HIGHLIGHT } else { stroke }), egui::StrokeKind::Inside);
-        let galley = painter.layout(item.title.to_string(), egui::FontId::proportional(14.0), text, W - 10.0);
+        let galley = painter.layout(i18n::tr(item.title).to_string(), egui::FontId::proportional(14.0), text, W - 10.0);
         painter.galley(boxes[k].min + egui::vec2(5.0, 4.0), galley, text);
         if is_recommended {
             // a badge on the top edge: this is the one to take next
@@ -254,8 +254,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
             ui.painter().rect_filled(badge, 9.0, crate::theme::HIGHLIGHT);
             ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, i18n::tr("★ 次はこれ"), egui::FontId::proportional(12.0), Color32::BLACK);
         }
-        let response = response.on_hover_text(if item.kind == Kind::Planned { format!("{}
-(準備中)", item.about) } else { item.about.to_string() });
+        let response = response.on_hover_text(if item.kind == Kind::Planned { format!("{}\n{}", i18n::tr(item.about), i18n::tr("(準備中)")) } else { i18n::tr(item.about).to_string() });
         if response.clicked() {
             action = item_action(item);
         }

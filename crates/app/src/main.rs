@@ -338,7 +338,7 @@ impl eframe::App for App {
                     }
                     ui.menu_button(i18n::tr("サンプル回路を開く"), |ui| {
                         for s in samples::SAMPLES {
-                            if ui.button(s.title).on_hover_text(s.about).clicked() {
+                            if ui.button(i18n::tr(s.title)).on_hover_text(i18n::tr(s.about)).clicked() {
                                 if self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") && self.sch.open_sample(s.title, s.json) {
                                     self.mode = Mode::Schematic;
                                 }

@@ -305,11 +305,11 @@ impl Help {
             ui.small(i18n::tr("(F1 でいつでも開けます)"));
             for (heading, rows) in page(current) {
                 ui.add_space(8.0);
-                ui.heading(*heading);
+                ui.heading(i18n::tr(heading));
                 egui::Grid::new(("help", current as u8, *heading)).num_columns(2).min_col_width(210.0).spacing([16.0, 8.0]).striped(true).show(ui, |ui| {
                     for (op, what) in *rows {
-                        ui.label(egui::RichText::new(*op).strong());
-                        ui.add(egui::Label::new(*what).wrap());
+                        ui.label(egui::RichText::new(i18n::tr(op)).strong());
+                        ui.add(egui::Label::new(i18n::tr(what)).wrap());
                         ui.end_row();
                     }
                 });

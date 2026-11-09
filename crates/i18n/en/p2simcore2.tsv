@@ -1,0 +1,281 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/sim-core/src/impedance.rs
+「{t}」という名前のネットがありません (ネット: {})	There is no net named "{t}" (nets: {})
+見るネットと基準のネットが同じです	The net to watch and the reference net are the same
+取り除く部品「{r}」がありません	The part to remove, "{r}", does not exist
+# crates/sim-core/src/loopgain.rs
+内部エラー: 注入の電流が結果にありません	Internal error: the injected current is missing from the results
+ループを切る部品「{element}」がありません	The part to break the loop at, "{element}", does not exist
+「{element}」は切れる部品ではありません。ループの途中にある、抵抗・コンデンサ・コイルを選んでください (帰還の抵抗が一番かんたんです)	"{element}" is not a part the loop can be broken at. Choose a resistor, capacitor or inductor inside the loop (the feedback resistor is easiest)
+「{element}」の両端が同じネットです。ループの途中にある部品を選んでください	Both ends of "{element}" are on the same net. Choose a part inside the loop
+ループゲインが 1 を超えません。切った部品がループの途中にないか、向きが逆かもしれません (出力側のネットを指定して試してください)	The loop gain never goes above 1. The part you broke may not be inside the loop, or the direction may be reversed (try giving the output-side net)
+# crates/sim-core/src/montecarlo.rs
+利得が -3dB に下がる周波数が、掃引の範囲内にありません。周波数の範囲を広げてください	The frequency where the gain drops by 3 dB is outside the sweep range. Widen the frequency range
+波形が 10% 〜 90% を通過していません	The waveform does not pass through 10% to 90%
+回数は 1〜20000 にしてください	Set the number of runs to 1 to 20000
+許容差は 0〜100 % 未満にしてください	Set the tolerance to at least 0 and less than 100 %
+ばらつかせる部品 (抵抗・コンデンサ・コイル) がありません。許容差を 0 より大きくしてください	There are no parts to vary (resistors, capacitors, inductors). Set a tolerance greater than 0
+# crates/sim-core/src/noise.rs
+出力ノード {t} が見つかりません	Output node {t} not found
+温度は絶対零度より高くしてください	Set the temperature above absolute zero
+出力ノードが GND と同じです	The output node is the same as GND
+入力ソース {name} が見つかりません (V/I 電源の名前を指定)	Input source {name} not found (give the name of a V/I source)
+コレクタ電流のショット雑音	Collector current shot noise
+電流は電子の粒の流れなので、粒が不規則に届くぶんだけ揺らぎます。大きさは 2q·Ic (q: 電子の電荷)。	Current is a flow of discrete electrons, so it fluctuates because they arrive at random. Its size is 2q·Ic (q: electron charge).
+コレクタ電流を小さくすると減ります。ただし電流を減らすと利得も下がるので、バランスを見ます。	It goes down with a smaller collector current. But less current also means less gain, so find a balance.
+ベース電流のショット雑音	Base current shot noise
+ベースに流れ込む電流の粒状性による揺らぎ。大きさは 2q·Ib。ベース側の抵抗が大きいと、この電流雑音が電圧に変わって目立ちます。	Fluctuation from the discrete nature of the current flowing into the base. Its size is 2q·Ib. With a large resistance on the base side, this current noise turns into a noticeable voltage.
+ベースを駆動する抵抗を小さくするか、hFE の大きいトランジスタを使うと減ります。	Use a smaller resistor to drive the base, or a transistor with a higher hFE.
+ベース抵抗の熱雑音	Base resistance thermal noise
+トランジスタ内部のベース抵抗 rb の熱雑音 (4kT·rb)。信号源の抵抗が小さい低雑音アンプで効いてきます。	Thermal noise of the transistor's internal base resistance rb (4kT·rb). It matters in low-noise amplifiers with a low source resistance.
+rb の小さい品種を選びます。信号源抵抗が大きい回路では、ほとんど影響しません。	Choose a type with a small rb. In circuits with a high source resistance it has almost no effect.
+ダイオードの直列抵抗の熱雑音	Diode series resistance thermal noise
+ダイオード内部の直列抵抗 rs の熱雑音 (4kT·rs)。	Thermal noise of the diode's internal series resistance rs (4kT·rs).
+rs の小さいダイオードを選びます。	Choose a diode with a small rs.
+抵抗の熱雑音 (ジョンソン雑音)	Resistor thermal noise (Johnson noise)
+抵抗の中の電子は熱で絶えず動き回り、電圧が揺らぎます。電流が流れていなくても出ます。電圧の密度は √(4kT·R) で、周波数によらず一定 (白色雑音)。	Electrons inside a resistor keep moving because of heat, so the voltage fluctuates. It appears even with no current. The voltage density is √(4kT·R) and is the same at all frequencies (white noise).
+抵抗値を小さくすると減ります (4倍の抵抗値で雑音は2倍)。温度を下げても減ります。	It goes down with a smaller resistance (4x the resistance gives 2x the noise). Lowering the temperature also helps.
+ダイオードのショット雑音	Diode shot noise
+接合を通る電流の粒状性による揺らぎ。大きさは 2q·Id で、電流が大きいほど増えます。	Fluctuation from the discrete nature of the current through the junction. Its size is 2q·Id and grows with the current.
+順方向電流を小さくすると減ります。	It goes down with a smaller forward current.
+スイッチの抵抗の熱雑音	Switch resistance thermal noise
+オン抵抗(オフのときは大きな抵抗)の熱雑音。導通しているスイッチは抵抗と同じく 4kT·R の雑音を出します。	Thermal noise of the on-resistance (a large resistance when off). A conducting switch makes 4kT·R noise just like a resistor.
+オン抵抗を小さくすると減ります。	It goes down with a smaller on-resistance.
+MOSFET チャネルの熱雑音	MOSFET channel thermal noise
+チャネルを流れる電子の熱運動による揺らぎ。飽和領域では 4kT·(2/3)·gm、線形領域では 4kT·gds。	Fluctuation from the thermal motion of electrons in the channel. 4kT·(2/3)·gm in saturation, 4kT·gds in the linear region.
+gm を小さくすれば雑音は減りますが、利得も下がります。	A smaller gm reduces the noise, but also the gain.
+雑音源	Noise source
+この素子のノイズ源です。	The noise source of this device.
+# crates/sim-core/src/paramsweep.rs
+値の数は 1〜{MAX_RUNS} にしてください	Set the number of values to 1 to {MAX_RUNS}
+部品 {} が見つかりません。部品番号 (R1 など) を確かめてください	Part {} not found. Check the reference designator (R1 etc.)
+{} の値「{}」は数値ではないのでスイープできません。抵抗・コンデンサ・コイルなど、値が数字の部品を選んでください	The value "{@2}" of {@1} is not a number, so it cannot be swept. Choose a part whose value is a number, such as a resistor, capacitor or inductor
+ノード {} が見つかりません	Node {} not found
+どの値でも計算できませんでした: {why}	No value could be calculated: {why}
+# crates/sim-core/src/polezero.rs
+極と零を求めるには、周波数の点が 8 点以上要ります (点数/デケードを増やしてください)	Finding poles and zeros needs at least 8 frequency points (increase the points per decade)
+応答がすべて 0 です。入力と出力のネットを確かめてください	The response is all 0. Check the input and output nets
+当てはめに失敗しました (周波数の範囲を狭めるか、点数を増やしてください)	Fitting failed (narrow the frequency range or add more points)
+ネット {name} が見つかりません	Net {name} not found
+# crates/sim-core/src/ratings.rs
+{} の電圧 {:.1} V は、最大定格 {} V の {:.0}% です{}	The voltage on {} is {:.1} V; against its max rating of {} V that is {:.0}%{}
+ (超えています)	 (over)
+ (余裕が少ないです)	 (little margin)
+電圧には、最大定格の 8 割以下に収まるように余裕をとります。電源電圧を下げるか、耐圧の大きい部品を選びます。	Keep voltages at 80% of the max rating or less. Lower the supply voltage or choose a part with a higher voltage rating.
+{} の電流 {:.0} mA は、最大定格 {:.0} mA の {:.0}% です{}	The current in {} is {:.0} mA; against its max rating of {:.0} mA that is {:.0}%{}
+電流には、最大定格の 8 割以下に収まるように余裕をとります。負荷の電流を減らすか、電流の大きい部品を選びます。	Keep currents at 80% of the max rating or less. Reduce the load current or choose a part rated for more current.
+目安を超えています	over the limit
+余裕が少ないです	little margin
+最大定格	max rating
+この形の目安	typical limit for this package
+抵抗値を大きくして電流を減らすか、大きい形(1206 / 2512 や 1/2W 品)に変えます。発熱は P = V × I = I² × R で決まります	Use a higher resistance to reduce the current, or a bigger package (1206 / 2512 or 1/2W). The heat is P = V × I = I² × R
+電圧差を減らす(入力電圧を下げる / 電流を減らす)か、放熱板つきの形(TO-220 など)にします。LDO やリニアレギュレータは (入力 − 出力) × 電流 が熱になります	Reduce the voltage drop (lower the input voltage / reduce the current), or use a package with a heatsink (TO-220 etc.). In an LDO or linear regulator, (input − output) × current becomes heat
+{} ({fp}) の消費電力は {:.0} mW で、{basis} {:.0} mW に対して{word}	{} ({fp}) dissipates {:.0} mW against the {basis} of {:.0} mW: {word}
+{hint}。実際の定格はデータシートで確認してください。	{hint}. Check the actual rating in the datasheet.
+{} の電流が {:.1} mA あります。一般的な LED は 20 mA 前後が上限です	{} carries {:.1} mA. Typical LEDs top out around 20 mA
+電流制限抵抗を大きくします。R = (電源電圧 − LED の順電圧) ÷ 目標電流 で決めます (「学ぶ → 値の決め方」が使えます)。	Use a larger current-limiting resistor. R = (supply voltage − LED forward voltage) ÷ target current ("Learn → How to choose values" can help).
+{} に逆向きに {:.1} V かかっています。LED の逆耐圧は 5 V 程度です	{} has {:.1} V across it in reverse. An LED can only take about 5 V in reverse
+向きを確認するか、逆電圧がかかる回路では保護ダイオードを並べます。	Check the direction, or in circuits with reverse voltage, add a protection diode in parallel.
+{} に {:.1} V かかっています。小さいチップコンデンサの耐圧は 16〜50 V 程度が多いです	{} has {:.1} V across it. Small chip capacitors are often rated for only 16 to 50 V
+かかる電圧の 2 倍ほどの耐圧がある品を選びます。電解コンデンサは極性も確認してください。	Choose a part rated for about twice the applied voltage. For electrolytic capacitors, also check the polarity.
+# crates/sim-core/src/ripple.rs
+{} のリップル電流 {}	Ripple current in {}: {}
+ は、定格 {} の {:.0}% です	 vs. rating {}: {:.0}%
+リップル電流は、コンデンサの中で熱になって寿命を縮めます。容量の大きい部品・ESR の小さい部品・定格リップル電流の大きい部品を選ぶか、同じ部品を並列にして電流を分けます。	Ripple current turns into heat inside the capacitor and shortens its life. Choose a larger capacitance, a lower ESR or a higher ripple current rating, or put identical parts in parallel to share the current.
+{} の推定寿命: {}約 {:.0} 時間 (約 {:.1} 年)。内部の温度 {:.0}℃ で見積もりました	Estimated life of {}: {}about {:.0} hours (about {:.1} years). Estimated at an internal temperature of {:.0}℃
+15 年以上 (上限) 	15+ years (limit) 
+# crates/sim-core/src/selfheat.rs
+{} の温度が 1000 ℃ を超えます (電力 {:.1} W × 熱抵抗 {} K/W)。電流を減らすか、熱抵抗の小さい部品にしてください	{} would exceed 1000 ℃ ({:.1} W × thermal resistance {} K/W). Reduce the current or use a part with a lower thermal resistance
+# crates/sim-core/src/spec.rs
+DC電圧	DC voltage
+DC電流	DC current
+平均値 (過渡の後半)	Average (late transient)
+リップル p-p (過渡の後半)	Ripple p-p (late transient)
+最大値 (過渡)	Maximum (transient)
+最小値 (過渡)	Minimum (transient)
+-3dB点 (AC)	-3dB point (AC)
+ゲイン (AC・ある周波数)	Gain (AC, at a frequency)
+位相余裕 (AC)	Phase margin (AC)
+DC電圧 (最悪ケース)	DC voltage (worst case)
+-3dB点 (最悪ケース)	-3dB point (worst case)
+最悪ケース解析 (回路図から直接。許容差は「温度とばらつき」の欄)	Worst-case analysis (straight from the schematic; tolerances are in the "Temperature and variation" section)
+下限より {} 小さい	{} below the lower limit
+上限より {} 大きい	{} above the upper limit
+{what}を実行すると測れます	Run {what} to measure this
+最悪ケースは回路図から直接計算します (画面の表と、CLI の `worst` コマンド)	The worst case is calculated straight from the schematic (the table on screen, and the CLI `worst` command)
+ノード {} が結果にありません	Node {} is not in the results
+部品 {} が結果にありません	Part {} is not in the results
+信号 {} が結果にありません (波形の一覧で選べる名前です)	Signal {} is not in the results (use a name from the waveform list)
+波形の点が足りず測れません	Not enough waveform points to measure
+信号 {} が結果にありません	Signal {} is not in the results
+-3dB点が計算範囲の中にありません	The -3dB point is outside the calculated range
+その周波数が計算範囲の外です	That frequency is outside the calculated range
+ゲインが 0dB を横切る点がなく、位相余裕を求められません	The gain never crosses 0 dB, so the phase margin cannot be found
+最悪ケース {} 〜 {}	Worst case {} to {}
+{range} (最小が{lo_note})	{range} (min is {lo_note})
+{range} (最大が{hi_note})	{range} (max is {hi_note})
+{range} (最小が{lo_note}、最大が{hi_note})	{range} (min is {lo_note}, max is {hi_note})
+部品の誤差: 抵抗は ±1〜5%、ツェナーや基準電圧は ±5% ほど、7805 は ±4% ほどあります (データシートの範囲を見ます)	Part tolerances: resistors are ±1 to 5%, zeners and voltage references about ±5%, a 7805 about ±4% (see the datasheet ranges)
+測り方: テスタの精度 (±0.5〜1% + 数桁)、テスタ棒の接触、基準 (GND) の取り方を確かめます	Measuring: check the meter accuracy (±0.5 to 1% + a few digits), the probe contact and how you connect the reference (GND)
+電源側: 電池や AC アダプタは、負荷をつなぐと電圧が下がります。つないだ状態で入力電圧も測ります	Supply side: batteries and AC adapters drop in voltage under load. Measure the input voltage with the load connected, too
+配線: ブレッドボードの接触抵抗や、細い配線の電圧降下で、数十 mV 変わります	Wiring: breadboard contact resistance and voltage drop in thin wires can change things by tens of mV
+テスタの電流レンジは、中で電圧が落ちます。そのぶん電流が小さく測れます (抵抗の電圧と抵抗値から計算し直すと確かめられます)	A meter's current range drops some voltage inside, so the current reads smaller (you can check by recalculating from a resistor's voltage and value)
+部品の誤差: 抵抗の値のずれが、そのまま電流のずれになります	Part tolerances: the resistor value error becomes the current error directly
+つなぎ方: 電流は測りたい部品と直列に入れます。並列につなぐと、ヒューズが切れることがあります	Connecting: put the meter in series with the part you measure. Connecting it in parallel can blow the fuse
+オシロの測り方: プローブの GND は短く (長いワニ口線は、拾った雑音がリップルに見えます)。帯域制限と AC カップリングも確かめます	Scope technique: keep the probe GND short (a long alligator lead picks up noise that looks like ripple). Also check the bandwidth limit and AC coupling
+部品: 電解コンデンサの容量は −20〜+20% ずれ、古いものや低温で ESR が増えます (シミュレーションの ESR と比べます)	Parts: electrolytic capacitors vary −20 to +20%, and their ESR rises when old or cold (compare with the ESR in the simulation)
+テスタの交流レンジでは、リップルの形と大きさは測れません (実効値の目安だけです)	A meter's AC range cannot measure the shape or size of ripple (only a rough RMS value)
+部品の誤差: コンデンサは ±10〜20%、抵抗は ±1〜5%。カットオフ周波数にそのまま出ます	Part tolerances: capacitors ±10 to 20%, resistors ±1 to 5%. These show up directly in the cutoff frequency
+測る機器の入力: オシロやテスタの入力容量・抵抗が、回路につながって周波数特性を変えます	Instrument input: the input capacitance and resistance of the scope or meter load the circuit and change the frequency response
+高い周波数では、ブレッドボードの浮遊容量や配線のインダクタンスが効きます	At high frequencies, breadboard stray capacitance and wire inductance matter
+位相余裕は、部品の誤差と配線の浮遊容量に敏感です。実機では、大きな余裕 (45° 以上) を見込みます	Phase margin is sensitive to part tolerances and stray wiring capacitance. On real hardware, allow a large margin (45° or more)
+モデルの限界: オペアンプやトランジスタのモデルは、実際の部品の一部の特性しか表せません	Model limits: op-amp and transistor models only capture some of the real part's behavior
+差が大きいときは、まず配線の間違い (つなぎ違い、抜けた脚、極性) と、測っている場所がシミュレーションと同じかを確かめます	When the difference is large, first check for wiring mistakes (wrong connections, missing pins, polarity) and that you measure at the same place as the simulation
+それでも合わないときは、シミュレーションの部品値が、実際に使った部品と同じか確かめます (回路図の値を、手元の部品に合わせます)	If it still doesn't match, check that the part values in the simulation match the parts you actually used (set the schematic values to the parts you have)
+測った値のほうが大きいとき: 負荷が軽い (つないだ抵抗が大きい)、または入力電圧が想定より高いことがあります	When the measured value is larger: the load may be lighter (a larger resistor connected), or the input voltage higher than expected
+# crates/sim-core/src/spectrum.rs
+波形がありません	No waveform
+解析範囲に波形がありません	No waveform in the analysis range
+基本周波数は正の値にしてください	Set the fundamental frequency to a positive value
+基本周波数が見つかりません。範囲に 3 周期以上入るようにするか、基本周波数を入力してください	Fundamental frequency not found. Make the range cover 3 or more periods, or enter the fundamental frequency
+解析範囲が 1 周期 ({:.4e} 秒) より短いです。範囲を広げてください	The analysis range is shorter than 1 period ({:.4e} s). Widen the range
+高調波の数が多すぎます	Too many harmonics
+基本周波数の成分がありません。基本周波数を確かめてください	There is no component at the fundamental frequency. Check the fundamental frequency
+# crates/sim-core/src/spice_flat.rs
+パラメータ「{id}」の値が分かりません。.param で定義されているか確かめてください	The value of parameter "{id}" is unknown. Check that it is defined with .param
+パラメータの式を読めません: {e}	Cannot read the parameter expression: {e}
+パラメータの式「{s}」に電圧や電流が含まれています。数値だけの式にしてください	The parameter expression "{s}" contains voltages or currents. Use an expression of numbers only
+パラメータの式「{s}」の結果が数になりません	The parameter expression "{s}" does not give a number
+「{line}」の {open} が閉じていません	The {open} in "{line}" is not closed
+サブサーキットの入れ子が深すぎます (自分自身を呼んでいませんか)	Subcircuits are nested too deeply (does one call itself?)
+{head}: 「X名前 ノード… サブサーキット名」の形で書いてください	{head}: write it as "Xname nodes… subcircuit-name"
+{head} が呼ぶ .subckt {sub} が見つかりません。メーカーのファイルでは別の .subckt として入っているので、その中身も貼ってください	{head}: the .subckt {sub} it calls was not found. Maker files put it in as a separate .subckt, so paste that one in too
+{head}: .subckt {sub} の端子は {} 本ですが、{} 本つながっています	{head}: .subckt {sub} has {} pins, but {} are connected
+{head}: TBL(電圧 電流 電圧 電流 …) は、点 (電圧, 電流) を 2 つ以上並べます	{head}: TBL(voltage current voltage current …) needs 2 or more points (voltage, current)
+{head}: {ty} は「入力 {n_in} 本、出力 q と qb」の形で書きます (使わない端子は NULL)	{head}: write {ty} as "{n_in} inputs, outputs q and qb" (NULL for unused pins)
+{head}: 伝送線路は「T名前 入力+ 入力- 出力+ 出力- Z0=特性インピーダンス TD=遅れ時間」の形で書きます	{head}: write a transmission line as "Tname in+ in- out+ out- Z0=impedance TD=delay"
+{head}: 伝送線路の遅れ時間が分かりません。TD=10n のように書くか、F= (周波数) と NL= (波長の何倍か) を書いてください	{head}: the transmission line delay is unknown. Write it like TD=10n, or give F= (frequency) and NL= (length in wavelengths)
+{head}: 伝送線路の Z0 と TD は正の値にしてください	{head}: set the transmission line Z0 and TD to positive values
+{head}: 損失のある線路は「O名前 入力+ 入力- 出力+ 出力- モデル名」の形で書きます	{head}: write a lossy line as "Oname in+ in- out+ out- model-name"
+{head}: 線路のモデル {} が見つかりません	{head}: line model {} not found
+{head}: 線路のモデル {} は LTRA / TRN ではありません	{head}: line model {} is not LTRA / TRN
+{head}: 線路のモデルには L と C と LEN (正の値) が必要です	{head}: the line model needs L, C and LEN (positive values)
+{head}: {name}({bits}) は「電源 GND PREBAR CLRBAR {} とビットごとの Q QBAR」の形で書きます	{head}: write {name}({bits}) as "supply GND PREBAR CLRBAR {} and Q QBAR for each bit"
+{head}: PSpice のデジタル部品「{ty}」は未対応です (AND / OR / バッファ / インバータ / フリップフロップ / ラッチだけ読めます。カウンタなどは、アナログ回路としては表せません)	{head}: the PSpice digital part "{ty}" is not supported (only AND / OR / buffer / inverter / flip-flop / latch can be read. Counters and such cannot be expressed as analog circuits)
+{head}: U 素子は「U名前 種類(入力数) 電源 GND 入力… 出力 …」の形で書きます	{head}: write a U device as "Uname type(inputs) supply GND inputs… outputs …"
+{head}: ゲートを読めません	{head}: cannot read the gate
+{head}: A 素子は「A名前 ノード × 8 種類 パラメータ…」の形で書きます	{head}: write an A device as "Aname nodes × 8 type parameters…"
+{head}: XSPICE の部品「{kind}」は未対応です (SCHMITT・SRFLOP・DFLOP・AND・OR のように、記憶や遅れを持つ部品は、1 つの式にできません)。回路図用の別のモデルを探すか、部品作成フォームの「かんたん作成」を使ってください	{head}: the XSPICE part "{kind}" is not supported (parts with memory or delay, like SCHMITT, SRFLOP, DFLOP, AND, OR, cannot be made into one expression). Look for another model meant for schematics, or use "Quick create" in the part creation form
+{head}: MODULATOR には mark=周波数 (と space=周波数) が必要です	{head}: MODULATOR needs mark=frequency (and space=frequency)
+{head}: s_xfer には num_coeff=[…] と den_coeff=[…] が必要です	{head}: s_xfer needs num_coeff=[…] and den_coeff=[…]
+{head}: s_xfer の分子は分母より高い次数にできません (分母は 1 次以上で、最高次の係数が 0 でないこと)	{head}: the s_xfer numerator cannot have a higher order than the denominator (the denominator must be order 1 or more, with a nonzero top coefficient)
+{head}: 引数が足りません	{head}: not enough arguments
+{head}: table(x0 y0 x1 y1 ...) は、点 (x y) を 2 つ以上並べます	{head}: table(x0 y0 x1 y1 ...) needs 2 or more points (x y)
+{head}: TABLE の {{ が閉じていません	{head}: the {{ of TABLE is not closed
+{head}: TABLE の式と点 (x,y) の区切りの = がありません	{head}: TABLE is missing the = between the expression and the points (x,y)
+{head}: TABLE の点 (x,y) が 2 つ以上ありません	{head}: TABLE does not have 2 or more points (x,y)
+{head}: POLY(n) の n を読めません	{head}: cannot read the n of POLY(n)
+{head}: 制御するノードが足りません	{head}: not enough controlling nodes
+{head}: 制御する電源の名前がありません	{head}: the name of the controlling source is missing
+{head}: 係数「{w}」を数値にできません	{head}: cannot turn the coefficient "{w}" into a number
+{head}: 利得がありません	{head}: the gain is missing
+.subckt に名前がありません	.subckt has no name
+.subckt {sub_name} が見つかりません	.subckt {sub_name} not found
+# crates/sim-core/src/spice_in.rs
+パラメータ値 {val} を数値にできません	Cannot turn parameter value {val} into a number
+.model に名前がありません	.model has no name
+未対応のモデル種別 {other} (D / NPN / PNP / NMOS / PMOS / SW / VSWITCH のみ)	Unsupported model type {other} (only D / NPN / PNP / NMOS / PMOS / SW / VSWITCH)
+未対応のモデル種別	Unsupported model type
+モデル {model_name} が見つかりません	Model {model_name} not found
+{inst}: 素子記号 {e} とモデル {model_name} の組み合わせ/ピン数が未対応です	{inst}: the combination / pin count of device letter {e} and model {model_name} is not supported
+{inst}: ポート数 {} と接続数 {} が一致しません	{inst}: the port count {} does not match the connection count {}
+{inst}: 値 {s} を数値にできません	{inst}: cannot turn the value {s} into a number
+{name}: 引数が足りません	{name}: not enough arguments
+{name}: 電荷の式 Q= を読めません: {e}	{name}: cannot read the charge expression Q=: {e}
+{name}: ISAT は 0 より大きい電流、LDROP は 0〜1 の間 (例: 0.3 = 30% 下がる) にしてください	{name}: set ISAT to a current above 0, and LDROP between 0 and 1 (e.g. 0.3 = drops by 30%)
+{name}: 記憶つき部品の種類 {other} が分かりません	{name}: unknown kind of part with memory: {other}
+{name}: デジタルセルの種類 {other} が分かりません	{name}: unknown kind of digital cell: {other}
+{name}: table= の {h} が 16 進数ではありません (例: table=0,1,1,0)	{name}: {h} in table= is not hexadecimal (e.g. table=0,1,1,0)
+{name}: デジタルセルのパラメータ {other} が分かりません (td・tplh・tphl・tsu・th・oe・oel・od・outs・table)	{name}: unknown digital cell parameter {other} (td, tplh, tphl, tsu, th, oe, oel, od, outs, table)
+{name}: outs= と table= が使えるのは lut / rom だけです	{name}: outs= and table= can only be used with lut / rom
+{name}: lut / rom には table=<16 進数>,<16 進数>,... (アドレス順) が要ります	{name}: lut / rom needs table=<hex>,<hex>,... (in address order)
+{name}: lut / rom のアドレス入力は 1〜16 本にしてください ({} 本)	{name}: lut / rom needs 1 to 16 address inputs ({} given)
+{name}: table= が {} 個ありますが、アドレス入力 {} 本では {} 個までです	{name}: table= has {} entries, but {} address inputs allow at most {}
+{name}: lut / rom の出力は 64 本までです	{name}: lut / rom can have at most 64 outputs
+{name}: 結合係数 {k} は 0 ではなく、絶対値が 1 以下にしてください	{name}: the coupling coefficient {k} must be nonzero with an absolute value of 1 or less
+{name}: 結合係数 {k} は 0 ではなく、絶対値が 1 以下にしてください (負の値は巻き方向が逆)	{name}: the coupling coefficient {k} must be nonzero with an absolute value of 1 or less (a negative value means the opposite winding direction)
+{name}: ダイオードモデル {} が見つかりません	{name}: diode model {} not found
+{name}: モデル {} を読めません: {e}	{name}: cannot read model {}: {e}
+{name}: トランジスタモデル {} が見つかりません (JFET や VDMOS など、未対応の種類のモデルかもしれません)	{name}: transistor model {} not found (it may be an unsupported kind of model, such as JFET or VDMOS)
+{name}: JFET モデル {} が見つかりません (NJF / PJF の .model が要ります)	{name}: JFET model {} not found (a .model of NJF / PJF is needed)
+{name}: MOSFETモデル {} が見つかりません	{name}: MOSFET model {} not found
+{name}: スイッチモデル {} が見つかりません	{name}: switch model {} not found
+{name}: B 素子は「B名前 ノード+ ノード- V=式」または「I=式」の形で書いてください	{name}: write a B device as "Bname node+ node- V=expression" or "I=expression"
+{name}: B 素子の「{kind}=」は使えません。V=式 (電圧) か I=式 (電流) にしてください	{name}: "{kind}=" cannot be used in a B device. Use V=expression (voltage) or I=expression (current)
+{name}: 素子 {other} は未対応です (R C L V I E G F H D Q J M S B と X のみ。A は XSPICE の部品です)	{name}: device {other} is not supported (only R C L V I E G F H D Q J M S B and X. A is an XSPICE part)
+.subckt {sub_name} に .ends がありません	.subckt {sub_name} has no .ends
+{name}: 結合するインダクタ {} がありません (K は同じ .subckt の中の L を 2 つ指します)	{name}: the coupled inductor {} does not exist (K points to 2 L's in the same .subckt)
+{name}: 式の I({short}) は電流を読める素子ではありません。V 電源・コイル・E 素子・V=式の B 素子の名前を書いてください (R や G、I 電源は不可。電流を読みたいときは 0V の電圧源を直列に入れます)	{name}: I({short}) in the expression is not a device whose current can be read. Give the name of a V source, inductor, E device or V=expression B device (not R, G or an I source. To read a current, put a 0V voltage source in series)
+# crates/sim-core/src/stepmetrics.rs
+点数が足りません	Not enough points
+最後の区間を調べられません	Cannot examine the last section
+最初と最後の値がほぼ同じです。ステップ応答ではない波形 (周期的な信号など) には使えません	The first and last values are almost the same. This cannot be used on waveforms that are not step responses (such as periodic signals)
+最後まで落ち着いていません。終了時間を長くして、もう一度解析してください	It has not settled by the end. Make the end time longer and run the analysis again
+開始の時刻が、解析の時間より後です	The start time is later than the analysis time
+開始の時刻の後の点が足りません	Not enough points after the start time
+最初と最後の値が同じです。ステップ応答ではない波形には使えません	The first and last values are the same. This cannot be used on waveforms that are not step responses
+# crates/sim-core/src/temperature.rs
+温度の開始・終了・刻みを確認してください (開始 ≦ 終了、刻み > 0)	Check the temperature start, end and step (start ≦ end, step > 0)
+点数が多すぎます。刻みを大きくしてください	Too many points. Make the step larger
+{temp} ℃ で収束しませんでした	Did not converge at {temp} ℃
+# crates/sim-core/src/tran.rs
+終了時間は正の値にしてください	Set the end time to a positive value
+時間刻みは正の値にしてください	Set the time step to a positive value
+終了時間 / 時間刻み が大きすぎます (最大 {} 点)	End time / time step is too large (max {} points)
+{name}: ノイズの最高周波数に対して時間刻みが粗すぎます (刻みは {:.3e} 秒以下を推奨)	{name}: the time step is too coarse for the noise's top frequency (a step of {:.3e} s or less is recommended)
+DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです)	The DC operating point could not be found, so the run started from all zeros (this is normal for oscillators)
+データがクロックの {} 前に変わっています (必要なのは {} 以上)。クロックを遅くするか、データまでの遅れ (ゲートの段数) を短くしてください	Data changes {} before the clock ({} or more is needed). Slow the clock or shorten the delay to the data (the number of gate stages)
+データがクロックの {} 後に変わっています (クロックのあと {} は変わってはいけません)。データの経路に遅れを足すか、クロックのずれを減らしてください	Data changes {} after the clock (it must not change for {} after the clock). Add delay to the data path or reduce the clock skew
+セットアップ時間	setup time
+ホールド時間	hold time
+{}: {name}が足りません ({} 回。最初は {})。{what}。この回の出力は実物では不定で、ここでは古いデータを取り込んだ値です	{}: {name} violated ({} times; first at {}). {what}. On real hardware the output of this cycle is undefined; here it takes the old data
+# crates/sim-core/src/value.rs
+値が空です	The value is empty
+値「{first}」を数値にできません	Cannot turn the value "{first}" into a number
+「{tok}」は 名前=値 の形式ではありません (例: ESR=20m)	"{tok}" is not in the form name=value (e.g. ESR=20m)
+{k} の値「{v}」を数値にできません	Cannot turn the value "{v}" of {k} into a number
+{k} は0以上にしてください	Set {k} to 0 or more
+# crates/sim-core/src/waveform.rs
+AC の値「{w}」を数値にできません	Cannot turn the AC value "{w}" into a number
+AC は「AC 大きさ [位相(度)]」の形式で指定してください	Give AC as "AC magnitude [phase (deg)]"
+値「{t}」を数値にできません	Cannot turn the value "{t}" into a number
+「{w}」を数値にできません	Cannot turn "{w}" into a number
+SIN(オフセット 振幅 周波数 [遅延 減衰 位相]) の形式で指定してください	Give it as SIN(offset amplitude frequency [delay damping phase])
+SIN の周波数は正の値にしてください	Set the SIN frequency to a positive value
+PULSE(初期値 パルス値 [遅延 立上り 立下り 幅 周期 回数]) の形式で指定してください	Give it as PULSE(initial pulsed [delay rise fall width period count])
+NOISE(実効値 最高周波数 [シード] [オフセット]) の形式で指定してください	Give it as NOISE(rms top-frequency [seed] [offset])
+NOISE の実効値は0以上、最高周波数は正の値にしてください	Set the NOISE rms to 0 or more and the top frequency to a positive value
+EXP(初期値 最終値 [上昇の開始 時定数 下降の開始 時定数]) の形式で指定してください	Give it as EXP(initial final [rise-start time-constant fall-start time-constant])
+EXP の時定数は正の値にしてください	Set the EXP time constants to positive values
+PWL(時間 値 時間 値 ...) は時間と値の組で指定してください	Give PWL(time value time value ...) as pairs of time and value
+PWL の時間は増加させてください	PWL times must increase
+未対応の電源波形 {other} (SIN / PULSE / PWL / NOISE / DC)	Unsupported source waveform {other} (SIN / PULSE / PWL / NOISE / DC)
+# crates/sim-core/src/worstcase.rs
+許容差のある部品 (抵抗・コンデンサ・コイル) がありません。許容差を 0 より大きくしてください	There are no parts with a tolerance (resistors, capacitors, inductors). Set a tolerance greater than 0
+# crates/sim-core/src/dc/digital.rs
+ネット {name}: 2 つ以上の出力が違う値を同時に出しています ({count} 回。最初は {}。つながっている出力: {})。ここでは Low にして続けます。実物では出力どうしで大きな電流が流れて、壊れることがあります。出力許可 (OE) を切り替える時間をずらして、同時に出ないようにしてください	Net {name}: two or more outputs drive different values at the same time ({count} times; first at {}; connected outputs: {}). Here it is taken as Low. On real hardware a large current flows between the outputs and can break them. Stagger the output enable (OE) switching so they never drive at the same time
+ネット {name}: どの出力も出ていません ({count} 回。最初は {}。つながっている出力: {})。浮いたネットです。ここでは前の値のままにしていますが、実物では不定です。プルアップ (またはプルダウン) 抵抗を付けるか、どれかの出力を出してください	Net {name}: no output is driving it ({count} times; first at {}; connected outputs: {}). It is a floating net. Here it keeps its previous value, but on real hardware it is undefined. Add a pull-up (or pull-down) resistor, or have one of the outputs drive it
+# crates/sim-core/src/dc/mod.rs
+GNDにつながる部品がありません	No part is connected to GND
+回路方程式が解けません (電圧源のループや並列接続、コイルと電圧源のループなど)	The circuit equations cannot be solved (a loop of voltage sources, sources in parallel, a loop of an inductor and a voltage source, etc.)
+収束しませんでした	Did not converge
+部品の中の電源	sources inside parts
+ と部品の中の電源	 and sources inside parts
+時間で変わる電源 ({who}) があります。DC 解析は時間 0 の状態で計算するので、スイッチングやパルスで動く回路は、落ち着いた出力になりません。時間を追って確かめるには「過渡解析」を使ってください	There are time-varying sources ({who}). DC analysis calculates the state at time 0, so circuits driven by switching or pulses do not give a settled output. To check over time, use "Transient analysis"
+ノード {} にGNDへのDC経路がありません (0Vとして扱います)	Node {} has no DC path to GND (treated as 0V)
+部品 {part} の中のノード {node}	node {node} inside part {part}
+ノード {node}	node {node}
+計算が発散しました。最後の繰り返しで一番大きく動いたのは {place} です ({before:.4} V から {after:.4} V)。ここは暴走の結果で、原因とは限りません。非線形な部品 (比較器・基準電圧・オペアンプのマクロモデルなど) が複数つながっていると、ゼロからの計算が飛び出すことがあります。部品を1つずつ外して、収束するようになるものを探すと、組み合わせの原因が分かります	The calculation diverged. In the last iteration, {place} moved the most ({before:.4} V to {after:.4} V). This is a result of the runaway, not necessarily its cause. When several nonlinear parts (comparators, voltage references, op-amp macro models, etc.) are connected, a calculation from zero can fly off. Remove parts one at a time to find the one that makes it converge; that tells you which combination causes it
+計算の最後まで落ち着かなかったのは {place} です (最後の繰り返しで {before:.4} V から {after:.4} V へ動きました)。この近くの部品の向き・値と、帰還のかかり方を見直してください。2つの状態を持つ部品 (ヒステリシスつきの比較器など) や、電圧に応じて電流が決まる部品が近くにあると、DCでは答えが1点に決まらないことがあります	{place} did not settle by the end of the calculation (it moved from {before:.4} V to {after:.4} V in the last iteration). Recheck the direction and values of nearby parts and how the feedback works. With parts that have two states (comparators with hysteresis, etc.) or parts whose current depends on voltage nearby, DC may not have a single answer
+この答えは、ふつうの方法では収束せず、1回の変化を小さくした特別な反復で求めました。2つの状態を持つ回路 (555 の点滅・フリップフロップ・ヒステリシスつきの比較器) や発振回路では、実際には落ち着かない点が出ることがあります。時間を追って確かめるには「過渡解析」を使ってください	This answer did not converge the usual way; it was found with a special iteration taking smaller steps. In circuits with two states (555 blinkers, flip-flops, comparators with hysteresis) or oscillators, the point may not actually be stable. To check over time, use "Transient analysis"
+この回路には記憶素子 (フリップフロップ・ラッチ・シュミットトリガ) が {} 個あります。DC の答えは、記憶の初期値 (既定はすべて 0) から求めた一つの状態で ({} 個が 1)、電源を入れたときの状態は決まっていません	This circuit has {} memory elements (flip-flops, latches, Schmitt triggers). The DC answer is one state found from the initial memory values (all 0 by default; {} of them are 1); the state at power-on is not determined
