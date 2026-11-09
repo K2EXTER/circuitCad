@@ -112,6 +112,7 @@ A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in
 - **The simulator uses simplified models** and can differ noticeably from real hardware. Each lesson explains the differences.
 - **Part data and fabricator rules are approximate.** Always check the datasheet and the fabricator's current page. A part whose land pattern has not been checked against the datasheet is flagged `land_unverified`, and the pre-order check warns about it.
 - **Do not use it as the basis for safety-critical designs** (medical, automotive, high voltage, lithium-cell chargers, and so on).
+- **The user interface is still being reworked.** It is the area improved most actively, release by release (layout, wording, icons, one consistent look across the editors and windows), but some panels are still dense and some screens do not match the others yet. Feedback on what confused you is welcome.
 - **The English text is new** and was translated with AI help; some wording may be awkward, and a few messages built at run time may still appear in Japanese. Reports are welcome.
 - It is developed by a small team (mostly one person plus an AI assistant), so replies and fixes can be slow.
 

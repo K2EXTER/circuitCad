@@ -320,6 +320,7 @@ a{color:var(--accent)}
     <li><strong>Platforms:</strong> tested mainly on Windows 10 / 11. The Linux zip was only checked on WSL2 (Ubuntu, no GPU). There is no macOS build yet (it builds and passes the tests in CI, but nobody has run the app).</li>
     <li><strong>No board made with circuitCad has been manufactured yet.</strong> The Gerber, drill and pre-order checks are unproven in practice.</li>
     <li><strong>Simplified models.</strong> Results agree with ngspice on the bundled examples, but agreement with real hardware has not been measured yet. Makers' SPICE models load only partly (some syntax, many XSPICE devices are not supported).</li>
+    <li><strong>The user interface is still being reworked.</strong> It is the area we are improving most actively, release by release (layout, wording, icons, and the same look and behaviour across the schematic editor, the board editor and the windows), but it is not finished: some panels are still dense, some screens do not look like the others yet, and some operations take more clicks than they should. Feedback on what confused you is especially welcome.</li>
     <li><strong>The English text is new</strong> and was translated with AI help from the Japanese original; some wording may be awkward, and a few messages may still appear in Japanese. Most documentation (docs/, the code notes) is in Japanese.</li>
     <li><strong>Gaps compared with mature tools:</strong> symbols are drawn as boxes (no graphical symbol or footprint editor), no STEP export, no KiCad board (<code>.kicad_pcb</code>), EAGLE or LTspice import, no panelization, dark theme only, shortcuts cannot be changed.</li>
     <li>It is developed by one person with an AI assistant, so replies and fixes can be slow.</li>
@@ -333,6 +334,7 @@ a{color:var(--accent)}
     <div>
       <h3>Next</h3>
       <ul>
+        <li><strong>The user interface:</strong> fewer words on screen, clearer panels, one consistent look and behaviour everywhere, guided by what confuses learners</li>
         <li><strong>An evaluation board:</strong> build and measure a small board (LDO, RC filter, diodes) and compare the readings with the simulation, to show where the models hold</li>
         <li>3D parts closer to the real ones; case design: screw posts and connector cut-outs</li>
         <li>More shop part numbers, checked on the shops' pages</li>
