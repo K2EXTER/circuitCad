@@ -336,6 +336,11 @@ impl eframe::App for App {
                         self.mode = Mode::Schematic;
                         ui.close();
                     }
+                    if ui.button(i18n::tr("LTspice の回路図を開く…")).on_hover_text(i18n::tr("LTspice の回路図 (.asc) を取り込みます。部品はこのソフトの記号で並べ直し、つながりはネットの名前で表します。抵抗・コンデンサ・コイル・電圧源と、ライブラリにある型番のダイオード・トランジスタ・IC はシミュレーションできます。.tran と .ac は解析の欄に入ります。読めなかったものは、取り込んだあとの案内に出ます")).clicked() && self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") {
+                        self.sch.open_ltspice();
+                        self.mode = Mode::Schematic;
+                        ui.close();
+                    }
                     ui.menu_button(i18n::tr("サンプル回路を開く"), |ui| {
                         for s in samples::SAMPLES {
                             if ui.button(i18n::tr(s.title)).on_hover_text(i18n::tr(s.about)).clicked() {

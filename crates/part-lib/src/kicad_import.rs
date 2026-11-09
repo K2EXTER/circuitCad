@@ -16,10 +16,12 @@ pub struct Imported {
     /// How many parts became plain circuitCad parts / parts with a symbol made from the KiCad one.
     pub basic: usize,
     pub custom: usize,
+    /// The SPICE directives of the sheet (`.tran 10m`, `.ac dec 20 10 1Meg`): an LTspice sheet carries its analysis.
+    pub directives: Vec<String>,
 }
 
 /// `4k7` → `4.7k`, `2R2` → `2.2`, `10R` → `10`, `100nF` stays: the value text as circuitCad reads it.
-fn normalise_value(v: &str) -> String {
+pub(crate) fn normalise_value(v: &str) -> String {
     let t = v.trim().replace(['\u{2126}', '\u{3a9}'], "");
     let b: Vec<char> = t.chars().collect();
     // digits, one letter, digits: the letter stands for the decimal point
@@ -113,6 +115,55 @@ fn net_name(n: &str) -> String {
     if n.eq_ignore_ascii_case("gnd") || n == "0" { "GND".to_string() } else { n.to_string() }
 }
 
+/// Puts a newly added part at the next free place of the rows (like the CLI's `add`), and moves the place on.
+pub(crate) fn place_in_row(sch: &mut Schematic, idx: usize, cursor: &mut (i32, i32, i32)) {
+    // size of the part: its pins (and the body of a drawn symbol)
+    let c = &sch.components[idx];
+    let mut xs: Vec<i32> = c.pins().iter().map(|(_, q)| q.0).collect();
+    let mut ys: Vec<i32> = c.pins().iter().map(|(_, q)| q.1).collect();
+    if let Some(sym) = &c.custom {
+        let l = sym.layout();
+        for (cx, cy) in [(-l.hw, -l.hh), (l.hw, l.hh)] {
+            xs.push(cx);
+            ys.push(cy);
+        }
+    }
+    let (minx, maxx) = (*xs.iter().min().unwrap_or(&0), *xs.iter().max().unwrap_or(&0));
+    let (miny, maxy) = (*ys.iter().min().unwrap_or(&0), *ys.iter().max().unwrap_or(&0));
+    let (w, h) = (maxx - minx, maxy - miny);
+    let (mut x, mut y, mut rowh) = *cursor;
+    if x > 8 && x + w > 110 {
+        x = 8;
+        y += rowh + 10;
+        rowh = 0;
+    }
+    *cursor = (x + w + 10, y, rowh.max(h));
+
+    sch.components[idx].pos = (x - minx, y - miny);
+}
+
+/// Ties the pins of each net together with a label of the net's name (pins given as our reference and pin), and puts one ground
+/// symbol on the GND net when the sheet has none, so the sheet looks and simulates like a normal one.
+pub(crate) fn label_nets(sch: &mut Schematic, nets: &[(String, Vec<(String, String)>)]) {
+    let mut first_gnd: Option<Pt> = None;
+    for (name, pins) in nets {
+        for (our_ref, our_num) in pins {
+            let Some(c) = sch.components.iter().find(|c| &c.refdes == our_ref) else { continue };
+            let Some((_, pt)) = c.pins().into_iter().find(|(m, _)| m == our_num) else { continue };
+            if !sch.labels.iter().any(|l| l.pos == pt) {
+                sch.labels.push(Label { pos: pt, text: name.clone() });
+            }
+            if name == "GND" {
+                first_gnd.get_or_insert(pt);
+            }
+        }
+    }
+    let has_gnd = sch.components.iter().any(|c| c.kind == Kind::Ground);
+    if let (false, Some(pt)) = (has_gnd, first_gnd) {
+        sch.add(Kind::Ground, pt, 0);
+    }
+}
+
 /// Lay the parts out in rows (like the CLI's `add`) and connect them by net labels.
 pub fn import(k: &KicadSch) -> Imported {
     let mut sch = Schematic::default();
@@ -147,30 +198,8 @@ pub fn import(k: &KicadSch) -> Imported {
             notes.push(format!("{} は参照名が決まっていない (または重なっている) ので、{} にしました。", p.reference, sch.components[idx].refdes));
             refdes = sch.components[idx].refdes.clone();
         }
-        // size of the part: its pins (and the body of a drawn symbol)
-        let c = &sch.components[idx];
-        let mut xs: Vec<i32> = c.pins().iter().map(|(_, q)| q.0).collect();
-        let mut ys: Vec<i32> = c.pins().iter().map(|(_, q)| q.1).collect();
-        if let Some(sym) = &c.custom {
-            let l = sym.layout();
-            for (cx, cy) in [(-l.hw, -l.hh), (l.hw, l.hh)] {
-                xs.push(cx);
-                ys.push(cy);
-            }
-        }
-        let (minx, maxx) = (*xs.iter().min().unwrap_or(&0), *xs.iter().max().unwrap_or(&0));
-        let (miny, maxy) = (*ys.iter().min().unwrap_or(&0), *ys.iter().max().unwrap_or(&0));
-        let (w, h) = (maxx - minx, maxy - miny);
-        let (mut x, mut y, mut rowh) = cursor;
-        if x > 8 && x + w > 110 {
-            x = 8;
-            y += rowh + 10;
-            rowh = 0;
-        }
-        cursor = (x + w + 10, y, rowh.max(h));
-
+        place_in_row(&mut sch, idx, &mut cursor);
         let c = &mut sch.components[idx];
-        c.pos = (x - minx, y - miny);
         c.refdes = refdes.clone();
         if !p.value.is_empty() {
             c.value = match kind {
@@ -212,32 +241,12 @@ pub fn import(k: &KicadSch) -> Imported {
         if kind.is_some() { basic += 1 } else { custom += 1 }
     }
 
-    // the nets, as labels on the pins
-    let mut has_gnd = false;
-    let mut first_gnd: Option<Pt> = None;
-    for n in &k.nets {
-        let name = net_name(&n.name);
-        for (r, num) in &n.pins {
-            let Some((our_ref, our_num)) = pin_of.get(&(r.clone(), num.clone())) else { continue };
-            let Some(c) = sch.components.iter().find(|c| &c.refdes == our_ref) else { continue };
-            let Some((_, pt)) = c.pins().into_iter().find(|(m, _)| m == our_num) else { continue };
-            if !sch.labels.iter().any(|l| l.pos == pt) {
-                sch.labels.push(Label { pos: pt, text: name.clone() });
-            }
-            if name == "GND" {
-                first_gnd.get_or_insert(pt);
-            }
-        }
-    }
-    for c in &sch.components {
-        if c.kind == Kind::Ground {
-            has_gnd = true;
-        }
-    }
-    // one ground symbol makes the sheet look and simulate like a normal one
-    if let (false, Some(pt)) = (has_gnd, first_gnd) {
-        sch.add(Kind::Ground, pt, 0);
-    }
+    let named: Vec<(String, Vec<(String, String)>)> = k
+        .nets
+        .iter()
+        .map(|n| (net_name(&n.name), n.pins.iter().filter_map(|(r, num)| pin_of.get(&(r.clone(), num.clone())).cloned()).collect()))
+        .collect();
+    label_nets(&mut sch, &named);
     for (r, num) in &k.no_connects {
         if let Some((our_ref, our_num)) = pin_of.get(&(r.clone(), num.clone())) {
             sch.set_no_connect(our_ref, our_num, true);
@@ -254,7 +263,7 @@ pub fn import(k: &KicadSch) -> Imported {
         ));
     }
     notes.push("配置は取り込み時に並べ直しています (KiCad の図の位置・形は引き継ぎません)。つながりは、ピンについたネットの名前で表しています。".into());
-    Imported { sch, notes, basic, custom }
+    Imported { sch, notes, basic, custom, directives: vec![] }
 }
 
 #[cfg(test)]

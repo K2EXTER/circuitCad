@@ -1,0 +1,32 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/main.rs
+LTspice の回路図を開く…	Open LTspice schematic…
+LTspice の回路図 (.asc) を取り込みます。部品はこのソフトの記号で並べ直し、つながりはネットの名前で表します。抵抗・コンデンサ・コイル・電圧源と、ライブラリにある型番のダイオード・トランジスタ・IC はシミュレーションできます。.tran と .ac は解析の欄に入ります。読めなかったものは、取り込んだあとの案内に出ます	Imports an LTspice schematic (.asc). The parts are laid out again with this program's symbols, and the connections are kept as net names. Resistors, capacitors, coils, voltage sources, and diodes, transistors and ICs whose type is in the library can be simulated. .tran and .ac go into the analysis boxes. Anything that could not be read is listed after the import
+# crates/app/src/schematic/file.rs
+LTspice の回路図 (.asc)	LTspice schematic (.asc)
+LTspice の回路図を取り込みました: 部品 {} 個 (シミュレーションできる部品 {}・記号だけの部品 {})。保存するときは名前を付けます	Imported the LTspice schematic: {} parts ({} can be simulated, {} are symbols only). Give it a name when you save
+LTspice の回路図を取り込みました	LTspice schematic imported
+# crates/part-lib/src/ltspice.rs
+LTspice の回路図 (.asc) ではないようです (先頭に「Version」の行がありません)	This does not look like an LTspice schematic (.asc): it does not start with a "Version" line
+{} ({}): 記号のファイル (.asy) が見つからないので、ピンの位置が分からず、取り込めませんでした。.asc と同じフォルダに .asy を置くか、LTspice を入れてから取り込んでください。	{} ({}): its symbol file (.asy) was not found, so the positions of its pins are unknown and it was not imported. Put the .asy next to the .asc, or install LTspice, and import again.
+{} ({} 個) は読みません (バスの扱いは、このソフトにありません)。	{} ({} of them) are not read (this program has no buses of that kind).
+# crates/part-lib/src/ltspice_import.rs
+{}: 型番「{}」はライブラリにないので、代わりに {} にしました (特性は型番と違います)。	{}: type "{}" is not in the library, so {} stands in for it (its characteristics differ).
+{}: 型番「{}」はライブラリにないので、標準の値の部品にしました (特性は型番と違います)。	{}: type "{}" is not in the library, so the part with standard values is used (its characteristics differ).
+{}: 「{}」はこのソフトのライブラリにない部品です。記号だけ作りました (シミュレーションのモデルはありません)。	{}: "{}" is not in this program's library. Only a symbol was made (no simulation model).
+{}: ばらつき (mc) は公称値で取り込みました。「温度とばらつき」で調べられます。	{}: the spread (mc) was imported at its nominal value. "Temperature and variation" can look into it.
+{} は名前が重なっているので、{} にしました。	{} clashes with another name, so it was renamed {}.
+{}: LTspice の設定 {} は、このソフトにない項目なので入れていません。	{}: the LTspice setting {} has no counterpart in this program and was left out.
+{}: 電源の内部抵抗 (Rser) は入れていません。要るなら、抵抗を直列に足してください。	{}: the source's internal resistance (Rser) was left out. Add a resistor in series if it matters.
+{}: ピン {} は対応するピンがなく、つなぎませんでした。	{}: pin {} has no matching pin and was not connected.
+取り込めない部品がありました: {}。このソフトの部品で置き換えてください。	Some parts could not be imported: {}. Replace them with parts of this program.
+{} (電流源)	{} (current source)
+{} (式や制御で動く電源 {})	{} (source driven by an expression or another signal, {})
+グラウンド (LTspice の「0」の印) がありません。シミュレーションするには、0 V の基準にするネットを GND にしてください。	There is no ground (LTspice's "0" flag). To simulate, name the 0 V reference net GND.
+{} は、掃引する値の最初の 1 つで取り込みました。値を振って比べるには「パラメータスイープ」を使います。	{} was imported at the first of its swept values. Use "Parameter sweep" to step values and compare.
+SPICE の指示 {} は取り込みません (モデルの定義・パラメータの掃引・結合などは、このソフトの部品と解析の欄で設定し直してください)。	The SPICE directives {} are not imported (set model definitions, parameter sweeps, couplings and so on again with this program's parts and analysis boxes).
+配置は取り込み時に並べ直しています (LTspice の図の位置・形は引き継ぎません)。つながりは、ピンについたネットの名前で表しています。	The parts are laid out again on import (the positions and shapes of the LTspice drawing are not kept). Connections are shown by net names on the pins.
+LTspice から取り込み	imported from LTspice
+# crates/app/src/help.rs
+「ファイル → LTspice の回路図を開く…」	"File → Open LTspice schematic…"
+LTspice の回路図 (.asc) を取り込みます。並べ直しとネットの名前は KiCad と同じです。抵抗・コンデンサ・コイル・電圧源 (直流・SINE・PULSE・AC) と、ライブラリにある型番のダイオード・トランジスタ・IC はそのままシミュレーションできます。.param の値と中かっこで囲んだ式は計算して入れ、.tran と .ac は解析の欄に入ります。記号は .asc と同じフォルダか、パソコンに入っている LTspice の部品から探します	Imports an LTspice schematic (.asc). The parts are laid out again and connected by net names, as for KiCad. Resistors, capacitors, coils, voltage sources (DC, SINE, PULSE, AC), and diodes, transistors and ICs whose type is in the library simulate as they are. .param values and expressions in curly brackets are worked out, and .tran and .ac go into the analysis boxes. Symbols are looked for next to the .asc and in LTspice's parts on this computer

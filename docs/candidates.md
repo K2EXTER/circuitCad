@@ -109,7 +109,7 @@ KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の�
 | # | 内容 | メモ |
 |---|---|---|
 | J16 | 記号とフットプリントを絵で描く編集画面 | 今はフォームと KiCad の取り込み。記号の絵は四角い箱 |
-| J17 | LTspice の `.asc`・EAGLE の読み込み | LTspice は初学者の利用者が多く、効果は大きめ |
+| J17 | EAGLE の読み込み(LTspice の `.asc` は 2026-11-09 に済み: `part-lib/ltspice*.rs`) | 利用者は減っている。KiCad・LTspice より優先度は低い |
 | J18 | IPC-D-356(電気テスト用のネットリスト)、Gerber X2 の部品ごとの情報(`%TO`) | 今の X2 はファイルの情報(`%TF`)だけ。ODB++・IPC-2581 は対象外のまま |
 | J19 | 沿面距離(高電圧の点検)、ネットタイ、キャスタレーション | Altium に沿面距離のルール(確認) |
 | J20 | ショートカットの変更、明るい画面への切り替え、英語の画面 | 今は暗い画面だけ(`theme.rs`)、日本語だけ |

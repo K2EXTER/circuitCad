@@ -245,6 +245,15 @@ impl Session {
                 self.cursor = self.cursor_below();
                 Ok(obj(json!({"parts": self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).count()})))
             }
+            "import_ltspice" => {
+                let f = args.first().ok_or("import_ltspice FILE.asc   (an LTspice schematic; the parts are laid out again, the nets kept as net names; symbols are looked for next to the file and in LTspice's library)")?;
+                let imp = part_lib::ltspice_import::import_file(std::path::Path::new(f), &self.lib)?;
+                self.sch = imp.sch;
+                self.extras.clear();
+                self.cursor = self.cursor_below();
+                (self.last_dc, self.last_tran, self.last_ac) = (None, None, None);
+                Ok(obj(json!({"parts": imp.basic + imp.custom, "plain_or_library_parts": imp.basic, "parts_without_model": imp.custom, "directives": imp.directives, "notes": imp.notes})))
+            }
             "import_kicad" => {
                 let f = args.first().ok_or("import_kicad FILE.kicad_sch   (a KiCad 6+ schematic; the parts are laid out again, the nets kept as net names)")?;
                 let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;

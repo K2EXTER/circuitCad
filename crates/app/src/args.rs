@@ -109,6 +109,19 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             apply_board_args(app, args);
         }
     }
+    if let Some(p) = args.iter().find(|a| a.to_ascii_lowercase().ends_with(".asc")) {
+        app.sch.load_ltspice(p.into(), false);
+        // the analysis the sheet asked for (`.tran` / `.ac` filled the boxes)
+        if args.iter().any(|a| a == "--dc") {
+            app.sch.analyze_dc();
+        }
+        if args.iter().any(|a| a == "--ac") {
+            app.sch.analyze_ac();
+        }
+        if args.iter().any(|a| a == "--tran") {
+            app.sch.analyze_tran();
+        }
+    }
     if let Some(p) = args.iter().find(|a| a.ends_with(".kicad_sch")) {
         app.sch.load_kicad_sch(p.into(), false);
     }

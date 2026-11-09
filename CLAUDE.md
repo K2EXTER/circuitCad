@@ -20,7 +20,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が共有 |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
-| `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
+| `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、LTspice の回路図の取り込み(`ltspice*.rs`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
 | `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ(`docs/datasheet-viewer-design.md`) |
 | `i18n` | 英語の画面。日本語の文を鍵にした表 `en/*.tsv`、`tr` / `trf!` / `tr_dyn`、`tools/i18n.py`(包む・未訳の一覧)。`docs/code-notes/i18n.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |

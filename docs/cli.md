@@ -111,6 +111,7 @@ board fab out/
 | コマンド | 内容 |
 |---|---|
 | `new` / `open F` / `save F` | 回路図(`.schjson`)。アプリが同じファイルに入れているスペック表・実測・許容差は、`open` で取っておき `save` で書き戻す(`new` で消える)。 |
+| `import_ltspice F` | LTspice の回路図(`.asc`)を取り込む。部品を並べ直し、つながりはネットの名前で表す。記号(`.asy`)は `.asc` と同じフォルダ → パソコンの LTspice の `lib/sym`(下のフォルダも)の順に探し、基本の記号(res・cap・ind・diode・voltage・npn など)は内蔵。`.param`/`.params` と `{式}` は計算して値にし(`.step param` は最初の値)、`SINE` は `SIN`、コンデンサの `Rser` は `ESR=`、コイルの `Rser` は `DCR=`(無ければ LTspice と同じ 1 mΩ)。型番がライブラリにあるダイオード・トランジスタ・IC はその部品に、無い PNP・MOSFET は 2N3906・2N7000・AO3401A で代用(`notes` に出る)。答えの `directives` に `.tran` などがそのまま入る |
 | `import_kicad F` | KiCad 6 以降の回路図(`.kicad_sch`)を取り込む。部品を並べ直し、つながりはネットの名前で表す。答えの `notes` に、読めなかったもの(子シート・バスなど)と直してほしいところが出る。抵抗・コンデンサ・コイル・ダイオード・LED・NPN・`VDC`/`VSIN`/`VPULSE` は基本の部品(シミュレーションできる)、ほかは KiCad の記号のピンから作った部品(モデルは付かない)。 |
 | `parts [語...]` / `part 名前` | 部品ライブラリの検索と、ピン(番号と名前)・シミュレーションの有無。`part` は基本の部品(`R` `LED` など)のピンも出す。 |
 | `add 種類 [値] [as=U1] [rot=0..3] [at=X,Y]` | 部品を置く。種類は `R C L D LED V NPN HEADERn` か、ライブラリの部品名。位置は自動。 |

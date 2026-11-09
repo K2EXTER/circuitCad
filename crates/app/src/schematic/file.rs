@@ -76,6 +76,40 @@ impl SchEditor {
         }
     }
 
+    /// Read an LTspice schematic (`.asc`): the parts are laid out again and joined by net names, and its `.tran` / `.ac` fill the
+    /// analysis boxes.
+    pub fn open_ltspice(&mut self) {
+        if let Some(p) = rfd::FileDialog::new().add_filter("LTspice の回路図 (.asc)", &["asc"]).pick_file() {
+            self.load_ltspice(p, true);
+        }
+    }
+
+    pub fn load_ltspice(&mut self, p: PathBuf, with_dialog: bool) {
+        match part_lib::ltspice_import::import_file(&p, &self.library) {
+            Ok(imp) => {
+                self.adopt(imp.sch, None);
+                let an = part_lib::ltspice_import::analyses(&imp.directives);
+                if let Some((stop, step, uic)) = an.tran {
+                    self.tran_tstop = stop;
+                    self.tran_tstep = step;
+                    self.tran_uic = uic;
+                }
+                if let Some((f0, f1, ppd)) = an.ac {
+                    self.set_ac_settings(&f0, &f1, &ppd);
+                }
+                self.status = format!("LTspice の回路図を取り込みました: 部品 {} 個 (シミュレーションできる部品 {}・記号だけの部品 {})。保存するときは名前を付けます", imp.basic + imp.custom, imp.basic, imp.custom);
+                if with_dialog {
+                    rfd::MessageDialog::new()
+                        .set_title(i18n::tr("LTspice の回路図を取り込みました"))
+                        .set_description(imp.notes.iter().map(|n| format!("・{}", i18n::tr_dyn(n))).collect::<Vec<_>>().join("
+"))
+                        .show();
+                }
+            }
+            Err(e) => self.status = format!("取り込めませんでした: {e}"),
+        }
+    }
+
     pub fn load_kicad_sch(&mut self, p: PathBuf, with_dialog: bool) {
         let read = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display())).and_then(|t| part_lib::kicad_sch::parse_schematic(&t));
         match read {
@@ -85,8 +119,8 @@ impl SchEditor {
                 self.status = format!("KiCad の回路図を取り込みました: 部品 {} 個 (基本の部品 {}・記号から作った部品 {})。保存するときは名前を付けます", imp.basic + imp.custom, imp.basic, imp.custom);
                 if with_dialog {
                     rfd::MessageDialog::new()
-                        .set_title("KiCad の回路図を取り込みました")
-                        .set_description(imp.notes.iter().map(|n| format!("・{n}")).collect::<Vec<_>>().join("
+                        .set_title(i18n::tr("KiCad の回路図を取り込みました"))
+                        .set_description(imp.notes.iter().map(|n| format!("・{}", i18n::tr_dyn(n))).collect::<Vec<_>>().join("
 "))
                         .show();
                 }
@@ -152,6 +186,24 @@ mod kicad_tests {
         assert!(e.path.is_none(), "saving must ask for a name, not overwrite the old file");
         assert!(e.status.contains("取り込みました"), "{}", e.status);
         e.load_kicad_sch(PathBuf::from("no-such.kicad_sch"), false);
+        assert!(e.status.contains("取り込めませんでした"), "{}", e.status);
+    }
+
+    #[test]
+    fn an_ltspice_sheet_opens_with_its_analysis_and_simulates() {
+        let mut e = SchEditor::default();
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ltspice-rc.asc");
+        e.load_ltspice(p, false);
+        assert_eq!(e.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).count(), 3, "{}", e.status);
+        assert!(e.path.is_none());
+        // the sheet's .ac fills the AC boxes, and the {R} of .param R=1.5k is worked out
+        assert_eq!((e.ac_fstart.as_str(), e.ac_fstop.as_str(), e.ac_ppd.as_str()), ("10", "100k", "20"));
+        assert_eq!(e.sch.components.iter().find(|c| c.refdes == "R1").unwrap().value, "1.5k");
+        e.run_ac();
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().expect("simulates");
+        let f = sim_core::minus_3db(&r.freq, &r.signal("V(out)").unwrap().mag()).unwrap();
+        assert!((f - 1061.0).abs() < 15.0, "{f}");
+        e.load_ltspice(PathBuf::from("no-such.asc"), false);
         assert!(e.status.contains("取り込めませんでした"), "{}", e.status);
     }
 }
