@@ -1,0 +1,250 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "9",
+      "pos": [
+        8,
+        10
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "47",
+      "pos": [
+        18,
+        8
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "470u",
+      "pos": [
+        30,
+        8
+      ],
+      "rot": 0,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "220",
+      "pos": [
+        10,
+        20
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N4733A",
+      "pos": [
+        22,
+        21
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N4733A",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N4733A",
+          "text": ".model 1N4733A D(IS=50f N=1 RS=6.5 BV=5.1 IBV=49m)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "降伏電圧つきのダイオードのモデルです。電流を増やしたときのツェナー電圧の変化 (ツェナーインピーダンス) は簡易な式で、実物とずれます。",
+            "ツェナー電圧は温度で変わらない値です。実物は温度で変わります。",
+            "接合容量と逆回復時間は扱いません。許容損失 (W) を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "i_max": 0.178,
+          "p_max": 1.0,
+          "rows": [
+            {
+              "name": "ツェナー電圧",
+              "value": "5.1V ±5%",
+              "condition": "IZT = 49mA"
+            },
+            {
+              "name": "ツェナーインピーダンス",
+              "value": "7Ω (最大)",
+              "condition": "IZT = 49mA"
+            }
+          ]
+        },
+        "glyph": "zener"
+      }
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        34,
+        20
+      ],
+      "rot": 0,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        10,
+        30
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        20,
+        30
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        16,
+        8
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        20,
+        8
+      ],
+      "text": "FILT"
+    },
+    {
+      "pos": [
+        28,
+        8
+      ],
+      "text": "FILT"
+    },
+    {
+      "pos": [
+        8,
+        20
+      ],
+      "text": "FILT"
+    },
+    {
+      "pos": [
+        12,
+        20
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        24,
+        21
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        32,
+        20
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        8,
+        30
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        32,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        36,
+        20
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        12,
+        30
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

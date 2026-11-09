@@ -199,6 +199,8 @@ pub struct SchEditor {
     pz: Option<polezero::PzSummary>,
     /// The loop gain box: the part to cut, the net on its output side, and waiting for a click to choose them (shares `noise_pick`).
     loop_part: String,
+    psrr_source: String,
+    psrr_out: String,
     loop_from: String,
     loop_pick: bool,
     /// Waiting for a click on the canvas to choose the noise output node.
@@ -428,6 +430,10 @@ struct AcView {
     loop_run: bool,
     /// The curves are a transfer function and its fit (`run_pz`): a recompute redoes that.
     pz_run: bool,
+    /// The curves answer a ripple on one supply (`run_psrr`): a recompute redoes that.
+    psrr_run: bool,
+    /// Figures shown above the plot (the rejection of a `run_psrr`).
+    notes: Vec<String>,
 }
 
 /// A finished transient run with the waveform viewer state.
@@ -571,6 +577,8 @@ impl Default for SchEditor {
             pz_pick: false,
             pz: None,
             loop_part: String::new(),
+            psrr_source: String::new(),
+            psrr_out: String::new(),
             loop_from: String::new(),
             loop_pick: false,
             src_form: None,
@@ -746,6 +754,7 @@ mod impedance;
 mod polezero;
 mod variation;
 mod sensitivity;
+mod psrr;
 mod tran;
 mod dc;
 mod library;

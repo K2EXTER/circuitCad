@@ -101,6 +101,8 @@ impl SchEditor {
                     self.run_loop();
                 } else if old.as_ref().is_some_and(|o| o.pz_run) {
                     self.run_pz();
+                } else if old.as_ref().is_some_and(|o| o.psrr_run) {
+                    self.run_psrr();
                 } else {
                     self.run_ac();
                 }

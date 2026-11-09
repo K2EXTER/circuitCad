@@ -102,7 +102,7 @@ impl SchEditor {
         self.pz = summary;
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
         let ghost = self.ac.as_ref().and_then(|v| v.ghost.clone());
-        self.ac = Some(AcView { outcome: ac_outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: true });
+        self.ac = Some(AcView { outcome: ac_outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: true, psrr_run: false, notes: vec![] });
         self.wave_mode = WaveMode::Ac;
     }
 

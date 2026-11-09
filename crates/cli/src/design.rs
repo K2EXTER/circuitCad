@@ -396,6 +396,45 @@ impl Session {
         Ok(obj(json!({"circuit_ok": gate.is_none(), "net": pos[0], "points": r.freq.len(), "per_decade": decades, "min_ohm": lo, "max_ohm": hi, "peaks_and_dips": extrema, "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
     }
 
+    /// `psrr NET F0 F1 [supply=V1] [ppd=10]`: how much of a ripple on one supply reaches NET (every other AC source is silenced).
+    pub fn psrr(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        if pos.len() < 3 {
+            return Err("psrr NET FSTART FSTOP [supply=V1] [ppd=10]   (a 1 V ripple on the supply alone, the other AC sources silenced; the answer is the share reaching NET and the rejection in dB)".into());
+        }
+        let num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("'{s}' is not a positive frequency (write 10, 1k, 100k ...)"));
+        let (f0, f1) = (num(&pos[1])?, num(&pos[2])?);
+        let ppd: usize = opt(&kv, "ppd").and_then(|s| s.parse().ok()).unwrap_or(10);
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let supplies = sim_core::supply_sources(&c);
+        let supply = match opt(&kv, "supply") {
+            Some(s) => s.trim().to_string(),
+            None => supplies.first().cloned().ok_or("psrr: no DC voltage source to ripple (place one, or name it with supply=)")?,
+        };
+        let c = sim_core::with_supply_ripple(&c, &supply).map_err(|e| format!("{e} (supplies: {})", supplies.join(", ")))?;
+        let r = sim_core::ac_analysis(&c, &sim_core::AcSettings { fstart: f0, fstop: f1, sweep: sim_core::AcSweep::Decade(ppd) }).map_err(|e| e.to_string())?;
+        let net = pos[0].trim();
+        let sig = r.signals.iter().find(|s| s.name.eq_ignore_ascii_case(&format!("V({net})"))).ok_or_else(|| {
+            let some: Vec<&str> = c.names.iter().map(String::as_str).filter(|n| !n.contains('.') && *n != "0").take(30).collect();
+            format!("no net '{net}' in the circuit (nets: {})", some.join(", "))
+        })?;
+        let db = sig.db();
+        let s = sim_core::psrr_summary(&r.freq, &db).ok_or("psrr: no frequency points")?;
+        let mut decades = vec![];
+        let mut f = f0;
+        while f <= f1 * 1.0001 {
+            let i = r.freq.iter().enumerate().min_by(|a, b| (a.1 / f).ln().abs().total_cmp(&(b.1 / f).ln().abs())).map(|(i, _)| i).unwrap_or(0);
+            decades.push(json!({"hz": round6(r.freq[i]), "gain_db": db[i], "rejection_db": -db[i]}));
+            f *= 10.0;
+        }
+        let at: Vec<Value> = s.at.iter().map(|(f, d)| json!({"hz": f, "rejection_db": d})).collect();
+        Ok(obj(json!({"circuit_ok": gate.is_none(), "supply": supply, "net": net, "per_decade": decades, "at": at,
+            "lowest_frequency": {"hz": s.low.0, "rejection_db": s.low.1}, "worst": {"hz": s.worst.0, "rejection_db": s.worst.1},
+            "note": "rejection_db = how many dB smaller the ripple is at NET (60 = a 1 V ripple leaves 1 mV). Bundled IC models mostly leave the supply out of their insides: compare their share with the datasheet's PSRR curve",
+            "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
+    }
+
     /// `noise OUT[,REF] F0 F1 [ppd=10] [input=V1] [temp=27] [top=8]`: thermal and shot noise at an output node.
     pub fn noise(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);

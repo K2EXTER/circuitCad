@@ -42,7 +42,7 @@ impl SchEditor {
         };
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
         let ghost = self.ac.as_ref().and_then(|v| v.ghost.clone());
-        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: false });
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: false, psrr_run: false, notes: vec![] });
         self.wave_mode = WaveMode::Ac;
     }
 
@@ -53,7 +53,7 @@ impl SchEditor {
         let mut start_probe = false;
         let mut open_help = false;
         ui.horizontal(|ui| {
-            crate::widgets::heading_inline(ui, if view.loop_run { "ループゲイン (帰還を1周したゲイン)" } else if view.pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if view.pz_run { i18n::tr("H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります") } else if view.loop_run { i18n::tr("0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)") } else { i18n::tr("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります") });
+            crate::widgets::heading_inline(ui, if view.psrr_run { "電源除去比 (電源の揺れが届く割合)" } else if view.loop_run { "ループゲイン (帰還を1周したゲイン)" } else if view.pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if view.psrr_run { i18n::tr("選んだ電源にだけ 1 V の揺れを入れたとき、各点に届く揺れの大きさです。-60 dB なら 1 V の揺れが 1 mV に (除去比 60 dB)。周波数が高い所で悪くなるのが普通で、そこはコンデンサで吸います") } else if view.pz_run { i18n::tr("H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります") } else if view.loop_run { i18n::tr("0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)") } else { i18n::tr("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります") });
             if crate::widgets::close_button(ui, "波形") {
                 close = true;
             }
@@ -61,7 +61,7 @@ impl SchEditor {
                 open_help = true;
             }
         });
-        let AcView { outcome, selected, plot: st, ghost, .. } = view;
+        let AcView { outcome, selected, plot: st, ghost, psrr_run, notes, .. } = view;
         match outcome {
             Err(msgs) => {
                 for m in msgs {
@@ -69,6 +69,9 @@ impl SchEditor {
                 }
             }
             Ok(res) => {
+                for n in notes.iter() {
+                    ui.label(i18n::tr_dyn(n));
+                }
                 crate::widgets::warning_lines(ui, "ac_warn", &res.warnings, |_| false);
                 plot::scale_bar(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
                 ui.horizontal_top(|ui| {
@@ -111,7 +114,8 @@ impl SchEditor {
                                 Some((name.to_string(), txt))
                             })
                             .collect();
-                        if !corner.is_empty() {
+                        // a ripple share has no cutoff to speak of
+                        if !corner.is_empty() && !*psrr_run {
                             egui::Grid::new("ac_corner_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                 ui.label("");
                                 for (name, _) in &corner {

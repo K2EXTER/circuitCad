@@ -82,6 +82,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   mc NET [measure=dc|cutoff|rise|...] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=]
                                         Monte Carlo: parts drawn at random inside their tolerance; mean, std, the 95 % range a few built
                                         boards should land in, a histogram, the parts that matter; lo=/hi= give the share inside the limits
+  psrr NET FSTART FSTOP [supply=V1] [ppd=10]
+                                        supply rejection: a 1 V ripple on one DC supply alone (the first one if not named), the share
+                                        that reaches NET per decade (dB) and the rejection at 100 Hz, 1 kHz ...; the worst frequency
   noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]
                                         thermal / shot noise at net OUT (or the difference OUT,REF): rms over the band,
                                         density per decade, the biggest contributors; input=V1 also refers it to that source
@@ -273,6 +276,7 @@ impl Session {
             "ac" => self.ac(args),
             "noise" => self.noise(args),
             "zout" => self.zout(args),
+            "psrr" => self.psrr(args),
             "loopgain" => self.loopgain(args),
             "pz" => self.pz(args),
             "worst" => self.worst(args),

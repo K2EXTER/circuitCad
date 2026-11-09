@@ -229,6 +229,12 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 // --mc <node> [ac]  (the variation analysis; AC measures the -3 dB frequency and uses the --ac range)
                 app.sch.analyze_variation(node, args.get(i + 2).is_some_and(|m| m == "ac"));
             }
+        if let Some(i) = args.iter().position(|a| a == "--psrr")
+            && let (Some(src), Some(out)) = (args.get(i + 1), args.get(i + 2)) {
+                // --psrr <supply source or -> <node>  (uses the --ac frequency range)
+                app.sch.set_psrr_settings(if src == "-" { "" } else { src }, out);
+                app.sch.analyze_psrr();
+            }
         if let Some(i) = args.iter().position(|a| a == "--sens")
             && let Some(node) = args.get(i + 1) {
                 // --sens <node> [ac]  (sensitivity: every part moved by 1 %; AC measures the -3 dB frequency with the --ac range)

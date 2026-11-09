@@ -38,3 +38,33 @@
 # crates/app/src/schematic/lessons/basics.rs
 どの部品が電圧を決めているか、感度で見る	See which parts set the voltage, with the sensitivity
 同じ欄の「感度を計算 (効く部品の順)」を押します。部品を 1 つずつ 1% 動かして、MID がどれだけ動くかを効く順に並べます。電源 V1 は 1 (1% 上がると MID も 1% 上がる)、R1 と R2 は、同じ大きさで逆向きに効きます (10k と 10k なら R2 が +0.5、R1 が −0.5)。出力は電源にそのまま比例し、抵抗は比だけが効くので、電源の精度も抵抗の精度も大切だと分かります。	Press "Sensitivity (parts by effect)" in the same section. It moves each part by 1% on its own and lists how far MID moves, strongest first. The supply V1 shows 1 (1% up on V1 is 1% up on MID); R1 and R2 act by the same amount in opposite directions (with 10k and 10k, R2 is +0.5 and R1 is −0.5). The output follows the supply directly and only the ratio of the resistors matters, so the accuracy of the supply and of the resistors both count
+# crates/app/src/schematic/psrr.rs
+AC解析の欄の開始・終了周波数と点数/デケードを数値で入力してください (例: 10, 1Meg, 20)	Enter the start and stop frequencies and points per decade in the AC analysis section as numbers (e.g. 10, 1Meg, 20)
+揺らす電源がありません。直流の電圧源 (5V の V1 など) を置いてください	There is no supply to ripple. Place a DC voltage source (such as a 5V V1)
+揺れを見る点 (出力のネット) を選んでください	Choose the point to watch the ripple at (the output net)
+ネット {out} が見つかりません	Net {out} not found
+周波数の点がありません	No frequency points
+{source} に 1 V の揺れを入れて、{out} に届く揺れを見ています (グラフの dB がマイナスほど、よく除去しています)	A 1 V ripple is put on {source} and the ripple reaching {out} is shown (the more negative the dB on the graph, the better it is rejected)
+除去比: {} で {:.1} dB (揺れは {} 倍)、いちばん悪いのは {} で {:.1} dB (揺れは {} 倍)	Rejection: {@2} dB at {@1} (ripple × {@3}); worst {@5} dB at {@4} (ripple × {@6})
+注意: {} は IC のモデルです。同梱のモデルの多くは、実物の電源除去比を持たないか簡単にしてあり、特に高い周波数では実物よりよく出ます。IC の分は、データシートの PSRR のグラフと比べてください	Note: {} is an IC model. Most bundled models leave out or simplify a real part's supply rejection, so it comes out better than the real part, above all at high frequencies. For the IC's share, compare with the PSRR graph in its datasheet
+電源除去比: {src} → {out}、いちばん悪いのは {} で {:.1} dB	Supply rejection: {src} → {out}, worst {@4} dB at {@3}
+電源除去比の計算に失敗: {}	Supply rejection failed: {}
+揺らす電源	Rippled supply
+揺れ (リップル・雑音) が乗る電源。直流の電圧源から選びます。この電源だけに 1 V の揺れを入れ、ほかの電源の「AC」は外して計算します (回路図は書き換えません)	The supply that carries the ripple (or noise), chosen from the DC voltage sources. A 1 V ripple is put on this supply alone and the "AC" of the other sources is left out (the schematic is not changed)
+揺れがどれだけ届くかを見るネット。レギュレータやアンプの出力を選びます	The net where you see how much ripple arrives. Choose the output of a regulator or amplifier
+電源除去比を計算	Compute supply rejection
+電源の揺れが、選んだ点にどれだけ届くかを周波数ごとに計算します。周波数の範囲と点数は AC解析の欄を使います。結果は AC解析のグラフに出ます	Computes, per frequency, how much of the supply ripple reaches the chosen point. The frequency range and points come from the AC analysis section. The result is drawn in the AC analysis graph
+# crates/app/src/schematic/ac.rs
+電源除去比 (電源の揺れが届く割合)	Supply rejection (share of the supply ripple that arrives)
+選んだ電源にだけ 1 V の揺れを入れたとき、各点に届く揺れの大きさです。-60 dB なら 1 V の揺れが 1 mV に (除去比 60 dB)。周波数が高い所で悪くなるのが普通で、そこはコンデンサで吸います	The ripple reaching each point when a 1 V ripple is put on the chosen supply alone. -60 dB means 1 V of ripple becomes 1 mV (60 dB of rejection). It usually gets worse at high frequencies, where capacitors soak it up
+# crates/app/src/schematic/panel/mod.rs
+電源除去比 (PSRR)	Supply rejection (PSRR)
+電源に乗った揺れ (リップル・雑音) が、出力にどれだけ漏れるかを周波数ごとに見ます。選んだ電源だけを揺らすので、回路図の値を「AC 1」に書き換える必要はありません。レギュレータやアンプの電源にコンデンサが要る理由が、数字で分かります。周波数範囲・点数は AC解析の欄を共用	Shows, per frequency, how much of the ripple (or noise) on a supply leaks to the output. Only the chosen supply is rippled, so there is no need to change any value to "AC 1". It shows in numbers why regulators and amplifiers need capacitors on their supplies. The frequency range and points are shared with the AC analysis section
+# crates/app/src/help.rs
+電源の揺れが出力に漏れるか	Does supply ripple leak to the output
+電源除去比 (PSRR)。選んだ電源だけを揺らして、見る点に届く割合を周波数ごとに出します	Supply rejection (PSRR). Ripples the chosen supply alone and shows, per frequency, the share reaching the point you watch
+# crates/app/src/samples.rs
+電源の揺れを減らす (RC フィルタ + ツェナー)	Reducing supply ripple (RC filter + zener)
+9V の電源を、RC フィルタ (R1・C1) とツェナー (D1) で 5.1V にします。「解析」タブの「電源除去比 (PSRR)」で、揺らす電源を V1、見る点を VOUT にして計算すると、電源の揺れが VOUT にどれだけ届くかが周波数ごとに出ます (見る点を FILT にすると、フィルタだけの効き)。C1 や C2 を小さくして計算し直すと、揺れが届きやすくなるのが分かります	Turns a 9V supply into 5.1V with an RC filter (R1, C1) and a zener (D1). In "Supply rejection (PSRR)" on the "Analysis" tab, choose V1 as the rippled supply and VOUT as the point, and compute: it shows per frequency how much of the supply ripple reaches VOUT (choose FILT to see the filter alone). Make C1 or C2 smaller and compute again to see more ripple get through
+# crates/sim-core/src/psrr.rs
+電源 {source} が見つかりません。電圧源 (V1 など) の部品番号を選んでください	Supply {source} not found. Choose the part number of a voltage source (such as V1)

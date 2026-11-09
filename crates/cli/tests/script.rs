@@ -2015,3 +2015,33 @@ fn record_probes_keeps_only_the_probed_signals_and_record_all_keeps_everything()
     let (e, ok) = run(&format!("{rc}tran 5m 50u probe=V(out) record=some\n"));
     assert!(!ok && e.iter().any(|v| v["error"].as_str().is_some_and(|e| e.contains("not 'all' or 'probes'"))), "{e:?}");
 }
+
+#[test]
+fn psrr_of_an_rc_filter_grows_twenty_db_a_decade_above_its_corner() {
+    // R1 1k and C1 1u from the supply: corner 159 Hz; the AC 1 on the signal source V2 is silenced
+    let (a, ok) = run("new
+add V 5 as=V1
+add V 0 AC 1 as=V2
+add R 1k as=R1
+add C 1u as=C1
+add R 1k as=R2
+net VCC V1.+ R1.1
+net OUT R1.2 C1.1
+net IN V2.+ R2.1
+net GND V1.- C1.2 V2.- R2.2
+erc
+psrr out 10 100k supply=V1
+psrr in 10 100k
+psrr out 10 100k supply=V9
+");
+    assert!(!ok, "the last line names no supply");
+    let p = a.iter().find(|v| v["net"] == "out").unwrap();
+    assert_eq!(p["supply"], "V1");
+    let at = |f: f64| p["at"].as_array().unwrap().iter().find(|x| x["hz"].as_f64() == Some(f)).unwrap()["rejection_db"].as_f64().unwrap();
+    assert!((at(10e3) - 36.0).abs() < 0.5, "{p}");
+    assert!((at(100e3) - at(10e3) - 20.0).abs() < 0.5);
+    // the first supply is taken when none is named, and nothing reaches IN from it
+    let q = a.iter().find(|v| v["net"] == "in").unwrap();
+    assert_eq!(q["supply"], "V1");
+    assert!(q["worst"]["rejection_db"].as_f64().unwrap() > 150.0, "{q}");
+}
