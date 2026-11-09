@@ -162,7 +162,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         }
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("許容差 %  R"));
-            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_r).desired_width(26.0)).on_hover_text(i18n::tr("抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です"));
+            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_r).desired_width(26.0)).on_hover_text(i18n::tr("抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です。許容差の欄は、回路図と一緒に保存されます"));
             ui.label("C");
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_c).desired_width(26.0)).on_hover_text(i18n::tr("コンデンサの誤差。セラミック (X7R) は 10〜20%、電解は 20% ほどです"));
             ui.label("L");

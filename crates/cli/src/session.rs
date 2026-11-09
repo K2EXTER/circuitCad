@@ -128,6 +128,10 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board fab DIR                         Gerber, drill, BOM, placement and the zip
 ";
 
+/// The keys of a `.schjson` that belong to the app, not to the circuit (`specs`: the spec table, `bench`: measured curves,
+/// `tolerances`: the variation analysis's part tolerances).
+const EXTRA_KEYS: [&str; 3] = ["specs", "bench", "tolerances"];
+
 pub struct Session {
     pub sch: Schematic,
     pub lib: Vec<PartDef>,
@@ -138,6 +142,9 @@ pub struct Session {
     pub(crate) broken: Option<(pcb_core::breakage::Health, pcb_core::breakage::Injected)>,
     /// Where the next part goes: (x, y, tallest part of the row).
     pub cursor: (i32, i32, i32),
+    /// What the app keeps next to the circuit in a `.schjson` (the spec table, bench recordings, tolerances): this tool does not
+    /// use them, but `save` writes them back so that opening and saving a file loses nothing. Cleared by `new`.
+    pub(crate) extras: serde_json::Map<String, Value>,
     pub lib_errors: Vec<String>,
     /// `--strict`: an ERC error stops the script (and `dc`, `tran`, `board import` refuse to run on a sheet with ERC errors).
     pub strict: bool,
@@ -205,7 +212,7 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_dir(&dir);
-        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, broken: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
+        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
@@ -218,15 +225,21 @@ impl Session {
             "new" => {
                 self.sch = Schematic::default();
                 self.cursor = (8, 8, 0);
+                self.extras.clear();
                 Ok(obj(json!({})))
             }
             "open" => {
                 let f = args.first().ok_or("open FILE.schjson")?;
                 let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
                 let mut v: Value = serde_json::from_str(&text).map_err(|e| format!("{f}: {e}"))?;
-                // the app keeps its spec table in the same file; this tool does not use it
+                // the app keeps its spec table, bench recordings and tolerances in the same file: set aside, written back by `save`
+                self.extras.clear();
                 if let Value::Object(m) = &mut v {
-                    m.remove("specs");
+                    for key in EXTRA_KEYS {
+                        if let Some(x) = m.remove(key) {
+                            self.extras.insert(key.to_string(), x);
+                        }
+                    }
                 }
                 self.sch = serde_json::from_value(v).map_err(|e| format!("{f}: {e}"))?;
                 self.cursor = self.cursor_below();
@@ -238,13 +251,18 @@ impl Session {
                 let k = part_lib::kicad_sch::parse_schematic(&text)?;
                 let imp = part_lib::kicad_import::import(&k);
                 self.sch = imp.sch;
+                self.extras.clear();
                 self.cursor = self.cursor_below();
                 (self.last_dc, self.last_tran, self.last_ac) = (None, None, None);
                 Ok(obj(json!({"parts": imp.basic + imp.custom, "plain_parts": imp.basic, "parts_from_kicad_symbols": imp.custom, "nets": k.nets.len(), "notes": imp.notes})))
             }
             "save" => {
                 let f = args.first().ok_or("save FILE.schjson")?;
-                let text = serde_json::to_string_pretty(&self.sch).map_err(|e| e.to_string())?;
+                let mut v = serde_json::to_value(&self.sch).map_err(|e| e.to_string())?;
+                if let Value::Object(m) = &mut v {
+                    m.extend(self.extras.clone());
+                }
+                let text = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
                 std::fs::write(f, text).map_err(|e| format!("{f}: {e}"))?;
                 Ok(obj(json!({"file": f})))
             }

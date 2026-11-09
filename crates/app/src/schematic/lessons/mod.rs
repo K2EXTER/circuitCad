@@ -230,12 +230,13 @@ impl SchEditor {
     pub fn load_sample(&mut self, json: &str) -> bool {
         // a sample may carry its spec table and bench recordings next to the circuit
         let Ok(mut value) = serde_json::from_str::<serde_json::Value>(json) else { return false };
-        let (specs, bench) = (take_specs(&mut value), take_bench(&mut value));
+        let (specs, bench, tol) = (take_specs(&mut value), take_bench(&mut value), take_tolerances(&mut value));
         let Ok(sch) = serde_json::from_value::<Schematic>(value) else { return false };
         self.new_file();
         self.sch = sch;
         self.set_spec_items(&specs);
         self.set_bench(bench);
+        self.set_tolerances(tol);
         self.reset_history();
         self.fit_pending = true;
         // a finished circuit is for looking at: a click on it must not drop the part the blank sheet starts with

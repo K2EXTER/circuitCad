@@ -112,7 +112,7 @@ DCスイープを実行	Run DC sweep
 10% に達してから、最終値の ±2% に収まるまでの時間	Time from reaching 10% until it stays within ±2% of the final value
 落ち着いたあとの電圧	Voltage after settling
 許容差 %  R	Tolerance %  R
-抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です	Resistor tolerance. 5% is typical for carbon film and 1% for metal film
+抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です。許容差の欄は、回路図と一緒に保存されます	Resistor tolerance. 5% is typical for carbon film and 1% for metal film. The tolerance boxes are saved with the schematic
 コンデンサの誤差。セラミック (X7R) は 10〜20%、電解は 20% ほどです	Capacitor tolerance. About 10-20% for ceramic (X7R) and 20% for electrolytic
 コイルの誤差。10〜20% が一般的です	Inductor tolerance. 10-20% is typical
 直流電源の電圧の誤差。最悪ケースだけに使います (ランダムのばらつきは電源をそのままにします)。0 なら電源は変えません。例: 5V 電源が ±5% なら 5	Tolerance of DC supply voltages. Used only for the worst case (random spread leaves supplies as they are). 0 leaves supplies unchanged. E.g. 5 for a 5V supply of ±5%

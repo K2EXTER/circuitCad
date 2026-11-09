@@ -2045,3 +2045,33 @@ psrr out 10 100k supply=V9
     assert_eq!(q["supply"], "V1");
     assert!(q["worst"]["rejection_db"].as_f64().unwrap() > 150.0, "{q}");
 }
+
+#[test]
+fn open_and_save_keep_what_the_app_stores_next_to_the_circuit() {
+    // the sample carries a spec table and bench recordings; a tolerance is added to it here
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rc_lowpass_measured.schjson");
+    let mut v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&src).unwrap()).unwrap();
+    v["tolerances"] = serde_json::json!({"r": "1", "c": "10", "l": "10", "v": "0"});
+    let dir = std::env::temp_dir().join(format!("ccad_extras_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (a, b) = (dir.join("a.schjson"), dir.join("b.schjson"));
+    std::fs::write(&a, serde_json::to_string(&v).unwrap()).unwrap();
+    let (out, ok) = run(&format!("open {}
+value R1 2k
+save {}
+", a.display(), b.display()));
+    assert!(ok, "{out:?}");
+    let w: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&b).unwrap()).unwrap();
+    for key in ["specs", "bench", "tolerances"] {
+        assert_eq!(w[key], v[key], "{key} kept");
+    }
+    // a new sheet starts without them
+    let (_, ok) = run(&format!("open {}
+new
+save {}
+", a.display(), b.display()));
+    assert!(ok);
+    let w: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&b).unwrap()).unwrap();
+    assert!(w.get("specs").is_none() && w.get("tolerances").is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}

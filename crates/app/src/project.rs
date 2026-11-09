@@ -1,7 +1,7 @@
 //! A project: the schematic and the board saved together in one `.ccproj` file.
 
 use pcb_core::Board;
-use crate::schematic::{take_bench, take_specs, with_bench, with_specs, BenchData, SpecItem};
+use crate::schematic::{take_bench, take_specs, take_tolerances, with_bench, with_specs, with_tolerances, BenchData, SpecItem, Tolerances};
 use sch_core::Schematic;
 use std::path::Path;
 
@@ -15,14 +15,17 @@ pub struct Project {
     pub specs: Vec<SpecItem>,
     /// Bench recordings drawn over the plots (empty in older files).
     pub bench: BenchData,
+    /// The part tolerances of the variation analysis (the defaults in older files).
+    pub tolerances: Tolerances,
 }
 
 const VERSION: u64 = 1;
 
-pub fn save(path: &Path, schematic: &Schematic, board: &Board, specs: &[SpecItem], bench: &BenchData) -> Result<(), String> {
+pub fn save(path: &Path, schematic: &Schematic, board: &Board, specs: &[SpecItem], bench: &BenchData, tolerances: &Tolerances) -> Result<(), String> {
     let mut sheet = serde_json::to_value(schematic).map_err(|e| e.to_string())?;
     with_specs(&mut sheet, specs);
     with_bench(&mut sheet, bench);
+    with_tolerances(&mut sheet, tolerances);
     let value = serde_json::json!({ "version": VERSION, "schematic": sheet, "board": board });
     let text = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
     std::fs::write(path, text).map_err(|e| e.to_string())
@@ -43,9 +46,10 @@ pub fn parse(text: &str) -> Result<Project, String> {
     let mut sheet = part("schematic")?;
     let specs = take_specs(&mut sheet);
     let bench = take_bench(&mut sheet);
+    let tolerances = take_tolerances(&mut sheet);
     let schematic = serde_json::from_value(sheet).map_err(|e| format!("回路図の部分が読めません ({e})"))?;
     let board = serde_json::from_value(part("board")?).map_err(|e| format!("基板の部分が読めません ({e})"))?;
-    Ok(Project { schematic, board, specs, bench })
+    Ok(Project { schematic, board, specs, bench, tolerances })
 }
 
 #[cfg(test)]
@@ -61,8 +65,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("demo.ccproj");
         let spec = SpecItem { kind: "dc_voltage".into(), target: "OUT".into(), lo: "4.75".into(), hi: "5.25".into(), at: String::new(), measured: "4.93".into() };
-        save(&f, &s, &b, std::slice::from_ref(&spec), &BenchData::default()).unwrap();
+        let tol = Tolerances { r: "1".into(), ..Default::default() };
+        save(&f, &s, &b, std::slice::from_ref(&spec), &BenchData::default(), &tol).unwrap();
         let p = load(&f).unwrap();
+        assert_eq!(p.tolerances, tol);
         assert_eq!(p.schematic.components.len(), 1);
         assert_eq!(p.specs, vec![spec]);
         assert_eq!(p.board.name, "demo");
