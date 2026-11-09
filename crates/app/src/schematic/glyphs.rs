@@ -12,8 +12,8 @@ type P = (f32, f32);
 /// Which body a part gets: the `glyph` of the part when it names one, else a guess from the part
 /// name and pin names (so parts installed before the glyphs existed look right too).
 pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 18] = [
-        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal", "comparator",
+    const KNOWN: [&str; 19] = [
+        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal", "comparator", "motor",
     ];
     if let Some(g) = KNOWN.iter().find(|g| **g == sym.glyph) {
         return Some(g);
@@ -436,6 +436,24 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
             v.push(L(bus, a.1, bus, c.1 + 1.0));
             v.push(L(n.0, n.1, n.0, c.1 + 1.0));
             v.push(L(n.0, c.1 + 1.0, bus, c.1 + 1.0));
+            Some(v)
+        }
+        "motor" => {
+            // a circle with an M; the leads run from the pins to the circle (the speed pin SPD is the shaft)
+            let r = 1.1f32;
+            let edge = |p: P| {
+                let len = (p.0 * p.0 + p.1 * p.1).sqrt().max(1e-3);
+                (p.0 / len * r, p.1 / len * r)
+            };
+            let mut v = vec![C(0.0, 0.0, r), L(-0.45, 0.45, -0.45, -0.45), L(-0.45, -0.45, 0.0, 0.1), L(0.0, 0.1, 0.45, -0.45), L(0.45, -0.45, 0.45, 0.45)];
+            for names in [&["+"][..], &["-"][..], &["SPD"][..]] {
+                if let Some(g) = find(l, names) {
+                    let (t, e) = (pt(g), edge(pt(g)));
+                    v.push(L(t.0, t.1, e.0, e.1));
+                } else if names[0] != "SPD" {
+                    return None;
+                }
+            }
             Some(v)
         }
         "ldr" => {

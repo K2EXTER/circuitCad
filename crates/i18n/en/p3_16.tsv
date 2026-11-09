@@ -66,3 +66,15 @@ LED が点かないとき、ベースとコレクタの電圧を測り、トラ�
 1 か所が壊れるとループ全体が狂う回路と、基板そのものの故障	Circuits where one broken place throws off the whole loop, and faults of the board itself
 帰還のある電源 (直列レギュレータ)	A supply with feedback (series regulator)
 基準・帰還・出力の「約束」のどれが破れているかで、ループの中の故障を絞る	Narrow a fault inside the loop down by which "promise" (reference, feedback, output) is broken
+# the motor (sim-core fault.rs / chain.rs / ratings.rs, app samples.rs / glyph_pick.rs)
+モーターの巻線が断線	Motor winding open
+モーターの巻線のレアショート ({:.0}% の巻数)	Motor winding layer short ({:.0}% of the turns)
+モーターの軸がロック (回らない)	Motor shaft locked (does not turn)
+{r} (モーター) の巻線の発熱 {} が目安 {} を超えた	{r} (motor): the winding's heat {} is past its limit of {}
+巻線が焼けて断線	Winding burned open
+{} は、壊す前から定格を超えていたので、連鎖からは外しています。起動の電流などが入っているなら、過渡解析の終了時間を長くして、落ち着いたあとで見ます (判定は後半の時間で行います)	{} was already past its rating before anything broke, so it is left out of the chain. If the start-up current is in the run, make the transient analysis longer and look once things have settled (the check uses the second half of the run)
+モーターの巻線の発熱 (電流² × 巻線の抵抗) です。負荷が重い・軸が止まっていると電流が増えて熱くなります。負荷を軽くするか、電圧を下げるか、大きいモーターにします	This is the heat of the motor's winding (current² × winding resistance). A heavy load or a stopped shaft raises the current and the heat. Lighten the load, lower the voltage, or use a bigger motor
+モーターを回す (MOSFET + 負荷のトルク)	Driving a motor (MOSFET + load torque)
+小型の DC モーター M1 を、MOSFET Q1 で 5ms からオンにします。D1 はフライバックダイオード。M1 の SPD の電圧が回転数 (1V = 1000rpm) で、電流源 I1 が 50ms から 1mN·m の負荷をかけます (1mA = 1mN·m)。過渡解析の終了を 100m にして「過渡解析を実行」すると、起動の大きな電流と、負荷で回転が落ちて電流が増える様子が見えます。故障シミュレーションで部品 M1.CJ (軸) の「モーターの軸がロック」を選んで「連鎖故障を追う」と、Q1 が壊れ、巻線が焼ける順が出ます	The MOSFET Q1 turns the small DC motor M1 on at 5ms. D1 is the flyback diode. The voltage at M1's SPD is its speed (1V = 1000rpm), and the current source I1 puts a load of 1mN·m on it from 50ms (1mA = 1mN·m). Set the transient end to 100m and "Run transient analysis" to see the large start-up current, and the speed dropping and the current rising under the load. In the fault simulation, choose part M1.CJ (the shaft), "Motor shaft locked", and "Follow the chain of failures": Q1 breaks, then the winding burns
+モーター	Motor
+ピン名 + - (回転数は SPD)	Pin names + - (speed at SPD)

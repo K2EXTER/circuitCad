@@ -126,6 +126,12 @@ pub fn meets(req: &Requirement, r: &sch_core::PartRatings, check_voltage: bool) 
 
 /// Power dissipated inside a component: its own element, or the net of a sub-circuit's elements.
 fn dissipation(dc: &DcResult, c: &Component) -> Option<f64> {
+    // a motor turns most of its power into motion: only its winding resistance makes heat
+    if dc.element(&format!("{}.LW", c.refdes)).is_some()
+        && let Some(w) = dc.element(&format!("{}.RW", c.refdes))
+    {
+        return Some(w.power);
+    }
     let own = dc.element(&c.refdes).map(|e| e.power);
     let prefix = format!("{}.", c.refdes);
     let inner: Vec<f64> = dc.elements.iter().filter(|e| e.name.starts_with(&prefix)).map(|e| e.power).collect();
@@ -176,7 +182,10 @@ pub fn check_ratings(sch: &Schematic, dc: &DcResult) -> Vec<RatingIssue> {
                 let Some(lv) = level(p, limit) else { continue };
                 let word = if lv == RatingLevel::Over { "目安を超えています" } else { "余裕が少ないです" };
                 let basis = if from_sheet.is_some() { "最大定格" } else { "この形の目安" };
-                let hint = if c.kind == Kind::Resistor {
+                let motor = dc.element(&format!("{}.LW", c.refdes)).is_some();
+                let hint = if motor {
+                    "モーターの巻線の発熱 (電流² × 巻線の抵抗) です。負荷が重い・軸が止まっていると電流が増えて熱くなります。負荷を軽くするか、電圧を下げるか、大きいモーターにします"
+                } else if c.kind == Kind::Resistor {
                     "抵抗値を大きくして電流を減らすか、大きい形(1206 / 2512 や 1/2W 品)に変えます。発熱は P = V × I = I² × R で決まります"
                 } else {
                     "電圧差を減らす(入力電圧を下げる / 電流を減らす)か、放熱板つきの形(TO-220 など)にします。LDO やリニアレギュレータは (入力 − 出力) × 電流 が熱になります"

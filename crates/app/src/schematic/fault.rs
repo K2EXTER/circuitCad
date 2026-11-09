@@ -3,7 +3,7 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-use sim_core::{likelihood, Likelihood, assess_safety, chain_failure, dc_op, Danger, break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
+use sim_core::{likelihood, Likelihood, assess_safety, chain_failure, dc_op, Danger, break_part, break_pin, breakable, describe_fault, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
 
 /// The last fault run.
 pub(super) struct FaultView {
@@ -535,11 +535,8 @@ impl SchEditor {
                 self.fault_pin.clear();
             }
         });
-        let whole: Vec<Fault> = circuit
-            .as_ref()
-            .and_then(|c| c.elements.iter().find(|e| e.name() == self.fault_part))
-            .map(fault_applicable)
-            .unwrap_or_default();
+        // the faults of this part (a motor's winding and shaft have their own)
+        let whole: Vec<Fault> = circuit.as_ref().map(|c| sim_core::faults_of(c, &self.fault_part)).unwrap_or_default();
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("壊し方"));
             if ui.selectable_label(self.fault_pin.is_empty(), i18n::tr("部品全体")).on_hover_text(i18n::tr("部品そのものが壊れた/付け間違えた状態にします")).clicked() {

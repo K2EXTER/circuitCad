@@ -182,11 +182,18 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                         Some("ac") => app.sch.set_fault_ac(args.get(i + 4).map_or("", |n| n.as_str())),
                         _ => {}
                     }
+                    // a chain follows a transient run: the --tran time when given (it is read later for the waveform)
+                    if let Some(t) = args.iter().position(|a| a == "--tran")
+                        && let (Some(stop), Some(step)) = (args.get(t + 1), args.get(t + 2)) {
+                            app.sch.set_tran_settings(stop, step);
+                        }
                     if chain {
                         app.sch.analyze_fault_chain();
                     } else {
                         app.sch.analyze_fault();
                     }
+                    // the result is in the section: show it
+                    app.sch.show_analysis_section("fault");
                 }
                 None => {}
             }

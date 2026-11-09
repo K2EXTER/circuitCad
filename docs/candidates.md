@@ -114,7 +114,7 @@ KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の�
 | J19 | 沿面距離(高電圧の点検)、ネットタイ、キャスタレーション | Altium に沿面距離のルール(確認) |
 | J20 | ショートカットの変更、明るい画面への切り替え、英語の画面 | 今は暗い画面だけ(`theme.rs`)、日本語だけ |
 | J21 | プラグインの仕組み | 今は CLI と MCP で足りている |
-| J22 | シミュレーションの残り: S パラメータ・IBIS、銅の面積から熱抵抗(基板の銅の面積から θ を出す案。Q1 のドレインの銅が約 11 mm² のとき 110 K/W 近く、1 in² で 42 K/W)、平均化したスイッチング電源のモデル、モーター | 伝送線路は無損失の LC のはしごだけ |
+| J22 | シミュレーションの残り: S パラメータ・IBIS、銅の面積から熱抵抗(基板の銅の面積から θ を出す案。Q1 のドレインの銅が約 11 mm² のとき 110 K/W 近く、1 in² で 42 K/W)、平均化したスイッチング電源のモデル(モーターは 2026-11-10 に `DC_MOTOR` を追加) | 伝送線路は無損失の LC のはしごだけ |
 
 出典は `docs/competitor-comparison.md` の出典の節と、次のページ: KiCad 9.0 のリリース https://www.kicad.org/blog/2025/02/Version-9.0.0-Released/ ・KiCad 10.0 のリリース https://www.kicad.org/blog/2026/03/Version-10.0.0-Released/ ・EasyEDA の Standard と Pro の比較 https://prodocs.easyeda.com/en/introduction/std-vs-pro/ ・EasyEDA の面付け https://prodocs.easyeda.com/en/pcb/tools-panelize-advanced/ ・EasyEDA の部品表(価格と在庫) https://prodocs.easyeda.com/en/pcb/export-bill-of-materials-bom/ ・Altium の Draftsman https://www.altium.com/documentation/altium-designer/streamlining-board-design-documentation-with-draftsman?version=21 ・Fusion Electronics https://www.autodesk.com/products/fusion-360/blog/18-things-need-to-know-fusion-360-electronics/ ・Quadcept の製品 https://www.quadcept.com/ja/product/cad/ ・Quadcept の Gerber の重ね比べ https://www.quadcept.com/ja/manual/pcb/post-752
 

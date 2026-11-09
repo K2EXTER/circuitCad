@@ -12,7 +12,7 @@
 
 use crate::circuit::Circuit;
 use crate::dc::{dc_op, SimError};
-use crate::fault::{applicable, break_part, breakable, likelihood, Likelihood};
+use crate::fault::{break_part, breakable, faults_of, likelihood, Likelihood};
 use sch_core::{Kind, Schematic};
 
 /// One voltage read on the circuit, against ground.
@@ -67,8 +67,7 @@ pub fn hypotheses(sch: &Schematic, temp_c: f64, rare: bool) -> Result<Vec<Hypoth
     // whole-part faults
     let mut jobs: Vec<(String, String, f64, Circuit)> = vec![];
     for part in breakable(&c) {
-        let Some(e) = c.elements.iter().find(|e| e.name() == part) else { continue };
-        for fault in applicable(e) {
+        for fault in faults_of(&c, &part) {
             let l = likelihood(&c, &part, fault);
             if l == Likelihood::Rare && !rare {
                 continue;

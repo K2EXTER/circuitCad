@@ -50,11 +50,51 @@ fn is_top_level(name: &str) -> bool {
     !name.contains('.')
 }
 
+/// A motor model (the library's `DC_MOTOR`) names its insides so that they can be broken: the winding `LW` (with its resistance
+/// `RW`) and the shaft's inertia `CJ` (with the torque source `BT`). `Some((part, what))` for those two.
+pub fn motor_inside(c: &Circuit, name: &str) -> Option<(String, &'static str)> {
+    let (part, inner) = name.rsplit_once('.')?;
+    let has = |n: &str| c.elements.iter().any(|e| e.name() == format!("{part}.{n}"));
+    match inner {
+        "LW" if has("RW") => Some((part.to_string(), "winding")),
+        "CJ" if has("BT") => Some((part.to_string(), "shaft")),
+        _ => None,
+    }
+}
+
+/// The resistance of a winding: the coil's own `<name>.DCR`, or the motor's `<part>.RW` beside its winding `<part>.LW`.
+pub(crate) fn winding_resistance(c: &Circuit, element: &str) -> Option<(String, f64)> {
+    let mut names = vec![format!("{element}.DCR")];
+    if let Some(part) = element.strip_suffix(".LW") {
+        names.push(format!("{part}.RW"));
+    }
+    names.iter().find_map(|n| {
+        c.elements.iter().find_map(|e| match e {
+            Element::Resistor { name, r, .. } if name == n => Some((name.clone(), *r)),
+            _ => None,
+        })
+    })
+}
+
+/// The faults of the element named `name` of `c`: a motor's winding opens or shorts some turns, its shaft locks; anything else
+/// as `applicable` says.
+pub fn faults_of(c: &Circuit, name: &str) -> Vec<Fault> {
+    match motor_inside(c, name) {
+        Some((_, "winding")) => {
+            let mut v = vec![Fault::Open];
+            v.extend(TURN_SHORTS.map(Fault::TurnShort));
+            v
+        }
+        Some(_) => vec![Fault::Short],
+        None => c.elements.iter().find(|e| e.name() == name).map(applicable).unwrap_or_default(),
+    }
+}
+
 /// Names of the parts that can be broken (not the parts inside a library IC model).
 pub fn breakable(c: &Circuit) -> Vec<String> {
     c.elements
         .iter()
-        .filter(|e| is_top_level(e.name()) && !applicable(e).is_empty())
+        .filter(|e| (is_top_level(e.name()) && !applicable(e).is_empty()) || motor_inside(c, e.name()).is_some())
         .map(|e| e.name().to_string())
         .collect()
 }
@@ -94,6 +134,10 @@ pub enum Likelihood {
 pub fn likelihood(c: &Circuit, element: &str, fault: Fault) -> Likelihood {
     use Likelihood::*;
     let Some(e) = c.elements.iter().find(|e| e.name() == element) else { return Rare };
+    // a motor's winding burns open or shorts some turns, and its shaft jams: all of them happen with age and overload
+    if motor_inside(c, element).is_some() {
+        return Occasional;
+    }
     match (e, fault) {
         (_, Fault::Reverse) => Rare,
         (Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. }, Fault::Open | Fault::Short) => Common,
@@ -120,7 +164,7 @@ pub(crate) fn main_pins(e: &Element) -> Option<(usize, usize)> {
 /// `c` with `element` broken as `fault`. `None` when the fault does not apply to that element.
 pub fn with_fault(c: &Circuit, element: &str, fault: Fault) -> Option<Circuit> {
     let idx = c.elements.iter().position(|e| e.name() == element)?;
-    if !applicable(&c.elements[idx]).contains(&fault) {
+    if !faults_of(c, element).contains(&fault) {
         return None;
     }
     let mut out = c.clone();
@@ -149,9 +193,10 @@ pub fn with_fault(c: &Circuit, element: &str, fault: Fault) -> Option<Circuit> {
             if let Element::Inductor { l, .. } = &mut out.elements[idx] {
                 *l *= keep * keep;
             }
-            // the winding resistance (`<name>.DCR`) shrinks with the turns that are left
-            let dcr = format!("{element}.DCR");
-            if let Some(Element::Resistor { r, .. }) = out.elements.iter_mut().find(|e| e.name() == dcr) {
+            // the winding resistance (`<name>.DCR`, or a motor's `<part>.RW`) shrinks with the turns that are left
+            if let Some((dcr, _)) = winding_resistance(c, element)
+                && let Some(Element::Resistor { r, .. }) = out.elements.iter_mut().find(|e| e.name() == dcr)
+            {
                 *r *= keep;
             }
         }
@@ -178,6 +223,12 @@ pub struct Broken {
 
 /// Words for `fault` on `element`, which depend on what the element is (a supply "dies", it is not "opened").
 pub fn describe_fault(c: &Circuit, element: &str, fault: Fault) -> String {
+    match (motor_inside(c, element).map(|m| m.1), fault) {
+        (Some("winding"), Fault::Open) => return "モーターの巻線が断線".into(),
+        (Some("winding"), Fault::TurnShort(x)) => return format!("モーターの巻線のレアショート ({:.0}% の巻数)", x * 100.0),
+        (Some("shaft"), _) => return "モーターの軸がロック (回らない)".into(),
+        _ => {}
+    }
     match (c.elements.iter().find(|e| e.name() == element), fault) {
         (Some(Element::VSource { .. }), Fault::Open) => "電源が切れる (0V)".into(),
         (Some(Element::VSource { .. }), Fault::Scale(k)) => format!("電圧が {k} 倍"),

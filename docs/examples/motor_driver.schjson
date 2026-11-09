@@ -1,0 +1,391 @@
+{
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        8,
+        10
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "3"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        16,
+        10
+      ],
+      "refdes": "V2",
+      "rot": 0,
+      "value": "PULSE(0 3.3 5m 10u 10u 1 2)"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        26,
+        8
+      ],
+      "refdes": "R1",
+      "rot": 0,
+      "value": "100"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        38,
+        8
+      ],
+      "refdes": "R2",
+      "rot": 0,
+      "value": "100k"
+    },
+    {
+      "custom": {
+        "glyph": "nmos",
+        "name": "AO3400A",
+        "pins": [
+          {
+            "name": "G",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "D",
+            "number": "3",
+            "side": "top"
+          },
+          {
+            "name": "S",
+            "number": "2",
+            "side": "bottom"
+          }
+        ],
+        "prefix": "Q",
+        "shops": {
+          "lcsc": "C20917"
+        },
+        "sim": {
+          "element": "M",
+          "kind": "model",
+          "limits": [
+            "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+            "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+            "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+          ],
+          "name": "AO3400A",
+          "params": {},
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "text": ".model AO3400A NMOS(VTO=1.05 KP=1.2 LAMBDA=0.02 CGS=250p CGD=30p)"
+        }
+      },
+      "footprint": "SOT-23_MOS",
+      "kind": "Custom",
+      "pos": [
+        10,
+        22
+      ],
+      "refdes": "Q1",
+      "rot": 0,
+      "value": "AO3400A"
+    },
+    {
+      "custom": {
+        "glyph": "motor",
+        "name": "DC_MOTOR",
+        "pins": [
+          {
+            "name": "+",
+            "number": "1",
+            "side": "top"
+          },
+          {
+            "name": "-",
+            "number": "2",
+            "side": "bottom"
+          },
+          {
+            "name": "SPD",
+            "number": "SPD",
+            "side": "right",
+            "sim_only": true
+          }
+        ],
+        "prefix": "M",
+        "ratings": {
+          "p_max": 1.5,
+          "rows": [
+            {
+              "condition": "目安",
+              "name": "定格電圧",
+              "value": "3V"
+            },
+            {
+              "condition": "3V",
+              "name": "無負荷回転数",
+              "value": "約 9000rpm"
+            },
+            {
+              "condition": "3V、軸を止めたとき",
+              "name": "拘束電流",
+              "value": "約 2A"
+            },
+            {
+              "condition": "連続。超えると巻線が焼ける",
+              "name": "巻線の発熱の目安",
+              "value": "1.5W"
+            }
+          ]
+        },
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "電気と機械を1つの回路にした、理想化したモデルです。回転数は SPD の電圧 (1V = 1000rpm)、トルクは電流 (1mA = 1mN·m) で表します。",
+            "ブラシと整流子の火花・電気ノイズ、ブラシの電圧降下、磁石の温度による弱まり、巻線の温度による抵抗の増加は入っていません。",
+            "値は小型の 3V 級モーターの目安です。実物は型番ごとに、巻線の抵抗・回転数・電流が大きく違います。データシートの値で確かめてください。"
+          ],
+          "name": "DC_MOTOR",
+          "params": {},
+          "pins": [
+            "1",
+            "2",
+            "SPD"
+          ],
+          "text": ".subckt DC_MOTOR p n spd\n* armature: winding resistance RW and inductance LW (the fault simulation finds them by these names), current sense VS\nRW p a 1.5\nLW a b 200u\nVS b c 0\n* back EMF: Ke = 3 mV/(rad/s); spd is in krpm (1 V = 1000 rpm = 104.72 rad/s)\nBE c n V=0.003*104.72*V(spd)\n* shaft: torque Kt * I into spd (1 A = 1 N*m), inertia J = 5e-8 kg*m^2 as a capacitor, friction B = 4.8e-7 N*m*s as a resistor\nBT 0 spd I=0.003*I(VS)\nCJ spd 0 5.236u\nRB spd 0 19894\n.ends DC_MOTOR"
+        }
+      },
+      "footprint": "MotorWire_2P",
+      "kind": "Custom",
+      "pos": [
+        20,
+        24
+      ],
+      "refdes": "M1",
+      "rot": 0,
+      "value": "DC_MOTOR"
+    },
+    {
+      "custom": {
+        "glyph": "schottky",
+        "name": "1N5819",
+        "pins": [
+          {
+            "name": "K",
+            "number": "K",
+            "side": "right"
+          },
+          {
+            "name": "A",
+            "number": "A",
+            "side": "left"
+          }
+        ],
+        "prefix": "D",
+        "ratings": {
+          "i_max": 1.0,
+          "rows": [
+            {
+              "condition": "IF = 1A",
+              "name": "順方向電圧",
+              "value": "0.6V (最大)"
+            }
+          ],
+          "v_max": 40.0
+        },
+        "sim": {
+          "element": "D",
+          "kind": "model",
+          "limits": [
+            "簡易なダイオードのモデル (IS・N・RS) です。順方向電圧は電流と温度で変わります。温度の影響は、解析の温度スイープで確かめられます。",
+            "接合容量と逆回復時間は扱いません。実物は、切り替わる瞬間に短い逆向きの電流が流れるので、高い周波数の整流では損失や雑音になります。",
+            "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+          ],
+          "name": "1N5819",
+          "params": {},
+          "pins": [
+            "A",
+            "K"
+          ],
+          "text": ".model 1N5819 D(IS=500n N=1.1 RS=0.04 BV=40 IBV=1m)"
+        }
+      },
+      "footprint": "D_DO-41_P10.16",
+      "kind": "Custom",
+      "pos": [
+        34,
+        21
+      ],
+      "refdes": "D1",
+      "rot": 0,
+      "value": "1N5819"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "ISource",
+      "pos": [
+        8,
+        38
+      ],
+      "refdes": "I1",
+      "rot": 0,
+      "sim_only": true,
+      "value": "PULSE(0 1m 50m 1m 1m 1 2)"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "Ground",
+      "pos": [
+        16,
+        36
+      ],
+      "refdes": "#PWR01",
+      "rot": 0,
+      "value": "GND"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        20,
+        20
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        36,
+        21
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        20,
+        28
+      ],
+      "text": "DRAIN"
+    },
+    {
+      "pos": [
+        32,
+        21
+      ],
+      "text": "DRAIN"
+    },
+    {
+      "pos": [
+        10,
+        20
+      ],
+      "text": "DRAIN"
+    },
+    {
+      "pos": [
+        16,
+        8
+      ],
+      "text": "VG"
+    },
+    {
+      "pos": [
+        24,
+        8
+      ],
+      "text": "VG"
+    },
+    {
+      "pos": [
+        28,
+        8
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        8,
+        22
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        36,
+        8
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        24,
+        24
+      ],
+      "text": "SPD"
+    },
+    {
+      "pos": [
+        8,
+        40
+      ],
+      "text": "SPD"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        16,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        40,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        24
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        8,
+        36
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": []
+}

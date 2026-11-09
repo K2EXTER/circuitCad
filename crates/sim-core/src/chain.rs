@@ -5,7 +5,7 @@
 
 use crate::circuit::{Circuit, Element};
 use crate::dc::SimError;
-use crate::fault::{main_pins, with_fault, Fault};
+use crate::fault::{describe_fault, main_pins, motor_inside, winding_resistance, with_fault, Fault};
 use crate::ratings::package_power_limit;
 use crate::tran::{transient, TranResult, TranSettings};
 use crate::value::format_value;
@@ -45,6 +45,8 @@ pub struct ChainReport {
     pub supply: Option<(String, f64, f64)>,
     /// For a layer short: what circulates in the shorted turns.
     pub loop_heat: Option<LoopHeat>,
+    /// Parts already past their rating in the healthy circuit (left out of the chain: not the fault's doing).
+    pub already_over: Vec<String>,
 }
 
 /// The shorted turns of a coil are a one-turn-like secondary closed on itself: a large circulating
@@ -62,12 +64,17 @@ pub struct LoopHeat {
     pub p_healthy: Option<f64>,
 }
 
+/// The heat a small motor's winding stands for long when its part gives none (W).
+const MOTOR_W: f64 = 1.5;
+
 /// The shorted turns burn out when they dissipate more than this (W): they are a short piece of thin wire.
 const LOOP_BURN_W: f64 = 0.25;
 
 /// A part past its rating in a transient run.
 struct Over {
     refdes: String,
+    /// What to break when it is not the part's own element (a motor's winding `<part>.LW`), and how.
+    inside: Option<(String, Fault)>,
     /// Peak or mean figure over the rating (> 1 means past it): which part goes first.
     ratio: f64,
     why: String,
@@ -115,17 +122,28 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
     let mut out = vec![];
     for comp in sch.components.iter().filter(|x| !x.kind.is_power_symbol()) {
         let r = comp.refdes.as_str();
+        // a motor: the heat of its winding (current² × winding resistance); past the limit the winding burns open
+        let winding = format!("{r}.LW");
+        if let (Some((_, rw)), Some(cur)) = (winding_resistance(c, &winding), tr.signal(&format!("I({winding})"))) {
+            let limit = comp.custom.as_ref().and_then(|s| s.ratings.as_ref()).and_then(|x| x.p_max).unwrap_or(MOTOR_W);
+            if let Some(p) = time_mean(&tr.time, w, |k| cur.values[k] * cur.values[k] * rw)
+                && p > limit
+            {
+                out.push(Over { refdes: r.into(), inside: Some((winding, Fault::Open)), ratio: p / limit, why: format!("{r} (モーター) の巻線の発熱 {} が目安 {} を超えた", watts(p), watts(limit)) });
+            }
+            continue;
+        }
         let Some(el) = c.elements.iter().find(|e| e.name() == r) else { continue };
         let Some(cur) = tr.signal(&format!("I({r})")) else { continue };
         let ratings = comp.custom.as_ref().and_then(|s| s.ratings.as_ref());
         let peak = in_window(&tr.time, w).map(|k| cur.values[k].abs()).fold(0.0, f64::max);
         if let Some(imax) = ratings.and_then(|x| x.i_max)
             && peak > imax {
-                out.push(Over { refdes: r.into(), ratio: peak / imax, why: format!("{r} のピーク電流 {} が最大定格 {} を超えた", amps(peak), amps(imax)) });
+                out.push(Over { refdes: r.into(), inside: None, ratio: peak / imax, why: format!("{r} のピーク電流 {} が最大定格 {} を超えた", amps(peak), amps(imax)) });
                 continue;
             }
         if comp.kind == Kind::Led && peak > 0.03 {
-            out.push(Over { refdes: r.into(), ratio: peak / 0.03, why: format!("{r} (LED) のピーク電流 {} が上限の目安 30 mA を超えた", amps(peak)) });
+            out.push(Over { refdes: r.into(), inside: None, ratio: peak / 0.03, why: format!("{r} (LED) のピーク電流 {} が上限の目安 30 mA を超えた", amps(peak)) });
             continue;
         }
         let Some((a, b)) = main_pins(el) else { continue };
@@ -134,7 +152,7 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
         if let (Element::Diode { .. }, Some(vmax)) = (el, ratings.and_then(|x| x.v_max)) {
             let rev = in_window(&tr.time, w).map(|k| -volt(k)).fold(0.0, f64::max);
             if rev > vmax {
-                out.push(Over { refdes: r.into(), ratio: rev / vmax, why: format!("{r} にかかる逆電圧 {rev:.0} V が耐圧 {vmax:.0} V を超えた") });
+                out.push(Over { refdes: r.into(), inside: None, ratio: rev / vmax, why: format!("{r} にかかる逆電圧 {rev:.0} V が耐圧 {vmax:.0} V を超えた") });
                 continue;
             }
         }
@@ -144,7 +162,7 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
             let limit = ratings.and_then(|x| x.p_max).or_else(|| package_power_limit(&comp.footprint_name())).unwrap_or(COIL_W);
             let Some(p) = time_mean(&tr.time, w, |k| cur.values[k] * cur.values[k] * dcr) else { continue };
             if p > limit {
-                out.push(Over { refdes: r.into(), ratio: p / limit, why: format!("{r} (コイル) の巻線の発熱 {} が目安 {} を超えた", watts(p), watts(limit)) });
+                out.push(Over { refdes: r.into(), inside: None, ratio: p / limit, why: format!("{r} (コイル) の巻線の発熱 {} が目安 {} を超えた", watts(p), watts(limit)) });
             }
             continue;
         }
@@ -154,7 +172,7 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
         let limit = ratings.and_then(|x| x.p_max).or_else(|| package_power_limit(&comp.footprint_name()));
         let (Some(limit), Some(p)) = (limit, time_mean(&tr.time, w, |k| cur.values[k] * volt(k))) else { continue };
         if p > limit {
-            out.push(Over { refdes: r.into(), ratio: p / limit, why: format!("{r} の平均消費電力 {} が定格・目安 {} を超えた", watts(p), watts(limit)) });
+            out.push(Over { refdes: r.into(), inside: None, ratio: p / limit, why: format!("{r} の平均消費電力 {} が定格・目安 {} を超えた", watts(p), watts(limit)) });
         }
     }
     out
@@ -187,14 +205,19 @@ pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, 
     let mut cur = with_fault(c, element, fault).ok_or_else(|| SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label())))?;
     let healthy = transient(c, set)?;
     // what was already past its rating before anything broke is not the fault's doing
-    let mut failed: Vec<String> = overs(sch, c, &healthy, w).into_iter().map(|o| o.refdes).collect();
+    let already_over: Vec<String> = overs(sch, c, &healthy, w).into_iter().map(|o| o.refdes).collect();
+    let mut failed = already_over.clone();
     failed.push(element.to_string());
+    // a motor's winding or shaft is told as the motor ("M1", "モーターの軸がロック")
+    // (only the broken element is out of the chain: a motor whose shaft locked can still burn its winding)
+    let shown = motor_inside(c, element).map_or(element.to_string(), |(part, _)| part);
     let supply0 = supply_peak(c, &healthy, w);
     let mut rep = ChainReport {
-        steps: vec![ChainStep { part: element.into(), what: fault.label(), why: "最初に壊した部品".into(), fault }],
+        steps: vec![ChainStep { part: shown.clone(), what: describe_fault(c, element, fault), why: "最初に壊した部品".into(), fault }],
         end: ChainEnd::Settled,
         supply: None,
         loop_heat: None,
+        already_over,
     };
     let mut burn: Option<String> = None;
     loop {
@@ -211,10 +234,7 @@ pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, 
                 time_mean(&tr.time, w, |k| s.values[k] * s.values[k]).map(f64::sqrt)
             };
             if let (Some(i_coil), Some(i_h)) = (rms(&tr), rms(&healthy)) {
-                let dcr = c.elements.iter().find_map(|e| match e {
-                    Element::Resistor { name, r, .. } if *name == format!("{element}.DCR") => Some(*r),
-                    _ => None,
-                });
+                let dcr = winding_resistance(c, element).map(|(_, r)| r);
                 let i_loop = i_coil * (1.0 - x) / x;
                 let heat = LoopHeat { coil: element.into(), i_coil, i_loop, p_loop: dcr.map(|r| i_loop * i_loop * x * r), p_healthy: dcr.map(|r| i_h * i_h * r) };
                 // electrical overloads happen at once; the shorted turns take seconds to cook, so they go last
@@ -234,6 +254,10 @@ pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, 
         over.sort_by(|a, b| b.ratio.total_cmp(&a.ratio));
         // the worst offender goes first; a part with no way to fail (an IC) is skipped
         let next = over.into_iter().find_map(|o| {
+            if let Some((_, f)) = &o.inside {
+                let f = *f;
+                return Some((o, f));
+            }
             let comp = sch.components.iter().find(|x| x.refdes == o.refdes)?;
             let el = cur.elements.iter().find(|e| e.name() == o.refdes)?;
             let f = failure_of(comp, el)?;
@@ -243,7 +267,7 @@ pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, 
             // nothing else is past its rating: the shorted turns finally burn through
             if let Some(why) = burn.take()
                 && let Some(broken) = with_fault(&cur, element, Fault::Open) {
-                    rep.steps.push(ChainStep { part: element.into(), what: "焼損して断線".into(), why, fault: Fault::Open });
+                    rep.steps.push(ChainStep { part: shown.clone(), what: "焼損して断線".into(), why, fault: Fault::Open });
                     cur = broken;
                     continue;
                 }
@@ -253,9 +277,11 @@ pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, 
             rep.end = ChainEnd::Cut;
             break;
         }
-        let Some(broken) = with_fault(&cur, &o.refdes, f) else { break };
+        let target = o.inside.as_ref().map_or(o.refdes.clone(), |(e, _)| e.clone());
+        let Some(broken) = with_fault(&cur, &target, f) else { break };
         failed.push(o.refdes.clone());
-        rep.steps.push(ChainStep { part: o.refdes, what: if f == Fault::Open { "過熱・過電流で断線".into() } else { "破損してショート".into() }, why: o.why, fault: f });
+        let what = if o.inside.is_some() { "巻線が焼けて断線".into() } else if f == Fault::Open { "過熱・過電流で断線".into() } else { "破損してショート".into() };
+        rep.steps.push(ChainStep { part: o.refdes, what, why: o.why, fault: f });
         cur = broken;
     }
     Ok(rep)
@@ -282,6 +308,12 @@ impl ChainReport {
             ChainEnd::Unsolvable => "このあと回路は計算できなくなります。実機では大電流が流れ続け、電源や配線まで傷むおそれがあります".into(),
             ChainEnd::Cut => format!("{MAX_CHAIN} 個壊れてもまだ続きます。ここで打ち切りました"),
         });
+        if !self.already_over.is_empty() {
+            out.push(format!(
+                "{} は、壊す前から定格を超えていたので、連鎖からは外しています。起動の電流などが入っているなら、過渡解析の終了時間を長くして、落ち着いたあとで見ます (判定は後半の時間で行います)",
+                self.already_over.join("・")
+            ));
+        }
         if let Some((n, h, f)) = &self.supply
             && *f > 1.5 * h && *f > 0.05 {
                 out.push(format!("電源 {n} のピーク電流は {} → {} になります。電源の直後にヒューズを入れると、連鎖が広がる前に切れて止められます", amps(*h), amps(*f)));

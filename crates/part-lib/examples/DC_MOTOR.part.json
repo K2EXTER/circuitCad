@@ -1,0 +1,88 @@
+{
+  "name": "DC_MOTOR",
+  "category": "モーター",
+  "description": "小型の DC モーター (3V 級の目安。巻線 1.5Ω・0.2mH、3V で無負荷 約 9000rpm・約 0.15A、拘束 2A)。+ から − へ電流が流れると回る。SPD ピン (シミュレーション専用) の電圧が回転数 (1V = 1000rpm)。SPD から電流を引き出すと負荷のトルク (1mA = 1mN·m): 電流源の + を GND、− を SPD につなぐ。故障シミュレーションで巻線の断線・レアショートと軸のロックを試せる",
+  "prefix": "M",
+  "footprint_name": "MotorWire_2P",
+  "glyph": "motor",
+  "pins": [
+    {
+      "number": "1",
+      "name": "+",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "-",
+      "side": "bottom"
+    },
+    {
+      "number": "SPD",
+      "name": "SPD",
+      "side": "right",
+      "sim_only": true
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -1.27,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 1.0
+      },
+      {
+        "pin": "2",
+        "x": 1.27,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 1.0
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "DC_MOTOR",
+    "text": ".subckt DC_MOTOR p n spd\n* armature: winding resistance RW and inductance LW (the fault simulation finds them by these names), current sense VS\nRW p a 1.5\nLW a b 200u\nVS b c 0\n* back EMF: Ke = 3 mV/(rad/s); spd is in krpm (1 V = 1000 rpm = 104.72 rad/s)\nBE c n V=0.003*104.72*V(spd)\n* shaft: torque Kt * I into spd (1 A = 1 N*m), inertia J = 5e-8 kg*m^2 as a capacitor, friction B = 4.8e-7 N*m*s as a resistor\nBT 0 spd I=0.003*I(VS)\nCJ spd 0 5.236u\nRB spd 0 19894\n.ends DC_MOTOR",
+    "pins": [
+      "1",
+      "2",
+      "SPD"
+    ],
+    "limits": [
+      "電気と機械を1つの回路にした、理想化したモデルです。回転数は SPD の電圧 (1V = 1000rpm)、トルクは電流 (1mA = 1mN·m) で表します。",
+      "ブラシと整流子の火花・電気ノイズ、ブラシの電圧降下、磁石の温度による弱まり、巻線の温度による抵抗の増加は入っていません。",
+      "値は小型の 3V 級モーターの目安です。実物は型番ごとに、巻線の抵抗・回転数・電流が大きく違います。データシートの値で確かめてください。"
+    ]
+  },
+  "ratings": {
+    "p_max": 1.5,
+    "rows": [
+      {
+        "name": "定格電圧",
+        "value": "3V",
+        "condition": "目安"
+      },
+      {
+        "name": "無負荷回転数",
+        "value": "約 9000rpm",
+        "condition": "3V"
+      },
+      {
+        "name": "拘束電流",
+        "value": "約 2A",
+        "condition": "3V、軸を止めたとき"
+      },
+      {
+        "name": "巻線の発熱の目安",
+        "value": "1.5W",
+        "condition": "連続。超えると巻線が焼ける"
+      }
+    ]
+  }
+}

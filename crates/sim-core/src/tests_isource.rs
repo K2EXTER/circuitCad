@@ -89,3 +89,51 @@ fn the_load_step_sample_dips_by_the_zeners_resistance() {
     assert!((m.after - m.extreme).abs() < 0.002, "a zener and a capacitor do not overshoot");
     assert!(m.recovery.is_some_and(|t| t > 50e-6 && t < 500e-6), "{:?}", m.recovery);
 }
+
+/// The motor sample (`DC_MOTOR` driven by a MOSFET from 5 ms; 1 mN·m of load from a current source on its speed pin from 50 ms).
+fn motor_sample() -> (Schematic, crate::Circuit) {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/motor_driver.schjson");
+    let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let c = from_schematic(&s).unwrap();
+    (s, c)
+}
+
+#[test]
+fn the_motor_turns_and_slows_under_its_load() {
+    let (_, c) = motor_sample();
+    let r = transient(&c, &TranSettings { tstop: 0.1, tstep: 50e-6, uic: false }).unwrap();
+    let spd = &r.signal("V(SPD)").unwrap().values;
+    let i = &r.signal("I(V1)").unwrap().values;
+    // off before the gate turns on at 5 ms; about 8.6 krpm (1 V = 1000 rpm) unloaded by 45 ms
+    let at = |t: f64| spd[r.time.iter().position(|x| *x >= t).unwrap()];
+    assert!(at(4e-3).abs() < 0.01);
+    assert!((at(48e-3) - 8.6).abs() < 0.2, "{}", at(48e-3));
+    // 1 mN·m of load from 50 ms (a current source of 1 mA on the speed pin): slower, and more current
+    let end = *spd.last().unwrap();
+    assert!((end - 6.87).abs() < 0.15, "{end}");
+    // the start draws far more than the run: the winding sees nearly the stall current until the back EMF builds
+    let peak = i.iter().fold(0.0f64, |m, x| m.max(x.abs()));
+    assert!(peak > 1.3 && (i.last().unwrap().abs() - 0.447).abs() < 0.03, "peak {peak}, end {}", i.last().unwrap());
+}
+
+#[test]
+fn a_locked_shaft_burns_the_winding_open_in_the_chain() {
+    let (s, c) = motor_sample();
+    assert!(crate::breakable(&c).iter().any(|n| n == "M1.LW") && crate::breakable(&c).iter().any(|n| n == "M1.CJ"));
+    assert_eq!(crate::describe_fault(&c, "M1.CJ", crate::Fault::Short), "モーターの軸がロック (回らない)");
+    let rep = crate::chain_failure(&s, &c, "M1.CJ", crate::Fault::Short, &TranSettings { tstop: 0.1, tstep: 50e-6, uic: false }).unwrap();
+    let parts: Vec<String> = rep.steps.iter().map(|x| format!("{} {}", x.part, x.what)).collect();
+    // about 2 A through 1.5 Ω: 6 W in the winding, well past its 1.5 W
+    assert!(parts.iter().any(|p| p.starts_with("M1 ") && p.contains("巻線")), "{parts:?}");
+    // a healthy motor under its load is inside its rating: nothing burns
+    let ok = crate::check_ratings(&s, &crate::dc_op(&c).unwrap());
+    assert!(ok.iter().all(|x| x.refdes != "M1"), "{:?}", ok.iter().map(|x| &x.message).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_layer_short_in_the_motor_winding_lowers_its_resistance() {
+    let (_, c) = motor_sample();
+    let b = crate::with_fault(&c, "M1.LW", crate::Fault::TurnShort(0.5)).unwrap();
+    let r = |c: &crate::Circuit| c.elements.iter().find_map(|e| match e { crate::Element::Resistor { name, r, .. } if name == "M1.RW" => Some(*r), _ => None }).unwrap();
+    assert!((r(&b) - 0.75).abs() < 1e-9 && (r(&c) - 1.5).abs() < 1e-9);
+}
