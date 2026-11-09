@@ -8,7 +8,7 @@ circuitCad combines schematic capture, SPICE-style simulation, PCB layout and Ge
 
 > **English UI.** The whole interface (menus, hover help, error messages, the operation guide, the glossary, the learning paths and all lessons) can be shown in English: **Settings → Language / 言語 → English**, or start it with `--lang en`. The English text was translated with AI help from the Japanese original; if a sentence reads oddly, please open an issue (or fix the line in [`crates/i18n/en/`](crates/i18n/en/)).
 >
-> The English mode is included from **`v0.1.0-alpha.10`**; the zips up to `v0.1.0-alpha.9` are Japanese only.
+> The English mode is included from **`v0.1.0-alpha.11`**; the zips up to `v0.1.0-alpha.10` are Japanese only.
 
 [**Download for Windows**](https://github.com/K2EXTER/circuitCad/releases) (alpha, no installer: unzip and run `circuitCad.exe`)
 
@@ -85,7 +85,7 @@ Save this as `led.ccad` and run `ccad led.ccad`. In the answer of `dc`, `element
 - The command list and the caveats are in [docs/cli.md](docs/cli.md) (Japanese).
 
 ## Try it in five minutes
-1. Download the zip from the [releases page](https://github.com/K2EXTER/circuitCad/releases), unzip it and run `circuitCad.exe`. Windows SmartScreen may warn about the unsigned executable: choose "More info" then "Run anyway". Use `v0.1.0-alpha.10` or later for the English UI.
+1. Download the zip from the [releases page](https://github.com/K2EXTER/circuitCad/releases), unzip it and run `circuitCad.exe`. Windows SmartScreen may warn about the unsigned executable: choose "More info" then "Run anyway". Use `v0.1.0-alpha.11` or later for the English UI.
 2. Choose **Settings → Language / 言語 → English**. The setting is kept for the next start.
 3. **File → Open sample circuit → "Make 5V from 12V to light an LED"** (a three-terminal regulator circuit).
 4. In the left panel, open the **Analysis** tab and press **Run DC operating point**. Voltages appear as wire colours and numbers, currents as arrows.
