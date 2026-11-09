@@ -13,7 +13,7 @@
 
 use crate::circuit::{Circuit, Element};
 use crate::dc::SimError;
-use crate::montecarlo::{measure, scale, McMeasure, McSettings, TranMetric};
+use crate::montecarlo::{measure, scale, McMeasure, McSettings};
 
 #[derive(Clone, Debug)]
 pub struct WcSettings {
@@ -168,13 +168,7 @@ pub fn worst_case(circuit: &Circuit, s: &WcSettings) -> Result<WorstCase, SimErr
     let down_rss = wc_parts.iter().map(|p| p.low.min(p.high).min(0.0).powi(2)).sum::<f64>().sqrt();
     wc_parts.sort_by(|a, b| b.span().total_cmp(&a.span()));
     let named = |high: &[bool]| -> Vec<(String, bool)> { parts.iter().zip(high).map(|(&(i, _), &h)| (circuit.elements[i].name().to_string(), h)).collect() };
-    let unit = match &s.measure {
-        McMeasure::DcVoltage => "V",
-        McMeasure::Cutoff { .. } => "Hz",
-        McMeasure::Tran { metric: TranMetric::RiseTime | TranMetric::SettlingTime, .. } => "s",
-        McMeasure::Tran { metric: TranMetric::Overshoot, .. } => "%",
-        McMeasure::Tran { metric: TranMetric::FinalValue, .. } => "V",
-    };
+    let unit = s.measure.unit();
     Ok(WorstCase {
         output,
         unit,

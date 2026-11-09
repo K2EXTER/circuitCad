@@ -202,6 +202,10 @@ pub(super) fn mc_done(e: &SchEditor) -> bool {
     e.mc.as_ref().is_some_and(|m| m.outcome.is_ok())
 }
 
+pub(super) fn sens_done(e: &SchEditor) -> bool {
+    e.sens.as_ref().is_some_and(|s| s.outcome.is_ok())
+}
+
 pub(super) fn temp_sweep_done(e: &SchEditor) -> bool {
     e.sweep.as_ref().is_some_and(|s| s.temp && s.outcome.is_ok())
 }

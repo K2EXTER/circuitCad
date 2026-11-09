@@ -40,6 +40,7 @@ mod temperature;
 #[cfg(test)]
 pub(crate) mod tran;
 mod worstcase;
+mod sensitivity;
 #[cfg(not(test))]
 mod tran;
 mod value;
@@ -49,6 +50,7 @@ pub use coverage::{model_coverage, ModelCoverage, PartNote};
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use expr::Expr;
 pub use loopgain::{loop_gain, BreakDirection, LoopGain};
+pub use sensitivity::{sensitivity, SensPart, SensSettings, Sensitivity};
 pub use worstcase::{worst_case, WcPart, WcSettings, WorstCase};
 pub use impedance::{character as z_character, impedance_analysis, z_extrema, ImpedanceResult, ZExtremum};
 pub use polezero::{pole_zero, transfer_function, PoleZero, Root, TransferFunction};

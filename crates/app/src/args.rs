@@ -229,6 +229,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 // --mc <node> [ac]  (the variation analysis; AC measures the -3 dB frequency and uses the --ac range)
                 app.sch.analyze_variation(node, args.get(i + 2).is_some_and(|m| m == "ac"));
             }
+        if let Some(i) = args.iter().position(|a| a == "--sens")
+            && let Some(node) = args.get(i + 1) {
+                // --sens <node> [ac]  (sensitivity: every part moved by 1 %; AC measures the -3 dB frequency with the --ac range)
+                app.sch.analyze_sensitivity(node, args.get(i + 2).is_some_and(|m| m == "ac"));
+            }
         if let Some(i) = args.iter().position(|a| a == "--noise") {
             // --noise <out node> <input source or -> <temp C> (uses the --ac frequency range)
             if let (Some(out), Some(inp), Some(t)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {

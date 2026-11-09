@@ -1,0 +1,40 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/sensitivity.rs
+測る点を選んでください	Choose the point to measure
+感度: 完了 ({} 個の部品。いちばん効くのは {})	Sensitivity: done ({} parts; {} matters most)
+感度: 完了	Sensitivity: done
+感度の計算に失敗: {}	Sensitivity failed: {}
+感度 (どの部品が結果を決めているか)	Sensitivity (which parts set the result)
+感度の表示	the sensitivity view
+{} のカットオフ周波数	cutoff frequency of {}
+{} のステップ応答	step response of {}
+{what} = {} のとき、部品を 1 つずつ ±{:.0}% 動かして、結果がどれだけ動くかを見ました	With {what} = {}, each part was moved by ±{:.0}% on its own to see how far the result moves
+上がり	up
+下がり	down
+{} が 1% 大きいと、結果は {:.2}% {dir}ます。精度が要るなら、まず {} を誤差の小さい部品にします	1% more {@1} moves the result {@3} by {@2}%. If this value must be precise, give {@4} a tighter tolerance first
+どの部品を動かしても、結果はほとんど動きません。値を決めているのは IC やダイオードのような、値を動かせない部品です	Moving any part hardly moves the result. It is set by parts whose values cannot be moved here, such as ICs and diodes
+{quiet} 個の部品は、ほとんど効きません (1% 動かして結果が 0.01% 未満)。安い部品でかまいません	{quiet} parts hardly matter (1% on the part moves the result less than 0.01%). Cheap parts are fine there
+動かすと計算できなかった部品: {}	Parts that could not be solved when moved: {}
+クリックすると、回路図でその部品を選びます	Click to select the part on the schematic
+1% 大きいと	At +1%
+その部品だけを 1% 大きくしたとき、結果がどれだけ変わるか (結果の単位で)	How much the result changes when only this part grows by 1% (in the unit of the result)
+効き (%/%)	Effect (%/%)
+部品が 1% 変わると結果が何 % 変わるか。1 なら同じだけ、0.5 なら半分、マイナスなら逆向きに動きます。種類の違う部品 (抵抗と電源など) を、同じものさしで比べられます	How many percent the result changes when the part changes by 1%. 1 means by the same amount, 0.5 by half, and a minus sign means the other way. Parts of different kinds (a resistor and a supply) are compared on one scale
+大きくしたときと小さくしたときで、動く量が違います (まっすぐに動かない)。大きく動かすと、この数字からは外れます	The result moves by different amounts when the part grows and when it shrinks (not a straight line). For large changes it departs from this figure
+ほか {} 個 (効きの小さい部品)	{} more (parts with a small effect)
+# crates/app/src/schematic/analysis_panel.rs
+感度を計算 (効く部品の順)	Sensitivity (parts by effect)
+部品を 1 つずつ 1% 大きく・小さくして、上で選んだ点の結果がどれだけ動くかを、効く順に並べます。許容差は使いません。どの部品を精度のいいものにすべきか、どれは安い部品でいいかが分かります	Moves each part 1% up and down on its own and lists the parts by how far they move the result at the point chosen above. Tolerances are not used. It shows which parts need precise values and which can be cheap
+# crates/app/src/schematic/panel/mod.rs
+温度を変える、部品の値を許容差の範囲でランダムに変えて何度も計算する、などで、ずれる範囲を調べます。縦棒が高いところほど、よく出る値です。「感度」は、どの部品が結果を決めているかを効く順に並べます	Finds how far results drift by changing the temperature, or by computing many times with part values drawn at random inside their tolerances. Taller bars are the more common values. "Sensitivity" lists the parts that set the result, the strongest first
+# crates/app/src/schematic/hint.rs
+感度: 上にある部品ほど結果を大きく動かします。精度の要る値は、上の部品を誤差の小さいもの (1% の抵抗など) にすれば守れます。下の、ほとんど効かない部品は安いものでかまいません	Sensitivity: the higher a part is in the list, the more it moves the result. To hold a value precisely, give the top parts tight tolerances (1% resistors and so on). The parts at the bottom that hardly matter can be cheap
+# crates/sim-core/src/sensitivity.rs
+動かす量は 0 より大きく 50 % 以下にしてください	The step must be more than 0 and at most 50 %
+値を動かせる部品 (抵抗・コンデンサ・コイル・直流電源) がありません	No part with a value to move (resistors, capacitors, coils, DC sources)
+# crates/app/src/help.rs
+どの部品が効いているか	Which parts matter
+温度とばらつきの欄の「感度を計算」。部品を 1 つずつ 1% 動かして、結果を大きく動かす部品から順に並べます。精度の要る部品と、安くてよい部品が分かります	"Sensitivity" in Temperature and variation. Moves each part by 1% on its own and lists the parts that move the result most first. It shows which parts need precision and which can be cheap
+# crates/app/src/schematic/lessons/basics.rs
+どの部品が電圧を決めているか、感度で見る	See which parts set the voltage, with the sensitivity
+同じ欄の「感度を計算 (効く部品の順)」を押します。部品を 1 つずつ 1% 動かして、MID がどれだけ動くかを効く順に並べます。電源 V1 は 1 (1% 上がると MID も 1% 上がる)、R1 と R2 は、同じ大きさで逆向きに効きます (10k と 10k なら R2 が +0.5、R1 が −0.5)。出力は電源にそのまま比例し、抵抗は比だけが効くので、電源の精度も抵抗の精度も大切だと分かります。	Press "Sensitivity (parts by effect)" in the same section. It moves each part by 1% on its own and lists how far MID moves, strongest first. The supply V1 shows 1 (1% up on V1 is 1% up on MID); R1 and R2 act by the same amount in opposite directions (with 10k and 10k, R2 is +0.5 and R1 is −0.5). The output follows the supply directly and only the ratio of the resistors matters, so the accuracy of the supply and of the resistors both count

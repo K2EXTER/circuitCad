@@ -155,6 +155,19 @@ pub fn minus_3db(freq: &[f64], mag: &[f64]) -> Option<f64> {
     before.or(after)
 }
 
+impl McMeasure {
+    /// The unit of the measured result.
+    pub fn unit(&self) -> &'static str {
+        match self {
+            McMeasure::DcVoltage => "V",
+            McMeasure::Cutoff { .. } => "Hz",
+            McMeasure::Tran { metric: TranMetric::RiseTime | TranMetric::SettlingTime, .. } => "s",
+            McMeasure::Tran { metric: TranMetric::Overshoot, .. } => "%",
+            McMeasure::Tran { metric: TranMetric::FinalValue, .. } => "V",
+        }
+    }
+}
+
 pub(crate) fn measure(c: &Circuit, node: &str, how: &McMeasure) -> Result<f64, SimError> {
     match how {
         McMeasure::DcVoltage => {
@@ -222,12 +235,6 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
     });
     let mut sensitivity: Vec<(String, f64)> = swung.into_iter().flatten().collect();
     sensitivity.sort_by(|a, b| b.1.abs().total_cmp(&a.1.abs()));
-    let unit = match &s.measure {
-        McMeasure::DcVoltage => "V",
-        McMeasure::Cutoff { .. } => "Hz",
-        McMeasure::Tran { metric: TranMetric::RiseTime | TranMetric::SettlingTime, .. } => "s",
-        McMeasure::Tran { metric: TranMetric::Overshoot, .. } => "%",
-        McMeasure::Tran { metric: TranMetric::FinalValue, .. } => "V",
-    };
+    let unit = s.measure.unit();
     Ok(McResult { output, unit, nominal, values, failed, sensitivity })
 }

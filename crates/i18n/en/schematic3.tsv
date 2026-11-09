@@ -308,7 +308,6 @@ AC解析の結果に分数の式を当てはめて、極と零の周波数を求
 インピーダンス (ネットから見た値)	Impedance (seen from a net)
 あるネットから回路の中を見たインピーダンスを、周波数ごとに求めます。電源ラインの出力インピーダンスとバイパスコンデンサの効き (山と谷)、アンプの出力・入力インピーダンスが分かります。周波数範囲・点数は AC解析の欄を共用	Finds, at each frequency, the impedance looking into the circuit from a net. Shows the output impedance of a supply line and how bypass capacitors work (peaks and dips), and the output/input impedance of amplifiers. Frequency range and points are shared with the AC analysis fields
 温度とばらつき	Temperature and variation
-温度を変える、部品の値を許容差の範囲でランダムに変えて何度も計算する、などで、ずれる範囲を調べます。縦棒が高いところほど、よく出る値です	Finds how far results shift, e.g. by changing temperature or by computing many times with part values randomly varied within their tolerances. Taller bars are values that come up more often
 作りたい回路の目標値 (出力電圧は 4.75〜5.25V、カットオフは 1kHz 前後など) を書いておくと、解析の結果が合格かどうかを ✓/× で表示します。値を変えるたびに判定がやり直されます	Write targets for the circuit (output voltage 4.75-5.25V, cutoff around 1kHz, etc.) and each analysis result is shown as pass/fail with ✓/×. Re-judged every time a value changes
 自己発熱 (部品の温度上昇)	Self-heating (part temperature rise)
 電流が流れる抵抗は、自分の電力で温まります。温度がどれだけ上がるか、温度係数のある抵抗は値がどれだけ動くかを、熱抵抗 (K/W) から計算します。シャント抵抗や、精度が要る分圧の抵抗の確認に	A resistor carrying current warms up from its own power. Calculates from thermal resistance (K/W) how much its temperature rises and, for resistors with a temperature coefficient, how much the value moves. Useful for checking shunt resistors and precision divider resistors

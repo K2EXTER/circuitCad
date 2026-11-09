@@ -61,6 +61,9 @@ impl SchEditor {
         if self.mc.is_some() && self.wave_mode == WaveMode::Mc {
             return "同じ回路でも、部品の誤差で実物ごとに電圧が変わります。「効いている部品」の上位を許容差の小さい部品にすると、ばらつきが小さくなります".into();
         }
+        if self.sens.is_some() && self.wave_mode == WaveMode::Sens {
+            return "感度: 上にある部品ほど結果を大きく動かします。精度の要る値は、上の部品を誤差の小さいもの (1% の抵抗など) にすれば守れます。下の、ほとんど効かない部品は安いものでかまいません".into();
+        }
         if self.sweep.as_ref().is_some_and(|s| s.temp) && self.wave_mode == WaveMode::Sweep {
             return "温度が上がるとダイオードやトランジスタの電圧が下がります (約 -2 mV/℃)。この変化で回路の動作点がどれだけずれるかを見ましょう".into();
         }

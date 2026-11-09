@@ -216,6 +216,7 @@ pub struct SchEditor {
     temp_to: String,
     temp_step: String,
     mc: Option<McView>,
+    sens: Option<sensitivity::SensView>,
     mc_out: String,
     mc_runs: String,
     mc_tol_r: String,
@@ -346,6 +347,7 @@ enum WaveMode {
     Impedance,
     Sweep,
     Mc,
+    Sens,
     Param,
     Fault,
 }
@@ -580,6 +582,7 @@ impl Default for SchEditor {
             temp_to: "80".into(),
             temp_step: "5".into(),
             mc: None,
+            sens: None,
             mc_out: String::new(),
             mc_runs: "300".into(),
             mc_tol_r: "5".into(),
@@ -742,6 +745,7 @@ mod loopgain;
 mod impedance;
 mod polezero;
 mod variation;
+mod sensitivity;
 mod tran;
 mod dc;
 mod library;

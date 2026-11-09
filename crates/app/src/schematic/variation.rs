@@ -68,21 +68,11 @@ impl SchEditor {
             return;
         };
         self.mc_seed += 1;
-        let measure = match self.mc_kind {
-            McKind::Dc => McMeasure::DcVoltage,
-            McKind::Ac => {
-                let (Some(fstart), Some(fstop), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
-                    self.status = "AC解析の欄の周波数と点数を数値で入力してください (例: 10, 1Meg, 20)".into();
-                    return;
-                };
-                McMeasure::Cutoff { fstart, fstop, points_per_decade: ppd.max(1.0) as usize }
-            }
-            McKind::Tran => {
-                let Some((tstop, tstep)) = self.tran_times() else {
-                    self.status = "過渡解析の欄の終了時間と刻みを数値で入力してください (例: 10m, 10u)".into();
-                    return;
-                };
-                McMeasure::Tran { tstop, tstep, uic: self.tran_uic, metric: self.mc_metric }
+        let measure = match self.mc_measure() {
+            Ok(m) => m,
+            Err(e) => {
+                self.status = e;
+                return;
             }
         };
         let settings = McSettings { runs, seed: self.mc_seed, tol_r, tol_c, tol_l, output: self.mc_out.trim().to_string(), measure };
@@ -109,6 +99,25 @@ impl SchEditor {
         };
         self.mc = Some(McView { outcome, worst });
         self.wave_mode = WaveMode::Mc;
+    }
+
+    /// What the variation, worst-case and sensitivity runs measure, from the choice in the panel.
+    pub(super) fn mc_measure(&self) -> Result<McMeasure, String> {
+        Ok(match self.mc_kind {
+            McKind::Dc => McMeasure::DcVoltage,
+            McKind::Ac => {
+                let (Some(fstart), Some(fstop), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
+                    return Err("AC解析の欄の周波数と点数を数値で入力してください (例: 10, 1Meg, 20)".into());
+                };
+                McMeasure::Cutoff { fstart, fstop, points_per_decade: ppd.max(1.0) as usize }
+            }
+            McKind::Tran => {
+                let Some((tstop, tstep)) = self.tran_times() else {
+                    return Err("過渡解析の欄の終了時間と刻みを数値で入力してください (例: 10m, 10u)".into());
+                };
+                McMeasure::Tran { tstop, tstep, uic: self.tran_uic, metric: self.mc_metric }
+            }
+        })
     }
 
     /// Names of the nodes that can be measured.

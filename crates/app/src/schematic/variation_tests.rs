@@ -117,3 +117,21 @@ fn the_li_ion_charger_example_charges_through_all_phases() {
     assert!(ch[1] < 1.0 && sb[1] > 3.0, "charging at the start: the LED on /CHRG is lit, the other is dark");
     assert!(sb.last().unwrap() < &1.0 && ch.last().unwrap() > &3.0, "done at the end: {} {}", sb.last().unwrap(), ch.last().unwrap());
 }
+
+#[test]
+fn sensitivity_lists_the_divider_parts_with_the_supply_first() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/divider_tolerance.schjson");
+    let mut e = SchEditor::default();
+    e.load_path(path);
+    e.mc_out = "MID".into();
+    e.run_sens();
+    assert!(matches!(e.wave_mode, WaveMode::Sens));
+    let r = e.sens.as_ref().unwrap().outcome.as_ref().expect("runs");
+    // a divider's output follows its supply one to one, and each resistor by its share of the supply
+    let first = &r.parts[0];
+    assert!((first.elasticity.unwrap() - 1.0).abs() < 1e-6, "{first:?}");
+    assert!(r.parts.iter().filter(|p| p.name.starts_with('R')).all(|p| p.elasticity.unwrap().abs() > 0.1), "{:?}", r.parts);
+    e.mc_out = String::new();
+    e.run_sens();
+    assert!(e.status.contains("失敗"), "{}", e.status);
+}
