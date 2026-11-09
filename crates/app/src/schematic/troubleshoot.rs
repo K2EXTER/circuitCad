@@ -80,7 +80,11 @@ impl SchEditor {
                 self.status = match d.suspects.first() {
                     Some(s) if !d.unexplained => {
                         let h = &hyps[s.index];
-                        format!("故障診断: いちばん疑わしいのは {} ({:.0}%)", if h.element.is_empty() { h.label.clone() } else { format!("{} の{}", h.element, h.label) }, s.probability * 100.0)
+                        {
+                            // the first way of a merged line is enough for the status line
+                            let way = h.label.split(" / ").next().unwrap_or("");
+                            format!("故障診断: いちばん疑わしいのは {} ({:.0}%)", if h.element.is_empty() { i18n::tr_dyn(way) } else { format!("{} {}", h.element, i18n::tr_dyn(way)) }, s.probability * 100.0)
+                        }
                     }
                     _ => "故障診断: 1 つの故障ではうまく説明できません".into(),
                 };
@@ -217,19 +221,28 @@ impl SchEditor {
         }
         ui.label(egui::RichText::new(i18n::tr("疑わしい順")).strong()).on_hover_text(i18n::tr("測った値に合う度合いと、その故障の起こりやすさ (よくある・ときどき・まれ) から出した割合です。クリックすると、回路図でその部品を選びます"));
         let mut pick = None;
-        egui::Grid::new("diag_suspects").num_columns(2).spacing([8.0, 2.0]).show(ui, |ui| {
+        // the name column gets what is left of the panel's width after the bar and the share: long names are cut (the hover has them)
+        let name_w = (ui.available_width() - 60.0 - 36.0 - 16.0).max(80.0);
+        egui::Grid::new("diag_suspects").num_columns(3).spacing([6.0, 2.0]).show(ui, |ui| {
             for s in d.suspects.iter().take(8) {
                 let h = &hyps[s.index];
                 let fit = s.fit.iter().map(|(n, p, m)| i18n::trf!("{n}: この故障なら {} / 測った値 {}", eng(*p, "V"), eng(*m, "V"))).collect::<Vec<_>>().join("\n");
                 let tip = format!("{}\n\n{fit}", all_ways(s.index));
                 let text = egui::RichText::new(name(s.index));
                 let text = if s.worst_miss > 3.0 { text.weak() } else { text };
-                if ui.add(egui::Label::new(text).sense(Sense::click())).on_hover_text(&tip).clicked() && !h.element.is_empty() {
+                let label = egui::Label::new(text).truncate().sense(Sense::click());
+                // a fixed-width, left-aligned cell (add_sized would centre it)
+                let clicked = ui.allocate_ui_with_layout(egui::vec2(name_w, 16.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.set_min_width(name_w);
+                    ui.add(label).on_hover_text(&tip).clicked()
+                }).inner;
+                if clicked && !h.element.is_empty() {
                     pick = Some(h.element.clone());
                 }
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(90.0, 12.0), Sense::hover());
-                ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(90.0 * s.probability as f32, 12.0)), 2.0, crate::theme::INFO);
-                ui.painter().text(rect.right_center(), egui::Align2::RIGHT_CENTER, format!("{:.0}%", s.probability * 100.0), FontId::proportional(11.0), ui.visuals().text_color());
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(60.0, 10.0), Sense::hover());
+                ui.painter().rect_filled(rect, 2.0, ui.visuals().extreme_bg_color);
+                ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(60.0 * s.probability as f32, 10.0)), 2.0, crate::theme::INFO);
+                ui.add_sized([36.0, 16.0], egui::Label::new(egui::RichText::new(format!("{:.0}%", s.probability * 100.0)).small()));
                 ui.end_row();
             }
         });

@@ -105,3 +105,4 @@ LTspice の回路図 (.asc) を取り込みます。並べ直しとネットの�
 故障なし	No fault
 ピン {pin} ({n}) を断線	Pin {pin} ({n}) open
 ピン {pin} を断線	Pin {pin} open
+ショート	Short
