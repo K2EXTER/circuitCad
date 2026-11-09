@@ -154,3 +154,39 @@ fn ac_ghost(v: &AcView) -> Option<Ghost> {
     }
     (!sigs.is_empty()).then(|| Ghost { x: res.freq.clone(), sigs })
 }
+
+/// The checkboxes that pick which signals are drawn, side by side, in a box about three lines high that scrolls (a sheet with
+/// forty nets used to push the tables under it off the panel). With many signals a filter box comes first; the chosen ones are
+/// listed first so they stay in view. The colour of a chosen name is its curve's colour (its place among the chosen, in
+/// `order`), so the plot and the list agree.
+pub(super) fn signal_list(ui: &mut egui::Ui, id: &str, order: &[&str], selected: &mut BTreeSet<String>) {
+    let filter_id = egui::Id::new(("signal_filter", id));
+    let mut filter: String = ui.data_mut(|d| d.get_temp(filter_id)).unwrap_or_default();
+    if order.len() > 12 {
+        ui.add(egui::TextEdit::singleline(&mut filter).hint_text(i18n::tr("信号の名前で絞り込み (例: OUT)")).desired_width(f32::INFINITY))
+            .on_hover_text(i18n::tr("名前の一部を入れると、その文字を含む信号だけが並びます (大文字と小文字は区別しません)。選んでいる信号はいつも先頭に出ます"));
+        ui.data_mut(|d| d.insert_temp(filter_id, filter.clone()));
+    }
+    let needle = filter.trim().to_lowercase();
+    let colour_of = |name: &str, selected: &BTreeSet<String>| order.iter().filter(|n| selected.contains(**n)).position(|n| *n == name).map(|i| PALETTE[i % PALETTE.len()]);
+    let mut shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
+    shown.extend(order.iter().copied().filter(|n| !selected.contains(*n) && (needle.is_empty() || n.to_lowercase().contains(&needle))));
+    egui::ScrollArea::vertical().id_salt(("signal_list", id)).max_height(84.0).auto_shrink([false, true]).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            for name in shown {
+                let mut on = selected.contains(name);
+                let text = match colour_of(name, selected) {
+                    Some(c) if on => egui::RichText::new(name).color(c),
+                    _ => egui::RichText::new(name),
+                };
+                if ui.checkbox(&mut on, text).changed() {
+                    if on {
+                        selected.insert(name.to_string());
+                    } else {
+                        selected.remove(name);
+                    }
+                }
+            }
+        });
+    });
+}

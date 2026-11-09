@@ -159,7 +159,8 @@ impl SchEditor {
                     });
                 }
                 if !parts.is_empty() {
-                    egui::CollapsingHeader::new(i18n::tr("部品の定格 (リップル電流・寿命)")).default_open(true).show(ui, |ui| {
+                    // open at first only when a part is past or near its rating: all-green lines are not worth the plot's height
+                    egui::CollapsingHeader::new(i18n::tr("部品の定格 (リップル電流・寿命)")).default_open(parts.iter().any(|r| r.level.is_some())).show(ui, |ui| {
                         for r in parts.iter() {
                             let color = match r.level {
                                 Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
@@ -223,27 +224,7 @@ impl SchEditor {
                         bar[2].clone().on_hover_text(i18n::tr("選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます。残した後は、もう一度押すと消えます"));
                         // the signals to show, side by side so a short list takes a line or two (it used to sit at the bottom and
                         // was cut off by the panel's edge)
-                        ui.horizontal_wrapped(|ui| {
-                            for name in &order {
-                                let mut on = selected.contains(*name);
-                                let color = order
-                                    .iter()
-                                    .filter(|n| selected.contains(**n))
-                                    .position(|n| n == name)
-                                    .map(|i| PALETTE[i % PALETTE.len()]);
-                                let text = match color {
-                                    Some(c) if on => egui::RichText::new(*name).color(c),
-                                    _ => egui::RichText::new(*name),
-                                };
-                                if ui.checkbox(&mut on, text).changed() {
-                                    if on {
-                                        selected.insert(name.to_string());
-                                    } else {
-                                        selected.remove(*name);
-                                    }
-                                }
-                            }
-                        });
+                        wave::signal_list(ui, "tran", &order, selected);
                         // which table to show: the basic figures or one of the detailed ones, one at a time (they used to be a table
                         // and four folds stacked under it, which pushed everything below off the panel)
                         let metric_id = egui::Id::new("tran_metric");

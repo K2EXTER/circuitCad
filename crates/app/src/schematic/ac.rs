@@ -104,23 +104,7 @@ impl SchEditor {
                             }
                         }
                         bar[2].clone().on_hover_text(i18n::tr("選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます。残した後は、もう一度押すと消えます"));
-                        ui.horizontal_wrapped(|ui| {
-                            for name in &order {
-                                let mut on = selected.contains(*name);
-                                let color = order.iter().filter(|n| selected.contains(**n)).position(|n| n == name).map(|i| PALETTE[i % PALETTE.len()]);
-                                let text = match color {
-                                    Some(c) if on => egui::RichText::new(*name).color(c),
-                                    _ => egui::RichText::new(*name),
-                                };
-                                if ui.checkbox(&mut on, text).changed() {
-                                    if on {
-                                        selected.insert(name.to_string());
-                                    } else {
-                                        selected.remove(*name);
-                                    }
-                                }
-                            }
-                        });
+                        wave::signal_list(ui, "ac", &order, selected);
                         ui.add_space(crate::theme::SPACE_S);
                         // -3dB point: one column per signal
                         let corner: Vec<(String, String)> = order
