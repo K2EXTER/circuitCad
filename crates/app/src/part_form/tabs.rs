@@ -193,7 +193,7 @@ impl PartForm {
             });
             }
             crate::icons::help_label(ui, "そのほかの情報", "そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。値が空の行は、まだ調べていない項目として残ります)");
-            ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(5).desired_width(f32::INFINITY).hint_text(i18n::tr("順方向電圧 | 0.9V | IF = 1A")))
+            ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(5).desired_width(f32::INFINITY).hint_text(i18n::tr(example_line(self.rt_kind))))
                 .on_hover_text(i18n::tr("定格・代表値を、データシートのまま書き写します。条件 (電流や温度) も一緒に書くと、あとで比べやすくなります。部品の一覧でポインタを置いたときに出ます"));
             let (max_given, rows_given, rows_open) = self.ratings_progress();
             let summary = format!("入力済み: 最大定格 {max_given} / 3 項目、そのほかの情報 {rows_given} 行{}", if rows_open > 0 { format!(" (まだ調べていない項目 {rows_open} 行)") } else { String::new() });
@@ -209,6 +209,27 @@ impl PartForm {
 
     /// The tab of the simulation model.
     pub(super) fn tab_sim(&mut self, ui: &mut egui::Ui) {
+            // where the model of this kind comes from: the easy-make box of ① (diode, capacitor, resistor, coil) or none at
+            // all (connector); the tab only had the SPICE box, so a learner who opened it did not know either
+            let quick = matches!(self.ptype, Some(PartType::Capacitor | PartType::Resistor | PartType::Inductor))
+                || (self.ptype == Some(PartType::Diode) && self.glyph != "zener");
+            if quick {
+                ui.group(|ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(i18n::tr("データシートの数値からモデルを作るなら:"));
+                        if ui.link(i18n::tr("① 基本 の「かんたん作成」")).on_hover_text(i18n::tr("「① 基本」を開きます")).clicked() {
+                            self.tab = FormTab::Basic;
+                        }
+                        crate::icons::help(ui, "ダイオード・コンデンサ・抵抗・コイルは、「① 基本」の「かんたん作成」にデータシートの数字を入れると、このタブにモデルが入ります。メーカーの SPICE モデルがあるときは、下に貼ります");
+                    });
+                });
+            } else if self.ptype == Some(PartType::Connector) {
+                ui.group(|ui| {
+                    ui.set_width(ui.available_width());
+                    ui.label(i18n::tr("コネクタは、ふつうシミュレーションのモデルが要りません。「なし」のままで保存できます"));
+                });
+            }
             ui.label(i18n::tr("シミュレーションモデル (部品の特性)"));
             crate::icons::help_small(ui, "SPICE モデルを貼ると自動入力", "メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
             {

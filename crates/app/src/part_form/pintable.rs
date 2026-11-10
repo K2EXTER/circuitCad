@@ -181,7 +181,9 @@ impl PartForm {
         ui.horizontal(|ui| {
             if ui.button(i18n::tr("＋ ピンを足す")).on_hover_text(i18n::tr("表の最後に、空のピンを1行足します。番号は、いまの最大の番号の次になります")).clicked() {
                 let next = rows.iter().filter_map(|r| r.number.parse::<u32>().ok()).max().map_or(1, |m| m + 1);
-                rows.push(PinRow { number: next.to_string(), ..PinRow::default() });
+                // when every pin is on one side (a header), the new one goes there too instead of splitting the box
+                let side = rows.first().map(|r| r.side.clone()).filter(|s| !s.is_empty() && rows.iter().all(|r| r.side == *s)).unwrap_or_default();
+                rows.push(PinRow { number: next.to_string(), side, ..PinRow::default() });
             }
             if !roles.is_empty() && ui.button(i18n::tr("名前で合わせる")).on_hover_text(i18n::tr("ピンの名前 (か番号) が、モデルの端子の名前と同じものを、自動で選びます。合うものがない端子は、選び直しになります")).clicked() {
                 for (j, role) in roles.iter().enumerate() {

@@ -82,6 +82,17 @@ pub(super) const CHECKLISTS: &[Checklist] = &[
         ],
     ),
     (
+        "コネクタ",
+        "最大電圧 = 定格電圧、最大電流 = 1 ピンあたりの定格電流 (Rated Current)。最大電力は空のままでよい。どちらも仕様の表 (Specifications) にあります",
+        &[
+            ("定格電流 (1ピンあたり)", "仕様の表。全ピンに流すときは下がることがある"),
+            ("接触抵抗", "仕様の表。大きい電流では電圧降下と発熱の元になる"),
+            ("耐電圧", "仕様の表。ピンの間にかけてよい交流の電圧"),
+            ("挿抜回数", "仕様の表。抜き差しして使える回数の目安"),
+            ("使用温度範囲", "仕様の表"),
+        ],
+    ),
+    (
         "そのほか",
         "部品に合わせて、「絶対最大定格」の電圧・電流・電力を入れます",
         &[
@@ -92,12 +103,33 @@ pub(super) const CHECKLISTS: &[Checklist] = &[
     ),
 ];
 
+/// The example line shown in the empty "そのほかの情報" box: one item of the kind's checklist, written in the
+/// `item | value | condition` form (it was a diode's forward voltage for every kind).
+pub(super) fn example_line(kind: usize) -> &'static str {
+    let name = CHECKLISTS[kind.min(CHECKLISTS.len() - 1)].0;
+    [
+        ("ダイオード", "順方向電圧 | 0.9V | IF = 1A"),
+        ("ツェナー", "ツェナー電圧 Vz | 5.1V | IZ = 5mA"),
+        ("トランジスタ", "電流増幅率 hFE | 100〜300 | IC = 2mA"),
+        ("MOSFET", "オン抵抗 RDS(on) | 50m | VGS = 10V"),
+        ("レギュレータ", "ドロップアウト電圧 | 0.3V | IOUT = 100mA"),
+        ("オペアンプ", "ゲイン帯域幅積 GBW | 1MHz"),
+        ("電解コンデンサ", "漏れ電流 | 3uA | 定格電圧で 2 分後"),
+        ("コネクタ", "定格電流 (1ピンあたり) | 3A"),
+    ]
+    .iter()
+    .find(|(head, _)| name.starts_with(head))
+    .map_or("動作温度範囲 | -40〜85℃", |(_, line)| line)
+}
+
 /// Adds the checklist of `kind` to the rows already typed: an item whose name is already there is not added again.
 pub(super) fn merge_checklist(rows: &str, kind: usize) -> String {
     let (_, _, items) = CHECKLISTS[kind.min(CHECKLISTS.len() - 1)];
     let mut out: Vec<String> = rows.lines().map(String::from).collect();
     for (name, hint) in items {
-        if !out.iter().any(|l| l.split('|').next().is_some_and(|n| n.trim() == *name)) {
+        // the lines go into the text box in the language of the screen
+        let (name, hint) = (i18n::tr(name), i18n::tr(hint));
+        if !out.iter().any(|l| l.split('|').next().is_some_and(|n| n.trim() == name)) {
             out.push(format!("{name} |  | ※{hint}"));
         }
     }

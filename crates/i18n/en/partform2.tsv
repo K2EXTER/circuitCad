@@ -484,3 +484,26 @@ Isat で、インダクタンスが何 % 下がるか。30 が多いですが、
 寸法で指定	By dimensions
 数字は例です。データシートの推奨ランドパターンの寸法に直してください	The numbers are examples. Change them to the datasheet's recommended land pattern dimensions
 本体の中心の、部品の原点 (パッケージの中心) からのずれ (Y)。ふつうは 0 (1列に並ぶ部品は、1番ピンが原点なので、列の真ん中)	Offset (Y) of the body center from the part origin (package center). Usually 0 (for a single row of pins the origin is pin 1, so it is the middle of the row)
+最大電圧 = 定格電圧、最大電流 = 1 ピンあたりの定格電流 (Rated Current)。最大電力は空のままでよい。どちらも仕様の表 (Specifications) にあります	Max voltage = rated voltage, max current = rated current per pin (Rated Current). Max power can stay blank. Both are in the specifications table
+定格電流 (1ピンあたり)	Rated current (per pin)
+仕様の表。全ピンに流すときは下がることがある	Specifications table. It may be lower when every pin carries current
+接触抵抗	Contact resistance
+仕様の表。大きい電流では電圧降下と発熱の元になる	Specifications table. With a large current it causes voltage drop and heat
+耐電圧	Withstanding voltage
+仕様の表。ピンの間にかけてよい交流の電圧	Specifications table. The AC voltage allowed between pins
+挿抜回数	Mating cycles
+仕様の表。抜き差しして使える回数の目安	Specifications table. About how many times it can be plugged and unplugged
+仕様の表	Specifications table
+ツェナー電圧 Vz | 5.1V | IZ = 5mA	Zener voltage Vz | 5.1V | IZ = 5mA
+電流増幅率 hFE | 100〜300 | IC = 2mA	Current gain hFE | 100-300 | IC = 2mA
+オン抵抗 RDS(on) | 50m | VGS = 10V	On-resistance RDS(on) | 50m | VGS = 10V
+ドロップアウト電圧 | 0.3V | IOUT = 100mA	Dropout voltage | 0.3V | IOUT = 100mA
+ゲイン帯域幅積 GBW | 1MHz	Gain-bandwidth product GBW | 1MHz
+漏れ電流 | 3uA | 定格電圧で 2 分後	Leakage current | 3uA | after 2 minutes at rated voltage
+定格電流 (1ピンあたり) | 3A	Rated current (per pin) | 3A
+動作温度範囲 | -40〜85℃	Operating temperature range | -40 to 85℃
+データシートの数値からモデルを作るなら:	To make the model from datasheet figures:
+① 基本 の「かんたん作成」	"Quick create" in ① Basics
+「① 基本」を開きます	Opens ① Basics
+ダイオード・コンデンサ・抵抗・コイルは、「① 基本」の「かんたん作成」にデータシートの数字を入れると、このタブにモデルが入ります。メーカーの SPICE モデルがあるときは、下に貼ります	For a diode, capacitor, resistor or inductor, enter the datasheet figures in "Quick create" in ① Basics and the model is put in this tab. If you have the maker's SPICE model, paste it below
+コネクタは、ふつうシミュレーションのモデルが要りません。「なし」のままで保存できます	A connector usually needs no simulation model. You can save it with "None"

@@ -616,6 +616,44 @@ mod passive_form_tests {
         assert!(cap.apply_passive().unwrap_err().contains("TC1"));
     }
 
+    /// A fitted body follows the pads when pins or the pitch change; a body whose numbers were typed stays as typed.
+    #[test]
+    fn the_fitted_body_follows_the_pins_until_it_is_typed() {
+        // a 4-pin header made 6-pin: the outline covers all six, centred on the row
+        let mut c = PartForm::for_type("connector");
+        assert!(c.pins_text.lines().all(|l| l.ends_with(" left")), "a header's pins are on one side");
+        c.pins_text.push_str("\n5 5 left\n6 6 left");
+        c.follow_body();
+        assert_eq!((c.body_w, c.body_h, c.body_y), (2.5, 6.0 * 2.54, -2.5 * 2.54));
+        // a 4-pin IC made 8-pin: the outline grows with the rows
+        let mut ic = PartForm::for_type("ic");
+        let h4 = ic.body_h;
+        ic.pins_text = (1..=8).map(|i| format!("{i} P{i}")).collect::<Vec<_>>().join("\n");
+        ic.follow_body();
+        assert!((ic.body_h - (h4 + 2.0 * ic.pitch)).abs() < 1e-9, "{}", ic.body_h);
+        // a diode keeps its size and stays between the holes when the pitch changes
+        let mut d = PartForm::for_type("diode");
+        d.pitch = 10.16;
+        d.follow_body();
+        assert_eq!((d.body_w, d.body_h, d.body_y), (1.8, 3.8, -5.08));
+        // a typed width stops the following
+        d.body_w = 2.0;
+        d.pitch = 7.62;
+        d.follow_body();
+        assert_eq!((d.body_w, d.body_y), (2.0, -5.08));
+        assert!(d.body_fit.is_none());
+    }
+
+    /// The ratings checklist and the example of the free rows follow the kind (a connector got a diode's example).
+    #[test]
+    fn a_connector_gets_its_own_checklist_and_example() {
+        let c = PartForm::for_type("connector");
+        let k = c.checklist_for_type().unwrap();
+        assert_eq!(CHECKLISTS[k].0, "コネクタ");
+        assert!(example_line(k).starts_with("定格電流"));
+        assert!(example_line(PartForm::for_type("diode").checklist_for_type().unwrap()).starts_with("順方向電圧"));
+    }
+
     /// The leaded-part helper turns the 1N4007's drawing into a hole, pad, pitch and body, and the result is a valid part.
     #[test]
     fn the_leaded_part_helper_fills_the_package_from_the_mechanical_drawing() {

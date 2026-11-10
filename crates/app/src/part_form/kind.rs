@@ -144,7 +144,8 @@ impl PartForm {
             PartType::Transistor => by_name(if matches!(self.glyph.as_str(), "nmos" | "pmos") { "MOSFET" } else { "トランジスタ" }),
             PartType::Diode => by_name(if self.glyph == "zener" { "ツェナー" } else { "ダイオード" }),
             PartType::Capacitor if self.pas_polar => by_name("電解コンデンサ"),
-            PartType::Capacitor | PartType::Resistor | PartType::Inductor | PartType::Connector => by_name("そのほか"),
+            PartType::Connector => by_name("コネクタ"),
+            PartType::Capacitor | PartType::Resistor | PartType::Inductor => by_name("そのほか"),
         }
     }
 
@@ -169,6 +170,7 @@ impl PartForm {
         self.thermal_on = false;
         self.extras.clear();
         self.body_pin.clear();
+        self.body_fit = None;
         match t {
             PartType::Ic => {
                 // the ratings list starts at a regulator (the first kind of IC), not at the diode
@@ -212,12 +214,13 @@ impl PartForm {
             PartType::Connector => {
                 self.prefix = "J".into();
                 self.glyph.clear();
-                self.pins_text = "1 1\n2 2\n3 3\n4 4".into();
+                // one side, in order, like the header itself (the automatic sides split 1 2 | 3 4 across the box)
+                self.pins_text = "1 1 left\n2 2 left\n3 3 left\n4 4 left".into();
                 self.pkg = PkgKind::Row;
                 (self.pitch, self.pad_d, self.drill) = (2.54, 1.7, 1.0);
                 self.body_on = true;
                 self.body_circle = false;
-                self.row_body(10.16, 2.5);
+                self.span_body(2.5);
                 self.body_mark = BodyMark::Dot;
             }
         }
@@ -228,6 +231,7 @@ impl PartForm {
         self.ptype = Some(PartType::Capacitor);
         self.ptype_sub = kind;
         self.pas_kind = PassiveKind::Capacitor;
+        self.body_fit = None;
         self.prefix = "C".into();
         self.pas_polar = matches!(kind, "electrolytic" | "tantalum");
         self.glyph = if self.pas_polar { "electrolytic" } else { "capacitor" }.into();
@@ -273,6 +277,7 @@ impl PartForm {
         self.ptype = Some(t);
         self.ptype_sub = shape;
         self.pas_kind = if resistor { PassiveKind::Resistor } else { PassiveKind::Inductor };
+        self.body_fit = None;
         self.prefix = if resistor { "R" } else { "L" }.into();
         self.glyph = if resistor { "resistor" } else { "inductor" }.into();
         self.pins_text = "1 1 left\n2 2 right".into();
@@ -303,24 +308,61 @@ impl PartForm {
         .into();
     }
 
-    /// A body that fits the pads of a dual-row IC (the data sheet's outline is the value to type; this is a start).
-    pub(super) fn fit_body(&mut self) {
-        if self.pkg == PkgKind::Dual {
-            let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count().max(2);
-            self.body_w = (self.row - 1.5).max(1.0);
-            self.body_h = self.pitch * (n / 2).saturating_sub(1) as f64 + 1.1;
-            self.body_x = 0.0;
-            self.body_y = 0.0;
+    /// How many pads the pin table gives.
+    fn pad_count(&self) -> usize {
+        self.pins_text.lines().filter(|l| !l.trim().is_empty()).count()
+    }
+
+    /// The body (w, h, x, y) a fit gives for the pads as they are now; None when the package is not the one the fit is for.
+    /// A single row runs from pad 1 at the origin down -y (`PackageSpec::SingleRow`), so its body is long in y and
+    /// centred on the middle of the row, not on pad 1.
+    pub(super) fn body_for(&self, fit: BodyFit) -> Option<[f64; 4]> {
+        let n = self.pad_count().max(1);
+        let middle = -((n - 1) as f64) * self.pitch / 2.0;
+        match fit {
+            BodyFit::Dual if self.pkg == PkgKind::Dual => {
+                let rows = (n.max(2) / 2).saturating_sub(1);
+                Some([(self.row - 1.5).max(1.0), self.pitch * rows as f64 + 1.1, 0.0, 0.0])
+            }
+            BodyFit::Span(across) if self.pkg == PkgKind::Row => Some([across, n as f64 * self.pitch, 0.0, middle]),
+            BodyFit::Middle(along, across) if self.pkg == PkgKind::Row => Some([across, along, 0.0, middle]),
+            _ => None,
         }
     }
 
-    /// A body over the pads of a single row: the pads run from pad 1 at the origin down -y (`PackageSpec::SingleRow`),
-    /// so the body's long side (`along`) goes along y and its centre is the middle of the row, not pad 1.
+    fn set_body_fit(&mut self, fit: BodyFit) {
+        if let Some(v) = self.body_for(fit) {
+            [self.body_w, self.body_h, self.body_x, self.body_y] = v;
+            self.body_fit = Some((fit, v));
+        }
+    }
+
+    /// A body that fits the pads of a dual-row IC (the data sheet's outline is the value to type; this is a start).
+    pub(super) fn fit_body(&mut self) {
+        self.set_body_fit(BodyFit::Dual);
+    }
+
+    /// A body of a fixed size (`along` the row x `across` it) in the middle of a single row: a diode between its holes.
     pub(super) fn row_body(&mut self, along: f64, across: f64) {
-        let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count().max(1);
-        self.body_w = across;
-        self.body_h = along;
-        self.body_x = 0.0;
-        self.body_y = -((n - 1) as f64) * self.pitch / 2.0;
+        self.set_body_fit(BodyFit::Middle(along, across));
+    }
+
+    /// A body over the whole single row, `across` wide: a pin header.
+    pub(super) fn span_body(&mut self, across: f64) {
+        self.set_body_fit(BodyFit::Span(across));
+    }
+
+    /// Keeps a fitted body on the pads when the pins or the pitch change (a 4-pin IC made 8-pin had its pads outside
+    /// the outline). A body whose numbers were typed, or that was made round, is left as it is.
+    pub(super) fn follow_body(&mut self) {
+        let Some((fit, last)) = self.body_fit else { return };
+        if self.body_circle || [self.body_w, self.body_h, self.body_x, self.body_y] != last {
+            self.body_fit = None;
+            return;
+        }
+        if let Some(v) = self.body_for(fit).filter(|v| *v != last) {
+            [self.body_w, self.body_h, self.body_x, self.body_y] = v;
+            self.body_fit = Some((fit, v));
+        }
     }
 }

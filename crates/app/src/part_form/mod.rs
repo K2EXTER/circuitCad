@@ -72,6 +72,17 @@ pub enum SimChoice {
     Subckt,
 }
 
+/// How the body outline was fitted to the pads, so it can follow when the pins or the pitch change.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum BodyFit {
+    /// Over the two rows of a dual IC.
+    Dual,
+    /// Over the whole single row (a header): `across` wide, as long as the row.
+    Span(f64),
+    /// A fixed body (`along` x `across`) in the middle of a single row (a diode between its two holes).
+    Middle(f64, f64),
+}
+
 pub struct PartForm {
     /// The 3D body read from a STEP file, as it is saved with the part (see `step3d.rs`).
     pub model3d: Option<pcb_core::mesh::Mesh3d>,
@@ -132,6 +143,9 @@ pub struct PartForm {
     pub body_mark: BodyMark,
     /// The pin the orientation mark belongs to (empty = the first pad).
     pub body_pin: String,
+    /// The fit the body was given and the values it gave (w, h, x, y). While the body still has those values it follows
+    /// the pads; typing another value stops that.
+    pub body_fit: Option<(BodyFit, [f64; 4])>,
     /// Body height above the board in mm (0 = not given: the 3D view guesses from the footprint).
     pub height: f64,
     /// Extra pads and holes beyond the package: shield legs, locating pegs, slots. One per line, see `EXTRAS_HELP`.
@@ -282,6 +296,7 @@ impl Default for PartForm {
             body_y: 0.0,
             body_mark: BodyMark::Dot,
             body_pin: String::new(),
+            body_fit: None,
             height: 0.0,
             extras: String::new(),
             fp_preset: String::new(),
@@ -387,6 +402,7 @@ use parse::*;
 impl PartForm {
     /// Draws the form. Returns a finished definition when the user presses save.
     pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PartDef> {
+        self.follow_body();
         let built = self.to_def();
         self.sheet.take_dropped(ui.ctx());
         self.sheet.window(ui.ctx());
