@@ -60,7 +60,8 @@ impl BoardEditor {
             self.linked.part.as_deref().and_then(|r| self.board.parts.iter().position(|p| p.refdes == r))
         };
         let v = &mut self.view3d;
-        egui::Window::new(i18n::tr("3Dで見る")).open(&mut open).default_size([900.0, 680.0]).show(ctx, |ui| {
+        // beside the left panel, like the other windows (with no position it opened over the panel)
+        egui::Window::new(i18n::tr("3Dで見る")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([900.0, 680.0]).show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if ui.button(i18n::tr("上から")).on_hover_text(i18n::tr("真上から見ます (部品の配置・配線の確認)")).clicked() {
                     (v.yaw, v.pitch, v.pan) = (0.0, std::f32::consts::FRAC_PI_2, Vec2::ZERO);

@@ -486,3 +486,6 @@ CSV をコピー	Copy CSV
 部品のシルクを作り直す	Redraw part silk
 印の欠けた部品のシルク (外形と向きの印) を、いまのフットプリントの形で描き直します。部品の位置と配線は変わりません	Draws the silk (outline and polarity marks) of the parts with missing marks again from the current footprints. Part positions and tracks do not change.
 {n} 個の部品のシルクを作り直しました: {}	Redrew the silk of {n} parts: {}
+{} ネット・配線の長さの合計 {:.1} mm・未配線 {total_open} 本	{} nets, total track length {:.1} mm, {total_open} unrouted
+見出しをクリックすると、その列で並べ替えます (もう一度で逆順)。ネット名のクリックで、そのネットの設定の窓が開きます	Click a heading to sort by that column (again to reverse). Click a net name to open that net's settings window
+ほかのネットに切り替えるには	To switch to another net

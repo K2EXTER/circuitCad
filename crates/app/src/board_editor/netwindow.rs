@@ -447,7 +447,7 @@ impl BoardEditor {
             }
             self.commit_classes(classes, down);
             ui.separator();
-            ui.small(i18n::tr("基板で、別のネットの配線やパッドをクリックすると、そのネットの設定に切り替わります。何もない所をクリックすると閉じます"));
+            crate::icons::help_small(ui, "ほかのネットに切り替えるには", "基板で、別のネットの配線やパッドをクリックすると、そのネットの設定に切り替わります。何もない所をクリックすると閉じます");
         });
         if !open {
             self.net_win = None;

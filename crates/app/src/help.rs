@@ -312,7 +312,10 @@ impl Help {
         let mut open = true;
         let current = self.tab.unwrap_or(HelpTab::Schematic);
         let mut next = current;
-        egui::Window::new(i18n::tr("操作ガイド")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(640.0).default_height(560.0).vscroll(true).show(ctx, |ui| {
+        // wider and as tall as the screen allows: at 640 × 560 the description column wrapped every few words and the tables
+        // scrolled at once
+        let tall = (ctx.content_rect().height() - crate::widgets::beside_panel().y - 60.0).max(560.0);
+        egui::Window::new(i18n::tr("操作ガイド")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(760.0).default_height(tall).vscroll(true).show(ctx, |ui| {
             let tabs: Vec<(HelpTab, &str, &str)> = TABS.iter().map(|(t, name)| (*t, *name, "")).collect();
             crate::widgets::tab_bar(ui, &mut next, &tabs);
             ui.small(i18n::tr("(F1 でいつでも開けます)"));

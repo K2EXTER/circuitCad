@@ -69,7 +69,11 @@ impl BoardEditor {
             });
             layers.dedup();
             let total_open: usize = rows.iter().map(|r| r.open).sum();
-            ui.small(i18n::trf!("{} ネット・配線の長さの合計 {:.1} mm・未配線 {total_open} 本。見出しをクリックすると、その列で並べ替えます (もう一度で逆順)。ネット名のクリックで、そのネットの設定の窓が開きます", rows.len(), rows.iter().map(|r| r.length).sum::<f64>()));
+            // the figures stay on the line; how to use the table goes behind the (?)
+            ui.horizontal(|ui| {
+                ui.small(i18n::trf!("{} ネット・配線の長さの合計 {:.1} mm・未配線 {total_open} 本", rows.len(), rows.iter().map(|r| r.length).sum::<f64>()));
+                crate::icons::help(ui, "見出しをクリックすると、その列で並べ替えます (もう一度で逆順)。ネット名のクリックで、そのネットの設定の窓が開きます");
+            });
             egui::ScrollArea::both().max_height(460.0).show(ui, |ui| {
                 egui::Grid::new("net_table").striped(true).spacing([12.0, 3.0]).show(ui, |ui| {
                     let cols: [(&str, SortBy, &str); 4] = [

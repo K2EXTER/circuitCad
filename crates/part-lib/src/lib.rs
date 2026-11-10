@@ -176,10 +176,10 @@ impl PartDef {
         let mut warns = vec![];
 
         if self.name.trim().is_empty() {
-            err("(name) 部品名が空です。データシートの型番などを入れてください (例: LM358、2N3904)".into());
+            err("部品名が空です。データシートの型番などを入れてください (例: LM358、2N3904)".into());
         }
         if self.prefix.trim().is_empty() {
-            err("(prefix) 部品番号の頭文字が空です。抵抗なら R、コンデンサなら C、IC なら U のように入れてください".into());
+            err("部品番号の頭文字が空です。抵抗なら R、コンデンサなら C、IC なら U のように入れてください".into());
         }
         if self.pins.is_empty() {
             err("ピンがありません".into());

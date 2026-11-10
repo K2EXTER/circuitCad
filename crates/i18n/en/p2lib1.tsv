@@ -54,8 +54,8 @@ KiCad の回路図 (.kicad_sch) ではありません。KiCad 6 以降で保存�
 バス (太い線・バスの引き出し) は読み込めません。バスでつながるはずの信号は、つながっていません	Buses (thick lines and bus entries) cannot be read. Signals that should connect through a bus are not connected
 # crates/part-lib/src/lib.rs
 フィルムコンデンサ	
-(name) 部品名が空です。データシートの型番などを入れてください (例: LM358、2N3904)	(name) The part name is empty. Enter something like the datasheet's part number (e.g. LM358, 2N3904)
-(prefix) 部品番号の頭文字が空です。抵抗なら R、コンデンサなら C、IC なら U のように入れてください	(prefix) The refdes prefix is empty. Enter R for a resistor, C for a capacitor, U for an IC, and so on
+部品名が空です。データシートの型番などを入れてください (例: LM358、2N3904)	The part name is empty. Enter something like the datasheet's part number (e.g. LM358, 2N3904)
+部品番号の頭文字が空です。抵抗なら R、コンデンサなら C、IC なら U のように入れてください	The refdes prefix is empty. Enter R for a resistor, C for a capacitor, U for an IC, and so on
 ピンがありません	There are no pins
 番号が空のピンがあります	A pin has an empty number
 ピン番号 {} が重複しています	Pin number {} is used twice
