@@ -29,7 +29,12 @@ impl PartForm {
         // the fields take the width of the column (the label column is about 150 px), not egui's narrow default
         ui.spacing_mut().text_edit_width = (ui.available_width() - 260.0).clamp(240.0, 420.0);
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
-            ui.label(i18n::tr("部品名"));
+            if self.ptype == Some(PartType::Capacitor) {
+                // how to name a capacitor sits on the name it is about (it was a line of its own under the kind buttons)
+                crate::icons::help_label(ui, "部品名", "名前は、種類の頭文字から始めると、部品一覧の「コンデンサ」の木で種類ごとに分かれます (電解 CE_ / タンタル CT_ / フィルム CF_)。値は「① 基本」のかんたん作成で入れます");
+            } else {
+                ui.label(i18n::tr("部品名"));
+            }
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut self.name).on_hover_text(i18n::tr("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます"));
                 self.pick_button(ui, datasheet_view::Target::Name, "PDFから選ぶ");
