@@ -44,7 +44,7 @@ H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重な
 電圧表示	Show voltages
 DC解析の結果を回路図に重ねて表示します。配線は電圧が低いほど青、高いほど赤に色分けされます	Overlays the DC analysis results on the schematic. Wires are colored blue for low voltage through red for high voltage
 電流表示	Show currents
-各部品を流れる電流を数値と矢印 (電流の向き) で表示します。「どこに電流が流れているか」の理解に役立ちます。数値の符号は向きの約束です: 素子の第1端子→第2端子の向きに流れるとプラス、逆向きならマイナス (例: -9.2 mA は、9.2 mA が逆向きに流れている)。電源は、電力を供給しているとマイナスになります	Shows the current through each part as a number and an arrow (its direction). Helps you see "where the current flows". The sign is a direction convention: positive when flowing from the part's 1st terminal to its 2nd, negative the other way (e.g. -9.2 mA means 9.2 mA flowing the opposite way). A supply shows negative while it delivers power
+各部品を流れる電流を数値と矢印 (電流の向き) で表示します。「どこに電流が流れているか」の理解に役立ちます。数値の符号は向きの約束です: 素子の第1端子→第2端子の向きに流れるとプラス、逆向きならマイナス (例: -9.2 mA は、9.2 mA が逆向きに流れている)。電源は、電力を供給しているとマイナスになります。1 nA 未満 (直流でのコンデンサなど、ほぼ 0 のもの) は表示しません	Shows the current through each part as a number and an arrow (its direction). Helps you see "where the current flows". The sign is a direction convention: positive when flowing from the part's 1st terminal to its 2nd, negative the other way (e.g. -9.2 mA means 9.2 mA flowing the opposite way). A supply shows negative while it delivers power. Currents under 1 nA (a capacitor at DC and the like, practically 0) are not shown
 自動で再計算	Auto recalculate
 回路を変えるたびに、開いている解析 (DC / 過渡 / AC) をやり直します。\n部品の「スライダー」と組み合わせると、値を動かしながら結果がどう変わるかを実験できます。\n重い回路では動きがもたつくのでオフにしてください	Reruns the open analyses (DC / transient / AC) every time you change the circuit.\nCombined with a part's "slider", you can experiment by moving a value and watching the results change.\nTurn it off for heavy circuits, as things get sluggish
 回路の温度	Circuit temperature

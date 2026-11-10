@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// Below this a part's DC current is not written on the sheet (it reads as 0 and only adds clutter).
+pub(super) const MIN_SHOWN_CURRENT: f64 = 1e-9;
+
 impl SchEditor {
     pub(super) fn draw_grid(&self, painter: &egui::Painter, rect: Rect) {
         // grid dots
@@ -229,6 +232,11 @@ impl SchEditor {
                 let label_rects = self.label_rects(painter, rect);
                 for c in self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()) {
                     let Some(el) = res.element(&c.refdes) else { continue };
+                    // no current worth reading: a capacitor at DC, a part on an idle pin. "0 A" under every part of a big sheet
+                    // buried the currents that matter; 1 nA still keeps an op-amp's input bias (tens of nA)
+                    if el.current.abs() < MIN_SHOWN_CURRENT {
+                        continue;
+                    }
                     let ext = comp_extents(c);
                     let Some((x0, x1, _, y1)) = sheet_box(c.kind, ext, c.pos, c.rot) else { continue };
                     // below the part's value text
