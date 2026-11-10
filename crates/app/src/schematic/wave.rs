@@ -175,9 +175,11 @@ pub(super) fn signal_list(ui: &mut egui::Ui, id: &str, order: &[&str], selected:
         ui.horizontal_wrapped(|ui| {
             for name in shown {
                 let mut on = selected.contains(name);
+                // a name made here ("T ループゲイン", "合計") is shown in the screen's language; the key stays the Japanese
+                let shown = i18n::tr_dyn(name);
                 let text = match colour_of(name, selected) {
-                    Some(c) if on => egui::RichText::new(name).color(c),
-                    _ => egui::RichText::new(name),
+                    Some(c) if on => egui::RichText::new(shown).color(c),
+                    _ => egui::RichText::new(shown),
                 };
                 if ui.checkbox(&mut on, text).changed() {
                     if on {

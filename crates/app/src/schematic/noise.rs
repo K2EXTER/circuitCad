@@ -193,7 +193,7 @@ impl SchEditor {
                                 let mut on = selected.contains(name);
                                 let color = order.iter().filter(|(n, _)| selected.contains(n)).position(|(n, _)| n == name).map(|i| PALETTE[i % PALETTE.len()]);
                                 let share = if name == "合計" || name == "入力換算" { None } else { Some(res.share(name)) };
-                                let label = name.clone();
+                                let label = i18n::tr_dyn(name);
                                 let text = match color {
                                     Some(c) if on => egui::RichText::new(label).color(c),
                                     _ => egui::RichText::new(label),

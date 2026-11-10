@@ -239,7 +239,7 @@ pub fn cursor_report(traces: &[Trace], c: &[Option<f64>; 2], style: &Style, log:
     for (i, tr) in traces.iter().enumerate() {
         let (va, vb) = (c[0].and_then(|t| interp(tr.t, tr.v, t)), c[1].and_then(|t| interp(tr.t, tr.v, t)));
         let step = |v: f64| v.abs() / 100.0;
-        let mut l = tr.name.to_string();
+        let mut l = i18n::tr_dyn(tr.name);
         if let Some(v) = va {
             l += &format!("  A={}", ys(v, step(v)));
         }
@@ -533,7 +533,7 @@ pub fn draw_group(
             if let Some(v) = interp(tr.t, tr.v, t) {
                 clip.circle_filled(Pos2::new(p.x, sy(v)), 3.0, tr.color);
                 let step = (y1 - y0) / 1000.0;
-                let txt = format!("{} = {}", tr.name, style.y_text(v, step));
+                let txt = format!("{} = {}", i18n::tr_dyn(tr.name), style.y_text(v, step));
                 clip.text(Pos2::new(pa.left() + 6.0, y), Align2::LEFT_TOP, txt, label.clone(), tr.color);
             }
         }

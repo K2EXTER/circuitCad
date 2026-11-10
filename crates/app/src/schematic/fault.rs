@@ -569,7 +569,7 @@ impl SchEditor {
                         _ => "値の読み間違い・部品の取り違え・容量抜け・電源電圧の低下。値を小さくします",
                     };
                     let label = circuit.as_ref().map_or(f.label(), |c| describe_fault(c, &self.fault_part, *f));
-                    ui.selectable_value(&mut self.fault_kind, k, label).on_hover_text(tip);
+                    ui.selectable_value(&mut self.fault_kind, k, i18n::tr_dyn(&label)).on_hover_text(i18n::tr_dyn(tip));
                 }
             });
         } else {

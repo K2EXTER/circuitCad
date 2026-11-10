@@ -129,7 +129,7 @@ impl SchEditor {
                             egui::Grid::new("ac_corner_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                 ui.label("");
                                 for (name, _) in &corner {
-                                    ui.strong(name);
+                                    ui.strong(i18n::tr_dyn(name));
                                 }
                                 ui.end_row();
                                 ui.label(i18n::tr("-3dB点")).on_hover_text(i18n::tr("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります"));
@@ -164,7 +164,7 @@ impl SchEditor {
                                 egui::Grid::new("ac_margin_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                     ui.label("");
                                     for (name, _) in &margins {
-                                        ui.strong(name);
+                                        ui.strong(i18n::tr_dyn(name));
                                     }
                                     ui.end_row();
                                     ui.label(i18n::tr("位相余裕")).on_hover_text(i18n::tr("ゲインが 0dB になる周波数で、位相が -180° までにあと何度残っているか。45° 以上が目安で、小さいとステップ応答で行き過ぎや振動が出ます"));

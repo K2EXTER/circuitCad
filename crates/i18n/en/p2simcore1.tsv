@@ -410,3 +410,6 @@ tbl(x, x1,y1, x2,y2, ...) は、数値の点を 2 つ以上並べて書きます
 BIAS (DCバイアスで下がる容量) は 0〜95 (%) で入れてください (例: BIAS=60)	Enter BIAS (capacitance lost to DC bias) as 0-95 (%) (e.g. BIAS=60)
 電源の値「{}」: {m}	Supply value "{}": {m}
 {r} ({}): シミュレーションモデルがないため無視します	{r} ({}): ignored because it has no simulation model
+{}: 電流 {} → {} (電流が止まります)	{}: current {} -> {} (the current stops)
+{}: 電流 {} → {}、消費電力 {} mW → {} mW (1W 超: 焼損・発煙のおそれ)	{}: current {} -> {}, power {} mW -> {} mW (over 1 W: it may burn or smoke)
+{}: 電流 {} → {}、消費電力 {} mW → {} mW (一般的な 1/4 W 抵抗の定格を超えます)	{}: current {} -> {}, power {} mW -> {} mW (more than a common 1/4 W resistor is rated for)

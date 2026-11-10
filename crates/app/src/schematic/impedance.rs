@@ -135,8 +135,8 @@ impl SchEditor {
                             "capacitive" => "コンデンサのように見える",
                             _ => "抵抗のように見える",
                         };
-                        ui.label(format!("{}: {} ({})", eng(res.freq[first], "Hz"), eng(mag[first], "Ω"), kind(ph[first])));
-                        ui.label(format!("{}: {} ({})", eng(res.freq[last], "Hz"), eng(mag[last], "Ω"), kind(ph[last])));
+                        ui.label(format!("{}: {} ({})", eng(res.freq[first], "Hz"), eng(mag[first], "Ω"), i18n::tr_dyn(kind(ph[first]))));
+                        ui.label(format!("{}: {} ({})", eng(res.freq[last], "Hz"), eng(mag[last], "Ω"), i18n::tr_dyn(kind(ph[last]))));
                         let ex = z_extrema(&res.freq, &mag, 3.0);
                         if ex.is_empty() {
                             ui.small(i18n::tr("山や谷はありません (なだらかに変わります)"));
@@ -148,7 +148,7 @@ impl SchEditor {
                                     } else {
                                         ("谷", "直列共振: コンデンサの容量とその足の細かいインダクタンスが打ち消し合って、インピーダンスが最も低くなる周波数。その上は、足のインダクタンスのせいでコイルのように上がります")
                                     };
-                                    ui.label(word).on_hover_text(tip);
+                                    ui.label(i18n::tr_dyn(word)).on_hover_text(i18n::tr_dyn(tip));
                                     ui.label(eng(e.freq, "Hz"));
                                     ui.label(eng(e.ohm, "Ω"));
                                     ui.end_row();

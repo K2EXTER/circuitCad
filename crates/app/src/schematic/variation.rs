@@ -155,8 +155,8 @@ impl SchEditor {
                         ui.set_width(300.0);
                         egui::Grid::new("mc_stats").num_columns(2).show(ui, |ui| {
                             let row = |ui: &mut egui::Ui, label: &str, val: String, tip: &str| {
-                                ui.label(label).on_hover_text(tip);
-                                ui.label(val).on_hover_text(tip);
+                                ui.label(i18n::tr_dyn(label)).on_hover_text(i18n::tr_dyn(tip));
+                                ui.label(val).on_hover_text(i18n::tr_dyn(tip));
                                 ui.end_row();
                             };
                             row(ui, &format!("{} の設計値", res.output), fmt_unit(res.nominal, res.unit), "部品がすべて表示どおりの値のときの値");
@@ -178,10 +178,12 @@ impl SchEditor {
                             ui.label(i18n::tr("最悪ケース (全部品が誤差の端にあるとき)")).on_hover_text(i18n::tr("ランダムではなく、結果がいちばん小さく (大きく) なるように、すべての部品を許容差の端に置いて計算した値です。ばらつき解析の最小・最大は「たまたま出た値」ですが、これは「これより外には出ない」値です"));
                             egui::Grid::new("mc_worst").num_columns(2).show(ui, |ui| {
                                 for (label, v, corner) in [("最小", w.min, &w.min_corner), ("最大", w.max, &w.max_corner)] {
-                                    let tip: Vec<String> = corner.iter().map(|(n, h)| format!("{n}{}", if *h { " 大" } else { " 小" })).collect();
+                                    // "R1 大・R2 小": the words and the separator are translated one by one (the list has any length)
+                                    let tip: Vec<String> = corner.iter().map(|(n, h)| format!("{n} {}", if *h { i18n::tr("大") } else { i18n::tr("小") })).collect();
+                                    let tip = tip.join(i18n::tr("・"));
                                     let pct = if w.nominal.abs() > 1e-12 { format!(" ({:+.1}%)", (v - w.nominal) / w.nominal.abs() * 100.0) } else { String::new() };
-                                    ui.label(label).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip.join("・")));
-                                    ui.label(format!("{}{pct}", fmt_unit(v, w.unit))).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip.join("・")));
+                                    ui.label(i18n::tr(label)).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip));
+                                    ui.label(format!("{}{pct}", fmt_unit(v, w.unit))).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip));
                                     ui.end_row();
                                 }
                             });
