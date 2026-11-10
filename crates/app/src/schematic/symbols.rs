@@ -416,14 +416,51 @@ impl SchEditor {
         if pts.is_empty() {
             return;
         }
-        let (x0, x1) = (pts.iter().map(|p| p.0).min().unwrap() as f32, pts.iter().map(|p| p.0).max().unwrap() as f32);
-        let (y0, y1) = (pts.iter().map(|p| p.1).min().unwrap() as f32, pts.iter().map(|p| p.1).max().unwrap() as f32);
-        let (w, h) = ((x1 - x0).max(4.0) + 6.0, (y1 - y0).max(4.0) + 6.0);
+        let base = (
+            pts.iter().map(|p| p.0).min().unwrap() as f32,
+            pts.iter().map(|p| p.0).max().unwrap() as f32,
+            pts.iter().map(|p| p.1).min().unwrap() as f32,
+            pts.iter().map(|p| p.1).max().unwrap() as f32,
+        );
         // a running lesson's window floats over the right of the canvas: the circuit goes into the part left of it
         let free = if self.lesson.is_some() { (rect.width() - LESSON_WINDOW_PX).max(rect.width() * 0.5) } else { rect.width() };
-        self.zoom = (free / w).min(rect.height() / h).clamp(6.0, 40.0);
+        let fit = |(x0, x1, y0, y1): (f32, f32, f32, f32)| {
+            let (w, h) = ((x1 - x0).max(4.0) + 6.0, (y1 - y0).max(4.0) + 6.0);
+            (free / w).min(rect.height() / h).clamp(6.0, 40.0)
+        };
+        // the names and values written beside the parts take room too (a source's "SIN(0 0.1 1k) AC 1" ran off the left edge): their
+        // width in sheet units depends on the zoom (the text is 0.55 × zoom px, at least 8), so fit once without them, then again with
+        let zoom = fit(base);
+        let b = self.text_bounds(base, zoom);
+        self.zoom = fit(b);
+        let b = self.text_bounds(base, self.zoom);
         let shift = (rect.width() - free) / 2.0 / self.zoom;
-        self.pan = Vec2::new((x0 + x1) / 2.0 + shift, (y0 + y1) / 2.0);
+        self.pan = Vec2::new((b.0 + b.1) / 2.0 + shift, (b.2 + b.3) / 2.0);
+    }
+
+    /// `bounds` widened by the part names and values as `draw_components` places them at `zoom` (an estimate of their width:
+    /// 0.6 em per character, CJK twice that).
+    fn text_bounds(&self, bounds: (f32, f32, f32, f32), zoom: f32) -> (f32, f32, f32, f32) {
+        let em = (zoom * 0.55).clamp(8.0, 18.0) / zoom;
+        let width = |t: &str| t.chars().map(|c| if c.is_ascii() { 0.6 } else { 1.0 }).sum::<f32>() * em;
+        let (mut x0, mut x1, mut y0, mut y1) = bounds;
+        for c in self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()) {
+            let ext = comp_extents(c);
+            let Some((bx0, bx1, by0, by1)) = sheet_box(c.kind, ext, c.pos, c.rot) else { continue };
+            let w = width(&c.refdes).max(width(&c.value));
+            if by1 - by0 <= bx1 - bx0 || super::draw::side_pinned(c, bx0, bx1) {
+                // centred above and below the body
+                let cx = (bx0 + bx1) / 2.0;
+                x0 = x0.min(cx - w / 2.0 - 0.4);
+                x1 = x1.max(cx + w / 2.0);
+                y0 = y0.min(by0 - 0.3 - em * 1.2);
+                y1 = y1.max(by1 + 0.3 + em * 1.2);
+            } else {
+                // left of the body, level with its middle
+                x0 = x0.min(bx0 - 0.4 - w);
+            }
+        }
+        (x0, x1, y0, y1)
     }
 }
 

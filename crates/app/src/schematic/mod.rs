@@ -314,6 +314,8 @@ pub struct SchEditor {
     bench_ui: bench_data::BenchUi,
     fault_kind: usize,
     fault_view: Option<fault::FaultView>,
+    /// A fault result just arrived: scroll the panel to it once (it is at the bottom of a long analysis tab).
+    fault_scroll: bool,
     fault_scan: Vec<fault::ScanRow>,
     /// The scan of every part also tries the faults that hardly ever happen.
     scan_rare: bool,
@@ -676,6 +678,7 @@ impl Default for SchEditor {
             bench_ui: Default::default(),
             fault_kind: 0,
             fault_view: None,
+            fault_scroll: false,
             fault_scan: vec![],
             scan_rare: false,
             diag: Default::default(),

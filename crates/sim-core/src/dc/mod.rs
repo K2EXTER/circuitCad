@@ -398,6 +398,13 @@ pub(crate) fn small_signal_op(cm: &Compiled) -> Result<(Attempt, Option<String>)
     }
 }
 
+/// The error for a net name that is not in the circuit, with the names that are (a typo, or "N$2" lost by the shell, then shows what
+/// to type instead of a bare "ノード N が見つかりません").
+pub(crate) fn no_such_net(c: &Circuit, name: &str) -> SimError {
+    let some: Vec<&str> = c.names.iter().map(String::as_str).filter(|n| !n.contains('.') && *n != "0").take(30).collect();
+    SimError::Invalid(format!("「{}」という名前のネットがありません (ネット: {})", name.trim(), some.join(", ")))
+}
+
 /// Try the strategies in order; the first that converges wins.
 pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'static str), SimError> {
     TROUBLE.with(|t| t.borrow_mut().take());

@@ -384,7 +384,7 @@ fn pin_left_of_body(c: &Component, pt: Pt) -> bool {
 }
 
 /// A part with at least three pins on its left or right edge (an IC): the space beside the body is taken by wires and labels.
-fn side_pinned(c: &Component, bx0: f32, bx1: f32) -> bool {
+pub(super) fn side_pinned(c: &Component, bx0: f32, bx1: f32) -> bool {
     let pins = c.pins();
     let on = |x: f32| pins.iter().filter(|p| (p.1.0 as f32 - x).abs() < 0.6).count();
     on(bx0) >= 3 || on(bx1) >= 3

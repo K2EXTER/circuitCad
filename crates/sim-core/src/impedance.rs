@@ -79,10 +79,7 @@ fn node_index(c: &Circuit, name: &str) -> Result<usize, SimError> {
     if t == "0" || t.eq_ignore_ascii_case("gnd") {
         return Ok(0);
     }
-    c.names.iter().position(|n| n.eq_ignore_ascii_case(t)).ok_or_else(|| {
-        let some: Vec<&str> = c.names.iter().map(String::as_str).filter(|n| !n.contains('.') && *n != "0").take(30).collect();
-        SimError::Invalid(format!("「{t}」という名前のネットがありません (ネット: {})", some.join(", ")))
-    })
+    c.names.iter().position(|n| n.eq_ignore_ascii_case(t)).ok_or_else(|| crate::dc::no_such_net(c, t))
 }
 
 /// Impedance between `node` and `reference` (ground when `None`), with all sources switched off.

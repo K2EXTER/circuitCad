@@ -104,7 +104,7 @@ fn node_index(c: &Circuit, name: &str) -> Result<usize, SimError> {
     if t == "0" || t.eq_ignore_ascii_case("gnd") {
         return Ok(0);
     }
-    c.names.iter().position(|n| n == t).ok_or_else(|| SimError::Invalid(format!("出力ノード {t} が見つかりません")))
+    c.names.iter().position(|n| n == t).ok_or_else(|| crate::dc::no_such_net(c, t))
 }
 
 pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResult, SimError> {

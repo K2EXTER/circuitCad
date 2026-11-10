@@ -84,12 +84,12 @@ pub fn param_sweep(base: &Schematic, s: &ParamSettings) -> Result<ParamResult, S
             match &s.analysis {
                 ParamAnalysis::Tran { tstop, tstep, uic } => {
                     let r = transient(&c, &TranSettings { tstop: *tstop, tstep: *tstep, uic: *uic })?;
-                    let sg = r.signal(&signal).ok_or_else(|| SimError::Invalid(format!("ノード {} が見つかりません", s.node)))?;
+                    let sg = r.signal(&signal).ok_or_else(|| crate::dc::no_such_net(&c, &s.node))?;
                     Ok((r.time.clone(), sg.values.clone()))
                 }
                 ParamAnalysis::Ac { fstart, fstop, points_per_decade } => {
                     let r = ac_analysis(&c, &AcSettings { fstart: *fstart, fstop: *fstop, sweep: AcSweep::Decade(*points_per_decade) })?;
-                    let sg = r.signal(&signal).ok_or_else(|| SimError::Invalid(format!("ノード {} が見つかりません", s.node)))?;
+                    let sg = r.signal(&signal).ok_or_else(|| crate::dc::no_such_net(&c, &s.node))?;
                     Ok((r.freq.clone(), sg.db()))
                 }
             }

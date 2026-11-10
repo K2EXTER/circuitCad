@@ -172,16 +172,16 @@ pub(crate) fn measure(c: &Circuit, node: &str, how: &McMeasure) -> Result<f64, S
     match how {
         McMeasure::DcVoltage => {
             let r = dc_op(c)?;
-            r.voltage(node).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))
+            r.voltage(node).ok_or_else(|| crate::dc::no_such_net(c, node))
         }
         McMeasure::Cutoff { fstart, fstop, points_per_decade } => {
             let r = ac_analysis(c, &AcSettings { fstart: *fstart, fstop: *fstop, sweep: AcSweep::Decade(*points_per_decade) })?;
-            let sig = r.signal(&format!("V({node})")).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
+            let sig = r.signal(&format!("V({node})")).ok_or_else(|| crate::dc::no_such_net(c, node))?;
             minus_3db(&r.freq, &sig.mag()).ok_or_else(|| SimError::Invalid("利得が -3dB に下がる周波数が、掃引の範囲内にありません。周波数の範囲を広げてください".into()))
         }
         McMeasure::Tran { tstop, tstep, uic, metric } => {
             let r = transient(c, &TranSettings { tstop: *tstop, tstep: *tstep, uic: *uic })?;
-            let sig = r.signal(&format!("V({node})")).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
+            let sig = r.signal(&format!("V({node})")).ok_or_else(|| crate::dc::no_such_net(c, node))?;
             let m = step_metrics(&r.time, &sig.values).map_err(SimError::Invalid)?;
             let missing = || SimError::Invalid("波形が 10% 〜 90% を通過していません".into());
             match metric {

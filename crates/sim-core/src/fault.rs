@@ -470,8 +470,8 @@ pub fn simulate_broken_tran(c: &Circuit, b: &Broken, s: &TranSettings, node: &st
     let signal = format!("V({node})");
     let pick = |r: &crate::TranResult| r.signal(&signal).map(|g| (r.time.clone(), g.values.clone()));
     let h = transient(c, s)?;
-    let (healthy_time, healthy) = pick(&h).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
-    let faulted = transient(broken, s).and_then(|r| pick(&r).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
+    let (healthy_time, healthy) = pick(&h).ok_or_else(|| crate::dc::no_such_net(c, node))?;
+    let faulted = transient(broken, s).and_then(|r| pick(&r).ok_or_else(|| crate::dc::no_such_net(c, node)));
     let window = (s.tstop * 0.5, s.tstop);
     let measure = |t: &[f64], v: &[f64]| (wave_measure(t, v, window.0, window.1), stats(t, v, window.0, window.1).map(|x| x.mean));
     let (healthy_measure, healthy_mean) = measure(&healthy_time, &healthy);
@@ -558,8 +558,8 @@ pub fn simulate_broken_ac(c: &Circuit, b: &Broken, s: &AcSettings, node: &str) -
     let (element, broken) = (b.element.as_str(), &b.circuit);
     let signal = format!("V({node})");
     let h = ac_analysis(c, s)?;
-    let hs = h.signal(&signal).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
-    let faulted_db = ac_analysis(broken, s).and_then(|r| r.signal(&signal).map(|g| g.db()).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
+    let hs = h.signal(&signal).ok_or_else(|| crate::dc::no_such_net(c, node))?;
+    let faulted_db = ac_analysis(broken, s).and_then(|r| r.signal(&signal).map(|g| g.db()).ok_or_else(|| crate::dc::no_such_net(c, node)));
     Ok(AcFaultReport { element: element.into(), label: b.label.clone(), node: node.into(), freq: h.freq.clone(), healthy_db: hs.db(), faulted_db })
 }
 

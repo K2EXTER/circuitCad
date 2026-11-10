@@ -1,6 +1,6 @@
 # 日本語<TAB>English. 説明は docs/code-notes/i18n.md
 # crates/sim-core/src/impedance.rs
-「{t}」という名前のネットがありません (ネット: {})	There is no net named "{t}" (nets: {})
+「{}」という名前のネットがありません (ネット: {})	There is no net named "{}" (nets: {})
 見るネットと基準のネットが同じです	The net to watch and the reference net are the same
 取り除く部品「{r}」がありません	The part to remove, "{r}", does not exist
 # crates/sim-core/src/loopgain.rs

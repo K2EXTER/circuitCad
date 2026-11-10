@@ -376,6 +376,7 @@ impl SchEditor {
             Err(e) => format!("故障シミュレーションに失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         self.fault_view = Some(FaultView { report });
+        self.fault_scroll = true;
     }
 
     /// Breaks the chosen part, then lets every part that goes past its rating fail in turn (transient run).
@@ -443,6 +444,7 @@ impl SchEditor {
         let rows = plan.run(&AtomicUsize::new(0), &AtomicBool::new(false)).unwrap_or_default();
         self.status = format!("故障シミュレーション: {} 通りを試しました", rows.len());
         self.fault_scan = rows;
+        self.fault_scroll = true;
     }
 
     /// For the command line: the scan on its own thread, and the fault panel open.
@@ -482,6 +484,7 @@ impl SchEditor {
             Ok(Some(rows)) => {
                 self.status = format!("故障シミュレーション: {} 通りを試しました", rows.len());
                 self.fault_scan = rows;
+                self.fault_scroll = true;
                 self.scan_run = None;
             }
             Ok(None) => {
@@ -678,33 +681,42 @@ impl SchEditor {
                     }
                 }
                 Ok(r) => {
-                    let lines = r.summary();
-                    for (k, l) in lines.iter().enumerate() {
-                        if k == 0 {
-                            ui.strong(l);
-                        } else {
-                            ui.label(l);
+                    // the result in a card of its own, so it stands apart from the settings above it
+                    let card = crate::widgets::plain_card(ui, |ui| {
+                        let lines = r.summary();
+                        for (k, l) in lines.iter().enumerate() {
+                            if k == 0 {
+                                ui.strong(i18n::tr_dyn(l));
+                            } else {
+                                ui.label(i18n::tr_dyn(l));
+                            }
                         }
-                    }
-                    let safety = assess_safety(&self.sch, r);
-                    let col = match safety.level {
-                        Danger::Danger => crate::theme::ERROR,
-                        Danger::Caution => Color32::from_rgb(230, 170, 50),
-                        Danger::Safe => Color32::from_rgb(90, 180, 110),
-                    };
-                    ui.separator();
-                    for (k, l) in safety.summary().iter().enumerate() {
-                        let t = egui::RichText::new(l);
-                        ui.label(if k == 0 { t.strong().color(col) } else { t });
-                    }
-                    ui.horizontal(|ui| {
-                        if r.faulted.is_ok() && ui.button(i18n::tr("故障時の電圧を回路図に表示")).on_hover_text(i18n::tr("回路図の電圧表示を、壊れた状態の値に切り替えます。元に戻すには右のボタンか、DC解析を実行します")).clicked() {
+                        let safety = assess_safety(&self.sch, r);
+                        let col = match safety.level {
+                            Danger::Danger => crate::theme::ERROR,
+                            Danger::Caution => crate::theme::WARN,
+                            Danger::Safe => crate::theme::OK,
+                        };
+                        ui.separator();
+                        for (k, l) in safety.summary().iter().enumerate() {
+                            let t = egui::RichText::new(i18n::tr_dyn(l));
+                            ui.label(if k == 0 { t.strong().color(col) } else { t });
+                        }
+                        let bar = crate::widgets::segment_row(ui, &[("故障時の電圧を回路図に表示", r.faulted.is_ok()), ("元に戻す (DC解析)", true)]);
+                        if bar[0].clicked() {
                             show_sheet = true;
                         }
-                        if ui.button(i18n::tr("元に戻す (DC解析)")).on_hover_text(i18n::tr("壊した仮定の結果をやめて、いまの回路のDC解析の結果に戻します")).clicked() {
+                        bar[0].clone().on_hover_text(i18n::tr("回路図の電圧表示を、壊れた状態の値に切り替えます。元に戻すには右のボタンか、DC解析を実行します"));
+                        if bar[1].clicked() {
                             restore = true;
                         }
+                        bar[1].clone().on_hover_text(i18n::tr("壊した仮定の結果をやめて、いまの回路のDC解析の結果に戻します"));
+                        ui.min_rect()
                     });
+                    // a new result sits at the bottom of a long tab: bring it into view once
+                    if self.fault_scroll {
+                        ui.scroll_to_rect(card, Some(egui::Align::Min));
+                    }
                 }
             }
         }
@@ -716,7 +728,7 @@ impl SchEditor {
         }
         if !self.fault_scan.is_empty() {
             let mut pick = None;
-            egui::CollapsingHeader::new(i18n::tr("危険な順 (定格超え → 電圧の変化)")).default_open(true).show(ui, |ui| {
+            let scan = egui::CollapsingHeader::new(i18n::tr("危険な順 (定格超え → 電圧の変化)")).default_open(true).show(ui, |ui| {
                 egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                     for (k, row) in self.fault_scan.iter().enumerate() {
                         let effect = if row.severity.is_infinite() {
@@ -740,12 +752,20 @@ impl SchEditor {
                         }
                     }
                 });
-            }).header_response.on_hover_text(i18n::tr("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです"));
+            });
+            if self.fault_scroll && self.fault_view.is_none() {
+                ui.scroll_to_rect(scan.header_response.rect, Some(egui::Align::Min));
+            }
+            scan.header_response.on_hover_text(i18n::tr("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです"));
             if let Some(k) = pick {
                 let row = &self.fault_scan[k];
                 (self.fault_part, self.fault_pin, self.fault_kind, self.fault_pin_how) = (row.part.clone(), row.pin.clone(), row.fault_kind, 0);
                 self.run_fault();
             }
+        }
+        // scrolled to (if it was shown): once is enough, the learner may scroll away
+        if self.fault_view.is_some() || !self.fault_scan.is_empty() {
+            self.fault_scroll = false;
         }
     }
 }

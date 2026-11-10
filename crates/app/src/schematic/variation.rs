@@ -236,7 +236,7 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
         let y = if above { plot.top() - 1.0 } else { plot.top() + 11.0 };
         // near the right edge the label goes to the left of its line
         let (dx, al) = if x > plot.center().x + plot.width() * 0.35 { (-3.0, Align2::RIGHT_BOTTOM) } else { (3.0, Align2::LEFT_BOTTOM) };
-        p.text(Pos2::new(x + dx, y), al, label, FontId::proportional(11.0), color);
+        p.text(Pos2::new(x + dx, y), al, i18n::tr_dyn(label), FontId::proportional(11.0), color);
     };
     mark(res.nominal, Color32::WHITE, "設計値", true);
     mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
@@ -247,6 +247,16 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     let f = FontId::proportional(11.0);
     p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, fmt_unit(a, res.unit), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, fmt_unit(b, res.unit), f.clone(), Color32::from_gray(190));
+    // round values in between (only the two ends were labelled), with a short tick; one that would crowd an end label is skipped
+    let (ticks, _) = plot::nice_ticks(a, b, (plot.width() / 110.0) as usize);
+    for t in ticks {
+        let x = x_of(t);
+        if x - plot.left() < 80.0 || plot.right() - x < 80.0 {
+            continue;
+        }
+        p.line_segment([Pos2::new(x, plot.bottom()), Pos2::new(x, plot.bottom() + 4.0)], Stroke::new(1.0, Color32::from_gray(140)));
+        p.text(Pos2::new(x, plot.bottom() + 4.0), Align2::CENTER_TOP, fmt_unit(t, res.unit), f.clone(), Color32::from_gray(150));
+    }
     p.text(Pos2::new(rect.left() + 4.0, plot.top()), Align2::LEFT_TOP, i18n::trf!("{peak:.0}回"), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(rect.left() + 4.0, plot.bottom()), Align2::LEFT_BOTTOM, "0", f, Color32::from_gray(190));
 }
