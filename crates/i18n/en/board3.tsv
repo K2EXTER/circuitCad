@@ -149,7 +149,7 @@
 裏から	Bottom
 基板を裏返して真下から見ます (裏面の部品と配線)	Flips the board and looks straight up (parts and tracks on the bottom)
 部品の本体を表示します。形と高さはフットプリントからの目安です	Shows part bodies. Shapes and heights are estimates from the footprint
-部品名	Refdes
+部品名	Part name
 部品番号 (R1 など) を表示します	Shows reference designators (R1 etc.)
 ソルダーレジスト	Solder mask
 基板の緑色の保護膜。オフにすると、銅箔の配線がそのまま見えます	The board's green protective coating. Turn it off to see the copper tracks as they are

@@ -26,10 +26,10 @@ impl PartForm {
         self.drill = t.drill;
         self.pad_d = t.pad_d;
         if !self.thru_radial {
-            // lying down: the body runs along the leads (x), its diameter is the height above the board
+            // lying down: the body runs along the leads (the row of pads, y), its diameter is the height above the board
             self.body_on = true;
             self.body_circle = false;
-            (self.body_w, self.body_h, self.body_x, self.body_y) = (t.body_len, t.body_dia, 0.0, 0.0);
+            self.row_body(t.body_len, t.body_dia);
             self.height = t.body_dia;
         }
     }

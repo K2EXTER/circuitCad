@@ -625,7 +625,9 @@ mod passive_form_tests {
         let t = f.thru_suggest().unwrap();
         f.thru_apply(&t);
         assert_eq!((f.drill, f.pad_d, f.pitch), (1.2, 2.0, 10.16));
-        assert_eq!((f.body_w, f.body_h, f.height), (5.21, 2.72, 2.72));
+        // the body lies along the row of pads (y), centred between the two holes
+        assert_eq!((f.body_w, f.body_h, f.height), (2.72, 5.21, 2.72));
+        assert_eq!((f.body_x, f.body_y), (0.0, -5.08));
         assert!(f.to_def().is_ok());
         f.thru_lead = "abc".into();
         assert!(f.thru_suggest().unwrap_err().contains("リード径"));

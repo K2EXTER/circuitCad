@@ -101,7 +101,11 @@ impl PartForm {
                     ui.add(egui::TextEdit::singleline(text).desired_width(120.0).min_size(egui::vec2(120.0, 0.0)).hint_text(hint)).on_hover_text(tip);
                     ui.end_row();
                 };
-                row(ui, &format!("値 ({})", kind.unit()), &mut self.pas_value, "コンデンサは容量 (例: 100n、4.7u)、抵抗は抵抗値 (例: 10k)、コイルはインダクタンス (例: 10u)", "100n");
+                row(ui, &format!("値 ({})", kind.unit()), &mut self.pas_value, "コンデンサは容量 (例: 100n、4.7u)、抵抗は抵抗値 (例: 10k)、コイルはインダクタンス (例: 10u)", match kind {
+                    PassiveKind::Capacitor => "100n",
+                    PassiveKind::Resistor => "10k",
+                    PassiveKind::Inductor => "10u",
+                });
                 match kind {
                     PassiveKind::Capacitor => {
                         row(ui, "ESR (等価直列抵抗)", &mut self.pas_esr, "データシートの ESR か、インピーダンスの最小値。大きいほどリップルが大きく、発熱します。下の表から求めることもできます", "20m");

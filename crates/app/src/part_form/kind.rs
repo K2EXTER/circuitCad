@@ -200,7 +200,7 @@ impl PartForm {
                 (self.pitch, self.pad_d, self.drill) = (7.62, 1.8, 0.9);
                 self.body_on = true;
                 self.body_circle = false;
-                (self.body_w, self.body_h, self.body_x, self.body_y) = (3.8, 1.8, 0.0, 0.0);
+                self.row_body(3.8, 1.8);
                 self.body_mark = BodyMark::Bar;
                 self.body_pin = "1".into();
             }
@@ -218,7 +218,7 @@ impl PartForm {
                 (self.pitch, self.pad_d, self.drill) = (2.54, 1.7, 1.0);
                 self.body_on = true;
                 self.body_circle = false;
-                (self.body_w, self.body_h, self.body_x, self.body_y) = (10.16, 2.5, 0.0, 0.0);
+                self.row_body(10.16, 2.5);
                 self.body_mark = BodyMark::Dot;
             }
         }
@@ -313,5 +313,15 @@ impl PartForm {
             self.body_x = 0.0;
             self.body_y = 0.0;
         }
+    }
+
+    /// A body over the pads of a single row: the pads run from pad 1 at the origin down -y (`PackageSpec::SingleRow`),
+    /// so the body's long side (`along`) goes along y and its centre is the middle of the row, not pad 1.
+    pub(super) fn row_body(&mut self, along: f64, across: f64) {
+        let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count().max(1);
+        self.body_w = across;
+        self.body_h = along;
+        self.body_x = 0.0;
+        self.body_y = -((n - 1) as f64) * self.pitch / 2.0;
     }
 }

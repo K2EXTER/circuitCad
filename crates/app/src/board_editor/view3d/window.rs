@@ -77,7 +77,7 @@ impl BoardEditor {
                 }
                 ui.separator();
                 ui.checkbox(&mut v.show_parts, i18n::tr("部品")).on_hover_text(i18n::tr("部品の本体を表示します。形と高さはフットプリントからの目安です"));
-                ui.checkbox(&mut v.show_names, i18n::tr("部品名")).on_hover_text(i18n::tr("部品番号 (R1 など) を表示します"));
+                ui.checkbox(&mut v.show_names, i18n::tr_ctx("3D", "部品名")).on_hover_text(i18n::tr("部品番号 (R1 など) を表示します"));
                 if ui.checkbox(&mut v.mask, i18n::tr("ソルダーレジスト")).on_hover_text(i18n::tr("基板の緑色の保護膜。オフにすると、銅箔の配線がそのまま見えます")).changed() {
                     retex = true;
                 }
