@@ -217,9 +217,19 @@ impl SchEditor {
             ui.colored_label(crate::theme::WARN, i18n::trf!("{n} という点は回路にありません"));
         }
         if d.unexplained {
-            ui.colored_label(crate::theme::WARN, i18n::tr("どの故障 1 つでも、測った値をうまく説明できません。故障が 2 つ以上ある・測り間違い (テスターの GND の当て先)・モデルが実物と違う、を疑います"));
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(crate::theme::WARN, i18n::tr("▲ どの故障 1 つでも説明できません"));
+                crate::icons::help(ui, "どの故障 1 つでも、測った値をうまく説明できません。故障が 2 つ以上ある・測り間違い (テスターの GND の当て先)・モデルが実物と違う、を疑います");
+            });
         }
-        ui.label(egui::RichText::new(i18n::tr("疑わしい順")).strong()).on_hover_text(i18n::tr("測った値に合う度合いと、その故障の起こりやすさ (よくある・ときどき・まれ) から出した割合です。クリックすると、回路図でその部品を選びます"));
+        // when nothing fits, the shares (which always add up to 100 % among the candidates) would still crown one with "100 %": the list
+        // is then only the nearest misses, without a share
+        if d.unexplained {
+            ui.label(egui::RichText::new(i18n::tr("近い順 (どれも合いません)")).strong()).on_hover_text(i18n::tr("測った値にいちばん近い故障から並べています。どれも合っていないので、割合は出しません。クリックすると、回路図でその部品を選びます"));
+        } else {
+            ui.label(egui::RichText::new(i18n::tr("疑わしい順")).strong()).on_hover_text(i18n::tr("測った値に合う度合いと、その故障の起こりやすさ (よくある・ときどき・まれ) から出した割合です。クリックすると、回路図でその部品を選びます"));
+        }
+        let unexplained = d.unexplained;
         let mut pick = None;
         // the name column gets what is left of the panel's width after the bar and the share: long names are cut (the hover has them)
         let name_w = (ui.available_width() - 60.0 - 36.0 - 16.0).max(80.0);
@@ -241,8 +251,11 @@ impl SchEditor {
                 }
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(60.0, 10.0), Sense::hover());
                 ui.painter().rect_filled(rect, 2.0, ui.visuals().extreme_bg_color);
-                ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(60.0 * s.probability as f32, 10.0)), 2.0, crate::theme::INFO);
-                ui.add_sized([36.0, 16.0], egui::Label::new(egui::RichText::new(format!("{:.0}%", s.probability * 100.0)).small()));
+                if !unexplained {
+                    ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(60.0 * s.probability as f32, 10.0)), 2.0, crate::theme::INFO);
+                }
+                let share = if unexplained { "—".to_string() } else { format!("{:.0}%", s.probability * 100.0) };
+                ui.add_sized([36.0, 16.0], egui::Label::new(egui::RichText::new(share).small()));
                 ui.end_row();
             }
         });

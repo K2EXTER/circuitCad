@@ -70,7 +70,12 @@ impl SchEditor {
             }
             Ok(res) => {
                 for n in notes.iter() {
-                    ui.label(i18n::tr_dyn(n));
+                    // a note that says the result cannot be used is in the warning colour
+                    if n.starts_with('▲') {
+                        ui.colored_label(crate::theme::WARN, i18n::tr_dyn(n));
+                    } else {
+                        ui.label(i18n::tr_dyn(n));
+                    }
                 }
                 crate::widgets::warning_lines(ui, "ac_warn", &res.warnings, |_| false);
                 plot::scale_bar(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
@@ -118,7 +123,9 @@ impl SchEditor {
                             })
                             .collect();
                         // a ripple share has no cutoff to speak of
-                        if !corner.is_empty() && !*psrr_run {
+                        // (nor a result the note above calls unusable)
+                        let unusable = notes.iter().any(|n| n.starts_with('▲'));
+                        if !corner.is_empty() && !*psrr_run && !unusable {
                             egui::Grid::new("ac_corner_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                 ui.label("");
                                 for (name, _) in &corner {

@@ -1338,3 +1338,24 @@ fn ac_runs_on_a_mixed_signal_sheet_and_says_how() {
     let res = e.ac.as_ref().unwrap().outcome.as_ref().expect("AC works on the mixed-signal sample");
     assert!(res.warnings.iter().any(|w| w.contains("なだらかにして")), "{:?}", res.warnings);
 }
+
+/// Cutting a part that is not in the loop (the load resistor) gives a loop gain of almost nothing: the viewer says so on top, the
+/// status names the part, and the bottom hint is the loop-gain one; a PSRR run gets its own hint, not the Bode plot's.
+#[test]
+fn a_cut_outside_the_loop_is_said_on_top_and_hints_follow_the_analysis() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "opamp_loop_gain.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.set_loop_settings("R3", "");
+    e.analyze_loop();
+    let view = e.ac.as_ref().unwrap();
+    assert!(view.notes.iter().any(|n| n.starts_with('▲') && n.contains("R3")), "{:?}", view.notes);
+    assert!(e.status.contains("ループの途中にありません"), "{}", e.status);
+    assert!(e.hint().starts_with("ループゲイン:"), "{}", e.hint());
+
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "psrr_filter.schjson").unwrap().1;
+    e.sch = sch;
+    e.set_psrr_settings("V1", "VOUT");
+    e.analyze_psrr();
+    assert!(e.hint().starts_with("電源除去比:"), "{}", e.hint());
+}

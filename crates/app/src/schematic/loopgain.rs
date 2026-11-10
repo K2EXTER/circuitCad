@@ -93,7 +93,23 @@ impl SchEditor {
         };
         let mut selected = BTreeSet::new();
         selected.insert("T ループゲイン".to_string());
+        // a loop gain that never reaches 1 means the cut is not in the loop: the curves are then meaningless (-300 dB, a phase that
+        // wanders to 2000°), so it is said on top in the warning colour, not folded away among the other notes
+        let mut notes = vec![];
+        let mut outcome = outcome;
+        if let Ok(r) = &mut outcome {
+            let peak = r.signal("T ループゲイン").map_or(0.0, |t| t.mag().iter().copied().filter(|v| v.is_finite()).fold(0.0, f64::max));
+            if peak < 1.0 {
+                r.warnings.retain(|w| !w.starts_with("ループゲインが 1 を超えません"));
+                notes.push(if peak < 1e-5 {
+                    format!("▲ {} はループの途中にありません (ループゲインがほぼ 0)。グラフの値は使えません。帰還の抵抗など、出力から入力へ戻る道にある部品を切ってください", part)
+                } else {
+                    "▲ ループゲインが 1 を超えません。切った部品がループの途中にないか、向きが逆かもしれません (出力側のネットを指定して試してください)".to_string()
+                });
+            }
+        }
         self.status = match &outcome {
+            Ok(_) if notes.iter().any(|n| n.contains("ループの途中にありません")) => format!("ループゲイン: {} はループの途中にありません", part),
             Ok(r) => {
                 let t = r.signal("T ループゲイン").expect("T");
                 match stability_margins(&r.freq, &t.db(), &t.phase_deg()).filter(|m| m.gain_crossover.is_some()) {
@@ -105,7 +121,7 @@ impl SchEditor {
         };
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
         let ghost = self.ac.as_ref().and_then(|v| v.ghost.clone());
-        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: true, pz_run: false, psrr_run: false, notes: vec![] });
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: true, pz_run: false, psrr_run: false, notes });
         self.wave_mode = WaveMode::Ac;
     }
 

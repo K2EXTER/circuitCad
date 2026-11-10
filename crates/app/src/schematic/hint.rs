@@ -44,8 +44,18 @@ impl SchEditor {
                     _ => "選んだ部品の値は左の欄で変えられます。R キーで回転、Delete で削除".into(),
                 };
             }
+        // the temperature sweep first: it is a sweep too, and its hint used to be hidden behind the plain one
+        if self.sweep.as_ref().is_some_and(|s| s.temp) && self.wave_mode == WaveMode::Sweep {
+            return "温度が上がるとダイオードやトランジスタの電圧が下がります (約 -2 mV/℃)。この変化で回路の動作点がどれだけずれるかを見ましょう".into();
+        }
         if self.sweep.is_some() && self.wave_mode == WaveMode::Sweep {
-            return "出力 = 入力の線と曲線が交わる所が切替電圧です。VIL・VIH の間が「どちらとも言えない」領域で、狭いほどスパッと切り替わります。電源電圧や部品を変えて再実行してみましょう".into();
+            return "電源の電圧を動かしたときの、各点の電圧と電流です。線が折れる所で部品の働き方が変わります (ツェナーが効き始める・トランジスタが飽和する など)。ロジックの回路なら、「出力 = 入力」の線と交わる所が切り替わりの電圧です".into();
+        }
+        if self.param.is_some() && self.wave_mode == WaveMode::Param {
+            return "線の色ごとに部品の値が違います (色と値は上の凡例)。値でどこがどう動くかを比べましょう。範囲や本数は、左の「パラメータスイープ」で変えられます".into();
+        }
+        if self.fault_wave.is_some() && self.wave_mode == WaveMode::Fault {
+            return "正常 (白い線) と、壊れたとき (色つきの線) の比較です。実物では、この違いから壊れた場所を当てます。部品や壊れ方を変えて、どれが見分けやすいかを比べましょう".into();
         }
         if self.noise.is_some() && self.wave_mode == WaveMode::Noise {
             return "ノイズ一覧の素子名にカーソルを合わせると原因と対策が出ます。抵抗値を変えて再実行すると、雑音が √(抵抗値) に比例して変わるのが分かります".into();
@@ -53,8 +63,17 @@ impl SchEditor {
         if self.z.is_some() && self.wave_mode == WaveMode::Impedance {
             return "インピーダンス: 谷は、コンデンサがよく効く周波数 (電源の揺れを吸う)。山は、コイルとコンデンサが打ち消し合って高くなる所で、電圧が揺れやすい周波数です。コンデンサを足す・容量を変えて再実行して、山と谷の動きを見ましょう".into();
         }
-        if self.ac.is_some() && self.wave_mode == WaveMode::Ac {
-            return "ボード線図: 上が大きさ(dB)、下が位相。-3 dB になる周波数がカットオフ周波数です。グラフはドラッグで移動、ホイールで拡大縮小".into();
+        if let Some(ac) = self.ac.as_ref().filter(|_| self.wave_mode == WaveMode::Ac) {
+            // the AC viewer also shows the loop gain, the pole-zero fit and the supply rejection: each its own reading
+            return if ac.loop_run {
+                "ループゲイン: ゲインが 0 dB を横切る周波数で、位相が -180° まで 45° 以上残っていれば安定です。数値は左の「安定性の余裕」に出ます".into()
+            } else if ac.pz_run {
+                "極と零: 「当てはめ」の線が回路の応答に重なっていれば、見つかった極と零でこの回路を説明できています。極と零の一覧は、解析タブの「極と零」にあります".into()
+            } else if ac.psrr_run {
+                "電源除去比: 電源の揺れが出力にどれだけ届くかです。dB がマイナスに大きいほど、よく除去しています。悪い周波数には、出力の近くにコンデンサを足すと効きます".into()
+            } else {
+                "ボード線図: 上が大きさ(dB)、下が位相。-3 dB になる周波数がカットオフ周波数です。グラフはドラッグで移動、ホイールで拡大縮小".into()
+            };
         }
         if self.tran.is_some() && self.wave_mode == WaveMode::Tran {
             return "波形はドラッグで移動、ホイールで拡大縮小、ダブルクリックで全体表示。左の一覧で表示する信号を選べます".into();
@@ -65,8 +84,15 @@ impl SchEditor {
         if self.sens.is_some() && self.wave_mode == WaveMode::Sens {
             return "感度: 上にある部品ほど結果を大きく動かします。精度の要る値は、上の部品を誤差の小さいもの (1% の抵抗など) にすれば守れます。下の、ほとんど効かない部品は安いものでかまいません".into();
         }
-        if self.sweep.as_ref().is_some_and(|s| s.temp) && self.wave_mode == WaveMode::Sweep {
-            return "温度が上がるとダイオードやトランジスタの電圧が下がります (約 -2 mV/℃)。この変化で回路の動作点がどれだけずれるかを見ましょう".into();
+        // the fault and diagnosis results sit in the left panel, with no waveform: the last run is told by its status line
+        if self.status.starts_with("故障シミュレーション:") && self.status.contains("通りを試しました") {
+            return "よくある故障を順に試した結果です。出力が大きく変わる故障は実物でも気づきやすく、ほとんど変わらない故障は見つけにくい (隠れた故障) ものです".into();
+        }
+        if self.status.starts_with("故障シミュレーション:") {
+            return "壊れたときに電圧がどう変わるかです。「故障時の電圧を回路図に表示」で、回路図の上でも確かめられます。実物では、この変わり方から壊れた場所を当てます".into();
+        }
+        if self.status.starts_with("故障診断:") {
+            return "測った電圧に合う故障の候補です。「次に測るとよい点」を測って入れると、候補が絞れます。どれも合わないときは、テスターの当て方 (GND の当て先) や、故障が 2 つ以上ある可能性を考えます".into();
         }
         if self.dc.is_none() {
             return "回路が描けたら、左の「解析」タブの「DC動作点を解析」で各点の電圧と部品の電流 (配線は低電圧が青、高電圧が赤) を見てみましょう。ERC で配線ミスの点検もできます".into();
