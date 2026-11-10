@@ -44,7 +44,7 @@ impl SchEditor {
             if out.is_empty() {
                 return Err(vec!["揺れを見る点 (出力のネット) を選んでください".to_string()]);
             }
-            let c = with_supply_ripple(&c, &source).map_err(|e| vec![e.to_string()])?;
+            let c = with_supply_ripple(&c, &source).map_err(|e| dc::small_signal_error(&c, e))?;
             let mut r = ac_analysis(&c, &AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) }).map_err(|e| vec![e.to_string()])?;
             let sig = r.signal(&format!("V({out})")).ok_or_else(|| vec![format!("ネット {out} が見つかりません")])?;
             let s = psrr_summary(&r.freq, &sig.db()).ok_or_else(|| vec!["周波数の点がありません".to_string()])?;

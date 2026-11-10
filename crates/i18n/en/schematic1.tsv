@@ -452,3 +452,4 @@ GND は電圧の基準なので出力にできません。測りたいノード�
 {} [{kind}]\n{}\n対策: {}	{} [{kind}]\n{}\nFix: {}
 左の一覧から項目を選んでください	Pick an item from the list on the left
 DC動作点を計算しました。どこにも電圧がかかっていません (電源がない回路です。電源の部品か、値のある電源ネットを足してください)	DC operating point calculated. There is no voltage anywhere (nothing powers this circuit: add a source part, or a supply net with a value)
+この解析は、まず回路の動作点 (DC動作点) を求めて、その周りで計算します。その動作点が、どの方法でも求まりませんでした。「DC動作点を解析」で同じように失敗するかを確かめ、出たヒントに沿って直してください。発振する部分を外す・シミュレーション設定の「収束しやすく」を試すのも手です	This analysis first finds the circuit's operating point (DC operating point) and works around it. No method found that operating point. Check whether "Run DC operating point" fails the same way and follow its hints. Taking out the oscillating part or trying "Easier convergence" in the simulation settings can also help

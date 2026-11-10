@@ -225,3 +225,14 @@ impl SchEditor {
         self.dc.as_ref()?.pin_v.iter().find(|(p, _)| *p == pt).map(|(_, v)| *v)
     }
 }
+
+/// The messages for a small-signal run (AC, noise, PSRR) that failed: its cause and, when the operating point was not found, what
+/// that means and where to look (the DC panel's hints for the same circuit), instead of a bare "収束しませんでした".
+pub(super) fn small_signal_error(c: &sim_core::Circuit, e: sim_core::SimError) -> Vec<String> {
+    let mut msgs = vec![e.to_string()];
+    if matches!(e, sim_core::SimError::NoConvergence) {
+        msgs.push("この解析は、まず回路の動作点 (DC動作点) を求めて、その周りで計算します。その動作点が、どの方法でも求まりませんでした。「DC動作点を解析」で同じように失敗するかを確かめ、出たヒントに沿って直してください。発振する部分を外す・シミュレーション設定の「収束しやすく」を試すのも手です".to_string());
+        msgs.extend(diagnose(c, &e).into_iter().map(|h| format!("ヒント: {h}")));
+    }
+    msgs
+}

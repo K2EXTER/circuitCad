@@ -3,7 +3,7 @@
 //! (junction/diffusion capacitances are not modelled).
 
 use crate::circuit::{Circuit, Element};
-use crate::dc::{compile, floating_warnings, has_ground, solve_op, Ce, Ctx, SimError};
+use crate::dc::{compile, floating_warnings, has_ground, Ce, Ctx, SimError};
 use std::f64::consts::PI;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
@@ -224,11 +224,12 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
     if !has_ground(circuit) {
         return Err(SimError::NoGround);
     }
-    let warnings = floating_warnings(circuit);
+    let mut warnings = floating_warnings(circuit);
     let cm = compile(circuit);
 
     // small-signal matrix: the DC Jacobian at the operating point (C open, L short)
-    let (op, _) = solve_op(&cm, &crate::dc::DC_ORDER)?;
+    let (op, note) = crate::dc::small_signal_op(&cm)?;
+    warnings.extend(note);
     let mut vj = op.vj.clone();
     let (jac, _) = cm.assemble(&mut vj, &op.x, &Ctx::dc(crate::options::options().gmin, 1.0));
     let n = cm.n_unknowns;

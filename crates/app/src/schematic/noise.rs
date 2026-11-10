@@ -126,7 +126,7 @@ impl SchEditor {
                         input: if inp.is_empty() { None } else { Some(inp) },
                         temp_c: temp,
                     };
-                    noise_analysis(&c, &st).map_err(|e| vec![e.to_string()])
+                    noise_analysis(&c, &st).map_err(|e| dc::small_signal_error(&c, e))
                 }
             }
         };

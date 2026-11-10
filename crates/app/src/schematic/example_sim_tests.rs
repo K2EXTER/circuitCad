@@ -1326,3 +1326,15 @@ fn dc_overlay_writes_one_voltage_per_net_and_none_on_a_dead_sheet() {
         }
     }
 }
+
+/// A sheet with a 555 and flip-flops next to its analog part: the usual order finds no operating point, switch widening (as the DC
+/// panel uses) does, so the AC run works and says its answer was taken with the latches set and the oscillator held still.
+#[test]
+fn ac_runs_on_a_mixed_signal_sheet_and_says_how() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "mixed_signal.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.run_ac();
+    let res = e.ac.as_ref().unwrap().outcome.as_ref().expect("AC works on the mixed-signal sample");
+    assert!(res.warnings.iter().any(|w| w.contains("なだらかにして")), "{:?}", res.warnings);
+}

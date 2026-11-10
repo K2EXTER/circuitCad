@@ -385,6 +385,19 @@ pub(crate) fn floating_warnings(circuit: &Circuit) -> Vec<String> {
     w
 }
 
+/// The operating point a small-signal run (AC, noise) linearises around. The usual order first; when it finds none, switch widening as
+/// the DC panel does (a sheet with a latch or a 555 next to the analog part had no AC at all while its DC panel worked). The note
+/// says so, because a latch was set into one of its states and an oscillator was held still, so that part of the answer is a guide.
+pub(crate) fn small_signal_op(cm: &Compiled) -> Result<(Attempt, Option<String>), SimError> {
+    match solve_op(cm, &DC_ORDER) {
+        Err(SimError::NoConvergence) => {
+            let (op, _) = solve_op(cm, &[Strategy::Widen])?;
+            Ok((op, Some("動作点がふつうの方法では求まらなかったので、スイッチ (ロジック・比較器・ラッチ) の切り替わりをなだらかにして求めました。ラッチは安定な状態の1つに、発振する部分は止まった状態にして計算しているので、その部分の結果は目安です".to_string())))
+        }
+        other => other.map(|(op, _)| (op, None)),
+    }
+}
+
 /// Try the strategies in order; the first that converges wins.
 pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'static str), SimError> {
     TROUBLE.with(|t| t.borrow_mut().take());
