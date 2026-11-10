@@ -4,6 +4,8 @@ use super::*;
 
 /// Width of the floating layer panel at the canvas's right edge, in screen pixels (with a little air).
 const OVERLAY_PANEL_PX: f32 = 230.0;
+/// The board lesson's window at the left of the canvas (360 wide, 14 from the panel) and a margin.
+const LESSON_WINDOW_PX: f32 = 390.0;
 
 impl BoardEditor {
     /// Looks at the board at `zoom` pixels to the mm with `(x, y)` mm at the middle (the `--view` start option).
@@ -30,11 +32,13 @@ impl BoardEditor {
             (lo, hi) = (Point::new(lo.x.min(a.x), lo.y.min(a.y)), Point::new(hi.x.max(b.x), hi.y.max(b.y)));
         }
         let (w, h) = ((hi.x - lo.x).max(5.0) + 10.0, (hi.y - lo.y).max(5.0) + 10.0);
-        // the "物の表示とロック" panel floats over the right edge of the canvas: fit into the part of the canvas left of it
-        let free = (rect.width() - OVERLAY_PANEL_PX).max(rect.width() * 0.5);
+        // the "物の表示とロック" panel floats over the right edge of the canvas, and a running lesson's window over its left edge
+        // (it stays there: the right top is the panel's): fit into the part of the canvas between them
+        let lesson = if self.lesson.is_some() { LESSON_WINDOW_PX } else { 0.0 };
+        let free = (rect.width() - OVERLAY_PANEL_PX - lesson).max(rect.width() * 0.4);
         self.zoom = ((free as f64 / w).min(rect.height() as f64 / h) as f32).clamp(2.0, 60.0);
-        // the view's centre moves right by half the panel, so the board sits in the free part
-        let shift = (rect.width() - free) / 2.0 / self.zoom;
+        // the view's centre moves by half the difference of the two, so the board sits in the free part
+        let shift = (OVERLAY_PANEL_PX - lesson) / 2.0 / self.zoom;
         self.pan = Vec2::new(((lo.x + hi.x) / 2.0) as f32 + shift, ((lo.y + hi.y) / 2.0) as f32);
     }
 

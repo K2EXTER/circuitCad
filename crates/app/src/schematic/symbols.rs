@@ -422,8 +422,8 @@ impl SchEditor {
             pts.iter().map(|p| p.1).min().unwrap() as f32,
             pts.iter().map(|p| p.1).max().unwrap() as f32,
         );
-        // a running lesson's window floats over the right of the canvas: the circuit goes into the part left of it
-        let free = if self.lesson.is_some() { (rect.width() - LESSON_WINDOW_PX).max(rect.width() * 0.5) } else { rect.width() };
+        // a running lesson's (or challenge's) window floats over the right of the canvas: the circuit goes into the part left of it
+        let free = if self.lesson.is_some() || self.challenge.is_some() { (rect.width() - LESSON_WINDOW_PX).max(rect.width() * 0.5) } else { rect.width() };
         let fit = |(x0, x1, y0, y1): (f32, f32, f32, f32)| {
             let (w, h) = ((x1 - x0).max(4.0) + 6.0, (y1 - y0).max(4.0) + 6.0);
             (free / w).min(rect.height() / h).clamp(6.0, 40.0)

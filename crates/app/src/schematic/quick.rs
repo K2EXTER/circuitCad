@@ -85,8 +85,35 @@ pub(super) fn quick_matches(query: &str, basic: &[Kind], library: &[PartDef], pr
         order += 1;
     }
     for (i, d) in library.iter().enumerate() {
-        let pins = d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ");
-        let score = score_all(&words, &[(&d.name, 100), (&d.category, 40), (&d.footprint_name(), 30), (&pins, 20), (&d.description, 15)]);
+        // a library part in the category of a basic part ("抵抗", "コンデンサ", "トランジスタ"...) is found by that part's words too:
+        // "res" found the basic resistor but not the library ones, whose category is only in Japanese
+        let kind_words = basic.iter().filter(|k| d.category.contains(k.label().as_str())).map(|k| aliases(*k)).collect::<Vec<_>>().join(" ");
+        let fields = [(d.name.as_str(), 100), (d.category.as_str(), 40), (kind_words.as_str(), 40), (&d.footprint_name(), 30)];
+        // pin names count only when one is typed in full, and the description only at the start of its words: "res" listed every
+        // chip with a RESET pin (an ADC, the microcontrollers, the 555) and nothing about resistors
+        let score = score_all(&words, &fields).or_else(|| {
+            let text = d.description.to_lowercase();
+            // Japanese has no spaces between words: a Japanese word may sit anywhere in the text
+            let in_text = |w: &str| if w.is_ascii() { text.split(|c: char| !c.is_ascii_alphanumeric()).any(|t| t.starts_with(w)) } else { text.contains(w) };
+            let pin_or_text = |w: &String| {
+                if d.pins.iter().any(|p| p.name.to_lowercase() == *w) {
+                    40
+                } else if in_text(w) {
+                    15
+                } else {
+                    0
+                }
+            };
+            let mut total = 0;
+            for w in &words {
+                let best = fields.iter().map(|(t, weight)| field_score(t, w, *weight)).max().unwrap_or(0).max(pin_or_text(w));
+                if best == 0 {
+                    return None;
+                }
+                total += best;
+            }
+            (!words.is_empty()).then_some(total)
+        });
         let boost = fav_pos(&d.name).map(|_| 400).or(recent_pos(&d.name).map(|p| 300 - p as u32)).unwrap_or(0);
         let base = if words.is_empty() { (boost > 0).then_some(1) } else { score };
         if let Some(s) = base {
@@ -255,6 +282,18 @@ mod tests {
         e.pick_quick(QuickTarget::Lib(i));
         assert!(e.tool == Tool::Place && e.place_lib == Some(i));
         assert_eq!(e.lib_prefs.recent.first().map(String::as_str), Some("LM358"), "it counts as recently used");
+    }
+
+    /// "res" lists resistors (the basic one, then the library ones found through their category), not every chip with a RESET pin;
+    /// a pin typed in full still finds its chips.
+    #[test]
+    fn a_short_word_finds_the_kind_not_chips_with_a_pin_of_that_start() {
+        let p = LibPrefs::default();
+        let t = titles("res", &p);
+        assert_eq!(t[0], "抵抗");
+        assert!(t.iter().any(|t| t == "R_10k_0603"), "the library resistor: {t:?}");
+        assert!(!t.iter().any(|t| t == "NE555" || t.starts_with("ATmega")), "chips only by their RESET pin: {t:?}");
+        assert!(titles("reset", &p).iter().any(|t| t == "NE555"), "the whole pin name still finds them");
     }
 
     #[test]

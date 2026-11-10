@@ -3,15 +3,15 @@
 use super::*;
 
 impl SchEditor {
-    /// Fits the view when a file or sheet was just opened, and keeps a running lesson's circuit fitted left of the lesson window while the
+    /// Fits the view when a file or sheet was just opened, and keeps a running lesson's (or challenge's) circuit fitted left of its window while the
     /// canvas changes size; a view the learner has moved is left alone.
     pub(super) fn fit_if_needed(&mut self, rect: Rect) {
         if self.fit_pending {
             self.fit_pending = false;
             self.fit_view(rect);
-            self.lesson_fit = self.lesson.is_some().then_some((rect.size(), self.zoom, self.pan));
+            self.lesson_fit = (self.lesson.is_some() || self.challenge.is_some()).then_some((rect.size(), self.zoom, self.pan));
         } else if let Some((size, zoom, pan)) = self.lesson_fit {
-            if self.lesson.is_none() || self.zoom != zoom || self.pan != pan {
+            if (self.lesson.is_none() && self.challenge.is_none()) || self.zoom != zoom || self.pan != pan {
                 self.lesson_fit = None;
             } else if (rect.size() - size).abs().max_elem() > 1.0 {
                 self.fit_view(rect);

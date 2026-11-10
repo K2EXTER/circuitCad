@@ -177,7 +177,9 @@ impl BoardEditor {
         let mut make_preview = false;
         let mut repaint = false;
         let mut redraw_silk = false;
-        egui::Window::new(i18n::tr("発注の準備")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(640.0).vscroll(true).show(ctx, |ui| {
+        // as tall as the screen allows (640 hid step 4, the export button, below the window's edge on a 1080-line screen)
+        let tall = (ctx.content_rect().height() - crate::widgets::beside_panel().y - 60.0).max(640.0);
+        egui::Window::new(i18n::tr("発注の準備")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(tall).vscroll(true).show(ctx, |ui| {
             ui.label(i18n::tr("基板を発注する前の確認です。上から順に見ていきましょう。"));
             ui.separator();
             crate::widgets::section_heading(ui, "1. 発注先を選ぶ");
