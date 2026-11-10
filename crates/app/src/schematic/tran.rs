@@ -116,7 +116,7 @@ impl SchEditor {
             ui.checkbox(spectrum, i18n::tr("スペクトル表示")).on_hover_text(i18n::tr("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います"));
             if *spectrum {
                 ui.label(i18n::tr("解析範囲"));
-                let tip = "スペクトルを計算する時間の範囲 (秒)。立ち上がり直後を除いた範囲を指定してください。縦軸は 0 dB = 1 V (ピーク値)";
+                let tip = "スペクトルを計算する時間の範囲 (秒)。立ち上がり直後を除いた範囲を指定してください。縦軸は各周波数の成分の振幅 (ピーク値の V。目盛りは対数)";
                 ui.add(egui::TextEdit::singleline(spec_t0).desired_width(70.0)).on_hover_text(tip);
                 ui.label("〜");
                 ui.add(egui::TextEdit::singleline(spec_t1).desired_width(70.0)).on_hover_text(tip);
@@ -516,7 +516,8 @@ impl SchEditor {
                             .enumerate()
                             .map(|(k, ((n, sp), db))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &sp.freq, v: db, dots: false })
                             .collect();
-                        let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
+                        // the amplitude itself (peak volts) on a log scale: the curve is dB with 0 dB = 1 V
+                        let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1.0, "V")) };
                         plot::draw_group(ui, rect, egui::Id::new("spectrum"), &traces, sp_state, 0, &style, true);
                         return;
                     }
@@ -556,7 +557,7 @@ impl SchEditor {
                     let h = rect.height() / used.len().max(1) as f32;
                     for (n, g) in used.iter().enumerate() {
                         let sub = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h * n as f32), Vec2::new(rect.width(), h - 2.0));
-                        let style = Style { unit: if *g == 0 { "V" } else { "A" }, x_unit: "s", x_name: "t", plain_y: false };
+                        let style = Style { unit: if *g == 0 { "V" } else { "A" }, x_unit: "s", x_name: "t", plain_y: false, db_ref: None };
                         plot::draw_group(ui, sub, egui::Id::new(("wave", *g)), &groups[*g], st, *g, &style, n + 1 == used.len());
                     }
                 });

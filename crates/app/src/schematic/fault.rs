@@ -339,7 +339,7 @@ impl SchEditor {
                             if let Ok((t, v)) = &r.faulted {
                                 traces.push(Trace { name: &f_name, color: PALETTE[0], t, v, dots: false });
                             }
-                            let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
+                            let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false, db_ref: None };
                             plot::draw_group(ui, rect, egui::Id::new("fault_plot"), &traces, st, 0, &style, true);
                         }
                         FaultWave::Ac(r) => {
@@ -348,7 +348,7 @@ impl SchEditor {
                             if let Ok(v) = &r.faulted_db {
                                 traces.push(Trace { name: &f_name, color: PALETTE[0], t: &r.freq, v, dots: false });
                             }
-                            let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
+                            let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
                             plot::draw_group(ui, rect, egui::Id::new("fault_plot_ac"), &traces, st, 0, &style, true);
                         }
                     }

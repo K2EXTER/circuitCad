@@ -191,7 +191,7 @@ impl SchEditor {
                 });
                 let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
                 let traces: Vec<Trace> = res.curves.iter().zip(&names).enumerate().map(|(k, (c, n))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &c.x, v: &c.y, dots: false }).collect();
-                let style = if *ac { Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true } } else { Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false } };
+                let style = if *ac { Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None } } else { Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false, db_ref: None } };
                 plot::draw_group(ui, rect, egui::Id::new("param_plot"), &traces, st, 0, &style, true);
             }
         }

@@ -160,8 +160,9 @@ impl SchEditor {
                     let h = rect.height() / 2.0;
                     let top = Rect::from_min_size(rect.min, Vec2::new(rect.width(), h - 2.0));
                     let bottom = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h), Vec2::new(rect.width(), h - 2.0));
-                    let ms = Style { unit: " dBΩ", x_unit: "Hz", x_name: "f", plain_y: true };
-                    let ps = Style { unit: "°", x_unit: "Hz", x_name: "f", plain_y: true };
+                    // in ohms on a log scale, the same unit as the table beside it (the curve is 20·log10|Z|, 0 dB = 1 Ω)
+                    let ms = Style { unit: " dBΩ", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1.0, "Ω")) };
+                    let ps = Style { unit: "°", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
                     plot::draw_group(ui, top, egui::Id::new("z_mag"), &[Trace { name: "|Z|", color: PALETTE[0], t: &res.freq, v: &db, dots: false }], st, 0, &ms, false);
                     plot::draw_group(ui, bottom, egui::Id::new("z_phase"), &[Trace { name: "位相", color: PALETTE[0], t: &res.freq, v: &ph, dots: false }], st, 1, &ps, true);
                 });

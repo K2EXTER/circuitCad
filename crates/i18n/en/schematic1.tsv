@@ -443,7 +443,7 @@ GND は電圧の基準なので出力にできません。測りたいノード�
 最大の原因: {} ({}) — 全体の約 {:.0}%	Largest source: {} ({}) — about {:.0}% of the total
 対策: {}	Fix: {}
 グラフの読み方	How to read the graph
-縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (dB, 0 dB = 1 nV/√Hz)。60 dB で 1 µV/√Hz。rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。	The vertical axis is noise "density": voltage per 1Hz of bandwidth (dB, 0 dB = 1 nV/√Hz). 60 dB is 1 µV/√Hz. The rms value is the noise summed over the whole band of the graph. Noise sources are unrelated, so they add as squares (power sum) and take √ at the end. That is why reducing the biggest source is the shortcut. Hover over an element name to see the cause of its noise and the fix.
+縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (V/√Hz)。目盛りは対数で、上に行くほど桁が大きくなります。rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。	The vertical axis is noise "density": voltage per 1Hz of bandwidth (V/√Hz). The scale is logarithmic: higher up means more digits. The rms value is the noise summed over the whole band of the graph. Noise sources are unrelated, so they add as squares (power sum) and take √ at the end. That is why reducing the biggest source is the shortcut. Hover over an element name to see the cause of its noise and the fix.
 その原因だけが出す雑音の実効値 (1Hz 幅あたりではなく、グラフの帯域全体)	RMS noise from that source alone (over the whole band of the graph, not per 1Hz)
 割合	Share
 全体の雑音のうち、この原因が占める割合 (電力で足し算)	Share of the total noise from this source (added as power)

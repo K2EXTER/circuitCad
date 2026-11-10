@@ -250,8 +250,8 @@ impl SchEditor {
                     let h = rect.height() / 2.0;
                     let top = Rect::from_min_size(rect.min, Vec2::new(rect.width(), h - 2.0));
                     let bottom = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h), Vec2::new(rect.width(), h - 2.0));
-                    let ms = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
-                    let ps = Style { unit: "°", x_unit: "Hz", x_name: "f", plain_y: true };
+                    let ms = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
+                    let ps = Style { unit: "°", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
                     plot::draw_group(ui, top, egui::Id::new("bode_mag"), &mag, st, 0, &ms, false);
                     plot::draw_group(ui, bottom, egui::Id::new("bode_phase"), &phase, st, 1, &ps, true);
                 });

@@ -180,7 +180,7 @@ impl SchEditor {
                             }
                         }
                         {
-                            crate::icons::help_small(ui, "グラフの読み方", "縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (dB, 0 dB = 1 nV/√Hz)。60 dB で 1 µV/√Hz。rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。");
+                            crate::icons::help_small(ui, "グラフの読み方", "縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (V/√Hz)。目盛りは対数で、上に行くほど桁が大きくなります。rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。");
                         }
                         egui::ScrollArea::vertical().show(ui, |ui| {
                           // name (tick to draw) | rms | share of the total, one row per source
@@ -238,7 +238,8 @@ impl SchEditor {
                         return;
                     }
                     let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v, dots: false }).collect();
-                    let sty = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
+                    // the density itself (V/√Hz) on a log scale: the curve is dB with 0 dB = 1 nV/√Hz, which a bare "51 dB" did not say
+                    let sty = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1e-9, "V/√Hz")) };
                     plot::draw_group(ui, rect, egui::Id::new("noise_density"), &traces, st, 0, &sty, true);
                 });
             }

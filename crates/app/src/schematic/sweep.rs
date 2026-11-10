@@ -143,8 +143,8 @@ impl SchEditor {
                     }
                     let amps: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "A").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values, dots: false }).collect();
                     let x_unit = if temp { "℃" } else { "V" };
-                    let vs = Style { unit: "V", x_unit, x_name: &res.source, plain_y: false };
-                    let is = Style { unit: "A", x_unit, x_name: &res.source, plain_y: false };
+                    let vs = Style { unit: "V", x_unit, x_name: &res.source, plain_y: false, db_ref: None };
+                    let is = Style { unit: "A", x_unit, x_name: &res.source, plain_y: false, db_ref: None };
                     match (volts.is_empty(), amps.is_empty()) {
                         (false, false) => {
                             let h = rect.height() / 2.0;

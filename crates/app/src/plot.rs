@@ -108,6 +108,27 @@ pub struct Style<'a> {
     pub x_name: &'a str,
     /// No SI prefixes on y labels (dB, degrees).
     pub plain_y: bool,
+    /// The curves are in dB of a quantity: `(the value at 0 dB, its unit)`. The labels then give the quantity itself at each tick
+    /// ("1µV/√Hz", "100mΩ") instead of a bare "60 dB", which says nothing without its reference; the axis stays logarithmic.
+    pub db_ref: Option<(f64, &'a str)>,
+}
+
+impl Style<'_> {
+    /// The text of a y value (tick, readout, cursor): the quantity behind a dB value when `db_ref` is set.
+    pub fn y_text(&self, v: f64, step: f64) -> String {
+        match self.db_ref {
+            Some((r, unit)) => {
+                let q = r * 10f64.powf(v / 20.0);
+                // three significant digits, whatever the tick step in dB, without trailing zeros ("1m", not "1.00m")
+                let t = axis_label(q, q.abs() / 100.0);
+                let split = t.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-')).unwrap_or(t.len());
+                let (num, prefix) = t.split_at(split);
+                let num = if num.contains('.') { num.trim_end_matches('0').trim_end_matches('.') } else { num };
+                format!("{num}{prefix}{unit}")
+            }
+            None => format!("{}{}", if self.plain_y { plain_label(v, step) } else { axis_label(v, step) }, self.unit),
+        }
+    }
 }
 
 pub const PALETTE: [Color32; 8] = [
@@ -195,7 +216,7 @@ pub fn cursor_report(traces: &[Trace], c: &[Option<f64>; 2], style: &Style, log:
         return out;
     }
     let xs = |t: f64| format!("{}{}", axis_label(t, t.abs() / 100.0), style.x_unit);
-    let ys = |v: f64, step: f64| format!("{}{}", if style.plain_y { plain_label(v, step) } else { axis_label(v, step) }, style.unit);
+    let ys = |v: f64, step: f64| style.y_text(v, step);
     for (k, name) in ["A", "B"].iter().enumerate() {
         if let Some(t) = c[k] {
             out.push((None, format!("{name}: {} = {}", style.x_name, xs(t))));
@@ -398,11 +419,19 @@ pub fn draw_group(
             x_label(&painter, *t, format!("{}{}", axis_label(*t, xs), style.x_unit));
         }
     }
-    let (yt, ys) = nice_ticks(y0, y1, (pa.height() / 40.0) as usize);
-    let ylab = |v: f64, step: f64| if style.plain_y { plain_label(v, step) } else { axis_label(v, step) };
+    let (mut yt, mut ys) = nice_ticks(y0, y1, (pa.height() / 40.0) as usize);
+    // a quantity on a log scale reads best at whole decades (1µ, 10µ, 100µ): a coarse dB step becomes a multiple of 20 dB, which
+    // lands on them (a 50 dB step labelled 3.16m, 10.0µ, 31.6n)
+    // (only over two decades or more: a narrower range keeps its finer ticks, or it would be left with one label)
+    if style.db_ref.is_some() && ys >= 10.0 && y1 - y0 >= 40.0 {
+        ys = (ys / 20.0).ceil() * 20.0;
+        let first = (y0 / ys).ceil() as i64;
+        let last = (y1 / ys).floor() as i64;
+        yt = (first..=last).map(|k| k as f64 * ys).collect();
+    }
     for v in &yt {
         painter.line_segment([Pos2::new(pa.left(), sy(*v)), Pos2::new(pa.right(), sy(*v))], if *v == 0.0 { Stroke::new(1.0, Color32::from_gray(90)) } else { grid });
-        painter.text(Pos2::new(pa.left() - 5.0, sy(*v)), Align2::RIGHT_CENTER, format!("{}{}", ylab(*v, ys), style.unit), label.clone(), label_col);
+        painter.text(Pos2::new(pa.left() - 5.0, sy(*v)), Align2::RIGHT_CENTER, style.y_text(*v, ys), label.clone(), label_col);
     }
     painter.rect_stroke(pa, 0.0, Stroke::new(1.0, Color32::from_gray(80)), egui::StrokeKind::Inside);
 
@@ -504,7 +533,7 @@ pub fn draw_group(
             if let Some(v) = interp(tr.t, tr.v, t) {
                 clip.circle_filled(Pos2::new(p.x, sy(v)), 3.0, tr.color);
                 let step = (y1 - y0) / 1000.0;
-                let txt = format!("{} = {}{}", tr.name, if style.plain_y { plain_label(v, step) } else { axis_label(v, step) }, style.unit);
+                let txt = format!("{} = {}", tr.name, style.y_text(v, step));
                 clip.text(Pos2::new(pa.left() + 6.0, y), Align2::LEFT_TOP, txt, label.clone(), tr.color);
             }
         }
@@ -576,13 +605,13 @@ mod tests {
     fn cursor_report_gives_differences_and_period() {
         let (t, v) = ([0.0, 1e-3, 2e-3], [0.0, 1.0, 3.0]);
         let tr = [Trace { name: "V(out)", color: Color32::WHITE, t: &t, v: &v, dots: false }];
-        let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
+        let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false, db_ref: None };
         assert!(cursor_report(&tr, &[None, None], &style, false).is_empty());
         let r = cursor_report(&tr, &[Some(0.0), Some(2e-3)], &style, false);
         let text: Vec<&str> = r.iter().map(|(_, l)| l.as_str()).collect();
         assert!(text.iter().any(|l| l.starts_with("Δt = 2.0") && l.contains("500Hz")), "{text:?}");
         assert!(text.iter().any(|l| l.contains("A=0") && l.contains("B=3") && l.contains("Δ=3")), "{text:?}");
-        let f = cursor_report(&tr, &[Some(100.0), Some(200.0)], &Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true }, true);
+        let f = cursor_report(&tr, &[Some(100.0), Some(200.0)], &Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None }, true);
         assert!(f.iter().any(|(_, l)| l.contains("2.000 倍") && l.contains("1.00 オクターブ")));
     }
 
@@ -599,5 +628,22 @@ mod tests {
         assert_eq!(interp(&t, &v, 0.5), Some(5.0));
         assert_eq!(interp(&t, &v, 2.0), Some(20.0));
         assert_eq!(interp(&t, &v, 4.0), None);
+    }
+}
+
+#[cfg(test)]
+mod db_ref_tests {
+    use super::*;
+
+    /// A dB curve with a reference is labelled with the quantity: whole decades without trailing zeros, finer ticks with three digits.
+    #[test]
+    fn db_values_are_labelled_with_the_quantity() {
+        let noise = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1e-9, "V/√Hz")) };
+        assert_eq!(noise.y_text(60.0, 20.0), "1µV/√Hz");
+        assert_eq!(noise.y_text(51.5, 0.5), "376nV/√Hz");
+        let z = Style { unit: " dBΩ", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1.0, "Ω")) };
+        assert_eq!(z.y_text(-20.0, 10.0), "100mΩ");
+        let plain = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
+        assert_eq!(plain.y_text(-20.0, 10.0), "-20 dB");
     }
 }
