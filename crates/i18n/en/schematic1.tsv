@@ -451,3 +451,4 @@ GND は電圧の基準なので出力にできません。測りたいノード�
 熱雑音	Thermal noise
 {} [{kind}]\n{}\n対策: {}	{} [{kind}]\n{}\nFix: {}
 左の一覧から項目を選んでください	Pick an item from the list on the left
+DC動作点を計算しました。どこにも電圧がかかっていません (電源がない回路です。電源の部品か、値のある電源ネットを足してください)	DC operating point calculated. There is no voltage anywhere (nothing powers this circuit: add a source part, or a supply net with a value)

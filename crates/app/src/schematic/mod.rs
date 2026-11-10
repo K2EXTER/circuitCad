@@ -473,7 +473,7 @@ struct DcView {
     /// Voltage at every pin position (the sheet shows `marks`; this is read by the tests' `pin_voltage`).
     #[cfg_attr(not(test), allow(dead_code))]
     pin_v: Vec<(Pt, f64)>,
-    /// The voltages written on the sheet: one per piece of wiring, ground left out (`dc.rs voltage_marks`).
+    /// The voltages written on the sheet: one per net, ground left out, none on a sheet with no voltage at all (`dc.rs voltage_marks`).
     marks: Vec<(Pt, f64)>,
     /// Voltage of each wire's net (same order as `Schematic::wires`).
     wire_v: Vec<Option<f64>>,

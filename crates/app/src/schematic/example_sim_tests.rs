@@ -1276,7 +1276,7 @@ fn loop_cap_load_sample_has_a_small_phase_margin_and_the_plain_regulator_a_large
 /// The DC overlay writes one voltage per piece of wiring: in the regulator sample each wire used to carry its value at both
 /// ends and the ground loop showed "0 V" four times; now 12 V, 5 V and the LED's anode show once each and ground not at all.
 #[test]
-fn dc_overlay_writes_one_voltage_per_piece_of_wiring() {
+fn dc_overlay_writes_one_voltage_per_wire() {
     let sch = example_schematics().into_iter().find(|(n, _)| n == "regulator_led.schjson").unwrap().1;
     let mut e = SchEditor::default();
     e.sch = sch;
@@ -1307,4 +1307,22 @@ fn dc_overlay_keeps_the_drop_along_the_copper() {
     let lifted = e.pin_voltage("R2", gnd_pin).unwrap();
     assert!(lifted.abs() > 1e-3, "{lifted}");
     assert!(marked(pin_pt("R2", gnd_pin)), "a ground pin lifted by its trace is shown: {:?}", dc.marks);
+}
+
+/// One value per net: a net drawn in pieces joined by labels is not repeated at each label (the zener sample has VIN and VOUT
+/// once each, a busy mixed-signal sheet no more than one per net), and a sheet nothing powers shows no row of "0 V" at all.
+#[test]
+fn dc_overlay_writes_one_voltage_per_net_and_none_on_a_dead_sheet() {
+    for (name, most) in [("zener_regulator.schjson", 2), ("mixed_signal.schjson", 34), ("arduino_mega_usb.schjson", 0)] {
+        let sch = example_schematics().into_iter().find(|(n, _)| n == name).unwrap().1;
+        let mut e = SchEditor::default();
+        e.sch = sch;
+        e.run_dc();
+        let nets = extract(&e.sch).len();
+        let marks = e.dc.as_ref().unwrap().marks.len();
+        assert!(marks <= most.min(nets), "{name}: {marks} values for {nets} nets");
+        if most == 0 {
+            assert!(e.status.contains("電源がない"), "the status says why nothing is shown: {}", e.status);
+        }
+    }
 }
