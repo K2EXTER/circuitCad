@@ -183,6 +183,9 @@ impl PartForm {
                 let next = rows.iter().filter_map(|r| r.number.parse::<u32>().ok()).max().map_or(1, |m| m + 1);
                 // when every pin is on one side (a header), the new one goes there too instead of splitting the box
                 let side = rows.first().map(|r| r.side.clone()).filter(|s| !s.is_empty() && rows.iter().all(|r| r.side == *s)).unwrap_or_default();
+                // a 2-row header's table alternates left / right: the new pin takes its turn
+                let alternating = rows.len() >= 2 && rows.iter().enumerate().all(|(i, r)| r.side == if i % 2 == 0 { "left" } else { "right" });
+                let side = if alternating { if rows.len().is_multiple_of(2) { "left" } else { "right" }.to_string() } else { side };
                 rows.push(PinRow { number: next.to_string(), side, ..PinRow::default() });
             }
             if !roles.is_empty() && ui.button(i18n::tr("名前で合わせる")).on_hover_text(i18n::tr("ピンの名前 (か番号) が、モデルの端子の名前と同じものを、自動で選びます。合うものがない端子は、選び直しになります")).clicked() {

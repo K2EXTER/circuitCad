@@ -28,6 +28,10 @@ pub enum PackageSpec {
     Quad { pins: usize, pitch: f64, span: f64, pad_len: f64, pad_width: f64 },
     /// One row of through-hole pins (headers, TO-92 style strips). Pin 1 square.
     SingleRow { pins: usize, pitch: f64, pad_d: f64, drill: f64 },
+    /// Two rows of through-hole pins (2xN pin headers, box headers, IDC). Numbered across like the header itself:
+    /// 1 2 / 3 4 / ..., odd pins in the left row (pin 1 square, at the origin), even pins `row_spacing` to the right,
+    /// the rows going down -y (as KiCad's PinHeader_2xNN). Not the counter-clockwise numbering of a DIP.
+    DoubleRow { pins: usize, pitch: f64, row_spacing: f64, pad_d: f64, drill: f64 },
     /// Anything else: list every pad.
     /// `holes` are non-plated holes of the part (locating pegs); a pad with `drill` and `slot` is a plated slot.
     Explicit {
@@ -179,6 +183,24 @@ impl PackageSpec {
                     })
                     .collect()
             }
+            PackageSpec::DoubleRow { pins, pitch, row_spacing, pad_d, drill } => {
+                if *pins < 2 || pins % 2 != 0 {
+                    return Err("2列ヘッダのピン数は2以上の偶数にしてください".into());
+                }
+                for (n, v) in [("pitch", pitch), ("row_spacing", row_spacing), ("pad_d", pad_d), ("drill", drill)] {
+                    positive(n, *v)?;
+                }
+                if drill >= pad_d {
+                    return Err("drill は pad_d より小さくしてください".into());
+                }
+                (0..*pins)
+                    .map(|i| {
+                        let s = if i == 0 { PadShape::Rect { w: *pad_d, h: *pad_d } } else { PadShape::Circle { d: *pad_d } };
+                        let (x, y) = ((i % 2) as f64 * row_spacing, -((i / 2) as f64) * pitch);
+                        fp_pad((i + 1).to_string(), x, y, s, Some(*drill))
+                    })
+                    .collect()
+            }
             PackageSpec::Explicit { pads, holes } => {
                 if pads.is_empty() {
                     return Err("pads が空です".into());
@@ -254,6 +276,20 @@ mod tests {
         assert!(x17 > 0.0 && y17 < 0.0); // start of the right side (bottom)
         let (x25, y25) = pos(&fp, "25");
         assert!(x25 > 0.0 && y25 > 0.0); // start of the top side (right)
+    }
+
+    #[test]
+    fn a_double_row_header_is_numbered_across() {
+        let fp = PackageSpec::DoubleRow { pins: 10, pitch: 2.54, row_spacing: 2.54, pad_d: 1.7, drill: 1.0 }.build("2x5").unwrap();
+        assert_eq!(fp.pads.len(), 10);
+        assert_eq!(pos(&fp, "1"), (0.0, 0.0));
+        assert_eq!(pos(&fp, "2"), (2.54, 0.0));
+        assert_eq!(pos(&fp, "3"), (0.0, -2.54));
+        assert_eq!(pos(&fp, "10"), (2.54, -4.0 * 2.54));
+        assert!(matches!(fp.pads[0].shape, PadShape::Rect { .. }) && matches!(fp.pads[1].shape, PadShape::Circle { .. }));
+        let j = r#"{"type":"double_row","pins":6,"pitch":2.54,"row_spacing":2.54,"pad_d":1.7,"drill":1.0}"#;
+        assert!(matches!(serde_json::from_str::<PackageSpec>(j).unwrap(), PackageSpec::DoubleRow { pins: 6, .. }));
+        assert!(PackageSpec::DoubleRow { pins: 5, pitch: 2.54, row_spacing: 2.54, pad_d: 1.7, drill: 1.0 }.build("x").is_err());
     }
 
     #[test]

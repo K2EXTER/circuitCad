@@ -310,6 +310,7 @@ impl PartForm {
             },
             PkgKind::Quad => PackageSpec::Quad { pins: n, pitch: self.pitch, span: self.span, pad_len: self.len, pad_width: self.width },
             PkgKind::Row => PackageSpec::SingleRow { pins: n, pitch: self.pitch, pad_d: self.pad_d, drill: self.drill },
+            PkgKind::Row2 => PackageSpec::DoubleRow { pins: n, pitch: self.pitch, row_spacing: self.row, pad_d: self.pad_d, drill: self.drill },
         };
         let package = match &self.orig {
             Some(o) if self.keep_package => o.package.clone(),

@@ -106,6 +106,26 @@ impl PartForm {
                     }
                 }
             }
+            Some(PartType::Connector) => {
+                ui.label(i18n::tr("どの形?"));
+                let options = [
+                    (PkgKind::Row, "1列 (ピンヘッダ)", "ピンが1列に並ぶヘッダ・端子台。番号は端から 1, 2, 3 …"),
+                    (PkgKind::Row2, "2列 (2×N ヘッダ)", "ピンが2列に並ぶヘッダ・ボックスヘッダ (書き込み用の 2×3・2×5、Raspberry Pi の 2×20 など)。番号は 1 2 / 3 4 / … と、2つの列をまたいで振ります"),
+                ];
+                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.pkg == *k));
+                for (n, r) in bar.iter().enumerate() {
+                    r.clone().on_hover_text(i18n::tr(options[n].2));
+                    if r.clicked() {
+                        // nothing typed yet: the new shape is still the starting point, so another kind needs no question
+                        let untouched = self.type_base.as_deref() == Some(self.fingerprint().as_str());
+                        self.set_connector_rows(options[n].0);
+                        if untouched {
+                            self.type_base = Some(self.fingerprint());
+                        }
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -149,13 +169,20 @@ impl PartForm {
         }
     }
 
-    /// A form that starts from this kind of part ("ic", "transistor", "diode", "chip", "connector"), for scripts and screenshots.
+    /// A form that starts from this kind of part ("ic", "transistor", "diode", "chip", "connector", "connector2"), for scripts and screenshots.
     pub fn for_type(name: &str) -> Self {
         let mut f = PartForm::default();
         // a kind of capacitor by its own name ("chip" is the small ceramic one)
         let name = if name == "chip" { "ceramic" } else { name };
         if let Some(k) = ["ceramic", "electrolytic", "tantalum", "film"].into_iter().find(|k| *k == name) {
             f.set_capacitor(k);
+            return f;
+        }
+        // "connector2": a connector as a 2-row header (2x5)
+        if name == "connector2" {
+            f.apply_type(PartType::Connector);
+            f.set_connector_rows(PkgKind::Row2);
+            f.follow_body();
             return f;
         }
         if let Some((t, _, _)) = PART_TYPES.iter().find(|(t, _, _)| format!("{t:?}").eq_ignore_ascii_case(name)) {
@@ -215,7 +242,7 @@ impl PartForm {
                 self.prefix = "J".into();
                 self.glyph.clear();
                 // one side, in order, like the header itself (the automatic sides split 1 2 | 3 4 across the box)
-                self.pins_text = "1 1 left\n2 2 left\n3 3 left\n4 4 left".into();
+                self.pins_text = CONNECTOR_PINS.into();
                 self.pkg = PkgKind::Row;
                 (self.pitch, self.pad_d, self.drill) = (2.54, 1.7, 1.0);
                 self.body_on = true;
@@ -308,6 +335,50 @@ impl PartForm {
         .into();
     }
 
+    /// A connector in one row or two. The starting pins follow (4 in a row, a 2x5 header) while they are untouched.
+    pub(super) fn set_connector_rows(&mut self, k: PkgKind) {
+        let two = header_2xn_pins(5);
+        if k == PkgKind::Row2 && self.pins_text == CONNECTOR_PINS {
+            self.pins_text = two;
+        } else if k == PkgKind::Row && self.pins_text == two {
+            self.pins_text = CONNECTOR_PINS.into();
+        }
+        self.set_pkg(k);
+    }
+
+    /// Changes the kind of package. Into a 2-row header the rows are a pitch apart (as on a header) and the pins
+    /// of a one-sided table go to the symbol's two sides 1 2 / 3 4 / ... like the header; out of it they go back to one side.
+    pub(super) fn set_pkg(&mut self, k: PkgKind) {
+        if k == PkgKind::Row2 && self.pkg != PkgKind::Row2 {
+            self.row = self.pitch;
+            self.pin_sides_across(true);
+        } else if k != PkgKind::Row2 && self.pkg == PkgKind::Row2 {
+            self.pin_sides_across(false);
+        }
+        self.pkg = k;
+    }
+
+    /// Sides of the pins: `across` = odd pins left and even pins right (from all on one side or all automatic);
+    /// otherwise all left (from that alternation). Sides chosen any other way are left alone.
+    fn pin_sides_across(&mut self, across: bool) {
+        let mut rows = pintable::rows_of(&self.pins_text);
+        let Some(first) = rows.first().map(|r| r.side.clone()) else { return };
+        let one_side = rows.iter().all(|r| r.side == first) && (first.is_empty() || first == "left");
+        let alternating = rows.len() >= 2 && rows.iter().enumerate().all(|(i, r)| r.side == if i % 2 == 0 { "left" } else { "right" });
+        if across && one_side {
+            for (i, r) in rows.iter_mut().enumerate() {
+                r.side = if i % 2 == 0 { "left" } else { "right" }.into();
+            }
+        } else if !across && alternating {
+            for r in rows.iter_mut() {
+                r.side = "left".into();
+            }
+        } else {
+            return;
+        }
+        self.pins_text = pintable::text_of(&rows);
+    }
+
     /// How many pads the pin table gives.
     fn pad_count(&self) -> usize {
         self.pins_text.lines().filter(|l| !l.trim().is_empty()).count()
@@ -325,6 +396,11 @@ impl PartForm {
                 Some([(self.row - 1.5).max(1.0), self.pitch * rows as f64 + 1.1, 0.0, 0.0])
             }
             BodyFit::Span(across) if self.pkg == PkgKind::Row => Some([across, n as f64 * self.pitch, 0.0, middle]),
+            // a 2-row header: both rows, odd pins at x = 0 and even pins at x = row spacing
+            BodyFit::Span(across) if self.pkg == PkgKind::Row2 => {
+                let rows = n.div_ceil(2).max(1);
+                Some([self.row + across, rows as f64 * self.pitch, self.row / 2.0, -((rows - 1) as f64) * self.pitch / 2.0])
+            }
             BodyFit::Middle(along, across) if self.pkg == PkgKind::Row => Some([across, along, 0.0, middle]),
             _ => None,
         }
@@ -365,4 +441,13 @@ impl PartForm {
             self.body_fit = Some((fit, v));
         }
     }
+}
+
+/// The starting pins of a connector: one side, in order, like the header itself (the automatic sides split 1 2 | 3 4
+/// across the box).
+pub(super) const CONNECTOR_PINS: &str = "1 1 left\n2 2 left\n3 3 left\n4 4 left";
+
+/// The pins of a 2xN header: odd pins on the left, even on the right, as the header is numbered.
+pub(super) fn header_2xn_pins(n: usize) -> String {
+    (1..=2 * n).map(|i| format!("{i} {i} {}", if i % 2 == 1 { "left" } else { "right" })).collect::<Vec<_>>().join("\n")
 }

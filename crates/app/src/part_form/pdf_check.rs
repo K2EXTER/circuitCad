@@ -118,6 +118,7 @@ impl PartForm {
             PkgKind::Dual => vec![T::Pitch, T::Row, T::PadLen, T::PadWidth],
             PkgKind::Quad => vec![T::Pitch, T::Span, T::PadLen, T::PadWidth],
             PkgKind::Row => vec![T::Pitch, T::PadDia, T::Drill],
+            PkgKind::Row2 => vec![T::Pitch, T::Row, T::PadDia, T::Drill],
         };
         if matches!(self.pkg, PkgKind::Dual | PkgKind::Quad) && self.thermal_on {
             targets.extend([T::ThermalW, T::ThermalH]);

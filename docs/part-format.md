@@ -32,7 +32,8 @@
 - `{"type":"chip2","pitch":..,"pad_len":..,"pad_width":..}` — 2端子チップ。`pitch` はパッド中心間
 - `{"type":"dual","pins":8,"pitch":1.27,"row_spacing":5.4,"pad_len":1.55,"pad_width":0.6}` — SOIC/SSOP/TSSOP。`drill` を付けるとスルーホール(DIP)。ピン1は左上、反時計回り。`row_spacing` は2列の中心間距離、`pad_len` は列間方向、`pad_width` は列に沿う方向
 - `{"type":"quad","pins":32,"pitch":0.8,"span":8.4,"pad_len":1.6,"pad_width":0.5}` — QFP 等。`span` は向かい合うパッド中心間
-- `{"type":"single_row","pins":4,"pitch":2.54,"pad_d":1.7,"drill":1.0}` — 1列ヘッダ。ピン1は角パッド
+- `{"type":"single_row","pins":4,"pitch":2.54,"pad_d":1.7,"drill":1.0}` — 1列ヘッダ。ピン1は角パッド
+- `{"type":"double_row","pins":10,"pitch":2.54,"row_spacing":2.54,"pad_d":1.7,"drill":1.0}` — 2列ヘッダ (2×N・ボックスヘッダ)。番号は列をまたいで 1 2 / 3 4 / …(奇数が左の列、偶数が `row_spacing` だけ右の列)。ピン1は原点の角パッドで、列は -y へ進む。ピン数は偶数。IC の DIP(反時計回り)は `dual` に `drill` を付ける
 - `{"type":"explicit","pads":[{"pin":"1","x":0,"y":0,"shape":"rect|circle|oval","w":1,"h":1,"drill":0.8}]}` — 座標を直接指定(サーマルパッド等)。
   - パッドに `"slot": 長さ` を足すと、その穴は**長穴**(めっきあり)になります。`drill` が穴の幅、`slot` が長さ(`drill` 以上)。向きは横(x方向)が標準で、`"slot_v": true` で縦。
   - `"holes": [{"x":0,"y":-3,"drill":1.0,"slot":2.0,"slot_v":false}]` で、部品に付く**めっきなしの穴**(位置決めの突起用の穴など)を書けます(`slot` 以降は省略可)。部品を置くと基板の取付穴として一緒に付き、動かす・回すとついてきます。ガーバーのドリル(NPTH)にも出ます。

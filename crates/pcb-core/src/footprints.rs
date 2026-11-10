@@ -132,6 +132,10 @@ pub fn names() -> Vec<String> {
     for n in 2..=6 {
         v.push(format!("PinHeader_1x{n}"));
     }
+    // 2-row headers of the usual sizes (ISP 2x3, JTAG / IDC 2x5, Raspberry Pi 2x20); any 2xN is read by `get`
+    for n in [3, 4, 5, 8, 10, 20] {
+        v.push(format!("PinHeader_2x{n}"));
+    }
     for n in 2..=6 {
         v.push(format!("WirePad_1x{n}"));
     }
@@ -208,6 +212,13 @@ pub fn get(name: &str) -> Option<Footprint> {
                 return None;
             }
             wire_pads(name, &(1..=n).map(|i| i.to_string()).collect::<Vec<_>>())
+        }
+        _ if name.starts_with("PinHeader_2x") => {
+            let n: usize = name.strip_prefix("PinHeader_2x")?.parse().ok()?;
+            if !(1..=40).contains(&n) {
+                return None;
+            }
+            crate::package::PackageSpec::DoubleRow { pins: 2 * n, pitch: 2.54, row_spacing: 2.54, pad_d: 1.7, drill: 1.0 }.build(name).ok()?
         }
         _ => {
             let n: usize = name.strip_prefix("PinHeader_1x")?.parse().ok()?;

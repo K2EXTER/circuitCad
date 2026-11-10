@@ -380,6 +380,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("USB_DEMO_TH", include_str!("../examples/USB_DEMO_TH.part.json")),
     ("TESTPOINT_PAD_1.5", include_str!("../examples/TESTPOINT_PAD_1.5.part.json")),
     ("TESTPOINT_THT_1.0", include_str!("../examples/TESTPOINT_THT_1.0.part.json")),
+    ("AVR_ISP_2x3", include_str!("../examples/AVR_ISP_2x3.part.json")),
     ("C_100n_0603", include_str!("../examples/C_100n_0603.part.json")),
     ("C_10u_0805", include_str!("../examples/C_10u_0805.part.json")),
     ("CE_100u_16V", include_str!("../examples/CE_100u_16V.part.json")),

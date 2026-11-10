@@ -64,6 +64,9 @@ impl PartForm {
             PackageSpec::SingleRow { pitch, pad_d, drill, .. } => {
                 (f.pkg, f.pitch, f.pad_d, f.drill) = (PkgKind::Row, *pitch, *pad_d, *drill);
             }
+            PackageSpec::DoubleRow { pitch, row_spacing, pad_d, drill, .. } => {
+                (f.pkg, f.pitch, f.row, f.pad_d, f.drill) = (PkgKind::Row2, *pitch, *row_spacing, *pad_d, *drill);
+            }
             PackageSpec::Explicit { .. } => f.keep_package = true,
         }
         if let Some(b) = &def.body {
@@ -111,6 +114,7 @@ impl PartForm {
             PackageSpec::Dual { pins, .. } => (PkgKind::Dual, *pins),
             PackageSpec::Quad { pins, .. } => (PkgKind::Quad, *pins),
             PackageSpec::SingleRow { pins, .. } => (PkgKind::Row, *pins),
+            PackageSpec::DoubleRow { pins, .. } => (PkgKind::Row2, *pins),
             _ => return None,
         };
         (same_pins && kind == self.pkg && self.thermal_pin.trim().is_empty() && self.extras.trim().is_empty()).then_some(n)

@@ -507,3 +507,11 @@ Isat で、インダクタンスが何 % 下がるか。30 が多いですが、
 「① 基本」を開きます	Opens ① Basics
 ダイオード・コンデンサ・抵抗・コイルは、「① 基本」の「かんたん作成」にデータシートの数字を入れると、このタブにモデルが入ります。メーカーの SPICE モデルがあるときは、下に貼ります	For a diode, capacitor, resistor or inductor, enter the datasheet figures in "Quick create" in ① Basics and the model is put in this tab. If you have the maker's SPICE model, paste it below
 コネクタは、ふつうシミュレーションのモデルが要りません。「なし」のままで保存できます	A connector usually needs no simulation model. You can save it with "None"
+1列 (ピンヘッダ)	1 row (pin header)
+ピンが1列に並ぶヘッダ・端子台。番号は端から 1, 2, 3 …	Headers and terminal blocks with the pins in one row. Numbered 1, 2, 3 ... from the end
+2列 (2×N ヘッダ)	2 rows (2×N header)
+ピンが2列に並ぶヘッダ・ボックスヘッダ (書き込み用の 2×3・2×5、Raspberry Pi の 2×20 など)。番号は 1 2 / 3 4 / … と、2つの列をまたいで振ります	Headers and box headers with the pins in two rows (2×3 / 2×5 for programming, the Raspberry Pi's 2×20 ...). Numbered 1 2 / 3 4 / ... across the two rows
+足が2列に並ぶヘッダ・ボックスヘッダ (2×N)。番号は 1 2 / 3 4 / … と列をまたぎます (IC の DIP は反時計回りなので「デュアル」で作ります)	Headers and box headers with the pins in two rows (2×N). Numbered 1 2 / 3 4 / ... across the rows (an IC's DIP goes counter-clockwise, so make it with "Dual")
+向かい合う足の列の中心どうしの間隔 (mm)。DIP の 0.3 インチ幅なら 7.62、2列のピンヘッダなら 2.54	Center-to-center distance between the facing rows of leads (mm). 7.62 for a 0.3-inch DIP, 2.54 for a 2-row pin header
+2列 (ヘッダ 2×N)	2 rows (header 2×N)
+2列ヘッダのピン数は2以上の偶数にしてください	A 2-row header needs an even number of pins, 2 or more

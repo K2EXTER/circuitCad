@@ -387,9 +387,10 @@ impl PartForm {
                         (PkgKind::Dual, "足が左右の2列に並ぶ IC (SOIC、DIP など)"),
                         (PkgKind::Quad, "足が四方に並ぶ IC (QFP、QFN など)"),
                         (PkgKind::Row, "足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)。ランドパターンが無いリード付き部品は、外形寸法から決める欄も出ます"),
+                        (PkgKind::Row2, "足が2列に並ぶヘッダ・ボックスヘッダ (2×N)。番号は 1 2 / 3 4 / … と列をまたぎます (IC の DIP は反時計回りなので「デュアル」で作ります)"),
                     ] {
                         if ui.selectable_label(self.fp_preset.is_empty() && self.pkg == k, i18n::tr(pkg_label(k))).on_hover_text(i18n::tr(tip)).clicked() {
-                            self.pkg = k;
+                            self.set_pkg(k);
                             self.fp_preset.clear();
                         }
                     }
@@ -464,6 +465,7 @@ impl PartForm {
             }
             PkgKind::Quad => rows.extend([("対向パッド間隔", &mut self.span), ("パッド長", &mut self.len), ("パッド幅", &mut self.width)]),
             PkgKind::Row => rows.extend([("パッド径", &mut self.pad_d), ("穴径", &mut self.drill)]),
+            PkgKind::Row2 => rows.extend([("列間隔", &mut self.row), ("パッド径", &mut self.pad_d), ("穴径", &mut self.drill)]),
         }
         egui::Grid::new("pad_dims").num_columns(4).spacing([8.0, 4.0]).show(ui, |ui| {
             let n = rows.len();
@@ -548,7 +550,7 @@ pub(super) fn pkg_tip(label: &str) -> &'static str {
         "ピッチ" => "隣り合う足の中心どうしの間隔 (mm)。例: 1.27、0.65、2.54",
         "パッド長" => "はんだ付けする銅の四角 (パッド) の長さ。データシートの推奨ランドパターンの値",
         "パッド幅" => "パッドの幅。足の幅より少し広くします",
-        "列間隔" => "向かい合う足の列の中心どうしの間隔 (mm)。DIP の 0.3 インチ幅なら 7.62",
+        "列間隔" => "向かい合う足の列の中心どうしの間隔 (mm)。DIP の 0.3 インチ幅なら 7.62、2列のピンヘッダなら 2.54",
         "対向パッド間隔" => "向かい合うパッドの外側から外側まで (または中心から中心まで) の距離。データシートの推奨寸法を見ます",
         "パッド径" => "パッド (丸い銅) の直径",
         "穴径" => "スルーホールの穴の直径。足の太さ + 0.2〜0.3mm",
@@ -602,5 +604,6 @@ fn pkg_label(k: PkgKind) -> &'static str {
         PkgKind::Dual => "デュアル (SOIC/DIP)",
         PkgKind::Quad => "クアッド (QFP)",
         PkgKind::Row => "1列 (ヘッダ)",
+        PkgKind::Row2 => "2列 (ヘッダ 2×N)",
     }
 }

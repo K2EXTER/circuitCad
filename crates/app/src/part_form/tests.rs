@@ -616,6 +616,43 @@ mod passive_form_tests {
         assert!(cap.apply_passive().unwrap_err().contains("TC1"));
     }
 
+    /// A 2-row header: the connector's second shape gives a 2x5 numbered across (1 2 / 3 4 ...), the symbol has the odd
+    /// pins left and the even pins right, the body covers both rows, and the part opens again as a 2-row header.
+    #[test]
+    fn a_connector_can_be_a_two_row_header() {
+        use crate::part_form::kind::{header_2xn_pins, CONNECTOR_PINS};
+        let mut f = PartForm::for_type("connector");
+        f.name = "HDR_2x5".into();
+        f.set_connector_rows(PkgKind::Row2);
+        f.follow_body();
+        assert_eq!(f.pins_text, header_2xn_pins(5));
+        assert_eq!(f.row, 2.54);
+        let def = f.to_def().unwrap();
+        assert!(matches!(def.package, PackageSpec::DoubleRow { pins: 10, .. }));
+        let fp = def.footprint().unwrap();
+        let at = |pin: &str| fp.pads.iter().find(|p| p.pin == pin).map(|p| (p.pos.x, p.pos.y)).unwrap();
+        assert_eq!((at("1"), at("2"), at("3")), ((0.0, 0.0), (2.54, 0.0), (0.0, -2.54)));
+        // the outline is over both rows
+        assert!((f.body_w - 5.04).abs() < 1e-9 && (f.body_h - 5.0 * 2.54).abs() < 1e-9 && f.body_x == 1.27 && f.body_y == -2.0 * 2.54);
+        let sides: Vec<_> = def.pins.iter().map(|p| p.side).collect();
+        assert_eq!(sides[0], Some(PinSide::Left));
+        assert_eq!(sides[1], Some(PinSide::Right));
+        // opened again: the same kind of package
+        let g = PartForm::from_def(&def);
+        assert!(g.pkg == PkgKind::Row2 && g.row == 2.54);
+        // back to one row: the untouched 2x5 pins become the 4 in a row again, on one side
+        f.set_connector_rows(PkgKind::Row);
+        assert_eq!(f.pins_text, CONNECTOR_PINS);
+        // a typed table keeps its pins but its one-sided pins go across
+        let mut c = PartForm::for_type("connector");
+        c.pins_text = "1 A left\n2 B left".into();
+        c.set_pkg(PkgKind::Row2);
+        assert_eq!(c.pins_text, "1 A left\n2 B right");
+        // an odd number of pins cannot be two rows
+        c.pins_text.push_str("\n3 C left");
+        assert!(c.to_def().map_or(true, |d| d.footprint().is_err()));
+    }
+
     /// A fitted body follows the pads when pins or the pitch change; a body whose numbers were typed stays as typed.
     #[test]
     fn the_fitted_body_follows_the_pins_until_it_is_typed() {

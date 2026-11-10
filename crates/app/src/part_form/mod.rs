@@ -25,6 +25,8 @@ pub enum PkgKind {
     Dual,
     Quad,
     Row,
+    /// Two rows of through-hole pins numbered across (2xN headers): `PackageSpec::DoubleRow`.
+    Row2,
 }
 
 /// The tabs of the form.
