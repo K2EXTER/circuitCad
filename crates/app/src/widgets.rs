@@ -219,7 +219,24 @@ pub fn segment_bar(ui: &mut egui::Ui, items: &[(&str, bool)], selected: Option<u
                 ui.painter().vline(rect.max.x - 0.5, rect.y_range().shrink(4.0), egui::Stroke::new(1.0, widgets.noninteractive.bg_stroke.color));
             }
             let colour = if chosen { ui.visuals().strong_text_color() } else if *enabled { ui.style().interact(&resp).text_color() } else { widgets.noninteractive.text_color().gamma_multiply(0.5) };
-            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr_dyn(label), egui::TextStyle::Button.resolve(ui.style()), colour);
+            // a label longer than its cell (English is often longer than the Japanese it was sized for) first gets a size or two
+            // smaller (whole pixels: this font loses its thin minus at fractional sizes), then is cut with "…"
+            let text = i18n::tr_dyn(label);
+            let base = egui::TextStyle::Button.resolve(ui.style());
+            let room = width - 8.0;
+            let mut galley = ui.painter().layout_no_wrap(text.clone(), base.clone(), colour);
+            for size in [base.size - 1.0, base.size - 2.0] {
+                if galley.size().x <= room {
+                    break;
+                }
+                galley = ui.painter().layout_no_wrap(text.clone(), egui::FontId::new(size.round(), base.family.clone()), colour);
+            }
+            if galley.size().x > room {
+                let mut job = egui::text::LayoutJob::simple_singleline(text, egui::FontId::new((base.size - 2.0).round(), base.family.clone()), colour);
+                job.wrap = egui::text::TextWrapping { max_width: room, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+                galley = ui.painter().layout_job(job);
+            }
+            ui.painter().galley(rect.center() - galley.size() / 2.0, galley, colour);
             out.push(resp);
         }
     });

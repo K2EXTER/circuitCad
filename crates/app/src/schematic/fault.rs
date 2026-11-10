@@ -309,7 +309,7 @@ impl SchEditor {
         match report {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, m);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
                 }
             }
             Ok(r) => {
@@ -653,7 +653,7 @@ impl SchEditor {
         match &self.fault_chain {
             Some(Err(msgs)) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, m);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
                 }
             }
             Some(Ok(r)) => {
@@ -677,7 +677,7 @@ impl SchEditor {
             match &view.report {
                 Err(msgs) => {
                     for m in msgs {
-                        ui.colored_label(crate::theme::ERROR, m);
+                        ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
                     }
                 }
                 Ok(r) => {

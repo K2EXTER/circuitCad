@@ -13,7 +13,7 @@ H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重な
 選択をクリア	Clear selection
 回路図で選ぶ	Pick in schematic
 押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)	Press, then click the schematic. A pin or wire adds the frequency response of the voltage at that point; a part body (or Shift+pin) adds that of the part's current. You can pick as many as you like in a row (Esc or right-click to finish)
-いまの特性を残す	Keep current response
+いまの特性を残す	Keep this response
 選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます	Keeps a faint copy of the selected responses. Change a part value and recalculate to compare before (faint line) and after (bold line)
 {} (前)	{} (before)
 残してある「前」の特性を消します	Removes the kept "before" responses

@@ -154,7 +154,7 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, m);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
                 }
             }
             Ok(res) => {
