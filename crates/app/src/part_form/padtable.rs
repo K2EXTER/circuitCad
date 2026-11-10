@@ -115,7 +115,7 @@ impl PartForm {
                     let kind = rows[i].kind;
                     if kind == ExtraKind::Raw {
                         ui.small(kind_label(kind)).on_hover_text(i18n::tr("この表で読めない行です (# で始まるコメントなど)。「文字で編集」で直せます"));
-                        ui.add(egui::TextEdit::singleline(&mut rows[i].raw).desired_width(330.0).font(egui::TextStyle::Monospace));
+                        ui.add(egui::TextEdit::singleline(&mut rows[i].raw).desired_width(330.0).min_size(egui::vec2(330.0, 0.0)).font(egui::TextStyle::Monospace));
                         for _ in 0..7 {
                             ui.label("");
                         }
@@ -131,7 +131,7 @@ impl PartForm {
                         let has_size = k != ExtraKind::Hole;
                         let has_drill = k != ExtraKind::Pad;
                         let field = |ui: &mut egui::Ui, v: &mut String, on: bool, w: f32, tip: &str| {
-                            ui.add_enabled(on, egui::TextEdit::singleline(v).desired_width(w).font(egui::TextStyle::Monospace)).on_hover_text(tip);
+                            ui.add_enabled(on, egui::TextEdit::singleline(v).desired_width(w).min_size(egui::vec2(w, 0.0)).font(egui::TextStyle::Monospace)).on_hover_text(tip);
                         };
                         field(ui, &mut rows[i].pin, has_pin, 44.0, i18n::tr("ピン名 (「③ ピン」の番号と同じ。例: SH)"));
                         field(ui, &mut rows[i].x, true, 46.0, i18n::tr("X (mm)。部品の中心から右が +"));

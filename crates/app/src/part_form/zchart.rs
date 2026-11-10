@@ -213,9 +213,9 @@ impl PartForm {
         });
         ui.horizontal(|ui| {
             ui.label("TC1 (ppm/℃)").on_hover_text(i18n::tr("1℃ あたりの変化 (ppm = 100万分の 1)。+100 なら、温度が 100℃ 上がると 1% 増えます。マイナスもあります"));
-            ui.add(egui::TextEdit::singleline(&mut self.pas_tc1).desired_width(70.0).hint_text("100"));
+            ui.add(egui::TextEdit::singleline(&mut self.pas_tc1).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("100"));
             ui.label("TC2 (ppm/℃²)").on_hover_text(i18n::tr("温度の 2 乗にかかる係数。曲がりを表すとき以外は空で構いません"));
-            ui.add(egui::TextEdit::singleline(&mut self.pas_tc2).desired_width(70.0));
+            ui.add(egui::TextEdit::singleline(&mut self.pas_tc2).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)));
         });
         if kind != PassiveKind::Resistor || !self.pas_tctable.trim().is_empty() {
             crate::icons::help_label(ui, "温度特性の表", "温度特性の表 (グラフから読んだ「温度 変化率(%)」を 1 行ずつ。27℃ を 0% とします)");
@@ -265,9 +265,9 @@ impl PartForm {
         crate::icons::help_small(ui, "電流で下がる特性 (飽和)", "電源用のコイルでは大事な特性です。電流が Isat を超えると、インダクタンスが急に下がり、電流が急に増えます。データシートの Isat (インダクタンスが 30% 下がる電流) か、「インダクタンス - 直流重畳電流」のグラフから読みます。空なら飽和しません");
         ui.horizontal(|ui| {
             ui.label("Isat [A]").on_hover_text(i18n::tr("インダクタンスが規定の割合だけ下がる電流 (Saturation Current)。データシートでは 30% 低下が多いです"));
-            ui.add(egui::TextEdit::singleline(&mut self.pas_isat).desired_width(70.0).hint_text("3"));
+            ui.add(egui::TextEdit::singleline(&mut self.pas_isat).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("3"));
             ui.label(i18n::tr("そのときの低下 [%]")).on_hover_text(i18n::tr("Isat で、インダクタンスが何 % 下がるか。30 が多いですが、20 や 10 のデータシートもあります。空なら 30"));
-            ui.add(egui::TextEdit::singleline(&mut self.pas_ldrop).desired_width(50.0).hint_text("30"));
+            ui.add(egui::TextEdit::singleline(&mut self.pas_ldrop).desired_width(50.0).min_size(egui::vec2(50.0, 0.0)).hint_text("30"));
         });
         crate::icons::help_label(ui, "インダクタンスと電流の表", "インダクタンスと電流の表 (グラフから読んだ「電流 変化率(%)」を 1 行ずつ。マイナスで下がる)");
         ui.add(egui::TextEdit::multiline(&mut self.pas_sattable).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("1 -5\n3 -30\n6 -60"))

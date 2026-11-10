@@ -243,7 +243,9 @@ impl SchEditor {
         if let Some(mut form) = self.form.take() {
             let mut open = true;
             let mut saved = None;
-            egui::Window::new(if form.editing().is_some() { i18n::tr("部品を編集") } else { i18n::tr("部品を作成") }).open(&mut open).default_size([980.0, 660.0]).resizable(true).show(ui.ctx(), |ui| {
+            // beside the left panel and as tall as the screen allows, so a long tab (the package, the ratings) shows whole
+            let tall = (ui.ctx().content_rect().height() - crate::widgets::beside_panel().y - 40.0).clamp(560.0, 900.0);
+            egui::Window::new(if form.editing().is_some() { i18n::tr("部品を編集") } else { i18n::tr("部品を作成") }).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([980.0, tall]).resizable(true).show(ui.ctx(), |ui| {
                 saved = form.ui(ui);
             });
             // the file buttons of the form: the library belongs to the editor

@@ -138,28 +138,28 @@ impl PartForm {
         ui.label(i18n::tr("手順3: 表から、逆耐圧と漏れ電流を写します (空でも作れます)"));
         egui::Grid::new("dio_rev").num_columns(2).show(ui, |ui| {
             ui.label(i18n::tr("逆耐圧 VRRM [V]")).on_hover_text(i18n::tr("「絶対最大定格」の Peak Repetitive Reverse Voltage。型番ごとに違うので、表で自分の型番の列を読みます (1N4007 は 1000)"));
-            ui.add(egui::TextEdit::singleline(&mut self.dio_vrrm).desired_width(80.0).hint_text("1000"));
+            ui.add(egui::TextEdit::singleline(&mut self.dio_vrrm).desired_width(80.0).min_size(egui::vec2(80.0, 0.0)).hint_text("1000"));
             ui.end_row();
             ui.label(i18n::tr("漏れ電流 IR [A]")).on_hover_text(i18n::tr("逆耐圧をかけたときの逆向きの電流 (Peak Reverse Current、25℃ の値)。1N4007 は 5μA = 5u"));
-            ui.add(egui::TextEdit::singleline(&mut self.dio_ir).desired_width(80.0).hint_text("5u"));
+            ui.add(egui::TextEdit::singleline(&mut self.dio_ir).desired_width(80.0).min_size(egui::vec2(80.0, 0.0)).hint_text("5u"));
             ui.end_row();
         });
         crate::icons::help_label(ui, "手順4: 高い周波数で効く値", "手順4: 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)");
         egui::Grid::new("dio_charge").num_columns(2).show(ui, |ui| {
             ui.label(i18n::tr("接合容量 Cj [F]")).on_hover_text(i18n::tr("データシートの Typical Junction Capacitance。測った逆電圧とセットで読みます (1N4007 は 8pF 〜 15pF、1MHz、逆電圧 4V)"));
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.dio_cj).desired_width(70.0).hint_text("15p"));
+                ui.add(egui::TextEdit::singleline(&mut self.dio_cj).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("15p"));
                 ui.label(i18n::tr("逆電圧 [V]"));
-                ui.add(egui::TextEdit::singleline(&mut self.dio_cj_vr).desired_width(50.0).hint_text("4"));
+                ui.add(egui::TextEdit::singleline(&mut self.dio_cj_vr).desired_width(50.0).min_size(egui::vec2(50.0, 0.0)).hint_text("4"));
             });
             ui.end_row();
             ui.label(i18n::tr("逆回復時間 trr [s]")).on_hover_text(i18n::tr("データシートの Reverse Recovery Time。電流を順方向から逆向きに切り替えたとき、逆向きの電流が止まるまでの時間。ショットキーには無い (ほぼ 0) ので、空で構いません"));
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.dio_trr).desired_width(70.0).hint_text("2u"));
+                ui.add(egui::TextEdit::singleline(&mut self.dio_trr).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("2u"));
                 ui.label("IF [A]");
-                ui.add(egui::TextEdit::singleline(&mut self.dio_trr_if).desired_width(50.0).hint_text("0.5"));
+                ui.add(egui::TextEdit::singleline(&mut self.dio_trr_if).desired_width(50.0).min_size(egui::vec2(50.0, 0.0)).hint_text("0.5"));
                 ui.label("IR [A]");
-                ui.add(egui::TextEdit::singleline(&mut self.dio_trr_ir).desired_width(50.0).hint_text("1"));
+                ui.add(egui::TextEdit::singleline(&mut self.dio_trr_ir).desired_width(50.0).min_size(egui::vec2(50.0, 0.0)).hint_text("1"));
             });
             ui.end_row();
         });

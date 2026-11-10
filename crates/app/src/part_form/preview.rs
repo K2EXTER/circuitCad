@@ -54,14 +54,17 @@ impl PartForm {
 pub(super) fn symbol_preview(ui: &mut egui::Ui, def: &PartDef) {
     let sym = def.symbol();
     let lines = crate::schematic::symbol_lines(&sym);
-    let (resp, painter) = ui.allocate_painter(Vec2::new(ui.available_width().min(370.0), 120.0), Sense::hover());
+    let (resp, painter) = ui.allocate_painter(Vec2::new(ui.available_width().min(370.0), 140.0), Sense::hover());
     let r = resp.rect;
     painter.rect_filled(r, 2.0, Color32::from_rgb(248, 245, 236));
     if lines.is_empty() {
         return;
     }
+    let labels = crate::schematic::symbol_pin_labels(&sym);
+    // the pin names count too: a transistor's C and E sit at the ends of its leads and were drawn off the box
+    let lines_bottom = lines.iter().flat_map(|(a, b)| [a[1], b[1]]).fold(f32::MIN, f32::max);
     let (mut x0, mut x1, mut y0, mut y1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
-    for (a, b) in &lines {
+    for (a, b) in lines.iter().map(|(a, b)| (a, b)).chain(labels.iter().map(|(_, p)| (p, p))) {
         for p in [a, b] {
             x0 = x0.min(p[0]);
             x1 = x1.max(p[0]);
@@ -69,14 +72,20 @@ pub(super) fn symbol_preview(ui: &mut egui::Ui, def: &PartDef) {
             y1 = y1.max(p[1]);
         }
     }
-    let scale = ((r.width() - 40.0) / (x1 - x0).max(1.0)).min((r.height() - 24.0) / (y1 - y0).max(1.0)).min(26.0);
+    // room for a label above the top end and below the bottom end (labels sit outside the lead ends)
+    let scale = ((r.width() - 40.0) / (x1 - x0).max(1.0)).min((r.height() - 44.0) / (y1 - y0).max(1.0)).min(26.0);
     let c = r.center();
     let to = |p: [f32; 2]| Pos2::new(c.x + (p[0] - (x0 + x1) / 2.0) * scale, c.y + (p[1] - (y0 + y1) / 2.0) * scale);
     for (a, b) in &lines {
         painter.line_segment([to(*a), to(*b)], Stroke::new(1.6, Color32::from_rgb(120, 30, 30)));
     }
-    for (name, p) in crate::schematic::symbol_pin_labels(&sym) {
-        painter.text(to(p), Align2::CENTER_BOTTOM, name, FontId::proportional(10.0), Color32::from_gray(90));
+    let painter = painter.with_clip_rect(r);
+    for (name, p) in labels {
+        // a pin at the bottom end (a transistor's E) gets its name under the lead, not over it
+        // (the label point sits 0.2 above the pin tip, see `symbol_pin_labels`)
+        let tip = [p[0], p[1] + 0.2];
+        let (at, align) = if tip[1] >= lines_bottom - 1e-3 { (tip, Align2::CENTER_TOP) } else { (p, Align2::CENTER_BOTTOM) };
+        painter.text(to(at), align, name, FontId::proportional(11.0), Color32::from_gray(70));
     }
 }
 

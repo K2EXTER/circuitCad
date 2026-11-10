@@ -99,8 +99,9 @@ impl PartForm {
                 ui.small(format!("{}", i + 1));
                 let twice = !rows[i].number.is_empty() && numbers.iter().filter(|x| **x == rows[i].number).count() > 1;
                 let before = rows[i].number.clone();
+                // min_size: a text box in a grid column (not the last) otherwise stays as narrow as the column's first frame
                 let r = ui
-                    .add(egui::TextEdit::singleline(&mut rows[i].number).desired_width(44.0).font(egui::TextStyle::Monospace))
+                    .add(egui::TextEdit::singleline(&mut rows[i].number).desired_width(52.0).min_size(egui::vec2(52.0, 0.0)).font(egui::TextStyle::Monospace))
                     .on_hover_text(if twice { i18n::tr("同じ番号のピンがあります。番号は重ならないようにします") } else { i18n::tr("パッドの番号 (データシートのピン番号。BGA なら A1 のような名前)。同じ番号は2つ使えません") });
                 if r.changed() {
                     clean(&mut rows[i].number);
@@ -112,7 +113,7 @@ impl PartForm {
                     }
                 }
                 let name_edit = ui
-                    .add(egui::TextEdit::singleline(&mut rows[i].name).desired_width(110.0).font(egui::TextStyle::Monospace))
+                    .add(egui::TextEdit::singleline(&mut rows[i].name).desired_width(130.0).min_size(egui::vec2(130.0, 0.0)).font(egui::TextStyle::Monospace))
                     .on_hover_text(i18n::tr("ピンの名前 (IN・GND・OUT・IN+ など)。回路図の部品に出ます"));
                 if name_edit.changed() {
                     clean(&mut rows[i].name);

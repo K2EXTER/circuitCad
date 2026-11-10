@@ -98,7 +98,7 @@ impl PartForm {
             egui::Grid::new("pas_grid").num_columns(2).show(ui, |ui| {
                 let row = |ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str, hint: &str| {
                     ui.label(label).on_hover_text(tip);
-                    ui.add(egui::TextEdit::singleline(text).desired_width(120.0).hint_text(hint)).on_hover_text(tip);
+                    ui.add(egui::TextEdit::singleline(text).desired_width(120.0).min_size(egui::vec2(120.0, 0.0)).hint_text(hint)).on_hover_text(tip);
                     ui.end_row();
                 };
                 row(ui, &format!("値 ({})", kind.unit()), &mut self.pas_value, "コンデンサは容量 (例: 100n、4.7u)、抵抗は抵抗値 (例: 10k)、コイルはインダクタンス (例: 10u)", "100n");
@@ -109,7 +109,7 @@ impl PartForm {
                         if self.pas_polar {
                             ui.label(i18n::tr("インピーダンス Z (Ω)")).on_hover_text(i18n::tr("データシートの「インピーダンス」(100kHz の値) を入れて「ESR に入れる」を押すと、上の ESR に写します。電解コンデンサでは、100kHz のインピーダンスはほぼ ESR です (容量の分は、そのころには小さくなっています)。ただし ESR は周波数と温度で大きく変わります (120Hz の tanδ から求めると、もっと大きくなります)"));
                             ui.horizontal(|ui| {
-                                ui.add(egui::TextEdit::singleline(&mut self.pas_z100k).desired_width(80.0).hint_text("0.3"));
+                                ui.add(egui::TextEdit::singleline(&mut self.pas_z100k).desired_width(80.0).min_size(egui::vec2(80.0, 0.0)).hint_text("0.3"));
                                 if ui.small_button(i18n::tr("→ ESR に入れる")).on_hover_text(i18n::tr("この値を ESR の欄に入れます (100kHz のときの値として)")).clicked() {
                                     match self.pas_number("インピーダンス", &self.pas_z100k, false) {
                                         Ok(Some(z)) => self.pas_esr = passive::eng(z),

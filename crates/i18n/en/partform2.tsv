@@ -472,3 +472,12 @@ Isat で、インダクタンスが何 % 下がるか。30 が多いですが、
 例: 3 -30 は、3A で L が 30% 下がる、という意味です。Isat より少し大きい電流までの点があると確かです	e.g. 3 -30 means L drops 30% at 3A. Points up to a little above Isat make it reliable
 表から Isat を求める	Find Isat from table
 表に合うように、Isat (30% 低下) を計算して上の欄に入れます	Calculates Isat (30% drop) to fit the table and puts it in the field above
+ここに SPICE モデルを貼る: .model Q1 NPN(BF=100)  /  .model M1 VDMOS(VTO=2)	Paste a SPICE model here: .model Q1 NPN(BF=100)  /  .model M1 VDMOS(VTO=2)
+ここに SPICE モデルを貼る: .subckt NAME IN+ IN- VCC VEE OUT ... .ends	Paste a SPICE model here: .subckt NAME IN+ IN- VCC VEE OUT ... .ends
+ほかの IC の入力の順番:	Order for other ICs:
+入力の順番:	Order:
+定格 (下)	Ratings (below)
+データシートの側面図から	from the data sheet's side view
+この画面の下の「データシートの数字 (定格)」です	The "Data sheet figures (ratings)" section further down this screen
+データシートを見ながら、定格 → ② シミュレーション → ③ ピン → ④ 部品の形 の順に入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます。タブの名前を押すと、そのタブを開きます	With the data sheet at hand, fill in ratings → ② Simulation → ③ Pins → ④ Package. Pasting a SPICE model on ② fills in the pins too, so on ③ you only check them. Click a tab name to open that tab
+未入力	not given

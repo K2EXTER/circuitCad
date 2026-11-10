@@ -409,7 +409,9 @@ impl PartForm {
         crate::widgets::tab_bar(ui, &mut self.tab, &tabs);
         ui.separator();
         self.pick_message(ui);
-        let h = 470.0;
+        // the two columns fill the window's height (a fixed height left the bottom of a long tab cut off above
+        // empty space when the window was taller, and hid more of it when the window was shorter)
+        let h = (ui.available_height() - 4.0).max(280.0);
         let mut saved = None;
         ui.horizontal_top(|ui| {
             let right_w = 370.0;

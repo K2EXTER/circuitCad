@@ -26,6 +26,8 @@ impl PartForm {
         } else if diode {
             crate::icons::help_small(ui, "部品名はモデルの名前にも使います", "部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)");
         }
+        // the fields take the width of the column (the label column is about 150 px), not egui's narrow default
+        ui.spacing_mut().text_edit_width = (ui.available_width() - 260.0).clamp(240.0, 420.0);
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label(i18n::tr("部品名"));
             ui.horizontal(|ui| {
@@ -71,10 +73,10 @@ impl PartForm {
             Some(PartType::Ic) => {
                 ui.label(egui::RichText::new(i18n::tr("かんたん作成 (ひな形)")).strong());
                 self.template_ui(ui);
-                crate::icons::help_small(ui, "入力の順番", "ほかの IC は、この画面の下の「データシートの数字 (定格)」→ ② シミュレーション → ③ ピン → ④ 部品の形 の順に入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます");
+                self.order_guide(ui, "ほかの IC の入力の順番:");
             }
             Some(PartType::Transistor | PartType::Diode | PartType::Connector) if !diode => {
-                crate::icons::help_small(ui, "入力の順番", "この画面の下の「データシートの数字 (定格)」→ ② シミュレーション → ③ ピン → ④ 部品の形 の順に、データシートを見ながら入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます");
+                self.order_guide(ui, "入力の順番:");
             }
             Some(_) => {}
             None => {
@@ -89,6 +91,25 @@ impl PartForm {
         ui.separator();
         egui::CollapsingHeader::new(egui::RichText::new(i18n::tr("データシートの数字 (定格)")).strong()).id_salt("ratings_section").default_open(true).show(ui, |ui| {
             self.tab_ratings(ui);
+        });
+    }
+
+    /// "What to fill in next": the order of the tabs as links that open them, in a box (like the sections of ④) so that
+    /// it reads as a guide and not as a stray line between the fields (a lone "入力の順番 (?)" was easy to miss).
+    fn order_guide(&mut self, ui: &mut egui::Ui, lead: &str) {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_wrapped(|ui| {
+                ui.label(i18n::tr_dyn(lead));
+                ui.label(i18n::tr("定格 (下)")).on_hover_text(i18n::tr("この画面の下の「データシートの数字 (定格)」です"));
+                for (tab, label, tip) in FORM_TABS.iter().skip(1) {
+                    ui.label("→");
+                    if ui.link(i18n::tr(label)).on_hover_text(i18n::tr(tip)).clicked() {
+                        self.tab = *tab;
+                    }
+                }
+                crate::icons::help(ui, "データシートを見ながら、定格 → ② シミュレーション → ③ ピン → ④ 部品の形 の順に入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます。タブの名前を押すと、そのタブを開きます");
+            });
         });
     }
 
@@ -126,15 +147,15 @@ impl PartForm {
             }
             egui::Grid::new("part_ratings_grid").num_columns(3).show(ui, |ui| {
                 ui.label(i18n::tr("最大電圧 [V]")).on_hover_text(i18n::tr("部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大"));
-                ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0)).on_hover_text(i18n::tr("例: 40 / 1000"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 40 / 1000"));
                 self.pick_button(ui, datasheet_view::Target::MaxV, "PDFから選ぶ");
                 ui.end_row();
                 ui.label(i18n::tr("最大電流 [A]")).on_hover_text(i18n::tr("流してよい最大の連続電流 (ダイオードなら平均順電流 IF、トランジスタなら Ic の最大)"));
-                ui.add(egui::TextEdit::singleline(&mut self.rt_i).desired_width(80.0)).on_hover_text(i18n::tr("例: 1 / 200m"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_i).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 1 / 200m"));
                 self.pick_button(ui, datasheet_view::Target::MaxI, "PDFから選ぶ");
                 ui.end_row();
                 ui.label(i18n::tr("最大電力 [W]")).on_hover_text(i18n::tr("部品が熱にしてよい最大の電力 (許容損失 Ptot)。周囲温度が高いと下がります。データシートの条件を確認します"));
-                ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0)).on_hover_text(i18n::tr("例: 0.5 / 625m / 1"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 0.5 / 625m / 1"));
                 self.pick_button(ui, datasheet_view::Target::MaxP, "PDFから選ぶ");
                 ui.end_row();
             });
@@ -148,9 +169,9 @@ impl PartForm {
                 egui::Grid::new("rt_electrolytic_grid").num_columns(2).show(ui, |ui| {
                     ui.label(i18n::tr("定格リップル電流 [A rms]")).on_hover_text(i18n::tr("コンデンサに流してよい、交流分の実効値 (データシートの Rated Ripple Current)。mA rms で書いてあるときは 540m のように入れます。最高温度 (105℃ など) での値です"));
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple).desired_width(80.0).hint_text("540m")).on_hover_text(i18n::tr("例: 540m / 1.2。データシートの表の、容量と電圧に合う行の値"));
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple).desired_width(80.0).min_size(egui::vec2(80.0, 0.0)).hint_text("540m")).on_hover_text(i18n::tr("例: 540m / 1.2。データシートの表の、容量と電圧に合う行の値"));
                         ui.label(i18n::tr("周波数"));
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple_f).desired_width(60.0)).on_hover_text(i18n::tr("その値が決められている周波数。データシートの表の見出しにあります (たいてい 100kHz。120Hz のこともあります)"));
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple_f).desired_width(60.0).min_size(egui::vec2(60.0, 0.0))).on_hover_text(i18n::tr("その値が決められている周波数。データシートの表の見出しにあります (たいてい 100kHz。120Hz のこともあります)"));
                     });
                     ui.end_row();
                     ui.label(i18n::tr("周波数の補正係数")).on_hover_text(i18n::tr("リップル電流の定格に掛ける係数の表 (Multiplier for Ripple Current)。低い周波数ほど、流してよい電流が小さくなります。1行に「周波数 係数」"));
@@ -158,9 +179,9 @@ impl PartForm {
                     ui.end_row();
                     ui.label(i18n::tr("寿命 [時間]")).on_hover_text(i18n::tr("定格電圧・定格リップル電流・最高温度で使ったときの寿命 (Endurance)。ケースの大きさで違うことがあります (例: 6000 / 10000)"));
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_h).desired_width(80.0).hint_text("6000")).on_hover_text(i18n::tr("例: 6000 / 10000"));
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_h).desired_width(80.0).min_size(egui::vec2(80.0, 0.0)).hint_text("6000")).on_hover_text(i18n::tr("例: 6000 / 10000"));
                         ui.label(i18n::tr("温度 [℃]"));
-                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_t).desired_width(50.0)).on_hover_text(i18n::tr("その寿命が決められている温度。最高使用温度 (105 など)"));
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_t).desired_width(50.0).min_size(egui::vec2(50.0, 0.0))).on_hover_text(i18n::tr("その寿命が決められている温度。最高使用温度 (105 など)"));
                     });
                     ui.end_row();
                 });
@@ -203,7 +224,12 @@ impl PartForm {
                     .desired_rows(if self.sim == SimChoice::None { 3 } else { 5 })
                     .desired_width(f32::INFINITY)
                     .font(egui::TextStyle::Monospace)
-                    .hint_text(i18n::tr("ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends")),
+                    // the example matches the kind chosen on ① (a diode's .model was shown for a transistor too)
+                    .hint_text(i18n::tr(match self.ptype {
+                        Some(PartType::Transistor) => "ここに SPICE モデルを貼る: .model Q1 NPN(BF=100)  /  .model M1 VDMOS(VTO=2)",
+                        Some(PartType::Ic) => "ここに SPICE モデルを貼る: .subckt NAME IN+ IN- VCC VEE OUT ... .ends",
+                        _ => "ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends",
+                    })),
             ).on_hover_text(i18n::tr("貼り付けると、モデルの種類・名前・端子からフォームを自動で埋めます。ピン表を自分で書いてあるときは、その名前 (A K / C B E など) に合わせて対応づけます"));
             // a paste into an empty model box fills the form right away
             if pasted.changed() && self.sim == SimChoice::None && !self.sim_text.trim().is_empty() {
@@ -259,12 +285,12 @@ impl PartForm {
                 ui.horizontal(|ui| {
                     if self.sim == SimChoice::Model {
                         ui.label(i18n::tr("素子記号"));
-                        ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text(i18n::tr("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S"));
+                        ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0).min_size(egui::vec2(30.0, 0.0))).on_hover_text(i18n::tr("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S"));
                     }
                     ui.label(i18n::tr("モデル名"));
-                    ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text(i18n::tr("`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします"));
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0).min_size(egui::vec2(120.0, 0.0))).on_hover_text(i18n::tr("`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします"));
                     ui.label(i18n::tr("ノード順のピン番号"));
-                    ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text(i18n::tr("例: A K"))).on_hover_text(i18n::tr("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順"));
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).min_size(egui::vec2(160.0, 0.0)).hint_text(i18n::tr("例: A K"))).on_hover_text(i18n::tr("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順"));
                 });
                 ui.small(i18n::tr("モデルの端子とピンの対応は、「③ ピン」の表の「モデルの端子」の列で選びます。"));
                 crate::icons::help_label(ui, "このモデルの限界", "このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
@@ -366,7 +392,7 @@ impl PartForm {
                 if self.thermal_on {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(i18n::tr("ピン番号"));
-                        ui.add(egui::TextEdit::singleline(&mut self.thermal_pin).desired_width(40.0).hint_text("9")).on_hover_text(i18n::tr("放熱パッドのピン番号。ピン表にある番号にします (GND につなぐことが多い)"));
+                        ui.add(egui::TextEdit::singleline(&mut self.thermal_pin).desired_width(40.0).min_size(egui::vec2(40.0, 0.0)).hint_text("9")).on_hover_text(i18n::tr("放熱パッドのピン番号。ピン表にある番号にします (GND につなぐことが多い)"));
                         ui.add(egui::DragValue::new(&mut self.thermal_w).speed(0.01).range(0.1..=50.0).prefix(i18n::tr("幅 ")).suffix(" mm")).on_hover_text(i18n::tr("データシートの推奨ランドパターンの、放熱パッドの幅"));
                         ui.add(egui::DragValue::new(&mut self.thermal_h).speed(0.01).range(0.1..=50.0).prefix(i18n::tr("長さ ")).suffix(" mm")).on_hover_text(i18n::tr("データシートの推奨ランドパターンの、放熱パッドの長さ"));
                     });
@@ -432,8 +458,12 @@ impl PartForm {
             ui.set_width(ui.available_width());
             ui.label(egui::RichText::new(i18n::tr("本体 (シルクの外形と高さ)")).strong()).on_hover_text(i18n::tr("外形は、基板のシルク (白い線) になります。高さはシルクには出ず、3D表示とケースに入るかの確認に使います"));
             ui.horizontal_wrapped(|ui| {
-                ui.add(egui::DragValue::new(&mut self.height).speed(0.01).range(0.0..=100.0).prefix(i18n::tr("高さ ")).suffix(" mm")).on_hover_text(i18n::tr("データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います"));
-                ui.small(i18n::tr("側面図の高さ (0 = 未入力)"));
+                // 0 means "not given": say so instead of a height of 0.00 mm, which read like a value
+                let unset = self.height == 0.0;
+                let dv = egui::DragValue::new(&mut self.height).speed(0.01).range(0.0..=100.0).prefix(i18n::tr("高さ "));
+                let dv = if unset { dv.custom_formatter(|_, _| i18n::tr("未入力").to_string()) } else { dv.suffix(" mm") };
+                ui.add(dv).on_hover_text(i18n::tr("データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います"));
+                ui.small(i18n::tr("データシートの側面図から"));
             });
             ui.checkbox(&mut self.body_on, i18n::tr("シルクに本体の外形 (上面図の幅×長さ) を描く")).on_hover_text(i18n::tr("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります"));
             if self.body_on {
@@ -475,7 +505,7 @@ impl PartForm {
                 ui.horizontal_wrapped(|ui| {
                     if self.body_mark != BodyMark::None {
                         ui.label(i18n::tr("のピン"));
-                        ui.add(egui::TextEdit::singleline(&mut self.body_pin).desired_width(40.0).hint_text("1")).on_hover_text(i18n::tr("印を付けるピンの番号。空なら最初のパッド (1番ピン)。ダイオードのカソードなら K、電解コンデンサの＋なら＋側のピン番号"));
+                        ui.add(egui::TextEdit::singleline(&mut self.body_pin).desired_width(40.0).min_size(egui::vec2(40.0, 0.0)).hint_text("1")).on_hover_text(i18n::tr("印を付けるピンの番号。空なら最初のパッド (1番ピン)。ダイオードのカソードなら K、電解コンデンサの＋なら＋側のピン番号"));
                     }
                 });
             }

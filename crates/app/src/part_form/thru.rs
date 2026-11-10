@@ -54,17 +54,17 @@ impl PartForm {
             });
             egui::Grid::new("thru_grid").num_columns(2).show(ui, |ui| {
                 ui.label(i18n::tr("リード径 (最大)")).on_hover_text(i18n::tr("データシートの外形図の、リードの直径 (Lead Diameter) の最大値。1N4007 は 0.71〜0.864 なので 0.864"));
-                ui.add(egui::TextEdit::singleline(&mut self.thru_lead).desired_width(70.0).hint_text("0.864"));
+                ui.add(egui::TextEdit::singleline(&mut self.thru_lead).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("0.864"));
                 ui.end_row();
                 if self.thru_radial {
                     ui.label(i18n::tr("リードの間隔")).on_hover_text(i18n::tr("データシートの寸法表の、リードの間隔 (Lead Spacing、F)。電解コンデンサは 2.0 / 2.5 / 3.5 / 5.0 など"));
-                    ui.add(egui::TextEdit::singleline(&mut self.thru_pitch).desired_width(70.0).hint_text("2.5"));
+                    ui.add(egui::TextEdit::singleline(&mut self.thru_pitch).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("2.5"));
                 } else {
                     ui.label(i18n::tr("本体の長さ (最大)")).on_hover_text(i18n::tr("外形図の、リードに沿った本体の長さ。1N4007 は 4.06〜5.21 なので 5.21"));
-                    ui.add(egui::TextEdit::singleline(&mut self.thru_len).desired_width(70.0).hint_text("5.21"));
+                    ui.add(egui::TextEdit::singleline(&mut self.thru_len).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("5.21"));
                     ui.end_row();
                     ui.label(i18n::tr("本体の径 (最大)")).on_hover_text(i18n::tr("外形図の、本体の直径。1N4007 は 2.00〜2.72 なので 2.72。基板に寝かせたときの高さにもなります"));
-                    ui.add(egui::TextEdit::singleline(&mut self.thru_dia).desired_width(70.0).hint_text("2.72"));
+                    ui.add(egui::TextEdit::singleline(&mut self.thru_dia).desired_width(70.0).min_size(egui::vec2(70.0, 0.0)).hint_text("2.72"));
                 }
                 ui.end_row();
             });

@@ -195,7 +195,7 @@ impl PartForm {
             let described = self.mu.indexes.iter().map(|i| i.described()).sum::<usize>();
             egui::Grid::new("vendor_grid").num_columns(2).show(ui, |ui| {
                 ui.label(i18n::tr("型番の一部")).on_hover_text(i18n::tr("例: GRM188R6 のように、型番の一部で絞ります。空白で区切ると、全部の語を含むものだけになります"));
-                ui.add(egui::TextEdit::singleline(&mut self.mu.text).desired_width(140.0));
+                ui.add(egui::TextEdit::singleline(&mut self.mu.text).desired_width(140.0).min_size(egui::vec2(140.0, 0.0)));
                 ui.end_row();
                 if described > 0 {
                     ui.label(i18n::tr("サイズ (インチ)")).on_hover_text(i18n::tr("0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田・日本ケミコン・ニチコン。サイズ・温度特性は村田だけ) だけです"));
@@ -216,13 +216,13 @@ impl PartForm {
                     ui.end_row();
                     ui.label(i18n::tr("容量")).on_hover_text(i18n::tr("下限と上限。同じ値を入れると、その容量だけ探します (例: 10u と 10u)"));
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_min).desired_width(60.0).hint_text(i18n::tr("下限 10u")));
+                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_min).desired_width(60.0).min_size(egui::vec2(60.0, 0.0)).hint_text(i18n::tr("下限 10u")));
                         ui.label("〜");
-                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_max).desired_width(60.0).hint_text(i18n::tr("上限 10u")));
+                        ui.add(egui::TextEdit::singleline(&mut self.mu.c_max).desired_width(60.0).min_size(egui::vec2(60.0, 0.0)).hint_text(i18n::tr("上限 10u")));
                     });
                     ui.end_row();
                     ui.label(i18n::tr("耐圧 (V 以上)")).on_hover_text(i18n::tr("定格電圧がこの値以上のものだけ。セラミックは電圧が高いほど容量が下がりにくいので、使う電圧の2倍ほどが目安です"));
-                    ui.add(egui::TextEdit::singleline(&mut self.mu.v_min).desired_width(60.0).hint_text("16"));
+                    ui.add(egui::TextEdit::singleline(&mut self.mu.v_min).desired_width(60.0).min_size(egui::vec2(60.0, 0.0)).hint_text("16"));
                     ui.end_row();
                 }
             });
