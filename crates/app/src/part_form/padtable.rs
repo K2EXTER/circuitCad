@@ -108,22 +108,22 @@ impl PartForm {
             ui.small(i18n::tr("座標は部品の中心から (右が +X、上が +Y)、単位は mm。ピン名は「③ ピン」の番号と同じにします"));
             egui::Grid::new("extras_table").num_columns(10).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                 for h in ["種類", "ピン名", "X", "Y", "幅", "高さ", "穴径", "長穴の長さ", "縦", ""] {
-                    ui.small(h);
+                    ui.small(i18n::tr(h));
                 }
                 ui.end_row();
                 for i in 0..n {
                     let kind = rows[i].kind;
                     if kind == ExtraKind::Raw {
-                        ui.small(kind_label(kind)).on_hover_text(i18n::tr("この表で読めない行です (# で始まるコメントなど)。「文字で編集」で直せます"));
+                        ui.small(i18n::tr(kind_label(kind))).on_hover_text(i18n::tr("この表で読めない行です (# で始まるコメントなど)。「文字で編集」で直せます"));
                         ui.add(egui::TextEdit::singleline(&mut rows[i].raw).desired_width(330.0).min_size(egui::vec2(330.0, 0.0)).font(egui::TextStyle::Monospace));
                         for _ in 0..7 {
                             ui.label("");
                         }
                     } else {
                         let mut k = kind;
-                        egui::ComboBox::from_id_salt(("extra_kind", i)).selected_text(kind_label(kind)).width(110.0).show_ui(ui, |ui| {
+                        egui::ComboBox::from_id_salt(("extra_kind", i)).selected_text(i18n::tr(kind_label(kind))).width(110.0).show_ui(ui, |ui| {
                             for c in [ExtraKind::Leg, ExtraKind::Pad, ExtraKind::Hole] {
-                                ui.selectable_value(&mut k, c, kind_label(c));
+                                ui.selectable_value(&mut k, c, i18n::tr(kind_label(c)));
                             }
                         }).response.on_hover_text(i18n::tr("脚はめっきのある穴と銅のパッド (USBのシェル脚など)、面実装パッドは穴のない銅のパッド、穴はめっきなしの穴 (位置決め・ネジ穴) です"));
                         rows[i].kind = k;
@@ -131,7 +131,7 @@ impl PartForm {
                         let has_size = k != ExtraKind::Hole;
                         let has_drill = k != ExtraKind::Pad;
                         let field = |ui: &mut egui::Ui, v: &mut String, on: bool, w: f32, tip: &str| {
-                            ui.add_enabled(on, egui::TextEdit::singleline(v).desired_width(w).min_size(egui::vec2(w, 0.0)).font(egui::TextStyle::Monospace)).on_hover_text(tip);
+                            ui.add_enabled(on, egui::TextEdit::singleline(v).desired_width(w).min_size(egui::vec2(w, 0.0)).font(egui::TextStyle::Monospace)).on_hover_text(i18n::tr(tip));
                         };
                         field(ui, &mut rows[i].pin, has_pin, 44.0, i18n::tr("ピン名 (「③ ピン」の番号と同じ。例: SH)"));
                         field(ui, &mut rows[i].x, true, 46.0, i18n::tr("X (mm)。部品の中心から右が +"));

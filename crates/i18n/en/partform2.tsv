@@ -481,3 +481,6 @@ Isat で、インダクタンスが何 % 下がるか。30 が多いですが、
 この画面の下の「データシートの数字 (定格)」です	The "Data sheet figures (ratings)" section further down this screen
 データシートを見ながら、定格 → ② シミュレーション → ③ ピン → ④ 部品の形 の順に入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます。タブの名前を押すと、そのタブを開きます	With the data sheet at hand, fill in ratings → ② Simulation → ③ Pins → ④ Package. Pasting a SPICE model on ② fills in the pins too, so on ③ you only check them. Click a tab name to open that tab
 未入力	not given
+寸法で指定	By dimensions
+数字は例です。データシートの推奨ランドパターンの寸法に直してください	The numbers are examples. Change them to the datasheet's recommended land pattern dimensions
+本体の中心の、部品の原点 (パッケージの中心) からのずれ (Y)。ふつうは 0 (1列に並ぶ部品は、1番ピンが原点なので、列の真ん中)	Offset (Y) of the body center from the part origin (package center). Usually 0 (for a single row of pins the origin is pin 1, so it is the middle of the row)

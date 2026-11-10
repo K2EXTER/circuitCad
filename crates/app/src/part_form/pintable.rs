@@ -131,10 +131,10 @@ impl PartForm {
                     .on_hover_text(i18n::tr("記号のどちらの辺にこのピンを出すか。「自動」なら、前半が左、後半が右です"));
                 if !roles.is_empty() {
                     let mine = if rows[i].number.is_empty() { None } else { sim.iter().position(|s| *s == rows[i].number) };
-                    let label = |j: usize| format!("端子 {} ({})", j + 1, roles.get(j).map_or("", |s| s.as_str()));
+                    let label = |j: usize| i18n::trf!("端子 {} ({})", j + 1, roles.get(j).map_or("", |s| s.as_str()));
                     let mut pick = mine;
                     egui::ComboBox::from_id_salt(("pin_term", i))
-                        .selected_text(mine.map_or("(使わない)".to_string(), label))
+                        .selected_text(mine.map_or(i18n::tr("(使わない)").to_string(), label))
                         .width(130.0)
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut pick, None, i18n::tr("(使わない)"));

@@ -53,17 +53,17 @@ fn label_of(glyph: &str) -> &'static str {
 pub fn glyph_combo(ui: &mut egui::Ui, id: &str, glyph: &mut String, sym: Option<&sch_core::CustomSymbol>) {
     ui.horizontal(|ui| {
         egui::ComboBox::from_id_salt(id)
-            .selected_text(label_of(glyph))
+            .selected_text(i18n::tr(label_of(glyph)))
             .width(260.0)
             .show_ui(ui, |ui| {
                 for (g, label, tip) in GLYPH_CHOICES {
-                    ui.selectable_value(glyph, g.to_string(), *label).on_hover_text(*tip);
+                    ui.selectable_value(glyph, g.to_string(), i18n::tr(label)).on_hover_text(i18n::tr(tip));
                 }
             })
             .response
             .on_hover_text(i18n::tr("回路図で、この部品を何の記号で描くか。ピンの位置は変わらないので、配線はそのままです。「自動」のままで合っていれば、選ぶ必要はありません"));
         if let Some(sym) = sym.filter(|s| !crate::schematic::glyph_fits(glyph, s)) {
-            let need = GLYPH_CHOICES.iter().find(|c| c.0 == glyph.as_str()).map_or("", |c| c.2);
+            let need = GLYPH_CHOICES.iter().find(|c| c.0 == glyph.as_str()).map_or("", |c| i18n::tr(c.2));
             ui.colored_label(crate::theme::WARN, i18n::tr("ピンが合わないので、箱で描きます"))
                 .on_hover_text(i18n::trf!("この記号が使うピンの名前・数と合っていません ({need})。ピン名を直すか、別の記号を選んでください (部品: {})", sym.name));
         }

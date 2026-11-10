@@ -80,7 +80,7 @@ impl PartForm {
             egui::CollapsingHeader::new(i18n::tr("チップ部品 (コンデンサ・抵抗・コイル) を、データシートの数値からつくる")).id_salt("pas_section").default_open(!self.glyph.is_empty()).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     for k in [PassiveKind::Capacitor, PassiveKind::Resistor, PassiveKind::Inductor] {
-                        ui.selectable_value(&mut self.pas_kind, k, k.label());
+                        ui.selectable_value(&mut self.pas_kind, k, i18n::tr(k.label()));
                     }
                 });
                 self.passive_body(ui);
@@ -101,14 +101,14 @@ impl PartForm {
                     ui.add(egui::TextEdit::singleline(text).desired_width(120.0).min_size(egui::vec2(120.0, 0.0)).hint_text(hint)).on_hover_text(tip);
                     ui.end_row();
                 };
-                row(ui, &format!("値 ({})", kind.unit()), &mut self.pas_value, "コンデンサは容量 (例: 100n、4.7u)、抵抗は抵抗値 (例: 10k)、コイルはインダクタンス (例: 10u)", match kind {
+                row(ui, &i18n::trf!("値 ({})", kind.unit()), &mut self.pas_value, i18n::tr("コンデンサは容量 (例: 100n、4.7u)、抵抗は抵抗値 (例: 10k)、コイルはインダクタンス (例: 10u)"), match kind {
                     PassiveKind::Capacitor => "100n",
                     PassiveKind::Resistor => "10k",
                     PassiveKind::Inductor => "10u",
                 });
                 match kind {
                     PassiveKind::Capacitor => {
-                        row(ui, "ESR (等価直列抵抗)", &mut self.pas_esr, "データシートの ESR か、インピーダンスの最小値。大きいほどリップルが大きく、発熱します。下の表から求めることもできます", "20m");
+                        row(ui, i18n::tr("ESR (等価直列抵抗)"), &mut self.pas_esr, i18n::tr("データシートの ESR か、インピーダンスの最小値。大きいほどリップルが大きく、発熱します。下の表から求めることもできます"), "20m");
                         // for an electrolytic / tantalum only: there the impedance at 100 kHz is about the ESR
                         if self.pas_polar {
                             ui.label(i18n::tr("インピーダンス Z (Ω)")).on_hover_text(i18n::tr("データシートの「インピーダンス」(100kHz の値) を入れて「ESR に入れる」を押すと、上の ESR に写します。電解コンデンサでは、100kHz のインピーダンスはほぼ ESR です (容量の分は、そのころには小さくなっています)。ただし ESR は周波数と温度で大きく変わります (120Hz の tanδ から求めると、もっと大きくなります)"));
@@ -124,18 +124,18 @@ impl PartForm {
                             });
                             ui.end_row();
                         }
-                        row(ui, "ESL (等価直列インダクタンス)", &mut self.pas_esl, "高い周波数で効いてくる直列のインダクタンス。小さいチップほど小さい (0603 で 0.5〜1nH ほど)。自己共振周波数から求めることもできます", "800p");
-                        row(ui, "自己共振周波数 (Hz)", &mut self.pas_srf, "容量と ESL が共振する周波数。ESL が空のとき、ここから ESL を求めます。M は MHz (例: 30M)", "30M");
-                        row(ui, "DCバイアスで下がる量 (%)", &mut self.pas_bias, "セラミックコンデンサは、直流の電圧をかけると容量が減ります。使う電圧での値をデータシートの「DCバイアス特性」の曲線から読み、減った割合を入れると、その分小さい容量で計算します", "30");
+                        row(ui, i18n::tr("ESL (等価直列インダクタンス)"), &mut self.pas_esl, i18n::tr("高い周波数で効いてくる直列のインダクタンス。小さいチップほど小さい (0603 で 0.5〜1nH ほど)。自己共振周波数から求めることもできます"), "800p");
+                        row(ui, i18n::tr("自己共振周波数 (Hz)"), &mut self.pas_srf, i18n::tr("容量と ESL が共振する周波数。ESL が空のとき、ここから ESL を求めます。M は MHz (例: 30M)"), "30M");
+                        row(ui, i18n::tr("DCバイアスで下がる量 (%)"), &mut self.pas_bias, i18n::tr("セラミックコンデンサは、直流の電圧をかけると容量が減ります。使う電圧での値をデータシートの「DCバイアス特性」の曲線から読み、減った割合を入れると、その分小さい容量で計算します"), "30");
                     }
                     PassiveKind::Resistor => {
-                        row(ui, "寄生インダクタンス (H)", &mut self.pas_esl, "高い周波数で効く直列のインダクタンス。チップ抵抗で 1〜2nH ほど", "2n");
-                        row(ui, "並列容量 (F)", &mut self.pas_cp, "両端の間の容量。チップ抵抗で 0.05〜0.2pF ほど", "100f");
+                        row(ui, i18n::tr("寄生インダクタンス (H)"), &mut self.pas_esl, i18n::tr("高い周波数で効く直列のインダクタンス。チップ抵抗で 1〜2nH ほど"), "2n");
+                        row(ui, i18n::tr("並列容量 (F)"), &mut self.pas_cp, i18n::tr("両端の間の容量。チップ抵抗で 0.05〜0.2pF ほど"), "100f");
                     }
                     PassiveKind::Inductor => {
-                        row(ui, "DCR (巻線抵抗)", &mut self.pas_dcr, "巻線の直流抵抗。損失と発熱の元になります", "100m");
-                        row(ui, "並列容量 (F)", &mut self.pas_cp, "巻線の間の容量。自己共振周波数から求めることもできます", "1p");
-                        row(ui, "自己共振周波数 (Hz)", &mut self.pas_srf, "コイルがこれより高い周波数でコンデンサのようになる限界。並列容量が空のとき、ここから求めます。M は MHz", "30M");
+                        row(ui, i18n::tr("DCR (巻線抵抗)"), &mut self.pas_dcr, i18n::tr("巻線の直流抵抗。損失と発熱の元になります"), "100m");
+                        row(ui, i18n::tr("並列容量 (F)"), &mut self.pas_cp, i18n::tr("巻線の間の容量。自己共振周波数から求めることもできます"), "1p");
+                        row(ui, i18n::tr("自己共振周波数 (Hz)"), &mut self.pas_srf, i18n::tr("コイルがこれより高い周波数でコンデンサのようになる限界。並列容量が空のとき、ここから求めます。M は MHz"), "30M");
                     }
                 }
             });
@@ -159,10 +159,10 @@ impl PartForm {
             }
             match &self.pas_message {
                 Some(Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, m);
+                    ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
                 }
                 None => {}
             }

@@ -100,7 +100,7 @@ impl PartForm {
                             "番号の写し間違いか、囲んだ表がこのピンを含んでいません (放熱パッドなど、別の表にあるピンかもしれません)",
                         ),
                     };
-                    ui.small(text).on_hover_text(tip);
+                    ui.small(i18n::tr_dyn(&text)).on_hover_text(i18n::tr(tip));
                 }
                 if c.diffs.len() > 12 {
                     ui.small(i18n::trf!("ほか {} 件", c.diffs.len() - 12));
@@ -188,7 +188,7 @@ impl PartForm {
             format!("照らしたページ: {pages}")
         };
         let rows = self.dim_rows();
-        ui.small(note);
+        ui.small(i18n::tr_dyn(&note));
         for (t, v, found) in &rows {
             match found {
                 Some((page, f)) => {

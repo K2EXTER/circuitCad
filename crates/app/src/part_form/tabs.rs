@@ -124,16 +124,16 @@ impl PartForm {
             }
             ui.horizontal(|ui| {
                 if decided.is_some() {
-                    ui.label(i18n::trf!("調べる項目: {}", CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0)).on_hover_text(i18n::tr("上で選んだ部品の種類に合わせた項目です。変えるときは、いちばん上の「部品の種類」を選び直します"));
+                    ui.label(i18n::trf!("調べる項目: {}", i18n::tr(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0))).on_hover_text(i18n::tr("上で選んだ部品の種類に合わせた項目です。変えるときは、いちばん上の「部品の種類」を選び直します"));
                 } else {
                     ui.label(if self.ptype == Some(PartType::Ic) { i18n::tr("どの IC?") } else { i18n::tr("部品の種類") });
-                    egui::ComboBox::from_id_salt("rt_kind").selected_text(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("rt_kind").selected_text(i18n::tr(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0)).show_ui(ui, |ui| {
                         for (k, (name, _, _)) in CHECKLISTS.iter().enumerate() {
                             // an IC is a regulator, an op-amp or something else; the diode and transistor lists belong to their own kinds
                             if self.ptype == Some(PartType::Ic) && !["レギュレータ", "オペアンプ", "そのほか"].iter().any(|h| name.starts_with(h)) {
                                 continue;
                             }
-                            ui.selectable_value(&mut self.rt_kind, k, *name);
+                            ui.selectable_value(&mut self.rt_kind, k, i18n::tr(name));
                         }
                     }).response.on_hover_text(i18n::tr("選ぶと、その種類で調べるとよい項目が出ます"));
                 }
@@ -141,7 +141,7 @@ impl PartForm {
             if crate::widgets::primary_button_wide(ui, true, "調べる項目のチェックリストを入れる").on_hover_text(i18n::tr("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)")).clicked() {
                 self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
             }
-            ui.label(egui::RichText::new(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1).weak());
+            ui.label(egui::RichText::new(i18n::tr(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1)).weak());
             if !self.sheet.has_doc() {
                 self.pick_row(ui, &[]);
             }
@@ -195,7 +195,7 @@ impl PartForm {
             if max_given == 0 && rows_given == 0 {
                 ui.colored_label(crate::theme::WARN, i18n::tr("データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう"));
             } else {
-                ui.label(summary);
+                ui.label(i18n::tr_dyn(&summary));
             }
             if self.datasheet.trim().is_empty() && (max_given > 0 || rows_given > 0) {
                 ui.colored_label(crate::theme::WARN, i18n::tr("データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)"));
@@ -262,22 +262,22 @@ impl PartForm {
             }
             match &self.trial_message {
                 Some(super::trial::Trial::Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, m);
+                    ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
                 }
                 Some(super::trial::Trial::Warn(m)) => {
-                    ui.colored_label(crate::theme::WARN, m);
+                    ui.colored_label(crate::theme::WARN, i18n::tr_dyn(m));
                 }
                 Some(super::trial::Trial::Err(m)) => {
-                    ui.colored_label(crate::theme::ERROR, m);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
                 }
                 None => {}
             }
             match &self.spice_message {
                 Some(Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, m);
+                    ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
                 }
                 None => {}
             }
@@ -352,7 +352,7 @@ impl PartForm {
                 let shown = if !self.fp_preset.is_empty() {
                     self.fp_preset.clone()
                 } else {
-                    format!("寸法で指定: {}", pkg_label(self.pkg))
+                    format!("{}: {}", i18n::tr("寸法で指定"), i18n::tr(pkg_label(self.pkg)))
                 };
                 egui::ComboBox::from_id_salt("pkg_pick").selected_text(shown).width(260.0).show_ui(ui, |ui| {
                     ui.small(i18n::tr("寸法で指定 (下の寸法の欄から作ります)"));
@@ -362,7 +362,7 @@ impl PartForm {
                         (PkgKind::Quad, "足が四方に並ぶ IC (QFP、QFN など)"),
                         (PkgKind::Row, "足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)。ランドパターンが無いリード付き部品は、外形寸法から決める欄も出ます"),
                     ] {
-                        if ui.selectable_label(self.fp_preset.is_empty() && self.pkg == k, pkg_label(k)).on_hover_text(tip).clicked() {
+                        if ui.selectable_label(self.fp_preset.is_empty() && self.pkg == k, i18n::tr(pkg_label(k))).on_hover_text(i18n::tr(tip)).clicked() {
                             self.pkg = k;
                             self.fp_preset.clear();
                         }
@@ -402,15 +402,17 @@ impl PartForm {
                 crate::icons::help_small(ui, "固定用の脚・穴について", "USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
                 self.extras_table_ui(ui);
                 egui::CollapsingHeader::new(i18n::tr("文字で編集 (貼り付け・コメント)")).id_salt("extras_text").default_open(false).show(ui, |ui| {
-                    ui.small(EXTRAS_HELP);
+                    ui.small(i18n::tr(EXTRAS_HELP));
                     ui.horizontal_wrapped(|ui| {
                         ui.label(i18n::tr("例を足す:"));
                         for (label, line, tip) in EXTRAS_EXAMPLES {
-                            if ui.small_button(*label).on_hover_text(i18n::trf!("{tip}\n数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
+                            let tip = format!("{}\n{}", i18n::tr(tip), i18n::tr("数字は例です。データシートの推奨ランドパターンの寸法に直してください"));
+                            if ui.small_button(i18n::tr(label)).on_hover_text(tip).clicked() {
                                 if !self.extras.is_empty() && !self.extras.ends_with('\n') {
                                     self.extras.push('\n');
                                 }
-                                self.extras.push_str(line);
+                                // the table has each example line with its English first word (leg / hole / pad), which the parser also takes
+                                self.extras.push_str(i18n::tr(line));
                             }
                         }
                     });
@@ -440,8 +442,8 @@ impl PartForm {
         egui::Grid::new("pad_dims").num_columns(4).spacing([8.0, 4.0]).show(ui, |ui| {
             let n = rows.len();
             for (i, (label, v)) in rows.into_iter().enumerate() {
-                ui.label(label);
-                ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).suffix(" mm")).on_hover_text(pkg_tip(label));
+                ui.label(i18n::tr(label));
+                ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).suffix(" mm")).on_hover_text(i18n::tr(pkg_tip(label)));
                 if i % 2 == 1 || i + 1 == n {
                     ui.end_row();
                 }
@@ -478,7 +480,7 @@ impl PartForm {
                 }
                 ui.horizontal_wrapped(|ui| {
                     let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64, lo: f64| {
-                        ui.add(egui::DragValue::new(v).speed(0.01).range(lo..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(body_tip(label));
+                        ui.add(egui::DragValue::new(v).speed(0.01).range(lo..=100.0).prefix(format!("{} ", i18n::tr(label))).suffix(" mm")).on_hover_text(i18n::tr(body_tip(label)));
                     };
                     dv(ui, if self.body_circle { "直径" } else { "幅" }, &mut self.body_w, 0.1);
                     if !self.body_circle {
@@ -497,7 +499,7 @@ impl PartForm {
                 let items: Vec<(&str, bool)> = marks.iter().map(|m| (m.1, true)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, marks.iter().position(|m| m.0 == self.body_mark));
                 for (n, (m, _, tip)) in marks.iter().enumerate() {
-                    bar[n].clone().on_hover_text(*tip);
+                    bar[n].clone().on_hover_text(i18n::tr(tip));
                     if bar[n].clicked() {
                         self.body_mark = *m;
                     }
@@ -535,7 +537,7 @@ pub(super) fn body_tip(label: &str) -> &'static str {
         "直径" => "丸い本体の直径 (データシートの D)",
         "長さ" => "本体の縦の大きさ (基板の Y 方向)",
         "中心X" => "本体の中心の、部品の原点 (パッケージの中心) からのずれ (X)。ふつうは 0",
-        _ => "本体の中心の、部品の原点 (パッケージの中心) からのずれ (Y)。ふつうは 0",
+        _ => "本体の中心の、部品の原点 (パッケージの中心) からのずれ (Y)。ふつうは 0 (1列に並ぶ部品は、1番ピンが原点なので、列の真ん中)",
     }
 }
 

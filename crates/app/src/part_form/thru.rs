@@ -81,7 +81,7 @@ impl PartForm {
                     }
                 }
                 Err(e) => {
-                    ui.colored_label(crate::theme::WARN, e);
+                    ui.colored_label(crate::theme::WARN, i18n::tr_dyn(&e));
                 }
             }
         });

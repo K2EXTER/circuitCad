@@ -148,7 +148,7 @@ impl PartForm {
                     self.apply_template();
                 }
                 if !self.tpl_message.is_empty() {
-                    ui.small(&self.tpl_message);
+                    ui.small(i18n::tr_dyn(&self.tpl_message));
                 }
             });
         }).header_response.on_hover_text(i18n::tr("データシートの数字を入れるだけで、充電ICの「外から見た動き」のモデルを作ります。市販のSPICEモデルが無いICに使えます。数字は、データシートの「電気的特性」の表から拾います"));

@@ -14,7 +14,7 @@ impl PartForm {
         let items: Vec<(&str, bool)> = PART_TYPES.iter().map(|(_, label, _)| (*label, true)).collect();
         let bar = crate::widgets::segment_bar(ui, &items, PART_TYPES.iter().position(|(t, _, _)| self.ptype == Some(*t)));
         for (n, r) in bar.iter().enumerate() {
-            r.clone().on_hover_text(PART_TYPES[n].2);
+            r.clone().on_hover_text(i18n::tr(PART_TYPES[n].2));
             if r.clicked() {
                 let t = PART_TYPES[n].0;
                 if self.type_base.as_deref() == Some(self.fingerprint().as_str()) {
@@ -51,7 +51,7 @@ impl PartForm {
                 let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.glyph == *k));
                 for (n, r) in bar.iter().enumerate() {
-                    r.clone().on_hover_text(options[n].2);
+                    r.clone().on_hover_text(i18n::tr(options[n].2));
                     if r.clicked() {
                         let k = options[n].0;
                         self.set_transistor(k);
@@ -68,7 +68,7 @@ impl PartForm {
                 let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.glyph == *k));
                 for (n, r) in bar.iter().enumerate() {
-                    r.clone().on_hover_text(options[n].2);
+                    r.clone().on_hover_text(i18n::tr(options[n].2));
                     if r.clicked() {
                         let k = options[n].0;
                         self.glyph = k.into();
@@ -86,7 +86,7 @@ impl PartForm {
                 let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.ptype_sub == *k));
                 for (n, r) in bar.iter().enumerate() {
-                    r.clone().on_hover_text(options[n].2);
+                    r.clone().on_hover_text(i18n::tr(options[n].2));
                     if r.clicked() {
                         let k = options[n].0;
                         self.set_capacitor(k);
@@ -100,7 +100,7 @@ impl PartForm {
                 let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.ptype_sub == *k));
                 for (n, r) in bar.iter().enumerate() {
-                    r.clone().on_hover_text(options[n].2);
+                    r.clone().on_hover_text(i18n::tr(options[n].2));
                     if r.clicked() {
                         let k = options[n].0;
                         self.set_resistor_or_inductor(t, k);

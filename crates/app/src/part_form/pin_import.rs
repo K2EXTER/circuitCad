@@ -107,13 +107,13 @@ impl TablePanel {
                 ("名前の列", &mut name, "ピンの名前 (VCC、GND、1IN+ …) が並んでいる列"),
             ];
             for (label, col, tip) in choices {
-                ui.label(label);
+                ui.label(i18n::tr(label));
                 let shown = labels.get(*col).cloned().unwrap_or_default();
                 egui::ComboBox::from_id_salt(label).selected_text(shown).width(260.0).show_ui(ui, |ui| {
                     for (c, text) in labels.iter().enumerate() {
                         ui.selectable_value(col, c, text);
                     }
-                }).response.on_hover_text(tip);
+                }).response.on_hover_text(i18n::tr(tip));
                 ui.end_row();
             }
         });

@@ -168,10 +168,10 @@ impl PartForm {
         }
         match &self.dio_message {
             Some(Ok(m)) => {
-                ui.colored_label(crate::theme::OK, m);
+                ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
             }
             Some(Err(e)) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
             }
             None => {}
         }
@@ -223,7 +223,8 @@ impl PartForm {
         if !pts.is_empty() {
             let rows: Vec<String> = pts.iter().map(|(i, v)| {
                 let m = diode::vf(is, n, rs, *i);
-                format!("{}A: データ {v:.2}V / モデル {m:.2}V (モデルが {:.0}mV {})", passive::eng(*i), ((m - v) * 1000.0).abs(), if m >= *v { "高い" } else { "低い" })
+                let side = if m >= *v { i18n::tr("高い") } else { i18n::tr("低い") };
+                i18n::trf!("{}A: データ {v:.2}V / モデル {m:.2}V (モデルが {:.0}mV {})", passive::eng(*i), ((m - v) * 1000.0).abs(), side)
             }).collect();
             ui.label(egui::RichText::new(rows.join("\n")).size(13.5));
         }

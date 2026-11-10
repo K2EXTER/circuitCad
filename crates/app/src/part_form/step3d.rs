@@ -90,7 +90,7 @@ impl PartForm {
                 }
             });
             if !self.step_msg.is_empty() {
-                ui.colored_label(Color32::from_rgb(230, 80, 70), &self.step_msg);
+                ui.colored_label(Color32::from_rgb(230, 80, 70), i18n::tr_dyn(&self.step_msg));
             }
             let Some(m) = self.model3d.clone() else {
                 ui.small(i18n::tr("読み込むと、ここに上から見た図と横から見た図が出ます"));

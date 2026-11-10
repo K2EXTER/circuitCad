@@ -101,7 +101,7 @@ impl PartForm {
             Some((page, word)) => format!("p.{} の「{word}」から入れました。押すと、選び直せます", page + 1),
             None => format!("データシートの窓で、{}の数字をクリックして入れます。インチ・mil は mm に換算します (単位は数字の右にあるものを使います)", target.label()),
         };
-        if ui.small_button(label).on_hover_text(tip).clicked() {
+        if ui.small_button(i18n::tr_dyn(&label)).on_hover_text(i18n::tr_dyn(&tip)).clicked() {
             self.pick_msg = None;
             self.sheet.start_pick(target);
         }

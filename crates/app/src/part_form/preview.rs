@@ -6,7 +6,7 @@ impl PartForm {
         let def = match built {
             Ok(d) => d,
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
                 return None;
             }
         };
@@ -43,7 +43,7 @@ impl PartForm {
         if let Some(n) = self.editing().filter(|_| !replaces) {
             ui.small(i18n::trf!("「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)"));
         }
-        if crate::widgets::primary_button_wide(ui, ok, label).on_hover_text(tip.replace("{}", &def.name)).clicked() {
+        if crate::widgets::primary_button_wide(ui, ok, label).on_hover_text(i18n::tr(tip).replace("{}", &def.name)).clicked() {
             return Some(def.clone());
         }
         None

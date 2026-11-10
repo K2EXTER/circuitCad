@@ -176,10 +176,10 @@ impl PartForm {
             }
             self.vendor_load();
             for e in &self.mu.errors {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
             }
             if let Some(Err(e)) = &self.mu.message {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
             }
             if self.mu.indexes.is_empty() {
                 if zips.is_empty() {
@@ -229,23 +229,23 @@ impl PartForm {
             let filter = match self.vendor_filter() {
                 Ok(f) => f,
                 Err(e) => {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(&e));
                     return;
                 }
             };
             let hits: Vec<(usize, VendorEntry)> =
                 self.mu.indexes.iter().enumerate().flat_map(|(n, idx)| idx.search(&filter).into_iter().map(move |e| (n, e.clone()))).take(SHOWN + 1).collect();
-            ui.small(if hits.len() > SHOWN { format!("{SHOWN} 件以上あります。絞り込んでください") } else { format!("{} 件", hits.len()) });
+            ui.small(if hits.len() > SHOWN { i18n::trf!("{SHOWN} 件以上あります。絞り込んでください") } else { i18n::trf!("{} 件", hits.len()) });
             let mut picked = None;
             egui::ScrollArea::vertical().max_height(180.0).id_salt("vendor_list").show(ui, |ui| {
                 for (n, e) in hits.iter().take(SHOWN) {
                     let label = match &e.meta {
                         Some(m) => format!("{}  {}F  {}V  {}  {}", e.part_number, passive::eng(m.capacitance), passive::eng(m.voltage), m.dielectric, m.size_inch),
-                        None => format!("{}  ({}端子)", e.part_number, e.nodes),
+                        None => i18n::trf!("{}  ({}端子)", e.part_number, e.nodes),
                     };
                     let usable = e.nodes == 2;
                     let tip = if usable { "クリックすると、この部品の記号・モデルをフォームに入れます" } else { "端子が2個のモデルだけ選べます (ここはコンデンサ・抵抗・コイルなどの2端子部品の作成です)" };
-                    if ui.add_enabled(usable, egui::Button::selectable(self.name == e.part_number, label)).on_hover_text(tip).clicked() {
+                    if ui.add_enabled(usable, egui::Button::selectable(self.name == e.part_number, label)).on_hover_text(i18n::tr(tip)).clicked() {
                         picked = Some((*n, e.clone()));
                     }
                 }
@@ -254,7 +254,7 @@ impl PartForm {
                 self.mu.message = Some(self.apply_vendor(n, &e));
             }
             if let Some(Ok(m)) = &self.mu.message {
-                ui.colored_label(crate::theme::OK, m);
+                ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
             }
         });
     }
