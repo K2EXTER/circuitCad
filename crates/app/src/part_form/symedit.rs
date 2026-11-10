@@ -111,10 +111,15 @@ impl PartForm {
         for (i, p) in lay.pins.iter().enumerate() {
             let tip = to((p.tip.0 as f32, p.tip.1 as f32));
             let edge = to((p.edge.0 as f32, p.edge.1 as f32));
-            let hit = Rect::from_two_pos(tip, edge).expand(scale * 0.7);
+            // a standard shape's lead ends at its drawing, not at the body's centre (`edge` is the centre when the body
+            // is 0 wide): there only the outer part of the lead, one grid step long, is the pin's own
+            let inner = if boxed { edge } else { tip + (edge - tip).normalized() * scale };
+            let hit = Rect::from_two_pos(tip, inner).expand(scale * 0.7);
             let resp = ui.interact(hit, ui.id().with(("sym_pin", i)), Sense::click_and_drag());
             let hot = resp.hovered() || resp.dragged();
-            painter.line_segment([tip, edge], Stroke::new(if hot { 3.0 } else { 1.6 }, if hot { crate::theme::ACCENT } else { ink }));
+            if boxed || hot {
+                painter.line_segment([tip, inner], Stroke::new(if hot { 3.0 } else { 1.6 }, if hot { crate::theme::ACCENT } else { ink }));
+            }
             // the name inside the box next to its lead, the number by the lead outside
             let (name_at, name_align, num_align) = match p.side {
                 PinSide::Left => (edge + Vec2::new(4.0, 0.0), Align2::LEFT_CENTER, Align2::CENTER_BOTTOM),
@@ -133,7 +138,7 @@ impl PartForm {
                 };
                 painter.text(at, align, &p.name, font.clone(), Color32::from_gray(40));
             }
-            let mid = tip + (edge - tip) / 2.0;
+            let mid = tip + (inner - tip) / 2.0;
             let num_at = if matches!(p.side, PinSide::Left | PinSide::Right) { mid - Vec2::new(0.0, 2.0) } else { mid + Vec2::new(3.0, 0.0) };
             painter.text(num_at, num_align, &p.number, FontId::proportional(10.0), Color32::from_gray(110));
             let gap = sym.pins.iter().find(|s| s.number == p.number).map_or(0, |s| s.gap);
