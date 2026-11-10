@@ -160,7 +160,7 @@ fn drawn_symbol(p: &AscPart, sym: &crate::ltspice::Symbol) -> KicadSymbol {
             } else {
                 PinSide::Bottom
             };
-            PinDef { number: q.order.to_string(), name: if q.name.is_empty() { q.order.to_string() } else { q.name.clone() }, side: Some(side), sim_only: false }
+            PinDef { number: q.order.to_string(), name: if q.name.is_empty() { q.order.to_string() } else { q.name.clone() }, side: Some(side), sim_only: false, gap: 0 }
         })
         .collect();
     let value = if p.attr("Value").is_empty() { sym.value.clone() } else { p.attr("Value").to_string() };

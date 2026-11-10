@@ -15,6 +15,8 @@ pub struct PinRow {
     pub number: String,
     pub name: String,
     pub side: String,
+    /// Empty places before the pin on its side of the symbol (`gap=N` in the text).
+    pub gap: u8,
 }
 
 /// The rows of a pin text (a line with only a number gives a row with an empty name).
@@ -22,9 +24,10 @@ pub(super) fn rows_of(text: &str) -> Vec<PinRow> {
     text.lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
-            let t: Vec<&str> = l.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
+            let (t, gap) = pin_tokens(l);
             let side = t.get(2).and_then(|s| parse_side(s)).map_or("", side_word);
-            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into() }
+            let gap = gap.and_then(|g| g.parse::<u8>().ok()).unwrap_or(0).min(MAX_GAP);
+            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into(), gap }
         })
         .collect()
 }
@@ -33,7 +36,13 @@ pub(super) fn rows_of(text: &str) -> Vec<PinRow> {
 pub(super) fn text_of(rows: &[PinRow]) -> String {
     rows.iter()
         .filter(|r| !(r.number.is_empty() && r.name.is_empty()))
-        .map(|r| if r.side.is_empty() { format!("{} {}", r.number, r.name) } else { format!("{} {} {}", r.number, r.name, r.side) })
+        .map(|r| {
+            let mut l = if r.side.is_empty() { format!("{} {}", r.number, r.name) } else { format!("{} {} {}", r.number, r.name, r.side) };
+            if r.gap > 0 {
+                l.push_str(&format!(" gap={}", r.gap));
+            }
+            l
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

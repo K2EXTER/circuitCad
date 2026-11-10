@@ -43,9 +43,12 @@ impl PartForm {
         f.pins_text = def
             .pins
             .iter()
-            .map(|p| match p.side {
-                Some(s) => format!("{} {} {}", p.number, p.name, side_word(s)),
-                None => format!("{} {}", p.number, p.name),
+            .map(|p| {
+                let l = match p.side {
+                    Some(s) => format!("{} {} {}", p.number, p.name, side_word(s)),
+                    None => format!("{} {}", p.number, p.name),
+                };
+                if p.gap > 0 { format!("{l} gap={}", p.gap) } else { l }
             })
             .collect::<Vec<_>>()
             .join("\n");

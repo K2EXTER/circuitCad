@@ -67,7 +67,7 @@ mod tests {
     use sch_core::{CustomSymbol, PinSide, SimKind, SimModel, SymPin};
 
     fn part(name: &str, sim: Option<SimModel>) -> CustomSymbol {
-        let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false };
+        let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false, gap: 0 };
         CustomSymbol { name: name.into(), prefix: "U".into(), pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)], sim, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![] }
     }
 

@@ -201,7 +201,7 @@ impl Session {
             if !seen.insert(num.clone()) {
                 return Err(format!("map= lists pin {num} twice"));
             }
-            pins.push(PinDef { number: num.clone(), name: n.clone(), side: side_for(n), sim_only: false });
+            pins.push(PinDef { number: num.clone(), name: n.clone(), side: side_for(n), sim_only: false, gap: 0 });
         }
         let part = PartDef {
             name: name.clone(),

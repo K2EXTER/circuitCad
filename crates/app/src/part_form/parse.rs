@@ -39,6 +39,27 @@ pub(super) fn parse_ohm(t: &str) -> Option<f64> {
     sim_core::parse_value(l.trim_end_matches("ohm").trim_end_matches('ω').trim())
 }
 
+/// The words of a pin line (`number name [side]`) without its `gap=N` word, and that N as typed: the empty places
+/// left before the pin on its side of the symbol.
+pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>) {
+    let mut gap = None;
+    let words = line
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|s| !s.is_empty())
+        .filter(|s| match s.strip_prefix("gap=") {
+            Some(v) => {
+                gap = Some(v);
+                false
+            }
+            None => true,
+        })
+        .collect();
+    (words, gap)
+}
+
+/// The most empty places a pin may have before it (a bigger number is a typing mistake, not a layout).
+pub(super) const MAX_GAP: u8 = 20;
+
 pub(super) fn parse_side(t: &str) -> Option<PinSide> {
     match t.to_ascii_lowercase().as_str() {
         "left" | "l" | "左" => Some(PinSide::Left),
@@ -167,15 +188,19 @@ impl PartForm {
     pub(super) fn parse_pins(&self) -> Result<Vec<PinDef>, String> {
         let mut out = vec![];
         for (n, line) in self.pins_text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
-            let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
+            let (t, gap) = pin_tokens(line);
             if t.len() < 2 {
                 return Err(format!("{}行目: 「番号 名前」の形式で入力してください", n + 1));
             }
+            let gap = match gap {
+                None => 0,
+                Some(v) => v.parse::<u8>().ok().filter(|g| *g <= MAX_GAP).ok_or_else(|| format!("{}行目: 空き「gap={v}」は 0〜{MAX_GAP} の数にしてください (記号で、このピンの前に空ける数)", n + 1))?,
+            };
             let side = match t.get(2) {
                 None => None,
                 Some(s) => Some(parse_side(s).ok_or_else(|| format!("{}行目: 向き「{s}」は left/right/top/bottom のいずれかです", n + 1))?),
             };
-            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only: false });
+            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only: false, gap });
         }
         Ok(out)
     }

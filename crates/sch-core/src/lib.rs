@@ -575,6 +575,14 @@ pub struct SymPin {
     /// sensor model): it has no pad and is left out of the board netlist.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub sim_only: bool,
+    /// Empty pin places left before this pin on its side of the box (to group pins: the supply apart from the
+    /// signals, as data sheets draw them). 0 = none.
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub gap: u8,
+}
+
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -863,9 +871,11 @@ impl CustomSymbol {
         }
     }
 
-    /// Box symbol: pins on each side are spaced 2 grid steps apart, in the order given.
+    /// Box symbol: pins on each side are spaced 2 grid steps apart, in the order given; a pin's `gap` leaves that many
+    /// empty places before it.
     pub fn layout(&self) -> SymLayout {
-        let count = |s: PinSide| self.pins.iter().filter(|p| p.side == s).count() as i32;
+        // places on a side: its pins and the empty places between them
+        let count = |s: PinSide| self.pins.iter().filter(|p| p.side == s).map(|p| 1 + p.gap as i32).sum::<i32>();
         let (hw, hh) = if self.is_two_lead_glyph() {
             // drawn as the basic symbol: pin tips at +-2, same as the basic C/R/L
             (0, 1)
@@ -883,6 +893,7 @@ impl CustomSymbol {
                 PinSide::Top => (2, count(PinSide::Top)),
                 PinSide::Bottom => (3, count(PinSide::Bottom)),
             };
+            idx[slot] += p.gap as i32;
             let along = -(n - 1) + 2 * idx[slot];
             idx[slot] += 1;
             let (tip, edge) = match p.side {

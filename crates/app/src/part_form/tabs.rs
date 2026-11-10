@@ -343,8 +343,11 @@ impl PartForm {
                 self.pick_row(ui, &[]);
             }
             self.pin_table_ui(ui);
+            ui.add_space(6.0);
+            self.symbol_layout_ui(ui);
+            ui.add_space(6.0);
             egui::CollapsingHeader::new(i18n::tr("まとめて貼り付ける (文字で編集)")).id_salt("pins_text").default_open(false).show(ui, |ui| {
-                ui.small(i18n::tr("1行に「番号 名前 [向き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。データシートや回路図からの貼り付けに使います"));
+                ui.small(i18n::tr("1行に「番号 名前 [向き] [gap=空き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。gap=1 は、記号でそのピンの前にピン1本分の空きを入れます。データシートや回路図からの貼り付けに使います"));
                 ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text(i18n::tr("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。NC は未接続のピンです。上の表と同じものです"));
             });
             self.pin_check_ui(ui);

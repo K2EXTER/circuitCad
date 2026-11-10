@@ -384,6 +384,7 @@ mod vendor;
 mod diode;
 mod edit;
 mod pintable;
+mod symedit;
 mod padtable;
 mod glyph_pick;
 pub use glyph_pick::glyph_combo;

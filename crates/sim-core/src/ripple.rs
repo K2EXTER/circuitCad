@@ -158,7 +158,7 @@ mod tests {
 
     fn sheet(ripple: Option<RippleRating>, life: Option<LifeRating>) -> Schematic {
         let mut s = Schematic::default();
-        let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false };
+        let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false, gap: 0 };
         let sym = CustomSymbol {
             name: "CE_TEST".into(),
             prefix: "C".into(),

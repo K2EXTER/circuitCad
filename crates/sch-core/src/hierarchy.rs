@@ -220,7 +220,7 @@ impl Schematic {
                 continue;
             }
             let side = if p.dir == PortDir::Out { PinSide::Right } else { PinSide::Left };
-            pins.push(SymPin { number: p.name.clone(), name: p.name.clone(), side, sim_only: false });
+            pins.push(SymPin { number: p.name.clone(), name: p.name.clone(), side, sim_only: false, gap: 0 });
         }
         CustomSymbol { name: self.sheet_name(k), prefix: "CH".into(), pins, sim: None, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![] }
     }

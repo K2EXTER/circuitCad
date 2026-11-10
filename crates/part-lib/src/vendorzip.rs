@@ -359,7 +359,7 @@ impl VendorIndex {
         }
         let text = self.read_file(e)?;
         let block = extract_block(&text, &e.part_number).ok_or_else(|| format!("{} の .subckt が .ends で閉じていません", e.part_number))?;
-        let pin = |n: &str, side| PinDef { number: n.into(), name: n.into(), side: Some(side), sim_only: false };
+        let pin = |n: &str, side| PinDef { number: n.into(), name: n.into(), side: Some(side), sim_only: false, gap: 0 };
         let (value_text, description, limits) = match &e.meta {
             Some(m) => (eng(m.capacitance), m.summary.clone(), m.notes.clone()),
             None => (
@@ -409,7 +409,7 @@ impl VendorIndex {
         use sch_core::{PartRatings, SimKind, SimModel};
         let g = self.generate(e)?;
         let polar = e.meta.as_ref().is_some_and(|m| m.polar);
-        let pin = |n: &str, name: &str, side| PinDef { number: n.into(), name: name.into(), side: Some(side), sim_only: false };
+        let pin = |n: &str, name: &str, side| PinDef { number: n.into(), name: name.into(), side: Some(side), sim_only: false, gap: 0 };
         let pins = if polar { vec![pin("1", "+", PinSide::Left), pin("2", "-", PinSide::Right)] } else { vec![pin("1", "1", PinSide::Left), pin("2", "2", PinSide::Right)] };
         let mut todo = vec![];
         let size = e.meta.as_ref().map(|m| m.size_inch.as_str()).filter(|s| !s.is_empty());

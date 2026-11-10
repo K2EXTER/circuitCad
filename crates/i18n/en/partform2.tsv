@@ -515,3 +515,16 @@ Isat で、インダクタンスが何 % 下がるか。30 が多いですが、
 向かい合う足の列の中心どうしの間隔 (mm)。DIP の 0.3 インチ幅なら 7.62、2列のピンヘッダなら 2.54	Center-to-center distance between the facing rows of leads (mm). 7.62 for a 0.3-inch DIP, 2.54 for a 2-row pin header
 2列 (ヘッダ 2×N)	2 rows (header 2×N)
 2列ヘッダのピン数は2以上の偶数にしてください	A 2-row header needs an even number of pins, 2 or more
+{}行目: 空き「gap={v}」は 0〜{MAX_GAP} の数にしてください (記号で、このピンの前に空ける数)	Line {}: the gap "gap={v}" must be a number from 0 to {MAX_GAP} (empty places before this pin on the symbol)
+記号のピン配置	Symbol pin layout
+回路図の記号で、ピンをどの辺のどこに出すかを、絵の上で決めます。ピンをドラッグすると、別の辺や別の順番に動きます (表の行の順番と「向き」も変わります)。ピンを右クリックすると、その前に空きを入れられます (電源ピンを信号から離す、データシートの絵に合わせる など)。ダイオードやトランジスタのような決まった形の記号は、ピンの辺が合わないと箱で描かれます	Decide on the drawing where each pin comes out of the schematic symbol. Drag a pin to move it to another side or another place (the order of the table rows and the "Side" change too). Right-click a pin to leave empty places before it (to set the supply pins apart from the signals, or to match the datasheet's drawing). A fixed symbol such as a diode or transistor is drawn as a box when its pins are not on the sides it needs
+ピン表のまちがいを直すと、ここに記号が出ます	Fix the mistakes in the pin table and the symbol appears here
+ピン {} ({}): ドラッグで別の辺・順番へ。右クリックで前に空きを入れます	Pin {} ({}): drag to another side or place. Right-click to leave a gap before it
+この前に空きを1つ入れる	Add a gap before this pin
+同じ辺で、このピンの前 (左右の辺なら上、上下の辺なら左) に、ピン1本分の空きを入れます	Leaves one pin's worth of empty space before this pin on the same side (above it on the left and right sides, to its left on the top and bottom)
+この前の空きを1つ減らす	Remove a gap before this pin
+このピンの前に入れた空きを、1つ減らします	Removes one of the gaps before this pin
+ピンをドラッグで動かす・右クリックで空き	Drag a pin to move it, right-click for a gap
+自動の配置に戻す	Back to automatic layout
+向きと空きを全部消して、自動の配置 (前半が左、後半が右) に戻します。ピンの行の順番はそのままです	Clears every side and gap and goes back to the automatic layout (first half left, second half right). The order of the pin rows stays as it is
+1行に「番号 名前 [向き] [gap=空き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。gap=1 は、記号でそのピンの前にピン1本分の空きを入れます。データシートや回路図からの貼り付けに使います	One pin per line: "number name [side] [gap=N]". The side is left / right / top / bottom; without it the first half goes left and the rest right. gap=1 leaves one pin's worth of empty space before that pin on the symbol. Use it to paste from a datasheet or a schematic

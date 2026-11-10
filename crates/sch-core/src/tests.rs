@@ -152,7 +152,7 @@ fn spice_deck() {
 }
 
 fn opamp() -> CustomSymbol {
-    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false };
+    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0 };
     CustomSymbol {
         ratings: None,
         shops: Default::default(),
@@ -191,6 +191,23 @@ fn custom_symbol_layout_is_on_grid() {
     assert_eq!(tip("8"), (0, -4));
     assert_eq!(tip("4"), (-1, 4)); // two bottom pins
     assert_eq!(tip("5"), (1, 4));
+}
+
+/// A gap leaves empty places before its pin: the side gets longer and the pins after it move down.
+#[test]
+fn a_gap_leaves_empty_places_on_its_side() {
+    let mut s = opamp();
+    // IN- with one empty place before it: the left side has three places (IN+, gap, IN-)
+    s.pins[1].gap = 1;
+    let l = s.layout();
+    let tip = |n: &str| l.pins.iter().find(|p| p.number == n).unwrap().tip;
+    assert_eq!((l.hw, l.hh), (2, 3));
+    assert_eq!(tip("3"), (-4, -2));
+    assert_eq!(tip("2"), (-4, 2));
+    assert_eq!(tip("1"), (4, 0), "the other sides keep their places");
+    // a gap is left out of the saved symbol when it is 0
+    assert!(!serde_json::to_string(&opamp()).unwrap().contains("gap"));
+    assert!(serde_json::to_string(&s).unwrap().contains("\"gap\":1"));
 }
 
 #[test]
@@ -437,7 +454,7 @@ fn labels_that_differ_only_in_case_are_a_warning() {
 
 #[test]
 fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
-    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false };
+    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0 };
     let fet = CustomSymbol {
         ratings: None,
         shops: Default::default(),
@@ -496,7 +513,7 @@ fn ic_power_pins_must_reach_a_supply_but_a_regulator_output_counts() {
 #[test]
 fn old_two_lead_glyph_sheet_gets_short_leads() {
     // a version-0 sheet: electrolytic cap at (10,10) whose pins used to sit at +-4, wires on them
-    let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false };
+    let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false, gap: 0 };
     let sym = CustomSymbol {
         name: "CE".into(),
         prefix: "C".into(),

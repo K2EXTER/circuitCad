@@ -49,7 +49,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 |---|---|
 | `main.rs` / `prefs.rs` / `icons.rs` | `App`・メニュー / 表示設定 / ツールのアイコン |
 | `args.rs` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
-| `plot.rs` / `part_form/` | 波形描画 / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `checklist` `trial` `vendor` `zchart` `preview`) |
+| `plot.rs` / `part_form/` | 波形描画 / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `checklist` `trial` `vendor` `zchart` `preview`) |
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
 | `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |

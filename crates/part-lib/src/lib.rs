@@ -26,6 +26,13 @@ pub struct PinDef {
     /// Simulation-only input (no pad): the sensor's light / field / ... stimulus, given as a voltage.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub sim_only: bool,
+    /// Empty places before this pin on its side of the symbol (see `SymPin::gap`).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub gap: u8,
+}
+
+fn is_zero(v: &u8) -> bool {
+    *v == 0
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -129,6 +136,7 @@ impl PartDef {
                     name: p.name.clone(),
                     side: p.side.unwrap_or(if i < half { PinSide::Left } else { PinSide::Right }),
                     sim_only: p.sim_only,
+                    gap: p.gap,
                 })
                 .collect(),
             sim: self.sim.clone(),

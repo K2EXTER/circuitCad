@@ -616,6 +616,42 @@ mod passive_form_tests {
         assert!(cap.apply_passive().unwrap_err().contains("TC1"));
     }
 
+    /// The symbol editor: a pin dropped beyond a side goes to that side at the place it was dropped, the automatic sides
+    /// are written out first so the other pins stay where they were drawn, and a gap survives the text and the saved part.
+    #[test]
+    fn pins_are_moved_and_spaced_on_the_symbol() {
+        use crate::part_form::pintable::rows_of;
+        use crate::part_form::symedit::{drop_at, move_pin};
+        let mut f = PartForm::for_type("ic");
+        f.name = "U_TEST".into();
+        // 1 IN, 2 GND (left, automatic), 3 OUT, 4 VCC (right)
+        let lay = f.to_def().unwrap().symbol().layout();
+        // VCC dropped above the box: the top side
+        let (side, before) = drop_at(&lay, "4", (0.0, -(lay.hh as f32) - 1.5));
+        assert_eq!((side, before), (PinSide::Top, 0));
+        let mut rows = rows_of(&f.pins_text);
+        move_pin(&mut rows, &lay, "4", side, before);
+        f.pins_text = crate::part_form::pintable::text_of(&rows);
+        assert_eq!(f.pins_text, "1 IN left\n2 GND left\n3 OUT right\n4 VCC top");
+        // GND dropped on the left side above IN: first on that side, and first in the list
+        let lay = f.to_def().unwrap().symbol().layout();
+        let (side, before) = drop_at(&lay, "2", (-(lay.hw as f32) - 1.0, -1.5));
+        assert_eq!((side, before), (PinSide::Left, 0));
+        let mut rows = rows_of(&f.pins_text);
+        move_pin(&mut rows, &lay, "2", side, before);
+        assert_eq!(rows.iter().map(|r| r.number.as_str()).collect::<Vec<_>>(), ["2", "1", "3", "4"]);
+        // a gap before IN: written as gap=1, read back, kept in the part and when it is opened again
+        rows[1].gap = 1;
+        f.pins_text = crate::part_form::pintable::text_of(&rows);
+        assert!(f.pins_text.contains("1 IN left gap=1"), "{}", f.pins_text);
+        let def = f.to_def().unwrap();
+        assert_eq!(def.pins.iter().find(|p| p.number == "1").unwrap().gap, 1);
+        assert_eq!(PartForm::from_def(&def).pins_text, f.pins_text);
+        // a gap that is not a small number is explained
+        f.pins_text = "1 IN left gap=x".into();
+        assert!(f.to_def().unwrap_err().contains("gap=x"));
+    }
+
     /// A 2-row header: the connector's second shape gives a 2x5 numbered across (1 2 / 3 4 ...), the symbol has the odd
     /// pins left and the even pins right, the body covers both rows, and the part opens again as a 2-row header.
     #[test]
