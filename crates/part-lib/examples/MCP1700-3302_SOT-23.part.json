@@ -1,7 +1,7 @@
 {
   "name": "MCP1700-3302",
   "category": "レギュレータ",
-  "description": "MCP1700-3302 低消費電流LDO 3.3V 250mA (SOT-23, ピン1=GND 2=VOUT 3=VIN)。ドロップアウト約0.2V。簡易マクロモデル(静止電流・過電流保護は無し、数値は概算)",
+  "description": "MCP1700-3302 低消費電流LDO 3.3V 250mA (SOT-23, ピン1=GND 2=VOUT 3=VIN)。ドロップアウト約 0.18 V (250 mA)。データシートの typ から作った等価モデル (グラウンド電流 1.6 µA、ライン・ロード・レギュレーション、電流制限、リップル除去、雑音)",
   "prefix": "U",
   "footprint_name": "SOT-23",
   "pins": [
@@ -53,7 +53,7 @@
   "sim": {
     "kind": "subckt",
     "name": "MCP1700-3302",
-    "text": ".subckt MCP1700-3302 in gnd out\nVdo in ind DC 0.2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 3.3\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.3\nG1 in gnd o out 3.0\n.model DREG D(IS=1e-12 N=1)\n.ends MCP1700-3302",
+    "text": ".subckt MCP1700-3302 in gnd out\n* line regulation through a slow path (the data sheet's DC figure) and the ripple from the input (flat, the ripple rejection)\nElf lfa gnd in gnd 1\nRlf lfa lf 1.59Meg\nClf lf gnd 100n\n* output noise (taken as flat over the data sheet's band): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\nBtgt t0 gnd V=3.3+0.0184404*(V(lf,gnd)-4.3)+0.00630957*(V(in,gnd)-4.3)\nEn tgt t0 nz gnd 736.852\n* the ceiling the input leaves (the dropout)\nBdo ind gnd V=V(in,gnd)-0-0.579947*I(Vs)\n* the target, no higher than the dropout's ceiling\nEx1 xh1 gnd tgt ind 1000\nD1 xh1 yh1 DREG\nRy1 yh1 gnd 1k\nEy1 y1 gnd yh1 gnd 0.001\nEc1 c1 gnd tgt y1 1\n* the current limit: the current the target asks for (amps as volts), no more than the limit\nBu u gnd V=(V(c1,gnd)-V(out,gnd))/0.132053\nBlim cl gnd V=limit(0.408+0*(V(in,gnd)-V(out,gnd)-1),0.408,0.408)\nEx2 xh2 gnd u cl 1000\nD2 xh2 yh2 DREG\nRy2 yh2 gnd 1k\nEy2 y2 gnd yh2 gnd 0.001\nEc2 uc gnd u y2 1\nBc2 c2 gnd V=V(out,gnd)+0.132053*V(uc,gnd)\n* output through the load regulation's resistance; the output current comes from the input (both ways, as the earlier\n* bundled models did: a dead or reversed input then leaves the output near 0 V)\nEo o gnd c2 gnd 1\nVs o os DC 0\nRo os out 0.132053\nBin in gnd I=I(Vs)\n* ground (quiescent) current: flat above a few volts, like a resistor near 0 V\nBq in gnd I=1.6e-06*tanh(V(in,gnd)/2)\n.model DREG D(IS=1e-12 N=1)\n.ends MCP1700-3302",
     "pins": [
       "3",
       "1",
@@ -61,12 +61,14 @@
     ],
     "params": {
       "vout": 3.3,
-      "dropout": 0.2
+      "dropout": 0.712
     },
     "limits": [
-      "出力電圧、ドロップアウト (入力が低いと出力が下がる)、出力抵抗、負荷電流が入力電流になることを再現するマクロモデルです。",
-      "扱わないもの: リップル除去、負荷や入力が急に変わったときの応答、静止電流、過電流保護、熱による制限。",
-      "モデルには内部の応答がないので、入力・出力のコンデンサを付けたときの安定性 (発振しないか) は確かめられません。データシートの推奨回路に従ってください。"
+      "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS (VIN = 4.3 V、ILOAD = 100 µA)。データシートとの比べは docs/models/regulators.md。",
+      "再現しているもの: 出力 3.3 V、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、グラウンド電流 0.0016 mA (入力が数 V 以上で)、電流制限 (入出力の差で変わる)、リップル除去 44 dB (100 Hz。どの周波数でも同じとした)、出力雑音 3000 nV/√Hz (平ら)。",
+      "データシートの表に無い値: ライン・レギュレーションは表の typ「±0.75 %/V」をそのまま使った (表の値。代表特性の図は見ていない)。",
+      "扱わないもの: 出力電圧の誤差 (出力はちょうど公称値)、温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む)。",
+      "最終の確認は、メーカーの公式モデルで行ってください。"
     ]
   },
   "ratings": {

@@ -888,7 +888,8 @@ fn regulator_78xx_sample_shows_dropout_and_heat() {
     assert!(issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Caution), "{issues:?}");
     assert!(!issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
     let (low, _) = run("100", "6");
-    assert!((3.8..4.2).contains(&low), "dropout 2 V: input - 2 V, got {low}");
+    // the 7805's dropout is 2 V at 1 A (its data sheet's table) and about 1.6 V at this 50 mA (its figure 14)
+    assert!((4.25..4.5).contains(&low), "dropout about 1.6 V: got {low}");
 }
 
 /// The variable supply sample (lesson 23): the dial R2 sets the output, until the smoothed DC (minus 2 V) is out of reach.
@@ -911,9 +912,10 @@ fn variable_supply_sample_follows_the_dial_until_headroom_runs_out() {
     assert!((7.3..7.9).contains(&((mid.max + mid.min) / 2.0)) && mid.pp < 0.05, "{mid:?}");
     let high = run("2k", "100");
     assert!((11.4..12.2).contains(&((high.max + high.min) / 2.0)) && high.pp < 0.05, "{high:?}");
-    // 3k asks for 17 V but the smoothed DC is only about 15 V: the output follows the ripple
+    // 3k asks for 17 V but the smoothed DC is only about 15 V: the output follows the ripple (about 1.6 V below it at this
+    // light load: the LM317's dropout is 1.6 V + 0.4 ohm x the current)
     let over = run("3k", "100");
-    assert!(over.max < 14.0 && over.pp > 0.3, "{over:?}");
+    assert!(over.max < 14.5 && over.pp > 0.3, "{over:?}");
     let low = run("100", "100");
     assert!((1.7..2.1).contains(&((low.max + low.min) / 2.0)), "{low:?}");
 }

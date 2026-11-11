@@ -132,9 +132,9 @@ fn the_adjustable_regulator_follows_the_divider_formula() {
     // 1.25 * (1 + 1.5k/120) = 16.9 V from 24 V
     let r = run(24.0, 120.0, 1500.0, 1e3);
     assert!((v(&r, "out") - 16.9).abs() < 0.5, "{}", v(&r, "out"));
-    // too little input: the output follows about 2 V below it
+    // too little input: the output follows the dropout below it (1.6 V + 0.4 ohm x I: about 1.6 V at this light load)
     let r = run(4.0, 240.0, 720.0, 100.0);
-    assert!(v(&r, "out") < 2.3 && v(&r, "out") > 1.5, "{}", v(&r, "out"));
+    assert!(v(&r, "out") < 2.6 && v(&r, "out") > 2.2, "{}", v(&r, "out"));
 }
 
 #[test]
@@ -150,7 +150,8 @@ fn the_fixed_regulators_hold_their_voltage_and_drop_out() {
             dc_op(&c).unwrap()
         };
         assert!((v(&run(vin), "out") - vout).abs() < 0.05, "{name}: {}", v(&run(vin), "out"));
-        assert!(v(&run(vout + 0.05), "out") < vout - 0.05, "{name} drops out when the input is too low");
+        // (below the output: at this 10 mA the MCP1700's dropout is only about 7 mV)
+        assert!(v(&run(vout - 0.1), "out") < vout - 0.05, "{name} drops out when the input is too low");
     }
 }
 

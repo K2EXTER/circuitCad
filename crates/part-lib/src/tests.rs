@@ -204,7 +204,7 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
 ")).unwrap();
     };
     let old = legacy_models();
-    assert_eq!(old.len(), 6, "the six op amps rebuilt in 2026-11");
+    assert_eq!(old.len(), 15, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11");
     for (name, shipped) in &old {
         assert!(!shipped.texts.is_empty(), "{name}");
         let current: PartDef = example(name);

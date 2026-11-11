@@ -1,7 +1,7 @@
 {
   "name": "LM317",
   "category": "レギュレータ",
-  "description": "LM317 可変三端子レギュレータ 1.25〜37V 1.5A (TO-220, ピン1=ADJ 2=OUT 3=IN)。出力 = 1.25V × (1 + R2/R1) + 50µA × R2 (R1: OUT-ADJ間、R2: ADJ-GND間)。ドロップアウト約2V。簡易マクロモデル(安定度・過電流保護は無し、数値は概算)",
+  "description": "LM317 可変三端子レギュレータ 1.25〜37V 1.5A (TO-220, ピン1=ADJ 2=OUT 3=IN)。出力 = 1.25V × (1 + R2/R1) + 50µA × R2 (R1: OUT-ADJ間、R2: ADJ-GND間)。ドロップアウト約 2 V (1 A)。データシートの typ から作った等価モデル (ライン・ロード・レギュレーション、ADJ の電流、電流制限、リップル除去、雑音)",
   "prefix": "U",
   "footprint_name": "TO-220-3",
   "pins": [
@@ -31,7 +31,7 @@
   "sim": {
     "kind": "subckt",
     "name": "LM317",
-    "text": ".subckt LM317 in adj out\nVdo in ind DC 2\nE1 c0 adj ind adj 1\nVr vr adj DC 1.25\nEx xh adj c0 vr 1000\nD1 xh yh DREG\nRy yh adj 1k\nEy y adj yh adj 0.001\nEc c adj c0 y 1\nE2 o adj c adj 1\nRo o out 0.05\nG1 in adj o out 20.0\nIadj in adj DC 50u\n.model DREG D(IS=1e-12 N=1)\n.ends LM317",
+    "text": ".subckt LM317 in adj out\n* line regulation through a slow path (the data sheet's DC figure) and the ripple from the input (flat, the ripple rejection)\nElf lfa adj in adj 1\nRlf lfa lf 1.59Meg\nClf lf adj 100n\n* output noise (taken as flat over the data sheet's band): a 1 k resistor's noise, scaled\nRnz nz adj 1k\nBtgt t0 adj V=1.25+5.47073e-05*(V(lf,adj)-6.25)+7.02927e-05*(V(in,adj)-6.25)\nEn tgt t0 nz adj 92.1526\n* the ceiling the input leaves (the dropout)\nBdo ind adj V=V(in,adj)-1.6-0.399161*I(Vs)\n* the target, no higher than the dropout's ceiling\nEx1 xh1 adj tgt ind 1000\nD1 xh1 yh1 DREG\nRy1 yh1 adj 1k\nEy1 y1 adj yh1 adj 0.001\nEc1 c1 adj tgt y1 1\n* the current limit: the current the target asks for (amps as volts), no more than the limit\nBu u adj V=(V(c1,adj)-V(out,adj))/0.000838926\nBlim cl adj V=limit(2.2+-0.072*(V(in,adj)-V(out,adj)-15),0.4,2.2)\nEx2 xh2 adj u cl 1000\nD2 xh2 yh2 DREG\nRy2 yh2 adj 1k\nEy2 y2 adj yh2 adj 0.001\nEc2 uc adj u y2 1\nBc2 c2 adj V=V(out,adj)+0.000838926*V(uc,adj)\n* output through the load regulation's resistance; the output current comes from the input (both ways, as the earlier\n* bundled models did: a dead or reversed input then leaves the output near 0 V)\nEo o adj c2 adj 1\nVs o os DC 0\nRo os out 0.000838926\nBin in adj I=I(Vs)\n* adjustment pin current (out of ADJ)\nIadj in adj DC 5e-05\n.model DREG D(IS=1e-12 N=1)\n.ends LM317",
     "pins": [
       "3",
       "1",
@@ -39,12 +39,14 @@
     ],
     "params": {
       "vref": 1.25,
-      "dropout": 2
+      "dropout": 2.0
     },
     "limits": [
-      "出力電圧、ドロップアウト (入力が低いと出力が下がる)、出力抵抗、負荷電流が入力電流になることを再現するマクロモデルです。",
-      "扱わないもの: リップル除去、負荷や入力が急に変わったときの応答、静止電流、過電流保護、熱による制限。",
-      "モデルには内部の応答がないので、入力・出力のコンデンサを付けたときの安定性 (発振しないか) は確かめられません。データシートの推奨回路に従ってください。"
+      "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節 (新しいチップの値がある行はそれ)。データシートとの比べは docs/models/regulators.md。",
+      "再現しているもの: 基準 1.25 V (OUT − ADJ)、ADJ の電流 50 µA、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、電流制限 (入出力の差で変わる)、リップル除去 65 dB (120 Hz、出力 10 V の設定で。どの周波数でも同じとした)、出力雑音 375.188 nV/√Hz (平ら)。",
+      "データシートの表に無い値: ドロップアウトは表に無いので、図 6-18 (25 °C) を読んで 1.6 V + 0.4 Ω × 電流 とした (20 mA で約 1.6 V、1 A で約 2.0 V)。電流制限は表の 2.2 A (差 15 V 以下) と 0.4 A (差 40 V) を直線につないだ。",
+      "扱わないもの: 出力電圧の誤差 (出力はちょうど公称値)、温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む)、最小負荷電流 (3.5 mA)。",
+      "最終の確認は、メーカーの公式モデルで行ってください。"
     ]
   },
   "ratings": {

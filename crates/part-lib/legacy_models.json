@@ -54,5 +54,78 @@
   "descriptions": [
    "レールtoレール入出力デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化。GBW約1MHz、単一電源1.8V〜6V。出力は電源の25mV内側まで。簡易マクロモデル(概算)"
   ]
+ },
+ "AMS1117-3.3_SOT-223": {
+  "texts": [
+   ".subckt AMS1117-3.3 in gnd out\nVdo in ind DC 1.1\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 3.3\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends AMS1117-3.3"
+  ],
+  "descriptions": [
+   "AMS1117-3.3 LDO 3.3V 1A (SOT-223, ピン1=GND 2=OUT 3=IN、タブはOUT)。出力電圧・ドロップアウト・負荷電流が入力電流になることを再現する簡易マクロモデル(安定度・静止電流・過電流保護は無し、数値は概算)"
+  ]
+ },
+ "AMS1117-5.0_SOT-223": {
+  "texts": [
+   ".subckt AMS1117-5.0 in gnd out\nVdo in ind DC 1.1\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends AMS1117-5.0"
+  ],
+  "descriptions": [
+   "AMS1117-5.0 LDO 5V 1A (SOT-223, ピン1=GND 2=OUT 3=IN、タブはOUT)。出力電圧・ドロップアウト・負荷電流が入力電流になることを再現する簡易マクロモデル(安定度・静止電流・過電流保護は無し、数値は概算)"
+  ]
+ },
+ "LM7805_TO-220": {
+  "texts": [
+   ".subckt LM7805 in gnd out\nVdo in ind DC 2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends LM7805"
+  ],
+  "descriptions": [
+   "LM7805 三端子レギュレータ 5V 1A (TO-220, ピン1=IN 2=GND 3=OUT)。出力電圧・ドロップアウト・負荷電流が入力電流になることを再現する簡易マクロモデル(安定度・静止電流・過電流保護は無し、数値は概算)"
+  ]
+ },
+ "LM7812_TO-220": {
+  "texts": [
+   ".subckt LM7812 in gnd out\nVdo in ind DC 2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 12\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends LM7812"
+  ],
+  "descriptions": [
+   "LM7812 三端子レギュレータ 12V 1A (TO-220, ピン1=IN 2=GND 3=OUT)。出力電圧・ドロップアウト・負荷電流が入力電流になることを再現する簡易マクロモデル(安定度・静止電流・過電流保護は無し、数値は概算)"
+  ]
+ },
+ "L78L05_TO-92": {
+  "texts": [
+   ".subckt L78L05 in gnd out\nVdo in ind DC 1.7\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.2\nG1 in gnd o out 5.0\n.model DREG D(IS=1e-12 N=1)\n.ends L78L05"
+  ],
+  "descriptions": [
+   "L78L05 三端子レギュレータ 5V 100mA (TO-92, ピン1=OUT 2=GND 3=IN)。出力電圧・ドロップアウト・負荷電流が入力電流になることを再現する簡易マクロモデル(安定度・静止電流・過電流保護は無し、数値は概算)"
+  ]
+ },
+ "LM7809_TO-220": {
+  "texts": [
+   ".subckt LM7809 in gnd out\nVdo in ind DC 2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 9\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends LM7809"
+  ],
+  "descriptions": [
+   "LM7809 固定出力 9V 3端子レギュレータ 1.5A (TO-220, ピン1=IN 2=GND 3=OUT)。簡易マクロモデル(静止電流・過電流保護は無し、数値は概算)。ドロップアウト約2V"
+  ]
+ },
+ "LM317_TO-220": {
+  "texts": [
+   ".subckt LM317 in adj out\nVdo in ind DC 2\nE1 c0 adj ind adj 1\nVr vr adj DC 1.25\nEx xh adj c0 vr 1000\nD1 xh yh DREG\nRy yh adj 1k\nEy y adj yh adj 0.001\nEc c adj c0 y 1\nE2 o adj c adj 1\nRo o out 0.05\nG1 in adj o out 20.0\nIadj in adj DC 50u\n.model DREG D(IS=1e-12 N=1)\n.ends LM317"
+  ],
+  "descriptions": [
+   "LM317 可変三端子レギュレータ 1.25〜37V 1.5A (TO-220, ピン1=ADJ 2=OUT 3=IN)。出力 = 1.25V × (1 + R2/R1) + 50µA × R2 (R1: OUT-ADJ間、R2: ADJ-GND間)。ドロップアウト約2V。簡易マクロモデル(安定度・過電流保護は無し、数値は概算)"
+  ]
+ },
+ "MCP1700-3302_SOT-23": {
+  "texts": [
+   ".subckt MCP1700-3302 in gnd out\nVdo in ind DC 0.2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 3.3\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.3\nG1 in gnd o out 3.0\n.model DREG D(IS=1e-12 N=1)\n.ends MCP1700-3302"
+  ],
+  "descriptions": [
+   "MCP1700-3302 低消費電流LDO 3.3V 250mA (SOT-23, ピン1=GND 2=VOUT 3=VIN)。ドロップアウト約0.2V。簡易マクロモデル(静止電流・過電流保護は無し、数値は概算)"
+  ]
+ },
+ "TL431_SOT-23": {
+  "texts": [
+   ".subckt TL431 cat ref an\n* reference input current about 2 uA\nRref ref an 1.25Meg\n* the cathode current rises steeply once REF is above 2.495 V (200 A/V; a smooth knee 0.3 mV wide, so that Newton's iteration always has a slope to follow; and the cathode is above ~1.2 V)\nBk cat an I=0.06*(0.5*(((V(ref,an)-2.495)/0.0003)+abs(((V(ref,an)-2.495)/0.0003)))+ln(1+exp(-abs(((V(ref,an)-2.495)/0.0003)))))*step(V(cat,an)-1.2,0.2)\nRleak cat an 10Meg\n.ends TL431",
+   ".subckt TL431 cat ref an\n* reference input current about 2 uA\nRref ref an 1.25Meg\n* the cathode current rises steeply once REF is above 2.495 V (and the cathode is above ~1.2 V)\nBk cat an I=limit(200*(V(ref,an)-2.495),0,0.1)*step(V(cat,an)-1.2,0.2)\nRleak cat an 10Meg\n.ends TL431"
+  ],
+  "descriptions": [
+   "TL431 可変シャント・レギュレータ(基準電圧 2.495V、SOT-23, ピン1=CATHODE 2=REF 3=ANODE)。REF が 2.495V になるようカソード電流が流れる。外付け抵抗の分圧で 2.5〜36V に設定。簡易モデル(数値は概算)。ピン配置は必ずデータシートで確認"
+  ]
  }
 }

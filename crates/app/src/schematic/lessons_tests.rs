@@ -979,7 +979,8 @@ fn the_ldo_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     assert_eq!(progress(&e), 1);
     let (a, m) = outs(&e);
     assert!((3.25..3.35).contains(&a) && (3.2..3.35).contains(&m), "5 V: {a} {m}");
-    assert!(issues(&e).is_empty(), "inside the ratings at 5 V: {:?}", issues(&e));
+    // the MCP1700 in its SOT-23 gives off (5 - 3.3) V x 0.1 A = 0.17 W, near the package's 0.25 W: a caution (the step says so)
+    assert_eq!(issues(&e), vec!["U2 Caution".to_string()], "at 5 V only the MCP1700's heat");
     set_value(&mut e, "V1", "4");
     e.run_dc();
     e.update_lesson();
@@ -991,7 +992,8 @@ fn the_ldo_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     e.update_lesson();
     assert_eq!(progress(&e), 3);
     let (a, m) = outs(&e);
-    assert!((2.1..2.3).contains(&a) && (3.0..3.15).contains(&m), "3.3 V: {a} {m}");
+    // the MCP1700's dropout at 100 mA is about 0.07 V (0.178 V at 250 mA in its data sheet)
+    assert!((2.1..2.3).contains(&a) && (3.18..3.28).contains(&m), "3.3 V: {a} {m}");
     set_value(&mut e, "V1", "12");
     e.run_dc();
     e.update_lesson();
@@ -2245,7 +2247,8 @@ fn the_regulator_basics_lesson_ticks_and_its_numbers_hold() {
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 2, "{}", e.status);
-    assert!((v(&e, "VOUT") - 4.0).abs() < 0.05, "input - 2 V");
+    // the dropout at 100 mA is about 1.64 V (2 V is the data sheet's figure at 1 A)
+    assert!((v(&e, "VOUT") - 4.36).abs() < 0.05, "input - about 1.6 V: {}", v(&e, "VOUT"));
     e.analyze_ac();
     e.update_lesson();
     assert_eq!(progress(&e), 3, "{}", e.status);

@@ -174,17 +174,21 @@ fn regulator(name: &str, in_pin: &str, gnd_pin: &str, out_pin: &str, vin: f64, r
 
 #[test]
 fn the_5v_regulators_regulate_and_drop_out() {
-    for (name, i, g, o, dropout) in [("LM7805", "1", "2", "3", 2.0), ("L78L05", "3", "2", "1", 1.7)] {
+    // the dropout at this ~40 mA load: LM7805 1.6 V + 0.4 ohm x I (its data sheet: 2 V at 1 A, figure 14 for lighter loads), 78L05 1.7 V
+    for (name, i, g, o, dropout) in [("LM7805", "1", "2", "3", 1.62), ("L78L05", "3", "2", "1", 1.7)] {
         let at = |vin: f64, rl: f64| v(&regulator(name, i, g, o, vin, rl), "out");
         // regulated over a wide input range
         for vin in [9.0, 12.0, 20.0] {
-            assert!((at(vin, 100.0) - 5.0).abs() < 0.01, "{name} at {vin} V: {}", at(vin, 100.0));
+            // (the 78L05's load regulation is 8 mV for 1 to 40 mA: about 10 mV low at this 50 mA)
+            assert!((at(vin, 100.0) - 5.0).abs() < 0.02, "{name} at {vin} V: {}", at(vin, 100.0));
         }
         // dropout: output follows the input minus the dropout voltage
         let low = at(5.0 + dropout - 1.0, 100.0);
         assert!((low - 4.0).abs() < 0.1, "{name} in dropout: {low}");
-        // load regulation: a little droop at 10x the current
-        assert!(at(12.0, 100.0) - at(12.0, 10.0) < 0.1, "{name}");
+        // load regulation: a little droop at 10x the current (within each part's rating: the 78L05 is a 100 mA part and limits
+        // at about 130 mA)
+        let (light, heavy) = if name == "L78L05" { (1000.0, 100.0) } else { (100.0, 10.0) };
+        assert!(at(12.0, light) - at(12.0, heavy) < 0.1, "{name}");
     }
 }
 
@@ -193,7 +197,8 @@ fn the_regulator_draws_its_load_current_from_the_input() {
     let r = regulator("LM7805", "1", "2", "3", 12.0, 50.0);
     let iin = -r.element("V1").unwrap().current;
     let iload = v(&r, "out") / 50.0;
-    assert!((iin - iload).abs() / iload < 0.01, "{iin} vs {iload}");
+    // plus its ground current (3.2 mA, the data sheet's typ)
+    assert!((iin - iload - 3.2e-3).abs() / iload < 0.01, "{iin} vs {iload} + 3.2 mA");
     // the pass element dissipates (Vin - Vout) * I: V1 delivers 12 V * I, the load takes 5 V * I
     let total: f64 = r.elements.iter().filter(|e| e.name.starts_with("U1.")).map(|e| e.power).sum();
     let _ = total;

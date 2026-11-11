@@ -545,7 +545,7 @@ const LEGACY: &[(&str, &str)] = &[(
 )];
 
 /// Bundled parts whose model was rebuilt, with every earlier `sim.text` and `description` they were shipped with (from the git
-/// history): the op amps rebuilt on their data sheets in 2026-11 (docs/model-policy.md).
+/// history): the op amps, the linear regulators and the TL431 rebuilt on their data sheets in 2026-11 (docs/model-policy.md).
 const LEGACY_MODELS: &str = include_str!("../legacy_models.json");
 
 #[derive(Deserialize)]
