@@ -45,7 +45,7 @@
 
 | # | 内容 | 規模 | 理由 |
 |---|---|---|---|
-| M9 | 出どころの記録が無い同梱のモデル 33 個 (ダイオード・トランジスタ・MOSFET の SPICE パラメータ、PC817・BPW34。`model_checks.rs` の `UNRECORDED`) を、データシートから作り直して測るテストと比べの表を付ける。よく使う 1N4148・1N4007・2N3904・2N7000・AO3400A から | 中 | 画面に「記録なし」と出ている (2026-11-12 の洗い出し)。結果をどこまで信じてよいかが分からない |
+| M9 | 出どころの記録が無い同梱のモデル 30 個 (ダイオード・トランジスタ・MOSFET の SPICE パラメータ、PC817・BPW34。`model_checks.rs` の `UNRECORDED`) を、データシートから作り直して測るテストと比べの表を付ける。次は 2N3904・2N7000・AO3400A (データシートは取ってある)。ダイオードは `tools/gen_diode_models.py` に足すだけ | 中 | 2026-11-12 に 1N4148・1N4001・1N4007 は済んだ。残りは画面に「記録なし」と出ている |
 | M2 | 残り: バイアス電流・電源電流など、オフセットと出力電圧のほかの項目のばらつき(データシートの max を `* spread` に) | 小 | オフセット・基準電圧・出力電圧は同梱の 17 部品すべてに入った(2026-11-12)。ほかの項目は、使って要る順に |
 | M3 | 部品作成フォームで、オペアンプ・レギュレータのひな形にデータシートの数字を入れてモデルを作り、同じ測り方で比べる(`tools/gen_opamp_models.py` `tools/gen_regulator_models.py` のひな形を Rust に移す) | 中〜大 | 利用者が自分の部品を、同じ品質で作れる |
 | M8 | モデルに温度による変化を入れる(7805 の −0.3 mV/℃、オペアンプのオフセットのドリフトなど。式の `temp` で書ける) | 中 | 熱の解析を実物に近づける |
@@ -129,6 +129,17 @@ KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の�
 | J22 | シミュレーションの残り: S パラメータ・IBIS、銅の面積から熱抵抗(基板の銅の面積から θ を出す案。Q1 のドレインの銅が約 11 mm² のとき 110 K/W 近く、1 in² で 42 K/W)、平均化したスイッチング電源のモデル(モーターは 2026-11-10 に `DC_MOTOR` を追加) | 伝送線路は無損失の LC のはしごだけ |
 
 出典は `docs/competitor-comparison.md` の出典の節と、次のページ: KiCad 9.0 のリリース https://www.kicad.org/blog/2025/02/Version-9.0.0-Released/ ・KiCad 10.0 のリリース https://www.kicad.org/blog/2026/03/Version-10.0.0-Released/ ・EasyEDA の Standard と Pro の比較 https://prodocs.easyeda.com/en/introduction/std-vs-pro/ ・EasyEDA の面付け https://prodocs.easyeda.com/en/pcb/tools-panelize-advanced/ ・EasyEDA の部品表(価格と在庫) https://prodocs.easyeda.com/en/pcb/export-bill-of-materials-bom/ ・Altium の Draftsman https://www.altium.com/documentation/altium-designer/streamlining-board-design-documentation-with-draftsman?version=21 ・Fusion Electronics https://www.autodesk.com/products/fusion-360/blog/18-things-need-to-know-fusion-360-electronics/ ・Quadcept の製品 https://www.quadcept.com/ja/product/cad/ ・Quadcept の Gerber の重ね比べ https://www.quadcept.com/ja/manual/pcb/post-752
+
+## K. CERN の KiCad 部品ライブラリ (2026-11-12)
+
+CERN が社内の KiCad 部品ライブラリ (1万7千点以上、記号とフットプリント) を 2026-05-07 に CERN-OHL-P-2.0 (寛容型) で公開した (https://gitlab.com/ohwr/cern-kicad-libs 、FabScene の記事で知った)。Altium の元のライブラリを `kicad-cli` で毎晩変換したもの。KiCad の「データベースライブラリ」(SQLite と ODBC)。**3D モデル・データシートは入っていない** (メーカーの権利のため)。SPICE モデルの記述も無い。同梱はせず (重い・出典の表記が要る)、利用者が取ってきたものを読む形にする。
+
+| # | 内容 | 規模 | 理由 |
+|---|---|---|---|
+| K0 | まず調べる: リポジトリを取ってきて、DB の表の項目 (型番・メーカー・値・記号とフットプリントの参照) と、今の KiCad の読み込み (`part-lib/kicad*.rs`) で記号・フットプリントが読めるかを確かめる | 小 | K1〜K3 の形を決めるため。README には SQLite の DB とあるだけ |
+| K1 | ランドパターンが「概算」の同梱部品 6 個 (74HC244D・74HC245D・74HC373D・74HC574D・ADG2712・LP5907-4.5、`land_unverified`) を、CERN のフットプリントと比べて確かめる | 小 | 実際の設計で使われてきた形と比べられる。発注前のチェックの警告が消せる |
+| K2 | CERN のライブラリ (利用者が取ってきたフォルダ) を開いて、部品を探して取り込む (メーカーのモデルの zip の索引 `vendorzip.rs` と同じ扱い。シミュレーションのモデルは無いので、部品作成フォームで足す) | 中 | 回路図・基板の部品が一気に増える。KiCad の取り込みの上に作れる |
+| K3 | DB の型番・メーカーの列を、部品の MPN・メーカーの欄 (J12) と店の型番 (A2) につなぐ | 小〜中 | J12・A2 と相性がよい |
 
 ## 熱起電力(ゼーベック電圧)の点検の案(2026-10-30)
 

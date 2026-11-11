@@ -53,7 +53,7 @@
           "kind": "model",
           "element": "D",
           "name": "1N4148",
-          "text": ".model 1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n BV=100 IBV=100u)",
+          "text": ".model 1N4148 D(IS=4.092e-09 N=1.906 RS=0.3855 BV=100 IBV=0.0001 CJO=4e-12 VJ=0.7 M=0.5 TT=1.154e-08)",
           "pins": [
             "A",
             "K"

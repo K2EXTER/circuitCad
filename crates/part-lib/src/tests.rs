@@ -204,7 +204,7 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
 ")).unwrap();
     };
     let old = legacy_models();
-    assert_eq!(old.len(), 17, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11, and ADR4525 and LP5907-4.5 that gained their data sheet spread");
+    assert_eq!(old.len(), 20, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, and the diodes 1N4148, 1N4001, 1N4007 (M9)");
     for (name, shipped) in &old {
         assert!(!shipped.texts.is_empty(), "{name}");
         let current: PartDef = example(name);

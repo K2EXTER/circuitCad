@@ -1,4 +1,286 @@
 {
+  "1N4001": {
+    "fingerprint": "14a1566def9247fb",
+    "source": "onsemi 1N4001〜1N4007 データシート (1N4001/D Rev. 18, 2024-06)。25 °C",
+    "date": "2026-11-12",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.2 A)",
+        "datasheet": "— / 0.8240 / — V",
+        "target": "0.8240 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.8233 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.5 A)",
+        "datasheet": "— / 0.8710 / — V",
+        "target": "0.8710 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.8718 V",
+        "diff": "+0.0008 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.9160 / — V",
+        "target": "0.9160 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.9174 V",
+        "diff": "+0.0014 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (2 A)",
+        "datasheet": "— / 0.9830 / — V",
+        "target": "0.9830 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.9791 V",
+        "diff": "-0.0039 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (4 A)",
+        "datasheet": "— / 1.072 / — V",
+        "target": "1.072 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "1.073 V",
+        "diff": "+0.0010 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、1 A)",
+        "datasheet": "— / 0.9300 / 1.100 V",
+        "target": "0.9300 V",
+        "condition": "VF: IF = 1 A、TJ = 25 °C (表。図 1 の 0.916 V とは 1.5% 違う)",
+        "model": "0.9174 V",
+        "diff": "-0.0126 V",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (1 V)",
+        "datasheet": "— / 15.000 / — pF",
+        "target": "15.000 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "14.869 pF",
+        "diff": "-0.1310 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (4 V)",
+        "datasheet": "— / 9.100 / — pF",
+        "target": "9.100 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "8.901 pF",
+        "diff": "-0.1992 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (10 V)",
+        "datasheet": "— / 5.920 / — pF",
+        "target": "5.920 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "6.262 pF",
+        "diff": "+0.3422 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (30 V)",
+        "datasheet": "— / 3.760 / — pF",
+        "target": "3.760 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "4.090 pF",
+        "diff": "+0.3304 pF",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (50 V)",
+        "datasheet": "— / 0.0500 / 10.000 µA",
+        "target": "0.0500 µA",
+        "condition": "IR: 定格の直流電圧、TJ = 25 °C",
+        "model": "0.0009 µA",
+        "diff": "-0.0491 µA",
+        "tested": false
+      }
+    ]
+  },
+  "1N4007": {
+    "fingerprint": "e6d72f900916a4f4",
+    "source": "onsemi 1N4001〜1N4007 データシート (1N4001/D Rev. 18, 2024-06)。25 °C",
+    "date": "2026-11-12",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.2 A)",
+        "datasheet": "— / 0.8240 / — V",
+        "target": "0.8240 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.8233 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.5 A)",
+        "datasheet": "— / 0.8710 / — V",
+        "target": "0.8710 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.8718 V",
+        "diff": "+0.0008 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.9160 / — V",
+        "target": "0.9160 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.9174 V",
+        "diff": "+0.0014 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (2 A)",
+        "datasheet": "— / 0.9830 / — V",
+        "target": "0.9830 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.9791 V",
+        "diff": "-0.0039 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (4 A)",
+        "datasheet": "— / 1.072 / — V",
+        "target": "1.072 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "1.073 V",
+        "diff": "+0.0010 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、1 A)",
+        "datasheet": "— / 0.9300 / 1.100 V",
+        "target": "0.9300 V",
+        "condition": "VF: IF = 1 A、TJ = 25 °C (表。図 1 の 0.916 V とは 1.5% 違う)",
+        "model": "0.9174 V",
+        "diff": "-0.0126 V",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (1 V)",
+        "datasheet": "— / 15.000 / — pF",
+        "target": "15.000 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "14.869 pF",
+        "diff": "-0.1310 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (4 V)",
+        "datasheet": "— / 9.100 / — pF",
+        "target": "9.100 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "8.901 pF",
+        "diff": "-0.1992 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (10 V)",
+        "datasheet": "— / 5.920 / — pF",
+        "target": "5.920 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "6.262 pF",
+        "diff": "+0.3422 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (30 V)",
+        "datasheet": "— / 3.760 / — pF",
+        "target": "3.760 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "4.090 pF",
+        "diff": "+0.3304 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (150 V)",
+        "datasheet": "— / 2.350 / — pF",
+        "target": "2.350 pF",
+        "condition": "図 3 (容量の代表特性、グラフから読んだ)",
+        "model": "2.186 pF",
+        "diff": "-0.1641 pF",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (1000 V)",
+        "datasheet": "— / 0.0500 / 10.000 µA",
+        "target": "0.0500 µA",
+        "condition": "IR: 定格の直流電圧、TJ = 25 °C",
+        "model": "0.0019 µA",
+        "diff": "-0.0481 µA",
+        "tested": false
+      }
+    ]
+  },
+  "1N4148": {
+    "fingerprint": "f1cdcdf62bf6b982",
+    "source": "Vishay 1N4148 データシート (Document Number 81857, Rev. 1.6, 2024-11)。25 °C",
+    "date": "2026-11-12",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.1 mA)",
+        "datasheet": "— / 0.4990 / — V",
+        "target": "0.4990 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.4981 V",
+        "diff": "-0.0009 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 mA)",
+        "datasheet": "— / 0.6100 / — V",
+        "target": "0.6100 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.6120 V",
+        "diff": "+0.0020 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 mA)",
+        "datasheet": "— / 0.7300 / 1.000 V",
+        "target": "0.7300 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)。表の VF は max 1 V",
+        "model": "0.7290 V",
+        "diff": "-0.0010 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (100 mA)",
+        "datasheet": "— / 0.8770 / — V",
+        "target": "0.8770 V",
+        "condition": "図 1 の 25 °C (グラフから読んだ)",
+        "model": "0.8772 V",
+        "diff": "+0.0002 V",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (0 V)",
+        "datasheet": "— / — / 4.000 pF",
+        "target": "max 4.000 pF",
+        "condition": "CD: VR = 0 V、f = 1 MHz (max だけ)",
+        "model": "4.034 pF",
+        "diff": "+0.0342 pF",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (20 V)",
+        "datasheet": "— / — / 25.000 nA",
+        "target": "max 25.000 nA",
+        "condition": "IR: VR = 20 V (max だけ。図 3 の typ は約 15 nA)",
+        "model": "4.112 nA",
+        "diff": "-20.888 nA",
+        "tested": false
+      }
+    ]
+  },
   "ADR4525": {
     "fingerprint": "b54a8f354ce405e3",
     "source": "ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0、表 4 (ADR4525)。VIN = 3〜15 V、IL = 0 mA、25 °C",

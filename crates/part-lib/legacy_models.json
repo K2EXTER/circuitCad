@@ -154,5 +154,29 @@
    ".subckt LP5907-4.5 in gnd en out\n* enable: 1 Meg pull-down; on half way between the low and high thresholds; soft start to 95 % in the turn-on time\nRen en gnd 1e+06\nBon on gnd V=step(V(en,gnd)-0.8,0.05)\nRss on ss 2.66667\nCss ss gnd 10u\n* line regulation (slow, as the data sheet's DC figure) and the ripple from the input (a floor and a high-pass)\nRlf in lf 1.59Meg\nClf lf gnd 100n\nRhp_c in hp1 1\nChp hp1 hp 1e-09\nRhp hp gnd 10610.3\n* output noise (10 Hz to 100 kHz, taken as flat): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\nBtgt t0 gnd V=V(ss,gnd)*4.5*(1+0.0002*(V(lf,gnd)-5.5))+3.16228e-05*(V(in,gnd)-5.5)+0.001*V(hp,gnd)\nEn tgt t0 nz gnd 7.76749\n* pass device: the error amplifier's current (the load regulation), no more than the input allows through the pass\n* device's resistance (dropout) and the current limit; only from in to out\nBpass in out I=max(min(min(22.2222*(V(tgt,gnd)-V(out,gnd)),(V(in,gnd)-V(out,gnd))/0.5),0.5),0)\n* quiescent current: grows with the load; a little when disabled\nBq in gnd I=V(ss,gnd)*(1.2e-05+0.000952*max(min(min(22.2222*(V(tgt,gnd)-V(out,gnd)),(V(in,gnd)-V(out,gnd))/0.5),0.5),0))+2e-07\n* output discharge when disabled\nBdis out gnd I=(1-V(ss,gnd))*V(out,gnd)/230\n.ends LP5907-4.5"
   ],
   "descriptions": []
+ },
+ "1N4001_DO-41": {
+  "texts": [
+   ".model 1N4001 D(IS=14.1n N=1.984 RS=0.0339 BV=50 IBV=5u)"
+  ],
+  "descriptions": [
+   "1N4001 汎用整流ダイオード 50V 1A (DO-41)。簡易モデル(パラメータは概算、帯の側がカソード K)"
+  ]
+ },
+ "1N4007_DO-41": {
+  "texts": [
+   ".model 1N4007 D(IS=76.9p N=1.45 RS=0.042 BV=1000 IBV=5u)"
+  ],
+  "descriptions": [
+   "1N4007 整流ダイオード 1000V 1A (DO-41)。簡易モデル(パラメータは概算)、帯の側がカソード K"
+  ]
+ },
+ "1N4148": {
+  "texts": [
+   ".model 1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n BV=100 IBV=100u)"
+  ],
+  "descriptions": [
+   "小信号スイッチングダイオード (DO-35)。SPICEの.modelカードを持つ例。パラメータは一般的な公開値なので、設計に使う前にデータシートで確認してください"
+  ]
  }
 }

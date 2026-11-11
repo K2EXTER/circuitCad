@@ -53,7 +53,7 @@
           "kind": "model",
           "element": "D",
           "name": "1N4007",
-          "text": ".model 1N4007 D(IS=76.9p N=1.45 RS=0.042 BV=1000 IBV=5u)",
+          "text": ".model 1N4007 D(IS=8.774e-10 N=1.641 RS=0.03226 BV=1200 IBV=1e-05 CJO=3.788e-11 VJ=0.1 M=0.39)",
           "pins": [
             "A",
             "K"

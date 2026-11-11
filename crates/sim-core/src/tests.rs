@@ -501,11 +501,11 @@ fn library_diode_model_is_used() {
     wire(&mut s, (0, 6), (16, 6));
     let c = from_schematic(&s).unwrap();
     let res = dc_op(&c).unwrap();
-    // IS=2.52n RS=0.568 N=1.752 from the part file
-    let (vj, i) = diode_oracle(5.0, 1000.0 + 0.568, 2.52e-9, 1.752 * VT);
+    // IS=4.092n RS=0.3855 N=1.906 from the part file (tools/gen_diode_models.py, 2026-11-12)
+    let (vj, i) = diode_oracle(5.0, 1000.0 + 0.3855, 4.092e-9, 1.906 * VT);
     let d1 = res.element("D1").unwrap();
     close(d1.current, i, 1e-8);
-    close(d1.voltage, vj + i * 0.568, 1e-5);
+    close(d1.voltage, vj + i * 0.3855, 1e-5);
     assert_power_balance(&res);
 }
 
