@@ -6,7 +6,7 @@
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 2.500 / — V",
+        "datasheet": "2.499 / 2.500 / 2.501 V",
         "target": "2.500 V",
         "condition": "VOUT。初期誤差 B グレード ±0.02% (500 µV)",
         "model": "2.500 V",
@@ -79,13 +79,13 @@
     ]
   },
   "AMS1117-3.3": {
-    "fingerprint": "9b244947cdd1a15e",
+    "fingerprint": "4923aa1d8c557cf7",
     "source": "Advanced Monolithic Systems AMS1117 データシートの ELECTRICAL CHARACTERISTICS。25 °C",
     "date": "2026-11-11",
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 3.300 / — V",
+        "datasheet": "3.251 / 3.300 / 3.349 V",
         "target": "3.300 V",
         "condition": "VO (25 °C)",
         "model": "3.300 V",
@@ -158,13 +158,13 @@
     ]
   },
   "AMS1117-5.0": {
-    "fingerprint": "b23ece47a6e885e3",
+    "fingerprint": "d87056717f540c63",
     "source": "Advanced Monolithic Systems AMS1117 データシートの ELECTRICAL CHARACTERISTICS。25 °C",
     "date": "2026-11-11",
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 5.000 / — V",
+        "datasheet": "4.925 / 5.000 / 5.075 V",
         "target": "5.000 V",
         "condition": "VO (25 °C)",
         "model": "5.000 V",
@@ -237,13 +237,13 @@
     ]
   },
   "L78L05": {
-    "fingerprint": "2c60b1369aaa3106",
+    "fingerprint": "10e65ae18a35ee67",
     "source": "TI UA78L データシート SLVS010X (2023-06 改訂) の 6.7 節 (UA78L05、新しいチップ)。VI = 10 V、IO = 40 mA",
     "date": "2026-11-11",
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 5.000 / — V",
+        "datasheet": "4.950 / 5.000 / 5.150 V",
         "target": "5.000 V",
         "condition": "VO (25 °C)",
         "model": "4.992 V",
@@ -598,13 +598,13 @@
     ]
   },
   "LM7805": {
-    "fingerprint": "9ec295e076b2e8ca",
+    "fingerprint": "b3e657fabf56fcee",
     "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
     "date": "2026-11-11",
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 5.000 / — V",
+        "datasheet": "4.800 / 5.000 / 5.200 V",
         "target": "5.000 V",
         "condition": "VO (25 °C)",
         "model": "4.999 V",
@@ -677,13 +677,13 @@
     ]
   },
   "LM7809": {
-    "fingerprint": "29090cec5874afcf",
+    "fingerprint": "72c9c54f3ca0fda0",
     "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
     "date": "2026-11-11",
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 9.000 / — V",
+        "datasheet": "8.650 / 9.000 / 9.350 V",
         "target": "9.000 V",
         "condition": "VO (25 °C)",
         "model": "8.999 V",
@@ -756,13 +756,13 @@
     ]
   },
   "LM7812": {
-    "fingerprint": "4d6c49cec4eb5456",
+    "fingerprint": "20afc1d3fba01e52",
     "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
     "date": "2026-11-11",
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 12.000 / — V",
+        "datasheet": "11.500 / 12.000 / 12.500 V",
         "target": "12.000 V",
         "condition": "VO (25 °C)",
         "model": "11.997 V",
@@ -959,13 +959,13 @@
     ]
   },
   "MCP1700-3302": {
-    "fingerprint": "cf98f1a0038d073d",
+    "fingerprint": "1b92995e3bf14f90",
     "source": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA",
     "date": "2026-11-11",
     "rows": [
       {
         "item": "出力電圧",
-        "datasheet": "— / 3.300 / — V",
+        "datasheet": "3.234 / 3.300 / 3.366 V",
         "target": "3.300 V",
         "condition": "VO (25 °C)",
         "model": "3.300 V",

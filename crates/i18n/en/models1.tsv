@@ -51,5 +51,7 @@ REF の入力電流	REF input current
 差: {}\n{}	Difference: {}\n{}
 {top} が一番効いています。データシートの max の小さい部品 (高精度品) を選ぶか、回路で打ち消す (調整する) と狭くなります	{top} matters most. A part with a smaller data sheet max (a precision grade), or cancelling it in the circuit (a trim), narrows the range
 {} の{} (データシートの min〜max)	{} {} (data sheet min to max)
-部品のモデルのばらつき (データシートの min / max)	Part-to-part spread of the models (data sheet min / max)
+データシートの min / max も入れる	Include the data sheets' min / max
 オペアンプのオフセット、レギュレータや基準電圧 IC の出力電圧のように、同じ型番でも 1 個ずつ違う値を、データシートの min〜max の範囲で動かします (モデルに書いてある部品だけ)。ランダムのばらつきでは範囲の中で均等に動かすので、typ の近くに多い実物より、少し広めに出ます。外すと、モデルの値 (typ) のままにします	Moves the figures that differ from one part to the next even for the same part number, such as an op amp's offset or the output voltage of a regulator or voltage reference, between the data sheet's min and max (only parts whose model lists them). The random spread moves them evenly over the range, so it comes out a little wider than real parts, which gather near typ. Unticked, the model's own value (typ) is kept
+設計値からのずれ: {} 〜 {}	From the design value: {} to {}
+設計値が 0 に近く、ずれのほうが大きいので、% ではなく差で表しています	The design value is near 0 and the spread is larger than it, so the difference is shown instead of a percentage

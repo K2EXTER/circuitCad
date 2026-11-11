@@ -88,7 +88,7 @@ fn adr_ldo_rows() -> Vec<Row> {
         Row {
             part: "ADR4525",
             item: "出力電圧",
-            ds: [None, Some(2.5), None],
+            ds: [Some(2.4995), Some(2.5), Some(2.5005)],
             unit: "V",
             at: "VOUT。初期誤差 B グレード ±0.02% (500 µV)",
             measure: Box::new(|| probe(answers(&run(&format!("{}dc probe=V(out)\n", adr(5.0, 0.0))), "dc")[0], "V(out)")),
@@ -405,25 +405,27 @@ struct Fixed {
     limit: (f64, f64, f64, &'static str),
     /// output noise: (f low, f high, load, typ uV rms, text)
     noise: (f64, f64, f64, f64, &'static str),
+    /// the output's min and max at 25 C (part to part)
+    vrange: (f64, f64),
 }
 
 fn fixed_parts() -> Vec<Fixed> {
     vec![
-        Fixed { part: "LM7805", pins: ("IN", "GND", "OUT"), vout: 5.0, vin0: 10.0, i0: 0.5, line: (7.5, 20.0, 1.0, 0.5, "7.5 V ≤ VIN ≤ 20 V、1.0 A"), load: (0.005, 1.0, 1.3, "5 mA ≤ IO ≤ 1.0 A"), iq_ma: 3.2, dropout: (1.0, 2.0), ripple: (13.0, 0.5, 120.0, 83.0), limit: (35.0, 0.0, 0.6, "短絡電流 (VIN = 35 V)"), noise: (10.0, 100e3, 0.5, 50.0, "10 µV/VO × 5 V、10 Hz〜100 kHz") },
-        Fixed { part: "LM7809", pins: ("IN", "GND", "OUT"), vout: 9.0, vin0: 15.0, i0: 0.5, line: (11.0, 26.0, 0.5, 6.2, "11 V ≤ VIN ≤ 26 V"), load: (0.005, 1.5, 1.5, "5 mA ≤ IO ≤ 1.5 A"), iq_ma: 3.4, dropout: (1.0, 2.0), ripple: (16.5, 0.5, 120.0, 61.0), limit: (35.0, 0.0, 0.2, "短絡電流 (VIN = 35 V)"), noise: (10.0, 100e3, 0.5, 90.0, "10 µV/VO × 9 V、10 Hz〜100 kHz") },
-        Fixed { part: "LM7812", pins: ("IN", "GND", "OUT"), vout: 12.0, vin0: 19.0, i0: 0.5, line: (14.5, 30.0, 0.5, 3.8, "14.5 V ≤ VIN ≤ 30 V"), load: (0.005, 1.5, 8.1, "5 mA ≤ IO ≤ 1.5 A"), iq_ma: 3.4, dropout: (1.0, 2.0), ripple: (20.0, 0.5, 120.0, 60.0), limit: (35.0, 0.0, 0.2, "短絡電流 (VIN = 35 V)"), noise: (10.0, 100e3, 0.5, 120.0, "10 µV/VO × 12 V、10 Hz〜100 kHz") },
-        Fixed { part: "L78L05", pins: ("IN", "GND", "OUT"), vout: 5.0, vin0: 10.0, i0: 0.04, line: (7.0, 20.0, 0.04, 32.0, "VI = 7〜20 V"), load: (0.001, 0.04, 8.0, "IO = 1〜40 mA"), iq_ma: 3.53, dropout: (0.04, 1.7), ripple: (13.0, 0.04, 120.0, 55.0), limit: (10.0, 0.0, 0.13, "電流制限 (表に無い。図 6-19 の 25 °C を読んだ)"), noise: (10.0, 100e3, 0.04, 125.0, "10 Hz〜100 kHz") },
-        Fixed { part: "AMS1117-3.3", pins: ("IN", "GND", "OUT"), vout: 3.3, vin0: 4.8, i0: 0.0, line: (4.8, 15.3, 0.0, 0.5, "1.5 V ≤ VIN − VOUT ≤ 12 V"), load: (0.0, 0.8, 3.0, "VIN = 4.75 V、0 ≤ IOUT ≤ 0.8 A"), iq_ma: 5.0, dropout: (0.8, 1.1), ripple: (6.3, 1.0, 120.0, 72.0), limit: (4.8, 3.25, 1.1, "電流制限 (VIN − VOUT = 1.5 V)"), noise: (10.0, 10e3, 0.0, 99.0, "0.003 % × 3.3 V、10 Hz〜10 kHz") },
-        Fixed { part: "AMS1117-5.0", pins: ("IN", "GND", "OUT"), vout: 5.0, vin0: 6.5, i0: 0.0, line: (6.5, 17.0, 0.0, 0.5, "1.5 V ≤ VIN − VOUT ≤ 12 V"), load: (0.0, 0.8, 5.0, "VIN = 6.5 V、0 ≤ IOUT ≤ 0.8 A"), iq_ma: 5.0, dropout: (0.8, 1.1), ripple: (6.5, 1.0, 120.0, 68.0), limit: (6.5, 4.95, 1.1, "電流制限 (VIN − VOUT = 1.5 V)"), noise: (10.0, 10e3, 0.0, 150.0, "0.003 % × 5 V、10 Hz〜10 kHz") },
-        Fixed { part: "MCP1700-3302", pins: ("VIN", "GND", "VOUT"), vout: 3.3, vin0: 4.3, i0: 100e-6, line: (4.3, 6.0, 100e-6, 0.0075 * 3.3 * 1.7 * 1e3, "(VR + 1) V ≤ VIN ≤ 6 V。表は ±0.75 %/V (mV に直した)"), load: (100e-6, 0.25, 33.0, "IL = 0.1〜250 mA、±1.0 % (mV に直した)"), iq_ma: 1.6e-3, dropout: (0.25, 0.178), ripple: (4.3, 0.05, 100.0, 44.0), limit: (4.3, 0.0, 0.408, "短絡電流 (VIN = VR + 1 V)"), noise: (999.0, 1001.0, 0.1, 3.0 * std::f64::consts::SQRT_2, "1 kHz の密度 3 µV/√Hz (IL = 100 mA) を 999〜1001 Hz の rms に直した") },
+        Fixed { part: "LM7805", pins: ("IN", "GND", "OUT"), vout: 5.0, vin0: 10.0, i0: 0.5, line: (7.5, 20.0, 1.0, 0.5, "7.5 V ≤ VIN ≤ 20 V、1.0 A"), load: (0.005, 1.0, 1.3, "5 mA ≤ IO ≤ 1.0 A"), iq_ma: 3.2, dropout: (1.0, 2.0), ripple: (13.0, 0.5, 120.0, 83.0), limit: (35.0, 0.0, 0.6, "短絡電流 (VIN = 35 V)"), noise: (10.0, 100e3, 0.5, 50.0, "10 µV/VO × 5 V、10 Hz〜100 kHz"), vrange: (4.8, 5.2) },
+        Fixed { part: "LM7809", pins: ("IN", "GND", "OUT"), vout: 9.0, vin0: 15.0, i0: 0.5, line: (11.0, 26.0, 0.5, 6.2, "11 V ≤ VIN ≤ 26 V"), load: (0.005, 1.5, 1.5, "5 mA ≤ IO ≤ 1.5 A"), iq_ma: 3.4, dropout: (1.0, 2.0), ripple: (16.5, 0.5, 120.0, 61.0), limit: (35.0, 0.0, 0.2, "短絡電流 (VIN = 35 V)"), noise: (10.0, 100e3, 0.5, 90.0, "10 µV/VO × 9 V、10 Hz〜100 kHz"), vrange: (8.65, 9.35) },
+        Fixed { part: "LM7812", pins: ("IN", "GND", "OUT"), vout: 12.0, vin0: 19.0, i0: 0.5, line: (14.5, 30.0, 0.5, 3.8, "14.5 V ≤ VIN ≤ 30 V"), load: (0.005, 1.5, 8.1, "5 mA ≤ IO ≤ 1.5 A"), iq_ma: 3.4, dropout: (1.0, 2.0), ripple: (20.0, 0.5, 120.0, 60.0), limit: (35.0, 0.0, 0.2, "短絡電流 (VIN = 35 V)"), noise: (10.0, 100e3, 0.5, 120.0, "10 µV/VO × 12 V、10 Hz〜100 kHz"), vrange: (11.5, 12.5) },
+        Fixed { part: "L78L05", pins: ("IN", "GND", "OUT"), vout: 5.0, vin0: 10.0, i0: 0.04, line: (7.0, 20.0, 0.04, 32.0, "VI = 7〜20 V"), load: (0.001, 0.04, 8.0, "IO = 1〜40 mA"), iq_ma: 3.53, dropout: (0.04, 1.7), ripple: (13.0, 0.04, 120.0, 55.0), limit: (10.0, 0.0, 0.13, "電流制限 (表に無い。図 6-19 の 25 °C を読んだ)"), noise: (10.0, 100e3, 0.04, 125.0, "10 Hz〜100 kHz"), vrange: (4.95, 5.15) },
+        Fixed { part: "AMS1117-3.3", pins: ("IN", "GND", "OUT"), vout: 3.3, vin0: 4.8, i0: 0.0, line: (4.8, 15.3, 0.0, 0.5, "1.5 V ≤ VIN − VOUT ≤ 12 V"), load: (0.0, 0.8, 3.0, "VIN = 4.75 V、0 ≤ IOUT ≤ 0.8 A"), iq_ma: 5.0, dropout: (0.8, 1.1), ripple: (6.3, 1.0, 120.0, 72.0), limit: (4.8, 3.25, 1.1, "電流制限 (VIN − VOUT = 1.5 V)"), noise: (10.0, 10e3, 0.0, 99.0, "0.003 % × 3.3 V、10 Hz〜10 kHz"), vrange: (3.251, 3.349) },
+        Fixed { part: "AMS1117-5.0", pins: ("IN", "GND", "OUT"), vout: 5.0, vin0: 6.5, i0: 0.0, line: (6.5, 17.0, 0.0, 0.5, "1.5 V ≤ VIN − VOUT ≤ 12 V"), load: (0.0, 0.8, 5.0, "VIN = 6.5 V、0 ≤ IOUT ≤ 0.8 A"), iq_ma: 5.0, dropout: (0.8, 1.1), ripple: (6.5, 1.0, 120.0, 68.0), limit: (6.5, 4.95, 1.1, "電流制限 (VIN − VOUT = 1.5 V)"), noise: (10.0, 10e3, 0.0, 150.0, "0.003 % × 5 V、10 Hz〜10 kHz"), vrange: (4.925, 5.075) },
+        Fixed { part: "MCP1700-3302", pins: ("VIN", "GND", "VOUT"), vout: 3.3, vin0: 4.3, i0: 100e-6, line: (4.3, 6.0, 100e-6, 0.0075 * 3.3 * 1.7 * 1e3, "(VR + 1) V ≤ VIN ≤ 6 V。表は ±0.75 %/V (mV に直した)"), load: (100e-6, 0.25, 33.0, "IL = 0.1〜250 mA、±1.0 % (mV に直した)"), iq_ma: 1.6e-3, dropout: (0.25, 0.178), ripple: (4.3, 0.05, 100.0, 44.0), limit: (4.3, 0.0, 0.408, "短絡電流 (VIN = VR + 1 V)"), noise: (999.0, 1001.0, 0.1, 3.0 * std::f64::consts::SQRT_2, "1 kHz の密度 3 µV/√Hz (IL = 100 mA) を 999〜1001 Hz の rms に直した"), vrange: (3.3 * 0.98, 3.3 * 1.02) },
     ]
 }
 
 fn linear_rows() -> Vec<Row> {
     let mut rows = vec![];
     for f in fixed_parts() {
-        let Fixed { part, pins, vout: vo, vin0, i0, line, load, iq_ma, dropout, ripple, limit, noise } = f;
-        rows.push(Row { part, item: "出力電圧", ds: [None, Some(vo), None], unit: "V", at: "VO (25 °C)", measure: Box::new(move || vout(fixed(part, pins, vo, vin0, i0))), tol: Some(0.005 * vo) });
+        let Fixed { part, pins, vout: vo, vin0, i0, line, load, iq_ma, dropout, ripple, limit, noise, vrange } = f;
+        rows.push(Row { part, item: "出力電圧", ds: [Some(vrange.0), Some(vo), Some(vrange.1)], unit: "V", at: "VO (25 °C)", measure: Box::new(move || vout(fixed(part, pins, vo, vin0, i0))), tol: Some(0.005 * vo) });
         rows.push(Row {
             part,
             item: "ライン・レギュレーション",

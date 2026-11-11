@@ -170,7 +170,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
             ui.label(i18n::tr("電源"));
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_v).desired_width(26.0)).on_hover_text(i18n::tr("直流電源の電圧の誤差。最悪ケースだけに使います (ランダムのばらつきは電源をそのままにします)。0 なら電源は変えません。例: 5V 電源が ±5% なら 5"));
         });
-        ui.checkbox(&mut self.mc_spread, i18n::tr("部品のモデルのばらつき (データシートの min / max)")).on_hover_text(i18n::tr(
+        ui.checkbox(&mut self.mc_spread, i18n::tr("データシートの min / max も入れる")).on_hover_text(i18n::tr(
             "オペアンプのオフセット、レギュレータや基準電圧 IC の出力電圧のように、同じ型番でも 1 個ずつ違う値を、データシートの min〜max の範囲で動かします (モデルに書いてある部品だけ)。ランダムのばらつきでは範囲の中で均等に動かすので、typ の近くに多い実物より、少し広めに出ます。外すと、モデルの値 (typ) のままにします",
         ));
         if self.lit(crate::widgets::primary_button_wide(ui, true, "ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text(i18n::tr("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。

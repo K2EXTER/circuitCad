@@ -174,10 +174,15 @@ impl SchEditor {
                             row(ui, "最大", fmt_unit(st.max, res.unit), "一番大きかった値");
                             row(ui, "標準偏差 σ", fmt_unit(st.std, res.unit), "ばらつきの大きさ。約 68% の回路は 平均 ± σ に入ります");
                         });
-                        if res.nominal.abs() > 1e-12 {
-                            let lo = (st.min - res.nominal) / res.nominal.abs() * 100.0;
-                            let hi = (st.max - res.nominal) / res.nominal.abs() * 100.0;
+                        // in percent of the design value, or as a difference when the value is near 0 V (an offset: -33 mV
+                        // moving by 80 mV read as "+332 %")
+                        let (lo, hi) = (st.min - res.nominal, st.max - res.nominal);
+                        if percent_reads(res.nominal, lo, hi) {
+                            let (lo, hi) = (lo / res.nominal.abs() * 100.0, hi / res.nominal.abs() * 100.0);
                             ui.label(i18n::trf!("設計値からのずれ: {lo:+.1}% 〜 {hi:+.1}%"));
+                        } else {
+                            ui.label(i18n::trf!("設計値からのずれ: {} 〜 {}", signed_unit(lo, res.unit), signed_unit(hi, res.unit)))
+                                .on_hover_text(i18n::tr("設計値が 0 に近く、ずれのほうが大きいので、% ではなく差で表しています"));
                         }
                         if res.failed > 0 {
                             ui.colored_label(crate::theme::WARN, i18n::trf!("{} 回は計算が収束しませんでした", res.failed));
@@ -190,7 +195,8 @@ impl SchEditor {
                                     // "R1 大・R2 小": the words and the separator are translated one by one (the list has any length)
                                     let tip: Vec<String> = corner.iter().map(|(n, h)| format!("{} {}", varied_name(n), if *h { i18n::tr("大") } else { i18n::tr("小") })).collect();
                                     let tip = tip.join(i18n::tr("・"));
-                                    let pct = if w.nominal.abs() > 1e-12 { format!(" ({:+.1}%)", (v - w.nominal) / w.nominal.abs() * 100.0) } else { String::new() };
+                                    let d = v - w.nominal;
+                                    let pct = if percent_reads(w.nominal, w.min - w.nominal, w.max - w.nominal) { format!(" ({:+.1}%)", d / w.nominal.abs() * 100.0) } else { format!(" ({})", signed_unit(d, w.unit)) };
                                     ui.label(i18n::tr(label)).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip));
                                     ui.label(format!("{}{pct}", fmt_unit(v, w.unit))).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip));
                                     ui.end_row();
@@ -288,4 +294,14 @@ pub(super) fn varied_name(name: &str) -> String {
         other => other,
     };
     i18n::trf!("{} の{} (データシートの min〜max)", part, what)
+}
+
+/// Whether a spread reads well in percent of the design value: not when the value is near 0 and the spread is larger than it.
+fn percent_reads(nominal: f64, lo: f64, hi: f64) -> bool {
+    nominal.abs() > 1e-12 && lo.abs().max(hi.abs()) <= nominal.abs()
+}
+
+/// A difference with its sign and unit (+12.3 mV).
+fn signed_unit(d: f64, unit: &str) -> String {
+    format!("{}{}", if d >= 0.0 { "+" } else { "−" }, fmt_unit(d.abs(), unit))
 }

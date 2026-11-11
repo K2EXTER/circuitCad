@@ -257,6 +257,8 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             && let Some(node) = args.get(i + 1) {
                 // --mc <node> [ac]  (the variation analysis; AC measures the -3 dB frequency and uses the --ac range)
                 app.sch.analyze_variation(node, args.get(i + 2).is_some_and(|m| m == "ac"));
+                // its settings next to the result (the tolerances and the box for the models' min / max)
+                app.sch.show_analysis_section("variation");
             }
         if let Some(i) = args.iter().position(|a| a == "--psrr")
             && let (Some(src), Some(out)) = (args.get(i + 1), args.get(i + 2)) {

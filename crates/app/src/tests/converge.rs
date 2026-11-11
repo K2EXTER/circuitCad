@@ -1,4 +1,4 @@
-//! Convergence stress: every shipped sample circuit at the temperature extremes and with its resistors scaled
+//! Convergence stress: every shipped sample circuit (and the schematic of every sample project) at the temperature extremes and with its resistors scaled
 //! at random must still have a DC operating point (`cargo test -p app converge_explore -- --ignored --nocapture`
 //! lists the failures; `shipped_samples_keep_their_operating_point` is the guard).
 
@@ -21,8 +21,13 @@ fn samples() -> Vec<(String, sch_core::Schematic)> {
     let mut v: Vec<_> = std::fs::read_dir(dir)
         .unwrap()
         .flatten()
-        .filter(|e| e.path().extension().is_some_and(|x| x == "schjson"))
-        .map(|e| (e.file_name().to_string_lossy().into_owned(), serde_json::from_str::<sch_core::Schematic>(&std::fs::read_to_string(e.path()).unwrap()).unwrap()))
+        .filter(|e| e.path().extension().is_some_and(|x| x == "schjson" || x == "ccproj"))
+        .map(|e| {
+            // a project's schematic is the half that is simulated
+            let text = std::fs::read_to_string(e.path()).unwrap();
+            let s = if e.path().extension().is_some_and(|x| x == "ccproj") { crate::project::parse(&text).unwrap().schematic } else { serde_json::from_str::<sch_core::Schematic>(&text).unwrap() };
+            (e.file_name().to_string_lossy().into_owned(), s)
+        })
         .collect();
     v.sort_by(|a, b| a.0.cmp(&b.0));
     v
@@ -77,7 +82,7 @@ fn converge_explore() {
 /// Circuits whose operating point is an unstable balance (a 555 astable, a counter clocked by one): the DC
 /// panel may legitimately report "no convergence" for them with other resistor values; they start from zero in
 /// a transient run instead. Everything else must keep a DC operating point.
-const OSCILLATORS: [&str; 2] = ["ne555_blinker.schjson", "mixed_signal.schjson"];
+const OSCILLATORS: [&str; 3] = ["ne555_blinker.schjson", "mixed_signal.schjson", "mixed_signal.ccproj"];
 
 #[test]
 fn shipped_samples_keep_their_operating_point() {
