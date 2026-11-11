@@ -154,6 +154,8 @@ pub struct SchEditor {
     basic_open: bool,
     /// Whether the selected part's settings band in the panel is open.
     props_open: bool,
+    /// The same band in the analysis tab (folded at first, so that it does not push the analyses down).
+    props_open_analyze: bool,
     lib_open: bool,
     /// Counts the times the library was read again (the board compares its parts with the library when this changes).
     pub lib_rev: u64,
@@ -563,6 +565,7 @@ impl Default for SchEditor {
             lib_prefs,
             basic_open: true,
             props_open: true,
+            props_open_analyze: false,
             lib_open: false,
             lib_rev: 0,
             lib_delete: None,

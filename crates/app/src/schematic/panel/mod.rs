@@ -47,20 +47,7 @@ impl SchEditor {
                 self.panel_tools(ui);
                 // the selected part's settings sit right under quick add, above the long part lists
                 ui.spacing_mut().item_spacing.y = 5.0;
-                if let Some(Sel::Comp(i)) = self.selected
-                    && let Some(c) = self.sch.components.get(i)
-                {
-                    // the settings of the selected part: a band like the part lists below, folded by a click
-                    crate::widgets::group_gap(ui);
-                    let name = if c.kind.is_power_symbol() { String::new() } else { format!(" {}", c.refdes) };
-                    let title = egui::RichText::new(i18n::trf!("選択中の部品{name}")).strong();
-                    let (_, clicked) = crate::widgets::band_header(ui, "props", title, self.props_open, true, |ui| {
-                        crate::widgets::well(ui, |ui| self.properties_inner(ui, false));
-                    });
-                    if clicked {
-                        self.props_open = !self.props_open;
-                    }
-                } else {
+                if !self.selected_part_band(ui, false) {
                     self.panel_properties(ui);
                 }
                 self.panel_parts(ui);
@@ -81,6 +68,10 @@ impl SchEditor {
                         self.focus_section = None;
                     }
                 });
+                // the selected part's values, to change one and run again without going back to the drawing tab
+                if self.selected_part_band(ui, true) {
+                    crate::widgets::group_gap(ui);
+                }
                 // what the results rest on: a part without a model is not in the calculation at all
                 let cov = self.model_coverage();
                 if !cov.ignored.is_empty() {
@@ -285,6 +276,32 @@ impl SchEditor {
 #[cfg(test)]
 pub(super) fn lib_hover_for_test(d: &part_lib::PartDef) -> String {
     parts::lib_hover(d)
+}
+
+impl SchEditor {
+    /// The settings of the selected part as a band that folds by a click (the drawing tab, and the analysis tab with its own
+    /// open state). False when no part is selected.
+    fn selected_part_band(&mut self, ui: &mut egui::Ui, analyze: bool) -> bool {
+        let Some(Sel::Comp(i)) = self.selected else { return false };
+        let Some(c) = self.sch.components.get(i) else { return false };
+        if !analyze {
+            crate::widgets::group_gap(ui);
+        }
+        let name = if c.kind.is_power_symbol() { String::new() } else { format!(" {}", c.refdes) };
+        let title = egui::RichText::new(i18n::trf!("選択中の部品{name}")).strong();
+        let open = if analyze { self.props_open_analyze } else { self.props_open };
+        let (_, clicked) = crate::widgets::band_header(ui, if analyze { "props_analyze" } else { "props" }, title, open, true, |ui| {
+            crate::widgets::well(ui, |ui| self.properties_inner(ui, false));
+        });
+        if clicked {
+            if analyze {
+                self.props_open_analyze = !self.props_open_analyze;
+            } else {
+                self.props_open = !self.props_open;
+            }
+        }
+        true
+    }
 }
 
 /// What a model is and where it comes from (docs/model-policy.md, section 4): its kind and source, from the model's own

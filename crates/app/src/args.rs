@@ -152,6 +152,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if let Some(i) = args.iter().position(|a| a == "--select")
             && let Some(r) = args.get(i + 1) {
                 app.sch.select_part(r);
+                // selecting goes to the drawing tab; `--analyze` asks for the analysis tab with the part selected
+                if args.iter().any(|a| a == "--analyze") {
+                    app.sch.show_analysis_tab();
+                }
             }
         if let Some(i) = args.iter().position(|a| a == "--ac")
             && let (Some(f0), Some(f1), Some(p)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
