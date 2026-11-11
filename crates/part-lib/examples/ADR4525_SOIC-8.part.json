@@ -1,0 +1,76 @@
+{
+  "name": "ADR4525",
+  "category": "電圧基準",
+  "description": "Analog Devices ADR4525 2.5 V 電圧基準 (SOIC-8)。入力 3〜15 V。B グレード: 初期誤差 ±0.02%、2 ppm/°C (A グレード ±0.04%、4 ppm/°C)。ただし、はんだ付けで ±0.02% ずれうる (SOLDER HEAT SHIFT)。出力に 1 µF 以上のコンデンサが必要 (安定のため)、入力には 0.1 µF (+ 1〜10 µF)。ピン 8 (TP) はテスト用でどこにもつながない、NC は内部で未接続。型番: ADR4525BRZ / ADR4525WBRZ-R7 (車載向けの B グレード) / ADR4525ARZ。データシートの typ から作った等価モデル (ライン・ロード・レギュレーション、電源電流、リップル除去、雑音)",
+  "datasheet": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADR4520_4525_4530_4533_4540_4550.pdf",
+  "prefix": "U",
+  "value": "ADR4525",
+  "footprint_name": "SOIC-8_3.9x4.9_P1.27",
+  "height": 1.75,
+  "pins": [
+    {
+      "number": "2",
+      "name": "VIN",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "6",
+      "name": "VOUT",
+      "side": "right"
+    },
+    {
+      "number": "1",
+      "name": "NC",
+      "side": "top"
+    },
+    {
+      "number": "3",
+      "name": "NC",
+      "side": "top"
+    },
+    {
+      "number": "5",
+      "name": "NC",
+      "side": "top"
+    },
+    {
+      "number": "7",
+      "name": "NC",
+      "side": "top"
+    },
+    {
+      "number": "8",
+      "name": "TP",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 8,
+    "pitch": 1.27,
+    "row_spacing": 5.4,
+    "pad_len": 1.55,
+    "pad_width": 0.6
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "ADR4525",
+    "text": ".subckt ADR4525 vin gnd vout\n* quiescent current (typ), fading out below about 2 V of input\nBq vin gnd I=0.0007*step(V(vin,gnd)-2,0.5)\n* ripple from the input: rises 20 dB/decade, the data sheet's ripple rejection at 1 kHz\nCr vin h 1e-09\nRr h gnd 5.03292\n* output noise (density at 1 kHz): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\n* the reference: line regulation from 5 V in; below the dropout it follows the input\nBref r gnd V=min(2.5*(1+1e-06*(V(vin,gnd)-5)),V(vin,gnd)-0.5)+V(h,gnd)\nEn r2 r nz gnd 10.144\n* output: sourcing from vin and sinking to gnd through the load regulation's resistance, each up to twice the current capacity\nBsrc vin vout I=limit((V(r2,gnd)-V(vout,gnd))/0.075,0,0.02)*step((V(r2,gnd)-V(vout,gnd))/0.075,1u)\nBsnk vout gnd I=limit((V(vout,gnd)-V(r2,gnd))/0.15,0,0.02)*step((V(vout,gnd)-V(r2,gnd))/0.15,1u)\n.ends ADR4525",
+    "pins": [
+      "2",
+      "4",
+      "6"
+    ],
+    "limits": [
+      "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0 の表 4 (ADR4525)。データシートとの比べは docs/models/regulators.md。",
+      "再現しているもの: 出力 2.500 V、ライン・レギュレーション 1 ppm/V、ロード・レギュレーション (吐き出し 30 ppm/mA・吸い込み 60 ppm/mA)、電源電流 700 µA、ドロップアウト 0.5 V (データシートは max だけ)、出力電流の能力 ±10 mA (電流の上限は、データシートに短絡電流が無いので、能力の 2 倍の 20 mA で切る)、1 kHz のリップル除去 90 dB、1 kHz の出力雑音 41.3 nV/√Hz。",
+      "扱わないもの: 初期誤差 (B グレード ±0.02%、A グレード ±0.04%) とはんだ付けのずれ (±0.02%) — 出力はちょうど 2.500 V、温度係数 (B グレード max 2 ppm/°C。typ が無いので 0)、ヒステリシス、長期のドリフト、1/f 雑音 (0.1〜10 Hz の 1.25 µVp-p)、起動の時間 (125 µs)、出力の容量 (1 µF 以上が必要) による安定性。",
+      "最終の確認は、メーカーの公式モデルで行ってください。"
+    ]
+  }
+}

@@ -161,6 +161,36 @@ fn an_existing_library_gets_the_new_parts_and_the_old_lm358_is_upgraded() {
 }
 
 #[test]
+fn the_bench_reference_and_ldo_made_without_a_model_get_the_bundled_model() {
+    // ADR4525 and LP5907-4.5 were first made in a user's library (no model, their own description); bundled with a model later
+    let dir = std::env::temp_dir().join(format!("circuitcad_lib_bench_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for name in ["ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5"] {
+        let mut mine: PartDef = example(name);
+        mine.sim = None;
+        mine.description = "made for the bench, no model yet".into();
+        std::fs::write(dir.join(format!("{name}{FILE_SUFFIX}")), serde_json::to_string_pretty(&mine).unwrap()).unwrap();
+    }
+    // the same part with an edited package is left alone
+    let mut edited: PartDef = example("ADR4525_SOIC-8");
+    edited.sim = None;
+    edited.prefix = "IC".into();
+    let other = dir.join("other");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join(format!("ADR4525_SOIC-8{FILE_SUFFIX}")), serde_json::to_string_pretty(&edited).unwrap()).unwrap();
+    install_examples(&dir).unwrap();
+    install_examples(&other).unwrap();
+    for name in ["ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5"] {
+        let now: PartDef = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}{FILE_SUFFIX}"))).unwrap()).unwrap();
+        assert!(now.sim.is_some(), "{name} got its model");
+    }
+    let kept: PartDef = serde_json::from_str(&std::fs::read_to_string(other.join(format!("ADR4525_SOIC-8{FILE_SUFFIX}"))).unwrap()).unwrap();
+    assert!(kept.sim.is_none() && kept.prefix == "IC", "an edited copy is not replaced");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
     let dir = std::env::temp_dir().join(format!("circuitcad_lib_opamps_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
