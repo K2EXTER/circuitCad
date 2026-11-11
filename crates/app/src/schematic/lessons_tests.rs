@@ -300,8 +300,10 @@ fn a_model_shows_where_it_comes_from_and_its_data_sheet_table() {
     assert!(checks.is_some_and(|c| c.rows.len() >= 8 && c.rows.iter().all(|r| r.tested)));
     m.text.push_str("\n* edited\nR9 a b 1k\n");
     assert!(super::panel::model_origin("LM358", &m) == (None, None), "an edited model is not the one that was measured");
-    let other = e.library.iter().find(|d| d.name == "TP4056").unwrap();
-    assert!(super::panel::lib_hover_for_test(other).contains("記録なし"));
+    let behaviour = e.library.iter().find(|d| d.name == "TP4056").unwrap();
+    assert!(super::panel::lib_hover_for_test(behaviour).contains("一般のモデル"));
+    let unrecorded = e.library.iter().find(|d| d.name == "2N3904").unwrap();
+    assert!(super::panel::lib_hover_for_test(unrecorded).contains("記録なし"));
 }
 
 /// The three power-supply lessons tick their steps as the learner acts and carry a real-experiment card.

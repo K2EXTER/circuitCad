@@ -143,6 +143,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--analyze") {
             app.sch.show_analysis_tab();
         }
+        // --section <key>: the analysis tab with that section open (dc, variation, coverage ...)
+        if let Some(i) = args.iter().position(|a| a == "--section")
+            && let Some(k) = args.get(i + 1)
+            && !app.sch.open_analysis_section(k)
+        {
+            eprintln!("--section {k}: no such section of the analysis tab");
+        }
         if args.iter().any(|a| a == "--requirements") {
             app.sch.open_requirements();
             if args.iter().any(|a| a == "--dc") {

@@ -1,6 +1,6 @@
 データシートの値から作った等価モデル (メーカーのモデルではありません)	Equivalent model made from the data sheet's figures (not the maker's model)
 メーカーのモデル (取り込んだファイルをそのまま使っています)	The maker's model (the imported file is used as it is)
-一般のモデル (理想の素子に、入れた値の寄生成分を足したもの)	Generic model (an ideal part plus the parasitics you entered)
+一般のモデル (理想の素子や代表的な値で動きを表したもの。特定の型番のデータシートとは比べていません)	Generic model (an ideal part, or the behaviour with typical values; not compared with one part number's data sheet)
 モデルの出どころ: 記録なし (データシートとはまだ比べていません)	Model source: not recorded (not yet compared with the data sheet)
 このモデルが何から作られたか、データシートとどれだけ合うかは、まだ記録がありません。結果は目安として使い、大事な値はデータシートで確かめてください	There is no record yet of what this model was made from or how well it matches the data sheet. Use the results as a guide and check important values against the data sheet
 出典: {}	Source: {}
@@ -55,3 +55,5 @@ REF の入力電流	REF input current
 オペアンプのオフセット、レギュレータや基準電圧 IC の出力電圧のように、同じ型番でも 1 個ずつ違う値を、データシートの min〜max の範囲で動かします (モデルに書いてある部品だけ)。ランダムのばらつきでは範囲の中で均等に動かすので、typ の近くに多い実物より、少し広めに出ます。外すと、モデルの値 (typ) のままにします	Moves the figures that differ from one part to the next even for the same part number, such as an op amp's offset or the output voltage of a regulator or voltage reference, between the data sheet's min and max (only parts whose model lists them). The random spread moves them evenly over the range, so it comes out a little wider than real parts, which gather near typ. Unticked, the model's own value (typ) is kept
 設計値からのずれ: {} 〜 {}	From the design value: {} to {}
 設計値が 0 に近く、ずれのほうが大きいので、% ではなく差で表しています	The design value is near 0 and the spread is larger than it, so the difference is shown instead of a percentage
+ライブラリのモデル {} 個: データシートと比べたもの {} 個、出どころの記録なし {} 個	Library models: {}; compared with their data sheets: {}; source not recorded: {}
+「データシートと比べた」モデルは、部品の欄の「データシートとの比べ」に、データシートの値とモデルの値が並んでいます。「記録なし」のモデルは、どの資料から作ったか分からないので、結果は目安として見て、大事な値はデータシートで確かめてください	A model "compared with its data sheet" shows the data sheet's values next to the model's under "Compared with the data sheet" in the part's panel. A model whose source is not recorded was made from no known document: read its results as a guide and check important values against the data sheet

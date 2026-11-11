@@ -689,3 +689,13 @@ fn a_pick_in_one_editor_is_linked_to_the_others() {
     app.sync_focus();
     assert!(app.sch.linked.is_empty() && app.board_ed.linked.is_empty());
 }
+
+/// `--section <key>` opens the analysis tab at that section (screenshots of one analysis).
+#[test]
+fn command_line_opens_an_analysis_section() {
+    let sample = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/opamp_amp.schjson");
+    let mut app = App::default();
+    let args: Vec<String> = [sample.to_str().unwrap(), "--section", "coverage"].iter().map(|s| s.to_string()).collect();
+    apply_args(&mut app, &args);
+    assert!(app.sch.analysis_section_open("coverage"), "the coverage section is the one open");
+}

@@ -63,6 +63,20 @@ pub fn fingerprint(text: &str) -> String {
     format!("{h:016x}")
 }
 
+/// Where a bundled model comes from (`sim.origin`), for a copy of it that has no origin of its own: a part placed in a
+/// circuit or installed in a library before the field existed. Only when `text` is the bundled model (same fingerprint).
+pub fn bundled_origin(name: &str, text: &str) -> Option<&'static sch_core::ModelOrigin> {
+    static ALL: OnceLock<BTreeMap<String, (String, sch_core::ModelOrigin)>> = OnceLock::new();
+    let all = ALL.get_or_init(|| {
+        crate::EXAMPLES
+            .iter()
+            .filter_map(|(_, t)| serde_json::from_str::<crate::PartDef>(t).ok())
+            .filter_map(|d| d.sim.and_then(|m| m.origin.map(|o| (d.name, (fingerprint(&m.text), o)))))
+            .collect()
+    });
+    all.get(name).filter(|(f, _)| *f == fingerprint(text)).map(|(_, o)| o)
+}
+
 /// The table of part `name` when `text` is the model it was measured on.
 pub fn for_model(name: &str, text: &str) -> Option<&'static ModelChecks> {
     all().get(name).filter(|c| c.fingerprint == fingerprint(text))
@@ -81,6 +95,39 @@ mod tests {
     fn fingerprint_ignores_line_ends_and_indentation() {
         assert_eq!(fingerprint("a\r\n  b \n\n"), fingerprint("a\nb"));
         assert_ne!(fingerprint("a\nb"), fingerprint("a\nc"));
+    }
+
+    /// Bundled models whose source was never recorded (SPICE parameters of diodes, transistors and MOSFETs): they show
+    /// "記録なし" and are the next to be rebuilt from their data sheets (docs/model-policy.md). Every other bundled model
+    /// says where it comes from.
+    const UNRECORDED: &[&str] = &[
+        "1N4001", "1N4007", "1N4148", "1N4728A", "1N4733A", "1N4742A", "1N5408", "1N5817", "1N5819", "1N5822", "2N3904", "2N3906", "2N7000", "AO3400A",
+        "AO3401A", "BAT54", "BC547", "BD139", "BD140", "BPW34", "BSS138", "IRF540N", "IRF9540N", "IRFZ44N", "IRLZ44N", "PC817", "PN2222A", "S8050",
+        "S8550", "SS14", "TIP120", "TIP125", "UF4007",
+    ];
+
+    #[test]
+    fn every_bundled_model_says_where_it_comes_from_or_is_listed_as_unrecorded() {
+        let mut wrong = vec![];
+        for (file, text) in crate::EXAMPLES {
+            let Ok(def) = serde_json::from_str::<crate::PartDef>(text) else { continue };
+            let Some(sim) = &def.sim else { continue };
+            match (sim.origin.is_some(), UNRECORDED.contains(&def.name.as_str())) {
+                (false, false) => wrong.push(format!("{file}: no sim.origin (say where the model comes from, or list it in UNRECORDED)")),
+                (true, true) => wrong.push(format!("{file}: has an origin now; take it out of UNRECORDED")),
+                _ => {}
+            }
+        }
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
+    #[test]
+    fn a_copy_without_an_origin_takes_the_bundled_parts_when_it_is_the_same_model() {
+        let text = crate::EXAMPLES.iter().find(|(n, _)| *n == "NE555_DIP-8").unwrap().1;
+        let m = serde_json::from_str::<crate::PartDef>(text).unwrap().sim.unwrap();
+        assert_eq!(bundled_origin("NE555", &m.text).map(|o| o.kind), Some(sch_core::OriginKind::Generic));
+        assert!(bundled_origin("NE555", &format!("{}\n* mine", m.text)).is_none(), "an edited model is not the bundled one");
+        assert!(bundled_origin("2N3904", ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)").is_none(), "no origin recorded");
     }
 
     /// Every bundled part whose model is marked as an equivalent model with a table has the table of its current

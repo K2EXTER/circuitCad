@@ -279,6 +279,23 @@ pub(super) fn lib_hover_for_test(d: &part_lib::PartDef) -> String {
 }
 
 impl SchEditor {
+    /// The analysis tab with one section open, by its key (`dc`, `variation`, `coverage` ...: `ANALYSIS_SECTIONS`). False for
+    /// a key that is not a section (command line `--section`).
+    pub fn open_analysis_section(&mut self, key: &str) -> bool {
+        match ANALYSIS_SECTIONS.iter().find(|(k, ..)| *k == key) {
+            Some((k, ..)) => {
+                self.show_analysis_section(k);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Whether the analysis tab is shown with section `key` asked for (tests of `--section`).
+    pub fn analysis_section_open(&self, key: &str) -> bool {
+        self.panel_tab == PanelTab::Analyze && self.focus_section == Some(key)
+    }
+
     /// The settings of the selected part as a band that folds by a click (the drawing tab, and the analysis tab with its own
     /// open state). False when no part is selected.
     fn selected_part_band(&mut self, ui: &mut egui::Ui, analyze: bool) -> bool {
@@ -308,7 +325,12 @@ impl SchEditor {
 /// `origin` or, for a copy saved before that field, from the bundled table measured on the same model text.
 pub(super) fn model_origin(part: &str, m: &sch_core::SimModel) -> (Option<sch_core::ModelOrigin>, Option<&'static part_lib::model_checks::ModelChecks>) {
     let checks = part_lib::model_checks::for_model(part, &m.text);
-    let origin = m.origin.clone().or_else(|| checks.map(|c| sch_core::ModelOrigin::new(sch_core::OriginKind::Equivalent, c.source.clone())));
+    // a copy without the field (placed or installed before it existed) takes the bundled part's, when it is the same model
+    let origin = m
+        .origin
+        .clone()
+        .or_else(|| part_lib::model_checks::bundled_origin(part, &m.text).cloned())
+        .or_else(|| checks.map(|c| sch_core::ModelOrigin::new(sch_core::OriginKind::Equivalent, c.source.clone())));
     (origin, checks)
 }
 
@@ -318,7 +340,7 @@ pub(super) fn origin_kind_text(o: Option<&sch_core::ModelOrigin>) -> &'static st
     match o.map(|o| o.kind) {
         Some(Equivalent) => i18n::tr("データシートの値から作った等価モデル (メーカーのモデルではありません)"),
         Some(Vendor) => i18n::tr("メーカーのモデル (取り込んだファイルをそのまま使っています)"),
-        Some(Generic) => i18n::tr("一般のモデル (理想の素子に、入れた値の寄生成分を足したもの)"),
+        Some(Generic) => i18n::tr("一般のモデル (理想の素子や代表的な値で動きを表したもの。特定の型番のデータシートとは比べていません)"),
         None => i18n::tr("モデルの出どころ: 記録なし (データシートとはまだ比べていません)"),
     }
 }
