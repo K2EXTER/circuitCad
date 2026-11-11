@@ -1,6 +1,6 @@
 {
   "ADR4525": {
-    "fingerprint": "32c54ffb5c035698",
+    "fingerprint": "b54a8f354ce405e3",
     "source": "ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0、表 4 (ADR4525)。VIN = 3〜15 V、IL = 0 mA、25 °C",
     "date": "2026-11-11",
     "rows": [
@@ -316,7 +316,7 @@
     ]
   },
   "LM317": {
-    "fingerprint": "11f6f643b951b54e",
+    "fingerprint": "e7255e43da945c6b",
     "source": "TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節。VIN − VOUT = 5 V、IOUT = 10 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
     "date": "2026-11-11",
     "rows": [
@@ -335,7 +335,7 @@
         "target": "50.000 µA",
         "condition": "IADJ",
         "model": "50.005 µA",
-        "diff": "+0.0055 µA",
+        "diff": "+0.0054 µA",
         "tested": true
       },
       {
@@ -404,7 +404,7 @@
     ]
   },
   "LM324": {
-    "fingerprint": "6f900b17dbda9a5c",
+    "fingerprint": "10345c75ecefd48d",
     "source": "TI SLOS066AE(2025-09 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -501,7 +501,7 @@
     ]
   },
   "LM358": {
-    "fingerprint": "4c9ee02d217eb73e",
+    "fingerprint": "35a77401fef95e55",
     "source": "TI SLOS068AB(2024-10 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -835,7 +835,7 @@
     ]
   },
   "LP5907-4.5": {
-    "fingerprint": "d7e322a322e12305",
+    "fingerprint": "e5e079a506791c99",
     "source": "TI LP5907 データシート SNVS798Q (2025-07 改訂)、5.5 節。VIN = 5.5 V、VEN = 1.2 V、IOUT = 1 mA、CIN = COUT = 1 µF",
     "date": "2026-11-11",
     "rows": [
@@ -1038,7 +1038,7 @@
     ]
   },
   "MCP6001": {
-    "fingerprint": "4f3079f335fcde71",
+    "fingerprint": "b98270579f875a26",
     "source": "Microchip DS20001733L",
     "date": "2026-11-11",
     "rows": [
@@ -1144,7 +1144,7 @@
     ]
   },
   "MCP6002": {
-    "fingerprint": "63d728a5fc85b29d",
+    "fingerprint": "08f08505b369a2bc",
     "source": "Microchip DS20001733L",
     "date": "2026-11-11",
     "rows": [
@@ -1250,7 +1250,7 @@
     ]
   },
   "NE5532": {
-    "fingerprint": "518066ebd0cd4d05",
+    "fingerprint": "0ab63dcdb8d7c2c1",
     "source": "TI SLOS075K(2025-12 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -1329,7 +1329,7 @@
     ]
   },
   "TL072": {
-    "fingerprint": "2c54ba6cf4674de0",
+    "fingerprint": "1971055a93e351f3",
     "source": "TI SLOS080W(2025-07 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -1417,7 +1417,7 @@
     ]
   },
   "TL431": {
-    "fingerprint": "e9dbee81efca22a9",
+    "fingerprint": "5f55cb3b7d357cdf",
     "source": "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。25 °C",
     "date": "2026-11-11",
     "rows": [

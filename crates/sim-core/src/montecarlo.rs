@@ -2,6 +2,10 @@
 //! and inductor at random inside its tolerance, solve the circuit each time, and see how far one
 //! result wanders: a node voltage (DC) or the -3 dB frequency of a filter (AC). A one-at-a-time
 //! sensitivity run tells which part is responsible.
+//!
+//! The parts' own figures that the data sheet gives as min / max (an op amp's offset, a regulator's output voltage: the
+//! `* spread` lines of a model, `Circuit::spreads`) are drawn too, evenly between the two ends. Real parts gather near the
+//! typical value, so this is on the cautious side. Clear `Circuit::spreads` to leave them at the model's value.
 
 use crate::ac::{ac_analysis, AcSettings, AcSweep};
 use crate::circuit::{Circuit, Element};
@@ -57,7 +61,7 @@ pub struct McResult {
     /// Runs that did not converge.
     pub failed: usize,
     /// For each part with a tolerance: the change of the output when only that part is
-    /// `+tolerance` high, sorted by size (largest first).
+    /// `+tolerance` high, sorted by size (largest first). A model's spread (`U1:offset`) is at its high end.
     pub sensitivity: Vec<(String, f64)>,
 }
 
@@ -112,6 +116,34 @@ fn uniform(seed: u64, k: u64) -> f64 {
     (splitmix64(seed ^ k.wrapping_mul(0xD6E8_FEB8_6659_FD93)) >> 11) as f64 / (1u64 << 53) as f64
 }
 
+/// How one element moves in a variation analysis: by a share of its value (a tolerance), or between two values (a part's
+/// spread from its data sheet).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Swing {
+    Rel(f64),
+    Abs(f64, f64),
+}
+
+/// The element at `x` of its range: -1 is the low end, +1 the high end.
+pub(crate) fn swing_to(e: &mut Element, s: Swing, x: f64) {
+    match s {
+        Swing::Rel(tol) => scale(e, 1.0 + tol * x),
+        Swing::Abs(lo, hi) => set_value(e, lo + (hi - lo) * (x + 1.0) / 2.0),
+    }
+}
+
+/// The model figures that spread from part to part, by element index, with the name shown for them (`U1:offset`).
+pub(crate) fn spread_swings(circuit: &Circuit) -> Vec<(usize, Swing, String)> {
+    circuit
+        .spreads
+        .iter()
+        .filter_map(|sp| {
+            let i = circuit.elements.iter().position(|e| e.name() == sp.element)?;
+            Some((i, Swing::Abs(sp.lo, sp.hi), format!("{}:{}", sp.part(), sp.what)))
+        })
+        .collect()
+}
+
 /// Tolerance of an element, if it has one. Parasitic parts (`R1.ESR`) are left alone.
 fn tolerance(e: &Element, s: &McSettings) -> Option<f64> {
     if e.name().contains('.') {
@@ -132,6 +164,18 @@ pub(crate) fn scale(e: &mut Element, f: f64) {
         Element::Capacitor { c, .. } => *c *= f,
         Element::Inductor { l, .. } => *l *= f,
         Element::VSource { wave: crate::waveform::Waveform::Dc(v), .. } => *v *= f,
+        Element::ISource { wave: crate::waveform::Waveform::Dc(v), .. } => *v *= f,
+        _ => {}
+    }
+}
+
+/// Sets the value of a resistor, capacitor, inductor or DC source (a spread's end).
+pub(crate) fn set_value(e: &mut Element, x: f64) {
+    match e {
+        Element::Resistor { r, .. } => *r = x,
+        Element::Capacitor { c, .. } => *c = x,
+        Element::Inductor { l, .. } => *l = x,
+        Element::VSource { wave: crate::waveform::Waveform::Dc(v), .. } | Element::ISource { wave: crate::waveform::Waveform::Dc(v), .. } => *v = x,
         _ => {}
     }
 }
@@ -203,7 +247,9 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
     }
     let output = s.output.trim().to_string();
     let nominal = measure(circuit, &output, &s.measure)?;
-    let toleranced: Vec<(usize, f64)> = circuit.elements.iter().enumerate().filter_map(|(i, e)| tolerance(e, s).map(|t| (i, t))).collect();
+    let mut toleranced: Vec<(usize, Swing, String)> =
+        circuit.elements.iter().enumerate().filter_map(|(i, e)| tolerance(e, s).map(|t| (i, Swing::Rel(t), e.name().to_string()))).collect();
+    toleranced.extend(spread_swings(circuit));
     if toleranced.is_empty() {
         return Err(SimError::Invalid("ばらつかせる部品 (抵抗・コンデンサ・コイル) がありません。許容差を 0 より大きくしてください".into()));
     }
@@ -213,9 +259,9 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
     let run_ids: Vec<usize> = (0..s.runs).collect();
     let measured = crate::par_map(&run_ids, |&run| {
         let mut c = circuit.clone();
-        for (k, &(i, tol)) in toleranced.iter().enumerate() {
+        for (k, (i, swing, _)) in toleranced.iter().enumerate() {
             let u = uniform(s.seed, (run * toleranced.len() + k) as u64);
-            scale(&mut c.elements[i], 1.0 + tol * (2.0 * u - 1.0));
+            swing_to(&mut c.elements[*i], *swing, 2.0 * u - 1.0);
         }
         measure(&c, &output, &s.measure)
     });
@@ -228,10 +274,10 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
         }
     }
 
-    let swung = crate::par_map(&toleranced, |&(i, tol)| {
+    let swung = crate::par_map(&toleranced, |(i, swing, name)| {
         let mut c = circuit.clone();
-        scale(&mut c.elements[i], 1.0 + tol);
-        measure(&c, &output, &s.measure).ok().map(|v| (circuit.elements[i].name().to_string(), v - nominal))
+        swing_to(&mut c.elements[*i], *swing, 1.0);
+        measure(&c, &output, &s.measure).ok().map(|v| (name.clone(), v - nominal))
     });
     let mut sensitivity: Vec<(String, f64)> = swung.into_iter().flatten().collect();
     sensitivity.sort_by(|a, b| b.1.abs().total_cmp(&a.1.abs()));

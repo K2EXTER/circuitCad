@@ -369,6 +369,29 @@ pub struct Circuit {
     /// Where the DC solve should start (SPICE `.nodeset`): node name and voltage. A circuit with a latch built from gates has more than one
     /// solution; the nodes listed here are pulled towards these voltages while the solver steps gmin down, which picks the state.
     pub nodesets: Vec<(String, f64)>,
+    /// How far the parts' own figures spread from one part to the next (the data sheet's min and max: an op amp's offset, a
+    /// regulator's output voltage), from `* spread` lines in a part model. Only the variation analyses use them; every other
+    /// analysis takes the model's value.
+    pub spreads: Vec<Spread>,
+}
+
+/// One figure of a part model that differs from part to part: the element that carries it and the range of its value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Spread {
+    /// The element inside the model (`U1.Vos`): a DC voltage or current source, or a resistor, capacitor or inductor.
+    pub element: String,
+    /// The element's value at the two ends (the data sheet's min and max, as the model carries them).
+    pub lo: f64,
+    pub hi: f64,
+    /// What it is: `offset`, `vout`, `vref` or the model's own word.
+    pub what: String,
+}
+
+impl Spread {
+    /// The part it belongs to (`U1` for `U1.Vos`).
+    pub fn part(&self) -> &str {
+        self.element.rsplit_once('.').map_or(&self.element, |(p, _)| p)
+    }
 }
 
 impl Default for Circuit {
@@ -379,7 +402,7 @@ impl Default for Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![], nodesets: vec![] }
+        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![], nodesets: vec![], spreads: vec![] }
     }
 
     /// Node index for a name; `0` and `GND` (any case) are ground.

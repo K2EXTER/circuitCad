@@ -150,3 +150,48 @@ fn a_high_pass_reports_its_rising_edge() {
     let r = monte_carlo(&c, &cutoff_settings(5, 0.05)).unwrap();
     assert!((r.nominal / 1000.0 - 1.0).abs() < 0.01, "{}", r.nominal);
 }
+
+/// A follower whose model has an offset of 3 mV (typ) that the data sheet allows to be anywhere in -7..+7 mV.
+fn follower_with_offset(spread: &str) -> Circuit {
+    let model = format!(".subckt OFS inp out\n{spread}\nVos inp i1 DC 3m\nE1 out 0 i1 0 1\n.ends OFS");
+    let mut c = Circuit::new();
+    let (inp, out) = (c.node("in"), c.node("out"));
+    c.add(Element::vdc("V1", inp, 0, 1.0));
+    crate::spice_in::add_subckt_instance(&mut c, "U1", "OFS", &model, &[inp, out]).unwrap();
+    c
+}
+
+#[test]
+fn a_models_spread_moves_between_the_data_sheets_ends_in_the_variation_analyses() {
+    let c = follower_with_offset("* spread Vos -7m 7m offset (data sheet max 7 mV)");
+    assert_eq!(c.spreads, vec![Spread { element: "U1.Vos".into(), lo: -7e-3, hi: 7e-3, what: "offset".into() }]);
+    assert!(c.warnings.is_empty(), "{:?}", c.warnings);
+    // every other analysis takes the model's value
+    // (Vos sits between in and the amplifier: out = 1 V - 3 mV)
+    assert!((dc_op(&c).unwrap().voltage("out").unwrap() - 0.997).abs() < 1e-9);
+    // worst case: the two ends, named after the part and the figure
+    let w = worst_case(&c, &WcSettings { tol_r: 0.0, tol_c: 0.0, tol_l: 0.0, tol_v: 0.0, output: "out".into(), measure: McMeasure::DcVoltage }).unwrap();
+    assert!((w.min - 0.993).abs() < 1e-9 && (w.max - 1.007).abs() < 1e-9, "{} {}", w.min, w.max);
+    assert_eq!(w.parts[0].name, "U1:offset");
+    assert_eq!(w.parts[0].range, Some((-7e-3, 7e-3)));
+    assert!(w.max_corner.contains(&("U1:offset".to_string(), false)), "the low end of the offset gives the largest output");
+    // Monte Carlo: evenly inside the ends (no tolerance on anything else is needed)
+    let m = monte_carlo(&c, &McSettings { runs: 400, seed: 3, tol_r: 0.0, tol_c: 0.0, tol_l: 0.0, output: "out".into(), measure: McMeasure::DcVoltage }).unwrap();
+    let st = m.stats().unwrap();
+    assert!(st.min >= 0.993 - 1e-12 && st.max <= 1.007 + 1e-12, "{st:?}");
+    // evenly over 14 mV: a standard deviation of 14 mV / sqrt(12) = 4.0 mV
+    assert!((st.std - 14e-3 / 12f64.sqrt()).abs() < 0.4e-3, "{st:?}");
+    assert_eq!(m.sensitivity[0].0, "U1:offset");
+    // without the spreads there is nothing left to vary
+    let mut fixed = c.clone();
+    fixed.spreads.clear();
+    assert!(worst_case(&fixed, &WcSettings { tol_r: 0.0, tol_c: 0.0, tol_l: 0.0, tol_v: 0.0, output: "out".into(), measure: McMeasure::DcVoltage }).is_err());
+}
+
+#[test]
+fn a_spread_on_a_missing_or_fixed_element_is_a_warning() {
+    let c = follower_with_offset("* spread Vx -7m 7m offset\n* spread E1 0.9 1.1 gain\n* spreadsheet is not a spread line");
+    assert!(c.spreads.is_empty());
+    assert_eq!(c.warnings.len(), 2, "{:?}", c.warnings);
+    assert!(c.warnings[0].contains("Vx") && c.warnings[1].contains("E1"));
+}

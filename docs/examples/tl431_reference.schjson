@@ -58,7 +58,7 @@
           "kind": "subckt",
           "element": "",
           "name": "TL431",
-          "text": ".subckt TL431 cat ref an\n* reference input current (typ, at 2.495 V)\nRref ref an 1.2475e+06\n* the cathode current rises with REF above the knee (slope 1 / dynamic impedance; a smooth knee 0.3 mV wide); REF moves with\n* the cathode voltage by the data sheet's ratio; the cathode needs about 1.2 V\nBk cat an I=0.0015*(0.5*(((V(ref,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)+abs(((V(ref,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))+ln(1+exp(-abs(((V(ref,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))))*step(V(cat,an)-1.2,0.2)\n* off-state cathode current (typ, at 36 V)\nRleak cat an 3.6e+08\n.ends TL431",
+          "text": ".subckt TL431 cat ref an\n* reference input current (typ, at 2.495 V)\nRref ref an 1.2475e+06\n* the cathode current rises with REF above the knee (slope 1 / dynamic impedance; a smooth knee 0.3 mV wide); REF moves with\n* the cathode voltage by the data sheet's ratio; the cathode needs about 1.2 V\nBk cat an I=0.0015*(0.5*(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)+abs(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))+ln(1+exp(-abs(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))))*step(V(cat,an)-1.2,0.2)\n* off-state cathode current (typ, at 36 V)\nRleak cat an 3.6e+08\n* the reference's difference from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVtol vt an DC 0\n* spread Vtol -0.055 0.055 vref (data sheet: 2.44 to 2.55 V)\n.ends TL431",
           "pins": [
             "1",
             "2",

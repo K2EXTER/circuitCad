@@ -60,7 +60,10 @@ def adr4525():
         "* output noise (density at 1 kHz): a 1 k resistor's noise, scaled",
         "Rnz nz gnd 1k",
         "* the reference: line regulation from 5 V in; below the dropout it follows the input",
-        f"Bref r gnd V=min({g(p['vout'])}*(1+{g(p['line_ppm_v'] * 1e-6)}*(V(vin,gnd)-5)),V(vin,gnd)-{g(p['dropout'])})+V(h,gnd)",
+        f"Bref r gnd V=min({g(p['vout'])}*(1+{g(p['line_ppm_v'] * 1e-6)}*(V(vin,gnd)-5))+V(vt,gnd),V(vin,gnd)-{g(p['dropout'])})+V(h,gnd)",
+        "* the output's difference from part to part (0 V; the variation analyses move it over the B grade's initial accuracy)",
+        "Vtol vt gnd DC 0",
+        f"* spread Vtol {g(-p['vout'] * 0.02e-2)} {g(p['vout'] * 0.02e-2)} vout (data sheet: B grade initial accuracy 0.02 %)",
         f"En r2 r nz gnd {g(noise_gain(p['en']))}",
         "* output: sourcing from vin and sinking to gnd through the load regulation's resistance, each up to twice the current capacity",
         f"Bsrc vin vout I=limit({x_src},0,{g(cap)})*step({x_src},1u)",
@@ -72,7 +75,8 @@ def adr4525():
 ADR_LIMITS = [
     "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0 の表 4 (ADR4525)。データシートとの比べは docs/models/regulators.md。",
     "再現しているもの: 出力 2.500 V、ライン・レギュレーション 1 ppm/V、ロード・レギュレーション (吐き出し 30 ppm/mA・吸い込み 60 ppm/mA)、電源電流 700 µA、ドロップアウト 0.5 V (データシートは max だけ)、出力電流の能力 ±10 mA (電流の上限は、データシートに短絡電流が無いので、能力の 2 倍の 20 mA で切る)、1 kHz のリップル除去 90 dB、1 kHz の出力雑音 41.3 nV/√Hz。",
-    "扱わないもの: 初期誤差 (B グレード ±0.02%、A グレード ±0.04%) とはんだ付けのずれ (±0.02%) — 出力はちょうど 2.500 V、温度係数 (B グレード max 2 ppm/°C。typ が無いので 0)、ヒステリシス、長期のドリフト、1/f 雑音 (0.1〜10 Hz の 1.25 µVp-p)、起動の時間 (125 µs)、出力の容量 (1 µF 以上が必要) による安定性。",
+    "出力電圧の部品ごとの違い (B グレードの初期誤差 ±0.02%、±0.5 mV) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析はちょうど 2.500 V)。",
+    "扱わないもの: A グレードの初期誤差 (±0.04%) とはんだ付けのずれ (±0.02%)、温度係数 (B グレード max 2 ppm/°C。typ が無いので 0)、ヒステリシス、長期のドリフト、1/f 雑音 (0.1〜10 Hz の 1.25 µVp-p)、起動の時間 (125 µs)、出力の容量 (1 µF 以上が必要) による安定性。",
     "最終の確認は、メーカーの公式モデルで行ってください。",
 ]
 
@@ -130,7 +134,10 @@ def lp5907():
         f"Rhp hp gnd {g(r_h)}",
         "* output noise (10 Hz to 100 kHz, taken as flat): a 1 k resistor's noise, scaled",
         "Rnz nz gnd 1k",
-        f"Btgt t0 gnd V={on}*{g(p['vout'])}*(1+{g(p['line_pct_v'] / 100)}*(V(lf,gnd)-{g(p['vout'] + 1)}))+{g(floor)}*(V(in,gnd)-{g(p['vout'] + 1)})+{g(hi)}*V(hp,gnd)",
+        f"Btgt t0 gnd V={on}*({g(p['vout'])}*(1+{g(p['line_pct_v'] / 100)}*(V(lf,gnd)-{g(p['vout'] + 1)}))+V(vt,gnd))+{g(floor)}*(V(in,gnd)-{g(p['vout'] + 1)})+{g(hi)}*V(hp,gnd)",
+        "* the output's difference from part to part (0 V; the variation analyses move it over the data sheet's 2 %)",
+        "Vtol vt gnd DC 0",
+        f"* spread Vtol {g(-p['vout'] * 0.02)} {g(p['vout'] * 0.02)} vout (data sheet: output accuracy 2 %)",
         f"En tgt t0 nz gnd {g(noise_gain(density))}",
         "* pass device: the error amplifier's current (the load regulation), no more than the input allows through the pass",
         "* device's resistance (dropout) and the current limit; only from in to out",
@@ -146,7 +153,8 @@ def lp5907():
 LDO_LIMITS = [
     "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI LP5907 データシート SNVS798Q の 5.5 節 (VIN = 5.5 V、IOUT = 1 mA、CIN = COUT = 1 µF)。データシートとの比べは docs/models/regulators.md。",
     "再現しているもの: 出力 4.5 V、ライン・レギュレーション 0.02 %/V、ロード・レギュレーション 0.001 %/mA、電源電流 (無負荷 12 µA、250 mA で 250 µA、停止中 0.2 µA)、ドロップアウト (100 mA で 50 mV)、電流制限 500 mA、PSRR (100 Hz 90 dB・1 kHz 82 dB・10 kHz 65 dB・100 kHz 60 dB の近似)、出力雑音 10 µVrms (10 Hz〜100 kHz を平らとした)、EN (1 MΩ のプルダウン、0.8 V で切り替え)、起動 80 µs、停止中の放電 230 Ω。",
-    "扱わないもの: 出力電圧の誤差 (±2%) — 出力はちょうど 4.5 V、出力コンデンサの容量・ESR による安定性 (どのコンデンサでも安定に動きます)、負荷の急変での応答 (データシート ±40 mV)、熱による停止、温度による変化。",
+    "出力電圧の部品ごとの違い (±2%) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析はちょうど 4.5 V)。",
+    "扱わないもの: 出力コンデンサの容量・ESR による安定性 (どのコンデンサでも安定に動きます)、負荷の急変での応答 (データシート ±40 mV)、熱による停止、温度による変化。",
     "最終の確認は、メーカーの公式モデルで行ってください。",
 ]
 

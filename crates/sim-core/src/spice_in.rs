@@ -419,9 +419,55 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
     let lines = logical_lines(text);
     // vendor-style text (.param, {expr}, nested X calls) is first turned into one plain .subckt
     if let Some(flat) = crate::spice_flat::flatten(text, sub_name, &lines)? {
-        return add_flat_subckt(c, inst, sub_name, &flat, nodes);
+        add_flat_subckt(c, inst, sub_name, &flat, nodes)?;
+    } else {
+        add_flat_subckt(c, inst, sub_name, text, nodes)?;
     }
-    add_flat_subckt(c, inst, sub_name, text, nodes)
+    add_spreads(c, inst, text);
+    Ok(())
+}
+
+/// The `* spread <element> <min> <max> <what> [note]` lines of a model: how far one of its figures differs from part to part
+/// (docs/part-format.md). A comment to every other SPICE program. A line that names no element of the model, or one whose
+/// value cannot be set, becomes a warning.
+pub fn parse_spreads(text: &str) -> Vec<(String, f64, f64, String)> {
+    text.lines()
+        .filter_map(|l| {
+            let rest = l.trim().strip_prefix('*')?.trim_start();
+            let rest = rest.strip_prefix("spread")?;
+            let t: Vec<&str> = rest.split_whitespace().collect();
+            if !rest.starts_with(char::is_whitespace) || t.len() < 4 {
+                return None;
+            }
+            let (lo, hi) = (parse_value(t[1])?, parse_value(t[2])?);
+            Some((t[0].to_string(), lo.min(hi), lo.max(hi), t[3].to_string()))
+        })
+        .collect()
+}
+
+fn add_spreads(c: &mut Circuit, inst: &str, text: &str) {
+    for (el, lo, hi, what) in parse_spreads(text) {
+        let element = format!("{inst}.{el}");
+        let settable = c.elements.iter().find(|e| e.name().eq_ignore_ascii_case(&element)).map(|e| {
+            matches!(
+                e,
+                Element::Resistor { .. }
+                    | Element::Capacitor { .. }
+                    | Element::Inductor { .. }
+                    | Element::VSource { wave: crate::waveform::Waveform::Dc(_), .. }
+                    | Element::ISource { wave: crate::waveform::Waveform::Dc(_), .. }
+            )
+        });
+        match settable {
+            Some(true) => {
+                // the element's own spelling, so that the analyses find it by name
+                let element = c.elements.iter().find(|e| e.name().eq_ignore_ascii_case(&element)).map(|e| e.name().to_string()).unwrap_or(element);
+                c.spreads.push(crate::circuit::Spread { element, lo, hi, what });
+            }
+            Some(false) => c.warnings.push(format!("{inst}: モデルの「* spread {el}」は、値を変えられない素子です (直流の電圧源・電流源、抵抗・コンデンサ・コイルだけ)。ばらつきの解析では使いません")),
+            None => c.warnings.push(format!("{inst}: モデルの「* spread {el}」の素子 {el} がモデルの中にありません。ばらつきの解析では使いません")),
+        }
+    }
 }
 
 fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, nodes: &[usize]) -> Result<(), String> {

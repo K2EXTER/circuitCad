@@ -53,7 +53,7 @@
   "sim": {
     "kind": "subckt",
     "name": "TL431",
-    "text": ".subckt TL431 cat ref an\n* reference input current (typ, at 2.495 V)\nRref ref an 1.2475e+06\n* the cathode current rises with REF above the knee (slope 1 / dynamic impedance; a smooth knee 0.3 mV wide); REF moves with\n* the cathode voltage by the data sheet's ratio; the cathode needs about 1.2 V\nBk cat an I=0.0015*(0.5*(((V(ref,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)+abs(((V(ref,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))+ln(1+exp(-abs(((V(ref,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))))*step(V(cat,an)-1.2,0.2)\n* off-state cathode current (typ, at 36 V)\nRleak cat an 3.6e+08\n.ends TL431",
+    "text": ".subckt TL431 cat ref an\n* reference input current (typ, at 2.495 V)\nRref ref an 1.2475e+06\n* the cathode current rises with REF above the knee (slope 1 / dynamic impedance; a smooth knee 0.3 mV wide); REF moves with\n* the cathode voltage by the data sheet's ratio; the cathode needs about 1.2 V\nBk cat an I=0.0015*(0.5*(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)+abs(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))+ln(1+exp(-abs(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))))*step(V(cat,an)-1.2,0.2)\n* off-state cathode current (typ, at 36 V)\nRleak cat an 3.6e+08\n* the reference's difference from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVtol vt an DC 0\n* spread Vtol -0.055 0.055 vref (data sheet: 2.44 to 2.55 V)\n.ends TL431",
     "pins": [
       "1",
       "2",
@@ -62,7 +62,8 @@
     "limits": [
       "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。データシートとの比べは docs/models/regulators.md。",
       "再現しているもの: 基準電圧 2.495 V (IKA = 10 mA)、REF の入力電流 2 µA、ΔVref/ΔVKA −1.4 mV/V、動的インピーダンス 0.2 Ω、停止中のカソード電流 0.1 µA。",
-      "扱わないもの: 初期誤差 (2.440〜2.550 V) と温度による変化、最小カソード電流 (0.4 mA) より下で安定しなくなること (このモデルは小さな電流でも安定します)、周波数特性と容量負荷での発振、耐圧・最大電流を超えたときの破壊。",
+      "基準電圧の部品ごとの違い (2.440〜2.550 V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+      "扱わないもの: 温度による変化、最小カソード電流 (0.4 mA) より下で安定しなくなること (このモデルは小さな電流でも安定します)、周波数特性と容量負荷での発振、耐圧・最大電流を超えたときの破壊。",
       "最終の確認は、メーカーの公式モデルで行ってください。"
     ],
     "origin": {

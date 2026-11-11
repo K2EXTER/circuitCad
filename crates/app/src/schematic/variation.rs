@@ -79,7 +79,7 @@ impl SchEditor {
         let outcome = if settings.output.is_empty() {
             Err(vec!["測るノードを選んでください".to_string()])
         } else {
-            match self.sim_circuit() {
+            match self.variation_circuit() {
                 Err(errs) => Err(errs),
                 Ok(c) => monte_carlo(&c, &settings).map_err(|e| vec![e.to_string()]),
             }
@@ -89,7 +89,7 @@ impl SchEditor {
             Err(e) => format!("ばらつき解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         // the limits for the same parts and tolerances: not a chance, a guarantee
-        let worst = match (&outcome, self.sim_circuit()) {
+        let worst = match (&outcome, self.variation_circuit()) {
             (Ok(_), Ok(c)) => {
                 let mut w = sim_core::WcSettings::from(&settings);
                 w.tol_v = percent(&self.mc_tol_v).unwrap_or(0.0);
@@ -99,6 +99,15 @@ impl SchEditor {
         };
         self.mc = Some(McView { outcome, worst });
         self.wave_mode = WaveMode::Mc;
+    }
+
+    /// The circuit for the variation and worst-case runs: without the models' own min / max when the box is off.
+    pub(super) fn variation_circuit(&self) -> Result<sim_core::Circuit, Vec<String>> {
+        let mut c = self.sim_circuit()?;
+        if !self.mc_spread {
+            c.spreads.clear();
+        }
+        Ok(c)
     }
 
     /// What the variation, worst-case and sensitivity runs measure, from the choice in the panel.
@@ -179,7 +188,7 @@ impl SchEditor {
                             egui::Grid::new("mc_worst").num_columns(2).show(ui, |ui| {
                                 for (label, v, corner) in [("最小", w.min, &w.min_corner), ("最大", w.max, &w.max_corner)] {
                                     // "R1 大・R2 小": the words and the separator are translated one by one (the list has any length)
-                                    let tip: Vec<String> = corner.iter().map(|(n, h)| format!("{n} {}", if *h { i18n::tr("大") } else { i18n::tr("小") })).collect();
+                                    let tip: Vec<String> = corner.iter().map(|(n, h)| format!("{} {}", varied_name(n), if *h { i18n::tr("大") } else { i18n::tr("小") })).collect();
                                     let tip = tip.join(i18n::tr("・"));
                                     let pct = if w.nominal.abs() > 1e-12 { format!(" ({:+.1}%)", (v - w.nominal) / w.nominal.abs() * 100.0) } else { String::new() };
                                     ui.label(i18n::tr(label)).on_hover_text(i18n::trf!("そうなる部品の組み合わせ: {}", tip));
@@ -193,13 +202,19 @@ impl SchEditor {
                         ui.label(i18n::tr("効いている部品")).on_hover_text(i18n::tr("その部品だけが許容差ぶん大きくなったとき、結果がどれだけ変わるか。上にある部品ほど効きます"));
                         egui::Grid::new("mc_sens").num_columns(2).show(ui, |ui| {
                             for (name, dv) in res.sensitivity.iter().take(8) {
-                                ui.label(name);
+                                ui.label(varied_name(name));
                                 ui.label(format!("{}{}", if *dv >= 0.0 { "+" } else { "−" }, fmt_unit(dv.abs(), res.unit)));
                                 ui.end_row();
                             }
                         });
                         if let Some((top, _)) = res.sensitivity.first() {
-                            ui.small(i18n::trf!("{top} の誤差が一番効いています。精度が必要なら、{top} を許容差の小さい部品 (1% など) にしましょう"));
+                            if top.contains(':') {
+                                // a part's own figure (the data sheet's min / max), not a printed tolerance
+                                let top = varied_name(top);
+                                ui.small(i18n::trf!("{top} が一番効いています。データシートの max の小さい部品 (高精度品) を選ぶか、回路で打ち消す (調整する) と狭くなります"));
+                            } else {
+                                ui.small(i18n::trf!("{top} の誤差が一番効いています。精度が必要なら、{top} を許容差の小さい部品 (1% など) にしましょう"));
+                            }
                         }
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
@@ -261,4 +276,16 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     }
     p.text(Pos2::new(rect.left() + 4.0, plot.top()), Align2::LEFT_TOP, i18n::trf!("{peak:.0}回"), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(rect.left() + 4.0, plot.bottom()), Align2::LEFT_BOTTOM, "0", f, Color32::from_gray(190));
+}
+
+/// The name shown for a varied part: `R1` as it is; a model's own figure (`U1:offset`, `Circuit::spreads`) in words.
+pub(super) fn varied_name(name: &str) -> String {
+    let Some((part, what)) = name.split_once(':') else { return name.to_string() };
+    let what = match what {
+        "offset" => i18n::tr("入力オフセット電圧"),
+        "vout" => i18n::tr("出力電圧"),
+        "vref" => i18n::tr("基準電圧"),
+        other => other,
+    };
+    i18n::trf!("{} の{} (データシートの min〜max)", part, what)
 }

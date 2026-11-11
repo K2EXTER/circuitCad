@@ -226,6 +226,8 @@ pub struct SchEditor {
     mc_tol_l: String,
     /// DC supply tolerance in %; used by the worst case only (the random run keeps supplies as they are)
     mc_tol_v: String,
+    /// The models' own min / max (`* spread`) take part in the variation and worst-case runs.
+    mc_spread: bool,
     mc_seed: u64,
     /// What the Monte Carlo run measures.
     mc_kind: McKind,
@@ -621,6 +623,7 @@ impl Default for SchEditor {
             mc_tol_c: "10".into(),
             mc_tol_l: "10".into(),
             mc_tol_v: "0".into(),
+            mc_spread: true,
             mc_seed: 1,
             mc_kind: McKind::Dc,
             panel_tab: PanelTab::Draw,

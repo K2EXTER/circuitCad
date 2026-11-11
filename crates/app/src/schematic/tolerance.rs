@@ -12,6 +12,9 @@ pub struct SheetSettings {
     pub c: String,
     pub l: String,
     pub v: String,
+    /// The parts' own figures that the data sheet gives as min / max (`* spread` in a model: an op amp's offset, a
+    /// regulator's output voltage) take part in the variation and worst-case runs.
+    pub spread: bool,
     /// The transient run: end time, largest step (empty = automatic), start from zero.
     pub tran_stop: String,
     pub tran_step: String,
@@ -29,6 +32,7 @@ impl Default for SheetSettings {
             c: "10".into(),
             l: "10".into(),
             v: "0".into(),
+            spread: true,
             tran_stop: "10m".into(),
             tran_step: String::new(),
             tran_uic: false,
@@ -42,7 +46,7 @@ impl Default for SheetSettings {
 impl SheetSettings {
     fn tolerances_default(&self) -> bool {
         let d = Self::default();
-        (&self.r, &self.c, &self.l, &self.v) == (&d.r, &d.c, &d.l, &d.v)
+        (&self.r, &self.c, &self.l, &self.v, self.spread) == (&d.r, &d.c, &d.l, &d.v, d.spread)
     }
 
     fn analysis_default(&self) -> bool {
@@ -56,7 +60,11 @@ impl SheetSettings {
 pub fn with_settings(sheet: &mut serde_json::Value, t: &SheetSettings) {
     let Some(obj) = sheet.as_object_mut() else { return };
     if !t.tolerances_default() {
-        obj.insert("tolerances".into(), serde_json::json!({"r": t.r, "c": t.c, "l": t.l, "v": t.v}));
+        let mut tol = serde_json::json!({"r": t.r, "c": t.c, "l": t.l, "v": t.v});
+        if !t.spread {
+            tol["spread"] = false.into();
+        }
+        obj.insert("tolerances".into(), tol);
     }
     if !t.analysis_default() {
         obj.insert(
@@ -75,6 +83,9 @@ pub fn take_settings(sheet: &mut serde_json::Value) -> SheetSettings {
             if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
                 *slot = s.to_string();
             }
+        }
+        if let Some(b) = v.get("spread").and_then(|x| x.as_bool()) {
+            t.spread = b;
         }
     }
     if let Some(v) = obj.remove("analysis") {
@@ -97,6 +108,7 @@ impl SchEditor {
             c: self.mc_tol_c.clone(),
             l: self.mc_tol_l.clone(),
             v: self.mc_tol_v.clone(),
+            spread: self.mc_spread,
             tran_stop: self.tran_tstop.clone(),
             tran_step: self.tran_tstep.clone(),
             tran_uic: self.tran_uic,
@@ -112,6 +124,7 @@ impl SchEditor {
         self.mc_tol_c = t.c.clone();
         self.mc_tol_l = t.l.clone();
         self.mc_tol_v = t.v.clone();
+        self.mc_spread = t.spread;
         self.tran_tstop = t.tran_stop.clone();
         self.tran_tstep = t.tran_step.clone();
         self.tran_uic = t.tran_uic;
@@ -143,6 +156,12 @@ mod tests {
         assert_eq!(take_settings(&mut w), a);
         // a file without them, or with only some boxes
         assert_eq!(take_settings(&mut serde_json::json!({})), SheetSettings::default());
+        // the models' own min / max switched off is kept (and only then written)
+        let off = SheetSettings { spread: false, ..Default::default() };
+        let mut o = serde_json::json!({});
+        with_settings(&mut o, &off);
+        assert_eq!(o["tolerances"]["spread"], false, "{o}");
+        assert_eq!(take_settings(&mut o), off);
         let mut part = serde_json::json!({"tolerances": {"c": "20"}, "analysis": {"tran_stop": "5m"}});
         assert_eq!(take_settings(&mut part), SheetSettings { c: "20".into(), tran_stop: "5m".into(), ..Default::default() });
     }

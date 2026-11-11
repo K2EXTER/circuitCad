@@ -10,19 +10,20 @@ import json, math, os, sys
 
 EX = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "crates", "part-lib", "examples")
 
-# typ values from the data sheets (docs/models/opamps.md lists the sections)
+# typ values from the data sheets (docs/models/opamps.md lists the sections); vos_max: the offset's max (absolute), which the
+# variation analyses spread the offset over (`* spread`, docs/part-format.md)
 PARTS = {
-    "LM358_SOIC-8": dict(name="LM358", aol_db=100, gbw=0.7e6, sr=0.3e6, vos=3e-3, ib=-20e-9, iq=350e-6, rin="2Meg",
+    "LM358_SOIC-8": dict(name="LM358", aol_db=100, gbw=0.7e6, sr=0.3e6, vos=3e-3, vos_max=7e-3, ib=-20e-9, iq=350e-6, rin="2Meg",
                          hu=1.4, hl=0.005, isc=40e-3, en=40e-9, ro=50, pm=None),
-    "LM324_SOIC-14": dict(name="LM324", aol_db=100, gbw=1.2e6, sr=0.5e6, vos=3e-3, ib=-20e-9, iq=175e-6, rin="2Meg",
+    "LM324_SOIC-14": dict(name="LM324", aol_db=100, gbw=1.2e6, sr=0.5e6, vos=3e-3, vos_max=7e-3, ib=-20e-9, iq=175e-6, rin="2Meg",
                           hu=1.4, hl=0.005, isc=40e-3, en=35e-9, ro=50, pm=None),
-    "TL072_SOIC-8": dict(name="TL072", aol_db=106.02, gbw=5.25e6, sr=20e6, vos=3e-3, ib=65e-12, iq=1.4e-3, rin="1e12",
+    "TL072_SOIC-8": dict(name="TL072", aol_db=106.02, gbw=5.25e6, sr=20e6, vos=3e-3, vos_max=10e-3, ib=65e-12, iq=1.4e-3, rin="1e12",
                          hu=1.4, hl=1.4, isc=26e-3, en=37e-9, ro=100, pm=56),
-    "NE5532_SOIC-8": dict(name="NE5532", aol_db=100, gbw=12e6, sr=5e6, vos=0.5e-3, ib=200e-9, iq=3e-3, rin="300k",
+    "NE5532_SOIC-8": dict(name="NE5532", aol_db=100, gbw=12e6, sr=5e6, vos=0.5e-3, vos_max=4e-3, ib=200e-9, iq=3e-3, rin="300k",
                           hu=2, hl=2, isc=38e-3, en=5e-9, ro=50, pm=None),
-    "MCP6001_SOT-23-5": dict(name="MCP6001", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, ib=1e-12, iq=100e-6, rin="1e13",
+    "MCP6001_SOT-23-5": dict(name="MCP6001", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, vos_max=4.5e-3, ib=1e-12, iq=100e-6, rin="1e13",
                              hu=0.010, hl=0.010, isc=23e-3, en=28e-9, ro=50, pm=None),
-    "MCP6002_SOIC-8": dict(name="MCP6002", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, ib=1e-12, iq=100e-6, rin="1e13",
+    "MCP6002_SOIC-8": dict(name="MCP6002", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, vos_max=4.5e-3, ib=1e-12, iq=100e-6, rin="1e13",
                            hu=0.010, hl=0.010, isc=23e-3, en=28e-9, ro=50, pm=None),
 }
 
@@ -48,6 +49,7 @@ def model(p):
         f".subckt {n} inp inn out vp vn",
         "* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance",
         f"Vos inp i1 DC {g(p['vos'])}",
+        f"* spread Vos {g(-p['vos_max'])} {g(p['vos_max'])} offset (data sheet: max {g(p['vos_max'] * 1e3)} mV either way)",
         f"En i1 i2 nz 0 {g(en_gain)}",
         "Rnz nz 0 1k",
         f"Ibp inp vn DC {g(p['ib'])}",
@@ -142,9 +144,10 @@ def limits(p):
     return [
         f"データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {where}。データシートとの比べは docs/models/opamps.md。",
         f"再現しているもの: {summary(p)}、{vos}、入力バイアス電流 {eng(abs(p['ib']), 'A')}、"
-        f"出力の振れ幅 (電源から {eng(p['hu'], 'V')} / {eng(p['hl'], 'V')})、出力の短絡電流 {eng(p['isc'], 'A')}、1 kHz の入力換算雑音 {eng(p['en'], 'V')}/√Hz。",
+        f"出力の振れ幅 (電源から {eng(p['hu'], 'V')} / {eng(p['hl'], 'V')})、出力の短絡電流 {eng(p['isc'], 'A')}、1 kHz の入力換算雑音 {eng(p['en'], 'V')}/√Hz。"
+        f"オフセットの部品ごとの違い (±{eng(p['vos_max'], 'V')}、データシートの max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
         "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、"
-        "電源電圧による GBW の変化、オフセットとバイアス電流のばらつき (typ の値で固定)、チャネル2。",
+        "電源電圧による GBW の変化、バイアス電流のばらつき (typ の値で固定)、チャネル2。",
         "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
         "電源ピンをつながないと、出力は 0V に張り付きます。",
     ]

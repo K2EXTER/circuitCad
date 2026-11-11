@@ -189,19 +189,33 @@ impl Session {
         Ok(obj(json!({"probe": sg.name, "unit": sg.unit, "fundamental_hz": t.f0, "periods_used": t.periods, "window": [t.t0, t.t1], "dc": t.dc, "thd_percent": t.thd * 100.0, "thd_db": if t.thd > 0.0 { Some(20.0 * t.thd.log10()) } else { None }, "thd_plus_noise_percent": t.thd_n * 100.0, "harmonics": rows, "warnings": warnings})))
     }
 
-    /// `worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]`:
-    /// the smallest and the largest value one result can take when every part sits at an end of its tolerance.
+    /// `worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [spread=on|off] [f=10:1Meg] [tran=10m:10u] [top=8]`:
+    /// the smallest and the largest value one result can take when every part sits at an end of its tolerance. The models' own
+    /// min / max from their data sheets (`* spread`: an op amp's offset, a regulator's output) take part unless `spread=off`.
     pub fn worst(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
-        let usage = "worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]   (tolerances in percent; NET is the net measured)";
+        let usage = "worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [spread=on|off] [f=10:1Meg] [tran=10m:10u] [top=8]   (tolerances in percent; NET is the net measured)";
         let net = pos.first().ok_or_else(|| usage.to_string())?.trim().to_string();
         let (tol_r, tol_c, tol_l, tol_v, measure) = tolerances_and_measure(&kv, 50)?;
         let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(1, 100);
+        let spread = spread_option(&kv)?;
         let gate = self.erc_gate()?;
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        if !spread {
+            c.spreads.clear();
+        }
         let w = sim_core::worst_case(&c, &sim_core::WcSettings { tol_r, tol_c, tol_l, tol_v, output: net, measure }).map_err(|e| e.to_string())?;
         let corner = |v: &[(String, bool)]| -> Vec<String> { v.iter().map(|(n, h)| format!("{n}{}", if *h { "+" } else { "-" })).collect() };
-        let parts: Vec<Value> = w.parts.iter().take(top).map(|p| json!({"part": p.name, "tolerance_percent": round6(p.tol * 100.0), "at_low_end": p.low, "at_high_end": p.high})).collect();
+        // a model's own figure (`U1:offset`) has the two ends of its element instead of a tolerance
+        let parts: Vec<Value> = w
+            .parts
+            .iter()
+            .take(top)
+            .map(|p| match p.range {
+                Some((lo, hi)) => json!({"part": p.name, "data_sheet_range": [lo, hi], "at_low_end": p.low, "at_high_end": p.high}),
+                None => json!({"part": p.name, "tolerance_percent": round6(p.tol * 100.0), "at_low_end": p.low, "at_high_end": p.high}),
+            })
+            .collect();
         let pct = |v: f64| if w.nominal.abs() > 1e-30 { Some(round6((v - w.nominal) / w.nominal.abs() * 100.0)) } else { None };
         Ok(obj(json!({
             "circuit_ok": gate.is_none(), "net": w.output, "unit": w.unit, "nominal": w.nominal,
@@ -209,18 +223,18 @@ impl Session {
             "sum_of_parts": {"min": w.min_sum, "max": w.max_sum}, "likely_at_worst": {"min": w.min_rss, "max": w.max_rss},
             "min_corner": corner(&w.min_corner), "max_corner": corner(&w.max_corner),
             "parts": parts, "unsolved_parts": w.unsolved,
-            "meaning": "min/max are solved circuits with every part at one end of its tolerance (+ = high end, - = low end); likely_at_worst treats the parts as independent",
+            "meaning": "min/max are solved circuits with every part at one end of its tolerance (+ = high end, - = low end); likely_at_worst treats the parts as independent; PART:offset / :vout / :vref are a model's own figure between its data sheet's min and max (spread=off leaves them at the model's value)",
             "warnings": gate.into_iter().collect::<Vec<_>>()
         })))
     }
 
-    /// `mc NET [measure=dc|cutoff|rise|overshoot|settle|final] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50]
-    /// [tran=10m:10u] [lo=] [hi=] [bins=10] [top=8]`: Monte Carlo. Every resistor, capacitor and coil is drawn at random inside its
+    /// `mc NET [measure=dc|cutoff|rise|overshoot|settle|final] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [spread=on|off] [f=10:1Meg]
+    /// [ppd=50] [tran=10m:10u] [lo=] [hi=] [bins=10] [top=8]`: Monte Carlo. Every resistor, capacitor and coil is drawn at random inside its
     /// tolerance (uniformly), the circuit solved each time, and the spread of one result reported, with the 95 % range a few built
-    /// boards should fall in.
+    /// boards should fall in. The models' own min / max (`* spread`) are drawn too, unless `spread=off`.
     pub fn mc(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
-        let usage = "mc NET [measure=dc|cutoff|rise|overshoot|settle|final] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=] [bins=10] [top=8]   (tolerances in percent; NET is the net measured)";
+        let usage = "mc NET [measure=dc|cutoff|rise|overshoot|settle|final] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [spread=on|off] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=] [bins=10] [top=8]   (tolerances in percent; NET is the net measured)";
         let net = pos.first().ok_or_else(|| usage.to_string())?.trim().to_string();
         if opt(&kv, "tol_v").is_some() {
             return Err("tol_v= is not used by mc (only resistors, capacitors and coils are drawn at random); use 'worst ... tol_v=' for the supply".into());
@@ -244,8 +258,12 @@ impl Session {
         let (lo, hi) = (limit("lo")?, limit("hi")?);
         let bins: usize = opt(&kv, "bins").and_then(|s| s.parse().ok()).unwrap_or(10).clamp(1, 100);
         let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(1, 100);
+        let spread = spread_option(&kv)?;
         let gate = self.erc_gate()?;
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        if !spread {
+            c.spreads.clear();
+        }
         let r = sim_core::monte_carlo(&c, &sim_core::McSettings { runs, seed, tol_r, tol_c, tol_l, output: net, measure }).map_err(|e| e.to_string())?;
         let st = r.stats().ok_or("no run gave an answer (every random circuit failed to solve); try fewer runs or smaller tolerances")?;
         let mut v = r.values.clone();
@@ -263,7 +281,12 @@ impl Session {
             warnings.push(format!("{} of {runs} random circuits did not solve and are left out", r.failed));
         }
         if c.elements.iter().any(|e| !matches!(e, sim_core::Element::Resistor { .. } | sim_core::Element::Capacitor { .. } | sim_core::Element::Inductor { .. } | sim_core::Element::VSource { .. } | sim_core::Element::ISource { .. })) {
-            warnings.push("only resistors, capacitors and coils are drawn at random: the spread of diodes, transistors and ICs (a regulator's output voltage, a diode's forward voltage) and of the supplies is not in this range".into());
+            let parts: Vec<&str> = c.spreads.iter().map(|s| s.part()).collect();
+            warnings.push(if parts.is_empty() {
+                "only resistors, capacitors and coils are drawn at random: the spread of diodes, transistors and ICs (a regulator's output voltage, a diode's forward voltage) and of the supplies is not in this range".to_string()
+            } else {
+                format!("resistors, capacitors and coils are drawn at random, and the data sheet's min / max of {} (their models' `* spread`); other diodes, transistors and ICs and the supplies are not in this range", parts.join(", "))
+            });
         }
         Ok(obj(json!({
             "net": r.output, "unit": r.unit, "runs": runs, "solved": r.values.len(), "seed": seed,
@@ -594,5 +617,14 @@ impl Session {
         (self.post_layout && self.board.is_some() && fmax > 1e6).then(|| {
             "post-layout wiring: the copper resistance is the DC value. Above about 300 kHz the skin effect raises it (x1.4 at 10 MHz, x3.5-4 at 100 MHz for 35 um copper, FastHenry2) and above about 10 MHz the inductance of close traces is up to 10 % lower, so results above 1 MHz are optimistic for the resistance".to_string()
         })
+    }
+}
+
+/// `spread=on|off` (default on): whether the models' own min / max from their data sheets (`* spread`) take part.
+fn spread_option(kv: &[(String, String)]) -> Result<bool, String> {
+    match opt(kv, "spread") {
+        None | Some("on") => Ok(true),
+        Some("off") => Ok(false),
+        Some(s) => Err(format!("spread={s}: on (the models' data sheet min / max take part) or off (the models' own values)")),
     }
 }

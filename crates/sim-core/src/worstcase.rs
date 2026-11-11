@@ -13,7 +13,7 @@
 
 use crate::circuit::{Circuit, Element};
 use crate::dc::SimError;
-use crate::montecarlo::{measure, scale, McMeasure, McSettings};
+use crate::montecarlo::{measure, spread_swings, swing_to, McMeasure, McSettings, Swing};
 
 #[derive(Clone, Debug)]
 pub struct WcSettings {
@@ -35,8 +35,12 @@ impl From<&McSettings> for WcSettings {
 /// What one part does to the result on its own.
 #[derive(Clone, Debug)]
 pub struct WcPart {
+    /// The element (`R1`), or a model's figure that spreads from part to part (`U1:offset`, `Circuit::spreads`).
     pub name: String,
+    /// The tolerance (0 for a spread).
     pub tol: f64,
+    /// A spread's two ends (the element's value, the data sheet's min and max).
+    pub range: Option<(f64, f64)>,
     /// Change of the result with only this part at its low end / high end.
     pub low: f64,
     pub high: f64,
@@ -86,10 +90,16 @@ pub(crate) fn tolerance(e: &Element, s: &WcSettings) -> Option<f64> {
     (t > 0.0).then_some(t)
 }
 
+#[cfg(test)]
 pub(crate) fn corner(circuit: &Circuit, parts: &[(usize, f64)], high: &[bool]) -> Circuit {
+    let parts: Vec<(usize, Swing)> = parts.iter().map(|&(i, t)| (i, Swing::Rel(t))).collect();
+    corner_of(circuit, &parts, high)
+}
+
+fn corner_of(circuit: &Circuit, parts: &[(usize, Swing)], high: &[bool]) -> Circuit {
     let mut c = circuit.clone();
-    for (&(i, tol), &h) in parts.iter().zip(high) {
-        scale(&mut c.elements[i], 1.0 + if h { tol } else { -tol });
+    for (&(i, swing), &h) in parts.iter().zip(high) {
+        swing_to(&mut c.elements[i], swing, if h { 1.0 } else { -1.0 });
     }
     c
 }
@@ -100,7 +110,12 @@ pub fn worst_case(circuit: &Circuit, s: &WcSettings) -> Result<WorstCase, SimErr
     }
     let output = s.output.trim().to_string();
     let nominal = measure(circuit, &output, &s.measure)?;
-    let parts: Vec<(usize, f64)> = circuit.elements.iter().enumerate().filter_map(|(i, e)| tolerance(e, s).map(|t| (i, t))).collect();
+    // the toleranced parts, then the models' own spreads (Circuit::spreads)
+    let mut named: Vec<(usize, Swing, String)> =
+        circuit.elements.iter().enumerate().filter_map(|(i, e)| tolerance(e, s).map(|t| (i, Swing::Rel(t), e.name().to_string()))).collect();
+    named.extend(spread_swings(circuit));
+    let parts: Vec<(usize, Swing)> = named.iter().map(|(i, sw, _)| (*i, *sw)).collect();
+    let name_of = |k: usize| named[k].2.clone();
     if parts.is_empty() {
         return Err(SimError::Invalid("許容差のある部品 (抵抗・コンデンサ・コイル) がありません。許容差を 0 より大きくしてください".into()));
     }
@@ -109,25 +124,29 @@ pub fn worst_case(circuit: &Circuit, s: &WcSettings) -> Result<WorstCase, SimErr
     let jobs: Vec<(usize, bool)> = (0..parts.len()).flat_map(|k| [(k, false), (k, true)]).collect();
     let alone = crate::par_map(&jobs, |&(k, h)| {
         let mut c = circuit.clone();
-        let (i, tol) = parts[k];
-        scale(&mut c.elements[i], 1.0 + if h { tol } else { -tol });
+        let (i, swing) = parts[k];
+        swing_to(&mut c.elements[i], swing, if h { 1.0 } else { -1.0 });
         measure(&c, &output, &s.measure).ok().filter(|v| v.is_finite())
     });
     let mut unsolved = vec![];
     let mut wc_parts = vec![];
-    for (k, &(i, tol)) in parts.iter().enumerate() {
+    for (k, &(_, swing)) in parts.iter().enumerate() {
         let (lo, hi) = (alone[2 * k], alone[2 * k + 1]);
         if lo.is_none() || hi.is_none() {
-            unsolved.push(circuit.elements[i].name().to_string());
+            unsolved.push(name_of(k));
         }
+        let (tol, range) = match swing {
+            Swing::Rel(t) => (t, None),
+            Swing::Abs(a, b) => (0.0, Some((a, b))),
+        };
         // a side that did not solve counts as no change
-        wc_parts.push(WcPart { name: circuit.elements[i].name().to_string(), tol, low: lo.map_or(0.0, |v| v - nominal), high: hi.map_or(0.0, |v| v - nominal) });
+        wc_parts.push(WcPart { name: name_of(k), tol, range, low: lo.map_or(0.0, |v| v - nominal), high: hi.map_or(0.0, |v| v - nominal) });
     }
 
     // the corner that pushes the result up (or down): each part at the end that does it
     let pick = |up: bool| -> Vec<bool> { wc_parts.iter().map(|p| if up { p.high >= p.low } else { p.high < p.low }).collect() };
     let better = |a: f64, b: f64, up: bool| if up { a > b } else { a < b };
-    let solve_corner = |high: &[bool]| measure(&corner(circuit, &parts, high), &output, &s.measure).ok().filter(|v| v.is_finite());
+    let solve_corner = |high: &[bool]| measure(&corner_of(circuit, &parts, high), &output, &s.measure).ok().filter(|v| v.is_finite());
     let find = |up: bool| -> (f64, Vec<bool>) {
         let mut high = pick(up);
         let mut best = solve_corner(&high).unwrap_or(nominal);
@@ -167,7 +186,7 @@ pub fn worst_case(circuit: &Circuit, s: &WcSettings) -> Result<WorstCase, SimErr
     let up_rss = wc_parts.iter().map(|p| p.low.max(p.high).max(0.0).powi(2)).sum::<f64>().sqrt();
     let down_rss = wc_parts.iter().map(|p| p.low.min(p.high).min(0.0).powi(2)).sum::<f64>().sqrt();
     wc_parts.sort_by(|a, b| b.span().total_cmp(&a.span()));
-    let named = |high: &[bool]| -> Vec<(String, bool)> { parts.iter().zip(high).map(|(&(i, _), &h)| (circuit.elements[i].name().to_string(), h)).collect() };
+    let named = |high: &[bool]| -> Vec<(String, bool)> { high.iter().enumerate().map(|(k, &h)| (name_of(k), h)).collect() };
     let unit = s.measure.unit();
     Ok(WorstCase {
         output,

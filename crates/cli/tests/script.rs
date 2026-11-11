@@ -2152,3 +2152,34 @@ diagnose OUT=0 MID=5
     let second = a.last().unwrap();
     assert!(second["suspects"][0]["fault"].as_str().unwrap().starts_with("R3"), "{second}");
 }
+
+#[test]
+fn worst_and_mc_move_an_op_amps_offset_between_its_data_sheet_ends() {
+    // an LM358 follower at 2.5 V: the data sheet's offset is 3 mV typ, 7 mV max either way
+    let follower = "new
+add LM358 as=U1
+add V 5 as=VP
+add V 2.5 as=VI
+net VCC VP.+ U1.V+
+net GND VP.- VI.- U1.V-
+net IN VI.+ U1.IN+
+net OUT U1.OUT U1.IN-
+erc
+";
+    let (a, ok) = run(&format!("{follower}worst out tol_r=0 tol_c=0 tol_l=0
+mc out runs=200 tol_r=0 tol_c=0 tol_l=0
+worst out tol_r=0 tol_c=0 tol_l=0 spread=off
+"));
+    assert!(!ok, "without the spreads there is nothing to vary");
+    let w = a.iter().find(|v| v.get("min_corner").is_some()).unwrap();
+    let span = w["max"].as_f64().unwrap() - w["min"].as_f64().unwrap();
+    assert!((span - 14e-3).abs() < 0.2e-3, "the follower moves with the offset, -7..+7 mV: {w}");
+    assert_eq!(w["parts"][0]["part"], "U1:offset", "{w}");
+    assert_eq!(w["parts"][0]["data_sheet_range"], serde_json::json!([-0.007, 0.007]), "{w}");
+    let mc = a.iter().find(|v| v["cmd"] == "mc").unwrap();
+    assert!(mc.to_string().contains("U1:offset"), "{mc}");
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("許容差のある部品"), "{a:?}");
+    let (b, _) = run(&format!("{follower}worst out spread=maybe
+"));
+    assert!(b.last().unwrap()["error"].as_str().unwrap().contains("spread=maybe"));
+}

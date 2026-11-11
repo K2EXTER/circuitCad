@@ -83,7 +83,7 @@
   "sim": {
     "kind": "subckt",
     "name": "LP5907-4.5",
-    "text": ".subckt LP5907-4.5 in gnd en out\n* enable: 1 Meg pull-down; on half way between the low and high thresholds; soft start to 95 % in the turn-on time\nRen en gnd 1e+06\nBon on gnd V=step(V(en,gnd)-0.8,0.05)\nRss on ss 2.66667\nCss ss gnd 10u\n* line regulation (slow, as the data sheet's DC figure) and the ripple from the input (a floor and a high-pass)\nRlf in lf 1.59Meg\nClf lf gnd 100n\nRhp_c in hp1 1\nChp hp1 hp 1e-09\nRhp hp gnd 10610.3\n* output noise (10 Hz to 100 kHz, taken as flat): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\nBtgt t0 gnd V=V(ss,gnd)*4.5*(1+0.0002*(V(lf,gnd)-5.5))+3.16228e-05*(V(in,gnd)-5.5)+0.001*V(hp,gnd)\nEn tgt t0 nz gnd 7.76749\n* pass device: the error amplifier's current (the load regulation), no more than the input allows through the pass\n* device's resistance (dropout) and the current limit; only from in to out\nBpass in out I=max(min(min(22.2222*(V(tgt,gnd)-V(out,gnd)),(V(in,gnd)-V(out,gnd))/0.5),0.5),0)\n* quiescent current: grows with the load; a little when disabled\nBq in gnd I=V(ss,gnd)*(1.2e-05+0.000952*max(min(min(22.2222*(V(tgt,gnd)-V(out,gnd)),(V(in,gnd)-V(out,gnd))/0.5),0.5),0))+2e-07\n* output discharge when disabled\nBdis out gnd I=(1-V(ss,gnd))*V(out,gnd)/230\n.ends LP5907-4.5",
+    "text": ".subckt LP5907-4.5 in gnd en out\n* enable: 1 Meg pull-down; on half way between the low and high thresholds; soft start to 95 % in the turn-on time\nRen en gnd 1e+06\nBon on gnd V=step(V(en,gnd)-0.8,0.05)\nRss on ss 2.66667\nCss ss gnd 10u\n* line regulation (slow, as the data sheet's DC figure) and the ripple from the input (a floor and a high-pass)\nRlf in lf 1.59Meg\nClf lf gnd 100n\nRhp_c in hp1 1\nChp hp1 hp 1e-09\nRhp hp gnd 10610.3\n* output noise (10 Hz to 100 kHz, taken as flat): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\nBtgt t0 gnd V=V(ss,gnd)*(4.5*(1+0.0002*(V(lf,gnd)-5.5))+V(vt,gnd))+3.16228e-05*(V(in,gnd)-5.5)+0.001*V(hp,gnd)\n* the output's difference from part to part (0 V; the variation analyses move it over the data sheet's 2 %)\nVtol vt gnd DC 0\n* spread Vtol -0.09 0.09 vout (data sheet: output accuracy 2 %)\nEn tgt t0 nz gnd 7.76749\n* pass device: the error amplifier's current (the load regulation), no more than the input allows through the pass\n* device's resistance (dropout) and the current limit; only from in to out\nBpass in out I=max(min(min(22.2222*(V(tgt,gnd)-V(out,gnd)),(V(in,gnd)-V(out,gnd))/0.5),0.5),0)\n* quiescent current: grows with the load; a little when disabled\nBq in gnd I=V(ss,gnd)*(1.2e-05+0.000952*max(min(min(22.2222*(V(tgt,gnd)-V(out,gnd)),(V(in,gnd)-V(out,gnd))/0.5),0.5),0))+2e-07\n* output discharge when disabled\nBdis out gnd I=(1-V(ss,gnd))*V(out,gnd)/230\n.ends LP5907-4.5",
     "pins": [
       "1",
       "2",
@@ -93,7 +93,8 @@
     "limits": [
       "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI LP5907 データシート SNVS798Q の 5.5 節 (VIN = 5.5 V、IOUT = 1 mA、CIN = COUT = 1 µF)。データシートとの比べは docs/models/regulators.md。",
       "再現しているもの: 出力 4.5 V、ライン・レギュレーション 0.02 %/V、ロード・レギュレーション 0.001 %/mA、電源電流 (無負荷 12 µA、250 mA で 250 µA、停止中 0.2 µA)、ドロップアウト (100 mA で 50 mV)、電流制限 500 mA、PSRR (100 Hz 90 dB・1 kHz 82 dB・10 kHz 65 dB・100 kHz 60 dB の近似)、出力雑音 10 µVrms (10 Hz〜100 kHz を平らとした)、EN (1 MΩ のプルダウン、0.8 V で切り替え)、起動 80 µs、停止中の放電 230 Ω。",
-      "扱わないもの: 出力電圧の誤差 (±2%) — 出力はちょうど 4.5 V、出力コンデンサの容量・ESR による安定性 (どのコンデンサでも安定に動きます)、負荷の急変での応答 (データシート ±40 mV)、熱による停止、温度による変化。",
+      "出力電圧の部品ごとの違い (±2%) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析はちょうど 4.5 V)。",
+      "扱わないもの: 出力コンデンサの容量・ESR による安定性 (どのコンデンサでも安定に動きます)、負荷の急変での応答 (データシート ±40 mV)、熱による停止、温度による変化。",
       "最終の確認は、メーカーの公式モデルで行ってください。"
     ],
     "origin": {

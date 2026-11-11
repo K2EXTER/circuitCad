@@ -204,7 +204,7 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
 ")).unwrap();
     };
     let old = legacy_models();
-    assert_eq!(old.len(), 15, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11");
+    assert_eq!(old.len(), 17, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11, and ADR4525 and LP5907-4.5 that gained their data sheet spread");
     for (name, shipped) in &old {
         assert!(!shipped.texts.is_empty(), "{name}");
         let current: PartDef = example(name);
@@ -213,7 +213,8 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
             // a copy with an earlier model (any earlier one) gets the current model; the user's shop number stays
             let mut was = current.clone();
             was.sim.as_mut().unwrap().text = text.clone();
-            was.description = shipped.descriptions[0].clone();
+            // (a part whose description never changed has no earlier one)
+            was.description = shipped.descriptions.first().cloned().unwrap_or_else(|| current.description.clone());
             was.shops.insert("akizuki".into(), "I-mine".into());
             std::fs::write(&file, serde_json::to_string_pretty(&was).unwrap()).unwrap();
             forget_rebuild();
