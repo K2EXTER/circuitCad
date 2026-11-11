@@ -591,12 +591,6 @@ impl Grad {
         }
         g
     }
-    fn into_vec(self) -> Vec<f64> {
-        match self {
-            Grad::Inline(a, n) => a[..n].to_vec(),
-            Grad::Heap(v) => v,
-        }
-    }
 }
 
 impl std::ops::Deref for Grad {
@@ -652,9 +646,15 @@ impl CExpr {
 
     /// Value and the derivative with respect to each of `self.vars`.
     pub fn eval(&self, x: &[f64], t: f64) -> (f64, Vec<f64>) {
+        self.eval_with(x, t, |v, g| (v, g.to_vec()))
+    }
+
+    /// `eval`, handing the derivatives to `k` as a slice: no allocation for an expression of up to eight variables (the
+    /// matrix assembly calls this for every behavioural source at every Newton iteration).
+    pub fn eval_with<R>(&self, x: &[f64], t: f64, k: impl FnOnce(f64, &[f64]) -> R) -> R {
         let n = self.vars.len();
         let d = self.go(&self.tree, x, t, n);
-        (d.v, d.g.into_vec())
+        k(d.v, &d.g)
     }
 
     fn go(&self, tr: &Tree, x: &[f64], t: f64, n: usize) -> D {
@@ -692,7 +692,17 @@ impl CExpr {
                 }
             }
             Tree::Call(f, args) => {
-                let a: Vec<D> = args.iter().map(|e| self.go(e, x, t, n)).collect();
+                // up to three arguments (every function but a long `if` chain) stay on the stack: collecting them into a Vec was
+                // an allocation per call, at every Newton iteration
+                let few: [D; 3];
+                let many: Vec<D>;
+                let a: &[D] = if args.len() <= 3 {
+                    few = std::array::from_fn(|i| args.get(i).map_or(D { v: 0.0, g: Grad::Inline([0.0; INLINE], 0) }, |e| self.go(e, x, t, n)));
+                    &few[..args.len()]
+                } else {
+                    many = args.iter().map(|e| self.go(e, x, t, n)).collect();
+                    &many
+                };
                 match f {
                     Func::Abs => a[0].map(a[0].v.abs(), if a[0].v < 0.0 { -1.0 } else { 1.0 }),
                     Func::Min => if a[0].v <= a[1].v { a[0].clone() } else { a[1].clone() },
