@@ -13,8 +13,17 @@ pub(crate) struct Mna {
 }
 
 impl Mna {
-    pub(super) fn new(n: usize, rhs_only: bool) -> Self {
-        let rows = if rhs_only { Vec::new() } else { vec![Vec::new(); n] };
+    /// An empty system of `n` unknowns, filling the row buffers of `spare` (emptied first) when there are `n` of them.
+    pub(super) fn new(n: usize, rhs_only: bool, spare: Vec<Vec<(usize, f64)>>) -> Self {
+        let rows = if rhs_only {
+            Vec::new()
+        } else if spare.len() == n {
+            let mut rows = spare;
+            rows.iter_mut().for_each(Vec::clear);
+            rows
+        } else {
+            vec![Vec::new(); n]
+        };
         Self { n, rows, b: vec![0.0; n], rhs_only }
     }
     /// A[row node][col node] += val (ground rows/cols are dropped).
@@ -129,7 +138,8 @@ impl Compiled {
 
     pub(super) fn assemble_with(&self, vj: &mut [f64], x: &[f64], ctx: &Ctx, rhs_only: bool) -> (Mna, bool) {
         let (gmin, scale) = (ctx.gmin, ctx.scale);
-        let mut m = Mna::new(self.n_unknowns, rhs_only);
+        let spare = if rhs_only { Vec::new() } else { std::mem::take(&mut *self.rows_spare.borrow_mut()) };
+        let mut m = Mna::new(self.n_unknowns, rhs_only, spare);
         let mut limited = false;
         for node in 1..self.n_nodes {
             m.at(node - 1, node - 1, gmin);

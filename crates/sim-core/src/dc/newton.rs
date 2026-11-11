@@ -132,22 +132,40 @@ impl Compiled {
         // Only for the large systems, where the factorisation is most of the time: in a small circuit a bistable flip (a multivibrator)
         // has an almost singular matrix, and what Newton's iteration does there depends on the pivots chosen at that moment.
         let plan = if n >= REFACTOR_MIN_SIZE { self.plan.borrow().clone() } else { None };
-        let rf = plan.as_ref().and_then(|sym| linalg::refactor(sym, &rows));
+        let rf = plan.as_ref().and_then(|sym| linalg::refactor(sym, &rows, std::mem::take(&mut *self.factor_spare.borrow_mut())));
         if let Some(f) = rf {
             let mut x = b.clone();
             f.solve(&mut x);
-            if x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b) {
+            let mut ok = x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b);
+            // An old pivot order loses a few digits when a conductance has moved by decades (a switch, a diode turning on): one or
+            // two steps of iterative refinement with the same factors win them back, far cheaper than a new factorisation. The
+            // answer is held to the same test.
+            for _ in 0..2 {
+                if ok || !x.iter().all(|v| v.is_finite()) {
+                    break;
+                }
+                let mut d = linalg::residual(&rows, &x, &b);
+                f.solve(&mut d);
+                x.iter_mut().zip(&d).for_each(|(a, d)| *a += d);
+                ok = x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b);
+            }
+            *self.factor_spare.borrow_mut() = f.into_rows();
+            if ok {
                 REFAC.with(|c| c.set([c.get()[0] + 1, c.get()[1]]));
+                *self.rows_spare.borrow_mut() = rows;
                 return Ok(x);
             }
         }
         REFAC.with(|c| c.set([c.get()[0], c.get()[1] + 1]));
-        let (f, sym) = linalg::factor_planned(n, rows, n >= REFACTOR_MIN_SIZE)?;
+        // a full factorisation still takes the elimination order of the plan when the pattern has not changed
+        let (f, sym) = linalg::factor_ordered(n, rows, n >= REFACTOR_MIN_SIZE, plan.as_deref())?;
         if let Some(sym) = sym {
             *self.plan.borrow_mut() = Some(std::rc::Rc::new(sym));
         }
         let mut x = b;
         f.solve(&mut x);
+        // the factor's rows are the input rows, grown by the fill-in: the next assembly reuses them
+        *self.rows_spare.borrow_mut() = f.into_rows();
         Ok(x)
     }
 
@@ -239,22 +257,24 @@ impl Compiled {
                     }
             }
             let (x_old, vj_old) = if backtrack { (x.clone(), vj.clone()) } else { (vec![], vec![]) };
-            let mut xn = m.b;
             // after the first iteration a singular matrix is the iterate's fault, not the circuit's: an overshoot into
             // a junction at several volts of forward bias puts 1e20 S on the diagonal and the pivots vanish. Report it
             // as "no convergence" so that the damped retries and the other strategies get their turn.
-            match self.solve_reusing(m.n, m.rows, xn.clone()) {
-                Ok(x) => xn = x,
+            let xn = match self.solve_reusing(m.n, m.rows, m.b) {
+                Ok(x) => x,
                 Err(_) if it > 1 => return Err(Fail::NoConv),
                 Err(_) => return Err(Fail::Singular),
-            }
+            };
             if xn.iter().any(|v| !v.is_finite()) {
                 return Err(Fail::NoConv);
             }
             if it == limit {
                 note_stuck(&x, &xn, n_node_unknowns);
             }
-            if std::env::var_os("CCAD_TRACE").is_some() && (it <= 6 || it % 25 == 0) {
+            // read once per process: on Windows every `var_os` locks and searches the environment, a few percent of an iteration
+            // of a small circuit
+            static TRACE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            if *TRACE.get_or_init(|| std::env::var_os("CCAD_TRACE").is_some()) && (it <= 6 || it % 25 == 0) {
                 let o = crate::options::options();
                 let w = x.iter().zip(&xn).enumerate().filter(|(i, _)| *i < n_node_unknowns).map(|(i, (a, b))| (i, (a - b).abs() / (o.reltol * a.abs().max(b.abs()) + o.vntol), *a, *b)).max_by(|p, q| p.1.total_cmp(&q.1));
                 if let Some((i, r, a, b)) = w {

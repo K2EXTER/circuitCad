@@ -89,6 +89,20 @@ impl Symbolic {
     }
 }
 
+/// The work lists of the last `factor_ordered` on this thread, kept for their capacity: a small system is factored from scratch
+/// at every Newton iteration, and allocating these was a fifth of the time of a small circuit's transient.
+#[derive(Default)]
+struct Scratch {
+    col_rows: Vec<Vec<usize>>,
+    merged: Vec<(usize, f64)>,
+    cand: Vec<(usize, f64)>,
+    ops_len: usize,
+}
+
+thread_local! {
+    static SCRATCH: std::cell::RefCell<Scratch> = std::cell::RefCell::new(Scratch::default());
+}
+
 /// Factor a sparse matrix given as rows of (column, value), sorted by column with no duplicates.
 /// Gaussian elimination column by column; the pivot is the sparsest row among those within a
 /// tenth of the largest entry (threshold pivoting), which keeps fill-in small.
@@ -104,14 +118,24 @@ pub(super) fn factor_sym(n: usize, rows: Vec<Vec<(usize, f64)>>) -> Result<(Fact
 
 /// `factor_sym`, with the plan only when `want_plan`: the plan repeats the whole elimination on the pattern, which is wasted when
 /// the caller will never refactor (a small system is always factored from scratch).
-pub(super) fn factor_planned(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_plan: bool) -> Result<(Factor, Option<Symbolic>), SimError> {
+pub(super) fn factor_planned(n: usize, rows: Vec<Vec<(usize, f64)>>, want_plan: bool) -> Result<(Factor, Option<Symbolic>), SimError> {
+    factor_ordered(n, rows, want_plan, None)
+}
+
+/// `factor_planned`; `earlier`: the plan of an earlier factorisation, whose elimination order is taken when the pattern is the
+/// same (the order depends on the pattern alone, so it comes out the same, without the search for it).
+pub(super) fn factor_ordered(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_plan: bool, earlier: Option<&Symbolic>) -> Result<(Factor, Option<Symbolic>), SimError> {
     const THRESHOLD: f64 = 0.1;
     let orig_pattern: Vec<Vec<usize>> = if want_plan || n >= ORDER_MIN_SIZE { rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect() } else { vec![] };
     // A big system is eliminated in a minimum-degree order of its unknowns: in the natural order a circuit of a few hundred nodes
     // fills in to fifteen times its entries, and the factorisation is most of the time of a DC solve. A small one keeps the natural
     // order (a latch there is sensitive to the pivots chosen).
     let (perm, pos) = if n >= ORDER_MIN_SIZE {
-        let perm = min_degree_order(n, &orig_pattern);
+        let reuse = earlier.filter(|s| s.n == n && !s.perm.is_empty() && s.pattern == orig_pattern);
+        let perm = match reuse {
+            Some(s) => s.perm.clone(),
+            None => min_degree_order(n, &orig_pattern),
+        };
         let mut pos = vec![0usize; n];
         for (k, &c) in perm.iter().enumerate() {
             pos[c] = k;
@@ -122,8 +146,11 @@ pub(super) fn factor_planned(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
         (vec![], vec![])
     };
     let pattern: Vec<Vec<usize>> = if want_plan { rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect() } else { vec![] };
-    // rows that have (or once had) an entry in each column
-    let mut col_rows: Vec<Vec<usize>> = vec![vec![]; n];
+    // rows that have (or once had) an entry in each column; the lists of the last factorisation are filled again (a small system
+    // is factored from scratch at every Newton iteration, and these were most of its allocations)
+    let Scratch { mut col_rows, mut merged, mut cand, ops_len } = SCRATCH.with(|c| std::mem::take(&mut *c.borrow_mut()));
+    col_rows.iter_mut().for_each(Vec::clear);
+    col_rows.resize_with(n, Vec::new);
     for (r, row) in rows.iter().enumerate() {
         for &(c, _) in row {
             col_rows[c].push(r);
@@ -131,9 +158,10 @@ pub(super) fn factor_planned(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
     }
     let mut done = vec![false; n];
     let mut pivot_row = vec![0usize; n];
-    let mut ops = vec![];
-    let mut merged: Vec<(usize, f64)> = vec![];
-    let mut cand: Vec<(usize, f64)> = vec![];
+    // as many row operations as last time, roughly: one allocation instead of a dozen doublings
+    let mut ops = Vec::with_capacity(ops_len);
+    merged.clear();
+    cand.clear();
     for k in 0..n {
         let mut best = 0.0f64;
         cand.clear();
@@ -194,6 +222,7 @@ pub(super) fn factor_planned(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
         }
         rows[p] = prow;
     }
+    SCRATCH.with(|c| *c.borrow_mut() = Scratch { col_rows, merged, cand, ops_len: ops.len() });
     let sym = want_plan.then(|| {
         let mut sym = Symbolic::plan(n, pattern, pivot_row.clone());
         sym.pattern = orig_pattern;
@@ -207,7 +236,8 @@ pub(super) fn factor_planned(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
 /// The numeric factorisation of a matrix with the pattern of `sym`, in its pivot order: row by row, each row combined with
 /// the earlier pivot rows. `None` when the pattern differs or a pivot has become small compared with its row (the caller then
 /// factors from scratch and makes a new plan).
-pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Factor> {
+/// `spare`: the rows of an earlier factor of the same plan (`Factor::into_rows`), filled again instead of allocating new ones.
+pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>], spare: Vec<Vec<(usize, f64)>>) -> Option<Factor> {
     let n = sym.n;
     if rows.len() != n || rows.iter().zip(&sym.pattern).any(|(r, p)| r.len() != p.len() || r.iter().zip(p).any(|(e, c)| e.0 != *c)) {
         return None;
@@ -216,7 +246,7 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Fac
     // the way in instead of building a permuted, re-sorted copy of every row.
     let map = |c: usize| if sym.perm.is_empty() { c } else { sym.pos[c] };
     let mut w = vec![0.0f64; n];
-    let mut u: Vec<Vec<(usize, f64)>> = vec![vec![]; n];
+    let mut u: Vec<Vec<(usize, f64)>> = if spare.len() == n { spare } else { vec![vec![]; n] };
     let mut ops: Vec<(usize, usize, f64)> = Vec::with_capacity(sym.row_ops.iter().map(|o| o.len()).sum());
     let mut touched: Vec<usize> = vec![];
     for k in 0..n {
@@ -246,7 +276,9 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Fac
                 return None;
         }
         let cols = &sym.u_cols[p];
-        let mut row = Vec::with_capacity(cols.len());
+        let mut row = std::mem::take(&mut u[p]);
+        row.clear();
+        row.reserve(cols.len());
         for &c in cols {
             row.push((c, w[c]));
             w[c] = 0.0;
@@ -262,6 +294,11 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Fac
 }
 
 impl Factor {
+    /// The row buffers of the eliminated matrix (row `r` of the input is `u[r]`), for the next assembly to fill.
+    pub(super) fn into_rows(self) -> Vec<Vec<(usize, f64)>> {
+        self.u
+    }
+
     /// Solve A x = b; `b` holds the solution on return.
     pub(super) fn solve(&self, b: &mut [f64]) {
         for &(r, p, f) in &self.ops {
@@ -341,6 +378,11 @@ fn min_degree_order(n: usize, pattern: &[Vec<usize>]) -> Vec<usize> {
     order
 }
 
+/// `b - rows * x`.
+pub(super) fn residual(rows: &[Vec<(usize, f64)>], x: &[f64], b: &[f64]) -> Vec<f64> {
+    rows.iter().zip(b).map(|(row, b)| b - row.iter().map(|&(c, v)| v * x[c]).sum::<f64>()).collect()
+}
+
 /// Is `x` a solution of `rows * x = b` to rounding level? (A refactorisation in an old pivot order can lose digits when
 /// a pivot has become small; this tells.)
 pub(super) fn residual_ok(rows: &[Vec<(usize, f64)>], x: &[f64], b: &[f64]) -> bool {
@@ -382,7 +424,7 @@ mod tests {
         let b = [1.0, 2.0, 3.0, 4.0, 5.0];
         let (f1, sym) = factor_sym(5, rows_of(&a)).unwrap();
         let x1 = solve_with(&f1, &b);
-        let f2 = refactor(&sym, &rows_of(&a)).expect("the same matrix must refactor");
+        let f2 = refactor(&sym, &rows_of(&a), vec![]).expect("the same matrix must refactor");
         let x2 = solve_with(&f2, &b);
         for (p, q) in x1.iter().zip(&x2) {
             assert!((p - q).abs() < 1e-12, "{x1:?} vs {x2:?}");
@@ -393,7 +435,10 @@ mod tests {
         a2[3][3] = 1.5;
         a2[1][2] = -0.5;
         let (g1, _) = factor_sym(5, rows_of(&a2)).unwrap();
-        let g2 = refactor(&sym, &rows_of(&a2)).expect("new values refactor");
+        // into the rows of the earlier factor (as the Newton iteration does): bit for bit what fresh rows give
+        let g2 = refactor(&sym, &rows_of(&a2), f2.into_rows()).expect("new values refactor");
+        let g3 = refactor(&sym, &rows_of(&a2), vec![]).expect("new values refactor");
+        assert_eq!(solve_with(&g2, &b), solve_with(&g3, &b));
         for (p, q) in solve_with(&g1, &b).iter().zip(&solve_with(&g2, &b)) {
             assert!((p - q).abs() < 1e-9);
         }
@@ -446,7 +491,7 @@ mod tests {
             m2[i][i] += 1.0;
         }
         let rows2 = rows_of(&m2);
-        let g = refactor(&sym, &rows2).expect("the pattern is the same");
+        let g = refactor(&sym, &rows2, f.into_rows()).expect("the pattern is the same");
         let x2 = solve_with(&g, &b);
         assert!(residual_ok(&rows2, &x2, &b));
     }

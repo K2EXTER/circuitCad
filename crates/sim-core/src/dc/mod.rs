@@ -112,6 +112,11 @@ pub(crate) struct Compiled {
     cache: std::cell::RefCell<Vec<(FactorKey, std::rc::Rc<Factor>)>>,
     /// The pivot order and fill pattern of the last full factorisation (see `linalg::refactor`).
     plan: std::cell::RefCell<Option<std::rc::Rc<linalg::Symbolic>>>,
+    /// The rows of the last matrix, handed back after its solve so that the next assembly fills the same buffers instead of
+    /// allocating a row at a time (see `Mna::new`). Row `i` goes back to row `i`, so each keeps a capacity that fits it.
+    rows_spare: std::cell::RefCell<Vec<Vec<(usize, f64)>>>,
+    /// The same for the eliminated rows of the last `linalg::refactor`.
+    factor_spare: std::cell::RefCell<Vec<Vec<(usize, f64)>>>,
     pub(crate) ce: Vec<Ce>,
     /// The stored state (0 or 1) of every `Ce::Seq`, changed only between solves.
     pub(crate) seq_state: std::cell::RefCell<Vec<f64>>,
