@@ -107,26 +107,44 @@ pub(crate) fn diode_q(m: &DiodeModel, nvt: f64, v: f64) -> (f64, f64) {
 /// Stored charge and capacitance of the base-emitter junction (depletion plus the forward diffusion charge).
 /// The forward diffusion charge is `tf * if / qb` as in SPICE's Gummel-Poon model: `1 / qb` is the same Early (`k`) and high
 /// injection (`h`) factor that scales the transport current in `bjt_eval`. The capacitance is its derivative with respect to
-/// vbe (the small cross term through vbc is left out).
+/// vbe; the derivative with respect to vbc (through `qb`) is `bjt_qbe_dvbc`.
 pub(crate) fn bjt_qbe(m: &BjtModel, vbe: f64, vbc: f64) -> (f64, f64) {
     let (qd, cd) = depletion(m.cje, m.vje, m.mje, m.fc, vbe);
     if m.tf <= 0.0 {
         return (qd, cd);
     }
-    let nfvt = m.nf * VT;
-    let ef = exp_safe(vbe / nfvt);
-    let (iff, gf) = (m.is * (ef - 1.0), m.is / nfvt * ef);
-    let (khv, dkh) = bjt_inv_qb(m, vbe, vbc, iff, gf);
+    let (iff, gf) = bjt_forward(m, vbe);
+    let (khv, dkh, _) = bjt_inv_qb(m, vbe, vbc, iff, gf);
     (qd + m.tf * iff * khv, cd + m.tf * (gf * khv + iff * dkh))
 }
 
-/// `1 / qb` of the Gummel-Poon model at (vbe, vbc) and its derivative with respect to vbe, the same factors as `bjt_eval`.
-fn bjt_inv_qb(m: &BjtModel, vbe: f64, vbc: f64, iff: f64, gf: f64) -> (f64, f64) {
+/// How the base-emitter charge moves with vbc: the diffusion charge `tf * if / qb` depends on vbc through `qb` (the Early
+/// factor and the reverse current's share of high injection). The transient needs it in its matrix, or the Newton iteration
+/// of a transistor in saturation converges only linearly.
+pub(crate) fn bjt_qbe_dvbc(m: &BjtModel, vbe: f64, vbc: f64) -> f64 {
+    if m.tf <= 0.0 {
+        return 0.0;
+    }
+    let (iff, gf) = bjt_forward(m, vbe);
+    m.tf * iff * bjt_inv_qb(m, vbe, vbc, iff, gf).2
+}
+
+fn bjt_forward(m: &BjtModel, vbe: f64) -> (f64, f64) {
+    let nfvt = m.nf * VT;
+    let ef = exp_safe(vbe / nfvt);
+    (m.is * (ef - 1.0), m.is / nfvt * ef)
+}
+
+/// `1 / qb` of the Gummel-Poon model at (vbe, vbc) and its derivatives with respect to vbe and vbc, the same factors as
+/// `bjt_eval`.
+fn bjt_inv_qb(m: &BjtModel, vbe: f64, vbc: f64, iff: f64, gf: f64) -> (f64, f64, f64) {
     let (dk_be, dk_bc) = (if m.var.is_finite() { -1.0 / m.var } else { 0.0 }, if m.vaf.is_finite() { -1.0 / m.vaf } else { 0.0 });
     let k_raw = 1.0 + dk_be * vbe + dk_bc * vbc;
-    let (k, dk_be) = if k_raw > 0.05 { (k_raw, dk_be) } else { (0.05, 0.0) };
+    let (k, dk_be, dk_bc) = if k_raw > 0.05 { (k_raw, dk_be, dk_bc) } else { (0.05, 0.0, 0.0) };
     let inv_f = if m.ikf.is_finite() { 1.0 / m.ikf } else { 0.0 };
-    let ir = m.is * (exp_safe(vbc / (m.nr * VT)) - 1.0);
+    let nrvt = m.nr * VT;
+    let er = exp_safe(vbc / nrvt);
+    let (ir, gr) = (m.is * (er - 1.0), m.is / nrvt * er);
     let inv_r = if m.ikr.is_finite() { 1.0 / m.ikr } else { 0.0 };
     let q2 = iff * inv_f + ir * inv_r;
     let (h, dh) = if q2 > 0.0 {
@@ -135,7 +153,7 @@ fn bjt_inv_qb(m: &BjtModel, vbe: f64, vbc: f64, iff: f64, gf: f64) -> (f64, f64)
     } else {
         (1.0, 0.0)
     };
-    (k * h, dk_be * h + k * dh * gf * inv_f)
+    (k * h, dk_be * h + k * dh * gf * inv_f, dk_bc * h + k * dh * gr * inv_r)
 }
 
 /// Stored charge and capacitance of the base-collector junction.

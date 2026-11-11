@@ -146,6 +146,8 @@ mod tests_tran;
 #[cfg(test)]
 mod tests_isource;
 #[cfg(test)]
+mod tests_jacobian;
+#[cfg(test)]
 mod tests_variation;
 #[cfg(test)]
 mod tests_bench;

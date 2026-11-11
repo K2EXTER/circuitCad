@@ -403,9 +403,18 @@ impl Compiled {
                             (*idx, *e, lim_be, bjt_qbe(bm, lim_be, lim_bc), bjt_qbe(bm, d.cap_v[*idx], d.cap_v[*idx + 1]).0),
                             (*idx + 1, *c, lim_bc, bjt_qbc(bm, lim_bc), bjt_qbc(bm, d.cap_v[*idx + 1]).0),
                         ] {
+                            // the base-emitter charge also moves with vbc (through qb): a transcapacitance from (b, c) into b-e
+                            let cx = if slot_i == *idx { bjt_qbe_dvbc(bm, lim_be, lim_bc) } else { 0.0 };
                             let geq = k * cc / d.h;
-                            let rest = k / d.h * (q - cc * vk - q_old) - if d.trap { d.cap_i[slot_i] } else { 0.0 };
+                            let rest = k / d.h * (q - cc * vk - cx * lim_bc - q_old) - if d.trap { d.cap_i[slot_i] } else { 0.0 };
                             m.g(*b, other, geq);
+                            if cx != 0.0 {
+                                let gx = k * cx / d.h;
+                                m.gn(*b, *b, gx);
+                                m.gn(*b, *c, -gx);
+                                m.gn(other, *b, -gx);
+                                m.gn(other, *c, gx);
+                            }
                             m.current(*b, other, pol * rest);
                         }
                     }

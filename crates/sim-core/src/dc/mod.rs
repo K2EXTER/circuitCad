@@ -146,7 +146,7 @@ use digital::*;
 use linalg::*;
 
 pub(crate) use build::{compile, v};
-pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, diode_q, diode_recomb, exp_safe, mos_eval};
+pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, bjt_qbe_dvbc, diode_q, diode_recomb, exp_safe, mos_eval};
 #[cfg(test)]
 pub(crate) use devices::depletion;
 pub(crate) use mna::{Ctx, Dyn};
