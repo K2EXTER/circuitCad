@@ -18,6 +18,7 @@ impl PartForm {
                 self.sim_pins = g.sim_pins.join(" ");
                 self.description = g.description;
                 self.sim_limits = g.limits.join("\n");
+                self.sim_origin = Some((sch_core::ModelOrigin::new(sch_core::OriginKind::Equivalent, self.datasheet.trim()), self.sim_text.clone()));
                 if self.category.trim().is_empty() || self.category == "ユーザー" {
                     self.category = "電源管理".into();
                 }

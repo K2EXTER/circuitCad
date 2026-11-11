@@ -1,0 +1,50 @@
+データシートの値から作った等価モデル (メーカーのモデルではありません)	Equivalent model made from the data sheet's figures (not the maker's model)
+メーカーのモデル (取り込んだファイルをそのまま使っています)	The maker's model (the imported file is used as it is)
+一般のモデル (理想の素子に、入れた値の寄生成分を足したもの)	Generic model (an ideal part plus the parasitics you entered)
+モデルの出どころ: 記録なし (データシートとはまだ比べていません)	Model source: not recorded (not yet compared with the data sheet)
+このモデルが何から作られたか、データシートとどれだけ合うかは、まだ記録がありません。結果は目安として使い、大事な値はデータシートで確かめてください	There is no record yet of what this model was made from or how well it matches the data sheet. Use the results as a guide and check important values against the data sheet
+出典: {}	Source: {}
+データシートとの比べ ({} 項目)	Compared with the data sheet ({} figures)
+モデルの値は、データシートの条件に近い回路を、このソフトのシミュレータで測ったものです。✓ の項目は、決めた幅から外れると開発のテストで止まります。行にマウスを置くと条件が出ます	The model's values were measured by this program's simulator on circuits close to the data sheet's conditions. Figures marked ✓ stop the development tests when they leave the allowed range. Hover over a row to see the conditions
+項目	Figure
+データシート (min / typ / max)	Data sheet (min / typ / max)
+決めた幅に入っていることを、テストで確かめています	A test checks that this figure stays within the allowed range
+比べて表に出すだけで、幅は決めていません	Shown for comparison only; no allowed range is set
+部品そのもののばらつき (typ と min / max の差) は、モデルの誤差より大きいことがあります。	The spread of the real parts (typ versus min / max) can be larger than the model's error.
+\nデータシートとの比べ: {} 項目 (部品を選ぶと表が出ます)	\nCompared with the data sheet: {} figures (select the part to see the table)
+開ループ利得	Open-loop gain
+GBW(単位利得の周波数)	GBW (unity-gain frequency)
+位相余裕	Phase margin
+スルーレート	Slew rate
+入力オフセット電圧	Input offset voltage
+入力バイアス電流	Input bias current
+電源電流(1 回路)	Supply current (per amplifier)
+出力の振れ幅(正の電源から)	Output swing (from the positive rail)
+出力の振れ幅(負の電源から)	Output swing (from the negative rail)
+出力の短絡電流	Output short-circuit current
+入力換算の雑音(1 kHz)	Input-referred noise (1 kHz)
+ロード・レギュレーション (吐き出し)	Load regulation (sourcing)
+ロード・レギュレーション (吸い込み)	Load regulation (sinking)
+電源電流	Supply current
+ドロップアウト (入力 − 出力、入力 2.9 V)	Dropout (input − output, input 2.9 V)
+リップル除去 (1 kHz)	Ripple rejection (1 kHz)
+出力雑音 (1 kHz)	Output noise (1 kHz)
+グラウンド電流	Ground current
+リップル除去	Ripple rejection
+電流制限	Current limit
+出力雑音	Output noise
+基準電圧 (OUT − ADJ)	Reference voltage (OUT − ADJ)
+ADJ ピンの電流	ADJ pin current
+ドロップアウト (1 A)	Dropout (1 A)
+電流制限 (差 15 V 以下)	Current limit (difference 15 V or less)
+電流制限 (差 40 V)	Current limit (difference 40 V)
+短絡電流 (VIN = 35 V)	Short-circuit current (VIN = 35 V)
+電源電流 (無負荷)	Supply current (no load)
+電源電流 (250 mA)	Supply current (250 mA)
+電源電流 (停止中)	Supply current (shut down)
+ドロップアウト (100 mA)	Dropout (100 mA)
+起動時間	Start-up time
+短絡電流 (VIN = VR + 1 V)	Short-circuit current (VIN = VR + 1 V)
+REF の入力電流	REF input current
+動的インピーダンス	Dynamic impedance
+停止中のカソード電流	Cathode current when off

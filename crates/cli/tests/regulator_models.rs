@@ -3,8 +3,12 @@
 //! `opamp_models.rs`.
 //!
 //! `regulator_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
-//! `cargo test -p cli --test regulator_models -- --ignored write_regulator_model_report` writes `docs/models/regulators.md`.
+//! `cargo test -p cli --test regulator_models -- --ignored write_regulator_model_report` writes `docs/models/regulators.md`
+//! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
 //! The models are written by `tools/gen_reference_models.py`.
+
+#[path = "common/checks.rs"]
+mod checks;
 
 use serde_json::Value;
 use std::process::{Command, Stdio};
@@ -626,12 +630,15 @@ fn show(v: f64) -> String {
     }
 }
 
-fn report() -> String {
+/// The report as Markdown, and the rows shown on the screen (one table per part).
+fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRow>)>) {
     let mut out = String::new();
     let mut part = "";
+    let mut tables: Vec<(String, String, Vec<part_lib::model_checks::CheckRow>)> = vec![];
     for r in rows() {
         if r.part != part {
             part = r.part;
+            tables.push((part.to_string(), source(part).to_string(), vec![]));
             let ds = source(part);
             out += &format!("\n## {part}\n\nデータシート: {ds}\n\n| 項目 | データシート (min / typ / max) | 条件・表 | モデル | 差 |\n|---|---|---|---|---|\n");
         }
@@ -640,8 +647,17 @@ fn report() -> String {
         let target = r.ds[1].or(r.ds[2]);
         let diff = target.map(|t| if v >= t { format!("+{}", show(v - t)) } else { show(v - t) }).unwrap_or_else(|| "—".into());
         out += &format!("| {} | {ds} {u} | {} | {} {u} | {diff} |\n", r.item, r.at, show(v), u = r.unit);
+        let unit = |t: String| if t == "—" { t } else { format!("{t} {}", r.unit) };
+        tables.last_mut().unwrap().2.push(part_lib::model_checks::CheckRow {
+            item: r.item.into(),
+            datasheet: format!("{ds} {}", r.unit),
+            condition: r.at.into(),
+            model: unit(show(v)),
+            diff: unit(diff),
+            tested: r.tol.is_some(),
+        });
     }
-    out
+    (out, tables)
 }
 
 #[test]
@@ -662,7 +678,8 @@ fn regulator_models_match_their_data_sheets() {
 #[test]
 #[ignore]
 fn write_regulator_model_report() {
-    let body = report();
+    let (body, tables) = report();
+    checks::write(tables, "2026-11-11");
     let text = format!(
         "# 同梱の電圧基準と LDO のモデルとデータシートの比べ\n\n\
          `crates/cli/tests/regulator_models.rs` が作る表(`cargo test -p cli --test regulator_models -- --ignored write_regulator_model_report`)。\

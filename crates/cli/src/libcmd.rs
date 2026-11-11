@@ -214,7 +214,7 @@ impl Session {
             package: donor.package.clone(),
             footprint_name: donor.footprint_name.clone(),
             height: None,
-            sim: Some(SimModel { kind: SimKind::Subckt, element: String::new(), name: sub.clone(), text: body, pins: numbers.clone(), params: Default::default(), limits: vec!["メーカーのモデルをそのまま使っています。モデルが扱う範囲・温度条件はメーカーの資料で確かめてください。".into()] }),
+            sim: Some(SimModel { kind: SimKind::Subckt, element: String::new(), name: sub.clone(), text: body, pins: numbers.clone(), params: Default::default(), limits: vec!["メーカーのモデルをそのまま使っています。モデルが扱う範囲・温度条件はメーカーの資料で確かめてください。".into()], origin: Some(sch_core::ModelOrigin::new(sch_core::OriginKind::Vendor, std::path::Path::new(file).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default())) }),
             ratings: None,
             glyph: String::new(),
             body: None,

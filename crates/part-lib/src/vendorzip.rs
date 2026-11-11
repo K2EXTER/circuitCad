@@ -447,6 +447,7 @@ impl VendorIndex {
                 pins: g.sim_pins,
                 params: Default::default(),
                 limits: g.limits,
+                origin: Some(sch_core::ModelOrigin::new(sch_core::OriginKind::Vendor, format!("{} {}", e.maker, e.part_number))),
             }),
             ratings,
             glyph: if polar { "electrolytic" } else { "capacitor" }.into(),

@@ -287,6 +287,62 @@ pub(super) fn lib_hover_for_test(d: &part_lib::PartDef) -> String {
     parts::lib_hover(d)
 }
 
+/// What a model is and where it comes from (docs/model-policy.md, section 4): its kind and source, from the model's own
+/// `origin` or, for a copy saved before that field, from the bundled table measured on the same model text.
+pub(super) fn model_origin(part: &str, m: &sch_core::SimModel) -> (Option<sch_core::ModelOrigin>, Option<&'static part_lib::model_checks::ModelChecks>) {
+    let checks = part_lib::model_checks::for_model(part, &m.text);
+    let origin = m.origin.clone().or_else(|| checks.map(|c| sch_core::ModelOrigin::new(sch_core::OriginKind::Equivalent, c.source.clone())));
+    (origin, checks)
+}
+
+/// One line on what kind of model it is.
+pub(super) fn origin_kind_text(o: Option<&sch_core::ModelOrigin>) -> &'static str {
+    use sch_core::OriginKind::*;
+    match o.map(|o| o.kind) {
+        Some(Equivalent) => i18n::tr("データシートの値から作った等価モデル (メーカーのモデルではありません)"),
+        Some(Vendor) => i18n::tr("メーカーのモデル (取り込んだファイルをそのまま使っています)"),
+        Some(Generic) => i18n::tr("一般のモデル (理想の素子に、入れた値の寄生成分を足したもの)"),
+        None => i18n::tr("モデルの出どころ: 記録なし (データシートとはまだ比べていません)"),
+    }
+}
+
+/// "モデルの出どころ" and, when the model was measured against its data sheet, the table of the figures side by side.
+pub(super) fn origin_ui(ui: &mut egui::Ui, part: &str, m: &sch_core::SimModel, id: &str) {
+    let (origin, checks) = model_origin(part, m);
+    let kind = origin_kind_text(origin.as_ref());
+    let line = ui.small(kind);
+    if origin.is_none() {
+        line.on_hover_text(i18n::tr("このモデルが何から作られたか、データシートとどれだけ合うかは、まだ記録がありません。結果は目安として使い、大事な値はデータシートで確かめてください"));
+    }
+    if let Some(src) = origin.as_ref().map(|o| o.source.as_str()).filter(|s| !s.is_empty()) {
+        ui.small(i18n::trf!("出典: {}", src));
+    }
+    let Some(c) = checks else { return };
+    let header = i18n::trf!("データシートとの比べ ({} 項目)", c.rows.len());
+    egui::CollapsingHeader::new(header).id_salt(id).show(ui, |ui| {
+        ui.small(i18n::tr("モデルの値は、データシートの条件に近い回路を、このソフトのシミュレータで測ったものです。✓ の項目は、決めた幅から外れると開発のテストで止まります。行にマウスを置くと条件が出ます"));
+        egui::Grid::new((id, "grid")).num_columns(5).striped(true).spacing([8.0, 2.0]).show(ui, |ui| {
+            for h in [i18n::tr("項目"), i18n::tr("データシート (min / typ / max)"), i18n::tr("モデル"), i18n::tr("差"), ""] {
+                ui.small(egui::RichText::new(h).strong());
+            }
+            ui.end_row();
+            for r in &c.rows {
+                ui.small(i18n::tr_dyn(&r.item)).on_hover_text(&r.condition);
+                ui.small(&r.datasheet).on_hover_text(&r.condition);
+                ui.small(&r.model);
+                ui.small(&r.diff);
+                if r.tested {
+                    ui.small(egui::RichText::new("✓").color(crate::theme::OK)).on_hover_text(i18n::tr("決めた幅に入っていることを、テストで確かめています"));
+                } else {
+                    ui.small("—").on_hover_text(i18n::tr("比べて表に出すだけで、幅は決めていません"));
+                }
+                ui.end_row();
+            }
+        });
+        ui.small(i18n::tr("部品そのもののばらつき (typ と min / max の差) は、モデルの誤差より大きいことがあります。"));
+    });
+}
+
 /// "このモデルの限界": a collapsed list of what the model leaves out, so that a result is not
 /// mistaken for the real part's behaviour.
 pub(super) fn limits_ui(ui: &mut egui::Ui, limits: &[String], id: &str) {

@@ -166,7 +166,10 @@ for f, (make, pins, limits) in PARTS.items():
     path = os.path.join(EX, f + ".part.json")
     j = json.load(open(path, encoding="utf-8"))
     name = j["name"]
+    origin = j.get("sim", {}).get("origin")
     j["sim"] = {"kind": "subckt", "name": name, "text": make(), "pins": pins, "limits": limits}
+    if origin:
+        j["sim"]["origin"] = origin
     start, old, new = DESC[f]
     assert j["description"].startswith(start), (f, j["description"][:40])
     j["description"] = j["description"].replace(old, new)

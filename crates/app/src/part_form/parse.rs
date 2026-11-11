@@ -370,6 +370,8 @@ impl PartForm {
                 pins: self.sim_pins.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).map(String::from).collect(),
                 params: Default::default(),
                 limits: self.sim_limits.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect(),
+                // an edited model is no longer the one the origin was recorded for
+                origin: self.sim_origin.as_ref().filter(|(_, t)| *t == self.sim_text).map(|(o, _)| o.clone()),
             }),
         };
         let mut def = PartDef {

@@ -104,6 +104,7 @@ impl PartForm {
         self.sim_text = g.sim_text;
         self.sim_pins = g.sim_pins.join(" ");
         self.sim_limits = g.limits.join("\n");
+        self.sim_origin = Some((sch_core::ModelOrigin::new(sch_core::OriginKind::Vendor, format!("{} {}", e.maker, e.part_number)), self.sim_text.clone()));
         self.glyph = if self.pas_polar { "electrolytic" } else { PassiveKind::Capacitor.glyph() }.into();
         let Some(m) = &e.meta else {
             return Ok(format!(

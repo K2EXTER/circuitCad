@@ -614,6 +614,36 @@ pub struct SimModel {
     /// so that a result is not mistaken for the real part's behaviour.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<String>,
+    /// Where the model comes from (docs/model-policy.md, sections 1 and 4). None = not recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<ModelOrigin>,
+}
+
+/// The kind of a part model (docs/model-policy.md, section 1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OriginKind {
+    /// Made by circuitCad from public figures (the data sheet, own measurements).
+    Equivalent,
+    /// The maker's own `.model` / `.subckt`, read from a file the user has.
+    Vendor,
+    /// An ideal part, or values with parasitics (chip parts, generic diodes ...).
+    Generic,
+}
+
+/// Where a model comes from: its kind and the document it was made from.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ModelOrigin {
+    pub kind: OriginKind,
+    /// The data sheet (maker, document number, revision) or the vendor file the model was made from or read from.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+}
+
+impl ModelOrigin {
+    pub fn new(kind: OriginKind, source: impl Into<String>) -> Self {
+        ModelOrigin { kind, source: source.into() }
+    }
 }
 
 /// One datasheet row: a rated or typical figure, e.g. ("順方向電圧", "0.9V", "IF = 1A").

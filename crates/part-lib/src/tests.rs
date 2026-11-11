@@ -523,6 +523,7 @@ fn write_chip_examples() {
                 pins: g.sim_pins.clone(),
                 params: Default::default(),
                 limits: g.limits.clone(),
+                origin: None,
             }),
             ratings: Some(ratings),
             glyph: if name.starts_with("CE_") || name.starts_with("CT_") { "electrolytic".into() } else { t.kind.glyph().into() },
@@ -932,4 +933,21 @@ fn saving_an_edited_bundled_part_replaces_its_file_instead_of_adding_a_second_on
     let same: Vec<_> = parts.iter().filter(|p| p.name == "LM358").collect();
     assert_eq!((same.len(), same[0].description.as_str()), (1, "edited"));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A user's copy from before the model's `origin` existed is still the unmodified original for the one-off upgrades.
+#[test]
+fn a_copy_from_before_the_model_origin_is_still_the_original() {
+    let text = EXAMPLES.iter().find(|(n, _)| *n == "LM358_SOIC-8").unwrap().1;
+    let mut old = example("LM358_SOIC-8");
+    assert!(old.sim.as_ref().unwrap().origin.is_some(), "the bundled LM358 records where its model comes from");
+    let sim = old.sim.as_mut().unwrap();
+    sim.origin = None;
+    sim.limits.clear();
+    let dir = std::env::temp_dir().join(format!("ccad_origin_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("LM358.part.json");
+    std::fs::write(&file, serde_json::to_string(&old).unwrap()).unwrap();
+    assert!(is_original_without_limits(&file, text));
+    std::fs::remove_dir_all(&dir).ok();
 }

@@ -266,6 +266,7 @@ impl SchEditor {
                     }
                     ui.small(&d.description);
                     if let Some(m) = &d.sim {
+                        super::origin_ui(ui, &d.name, m, "lib_origin");
                         limits_ui(ui, &m.limits, "lib_limits");
                     }
                     egui::CollapsingHeader::new(i18n::tr("ピン表")).id_salt("lib_pins").show(ui, |ui| {
@@ -339,6 +340,14 @@ pub(super) fn lib_hover(d: &part_lib::PartDef) -> String {
     }
     if d.land_unverified {
         t.push_str("\n\nランドパターン: データシートの図面と照らし合わせていない概算です。基板にする前に、パッドの位置・大きさ・ピン番号を確かめてください (発注の準備のチェックも注意します)。");
+    }
+    if let Some(m) = &d.sim {
+        let (origin, checks) = super::model_origin(&d.name, m);
+        t.push_str("\n\n");
+        t.push_str(super::origin_kind_text(origin.as_ref()));
+        if let Some(c) = checks {
+            t.push_str(&format!("\nデータシートとの比べ: {} 項目 (部品を選ぶと表が出ます)", c.rows.len()));
+        }
     }
     if let Some(m) = &d.sim
         && !m.limits.is_empty() {

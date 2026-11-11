@@ -284,6 +284,26 @@ fn a_library_part_shows_its_model_notes_in_the_tooltip_and_old_circuits_borrow_t
     assert!(super::panel::lib_hover_for_test(adc).contains("ランドパターン"));
 }
 
+/// A model made from its data sheet says so, with the measured table; a copy kept in an old circuit (no `origin`) is
+/// known by its model text; an edited model loses the table; a model nobody recorded says that.
+#[test]
+fn a_model_shows_where_it_comes_from_and_its_data_sheet_table() {
+    use sch_core::OriginKind;
+    let e = SchEditor::default();
+    let lm358 = e.library.iter().find(|d| d.name == "LM358").expect("LM358 is bundled");
+    let tip = super::panel::lib_hover_for_test(lm358);
+    assert!(tip.contains("等価モデル") && tip.contains("データシートとの比べ"), "{tip}");
+    let mut m = lm358.sim.clone().unwrap();
+    m.origin = None;
+    let (origin, checks) = super::panel::model_origin("LM358", &m);
+    assert_eq!(origin.map(|o| o.kind), Some(OriginKind::Equivalent));
+    assert!(checks.is_some_and(|c| c.rows.len() >= 8 && c.rows.iter().all(|r| r.tested)));
+    m.text.push_str("\n* edited\nR9 a b 1k\n");
+    assert!(super::panel::model_origin("LM358", &m) == (None, None), "an edited model is not the one that was measured");
+    let other = e.library.iter().find(|d| d.name == "TP4056").unwrap();
+    assert!(super::panel::lib_hover_for_test(other).contains("記録なし"));
+}
+
 /// The three power-supply lessons tick their steps as the learner acts and carry a real-experiment card.
 #[test]
 fn the_power_supply_lessons_walk_their_steps() {

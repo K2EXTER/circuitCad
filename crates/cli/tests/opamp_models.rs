@@ -2,9 +2,13 @@
 //! (`docs/model-policy.md`, section 5). Runs the real `ccad` binary on small test circuits.
 //!
 //! `opamp_models_match_their_data_sheets` fails when a model leaves its data sheet by more than `tolerance`.
-//! `cargo test -p cli --test opamp_models -- --ignored write_opamp_model_report` writes `docs/models/opamps.md`.
+//! `cargo test -p cli --test opamp_models -- --ignored write_opamp_model_report` writes `docs/models/opamps.md`
+//! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
 //!
 //! The data sheet numbers are typed in from the data sheets named in `SOURCE` (read 2026-11-11), never from memory.
+
+#[path = "common/checks.rs"]
+mod checks;
 
 use serde_json::Value;
 use std::process::{Command, Stdio};
@@ -416,10 +420,12 @@ fn show(i: &Item, v: f64) -> String {
     }
 }
 
-/// The report: one table per part.
-fn report() -> String {
+/// The report: one table per part, as Markdown and as the rows shown on the screen.
+fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRow>)>) {
     let mut out = String::new();
+    let mut tables = vec![];
     for p in PARTS {
+        let mut rows = vec![];
         out += &format!("\n## {}\n\nデータシート: {}\n\n| 項目 | データシート (min / typ / max) | 条件・表 | モデル | 差 (typ と比べて) |\n|---|---|---|---|---|\n", p.name, p.source);
         for row in p.rows {
             let ds = [row.min, row.typ, row.max].iter().map(|x| x.map(|v| show(&row.item, v)).unwrap_or_else(|| "—".into())).collect::<Vec<_>>().join(" / ");
@@ -435,16 +441,18 @@ fn report() -> String {
                     } else if r > 100.0 {
                         format!("{:.0e} 倍", r)
                     } else {
-                        format!("{:+.0}%", (r - 1.0) * 100.0)
+                        format!("{:+.0}%", (r - 1.0) * 100.0).replace("-0%", "0%").replace("+0%", "0%")
                     }
                 }
                 _ => "—".into(),
             };
             let diff = if row.typ.is_none() && row.max.is_some() { format!("{diff} (max と)") } else { diff };
             out += &format!("| {} | {ds} | {} | {model} | {diff} |\n", item_name(&row.item), row.at);
+            rows.push(part_lib::model_checks::CheckRow { item: item_name(&row.item).into(), datasheet: ds, condition: row.at.into(), model, diff, tested: tolerance(row).is_some() });
         }
+        tables.push((p.name.to_string(), p.source.to_string(), rows));
     }
-    out
+    (out, tables)
 }
 
 /// How far the model may be from the data sheet (docs/model-policy.md, section 5): None = not checked.
@@ -506,7 +514,8 @@ fn opamp_models_match_their_data_sheets() {
 #[test]
 #[ignore]
 fn write_opamp_model_report() {
-    let body = report();
+    let (body, tables) = report();
+    checks::write(tables, "2026-11-11");
     let text = format!(
         "# 同梱のオペアンプのモデルとデータシートの比べ\n\n\
          `crates/cli/tests/opamp_models.rs` が作る表(`cargo test -p cli --test opamp_models -- --ignored write_opamp_model_report`)。\

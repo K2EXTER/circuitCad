@@ -1,0 +1,1321 @@
+{
+  "ADR4525": {
+    "fingerprint": "32c54ffb5c035698",
+    "source": "ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0、表 4 (ADR4525)。VIN = 3〜15 V、IL = 0 mA、25 °C",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 2.500 / — V",
+        "condition": "VOUT。初期誤差 B グレード ±0.02% (500 µV)",
+        "model": "2.500 V",
+        "diff": "-0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 1.000 / 10.000 ppm/V",
+        "condition": "ΔVOUT/ΔVIN (3 V と 15 V で比べた)",
+        "model": "1.0000 ppm/V",
+        "diff": "-0.0000 ppm/V",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション (吐き出し)",
+        "datasheet": "— / 30.000 / 80.000 ppm/mA",
+        "condition": "ΔVOUT/ΔIL、0 → 10 mA",
+        "model": "30.000 ppm/mA",
+        "diff": "-0.0000 ppm/mA",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション (吸い込み)",
+        "datasheet": "— / 60.000 / 120.0 ppm/mA",
+        "condition": "ΔVOUT/ΔIL、0 → −10 mA",
+        "model": "60.000 ppm/mA",
+        "diff": "-0.0000 ppm/mA",
+        "tested": true
+      },
+      {
+        "item": "電源電流",
+        "datasheet": "— / 700.0 / 950.0 µA",
+        "condition": "IQ、無負荷",
+        "model": "700.0 µA",
+        "diff": "+0.0000 µA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト (入力 − 出力、入力 2.9 V)",
+        "datasheet": "— / — / 500.0 mV",
+        "condition": "VDO、無負荷 (データシートは max だけ。モデルは max の値)",
+        "model": "500.0 mV",
+        "diff": "+0.0000 mV",
+        "tested": true
+      },
+      {
+        "item": "リップル除去 (1 kHz)",
+        "datasheet": "— / 90.000 / — dB",
+        "condition": "RRR、fIN = 1 kHz",
+        "model": "89.973 dB",
+        "diff": "-0.0271 dB",
+        "tested": true
+      },
+      {
+        "item": "出力雑音 (1 kHz)",
+        "datasheet": "— / 41.300 / — nV/√Hz",
+        "condition": "eN、1 kHz",
+        "model": "41.301 nV/√Hz",
+        "diff": "+0.0010 nV/√Hz",
+        "tested": true
+      }
+    ]
+  },
+  "AMS1117-3.3": {
+    "fingerprint": "9b244947cdd1a15e",
+    "source": "Advanced Monolithic Systems AMS1117 データシートの ELECTRICAL CHARACTERISTICS。25 °C",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 3.300 / — V",
+        "condition": "VO (25 °C)",
+        "model": "3.300 V",
+        "diff": "+0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 0.5000 / — mV",
+        "condition": "1.5 V ≤ VIN − VOUT ≤ 12 V",
+        "model": "0.5000 mV",
+        "diff": "+0.0000 mV",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 3.000 / — mV",
+        "condition": "VIN = 4.75 V、0 ≤ IOUT ≤ 0.8 A",
+        "model": "2.997 mV",
+        "diff": "-0.0027 mV",
+        "tested": true
+      },
+      {
+        "item": "グラウンド電流",
+        "datasheet": "— / 5.000 / — mA",
+        "condition": "IB・IQ (入力の電流 − 負荷の電流)",
+        "model": "4.918 mA",
+        "diff": "-0.0816 mA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト",
+        "datasheet": "— / 1.100 / — V",
+        "condition": "VI − VO (入力を、公称の出力 + ドロップアウト − 0.3 V に下げた所)",
+        "model": "1.102 V",
+        "diff": "+0.0023 V",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 72.000 / — dB",
+        "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
+        "model": "72.010 dB",
+        "diff": "+0.0101 dB",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "— / 1.100 / — A",
+        "condition": "電流制限 (VIN − VOUT = 1.5 V)",
+        "model": "1.101 A",
+        "diff": "+0.0008 A",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 99.000 / — µVrms",
+        "condition": "0.003 % × 3.3 V、10 Hz〜10 kHz",
+        "model": "99.000 µVrms",
+        "diff": "+0.0000 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "AMS1117-5.0": {
+    "fingerprint": "b23ece47a6e885e3",
+    "source": "Advanced Monolithic Systems AMS1117 データシートの ELECTRICAL CHARACTERISTICS。25 °C",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 5.000 / — V",
+        "condition": "VO (25 °C)",
+        "model": "5.000 V",
+        "diff": "+0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 0.5000 / — mV",
+        "condition": "1.5 V ≤ VIN − VOUT ≤ 12 V",
+        "model": "0.5000 mV",
+        "diff": "+0.0000 mV",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 5.000 / — mV",
+        "condition": "VIN = 6.5 V、0 ≤ IOUT ≤ 0.8 A",
+        "model": "4.995 mV",
+        "diff": "-0.0050 mV",
+        "tested": true
+      },
+      {
+        "item": "グラウンド電流",
+        "datasheet": "— / 5.000 / — mA",
+        "condition": "IB・IQ (入力の電流 − 負荷の電流)",
+        "model": "4.985 mA",
+        "diff": "-0.0150 mA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト",
+        "datasheet": "— / 1.100 / — V",
+        "condition": "VI − VO (入力を、公称の出力 + ドロップアウト − 0.3 V に下げた所)",
+        "model": "1.104 V",
+        "diff": "+0.0043 V",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 68.000 / — dB",
+        "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
+        "model": "68.011 dB",
+        "diff": "+0.0111 dB",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "— / 1.100 / — A",
+        "condition": "電流制限 (VIN − VOUT = 1.5 V)",
+        "model": "1.101 A",
+        "diff": "+0.0008 A",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 150.0 / — µVrms",
+        "condition": "0.003 % × 5 V、10 Hz〜10 kHz",
+        "model": "150.0 µVrms",
+        "diff": "+0.0002 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "L78L05": {
+    "fingerprint": "2c60b1369aaa3106",
+    "source": "TI UA78L データシート SLVS010X (2023-06 改訂) の 6.7 節 (UA78L05、新しいチップ)。VI = 10 V、IO = 40 mA",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 5.000 / — V",
+        "condition": "VO (25 °C)",
+        "model": "4.992 V",
+        "diff": "-0.0082 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 32.000 / — mV",
+        "condition": "VI = 7〜20 V",
+        "model": "31.948 mV",
+        "diff": "-0.0524 mV",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 8.000 / — mV",
+        "condition": "IO = 1〜40 mA",
+        "model": "7.987 mV",
+        "diff": "-0.0134 mV",
+        "tested": true
+      },
+      {
+        "item": "グラウンド電流",
+        "datasheet": "— / 3.530 / — mA",
+        "condition": "IB・IQ (入力の電流 − 負荷の電流)",
+        "model": "3.464 mA",
+        "diff": "-0.0659 mA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト",
+        "datasheet": "— / 1.700 / — V",
+        "condition": "VI − VO (入力を、公称の出力 + ドロップアウト − 0.3 V に下げた所)",
+        "model": "1.708 V",
+        "diff": "+0.0075 V",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 55.000 / — dB",
+        "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
+        "model": "55.014 dB",
+        "diff": "+0.0140 dB",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "— / 0.1300 / — A",
+        "condition": "電流制限 (表に無い。図 6-19 の 25 °C を読んだ)",
+        "model": "0.1308 A",
+        "diff": "+0.0008 A",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 125.0 / — µVrms",
+        "condition": "10 Hz〜100 kHz",
+        "model": "124.8 µVrms",
+        "diff": "-0.2048 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "LM317": {
+    "fingerprint": "11f6f643b951b54e",
+    "source": "TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節。VIN − VOUT = 5 V、IOUT = 10 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "基準電圧 (OUT − ADJ)",
+        "datasheet": "1.200 / 1.250 / 1.300 V",
+        "condition": "VREF、IOUT = 10 mA",
+        "model": "1.250 V",
+        "diff": "-0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "ADJ ピンの電流",
+        "datasheet": "— / 50.000 / 100.0 µA",
+        "condition": "IADJ",
+        "model": "50.005 µA",
+        "diff": "+0.0055 µA",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 0.0100 / 0.0400 %/V",
+        "condition": "3 V ≤ VIN − VOUT ≤ 40 V (入力 8 V と 45 V で比べた)",
+        "model": "0.0099 %/V",
+        "diff": "-0.0001 %/V",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 0.1000 / 0.5000 %VO",
+        "condition": "10 mA ≤ IOUT ≤ 1.5 A (新しいチップ)",
+        "model": "0.1006 %VO",
+        "diff": "+0.0006 %VO",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト (1 A)",
+        "datasheet": "— / 2.000 / — V",
+        "condition": "表に無い。図 6-18 (25 °C、IOUT = 1 A) を読んだ",
+        "model": "1.964 V",
+        "diff": "-0.0359 V",
+        "tested": true
+      },
+      {
+        "item": "電流制限 (差 15 V 以下)",
+        "datasheet": "1.500 / 2.200 / — A",
+        "condition": "(VIN − VOUT) ≤ 15 V (出力を 4.9 V に押さえ、入力 15 V)",
+        "model": "2.196 A",
+        "diff": "-0.0043 A",
+        "tested": true
+      },
+      {
+        "item": "電流制限 (差 40 V)",
+        "datasheet": "0.1500 / 0.4000 / — A",
+        "condition": "(VIN − VOUT) = 40 V (出力を 4.9 V に押さえ、入力 44.9 V)",
+        "model": "0.3957 A",
+        "diff": "-0.0043 A",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 65.000 / — dB",
+        "condition": "f = 120 Hz、VOUT = 10 V (R2 = 1680 Ω、入力 15 V)、CADJ = 0 (新しいチップ)",
+        "model": "64.978 dB",
+        "diff": "-0.0223 dB",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 150.0 / — µVrms",
+        "condition": "0.003 % × 5 V、10 Hz〜10 kHz",
+        "model": "150.0 µVrms",
+        "diff": "-0.0308 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "LM324": {
+    "fingerprint": "6f900b17dbda9a5c",
+    "source": "TI SLOS066AE(2025-09 改訂)",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "開ループ利得",
+        "datasheet": "88.0 dB / 100.0 dB / —",
+        "condition": "6.7 AVD: VCC = 15 V、VO = 1〜11 V、RL ≥ 2 kΩ。25 / 100 V/mV",
+        "model": "100.0 dB",
+        "diff": "+0.0",
+        "tested": true
+      },
+      {
+        "item": "GBW(単位利得の周波数)",
+        "datasheet": "— / 1.200 MHz / —",
+        "condition": "6.10 B1: ±15 V、RL = 1 MΩ、CL = 20 pF",
+        "model": "1.200 MHz",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "スルーレート",
+        "datasheet": "— / 0.50 V/µs / —",
+        "condition": "6.10 SR: ±15 V、VI = ±10 V",
+        "model": "0.50 V/µs",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット電圧",
+        "datasheet": "— / 3 mV / 7 mV",
+        "condition": "6.7 VIO(絶対値)",
+        "model": "3.025 mV",
+        "diff": "+1%",
+        "tested": true
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 20 nA / 250 nA",
+        "condition": "6.7 IIB(絶対値)",
+        "model": "18.480 nA",
+        "diff": "-8%",
+        "tested": true
+      },
+      {
+        "item": "電源電流(1 回路)",
+        "datasheet": "— / 175 µA / 300 µA",
+        "condition": "6.7 ICC: 4 回路で 0.7 / 1.2 mA を 4 で割った値",
+        "model": "174.990 µA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(正の電源から)",
+        "datasheet": "— / — / 1.500 V",
+        "condition": "6.7 VOH: RL = 2 kΩ(VCC − 1.5 V)",
+        "model": "1.426 V",
+        "diff": "-5% (max と)",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(負の電源から)",
+        "datasheet": "— / 5 mV / 20 mV",
+        "condition": "6.7 VOL: RL ≤ 10 kΩ",
+        "model": "4.263 mV",
+        "diff": "-15%",
+        "tested": true
+      },
+      {
+        "item": "出力の短絡電流",
+        "datasheet": "— / 40 mA / 60 mA",
+        "condition": "6.7 IOS: ±5 V、VO = 0 V",
+        "model": "40 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力換算の雑音(1 kHz)",
+        "datasheet": "— / 35 nV/√Hz / —",
+        "condition": "6.10 Vn: f = 1 kHz",
+        "model": "35 nV/√Hz",
+        "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "LM358": {
+    "fingerprint": "4c9ee02d217eb73e",
+    "source": "TI SLOS068AB(2024-10 改訂)",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "開ループ利得",
+        "datasheet": "88.0 dB / 100.0 dB / —",
+        "condition": "5.7 AOL: VS = 15 V, VO = 1〜11 V, RL ≥ 2 kΩ。25 / 100 V/mV",
+        "model": "100.0 dB",
+        "diff": "+0.0",
+        "tested": true
+      },
+      {
+        "item": "GBW(単位利得の周波数)",
+        "datasheet": "— / 700 kHz / —",
+        "condition": "5.7 GBW(VS = 5 V)",
+        "model": "699.965 kHz",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "スルーレート",
+        "datasheet": "— / 0.30 V/µs / —",
+        "condition": "5.7 SR: G = +1(VS = 5 V)",
+        "model": "0.30 V/µs",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット電圧",
+        "datasheet": "— / 3 mV / 7 mV",
+        "condition": "5.7 VOS: VS = 5〜30 V(絶対値)",
+        "model": "3.025 mV",
+        "diff": "+1%",
+        "tested": true
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 20 nA / 250 nA",
+        "condition": "5.7 IB(ピンから出る向き、絶対値)",
+        "model": "18.480 nA",
+        "diff": "-8%",
+        "tested": true
+      },
+      {
+        "item": "電源電流(1 回路)",
+        "datasheet": "— / 350 µA / 600 µA",
+        "condition": "5.7 IQ: 1 回路あたり、VO = 2.5 V、無負荷",
+        "model": "349.990 µA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(正の電源から)",
+        "datasheet": "— / — / 1.500 V",
+        "condition": "5.7 VO 正側: VS = 5 V、RL ≥ 2 kΩ(電源から 1.5 V)",
+        "model": "1.426 V",
+        "diff": "-5% (max と)",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(負の電源から)",
+        "datasheet": "— / 5 mV / 20 mV",
+        "condition": "5.7 VO 負側: VS = 5 V、RL ≤ 10 kΩ を V− へ",
+        "model": "4.264 mV",
+        "diff": "-15%",
+        "tested": true
+      },
+      {
+        "item": "出力の短絡電流",
+        "datasheet": "— / 40 mA / 60 mA",
+        "condition": "5.7 ISC: VS = 10 V、VO = VS/2",
+        "model": "40 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力換算の雑音(1 kHz)",
+        "datasheet": "— / 40 nV/√Hz / —",
+        "condition": "5.7 en: f = 1 kHz",
+        "model": "40 nV/√Hz",
+        "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "LM7805": {
+    "fingerprint": "9ec295e076b2e8ca",
+    "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 5.000 / — V",
+        "condition": "VO (25 °C)",
+        "model": "4.999 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 0.5000 / — mV",
+        "condition": "7.5 V ≤ VIN ≤ 20 V、1.0 A",
+        "model": "0.4999 mV",
+        "diff": "-0.0001 mV",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 1.300 / — mV",
+        "condition": "5 mA ≤ IO ≤ 1.0 A",
+        "model": "1.300 mV",
+        "diff": "-0.0003 mV",
+        "tested": true
+      },
+      {
+        "item": "グラウンド電流",
+        "datasheet": "— / 3.200 / — mA",
+        "condition": "IB・IQ (入力の電流 − 負荷の電流)",
+        "model": "3.134 mA",
+        "diff": "-0.0656 mA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト",
+        "datasheet": "— / 2.000 / — V",
+        "condition": "VI − VO (入力を、公称の出力 + ドロップアウト − 0.3 V に下げた所)",
+        "model": "1.999 V",
+        "diff": "-0.0006 V",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 83.000 / — dB",
+        "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
+        "model": "83.001 dB",
+        "diff": "+0.0012 dB",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "— / 0.6000 / — A",
+        "condition": "短絡電流 (VIN = 35 V)",
+        "model": "0.6009 A",
+        "diff": "+0.0009 A",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 50.000 / — µVrms",
+        "condition": "10 µV/VO × 5 V、10 Hz〜100 kHz",
+        "model": "49.994 µVrms",
+        "diff": "-0.0065 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "LM7809": {
+    "fingerprint": "29090cec5874afcf",
+    "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 9.000 / — V",
+        "condition": "VO (25 °C)",
+        "model": "8.999 V",
+        "diff": "-0.0005 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 6.200 / — mV",
+        "condition": "11 V ≤ VIN ≤ 26 V",
+        "model": "6.200 mV",
+        "diff": "-0.0003 mV",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 1.500 / — mV",
+        "condition": "5 mA ≤ IO ≤ 1.5 A",
+        "model": "1.500 mV",
+        "diff": "-0.0003 mV",
+        "tested": true
+      },
+      {
+        "item": "グラウンド電流",
+        "datasheet": "— / 3.400 / — mA",
+        "condition": "IB・IQ (入力の電流 − 負荷の電流)",
+        "model": "3.372 mA",
+        "diff": "-0.0279 mA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト",
+        "datasheet": "— / 2.000 / — V",
+        "condition": "VI − VO (入力を、公称の出力 + ドロップアウト − 0.3 V に下げた所)",
+        "model": "1.999 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 61.000 / — dB",
+        "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
+        "model": "61.001 dB",
+        "diff": "+0.0007 dB",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "— / 0.2000 / — A",
+        "condition": "短絡電流 (VIN = 35 V)",
+        "model": "0.2010 A",
+        "diff": "+0.0010 A",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 90.000 / — µVrms",
+        "condition": "10 µV/VO × 9 V、10 Hz〜100 kHz",
+        "model": "89.995 µVrms",
+        "diff": "-0.0051 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "LM7812": {
+    "fingerprint": "4d6c49cec4eb5456",
+    "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 12.000 / — V",
+        "condition": "VO (25 °C)",
+        "model": "11.997 V",
+        "diff": "-0.0027 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 3.800 / — mV",
+        "condition": "14.5 V ≤ VIN ≤ 30 V",
+        "model": "3.799 mV",
+        "diff": "-0.0008 mV",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 8.100 / — mV",
+        "condition": "5 mA ≤ IO ≤ 1.5 A",
+        "model": "8.094 mV",
+        "diff": "-0.0055 mV",
+        "tested": true
+      },
+      {
+        "item": "グラウンド電流",
+        "datasheet": "— / 3.400 / — mA",
+        "condition": "IB・IQ (入力の電流 − 負荷の電流)",
+        "model": "3.287 mA",
+        "diff": "-0.1128 mA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト",
+        "datasheet": "— / 2.000 / — V",
+        "condition": "VI − VO (入力を、公称の出力 + ドロップアウト − 0.3 V に下げた所)",
+        "model": "1.999 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 60.000 / — dB",
+        "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
+        "model": "60.002 dB",
+        "diff": "+0.0022 dB",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "— / 0.2000 / — A",
+        "condition": "短絡電流 (VIN = 35 V)",
+        "model": "0.2009 A",
+        "diff": "+0.0009 A",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 120.0 / — µVrms",
+        "condition": "10 µV/VO × 12 V、10 Hz〜100 kHz",
+        "model": "120.0 µVrms",
+        "diff": "-0.0271 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "LP5907-4.5": {
+    "fingerprint": "d7e322a322e12305",
+    "source": "TI LP5907 データシート SNVS798Q (2025-07 改訂)、5.5 節。VIN = 5.5 V、VEN = 1.2 V、IOUT = 1 mA、CIN = COUT = 1 µF",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "4.410 / 4.500 / 4.590 V",
+        "condition": "VOUT(NOM)、±2%",
+        "model": "4.500 V",
+        "diff": "-0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 0.0200 / — %/V",
+        "condition": "VIN = 5.0 V と 5.5 V で比べた (4.5 V 品の表の範囲は 5.5〜5.5 V なので、少し下げた)",
+        "model": "0.0207 %/V",
+        "diff": "+0.0007 %/V",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 0.0010 / — %/mA",
+        "condition": "IOUT = 1 → 250 mA",
+        "model": "0.0010 %/mA",
+        "diff": "+0.0000 %/mA",
+        "tested": true
+      },
+      {
+        "item": "電源電流 (無負荷)",
+        "datasheet": "— / 12.000 / 25.000 µA",
+        "condition": "IQ、VEN = 1.2 V、IOUT = 0 mA (EN に 1.2 V)",
+        "model": "12.200 µA",
+        "diff": "+0.2000 µA",
+        "tested": true
+      },
+      {
+        "item": "電源電流 (250 mA)",
+        "datasheet": "— / 250.0 / 425.0 µA",
+        "condition": "IQ、IOUT = 250 mA (入力の電流 − 負荷の電流)",
+        "model": "249.6 µA",
+        "diff": "-0.3935 µA",
+        "tested": true
+      },
+      {
+        "item": "電源電流 (停止中)",
+        "datasheet": "— / 0.2000 / 1.000 µA",
+        "condition": "VEN = 0.3 V",
+        "model": "0.2000 µA",
+        "diff": "+0.0000 µA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト (100 mA)",
+        "datasheet": "— / 50.000 / — mV",
+        "condition": "VDO、IOUT = 100 mA (出力が 100 mV 下がったときの入力 − 出力。入力 4.45 V、負荷 44 Ω で測った)",
+        "model": "50.000 mV",
+        "diff": "+0.0000 mV",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "250.0 / 500.0 / — mA",
+        "condition": "ISC、出力を 100 mV 下げた所で (出力に 4.4 V の電源をつないで、そこへ流れ込む電流)",
+        "model": "500.0 mA",
+        "diff": "-0.0000 mA",
+        "tested": true
+      },
+      {
+        "item": "PSRR (1 kHz)",
+        "datasheet": "— / 82.000 / — dB",
+        "condition": "f = 1 kHz、IOUT = 20 mA",
+        "model": "82.531 dB",
+        "diff": "+0.5308 dB",
+        "tested": true
+      },
+      {
+        "item": "PSRR (10 kHz)",
+        "datasheet": "— / 65.000 / — dB",
+        "condition": "f = 10 kHz、IOUT = 20 mA",
+        "model": "64.842 dB",
+        "diff": "-0.1576 dB",
+        "tested": true
+      },
+      {
+        "item": "PSRR (100 kHz)",
+        "datasheet": "— / 60.000 / — dB",
+        "condition": "f = 100 kHz、IOUT = 20 mA",
+        "model": "59.832 dB",
+        "diff": "-0.1679 dB",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 10.000 / — µVrms",
+        "condition": "eN、10 Hz〜100 kHz、IOUT = 1 mA",
+        "model": "9.999 µVrms",
+        "diff": "-0.0010 µVrms",
+        "tested": true
+      },
+      {
+        "item": "起動時間",
+        "datasheet": "— / 80.000 / 150.0 µs",
+        "condition": "tON、VEN > VIH から VOUT = 95% まで (EN を 10 µs で 0 → 1.2 V)",
+        "model": "81.445 µs",
+        "diff": "+1.445 µs",
+        "tested": true
+      }
+    ]
+  },
+  "MCP1700-3302": {
+    "fingerprint": "cf98f1a0038d073d",
+    "source": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "出力電圧",
+        "datasheet": "— / 3.300 / — V",
+        "condition": "VO (25 °C)",
+        "model": "3.300 V",
+        "diff": "-0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 42.075 / — mV",
+        "condition": "(VR + 1) V ≤ VIN ≤ 6 V。表は ±0.75 %/V (mV に直した)",
+        "model": "42.075 mV",
+        "diff": "-0.0003 mV",
+        "tested": true
+      },
+      {
+        "item": "ロード・レギュレーション",
+        "datasheet": "— / 33.000 / — mV",
+        "condition": "IL = 0.1〜250 mA、±1.0 % (mV に直した)",
+        "model": "32.673 mV",
+        "diff": "-0.3270 mV",
+        "tested": true
+      },
+      {
+        "item": "グラウンド電流",
+        "datasheet": "— / 0.0016 / — mA",
+        "condition": "IB・IQ (入力の電流 − 負荷の電流)",
+        "model": "0.0016 mA",
+        "diff": "-0.0000 mA",
+        "tested": true
+      },
+      {
+        "item": "ドロップアウト",
+        "datasheet": "— / 0.1780 / — V",
+        "condition": "VI − VO (入力を、公称の出力 + ドロップアウト − 0.3 V に下げた所)",
+        "model": "0.1774 V",
+        "diff": "-0.0006 V",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 44.000 / — dB",
+        "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
+        "model": "44.011 dB",
+        "diff": "+0.0111 dB",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "— / 0.4080 / — A",
+        "condition": "短絡電流 (VIN = VR + 1 V)",
+        "model": "0.4088 A",
+        "diff": "+0.0008 A",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 4.243 / — µVrms",
+        "condition": "1 kHz の密度 3 µV/√Hz (IL = 100 mA) を 999〜1001 Hz の rms に直した",
+        "model": "4.226 µVrms",
+        "diff": "-0.0169 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "MCP6001": {
+    "fingerprint": "4f3079f335fcde71",
+    "source": "Microchip DS20001733L",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "開ループ利得",
+        "datasheet": "88.0 dB / 112.0 dB / —",
+        "condition": "DC: AOL、VOUT = 0.3 V〜VDD − 0.3 V",
+        "model": "112.9 dB",
+        "diff": "+0.9",
+        "tested": true
+      },
+      {
+        "item": "GBW(単位利得の周波数)",
+        "datasheet": "— / 1 MHz / —",
+        "condition": "AC: GBWP",
+        "model": "999.951 kHz",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "位相余裕",
+        "datasheet": "— / 90° / —",
+        "condition": "AC: PM、G = +1",
+        "model": "90°",
+        "diff": "+0.0",
+        "tested": true
+      },
+      {
+        "item": "スルーレート",
+        "datasheet": "— / 0.60 V/µs / —",
+        "condition": "AC: SR",
+        "model": "0.60 V/µs",
+        "diff": "-1%",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット電圧",
+        "datasheet": "— / — / 4.500 mV",
+        "condition": "DC: VOS ±4.5 mV(VCM = VSS)",
+        "model": "6.908 µV",
+        "diff": "モデルに無い(ほぼ 0) (max と)",
+        "tested": false
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 1 pA / —",
+        "condition": "DC: IB ±1 pA",
+        "model": "9.250 pA",
+        "diff": "+825%",
+        "tested": false
+      },
+      {
+        "item": "電源電流(1 回路)",
+        "datasheet": "50 µA / 100 µA / 170 µA",
+        "condition": "DC: IQ、VDD = 5.5 V",
+        "model": "100 µA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(正の電源から)",
+        "datasheet": "— / — / 25 mV",
+        "condition": "DC: VOH、VDD = 5.5 V、入力 0.5 V 超過(VDD − 25 mV)",
+        "model": "22.920 mV",
+        "diff": "-8% (max と)",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(負の電源から)",
+        "datasheet": "— / — / 25 mV",
+        "condition": "DC: VOL(VSS + 25 mV)",
+        "model": "22.920 mV",
+        "diff": "-8% (max と)",
+        "tested": true
+      },
+      {
+        "item": "出力の短絡電流",
+        "datasheet": "— / 23 mA / —",
+        "condition": "DC: ISC、VDD = 5.5 V",
+        "model": "23 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力換算の雑音(1 kHz)",
+        "datasheet": "— / 28 nV/√Hz / —",
+        "condition": "AC: eni、f = 1 kHz",
+        "model": "28 nV/√Hz",
+        "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "MCP6002": {
+    "fingerprint": "63d728a5fc85b29d",
+    "source": "Microchip DS20001733L",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "開ループ利得",
+        "datasheet": "88.0 dB / 112.0 dB / —",
+        "condition": "DC: AOL、VOUT = 0.3 V〜VDD − 0.3 V",
+        "model": "112.9 dB",
+        "diff": "+0.9",
+        "tested": true
+      },
+      {
+        "item": "GBW(単位利得の周波数)",
+        "datasheet": "— / 1 MHz / —",
+        "condition": "AC: GBWP",
+        "model": "999.951 kHz",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "位相余裕",
+        "datasheet": "— / 90° / —",
+        "condition": "AC: PM、G = +1",
+        "model": "90°",
+        "diff": "+0.0",
+        "tested": true
+      },
+      {
+        "item": "スルーレート",
+        "datasheet": "— / 0.60 V/µs / —",
+        "condition": "AC: SR",
+        "model": "0.60 V/µs",
+        "diff": "-1%",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット電圧",
+        "datasheet": "— / — / 4.500 mV",
+        "condition": "DC: VOS ±4.5 mV(VCM = VSS)",
+        "model": "6.908 µV",
+        "diff": "モデルに無い(ほぼ 0) (max と)",
+        "tested": false
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 1 pA / —",
+        "condition": "DC: IB ±1 pA",
+        "model": "9.250 pA",
+        "diff": "+825%",
+        "tested": false
+      },
+      {
+        "item": "電源電流(1 回路)",
+        "datasheet": "50 µA / 100 µA / 170 µA",
+        "condition": "DC: IQ、VDD = 5.5 V",
+        "model": "100 µA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(正の電源から)",
+        "datasheet": "— / — / 25 mV",
+        "condition": "DC: VOH、VDD = 5.5 V、入力 0.5 V 超過(VDD − 25 mV)",
+        "model": "22.920 mV",
+        "diff": "-8% (max と)",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(負の電源から)",
+        "datasheet": "— / — / 25 mV",
+        "condition": "DC: VOL(VSS + 25 mV)",
+        "model": "22.920 mV",
+        "diff": "-8% (max と)",
+        "tested": true
+      },
+      {
+        "item": "出力の短絡電流",
+        "datasheet": "— / 23 mA / —",
+        "condition": "DC: ISC、VDD = 5.5 V",
+        "model": "23 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力換算の雑音(1 kHz)",
+        "datasheet": "— / 28 nV/√Hz / —",
+        "condition": "AC: eni、f = 1 kHz",
+        "model": "28 nV/√Hz",
+        "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "NE5532": {
+    "fingerprint": "518066ebd0cd4d05",
+    "source": "TI SLOS075K(2025-12 改訂)",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "開ループ利得",
+        "datasheet": "88.0 dB / 100.0 dB / —",
+        "condition": "5.5 AVD: RL ≥ 2 kΩ、VO = ±10 V。25 / 100 V/mV",
+        "model": "100.0 dB",
+        "diff": "+0.0",
+        "tested": true
+      },
+      {
+        "item": "GBW(単位利得の周波数)",
+        "datasheet": "— / 12 MHz / —",
+        "condition": "5.5 B1(単位利得の帯域)",
+        "model": "11.999 MHz",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "スルーレート",
+        "datasheet": "— / 5.00 V/µs / —",
+        "condition": "5.6 SR: 単位利得",
+        "model": "4.88 V/µs",
+        "diff": "-2%",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット電圧",
+        "datasheet": "— / 500 µV / 4 mV",
+        "condition": "5.5 VIO(絶対値)",
+        "model": "499.995 µV",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 200 nA / 800 nA",
+        "condition": "5.5 IIB",
+        "model": "201.667 nA",
+        "diff": "+1%",
+        "tested": true
+      },
+      {
+        "item": "電源電流(1 回路)",
+        "datasheet": "— / 3 mA / 8 mA",
+        "condition": "5.5 ICC: 2 回路で 6 / 16 mA を 2 で割った値",
+        "model": "3 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "出力の短絡電流",
+        "datasheet": "— / 38 mA / —",
+        "condition": "5.5 IOS",
+        "model": "38 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力換算の雑音(1 kHz)",
+        "datasheet": "— / 5 nV/√Hz / —",
+        "condition": "5.6 Vn: f = 1 kHz",
+        "model": "5 nV/√Hz",
+        "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "TL072": {
+    "fingerprint": "2c54ba6cf4674de0",
+    "source": "TI SLOS080W(2025-07 改訂)",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "開ループ利得",
+        "datasheet": "88.0 dB / 106.0 dB / —",
+        "condition": "5.8 AOL: ±15 V(TL07xC)。25 / 200 V/mV",
+        "model": "106.0 dB",
+        "diff": "+0.0",
+        "tested": true
+      },
+      {
+        "item": "GBW(単位利得の周波数)",
+        "datasheet": "— / 5.250 MHz / —",
+        "condition": "5.8 GBW: NS・PS パッケージと M 以外(SOIC の D はこちら)。NS・PS は 3 MHz",
+        "model": "5.250 MHz",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "位相余裕",
+        "datasheet": "— / 56° / —",
+        "condition": "5.9 位相余裕: G = +1、RL = 10 kΩ、CL = 20 pF",
+        "model": "56°",
+        "diff": "+0.0",
+        "tested": true
+      },
+      {
+        "item": "スルーレート",
+        "datasheet": "8.00 V/µs / 20.00 V/µs / —",
+        "condition": "5.9 SR: VI = 10 V、RL = 2 kΩ、CL = 100 pF",
+        "model": "19.04 V/µs",
+        "diff": "-5%",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット電圧",
+        "datasheet": "— / 3 mV / 10 mV",
+        "condition": "5.8 VOS: TL07xC(絶対値)",
+        "model": "3 mV",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 65 pA / 200 pA",
+        "condition": "5.8 IB",
+        "model": "64.997 pA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "電源電流(1 回路)",
+        "datasheet": "— / 1.400 mA / 2.500 mA",
+        "condition": "5.8 IQ: 1 回路あたり、VO = 0 V、無負荷",
+        "model": "1.400 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(正の電源から)",
+        "datasheet": "— / 1.500 V / 3 V",
+        "condition": "5.8 VOM: RL = 10 kΩ で ±13.5 V typ、±12 V min(電源からの距離に直した)",
+        "model": "1.534 V",
+        "diff": "+2%",
+        "tested": true
+      },
+      {
+        "item": "入力換算の雑音(1 kHz)",
+        "datasheet": "— / 37 nV/√Hz / —",
+        "condition": "5.9 eN: f = 1 kHz(NS・PS と M 以外)",
+        "model": "37 nV/√Hz",
+        "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "TL431": {
+    "fingerprint": "e9dbee81efca22a9",
+    "source": "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。25 °C",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "基準電圧",
+        "datasheet": "2.440 / 2.495 / 2.550 V",
+        "condition": "VKA = Vref、IKA = 10 mA",
+        "model": "2.495 V",
+        "diff": "-0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "REF の入力電流",
+        "datasheet": "— / 2.000 / 4.000 µA",
+        "condition": "IKA = 10 mA",
+        "model": "2.000 µA",
+        "diff": "+0.0000 µA",
+        "tested": true
+      },
+      {
+        "item": "ΔVref / ΔVKA",
+        "datasheet": "— / -1.400 / -2.700 mV/V",
+        "condition": "IKA = 10 mA、ΔVKA = 10 V − Vref",
+        "model": "-1.400 mV/V",
+        "diff": "+0.0002 mV/V",
+        "tested": true
+      },
+      {
+        "item": "動的インピーダンス",
+        "datasheet": "— / 0.2000 / 0.5000 Ω",
+        "condition": "VKA = Vref、IKA = 1〜100 mA (REF をカソードにつないで、電流を流し込んだ)",
+        "model": "0.2019 Ω",
+        "diff": "+0.0019 Ω",
+        "tested": true
+      },
+      {
+        "item": "停止中のカソード電流",
+        "datasheet": "— / 0.1000 / 1.000 µA",
+        "condition": "VKA = 36 V、Vref = 0",
+        "model": "0.1000 µA",
+        "diff": "+0.0000 µA",
+        "tested": true
+      }
+    ]
+  }
+}

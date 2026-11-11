@@ -586,12 +586,12 @@ fn with_rebuilt_model(file: &Path, example: &str, bundled: &str) -> Option<PartD
 /// Is the file on disk an unmodified copy of an older bundled version? That is the case when it
 /// carries the known old model text, or when it equals the bundled part except for the category.
 fn is_unmodified_legacy(file: &Path, example: &str, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
     if let Some((_, text)) = LEGACY.iter().find(|(n, _)| *n == example)
         && old.sim.as_ref().is_some_and(|m| m.text == *text) {
             return true;
         }
-    match serde_json::from_str::<PartDef>(bundled) {
+    match serde_json::from_str::<PartDef>(bundled).map(without_origin) {
         Ok(new) => old.category.is_empty() && old == PartDef { category: String::new(), ..new },
         Err(_) => false,
     }
@@ -608,11 +608,20 @@ fn upgrade_key(name: &str) -> String {
 }
 
 fn is_modelless_original(file: &Path, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
     match serde_json::from_str::<PartDef>(bundled) {
         Ok(new) => old.sim.is_none() && old == PartDef { description: old.description.clone(), sim: None, ..new },
         Err(_) => false,
     }
+}
+
+/// The part without its model's `origin` (added 2026-11-11): the one-off upgrades compare a user's file with the
+/// bundled part field by field, and a copy from before the field is still the unmodified original.
+fn without_origin(mut d: PartDef) -> PartDef {
+    if let Some(m) = d.sim.as_mut() {
+        m.origin = None;
+    }
+    d
 }
 
 /// Key recorded in `.bundled` once a part has been offered the model notes (`sim.limits`).
@@ -623,8 +632,8 @@ fn limits_key(name: &str) -> String {
 /// Is the file an unmodified copy of the bundled part from before it carried model notes?
 /// (Equal to the bundled part in every field except the notes.)
 fn is_original_without_limits(file: &Path, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
-    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
     let Some(sim) = new.sim.as_mut() else { return false };
     if sim.limits.is_empty() || old.sim.as_ref().is_none_or(|m| !m.limits.is_empty()) {
         return false;
@@ -641,8 +650,8 @@ fn ratings_key(name: &str) -> String {
 /// Is the file an unmodified copy of the bundled part from before it carried ratings?
 /// (Equal to the bundled part in every field except the ratings.)
 fn is_original_without_ratings(file: &Path, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
-    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
     if new.ratings.is_none() || old.ratings.is_some() {
         return false;
     }
@@ -658,8 +667,8 @@ fn pads_key(name: &str) -> String {
 /// Is the file an unmodified copy of a bundled leaded part from when its pads had no hole (drawn as surface mount)?
 /// (Equal to the bundled part in every field except the package.)
 fn is_original_without_holes(file: &Path, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
-    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
     let has_hole = |d: &PartDef| matches!(&d.package, PackageSpec::Explicit { pads, .. } if pads.iter().any(|p| p.drill.is_some()));
     has_hole(&new) && !has_hole(&old) && old == PartDef { package: old.package.clone(), height: old.height, ..new }
 }
@@ -672,8 +681,8 @@ fn wire_key(name: &str) -> String {
 /// Is the file an unmodified copy of a bundled battery from when its pads were those of the 77 mm battery holder?
 /// (Equal to the bundled part in every field except the package and its name.)
 fn is_original_with_holder(file: &Path, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
-    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
     old.footprint_name.as_deref() == Some("BatteryHolder_18650") && new.footprint_name.as_deref() != old.footprint_name.as_deref() && old == PartDef { package: old.package.clone(), footprint_name: old.footprint_name.clone(), ..new }
 }
 
@@ -685,8 +694,8 @@ fn ripple_key(name: &str) -> String {
 /// Is the file an unmodified copy of the bundled part from before it carried ripple current and life?
 /// (Equal to the bundled part in every field except the ratings.)
 fn is_original_without_ripple(file: &Path, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
-    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
     let has = |d: &PartDef| d.ratings.as_ref().is_some_and(|r| r.ripple.is_some() || r.life.is_some());
     // the old ratings keep only what they had: the voltage
     has(&new) && !has(&old) && old == PartDef { ratings: old.ratings.clone(), ..new }
@@ -700,8 +709,8 @@ fn shops_key(name: &str) -> String {
 /// Is the file an unmodified copy of the bundled part from before it carried shop part numbers?
 /// (Equal to the bundled part in every field except the shops.)
 fn is_original_without_shops(file: &Path, bundled: &str) -> bool {
-    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
-    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
     !new.shops.is_empty() && old.shops.is_empty() && old == PartDef { shops: Default::default(), ..new }
 }
 
@@ -840,6 +849,7 @@ pub mod ltspice;
 pub mod ltspice_expr;
 pub mod ltspice_import;
 pub mod vendorzip;
+pub mod model_checks;
 pub mod passive;
 pub mod templates;
 pub mod thru_hole;

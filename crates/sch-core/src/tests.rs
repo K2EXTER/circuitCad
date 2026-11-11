@@ -176,6 +176,7 @@ fn opamp() -> CustomSymbol {
             pins: vec!["3".into(), "2".into(), "1".into(), "8".into(), "4".into()],
             params: Default::default(),
             limits: vec![],
+            origin: None,
         }),
     }
 }
@@ -471,6 +472,7 @@ fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
             pins: vec!["3".into(), "1".into(), "2".into()],
             params: Default::default(),
             limits: vec![],
+            origin: None,
         }),
     };
     let mut s = Schematic::default();

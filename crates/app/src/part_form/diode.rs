@@ -82,6 +82,7 @@ impl PartForm {
         self.sim_name = diode::model_name(&self.name);
         self.sim_text = diode::model_text(&self.name, self.dio_is, self.dio_n, self.dio_rs, vrrm, ir, charge);
         self.sim_pins = format!("{a} {k}");
+        self.sim_origin = Some((sch_core::ModelOrigin::new(sch_core::OriginKind::Equivalent, self.datasheet.trim()), self.sim_text.clone()));
         if self.sim_limits.trim().is_empty() {
             self.sim_limits = "IS・N・RS は、データシートのグラフから読み取った点に合わせた近似です。個体差と温度で、実物は変わります。\n接合容量・逆回復時間は、入れた数値だけの近似です (入れていなければ扱いません)。\n耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。".into();
         }

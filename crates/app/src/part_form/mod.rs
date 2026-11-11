@@ -208,6 +208,8 @@ pub struct PartForm {
     pub sim_pins: String,
     /// What the model leaves out, one note per line.
     pub sim_limits: String,
+    /// Where the model comes from, and the model text it was recorded for: kept only while the text is unchanged.
+    pub sim_origin: Option<(sch_core::ModelOrigin, String)>,
     /// Data sheet ratings: absolute maximum voltage [V] / current [A] / power [W] (blank = not given) and
     /// further rows, one per line as `name | value | condition`.
     pub rt_v: String,
@@ -344,6 +346,7 @@ impl Default for PartForm {
             sim_text: String::new(),
             sim_pins: String::new(),
             sim_limits: String::new(),
+            sim_origin: None,
             rt_v: String::new(),
             rt_i: String::new(),
             rt_p: String::new(),

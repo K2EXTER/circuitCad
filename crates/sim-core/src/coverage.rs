@@ -72,7 +72,7 @@ mod tests {
     }
 
     fn model(limits: &[&str]) -> SimModel {
-        SimModel { kind: SimKind::Model, element: "D".into(), name: "X".into(), text: ".model X D".into(), pins: vec!["1".into(), "2".into()], params: Default::default(), limits: limits.iter().map(|s| s.to_string()).collect() }
+        SimModel { kind: SimKind::Model, element: "D".into(), name: "X".into(), text: ".model X D".into(), pins: vec!["1".into(), "2".into()], params: Default::default(), limits: limits.iter().map(|s| s.to_string()).collect(), origin: None }
     }
 
     #[test]

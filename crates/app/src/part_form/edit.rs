@@ -84,6 +84,7 @@ impl PartForm {
             f.sim_text = m.text.clone();
             f.sim_pins = m.pins.join(" ");
             f.sim_limits = m.limits.join("\n");
+            f.sim_origin = m.origin.clone().map(|o| (o, m.text.clone()));
         }
         if let Some(r) = &def.ratings {
             f.rt_v = r.v_max.map(num).unwrap_or_default();

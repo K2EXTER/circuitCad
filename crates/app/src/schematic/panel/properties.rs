@@ -167,6 +167,7 @@ impl SchEditor {
                             match &sym.sim {
                                 Some(m) => {
                                     ui.label(i18n::trf!("モデル: {}", m.name));
+                                    super::origin_ui(ui, &sym.name, m, "placed_origin");
                                     // a circuit saved before the notes existed carries the model without them:
                                     // take the notes of the same library model (same name, same text)
                                     let from_library = self.library.iter().find(|d| d.name == sym.name && d.sim.as_ref().is_some_and(|x| x.text == m.text)).and_then(|d| d.sim.as_ref()).map(|x| &x.limits);
