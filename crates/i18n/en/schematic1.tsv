@@ -385,7 +385,7 @@ Ultra Librarian や SnapEDA は、ダウンロードの画面で 3D モデルに
 部品定義 JSON	Part definition JSON
 ライブラリに追加しました: {}	Added to library: {}
 # crates/app/src/schematic/loopgain.rs
-注意: このループには、オペアンプのモデル ({}) があります。同梱のモデルは「増幅 → 極が1つ → 出力抵抗」の簡単な形で、実物の部品が持つ第2の極を持ちません。位相余裕は、そのモデルでの値で、実物より大きく出ます (負荷の容量による分は表れます)。実機の余裕は、メーカーのモデルか、実機で確かめてください	Note: this loop contains an op-amp model ({}). The bundled model is a simple "gain -> one pole -> output resistance" form and lacks the second pole real parts have. The phase margin is for that model and comes out larger than the real part's (the effect of load capacitance does show). Check the real margin with the manufacturer's model or on real hardware
+注意: このループには、オペアンプのモデル ({}) があります。同梱のモデルは「増幅 → 極 → 出力抵抗」の簡単な形です。データシートに位相余裕が書かれている部品 (TL072) は第2の極でその値に合わせてありますが、ほかは第2の極を持たず、位相余裕が実物より大きく出ます (負荷の容量による分は表れます)。実機の余裕は、メーカーのモデルか、実機で確かめてください	Note: this loop has op-amp models in it ({}). The bundled models are a simple "gain -> pole -> output resistance" form. The part whose data sheet gives a phase margin (TL072) has a second pole that sets that margin; the others have no second pole, so their phase margin comes out larger than a real part's (the part due to a load capacitor does show). Check the real margin with the maker's model or on the bench
 出力側のネットを {} にしました。切る部品の本体をクリックしてください	Output-side net set to {}. Click the body of the part to break
 部品の本体 (切る部品) か、ピン・配線 (出力側のネット) をクリックしてください	Click a part body (the part to break) or a pin/wire (the output-side net)
 ループを切る部品の名前を入力してください (帰還の抵抗が一番かんたんです。「回路図で選ぶ」でも入れられます)	Enter the name of the part where the loop is broken (the feedback resistor is easiest. "Pick in schematic" also fills it in)

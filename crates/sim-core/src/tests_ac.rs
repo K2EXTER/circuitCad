@@ -193,11 +193,12 @@ fn lib_part(name: &str) -> part_lib::PartDef {
 
 #[test]
 fn op_amp_macro_model_open_loop_response() {
-    // LM358 example: DC gain 1e5 with a pole at 1/(2 pi 1k 16u) = 9.95 Hz
+    // LM358 example: DC gain 1e5 and GBW 0.7 MHz (the data sheet's typ), so one pole at 7 Hz. The input sits at the model's
+    // offset (3 mV) so that the open-loop output is mid-range, not at a rail.
     let u = lib_part("LM358");
     let mut s = Schematic::default();
     s.add(Kind::VSource, (0, 0), 0);
-    s.components[0].value = "AC 1".into();
+    s.components[0].value = "DC 3m AC 1".into();
     s.add_custom(u.symbol(), &u.default_value(), &u.footprint_name(), (20, 0), 0);
     s.add(Kind::Ground, (0, 6), 0);
     s.add(Kind::Ground, (16, 6), 0);
@@ -215,16 +216,16 @@ fn op_amp_macro_model_open_loop_response() {
     c.add(Element::vdc("Vn", vn, 0, -5.0));
     let r = ac_analysis(&c, &sweep(0.1, 10e6, 10)).unwrap();
     let out = r.signal(&format!("V({out_net})")).unwrap();
-    let pole = 1.0 / (2.0 * PI * 1000.0 * 16e-6);
+    let pole = 0.7e6 / 1e5;
     for (k, f) in r.freq.iter().enumerate() {
         let h = C64::new(1e5, 0.0) / C64::new(1.0, f / pole);
         assert!((out.re[k] - h.re).abs() < 1e-3 * h.abs() + 1e-9 && (out.im[k] - h.im).abs() < 1e-3 * h.abs() + 1e-9, "f = {f}");
     }
     let db = out.db();
     assert!((db[0] - 100.0).abs() < 0.01, "DC gain {}", db[0]);
-    // unity-gain crossover ~ GBW = 1 MHz
+    // unity-gain crossover ~ GBW = 0.7 MHz
     let k = db.iter().position(|d| *d < 0.0).unwrap();
-    assert!(r.freq[k] > 0.9e6 && r.freq[k] < 1.2e6, "{}", r.freq[k]);
+    assert!(r.freq[k] > 0.63e6 && r.freq[k] < 0.84e6, "{}", r.freq[k]);
 }
 
 /// A chip capacitor made by the part template has its resonance where its ESL says, and the dip is as deep as its ESR.

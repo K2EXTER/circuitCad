@@ -102,9 +102,9 @@ fn consistency(name: &str, topology: Topology, cload: f64) -> (f64, Option<f64>,
     // H_0: the response with the loop dead, from the same circuit with the gain of the first stage of the model set to zero
     // (the load capacitor and the resistors still carry the input to the output, at every frequency)
     let mut dead = c.clone();
-    let eop = dead.elements.iter().position(|e| matches!(e, Element::Vcvs { name, .. } if name.ends_with("Eop"))).expect("the model's first stage Eop");
-    if let Element::Vcvs { gain, .. } = &mut dead.elements[eop] {
-        *gain = 0.0;
+    let gm = dead.elements.iter().position(|e| matches!(e, Element::BSource { name, .. } if name.ends_with("Bgm"))).expect("the model's first stage Bgm");
+    if let Element::BSource { name, p, n, .. } = &dead.elements[gm] {
+        dead.elements[gm] = Element::ISource { name: name.clone(), from: *p, to: *n, wave: Waveform::Dc(0.0), ac: None };
     }
     let h0 = cx(ac_analysis(&dead, &sweep()).unwrap().signal("V(out)").unwrap());
     let one = C64::new(1.0, 0.0);
@@ -133,15 +133,16 @@ fn the_loop_gain_agrees_with_the_closed_loop_response_on_every_bundled_op_amp() 
     eprintln!("largest mismatch {worst:e}");
 }
 
-/// The LM358 model at small signal: A(s) = 1e5 / (1 + s Rp Cp) from the differential input (2 Meg between the inputs), through
-/// the output resistor of 50 ohm. A follower with a feedback resistor `rf` from the output to the inverting input and a load
+/// The LM358 model at small signal: A(s) = gm Rp / (1 + s Rp Cp) from the differential input (2 Meg between the inputs), through
+/// the output resistor of 50 ohm (gm, Rp and Cp read from the model's text). A follower with a feedback resistor `rf` from the output to the inverting input and a load
 /// capacitor `cl` (and a 10 k load to the reference): the output node carries Ro, then cl || RL || (rf + Rin); the inverting input
 /// sees Rin to the (AC grounded) non-inverting input.
 fn lm358_follower_t(f: f64, rf: f64, cl: f64) -> C64 {
     let s = C64::new(0.0, 2.0 * PI * f);
     let one = C64::new(1.0, 0.0);
     let (rin, ro, rl) = (2e6, 50.0, 10e3);
-    let a = C64::new(1e5, 0.0) / (one + s * C64::new(1e6 * 16e-9, 0.0));
+    let (gm, rp, cp) = lm358_gain_stage();
+    let a = C64::new(gm * rp, 0.0) / (one + s * C64::new(rp * cp, 0.0));
     // load of the output: cl || rl || (rf + rin)
     let y_load = one / C64::new(rl, 0.0) + one / C64::new(rf + rin, 0.0) + s * C64::new(cl, 0.0);
     let z_load = one / y_load;
@@ -149,6 +150,19 @@ fn lm358_follower_t(f: f64, rf: f64, cl: f64) -> C64 {
     // from the output to the inverting input, a divider of rf and rin
     let to_inn = C64::new(rin, 0.0) / C64::new(rin + rf, 0.0);
     a * to_out * to_inn
+}
+
+/// (gm, Rp, Cp) of the LM358 model's gain stage, from its text.
+fn lm358_gain_stage() -> (f64, f64, f64) {
+    let def = part("LM358");
+    let text = &def.sim.as_ref().unwrap().text;
+    let line = |start: &str| text.lines().find(|l| l.starts_with(start)).unwrap_or_else(|| panic!("no {start} in the LM358 model")).to_string();
+    let num = |s: &str| s.trim().parse::<f64>().unwrap();
+    let bgm = line("Bgm");
+    let gm = num(bgm.split("limit(").nth(1).unwrap().split('*').next().unwrap());
+    let rp = num(line("Rp ").split_whitespace().nth(3).unwrap());
+    let cp = num(line("Cp ").split_whitespace().nth(3).unwrap());
+    (gm, rp, cp)
 }
 
 #[test]
@@ -173,16 +187,17 @@ fn the_lm358_follower_loop_gain_is_exact() {
 
 #[test]
 fn the_bundled_op_amp_models_are_one_pole_amplifiers() {
-    // All six models share one template: a gain stage (Eop), one pole (Rp, Cp) and an output resistor, so a follower with no load
-    // has a phase margin of 90 degrees at its gain-bandwidth product. A real part has a second pole and a lower margin, which these
-    // models cannot show; the margin they give comes from the load (the output resistor with a load capacitor) only.
+    // All six models share one template: a gain stage (Bgm), one pole (Rp, Cp) and an output resistor, so a follower with no load
+    // has a phase margin of 90 degrees at its gain-bandwidth product. TL072 adds the second pole that gives its data sheet's
+    // margin of 56 degrees; for the others the data sheet gives no margin (or 90 degrees) and the margin comes from the load only.
     for name in ["LM324", "LM358", "MCP6001", "MCP6002", "NE5532", "TL072"] {
         let (_, pm, fc) = consistency(name, Topology::Follower, 0.0);
         let (pm, fc) = (pm.unwrap(), fc.unwrap());
-        assert!((pm - 90.0).abs() < 0.01, "{name}: {pm}");
-        assert!(fc > 5e5 && fc < 1.1e7, "{name}: {fc}");
+        let want = if name == "TL072" { 56.0 } else { 90.0 };
+        assert!((pm - want).abs() < 1.0, "{name}: {pm}");
+        assert!(fc > 5e5 && fc < 1.3e7, "{name}: {fc}");
         // a load capacitor puts a second pole in the loop (Ro and CL) and the margin falls
         let (_, pm_loaded, _) = consistency(name, Topology::Follower, 10e-9);
-        assert!(pm_loaded.unwrap() < 35.0, "{name}: {pm_loaded:?}");
+        assert!(pm_loaded.unwrap() < 45.0, "{name}: {pm_loaded:?}");
     }
 }

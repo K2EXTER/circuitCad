@@ -1,7 +1,7 @@
 {
   "name": "MCP6001",
   "category": "オペアンプ",
-  "description": "レールtoレール入出力オペアンプ (SOT-23-5, ピン1=OUT 2=VSS 3=IN+ 4=IN- 5=VDD)。GBW約1MHz。簡易マクロモデル(概算)",
+  "description": "レールtoレール入出力オペアンプ (SOT-23-5, ピン1=OUT 2=VSS 3=IN+ 4=IN- 5=VDD)。単一電源 1.8〜6 V。開ループ利得 112 dB、GBW 1 MHz、スルーレート 0.6 V/µs、電源電流 100 µA/回路。データシートから作った等価モデル",
   "prefix": "U",
   "footprint_name": "SOT-23-5_P0.95",
   "pins": [
@@ -79,7 +79,7 @@
   "sim": {
     "kind": "subckt",
     "name": "MCP6001",
-    "text": ".subckt MCP6001 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 100k\nRp m n0 1Meg\nCp n0 0 16n\nEu u 0 vp 0 1\nVhu u uh DC 0.025\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.025\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6001",
+    "text": ".subckt MCP6001 inp inn out vp vn\n* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance\nVos inp i1 DC 0\nEn i1 i2 nz 0 6.87729\nRnz nz 0 1k\nIbp inp vn DC 1e-12\nIbn inn vn DC 1e-12\nRin inp inn 1e13\n* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)\nBgm 0 n0 I=limit(0.00628319*V(i2,inn),-0.0006,0.0006)\nRp n0 0 6.33607e+07\nCp n0 0 1e-09\n* output swing: clamped hu below vp and hl above vn\nEu u 0 vp 0 1\nVhu u uh DC 0.01\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.01\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\n* output: ro, current limited to the short-circuit current, taken from vp (source) and returned to vn (sink)\nBsrc vp out I=limit((V(n)-V(out))/50,-0.023,0.023)*step(limit((V(n)-V(out))/50,-0.023,0.023),1u)\nBsnk out vn I=-limit((V(n)-V(out))/50,-0.023,0.023)*step(-limit((V(n)-V(out))/50,-0.023,0.023),1u)\n* quiescent current of one amplifier\nIq vp vn DC 0.0001\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6001",
     "pins": [
       "3",
       "4",
@@ -89,12 +89,15 @@
     ],
     "params": {
       "gbw": 1000000.0,
-      "gain_dc": 100000.0
+      "gain_dc": 398107.0
     },
     "limits": [
-      "開ループ利得、1次の極 (GBW)、入力抵抗、出力抵抗、出力の振れ幅 (電源からの余裕) を再現する簡易マクロモデルです。チャネル1のみ記号にしてあります。",
-      "扱わないもの: 入力オフセット電圧、入力バイアス電流、スルーレート、電源電流、入力できる電圧の範囲、出力電流の限界、容量性の負荷での発振 (位相余裕)、電源電圧による GBW の変化。",
+      "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Microchip DS20001733L の DC・AC の表。データシートとの比べは docs/models/opamps.md。",
+      "再現しているもの: 開ループ利得 112 dB、GBW 1 MHz、スルーレート 0.6 V/µs、電源電流 100 µA/回路、入力オフセット 0 (データシートに typ が無い)、入力バイアス電流 1 pA、出力の振れ幅 (電源から 10 mV / 10 mV)、出力の短絡電流 23 mA、1 kHz の入力換算雑音 28 nV/√Hz。",
+      "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、オフセットとバイアス電流のばらつき (typ の値で固定)、チャネル2。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
       "電源ピンをつながないと、出力は 0V に張り付きます。"
     ]
-  }
+  },
+  "datasheet": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP6001-1R-1U-2-4-1-MHz-Low-Power-Op-Amp-DS20001733L.pdf"
 }

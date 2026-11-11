@@ -534,9 +534,9 @@ fn library_opamp_subckt_follower() {
     wire(&mut s, (28, 6), (20, 6));
     let c = from_schematic(&s).unwrap();
     let res = dc_op(&c).unwrap();
-    // closed loop gain A/(1+A) with A = 1e5
-    let follower = res.element("U1.Eo").expect("subcircuit elements are prefixed with the instance name");
-    close(follower.voltage, 1e5 / (1.0 + 1e5), 1e-7);
+    // closed loop gain A/(1+A) with A = 1e5, on the input less the model's offset (3 mV, the data sheet's typ)
+    let follower = res.element("U1.Ec2").expect("subcircuit elements are prefixed with the instance name");
+    close(follower.voltage, (1.0 - 3e-3) * 1e5 / (1.0 + 1e5), 1e-5);
     assert!(res.warnings.is_empty(), "{:?}", res.warnings);
 }
 

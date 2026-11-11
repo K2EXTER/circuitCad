@@ -4,15 +4,17 @@
 use super::*;
 use sim_core::{loop_gain, AcSignal, BreakDirection};
 
-/// A note for a loop that has the bundled op-amp models in it: they are one-pole amplifiers (a gain, one pole, an output
+/// A note for a loop that has the bundled op-amp models in it: most are one-pole amplifiers (a gain, one pole, an output
 /// resistor), so the phase margin they give is larger than a real part's, which has a second pole. None without such a model.
-/// The models are told by the first stage, an `Eop` source inside a part (`U1.Eop`).
+/// The models are told by the first stage inside a part: `Bgm` (the data sheet models of 2026-11, `U1.Bgm`) or `Eop` (the
+/// older models, still in saved circuits and the samples, `U1.Eop`).
 pub(super) fn opamp_model_note(c: &sim_core::Circuit) -> Option<String> {
     let mut parts: Vec<String> = c
         .elements
         .iter()
         .filter_map(|e| match e {
             sim_core::Element::Vcvs { name, .. } => name.strip_suffix(".Eop").map(str::to_string),
+            sim_core::Element::BSource { name, .. } => name.strip_suffix(".Bgm").map(str::to_string),
             _ => None,
         })
         .collect();
@@ -22,7 +24,7 @@ pub(super) fn opamp_model_note(c: &sim_core::Circuit) -> Option<String> {
         return None;
     }
     Some(format!(
-        "注意: このループには、オペアンプのモデル ({}) があります。同梱のモデルは「増幅 → 極が1つ → 出力抵抗」の簡単な形で、実物の部品が持つ第2の極を持ちません。位相余裕は、そのモデルでの値で、実物より大きく出ます (負荷の容量による分は表れます)。実機の余裕は、メーカーのモデルか、実機で確かめてください",
+        "注意: このループには、オペアンプのモデル ({}) があります。同梱のモデルは「増幅 → 極 → 出力抵抗」の簡単な形です。データシートに位相余裕が書かれている部品 (TL072) は第2の極でその値に合わせてありますが、ほかは第2の極を持たず、位相余裕が実物より大きく出ます (負荷の容量による分は表れます)。実機の余裕は、メーカーのモデルか、実機で確かめてください",
         parts.join("、")
     ))
 }
