@@ -1957,7 +1957,8 @@ fn the_opamp_basics_lesson_ticks_and_its_numbers_hold() {
         for n in ["V(OUT1)", "V(OUT2)", "V(OUT3)"] {
             let m = r.signal(n).unwrap().mag();
             let f3 = r.freq[m.iter().position(|x| *x < m[0] * std::f64::consts::FRAC_1_SQRT_2).unwrap()];
-            let (gain, want) = match n { "V(OUT1)" => (2.0, 5e5), "V(OUT2)" => (11.0, 1e5), _ => (101.0, 1e4) };
+            // GBW 0.7 MHz (the LM358 model's data sheet value) over the gain
+            let (gain, want) = match n { "V(OUT1)" => (2.0, 3.5e5), "V(OUT2)" => (11.0, 6.4e4), _ => (101.0, 7e3) };
             assert!((m[0] / gain - 1.0).abs() < 0.02 && (f3 / want - 1.0).abs() < 0.15, "{n}: {} {f3}", m[0]);
         }
     }

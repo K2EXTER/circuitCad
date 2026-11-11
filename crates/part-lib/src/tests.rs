@@ -161,6 +161,59 @@ fn an_existing_library_gets_the_new_parts_and_the_old_lm358_is_upgraded() {
 }
 
 #[test]
+fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_lib_opamps_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    install_examples(&dir).unwrap();
+    // the library of a user who installed before the rebuild: the parts are recorded, the rebuild was never offered
+    let forget_rebuild = || {
+        let marker = dir.join(".bundled");
+        let kept: Vec<String> = std::fs::read_to_string(&marker).unwrap().lines().filter(|l| !l.ends_with("+model2026-11")).map(str::to_string).collect();
+        std::fs::write(&marker, kept.join("
+")).unwrap();
+    };
+    let old = legacy_models();
+    assert_eq!(old.len(), 6, "the six op amps rebuilt in 2026-11");
+    for (name, shipped) in &old {
+        assert!(!shipped.texts.is_empty(), "{name}");
+        let current: PartDef = example(name);
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        for text in &shipped.texts {
+            // a copy with an earlier model (any earlier one) gets the current model; the user's shop number stays
+            let mut was = current.clone();
+            was.sim.as_mut().unwrap().text = text.clone();
+            was.description = shipped.descriptions[0].clone();
+            was.shops.insert("akizuki".into(), "I-mine".into());
+            std::fs::write(&file, serde_json::to_string_pretty(&was).unwrap()).unwrap();
+            forget_rebuild();
+            install_examples(&dir).unwrap();
+            let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+            assert_eq!(now.sim, current.sim, "{name}: an earlier model was left in place");
+            assert_eq!(now.description, current.description, "{name}: the earlier description was left in place");
+            assert_eq!(now.shops.get("akizuki").map(String::as_str), Some("I-mine"), "{name}: the user's shop number was lost");
+            // offered once: a later run leaves the file alone
+            std::fs::write(&file, serde_json::to_string_pretty(&was).unwrap()).unwrap();
+            install_examples(&dir).unwrap();
+            let again: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+            assert_eq!(again.sim.unwrap().text, *text, "{name}: replaced twice");
+        }
+        // an edited model and the user's own description are kept
+        let mut edited = current.clone();
+        edited.sim.as_mut().unwrap().text = format!("{}
+* mine", shipped.texts[0]);
+        edited.description = "my op amp".into();
+        std::fs::write(&file, serde_json::to_string_pretty(&edited).unwrap()).unwrap();
+        forget_rebuild();
+        install_examples(&dir).unwrap();
+        let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert!(now.sim.unwrap().text.ends_with("* mine"), "{name}: the user's edit was overwritten");
+        assert_eq!(now.description, "my op amp");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn bundled_parts_are_well_formed() {
     let mut names = std::collections::HashSet::new();
     for (n, text) in EXAMPLES {

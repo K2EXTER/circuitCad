@@ -70,7 +70,7 @@ MOSFET やスイッチが ON のときの、内部の抵抗。小さいほど、
 出力が、入力の何倍かを表す値。	The value showing how many times larger the output is than the input.
 帯域	Bandwidth
 信号を正しく扱える、周波数の範囲。	The range of frequencies a signal can be handled correctly in.
-オペアンプで、倍率 × 帯域が、ほぼ一定になる値。LM358 は約 1MHz。	For an op amp, the value of gain × bandwidth, which stays roughly constant. About 1MHz for the LM358.
+オペアンプで、倍率 × 帯域が、ほぼ一定になる値。LM358 は約 0.7MHz。	For an op amp, the value of gain × bandwidth, which stays roughly constant. About 0.7MHz for the LM358.
 出力の電圧が、変われる速さの上限 (V/µs)。大きく速い信号は、これを超えるとゆがみます。	The fastest the output voltage can change (V/µs). Large, fast signals get distorted when they exceed it.
 ボルテージフォロワ	Voltage follower
 出力を − 入力につないで、入力と同じ電圧を出す、倍率 1 倍の回路。	A gain-of-1 circuit that connects the output to the − input and outputs the same voltage as the input.

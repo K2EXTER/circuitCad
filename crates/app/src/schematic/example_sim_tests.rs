@@ -637,8 +637,9 @@ fn inverting_amplifier_sample_gives_minus_ten_and_a_virtual_ground() {
     };
     let (lo, hi) = peaks(&with_r1("1k"), "V(OUT)");
     assert!((hi - 1.0).abs() < 0.05 && (lo + 1.0).abs() < 0.05, "{lo}..{hi}");
+    // the virtual ground sits at minus the model's 3 mV offset, give or take the signal over the finite gain
     let (nlo, nhi) = peaks(&with_r1("1k"), "V(N)");
-    assert!(nlo.abs() < 0.003 && nhi.abs() < 0.003, "virtual ground {nlo}..{nhi}");
+    assert!((nlo + 0.003).abs() < 0.002 && (nhi + 0.003).abs() < 0.002, "virtual ground {nlo}..{nhi}");
     // gain -100 clips against the supply and the inverting input leaves 0 V
     let (lo, hi) = peaks(&with_r1("100"), "V(OUT)");
     assert!(lo > -5.1 && lo < -4.5 && hi > 3.0 && hi < 4.0, "{lo}..{hi}");
@@ -1218,9 +1219,10 @@ fn amp_clipping_sample_is_clean_when_small_and_distorted_when_clipped() {
     let (clean, hard) = (run("0.1"), run("0.4"));
     assert!((clean.f0 - 1000.0).abs() < 2.0 && (clean.fundamental() - 1.1).abs() < 0.02, "{} {}", clean.f0, clean.fundamental());
     assert!(clean.thd < 1e-4, "{}", clean.thd);
-    assert!((0.08..0.30).contains(&hard.thd), "{}", hard.thd);
+    // the top is cut at the LM358's +3.6 V, the bottom (-4.4 V) is not cut: about 7 %
+    assert!((0.03..0.30).contains(&hard.thd), "{}", hard.thd);
     // the top and the bottom of the wave are not cut the same way: the even harmonics show too
-    assert!(hard.harmonics[1].amp > 0.05 * hard.fundamental(), "{:?}", hard.harmonics);
+    assert!(hard.harmonics[1].amp > 0.03 * hard.fundamental(), "{:?}", hard.harmonics);
 }
 
 /// The worst-case rows of the spec table: the range comes from the tolerances of the variation box, and is kept until something changes.

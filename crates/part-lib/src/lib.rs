@@ -542,6 +542,45 @@ const LEGACY: &[(&str, &str)] = &[(
     ".subckt LM358 inp inn out vp vn\nRin inp inn 1Meg\nEop m 0 inp inn 100k\nRp m n 1k\nCp n 0 16u\nEo o 0 n 0 1\nRo o out 50\n.ends LM358",
 )];
 
+/// Bundled parts whose model was rebuilt, with every earlier `sim.text` and `description` they were shipped with (from the git
+/// history): the op amps rebuilt on their data sheets in 2026-11 (docs/model-policy.md).
+const LEGACY_MODELS: &str = include_str!("../legacy_models.json");
+
+#[derive(Deserialize)]
+struct Shipped {
+    texts: Vec<String>,
+    descriptions: Vec<String>,
+}
+
+fn legacy_models() -> std::collections::HashMap<String, Shipped> {
+    serde_json::from_str(LEGACY_MODELS).unwrap_or_default()
+}
+
+/// Key recorded in `.bundled` once a part has been offered its rebuilt model.
+fn rebuilt_key(name: &str) -> String {
+    format!("{name}+model2026-11")
+}
+
+/// The user's copy with the rebuilt model: only when its model is one of the earlier bundled ones (never edited). The model
+/// (`sim`) is replaced; the description only when it is an earlier bundled one; the data sheet link only when there is none.
+/// Everything else (pins, package, shops, ratings, notes of the user's own) is kept.
+fn with_rebuilt_model(file: &Path, example: &str, bundled: &str) -> Option<PartDef> {
+    let mut old = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok())?;
+    let shipped = legacy_models().remove(example)?;
+    if !old.sim.as_ref().is_some_and(|m| shipped.texts.contains(&m.text)) {
+        return None;
+    }
+    let new = serde_json::from_str::<PartDef>(bundled).ok()?;
+    old.sim = new.sim;
+    if shipped.descriptions.contains(&old.description) {
+        old.description = new.description;
+    }
+    if old.datasheet.is_empty() {
+        old.datasheet = new.datasheet;
+    }
+    Some(old)
+}
+
 /// Is the file on disk an unmodified copy of an older bundled version? That is the case when it
 /// carries the known old model text, or when it equals the bundled part except for the category.
 fn is_unmodified_legacy(file: &Path, example: &str, bundled: &str) -> bool {
@@ -681,6 +720,23 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             std::fs::write(&file, text)?;
         }
         done.insert(name.to_string());
+    }
+    // parts whose model was rebuilt (the op amps on their data sheets): offered once, only to a copy with an earlier model
+    for name in legacy_models().keys() {
+        let key = rebuilt_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        if let Some((_, text)) = EXAMPLES.iter().find(|(n, _)| n == name) {
+            let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+            if file.exists()
+                && let Some(part) = with_rebuilt_model(&file, name, text)
+                && let Ok(json) = serde_json::to_string_pretty(&part)
+            {
+                std::fs::write(&file, json)?;
+            }
+        }
+        done.insert(key);
     }
     for name in MODEL_UPGRADES {
         let key = upgrade_key(name);

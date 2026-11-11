@@ -1,0 +1,58 @@
+{
+ "LM358_SOIC-8": {
+  "texts": [
+   ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1Meg\nCp n0 0 16n\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
+   ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
+   ".subckt LM358 inp inn out vp vn\nRin inp inn 1Meg\nEop m 0 inp inn 100k\nRp m n 1k\nCp n 0 16u\nEo o 0 n 0 1\nRo o out 50\n.ends LM358"
+  ],
+  "descriptions": [
+   "デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化。DC利得100dB、GBW約1MHz、出力は電源+側から約1.5V内側まで・電源-側+20mVまで。簡易マクロモデル(概算)",
+   "デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化し、簡易マクロモデル(電源クリップなし)で動かす例"
+  ]
+ },
+ "LM324_SOIC-14": {
+  "texts": [
+   ".subckt LM324 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1Meg\nCp n0 0 16n\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM324",
+   ".subckt LM324 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM324"
+  ],
+  "descriptions": [
+   "クワッドオペアンプ (SOIC-14)。チャネル1のみ記号化 (ピン1=OUT1 2=IN1- 3=IN1+ 4=V+ 11=V-)。DC利得100dB、GBW約1MHz、単電源動作。簡易マクロモデル(概算)"
+  ]
+ },
+ "TL072_SOIC-8": {
+  "texts": [
+   ".subckt TL072 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 200k\nRp m n0 1Meg\nCp n0 0 10.6n\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 1.5\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends TL072",
+   ".subckt TL072 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 200k\nRp m n0 1k\nCp n0 0 10.6u\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 1.5\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends TL072"
+  ],
+  "descriptions": [
+   "JFET入力デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化。DC利得106dB、GBW約3MHz、出力は電源から約1.5V内側まで。簡易マクロモデル(概算)"
+  ]
+ },
+ "NE5532_SOIC-8": {
+  "texts": [
+   ".subckt NE5532 inp inn out vp vn\nRin inp inn 300k\nEop m 0 inp inn 100k\nRp m n0 1Meg\nCp n0 0 1.59n\nEu u 0 vp 0 1\nVhu u uh DC 2\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 2\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends NE5532",
+   ".subckt NE5532 inp inn out vp vn\nRin inp inn 300k\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 1.59u\nEu u 0 vp 0 1\nVhu u uh DC 2\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 2\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends NE5532"
+  ],
+  "descriptions": [
+   "低雑音デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化。DC利得100dB、GBW約10MHz、出力は電源から約2V内側まで。オーディオ用。簡易マクロモデル(概算)"
+  ]
+ },
+ "MCP6001_SOT-23-5": {
+  "texts": [
+   ".subckt MCP6001 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 100k\nRp m n0 1Meg\nCp n0 0 16n\nEu u 0 vp 0 1\nVhu u uh DC 0.025\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.025\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6001",
+   ".subckt MCP6001 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 0.025\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.025\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6001"
+  ],
+  "descriptions": [
+   "レールtoレール入出力オペアンプ (SOT-23-5, ピン1=OUT 2=VSS 3=IN+ 4=IN- 5=VDD)。GBW約1MHz。簡易マクロモデル(概算)"
+  ]
+ },
+ "MCP6002_SOIC-8": {
+  "texts": [
+   ".subckt MCP6002 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 100k\nRp m n0 1Meg\nCp n0 0 16n\nEu u 0 vp 0 1\nVhu u uh DC 0.025\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.025\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6002",
+   ".subckt MCP6002 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 0.025\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.025\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6002"
+  ],
+  "descriptions": [
+   "レールtoレール入出力デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化。GBW約1MHz、単一電源1.8V〜6V。出力は電源の25mV内側まで。簡易マクロモデル(概算)"
+  ]
+ }
+}

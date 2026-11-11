@@ -3,7 +3,7 @@
     {
       "refdes": "V1",
       "kind": "VSource",
-      "value": "AC 1",
+      "value": "DC -3m AC 1",
       "pos": [
         2,
         -3
@@ -92,7 +92,7 @@
           "kind": "subckt",
           "element": "",
           "name": "LM358",
-          "text": ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
+          "text": ".subckt LM358 inp inn out vp vn\n* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance\nVos inp i1 DC 0.003\nEn i1 i2 nz 0 9.8247\nRnz nz 0 1k\nIbp inp vn DC -2e-08\nIbn inn vn DC -2e-08\nRin inp inn 2Meg\n* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)\nBgm 0 n0 I=limit(0.00439823*V(i2,inn),-0.0003,0.0003)\nRp n0 0 2.27364e+07\nCp n0 0 1e-09\n* output swing: clamped hu below vp and hl above vn\nEu u 0 vp 0 1\nVhu u uh DC 1.4\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.005\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\n* output: ro, current limited to the short-circuit current, taken from vp (source) and returned to vn (sink)\nBsrc vp out I=limit((V(n)-V(out))/50,-0.04,0.04)*step(limit((V(n)-V(out))/50,-0.04,0.04),1u)\nBsnk out vn I=-limit((V(n)-V(out))/50,-0.04,0.04)*step(-limit((V(n)-V(out))/50,-0.04,0.04),1u)\n* quiescent current of one amplifier\nIq vp vn DC 0.00035\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
           "pins": [
             "3",
             "2",

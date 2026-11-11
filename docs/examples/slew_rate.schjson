@@ -116,7 +116,7 @@
           "kind": "subckt",
           "element": "",
           "name": "LM358",
-          "text": ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nBgm 0 n0 I=limit(0.1*V(inp,inn),-4.8m,4.8m)\nRp n0 0 1Meg\nCp n0 0 16n\nBo o 0 V=limit(V(n0),V(vn)+0.05,V(vp)-1.5)\nRo o out 50\n.ends LM358",
+          "text": ".subckt LM358 inp inn out vp vn\n* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance\nVos inp i1 DC 0.003\nEn i1 i2 nz 0 9.8247\nRnz nz 0 1k\nIbp inp vn DC -2e-08\nIbn inn vn DC -2e-08\nRin inp inn 2Meg\n* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)\nBgm 0 n0 I=limit(0.00439823*V(i2,inn),-0.0003,0.0003)\nRp n0 0 2.27364e+07\nCp n0 0 1e-09\n* output swing: clamped hu below vp and hl above vn\nEu u 0 vp 0 1\nVhu u uh DC 1.4\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.005\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\n* output: ro, current limited to the short-circuit current, taken from vp (source) and returned to vn (sink)\nBsrc vp out I=limit((V(n)-V(out))/50,-0.04,0.04)*step(limit((V(n)-V(out))/50,-0.04,0.04),1u)\nBsnk out vn I=-limit((V(n)-V(out))/50,-0.04,0.04)*step(-limit((V(n)-V(out))/50,-0.04,0.04),1u)\n* quiescent current of one amplifier\nIq vp vn DC 0.00035\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
           "pins": [
             "3",
             "2",
@@ -126,11 +126,13 @@
           ],
           "params": {
             "gain_dc": 100000.0,
-            "gbw": 1000000.0
+            "gbw": 700000.0
           },
           "limits": [
-            "開ループ利得、1次の極 (GBW)、入力抵抗、出力抵抗、出力の振れ幅 (電源からの余裕) を再現する簡易マクロモデルです。チャネル1のみ記号にしてあります。",
-            "扱わないもの: 入力オフセット電圧、入力バイアス電流、スルーレート、電源電流、入力できる電圧の範囲、出力電流の限界、容量性の負荷での発振 (位相余裕)、電源電圧による GBW の変化。",
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI SLOS068AB の 5.7 節(B 版ではない LM358)。データシートとの比べは docs/models/opamps.md。",
+            "再現しているもの: 開ループ利得 100 dB、GBW 700 kHz、スルーレート 0.3 V/µs、電源電流 350 µA/回路、入力オフセット 3 mV、入力バイアス電流 20 nA、出力の振れ幅 (電源から 1.4 V / 5 mV)、出力の短絡電流 40 mA、1 kHz の入力換算雑音 40 nV/√Hz。",
+            "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、オフセットとバイアス電流のばらつき (typ の値で固定)、チャネル2。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
             "電源ピンをつながないと、出力は 0V に張り付きます。"
           ]
         },
@@ -201,7 +203,7 @@
           "kind": "subckt",
           "element": "",
           "name": "LM358",
-          "text": ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nBgm 0 n0 I=limit(0.1*V(inp,inn),-4.8m,4.8m)\nRp n0 0 1Meg\nCp n0 0 16n\nBo o 0 V=limit(V(n0),V(vn)+0.05,V(vp)-1.5)\nRo o out 50\n.ends LM358",
+          "text": ".subckt LM358 inp inn out vp vn\n* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance\nVos inp i1 DC 0.003\nEn i1 i2 nz 0 9.8247\nRnz nz 0 1k\nIbp inp vn DC -2e-08\nIbn inn vn DC -2e-08\nRin inp inn 2Meg\n* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)\nBgm 0 n0 I=limit(0.00439823*V(i2,inn),-0.0003,0.0003)\nRp n0 0 2.27364e+07\nCp n0 0 1e-09\n* output swing: clamped hu below vp and hl above vn\nEu u 0 vp 0 1\nVhu u uh DC 1.4\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.005\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\n* output: ro, current limited to the short-circuit current, taken from vp (source) and returned to vn (sink)\nBsrc vp out I=limit((V(n)-V(out))/50,-0.04,0.04)*step(limit((V(n)-V(out))/50,-0.04,0.04),1u)\nBsnk out vn I=-limit((V(n)-V(out))/50,-0.04,0.04)*step(-limit((V(n)-V(out))/50,-0.04,0.04),1u)\n* quiescent current of one amplifier\nIq vp vn DC 0.00035\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
           "pins": [
             "3",
             "2",
@@ -211,11 +213,13 @@
           ],
           "params": {
             "gain_dc": 100000.0,
-            "gbw": 1000000.0
+            "gbw": 700000.0
           },
           "limits": [
-            "開ループ利得、1次の極 (GBW)、入力抵抗、出力抵抗、出力の振れ幅 (電源からの余裕) を再現する簡易マクロモデルです。チャネル1のみ記号にしてあります。",
-            "扱わないもの: 入力オフセット電圧、入力バイアス電流、スルーレート、電源電流、入力できる電圧の範囲、出力電流の限界、容量性の負荷での発振 (位相余裕)、電源電圧による GBW の変化。",
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI SLOS068AB の 5.7 節(B 版ではない LM358)。データシートとの比べは docs/models/opamps.md。",
+            "再現しているもの: 開ループ利得 100 dB、GBW 700 kHz、スルーレート 0.3 V/µs、電源電流 350 µA/回路、入力オフセット 3 mV、入力バイアス電流 20 nA、出力の振れ幅 (電源から 1.4 V / 5 mV)、出力の短絡電流 40 mA、1 kHz の入力換算雑音 40 nV/√Hz。",
+            "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、オフセットとバイアス電流のばらつき (typ の値で固定)、チャネル2。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
             "電源ピンをつながないと、出力は 0V に張り付きます。"
           ]
         },
@@ -286,7 +290,7 @@
           "kind": "subckt",
           "element": "",
           "name": "TL072",
-          "text": ".subckt TL072 inp inn out vp vn\nRin inp inn 2Meg\nBgm 0 n0 I=limit(0.1*V(inp,inn),-69m,69m)\nRp n0 0 2Meg\nCp n0 0 5.3n\nBo o 0 V=limit(V(n0),V(vn)+0.05,V(vp)-1.5)\nRo o out 50\n.ends TL072",
+          "text": ".subckt TL072 inp inn out vp vn\n* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance\nVos inp i1 DC 0.003\nEn i1 i2 nz 0 9.08785\nRnz nz 0 1k\nIbp inp vn DC 6.5e-11\nIbn inn vn DC 6.5e-11\nRin inp inn 1e12\n* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)\nBgm 0 n0 I=limit(0.0397892*V(i2,inn),-0.02,0.02)\nRp n0 0 5.02615e+06\nCp n0 0 1e-09\n* second pole (phase margin)\nE2 p2a 0 n0 0 1\nR2 p2a p2 1k\nC2 p2 0 2.04479e-11\n* output swing: clamped hu below vp and hl above vn\nEu u 0 vp 0 1\nVhu u uh DC 1.4\nEx1 x1 0 p2 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 p2 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 1.4\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\n* output: ro, current limited to the short-circuit current, taken from vp (source) and returned to vn (sink)\nBsrc vp out I=limit((V(n)-V(out))/100,-0.026,0.026)*step(limit((V(n)-V(out))/100,-0.026,0.026),1u)\nBsnk out vn I=-limit((V(n)-V(out))/100,-0.026,0.026)*step(-limit((V(n)-V(out))/100,-0.026,0.026),1u)\n* quiescent current of one amplifier\nIq vp vn DC 0.0014\n.model DLIM D(IS=1e-12 N=1)\n.ends TL072",
           "pins": [
             "3",
             "2",
@@ -295,12 +299,14 @@
             "4"
           ],
           "params": {
-            "gain_dc": 200000.0,
-            "gbw": 3000000.0
+            "gain_dc": 199986.0,
+            "gbw": 5250000.0
           },
           "limits": [
-            "開ループ利得、1次の極 (GBW)、入力抵抗、出力抵抗、出力の振れ幅 (電源からの余裕) を再現する簡易マクロモデルです。チャネル1のみ記号にしてあります。",
-            "扱わないもの: 入力オフセット電圧、入力バイアス電流、スルーレート、電源電流、入力できる電圧の範囲、出力電流の限界、容量性の負荷での発振 (位相余裕)、電源電圧による GBW の変化。",
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI SLOS080W の 5.8・5.9 節(TL07xC。短絡電流は C の表に無いので TL07xH の 5.7 節の値)。データシートとの比べは docs/models/opamps.md。",
+            "再現しているもの: 開ループ利得 106 dB、GBW 5.25 MHz(位相余裕 56°)、スルーレート 20 V/µs、電源電流 1.4 mA/回路、入力オフセット 3 mV、入力バイアス電流 65 pA、出力の振れ幅 (電源から 1.4 V / 1.4 V)、出力の短絡電流 26 mA、1 kHz の入力換算雑音 37 nV/√Hz。",
+            "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、オフセットとバイアス電流のばらつき (typ の値で固定)、チャネル2。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
             "電源ピンをつながないと、出力は 0V に張り付きます。"
           ]
         },

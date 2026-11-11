@@ -1550,24 +1550,17 @@ fn write_diode_recovery_example() {
     std::fs::write(root.join("diode_recovery.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
-/// Generates docs/examples/slew_rate.schjson for the op-amp slew rate lesson: three voltage followers on +-5 V. U1 (a slow op-amp, 0.3 V/us)
-/// follows a 0 - 2 V pulse (V1); U2 (the same slow op-amp) and U3 (a fast one, 13 V/us) follow a 100 kHz sine of 2 V peak (V2 through the divider
-/// R1 = 1 ohm / R2 = 10 kohm, node IN2). The library models have no slew limit, so this sample embeds models of its own: a transconductance stage
-/// (0.1 S: the input stage is linear for ~50 mV or more) whose current is limited to SR x Cp into Cp: `cargo test -p app write_slew_rate_example -- --ignored`
+/// Generates docs/examples/slew_rate.schjson for the op-amp slew rate lesson: three voltage followers on +-5 V. U1 (a slow op-amp, LM358
+/// 0.3 V/us) follows a 0 - 2 V pulse (V1); U2 (the same slow op-amp) and U3 (a fast one, TL072 20 V/us) follow a 100 kHz sine of 2 V peak
+/// (V2 through the divider R1 = 1 ohm / R2 = 10 kohm, node IN2). The library models carry their data sheets' slew rates
+/// (docs/models/opamps.md): `cargo test -p app write_slew_rate_example -- --ignored`
 #[test]
 #[ignore]
 fn write_slew_rate_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
-    let model = |n: &str, imax: &str, cp: &str, rp: &str| {
-        let mut d = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
-        d.sim.as_mut().unwrap().text = format!(
-            ".subckt {n} inp inn out vp vn\nRin inp inn 2Meg\nBgm 0 n0 I=limit(0.1*V(inp,inn),-{imax},{imax})\nRp n0 0 {rp}\nCp n0 0 {cp}\nBo o 0 V=limit(V(n0),V(vn)+0.05,V(vp)-1.5)\nRo o out 50\n.ends {n}"
-        );
-        d
-    };
-    // LM358: GBW 1 MHz, 0.3 V/us (Imax = SR x Cp = 4.8 mA, DC gain 100k); TL072: GBW 3 MHz, 13 V/us (Imax = 69 mA, DC gain 200k)
-    let slow = model("LM358", "4.8m", "16n", "1Meg");
-    let fast = model("TL072", "69m", "5.3n", "2Meg");
+    let lib = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+    let slow = lib("LM358");
+    let fast = lib("TL072");
     let mut s = sch_core::Schematic::default();
     let src = |s: &mut sch_core::Schematic, y: i32, value: &str, plus: &str, minus: &str| {
         let v = s.add(Kind::VSource, (0, y), 0);
