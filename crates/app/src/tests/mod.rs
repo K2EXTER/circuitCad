@@ -3,6 +3,7 @@ mod converge;
 mod flow;
 mod mixed;
 mod uln2803a;
+mod sample_models;
 
 use super::*;
 use pcb_core::ratsnest::ratsnest;

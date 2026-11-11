@@ -356,13 +356,43 @@ pub fn run_path(path: &Path, exe: &Path) -> String {
 #[cfg(test)]
 pub const GOLDEN_DC: &str = "docs/xcheck/ngspice_dc.json";
 
-/// Run ngspice on every example of a folder and store its raw answer for each circuit that agrees with
-/// ours under ngspice's default settings. CI compares against this file, so it needs no ngspice.
-pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
-    let work = std::env::temp_dir().join("circuitcad_xcheck");
-    let _ = std::fs::create_dir_all(&work);
+/// The circuits a stored answer file (`--golden`) holds now: with `--keep-set` only these are run again and written, so that
+/// a changed model refreshes their answers without adding the examples that were never stored. None = no such file.
+pub fn stored_set(out: &Path) -> Option<std::collections::BTreeSet<String>> {
+    let json: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(out).ok()?).ok()?;
+    Some(json["circuits"].as_object()?.keys().cloned().collect())
+}
+
+/// The examples of a folder to run for a stored answer file: all of them, or with `keep` only those already stored.
+/// Also the stored names with no example any more, for the report.
+pub fn golden_files(dir: &Path, keep: Option<&std::collections::BTreeSet<String>>) -> (Vec<PathBuf>, Vec<String>) {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "schjson")).collect();
     files.sort();
+    let tag = |p: &PathBuf| p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let Some(keep) = keep else { return (files, vec![]) };
+    let gone = keep.iter().filter(|k| !files.iter().any(|f| tag(f) == **k)).cloned().collect();
+    (files.into_iter().filter(|f| keep.contains(&tag(f))).collect(), gone)
+}
+
+/// The report's line for `--keep-set`: stored circuits that are no longer stored (no longer agree, or gone).
+pub fn keep_set_note(keep: Option<&std::collections::BTreeSet<String>>, written: &[String], gone: &[String]) -> String {
+    let Some(keep) = keep else { return String::new() };
+    let lost: Vec<&String> = keep.iter().filter(|k| !written.contains(k)).collect();
+    if lost.is_empty() {
+        return "--keep-set: 前と同じ回路の組です\n".into();
+    }
+    let gone = if gone.is_empty() { String::new() } else { format!(" (サンプルが無いもの: {})", gone.join(", ")) };
+    format!("--keep-set: 前は保存していたのに、今回は保存しなかった回路があります: {}{gone}\n", lost.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))
+}
+
+/// Run ngspice on every example of a folder and store its raw answer for each circuit that agrees with
+/// ours under ngspice's default settings. CI compares against this file, so it needs no ngspice.
+/// With `keep_set`, only the circuits the file holds now are run and written (`stored_set`).
+pub fn write_golden(dir: &Path, exe: &Path, out: &Path, keep_set: bool) -> String {
+    let work = std::env::temp_dir().join("circuitcad_xcheck");
+    let _ = std::fs::create_dir_all(&work);
+    let keep = if keep_set { stored_set(out) } else { None };
+    let (files, gone) = golden_files(dir, keep.as_ref());
     let mut circuits = serde_json::Map::new();
     let mut left_out = vec![];
     for f in &files {
@@ -378,9 +408,10 @@ pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
     }
     let json = serde_json::json!({ "about": "ngspice's DC operating point (raw output, default settings) for the shipped examples; written by `circuitCad --xcheck docs/examples --golden docs/xcheck/ngspice_dc.json`", "circuits": circuits });
     let written = std::fs::create_dir_all(out.parent().unwrap_or(Path::new("."))).and_then(|_| std::fs::write(out, serde_json::to_string_pretty(&json).unwrap_or_default()));
+    let names: Vec<String> = circuits.keys().cloned().collect();
     format!("{} 回路を {} に保存 ({:?})
 保存しなかった: {}
-", circuits.len(), out.display(), written.map_err(|e| e.to_string()), left_out.join(", "))
+{}", circuits.len(), out.display(), written.map_err(|e| e.to_string()), left_out.join(", "), keep_set_note(keep.as_ref(), &names, &gone))
 }
 
 /// Handle `--xcheck ...`; returns true when the flag was present (the GUI must not start then).
@@ -388,20 +419,22 @@ pub fn run_cli(args: &[String]) -> bool {
     let Some(i) = args.iter().position(|a| a == "--xcheck") else { return false };
     let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|j| args.get(j + 1)).map(|s| s.as_str());
     let tran = args.iter().any(|a| a == "--tran");
+    // with --golden: run and write only the circuits the file holds now (a model change refreshes them, adds none)
+    let keep_set = args.iter().any(|a| a == "--keep-set");
     if args.iter().any(|a| a == "--ac") {
         let report = match (args.get(i + 1).filter(|a| !a.starts_with("--")), find_ngspice(val("--ngspice"))) {
-            (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> --ac [--golden <保存先.json>] [--ngspice <exe>] [--out report.txt]
+            (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> --ac [--golden <保存先.json> [--keep-set]] [--ngspice <exe>] [--out report.txt]
 ".to_string(),
             (_, None) => "ngspice が見つかりません。--ngspice <exe> か環境変数 NGSPICE で指定してください
 ".to_string(),
-            (Some(p), Some(exe)) => crate::xcheck_ac::run_path(Path::new(p), &exe, val("--golden").map(Path::new)),
+            (Some(p), Some(exe)) => crate::xcheck_ac::run_path(Path::new(p), &exe, val("--golden").map(Path::new), keep_set),
         };
         let _ = std::fs::write(val("--out").unwrap_or("xcheck_ac_report.txt"), &report);
         print!("{report}");
         return true;
     }
     if let (Some(dir), Some(out), Some(exe)) = (args.get(i + 1).filter(|a| !a.starts_with("--")), val("--golden"), find_ngspice(val("--ngspice"))) {
-        let report = if tran { crate::xcheck_tran::write_golden(Path::new(dir), &exe, Path::new(out)) } else { write_golden(Path::new(dir), &exe, Path::new(out)) };
+        let report = if tran { crate::xcheck_tran::write_golden(Path::new(dir), &exe, Path::new(out), keep_set) } else { write_golden(Path::new(dir), &exe, Path::new(out), keep_set) };
         let _ = std::fs::write("xcheck_golden_report.txt", &report);
         print!("{report}");
         return true;

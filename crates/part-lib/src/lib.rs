@@ -558,9 +558,13 @@ fn legacy_models() -> std::collections::HashMap<String, Shipped> {
     serde_json::from_str(LEGACY_MODELS).unwrap_or_default()
 }
 
-/// Key recorded in `.bundled` once a part has been offered its rebuilt model.
-fn rebuilt_key(name: &str) -> String {
-    format!("{name}+model2026-11")
+/// Key recorded in `.bundled` once a part has been offered its rebuilt model: it carries the fingerprint of the bundled
+/// model, so that every later rebuild is offered once again (a copy that already has the current model is left as it is,
+/// since only the earlier versions in `legacy_models.json` are replaced). Libraries offered the 2026-11 rebuild recorded
+/// `+model2026-11`; they get the new key on the next start without any change to their files.
+fn rebuilt_key(name: &str, bundled: &str) -> String {
+    let model = serde_json::from_str::<PartDef>(bundled).ok().and_then(|d| d.sim).map(|m| model_checks::fingerprint(&m.text)).unwrap_or_default();
+    format!("{name}+model-{model}")
 }
 
 /// The user's copy with the rebuilt model: only when its model is one of the earlier bundled ones (never edited). The model
@@ -733,20 +737,19 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         done.insert(name.to_string());
     }
-    // parts whose model was rebuilt (the op amps on their data sheets): offered once, only to a copy with an earlier model
+    // parts whose model was rebuilt (on their data sheets): each rebuild offered once, only to a copy with an earlier model
     for name in legacy_models().keys() {
-        let key = rebuilt_key(name);
+        let Some((_, text)) = EXAMPLES.iter().find(|(n, _)| n == name) else { continue };
+        let key = rebuilt_key(name, text);
         if done.contains(&key) {
             continue;
         }
-        if let Some((_, text)) = EXAMPLES.iter().find(|(n, _)| n == name) {
-            let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-            if file.exists()
-                && let Some(part) = with_rebuilt_model(&file, name, text)
-                && let Ok(json) = serde_json::to_string_pretty(&part)
-            {
-                std::fs::write(&file, json)?;
-            }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists()
+            && let Some(part) = with_rebuilt_model(&file, name, text)
+            && let Ok(json) = serde_json::to_string_pretty(&part)
+        {
+            std::fs::write(&file, json)?;
         }
         done.insert(key);
     }

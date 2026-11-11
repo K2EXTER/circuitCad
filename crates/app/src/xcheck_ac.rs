@@ -203,14 +203,17 @@ fn load(f: &Path) -> Result<Schematic, String> {
     std::fs::read_to_string(f).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str::<Schematic>(&t).map_err(|e| e.to_string()))
 }
 
-/// Check a file or a folder; returns the report. With `golden` set, the circuits that match are stored there.
-pub fn run_path(path: &Path, exe: &Path, golden: Option<&Path>) -> String {
+/// Check a file or a folder; returns the report. With `golden` set, the circuits that match are stored there; with
+/// `keep_set` too, only the circuits the file holds now are run and written (`xcheck::stored_set`).
+pub fn run_path(path: &Path, exe: &Path, golden: Option<&Path>, keep_set: bool) -> String {
     let work = std::env::temp_dir().join("circuitcad_xcheck_ac");
     let _ = std::fs::create_dir_all(&work);
     let mut report = format!("AC解析の検算 (自前エンジン vs ngspice, {F_START}Hz〜{F_STOP:e}Hz)  合格: 複素数の差が 相対{REL_TOL} + 最大値の{PEAK_TOL}倍 以内\n\n");
     let mut counts = [0usize; 4];
     let (mut stored, mut left_out) = (vec![], vec![]);
-    for f in example_files(path) {
+    let keep_names = golden.filter(|_| keep_set && path.is_dir()).and_then(crate::xcheck::stored_set);
+    let (files, gone) = if keep_names.is_some() { crate::xcheck::golden_files(path, keep_names.as_ref()) } else { (example_files(path), vec![]) };
+    for f in files {
         let tag = f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let mut keep = None;
         let outcome = match load(&f) {
@@ -251,6 +254,8 @@ pub fn run_path(path: &Path, exe: &Path, golden: Option<&Path>) -> String {
         );
         let written = std::fs::create_dir_all(out.parent().unwrap_or(Path::new("."))).and_then(|_| std::fs::write(out, text));
         report.push_str(&format!("{} 回路を {} に保存 ({:?})\n保存しなかった: {}\n", lines.len(), out.display(), written.map_err(|e| e.to_string()), left_out.join(", ")));
+        let names: Vec<String> = stored.iter().map(|(t, _)| t.clone()).collect();
+        report.push_str(&crate::xcheck::keep_set_note(keep_names.as_ref(), &names, &gone));
     }
     report
 }

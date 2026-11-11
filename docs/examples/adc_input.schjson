@@ -99,7 +99,7 @@
           "kind": "model",
           "element": "S",
           "name": "SWSAMPLE",
-          "text": ".model SWSAMPLE SW(RON=100 ROFF=1G VT=2.5 VW=0.1)",
+          "text": ".model SWSAMPLE SW(RON=100 ROFF=1G VT=2.5 VW=2)",
           "pins": [
             "1",
             "2",

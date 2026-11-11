@@ -199,7 +199,7 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
     // the library of a user who installed before the rebuild: the parts are recorded, the rebuild was never offered
     let forget_rebuild = || {
         let marker = dir.join(".bundled");
-        let kept: Vec<String> = std::fs::read_to_string(&marker).unwrap().lines().filter(|l| !l.ends_with("+model2026-11")).map(str::to_string).collect();
+        let kept: Vec<String> = std::fs::read_to_string(&marker).unwrap().lines().filter(|l| !l.contains("+model-")).map(str::to_string).collect();
         std::fs::write(&marker, kept.join("
 ")).unwrap();
     };
@@ -950,4 +950,17 @@ fn a_copy_from_before_the_model_origin_is_still_the_original() {
     std::fs::write(&file, serde_json::to_string(&old).unwrap()).unwrap();
     assert!(is_original_without_limits(&file, text));
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// The key that records a rebuilt model as offered names the bundled model, so the next rebuild is offered once again,
+/// also to a library that recorded the 2026-11 rebuild under its old key.
+#[test]
+fn every_rebuild_of_a_model_is_offered_once() {
+    let text = EXAMPLES.iter().find(|(n, _)| *n == "LM358_SOIC-8").unwrap().1;
+    let mut next = example("LM358_SOIC-8");
+    next.sim.as_mut().unwrap().text.push_str("\n* rebuilt again\n");
+    let next = serde_json::to_string(&next).unwrap();
+    assert_ne!(rebuilt_key("LM358_SOIC-8", text), rebuilt_key("LM358_SOIC-8", &next));
+    assert_ne!(rebuilt_key("LM358_SOIC-8", text), "LM358_SOIC-8+model2026-11");
+    assert_eq!(rebuilt_key("LM358_SOIC-8", text), rebuilt_key("LM358_SOIC-8", text));
 }

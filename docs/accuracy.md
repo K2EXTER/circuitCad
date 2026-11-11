@@ -74,7 +74,7 @@ circuitCad --xcheck docs/examples
 # 過渡解析を比べる (結果は xcheck_tran_report.txt)
 circuitCad --xcheck docs/examples --tran
 
-# AC 解析を比べる (結果は xcheck_ac_report.txt。--golden <json> で一致した答えを保存)
+# AC 解析を比べる (結果は xcheck_ac_report.txt。--golden <json> で一致した答えを保存。--keep-set を足すと、保存ファイルに今ある回路だけを書き直す)
 circuitCad --xcheck docs/examples --ac
 
 # 保存した答えとの比較だけなら ngspice は要らない

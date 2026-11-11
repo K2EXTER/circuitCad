@@ -168,10 +168,11 @@ impl SchEditor {
                                 Some(m) => {
                                     ui.label(i18n::trf!("モデル: {}", m.name));
                                     super::origin_ui(ui, &sym.name, m, "placed_origin");
-                                    // a circuit saved before the notes existed carries the model without them:
-                                    // take the notes of the same library model (same name, same text)
-                                    let from_library = self.library.iter().find(|d| d.name == sym.name && d.sim.as_ref().is_some_and(|x| x.text == m.text)).and_then(|d| d.sim.as_ref()).map(|x| &x.limits);
-                                    limits_ui(ui, if m.limits.is_empty() { from_library.map_or(&[][..], |l| l.as_slice()) } else { &m.limits }, "placed_limits");
+                                    // the same model as the library part (same name, same text): its notes are the current ones,
+                                    // also for a circuit saved before the notes existed or before they were reworded
+                                    // (the sample refresh, tests/sample_models.rs, replaces only the model text)
+                                    let from_library = self.library.iter().find(|d| d.name == sym.name && d.sim.as_ref().is_some_and(|x| x.text == m.text)).and_then(|d| d.sim.as_ref()).map(|x| &x.limits).filter(|l| !l.is_empty());
+                                    limits_ui(ui, from_library.map_or(&m.limits[..], |l| l.as_slice()), "placed_limits");
                                 }
                                 None => {
                                     ui.colored_label(crate::theme::WARN, i18n::tr("シミュレーションモデルなし"));

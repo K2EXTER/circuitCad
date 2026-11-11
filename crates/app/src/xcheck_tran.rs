@@ -462,12 +462,13 @@ fn round6(x: f64) -> f64 {
 }
 
 /// Run ngspice over a folder of examples and store the statistics of every circuit that matches.
-pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
+/// With `keep_set`, only the circuits the file holds now are run and written (`xcheck::stored_set`).
+pub fn write_golden(dir: &Path, exe: &Path, out: &Path, keep_set: bool) -> String {
     let work = std::env::temp_dir().join("circuitcad_xcheck_tran");
     let _ = std::fs::create_dir_all(&work);
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "schjson")).collect();
-    files.sort();
-    let (mut lines, mut left_out) = (vec![], vec![]);
+    let keep = if keep_set { crate::xcheck::stored_set(out) } else { None };
+    let (files, gone) = crate::xcheck::golden_files(dir, keep.as_ref());
+    let (mut lines, mut left_out, mut names) = (vec![], vec![], vec![]);
     for f in &files {
         let tag = f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let Ok(s) = std::fs::read_to_string(f).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str::<Schematic>(&t).map_err(|e| e.to_string())) else { continue };
@@ -482,6 +483,7 @@ pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
                         .collect();
                 let one = serde_json::json!({ "tstop": g.tstop, "tstep": g.tstep, "zero_start": g.zero_start, "nodes": nodes });
                 lines.push(format!("    {}: {}", serde_json::json!(tag), one));
+                names.push(tag);
             }
             _ => left_out.push(format!("{tag} ({})", outcome.label())),
         }
@@ -491,7 +493,14 @@ pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
         lines.join(",\n")
     );
     let written = std::fs::create_dir_all(out.parent().unwrap_or(Path::new("."))).and_then(|_| std::fs::write(out, text));
-    format!("{} 回路を {} に保存 ({:?})\n保存しなかった: {}\n", lines.len(), out.display(), written.map_err(|e| e.to_string()), left_out.join(", "))
+    format!(
+        "{} 回路を {} に保存 ({:?})\n保存しなかった: {}\n{}",
+        lines.len(),
+        out.display(),
+        written.map_err(|e| e.to_string()),
+        left_out.join(", "),
+        crate::xcheck::keep_set_note(keep.as_ref(), &names, &gone)
+    )
 }
 
 /// Read the stored file: circuit name -> run.
