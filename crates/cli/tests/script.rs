@@ -1045,6 +1045,58 @@ fn sheets_split_a_label_circuit_without_changing_its_answer() {
 }
 
 #[test]
+fn a_name_given_to_the_only_sheet_is_kept_for_when_the_second_is_added() {
+    let (a, ok) = run("new
+add R 1k as=R1
+sheet name Measure
+sheet add Input
+sheet use Measure
+list
+");
+    assert!(ok, "{a:?}");
+    let named = a.iter().find(|v| v["cmd"] == "sheet" && v.get("note").is_some()).unwrap();
+    assert_eq!(named["sheets"][0]["name"], "Measure", "{named}");
+    let list = a.iter().rev().find(|v| v["cmd"] == "sheet").unwrap();
+    assert_eq!(list["sheets"][0]["name"], "Measure", "{list}");
+    assert_eq!(list["sheets"][1]["name"], "Input", "{list}");
+    assert_eq!(last(&a, "list")["parts"].as_array().unwrap().len(), 1);
+    // 'new' forgets a name that was never used
+    let (a, ok) = run("new
+sheet name Old
+new
+sheet add Second
+");
+    assert!(ok, "{a:?}");
+    assert_eq!(last(&a, "sheet")["sheets"][0]["name"], "シート1");
+}
+
+#[test]
+fn one_name_of_a_dual_use_pin_is_enough() {
+    let (a, ok) = run("new
+add ADS124S08 as=U1
+add R 10k as=R1
+net X U1.AIN6 R1.1
+net Y U1.REFN1 R1.2
+net Z U1.GPIO0/AIN8
+nc U1.AIN9
+list
+");
+    assert!(ok, "{a:?}");
+    let pins = |net: &str| -> Vec<String> {
+        let n = last(&a, "list")["nets"].as_array().unwrap().iter().find(|n| n["net"] == net).unwrap_or_else(|| panic!("no net {net}: {a:?}")).clone();
+        n["pins"].as_array().unwrap().iter().map(|p| p.as_str().unwrap().to_string()).collect()
+    };
+    assert!(pins("X").contains(&"U1.32".to_string()), "AIN6 is pin 32 (REFP1/AIN6)");
+    assert!(pins("Y").contains(&"U1.31".to_string()), "REFN1 is pin 31 (REFN1/AIN7)");
+    assert_eq!(last(&a, "nc")["changed"][0], "U1.21", "AIN9 is pin 21 (GPIO1/AIN9)");
+    let (a, ok) = run("new
+add ADS124S08 as=U1
+net X U1.AIN99
+");
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("no pin 'AIN99'"), "{a:?}");
+}
+
+#[test]
 fn a_sheet_used_twice_is_two_copies_with_their_own_parts_and_nets() {
     // a divider on its own sheet, used by two symbols on the first sheet
     let script = "new\nsheet add Divider\nadd R 10k as=R1\nadd R 10k as=R2\nnet MID R1.2 R2.1\nnet GND R2.2\nsheet port IN R1.1 dir=in\nsheet port OUT R1.2 dir=out\n\

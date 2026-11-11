@@ -25,7 +25,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   nc REF.PIN [REF.PIN ...] [remove=1]    pins left unconnected on purpose (an unused output, a pin the data sheet says to leave open): ERC does not ask about them; no pins = the list
   pinnames REF NAME1,NAME2,...          the names of the pins of a pin header (F+,F-,SA,SB,GND): written beside its symbol and, with `board pinlabels`, on the silk (`-` clears)
   simonly REF [off]                     the part is only for the simulation (a test source, a stand-in for the device under test): it is left off the board and the bill of materials
-  net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name (any case)
+  net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name (any case; one part of a dual-use name like REFP1/AIN6 is enough)
                                         (GND pins of a part that share a name are all connected)
                                         The net named GND is the 0 V reference: every circuit needs one.
   remove REF
@@ -157,6 +157,8 @@ pub struct Session {
     pub last_ac: Option<sim_core::AcResult>,
     /// `board postlayout on`: analyses add the board's copper resistance in series with the pads.
     pub post_layout: bool,
+    /// `sheet name` given while the circuit still has one sheet: the name sheet 1 gets when `sheet add` makes the second.
+    pub(crate) first_sheet_name: Option<String>,
 }
 
 pub fn split_words(line: &str) -> Vec<String> {
@@ -215,7 +217,7 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_dir(&dir);
-        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
+        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false, first_sheet_name: None }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
@@ -223,6 +225,9 @@ impl Session {
         // an answer about the old circuit must not be judged against a new target
         if matches!(w[0].to_ascii_lowercase().as_str(), "new" | "open" | "add" | "value" | "net" | "remove" | "sheet") {
             (self.last_dc, self.last_tran, self.last_ac) = (None, None, None);
+        }
+        if matches!(w[0].to_ascii_lowercase().as_str(), "new" | "open" | "import_ltspice" | "import_kicad") {
+            self.first_sheet_name = None;
         }
         match w[0].to_ascii_lowercase().as_str() {
             "new" => {

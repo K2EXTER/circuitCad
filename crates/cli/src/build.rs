@@ -31,6 +31,17 @@ fn pin_names(c: &Component) -> Vec<(String, String)> {
     }
 }
 
+/// The numbers of the pins of `c` called `want`: the whole name first ("REFP1/AIN6"), else one of the names a
+/// slash-separated name of a dual-use pin is made of ("AIN6" or "REFP1"). A name shared by several pins gives them all.
+pub(crate) fn pins_named(c: &Component, want: &str) -> Vec<String> {
+    let names = pin_names(c);
+    let whole: Vec<String> = names.iter().filter(|(_, name)| name.eq_ignore_ascii_case(want)).map(|(n, _)| n.clone()).collect();
+    if !whole.is_empty() || want.contains('/') {
+        return whole;
+    }
+    names.iter().filter(|(_, name)| name.contains('/') && name.split('/').any(|part| part.trim().eq_ignore_ascii_case(want))).map(|(n, _)| n.clone()).collect()
+}
+
 /// Period and duty of a repeating wave: rising crossings of the mid level (at least two periods), and the share of
 /// time spent above it between the first and the last crossing. None for a wave that does not repeat.
 fn periodicity(t: &[f64], v: &[f64], mn: f64, mx: f64) -> Option<(f64, f64)> {
@@ -557,8 +568,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         if let Some((_, pt)) = pins.iter().find(|(n, _)| n.eq_ignore_ascii_case(p)) {
             return Ok(vec![*pt]);
         }
-        let by_name: Vec<Pt> =
-            pin_names(c).iter().filter(|(_, name)| name.eq_ignore_ascii_case(p)).filter_map(|(n, _)| pins.iter().find(|(m, _)| m == n).map(|(_, pt)| *pt)).collect();
+        let by_name: Vec<Pt> = pins_named(c, p).iter().filter_map(|n| pins.iter().find(|(m, _)| m == n).map(|(_, pt)| *pt)).collect();
         if by_name.is_empty() {
             let have: Vec<String> = pin_names(c).iter().map(|(n, name)| if n == name { n.clone() } else { format!("{n}={name}") }).collect();
             return Err(format!("{} has no pin '{p}' (pins: {})", c.refdes, have.join(" ")));
@@ -581,7 +591,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
                 if let Some((n, _)) = pins.iter().find(|(n, _)| n.eq_ignore_ascii_case(p)) {
                     vec![n.clone()]
                 } else {
-                    let by_name: Vec<String> = pin_names(c).iter().filter(|(_, name)| name.eq_ignore_ascii_case(p)).map(|(n, _)| n.clone()).collect();
+                    let by_name = pins_named(c, p);
                     if by_name.is_empty() {
                         return Err(format!("{refdes} has no pin '{p}'"));
                     }

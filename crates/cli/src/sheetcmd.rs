@@ -84,7 +84,11 @@ impl Session {
                 } else {
                     (self.sch.sheets[k].components.len(), self.sch.sheets[k].labels.len())
                 };
-                json!({"n": k + 1, "name": self.sch.sheet_name(k), "parts": parts, "labels": labels, "active": active})
+                let name = match (&self.first_sheet_name, self.sch.sheets.is_empty()) {
+                    (Some(n), true) => n.clone(),
+                    _ => self.sch.sheet_name(k),
+                };
+                json!({"n": k + 1, "name": name, "parts": parts, "labels": labels, "active": active})
             })
             .collect();
         Ok(obj(json!({"sheets": rows, "hint": "add, use, name and move edit the sheets; add / net / remove / list act on the active sheet"})))
@@ -96,7 +100,13 @@ impl Session {
         let Some(sub) = pos.first().map(|s| s.to_ascii_lowercase()) else { return self.sheet_list() };
         match sub.as_str() {
             "add" => {
+                let first = self.sch.sheets.is_empty();
                 let k = self.sch.add_sheet();
+                if first {
+                    if let Some(name) = self.first_sheet_name.take() {
+                        self.sch.rename_sheet(0, &name);
+                    }
+                }
                 if let Some(name) = pos.get(1) {
                     self.sch.rename_sheet(k, name);
                 }
@@ -112,7 +122,11 @@ impl Session {
             "name" => {
                 let name = pos.get(1).ok_or("sheet name NAME   (renames the active sheet)")?;
                 if self.sch.sheets.is_empty() {
-                    return Err("the circuit has one sheet: 'sheet add' first".into());
+                    // a single sheet has no name of its own: keep it for when `sheet add` splits the circuit
+                    self.first_sheet_name = Some(name.to_string());
+                    let mut out = self.sheet_list()?;
+                    out.insert("note".into(), json!(format!("the circuit has one sheet: it is called '{name}' once 'sheet add' makes the second")));
+                    return Ok(out);
                 }
                 self.sch.rename_sheet(self.sch.active_sheet, name);
                 self.sheet_list()
@@ -177,7 +191,17 @@ impl Session {
                 let at = pos.get(2).ok_or(usage)?;
                 let (rf, pin) = at.split_once('.').ok_or(usage)?;
                 let comp = self.sch.components.iter().find(|c| c.refdes.eq_ignore_ascii_case(rf)).ok_or_else(|| format!("no part {rf} on the active sheet"))?;
-                let place = comp.pins().into_iter().find(|(n, _)| n.eq_ignore_ascii_case(pin)).ok_or_else(|| format!("{} has no pin {pin}", comp.refdes))?.1;
+                let pins = comp.pins();
+                let named = crate::build::pins_named(comp, pin);
+                let place = pins
+                    .iter()
+                    .find(|(n, _)| n.eq_ignore_ascii_case(pin))
+                    .or_else(|| match named.as_slice() {
+                        [one] => pins.iter().find(|(n, _)| n == one),
+                        _ => None,
+                    })
+                    .ok_or_else(|| format!("{} has no pin {pin} (a port is one pin: give its number when the name is shared)", comp.refdes))?
+                    .1;
                 let dir = match opt(&kv, "dir").map(|d| d.to_ascii_lowercase()).as_deref() {
                     None | Some("io") => sch_core::PortDir::Io,
                     Some("in") => sch_core::PortDir::In,
