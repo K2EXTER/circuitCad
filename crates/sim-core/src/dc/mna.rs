@@ -4,37 +4,79 @@ use super::*;
 
 pub(crate) struct Mna {
     pub(crate) n: usize,
-    /// Sparse rows of (column, value). Stamps are appended unsorted; `compress` sorts each row
-    /// and sums duplicate entries.
+    /// Sparse rows of (column, value), sorted by column with no duplicates: built by `compress` from the stamps.
     pub(crate) rows: Vec<Vec<(usize, f64)>>,
     pub(crate) b: Vec<f64>,
     /// Only the right-hand side is wanted (the factorisation of the matrix is cached).
     rhs_only: bool,
+    /// Every stamp (row, column, value) in the order the elements made them.
+    log: Vec<(u32, u32, f64)>,
+}
+
+/// Where each stamp of an assembly lands, worked out once: a circuit stamps the same (row, column) sequence at every Newton
+/// iteration, so the next assembly with that sequence adds its values straight into their places, with no per-row lists to
+/// grow, sort and merge.
+pub(crate) struct StampPlan {
+    /// The (row, column) of every stamp, in stamping order: the sequence this plan is valid for.
+    keys: Vec<(u32, u32)>,
+    /// The entries (slots) of row `r` are `row_ptr[r]..row_ptr[r + 1]`, in increasing column `cols[slot]`.
+    row_ptr: Vec<usize>,
+    cols: Vec<usize>,
+    /// The stamps summed into slot `s` are `order[slot_ptr[s]..slot_ptr[s + 1]]`, in stamping order.
+    slot_ptr: Vec<usize>,
+    order: Vec<u32>,
+}
+
+impl StampPlan {
+    fn build(n: usize, log: &[(u32, u32, f64)]) -> StampPlan {
+        let mut by_row: Vec<Vec<u32>> = vec![vec![]; n];
+        for (i, e) in log.iter().enumerate() {
+            by_row[e.0 as usize].push(i as u32);
+        }
+        let (mut row_ptr, mut cols, mut slot_ptr, mut order) = (vec![0], vec![], vec![], Vec::with_capacity(log.len()));
+        for mut ix in by_row {
+            // a stable sort: the stamps of one column stay in stamping order
+            ix.sort_by_key(|&i| log[i as usize].1);
+            for (k, &i) in ix.iter().enumerate() {
+                if k == 0 || log[ix[k - 1] as usize].1 != log[i as usize].1 {
+                    cols.push(log[i as usize].1 as usize);
+                    slot_ptr.push(order.len());
+                }
+                order.push(i);
+            }
+            row_ptr.push(cols.len());
+        }
+        slot_ptr.push(order.len());
+        StampPlan { keys: log.iter().map(|e| (e.0, e.1)).collect(), row_ptr, cols, slot_ptr, order }
+    }
+
+    fn fits(&self, log: &[(u32, u32, f64)]) -> bool {
+        self.keys.len() == log.len() && self.keys.iter().zip(log).all(|(k, e)| k.0 == e.0 && k.1 == e.1)
+    }
 }
 
 impl Mna {
-    /// An empty system of `n` unknowns, filling the row buffers of `spare` (emptied first) when there are `n` of them.
-    pub(super) fn new(n: usize, rhs_only: bool, spare: Vec<Vec<(usize, f64)>>) -> Self {
+    /// An empty system of `n` unknowns, filling the row buffers of `spare` and the stamp list `log` (both emptied first).
+    pub(super) fn new(n: usize, rhs_only: bool, spare: Vec<Vec<(usize, f64)>>, mut log: Vec<(u32, u32, f64)>) -> Self {
         let rows = if rhs_only {
             Vec::new()
         } else if spare.len() == n {
-            let mut rows = spare;
-            rows.iter_mut().for_each(Vec::clear);
-            rows
+            spare
         } else {
             vec![Vec::new(); n]
         };
-        Self { n, rows, b: vec![0.0; n], rhs_only }
+        log.clear();
+        Self { n, rows, b: vec![0.0; n], rhs_only, log }
     }
     /// A[row node][col node] += val (ground rows/cols are dropped).
     pub(super) fn gn(&mut self, r: usize, c: usize, val: f64) {
         if r != 0 && c != 0 && !self.rhs_only {
-            self.rows[r - 1].push((c - 1, val));
+            self.log.push(((r - 1) as u32, (c - 1) as u32, val));
         }
     }
     pub(super) fn at(&mut self, r: usize, c: usize, val: f64) {
         if !self.rhs_only {
-            self.rows[r].push((c, val));
+            self.log.push((r as u32, c as u32, val));
         }
     }
     pub(super) fn g(&mut self, p: usize, q: usize, g: f64) {
@@ -63,20 +105,23 @@ impl Mna {
             self.at(br, n - 1, -1.0);
         }
     }
-    /// Sort every row by column and merge duplicate entries.
-    pub(super) fn compress(&mut self) {
-        for row in &mut self.rows {
-            row.sort_unstable_by_key(|e| e.0);
-            let mut w = 0;
-            for r in 0..row.len() {
-                if w > 0 && row[w - 1].0 == row[r].0 {
-                    row[w - 1].1 += row[r].1;
-                } else {
-                    row[w] = row[r];
-                    w += 1;
+    /// Build the rows from the stamps: every column once, in increasing order, holding the sum of its stamps (added in
+    /// stamping order). `plan` is used when it fits the stamps and made again when it does not.
+    pub(super) fn compress(&mut self, plan: &mut Option<StampPlan>) {
+        if !plan.as_ref().is_some_and(|p| p.fits(&self.log)) {
+            *plan = Some(StampPlan::build(self.n, &self.log));
+        }
+        let p = plan.as_ref().expect("made above");
+        for (r, row) in self.rows.iter_mut().enumerate() {
+            row.clear();
+            for s in p.row_ptr[r]..p.row_ptr[r + 1] {
+                let stamps = &p.order[p.slot_ptr[s]..p.slot_ptr[s + 1]];
+                let mut v = self.log[stamps[0] as usize].2;
+                for &i in &stamps[1..] {
+                    v += self.log[i as usize].2;
                 }
+                row.push((p.cols[s], v));
             }
-            row.truncate(w);
         }
     }
     /// Row-major dense copy.
@@ -138,8 +183,8 @@ impl Compiled {
 
     pub(super) fn assemble_with(&self, vj: &mut [f64], x: &[f64], ctx: &Ctx, rhs_only: bool) -> (Mna, bool) {
         let (gmin, scale) = (ctx.gmin, ctx.scale);
-        let spare = if rhs_only { Vec::new() } else { std::mem::take(&mut *self.rows_spare.borrow_mut()) };
-        let mut m = Mna::new(self.n_unknowns, rhs_only, spare);
+        let (spare, log) = if rhs_only { (Vec::new(), Vec::new()) } else { (std::mem::take(&mut *self.rows_spare.borrow_mut()), std::mem::take(&mut *self.log_spare.borrow_mut())) };
+        let mut m = Mna::new(self.n_unknowns, rhs_only, spare, log);
         let mut limited = false;
         for node in 1..self.n_nodes {
             m.at(node - 1, node - 1, gmin);
@@ -437,7 +482,8 @@ impl Compiled {
             }
         }
         if !rhs_only {
-            m.compress();
+            m.compress(&mut self.stamp_plan.borrow_mut());
+            *self.log_spare.borrow_mut() = std::mem::take(&mut m.log);
         }
         (m, limited)
     }

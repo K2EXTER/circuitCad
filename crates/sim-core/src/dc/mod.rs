@@ -117,6 +117,9 @@ pub(crate) struct Compiled {
     rows_spare: std::cell::RefCell<Vec<Vec<(usize, f64)>>>,
     /// The same for the eliminated rows of the last `linalg::refactor`.
     factor_spare: std::cell::RefCell<Vec<Vec<(usize, f64)>>>,
+    /// Where the stamps of an assembly land (`mna::StampPlan`), and the stamp list of the last assembly, kept for its capacity.
+    stamp_plan: std::cell::RefCell<Option<mna::StampPlan>>,
+    log_spare: std::cell::RefCell<Vec<(u32, u32, f64)>>,
     pub(crate) ce: Vec<Ce>,
     /// The stored state (0 or 1) of every `Ce::Seq`, changed only between solves.
     pub(crate) seq_state: std::cell::RefCell<Vec<f64>>,
