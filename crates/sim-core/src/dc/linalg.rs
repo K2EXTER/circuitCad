@@ -91,12 +91,29 @@ impl Symbolic {
 
 /// The work lists of the last `factor_ordered` on this thread, kept for their capacity: a small system is factored from scratch
 /// at every Newton iteration, and allocating these was a fifth of the time of a small circuit's transient.
+/// `pivot_row` and `ops` go into the `Factor` and come back when it is done with (`Factor::into_rows`); `solve_x` is the
+/// work vector of `Factor::solve`.
 #[derive(Default)]
 struct Scratch {
     col_rows: Vec<Vec<usize>>,
     merged: Vec<(usize, f64)>,
     cand: Vec<(usize, f64)>,
-    ops_len: usize,
+    done: Vec<bool>,
+    pivot_row: Vec<usize>,
+    ops: Vec<(usize, usize, f64)>,
+    solve_x: Vec<f64>,
+}
+
+/// The `pivot_row` and `ops` buffers kept on this thread, emptied, for a new factor of `n` unknowns.
+fn take_factor_buffers(n: usize) -> (Vec<usize>, Vec<(usize, usize, f64)>) {
+    SCRATCH.with(|c| {
+        let mut s = c.borrow_mut();
+        let (mut p, mut o) = (std::mem::take(&mut s.pivot_row), std::mem::take(&mut s.ops));
+        p.clear();
+        p.resize(n, 0);
+        o.clear();
+        (p, o)
+    })
 }
 
 thread_local! {
@@ -148,7 +165,11 @@ pub(super) fn factor_ordered(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
     let pattern: Vec<Vec<usize>> = if want_plan { rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect() } else { vec![] };
     // rows that have (or once had) an entry in each column; the lists of the last factorisation are filled again (a small system
     // is factored from scratch at every Newton iteration, and these were most of its allocations)
-    let Scratch { mut col_rows, mut merged, mut cand, ops_len } = SCRATCH.with(|c| std::mem::take(&mut *c.borrow_mut()));
+    let (mut pivot_row, mut ops) = take_factor_buffers(n);
+    let (mut col_rows, mut merged, mut cand, mut done) = SCRATCH.with(|c| {
+        let mut s = c.borrow_mut();
+        (std::mem::take(&mut s.col_rows), std::mem::take(&mut s.merged), std::mem::take(&mut s.cand), std::mem::take(&mut s.done))
+    });
     col_rows.iter_mut().for_each(Vec::clear);
     col_rows.resize_with(n, Vec::new);
     for (r, row) in rows.iter().enumerate() {
@@ -156,10 +177,8 @@ pub(super) fn factor_ordered(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
             col_rows[c].push(r);
         }
     }
-    let mut done = vec![false; n];
-    let mut pivot_row = vec![0usize; n];
-    // as many row operations as last time, roughly: one allocation instead of a dozen doublings
-    let mut ops = Vec::with_capacity(ops_len);
+    done.clear();
+    done.resize(n, false);
     merged.clear();
     cand.clear();
     for k in 0..n {
@@ -216,13 +235,16 @@ pub(super) fn factor_ordered(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
                     j += 1;
                 }
             }
-            rows[r].clear();
-            rows[r].extend_from_slice(&merged);
+            // the merged row takes the place of the old one, whose buffer becomes the next `merged`
+            std::mem::swap(&mut rows[r], &mut merged);
             ops.push((r, p, f));
         }
         rows[p] = prow;
     }
-    SCRATCH.with(|c| *c.borrow_mut() = Scratch { col_rows, merged, cand, ops_len: ops.len() });
+    SCRATCH.with(|c| {
+        let mut s = c.borrow_mut();
+        (s.col_rows, s.merged, s.cand, s.done) = (col_rows, merged, cand, done);
+    });
     let sym = want_plan.then(|| {
         let mut sym = Symbolic::plan(n, pattern, pivot_row.clone());
         sym.pattern = orig_pattern;
@@ -247,7 +269,8 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>], spare: Vec<Ve
     let map = |c: usize| if sym.perm.is_empty() { c } else { sym.pos[c] };
     let mut w = vec![0.0f64; n];
     let mut u: Vec<Vec<(usize, f64)>> = if spare.len() == n { spare } else { vec![vec![]; n] };
-    let mut ops: Vec<(usize, usize, f64)> = Vec::with_capacity(sym.row_ops.iter().map(|o| o.len()).sum());
+    let (mut pivot_row, mut ops) = take_factor_buffers(n);
+    pivot_row.copy_from_slice(&sym.pivot_row);
     let mut touched: Vec<usize> = vec![];
     for k in 0..n {
         let p = sym.pivot_row[k];
@@ -290,12 +313,18 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>], spare: Vec<Ve
         }
         u[p] = row;
     }
-    Some(Factor { n, pivot_row: sym.pivot_row.clone(), ops, u, perm: sym.perm.clone() })
+    Some(Factor { n, pivot_row, ops, u, perm: sym.perm.clone() })
 }
 
 impl Factor {
-    /// The row buffers of the eliminated matrix (row `r` of the input is `u[r]`), for the next assembly to fill.
+    /// The row buffers of the eliminated matrix (row `r` of the input is `u[r]`), for the next assembly to fill. The factor's
+    /// other buffers go back to this thread's `Scratch` for the next factorisation.
     pub(super) fn into_rows(self) -> Vec<Vec<(usize, f64)>> {
+        SCRATCH.with(|c| {
+            let mut s = c.borrow_mut();
+            s.pivot_row = self.pivot_row;
+            s.ops = self.ops;
+        });
         self.u
     }
 
@@ -304,7 +333,9 @@ impl Factor {
         for &(r, p, f) in &self.ops {
             b[r] -= f * b[p];
         }
-        let mut x = vec![0.0; self.n];
+        // every x[k] is written below before it is read (only x[c] with c > k is read), so the old contents do not matter
+        let mut x = SCRATCH.with(|c| std::mem::take(&mut c.borrow_mut().solve_x));
+        x.resize(self.n, 0.0);
         for k in (0..self.n).rev() {
             let p = self.pivot_row[k];
             let mut sum = b[p];
@@ -319,12 +350,13 @@ impl Factor {
             x[k] = sum / diag;
         }
         if self.perm.is_empty() {
-            b.copy_from_slice(&x);
+            b.copy_from_slice(&x[..self.n]);
         } else {
-            for (k, v) in x.into_iter().enumerate() {
+            for (k, &v) in x[..self.n].iter().enumerate() {
                 b[self.perm[k]] = v;
             }
         }
+        SCRATCH.with(|c| c.borrow_mut().solve_x = x);
     }
 }
 
