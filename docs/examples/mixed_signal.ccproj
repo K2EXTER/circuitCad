@@ -972,7 +972,7 @@
             "kind": "model",
             "element": "Q",
             "name": "2N3904",
-            "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)",
+            "text": ".model 2N3904 NPN(IS=2.486e-14 BF=333 NF=1 VAF=150 IKF=0.01908 ISE=5.55e-12 NE=1.818 BR=30.69 RB=6.027 RE=0.5375 RC=2.647 CJE=4.739e-12 VJE=0.3 MJE=0.24 CJC=3.878e-12 VJC=0.3 MJC=0.23 TF=5.305e-10)",
             "pins": [
               "3",
               "2",

@@ -258,7 +258,8 @@ fn the_notes_match_what_the_models_really_assume() {
     let d = e.dc.as_ref().unwrap().outcome.as_ref().unwrap();
     let led = d.elements.iter().find(|x| x.name == "D1").unwrap();
     assert!((1.8..2.2).contains(&led.voltage), "LED forward voltage {}", led.voltage);
-    // lesson 4: the 2N3904 has a fixed gain of 300, and its model has no capacitance at all
+    // lesson 4: the 2N3904 is the data sheet model: its gain falls at high current (IKF), it has junction capacitances and a
+    // transit time, but no storage time (TR), as the notes say
     let mut e = SchEditor::default();
     e.start_lesson(3);
     let c = sim_core::from_schematic(&e.sch).unwrap_or_else(|_| panic!("lesson 4 converts"));
@@ -266,8 +267,9 @@ fn the_notes_match_what_the_models_really_assume() {
         sim_core::Element::Bjt { model, .. } => Some(model.clone()),
         _ => None,
     });
-    assert_eq!(q.unwrap().bf, 300.0);
-    assert!(!c.elements.iter().any(|x| matches!(x, sim_core::Element::Capacitor { .. })), "no capacitor appears next to the transistor");
+    let q = q.unwrap();
+    assert!(q.ikf.is_finite() && q.cje > 0.0 && q.cjc > 0.0 && q.tf > 0.0 && q.tr == 0.0, "{q:?}");
+    assert!(super::lessons::lesson_limits(3).iter().any(|l| l.contains("データシート") && l.contains("蓄積時間")));
 }
 
 #[test]
@@ -302,7 +304,7 @@ fn a_model_shows_where_it_comes_from_and_its_data_sheet_table() {
     assert!(super::panel::model_origin("LM358", &m) == (None, None), "an edited model is not the one that was measured");
     let behaviour = e.library.iter().find(|d| d.name == "TP4056").unwrap();
     assert!(super::panel::lib_hover_for_test(behaviour).contains("一般のモデル"));
-    let unrecorded = e.library.iter().find(|d| d.name == "2N3904").unwrap();
+    let unrecorded = e.library.iter().find(|d| d.name == "2N3906").unwrap();
     assert!(super::panel::lib_hover_for_test(unrecorded).contains("記録なし"));
 }
 
@@ -1405,22 +1407,22 @@ fn the_equivalent_model_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 1);
-    // light load (about 93 mA): both are near 0.8 V, as the text says
-    assert!((0.75..0.9).contains(&v(&e, "OUTA")) && (0.7..0.85).contains(&v(&e, "OUTB")), "120 ohm: {} {}", v(&e, "OUTA"), v(&e, "OUTB"));
+    // light load (about 93 mA): both are near 0.8 V, as the text says (0.82 V and 0.86 V)
+    assert!((0.78..0.86).contains(&v(&e, "OUTA")) && (0.82..0.9).contains(&v(&e, "OUTB")), "120 ohm: {} {}", v(&e, "OUTA"), v(&e, "OUTB"));
     for r in ["R1", "R2"] {
         set_value(&mut e, r, "34");
     }
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 2);
-    // the part is near the data sheet's 1.3 V at about 320 mA; the hand-built one is far below it
+    // the part is near the data sheet's 1.3 V at about 320 mA; the hand-built one is about 0.1 V below it
     assert!((1.2..1.35).contains(&v(&e, "OUTA")), "part at 34 ohm: {}", v(&e, "OUTA"));
-    assert!(v(&e, "OUTB") < 0.9, "hand-built without R6: {}", v(&e, "OUTB"));
-    set_value(&mut e, "R6", "1.5");
+    assert!((1.15..1.24).contains(&v(&e, "OUTB")), "hand-built without R6: {}", v(&e, "OUTB"));
+    set_value(&mut e, "R6", "0.3");
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 3);
-    assert!((1.2..1.4).contains(&v(&e, "OUTB")), "hand-built with 1.5 ohm: {}", v(&e, "OUTB"));
+    assert!((1.25..1.33).contains(&v(&e, "OUTB")), "hand-built with 0.3 ohm: {}", v(&e, "OUTB"));
     // the relay coils (34 ohm, about 3.5 W) are not chip resistors, so the only warning is the true one: a 2N3904 (200 mA) carrying 320 mA
     let over: Vec<_> = sim_core::check_ratings(&e.sch, e.dc.as_ref().unwrap().outcome.as_ref().unwrap()).into_iter().filter(|i| i.level == sim_core::RatingLevel::Over).map(|i| i.refdes).collect();
     assert_eq!(over, vec!["Q2".to_string()], "the lesson text tells about this warning");
@@ -1746,7 +1748,7 @@ fn the_noise_lesson_shows_the_main_source_changing_with_the_source_resistance() 
     let r = e.noise.as_ref().unwrap().outcome.as_ref().unwrap();
     assert_eq!(r.contributions[0].name, "Q1.ib");
     let at_100k = r.in_rms.unwrap();
-    assert!((at_100k * 1e6 - 32.0).abs() < 3.0, "{at_100k}");
+    assert!((at_100k * 1e6 - 41.0).abs() < 3.0, "{at_100k}");
     set_value(&mut e, "R1", "10k");
     e.update_lesson();
     assert_eq!(progress(&e), 1, "the result is old");
@@ -1787,7 +1789,7 @@ fn a_guess_about_an_ac_or_noise_number_is_judged_too() {
     e.run_noise();
     e.update_lesson();
     let v = e.lesson.as_ref().unwrap().verdicts[1].clone().expect("a verdict");
-    assert!(!v.right && v.chosen == 1 && (v.actual - 5.6).abs() < 0.5, "{v:?}");
+    assert!(!v.right && v.chosen == 1 && (v.actual - 6.8).abs() < 0.5, "{v:?}");
 }
 
 #[test]
@@ -1955,15 +1957,15 @@ fn the_mosfet_basics_lesson_ticks_and_its_numbers_hold() {
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 1, "{}", e.status);
-    assert!((v(&e, "DRAIN") - 0.14).abs() < 0.02, "on");
+    assert!((v(&e, "DRAIN") - 0.08).abs() < 0.02, "on: {}", v(&e, "DRAIN"));
     e.run_sweep();
     e.update_lesson();
     assert_eq!(progress(&e), 2, "{}", e.status);
-    set_value(&mut e, "V2", "2.5");
+    set_value(&mut e, "V2", "2.3");
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 3);
-    assert!((v(&e, "DRAIN") - 4.0).abs() < 0.2, "half on");
+    assert!((v(&e, "DRAIN") - 3.3).abs() < 0.2, "half on: {}", v(&e, "DRAIN"));
 }
 
 #[test]

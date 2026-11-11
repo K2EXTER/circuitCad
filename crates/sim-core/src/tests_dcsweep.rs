@@ -127,8 +127,9 @@ fn cmos_inverter_example_sweeps() {
     let r = dc_sweep(&c, &sweep("V2", 0.0, 3.3, 0.03)).unwrap();
     let m = inverter_metrics(&r.x, &r.signal("V(OUT)").unwrap().values).expect("an inverting curve");
     assert!((m.voh - 3.3).abs() < 1e-3 && m.vol < 1e-3, "{m:?}");
-    // AO3400A / AO3401A switch near the middle of a 3.3 V supply with healthy margins
-    assert!(m.vth > 1.2 && m.vth < 2.1, "{m:?}");
+    // AO3400A / AO3401A switch in the lower half of a 3.3 V supply with healthy margins (the AO3400A is the data sheet model,
+    // much stronger than the AO3401A's earlier model, which pulls the switching point down: M9 has not rebuilt the AO3401A yet)
+    assert!(m.vth > 1.0 && m.vth < 2.1, "{m:?}");
     assert!(m.nml() > 1.0 && m.nmh() > 1.0, "{m:?}");
 }
 

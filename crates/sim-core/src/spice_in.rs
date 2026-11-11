@@ -196,6 +196,8 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 cgso: get("CGSO", 0.0),
                 cgdo: get("CGDO", 0.0),
                 jfet: false,
+                rd: get("RD", 0.0),
+                rs: get("RS", 0.0),
             }),
         )),
         t @ ("NPN" | "PNP" | "LPNP") => Ok((
@@ -246,10 +248,12 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 cgso: 0.0,
                 cgdo: 0.0,
                 jfet: true,
+                rd: get("RD", 0.0),
+                rs: get("RS", 0.0),
             }),
         )),
-        // a power MOSFET (ngspice / LTspice VDMOS): the square law with the whole-device Kp; the series resistances and the
-        // body diode of the card are not modelled
+        // a power MOSFET (ngspice / LTspice VDMOS): the square law with the whole-device Kp and the series resistances RD / RS;
+        // the body diode of the card is not modelled
         "VDMOS" => Ok((
             name,
             Model::Mos(MosModel {
@@ -262,6 +266,8 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 cgso: 0.0,
                 cgdo: 0.0,
                 jfet: false,
+                rd: get("RD", 0.0),
+                rs: get("RS", 0.0),
             }),
         )),
         "SW" => {
@@ -361,8 +367,8 @@ pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
         let used: &[&str] = match ty.as_str() {
             "D" => &["IS", "N", "RS", "BV", "IBV", "CJO", "CJ0", "CJ", "VJ", "M", "FC", "TT", "ISR", "NR", "EG", "XTI"],
             "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB", "RC", "RE", "VAF", "VA", "VAR", "VB", "CJE", "VJE", "PE", "MJE", "ME", "CJC", "VJC", "PC", "MJC", "MC", "FC", "TF", "TR", "ISE", "C2", "NE", "ISC", "C4", "NC", "IKF", "IK", "IKR", "EG", "XTI", "XTB"],
-            "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD", "CGSO", "CGDO"],
-            "NJF" | "PJF" => &["BETA", "VTO", "LAMBDA", "CGS", "CGD"],
+            "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD", "CGSO", "CGDO", "RD", "RS"],
+            "NJF" | "PJF" => &["BETA", "VTO", "LAMBDA", "CGS", "CGD", "RD", "RS"],
             "SW" | "VSWITCH" => &["RON", "ROFF", "VT", "VW", "VH", "VON", "VOFF"],
             _ => continue,
         };

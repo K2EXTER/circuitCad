@@ -58,7 +58,7 @@
           "kind": "model",
           "element": "M",
           "name": "2N7000",
-          "text": ".model 2N7000 NMOS(VTO=2.1 KP=0.12 LAMBDA=0.01 CGS=22p CGD=4p)",
+          "text": ".model 2N7000 NMOS(VTO=2.035 KP=0.4742 RD=0.933 CGS=1.6e-11 CGD=4e-12)",
           "pins": [
             "3",
             "2",

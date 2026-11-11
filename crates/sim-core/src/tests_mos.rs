@@ -306,3 +306,23 @@ fn a_mosfet_line_scales_kp_by_w_over_l_and_m() {
     let kp = c.elements.iter().find_map(|e| match e { Element::Mosfet { model, .. } => Some(model.kp), _ => None }).unwrap();
     assert!((kp / 200e-6 - 1.0).abs() < 1e-9, "{kp}");
 }
+
+/// RD and RS of a `.model NMOS` card sit in series with the channel: at a small drain current in the linear region the
+/// on-resistance is 1 / (KP (VGS - VTO)) + RD + RS, and the gate capacitances hang on the inner nodes.
+#[test]
+fn series_resistances_add_to_the_on_resistance() {
+    let text = ".model MRD NMOS(VTO=2 KP=0.5 RD=0.3 RS=0.2 CGS=10p CGD=2p)";
+    let models = crate::spice_in::parse_models(text).unwrap();
+    let crate::spice_in::Model::Mos(m) = models.get("mrd").unwrap().clone() else { panic!("not a MOSFET") };
+    assert_eq!((m.rd, m.rs), (0.3, 0.2));
+    let mut c = Circuit::new();
+    let (d, g) = (c.node("d"), c.node("g"));
+    c.add(Element::vdc("VG", g, 0, 10.0));
+    c.add(Element::ISource { name: "ID".into(), from: 0, to: d, wave: crate::waveform::Waveform::Dc(-1e-3), ac: None });
+    c.add_mosfet("M1", d, g, 0, m);
+    let r = dc_op(&c).unwrap();
+    let rds = r.voltage("d").unwrap().abs() / 1e-3;
+    let expect = 1.0 / (0.5 * 8.0) + 0.5;
+    assert!((rds - expect).abs() < 1e-3, "{rds} vs {expect}");
+    assert!(c.elements.iter().any(|e| e.name() == "M1.RD") && c.elements.iter().any(|e| e.name() == "M1.RS"));
+}

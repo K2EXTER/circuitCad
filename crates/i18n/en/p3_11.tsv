@@ -145,12 +145,12 @@ R1 を 150Ω から 1.5kΩ にして、D1 の電流を約 1/10 にすると、D1
 約 90° に増える	Increases to about 90°
 約 15° に減る	Decreases to about 15°
 負荷の容量が出力抵抗と作る極が、0dB の周波数のずっと上へ動くので、位相が遅れるのはオペアンプ自身の 1 つの極だけです。極が 1 つだけなら、位相は最大でも 90° しか遅れず、余裕は約 90° になります。容量を付けると、2 つめの極が余裕を食います。	The pole formed by the load capacitance and the output resistance moves far above the 0dB frequency, so the only pole delaying the phase is the op-amp's own single pole. With just one pole, the phase lags by at most 90°, so the margin is about 90°. Adding capacitance brings a second pole that eats into the margin.
-信号源の抵抗 R1 を 100k から 10k (1/10) にすると、入力換算の雑音 (いま約 32µV) はどうなると思いますか?	If you change the source resistance R1 from 100k to 10k (1/10), what do you think happens to the input-referred noise (now about 32µV)?
-32µV のまま	Stays at 32µV
-約 10µV (1/√10)	About 10µV (1/√10)
-約 5.6µV (1/5〜6)	About 5.6µV (1/5-6)
-約 1µV (1/30)	About 1µV (1/30)
-熱雑音だけなら、抵抗の 1/10 で雑音は 1/√10 (1/3.2) になります。ところが、ここでは、ベース電流のショット雑音が R1 を通って電圧になり、R1 に比例して効きます。R1 に比例する分と √R1 に比例する分が合わさって、1/5〜6 まで減ります。	With thermal noise alone, 1/10 the resistance gives 1/√10 (1/3.2) the noise. But here the base current's shot noise flows through R1 and becomes a voltage, which scales with R1. The part proportional to R1 and the part proportional to √R1 combine, so the noise drops to 1/5-6.
+信号源の抵抗 R1 を 100k から 10k (1/10) にすると、入力換算の雑音 (いま約 41µV) はどうなると思いますか?	If you change the source resistance R1 from 100k to 10k (1/10), what do you think happens to the input-referred noise (now about 41µV)?
+41µV のまま	Stays at 41µV
+約 13µV (1/√10)	About 13µV (1/√10)
+約 6.8µV (1/6)	About 6.8µV (1/6)
+約 1µV (1/40)	About 1µV (1/40)
+熱雑音だけなら、抵抗の 1/10 で雑音は 1/√10 (1/3.2) になります。ところが、ここでは、ベース電流のショット雑音が R1 を通って電圧になり、R1 に比例して効きます。R1 に比例する分と √R1 に比例する分が合わさって、1/6 ほどまで減ります。	With thermal noise alone, 1/10 the resistance gives 1/√10 (1/3.2) the noise. But here the base current's shot noise flows through R1 and becomes a voltage, which scales with R1. The part proportional to R1 and the part proportional to √R1 combine, so the noise drops to 1/6.
 C1 を 159n から 10 倍の 1.59u にすると、カットオフ周波数 (いま約 1kHz) はどうなると思いますか?	If you change C1 from 159n to 10 times that, 1.59u, what do you think happens to the cutoff frequency (now about 1kHz)?
 1kHz のまま	Stays at 1kHz
 約 100Hz に下がる	Drops to about 100Hz

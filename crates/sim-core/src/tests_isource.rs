@@ -104,16 +104,16 @@ fn the_motor_turns_and_slows_under_its_load() {
     let r = transient(&c, &TranSettings { tstop: 0.1, tstep: 50e-6, uic: false }).unwrap();
     let spd = &r.signal("V(SPD)").unwrap().values;
     let i = &r.signal("I(V1)").unwrap().values;
-    // off before the gate turns on at 5 ms; about 8.6 krpm (1 V = 1000 rpm) unloaded by 45 ms
+    // off before the gate turns on at 5 ms; about 8.8 krpm (1 V = 1000 rpm) unloaded by 45 ms
     let at = |t: f64| spd[r.time.iter().position(|x| *x >= t).unwrap()];
     assert!(at(4e-3).abs() < 0.01);
-    assert!((at(48e-3) - 8.6).abs() < 0.2, "{}", at(48e-3));
+    assert!((at(48e-3) - 8.8).abs() < 0.2, "{}", at(48e-3));
     // 1 mN·m of load from 50 ms (a current source of 1 mA on the speed pin): slower, and more current
     let end = *spd.last().unwrap();
-    assert!((end - 6.87).abs() < 0.15, "{end}");
+    assert!((end - 7.34).abs() < 0.15, "{end}");
     // the start draws far more than the run: the winding sees nearly the stall current until the back EMF builds
     let peak = i.iter().fold(0.0f64, |m, x| m.max(x.abs()));
-    assert!(peak > 1.3 && (i.last().unwrap().abs() - 0.447).abs() < 0.03, "peak {peak}, end {}", i.last().unwrap());
+    assert!(peak > 1.3 && (i.last().unwrap().abs() - 0.456).abs() < 0.03, "peak {peak}, end {}", i.last().unwrap());
 }
 
 #[test]

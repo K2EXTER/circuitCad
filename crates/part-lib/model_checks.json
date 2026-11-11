@@ -281,6 +281,218 @@
       }
     ]
   },
+  "2N3904": {
+    "fingerprint": "6862d94918b5932b",
+    "source": "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
+    "date": "2026-11-12",
+    "rows": [
+      {
+        "item": "hFE (0.1 mA)",
+        "datasheet": "40.000 / 76.639 / —",
+        "target": "76.639",
+        "condition": "VCE = 1 V。typ は図 15 の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表",
+        "model": "71.331",
+        "diff": "-5.308",
+        "tested": true
+      },
+      {
+        "item": "hFE (1 mA)",
+        "datasheet": "70.000 / 133.7 / —",
+        "target": "133.7",
+        "condition": "VCE = 1 V。typ は図 15 の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表",
+        "model": "144.5",
+        "diff": "+10.746",
+        "tested": true
+      },
+      {
+        "item": "hFE (10 mA)",
+        "datasheet": "100.0 / 170.9 / 300.0",
+        "target": "170.9",
+        "condition": "VCE = 1 V。typ は図 15 の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表",
+        "model": "161.5",
+        "diff": "-9.456",
+        "tested": true
+      },
+      {
+        "item": "hFE (50 mA)",
+        "datasheet": "60.000 / 85.289 / —",
+        "target": "85.289",
+        "condition": "VCE = 1 V。typ は図 15 の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表",
+        "model": "83.323",
+        "diff": "-1.966",
+        "tested": true
+      },
+      {
+        "item": "hFE (100 mA)",
+        "datasheet": "30.000 / 46.710 / —",
+        "target": "46.710",
+        "condition": "VCE = 1 V。typ は図 15 の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表",
+        "model": "48.418",
+        "diff": "+1.708",
+        "tested": true
+      },
+      {
+        "item": "VBE (5 mA)",
+        "datasheet": "— / 0.6840 / — V",
+        "target": "0.6840 V",
+        "condition": "VCE = 1 V、図 17 (グラフから読んだ)",
+        "model": "0.6823 V",
+        "diff": "-0.0017 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (10 mA)",
+        "datasheet": "— / 0.7060 / — V",
+        "target": "0.7060 V",
+        "condition": "VCE = 1 V、図 17 (グラフから読んだ)",
+        "model": "0.7055 V",
+        "diff": "-0.0005 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (50 mA)",
+        "datasheet": "— / 0.7900 / — V",
+        "target": "0.7900 V",
+        "condition": "VCE = 1 V、図 17 (グラフから読んだ)",
+        "model": "0.7951 V",
+        "diff": "+0.0051 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (100 mA)",
+        "datasheet": "— / 0.8690 / — V",
+        "target": "0.8690 V",
+        "condition": "VCE = 1 V、図 17 (グラフから読んだ)",
+        "model": "0.8696 V",
+        "diff": "+0.0006 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (10 mA)",
+        "datasheet": "0.6500 / 0.7450 / 0.8500 V",
+        "target": "0.7450 V",
+        "condition": "IC/IB = 10。typ は図 17、min / max は表",
+        "model": "0.7441 V",
+        "diff": "-0.0009 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (50 mA)",
+        "datasheet": "— / 0.8480 / 0.9500 V",
+        "target": "0.8480 V",
+        "condition": "IC/IB = 10。typ は図 17、min / max は表",
+        "model": "0.8453 V",
+        "diff": "-0.0027 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (10 mA)",
+        "datasheet": "— / — / 0.2000 V",
+        "target": "max 0.2000 V",
+        "condition": "IC/IB = 10。typ は図 17、max は表",
+        "model": "0.0495 V",
+        "diff": "-0.1505 V",
+        "tested": false
+      },
+      {
+        "item": "VCE(sat) (50 mA)",
+        "datasheet": "— / 0.1940 / 0.3000 V",
+        "target": "0.1940 V",
+        "condition": "IC/IB = 10。typ は図 17、max は表",
+        "model": "0.1933 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (100 mA)",
+        "datasheet": "— / 0.3600 / — V",
+        "target": "0.3600 V",
+        "condition": "IC/IB = 10。typ は図 17、max は表",
+        "model": "0.3664 V",
+        "diff": "+0.0064 V",
+        "tested": true
+      },
+      {
+        "item": "Cobo (5 V)",
+        "datasheet": "— / 1.960 / 4.000 pF",
+        "target": "1.960 pF",
+        "condition": "VCB = 5 V、IE = 0。typ は図 3、max は表",
+        "model": "2.004 pF",
+        "diff": "+0.0435 pF",
+        "tested": true
+      },
+      {
+        "item": "Cibo (0.5 V)",
+        "datasheet": "— / 3.760 / 8.000 pF",
+        "target": "3.760 pF",
+        "condition": "VEB = 0.5 V、IC = 0。typ は図 3、max は表",
+        "model": "3.745 pF",
+        "diff": "-0.0147 pF",
+        "tested": true
+      }
+    ]
+  },
+  "2N7000": {
+    "fingerprint": "846ae3ed157ef44b",
+    "source": "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
+    "date": "2026-11-12",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "— / 2.100 / — V",
+        "target": "2.100 V",
+        "condition": "VDS = VGS、ID = 1 mA (表)",
+        "model": "2.100 V",
+        "diff": "-0.0001 V",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = 10 V)",
+        "datasheet": "— / 1.200 / 5.000 Ω",
+        "target": "1.200 Ω",
+        "condition": "ID = 0.5 A (表)",
+        "model": "1.200 Ω",
+        "diff": "-0.0000 Ω",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = 4.5 V)",
+        "datasheet": "— / 1.800 / 5.300 Ω",
+        "target": "1.800 Ω",
+        "condition": "ID = 0.075 A (表)",
+        "model": "1.800 Ω",
+        "diff": "-0.0001 Ω",
+        "tested": true
+      },
+      {
+        "item": "gFS",
+        "datasheet": "— / 0.3200 / — S",
+        "target": "0.3200 S",
+        "condition": "VDS = 10 V、ID = 0.2 A (表)。オン抵抗に合わせた 2乗則では、ここは合わない",
+        "model": "0.4355 S",
+        "diff": "+0.1155 S",
+        "tested": false
+      },
+      {
+        "item": "Ciss",
+        "datasheet": "— / 20.000 / — pF",
+        "target": "20.000 pF",
+        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
+        "model": "20.000 pF",
+        "diff": "+0.0000 pF",
+        "tested": true
+      },
+      {
+        "item": "Crss",
+        "datasheet": "— / 4.000 / — pF",
+        "target": "4.000 pF",
+        "condition": "VGS = 0 (表)",
+        "model": "4.000 pF",
+        "diff": "+0.0000 pF",
+        "tested": true
+      }
+    ]
+  },
   "ADR4525": {
     "fingerprint": "b54a8f354ce405e3",
     "source": "ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0、表 4 (ADR4525)。VIN = 3〜15 V、IL = 0 mA、25 °C",
@@ -514,6 +726,76 @@
         "condition": "0.003 % × 5 V、10 Hz〜10 kHz",
         "model": "150.0 µVrms",
         "diff": "+0.0002 µVrms",
+        "tested": true
+      }
+    ]
+  },
+  "AO3400A": {
+    "fingerprint": "aafaa89168260ecf",
+    "source": "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。25 °C",
+    "date": "2026-11-12",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "— / 1.050 / — V",
+        "target": "1.050 V",
+        "condition": "VDS = VGS、ID = 0.25 mA (表)",
+        "model": "1.050 V",
+        "diff": "+0.0003 V",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = 10 V)",
+        "datasheet": "— / 18.000 / 26.500 mΩ",
+        "target": "18.000 mΩ",
+        "condition": "ID = 5.7 A (表)",
+        "model": "17.685 mΩ",
+        "diff": "-0.3152 mΩ",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = 4.5 V)",
+        "datasheet": "— / 19.000 / 32.000 mΩ",
+        "target": "19.000 mΩ",
+        "condition": "ID = 5 A (表)",
+        "model": "19.546 mΩ",
+        "diff": "+0.5461 mΩ",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = 2.5 V)",
+        "datasheet": "— / 24.000 / 48.000 mΩ",
+        "target": "24.000 mΩ",
+        "condition": "ID = 3 A (表)",
+        "model": "23.753 mΩ",
+        "diff": "-0.2475 mΩ",
+        "tested": true
+      },
+      {
+        "item": "gFS",
+        "datasheet": "— / 33.000 / — S",
+        "target": "33.000 S",
+        "condition": "VDS = 5 V、ID = 5.7 A (表)",
+        "model": "33.071 S",
+        "diff": "+0.0714 S",
+        "tested": false
+      },
+      {
+        "item": "Ciss",
+        "datasheet": "— / 630.0 / — pF",
+        "target": "630.0 pF",
+        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
+        "model": "630.0 pF",
+        "diff": "+0.0001 pF",
+        "tested": true
+      },
+      {
+        "item": "Crss",
+        "datasheet": "— / 50.000 / — pF",
+        "target": "50.000 pF",
+        "condition": "VGS = 0 (表)",
+        "model": "50.000 pF",
+        "diff": "+0.0000 pF",
         "tested": true
       }
     ]

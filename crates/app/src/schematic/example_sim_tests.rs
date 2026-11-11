@@ -586,12 +586,14 @@ fn mosfet_sample_switches_around_2v_and_the_lesson_numbers_hold() {
         (dc.voltage("OUT").unwrap(), dc.element("Q1").unwrap().current, issues)
     };
     assert!((run("1.5", "47").0 - 5.0).abs() < 0.01, "off below the threshold");
-    assert!((2.4..2.9).contains(&run("3", "47").0), "half on at 3 V");
+    // the data sheet model (threshold 2.1 V typ) is half on at 2.5 V and nearly fully on at 3 V
+    assert!((2.3..2.9).contains(&run("2.5", "47").0), "half on at 2.5 V");
+    assert!((0.25..0.45).contains(&run("3", "47").0), "nearly on at 3 V");
     let (v, i, issues) = run("5", "47");
-    assert!((0.2..0.4).contains(&v) && (0.09..0.11).contains(&i), "{v} {i}");
+    assert!((0.12..0.22).contains(&v) && (0.09..0.11).contains(&i), "{v} {i}");
     assert!(issues.is_empty(), "the sample is within ratings: {issues:?}");
     let (v, i, issues) = run("5", "10");
-    assert!((1.1..1.6).contains(&v) && (0.3..0.4).contains(&i), "{v} {i}");
+    assert!((0.6..0.85).contains(&v) && (0.4..0.45).contains(&i), "{v} {i}");
     assert!(issues.iter().any(|x| x.refdes == "R2" && x.level == sim_core::RatingLevel::Over), "{issues:?}");
     assert!(issues.iter().any(|x| x.refdes == "Q1"), "{issues:?}");
 }
@@ -793,7 +795,8 @@ fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {
     let mut g = f.clone();
     set(&mut g, "R2", "47");
     let r47 = dc(&g);
-    assert!(r.voltage("VOUT").unwrap() - r47.voltage("VOUT").unwrap() < 0.1);
+    // a little lower under the heavier load: the data sheet 2N3904's gain falls at 90 mA and its resistances drop a little
+    assert!(r.voltage("VOUT").unwrap() - r47.voltage("VOUT").unwrap() < 0.16);
     let issues = sim_core::check_ratings(&g, &r47);
     assert!(issues.iter().any(|i| i.refdes == "Q1" && i.level == sim_core::RatingLevel::Caution), "{issues:?}");
     set(&mut g, "R2", "22");

@@ -306,7 +306,7 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
                 }
                 Ce::Q { bi, ci, ei, m, slot, cap: Some(_), .. } => {
                     // small-signal junction capacitances at the operating point
-                    let (cbe, cbc) = (crate::dc::bjt_qbe(m, op.vj[*slot]).1, crate::dc::bjt_qbc(m, op.vj[*slot + 1]).1);
+                    let (cbe, cbc) = (crate::dc::bjt_qbe(m, op.vj[*slot], op.vj[*slot + 1]).1, crate::dc::bjt_qbc(m, op.vj[*slot + 1]).1);
                     for (n1, n2, cc) in [(*bi, *ei, cbe), (*bi, *ci, cbc)] {
                         let y = jw_c(w) * C64::new(cc, 0.0);
                         add(&mut a, n1, n1, y);

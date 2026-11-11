@@ -178,5 +178,30 @@
   "descriptions": [
    "小信号スイッチングダイオード (DO-35)。SPICEの.modelカードを持つ例。パラメータは一般的な公開値なので、設計に使う前にデータシートで確認してください"
   ]
+ },
+ "2N3904_TO-92": {
+  "texts": [
+   ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5)",
+   ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)"
+  ],
+  "descriptions": [
+   "NPN 汎用トランジスタ (TO-92, ピン1=E 2=B 3=C)。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "2N7000_TO-92": {
+  "texts": [
+   ".model 2N7000 NMOS(VTO=2.1 KP=0.12 LAMBDA=0.01 CGS=22p CGD=4p)"
+  ],
+  "descriptions": [
+   "Nチャネル MOSFET (TO-92)。簡易レベル1モデル(パラメータは概算)。データシートで確認してください"
+  ]
+ },
+ "AO3400A_SOT-23": {
+  "texts": [
+   ".model AO3400A NMOS(VTO=1.05 KP=1.2 LAMBDA=0.02 CGS=250p CGD=30p)"
+  ],
+  "descriptions": [
+   "Nチャネル MOSFET 30V (SOT-23)。ロジックレベル駆動。簡易レベル1モデル(パラメータは概算)"
+  ]
  }
 }

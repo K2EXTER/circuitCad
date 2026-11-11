@@ -462,9 +462,9 @@ pub(super) fn equiv_heavy_load(e: &SchEditor) -> bool {
     dc_fresh(e) && equiv_coils_between(e, 28.0, 40.0)
 }
 
-/// Step 3: the same load and R6 raised to about 1.5 ohm.
+/// Step 3: the same load and R6 raised to about 0.3 ohm (the data sheet 2N3904's own resistances already give most of the drop).
 pub(super) fn equiv_matched(e: &SchEditor) -> bool {
-    equiv_heavy_load(e) && equiv_emitter_between(e, 1.0, 2.2)
+    equiv_heavy_load(e) && equiv_emitter_between(e, 0.2, 0.5)
 }
 
 /// Step 4: matched, and the input source V2 is a 3.3 V pin.
@@ -793,7 +793,8 @@ pub(super) fn base_pushed_hard(e: &SchEditor) -> bool {
 
 /// The MOSFET lesson: the gate source V2 is between 2.3 V and 2.8 V (half on) and the run is fresh.
 pub(super) fn gate_half_on(e: &SchEditor) -> bool {
-    value_between(e, "V2", 2.3, 2.8) && dc_fresh(e)
+    // just above the 2N7000's threshold (2.1 V typ): about 2.3 V leaves it half on (above 2.5 V it is nearly fully on)
+    value_between(e, "V2", 2.2, 2.4) && dc_fresh(e)
 }
 
 /// The op-amp lesson: the feedback resistor R3 of the middle amplifier is 3 kohm or less (its output no longer reaches the supply) and the run is fresh.

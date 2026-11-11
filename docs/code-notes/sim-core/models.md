@@ -24,7 +24,7 @@
 `dc/devices.rs bjt_eval`: 輸送電流に `k = 1 − vbc/VAF − vbe/VAR`(0.05 で下限)を掛ける(ベース電流は変えない)。`RB`/`RC`/`RE` はそれぞれ内部ノード(`Ce::Q` の `bi`/`ci`/`ei`)を作り、接合は内部ノードで評価する。`.model` の `VAF`(別名 `VA`)・`VAR`(別名 `VB`)・`RC`・`RE` を `spice_in` が読む。外付け抵抗と同じ結果になることを `tests_bjt.rs` で確認(`RC`/`RE`)。メーカーの 7805 モデルで、出力が 4.76V → 4.78V と少し近づいた(残りは寄生容量・その他の項)。
 
 ## BJT の電荷(接合容量 CJE/CJC・遷移時間 TF/TR)
-`dc/devices.rs`: `depletion`(空乏容量。`FC·VJ` までは `CJ0/(1−v/VJ)^M`、その先は接線で延長、電荷は積分形)、`bjt_qbe`/`bjt_qbc`(空乏電荷+拡散電荷 `TF·If` / `TR·Ir` とその容量 dQ/dV)。電荷を持つ素子は `Ce::Q.cap`(積分器の枠を2つ=BE,BC)。過渡は容量と同じ台形/後退オイラーを、電荷 Q(v) を反復点で線形化して使う(`dc/mna.rs`、状態の更新は `tran.rs`)。ACとノイズは動作点の `C=dQ/dV` を BE・BC の間に入れる。`.model` の `CJE/VJE(PE)/MJE(ME)/CJC/VJC(PC)/MJC(MC)/FC/TF/TR`。検証: `tests_bjt.rs`(AC の折れ点が 1/√2、過渡の時定数、`|h21| = βf/√(1+(ωβfTF)²)`)。
+`dc/devices.rs`: `depletion`(空乏容量。`FC·VJ` までは `CJ0/(1−v/VJ)^M`、その先は接線で延長、電荷は積分形)、`bjt_qbe`/`bjt_qbc`(空乏電荷+拡散電荷 `TF·If/qb` / `TR·Ir` とその容量 dQ/dV。2026-11-12 から順方向の拡散電荷は SPICE の Gummel-Poon と同じく `1/qb`(Early 効果 `k` と高注入 `h`、`bjt_eval` と同じ)で割る。vbc についての交差の項は入れていない。データシート版の 2N3904(TF・VAF・IKF を持つ)で ngspice の AC と 0.2% ずれたのを、許容の 97% まで寄せた)。電荷を持つ素子は `Ce::Q.cap`(積分器の枠を2つ=BE,BC)。過渡は容量と同じ台形/後退オイラーを、電荷 Q(v) を反復点で線形化して使う(`dc/mna.rs`、状態の更新は `tran.rs`)。ACとノイズは動作点の `C=dQ/dV` を BE・BC の間に入れる。`.model` の `CJE/VJE(PE)/MJE(ME)/CJC/VJC(PC)/MJC(MC)/FC/TF/TR`。検証: `tests_bjt.rs`(AC の折れ点が 1/√2、過渡の時定数、`|h21| = βf/√(1+(ωβfTF)²)`)。
 
 ## ダイオードの電荷(CJO/VJ/M/FC/TT)
 BJT と同じ作り(`diode_q` = 空乏電荷 + 拡散電荷 `TT·Id`)。`Ce::D` に `dm`(モデルの複製)と `cap`(積分器の枠1つ)を持ち、接合は `ai`–`k` の間(RS があれば内部ノード側)。過渡・AC・ノイズは BJT と同様。`AREA` は CJO も倍にする。検証: `tests_diode_cap.rs`(逆バイアスのAC折れ点が 1/√2、過渡の時定数、順方向で `rd·C = TT`)。フォーム側は `part-lib/diode.rs` の `cj0_from`(Cj と測定した逆電圧から CJO)・`tt_from_trr`(trr と IF/IR から TT)。
@@ -42,6 +42,7 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - **BJT**(`dc/devices.rs bjt_eval`): 漏れ電流 `ISE/NE`(BE)・`ISC/NC`(BC) をベース電流へ足す(コレクタ電流は BC 漏れだけ引く)。高注入 `IKF`/`IKR`: 輸送電流を `2/(1+√(1+4·q2))`(`q2=If/IKF+Ir/IKR`)で割る。早期効果 `k` との積で微分を取る。`EG`・`XTI`・`XTB`(温度 `temperature.rs`。`XTB` の既定は従来どおり 1.5)。`.model` の別名 `C2`(=ISE)・`C4`(=ISC)・`IK`(=IKF)。
 - **ダイオード**: 再結合電流 `ISR/NR`(`diode_recomb`。DC/過渡/ノイズ/素子の電流表示で共通)、温度 `EG`・`XTI`(ショットキーは `EG≈0.69`・`XTI≈2` で、温度での飽和電流の増え方がシリコンと大きく違う)。
 - **MOSFET**: ゲート重なり容量 `CGSO/CGDO`(F/m)に、素子の `W` と並列数 `M` を掛けて固定の CGS/CGD にする(`spice_in.rs` の `M` 行)。
+- **MOSFET の直列抵抗 `RD`/`RS`**(2026-11-12、NMOS/PMOS・NJF/PJF・VDMOS の `.model`): `Circuit::add_mosfet` が内部ノード `M1.d`/`M1.s` と抵抗 `M1.RD`/`M1.RS` を足し、チャネルとゲート容量は内部ノードにつなぐ。パワー MOSFET のオン抵抗は高いゲート電圧ではほぼこの抵抗なので、2乗則だけでは、しきい値と 2 つのゲート電圧のオン抵抗を同時に合わせられなかった(データシート版の 2N7000・AO3400A)。テスト `tests_mos.rs` の `series_resistances_add_to_the_on_resistance`。
 - 温度では、`ISE`・`ISC`・`ISR` も各自の `N` で同じ式にかけ、各 `N` を温度比で伸ばす(解く側の `VT` が 27℃ 固定のため)。
 - 検証: `tests_params.rs`(全効果を入れた BJT の微分が差分と一致、IKF の式、漏れ電流、ISR、EG/XTI/XTB の温度式、CGSO、`.model` の読み込み)。実在モデルの警告は、2N3904 が `XTI EG NE ISE IKF XTB NC ISC` → `ITF VTF XTF` だけに、LM7805 が `EG CCS` → `CCS` だけになった。
 - **過渡解析の刻み制御(2026-10):** 誤差で棄却された刻みのあと、`h_ctrl` を古い大きな値のまま残していたため、毎ステップ「大きい刻みを試す→棄却→縮める」を繰り返していた(総合デモで採用 2464 点に対し棄却 5018 回)。棄却したステップのあとは採用した刻みから出発し、伸びは 1.05 倍までにした(棄却 約360回、時間は半分以下)。1.2 倍以上だと `cmos_inverter` の窓1の最小が ngspice より下がり(3.10V対3.30V、`xcheck_tran` のテストが落ちる)、1.0 倍だとマルチバイブレータの反転で収束しなくなる。

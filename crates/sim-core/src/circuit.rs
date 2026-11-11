@@ -74,11 +74,15 @@ pub struct MosModel {
     pub cgdo: f64,
     /// A junction FET: `vto` is the (negative) pinch-off voltage in the n-channel orientation and is used with its sign.
     pub jfet: bool,
+    /// Series resistances of the drain and the source (ohm; SPICE `RD` / `RS`): a power MOSFET's on-resistance at a high gate
+    /// voltage is mostly these. 0 = none.
+    pub rd: f64,
+    pub rs: f64,
 }
 
 impl Default for MosModel {
     fn default() -> Self {
-        Self { kp: 2e-5, vto: 1.0, lambda: 0.0, pmos: false, cgs: 0.0, cgd: 0.0, cgso: 0.0, cgdo: 0.0, jfet: false }
+        Self { kp: 2e-5, vto: 1.0, lambda: 0.0, pmos: false, cgs: 0.0, cgd: 0.0, cgso: 0.0, cgdo: 0.0, jfet: false, rd: 0.0, rs: 0.0 }
     }
 }
 
@@ -450,6 +454,8 @@ impl Circuit {
     /// A MOSFET plus its constant gate capacitances (named `<name>.CGS` / `<name>.CGD`).
     pub fn add_mosfet(&mut self, name: &str, d: usize, g: usize, s: usize, model: MosModel) {
         let (cgs, cgd) = (model.cgs, model.cgd);
+        // series resistances: the channel sits between internal nodes (`M1.d`, `M1.s`), and so do the gate capacitances
+        let (d, s) = (self.series(name, "d", "RD", d, model.rd), self.series(name, "s", "RS", s, model.rs));
         self.add(Element::Mosfet { name: name.into(), d, g, s, model });
         if cgs > 0.0 {
             self.add(Element::Capacitor { name: format!("{name}.CGS"), a: g, b: s, c: cgs });
@@ -457,5 +463,15 @@ impl Circuit {
         if cgd > 0.0 {
             self.add(Element::Capacitor { name: format!("{name}.CGD"), a: g, b: d, c: cgd });
         }
+    }
+
+    /// A resistor `r` from `outer` to a new internal node of part `name` (`name.node`), which is returned; `outer` when `r` is 0.
+    fn series(&mut self, name: &str, node: &str, label: &str, outer: usize, r: f64) -> usize {
+        if !(r > 0.0) {
+            return outer;
+        }
+        let inner = self.node(&format!("{name}.{node}"));
+        self.add(Element::Resistor { name: format!("{name}.{label}"), a: outer, b: inner, r });
+        inner
     }
 }

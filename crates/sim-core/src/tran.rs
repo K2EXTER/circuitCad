@@ -167,7 +167,7 @@ fn lte_abs_voltages(cm: &crate::dc::Compiled, x: &[f64]) -> Vec<f64> {
             }
             Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
                 let pol = if m.pnp { -1.0 } else { 1.0 };
-                let cbe = crate::dc::bjt_qbe(m, pol * (v(x, *bi) - v(x, *ei))).1;
+                let cbe = crate::dc::bjt_qbe(m, pol * (v(x, *bi) - v(x, *ei)), pol * (v(x, *bi) - v(x, *ci))).1;
                 let cbc = crate::dc::bjt_qbc(m, pol * (v(x, *bi) - v(x, *ci))).1;
                 abs[*idx] = LTE_ABS_V.max(LTE_CHGTOL / cbe.max(1e-30));
                 abs[*idx + 1] = LTE_ABS_V.max(LTE_CHGTOL / cbc.max(1e-30));
@@ -531,7 +531,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
                     let k = if trap { 2.0 } else { 1.0 };
                     let vn = [pol * (v(&att.x, *bi) - v(&att.x, *ei)), pol * (v(&att.x, *bi) - v(&att.x, *ci))];
                     for (j, vnew) in vn.into_iter().enumerate() {
-                        let (q_new, q_old) = if j == 0 { (crate::dc::bjt_qbe(m, vnew).0, crate::dc::bjt_qbe(m, cap_v[*idx]).0) } else { (crate::dc::bjt_qbc(m, vnew).0, crate::dc::bjt_qbc(m, cap_v[*idx + 1]).0) };
+                        let (q_new, q_old) = if j == 0 { (crate::dc::bjt_qbe(m, vnew, vn[1]).0, crate::dc::bjt_qbe(m, cap_v[*idx], cap_v[*idx + 1]).0) } else { (crate::dc::bjt_qbc(m, vnew).0, crate::dc::bjt_qbc(m, cap_v[*idx + 1]).0) };
                         cap_i[*idx + j] = k / h * (q_new - q_old) - if trap { cap_i[*idx + j] } else { 0.0 };
                         cap_v[*idx + j] = vnew;
                     }

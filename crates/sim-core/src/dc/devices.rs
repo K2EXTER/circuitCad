@@ -105,11 +105,37 @@ pub(crate) fn diode_q(m: &DiodeModel, nvt: f64, v: f64) -> (f64, f64) {
 }
 
 /// Stored charge and capacitance of the base-emitter junction (depletion plus the forward diffusion charge).
-pub(crate) fn bjt_qbe(m: &BjtModel, vbe: f64) -> (f64, f64) {
+/// The forward diffusion charge is `tf * if / qb` as in SPICE's Gummel-Poon model: `1 / qb` is the same Early (`k`) and high
+/// injection (`h`) factor that scales the transport current in `bjt_eval`. The capacitance is its derivative with respect to
+/// vbe (the small cross term through vbc is left out).
+pub(crate) fn bjt_qbe(m: &BjtModel, vbe: f64, vbc: f64) -> (f64, f64) {
     let (qd, cd) = depletion(m.cje, m.vje, m.mje, m.fc, vbe);
+    if m.tf <= 0.0 {
+        return (qd, cd);
+    }
     let nfvt = m.nf * VT;
     let ef = exp_safe(vbe / nfvt);
-    (qd + m.tf * m.is * (ef - 1.0), cd + m.tf * m.is / nfvt * ef)
+    let (iff, gf) = (m.is * (ef - 1.0), m.is / nfvt * ef);
+    let (khv, dkh) = bjt_inv_qb(m, vbe, vbc, iff, gf);
+    (qd + m.tf * iff * khv, cd + m.tf * (gf * khv + iff * dkh))
+}
+
+/// `1 / qb` of the Gummel-Poon model at (vbe, vbc) and its derivative with respect to vbe, the same factors as `bjt_eval`.
+fn bjt_inv_qb(m: &BjtModel, vbe: f64, vbc: f64, iff: f64, gf: f64) -> (f64, f64) {
+    let (dk_be, dk_bc) = (if m.var.is_finite() { -1.0 / m.var } else { 0.0 }, if m.vaf.is_finite() { -1.0 / m.vaf } else { 0.0 });
+    let k_raw = 1.0 + dk_be * vbe + dk_bc * vbc;
+    let (k, dk_be) = if k_raw > 0.05 { (k_raw, dk_be) } else { (0.05, 0.0) };
+    let inv_f = if m.ikf.is_finite() { 1.0 / m.ikf } else { 0.0 };
+    let ir = m.is * (exp_safe(vbc / (m.nr * VT)) - 1.0);
+    let inv_r = if m.ikr.is_finite() { 1.0 / m.ikr } else { 0.0 };
+    let q2 = iff * inv_f + ir * inv_r;
+    let (h, dh) = if q2 > 0.0 {
+        let s = (1.0 + 4.0 * q2).sqrt();
+        (2.0 / (1.0 + s), -4.0 / ((1.0 + s) * (1.0 + s) * s))
+    } else {
+        (1.0, 0.0)
+    };
+    (k * h, dk_be * h + k * dh * gf * inv_f)
 }
 
 /// Stored charge and capacitance of the base-collector junction.

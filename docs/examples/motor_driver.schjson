@@ -88,7 +88,7 @@
             "1",
             "2"
           ],
-          "text": ".model AO3400A NMOS(VTO=1.05 KP=1.2 LAMBDA=0.02 CGS=250p CGD=30p)"
+          "text": ".model AO3400A NMOS(VTO=1.048 KP=95.94 RD=0.01652 CGS=5.8e-10 CGD=5e-11)"
         }
       },
       "footprint": "SOT-23_MOS",

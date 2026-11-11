@@ -400,7 +400,7 @@ impl Compiled {
                     if let (Some(d), Some(idx)) = (&ctx.dynamic, cap) {
                         let k = if d.trap { 2.0 } else { 1.0 };
                         for (slot_i, other, vk, (q, cc), q_old) in [
-                            (*idx, *e, lim_be, bjt_qbe(bm, lim_be), bjt_qbe(bm, d.cap_v[*idx]).0),
+                            (*idx, *e, lim_be, bjt_qbe(bm, lim_be, lim_bc), bjt_qbe(bm, d.cap_v[*idx], d.cap_v[*idx + 1]).0),
                             (*idx + 1, *c, lim_bc, bjt_qbc(bm, lim_bc), bjt_qbc(bm, d.cap_v[*idx + 1]).0),
                         ] {
                             let geq = k * cc / d.h;
