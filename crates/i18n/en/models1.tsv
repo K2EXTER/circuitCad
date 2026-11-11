@@ -5,7 +5,7 @@
 このモデルが何から作られたか、データシートとどれだけ合うかは、まだ記録がありません。結果は目安として使い、大事な値はデータシートで確かめてください	There is no record yet of what this model was made from or how well it matches the data sheet. Use the results as a guide and check important values against the data sheet
 出典: {}	Source: {}
 データシートとの比べ ({} 項目)	Compared with the data sheet ({} figures)
-モデルの値は、データシートの条件に近い回路を、このソフトのシミュレータで測ったものです。✓ の項目は、決めた幅から外れると開発のテストで止まります。行にマウスを置くと条件が出ます	The model's values were measured by this program's simulator on circuits close to the data sheet's conditions. Figures marked ✓ stop the development tests when they leave the allowed range. Hover over a row to see the conditions
+モデルの値は、データシートの条件に近い回路を、このソフトのシミュレータで測ったものです。緑の値は、決めた幅から外れると開発のテストで止まります。値にマウスを置くと、条件と差が出ます	The model's values were measured by this program's simulator on circuits close to the data sheet's conditions. A green value stops the development tests when it leaves the allowed range. Hover over a value to see the conditions and the difference
 項目	Figure
 データシート (min / typ / max)	Data sheet (min / typ / max)
 決めた幅に入っていることを、テストで確かめています	A test checks that this figure stays within the allowed range
@@ -48,3 +48,4 @@ ADJ ピンの電流	ADJ pin current
 REF の入力電流	REF input current
 動的インピーダンス	Dynamic impedance
 停止中のカソード電流	Cathode current when off
+差: {}\n{}	Difference: {}\n{}

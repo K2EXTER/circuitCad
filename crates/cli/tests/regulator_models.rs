@@ -651,6 +651,11 @@ fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRo
         tables.last_mut().unwrap().2.push(part_lib::model_checks::CheckRow {
             item: r.item.into(),
             datasheet: format!("{ds} {}", r.unit),
+            target: match (r.ds[1], r.ds[2]) {
+                (Some(t), _) => format!("{} {}", show(t), r.unit),
+                (None, Some(m)) => format!("max {} {}", show(m), r.unit),
+                _ => "—".into(),
+            },
             condition: r.at.into(),
             model: unit(show(v)),
             diff: unit(diff),

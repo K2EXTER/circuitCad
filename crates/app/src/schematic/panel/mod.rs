@@ -320,24 +320,26 @@ pub(super) fn origin_ui(ui: &mut egui::Ui, part: &str, m: &sch_core::SimModel, i
     let Some(c) = checks else { return };
     let header = i18n::trf!("データシートとの比べ ({} 項目)", c.rows.len());
     egui::CollapsingHeader::new(header).id_salt(id).show(ui, |ui| {
-        ui.small(i18n::tr("モデルの値は、データシートの条件に近い回路を、このソフトのシミュレータで測ったものです。✓ の項目は、決めた幅から外れると開発のテストで止まります。行にマウスを置くと条件が出ます"));
-        egui::Grid::new((id, "grid")).num_columns(5).striped(true).spacing([8.0, 2.0]).show(ui, |ui| {
-            for h in [i18n::tr("項目"), i18n::tr("データシート (min / typ / max)"), i18n::tr("モデル"), i18n::tr("差"), ""] {
-                ui.small(egui::RichText::new(h).strong());
-            }
-            ui.end_row();
-            for r in &c.rows {
-                ui.small(i18n::tr_dyn(&r.item)).on_hover_text(&r.condition);
-                ui.small(&r.datasheet).on_hover_text(&r.condition);
-                ui.small(&r.model);
-                ui.small(&r.diff);
-                if r.tested {
-                    ui.small(egui::RichText::new("✓").color(crate::theme::OK)).on_hover_text(i18n::tr("決めた幅に入っていることを、テストで確かめています"));
-                } else {
-                    ui.small("—").on_hover_text(i18n::tr("比べて表に出すだけで、幅は決めていません"));
+        ui.small(i18n::tr("モデルの値は、データシートの条件に近い回路を、このソフトのシミュレータで測ったものです。緑の値は、決めた幅から外れると開発のテストで止まります。値にマウスを置くと、条件と差が出ます"));
+        // in a horizontal scroll area: a wide table must not push the side panel wider
+        egui::ScrollArea::horizontal().id_salt((id, "scroll")).show(ui, |ui| {
+            egui::Grid::new((id, "grid")).num_columns(3).striped(true).spacing([8.0, 2.0]).show(ui, |ui| {
+                for h in [i18n::tr("項目"), i18n::tr("データシート"), i18n::tr("モデル")] {
+                    ui.small(egui::RichText::new(h).strong());
                 }
                 ui.end_row();
-            }
+                for r in &c.rows {
+                    // min / typ / max and the conditions on hover
+                    let detail = format!("{}  (min / typ / max)\n{}", r.datasheet, r.condition);
+                    ui.small(i18n::tr_dyn(&r.item)).on_hover_text(&detail);
+                    ui.small(if r.target.is_empty() { &r.datasheet } else { &r.target }).on_hover_text(&detail);
+                    // three columns so that the table fits the side panel: the difference and whether a test checks it on hover
+                    let check = if r.tested { i18n::tr("決めた幅に入っていることを、テストで確かめています") } else { i18n::tr("比べて表に出すだけで、幅は決めていません") };
+                    let model = egui::RichText::new(&r.model);
+                    ui.small(if r.tested { model.color(crate::theme::OK) } else { model }).on_hover_text(i18n::trf!("差: {}\n{}", r.diff, check));
+                    ui.end_row();
+                }
+            });
         });
         ui.small(i18n::tr("部品そのもののばらつき (typ と min / max の差) は、モデルの誤差より大きいことがあります。"));
     });

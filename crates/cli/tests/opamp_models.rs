@@ -446,9 +446,14 @@ fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRo
                 }
                 _ => "—".into(),
             };
-            let diff = if row.typ.is_none() && row.max.is_some() { format!("{diff} (max と)") } else { diff };
-            out += &format!("| {} | {ds} | {} | {model} | {diff} |\n", item_name(&row.item), row.at);
-            rows.push(part_lib::model_checks::CheckRow { item: item_name(&row.item).into(), datasheet: ds, condition: row.at.into(), model, diff, tested: tolerance(row).is_some() });
+            let diff_md = if row.typ.is_none() && row.max.is_some() { format!("{diff} (max と)") } else { diff.clone() };
+            out += &format!("| {} | {ds} | {} | {model} | {diff_md} |\n", item_name(&row.item), row.at);
+            let target = match (row.typ, row.max) {
+                (Some(t), _) => show(&row.item, t),
+                (None, Some(m)) => format!("max {}", show(&row.item, m)),
+                _ => "—".into(),
+            };
+            rows.push(part_lib::model_checks::CheckRow { item: item_name(&row.item).into(), datasheet: ds, target, condition: row.at.into(), model, diff, tested: tolerance(row).is_some() });
         }
         tables.push((p.name.to_string(), p.source.to_string(), rows));
     }

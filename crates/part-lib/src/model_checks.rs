@@ -27,6 +27,9 @@ pub struct CheckRow {
     pub item: String,
     /// "min / typ / max" with the unit ("—" where the data sheet gives none).
     pub datasheet: String,
+    /// The data sheet's value the model is compared with: the typ, or "max 1.5 V" when only the max is given.
+    #[serde(default)]
+    pub target: String,
     /// The data sheet's conditions and where in it.
     #[serde(default)]
     pub condition: String,
