@@ -9,3 +9,9 @@ AEC-Q200: 車載用の受動部品の信頼性試験の規格。温度サイク�
 値を読めません。4.7k・4k7・220・1M のように書いてください	Can't read the value. Write it like 4.7k, 4k7, 220 or 1M
 {} は {} にありません。近い値:	{} is not made in {}. Nearest values:
 品質: {}	Quality: {}
+有効数字 (カラーコードの 1・2 本目、E96 なら 3 本目まで)。ホイール・上下のドラッグ・上下の行のクリックで回します	Significant figures (the colour code's 1st and 2nd bands, up to the 3rd for E96). Turn it with the mouse wheel, a drag up or down, or a click on a row above or below
+桁 (カラーコードの乗数の帯)。有効数字 × 桁 が抵抗値です	Multiplier (the colour code's multiplier band). Figures × multiplier is the resistance
+{} にはありません ({})	Not made in {} ({})
+細かい値 (E96)	Fine values (E96)
+有効数字の輪に E96 (1 桁に 96 個、±1 % の抵抗によくある並び) も入れます。外すと E24 (1 桁に 24 個) だけ	Adds E96 (96 values a decade, the usual series of ±1 % resistors) to the figures' wheel. Off: E24 only (24 a decade)
+値を打つ	Type a value

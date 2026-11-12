@@ -203,6 +203,18 @@ impl SeriesDef {
         (below, above)
     }
 
+    /// Is `v` one of the series' values?
+    pub fn makes(&self, v: f64) -> bool {
+        self.nearest(v).is_some_and(|(_, exact)| exact)
+    }
+
+    /// The decades the series' values fall in: `d` for values from 10^d up to 10^(d+1) (10 Ω to 1 MΩ → 1 to 6).
+    pub fn decades(&self) -> Vec<i32> {
+        let lo = self.values.min.log10().floor() as i32;
+        let hi = self.values.max.log10().floor() as i32;
+        (lo..=hi).collect()
+    }
+
     /// The value shown first when the series is picked: 10 kΩ if it is made, else the middle of the range.
     pub fn default_value(&self) -> f64 {
         let vals = self.values();
@@ -302,6 +314,40 @@ impl SeriesDef {
     pub fn range_text(&self) -> String {
         format!("{} の {}〜{}", self.values.sets.join("・"), value_label(self.values.min), value_label(self.values.max))
     }
+}
+
+/// The significant figures of a decade (times 100: 470 is 4.7): E24 alone, or with `fine` E24 and E96 together (114 a decade).
+pub fn mantissas(fine: bool) -> Vec<u16> {
+    let mut m: Vec<u16> = E24.to_vec();
+    if fine {
+        m.extend(E96);
+        m.sort_unstable();
+        m.dedup();
+    }
+    m
+}
+
+/// A value from its significant figures (times 100) and its decade: (470, 3) is 4.7 kΩ.
+pub fn compose(m: u16, decade: i32) -> f64 {
+    value_of(m, decade - 2)
+}
+
+/// The significant figures (times 100) and the decade of a value: 4.7 kΩ is (470, 3).
+pub fn split(v: f64) -> (u16, i32) {
+    let decade = v.log10().floor() as i32;
+    let m = (v / 10f64.powi(decade - 2)).round() as u16;
+    // 9.995 rounds up to 1000: the next decade's 1.00
+    if m >= 1000 { (100, decade + 1) } else { (m, decade) }
+}
+
+/// The decade as a multiplier, as the colour code reads it: 3 is "×1k".
+pub fn decade_label(decade: i32) -> String {
+    let unit = match decade {
+        d if d >= 6 => ("M", d - 6),
+        d if d >= 3 => ("k", d - 3),
+        d => ("", d),
+    };
+    format!("×{}{}", 10u32.pow(unit.1.max(0) as u32), unit.0)
 }
 
 /// `m` (the mantissa times 100) times 10^`exp`, rounded to the digits it has.
@@ -447,6 +493,33 @@ mod tests {
         }
         assert_eq!(bundled_parts().len(), names.len());
         assert_eq!(by_name("ERJ-6ENF").unwrap().values().last(), Some(&2.2e6));
+    }
+
+    #[test]
+    fn a_value_splits_into_figures_and_a_decade_for_the_drum() {
+        assert_eq!(split(4700.0), (470, 3));
+        assert_eq!(split(10.0), (100, 1));
+        assert_eq!(split(97.6), (976, 1));
+        assert_eq!(split(2.2e6), (220, 6));
+        assert_eq!(compose(470, 3), 4700.0);
+        assert_eq!(compose(102, 1), 10.2);
+        assert_eq!(decade_label(1), "×10");
+        assert_eq!(decade_label(3), "×1k");
+        assert_eq!(decade_label(5), "×100k");
+        assert_eq!(decade_label(6), "×1M");
+        assert_eq!(mantissas(false).len(), 24);
+        assert_eq!(mantissas(true).len(), 114);
+        let s = by_name("ERJ-6ENF").unwrap();
+        assert_eq!(s.decades(), vec![1, 2, 3, 4, 5, 6]);
+        assert!(s.makes(2.2e6) && !s.makes(4.7e6) && !s.makes(4.8e3));
+        // every value of every series is on the drum: its figures are in the fine list and its decade in the series' decades
+        for s in bundled() {
+            for v in s.values() {
+                let (m, d) = split(v);
+                assert!(mantissas(true).contains(&m) && s.decades().contains(&d), "{v}");
+                assert_eq!(compose(m, d), v);
+            }
+        }
     }
 
     #[test]

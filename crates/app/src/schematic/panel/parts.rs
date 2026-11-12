@@ -424,15 +424,67 @@ fn quality_tip(q: &str) -> &'static str {
     }
 }
 
-/// The value field of a series part on the library card. Returns the series' value to switch to when the typed value is made
-/// (or a nearby one is clicked).
+/// The value of a series part on the library card: a drum roll of two wheels, the significant figures (E24, or E24 and E96) and the
+/// decade (×10 … ×1M, as the colour code reads it), with a field to type the value for those who know it. Returns the series' value
+/// to switch to (the part with that part number becomes the chosen one).
 fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64, text: &mut String) -> Option<f64> {
+    use part_lib::series::{compose, decade_label, mantissas, ohms_text, split};
     let mut switch = None;
+    let id = ui.make_persistent_id(("series_drum", &s.series));
+    // the drums keep their own (figures, decade): a turn to a value the series does not make leaves the part as it was, and the
+    // drum stays there until it is turned on. They start again from the part when the part changes from elsewhere.
+    let (m_now, d_now) = split(now);
+    let mut sel: (u16, i32, f64) = ui.data(|d| d.get_temp(id)).filter(|&(_, _, last): &(u16, i32, f64)| last == now).unwrap_or((m_now, d_now, now));
+    let fine_id = id.with("fine");
+    let mut fine = ui.data(|d| d.get_temp::<bool>(fine_id)).unwrap_or(false) || !part_lib::series::E24.contains(&sel.0);
+    let figures = mantissas(fine);
+    let decades = s.decades();
+    let mut mi = figures.iter().position(|&m| m >= sel.0).unwrap_or(figures.len() - 1);
+    let mut di = decades.iter().position(|&d| d == sel.1).unwrap_or(0);
     ui.horizontal(|ui| {
-        ui.label(i18n::tr("抵抗値"));
+        let labels: Vec<String> = figures.iter().map(|&m| trim_figure(m)).collect();
+        let usable: Vec<bool> = figures.iter().map(|&m| s.makes(compose(m, sel.1))).collect();
+        crate::widgets::drum(ui, id.with("figures"), &labels, &usable, &mut mi, 58.0)
+            .on_hover_text(i18n::tr("有効数字 (カラーコードの 1・2 本目、E96 なら 3 本目まで)。ホイール・上下のドラッグ・上下の行のクリックで回します"));
+        let labels: Vec<String> = decades.iter().map(|&d| decade_label(d)).collect();
+        let usable: Vec<bool> = decades.iter().map(|&d| s.makes(compose(figures[mi], d))).collect();
+        crate::widgets::drum(ui, id.with("decades"), &labels, &usable, &mut di, 64.0)
+            .on_hover_text(i18n::tr("桁 (カラーコードの乗数の帯)。有効数字 × 桁 が抵抗値です"));
+        ui.vertical(|ui| {
+            let v = compose(figures[mi], decades[di]);
+            ui.label(egui::RichText::new(format!("{}Ω", ohms_text(v).replace("Meg", "M"))).size(18.0).strong());
+            if s.makes(v) {
+                ui.small(s.part_name(v));
+            } else {
+                ui.colored_label(crate::theme::WARN, i18n::trf!("{} にはありません ({})", s.series, s.range_text()));
+            }
+            if ui.checkbox(&mut fine, i18n::tr("細かい値 (E96)")).on_hover_text(i18n::tr("有効数字の輪に E96 (1 桁に 96 個、±1 % の抵抗によくある並び) も入れます。外すと E24 (1 桁に 24 個) だけ")).changed() {
+                ui.data_mut(|d| d.insert_temp(fine_id, fine));
+            }
+        });
+    });
+    // E96 turned off on a value that only E96 has: the nearest E24 value
+    let mut figure = figures[mi];
+    if !fine && !part_lib::series::E24.contains(&figure) {
+        figure = *part_lib::series::E24.iter().min_by_key(|&&x| (x as i32 - figure as i32).abs()).unwrap_or(&100);
+    }
+    let picked = (figure, decades[di]);
+    let v = compose(picked.0, picked.1);
+    if (picked.0, picked.1) != (sel.0, sel.1) {
+        sel = (picked.0, picked.1, now);
+        if s.makes(v) && (v / now - 1.0).abs() > 1e-9 {
+            switch = Some(v);
+            *text = ohms_text(v);
+            // the part becomes `v` next frame: the drums stay where they are
+            sel.2 = v;
+        }
+    }
+    ui.data_mut(|d| d.insert_temp(id, sel));
+    // typing the value: for those who know it
+    ui.horizontal(|ui| {
+        ui.small(i18n::tr("値を打つ"));
         ui.add(egui::TextEdit::singleline(text).desired_width(70.0))
             .on_hover_text(i18n::trf!("{} の値を入れると、その型番に切り替わります (例: 4.7k、4k7、220、1M)", s.range_text()));
-        ui.small(egui::RichText::new(s.range_text()).weak());
     });
     match part_lib::series::parse_ohms(text) {
         None => {
@@ -442,17 +494,17 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
         }
         Some(v) => match s.nearest(v) {
             Some((x, true)) => {
-                if (x / now - 1.0).abs() > 1e-9 {
+                if switch.is_none() && (x / now - 1.0).abs() > 1e-9 {
                     switch = Some(x);
                 }
             }
             _ => {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("{} は {} にありません。近い値:", part_lib::series::ohms_text(v), s.series));
+                ui.colored_label(crate::theme::WARN, i18n::trf!("{} は {} にありません。近い値:", ohms_text(v), s.series));
                 let (lo, hi) = s.neighbours(v);
                 ui.horizontal(|ui| {
                     for x in [lo, hi].into_iter().flatten() {
-                        if ui.small_button(part_lib::series::ohms_text(x)).on_hover_text(s.part_name(x)).clicked() {
-                            *text = part_lib::series::ohms_text(x);
+                        if ui.small_button(ohms_text(x)).on_hover_text(s.part_name(x)).clicked() {
+                            *text = ohms_text(x);
                             switch = Some(x);
                         }
                     }
@@ -466,6 +518,13 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
     switch
 }
 
+/// 470 → "4.7", 102 → "1.02", 100 → "1.0": the figures as the E series write them.
+fn trim_figure(m: u16) -> String {
+    let s = format!("{}.{:02}", m / 100, m % 100);
+    if m.is_multiple_of(10) { s[..s.len() - 1].to_string() } else { s }
+}
+
+
 /// One row of the basic parts list: a small picture of the symbol, then the name.
 fn kind_row(ui: &mut egui::Ui, selected: bool, kind: Kind, text: &str) -> egui::Response {
     ui.horizontal(|ui| {
@@ -476,4 +535,15 @@ fn kind_row(ui: &mut egui::Ui, selected: bool, kind: Kind, text: &str) -> egui::
         pic | ui.selectable_label(selected, i18n::tr_dyn(text))
     })
     .inner
+}
+
+#[cfg(test)]
+mod drum_tests {
+    #[test]
+    fn the_figures_read_as_the_e_series_write_them() {
+        assert_eq!(super::trim_figure(470), "4.7");
+        assert_eq!(super::trim_figure(100), "1.0");
+        assert_eq!(super::trim_figure(102), "1.02");
+        assert_eq!(super::trim_figure(976), "9.76");
+    }
 }

@@ -321,3 +321,81 @@ pub fn warning_lines(ui: &mut egui::Ui, id: &str, lines: &[String], calm: impl F
     }
 }
 
+
+/// A drum roll (the wheel of a slot machine or a phone's date picker): `items` stacked on a drum, the middle row is the chosen one.
+/// The mouse wheel, a drag up or down and a click on a row above or below turn it; it eases to the new row. Items that `usable`
+/// marks false are drawn faint (they can still be reached, so the drum never jumps over a row). Returns true when `selected` changed.
+pub fn drum(ui: &mut egui::Ui, id: egui::Id, items: &[String], usable: &[bool], selected: &mut usize, width: f32) -> egui::Response {
+    const ROW: f32 = 22.0;
+    const ROWS: f32 = 5.0;
+    let (rect, mut resp) = ui.allocate_exact_size(egui::vec2(width, ROW * ROWS), egui::Sense::click_and_drag());
+    let n = items.len();
+    if n == 0 {
+        return resp;
+    }
+    *selected = (*selected).min(n - 1);
+    let before = *selected;
+    let turn = |sel: &mut usize, k: i32| *sel = (*sel as i32 + k).clamp(0, n as i32 - 1) as usize;
+    // the wheel: whole rows, from deltas added up (a touchpad sends many small ones); the panel under it must not scroll as well
+    let acc_id = id.with("wheel");
+    if resp.hovered() {
+        let dy = ui.input(|i| i.smooth_scroll_delta.y);
+        if dy != 0.0 {
+            ui.input_mut(|i| {
+                i.smooth_scroll_delta = egui::Vec2::ZERO;
+            });
+            let mut acc = ui.data(|d| d.get_temp::<f32>(acc_id)).unwrap_or(0.0) + dy;
+            while acc.abs() >= 40.0 {
+                // the wheel turned up shows the rows above: the smaller values
+                turn(selected, if acc > 0.0 { -1 } else { 1 });
+                acc -= 40.0 * acc.signum();
+            }
+            ui.data_mut(|d| d.insert_temp(acc_id, acc));
+        }
+    }
+    // a drag: one row for every row's height moved, the drum following the hand
+    let drag_id = id.with("drag");
+    if resp.dragged() {
+        let mut acc = ui.data(|d| d.get_temp::<f32>(drag_id)).unwrap_or(0.0) + resp.drag_delta().y;
+        while acc.abs() >= ROW {
+            turn(selected, if acc > 0.0 { -1 } else { 1 });
+            acc -= ROW * acc.signum();
+        }
+        ui.data_mut(|d| d.insert_temp(drag_id, acc));
+    } else {
+        ui.data_mut(|d| d.remove::<f32>(drag_id));
+    }
+    if resp.clicked()
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        turn(selected, ((p.y - rect.center().y) / ROW).round() as i32);
+    }
+    // drawing: the rows around the eased position, fading away from the middle
+    let pos = ui.ctx().animate_value_with_time(id.with("anim"), *selected as f32, 0.12);
+    let painter = ui.painter_at(rect);
+    let v = ui.visuals();
+    painter.rect_filled(rect, 4.0, v.extreme_bg_color);
+    let band = egui::Rect::from_center_size(rect.center(), egui::vec2(width, ROW));
+    painter.rect_filled(band, 3.0, v.selection.bg_fill.gamma_multiply(0.45));
+    painter.rect_stroke(band, 3.0, egui::Stroke::new(1.0, v.selection.stroke.color.gamma_multiply(0.6)), egui::StrokeKind::Inside);
+    let first = (pos - ROWS / 2.0 - 1.0).floor().max(0.0) as usize;
+    let last = ((pos + ROWS / 2.0 + 1.0).ceil() as usize).min(n - 1);
+    for (i, item) in items.iter().enumerate().take(last + 1).skip(first) {
+        let off = i as f32 - pos;
+        let fade = (1.0 - off.abs() / (ROWS / 2.0 + 0.5)).clamp(0.0, 1.0);
+        let base = if usable.get(i).copied().unwrap_or(true) { v.text_color() } else { v.weak_text_color().gamma_multiply(0.6) };
+        let size = if off.abs() < 0.5 { 15.0 } else { 14.0 };
+        painter.text(
+            egui::pos2(rect.center().x, rect.center().y + off * ROW),
+            egui::Align2::CENTER_CENTER,
+            item,
+            egui::FontId::proportional(size),
+            base.gamma_multiply(0.25 + 0.75 * fade),
+        );
+    }
+    painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0, v.widgets.noninteractive.bg_stroke.color), egui::StrokeKind::Inside);
+    if *selected != before {
+        resp.mark_changed();
+    }
+    resp
+}
