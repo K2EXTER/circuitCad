@@ -36,6 +36,7 @@ pub mod merge;
 pub mod mesh;
 pub mod gerber;
 pub mod groundpour;
+pub mod heat_copper;
 pub mod gerber_view;
 pub mod model;
 pub mod model3d;

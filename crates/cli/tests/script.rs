@@ -1973,6 +1973,41 @@ fn heat_warms_a_resistor_by_its_own_power_and_moves_the_nets() {
     assert!(!ok);
 }
 
+/// With the board carried over (`board postlayout on`), a part's θ takes the copper joined to its pins: a GND pour under the board spreads
+/// R2's heat, so it warms less than on its own 100 K/W; R1's own θ stays what it was given.
+#[test]
+fn heat_with_postlayout_lowers_theta_by_the_copper_joined_to_the_pins() {
+    let (a, ok) = run("new
+add V 10 as=V1
+add R 100 as=R1
+add R 100 as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+thermal R1 theta=100
+thermal R2 theta=100
+board import
+board autoplace
+board route
+board pour net=GND
+heat
+board postlayout on
+heat
+");
+    assert!(ok, "{a:?}");
+    let heats: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "heat").collect();
+    let part = |h: &Value, n: &str| h["parts"].as_array().unwrap().iter().find(|p| p["part"] == n).cloned().unwrap_or_else(|| panic!("{n}: {h}"));
+    let (before, after) = (part(heats[0], "R2"), part(heats[1], "R2"));
+    assert_eq!(before["theta_k_per_w"].as_f64().unwrap(), 100.0, "{before}");
+    assert!(before["board_copper_mm2"].is_null(), "{before}");
+    let theta = after["theta_k_per_w"].as_f64().unwrap();
+    assert!(theta < 90.0 && theta > 20.0, "{after}");
+    assert_eq!(after["own_theta_k_per_w"].as_f64().unwrap(), 100.0);
+    assert!(after["board_copper_mm2"].as_f64().unwrap() > 100.0, "{after}");
+    assert!(after["rise_k"].as_f64().unwrap() < before["rise_k"].as_f64().unwrap());
+    assert!(heats[1]["notes"].as_array().unwrap().iter().any(|n| n.as_str().unwrap().contains("board copper")), "{}", heats[1]);
+}
+
 /// `heattran`: a 1 s pulse of 0.25 W into a part of 100 K/W and 0.05 J/K (5 s) warms it by 25 (1 - e^-0.2) = 4.5 K, far below the 25 K of the
 /// steady state; a part without a heat capacity shows the steady value; a coupling to a wrong name is refused.
 #[test]

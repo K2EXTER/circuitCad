@@ -3,7 +3,7 @@
 use super::*;
 
 /// What the last run found.
-pub(super) struct HeatView {
+pub(crate) struct HeatView {
     pub ambient: f64,
     pub parts: Vec<sim_core::HeatedPart>,
     /// (net, volts cold, volts warm) for the nets that moved the most.
@@ -11,10 +11,10 @@ pub(super) struct HeatView {
 }
 
 impl SchEditor {
-    pub(super) fn run_self_heat(&mut self) -> Result<HeatView, String> {
+    pub(crate) fn run_self_heat(&mut self) -> Result<HeatView, String> {
         let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
-        let heaters = sim_core::heaters_from_schematic(&self.sch, &c);
+        let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &self.copper_g());
         let r = sim_core::self_heat(&c, &heaters, ambient).map_err(|e| e.to_string())?;
         let mut parts: Vec<_> = r.parts.iter().filter(|p| p.power > 1e-9).cloned().collect();
         parts.sort_by(|a, b| b.rise.total_cmp(&a.rise));
@@ -49,6 +49,7 @@ impl SchEditor {
                     ui.label(i18n::tr("電力が出ている抵抗はありません"));
                 }
                 let mut edits: Vec<(String, f64, f64)> = vec![];
+                let own = self.own_thetas();
                 egui::Grid::new("selfheat_grid").num_columns(6).striped(true).show(ui, |ui| {
                     for h in ["部品", "電力", "上昇", "値の変化", "熱抵抗 K/W", "係数 ppm/K"] {
                         ui.label(egui::RichText::new(h).small().strong());
@@ -59,8 +60,8 @@ impl SchEditor {
                         ui.label(fmt_power(p.power));
                         ui.label(format!("{:.1} K", p.rise)).on_hover_text(i18n::tr("周囲の温度より、これだけ高くなります"));
                         ui.label(format!("{:+.0} ppm", p.change * 1e6)).on_hover_text(i18n::tr("温まったことで、抵抗値が冷えているときよりどれだけ変わったか (100 ppm = 0.01 %)。温度係数が 0 なら変わりません"));
-                        let (mut theta, mut tc) = (p.theta, p.tc1 * 1e6);
-                        let a = ui.add(egui::DragValue::new(&mut theta).range(0.0..=1000.0).speed(0.5)).on_hover_text(i18n::tr("熱抵抗: 抵抗体から空気までの熱の伝わりにくさ (K/W)。メーカーの値 (抵抗体〜端子間) に、基板の銅箔での放熱ぶんが足されます。放熱の良い大きな銅箔・厚い銅箔・多層にすると小さくなります。変えたら、もう一度計算してください"));
+                        let (mut theta, mut tc) = (own.get(&p.name).copied().unwrap_or(p.theta), p.tc1 * 1e6);
+                        let a = theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name));
                         let b = ui.add(egui::DragValue::new(&mut tc).range(-5000.0..=5000.0).speed(1.0)).on_hover_text(i18n::tr("温度係数: 1 K 温まると抵抗値が何 ppm 変わるか。データシートの値 (シャント抵抗なら ±25 〜 ±100 ppm/K など) を入れます"));
                         if a.changed() || b.changed() {
                             edits.push((p.name.clone(), theta, tc));
@@ -85,6 +86,34 @@ impl SchEditor {
         }
         self.heat_view = Some(view);
     }
+}
+
+impl SchEditor {
+    /// The board copper's conductance (W/K) beside each part's θ, for `sim_core` (empty unless the board was carried over).
+    pub(super) fn copper_g(&self) -> std::collections::BTreeMap<String, f64> {
+        self.heat_copper.iter().map(|(k, v)| (k.clone(), v.0)).collect()
+    }
+
+    /// Each part's own θ (K/W, smallest pads): what it was given, or the guess from its package.
+    pub(super) fn own_thetas(&self) -> std::collections::BTreeMap<String, f64> {
+        self.sch.components.iter().map(|c| (c.refdes.clone(), sim_core::own_theta(c))).collect()
+    }
+}
+
+/// The θ cell of a heat table: the part's own θ to edit, and when the board's copper helps, the θ it has with it.
+pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, copper: Option<&(f64, f64)>) -> egui::Response {
+    ui.horizontal(|ui| {
+        let r = ui.add(egui::DragValue::new(own).range(0.1..=1000.0).speed(0.5)).on_hover_text(i18n::tr("部品の熱抵抗 (K/W): 部品から空気までの熱の伝わりにくさ。データシートの「最小のパッド」の値を入れます (入れないと、パッケージの定格電力からの目安)。基板を回路図に反映していると、つながった銅の放熱ぶんが自動で足されます。変えたら、もう一度計算してください"));
+        if let Some((_, mm2)) = copper {
+            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::OK)).on_hover_text(i18n::trf!(
+                "基板の銅を入れた熱抵抗: {:.0} K/W。ピンにつながった銅 (部品の中心から 20 mm 以内、パッドのほかに {:.0} mm²) が熱を広げます。銅 35 µm (1 oz) として、SOT-223 のデータシートの曲線 (最小のパッド 110 K/W、1 in² で 42 K/W、2 oz) から見積もった目安です。正確には実物で測ってください",
+                with_copper,
+                mm2
+            ));
+        }
+        r
+    })
+    .inner
 }
 
 fn fmt_power(w: f64) -> String {

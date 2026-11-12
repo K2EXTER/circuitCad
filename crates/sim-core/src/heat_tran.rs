@@ -8,7 +8,8 @@
 
 use crate::circuit::{Circuit, Element};
 use crate::dc::SimError;
-use crate::selfheat::{default_theta, scale, Heater};
+use crate::selfheat::{part_theta, scale, Heater};
+use std::collections::BTreeMap;
 use crate::tran::{transient, TranResult, TranSettings};
 use sch_core::Schematic;
 
@@ -94,8 +95,9 @@ impl HeatTran {
 }
 
 /// The parts of a schematic named in `refs` as thermal nodes: all the resistors, diodes, bipolar and MOS transistors inside each part
-/// (a library part's macro model counts). θ and the coefficient come as in `heaters_from_schematic`, the capacity from the part.
-pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[String]) -> Result<Vec<ThermalNode>, String> {
+/// (a library part's macro model counts). θ (with the board's `copper`) and the coefficient come as in `heaters_from_schematic`,
+/// the capacity from the part.
+pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[String], copper: &BTreeMap<String, f64>) -> Result<Vec<ThermalNode>, String> {
     let mut out = vec![];
     for r in refs {
         let comp = sch.components.iter().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
@@ -116,7 +118,7 @@ pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[
         if elements.is_empty() {
             return Err(format!("{name} has no resistor, diode or transistor in the circuit (nothing that dissipates power)"));
         }
-        let theta = if comp.theta > 0.0 { comp.theta } else { default_theta(&comp.footprint_name()).unwrap_or(100.0) };
+        let theta = part_theta(comp, copper);
         let (tc1, tc2) = if comp.tc_ppm != 0.0 {
             (comp.tc_ppm * 1e-6, 0.0)
         } else {

@@ -495,7 +495,9 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         }
         let gate = self.erc_gate()?;
         let c = self.circuit()?;
-        let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs)?;
+        let copper = self.heat_copper();
+        let g: std::collections::BTreeMap<String, f64> = copper.iter().map(|(k, v)| (k.clone(), v.0)).collect();
+        let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs, &g)?;
         let r = sim_core::heat_tran(&c, &nodes, &links, temp, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
         self.last_tran = Some(r.tran.clone());
         let n = r.time.len();
@@ -505,7 +507,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
             .iter()
             .map(|p| {
                 let series: Vec<Value> = (0..samples).map(|k| json!([r.time[at(k)], p.power[at(k)], p.rise[at(k)]])).collect();
-                json!({"part": p.name, "theta_k_per_w": p.theta, "cth_j_per_k": p.cth, "tau_s": p.theta * p.cth,
+                json!({"part": p.name, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "cth_j_per_k": p.cth, "tau_s": p.theta * p.cth,
                     "power_peak_w": p.power_peak, "power_mean_w": p.power_mean,
                     "rise_peak_k": p.rise_peak, "peak_at_s": p.peak_time, "rise_end_k": p.rise_end,
                     "temp_peak_c": temp + p.rise_peak, "added_by_neighbours_k": p.rise_peak - p.rise_alone,
@@ -513,7 +515,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
                     "steady_state_rise_k": p.power_peak * p.theta, "samples_time_power_rise": series})
             })
             .collect();
-        let mut notes = vec!["each part is one heat capacity and one heat resistance to the surroundings (board copper included): a rough picture, not a field solution".to_string()];
+        let mut notes = vec!["each part is one heat capacity and one heat resistance to the surroundings: a rough picture, not a field solution".to_string(), copper_note(&copper, self.board.is_some(), self.post_layout)];
         let no_cap: Vec<&str> = r.parts.iter().filter(|p| p.cth == 0.0).map(|p| p.name.as_str()).collect();
         if !no_cap.is_empty() {
             notes.push(format!("{} has no heat capacity (thermal REF cth=J/K), so it follows its power at once: the rise is the steady-state value, too high for a short pulse", no_cap.join(", ")));
@@ -537,7 +539,9 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number")));
         let (temp, top) = (num("temp", 27.0)?, num("top", 10.0)? as usize);
         let c = self.circuit()?;
-        let heaters = sim_core::heaters_from_schematic(&self.sch, &c);
+        let copper = self.heat_copper();
+        let g: std::collections::BTreeMap<String, f64> = copper.iter().map(|(k, v)| (k.clone(), v.0)).collect();
+        let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
         let r = sim_core::self_heat(&c, &heaters, temp).map_err(|e| dc_fail(&c, e))?;
         self.last_dc = Some(r.warm.clone());
         let mut parts: Vec<&sim_core::HeatedPart> = r.parts.iter().filter(|p| p.power > 1e-9).collect();
@@ -545,7 +549,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let rows: Vec<Value> = parts
             .iter()
             .take(top)
-            .map(|p| json!({"part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "tc_ppm_per_k": p.tc1 * 1e6}))
+            .map(|p| json!({"part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6}))
             .collect();
         let mut moved: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-12).collect();
         moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
@@ -555,7 +559,8 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         if !hot.is_empty() {
             notes.push(format!("{} warm up but have no temperature coefficient, so their value does not change (set one: thermal REF tc=PPM): the rise is still real, for the neighbours and the thermal EMF", hot.join(", ")));
         }
-        notes.push("theta is a guess from the package unless set (thermal REF theta=K/W): it is the heat resistance from the resistor to the air, board copper included".to_string());
+        notes.push("own_theta is a guess from the package unless set (thermal REF theta=K/W): the heat resistance from the resistor to the air on the smallest pads".to_string());
+        notes.push(copper_note(&copper, self.board.is_some(), self.post_layout));
         notes.extend(gate);
         Ok(obj(json!({"ambient_c": temp, "rounds": r.rounds, "parts": rows, "nodes": nodes, "notes": notes})))
     }
@@ -741,6 +746,19 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         match (&self.board, self.post_layout) {
             (Some(b), true) => post_layout_parts(b),
             _ => (vec![], vec![]),
+        }
+    }
+
+    /// A part's own θ (K/W, smallest pads): what it was given, or the guess from its package.
+    fn own_theta(&self, refdes: &str) -> Option<f64> {
+        self.sch.components.iter().find(|c| c.refdes == refdes).map(sim_core::own_theta)
+    }
+
+    /// The board copper beside each part's θ, by reference: (W/K, mm² beyond its pads); empty unless `board postlayout on`.
+    fn heat_copper(&self) -> std::collections::BTreeMap<String, (f64, f64)> {
+        match (&self.board, self.post_layout) {
+            (Some(b), true) => pcb_core::heat_copper::conductances(b, pcb_core::irdrop::IrSpec::default().thickness_um),
+            _ => Default::default(),
         }
     }
 
@@ -1039,6 +1057,17 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
             notes.insert(0, format!("{} rating issue(s), {over} over, in the second half of the run: see 'ratings' (typical package limits, not the data sheet)", ratings.len()));
         }
         (ratings, notes)
+    }
+}
+
+/// What the heat answers say about the board's copper.
+fn copper_note(copper: &std::collections::BTreeMap<String, (f64, f64)>, board: bool, post_layout: bool) -> String {
+    if !(board && post_layout) {
+        "theta is the part's own (smallest pads): with a board loaded, `board postlayout on` adds the copper joined to each part's pins within 20 mm (estimate fitted to one SOT-223 datasheet curve)".to_string()
+    } else if copper.is_empty() {
+        "postlayout is on but no part has copper beyond its pads, so theta is the part's own".to_string()
+    } else {
+        "theta includes the board copper joined to each part's pins within 20 mm (board_copper_mm2 beyond its pads, 35 um copper): an estimate fitted to one SOT-223 datasheet curve, own_theta is without it".to_string()
     }
 }
 

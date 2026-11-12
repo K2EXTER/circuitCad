@@ -51,7 +51,7 @@ impl SchEditor {
         self.store_links(parsed.clone());
         let links: Vec<sim_core::ThermalLink> = parsed.into_iter().map(|(a, b, theta)| sim_core::ThermalLink { a, b, theta }).collect();
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
-        let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs)?;
+        let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs, &self.copper_g())?;
         let r = sim_core::heat_tran(&c, &nodes, &links, ambient, &sim_core::TranSettings { tstop, tstep: sim_core::auto_tstep(tstop), uic: false }).map_err(|e| e.to_string())?;
         let (moved_at, moved) = r.moved(6);
         Ok(HeatTranView { ambient, tstop, time: r.time.clone(), parts: r.parts.clone(), moved_at, moved })
@@ -103,6 +103,7 @@ impl SchEditor {
             }
             Ok(v) => {
                 let mut edits: Vec<(String, f64, f64)> = vec![];
+                let own = self.own_thetas();
                 egui::Grid::new("htran_grid").num_columns(6).striped(true).show(ui, |ui| {
                     for h in ["部品", "電力(最大)", "上昇(最大)", "熱抵抗 K/W", "熱容量 J/K", "定常なら"] {
                         ui.label(egui::RichText::new(h).small().strong());
@@ -117,8 +118,8 @@ impl SchEditor {
                             p.rise_peak - p.rise_alone,
                             p.change * 1e6
                         ));
-                        let (mut theta, mut cth) = (p.theta, p.cth);
-                        let a = ui.add(egui::DragValue::new(&mut theta).range(0.1..=1000.0).speed(0.5)).on_hover_text(i18n::tr("熱抵抗 (K/W): 部品から空気までの熱の伝わりにくさ。データシートの値 (基板の銅の面積で変わります) を入れます。変えたら、もう一度計算してください"));
+                        let (mut theta, mut cth) = (own.get(&p.name).copied().unwrap_or(p.theta), p.cth);
+                        let a = super::selfheat::theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name));
                         let b = ui
                             .add(egui::DragValue::new(&mut cth).range(0.0..=100.0).speed(0.005).max_decimals(3))
                             .on_hover_text(i18n::tr("熱容量 (J/K): 部品とそのまわりの銅を 1 K 温めるのに要る熱。短い通電の温度の上がりは、これでほぼ決まります (上昇 ≒ 電力 × 時間 ÷ 熱容量)。データシートに数字がないことが多いので、推測の値です。0 だと定常の温度になります"));

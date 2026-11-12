@@ -6,7 +6,8 @@
 use crate::circuit::{Circuit, Element};
 use crate::dc::{dc_op, DcResult, SimError};
 use crate::temperature::T_NOM_C;
-use sch_core::{Kind, Schematic};
+use sch_core::{Component, Kind, Schematic};
+use std::collections::BTreeMap;
 
 /// A part that warms itself: the resistors inside it (all share one temperature), its heat resistance and temperature coefficients.
 #[derive(Clone, Debug, PartialEq)]
@@ -55,7 +56,10 @@ pub fn default_theta(footprint: &str) -> Option<f64> {
 
 /// The parts of a schematic that can heat themselves: every resistor, and library parts that hold resistors. θ comes from the part
 /// (`theta`, or a guess from the package); the temperature coefficient from the part (`tc_ppm`) or from the model (`TC=`).
-pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit) -> Vec<Heater> {
+///
+/// `copper` holds, by reference, the conductance (W/K) that the board's copper joined to the part adds beside its own θ
+/// (`pcb_core::heat_copper`, carried over with the board's wiring); empty when there is no board.
+pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit, copper: &BTreeMap<String, f64>) -> Vec<Heater> {
     let mut out = vec![];
     for comp in &sch.components {
         if !matches!(comp.kind, Kind::Resistor | Kind::Custom) {
@@ -74,7 +78,7 @@ pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit) -> Vec<Heater>
         if elements.is_empty() {
             continue;
         }
-        let theta = if comp.theta > 0.0 { comp.theta } else { default_theta(&comp.footprint_name()).unwrap_or(100.0) };
+        let theta = part_theta(comp, copper);
         let (tc1, tc2) = if comp.tc_ppm != 0.0 {
             (comp.tc_ppm * 1e-6, 0.0)
         } else {
@@ -83,6 +87,20 @@ pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit) -> Vec<Heater>
         out.push(Heater { name: r.to_string(), elements, theta, tc1, tc2 });
     }
     out
+}
+
+/// A part's own θ (K/W, on the smallest pads): what it was given, or the guess from its package.
+pub fn own_theta(comp: &Component) -> f64 {
+    if comp.theta > 0.0 { comp.theta } else { default_theta(&comp.footprint_name()).unwrap_or(100.0) }
+}
+
+/// A part's θ (K/W) with the board's copper: its own θ in parallel with the copper's conductance from `copper` (W/K).
+pub fn part_theta(comp: &Component, copper: &BTreeMap<String, f64>) -> f64 {
+    let own = own_theta(comp);
+    match copper.get(&comp.refdes) {
+        Some(&g) if g > 0.0 => 1.0 / (1.0 / own + g),
+        _ => own,
+    }
 }
 
 pub(crate) fn scale(h: &Heater, temp_c: f64) -> f64 {

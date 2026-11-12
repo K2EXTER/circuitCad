@@ -180,6 +180,7 @@ impl App {
                     self.sch.adopt(pr.schematic, None);
                     self.sch.wiring.clear();
                     self.sch.couplings.clear();
+                    self.sch.heat_copper.clear();
                     self.board_ed.adopt(pr.board, None);
                     self.project = None;
                     if which == 1 {

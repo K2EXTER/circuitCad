@@ -216,6 +216,9 @@ pub struct SchEditor {
     pub wiring: Vec<sim_core::WiringR>,
     /// Magnetic coupling between the wiring inductors (with `wiring`).
     pub couplings: Vec<sim_core::WiringK>,
+    /// The board copper joined to each part's pins (with `wiring`), by reference: (conductance W/K beside the part's θ,
+    /// mm² beyond its pads). `pcb_core::heat_copper`.
+    pub heat_copper: std::collections::BTreeMap<String, (f64, f64)>,
     temp_from: String,
     temp_to: String,
     temp_step: String,
@@ -614,6 +617,7 @@ impl Default for SchEditor {
             sweep: None,
             temp_c: "27".into(),
             wiring: vec![],
+            heat_copper: Default::default(),
             couplings: vec![],
             temp_from: "-20".into(),
             temp_to: "80".into(),

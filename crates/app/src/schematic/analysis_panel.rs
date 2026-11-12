@@ -31,6 +31,7 @@ impl SchEditor {
                 if ui.small_button(i18n::tr("解除")).on_hover_text(i18n::tr("配線の抵抗を入れない理想の回路に戻します")).clicked() {
                     self.wiring.clear();
                     self.couplings.clear();
+                    self.heat_copper.clear();
                 }
             });
         }

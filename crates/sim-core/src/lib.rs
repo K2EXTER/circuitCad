@@ -77,7 +77,7 @@ pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, 
 pub use from_schematic::{from_schematic, from_schematic_with_pin_fault, from_schematic_with_wiring, from_schematic_with_layout, ConvertError, PinFaultSpec, PinHow, WiringK, WiringR};
 pub use spice_in::{add_model_instance, add_subckt_instance, decode_spice_text, ignored_model_params, parse_models};
 pub use heat_tran::{heat_tran, thermal_nodes_from_schematic, HeatTran, HeatTranPart, ThermalLink, ThermalNode};
-pub use selfheat::{default_theta, heaters_from_schematic, self_heat, HeatedPart, Heater, SelfHeat};
+pub use selfheat::{default_theta, heaters_from_schematic, own_theta, part_theta, self_heat, HeatedPart, Heater, SelfHeat};
 pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{auto_tstep, format_time, transient, transient_with, Signal, TimingKind, TimingReport, TimingViolation, TranResult, TranSettings};
 pub use stepmetrics::{load_step, settling_times, step_metrics, LoadStep, Settling, StepMetrics};

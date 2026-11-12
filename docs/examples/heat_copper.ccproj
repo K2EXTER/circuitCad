@@ -1,0 +1,757 @@
+{
+  "version": 1,
+  "schematic": {
+    "components": [
+      {
+        "custom": null,
+        "footprint": "PinHeader_1x2_PM",
+        "kind": "VSource",
+        "pos": [
+          8,
+          10
+        ],
+        "refdes": "V1",
+        "rot": 0,
+        "value": "5"
+      },
+      {
+        "custom": null,
+        "footprint": "R_2512",
+        "kind": "Resistor",
+        "pos": [
+          20,
+          8
+        ],
+        "refdes": "R1",
+        "rot": 0,
+        "tc_ppm": 100.0,
+        "value": "33"
+      },
+      {
+        "custom": null,
+        "footprint": "R_2512",
+        "kind": "Resistor",
+        "pos": [
+          34,
+          8
+        ],
+        "refdes": "R2",
+        "rot": 0,
+        "tc_ppm": 100.0,
+        "value": "33"
+      },
+      {
+        "custom": null,
+        "footprint": "",
+        "kind": "Ground",
+        "pos": [
+          8,
+          12
+        ],
+        "refdes": "#PWR01",
+        "rot": 0,
+        "value": "GND"
+      }
+    ],
+    "labels": [
+      {
+        "pos": [
+          8,
+          8
+        ],
+        "text": "VIN"
+      },
+      {
+        "pos": [
+          18,
+          8
+        ],
+        "text": "VIN"
+      },
+      {
+        "pos": [
+          32,
+          8
+        ],
+        "text": "VIN"
+      },
+      {
+        "pos": [
+          8,
+          12
+        ],
+        "text": "GND"
+      },
+      {
+        "pos": [
+          22,
+          8
+        ],
+        "text": "GND"
+      },
+      {
+        "pos": [
+          36,
+          8
+        ],
+        "text": "GND"
+      }
+    ],
+    "layout_version": 1,
+    "wires": []
+  },
+  "board": {
+    "name": "heat_copper",
+    "outline": [
+      {
+        "x": 0.0,
+        "y": 0.0
+      },
+      {
+        "x": 90.0,
+        "y": 0.0
+      },
+      {
+        "x": 90.0,
+        "y": 40.0
+      },
+      {
+        "x": 0.0,
+        "y": 40.0
+      }
+    ],
+    "tracks": [
+      {
+        "side": "Top",
+        "a": {
+          "x": 45.0,
+          "y": 32.0
+        },
+        "b": {
+          "x": 45.0,
+          "y": 30.6
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 45.0,
+          "y": 30.6
+        },
+        "b": {
+          "x": 50.2,
+          "y": 30.6
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 50.2,
+          "y": 30.6
+        },
+        "b": {
+          "x": 65.8,
+          "y": 15.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 65.8,
+          "y": 15.0
+        },
+        "b": {
+          "x": 67.05,
+          "y": 15.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 47.54,
+          "y": 32.6
+        },
+        "b": {
+          "x": 46.800000000000004,
+          "y": 32.6
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 46.800000000000004,
+          "y": 32.6
+        },
+        "b": {
+          "x": 46.2,
+          "y": 33.2
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 46.2,
+          "y": 33.2
+        },
+        "b": {
+          "x": 42.400000000000006,
+          "y": 33.2
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 42.400000000000006,
+          "y": 33.2
+        },
+        "b": {
+          "x": 24.200000000000003,
+          "y": 15.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 24.200000000000003,
+          "y": 15.0
+        },
+        "b": {
+          "x": 22.95,
+          "y": 15.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 47.54,
+          "y": 31.6
+        },
+        "b": {
+          "x": 55.2,
+          "y": 31.6
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 55.2,
+          "y": 31.6
+        },
+        "b": {
+          "x": 71.8,
+          "y": 15.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 71.8,
+          "y": 15.0
+        },
+        "b": {
+          "x": 72.95,
+          "y": 15.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 45.0,
+          "y": 32.0
+        },
+        "b": {
+          "x": 43.6,
+          "y": 32.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 43.6,
+          "y": 32.0
+        },
+        "b": {
+          "x": 24.400000000000002,
+          "y": 12.8
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 24.400000000000002,
+          "y": 12.8
+        },
+        "b": {
+          "x": 20.400000000000002,
+          "y": 12.8
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 20.400000000000002,
+          "y": 12.8
+        },
+        "b": {
+          "x": 18.2,
+          "y": 15.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 18.2,
+          "y": 15.0
+        },
+        "b": {
+          "x": 17.05,
+          "y": 15.0
+        },
+        "width": 0.25
+      }
+    ],
+    "pads": [
+      {
+        "pos": {
+          "x": 45.0,
+          "y": 32.0
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.7,
+            "h": 1.7
+          }
+        },
+        "drill": 1.0,
+        "slot": 0.0,
+        "slot_v": true,
+        "side": "Top",
+        "refdes": "V1",
+        "pin": "+",
+        "net": "VIN"
+      },
+      {
+        "pos": {
+          "x": 47.54,
+          "y": 32.0
+        },
+        "shape": {
+          "Circle": {
+            "d": 1.7
+          }
+        },
+        "drill": 1.0,
+        "slot": 0.0,
+        "slot_v": true,
+        "side": "Top",
+        "refdes": "V1",
+        "pin": "-",
+        "net": "GND"
+      },
+      {
+        "pos": {
+          "x": 17.05,
+          "y": 15.0
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.4,
+            "h": 3.4
+          }
+        },
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "R1",
+        "pin": "1",
+        "net": "VIN"
+      },
+      {
+        "pos": {
+          "x": 22.95,
+          "y": 15.0
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.4,
+            "h": 3.4
+          }
+        },
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "R1",
+        "pin": "2",
+        "net": "GND"
+      },
+      {
+        "pos": {
+          "x": 67.05,
+          "y": 15.0
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.4,
+            "h": 3.4
+          }
+        },
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "R2",
+        "pin": "1",
+        "net": "VIN"
+      },
+      {
+        "pos": {
+          "x": 72.95,
+          "y": 15.0
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.4,
+            "h": 3.4
+          }
+        },
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "R2",
+        "pin": "2",
+        "net": "GND"
+      }
+    ],
+    "vias": [],
+    "holes": [],
+    "silk": [
+      {
+        "side": "Top",
+        "a": {
+          "x": 43.85,
+          "y": 30.849999999999998
+        },
+        "b": {
+          "x": 48.69,
+          "y": 30.849999999999998
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 48.69,
+          "y": 30.849999999999998
+        },
+        "b": {
+          "x": 48.69,
+          "y": 33.15
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 48.69,
+          "y": 33.15
+        },
+        "b": {
+          "x": 43.85,
+          "y": 33.15
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 43.85,
+          "y": 33.15
+        },
+        "b": {
+          "x": 43.85,
+          "y": 30.849999999999998
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 16.05,
+          "y": 13.0
+        },
+        "b": {
+          "x": 23.95,
+          "y": 13.0
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 23.95,
+          "y": 13.0
+        },
+        "b": {
+          "x": 23.95,
+          "y": 17.0
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 23.95,
+          "y": 17.0
+        },
+        "b": {
+          "x": 16.05,
+          "y": 17.0
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 16.05,
+          "y": 17.0
+        },
+        "b": {
+          "x": 16.05,
+          "y": 13.0
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 66.05,
+          "y": 13.0
+        },
+        "b": {
+          "x": 73.95,
+          "y": 13.0
+        },
+        "width": 0.15,
+        "refdes": "R2"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 73.95,
+          "y": 13.0
+        },
+        "b": {
+          "x": 73.95,
+          "y": 17.0
+        },
+        "width": 0.15,
+        "refdes": "R2"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 73.95,
+          "y": 17.0
+        },
+        "b": {
+          "x": 66.05,
+          "y": 17.0
+        },
+        "width": 0.15,
+        "refdes": "R2"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 66.05,
+          "y": 17.0
+        },
+        "b": {
+          "x": 66.05,
+          "y": 13.0
+        },
+        "width": 0.15,
+        "refdes": "R2"
+      }
+    ],
+    "parts": [
+      {
+        "refdes": "V1",
+        "value": "5",
+        "footprint": "PinHeader_1x2_PM",
+        "pos": {
+          "x": 45.0,
+          "y": 32.0
+        },
+        "rot": 1,
+        "side": "Top"
+      },
+      {
+        "refdes": "R1",
+        "value": "33",
+        "footprint": "R_2512",
+        "pos": {
+          "x": 20.0,
+          "y": 15.0
+        },
+        "rot": 0,
+        "side": "Top"
+      },
+      {
+        "refdes": "R2",
+        "value": "33",
+        "footprint": "R_2512",
+        "pos": {
+          "x": 70.0,
+          "y": 15.0
+        },
+        "rot": 0,
+        "side": "Top"
+      }
+    ],
+    "texts": [
+      {
+        "side": "Top",
+        "pos": {
+          "x": 46.269999999999996,
+          "y": 33.85
+        },
+        "height": 1.0,
+        "text": "V1",
+        "refdes": "V1",
+        "rot": 0
+      },
+      {
+        "side": "Top",
+        "pos": {
+          "x": 20.0,
+          "y": 17.7
+        },
+        "height": 1.0,
+        "text": "R1",
+        "refdes": "R1",
+        "rot": 0
+      },
+      {
+        "side": "Top",
+        "pos": {
+          "x": 70.0,
+          "y": 17.7
+        },
+        "height": 1.0,
+        "text": "R2",
+        "refdes": "R2",
+        "rot": 0
+      }
+    ],
+    "zones": [
+      {
+        "net": "VIN",
+        "side": "Top",
+        "polygon": [
+          {
+            "x": 1.0,
+            "y": 1.0
+          },
+          {
+            "x": 19.5,
+            "y": 1.0
+          },
+          {
+            "x": 19.5,
+            "y": 27.0
+          },
+          {
+            "x": 1.0,
+            "y": 27.0
+          }
+        ],
+        "clearance": 0.3,
+        "thermal": false,
+        "thermal_gap": 0.3,
+        "spoke_width": 0.3,
+        "remove_islands": true
+      },
+      {
+        "net": "GND",
+        "side": "Top",
+        "polygon": [
+          {
+            "x": 20.5,
+            "y": 1.0
+          },
+          {
+            "x": 38.0,
+            "y": 1.0
+          },
+          {
+            "x": 38.0,
+            "y": 27.0
+          },
+          {
+            "x": 20.5,
+            "y": 27.0
+          }
+        ],
+        "clearance": 0.3,
+        "thermal": false,
+        "thermal_gap": 0.3,
+        "spoke_width": 0.3,
+        "remove_islands": true
+      }
+    ],
+    "footprints": [],
+    "net_currents": {
+      "GND": 0.30303030303280304,
+      "VIN": 0.30303030303280304
+    },
+    "locked_parts": [],
+    "inner_layers": 0,
+    "diff_pairs": [],
+    "finish": {
+      "corners": true,
+      "radius": 0.5,
+      "tapers": true,
+      "forks": true,
+      "slots": false
+    },
+    "rules": {
+      "min_track_width": 0.15,
+      "min_clearance": 0.15,
+      "edge_clearance": 0.3,
+      "min_drill": 0.3,
+      "min_annular_ring": 0.13,
+      "mask_expansion": 0.05,
+      "outline_width": 0.1,
+      "min_silk_width": 0.15,
+      "min_silk_text": 0.8
+    }
+  }
+}

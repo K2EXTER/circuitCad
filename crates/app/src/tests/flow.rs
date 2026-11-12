@@ -616,6 +616,27 @@ fn thin_power_line_project_shows_the_copper_drop_and_the_fix() {
     assert!(wide > 4.9 && wide > thin + 0.3, "widened: {wide}");
 }
 
+/// The heat sample (docs/examples/heat_copper.ccproj): two 33 ohm 2512 resistors take 0.75 W each and warm the same on their own θ;
+/// carried over to the schematic, the board's pours under R1 bring its θ down to about half, so R1 warms about half as much as R2.
+#[test]
+fn heat_copper_project_shows_the_pour_cooling_one_resistor() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.load_project(root.join("heat_copper.ccproj"));
+    assert!(pcb_core::drc::check(&app.board_ed.board).is_empty());
+    let rise = |app: &mut App, name: &str| app.sch.run_self_heat().unwrap().parts.iter().find(|p| p.name == name).unwrap().rise;
+    let (r1, r2) = (rise(&mut app, "R1"), rise(&mut app, "R2"));
+    assert!((r1 - r2).abs() < 1e-6 && r1 > 55.0, "{r1} {r2}");
+
+    app.apply_post_layout(true);
+    assert!(app.sch.heat_copper["R1"].1 > 400.0, "{:?}", app.sch.heat_copper);
+    let (r1, r2) = (rise(&mut app, "R1"), rise(&mut app, "R2"));
+    assert!(r1 < 0.6 * r2 && r2 > 55.0, "with the pour {r1} K, without {r2} K");
+
+    app.apply_post_layout(false);
+    assert!(app.sch.heat_copper.is_empty());
+}
+
 /// Opening the window of a net with no current asks the schematic's DC analysis for that net alone and declares it (the others are left
 /// as they are); the window that lists all the currents draws.
 #[test]

@@ -15,77 +15,109 @@ fn in_piece(piece: &FillShape, p: Point) -> bool {
 /// zero only the copper within that distance of the first pad's middle counts (the heat of a part spreads into the copper near it). None
 /// when the board has no such pad.
 pub fn pad_copper_area(board: &Board, r: &PadRef, radius: f64) -> Option<(f64, Point)> {
-    let conn = connectivity(board);
     let mine: Vec<usize> = board.pads.iter().enumerate().filter(|(_, p)| p.refdes == r.refdes && p.pin == r.pin).map(|(i, _)| i).collect();
     let first = *mine.first()?;
-    let groups: HashSet<usize> = mine.iter().map(|&i| conn.pad_group(i)).collect();
+    let net = board.pads[first].net.clone();
+    let ctx = CopperCtx::new(board, |z| z.net == net);
+    let centre = board.pads[first].pos;
+    Some((ctx.joined_area(&mine, centre, radius, false), centre))
+}
+
+/// What measuring the copper joined to pads needs once for a whole board: the connectivity and the fill of the pours.
+pub struct CopperCtx<'a> {
+    board: &'a Board,
+    conn: Connectivity,
+    /// The filled pieces of each pour (`board.zones` order); empty for the pours that were not asked for.
+    fills: Vec<Vec<FillShape>>,
+}
+
+impl<'a> CopperCtx<'a> {
+    /// Fills only the pours that `want` picks (filling is the slow part).
+    pub fn new(board: &'a Board, want: impl Fn(&Zone) -> bool + Sync) -> Self {
+        let conn = connectivity(board);
+        let fills = crate::par::par_map(&board.zones, |z| if want(z) { zone_fill(board, z, &conn) } else { vec![] });
+        Self { board, conn, fills }
+    }
+
+    /// The area (mm²) of the copper joined to the pads `mine` (indices into `board.pads`, all of one net), as in
+    /// `pad_copper_area`; with `radius` above zero, only what lies within that distance of `centre`. With `pads_only`,
+    /// only the pads `mine` themselves, counted on the same layers (what they have without any copper added).
+    pub fn joined_area(&self, mine: &[usize], centre: Point, radius: f64, pads_only: bool) -> f64 {
+        let (board, conn) = (self.board, &self.conn);
+        let Some(&first) = mine.first() else { return 0.0 };
+        let groups: HashSet<usize> = mine.iter().map(|&i| conn.pad_group(i)).collect();
     let pad_in = |i: usize| groups.contains(&conn.pad_group(i));
     let track_in = |i: usize| groups.contains(&conn.track_group(i));
     let via_in = |i: usize| groups.contains(&conn.via_group(i));
 
-    // the pieces of the pours of the net that hold a pad, via or track end of the group
-    let net = board.pads[first].net.as_str();
-    let mut pieces: Vec<(Side, FillShape)> = vec![];
-    if !net.is_empty() {
-        for z in board.zones.iter().filter(|z| z.net == net) {
-            for piece in zone_fill(board, z, &conn) {
-                let holds = board.pads.iter().enumerate().any(|(i, p)| pad_in(i) && (p.drill.is_some() || p.side == z.side) && in_piece(&piece, p.pos))
-                    || board.vias.iter().enumerate().any(|(i, v)| via_in(i) && in_piece(&piece, v.pos))
-                    || board.tracks.iter().enumerate().any(|(i, t)| track_in(i) && t.side == z.side && (in_piece(&piece, t.a) || in_piece(&piece, t.b)));
-                if holds {
-                    pieces.push((z.side, piece));
+        // the pieces of the pours of the net that hold a pad, via or track end of the group
+        let net = board.pads[first].net.as_str();
+        let mut pieces: Vec<(Side, FillShape)> = vec![];
+        if !net.is_empty() {
+            for (z, fill) in board.zones.iter().zip(&self.fills).filter(|(z, _)| z.net == net) {
+                for piece in fill.iter().cloned() {
+                    let holds = board.pads.iter().enumerate().any(|(i, p)| pad_in(i) && (p.drill.is_some() || p.side == z.side) && in_piece(&piece, p.pos))
+                        || board.vias.iter().enumerate().any(|(i, v)| via_in(i) && in_piece(&piece, v.pos))
+                        || board.tracks.iter().enumerate().any(|(i, t)| track_in(i) && t.side == z.side && (in_piece(&piece, t.a) || in_piece(&piece, t.b)));
+                    if holds {
+                        pieces.push((z.side, piece));
+                    }
                 }
             }
         }
-    }
 
-    // the layers the group has copper on of its own (a track, a pad of one side, a pour piece)
-    let mut layers: Vec<Side> = vec![];
-    let mut note = |s: Side| {
-        if !layers.contains(&s) {
-            layers.push(s);
-        }
-    };
-    for (s, _) in &pieces {
-        note(*s);
-    }
-    for (i, t) in board.tracks.iter().enumerate() {
-        if track_in(i) {
-            note(t.side);
-        }
-    }
-    for (i, p) in board.pads.iter().enumerate() {
-        if pad_in(i) && p.drill.is_none() {
-            note(p.side);
-        }
-    }
-    if layers.is_empty() {
-        layers.push(Side::Top);
-    }
-
-    let centre = board.pads[first].pos;
-    let within = (radius > 0.0).then_some((centre, radius));
-    let mut area = 0.0;
-    for &layer in &layers {
-        let mut shapes: Vec<FillShape> = pieces.iter().filter(|(s, _)| *s == layer).map(|(_, p)| p.clone()).collect();
-        for (i, p) in board.pads.iter().enumerate() {
-            if pad_in(i) && (p.drill.is_some() || p.side == layer) {
-                shapes.push(pad_piece(p.pos, p.shape));
+        // the layers the group has copper on of its own (a track, a pad of one side, a pour piece)
+        let mut layers: Vec<Side> = vec![];
+        let mut note = |s: Side| {
+            if !layers.contains(&s) {
+                layers.push(s);
             }
+        };
+        for (s, _) in &pieces {
+            note(*s);
         }
         for (i, t) in board.tracks.iter().enumerate() {
-            if track_in(i) && t.side == layer {
-                shapes.push(track_piece(t.a, t.b, t.width));
+            if track_in(i) {
+                note(t.side);
             }
         }
-        for (i, v) in board.vias.iter().enumerate() {
-            if via_in(i) {
-                shapes.push(via_piece(v.pos, v.diameter));
+        for (i, p) in board.pads.iter().enumerate() {
+            if pad_in(i) && p.drill.is_none() {
+                note(p.side);
             }
         }
-        area += copper_area(&shapes, within);
+        if layers.is_empty() {
+            layers.push(Side::Top);
+        }
+
+        let within = (radius > 0.0).then_some((centre, radius));
+        let mut area = 0.0;
+        for &layer in &layers {
+            if pads_only {
+                let shapes: Vec<FillShape> = mine.iter().map(|&i| &board.pads[i]).filter(|p| p.drill.is_some() || p.side == layer).map(|p| pad_piece(p.pos, p.shape)).collect();
+                area += copper_area(&shapes, within);
+                continue;
+            }
+            let mut shapes: Vec<FillShape> = pieces.iter().filter(|(s, _)| *s == layer).map(|(_, p)| p.clone()).collect();
+            for (i, p) in board.pads.iter().enumerate() {
+                if pad_in(i) && (p.drill.is_some() || p.side == layer) {
+                    shapes.push(pad_piece(p.pos, p.shape));
+                }
+            }
+            for (i, t) in board.tracks.iter().enumerate() {
+                if track_in(i) && t.side == layer {
+                    shapes.push(track_piece(t.a, t.b, t.width));
+                }
+            }
+            for (i, v) in board.vias.iter().enumerate() {
+                if via_in(i) {
+                    shapes.push(via_piece(v.pos, v.diameter));
+                }
+            }
+            area += copper_area(&shapes, within);
+        }
+        area
     }
-    Some((area, centre))
 }
 
 /// How many vias lie in the copper of the pad(s) `r` (the bounding box of each pad): the thermal vias of a heat pad. None when the board has no such pad.

@@ -3,7 +3,7 @@
 (`docs/code-notes/sim-core.md` の目次から分けた。内容は元のまま)
 
 ## selfheat.rs (抵抗の自己発熱)
-`self_heat(&Circuit, &[Heater], t_amb)`: 電流の流れる抵抗が `P·θ` だけ温まり、温度係数(`tc1`/`tc2`、27 ℃ からの差)で値が変わり、電流と電力が変わる、の不動点を求める(直流の定常状態)。1回目は全部品が周囲温度の「冷えた」答え(`cold`)、そのあと温度を `0.6` の歩幅で動かしながら `dc_op` をやり直し、動きが 1e-6 K を切ったら終わり(最大60回)。温度が 1000 ℃ を超えると熱暴走として `SimError::Invalid`。`Heater` は部品1つ(ライブラリ部品の中の抵抗は `REF.` で始まる名前で集め、1つの温度を共有)。`heaters_from_schematic` は `Component.theta`(K/W。0 なら `default_theta` = 85 K ÷ パッケージの定格電力。定格が分からなければ 100)と `Component.tc_ppm`(0 ならモデルの `TC=` = `Circuit.tempcos`)から作る。熱の広がり(基板・隣の部品)はシミュレーションせず θ にまとめる。半導体は自己発熱させない(周囲温度 `at_temperature(t_amb)` のまま)。CLI `heat` / `thermal`、画面は解析タブの「自己発熱」。
+`self_heat(&Circuit, &[Heater], t_amb)`: 電流の流れる抵抗が `P·θ` だけ温まり、温度係数(`tc1`/`tc2`、27 ℃ からの差)で値が変わり、電流と電力が変わる、の不動点を求める(直流の定常状態)。1回目は全部品が周囲温度の「冷えた」答え(`cold`)、そのあと温度を `0.6` の歩幅で動かしながら `dc_op` をやり直し、動きが 1e-6 K を切ったら終わり(最大60回)。温度が 1000 ℃ を超えると熱暴走として `SimError::Invalid`。`Heater` は部品1つ(ライブラリ部品の中の抵抗は `REF.` で始まる名前で集め、1つの温度を共有)。`heaters_from_schematic` は `Component.theta`(K/W。0 なら `default_theta` = 85 K ÷ パッケージの定格電力。定格が分からなければ 100)と `Component.tc_ppm`(0 ならモデルの `TC=` = `Circuit.tempcos`)から作る。熱の広がり(基板・隣の部品)はシミュレーションせず θ にまとめる。基板を回路図に反映していると、ピンにつながった銅のコンダクタンスを θ と並列に足す(`part_theta`。3 つ目の引数 `copper`、`pcb-core/heat_copper.md`)。半導体は自己発熱させない(周囲温度 `at_temperature(t_amb)` のまま)。CLI `heat` / `thermal`、画面は解析タブの「自己発熱」。
 資料: ROHM 64AN040J(GMR シリーズの抵抗体〜端子の熱抵抗 9.5 K/W、一般品 31 K/W。基板の銅箔は厚く・面積が広く・多層ほど温度上昇が小さい)。
 
 ## heat_tran.rs (温度の時間変化: Q1 と RS1 のような部品の熱)
