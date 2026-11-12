@@ -1,0 +1,63 @@
+{
+  "series": "ERJ-1GJF",
+  "maker": "Panasonic",
+  "category": "抵抗",
+  "summary": "厚膜チップ抵抗 ±1% 0201 (0603)。とても小さく、手はんだは難しい",
+  "size": "0201",
+  "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDA0000/AOA0000C304.pdf",
+  "checked": "Panasonic のデータシート AOA0000C304 (29-May-25) の Ratings・Dimensions・型番の説明と、ランドパターンの資料 DMM0000COL17 で確かめた (2026-11-12)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 10.0,
+    "max": 1000000.0
+  },
+  "mpn": "ERJ-1GJF{code}C",
+  "code": "sig3",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 200.0,
+  "p_max": 0.05,
+  "v_limit": 25.0,
+  "v_overload": 50.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 125.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 125.0,
+  "quality": [
+    "AEC-Q200 Grade 1"
+  ],
+  "height": 0.23,
+  "footprint_name": "R_0201_Panasonic",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.3,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.25,
+        "h": 0.3,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.3,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.25,
+        "h": 0.3,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは Panasonic の推奨 (0603 (0201): パッドの内側の間 a 0.3〜0.4、外側の端から端 b 0.8〜0.9、パッドの幅 c 0.25〜0.35 mm) の真ん中 (a 0.35・b 0.85・c 0.3 mm)",
+  "body": "本体 0.60 × 0.30 mm、厚さ 0.23 mm (データシートの ERJ1G の寸法)。0201 は抵抗値の印字なし"
+}

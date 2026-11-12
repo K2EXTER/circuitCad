@@ -3,9 +3,17 @@
   "maker": "Panasonic",
   "category": "抵抗",
   "summary": "厚膜チップ抵抗 ±1% 0603 (1608)",
+  "size": "0603",
   "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDA0000/AOA0000C304.pdf",
   "checked": "Panasonic のデータシート AOA0000C304 (29-May-25) の Ratings・Dimensions・型番の説明と、ランドパターンの資料 DMM0000COL17 で確かめた (2026-11-12)",
-  "values": { "sets": ["E24", "E96"], "min": 10.0, "max": 1000000.0 },
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 10.0,
+    "max": 1000000.0
+  },
   "mpn": "ERJ-3EKF{code}V",
   "code": "sig3",
   "tolerance_pct": 1.0,
@@ -17,14 +25,36 @@
   "derate_zero_c": 155.0,
   "temp_min_c": -55.0,
   "temp_max_c": 155.0,
-  "quality": ["AEC-Q200 Grade 0"],
+  "quality": [
+    "AEC-Q200 Grade 0"
+  ],
   "height": 0.45,
   "footprint_name": "R_0603_Panasonic",
   "package": {
     "type": "explicit",
     "pads": [
-      { "pin": "1", "x": -0.725, "y": 0.0, "shape": "rect", "w": 0.65, "h": 0.9, "drill": null, "slot": 0.0, "slot_v": false },
-      { "pin": "2", "x": 0.725, "y": 0.0, "shape": "rect", "w": 0.65, "h": 0.9, "drill": null, "slot": 0.0, "slot_v": false }
+      {
+        "pin": "1",
+        "x": -0.725,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.65,
+        "h": 0.9,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.725,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.65,
+        "h": 0.9,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
     ],
     "holes": []
   },

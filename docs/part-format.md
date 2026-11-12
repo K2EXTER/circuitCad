@@ -178,6 +178,7 @@ SPICE ネットリストの書き出し時に、使われているモデルが1�
 {
   "series": "ERJ-3EKF", "maker": "Panasonic", "category": "抵抗",
   "summary": "厚膜チップ抵抗 ±1% 0603 (1608)",
+  "size": "0603",
   "datasheet": "https://...", "checked": "どの資料のどこを見て、いつ確かめたか",
   "values": { "sets": ["E24", "E96"], "min": 10.0, "max": 1000000.0 },
   "mpn": "ERJ-3EKF{code}V", "code": "sig3",
@@ -191,6 +192,7 @@ SPICE ネットリストの書き出し時に、使われているモデルが1�
 }
 ```
 
+- `size`: インチの大きさ。部品一覧の行に「ERJ-3EKF 0603 … 10k」のように出ます。
 - `values`: 作られている値。`sets` の E 系列 (`E24`・`E96`) を合わせ、`min`〜`max` (Ω) の範囲だけ。
 - `mpn` と `code`: 型番の作り方。`{code}` に値の符号が入る。`sig3` は「有効数字 3 桁 + 0 の数、100 Ω 未満は `R` が小数点」(`1002` = 10 kΩ、`10R0` = 10 Ω、`1004` = 1 MΩ。Panasonic ERJ・KOA RK73H・ROHM MCR がこの形)。
 - 定格: `p_max` は `derate_from_c` までの定格電力 (それより上は `derate_zero_c` で 0 W になる直線)。値ごとの定格電圧は √(電力 × 抵抗値) と `v_limit` (素子の最高電圧) の小さいほう。

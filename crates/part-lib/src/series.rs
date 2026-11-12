@@ -41,6 +41,9 @@ pub struct SeriesDef {
     pub category: String,
     /// One line: kind, tolerance, size.
     pub summary: String,
+    /// The size in inches ("0603"), shown on the series' row in the library list.
+    #[serde(default)]
+    pub size: String,
     pub datasheet: String,
     /// Which documents the figures were read from, and when.
     pub checked: String,
@@ -78,7 +81,12 @@ pub struct SeriesDef {
 }
 
 /// The series that ship with the program (`crates/part-lib/series/`).
-const BUNDLED: &[(&str, &str)] = &[("ERJ-3EKF", include_str!("../series/ERJ-3EKF.series.json"))];
+const BUNDLED: &[(&str, &str)] = &[
+    ("ERJ-1GJF", include_str!("../series/ERJ-1GJF.series.json")),
+    ("ERJ-2RKF", include_str!("../series/ERJ-2RKF.series.json")),
+    ("ERJ-3EKF", include_str!("../series/ERJ-3EKF.series.json")),
+    ("ERJ-6ENF", include_str!("../series/ERJ-6ENF.series.json")),
+];
 
 /// The bundled series, read once.
 pub fn bundled() -> &'static [SeriesDef] {
@@ -406,6 +414,39 @@ mod tests {
         assert!((gap - 0.8).abs() < 1e-9, "{gap}");
         assert!((overall - 2.1).abs() < 1e-9, "{overall}");
         assert!((lh - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_other_sizes_follow_the_data_sheets_ratings_and_land_patterns() {
+        // (series, 10 kΩ part, values, rated power, limiting voltage, gap a, overall b, width c of the land pattern)
+        let table = [
+            ("ERJ-1GJF", "ERJ-1GJF1002C", 571, 0.05, 25.0, 0.35, 0.85, 0.30),
+            ("ERJ-2RKF", "ERJ-2RKF1002X", 571, 0.1, 50.0, 0.55, 1.5, 0.5),
+            ("ERJ-3EKF", "ERJ-3EKF1002V", 571, 0.1, 75.0, 0.8, 2.1, 0.9),
+            // 10 Ω to 2.2 MΩ: 37 values from 1 MΩ up (E96 2.21 M is above the range)
+            ("ERJ-6ENF", "ERJ-6ENF1002V", 607, 0.125, 150.0, 1.2, 3.5, 1.15),
+        ];
+        let mut names = std::collections::HashSet::new();
+        for (series, ten_k, count, p, v, a, b, c) in table {
+            let s = by_name(series).unwrap();
+            assert_eq!(s.part_name(10_000.0), ten_k);
+            assert_eq!(s.values().len(), count, "{series}");
+            let d = s.part(1e6);
+            let r = d.ratings.as_ref().unwrap();
+            assert_eq!(r.p_max, Some(p));
+            assert!((r.v_max.unwrap() - (p * 1e6_f64).sqrt().min(v)).abs() < 1e-9, "{series}");
+            let fp = d.footprint().unwrap();
+            let (l, rt) = (&fp.pads[0], &fp.pads[1]);
+            let (w, h) = l.shape.size();
+            assert!(((rt.pos.x - w / 2.0) - (l.pos.x + w / 2.0) - a).abs() < 1e-9, "{series} gap");
+            assert!(((rt.pos.x + w / 2.0) - (l.pos.x - w / 2.0) - b).abs() < 1e-9, "{series} overall");
+            assert!((h - c).abs() < 1e-9, "{series} width");
+            for x in s.values() {
+                assert!(names.insert(s.part_name(x)), "{} twice", s.part_name(x));
+            }
+        }
+        assert_eq!(bundled_parts().len(), names.len());
+        assert_eq!(by_name("ERJ-6ENF").unwrap().values().last(), Some(&2.2e6));
     }
 
     #[test]

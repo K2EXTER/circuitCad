@@ -1,0 +1,63 @@
+{
+  "series": "ERJ-6ENF",
+  "maker": "Panasonic",
+  "category": "抵抗",
+  "summary": "厚膜チップ抵抗 ±1% 0805 (2012)。手はんだしやすい大きさ",
+  "size": "0805",
+  "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDA0000/AOA0000C304.pdf",
+  "checked": "Panasonic のデータシート AOA0000C304 (29-May-25) の Ratings・Dimensions・型番の説明と、ランドパターンの資料 DMM0000COL17 で確かめた (2026-11-12)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 10.0,
+    "max": 2200000.0
+  },
+  "mpn": "ERJ-6ENF{code}V",
+  "code": "sig3",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 100.0,
+  "p_max": 0.125,
+  "v_limit": 150.0,
+  "v_overload": 200.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "quality": [
+    "AEC-Q200 Grade 0"
+  ],
+  "height": 0.6,
+  "footprint_name": "R_0805_Panasonic",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -1.175,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.15,
+        "h": 1.15,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 1.175,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.15,
+        "h": 1.15,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは Panasonic の推奨 (2012 (0805): パッドの内側の間 a 1.0〜1.4、外側の端から端 b 3.2〜3.8、パッドの幅 c 0.9〜1.4 mm) の真ん中 (a 1.2・b 3.5・c 1.15 mm)",
+  "body": "本体 2.00 × 1.25 mm、厚さ 0.60 mm (データシートの ERJ6E の寸法)"
+}

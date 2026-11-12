@@ -2,7 +2,7 @@
 # crates/app/src/schematic/panel/parts.rs (a maker's series shown as one row: part_lib::series)
 {} {} の {}。{} の値から選べます (部品を選んで、下の欄に抵抗値を入れます)	{} {}: {}. Made in {}: choose the part, then type the resistance in the field below
 \n品質: {}	\nQuality: {}
-AEC-Q200: 車載用の受動部品の信頼性試験の規格。温度サイクル・湿度・はんだ付けなどの試験を通った品です。Grade 0 は −50〜150 ℃の範囲。メーカーは歩留まりを公開しないので、品質を比べる目安のひとつになります	AEC-Q200: the reliability test standard for passive parts in cars. The part has passed its temperature cycling, humidity and soldering tests. Grade 0 covers −50 to 150 °C. Makers do not publish their yields, so this is one of the signs to compare quality by
+AEC-Q200: 車載用の受動部品の信頼性試験の規格。温度サイクル・湿度・はんだ付けなどの試験を通った品です。Grade は試験の温度の範囲で、Grade 0 は −50〜150 ℃、Grade 1 は −40〜125 ℃。メーカーは歩留まりを公開しないので、品質を比べる目安のひとつになります	AEC-Q200: the reliability test standard for passive parts in cars. The part has passed its temperature cycling, humidity and soldering tests. The grade is the temperature range of the tests: Grade 0 is −50 to 150 °C, Grade 1 −40 to 125 °C. Makers do not publish their yields, so this is one of the signs to compare quality by
 耐硫化: 硫黄を含む空気で電極が腐って断線する故障を防いだ品です	Anti-sulfur: made so that its electrodes do not corrode and open in air that carries sulfur
 データシートに書かれた品質の印です	A quality mark from the data sheet
 {} の値を入れると、その型番に切り替わります (例: 4.7k、4k7、220、1M)	Type a value from {} to switch to its part number (e.g. 4.7k, 4k7, 220, 1M)

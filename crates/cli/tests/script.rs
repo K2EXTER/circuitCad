@@ -2225,9 +2225,10 @@ fn a_makers_series_is_listed_once_and_placed_by_its_value() {
     let (a, ok) = run("new\nparts ERJ\nadd V 12 as=V1\nadd ERJ-3EKF 4.7k as=R1\nadd ERJ-3EKF 4k7 as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\ndc\n");
     assert!(ok, "{a:?}");
     let parts = last(&a, "parts");
-    assert_eq!(parts["series"][0]["series"], "ERJ-3EKF");
-    assert_eq!(parts["series"][0]["example"], "ERJ-3EKF1002V");
-    assert_eq!(parts["count"], 0, "the 571 values are not listed one by one");
+    let erj = parts["series"].as_array().unwrap().iter().find(|s| s["series"] == "ERJ-3EKF").unwrap();
+    assert_eq!(erj["example"], "ERJ-3EKF1002V");
+    assert_eq!(parts["series"].as_array().unwrap().len(), 4, "the four sizes, once each");
+    assert_eq!(parts["count"], 0, "the values are not listed one by one");
     let adds: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "add" && v["ref"] != "V1").collect();
     assert_eq!(adds[0]["type"], "ERJ-3EKF4701V");
     assert_eq!(adds[1]["type"], "ERJ-3EKF4701V");

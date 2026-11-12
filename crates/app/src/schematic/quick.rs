@@ -279,12 +279,15 @@ mod tests {
         l.extend(part_lib::series::bundled_parts().iter().cloned());
         let titles = |q: &str| quick_matches(q, Kind::PALETTE, &l, &p).into_iter().map(|h| h.title).collect::<Vec<_>>();
         let erj = |t: &Vec<String>| t.iter().filter(|x| x.starts_with("ERJ-3EKF")).cloned().collect::<Vec<_>>();
-        assert_eq!(erj(&titles("erj")), ["ERJ-3EKF1002V"]);
-        assert_eq!(erj(&titles("erj 4.7k")), ["ERJ-3EKF4701V"]);
+        assert_eq!(erj(&titles("erj-3ekf")), ["ERJ-3EKF1002V"]);
+        assert_eq!(erj(&titles("erj-3ekf 4.7k")), ["ERJ-3EKF4701V"]);
         assert_eq!(erj(&titles("抵抗 4k7")), ["ERJ-3EKF4701V"]);
         // a value the series does not make: its default part stays, as with no value
-        assert_eq!(erj(&titles("erj 4.8k")), Vec::<String>::new(), "4.8k is in no field of the 10k part");
-        assert_eq!(titles("res").iter().filter(|x| x.starts_with("ERJ")).count(), 1);
+        assert_eq!(erj(&titles("erj-3ekf 4.8k")), Vec::<String>::new(), "4.8k is in no field of the 10k part");
+        // one part for each series (the four sizes of ERJ), not one for each value
+        let series = part_lib::series::bundled().len();
+        assert_eq!(titles("erj").iter().filter(|x| x.starts_with("ERJ")).count(), series);
+        assert_eq!(titles("res").iter().filter(|x| x.starts_with("ERJ")).count(), series);
     }
 
     #[test]

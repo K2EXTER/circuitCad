@@ -209,7 +209,7 @@ impl SchEditor {
                     super::symbols::paint_lines_preview(ui.painter(), rect, &super::symbol_lines(&d.symbol()), color);
                     // a series' row: its name and the value now chosen; the value is changed on the card below
                     let (label, hover) = match part_lib::series::member(&d.name) {
-                        Some((s, v)) => (format!("{} … {}{mark}", s.series, part_lib::series::ohms_text(v)), series_hover(s)),
+                        Some((s, v)) => (format!("{} {} … {}{mark}", s.series, s.size, part_lib::series::ohms_text(v)).replace("  ", " "), series_hover(s)),
                         None => (format!("{}{mark}", d.name), lib_hover(d)),
                     };
                     if (pic | ui.selectable_label(selected, label)).on_hover_text(hover).clicked() {
@@ -416,7 +416,7 @@ fn series_hover(s: &part_lib::series::SeriesDef) -> String {
 /// What a quality mark means, for its tooltip.
 fn quality_tip(q: &str) -> &'static str {
     if q.starts_with("AEC-Q200") {
-        "AEC-Q200: 車載用の受動部品の信頼性試験の規格。温度サイクル・湿度・はんだ付けなどの試験を通った品です。Grade 0 は −50〜150 ℃の範囲。メーカーは歩留まりを公開しないので、品質を比べる目安のひとつになります"
+        "AEC-Q200: 車載用の受動部品の信頼性試験の規格。温度サイクル・湿度・はんだ付けなどの試験を通った品です。Grade は試験の温度の範囲で、Grade 0 は −50〜150 ℃、Grade 1 は −40〜125 ℃。メーカーは歩留まりを公開しないので、品質を比べる目安のひとつになります"
     } else if q.contains("硫化") {
         "耐硫化: 硫黄を含む空気で電極が腐って断線する故障を防いだ品です"
     } else {
