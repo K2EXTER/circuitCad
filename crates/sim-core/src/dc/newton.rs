@@ -90,6 +90,16 @@ impl Compiled {
         }
     }
 
+    /// One plain Newton pass of at most `cap` iterations (no line search): for a step whose failure is cheaper to answer by
+    /// shrinking it than by iterating on (see `tran::CRAWL`).
+    pub(crate) fn newton_plain_capped(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx, cap: usize) -> Result<Attempt, Fail> {
+        let saved = crate::options::options();
+        crate::options::set_options(crate::options::SimOptions { max_iter: cap.min(saved.max_iter), ..saved });
+        let r = self.newton_with(x0, vj0, ctx, false, 1.0, f64::INFINITY);
+        crate::options::set_options(saved);
+        r
+    }
+
     /// `newton` with forty times the iteration limit (for a solution the iteration only crawls towards).
     pub(crate) fn newton_long(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
         let saved = crate::options::options();

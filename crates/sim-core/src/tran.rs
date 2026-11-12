@@ -231,6 +231,19 @@ const CAPPED_TRIES: usize = 6;
 /// edge is then placed by the shortest step that lands (`JUMP_SEARCH`), and the led blinker takes 0.6 s, not 3.2 s.
 const SNAP_EARLY: f64 = 64.0;
 
+/// A regenerative flip that is not instant (a multivibrator's transistors, with their junction capacitances, take a few
+/// microseconds) has no solution at the largest step from its middle, but steps below `h_min` follow it in 3 or 4 iterations.
+/// Once a jump has failed there and a shorter step went through, the circuit is in such a transition: its steps are taken with
+/// backward Euler, the next size is twice the last one (not raised to `h_min`), its first try is cut short (`CRAWL_CAP`), and
+/// a failure tries the largest step only at the second try, not at once (`SNAP_EARLY`). In `led_blinker` a flip took up to 64
+/// failed Newton runs of 300 iterations, from jumping (and failing) again after each short step. The state ends when a step
+/// of this many `h_min` goes through at once, or when a jump lands.
+const CRAWL: f64 = 64.0;
+
+/// The first try of a step during a transition (`CRAWL`) gives up after this many plain Newton iterations: its steps converge
+/// in 3 to 8, and one that does not is shrunk.
+const CRAWL_CAP: usize = 20;
+
 /// After the largest step landed beyond a flip, the shorter steps that land are searched down to this factor of the size that
 /// failed (see the step loop of `transient_with`).
 const JUMP_SEARCH: f64 = 16.0;
@@ -424,6 +437,8 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
     // theirs with the current they carry (`WIRING_INDUCTOR`, `ESL_INDUCTORS`)
     let wiring_l: Vec<usize> = cm.ce.iter().filter_map(|e| match e { Ce::L { name, idx, .. } if name.ends_with(WIRING_INDUCTOR) || ESL_INDUCTORS.iter().any(|e| name.ends_with(e)) => Some(*idx), _ => None }).collect();
     let mut abs_i = vec![LTE_ABS_I; cm.n_inds];
+    // the circuit is in a transition the largest step cannot cross but small steps can follow (see `CRAWL`)
+    let mut crawl = false;
     while t < s.tstop - eps {
         while bp_idx < bps.len() && bps[bp_idx] <= t + eps {
             bp_idx += 1;
@@ -449,11 +464,15 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
 
         let mut retried = false;
         let mut rejects = 0;
+        // the size that failed first and whether the largest step was tried, for `crawl` after the step
+        let mut step_first;
+        let mut step_jumped = false;
         // one pass per tried step size: Newton (shrinking on failure), then the error check
         let (att, ratio, order) = 'step: loop {
             let mut tries = 0;
             let mut h_back = 0.0;
             let h_first = h;
+            step_first = h_first;
             // the largest step was tried after a failure: if it lands, the circuit has flipped (see `SNAP_EARLY`)
             let mut jumped = false;
             let att: Attempt = loop {
@@ -466,7 +485,8 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
                     sw_widen: 1.0,
                     seed_g: None,
                 };
-                match cm.newton(x.clone(), vj.clone(), &ctx) {
+                let solved = if crawl && tries == 0 { cm.newton_plain_capped(x.clone(), vj.clone(), &ctx, CRAWL_CAP) } else { cm.newton(x.clone(), vj.clone(), &ctx) };
+                match solved {
                     Ok(a) if jumped && h > JUMP_SEARCH * h_first => {
                         // The largest step landed beyond the flip, which may lie anywhere within it: the step would draw the edge over
                         // its whole length and hand a later digital input the new level that much late (a 555's output and the gate
@@ -508,12 +528,13 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
                         // the trapezoidal rule keeps the old capacitor current, which for a fast
                         // switching event no step size can fix: retry with backward Euler
                         retried = true;
-                        if (tries == 4 || (tries == 1 && h_first <= SNAP_EARLY * h_min)) && h * 16.0 < s.tstep.min(s.tstop - t) {
+                        if (tries == 4 || (tries == if crawl { 2 } else { 1 } && h_first <= SNAP_EARLY * h_min)) && h * 16.0 < s.tstep.min(s.tstop - t) {
                             // An instant switching event (a latch, a logic gate) may have no solution
                             // close to the old state at all, yet one far away that a big step lands on:
                             // shrinking never helps there, so try the largest step once, then go on shrinking.
                             h_back = h / 4.0;
                             jumped = true;
+                            step_jumped = true;
                             h = s.tstep.min(s.tstop - t);
                             if bp_idx < bps.len() && t + h >= bps[bp_idx] - eps {
                                 h = bps[bp_idx] - t;
@@ -611,13 +632,24 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
         force_be = lands_on_bp || retried || seq_changed;
         record(&mut result, t, &x, &cap_i, &cm);
 
+        // a jump that did not land, after which a shorter step went through: the circuit is in the middle of its transition
+        // (see `CRAWL`). It ends with a jump that lands or with a step back at the sizes of the quiet circuit.
+        let was_crawling = crawl;
+        if step_jumped {
+            crawl = h < step_first;
+        } else if h >= CRAWL * h_min {
+            crawl = false;
+        }
+        // the steps of a transition are taken with backward Euler: the trapezoidal rule leaves an oscillation from point to
+        // point behind it that holds the error control at a few microseconds for tens of milliseconds
+        force_be |= crawl || was_crawling;
         // the next step: grow while the error estimate leaves room, never beyond `tstep`
         if lands_on_bp || seq_changed {
             hist.clear();
             // restart from about the length of the step that reached the corner
             h_ctrl = h.max(s.tstep * 1e-3).min(s.tstep);
         } else if retried {
-            h_ctrl = h.max(h_min);
+            h_ctrl = if crawl { (2.0 * h).min(s.tstep) } else { h.max(h_min) };
         } else if h >= wanted * 0.999 || rejects > 0 || ratio.is_some_and(|r| r > 1.0) {
             let mut growth = ratio.map_or(2.0, |r| (0.9 * r.max(1e-12).powf(-1.0 / order)).clamp(0.5, 2.0));
             // a step that had to be redone has found the size the circuit allows here: trying twice that again
@@ -625,7 +657,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
             if rejects > 0 {
                 growth = growth.min(1.05);
             }
-            h_ctrl = (h * growth).clamp(h_min, s.tstep);
+            h_ctrl = (h * growth).clamp(if crawl { 0.0 } else { h_min }, s.tstep);
         }
         // else: the step was cut short by the end of the run (not by the error control); keep the controller's value
         for &k in &wiring_l {
