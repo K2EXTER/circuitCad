@@ -116,6 +116,10 @@ const BUNDLED: &[(&str, &str)] = &[
     ("MCR03S", include_str!("../series/MCR03S.series.json")),
     ("MCR10S", include_str!("../series/MCR10S.series.json")),
     ("MCR18S", include_str!("../series/MCR18S.series.json")),
+    ("CRCW0402", include_str!("../series/CRCW0402.series.json")),
+    ("CRCW0603", include_str!("../series/CRCW0603.series.json")),
+    ("CRCW0805", include_str!("../series/CRCW0805.series.json")),
+    ("CRCW1206", include_str!("../series/CRCW1206.series.json")),
     ("CF1/4", include_str!("../series/CF1_4.series.json")),
     ("MF1/4D", include_str!("../series/MF1_4D.series.json")),
 ];
@@ -213,6 +217,7 @@ impl SeriesDef {
         match self.code.as_str() {
             "sig3" => sig3(v),
             "sig2" => sig2(v),
+            "rkm4" => rkm4(v),
             _ => None,
         }
     }
@@ -450,6 +455,24 @@ fn sig2(v: f64) -> Option<String> {
     })
 }
 
+/// Three significant figures with the unit's letter where the decimal point goes (Vishay CRCW): `1R00` = 1 Ω, `562R` = 562 Ω,
+/// `4K75` = 4.75 kΩ, `10K0` = 10 kΩ, `1M00` = 1 MΩ.
+fn rkm4(v: f64) -> Option<String> {
+    if !(v.is_finite() && v >= 1.0) {
+        return None;
+    }
+    let (scale, letter) = if v >= 1e6 { (1e6, 'M') } else if v >= 1e3 { (1e3, 'K') } else { (1.0, 'R') };
+    let x = v / scale;
+    let whole = x.log10().floor() as i32 + 1; // 1 to 3 digits before the point
+    let m = (x * 10f64.powi(3 - whole)).round() as u32;
+    if !(100..1000).contains(&m) {
+        return None;
+    }
+    let digits = format!("{m}");
+    let (a, b) = digits.split_at(whole as usize);
+    Some(format!("{a}{letter}{b}"))
+}
+
 /// `10 kΩ`, `4.75 kΩ`, `1 MΩ`, `97.6 Ω`: the value in sentences.
 fn value_label(v: f64) -> String {
     let (scale, p) = if v >= 1e6 { (1e6, " MΩ") } else if v >= 1e3 { (1e3, " kΩ") } else { (1.0, " Ω") };
@@ -662,6 +685,42 @@ mod tests {
             assert!(((r.pos.x - w / 2.0) - (l.pos.x + w / 2.0) - a).abs() < 1e-9, "{series} gap");
             assert!(((r.pos.x + w / 2.0) - (l.pos.x - w / 2.0) - b).abs() < 1e-9, "{series} overall");
             assert!((h - c).abs() < 1e-9, "{series} width");
+            for d in s.expand() {
+                assert!(d.validate().iter().all(|i| !i.error), "{}", d.name);
+            }
+        }
+    }
+
+    #[test]
+    fn vishay_crcw_writes_the_value_with_its_unit_letter() {
+        let s = by_name("CRCW0603").unwrap();
+        // the data sheet's examples: 562R = 562 Ω (CRCW0603562RFKEA), 10R = 10 Ω, 1M = 1 MΩ
+        assert_eq!(s.part_name(562.0), "CRCW0603562RFKEA");
+        assert_eq!(s.part_name(10.0), "CRCW060310R0FKEA");
+        assert_eq!(s.part_name(1.0), "CRCW06031R00FKEA");
+        assert_eq!(s.part_name(4750.0), "CRCW06034K75FKEA");
+        assert_eq!(s.part_name(10_000.0), "CRCW060310K0FKEA");
+        assert_eq!(s.part_name(1e6), "CRCW06031M00FKEA");
+        assert_eq!(s.part_name(1e7), "CRCW060310M0FKEA");
+        assert_eq!(by_name("CRCW0402").unwrap().part_name(10_000.0), "CRCW040210K0FKED");
+        // (series, values, standard power, voltage, gap G, overall Z, width X of the reflow pads)
+        let table = [
+            ("CRCW0402", 0.063, 50.0, 0.45, 1.65, 0.6),
+            ("CRCW0603", 0.1, 75.0, 0.75, 2.25, 1.0),
+            ("CRCW0805", 0.125, 150.0, 1.0, 2.9, 1.45),
+            ("CRCW1206", 0.25, 200.0, 1.5, 3.6, 1.8),
+        ];
+        for (series, p, v, g, z, x) in table {
+            let s = by_name(series).unwrap();
+            assert_eq!(s.values().len(), 114 * 7 + 1, "{series}");
+            assert_eq!(s.power_at(1000.0), p);
+            assert_eq!(s.rated_voltage(1e7), v);
+            let fp = s.part(1000.0).footprint().unwrap();
+            let (l, r) = (&fp.pads[0], &fp.pads[1]);
+            let (w, h) = l.shape.size();
+            assert!(((r.pos.x - w / 2.0) - (l.pos.x + w / 2.0) - g).abs() < 1e-9, "{series} gap");
+            assert!(((r.pos.x + w / 2.0) - (l.pos.x - w / 2.0) - z).abs() < 1e-9, "{series} overall");
+            assert!((h - x).abs() < 1e-9, "{series} width");
             for d in s.expand() {
                 assert!(d.validate().iter().all(|i| !i.error), "{}", d.name);
             }

@@ -1,0 +1,64 @@
+{
+  "series": "CRCW1206",
+  "maker": "Vishay",
+  "category": "抵抗",
+  "summary": "厚膜チップ抵抗 ±1% 1206 (3216)。手はんだしやすい大きさ",
+  "size": "1206",
+  "datasheet": "https://www.vishay.com/docs/20035/dcrcwe3.pdf",
+  "checked": "Vishay のデータシート D/CRCW e3 (Document Number 20035、Revision 14-Apr-2026) で確かめた (2026-11-13)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 1.0,
+    "max": 10000000.0
+  },
+  "mpn": "CRCW1206{code}FKEA",
+  "code": "rkm4",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 100.0,
+  "p_max": 0.25,
+  "v_limit": 200.0,
+  "v_overload": 0.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [],
+  "quality": [
+    "AEC-Q200"
+  ],
+  "height": 0.55,
+  "footprint_name": "R_1206_Vishay",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -1.275,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.05,
+        "h": 1.8,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 1.275,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.05,
+        "h": 1.8,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは Vishay の推奨 (リフローの G 1.5・Y 1.05・X 1.8・Z 3.6 mm: G = パッドの内側の間、Y = パッドの長さ、X = パッドの幅、Z = 外側の端から端)",
+  "body": "本体 3.2 × 1.6 mm、厚さ 0.55 mm (データシートの寸法)。型番の F は ±1 %、K は ±100 ppm/K、EA は包装 (紙テープ 4 mm ピッチ、5,000 個)"
+}

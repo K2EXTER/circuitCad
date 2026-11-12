@@ -1,0 +1,64 @@
+{
+  "series": "CRCW0402",
+  "maker": "Vishay",
+  "category": "抵抗",
+  "summary": "厚膜チップ抵抗 ±1% 0402 (1005)",
+  "size": "0402",
+  "datasheet": "https://www.vishay.com/docs/20035/dcrcwe3.pdf",
+  "checked": "Vishay のデータシート D/CRCW e3 (Document Number 20035、Revision 14-Apr-2026) で確かめた (2026-11-13)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 1.0,
+    "max": 10000000.0
+  },
+  "mpn": "CRCW0402{code}FKED",
+  "code": "rkm4",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 100.0,
+  "p_max": 0.063,
+  "v_limit": 50.0,
+  "v_overload": 0.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [],
+  "quality": [
+    "AEC-Q200"
+  ],
+  "height": 0.35,
+  "footprint_name": "R_0402_Vishay",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.525,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 0.6,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.525,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 0.6,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは Vishay の推奨 (リフローの G 0.45・Y 0.6・X 0.6・Z 1.65 mm: G = パッドの内側の間、Y = パッドの長さ、X = パッドの幅、Z = 外側の端から端)",
+  "body": "本体 1.0 × 0.5 mm、厚さ 0.35 mm (データシートの寸法)。拡張の使い方 (1000 時間で抵抗値の変化 2 % まで) なら 0.1 W まで使えるが、ここでは標準 (0.063 W、1 % まで) の値を定格にした。型番の F は ±1 %、K は ±100 ppm/K、ED は包装 (紙テープ 2 mm ピッチ、10,000 個)"
+}
