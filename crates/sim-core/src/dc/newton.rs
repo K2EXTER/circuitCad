@@ -110,6 +110,11 @@ impl Compiled {
         if !matches!(r, Err(Fail::NoConv)) {
             return r;
         }
+        self.damped_retries(x0, vj0, ctx)
+    }
+
+    /// The step-limited iterations of `newton_damped`, for a caller that has already tried `newton` from the same point.
+    pub(crate) fn damped_retries(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
         // (damping, largest change in volts, and the share of an unknown's own size added to it). The last group lets a node that
         // legitimately sits at 100 V (a macro model's internal reference) move in proportion; the ones before hold every node to volts.
         let mut result = Err(Fail::NoConv);

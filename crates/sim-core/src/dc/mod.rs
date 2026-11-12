@@ -269,23 +269,29 @@ struct GminStall {
 const GMIN_FIRST_STAGES: [f64; 3] = [2.0, 1.0, 0.0];
 
 impl Compiled {
-    /// The first stage of gmin stepping from `x0`: at 1e-2, or when that does not converge, at the larger gmin of
-    /// `GMIN_FIRST_STAGES`. With `nodeset`s only 1e-2, the strength the seeds are held with. Returns the solution and its stage.
+    /// The first stage of gmin stepping from `x0`: `newton` at 1e-2; when that does not converge, one plain Newton pass at each
+    /// larger gmin of `GMIN_FIRST_STAGES`, and only then the damped retries at 1e-2. A circuit that a larger gmin settles does
+    /// so in a few iterations; one it does not (an oscillator: the combined demo with its board wiring) pays for the damped
+    /// retries once. With `nodeset`s only 1e-2, the strength the seeds are held with. Returns the solution and its stage.
     fn gmin_first_stage(&self, x0: Vec<f64>, vj0: Vec<f64>, hold: &dyn Fn(f64) -> Ctx<'static>) -> Result<(Attempt, f64), Fail> {
-        let stages = if self.seed.is_empty() { &GMIN_FIRST_STAGES[..] } else { &GMIN_FIRST_STAGES[..1] };
-        let mut last = Fail::NoConv;
-        for (k, &e) in stages.iter().enumerate() {
-            // the larger stages get one plain Newton pass: where they help, the large gmin settles the circuit in a few
-            // iterations, and a circuit they do not help (an oscillator) must not pay for every damped retry twice more
-            let r = if k == 0 { self.newton_damped(x0.clone(), vj0.clone(), &hold(10f64.powf(-e))) } else { self.newton_with(x0.clone(), vj0.clone(), &hold(10f64.powf(-e)), false, 1.0, f64::INFINITY) };
-            match r {
-                Ok(a) => return Ok((a, e)),
-                // a singular circuit is singular at every gmin
-                Err(Fail::Singular) => return Err(Fail::Singular),
-                Err(f) => last = f,
+        let first = GMIN_FIRST_STAGES[0];
+        match self.newton(x0.clone(), vj0.clone(), &hold(10f64.powf(-first))) {
+            Ok(a) => return Ok((a, first)),
+            // a singular circuit is singular at every gmin
+            Err(Fail::Singular) => return Err(Fail::Singular),
+            Err(Fail::NoConv) => {}
+        }
+        if self.seed.is_empty() {
+            for &e in &GMIN_FIRST_STAGES[1..] {
+                match self.newton_with(x0.clone(), vj0.clone(), &hold(10f64.powf(-e)), false, 1.0, f64::INFINITY) {
+                    Ok(a) => return Ok((a, e)),
+                    Err(Fail::Singular) => return Err(Fail::Singular),
+                    Err(Fail::NoConv) => {}
+                }
             }
         }
-        Err(last)
+        let a = self.damped_retries(x0, vj0, &hold(10f64.powf(-first)))?;
+        Ok((a, first))
     }
 
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
@@ -321,11 +327,13 @@ impl Compiled {
                     }
                 };
                 let mut skip_short = resumed;
+                // the stage sizes that only had `newton` from the present point and failed (see below)
+                let mut plain_only: Vec<f64> = vec![];
                 while e < 12.0 - 1e-9 {
                     let target = (e + de).min(12.0);
                     let ctx = hold(10f64.powf(-target));
-                    // a stage that fails is split, so the damped retries (a latch close to its split point) are only worth their time
-                    // on the smallest one, before the stepping gives up
+                    // a stage that fails is split, so the damped retries (a latch close to its split point) are first tried on the
+                    // smallest one only, before the stepping gives up
                     let short = if std::mem::take(&mut skip_short) {
                         Err(Fail::NoConv)
                     } else if de >= 1.0 / 8.0 {
@@ -340,17 +348,37 @@ impl Compiled {
                             vj = a.vj;
                             de = (de * 2.0).min(1.0);
                             e = target;
+                            plain_only.clear();
                         }
-                        Err(_) if de >= 1.0 / 8.0 => de /= 2.0,
-                        // already a small step: a circuit with saturating gates (current-limited output stages, latches built
-                        // from them) can crawl towards the solution for hundreds of iterations, so give it forty times as many
-                        Err(f) if which == Strategy::Gmin => {
-                            if matches!(f, Fail::NoConv) {
-                                *self.gmin_stall.borrow_mut() = Some(GminStall { x, vj, iters, e, de });
-                            }
-                            return Err(f);
+                        Err(_) if de >= 1.0 / 8.0 => {
+                            plain_only.push(de);
+                            de /= 2.0;
                         }
+                        // already a small step. First the damped retries for the larger stages from this point that only had
+                        // `newton` (smallest first): a damped iteration can slide into the solution of a larger step that the
+                        // smaller ones do not reach (Microchip's TC4421 with its input high: 1e-1.625 to 1e-1.875 only)
                         Err(f) => {
+                            let rescued = plain_only.iter().rev().find_map(|&d| {
+                                let t = (e + d).min(12.0);
+                                self.damped_retries(x.clone(), vj.clone(), &hold(10f64.powf(-t))).ok().map(|a| (a, d, t))
+                            });
+                            plain_only.clear();
+                            if let Some((a, d, t)) = rescued {
+                                iters += a.iterations;
+                                x = a.x;
+                                vj = a.vj;
+                                de = (d * 2.0).min(1.0);
+                                e = t;
+                                continue;
+                            }
+                            // a circuit with saturating gates (current-limited output stages, latches built from them) can crawl
+                            // towards the solution for hundreds of iterations: the long variant gives it forty times as many
+                            if which == Strategy::Gmin {
+                                if matches!(f, Fail::NoConv) {
+                                    *self.gmin_stall.borrow_mut() = Some(GminStall { x, vj, iters, e, de });
+                                }
+                                return Err(f);
+                            }
                             let a = self.newton_long(x.clone(), vj.clone(), &ctx).map_err(|_| f)?;
                             // a "solution" with a node at a million volts is a runaway that only looks converged (relative tolerances)
                             if a.x.iter().take(self.n_nodes - 1).any(|v| v.abs() > 1e6) {
