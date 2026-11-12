@@ -301,7 +301,15 @@ impl Compiled {
         }
         let zero_vj = vec![0.0; self.n_slots];
         match which {
-            Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(crate::options::options().gmin, 1.0)),
+            // one short plain pass and the line search: a circuit these do not settle goes to gmin stepping (the damped passes of
+            // `newton` and the full 150 plain iterations only made its failure four times as long, see `newton::DC_PLAIN_CAP`)
+            Strategy::Direct => {
+                let ctx = Ctx::dc(crate::options::options().gmin, 1.0);
+                match self.newton_plain_capped(zero_x.clone(), zero_vj.clone(), &ctx, newton::DC_PLAIN_CAP) {
+                    Err(Fail::NoConv) => self.newton_with(zero_x, zero_vj, &ctx, true, 1.0, f64::INFINITY),
+                    other => other,
+                }
+            }
             Strategy::Gmin | Strategy::GminLong => {
                 // gmin from 1e-2 (or a larger first stage, `GMIN_FIRST_STAGES`) down to 1e-12 (a decade at a time), each step starting from the previous solution. A step
                 // that does not converge is split into smaller ones: a latch or a current-limited output stage can need

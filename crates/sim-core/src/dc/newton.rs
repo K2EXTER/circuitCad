@@ -39,6 +39,12 @@ thread_local! {
 /// The plain Newton iteration of a transient step is cut after this many iterations (large systems, first tries only).
 const PLAIN_CAP: usize = 40;
 
+/// The plain pass of `Strategy::Direct` gives up after this many iterations and goes on to the line search. A circuit with an
+/// op-amp macro model, a transistor and a Zener (`series_regulator`, `loop_cap_load`) found no direct solution in four passes of
+/// 150 (600 iterations, 3 ms, then gmin stepping in 535). Every bundled example gets the same answer from every strategy
+/// (`tests_bench::bench_dc_strategies_all`); gmin stepping keeps its full plain passes (a stage there settles in up to 66).
+pub(crate) const DC_PLAIN_CAP: usize = 40;
+
 /// Systems below this many unknowns are always factored from scratch (and their plain iteration is never cut short).
 const REFACTOR_MIN_SIZE: usize = 60;
 
