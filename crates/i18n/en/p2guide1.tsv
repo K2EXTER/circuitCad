@@ -314,7 +314,7 @@ NE555 の点滅回路	NE555 blinker
 降圧コンバータ (スイッチング電源)	Buck converter (switching supply)
 熱にしないで電圧を下げる電源。スイッチの波形とリップルを見られます	A supply that lowers the voltage without turning it into heat. You can see the switch waveform and the ripple
 総合デモ (電源 + 555 + カウンタ + 温度アラーム + アンプ)	Full demo (supply + 555 + counter + temperature alarm + amplifier)
-部品 41 個 の大きな回路。「過渡解析を実行」で、時計 (CLK) と 1/2・1/4 に割ったカウンタの波形が見えます。計算に 数十秒かかります	A large circuit with 41 parts. "Run transient analysis" shows the clock (CLK) and the counter waveforms divided by 2 and 4. The calculation takes several tens of seconds
+部品 41 個 の大きな回路。「過渡解析を実行」で、時計 (CLK) と 1/2・1/4 に割ったカウンタの波形が見えます。計算は 1 秒ほどです	A large circuit with 41 parts. "Run transient analysis" shows the clock (CLK) and the counter waveforms divided by 2 and 4. The calculation takes about a second
 電源ラインのインピーダンス (バイパスコンデンサの効き)	Supply line impedance (how bypass capacitors help)
 ケーブルの先の電源ラインに、電解・10µF・100nF のコンデンサをつけた回路。「解析」タブの「インピーダンス」で、ネットに RAIL と入れて実行すると、谷 (コンデンサがよく効く周波数) と山 (電圧が揺れやすい周波数) が出ます	A supply line at the end of a cable, with electrolytic, 10µF and 100nF capacitors. In "Impedance" in the "Analysis" tab, enter RAIL as the net and run it to see valleys (frequencies where the capacitors work well) and peaks (frequencies where the voltage shakes easily)
 アンプのひずみ (出力が頭打ちになる)	Amplifier distortion (output clipping)
