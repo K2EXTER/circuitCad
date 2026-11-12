@@ -264,7 +264,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     });
     // the guesses of the user for digital nets: where their latches start
     let dig_seeds: Vec<(usize, f64)> = c.nodesets.iter().filter_map(|(name, volts)| c.names.iter().position(|n| n.eq_ignore_ascii_case(name)).filter(|i| *i > 0 && dnets.digital[*i]).map(|i| (i, *volts))).collect();
-    Compiled { cells, dnets, dstat, dig, dig_seeds, seed, seeded, seq_state, seq_names, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), rows_spare: Default::default(), factor_spare: Default::default(), stamp_plan: Default::default(), log_spare: Default::default(), ce }
+    Compiled { cells, dnets, dstat, dig, dig_seeds, seed, seeded, seq_state, seq_names, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), rows_spare: Default::default(), factor_spare: Default::default(), stamp_plan: Default::default(), log_spare: Default::default(), gmin_stall: Default::default(), ce }
 }
 
 pub(crate) fn v(x: &[f64], node: usize) -> f64 {

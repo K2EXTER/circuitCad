@@ -120,6 +120,8 @@ pub(crate) struct Compiled {
     /// Where the stamps of an assembly land (`mna::StampPlan`), and the stamp list of the last assembly, kept for its capacity.
     stamp_plan: std::cell::RefCell<Option<mna::StampPlan>>,
     log_spare: std::cell::RefCell<Vec<(u32, u32, f64)>>,
+    /// Where the last `Strategy::Gmin` of this `solve_op` gave up, for `Strategy::GminLong` to go on from (see `GminStall`).
+    gmin_stall: std::cell::RefCell<Option<GminStall>>,
     pub(crate) ce: Vec<Ce>,
     /// The stored state (0 or 1) of every `Ce::Seq`, changed only between solves.
     pub(crate) seq_state: std::cell::RefCell<Vec<f64>>,
@@ -242,6 +244,17 @@ pub(crate) const DC_ORDER_WIDEN: [Strategy; 5] = [Strategy::Direct, Strategy::Wi
 /// A circuit with more unknowns than this gives up switch widening as soon as the plain Newton steps fail at its first stage.
 const WIDEN_QUICK_GIVE_UP: usize = 300;
 
+/// The state gmin stepping had reached when its stage failed: the solution at gmin = 10^-`e`, its iterations so far, and the size `de`
+/// (in decades) of the stage that failed. `Strategy::GminLong` takes up from here with its long iteration instead of walking the
+/// same stages again (which repeated every failed damped try: 0.15 s of the combined demo's 0.6 s start).
+struct GminStall {
+    x: Vec<f64>,
+    vj: Vec<f64>,
+    iters: usize,
+    e: f64,
+    de: f64,
+}
+
 impl Compiled {
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
         let mut zero_x = vec![0.0; self.n_unknowns];
@@ -264,13 +277,23 @@ impl Compiled {
                     }
                     c
                 };
-                let first = self.newton_damped(zero_x, zero_vj, &hold(1e-2))?;
-                let (mut x, mut vj, mut iters) = (first.x, first.vj, first.iterations);
-                let (mut e, mut de) = (2.0f64, 1.0f64);
+                // the long variant goes on from where the plain one gave up in this `solve_op`, straight to its long iteration
+                let stall = if which == Strategy::GminLong { self.gmin_stall.borrow_mut().take() } else { None };
+                *self.gmin_stall.borrow_mut() = None;
+                let resumed = stall.is_some();
+                let (mut x, mut vj, mut iters, mut e, mut de) = match stall {
+                    Some(st) => (st.x, st.vj, st.iters, st.e, st.de),
+                    None => {
+                        let first = self.newton_damped(zero_x, zero_vj, &hold(1e-2))?;
+                        (first.x, first.vj, first.iterations, 2.0f64, 1.0f64)
+                    }
+                };
+                let mut skip_short = resumed;
                 while e < 12.0 - 1e-9 {
                     let target = (e + de).min(12.0);
                     let ctx = hold(10f64.powf(-target));
-                    match self.newton_damped(x.clone(), vj.clone(), &ctx) {
+                    let short = if std::mem::take(&mut skip_short) { Err(Fail::NoConv) } else { self.newton_damped(x.clone(), vj.clone(), &ctx) };
+                    match short {
                         Ok(a) => {
                             iters += a.iterations;
                             x = a.x;
@@ -281,7 +304,12 @@ impl Compiled {
                         Err(_) if de >= 1.0 / 8.0 => de /= 2.0,
                         // already a small step: a circuit with saturating gates (current-limited output stages, latches built
                         // from them) can crawl towards the solution for hundreds of iterations, so give it forty times as many
-                        Err(f) if which == Strategy::Gmin => return Err(f),
+                        Err(f) if which == Strategy::Gmin => {
+                            if matches!(f, Fail::NoConv) {
+                                *self.gmin_stall.borrow_mut() = Some(GminStall { x, vj, iters, e, de });
+                            }
+                            return Err(f);
+                        }
                         Err(f) => {
                             let a = self.newton_long(x.clone(), vj.clone(), &ctx).map_err(|_| f)?;
                             // a "solution" with a node at a million volts is a runaway that only looks converged (relative tolerances)
@@ -416,6 +444,7 @@ pub(crate) fn no_such_net(c: &Circuit, name: &str) -> SimError {
 /// Try the strategies in order; the first that converges wins.
 pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'static str), SimError> {
     TROUBLE.with(|t| t.borrow_mut().take());
+    cm.gmin_stall.borrow_mut().take();
     newton::LIMITED_USED.with(|c| c.set(false));
     newton::STUCK.with(|s| s.set(None));
     let mut last = SimError::NoConvergence;
