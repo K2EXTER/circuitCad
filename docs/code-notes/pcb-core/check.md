@@ -18,6 +18,7 @@
   - `add_thermal_vias` が足りない分を格子状に置く(DRCが悪化するなら置かない、GUIは基板エディタの「サーマルビアを置く」)、`zone_checks` はベタの細いかけら(スリバー)と、どこにもつながらない銅の島(`zonefill` の実際の形で調べる)、`mask_dam_checks` は異なるネットのパッドの間のソルダーマスクの帯(0.1mm 未満で警告、`MIN_MASK_DAM`)、`missing_ground_fill` はGNDベタが無いときのヒント。
   - どちらも発注前チェックで警告 / DRCの指摘は日本語で原因と直し方を書く
 - `irdrop.rs` `wiring_resistances`(全ネットの入口パッド→各パッドの抵抗とインダクタンスの一覧 `PadSeries{ohm,henry}`。
+  - 抵抗は、ベタの格子と配線の抵抗網(供給パッドを接地)を 1 回だけコレスキー分解して(`EnvelopeCholesky`、逆 Cuthill-McKee の順)、パッドごとに代入で解く(大きすぎる網は共役勾配法 `cg_resistance`)。最短路の木(`lowest_resistance_tree`)もネットごとに 1 回。総合デモの GND で 1.07 → 0.13 秒(2026-11-12、`docs/code-notes/sim-core/performance.md`)。
   - インダクタンスは抵抗が最小の経路(ダイクストラ)の線を1本の配線とみなして Terman の式 `track_inductance`(0.2 nH/mm×長さ×(ln(2長さ/(幅+厚さ))+0.5+…))、ビア `via_inductance`(0.2 nH/mm×h×(ln(2h/r)−0.75)、0.3 mm の穴で約0.74 nH)・ベタ(0.3 nH)を足す。
   - `wiring_couplings`(別ネットのパッド対ごとに、2本の経路を短い片に刻んで相互インダクタンスを足す。
     - 平行な片どうしは2本の線(距離は断面の幾何平均距離 0.2235(w+t) でならす=発散防止)の厳密式(Grover、`parallel_mutual`)、角度のある片どうしは中点間の 1e-10×dl1·dl2/r。

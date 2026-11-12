@@ -11,6 +11,12 @@ const LTE_ABS_I: f64 = 1e-9;
 /// Absolute charge tolerance of a diode or transistor junction (SPICE's `CHGTOL`): a junction is checked by the charge its voltage moves, not by
 /// the volts, so that a few tens of microvolts of ringing on a junction of a few femtofarads is not taken for an inaccurate step.
 const LTE_CHGTOL: f64 = 1e-14;
+/// The name ending of an inductor of the board's wiring (`REF.PIN.LW`, a post-layout run, `from_schematic_with_layout`). Its step error is
+/// allowed relative to the largest current it has carried so far (`lte_reltol` times it, as an absolute floor), not only to its present
+/// current: between two bypass capacitors such an inductor rings at a few MHz with well under 1 % of the pin's peak current, and checked
+/// against its own present value, which crosses zero at every swing, that ring held the steps of the 41-part demo near 5 ns (24 000 points
+/// for 10 ms, 6 000 against the peak; the clock and counter edges stay as close to a run with a ten times tighter tolerance as before).
+const WIRING_INDUCTOR: &str = ".LW";
 
 /// The largest time step used when the user leaves it blank: 1/1000 of the stop time. The error control still shrinks
 /// the step where the waveform bends faster, so this is only the ceiling.
@@ -221,7 +227,8 @@ const CAPPED_TRIES: usize = 6;
 /// edge is then placed within this size, below a thousandth of the largest step, and the led blinker takes 0.8 s, not 3.2 s.
 const SNAP_EARLY: f64 = 64.0;
 
-fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], abs_v: &[f64], il: &[f64], trap: bool, rel: f64) -> Option<f64> {
+/// (the new capacitor states and inductor currents, then their absolute tolerances)
+fn step_error_ratio(hist: &[Sample], t_new: f64, (cv, il): (&[f64], &[f64]), (abs_v, abs_i): (&[f64], &[f64]), trap: bool, rel: f64) -> Option<f64> {
     let need = if trap { 3 } else { 2 };
     if hist.len() < need {
         return None;
@@ -250,7 +257,7 @@ fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], abs_v: &[f64], il: 
         check(&|p| p.1[k], new, abs_v[k], (k, false));
     }
     for (k, &new) in il.iter().enumerate() {
-        check(&|p| p.2[k], new, LTE_ABS_I, (k, true));
+        check(&|p| p.2[k], new, abs_i[k], (k, true));
     }
     #[cfg(test)]
     WORST.with(|w| w.set(worst_at));
@@ -405,6 +412,9 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
     // the last accepted points (time, capacitor voltages, inductor currents) for the error estimate;
     // a source corner breaks the smoothness, so the history restarts there
     let mut hist: Vec<(f64, Vec<f64>, Vec<f64>)> = vec![(0.0, cap_v.clone(), ind_i.clone())];
+    // the absolute current tolerance of every inductor; the board's wiring inductors raise theirs with the current they carry (`WIRING_INDUCTOR`)
+    let wiring_l: Vec<usize> = cm.ce.iter().filter_map(|e| match e { Ce::L { name, idx, .. } if name.ends_with(WIRING_INDUCTOR) => Some(*idx), _ => None }).collect();
+    let mut abs_i = vec![LTE_ABS_I; cm.n_inds];
     while t < s.tstop - eps {
         while bp_idx < bps.len() && bps[bp_idx] <= t + eps {
             bp_idx += 1;
@@ -490,7 +500,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
             let order = if trap { 3.0 } else { 2.0 };
             let (cv, il) = reactive_state(&cm, &att.x);
             let abs_v = lte_abs_voltages(&cm, &att.x);
-            let ratio = step_error_ratio(&hist, t + h, &cv, &abs_v, &il, trap, lte_rel);
+            let ratio = step_error_ratio(&hist, t + h, (&cv, &il), (&abs_v, &abs_i), trap, lte_rel);
             match ratio {
                 // too inaccurate: redo this step with a smaller one (unless it is already tiny)
                 // (not after a step that landed beyond a flip: its error estimate spans the jump, and redoing the step only repeats
@@ -577,6 +587,9 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
             h_ctrl = (h * growth).clamp(h_min, s.tstep);
         }
         // else: the step was cut short by the end of the run (not by the error control); keep the controller's value
+        for &k in &wiring_l {
+            abs_i[k] = abs_i[k].max(lte_rel * ind_i[k].abs());
+        }
         hist.push((t, cap_v.clone(), ind_i.clone()));
         if hist.len() > 3 {
             hist.remove(0);

@@ -498,8 +498,14 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         nbr[y].push((x, c));
     }
     let mut res: HashMap<usize, f64> = HashMap::new();
+    // one factorisation of the network for all the pads; a network whose factor would be too large is solved pad by pad
+    let target_nodes: Vec<usize> = targets.iter().map(|t| pad_node[t]).collect();
+    if let Some(r) = EnvelopeCholesky::new(&nbr, &diag, src).and_then(|f| target_nodes.iter().map(|&tn| f.resistance(tn)).collect::<Option<Vec<f64>>>()) {
+        res.extend(targets.iter().copied().zip(r));
+    }
     let mut x = vec![0.0f64; n];
-    for &t in &targets {
+    let left: Vec<usize> = targets.iter().copied().filter(|t| !res.contains_key(t)).collect();
+    for t in left {
         // push 1 A into the target; its voltage is the resistance from the supply pad
         let tn = pad_node[&t];
         match cg_resistance(&nbr, &diag, src, tn, &mut x) {
@@ -513,6 +519,8 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         }
     }
 
+    // the lowest-resistance way from the supply pad to every node, found once for all the pads (it does not depend on the pad)
+    let tree = if res.is_empty() { vec![] } else { lowest_resistance_tree(&g, src) };
     for &i in &pad_ids {
         if i == src_id {
             continue;
@@ -521,7 +529,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         let ohm = res.get(&i).copied();
         let (henry, path) = match ohm {
             Some(_) => {
-                let (h, path) = path_inductance(&g, src, pad_node[&i], spec, &layers, &planes);
+                let (h, path) = path_inductance(&g, &tree, pad_node[&i], spec, &layers, &planes);
                 (Some(h), path)
             }
             None => (None, vec![]),
@@ -531,11 +539,9 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
     out
 }
 
-/// Inductance of the lowest-resistance way from `src` to `dst`: the tracks on it are cut into straight runs (consecutive
-/// segments that go the same way on the same layer); each run is one trace of its length and length-weighted width, and the runs
-/// couple to each other (`mutual`), so a corner counts as it does on a real board: nothing at a right angle, a lot at a sharp
-/// turn. Plus a via inductance for each hole and a little for each pour.
-fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[Side], planes: &[(f64, Vec<Point>)]) -> (f64, Vec<PathSeg>) {
+/// The lowest-resistance way from `src` to every node of `g`: for each node, the node before it and the edge between (`None` for
+/// `src` and the nodes it cannot reach).
+fn lowest_resistance_tree(g: &Graph, src: usize) -> Vec<Option<(usize, usize)>> {
     let n = g.pos.len();
     let mut adj: Vec<Vec<(usize, usize)>> = vec![vec![]; n];
     for (k, &(a, b, _)) in g.edges.iter().enumerate() {
@@ -546,7 +552,7 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
     let mut prev: Vec<Option<(usize, usize)>> = vec![None; n];
     let mut done = vec![false; n];
     dist[src] = 0.0;
-    // the nets are small (at most MAX_NODES), so a plain O(n^2) Dijkstra is fine
+    // the nets are small (at most MAX_NODES), so a plain O(n^2) Dijkstra is fine (once per net)
     for _ in 0..n {
         let Some(u) = (0..n).filter(|&i| !done[i] && dist[i].is_finite()).min_by(|&a, &b| dist[a].total_cmp(&dist[b])) else { break };
         done[u] = true;
@@ -558,10 +564,18 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
             }
         }
     }
+    prev
+}
+
+/// Inductance of the lowest-resistance way from the supply node to `dst` (`tree`, from `lowest_resistance_tree`): the tracks on
+/// it are cut into straight runs (consecutive segments that go the same way on the same layer); each run is one trace of its
+/// length and length-weighted width, and the runs couple to each other (`mutual`), so a corner counts as it does on a real board: nothing at a right angle, a lot at a sharp
+/// turn. Plus a via inductance for each hole and a little for each pour.
+fn path_inductance(g: &Graph, tree: &[Option<(usize, usize)>], dst: usize, spec: &IrSpec, layers: &[Side], planes: &[(f64, Vec<Point>)]) -> (f64, Vec<PathSeg>) {
     let mut extra = 0.0;
     let mut segs: Vec<PathSeg> = vec![];
     let mut at = dst;
-    while let Some((u, k)) = prev[at] {
+    while let Some((u, k)) = tree[at] {
         match g.links[k] {
             Link::Track { .. } => {
                 let width = if let Link::Track { width, .. } = g.links[k] { width } else { 0.0 };
@@ -665,6 +679,143 @@ fn cell_blob_radius(n: usize) -> f64 {
         }
     }
     0.92 * (n / std::f64::consts::PI).sqrt()
+}
+
+/// Largest number of stored entries of an `EnvelopeCholesky` factor (8 bytes each); a network that would need more is solved by
+/// `cg_resistance` instead.
+const MAX_ENVELOPE: usize = 20_000_000;
+
+/// The Cholesky factor of a network's Laplacian (given as lists of (neighbour, conductance)) with one node grounded, its nodes in reverse
+/// Cuthill-McKee order and each row of the factor stored from its first nonzero entry to the diagonal (the fill stays inside that
+/// envelope). A pour's grid of cells has rows of about the grid's width, so one factorisation and a forward and back substitution per pad
+/// replace a conjugate-gradient solve per pad (the 33 pads of the ground pour of the 41-part demo: 0.67 s -> a few ms).
+struct EnvelopeCholesky {
+    /// The position of each node of the network in the order (`usize::MAX`: grounded or not connected).
+    pos: Vec<usize>,
+    /// Per row: the column of its first stored entry, and where its entries start in `vals` (the diagonal is the last of them).
+    first: Vec<usize>,
+    start: Vec<usize>,
+    vals: Vec<f64>,
+}
+
+impl EnvelopeCholesky {
+    fn new(nbr: &[Vec<(usize, f64)>], diag: &[f64], src: usize) -> Option<Self> {
+        let n = diag.len();
+        let live = |i: usize| i != src && diag[i] > 0.0;
+        let degree = |i: usize| nbr[i].iter().filter(|&&(j, _)| live(j) && j != i).count();
+        // reverse Cuthill-McKee: breadth-first from a node of least degree, neighbours by increasing degree, then reversed
+        let mut order: Vec<usize> = Vec::with_capacity(n);
+        let mut seen = vec![false; n];
+        let mut starts: Vec<usize> = (0..n).filter(|&i| live(i)).collect();
+        starts.sort_by_key(|&i| degree(i));
+        for s0 in starts {
+            if seen[s0] {
+                continue;
+            }
+            seen[s0] = true;
+            let from = order.len();
+            order.push(s0);
+            let mut head = from;
+            while head < order.len() {
+                let u = order[head];
+                head += 1;
+                let mut next: Vec<usize> = nbr[u].iter().map(|&(j, _)| j).filter(|&j| live(j) && !seen[j]).collect();
+                next.sort_by_key(|&j| degree(j));
+                next.dedup();
+                for j in next {
+                    if !seen[j] {
+                        seen[j] = true;
+                        order.push(j);
+                    }
+                }
+            }
+        }
+        order.reverse();
+        let m = order.len();
+        let mut pos = vec![usize::MAX; n];
+        for (k, &i) in order.iter().enumerate() {
+            pos[i] = k;
+        }
+        let mut first: Vec<usize> = (0..m).collect();
+        for (k, &i) in order.iter().enumerate() {
+            for &(j, _) in &nbr[i] {
+                if pos[j] != usize::MAX && pos[j] < first[k] {
+                    first[k] = pos[j];
+                }
+            }
+        }
+        let mut start = Vec::with_capacity(m + 1);
+        let mut size = 0usize;
+        for (k, &f) in first.iter().enumerate() {
+            start.push(size);
+            size += k - f + 1;
+            if size > MAX_ENVELOPE {
+                return None;
+            }
+        }
+        start.push(size);
+        let mut vals = vec![0.0f64; size];
+        for (k, &i) in order.iter().enumerate() {
+            vals[start[k + 1] - 1] += diag[i];
+            for &(j, c) in &nbr[i] {
+                if j == i {
+                    vals[start[k + 1] - 1] -= c;
+                } else if pos[j] != usize::MAX && pos[j] < k {
+                    vals[start[k] + pos[j] - first[k]] -= c;
+                }
+            }
+        }
+        // row by row: L[k][j] = (A[k][j] - sum L[k][q] L[j][q]) / L[j][j] over the columns q both rows store, then the diagonal
+        for k in 0..m {
+            for j in first[k]..k {
+                let q0 = first[k].max(first[j]);
+                let (rk, rj) = (start[k] + q0 - first[k], start[j] + q0 - first[j]);
+                let len = j - q0;
+                let dot: f64 = vals[rk..rk + len].iter().zip(&vals[rj..rj + len]).map(|(a, b)| a * b).sum();
+                let ljj = vals[start[j + 1] - 1];
+                let at = start[k] + j - first[k];
+                vals[at] = (vals[at] - dot) / ljj;
+            }
+            let row = &vals[start[k]..start[k + 1] - 1];
+            let d = vals[start[k + 1] - 1] - row.iter().map(|v| v * v).sum::<f64>();
+            if d.is_nan() || d <= 0.0 {
+                return None;
+            }
+            vals[start[k + 1] - 1] = d.sqrt();
+        }
+        Some(Self { pos, first, start, vals })
+    }
+
+    /// The potential of `target` with 1 A pushed into it: its resistance to the grounded node.
+    fn resistance(&self, target: usize) -> Option<f64> {
+        let t = *self.pos.get(target).filter(|&&p| p != usize::MAX)?;
+        let m = self.first.len();
+        let mut y = vec![0.0f64; m];
+        // forward: L y = e_t (nothing before t)
+        y[t] = 1.0 / self.vals[self.start[t + 1] - 1];
+        for k in t + 1..m {
+            let q0 = self.first[k].max(t);
+            if q0 >= k {
+                continue;
+            }
+            let row = &self.vals[self.start[k] + q0 - self.first[k]..self.start[k + 1] - 1];
+            let dot: f64 = row.iter().zip(&y[q0..k]).map(|(a, b)| a * b).sum();
+            y[k] = -dot / self.vals[self.start[k + 1] - 1];
+        }
+        // back: L^T x = y, column by column from the last row; only x[t] is wanted, so stop there
+        for k in (t..m).rev() {
+            let xk = y[k] / self.vals[self.start[k + 1] - 1];
+            y[k] = xk;
+            if k == t {
+                return Some(xk);
+            }
+            let row = &self.vals[self.start[k]..self.start[k + 1] - 1];
+            for (yq, l) in y[self.first[k]..k].iter_mut().zip(row) {
+                *yq -= l * xk;
+            }
+        }
+        None
+    }
 }
 
 /// Resistance between `src` and `target` of a network given as Laplacian lists: ground `src`, push 1 A into `target`, and solve for
@@ -1352,5 +1503,43 @@ mod tests {
     fn via_resistance_is_about_a_milliohm() {
         let r = via_resistance(0.3, BOARD_MM);
         assert!((0.0008..0.0015).contains(&r), "{r}");
+    }
+
+    #[test]
+    fn one_factorisation_gives_the_resistances_conjugate_gradients_give() {
+        // a 30 x 20 grid of uneven conductances with a few long links across it and a node tied to itself, grounded at a corner
+        let (nx, ny) = (30usize, 20usize);
+        let n = nx * ny + 1;
+        let mut nbr: Vec<Vec<(usize, f64)>> = vec![vec![]; n];
+        let mut diag = vec![0.0f64; n];
+        let mut link = |a: usize, b: usize, c: f64| {
+            diag[a] += c;
+            diag[b] += c;
+            nbr[a].push((b, c));
+            nbr[b].push((a, c));
+        };
+        for ix in 0..nx {
+            for iy in 0..ny {
+                let me = ix * ny + iy;
+                let c = 1.0 + ((ix * 7 + iy * 13) % 5) as f64;
+                if ix + 1 < nx {
+                    link(me, me + ny, c);
+                }
+                if iy + 1 < ny {
+                    link(me, me + 1, 0.5 * c);
+                }
+            }
+        }
+        link(3, nx * ny - 5, 0.2);
+        link(nx * ny, 250, 40.0);
+        link(nx * ny, 251, 40.0);
+        link(77, 77, 3.0);
+        let f = EnvelopeCholesky::new(&nbr, &diag, 0).unwrap();
+        let mut x = vec![0.0; n];
+        for t in [1, 77, 250, nx * ny - 1, nx * ny] {
+            let (a, b) = (f.resistance(t).unwrap(), cg_resistance(&nbr, &diag, 0, t, &mut x).unwrap());
+            assert!((a - b).abs() <= 1e-9 * b, "node {t}: {a} vs {b}");
+        }
+        assert_eq!(f.resistance(0), None, "the grounded node has no row");
     }
 }

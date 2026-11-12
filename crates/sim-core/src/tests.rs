@@ -439,6 +439,41 @@ fn wiring_resonance_far_above_the_signal_does_not_make_the_transient_crawl() {
 }
 
 #[test]
+fn bypass_capacitors_ringing_through_their_wiring_do_not_hold_the_steps_down() {
+    // a pulsed load on a rail that two bypass capacitors share through the copper of their pins: the two pin inductors and the
+    // capacitors ring, lightly damped, at a small fraction of the current they carry at the edges (9 100 points without the rule of
+    // `WIRING_INDUCTOR`, 3 200 with it, and the rail within 0.2 mV)
+    let run = |ending: &str| {
+        let mut c = Circuit::new();
+        let (vin, rail, load) = (c.node("in"), c.node("rail"), c.node("load"));
+        c.add(Element::vdc("V1", vin, 0, 5.0));
+        c.add(Element::Resistor { name: "RS".into(), a: vin, b: rail, r: 0.5 });
+        for k in 1..=2 {
+            let (w, m) = (c.node(&format!("C{k}.1.wire")), c.node(&format!("C{k}.1.wirel")));
+            c.add(Element::Resistor { name: format!("C{k}.1.RW"), a: rail, b: m, r: 0.005 });
+            c.add(Element::Inductor { name: format!("C{k}.1{ending}"), a: m, b: w, l: 5e-9 });
+            c.add(Element::Capacitor { name: format!("C{k}"), a: w, b: 0, c: if k == 1 { 100e-9 } else { 10e-6 } });
+        }
+        c.add(Element::VSource { name: "VL".into(), p: load, n: 0, wave: Waveform::Pulse { v1: 0.0, v2: 1.0, td: 1e-6, tr: 5e-9, tf: 5e-9, pw: 20e-6, per: 40e-6 }, ac: None });
+        c.add(Element::Switch { name: "SL".into(), a: rail, b: 0, cp: load, cn: 0, model: SwitchModel { ron: 5.0, roff: 1e9, vt: 0.5, vw: 0.1 } });
+        transient(&c, &TranSettings { tstop: 200e-6, tstep: 1e-6, uic: false }).unwrap()
+    };
+    let (plain, wiring) = (run(".LX"), run(".LW"));
+    let (n0, n1) = (plain.time.len(), wiring.time.len());
+    assert!(n1 * 2 < n0, "{n1} points with the wiring rule, {n0} without");
+    // the rail is the same (linear between the points of each run)
+    let (a, b) = (plain.signal("V(rail)").unwrap(), wiring.signal("V(rail)").unwrap());
+    let at = |r: &TranResult, v: &[f64], t: f64| {
+        let i = r.time.partition_point(|x| *x < t).clamp(1, r.time.len() - 1);
+        v[i - 1] + (v[i] - v[i - 1]) * (t - r.time[i - 1]) / (r.time[i] - r.time[i - 1])
+    };
+    for t in [0.5e-6, 10e-6, 30e-6, 50e-6, 150e-6, 199e-6] {
+        let (x, y) = (at(&plain, &a.values, t), at(&wiring, &b.values, t));
+        assert!((x - y).abs() < 1e-3, "V(rail) at {t}: {x} vs {y}");
+    }
+}
+
+#[test]
 fn coupled_supply_and_return_wiring_lowers_the_loop_inductance() {
     let mut s = Schematic::default();
     s.add(Kind::VSource, (0, 0), 0);
