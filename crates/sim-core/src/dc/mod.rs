@@ -115,8 +115,8 @@ pub(crate) struct Compiled {
     /// The rows of the last matrix, handed back after its solve so that the next assembly fills the same buffers instead of
     /// allocating a row at a time (see `Mna::new`). Row `i` goes back to row `i`, so each keeps a capacity that fits it.
     rows_spare: std::cell::RefCell<Vec<Vec<(usize, f64)>>>,
-    /// The same for the eliminated rows of the last `linalg::refactor`.
-    factor_spare: std::cell::RefCell<Vec<Vec<(usize, f64)>>>,
+    /// The same for the values of the last `linalg::refactor`.
+    factor_spare: std::cell::RefCell<Vec<f64>>,
     /// Where the stamps of an assembly land (`mna::StampPlan`), and the stamp list of the last assembly, kept for its capacity.
     stamp_plan: std::cell::RefCell<Option<mna::StampPlan>>,
     log_spare: std::cell::RefCell<Vec<(u32, u32, f64)>>,

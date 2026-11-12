@@ -14,6 +14,9 @@ pub(crate) struct Factor {
     u: Vec<Vec<(usize, f64)>>,
     /// The unknown eliminated k-th (empty: the natural order). The columns of `u` are positions in this order.
     perm: Vec<usize>,
+    /// A refactorisation (`refactor`) keeps its eliminated rows in one array instead of `u` (which is then empty): the values of
+    /// `Flat::u_col` of its plan, which also has the pivot rows and the order (`pivot_row` and `perm` are then empty too).
+    flat: Option<(std::rc::Rc<Symbolic>, Vec<f64>)>,
 }
 
 /// What a factorisation decided, kept for the next matrix with the same sparsity pattern (every Newton iteration of a
@@ -31,6 +34,76 @@ pub(crate) struct Symbolic {
     row_ops: Vec<Vec<(usize, usize)>>,
     /// For every pivot row: the columns of its eliminated row (starting with its own pivot column).
     u_cols: Vec<Vec<usize>>,
+    /// The same plan in flat arrays, for `refactor` (made once the order is known).
+    flat: Flat,
+}
+
+/// A `Symbolic` plan laid out in flat arrays, so that a refactorisation walks a few contiguous lists instead of following a
+/// separate `Vec` per row for the input, its row operations and its eliminated row (that was 50 ns a row, half of a Newton
+/// iteration of a 436-unknown post-layout circuit). Everything is indexed by the input row `r` through `*_start[r]..*_start[r + 1]`.
+#[derive(Default)]
+struct Flat {
+    /// The columns of the input row (original numbering, to check the pattern) and where each value goes (its position in the order).
+    pat_start: Vec<usize>,
+    pat_col: Vec<usize>,
+    dst: Vec<usize>,
+    /// The row operations of the row: the column they clear and the pivot row of that column.
+    op_start: Vec<usize>,
+    op_kk: Vec<usize>,
+    op_q: Vec<usize>,
+    /// The columns of the eliminated row (its pivot column first); the factor's values follow the same layout.
+    u_start: Vec<usize>,
+    u_col: Vec<usize>,
+    /// The columns before the pivot column that the row's values reach and no row operation clears: they must come out zero,
+    /// or the plan (made when such an entry was exactly zero) does not hold for these values.
+    chk_start: Vec<usize>,
+    chk_col: Vec<usize>,
+}
+
+impl Flat {
+    fn new(sym: &Symbolic) -> Flat {
+        let n = sym.n;
+        let map = |c: usize| if sym.perm.is_empty() { c } else { sym.pos[c] };
+        let mut step = vec![0usize; n];
+        for (k, &p) in sym.pivot_row.iter().enumerate() {
+            step[p] = k;
+        }
+        let mut f = Flat::default();
+        let mut seen = vec![false; n];
+        for (r, pattern) in sym.pattern.iter().enumerate() {
+            f.pat_start.push(f.pat_col.len());
+            f.op_start.push(f.op_kk.len());
+            f.u_start.push(f.u_col.len());
+            f.chk_start.push(f.chk_col.len());
+            for &c in pattern {
+                f.pat_col.push(c);
+                f.dst.push(map(c));
+            }
+            for &(kk, q) in &sym.row_ops[r] {
+                f.op_kk.push(kk);
+                f.op_q.push(q);
+            }
+            f.u_col.extend_from_slice(&sym.u_cols[r]);
+            // the row's pivot column is the first of its eliminated row (the step that eliminates it when it has none)
+            let first_col = sym.u_cols[r].first().copied().unwrap_or(step[r]);
+            let cleared: Vec<usize> = sym.row_ops[r].iter().map(|e| e.0).collect();
+            let reached = pattern.iter().map(|&c| map(c)).chain(sym.row_ops[r].iter().flat_map(|&(_, q)| sym.u_cols[q].iter().skip(1).copied()));
+            for c in reached {
+                if c < first_col && !cleared.contains(&c) && !seen[c] {
+                    seen[c] = true;
+                    f.chk_col.push(c);
+                }
+            }
+            for &c in &f.chk_col[f.chk_start[r]..] {
+                seen[c] = false;
+            }
+        }
+        f.pat_start.push(f.pat_col.len());
+        f.op_start.push(f.op_kk.len());
+        f.u_start.push(f.u_col.len());
+        f.chk_start.push(f.chk_col.len());
+        f
+    }
 }
 
 impl Symbolic {
@@ -85,7 +158,7 @@ impl Symbolic {
             }
             u_cols[p] = prow;
         }
-        Symbolic { n, pattern, perm: vec![], pos: vec![], pivot_row, row_ops, u_cols }
+        Symbolic { n, pattern, perm: vec![], pos: vec![], pivot_row, row_ops, u_cols, flat: Flat::default() }
     }
 }
 
@@ -250,70 +323,64 @@ pub(super) fn factor_ordered(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_pl
         sym.pattern = orig_pattern;
         sym.perm = perm.clone();
         sym.pos = pos;
+        sym.flat = Flat::new(&sym);
         sym
     });
-    Ok((Factor { n, pivot_row, ops, u: rows, perm }, sym))
+    Ok((Factor { n, pivot_row, ops, u: rows, perm, flat: None }, sym))
 }
 
 /// The numeric factorisation of a matrix with the pattern of `sym`, in its pivot order: row by row, each row combined with
 /// the earlier pivot rows. `None` when the pattern differs or a pivot has become small compared with its row (the caller then
 /// factors from scratch and makes a new plan).
-/// `spare`: the rows of an earlier factor of the same plan (`Factor::into_rows`), filled again instead of allocating new ones.
-pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>], spare: Vec<Vec<(usize, f64)>>) -> Option<Factor> {
+/// `spare`: the values of an earlier factor (`Factor::into_values`), filled again instead of allocating new ones.
+pub(super) fn refactor(sym: &std::rc::Rc<Symbolic>, rows: &[Vec<(usize, f64)>], spare: Vec<f64>) -> Option<Factor> {
     let n = sym.n;
-    if rows.len() != n || rows.iter().zip(&sym.pattern).any(|(r, p)| r.len() != p.len() || r.iter().zip(p).any(|(e, c)| e.0 != *c)) {
+    let fl = &sym.flat;
+    if rows.len() != n
+        || rows.iter().enumerate().any(|(r, row)| row.len() != fl.pat_start[r + 1] - fl.pat_start[r] || row.iter().zip(&fl.pat_col[fl.pat_start[r]..]).any(|(e, c)| e.0 != *c))
+    {
         return None;
     }
     // The columns are scattered into `w` below, in whatever order the row lists them, so the permuted numbering is applied on
     // the way in instead of building a permuted, re-sorted copy of every row.
-    let map = |c: usize| if sym.perm.is_empty() { c } else { sym.pos[c] };
     let mut w = vec![0.0f64; n];
-    let mut u: Vec<Vec<(usize, f64)>> = if spare.len() == n { spare } else { vec![vec![]; n] };
-    let (mut pivot_row, mut ops) = take_factor_buffers(n);
-    pivot_row.copy_from_slice(&sym.pivot_row);
-    let mut touched: Vec<usize> = vec![];
-    for k in 0..n {
-        let p = sym.pivot_row[k];
-        touched.clear();
-        for &(c, v) in &rows[p] {
-            let c = map(c);
+    let mut vals = spare;
+    vals.clear();
+    vals.resize(fl.u_col.len(), 0.0);
+    let (_, mut ops) = take_factor_buffers(0);
+    for &p in &sym.pivot_row {
+        for (&(_, v), &c) in rows[p].iter().zip(&fl.dst[fl.pat_start[p]..]) {
             w[c] = v;
-            touched.push(c);
         }
-        for &(kk, q) in &sym.row_ops[p] {
-            let f = w[kk] / u[q][0].1;
+        for o in fl.op_start[p]..fl.op_start[p + 1] {
+            let (kk, q) = (fl.op_kk[o], fl.op_q[o]);
+            let (q0, q1) = (fl.u_start[q], fl.u_start[q + 1]);
+            let f = w[kk] / vals[q0];
             w[kk] = 0.0;
             if f != 0.0 {
-                for &(c, v) in &u[q][1..] {
+                for (&c, &v) in fl.u_col[q0 + 1..q1].iter().zip(&vals[q0 + 1..q1]) {
                     w[c] -= f * v;
-                    touched.push(c);
                 }
                 ops.push((p, q, f));
             }
         }
         // The plan came from a factorisation that skipped entries that were exactly zero then. An entry in an already
         // eliminated column that is not zero now was never combined away: the plan does not hold for these values.
-        let cols = &sym.u_cols[p];
-        let first_col = cols.first().copied().unwrap_or(k);
-        if touched.iter().any(|&c| c < first_col && w[c] != 0.0) {
-                return None;
+        if fl.chk_col[fl.chk_start[p]..fl.chk_start[p + 1]].iter().any(|&c| w[c] != 0.0) {
+            return None;
         }
-        let cols = &sym.u_cols[p];
-        let mut row = std::mem::take(&mut u[p]);
-        row.clear();
-        row.reserve(cols.len());
-        for &c in cols {
-            row.push((c, w[c]));
+        let (p0, p1) = (fl.u_start[p], fl.u_start[p + 1]);
+        for (&c, v) in fl.u_col[p0..p1].iter().zip(&mut vals[p0..p1]) {
+            *v = w[c];
             w[c] = 0.0;
         }
-        let diag = row.first().map_or(0.0, |e| e.1);
+        let diag = if p1 > p0 { vals[p0] } else { 0.0 };
         // (the accuracy of the answer is checked by the caller: see `residual_ok`)
         if !diag.is_finite() || diag.abs() < 1e-30 {
-                return None;
+            return None;
         }
-        u[p] = row;
     }
-    Some(Factor { n, pivot_row, ops, u, perm: sym.perm.clone() })
+    Some(Factor { n, pivot_row: vec![], ops, u: vec![], perm: vec![], flat: Some((sym.clone(), vals)) })
 }
 
 impl Factor {
@@ -328,6 +395,13 @@ impl Factor {
         self.u
     }
 
+    /// The values of a refactorisation (empty for a full factorisation), for the next `refactor` to fill. The row operations go
+    /// back to this thread's `Scratch`.
+    pub(super) fn into_values(self) -> Vec<f64> {
+        SCRATCH.with(|c| c.borrow_mut().ops = self.ops);
+        self.flat.map(|f| f.1).unwrap_or_default()
+    }
+
     /// Solve A x = b; `b` holds the solution on return.
     pub(super) fn solve(&self, b: &mut [f64]) {
         for &(r, p, f) in &self.ops {
@@ -336,24 +410,41 @@ impl Factor {
         // every x[k] is written below before it is read (only x[c] with c > k is read), so the old contents do not matter
         let mut x = SCRATCH.with(|c| std::mem::take(&mut c.borrow_mut().solve_x));
         x.resize(self.n, 0.0);
-        for k in (0..self.n).rev() {
-            let p = self.pivot_row[k];
-            let mut sum = b[p];
+        // x[k] from the eliminated row of step k, its columns and values in order
+        fn back(k: usize, mut sum: f64, row: impl Iterator<Item = (usize, f64)>, x: &[f64]) -> f64 {
             let mut diag = 0.0;
-            for &(c, v) in &self.u[p] {
+            for (c, v) in row {
                 if c == k {
                     diag = v;
                 } else if c > k {
                     sum -= v * x[c];
                 }
             }
-            x[k] = sum / diag;
+            sum / diag
         }
-        if self.perm.is_empty() {
+        let perm = match &self.flat {
+            Some((sym, vals)) => {
+                let fl = &sym.flat;
+                for k in (0..self.n).rev() {
+                    let p = sym.pivot_row[k];
+                    let (p0, p1) = (fl.u_start[p], fl.u_start[p + 1]);
+                    x[k] = back(k, b[p], fl.u_col[p0..p1].iter().copied().zip(vals[p0..p1].iter().copied()), &x);
+                }
+                &sym.perm
+            }
+            None => {
+                for k in (0..self.n).rev() {
+                    let p = self.pivot_row[k];
+                    x[k] = back(k, b[p], self.u[p].iter().copied(), &x);
+                }
+                &self.perm
+            }
+        };
+        if perm.is_empty() {
             b.copy_from_slice(&x[..self.n]);
         } else {
             for (k, &v) in x[..self.n].iter().enumerate() {
-                b[self.perm[k]] = v;
+                b[perm[k]] = v;
             }
         }
         SCRATCH.with(|c| c.borrow_mut().solve_x = x);
@@ -455,6 +546,7 @@ mod tests {
         ];
         let b = [1.0, 2.0, 3.0, 4.0, 5.0];
         let (f1, sym) = factor_sym(5, rows_of(&a)).unwrap();
+        let sym = std::rc::Rc::new(sym);
         let x1 = solve_with(&f1, &b);
         let f2 = refactor(&sym, &rows_of(&a), vec![]).expect("the same matrix must refactor");
         let x2 = solve_with(&f2, &b);
@@ -468,7 +560,7 @@ mod tests {
         a2[1][2] = -0.5;
         let (g1, _) = factor_sym(5, rows_of(&a2)).unwrap();
         // into the rows of the earlier factor (as the Newton iteration does): bit for bit what fresh rows give
-        let g2 = refactor(&sym, &rows_of(&a2), f2.into_rows()).expect("new values refactor");
+        let g2 = refactor(&sym, &rows_of(&a2), f2.into_values()).expect("new values refactor");
         let g3 = refactor(&sym, &rows_of(&a2), vec![]).expect("new values refactor");
         assert_eq!(solve_with(&g2, &b), solve_with(&g3, &b));
         for (p, q) in solve_with(&g1, &b).iter().zip(&solve_with(&g2, &b)) {
@@ -523,7 +615,8 @@ mod tests {
             m2[i][i] += 1.0;
         }
         let rows2 = rows_of(&m2);
-        let g = refactor(&sym, &rows2, f.into_rows()).expect("the pattern is the same");
+        let sym = std::rc::Rc::new(sym);
+        let g = refactor(&sym, &rows2, vec![]).expect("the pattern is the same");
         let x2 = solve_with(&g, &b);
         assert!(residual_ok(&rows2, &x2, &b));
     }

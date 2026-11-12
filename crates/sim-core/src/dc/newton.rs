@@ -149,7 +149,7 @@ impl Compiled {
                 x.iter_mut().zip(&d).for_each(|(a, d)| *a += d);
                 ok = x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b);
             }
-            *self.factor_spare.borrow_mut() = f.into_rows();
+            *self.factor_spare.borrow_mut() = f.into_values();
             if ok {
                 REFAC.with(|c| c.set([c.get()[0] + 1, c.get()[1]]));
                 *self.rows_spare.borrow_mut() = rows;
