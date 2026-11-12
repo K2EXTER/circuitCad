@@ -32,6 +32,21 @@ pub struct ValueRange {
     pub max: f64,
 }
 
+/// A range of values (ohms, both ends included) with its own figures.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Band {
+    pub min: f64,
+    pub max: f64,
+    #[serde(default)]
+    pub tc_ppm: Option<f64>,
+    /// The coefficient as the data sheet writes it when it is not the same either way ("+350〜−450"): `tc_ppm` is then its
+    /// largest size.
+    #[serde(default)]
+    pub tc_text: Option<String>,
+    #[serde(default)]
+    pub p_max: Option<f64>,
+}
+
 /// One series file. Only resistors for now (P2 in docs/candidates.md); capacitors come with their own fields.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SeriesDef {
@@ -67,6 +82,10 @@ pub struct SeriesDef {
     pub derate_zero_c: f64,
     pub temp_min_c: f64,
     pub temp_max_c: f64,
+    /// Ranges of value with their own temperature coefficient or rated power (KOA RK73H: ±100 ppm/K from 10 Ω to 1 MΩ, ±200 below
+    /// and above; 0.125 W up to 1 kΩ in 0603). A value outside every band takes `tc_ppm` and `p_max`.
+    #[serde(default)]
+    pub bands: Vec<Band>,
     /// Quality marks from the data sheet ("AEC-Q200 Grade 0", "耐硫化"): shown on the series' row.
     #[serde(default)]
     pub quality: Vec<String>,
@@ -78,6 +97,9 @@ pub struct SeriesDef {
     /// The body's size from the data sheet, in words.
     #[serde(default)]
     pub body: String,
+    /// The body drawn on the board's silkscreen and in 3D (a leaded part lying down: its length and diameter).
+    #[serde(default)]
+    pub outline: Option<pcb_core::body::BodySpec>,
 }
 
 /// The series that ship with the program (`crates/part-lib/series/`).
@@ -86,6 +108,10 @@ const BUNDLED: &[(&str, &str)] = &[
     ("ERJ-2RKF", include_str!("../series/ERJ-2RKF.series.json")),
     ("ERJ-3EKF", include_str!("../series/ERJ-3EKF.series.json")),
     ("ERJ-6ENF", include_str!("../series/ERJ-6ENF.series.json")),
+    ("RK73H1E", include_str!("../series/RK73H1E.series.json")),
+    ("RK73H1J", include_str!("../series/RK73H1J.series.json")),
+    ("RK73H2A", include_str!("../series/RK73H2A.series.json")),
+    ("RK73H2B", include_str!("../series/RK73H2B.series.json")),
 ];
 
 /// The bundled series, read once.
@@ -180,6 +206,7 @@ impl SeriesDef {
     pub fn code(&self, v: f64) -> Option<String> {
         match self.code.as_str() {
             "sig3" => sig3(v),
+            "sig2" => sig2(v),
             _ => None,
         }
     }
@@ -223,29 +250,49 @@ impl SeriesDef {
 
     /// The rated continuous working voltage of the value: √(P·R), at most the limiting element voltage.
     pub fn rated_voltage(&self, v: f64) -> f64 {
-        (self.p_max * v).sqrt().min(self.v_limit)
+        (self.power_at(v) * v).sqrt().min(self.v_limit)
+    }
+
+    fn band(&self, v: f64) -> Option<&Band> {
+        self.bands.iter().find(|b| v >= b.min * (1.0 - 1e-9) && v <= b.max * (1.0 + 1e-9))
+    }
+
+    /// The temperature coefficient's limit at the value `v`, ppm/K.
+    pub fn tc_at(&self, v: f64) -> f64 {
+        self.band(v).and_then(|b| b.tc_ppm).unwrap_or(self.tc_ppm)
+    }
+
+    /// The temperature coefficient as the data sheet writes it at the value `v`: "±100", "+350〜−450".
+    pub fn tc_label(&self, v: f64) -> String {
+        self.band(v).and_then(|b| b.tc_text.clone()).unwrap_or_else(|| format!("±{}", self.tc_at(v)))
+    }
+
+    /// The rated power at the value `v` (up to `derate_from_c`), watts.
+    pub fn power_at(&self, v: f64) -> f64 {
+        self.band(v).and_then(|b| b.p_max).unwrap_or(self.p_max)
     }
 
     /// The part of one value.
     pub fn part(&self, v: f64) -> PartDef {
         let name = self.part_name(v);
+        let (tc, power) = (self.tc_label(v), self.power_at(v));
         let value = ohms_text(v);
         let tol = self.tolerance_pct / 100.0;
         let sub = spice_name(&name);
         let quality = if self.quality.is_empty() { String::new() } else { format!("{}。", self.quality.join("・")) };
         let description = format!(
-            "{} {} {} {} ±{}%。{} W ({} ℃まで。それより高い周囲温度では直線で下げ、{} ℃で 0)、この値で使える電圧 {} V (√(電力×抵抗値) と素子の最高電圧 {} V の小さいほう)、温度係数 ±{} ppm/K、使える温度 {}〜{} ℃。{}{}。{}",
+            "{} {} {} {} ±{}%。{} W ({} ℃まで。それより高い周囲温度では直線で下げ、{} ℃で 0)、この値で使える電圧 {} V (√(電力×抵抗値) と素子の最高電圧 {} V の小さいほう)、温度係数 {} ppm/K、使える温度 {}〜{} ℃。{}{}。{}",
             self.maker,
             self.series,
             self.summary,
             value_label(v),
             self.tolerance_pct,
-            self.p_max,
+            power,
             self.derate_from_c,
             self.derate_zero_c,
             trim3(self.rated_voltage(v)),
             self.v_limit,
-            self.tc_ppm,
+            tc,
             self.temp_min_c,
             self.temp_max_c,
             quality,
@@ -260,14 +307,14 @@ impl SeriesDef {
         );
         let limits = vec![
             format!("抵抗値はデータシートの公称値です。1 個ずつの違い (±{} %) は、「温度とばらつき」のばらつき解析と最悪ケースで動きます。", self.tolerance_pct),
-            format!("温度係数は「±{} ppm/K 以内」という保証の範囲で、向きと大きさは 1 個ずつ違うので、モデルでは 0 (温度で値が変わらない) にしています。自己発熱の解析で効かせるときは、部品の設定で温度係数を入れてください。", self.tc_ppm),
+            format!("温度係数は「{} ppm/K」という保証の範囲で、向きと大きさは 1 個ずつ違うので、モデルでは 0 (温度で値が変わらない) にしています。自己発熱の解析で効かせるときは、部品の設定で温度係数を入れてください。", tc),
             "寄生のインダクタンスと容量はデータシートに無いので入れていません。高い周波数 (数百 MHz 以上) では実物と違います。".into(),
-            format!("定格の判定は {} W のままです。周囲温度が {} ℃を超えるときは、データシートの曲線のとおり下げて考えてください。", self.p_max, self.derate_from_c),
+            format!("定格の判定は {} W のままです。周囲温度が {} ℃を超えるときは、データシートの曲線のとおり下げて考えてください。", power, self.derate_from_c),
         ];
         let rows = vec![
             sch_core::SpecRow { name: "許容差".into(), value: format!("±{} %", self.tolerance_pct), condition: String::new() },
-            sch_core::SpecRow { name: "温度係数".into(), value: format!("±{} ppm/K", self.tc_ppm), condition: String::new() },
-            sch_core::SpecRow { name: "定格電力".into(), value: format!("{} W", self.p_max), condition: format!("{} ℃まで。{} ℃で 0 W へ直線で下げる", self.derate_from_c, self.derate_zero_c) },
+            sch_core::SpecRow { name: "温度係数".into(), value: format!("{} ppm/K", tc), condition: String::new() },
+            sch_core::SpecRow { name: "定格電力".into(), value: format!("{} W", power), condition: format!("{} ℃まで。{} ℃で 0 W へ直線で下げる", self.derate_from_c, self.derate_zero_c) },
             sch_core::SpecRow { name: "素子の最高電圧".into(), value: format!("{} V", self.v_limit), condition: "定格電圧は √(電力×抵抗値) とこの値の小さいほう".into() },
             sch_core::SpecRow { name: "使える温度".into(), value: format!("{}〜{} ℃", self.temp_min_c, self.temp_max_c), condition: String::new() },
         ];
@@ -299,8 +346,9 @@ impl SeriesDef {
                 "limits": limits,
                 "origin": { "kind": "equivalent", "source": format!("{} {} のデータシートの公称値と許容差 ({})", self.maker, self.series, self.checked) }
             },
-            "ratings": { "v_max": self.rated_voltage(v), "p_max": self.p_max, "rows": rows },
-            "glyph": "resistor"
+            "ratings": { "v_max": self.rated_voltage(v), "p_max": power, "rows": rows },
+            "glyph": "resistor",
+            "body": self.outline
         });
         serde_json::from_value(json).unwrap_or_else(|e| panic!("series {}: part {name}: {e}", self.series))
     }
@@ -373,6 +421,24 @@ fn sig3(v: f64) -> Option<String> {
     Some(match exp {
         e if e >= 2 => format!("{digits}{}", e - 2),
         1 => format!("{}R{}", &digits[..2], &digits[2..]),
+        0 => format!("{}R{}", &digits[..1], &digits[1..]),
+        _ => return None,
+    })
+}
+
+/// Two significant figures and the number of zeros; `R` for the decimal point below 10 Ω (KOA CF: `103` = 10 kΩ, `2R2` = 2.2 Ω).
+fn sig2(v: f64) -> Option<String> {
+    if !(v.is_finite() && v > 0.0) {
+        return None;
+    }
+    let exp = v.log10().floor() as i32;
+    let m = (v / 10f64.powi(exp - 1)).round() as u32;
+    if !(10..100).contains(&m) || (m as f64 * 10f64.powi(exp - 1) / v - 1.0).abs() > 1e-6 {
+        return None;
+    }
+    let digits = format!("{m}");
+    Some(match exp {
+        e if e >= 1 => format!("{digits}{}", e - 1),
         0 => format!("{}R{}", &digits[..1], &digits[1..]),
         _ => return None,
     })
@@ -491,8 +557,56 @@ mod tests {
                 assert!(names.insert(s.part_name(x)), "{} twice", s.part_name(x));
             }
         }
-        assert_eq!(bundled_parts().len(), names.len());
         assert_eq!(by_name("ERJ-6ENF").unwrap().values().last(), Some(&2.2e6));
+    }
+
+    #[test]
+    fn koa_rk73h_follows_its_ratings_table_by_value_range() {
+        // (series, 10 kΩ part, rated voltage limit, gap A, overall B, width C of Appendix B)
+        let table = [
+            ("RK73H1E", "RK73H1ETTP1002F", 75.0, 0.5, 1.3, 0.3),
+            ("RK73H1J", "RK73H1JTTD1002F", 75.0, 1.0, 2.0, 0.6),
+            ("RK73H2A", "RK73H2ATTD1002F", 150.0, 1.3, 2.5, 1.05),
+            ("RK73H2B", "RK73H2BTTD1002F", 200.0, 2.2, 4.0, 1.4),
+        ];
+        for (series, ten_k, v, a, b, c) in table {
+            let s = by_name(series).unwrap();
+            assert_eq!(s.part_name(10_000.0), ten_k);
+            // 1.0 Ω to 10 MΩ: seven decades of 114 and 10 MΩ itself
+            assert_eq!(s.values().len(), 114 * 7 + 1, "{series}");
+            assert_eq!(s.values().first(), Some(&1.0));
+            assert_eq!(s.part_name(1.0), ten_k.replace("1002F", "1R00F"));
+            assert_eq!(s.rated_voltage(1e7), v);
+            // ±100 ppm/K from 10 Ω to 1 MΩ, ±200 below
+            assert_eq!(s.tc_at(10_000.0), 100.0);
+            assert_eq!(s.tc_at(4.7), 200.0);
+            let fp = s.part(1000.0).footprint().unwrap();
+            let (l, r) = (&fp.pads[0], &fp.pads[1]);
+            let (w, h) = l.shape.size();
+            assert!(((r.pos.x - w / 2.0) - (l.pos.x + w / 2.0) - a).abs() < 1e-9, "{series} gap");
+            assert!(((r.pos.x + w / 2.0) - (l.pos.x - w / 2.0) - b).abs() < 1e-9, "{series} overall");
+            assert!((h - c).abs() < 1e-9, "{series} width");
+        }
+        // above 1 MΩ: ±200 in 0603, ±400 in 0805; in 1206 ±200 to 5.6 MΩ and ±400 from 5.62 MΩ
+        assert_eq!(by_name("RK73H1J").unwrap().tc_at(2.2e6), 200.0);
+        assert_eq!(by_name("RK73H2A").unwrap().tc_at(2.2e6), 400.0);
+        assert_eq!(by_name("RK73H2B").unwrap().tc_at(5.6e6), 200.0);
+        assert_eq!(by_name("RK73H2B").unwrap().tc_at(5.62e6), 400.0);
+        // 0603 is 0.125 W up to 1 kΩ and 0.1 W above, and the part says so
+        let j = by_name("RK73H1J").unwrap();
+        assert_eq!(j.power_at(1000.0), 0.125);
+        assert_eq!(j.power_at(1020.0), 0.1);
+        assert_eq!(j.part(470.0).ratings.unwrap().p_max, Some(0.125));
+        assert!(j.part(4.7).description.contains("±200 ppm/K"));
+    }
+
+    #[test]
+    fn every_bundled_part_name_is_used_once() {
+        let mut names = std::collections::HashSet::new();
+        for d in bundled_parts() {
+            assert!(names.insert(d.name.clone()), "{} twice", d.name);
+            assert_eq!(member(&d.name).map(|(s, v)| s.part_name(v)), Some(d.name.clone()));
+        }
     }
 
     #[test]

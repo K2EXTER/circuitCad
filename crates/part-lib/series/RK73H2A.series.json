@@ -1,0 +1,80 @@
+{
+  "series": "RK73H2A",
+  "maker": "KOA",
+  "category": "抵抗",
+  "summary": "厚膜チップ抵抗 ±1% 0805 (2012)。手はんだしやすい大きさ",
+  "size": "0805",
+  "datasheet": "https://www.koaspeer.com/pdfs/RK73H.pdf",
+  "checked": "KOA のデータシート RK73H (KOA Speer、寸法 10/26/25・定格 01/27/26) と Appendix A (包装、10/27/26)・Appendix B (ランド、04/15/26) で確かめた (2026-11-13)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 1.0,
+    "max": 10000000.0
+  },
+  "mpn": "RK73H2ATTD{code}F",
+  "code": "sig3",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 100.0,
+  "p_max": 0.25,
+  "v_limit": 150.0,
+  "v_overload": 200.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [
+    {
+      "min": 1.0,
+      "max": 9.76,
+      "tc_ppm": 200
+    },
+    {
+      "min": 10,
+      "max": 1000000.0,
+      "tc_ppm": 100
+    },
+    {
+      "min": 1020000.0,
+      "max": 10000000.0,
+      "tc_ppm": 400
+    }
+  ],
+  "quality": [
+    "AEC-Q200"
+  ],
+  "height": 0.5,
+  "footprint_name": "R_0805_KOA",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.05,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.05,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは KOA の推奨 (Appendix B の RK73 の 2A: パッドの内側の間 A 1.3、外側の端から端 B 2.5、パッドの幅 C 1.05 mm)",
+  "body": "本体 2.0 × 1.25 mm、厚さ 0.5 mm (データシートの寸法)。包装は TD (4 mm ピッチの紙テープ、5,000 個)。ほかの包装も中身は同じ部品"
+}

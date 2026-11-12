@@ -285,9 +285,14 @@ mod tests {
         // a value the series does not make: its default part stays, as with no value
         assert_eq!(erj(&titles("erj-3ekf 4.8k")), Vec::<String>::new(), "4.8k is in no field of the 10k part");
         // one part for each series (the four sizes of ERJ), not one for each value
-        let series = part_lib::series::bundled().len();
-        assert_eq!(titles("erj").iter().filter(|x| x.starts_with("ERJ")).count(), series);
-        assert_eq!(titles("res").iter().filter(|x| x.starts_with("ERJ")).count(), series);
+        let erj_series = part_lib::series::bundled().iter().filter(|s| s.series.starts_with("ERJ")).count();
+        assert_eq!(titles("erj").iter().filter(|x| x.starts_with("ERJ")).count(), erj_series);
+        // "res" finds the series too, never two parts of one series
+        let res = titles("res");
+        let series_of = |x: &String| part_lib::series::member(x).map(|(s, _)| s.series.clone());
+        let found: Vec<String> = res.iter().filter_map(series_of).collect();
+        assert!(!found.is_empty());
+        assert_eq!(found.len(), found.iter().collect::<std::collections::HashSet<_>>().len(), "{res:?}");
     }
 
     #[test]
