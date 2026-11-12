@@ -3,6 +3,7 @@
 (`docs/code-notes/sim-core.md` の目次から分けた。内容は元のまま)
 
 ## 解析の速度(2026-10-19)
+**前後比べの道具**(2026-11-12): `tools/sim_compare.py snapshot <名前> [--rev REV] [--ngspice] [--only a,b]` がスナップショット(`tests_bench` の出力、総合デモ配線なし・あり・オペアンプの全点の波形、全サンプルの過渡の時間・点数・値の指紋、ngspice の時間)を `target/sim-compare/<名前>/` に取り、`compare <前> <後>` が時間以外のベンチの違い・波形の一致・波形の変わったサンプル・遅く/速くなったサンプル・ngspice との比を出す。`--rev` は別の worktree と target で組み立てる(`clean` で worktree を消す)。中身は `crates/app/src/tests/sim_snapshot.rs`。使い方は `.claude/skills/sim-compare/SKILL.md`。
 `vendor_xcheck_tran` が自前と ngspice の所要時間を出す(`TIME` 行、最後に `TIMES` の中央値・最大・合計)。`tran_profile`(`SPICE_MODEL_DIR` `SPICE_DUMP_FILE` `SPICE_DUMP_TOP` で1つ指定)は、1つのモデルの過渡の点数と、行列の因数分解を使い回せた回数を出す。
 - **測った結果(公開モデルの過渡 20µs、47個)**: 中央値は自前 0.065 秒、ngspice 0.061 秒(プロセスの起動を含む)でほぼ同じ。合計は自前 39 秒、ngspice 5 秒。遅いのは大きなマクロモデル(行列が 130〜300)と、刻みが小さくなってしまう少数のモデル。
 - **時間の内訳**(`OPA197`、行列 132): ニュートン法の1反復あたり約 200µs のうち、行列の組み立て 約 30%、**因数分解 約 65%**、解く部分 2%。因数分解は毎回「ピボットの選び直し+疎な消去+行の作り直し」を最初からやっていた(係数は 867 個、因数分解後 2935 個と、うめ込みは小さい。時間は構造の探索と配列の確保に使われていた)。

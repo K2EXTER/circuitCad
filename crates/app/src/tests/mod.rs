@@ -4,6 +4,7 @@ mod flow;
 mod mixed;
 mod uln2803a;
 mod sample_models;
+mod sim_snapshot;
 
 use super::*;
 use pcb_core::ratsnest::ratsnest;

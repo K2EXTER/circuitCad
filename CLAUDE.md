@@ -74,7 +74,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## ドキュメント・サンプル
 - `docs/code-notes/` コードの詳細メモ。`sim-core.md` `pcb-core.md` `app.md` は目次で、話題ごとのファイル(`sim-core/` `pcb-core/` `app/`)に分けてある。ほかに `samples.md` `cli.md` `part-lib.md` `crates.md`
 - `docs/candidates.md` 機能の候補と優先順位(次に何を作るかの一覧。着手したら該当行を消す)
-- `docs/competitor-comparison.md` 他の電気CADとの機能比較 / `docs/quality-bench.md` 配置・配線の質を前後で比べる道具(配置・自動配線を変えたら、前後で回して `problems` が 0 のままか確かめる)
+- `docs/competitor-comparison.md` 他の電気CADとの機能比較 / `docs/quality-bench.md` 配置・配線の質を前後で比べる道具(配置・自動配線を変えたら、前後で回して `problems` が 0 のままか確かめる) / `tools/sim_compare.py` シミュレータの答え・波形・速さを前後で比べる道具(sim-core を変えたら前後で回す。`.claude/skills/sim-compare`)
 - `docs/routing-guidelines.md` 配線の考え方 / `docs/learning-path.md` 学習パス / `docs/board-editor.md` 基板の使い方 / `docs/library.md` 部品ライブラリ / `docs/part-format.md` 部品JSON形式
 - `docs/model-policy.md` 同梱する部品のモデルの作り方(等価モデル・使ってよい情報・LTspice の許諾)・表示・誤差の表 / `docs/shop-api-design.md` 部品店の API(在庫・候補、J5)の計画
 - `docs/examples/*.schjson` サンプル回路 (説明と生成テストは `docs/code-notes/samples.md`)

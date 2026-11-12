@@ -72,7 +72,7 @@ pub fn pick_settings(s: &Schematic) -> Result<Option<(f64, f64)>, String> {
 
 /// Run length and step for circuits that move by themselves (their own oscillator or start-up);
 /// anything else gets a short run that checks the circuit stays at its operating point.
-fn own_dynamics(tag: &str) -> (f64, f64) {
+pub(crate) fn own_dynamics(tag: &str) -> (f64, f64) {
     match tag {
         // 150 kHz PWM: the start-up of the output filter
         "buck_converter" => (1e-3, 100e-9),
