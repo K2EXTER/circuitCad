@@ -110,7 +110,7 @@ impl TranResult {
 /// The operating point the run starts from. Capacitors with an initial voltage (`IC=`) are held at
 /// it by temporary voltage sources while the rest of the circuit settles around them.
 fn start_point(circuit: &Circuit, cm: &crate::dc::Compiled) -> Result<(Vec<f64>, Vec<f64>), SimError> {
-    let order = crate::dc::DC_ORDER;
+    let order = crate::dc::TRAN_START_ORDER;
     let has_ic = circuit.initial.iter().any(|(n, _)| circuit.elements.iter().any(|e| matches!(e, crate::Element::Capacitor { name, .. } if name == n)));
     if !has_ic {
         return solve_op(cm, &order).map(|(att, _)| (att.x, att.vj));
@@ -315,7 +315,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
             // an oscillator has no stable operating point (with the capacitors open it sits on
             // the unstable balance point): start from zero charge instead, like SPICE's UIC
             Err(SimError::NoConvergence) => {
-                warnings.push("DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです)".into());
+                warnings.push("DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです。ゆっくり落ち着く回路では、始めの部分が電源を入れた直後の様子になります)".into());
                 (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
             }
             Err(e) => return Err(e),

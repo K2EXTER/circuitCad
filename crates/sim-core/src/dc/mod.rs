@@ -231,9 +231,15 @@ pub(crate) enum Strategy {
     Widen,
 }
 
-/// The order in which the operating point is attempted before a transient, AC or noise run. Those
+/// The order in which the operating point is attempted before an AC or noise run (a transient uses `TRAN_START_ORDER`). Those
 /// rely on a bistable or oscillating circuit reporting "no operating point" and starting from zero.
 pub(crate) const DC_ORDER: [Strategy; 4] = [Strategy::Direct, Strategy::Gmin, Strategy::Source, Strategy::GminLong];
+
+/// The start of a transient run: `DC_ORDER` without `GminLong`. A transient that finds no operating point starts from zero, and over
+/// the tests the long iteration was only ever reached at the start of oscillators, where it never converged and took four tries of
+/// 6000 iterations (0.29 s of the combined demo's 0.58 s). A circuit that only crawls to its operating point (a vendor gate driver
+/// built from saturating sources) now settles there from zero in the first part of the run instead.
+pub(crate) const TRAN_START_ORDER: [Strategy; 3] = [Strategy::Direct, Strategy::Gmin, Strategy::Source];
 
 /// `dc_op` (the DC panel) also tries `Widen`, so that a latch settles into one of its stable states. It comes right after `Direct`: it
 /// solved all 67 bundled examples in 0.22 s where gmin stepping took 0.7 s (and failed two), with the same answers

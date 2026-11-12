@@ -233,7 +233,7 @@ DC電圧 (最悪ケース)	DC voltage (worst case)
 時間刻みは正の値にしてください	Set the time step to a positive value
 終了時間 / 時間刻み が大きすぎます (最大 {} 点)	End time / time step is too large (max {} points)
 {name}: ノイズの最高周波数に対して時間刻みが粗すぎます (刻みは {:.3e} 秒以下を推奨)	{name}: the time step is too coarse for the noise's top frequency (a step of {:.3e} s or less is recommended)
-DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです)	The DC operating point could not be found, so the run started from all zeros (this is normal for oscillators)
+DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです。ゆっくり落ち着く回路では、始めの部分が電源を入れた直後の様子になります)	The DC operating point could not be found, so the run started from all zeros (this is normal for oscillators; in a circuit that settles slowly, the first part shows the moment after power-on)
 データがクロックの {} 前に変わっています (必要なのは {} 以上)。クロックを遅くするか、データまでの遅れ (ゲートの段数) を短くしてください	Data changes {} before the clock ({} or more is needed). Slow the clock or shorten the delay to the data (the number of gate stages)
 データがクロックの {} 後に変わっています (クロックのあと {} は変わってはいけません)。データの経路に遅れを足すか、クロックのずれを減らしてください	Data changes {} after the clock (it must not change for {} after the clock). Add delay to the data path or reduce the clock skew
 セットアップ時間	setup time
