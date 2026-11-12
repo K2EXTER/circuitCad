@@ -506,17 +506,28 @@ pub(super) fn residual(rows: &[Vec<(usize, f64)>], x: &[f64], b: &[f64]) -> Vec<
     rows.iter().zip(b).map(|(row, b)| b - row.iter().map(|&(c, v)| v * x[c]).sum::<f64>()).collect()
 }
 
+/// The fraction of the Newton tolerances below which a residual is not counted (`residual_ok`).
+const RESIDUAL_FLOOR: f64 = 1e-8;
+
 /// Is `x` a solution of `rows * x = b` to rounding level? (A refactorisation in an old pivot order can lose digits when
 /// a pivot has become small; this tells.)
-pub(super) fn residual_ok(rows: &[Vec<(usize, f64)>], x: &[f64], b: &[f64]) -> bool {
+///
+/// Each row's residual is held to 1e-8 of the size of its terms, or to `RESIDUAL_FLOOR` of what moving every unknown by its
+/// Newton tolerance would make (`tol.1` for the first `tol.0` unknowns, the node voltages, and `tol.2` for the rest), whichever is
+/// larger. Without that floor a row whose terms are all near zero failed on rounding alone: the noise node of an op-amp model
+/// (`Rnz nz 0 1k`, nothing else) comes out at 1e-16 V, so every term of its row is 1e-19 A and so is the residual, and even a
+/// fresh factorisation failed it; most refactorisations of the 41-part demo went on to iterative refinement for it.
+pub(super) fn residual_ok(rows: &[Vec<(usize, f64)>], x: &[f64], b: &[f64], tol: (usize, f64, f64)) -> bool {
+    let (nv, vtol, itol) = tol;
     rows.iter().zip(b).all(|(row, b)| {
-        let (mut sum, mut scale) = (0.0f64, b.abs());
+        let (mut sum, mut scale, mut moved) = (0.0f64, b.abs(), 0.0f64);
         for &(c, v) in row {
             let t = v * x[c];
             sum += t;
             scale += t.abs();
+            moved += v.abs() * if c < nv { vtol } else { itol };
         }
-        (sum - b).abs() <= 1e-8 * scale + 1e-30
+        (sum - b).abs() <= 1e-8 * scale + RESIDUAL_FLOOR * moved + 1e-30
     })
 }
 
@@ -605,7 +616,7 @@ mod tests {
         let (f, sym) = factor_sym(n, rows.clone()).unwrap();
         assert!(!sym.perm.is_empty(), "a system of {n} unknowns is ordered");
         let x = solve_with(&f, &b);
-        assert!(residual_ok(&rows, &x, &b), "the answer solves the equations");
+        assert!(residual_ok(&rows, &x, &b, (0, 0.0, 0.0)), "the answer solves the equations");
         let nnz: usize = rows.iter().map(|r| r.len()).sum();
         let fill: usize = f.u.iter().map(|r| r.len()).sum();
         assert!(fill < 8 * nnz, "fill-in {fill} for {nnz} entries");
@@ -618,6 +629,6 @@ mod tests {
         let sym = std::rc::Rc::new(sym);
         let g = refactor(&sym, &rows2, vec![]).expect("the pattern is the same");
         let x2 = solve_with(&g, &b);
-        assert!(residual_ok(&rows2, &x2, &b));
+        assert!(residual_ok(&rows2, &x2, &b, (0, 0.0, 0.0)));
     }
 }

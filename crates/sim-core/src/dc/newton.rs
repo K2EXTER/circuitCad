@@ -134,9 +134,11 @@ impl Compiled {
         let plan = if n >= REFACTOR_MIN_SIZE { self.plan.borrow().clone() } else { None };
         let rf = plan.as_ref().and_then(|sym| linalg::refactor(sym, &rows, std::mem::take(&mut *self.factor_spare.borrow_mut())));
         if let Some(f) = rf {
+            let o = crate::options::options();
+            let tol = (self.n_nodes - 1, o.vntol, o.abstol);
             let mut x = b.clone();
             f.solve(&mut x);
-            let mut ok = x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b);
+            let mut ok = x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b, tol);
             // An old pivot order loses a few digits when a conductance has moved by decades (a switch, a diode turning on): one or
             // two steps of iterative refinement with the same factors win them back, far cheaper than a new factorisation. The
             // answer is held to the same test.
@@ -147,7 +149,7 @@ impl Compiled {
                 let mut d = linalg::residual(&rows, &x, &b);
                 f.solve(&mut d);
                 x.iter_mut().zip(&d).for_each(|(a, d)| *a += d);
-                ok = x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b);
+                ok = x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b, tol);
             }
             *self.factor_spare.borrow_mut() = f.into_values();
             if ok {
