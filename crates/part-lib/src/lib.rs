@@ -327,6 +327,15 @@ pub fn load_dir(dir: &Path) -> (Vec<PartDef>, Vec<String>) {
     (parts, errors)
 }
 
+/// The library as the program uses it: the parts in `dir`, then every part of the bundled series (`series.rs`) whose name no
+/// file in `dir` already uses (a user's own copy of a series part wins). The series parts are not written to `dir`.
+pub fn load_library(dir: &Path) -> (Vec<PartDef>, Vec<String>) {
+    let (mut parts, errors) = load_dir(dir);
+    let have: std::collections::HashSet<String> = parts.iter().map(|p| p.name.clone()).collect();
+    parts.extend(series::bundled_parts().iter().filter(|p| !have.contains(&p.name)).cloned());
+    (parts, errors)
+}
+
 /// Write the part into the library. A part name is unique there: another file that holds a part of the same name (a bundled part's
 /// file is not named like the part: "TMUX1101_SOT-23-5.part.json") is replaced, not left beside the new one.
 pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
@@ -854,6 +863,7 @@ pub mod ltspice_import;
 pub mod vendorzip;
 pub mod model_checks;
 pub mod passive;
+pub mod series;
 pub mod templates;
 pub mod thru_hole;
 

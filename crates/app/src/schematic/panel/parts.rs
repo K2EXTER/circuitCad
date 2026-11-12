@@ -60,7 +60,7 @@ impl SchEditor {
                 };
                 let groups = names
                     .iter()
-                    .map(|f| (*f, (0..self.library.len()).filter(|&i| part_family(k, &self.library[i]) == Some(*f)).collect::<Vec<_>>()))
+                    .map(|f| (*f, (0..self.library.len()).filter(|&i| !in_series(&self.library[i]) && part_family(k, &self.library[i]) == Some(*f)).collect::<Vec<_>>()))
                     .filter(|(_, v)| !v.is_empty())
                     .collect::<Vec<_>>();
                 (k, groups)
@@ -128,7 +128,17 @@ impl SchEditor {
                 self.lib_open = false;
             }
         }
-        let library_title = crate::widgets::count_title(ui, "ライブラリ部品", self.library.len());
+        // a series (one part per value) counts as one part and shows as one row: the chosen value's part, else its default value's
+        let rep_of = |s: &part_lib::series::SeriesDef| -> Option<usize> {
+            if let Some(k) = self.place_lib.filter(|&k| self.library.get(k).and_then(|d| part_lib::series::member(&d.name)).is_some_and(|(x, _)| x.series == s.series)) {
+                return Some(k);
+            }
+            let name = s.part_name(s.default_value());
+            self.library.iter().position(|d| d.name == name)
+        };
+        let reps: Vec<usize> = part_lib::series::bundled().iter().filter_map(rep_of).collect();
+        let library_count = self.library.iter().filter(|d| !in_series(d)).count() + reps.len();
+        let library_title = crate::widgets::count_title(ui, "ライブラリ部品", library_count);
         let (_, library_clicked) = crate::widgets::band_header(ui, "library", library_title, self.lib_open, true, |ui| {
             // everything inside the library group sits in one sunken well joined to the band; the indent line is not needed there
             crate::widgets::well(ui, |ui| {
@@ -163,11 +173,16 @@ impl SchEditor {
                     if (!self.lib_cat.is_empty() && self.lib_cat != cat_of(d)) || (self.lib_sim_only && d.sim.is_none()) {
                         return false;
                     }
+                    // a series' other values only when the search is that part number
+                    if in_series(d) && !reps.contains(&i) {
+                        return !f.is_empty() && d.name.to_lowercase() == f;
+                    }
                     if f.is_empty() {
                         return true;
                     }
                     let pins = d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ");
-                    [d.name.as_str(), d.description.as_str(), cat_of(d).as_str(), pins.as_str(), d.footprint_name().as_str()].iter().any(|t| t.to_lowercase().contains(&f))
+                    let series = part_lib::series::member(&d.name).map(|(s, _)| format!("{} {} {}", s.series, s.maker, s.quality.join(" "))).unwrap_or_default();
+                    [d.name.as_str(), d.description.as_str(), cat_of(d).as_str(), pins.as_str(), d.footprint_name().as_str(), series.as_str()].iter().any(|t| t.to_lowercase().contains(&f))
                 })
                 .collect();
             // the list fills what is left of the window (the part card and "部品を作る" stay below it)
@@ -192,8 +207,18 @@ impl SchEditor {
                     let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 24.0), egui::Sense::click());
                     let color = if selected { ui.visuals().selection.stroke.color } else { ui.visuals().text_color() };
                     super::symbols::paint_lines_preview(ui.painter(), rect, &super::symbol_lines(&d.symbol()), color);
-                    if (pic | ui.selectable_label(selected, format!("{}{mark}", d.name))).on_hover_text(lib_hover(d)).clicked() {
+                    // a series' row: its name and the value now chosen; the value is changed on the card below
+                    let (label, hover) = match part_lib::series::member(&d.name) {
+                        Some((s, v)) => (format!("{} … {}{mark}", s.series, part_lib::series::ohms_text(v)), series_hover(s)),
+                        None => (format!("{}{mark}", d.name), lib_hover(d)),
+                    };
+                    if (pic | ui.selectable_label(selected, label)).on_hover_text(hover).clicked() {
                         chosen = Some(i);
+                    }
+                    if let Some((s, _)) = part_lib::series::member(&d.name) {
+                        for q in &s.quality {
+                            ui.small(egui::RichText::new(q).color(crate::theme::INFO)).on_hover_text(i18n::tr_dyn(quality_tip(q)));
+                        }
                     }
                 });
             };
@@ -244,14 +269,21 @@ impl SchEditor {
                 self.lib_prefs.toggle_fav(&n);
                 self.lib_prefs.save(&self.lib_dir);
             }
+            let mut switch_to: Option<f64> = None;
             if let Some(d) = self.place_lib.and_then(|k| self.library.get(k)) {
+                let member = part_lib::series::member(&d.name);
                 ui.group(|ui| {
                     ui.strong(&d.name);
+                    if let Some((s, v)) = member {
+                        switch_to = series_value_ui(ui, s, v, &mut self.series_value);
+                    }
                     ui.small(i18n::trf!("パッケージ: {}", d.footprint_name()));
                     if ui.small_button(i18n::tr("編集…")).on_hover_text(i18n::tr("この部品を部品作成の窓で開いて、ピン・部品の形・モデル・定格などを直します。保存すると書き換わります (名前を変えると別の部品として追加)")).clicked() {
                         edit_part = Some(d.clone());
                     }
-                    if self.lib_delete.as_deref() == Some(d.name.as_str()) {
+                    if member.is_some() {
+                        // a bundled series is not a file in the library folder: there is nothing to delete
+                    } else if self.lib_delete.as_deref() == Some(d.name.as_str()) {
                         ui.horizontal(|ui| {
                             ui.colored_label(crate::theme::ERROR, i18n::tr("本当に削除しますか?"));
                             if ui.small_button(i18n::tr("削除する")).on_hover_text(i18n::tr("この部品のファイルをライブラリのフォルダから消します。元に戻せません。回路図や基板に置いた部品は、そのまま残ります")).clicked() {
@@ -280,6 +312,12 @@ impl SchEditor {
                     });
                     ui.small(if d.sim.is_some() { i18n::tr("シミュレーションモデルあり ◎") } else { i18n::tr("シミュレーションモデルなし (基板設計用)") });
                 });
+            }
+            if let Some(v) = switch_to
+                && let Some((s, _)) = self.place_lib.and_then(|k| self.library.get(k)).and_then(|d| part_lib::series::member(&d.name))
+                && let Some(k) = self.library.iter().position(|d| d.name == s.part_name(v))
+            {
+                self.choose_library_part(k);
             }
             if let Some(n) = delete_part {
                 self.lib_delete = None;
@@ -358,6 +396,74 @@ pub(super) fn lib_hover(d: &part_lib::PartDef) -> String {
             }
         }
     t
+}
+
+/// Is the part one value of a bundled series (shown as the series' one row)?
+fn in_series(d: &PartDef) -> bool {
+    part_lib::series::member(&d.name).is_some()
+}
+
+/// Tooltip of a series' row.
+fn series_hover(s: &part_lib::series::SeriesDef) -> String {
+    let mut t = i18n::trf!("{} {} の {}。{} の値から選べます (部品を選んで、下の欄に抵抗値を入れます)", s.maker, s.series, s.summary, s.range_text());
+    if !s.quality.is_empty() {
+        t.push_str(&i18n::trf!("\n品質: {}", s.quality.join("・")));
+    }
+    t.push_str(&format!("\n\n{}", s.checked));
+    t
+}
+
+/// What a quality mark means, for its tooltip.
+fn quality_tip(q: &str) -> &'static str {
+    if q.starts_with("AEC-Q200") {
+        "AEC-Q200: 車載用の受動部品の信頼性試験の規格。温度サイクル・湿度・はんだ付けなどの試験を通った品です。Grade 0 は −50〜150 ℃の範囲。メーカーは歩留まりを公開しないので、品質を比べる目安のひとつになります"
+    } else if q.contains("硫化") {
+        "耐硫化: 硫黄を含む空気で電極が腐って断線する故障を防いだ品です"
+    } else {
+        "データシートに書かれた品質の印です"
+    }
+}
+
+/// The value field of a series part on the library card. Returns the series' value to switch to when the typed value is made
+/// (or a nearby one is clicked).
+fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64, text: &mut String) -> Option<f64> {
+    let mut switch = None;
+    ui.horizontal(|ui| {
+        ui.label(i18n::tr("抵抗値"));
+        ui.add(egui::TextEdit::singleline(text).desired_width(70.0))
+            .on_hover_text(i18n::trf!("{} の値を入れると、その型番に切り替わります (例: 4.7k、4k7、220、1M)", s.range_text()));
+        ui.small(egui::RichText::new(s.range_text()).weak());
+    });
+    match part_lib::series::parse_ohms(text) {
+        None => {
+            if !text.trim().is_empty() {
+                ui.colored_label(crate::theme::WARN, i18n::tr("値を読めません。4.7k・4k7・220・1M のように書いてください"));
+            }
+        }
+        Some(v) => match s.nearest(v) {
+            Some((x, true)) => {
+                if (x / now - 1.0).abs() > 1e-9 {
+                    switch = Some(x);
+                }
+            }
+            _ => {
+                ui.colored_label(crate::theme::WARN, i18n::trf!("{} は {} にありません。近い値:", part_lib::series::ohms_text(v), s.series));
+                let (lo, hi) = s.neighbours(v);
+                ui.horizontal(|ui| {
+                    for x in [lo, hi].into_iter().flatten() {
+                        if ui.small_button(part_lib::series::ohms_text(x)).on_hover_text(s.part_name(x)).clicked() {
+                            *text = part_lib::series::ohms_text(x);
+                            switch = Some(x);
+                        }
+                    }
+                });
+            }
+        },
+    }
+    for q in &s.quality {
+        ui.small(egui::RichText::new(i18n::trf!("品質: {}", q)).color(crate::theme::INFO)).on_hover_text(i18n::tr_dyn(quality_tip(q)));
+    }
+    switch
 }
 
 /// One row of the basic parts list: a small picture of the symbol, then the name.

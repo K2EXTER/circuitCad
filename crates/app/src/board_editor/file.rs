@@ -261,7 +261,7 @@ impl BoardEditor {
             let pick = |lib: &'_ [part_lib::PartDef]| library_part(lib, want, &c.footprint).cloned();
             let found = match pick(&sch_ed.library) {
                 Some(d) => Some(d),
-                None => pick(on_disk.get_or_insert_with(|| part_lib::load_dir(&part_lib::default_dir()).0)),
+                None => pick(on_disk.get_or_insert_with(|| part_lib::load_library(&part_lib::default_dir()).0)),
             };
             let found = found.as_ref();
             if let Some(spec) = c.custom.as_ref().and_then(|sym| part_lib::swap_for(&sym.name, &sch_ed.library)) {

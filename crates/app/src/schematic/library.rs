@@ -47,7 +47,7 @@ impl LibPrefs {
 
 impl SchEditor {
     pub(super) fn reload_library(&mut self) {
-        let (lib, errs) = part_lib::load_dir(&self.lib_dir);
+        let (lib, errs) = part_lib::load_library(&self.lib_dir);
         self.library = lib;
         self.lib_rev += 1;
         self.lib_errors = errs;
@@ -89,12 +89,48 @@ impl SchEditor {
     }
 
     /// Put a library part on the cursor, and remember it as recently used.
+    /// Opens the library list with the part `name` chosen (`--lib-part`). A series' name picks its part of `value` (or of its
+    /// default value), and `value` is left in the card's field even when the series does not make it.
+    pub fn open_library_part(&mut self, name: &str, value: &str) {
+        let target = match part_lib::series::by_name(name) {
+            Some(s) => {
+                let v = part_lib::series::parse_ohms(value).and_then(|v| s.nearest(v)).map_or(s.default_value(), |(x, _)| x);
+                s.part_name(v)
+            }
+            None => name.to_string(),
+        };
+        if let Some(i) = self.library.iter().position(|d| d.name.eq_ignore_ascii_case(&target)) {
+            self.lib_open = true;
+            self.basic_open = false;
+            // not choose_library_part: a screenshot run must not add to the user's recent parts
+            self.tool = Tool::Place;
+            self.place_lib = Some(i);
+            self.pending = None;
+            if let Some((_, v)) = part_lib::series::member(&target) {
+                self.series_value = part_lib::series::ohms_text(v);
+            }
+            if !value.is_empty() {
+                self.series_value = value.to_string();
+            }
+        }
+    }
+
+    /// Opens the library list with `text` in its search box (`--lib-search`).
+    pub fn set_library_search(&mut self, text: &str) {
+        self.lib_open = true;
+        self.basic_open = false;
+        self.lib_filter = text.to_string();
+    }
+
     pub(super) fn choose_library_part(&mut self, i: usize) {
         self.tool = Tool::Place;
         self.place_lib = Some(i);
         self.pending = None;
         if let Some(d) = self.library.get(i) {
             let name = d.name.clone();
+            if let Some((_, v)) = part_lib::series::member(&name) {
+                self.series_value = part_lib::series::ohms_text(v);
+            }
             self.lib_prefs.touch(&name);
             self.lib_prefs.save(&self.lib_dir);
         }

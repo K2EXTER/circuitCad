@@ -216,7 +216,7 @@ impl Session {
         let dir = lib_dir.unwrap_or_else(part_lib::default_dir);
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
-        let (lib, lib_errors) = part_lib::load_dir(&dir);
+        let (lib, lib_errors) = part_lib::load_library(&dir);
         Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false, first_sheet_name: None }
     }
 

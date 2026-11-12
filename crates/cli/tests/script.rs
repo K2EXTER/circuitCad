@@ -2218,3 +2218,25 @@ worst out tol_r=0 tol_c=0 tol_l=0 spread=off
 "));
     assert!(b.last().unwrap()["error"].as_str().unwrap().contains("spread=maybe"));
 }
+
+#[test]
+fn a_makers_series_is_listed_once_and_placed_by_its_value() {
+    // Panasonic ERJ-3EKF: 10 kΩ in E24/E96 is ERJ-3EKF1002V; 4.7 k and 4.7 k as a divider of 12 V gives 6 V
+    let (a, ok) = run("new\nparts ERJ\nadd V 12 as=V1\nadd ERJ-3EKF 4.7k as=R1\nadd ERJ-3EKF 4k7 as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\ndc\n");
+    assert!(ok, "{a:?}");
+    let parts = last(&a, "parts");
+    assert_eq!(parts["series"][0]["series"], "ERJ-3EKF");
+    assert_eq!(parts["series"][0]["example"], "ERJ-3EKF1002V");
+    assert_eq!(parts["count"], 0, "the 571 values are not listed one by one");
+    let adds: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "add" && v["ref"] != "V1").collect();
+    assert_eq!(adds[0]["type"], "ERJ-3EKF4701V");
+    assert_eq!(adds[1]["type"], "ERJ-3EKF4701V");
+    assert_eq!(adds[0]["footprint"], "R_0603_Panasonic");
+    let mid = last(&a, "dc")["voltages"]["MID"].as_f64().unwrap();
+    assert!((mid - 6.0).abs() < 1e-6, "MID = {mid}");
+    // a value the series does not make is refused with the values next to it
+    let (b, ok) = run("new\nadd ERJ-3EKF 4.8k as=R1\n");
+    assert!(!ok);
+    let err = b.last().unwrap()["error"].as_str().unwrap();
+    assert!(err.contains("ERJ-3EKF4751V") && err.contains("ERJ-3EKF4871V"), "{err}");
+}

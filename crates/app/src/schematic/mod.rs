@@ -164,6 +164,8 @@ pub struct SchEditor {
     /// The quick-add box (key A), when open.
     quick: Option<quick::QuickAdd>,
     place_lib: Option<usize>,
+    /// The value typed in the library card when the chosen part belongs to a series (`part_lib::series`): "4.7k".
+    series_value: String,
     form: Option<PartForm>,
     /// The "import from KiCad" window (symbol list and optional footprint).
     kicad: Option<kicad_import::KicadImport>,
@@ -561,7 +563,7 @@ impl Default for SchEditor {
     fn default() -> Self {
         let lib_dir = part_lib::default_dir();
         let _ = part_lib::install_examples(&lib_dir);
-        let (library, lib_errors) = part_lib::load_dir(&lib_dir);
+        let (library, lib_errors) = part_lib::load_library(&lib_dir);
         let lib_prefs = library::LibPrefs::load(&lib_dir);
         Self {
             library,
@@ -579,6 +581,7 @@ impl Default for SchEditor {
             lib_cat: String::new(),
             lib_sim_only: false,
             place_lib: None,
+            series_value: String::new(),
             form: None,
             kicad: None,
             dc: None,

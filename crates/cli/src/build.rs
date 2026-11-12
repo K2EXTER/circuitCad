@@ -223,12 +223,24 @@ fn bad_number(v: &str) -> String {
 impl Session {
     pub fn parts(&self, args: &[String]) -> crate::Out {
         let words: Vec<String> = args.iter().map(|w| lower(w)).collect();
+        let matches = |d: &part_lib::PartDef| {
+            let hay = lower(&format!("{} {} {}", d.name, d.category, d.description));
+            words.iter().all(|w| hay.contains(w.as_str()))
+        };
+        // a series' parts (one per value) are listed once, as the series; a member is listed itself only when asked by its full name
+        let mut series: Vec<&part_lib::series::SeriesDef> = vec![];
         let hits: Vec<&part_lib::PartDef> = self
             .lib
             .iter()
-            .filter(|d| {
-                let hay = lower(&format!("{} {} {}", d.name, d.category, d.description));
-                words.iter().all(|w| hay.contains(w.as_str()))
+            .filter(|d| matches(d))
+            .filter(|d| match part_lib::series::member(&d.name) {
+                Some((s, _)) => {
+                    if !series.iter().any(|x| x.series == s.series) {
+                        series.push(s);
+                    }
+                    words.iter().any(|w| *w == lower(&d.name))
+                }
+                None => true,
             })
             .collect();
         let shown: Vec<Value> = hits
@@ -236,7 +248,11 @@ impl Session {
             .take(40)
             .map(|d| json!({"name": d.name, "category": d.category, "pins": d.pins.len(), "simulates": d.sim.is_some(), "description": d.description}))
             .collect();
-        obj(json!({"count": hits.len(), "shown": shown.len(), "parts": shown, "basic": ["R", "C", "L", "D", "LED", "V", "NPN", "HEADERn"], "library_errors": self.lib_errors}))
+        let series: Vec<Value> = series
+            .iter()
+            .map(|s| json!({"series": s.series, "maker": s.maker, "summary": s.summary, "values": s.range_text(), "quality": s.quality, "example": s.part_name(s.default_value()), "add": format!("add {} 4.7k", s.series)}))
+            .collect();
+        obj(json!({"count": hits.len(), "shown": shown.len(), "parts": shown, "series": series, "basic": ["R", "C", "L", "D", "LED", "V", "NPN", "HEADERn"], "library_errors": self.lib_errors}))
     }
 
     pub fn part(&self, args: &[String]) -> Res {
@@ -283,8 +299,26 @@ impl Session {
             None => None,
         };
         let kind = basic_kind(t);
+        // a series and a value ("add ERJ-3EKF 4.7k"): the series' part of that value
+        let series_part = if kind.is_none() && let Some(s) = part_lib::series::by_name(t) {
+            let v = match pos.get(1) {
+                Some(text) => part_lib::series::parse_ohms(text).ok_or_else(|| bad_number(text))?,
+                None => s.default_value(),
+            };
+            match s.nearest(v) {
+                Some((x, true)) => Some(s.part_name(x)),
+                _ => {
+                    let (lo, hi) = s.neighbours(v);
+                    let near: Vec<String> = [lo, hi].into_iter().flatten().map(|x| format!("{} ({})", part_lib::series::ohms_text(x), s.part_name(x))).collect();
+                    return Err(format!("{} is not made in {} ({}); nearest: {}", part_lib::series::ohms_text(v), s.series, s.range_text(), near.join(", ")));
+                }
+            }
+        } else {
+            None
+        };
+        let t = series_part.as_ref().unwrap_or(t);
         let lib_part = if kind.is_none() { Some(self.find_part(t)?.clone()) } else { None };
-        let value = pos.get(1).cloned();
+        let value = if series_part.is_some() { None } else { pos.get(1).cloned() };
         if let (Some(k), Some(v)) = (kind, &value)
             && matches!(k, Kind::Resistor | Kind::Capacitor | Kind::Inductor)
             && sim_core::parse_part_value(v).is_err()

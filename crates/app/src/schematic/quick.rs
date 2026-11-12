@@ -84,14 +84,35 @@ pub(super) fn quick_matches(query: &str, basic: &[Kind], library: &[PartDef], pr
         }
         order += 1;
     }
+    // values typed as resistances ("4.7k", "220"): they pick a series' part of that value
+    let typed: Vec<f64> = words.iter().filter_map(|w| part_lib::series::parse_ohms(w)).collect();
     for (i, d) in library.iter().enumerate() {
+        // a series (one part per value) shows one part: the value typed when the series makes it, else its default value
+        let member = part_lib::series::member(&d.name);
+        if let Some((s, v)) = member {
+            let made = |t: &f64| s.nearest(*t).is_some_and(|(_, exact)| exact);
+            let wanted = typed.iter().any(|t| made(t) && (t / v - 1.0).abs() < 5e-4);
+            let default = !typed.iter().any(made) && (v / s.default_value() - 1.0).abs() < 1e-9;
+            if !(wanted || default || fav_pos(&d.name).is_some() || recent_pos(&d.name).is_some()) {
+                order += 1;
+                continue;
+            }
+        }
         // a library part in the category of a basic part ("抵抗", "コンデンサ", "トランジスタ"...) is found by that part's words too:
         // "res" found the basic resistor but not the library ones, whose category is only in Japanese
         let kind_words = basic.iter().filter(|k| d.category.contains(k.label().as_str())).map(|k| aliases(*k)).collect::<Vec<_>>().join(" ");
-        let fields = [(d.name.as_str(), 100), (d.category.as_str(), 40), (kind_words.as_str(), 40), (&d.footprint_name(), 30)];
+        let series_words = member.map(|(s, v)| format!("{} {} {}", s.series, s.maker, part_lib::series::ohms_text(v))).unwrap_or_default();
+        let footprint = d.footprint_name();
+        let fields = [(d.name.as_str(), 100), (d.category.as_str(), 40), (kind_words.as_str(), 40), (footprint.as_str(), 30), (series_words.as_str(), 90)];
+        // a series part has already matched the value typed for it ("4k7" is its 4.7k): the other words decide
+        let own: Vec<String> = match member {
+            Some((_, v)) => words.iter().filter(|w| part_lib::series::parse_ohms(w).is_none_or(|t| (t / v - 1.0).abs() >= 5e-4)).cloned().collect(),
+            None => words.clone(),
+        };
+        let value_only = !words.is_empty() && own.is_empty();
         // pin names count only when one is typed in full, and the description only at the start of its words: "res" listed every
         // chip with a RESET pin (an ADC, the microcontrollers, the 555) and nothing about resistors
-        let score = score_all(&words, &fields).or_else(|| {
+        let score = score_all(&own, &fields).or_else(|| {
             let text = d.description.to_lowercase();
             // Japanese has no spaces between words: a Japanese word may sit anywhere in the text
             let in_text = |w: &str| if w.is_ascii() { text.split(|c: char| !c.is_ascii_alphanumeric()).any(|t| t.starts_with(w)) } else { text.contains(w) };
@@ -105,17 +126,17 @@ pub(super) fn quick_matches(query: &str, basic: &[Kind], library: &[PartDef], pr
                 }
             };
             let mut total = 0;
-            for w in &words {
+            for w in &own {
                 let best = fields.iter().map(|(t, weight)| field_score(t, w, *weight)).max().unwrap_or(0).max(pin_or_text(w));
                 if best == 0 {
                     return None;
                 }
                 total += best;
             }
-            (!words.is_empty()).then_some(total)
+            (!own.is_empty()).then_some(total)
         });
         let boost = fav_pos(&d.name).map(|_| 400).or(recent_pos(&d.name).map(|p| 300 - p as u32)).unwrap_or(0);
-        let base = if words.is_empty() { (boost > 0).then_some(1) } else { score };
+        let base = if words.is_empty() { (boost > 0).then_some(1) } else if value_only { Some(180) } else { score.map(|s| if own.len() < words.len() { s + 180 } else { s }) };
         if let Some(s) = base {
             let sim = if d.sim.is_some() { " ◎" } else { "" };
             let star = if fav_pos(&d.name).is_some() { "★ " } else if recent_pos(&d.name).is_some() { "最近 " } else { "" };
@@ -249,6 +270,21 @@ mod tests {
         assert_eq!(titles("lm358", &p)[0], "LM358");
         assert!(titles("0603", &p).iter().any(|t| t == "C_100n_0603"), "found through its package");
         assert!(titles("zzzz-no-such", &p).is_empty());
+    }
+
+    #[test]
+    fn a_series_shows_one_part_the_value_typed_or_its_default() {
+        let p = LibPrefs::default();
+        let mut l = lib();
+        l.extend(part_lib::series::bundled_parts().iter().cloned());
+        let titles = |q: &str| quick_matches(q, Kind::PALETTE, &l, &p).into_iter().map(|h| h.title).collect::<Vec<_>>();
+        let erj = |t: &Vec<String>| t.iter().filter(|x| x.starts_with("ERJ-3EKF")).cloned().collect::<Vec<_>>();
+        assert_eq!(erj(&titles("erj")), ["ERJ-3EKF1002V"]);
+        assert_eq!(erj(&titles("erj 4.7k")), ["ERJ-3EKF4701V"]);
+        assert_eq!(erj(&titles("抵抗 4k7")), ["ERJ-3EKF4701V"]);
+        // a value the series does not make: its default part stays, as with no value
+        assert_eq!(erj(&titles("erj 4.8k")), Vec::<String>::new(), "4.8k is in no field of the 10k part");
+        assert_eq!(titles("res").iter().filter(|x| x.starts_with("ERJ")).count(), 1);
     }
 
     #[test]

@@ -165,7 +165,7 @@ impl Session {
         };
         let before = self.lib.len();
         if reload {
-            let (lib, errors) = part_lib::load_dir(&self.lib_dir);
+            let (lib, errors) = part_lib::load_library(&self.lib_dir);
             self.lib = lib;
             self.lib_errors = errors;
         }
@@ -225,7 +225,7 @@ impl Session {
             programming: vec![],
         };
         let path = part_lib::save(&self.lib_dir, &part).map_err(|e| format!("cannot write the part file: {e}"))?;
-        let (lib, errors) = part_lib::load_dir(&self.lib_dir);
+        let (lib, errors) = part_lib::load_library(&self.lib_dir);
         self.lib = lib;
         self.lib_errors = errors;
         let todo = vec![

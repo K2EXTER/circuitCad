@@ -77,6 +77,15 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         // open the quick-add box (key A) with a word already typed, for screenshots
         app.sch.open_quick_add_with(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
     }
+    if let Some(i) = args.iter().position(|a| a == "--lib-part") {
+        // open the library list on a part (a series' name with a value: "ERJ-3EKF 4.8k"), for screenshots
+        let arg = |k: usize| args.get(i + k).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str());
+        app.sch.open_library_part(arg(1), arg(2));
+    }
+    if let Some(i) = args.iter().position(|a| a == "--lib-search") {
+        // the library list's search box, for screenshots
+        app.sch.set_library_search(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
+    }
     if let Some(i) = args.iter().position(|a| a == "--guide") {
         app.help.show(match args.get(i + 1).map(|s| s.as_str()) {
             Some("waveform") => help::HelpTab::Waveform,
