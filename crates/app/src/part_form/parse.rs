@@ -396,6 +396,7 @@ impl PartForm {
                 y: self.body_y,
                 mark: self.body_mark,
                 mark_pin: self.body_pin.trim().to_string(),
+                color_code: self.body_color_code.clone(),
             }),
             shops: Default::default(),
             land_unverified: self.land_unverified,

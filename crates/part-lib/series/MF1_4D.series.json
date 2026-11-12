@@ -68,6 +68,15 @@
     "x": 0.0,
     "y": 0.0,
     "mark": "none",
-    "mark_pin": ""
+    "mark_pin": "",
+    "color_code": {
+      "bands": 5,
+      "tolerance_pct": 1.0,
+      "body": [
+        110,
+        165,
+        215
+      ]
+    }
   }
 }

@@ -145,6 +145,8 @@ pub struct PartForm {
     pub body_mark: BodyMark,
     /// The pin the orientation mark belongs to (empty = the first pad).
     pub body_pin: String,
+    /// The colour bands of a leaded resistor (kept from the part being edited; the form has no field for them).
+    pub body_color_code: Option<pcb_core::body::ColorCode>,
     /// The fit the body was given and the values it gave (w, h, x, y). While the body still has those values it follows
     /// the pads; typing another value stops that.
     pub body_fit: Option<(BodyFit, [f64; 4])>,
@@ -300,6 +302,7 @@ impl Default for PartForm {
             body_y: 0.0,
             body_mark: BodyMark::Dot,
             body_pin: String::new(),
+            body_color_code: None,
             body_fit: None,
             height: 0.0,
             extras: String::new(),

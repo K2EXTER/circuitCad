@@ -249,6 +249,9 @@ fn pin1_dot(pads: &[&Pad], lo: [f64; 2], hi: [f64; 2], top: f64) -> Option<Solid
 /// `local` positions are in the footprint's frame; a bottom part is mirrored and the part is turned by `rot`.
 fn data_sheet_body(part: &Part, pads: &[&Pad], body: &crate::body::BodySpec, h: f64, color: [u8; 3]) -> Vec<Solid> {
     use crate::body::BodyMark;
+    if let Some(code) = body.color_code.as_ref().filter(|_| pads.len() >= 2) {
+        return banded_resistor(part, pads, body, code, color);
+    }
     let bottom = part.side == Side::Bottom;
     let place = |x: f64, y: f64| {
         let local = if bottom { Point::new(-x, y) } else { Point::new(x, y) };
@@ -289,6 +292,41 @@ fn data_sheet_body(part: &Part, pads: &[&Pad], body: &crate::body::BodySpec, h: 
             }
             // the + sign is drawn on the silkscreen; the 3D body stays plain
             BodyMark::Plus | BodyMark::None => {}
+        }
+    }
+    v
+}
+
+/// A leaded resistor lying on the board with its colour bands (the code of its value, read from pin 1's end): the body as a
+/// cylinder between the two holes `body.w` long and `body.h` across, the lead wire through it, and a ring for every band.
+fn banded_resistor(part: &Part, pads: &[&Pad], body: &crate::body::BodySpec, code: &crate::body::ColorCode, color: [u8; 3]) -> Vec<Solid> {
+    let first = pads.iter().copied().find(|p| p.pin == "1").unwrap_or(pads[0]);
+    let other = pads.iter().copied().find(|p| !std::ptr::eq(*p, first)).unwrap_or(pads[1]);
+    let along_x = (other.pos.x - first.pos.x).abs() >= (other.pos.y - first.pos.y).abs();
+    let (cx, cy) = ((first.pos.x + other.pos.x) / 2.0, (first.pos.y + other.pos.y) / 2.0);
+    let (len, dia) = (body.w, body.h.max(0.5));
+    let z0 = 0.3;
+    let zc = z0 + dia / 2.0;
+    // the axis runs from pin 1 (s = -1 when pin 1 is on the low side)
+    let (c_axis, p1_axis) = if along_x { (cx, first.pos.x) } else { (cy, first.pos.y) };
+    let s = if p1_axis < c_axis { -1.0 } else { 1.0 };
+    let span = |a: f64, b: f64, r: f64, col: [u8; 3]| -> Solid {
+        let (a, b) = (a.min(b), a.max(b));
+        if along_x {
+            solid([a, cy - r, zc - r], [b, cy + r, zc + r], col, BodyShape::Cylinder(0))
+        } else {
+            solid([cx - r, a, zc - r], [cx + r, b, zc + r], col, BodyShape::Cylinder(1))
+        }
+    };
+    let wire = 0.3;
+    let (lead_a, lead_b) = if along_x { (first.pos.x, other.pos.x) } else { (first.pos.y, other.pos.y) };
+    let paint = code.body.unwrap_or(color);
+    let mut v = vec![span(lead_a, lead_b, wire, SILVER), span(c_axis - len / 2.0, c_axis + len / 2.0, dia / 2.0, paint)];
+    if let Some(bands) = crate::body::parse_ohms(&part.value).and_then(|ohms| code.bands_for(ohms)) {
+        let width = len * 0.085;
+        for (band, f) in bands.iter().zip(crate::body::band_places(bands.len())) {
+            let mid = c_axis + s * (len / 2.0 - f * len);
+            v.push(span(mid - width / 2.0, mid + width / 2.0, dia / 2.0 + 0.04, band.rgb()));
         }
     }
     v
@@ -573,7 +611,7 @@ mod tests {
         let mut fp = crate::footprints::get("R_0805").unwrap();
         fp.name = "BODY".into();
         fp.height = Some(2.0);
-        fp.body = Some(BodySpec { shape: "rect".into(), w: 4.0, h: 3.0, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into() });
+        fp.body = Some(BodySpec { shape: "rect".into(), w: 4.0, h: 3.0, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into(), color_code: None });
         b.add_footprint(fp);
         b.set_part(Part { refdes: "U1".into(), value: "x".into(), footprint: "BODY".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
         let boxes = part_boxes(&b);
@@ -588,7 +626,7 @@ mod tests {
         // a circle is a cylinder along z
         let mut fp = crate::footprints::get("R_0805").unwrap();
         fp.name = "ROUND".into();
-        fp.body = Some(BodySpec { shape: "circle".into(), w: 5.0, h: 0.0, x: 0.0, y: 0.0, mark: BodyMark::None, mark_pin: String::new() });
+        fp.body = Some(BodySpec { shape: "circle".into(), w: 5.0, h: 0.0, x: 0.0, y: 0.0, mark: BodyMark::None, mark_pin: String::new(), color_code: None });
         b.add_footprint(fp);
         b.set_part(Part { refdes: "U2".into(), value: "x".into(), footprint: "ROUND".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top }).unwrap();
         let round = part_boxes(&b).into_iter().find(|p| p.refdes == "U2").unwrap();
@@ -909,5 +947,29 @@ mod tests {
         assert_eq!(boxes.iter().filter(|x| x.color == [8, 8, 10]).count(), 1, "the sound hole");
         // the height counts in the case check (9 mm)
         assert_eq!(part_total_height("BZ1", "Buzzer_D12_P7.6"), 9.0);
+    }
+
+    #[test]
+    fn a_banded_resistor_shows_its_value_from_pin_1() {
+        use crate::body::{BodySpec, ColorCode};
+        let mut b = Board::new("t", 30.0, 20.0);
+        let mut fp = crate::footprints::get("R_0805").unwrap();
+        fp.name = "R_Axial_Test".into();
+        fp.height = Some(2.6);
+        fp.pads = [("1", -5.08), ("2", 5.08)]
+            .into_iter()
+            .map(|(pin, x)| crate::footprints::FpPad { pin: pin.into(), pos: Point::new(x, 0.0), shape: PadShape::Circle { d: 1.7 }, drill: Some(0.9), slot: 0.0, slot_v: false })
+            .collect();
+        fp.body = Some(BodySpec { shape: "rect".into(), w: 6.8, h: 2.6, x: 0.0, y: 0.0, mark: crate::body::BodyMark::None, mark_pin: String::new(), color_code: Some(ColorCode { bands: 4, tolerance_pct: 5.0, body: Some([215, 185, 140]) }) });
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "R1".into(), value: "220".into(), footprint: "R_Axial_Test".into(), pos: Point::new(15.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+        let solids = solids(&b, &b.parts[0]);
+        // the wire, the body and four bands: red red brown gold, the first nearest pin 1 (on the left)
+        assert_eq!(solids.len(), 6);
+        assert_eq!(solids[1].color, [215, 185, 140]);
+        let bands: Vec<([u8; 3], f64)> = solids[2..].iter().map(|s| (s.color, (s.lo[0] + s.hi[0]) / 2.0)).collect();
+        assert_eq!(bands.iter().map(|b| b.0).collect::<Vec<_>>(), vec![[210, 35, 35], [210, 35, 35], [125, 70, 30], [200, 160, 50]]);
+        assert!(bands.windows(2).all(|w| w[0].1 < w[1].1), "read from the left: {bands:?}");
+        assert!(matches!(solids[1].shape, BodyShape::Cylinder(0)));
     }
 }

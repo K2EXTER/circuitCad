@@ -40,6 +40,145 @@ pub struct BodySpec {
     /// The pin the mark belongs to; empty = the first pad.
     #[serde(default)]
     pub mark_pin: String,
+    /// A leaded resistor lying down with colour bands: the 3D view draws it as a cylinder with its bands, from the part's value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_code: Option<ColorCode>,
+}
+
+/// The colour bands printed on a leaded resistor (IEC 60062): how many, and the tolerance they end with.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ColorCode {
+    /// 4 (two figures, multiplier, tolerance) or 5 (three figures, multiplier, tolerance).
+    pub bands: u8,
+    pub tolerance_pct: f64,
+    /// The paint of the body (a carbon film's beige, a metal film's blue).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<[u8; 3]>,
+}
+
+/// One colour of the code: a figure 0 to 9, or gold / silver (multiplier 0.1 / 0.01, tolerance 5 % / 10 %).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BandColor {
+    Digit(u8),
+    Gold,
+    Silver,
+}
+
+impl BandColor {
+    /// The colour to draw.
+    pub fn rgb(self) -> [u8; 3] {
+        match self {
+            BandColor::Digit(0) => [25, 25, 25],
+            BandColor::Digit(1) => [125, 70, 30],
+            BandColor::Digit(2) => [210, 35, 35],
+            BandColor::Digit(3) => [240, 135, 25],
+            BandColor::Digit(4) => [240, 210, 40],
+            BandColor::Digit(5) => [40, 155, 70],
+            BandColor::Digit(6) => [40, 90, 210],
+            BandColor::Digit(7) => [145, 70, 190],
+            BandColor::Digit(8) => [135, 135, 135],
+            BandColor::Digit(_) => [245, 245, 245],
+            BandColor::Gold => [200, 160, 50],
+            BandColor::Silver => [190, 190, 200],
+        }
+    }
+
+    /// The colour's name, as it is taught: 黒 0, 茶 1, 赤 2 … 白 9, 金, 銀.
+    pub fn name(self) -> &'static str {
+        match self {
+            BandColor::Digit(0) => "黒",
+            BandColor::Digit(1) => "茶",
+            BandColor::Digit(2) => "赤",
+            BandColor::Digit(3) => "橙",
+            BandColor::Digit(4) => "黄",
+            BandColor::Digit(5) => "緑",
+            BandColor::Digit(6) => "青",
+            BandColor::Digit(7) => "紫",
+            BandColor::Digit(8) => "灰",
+            BandColor::Digit(_) => "白",
+            BandColor::Gold => "金",
+            BandColor::Silver => "銀",
+        }
+    }
+}
+
+impl ColorCode {
+    /// The bands of a resistor of `ohms`, first (nearest pin 1) to last. None when the value does not fit the figures (4.75 kΩ
+    /// in a 4-band code) or the multiplier is out of the code's range.
+    pub fn bands_for(&self, ohms: f64) -> Option<Vec<BandColor>> {
+        if !(ohms.is_finite() && ohms > 0.0) || !(self.bands == 4 || self.bands == 5) {
+            return None;
+        }
+        let figures = (self.bands - 2) as i32;
+        let exp = ohms.log10().floor() as i32;
+        let power = exp - (figures - 1);
+        let m = (ohms / 10f64.powi(power)).round() as u32;
+        if (m as f64 * 10f64.powi(power) / ohms - 1.0).abs() > 1e-6 || m >= 10u32.pow(figures as u32) {
+            return None;
+        }
+        let mut v: Vec<BandColor> = format!("{m:0width$}", width = figures as usize).bytes().map(|b| BandColor::Digit(b - b'0')).collect();
+        v.push(match power {
+            -1 => BandColor::Gold,
+            -2 => BandColor::Silver,
+            p if (0..=9).contains(&p) => BandColor::Digit(p as u8),
+            _ => return None,
+        });
+        let tol = self.tolerance_pct;
+        let close = |x: f64| (tol - x).abs() < 1e-9;
+        v.push(if close(1.0) {
+            BandColor::Digit(1)
+        } else if close(2.0) {
+            BandColor::Digit(2)
+        } else if close(0.5) {
+            BandColor::Digit(5)
+        } else if close(0.25) {
+            BandColor::Digit(6)
+        } else if close(0.1) {
+            BandColor::Digit(7)
+        } else if close(5.0) {
+            BandColor::Gold
+        } else if close(10.0) {
+            BandColor::Silver
+        } else {
+            return None;
+        });
+        Some(v)
+    }
+}
+
+/// Where along a banded resistor's body each band sits (its middle, as a share of the length from the pin 1 end): the tolerance
+/// band stands apart from the others so the code reads from the other end.
+pub fn band_places(n: usize) -> &'static [f64] {
+    if n == 5 { &[0.15, 0.27, 0.39, 0.51, 0.81] } else { &[0.18, 0.32, 0.46, 0.79] }
+}
+
+/// A resistance as a part's value is written: `220`, `4.75k`, `1Meg`, `1M` (mega), `2.2`, `4k7`, `100Ω`.
+pub fn parse_ohms(text: &str) -> Option<f64> {
+    let s = text.trim().trim_end_matches(['Ω', 'Ω']).trim();
+    let end = s.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(s.len());
+    let (num, rest) = s.split_at(end);
+    let lower = rest.to_ascii_lowercase();
+    let (mult, tail) = if lower.starts_with("meg") {
+        (1e6, &rest[3..])
+    } else {
+        match rest.chars().next() {
+            Some('k' | 'K') => (1e3, &rest[1..]),
+            Some('M') => (1e6, &rest[1..]),
+            Some('G') => (1e9, &rest[1..]),
+            Some('R' | 'r') => (1.0, &rest[1..]),
+            None => (1.0, ""),
+            _ => return None,
+        }
+    };
+    // `4k7`: the letter is the decimal point
+    let x: f64 = if !tail.is_empty() && tail.chars().all(|c| c.is_ascii_digit()) && !num.contains('.') {
+        format!("{num}.{tail}").parse().ok()?
+    } else if tail.is_empty() {
+        num.parse().ok()?
+    } else {
+        return None;
+    };
+    Some(x * mult).filter(|v| v.is_finite() && *v > 0.0)
 }
 
 fn default_shape() -> String {
@@ -184,7 +323,7 @@ mod tests {
     #[test]
     fn a_body_between_pads_keeps_clear_of_them() {
         let pads = vec![pad("1", -2.7, 1.9, 1.55, 0.6), pad("2", -2.7, 0.63, 1.55, 0.6), pad("3", 2.7, 0.63, 1.55, 0.6), pad("4", 2.7, 1.9, 1.55, 0.6)];
-        let body = BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 1.27, mark: BodyMark::Dot, mark_pin: String::new() };
+        let body = BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 1.27, mark: BodyMark::Dot, mark_pin: String::new(), color_code: None };
         let lines = body_lines(&body, &pads);
         assert!(lines.len() > 4, "{}", lines.len());
         for l in &lines {
@@ -203,7 +342,7 @@ mod tests {
             FpPad { pin: "1".into(), pos: pt(-1.0, 0.0), shape: PadShape::Rect { w: 1.6, h: 1.6 }, drill: Some(0.8), slot: 0.0, slot_v: false },
             FpPad { pin: "2".into(), pos: pt(1.0, 0.0), shape: PadShape::Circle { d: 1.6 }, drill: Some(0.8), slot: 0.0, slot_v: false },
         ];
-        let circle = BodySpec { shape: "circle".into(), w: 5.4, h: 0.0, x: 0.0, y: 0.0, mark: BodyMark::Plus, mark_pin: "1".into() };
+        let circle = BodySpec { shape: "circle".into(), w: 5.4, h: 0.0, x: 0.0, y: 0.0, mark: BodyMark::Plus, mark_pin: "1".into(), color_code: None };
         let lines = body_lines(&circle, &pads);
         assert!(lines.len() > 60, "{}", lines.len());
         // the + is on the pin 1 side (left)
@@ -216,5 +355,28 @@ mod tests {
         assert!(BodySpec { w: 0.0, ..circle.clone() }.validate(&["1", "2"]).is_err());
         assert!(BodySpec { mark_pin: "9".into(), ..circle.clone() }.validate(&["1", "2"]).is_err());
         assert!(circle.validate(&["1", "2"]).is_ok());
+    }
+
+    #[test]
+    fn the_colour_code_reads_as_it_is_taught() {
+        use super::BandColor::*;
+        let four = ColorCode { bands: 4, tolerance_pct: 5.0, body: None };
+        let five = ColorCode { bands: 5, tolerance_pct: 1.0, body: None };
+        // 220 Ω ±5 %: red red brown gold; 4.7 kΩ: yellow violet red gold; 2.2 Ω: red red gold gold
+        assert_eq!(four.bands_for(220.0), Some(vec![Digit(2), Digit(2), Digit(1), Gold]));
+        assert_eq!(four.bands_for(4700.0), Some(vec![Digit(4), Digit(7), Digit(2), Gold]));
+        assert_eq!(four.bands_for(2.2), Some(vec![Digit(2), Digit(2), Gold, Gold]));
+        assert_eq!(four.bands_for(4750.0), None, "three figures do not fit four bands");
+        // 4.75 kΩ ±1 %: yellow violet green brown brown; 10 Ω: brown black black gold brown
+        assert_eq!(five.bands_for(4750.0), Some(vec![Digit(4), Digit(7), Digit(5), Digit(1), Digit(1)]));
+        assert_eq!(five.bands_for(10.0), Some(vec![Digit(1), Digit(0), Digit(0), Gold, Digit(1)]));
+        assert_eq!(Digit(7).name(), "紫");
+        assert_eq!(parse_ohms("4.75k"), Some(4750.0));
+        assert_eq!(parse_ohms("1Meg"), Some(1e6));
+        assert_eq!(parse_ohms("1M"), Some(1e6));
+        assert_eq!(parse_ohms("4k7"), Some(4700.0));
+        assert_eq!(parse_ohms("2.2"), Some(2.2));
+        assert_eq!(parse_ohms("100Ω"), Some(100.0));
+        assert_eq!(parse_ohms("10u"), None);
     }
 }

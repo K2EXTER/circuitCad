@@ -457,6 +457,9 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
             ui.label(egui::RichText::new(format!("{}Ω", ohms_text(v).replace("Meg", "M"))).size(18.0).strong());
             if s.makes(v) {
                 ui.small(s.part_name(v));
+                if let Some(bands) = s.outline.as_ref().and_then(|o| o.color_code.as_ref()).and_then(|c| c.bands_for(v)) {
+                    color_code_ui(ui, &bands);
+                }
             } else {
                 ui.colored_label(crate::theme::WARN, i18n::trf!("{} にはありません ({})", s.series, s.range_text()));
             }
@@ -518,6 +521,22 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
         ui.small(egui::RichText::new(i18n::trf!("品質: {}", q)).color(crate::theme::INFO)).on_hover_text(i18n::tr_dyn(quality_tip(q)));
     }
     switch
+}
+
+/// The colour bands of the value: a swatch for each, then their names ("赤 赤 茶 金").
+fn color_code_ui(ui: &mut egui::Ui, bands: &[pcb_core::body::BandColor]) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for b in bands {
+            let (r, _) = ui.allocate_exact_size(egui::vec2(9.0, 15.0), egui::Sense::hover());
+            let [cr, cg, cb] = b.rgb();
+            ui.painter().rect_filled(r, 1.0, egui::Color32::from_rgb(cr, cg, cb));
+            ui.painter().rect_stroke(r, 1.0, egui::Stroke::new(0.5, egui::Color32::from_gray(90)), egui::StrokeKind::Inside);
+        }
+        ui.add_space(4.0);
+        let names: Vec<String> = bands.iter().map(|b| i18n::tr_dyn(b.name())).collect();
+        ui.small(names.join(" ")).on_hover_text(i18n::tr("カラーコード (左から): 有効数字の帯、乗数の帯、少し離れて許容差の帯。黒 0・茶 1・赤 2・橙 3・黄 4・緑 5・青 6・紫 7・灰 8・白 9、乗数の金は ×0.1・銀は ×0.01、許容差の金は ±5 %・茶は ±1 %"));
+    });
 }
 
 /// 470 → "4.7", 102 → "1.02", 100 → "1.0": the figures as the E series write them.

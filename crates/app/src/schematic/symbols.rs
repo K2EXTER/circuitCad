@@ -341,6 +341,20 @@ impl SchEditor {
                 painter.text(tr((p.tip.0 as f32 + s) / 2.0, -0.45), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
             }
             self.draw_symbol(painter, rect, kind, pos, rot, color);
+            // a leaded resistor of a maker's series: its colour bands inside the box, read from pin 1 (the left end)
+            if kind == Kind::Resistor
+                && self.zoom >= 9.0
+                && let Some(bands) = color_bands(&sym.name)
+            {
+                let places = pcb_core::body::band_places(bands.len());
+                for (b, f) in bands.iter().zip(places) {
+                    let mid = -1.0 + 2.0 * *f as f32;
+                    let half = 0.08;
+                    let [r, g, bl] = b.rgb();
+                    let pts = vec![tr(mid - half, -0.36), tr(mid + half, -0.36), tr(mid + half, 0.36), tr(mid - half, 0.36)];
+                    painter.add(egui::Shape::convex_polygon(pts, Color32::from_rgb(r, g, bl), Stroke::NONE));
+                }
+            }
             if super::glyphs::is_thermistor(sym) {
                 self.draw_shapes(painter, rect, super::glyphs::thermistor_mark(), pos, rot, color);
             }
@@ -499,6 +513,12 @@ pub(super) fn paint_lines_preview(painter: &egui::Painter, rect: Rect, lines: &[
     for (a, b) in lines {
         painter.line_segment([tr(*a), tr(*b)], stroke);
     }
+}
+
+/// The colour bands of a library part that is one value of a maker's series with a colour code (KOA CF, MF), first to last.
+pub(super) fn color_bands(name: &str) -> Option<Vec<pcb_core::body::BandColor>> {
+    let (s, v) = part_lib::series::member(name)?;
+    s.outline.as_ref()?.color_code.as_ref()?.bands_for(v)
 }
 
 #[cfg(test)]

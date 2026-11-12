@@ -367,7 +367,7 @@ mod library_tests {
         assert!(library_changes(&board, &parts, &names, std::slice::from_ref(&def)).is_empty(), "the same part is no change");
 
         let mut with_body = def.clone();
-        with_body.body = Some(BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into() });
+        with_body.body = Some(BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into(), color_code: None });
         assert_eq!(library_changes(&board, &parts, &names, &[with_body]), vec!["U1".to_string()], "a new outline");
 
         let mut with_shape = def.clone();
@@ -378,7 +378,7 @@ mod library_tests {
         // another part with the same footprint name, listed first, is not mistaken for the component's part
         let mut other = def.clone();
         other.name = "OTHER".into();
-        other.body = Some(BodySpec { shape: "rect".into(), w: 1.0, h: 1.0, x: 0.0, y: 0.0, mark: BodyMark::None, mark_pin: String::new() });
+        other.body = Some(BodySpec { shape: "rect".into(), w: 1.0, h: 1.0, x: 0.0, y: 0.0, mark: BodyMark::None, mark_pin: String::new(), color_code: None });
         assert!(library_changes(&board, &parts, &names, &[other, def.clone()]).is_empty(), "the part of the component's name is compared");
     }
 
@@ -393,7 +393,7 @@ mod library_tests {
         board.set_part(part.clone()).unwrap();
         let before = board.silk.iter().filter(|s| s.refdes == "U1").count();
         let mut edited = def.clone();
-        edited.body = Some(BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into() });
+        edited.body = Some(BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into(), color_code: None });
         board.add_footprint(edited.footprint().unwrap());
         board.set_part(part).unwrap();
         let after = board.silk.iter().filter(|s| s.refdes == "U1").count();

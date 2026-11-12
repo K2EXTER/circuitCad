@@ -15,3 +15,9 @@ AEC-Q200: 車載用の受動部品の信頼性試験の規格。温度サイク�
 細かい値 (E96)	Fine values (E96)
 有効数字の輪に E96 (1 桁に 96 個、±1 % の抵抗によくある並び) も入れます。外すと E24 (1 桁に 24 個) だけ	Adds E96 (96 values a decade, the usual series of ±1 % resistors) to the figures' wheel. Off: E24 only (24 a decade)
 値を打つ	Type a value
+カラーコード (左から): 有効数字の帯、乗数の帯、少し離れて許容差の帯。黒 0・茶 1・赤 2・橙 3・黄 4・緑 5・青 6・紫 7・灰 8・白 9、乗数の金は ×0.1・銀は ×0.01、許容差の金は ±5 %・茶は ±1 %	Colour code (from the left): the figure bands, the multiplier band, then a little apart the tolerance band. Black 0, brown 1, red 2, orange 3, yellow 4, green 5, blue 6, violet 7, grey 8, white 9; as the multiplier gold is ×0.1 and silver ×0.01; as the tolerance gold is ±5 % and brown ±1 %
+黒	black
+茶	brown
+灰	grey
+白	white
+銀	silver

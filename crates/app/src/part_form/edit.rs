@@ -76,6 +76,7 @@ impl PartForm {
             f.body_on = true;
             f.body_circle = b.shape == "circle";
             (f.body_w, f.body_h, f.body_x, f.body_y, f.body_mark, f.body_pin) = (b.w, b.h, b.x, b.y, b.mark, b.mark_pin.clone());
+            f.body_color_code = b.color_code.clone();
         }
         if let Some(m) = &def.sim {
             f.sim = if m.kind == SimKind::Model { SimChoice::Model } else { SimChoice::Subckt };

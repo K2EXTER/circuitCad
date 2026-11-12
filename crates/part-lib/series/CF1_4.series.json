@@ -90,6 +90,15 @@
     "x": 0.0,
     "y": 0.0,
     "mark": "none",
-    "mark_pin": ""
+    "mark_pin": "",
+    "color_code": {
+      "bands": 4,
+      "tolerance_pct": 5.0,
+      "body": [
+        215,
+        185,
+        140
+      ]
+    }
   }
 }
