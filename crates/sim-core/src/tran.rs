@@ -17,6 +17,10 @@ const LTE_CHGTOL: f64 = 1e-14;
 /// against its own present value, which crosses zero at every swing, that ring held the steps of the 41-part demo near 5 ns (24 000 points
 /// for 10 ms, 6 000 against the peak; the clock and counter edges stay as close to a run with a ten times tighter tolerance as before).
 const WIRING_INDUCTOR: &str = ".LW";
+/// The name endings of a capacitor's series inductance: `Lesl` in the subcircuit of a library capacitor (`CE_100u_16V` and the
+/// others), `.ESL` from the ESL field of a plain capacitor (`from_schematic`). Checked against its peak current like the wiring: a
+/// bypass capacitor's ESL rings with its neighbours after every logic edge, at a few hundred MHz and microamps.
+const ESL_INDUCTORS: [&str; 2] = [".Lesl", ".ESL"];
 
 /// The largest time step used when the user leaves it blank: 1/1000 of the stop time. The error control still shrinks
 /// the step where the waveform bends faster, so this is only the ceiling.
@@ -416,8 +420,9 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
     // the last accepted points (time, capacitor voltages, inductor currents) for the error estimate;
     // a source corner breaks the smoothness, so the history restarts there
     let mut hist: Vec<(f64, Vec<f64>, Vec<f64>)> = vec![(0.0, cap_v.clone(), ind_i.clone())];
-    // the absolute current tolerance of every inductor; the board's wiring inductors raise theirs with the current they carry (`WIRING_INDUCTOR`)
-    let wiring_l: Vec<usize> = cm.ce.iter().filter_map(|e| match e { Ce::L { name, idx, .. } if name.ends_with(WIRING_INDUCTOR) => Some(*idx), _ => None }).collect();
+    // the absolute current tolerance of every inductor; the board's wiring inductors and the capacitors' series inductances raise
+    // theirs with the current they carry (`WIRING_INDUCTOR`, `ESL_INDUCTORS`)
+    let wiring_l: Vec<usize> = cm.ce.iter().filter_map(|e| match e { Ce::L { name, idx, .. } if name.ends_with(WIRING_INDUCTOR) || ESL_INDUCTORS.iter().any(|e| name.ends_with(e)) => Some(*idx), _ => None }).collect();
     let mut abs_i = vec![LTE_ABS_I; cm.n_inds];
     while t < s.tstop - eps {
         while bp_idx < bps.len() && bps[bp_idx] <= t + eps {
