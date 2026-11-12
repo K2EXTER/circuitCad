@@ -1,0 +1,64 @@
+{
+  "series": "MCR10S",
+  "maker": "ROHM",
+  "category": "抵抗",
+  "summary": "厚膜チップ抵抗 <高電力> ±1% 0805 (2012)。手はんだしやすい大きさ",
+  "size": "0805",
+  "datasheet": "https://fscdn.rohm.com/en/products/databook/datasheet/passive/resistor/chip_resistor/mcr10s-e.pdf",
+  "checked": "ROHM のデータシート MCR10S EQP series (2025.10.01 Rev.MCR10S-IA-006E)・シリーズの一覧 (MCRS, MCRE, MCR series、2026.09 Rev.002)・ランドはアプリケーションノート No.67AN023E Rev.010 (2026 年 1 月) で確かめた (2026-11-13)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 10.0,
+    "max": 2200000.0
+  },
+  "mpn": "MCR10SEQPF{code}",
+  "code": "sig3",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 100.0,
+  "p_max": 0.25,
+  "v_limit": 200.0,
+  "v_overload": 0.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [],
+  "quality": [
+    "AEC-Q200"
+  ],
+  "height": 0.55,
+  "footprint_name": "R_0805_ROHM",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.7,
+        "h": 1.15,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.7,
+        "h": 1.15,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは ROHM の推奨 (No.67AN023E の MCRS の 0805: パッドの内側の間 A 1.2、外側の端から端 B 2.6、パッドの幅 C 1.15 mm)",
+  "body": "本体 2.00 × 1.25 mm、厚さ 0.55 mm (データシートの寸法)。抵抗値の印字なし。E24 は標準品、E96 は受注生産 (シリーズの一覧の注)。包装は EQP (紙テープ 4 mm ピッチ、5,000 個)。同じ大きさの従来品 (MCR01・MCR03・MCR10・MCR18) より定格電力が 1 つ上の大きさと同じ。従来品は新規設計に勧められていない"
+}

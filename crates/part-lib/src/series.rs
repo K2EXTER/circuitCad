@@ -112,6 +112,10 @@ const BUNDLED: &[(&str, &str)] = &[
     ("RK73H1J", include_str!("../series/RK73H1J.series.json")),
     ("RK73H2A", include_str!("../series/RK73H2A.series.json")),
     ("RK73H2B", include_str!("../series/RK73H2B.series.json")),
+    ("MCR01S", include_str!("../series/MCR01S.series.json")),
+    ("MCR03S", include_str!("../series/MCR03S.series.json")),
+    ("MCR10S", include_str!("../series/MCR10S.series.json")),
+    ("MCR18S", include_str!("../series/MCR18S.series.json")),
     ("CF1/4", include_str!("../series/CF1_4.series.json")),
     ("MF1/4D", include_str!("../series/MF1_4D.series.json")),
 ];
@@ -633,6 +637,34 @@ mod tests {
             assert!((fp.pads[1].pos.x - fp.pads[0].pos.x - 10.16).abs() < 1e-9);
             let b = fp.body.as_ref().unwrap();
             assert_eq!((b.w, b.h), (6.8, 2.6));
+        }
+    }
+
+    #[test]
+    fn rohm_mcrs_follows_its_data_sheets() {
+        // (series, 10 kΩ part, values, rated power, limiting voltage, gap A, overall B, width C of the application note)
+        let table = [
+            ("MCR01S", "MCR01SMQPF1002", 114 * 6 + 1, 0.1, 75.0, 0.5, 1.3, 0.5),
+            ("MCR03S", "MCR03SEQPF1002", 114 * 6 + 1, 0.125, 150.0, 1.0, 2.0, 0.8),
+            ("MCR10S", "MCR10SEQPF1002", 114 * 5 + 37, 0.25, 200.0, 1.2, 2.6, 1.15),
+            ("MCR18S", "MCR18SEQPF1002", 114 * 5 + 37, 0.4, 200.0, 2.2, 4.0, 1.5),
+        ];
+        for (series, ten_k, count, p, v, a, b, c) in table {
+            let s = by_name(series).unwrap();
+            assert_eq!(s.part_name(10_000.0), ten_k);
+            assert_eq!(s.part_name(10.0), ten_k.replace("1002", "10R0"));
+            assert_eq!(s.values().len(), count, "{series}");
+            assert_eq!(s.power_at(1000.0), p);
+            assert_eq!(s.rated_voltage(1e6), (p * 1e6_f64).sqrt().min(v));
+            let fp = s.part(1000.0).footprint().unwrap();
+            let (l, r) = (&fp.pads[0], &fp.pads[1]);
+            let (w, h) = l.shape.size();
+            assert!(((r.pos.x - w / 2.0) - (l.pos.x + w / 2.0) - a).abs() < 1e-9, "{series} gap");
+            assert!(((r.pos.x + w / 2.0) - (l.pos.x - w / 2.0) - b).abs() < 1e-9, "{series} overall");
+            assert!((h - c).abs() < 1e-9, "{series} width");
+            for d in s.expand() {
+                assert!(d.validate().iter().all(|i| !i.error), "{}", d.name);
+            }
         }
     }
 
