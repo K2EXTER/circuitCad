@@ -496,27 +496,33 @@ pub enum Var {
     Unknown(usize),
 }
 
-#[derive(Clone, Debug)]
-enum Tree {
+/// One step of a compiled expression, run on a stack of values with their derivatives (postfix order: the operands of a step are
+/// the values on top of the stack, and its result takes their place).
+#[derive(Clone, Copy, Debug)]
+enum Ins {
     Num(f64),
     Time,
-    Var(usize),
     /// A node 0 reference: a constant 0 V.
     Ground,
-    Neg(Box<Tree>),
-    Bin(Op, Box<Tree>, Box<Tree>),
-    Call(Func, Vec<Tree>),
+    /// Variable `k` of `CExpr::vars`, with the derivative 1 with respect to itself.
+    Var(usize),
+    Neg,
+    Bin(Op),
+    /// A function of the `usize` values on top of the stack.
+    Call(Func, usize),
 }
 
 #[derive(Clone, Debug)]
 pub struct CExpr {
-    tree: Tree,
+    code: Vec<Ins>,
+    /// The most values on the stack at once.
+    depth: usize,
     pub vars: Vec<Var>,
 }
 
 impl CExpr {
     pub fn empty() -> CExpr {
-        CExpr { tree: Tree::Num(0.0), vars: vec![] }
+        CExpr { code: vec![Ins::Num(0.0)], depth: 1, vars: vec![] }
     }
 }
 
@@ -541,11 +547,23 @@ impl Expr {
     /// `branch_index(name)` gives the solution-vector index of the current through that element.
     pub fn compile(&self, branch_index: &dyn Fn(&str) -> Option<usize>) -> CExpr {
         let mut vars: Vec<Var> = vec![];
-        let tree = self.build(&mut vars, branch_index);
-        CExpr { tree, vars }
+        let mut code = vec![];
+        self.build(&mut vars, &mut code, branch_index);
+        // the stack's height after each step: +1 for a value, -1 for an operator of two, 1 - n for a function of n
+        let (mut height, mut depth) = (0usize, 0usize);
+        for ins in &code {
+            height = match ins {
+                Ins::Num(_) | Ins::Time | Ins::Ground | Ins::Var(_) => height + 1,
+                Ins::Neg => height,
+                Ins::Bin(_) => height - 1,
+                Ins::Call(_, n) => height + 1 - n,
+            };
+            depth = depth.max(height);
+        }
+        CExpr { code, depth, vars }
     }
 
-    fn build(&self, vars: &mut Vec<Var>, bi: &dyn Fn(&str) -> Option<usize>) -> Tree {
+    fn build(&self, vars: &mut Vec<Var>, code: &mut Vec<Ins>, bi: &dyn Fn(&str) -> Option<usize>) {
         let slot = |v: Var, vars: &mut Vec<Var>| match vars.iter().position(|x| *x == v) {
             Some(i) => i,
             None => {
@@ -554,86 +572,85 @@ impl Expr {
             }
         };
         match self {
-            Expr::Num(v) => Tree::Num(*v),
-            Expr::Time => Tree::Time,
-            Expr::Temp => Tree::Num(crate::temperature::T_NOM_C),
-            Expr::Node(0) => Tree::Ground,
-            Expr::Node(n) => Tree::Var(slot(Var::Node(*n), vars)),
-            Expr::Branch(name) => match bi(name) {
-                Some(i) => Tree::Var(slot(Var::Unknown(i), vars)),
-                None => Tree::Num(0.0),
-            },
-            Expr::Neg(a) => Tree::Neg(Box::new(a.build(vars, bi))),
-            Expr::Bin(op, a, b) => Tree::Bin(*op, Box::new(a.build(vars, bi)), Box::new(b.build(vars, bi))),
-            Expr::Call(f, args) => Tree::Call(*f, args.iter().map(|a| a.build(vars, bi)).collect()),
+            Expr::Num(v) => code.push(Ins::Num(*v)),
+            Expr::Time => code.push(Ins::Time),
+            Expr::Temp => code.push(Ins::Num(crate::temperature::T_NOM_C)),
+            Expr::Node(0) => code.push(Ins::Ground),
+            Expr::Node(n) => code.push(Ins::Var(slot(Var::Node(*n), vars))),
+            Expr::Branch(name) => code.push(match bi(name) {
+                Some(i) => Ins::Var(slot(Var::Unknown(i), vars)),
+                None => Ins::Num(0.0),
+            }),
+            Expr::Neg(a) => {
+                a.build(vars, code, bi);
+                code.push(Ins::Neg);
+            }
+            Expr::Bin(op, a, b) => {
+                a.build(vars, code, bi);
+                b.build(vars, code, bi);
+                code.push(Ins::Bin(*op));
+            }
+            Expr::Call(f, args) => {
+                for a in args {
+                    a.build(vars, code, bi);
+                }
+                code.push(Ins::Call(*f, args.len()));
+            }
         }
     }
 }
 
-/// The derivatives of a value with respect to the expression's variables: up to `INLINE` of them live on the stack, so that
-/// evaluating a typical vendor-model source (a few variables) allocates nothing per node of the expression tree.
-#[derive(Clone, Debug)]
-enum Grad {
-    Inline([f64; INLINE], usize),
-    Heap(Vec<f64>),
+/// The stack of an evaluation, kept on the thread for its capacity: a value and its derivatives (`n` of them, the expression's
+/// variables) per entry.
+#[derive(Default)]
+struct Stack {
+    v: Vec<f64>,
+    g: Vec<f64>,
 }
 
-const INLINE: usize = 8;
-
-impl Grad {
-    fn zeros(n: usize) -> Grad {
-        if n <= INLINE { Grad::Inline([0.0; INLINE], n) } else { Grad::Heap(vec![0.0; n]) }
-    }
-    fn from_fn(n: usize, f: impl Fn(usize) -> f64) -> Grad {
-        let mut g = Grad::zeros(n);
-        for (i, e) in g.iter_mut().enumerate() {
-            *e = f(i);
-        }
-        g
-    }
-}
-
-impl std::ops::Deref for Grad {
-    type Target = [f64];
-    fn deref(&self) -> &[f64] {
-        match self {
-            Grad::Inline(a, n) => &a[..*n],
-            Grad::Heap(v) => v,
-        }
-    }
-}
-
-impl std::ops::DerefMut for Grad {
-    fn deref_mut(&mut self) -> &mut [f64] {
-        match self {
-            Grad::Inline(a, n) => &mut a[..*n],
-            Grad::Heap(v) => v,
-        }
-    }
-}
-
-/// A value and its derivatives with respect to the expression's variables.
-#[derive(Clone, Debug)]
-struct D {
-    v: f64,
-    g: Grad,
-}
-
-impl D {
-    fn konst(v: f64, n: usize) -> D {
-        D { v, g: Grad::zeros(n) }
-    }
-    fn map(&self, v: f64, dv: f64) -> D {
-        D { v, g: Grad::from_fn(self.g.len(), |i| self.g[i] * dv) }
-    }
-    fn lin(a: &D, ka: f64, b: &D, kb: f64, v: f64) -> D {
-        D { v, g: Grad::from_fn(a.g.len(), |i| ka * a.g[i] + kb * b.g[i]) }
-    }
+thread_local! {
+    static STACK: std::cell::RefCell<Stack> = std::cell::RefCell::new(Stack::default());
 }
 
 fn smooth(s: f64) -> (f64, f64) {
     let s = s.clamp(0.0, 1.0);
     (s * s * (3.0 - 2.0 * s), 6.0 * s * (1.0 - s))
+}
+
+/// The derivatives `g` scaled by `dv` (the chain rule of a function of one value).
+fn scale(g: &mut [f64], dv: f64) {
+    for e in g {
+        *e *= dv;
+    }
+}
+
+/// `g = ka * g + kb * gb` (the chain rule of a function of two values).
+fn lin(g: &mut [f64], ka: f64, gb: &[f64], kb: f64) {
+    for (e, b) in g.iter_mut().zip(gb) {
+        *e = ka * *e + kb * b;
+    }
+}
+
+/// `a ^ b`, its value into `av` and its derivatives into `ag`.
+fn pow(av: &mut f64, ag: &mut [f64], bv: f64, bg: &[f64]) {
+    let a = *av;
+    if a > 0.0 {
+        let r = a.powf(bv).min(1e300);
+        // d/da = b a^(b-1), d/db = a^b ln a
+        lin(ag, bv * a.powf(bv - 1.0), bg, r * a.ln());
+        *av = r;
+    } else if a == 0.0 && bv > 0.0 {
+        *av = 0.0;
+        ag.fill(0.0);
+    } else if bv.fract() == 0.0 && a != 0.0 {
+        // a negative base with a whole exponent
+        let r = a.powf(bv);
+        scale(ag, bv * a.powf(bv - 1.0));
+        *av = r;
+    } else {
+        *av = 0.0;
+        ag.fill(0.0);
+    }
 }
 
 impl CExpr {
@@ -649,152 +666,202 @@ impl CExpr {
         self.eval_with(x, t, |v, g| (v, g.to_vec()))
     }
 
-    /// `eval`, handing the derivatives to `k` as a slice: no allocation for an expression of up to eight variables (the
-    /// matrix assembly calls this for every behavioural source at every Newton iteration).
+    /// `eval`, handing the derivatives to `k` as a slice. The matrix assembly calls this for every behavioural source at every
+    /// Newton iteration: the steps run on one stack of values and one of derivatives, kept on the thread, with no allocation and
+    /// no recursion (walking a tree that built a value with eight derivatives at every node was a quarter of a microsecond a
+    /// source, a quarter of an assembly of the 41-part demo).
     pub fn eval_with<R>(&self, x: &[f64], t: f64, k: impl FnOnce(f64, &[f64]) -> R) -> R {
         let n = self.vars.len();
-        let d = self.go(&self.tree, x, t, n);
-        k(d.v, &d.g)
+        let mut st = STACK.with(|s| std::mem::take(&mut *s.borrow_mut()));
+        if st.v.len() < self.depth {
+            st.v.resize(self.depth, 0.0);
+        }
+        if st.g.len() < self.depth * n {
+            st.g.resize(self.depth * n, 0.0);
+        }
+        self.run(&mut st, x, t, n);
+        let r = k(st.v[0], &st.g[..n]);
+        STACK.with(|s| *s.borrow_mut() = st);
+        r
     }
 
-    fn go(&self, tr: &Tree, x: &[f64], t: f64, n: usize) -> D {
-        match tr {
-            Tree::Num(v) => D::konst(*v, n),
-            Tree::Time => D::konst(t, n),
-            Tree::Ground => D::konst(0.0, n),
-            Tree::Var(k) => {
-                let mut g = Grad::zeros(n);
-                g[*k] = 1.0;
-                D { v: self.read(x, *k), g }
-            }
-            Tree::Neg(a) => {
-                let a = self.go(a, x, t, n);
-                a.map(-a.v, -1.0)
-            }
-            Tree::Bin(op, a, b) => {
-                let (a, b) = (self.go(a, x, t, n), self.go(b, x, t, n));
-                match op {
-                    Op::Add => D::lin(&a, 1.0, &b, 1.0, a.v + b.v),
-                    Op::Sub => D::lin(&a, 1.0, &b, -1.0, a.v - b.v),
-                    Op::Mul => D::lin(&a, b.v, &b, a.v, a.v * b.v),
-                    Op::Div => {
-                        // a division by (almost) nothing is held at a large finite value
-                        let den = if b.v.abs() < 1e-9 { 1e-9f64.copysign(if b.v == 0.0 { 1.0 } else { b.v }) } else { b.v };
-                        D::lin(&a, 1.0 / den, &b, -a.v / (den * den), a.v / den)
-                    }
-                    Op::Pow => pow(&a, &b),
-                    Op::Lt => D::konst((a.v < b.v) as u8 as f64, n),
-                    Op::Gt => D::konst((a.v > b.v) as u8 as f64, n),
-                    Op::Le => D::konst((a.v <= b.v) as u8 as f64, n),
-                    Op::Ge => D::konst((a.v >= b.v) as u8 as f64, n),
-                    Op::Eq => D::konst((a.v == b.v) as u8 as f64, n),
-                    Op::Ne => D::konst((a.v != b.v) as u8 as f64, n),
+    fn run(&self, st: &mut Stack, x: &[f64], t: f64, n: usize) {
+        let (vs, gs) = (&mut st.v, &mut st.g);
+        // the number of values on the stack
+        let mut sp = 0usize;
+        for ins in &self.code {
+            match *ins {
+                Ins::Num(v) => {
+                    vs[sp] = v;
+                    gs[sp * n..(sp + 1) * n].fill(0.0);
+                    sp += 1;
                 }
-            }
-            Tree::Call(f, args) => {
-                // up to three arguments (every function but a long `if` chain) stay on the stack: collecting them into a Vec was
-                // an allocation per call, at every Newton iteration
-                let few: [D; 3];
-                let many: Vec<D>;
-                let a: &[D] = if args.len() <= 3 {
-                    few = std::array::from_fn(|i| args.get(i).map_or(D { v: 0.0, g: Grad::Inline([0.0; INLINE], 0) }, |e| self.go(e, x, t, n)));
-                    &few[..args.len()]
-                } else {
-                    many = args.iter().map(|e| self.go(e, x, t, n)).collect();
-                    &many
-                };
-                match f {
-                    Func::Abs => a[0].map(a[0].v.abs(), if a[0].v < 0.0 { -1.0 } else { 1.0 }),
-                    Func::Min => if a[0].v <= a[1].v { a[0].clone() } else { a[1].clone() },
-                    Func::Max => if a[0].v >= a[1].v { a[0].clone() } else { a[1].clone() },
-                    Func::Limit => {
-                        // LTspice: the middle one of the three, so the two limits may be written in either order
-                        let (lo, hi) = if a[1].v <= a[2].v { (&a[1], &a[2]) } else { (&a[2], &a[1]) };
-                        if a[0].v < lo.v {
-                            lo.clone()
-                        } else if a[0].v > hi.v {
-                            hi.clone()
-                        } else {
-                            a[0].clone()
+                Ins::Time | Ins::Ground => {
+                    vs[sp] = if matches!(ins, Ins::Time) { t } else { 0.0 };
+                    gs[sp * n..(sp + 1) * n].fill(0.0);
+                    sp += 1;
+                }
+                Ins::Var(k) => {
+                    vs[sp] = self.read(x, k);
+                    let g = &mut gs[sp * n..(sp + 1) * n];
+                    g.fill(0.0);
+                    g[k] = 1.0;
+                    sp += 1;
+                }
+                Ins::Neg => {
+                    let a = sp - 1;
+                    vs[a] = -vs[a];
+                    scale(&mut gs[a * n..(a + 1) * n], -1.0);
+                }
+                Ins::Bin(op) => {
+                    sp -= 1;
+                    let (a, b) = (sp - 1, sp);
+                    let (av, bv) = (vs[a], vs[b]);
+                    let (lo, hi) = gs.split_at_mut(b * n);
+                    let (ag, bg) = (&mut lo[a * n..], &hi[..n]);
+                    let konst = |v: f64, ag: &mut [f64]| {
+                        ag.fill(0.0);
+                        v
+                    };
+                    vs[a] = match op {
+                        Op::Add => {
+                            lin(ag, 1.0, bg, 1.0);
+                            av + bv
                         }
-                    }
-                    Func::Sqrt => {
-                        if a[0].v > 1e-30 {
-                            let r = a[0].v.sqrt();
-                            a[0].map(r, 0.5 / r)
-                        } else {
-                            D::konst(0.0, n)
+                        Op::Sub => {
+                            lin(ag, 1.0, bg, -1.0);
+                            av - bv
                         }
-                    }
-                    Func::Exp => {
-                        let r = a[0].v.min(80.0).exp();
-                        a[0].map(r, if a[0].v < 80.0 { r } else { 0.0 })
-                    }
-                    Func::Ln => {
-                        let v = a[0].v.max(1e-30);
-                        a[0].map(v.ln(), if a[0].v > 1e-30 { 1.0 / v } else { 0.0 })
-                    }
-                    Func::Log10 => {
-                        let v = a[0].v.max(1e-30);
-                        a[0].map(v.log10(), if a[0].v > 1e-30 { 1.0 / (v * std::f64::consts::LN_10) } else { 0.0 })
-                    }
-                    Func::Pow => pow(&a[0], &a[1]),
-                    Func::Tanh => {
-                        let r = a[0].v.tanh();
-                        a[0].map(r, 1.0 - r * r)
-                    }
-                    Func::Sin => a[0].map(a[0].v.sin(), a[0].v.cos()),
-                    Func::Floor => a[0].map(a[0].v.floor(), 0.0),
-                    Func::Sgn => a[0].map(if a[0].v > 0.0 { 1.0 } else if a[0].v < 0.0 { -1.0 } else { 0.0 }, 0.0),
-                    Func::Pwrs => {
-                        // sgn(x) * |x|^y
-                        let s = if a[0].v < 0.0 { -1.0 } else { 1.0 };
-                        let r = pow(&a[0].map(a[0].v.abs(), s), &a[1]);
-                        r.map(s * r.v, s)
-                    }
-                    Func::Tan => {
-                        let r = a[0].v.tan();
-                        a[0].map(r, 1.0 + r * r)
-                    }
-                    Func::Asin | Func::Acos => {
-                        // clamped at +-1, where the slope would be infinite
-                        let x = a[0].v.clamp(-1.0 + 1e-9, 1.0 - 1e-9);
-                        let d = 1.0 / (1.0 - x * x).sqrt();
-                        if *f == Func::Asin { a[0].map(x.asin(), d) } else { a[0].map(x.acos(), -d) }
-                    }
-                    Func::Atan => a[0].map(a[0].v.atan(), 1.0 / (1.0 + a[0].v * a[0].v)),
-                    Func::Sinh => a[0].map(a[0].v.clamp(-80.0, 80.0).sinh(), a[0].v.clamp(-80.0, 80.0).cosh()),
-                    Func::Cosh => a[0].map(a[0].v.clamp(-80.0, 80.0).cosh(), a[0].v.clamp(-80.0, 80.0).sinh()),
-                    Func::Asinh => a[0].map(a[0].v.asinh(), 1.0 / (a[0].v * a[0].v + 1.0).sqrt()),
-                    Func::Cos => a[0].map(a[0].v.cos(), -a[0].v.sin()),
-                    Func::If => if a[0].v != 0.0 { a[1].clone() } else { a[2].clone() },
-                    Func::Step => {
-                        // smooth 0 -> 1 across [-w, w] (w = 1 mV when omitted)
-                        let w = a.get(1).map_or(1e-3, |w| w.v.abs().max(1e-12));
-                        let (s, ds) = smooth((a[0].v + w) / (2.0 * w));
-                        let inside = a[0].v > -w && a[0].v < w;
-                        a[0].map(s, if inside { ds / (2.0 * w) } else { 0.0 })
+                        Op::Mul => {
+                            lin(ag, bv, bg, av);
+                            av * bv
+                        }
+                        Op::Div => {
+                            // a division by (almost) nothing is held at a large finite value
+                            let den = if bv.abs() < 1e-9 { 1e-9f64.copysign(if bv == 0.0 { 1.0 } else { bv }) } else { bv };
+                            lin(ag, 1.0 / den, bg, -av / (den * den));
+                            av / den
+                        }
+                        Op::Pow => {
+                            let mut v = av;
+                            pow(&mut v, ag, bv, bg);
+                            v
+                        }
+                        Op::Lt => konst((av < bv) as u8 as f64, ag),
+                        Op::Gt => konst((av > bv) as u8 as f64, ag),
+                        Op::Le => konst((av <= bv) as u8 as f64, ag),
+                        Op::Ge => konst((av >= bv) as u8 as f64, ag),
+                        Op::Eq => konst((av == bv) as u8 as f64, ag),
+                        Op::Ne => konst((av != bv) as u8 as f64, ag),
+                    };
+                }
+                Ins::Call(f, argc) => {
+                    sp -= argc;
+                    let a0 = sp;
+                    sp += 1;
+                    let v0 = vs[a0];
+                    // the result replaces argument 0: a function of it alone scales its derivatives, one that picks an argument copies it
+                    let pick = |vs: &mut [f64], gs: &mut [f64], i: usize| {
+                        if i != 0 {
+                            vs[a0] = vs[a0 + i];
+                            gs.copy_within((a0 + i) * n..(a0 + i + 1) * n, a0 * n);
+                        }
+                    };
+                    let one = |vs: &mut [f64], gs: &mut [f64], v: f64, dv: f64| {
+                        vs[a0] = v;
+                        scale(&mut gs[a0 * n..(a0 + 1) * n], dv);
+                    };
+                    match f {
+                        Func::Abs => one(vs, gs, v0.abs(), if v0 < 0.0 { -1.0 } else { 1.0 }),
+                        Func::Min => {
+                            let i = if v0 <= vs[a0 + 1] { 0 } else { 1 };
+                            pick(vs, gs, i);
+                        }
+                        Func::Max => {
+                            let i = if v0 >= vs[a0 + 1] { 0 } else { 1 };
+                            pick(vs, gs, i);
+                        }
+                        Func::Limit => {
+                            // LTspice: the middle one of the three, so the two limits may be written in either order
+                            let (lo, hi) = if vs[a0 + 1] <= vs[a0 + 2] { (1, 2) } else { (2, 1) };
+                            let i = if v0 < vs[a0 + lo] { lo } else if v0 > vs[a0 + hi] { hi } else { 0 };
+                            pick(vs, gs, i);
+                        }
+                        Func::Sqrt => {
+                            if v0 > 1e-30 {
+                                let r = v0.sqrt();
+                                one(vs, gs, r, 0.5 / r);
+                            } else {
+                                vs[a0] = 0.0;
+                                gs[a0 * n..(a0 + 1) * n].fill(0.0);
+                            }
+                        }
+                        Func::Exp => {
+                            let r = v0.min(80.0).exp();
+                            one(vs, gs, r, if v0 < 80.0 { r } else { 0.0 });
+                        }
+                        Func::Ln => {
+                            let v = v0.max(1e-30);
+                            one(vs, gs, v.ln(), if v0 > 1e-30 { 1.0 / v } else { 0.0 });
+                        }
+                        Func::Log10 => {
+                            let v = v0.max(1e-30);
+                            one(vs, gs, v.log10(), if v0 > 1e-30 { 1.0 / (v * std::f64::consts::LN_10) } else { 0.0 });
+                        }
+                        Func::Pow => {
+                            let bv = vs[a0 + 1];
+                            let (lo, hi) = gs.split_at_mut((a0 + 1) * n);
+                            let mut v = v0;
+                            pow(&mut v, &mut lo[a0 * n..], bv, &hi[..n]);
+                            vs[a0] = v;
+                        }
+                        Func::Tanh => {
+                            let r = v0.tanh();
+                            one(vs, gs, r, 1.0 - r * r);
+                        }
+                        Func::Sin => one(vs, gs, v0.sin(), v0.cos()),
+                        Func::Floor => one(vs, gs, v0.floor(), 0.0),
+                        Func::Sgn => one(vs, gs, if v0 > 0.0 { 1.0 } else if v0 < 0.0 { -1.0 } else { 0.0 }, 0.0),
+                        Func::Pwrs => {
+                            // sgn(x) * |x|^y
+                            let s = if v0 < 0.0 { -1.0 } else { 1.0 };
+                            let bv = vs[a0 + 1];
+                            let (lo, hi) = gs.split_at_mut((a0 + 1) * n);
+                            let ag = &mut lo[a0 * n..];
+                            scale(ag, s);
+                            let mut v = v0.abs();
+                            pow(&mut v, ag, bv, &hi[..n]);
+                            scale(ag, s);
+                            vs[a0] = s * v;
+                        }
+                        Func::Tan => {
+                            let r = v0.tan();
+                            one(vs, gs, r, 1.0 + r * r);
+                        }
+                        Func::Asin | Func::Acos => {
+                            // clamped at +-1, where the slope would be infinite
+                            let x = v0.clamp(-1.0 + 1e-9, 1.0 - 1e-9);
+                            let d = 1.0 / (1.0 - x * x).sqrt();
+                            if f == Func::Asin { one(vs, gs, x.asin(), d) } else { one(vs, gs, x.acos(), -d) }
+                        }
+                        Func::Atan => one(vs, gs, v0.atan(), 1.0 / (1.0 + v0 * v0)),
+                        Func::Sinh => one(vs, gs, v0.clamp(-80.0, 80.0).sinh(), v0.clamp(-80.0, 80.0).cosh()),
+                        Func::Cosh => one(vs, gs, v0.clamp(-80.0, 80.0).cosh(), v0.clamp(-80.0, 80.0).sinh()),
+                        Func::Asinh => one(vs, gs, v0.asinh(), 1.0 / (v0 * v0 + 1.0).sqrt()),
+                        Func::Cos => one(vs, gs, v0.cos(), -v0.sin()),
+                        Func::If => pick(vs, gs, if v0 != 0.0 { 1 } else { 2 }),
+                        Func::Step => {
+                            // smooth 0 -> 1 across [-w, w] (w = 1 mV when omitted)
+                            let w = if argc > 1 { vs[a0 + 1].abs().max(1e-12) } else { 1e-3 };
+                            let (s, ds) = smooth((v0 + w) / (2.0 * w));
+                            let inside = v0 > -w && v0 < w;
+                            one(vs, gs, s, if inside { ds / (2.0 * w) } else { 0.0 });
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-fn pow(a: &D, b: &D) -> D {
-    let n = a.g.len();
-    if a.v > 0.0 {
-        let r = a.v.powf(b.v).min(1e300);
-        // d/da = b a^(b-1), d/db = a^b ln a
-        D::lin(a, b.v * a.v.powf(b.v - 1.0), b, r * a.v.ln(), r)
-    } else if a.v == 0.0 && b.v > 0.0 {
-        D::konst(0.0, n)
-    } else if b.v.fract() == 0.0 && a.v != 0.0 {
-        // a negative base with a whole exponent
-        let r = a.v.powf(b.v);
-        a.map(r, b.v * a.v.powf(b.v - 1.0))
-    } else {
-        D::konst(0.0, n)
+        debug_assert_eq!(sp, 1, "a compiled expression leaves one value");
     }
 }
 
@@ -844,8 +911,8 @@ mod tests {
     }
 
     #[test]
-    fn derivatives_with_more_variables_than_fit_on_the_stack() {
-        // 10 variables: past the inline gradient size, so the heap path is used
+    fn derivatives_with_many_variables() {
+        // 10 variables, each with its own derivative on the evaluation stack
         let names: Vec<String> = (0..10).map(|i| format!("v{i}")).collect();
         let text = names.iter().enumerate().map(|(i, n)| format!("{}*V({n})", i + 1)).collect::<Vec<_>>().join(" + ");
         let mut node = |n: &str| names.iter().position(|x| x == n).map_or(0, |i| i + 1);
