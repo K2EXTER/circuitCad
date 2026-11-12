@@ -178,9 +178,12 @@ fn lte_abs_voltages(cm: &crate::dc::Compiled, x: &[f64]) -> Vec<f64> {
     abs
 }
 
-/// Divided difference of order `pts.len() - 1` through `(t, y)` points.
+/// Divided difference of order `pts.len() - 1` through `(t, y)` points (at most four: the step-error check needs three or four).
 fn divided_difference(pts: &[(f64, f64)]) -> f64 {
-    let mut d: Vec<f64> = pts.iter().map(|p| p.1).collect();
+    let mut d = [0.0; 4];
+    for (di, p) in d.iter_mut().zip(pts) {
+        *di = p.1;
+    }
     for k in 1..pts.len() {
         for i in 0..pts.len() - k {
             d[i] = (d[i + 1] - d[i]) / (pts[i + k].0 - pts[i].0);
@@ -228,9 +231,13 @@ fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], abs_v: &[f64], il: 
     let mut worst: f64 = 0.0;
     let mut worst_at: (usize, bool) = (0, false);
     let mut check = |get: &dyn Fn(&Sample) -> f64, new: f64, abs: f64, cur_at: (usize, bool)| {
-        let mut pts: Vec<(f64, f64)> = past.iter().map(|p| (p.0, get(p))).collect();
-        pts.push((t_new, new));
-        let dd = divided_difference(&pts).abs();
+        let mut buf = [(0.0, 0.0); 4];
+        for (b, p) in buf.iter_mut().zip(past) {
+            *b = (p.0, get(p));
+        }
+        buf[need] = (t_new, new);
+        let pts = &buf[..=need];
+        let dd = divided_difference(pts).abs();
         let err = if trap { h.powi(3) * dd / 2.0 } else { h * h * dd };
         let old = pts[need - 1].1;
         let r = err / (rel * new.abs().max(old.abs()) + abs);
