@@ -112,6 +112,8 @@ const BUNDLED: &[(&str, &str)] = &[
     ("RK73H1J", include_str!("../series/RK73H1J.series.json")),
     ("RK73H2A", include_str!("../series/RK73H2A.series.json")),
     ("RK73H2B", include_str!("../series/RK73H2B.series.json")),
+    ("CF1/4", include_str!("../series/CF1_4.series.json")),
+    ("MF1/4D", include_str!("../series/MF1_4D.series.json")),
 ];
 
 /// The bundled series, read once.
@@ -598,6 +600,40 @@ mod tests {
         assert_eq!(j.power_at(1020.0), 0.1);
         assert_eq!(j.part(470.0).ratings.unwrap().p_max, Some(0.125));
         assert!(j.part(4.7).description.contains("±200 ppm/K"));
+    }
+
+    #[test]
+    fn koa_cf_and_mf_are_leaded_and_follow_their_data_sheets() {
+        let cf = by_name("CF1/4").unwrap();
+        // two significant figures and the zeros, R for the point below 10 Ω (the data sheet's "103")
+        assert_eq!(cf.part_name(10_000.0), "CF1/4CT52A103J");
+        assert_eq!(cf.part_name(2.2), "CF1/4CT52A2R2J");
+        assert_eq!(cf.part_name(51.0), "CF1/4CT52A510J");
+        assert_eq!(cf.part_name(5.1e6), "CF1/4CT52A515J");
+        // E24 from 2.2 Ω to 5.1 MΩ: 16 values up to 9.1 Ω, five decades of 24, 18 from 1 MΩ to 5.1 MΩ
+        assert_eq!(cf.values().len(), 16 + 24 * 5 + 18);
+        // the coefficient as the data sheet writes it, by range
+        assert_eq!(cf.tc_label(4700.0), "+350〜−450");
+        assert_eq!(cf.tc_label(470_000.0), "0〜−1000");
+        assert!(cf.part(1.5e6).description.contains("0〜−1300 ppm/K"));
+        assert_eq!(cf.rated_voltage(1e6), 300.0);
+        let mf = by_name("MF1/4D").unwrap();
+        assert_eq!(mf.part_name(10_000.0), "MF1/4DCT52A1002F");
+        assert_eq!(mf.part_name(10.0), "MF1/4DCT52A10R0F");
+        assert_eq!(mf.values().len(), 114 * 5 + 38);
+        assert_eq!(mf.values().last(), Some(&2.21e6));
+        assert_eq!(mf.tc_label(1e5), "±100");
+        for s in [cf, mf] {
+            for d in s.expand() {
+                assert!(d.validate().iter().all(|i| !i.error), "{}: {:?}", d.name, d.validate());
+            }
+            let fp = s.part(1000.0).footprint().unwrap();
+            // through holes 10.16 mm apart, a 0.9 mm drill in a 1.7 mm pad; the body drawn 6.8 × 2.6 mm
+            assert_eq!(fp.pads.iter().map(|p| p.drill).collect::<Vec<_>>(), vec![Some(0.9), Some(0.9)]);
+            assert!((fp.pads[1].pos.x - fp.pads[0].pos.x - 10.16).abs() < 1e-9);
+            let b = fp.body.as_ref().unwrap();
+            assert_eq!((b.w, b.h), (6.8, 2.6));
+        }
     }
 
     #[test]

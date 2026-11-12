@@ -1,0 +1,95 @@
+{
+  "series": "CF1/4",
+  "maker": "KOA",
+  "category": "抵抗",
+  "summary": "炭素皮膜のリード線付き抵抗 ±5% 1/4 W。ブレッドボードの定番",
+  "size": "リード線",
+  "datasheet": "https://www.koaspeer.com/pdfs/CF.pdf",
+  "checked": "KOA のデータシート CF (KOA Speer、寸法と型番 9/1/20・定格 10/28/30) と Appendix C (包装、08/13/26) で確かめた (2026-11-13)",
+  "values": {
+    "sets": [
+      "E24"
+    ],
+    "min": 2.2,
+    "max": 5100000.0
+  },
+  "mpn": "CF1/4CT52A{code}J",
+  "code": "sig2",
+  "tolerance_pct": 5.0,
+  "tc_ppm": 450.0,
+  "p_max": 0.25,
+  "v_limit": 300.0,
+  "v_overload": 600.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [
+    {
+      "min": 2.2,
+      "max": 100000.0,
+      "tc_ppm": 450.0,
+      "tc_text": "+350〜−450"
+    },
+    {
+      "min": 110000.0,
+      "max": 330000.0,
+      "tc_ppm": 700.0,
+      "tc_text": "0〜−700"
+    },
+    {
+      "min": 360000.0,
+      "max": 1000000.0,
+      "tc_ppm": 1000.0,
+      "tc_text": "0〜−1000"
+    },
+    {
+      "min": 1100000.0,
+      "max": 5100000.0,
+      "tc_ppm": 1300.0,
+      "tc_text": "0〜−1300"
+    }
+  ],
+  "quality": [],
+  "height": 2.6,
+  "footprint_name": "R_Axial_L6.1_D2.3_P10.16_KOA",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -5.08,
+        "y": 0.0,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 0.9,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 5.08,
+        "y": 0.0,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 0.9,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "穴とピッチは部品作成フォームのリード部品の目安と同じ考え方: 穴径 0.9 mm = リード径 0.6 mm + 余裕 0.25 mm を 0.1 mm に切り上げ、パッド径 1.7 mm = 穴 + 銅の輪 0.4 mm × 2。穴の間隔 10.16 mm (400 mil) = 本体の長さ L の最大 6.8 mm + 両側の曲げしろ (リード径 + 1 mm) の 10.0 mm 以上の 2.54 mm の倍数。KOA も曲げ済みの品 (M 形の 10 mm・12.5 mm) を出している。塗装のふくらみ C (最大 7.1 mm) で数えると 12.7 mm になるので、窮屈なら穴の間隔を広げる。メーカーの推奨ランドではない",
+  "body": "本体の長さ L 6.1 mm (+0.7/−0.5)、塗装を含む C 最大 7.1 mm、径 D 2.3 ± 0.3 mm、リード径 0.6 mm (データシートの CF1/4 の寸法)。色の帯 4 本 (2 桁 + 乗数 + 許容差の金)。包装は T52A (52 mm 間隔のテープ、Ammo 箱 2,000 本) で、テープからはがせば中身は同じ部品",
+  "outline": {
+    "shape": "rect",
+    "w": 6.8,
+    "h": 2.6,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "none",
+    "mark_pin": ""
+  }
+}

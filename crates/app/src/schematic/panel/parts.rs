@@ -436,7 +436,9 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
     let (m_now, d_now) = split(now);
     let mut sel: (u16, i32, f64) = ui.data(|d| d.get_temp(id)).filter(|&(_, _, last): &(u16, i32, f64)| last == now).unwrap_or((m_now, d_now, now));
     let fine_id = id.with("fine");
-    let mut fine = ui.data(|d| d.get_temp::<bool>(fine_id)).unwrap_or(false) || !part_lib::series::E24.contains(&sel.0);
+    // a series made only in E24 (KOA CF) has no fine values to offer
+    let has_e96 = s.values.sets.iter().any(|x| x == "E96");
+    let mut fine = has_e96 && (ui.data(|d| d.get_temp::<bool>(fine_id)).unwrap_or(false) || !part_lib::series::E24.contains(&sel.0));
     let figures = mantissas(fine);
     let decades = s.decades();
     let mut mi = figures.iter().position(|&m| m >= sel.0).unwrap_or(figures.len() - 1);
@@ -458,7 +460,7 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
             } else {
                 ui.colored_label(crate::theme::WARN, i18n::trf!("{} にはありません ({})", s.series, s.range_text()));
             }
-            if ui.checkbox(&mut fine, i18n::tr("細かい値 (E96)")).on_hover_text(i18n::tr("有効数字の輪に E96 (1 桁に 96 個、±1 % の抵抗によくある並び) も入れます。外すと E24 (1 桁に 24 個) だけ")).changed() {
+            if has_e96 && ui.checkbox(&mut fine, i18n::tr("細かい値 (E96)")).on_hover_text(i18n::tr("有効数字の輪に E96 (1 桁に 96 個、±1 % の抵抗によくある並び) も入れます。外すと E24 (1 桁に 24 個) だけ")).changed() {
                 ui.data_mut(|d| d.insert_temp(fine_id, fine));
             }
         });

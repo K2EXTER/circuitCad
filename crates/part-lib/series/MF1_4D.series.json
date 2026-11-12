@@ -1,0 +1,73 @@
+{
+  "series": "MF1/4D",
+  "maker": "KOA",
+  "category": "抵抗",
+  "summary": "金属皮膜のリード線付き抵抗 ±1% 1/4 W。精度が要るときに",
+  "size": "リード線",
+  "datasheet": "https://www.mouser.com/datasheet/2/219/MF_MFS_RK-18760.pdf",
+  "checked": "KOA のデータシート MF, MFS, RK (KOA Speer、寸法と型番 6/5/25・定格 6/2/25。Mouser が置いている KOA の PDF) と Appendix C (包装、08/13/26) で確かめた (2026-11-13)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 10.0,
+    "max": 2210000.0
+  },
+  "mpn": "MF1/4DCT52A{code}F",
+  "code": "sig3",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 100.0,
+  "p_max": 0.25,
+  "v_limit": 250.0,
+  "v_overload": 500.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [],
+  "quality": [
+    "AEC-Q200"
+  ],
+  "height": 2.6,
+  "footprint_name": "R_Axial_L6.3_D2.3_P10.16_KOA",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -5.08,
+        "y": 0.0,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 0.9,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 5.08,
+        "y": 0.0,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 0.9,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "穴とピッチは部品作成フォームのリード部品の目安と同じ考え方: 穴径 0.9 mm = リード径 0.6 mm + 余裕 0.25 mm を 0.1 mm に切り上げ、パッド径 1.7 mm = 穴 + 銅の輪 0.4 mm × 2。穴の間隔 10.16 mm (400 mil) = 本体の長さ L の最大 6.8 mm + 両側の曲げしろ (リード径 + 1 mm) の 10.0 mm 以上の 2.54 mm の倍数。KOA も曲げ済みの品 (M 形の 10 mm・12.5 mm) を出している。塗装のふくらみ C (最大 7.1 mm) で数えると 12.7 mm になるので、窮屈なら穴の間隔を広げる。メーカーの推奨ランドではない",
+  "body": "本体の長さ L 6.3 ± 0.5 mm、塗装を含む C 最大 7.1 mm、径 D 2.3 ± 0.3 mm、リード径 0.6 mm (データシートの MF1/4 の寸法)。色の帯 5 本 (3 桁 + 乗数 + 許容差の茶)。型番の D は温度係数 ±100 ppm/K の品。包装は T52A (52 mm 間隔のテープ、Ammo 箱 2,000 本)",
+  "outline": {
+    "shape": "rect",
+    "w": 6.8,
+    "h": 2.6,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "none",
+    "mark_pin": ""
+  }
+}
