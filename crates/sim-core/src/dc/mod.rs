@@ -261,7 +261,33 @@ struct GminStall {
     de: f64,
 }
 
+/// The gmin (in decades below 1 S) of the first stage of gmin stepping, then the larger ones it falls back on. The usual 1e-2
+/// holds every circuit that solved before. A model built from current sources with stiff clamps (Microchip's TC4421: a 1 A
+/// source into a node held by tables of 10 A per mV that go flat after 1 mV) sends the node a hundred volts past its clamp at
+/// 1e-2, where the table no longer pulls back, and Newton jumps between the two clamps for good. At 1e-1 the overshoot is a
+/// few volts, the first stage settles in 4 iterations and the stages down to 1e-12 follow (`docs/code-notes/sim-core/performance.md`).
+const GMIN_FIRST_STAGES: [f64; 3] = [2.0, 1.0, 0.0];
+
 impl Compiled {
+    /// The first stage of gmin stepping from `x0`: at 1e-2, or when that does not converge, at the larger gmin of
+    /// `GMIN_FIRST_STAGES`. With `nodeset`s only 1e-2, the strength the seeds are held with. Returns the solution and its stage.
+    fn gmin_first_stage(&self, x0: Vec<f64>, vj0: Vec<f64>, hold: &dyn Fn(f64) -> Ctx<'static>) -> Result<(Attempt, f64), Fail> {
+        let stages = if self.seed.is_empty() { &GMIN_FIRST_STAGES[..] } else { &GMIN_FIRST_STAGES[..1] };
+        let mut last = Fail::NoConv;
+        for (k, &e) in stages.iter().enumerate() {
+            // the larger stages get one plain Newton pass: where they help, the large gmin settles the circuit in a few
+            // iterations, and a circuit they do not help (an oscillator) must not pay for every damped retry twice more
+            let r = if k == 0 { self.newton_damped(x0.clone(), vj0.clone(), &hold(10f64.powf(-e))) } else { self.newton_with(x0.clone(), vj0.clone(), &hold(10f64.powf(-e)), false, 1.0, f64::INFINITY) };
+            match r {
+                Ok(a) => return Ok((a, e)),
+                // a singular circuit is singular at every gmin
+                Err(Fail::Singular) => return Err(Fail::Singular),
+                Err(f) => last = f,
+            }
+        }
+        Err(last)
+    }
+
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
         let mut zero_x = vec![0.0; self.n_unknowns];
         if !self.seed.is_empty() {
@@ -271,7 +297,7 @@ impl Compiled {
         match which {
             Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(crate::options::options().gmin, 1.0)),
             Strategy::Gmin | Strategy::GminLong => {
-                // gmin from 1e-2 down to 1e-12 (a decade at a time), each step starting from the previous solution. A step
+                // gmin from 1e-2 (or a larger first stage, `GMIN_FIRST_STAGES`) down to 1e-12 (a decade at a time), each step starting from the previous solution. A step
                 // that does not converge is split into smaller ones: a latch or a current-limited output stage can need
                 // hundreds of iterations for a decade, but only a few for a third of it.
                 // with `nodeset`s the pull to the seeds stays at the strength of the first stage while gmin falls (like SPICE: the seeds
@@ -290,15 +316,23 @@ impl Compiled {
                 let (mut x, mut vj, mut iters, mut e, mut de) = match stall {
                     Some(st) => (st.x, st.vj, st.iters, st.e, st.de),
                     None => {
-                        let first = self.newton_damped(zero_x, zero_vj, &hold(1e-2))?;
-                        (first.x, first.vj, first.iterations, 2.0f64, 1.0f64)
+                        let (first, e) = self.gmin_first_stage(zero_x, zero_vj, &hold)?;
+                        (first.x, first.vj, first.iterations, e, 1.0f64)
                     }
                 };
                 let mut skip_short = resumed;
                 while e < 12.0 - 1e-9 {
                     let target = (e + de).min(12.0);
                     let ctx = hold(10f64.powf(-target));
-                    let short = if std::mem::take(&mut skip_short) { Err(Fail::NoConv) } else { self.newton_damped(x.clone(), vj.clone(), &ctx) };
+                    // a stage that fails is split, so the damped retries (a latch close to its split point) are only worth their time
+                    // on the smallest one, before the stepping gives up
+                    let short = if std::mem::take(&mut skip_short) {
+                        Err(Fail::NoConv)
+                    } else if de >= 1.0 / 8.0 {
+                        self.newton(x.clone(), vj.clone(), &ctx)
+                    } else {
+                        self.newton_damped(x.clone(), vj.clone(), &ctx)
+                    };
                     match short {
                         Ok(a) => {
                             iters += a.iterations;

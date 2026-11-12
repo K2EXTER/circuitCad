@@ -1181,3 +1181,33 @@ fn a_large_nonlinear_ladder_solves_with_the_reused_factorisation() {
     assert!((last - dc).abs() < 2e-3, "transient end {last} vs DC {dc}");
     assert!(dc > 0.4 && dc < 0.8, "the diode clamps the end near its forward voltage: {dc}");
 }
+
+/// A clamp built the way Microchip's TC4421 model builds its comparator: a 1 A source into a node held at 14 V and -10 V by tables
+/// of 10 A per mV that go flat 1 mV past the clamp. At the usual first gmin stage (1e-2) the step overshoots the clamp by a
+/// hundred volts, where the table no longer pulls back, and Newton jumps between the two clamps for good; the stepping starts at
+/// a larger gmin then (`dc::GMIN_FIRST_STAGES`). Every strategy failed before, and a transient started from zero.
+const STIFF_CLAMP: &str = "
+.subckt CLAMPED out
+I1 0 30 1
+G33 0 30 TABLE { V(31, 30) } ( (-1M,-10)(0,0)(1,10N) )
+G34 30 0 TABLE { V(30, 32) } ( (-1M,-10)(0,0)(1,10N) )
+R30 32 30 1MEG
+V31 31 0 14
+V32 32 0 -10
+G51 0 out TABLE { V(30, 0) } ( (-5,-1U)(-3,-1U)(0,0)(6,8.95)(18,9.04) )
+R53 out 0 1
+.ends
+";
+
+#[test]
+fn a_node_between_stiff_flat_ended_clamps_has_an_operating_point() {
+    let mut c = Circuit::new();
+    let out = c.node("out");
+    add_subckt_instance(&mut c, "U1", "CLAMPED", STIFF_CLAMP, &[out]).unwrap_or_else(|e| panic!("{e}"));
+    // the node sits at the upper clamp (14 V), which the last table turns into 8.95 + 0.09 * 8 / 12 V
+    let op = dc_op(&c).unwrap();
+    assert!((op.voltage("out").unwrap() - 9.01).abs() < 1e-3, "{:?}", op.voltage("out"));
+    let r = transient(&c, &TranSettings { tstop: 1e-6, tstep: 1e-8, uic: false }).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!((r.signal("V(out)").unwrap().values[0] - 9.01).abs() < 1e-3);
+}
