@@ -1,0 +1,70 @@
+{
+  "series": "AC0603",
+  "maker": "Yageo",
+  "category": "抵抗",
+  "summary": "厚膜チップ抵抗 車載品 ±1% 0603 (1608)",
+  "size": "0603",
+  "datasheet": "https://www.yageogroup.com/content/datasheet/asset/file/PYU-AC_51_ROHS_L",
+  "checked": "Yageo のデータシート AC series 0201 to 2512 (Product specification、Nov. 17, 2023 V.11) と、ランドは Yageo の Chip resistors Mounting (Feb. 13, 2018 V.10。Yageo のサイトで見つからず、Octopart が置いている Yageo の PDF) で確かめた (2026-11-13)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 1.0,
+    "max": 10000000.0
+  },
+  "mpn": "AC0603FR-07{code}L",
+  "code": "rkmt",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 100.0,
+  "p_max": 0.1,
+  "v_limit": 75.0,
+  "v_overload": 150.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [
+    {
+      "min": 1.0,
+      "max": 9.76,
+      "tc_ppm": 200.0
+    }
+  ],
+  "quality": [
+    "AEC-Q200"
+  ],
+  "height": 0.45,
+  "footprint_name": "R_0603_Yageo",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.85,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.85,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは Yageo の推奨 (リフローの A 2.6・B 0.8・C 0.9・D 0.8 mm: A = 外側の端から端、B = パッドの内側の間、C = パッドの長さ、D = パッドの幅。AC は RC と同じ)",
+  "body": "本体 1.60 × 0.80 mm、厚さ 0.45 mm (データシートの寸法)。抵抗値の印字あり。型番の F は ±1 %、R は紙テープ、07 は 7 インチのリールで標準の電力 (紙テープ、7 インチのリールに 5,000 個)。7W (2 倍の電力) の品なら 0.2 W"
+}

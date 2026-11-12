@@ -86,14 +86,18 @@ pub(super) fn quick_matches(query: &str, basic: &[Kind], library: &[PartDef], pr
     }
     // values typed as resistances ("4.7k", "220"): they pick a series' part of that value
     let typed: Vec<f64> = words.iter().filter_map(|w| part_lib::series::parse_ohms(w)).collect();
+    // the one value each series shows, worked out once (a series has hundreds of parts): the value typed when the series makes
+    // it, else its default value
+    let shown_value: std::collections::HashMap<&str, f64> = part_lib::series::bundled()
+        .iter()
+        .map(|s| (s.series.as_str(), typed.iter().copied().find(|t| s.makes(*t)).unwrap_or_else(|| s.default_value())))
+        .collect();
     for (i, d) in library.iter().enumerate() {
-        // a series (one part per value) shows one part: the value typed when the series makes it, else its default value
+        // a series (one part per value) shows one part
         let member = part_lib::series::member(&d.name);
         if let Some((s, v)) = member {
-            let made = |t: &f64| s.nearest(*t).is_some_and(|(_, exact)| exact);
-            let wanted = typed.iter().any(|t| made(t) && (t / v - 1.0).abs() < 5e-4);
-            let default = !typed.iter().any(made) && (v / s.default_value() - 1.0).abs() < 1e-9;
-            if !(wanted || default || fav_pos(&d.name).is_some() || recent_pos(&d.name).is_some()) {
+            let shown = shown_value.get(s.series.as_str()).is_some_and(|x| (v / x - 1.0).abs() < 5e-4);
+            if !(shown || fav_pos(&d.name).is_some() || recent_pos(&d.name).is_some()) {
                 order += 1;
                 continue;
             }

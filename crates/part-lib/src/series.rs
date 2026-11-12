@@ -120,6 +120,10 @@ const BUNDLED: &[(&str, &str)] = &[
     ("CRCW0603", include_str!("../series/CRCW0603.series.json")),
     ("CRCW0805", include_str!("../series/CRCW0805.series.json")),
     ("CRCW1206", include_str!("../series/CRCW1206.series.json")),
+    ("AC0402", include_str!("../series/AC0402.series.json")),
+    ("AC0603", include_str!("../series/AC0603.series.json")),
+    ("AC0805", include_str!("../series/AC0805.series.json")),
+    ("AC1206", include_str!("../series/AC1206.series.json")),
     ("CF1/4", include_str!("../series/CF1_4.series.json")),
     ("MF1/4D", include_str!("../series/MF1_4D.series.json")),
 ];
@@ -218,6 +222,7 @@ impl SeriesDef {
             "sig3" => sig3(v),
             "sig2" => sig2(v),
             "rkm4" => rkm4(v),
+            "rkmt" => rkmt(v),
             _ => None,
         }
     }
@@ -243,7 +248,16 @@ impl SeriesDef {
 
     /// Is `v` one of the series' values?
     pub fn makes(&self, v: f64) -> bool {
-        self.nearest(v).is_some_and(|(_, exact)| exact)
+        // without listing the values (the drum asks this for every row it draws): in range, and its figures in one of the sets
+        if !(v.is_finite() && v > 0.0) || v < self.values.min * (1.0 - 1e-9) || v > self.values.max * (1.0 + 1e-9) {
+            return false;
+        }
+        let (m, d) = split(v);
+        (compose(m, d) / v - 1.0).abs() < 5e-4 && self.values.sets.iter().any(|set| match set.as_str() {
+            "E24" => E24.contains(&m),
+            "E96" => E96.contains(&m),
+            _ => false,
+        })
     }
 
     /// The decades the series' values fall in: `d` for values from 10^d up to 10^(d+1) (10 Ω to 1 MΩ → 1 to 6).
@@ -471,6 +485,16 @@ fn rkm4(v: f64) -> Option<String> {
     let digits = format!("{m}");
     let (a, b) = digits.split_at(whole as usize);
     Some(format!("{a}{letter}{b}"))
+}
+
+/// The unit's letter at the decimal point with the zeros after it left out (Yageo): `1R` = 1 Ω, `9R76`, `100R`, `4K7` = 4.7 kΩ,
+/// `4K75`, `100K`, `1M`, `10M`.
+fn rkmt(v: f64) -> Option<String> {
+    let full = rkm4(v)?;
+    let i = full.find(['R', 'K', 'M'])?;
+    let (a, rest) = full.split_at(i);
+    let (letter, b) = rest.split_at(1);
+    Some(format!("{a}{letter}{}", b.trim_end_matches('0')))
 }
 
 /// `10 kΩ`, `4.75 kΩ`, `1 MΩ`, `97.6 Ω`: the value in sentences.
@@ -723,6 +747,53 @@ mod tests {
             assert!((h - x).abs() < 1e-9, "{series} width");
             for d in s.expand() {
                 assert!(d.validate().iter().all(|i| !i.error), "{}", d.name);
+            }
+        }
+    }
+
+    #[test]
+    fn yageo_ac_writes_the_value_as_its_data_sheet_does() {
+        let s = by_name("AC0402").unwrap();
+        // the data sheet's ordering example: AC0402FR-07100KL is 100 kΩ ±1 %; and its coding table
+        assert_eq!(s.part_name(100_000.0), "AC0402FR-07100KL");
+        for (v, code) in [(1.0, "1R"), (1.5, "1R5"), (9.76, "9R76"), (10.0, "10R"), (97.6, "97R6"), (100.0, "100R"), (976.0, "976R"), (1000.0, "1K"), (9760.0, "9K76"), (4700.0, "4K7"), (1e6, "1M"), (1e7, "10M")] {
+            assert_eq!(s.part_name(v), format!("AC0402FR-07{code}L"), "{v}");
+        }
+        // (series, rated power, working voltage, gap B, overall A, width D of the reflow footprint)
+        let table = [
+            ("AC0402", 0.0625, 50.0, 0.5, 1.5, 0.6),
+            ("AC0603", 0.1, 75.0, 0.8, 2.6, 0.8),
+            ("AC0805", 0.125, 150.0, 1.2, 3.0, 1.2),
+            ("AC1206", 0.25, 200.0, 2.2, 4.2, 1.5),
+        ];
+        for (series, p, v, b, a, d) in table {
+            let s = by_name(series).unwrap();
+            assert_eq!(s.values().len(), 114 * 7 + 1, "{series}");
+            assert_eq!(s.power_at(1000.0), p);
+            assert_eq!(s.rated_voltage(1e7), v);
+            // ±200 ppm/K below 10 Ω, ±100 from 10 Ω
+            assert_eq!((s.tc_at(4.7), s.tc_at(10.0)), (200.0, 100.0));
+            let fp = s.part(1000.0).footprint().unwrap();
+            let (l, r) = (&fp.pads[0], &fp.pads[1]);
+            let (w, h) = l.shape.size();
+            assert!(((r.pos.x - w / 2.0) - (l.pos.x + w / 2.0) - b).abs() < 1e-9, "{series} gap");
+            assert!(((r.pos.x + w / 2.0) - (l.pos.x - w / 2.0) - a).abs() < 1e-9, "{series} overall");
+            assert!((h - d).abs() < 1e-9, "{series} width");
+            for part in s.expand() {
+                assert!(part.validate().iter().all(|i| !i.error), "{}", part.name);
+            }
+        }
+    }
+
+    #[test]
+    fn makes_agrees_with_the_list_of_values() {
+        for s in bundled() {
+            let vals = s.values();
+            for &v in &vals {
+                assert!(s.makes(v), "{} {v}", s.series);
+            }
+            for v in [0.5, 4.8e3, 1.234e4, s.values.max * 1.5, s.values.min * 0.9] {
+                assert_eq!(s.makes(v), vals.iter().any(|x| (x / v - 1.0).abs() < 5e-4), "{} {v}", s.series);
             }
         }
     }
