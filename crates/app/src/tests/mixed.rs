@@ -230,6 +230,32 @@ fn mixed_signal_project_opens_with_its_routed_board() {
     assert!(d.is_empty(), "{:?}", d.iter().map(|x| &x.message).collect::<Vec<_>>());
 }
 
+/// With the board's wiring, the 555's flip is found by the largest step (Newton fails near it); that step must not carry the
+/// flip to its end: the 74HC04 after the 555 (7 ns delay) used to switch CLK 10 us after OSC on half of the edges.
+#[test]
+fn the_clock_follows_the_oscillator_with_the_board_wiring() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let p = crate::project::load(&root.join("mixed_signal.ccproj")).unwrap();
+    let spec = pcb_core::irdrop::IrSpec::default();
+    let series = pcb_core::irdrop::wiring_resistances(&p.board, &spec);
+    let k: Vec<sim_core::WiringK> = pcb_core::irdrop::wiring_couplings(&series, &spec).into_iter().map(|c| sim_core::WiringK { a: c.a, b: c.b, k: c.k }).collect();
+    let w: Vec<sim_core::WiringR> = series.into_iter().map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry, farad: w.farad }).collect();
+    let c = sim_core::from_schematic_with_layout(&p.schematic, &w, &k).unwrap();
+    let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 2.2e-3, tstep: 10e-6, uic: false }).unwrap();
+    let cross = |name: &str, level: f64| -> Vec<f64> {
+        let v = &r.signal(name).unwrap().values;
+        (1..v.len()).filter(|&i| (v[i - 1] > level) != (v[i] > level)).map(|i| r.time[i - 1] + (level - v[i - 1]) / (v[i] - v[i - 1]) * (r.time[i] - r.time[i - 1])).collect()
+    };
+    let (osc, clk) = (cross("V(OSC)", 1.65), cross("V(CLK)", 2.5));
+    // the edges after the start (the first one is the 555 waking up)
+    let edges: Vec<f64> = osc.into_iter().filter(|t| *t > 1e-3).collect();
+    assert!(edges.len() >= 2, "{edges:?}");
+    for t in edges {
+        let lag = clk.iter().map(|c| c - t).filter(|d| *d > -1e-9).fold(f64::MAX, f64::min);
+        assert!(lag < 1e-6, "CLK follows the OSC edge at {:.2} us {:.2} us late", t * 1e6, lag * 1e6);
+    }
+}
+
 /// Speed of the combined demo's transient (8 ms, 10 us steps): `cargo test -p app --release mixed_signal_speed -- --ignored --nocapture`.
 #[test]
 #[ignore]

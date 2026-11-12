@@ -224,8 +224,12 @@ const CAPPED_TRIES: usize = 6;
 /// multivibrator or latch snapping over: a loop of gain above one with only capacitors to slow it, so no state exists close to the old
 /// one). Shrinking further only finds the edge to the nanosecond at the price of four failed solves per level (the failures near
 /// such an edge wander for the whole 150 iterations); the largest step is tried at once instead, as after the fourth failure. The
-/// edge is then placed within this size, below a thousandth of the largest step, and the led blinker takes 0.8 s, not 3.2 s.
+/// edge is then placed by the shortest step that lands (`JUMP_SEARCH`), and the led blinker takes 0.6 s, not 3.2 s.
 const SNAP_EARLY: f64 = 64.0;
+
+/// After the largest step landed beyond a flip, the shorter steps that land are searched down to this factor of the size that
+/// failed (see the step loop of `transient_with`).
+const JUMP_SEARCH: f64 = 16.0;
 
 /// (the new capacitor states and inductor currents, then their absolute tolerances)
 fn step_error_ratio(hist: &[Sample], t_new: f64, (cv, il): (&[f64], &[f64]), (abs_v, abs_i): (&[f64], &[f64]), trap: bool, rel: f64) -> Option<f64> {
@@ -458,6 +462,38 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
                     seed_g: None,
                 };
                 match cm.newton(x.clone(), vj.clone(), &ctx) {
+                    Ok(a) if jumped && h > JUMP_SEARCH * h_first => {
+                        // The largest step landed beyond the flip, which may lie anywhere within it: the step would draw the edge over
+                        // its whole length and hand a later digital input the new level that much late (a 555's output and the gate
+                        // after it, 15 us late at 10 us steps). Look for the shortest step that still lands, between the size that
+                        // failed and this one (by halving their ratio, as fails cost the most): the edge is then within a factor
+                        // `JUMP_SEARCH` of the step that found it.
+                        let (mut lo, mut hi, mut a) = (h_first, h, a);
+                        while hi > JUMP_SEARCH * lo {
+                            let mid = (lo * hi).sqrt();
+                            let ctx = Ctx {
+                                gmin: crate::options::options().gmin,
+                                scale: 1.0,
+                                t: t + mid,
+                                dynamic: Some(Dyn { h: mid, trap: false, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v, capped: true }),
+                                sw_widen: 1.0,
+                                seed_g: None,
+                            };
+                            match cm.newton(x.clone(), vj.clone(), &ctx) {
+                                Ok(b) => (hi, a) = (mid, b),
+                                Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
+                                Err(crate::dc::Fail::NoConv) => {
+                                    result.retries += 1;
+                                    lo = mid;
+                                }
+                            }
+                        }
+                        if hi < h {
+                            h = hi;
+                            lands_on_bp = false;
+                        }
+                        break a;
+                    }
                     Ok(a) => break a,
                     Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
                     Err(crate::dc::Fail::NoConv) => {
