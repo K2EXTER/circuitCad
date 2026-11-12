@@ -234,14 +234,16 @@ const SNAP_EARLY: f64 = 64.0;
 /// A regenerative flip that is not instant (a multivibrator's transistors, with their junction capacitances, take a few
 /// microseconds) has no solution at the largest step from its middle, but steps below `h_min` follow it in 3 or 4 iterations.
 /// Once a jump has failed there and a shorter step went through, the circuit is in such a transition: its steps are taken with
-/// backward Euler, the next size is twice the last one (not raised to `h_min`), its first try is cut short (`CRAWL_CAP`), and
+/// backward Euler, the next size is twice the last one (not raised to `h_min`), its tries are cut short (`CRAWL_CAP`), and
 /// a failure tries the largest step only at the second try, not at once (`SNAP_EARLY`). In `led_blinker` a flip took up to 64
 /// failed Newton runs of 300 iterations, from jumping (and failing) again after each short step. The state ends when a step
 /// of this many `h_min` goes through at once, or when a jump lands.
 const CRAWL: f64 = 64.0;
 
-/// The first try of a step during a transition (`CRAWL`) gives up after this many plain Newton iterations: its steps converge
-/// in 3 to 8, and one that does not is shrunk.
+/// The tries of a step during a transition (`CRAWL`), up to the fourth and except the jump, give up after this many plain
+/// Newton iterations: its steps converge in 3 to 8, and one that does not is shrunk. With the full `newton` the retry after a
+/// shrink ran the plain pass to 150 and went through by its line search: two thirds of the iterations of a blinker whose
+/// transistors have no capacitances (`tests_blinker`), whose small steps creep up to the instant flip.
 const CRAWL_CAP: usize = 20;
 
 /// After the largest step landed beyond a flip, the shorter steps that land are searched down to this factor of the size that
@@ -485,7 +487,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
                     sw_widen: 1.0,
                     seed_g: None,
                 };
-                let solved = if crawl && tries == 0 { cm.newton_plain_capped(x.clone(), vj.clone(), &ctx, CRAWL_CAP) } else { cm.newton(x.clone(), vj.clone(), &ctx) };
+                let solved = if crawl && tries < 4 && !jumped { cm.newton_plain_capped(x.clone(), vj.clone(), &ctx, CRAWL_CAP) } else { cm.newton(x.clone(), vj.clone(), &ctx) };
                 match solved {
                     Ok(a) if jumped && h > JUMP_SEARCH * h_first => {
                         // The largest step landed beyond the flip, which may lie anywhere within it: the step would draw the edge over
