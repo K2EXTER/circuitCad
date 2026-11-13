@@ -267,6 +267,8 @@ pub struct SchEditor {
     req_tab: requirements::ReqTab,
     /// The window of the title block (`title_block.rs`).
     title_open: bool,
+    /// What an empty title block's "作者" gets when its window opens (the settings' 図枠の作者).
+    pub default_author: String,
     /// Frames on the sheet round the parts of the groups and of the distances to keep in the requirements table.
     pub req_frames: bool,
     /// The suggestions for the bypass section of the requirements table (each with its tick), and the sentence about them.
@@ -656,6 +658,7 @@ impl Default for SchEditor {
             req_open: false,
             req_tab: Default::default(),
             title_open: false,
+            default_author: String::new(),
             req_frames: true,
             req_bp_suggest: vec![],
             req_bp_msg: String::new(),

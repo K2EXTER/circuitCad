@@ -1,0 +1,36 @@
+30 秒	30 s
+1 分	1 min
+2 分	2 min
+5 分	5 min
+10 分	10 min
+しない	Never
+{} 秒	{} s
+言語・画面の大きさ・ヒントと豆知識・アイコン・線の縁	Language, screen size, hints and tips, icons, smooth edges
+マウスのホイールでの拡大・縮小と、回路図・基板・3D の連動	Zooming with the mouse wheel, and linking the schematic, board and 3D
+自動保存と、図枠の作者	Autosave, and the title block's author
+基板エディタの初めの値	Starting values of the board editor
+計算の精度や収束のしやすさを調整する窓を開きます	Opens the window that adjusts the accuracy of the calculation and how easily it converges
+画面の大きさ	Screen size
+文字・ボタン・窓など、画面のすべての大きさです。文字が小さくて読みにくいとき、高解像度の画面で小さく見えるときに大きくします。Ctrl を押しながら + / − でも変えられます (その回だけ)	The size of everything on the screen: text, buttons, windows. Make it larger when text is hard to read or looks small on a high-resolution screen. Ctrl + / − also changes it (for this run only)
+画面の下	Bottom of the screen
+ヒントを出す	Show hints
+画面下に、いま何をするとよいかのヒントを表示します	Shows a hint at the bottom of the screen about what to do next
+豆知識を出す	Show tips
+画面下の右に、12 秒ごとに入れ替わる豆知識を表示します。慣れてきて気が散るときは切ります	Shows a tip at the bottom right that changes every 12 seconds. Turn it off once it distracts you
+ツール	Tools
+アイコンだけで表示	Icons only
+描き方	Drawing
+ホイールの拡大	Wheel zoom
+回路図・基板・3D・波形で、マウスのホイールを回したときの拡大・縮小の速さです	How fast the mouse wheel zooms in the schematic, the board, the 3D view and the waveforms
+1 が初めの速さです。タッチパッドで速すぎるときは小さく、ホイールで遅いときは大きくします	1 is the starting speed. Make it smaller if a touchpad zooms too fast, larger if the wheel is slow
+向きを逆にする	Reverse direction
+ホイールを奥に回したときに縮小、手前に回したときに拡大にします (ほかの CAD に合わせたいとき)	Rolling the wheel away zooms out and rolling it toward you zooms in (to match another CAD)
+連動	Linking
+自動保存	Autosave
+保存していない回路図・基板の写しを、この間隔で取っておきます。アプリが落ちたとき、次の起動で「復旧しますか?」と聞きます。元のファイルは書き換えません	Keeps a copy of the unsaved schematic and board at this interval. If the app crashes, the next start asks whether to recover it. The original files are not changed
+図枠の作者	Title block author
+「ファイル → 図枠」を開いたとき、作者の欄が空なら、この名前が入ります。書き出した回路図の右下の枠に出ます	When you open "File → Title block" and the author is empty, this name is filled in. It appears in the box at the bottom right of an exported schematic
+基板エディタでカーソルが吸い付く間隔の、起動したときの値です。変えると、いまの基板にもすぐ効きます (作業中に変えるのは「手で描く」タブの「作業の設定」で)	The spacing the cursor snaps to in the board editor when the app starts. A change also applies to the current board at once (to change it while working, use "Work settings" in the "Draw by hand" tab)
+よく使う間隔。0.5 mm は表面実装、1.27 mm と 2.54 mm はリード部品の足の間隔です	Common spacings: 0.5 mm for surface mount, 1.27 mm and 2.54 mm for the lead pitch of leaded parts
+設定…	Settings…
+言語・画面の大きさ・ヒント・ホイール・自動保存・図枠の作者・基板のグリッドなど、次の起動にも残る設定の窓を開きます	Opens the window of settings that last to the next start: language, screen size, hints, wheel, autosave, title block author, board grid and more

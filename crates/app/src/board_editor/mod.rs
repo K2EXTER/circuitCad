@@ -268,7 +268,7 @@ pub struct BoardEditor {
     tool: Tool,
     panel_tab: PanelTab,
     side: Side,
-    grid: f64,
+    pub(crate) grid: f64,
     track_width: f64,
     /// Voltage drop along the nets' copper, with a fingerprint of the board it was computed for.
     /// Open the width panel on the next frame (command line `--ir`).

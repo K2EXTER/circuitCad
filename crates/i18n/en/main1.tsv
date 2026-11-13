@@ -136,9 +136,6 @@ F1 キーでも開けます	You can also open it with the F1 key
 Language / 言語	Language / 言語
 日本語	日本語
 画面の言語 / The language of the screen (English is partly translated: untranslated text stays in Japanese)	画面の言語 / The language of the screen (English is partly translated: untranslated text stays in Japanese)
-画面下にヒントを出す	Show hints at the bottom
-画面下に、いま何をするとよいかのヒントと豆知識を表示します	Shows a hint about what to do next, and tips, at the bottom of the screen
-ツールをアイコンだけで表示	Show tools as icons only
 ツールボタンの文字を省き、アイコンだけにします。ボタンにカーソルを重ねると名前と説明が出ます。慣れてきたら画面が広く使えます	Drops the text from tool buttons and shows icons only. Hover over a button to see its name and description. Once you're used to it, you get more screen space
 選んだ部品・ネットを回路図・基板・3Dで連動	Link selected parts/nets across schematic, board and 3D
 回路図で選んだ部品やネット (配線・ネットラベル) が、基板と3D表示でも光り、基板や3Dで選んだものが、回路図でも光ります (水色の枠と線)。画面を切り替えたときに、同じものをすぐ探せます。オフにすると、それぞれ別々に選びます	Parts and nets (wires, net labels) you select in the schematic also light up on the board and in 3D, and things you select on the board or in 3D light up in the schematic (light blue outline and lines). Helps you find the same thing quickly when you switch screens. Turn off to select separately in each

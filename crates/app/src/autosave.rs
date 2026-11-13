@@ -5,7 +5,6 @@ use super::*;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub(super) const INTERVAL: Duration = Duration::from_secs(60);
 const SCH_FILE: &str = "sch.schjson";
 const BOARD_FILE: &str = "board.pcbjson";
 const META_FILE: &str = "meta.json";
@@ -90,15 +89,19 @@ impl Found {
 }
 
 impl App {
-    /// Every minute, keep a copy of what is not saved. Not while the question about an earlier copy is open (the editors are still
+    /// Every so often (the settings' 自動保存の間隔, a minute at first; never when it is 0), keep a copy of what is not saved. Not while the question about an earlier copy is open (the editors are still
     /// empty then, and writing would remove that copy).
     pub(super) fn tick_autosave(&mut self, ctx: &egui::Context) {
         if self.recovery.is_some() {
             return;
         }
+        if self.prefs.autosave_secs == 0 {
+            return;
+        }
+        let interval = Duration::from_secs(self.prefs.autosave_secs.into());
         let elapsed = self.last_autosave.elapsed();
-        if elapsed < INTERVAL {
-            ctx.request_repaint_after(INTERVAL - elapsed);
+        if elapsed < interval {
+            ctx.request_repaint_after(interval - elapsed);
             return;
         }
         self.last_autosave = std::time::Instant::now();

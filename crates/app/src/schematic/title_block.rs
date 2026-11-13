@@ -33,6 +33,10 @@ impl SchEditor {
     }
 
     pub fn open_title_block(&mut self) {
+        // the settings' default author fills an empty box (one change in the history, like typing it)
+        if self.sch.title_block.author.is_empty() && !self.default_author.is_empty() {
+            self.sch.title_block.author = self.default_author.clone();
+        }
         self.title_open = true;
     }
 
@@ -86,5 +90,16 @@ mod tests {
         s.title_block.author = "me".into();
         let back: sch_core::Schematic = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(back.title_block.author, "me");
+    }
+
+    #[test]
+    fn the_default_author_fills_only_an_empty_box() {
+        let mut e = SchEditor::default();
+        e.default_author = "山田".into();
+        e.open_title_block();
+        assert_eq!(e.sch.title_block.author, "山田");
+        e.sch.title_block.author = "鈴木".into();
+        e.open_title_block();
+        assert_eq!(e.sch.title_block.author, "鈴木", "a name already there stays");
     }
 }

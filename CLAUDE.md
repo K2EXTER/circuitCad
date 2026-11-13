@@ -48,7 +48,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## app (`crates/app/src`) — 詳細: `docs/code-notes/app.md`(目次。ファイル一覧は `app/files.md`)
 | ファイル | 内容 |
 |---|---|
-| `main.rs` / `prefs.rs` / `icons.rs` | `App`・メニュー / 表示設定 / ツールのアイコン |
+| `main.rs` / `prefs.rs` / `settings_window.rs` / `icons.rs` | `App`・メニュー / 設定の保存 / 設定の窓 / ツールのアイコン |
 | `args.rs` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
 | `plot.rs` / `part_form/` | 波形描画 / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `checklist` `trial` `vendor` `zchart` `preview`) |
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |

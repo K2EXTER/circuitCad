@@ -32,6 +32,16 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 app.sch.run_judge();
             }
         }
+    // --settings [look | input | files | board]: the settings window open at that tab (for screenshots)
+    if let Some(i) = args.iter().position(|a| a == "--settings") {
+        app.settings_tab = match args.get(i + 1).map(String::as_str) {
+            Some("input") => settings_window::SettingsTab::Input,
+            Some("files") => settings_window::SettingsTab::Files,
+            Some("board") => settings_window::SettingsTab::Board,
+            _ => settings_window::SettingsTab::Look,
+        };
+        app.open_settings();
+    }
     if let Some(i) = args.iter().position(|a| a == "--new-part") {
         // --new-part [ic|transistor|diode|chip (= ceramic)|ceramic|electrolytic|tantalum|film|resistor|inductor|connector|connector2 (2-row header)]
         app.sch.open_part_form_for(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));

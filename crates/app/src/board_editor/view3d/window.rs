@@ -180,7 +180,7 @@ impl BoardEditor {
                 v.touched = true;
             }
             if resp.hovered() {
-                let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+                let scroll = crate::prefs::zoom_scroll(ui);
                 if scroll != 0.0 {
                     moving = true;
                     v.touched = true;

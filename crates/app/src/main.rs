@@ -29,6 +29,7 @@ mod prefs;
 mod project;
 mod schematic;
 mod screenshot;
+mod settings_window;
 mod source_form;
 mod startup;
 mod theme;
@@ -85,6 +86,10 @@ struct App {
     /// A copy of unsaved work left by an earlier run (asked about at start-up), and when the copy was last written.
     recovery: Option<autosave::Found>,
     last_autosave: std::time::Instant,
+    /// The settings as last applied (`settings_window.rs`); the editors keep their own copies of what they use.
+    prefs: prefs::Prefs,
+    settings_open: bool,
+    settings_tab: settings_window::SettingsTab,
 }
 
 impl App {
@@ -137,7 +142,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false, recovery: None, last_autosave: std::time::Instant::now() }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
     }
 }
 
@@ -552,12 +557,16 @@ impl eframe::App for App {
                     ui.label(i18n::tr("F1 キーでも開けます"));
                 });
                 ui.menu_button(i18n::tr("設定"), |ui| {
+                    if ui.button(i18n::tr("設定…")).on_hover_text(i18n::tr("言語・画面の大きさ・ヒント・ホイール・自動保存・図枠の作者・基板のグリッドなど、次の起動にも残る設定の窓を開きます")).clicked() {
+                        self.open_settings();
+                        ui.close();
+                    }
                     if ui.button(i18n::tr("シミュレーション設定…")).on_hover_text(i18n::tr("計算の精度や収束のしやすさを調整します。ふだんは変えなくて大丈夫です。「収束しませんでした」と出たとき、または結果の精度を上げたいときに調整します。変えたあとは、解析をもう一度実行してください (「自動で再計算」がオンなら自動で反映されます)。")).clicked() {
                         self.sch.show_sim_opts = true;
                         ui.close();
                     }
                     ui.separator();
-                    // written in both languages on purpose, so it can be found whichever one is showing
+                    // written in both languages on purpose, so it can be found whichever one is showing (the settings window has it too)
                     ui.horizontal(|ui| {
                         ui.label(i18n::tr("Language / 言語"));
                         let now = i18n::lang();
@@ -572,35 +581,10 @@ impl eframe::App for App {
                             }
                         }
                     });
-                    ui.separator();
-                    let mut changed = ui.checkbox(&mut self.show_hints, i18n::tr("画面下にヒントを出す")).on_hover_text(i18n::tr("画面下に、いま何をするとよいかのヒントと豆知識を表示します")).changed();
-                    let mut only = icons::icon_only();
-                    if ui.checkbox(&mut only, i18n::tr("ツールをアイコンだけで表示")).on_hover_text(i18n::tr("ツールボタンの文字を省き、アイコンだけにします。ボタンにカーソルを重ねると名前と説明が出ます。慣れてきたら画面が広く使えます")).changed() {
-                        icons::set_icon_only(only);
-                        changed = true;
-                    }
-                    if ui.checkbox(&mut self.link_selection, i18n::tr("選んだ部品・ネットを回路図・基板・3Dで連動")).on_hover_text(i18n::tr("回路図で選んだ部品やネット (配線・ネットラベル) が、基板と3D表示でも光り、基板や3Dで選んだものが、回路図でも光ります (水色の枠と線)。画面を切り替えたときに、同じものをすぐ探せます。オフにすると、それぞれ別々に選びます")).changed() {
-                        changed = true;
-                    }
-                    let note = if self.smooth_edges != self.smooth_edges_running { i18n::tr(" (次の起動から)") } else { "" };
-                    if ui
-                        .checkbox(&mut self.smooth_edges, i18n::trf!("線の縁をなめらかにする{note}"))
-                        .on_hover_text(i18n::tr("画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)"))
-                        .changed()
-                    {
-                        changed = true;
-                    }
-                    // these survive a restart
-                    if changed {
-                        let file = prefs::Prefs::default_file();
-                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints, smooth_edges: self.smooth_edges, link_selection: self.link_selection, ..prefs::Prefs::load(&file) }.save(&file);
-                        if let Err(e) = saved {
-                            self.sch.status = e;
-                        }
-                    }
                 });
             });
         });
+        self.settings_window(ui.ctx());
         self.sch.settings_window(ui.ctx());
         self.sch.wizard_window(ui.ctx());
         self.sch.requirements_window(ui.ctx());
@@ -621,7 +605,7 @@ impl eframe::App for App {
                 } else {
                     ui.label(status.as_str());
                 }
-                if self.show_hints {
+                if self.show_hints && self.prefs.show_tips {
                     // rotate the general tips every 12 seconds
                     let t = ui.input(|i| i.time);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -698,11 +682,10 @@ fn main() -> eframe::Result {
             let mut app = App::default();
             app.progress = learn::Progress::load(&learn::Progress::default_file());
             let prefs = prefs::Prefs::load(&prefs::Prefs::default_file());
-            app.show_hints = prefs.show_hints;
-            (app.smooth_edges_running, app.smooth_edges) = (smooth_edges, prefs.smooth_edges);
-            icons::set_icon_only(prefs.icon_only);
+            app.apply_prefs(&cc.egui_ctx, &prefs);
+            app.smooth_edges_running = smooth_edges;
+            app.board_ed.grid = prefs.board_grid;
             (app.sch.req_frames, app.board_ed.show_req_marks, app.board_ed.show_req_lines, app.board_ed.show_sheets) = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
-            app.link_selection = prefs.link_selection;
             app.req_view = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);

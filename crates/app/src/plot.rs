@@ -323,7 +323,7 @@ pub fn draw_group(
         let xstrip = Rect::from_min_max(Pos2::new(pa.left(), pa.bottom()), Pos2::new(pa.right(), rect.bottom()));
         let yr = ui.interact(ystrip, id.with("y_axis"), Sense::hover()).on_hover_cursor(egui::CursorIcon::ResizeVertical);
         let xr = x_labels.then(|| ui.interact(xstrip, id.with("x_axis"), Sense::hover()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal));
-        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+        let scroll = crate::prefs::zoom_scroll(ui);
         if scroll != 0.0 {
             let f = (1.0 - scroll as f64 * 0.002).clamp(0.5, 2.0);
             let p = ui.input(|i| i.pointer.hover_pos()).unwrap_or(pa.center());
@@ -374,7 +374,7 @@ pub fn draw_group(
         }
     }
     if resp.hovered() {
-        let (scroll, ctrl) = ui.input(|i| (i.smooth_scroll_delta.y, i.modifiers.ctrl));
+        let (scroll, ctrl) = (crate::prefs::zoom_scroll(ui), ui.input(|i| i.modifiers.ctrl));
         if scroll != 0.0 {
             let f = (1.0 - scroll as f64 * 0.002).clamp(0.5, 2.0);
             let p = ui.input(|i| i.pointer.hover_pos()).unwrap_or(pa.center());
