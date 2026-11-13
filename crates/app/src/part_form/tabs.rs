@@ -7,18 +7,6 @@ impl PartForm {
     pub(super) fn tab_basic(&mut self, ui: &mut egui::Ui) {
         self.kind_bar(ui);
         ui.separator();
-        // a part that already exists as a file needs no form at all
-        ui.small(i18n::tr("ファイルがあるとき"));
-        let bar = crate::widgets::segment_row(ui, &[("JSONから追加…", true), ("KiCadから取り込み…", true)]);
-        bar[0].clone().on_hover_text(i18n::tr("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません"));
-        bar[1].clone().on_hover_text(i18n::tr("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます"));
-        if bar[0].clicked() {
-            self.request = Some(FormRequest::ImportJson);
-        }
-        if bar[1].clicked() {
-            self.request = Some(FormRequest::ImportKicad);
-        }
-        ui.separator();
         let passive = matches!(self.ptype, Some(PartType::Capacitor | PartType::Resistor | PartType::Inductor));
         let diode = self.ptype == Some(PartType::Diode) && self.glyph != "zener";
         if passive {
@@ -60,7 +48,6 @@ impl PartForm {
             ui.text_edit_singleline(&mut self.datasheet).on_hover_text(i18n::tr("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです"));
             ui.end_row();
         });
-        self.sheet.open_button(ui);
         self.sheet_candidates(ui);
         if passive || diode {
             ui.add_space(6.0);
@@ -147,9 +134,6 @@ impl PartForm {
                 self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
             }
             ui.label(egui::RichText::new(i18n::tr(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1)).weak());
-            if !self.sheet.has_doc() {
-                self.pick_row(ui, &[]);
-            }
             egui::Grid::new("part_ratings_grid").num_columns(3).show(ui, |ui| {
                 ui.label(i18n::tr("最大電圧 [V]")).on_hover_text(i18n::tr("部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大"));
                 ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 40 / 1000"));
@@ -339,8 +323,6 @@ impl PartForm {
                     self.sheet.start_pin_select();
                 }
                 ui.small(i18n::tr("データシートの「ピン配置」の表を囲みます"));
-            } else {
-                self.pick_row(ui, &[]);
             }
             self.pin_table_ui(ui);
             ui.add_space(6.0);

@@ -20,17 +20,25 @@ impl PartForm {
             }
         }
         let issues: Vec<Issue> = def.validate();
-        egui::ScrollArea::vertical().id_salt("part_form_issues").max_height(110.0).auto_shrink([false, true]).show(ui, |ui| {
-            if issues.iter().any(|i| i.error) {
-                ui.small(i18n::tr("赤い項目を直すと、保存できます"));
-            }
-            if issues.is_empty() {
-                ui.colored_label(crate::theme::OK, i18n::tr("✔ 問題は見つかりません"));
-            }
-            for i in &issues {
-                // an "error" here only means "cannot be saved yet": a blank form starts with some, so it is worded as a to-do
-                let (c, mark) = if i.error { (crate::theme::ERROR, i18n::tr("保存前に直す")) } else { (crate::theme::WARN, i18n::tr("注意")) };
-                ui.colored_label(c, format!("{mark}: {}", i18n::tr_dyn(&i.message)));
+        // what stops the save, then what is only worth a look, each under its own small heading; an "error" here only
+        // means "cannot be saved yet" (a blank form starts with some), so it is worded as a to-do
+        ui.add_space(4.0);
+        if issues.is_empty() {
+            ui.colored_label(crate::theme::OK, i18n::tr("✔ 問題は見つかりません"));
+        }
+        egui::ScrollArea::vertical().id_salt("part_form_issues").max_height(130.0).auto_shrink([false, true]).show(ui, |ui| {
+            for (error, head, color) in [(true, "保存の前に直すこと", crate::theme::ERROR), (false, "注意", crate::theme::WARN)] {
+                let lines: Vec<&Issue> = issues.iter().filter(|i| i.error == error).collect();
+                if lines.is_empty() {
+                    continue;
+                }
+                ui.label(egui::RichText::new(i18n::tr(head)).small().strong().color(color));
+                for i in lines {
+                    ui.horizontal_top(|ui| {
+                        ui.colored_label(color, "•");
+                        ui.add(egui::Label::new(egui::RichText::new(i18n::tr_dyn(&i.message)).color(color)).wrap());
+                    });
+                }
             }
         });
         let ok = !def.has_errors();

@@ -1,7 +1,7 @@
 # 部品定義ファイル (`*.part.json`)
 
 1つの部品の **回路図記号・基板パッケージ・シミュレーションモデル** を1ファイルで定義します。
-置き場所: `%APPDATA%\circuitCad\library\`（アプリの「＋ 部品を作る…」の窓の「① 基本」にある「JSONから追加…」でも追加できます）。
+置き場所: `%APPDATA%\circuitCad\library\`（アプリの「＋ 部品を作る…」の窓のタブの右の「読み込む…」→「部品のファイル (.part.json)…」でも追加できます）。
 同梱の例: `crates/part-lib/examples/`。
 
 データシートの PDF から作るときは、PDF を Claude に渡して「この部品の part.json を作って」と頼めます。

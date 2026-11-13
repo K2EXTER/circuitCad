@@ -431,8 +431,28 @@ impl PartForm {
             })
             .collect();
         let tabs: Vec<(FormTab, &str, &str)> = FORM_TABS.iter().zip(&labels).map(|((tab, _, tip), text)| (*tab, text.as_str(), *tip)).collect();
-        crate::widgets::tab_bar(ui, &mut self.tab, &tabs);
+        // the tab row carries what serves every tab: the data sheet's PDF (its "PDFから選ぶ" buttons are in the tabs)
+        // and reading a part that already exists as a file (which needs no form at all)
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.menu_button(i18n::tr("読み込む…"), |ui| {
+                    if ui.button(i18n::tr("部品のファイル (.part.json)…")).on_hover_text(i18n::tr("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません")).clicked() {
+                        self.request = Some(FormRequest::ImportJson);
+                        ui.close();
+                    }
+                    if ui.button(i18n::tr("KiCad の部品…")).on_hover_text(i18n::tr("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます")).clicked() {
+                        self.request = Some(FormRequest::ImportKicad);
+                        ui.close();
+                    }
+                }).response.on_hover_text(i18n::tr("部品がもうファイルになっているとき (メーカーや KiCad の部品) は、このフォームを使わずに、そのファイルをライブラリに追加できます"));
+                self.sheet.open_button(ui);
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                    crate::widgets::tab_bar(ui, &mut self.tab, &tabs);
+                });
+            });
+        });
         ui.separator();
+        self.sheet.message(ui);
         self.pick_message(ui);
         // the two columns fill the window's height (a fixed height left the bottom of a long tab cut off above
         // empty space when the window was taller, and hid more of it when the window was shorter)

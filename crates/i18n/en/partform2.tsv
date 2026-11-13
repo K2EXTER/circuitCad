@@ -39,7 +39,6 @@
 {} に {} {unit} を入れました (p.{} の「{}」){note}	Set {} to {} {unit} (p.{}: "{}"){note}
 p.{} の「{word}」から入れました。押すと、選び直せます	Filled in from "{word}" on p.{}. Press to pick again
 データシートの窓で、{}の数字をクリックして入れます。インチ・mil は mm に換算します (単位は数字の右にあるものを使います)	Click the number for {} in the datasheet window to fill it in. Inches and mil are converted to mm (the unit to the right of the number is used)
-データシートの数字を、クリックで入れられます:	You can click numbers in the datasheet to fill them in:
 PDFから入れる	Fill in from PDF
 # crates/app/src/part_form/pin_import.rs
 列{}: {}	Column {}: {}
@@ -85,9 +84,7 @@ p.{} の表を読みました ({} 行 × {} 列)	Read the table on p.{} ({} rows
 回路図の記号	Schematic symbol
 部品の形 (実寸比)	Part shape (to scale)
 本体の高さ {h:.2} mm	Body height {h:.2} mm
-赤い項目を直すと、保存できます	Fix the red items to be able to save
 ✔ 問題は見つかりません	✔ No problems found
-保存前に直す	Fix before saving
 注意	Caution
 保存して上書き	Save and overwrite
 「{}」をこの内容で書き換えます。すでに回路図に置いた部品は、そのままです (新しく置く部品から変わります)。名前を変えて押すと、別の部品として追加します。エラーが残っていると押せません	Overwrites "{}" with this content. Parts already placed in the schematic stay as they are (new placements use the change). If you change the name and press this, it is added as a separate part. Cannot be pressed while errors remain
@@ -116,9 +113,6 @@ STEP を読み込む…	Load STEP…
 左: 上から (赤い枠がパッド)  右: 横から (緑の線が基板の面)	Left: top view (red boxes are pads)  Right: side view (green line is the board surface)
 3D の形が空です	The 3D shape is empty
 # crates/app/src/part_form/tabs.rs
-ファイルがあるとき	When you have a file
-JSONから追加…	Add from JSON…
-KiCadから取り込み…	Import from KiCad…
 部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません	Loads a part definition file (.part.json) and adds it to the library. What you entered in this form is not used
 KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます	Loads a KiCad symbol (.kicad_sym, or the old .lib format) and, if present, a footprint (.kicad_mod), and adds them to the library. Zip files downloaded from Ultra Librarian or SnapEDA (in KiCad format) can be chosen as they are (a 3D model inside is attached too). Parts from the official KiCad libraries work too
 名前・値・説明は自動で入ります	Name, value and description are filled in automatically
@@ -528,3 +522,9 @@ Isat で、インダクタンスが何 % 下がるか。30 が多いですが、
 自動の配置に戻す	Back to automatic layout
 向きと空きを全部消して、自動の配置 (前半が左、後半が右) に戻します。ピンの行の順番はそのままです	Clears every side and gap and goes back to the automatic layout (first half left, second half right). The order of the pin rows stays as it is
 1行に「番号 名前 [向き] [gap=空き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。gap=1 は、記号でそのピンの前にピン1本分の空きを入れます。データシートや回路図からの貼り付けに使います	One pin per line: "number name [side] [gap=N]". The side is left / right / top / bottom; without it the first half goes left and the rest right. gap=1 leaves one pin's worth of empty space before that pin on the symbol. Use it to paste from a datasheet or a schematic
+データシート (PDF) を替える…	Change datasheet (PDF)…
+読み込む…	Import…
+部品のファイル (.part.json)…	Part file (.part.json)…
+KiCad の部品…	KiCad part…
+部品がもうファイルになっているとき (メーカーや KiCad の部品) は、このフォームを使わずに、そのファイルをライブラリに追加できます	When the part already exists as a file (from the maker or KiCad), you can add that file to the library without using this form
+保存の前に直すこと	Fix before saving

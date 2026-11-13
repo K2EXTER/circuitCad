@@ -305,18 +305,22 @@ impl SheetView {
         }
     }
 
-    /// The button of the form that opens a PDF, and the message when that failed.
+    /// The form's button that opens a PDF (on the tab row, one for every tab), and "窓を出す" when its window was
+    /// closed. Laid out by the caller's layout (right to left on the tab row). Why a PDF did not open is `message`.
     pub fn open_button(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            if ui.button(i18n::tr("データシート (PDF) を開く…")).on_hover_text(i18n::tr("手元のデータシート (PDF) を、別の窓に出します。日本語でも英語でも開けます。見ながらピンや寸法を入れられます。PDF の窓に、PDF ファイルをドラッグしても開けます。ファイルはこのパソコンの中だけで読み、どこにも送りません")).clicked()
-                && let Some(p) = rfd::FileDialog::new().set_title("データシート (PDF)").add_filter("PDF", &["pdf", "PDF"]).pick_file()
-            {
-                self.load(&p);
-            }
-            if self.doc.is_some() && !self.open && ui.button(i18n::tr("窓を出す")).on_hover_text(i18n::tr("閉じたデータシートの窓をもう一度出します")).clicked() {
-                self.open = true;
-            }
-        });
+        if self.doc.is_some() && !self.open && ui.button(i18n::tr("窓を出す")).on_hover_text(i18n::tr("閉じたデータシートの窓をもう一度出します")).clicked() {
+            self.open = true;
+        }
+        let label = if self.doc.is_some() { "データシート (PDF) を替える…" } else { "データシート (PDF) を開く…" };
+        if ui.button(i18n::tr(label)).on_hover_text(i18n::tr("手元のデータシート (PDF) を、別の窓に出します。日本語でも英語でも開けます。開いておくと、各タブの「PDFから選ぶ」で、窓の数字をクリックして欄に入れられます (ピン表は囲んで取り込めます)。PDF の窓に、PDF ファイルをドラッグしても開けます。ファイルはこのパソコンの中だけで読み、どこにも送りません")).clicked()
+            && let Some(p) = rfd::FileDialog::new().set_title("データシート (PDF)").add_filter("PDF", &["pdf", "PDF"]).pick_file()
+        {
+            self.load(&p);
+        }
+    }
+
+    /// Why the last PDF did not open (nothing when it did).
+    pub fn message(&self, ui: &mut egui::Ui) {
         if !self.msg.is_empty() {
             ui.colored_label(crate::theme::ERROR, &self.msg);
         }

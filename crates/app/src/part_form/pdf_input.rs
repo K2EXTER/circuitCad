@@ -107,13 +107,10 @@ impl PartForm {
         }
     }
 
-    /// A row of buttons, one per field, labelled with the field names; the PDF can be opened here when it is not.
+    /// A row of buttons, one per field, labelled with the field names. Nothing while no PDF is open (the PDF is
+    /// opened from the button on the tab row).
     pub(super) fn pick_row(&mut self, ui: &mut egui::Ui, targets: &[Target]) {
-        if !self.sheet.has_doc() {
-            ui.horizontal_wrapped(|ui| {
-                ui.small(i18n::tr("データシートの数字を、クリックで入れられます:"));
-                self.sheet.open_button(ui);
-            });
+        if !self.sheet.has_doc() || targets.is_empty() {
             return;
         }
         ui.horizontal_wrapped(|ui| {
