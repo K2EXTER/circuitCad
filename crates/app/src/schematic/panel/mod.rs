@@ -31,6 +31,29 @@ const ANALYSIS_GROUPS: &[(&str, &str, &[&str])] = &[
     ("壊れたとき", "実物が動かないときの原因探しと、部品が壊れたら回路がどうなるかの練習です", &["diagnose", "fault"]),
 ];
 
+/// The picture before an analysis's title: what the analysis shows (None for the model assumptions, which no picture says well).
+fn analysis_icon(key: &str) -> Option<crate::icons::Icon> {
+    use crate::icons::Icon;
+    Some(match key {
+        "dc" => Icon::Meter,
+        "tran" => Icon::Wave,
+        "ac" => Icon::Bode,
+        "sweep" => Icon::Transfer,
+        "param" => Icon::Fan,
+        "variation" => Icon::Histogram,
+        "loopgain" => Icon::Loop,
+        "polezero" => Icon::PoleZero,
+        "psrr" => Icon::Ripple,
+        "noise" => Icon::Noise,
+        "impedance" => Icon::Valley,
+        "spec" => Icon::Checklist,
+        "selfheat" => Icon::Thermo,
+        "diagnose" => Icon::Search,
+        "fault" => Icon::Broken,
+        _ => return None,
+    })
+}
+
 mod parts;
 mod properties;
 
@@ -106,7 +129,7 @@ impl SchEditor {
                         let open = lesson || self.focus_section.unwrap_or("dc") == *key;
                         let was = egui::collapsing_header::CollapsingState::load(ui.ctx(), id).map_or(open, |s| s.is_open());
                         let done = self.analysis_has_result(key);
-                        crate::widgets::section_header_marked(ui, id, open, title, hint, done, |ui| {
+                        crate::widgets::section_header_marked(ui, id, open, title, hint, Some(analysis_icon(key)), done, |ui| {
                             match *key {
                                 "dc" => self.panel_dc(ui),
                                 "tran" => self.panel_tran(ui),

@@ -52,6 +52,37 @@ pub enum Icon {
     Unlock,
     /// A capital T (a text on the silkscreen).
     Text,
+    // The analyses of the analysis tab: what each one shows.
+    /// A meter face (DC operating point).
+    Meter,
+    /// A step that rings and settles (transient).
+    Wave,
+    /// A low-pass response (AC).
+    Bode,
+    /// An S curve of output against input (DC sweep).
+    Transfer,
+    /// A few curves from one point (parameter sweep).
+    Fan,
+    /// Bars of a histogram (temperature and tolerances).
+    Histogram,
+    /// A loop with an arrow head (loop gain).
+    Loop,
+    /// A pole and a zero on the complex plane.
+    PoleZero,
+    /// A big ripple in, a small one out (PSRR).
+    Ripple,
+    /// A jagged line (noise).
+    Noise,
+    /// A curve with a sharp valley (impedance).
+    Valley,
+    /// Ticked lines (the spec table).
+    Checklist,
+    /// A thermometer (self-heating).
+    Thermo,
+    /// A magnifying glass (finding the cause).
+    Search,
+    /// A wire cut in two (fault simulation).
+    Broken,
 }
 
 /// Draw `icon` inside `r` (a square) with `c`.
@@ -61,6 +92,134 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
     let q = |x: f32, y: f32| pos2(r.min.x + x * r.width(), r.min.y + y * r.height());
     let u = r.width();
     match icon {
+        Icon::Meter => {
+            // a meter face: an arc scale and a needle
+            let pts: Vec<Pos2> = (0..=12).map(|i| {
+                let a = std::f32::consts::PI * (1.0 + i as f32 / 12.0);
+                q(0.5 + 0.4 * a.cos(), 0.72 + 0.4 * a.sin())
+            }).collect();
+            p.line(pts, s);
+            p.line_segment([q(0.5, 0.72), q(0.72, 0.42)], s);
+            p.circle_filled(q(0.5, 0.72), u * 0.07, c);
+            p.line_segment([q(0.1, 0.88), q(0.9, 0.88)], Stroke::new(1.2, c));
+        }
+        Icon::Wave => {
+            // a step that rings and settles
+            let mut pts = vec![q(0.08, 0.8), q(0.25, 0.8)];
+            for i in 0..=14 {
+                let t = i as f32 / 14.0;
+                let y = 0.35 - 0.25 * (-3.0 * t).exp() * (t * 14.0).cos();
+                pts.push(q(0.25 + 0.67 * t, y));
+            }
+            p.line(pts, s);
+        }
+        Icon::Bode => {
+            // flat, then falling: a low-pass response
+            p.line(vec![q(0.08, 0.3), q(0.45, 0.3), q(0.6, 0.38), q(0.92, 0.85)], s);
+            p.line_segment([q(0.08, 0.92), q(0.92, 0.92)], Stroke::new(1.0, c));
+        }
+        Icon::Transfer => {
+            // the S curve of output against input
+            let pts: Vec<Pos2> = (0..=14).map(|i| {
+                let t = i as f32 / 14.0;
+                let y = 1.0 / (1.0 + (-(t - 0.5) * 12.0).exp());
+                q(0.12 + 0.76 * t, 0.82 - 0.64 * y)
+            }).collect();
+            p.line(pts, s);
+            p.line(vec![q(0.08, 0.08), q(0.08, 0.92), q(0.92, 0.92)], Stroke::new(1.0, c));
+        }
+        Icon::Fan => {
+            // several curves from one point: the same analysis for a few values
+            for k in [0.2f32, 0.45, 0.7] {
+                let pts: Vec<Pos2> = (0..=10).map(|i| {
+                    let t = i as f32 / 10.0;
+                    q(0.1 + 0.8 * t, 0.85 - (0.85 - k + 0.05) * (1.0 - (-4.0 * t).exp()))
+                }).collect();
+                p.line(pts, Stroke::new(1.3, c));
+            }
+        }
+        Icon::Histogram => {
+            for (x, h) in [(0.12, 0.2), (0.27, 0.45), (0.42, 0.7), (0.57, 0.6), (0.72, 0.3)] {
+                let b = Rect::from_min_max(q(x, 0.88 - h), q(x + 0.13, 0.88));
+                p.rect_filled(b, 0.0, c.gamma_multiply(0.5));
+                p.rect_stroke(b, 0.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
+            }
+        }
+        Icon::Loop => {
+            // a loop with an arrow head: the signal going round the feedback
+            let pts: Vec<Pos2> = (0..=16).map(|i| {
+                let a = 0.6 + 4.6 * i as f32 / 16.0;
+                q(0.5 + 0.36 * a.cos(), 0.5 + 0.36 * a.sin())
+            }).collect();
+            let end = *pts.last().unwrap();
+            p.line(pts, s);
+            let a = 5.2f32;
+            let (dx, dy) = (-a.sin(), a.cos());
+            let tip = end + egui::vec2(dx, dy) * u * 0.26;
+            let side = egui::vec2(-dy, dx) * u * 0.2;
+            p.add(egui::Shape::convex_polygon(vec![tip, end + side, end - side], c, Stroke::NONE));
+        }
+        Icon::PoleZero => {
+            // a pole (x) and a zero (o) on the complex plane
+            p.line_segment([q(0.08, 0.5), q(0.92, 0.5)], Stroke::new(1.0, c));
+            p.line_segment([q(0.62, 0.1), q(0.62, 0.9)], Stroke::new(1.0, c));
+            let (x, y, r) = (0.3, 0.3, 0.1);
+            p.line_segment([q(x - r, y - r), q(x + r, y + r)], s);
+            p.line_segment([q(x - r, y + r), q(x + r, y - r)], s);
+            p.circle_stroke(q(0.3, 0.72), u * 0.1, s);
+        }
+        Icon::Ripple => {
+            // a big ripple in, a small one out
+            let wave = |x0: f32, amp: f32| -> Vec<Pos2> {
+                (0..=8).map(|i| {
+                    let t = i as f32 / 8.0;
+                    q(x0 + 0.34 * t, 0.5 - amp * (t * std::f32::consts::TAU * 1.5).sin())
+                }).collect()
+            };
+            p.line(wave(0.06, 0.3), s);
+            p.line(wave(0.6, 0.06), s);
+            p.line_segment([q(0.43, 0.5), q(0.55, 0.5)], Stroke::new(1.0, c));
+        }
+        Icon::Noise => {
+            let ys = [0.5, 0.3, 0.62, 0.42, 0.75, 0.25, 0.55, 0.38, 0.7, 0.45, 0.6, 0.33, 0.5];
+            let pts: Vec<Pos2> = ys.iter().enumerate().map(|(i, y)| q(0.08 + 0.84 * i as f32 / 12.0, *y)).collect();
+            p.line(pts, Stroke::new(1.3, c));
+        }
+        Icon::Valley => {
+            // falling, a sharp valley, then rising: a bypass capacitor's impedance
+            let pts: Vec<Pos2> = (0..=16).map(|i| {
+                let t = i as f32 / 16.0;
+                let d = (t - 0.55).abs();
+                q(0.08 + 0.84 * t, 0.85 - 0.6 * (d * 1.6).min(1.0).sqrt())
+            }).collect();
+            p.line(pts, s);
+        }
+        Icon::Checklist => {
+            for (k, y) in [0.25f32, 0.5, 0.75].into_iter().enumerate() {
+                p.line(vec![q(0.1, y), q(0.18, y + 0.08), q(0.32, y - 0.1)], Stroke::new(1.4, c));
+                p.line_segment([q(0.42, y), q(0.9 - k as f32 * 0.1, y)], Stroke::new(1.2, c));
+            }
+        }
+        Icon::Thermo => {
+            // a thermometer: a tube and a bulb
+            p.rect_stroke(Rect::from_min_max(q(0.42, 0.08), q(0.58, 0.66)), 4.0, s, egui::StrokeKind::Inside);
+            p.circle_filled(q(0.5, 0.78), u * 0.14, c);
+            p.line_segment([q(0.5, 0.35), q(0.5, 0.7)], Stroke::new(3.0, c));
+            for y in [0.22, 0.36, 0.5] {
+                p.line_segment([q(0.62, y), q(0.74, y)], Stroke::new(1.0, c));
+            }
+        }
+        Icon::Search => {
+            p.circle_stroke(q(0.42, 0.42), u * 0.26, s);
+            p.line_segment([q(0.61, 0.61), q(0.88, 0.88)], Stroke::new(2.4, c));
+        }
+        Icon::Broken => {
+            // a wire cut in two, with a spark
+            p.line(vec![q(0.06, 0.6), q(0.38, 0.6), q(0.44, 0.48)], s);
+            p.line(vec![q(0.56, 0.52), q(0.62, 0.4), q(0.94, 0.4)], s);
+            p.line(vec![q(0.5, 0.12), q(0.44, 0.3), q(0.56, 0.28), q(0.5, 0.42)], Stroke::new(1.2, c));
+            p.line(vec![q(0.5, 0.58), q(0.44, 0.72), q(0.56, 0.7), q(0.5, 0.88)], Stroke::new(1.2, c));
+        }
         Icon::Select => {
             let pts = vec![q(0.25, 0.1), q(0.25, 0.85), q(0.43, 0.68), q(0.58, 0.95), q(0.7, 0.89), q(0.55, 0.62), q(0.8, 0.6)];
             p.add(egui::Shape::convex_polygon(pts, c.gamma_multiply(0.35), s));

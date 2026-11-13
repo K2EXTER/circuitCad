@@ -105,12 +105,13 @@ pub fn band_header<R>(
 /// with its contents, so the open ones stand out. The whole row is the click target and
 /// shows `hint` on hover. The open state is kept by `id`. Returns what `body` returns while the section is open.
 pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, title: &str, hint: &str, body: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
-    section_header_marked(ui, id, default_open, title, hint, false, body)
+    section_header_marked(ui, id, default_open, title, hint, None, false, body)
 }
 
-/// `section_header` with a green ✓ at the right end of the band when `done` (the analysis has a result).
+/// `section_header` with a green ✓ at the right end of the band when `done` (the analysis has a result), and a slot for an icon
+/// before the title (`Some(None)`: the slot is kept empty, so the titles of a list line up).
 #[allow(clippy::too_many_arguments)]
-pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, title: &str, hint: &str, done: bool, body: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, title: &str, hint: &str, icon: Option<Option<crate::icons::Icon>>, done: bool, body: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
     let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, default_open);
     let open = state.is_open();
     let (row, hit) = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.spacing().interact_size.y), egui::Sense::click());
@@ -133,7 +134,16 @@ pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: b
     ui.painter().add(egui::Shape::convex_polygon(points, colour, egui::Stroke::NONE));
     let font = egui::TextStyle::Button.resolve(ui.style());
     let galley = ui.painter().layout_no_wrap(i18n::tr_dyn(title), font, colour);
-    let pos = egui::pos2(row.min.x + 4.0 + ui.spacing().icon_width + 6.0, row.center().y - galley.size().y / 2.0);
+    let mut text_x = row.min.x + 4.0 + ui.spacing().icon_width + 6.0;
+    if let Some(slot) = icon {
+        let side = row.height() - 6.0;
+        if let Some(icon) = slot {
+            let r = egui::Rect::from_min_size(egui::pos2(text_x, row.center().y - side / 2.0), egui::vec2(side, side));
+            crate::icons::paint(ui.painter(), r, icon, colour);
+        }
+        text_x += side + 6.0;
+    }
+    let pos = egui::pos2(text_x, row.center().y - galley.size().y / 2.0);
     // bold while open: draw twice, a pixel apart (the font has no bold face)
     if open {
         ui.painter().galley(pos + egui::vec2(0.6, 0.0), galley.clone(), colour);
