@@ -8,6 +8,25 @@ use eframe::egui;
 
 /// The "閉じる" button at the top of a result window (the waveforms and tables under the schematic, a lesson window). `what` is the
 /// thing that closes, for the hover text ("波形" gives "波形を閉じます").
+/// A close cross at the right end of the current row (the bottom panels' headings: like a window's cross, where the eye looks for
+/// it). It takes no room in the row's layout. True when pressed.
+pub fn close_x(ui: &mut egui::Ui, what: &str) -> bool {
+    let side = ui.spacing().interact_size.y;
+    let right = ui.max_rect().right();
+    let rect = egui::Rect::from_min_size(egui::pos2(right - side, ui.cursor().min.y), egui::vec2(side, side));
+    let resp = ui.interact(rect, ui.id().with(("close_x", what)), egui::Sense::click());
+    let v = ui.style().interact(&resp);
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 4, v.weak_bg_fill);
+    }
+    let c = rect.center();
+    let r = side * 0.22;
+    let stroke = egui::Stroke::new(1.5, v.text_color());
+    ui.painter().line_segment([c + egui::vec2(-r, -r), c + egui::vec2(r, r)], stroke);
+    ui.painter().line_segment([c + egui::vec2(-r, r), c + egui::vec2(r, -r)], stroke);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(i18n::trf!("{what}を閉じます")).clicked()
+}
+
 pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
     ui.button(i18n::tr("閉じる")).on_hover_text(i18n::trf!("{what}を閉じます")).clicked()
 }

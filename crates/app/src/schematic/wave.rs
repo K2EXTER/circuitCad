@@ -171,24 +171,36 @@ pub(super) fn signal_list(ui: &mut egui::Ui, id: &str, order: &[&str], selected:
     let colour_of = |name: &str, selected: &BTreeSet<String>| order.iter().filter(|n| selected.contains(**n)).position(|n| *n == name).map(|i| PALETTE[i % PALETTE.len()]);
     let mut shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
     shown.extend(order.iter().copied().filter(|n| !selected.contains(*n) && (needle.is_empty() || n.to_lowercase().contains(&needle))));
+    // currents ("I(R1)") on a line of their own under the voltages, each with a small heading, when there are both
+    let is_current = |n: &str| n.starts_with("I(") || n.starts_with("I ");
+    let (currents, others): (Vec<&str>, Vec<&str>) = shown.into_iter().partition(|n| is_current(n));
+    let both = !currents.is_empty() && !others.is_empty();
     egui::ScrollArea::vertical().id_salt(("signal_list", id)).max_height(84.0).auto_shrink([false, true]).show(ui, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            for name in shown {
-                let mut on = selected.contains(name);
-                // a name made here ("T ループゲイン", "合計") is shown in the screen's language; the key stays the Japanese
-                let shown = i18n::tr_dyn(name);
-                let text = match colour_of(name, selected) {
-                    Some(c) if on => egui::RichText::new(shown).color(c),
-                    _ => egui::RichText::new(shown),
-                };
-                if ui.checkbox(&mut on, text).changed() {
-                    if on {
-                        selected.insert(name.to_string());
-                    } else {
-                        selected.remove(name);
+        for (heading, names) in [("電圧", others), ("電流", currents)] {
+            if names.is_empty() {
+                continue;
+            }
+            ui.horizontal_wrapped(|ui| {
+                if both {
+                    ui.label(egui::RichText::new(i18n::tr(heading)).small().weak());
+                }
+                for name in names {
+                    let mut on = selected.contains(name);
+                    // a name made here ("T ループゲイン", "合計") is shown in the screen's language; the key stays the Japanese
+                    let shown = i18n::tr_dyn(name);
+                    let text = match colour_of(name, selected) {
+                        Some(c) if on => egui::RichText::new(shown).color(c),
+                        _ => egui::RichText::new(shown),
+                    };
+                    if ui.checkbox(&mut on, text).changed() {
+                        if on {
+                            selected.insert(name.to_string());
+                        } else {
+                            selected.remove(name);
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     });
 }

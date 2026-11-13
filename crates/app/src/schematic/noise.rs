@@ -146,7 +146,7 @@ impl SchEditor {
         let mut close = false;
         ui.horizontal(|ui| {
             crate::widgets::heading_inline(ui, "ノイズ解析 (熱雑音・ショット雑音)");
-            if crate::widgets::close_button(ui, "ノイズ解析の表示") {
+            if crate::widgets::close_x(ui, "ノイズ解析の表示") {
                 close = true;
             }
         });

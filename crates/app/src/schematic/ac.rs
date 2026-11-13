@@ -52,16 +52,19 @@ impl SchEditor {
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
+        let AcView { outcome, selected, plot: st, ghost, psrr_run, pz_run, loop_run, notes, .. } = view;
         ui.horizontal(|ui| {
-            crate::widgets::heading_inline(ui, if view.psrr_run { "電源除去比 (電源の揺れが届く割合)" } else if view.loop_run { "ループゲイン (帰還を1周したゲイン)" } else if view.pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if view.psrr_run { i18n::tr("選んだ電源にだけ 1 V の揺れを入れたとき、各点に届く揺れの大きさです。-60 dB なら 1 V の揺れが 1 mV に (除去比 60 dB)。周波数が高い所で悪くなるのが普通で、そこはコンデンサで吸います") } else if view.pz_run { i18n::tr("H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります") } else if view.loop_run { i18n::tr("0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)") } else { i18n::tr("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります") });
-            if crate::widgets::close_button(ui, "波形") {
+            crate::widgets::heading_inline(ui, if *psrr_run { "電源除去比 (電源の揺れが届く割合)" } else if *loop_run { "ループゲイン (帰還を1周したゲイン)" } else if *pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if *psrr_run { i18n::tr("選んだ電源にだけ 1 V の揺れを入れたとき、各点に届く揺れの大きさです。-60 dB なら 1 V の揺れが 1 mV に (除去比 60 dB)。周波数が高い所で悪くなるのが普通で、そこはコンデンサで吸います") } else if *pz_run { i18n::tr("H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります") } else if *loop_run { i18n::tr("0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)") } else { i18n::tr("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります") });
+            if crate::widgets::close_x(ui, "波形") {
                 close = true;
             }
             if ui.small_button(i18n::tr("操作")).on_hover_text(i18n::tr("波形のズーム・測定カーソル・信号の選び方を開きます")).clicked() {
                 open_help = true;
             }
+            if outcome.is_ok() {
+                plot::range_button(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
+            }
         });
-        let AcView { outcome, selected, plot: st, ghost, psrr_run, pz_run, notes, .. } = view;
         match outcome {
             Err(msgs) => {
                 for m in msgs {
@@ -78,7 +81,6 @@ impl SchEditor {
                     }
                 }
                 crate::widgets::warning_lines(ui, "ac_warn", &res.warnings, |_| false);
-                plot::scale_bar(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {

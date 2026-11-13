@@ -63,7 +63,7 @@ impl SchEditor {
         let mut pick: Option<String> = None;
         ui.horizontal(|ui| {
             crate::widgets::heading_inline(ui, i18n::tr("感度 (どの部品が結果を決めているか)"));
-            if crate::widgets::close_button(ui, "感度の表示") {
+            if crate::widgets::close_x(ui, "感度の表示") {
                 close = true;
             }
         });

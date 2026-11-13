@@ -76,6 +76,26 @@ fn range_boxes(ui: &mut egui::Ui, text: &mut [String; 2], cur: (f64, f64), unit:
     out
 }
 
+/// The visible range as one small button ("範囲: 0〜2m s"), which opens `scale_bar` in a popup: the range is usually set with the
+/// wheel and drags, so the boxes need not take a line of the panel.
+pub fn range_button(ui: &mut egui::Ui, st: &mut PlotState, x_unit: &str, groups: &[(usize, &str)]) {
+    let auto = groups.iter().all(|(g, _)| st.auto_y[*g]);
+    let text = i18n::trf!(
+        "範囲: {}〜{} {}{}",
+        sim_core::format_value(st.x.0),
+        sim_core::format_value(st.x.1),
+        x_unit,
+        if auto && !groups.is_empty() { i18n::tr("・縦は自動") } else { "" }
+    );
+    let resp = ui.small_button(text).on_hover_text(i18n::tr("表示する範囲を数字で決めます。ふだんは、波形の上のホイール (拡大縮小) とドラッグ (移動)、ダブルクリック (全体) で変えられます"));
+    egui::Popup::from_toggle_button_response(&resp)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            ui.set_min_width(360.0);
+            scale_bar(ui, st, x_unit, groups);
+        });
+}
+
 /// The visible range of every axis as editable numbers, plus "全体" (x) and an auto-scale switch (y).
 /// `groups` = (group index, unit). Zooming itself is the wheel over the axis numbers (see `draw_group`).
 pub fn scale_bar(ui: &mut egui::Ui, st: &mut PlotState, x_unit: &str, groups: &[(usize, &str)]) {

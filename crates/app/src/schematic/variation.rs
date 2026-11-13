@@ -144,7 +144,7 @@ impl SchEditor {
                 Ok("s") | Ok("%") => "ばらつき解析 (部品の誤差でステップ応答がどれだけずれるか)",
                 _ => "ばらつき解析 (部品の誤差で出力がどれだけずれるか)",
             });
-            if crate::widgets::close_button(ui, "ばらつき解析の表示") {
+            if crate::widgets::close_x(ui, "ばらつき解析の表示") {
                 close = true;
             }
         });

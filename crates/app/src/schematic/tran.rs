@@ -110,7 +110,7 @@ impl SchEditor {
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, .. } = view;
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(i18n::tr("過渡解析の波形")).strong().color(crate::theme::INFO));
-            if crate::widgets::close_button(ui, "波形") {
+            if crate::widgets::close_x(ui, "波形") {
                 close = true;
             }
             ui.checkbox(spectrum, i18n::tr("スペクトル表示")).on_hover_text(i18n::tr("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います"));
@@ -124,6 +124,18 @@ impl SchEditor {
             } else {
                 if ui.small_button(i18n::tr("操作")).on_hover_text(i18n::tr("波形のズーム・測定カーソル・信号の選び方を開きます")).clicked() {
                     open_help = true;
+                }
+                // the range of the groups that are on screen (voltage, current), as one small button
+                if let Ok(res) = &*outcome {
+                    let units: Vec<&str> = res.signals.iter().filter(|s| shown_signal(&s.name) && selected.contains(&s.name)).map(|s| s.unit).collect();
+                    let mut groups: Vec<(usize, &str)> = vec![];
+                    if units.contains(&"V") {
+                        groups.push((0, "V"));
+                    }
+                    if units.iter().any(|u| *u != "V") {
+                        groups.push((1, "A"));
+                    }
+                    plot::range_button(ui, st, "s", &groups);
                 }
             }
         });
@@ -177,18 +189,6 @@ impl SchEditor {
                         }
                         crate::icons::help_small(ui, "リップル電流と寿命の見積もり", "リップル電流は、計算の後半の波形の交流分の実効値です。寿命は「温度が 10℃ 下がると 2 倍」の目安で、データシートの条件 (定格電圧・定格リップル電流) での値から見積もります。実際の寿命は、使い方で大きく変わります");
                     });
-                }
-                if !*spectrum {
-                    // scale controls for the groups that are on screen (voltage, current)
-                    let units: Vec<&str> = res.signals.iter().filter(|s| shown_signal(&s.name) && selected.contains(&s.name)).map(|s| s.unit).collect();
-                    let mut groups: Vec<(usize, &str)> = vec![];
-                    if units.contains(&"V") {
-                        groups.push((0, "V"));
-                    }
-                    if units.iter().any(|u| *u != "V") {
-                        groups.push((1, "A"));
-                    }
-                    plot::scale_bar(ui, st, "s", &groups);
                 }
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| shown_signal(&s.name)).map(|s| s.name.as_str()).collect();

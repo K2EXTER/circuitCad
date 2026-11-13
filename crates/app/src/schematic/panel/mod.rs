@@ -61,7 +61,7 @@ impl SchEditor {
     pub fn side_panel(&mut self, ui: &mut egui::Ui) {
         // the drawing tab's checks stay at the bottom, in sight however long the lists above grow
         if self.panel_tab == PanelTab::Draw {
-            egui::Panel::bottom("sch_draw_checks").frame(egui::Frame::NONE.inner_margin(egui::Margin { left: 0, right: 0, top: 6, bottom: 0 })).resizable(false).show_inside(ui, |ui| {
+            egui::Panel::bottom("sch_draw_checks").frame(egui::Frame::NONE.inner_margin(egui::Margin { left: 0, right: 0, top: 6, bottom: 0 })).resizable(false).show(ui, |ui| {
                 let bar = ui.spacing().scroll.allocated_width() + 10.0;
                 ui.set_max_width((ui.available_width() - bar).max(100.0));
                 self.panel_erc(ui);

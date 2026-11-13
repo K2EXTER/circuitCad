@@ -1,0 +1,5 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/plot.rs (the range of a plot as one button)
+範囲: {}〜{} {}{}	Range: {} to {} {}{}
+・縦は自動	, y auto
+表示する範囲を数字で決めます。ふだんは、波形の上のホイール (拡大縮小) とドラッグ (移動)、ダブルクリック (全体) で変えられます	Sets the shown range by numbers. Usually the wheel over the plot (zoom), a drag (move) and a double-click (all) change it

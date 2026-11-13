@@ -168,7 +168,7 @@ impl SchEditor {
         let ParamView { outcome, ac, part, node, plot: st } = view;
         ui.horizontal(|ui| {
             crate::widgets::heading_inline(ui, format!("パラメータスイープ: {part} を変えたときの V({node})"));
-            if crate::widgets::close_button(ui, "パラメータスイープの表示") {
+            if crate::widgets::close_x(ui, "パラメータスイープの表示") {
                 close = true;
             }
             ui.small(if *ac { i18n::tr("縦軸: ゲイン (dB)。線の色は下の凡例のとおり") } else { i18n::tr("縦軸: 電圧。線の色は下の凡例のとおり") });

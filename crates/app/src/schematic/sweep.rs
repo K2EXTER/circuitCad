@@ -58,7 +58,7 @@ impl SchEditor {
         let mut close = false;
         ui.horizontal(|ui| {
             crate::widgets::heading_inline(ui, if view.temp { "温度スイープ (温度を変えたときの動作点)" } else { "DCスイープ (入力を変えたときの出力)" });
-            if crate::widgets::close_button(ui, "スイープの表示") {
+            if crate::widgets::close_x(ui, "スイープの表示") {
                 close = true;
             }
             ui.small(if view.temp { i18n::tr("横軸: 回路の温度 (℃)。縦軸: 各ノードの電圧 (上) と電流 (下)") } else { i18n::tr("横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)") });
