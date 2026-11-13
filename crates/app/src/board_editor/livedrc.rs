@@ -22,16 +22,17 @@ impl Default for LiveDrc {
     }
 }
 
-/// What the check depends on: the copper and holes, the outline, the rules and the net classes.
+/// What the check depends on: the copper and holes, the outline, the rules, the net classes and the finish.
 fn board_key(b: &pcb_core::Board) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     pcb_core::zonefill::geometry_key(b).hash(&mut h);
-    format!("{:?}{:?}{:?}{:?}", b.rules, b.net_classes, b.outline, b.silk.len()).hash(&mut h);
+    // the finish too: the check looks at the copper as it will be made
+    format!("{:?}{:?}{:?}{:?}{:?}{:?}", b.rules, b.net_classes, b.outline, b.silk.len(), b.finish, b.finish_exclude).hash(&mut h);
     h.finish()
 }
 
-/// `drc::check`, less what is said about parts still waiting outside the board (just imported, not yet placed: putting them on
+/// `drc::check_final`, less what is said about parts still waiting outside the board (just imported, not yet placed: putting them on
 /// the board is the next step, not a mistake).
 pub fn live_check(board: &pcb_core::Board) -> Vec<Violation> {
     // a finding is marked at the pad's centre (outside the board) or in the gap next to it (too near the edge, or to another
@@ -46,7 +47,9 @@ pub fn live_check(board: &pcb_core::Board) -> Vec<Violation> {
             (q.pos, w.hypot(h) / 2.0 + reach)
         }))
         .collect();
-    let mut found = drc::check(board);
+    // the copper as it will be made (with the finish: track ends cut back to the pads, corners rounded ...), as "DRC を実行" and
+    // the order check see it; the board as drawn showed gaps the finish takes away (a wide track's round end past a narrow pad)
+    let mut found = drc::check_final(board);
     found.retain(|v| !parked.iter().any(|(p, r)| p.dist(v.at) <= r + 1e-6));
     found
 }
@@ -209,5 +212,21 @@ mod tests {
         e.board.tracks.push(pcb_core::Track { side: Side::Top, a: Point::new(8.0, 10.0), b: Point::new(5.7, 10.0), width: 0.25 });
         e.settle_live_drc();
         assert!(e.live_findings().is_empty());
+    }
+
+    #[test]
+    fn what_the_finish_takes_away_is_not_a_finding() {
+        // a QFN's two pads 0.5 mm apart (0.3 mm wide), and a 0.6 mm track of the first one's net that ends on it: the track's round
+        // end reaches 0.06 mm past the pad, 0.14 mm from the next pad. The finish cuts it back, so the board that is made is fine
+        let mut b = pcb_core::Board::new("t", 30.0, 20.0);
+        for (x, net) in [(10.0, "VNEG"), (10.5, "BKEN")] {
+            let mut p = pcb_core::Pad::new(Point::new(x, 10.0), pcb_core::PadShape::Rect { w: 0.3, h: 0.67 }, None, Side::Top);
+            p.net = net.into();
+            b.pads.push(p);
+        }
+        b.tracks.push(pcb_core::Track { side: Side::Top, a: Point::new(8.0, 10.0), b: Point::new(9.91, 10.0), width: 0.6 });
+        assert!(!drc::check(&b).is_empty(), "as drawn, the round end is too near the next pad");
+        assert!(drc::check_final(&b).is_empty(), "the finish cuts it back");
+        assert!(live_check(&b).is_empty(), "the check while one works looks at the copper as made: {:?}", live_check(&b));
     }
 }

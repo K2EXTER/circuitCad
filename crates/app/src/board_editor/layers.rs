@@ -226,14 +226,17 @@ impl BoardEditor {
                 let open = ui.ctx().data_mut(|d| *d.get_persisted_mut_or_insert_with(id, || false));
                 let title = if open { i18n::tr("表示とロック").to_string() } else { i18n::trf!("表示とロック ・ 作業: {}", self.side.label()) };
                 let summary = if open { None } else { self.view_summary() };
-                let open = ui.horizontal(|ui| {
-                    let open = fold_header(ui, id, &title, false, "クリックでたたみます / ひらきます。上は銅の層 (目で表示、名前を押すとその層で作業。L キーでも切り替え)、下は物の種類ごとの目 (画面に出すか) と鍵 (選べないようにロックするか) です。明るい四角が「オン」(見えている / ロック中) です");
-                    if let Some(s) = summary {
-                        ui.label(egui::RichText::new(s).small().color(Color32::from_rgb(170, 90, 0)))
+                let open = fold_header(ui, id, &title, false, "クリックでたたみます / ひらきます。上は銅の層 (目で表示、名前を押すとその層で作業。L キーでも切り替え)、下は物の種類ごとの目 (画面に出すか) と鍵 (選べないようにロックするか) です。明るい四角が「オン」(見えている / ロック中) です");
+                // what is hidden or locked: on a line of its own under the title, within the title's width (beside the title it made the
+                // folded box as much wider as the warning was long)
+                if let Some(s) = summary {
+                    let w = ui.min_rect().width();
+                    ui.scope(|ui| {
+                        ui.set_max_width(w);
+                        ui.add(egui::Label::new(egui::RichText::new(s).small().color(Color32::from_rgb(170, 90, 0))).wrap())
                             .on_hover_text(i18n::tr("隠している物やロックしている物があります。開くと、どれかが分かります"));
-                    }
-                    open
-                }).inner;
+                    });
+                }
                 if open {
                     let w = ui.scope(|ui| {
                         self.layer_rows(ui);
@@ -276,6 +279,34 @@ mod tests {
         e.pick.tracks = false;
         let s = e.view_summary().unwrap();
         assert!(s.contains("2 個を隠し中") && s.contains("配線をロック中"), "{s}");
+    }
+
+    /// The width of the folded box as drawn.
+    fn folded_width(e: &mut BoardEditor) -> f32 {
+        let ctx = egui::Context::default();
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(1200.0, 800.0));
+        let mut w = 0.0;
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(rect), ..Default::default() }, |ui| e.layer_overlay(ui, rect));
+            out.textures_delta.clear();
+            w = ctx.memory(|m| m.area_rect(egui::Id::new("layer_overlay"))).map_or(0.0, |r| r.width());
+        }
+        w
+    }
+
+    #[test]
+    fn the_folded_box_does_not_widen_for_what_is_hidden() {
+        let mut e = BoardEditor::default();
+        e.board = pcb_core::Board::new("t", 40.0, 30.0);
+        let plain = folded_width(&mut e);
+        assert!(plain > 50.0, "{plain}");
+        e.vis.parts = false;
+        e.vis.bottom = false;
+        e.pick.tracks = false;
+        e.pick.vias = false;
+        assert!(e.view_summary().is_some());
+        let with = folded_width(&mut e);
+        assert!((with - plain).abs() < 1.0, "the warning goes under the title, in its width: {plain} -> {with}");
     }
 
     #[test]
