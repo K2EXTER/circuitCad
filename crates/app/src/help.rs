@@ -292,17 +292,39 @@ fn page(tab: HelpTab) -> Page {
     }
 }
 
+/// A row whose explanation is longer than this (in characters) is a feature rather than a key: it goes under the table as a fold
+/// with its name, so the table stays short lines of keys and clicks.
+const LONG: usize = 100;
+
+fn is_long(what: &str) -> bool {
+    what.chars().count() > LONG
+}
+
+/// Whether a row holds every word of the search (in either language, any case).
+fn matches(op: &str, what: &str, words: &[String]) -> bool {
+    let hay = format!("{op} {what} {} {}", i18n::tr(op), i18n::tr(what)).to_lowercase();
+    words.iter().all(|w| hay.contains(w.as_str()))
+}
+
 /// State of the window.
 #[derive(Default)]
 pub struct Help {
     pub open: bool,
     tab: Option<HelpTab>,
+    /// The search box: a word here lists the matching rows of every tab.
+    query: String,
 }
 
 impl Help {
     pub fn show(&mut self, tab: HelpTab) {
         self.open = true;
         self.tab = Some(tab);
+    }
+
+    /// Opens the window with a word in its search box (command line `--guide-search`, for screenshots).
+    pub fn search(&mut self, word: &str) {
+        self.open = true;
+        self.query = word.to_string();
     }
 
     pub fn window(&mut self, ctx: &egui::Context) {
@@ -316,19 +338,40 @@ impl Help {
         // scrolled at once
         let tall = (ctx.content_rect().height() - crate::widgets::beside_panel().y - 60.0).max(560.0);
         egui::Window::new(i18n::tr("操作ガイド")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(760.0).default_height(tall).vscroll(true).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut self.query).hint_text(i18n::tr("さがす (例: 回転、ビア、ズーム)")).desired_width(260.0))
+                    .on_hover_text(i18n::tr("操作の名前や説明の言葉で、全部のタブから探します (F1 でいつでも開けます)"));
+                if !self.query.is_empty() && ui.small_button(i18n::tr("消す")).on_hover_text(i18n::tr("探す言葉を消して、タブの表示に戻ります")).clicked() {
+                    self.query.clear();
+                }
+            });
+            let words: Vec<String> = self.query.split_whitespace().map(|w| w.to_lowercase()).collect();
+            if !words.is_empty() {
+                search_results(ui, &words);
+                return;
+            }
             let tabs: Vec<(HelpTab, &str, &str)> = TABS.iter().map(|(t, name)| (*t, *name, "")).collect();
             crate::widgets::tab_bar(ui, &mut next, &tabs);
-            ui.small(i18n::tr("(F1 でいつでも開けます)"));
             for (heading, rows) in page(current) {
                 ui.add_space(8.0);
-                ui.heading(i18n::tr(heading));
-                egui::Grid::new(("help", current as u8, *heading)).num_columns(2).min_col_width(210.0).spacing([16.0, 8.0]).striped(true).show(ui, |ui| {
-                    for (op, what) in *rows {
-                        ui.label(egui::RichText::new(i18n::tr(op)).strong());
+                ui.label(egui::RichText::new(i18n::tr(heading)).size(17.0).strong());
+                // the keys and clicks as a table of short lines
+                let short: Vec<&(&str, &str)> = rows.iter().filter(|(_, w)| !is_long(w)).collect();
+                if !short.is_empty() {
+                    egui::Grid::new(("help", current as u8, *heading)).num_columns(2).min_col_width(210.0).spacing([16.0, 8.0]).striped(true).show(ui, |ui| {
+                        for (op, what) in short {
+                            ui.label(egui::RichText::new(i18n::tr(op)).strong());
+                            ui.add(egui::Label::new(i18n::tr(what)).wrap());
+                            ui.end_row();
+                        }
+                    });
+                }
+                // the longer explanations of features, folded under their names
+                for (op, what) in rows.iter().filter(|(_, w)| is_long(w)) {
+                    egui::CollapsingHeader::new(egui::RichText::new(i18n::tr(op)).strong()).id_salt(("help_long", current as u8, *op)).show(ui, |ui| {
                         ui.add(egui::Label::new(i18n::tr(what)).wrap());
-                        ui.end_row();
-                    }
-                });
+                    });
+                }
             }
         });
         self.tab = Some(next);
@@ -338,9 +381,42 @@ impl Help {
     }
 }
 
+/// The rows of every tab that hold the words, each under the tab and heading it is in, with the whole explanation.
+fn search_results(ui: &mut egui::Ui, words: &[String]) {
+    let mut n = 0;
+    for (tab, name) in TABS {
+        for (heading, rows) in page(*tab) {
+            for (op, what) in rows.iter().filter(|(op, what)| matches(op, what, words)) {
+                n += 1;
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(format!("{} › {}", i18n::tr(name), i18n::tr(heading))).small().weak());
+                ui.label(egui::RichText::new(i18n::tr(op)).strong());
+                ui.add(egui::Label::new(i18n::tr(what)).wrap());
+            }
+        }
+    }
+    ui.add_space(6.0);
+    if n == 0 {
+        ui.label(i18n::tr("見つかりません。別の言葉 (短い言葉、ひらがな・カタカナ) で探してください"));
+    } else {
+        ui.small(i18n::trf!("{n} 件"));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_search_finds_a_key_in_any_tab_and_needs_every_word() {
+        let hits = |q: &str| -> usize {
+            let words: Vec<String> = q.split_whitespace().map(|w| w.to_lowercase()).collect();
+            TABS.iter().flat_map(|(t, _)| page(*t).iter()).flat_map(|(_, rows)| rows.iter()).filter(|(op, what)| matches(op, what, &words)).count()
+        };
+        assert!(hits("回転") > 0);
+        assert!(hits("ctrl+d") > 0, "any case");
+        assert_eq!(hits("回転 存在しない言葉"), 0);
+    }
 
     #[test]
     fn every_page_has_rows_with_both_columns_filled() {

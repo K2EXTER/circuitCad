@@ -294,7 +294,7 @@ impl eframe::App for App {
         if compared >= 3 {
             self.progress.mark("build_psu");
         }
-        if let Some(learn_action) = self.measure.show(ui.ctx(), self.progress.is_done("build_psu"), compared) {
+        if let Some(learn_action) = self.measure.show(ui.ctx(), self.progress.is_done("build_psu"), compared, self.sch.spec_rows()) {
             match learn_action {
                 measure_guide::GuideAction::AddRows => {
                     self.mode = Mode::Schematic;

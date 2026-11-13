@@ -1,0 +1,9 @@
+済んだら印をつけます。次の手順が開きます	Tick this when it is done. The next step opens
+部品をそろえた	I have the parts
+組み立てて、ショートがないのを確かめた	Built it and checked there is no short
+一覧を、この行の語まで動かします	Scrolls the list to the words of this row
+さがす (例: 回転、ビア、ズーム)	Search (e.g. rotate, via, zoom)
+操作の名前や説明の言葉で、全部のタブから探します (F1 でいつでも開けます)	Searches every tab by the name of an operation or words of its explanation (F1 opens this at any time)
+探す言葉を消して、タブの表示に戻ります	Clears the search and goes back to the tabs
+見つかりません。別の言葉 (短い言葉、ひらがな・カタカナ) で探してください	Nothing found. Try other words (shorter ones)
+{n} 件	{n} found

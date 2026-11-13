@@ -367,6 +367,8 @@ pub struct GlossaryWindow {
     pub open: bool,
     query: String,
     selected: Option<&'static str>,
+    /// A letter of the index row was pressed: the list scrolls to that row's heading on the next frame.
+    jump: Option<&'static str>,
 }
 
 impl GlossaryWindow {
@@ -384,7 +386,8 @@ impl GlossaryWindow {
         }
         let mut open = true;
         let mut start = None;
-        egui::Window::new(i18n::tr("用語集・索引")).open(&mut open).default_size([760.0, 520.0]).show(ctx, |ui| {
+        let tall = (ctx.content_rect().height() * 0.8).max(520.0);
+        egui::Window::new(i18n::tr("用語集・索引")).open(&mut open).default_size([760.0, tall]).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(i18n::tr("さがす:"));
                 ui.add(egui::TextEdit::singleline(&mut self.query).hint_text(i18n::tr("名前・読み・別名 (例: ぶんあつ、dB、ADC)")).desired_width(300.0))
@@ -395,16 +398,39 @@ impl GlossaryWindow {
             });
             let found = if i18n::is_ja() { sorted(search(&self.query)) } else { english_sorted(english_search(&self.query)) };
             ui.small(i18n::trf!("{} 件 (全 {} 語)。語を押すと、説明と、その語が出てくるレッスンが右に出ます", found.len(), TERMS.len()));
+            // the index: one small button per row of the list (あ か さ … / A B C …), a press scrolls the list there
+            let row_name = |term: &Term| if i18n::is_ja() { row_of(term.reading) } else { english_row(term) };
+            let mut rows: Vec<&'static str> = vec![];
+            for term in &found {
+                let r = row_name(term);
+                if rows.last() != Some(&r) {
+                    rows.push(r);
+                }
+            }
+            if rows.len() > 1 {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
+                    for r in &rows {
+                        if ui.small_button(*r).on_hover_text(i18n::tr("一覧を、この行の語まで動かします")).clicked() {
+                            self.jump = Some(r);
+                        }
+                    }
+                });
+            }
             ui.separator();
             ui.columns(2, |cols| {
-                egui::ScrollArea::vertical().id_salt("glossary_list").show(&mut cols[0], |ui| {
+                egui::ScrollArea::vertical().id_salt("glossary_list").auto_shrink([false, false]).show(&mut cols[0], |ui| {
                     let mut row = "";
                     for term in &found {
                         let r = if i18n::is_ja() { row_of(term.reading) } else { english_row(term) };
                         if r != row {
                             row = r;
                             ui.add_space(4.0);
-                            ui.label(egui::RichText::new(format!("【{row}】")).strong().color(crate::theme::WARN));
+                            let head = ui.label(egui::RichText::new(format!("【{row}】")).strong().color(crate::theme::WARN));
+                            if self.jump == Some(row) {
+                                head.scroll_to_me(Some(egui::Align::TOP));
+                                self.jump = None;
+                            }
                         }
                         let mark = match term.kind {
                             Kind::Operation => "  (操作)",
@@ -420,7 +446,7 @@ impl GlossaryWindow {
                         ui.label(i18n::tr("見つかりませんでした。別の書き方 (ひらがな・英字) でも試してください"));
                     }
                 });
-                egui::ScrollArea::vertical().id_salt("glossary_detail").show(&mut cols[1], |ui| {
+                egui::ScrollArea::vertical().id_salt("glossary_detail").auto_shrink([false, false]).show(&mut cols[1], |ui| {
                     let Some(term) = self.selected.and_then(|n| TERMS.iter().find(|t| t.name == n)) else {
                         ui.label(i18n::tr("左の一覧から、語を選んでください。"));
                         return;

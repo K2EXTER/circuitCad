@@ -161,6 +161,11 @@ impl SchEditor {
     }
 
     /// How many rows have a bench measurement that could be compared with a simulated value right now.
+    /// How many rows the spec table has (the bench guide's step 3 is done once it has some).
+    pub fn spec_rows(&self) -> usize {
+        self.specs.len()
+    }
+
     pub fn compared_measurements(&self) -> usize {
         let dc = self.dc.as_ref().and_then(|v| v.outcome.as_ref().ok());
         let tran = self.tran.as_ref().and_then(|v| v.outcome.as_ref().ok());

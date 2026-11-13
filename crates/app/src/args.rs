@@ -86,6 +86,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         // the library list's search box, for screenshots
         app.sch.set_library_search(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
     }
+    if let Some(i) = args.iter().position(|a| a == "--guide-search")
+        && let Some(w) = args.get(i + 1) {
+            app.help.search(w);
+        }
     if let Some(i) = args.iter().position(|a| a == "--guide") {
         app.help.show(match args.get(i + 1).map(|s| s.as_str()) {
             Some("waveform") => help::HelpTab::Waveform,
