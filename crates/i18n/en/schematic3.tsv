@@ -374,7 +374,7 @@ N チャネルと極性が逆。電源側で負荷を切り替える (ハイサ�
 すべてのカテゴリ	All categories
 ライブラリ部品の分類。選んだ分類だけを一覧に出します	Library part category. Only parts in the chosen category are listed
 ◎のみ	◎ only
-シミュレーションモデルのある部品だけを表示します	Show only parts with a simulation model
+◎ は、シミュレーションモデルのある部品の印です。入れると、◎ の部品だけを表示します (◎ のない部品は、基板づくり用です)	◎ marks the parts that have a simulation model. Tick it to show only the ◎ parts (the others are for board design only)
 お気に入りから外します	Remove from favorites
 お気に入りに入れます。一覧の先頭に出ます	Add to favorites. They show at the top of the list
 ★ お気に入り	★ Favorites
@@ -394,14 +394,12 @@ N チャネルと極性が逆。電源側で負荷を切り替える (ハイサ�
 シミュレーションモデルあり ◎	Has a simulation model ◎
 シミュレーションモデルなし (基板設計用)	No simulation model (for board design)
 {} を編集します。保存すると書き換わります	Editing {}. Saving overwrites it
-◎ = シミュレーションモデルあり	◎ = has a simulation model
 再読み込み	Reload
-ライブラリのフォルダを読み直します。ファイルを直接直したときに押します	Re-reads the library folder. Press it after editing the files directly
-保存先: ライブラリのフォルダ	Saved to: library folder
+ライブラリのフォルダを読み直します。ファイルを直接直したときや、部品のファイルをフォルダに置いたときに押します	Reads the library folder again. Press it after editing a file directly or after putting a part file in the folder
 部品を作る…	Create part…
 スニペット…	Snippets…
 ＋ 部品を作る…	+ Create part…
-ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます	Make and add a part not in the library yourself while reading its datasheet (symbol, footprint, simulation model, ratings). You can also add from JSON or KiCad files under "① Basics" in the window that opens
+ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「読み込む…」からできます	Make and add a part not in the library yourself while reading its datasheet (symbol, footprint, simulation model, ratings). You can also add from JSON or KiCad files under "Import…" in the window that opens
 選んだ部品・線・ラベルをファイル (スニペット) に保存します。電源回路やLED点灯回路など、よく使う部分を別の回路でも使えます	Saves the selected parts, wires and labels to a file (snippet). Reuse common pieces such as a supply circuit or LED circuit in other circuits
 保存したスニペットを選んで、いまの回路の空いた所に置きます。部品番号は新しくなります。置いたあと、ドラッグで動かせます	Pick a saved snippet and place it in an empty spot of the current circuit. Refdes are renumbered. After placing, you can drag it to move it
 \n(データシートの代表的な値。使う前に、必ずデータシートで確かめてください)	\n(Typical datasheet values. Always check the datasheet before use)

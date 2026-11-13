@@ -166,7 +166,7 @@ impl SchEditor {
                             ui.selectable_value(&mut self.lib_cat, c.clone(), c);
                         }
                     }).response.on_hover_text(i18n::tr("ライブラリ部品の分類。選んだ分類だけを一覧に出します"));
-                ui.checkbox(&mut self.lib_sim_only, i18n::tr("◎のみ")).on_hover_text(i18n::tr("シミュレーションモデルのある部品だけを表示します"));
+                ui.checkbox(&mut self.lib_sim_only, i18n::tr("◎のみ")).on_hover_text(i18n::tr("◎ は、シミュレーションモデルのある部品の印です。入れると、◎ の部品だけを表示します (◎ のない部品は、基板づくり用です)"));
             });
             let f = self.lib_filter.to_lowercase();
             let filtering = !f.is_empty() || !self.lib_cat.is_empty() || self.lib_sim_only;
@@ -331,13 +331,15 @@ impl SchEditor {
                 self.status = format!("{} を編集します。保存すると書き換わります", d.name);
                 self.form = Some(PartForm::from_def(&d));
             }
-            ui.small(i18n::tr("◎ = シミュレーションモデルあり"));
-            ui.horizontal(|ui| {
-                if self.lit(ui.button(i18n::tr("再読み込み")), "再読み込み").on_hover_text(i18n::tr("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します")).clicked() {
-                    self.reload_library();
-                }
-            });
-            ui.small(i18n::tr("保存先: ライブラリのフォルダ")).on_hover_text(self.lib_dir.display().to_string());
+            // the library folder in one row: read it again, or open it (where the parts are saved; the path is in the hover)
+            let folder = self.lib_dir.display().to_string();
+            let bar = crate::widgets::segment_row(ui, &[("再読み込み", true), ("フォルダを開く", true)]);
+            if self.lit(bar[0].clone(), "再読み込み").on_hover_text(i18n::tr("ライブラリのフォルダを読み直します。ファイルを直接直したときや、部品のファイルをフォルダに置いたときに押します")).clicked() {
+                self.reload_library();
+            }
+            if bar[1].clone().on_hover_text(i18n::trf!("部品を保存するフォルダを開きます: {folder}")).clicked() {
+                self.open_library_folder();
+            }
             for e in &self.lib_errors {
                 ui.colored_label(crate::theme::ERROR, e);
             }
@@ -353,7 +355,7 @@ impl SchEditor {
         // make or reuse a part: one bar (the parts library's own buttons, then the snippet pair that works on the selection)
         let has = self.has_selection();
         let bar = crate::widgets::segment_row(ui, &[("部品を作る…", true), ("選択を保存…", has), ("スニペット…", true)]);
-        let make = self.lit(bar[0].clone(), "＋ 部品を作る…").on_hover_text(i18n::tr("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます"));
+        let make = self.lit(bar[0].clone(), "＋ 部品を作る…").on_hover_text(i18n::tr("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「読み込む…」からできます"));
         if make.clicked() {
             self.form = Some(PartForm::default());
         }

@@ -34,3 +34,6 @@
 よく使う間隔。0.5 mm は表面実装、1.27 mm と 2.54 mm はリード部品の足の間隔です	Common spacings: 0.5 mm for surface mount, 1.27 mm and 2.54 mm for the lead pitch of leaded parts
 設定…	Settings…
 言語・画面の大きさ・ヒント・ホイール・自動保存・図枠の作者・基板のグリッドなど、次の起動にも残る設定の窓を開きます	Opens the window of settings that last to the next start: language, screen size, hints, wheel, autosave, title block author, board grid and more
+フォルダを開く	Open folder
+部品を保存するフォルダを開きます: {folder}	Opens the folder the parts are saved in: {folder}
+フォルダを開けませんでした: {e}。場所は {} です	Could not open the folder: {e}. It is at {}

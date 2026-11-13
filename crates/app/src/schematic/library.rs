@@ -46,6 +46,15 @@ impl LibPrefs {
 }
 
 impl SchEditor {
+    /// Opens the library folder in the file manager (made first when it is not there yet).
+    pub(super) fn open_library_folder(&mut self) {
+        let _ = std::fs::create_dir_all(&self.lib_dir);
+        let opener = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+        if let Err(e) = std::process::Command::new(opener).arg(&self.lib_dir).spawn() {
+            self.status = format!("フォルダを開けませんでした: {e}。場所は {} です", self.lib_dir.display());
+        }
+    }
+
     pub(super) fn reload_library(&mut self) {
         let (lib, errs) = part_lib::load_library(&self.lib_dir);
         self.library = lib;
