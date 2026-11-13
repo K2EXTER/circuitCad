@@ -59,6 +59,17 @@ mod properties;
 
 impl SchEditor {
     pub fn side_panel(&mut self, ui: &mut egui::Ui) {
+        // the drawing tab's checks stay at the bottom, in sight however long the lists above grow
+        if self.panel_tab == PanelTab::Draw {
+            egui::Panel::bottom("sch_draw_checks").frame(egui::Frame::NONE.inner_margin(egui::Margin { left: 0, right: 0, top: 6, bottom: 0 })).resizable(false).show_inside(ui, |ui| {
+                let bar = ui.spacing().scroll.allocated_width() + 10.0;
+                ui.set_max_width((ui.available_width() - bar).max(100.0));
+                self.panel_erc(ui);
+                if ui.button(i18n::tr("操作ガイド (F1)")).on_hover_text(i18n::tr("マウスとキーの操作の一覧を開きます")).clicked() {
+                    self.help_request = Some(crate::help::HelpTab::Schematic);
+                }
+            });
+        }
         // the panel is taller than a small window: let it scroll instead of hiding the bottom controls
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             // leave room on the right so this bar does not sit on top of the inner part-list bar
@@ -83,7 +94,6 @@ impl SchEditor {
                     self.panel_properties(ui);
                 }
                 self.panel_parts(ui);
-                self.panel_erc(ui);
                 self.panel_forms(ui);
             }
             PanelTab::Analyze => {
@@ -243,6 +253,9 @@ impl SchEditor {
         let mut jump = None;
         let mut jump_sheet = 0;
         let mut make_nc: Option<(String, String)> = None;
+        // the findings scroll in a box of their own: the checks stay at the bottom of the panel, and a long list must not cover it all
+        let tall = (ui.ctx().content_rect().height() * 0.35).max(120.0);
+        egui::ScrollArea::vertical().id_salt("erc_findings").max_height(tall).auto_shrink([false, true]).show(ui, |ui| {
         for (k, p) in self.problems.iter().enumerate() {
             let (mark, color) = match p.severity {
                 Severity::Error => ("✖", crate::theme::ERROR),
@@ -267,6 +280,7 @@ impl SchEditor {
                 });
             }
         }
+        });
         if let Some(at) = jump {
             self.show_sheet(jump_sheet);
             self.pan = Vec2::new(at.0 as f32, at.1 as f32);
@@ -318,9 +332,6 @@ impl SchEditor {
             }
         }
         self.kicad_window(ui.ctx());
-        if ui.button(i18n::tr("操作ガイド (F1)")).on_hover_text(i18n::tr("マウスとキーの操作の一覧を開きます")).clicked() {
-            self.help_request = Some(crate::help::HelpTab::Schematic);
-        }
     }
 }
 

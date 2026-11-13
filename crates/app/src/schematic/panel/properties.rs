@@ -227,30 +227,55 @@ impl SchEditor {
             let has = self.has_selection();
             ui.add_space(crate::theme::SPACE_S);
             ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
-            // two joined bars, like the buttons under the part lists: change the part, then the clipboard
+            // one joined bar of small picture buttons: change the part, then the clipboard (the keys do the same; the names are in the hover)
             let rotatable = matches!(self.selected, Some(Sel::Comp(_)));
-            let edit = crate::widgets::segment_row(ui, &[("回転 (R)", rotatable), ("複製", has), ("削除", has)]);
-            if let Some(Sel::Comp(i)) = self.selected
-                && self.lit(edit[0].clone(), "回転 (R)").on_hover_text(i18n::tr("部品を 90° 回します (R キーでも同じです)")).clicked()
-            {
-                self.rotate_req = Some(i);
-            }
-            if edit[1].clone().on_hover_text(i18n::tr("コピーしてすぐ貼り付けます (Ctrl+D)")).clicked() {
-                self.duplicate_selection();
-            }
-            if self.lit(edit[2].clone(), "削除 (Delete)").on_hover_text(i18n::tr("選んだものを消します (Delete キーでも同じです)")).clicked() {
-                self.delete_selected();
-            }
             let has_clip = !self.clipboard.is_empty();
-            let clip = crate::widgets::segment_row(ui, &[("コピー", has), ("切り取り", has), ("貼り付け", has_clip)]);
-            if clip[0].clone().on_hover_text(i18n::tr("選んだ部品・線・ラベルをコピーします (Ctrl+C)。部品のピンについているネットラベルも一緒にコピーされます")).clicked() {
-                self.copy_selection();
-            }
-            if clip[1].clone().on_hover_text(i18n::tr("コピーして、元のものを消します (Ctrl+X)")).clicked() {
-                self.cut_selection();
-            }
-            if clip[2].clone().on_hover_text(i18n::tr("コピーしたものを、近くの空いた所に置きます (Ctrl+V)。部品番号は新しくなります。貼ったあと、ドラッグで動かせます")).clicked() {
-                self.paste_clipboard();
+            use crate::icons::Icon;
+            let items: [(Icon, &str, bool, &str); 6] = [
+                (Icon::Rotate, "回転 (R)", rotatable, "部品を 90° 回します (R キーでも同じです)"),
+                (Icon::Duplicate, "複製", has, "コピーしてすぐ貼り付けます (Ctrl+D)"),
+                (Icon::Trash, "削除 (Delete)", has, "選んだものを消します (Delete キーでも同じです)"),
+                (Icon::Copy, "コピー", has, "選んだ部品・線・ラベルをコピーします (Ctrl+C)。部品のピンについているネットラベルも一緒にコピーされます"),
+                (Icon::Cut, "切り取り", has, "コピーして、元のものを消します (Ctrl+X)"),
+                (Icon::Paste, "貼り付け", has_clip, "コピーしたものを、近くの空いた所に置きます (Ctrl+V)。部品番号は新しくなります。貼ったあと、ドラッグで動かせます"),
+            ];
+            let mut pressed = None;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let width = ui.available_width() / items.len() as f32;
+                for (n, (icon, name, enabled, tip)) in items.iter().enumerate() {
+                    let first = if n == 0 { 4 } else { 0 };
+                    let last = if n + 1 == items.len() { 4 } else { 0 };
+                    let corners = egui::CornerRadius { nw: first, sw: first, ne: last, se: last };
+                    let tip = format!("{}\n{}", i18n::tr_dyn(name), i18n::tr_dyn(tip));
+                    let r = crate::icons::segment_button(ui, *icon, "", "", false, *enabled, &tip, width, corners);
+                    if self.lit(r, name).clicked() {
+                        pressed = Some(n);
+                    }
+                }
+            });
+            match pressed {
+                Some(0) => {
+                    if let Some(Sel::Comp(i)) = self.selected {
+                        self.rotate_req = Some(i);
+                    }
+                }
+                Some(1) => {
+                    self.duplicate_selection();
+                }
+                Some(2) => {
+                    self.delete_selected();
+                }
+                Some(3) => {
+                    self.copy_selection();
+                }
+                Some(4) => {
+                    self.cut_selection();
+                }
+                Some(5) => {
+                    self.paste_clipboard();
+                }
+                _ => {}
             }
         }
     }

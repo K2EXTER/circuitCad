@@ -71,53 +71,57 @@ impl SchEditor {
         let (_, basic_clicked) = crate::widgets::band_header(ui, "basic", basic_title, self.basic_open, true, |ui| {
             crate::widgets::well(ui, |ui| {
             ui.small(i18n::tr("クリックして配置 / Rキーで回転"));
-            for k in Kind::PALETTE {
-                let selected = self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k;
-                let mut click = false;
-                if let Some((_, cap_kinds)) = families.iter().find(|(fk, _)| fk == k) {
-                    // a folder, not a button: it opens to the plain part and the kinds from the library
-                    let title = match k {
-                        Kind::Npn => "トランジスタ".to_string(),
-                        _ => k.label(),
-                    };
-                    let id = ui.make_persistent_id(("part_tree", k.label()));
-                    let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
-                    let mut toggled = false;
-                    state.show_header(ui, |ui| {
-                        let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 22.0), egui::Sense::click());
-                        super::symbols::paint_kind_preview(ui.painter(), rect, *k, ui.visuals().text_color());
-                        toggled = (pic | ui.add(egui::Label::new(i18n::tr_dyn(&title)).sense(egui::Sense::click()))).clicked();
-                    }).body(|ui| {
-                        click = kind_row(ui, selected, *k, &i18n::trf!("{} (基本)", k.label())).on_hover_text(i18n::tr_dyn(kind_tip(*k))).clicked();
-                        for (family, parts) in cap_kinds.iter() {
-                            egui::CollapsingHeader::new(i18n::tr_dyn(family))
-                                .id_salt(("part_family", k.label(), *family))
-                                .default_open(false)
-                                .show(ui, |ui| {
-                                    ui.small(i18n::tr_dyn(family_tip(family)));
-                                    for &i in parts {
-                                        let sel = self.tool == Tool::Place && self.place_lib == Some(i);
-                                        if ui.selectable_label(sel, &self.library[i].name).on_hover_text(i18n::tr_dyn(&lib_hover(&self.library[i]))).clicked() {
-                                            chosen = Some(i);
+            // two columns of cells (symbol and name); a kind with library parts (capacitor, diode, transistor) opens a menu of its kinds
+            let gap = 4.0;
+            let width = ((ui.available_width() - gap) / 2.0).floor();
+            for row in Kind::PALETTE.chunks(2) {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    for k in row {
+                        // lit for the plain part, and for a library part of its kinds (picked from its menu)
+                        let selected = self.tool == Tool::Place
+                            && match self.place_lib.and_then(|i| self.library.get(i)) {
+                                None => self.place == *k,
+                                Some(d) => families.iter().any(|(fk, _)| fk == k) && part_family(*k, d).is_some(),
+                            };
+                        let family = families.iter().find(|(fk, _)| fk == k);
+                        let title = match k {
+                            Kind::Npn if family.is_some() => "トランジスタ".to_string(),
+                            _ => k.label(),
+                        };
+                        let resp = palette_cell(ui, width, *k, &i18n::tr_dyn(&title), selected, family.is_some());
+                        let mut click = false;
+                        if let Some((_, kinds)) = family {
+                            let resp = resp.on_hover_text(i18n::tr("押すと、基本の部品と、ライブラリの種類 (型番つき) を選ぶメニューが出ます"));
+                            egui::Popup::menu(&resp).show(|ui| {
+                                if ui.button(i18n::trf!("{} (基本)", k.label())).on_hover_text(i18n::tr_dyn(kind_tip(*k))).clicked() {
+                                    click = true;
+                                }
+                                ui.separator();
+                                for (fam, parts) in kinds.iter() {
+                                    ui.menu_button(i18n::tr_dyn(fam), |ui| {
+                                        ui.small(i18n::tr_dyn(family_tip(fam)));
+                                        for &i in parts {
+                                            let sel = self.tool == Tool::Place && self.place_lib == Some(i);
+                                            if ui.selectable_label(sel, &self.library[i].name).on_hover_text(i18n::tr_dyn(&lib_hover(&self.library[i]))).clicked() {
+                                                chosen = Some(i);
+                                                ui.close();
+                                            }
                                         }
-                                    }
-                                });
+                                    });
+                                }
+                            });
+                        } else {
+                            click = resp.on_hover_text(i18n::tr_dyn(kind_tip(*k))).clicked();
                         }
-                    });
-                    if toggled {
-                        let mut st = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
-                        st.toggle(ui);
-                        st.store(ui.ctx());
+                        if click {
+                            self.tool = Tool::Place;
+                            self.place_lib = None;
+                            self.place = *k;
+                            self.pending = None;
+                        }
                     }
-                } else {
-                    click = kind_row(ui, selected, *k, &k.label()).on_hover_text(i18n::tr_dyn(kind_tip(*k))).clicked();
-                }
-                if click {
-                    self.tool = Tool::Place;
-                    self.place_lib = None;
-                    self.place = *k;
-                    self.pending = None;
-                }
+                });
             }
             });
         });
@@ -547,15 +551,36 @@ fn trim_figure(m: u16) -> String {
 
 
 /// One row of the basic parts list: a small picture of the symbol, then the name.
-fn kind_row(ui: &mut egui::Ui, selected: bool, kind: Kind, text: &str) -> egui::Response {
-    ui.horizontal(|ui| {
-        ui.add_space(ui.spacing().icon_width + ui.spacing().item_spacing.x);
-        let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 22.0), egui::Sense::click());
-        let color = if selected { ui.visuals().selection.stroke.color } else { ui.visuals().text_color() };
-        super::symbols::paint_kind_preview(ui.painter(), rect, kind, color);
-        pic | ui.selectable_label(selected, i18n::tr_dyn(text))
-    })
-    .inner
+/// One cell of the basic parts' grid: the symbol and the name, filled when it is the part being placed. `menu`: a small down arrow at the
+/// right end, for a kind that opens a menu of its library kinds.
+fn palette_cell(ui: &mut egui::Ui, width: f32, kind: Kind, text: &str, selected: bool, menu: bool) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let v = ui.visuals();
+        let fill = if selected {
+            v.selection.bg_fill
+        } else if resp.hovered() {
+            v.widgets.hovered.weak_bg_fill
+        } else {
+            egui::Color32::TRANSPARENT
+        };
+        ui.painter().rect_filled(rect, 4, fill);
+        let color = if selected { v.selection.stroke.color } else { v.text_color() };
+        let pic = egui::Rect::from_min_size(rect.min + egui::vec2(2.0, 2.0), egui::vec2(34.0, 22.0));
+        super::symbols::paint_kind_preview(ui.painter(), pic, kind, color);
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let room = rect.right() - pic.right() - if menu { 20.0 } else { 6.0 };
+        let mut galley = ui.painter().layout_no_wrap(text.to_owned(), font.clone(), color);
+        if galley.size().x > room {
+            galley = ui.painter().layout_no_wrap(text.to_owned(), egui::FontId::new(font.size - 2.0, font.family.clone()), color);
+        }
+        ui.painter().galley(egui::pos2(pic.right() + 4.0, rect.center().y - galley.size().y / 2.0), galley, color);
+        if menu {
+            let c = egui::pos2(rect.right() - 9.0, rect.center().y);
+            ui.painter().add(egui::Shape::convex_polygon(vec![c + egui::vec2(-4.0, -2.0), c + egui::vec2(4.0, -2.0), c + egui::vec2(0.0, 3.0)], color.gamma_multiply(0.7), egui::Stroke::NONE));
+        }
+    }
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 #[cfg(test)]

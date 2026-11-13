@@ -1,0 +1,3 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/panel (the drawing tab: the basic parts in two columns)
+押すと、基本の部品と、ライブラリの種類 (型番つき) を選ぶメニューが出ます	Opens a menu of the basic part and the library kinds (with part numbers)
