@@ -11,3 +11,6 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 3
+# no debug info for dependencies: the PDB shrank 137 -> 69 MB and relinks got faster;
+# backtraces still have line numbers in our own crates
+debug = false

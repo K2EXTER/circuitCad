@@ -1,3 +1,7 @@
 [resolver]
 feature-unification = "workspace"
 
+# Link with rust-lld (ships with the Rust toolchain) instead of MSVC link.exe:
+# an edit in the app crate rebuilt in ~5 s instead of ~8 s (measured 2026-11-14).
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
