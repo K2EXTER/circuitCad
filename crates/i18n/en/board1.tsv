@@ -238,7 +238,7 @@ DRC違反が{}件あります。修正してから書き出してください	Th
 ネット名	Net names
 禁止領域 (斜線の範囲) を表示します。隠しても領域は効いたままで、DRC は中の配線・ビア・部品を指摘し、自動配線とベタは領域をよけます	Shows keep-out areas (hatched). Hidden areas still apply: DRC flags tracks, vias and parts inside, and autoroute and pours avoid them
 基板に残した寸法線を表示します。隠しても、DXF と SVG の図には出ます	Shows dimensions placed on the board. Even when hidden, they appear in DXF and SVG drawings
-作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認して発注」の「作業中も点検する」です	Shows the marks (red ×) for rule violations found by the live check. When hidden, checking continues and the count is shown at the bottom left. To stop the check itself, use "Check while working" in "③ Check and order"
+作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認する」の「作業中も点検する」です	Shows the marks (red ×) for rule violations found by the live check. When hidden, checking continues and the count is shown at the bottom left. To stop the check itself, use "Check while working" in "③ Check"
 点検の印	Check marks
 回路図から	From schematic
 回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます。シートの一覧は、左のパネルにあります	Outlines parts in a color for each schematic sheet (tab) and shows the sheet name at the group's corner, so you can tell on the board which part belongs to which sheet. The list of sheets is in the left panel

@@ -273,6 +273,9 @@ pub struct BoardEditor {
     /// Voltage drop along the nets' copper, with a fingerprint of the board it was computed for.
     /// Open the width panel on the next frame (command line `--ir`).
     widths_open: Option<bool>,
+    /// The step of the "手順" tab the learner opened (None: the step the board is at), and a counter that renews the folds when it changes.
+    step_open: Option<panel::Step>,
+    step_gen: u32,
     /// After the auto-router, fill the top with GND too (only when the bottom has the GND pour).
     pour_top: bool,
     /// Distance between the stitching vias (mm), for the "ビアを縫う" buttons.
@@ -519,6 +522,8 @@ impl Default for BoardEditor {
             track_width: 0.25,
             ir_drop: None,
             widths_open: None,
+            step_open: None,
+            step_gen: 0,
             pour_top: true,
             stitch_pitch: 5.0,
             pair_new: Default::default(),

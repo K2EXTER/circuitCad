@@ -10,7 +10,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// The state of the check: the answer for one state of the board, and the job working on a newer one.
 pub struct LiveDrc {
-    /// On by default; the checkbox in "③ 確認して発注" turns it off.
+    /// On by default; the checkbox in "③ 確認する" turns it off.
     pub on: bool,
     shown: Option<(u64, std::rc::Rc<Vec<Violation>>)>,
     job: Option<(u64, Receiver<Vec<Violation>>)>,

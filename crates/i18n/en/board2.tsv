@@ -188,7 +188,7 @@ DRC の指摘は、クリックするとその場所に飛びます。直した�
 {n} だけ	Only {n}
 全部つなぐ	Connect all
 基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。\n    部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます	Makes the whole bottom side a GND copper pour, and connects the top GND pads to it with short tracks and vias. Long GND tracks are no longer needed, and routing gets easier.\n    You can press it before or after placing parts. If you press it first, the parts move closer, leaving out GND (see the help for "Place parts and set outline"). Either way, press it before "Connect all" autoroute (works on boards with a rectangular outline). If you don't like it, Undo reverts it
-未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。\n    線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。\n    電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「③ 確認して発注」の「電流と電圧降下」で見直せます)。\n    2層・45°配線で、ルール違反になる配線は自動的にやめます	Autoroutes all unrouted connections (yellow lines). Place the parts on the board first.\n    Track width and via size come from the settings shown when you choose the Route or Via tool; connections that can't be routed stay as yellow lines. If you don't like it, Undo reverts it.\n    If currents are not set yet, it first takes the currents from the schematic's DC operating point and routes high-current nets as wide as needed (review them in "Current and voltage drop" under "③ Check and order").\n    2 layers, 45° tracks; tracks that would break a rule are dropped automatically
+未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。\n    線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。\n    電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「③ 確認する」の「電流と電圧降下」で見直せます)。\n    2層・45°配線で、ルール違反になる配線は自動的にやめます	Autoroutes all unrouted connections (yellow lines). Place the parts on the board first.\n    Track width and via size come from the settings shown when you choose the Route or Via tool; connections that can't be routed stay as yellow lines. If you don't like it, Undo reverts it.\n    If currents are not set yet, it first takes the currents from the schematic's DC operating point and routes high-current nets as wide as needed (review them in "Current and voltage drop" under "③ Check").\n    2 layers, 45° tracks; tracks that would break a rule are dropped automatically
 パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます{only_tip}	Select a pad to autoroute only that pad's net. You can route important tracks by hand and leave the rest to it{only_tip}
 表面も GND のベタで埋める	Fill top with GND pour too
 「GND ベタ」を押したとき、裏面に加えて、表面の空いた所も GND の銅で埋めます (自動配線は、その上を通る形で配線します。配線のあとに表面のベタを足すこともできます)。配線から隙間をあけて塗るので、配線は変わりません。表面の GND パッドは直接つながり、ノイズに強く、銅の量が表裏でそろって基板が反りにくくなります。ルール違反が増えるときは置きません	When you press "GND pour", the free areas of the top are also filled with GND copper, in addition to the bottom (autoroute routes over it; you can also add the top pour after routing). It is filled with a gap from the tracks, so the tracks don't change. Top GND pads connect directly, noise is reduced, and with similar copper on both sides the board warps less. Not placed if it would add rule violations
@@ -201,7 +201,7 @@ DRC の指摘は、クリックするとその場所に飛びます。直した�
 board_sec_仕上	
 仕上げ (任意)	Finishing (optional)
 パッドの根元をそろえる、配線の角を丸める、涙型など、見た目と製造のための仕上げです	Finishing for looks and manufacturing: straighten pad entries, round track corners, teardrops, etc.
-③ 確認して発注	③ Check and order
+③ 確認する	③ Check
 「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。問題がなければ、「発注の準備」で、工場に渡すデータ (ガーバー) を作ります	"DRC" checks the rules (design rules) for whether the factory can make the board, such as tracks too close together or running off the board edge. If there are no problems, make the data for the factory (Gerber) in "Prepare order"
 DRC を実行	Run DRC
 設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう	Design rule check. Checks for tracks too close together, copper running off the board edge, and so on. Always run it before ordering
@@ -433,3 +433,7 @@ DRC の違反	DRC violations
 自動配置のとき、組の部品のうち、コピー (同じ形の繰り返し) や IC のブロックにまとまっている部品は、組の塊に入れられません。その部品は、組の上限を距離のコストで守る形になります	In autoplace, parts of a group that are bundled into a copy (repeated layout) or an IC block can't be put in the group's cluster. For those parts, the group's limit is kept through a distance cost
 基板にない名前: {} 件	Names not on the board: {}
 表にあるが、基板に部品・パッドがないもの (回路図から取り込み直すと消えることがあります): {}	In the table but with no part or pad on the board (may go away if you import from schematic again): {}
+整える	Tidy up
+「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。電流と電圧降下・放熱もここで確かめます	The DRC checks the rules the factory can make (design rules): tracks too close, copper over the board edge and so on. Currents, voltage drop and heat are checked here too
+④ 発注する	④ Order
+出来上がりを 3D で見て、「発注の準備」で発注先を選び、工場に渡すデータ (ガーバー) を作ります	See the finished board in 3D, then "Prepare order…" picks a maker and writes the files for the factory (Gerber)

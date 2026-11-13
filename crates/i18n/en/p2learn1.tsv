@@ -6,13 +6,13 @@
 基板エディタの「仕上げ (任意)」	"Finishing (optional)" in the board editor
 配線の太さを、流れる電流から決める	Choose track width from the current
 回路の電流から、配線に必要な太さを求め、電圧降下 (配線の抵抗で電圧が下がる量) も確かめます	Finds the track width the circuit's current needs, and also checks the voltage drop (how much the voltage falls because of the track's resistance)
-基板エディタの「③ 確認して発注」の「電流と電圧降下」	"Current and voltage drop" under "③ Check and order" in the board editor
+基板エディタの「③ 確認する」の「電流と電圧降下」	"Current and voltage drop" under "③ Check" in the board editor
 差動ペアと長さ合わせ	Differential pairs and length matching
 USB のように2本で信号を送る線を並べて引き、長さをそろえます。高い周波数の信号が乱れにくくなります	Routes two-wire signal lines such as USB side by side and makes them the same length. High-frequency signals are then less easily disturbed
 同じ「高度な配線 (中級者向け)」の「差動ペア」「長さ合わせ (蛇行)」	"Differential pairs" and "Length matching (meander)" in the same "Advanced routing (intermediate)"
 発注と、買うものの一覧	Ordering, and a list of what to buy
 ガーバー・ドリル・部品表・配置ファイルと一緒に、部品ごとの数量と、秋月電子・DigiKey・LCSC のリンク (型番が分かる部品は商品ページ) を書き出します	Along with the Gerber, drill, BOM and placement files, writes out the quantity of each part and links to Akizuki Denshi, DigiKey and LCSC (product pages for parts whose part number is known)
-基板エディタの「③ 確認して発注」の「発注の準備…」	"Prepare order…" under "③ Check and order" in the board editor
+基板エディタの「④ 発注する」の「発注の準備…」	"Prepare order…" under "④ Order" in the board editor
 部品の故障を試す	Try part faults
 抵抗が焼ける、コンデンサがショートするなど、部品が壊れたときに回路がどうなるか、ほかの部品が連鎖して壊れないかを調べます	Checks what happens to the circuit when a part breaks, such as a resistor burning out or a capacitor shorting, and whether other parts break in a chain
 回路図の左パネルの「故障を試す」「連鎖故障を追う」	"Try fault" and "Follow cascading faults" in the schematic's left panel

@@ -143,7 +143,7 @@ impl BoardEditor {
                             kind(ui, Icon::Dimension, "寸法線");
                             none(ui);
                             ui.end_row();
-                            eye(ui, &mut self.vis.drc_marks, "作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認して発注」の「作業中も点検する」です");
+                            eye(ui, &mut self.vis.drc_marks, "作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認する」の「作業中も点検する」です");
                             kind(ui, Icon::DrcMark, "点検の印");
                             none(ui);
                             ui.end_row();

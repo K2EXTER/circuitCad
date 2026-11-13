@@ -694,6 +694,20 @@ mod order_flow {
 }
 
 #[test]
+fn the_steps_tab_opens_the_step_the_board_is_at() {
+    use super::panel::Step;
+    let mut e = BoardEditor::default();
+    assert_eq!(e.current_step(), Step::Place, "an empty board: place the parts");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rlc_board.pcbjson");
+    e.board = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(e.current_step(), Step::Check, "the sample is routed: check it");
+    e.run_drc();
+    assert_eq!(e.current_step(), Step::Order, "the DRC passed: order it");
+    e.checkpoint();
+    assert_eq!(e.current_step(), Step::Check, "an edit after the DRC: check again");
+}
+
+#[test]
 fn shipped_example_boards_can_be_previewed() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut n = 0;
