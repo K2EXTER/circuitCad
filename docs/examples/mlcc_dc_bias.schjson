@@ -1,0 +1,316 @@
+{
+  "components": [
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        10,
+        8
+      ],
+      "refdes": "R1",
+      "rot": 0,
+      "value": "100"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        24,
+        8
+      ],
+      "refdes": "R2",
+      "rot": 0,
+      "value": "100"
+    },
+    {
+      "custom": {
+        "glyph": "capacitor",
+        "name": "GRM188R61C106MA73",
+        "pins": [
+          {
+            "name": "1",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "2",
+            "number": "2",
+            "side": "right"
+          }
+        ],
+        "prefix": "C",
+        "ratings": {
+          "rows": [
+            {
+              "condition": "±20%",
+              "name": "容量",
+              "value": "10µF"
+            },
+            {
+              "name": "温度特性",
+              "value": "X5R"
+            },
+            {
+              "condition": "直流",
+              "name": "定格電圧",
+              "value": "16 V"
+            },
+            {
+              "condition": "定格の 25 / 50 / 100 % (4 / 8 / 16 V)",
+              "name": "DC バイアス",
+              "value": "-49 % / -76 % / -89 %"
+            },
+            {
+              "condition": "自己共振 約 1.93 MHz で",
+              "name": "ESR",
+              "value": "約 5.02 mΩ"
+            },
+            {
+              "name": "ESL",
+              "value": "約 0.68 nH"
+            }
+          ],
+          "v_max": 16.0
+        },
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "DC バイアスは C(V) = C0 × (0.06 + 0.94 / (1 + (V / 3.84 V)²)) を電荷の式にしたもので、データシートの曲線との差は最大 0.9 ポイント (0〜16 V)。AC 解析でも、直流の動作点での容量が使われます。",
+            "ESR と ESL は、データシートの |Z| の曲線のいちばん低い所 (自己共振 約 1.93 MHz で |Z| 約 5.02 mΩ) から決めた一定の値です。実物の ESR は周波数で変わります (低い周波数ほど大きい)。",
+            "容量の許容差 (±20%) と温度による変化 (X5R) はモデルに入れていません。",
+            "直流の耐圧を超える電圧は、シミュレーションでは止まりません。定格電圧を守ってください。"
+          ],
+          "name": "GRM188R61C106MA73",
+          "origin": {
+            "kind": "equivalent",
+            "source": "村田製作所 GRM188R61C106MA73 の Electrical Characteristics Data (DC バイアス特性・|Z| と ESR の周波数特性、2026 年 11 月時点) の図を読み取った値"
+          },
+          "params": {},
+          "pins": [
+            "1",
+            "2"
+          ],
+          "text": ".subckt GRM188R61C106MA73 1 2\nResr 1 n_esr 5.02m\nLesl n_esr n_c 680p\nC1 n_c 2 Q=10u*(0.06*V(n_c,2)+0.94*3.84*atan(V(n_c,2)/3.84))\n.ends"
+        }
+      },
+      "footprint": "C_0603_Murata_B",
+      "kind": "Custom",
+      "pos": [
+        38,
+        9
+      ],
+      "refdes": "C1",
+      "rot": 0,
+      "value": "10u"
+    },
+    {
+      "custom": {
+        "glyph": "capacitor",
+        "name": "GRM188R61C106MA73",
+        "pins": [
+          {
+            "name": "1",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "2",
+            "number": "2",
+            "side": "right"
+          }
+        ],
+        "prefix": "C",
+        "ratings": {
+          "rows": [
+            {
+              "condition": "±20%",
+              "name": "容量",
+              "value": "10µF"
+            },
+            {
+              "name": "温度特性",
+              "value": "X5R"
+            },
+            {
+              "condition": "直流",
+              "name": "定格電圧",
+              "value": "16 V"
+            },
+            {
+              "condition": "定格の 25 / 50 / 100 % (4 / 8 / 16 V)",
+              "name": "DC バイアス",
+              "value": "-49 % / -76 % / -89 %"
+            },
+            {
+              "condition": "自己共振 約 1.93 MHz で",
+              "name": "ESR",
+              "value": "約 5.02 mΩ"
+            },
+            {
+              "name": "ESL",
+              "value": "約 0.68 nH"
+            }
+          ],
+          "v_max": 16.0
+        },
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "DC バイアスは C(V) = C0 × (0.06 + 0.94 / (1 + (V / 3.84 V)²)) を電荷の式にしたもので、データシートの曲線との差は最大 0.9 ポイント (0〜16 V)。AC 解析でも、直流の動作点での容量が使われます。",
+            "ESR と ESL は、データシートの |Z| の曲線のいちばん低い所 (自己共振 約 1.93 MHz で |Z| 約 5.02 mΩ) から決めた一定の値です。実物の ESR は周波数で変わります (低い周波数ほど大きい)。",
+            "容量の許容差 (±20%) と温度による変化 (X5R) はモデルに入れていません。",
+            "直流の耐圧を超える電圧は、シミュレーションでは止まりません。定格電圧を守ってください。"
+          ],
+          "name": "GRM188R61C106MA73",
+          "origin": {
+            "kind": "equivalent",
+            "source": "村田製作所 GRM188R61C106MA73 の Electrical Characteristics Data (DC バイアス特性・|Z| と ESR の周波数特性、2026 年 11 月時点) の図を読み取った値"
+          },
+          "params": {},
+          "pins": [
+            "1",
+            "2"
+          ],
+          "text": ".subckt GRM188R61C106MA73 1 2\nResr 1 n_esr 5.02m\nLesl n_esr n_c 680p\nC1 n_c 2 Q=10u*(0.06*V(n_c,2)+0.94*3.84*atan(V(n_c,2)/3.84))\n.ends"
+        }
+      },
+      "footprint": "C_0603_Murata_B",
+      "kind": "Custom",
+      "pos": [
+        52,
+        9
+      ],
+      "refdes": "C2",
+      "rot": 0,
+      "value": "10u"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        64,
+        10
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "0 AC 1"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        74,
+        10
+      ],
+      "refdes": "V2",
+      "rot": 0,
+      "value": "12 AC 1"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "Ground",
+      "pos": [
+        64,
+        12
+      ],
+      "refdes": "#PWR01",
+      "rot": 0,
+      "value": "GND"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "OUT0"
+    },
+    {
+      "pos": [
+        36,
+        9
+      ],
+      "text": "OUT0"
+    },
+    {
+      "pos": [
+        22,
+        8
+      ],
+      "text": "OUT12"
+    },
+    {
+      "pos": [
+        50,
+        9
+      ],
+      "text": "OUT12"
+    },
+    {
+      "pos": [
+        64,
+        8
+      ],
+      "text": "IN0"
+    },
+    {
+      "pos": [
+        12,
+        8
+      ],
+      "text": "IN0"
+    },
+    {
+      "pos": [
+        74,
+        8
+      ],
+      "text": "IN12"
+    },
+    {
+      "pos": [
+        26,
+        8
+      ],
+      "text": "IN12"
+    },
+    {
+      "pos": [
+        64,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        40,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        74,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        54,
+        9
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": []
+}

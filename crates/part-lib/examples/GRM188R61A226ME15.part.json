@@ -1,0 +1,107 @@
+{
+  "name": "GRM188R61A226ME15",
+  "category": "コンデンサ",
+  "description": "村田製作所 GRM 積層セラミックコンデンサ 22µF ±20% 10 V X5R 0603 (1608)。直流電圧で容量が下がります (データシートの DC バイアス特性): 定格 10 V の 25 % (2.5 V) で -45 %、50 % で -75 %、100 % で -89 %。ESR 約 3.78 mΩ・ESL 約 0.72 nH (自己共振 約 1.26 MHz)。本体 1.6±0.2 × 0.8±0.2 mm、厚さ 0.8±0.2 mm。ランドは村田の推奨 (リフロー、1.6×0.8 (±0.15・±0.20): a 0.7〜0.9・b 0.7〜0.8・c 0.8〜1.0 mm: a = パッドの内側の間、b = パッドの長さ、c = パッドの幅) の真ん中。型番の末尾に包装の記号が付きます (村田は「#」と書く。0603 の紙テープは D、0805 の厚い品はエンボステープの L など、注文の前に確かめてください)。村田の Electrical Characteristics Data (2026 年 11 月時点) と製品ページ (生産中) で確かめた (2026-11-13)",
+  "datasheet": "https://www.murata.com/en-us/products/productdetail?partno=GRM188R61A226ME15%23",
+  "prefix": "C",
+  "value": "22u",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.775,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.75,
+        "h": 0.9,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.775,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.75,
+        "h": 0.9,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "C_0603_Murata_B",
+  "height": 0.8,
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "GRM188R61A226ME15",
+    "text": ".subckt GRM188R61A226ME15 1 2\nResr 1 n_esr 3.78m\nLesl n_esr n_c 720p\nC1 n_c 2 Q=22u*(0.04*V(n_c,2)+0.96*2.7*atan(V(n_c,2)/2.7))\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "DC バイアスは C(V) = C0 × (0.04 + 0.96 / (1 + (V / 2.7 V)²)) を電荷の式にしたもので、データシートの曲線との差は最大 1.5 ポイント (0〜10 V)。AC 解析でも、直流の動作点での容量が使われます。",
+      "ESR と ESL は、データシートの |Z| の曲線のいちばん低い所 (自己共振 約 1.26 MHz で |Z| 約 3.78 mΩ) から決めた一定の値です。実物の ESR は周波数で変わります (低い周波数ほど大きい)。",
+      "容量の許容差 (±20%) と温度による変化 (X5R) はモデルに入れていません。",
+      "直流の耐圧を超える電圧は、シミュレーションでは止まりません。定格電圧を守ってください。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "村田製作所 GRM188R61A226ME15 の Electrical Characteristics Data (DC バイアス特性・|Z| と ESR の周波数特性、2026 年 11 月時点) の図を読み取った値"
+    }
+  },
+  "ratings": {
+    "v_max": 10.0,
+    "rows": [
+      {
+        "name": "容量",
+        "value": "22µF",
+        "condition": "±20%"
+      },
+      {
+        "name": "温度特性",
+        "value": "X5R",
+        "condition": ""
+      },
+      {
+        "name": "定格電圧",
+        "value": "10 V",
+        "condition": "直流"
+      },
+      {
+        "name": "DC バイアス",
+        "value": "-45 % / -75 % / -89 %",
+        "condition": "定格の 25 / 50 / 100 % (2.5 / 5 / 10 V)"
+      },
+      {
+        "name": "ESR",
+        "value": "約 3.78 mΩ",
+        "condition": "自己共振 約 1.26 MHz で"
+      },
+      {
+        "name": "ESL",
+        "value": "約 0.72 nH",
+        "condition": ""
+      }
+    ]
+  },
+  "glyph": "capacitor"
+}

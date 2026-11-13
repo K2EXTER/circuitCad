@@ -1,0 +1,107 @@
+{
+  "name": "GRM1882C1H103JA01",
+  "category": "コンデンサ",
+  "description": "村田製作所 GRM 積層セラミックコンデンサ 10000pF ±5% 50 V CH 0603 (1608)。温度補償用 (CH) で、直流電圧で容量はほとんど変わりません (データシートの DC バイアス特性は 0 % のまま)。ESR 約 27.8 mΩ・ESL 約 0.56 nH (自己共振 約 67.1 MHz)。本体 1.6±0.1 × 0.8±0.1 mm、厚さ 0.8±0.1 mm。ランドは村田の推奨 (リフロー、1.6×0.8 (±0.10 以内): a 0.6〜0.8・b 0.6〜0.7・c 0.6〜0.8 mm: a = パッドの内側の間、b = パッドの長さ、c = パッドの幅) の真ん中。型番の末尾に包装の記号が付きます (村田は「#」と書く。0603 の紙テープは D、0805 の厚い品はエンボステープの L など、注文の前に確かめてください)。村田の Electrical Characteristics Data (2026 年 11 月時点) と製品ページ (生産中) で確かめた (2026-11-13)",
+  "datasheet": "https://www.murata.com/en-us/products/productdetail?partno=GRM1882C1H103JA01%23",
+  "prefix": "C",
+  "value": "10n",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.675,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.65,
+        "h": 0.7,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.675,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.65,
+        "h": 0.7,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "C_0603_Murata_A",
+  "height": 0.8,
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "GRM1882C1H103JA01",
+    "text": ".subckt GRM1882C1H103JA01 1 2\nResr 1 n_esr 27.8m\nLesl n_esr n_c 563p\nC1 n_c 2 10n\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "温度補償用 (CH) なので DC バイアスはありません (データシートの曲線も 0 %)。",
+      "ESR と ESL は、データシートの |Z| の曲線のいちばん低い所 (自己共振 約 67.1 MHz で |Z| 約 27.8 mΩ) から決めた一定の値です。実物の ESR は周波数で変わります (低い周波数ほど大きい)。",
+      "容量の許容差 (±5%) と温度による変化 (CH) はモデルに入れていません。",
+      "直流の耐圧を超える電圧は、シミュレーションでは止まりません。定格電圧を守ってください。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "村田製作所 GRM1882C1H103JA01 の Electrical Characteristics Data (DC バイアス特性・|Z| と ESR の周波数特性、2026 年 11 月時点) の図を読み取った値"
+    }
+  },
+  "ratings": {
+    "v_max": 50.0,
+    "rows": [
+      {
+        "name": "容量",
+        "value": "10000pF",
+        "condition": "±5%"
+      },
+      {
+        "name": "温度特性",
+        "value": "CH",
+        "condition": ""
+      },
+      {
+        "name": "定格電圧",
+        "value": "50 V",
+        "condition": "直流"
+      },
+      {
+        "name": "DC バイアス",
+        "value": "0 %",
+        "condition": "0〜50 V"
+      },
+      {
+        "name": "ESR",
+        "value": "約 27.8 mΩ",
+        "condition": "自己共振 約 67.1 MHz で"
+      },
+      {
+        "name": "ESL",
+        "value": "約 0.56 nH",
+        "condition": ""
+      }
+    ]
+  },
+  "glyph": "capacitor"
+}

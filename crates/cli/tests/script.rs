@@ -2241,3 +2241,26 @@ fn a_makers_series_is_listed_once_and_placed_by_its_value() {
     let err = b.last().unwrap()["error"].as_str().unwrap();
     assert!(err.contains("ERJ-3EKF4751V") && err.contains("ERJ-3EKF4871V"), "{err}");
 }
+
+#[test]
+fn a_murata_mlcc_loses_capacitance_under_dc_bias_as_its_data_sheet_shows() {
+    // GRM188R61C106MA73 (10 µF X5R 16 V 0603): the data sheet's DC bias curve gives -49 % at 4 V, -76 % at 8 V and -89 % at 16 V.
+    // With 100 Ω the cutoff 1 / (2π R C) moves up by the same factor.
+    let f3 = |bias: &str| {
+        let (a, ok) = run(&format!("new\nadd V 1 as=V1\nvalue V1 \"{bias} AC 1\"\nadd R 100 as=R1\nadd GRM188R61C106MA73 as=C1\nnet IN V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\nac 10 10Meg ppd=40 probe=V(OUT)\n"));
+        assert!(ok, "{a:?}");
+        last(&a, "ac")["signals"]["V(OUT)"]["minus_3db_hz"].as_f64().unwrap()
+    };
+    let c = |f: f64| 1.0 / (2.0 * std::f64::consts::PI * 100.0 * f);
+    let c0 = c(f3("0"));
+    assert!((c0 / 10e-6 - 1.0).abs() < 0.02, "C at 0 V = {c0}");
+    for (v, change) in [("4", -0.49), ("8", -0.76), ("16", -0.89)] {
+        let got = c(f3(v)) / c0 - 1.0;
+        assert!((got - change).abs() < 0.04, "{v} V: {got:.3} against the data sheet's {change}");
+    }
+    // a class 1 part (CH) does not change
+    let (a, ok) = run("new\nadd V 1 as=V1\nvalue V1 \"40 AC 1\"\nadd R 1k as=R1\nadd GRM1882C1H103JA01 as=C1\nnet IN V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\nac 100 10Meg ppd=40 probe=V(OUT)\n");
+    assert!(ok, "{a:?}");
+    let f = last(&a, "ac")["signals"]["V(OUT)"]["minus_3db_hz"].as_f64().unwrap();
+    assert!((c(f) * 100.0 / 1000.0 / 10e-9 - 1.0).abs() < 0.02, "10 nF CH at 40 V: {}", c(f) / 10.0);
+}
