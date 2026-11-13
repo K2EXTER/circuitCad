@@ -263,6 +263,8 @@ pub struct SchEditor {
     wiz_open: bool,
     /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
     req_open: bool,
+    /// The tab of the requirements window that is shown.
+    req_tab: requirements::ReqTab,
     /// The window of the title block (`title_block.rs`).
     title_open: bool,
     /// Frames on the sheet round the parts of the groups and of the distances to keep in the requirements table.
@@ -651,6 +653,7 @@ impl Default for SchEditor {
             glossary_request: None,
             wiz_open: false,
             req_open: false,
+            req_tab: Default::default(),
             title_open: false,
             req_frames: true,
             req_bp_suggest: vec![],

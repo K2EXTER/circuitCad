@@ -1,0 +1,14 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/requirements.rs (the requirements window in tabs)
+回路の「こう作りたい」を書く表 (全シートで1つ)	A table of how the circuit should be built (one for all sheets)
+見に行く	Show
+理由が空の行のあるタブを開きます	Opens the tab with rows that have no reason
+配置	Placement
+近くに置く部品の組と、離しておくものどうし	Groups of parts to place close together, and things to keep apart
+例外	Exceptions
+1行が、基板の1つのネットクラスになります	Each row becomes one net class on the board
+近くに置く組 ({})	Keep close ({})
+書くと、自動配置がそのコンデンサを、その IC の電源ピンのそばに置きます	Auto-placement then puts the capacitor next to that IC's power pin
+離す組 ({})	Keep apart ({})
+基板に配線したあとの点検です。測るものを選び、パッドかネットを書きます	Checks after routing: choose what to measure and write the pads or nets
+ここに書いた指摘は「違反」に数えず、理由つきで別に出ます	Findings written here are not counted as violations; they are listed apart with the reason
