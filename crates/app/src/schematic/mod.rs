@@ -159,6 +159,8 @@ pub struct SchEditor {
     lib_open: bool,
     /// Counts the times the library was read again (the board compares its parts with the library when this changes).
     pub lib_rev: u64,
+    /// What the part lists need from the whole library, made once per library (`panel/parts.rs`).
+    lib_index: Option<std::sync::Arc<panel::parts::LibIndex>>,
     /// The library part the learner pressed 削除 for and has not yet confirmed.
     lib_delete: Option<String>,
     /// The quick-add box (key A), when open.
@@ -578,6 +580,7 @@ impl Default for SchEditor {
             props_open_analyze: false,
             lib_open: false,
             lib_rev: 0,
+            lib_index: None,
             lib_delete: None,
             quick: None,
             lib_errors,
@@ -827,7 +830,7 @@ mod pdf;
 mod svg;
 mod title_block;
 mod interact;
-mod panel;
+pub(crate) mod panel;
 mod coverage;
 mod selfheat;
 mod selfheat_tran;

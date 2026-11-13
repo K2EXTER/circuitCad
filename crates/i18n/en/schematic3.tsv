@@ -515,3 +515,5 @@ DC動作点が解けていないので、必要な定格を出せません	The D
 電源除去比: 電源の揺れが出力にどれだけ届くかです。dB がマイナスに大きいほど、よく除去しています。悪い周波数には、出力の近くにコンデンサを足すと効きます	Supply rejection: how much of the supply's ripple reaches the output. The more negative the dB, the better it is rejected. Where it is poor, a capacitor near the output helps
 大	high
 小	low
+詳しく	Details
+部品の説明の全文、モデルの出どころと限界、ピン表	The full description of the part, where its model comes from and its limits, and the pin table

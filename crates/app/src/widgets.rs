@@ -387,11 +387,25 @@ pub fn drum(ui: &mut egui::Ui, id: egui::Id, items: &[String], usable: &[bool], 
     // the wheel: whole rows, from deltas added up (a touchpad sends many small ones); the panel under it must not scroll as well
     let acc_id = id.with("wheel");
     if resp.hovered() {
-        let dy = ui.input(|i| i.smooth_scroll_delta.y);
+        // the wheel as it turns (the smoothed delta arrives over several frames, which made the drum lag behind the wheel); the
+        // smoothed one is used up too, so the panel under the drum does not scroll
+        let dy: f32 = ui.input(|i| {
+            i.raw
+                .events
+                .iter()
+                .map(|e| match e {
+                    egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta, .. } => delta.y,
+                    // a notch of a wheel: one row, like the 40 points of a smoothed notch
+                    egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta, .. } => delta.y * 40.0,
+                    egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Page, delta, .. } => delta.y * 40.0 * 5.0,
+                    _ => 0.0,
+                })
+                .sum()
+        });
+        ui.input_mut(|i| {
+            i.smooth_scroll_delta = egui::Vec2::ZERO;
+        });
         if dy != 0.0 {
-            ui.input_mut(|i| {
-                i.smooth_scroll_delta = egui::Vec2::ZERO;
-            });
             let mut acc = ui.data(|d| d.get_temp::<f32>(acc_id)).unwrap_or(0.0) + dy;
             while acc.abs() >= 40.0 {
                 // the wheel turned up shows the rows above: the smaller values

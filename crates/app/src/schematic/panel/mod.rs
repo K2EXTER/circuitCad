@@ -54,7 +54,7 @@ fn analysis_icon(key: &str) -> Option<crate::icons::Icon> {
     })
 }
 
-mod parts;
+pub(crate) mod parts;
 mod properties;
 
 impl SchEditor {
@@ -62,7 +62,7 @@ impl SchEditor {
         // the drawing tab's checks stay at the bottom, in sight however long the lists above grow
         if self.panel_tab == PanelTab::Draw {
             egui::Panel::bottom("sch_draw_checks").frame(egui::Frame::NONE.inner_margin(egui::Margin { left: 0, right: 0, top: 6, bottom: 0 })).resizable(false).show(ui, |ui| {
-                let bar = ui.spacing().scroll.allocated_width() + 10.0;
+                let bar = ui.spacing().scroll.allocated_width() + 18.0;
                 ui.set_max_width((ui.available_width() - bar).max(100.0));
                 self.panel_erc(ui);
                 if ui.button(i18n::tr("操作ガイド (F1)")).on_hover_text(i18n::tr("マウスとキーの操作の一覧を開きます")).clicked() {
@@ -72,8 +72,8 @@ impl SchEditor {
         }
         // the panel is taller than a small window: let it scroll instead of hiding the bottom controls
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            // leave room on the right so this bar does not sit on top of the inner part-list bar
-            let bar = ui.spacing().scroll.allocated_width() + 10.0;
+            // leave room on the right so this bar does not sit on top of the inner part-list bar, with a clear gap between the two
+            let bar = ui.spacing().scroll.allocated_width() + 18.0;
             ui.set_max_width((ui.available_width() - bar).max(100.0));
             self.side_panel_body(ui)
         });
@@ -227,7 +227,8 @@ impl SchEditor {
     }
 
     pub(super) fn panel_erc(&mut self, ui: &mut egui::Ui) {
-        crate::widgets::group_gap(ui);
+        // it sits in the bottom panel, whose edge is the line above it (a line of its own here made the line double)
+        ui.add_space(crate::theme::SPACE_S);
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
         if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text(i18n::tr("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です")).clicked() {
             self.problems = erc(&self.sch);
@@ -294,8 +295,9 @@ impl SchEditor {
         }
     }
 
+    /// The windows of the part form and the KiCad import (nothing is drawn in the panel itself, so no gap or line goes before it: a
+    /// line was left under the part buttons).
     pub(super) fn panel_forms(&mut self, ui: &mut egui::Ui) {
-        crate::widgets::group_gap(ui);
         if let Some(mut form) = self.form.take() {
             let mut open = true;
             let mut saved = None;

@@ -48,25 +48,10 @@ impl SchEditor {
         crate::widgets::group_gap(ui);
         ui.spacing_mut().item_spacing.y = 5.0;
         let mut chosen = None;
+        // what the lists need from the whole library (thousands of series values), worked out once per library
+        let index = self.lib_index();
         // library parts hang under the basic part of their kind (capacitor, diode, transistor), grouped by family
-        type Family<'a> = (Kind, Vec<(&'a str, Vec<usize>)>);
-        let families: Vec<Family> = [Kind::Capacitor, Kind::Diode, Kind::Npn]
-            .into_iter()
-            .map(|k| {
-                let names: &[&str] = match k {
-                    Kind::Capacitor => &["積層セラミック", "電解", "タンタル", "フィルム"],
-                    Kind::Diode => &["整流・スイッチング", "ショットキー", "ツェナー"],
-                    _ => &["NPN", "PNP", "MOSFET Nch", "MOSFET Pch"],
-                };
-                let groups = names
-                    .iter()
-                    .map(|f| (*f, (0..self.library.len()).filter(|&i| !in_series(&self.library[i]) && part_family(k, &self.library[i]) == Some(*f)).collect::<Vec<_>>()))
-                    .filter(|(_, v)| !v.is_empty())
-                    .collect::<Vec<_>>();
-                (k, groups)
-            })
-            .filter(|(_, g)| !g.is_empty())
-            .collect();
+        let families = &index.families;
         let basic_title = if self.basic_open { egui::RichText::new(i18n::tr("基本の部品")).strong() } else { egui::RichText::new(i18n::tr("基本の部品")) };
         let (_, basic_clicked) = crate::widgets::band_header(ui, "basic", basic_title, self.basic_open, true, |ui| {
             crate::widgets::well(ui, |ui| {
@@ -133,26 +118,27 @@ impl SchEditor {
             }
         }
         // a series (one part per value) counts as one part and shows as one row: the chosen value's part, else its default value's
-        let rep_of = |s: &part_lib::series::SeriesDef| -> Option<usize> {
-            if let Some(k) = self.place_lib.filter(|&k| self.library.get(k).and_then(|d| part_lib::series::member(&d.name)).is_some_and(|(x, _)| x.series == s.series)) {
-                return Some(k);
-            }
-            let name = s.part_name(s.default_value());
-            self.library.iter().position(|d| d.name == name)
-        };
-        let reps: Vec<usize> = part_lib::series::bundled().iter().filter_map(rep_of).collect();
-        let library_count = self.library.iter().filter(|d| !in_series(d)).count() + reps.len();
+        let chosen_series = self.place_lib.and_then(|k| self.library.get(k)).and_then(|d| part_lib::series::member(&d.name)).map(|(x, _)| x.series.clone());
+        let reps: Vec<usize> = part_lib::series::bundled()
+            .iter()
+            .zip(&index.series_defaults)
+            .filter_map(|(s, &default)| if chosen_series.as_deref() == Some(s.series.as_str()) { self.place_lib } else { default })
+            .collect();
+        let library_count = index.plain_count + reps.len();
         let library_title = crate::widgets::count_title(ui, "ライブラリ部品", library_count);
+        // the list fills what the panel shows below it, less what came under the list last frame (the part card, tall for a series
+        // with its drums, and the buttons), so the panel itself does not have to scroll: its bar would sit next to the list's
+        let below_id = egui::Id::new("lib_list_below");
+        let below = ui.data(|d| d.get_temp::<f32>(below_id)).unwrap_or(215.0);
+        let mut list_end: Option<f32> = None;
         let (_, library_clicked) = crate::widgets::band_header(ui, "library", library_title, self.lib_open, true, |ui| {
             // everything inside the library group sits in one sunken well joined to the band; the indent line is not needed there
             crate::widgets::well(ui, |ui| {
             ui.visuals_mut().indent_has_left_vline = false;
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text(i18n::tr("検索 (名前・説明・ピン名・パッケージ)")).desired_width(f32::INFINITY).margin(egui::Margin::symmetric(6, 7)))
                 .on_hover_text(i18n::tr("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます"));
-            let cat_of = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
-            let mut cats: Vec<String> = self.library.iter().map(cat_of).collect();
-            cats.sort();
-            cats.dedup();
+            let cat_of = |i: usize| index.cat[i].as_str();
+            let cats = &index.cats;
             ui.horizontal(|ui| {
                 // the same width and height as the search field above: it takes what the "◎のみ" box leaves
                 ui.spacing_mut().button_padding.y = 5.0;
@@ -162,7 +148,7 @@ impl SchEditor {
                     .selected_text(if self.lib_cat.is_empty() { "すべてのカテゴリ".to_string() } else { self.lib_cat.clone() })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.lib_cat, String::new(), i18n::tr("すべてのカテゴリ"));
-                        for c in &cats {
+                        for c in cats {
                             ui.selectable_value(&mut self.lib_cat, c.clone(), c);
                         }
                     }).response.on_hover_text(i18n::tr("ライブラリ部品の分類。選んだ分類だけを一覧に出します"));
@@ -174,11 +160,11 @@ impl SchEditor {
             let shown: Vec<usize> = (0..self.library.len())
                 .filter(|&i| {
                     let d = &self.library[i];
-                    if (!self.lib_cat.is_empty() && self.lib_cat != cat_of(d)) || (self.lib_sim_only && d.sim.is_none()) {
+                    if (!self.lib_cat.is_empty() && self.lib_cat != cat_of(i)) || (self.lib_sim_only && d.sim.is_none()) {
                         return false;
                     }
                     // a series' other values only when the search is that part number
-                    if in_series(d) && !reps.contains(&i) {
+                    if index.in_series[i] && !reps.contains(&i) {
                         return !f.is_empty() && d.name.to_lowercase() == f;
                     }
                     if f.is_empty() {
@@ -186,11 +172,11 @@ impl SchEditor {
                     }
                     let pins = d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ");
                     let series = part_lib::series::member(&d.name).map(|(s, _)| format!("{} {} {}", s.series, s.maker, s.quality.join(" "))).unwrap_or_default();
-                    [d.name.as_str(), d.description.as_str(), cat_of(d).as_str(), pins.as_str(), d.footprint_name().as_str(), series.as_str()].iter().any(|t| t.to_lowercase().contains(&f))
+                    [d.name.as_str(), d.description.as_str(), cat_of(i), pins.as_str(), d.footprint_name().as_str(), series.as_str()].iter().any(|t| t.to_lowercase().contains(&f))
                 })
                 .collect();
             // the list fills what is left of the window (the part card and "部品を作る" stay below it)
-            let list_height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 215.0).clamp(160.0, 900.0);
+            let list_height = (ui.clip_rect().bottom() - ui.cursor().top() - below - 8.0).clamp(120.0, 900.0);
             let by_name = |n: &String| self.library.iter().position(|d| &d.name == n);
             let favs: Vec<usize> = self.lib_prefs.fav.iter().filter_map(by_name).collect();
             let recents: Vec<usize> = self.lib_prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
@@ -241,10 +227,10 @@ impl SchEditor {
                 }
                 // grouped by category (folded unless searching), then by name
                 let mut order = shown.clone();
-                order.sort_by_key(|&i| (cat_of(&self.library[i]), self.library[i].name.to_lowercase()));
+                order.sort_by_key(|&i| (cat_of(i), self.library[i].name.to_lowercase()));
                 let mut groups: Vec<(String, Vec<usize>)> = vec![];
                 for i in order {
-                    let c = cat_of(&self.library[i]);
+                    let c = cat_of(i).to_string();
                     match groups.last_mut() {
                         Some((g, v)) if *g == c => v.push(i),
                         _ => groups.push((c, vec![i])),
@@ -266,6 +252,7 @@ impl SchEditor {
                     });
                 }
             });
+            list_end = Some(ui.cursor().top());
             // a line under the scrolling part: a row cut by the edge reads as scrolled, not as overlapping the notes below
             ui.add_space(2.0);
             ui.separator();
@@ -300,20 +287,30 @@ impl SchEditor {
                     } else if ui.small_button(i18n::tr("削除…")).on_hover_text(i18n::tr("この部品を、ライブラリから消します (押したあとに、もう一度確かめます)。同梱の部品も消せて、消したものは、次に起動しても戻りません。回路図や基板に置いた部品は、そのまま残ります")).clicked() {
                         self.lib_delete = Some(d.name.clone());
                     }
-                    ui.small(&d.description);
-                    if let Some(m) = &d.sim {
-                        super::origin_ui(ui, &d.name, m, "lib_origin");
-                        limits_ui(ui, &m.limits, "lib_limits");
+                    // the first sentence of the description; the rest, where the model comes from and the pins fold under "詳しく", so a long
+                    // description (a maker's series runs to ten lines) does not push the list and the buttons out of the panel
+                    let first = d.description.split_inclusive('。').next().unwrap_or("").trim();
+                    if !first.is_empty() {
+                        ui.add(egui::Label::new(egui::RichText::new(first).small()).wrap()).on_hover_text(&d.description);
                     }
-                    egui::CollapsingHeader::new(i18n::tr("ピン表")).id_salt("lib_pins").show(ui, |ui| {
-                        egui::Grid::new("lib_pin_grid").num_columns(2).show(ui, |ui| {
-                            for p in &d.pins {
-                                ui.small(&p.number);
-                                ui.small(&p.name);
-                                ui.end_row();
-                            }
+                    egui::CollapsingHeader::new(i18n::tr("詳しく")).id_salt("lib_details").default_open(false).show(ui, |ui| {
+                        if first.len() < d.description.trim().len() {
+                            ui.small(&d.description);
+                        }
+                        if let Some(m) = &d.sim {
+                            super::origin_ui(ui, &d.name, m, "lib_origin");
+                            limits_ui(ui, &m.limits, "lib_limits");
+                        }
+                        egui::CollapsingHeader::new(i18n::tr("ピン表")).id_salt("lib_pins").show(ui, |ui| {
+                            egui::Grid::new("lib_pin_grid").num_columns(2).show(ui, |ui| {
+                                for p in &d.pins {
+                                    ui.small(&p.number);
+                                    ui.small(&p.name);
+                                    ui.end_row();
+                                }
+                            });
                         });
-                    });
+                    }).header_response.on_hover_text(i18n::tr("部品の説明の全文、モデルの出どころと限界、ピン表"));
                     ui.small(if d.sim.is_some() { i18n::tr("シミュレーションモデルあり ◎") } else { i18n::tr("シミュレーションモデルなし (基板設計用)") });
                 });
             }
@@ -365,6 +362,10 @@ impl SchEditor {
         if bar[2].clone().on_hover_text(i18n::tr("保存したスニペットを選んで、いまの回路の空いた所に置きます。部品番号は新しくなります。置いたあと、ドラッグで動かせます")).clicked() {
             self.load_snippet_dialog();
         }
+        if let Some(end) = list_end {
+            let used = ui.cursor().top() - end;
+            ui.data_mut(|d| d.insert_temp(below_id, used));
+        }
         if let Some(i) = chosen {
             self.choose_library_part(i);
         }
@@ -407,6 +408,70 @@ pub(super) fn lib_hover(d: &part_lib::PartDef) -> String {
 /// Is the part one value of a bundled series (shown as the series' one row)?
 fn in_series(d: &PartDef) -> bool {
     part_lib::series::member(&d.name).is_some()
+}
+
+/// What the part lists need from the whole library, made once per library (it holds thousands of series values, and going through
+/// all of them every frame made the panel slow: 23 ms a frame, so the value drum lagged).
+pub(crate) struct LibIndex {
+    /// The library it was made from: its reload count and length.
+    key: (u64, usize),
+    /// Per part: one value of a bundled series.
+    in_series: Vec<bool>,
+    /// Per part: its category ("その他" when it has none), and every category once, sorted.
+    cat: Vec<String>,
+    cats: Vec<String>,
+    /// Per bundled series: its default value's part.
+    series_defaults: Vec<Option<usize>>,
+    /// The parts not in a series.
+    plain_count: usize,
+    /// The library parts under the capacitor, diode and transistor cells, by family.
+    families: Vec<(Kind, Vec<(&'static str, Vec<usize>)>)>,
+}
+
+impl LibIndex {
+    fn new(library: &[PartDef], key: (u64, usize)) -> Self {
+        let in_series: Vec<bool> = library.iter().map(in_series).collect();
+        let cat: Vec<String> = library.iter().map(|d| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() }).collect();
+        let mut cats = cat.clone();
+        cats.sort();
+        cats.dedup();
+        let by_name: std::collections::HashMap<&str, usize> = library.iter().enumerate().map(|(i, d)| (d.name.as_str(), i)).collect();
+        let series_defaults = part_lib::series::bundled().iter().map(|s| by_name.get(s.part_name(s.default_value()).as_str()).copied()).collect();
+        let plain_count = in_series.iter().filter(|x| !**x).count();
+        let families = [Kind::Capacitor, Kind::Diode, Kind::Npn]
+            .into_iter()
+            .map(|k| {
+                let names: &[&'static str] = match k {
+                    Kind::Capacitor => &["積層セラミック", "電解", "タンタル", "フィルム"],
+                    Kind::Diode => &["整流・スイッチング", "ショットキー", "ツェナー"],
+                    _ => &["NPN", "PNP", "MOSFET Nch", "MOSFET Pch"],
+                };
+                let groups = names
+                    .iter()
+                    .map(|f| (*f, (0..library.len()).filter(|&i| !in_series[i] && part_family(k, &library[i]) == Some(*f)).collect::<Vec<_>>()))
+                    .filter(|(_, v)| !v.is_empty())
+                    .collect::<Vec<_>>();
+                (k, groups)
+            })
+            .filter(|(_, g)| !g.is_empty())
+            .collect();
+        Self { key, in_series, cat, cats, series_defaults, plain_count, families }
+    }
+}
+
+impl SchEditor {
+    /// The library's index, made again when the library was read again or a part was added or removed.
+    fn lib_index(&mut self) -> std::sync::Arc<LibIndex> {
+        let key = (self.lib_rev, self.library.len());
+        match &self.lib_index {
+            Some(x) if x.key == key => x.clone(),
+            _ => {
+                let x = std::sync::Arc::new(LibIndex::new(&self.library, key));
+                self.lib_index = Some(x.clone());
+                x
+            }
+        }
+    }
 }
 
 /// Tooltip of a series' row.
@@ -593,5 +658,40 @@ mod drum_tests {
         assert_eq!(super::trim_figure(100), "1.0");
         assert_eq!(super::trim_figure(102), "1.02");
         assert_eq!(super::trim_figure(976), "9.76");
+    }
+}
+
+#[cfg(test)]
+mod speed_tests {
+    use super::*;
+
+    /// How long a frame of the drawing panel takes with the library open and a series part on the card (the drum turns once a
+    /// frame, so a slow frame is a slow drum). `cargo test -p app library_panel_frame_time -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn library_panel_frame_time() {
+        let mut e = SchEditor::default();
+        e.lib_open = true;
+        e.basic_open = false;
+        let k = e.library.iter().position(|d| part_lib::series::member(&d.name).is_some()).expect("a series part");
+        e.choose_library_part(k);
+        println!("library: {} parts", e.library.len());
+        let ctx = egui::Context::default();
+        let mut times = vec![];
+        for _ in 0..30 {
+            let t = std::time::Instant::now();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+                egui::Panel::left("sch_tools").default_size(crate::PANEL_WIDTH).show(ui, |ui| e.side_panel(ui));
+            });
+            out.textures_delta.clear();
+            times.push(t.elapsed().as_secs_f64() * 1000.0);
+        }
+        times.sort_by(f64::total_cmp);
+        println!("panel frame: median {:.2} ms, worst {:.2} ms", times[15], times[29]);
+        let t = std::time::Instant::now();
+        for _ in 0..20 {
+            e.choose_library_part(k);
+        }
+        println!("choose_library_part: {:.2} ms each", t.elapsed().as_secs_f64() * 1000.0 / 20.0);
     }
 }
