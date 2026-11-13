@@ -437,3 +437,5 @@ DRC の違反	DRC violations
 「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。電流と電圧降下・放熱もここで確かめます	The DRC checks the rules the factory can make (design rules): tracks too close, copper over the board edge and so on. Currents, voltage drop and heat are checked here too
 ④ 発注する	④ Order
 出来上がりを 3D で見て、「発注の準備」で発注先を選び、工場に渡すデータ (ガーバー) を作ります	See the finished board in 3D, then "Prepare order…" picks a maker and writes the files for the factory (Gerber)
+作業の設定 (グリッド {:.2} mm)	Work settings (grid {:.2} mm)
+{}の設定	{} settings

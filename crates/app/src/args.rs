@@ -390,6 +390,13 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         && let Some(n) = args.get(i + 1).and_then(|n| n.parse::<usize>().ok()) {
             app.board_ed.select_track(n);
         }
+    // --board-tool track | via | zone ...: the "手で描く" tab with that tool picked (its settings open)
+    if let Some(i) = args.iter().position(|a| a == "--board-tool")
+        && let Some(name) = args.get(i + 1)
+        && !app.board_ed.pick_tool_named(name)
+    {
+        eprintln!("--board-tool {name}: no such tool (select, track, via, measure, zone, keepout, padth, padsmd, hole, rect, poly, silk, text)");
+    }
     // --select-board text:N | label:R1 | silk:N | R1: something on the board picked (its settings in the panel)
     if let Some(i) = args.iter().position(|a| a == "--select-board")
         && let Some(w) = args.get(i + 1) {

@@ -332,7 +332,6 @@ impl BoardEditor {
                 self.help_request = Some(crate::help::HelpTab::Board);
             }
             } else {
-            group_heading(ui, i18n::tr("手で描く (ツール)"), i18n::tr("ここで選んだツールで、基板の上に自分で描き込みます (数字キー 1〜0 でも選べます)"));
             ui.scope(|ui| {
                 if wrap {
                     // icon-only: the icons are one wrapped block, and the picked tool's settings go under the whole block
@@ -340,21 +339,13 @@ impl BoardEditor {
                     ui.horizontal_wrapped(|ui| self.tool_buttons(ui, TOOLS));
                     self.tool_options(ui);
                 } else {
-                    // three groups of joined bars; the picked tool's settings open right under its own group
+                    // three groups of joined bars that stay where they are; the picked tool's settings go under all of them
                     for (name, tools) in TOOL_GROUPS {
-                        ui.label(egui::RichText::new(*name).weak().small());
-                        // a picked tool with settings: the bar and the box under it are one piece (square where they meet, no gap)
-                        let joined = tools.iter().any(|(t, _)| *t == self.tool) && self.has_tool_options();
-                        let gap = ui.spacing().item_spacing.y;
-                        if joined {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                        }
-                        self.tool_bar(ui, tools, joined);
-                        if joined {
-                            self.tool_options(ui);
-                            ui.spacing_mut().item_spacing.y = gap;
-                        }
+                        ui.label(egui::RichText::new(i18n::tr_dyn(name)).weak().small());
+                        self.tool_bar(ui, tools, false);
                     }
+                    ui.add_space(2.0);
+                    self.tool_options(ui);
                 }
             });
             ui.horizontal(|ui| {
@@ -369,7 +360,9 @@ impl BoardEditor {
                     self.redo();
                 }
             });
-            crate::widgets::section_header(ui, egui::Id::new("board_sec_作業"), true, "作業の設定", "作業する層・配線のドラッグ・範囲選択・延長線トラッキング・グリッドなど、基板を描くときの設定です", |ui| {
+            // folded at first (rarely changed); the grid, which is, stays in sight on the band
+            let title = i18n::trf!("作業の設定 (グリッド {:.2} mm)", self.grid);
+            crate::widgets::section_header(ui, egui::Id::new("board_sec_作業"), false, &title, "作業する層・配線のドラッグ・範囲選択・延長線トラッキング・グリッドなど、基板を描くときの設定です", |ui| {
                 ui.horizontal(|ui| {
                     ui.label(i18n::tr("作業層"));
                     crate::icons::help(ui, concat!("画面右上の「層」で切り替えます (L キーでも順に切り替わります)。",
@@ -418,6 +411,29 @@ impl BoardEditor {
         }
     }
 
+    /// The "手で描く" tab with the tool of that name picked (command line `--board-tool`). False for a name that is no tool.
+    pub fn pick_tool_named(&mut self, name: &str) -> bool {
+        let t = match name {
+            "select" => Tool::Select,
+            "track" => Tool::Track,
+            "via" => Tool::Via,
+            "measure" => Tool::Measure,
+            "zone" => Tool::Zone,
+            "keepout" => Tool::Keepout,
+            "padth" => Tool::PadTh,
+            "padsmd" => Tool::PadSmd,
+            "hole" => Tool::Hole,
+            "rect" => Tool::OutlineRect,
+            "poly" => Tool::OutlinePoly,
+            "silk" => Tool::Silk,
+            "text" => Tool::Text,
+            _ => return false,
+        };
+        self.panel_tab = PanelTab::Draw;
+        self.set_tool(t);
+        true
+    }
+
     pub(super) fn set_tool(&mut self, t: Tool) {
         self.tool = t;
         self.clear_tracking();
@@ -444,8 +460,12 @@ impl BoardEditor {
         if !self.has_tool_options() {
             return;
         }
-        // a bordered box right under the tool bar: it belongs to the picked tool and goes when the tool changes (no heading: the picked button says which)
-        crate::widgets::plain_card(ui, |ui| self.tool_options_body(ui));
+        // a bordered box under the tool bars, headed with the tool's name: it belongs to the picked tool and goes when the tool changes
+        let full = TOOLS.iter().find(|(x, _, _)| *x == self.tool).map_or("", |(_, f, _)| *f);
+        crate::widgets::round_card(ui, |ui| {
+            ui.label(egui::RichText::new(i18n::trf!("{}の設定", i18n::tr_dyn(full))).strong());
+            self.tool_options_body(ui)
+        });
         ui.add_space(4.0);
     }
 

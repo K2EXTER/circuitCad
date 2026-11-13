@@ -194,9 +194,18 @@ pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: b
 /// A bordered box without a heading, square on top, for what hangs from the bar just above it (the settings of the picked tool) and goes
 /// away with it: the same border and inner margin as the cards of the folds, no band and no arrow.
 pub fn plain_card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    card_with_corners(ui, egui::CornerRadius { nw: 0, ne: 0, sw: 4, se: 4 }, body)
+}
+
+/// The same box standing on its own (round on all four corners): the settings of the picked tool under the board's tool bars.
+pub fn round_card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    card_with_corners(ui, egui::CornerRadius::same(4), body)
+}
+
+fn card_with_corners<R>(ui: &mut egui::Ui, corners: egui::CornerRadius, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let framed = egui::Frame::new()
         .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(75)))
-        .corner_radius(egui::CornerRadius { nw: 0, ne: 0, sw: 4, se: 4 })
+        .corner_radius(corners)
         .inner_margin(egui::Margin::symmetric(6, 6))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
