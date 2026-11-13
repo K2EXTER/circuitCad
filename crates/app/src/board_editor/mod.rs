@@ -342,6 +342,8 @@ pub struct BoardEditor {
     drag_text: Option<(usize, Point)>,
     /// The width of the next silk line (mm; the last one set on a line).
     silk_width: f64,
+    /// The height of a text the text tool puts down, mm (raised to the shop's smallest when that is larger).
+    text_height: f64,
     /// The text being typed for the selected free text (index, text): kept while it is not one the font prints, with the reason.
     text_edit: Option<(usize, String, Option<String>)>,
     /// The wire tool in its trunk mode ("幹で引く"): two pads of a net side by side, then a place to go to.
@@ -573,6 +575,7 @@ impl Default for BoardEditor {
             drag_label: None,
             drag_text: None,
             silk_width: 0.15,
+            text_height: 1.0,
             text_edit: None,
             trunk_mode: false,
             trunk_pads: vec![],

@@ -455,3 +455,7 @@ DRC の違反	DRC violations
 両端が丸い長円のパッド。幅と高さが同じなら円になります	An oval pad with round ends. With the same width and height it is a circle
 穴のない、表面だけのパッドです (裏面を作業中なら裏面)	A pad on the surface only, with no hole (on the bottom if you are working on the bottom)
 縦横を入れ替え	Swap width/height
+これから引くシルクの線の太さ。発注先が印刷できる {min:.3} mm より細くはできません (下限は、発注の窓で選ぶ発注先で変わります)。引いた線の太さは、線を選ぶと変えられます	The width of the silkscreen lines you draw next. It cannot be thinner than the {min:.3} mm the shop can print (the limit depends on the shop chosen in the order window). Select a drawn line to change its width
+クリックで始点、続けてクリックで線を引きます。右クリックか Esc で終わります	Click to start, click again to draw each line. Right-click or Esc ends it
+これから置く文字の高さ。発注先が読める大きさに印刷できる {min:.2} mm より小さくはできません。置いた文字は、選ぶと内容・大きさ・向きを変えられます	The height of the text you place next. It cannot be smaller than the {min:.2} mm the shop can print legibly. Select a placed text to change its content, size and angle
+クリックした所に「TEXT」を置きます。置いた文字は選ばれるので、下で内容を書き換えます	Places "TEXT" where you click. The placed text is selected, so edit its content below

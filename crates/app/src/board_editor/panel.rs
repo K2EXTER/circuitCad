@@ -97,7 +97,11 @@ impl BoardEditor {
                     (PanelTab::Draw, "手で描く", "ツールで基板に自分で描き込みます。作業する層・グリッド・層構成もここです"),
                 ],
             );
-            self.selection_panel(ui);
+            // in the steps the selection comes first; in the drawing tab it comes under the tool bars and the tool's settings, so the
+            // bars stay where they are when something is picked (a text or a silk line just put down is picked)
+            if self.panel_tab == PanelTab::Steps {
+                self.selection_panel(ui);
+            }
             if self.panel_tab == PanelTab::Steps {
             // the first thing to press, so it is not inside a fold
             if crate::widgets::primary_button_wide(ui, true, "回路図から取り込み").on_hover_text(i18n::tr("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します")).clicked() {
@@ -334,6 +338,7 @@ impl BoardEditor {
                     self.tool_options(ui);
                 }
             });
+            self.selection_panel(ui);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let half = egui::CornerRadius { nw: 4, sw: 4, ne: 0, se: 0 };
@@ -487,8 +492,8 @@ impl BoardEditor {
     /// Settings of the tool that is picked, shown right under the toolbar: how a wire is laid for the wire tool,
     /// the size of a via for the via tool (autoroute uses both).
     /// Whether the picked tool has settings to show under the bar.
-    fn has_tool_options(&self) -> bool {
-        matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone | Tool::Keepout | Tool::OutlineRect | Tool::OutlinePoly)
+    pub(super) fn has_tool_options(&self) -> bool {
+        matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone | Tool::Keepout | Tool::OutlineRect | Tool::OutlinePoly | Tool::Silk | Tool::Text)
     }
 
     fn tool_options(&mut self, ui: &mut egui::Ui) {
@@ -560,6 +565,18 @@ impl BoardEditor {
         ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix(i18n::tr("ビア径 ")).suffix(" mm")).on_hover_text(i18n::tr("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように"));
         ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix(i18n::tr("ビア穴 ")).suffix(" mm"))
             .on_hover_text(i18n::tr("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう"));
+            }
+            Tool::Silk => {
+                let min = self.board.rules.min_silk_width;
+                ui.add(egui::DragValue::new(&mut self.silk_width).speed(0.01).range(min..=pcb_core::silkedit::MAX_LINE_WIDTH).prefix(i18n::tr("線幅 ")).suffix(" mm"))
+                    .on_hover_text(i18n::trf!("これから引くシルクの線の太さ。発注先が印刷できる {min:.3} mm より細くはできません (下限は、発注の窓で選ぶ発注先で変わります)。引いた線の太さは、線を選ぶと変えられます"));
+                ui.small(i18n::tr("クリックで始点、続けてクリックで線を引きます。右クリックか Esc で終わります"));
+            }
+            Tool::Text => {
+                let min = self.board.rules.min_silk_text;
+                ui.add(egui::DragValue::new(&mut self.text_height).speed(0.05).range(min.max(0.3)..=20.0).prefix(i18n::tr("文字の高さ ")).suffix(" mm"))
+                    .on_hover_text(i18n::trf!("これから置く文字の高さ。発注先が読める大きさに印刷できる {min:.2} mm より小さくはできません。置いた文字は、選ぶと内容・大きさ・向きを変えられます"));
+                ui.small(i18n::tr("クリックした所に「TEXT」を置きます。置いた文字は選ばれるので、下で内容を書き換えます"));
             }
             Tool::PadSmd => {
                 // a surface pad has no hole and need not be square: its own width, height and shape

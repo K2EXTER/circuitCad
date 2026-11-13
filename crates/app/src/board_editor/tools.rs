@@ -349,7 +349,7 @@ impl BoardEditor {
             Tool::Measure => self.measure_click(p),
             Tool::Text => {
                 self.checkpoint();
-                let height = 1.0f64.max(self.board.rules.min_silk_text);
+                let height = self.text_height.max(self.board.rules.min_silk_text);
                 match pcb_core::silkedit::add_text(&mut self.board, "TEXT", p, height, 0, self.side) {
                     Ok(i) => {
                         self.selected = Some(Item::Text(i));
