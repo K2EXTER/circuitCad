@@ -32,7 +32,7 @@ impl BoardEditor {
             (lo, hi) = (Point::new(lo.x.min(a.x), lo.y.min(a.y)), Point::new(hi.x.max(b.x), hi.y.max(b.y)));
         }
         let (w, h) = ((hi.x - lo.x).max(5.0) + 10.0, (hi.y - lo.y).max(5.0) + 10.0);
-        // the "物の表示とロック" panel floats over the right edge of the canvas, and a running lesson's window over its left edge
+        // the "表示とロック" panel floats over the right edge of the canvas, and a running lesson's window over its left edge
         // (it stays there: the right top is the panel's): fit into the part of the canvas between them
         let lesson = if self.lesson.is_some() { LESSON_WINDOW_PX } else { 0.0 };
         let free = (rect.width() - OVERLAY_PANEL_PX - lesson).max(rect.width() * 0.4);

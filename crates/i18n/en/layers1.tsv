@@ -1,0 +1,9 @@
+{hidden} 個を隠し中	{hidden} hidden
+{}をロック中	{} locked
+配線を置く層をこの層にします (L キーでも順に切り替えられます)	Work on this layer (tracks go here). The L key also steps through the layers
+下の 5 種類 (部品・配線・ビア・ゾーン・シルク) を、まとめて出す / 隠す。全部が出ているときだけ明るくなります	Show / hide the 5 kinds below (parts, tracks, vias, zones, silk) at once. Lit only when all of them are shown
+補助の表示	Helpers
+まだつながっていない接続を示す黄色の線を表示します	Shows the yellow lines of connections not yet routed
+表示とロック ・ 作業: {}	Visibility and locks · working on: {}
+クリックでたたみます / ひらきます。上は銅の層 (目で表示、名前を押すとその層で作業。L キーでも切り替え)、下は物の種類ごとの目 (画面に出すか) と鍵 (選べないようにロックするか) です。明るい四角が「オン」(見えている / ロック中) です	Click to fold / unfold. At the top, the copper layers (the eye shows them; click a name to work on that layer, or press L). Below, an eye (show on screen) and a lock (cannot be picked) for each kind of thing. A lit square means "on" (shown / locked)
+隠している物やロックしている物があります。開くと、どれかが分かります	Some things are hidden or locked. Unfold to see which

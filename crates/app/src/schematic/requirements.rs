@@ -86,7 +86,7 @@ fn frame_of(&self, rect: Rect, refs: &[String]) -> Option<Rect> {
         Some(Rect::from_two_pos(self.to_screen(rect, (x0 - m, y0 - m)), self.to_screen(rect, (x1 + m, y1 + m))))
 }
 
-/// The "show" strip over the sheet (top right), made like the board's "物の表示とロック": a whitish glass box that folds down to its
+/// The "show" strip over the sheet (top right), made like the board's "表示とロック": a whitish glass box that folds down to its
 /// title, one row per kind of thing with an eye. Only while the design has a requirements table.
 pub(super) fn view_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
         use crate::icons::{fold_header, icon_label, icon_switch, Icon};

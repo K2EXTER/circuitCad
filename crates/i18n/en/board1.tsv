@@ -213,7 +213,7 @@ DRC違反が{}件あります。修正してから書き出してください	Th
 内層には配線とベタを置けます。スルーホールの部品とビアは、全部の層につながります (ブラインドビアは未対応)	Inner layers can hold tracks and pours. Through-hole parts and vias connect to all layers (blind vias are not supported)
 {total} 層にすると消える内層に、配線 {n_tracks} 本とベタ {n_zones} 個があります。先に消すか、ほかの層へ移してください	The inner layers removed by going to {total} layers have {n_tracks} tracks and {n_zones} pours. Delete them or move them to other layers first
 銅箔を {total} 層にしました	Set copper layers to {total}
-物の表示とロック	Visibility and locks
+表示とロック	Visibility and locks
 クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」、鍵は「選べないようにロックするか」です。明るい四角が「オン」(見えている / ロック中)です	Click to collapse / expand. For each kind, the eye is "show on screen" and the lock is "lock so it can't be selected". A bright box means "on" (shown / locked)
 すべての表示を、まとめて出す / 隠す (下の目の一括操作)。いまは全部が出ているときだけ明るくなります	Shows / hides everything at once (all the eyes below). Bright only when everything is shown
 すべて	All
@@ -282,7 +282,7 @@ DRC違反が{}件あります。修正してから書き出してください	Th
 長さ合わせ: 目標 {:.2} mm に、{ok} 本のネットを蛇行で合わせました{tail}	Length matching: matched {ok} nets to the target {:.2} mm with meanders{tail}
 # crates/app/src/board_editor/livedrc.rs
 ルール違反 {n} 件 (赤い × の所。ポインタを合わせると内容)	{n} rule violations (at the red ×. Point at one for details)
-ルール違反 {n} 件 (印は隠しています。右上の「物の表示とロック」の「点検の印」で出せます)	{n} rule violations (marks are hidden. Show them with "Check marks" in "Visibility and locks" at the top right)
+ルール違反 {n} 件 (印は隠しています。右上の「表示とロック」の「点検の印」で出せます)	{n} rule violations (marks are hidden. Show them with "Check marks" in "Visibility and locks" at the top right)
 作業中も点検する	Check while working
 配線を引いたり部品を動かしたりするたびに、線どうしの間隔・穴・基板の端などの規則を裏で調べ直して、違反の所に赤い × を出します (ポインタを合わせると内容が出ます)。\n「DRC を実行」は、仕上げの形・ベタの分断・未配線も含めて一覧にします。発注の前には、そちらも実行してください	Each time you route a track or move a part, rechecks rules such as spacing between lines, holes and board edges in the background and puts a red × at violations (point at one for details).\n"Run DRC" lists everything, including final shapes, split pours and unrouted connections. Run that too before ordering
 いま {n} 件	{n} now

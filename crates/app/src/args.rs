@@ -397,6 +397,10 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     {
         eprintln!("--board-tool {name}: no such tool (select, track, via, measure, zone, keepout, padth, padsmd, hole, rect, poly, silk, text)");
     }
+    // --board-view-open: the "表示とロック" box over the board unfolded
+    if args.iter().any(|a| a == "--board-view-open") {
+        app.board_ed.open_view_box = true;
+    }
     // --select-board text:N | label:R1 | silk:N | R1: something on the board picked (its settings in the panel)
     if let Some(i) = args.iter().position(|a| a == "--select-board")
         && let Some(w) = args.get(i + 1) {

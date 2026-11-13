@@ -43,227 +43,207 @@ impl BoardEditor {
 }
 
 impl BoardEditor {
-    /// What to show and what can be picked, as a table (one row per kind of thing: an eye and a lock) on a glass strip over the canvas
-    /// (under the layer switcher, same Area). Folds down to a small title.
-    fn view_frame(&mut self, ui: &mut egui::Ui) -> f32 {
-        use crate::icons::{icon_label, icon_switch, Icon};
-        let id = egui::Id::new("view_overlay_fold");
-        {
-            egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
-                ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
-                if fold_header(ui, id, "物の表示とロック", true, "クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」、鍵は「選べないようにロックするか」です。明るい四角が「オン」(見えている / ロック中)です") {
-                    let w = ui.scope(|ui| {
-                        let before = self.pick;
-                        // (icon, name, tip, eye, lock): None where a kind has no such switch
-                        egui::Grid::new("view_lock_grid").spacing(Vec2::new(4.0, 2.0)).show(ui, |ui| {
-                            let req = pcb_core::requirements::any(&self.board);
-                            let sheets = !self.board.part_sheets.is_empty();
-                            let v = self.vis;
-                            let mut all_shown = v.parts && v.tracks && v.vias && v.zones && v.silk && v.airwires && v.nets && v.ruler && v.keepouts && v.dimensions && v.drc_marks
-                                && (!sheets || self.show_sheets) && (!req || (self.show_req_marks && self.show_req_lines));
-                            if icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut all_shown, "すべての表示を、まとめて出す / 隠す (下の目の一括操作)。いまは全部が出ているときだけ明るくなります").changed() {
-                                let a = all_shown;
-                                (self.vis.tracks, self.vis.vias, self.vis.zones, self.vis.silk, self.vis.parts) = (a, a, a, a, a);
-                                (self.vis.airwires, self.vis.nets, self.vis.ruler) = (a, a, a);
-                                (self.vis.keepouts, self.vis.dimensions, self.vis.drc_marks) = (a, a, a);
-                                (self.show_sheets, self.show_req_marks, self.show_req_lines) = (a, a, a);
-                            }
-                            ui.label(i18n::tr("すべて"));
-                            let p = self.pick;
-                            let mut all_locked = !(p.parts || p.pads || p.tracks || p.vias || p.zones || p.silk);
-                            if icon_switch(ui, Icon::Lock, Icon::Unlock, &mut all_locked, "すべての種類を、まとめてロック / 解除します (「反対の面」は別です)。ロックすると、クリックや範囲選択で選べず、ドラッグでも動きません。部品をロックすると、ビアや配線を囲んで選ぶときに部品を巻き込みません").changed() {
-                                (self.pick.parts, self.pick.pads, self.pick.tracks) = (!all_locked, !all_locked, !all_locked);
-                                (self.pick.vias, self.pick.zones, self.pick.silk) = (!all_locked, !all_locked, !all_locked);
-                            }
-                            ui.end_row();
-                            let lock = |ui: &mut egui::Ui, pick: &mut bool, tip: &str| {
-                                let mut locked = !*pick;
-                                if icon_switch(ui, Icon::Lock, Icon::Unlock, &mut locked, tip).changed() {
-                                    *pick = !locked;
-                                }
-                            };
-                            let eye = |ui: &mut egui::Ui, shown: &mut bool, tip: &str| {
-                                icon_switch(ui, Icon::Eye, Icon::EyeOff, shown, tip);
-                            };
-                            let none = |ui: &mut egui::Ui| {
-                                ui.allocate_exact_size(Vec2::splat(24.0), Sense::hover());
-                            };
-                            let kind = |ui: &mut egui::Ui, icon: Icon, name: &str| {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 2.0;
-                                    icon_label(ui, icon, name);
-                                    ui.label(i18n::tr_dyn(name));
-                                });
-                            };
-                            // a small grey heading over a group of rows (in the name column)
-                            let head = |ui: &mut egui::Ui, text: &str| {
-                                ui.label("");
-                                ui.label(egui::RichText::new(i18n::tr_dyn(text)).small().color(Color32::from_rgb(85, 100, 115)));
-                                ui.end_row();
-                            };
-                            head(ui, "基板の物");
-                            eye(ui, &mut self.vis.parts, "部品 (部品のパッド、外形、部品番号) を表示します。隠すと、部品の下の配線やベタが見やすくなります。隠している間も、配線やビアは、そのまま選べます");
-                            kind(ui, Icon::Part, "部品");
-                            lock(ui, &mut self.pick.parts, "部品をロックします。選べず、ドラッグでも動きません (範囲選択になります)");
-                            ui.end_row();
-                            none(ui);
-                            kind(ui, Icon::PadTh, "パッド・穴");
-                            lock(ui, &mut self.pick.pads, "部品に属さないパッドと取付穴をロックします");
-                            ui.end_row();
-                            eye(ui, &mut self.vis.tracks, "配線 (トラック) を表示します");
-                            kind(ui, Icon::Wire, "配線");
-                            lock(ui, &mut self.pick.tracks, "配線をロックします。選べず、動かせません");
-                            ui.end_row();
-                            eye(ui, &mut self.vis.vias, "ビアを表示します");
-                            kind(ui, Icon::Via, "ビア");
-                            lock(ui, &mut self.pick.vias, "ビアをロックします。選べず、動かせません");
-                            ui.end_row();
-                            eye(ui, &mut self.vis.zones, "ゾーン (銅を面で塗った所) を表示します");
-                            kind(ui, Icon::Zone, "ゾーン");
-                            lock(ui, &mut self.pick.zones, "ゾーン (ベタ) をロックします");
-                            ui.end_row();
-                            eye(ui, &mut self.vis.silk, "シルク (白い印刷の文字と枠) を表示します");
-                            kind(ui, Icon::Silk, "シルク");
-                            lock(ui, &mut self.pick.silk, "部品に属さないシルク線をロックします");
-                            ui.end_row();
-                            head(ui, "作業の補助");
-                            eye(ui, &mut self.vis.airwires, "未配線 (まだつながっていない接続を示す黄色の線) を表示します");
-                            kind(ui, Icon::Airwire, "未配線");
-                            none(ui);
-                            ui.end_row();
-                            eye(ui, &mut self.vis.nets, "パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
-                            kind(ui, Icon::Label, "ネット名");
-                            none(ui);
-                            ui.end_row();
-                            eye(ui, &mut self.vis.keepouts, "禁止領域 (斜線の範囲) を表示します。隠しても領域は効いたままで、DRC は中の配線・ビア・部品を指摘し、自動配線とベタは領域をよけます");
-                            kind(ui, Icon::Keepout, "禁止領域");
-                            none(ui);
-                            ui.end_row();
-                            eye(ui, &mut self.vis.dimensions, "基板に残した寸法線を表示します。隠しても、DXF と SVG の図には出ます");
-                            kind(ui, Icon::Dimension, "寸法線");
-                            none(ui);
-                            ui.end_row();
-                            eye(ui, &mut self.vis.drc_marks, "作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認する」の「作業中も点検する」です");
-                            kind(ui, Icon::DrcMark, "点検の印");
-                            none(ui);
-                            ui.end_row();
-                            if sheets || req {
-                                head(ui, "回路図から");
-                            }
-                            if sheets {
-                                eye(ui, &mut self.show_sheets, "回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます。シートの一覧は、左のパネルにあります");
-                                kind(ui, Icon::Sheet, "シートの色");
-                                none(ui);
-                                ui.end_row();
-                            }
-                            if req {
-                                eye(ui, &mut self.show_req_marks, "回路図の「設計の要件」の、近くに置く組を、枠で囲んで表示します (守れていれば緑、広がりすぎならピンク)");
-                                kind(ui, Icon::Frame, "要件の組 (枠)");
-                                none(ui);
-                                ui.end_row();
-                                eye(ui, &mut self.show_req_lines, "回路図の「設計の要件」の、離す組を、いちばん近い2つのパッドを結ぶ線と距離で表示します (足りなければピンク)");
-                                kind(ui, Icon::Gap, "要件の距離 (線)");
-                                none(ui);
-                                ui.end_row();
-                            }
-                            head(ui, "画面");
-                            eye(ui, &mut self.vis.ruler, "画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です");
-                            kind(ui, Icon::Ruler, "定規 (mm)");
-                            none(ui);
-                            ui.end_row();
-                            none(ui);
-                            kind(ui, Icon::Layers, "反対の面");
-                            icon_switch(ui, Icon::Lock, Icon::Unlock, &mut self.pick.active_side_only, "いま作業している面 (枠の色) と反対の面にある物をロックします。薄く表示している反対の面を誤って選ばなくなります。ビアと、貫通するスルーホール部品は、どちらの面でも選べます");
-                            ui.end_row();
-                        });
-                        if before.parts != self.pick.parts || before.tracks != self.pick.tracks || before.vias != self.pick.vias || before.pads != self.pick.pads || before.zones != self.pick.zones || before.silk != self.pick.silk {
-                            self.multi.retain(|it| self.pick.allows(it));
-                            if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
-                                self.selected = None;
-                            }
+    /// What is hidden or locked while the box is folded ("2 個を隠し中・部品をロック中"): so a part that will not pick or a
+    /// track that is gone is explained without opening the box. The lock on the other side is the usual state and is left out.
+    fn view_summary(&self) -> Option<String> {
+        let v = self.vis;
+        let sheets = !self.board.part_sheets.is_empty();
+        let req = pcb_core::requirements::any(&self.board);
+        let layers_hidden = self.board.copper_layers().into_iter().filter(|&l| !self.side_visible(l)).count();
+        let hidden = [v.parts, v.tracks, v.vias, v.zones, v.silk, v.airwires, v.nets, v.keepouts, v.dimensions, v.drc_marks, v.ruler].iter().filter(|x| !**x).count()
+            + usize::from(sheets && !self.show_sheets)
+            + usize::from(req && !self.show_req_marks)
+            + usize::from(req && !self.show_req_lines)
+            + layers_hidden;
+        let p = self.pick;
+        let locked: Vec<String> = [(p.parts, "部品"), (p.pads, "パッド・穴"), (p.tracks, "配線"), (p.vias, "ビア"), (p.zones, "ゾーン"), (p.silk, "シルク")]
+            .iter()
+            .filter(|(on, _)| !*on)
+            .map(|(_, n)| i18n::tr_dyn(n))
+            .collect();
+        let mut out = vec![];
+        if hidden > 0 {
+            out.push(i18n::trf!("{hidden} 個を隠し中"));
+        }
+        if !locked.is_empty() {
+            out.push(i18n::trf!("{}をロック中", locked.join(i18n::tr("・"))));
+        }
+        (!out.is_empty()).then(|| out.join(i18n::tr("・")))
+    }
+
+    /// One row per copper layer: an eye, the layer's colour and its name (a click works on that layer).
+    fn layer_rows(&mut self, ui: &mut egui::Ui) {
+        use crate::icons::{icon_switch, Icon};
+        for l in self.board.copper_layers() {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                let mut shown = self.side_visible(l);
+                if icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut shown, "この層の銅を表示 / 非表示にします").changed() {
+                    match l {
+                        Side::Top => self.vis.top = shown,
+                        Side::Bottom => self.vis.bottom = shown,
+                        Side::Inner(n) => {
+                            let bit = 1u32 << n.min(31);
+                            self.vis.inner_hidden = if shown { self.vis.inner_hidden & !bit } else { self.vis.inner_hidden | bit };
                         }
-                    }).response.rect.width();
-                    crate::icons::fold_remember_width(ui, id, w);
+                    }
                 }
-            })
-            .response
-            .rect
-            .width()
+                let (r, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
+                ui.painter().rect_filled(r, 2.0, self.side_color(l));
+                if ui.selectable_value(&mut self.side, l, l.label()).on_hover_text(i18n::tr("配線を置く層をこの層にします (L キーでも順に切り替えられます)")).clicked() {
+                    // working on a layer shows it
+                    match l {
+                        Side::Top => self.vis.top = true,
+                        Side::Bottom => self.vis.bottom = true,
+                        Side::Inner(n) => self.vis.inner_hidden &= !(1u32 << n.min(31)),
+                    }
+                }
+            });
         }
     }
 
-    /// The layer switcher floating over the canvas (top right): folds down to the name of the working layer,
-    /// unfolds to one row per copper layer with an eye (show / hide) and a radio (work on this layer).
+    /// The things on the board as a table (an eye and a lock per kind), then the helpers (unrouted lines, net names ...) as a
+    /// block of picture switches, four to a row, with their names in the hover.
+    fn things_rows(&mut self, ui: &mut egui::Ui) {
+        use crate::icons::{icon_label, icon_switch, Icon};
+        let head = |ui: &mut egui::Ui, text: &str| {
+            ui.label(egui::RichText::new(i18n::tr_dyn(text)).small().color(Color32::from_rgb(85, 100, 115)));
+        };
+        let before = self.pick;
+        head(ui, "基板の物");
+        egui::Grid::new("view_lock_grid").spacing(Vec2::new(4.0, 2.0)).show(ui, |ui| {
+            let lock = |ui: &mut egui::Ui, pick: &mut bool, tip: &str| {
+                let mut locked = !*pick;
+                if icon_switch(ui, Icon::Lock, Icon::Unlock, &mut locked, tip).changed() {
+                    *pick = !locked;
+                }
+            };
+            let eye = |ui: &mut egui::Ui, shown: &mut bool, tip: &str| {
+                icon_switch(ui, Icon::Eye, Icon::EyeOff, shown, tip);
+            };
+            let none = |ui: &mut egui::Ui| {
+                ui.allocate_exact_size(Vec2::splat(24.0), Sense::hover());
+            };
+            let kind = |ui: &mut egui::Ui, icon: Icon, name: &str| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
+                    icon_label(ui, icon, name);
+                    ui.label(i18n::tr_dyn(name));
+                });
+            };
+            // the switches for all the rows of the table (the lock on the other side is apart)
+            let v = self.vis;
+            let mut all_shown = v.parts && v.tracks && v.vias && v.zones && v.silk;
+            if icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut all_shown, "下の 5 種類 (部品・配線・ビア・ゾーン・シルク) を、まとめて出す / 隠す。全部が出ているときだけ明るくなります").changed() {
+                let a = all_shown;
+                (self.vis.tracks, self.vis.vias, self.vis.zones, self.vis.silk, self.vis.parts) = (a, a, a, a, a);
+            }
+            ui.label(i18n::tr("すべて"));
+            let p = self.pick;
+            let mut all_locked = !(p.parts || p.pads || p.tracks || p.vias || p.zones || p.silk);
+            if icon_switch(ui, Icon::Lock, Icon::Unlock, &mut all_locked, "すべての種類を、まとめてロック / 解除します (「反対の面」は別です)。ロックすると、クリックや範囲選択で選べず、ドラッグでも動きません。部品をロックすると、ビアや配線を囲んで選ぶときに部品を巻き込みません").changed() {
+                (self.pick.parts, self.pick.pads, self.pick.tracks) = (!all_locked, !all_locked, !all_locked);
+                (self.pick.vias, self.pick.zones, self.pick.silk) = (!all_locked, !all_locked, !all_locked);
+            }
+            ui.end_row();
+            eye(ui, &mut self.vis.parts, "部品 (部品のパッド、外形、部品番号) を表示します。隠すと、部品の下の配線やベタが見やすくなります。隠している間も、配線やビアは、そのまま選べます");
+            kind(ui, Icon::Part, "部品");
+            lock(ui, &mut self.pick.parts, "部品をロックします。選べず、ドラッグでも動きません (範囲選択になります)");
+            ui.end_row();
+            none(ui);
+            kind(ui, Icon::PadTh, "パッド・穴");
+            lock(ui, &mut self.pick.pads, "部品に属さないパッドと取付穴をロックします");
+            ui.end_row();
+            eye(ui, &mut self.vis.tracks, "配線 (トラック) を表示します");
+            kind(ui, Icon::Wire, "配線");
+            lock(ui, &mut self.pick.tracks, "配線をロックします。選べず、動かせません");
+            ui.end_row();
+            eye(ui, &mut self.vis.vias, "ビアを表示します");
+            kind(ui, Icon::Via, "ビア");
+            lock(ui, &mut self.pick.vias, "ビアをロックします。選べず、動かせません");
+            ui.end_row();
+            eye(ui, &mut self.vis.zones, "ゾーン (銅を面で塗った所) を表示します");
+            kind(ui, Icon::Zone, "ゾーン");
+            lock(ui, &mut self.pick.zones, "ゾーン (ベタ) をロックします");
+            ui.end_row();
+            eye(ui, &mut self.vis.silk, "シルク (白い印刷の文字と枠) を表示します");
+            kind(ui, Icon::Silk, "シルク");
+            lock(ui, &mut self.pick.silk, "部品に属さないシルク線をロックします");
+            ui.end_row();
+            none(ui);
+            kind(ui, Icon::Layers, "反対の面");
+            icon_switch(ui, Icon::Lock, Icon::Unlock, &mut self.pick.active_side_only, "いま作業している面 (枠の色) と反対の面にある物をロックします。薄く表示している反対の面を誤って選ばなくなります。ビアと、貫通するスルーホール部品は、どちらの面でも選べます");
+            ui.end_row();
+        });
+        if before.parts != self.pick.parts || before.tracks != self.pick.tracks || before.vias != self.pick.vias || before.pads != self.pick.pads || before.zones != self.pick.zones || before.silk != self.pick.silk {
+            self.multi.retain(|it| self.pick.allows(it));
+            if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
+                self.selected = None;
+            }
+        }
+        // the helpers: picture switches (lit = shown), the name first in the hover
+        head(ui, "補助の表示");
+        let sheets = !self.board.part_sheets.is_empty();
+        let req = pcb_core::requirements::any(&self.board);
+        let mut items: Vec<(Icon, &str, &str, &mut bool)> = vec![
+            (Icon::Airwire, "未配線", "まだつながっていない接続を示す黄色の線を表示します", &mut self.vis.airwires),
+            (Icon::Label, "ネット名", "パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します", &mut self.vis.nets),
+            (Icon::Keepout, "禁止領域", "禁止領域 (斜線の範囲) を表示します。隠しても領域は効いたままで、DRC は中の配線・ビア・部品を指摘し、自動配線とベタは領域をよけます", &mut self.vis.keepouts),
+            (Icon::Dimension, "寸法線", "基板に残した寸法線を表示します。隠しても、DXF と SVG の図には出ます", &mut self.vis.dimensions),
+            (Icon::DrcMark, "点検の印", "作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認する」の「作業中も点検する」です", &mut self.vis.drc_marks),
+            (Icon::Ruler, "定規 (mm)", "画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です", &mut self.vis.ruler),
+        ];
+        if sheets {
+            items.push((Icon::Sheet, "シートの色", "回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます。シートの一覧は、左のパネルにあります", &mut self.show_sheets));
+        }
+        if req {
+            items.push((Icon::Frame, "要件の組 (枠)", "回路図の「設計の要件」の、近くに置く組を、枠で囲んで表示します (守れていれば緑、広がりすぎならピンク)", &mut self.show_req_marks));
+            items.push((Icon::Gap, "要件の距離 (線)", "回路図の「設計の要件」の、離す組を、いちばん近い2つのパッドを結ぶ線と距離で表示します (足りなければピンク)", &mut self.show_req_lines));
+        }
+        for row in items.chunks_mut(4) {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                for (icon, name, tip, on) in row.iter_mut() {
+                    let tip = format!("{}\n{}", i18n::tr_dyn(name), i18n::tr_dyn(tip));
+                    icon_switch(ui, *icon, *icon, on, &tip);
+                }
+            });
+        }
+    }
+
+    /// The box floating over the canvas (top right): the copper layers (eye, colour, a click works on the layer), then what to show
+    /// and what can be picked. Folded at first, to one line with the working layer and what is hidden or locked.
     pub(super) fn layer_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
-        let layers = self.board.copper_layers();
         let pos = rect.right_top() + Vec2::new(-14.0, 30.0);
-        let id = egui::Id::new("layer_overlay_fold");
-        egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| ui.vertical(|ui| {
-            // Both panels hug the right edge. The Area must be exactly as wide as the wider panel: a right-aligned
-            // layout would make it as wide as the free space, and that empty strip would take the canvas's clicks.
-            let (wl_id, wv_id) = (egui::Id::new("layer_overlay_w"), egui::Id::new("view_overlay_w"));
-            let (wl, wv) = ui.ctx().data_mut(|d| (d.get_temp::<f32>(wl_id).unwrap_or(0.0), d.get_temp::<f32>(wv_id).unwrap_or(0.0)));
-            let widest = wl.max(wv);
-            let gap = ui.spacing().item_spacing.x;
-            let drawn_l = ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.add_space((widest - wl).max(0.0));
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.x = gap;
-                    egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
+        let id = egui::Id::new("board_view_box_fold");
+        egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| {
+            egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
                 // dark text on the whitish glass
                 ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
+                if std::mem::take(&mut self.open_view_box) {
+                    ui.ctx().data_mut(|d| d.insert_persisted(id, true));
+                }
                 let open = ui.ctx().data_mut(|d| *d.get_persisted_mut_or_insert_with(id, || false));
-                let title = if open { "層".to_string() } else { format!("層: {}", self.side.label()) };
-                if fold_header(ui, id, &title, false, "クリックでたたみます / ひらきます。L キーでも作業層を順に切り替えられます") {
+                let title = if open { i18n::tr("表示とロック").to_string() } else { i18n::trf!("表示とロック ・ 作業: {}", self.side.label()) };
+                let summary = if open { None } else { self.view_summary() };
+                let open = ui.horizontal(|ui| {
+                    let open = fold_header(ui, id, &title, false, "クリックでたたみます / ひらきます。上は銅の層 (目で表示、名前を押すとその層で作業。L キーでも切り替え)、下は物の種類ごとの目 (画面に出すか) と鍵 (選べないようにロックするか) です。明るい四角が「オン」(見えている / ロック中) です");
+                    if let Some(s) = summary {
+                        ui.label(egui::RichText::new(s).small().color(Color32::from_rgb(170, 90, 0)))
+                            .on_hover_text(i18n::tr("隠している物やロックしている物があります。開くと、どれかが分かります"));
+                    }
+                    open
+                }).inner;
+                if open {
                     let w = ui.scope(|ui| {
-                        for l in layers.iter().copied() {
-                            ui.horizontal(|ui| {
-                                let mut shown = self.side_visible(l);
-                                if ui.checkbox(&mut shown, "").on_hover_text(i18n::tr("この層の銅を表示 / 非表示にします")).changed() {
-                                    match l {
-                                        Side::Top => self.vis.top = shown,
-                                        Side::Bottom => self.vis.bottom = shown,
-                                        Side::Inner(n) => {
-                                            let bit = 1u32 << n.min(31);
-                                            self.vis.inner_hidden = if shown { self.vis.inner_hidden & !bit } else { self.vis.inner_hidden | bit };
-                                        }
-                                    }
-                                }
-                                let (r, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
-                                ui.painter().rect_filled(r, 2.0, self.side_color(l));
-                                if ui.selectable_value(&mut self.side, l, l.label()).on_hover_text(i18n::tr("配線を置く層をこの層にします")).clicked() {
-                                    // working on a layer shows it
-                                    match l {
-                                        Side::Top => self.vis.top = true,
-                                        Side::Bottom => self.vis.bottom = true,
-                                        Side::Inner(n) => self.vis.inner_hidden &= !(1u32 << n.min(31)),
-                                    }
-                                }
-                            });
-                        }
+                        self.layer_rows(ui);
+                        ui.separator();
+                        self.things_rows(ui);
                     }).response.rect.width();
                     crate::icons::fold_remember_width(ui, id, w);
                 }
-            }).response.rect.width()
-                }).inner
-            }).inner;
-            let drawn_v = ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.add_space((widest - wv).max(0.0));
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.x = gap;
-                    self.view_frame(ui)
-                }).inner
-            }).inner;
-            ui.ctx().data_mut(|d| {
-                d.insert_temp(wl_id, drawn_l);
-                d.insert_temp(wv_id, drawn_v);
             });
-            if (drawn_l - wl).abs() > 0.5 || (drawn_v - wv).abs() > 0.5 {
-                ui.ctx().request_repaint(); // the padding follows the new widths
-            }
-        }));
+        });
     }
 }
 
@@ -283,6 +263,19 @@ mod tests {
         });
         out.textures_delta.clear();
         out.shapes.len()
+    }
+
+    #[test]
+    fn the_folded_box_says_what_is_hidden_or_locked() {
+        let mut e = BoardEditor::default();
+        e.board = pcb_core::Board::new("t", 40.0, 30.0);
+        // as it starts (the other side locked is the usual state): nothing to say
+        assert_eq!(e.view_summary(), None);
+        e.vis.parts = false;
+        e.vis.bottom = false;
+        e.pick.tracks = false;
+        let s = e.view_summary().unwrap();
+        assert!(s.contains("2 個を隠し中") && s.contains("配線をロック中"), "{s}");
     }
 
     #[test]

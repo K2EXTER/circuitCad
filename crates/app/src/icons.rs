@@ -546,7 +546,7 @@ pub fn icon_switch(ui: &mut egui::Ui, on_icon: Icon, off_icon: Icon, on: &mut bo
         } else if resp.hovered() {
             ui.painter().rect_filled(rect, 4.0, Color32::from_black_alpha(25));
         }
-        paint(ui.painter(), rect.shrink(4.0), if *on { on_icon } else { off_icon }, if *on { dark } else { dark.gamma_multiply(0.45) });
+        paint(ui.painter(), rect.shrink(4.0), if *on { on_icon } else { off_icon }, if *on { dark } else { dark.gamma_multiply(0.7) });
     }
     resp.on_hover_text(i18n::tr_dyn(tip))
 }

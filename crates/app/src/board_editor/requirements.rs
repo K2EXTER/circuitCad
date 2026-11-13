@@ -192,7 +192,7 @@ impl BoardEditor {
             return;
         }
         let mut both = self.show_req_marks || self.show_req_lines;
-        if ui.checkbox(&mut both, i18n::tr("組と離す距離を基板の上に出す")).on_hover_text(i18n::tr("近くに置く組を枠で囲み (守れていれば緑、広がりすぎならピンク)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければピンク)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「物の表示とロック」で別々に切り替えられます")).changed() {
+        if ui.checkbox(&mut both, i18n::tr("組と離す距離を基板の上に出す")).on_hover_text(i18n::tr("近くに置く組を枠で囲み (守れていれば緑、広がりすぎならピンク)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければピンク)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「表示とロック」で別々に切り替えられます")).changed() {
             (self.show_req_marks, self.show_req_lines) = (both, both);
         }
         let answer = self.cached_requirements();

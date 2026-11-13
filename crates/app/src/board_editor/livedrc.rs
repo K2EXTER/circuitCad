@@ -141,7 +141,7 @@ impl BoardEditor {
         let text = if self.vis.drc_marks {
             format!("ルール違反 {n} 件 (赤い × の所。ポインタを合わせると内容)")
         } else {
-            format!("ルール違反 {n} 件 (印は隠しています。右上の「物の表示とロック」の「点検の印」で出せます)")
+            format!("ルール違反 {n} 件 (印は隠しています。右上の「表示とロック」の「点検の印」で出せます)")
         };
         let galley = painter.layout_no_wrap(text, egui::FontId::proportional(14.0), Color32::WHITE);
         let at = Pos2::new(rect.left() + 44.0, rect.bottom() - 30.0 - galley.size().y);

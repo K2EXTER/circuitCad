@@ -10,7 +10,7 @@
 {r} の文字を、元の位置に戻しました	Moved the text of {r} back to its original place
 {r} の文字は、もとの位置にあります	The text of {r} is already in its original place
 # crates/app/src/board_editor/sheets.rs
-シート (色は右上の「物の表示とロック」の「シートの色」で切り替え)	Sheets (change colors with "Sheet colors" under "Visibility and locks" at the top right)
+シート (色は右上の「表示とロック」の「シートの色」で切り替え)	Sheets (change colors with "Sheet colors" under "Visibility and locks" at the top right)
 {name} ({}個)	{name} ({} parts)
 このシートの部品をまとめて選びます。選んだまま動かせば、グループごと動きます: {}	Selects all parts of this sheet. Move them while selected to move the whole group: {}
 シート「{name}」の部品 {} 個を選びました	Selected {} parts of sheet "{name}"

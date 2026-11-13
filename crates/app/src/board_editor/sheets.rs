@@ -109,7 +109,7 @@ impl BoardEditor {
         if !self.show_sheets {
             return;
         }
-        ui.label(egui::RichText::new(i18n::tr("シート (色は右上の「物の表示とロック」の「シートの色」で切り替え)")).small().color(Color32::GRAY));
+        ui.label(egui::RichText::new(i18n::tr("シート (色は右上の「表示とロック」の「シートの色」で切り替え)")).small().color(Color32::GRAY));
         for (name, col) in colors {
             let parts: Vec<String> = self.board.part_sheets.iter().filter(|(_, s)| **s == name).map(|(r, _)| r.clone()).collect();
             ui.horizontal(|ui| {

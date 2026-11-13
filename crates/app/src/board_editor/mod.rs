@@ -450,6 +450,8 @@ pub struct BoardEditor {
     zone_job: std::cell::RefCell<ZoneJob>,
     /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
     island_cache: std::cell::RefCell<Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>>,
+    /// `--board-view-open`: unfold the "表示とロック" box on the next frame (for screenshots).
+    pub(crate) open_view_box: bool,
     /// The outlines of the pours (the outer line and the holes of every shape) thinned to a level of detail (`ribbon::lod_level`) of the
     /// zoom, for the key of `zone_cache` they were made from.
     zone_outline_lod: std::cell::RefCell<Option<(u64, usize, std::rc::Rc<PourLod>)>>,
@@ -627,6 +629,7 @@ impl Default for BoardEditor {
             zone_cache: std::cell::RefCell::new(None),
             zone_job: Default::default(),
             island_cache: std::cell::RefCell::new(None),
+            open_view_box: false,
             zone_outline_lod: Default::default(),
             thermal_cache: std::cell::Cell::new(None),
             hover_net: None,
