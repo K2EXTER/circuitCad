@@ -391,7 +391,7 @@ impl BoardEditor {
             }
             Tool::PadSmd => {
                 self.checkpoint();
-                self.board.pads.push(Pad::new(p, PadShape::Rect { w: self.pad_size, h: self.pad_size * 0.7 }, None, self.side.outer()));
+                self.board.pads.push(Pad::new(p, self.smd_shape(), None, self.side.outer()));
             }
             Tool::Via => {
                 self.checkpoint();
@@ -404,6 +404,17 @@ impl BoardEditor {
                 self.checkpoint();
                 self.board.holes.push(Hole::new(p, self.hole_drill));
             }
+        }
+    }
+}
+
+impl BoardEditor {
+    /// The pad the SMD pad tool puts down, from its settings.
+    pub(super) fn smd_shape(&self) -> PadShape {
+        if self.smd_oval {
+            PadShape::Oval { w: self.smd_w, h: self.smd_h }
+        } else {
+            PadShape::Rect { w: self.smd_w, h: self.smd_h }
         }
     }
 }

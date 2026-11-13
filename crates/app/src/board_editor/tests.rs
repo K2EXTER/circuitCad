@@ -3633,3 +3633,19 @@ fn a_silk_line_is_drawn_with_the_width_last_set_and_never_thinner_than_the_fab_p
     e.click(p(9.0, 1.0));
     assert_eq!(e.board.silk.last().unwrap().width, e.board.rules.min_silk_width);
 }
+
+#[test]
+fn smd_pad_tool_uses_its_own_size_and_shape() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::PadSmd;
+    e.smd_w = 0.6;
+    e.smd_h = 1.5;
+    e.pad_drill = 2.0; // the through-hole tool's setting: no business of a surface pad
+    e.click(p(5.0, 5.0));
+    let pad = e.board.pads.last().unwrap();
+    assert_eq!(pad.shape, PadShape::Rect { w: 0.6, h: 1.5 });
+    assert!(pad.drill.is_none(), "a surface pad has no hole");
+    e.smd_oval = true;
+    e.click(p(8.0, 5.0));
+    assert_eq!(e.board.pads.last().unwrap().shape, PadShape::Oval { w: 0.6, h: 1.5 });
+}

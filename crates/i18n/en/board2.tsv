@@ -447,3 +447,11 @@ DRC の違反	DRC violations
 数字で決める	Set by numbers
 基板の大きさと形 (黄色の枠) を、幅・高さ・角R の数字から作ります。発注するときの基板サイズになります。決まった大きさのケースに入れるときに	Makes the board's size and shape (the yellow frame) from the width, height and corner radius. It is the board size when you order. Useful when the board must fit a case of a set size
 画面をドラッグして描きます	Drag on the board to draw it
+パッドの横 (左右) の長さ。データシートの推奨ランドパターンの寸法を入れます	The pad's length across (left to right). Enter the size from the datasheet's recommended land pattern
+パッドの縦 (上下) の長さ	The pad's length up and down
+幅と高さを入れ替えます (パッドを 90° 回した形)	Swaps the width and height (the pad turned by 90°)
+長円	Oval
+四角いパッド。チップ部品や IC の足のパッドの、ふつうの形です	A rectangular pad, the usual shape for chip parts and IC leads
+両端が丸い長円のパッド。幅と高さが同じなら円になります	An oval pad with round ends. With the same width and height it is a circle
+穴のない、表面だけのパッドです (裏面を作業中なら裏面)	A pad on the surface only, with no hole (on the bottom if you are working on the bottom)
+縦横を入れ替え	Swap width/height

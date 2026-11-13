@@ -561,7 +561,27 @@ impl BoardEditor {
         ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix(i18n::tr("ビア穴 ")).suffix(" mm"))
             .on_hover_text(i18n::tr("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう"));
             }
-            Tool::PadTh | Tool::PadSmd => {
+            Tool::PadSmd => {
+                // a surface pad has no hole and need not be square: its own width, height and shape
+                ui.horizontal_wrapped(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.smd_w).speed(0.05).range(0.1..=10.0).prefix(i18n::tr("幅 ")).suffix(" mm")).on_hover_text(i18n::tr("パッドの横 (左右) の長さ。データシートの推奨ランドパターンの寸法を入れます"));
+                    ui.add(egui::DragValue::new(&mut self.smd_h).speed(0.05).range(0.1..=10.0).prefix(i18n::tr("高さ ")).suffix(" mm")).on_hover_text(i18n::tr("パッドの縦 (上下) の長さ"));
+                    if ui.small_button(i18n::tr("縦横を入れ替え")).on_hover_text(i18n::tr("幅と高さを入れ替えます (パッドを 90° 回した形)")).clicked() {
+                        std::mem::swap(&mut self.smd_w, &mut self.smd_h);
+                    }
+                });
+                let bar = crate::widgets::segment_bar(ui, &[("四角", true), ("長円", true)], Some(usize::from(self.smd_oval)));
+                bar[0].clone().on_hover_text(i18n::tr("四角いパッド。チップ部品や IC の足のパッドの、ふつうの形です"));
+                bar[1].clone().on_hover_text(i18n::tr("両端が丸い長円のパッド。幅と高さが同じなら円になります"));
+                if bar[0].clicked() {
+                    self.smd_oval = false;
+                }
+                if bar[1].clicked() {
+                    self.smd_oval = true;
+                }
+                ui.small(i18n::tr("穴のない、表面だけのパッドです (裏面を作業中なら裏面)"));
+            }
+            Tool::PadTh => {
                 ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix(i18n::tr("パッド径 ")).suffix(" mm")).on_hover_text(i18n::tr("パッド (部品の足をはんだ付けする銅の丸) の直径"));
                 ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix(i18n::tr("パッド穴 ")).suffix(" mm")).on_hover_text(i18n::tr("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です"));
             }

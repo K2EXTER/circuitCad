@@ -621,6 +621,16 @@ impl BoardEditor {
         let preview = Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 200));
         match self.tool {
             Tool::Track if self.trunk_mode => self.draw_trunk_ghost(painter, rect, p, scr),
+            Tool::PadTh => {
+                // the pad as it would be put down: its copper and its hole
+                painter.circle_stroke(scr, self.pad_size as f32 * self.zoom / 2.0, preview);
+                painter.circle_stroke(scr, self.pad_drill as f32 * self.zoom / 2.0, preview);
+            }
+            Tool::PadSmd => {
+                let size = Vec2::new(self.smd_w as f32, self.smd_h as f32) * self.zoom;
+                let r = if self.smd_oval { size.x.min(size.y) / 2.0 } else { 0.0 };
+                painter.rect_stroke(Rect::from_center_size(scr, size), r, preview, egui::StrokeKind::Middle);
+            }
             Tool::Via => {
                 // the via as it would be, and the net it would be for
                 painter.circle_stroke(scr, self.via_dia as f32 * self.zoom / 2.0, Stroke::new(1.5, Color32::from_rgb(60, 170, 90)));
