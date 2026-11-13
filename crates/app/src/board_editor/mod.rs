@@ -10,7 +10,7 @@ use pcb_core::ratsnest::ratsnest;
 use pcb_core::{assembly, export, Board, Hole, Pad, PadShape, Point, Side, SilkLine, Track, Via, Zone};
 use std::path::PathBuf;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
     Select,
     Track,
@@ -745,3 +745,5 @@ pub mod lesson;
 mod panel;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_ui;
