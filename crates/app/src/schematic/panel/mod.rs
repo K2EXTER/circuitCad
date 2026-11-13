@@ -2,24 +2,33 @@
 
 use super::*;
 
-/// The analyses of the "解析" tab: (key, title, open at first, what it is for).
-const ANALYSIS_SECTIONS: &[(&str, &str, bool, &str)] = &[
-    ("dc", "DC動作点 (電圧・電流)", true, "落ち着いたあとの各点の電圧と部品の電流を見ます。まずここから"),
-    ("tran", "過渡解析 (時間の変化)", true, "時間とともに電圧・電流がどう変わるかを、オシロスコープのように見ます"),
-    ("ac", "AC解析 (周波数特性)", true, "周波数ごとの強さ (ゲイン) と位相を見ます。フィルタやアンプの帯域も。入力にする電源の値を「AC 1」にしてください。「安定性の余裕」は、帰還ループを1か所で切って1周したときのゲイン (一巡伝達関数) を測った波形に使います"),
-    ("sweep", "DCスイープ (入力→出力)", false, "入力電圧を変えたときの出力の変化 (伝達特性) を見ます。電圧の信号を選ぶと、反転する (インバーターの) 特性なら VOH / VOL / 切替電圧 / ノイズマージンを計算します"),
-    ("param", "パラメータスイープ (値を振る)", false, "部品の値を何通りか変えて同じ解析をくり返し、波形を重ねて比べます。「Rを変えるとカットオフがどう動くか」を一度に見られます"),
-    ("loopgain", "ループゲイン (帰還の安定性)", false, "帰還のループを1か所切って、1周したときのゲインを測ります。0 dB を横切る所の位相余裕で、電源やアンプが安定か、振動しそうかが分かります。周波数範囲・点数は AC解析の欄を共用"),
-    ("polezero", "極と零 (伝達関数)", false, "AC解析の結果に分数の式を当てはめて、極と零の周波数を求めます。フィルタのカットオフ・共振の鋭さ (Q)・アンプの補償の効き方が、数字で分かります。周波数範囲・点数は AC解析の欄を共用"),
-    ("psrr", "電源除去比 (PSRR)", false, "電源に乗った揺れ (リップル・雑音) が、出力にどれだけ漏れるかを周波数ごとに見ます。選んだ電源だけを揺らすので、回路図の値を「AC 1」に書き換える必要はありません。レギュレータやアンプの電源にコンデンサが要る理由が、数字で分かります。周波数範囲・点数は AC解析の欄を共用"),
-    ("noise", "ノイズ解析", false, "熱雑音・ショット雑音が出力にどれだけ出るかを見ます。周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示"),
-    ("impedance", "インピーダンス (ネットから見た値)", false, "あるネットから回路の中を見たインピーダンスを、周波数ごとに求めます。電源ラインの出力インピーダンスとバイパスコンデンサの効き (山と谷)、アンプの出力・入力インピーダンスが分かります。周波数範囲・点数は AC解析の欄を共用"),
-    ("variation", "温度とばらつき", false, "温度を変える、部品の値を許容差の範囲でランダムに変えて何度も計算する、などで、ずれる範囲を調べます。縦棒が高いところほど、よく出る値です。「感度」は、どの部品が結果を決めているかを効く順に並べます"),
-    ("spec", "スペック (合否の表)", false, "作りたい回路の目標値 (出力電圧は 4.75〜5.25V、カットオフは 1kHz 前後など) を書いておくと、解析の結果が合格かどうかを ✓/× で表示します。値を変えるたびに判定がやり直されます"),
-    ("selfheat", "自己発熱 (部品の温度上昇)", false, "電流が流れる抵抗は、自分の電力で温まります。温度がどれだけ上がるか、温度係数のある抵抗は値がどれだけ動くかを、熱抵抗 (K/W) から計算します。シャント抵抗や、精度が要る分圧の抵抗の確認に"),
-    ("coverage", "モデルの前提 (何がわからないか)", false, "シミュレーションが計算に入れていない部品 (モデルがない)、汎用の標準値で計算している部品、モデルの注意書きをまとめて見ます。結果を信じてよい範囲が分かります"),
-    ("diagnose", "症状から原因を探す (故障診断)", false, "動かない回路で測った電圧から、どの部品がどう壊れているかを探します。起こりうる故障を全部計算して、測った値に合う順に並べ、次にどこを測ればよいかも教えます。実物の修理に使えます"),
-    ("fault", "故障シミュレーション", false, "部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます"),
+/// The analyses of the "解析" tab: (key, title, what it is for).
+const ANALYSIS_SECTIONS: &[(&str, &str, &str)] = &[
+    ("dc", "DC動作点 (電圧・電流)", "落ち着いたあとの各点の電圧と部品の電流を見ます。まずここから"),
+    ("tran", "過渡解析 (時間の変化)", "時間とともに電圧・電流がどう変わるかを、オシロスコープのように見ます"),
+    ("ac", "AC解析 (周波数特性)", "周波数ごとの強さ (ゲイン) と位相を見ます。フィルタやアンプの帯域も。入力にする電源の値を「AC 1」にしてください。「安定性の余裕」は、帰還ループを1か所で切って1周したときのゲイン (一巡伝達関数) を測った波形に使います"),
+    ("sweep", "DCスイープ (入力→出力)", "入力電圧を変えたときの出力の変化 (伝達特性) を見ます。電圧の信号を選ぶと、反転する (インバーターの) 特性なら VOH / VOL / 切替電圧 / ノイズマージンを計算します"),
+    ("param", "パラメータスイープ (値を振る)", "部品の値を何通りか変えて同じ解析をくり返し、波形を重ねて比べます。「Rを変えるとカットオフがどう動くか」を一度に見られます"),
+    ("loopgain", "ループゲイン (帰還の安定性)", "帰還のループを1か所切って、1周したときのゲインを測ります。0 dB を横切る所の位相余裕で、電源やアンプが安定か、振動しそうかが分かります。周波数範囲・点数は AC解析の欄を共用"),
+    ("polezero", "極と零 (伝達関数)", "AC解析の結果に分数の式を当てはめて、極と零の周波数を求めます。フィルタのカットオフ・共振の鋭さ (Q)・アンプの補償の効き方が、数字で分かります。周波数範囲・点数は AC解析の欄を共用"),
+    ("psrr", "電源除去比 (PSRR)", "電源に乗った揺れ (リップル・雑音) が、出力にどれだけ漏れるかを周波数ごとに見ます。選んだ電源だけを揺らすので、回路図の値を「AC 1」に書き換える必要はありません。レギュレータやアンプの電源にコンデンサが要る理由が、数字で分かります。周波数範囲・点数は AC解析の欄を共用"),
+    ("noise", "ノイズ解析", "熱雑音・ショット雑音が出力にどれだけ出るかを見ます。周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示"),
+    ("impedance", "インピーダンス (ネットから見た値)", "あるネットから回路の中を見たインピーダンスを、周波数ごとに求めます。電源ラインの出力インピーダンスとバイパスコンデンサの効き (山と谷)、アンプの出力・入力インピーダンスが分かります。周波数範囲・点数は AC解析の欄を共用"),
+    ("variation", "温度とばらつき", "温度を変える、部品の値を許容差の範囲でランダムに変えて何度も計算する、などで、ずれる範囲を調べます。縦棒が高いところほど、よく出る値です。「感度」は、どの部品が結果を決めているかを効く順に並べます"),
+    ("spec", "スペック (合否の表)", "作りたい回路の目標値 (出力電圧は 4.75〜5.25V、カットオフは 1kHz 前後など) を書いておくと、解析の結果が合格かどうかを ✓/× で表示します。値を変えるたびに判定がやり直されます"),
+    ("selfheat", "自己発熱 (部品の温度上昇)", "電流が流れる抵抗は、自分の電力で温まります。温度がどれだけ上がるか、温度係数のある抵抗は値がどれだけ動くかを、熱抵抗 (K/W) から計算します。シャント抵抗や、精度が要る分圧の抵抗の確認に"),
+    ("coverage", "モデルの前提 (何がわからないか)", "シミュレーションが計算に入れていない部品 (モデルがない)、汎用の標準値で計算している部品、モデルの注意書きをまとめて見ます。結果を信じてよい範囲が分かります"),
+    ("diagnose", "症状から原因を探す (故障診断)", "動かない回路で測った電圧から、どの部品がどう壊れているかを探します。起こりうる故障を全部計算して、測った値に合う順に並べ、次にどこを測ればよいかも教えます。実物の修理に使えます"),
+    ("fault", "故障シミュレーション", "部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます"),
+];
+
+/// The analyses in groups by what they are for: (heading, when to use them, section keys). Every key of `ANALYSIS_SECTIONS` is in one group.
+const ANALYSIS_GROUPS: &[(&str, &str, &[&str])] = &[
+    ("基本", "まずここから。電圧・電流 (DC)、時間の変化 (過渡)、周波数の特性 (AC) を見ます", &["dc", "tran", "ac"]),
+    ("値を振って調べる", "入力・部品の値・温度・ばらつきを変えて、結果がどれだけ動くかを見ます", &["sweep", "param", "variation"]),
+    ("周波数と安定性", "帰還が安定か、電源の揺れや雑音がどれだけ出るか、ネットのインピーダンスを、周波数ごとに見ます", &["loopgain", "polezero", "psrr", "noise", "impedance"]),
+    ("確かめる", "目標の値に合っているか、部品が熱くならないか、計算が何を前提にしているかを確かめます", &["spec", "selfheat", "coverage"]),
+    ("壊れたとき", "実物が動かないときの原因探しと、部品が壊れたら回路がどうなるかの練習です", &["diagnose", "fault"]),
 ];
 
 mod parts;
@@ -55,19 +64,13 @@ impl SchEditor {
                 self.panel_forms(ui);
             }
             PanelTab::Analyze => {
-                ui.horizontal(|ui| {
-                    // one button that flips: open everything, then close everything, then open again
-                    let all_open = self.sec_mode == 1;
-                    let (label, tip) = if all_open { ("すべて閉じる", "すべての解析の設定を閉じて、見出しだけにします") } else { ("すべて開く", "すべての解析の設定を開きます。もう一度押すと、すべて閉じます") };
-                    // during a lesson every section is open, so the lesson's steps can be found
-                    let in_lesson = self.lesson.is_some();
-                    let b = crate::widgets::primary_button_wide(ui, !in_lesson, label);
-                    if b.on_hover_text(if in_lesson { i18n::tr("レッスン中は、手順に出てくる欄を探せるように、すべて開いています") } else { tip }).clicked() {
-                        self.sec_gen += 1;
-                        self.sec_mode = if all_open { 2 } else { 1 };
-                        self.focus_section = None;
-                    }
-                });
+                // a filter over the names and descriptions of the analyses (both languages)
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.analysis_filter)
+                        .hint_text(i18n::tr("解析を探す (例: 安定・雑音・温度)"))
+                        .desired_width(f32::INFINITY),
+                )
+                .on_hover_text(i18n::tr("解析の名前と説明から探します。空にすると全部に戻ります"));
                 // the selected part's values, to change one and run again without going back to the drawing tab
                 if self.selected_part_band(ui, true) {
                     crate::widgets::group_gap(ui);
@@ -79,38 +82,63 @@ impl SchEditor {
                     ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
                         .on_hover_text(i18n::tr("この部品は、回路にないものとして計算されます。動作や電流に関わる部品なら、結果は実物と違います。下の「モデルの前提」で、ほかの注意もまとめて見られます"));
                 }
+                // during a lesson every section is open, so the lesson's steps can be found; otherwise one at a time
                 let lesson = self.lesson.is_some();
-                let (open_all, close_all) = (self.sec_mode == 1 || lesson, self.sec_mode == 2 && !lesson);
-                for (key, title, basic, hint) in ANALYSIS_SECTIONS {
-                    let id = egui::Id::new(("analysis_section", *key, self.sec_gen, lesson));
-                    // a section asked for by name (command line) is the one open
-                    let open = match self.focus_section {
-                        Some(f) => *key == f,
-                        None => open_all || (*basic && !close_all),
-                    };
-                    crate::widgets::section_header(ui, id, open, title, hint, |ui| {
-                        match *key {
-                            "dc" => self.panel_dc(ui),
-                            "tran" => self.panel_tran(ui),
-                            "ac" => self.panel_ac(ui),
-                            "sweep" => self.panel_sweep(ui),
-                            "param" => self.panel_param(ui),
-                            "noise" => self.panel_noise(ui),
-                            "psrr" => self.panel_psrr(ui),
-                            "diagnose" => self.panel_troubleshoot(ui),
-                            "loopgain" => self.panel_loop(ui),
-                            "impedance" => self.panel_z(ui),
-                            "polezero" => self.panel_pz(ui),
-                            "variation" => self.panel_variation(ui),
-                            "spec" => self.panel_spec(ui),
-                            "coverage" => self.panel_coverage(ui),
-                            "selfheat" => {
-                                self.panel_selfheat(ui);
-                                self.panel_heat_tran(ui);
+                let filter = self.analysis_filter.trim().to_lowercase();
+                let matches = |key: &str, title: &str, hint: &str| {
+                    filter.is_empty()
+                        || [title, hint, key].iter().any(|s| s.to_lowercase().contains(&filter) || i18n::tr_dyn(s).to_lowercase().contains(&filter))
+                };
+                let mut shown = 0;
+                for (heading, when, keys) in ANALYSIS_GROUPS {
+                    let sections: Vec<_> =
+                        ANALYSIS_SECTIONS.iter().filter(|(k, t, h)| keys.contains(k) && matches(k, t, h)).collect();
+                    if sections.is_empty() {
+                        continue;
+                    }
+                    if shown > 0 {
+                        ui.add_space(4.0);
+                    }
+                    crate::icons::help_small(ui, heading, when);
+                    for (key, title, hint) in sections {
+                        shown += 1;
+                        let id = egui::Id::new(("analysis_section", *key, self.sec_gen, lesson));
+                        let open = lesson || self.focus_section.unwrap_or("dc") == *key;
+                        let was = egui::collapsing_header::CollapsingState::load(ui.ctx(), id).map_or(open, |s| s.is_open());
+                        let done = self.analysis_has_result(key);
+                        crate::widgets::section_header_marked(ui, id, open, title, hint, done, |ui| {
+                            match *key {
+                                "dc" => self.panel_dc(ui),
+                                "tran" => self.panel_tran(ui),
+                                "ac" => self.panel_ac(ui),
+                                "sweep" => self.panel_sweep(ui),
+                                "param" => self.panel_param(ui),
+                                "noise" => self.panel_noise(ui),
+                                "psrr" => self.panel_psrr(ui),
+                                "diagnose" => self.panel_troubleshoot(ui),
+                                "loopgain" => self.panel_loop(ui),
+                                "impedance" => self.panel_z(ui),
+                                "polezero" => self.panel_pz(ui),
+                                "variation" => self.panel_variation(ui),
+                                "spec" => self.panel_spec(ui),
+                                "coverage" => self.panel_coverage(ui),
+                                "selfheat" => {
+                                    self.panel_selfheat(ui);
+                                    self.panel_heat_tran(ui);
+                                }
+                                _ => self.panel_fault(ui),
                             }
-                            _ => self.panel_fault(ui),
+                        });
+                        // opening one section closes the others (outside a lesson): the open one gets the height
+                        let now = egui::collapsing_header::CollapsingState::load(ui.ctx(), id).is_some_and(|s| s.is_open());
+                        if !lesson && now && !was {
+                            self.focus_section = Some(key);
+                            self.sec_gen += 1;
                         }
-                    });
+                    }
+                }
+                if shown == 0 {
+                    ui.weak(i18n::tr("その言葉に合う解析はありません"));
                 }
                 self.panel_results(ui);
             }
@@ -288,6 +316,27 @@ impl SchEditor {
                 true
             }
             None => false,
+        }
+    }
+
+    /// Whether the analysis `key` has a result to show (a ✓ on its heading, so the learner sees what has been done).
+    fn analysis_has_result(&self, key: &str) -> bool {
+        match key {
+            "dc" => self.dc.is_some(),
+            "tran" => self.tran.is_some(),
+            "ac" => self.ac.as_ref().is_some_and(|a| !a.loop_run && !a.psrr_run),
+            "loopgain" => self.ac.as_ref().is_some_and(|a| a.loop_run),
+            "psrr" => self.ac.as_ref().is_some_and(|a| a.psrr_run),
+            "sweep" => self.sweep.is_some(),
+            "param" => self.param.is_some(),
+            "noise" => self.noise.is_some(),
+            "impedance" => self.z.is_some(),
+            "polezero" => self.pz.is_some(),
+            "variation" => self.mc.is_some() || self.sens.is_some(),
+            "selfheat" => self.heat_view.is_some() || self.htran.is_some(),
+            "diagnose" => self.diag.result.is_some(),
+            "fault" => self.fault_view.is_some() || !self.fault_scan.is_empty(),
+            _ => false,
         }
     }
 

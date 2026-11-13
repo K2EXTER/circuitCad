@@ -105,6 +105,12 @@ pub fn band_header<R>(
 /// with its contents, so the open ones stand out. The whole row is the click target and
 /// shows `hint` on hover. The open state is kept by `id`. Returns what `body` returns while the section is open.
 pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, title: &str, hint: &str, body: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+    section_header_marked(ui, id, default_open, title, hint, false, body)
+}
+
+/// `section_header` with a green ✓ at the right end of the band when `done` (the analysis has a result).
+#[allow(clippy::too_many_arguments)]
+pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, title: &str, hint: &str, done: bool, body: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
     let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, default_open);
     let open = state.is_open();
     let (row, hit) = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.spacing().interact_size.y), egui::Sense::click());
@@ -133,6 +139,10 @@ pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, ti
         ui.painter().galley(pos + egui::vec2(0.6, 0.0), galley.clone(), colour);
     }
     ui.painter().galley(pos, galley, colour);
+    if done {
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        ui.painter().text(egui::pos2(row.max.x - 8.0, row.center().y), egui::Align2::RIGHT_CENTER, "✓", font, crate::theme::OK);
+    }
     let hit = hit.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(i18n::tr_dyn(hint));
     // the band already shows what belongs to the section: no guide line, and a narrow indent (the panel is only so wide)
     let mut bottom = row.bottom();

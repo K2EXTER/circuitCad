@@ -126,10 +126,8 @@ impl SchEditor {
         let mut row = SpecRow::new(kind, target);
         (row.lo, row.hi, row.at) = (dash(lo), dash(hi), dash(at));
         self.specs.push(row);
-        // show the analysis tab with every section open, so the table is visible
-        self.panel_tab = PanelTab::Analyze;
-        self.sec_mode = 1;
-        self.sec_gen += 1;
+        // show the analysis tab with the table open
+        self.show_analysis_section("spec");
     }
 
     /// Puts the rows of the "組み立てて、性能を測る" step into the table (input voltage, output voltage, a current to
@@ -157,9 +155,7 @@ impl SchEditor {
             self.specs.push(row);
             added += 1;
         }
-        self.panel_tab = PanelTab::Analyze;
-        self.sec_mode = 1;
-        self.sec_gen += 1;
+        self.show_analysis_section("spec");
         self.analyze_dc();
         added
     }

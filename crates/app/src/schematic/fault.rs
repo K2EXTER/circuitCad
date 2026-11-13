@@ -449,8 +449,7 @@ impl SchEditor {
 
     /// For the command line: the scan on its own thread, and the fault panel open.
     pub fn start_fault_scan_bg(&mut self) {
-        self.panel_tab = PanelTab::Analyze;
-        self.sec_mode = 1;
+        self.show_analysis_section("fault");
         self.start_fault_scan();
     }
 

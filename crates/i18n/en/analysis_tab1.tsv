@@ -1,0 +1,14 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/panel/mod.rs (the analysis tab in groups)
+まずここから。電圧・電流 (DC)、時間の変化 (過渡)、周波数の特性 (AC) を見ます	Start here: voltages and currents (DC), change over time (transient), and frequency response (AC)
+値を振って調べる	Vary and compare
+入力・部品の値・温度・ばらつきを変えて、結果がどれだけ動くかを見ます	Change the input, a part value, the temperature or the tolerances and see how far the results move
+周波数と安定性	Frequency and stability
+帰還が安定か、電源の揺れや雑音がどれだけ出るか、ネットのインピーダンスを、周波数ごとに見ます	Over frequency: whether feedback is stable, how much supply ripple and noise get through, and the impedance of a net
+確かめる	Check
+目標の値に合っているか、部品が熱くならないか、計算が何を前提にしているかを確かめます	Check the targets, whether parts get hot, and what the calculation assumes
+壊れたとき	When it breaks
+実物が動かないときの原因探しと、部品が壊れたら回路がどうなるかの練習です	Find the cause when the real circuit does not work, and practise what a broken part does to the circuit
+解析を探す (例: 安定・雑音・温度)	Find an analysis (e.g. stability, noise, temperature)
+解析の名前と説明から探します。空にすると全部に戻ります	Searches the names and descriptions of the analyses. Empty shows them all
+その言葉に合う解析はありません	No analysis matches those words

@@ -298,7 +298,8 @@ pub struct SchEditor {
     /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
     htran_links_seen: Vec<(String, String, f64)>,
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
-    sec_mode: u8,
+    /// The text typed in the analysis tab's search box (empty: every analysis).
+    analysis_filter: String,
     /// Windows with the long result lists (results table, net list)
     tables: result_tables::State,
     fault_part: String,
@@ -676,7 +677,7 @@ impl Default for SchEditor {
             htran_links_seen: vec![],
             htran_links: String::new(),
             coverage_cache: None,
-            sec_mode: 0,
+            analysis_filter: String::new(),
             tables: Default::default(),
             fault_part: String::new(),
             fault_pin: String::new(),

@@ -63,7 +63,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `board_editor/`(`BoardEditor`): `mod.rs` 型 / `canvas` `interact` `draw` `panel` / `select` `route` `tools` `ribbon` `padlead` `livepath` `tracking` `shoving` / `align` `lengths` `pairs` `layers` `netclass` `netwindow` `currentwindow` `nettable`(ネットの一覧の窓) `zoneedit` `repair` `ruler` `measure`(距離を測るツール)`dimensions`(寸法線)`livedrc`(作業中の点検)`keepouts`(禁止領域のツール)`snippet``smoothing` `linked` `netglow` `width` `order` / `file` `actions` `history` `view` / `view3d/`(camera・scene・glow)と `raster3d.rs`(3D)/ `requirements.rs`
 
 ## 「〜を変えたい」早見表
-- 新しい解析を足す → `sim-core/<名前>.rs` + `schematic/<名前>.rs` (実行+パネル) + `schematic/panel/mod.rs` の `ANALYSIS_SECTIONS` にボタン + `mod.rs` の `WaveMode` と `wave.rs` + `docs/examples/` にサンプル
+- 新しい解析を足す → `sim-core/<名前>.rs` + `schematic/<名前>.rs` (実行+パネル) + `schematic/panel/mod.rs` の `ANALYSIS_SECTIONS` にボタン・`ANALYSIS_GROUPS` に鍵・`analysis_has_result` + `mod.rs` の `WaveMode` と `wave.rs` + `docs/examples/` にサンプル
 - 新しい部品種別(基本素子) → `sch-core/lib.rs` の `Kind`、`symbols.rs`、`sim-core/from_schematic.rs`
 - ライブラリ部品を足す → `part-lib/examples/*.part.json` (形式は `docs/part-format.md`)
 - レッスン → `schematic/lessons/` に1件の `const` を足して `mod.rs` の `LESSONS` に並べる / チャレンジ → `schematic/challenge/` に1件の `const` を足して `mod.rs` の `CHALLENGES` に並べる (答えが通るテストも) / 学習パス → `learn.rs` の `PATHS`
