@@ -401,6 +401,13 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     {
         eprintln!("--board-tool {name}: no such tool (select, track, via, measure, zone, keepout, padth, padsmd, hole, rect, poly, silk, text)");
     }
+    // --board-step place | route | check | order: that step of the "手順" tab open (for screenshots)
+    if let Some(i) = args.iter().position(|a| a == "--board-step")
+        && let Some(name) = args.get(i + 1)
+        && !app.board_ed.open_step_named(name)
+    {
+        eprintln!("--board-step {name}: no such step (place, route, check, order)");
+    }
     // --board-view-open: the "表示とロック" box over the board unfolded
     if args.iter().any(|a| a == "--board-view-open") {
         app.board_ed.open_view_box = true;

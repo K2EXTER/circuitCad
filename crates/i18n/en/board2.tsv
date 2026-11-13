@@ -129,7 +129,7 @@ USB の D+ / D- のように、2本で1つの信号を運ぶ配線です。並�
 # crates/app/src/board_editor/panel.rs
 まず回路図タブで回路を作り、ここで「回路図から取り込み」を押すと、部品が基板に読み込まれます	First build a circuit in the schematic tab, then press "Import from schematic" here to load the parts onto the board
 部品が基板の外にあります。左の「部品を並べて外形を決める」で自動的に並べるか、部品をドラッグして基板の中に置きましょう	Some parts are outside the board. Use "Place parts and set outline" on the left to arrange them automatically, or drag the parts onto the board
-基板の外形を決めましょう。左の「矩形にする」か、ツールの「基板外形」で描きます。発注にはこの外形が必要です	Set the board outline. Use "Make rectangle" on the left, or draw it with the "Board outline" tool. You need an outline to order
+基板の外形を決めましょう。左の「部品を並べて外形を決める」で部品に合わせて作るか、「変える…」で大きさを数字で決めます。発注にはこの外形が必要です	Set the board outline. "Place parts and set outline" on the left makes one around the parts, or "Change…" sets its size by numbers. An order needs this outline
 黄色の線 (未配線 {unrouted} 本) が残っています。「配線」ツールで手でつなぐか、左の「自動配線」に任せましょう。広い GND は「銅箔ゾーン」にすると簡単です	Yellow lines ({unrouted} unrouted) remain. Connect them by hand with the "Route" tool, or leave it to "Autoroute" on the left. For a wide GND, a "Copper zone" is easy
 配線が終わりました。「DRC を実行」でルール違反がないか確認し、問題なければ「発注の準備」で最終チェックをして、発注用データ (ガーバー) を作れます	Routing is done. Use "Run DRC" to check for rule violations, and if all is fine, do a final check in "Prepare order" and make the order data (Gerber)
 DRC の指摘は、クリックするとその場所に飛びます。直したらもう一度 DRC を実行しましょう。0 件になれば発注データを書き出せます	Click a DRC item to jump to its spot. After fixing, run DRC again. At 0 items you can export the order data
@@ -165,7 +165,6 @@ DRC の指摘は、クリックするとその場所に飛びます。直した�
 保存したスニペットを、いま見えている画面の真ん中に置きます。同じ部品番号・同じフットプリントの部品を、保存した並べ方に動かし、保存した配線とビアを足します。動かした部品につながっていた古い配線は消えます。この基板にない部品や、固定した部品は動かさず、結果の文に出します。「元に戻す」で戻せます	Places a saved snippet in the center of the current view. Parts with the same refdes and footprint are moved into the saved arrangement, and the saved tracks and vias are added. Old tracks connected to the moved parts are removed. Parts not on this board and locked parts are not moved, and are listed in the result. Undo reverts this
 部品番号を位置順に	Renumber by position
 部品番号 (R1・C2 など) を、基板の上の位置の順に振り直します。上の段から下の段へ、各段は左から右です。回路図の部品番号、要件の表、「接続しない」の印も同じに変わります。固定した部品の番号は変えません。「元に戻す」で戻せます (回路図の側も、回路図で元に戻してください)	Renumbers the reference designators (R1, C2, etc.) in order of position on the board: rows from top to bottom, each row from left to right. Refdes in the schematic, the requirements table and "no connect" marks change too. Locked parts keep their numbers. Undo reverts this (undo in the schematic too, for the schematic side)
-基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります。矩形・円・多角形が選べます	The board's size and shape (yellow frame). This is the board size you order. Choose rectangle, circle or polygon
 幅 	Width 
 基板の幅 (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます	Board width (mm). Applied to the outline when you press "Make rectangle" or "Make circle/oval"
 高さ 	Height 
@@ -439,3 +438,12 @@ DRC の違反	DRC violations
 出来上がりを 3D で見て、「発注の準備」で発注先を選び、工場に渡すデータ (ガーバー) を作ります	See the finished board in 3D, then "Prepare order…" picks a maker and writes the files for the factory (Gerber)
 作業の設定 (グリッド {:.2} mm)	Work settings (grid {:.2} mm)
 {}の設定	{} settings
+外形 {:.1} × {:.1} mm	Outline {:.1} × {:.1} mm
+基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります	The size and shape of the board (the yellow frame). It is the board size when you order
+外形がまだありません	No outline yet
+発注には基板の外形が要ります。上の「部品を並べて外形を決める」で作るか、「変える…」で大きさを数字で決めるか、描きます	An order needs a board outline. Make one with "Place parts and set outline" above, set its size by numbers with "Change…", or draw it
+変える…	Change…
+「手で描く」タブの外形ツールを選びます。幅・高さ・角R を数字で入れて矩形や円・長円にしたり、角を丸めたり、ドラッグや多角形で描いたりできます。決まった大きさのケースに入れるときに	Picks the outline tool in the "Draw by hand" tab. There you can type the width, height and corner radius to make a rectangle, circle or oval, round the corners, or draw by dragging or as a polygon. Useful when the board must fit a case of a set size
+数字で決める	Set by numbers
+基板の大きさと形 (黄色の枠) を、幅・高さ・角R の数字から作ります。発注するときの基板サイズになります。決まった大きさのケースに入れるときに	Makes the board's size and shape (the yellow frame) from the width, height and corner radius. It is the board size when you order. Useful when the board must fit a case of a set size
+画面をドラッグして描きます	Drag on the board to draw it

@@ -67,7 +67,7 @@ impl BoardEditor {
             return "部品が基板の外にあります。左の「部品を並べて外形を決める」で自動的に並べるか、部品をドラッグして基板の中に置きましょう".into();
         }
         if self.board.bounds().is_none() || self.board.outline.is_empty() {
-            return "基板の外形を決めましょう。左の「矩形にする」か、ツールの「基板外形」で描きます。発注にはこの外形が必要です".into();
+            return "基板の外形を決めましょう。左の「部品を並べて外形を決める」で部品に合わせて作るか、「変える…」で大きさを数字で決めます。発注にはこの外形が必要です".into();
         }
         let unrouted = self.cached_airwires().len();
         if unrouted > 0 {
@@ -130,35 +130,21 @@ impl BoardEditor {
                     ui.checkbox(&mut self.place_by_sheet, i18n::tr("シートごとに塊にして並べる")).on_hover_text(i18n::tr("回路図が複数のシートのとき、シートごとの部品を1つの塊(長方形)にして並べ、塊どうしをつながりの強い順に並べます。塊の中は、足の多い部品から、つながりの強い順です。どの部品がどのシートのものか分かりやすく、手で直しやすくなります。そのぶん、基板が大きくなり、配線が長くなります (マイクロオームメーターの回路 (6 シート・191 部品) で、面積 +37%、自動配線の長さ +13%、コンデンサが電源ピンから遠くなります)。そのため、初めはオフです。オフだと、シートに関係なく並べます"));
                 }
                 ui.separator();
-                ui.label(i18n::tr("基板の外形")).on_hover_text(i18n::tr("基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります。矩形・円・多角形が選べます"));
+                // the outline in one line: "部品を並べて外形を決める" above makes it; the numbers, circles and rounded corners
+                // are the outline tool's settings (the "手で描く" tab), where the drawn outlines are too
                 ui.horizontal_wrapped(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix(i18n::tr("幅 "))).on_hover_text(i18n::tr("基板の幅 (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます"));
-                    ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix(i18n::tr("高さ "))).on_hover_text(i18n::tr("基板の高さ (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます"));
-                    ui.add(egui::DragValue::new(&mut self.size_r).speed(0.1).range(0.0..=100.0).prefix(i18n::tr("角R ")).suffix(" mm"))
-                        .on_hover_text(i18n::tr("角の丸み (半径)。0 なら角ばった形です。ケースに入れる基板や、手で持つ基板は、角を丸めると角が欠けにくく、安全です。大きすぎる値は、入る大きさまで自動で小さくなります"));
+                    match self.board.bounds().filter(|_| self.board.outline.len() >= 3) {
+                        Some((lo, hi)) => {
+                            ui.label(i18n::trf!("外形 {:.1} × {:.1} mm", hi.x - lo.x, hi.y - lo.y)).on_hover_text(i18n::tr("基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります"));
+                        }
+                        None => {
+                            ui.colored_label(crate::theme::WARN, i18n::tr("外形がまだありません")).on_hover_text(i18n::tr("発注には基板の外形が要ります。上の「部品を並べて外形を決める」で作るか、「変える…」で大きさを数字で決めるか、描きます"));
+                        }
+                    }
+                    if ui.small_button(i18n::tr("変える…")).on_hover_text(i18n::tr("「手で描く」タブの外形ツールを選びます。幅・高さ・角R を数字で入れて矩形や円・長円にしたり、角を丸めたり、ドラッグや多角形で描いたりできます。決まった大きさのケースに入れるときに")).clicked() {
+                        self.pick_tool_named("rect");
+                    }
                 });
-                // the three ways to turn the numbers above into an outline: one bar
-                let bar = crate::widgets::segment_row(ui, &[("矩形にする", true), ("円・長円にする", true), ("角を丸める", true)]);
-                bar[0].clone().on_hover_text(i18n::tr("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります"));
-                bar[1].clone().on_hover_text(i18n::tr("上の幅と高さに収まる円 (幅=高さ) や長円の外形にします。丸い基板やボタン電池サイズの基板に"));
-                bar[2].clone().on_hover_text(i18n::tr("いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)"));
-                if bar[0].clicked() {
-                    self.checkpoint();
-                    let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
-                    self.set_outline_box(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
-                }
-                if bar[1].clicked() {
-                    self.checkpoint();
-                    let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
-                    self.board.outline = pcb_core::outline::ellipse(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
-                    self.status = "基板の外形を円・長円にしました".into();
-                }
-                if bar[2].clicked() {
-                    self.round_outline(self.size_r);
-                }
-                if let Some((lo, hi)) = self.board.bounds() {
-                    ui.small(i18n::trf!("現在 {:.1} × {:.1} mm ({}点)", hi.x - lo.x, hi.y - lo.y, self.board.outline.len()));
-                }
                 ui.separator();
                 crate::widgets::section_heading(ui, "整える");
                 let bar = crate::widgets::segment_row(ui, &[("ピン名をシルクへ", true)]);
@@ -411,6 +397,55 @@ impl BoardEditor {
         }
     }
 
+    /// The outline from numbers (width, height, corner radius): a rectangle, a circle or oval, or the corners of the
+    /// outline rounded. In the settings box of the two outline tools.
+    fn outline_numbers_ui(&mut self, ui: &mut egui::Ui) {
+        ui.label(i18n::tr("数字で決める")).on_hover_text(i18n::tr("基板の大きさと形 (黄色の枠) を、幅・高さ・角R の数字から作ります。発注するときの基板サイズになります。決まった大きさのケースに入れるときに"));
+        ui.horizontal_wrapped(|ui| {
+            ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix(i18n::tr("幅 "))).on_hover_text(i18n::tr("基板の幅 (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます"));
+            ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix(i18n::tr("高さ "))).on_hover_text(i18n::tr("基板の高さ (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます"));
+            ui.add(egui::DragValue::new(&mut self.size_r).speed(0.1).range(0.0..=100.0).prefix(i18n::tr("角R ")).suffix(" mm"))
+                .on_hover_text(i18n::tr("角の丸み (半径)。0 なら角ばった形です。ケースに入れる基板や、手で持つ基板は、角を丸めると角が欠けにくく、安全です。大きすぎる値は、入る大きさまで自動で小さくなります"));
+        });
+        // the three ways to turn the numbers above into an outline: one bar
+        let bar = crate::widgets::segment_row(ui, &[("矩形にする", true), ("円・長円にする", true), ("角を丸める", true)]);
+        bar[0].clone().on_hover_text(i18n::tr("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります"));
+        bar[1].clone().on_hover_text(i18n::tr("上の幅と高さに収まる円 (幅=高さ) や長円の外形にします。丸い基板やボタン電池サイズの基板に"));
+        bar[2].clone().on_hover_text(i18n::tr("いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)"));
+        if bar[0].clicked() {
+            self.checkpoint();
+            let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
+            self.set_outline_box(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
+        }
+        if bar[1].clicked() {
+            self.checkpoint();
+            let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
+            self.board.outline = pcb_core::outline::ellipse(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
+            self.status = "基板の外形を円・長円にしました".into();
+        }
+        if bar[2].clicked() {
+            self.round_outline(self.size_r);
+        }
+        if let Some((lo, hi)) = self.board.bounds() {
+            ui.small(i18n::trf!("現在 {:.1} × {:.1} mm ({}点)", hi.x - lo.x, hi.y - lo.y, self.board.outline.len()));
+        }
+    }
+
+    /// The "手順" tab with the step of that name open (command line `--board-step`). False for a name that is no step.
+    pub fn open_step_named(&mut self, name: &str) -> bool {
+        let s = match name {
+            "place" => Step::Place,
+            "route" => Step::Route,
+            "check" => Step::Check,
+            "order" => Step::Order,
+            _ => return false,
+        };
+        self.panel_tab = PanelTab::Steps;
+        self.step_open = Some(s);
+        self.step_gen += 1;
+        true
+    }
+
     /// The "手で描く" tab with the tool of that name picked (command line `--board-tool`). False for a name that is no tool.
     pub fn pick_tool_named(&mut self, name: &str) -> bool {
         let t = match name {
@@ -453,7 +488,7 @@ impl BoardEditor {
     /// the size of a via for the via tool (autoroute uses both).
     /// Whether the picked tool has settings to show under the bar.
     fn has_tool_options(&self) -> bool {
-        matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone | Tool::Keepout | Tool::OutlinePoly)
+        matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone | Tool::Keepout | Tool::OutlineRect | Tool::OutlinePoly)
     }
 
     fn tool_options(&mut self, ui: &mut egui::Ui) {
@@ -530,7 +565,16 @@ impl BoardEditor {
                 ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix(i18n::tr("パッド径 ")).suffix(" mm")).on_hover_text(i18n::tr("パッド (部品の足をはんだ付けする銅の丸) の直径"));
                 ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix(i18n::tr("パッド穴 ")).suffix(" mm")).on_hover_text(i18n::tr("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です"));
             }
-            Tool::OutlinePoly => self.poly_mode_ui(ui),
+            Tool::OutlineRect => {
+                ui.small(i18n::tr("画面をドラッグして描きます"));
+                ui.separator();
+                self.outline_numbers_ui(ui);
+            }
+            Tool::OutlinePoly => {
+                self.poly_mode_ui(ui);
+                ui.separator();
+                self.outline_numbers_ui(ui);
+            }
             Tool::Keepout => self.panel_keepouts(ui),
             Tool::Hole => {
                 ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix(i18n::tr("取付穴 ")).suffix(" mm")).on_hover_text(i18n::tr("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です"));

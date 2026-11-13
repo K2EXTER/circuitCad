@@ -170,7 +170,7 @@ oshpark.com にログインし、「New Project」で `基板名_gerber.zip` を
 価格を確認して注文します (画面は変更されることがあります)	Check the price and order (the site may change)
 回路図と基板が合っていません	Schematic and board do not match
 {summary}。回路図を直したあと、基板で「回路図から取り込み」を押していないようです。このまま発注すると、シミュレーションした回路と違う基板が届きます。基板の画面の左パネルで「回路図から取り込み」を押し、必要なら配線をやり直しましょう	{summary}. It seems "Import from schematic" was not pressed on the board after fixing the schematic. If you order like this, you will get a board different from the circuit you simulated. Press "Import from schematic" in the left panel of the board screen, and redo tracks if needed
-基板の形 (外形) が決まっていません。左の「矩形にする」か、ツール「基板外形」で決めましょう。発注には外形が必要です	The board shape (outline) is not set. Set it with "Make rectangle" on the left or the "Board outline" tool. An outline is needed to order
+基板の形 (外形) が決まっていません。手順①の「部品を並べて外形を決める」か、外形ツール (「手で描く」タブ) で決めましょう。発注には外形が必要です	The board shape (outline) is not set. Set it with "Place parts and set outline" in step ①, or with an outline tool (the "Draw by hand" tab). An order needs an outline
 基板の大きさ {:.1} × {:.1} mm	Board size {:.1} × {:.1} mm
 外形が決まっています	The outline is set
 {n} 層の基板です (内層 {} 枚)	{n}-layer board ({} inner layers)
@@ -420,7 +420,7 @@ STEPの立体から三角形を作れませんでした	Could not make triangles
 内層2	Inner 2
 内層3	Inner 3
 内層	Inner
-基板の外形が3点未満で、面になっていません。「基板外形」ツールか「矩形にする」で外形を決めましょう	The board outline has fewer than 3 points and is not an area. Set the outline with the "Board outline" tool or "Make rectangle"
+基板の外形が3点未満で、面になっていません。手順①の「部品を並べて外形を決める」か、外形ツール (「手で描く」タブ) で外形を決めましょう	The board outline has fewer than 3 points and is not an area. Set the outline with "Place parts and set outline" in step ①, or with an outline tool (the "Draw by hand" tab)
 配線の幅 {:.3}mm が最小 {:.3}mm より細いです。配線を太くするか、発注先の最小幅に合わせたルールを選びましょう	Track width {:.3}mm is thinner than the minimum {:.3}mm. Make the track wider, or choose rules that match the fab's minimum width
 配線の端が基板の外にあります。基板の内側に引き直すか、外形を広げましょう	A track end is outside the board. Reroute it inside the board or enlarge the outline
 穴の径 {:.3}mm が最小 {:.3}mm より小さいです。穴を大きくするか、発注先に合ったルールを選びましょう	Hole diameter {:.3}mm is smaller than the minimum {:.3}mm. Make the hole larger, or choose rules that match the fab

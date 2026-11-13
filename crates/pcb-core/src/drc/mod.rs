@@ -62,7 +62,7 @@ pub fn check(board: &Board) -> Vec<Violation> {
     let mut out = vec![];
 
     if board.outline.len() < 3 {
-        out.push(v("基板の外形が3点未満で、面になっていません。「基板外形」ツールか「矩形にする」で外形を決めましょう".into(), Point::default()));
+        out.push(v("基板の外形が3点未満で、面になっていません。手順①の「部品を並べて外形を決める」か、外形ツール (「手で描く」タブ) で外形を決めましょう".into(), Point::default()));
         return out;
     }
 
