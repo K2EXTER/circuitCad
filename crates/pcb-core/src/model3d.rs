@@ -290,7 +290,20 @@ fn data_sheet_body(part: &Part, pads: &[&Pad], body: &crate::body::BodySpec, h: 
                     v.push(solid([cx - w / 2.0, a, top], [cx + w / 2.0, b, top + 0.05], MARK, BodyShape::Box));
                 }
             }
-            // the + sign is drawn on the silkscreen; the 3D body stays plain
+            // a round can marked + (an electrolytic): the pale stripe down its side on the minus lead's side, as the sleeve is
+            // printed; the + sign itself is on the silkscreen
+            BodyMark::Plus if circle => {
+                let (r, sw, out) = (w / 2.0, w * 0.22, 0.06);
+                // the side away from the + pad
+                let (sx, sy) = (-ux, -uy);
+                v.push(if sx != 0.0 {
+                    let (a, b) = if sx < 0.0 { (cx - r - out, cx - r + 0.4) } else { (cx + r - 0.4, cx + r + out) };
+                    solid([a, cy - sw / 2.0, z0], [b, cy + sw / 2.0, top], MARK, BodyShape::Box)
+                } else {
+                    let (a, b) = if sy < 0.0 { (cy - r - out, cy - r + 0.4) } else { (cy + r - 0.4, cy + r + out) };
+                    solid([cx - sw / 2.0, a, z0], [cx + sw / 2.0, b, top], MARK, BodyShape::Box)
+                });
+            }
             BodyMark::Plus | BodyMark::None => {}
         }
     }
@@ -971,5 +984,26 @@ mod tests {
         assert_eq!(bands.iter().map(|b| b.0).collect::<Vec<_>>(), vec![[210, 35, 35], [210, 35, 35], [125, 70, 30], [200, 160, 50]]);
         assert!(bands.windows(2).all(|w| w[0].1 < w[1].1), "read from the left: {bands:?}");
         assert!(matches!(solids[1].shape, BodyShape::Cylinder(0)));
+    }
+
+    #[test]
+    fn a_round_can_marked_plus_shows_its_minus_stripe() {
+        use crate::body::BodySpec;
+        let mut b = Board::new("t", 30.0, 20.0);
+        let mut fp = crate::footprints::get("R_0805").unwrap();
+        fp.name = "CP_Test".into();
+        fp.height = Some(11.0);
+        fp.pads = [("1", -1.25), ("2", 1.25)]
+            .into_iter()
+            .map(|(pin, x)| crate::footprints::FpPad { pin: pin.into(), pos: Point::new(x, 0.0), shape: PadShape::Circle { d: 1.6 }, drill: Some(0.8), slot: 0.0, slot_v: false })
+            .collect();
+        fp.body = Some(BodySpec { shape: "circle".into(), w: 6.3, h: 0.0, x: 0.0, y: 0.0, mark: crate::body::BodyMark::Plus, mark_pin: "1".into(), color_code: None });
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "C1".into(), value: "100u".into(), footprint: "CP_Test".into(), pos: Point::new(15.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+        let s = solids(&b, &b.parts[0]);
+        // the can and the stripe; pin 1 (+) is on the left, so the stripe is on the right edge of the can
+        assert_eq!(s.len(), 2);
+        assert_eq!(s[1].color, MARK);
+        assert!(s[1].lo[0] > 15.0 + 3.15 - 0.5 && s[1].hi[0] > 15.0 + 3.15, "{:?}", (s[1].lo, s[1].hi));
     }
 }

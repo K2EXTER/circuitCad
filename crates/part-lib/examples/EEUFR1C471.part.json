@@ -1,0 +1,141 @@
+{
+  "name": "EEUFR1C471",
+  "category": "コンデンサ",
+  "description": "Panasonic FR-A アルミ電解コンデンサ 470 µF ±20 % 16 V (105 ℃・6000 時間)。本体 φ8 × 11.5 mm、リード φ0.6 mm・間隔 3.5 mm。インピーダンス 0.056 Ω 以下 (100 kHz・20 ℃)、許容リップル電流 950 mA rms (100 kHz・105 ℃、120 Hz では ×0.75)。極性があります: 1 番ピン (四角いパッド) が +。逆につなぐと壊れます。穴径 0.9 mm・パッド径 1.7 mm はリード径からの目安 (部品作成フォームのリード部品と同じ考え方。メーカーの推奨ランドではない)。型番の末尾は、テープ包装なら B か H を足す (EEUFR1C471B など)。データシート ABA0000C1259 (FR-A series、01-Sep-25) で確かめた (2026-11-13)",
+  "datasheet": "https://mediap.industry.panasonic.eu/assets/imported/industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+  "prefix": "C",
+  "value": "470u",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -1.75,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 0.9,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 1.75,
+        "y": 0.0,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 0.9,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "CP_Radial_D8_P3.5_Panasonic",
+  "height": 11.5,
+  "body": {
+    "shape": "circle",
+    "w": 8.0,
+    "h": 0.0,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "plus",
+    "mark_pin": "1"
+  },
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "EEUFR1C471",
+    "text": ".subckt EEUFR1C471 1 2\nResr 1 n_c 55.9m\nC1 n_c 2 470u\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "ESR は、データシートの 100 kHz・20 ℃のインピーダンス 0.056 Ω から容量のリアクタンス (3.39 mΩ) を除いた値 (55.9 mΩ) を、全部の周波数で一定にしています。実物は低い周波数と低い温度で大きくなります (-10 ℃では約 3 倍、データシートの表)。",
+      "ESL (リードと巻き取りのインダクタンス) はデータシートに無いので入れていません。数百 kHz より上では実物と違います。",
+      "容量の許容差 (±20 %)、温度による容量の変化、漏れ電流 (0.01 CV か 3 µA の大きいほう) は入れていません。",
+      "逆電圧と定格を超える電圧は、シミュレーションでは止まりません。極性と定格電圧を守ってください。過渡解析のあと、波形の「部品の定格 (リップル電流・寿命)」で、リップル電流と推定寿命を確かめられます。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Panasonic FR-A series のデータシート (ABA0000C1259、01-Sep-25) の容量とインピーダンス"
+    }
+  },
+  "ratings": {
+    "v_max": 16.0,
+    "rows": [
+      {
+        "name": "インピーダンス",
+        "value": "0.056 Ω 以下",
+        "condition": "100 kHz・20 ℃"
+      },
+      {
+        "name": "許容リップル電流",
+        "value": "950 mA rms",
+        "condition": "100 kHz・105 ℃"
+      },
+      {
+        "name": "寿命",
+        "value": "6000 時間",
+        "condition": "105 ℃・定格電圧とリップル電流をかけて"
+      },
+      {
+        "name": "漏れ電流",
+        "value": "0.01 CV (µA) か 3 µA の大きいほう",
+        "condition": "定格電圧で 2 分後"
+      },
+      {
+        "name": "使える温度",
+        "value": "−40〜105 ℃",
+        "condition": ""
+      }
+    ],
+    "ripple": {
+      "i_rms": 0.95,
+      "freq_hz": 100000.0,
+      "coeffs": [
+        [
+          60.0,
+          0.65
+        ],
+        [
+          120.0,
+          0.75
+        ],
+        [
+          1000.0,
+          0.9
+        ],
+        [
+          10000.0,
+          0.98
+        ],
+        [
+          100000.0,
+          1.0
+        ]
+      ]
+    },
+    "life": {
+      "hours": 6000.0,
+      "temp_c": 105.0
+    }
+  },
+  "glyph": "electrolytic"
+}
