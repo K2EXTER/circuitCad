@@ -34,14 +34,20 @@ fn board_key(b: &pcb_core::Board) -> u64 {
 /// `drc::check`, less what is said about parts still waiting outside the board (just imported, not yet placed: putting them on
 /// the board is the next step, not a mistake).
 pub fn live_check(board: &pcb_core::Board) -> Vec<Violation> {
-    let parked: Vec<Point> = board
+    // a finding is marked at the pad's centre (outside the board) or in the gap next to it (too near the edge, or to another
+    // waiting part): within the pad's reach plus the clearance
+    let reach = board.max_clearance().max(board.rules.edge_clearance);
+    let parked: Vec<(Point, f64)> = board
         .parts
         .iter()
         .filter(|p| !pcb_core::geom::inside_polygon(&board.outline, p.pos))
-        .flat_map(|p| board.pads.iter().filter(move |q| q.refdes == p.refdes).map(|q| q.pos))
+        .flat_map(|p| board.pads.iter().filter(move |q| q.refdes == p.refdes).map(|q| {
+            let (w, h) = q.shape.size();
+            (q.pos, w.hypot(h) / 2.0 + reach)
+        }))
         .collect();
     let mut found = drc::check(board);
-    found.retain(|v| !parked.iter().any(|p| p.dist(v.at) < 1e-6));
+    found.retain(|v| !parked.iter().any(|(p, r)| p.dist(v.at) <= r + 1e-6));
     found
 }
 

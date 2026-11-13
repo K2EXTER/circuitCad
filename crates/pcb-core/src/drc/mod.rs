@@ -148,11 +148,11 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
             let d = dist(&items[i].geo, &items[j].geo);
             let need = board.clearance_between(conn.group_net(grp[i]), conn.group_net(grp[j]));
             if d + 1e-9 < need {
-                let (p, q) = (center(&items[i].geo), center(&items[j].geo));
+                let at = gap_point(&items[i].geo, &items[j].geo);
                 let why = if need > r.min_clearance + 1e-9 { " (ネットクラスで、広い間隔を決めたネットです)" } else { "" };
                 out.push(v(
                     format!("{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ){}", side_name(side), d, need, why),
-                    Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0),
+                    at,
                 ));
             }
         }
@@ -164,7 +164,7 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
             let edge = Geo::Cap { a: board.outline[e], b: board.outline[(e + 1) % n], r: 0.0 };
             let d = dist(&it.geo, &edge);
             if d + 1e-9 < r.edge_clearance {
-                out.push(v(format!("銅箔と基板の端の間隔 {:.3}mm が最小 {:.3}mm より狭いです。端から離しましょう (切り出しで銅が欠けたり短絡したりします)", d, r.edge_clearance), center(&it.geo)));
+                out.push(v(format!("銅箔と基板の端の間隔 {:.3}mm が最小 {:.3}mm より狭いです。端から離しましょう (切り出しで銅が欠けたり短絡したりします)", d, r.edge_clearance), gap_point(&it.geo, &edge)));
                 break;
             }
         }
