@@ -966,7 +966,11 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let (ratings, notes) = self.tran_notes(&r);
         let mut answer = json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "models": self.model_gaps(), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).chain(restricted_note).collect::<Vec<_>>()});
         if !r.timing.violations.is_empty() || r.timing.tightest.is_some() {
-            let kind = |k: sim_core::TimingKind| if k == sim_core::TimingKind::Setup { "setup" } else { "hold" };
+            let kind = |k: sim_core::TimingKind| match k {
+                sim_core::TimingKind::Setup => "setup",
+                sim_core::TimingKind::Hold => "hold",
+                sim_core::TimingKind::PulseWidth => "pulse_width",
+            };
             let violations: Vec<Value> = r
                 .timing
                 .violations

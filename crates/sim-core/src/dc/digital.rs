@@ -34,6 +34,7 @@ pub(crate) struct DCell {
     pub tphl: f64,
     pub tsu: f64,
     pub th: f64,
+    pub tw: f64,
     /// The output enable node, whether it enables when low, whether the output is open-drain.
     pub oe: Option<usize>,
     pub oe_low: bool,
@@ -74,6 +75,9 @@ pub(crate) struct Dig {
     /// Per input: when its level last changed (for the setup check); per cell: when its clock last rose (for the hold check).
     pub last_change: Vec<f64>,
     pub last_edge: Vec<f64>,
+    /// Per cell: when its clock (a latch: its enable) last rose and fell, for the pulse width check.
+    pub last_rise: Vec<f64>,
+    pub last_fall: Vec<f64>,
     /// The setup / hold violations found, one entry per cell and kind.
     pub viol: Vec<crate::TimingViolation>,
     /// The smallest margin found at a clock edge: (cell, margin, time between this clock edge and the one before).
@@ -193,7 +197,7 @@ impl Compiled {
         }
         // the data inputs of an edge-triggered flip-flop (timing checks)
         let data: &[usize] = match c.kind {
-            Dff | Tff => &[0],
+            Dff | Tff | Dlatch => &[0],
             Jkff | Srff => &[0, 1],
             _ => &[],
         };
@@ -241,8 +245,26 @@ impl Compiled {
                     new = set && !reset || (set && reset && old);
                 } else {
                     let edge = clk_at.is_some_and(|k| started && !at(&before, k) && at(&now, k));
-                    if edge && let Some(te) = te {
-                        self.timing_edge(d, ci, te, data);
+                    let fall = clk_at.is_some_and(|k| started && at(&before, k) && !at(&now, k));
+                    if let Some(te) = te {
+                        // a latch takes its data while it is enabled and keeps it when the enable falls: the setup and hold
+                        // are about that closing edge; a flip-flop's about the rising clock
+                        let closing = if c.kind == Dlatch { fall } else { edge };
+                        if closing {
+                            self.timing_edge(d, ci, te, data);
+                        }
+                        if c.tw > 0.0 && (edge || fall) {
+                            // the pulse that just ended: low before a rising edge, high before a falling one
+                            let start = if edge { d.last_fall[ci] } else { d.last_rise[ci] };
+                            if start > -1e29 && te - start < c.tw - 1e-15 {
+                                self.note_violation(d, ci, crate::TimingKind::PulseWidth, te, te - start, c.tw);
+                            }
+                        }
+                        if fall {
+                            d.last_fall[ci] = te;
+                        } else if edge {
+                            d.last_rise[ci] = te;
+                        }
                     }
                     match c.kind {
                         Dff if edge => new = at(&before, 0),
@@ -525,8 +547,11 @@ impl Compiled {
             if margin < v.worst_margin {
                 v.worst_margin = margin;
             }
+            if v.times.len() < crate::tran::TIMING_TIMES_KEPT {
+                v.times.push(time);
+            }
         } else {
-            d.viol.push(crate::TimingViolation { cell: name.clone(), kind, count: 1, first_time: time, worst_margin: margin, required });
+            d.viol.push(crate::TimingViolation { cell: name.clone(), kind, count: 1, first_time: time, worst_margin: margin, required, times: vec![time] });
         }
     }
 

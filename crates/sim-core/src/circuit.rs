@@ -269,6 +269,8 @@ pub struct CellSupply {
     /// Setup and hold time (seconds) of the data inputs of an edge-triggered flip-flop (0 = not checked).
     pub tsu: f64,
     pub th: f64,
+    /// The shortest high or low pulse (seconds) the clock input of a flip-flop or the enable of a latch may have (0 = not checked).
+    pub tw: f64,
     /// Output enable: the node that lets the output out (`None` = always), whether it enables when it is low, and whether the
     /// output is open-drain (a high output is off).
     pub oe: Option<usize>,

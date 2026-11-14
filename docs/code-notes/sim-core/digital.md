@@ -97,6 +97,7 @@
 - **出力**: `TranResult::timing`(`TimingReport`: 違反の一覧と、セットアップの余裕が最小だったクロックの立ち上がり `tightest`)。違反は `TranResult::warnings` にも日本語の文で出る(アプリの過渡解析にも出る)。CLI の `tran` の答えには `timing`(`violations`、`tightest` と、その FF だけで決まるとしたときの最大クロック周波数の目安 `max_clock_hz_estimate`)が付く。余裕が負なら、目安の周波数は、いまの周期より低い値になる(クロックを遅くする向きの目安)。
 - **違反しても、出力は不定にしない**: 古いデータを取り込んだ値のまま(警告の文にも書いた)。実物のメタステーブルは表さない。
 - **部品**: 74HC74 に `tsu=20n`(代表値、**未確認**。ホールドは 0 とみなして点検しない)。サンプル `timing_check`。
+- **ラッチと最小パルス幅(2026-11-15)**: `dlatch` もセットアップ・ホールドを点検する(データを持ち続ける、イネーブルの立ち下がりが基準。`last_edge` はラッチでは立ち下がりの時刻)。`tw=<s>`(`CellSupply.tw`)はクロック(ラッチはイネーブル)の High・Low の幅の下限で、立ち上がりで直前の Low の幅、立ち下がりで直前の High の幅を `last_rise`・`last_fall` と比べ、足りなければ `TimingKind::PulseWidth`(警告「クロックのパルス幅が足りません」、CLI の `pulse_width`)。違反は 1 件ごとの時刻も `TimingViolation::times` に先頭 500 回まで残す(画面のデジタル表示の印)。テスト `tests_cells.rs` の `a_clock_pulse_shorter_than_the_flip_flops_width_is_reported_each_time`・`a_latch_checks_its_setup_and_hold_at_the_closing_edge_of_its_enable`。JK・SR の 2 本のデータ入力は前から点検していた。同梱のロジック IC にはまだ `tw=` を入れていない(データシートで確かめてから)。
 - 最大クロック周波数の目安は、セットアップの余裕が最小の 1 つの FF だけで決める(データの経路の遅れは、いまのまま)。クロックの周期が一定でないときの目安は粗い。
 
 ## 74HC161・138・151(2026-11-04、候補 H2 の最初の3つ)

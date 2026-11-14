@@ -266,6 +266,54 @@ fn the_hold_time_is_checked_after_the_clock_edge() {
     assert!(bad.warnings.iter().any(|w| w.contains("ホールド時間が足りません")), "{:?}", bad.warnings);
 }
 
+/// A clock with a 40 ns high pulse: a flip-flop asking for 30 ns is fine, one asking for 60 ns reports the pulse width, every
+/// time it happened (the times are kept for the marks on the digital view).
+#[test]
+fn a_clock_pulse_shorter_than_the_flip_flops_width_is_reported_each_time() {
+    let run = |tw: &str| {
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss clk q", &format!("YF dff q 0 vss vcc 60 0.5 0 0 0 tw={tw} q clk 0 0"));
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        // high for 40 ns every 1 us, from 0.5 us: falling edges at about 0.54, 1.54 and 2.54 us
+        let ck = parse_source_full("PULSE(0 5 0.5u 1n 1n 40n 1u)").unwrap();
+        c.add(Element::VSource { name: "Vck".into(), p: n[2], n: 0, wave: ck.wave, ac: ck.ac });
+        c.add(Element::Resistor { name: "Rl".into(), a: n[3], b: 0, r: 10e3 });
+        transient(&c, &TranSettings { tstop: 3e-6, tstep: 20e-9, uic: false }).unwrap()
+    };
+    assert!(run("30n").timing.violations.is_empty(), "{:?}", run("30n").timing);
+    let bad = run("60n");
+    assert_eq!(bad.timing.violations.len(), 1, "{:?}", bad.timing);
+    let v = &bad.timing.violations[0];
+    assert_eq!(v.kind, crate::TimingKind::PulseWidth);
+    assert_eq!(v.count, 3, "{v:?}");
+    assert_eq!(v.times.len(), 3);
+    assert!((v.worst_margin - 41e-9).abs() < 5e-9 && (v.times[1] - 1.541e-6).abs() < 5e-9, "{v:?}");
+    assert!(bad.warnings.iter().any(|w| w.contains("クロックのパルス幅が足りません")), "{:?}", bad.warnings);
+}
+
+/// A latch keeps its data when its enable falls: the data changing 20 ns before that breaks a 50 ns setup time, 20 ns after it
+/// a 50 ns hold time.
+#[test]
+fn a_latch_checks_its_setup_and_hold_at_the_closing_edge_of_its_enable() {
+    let run = |data: &str| {
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss d en q", "YL dlatch q 0 vss vcc 60 0.5 0 0 0 tsu=50n th=50n d en 0 0");
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        pwl_source(&mut c, "Vd", n[2], data);
+        // enabled from 0.5 us to 1.0 us
+        pwl_source(&mut c, "Ven", n[3], "PWL(0 0 0.5u 0 0.501u 5 1u 5 1.001u 0)");
+        c.add(Element::Resistor { name: "Rl".into(), a: n[4], b: 0, r: 10e3 });
+        transient(&c, &TranSettings { tstop: 2e-6, tstep: 10e-9, uic: false }).unwrap()
+    };
+    let kinds = |r: &TranResult| r.timing.violations.iter().map(|v| v.kind).collect::<Vec<_>>();
+    // data steady around the closing edge
+    assert!(run("PWL(0 0 0.7u 0 0.701u 5)").timing.violations.is_empty());
+    assert_eq!(kinds(&run("PWL(0 0 0.98u 0 0.981u 5)")), vec![crate::TimingKind::Setup]);
+    assert_eq!(kinds(&run("PWL(0 0 1.02u 0 1.021u 5)")), vec![crate::TimingKind::Hold]);
+}
+
 fn pwl_source(c: &mut Circuit, name: &str, node: usize, text: &str) {
     let s = parse_source_full(text).unwrap();
     c.add(Element::VSource { name: name.into(), p: node, n: 0, wave: s.wave, ac: s.ac });

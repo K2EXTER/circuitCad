@@ -140,6 +140,11 @@ impl SchEditor {
                     .on_hover_text(i18n::tr("しきい値を決める電源電圧 (V)。空欄なら、選んだ信号のいちばん高い電圧を電源とみなします。3.3V の回路なら 3.3 と入れてください"));
                 ui.label("V");
                 use crate::logic_plot::Radix;
+                let group_id = egui::Id::new("logic_group_buses");
+                let mut group: bool = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(group_id, || true));
+                if ui.checkbox(&mut group, i18n::tr("バスにまとめる")).on_hover_text(i18n::tr("D0・D1 … のように番号だけが違うネットを 1 本のバスにまとめます。インバータの列 (N1・N2 …) のように、バスではないものまでまとまるときは外してください")).changed() {
+                    ui.data_mut(|d| d.insert_persisted(group_id, group));
+                }
                 for (r, name) in [(Radix::Dec, "10進"), (Radix::Hex, "16進"), (Radix::Bin, "2進")] {
                     ui.selectable_value(logic_radix, r, i18n::tr(name))
                         .on_hover_text(i18n::tr("バスの値の書き方: 10 進数・16 進数 (末尾に h)・2 進数。不定のビットがあるときは X"));
@@ -561,17 +566,19 @@ impl SchEditor {
                         }
                         let vals: Vec<&[f64]> = names.iter().filter_map(|n| res.signal(n)).map(|s| s.values.as_slice()).collect();
                         let vcc = parse_value(logic_vcc).filter(|v| *v > 0.0).unwrap_or_else(|| crate::logic_plot::guess_vcc(&vals));
-                        let lanes = crate::logic_plot::lanes(&names);
+                        let group = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(egui::Id::new("logic_group_buses"), || true));
+                        let lanes = if group { crate::logic_plot::lanes(&names) } else { names.iter().map(|n| crate::logic_plot::Lane::Bit(n.to_string())).collect() };
                         let open_id = egui::Id::new("logic_open_buses");
                         let mut open: Vec<String> = ui.data_mut(|d| d.get_temp(open_id)).unwrap_or_default();
                         let rows = crate::logic_plot::rows(&lanes, &open);
                         let signals: Vec<(&str, &[f64])> = names.iter().zip(&vals).map(|(n, v)| (*n, *v)).collect();
+                        let marks = timing_marks(&res.timing);
                         // many lanes scroll inside the plot's place
                         ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                             egui::ScrollArea::vertical().id_salt("logic_lanes").auto_shrink([false, false]).show(ui, |ui| {
                                 let h = crate::logic_plot::height(rows.len()).max(rect.height());
                                 let (r, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), h), Sense::hover());
-                                crate::logic_plot::draw(ui, r, egui::Id::new("logic"), &res.time, &rows, &mut open, &signals, crate::logic_plot::thresholds(vcc), *logic_radix, st);
+                                crate::logic_plot::draw(ui, r, egui::Id::new("logic"), &res.time, &rows, &mut open, &signals, crate::logic_plot::thresholds(vcc), *logic_radix, &marks, st);
                             });
                         });
                         ui.data_mut(|d| d.insert_temp(open_id, open));
@@ -633,4 +640,20 @@ impl SchEditor {
             self.tran = None;
         }
     }
+}
+
+/// The timing violations as marks for the digital view: each time, with what happened.
+fn timing_marks(r: &sim_core::TimingReport) -> Vec<(f64, String)> {
+    let mut out: Vec<(f64, String)> = vec![];
+    for v in &r.violations {
+        let what = match v.kind {
+            sim_core::TimingKind::Setup => i18n::tr("セットアップ時間が足りない"),
+            sim_core::TimingKind::Hold => i18n::tr("ホールド時間が足りない"),
+            sim_core::TimingKind::PulseWidth => i18n::tr("クロックのパルスが短すぎる"),
+        };
+        let text = i18n::trf!("{}: {} (いちばん短くて {}、必要なのは {})", v.cell, what, sim_core::format_time(v.worst_margin), sim_core::format_time(v.required));
+        out.extend(v.times.iter().map(|t| (*t, text.clone())));
+    }
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    out
 }

@@ -166,6 +166,7 @@ pub fn guess_vcc(values: &[&[f64]]) -> f64 {
 }
 
 const LANE_H: f32 = 26.0;
+const MARK_H: f32 = 16.0;
 const NAME_W: f32 = 132.0;
 const HIGH: Color32 = Color32::from_rgb(110, 220, 120);
 const LOW: Color32 = Color32::from_rgb(70, 150, 80);
@@ -185,12 +186,15 @@ pub fn draw(
     signals: &[(&str, &[f64])],
     th: (f64, f64),
     radix: Radix,
+    marks: &[(f64, String)],
     st: &mut PlotState,
 ) {
     let signal = |name: &str| signals.iter().find(|(n, _)| *n == name).map(|(_, v)| *v);
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
-    let pa = Rect::from_min_max(Pos2::new(rect.left() + NAME_W, rect.top() + 4.0), Pos2::new(rect.right() - 26.0, rect.bottom() - 22.0));
+    // the timing violations get a strip of their own above the lanes
+    let strip = if marks.is_empty() { 0.0 } else { MARK_H };
+    let pa = Rect::from_min_max(Pos2::new(rect.left() + NAME_W, rect.top() + 4.0 + strip), Pos2::new(rect.right() - 26.0, rect.bottom() - 22.0));
     if pa.width() < 20.0 || pa.height() < 10.0 || time.len() < 2 {
         return;
     }
@@ -329,6 +333,9 @@ pub fn draw(
         painter.line_segment([Pos2::new(rect.left(), top + lane_h - 4.0), Pos2::new(pa.right(), top + lane_h - 4.0)], Stroke::new(1.0, Color32::from_gray(32)));
     }
     painter.rect_stroke(pa, 0.0, Stroke::new(1.0, Color32::from_gray(80)), egui::StrokeKind::Inside);
+    if !marks.is_empty() {
+        draw_marks(ui, &painter, rect, pa, id, marks, &sx, (x0, x1), &font);
+    }
     // cursors and their difference
     for (k, c) in st.cursors.iter().enumerate() {
         let Some(t) = *c else { continue };
@@ -354,9 +361,37 @@ pub fn draw(
     }
 }
 
+/// The timing violations above the lanes: a red mark at each time (a faint line down through the lanes), the text of the
+/// nearest under the pointer.
+#[allow(clippy::too_many_arguments)]
+fn draw_marks(ui: &egui::Ui, painter: &egui::Painter, rect: Rect, pa: Rect, id: egui::Id, marks: &[(f64, String)], sx: &dyn Fn(f64) -> f32, (x0, x1): (f64, f64), font: &FontId) {
+    let top = pa.top() - MARK_H;
+    painter.text(Pos2::new(rect.left() + 6.0, top + MARK_H * 0.5), Align2::LEFT_CENTER, i18n::tr("タイミング違反"), font.clone(), MID);
+    let band = Rect::from_min_max(Pos2::new(pa.left(), top), Pos2::new(pa.right(), pa.top()));
+    let clip = painter.with_clip_rect(Rect::from_min_max(band.min, pa.max));
+    let mut last_x = f32::NEG_INFINITY;
+    for (t, _) in marks.iter().filter(|(t, _)| *t >= x0 && *t <= x1) {
+        let x = sx(*t);
+        clip.line_segment([Pos2::new(x, pa.top()), Pos2::new(x, pa.bottom())], Stroke::new(1.0, Color32::from_rgba_unmultiplied(235, 90, 80, 70)));
+        // marks closer than a few pixels are one triangle
+        if x - last_x >= 4.0 {
+            let y = top + 2.0;
+            clip.add(egui::Shape::convex_polygon(vec![Pos2::new(x - 4.0, y), Pos2::new(x + 4.0, y), Pos2::new(x, y + MARK_H - 5.0)], MID, Stroke::NONE));
+            last_x = x;
+        }
+    }
+    let resp = ui.interact(band, id.with("marks"), Sense::hover());
+    if let Some(p) = resp.hover_pos() {
+        let near = marks.iter().filter(|(t, _)| *t >= x0 && *t <= x1).min_by(|a, b| (sx(a.0) - p.x).abs().total_cmp(&(sx(b.0) - p.x).abs()));
+        if let Some((_, text)) = near.filter(|(t, _)| (sx(*t) - p.x).abs() < 8.0) {
+            resp.on_hover_text(text.as_str());
+        }
+    }
+}
+
 /// How high the lanes are drawn (the plot area and the time labels).
 pub fn height(rows: usize) -> f32 {
-    rows as f32 * LANE_H + 34.0
+    rows as f32 * LANE_H + 34.0 + MARK_H
 }
 
 #[cfg(test)]

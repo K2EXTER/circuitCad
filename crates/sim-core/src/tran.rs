@@ -62,7 +62,12 @@ pub struct TranResult {
 pub enum TimingKind {
     Setup,
     Hold,
+    /// A clock (a latch: enable) pulse shorter than the data sheet allows (`tw=`).
+    PulseWidth,
 }
+
+/// How many times of each violation are kept (`TimingViolation::times`), for the marks on the digital view.
+pub const TIMING_TIMES_KEPT: usize = 500;
 
 /// A flip-flop whose data input changed too close to the clock edge, all the times together.
 #[derive(Clone, Debug, PartialEq)]
@@ -74,6 +79,8 @@ pub struct TimingViolation {
     pub first_time: f64,
     pub worst_margin: f64,
     pub required: f64,
+    /// When it happened (seconds), the first `TIMING_TIMES_KEPT` times.
+    pub times: Vec<f64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -678,10 +685,12 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
             let what = match v.kind {
                 TimingKind::Setup => format!("データがクロックの {} 前に変わっています (必要なのは {} 以上)。クロックを遅くするか、データまでの遅れ (ゲートの段数) を短くしてください", format_time(v.worst_margin), format_time(v.required)),
                 TimingKind::Hold => format!("データがクロックの {} 後に変わっています (クロックのあと {} は変わってはいけません)。データの経路に遅れを足すか、クロックのずれを減らしてください", format_time(v.worst_margin), format_time(v.required)),
+                TimingKind::PulseWidth => format!("クロックのパルスの幅が {} しかありません ({} 以上が必要)。クロックを遅くするか、デューティ比を 50 % に近づけてください", format_time(v.worst_margin), format_time(v.required)),
             };
             let name = match v.kind {
                 TimingKind::Setup => "セットアップ時間",
                 TimingKind::Hold => "ホールド時間",
+                TimingKind::PulseWidth => "クロックのパルス幅",
             };
             warnings.push(format!("{}: {name}が足りません ({} 回。最初は {})。{what}。この回の出力は実物では不定で、ここでは古いデータを取り込んだ値です", v.cell, v.count, format_time(v.first_time)));
         }
