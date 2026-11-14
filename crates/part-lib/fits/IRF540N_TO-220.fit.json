@@ -1,0 +1,53 @@
+{
+  "kind": "mos",
+  "part": "IRF540N_TO-220",
+  "name": "IRF540N",
+  "pch": false,
+  "read": "2026-11-14",
+  "source": "Infineon IRF540NPbF データシート (Rev. 2.1, 2026-07-24)",
+  "url": "https://www.infineon.com/assets/row/public/documents/24/49/infineon-irf540n-datasheet-en.pdf",
+  "description": "N チャネル パワーMOSFET 100V 33A (TO-220, ピン1=G 2=D 3=S)。10V 駆動。データシート (Infineon) の代表特性から作った等価モデル (レベル1 + 直列抵抗、ボディダイオードつき)",
+  "vth_range": [2.0, 4.0, 0.00025],
+  "transfer": {
+    "at": "図 3 (伝達特性の代表特性、VDS = 50 V) の 25 °C",
+    "vds": 50.0,
+    "points": [
+      [4.75, 17.9],
+      [5.0, 26.8],
+      [5.5, 45.0],
+      [6.0, 63.7],
+      [6.5, 80.7],
+      [7.0, 98.1]
+    ]
+  },
+  "rds": [
+    [10.0, 7.3, 0.0411],
+    [10.0, 26.4, 0.0379],
+    [4.5, 4.28, 0.07]
+  ],
+  "caps": {
+    "ciss": 1.96e-09,
+    "coss": 2.5e-10,
+    "crss": 4e-11
+  },
+  "body_diode": {
+    "at": "図 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C",
+    "points": [
+      [0.2, 0.6821],
+      [0.5, 0.7116],
+      [1.0, 0.7354],
+      [2.0, 0.7639],
+      [5.0, 0.8029],
+      [10.0, 0.8551],
+      [20.0, 0.9511],
+      [50.0, 1.1872]
+    ]
+  },
+  "remarks": [
+    "the table gives VGS(th) min 2.0 / max 4.0 V and RDS(on) max 44 mohm (10 V, 16 A) only; the typical values are the graphs'. Most tick labels on the graph pages are pictures, so the axes were placed on the grid lines found with `ds grid` (the thick ones are the decades) and read with `ds trace` with `xt=` / `yt=`",
+    "transfer: Figure 3 (VDS = 50 V), the 25 C curve (the steeper of the two; it crosses the 175 C one near 5.3 V). Its square root rises 3.8 per volt at 5 V and 1.8 at 7 V: RS is fitted (the source resistance in the gate loop)",
+    "rds: Figure 1 (25 C) in its linear part: the top bundle (7 to 15 V, which lie on each other there) at 0.3 V and 1 V (7.3 A, 26.4 A: 41 and 38 mohm) taken as VGS = 10 V; the 4.5 V curve at 0.3 V (4.28 A: 70 mohm)",
+    "caps: the table's Ciss 1960, Coss 250, Crss 40 pF typ (VGS = 0, VDS = 25 V, 1 MHz)",
+    "body_diode: Figure 7, the 25 C curve (the right one), 0.2 to 50 A; the table's VSD max 1.2 V at 16 A"
+  ]
+}

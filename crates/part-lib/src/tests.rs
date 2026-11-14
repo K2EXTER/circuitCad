@@ -204,7 +204,7 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
 ")).unwrap();
     };
     let old = legacy_models();
-    assert_eq!(old.len(), 31, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, the diodes 1N4148, 1N4001, 1N4007 and the transistors 2N3904, 2N7000, AO3400A, AO3401A, 2N3906, BSS138, BC547, PN2222A and the Schottkys 1N5819, 1N5817, SS14 (M9)");
+    assert_eq!(old.len(), 39, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, the diodes 1N4148, 1N4001, 1N4007 and the transistors 2N3904, 2N7000, AO3400A, AO3401A, 2N3906, BSS138, BC547, PN2222A, BD139, BD140, IRF540N, IRFZ44N, the Schottkys 1N5819, 1N5817, SS14, 1N5822, BAT54 and the rectifiers 1N5408, UF4007 (M9)");
     for (name, shipped) in &old {
         assert!(!shipped.texts.is_empty(), "{name}");
         let current: PartDef = example(name);

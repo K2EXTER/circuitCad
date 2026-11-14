@@ -175,6 +175,9 @@ fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32
     // or more (also a grid line cut short by the white box behind a label). A curve's flat stretch (the top of an hFE
     // curve) is thicker.
     let (long, short, thin) = ((50.0 * px_per_pt) as i64, (15.0 * px_per_pt) as i64, (0.8 * px_per_pt).ceil() as i64);
+    // a black grid line up to 2 points thick (International Rectifier's graphs) goes on 120 points or more, much longer than a
+    // curve's flat stretch
+    let very_long = (120.0 * px_per_pt) as i64;
     let mut runs: Vec<(i64, i64)> = vec![];
     for a in top..=bottom {
         if !px(a, col) {
@@ -187,7 +190,7 @@ fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32
     }
     let straight = |r: &(i64, i64)| {
         let min_extent = (r.0..=r.1).map(|a| extent(a, long)).min().unwrap_or(0);
-        r.1 - r.0 < thin && min_extent >= short
+        (r.1 - r.0 < thin && min_extent >= short) || (r.1 - r.0 < (2.0 * px_per_pt) as i64 && extent(r.0 + (r.1 - r.0) / 2, very_long) >= very_long)
     };
     let c = col as f32 / px_per_pt;
     runs.iter()
@@ -214,6 +217,40 @@ impl Graph {
         let Some(y) = self.y.position(yv) else { return vec![] };
         curve_crossings_row(img, px_per_pt, y, x0, x1, skip).into_iter().filter_map(|x| self.x.value(x)).collect()
     }
+}
+
+/// The straight lines that run across a box (page points x0, y0, x1, y1) on the page's picture: the grid and the frame
+/// of a graph, for placing its axes when the tick labels are not text (pictures of numbers). `vertical` picks the
+/// lines running up and down (their x) or across (their y). Each is (centre, thickness) in points; a line is a run of
+/// pixel columns (rows) that are dark (black or grey) over 70 % of the box. The thick ones are usually the decades.
+pub fn grid_lines(img: &crate::PageImage, px_per_pt: f32, b: crate::Rect, vertical: bool) -> Vec<(f32, f32)> {
+    let dark = |x: i64, y: i64| {
+        if x < 0 || y < 0 || x as usize >= img.width || y as usize >= img.height {
+            return false;
+        }
+        let i = (y as usize * img.width + x as usize) * 4;
+        (299 * img.rgba[i] as i32 + 587 * img.rgba[i + 1] as i32 + 114 * img.rgba[i + 2] as i32) / 1000 < 180
+    };
+    let k = px_per_pt;
+    let (a0, a1, c0, c1) = if vertical { (b.x0, b.x1, b.y0, b.y1) } else { (b.y0, b.y1, b.x0, b.x1) };
+    let (a0, a1, c0, c1) = ((a0 * k) as i64, (a1 * k) as i64, (c0 * k) as i64, (c1 * k) as i64);
+    let full = |a: i64| {
+        let n = (c0..=c1).filter(|&c| if vertical { dark(a, c) } else { dark(c, a) }).count() as i64;
+        n * 10 >= (c1 - c0 + 1) * 7
+    };
+    let mut out = vec![];
+    let mut run: Option<i64> = None;
+    for a in a0..=a1 + 1 {
+        match (full(a) && a <= a1, run) {
+            (true, None) => run = Some(a),
+            (false, Some(s)) => {
+                out.push(((s + a - 1) as f32 / 2.0 / k, (a - s) as f32 / k));
+                run = None;
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Every number printed on a page as (text, centre x, centre y), one per label (several labels read as one word are

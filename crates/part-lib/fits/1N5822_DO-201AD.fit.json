@@ -1,0 +1,63 @@
+{
+  "kind": "diode",
+  "part": "1N5822_DO-201AD",
+  "name": "1N5822",
+  "read": "2026-11-14",
+  "source": "Vishay 1N5820〜1N5822 データシート (Document Number 88526, Revision 05-Apr-2019)",
+  "url": "https://www.vishay.com/docs/88526/1n5820.pdf",
+  "description": "ショットキーバリアダイオード 40V 3A (DO-201AD, 帯の側がカソード K)。順方向電圧が低く、電源の整流・逆流防止に。データシート (Vishay) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 3 (順方向の代表特性) の 25 °C",
+    "points": [
+      [0.02, 0.2371],
+      [0.05, 0.2571],
+      [0.1, 0.2771],
+      [0.2, 0.3021],
+      [0.5, 0.3521],
+      [1.0, 0.3934],
+      [2.0, 0.4347],
+      [3.0, 0.4735],
+      [5.0, 0.5385],
+      [10.0, 0.6336]
+    ]
+  },
+  "hot": {
+    "temp": 125.0,
+    "points": [
+      [0.02, 0.0995],
+      [0.05, 0.1345],
+      [0.1, 0.1683],
+      [0.2, 0.1995],
+      [0.5, 0.2571],
+      [1.0, 0.3009],
+      [2.0, 0.3384],
+      [3.0, 0.3734],
+      [5.0, 0.4397],
+      [10.0, 0.5285]
+    ]
+  },
+  "breakdown": {
+    "v": 48.0,
+    "i": 0.002,
+    "note": "降伏はデータシートに無いので、非繰り返しの最大逆電圧 VRSM 48 V に置いた (電流は表の IR の最大 2 mA)"
+  },
+  "capacitance": {
+    "at": "図 5 (接合容量の代表特性)",
+    "points": [
+      [0.2, 5.486e-10],
+      [0.5, 5.066e-10],
+      [1.0, 4.476e-10],
+      [2.0, 3.402e-10],
+      [5.0, 2.346e-10],
+      [10.0, 1.684e-10],
+      [20.0, 1.172e-10]
+    ]
+  },
+  "no_recovery": "逆回復は扱いません (ショットキーは多数キャリアで動き、蓄積する電荷がほとんど無い。データシートにも trr は無い)。",
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace` (forward: `rows`) on pages 2 and 3, checked against the rendered pages",
+    "forward, hot: Figure 3 has two curves, 125 C (left) and 25 C; the label 'TJ = 25 C' and its arrow lie near 0.4 V and were left out. Up to 10 A",
+    "the table: VF max 0.525 V at 3 A and 0.95 V at 9.4 A for the 1N5822 (the curve: 0.47 V and 0.63 V), IR max 2 mA at 25 C",
+    "capacitance: Figure 5, 0.2 to 20 V"
+  ]
+}

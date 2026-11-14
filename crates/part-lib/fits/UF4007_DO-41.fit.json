@@ -1,0 +1,53 @@
+{
+  "kind": "diode",
+  "part": "UF4007_DO-41",
+  "name": "UF4007",
+  "read": "2026-11-14",
+  "source": "Vishay UF4001〜UF4007 データシート (Document Number 88755, Revision 06-Apr-2020)",
+  "url": "https://www.vishay.com/docs/88755/uf4001.pdf",
+  "description": "ファストリカバリ整流ダイオード 1000V 1A (DO-41, 帯の側がカソード K)。スイッチング電源の整流に (逆回復 max 75ns)。データシート (Vishay) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 4 (順方向の代表特性。UF4005〜UF4007) の 25 °C",
+    "points": [
+      [0.015, 0.6378],
+      [0.02, 0.6617],
+      [0.05, 0.7619],
+      [0.1, 0.855],
+      [0.2, 0.9767],
+      [0.5, 1.1748],
+      [1.0, 1.3991],
+      [2.0, 1.5996]
+    ]
+  },
+  "breakdown": {
+    "v": 1000.0,
+    "i": 1e-05,
+    "note": "降伏はデータシートに無いので、繰り返しの最大逆電圧 VRRM 1000 V に置いた (電流は表の IR の最大 10 µA)"
+  },
+  "capacitance": {
+    "at": "図 7 (接合容量の代表特性)",
+    "points": [
+      [0.2, 2.732e-11],
+      [0.5, 2.435e-11],
+      [1.0, 2.189e-11],
+      [2.0, 1.968e-11],
+      [4.0, 1.649e-11],
+      [10.0, 1.264e-11],
+      [20.0, 1.026e-11],
+      [50.0, 7.63e-12]
+    ]
+  },
+  "recovery": {
+    "trr": 7.5e-08,
+    "if": 0.5,
+    "ir": 1.0,
+    "note": "表の trr の最大 75 ns (UF4005〜UF4007。IF = 0.5 A、IR = 1.0 A、Irr = 0.25 A まで)"
+  },
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace` (forward: `rows`; the y labels with `yt=` by hand, as two of them overlap others in the box) and checked against the rendered page 3",
+    "forward: Figure 4 (UF4005 to UF4007) has four curves, 150, 125, 100 and 25 C left to right; the rightmost is used. The labels' arrows cross the curves near 0.1 to 0.5 A and were left out by their place",
+    "the table: VF max 1.7 V at 1 A for UF4004 to UF4007 (the curve: 1.40 V), CJ typ 17 pF at 4 V (the curve: 16.5 pF), IR max 10 uA at 25 C, trr max 75 ns",
+    "the fit gives N = 5.1 (a warning): the curve rises 0.76 V from 15 mA to 1 A, more than N = 2 with a series resistance can follow (93 mV off at 0.2 A); the readings were checked again on the page",
+    "breakdown: no VRSM is given; VRRM 1000 V is used"
+  ]
+}

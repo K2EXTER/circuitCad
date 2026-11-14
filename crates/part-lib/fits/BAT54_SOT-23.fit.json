@@ -1,0 +1,58 @@
+{
+  "kind": "diode",
+  "part": "BAT54_SOT-23",
+  "name": "BAT54",
+  "read": "2026-11-14",
+  "source": "onsemi BAT54L データシート (BAT54LT1/D Rev. 18, 2024-11)",
+  "url": "https://www.onsemi.com/pdf/datasheet/bat54lt1-d.pdf",
+  "description": "小信号ショットキーダイオード 30V 200mA (SOT-23, ピン1=A 3=K, ピン2は NC)。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "forward": {
+    "at": "表の VF の typ (0.1・1・10・30・100 mA、25 °C)",
+    "points": [
+      [0.0001, 0.22],
+      [0.001, 0.29],
+      [0.01, 0.35],
+      [0.03, 0.41],
+      [0.1, 0.52]
+    ]
+  },
+  "hot": {
+    "temp": 125.0,
+    "points": [
+      [0.00015, 0.0659],
+      [0.0003, 0.0886],
+      [0.0005, 0.1064],
+      [0.001, 0.1297],
+      [0.002, 0.1563],
+      [0.005, 0.1908],
+      [0.01, 0.2193]
+    ]
+  },
+  "breakdown": {
+    "v": 30.0,
+    "i": 1e-05,
+    "note": "表の V(BR)R の min 30 V (IR = 10 µA)"
+  },
+  "capacitance": {
+    "at": "図 4 (全容量の代表特性。表の CT は 1 V で typ 7.6 pF)",
+    "points": [
+      [0.25, 9.517e-12],
+      [0.5, 8.869e-12],
+      [1.0, 8.063e-12],
+      [2.0, 6.157e-12],
+      [3.0, 5.29e-12],
+      [5.0, 4.313e-12],
+      [10.0, 3.443e-12],
+      [15.0, 3.022e-12],
+      [20.0, 2.686e-12],
+      [25.0, 2.505e-12]
+    ]
+  },
+  "no_recovery": "逆回復は扱いません (ショットキーは多数キャリアで動き、蓄積する電荷がほとんど無い。データシートの trr は max 5 ns (IF = IR = 10 mA) で、その多くは容量の充放電です)。",
+  "remarks": [
+    "forward: the table's VF typ at five currents (Figure 2's 25 C curve is about 10 mV lower: 0.28 V at 1 mA against the table's 0.29 V; the table is used)",
+    "hot: Figure 2 (forward voltage at -55, -40, 25, 85, 125 and 150 C), the 125 C curve (second from the left) read with `ds trace ... rows` up to 10 mA; above it the curves bunch up and the labels lie on them",
+    "capacitance: Figure 4 (linear axes), read with `ds trace`, 0.25 to 25 V",
+    "breakdown: the table's V(BR)R min 30 V at 10 uA"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "kind": "diode",
+  "part": "1N5408_DO-201AD",
+  "name": "1N5408",
+  "read": "2026-11-14",
+  "source": "Vishay 1N5400〜1N5408 データシート (Document Number 88516, Revision 19-Dec-2025)",
+  "url": "https://www.vishay.com/docs/88516/1n5400.pdf",
+  "description": "整流ダイオード 1000V 3A (DO-201AD, 帯の側がカソード K)。商用電源の整流に。データシート (Vishay) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 3 (順方向の代表特性) の 25 °C",
+    "points": [
+      [0.2, 0.6969],
+      [0.5, 0.7385],
+      [1.0, 0.7767],
+      [2.0, 0.8357],
+      [3.0, 0.8619],
+      [5.0, 0.9231],
+      [10.0, 1.0127]
+    ]
+  },
+  "breakdown": {
+    "v": 1000.0,
+    "i": 5e-06,
+    "note": "降伏はデータシートに無いので、繰り返しの最大逆電圧 VRRM 1000 V に置いた (電流は表の IR の最大 5 µA)"
+  },
+  "capacitance": {
+    "at": "図 5 (接合容量の代表特性)",
+    "points": [
+      [0.2, 5.393e-11],
+      [0.5, 4.6e-11],
+      [1.0, 4.064e-11],
+      [2.0, 3.559e-11],
+      [4.0, 3.062e-11],
+      [10.0, 2.477e-11],
+      [20.0, 2.094e-11],
+      [50.0, 1.649e-11]
+    ]
+  },
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace` (forward: `rows`, the voltage at each current) and checked against the rendered page 3",
+    "forward: Figure 3 at 25 C. Below about 0.2 A the drawn curve is almost vertical (22 mV from 20 to 100 mA, steeper than any junction), so those points are not used; 0.2 to 10 A",
+    "the table: VF max 1.2 V at 3 A (the curve: 0.86 V), CJ typ 30 pF at 4 V (the curve: 30.6 pF), IR max 5 uA at 25 C",
+    "breakdown: no VRSM is given; VRRM 1000 V is used"
+  ]
+}

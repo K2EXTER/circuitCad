@@ -27,9 +27,18 @@ fn bundled() -> Vec<(Spec, Fitted, String)> {
 }
 
 /// `NAME=value` pairs of a `.model` card.
-fn params(card: &str) -> BTreeMap<String, f64> {
-    let inner = card.split_once('(').unwrap().1.trim_end_matches(')');
-    inner.split_whitespace().map(|kv| kv.split_once('=').unwrap()).map(|(k, v)| (k.to_string(), v.parse().unwrap())).collect()
+/// `NAME=value` pairs of the `.model` cards in the text (a `.subckt` has two: the channel and the body diode; a
+/// name is prefixed with its model's name, `DBODY.RS`).
+fn params(text: &str) -> BTreeMap<String, f64> {
+    let mut out = BTreeMap::new();
+    for card in text.lines().filter(|l| l.trim_start().starts_with(".model")) {
+        let model = card.split_whitespace().nth(1).unwrap_or("");
+        let inner = card.split_once('(').unwrap().1.trim_end_matches(')');
+        for (k, v) in inner.split_whitespace().map(|kv| kv.split_once('=').unwrap()) {
+            out.insert(format!("{model}.{k}"), v.parse().unwrap());
+        }
+    }
+    out
 }
 
 #[test]
@@ -43,7 +52,7 @@ fn the_bundled_models_are_what_their_readings_give() {
         assert_eq!(was.keys().collect::<Vec<_>>(), now.keys().collect::<Vec<_>>(), "{}", f.part);
         for (k, a) in &was {
             let b = now[k];
-            assert!((b - a).abs() <= 2e-3 * a.abs(), "{} {k}: bundled {a}, fit {b}", f.part);
+            assert!((b - a).abs() <= 2e-3 * a.abs() + 1e-30, "{} {k}: bundled {a}, fit {b}", f.part);
         }
         assert_eq!(sim.limits, f.limits, "{}", f.part);
         assert_eq!(sim.origin.map(|o| o.source), Some(f.source.clone()), "{}", f.part);
@@ -68,7 +77,10 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
         let n = match &s {
             Spec::Diode(d) => d.forward.points.len() + d.hot.as_ref().map_or(0, |h| h.points.len()) + d.capacitance.points.len(),
             Spec::Bjt(b) => b.hfe_norm.len() + b.vbe_on.len() + b.vbe_sat.len() + b.vce_sat.len() + b.cibo.len() + b.cobo.len(),
-            Spec::Mos(m) => 1 + m.rds.len() + 2 + m.gfs.map_or(0, |_| 1),
+            Spec::Mos(m) => {
+                let threshold = if m.transfer.is_some() { usize::from(m.vth_range.is_some()) } else { 1 };
+                threshold + m.transfer.as_ref().map_or(0, |t| t.points.len()) + m.rds.len() + 2 + m.gfs.map_or(0, |_| 1) + m.body_diode.as_ref().map_or(0, |b| b.points.len())
+            }
         };
         assert_eq!(f.rows.len(), n, "{}", f.part);
         // a reading the model's form cannot follow is said in a note (with its condition); the others stay near

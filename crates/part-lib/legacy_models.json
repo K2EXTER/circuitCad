@@ -269,5 +269,69 @@
   "descriptions": [
    "SS14 ショットキーバリアダイオード 40V 1A (SMA/DO-214AC)。簡易モデル(パラメータは概算)、帯の側がカソード K"
   ]
+ },
+ "1N5408_DO-201AD": {
+  "texts": [
+   ".model 1N5408 D(IS=14n N=1.9 RS=0.03 BV=1000 IBV=5u)"
+  ],
+  "descriptions": [
+   "整流ダイオード 1000V 3A (DO-201AD, 帯の側がカソード K)。商用電源の整流に。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "1N5822_DO-201AD": {
+  "texts": [
+   ".model 1N5822 D(IS=2u N=1.1 RS=0.02 BV=40 IBV=1m)"
+  ],
+  "descriptions": [
+   "ショットキーバリアダイオード 40V 3A (DO-201AD, 帯の側がカソード K)。順方向電圧が低く、電源の整流・逆流防止に。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "BAT54_SOT-23": {
+  "texts": [
+   ".model BAT54 D(IS=10n N=1.05 RS=4 BV=30 IBV=2u)"
+  ],
+  "descriptions": [
+   "小信号ショットキーダイオード 30V 200mA (SOT-23, ピン1=A 3=K, ピン2は NC)。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "BD139_TO-126": {
+  "texts": [
+   ".model BD139 NPN(IS=2e-13 BF=120 BR=8)"
+  ],
+  "descriptions": [
+   "NPN パワートランジスタ 80V 1.5A (TO-126, ピン1=E 2=C 3=B)。ランドの寸法(2.54mmピッチ)は概算、ピン配置・寸法はデータシートで確認。簡易モデル"
+  ]
+ },
+ "BD140_TO-126": {
+  "texts": [
+   ".model BD140 PNP(IS=2e-13 BF=120 BR=8)"
+  ],
+  "descriptions": [
+   "PNP パワートランジスタ 80V 1.5A (TO-126, ピン1=E 2=C 3=B)。BD139 の相補。簡易モデル"
+  ]
+ },
+ "IRF540N_TO-220": {
+  "texts": [
+   ".subckt IRF540N d g s\nM1 d g s s MCH\nDbody s d DBODY\n.model MCH NMOS(VTO=3.0 KP=3.2 LAMBDA=0.01 CGS=1.6n CGD=0.1n)\n.model DBODY D(IS=2n N=1.3 RS=0.02)\n.ends IRF540N"
+  ],
+  "descriptions": [
+   "N チャネル パワーMOSFET 100V 33A (TO-220, ピン1=G 2=D 3=S)。10V 駆動。ボディダイオード入りの簡易モデル(パラメータは概算)"
+  ]
+ },
+ "IRFZ44N_TO-220": {
+  "texts": [
+   ".subckt IRFZ44N d g s\nM1 d g s s MCH\nDbody s d DBODY\n.model MCH NMOS(VTO=3.0 KP=8.2 LAMBDA=0.01 CGS=1.4n CGD=0.1n)\n.model DBODY D(IS=2n N=1.3 RS=0.02)\n.ends IRFZ44N"
+  ],
+  "descriptions": [
+   "N チャネル パワーMOSFET 55V 49A (TO-220, ピン1=G 2=D 3=S)。10V 駆動(ロジックレベルではない)。ボディダイオード入りの簡易モデル(パラメータは概算)"
+  ]
+ },
+ "UF4007_DO-41": {
+  "texts": [
+   ".model UF4007 D(IS=1n N=2.0 RS=0.3 BV=1000 IBV=5u)"
+  ],
+  "descriptions": [
+   "ファストリカバリ整流ダイオード 1000V 1A (DO-41, 帯の側がカソード K)。スイッチング電源の整流に(逆回復 75ns)。簡易モデル(パラメータは概算)"
+  ]
  }
 }

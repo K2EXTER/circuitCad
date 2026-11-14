@@ -1,0 +1,59 @@
+{
+  "kind": "mos",
+  "part": "IRFZ44N_TO-220",
+  "name": "IRFZ44N",
+  "pch": false,
+  "read": "2026-11-14",
+  "source": "Infineon IRFZ44NPbF データシート (Rev. 2.1, 2026-08-11)",
+  "url": "https://www.infineon.com/assets/row/public/documents/24/49/infineon-irfz44n-datasheet-en.pdf",
+  "description": "N チャネル パワーMOSFET 55V 49A (TO-220, ピン1=G 2=D 3=S)。10V 駆動。データシート (Infineon) の代表特性から作った等価モデル (レベル1 + 直列抵抗、ボディダイオードつき)",
+  "vth_range": [2.0, 4.0, 0.00025],
+  "transfer": {
+    "at": "図 3 (伝達特性の代表特性、VDS = 25 V) の 25 °C",
+    "vds": 25.0,
+    "points": [
+      [4.6, 10.56],
+      [4.8, 18.88],
+      [5.0, 22.63],
+      [5.5, 41.43],
+      [6.0, 58.36],
+      [6.5, 77.07],
+      [7.0, 92.78],
+      [7.5, 112.1],
+      [8.0, 126.0],
+      [9.0, 157.3]
+    ]
+  },
+  "rds": [
+    [10.0, 6.65, 0.015],
+    [10.0, 35.8, 0.014],
+    [10.0, 70.6, 0.0142],
+    [4.5, 4.5, 0.0666]
+  ],
+  "caps": {
+    "ciss": 1.47e-09,
+    "coss": 3.6e-10,
+    "crss": 8.8e-11
+  },
+  "body_diode": {
+    "at": "図 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C",
+    "points": [
+      [0.2, 0.6897],
+      [0.5, 0.7179],
+      [1.0, 0.7432],
+      [2.0, 0.7686],
+      [5.0, 0.8222],
+      [10.0, 0.887],
+      [20.0, 0.9815],
+      [50.0, 1.2154],
+      [100.0, 1.5561]
+    ]
+  },
+  "remarks": [
+    "the table gives VGS(th) min 2.0 / max 4.0 V and RDS(on) max 17.5 mohm (10 V, 25 A) only. Most tick labels are pictures: the axes are placed on the grid lines found with `ds grid` and read with `ds trace` `xt=` / `yt=`; Figure 7's x labels (0.0, 0.6, 1.2, 1.8, 2.4 V) differ from the IRF540N's and were checked on the page drawn at 2 px/pt",
+    "transfer: Figure 3 (VDS = 25 V), the 25 C curve (lower than the 175 C one below about 5.5 V, higher above)",
+    "rds: Figure 1 (25 C), the second curve from the top (10 V; at 1 V all eight curves are apart: 15, 10, 8 V ... give 78.8, 70.6, 63.5 A) at 0.1, 0.5 and 1 V; the bottom one (4.5 V) at 0.3 V",
+    "caps: the table's Ciss 1470, Coss 360, Crss 88 pF typ (VGS = 0, VDS = 25 V, 1 MHz)",
+    "body_diode: Figure 7, the 25 C curve (the right one), 0.2 to 100 A; the table's VSD max 1.3 V at 25 A"
+  ]
+}

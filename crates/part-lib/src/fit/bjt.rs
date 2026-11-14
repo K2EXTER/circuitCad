@@ -37,7 +37,10 @@ pub struct BjtSpec {
     pub vbe_sat: Vec<[f64; 2]>,
     pub vce_sat: Vec<[f64; 2]>,
     /// (reverse voltage V, F): emitter-base with the collector open, collector-base with the emitter open.
+    /// Empty when the data sheet gives no capacitance (BD140): no CJE / CJC, and the limits say so.
+    #[serde(default)]
     pub cibo: Vec<[f64; 2]>,
+    #[serde(default)]
     pub cobo: Vec<[f64; 2]>,
     /// fT (Hz); the min when no typ is given (the model is then as slow as the min allows).
     #[serde(default)]
@@ -187,11 +190,12 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     if b.hfe_norm.len() < 3 || b.vbe_on.len() < 2 || b.vbe_sat.len() < 2 || b.vce_sat.len() < 2 {
         return Err("点が足りません。hFE の曲線は 3 点以上、VBE・VBE(sat)・VCE(sat) は 2 点以上読んでください".into());
     }
-    if b.cibo.len() < 2 || b.cobo.len() < 2 {
-        return Err("容量の点が足りません。Cibo と Cobo を、逆電圧を変えて 2 点以上ずつ読んでください".into());
+    if b.cibo.len() == 1 || b.cobo.len() == 1 || b.cibo.is_empty() != b.cobo.is_empty() {
+        return Err("容量の点が足りません。Cibo と Cobo を、逆電圧を変えて 2 点以上ずつ読んでください (データシートに無ければ、両方とも空に)".into());
     }
     let vaf = vaf_of(b)?;
-    let ft = b.ft_typ.or(b.ft_min).ok_or("fT がありません。ft_typ (typ) か ft_min (min) を書いてください")?;
+    // no fT in the data sheet (BD139): no TF, and the limits say so
+    let ft = b.ft_typ.or(b.ft_min);
     let l = f64::log10;
     let starts = [
         [l(2e-14), l(200.0), l(1e-13), 1.6, l(0.05), 1.0, l(0.3), l(5.0), 0.0],
@@ -224,12 +228,17 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
         return Err("当てはめが収まりませんでした。点の読み (電流の単位 A、電圧 V) を確かめてください".into());
     }
     let p = unpack(&x, vaf);
-    let (cje, vje, mje) = fit_cap(&b.cibo, 10);
-    let (cjc, vjc, mjc) = fit_cap(&b.cobo, 10);
-    let tf = 1.0 / (2.0 * std::f64::consts::PI * ft);
+    let caps = if b.cibo.is_empty() {
+        String::new()
+    } else {
+        let (cje, vje, mje) = fit_cap(&b.cibo, 10);
+        let (cjc, vjc, mjc) = fit_cap(&b.cobo, 10);
+        format!(" CJE={} VJE={} MJE={} CJC={} VJC={} MJC={}", g(cje, 4), g(vje, 6), g(mje, 6), g(cjc, 4), g(vjc, 6), g(mjc, 6))
+    };
+    let tf = ft.map(|f| format!(" TF={}", g(1.0 / (2.0 * std::f64::consts::PI * f), 4))).unwrap_or_default();
     let kind = if b.pnp { "PNP" } else { "NPN" };
     let text = format!(
-        ".model {} {kind}(IS={} BF={} NF={} VAF={} IKF={} ISE={} NE={:.3} BR={} RB={} RE={} RC={} CJE={} VJE={} MJE={} CJC={} VJC={} MJC={} TF={})",
+        ".model {} {kind}(IS={} BF={} NF={} VAF={} IKF={} ISE={} NE={:.3} BR={} RB={} RE={} RC={}{caps}{tf})",
         b.common.name,
         g(p.is, 4),
         g(p.bf, 4),
@@ -242,17 +251,11 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
         g(p.rb, 4),
         g(p.re, 4),
         g(p.rc, 4),
-        g(cje, 4),
-        g(vje, 6),
-        g(mje, 6),
-        g(cjc, 4),
-        g(vjc, 6),
-        g(mjc, 6),
-        g(tf, 4)
     );
-    let speed = match b.ft_typ {
-        Some(f) => format!("fT の typ {} MHz から TF を決めました", g(f / 1e6, 6)),
-        None => format!("fT の min {} MHz から TF を決めました (実物は、ふつうこれより速い)", g(ft / 1e6, 6)),
+    let speed = match (b.ft_typ, ft) {
+        (Some(f), _) => format!("fT の typ {} MHz から TF を決めました", g(f / 1e6, 6)),
+        (None, Some(f)) => format!("fT の min {} MHz から TF を決めました (実物は、ふつうこれより速い)", g(f / 1e6, 6)),
+        (None, None) => "データシートに fT が無いので、蓄積の時間 TF は入れていません (速いスイッチングや高い周波数では、実物より速く出ます)".into(),
     };
     let early = match (&b.hoe, &b.vaf) {
         (Some(h), _) => format!("Early 電圧 VAF {} V は、hoe ({}〜{} µmho、1 mA) の中ほどから。", g(vaf, 4), g(h[0] * 1e6, 6), g(h[1] * 1e6, 6)),
@@ -262,10 +265,11 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     let limits = vec![
         format!("データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。", b.common.source),
         format!("直流: {} (hFE の電流による変化{})・{} (VBE、VBE(sat)、VCE(sat)) に、IS・BF{}・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。{}", b.figs.hfe, if b.hfe_absolute { "" } else { "。相対値" }, b.figs.on, if b.fit_nf { "・NF (VBE の傾き)" } else { "" }, b.hfe_note),
-        format!(
-            "容量: {} の Cibo・Cobo に CJE・CJC を当てはめました。速さ: {speed}。{early}",
-            b.figs.cap,
-        ),
+        if b.cibo.is_empty() {
+            format!("容量: データシートに容量の値もグラフも無いので、入れていません (速いスイッチングや高い周波数では、実物より速く出ます)。速さ: {speed}。{early}")
+        } else {
+            format!("容量: {} の Cibo・Cobo に CJE・CJC を当てはめました。速さ: {speed}。{early}", b.figs.cap)
+        },
         "扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。".into(),
         LAST_WORD.into(),
     ];
@@ -282,6 +286,8 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     for [ic, v] in &b.vce_sat {
         rows.push(row("VCE(sat)", format!("IC = {}、IC/IB = 10", amps(*ic)), *v, sat(&p, *ic).map_or(f64::NAN, |o| o.1), "V"));
     }
+    let (cje, vje, mje) = if b.cibo.is_empty() { (0.0, 1.0, 0.5) } else { fit_cap(&b.cibo, 10) };
+    let (cjc, vjc, mjc) = if b.cobo.is_empty() { (0.0, 1.0, 0.5) } else { fit_cap(&b.cobo, 10) };
     for [v, cc] in &b.cibo {
         rows.push(row("Cibo", format!("VEB = {} V", g(*v, 4)), *cc, cap_at(cje, vje, mje, *v), "F"));
     }

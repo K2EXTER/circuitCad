@@ -58,14 +58,14 @@ struct Bjt {
     vbe_on: &'static [(f64, f64)],
     vbe_sat: &'static [(f64, f64, Option<f64>, Option<f64>)],
     vce_sat: &'static [(f64, Option<f64>, Option<f64>)],
-    /// (reverse voltage, typ, max) pF: Cobo (VCB), Cibo (VEB)
-    cobo: (f64, f64, Option<f64>),
-    cibo: (f64, f64, Option<f64>),
+    /// (reverse voltage, typ, max) pF: Cobo (VCB), Cibo (VEB); None when the data sheet gives none (BD140)
+    cobo: Option<(f64, f64, Option<f64>)>,
+    cibo: Option<(f64, f64, Option<f64>)>,
 }
 
 const GEOMETRIC_MEAN: &str = "表の min と max の幾何平均。データシートに typ は無い";
 
-static BJTS: [Bjt; 4] = [
+static BJTS: [Bjt; 6] = [
     Bjt {
         part: "2N3904",
         pnp: false,
@@ -78,8 +78,8 @@ static BJTS: [Bjt; 4] = [
         vbe_on: &[(5e-3, 0.684), (10e-3, 0.706), (50e-3, 0.79), (100e-3, 0.869)],
         vbe_sat: &[(10e-3, 0.745, Some(0.65), Some(0.85)), (50e-3, 0.848, None, Some(0.95))],
         vce_sat: &[(10e-3, None, Some(0.2)), (50e-3, Some(0.194), Some(0.3)), (100e-3, Some(0.36), None)],
-        cobo: (5.0, 1.96, Some(4.0)),
-        cibo: (0.5, 3.76, Some(8.0)),
+        cobo: Some((5.0, 1.96, Some(4.0))),
+        cibo: Some((0.5, 3.76, Some(8.0))),
     },
     Bjt {
         part: "2N3906",
@@ -93,8 +93,8 @@ static BJTS: [Bjt; 4] = [
         vbe_on: &[(5e-3, 0.71), (10e-3, 0.727), (50e-3, 0.81), (100e-3, 0.868)],
         vbe_sat: &[(10e-3, 0.757, Some(0.65), Some(0.85)), (50e-3, 0.85, None, Some(0.95))],
         vce_sat: &[(10e-3, None, Some(0.25)), (50e-3, Some(0.136), Some(0.4)), (100e-3, Some(0.245), None)],
-        cobo: (5.0, 3.19, Some(4.5)),
-        cibo: (0.5, 4.72, Some(10.0)),
+        cobo: Some((5.0, 3.19, Some(4.5))),
+        cibo: Some((0.5, 4.72, Some(10.0))),
     },
     // BC547 (B grade): its data sheet gives the hFE and VBE(on) curves at VCE = 10 V; the table's hFE typ 290 (2 mA, 5 V)
     // set the curve's height. The table's Cibo typ (10 pF) is far from its Figure 5 (5.8 pF at 0.5 V): the figure is the typ here
@@ -110,8 +110,8 @@ static BJTS: [Bjt; 4] = [
         vbe_on: &[(1e-3, 0.626), (10e-3, 0.72), (50e-3, 0.85), (70e-3, 0.893)],
         vbe_sat: &[(10e-3, 0.786, None, None), (50e-3, 0.941, None, None)],
         vce_sat: &[(10e-3, Some(0.0706), None), (50e-3, Some(0.184), None), (70e-3, Some(0.263), None)],
-        cobo: (10.0, 1.74, Some(4.5)),
-        cibo: (0.5, 5.78, None),
+        cobo: Some((10.0, 1.74, Some(4.5))),
+        cibo: Some((0.5, 5.78, None)),
     },
     // PN2222A: its data sheet (Fairchild Rev. 1.1.0) has min and max only; the typ curves are those of MMBT2222A/PZT2222A
     // (the same table), whose Figure 3 gives hFE itself (peak 1) at VCE = 5 V
@@ -127,8 +127,40 @@ static BJTS: [Bjt; 4] = [
         vbe_on: &[(1e-3, 0.628), (5e-3, 0.677), (10e-3, 0.696), (20e-3, 0.718)],
         vbe_sat: &[(10e-3, 0.725, None, None), (100e-3, 0.836, None, None)],
         vce_sat: &[(50e-3, Some(0.0689), None), (100e-3, Some(0.0964), None), (150e-3, None, Some(0.3))],
-        cobo: (10.0, 4.19, Some(8.0)),
-        cibo: (0.5, 18.45, Some(25.0)),
+        cobo: Some((10.0, 4.19, Some(8.0))),
+        cibo: Some((0.5, 18.45, Some(25.0))),
+    },
+    // BD139 / BD140: their data sheets (onsemi BD135/D, BD136/D) give hFE itself at VCE = 2 V; no fT, no hoe, and the BD140 no
+    // capacitance either
+    Bjt {
+        part: "BD139",
+        pnp: false,
+        figs: ("図 1", "図 2〜4", "図 5"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの",
+        vce: 2.0,
+        hfe_norm: &[(1e-3, 122.7), (2e-3, 127.2), (5e-3, 133.6), (10e-3, 138.0), (20e-3, 143.1), (50e-3, 149.6), (100e-3, 152.7), (200e-3, 153.3), (300e-3, 150.8), (500e-3, 139.1), (700e-3, 122.7)],
+        hfe_rows: &[(5e-3, Some(25.0), None), (50e-3, None, None), (150e-3, Some(40.0), Some(250.0)), (500e-3, Some(25.0), None)],
+        vbe_on: &[(10e-3, 0.6496), (100e-3, 0.7205), (500e-3, 0.809)],
+        vbe_sat: &[(100e-3, 0.7715, None, None), (500e-3, 0.8601, None, None)],
+        vce_sat: &[(200e-3, Some(0.0493), None), (500e-3, Some(0.0945), Some(0.5))],
+        cobo: Some((10.0, 12.3, None)),
+        cibo: Some((1.0, 232.4, None)),
+    },
+    Bjt {
+        part: "BD140",
+        pnp: true,
+        figs: ("図 1", "図 2・3", "-"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの",
+        vce: 2.0,
+        hfe_norm: &[(50e-3, 89.67), (100e-3, 88.11), (200e-3, 84.46), (300e-3, 80.6), (500e-3, 74.26), (700e-3, 65.99), (1.0, 53.3), (1.3, 39.04)],
+        hfe_rows: &[(50e-3, None, None), (150e-3, None, None), (500e-3, Some(25.0), None), (1.0, None, None)],
+        vbe_on: &[(10e-3, 0.6522), (100e-3, 0.7301), (500e-3, 0.8043)],
+        vbe_sat: &[(100e-3, 0.7702, None, None), (500e-3, 0.8644, None, None)],
+        vce_sat: &[(100e-3, Some(0.0558), None), (500e-3, Some(0.1325), Some(0.5))],
+        cobo: None,
+        cibo: None,
     },
 ];
 
@@ -214,6 +246,16 @@ fn id_sweep(part: &str, vds: f64, from: f64, to: f64) -> Vec<(f64, f64)> {
 /// Forward transconductance at drain current `id` and `vds`. The gate voltage for `id`: a coarse sweep finds the step it is in, a
 /// fine one over that step finds it (two runs of `ccad`; a bisection took 42 and about 33 s per part). The slope there is that of the
 /// parabola through the three nearest points of the fine sweep (exact for the square law; the points are about 0.5 mV apart).
+/// The frequency guess for measuring Cibo: near the expected value (a power transistor's is hundreds of pF).
+fn guess_cibo(typ_pf: f64) -> f64 {
+    typ_pf * 1e-12
+}
+
+/// The body diode's forward drop |VSD| at source current `is` (gate tied to source, current from source to drain).
+fn vsd(part: &str, is: f64) -> f64 {
+    probes(&format!("new\nadd {part} as=M1\nadd I {is} as=IS\nnet S IS.+ M1.S M1.G\nnet GND IS.- M1.D\n"), &["V(S)"])[0].abs()
+}
+
 fn gfs(part: &str, vds: f64, id: f64) -> f64 {
     let id = id.abs();
     let cross = |pts: &[(f64, f64)]| pts.windows(2).position(|w| w[0].1 < id && w[1].1 >= id).unwrap_or_else(|| panic!("{part}: ID = {id} A not reached in {:?}..{:?}", pts.first(), pts.last()));
@@ -246,6 +288,10 @@ fn source(part: &str) -> &'static str {
         "2N3904" => "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
         "2N3906" => "onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)。25 °C",
         "PN2222A" => "Fairchild PN2222A データシート (Rev. 1.1.0, 2014-07) の表、MMBT2222A/PZT2222A (Rev. 1.1.0) の代表特性。25 °C",
+        "BD139" => "onsemi BD135G/BD137G/BD139G データシート (BD135/D Rev. 18, 2024-06)。25 °C",
+        "BD140" => "onsemi BD136/BD138/BD140 データシート (BD136/D Rev. 2, 2024-05)。25 °C",
+        "IRF540N" => "Infineon IRF540NPbF データシート (Rev. 2.1, 2026-07-24)。25 °C",
+        "IRFZ44N" => "Infineon IRFZ44NPbF データシート (Rev. 2.1, 2026-08-11)。25 °C",
         "BC547" => "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
@@ -284,33 +330,34 @@ fn rows() -> Vec<Row> {
             v.push(Row { part, item: format!("VCE(sat) ({} mA)", ic * 1e3), ds: [None, typ, max], unit: "V", at: format!("IC/IB = 10。typ は{fon}、max は表"), measure: Box::new(move || t.sat(ic).1), tol: typ.map(|_| 0.03) });
         }
         let s = t.sign();
+        let (Some(cobo), Some(cibo)) = (t.cobo, t.cibo) else { continue };
         v.push(Row {
             part,
-            item: format!("Cobo ({} V)", t.cobo.0),
-            ds: [None, Some(t.cobo.1), t.cobo.2],
+            item: format!("Cobo ({} V)", cobo.0),
+            ds: [None, Some(cobo.1), cobo.2],
             unit: "pF",
-            at: format!("VCB = {} V、IE = 0。typ は{fcap}、max は表", t.cobo.0),
+            at: format!("VCB = {} V、IE = 0。typ は{fcap}、max は表", cobo.0),
             measure: Box::new(move || cap_at(&format!("add {part} as=Q1
 add R 1G as=RE
 net X Q1.C
 net GND Q1.B RE.2
 net EM Q1.E RE.1
-"), t.cobo.0 * s, 2e-12) * 1e12),
-            tol: Some(0.3),
+"), cobo.0 * s, 2e-12) * 1e12),
+            tol: Some((0.1 * cobo.1).max(0.3)),
         });
         v.push(Row {
             part,
-            item: format!("Cibo ({} V)", t.cibo.0),
-            ds: [None, Some(t.cibo.1), t.cibo.2],
+            item: format!("Cibo ({} V)", cibo.0),
+            ds: [None, Some(cibo.1), cibo.2],
             unit: "pF",
-            at: format!("VEB = {} V、IC = 0。typ は{fcap}、max は表", t.cibo.0),
+            at: format!("VEB = {} V、IC = 0。typ は{fcap}、max は表", cibo.0),
             measure: Box::new(move || cap_at(&format!("add {part} as=Q1
 add R 1G as=RC
 net X Q1.E
 net GND Q1.B RC.2
 net CO Q1.C RC.1
-"), t.cibo.0 * s, 4e-12) * 1e12),
-            tol: Some(0.5),
+"), cibo.0 * s, guess_cibo(cibo.1)) * 1e12),
+            tol: Some((0.1 * cibo.1).max(0.5)),
         });
     }
     // MOSFETs: VGS(th), RDS(on) at each gate voltage of the table, gFS, the gate capacitances
@@ -354,6 +401,27 @@ net CO Q1.C RC.1
             measure: Box::new(move || cap_at(&format!("add {part} as=M1\nnet X M1.D\nnet GND M1.S M1.G\n"), 0.0, crss * 1e-12) * 1e12),
             tol: Some(0.05 * crss),
         });
+    }
+    // the power MOSFETs whose data sheets give VGS(th) and RDS(on) as min / max only (Infineon, the former IR): RDS(on) and the
+    // body diode at the typical curves' values, the table's limits next to them
+    #[allow(clippy::type_complexity)]
+    let power: [(&'static str, f64, (f64, f64, f64), (f64, f64), f64); 2] = [
+        ("IRF540N", 0.044, (10.0, 16.0, 0.0395), (0.5, 0.7116), 1.2),
+        ("IRFZ44N", 0.0175, (10.0, 25.0, 0.0141), (0.5, 0.7179), 1.3),
+    ];
+    for (part, rmax, (vgs, id, rtyp), (is_lo, vsd_lo), vsd_max) in power {
+        v.push(Row { part, item: "しきい値 VGS(th)".into(), ds: [Some(2.0), None, Some(4.0)], unit: "V", at: "VDS = VGS、ID = 250 µA (表は min・max だけ)".into(), measure: Box::new(move || vth(part, 250e-6)), tol: None });
+        v.push(Row {
+            part,
+            item: format!("RDS(on) (VGS = {vgs} V)"),
+            ds: [None, Some(rtyp * 1e3), Some(rmax * 1e3)],
+            unit: "mΩ",
+            at: format!("ID = {id} A。typ は図 1 の直線部分の傾き、max は表"),
+            measure: Box::new(move || rds(part, vgs, id) * 1e3),
+            tol: Some(0.15 * rtyp * 1e3),
+        });
+        v.push(Row { part, item: format!("VSD ({is_lo} A)"), ds: [None, Some(vsd_lo), None], unit: "V", at: "ボディダイオード、図 7 の 25 °C".into(), measure: Box::new(move || vsd(part, is_lo)), tol: Some(0.02) });
+        v.push(Row { part, item: format!("VSD ({id} A)"), ds: [None, None, Some(vsd_max)], unit: "V", at: "ボディダイオード、表の max".into(), measure: Box::new(move || vsd(part, id)), tol: None });
     }
     v
 }

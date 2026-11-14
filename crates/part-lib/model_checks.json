@@ -281,6 +281,67 @@
       }
     ]
   },
+  "1N5408": {
+    "fingerprint": "ed4c3cbbdc2563e5",
+    "source": "Vishay 1N5400〜1N5408 データシート (Document Number 88516, Revision 19-Dec-2025)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.5 A)",
+        "datasheet": "— / 0.7385 / — V",
+        "target": "0.7385 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "0.7422 V",
+        "diff": "+0.0037 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.7767 / — V",
+        "target": "0.7767 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "0.7836 V",
+        "diff": "+0.0069 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (3 A)",
+        "datasheet": "— / 0.8619 / — V",
+        "target": "0.8619 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "0.8646 V",
+        "diff": "+0.0027 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 A)",
+        "datasheet": "— / 1.013 / — V",
+        "target": "1.013 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "1.016 V",
+        "diff": "+0.0028 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、3 A)",
+        "datasheet": "— / — / 1.200 V",
+        "target": "max 1.200 V",
+        "condition": "VF: 表の max (パルスで測る)",
+        "model": "0.8646 V",
+        "diff": "-0.3354 V",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (4 V)",
+        "datasheet": "— / 30.620 / — pF",
+        "target": "30.620 pF",
+        "condition": "容量の図 (グラフから読んだ)。表の typ は 30 pF",
+        "model": "30.393 pF",
+        "diff": "-0.2274 pF",
+        "tested": true
+      }
+    ]
+  },
   "1N5817": {
     "fingerprint": "8438e03ec51ddb43",
     "source": "onsemi 1N5817〜1N5819 データシート (1N5817/D Rev. 11, 2021-08)。25 °C",
@@ -472,6 +533,67 @@
         "model": "0.0049 mA",
         "diff": "-0.9951 mA",
         "tested": false
+      }
+    ]
+  },
+  "1N5822": {
+    "fingerprint": "c767bade281f6f37",
+    "source": "Vishay 1N5820〜1N5822 データシート (Document Number 88526, Revision 05-Apr-2019)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.1 A)",
+        "datasheet": "— / 0.2771 / — V",
+        "target": "0.2771 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "0.2863 V",
+        "diff": "+0.0092 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.3934 / — V",
+        "target": "0.3934 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "0.3910 V",
+        "diff": "-0.0024 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (3 A)",
+        "datasheet": "— / 0.4735 / — V",
+        "target": "0.4735 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "0.4693 V",
+        "diff": "-0.0042 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 A)",
+        "datasheet": "— / 0.6336 / — V",
+        "target": "0.6336 V",
+        "condition": "図 3 の 25 °C (グラフから読んだ)",
+        "model": "0.6415 V",
+        "diff": "+0.0079 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、3 A)",
+        "datasheet": "— / — / 0.5250 V",
+        "target": "max 0.5250 V",
+        "condition": "VF: 表の max (パルスで測る)",
+        "model": "0.4693 V",
+        "diff": "-0.0557 V",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (5 V)",
+        "datasheet": "— / 234.6 / — pF",
+        "target": "234.6 pF",
+        "condition": "容量の図 (グラフから読んだ)",
+        "model": "238.3 pF",
+        "diff": "+3.728 pF",
+        "tested": true
       }
     ]
   },
@@ -1215,6 +1337,67 @@
       }
     ]
   },
+  "BAT54": {
+    "fingerprint": "f2c61bc24448228c",
+    "source": "onsemi BAT54L データシート (BAT54LT1/D Rev. 18, 2024-11)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.1 mA)",
+        "datasheet": "— / 0.2200 / 0.2400 V",
+        "target": "0.2200 V",
+        "condition": "VF: 表の typ と max",
+        "model": "0.2223 V",
+        "diff": "+0.0023 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 mA)",
+        "datasheet": "— / 0.2900 / 0.3200 V",
+        "target": "0.2900 V",
+        "condition": "VF: 表の typ と max",
+        "model": "0.2842 V",
+        "diff": "-0.0058 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 mA)",
+        "datasheet": "— / 0.3500 / 0.4000 V",
+        "target": "0.3500 V",
+        "condition": "VF: 表の typ と max",
+        "model": "0.3554 V",
+        "diff": "+0.0054 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (30 mA)",
+        "datasheet": "— / 0.4100 / 0.5000 V",
+        "target": "0.4100 V",
+        "condition": "VF: 表の typ と max",
+        "model": "0.4074 V",
+        "diff": "-0.0026 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (100 mA)",
+        "datasheet": "— / 0.5200 / 0.8000 V",
+        "target": "0.5200 V",
+        "condition": "VF: 表の typ と max",
+        "model": "0.5200 V",
+        "diff": "+0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "全容量 (1 V)",
+        "datasheet": "— / 7.600 / 10.000 pF",
+        "target": "7.600 pF",
+        "condition": "CT: VR = 1 V、f = 1 MHz (表。図 4 は 8.1 pF)",
+        "model": "7.484 pF",
+        "diff": "-0.1162 pF",
+        "tested": true
+      }
+    ]
+  },
   "BC547": {
     "fingerprint": "a1bb85681e4cb6e0",
     "source": "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
@@ -1366,6 +1549,236 @@
       }
     ]
   },
+  "BD139": {
+    "fingerprint": "251362b97ef346dc",
+    "source": "onsemi BD135G/BD137G/BD139G データシート (BD135/D Rev. 18, 2024-06)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "hFE (5 mA)",
+        "datasheet": "25.000 / 133.6 / —",
+        "target": "133.6",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "149.5",
+        "diff": "+15.914",
+        "tested": true
+      },
+      {
+        "item": "hFE (50 mA)",
+        "datasheet": "— / 149.6 / —",
+        "target": "149.6",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "146.4",
+        "diff": "-3.227",
+        "tested": true
+      },
+      {
+        "item": "hFE (150 mA)",
+        "datasheet": "40.000 / 153.1 / 250.0",
+        "target": "153.1",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "140.4",
+        "diff": "-12.603",
+        "tested": true
+      },
+      {
+        "item": "hFE (500 mA)",
+        "datasheet": "25.000 / 139.1 / —",
+        "target": "139.1",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "123.3",
+        "diff": "-15.798",
+        "tested": true
+      },
+      {
+        "item": "VBE (10 mA)",
+        "datasheet": "— / 0.6496 / — V",
+        "target": "0.6496 V",
+        "condition": "VCE = 2 V、図 2〜4 (グラフから読んだ)",
+        "model": "0.6521 V",
+        "diff": "+0.0025 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (100 mA)",
+        "datasheet": "— / 0.7205 / — V",
+        "target": "0.7205 V",
+        "condition": "VCE = 2 V、図 2〜4 (グラフから読んだ)",
+        "model": "0.7225 V",
+        "diff": "+0.0020 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (500 mA)",
+        "datasheet": "— / 0.8090 / — V",
+        "target": "0.8090 V",
+        "condition": "VCE = 2 V、図 2〜4 (グラフから読んだ)",
+        "model": "0.8061 V",
+        "diff": "-0.0029 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (100 mA)",
+        "datasheet": "— / 0.7715 / — V",
+        "target": "0.7715 V",
+        "condition": "IC/IB = 10。typ は図 2〜4、min / max は表",
+        "model": "0.7652 V",
+        "diff": "-0.0063 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (500 mA)",
+        "datasheet": "— / 0.8601 / — V",
+        "target": "0.8601 V",
+        "condition": "IC/IB = 10。typ は図 2〜4、min / max は表",
+        "model": "0.8619 V",
+        "diff": "+0.0018 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (200 mA)",
+        "datasheet": "— / 0.0493 / — V",
+        "target": "0.0493 V",
+        "condition": "IC/IB = 10。typ は図 2〜4、max は表",
+        "model": "0.0521 V",
+        "diff": "+0.0028 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (500 mA)",
+        "datasheet": "— / 0.0945 / 0.5000 V",
+        "target": "0.0945 V",
+        "condition": "IC/IB = 10。typ は図 2〜4、max は表",
+        "model": "0.0940 V",
+        "diff": "-0.0005 V",
+        "tested": true
+      },
+      {
+        "item": "Cobo (10 V)",
+        "datasheet": "— / 12.300 / — pF",
+        "target": "12.300 pF",
+        "condition": "VCB = 10 V、IE = 0。typ は図 5、max は表",
+        "model": "13.516 pF",
+        "diff": "+1.216 pF",
+        "tested": true
+      },
+      {
+        "item": "Cibo (1 V)",
+        "datasheet": "— / 232.4 / — pF",
+        "target": "232.4 pF",
+        "condition": "VEB = 1 V、IC = 0。typ は図 5、max は表",
+        "model": "233.0 pF",
+        "diff": "+0.5856 pF",
+        "tested": true
+      }
+    ]
+  },
+  "BD140": {
+    "fingerprint": "d95f9ce7261ba1c3",
+    "source": "onsemi BD136/BD138/BD140 データシート (BD136/D Rev. 2, 2024-05)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "hFE (50 mA)",
+        "datasheet": "— / 89.670 / —",
+        "target": "89.670",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "90.282",
+        "diff": "+0.6115",
+        "tested": true
+      },
+      {
+        "item": "hFE (150 mA)",
+        "datasheet": "— / 85.975 / —",
+        "target": "85.975",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "84.467",
+        "diff": "-1.507",
+        "tested": true
+      },
+      {
+        "item": "hFE (500 mA)",
+        "datasheet": "25.000 / 74.260 / —",
+        "target": "74.260",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "69.429",
+        "diff": "-4.831",
+        "tested": true
+      },
+      {
+        "item": "hFE (1000 mA)",
+        "datasheet": "— / 53.300 / —",
+        "target": "53.300",
+        "condition": "VCE = 2 V。typ は図 1の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "53.428",
+        "diff": "+0.1278",
+        "tested": true
+      },
+      {
+        "item": "VBE (10 mA)",
+        "datasheet": "— / 0.6522 / — V",
+        "target": "0.6522 V",
+        "condition": "VCE = 2 V、図 2・3 (グラフから読んだ)",
+        "model": "0.6595 V",
+        "diff": "+0.0073 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (100 mA)",
+        "datasheet": "— / 0.7301 / — V",
+        "target": "0.7301 V",
+        "condition": "VCE = 2 V、図 2・3 (グラフから読んだ)",
+        "model": "0.7276 V",
+        "diff": "-0.0025 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (500 mA)",
+        "datasheet": "— / 0.8043 / — V",
+        "target": "0.8043 V",
+        "condition": "VCE = 2 V、図 2・3 (グラフから読んだ)",
+        "model": "0.7974 V",
+        "diff": "-0.0069 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (100 mA)",
+        "datasheet": "— / 0.7702 / — V",
+        "target": "0.7702 V",
+        "condition": "IC/IB = 10。typ は図 2・3、min / max は表",
+        "model": "0.7663 V",
+        "diff": "-0.0039 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (500 mA)",
+        "datasheet": "— / 0.8644 / — V",
+        "target": "0.8644 V",
+        "condition": "IC/IB = 10。typ は図 2・3、min / max は表",
+        "model": "0.8573 V",
+        "diff": "-0.0071 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (100 mA)",
+        "datasheet": "— / 0.0558 / — V",
+        "target": "0.0558 V",
+        "condition": "IC/IB = 10。typ は図 2・3、max は表",
+        "model": "0.0567 V",
+        "diff": "+0.0009 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (500 mA)",
+        "datasheet": "— / 0.1325 / 0.5000 V",
+        "target": "0.1325 V",
+        "condition": "IC/IB = 10。typ は図 2・3、max は表",
+        "model": "0.1269 V",
+        "diff": "-0.0056 V",
+        "tested": true
+      }
+    ]
+  },
   "BSS138": {
     "fingerprint": "7ac43a957d2369ed",
     "source": "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
@@ -1424,6 +1837,92 @@
         "model": "6.000 pF",
         "diff": "+0.0000 pF",
         "tested": true
+      }
+    ]
+  },
+  "IRF540N": {
+    "fingerprint": "d3cccc85e4b2a7d0",
+    "source": "Infineon IRF540NPbF データシート (Rev. 2.1, 2026-07-24)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "2.000 / — / 4.000 V",
+        "target": "max 4.000 V",
+        "condition": "VDS = VGS、ID = 250 µA (表は min・max だけ)",
+        "model": "3.547 V",
+        "diff": "-0.4533 V",
+        "tested": false
+      },
+      {
+        "item": "RDS(on) (VGS = 10 V)",
+        "datasheet": "— / 39.500 / 44.000 mΩ",
+        "target": "39.500 mΩ",
+        "condition": "ID = 16 A。typ は図 1 の直線部分の傾き、max は表",
+        "model": "39.778 mΩ",
+        "diff": "+0.2781 mΩ",
+        "tested": true
+      },
+      {
+        "item": "VSD (0.5 A)",
+        "datasheet": "— / 0.7116 / — V",
+        "target": "0.7116 V",
+        "condition": "ボディダイオード、図 7 の 25 °C",
+        "model": "0.7110 V",
+        "diff": "-0.0006 V",
+        "tested": true
+      },
+      {
+        "item": "VSD (16 A)",
+        "datasheet": "— / — / 1.200 V",
+        "target": "max 1.200 V",
+        "condition": "ボディダイオード、表の max",
+        "model": "0.9143 V",
+        "diff": "-0.2857 V",
+        "tested": false
+      }
+    ]
+  },
+  "IRFZ44N": {
+    "fingerprint": "1c28a68aea22b582",
+    "source": "Infineon IRFZ44NPbF データシート (Rev. 2.1, 2026-08-11)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "2.000 / — / 4.000 V",
+        "target": "max 4.000 V",
+        "condition": "VDS = VGS、ID = 250 µA (表は min・max だけ)",
+        "model": "3.461 V",
+        "diff": "-0.5393 V",
+        "tested": false
+      },
+      {
+        "item": "RDS(on) (VGS = 10 V)",
+        "datasheet": "— / 14.100 / 17.500 mΩ",
+        "target": "14.100 mΩ",
+        "condition": "ID = 25 A。typ は図 1 の直線部分の傾き、max は表",
+        "model": "14.558 mΩ",
+        "diff": "+0.4583 mΩ",
+        "tested": true
+      },
+      {
+        "item": "VSD (0.5 A)",
+        "datasheet": "— / 0.7179 / — V",
+        "target": "0.7179 V",
+        "condition": "ボディダイオード、図 7 の 25 °C",
+        "model": "0.7172 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "VSD (25 A)",
+        "datasheet": "— / — / 1.300 V",
+        "target": "max 1.300 V",
+        "condition": "ボディダイオード、表の max",
+        "model": "1.017 V",
+        "diff": "-0.2827 V",
+        "tested": false
       }
     ]
   },
@@ -2676,87 +3175,6 @@
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "順方向電圧 (0.05 A)",
-        "datasheet": "— / 0.2975 / — V",
-        "target": "0.2975 V",
-        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "0.2984 V",
-        "diff": "+0.0009 V",
-        "tested": true
-      },
-      {
-        "item": "順方向電圧 (0.1 A)",
-        "datasheet": "— / 0.3191 / — V",
-        "target": "0.3191 V",
-        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "0.3196 V",
-        "diff": "+0.0005 V",
-        "tested": true
-      },
-      {
-        "item": "順方向電圧 (0.5 A)",
-        "datasheet": "— / 0.3787 / — V",
-        "target": "0.3787 V",
-        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "0.3801 V",
-        "diff": "+0.0014 V",
-        "tested": true
-      },
-      {
-        "item": "順方向電圧 (1 A)",
-        "datasheet": "— / 0.4194 / — V",
-        "target": "0.4194 V",
-        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "0.4194 V",
-        "diff": "-0.0000 V",
-        "tested": true
-      },
-      {
-        "item": "順方向電圧 (表、1 A)",
-        "datasheet": "— / — / 0.5000 V",
-        "target": "max 0.5000 V",
-        "condition": "VF: 表の max (パルスで測る)",
-        "model": "0.4194 V",
-        "diff": "-0.0806 V",
-        "tested": false
-      },
-      {
-        "item": "接合容量 (1 V)",
-        "datasheet": "— / 184.7 / — pF",
-        "target": "184.7 pF",
-        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "195.6 pF",
-        "diff": "+10.864 pF",
-        "tested": true
-      },
-      {
-        "item": "接合容量 (5 V)",
-        "datasheet": "— / 109.8 / — pF",
-        "target": "109.8 pF",
-        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "107.0 pF",
-        "diff": "-2.803 pF",
-        "tested": true
-      },
-      {
-        "item": "接合容量 (10 V)",
-        "datasheet": "— / 81.000 / — pF",
-        "target": "81.000 pF",
-        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "78.743 pF",
-        "diff": "-2.257 pF",
-        "tested": true
-      },
-      {
-        "item": "接合容量 (20 V)",
-        "datasheet": "— / 56.700 / — pF",
-        "target": "56.700 pF",
-        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
-        "model": "57.230 pF",
-        "diff": "+0.5298 pF",
-        "tested": true
-      },
-      {
         "item": "逆電流 (40 V)",
         "datasheet": "— / — / 0.2000 mA",
         "target": "max 0.2000 mA",
@@ -2903,6 +3321,67 @@
         "condition": "VKA = 36 V、Vref = 0",
         "model": "0.1000 µA",
         "diff": "+0.0000 µA",
+        "tested": true
+      }
+    ]
+  },
+  "UF4007": {
+    "fingerprint": "47ecebc19a3be38f",
+    "source": "Vishay UF4001〜UF4007 データシート (Document Number 88755, Revision 06-Apr-2020)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.05 A)",
+        "datasheet": "— / 0.7619 / — V",
+        "target": "0.7619 V",
+        "condition": "図 4 の 25 °C (グラフから読んだ)",
+        "model": "0.7817 V",
+        "diff": "+0.0198 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.2 A)",
+        "datasheet": "— / 0.9767 / — V",
+        "target": "0.9767 V",
+        "condition": "図 4 の 25 °C (グラフから読んだ)",
+        "model": "0.9929 V",
+        "diff": "+0.0162 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.5 A)",
+        "datasheet": "— / 1.175 / — V",
+        "target": "1.175 V",
+        "condition": "図 4 の 25 °C (グラフから読んだ)",
+        "model": "1.169 V",
+        "diff": "-0.0061 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 1.399 / — V",
+        "target": "1.399 V",
+        "condition": "図 4 の 25 °C (グラフから読んだ)",
+        "model": "1.351 V",
+        "diff": "-0.0484 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、1 A)",
+        "datasheet": "— / — / 1.700 V",
+        "target": "max 1.700 V",
+        "condition": "VF: 表の max (パルスで測る)",
+        "model": "1.351 V",
+        "diff": "-0.3493 V",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (4 V)",
+        "datasheet": "— / 16.490 / — pF",
+        "target": "16.490 pF",
+        "condition": "容量の図 (グラフから読んだ)。表の typ は 17 pF",
+        "model": "16.499 pF",
+        "diff": "+0.0095 pF",
         "tested": true
       }
     ]

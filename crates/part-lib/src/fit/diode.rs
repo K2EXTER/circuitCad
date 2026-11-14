@@ -157,8 +157,26 @@ pub fn fit(p: &DiodeSpec) -> Result<Out, String> {
     }
     limits.push(
         if p.hot.is_some() { "扱わないもの: " } else { "扱わないもの: 温度による順方向電圧の変化はシミュレータの標準の式 (1 °C あたり約 −2 mV)、" }.to_string()
-            + "逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、自己発熱。耐圧や定格電流を超えても壊れません。",
+            + &if is > p.breakdown.i {
+                format!("逆方向の漏れ電流 (IS の {}A。順方向の曲線に合わせた N が大きいので、表の逆電流の max {}A より大きく出ます)、", crate::passive::eng(is), crate::passive::eng(p.breakdown.i))
+            } else {
+                "逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、".to_string()
+            }
+            + "自己発熱。耐圧や定格電流を超えても壊れません。",
     );
     limits.push(LAST_WORD.into());
+    if is > p.breakdown.i {
+        notes.push(format!("IS が {}A になり、表の逆電流の max {}A より大きくなりました。逆向きの漏れ電流が実物より大きく出ます (注記に書きます)", crate::passive::eng(is), crate::passive::eng(p.breakdown.i)));
+    }
+    // forward voltages 30 mV or more away (a hot curve at a large current: RS does not change with temperature here)
+    let hot_at = p.hot.as_ref().map(|h| format!("({} °C)", g(h.temp, 6)));
+    for r in out.iter().filter(|r| r.unit == "V" && (r.model - r.datasheet).abs() >= 0.03) {
+        let why = if hot_at.as_ref().is_some_and(|h| r.at.ends_with(h.as_str())) {
+            "この形では直列抵抗 RS が温度で変わらないので、高い温度の大きい電流では合わせきれません"
+        } else {
+            "IS・N・RS の 3 つの形では、この電流まで合わせきれません"
+        };
+        notes.push(format!("{} が {} で {:+.0} mV ずれています。{why}", r.item, r.at, (r.model - r.datasheet) * 1e3));
+    }
     Ok((text, limits, out, notes))
 }

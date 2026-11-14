@@ -4,7 +4,9 @@
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
 //!     cargo run -p datasheet --example ds -- labels FILE.pdf PAGE [box=x0,y0,x1,y1]   numbers on the page (tick labels)
 //!     cargo run -p datasheet --example ds -- render FILE.pdf PAGE OUT.png [scale=2] [box=x0,y0,x1,y1]
-//!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=x0,y0,x1,y1 x=L1,L2 y=L1,L2 [xlog] [ylog] [rows] at=V1,V2,...
+//!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=x0,y0,x1,y1 x=L1,L2 y=L1,L2 [xlog] [ylog] [rows] [abs] at=V1,V2,...
+//!     cargo run -p datasheet --example ds -- grid   FILE.pdf PAGE box=x0,y0,x1,y1   the grid lines (for labels that are pictures:
+//!                                                                                  then trace with xt=V@X,.. yt=V@Y,..)
 //!
 //! Pages count from 1; positions are PDF points from the top left. `trace` reads a graph inside `box`: the axes from
 //! the tick labels named in `x=` (the lowest of that text in the box) and `y=` (the leftmost), then the curves'
@@ -92,11 +94,20 @@ fn main() -> Result<(), String> {
             let labels: Vec<_> = number_labels(ds.words(p)).into_iter().filter(|l| inside(&b, l.1, l.2)).collect();
             let pick = |list: Option<&str>, horizontal: bool| -> Result<Axis, String> {
                 let mut ticks = vec![];
+                // ticks given by hand: xt= / yt= VALUE@POSITION (page points), for labels that are pictures (`ds grid`)
+                for t in arg(&args, if horizontal { "xt" } else { "yt" }).unwrap_or("").split(',').filter(|s| !s.is_empty()) {
+                    let (v, at) = t.split_once('@').ok_or_else(|| format!("{t}: write VALUE@POSITION"))?;
+                    let value = datasheet::graph::tick_value(v).ok_or_else(|| format!("{v}: not a number"))?;
+                    let value = if args.iter().any(|a| a == "abs") { value.abs() } else { value };
+                    ticks.push(Tick { at: at.parse().map_err(|_| format!("{at}: not a position"))?, value });
+                }
                 for t in list.unwrap_or("").split(',').filter(|s| !s.is_empty()) {
                     let same = labels.iter().filter(|l| l.0 == t);
                     let l = if horizontal { same.max_by(|a, b| a.2.total_cmp(&b.2)) } else { same.min_by(|a, b| a.1.total_cmp(&b.1)) };
                     let l = l.ok_or_else(|| format!("no label '{t}' in the box"))?;
+                    // `abs`: a PNP's graph labels its axes with negative numbers; its readings are written as magnitudes
                     let value = datasheet::graph::tick_value(t).ok_or("label")?;
+                    let value = if args.iter().any(|a| a == "abs") { value.abs() } else { value };
                     ticks.push(Tick { at: if horizontal { l.1 } else { l.2 }, value });
                 }
                 let a = Axis { log: args.iter().any(|a| a == if horizontal { "xlog" } else { "ylog" }), ticks };
@@ -124,6 +135,17 @@ fn main() -> Result<(), String> {
                 let vals = g.curve_values(&img, k, v, top - 1.0, bottom + 1.0, &skip);
                 println!("{v}\t{}", vals.iter().map(|x| format!("{x:.5}")).collect::<Vec<_>>().join("\t"));
             }
+        }
+        "grid" => {
+            let p = page()?;
+            let b = rect(arg(&args, "box")).ok_or("grid needs box=x0,y0,x1,y1 (the plot, inside its frame)")?;
+            let img = ds.render(p, 4.0)?;
+            let k = img.width as f32 / ds.page_size(p).map_or(1.0, |s| s.0);
+            for (name, vertical) in [("x (vertical lines)", true), ("y (horizontal lines)", false)] {
+                let lines = datasheet::graph::grid_lines(&img, k, b, vertical);
+                println!("{name}: {}", lines.iter().map(|(c, w)| format!("{c:.1}{}", if *w > 0.9 { "*" } else { "" })).collect::<Vec<_>>().join(" "));
+            }
+            println!("(* = thick: usually the decades or the labelled lines)");
         }
         other => return Err(format!("unknown command {other}")),
     }
