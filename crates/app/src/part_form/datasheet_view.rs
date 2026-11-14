@@ -298,6 +298,11 @@ impl SheetView {
         d.graph = Some(g);
     }
 
+    /// The rows of `symbol` in the open PDF's electrical characteristics tables (none when no PDF is open).
+    pub fn spec_values(&self, symbol: &str) -> Vec<datasheet::spec_table::SpecValue> {
+        self.doc.as_ref().map(|d| d.ds.spec_values(symbol)).unwrap_or_default()
+    }
+
     /// The points the person sent to the form since the last call.
     pub fn take_graph(&mut self) -> Option<GraphOut> {
         self.doc.as_mut().and_then(|d| d.graph.as_mut()).and_then(|g| g.take_out())

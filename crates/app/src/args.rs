@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-mos-pdf]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -43,7 +43,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         app.open_settings();
     }
     if let Some(i) = args.iter().position(|a| a == "--new-part") {
-        // --new-part [ic|transistor|diode|chip (= ceramic)|ceramic|electrolytic|tantalum|film|resistor|inductor|connector|connector2 (2-row header)]
+        // --new-part [ic|transistor|nmos|pmos|diode|chip (= ceramic)|ceramic|electrolytic|tantalum|film|resistor|inductor|connector|connector2 (2-row header)]
         app.sch.open_part_form_for(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
     }
     if let Some(i) = args.iter().position(|a| a == "--form-tab")
@@ -80,6 +80,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(t) = args.get(i + 1) {
             app.sch.graph_in_form_pdf(t);
         }
+    // --form-mos-pdf: the MOSFET section read from the form's PDF and fitted
+    if args.iter().any(|a| a == "--form-mos-pdf") {
+        app.sch.mos_from_form_pdf();
+    }
     if let Some(i) = args.iter().position(|a| a == "--form-pick")
         && let Some(t) = args.get(i + 1) {
             app.sch.pick_in_form_pdf(t);

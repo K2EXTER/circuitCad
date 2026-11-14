@@ -49,11 +49,15 @@ impl PartForm {
             ui.end_row();
         });
         self.sheet_candidates(ui);
-        if passive || diode {
+        let mosfet = self.ptype == Some(PartType::Transistor) && matches!(self.glyph.as_str(), "nmos" | "pmos");
+        if passive || diode || mosfet {
             ui.add_space(6.0);
             ui.separator();
             if diode {
                 self.diode_ui(ui);
+            }
+            if mosfet {
+                self.mosfet_ui(ui);
             }
             if passive {
                 self.passive_ui(ui);

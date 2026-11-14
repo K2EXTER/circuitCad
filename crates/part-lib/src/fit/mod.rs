@@ -10,7 +10,10 @@ mod edit;
 mod mos;
 pub mod num;
 
+pub use bjt::BjtSpec;
+pub use diode::DiodeSpec;
 pub use edit::write_part;
+pub use mos::{Caps, MosSpec};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

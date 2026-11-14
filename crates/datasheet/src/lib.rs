@@ -9,6 +9,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 mod dimensions;
 pub mod graph;
+pub mod spec_table;
 mod headings;
 mod pin_table;
 mod suggest;
@@ -111,6 +112,11 @@ impl Datasheet {
     }
 
     /// The unit written right after a word on its line ("mm" after "0.65"), if there is one.
+    /// The rows of `symbol` in the electrical characteristics tables of every page (`spec_table::find`).
+    pub fn spec_values(&self, symbol: &str) -> Vec<spec_table::SpecValue> {
+        (0..self.page_count()).flat_map(|p| spec_table::find(p, self.words(p), symbol)).collect()
+    }
+
     pub fn unit_after(&self, page: usize, word: &Word) -> Option<String> {
         text::unit_after(self.words(page), word)
     }

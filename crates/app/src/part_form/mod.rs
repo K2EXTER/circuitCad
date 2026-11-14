@@ -197,6 +197,8 @@ pub struct PartForm {
     pub dio_n: f64,
     pub dio_rs: f64,
     pub dio_message: Option<Result<String, String>>,
+    /// The MOSFET section ("かんたん作成" from the data sheet's table).
+    pub mos: mosfet::MosInput,
     /// The leaded-part helper of the package tab: lead diameter, body length / diameter (axial) or lead spacing (radial), in mm as typed.
     pub thru_lead: String,
     pub thru_len: String,
@@ -338,6 +340,7 @@ impl Default for PartForm {
             dio_n: 1.5,
             dio_rs: 0.05,
             dio_message: None,
+            mos: Default::default(),
             thru_lead: String::new(),
             thru_len: String::new(),
             thru_dia: String::new(),
@@ -380,6 +383,7 @@ impl Default for PartForm {
 mod checklist;
 mod datasheet_view;
 mod graph_reader;
+mod mosfet;
 mod pdf_check;
 mod pdf_input;
 mod pin_import;

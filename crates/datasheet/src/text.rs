@@ -44,6 +44,14 @@ fn is_separator(c: char) -> bool {
 }
 
 impl Word {
+    /// A word for tests: the characters evenly spread over the rectangle, a 8 point font.
+    #[cfg(test)]
+    pub(crate) fn for_test(text: &str, x0: f32, y0: f32, x1: f32, y1: f32) -> Word {
+        let n = text.chars().count().max(1) as f32;
+        let xs = (0..text.chars().count()).map(|i| x0 + (x1 - x0) * i as f32 / n).collect();
+        Word { text: text.into(), rect: Rect { x0, y0, x1, y1 }, baseline: y1, em: 8.0, xs }
+    }
+
     /// The piece of the word at horizontal place `x` between separators: the part number under the pointer in
     /// "LM393B,LM2903B,LM193". None when the place is on a separator.
     pub fn token_at(&self, x: f32) -> Option<&str> {

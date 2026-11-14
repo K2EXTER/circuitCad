@@ -59,6 +59,13 @@ impl SchEditor {
         }
     }
 
+    /// Fills the form's MOSFET section from its PDF's table and fits it (`--form-mos-pdf`, for screenshots).
+    pub fn mos_from_form_pdf(&mut self) {
+        if let Some(f) = self.form.as_mut() {
+            f.mos_from_pdf_and_fit();
+        }
+    }
+
     /// Waits for a click in the data sheet window for a field of the form (`--form-pick <field name>`).
     pub fn pick_in_form_pdf(&mut self, label: &str) {
         if let Some(f) = self.form.as_mut()
