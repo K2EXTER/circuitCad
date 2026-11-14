@@ -821,12 +821,12 @@ fn old_circuits_borrow_the_ratings_of_their_library_parts() {
     }
     let mut e = SchEditor::default();
     e.sch = s;
-    e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect();
+    e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect::<Vec<_>>().into();
     e.run_dc();
     let issues = &e.dc.as_ref().unwrap().ratings;
     assert!(issues.iter().any(|i| i.refdes == "Q1" && i.message.contains("最大定格")), "{issues:?}");
     // without the library the old circuit has only the package rule of thumb (TO-92: 0.5 W), so the wording differs
-    e.library.clear();
+    e.library = Default::default();
     e.run_dc();
     let issues = &e.dc.as_ref().unwrap().ratings;
     assert!(issues.iter().any(|i| i.refdes == "Q1" && i.message.contains("この形の目安")), "{issues:?}");
@@ -982,7 +982,7 @@ fn chain_failure_on_the_coil_example_runs_from_the_panel() {
 fn the_electrolytic_capacitor_of_the_buck_sample_reports_ripple_current_and_life() {
     let sch = example_schematics().into_iter().find(|(n, _)| n == "buck_cout_electrolytic.schjson").unwrap().1;
     let mut e = SchEditor::default();
-    e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect();
+    e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect::<Vec<_>>().into();
     e.adopt(sch, None);
     e.set_tran_settings("2m", "200n");
     e.analyze_tran();

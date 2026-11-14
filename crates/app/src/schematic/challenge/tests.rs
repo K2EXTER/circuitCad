@@ -6,7 +6,7 @@ mod challenge_tests {
 
     fn editor(s: Schematic, id: &str) -> SchEditor {
         let mut e = SchEditor::default();
-        e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect();
+        e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect::<Vec<_>>().into();
         e.start_challenge(id, 0);
         e.sch = s;
         e

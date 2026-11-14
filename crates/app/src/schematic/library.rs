@@ -57,7 +57,7 @@ impl SchEditor {
 
     pub(super) fn reload_library(&mut self) {
         let (lib, errs) = part_lib::load_library(&self.lib_dir);
-        self.library = lib;
+        self.library = std::sync::Arc::new(lib);
         self.lib_rev += 1;
         self.lib_errors = errs;
         self.place_lib = None;

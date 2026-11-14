@@ -40,7 +40,7 @@ fn library_part_reaches_the_board() {
         .map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap())
         .find(|d| d.name == "LM358")
         .unwrap();
-    app.sch.library = vec![def.clone()];
+    app.sch.library = vec![def.clone()].into();
     let u = app.sch.sch.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 10), 0);
     app.sch.sch.add(Kind::Resistor, (34, 10), 0);
     let out = app.sch.sch.components[u].pins().iter().find(|p| p.0 == "1").unwrap().1;

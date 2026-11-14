@@ -140,7 +140,8 @@ pub struct SchEditor {
     pub status: String,
     /// Set by the small "操作" buttons; the app opens the guide on that page.
     pub help_request: Option<crate::help::HelpTab>,
-    pub library: Vec<PartDef>,
+    /// Shared, not copied (every new editor and every test editor had a copy of the ~15 000 parts); replaced as a whole on reload.
+    pub library: std::sync::Arc<Vec<PartDef>>,
     lib_errors: Vec<String>,
     lib_dir: PathBuf,
     lib_filter: String,
@@ -566,11 +567,34 @@ fn kind_tip(k: Kind) -> &'static str {
     }
 }
 
+/// The parts library of a new editor: the user's library folder (the bundled parts are copied there the first time).
+#[cfg(not(test))]
+fn startup_library() -> (std::path::PathBuf, std::sync::Arc<Vec<part_lib::PartDef>>, Vec<String>) {
+    let lib_dir = part_lib::default_dir();
+    let _ = part_lib::install_examples(&lib_dir);
+    let (library, lib_errors) = part_lib::load_library(&lib_dir);
+    (lib_dir, std::sync::Arc::new(library), lib_errors)
+}
+
+/// In the tests: the bundled parts only, in a folder of the tests' own (emptied at the first editor of the run), read once. Every
+/// editor reading the user's library took about 0.1 s (hundreds of tests make editors), and the user's own parts could change
+/// what a test sees; a part a test saves no longer lands in the user's library.
+#[cfg(test)]
+fn startup_library() -> (std::path::PathBuf, std::sync::Arc<Vec<part_lib::PartDef>>, Vec<String>) {
+    static LIB: std::sync::OnceLock<(std::path::PathBuf, std::sync::Arc<Vec<part_lib::PartDef>>, Vec<String>)> = std::sync::OnceLock::new();
+    LIB.get_or_init(|| {
+        let dir = std::env::temp_dir().join("circuitCad-app-test-lib");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = part_lib::install_examples(&dir);
+        let (library, lib_errors) = part_lib::load_library(&dir);
+        (dir, std::sync::Arc::new(library), lib_errors)
+    })
+    .clone()
+}
+
 impl Default for SchEditor {
     fn default() -> Self {
-        let lib_dir = part_lib::default_dir();
-        let _ = part_lib::install_examples(&lib_dir);
-        let (library, lib_errors) = part_lib::load_library(&lib_dir);
+        let (lib_dir, library, lib_errors) = startup_library();
         let lib_prefs = library::LibPrefs::load(&lib_dir);
         Self {
             library,
