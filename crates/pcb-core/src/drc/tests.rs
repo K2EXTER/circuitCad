@@ -27,37 +27,31 @@ mod drc_tests {
         assert_eq!(c.pad_group(0), c.pad_group(1), "one piece of copper through the pour");
     }
 
+    /// Tracks and the number of clearance faults they make (rules: 0.15 mm between copper, 0.3 mm to the board edge). A new
+    /// case of this shape is a new line here (docs/code-notes/tests.md); every case runs and the failing ones are all named.
     #[test]
-    fn parallel_tracks_too_close() {
-        let mut b = board();
-        // gap = 0.35 - 0.25 = 0.10 < 0.15
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Top, (10.0, 10.35), (20.0, 10.35), 0.25));
-        assert_eq!(clearance(&b).len(), 1);
-    }
-
-    #[test]
-    fn parallel_tracks_far_enough() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Top, (10.0, 10.5), (20.0, 10.5), 0.25)); // gap 0.25
-        assert!(clearance(&b).is_empty());
-    }
-
-    #[test]
-    fn different_layers_do_not_interact() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Bottom, (10.0, 10.1), (20.0, 10.1), 0.25));
-        assert!(clearance(&b).is_empty());
-    }
-
-    #[test]
-    fn touching_items_are_one_net() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Top, (20.0, 10.0), (20.0, 20.0), 0.25));
-        assert!(clearance(&b).is_empty());
+    fn track_clearances() {
+        use Side::{Bottom, Top};
+        let cases: [(&str, &[(Side, (f64, f64), (f64, f64), f64)], usize); 5] = [
+            // gap = 0.35 - 0.25 = 0.10 < 0.15
+            ("parallel tracks too close", &[(Top, (10.0, 10.0), (20.0, 10.0), 0.25), (Top, (10.0, 10.35), (20.0, 10.35), 0.25)], 1),
+            // gap 0.25
+            ("parallel tracks far enough", &[(Top, (10.0, 10.0), (20.0, 10.0), 0.25), (Top, (10.0, 10.5), (20.0, 10.5), 0.25)], 0),
+            ("different layers do not interact", &[(Top, (10.0, 10.0), (20.0, 10.0), 0.25), (Bottom, (10.0, 10.1), (20.0, 10.1), 0.25)], 0),
+            ("touching items are one net", &[(Top, (10.0, 10.0), (20.0, 10.0), 0.25), (Top, (20.0, 10.0), (20.0, 20.0), 0.25)], 0),
+            // edge gap ~0.175 < 0.3
+            ("copper near the board edge", &[(Top, (0.3, 10.0), (0.3, 20.0), 0.25)], 1),
+        ];
+        let bad: Vec<String> = cases
+            .iter()
+            .filter_map(|(what, tracks, faults)| {
+                let mut b = board();
+                b.tracks = tracks.iter().map(|&(side, a, z, w)| track(side, a, z, w)).collect();
+                let found = clearance(&b);
+                (found.len() != *faults).then(|| format!("{what}: {} faults, expected {faults}: {found:?}", found.len()))
+            })
+            .collect();
+        assert!(bad.is_empty(), "{bad:#?}");
     }
 
     #[test]
@@ -81,13 +75,6 @@ mod drc_tests {
         assert_eq!(clearance(&b).len(), 1);
         b.tracks[0] = track(Side::Top, (10.85, 5.0), (10.85, 15.0), 0.25); // gap 0.225
         assert!(clearance(&b).is_empty());
-    }
-
-    #[test]
-    fn copper_near_board_edge() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (0.3, 10.0), (0.3, 20.0), 0.25)); // edge gap ~0.175 < 0.3
-        assert_eq!(clearance(&b).len(), 1);
     }
 
     #[test]

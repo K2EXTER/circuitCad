@@ -17,10 +17,100 @@ fn err(text: &str, top: &str, ports: &[&str]) -> String {
     add_subckt_instance(&mut c, "U1", top, text, &nodes).unwrap_err()
 }
 
+/// A subcircuit read from vendor-style text, a voltage at its input, the voltage it gives at `probe`.
+struct Case {
+    what: &'static str,
+    text: &'static str,
+    top: &'static str,
+    ports: &'static [&'static str],
+    vin: f64,
+    probe: &'static str,
+    expect: f64,
+    tol: f64,
+}
+
+/// Text that is refused, with the words the error must have.
+struct Refused {
+    what: &'static str,
+    text: &'static str,
+    top: &'static str,
+    ports: &'static [&'static str],
+    says: &'static str,
+}
+
+/// The texts that are read and solved to one number: a new case of this shape is a new line here, not a new test
+/// (docs/code-notes/tests.md). Every case runs; the failing ones are all named.
 #[test]
-fn param_expressions_set_values() {
-    let t = ".param Rx=2k\n.subckt T a b gnd\nR1 a b {Rx*2}\nR2 b gnd '4k'\n.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-9);
+fn vendor_texts_give_their_voltages() {
+    let cases = [
+        Case { what: "param_expressions_set_values", text: ".param Rx=2k\n.subckt T a b gnd\nR1 a b {Rx*2}\nR2 b gnd '4k'\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 0.5, tol: 1e-9 },
+        Case { what: "the_top_subckt_need_not_be_first", text: ".subckt INNER p q\nR1 p q 1k\n.ends\n.subckt T a b gnd\nX1 a b INNER\nR2 b gnd 1k\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 2.0, probe: "b", expect: 1.0, tol: 1e-9 },
+        Case { what: "params_may_be_used_before_the_line_that_defines_them", text: ".subckt T a b gnd
+R1 a b {Rx}
+R2 b gnd {Rx}
+.param Rx={Ry*2}
+.param Ry=500
+.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 0.5, tol: 1e-9 },
+        // & | ! buf u pwr, and `Rpar=...` after the expression
+        // V(a)=1: (0 | 1&1)=1, u(0.5)=1, pwr=8 -> 10
+        Case { what: "ltspice_logic_functions_and_options_after_a_b_expression", text: ".subckt T a b gnd
+B1 b gnd V=(!V(a) | buf(V(a))&V(a)) + u(V(a)-0.5) + pwr(2,3) Rpar=25k tripdt=30n
+R2 b gnd 1k
+.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 10.0, tol: 1e-3 },
+        // a node fed only by a current source needs Rpar to have a voltage: 1 mA * 2k = 2 V
+        Case { what: "rpar_and_cpar_on_a_b_source_become_a_resistor_and_a_capacitor", text: ".subckt T a b gnd\nB1 gnd b I=1m*V(a) Rpar=2k Cpar=1p\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 2.0, tol: 1e-6 },
+        // "1µ" has a multi-byte character where "Q=" would be looked for
+        Case { what: "a_capacitor_value_with_a_micro_sign_is_not_mistaken_for_a_charge", text: ".subckt T a b gnd\nR1 a b 1k\nC1 b gnd 1µ\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 1.0, tol: 1e-6 },
+        // td = 1e3 * 4 * 2 = 8k: a divider of 8k / 8k
+        Case { what: "braces_inside_a_param_expression_only_group", text: ".subckt T a b gnd vcc1=5 sp=2\n.param td=1e3*({vcc1}-1)*{sp}\nR1 a b {td}\nR2 b gnd 8k\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 2.0, probe: "b", expect: 1.0, tol: 1e-6 },
+        Case { what: "old_pspice_headers_put_their_parameters_in_one_brace_group", text: ".subckt T a b gnd {Rx=2k Ry=2k}\nR1 a b {Rx}\nR2 b gnd {Ry}\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 2.0, probe: "b", expect: 1.0, tol: 1e-6 },
+        Case { what: "an_x_call_may_pass_its_parameters_in_one_brace_group", text: ".subckt DIV in out gnd {r=1k k=2}\nR1 in out {r}\nR2 out gnd {r*k}\n.ends\n.subckt T a b gnd\nX1 a b gnd DIV {r=1k k=3}\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 0.75, tol: 1e-6 },
+        // (2 * 1 + 1) / 2 = 1.5
+        Case { what: "a_value_expression_may_name_parameters_inside_its_braces", text: ".subckt T a b gnd\n.param Gn=2\nEx b 0 value = {({Gn} * V(a) +\n+ 1) / 2}\nRl b gnd 1meg\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 1.5, tol: 1e-6 },
+        // 2 * (1 + 0.25) = 2.5
+        Case { what: "func_defines_a_function_that_other_lines_can_call", text: ".func P (F) {1/F}\n.func Twice(a, b) {2*(a+b)}\n.subckt T a b gnd\nE1 b 0 value = {Twice(V(a), P(4))}\nRl b gnd 1meg\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 2.5, tol: 1e-6 },
+        // 1k + 1k divider
+        Case { what: "a_resistance_given_by_an_expression", text: ".subckt T a b gnd {Rn=500}\nR1 a b R = {Rn} * 2 + Freq\nR2 b gnd 1k\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 2.0, probe: "b", expect: 1.0, tol: 1e-6 },
+        Case { what: "b_source_options_are_not_touched_by_parameters_of_the_same_name", text: ".subckt T a b gnd\n.param ymax=7\nB1 b 0 V=V(a)*2 ymax=1e300 NoJacob\nR1 b gnd 1meg\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 2.0, tol: 1e-6 },
+        // 1 mA into 1k || 1k = 0.5 V
+        Case { what: "value_sources_keep_their_options_apart_from_the_expression", text: ".subckt T a b gnd\nG1 0 b VALUE {IF(V(a) > 0.5, 1m, 0)} Rpar=1k Cpar=1n NoJacob\nR1 b gnd 1k\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 1.0, probe: "b", expect: 0.5, tol: 1e-6 },
+        // Mid, MID and mid are one node: a divider
+        Case { what: "node_names_are_not_case_sensitive", text: ".subckt T a b gnd\nR1 a Mid 1k\nR2 MID gnd 1k\nB1 b 0 V=V(mid)\nR3 b gnd 1meg\n.ends T", top: "T", ports: &["a", "b", "gnd"], vin: 2.0, probe: "b", expect: 1.0, tol: 1e-6 },
+    ];
+    let bad: Vec<String> = cases
+        .iter()
+        .filter_map(|c| {
+            let mut circuit = Circuit::new();
+            let nodes: Vec<usize> = c.ports.iter().map(|p| if *p == "gnd" { 0 } else { circuit.node(p) }).collect();
+            if let Err(e) = add_subckt_instance(&mut circuit, "U1", c.top, c.text, &nodes) {
+                return Some(format!("{}: not read: {e}", c.what));
+            }
+            let a = circuit.node(c.ports[0]);
+            circuit.add(Element::vdc("Vin", a, 0, c.vin));
+            match dc_op(&circuit).map(|r| r.voltage(c.probe)) {
+                Ok(Some(v)) if (v - c.expect).abs() < c.tol => None,
+                Ok(v) => Some(format!("{}: {} = {v:?}, expected {} ± {}", c.what, c.probe, c.expect, c.tol)),
+                Err(e) => Some(format!("{}: no operating point: {e:?}", c.what)),
+            }
+        })
+        .collect();
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
+/// The texts that are refused with a reason.
+#[test]
+fn vendor_texts_that_are_refused_say_why() {
+    let cases = [
+        Refused { what: "a_question_mark_default_means_the_caller_must_give_the_parameter", text: ".subckt T a b gnd {Rx=???}\nR1 a b {Rx}\nR2 b gnd 1k\n.ends T", top: "T", ports: &["a", "b", "gnd"], says: "Rx" },
+    ];
+    let bad: Vec<String> = cases
+        .iter()
+        .filter_map(|c| {
+            let e = err(c.text, c.top, c.ports);
+            (!e.contains(c.says)).then(|| format!("{}: the error does not say {:?}: {e}", c.what, c.says))
+        })
+        .collect();
+    assert!(bad.is_empty(), "{bad:#?}");
 }
 
 #[test]
@@ -66,12 +156,6 @@ fn nested_calls_keep_internal_nodes_and_expressions_apart() {
 }
 
 #[test]
-fn the_top_subckt_need_not_be_first() {
-    let t = ".subckt INNER p q\nR1 p q 1k\n.ends\n.subckt T a b gnd\nX1 a b INNER\nR2 b gnd 1k\n.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-9);
-}
-
-#[test]
 fn an_unknown_inner_subckt_is_explained() {
     let e = err(".subckt T a b\nX1 a b NOPE\n.ends T", "T", &["a", "b"]);
     assert!(e.contains("NOPE") && e.contains("貼って"), "{e}");
@@ -87,17 +171,6 @@ fn an_unknown_parameter_is_named() {
 fn a_subckt_calling_itself_stops() {
     let e = err(".subckt T a b\nX1 a b T\n.ends T", "T", &["a", "b"]);
     assert!(e.contains("深すぎ"), "{e}");
-}
-
-#[test]
-fn params_may_be_used_before_the_line_that_defines_them() {
-    let t = ".subckt T a b gnd
-R1 a b {Rx}
-R2 b gnd {Rx}
-.param Rx={Ry*2}
-.param Ry=500
-.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-9);
 }
 
 #[test]
@@ -161,17 +234,6 @@ B1 b gnd V=tbl(V(a), 0,0, 1,2, 2,2.5)
 R2 b gnd 1k
 .ends T";
     assert!((run(b, "T", &["a", "b", "gnd"], 1.5, "b") - 2.25).abs() < 1e-6);
-}
-
-#[test]
-fn ltspice_logic_functions_and_options_after_a_b_expression() {
-    // & | ! buf u pwr, and `Rpar=...` after the expression
-    let t = ".subckt T a b gnd
-B1 b gnd V=(!V(a) | buf(V(a))&V(a)) + u(V(a)-0.5) + pwr(2,3) Rpar=25k tripdt=30n
-R2 b gnd 1k
-.ends T";
-    // V(a)=1: (0 | 1&1)=1, u(0.5)=1, pwr=8 -> 10
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 10.0).abs() < 1e-3, "{}", run(t, "T", &["a", "b", "gnd"], 1.0, "b"));
 }
 
 #[test]
@@ -433,13 +495,6 @@ fn bisect_singular() {
         }
     }
     println!("removing one of these makes it solvable: {fixers:?}");
-}
-
-#[test]
-fn rpar_and_cpar_on_a_b_source_become_a_resistor_and_a_capacitor() {
-    // a node fed only by a current source needs Rpar to have a voltage: 1 mA * 2k = 2 V
-    let t = ".subckt T a b gnd\nB1 gnd b I=1m*V(a) Rpar=2k Cpar=1p\n.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.0).abs() < 1e-6);
 }
 
 #[test]
@@ -767,13 +822,6 @@ fn a_nonlinear_charge_capacitor_has_the_small_signal_capacitance_dq_dv() {
 }
 
 #[test]
-fn a_capacitor_value_with_a_micro_sign_is_not_mistaken_for_a_charge() {
-    // "1µ" has a multi-byte character where "Q=" would be looked for
-    let t = ".subckt T a b gnd\nR1 a b 1k\nC1 b gnd 1µ\n.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 1.0).abs() < 1e-6);
-}
-
-#[test]
 fn an_ltspice_modulator_makes_a_sine_with_the_frequency_set_by_the_fm_pin() {
     // fm = 0.5 V between space = 0 and mark = 100 kHz -> 50 kHz; am = 2 V
     let t = ".subckt T fm am o\nA1 fm am 0 0 0 0 o 0 MODULATOR mark=100k space=0\n.ends T";
@@ -789,31 +837,6 @@ fn an_ltspice_modulator_makes_a_sine_with_the_frequency_set_by_the_fm_pin() {
     let hi = vo.values.iter().cloned().fold(f64::MIN, f64::max);
     assert!((rising as i32 - 5).abs() <= 1, "{rising} cycles in 100 us at 50 kHz");
     assert!((hi - 2.0).abs() < 0.05, "amplitude {hi}");
-}
-
-#[test]
-fn braces_inside_a_param_expression_only_group() {
-    let t = ".subckt T a b gnd vcc1=5 sp=2\n.param td=1e3*({vcc1}-1)*{sp}\nR1 a b {td}\nR2 b gnd 8k\n.ends T";
-    // td = 1e3 * 4 * 2 = 8k: a divider of 8k / 8k
-    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
-}
-
-#[test]
-fn old_pspice_headers_put_their_parameters_in_one_brace_group() {
-    let t = ".subckt T a b gnd {Rx=2k Ry=2k}\nR1 a b {Rx}\nR2 b gnd {Ry}\n.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
-}
-
-#[test]
-fn an_x_call_may_pass_its_parameters_in_one_brace_group() {
-    let t = ".subckt DIV in out gnd {r=1k k=2}\nR1 in out {r}\nR2 out gnd {r*k}\n.ends\n.subckt T a b gnd\nX1 a b gnd DIV {r=1k k=3}\n.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.75).abs() < 1e-6);
-}
-
-#[test]
-fn a_question_mark_default_means_the_caller_must_give_the_parameter() {
-    let t = ".subckt T a b gnd {Rx=???}\nR1 a b {Rx}\nR2 b gnd 1k\n.ends T";
-    assert!(err(t, "T", &["a", "b", "gnd"]).contains("Rx"));
 }
 
 #[test]
@@ -848,13 +871,6 @@ fn a_source_may_have_a_series_resistance_rser() {
 }
 
 #[test]
-fn a_value_expression_may_name_parameters_inside_its_braces() {
-    let t = ".subckt T a b gnd\n.param Gn=2\nEx b 0 value = {({Gn} * V(a) +\n+ 1) / 2}\nRl b gnd 1meg\n.ends T";
-    // (2 * 1 + 1) / 2 = 1.5
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 1.5).abs() < 1e-6);
-}
-
-#[test]
 fn a_vswitch_written_with_an_a_name_is_a_switch() {
     let t = ".subckt T a b gnd\nV1 c gnd 5\nAS1 a b c gnd SW1\n.model SW1 VSWITCH(RON=1 ROFF=1e9 VON=4 VOFF=1)\n.ends T";
     // closed (control 5 V > VON): 1 ohm in series with the 1k load
@@ -865,13 +881,6 @@ fn a_vswitch_written_with_an_a_name_is_a_switch() {
     c.add(Element::Resistor { name: "Rl".into(), a: b, b: 0, r: 1e3 });
     let v = dc_op(&c).unwrap().voltage("b").unwrap();
     assert!((v - 1000.0 / 1001.0).abs() < 1e-3, "{v}");
-}
-
-#[test]
-fn func_defines_a_function_that_other_lines_can_call() {
-    let t = ".func P (F) {1/F}\n.func Twice(a, b) {2*(a+b)}\n.subckt T a b gnd\nE1 b 0 value = {Twice(V(a), P(4))}\nRl b gnd 1meg\n.ends T";
-    // 2 * (1 + 0.25) = 2.5
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.5).abs() < 1e-6);
 }
 
 #[test]
@@ -944,13 +953,6 @@ fn an_expression_may_read_the_current_of_an_e_source_given_by_value() {
 }
 
 #[test]
-fn a_resistance_given_by_an_expression() {
-    let t = ".subckt T a b gnd {Rn=500}\nR1 a b R = {Rn} * 2 + Freq\nR2 b gnd 1k\n.ends T";
-    // 1k + 1k divider
-    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
-}
-
-#[test]
 fn a_lossy_line_has_a_series_resistance() {
     // 100 ohm per metre over 1 m with L = 250 nH/m and C = 100 pF/m (Z0 = 50): 100 ohm in series at DC
     let t = ".subckt T a b gnd\nO1 a gnd b gnd LOSSY\n.model LOSSY LTRA(R=100 G=0 L=250n C=100p LEN=1)\nRl b gnd 100\n.ends T";
@@ -991,19 +993,6 @@ fn ddt_is_the_time_derivative() {
     let at = |tt: f64| vo.values[r.time.iter().position(|x| *x >= tt).unwrap()];
     assert!((at(0.5e-3) - 1000.0).abs() < 20.0, "{}", at(0.5e-3));
     assert!(at(1.5e-3).abs() < 20.0, "{}", at(1.5e-3));
-}
-
-#[test]
-fn b_source_options_are_not_touched_by_parameters_of_the_same_name() {
-    let t = ".subckt T a b gnd\n.param ymax=7\nB1 b 0 V=V(a)*2 ymax=1e300 NoJacob\nR1 b gnd 1meg\n.ends T";
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.0).abs() < 1e-6);
-}
-
-#[test]
-fn value_sources_keep_their_options_apart_from_the_expression() {
-    let t = ".subckt T a b gnd\nG1 0 b VALUE {IF(V(a) > 0.5, 1m, 0)} Rpar=1k Cpar=1n NoJacob\nR1 b gnd 1k\n.ends T";
-    // 1 mA into 1k || 1k = 0.5 V
-    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-6);
 }
 
 #[test]
@@ -1127,13 +1116,6 @@ fn instances_with_different_model_parameters_do_not_share_a_model() {
     // 1 + 1000 in series with 1k: b = 1 * 1000 / 2001
     let v = run(t, "T", &["a", "b", "gnd"], 1.0, "b");
     assert!((v - 1000.0 / 2001.0).abs() < 1e-3, "{v}");
-}
-
-#[test]
-fn node_names_are_not_case_sensitive() {
-    let t = ".subckt T a b gnd\nR1 a Mid 1k\nR2 MID gnd 1k\nB1 b 0 V=V(mid)\nR3 b gnd 1meg\n.ends T";
-    // Mid, MID and mid are one node: a divider
-    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
 }
 
 #[test]

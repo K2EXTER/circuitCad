@@ -29,4 +29,6 @@
 
 ## 見直し
 
-月に 1 回ほど、`tools/test_times.py` で遅いテストを見る。同じ形のテストが増えた所(例: `sim-core/src/tests_flat.rs` の SPICE の読み込み 77 件)は、表にまとめる候補。
+月に 1 回ほど、`tools/test_times.py` で遅いテストを見る。同じ形のテストが増えた所は、表にまとめる。
+
+表になっているもの(2026-11-14): `sim-core/src/tests_flat.rs` の `vendor_texts_give_their_voltages`(SPICE の文を読んで解き、1 つの電圧を見る 15 件。`Case`)と `vendor_texts_that_are_refused_say_why`(断る文と、エラーに要る言葉。`Refused`)、`pcb-core/src/drc/tests.rs` の `track_clearances`(配線と、間隔の違反の数 5 件)。どれも全ケースを回し、失敗したケースを全部名前で出す。`tests_flat.rs` のほかの 57 件は、1 つのテストで何通りも確かめるか過渡解析を見るもので、形がそろわないので残した。
