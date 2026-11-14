@@ -137,7 +137,8 @@ pub fn bundled() -> &'static [SeriesDef] {
 /// Every part of the bundled series, made once.
 pub fn bundled_parts() -> &'static [PartDef] {
     static PARTS: OnceLock<Vec<PartDef>> = OnceLock::new();
-    PARTS.get_or_init(|| bundled().iter().flat_map(|s| s.expand()).collect())
+    // one thread per series (about twenty), the parts in the order of the series
+    PARTS.get_or_init(|| std::thread::scope(|scope| bundled().iter().map(|s| scope.spawn(|| s.expand())).collect::<Vec<_>>().into_iter().flat_map(|h| h.join().unwrap()).collect()))
 }
 
 /// The series a part belongs to and its value, by the part's name (`ERJ-3EKF1002V` → (ERJ-3EKF, 10 000)).
@@ -188,6 +189,19 @@ pub fn parse_ohms(text: &str) -> Option<f64> {
 /// `10k`, `4.75k`, `1Meg`, `97.6`: how a value is shown (and read back by the simulator).
 pub fn ohms_text(v: f64) -> String {
     crate::passive::eng(v)
+}
+
+/// The fields of a series part that depend on its value (`SeriesDef::varying`).
+struct Varying {
+    name: String,
+    description: String,
+    value: String,
+    sub: String,
+    text: String,
+    limits: Vec<String>,
+    rows: Vec<sch_core::SpecRow>,
+    v_max: f64,
+    power: f64,
 }
 
 impl SeriesDef {
@@ -298,7 +312,8 @@ impl SeriesDef {
     }
 
     /// The part of one value.
-    pub fn part(&self, v: f64) -> PartDef {
+    /// What changes from one value of the series to the next (the rest of the part is the same for every value).
+    fn varying(&self, v: f64) -> Varying {
         let name = self.part_name(v);
         let (tc, power) = (self.tc_label(v), self.power_at(v));
         let value = ohms_text(v);
@@ -350,6 +365,12 @@ impl SeriesDef {
         } else {
             rows
         };
+        Varying { name, description, value, sub, text, limits, rows, v_max: self.rated_voltage(v), power }
+    }
+
+    /// The part of one value.
+    pub fn part(&self, v: f64) -> PartDef {
+        let Varying { name, description, value, sub, text, limits, rows, v_max, power } = self.varying(v);
         let json = serde_json::json!({
             "name": name,
             "category": self.category,
@@ -371,7 +392,7 @@ impl SeriesDef {
                 "limits": limits,
                 "origin": { "kind": "equivalent", "source": format!("{} {} のデータシートの公称値と許容差 ({})", self.maker, self.series, self.checked) }
             },
-            "ratings": { "v_max": self.rated_voltage(v), "p_max": power, "rows": rows },
+            "ratings": { "v_max": v_max, "p_max": power, "rows": rows },
             "glyph": "resistor",
             "body": self.outline
         });
@@ -379,8 +400,33 @@ impl SeriesDef {
     }
 
     /// One part for every value.
+    /// The same as `part` for each value, but the part is built (through JSON) only once and the fields that change are put into a
+    /// copy of it for the others: 15 000 parts through JSON took 0.3 s at every start of the app and of `ccad`.
     pub fn expand(&self) -> Vec<PartDef> {
-        self.values().into_iter().map(|v| self.part(v)).collect()
+        let values = self.values();
+        let Some(&first) = values.first() else { return vec![] };
+        let template = self.part(first);
+        values
+            .into_iter()
+            .map(|v| {
+                let Varying { name, description, value, sub, text, limits, rows, v_max, power } = self.varying(v);
+                let mut p = template.clone();
+                p.name = name;
+                p.description = description;
+                p.value = Some(value);
+                if let Some(sim) = p.sim.as_mut() {
+                    sim.name = sub;
+                    sim.text = text;
+                    sim.limits = limits;
+                }
+                if let Some(r) = p.ratings.as_mut() {
+                    r.v_max = Some(v_max);
+                    r.p_max = Some(power);
+                    r.rows = rows;
+                }
+                p
+            })
+            .collect()
     }
 
     /// The values in words: "E24・E96 の 10 Ω〜1 MΩ".
@@ -832,6 +878,20 @@ mod tests {
                 assert_eq!(compose(m, d), v);
             }
         }
+    }
+
+    #[test]
+    fn the_expanded_parts_are_the_parts_of_each_value() {
+        // `expand` fills a copy of one part; it must give exactly what `part` gives for every value of every series
+        for series in bundled() {
+            let fast = series.expand();
+            let values = series.values();
+            assert_eq!(fast.len(), values.len(), "{}", series.series);
+            for (p, v) in fast.iter().zip(values) {
+                assert_eq!(*p, series.part(v), "{} {v}", series.series);
+            }
+        }
+        assert_eq!(bundled_parts().len(), bundled().iter().map(|s| s.values().len()).sum::<usize>());
     }
 
     #[test]

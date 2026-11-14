@@ -761,6 +761,10 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
     let mut done: std::collections::BTreeSet<String> =
         std::fs::read_to_string(&marker).unwrap_or_default().lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
     let before = done.len();
+    // the files written from the bundled text just now: they are the current parts, so the updates below (each of which reads the
+    // file again and replaces it only when it is an earlier bundled version) have nothing to do on them. Reading them all back
+    // took most of the 0.25 s of making a new library.
+    let mut fresh: std::collections::HashSet<PathBuf> = Default::default();
     for (name, text) in EXAMPLES {
         if done.contains(*name) {
             continue;
@@ -768,6 +772,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if !file.exists() || is_unmodified_legacy(&file, name, text) {
             std::fs::write(&file, text)?;
+            fresh.insert(file);
         }
         done.insert(name.to_string());
     }
@@ -779,7 +784,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             continue;
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        if file.exists()
+        if !fresh.contains(&file) && file.exists()
             && let Some(part) = with_rebuilt_model(&file, name, text)
             && let Ok(json) = serde_json::to_string_pretty(&part)
         {
@@ -794,7 +799,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         if let Some((_, text)) = EXAMPLES.iter().find(|(n, _)| n == name) {
             let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-            if file.exists() && is_modelless_original(&file, text) {
+            if !fresh.contains(&file) && file.exists() && is_modelless_original(&file, text) {
                 std::fs::write(&file, text)?;
             }
         }
@@ -807,7 +812,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             continue;
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        if file.exists() && is_original_without_limits(&file, text) {
+        if !fresh.contains(&file) && file.exists() && is_original_without_limits(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);
@@ -819,7 +824,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             continue;
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        if file.exists() && is_original_without_ratings(&file, text) {
+        if !fresh.contains(&file) && file.exists() && is_original_without_ratings(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);
@@ -831,7 +836,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             continue;
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        if file.exists() && is_original_without_holes(&file, text) {
+        if !fresh.contains(&file) && file.exists() && is_original_without_holes(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);
@@ -843,7 +848,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             continue;
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        if file.exists() && is_original_with_holder(&file, text) {
+        if !fresh.contains(&file) && file.exists() && is_original_with_holder(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);
@@ -855,7 +860,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             continue;
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        if file.exists() && is_original_without_ripple(&file, text) {
+        if !fresh.contains(&file) && file.exists() && is_original_without_ripple(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);
@@ -867,7 +872,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             continue;
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        if file.exists() && is_original_without_shops(&file, text) {
+        if !fresh.contains(&file) && file.exists() && is_original_without_shops(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);
@@ -894,3 +899,4 @@ pub mod thru_hole;
 
 #[cfg(test)]
 mod tests;
+
