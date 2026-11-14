@@ -4,11 +4,12 @@
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
 //!     cargo run -p datasheet --example ds -- labels FILE.pdf PAGE [box=x0,y0,x1,y1]   numbers on the page (tick labels)
 //!     cargo run -p datasheet --example ds -- render FILE.pdf PAGE OUT.png [scale=2] [box=x0,y0,x1,y1]
-//!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=x0,y0,x1,y1 x=L1,L2 y=L1,L2 [xlog] [ylog] at=V1,V2,...
+//!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=x0,y0,x1,y1 x=L1,L2 y=L1,L2 [xlog] [ylog] [rows] at=V1,V2,...
 //!
 //! Pages count from 1; positions are PDF points from the top left. `trace` reads a graph inside `box`: the axes from
 //! the tick labels named in `x=` (the lowest of that text in the box) and `y=` (the leftmost), then the curves'
-//! values at each `at=` value of the horizontal axis, from the page's picture (`datasheet::graph::curve_crossings`).
+//! values at each `at=` value of the horizontal axis, from the page's picture (`datasheet::graph::curve_crossings`);
+//! with `rows`, `at=` is a value of the vertical axis and the answer is where the curves are across (left to right).
 //! Readings for the bundled parts go into `crates/part-lib/fits/*.fit.json`.
 
 use datasheet::graph::{Axis, Graph, Tick, number_labels};
@@ -110,7 +111,15 @@ fn main() -> Result<(), String> {
             let scale: f32 = arg(&args, "scale").and_then(|s| s.parse().ok()).unwrap_or(4.0);
             let img = ds.render(p, scale)?;
             let k = img.width as f32 / ds.page_size(p).map_or(1.0, |s| s.0);
+            // `rows`: at= is a value of the vertical axis, and the answer the horizontal values (a forward voltage at a current)
+            let rows = args.iter().any(|a| a == "rows");
             for v in arg(&args, "at").unwrap_or("").split(',').filter_map(datasheet::graph::tick_value) {
+                if rows {
+                    let skip: Vec<Rect> = ds.words(p).iter().map(|w| w.rect).collect();
+                    let vals = g.curve_values_at(&img, k, v, bx.x0, bx.x1, &skip);
+                    println!("{v}\t{}", vals.iter().map(|x| format!("{x:.4}")).collect::<Vec<_>>().join("\t"));
+                    continue;
+                }
                 let skip: Vec<Rect> = ds.words(p).iter().map(|w| w.rect).collect();
                 let vals = g.curve_values(&img, k, v, top - 1.0, bottom + 1.0, &skip);
                 println!("{v}\t{}", vals.iter().map(|x| format!("{x:.5}")).collect::<Vec<_>>().join("\t"));

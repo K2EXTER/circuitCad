@@ -1,4 +1,4 @@
-//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819) measured the way their data sheets measure them, next to the data sheets' numbers
+//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14) measured the way their data sheets measure them, next to the data sheets' numbers
 //! (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`), like `regulator_models.rs`.
 //!
 //! `diode_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -64,11 +64,13 @@ struct Row {
 const VISHAY_4148: &str = "Vishay 1N4148 データシート (Document Number 81857, Rev. 1.6, 2024-11)。25 °C";
 const ONSEMI_400X: &str = "onsemi 1N4001〜1N4007 データシート (1N4001/D Rev. 18, 2024-06)。25 °C";
 const ONSEMI_581X: &str = "onsemi 1N5817〜1N5819 データシート (1N5817/D Rev. 11, 2021-08)。25 °C";
+const VISHAY_SS1X: &str = "Vishay SS12〜SS16 データシート (Document Number 88746, Revision 23-Apr-2020)。25 °C";
 
 fn source(part: &str) -> &'static str {
     match part {
         "1N4148" => VISHAY_4148,
         "1N5817" | "1N5819" => ONSEMI_581X,
+        "SS14" => VISHAY_SS1X,
         _ => ONSEMI_400X,
     }
 }
@@ -138,6 +140,15 @@ fn rows() -> Vec<Row> {
         }
         v.push(Row { part, item: format!("逆電流 ({rated} V)"), ds: [None, None, Some(1.0)], unit: "mA", at: "IR: 定格の直流電圧、TL = 25 °C (表の max。モデルは IS の分しか流れない)".into(), measure: Box::new(move || ir(part, rated) * 1e3), tol: None });
     }
+    // SS14: Fig. 3 at 25 C (the solid curves are SS12 to SS14), the table's VF max, Fig. 5 (solid), IR max
+    for (i, typ) in [(0.05, 0.2975), (0.1, 0.3191), (0.5, 0.3787), (1.0, 0.4194)] {
+        v.push(Row { part: "SS14", item: format!("順方向電圧 ({i} A)"), ds: [None, Some(typ), None], unit: "V", at: "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)".into(), measure: Box::new(move || vf("SS14", i)), tol: Some(0.02) });
+    }
+    v.push(Row { part: "SS14", item: "順方向電圧 (表、1 A)".into(), ds: [None, None, Some(0.5)], unit: "V", at: "VF: 表の max (パルスで測る)".into(), measure: Box::new(|| vf("SS14", 1.0)), tol: None });
+    for (vr, typ) in [(1.0, 184.7), (5.0, 109.8), (10.0, 81.0), (20.0, 56.7)] {
+        v.push(Row { part: "SS14", item: format!("接合容量 ({vr} V)"), ds: [None, Some(typ), None], unit: "pF", at: "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)".into(), measure: Box::new(move || cap("SS14", vr, typ * 1e-12) * 1e12), tol: Some(0.15 * typ) });
+    }
+    v.push(Row { part: "SS14", item: "逆電流 (40 V)".into(), ds: [None, None, Some(0.2)], unit: "mA", at: "IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない)".into(), measure: Box::new(|| ir("SS14", 40.0) * 1e3), tol: None });
     v
 }
 

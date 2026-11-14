@@ -110,3 +110,4 @@
 - コマンドラインの道具 `cargo run -p datasheet --example ds -- text|table|labels|render|trace ...` (`crates/datasheet/examples/ds.rs`): ページの語と位置、表の値、目盛りの数字、ページの絵 (範囲を切り出して PNG)、グラフの曲線の値 (`trace`: 箱の中の目盛りの数字で軸を作り、`at=` の値で曲線を読む)。データシートから部品のモデルを作るときの読み取りに使う (`.fit.json` に書く)。
 - 確かめたこと: BC546 のデータシート (onsemi Rev. 8) の図 1・2・5・6 を `trace` で読み、描いた絵と比べた (BC547 の `.fit.json`)。AO3400A の図 6 で 2 本の曲線を読むテスト (`graph.rs` の `real_pdf`)、作った絵で格子・枠・文字を除くテスト。表は AO3400A (実物)、onsemi と日本語の並び (作った語) のテスト。
 - 未対応: 曲線が重なる所 (どちらの曲線か分からない)、破線の曲線 (途切れる)、PDF の文字で µ が抜けるもの (BC546 の「10 µA」が「10 A」になる。フォントの都合)。
+- 2026-11-14 (SS14): 曲線を横の行でも読む `graph::curve_crossings_row`・`Graph::curve_values_at` (ある電流での順方向電圧のように、縦軸の値で横の位置を読む)。`ds trace ... rows`。表の読みは、同じ行を 2 度描いた PDF (太字のまね) の重なりを 1 つにする。部品ごとの列の表 (Vishay の SS12〜SS16 の max) は min / typ / max の見出しが無いので読まない (値は max なので、モデルには使わない)。

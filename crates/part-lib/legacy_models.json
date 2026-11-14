@@ -253,5 +253,21 @@
   "descriptions": [
    "NPN 汎用トランジスタ (TO-92, ピン1=C 2=B 3=E)。2N3904 とピン配置が違うので注意。簡易モデル(パラメータは概算)"
   ]
+ },
+ "PN2222A_TO-92": {
+  "texts": [
+   ".model PN2222A NPN(IS=14.34f BF=255 BR=6 RB=10)"
+  ],
+  "descriptions": [
+   "NPN 汎用トランジスタ 40V 600mA (TO-92, ピン1=E 2=B 3=C)。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "SS14_SMA": {
+  "texts": [
+   ".model SS14 D(IS=300n N=1.1 RS=0.05 BV=40 IBV=1m)"
+  ],
+  "descriptions": [
+   "SS14 ショットキーバリアダイオード 40V 1A (SMA/DO-214AC)。簡易モデル(パラメータは概算)、帯の側がカソード K"
+  ]
  }
 }

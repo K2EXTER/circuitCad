@@ -21,6 +21,13 @@ pub struct BjtSpec {
     pub hfe_note: String,
     /// (IC A, hFE / hfe_peak).
     pub hfe_norm: Vec<[f64; 2]>,
+    /// The hFE graph is the gain itself, not a curve normalised to 1 (then `hfe_peak` is 1 and `hfe_norm` holds hFE).
+    #[serde(default)]
+    pub hfe_absolute: bool,
+    /// Fit the forward emission coefficient NF too (1 when false): a VBE(on) graph that rises more than 60 mV a decade
+    /// (Fairchild's straight lines for the PN2222A: 73 mV) cannot be followed with NF = 1, and the fit then bends hFE.
+    #[serde(default)]
+    pub fit_nf: bool,
     /// The collector-emitter voltage of the hFE curve (V; 1 V when not given).
     #[serde(default = "one_volt")]
     pub hfe_vce: f64,
@@ -74,11 +81,12 @@ struct P {
     br: f64,
     rc: f64,
     vaf: f64,
+    nf: f64,
 }
 
 /// (collector current, base current) of the intrinsic transistor.
 fn ev(p: &P, vbe: f64, vbc: f64) -> (f64, f64) {
-    let (ef, er) = ((vbe / VT).min(200.0).exp(), (vbc / VT).min(200.0).exp());
+    let (ef, er) = ((vbe / (p.nf * VT)).min(200.0).exp(), (vbc / VT).min(200.0).exp());
     let (iff, ir) = (p.is * (ef - 1.0), p.is * (er - 1.0));
     let q2 = iff / p.ikf;
     let h = if q2 > 0.0 { 2.0 / (1.0 + (1.0 + 4.0 * q2).sqrt()) } else { 1.0 };
@@ -141,9 +149,10 @@ fn vaf_of(b: &BjtSpec) -> Result<f64, String> {
 }
 
 /// x = log10 of IS, BF, ISE; NE; log10 of IKF, RB, RE, BR, RC.
+/// x[9], when there, is NF.
 fn unpack(x: &[f64], vaf: f64) -> P {
     let e = |v: f64| 10f64.powf(v);
-    P { is: e(x[0]), bf: e(x[1]), ise: e(x[2]), ne: x[3], ikf: e(x[4]), rb: e(x[5]), re: e(x[6]), br: e(x[7]), rc: e(x[8]), vaf }
+    P { is: e(x[0]), bf: e(x[1]), ise: e(x[2]), ne: x[3], ikf: e(x[4]), rb: e(x[5]), re: e(x[6]), br: e(x[7]), rc: e(x[8]), vaf, nf: x.get(9).copied().unwrap_or(1.0) }
 }
 
 fn cost(x: &[f64], b: &BjtSpec, vaf: f64) -> f64 {
@@ -151,7 +160,7 @@ fn cost(x: &[f64], b: &BjtSpec, vaf: f64) -> f64 {
     // physical ranges: the leakage's emission coefficient, the reverse gain, and the ideal gain BF within 4 times the
     // curve's top (a wide hFE curve otherwise pulls BF to tens of thousands with a tiny IKF)
     let top = b.hfe_norm.iter().map(|r| r[1]).fold(0.0, f64::max) * b.hfe_peak;
-    if !((1.2..=3.0).contains(&p.ne) && (0.5..=50.0).contains(&p.br) && p.bf <= 4.0 * top) {
+    if !((1.2..=3.0).contains(&p.ne) && (0.5..=50.0).contains(&p.br) && p.bf <= 4.0 * top && (1.0..=1.5).contains(&p.nf)) {
         return 1e6;
     }
     let mut e = 0.0;
@@ -188,10 +197,22 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
         [l(2e-14), l(200.0), l(1e-13), 1.6, l(0.05), 1.0, l(0.3), l(5.0), 0.0],
         [l(3e-14), l(300.0), l(5e-12), 1.8, l(0.02), 0.8, l(0.5), l(30.0), 0.4],
         [l(1e-14), l(250.0), l(1e-12), 2.0, l(0.03), 0.5, l(0.2), l(10.0), 0.2],
+        // from the readings: BF a little over the curve's top, IS through the lowest VBE(on) point, IKF well above the
+        // largest current (a flat hFE curve, PN2222A: the three above are made for a peaked one)
+        {
+            let top = b.hfe_norm.iter().map(|r| r[1]).fold(0.0, f64::max) * b.hfe_peak;
+            let [ic, v] = b.vbe_on[0];
+            let imax = b.hfe_norm.iter().map(|r| r[0]).fold(0.0, f64::max);
+            [l(ic / (v / VT).exp()), l(1.2 * top), l(ic / (v / VT).exp() * 10.0), 1.6, l(5.0 * imax), 0.5, l(0.2), l(10.0), l(0.5)]
+        },
     ];
     let mut f = |x: &[f64]| cost(x, b, vaf);
     let mut best: Option<(Vec<f64>, f64)> = None;
     for x0 in starts {
+        let mut x0 = x0.to_vec();
+        if b.fit_nf {
+            x0.push(1.1);
+        }
         let (x, _) = nelder_mead(&mut f, &x0, 20000, 20000, 1e-7, 1e-10);
         let (x, c) = nelder_mead(&mut f, &x, 20000, 20000, 1e-8, 1e-11);
         if best.as_ref().is_none_or(|bb| c < bb.1) {
@@ -208,10 +229,11 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     let tf = 1.0 / (2.0 * std::f64::consts::PI * ft);
     let kind = if b.pnp { "PNP" } else { "NPN" };
     let text = format!(
-        ".model {} {kind}(IS={} BF={} NF=1 VAF={} IKF={} ISE={} NE={:.3} BR={} RB={} RE={} RC={} CJE={} VJE={} MJE={} CJC={} VJC={} MJC={} TF={})",
+        ".model {} {kind}(IS={} BF={} NF={} VAF={} IKF={} ISE={} NE={:.3} BR={} RB={} RE={} RC={} CJE={} VJE={} MJE={} CJC={} VJC={} MJC={} TF={})",
         b.common.name,
         g(p.is, 4),
         g(p.bf, 4),
+        if b.fit_nf { format!("{:.3}", p.nf) } else { "1".into() },
         g(vaf, 4),
         g(p.ikf, 4),
         g(p.ise, 4),
@@ -239,7 +261,7 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     };
     let limits = vec![
         format!("データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。", b.common.source),
-        format!("直流: {} (hFE の電流による変化。相対値)・{} (VBE、VBE(sat)、VCE(sat)) に、IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。{}", b.figs.hfe, b.figs.on, b.hfe_note),
+        format!("直流: {} (hFE の電流による変化{})・{} (VBE、VBE(sat)、VCE(sat)) に、IS・BF{}・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。{}", b.figs.hfe, if b.hfe_absolute { "" } else { "。相対値" }, b.figs.on, if b.fit_nf { "・NF (VBE の傾き)" } else { "" }, b.hfe_note),
         format!(
             "容量: {} の Cibo・Cobo に CJE・CJC を当てはめました。速さ: {speed}。{early}",
             b.figs.cap,

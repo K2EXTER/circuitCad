@@ -1,0 +1,82 @@
+{
+  "kind": "bjt",
+  "part": "PN2222A_TO-92",
+  "name": "PN2222A",
+  "pnp": false,
+  "read": "2026-11-14",
+  "source": "Fairchild (onsemi) PN2222A データシート (Rev. 1.1.0, 2014-07) の表と、MMBT2222A/PZT2222A データシート (Rev. 1.1.0, 2014-07) の代表特性",
+  "url": "https://www.onsemi.com/pdf/datasheet/pn2222a-d.pdf",
+  "description": "NPN 汎用トランジスタ 40V 600mA (TO-92, ピン1=E 2=B 3=C)。データシート (Fairchild) の表と代表特性から作った等価モデル",
+  "figs": {
+    "hfe": "MMBT2222A/PZT2222A の図 3",
+    "on": "同じく図 4・5・6",
+    "cap": "同じく図 8"
+  },
+  "hfe_absolute": true,
+  "fit_nf": true,
+  "hfe_peak": 1.0,
+  "hfe_note": "PN2222A のデータシート (Rev. 1.1.0) には typ もグラフも無いので、表が同じ (min・max がすべて同じ) SOT-23・SOT-223 版 MMBT2222A/PZT2222A のデータシートの代表特性 (25 °C) を使いました。hFE はその図 3 (VCE = 5 V) の値です。実物の hFE は、表の 100〜300 (150 mA) のように大きく違います。",
+  "hfe_vce": 5.0,
+  "hfe_norm": [
+    [0.0005, 206.8],
+    [0.001, 205.6],
+    [0.005, 201.9],
+    [0.01, 201.3],
+    [0.02, 196.4],
+    [0.05, 191.0],
+    [0.1, 181.2],
+    [0.15, 172.7],
+    [0.2, 161.2]
+  ],
+  "on_vce": 5.0,
+  "vbe_on": [
+    [0.0002, 0.572],
+    [0.001, 0.628],
+    [0.005, 0.677],
+    [0.01, 0.696],
+    [0.02, 0.718]
+  ],
+  "vbe_sat": [
+    [0.005, 0.698],
+    [0.01, 0.725],
+    [0.05, 0.795],
+    [0.1, 0.836],
+    [0.2, 0.891],
+    [0.4, 0.971]
+  ],
+  "vce_sat": [
+    [0.05, 0.0689],
+    [0.1, 0.0964],
+    [0.2, 0.1513],
+    [0.3, 0.2029],
+    [0.4, 0.2502]
+  ],
+  "cibo": [
+    [0.2, 20.21e-12],
+    [0.5, 18.45e-12],
+    [1.0, 16.31e-12],
+    [2.0, 14.11e-12],
+    [5.0, 10.46e-12]
+  ],
+  "cobo": [
+    [0.2, 8.53e-12],
+    [0.5, 7.48e-12],
+    [1.0, 6.60e-12],
+    [2.0, 5.77e-12],
+    [5.0, 4.75e-12],
+    [10.0, 4.19e-12],
+    [20.0, 3.53e-12],
+    [40.0, 3.04e-12]
+  ],
+  "ft_min": 300000000.0,
+  "vaf": [100.0, "データシートに出力の特性 (hoe や出力特性の図) が無いので、仮に 100 V としました (出力抵抗はこの値で決まります)"],
+  "remarks": [
+    "the PN2222A data sheet (Fairchild Rev. 1.1.0, onsemi pn2222a-d.pdf) has min / max only and no graphs; the MMBT2222A / PZT2222A data sheet (Rev. 1.1.0, onsemi pzt2222a-d.pdf) has the same table (every min and max the same, read with `ds table`) and the typical performance characteristics, which are used",
+    "read with `cargo run -p datasheet --example ds -- trace` on page 5 of pzt2222a-d.pdf; each graph has three curves (-40, 25, 125 C) and the middle one (25 C) is taken only where the three are apart and match the rendered page",
+    "hfe_norm: Figure 3 (typical pulsed current gain, VCE = 5 V), the gain itself (hfe_absolute); above 200 mA the curves cross and were not read",
+    "vce_sat, vbe_sat: Figures 4 and 5 (beta = 10); below 50 mA the three VCE(sat) curves lie on each other and were not read. vbe_on: Figure 6 (VCE = 5 V)",
+    "cibo, cobo: Figure 8 (Cte, the emitter transition capacitance, and Cob, f = 1 MHz)",
+    "fit_nf: Figure 6's 25 C line rises 73 mV a decade (0.2 to 20 mA); with NF = 1 the fit followed it by bending hFE (errors to 33 %), with NF fitted (1.054) every row is within 8 %",
+    "ft_min: the table's fT min 300 MHz (IC = 20 mA, VCE = 20 V); no typ is given"
+  ]
+}

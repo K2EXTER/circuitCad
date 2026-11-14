@@ -101,8 +101,8 @@ mod tests {
     /// "記録なし" and are the next to be rebuilt from their data sheets (docs/model-policy.md). Every other bundled model
     /// says where it comes from.
     const UNRECORDED: &[&str] = &[
-        "1N4728A", "1N4733A", "1N4742A", "1N5408", "1N5822", "BAT54", "BD139", "BD140", "BPW34", "IRF540N", "IRF9540N", "IRFZ44N", "IRLZ44N", "PC817", "PN2222A", "S8050",
-        "S8550", "SS14", "TIP120", "TIP125", "UF4007",
+        "1N4728A", "1N4733A", "1N4742A", "1N5408", "1N5822", "BAT54", "BD139", "BD140", "BPW34", "IRF540N", "IRF9540N", "IRFZ44N", "IRLZ44N", "PC817", "S8050",
+        "S8550", "TIP120", "TIP125", "UF4007",
     ];
 
     #[test]

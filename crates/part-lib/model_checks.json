@@ -2519,6 +2519,254 @@
       }
     ]
   },
+  "PN2222A": {
+    "fingerprint": "de5d3d1898cb2b7b",
+    "source": "Fairchild PN2222A データシート (Rev. 1.1.0, 2014-07) の表、MMBT2222A/PZT2222A (Rev. 1.1.0) の代表特性。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "hFE (0.5 mA)",
+        "datasheet": "— / 206.8 / —",
+        "target": "206.8",
+        "condition": "VCE = 5 V。typ はMMBT2222A/PZT2222A の図 3の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "201.2",
+        "diff": "-5.618",
+        "tested": true
+      },
+      {
+        "item": "hFE (1 mA)",
+        "datasheet": "50.000 / 205.6 / —",
+        "target": "205.6",
+        "condition": "VCE = 5 V。typ はMMBT2222A/PZT2222A の図 3の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "206.3",
+        "diff": "+0.6980",
+        "tested": true
+      },
+      {
+        "item": "hFE (10 mA)",
+        "datasheet": "75.000 / 201.3 / —",
+        "target": "201.3",
+        "condition": "VCE = 5 V。typ はMMBT2222A/PZT2222A の図 3の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "209.5",
+        "diff": "+8.180",
+        "tested": true
+      },
+      {
+        "item": "hFE (50 mA)",
+        "datasheet": "— / 191.0 / —",
+        "target": "191.0",
+        "condition": "VCE = 5 V。typ はMMBT2222A/PZT2222A の図 3の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "194.5",
+        "diff": "+3.515",
+        "tested": true
+      },
+      {
+        "item": "hFE (150 mA)",
+        "datasheet": "100.0 / 172.7 / 300.0",
+        "target": "172.7",
+        "condition": "VCE = 5 V。typ はMMBT2222A/PZT2222A の図 3の相対値 × 1 (図の hFE そのもの)。min / max は表",
+        "model": "165.5",
+        "diff": "-7.195",
+        "tested": true
+      },
+      {
+        "item": "VBE (1 mA)",
+        "datasheet": "— / 0.6280 / — V",
+        "target": "0.6280 V",
+        "condition": "VCE = 5 V、同じく図 4〜6 (グラフから読んだ)",
+        "model": "0.6268 V",
+        "diff": "-0.0012 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (5 mA)",
+        "datasheet": "— / 0.6770 / — V",
+        "target": "0.6770 V",
+        "condition": "VCE = 5 V、同じく図 4〜6 (グラフから読んだ)",
+        "model": "0.6722 V",
+        "diff": "-0.0048 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (10 mA)",
+        "datasheet": "— / 0.6960 / — V",
+        "target": "0.6960 V",
+        "condition": "VCE = 5 V、同じく図 4〜6 (グラフから読んだ)",
+        "model": "0.6929 V",
+        "diff": "-0.0031 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (20 mA)",
+        "datasheet": "— / 0.7180 / — V",
+        "target": "0.7180 V",
+        "condition": "VCE = 5 V、同じく図 4〜6 (グラフから読んだ)",
+        "model": "0.7155 V",
+        "diff": "-0.0025 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (10 mA)",
+        "datasheet": "— / 0.7250 / — V",
+        "target": "0.7250 V",
+        "condition": "IC/IB = 10。typ は同じく図 4〜6、min / max は表",
+        "model": "0.7298 V",
+        "diff": "+0.0048 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (100 mA)",
+        "datasheet": "— / 0.8360 / — V",
+        "target": "0.8360 V",
+        "condition": "IC/IB = 10。typ は同じく図 4〜6、min / max は表",
+        "model": "0.8276 V",
+        "diff": "-0.0084 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (50 mA)",
+        "datasheet": "— / 0.0689 / — V",
+        "target": "0.0689 V",
+        "condition": "IC/IB = 10。typ は同じく図 4〜6、max は表",
+        "model": "0.0745 V",
+        "diff": "+0.0056 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (100 mA)",
+        "datasheet": "— / 0.0964 / — V",
+        "target": "0.0964 V",
+        "condition": "IC/IB = 10。typ は同じく図 4〜6、max は表",
+        "model": "0.1007 V",
+        "diff": "+0.0043 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (150 mA)",
+        "datasheet": "— / — / 0.3000 V",
+        "target": "max 0.3000 V",
+        "condition": "IC/IB = 10。typ は同じく図 4〜6、max は表",
+        "model": "0.1262 V",
+        "diff": "-0.1738 V",
+        "tested": false
+      },
+      {
+        "item": "Cobo (10 V)",
+        "datasheet": "— / 4.190 / 8.000 pF",
+        "target": "4.190 pF",
+        "condition": "VCB = 10 V、IE = 0。typ は同じく図 8、max は表",
+        "model": "4.133 pF",
+        "diff": "-0.0565 pF",
+        "tested": true
+      },
+      {
+        "item": "Cibo (0.5 V)",
+        "datasheet": "— / 18.450 / 25.000 pF",
+        "target": "18.450 pF",
+        "condition": "VEB = 0.5 V、IC = 0。typ は同じく図 8、max は表",
+        "model": "18.446 pF",
+        "diff": "-0.0037 pF",
+        "tested": true
+      }
+    ]
+  },
+  "SS14": {
+    "fingerprint": "ffca50d8f1577c4b",
+    "source": "Vishay SS12〜SS16 データシート (Document Number 88746, Revision 23-Apr-2020)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.05 A)",
+        "datasheet": "— / 0.2975 / — V",
+        "target": "0.2975 V",
+        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "0.2984 V",
+        "diff": "+0.0009 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.1 A)",
+        "datasheet": "— / 0.3191 / — V",
+        "target": "0.3191 V",
+        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "0.3196 V",
+        "diff": "+0.0005 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.5 A)",
+        "datasheet": "— / 0.3787 / — V",
+        "target": "0.3787 V",
+        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "0.3801 V",
+        "diff": "+0.0014 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.4194 / — V",
+        "target": "0.4194 V",
+        "condition": "図 3 の 25 °C、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "0.4194 V",
+        "diff": "-0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、1 A)",
+        "datasheet": "— / — / 0.5000 V",
+        "target": "max 0.5000 V",
+        "condition": "VF: 表の max (パルスで測る)",
+        "model": "0.4194 V",
+        "diff": "-0.0806 V",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (1 V)",
+        "datasheet": "— / 184.7 / — pF",
+        "target": "184.7 pF",
+        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "195.6 pF",
+        "diff": "+10.864 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (5 V)",
+        "datasheet": "— / 109.8 / — pF",
+        "target": "109.8 pF",
+        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "107.0 pF",
+        "diff": "-2.803 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (10 V)",
+        "datasheet": "— / 81.000 / — pF",
+        "target": "81.000 pF",
+        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "78.743 pF",
+        "diff": "-2.257 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (20 V)",
+        "datasheet": "— / 56.700 / — pF",
+        "target": "56.700 pF",
+        "condition": "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)",
+        "model": "57.230 pF",
+        "diff": "+0.5298 pF",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (40 V)",
+        "datasheet": "— / — / 0.2000 mA",
+        "target": "max 0.2000 mA",
+        "condition": "IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない)",
+        "model": "0.2010 mA",
+        "diff": "+0.0010 mA",
+        "tested": false
+      }
+    ]
+  },
   "TL072": {
     "fingerprint": "1971055a93e351f3",
     "source": "TI SLOS080W(2025-07 改訂)",

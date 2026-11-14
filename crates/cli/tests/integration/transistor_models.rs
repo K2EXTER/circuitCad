@@ -1,4 +1,4 @@
-//! The bundled transistor models (2N3904, 2N3906, BC547, 2N7000, BSS138, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
+//! The bundled transistor models (2N3904, 2N3906, BC547, PN2222A, 2N7000, BSS138, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
 //! sheets' numbers (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`).
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -65,7 +65,7 @@ struct Bjt {
 
 const GEOMETRIC_MEAN: &str = "表の min と max の幾何平均。データシートに typ は無い";
 
-static BJTS: [Bjt; 3] = [
+static BJTS: [Bjt; 4] = [
     Bjt {
         part: "2N3904",
         pnp: false,
@@ -112,6 +112,23 @@ static BJTS: [Bjt; 3] = [
         vce_sat: &[(10e-3, Some(0.0706), None), (50e-3, Some(0.184), None), (70e-3, Some(0.263), None)],
         cobo: (10.0, 1.74, Some(4.5)),
         cibo: (0.5, 5.78, None),
+    },
+    // PN2222A: its data sheet (Fairchild Rev. 1.1.0) has min and max only; the typ curves are those of MMBT2222A/PZT2222A
+    // (the same table), whose Figure 3 gives hFE itself (peak 1) at VCE = 5 V
+    Bjt {
+        part: "PN2222A",
+        pnp: false,
+        figs: ("MMBT2222A/PZT2222A の図 3", "同じく図 4〜6", "同じく図 8"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの",
+        vce: 5.0,
+        hfe_norm: &[(0.5e-3, 206.8), (1e-3, 205.6), (5e-3, 201.9), (10e-3, 201.3), (20e-3, 196.4), (50e-3, 191.0), (100e-3, 181.2), (150e-3, 172.7), (200e-3, 161.2)],
+        hfe_rows: &[(0.5e-3, None, None), (1e-3, Some(50.0), None), (10e-3, Some(75.0), None), (50e-3, None, None), (150e-3, Some(100.0), Some(300.0))],
+        vbe_on: &[(1e-3, 0.628), (5e-3, 0.677), (10e-3, 0.696), (20e-3, 0.718)],
+        vbe_sat: &[(10e-3, 0.725, None, None), (100e-3, 0.836, None, None)],
+        vce_sat: &[(50e-3, Some(0.0689), None), (100e-3, Some(0.0964), None), (150e-3, None, Some(0.3))],
+        cobo: (10.0, 4.19, Some(8.0)),
+        cibo: (0.5, 18.45, Some(25.0)),
     },
 ];
 
@@ -228,6 +245,7 @@ fn source(part: &str) -> &'static str {
     match part {
         "2N3904" => "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
         "2N3906" => "onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)。25 °C",
+        "PN2222A" => "Fairchild PN2222A データシート (Rev. 1.1.0, 2014-07) の表、MMBT2222A/PZT2222A (Rev. 1.1.0) の代表特性。25 °C",
         "BC547" => "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",

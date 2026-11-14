@@ -1,0 +1,61 @@
+{
+  "kind": "diode",
+  "part": "SS14_SMA",
+  "name": "SS14",
+  "read": "2026-11-14",
+  "source": "Vishay SS12〜SS16 データシート (Document Number 88746, Revision 23-Apr-2020)",
+  "url": "https://www.vishay.com/docs/88746/ss12.pdf",
+  "description": "SS14 ショットキーバリアダイオード 40V 1A (SMA/DO-214AC、帯の側がカソード K)。データシート (Vishay) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 3 (順方向の代表特性。SS12〜SS14 の実線) の 25 °C",
+    "points": [
+      [0.015, 0.265],
+      [0.02, 0.2717],
+      [0.05, 0.2975],
+      [0.1, 0.3191],
+      [0.2, 0.3408],
+      [0.3, 0.3625],
+      [0.5, 0.3787],
+      [1.0, 0.4194]
+    ]
+  },
+  "hot": {
+    "temp": 150.0,
+    "points": [
+      [0.015, 0.0714],
+      [0.02, 0.0795],
+      [0.05, 0.1134],
+      [0.1, 0.1431],
+      [0.2, 0.1742],
+      [0.3, 0.2054],
+      [0.5, 0.2311],
+      [1.0, 0.3029]
+    ]
+  },
+  "breakdown": {
+    "v": 40.0,
+    "i": 0.0002,
+    "note": "降伏はデータシートに無いので、繰り返しの最大逆電圧 VRRM 40 V に置いた (電流は表の IR の最大 0.2 mA。実物は、ふつうこれより高い電圧で降伏します)"
+  },
+  "capacitance": {
+    "at": "図 5 (接合容量の代表特性。SS12〜SS14 の実線)",
+    "points": [
+      [0.2, 2.628e-10],
+      [0.5, 2.222e-10],
+      [1.0, 1.847e-10],
+      [2.0, 1.494e-10],
+      [5.0, 1.098e-10],
+      [10.0, 8.1e-11],
+      [20.0, 5.666e-11],
+      [30.0, 4.565e-11]
+    ]
+  },
+  "no_recovery": "逆回復は扱いません (ショットキーは多数キャリアで動き、蓄積する電荷がほとんど無い。データシートにも trr は無い)。",
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace ... rows` (the forward voltage at each current, along a row of the page drawn at 4 px/pt) and checked against the page drawn at 5 px/pt",
+    "forward, hot: Figure 3 has six curves: solid (SS12 to SS14) and dashed (SS15, SS16) at 150, 25 and -40 C. Left to right at a current: 150 solid, 150 dashed, 25 solid, 25 dashed, -40 solid, -40 dashed (at 15 mA: 0.071, 0.140, 0.265, 0.342, 0.392, 0.440 V). Above 1 A the curves cross and the arrows of the labels lie on them, so they were not read",
+    "the table gives VF max 0.50 V at 1 A for SS12 to SS14 (the curve: 0.42 V typical) and IR max 0.2 mA at the rated voltage",
+    "capacitance: Figure 5, the solid curve (SS12 to SS14), 0.2 to 30 V (it ends at about 35 V)",
+    "breakdown: no VRSM is given; VRRM 40 V is used"
+  ]
+}

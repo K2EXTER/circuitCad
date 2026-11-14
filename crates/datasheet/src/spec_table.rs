@@ -244,7 +244,14 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool) -> Vec<SpecV
             }
         }
     }
-    out
+    // some PDFs draw a line twice, a little apart (a fake bold): the same row is found twice
+    let mut unique: Vec<SpecValue> = vec![];
+    for v in out {
+        if !unique.iter().any(|u| u.symbol == v.symbol && u.conditions == v.conditions && (u.min, u.typ, u.max) == (v.min, v.typ, v.max) && (u.rect.y0 - v.rect.y0).abs() < 3.0) {
+            unique.push(v);
+        }
+    }
+    unique
 }
 
 /// The symbol with the pieces printed right after it on its line ("V" + "GS(th)" as subscript).
