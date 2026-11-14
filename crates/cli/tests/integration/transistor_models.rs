@@ -1,5 +1,5 @@
 //! The bundled transistor models (2N3904, 2N7000, AO3400A) measured the way their data sheets measure them, next to the data
-//! sheets' numbers (docs/model-policy.md, section 5). Runs the real `ccad` binary on small test circuits.
+//! sheets' numbers (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`).
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
 //! `cargo test -p cli --test integration -- --ignored write_transistor_model_report` writes `docs/models/transistors.md`
@@ -9,17 +9,10 @@
 use super::checks;
 
 use serde_json::Value;
-use std::process::{Command, Stdio};
+use super::common::{ccad, Flags};
 
 fn run(script: &str) -> Vec<Value> {
-    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let lib = std::env::temp_dir().join(format!("ccad-tr-lib-{}-{}", std::process::id(), RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ccad")).args(["--lib", lib.to_str().unwrap(), "-"]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
-    use std::io::Write;
-    child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
-    let out = child.wait_with_output().unwrap();
-    let _ = std::fs::remove_dir_all(&lib);
-    String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect()
+    ccad(script, Flags::default()).0
 }
 
 fn answer<'a>(a: &'a [Value], cmd: &str) -> &'a Value {

@@ -1,27 +1,9 @@
-//! `ccad`: circuitCad without the window.
-//!
-//! A script is one command per line (`#` starts a comment). Every command answers with one JSON object on its own
-//! line: `{"line":3,"cmd":"add","ok":true,...}` or `{"line":3,"cmd":"net","ok":false,"error":"..."}`.
-//! The first failing command stops the run (exit code 1) unless `--keep-going` is given.
-//! `ccad mcp` serves the same commands as a Model Context Protocol server. See `docs/cli.md`.
+//! `ccad`: the command line of circuitCad without the window (the commands are in `lib.rs`). See `docs/cli.md`.
 
-mod board;
-mod build;
-mod design;
-mod libcmd;
-mod mcp;
-mod models;
-mod reqcmd;
-mod runner;
-mod sheetcmd;
-mod session;
-
-use serde_json::{Map, Value};
+use cli::{mcp, runner, session};
+use serde_json::Value;
 use session::Session;
 use std::io::Read;
-
-pub type Out = Map<String, Value>;
-pub type Res = Result<Out, String>;
 
 const USAGE: &str = "ccad [--lib DIR] [--keep-going] [--strict] <script-file | - | -c \"line\\nline\">\n  ccad [--lib DIR] [--strict] mcp     serve the commands as an MCP server on standard input/output\n  ccad help                           list the commands\n  '-' reads the script from standard input";
 

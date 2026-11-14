@@ -1,23 +1,11 @@
-//! Runs the real `ccad` binary on small scripts and reads the JSON answers.
+//! Runs small scripts through the commands of `ccad` (`common::ccad`, inside the test) and reads the JSON answers. The last test
+//! runs the binary itself.
 
 use serde_json::Value;
-use std::process::{Command, Stdio};
+use super::common::{ccad, Flags};
 
 fn run(script: &str) -> (Vec<Value>, bool) {
-    // one library folder per run: the tests run in parallel, and a part written (or the bundled parts copied) by one run must not be read half-written by another
-    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}-{}", std::process::id(), RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))
-        .args(["--lib", lib.to_str().unwrap(), "-"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    use std::io::Write;
-    child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
-    let out = child.wait_with_output().unwrap();
-    let answers = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
-    (answers, out.status.success())
+    ccad(script, Flags::default())
 }
 
 fn last<'a>(a: &'a [Value], cmd: &str) -> &'a Value {
@@ -205,18 +193,7 @@ board postlayout on
 }
 
 fn run_strict(script: &str) -> (Vec<Value>, bool) {
-    let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}", std::process::id()));
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))
-        .args(["--strict", "--lib", lib.to_str().unwrap(), "-"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    use std::io::Write;
-    child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
-    let out = child.wait_with_output().unwrap();
-    let answers = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
-    (answers, out.status.success())
+    ccad(script, Flags { strict: true, ..Flags::default() })
 }
 
 const NO_GROUND: &str = "new\nadd V 5 as=V1\nadd R 1k as=R1\nnet VIN V1.+ R1.1\nnet X V1.- R1.2\n";
@@ -2285,4 +2262,39 @@ fn a_murata_mlcc_loses_capacitance_under_dc_bias_as_its_data_sheet_shows() {
     assert!(ok, "{a:?}");
     let f = last(&a, "ac")["signals"]["V(OUT)"]["minus_3db_hz"].as_f64().unwrap();
     assert!((c(f) * 100.0 / 1000.0 / 10e-9 - 1.0).abs() < 0.02, "10 nF CH at 40 V: {}", c(f) / 10.0);
+}
+
+/// The binary itself: a script on standard input, one JSON answer per line, exit code 1 at the first failing line (which stops
+/// the run). The other tests run the same commands inside the test.
+#[test]
+fn the_binary_reads_standard_input_and_exits_1_on_a_failure() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let lib = std::env::temp_dir().join(format!("ccad-test-bin-lib-{}", std::process::id()));
+    let go = |script: &str| {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ccad")).args(["--lib", lib.to_str().unwrap(), "-"]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
+        let out = child.wait_with_output().unwrap();
+        let answers: Vec<Value> = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        (answers, out.status.code())
+    };
+    let (a, code) = go("new
+add V 12 as=V1
+add R 10k as=R1
+add R 4.7k as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+dc
+");
+    assert_eq!(code, Some(0), "{a:?}");
+    let mid = last(&a, "dc")["voltages"]["MID"].as_f64().unwrap();
+    assert!((mid - 12.0 * 4.7 / 14.7).abs() < 1e-6, "MID = {mid}");
+    let (a, code) = go("new
+add R abc
+add R 1k
+");
+    assert_eq!(code, Some(1));
+    assert_eq!(a.len(), 2, "the run stops at the failing line: {a:?}");
+    let _ = std::fs::remove_dir_all(&lib);
 }

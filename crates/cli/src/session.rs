@@ -217,7 +217,12 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_library(&dir);
-        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false, first_sheet_name: None }
+        Self::with_library(dir, lib, lib_errors)
+    }
+
+    /// A session on a library already read from `dir` (the tests read it once for all the scripts that do not write parts).
+    pub fn with_library(lib_dir: std::path::PathBuf, lib: Vec<part_lib::PartDef>, lib_errors: Vec<String>) -> Self {
+        Session { sch: Schematic::default(), lib, lib_dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false, first_sheet_name: None }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
