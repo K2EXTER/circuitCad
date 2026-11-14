@@ -2,13 +2,12 @@
 //! (`docs/model-policy.md`, section 5). Runs the real `ccad` binary on small test circuits.
 //!
 //! `opamp_models_match_their_data_sheets` fails when a model leaves its data sheet by more than `tolerance`.
-//! `cargo test -p cli --test opamp_models -- --ignored write_opamp_model_report` writes `docs/models/opamps.md`
+//! `cargo test -p cli --test integration -- --ignored write_opamp_model_report` writes `docs/models/opamps.md`
 //! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
 //!
 //! The data sheet numbers are typed in from the data sheets named in `SOURCE` (read 2026-11-11), never from memory.
 
-#[path = "common/checks.rs"]
-mod checks;
+use super::checks;
 
 use serde_json::Value;
 use std::process::{Command, Stdio};
@@ -529,7 +528,7 @@ fn write_opamp_model_report() {
     checks::write(tables, "2026-11-11");
     let text = format!(
         "# 同梱のオペアンプのモデルとデータシートの比べ\n\n\
-         `crates/cli/tests/opamp_models.rs` が作る表(`cargo test -p cli --test opamp_models -- --ignored write_opamp_model_report`)。\
+         `crates/cli/tests/integration/opamp_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_opamp_model_report`)。\
          方針と表の読み方は `docs/model-policy.md` の 5 節。\n\n\
          - データシートの値は、各表の上に書いたデータシートから写した(2026-11-11)。モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。\n\
          - 「差」は typ と比べた差(typ が無い行は max と)。開ループ利得と位相余裕は dB・度の差。\n\

@@ -4,8 +4,8 @@ their data sheets' typ values (docs/model-policy.md).
     python tools/gen_regulator_models.py
 
 The numbers are typed in from the data sheets named in each entry (read 2026-11-11). A few come from the data sheets' typical
-characteristic figures where the table has none (said so in `src` and in the part's notes). crates/cli/tests/regulator_models.rs
-measures the models (docs/models/regulators.md); after a change: cargo test -p cli --test regulator_models -- --include-ignored
+characteristic figures where the table has none (said so in `src` and in the part's notes). crates/cli/tests/integration/regulator_models.rs
+measures the models (docs/models/regulators.md); after a change: cargo test -p cli --test integration regulator_models -- --include-ignored
 """
 import json, math, os, sys
 

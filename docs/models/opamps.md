@@ -1,6 +1,6 @@
 # 同梱のオペアンプのモデルとデータシートの比べ
 
-`crates/cli/tests/opamp_models.rs` が作る表(`cargo test -p cli --test opamp_models -- --ignored write_opamp_model_report`)。方針と表の読み方は `docs/model-policy.md` の 5 節。
+`crates/cli/tests/integration/opamp_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_opamp_model_report`)。方針と表の読み方は `docs/model-policy.md` の 5 節。
 
 - データシートの値は、各表の上に書いたデータシートから写した(2026-11-11)。モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。
 - 「差」は typ と比べた差(typ が無い行は max と)。開ループ利得と位相余裕は dB・度の差。

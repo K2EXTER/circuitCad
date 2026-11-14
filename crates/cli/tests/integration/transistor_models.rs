@@ -2,12 +2,11 @@
 //! sheets' numbers (docs/model-policy.md, section 5). Runs the real `ccad` binary on small test circuits.
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
-//! `cargo test -p cli --test transistor_models -- --ignored write_transistor_model_report` writes `docs/models/transistors.md`
+//! `cargo test -p cli --test integration -- --ignored write_transistor_model_report` writes `docs/models/transistors.md`
 //! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
 //! The models are written by `tools/gen_transistor_models.py` (the readings of the data sheets are there).
 
-#[path = "common/checks.rs"]
-mod checks;
+use super::checks;
 
 use serde_json::Value;
 use std::process::{Command, Stdio};
@@ -292,7 +291,7 @@ fn write_transistor_model_report() {
     checks::write(tables, "2026-11-12");
     let text = format!(
         "# 同梱のトランジスタ・MOSFET のモデルとデータシートの比べ\n\n\
-         `crates/cli/tests/transistor_models.rs` が作る表(`cargo test -p cli --test transistor_models -- --ignored write_transistor_model_report`)。\
+         `crates/cli/tests/integration/transistor_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_transistor_model_report`)。\
          方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_transistor_models.py`(データシートから読んだ値はそこにある)。\n\n\
          - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12)。グラフの読み取りは 1% ほどの誤差がある。\n\
          - 2N3904 の hFE の typ はデータシートに無い。図 15 の相対値に、表の min 100 と max 300(10 mA)の幾何平均 173 を掛けた値と比べる。実物の hFE は 100〜300 と大きく違う。\n\

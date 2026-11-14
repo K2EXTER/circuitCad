@@ -2,12 +2,11 @@
 //! (docs/model-policy.md, section 5). Runs the real `ccad` binary on small test circuits, like `regulator_models.rs`.
 //!
 //! `diode_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
-//! `cargo test -p cli --test diode_models -- --ignored write_diode_model_report` writes `docs/models/diodes.md`
+//! `cargo test -p cli --test integration -- --ignored write_diode_model_report` writes `docs/models/diodes.md`
 //! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
 //! The models are written by `tools/gen_diode_models.py` (the readings of the data sheets are there).
 
-#[path = "common/checks.rs"]
-mod checks;
+use super::checks;
 
 use serde_json::Value;
 use std::process::{Command, Stdio};
@@ -196,7 +195,7 @@ fn write_diode_model_report() {
     checks::write(tables, "2026-11-12");
     let text = format!(
         "# 同梱のダイオードのモデルとデータシートの比べ\n\n\
-         `crates/cli/tests/diode_models.rs` が作る表(`cargo test -p cli --test diode_models -- --ignored write_diode_model_report`)。\
+         `crates/cli/tests/integration/diode_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_diode_model_report`)。\
          方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_diode_models.py`(データシートから読んだ値はそこにある)。\n\n\
          - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12)。グラフの読み取りは 1% ほどの誤差がある。\n\
          - モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。接合容量は、100 kΩ と組んだローパスの利得から求めた。\n\

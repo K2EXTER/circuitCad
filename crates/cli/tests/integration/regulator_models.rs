@@ -3,12 +3,11 @@
 //! `opamp_models.rs`.
 //!
 //! `regulator_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
-//! `cargo test -p cli --test regulator_models -- --ignored write_regulator_model_report` writes `docs/models/regulators.md`
+//! `cargo test -p cli --test integration -- --ignored write_regulator_model_report` writes `docs/models/regulators.md`
 //! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
 //! The models are written by `tools/gen_reference_models.py`.
 
-#[path = "common/checks.rs"]
-mod checks;
+use super::checks;
 
 use serde_json::Value;
 use std::process::{Command, Stdio};
@@ -691,7 +690,7 @@ fn write_regulator_model_report() {
     checks::write(tables, "2026-11-11");
     let text = format!(
         "# 同梱の電圧基準と LDO のモデルとデータシートの比べ\n\n\
-         `crates/cli/tests/regulator_models.rs` が作る表(`cargo test -p cli --test regulator_models -- --ignored write_regulator_model_report`)。\
+         `crates/cli/tests/integration/regulator_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_regulator_model_report`)。\
          方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_reference_models.py`。\n\n\
          - データシートの値は、各表の上に書いたデータシートから写した(2026-11-11)。モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。\n\
          - 「差」はモデル − typ(typ が無い行は max)。合格の幅はテストの各行に書いてある(おおむね typ の 10%、dB は ±3 dB)。\n\

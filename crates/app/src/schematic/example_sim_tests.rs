@@ -26,22 +26,25 @@ fn example_schematics() -> Vec<(String, Schematic)> {
 fn shipped_examples_simulate() {
     let examples = example_schematics();
     assert!(!examples.is_empty(), "no examples found");
-    let mut bad = vec![];
-    for (name, sch) in examples {
+    // the samples on all the cores (one after another this took 12 s)
+    let bad: Vec<String> = sim_core::par_map(&examples, |(name, sch)| {
         let mut e = SchEditor::default();
-        e.sch = sch;
+        e.sch = sch.clone();
         match from_schematic(&e.sch) {
-            Err(errs) => bad.push(format!("{name}: 変換できません: {}", errs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "))),
-            Ok(c) if dc_op(&c).is_ok() => {}
+            Err(errs) => Some(format!("{name}: 変換できません: {}", errs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "))),
+            Ok(c) if dc_op(&c).is_ok() => None,
             Ok(_) => {
                 e.run_tran();
                 match e.tran.as_ref().map(|t| &t.outcome) {
-                    Some(Ok(_)) => {}
-                    _ => bad.push(format!("{name}: DCも過渡も失敗: {}", e.status)),
+                    Some(Ok(_)) => None,
+                    _ => Some(format!("{name}: DCも過渡も失敗: {}", e.status)),
                 }
             }
         }
-    }
+    })
+    .into_iter()
+    .flatten()
+    .collect();
     assert!(bad.is_empty(), "{bad:#?}");
 }
 

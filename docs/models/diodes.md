@@ -1,6 +1,6 @@
 # 同梱のダイオードのモデルとデータシートの比べ
 
-`crates/cli/tests/diode_models.rs` が作る表(`cargo test -p cli --test diode_models -- --ignored write_diode_model_report`)。方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_diode_models.py`(データシートから読んだ値はそこにある)。
+`crates/cli/tests/integration/diode_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_diode_model_report`)。方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_diode_models.py`(データシートから読んだ値はそこにある)。
 
 - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12)。グラフの読み取りは 1% ほどの誤差がある。
 - モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。接合容量は、100 kΩ と組んだローパスの利得から求めた。

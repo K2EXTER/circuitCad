@@ -1,6 +1,6 @@
 //! How a bundled equivalent model compares with its data sheet (docs/model-policy.md, section 5).
 //!
-//! `model_checks.json` is written by the tests that measure the models (`crates/cli/tests/opamp_models.rs`,
+//! `model_checks.json` is written by the tests that measure the models (`crates/cli/tests/integration/opamp_models.rs`,
 //! `regulator_models.rs`): one table per part. A table is shown only for the model text it was measured on
 //! (the fingerprint), so an edited model, or an old copy kept in a circuit, never shows a table that is not its own.
 
@@ -143,6 +143,6 @@ mod tests {
                 stale.push(format!("{file}: the table in model_checks.json was measured on another model"));
             }
         }
-        assert!(stale.is_empty(), "write the tables again (cargo test -p cli --test opamp_models / regulator_models -- --ignored write_):\n{}", stale.join("\n"));
+        assert!(stale.is_empty(), "write the tables again (cargo test -p cli --test integration -- --ignored write_):\n{}", stale.join("\n"));
     }
 }

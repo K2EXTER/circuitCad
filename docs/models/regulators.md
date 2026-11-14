@@ -1,6 +1,6 @@
 # 同梱の電圧基準と LDO のモデルとデータシートの比べ
 
-`crates/cli/tests/regulator_models.rs` が作る表(`cargo test -p cli --test regulator_models -- --ignored write_regulator_model_report`)。方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_reference_models.py`。
+`crates/cli/tests/integration/regulator_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_regulator_model_report`)。方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_reference_models.py`。
 
 - データシートの値は、各表の上に書いたデータシートから写した(2026-11-11)。モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。
 - 「差」はモデル − typ(typ が無い行は max)。合格の幅はテストの各行に書いてある(おおむね typ の 10%、dB は ±3 dB)。

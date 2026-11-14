@@ -3,8 +3,8 @@
     python tools/gen_opamp_models.py
 
 The numbers below are typed in from the data sheets named in DS (2026-11-11); docs/model-policy.md says how the models
-are made, docs/models/opamps.md compares them with the data sheets (crates/cli/tests/opamp_models.rs measures them).
-After a change: cargo test -p cli --test opamp_models -- --include-ignored (writes the table again).
+are made, docs/models/opamps.md compares them with the data sheets (crates/cli/tests/integration/opamp_models.rs measures them).
+After a change: cargo test -p cli --test integration opamp_models -- --include-ignored (writes the table again).
 """
 import json, math, os, sys
 

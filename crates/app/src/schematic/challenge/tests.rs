@@ -53,7 +53,8 @@ mod challenge_tests {
     #[test]
     fn every_answer_passes_and_every_start_sheet_is_bare() {
         let ids = lesson_ids();
-        for ch in CHALLENGES {
+        // the challenges on all the cores (one after another this took 6 s)
+        sim_core::par_map(CHALLENGES, |ch| {
             assert!(ids.contains(&ch.lesson), "{}: lesson {} exists", ch.id, ch.lesson);
             assert!(ch.hints.len() >= 3 && ch.hints.iter().all(|h| !h.is_empty()), "{}", ch.id);
             let r = verdict(ch.id, solution(ch.id));
@@ -71,7 +72,7 @@ mod challenge_tests {
             }
             // level 0 has more parts than level 1
             assert!(ch.parts0.len() > ch.parts1.len(), "{}", ch.id);
-        }
+        });
     }
 
     #[test]

@@ -6,8 +6,8 @@ AO3400A (level 1 with the series resistance RD).
 Every number below was read on 2026-11-12 from the data sheet named next to it, from the tables and from the graphs rendered
 as pictures (graph readings: the pixel position of the curve, good to about 1 %). The fits use the simulator's own equations
 (crates/sim-core/src/dc/devices.rs: bjt_eval, mos_eval). docs/model-policy.md says how bundled models are made;
-crates/cli/tests/transistor_models.rs measures the models and writes docs/models/transistors.md and the on-screen tables.
-After a change: python tools/collect_legacy_models.py, cargo test -p cli --test transistor_models -- --include-ignored,
+crates/cli/tests/integration/transistor_models.rs measures the models and writes docs/models/transistors.md and the on-screen tables.
+After a change: python tools/collect_legacy_models.py, cargo test -p cli --test integration transistor_models -- --include-ignored,
 cargo test -p app refresh_sample_models -- --ignored, then the samples' tests (docs/model-policy.md).
 """
 import json, math, os, sys

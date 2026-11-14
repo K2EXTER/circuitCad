@@ -14,21 +14,24 @@ fn set_value(e: &mut SchEditor, refdes: &str, v: &str) {
 fn every_lesson_loads_and_its_circuit_simulates() {
     let titles = lesson_titles();
     assert!(titles.len() >= 5);
-    for (i, title) in titles.iter().enumerate() {
+    // the lessons on all the cores (one after another this was the slowest test of the app)
+    let indices: Vec<usize> = (0..titles.len()).collect();
+    sim_core::par_map(&indices, |&i| {
+        let title = &titles[i];
         let mut e = SchEditor::default();
         e.start_lesson(i);
         assert!(e.lesson.is_some(), "{}", title);
-        assert!(!e.sch.components.is_empty(), "{}", titles[i]);
+        assert!(!e.sch.components.is_empty(), "{}", title);
         // the 555 is a circuit that changes state by itself: it only makes sense in the time domain
-        if titles[i].contains("555") || titles[i].contains("整流") {
+        if title.contains("555") || title.contains("整流") {
             e.run_tran();
-            assert!(e.tran.as_ref().unwrap().outcome.is_ok(), "{}", e.status);
+            assert!(e.tran.as_ref().unwrap().outcome.is_ok(), "{}: {}", title, e.status);
         } else {
             e.run_dc();
-            assert!(e.dc.as_ref().unwrap().outcome.is_ok(), "{}: {:?}", titles[i], e.dc.as_ref().unwrap().outcome.as_ref().err());
+            assert!(e.dc.as_ref().unwrap().outcome.is_ok(), "{}: {:?}", title, e.dc.as_ref().unwrap().outcome.as_ref().err());
         }
-        assert_eq!(progress(&e), 0);
-    }
+        assert_eq!(progress(&e), 0, "{}", title);
+    });
 }
 
 #[test]

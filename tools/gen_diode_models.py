@@ -5,9 +5,9 @@
 
 Every number below was read on 2026-11-12 from the data sheet named next to it, from the tables and from the graphs
 rendered as pictures (graph readings: the pixel position of the curve, so a reading is good to about 1 %).
-docs/model-policy.md says how bundled models are made; crates/cli/tests/diode_models.rs measures the models and writes the
+docs/model-policy.md says how bundled models are made; crates/cli/tests/integration/diode_models.rs measures the models and writes the
 comparison tables (docs/models/diodes.md, crates/part-lib/model_checks.json).
-After a change: python tools/collect_legacy_models.py, then cargo test -p cli --test diode_models -- --include-ignored,
+After a change: python tools/collect_legacy_models.py, then cargo test -p cli --test integration diode_models -- --include-ignored,
 then cargo test -p app refresh_sample_models -- --ignored (docs/model-policy.md, the steps after a rebuild).
 """
 import json, math, os, sys

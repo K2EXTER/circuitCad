@@ -6,13 +6,14 @@
 - `main.rs` 引数(`--lib DIR`、`--keep-going`、`-c`、`-`、ファイル)・1行ずつの実行・1コマンド=1行のJSON出力。最初の失敗で止まる(終了コード1)。
 - `session.rs` `Session`(回路図・部品ライブラリ・基板・部品を置く位置のカーソル)、コマンド表 `run`、`HELP`、語の分割(`"` で囲める)、`key=value` の分離。
 - `design.rs` 設計の手助け: `calc`(`sim-core/designcalc.rs` の14種。アプリの `wizard.rs` の `CALCS` とは別の表なので、計算を足したらどちらにも。基板の配線の太さはアプリだけ)/`ac`(`ac_analysis`。1デケードごとの値と -3dB・位相余裕)/`spec`(`sim-core/spec.rs` の `evaluate_spec`。対象の名前は大文字小文字を問わず結果の綴りに直す)。`dc`/`tran`/`ac` の結果は `Session.last_*` に残り、`new/open/add/value/net/remove` で消える(古い答えを新しい回路の合否にしないため)。
-- `models.rs` `models`(別名 `murata`。`part_lib::vendorzip` の検索。zipは `zip=` か、アプリが `settings.json` に保存した `model_zips`(旧 `murata_zip` も読む)。`model=型番` で `.subckt` と注意を返す。`models use 型番` は `VendorIndex::part_def` の部品を `Session.lib` に入れる(同名は置き換え。保存はしない)。テスト `tests/script.rs a_model_from_a_maker_zip_can_be_found_used_added_and_simulated`)。
+- `models.rs` `models`(別名 `murata`。`part_lib::vendorzip` の検索。zipは `zip=` か、アプリが `settings.json` に保存した `model_zips`(旧 `murata_zip` も読む)。`model=型番` で `.subckt` と注意を返す。`models use 型番` は `VendorIndex::part_def` の部品を `Session.lib` に入れる(同名は置き換え。保存はしない)。テスト `tests/integration/script.rs a_model_from_a_maker_zip_can_be_found_used_added_and_simulated`)。
 - `build.rs` 回路図側: `parts`/`part`/`add`/`value`/`net`/`remove`/`list`/`erc`/`dc`/`tran`。
 - `board/` 基板側。`mod.rs` の `board_cmd` が命令を振り分け、中身は話題ごと: `sync.rs`(new・import・swap・backannotate・renumber)`place.rs`(autoplace・move・orient・matchpairs・nudge・breakout・layers)`route.rs`(path/fork・track・via・net・guard・route・improve)`copper.rs`(pour・zones・keepout・copper・slits・thermal・picture・pinlabels・labels)`checks.rs`(impedance・class・drc・quality・status・currents・postlayout・check)`practice.rs`(break・health・reveal)`output.rs`(save・open・shopping・svg・case・dxf_import・dxf・fab)。(`pour [net=名]` はアプリの「GND ベタ」=`groundpour::ground_pour`。`import`→`pour`→`autoplace`→`route` の順で、ベタのネットを外して詰めた配置になり、`autoplace` が `repoured_vias` を返す。`route` はアプリと同じ流れ: `pad_lead`(`lead=mm`、既定0.5、0で切る)で引き、新しい配線に `padentry::align_entries` と `merge::merge_collinear`。答えは `aligned_pads`・`joined_tracks`): `board new|import|autoplace|route|drc|status|save|open|fab|postlayout|currents`。`currents [tran] [from=F] [widen]` は `sim_core::net_currents`(`tran` なら直前の `tran` の答え `last_tran` から `net_currents_tran`、答えの `stats` に rms/burst_rms_10ms/peak/spiky)(DC動作点→ネット電流)を `pcb_core::current::set_net_currents` で基板に入れて `net_widths` を返す(`widen` は `widen_net`)。`postlayout on` は `Session.post_layout` を立て、`circuit()` が `pcb_core::irdrop::wiring_resistances` を `sim_core::from_schematic_with_wiring` に渡す(切り替えで前回の `dc`/`tran`/`ac` の答えは消す)。回路図→基板の取り込み(`netlist_of`)はアプリの `board_editor/file.rs` と同じ規則(シミュレーション専用ピンは除く)。
 - `runner.rs` 1行ずつの実行(`run_script`: 失敗で止まる/`keep_going`)。コマンドラインと MCP が共有する。
 - `mcp.rs` `ccad mcp`: MCP サーバー(JSON-RPC 2.0、1メッセージ1行の標準入出力。`initialize`・`ping`・`tools/list`・`tools/call`。通知には返事をしない)。ツールは `ccad_run`(スクリプトを実行、失敗で `isError`)と `ccad_help`。`Session` はサーバーの間ずっと生きるので、回路図と基板が呼び出しをまたぐ。依存は増やしていない(`serde_json` のみ)。
-- `tests/mcp.rs` 実際の `ccad mcp` と JSON-RPC で話すテスト(握手・ツール一覧・未知のメソッドの -32601、回路が呼び出しをまたぐこと、壊れた入力や未知のツールでも落ちないこと)。
-- `tests/script.rs` 実際の `ccad` を走らせるテスト(分圧の理論値、名前の衝突で止まること、誤りの文言、555の周期が理論値の5%以内 + 配線完了 + DRC 0 + ガーバー出力)。
+- `tests/integration/` は1つのテストの実行ファイル(`main.rs` が `script`・`mcp`・`*_models`・共通の `checks` を束ねる。2026-11-14 まで別々の6つで、順に1つずつ走り、リンクも6回だった)。1つの部品の種類だけは `cargo test -p cli --test integration opamp_models`。
+- `tests/integration/mcp.rs` 実際の `ccad mcp` と JSON-RPC で話すテスト(握手・ツール一覧・未知のメソッドの -32601、回路が呼び出しをまたぐこと、壊れた入力や未知のツールでも落ちないこと)。
+- `tests/integration/script.rs` 実際の `ccad` を走らせるテスト(分圧の理論値、名前の衝突で止まること、誤りの文言、555の周期が理論値の5%以内 + 配線完了 + DRC 0 + ガーバー出力)。
 
 ## 設計判断
 - **配線は座標ではなくネット名のラベルで作る。** `net NAME REF.PIN ...` は各ピンの位置に同じ名前のラベルを置く(`sch-core` は同名のラベルを同じネットにする)ので、LLMがピンの座標を間違えてつながらない事故が起きない。GNDだけは、最初のピンにGNDの記号も1つ置く。
@@ -44,7 +45,7 @@
 - `libcmd.rs`: `lib [reload]`(`Session.lib_dir` から読み直す)と `part import`。`.subcircuit` の本体は、コメント行を省いて `sim.text` に入れる。取り込む前に `add_subckt_instance` で読めるか試す(読めない素子は、ここで理由つきで断る)。ピンの辺は `side_for`(名前から)、フットプリントは `package=` の部品から借りる。ADA4522(ADI)の `.cir` で `pins=IN+,IN-,V+,V-,OUT map=3,2,8,4,1` を使って確かめた。**取り込んだ部品はあなたのライブラリの中の1ファイルで、メーカーのモデルの再配布になることがある**ので、リポジトリには入れない。
 - `dc probe=` と `sweep`(`build.rs`): `probe=` は括弧の外のカンマで区切る(`V(a,b)` があるため)。`sweep` は部品の値を書き換えて `dc_op` を呼ぶだけ(`sim_core::param_sweep` は使わない: あれは解析の種類ごとの曲線用)。終わったら値を戻す。
 - `value` は残りの語をスペースでつなぐ(`split_words` が引用符を扱うので、どちらの書き方でも同じ値になる)。
-- `tests/script.rs` の `run` は、呼び出しごとに別の部品フォルダを使う(並列のテストが同じフォルダの同梱部品のコピーや `part import` を半端に読むことがあった)。
+- `tests/integration/script.rs` の `run` は、呼び出しごとに別の部品フォルダを使う(並列のテストが同じフォルダの同梱部品のコピーや `part import` を半端に読むことがあった)。
 - `board thermal`(`board/`): `pcb_core::drc::add_thermal_vias` を呼ぶだけ(アプリのボタンと同じ)。テスト `board_thermal_puts_vias_in_a_heat_pad_once`(IP2332 の裏のパッドに置いて、2回目は 0 個)。
 - `sheet use`・`sheet add`・`sheet tidy` のあとの `add` は、操作対象のシートの既存の部品の下から並べる(`cursor_below`)。以前は (8, 8) から始めて、既存の部品の上に重ね、ピンの位置がぶつかって `net` が「すでに別のネットにある」と断った。
 
@@ -53,6 +54,6 @@
 
 - **`sens`**(`build.rs`): `sweep` と同じく部品の `value` を書き換えて `dc_op` を呼び、元に戻す。値の先頭の数字だけを `step`% 動かし(残りの単語は残す: `5 AC 1`)、`probe_value` の差を `per_percent`・`elasticity` にする。基準値が 0 なら `elasticity` は null。全部品で 1 回ずつ解くので、150 部品まで。`dc` の答えには `solver`(`strategy`・`iterations`・`seconds`)が付く。
 - 基板の手直しの命令(2026-10-26): `board net`・`board track add|remove`・`board via add|remove`(`board/`)。`track add` は、引いたあとの接続(`drc::connectivity`)でネットを調べ、`net=` と違う・短絡・浮いているときは、引く前の配線に戻す。`mcp.rs` の `image_blocks` が、答えの `file`(PNG で `legend` があるもの)を、画像のコンテンツとして付ける(`base64`、2.5 MB まで)。`board picture` は `names=1`・`part=` も取る。
-- `tests/opamp_models.rs`: 同梱のオペアンプのモデルを、データシートの条件に近い回路(開ループは 1e9 H のコイルと 1 F のコンデンサで DC だけ帰還、スルーレートはフォロワの 20〜80 %、振れ幅は 1 V の入力超過)で測り、データシートの値と並べる成績表。`--ignored write_opamp_model_report` で `docs/models/opamps.md` を書く。方針は `docs/model-policy.md`。
-- `tests/regulator_models.rs`: ADR4525 と LP5907-4.5 のモデルを、データシートの条件で測る(ライン・ロード・レギュレーション、電源電流、ドロップアウト、電流制限、PSRR・リップル除去は単一周波数の AC、雑音、LDO の起動時間は EN のパルスで過渡)。行ごとに合格の幅を持つ。`--ignored write_regulator_model_report` で `docs/models/regulators.md` を書く。
-- `tests/regulator_models.rs` には、78xx・78L05・AMS1117・MCP1700・LM317・TL431 の行もある (出力・ライン・ロード・グラウンド電流・ドロップアウト・リップル除去・電流制限・雑音、TL431 は基準電圧・REF 電流・ΔVref/ΔVKA・動的インピーダンス・停止中の電流)。負荷は電流源でなく抵抗 (ドロップアウトや電流制限を越えると、電流源は出力を引き離す)。
+- `tests/integration/opamp_models.rs`: 同梱のオペアンプのモデルを、データシートの条件に近い回路(開ループは 1e9 H のコイルと 1 F のコンデンサで DC だけ帰還、スルーレートはフォロワの 20〜80 %、振れ幅は 1 V の入力超過)で測り、データシートの値と並べる成績表。`--ignored write_opamp_model_report` で `docs/models/opamps.md` を書く。方針は `docs/model-policy.md`。
+- `tests/integration/regulator_models.rs`: ADR4525 と LP5907-4.5 のモデルを、データシートの条件で測る(ライン・ロード・レギュレーション、電源電流、ドロップアウト、電流制限、PSRR・リップル除去は単一周波数の AC、雑音、LDO の起動時間は EN のパルスで過渡)。行ごとに合格の幅を持つ。`--ignored write_regulator_model_report` で `docs/models/regulators.md` を書く。
+- `tests/integration/regulator_models.rs` には、78xx・78L05・AMS1117・MCP1700・LM317・TL431 の行もある (出力・ライン・ロード・グラウンド電流・ドロップアウト・リップル除去・電流制限・雑音、TL431 は基準電圧・REF 電流・ΔVref/ΔVKA・動的インピーダンス・停止中の電流)。負荷は電流源でなく抵抗 (ドロップアウトや電流制限を越えると、電流源は出力を引き離す)。

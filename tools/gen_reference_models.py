@@ -5,8 +5,8 @@ sheets' typ values (docs/model-policy.md).
 
 The parts' pins and packages are the ones made for the bench DMM (bench/, 2026-11-10); this script only writes the model, the
 model notes and the description. The numbers below are typed in from the data sheets named in DS (read 2026-11-11). Where the
-data sheet gives no typ, the max is used and the note says so. crates/cli/tests/regulator_models.rs measures the models
-(docs/models/regulators.md); after a change: cargo test -p cli --test regulator_models -- --include-ignored
+data sheet gives no typ, the max is used and the note says so. crates/cli/tests/integration/regulator_models.rs measures the models
+(docs/models/regulators.md); after a change: cargo test -p cli --test integration regulator_models -- --include-ignored
 """
 import json, math, os, sys
 
