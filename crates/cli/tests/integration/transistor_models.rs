@@ -1,4 +1,4 @@
-//! The bundled transistor models (2N3904, 2N3906, 2N7000, BSS138, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
+//! The bundled transistor models (2N3904, 2N3906, BC547, 2N7000, BSS138, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
 //! sheets' numbers (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`).
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -46,44 +46,72 @@ struct Bjt {
     pnp: bool,
     /// The figures of hFE, of the "ON" voltages and of the capacitances
     figs: (&'static str, &'static str, &'static str),
-    /// The normalised hFE curve (VCE = 1 V) with its peak at 173 (the generator's choice: the data sheets have no typ)
-    hfe_norm: [(f64, f64); 10],
-    /// The table's min hFE at 0.1, 1, 10, 50, 100 mA
-    hfe_min: [f64; 5],
-    vbe_on: [(f64, f64); 4],
-    vbe_sat: [(f64, f64, Option<f64>, Option<f64>); 2],
-    vce_sat: [(f64, Option<f64>, Option<f64>); 3],
-    /// (typ, max) pF: Cobo at VCB = 5 V, Cibo at VEB = 0.5 V
-    cobo: (f64, f64),
-    cibo: (f64, f64),
+    /// The hFE where the normalised curve is 1, and how it was chosen (for the table's text)
+    peak: f64,
+    peak_basis: &'static str,
+    /// The collector-emitter voltage of the hFE and VBE(on) curves
+    vce: f64,
+    /// The normalised hFE curve
+    hfe_norm: &'static [(f64, f64)],
+    /// (IC, the table's min, the table's max) of the hFE rows; the typ is the curve's
+    hfe_rows: &'static [(f64, Option<f64>, Option<f64>)],
+    vbe_on: &'static [(f64, f64)],
+    vbe_sat: &'static [(f64, f64, Option<f64>, Option<f64>)],
+    vce_sat: &'static [(f64, Option<f64>, Option<f64>)],
+    /// (reverse voltage, typ, max) pF: Cobo (VCB), Cibo (VEB)
+    cobo: (f64, f64, Option<f64>),
+    cibo: (f64, f64, Option<f64>),
 }
 
-const HFE_PEAK: f64 = 173.0;
+const GEOMETRIC_MEAN: &str = "表の min と max の幾何平均。データシートに typ は無い";
 
-static BJTS: [Bjt; 2] = [
+static BJTS: [Bjt; 3] = [
     Bjt {
         part: "2N3904",
         pnp: false,
         figs: ("図 15", "図 17", "図 3"),
-        hfe_norm: [(0.1e-3, 0.443), (0.2e-3, 0.538), (0.5e-3, 0.676), (1e-3, 0.773), (2e-3, 0.868), (5e-3, 0.979), (10e-3, 0.988), (20e-3, 0.859), (50e-3, 0.493), (100e-3, 0.27)],
-        hfe_min: [40.0, 70.0, 100.0, 60.0, 30.0],
-        vbe_on: [(5e-3, 0.684), (10e-3, 0.706), (50e-3, 0.79), (100e-3, 0.869)],
-        vbe_sat: [(10e-3, 0.745, Some(0.65), Some(0.85)), (50e-3, 0.848, None, Some(0.95))],
-        vce_sat: [(10e-3, None, Some(0.2)), (50e-3, Some(0.194), Some(0.3)), (100e-3, Some(0.36), None)],
-        cobo: (1.96, 4.0),
-        cibo: (3.76, 8.0),
+        peak: 173.0,
+        peak_basis: GEOMETRIC_MEAN,
+        vce: 1.0,
+        hfe_norm: &[(0.1e-3, 0.443), (0.2e-3, 0.538), (0.5e-3, 0.676), (1e-3, 0.773), (2e-3, 0.868), (5e-3, 0.979), (10e-3, 0.988), (20e-3, 0.859), (50e-3, 0.493), (100e-3, 0.27)],
+        hfe_rows: &[(0.1e-3, Some(40.0), None), (1e-3, Some(70.0), None), (10e-3, Some(100.0), Some(300.0)), (50e-3, Some(60.0), None), (100e-3, Some(30.0), None)],
+        vbe_on: &[(5e-3, 0.684), (10e-3, 0.706), (50e-3, 0.79), (100e-3, 0.869)],
+        vbe_sat: &[(10e-3, 0.745, Some(0.65), Some(0.85)), (50e-3, 0.848, None, Some(0.95))],
+        vce_sat: &[(10e-3, None, Some(0.2)), (50e-3, Some(0.194), Some(0.3)), (100e-3, Some(0.36), None)],
+        cobo: (5.0, 1.96, Some(4.0)),
+        cibo: (0.5, 3.76, Some(8.0)),
     },
     Bjt {
         part: "2N3906",
         pnp: true,
         figs: ("図 13", "図 15", "図 3"),
-        hfe_norm: [(0.1e-3, 0.774), (0.2e-3, 0.806), (0.5e-3, 0.854), (1e-3, 0.883), (2e-3, 0.921), (5e-3, 0.971), (10e-3, 0.988), (20e-3, 0.936), (50e-3, 0.511), (100e-3, 0.22)],
-        hfe_min: [60.0, 80.0, 100.0, 60.0, 30.0],
-        vbe_on: [(5e-3, 0.71), (10e-3, 0.727), (50e-3, 0.81), (100e-3, 0.868)],
-        vbe_sat: [(10e-3, 0.757, Some(0.65), Some(0.85)), (50e-3, 0.85, None, Some(0.95))],
-        vce_sat: [(10e-3, None, Some(0.25)), (50e-3, Some(0.136), Some(0.4)), (100e-3, Some(0.245), None)],
-        cobo: (3.19, 4.5),
-        cibo: (4.72, 10.0),
+        peak: 173.0,
+        peak_basis: GEOMETRIC_MEAN,
+        vce: 1.0,
+        hfe_norm: &[(0.1e-3, 0.774), (0.2e-3, 0.806), (0.5e-3, 0.854), (1e-3, 0.883), (2e-3, 0.921), (5e-3, 0.971), (10e-3, 0.988), (20e-3, 0.936), (50e-3, 0.511), (100e-3, 0.22)],
+        hfe_rows: &[(0.1e-3, Some(60.0), None), (1e-3, Some(80.0), None), (10e-3, Some(100.0), Some(300.0)), (50e-3, Some(60.0), None), (100e-3, Some(30.0), None)],
+        vbe_on: &[(5e-3, 0.71), (10e-3, 0.727), (50e-3, 0.81), (100e-3, 0.868)],
+        vbe_sat: &[(10e-3, 0.757, Some(0.65), Some(0.85)), (50e-3, 0.85, None, Some(0.95))],
+        vce_sat: &[(10e-3, None, Some(0.25)), (50e-3, Some(0.136), Some(0.4)), (100e-3, Some(0.245), None)],
+        cobo: (5.0, 3.19, Some(4.5)),
+        cibo: (0.5, 4.72, Some(10.0)),
+    },
+    // BC547 (B grade): its data sheet gives the hFE and VBE(on) curves at VCE = 10 V; the table's hFE typ 290 (2 mA, 5 V)
+    // set the curve's height. The table's Cibo typ (10 pF) is far from its Figure 5 (5.8 pF at 0.5 V): the figure is the typ here
+    Bjt {
+        part: "BC547",
+        pnp: false,
+        figs: ("図 1", "図 2", "図 5"),
+        peak: 314.0,
+        peak_basis: "表の typ 290 (BC547B、2 mA、5 V) に合わせた高さ",
+        vce: 10.0,
+        hfe_norm: &[(0.3e-3, 0.692), (0.5e-3, 0.754), (1e-3, 0.838), (2e-3, 0.923), (5e-3, 0.995), (10e-3, 1.032), (20e-3, 1.049), (30e-3, 1.036), (50e-3, 0.952), (70e-3, 0.805), (100e-3, 0.617)],
+        hfe_rows: &[(0.5e-3, None, None), (2e-3, Some(200.0), Some(450.0)), (10e-3, None, None), (50e-3, None, None), (100e-3, None, None)],
+        vbe_on: &[(1e-3, 0.626), (10e-3, 0.72), (50e-3, 0.85), (70e-3, 0.893)],
+        vbe_sat: &[(10e-3, 0.786, None, None), (50e-3, 0.941, None, None)],
+        vce_sat: &[(10e-3, Some(0.0706), None), (50e-3, Some(0.184), None), (70e-3, Some(0.263), None)],
+        cobo: (10.0, 1.74, Some(4.5)),
+        cibo: (0.5, 5.78, None),
     },
 ];
 
@@ -94,10 +122,10 @@ impl Bjt {
             let ((a, na), (b, nb)) = (w[0], w[1]);
             if ic >= a && ic <= b {
                 let t = (ic.ln() - a.ln()) / (b.ln() - a.ln());
-                return HFE_PEAK * (na + t * (nb - na));
+                return self.peak * (na + t * (nb - na));
             }
         }
-        HFE_PEAK * if ic < pts[0].0 { pts[0].1 } else { pts[pts.len() - 1].1 }
+        self.peak * if ic < pts[0].0 { pts[0].1 } else { pts[pts.len() - 1].1 }
     }
 
     /// +1 for an NPN, -1 for a PNP: the sources' values are multiplied by it
@@ -105,7 +133,7 @@ impl Bjt {
         if self.pnp { -1.0 } else { 1.0 }
     }
 
-    /// (|IC|, |IB|, |VBE|) at |VCE| = 1 V with a base current that gives about `ic` on the data sheet's curve.
+    /// (|IC|, |IB|, |VBE|) at the curves' |VCE| with a base current that gives about `ic` on the data sheet's curve.
     fn on(&self, ic: f64) -> (f64, f64, f64) {
         let (ib, s) = (ic / self.hfe_ds(ic), self.sign());
         let p = probes(&format!("new
@@ -115,8 +143,24 @@ add I {} as=IB
 net C VC.+ Q1.C
 net B IB.+ Q1.B
 net GND VC.- IB.- Q1.E
-", self.part, s, s * ib), &["I(VC)", "V(B)"]);
+", self.part, s * self.vce, s * ib), &["I(VC)", "V(B)"]);
         (p[0].abs(), ib, p[1].abs())
+    }
+
+    /// |VBE| at collector current `ic` (the curves' |VCE|): the base current from the data sheet's hFE, then corrected
+    /// once by the model's own (a model hFE 15 % off would otherwise put the reading at another current).
+    fn vbe_at(&self, ic: f64) -> f64 {
+        let (i0, ib0, _) = self.on(ic);
+        let ib = ib0 * ic / i0;
+        let s = self.sign();
+        probes(&format!("new
+add {} as=Q1
+add V {} as=VC
+add I {} as=IB
+net C VC.+ Q1.C
+net B IB.+ Q1.B
+net GND VC.- IB.- Q1.E
+", self.part, s * self.vce, s * ib), &["V(B)"])[0].abs()
     }
 
     /// (|VBE|, |VCE|) with IC forced and IB = IC / 10.
@@ -184,6 +228,7 @@ fn source(part: &str) -> &'static str {
     match part {
         "2N3904" => "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
         "2N3906" => "onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)。25 °C",
+        "BC547" => "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
         "AO3401A" => "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。25 °C",
@@ -197,13 +242,13 @@ fn rows() -> Vec<Row> {
     // table), capacitances
     for t in &BJTS {
         let (part, (fh, fon, fcap)) = (t.part, t.figs);
-        for (k, ic) in [0.1e-3, 1e-3, 10e-3, 50e-3, 100e-3].into_iter().enumerate() {
+        for &(ic, min, max) in t.hfe_rows {
             v.push(Row {
                 part,
                 item: format!("hFE ({} mA)", ic * 1e3),
-                ds: [Some(t.hfe_min[k]), Some(t.hfe_ds(ic)), if ic == 10e-3 { Some(300.0) } else { None }],
+                ds: [min, Some(t.hfe_ds(ic)), max],
                 unit: "",
-                at: format!("VCE = 1 V。typ は{fh}の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表"),
+                at: format!("VCE = {} V。typ は{fh}の相対値 × {} ({})。min / max は表", t.vce, t.peak, t.peak_basis),
                 measure: Box::new(move || {
                     let (i, ib, _) = t.on(ic);
                     i / ib
@@ -211,42 +256,42 @@ fn rows() -> Vec<Row> {
                 tol: Some(0.15 * t.hfe_ds(ic)),
             });
         }
-        for (ic, typ) in t.vbe_on {
-            v.push(Row { part, item: format!("VBE ({} mA)", ic * 1e3), ds: [None, Some(typ), None], unit: "V", at: format!("VCE = 1 V、{fon} (グラフから読んだ)"), measure: Box::new(move || t.on(ic).2), tol: Some(0.015) });
+        for &(ic, typ) in t.vbe_on {
+            v.push(Row { part, item: format!("VBE ({} mA)", ic * 1e3), ds: [None, Some(typ), None], unit: "V", at: format!("VCE = {} V、{fon} (グラフから読んだ)", t.vce), measure: Box::new(move || t.vbe_at(ic)), tol: Some(0.015) });
         }
-        for (ic, typ, min, max) in t.vbe_sat {
+        for &(ic, typ, min, max) in t.vbe_sat {
             v.push(Row { part, item: format!("VBE(sat) ({} mA)", ic * 1e3), ds: [min, Some(typ), max], unit: "V", at: format!("IC/IB = 10。typ は{fon}、min / max は表"), measure: Box::new(move || t.sat(ic).0), tol: Some(0.02) });
         }
-        for (ic, typ, max) in t.vce_sat {
+        for &(ic, typ, max) in t.vce_sat {
             v.push(Row { part, item: format!("VCE(sat) ({} mA)", ic * 1e3), ds: [None, typ, max], unit: "V", at: format!("IC/IB = 10。typ は{fon}、max は表"), measure: Box::new(move || t.sat(ic).1), tol: typ.map(|_| 0.03) });
         }
         let s = t.sign();
         v.push(Row {
             part,
-            item: "Cobo (5 V)".into(),
-            ds: [None, Some(t.cobo.0), Some(t.cobo.1)],
+            item: format!("Cobo ({} V)", t.cobo.0),
+            ds: [None, Some(t.cobo.1), t.cobo.2],
             unit: "pF",
-            at: format!("VCB = 5 V、IE = 0。typ は{fcap}、max は表"),
+            at: format!("VCB = {} V、IE = 0。typ は{fcap}、max は表", t.cobo.0),
             measure: Box::new(move || cap_at(&format!("add {part} as=Q1
 add R 1G as=RE
 net X Q1.C
 net GND Q1.B RE.2
 net EM Q1.E RE.1
-"), 5.0 * s, 2e-12) * 1e12),
+"), t.cobo.0 * s, 2e-12) * 1e12),
             tol: Some(0.3),
         });
         v.push(Row {
             part,
-            item: "Cibo (0.5 V)".into(),
-            ds: [None, Some(t.cibo.0), Some(t.cibo.1)],
+            item: format!("Cibo ({} V)", t.cibo.0),
+            ds: [None, Some(t.cibo.1), t.cibo.2],
             unit: "pF",
-            at: format!("VEB = 0.5 V、IC = 0。typ は{fcap}、max は表"),
+            at: format!("VEB = {} V、IC = 0。typ は{fcap}、max は表", t.cibo.0),
             measure: Box::new(move || cap_at(&format!("add {part} as=Q1
 add R 1G as=RC
 net X Q1.E
 net GND Q1.B RC.2
 net CO Q1.C RC.1
-"), 0.5 * s, 4e-12) * 1e12),
+"), t.cibo.0 * s, 4e-12) * 1e12),
             tol: Some(0.5),
         });
     }

@@ -163,6 +163,8 @@ struct Opened {
     pins_out: Option<PinImport>,
     /// Points being read off a graph (its own window beside this one).
     graph: Option<GraphReader>,
+    /// The page drawn at a fixed scale for finding curves under the pointer (page, picture, pixels per point).
+    snap: Option<(usize, datasheet::PageImage, f32)>,
 }
 
 /// A search that goes on a few pages per frame, so that a long data sheet does not freeze the window.
@@ -218,6 +220,7 @@ impl SheetView {
                     panel: None,
                     pins_out: None,
                     graph: None,
+                    snap: None,
                 });
                 self.msg.clear();
                 self.open = true;
@@ -618,13 +621,26 @@ impl Opened {
                 self.drag_from = None;
             }
         }
+        // picking points: the curve nearest to the pointer in its column (within 6 points) is where the point goes
+        let snapped = match (self.graph.as_ref().filter(|g| g.page == self.page).and_then(|g| g.mode), resp.hover_pos()) {
+            (Some(Mode::Points), Some(pos)) if self.graph.as_ref().is_some_and(|g| g.snap) => {
+                let p = (pos - origin) / zoom;
+                self.curve_near(p.x, p.y)
+            }
+            _ => None,
+        };
         // reading a graph: the ticks and points are drawn; a click adds a tick (on a label: its number) or a point
         if let Some(g) = self.graph.as_mut()
             && g.page == self.page
         {
             g.paint(ui.painter(), |x, y| origin + Vec2::new(x, y) * zoom, page_size);
             if let (Some(mode), Some(pos)) = (g.mode, resp.hover_pos()) {
-                let p = (pos - origin) / zoom;
+                let mut p = (pos - origin) / zoom;
+                if let Some(y) = snapped {
+                    p.y = y;
+                    let c = origin + p * zoom;
+                    ui.painter().line_segment([c - Vec2::new(8.0, 0.0), c + Vec2::new(8.0, 0.0)], egui::Stroke::new(1.5, egui::Color32::from_rgb(230, 40, 40)));
+                }
                 let label = if mode == Mode::Points {
                     None
                 } else {
@@ -643,7 +659,7 @@ impl Opened {
                         format!("目盛り {t}")
                     }
                     (None, Mode::Points) => match g.value_at((p.x, p.y)) {
-                        Some((a, b)) => format!("({}, {})", super::graph_reader::short(a), super::graph_reader::short(b)),
+                        Some((a, b)) => format!("({}, {}){}", super::graph_reader::short(a), super::graph_reader::short(b), if snapped.is_some() { "  曲線に合わせました" } else { "" }),
                         None => "先に横軸と縦軸の目盛りを 2 つずつ入れてください".into(),
                     },
                     (None, _) => "ここを目盛りにします (値はあとで入れます)".into(),
@@ -676,6 +692,19 @@ impl Opened {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
             }
         }
+    }
+
+    /// The centre of the curve nearest to page point (x, y) in its column, within 6 points (`datasheet::graph::
+    /// curve_crossings` on the page drawn at 4 pixels per point; the words on the page are not curves).
+    fn curve_near(&mut self, x: f32, y: f32) -> Option<f32> {
+        if self.snap.as_ref().is_none_or(|s| s.0 != self.page) {
+            let img = self.ds.render(self.page, 4.0).ok()?;
+            let k = img.width as f32 / self.ds.page_size(self.page)?.0;
+            self.snap = Some((self.page, img, k));
+        }
+        let (_, img, k) = self.snap.as_ref()?;
+        let skip: Vec<Rect> = self.ds.words(self.page).iter().map(|w| w.rect).collect();
+        datasheet::graph::curve_crossings(img, *k, x, y - 6.0, y + 6.0, &skip).into_iter().min_by(|a, b| (a - y).abs().total_cmp(&(b - y).abs()))
     }
 
     /// The search box, the heading buttons, the hit counter and the list of hits.

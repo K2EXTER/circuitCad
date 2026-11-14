@@ -48,13 +48,20 @@ impl SpecValue {
 /// The value of `name=…` in a conditions text, in SI units and as a magnitude.
 pub fn condition(text: &str, name: &str) -> Option<f64> {
     let key = normalize(name).replace(' ', "");
-    // "VDS=VGS ID=250µA", "VGS= ±12V": a new part starts at each word holding an '='
+    // "VDS=VGS ID=250µA", "VGS= ±12V", "(IC = 2.0 mA, VCE = 5.0 V)": a new part starts at a word holding an '='
+    // (or at the word before a lone "=", its name); the words after it up to the next one are its value
+    // (a closing bracket or a comma ends a value: "kHz) BC547B" is not one unit)
+    let raw: Vec<&str> = text.split_inclusive(|c: char| c == ',' || c == ';' || c.is_whitespace()).map(str::trim).filter(|s| !s.is_empty()).collect();
+    let toks: Vec<(&str, bool)> = raw.iter().map(|s| (s.trim_end_matches([',', ';']).trim_matches(['(', ')']), s.ends_with([')', ',', ';']))).filter(|t| !t.0.is_empty()).collect();
     let mut parts: Vec<String> = vec![];
-    for tok in text.split(|c: char| c == ',' || c == ';' || c.is_whitespace()).filter(|s| !s.is_empty()) {
+    let mut closed = true;
+    for (i, (tok, ends)) in toks.iter().enumerate() {
+        let names_next = toks.get(i + 1).is_some_and(|n| n.0.starts_with('='));
         match parts.last_mut() {
-            Some(last) if !tok.contains('=') || last.ends_with('=') => last.push_str(tok),
+            Some(last) if !closed && !names_next && (!tok.contains('=') || last.ends_with('=') || tok.starts_with('=')) => last.push_str(tok),
             _ => parts.push(tok.to_string()),
         }
+        closed = *ends;
     }
     for part in &parts {
         let Some((k, v)) = part.split_once('=') else { continue };
@@ -96,11 +103,15 @@ pub fn prefix(unit: &str) -> Option<f64> {
 struct Header {
     y: f32,
     min: f32,
-    typ: f32,
+    /// None: the table has only min and max (Fairchild's small-signal transistors)
+    typ: Option<f32>,
     max: f32,
     unit: Option<f32>,
     /// Left edge of the conditions column, when headed ("Conditions", "Test Conditions", "条件").
     conditions: Option<f32>,
+    /// The symbol column's heading (x0, x1), when there is one ("Symbol", "記号"): the symbols are under it, which
+    /// may be right of the parameter names and the conditions (onsemi's small-signal transistors).
+    symbol: Option<(f32, f32)>,
 }
 
 fn centre(r: &Rect) -> (f32, f32) {
@@ -114,14 +125,18 @@ fn headers(words: &[Word]) -> Vec<Header> {
         names.contains(&t.as_str())
     };
     let mut out = vec![];
-    for w in words.iter().filter(|w| is(w, &["typ", "typical", "標準", "代表値"])) {
+    // the line is found by its max (every table has one); min must be on it, typ may be
+    for w in words.iter().filter(|w| is(w, &["max", "maximum", "最大"])) {
         let y = centre(&w.rect).1;
         let same = |names: &[&str]| words.iter().filter(|o| (centre(&o.rect).1 - y).abs() < 4.0 && is(o, names)).map(|o| centre(&o.rect).0).min_by(|a, b| (a - centre(&w.rect).0).abs().total_cmp(&(b - centre(&w.rect).0).abs()));
-        let (Some(min), Some(max)) = (same(&["min", "minimum", "最小"]), same(&["max", "maximum", "最大"])) else { continue };
+        let Some(min) = same(&["min", "minimum", "最小"]).filter(|m| *m < centre(&w.rect).0) else { continue };
+        let max = centre(&w.rect).0;
+        let typ = same(&["typ", "typical", "標準", "代表値"]).filter(|t| min < *t && *t < max);
         let unit = same(&["units", "unit", "単位"]);
         let conditions = words.iter().filter(|o| (centre(&o.rect).1 - y).abs() < 4.0 && (normalize(&o.text).contains("condition") || o.text.contains("条件"))).map(|o| o.rect.x0).fold(None, |a: Option<f32>, x| Some(a.map_or(x, |a| a.min(x))));
+        let symbol = words.iter().find(|o| (centre(&o.rect).1 - y).abs() < 4.0 && is(o, &["symbol", "sym", "記号"])).map(|o| (o.rect.x0, o.rect.x1));
         if !out.iter().any(|h: &Header| (h.y - y).abs() < 4.0) {
-            out.push(Header { y, min, typ: centre(&w.rect).0, max, unit, conditions });
+            out.push(Header { y, min, typ, max, unit, conditions, symbol });
         }
     }
     out.sort_by(|a, b| a.y.total_cmp(&b.y));
@@ -144,14 +159,21 @@ fn line_at(words: &[Word], y: f32) -> Vec<&Word> {
     l
 }
 
-/// The symbol's key for matching: lower case, no spaces, no brackets ("V GS(th)" and "VGS(TH)" -> "vgsth").
-fn key(s: &str) -> String {
-    normalize(s).chars().filter(|c| c.is_alphanumeric()).collect()
+/// The symbol's key for matching: no spaces, no brackets ("V GS(th)" -> "VGSth"), lower case unless `case`.
+fn key(s: &str, case: bool) -> String {
+    let t: String = s.chars().filter(|c| c.is_alphanumeric()).collect();
+    if case { t } else { normalize(&t) }
 }
 
-/// The rows of `symbol` on a page.
+/// The rows of `symbol` on a page. The case is kept when the page has the symbol in that case (hFE, the DC gain,
+/// and hfe, the small-signal one, are different rows); otherwise it is ignored (VGS(th), VGS(TH)).
 pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
-    let want = key(symbol);
+    let exact = find_case(page, words, symbol, true);
+    if exact.is_empty() { find_case(page, words, symbol, false) } else { exact }
+}
+
+fn find_case(page: usize, words: &[Word], symbol: &str, case: bool) -> Vec<SpecValue> {
+    let want = key(symbol, case);
     if want.is_empty() {
         return vec![];
     }
@@ -160,12 +182,22 @@ pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
     for h in &heads {
         // the table runs from its header down to the next header (or the page's end)
         let bottom = heads.iter().map(|o| o.y).find(|&y| y > h.y + 1.0).unwrap_or(f32::MAX);
-        let left = h.conditions.unwrap_or(h.min - 120.0);
         let body: Vec<&Word> = words.iter().filter(|w| centre(&w.rect).1 > h.y + 3.0 && centre(&w.rect).1 < bottom).collect();
-        // symbols: the words left of the parameter text, i.e. in the first column (left of a third of the way to Min)
-        // symbols: the first word of a line in the table's first column (left aligned; the parameter's name follows)
         let first_x = body.iter().map(|w| w.rect.x0).fold(f32::MAX, f32::min);
-        let mut symbols: Vec<&&Word> = body.iter().filter(|w| w.rect.x0 < first_x + 25.0 && w.rect.x1 < left && !w.text.trim().is_empty()).collect();
+        // the conditions: their own column when headed; with a symbol column right of the text, everything left of
+        // the min column (the parameter's name, its conditions in brackets, a grade "BC547B"); else a guess
+        // a symbol column right of the text: each row starts at its symbol's line (the parameter's name is there
+        // too) and goes down to the next symbol
+        let symbol_on_right = h.symbol.is_some_and(|s| s.0 > first_x + 60.0);
+        // (a "Conditions" heading may be centred over its column: the column starts up to 40 points left of it)
+        let left = h.conditions.map(|c| (c - 40.0).max(first_x)).unwrap_or(if symbol_on_right { first_x } else { h.min - 120.0 });
+        // symbols: under the symbol heading, or the first word of a line in the table's first column (left
+        // aligned; the parameter's name follows)
+        let under = |w: &Word| match h.symbol {
+            Some((s0, s1)) => centre(&w.rect).0 > s0 - 20.0 && centre(&w.rect).0 < s1 + 20.0 && w.rect.x1 < h.min - 5.0,
+            None => w.rect.x0 < first_x + 25.0 && w.rect.x1 < left,
+        };
+        let mut symbols: Vec<&&Word> = body.iter().filter(|w| under(w) && !w.text.trim().is_empty()).collect();
         symbols.sort_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
         let mut seen: Vec<f32> = vec![];
         symbols.retain(|w| {
@@ -186,10 +218,13 @@ pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
             if let Some(i) = sym_y.iter().position(|&sy| (sy - y).abs() < 3.0) {
                 return Some(i);
             }
+            if symbol_on_right {
+                return (0..sym_y.len()).filter(|&i| sym_y[i] < y).max_by(|&a, &b| sym_y[a].total_cmp(&sym_y[b]));
+            }
             let nearest = |only_bare: bool| (0..sym_y.len()).filter(|&i| !only_bare || bare[i]).min_by(|&a, &b| (sym_y[a] - y).abs().total_cmp(&(sym_y[b] - y).abs()));
             nearest(true).filter(|&i| (sym_y[i] - y).abs() < 30.0).or_else(|| nearest(false))
         };
-        for (si, s) in symbols.iter().enumerate().filter(|(_, w)| key(&symbol_text(&body, w)) == want) {
+        for (si, s) in symbols.iter().enumerate().filter(|(_, w)| key(&symbol_text(&body, w), case) == want) {
             let mine: Vec<f32> = ys.iter().copied().filter(|&y| owner(y) == Some(si)).collect();
             let sy = sym_y[si];
             let (top, end) = (mine.iter().copied().fold(sy, f32::min) - 6.0, mine.iter().copied().fold(sy, f32::max) + 6.0);
@@ -203,7 +238,7 @@ pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
                         rect = Some(rect.map_or(w.rect, |r| Rect { x0: r.x0.min(w.rect.x0), y0: r.y0.min(w.rect.y0), x1: r.x1.max(w.rect.x1), y1: r.y1.max(w.rect.y1) }));
                     }
                 }
-                let conditions = conditions_near(words, h, left, y, top, end);
+                let conditions = conditions_near(words, h, left, y, (top, end), &symbols, symbol_on_right);
                 let unit = unit_near(&band, h, y);
                 out.push(SpecValue { page, symbol: symbol_text(&body, s), conditions, min: v[0], typ: v[1], max: v[2], unit, rect: rect.unwrap_or(s.rect) });
             }
@@ -230,24 +265,62 @@ fn symbol_text(body: &[&Word], s: &Word) -> String {
 
 /// Which of min (0), typ (1), max (2) a number at `x` is under.
 fn column(h: &Header, x: f32) -> Option<usize> {
-    let d = [h.min, h.typ, h.max].map(|c| (c - x).abs());
-    let gap = ((h.typ - h.min).abs()).min((h.max - h.typ).abs());
-    let (i, best) = d.iter().enumerate().min_by(|a, b| a.1.total_cmp(b.1))?;
-    (*best < gap * 0.6).then_some(i)
+    let cols = [Some(h.min), h.typ, Some(h.max)];
+    let gap = match h.typ {
+        Some(t) => (t - h.min).abs().min((h.max - t).abs()),
+        None => (h.max - h.min).abs(),
+    };
+    let (i, best) = cols.iter().enumerate().filter_map(|(i, c)| c.map(|c| (i, (c - x).abs()))).min_by(|a, b| a.1.total_cmp(&b.1))?;
+    (best < gap * 0.6).then_some(i)
+}
+
+/// The words of a line as text: words that touch (a subscript printed as its own word, "I" + "C") are joined
+/// without a space ("IC = 10 mA").
+fn joined(words: &[&Word]) -> String {
+    let mut s = String::new();
+    let mut end = f32::MIN;
+    for w in words {
+        if !s.is_empty() && w.rect.x0 - end > 0.8 {
+            s.push(' ');
+        }
+        s.push_str(&w.text);
+        end = w.rect.x1;
+    }
+    s
 }
 
 /// The conditions on the line `y` (words between the conditions column and the min column); when it has none,
 /// the nearest line inside the row that has some, else the nearest line with an `=` within 30 points (a group of
 /// rows printed once for all: Ciss, Coss, Crss).
-fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, top: f32, end: f32) -> String {
-    let at = |y: f32| -> String {
-        line_at(words, y).iter().filter(|w| w.rect.x0 >= left - 2.0 && w.rect.x1 < h.min - 8.0).map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ")
+/// With `downward` (a table whose rows start at their symbol), the conditions are borrowed only from above: a
+/// condition line applies to the lines under it.
+fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f32, f32), symbols: &[&&Word], downward: bool) -> String {
+    let in_cond = |w: &Word| w.rect.x0 >= left - 2.0 && w.rect.x1 < h.min - 8.0 && !symbols.iter().any(|s| std::ptr::eq(**s, w));
+    let at = |y: f32| -> String { joined(&line_at(words, y).into_iter().filter(|w| in_cond(w)).collect::<Vec<_>>()) };
+    // the conditions of a line only: from the word before the first '=' or bracket to the last word with an '=' or a
+    // closing bracket and the number and unit after it
+    let conditions_only = |y: f32| -> String {
+        let text = joined(&line_at(words, y).into_iter().filter(|w| in_cond(w)).collect::<Vec<_>>());
+        let l: Vec<&str> = text.split(' ').collect();
+        let Some(last) = l.iter().rposition(|w| w.contains('=') || w.contains(')')) else { return String::new() };
+        let mut end = last + 1;
+        while end < l.len() && end <= last + 2 && (number(l[end]).is_some() || prefix(l[end].trim_end_matches(',')).is_some()) {
+            end += 1;
+        }
+        let first = l[..=last].iter().position(|w| w.contains('=') || w.starts_with('(')).unwrap_or(0).saturating_sub(1);
+        l[first..end].join(" ")
     };
     let own = at(y);
     if own.contains('=') {
         return own;
     }
-    let mut ys: Vec<f32> = words.iter().filter(|w| w.text.contains('=') && w.rect.x0 >= left - 2.0 && w.rect.x1 < h.min - 8.0).map(|w| centre(&w.rect).1).filter(|&c| (c - y).abs() < 30.0).collect();
+    let reach = if downward { 80.0 } else { 30.0 };
+    let mut ys: Vec<f32> = words
+        .iter()
+        .filter(|w| w.text.contains('=') && in_cond(w))
+        .map(|w| centre(&w.rect).1)
+        .filter(|&c| (c - y).abs() < reach && (!downward || (c < y && c > top)))
+        .collect();
     // inside the row first, then the nearer (in steps of 3 points, a line's spacing being about 13), then above:
     // the last row of a group (Crss under Coss) takes the group's conditions, not the next row's
     ys.sort_by(|a, b| {
@@ -255,7 +328,14 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, top: f32, end:
         let step = |c: f32| ((c - y).abs() / 3.0).round() as i32;
         (outside(*a), step(*a), *a > y).cmp(&(outside(*b), step(*b), *b > y))
     });
-    ys.first().map(|&c| at(c)).unwrap_or(own)
+    // a line of its own words without conditions keeps those with a digit (a grade: "BC547B"; not the parameter's
+    // name) before the borrowed conditions
+    let own: String = own.split_whitespace().filter(|w| w.chars().any(|c| c.is_ascii_digit())).collect::<Vec<_>>().join(" ");
+    match ys.first() {
+        Some(&c) if own.trim().is_empty() => conditions_only(c),
+        Some(&c) => format!("{} · {}", own.trim(), conditions_only(c)),
+        None => own,
+    }
 }
 
 /// The unit in the units column nearest to line `y` within the row.
@@ -297,6 +377,36 @@ mod tests {
         assert!(find(0, &words[7..], "VF").is_empty());
     }
 
+    /// A table laid out like onsemi's small-signal transistors: the symbol column right of the text, each row
+    /// starting at its symbol, the conditions in brackets with spaces, grades on their own lines, and the DC hFE
+    /// next to the small-signal hfe.
+    #[test]
+    fn a_symbol_column_on_the_right_with_grades() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 7.0);
+        let mut words = vec![w("Characteristic", 150.0, 70.0), w("Symbol", 350.0, 70.0), w("Min", 405.0, 70.0), w("Typ", 445.0, 70.0), w("Max", 485.0, 70.0), w("Unit", 525.0, 70.0)];
+        let line = |y: f32, text: &str| -> Vec<Word> {
+            let mut x = 65.0;
+            text.split(' ').map(|t| { let r = w(t, x, y); x += 5.0 * t.chars().count() as f32 + 4.0; r }).collect()
+        };
+        words.extend(line(100.0, "DC Current Gain"));
+        words.push(w("hFE", 360.0, 100.0));
+        words.extend(line(110.0, "(IC = 2.0 mA, VCE = 5.0 V)"));
+        words.extend([w("BC547", 315.0, 110.0), w("110", 410.0, 110.0), w("800", 491.0, 110.0)]);
+        words.extend([w("BC547B", 309.0, 120.0), w("200", 409.0, 120.0), w("290", 450.0, 120.0), w("450", 491.0, 120.0)]);
+        words.extend(line(130.0, "(IC = 100 mA, VCE = 5.0 V)"));
+        words.extend([w("BC547B", 309.0, 130.0), w("180", 450.0, 130.0)]);
+        words.extend(line(150.0, "Small - Signal Current Gain"));
+        words.push(w("hfe", 362.0, 150.0));
+        words.extend(line(160.0, "(IC = 2.0 mA, VCE = 5.0 V, f = 1.0 kHz)"));
+        words.extend([w("BC547B", 309.0, 160.0), w("240", 409.0, 160.0), w("330", 450.0, 160.0), w("500", 491.0, 160.0)]);
+        let h = find(0, &words, "hFE");
+        assert_eq!(h.len(), 3, "{h:?}");
+        assert_eq!((h[1].typ, h[1].condition("IC"), h[1].conditions.starts_with("BC547B")), (Some(290.0), Some(2e-3), true), "{:?}", h[1]);
+        assert_eq!((h[2].typ, h[2].condition("IC")), (Some(180.0), Some(0.1)), "{:?}", h[2]);
+        let s = find(0, &words, "hfe");
+        assert_eq!((s.len(), s[0].typ, s[0].condition("f")), (1, Some(330.0), Some(1000.0)), "{s:?}");
+    }
+
     #[test]
     fn units_and_conditions_are_read_in_si() {
         assert_eq!(prefix("mΩ"), Some(1e-3));
@@ -313,6 +423,11 @@ mod tests {
         assert_eq!(condition("VDS=0V, VGS= ±12V", "VGS"), Some(12.0));
         assert_eq!(condition("VGS=-10V, ID=-4.0A", "ID"), Some(4.0));
         assert_eq!(condition("VDS=VGS", "VDS"), None);
+        assert_eq!(condition("(IC = 2.0 mA, VCE = 5.0 V)", "IC"), Some(2e-3));
+        assert_eq!(prefix("kHz"), Some(1e3));
+        assert_eq!(condition("f = 1.0 kHz)", "f"), Some(1e3));
+        assert_eq!(condition("(IC = 2.0 mA, VCE = 5.0 V, f = 1.0 kHz) BC547B", "f"), Some(1e3));
+        assert_eq!(condition("(IC = 2.0 mA, VCE = 5.0 V)", "VCE"), Some(5.0));
     }
 }
 

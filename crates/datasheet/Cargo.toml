@@ -8,3 +8,7 @@ repository = "https://github.com/K2EXTER/circuitCad"
 
 [dependencies]
 hayro = "0.8.0"
+
+[dev-dependencies]
+# the `ds` example writes page pictures (already a dependency of app and cli: no new crate)
+image = { version = "0.25", default-features = false, features = ["png"] }

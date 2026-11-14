@@ -97,9 +97,10 @@ fn the_p_channel_mosfet_is_a_high_side_switch() {
 
 #[test]
 fn bipolar_parts_have_their_stated_gain_and_pinout() {
-    // (part, pin of C, pin of B, pin of E, expected hFE from the model)
-    // 2N3904: the data sheet model at about 1.3 mA (Figure 15 of its data sheet, the peak at 173); BC547: a fixed BF
-    for (name, c_pin, b_pin, e_pin, beta) in [("2N3904", "3", "2", "1", 0.0), ("BC547", "1", "2", "3", 290.0)] {
+    // (part, pin of C, pin of B, pin of E, the range of hFE from the model)
+    // 2N3904: the data sheet model at about 1.3 mA (Figure 15 of its data sheet, the peak at 173); BC547 (B grade): its data
+    // sheet model at about 2.8 mA, VCE 7 V (Figure 1 there gives 0.95 x 314 = 300; the table's typ is 290 at 2 mA, 5 V)
+    for (name, c_pin, b_pin, e_pin, beta) in [("2N3904", "3", "2", "1", 120.0..170.0), ("BC547", "1", "2", "3", 270.0..340.0)] {
         let def = part(name);
         let mut c = Circuit::new();
         vs(&mut c, "Vcc", "vcc", "0", 10.0);
@@ -109,11 +110,7 @@ fn bipolar_parts_have_their_stated_gain_and_pinout() {
         let r = dc_op(&c).unwrap();
         let q = r.element("Q1").unwrap();
         let ib = q.extra.iter().find(|(n, _)| n == "Ib").unwrap().1;
-        if beta > 0.0 {
-            assert!(q.current / ib > beta * 0.97 && q.current / ib < beta * 1.001, "{name}: beta {}", q.current / ib);
-        } else {
-            assert!((120.0..170.0).contains(&(q.current / ib)), "{name}: beta {}", q.current / ib);
-        }
+        assert!(beta.contains(&(q.current / ib)), "{name}: beta {} (IC {} mA)", q.current / ib, q.current * 1e3);
         assert!((v(&r, "b") - 0.65).abs() < 0.1, "{name}: vbe {}", v(&r, "b"));
     }
 }

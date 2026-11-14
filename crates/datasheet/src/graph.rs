@@ -118,6 +118,81 @@ pub fn tick_value(text: &str) -> Option<f64> {
     num.parse::<f64>().ok().map(|v| v * k)
 }
 
+/// Is the pixel ink of a curve: black or a strong colour. Grey (the usual grid), paper, light fills and pale
+/// watermarks ("OBSOLETE" in pink across a page) are not.
+fn ink(img: &crate::PageImage, x: i64, y: i64) -> bool {
+    if x < 0 || y < 0 || x as usize >= img.width || y as usize >= img.height {
+        return false;
+    }
+    let i = (y as usize * img.width + x as usize) * 4;
+    let (r, g, b) = (img.rgba[i] as i32, img.rgba[i + 1] as i32, img.rgba[i + 2] as i32);
+    let lum = (299 * r + 587 * g + 114 * b) / 1000;
+    let chroma = r.max(g).max(b) - r.min(g).min(b);
+    lum < 100 || (chroma > 90 && lum < 160)
+}
+
+/// Where curves cross the vertical line at page x (points), between page y0 and y1: the centre (page points) of
+/// each run of ink in that pixel column. `px_per_pt` is the picture's scale. Straight horizontal lines (the grid,
+/// an axis) are left out: their pixels go on at the same height well to both sides. A curve that crosses a grid
+/// line keeps the grid's pixels. When the column runs along a black vertical grid line, the column 2 pixels over
+/// is used. Crossings inside `skip` (the boxes of the words printed in the plot: "25°C") are left out.
+pub fn curve_crossings(img: &crate::PageImage, px_per_pt: f32, x: f32, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f32> {
+    let (top, bottom) = ((y0.min(y1) * px_per_pt).round() as i64, (y0.max(y1) * px_per_pt).round() as i64);
+    // the column with the least ink within 1 point of x (off a black vertical grid line), the nearest of equals
+    let x0 = (x * px_per_pt).round() as i64;
+    let reach = px_per_pt.round().max(1.0) as i64;
+    let col = (-reach..=reach)
+        .map(|d| (d, (top..=bottom).filter(|&y| ink(img, x0 + d, y)).count()))
+        .min_by(|a, b| a.1.cmp(&b.1).then(a.0.abs().cmp(&b.0.abs())))
+        .map_or(x0, |(d, _)| x0 + d);
+    // how far ink goes along row y from the column, both ways (gaps of 2 pixels allowed, where a curve crosses a
+    // grey grid line), up to `cap` pixels
+    let extent = |y: i64, cap: i64| {
+        let reach = |dir: i64| {
+            let (mut x, mut gap) = (col, 0);
+            while gap <= 2 && (x - col).abs() <= cap {
+                x += dir;
+                gap = if ink(img, x, y) { 0 } else { gap + 1 };
+            }
+            (x - col).abs() - gap as i64
+        };
+        reach(-1) + reach(1)
+    };
+    // a run of a horizontal straight line (the grid, the frame): every row of it goes on 50 points or more, or the run
+    // is thin (0.8 point at most) and goes on 15 points (a grid line cut short by the white box behind a label). A
+    // curve's flat stretch (the top of an hFE curve) is thicker and shorter.
+    let (long, short, thin) = ((50.0 * px_per_pt) as i64, (15.0 * px_per_pt) as i64, (0.8 * px_per_pt).ceil() as i64);
+    let mut runs: Vec<(i64, i64)> = vec![];
+    for y in top..=bottom {
+        if !ink(img, col, y) {
+            continue;
+        }
+        match runs.last_mut() {
+            Some(r) if r.1 + 1 >= y => r.1 = y,
+            _ => runs.push((y, y)),
+        }
+    }
+    let straight = |r: &(i64, i64)| {
+        let min_extent = (r.0..=r.1).map(|y| extent(y, long)).min().unwrap_or(0);
+        r.1 - r.0 < thin && min_extent >= short
+    };
+    let cx = col as f32 / px_per_pt;
+    runs.iter()
+        .filter(|r| !straight(r))
+        .map(|r| (r.0 + r.1) as f32 / 2.0 / px_per_pt)
+        .filter(|&y| !skip.iter().any(|w| w.x0 - 1.0 <= cx && cx <= w.x1 + 1.0 && w.y0 - 1.0 <= y && y <= w.y1 + 1.0))
+        .collect()
+}
+
+impl Graph {
+    /// The value of the curves on this graph's vertical axis at `xv` (a value of the horizontal axis), from the
+    /// page's picture: one value per curve crossing between page y `y0` and `y1` (the plot's top and bottom).
+    pub fn curve_values(&self, img: &crate::PageImage, px_per_pt: f32, xv: f64, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f64> {
+        let Some(x) = self.x.position(xv) else { return vec![] };
+        curve_crossings(img, px_per_pt, x, y0, y1, skip).into_iter().filter_map(|y| self.y.value(y)).collect()
+    }
+}
+
 /// Every number printed on a page as (text, centre x, centre y), one per label (several labels read as one word are
 /// split): the candidates for a graph's tick labels.
 pub fn number_labels(words: &[crate::Word]) -> Vec<(String, f32, f32)> {
@@ -192,6 +267,36 @@ mod tests {
     }
 
     #[test]
+    fn curves_are_found_and_grid_frame_and_labels_are_not() {
+        // 100 x 100 points at 1 pixel per point: a grey grid line at y = 30, a black frame line at y = 90, a black
+        // curve y = x / 2 + 20 (2 px thick), and a black blob (a label "25°C") at y = 60 inside a word box
+        let (w, h) = (100usize, 100usize);
+        let mut rgba = vec![255u8; w * h * 4];
+        let mut put = |x: usize, y: usize, v: u8| {
+            let i = (y * w + x) * 4;
+            rgba[i..i + 3].copy_from_slice(&[v, v, v]);
+        };
+        for x in 0..w {
+            put(x, 30, 150);
+            put(x, 90, 0);
+            let y = x / 2 + 20;
+            put(x, y, 0);
+            put(x, y + 1, 0);
+        }
+        for x in 40..50 {
+            for y in 58..63 {
+                put(x, y, 0);
+            }
+        }
+        let img = crate::PageImage { width: w, height: h, rgba };
+        let label = crate::Rect { x0: 40.0, y0: 58.0, x1: 50.0, y1: 63.0 };
+        let c = curve_crossings(&img, 1.0, 44.0, 0.0, 99.0, &[label]);
+        assert_eq!(c, vec![42.5], "the curve at x = 44 (rows 42 and 43); not the grid, the frame or the label");
+        // where the curve runs over the grey grid line, it is still found
+        assert_eq!(curve_crossings(&img, 1.0, 20.0, 0.0, 99.0, &[]), vec![30.5]);
+    }
+
+    #[test]
     fn tick_labels_are_read_as_printed() {
         for (t, v) in [("10", 10.0), ("0.1", 0.1), ("1.0E-3", 1e-3), ("10m", 0.01), ("1µ", 1e-6), ("100k", 1e5), ("\u{2212}5", -5.0), ("1,000", 1000.0)] {
             assert_eq!(tick_value(t), Some(v), "{t}");
@@ -228,6 +333,20 @@ mod real_pdf {
             let l = find(t, true);
             let got = y.value(l.2).unwrap();
             assert!((got / v).log10().abs() < 0.02, "{t}: read {got}");
+        }
+        // the two curves (125 °C on the left, 25 °C) read off the picture, the labels inside the plot left out;
+        // the values were checked on the rendered figure (125 °C: 0.33 A at 0.5 V, 25 °C: 1.3 mA)
+        let img = ds.render(2, 4.0).unwrap();
+        let k = img.width as f32 / ds.page_size(2).unwrap().0;
+        let skip: Vec<crate::Rect> = ds.words(2).iter().map(|w| w.rect).collect();
+        let g = Graph { page: 2, x, y, points: vec![] };
+        let at = |v: f64| g.curve_values(&img, k, v, 470.0, 620.0, &skip);
+        for (v, want) in [(0.5, vec![0.33, 0.00126]), (0.6, vec![2.1, 0.056]), (0.2, vec![8e-5])] {
+            let got = at(v);
+            assert_eq!(got.len(), want.len(), "{v}: {got:?}");
+            for (a, b) in got.iter().zip(&want) {
+                assert!((a / b).log10().abs() < 0.05, "{v}: {got:?}");
+            }
         }
     }
 }

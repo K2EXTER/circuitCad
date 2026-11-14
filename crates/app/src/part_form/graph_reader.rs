@@ -79,6 +79,8 @@ pub struct GraphReader {
     /// wants "current voltage").
     swap: bool,
     dest: Option<Dest>,
+    /// A click near a curve goes to the curve's centre line (the page's picture is read in the click's column).
+    pub snap: bool,
     msg: Option<(bool, String)>,
     out: Option<GraphOut>,
 }
@@ -93,6 +95,7 @@ impl GraphReader {
             points: vec![],
             swap: dest == Some(Dest::DiodeForward),
             dest,
+            snap: true,
             msg: None,
             out: None,
         }
@@ -239,6 +242,7 @@ impl GraphReader {
         ui.horizontal_wrapped(|ui| {
             set_mode(ui, Mode::Points, "点を取る", "曲線の上をクリックすると点を足します。ポインタの所の値が、そばに出ます", &mut self.mode);
             ui.label(i18n::trf!("{} 点", self.points.len()));
+            ui.checkbox(&mut self.snap, i18n::tr("曲線に合わせる")).on_hover_text(i18n::tr("クリックした所の上下 6 pt に曲線 (黒か色の線) があれば、その線の真ん中に点を置きます。灰色の格子・枠の線・グラフの中の文字は曲線として扱いません。曲線が重なっている所は、外して自分で置いてください"));
             if !self.points.is_empty() && ui.small_button(i18n::tr("最後の点を消す")).on_hover_text(i18n::tr("最後に取った点を消します")).clicked() {
                 self.points.pop();
             }

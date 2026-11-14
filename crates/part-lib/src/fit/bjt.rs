@@ -15,13 +15,16 @@ pub struct BjtSpec {
     pub pnp: bool,
     /// The figure names for the limits text: the hFE curve, the "ON" voltages, the capacitances.
     pub figs: Figs,
-    /// The hFE at the curve's peak (VCE = 1 V); `hfe_norm` is the normalised curve.
+    /// The hFE where the normalised curve is 1 (at `hfe_vce`); `hfe_norm` is the normalised curve.
     pub hfe_peak: f64,
     /// How `hfe_peak` was chosen and how much real parts vary (one or two sentences for the limits text).
     pub hfe_note: String,
     /// (IC A, hFE / hfe_peak).
     pub hfe_norm: Vec<[f64; 2]>,
-    /// (IC A, VBE V) at VCE = 1 V.
+    /// The collector-emitter voltage of the hFE curve (V; 1 V when not given).
+    #[serde(default = "one_volt")]
+    pub hfe_vce: f64,
+    /// (IC A, VBE V) at `on_vce`.
     pub vbe_on: Vec<[f64; 2]>,
     /// (IC A, V) at IC/IB = 10.
     pub vbe_sat: Vec<[f64; 2]>,
@@ -30,9 +33,24 @@ pub struct BjtSpec {
     pub cibo: Vec<[f64; 2]>,
     pub cobo: Vec<[f64; 2]>,
     /// fT (Hz); the min when no typ is given (the model is then as slow as the min allows).
-    pub ft_min: f64,
+    #[serde(default)]
+    pub ft_min: Option<f64>,
+    /// fT typ (Hz), when the data sheet gives one: used instead of the min.
+    #[serde(default)]
+    pub ft_typ: Option<f64>,
+    /// The collector-emitter voltage of the VBE(on) curve (V; 1 V when not given).
+    #[serde(default = "one_volt")]
+    pub on_vce: f64,
     /// hoe min and max (S) at IC = 1 mA, VCE = 10 V: VAF from their geometric mean.
-    pub hoe: [f64; 2],
+    #[serde(default)]
+    pub hoe: Option<[f64; 2]>,
+    /// VAF (V) and where it comes from, when there is no hoe ("データシートに出力の特性が無いので仮定").
+    #[serde(default)]
+    pub vaf: Option<(f64, String)>,
+}
+
+fn one_volt() -> f64 {
+    1.0
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -69,9 +87,8 @@ fn ev(p: &P, vbe: f64, vbc: f64) -> (f64, f64) {
     ((iff - ir) * k * h - ir / p.br, iff / p.bf + ile + ir / p.br)
 }
 
-/// VBE at the pins and hFE at collector current `ic`, VCE = 1 V.
-fn on(p: &P, ic: f64) -> Option<(f64, f64)> {
-    let vce = 1.0;
+/// VBE at the pins and hFE at collector current `ic` and collector-emitter voltage `vce`.
+fn on(p: &P, ic: f64, vce: f64) -> Option<(f64, f64)> {
     let v = brentq(|v| ev(p, v, v - vce).0 - ic, 0.2, 1.3)?;
     let ib = ev(p, v, v - vce).1;
     Some((v + ib * p.rb + (ic + ib) * p.re, ic / ib))
@@ -115,8 +132,12 @@ fn sat(p: &P, ic: f64) -> Option<(f64, f64)> {
     None
 }
 
-fn vaf_of(b: &BjtSpec) -> f64 {
-    ((1e-3 / (b.hoe[0] * b.hoe[1]).sqrt() - 10.0) / 10.0).round_ties_even() * 10.0
+fn vaf_of(b: &BjtSpec) -> Result<f64, String> {
+    match (&b.hoe, &b.vaf) {
+        (Some(h), _) => Ok(((1e-3 / (h[0] * h[1]).sqrt() - 10.0) / 10.0).round_ties_even() * 10.0),
+        (None, Some((v, _))) => Ok(*v),
+        (None, None) => Err("Early 電圧の元がありません。hoe (min と max、1 mA) か、vaf (値と、その理由) を書いてください".into()),
+    }
 }
 
 /// x = log10 of IS, BF, ISE; NE; log10 of IKF, RB, RE, BR, RC.
@@ -127,17 +148,19 @@ fn unpack(x: &[f64], vaf: f64) -> P {
 
 fn cost(x: &[f64], b: &BjtSpec, vaf: f64) -> f64 {
     let p = unpack(x, vaf);
-    // physical ranges: the leakage's emission coefficient and the reverse gain
-    if !((1.2..=3.0).contains(&p.ne) && (0.5..=50.0).contains(&p.br)) {
+    // physical ranges: the leakage's emission coefficient, the reverse gain, and the ideal gain BF within 4 times the
+    // curve's top (a wide hFE curve otherwise pulls BF to tens of thousands with a tiny IKF)
+    let top = b.hfe_norm.iter().map(|r| r[1]).fold(0.0, f64::max) * b.hfe_peak;
+    if !((1.2..=3.0).contains(&p.ne) && (0.5..=50.0).contains(&p.br) && p.bf <= 4.0 * top) {
         return 1e6;
     }
     let mut e = 0.0;
     for [ic, n] in &b.hfe_norm {
-        let Some((_, h)) = on(&p, *ic) else { return 1e6 };
+        let Some((_, h)) = on(&p, *ic, b.hfe_vce) else { return 1e6 };
         e += 4.0 * (h / (b.hfe_peak * n)).ln().powi(2);
     }
     for [ic, v] in &b.vbe_on {
-        let Some((m, _)) = on(&p, *ic) else { return 1e6 };
+        let Some((m, _)) = on(&p, *ic, b.on_vce) else { return 1e6 };
         e += ((m - v) / 0.01).powi(2);
     }
     for [ic, v] in &b.vbe_sat {
@@ -158,7 +181,8 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     if b.cibo.len() < 2 || b.cobo.len() < 2 {
         return Err("容量の点が足りません。Cibo と Cobo を、逆電圧を変えて 2 点以上ずつ読んでください".into());
     }
-    let vaf = vaf_of(b);
+    let vaf = vaf_of(b)?;
+    let ft = b.ft_typ.or(b.ft_min).ok_or("fT がありません。ft_typ (typ) か ft_min (min) を書いてください")?;
     let l = f64::log10;
     let starts = [
         [l(2e-14), l(200.0), l(1e-13), 1.6, l(0.05), 1.0, l(0.3), l(5.0), 0.0],
@@ -181,7 +205,7 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     let p = unpack(&x, vaf);
     let (cje, vje, mje) = fit_cap(&b.cibo, 10);
     let (cjc, vjc, mjc) = fit_cap(&b.cobo, 10);
-    let tf = 1.0 / (2.0 * std::f64::consts::PI * b.ft_min);
+    let tf = 1.0 / (2.0 * std::f64::consts::PI * ft);
     let kind = if b.pnp { "PNP" } else { "NPN" };
     let text = format!(
         ".model {} {kind}(IS={} BF={} NF=1 VAF={} IKF={} ISE={} NE={:.3} BR={} RB={} RE={} RC={} CJE={} VJE={} MJE={} CJC={} VJC={} MJC={} TF={})",
@@ -204,25 +228,31 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
         g(mjc, 6),
         g(tf, 4)
     );
-    let hoe = format!("{}〜{} µmho", g(b.hoe[0] * 1e6, 6), g(b.hoe[1] * 1e6, 6));
+    let speed = match b.ft_typ {
+        Some(f) => format!("fT の typ {} MHz から TF を決めました", g(f / 1e6, 6)),
+        None => format!("fT の min {} MHz から TF を決めました (実物は、ふつうこれより速い)", g(ft / 1e6, 6)),
+    };
+    let early = match (&b.hoe, &b.vaf) {
+        (Some(h), _) => format!("Early 電圧 VAF {} V は、hoe ({}〜{} µmho、1 mA) の中ほどから。", g(vaf, 4), g(h[0] * 1e6, 6), g(h[1] * 1e6, 6)),
+        (None, Some((_, why))) => format!("Early 電圧 VAF {} V は、{why}。", g(vaf, 4)),
+        (None, None) => String::new(),
+    };
     let limits = vec![
         format!("データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。", b.common.source),
         format!("直流: {} (hFE の電流による変化。相対値)・{} (VBE、VBE(sat)、VCE(sat)) に、IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。{}", b.figs.hfe, b.figs.on, b.hfe_note),
         format!(
-            "容量: {} の Cibo・Cobo に CJE・CJC を当てはめました。速さ: fT の min {} MHz から TF を決めました (実物は、ふつうこれより速い)。Early 電圧 VAF {} V は、hoe ({hoe}、1 mA) の中ほどから。",
+            "容量: {} の Cibo・Cobo に CJE・CJC を当てはめました。速さ: {speed}。{early}",
             b.figs.cap,
-            g(b.ft_min / 1e6, 6),
-            g(vaf, 4)
         ),
         "扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。".into(),
         LAST_WORD.into(),
     ];
     let mut rows: Vec<Row> = vec![];
     for [ic, n] in &b.hfe_norm {
-        rows.push(row("hFE", format!("IC = {}、VCE = 1 V", amps(*ic)), b.hfe_peak * n, on(&p, *ic).map_or(f64::NAN, |o| o.1), ""));
+        rows.push(row("hFE", format!("IC = {}、VCE = {} V", amps(*ic), g(b.hfe_vce, 4)), b.hfe_peak * n, on(&p, *ic, b.hfe_vce).map_or(f64::NAN, |o| o.1), ""));
     }
     for [ic, v] in &b.vbe_on {
-        rows.push(row("VBE", format!("IC = {}、VCE = 1 V", amps(*ic)), *v, on(&p, *ic).map_or(f64::NAN, |o| o.0), "V"));
+        rows.push(row("VBE", format!("IC = {}、VCE = {} V", amps(*ic), g(b.on_vce, 4)), *v, on(&p, *ic, b.on_vce).map_or(f64::NAN, |o| o.0), "V"));
     }
     for [ic, v] in &b.vbe_sat {
         rows.push(row("VBE(sat)", format!("IC = {}、IC/IB = 10", amps(*ic)), *v, sat(&p, *ic).map_or(f64::NAN, |o| o.0), "V"));
@@ -236,10 +266,15 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     for [v, cc] in &b.cobo {
         rows.push(row("Cobo", format!("VCB = {} V", g(*v, 4)), *cc, cap_at(cjc, vjc, mjc, *v), "F"));
     }
-    let notes = rows
+    let mut notes: Vec<String> = rows
         .iter()
         .filter(|r| r.item == "hFE" && r.error_pct().abs() > 15.0)
         .map(|r| format!("hFE が {} で {:+.0}% ずれています。Gummel-Poon の形では、hFE の曲線の両端を同時に合わせきれないことがあります", r.at, r.error_pct()))
         .collect();
+    // voltages: 30 mV or more (VCE(sat) at a small current is a few tens of mV, so its percent says little)
+    notes.extend(rows.iter().filter(|r| r.unit == "V" && (r.model - r.datasheet).abs() >= 0.03).map(|r| {
+        let why = if r.item == "VCE(sat)" { "小さい電流の飽和電圧は、この形では逆方向の電流増幅率 BR で決まり、hFE や大きい電流の点と同時には合わせきれません (シミュレーションでは実物より低く出ます)" } else { "この形の式では、この電流の電圧まで合わせきれません" };
+        format!("{} が {} で {:+.0} mV ずれています。{why}", r.item, r.at, (r.model - r.datasheet) * 1e3)
+    }));
     Ok((text, limits, rows, notes))
 }

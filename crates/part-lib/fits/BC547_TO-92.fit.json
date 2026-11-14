@@ -1,0 +1,81 @@
+{
+  "kind": "bjt",
+  "part": "BC547_TO-92",
+  "name": "BC547",
+  "pnp": false,
+  "read": "2026-11-14",
+  "source": "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)",
+  "url": "https://www.onsemi.com/pdf/datasheet/bc546-d.pdf",
+  "description": "NPN 汎用トランジスタ BC547B (TO-92, ピン1=C 2=B 3=E)。2N3904 とピン配置が違うので注意。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "figs": {
+    "hfe": "図 1",
+    "on": "図 2",
+    "cap": "図 5"
+  },
+  "hfe_peak": 314.0,
+  "hfe_note": "曲線の高さは、表の hFE の typ 290 (BC547B、2 mA、5 V) に、図 1 の 2 mA の値 0.923 を合わせて決めました (曲線の 1 が 314)。実物の hFE は、同じ B ランクでも 200〜450 と大きく違います。",
+  "hfe_vce": 10.0,
+  "hfe_norm": [
+    [0.0003, 0.692],
+    [0.0005, 0.754],
+    [0.001, 0.838],
+    [0.002, 0.923],
+    [0.005, 0.995],
+    [0.01, 1.032],
+    [0.02, 1.049],
+    [0.03, 1.036],
+    [0.05, 0.952],
+    [0.07, 0.805],
+    [0.1, 0.617]
+  ],
+  "on_vce": 10.0,
+  "vbe_on": [
+    [0.0002, 0.587],
+    [0.001, 0.626],
+    [0.005, 0.681],
+    [0.01, 0.72],
+    [0.05, 0.85],
+    [0.07, 0.893]
+  ],
+  "vbe_sat": [
+    [0.001, 0.657],
+    [0.005, 0.734],
+    [0.01, 0.786],
+    [0.02, 0.838],
+    [0.05, 0.941],
+    [0.07, 0.995]
+  ],
+  "vce_sat": [
+    [0.001, 0.0588],
+    [0.01, 0.0706],
+    [0.02, 0.0883],
+    [0.05, 0.184],
+    [0.07, 0.263]
+  ],
+  "cibo": [
+    [0.4, 5.95e-12],
+    [0.7, 5.55e-12],
+    [1.0, 5.2e-12],
+    [2.0, 4.54e-12],
+    [3.5, 3.7e-12]
+  ],
+  "cobo": [
+    [0.4, 3.39e-12],
+    [1.0, 2.99e-12],
+    [2.0, 2.71e-12],
+    [5.0, 2.21e-12],
+    [10.0, 1.74e-12],
+    [20.0, 1.37e-12],
+    [30.0, 1.21e-12]
+  ],
+  "ft_typ": 300000000.0,
+  "vaf": [100.0, "データシートに出力の特性 (hoe や出力特性の図) が無いので、仮に 100 V としました (出力抵抗はこの値で決まります)"],
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace` (curve_crossings on the page drawn at 4 px/pt) and checked against the rendered page",
+    "hfe_norm: Figure 1 (normalized DC current gain, VCE = 10 V, 25 C). Its x labels are not an exact log axis: all ten labels were used (piecewise). The table's hFE typ for BC547B is 290 at 2 mA / 5 V and 180 at 100 mA / 5 V (the curve gives 290 and 194 at 10 V)",
+    "vbe_on, vbe_sat, vce_sat: Figure 2 (IC/IB = 10; VBE(on) at VCE = 10 V). The table's VBE(sat) typ 0.7 V and VCE(sat) typ 0.09 V are at IC/IB = 20, so the graph is used",
+    "cibo, cobo: Figure 5. The table's Cibo typ is 10 pF at VEB = 0.5 V but the curve shows 5.8 pF there; the curve is used (both are typical values of the same data sheet)",
+    "ft_typ: the table's fT typ 300 MHz (IC = 10 mA, VCE = 5 V). Figure 6 shows 230 MHz at 10 mA, 10 V",
+    "the data sheet is marked OBSOLETE (BC546/D Rev. 8 still sells the parts listed); the numbers are those of the BC547B grade"
+  ]
+}
