@@ -52,7 +52,7 @@ REGS = {
                                 src="Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS (VIN = 4.3 V、ILOAD = 100 µA)",
                                 fig="ライン・レギュレーションは表の typ「±0.75 %/V」をそのまま使った (表の値。代表特性の図は見ていない)。出力電圧の min と max (±2.0 %) は、新しい版の DS20001826E (2018) の表から写した"),
     "LM317_TO-220": dict(name="LM317", vout=1.25, vin0=None, line=0.01e-2 * 1.25, rout=0.001 * 1.25 / 1.49, vdo0=1.6, rdo=0.4,
-                         iq=0.0, iadj=50e-6, vrange=(1.2, 1.3), ilim=[(15.0, 2.2), (40.0, 0.4)], rr=65.0, rr_f=120, rr_vout=10.0, noise=(1.25 * 0.003e-2, 10, 10e3),
+                         iq=0.0, iadj=50e-6, iadj_max=100e-6, vrange=(1.2, 1.3), ilim=[(15.0, 2.2), (40.0, 0.4)], rr=65.0, rr_f=120, rr_vout=10.0, noise=(1.25 * 0.003e-2, 10, 10e3),
                          src="TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節 (新しいチップの値がある行はそれ)",
                          fig="ドロップアウトは表に無いので、図 6-18 (25 °C) を読んで 1.6 V + 0.4 Ω × 電流 とした (20 mA で約 1.6 V、1 A で約 2.0 V)。電流制限は表の 2.2 A (差 15 V 以下) と 0.4 A (差 40 V) を直線につないだ"),
 }
@@ -137,7 +137,11 @@ def regulator(f, p):
         f"Bin in {ref} I=I(Vs)",
     ]
     if adj:
-        lines += ["* adjustment pin current (out of ADJ)", f"Iadj in adj DC {g(p['iadj'])}"]
+        lines += [
+            "* adjustment pin current (out of ADJ)",
+            f"Iadj in adj DC {g(p['iadj'])}",
+            f"* spread Iadj {g(p['iadj'])} {g(p['iadj_max'])} iadj (data sheet: typ {g(p['iadj'] * 1e6)} uA, max {g(p['iadj_max'] * 1e6)} uA; no min, so from typ)",
+        ]
     else:
         # flat above a few volts of input, like a resistor near 0 V: a constant current would pull on an unpowered input, and a
         # sharp switch-on (step) left the bundled mixed-signal sample without a DC solution at -40 C
@@ -161,7 +165,10 @@ def regulator_limits(p, density):
         rows.append(f"データシートの表に無い値: {p['fig']}。")
     if "vrange" in p:
         lo, hi = p["vrange"]
-        rows.append(f"{'基準電圧' if adj else '出力電圧'}の部品ごとの違い ({g(lo)}〜{g(hi)} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。")
+        if adj:
+            rows.append(f"部品ごとの違い (基準電圧 {g(lo)}〜{g(hi)} V はデータシートの min と max、ADJ の電流 {g(p['iadj'] * 1e6)}〜{g(p['iadj_max'] * 1e6)} µA は typ〜max。min は無い) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。")
+        else:
+            rows.append(f"出力電圧の部品ごとの違い ({g(lo)}〜{g(hi)} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。")
     rows += [
         "扱わないもの: " + ("" if "vrange" in p else "出力電圧の誤差 (出力はちょうど公称値)、") + "温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む)"
         + ("、最小負荷電流 (3.5 mA)" if adj else "")

@@ -223,7 +223,7 @@ impl Session {
             "sum_of_parts": {"min": w.min_sum, "max": w.max_sum}, "likely_at_worst": {"min": w.min_rss, "max": w.max_rss},
             "min_corner": corner(&w.min_corner), "max_corner": corner(&w.max_corner),
             "parts": parts, "unsolved_parts": w.unsolved,
-            "meaning": "min/max are solved circuits with every part at one end of its tolerance (+ = high end, - = low end); likely_at_worst treats the parts as independent; PART:offset / :vout / :vref are a model's own figure between its data sheet's min and max (spread=off leaves them at the model's value)",
+            "meaning": "min/max are solved circuits with every part at one end of its tolerance (+ = high end, - = low end); likely_at_worst treats the parts as independent; PART:offset / :vout / :vref / :ib+ / :ib- / :iq / :iadj are a model's own figure between its data sheet's min and max (spread=off leaves them at the model's value)",
             "warnings": gate.into_iter().collect::<Vec<_>>()
         })))
     }

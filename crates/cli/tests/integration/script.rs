@@ -2219,6 +2219,34 @@ worst out tol_r=0 tol_c=0 tol_l=0 spread=off
 }
 
 #[test]
+fn worst_moves_an_op_amps_bias_current_from_typ_to_max_through_a_high_source_resistance() {
+    // the same follower fed through 1 MΩ: the LM358's bias current (out of the pin) is 20 nA typ, 250 nA max, so IN+ sits
+    // 20 mV above 2.5 V at typ and 250 mV at max; the offset adds its -7..+7 mV
+    let (a, ok) = run("new
+add LM358 as=U1
+add V 5 as=VP
+add V 2.5 as=VI
+add R 1Meg as=RS
+net VCC VP.+ U1.V+
+net GND VP.- VI.- U1.V-
+net SRC VI.+ RS.1
+net IN RS.2 U1.IN+
+net OUT U1.OUT U1.IN-
+erc
+worst out tol_r=0 tol_c=0 tol_l=0
+");
+    assert!(ok, "{a:?}");
+    let w = a.iter().find(|v| v.get("min_corner").is_some()).unwrap();
+    let span = w["max"].as_f64().unwrap() - w["min"].as_f64().unwrap();
+    // (the offset's share is a little more than 14 mV: the 2 MΩ between the inputs shares the source resistance)
+    assert!(span > 0.24 && span < 0.26, "the bias current's 20..250 nA through 1 MΩ and the offset: {w}");
+    assert_eq!(w["parts"][0]["part"], "U1:ib+", "{w}");
+    let r = &w["parts"][0]["data_sheet_range"];
+    assert!((r[0].as_f64().unwrap() + 250e-9).abs() < 1e-12 && (r[1].as_f64().unwrap() + 20e-9).abs() < 1e-12, "{w}");
+    assert!(w.to_string().contains("U1:iq"), "the supply current is varied too (it does not move OUT): {w}");
+}
+
+#[test]
 fn a_makers_series_is_listed_once_and_placed_by_its_value() {
     // Panasonic ERJ-3EKF: 10 kΩ in E24/E96 is ERJ-3EKF1002V; 4.7 k and 4.7 k as a divider of 12 V gives 6 V
     let (a, ok) = run("new\nparts ERJ\nadd V 12 as=V1\nadd ERJ-3EKF 4.7k as=R1\nadd ERJ-3EKF 4k7 as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\ndc\n");

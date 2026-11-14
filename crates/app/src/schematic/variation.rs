@@ -291,6 +291,10 @@ pub(super) fn varied_name(name: &str) -> String {
         "offset" => i18n::tr("入力オフセット電圧"),
         "vout" => i18n::tr("出力電圧"),
         "vref" => i18n::tr("基準電圧"),
+        "ib+" => i18n::tr("+ 入力のバイアス電流"),
+        "ib-" => i18n::tr("− 入力のバイアス電流"),
+        "iq" => i18n::tr("電源電流"),
+        "iadj" => i18n::tr("ADJ ピンの電流"),
         other => other,
     };
     i18n::trf!("{} の{} (データシートの min〜max)", part, what)

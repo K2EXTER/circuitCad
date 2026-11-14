@@ -2399,7 +2399,7 @@
     ]
   },
   "LM317": {
-    "fingerprint": "e7255e43da945c6b",
+    "fingerprint": "19f3660e0815754b",
     "source": "TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節。VIN − VOUT = 5 V、IOUT = 10 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
     "date": "2026-11-11",
     "rows": [
@@ -2487,7 +2487,7 @@
     ]
   },
   "LM324": {
-    "fingerprint": "10345c75ecefd48d",
+    "fingerprint": "d3be34fa299db7ec",
     "source": "TI SLOS066AE(2025-09 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -2584,7 +2584,7 @@
     ]
   },
   "LM358": {
-    "fingerprint": "35a77401fef95e55",
+    "fingerprint": "2fb2969bbadc10ec",
     "source": "TI SLOS068AB(2024-10 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -3121,7 +3121,7 @@
     ]
   },
   "MCP6001": {
-    "fingerprint": "b98270579f875a26",
+    "fingerprint": "2658c3336c33cd29",
     "source": "Microchip DS20001733L",
     "date": "2026-11-11",
     "rows": [
@@ -3227,7 +3227,7 @@
     ]
   },
   "MCP6002": {
-    "fingerprint": "08f08505b369a2bc",
+    "fingerprint": "553231f728ab9ae9",
     "source": "Microchip DS20001733L",
     "date": "2026-11-11",
     "rows": [
@@ -3333,7 +3333,7 @@
     ]
   },
   "NE5532": {
-    "fingerprint": "0ab63dcdb8d7c2c1",
+    "fingerprint": "576b0f49e8b24684",
     "source": "TI SLOS075K(2025-12 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -3983,7 +3983,7 @@
     ]
   },
   "TL072": {
-    "fingerprint": "1971055a93e351f3",
+    "fingerprint": "c35bb5cdd2a67fea",
     "source": "TI SLOS080W(2025-07 改訂)",
     "date": "2026-11-11",
     "rows": [

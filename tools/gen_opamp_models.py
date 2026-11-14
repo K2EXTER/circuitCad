@@ -11,21 +11,40 @@ import json, math, os, sys
 EX = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "crates", "part-lib", "examples")
 
 # typ values from the data sheets (docs/models/opamps.md lists the sections); vos_max: the offset's max (absolute), which the
-# variation analyses spread the offset over (`* spread`, docs/part-format.md)
+# variation analyses spread the offset over (`* spread`, docs/part-format.md); ib_max, iq_min, iq_max: the bias current's max
+# (absolute) and the quiescent current's min and max per amplifier (None: not in the data sheet). Without a min, a spread
+# runs from typ to max
 PARTS = {
-    "LM358_SOIC-8": dict(name="LM358", aol_db=100, gbw=0.7e6, sr=0.3e6, vos=3e-3, vos_max=7e-3, ib=-20e-9, iq=350e-6, rin="2Meg",
+    "LM358_SOIC-8": dict(name="LM358", aol_db=100, gbw=0.7e6, sr=0.3e6, vos=3e-3, vos_max=7e-3, ib=-20e-9, iq=350e-6, ib_max=250e-9, iq_min=None, iq_max=600e-6, rin="2Meg",
                          hu=1.4, hl=0.005, isc=40e-3, en=40e-9, ro=50, pm=None),
-    "LM324_SOIC-14": dict(name="LM324", aol_db=100, gbw=1.2e6, sr=0.5e6, vos=3e-3, vos_max=7e-3, ib=-20e-9, iq=175e-6, rin="2Meg",
+    "LM324_SOIC-14": dict(name="LM324", aol_db=100, gbw=1.2e6, sr=0.5e6, vos=3e-3, vos_max=7e-3, ib=-20e-9, iq=175e-6, ib_max=250e-9, iq_min=None, iq_max=300e-6, rin="2Meg",
                           hu=1.4, hl=0.005, isc=40e-3, en=35e-9, ro=50, pm=None),
-    "TL072_SOIC-8": dict(name="TL072", aol_db=106.02, gbw=5.25e6, sr=20e6, vos=3e-3, vos_max=10e-3, ib=65e-12, iq=1.4e-3, rin="1e12",
+    "TL072_SOIC-8": dict(name="TL072", aol_db=106.02, gbw=5.25e6, sr=20e6, vos=3e-3, vos_max=10e-3, ib=65e-12, iq=1.4e-3, ib_max=200e-12, iq_min=None, iq_max=2.5e-3, rin="1e12",
                          hu=1.4, hl=1.4, isc=26e-3, en=37e-9, ro=100, pm=56),
-    "NE5532_SOIC-8": dict(name="NE5532", aol_db=100, gbw=12e6, sr=5e6, vos=0.5e-3, vos_max=4e-3, ib=200e-9, iq=3e-3, rin="300k",
+    "NE5532_SOIC-8": dict(name="NE5532", aol_db=100, gbw=12e6, sr=5e6, vos=0.5e-3, vos_max=4e-3, ib=200e-9, iq=3e-3, ib_max=800e-9, iq_min=None, iq_max=8e-3, rin="300k",
                           hu=2, hl=2, isc=38e-3, en=5e-9, ro=50, pm=None),
-    "MCP6001_SOT-23-5": dict(name="MCP6001", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, vos_max=4.5e-3, ib=1e-12, iq=100e-6, rin="1e13",
+    "MCP6001_SOT-23-5": dict(name="MCP6001", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, vos_max=4.5e-3, ib=1e-12, iq=100e-6, ib_max=None, iq_min=50e-6, iq_max=170e-6, rin="1e13",
                              hu=0.010, hl=0.010, isc=23e-3, en=28e-9, ro=50, pm=None),
-    "MCP6002_SOIC-8": dict(name="MCP6002", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, vos_max=4.5e-3, ib=1e-12, iq=100e-6, rin="1e13",
+    "MCP6002_SOIC-8": dict(name="MCP6002", aol_db=112, gbw=1.0e6, sr=0.6e6, vos=0.0, vos_max=4.5e-3, ib=1e-12, iq=100e-6, ib_max=None, iq_min=50e-6, iq_max=170e-6, rin="1e13",
                            hu=0.010, hl=0.010, isc=23e-3, en=28e-9, ro=50, pm=None),
 }
+
+def bias_spread(p):
+    """The bias currents' spread lines: each input on its own, from typ to max (the data sheets give no min), in the
+    direction of the typ (out of the pin for the PNP inputs)."""
+    if p["ib_max"] is None:
+        return []
+    sign = -1 if p["ib"] < 0 else 1
+    note = f"(data sheet: typ {eng(abs(p['ib']), 'A')}, max {eng(p['ib_max'], 'A')}; no min, so from typ)".replace("µ", "u")
+    return [f"* spread {el} {g(p['ib'])} {g(sign * p['ib_max'])} {what} {note}" for el, what in (("Ibp", "ib+"), ("Ibn", "ib-"))]
+
+
+def iq_spread(p):
+    lo = p["iq_min"] if p["iq_min"] is not None else p["iq"]
+    note = (f"{eng(p['iq_min'], 'A')} to {eng(p['iq_max'], 'A')}" if p["iq_min"] is not None
+            else f"typ {eng(p['iq'], 'A')}, max {eng(p['iq_max'], 'A')}; no min, so from typ")
+    return f"* spread Iq {g(lo)} {g(p['iq_max'])} iq (data sheet: {note})".replace("µ", "u")
+
 
 K4T = 4 * 1.380649e-23 * 300.15  # the simulator's default 27 °C
 
@@ -54,6 +73,7 @@ def model(p):
         "Rnz nz 0 1k",
         f"Ibp inp vn DC {g(p['ib'])}",
         f"Ibn inn vn DC {g(p['ib'])}",
+        *bias_spread(p),
         f"Rin inp inn {p['rin']}",
         "* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)",
         f"Bgm 0 n0 I=limit({g(gm)}*V(i2,inn),{g(-imax)},{g(imax)})",
@@ -97,6 +117,7 @@ def model(p):
         f"Bsnk out vn I=-limit((V(n)-V(out))/{p['ro']},{g(-p['isc'])},{g(p['isc'])})*step(-limit((V(n)-V(out))/{p['ro']},{g(-p['isc'])},{g(p['isc'])}),1u)",
         "* quiescent current of one amplifier",
         f"Iq vp vn DC {g(p['iq'])}",
+        iq_spread(p),
         ".model DLIM D(IS=1e-12 N=1)",
         f".ends {n}",
     ]
@@ -137,6 +158,16 @@ def summary(p):
     return s
 
 
+def spreads(p):
+    s = f"オフセット ±{eng(p['vos_max'], 'V')}"
+    if p["ib_max"] is not None:
+        s += f"、バイアス電流 {eng(abs(p['ib']), 'A')}〜{eng(p['ib_max'], 'A')} (入力ごと)"
+    lo = p["iq_min"] if p["iq_min"] is not None else p["iq"]
+    s += f"、電源電流 {eng(lo, 'A')}〜{eng(p['iq_max'], 'A')}"
+    s += "。データシートの max、min が無いものは typ から" if p["iq_min"] is None or p["ib_max"] is not None else "。データシートの min〜max"
+    return s
+
+
 def limits(p):
     n = p["name"]
     url, where = DS[n]
@@ -145,9 +176,11 @@ def limits(p):
         f"データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {where}。データシートとの比べは docs/models/opamps.md。",
         f"再現しているもの: {summary(p)}、{vos}、入力バイアス電流 {eng(abs(p['ib']), 'A')}、"
         f"出力の振れ幅 (電源から {eng(p['hu'], 'V')} / {eng(p['hl'], 'V')})、出力の短絡電流 {eng(p['isc'], 'A')}、1 kHz の入力換算雑音 {eng(p['en'], 'V')}/√Hz。"
-        f"オフセットの部品ごとの違い (±{eng(p['vos_max'], 'V')}、データシートの max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+        f"部品ごとの違い ({spreads(p)}) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
         "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、"
-        "電源電圧による GBW の変化、バイアス電流のばらつき (typ の値で固定)、チャネル2。",
+        "電源電圧による GBW の変化、"
+        + ("バイアス電流のばらつき (データシートに max が無いので typ の値で固定)、" if p["ib_max"] is None else "")
+        + "チャネル2。",
         "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
         "電源ピンをつながないと、出力は 0V に張り付きます。",
     ]
