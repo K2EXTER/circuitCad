@@ -85,20 +85,27 @@ fn rds(part: &str, vgs: f64, id: f64) -> f64 {
     probes(&format!("new\nadd {part} as=M1\nadd V {vgs} as=VG\nadd I {id} as=ID\nnet G VG.+ M1.G\nnet D ID.+ M1.D\nnet GND VG.- ID.- M1.S\n"), &["V(D)"])[0] / id
 }
 
-/// Drain current at `vgs` with the drain held at `vds`.
-fn id_at(part: &str, vgs: f64, vds: f64) -> f64 {
-    probes(&format!("new\nadd {part} as=M1\nadd V {vgs} as=VG\nadd V {vds} as=VD\nnet G VG.+ M1.G\nnet D VD.+ M1.D\nnet GND VG.- VD.- M1.S\n"), &["I(VD)"])[0].abs()
+/// |ID| for the gate from `from` to `to` volts (200 points of one `sweep`) with the drain held at `vds`, as (VGS, |ID|).
+fn id_sweep(part: &str, vds: f64, from: f64, to: f64) -> Vec<(f64, f64)> {
+    let a = run(&format!("new\nadd {part} as=M1\nadd V {from} as=VG\nadd V {vds} as=VD\nnet G VG.+ M1.G\nnet D VD.+ M1.D\nnet GND VG.- VD.- M1.S\nsweep VG {from} {to} steps=200 probe=I(VD)\n"));
+    let s = answer(&a, "sweep");
+    s["rows"].as_array().unwrap().iter().map(|r| (r["value"].as_f64().unwrap(), r["I(VD)"].as_f64().unwrap_or_else(|| panic!("no I(VD): {r}")).abs())).collect()
 }
 
-/// Forward transconductance at drain current `id` and `vds`: the gate voltage for `id` by bisection, then a small step.
+/// Forward transconductance at drain current `id` and `vds`. The gate voltage for `id`: a coarse sweep finds the step it is in, a
+/// fine one over that step finds it (two runs of `ccad`; a bisection took 42 and about 33 s per part). The slope there is that of the
+/// parabola through the three nearest points of the fine sweep (exact for the square law; the points are about 0.5 mV apart).
 fn gfs(part: &str, vds: f64, id: f64) -> f64 {
-    let (mut lo, mut hi) = (0.0, 20.0);
-    for _ in 0..40 {
-        let m = 0.5 * (lo + hi);
-        if id_at(part, m, vds) < id { lo = m } else { hi = m }
-    }
-    let v = 0.5 * (lo + hi);
-    (id_at(part, v + 1e-3, vds) - id_at(part, v - 1e-3, vds)) / 2e-3
+    let cross = |pts: &[(f64, f64)]| pts.windows(2).position(|w| w[0].1 < id && w[1].1 >= id).unwrap_or_else(|| panic!("{part}: ID = {id} A not reached in {:?}..{:?}", pts.first(), pts.last()));
+    let coarse = id_sweep(part, vds, 0.0, 20.0);
+    let k = cross(&coarse);
+    let fine = id_sweep(part, vds, coarse[k].0, coarse[k + 1].0);
+    let j = cross(&fine);
+    let ((v0, i0), (v1, i1)) = (fine[j], fine[j + 1]);
+    let v = v0 + (id - i0) / (i1 - i0) * (v1 - v0);
+    let m = j.clamp(1, fine.len() - 2);
+    let ((xa, ya), (xb, yb), (xc, yc)) = (fine[m - 1], fine[m], fine[m + 1]);
+    ya * (2.0 * v - xb - xc) / ((xa - xb) * (xa - xc)) + yb * (2.0 * v - xa - xc) / ((xb - xa) * (xb - xc)) + yc * (2.0 * v - xa - xb) / ((xc - xa) * (xc - xb))
 }
 
 struct Row {
