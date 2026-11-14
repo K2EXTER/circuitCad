@@ -2298,3 +2298,29 @@ add R 1k
     assert_eq!(a.len(), 2, "the run stops at the failing line: {a:?}");
     let _ = std::fs::remove_dir_all(&lib);
 }
+
+#[test]
+fn fit_makes_a_model_from_data_sheet_readings_and_writes_it_into_the_part() {
+    // the bundled 2N7000's readings give the bundled model, with each reading next to the model's value
+    let spec = concat!(env!("CARGO_MANIFEST_DIR"), "/../part-lib/fits/2N7000_TO-92.fit.json");
+    let (a, ok) = run(&format!("fit \"{spec}\"\n"));
+    assert!(ok, "{a:?}");
+    let f = last(&a, "fit");
+    assert_eq!(f["model"], ".model 2N7000 NMOS(VTO=2.035 KP=0.4742 RD=0.933 CGS=1.6e-11 CGD=4e-12)");
+    let rows = f["rows"].as_array().unwrap();
+    assert!(rows.iter().any(|r| r["item"] == "RDS(on)" && r["error_pct"].as_f64().unwrap().abs() < 1.0), "{f}");
+    assert!(rows.iter().any(|r| r["item"] == "gFS" && r["compare_only"] == true), "{f}");
+    assert!(f["notes"][0].as_str().unwrap().contains("gFS"), "{f}");
+    // 'write' puts the model back into a copy of the part whose model was changed; the rest of the file stays
+    let dir = std::env::temp_dir().join(format!("ccad-fit-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let bundled = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../part-lib/examples/2N7000_TO-92.part.json")).unwrap();
+    std::fs::write(dir.join("2N7000_TO-92.part.json"), bundled.replace("KP=0.4742", "KP=1")).unwrap();
+    let (a, ok) = run(&format!("fit \"{spec}\" write dir=\"{}\"\n", dir.display()));
+    let after = std::fs::read_to_string(dir.join("2N7000_TO-92.part.json")).unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(ok, "{a:?}");
+    assert_eq!(after, bundled);
+    let (a, ok) = run("fit nowhere.fit.json\n");
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("nowhere"), "{a:?}");
+}

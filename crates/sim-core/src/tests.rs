@@ -536,7 +536,7 @@ fn library_diode_model_is_used() {
     wire(&mut s, (0, 6), (16, 6));
     let c = from_schematic(&s).unwrap();
     let res = dc_op(&c).unwrap();
-    // IS=4.092n RS=0.3855 N=1.906 from the part file (tools/gen_diode_models.py, 2026-11-12)
+    // IS=4.092n RS=0.3855 N=1.906 from the part file (crates/part-lib/fits/1N4148.fit.json, 2026-11-12)
     let (vj, i) = diode_oracle(5.0, 1000.0 + 0.3855, 4.092e-9, 1.906 * VT);
     let d1 = res.element("D1").unwrap();
     close(d1.current, i, 1e-8);

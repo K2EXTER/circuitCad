@@ -8,6 +8,7 @@ use std::cell::OnceCell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 mod dimensions;
+pub mod graph;
 mod headings;
 mod pin_table;
 mod suggest;

@@ -1,0 +1,56 @@
+{
+  "kind": "diode",
+  "part": "1N5819_DO-41",
+  "name": "1N5819",
+  "read": "2026-11-14",
+  "source": "onsemi 1N5817〜1N5819 データシート (1N5817/D Rev. 11, 2021-08)",
+  "url": "https://www.onsemi.com/pdf/datasheet/1n5817-d.pdf",
+  "description": "1N5819 ショットキーバリアダイオード 40V 1A (DO-41、帯の側がカソード K)。データシート (onsemi) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 7 (順方向電圧の代表特性。1N5817〜1N5819 で共通) の 25 °C",
+    "points": [
+      [0.03, 0.243],
+      [0.05, 0.259],
+      [0.1, 0.282],
+      [0.25, 0.316],
+      [0.5, 0.359],
+      [1.0, 0.412],
+      [1.5, 0.47],
+      [2.5, 0.577],
+      [4.0, 0.695]
+    ]
+  },
+  "hot": {
+    "temp": 100.0,
+    "points": [
+      [0.03, 0.128],
+      [0.04, 0.143],
+      [0.05, 0.154],
+      [0.1, 0.189],
+      [0.15, 0.21],
+      [0.25, 0.238],
+      [0.3, 0.247],
+      [0.4, 0.265],
+      [0.5, 0.281],
+      [0.7, 0.319],
+      [1.0, 0.367]
+    ]
+  },
+  "breakdown": {
+    "v": 48.0,
+    "i": 0.001,
+    "note": "降伏はデータシートに無いので、非繰り返しの最大逆電圧 VRSM 48 V に置いた (電流は表の IR の最大 1 mA)"
+  },
+  "capacitance": {
+    "at": "データシートに容量の値もグラフも無いので、入れていません (実物にはあり、高い周波数で効きます)",
+    "points": []
+  },
+  "no_recovery": "逆回復は扱いません (ショットキーは多数キャリアで動き、蓄積する電荷がほとんど無い。データシートにも trr は無い)。",
+  "remarks": [
+    "forward: Figure 7 (typical forward voltage, shared by 1N5817 to 1N5819), the 25 C curve (read 2026-11-14). Above about 2 A the 25 C and 100 C curves lie on each other; at 4 A the one line was read.",
+    "hot: the same figure's 100 C curve (TC): the band gap EG is fitted to it with XTI = 2 (the silicon default EG = 1.11 made the forward voltage fall about 3 mV per degree; the curves show about 1.2 mV at 0.1 A)",
+    "breakdown: none is specified; VRSM and the table's IR max at the rated voltage",
+    "capacitance: the data sheet gives none (no value, no curve)",
+    "recovery: a Schottky diode has no stored charge (majority carriers): TT stays 0"
+  ]
+}

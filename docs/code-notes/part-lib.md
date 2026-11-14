@@ -58,3 +58,13 @@ gspice` にあるときだけ実行され、無ければ何もせず通る)。�
 - 起動の速さ (2026-11-14): 全シリーズで約 15 000 個の部品を、アプリと `ccad` の起動のたびに作る。1 個ずつ JSON を組んで読むと 0.35 秒かかっていたので、`expand` は最初の値だけ `part` で作り、ほかは値で変わる欄 (`varying`: 名前・説明・値・モデルの名前と文・注意・定格の表) だけをその写しに入れる。`bundled_parts` はシリーズごとに1つのスレッド。合わせて 37 ms。`part(v)` と同じものになることはテスト `the_expanded_parts_are_the_parts_of_each_value` が全シリーズの全部の値で確かめる。`part` に欄を足すときは `varying` にも。
 - 新しい部品フォルダ (`install_examples`): 同梱の文から書いたばかりのファイル (`fresh`) は、後の1回きりの入れ替え (どれもファイルを読み直して前の版か調べる) を飛ばす。今の版を書いたばかりなので替えるものがない。250 → 61 ms (`ccad` のテストは実行ごとに新しいフォルダを使う)。
 - テスト: `series::tests` (型番の作り方・値の数と E 系列・全部品の `validate`・spread と定格電圧・ランドが推奨の真ん中・値の読み取りと近い値)。
+
+## fit/ — データシートの読みから等価モデル (2026-11-14、M10 の段1)
+- 入口は `fit::Spec::load(path)` → `fit::fit(&spec) -> Fitted{text, limits, rows, notes, ...}` → `fit::write_part(dir, &fitted)`。CLI は `ccad fit FILE.fit.json [write] [dir=DIR]` (`cli/src/fitcmd.rs`)。
+- 読みのファイル `crates/part-lib/fits/<部品のファイル名>.fit.json`: `kind` (diode / bjt / mos)、`part`・`name`・`source`・`url`・`description`、読み取りの日 `read`、どの図からどう読んだか `remarks` (当てはめには使わない。記録)。形は kind ごとの構造体 (`fit/diode.rs` の `DiodeSpec`、`bjt.rs` の `BjtSpec`、`mos.rs` の `MosSpec`) のコメント。同梱のダイオード 5・BJT 2・MOSFET 4 の読みが入っている (2026-11-12〜14 に `tools/gen_*_models.py` に書いていたものを移した)。
+- 当てはめは、前の Python (SciPy) と同じ手順にしてある: ダイオードは `V = N·VT·ln(I/IS+1) + I·RS` の線形最小二乗 (`diode::least_squares`)、容量は VJ・M の格子 (ダイオードは M 0.20〜、BJT は 0.10〜)、`EG` は 1 mV 刻み (XTI = 2)。BJT は SciPy の Nelder-Mead をそのまま写した `num::nelder_mead` (同じ初めの単体・係数・止め方) を 3 つの出発点から 2 回ずつ、`on` は SciPy の `brentq` を写した `num::brentq`、飽和は 2 変数のニュートン法 (前は `fsolve`)。MOSFET は KP・RD の 2 つを `num::levenberg_marquardt` (前は `least_squares`)。数字の書き方は Python の `{:.4g}` (`num::g`)。
+- 結果: 11 部品のうち 10 は同梱のモデルと文字まで同じ。2N3906 だけ IS が 9.189e-15 → 9.19e-15 (飽和の解き方の止め方の差。0.01%)。同梱の 2N3906 は書き直していない (書き直すと指紋が変わり、前の版の収集・サンプルの写し・ngspice の答えの手順が要る。差は意味が無い)。テスト `the_bundled_models_are_what_their_readings_give` は、パラメータが 0.2% 以内、注記 (`limits`) は文字まで同じことを見る。
+- ショットキー (1N5817・1N5819) の注記の「1 °C あたり約 … mV 下がります」は、前は手で書いた 1.2〜1.5 だった。いまはモデルから計算する (高温の曲線の最小と最大の電流で、25 °C との差 ÷ 温度差) ので 1.0〜1.3 になり、2 部品の注記の 1 行を書き直した (モデルの文は同じ)。
+- `rows`: 読んだ点ごとに、同じ条件でのモデルの値 (式で計算。シミュレータで回路を組んで測るのは `cli/tests/integration/diode_models.rs`・`transistor_models.rs`)。gFS は合わせていない値なので `compare_only`。`notes` は、ずれが大きい点 (hFE 15% 超、RDS(on) 5% 超、gFS 30% 超) と、N が 0.5〜3 の外のとき。
+- `write_part` (`fit/edit.rs`) は部品のファイルを丸ごと書き直さない: 小さな JSON の走査で値の範囲を見つけ、`sim.text`・`sim.limits`・`sim.origin`・`description`・`datasheet` の値だけを差し替える (無い欄はその入れ物の最後に足す)。部品のファイルは Rust・Python・手書きで数の書き方や欄の並びが違い、`PartDef` を書き直すと全部が変わるため。差し替えた値は Python の `json.dumps(indent=2)` と同じ形 (1 行 1 要素)。改行は CRLF のファイルなら CRLF。
+- 時間: 11 部品の当てはめ全部で約 0.5 秒 (BJT が大半)。

@@ -379,6 +379,7 @@ impl Default for PartForm {
 
 mod checklist;
 mod datasheet_view;
+mod graph_reader;
 mod pdf_check;
 mod pdf_input;
 mod pin_import;
@@ -417,6 +418,7 @@ impl PartForm {
         self.sheet.window(ui.ctx());
         self.take_pdf_pick();
         self.take_pdf_pins();
+        self.take_pdf_graph();
         self.sync_pdf_checks();
         let labels: Vec<String> = FORM_TABS
             .iter()

@@ -1,6 +1,6 @@
 # 同梱のトランジスタ・MOSFET のモデルとデータシートの比べ
 
-`crates/cli/tests/integration/transistor_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_transistor_model_report`)。方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_transistor_models.py`(データシートから読んだ値はそこにある)。
+`crates/cli/tests/integration/transistor_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_transistor_model_report`)。方針は `docs/model-policy.md`、モデルを作るのは `ccad fit`(データシートから読んだ値は `crates/part-lib/fits/` にある)。
 
 - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12。AO3401A は 2026-11-14)。グラフの読み取りは 1% ほどの誤差がある。
 - 2N3904 の hFE の typ はデータシートに無い。図 15 の相対値に、表の min 100 と max 300(10 mA)の幾何平均 173 を掛けた値と比べる。実物の hFE は 100〜300 と大きく違う。

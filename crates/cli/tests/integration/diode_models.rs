@@ -4,7 +4,7 @@
 //! `diode_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
 //! `cargo test -p cli --test integration -- --ignored write_diode_model_report` writes `docs/models/diodes.md`
 //! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
-//! The models are written by `tools/gen_diode_models.py` (the readings of the data sheets are there).
+//! The models are written by `ccad fit` from the readings of the data sheets in `crates/part-lib/fits/*.fit.json`.
 
 use super::checks;
 
@@ -213,7 +213,7 @@ fn write_diode_model_report() {
     let text = format!(
         "# 同梱のダイオードのモデルとデータシートの比べ\n\n\
          `crates/cli/tests/integration/diode_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_diode_model_report`)。\
-         方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_diode_models.py`(データシートから読んだ値はそこにある)。\n\n\
+         方針は `docs/model-policy.md`、モデルを作るのは `ccad fit`(データシートから読んだ値は `crates/part-lib/fits/` にある)。\n\n\
          - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12。1N5817・1N5819 は 2026-11-14)。グラフの読み取りは 1% ほどの誤差がある。\n\
          - モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。接合容量は、100 kΩ と組んだローパスの利得から求めた。\n\
          - 「差」はモデル − typ(typ が無い行は max)。合格の幅はテストの各行(順方向電圧は ±15〜20 mV、接合容量は ±15%)。逆電流は比べるだけ(モデルは IS の分しか流れない)。\n{body}"

@@ -113,6 +113,11 @@ impl PartForm {
         ui.add(egui::TextEdit::multiline(&mut self.dio_points).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("10m 0.70\n100m 0.79\n1 0.92"))
             .on_hover_text(i18n::tr("グラフの縦軸 (電流) と横軸 (電圧) を読みます。電流は小・中・大の 3 点 (10mA・100mA・定格電流など)。m は 1000 分の 1。例: 100m 0.79 は 100mA のとき 0.79V"));
         ui.horizontal(|ui| {
+            if self.sheet.has_doc()
+                && ui.button(i18n::tr("PDF のグラフから読む")).on_hover_text(i18n::tr("データシートの窓で、順方向特性のグラフの軸の目盛りと曲線の上をクリックして、点を読みます。読んだ点は、点の窓のボタンでこの欄に入ります")).clicked()
+            {
+                self.sheet.start_graph(Some(super::graph_reader::Dest::DiodeForward));
+            }
             if ui.button(i18n::tr("1N4007 の例を入れる")).on_hover_text(i18n::tr("練習用の読み取り例を入れます。自分のデータシートのグラフで、読み直してみてください")).clicked() {
                 self.dio_points = EXAMPLE_POINTS.into();
                 self.dio_vrrm = "1000".into();

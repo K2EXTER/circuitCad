@@ -33,6 +33,18 @@ impl PartForm {
         });
     }
 
+    /// Takes the points read off a graph that the person sent to the form, and puts them in their field.
+    pub(super) fn take_pdf_graph(&mut self) {
+        use super::graph_reader::{Dest, short};
+        let Some(out) = self.sheet.take_graph() else { return };
+        match out.dest {
+            Dest::DiodeForward => {
+                self.dio_points = out.points.iter().map(|(i, v)| format!("{} {}", short(*i), short(*v))).collect::<Vec<_>>().join("\n");
+                self.dio_message = Some(self.dio_fit().map(|m| format!("p.{} のグラフの {} 点を入れました。{m}", out.page + 1, out.points.len())));
+            }
+        }
+    }
+
     /// Puts a clicked word in the field it was asked for. A number goes through the unit conversion; what was
     /// assumed or converted is said in `pick_msg`, and a number that cannot be read leaves the field alone.
     pub(super) fn apply_pick(&mut self, p: Picked) {

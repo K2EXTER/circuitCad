@@ -1,0 +1,26 @@
+{
+  "kind": "mos",
+  "part": "AO3400A_SOT-23",
+  "name": "AO3400A",
+  "pch": false,
+  "read": "2026-11-12",
+  "source": "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)",
+  "url": "https://www.aosmd.com/res/datasheets/AO3400A.pdf",
+  "description": "Nチャネル MOSFET 30V (SOT-23)。ロジックレベル駆動。データシート (Alpha & Omega) の typ から作った等価モデル (レベル1 + 直列抵抗)",
+  "vth": [1.05, 0.00025],
+  "rds": [
+    [10.0, 5.7, 0.018],
+    [4.5, 5.0, 0.019],
+    [2.5, 3.0, 0.024]
+  ],
+  "caps": {
+    "ciss": 6.3e-10,
+    "coss": 7.5e-11,
+    "crss": 5e-11
+  },
+  "gfs": [33.0, 5.0, 5.7],
+  "remarks": [
+    "vth: VGS(th) typ 1.05 V at 250 uA; rds: RDS(on) typ 18 mohm (10 V, 5.7 A), 19 (4.5 V, 5 A), 24 (2.5 V, 3 A)",
+    "caps: Ciss 630, Coss 75, Crss 50 pF typ (VDS = 15 V, VGS = 0)"
+  ]
+}

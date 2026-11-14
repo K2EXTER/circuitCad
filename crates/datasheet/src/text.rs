@@ -47,10 +47,16 @@ impl Word {
     /// The piece of the word at horizontal place `x` between separators: the part number under the pointer in
     /// "LM393B,LM2903B,LM193". None when the place is on a separator.
     pub fn token_at(&self, x: f32) -> Option<&str> {
+        self.token_span_at(x).map(|t| t.0)
+    }
+
+    /// [`Word::token_at`] with where the token starts and ends on the line (points from the left of the page): a tick
+    /// label of a graph is placed by its own centre, not the centre of the run of labels it was read with.
+    pub fn token_span_at(&self, x: f32) -> Option<(&str, f32, f32)> {
         let chars: Vec<(usize, char)> = self.text.char_indices().collect();
         let n = chars.len();
         if n == 0 || self.xs.len() != n {
-            return Some(self.text.as_str());
+            return Some((self.text.as_str(), self.rect.x0, self.rect.x1));
         }
         let i = self.xs.iter().rposition(|&s| s <= x).unwrap_or(0);
         if is_separator(chars[i].1) {
@@ -64,7 +70,8 @@ impl Word {
             b += 1;
         }
         let end = chars.get(b + 1).map_or(self.text.len(), |c| c.0);
-        Some(&self.text[chars[a].0..end])
+        let x1 = self.xs.get(b + 1).copied().unwrap_or(self.rect.x1);
+        Some((&self.text[chars[a].0..end], self.xs[a], x1))
     }
 
     pub(crate) fn baseline(&self) -> f32 {

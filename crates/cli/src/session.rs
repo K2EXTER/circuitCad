@@ -61,6 +61,11 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         search the models by name; size (inch code), dielectric, capacitance and rating
                                         work for models a maker reader describes (Murata; Nippon Chemi-Con and Nichicon give capacitance and rating only). zip defaults to the ones added in the app.
                                         'models model=PN' prints the subcircuit (alias: murata)
+ Models from data sheet readings
+  fit FILE.fit.json [write] [dir=DIR]   an equivalent model (diode, BJT, MOSFET) from numbers and graph points read off a
+                                        data sheet: answers the .model card, its notes and each reading next to the model's
+                                        value (rows, error_pct); 'write' puts it into DIR/<part>.part.json (default: the library).
+                                        The file's form: crates/part-lib/fits/*.fit.json (the bundled parts' readings)
  Design help
   calc [KEY NUMBER ...]                 value calculators (led, divider, rc, regulator, buck, boost, opamp, ...): no
                                         arguments lists them with their inputs; the answer has the value, steps, cautions
@@ -324,6 +329,7 @@ impl Session {
             "mc" => self.mc(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),
+            "fit" => self.fit(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),
             "req" => self.req(args),

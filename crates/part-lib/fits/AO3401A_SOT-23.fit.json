@@ -1,0 +1,27 @@
+{
+  "kind": "mos",
+  "part": "AO3401A_SOT-23",
+  "name": "AO3401A",
+  "pch": true,
+  "read": "2026-11-14",
+  "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)",
+  "url": "https://www.aosmd.com/res/datasheets/AO3401A.pdf",
+  "description": "Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。データシート (Alpha & Omega) の typ から作った等価モデル (レベル1 + 直列抵抗)",
+  "vth": [0.9, 0.00025],
+  "rds": [
+    [10.0, 4.0, 0.041],
+    [4.5, 3.5, 0.047],
+    [2.5, 2.5, 0.06]
+  ],
+  "caps": {
+    "ciss": 6.45e-10,
+    "coss": 8e-11,
+    "crss": 5.5e-11
+  },
+  "gfs": [17.0, 5.0, 4.0],
+  "remarks": [
+    "P channel: the numbers are the magnitudes (the data sheet writes VGS, ID and VDS negative); the model is a PMOS with VTO < 0",
+    "vth: VGS(th) typ -0.9 V at ID = -250 uA; rds: RDS(on) typ 41 mohm (-10 V, -4.0 A), 47 (-4.5 V, -3.5 A), 60 (-2.5 V, -2.5 A)",
+    "caps: Ciss 645, Coss 80, Crss 55 pF typ (VDS = -15 V, VGS = 0)"
+  ]
+}

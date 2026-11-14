@@ -1,0 +1,75 @@
+{
+  "kind": "bjt",
+  "part": "2N3904_TO-92",
+  "name": "2N3904",
+  "pnp": false,
+  "read": "2026-11-12",
+  "source": "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)",
+  "url": "https://www.onsemi.com/pdf/datasheet/2n3903-d.pdf",
+  "description": "NPN 汎用トランジスタ (TO-92, ピン1=E 2=B 3=C)。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "figs": {
+    "hfe": "図 15",
+    "on": "図 17",
+    "cap": "図 3"
+  },
+  "hfe_peak": 173.0,
+  "hfe_note": "データシートに hFE の typ が無いので、山の高さは表の min 100 と max 300 (10 mA) の幾何平均 173 に置きました。実物の hFE は、同じ型番でも 100〜300 と大きく違います。",
+  "hfe_norm": [
+    [0.0001, 0.443],
+    [0.0002, 0.538],
+    [0.0005, 0.676],
+    [0.001, 0.773],
+    [0.002, 0.868],
+    [0.005, 0.979],
+    [0.01, 0.988],
+    [0.02, 0.859],
+    [0.05, 0.493],
+    [0.1, 0.27]
+  ],
+  "vbe_on": [
+    [0.005, 0.684],
+    [0.01, 0.706],
+    [0.02, 0.738],
+    [0.05, 0.79],
+    [0.1, 0.869]
+  ],
+  "vbe_sat": [
+    [0.01, 0.745],
+    [0.02, 0.787],
+    [0.05, 0.848],
+    [0.1, 0.927]
+  ],
+  "vce_sat": [
+    [0.02, 0.117],
+    [0.05, 0.194],
+    [0.1, 0.36]
+  ],
+  "cibo": [
+    [0.1, 4.36e-12],
+    [0.2, 4.24e-12],
+    [0.5, 3.76e-12],
+    [1.0, 3.3e-12],
+    [2.0, 2.89e-12],
+    [3.0, 2.67e-12],
+    [5.0, 2.41e-12]
+  ],
+  "cobo": [
+    [0.1, 3.55e-12],
+    [0.2, 3.46e-12],
+    [0.5, 3.18e-12],
+    [1.0, 2.78e-12],
+    [2.0, 2.39e-12],
+    [5.0, 1.96e-12],
+    [10.0, 1.69e-12],
+    [20.0, 1.48e-12],
+    [30.0, 1.39e-12]
+  ],
+  "ft_min": 300000000.0,
+  "hoe": [1e-06, 4e-05],
+  "remarks": [
+    "hfe_norm: Figure 15. The data sheet has no typical hFE: the curve's peak is placed at 173, the geometric mean of the table's min 100 and max 300 at 10 mA (the table's min at 0.1 / 1 / 50 / 100 mA stay below it)",
+    "vbe_on, vbe_sat, vce_sat: Figure 17. Its printed axis labels sit off the grid lines; the grid lines are a plain log axis from 1 to 200 mA and were used. Below 5 mA the drawn VBE curve is flatter than any junction can be, so it is not used.",
+    "cibo, cobo: Figure 3 (Cibo emitter-base with the collector open, Cobo collector-base with the emitter open)",
+    "ft_min: no typ is given, so the model is as slow as the min allows (TF = 1 / (2 pi fT)); hoe: min and max at IC = 1 mA, VCE = 10 V (VAF from the geometric mean)"
+  ]
+}

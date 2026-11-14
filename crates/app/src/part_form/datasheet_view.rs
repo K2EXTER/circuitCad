@@ -1,6 +1,7 @@
 //! The data sheet window: a PDF opened beside the part form, to read while typing the numbers in.
 
 use datasheet::{Datasheet, HEADINGS, Hit, Quantity, Query, Rect, looks_like_part_number};
+use super::graph_reader::{Dest, GraphOut, GraphReader, Mode};
 use super::pin_import::{Action, PinImport, TablePanel};
 use eframe::egui::{self, Vec2};
 use std::path::Path;
@@ -160,6 +161,8 @@ struct Opened {
     panel: Option<TablePanel>,
     /// The pins the person accepted, for the form to take.
     pins_out: Option<PinImport>,
+    /// Points being read off a graph (its own window beside this one).
+    graph: Option<GraphReader>,
 }
 
 /// A search that goes on a few pages per frame, so that a long data sheet does not freeze the window.
@@ -214,6 +217,7 @@ impl SheetView {
                     drag_from: None,
                     panel: None,
                     pins_out: None,
+                    graph: None,
                 });
                 self.msg.clear();
                 self.open = true;
@@ -240,6 +244,63 @@ impl SheetView {
             d.picked = None;
             self.open = true;
         }
+    }
+
+    /// The form (or the window's own button) starts reading points off a graph on the page shown. `dest` is the
+    /// form's field the points can be sent to.
+    pub fn start_graph(&mut self, dest: Option<Dest>) {
+        if let Some(d) = self.doc.as_mut() {
+            d.target = None;
+            d.selecting = false;
+            d.graph = Some(GraphReader::new(d.page, dest));
+            self.open = true;
+        }
+    }
+
+    /// Reads a graph for a screenshot (`--form-graph "page|x=0.2,0.8|y=1.0E-04,1.0E+00|pts=0.55:1e-3,0.62:1e-2"`, page
+    /// from 1): the labels are clicked where they are printed (the last one on the page with that text), the points
+    /// are placed at their values.
+    pub fn graph_for_screenshot(&mut self, spec: &str) {
+        let mut parts = spec.split('|');
+        let page = parts.next().and_then(|p| p.trim().parse::<usize>().ok()).unwrap_or(1).saturating_sub(1);
+        self.go_to_page(page);
+        self.start_graph(Some(Dest::DiodeForward));
+        let Some(d) = self.doc.as_mut() else { return };
+        let labels = datasheet::graph::number_labels(d.ds.words(d.page));
+        let Some(mut g) = d.graph.take() else { return };
+        for part in parts {
+            let (key, list) = part.split_once('=').unwrap_or((part, ""));
+            for item in list.split(',').filter(|s| !s.is_empty()) {
+                match key {
+                    "x" | "y" => {
+                        g.mode = Some(if key == "x" { Mode::XTick } else { Mode::YTick });
+                        // the same number is printed on several graphs: the lowest one for the horizontal axis, the
+                        // rightmost for the vertical (the graph at the bottom right)
+                        let same = labels.iter().filter(|l| l.0 == item);
+                        let l = if key == "x" { same.max_by(|a, b| a.2.total_cmp(&b.2)) } else { same.max_by(|a, b| a.1.total_cmp(&b.1)) };
+                        if let Some(l) = l {
+                            g.click((l.1, l.2), Some((&l.0, (l.1, l.2))));
+                            d.jump = Some(Rect { x0: l.1, y0: l.2, x1: l.1, y1: l.2 });
+                        }
+                    }
+                    "pts" => {
+                        if let Some((a, b)) = item.split_once(':')
+                            && let (Ok(a), Ok(b)) = (a.parse(), b.parse())
+                        {
+                            g.add_point_at_values(a, b);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        g.mode = Some(Mode::Points);
+        d.graph = Some(g);
+    }
+
+    /// The points the person sent to the form since the last call.
+    pub fn take_graph(&mut self) -> Option<GraphOut> {
+        self.doc.as_mut().and_then(|d| d.graph.as_mut()).and_then(|g| g.take_out())
     }
 
     /// The form asks for the pin table to be cut out: the window comes forward and waits for a rectangle.
@@ -362,6 +423,20 @@ impl SheetView {
         if !open && let Some(d) = self.doc.as_mut() {
             d.target = None;
             d.selecting = false;
+            d.graph = None;
+        }
+        // the window that reads points off a graph: over the left panel, like the pin table's
+        if let Some(d) = self.doc.as_mut()
+            && let Some(g) = d.graph.as_mut()
+        {
+            let mut keep = true;
+            let mut keep_open = true;
+            egui::Window::new(i18n::tr("グラフから点を読む")).open(&mut keep_open).default_pos([8.0, 56.0]).default_size([crate::PANEL_WIDTH - 20.0, 460.0]).resizable(true).show(ctx, |ui| {
+                keep = g.ui(ui, d.page);
+            });
+            if !keep || !keep_open {
+                d.graph = None;
+            }
         }
         // the window that checks the pins read from the rectangle
         let current = &self.current_pins;
@@ -408,9 +483,12 @@ impl Opened {
         if std::mem::take(&mut self.fit) {
             self.zoom = ((ui.available_width() - 24.0) / pw).clamp(ZOOM_MIN, ZOOM_MAX);
         }
-        if (self.target.is_some() || self.selecting) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        if (self.target.is_some() || self.selecting || self.graph.as_ref().is_some_and(|g| g.mode.is_some())) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.target = None;
             self.selecting = false;
+            if let Some(g) = self.graph.as_mut() {
+                g.mode = None;
+            }
         }
         ui.horizontal_wrapped(|ui| {
             if ui.add_enabled(self.page > 0, egui::Button::new("◀")).on_hover_text(i18n::tr("前のページ")).clicked() {
@@ -493,6 +571,7 @@ impl Opened {
         }
         let Some(tex_id) = self.texture.as_ref().map(|t| t.handle.id()) else { return };
         let sense = if self.selecting { egui::Sense::click_and_drag() } else { egui::Sense::click() };
+        let page_size = (w, h);
         let resp = ui.add(egui::Image::new((tex_id, size)).sense(sense));
         let origin = resp.rect.min;
         let zoom = self.zoom;
@@ -532,6 +611,42 @@ impl Opened {
             }
             if resp.drag_stopped() {
                 self.drag_from = None;
+            }
+        }
+        // reading a graph: the ticks and points are drawn; a click adds a tick (on a label: its number) or a point
+        if let Some(g) = self.graph.as_mut()
+            && g.page == self.page
+        {
+            g.paint(ui.painter(), |x, y| origin + Vec2::new(x, y) * zoom, page_size);
+            if let (Some(mode), Some(pos)) = (g.mode, resp.hover_pos()) {
+                let p = (pos - origin) / zoom;
+                let label = if mode == Mode::Points {
+                    None
+                } else {
+                    self.ds.words(self.page).iter().find(|w| w.rect.x0 - 1.0 <= p.x && p.x <= w.rect.x1 + 1.0 && w.rect.y0 <= p.y && p.y <= w.rect.y1).and_then(|w| {
+                        let (token, x0, x1) = w.token_span_at(p.x)?;
+                        datasheet::graph::tick_value(token)?;
+                        // the label's own centre is the tick (several labels may be read as one word)
+                        let r = Rect { x0, x1, ..w.rect };
+                        Some((token.to_string(), ((x0 + x1) / 2.0, (r.y0 + r.y1) / 2.0), r))
+                    })
+                };
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                let tip = match (&label, mode) {
+                    (Some((t, _, r)), _) => {
+                        ui.painter().rect_stroke(on_screen(r).expand(1.0), 2.0, egui::Stroke::new(1.5, crate::theme::INFO), egui::StrokeKind::Outside);
+                        format!("目盛り {t}")
+                    }
+                    (None, Mode::Points) => match g.value_at((p.x, p.y)) {
+                        Some((a, b)) => format!("({}, {})", super::graph_reader::short(a), super::graph_reader::short(b)),
+                        None => "先に横軸と縦軸の目盛りを 2 つずつ入れてください".into(),
+                    },
+                    (None, _) => "ここを目盛りにします (値はあとで入れます)".into(),
+                };
+                resp.clone().on_hover_text(tip);
+                if resp.clicked() {
+                    g.click((p.x, p.y), label.as_ref().map(|(t, c, _)| (t.as_str(), *c)));
+                }
             }
         }
         // waiting for a word: the one under the pointer is framed, and a click takes it
@@ -581,6 +696,12 @@ impl Opened {
             if ui.button(i18n::tr("ピン表を囲む")).on_hover_text(i18n::tr("ページの上でピン表をドラッグで囲むと、番号と名前を読み取ります。読み取った内容は確認して、ピン表に入れます")).clicked() {
                 self.selecting = true;
                 self.target = None;
+                self.graph = None;
+            }
+            if ui.button(i18n::tr("グラフから点を読む")).on_hover_text(i18n::tr("いま出ているページのグラフで、軸の目盛りを 2 つずつクリックしてから曲線の上をクリックすると、点の値を読みます。読んだ点は写したり、部品作成フォームの欄に入れたりできます")).clicked() {
+                self.target = None;
+                self.selecting = false;
+                self.graph = Some(GraphReader::new(self.page, None));
             }
             ui.small(i18n::tr("見出しへ"));
             for h in HEADINGS {

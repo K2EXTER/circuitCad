@@ -1,0 +1,75 @@
+{
+  "kind": "bjt",
+  "part": "2N3906_TO-92",
+  "name": "2N3906",
+  "pnp": true,
+  "read": "2026-11-14",
+  "source": "onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)",
+  "url": "https://www.onsemi.com/pdf/datasheet/2n3906-d.pdf",
+  "description": "PNP 汎用トランジスタ (TO-92, ピン1=E 2=B 3=C)。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "figs": {
+    "hfe": "図 13",
+    "on": "図 15",
+    "cap": "図 3"
+  },
+  "hfe_peak": 173.0,
+  "hfe_note": "データシートに hFE の typ が無いので、山の高さは表の min 100 と max 300 (10 mA) の幾何平均 173 に置きました。実物の hFE は、同じ型番でも 100〜300 と大きく違います。",
+  "hfe_norm": [
+    [0.0001, 0.774],
+    [0.0002, 0.806],
+    [0.0005, 0.854],
+    [0.001, 0.883],
+    [0.002, 0.921],
+    [0.005, 0.971],
+    [0.01, 0.988],
+    [0.02, 0.936],
+    [0.05, 0.511],
+    [0.1, 0.22]
+  ],
+  "vbe_on": [
+    [0.005, 0.71],
+    [0.01, 0.727],
+    [0.02, 0.756],
+    [0.05, 0.81],
+    [0.1, 0.868]
+  ],
+  "vbe_sat": [
+    [0.01, 0.757],
+    [0.02, 0.796],
+    [0.05, 0.85],
+    [0.1, 0.903]
+  ],
+  "vce_sat": [
+    [0.02, 0.1],
+    [0.05, 0.136],
+    [0.1, 0.245]
+  ],
+  "cibo": [
+    [0.1, 6.05e-12],
+    [0.2, 5.53e-12],
+    [0.5, 4.72e-12],
+    [1.0, 4.24e-12],
+    [2.0, 3.78e-12],
+    [3.0, 3.59e-12]
+  ],
+  "cobo": [
+    [0.1, 6.48e-12],
+    [0.2, 6.04e-12],
+    [0.5, 5.21e-12],
+    [1.0, 4.57e-12],
+    [2.0, 3.96e-12],
+    [3.0, 3.59e-12],
+    [5.0, 3.19e-12],
+    [10.0, 2.71e-12],
+    [20.0, 2.48e-12],
+    [30.0, 2.45e-12]
+  ],
+  "ft_min": 250000000.0,
+  "hoe": [3e-06, 6e-05],
+  "remarks": [
+    "hfe_norm: Figure 13 (read 2026-11-14). As for the 2N3904, no typical hFE: the peak (7 to 10 mA) is placed at 173, the geometric mean of the table's min 100 and max 300 at 10 mA (the table's min 60 / 80 / 60 / 30 at 0.1 / 1 / 50 / 100 mA stay below)",
+    "vbe_on, vbe_sat, vce_sat: Figure 15. Its printed axis labels (1, 2, 5, 10, 20, 50, 100, 200 mA) sit on grid lines, but the grid lines between them are not a plain log axis: the current is read on a log scale between the two nearest labels.",
+    "cibo, cobo: Figure 3. The two curves meet above about 4 V; the one that goes on to 40 V is Cobo (VEBO is 5 V)",
+    "a PNP is fitted with magnitudes (the equations are the same)"
+  ]
+}

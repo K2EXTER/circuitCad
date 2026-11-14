@@ -4,7 +4,7 @@
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
 //! `cargo test -p cli --test integration -- --ignored write_transistor_model_report` writes `docs/models/transistors.md`
 //! and the tables shown next to the parts (`crates/part-lib/model_checks.json`).
-//! The models are written by `tools/gen_transistor_models.py` (the readings of the data sheets are there).
+//! The models are written by `ccad fit` from the readings of the data sheets in `crates/part-lib/fits/*.fit.json`.
 
 use super::checks;
 
@@ -39,7 +39,7 @@ fn cap_at(circuit: &str, bias: f64, guess: f64) -> f64 {
 }
 
 // ------------------------------------------------------------------ bipolar transistors
-/// A bipolar transistor and its data sheet's numbers (the readings of the graphs are those of `tools/gen_transistor_models.py`).
+/// A bipolar transistor and its data sheet's numbers (the readings of the graphs are those of `crates/part-lib/fits/`).
 /// A PNP is measured with every source turned round; its numbers are sizes, as its data sheet prints them.
 struct Bjt {
     part: &'static str,
@@ -373,7 +373,7 @@ fn write_transistor_model_report() {
     let text = format!(
         "# 同梱のトランジスタ・MOSFET のモデルとデータシートの比べ\n\n\
          `crates/cli/tests/integration/transistor_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_transistor_model_report`)。\
-         方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_transistor_models.py`(データシートから読んだ値はそこにある)。\n\n\
+         方針は `docs/model-policy.md`、モデルを作るのは `ccad fit`(データシートから読んだ値は `crates/part-lib/fits/` にある)。\n\n\
          - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12。AO3401A は 2026-11-14)。グラフの読み取りは 1% ほどの誤差がある。\n\
          - 2N3904 の hFE の typ はデータシートに無い。図 15 の相対値に、表の min 100 と max 300(10 mA)の幾何平均 173 を掛けた値と比べる。実物の hFE は 100〜300 と大きく違う。\n\
          - MOSFET はレベル1(2乗則)に直列抵抗 RD を足したもの。オン抵抗としきい値に合わせたので、飽和領域の gFS は合うとは限らない(比べるだけ。2N7000 は 36% 高い)。容量は電圧によらない一定の値。\n\

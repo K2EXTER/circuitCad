@@ -22,8 +22,8 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が共有 |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
-| `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。メーカーのシリーズ(値ごとの部品に展開。`series.rs`、`series/*.series.json`)。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、LTspice の回路図の取り込み(`ltspice*.rs`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
-| `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ(`docs/datasheet-viewer-design.md`) |
+| `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。メーカーのシリーズ(値ごとの部品に展開。`series.rs`、`series/*.series.json`)。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、LTspice の回路図の取り込み(`ltspice*.rs`)、データシートの読み(`fits/*.fit.json`)から等価モデルを当てはめる `fit/`(`ccad fit`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
+| `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ・グラフの軸と点 `graph.rs`(`docs/datasheet-viewer-design.md`) |
 | `i18n` | 英語の画面。日本語の文を鍵にした表 `en/*.tsv`、`tr` / `trf!` / `tr_dyn`、`tools/i18n.py`(包む・未訳の一覧)。`docs/code-notes/i18n.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
 | `cli` | `ccad`: 画面なしの操作窓口(1行1コマンドのスクリプト。`ccad mcp` で MCP サーバー。`board/` は基板の命令を話題ごとのファイルに分けてある。`docs/cli.md`、`docs/code-notes/cli.md`) |
@@ -52,7 +52,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 |---|---|
 | `main.rs` / `prefs.rs` / `settings_window.rs` / `icons.rs` | `App`・メニュー / 設定の保存 / 設定の窓 / ツールのアイコン |
 | `args.rs` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
-| `plot.rs` / `part_form/` | 波形描画 / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `checklist` `trial` `vendor` `zchart` `preview`) |
+| `plot.rs` / `part_form/` | 波形描画 / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `graph_reader` グラフから点を読む / `checklist` `trial` `vendor` `zchart` `preview`) |
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
 | `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |

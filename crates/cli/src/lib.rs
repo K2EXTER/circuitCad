@@ -9,6 +9,7 @@
 mod board;
 mod build;
 mod design;
+mod fitcmd;
 mod libcmd;
 pub mod mcp;
 mod models;

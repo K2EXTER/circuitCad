@@ -52,6 +52,13 @@ impl SchEditor {
         }
     }
 
+    /// Reads a graph of the form's data sheet (`--form-graph "page|x=..|y=..|pts=x:y,.."`, for screenshots).
+    pub fn graph_in_form_pdf(&mut self, spec: &str) {
+        if let Some(f) = self.form.as_mut() {
+            f.sheet.graph_for_screenshot(spec);
+        }
+    }
+
     /// Waits for a click in the data sheet window for a field of the form (`--form-pick <field name>`).
     pub fn pick_in_form_pdf(&mut self, label: &str) {
         if let Some(f) = self.form.as_mut()

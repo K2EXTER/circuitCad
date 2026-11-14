@@ -1,0 +1,25 @@
+{
+  "kind": "mos",
+  "part": "2N7000_TO-92",
+  "name": "2N7000",
+  "pch": false,
+  "read": "2026-11-12",
+  "source": "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)",
+  "url": "https://www.onsemi.com/pdf/datasheet/nds7002a-d.pdf",
+  "description": "Nチャネル MOSFET 60V 200mA (TO-92)。データシート (onsemi) の typ から作った等価モデル (レベル1 + 直列抵抗)",
+  "vth": [2.1, 0.001],
+  "rds": [
+    [10.0, 0.5, 1.2],
+    [4.5, 0.075, 1.8]
+  ],
+  "caps": {
+    "ciss": 2e-11,
+    "coss": 1.1e-11,
+    "crss": 4e-12
+  },
+  "gfs": [0.32, 10.0, 0.2],
+  "remarks": [
+    "vth: VGS(th) typ 2.1 V at ID = 1 mA (VDS = VGS); rds: RDS(on) typ 1.2 ohm (10 V, 500 mA) and 1.8 ohm (4.5 V, 75 mA)",
+    "caps: Ciss 20, Coss 11, Crss 4 pF typ (VDS = 25 V, VGS = 0)"
+  ]
+}

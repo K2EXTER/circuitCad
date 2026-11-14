@@ -1,0 +1,42 @@
+{
+  "kind": "diode",
+  "part": "1N4007_DO-41",
+  "name": "1N4007",
+  "read": "2026-11-12",
+  "source": "onsemi 1N4001〜1N4007 データシート (1N4001/D Rev. 18, 2024-06)",
+  "url": "https://www.onsemi.com/pdf/datasheet/1n4001-d.pdf",
+  "description": "整流ダイオード 1000V 1A (DO-41、帯の側がカソード K)。データシート (onsemi) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 1 (順方向電圧の代表特性) の 25 °C",
+    "points": [
+      [0.2, 0.824],
+      [0.3, 0.845],
+      [0.5, 0.871],
+      [0.7, 0.891],
+      [1.0, 0.916],
+      [2.0, 0.983],
+      [4.0, 1.072]
+    ]
+  },
+  "breakdown": {
+    "v": 1200.0,
+    "i": 1e-05,
+    "note": "降伏はデータシートに無いので、非繰り返しの最大逆電圧 VRSM 1200 V に置いた (電流は表の IR の最大 10 µA)"
+  },
+  "capacitance": {
+    "at": "図 3 (容量の代表特性)",
+    "points": [
+      [1.0, 1.5e-11],
+      [2.0, 1.2e-11],
+      [4.0, 9.1e-12],
+      [10.0, 5.92e-12],
+      [30.0, 3.76e-12],
+      [150.0, 2.35e-12]
+    ]
+  },
+  "remarks": [
+    "forward: Figure 1 (typical forward voltage), TC = 25 C",
+    "breakdown: none is specified; VRSM (non-repetitive peak) and the table's IR max at the rated voltage",
+    "capacitance: Figure 3 (typical capacitance), TJ = 25 C"
+  ]
+}

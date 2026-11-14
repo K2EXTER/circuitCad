@@ -1,0 +1,41 @@
+{
+  "kind": "diode",
+  "part": "1N4148",
+  "name": "1N4148",
+  "read": "2026-11-12",
+  "source": "Vishay 1N4148 データシート (Document Number 81857, Rev. 1.6, 2024-11)",
+  "url": "https://www.vishay.com/docs/81857/1n4148.pdf",
+  "description": "小信号スイッチングダイオード (DO-35)。データシート (Vishay) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 1 (VF と Tj の代表特性) の 25 °C",
+    "points": [
+      [0.0001, 0.499],
+      [0.001, 0.61],
+      [0.01, 0.73],
+      [0.1, 0.877]
+    ]
+  },
+  "breakdown": {
+    "v": 100.0,
+    "i": 0.0001,
+    "note": "V(BR) の最小 100 V (IR = 100 µA)"
+  },
+  "capacitance": {
+    "at": "CD の最大 4 pF (VR = 0 V)。曲線が無いので VJ = 0.7 V・M = 0.5 と仮定",
+    "points": [
+      [0.0, 4e-12]
+    ]
+  },
+  "recovery": {
+    "trr": 8e-09,
+    "if": 0.01,
+    "ir": 0.01,
+    "note": "trr の最大 8 ns (IF = IR = 10 mA、1 mA まで)"
+  },
+  "remarks": [
+    "forward: Fig. 1 (typical VF vs. Tj), the four currents at 25 C",
+    "breakdown: V(BR) min 100 V at IR = 100 uA",
+    "capacitance: CD max 4 pF at VR = 0 (no typ, no curve): one point, VJ and M assumed",
+    "recovery: trr max 8 ns with IF = IR = 10 mA, recovery to 1 mA: TT = trr / ln(1 + IF/IR)"
+  ]
+}

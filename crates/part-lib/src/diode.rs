@@ -73,7 +73,7 @@ pub fn fit(points: &[(f64, f64)]) -> Result<DiodeFit, String> {
 }
 
 /// Least squares for the first `k` columns of `rows` (k = 2 or 3) by the normal equations.
-fn least_squares(rows: &[[f64; 3]], y: &[f64], k: usize) -> Option<Vec<f64>> {
+pub(crate) fn least_squares(rows: &[[f64; 3]], y: &[f64], k: usize) -> Option<Vec<f64>> {
     let mut m = vec![vec![0.0; k + 1]; k];
     for (row, yv) in rows.iter().zip(y) {
         for i in 0..k {

@@ -1,0 +1,25 @@
+{
+  "kind": "mos",
+  "part": "BSS138_SOT-23",
+  "name": "BSS138",
+  "pch": false,
+  "read": "2026-11-14",
+  "source": "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)",
+  "url": "https://www.onsemi.com/pdf/datasheet/bss138-d.pdf",
+  "description": "N チャネル MOSFET 50V 0.22A (SOT-23, ピン1=G 2=S 3=D)。ロジックレベル駆動、レベル変換によく使われます。データシート (onsemi) の typ から作った等価モデル (レベル1 + 直列抵抗)",
+  "vth": [1.3, 0.001],
+  "rds": [
+    [10.0, 0.22, 0.7],
+    [4.5, 0.22, 1.0]
+  ],
+  "caps": {
+    "ciss": 2.7e-11,
+    "coss": 1.3e-11,
+    "crss": 6e-12
+  },
+  "gfs": [0.5, 10.0, 0.22],
+  "remarks": [
+    "vth: VGS(th) typ 1.3 V at ID = 1 mA (VDS = VGS); rds: RDS(on) typ 0.7 ohm (10 V) and 1.0 ohm (4.5 V), both at 0.22 A",
+    "caps: Ciss 27, Coss 13, Crss 6 pF typ (VDS = 25 V, VGS = 0)"
+  ]
+}
