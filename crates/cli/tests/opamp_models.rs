@@ -424,12 +424,15 @@ fn show(i: &Item, v: f64) -> String {
 fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRow>)>) {
     let mut out = String::new();
     let mut tables = vec![];
+    // every row of every part measured at once (each runs `ccad` on its own), then read in the same order
+    let jobs: Vec<(&Part, &Row)> = PARTS.iter().flat_map(|p| p.rows.iter().map(move |r| (p, r))).collect();
+    let mut measured = checks::par_map(&jobs, |(p, r)| measure(p, r)).into_iter();
     for p in PARTS {
         let mut rows = vec![];
         out += &format!("\n## {}\n\nデータシート: {}\n\n| 項目 | データシート (min / typ / max) | 条件・表 | モデル | 差 (typ と比べて) |\n|---|---|---|---|---|\n", p.name, p.source);
         for row in p.rows {
             let ds = [row.min, row.typ, row.max].iter().map(|x| x.map(|v| show(&row.item, v)).unwrap_or_else(|| "—".into())).collect::<Vec<_>>().join(" / ");
-            let m = measure(p, row);
+            let m = measured.next().unwrap();
             let model = m.map(|v| show(&row.item, v)).unwrap_or_else(|| "測れない".into());
             let diff = match (m, row.typ.or(row.max)) {
                 (Some(v), Some(t)) if matches!(row.item, Item::Aol { .. } | Item::PhaseMargin) => format!("{:+.1}", v - t),
@@ -487,9 +490,12 @@ enum Check {
 #[test]
 fn opamp_models_match_their_data_sheets() {
     let mut bad = vec![];
+    // every row of every part measured at once (each runs `ccad` on its own), then read in the same order
+    let jobs: Vec<(&Part, &Row)> = PARTS.iter().flat_map(|p| p.rows.iter().map(move |r| (p, r))).collect();
+    let mut measured = checks::par_map(&jobs, |(p, r)| measure(p, r)).into_iter();
     for p in PARTS {
         for row in p.rows {
-            let Some(v) = measure(p, row).filter(|v| v.is_finite()) else {
+            let Some(v) = measured.next().unwrap().filter(|v| v.is_finite()) else {
                 bad.push(format!("{} {}: no measurement", p.name, item_name(&row.item)));
                 continue;
             };

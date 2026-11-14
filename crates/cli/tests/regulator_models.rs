@@ -68,7 +68,7 @@ struct Row {
     /// Where in the data sheet, and its conditions.
     at: &'static str,
     /// The model's value in `unit`.
-    measure: Box<dyn Fn() -> f64>,
+    measure: Box<dyn Fn() -> f64 + Send + Sync>,
     /// Allowed distance from the typ (or the max when only that is given) in `unit`; None = not checked.
     tol: Option<f64>,
 }
@@ -637,7 +637,9 @@ fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRo
     let mut out = String::new();
     let mut part = "";
     let mut tables: Vec<(String, String, Vec<part_lib::model_checks::CheckRow>)> = vec![];
-    for r in rows() {
+    let rows = rows();
+    let values = checks::par_map(&rows, |r| (r.measure)());
+    for (r, v) in rows.iter().zip(values) {
         if r.part != part {
             part = r.part;
             tables.push((part.to_string(), source(part).to_string(), vec![]));
@@ -645,7 +647,6 @@ fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRo
             out += &format!("\n## {part}\n\nデータシート: {ds}\n\n| 項目 | データシート (min / typ / max) | 条件・表 | モデル | 差 |\n|---|---|---|---|---|\n");
         }
         let ds = r.ds.iter().map(|x| x.map(show).unwrap_or_else(|| "—".into())).collect::<Vec<_>>().join(" / ");
-        let v = (r.measure)();
         let target = r.ds[1].or(r.ds[2]);
         let diff = target.map(|t| if v >= t { format!("+{}", show(v - t)) } else { show(v - t) }).unwrap_or_else(|| "—".into());
         out += &format!("| {} | {ds} {u} | {} | {} {u} | {diff} |\n", r.item, r.at, show(v), u = r.unit);
@@ -670,8 +671,9 @@ fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRo
 #[test]
 fn regulator_models_match_their_data_sheets() {
     let mut bad = vec![];
-    for r in rows() {
-        let v = (r.measure)();
+    let rows = rows();
+    let values = checks::par_map(&rows, |r| (r.measure)());
+    for (r, v) in rows.iter().zip(values) {
         let target = r.ds[1].or(r.ds[2]);
         if let (Some(t), Some(tol)) = (target, r.tol)
             && ((v - t).abs() > tol || !v.is_finite())
