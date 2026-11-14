@@ -1,9 +1,9 @@
-"""Writes the bundled transistor models (M9) from their data sheets: 2N3904 (NPN, Gummel-Poon) and the MOSFETs 2N7000 and
-AO3400A (level 1 with the series resistance RD).
+"""Writes the bundled transistor models (M9) from their data sheets: 2N3904 (NPN, Gummel-Poon) and the MOSFETs 2N7000,
+AO3400A and AO3401A (P channel) (level 1 with the series resistance RD).
 
     python tools/gen_transistor_models.py        (needs scipy for the fits)
 
-Every number below was read on 2026-11-12 from the data sheet named next to it, from the tables and from the graphs rendered
+Every number below was read on 2026-11-12 (AO3401A on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs rendered
 as pictures (graph readings: the pixel position of the curve, good to about 1 %). The fits use the simulator's own equations
 (crates/sim-core/src/dc/devices.rs: bjt_eval, mos_eval). docs/model-policy.md says how bundled models are made;
 crates/cli/tests/integration/transistor_models.rs measures the models and writes docs/models/transistors.md and the on-screen tables.
@@ -164,6 +164,20 @@ MOS = {
         gfs=(33.0, 5.0, 5.7),
         desc="Nチャネル MOSFET 30V (SOT-23)。ロジックレベル駆動。データシート (Alpha & Omega) の typ から作った等価モデル (レベル1 + 直列抵抗)",
     ),
+    # P channel: the numbers are the magnitudes (the data sheet writes VGS, ID and VDS negative); the model is a PMOS with VTO < 0
+    "AO3401A_SOT-23": dict(
+        name="AO3401A",
+        pch=True,
+        src="Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)",
+        url="https://www.aosmd.com/res/datasheets/AO3401A.pdf",
+        # VGS(th) typ -0.9 V at ID = -250 uA; RDS(on) typ 41 mohm (-10 V, -4.0 A), 47 (-4.5 V, -3.5 A), 60 (-2.5 V, -2.5 A)
+        vth=(0.9, 250e-6),
+        rds=[(10.0, 4.0, 0.041), (4.5, 3.5, 0.047), (2.5, 2.5, 0.060)],
+        # Ciss 645, Coss 80, Crss 55 pF typ (VDS = -15 V, VGS = 0)
+        caps=(645e-12, 80e-12, 55e-12),
+        gfs=(17.0, 5.0, 4.0),
+        desc="Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。データシート (Alpha & Omega) の typ から作った等価モデル (レベル1 + 直列抵抗)",
+    ),
 }
 
 
@@ -199,7 +213,8 @@ def mos_model(p):
     kp, rd = 10 ** r.x[0], 10 ** r.x[1]
     vto = vth - math.sqrt(2 * ith / kp)
     ciss, coss, crss = p["caps"]
-    text = f".model {p['name']} NMOS(VTO={g(vto)} KP={g(kp)} RD={g(rd)} CGS={g(ciss - crss)} CGD={g(crss)})"
+    kind, sign = ("PMOS", -1) if p.get("pch") else ("NMOS", 1)
+    text = f".model {p['name']} {kind}(VTO={g(sign * vto)} KP={g(kp)} RD={g(rd)} CGS={g(ciss - crss)} CGD={g(crss)})"
     limits = [
         f"データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {p['src']}。データシートとの比べは docs/models/transistors.md。",
         f"レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) ({len(p['rds'])} 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",

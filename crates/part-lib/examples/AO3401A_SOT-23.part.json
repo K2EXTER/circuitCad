@@ -1,7 +1,7 @@
 {
   "name": "AO3401A",
   "category": "MOSFET",
-  "description": "Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。簡易レベル1モデル(パラメータは概算)",
+  "description": "Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。データシート (Alpha & Omega) の typ から作った等価モデル (レベル1 + 直列抵抗)",
   "prefix": "Q",
   "footprint_name": "SOT-23_MOS",
   "pins": [
@@ -54,19 +54,25 @@
     "kind": "model",
     "element": "M",
     "name": "AO3401A",
-    "text": ".model AO3401A PMOS(VTO=-1.0 KP=1.0 LAMBDA=0.03 CGS=500p CGD=60p)",
+    "text": ".model AO3401A PMOS(VTO=-0.8957 KP=27.62 RD=0.03698 CGS=5.9e-10 CGD=5.5e-11)",
     "pins": [
       "3",
       "1",
       "2"
     ],
     "limits": [
-      "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
-      "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
-      "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
-    ]
+      "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。データシートとの比べは docs/models/transistors.md。",
+      "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (3 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+      "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、温度によるオン抵抗の増加、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)"
+    }
   },
   "shops": {
     "lcsc": "C15127"
-  }
+  },
+  "datasheet": "https://www.aosmd.com/res/datasheets/AO3401A.pdf"
 }

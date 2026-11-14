@@ -204,7 +204,7 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
 ")).unwrap();
     };
     let old = legacy_models();
-    assert_eq!(old.len(), 23, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, the diodes 1N4148, 1N4001, 1N4007 and the transistors 2N3904, 2N7000, AO3400A (M9)");
+    assert_eq!(old.len(), 24, "the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, the diodes 1N4148, 1N4001, 1N4007 and the transistors 2N3904, 2N7000, AO3400A, AO3401A (M9)");
     for (name, shipped) in &old {
         assert!(!shipped.texts.is_empty(), "{name}");
         let current: PartDef = example(name);

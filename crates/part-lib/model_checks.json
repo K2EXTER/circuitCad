@@ -284,7 +284,7 @@
   "2N3904": {
     "fingerprint": "6862d94918b5932b",
     "source": "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
-    "date": "2026-11-12",
+    "date": "2026-11-14",
     "rows": [
       {
         "item": "hFE (0.1 mA)",
@@ -435,7 +435,7 @@
   "2N7000": {
     "fingerprint": "846ae3ed157ef44b",
     "source": "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
-    "date": "2026-11-12",
+    "date": "2026-11-14",
     "rows": [
       {
         "item": "しきい値 VGS(th)",
@@ -733,7 +733,7 @@
   "AO3400A": {
     "fingerprint": "aafaa89168260ecf",
     "source": "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。25 °C",
-    "date": "2026-11-12",
+    "date": "2026-11-14",
     "rows": [
       {
         "item": "しきい値 VGS(th)",
@@ -795,6 +795,76 @@
         "target": "50.000 pF",
         "condition": "VGS = 0 (表)",
         "model": "50.000 pF",
+        "diff": "+0.0000 pF",
+        "tested": true
+      }
+    ]
+  },
+  "AO3401A": {
+    "fingerprint": "0b52c9678213ee69",
+    "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "— / -0.9000 / — V",
+        "target": "-0.9000 V",
+        "condition": "VDS = VGS、ID = -0.25 mA (表)",
+        "model": "-0.9000 V",
+        "diff": "+0.0000 V",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = -10 V)",
+        "datasheet": "— / 41.000 / 50.000 mΩ",
+        "target": "41.000 mΩ",
+        "condition": "ID = -4 A (表)",
+        "model": "40.960 mΩ",
+        "diff": "-0.0398 mΩ",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = -4.5 V)",
+        "datasheet": "— / 47.000 / 60.000 mΩ",
+        "target": "47.000 mΩ",
+        "condition": "ID = -3.5 A (表)",
+        "model": "47.075 mΩ",
+        "diff": "+0.0746 mΩ",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = -2.5 V)",
+        "datasheet": "— / 60.000 / 85.000 mΩ",
+        "target": "60.000 mΩ",
+        "condition": "ID = -2.5 A (表)",
+        "model": "59.959 mΩ",
+        "diff": "-0.0407 mΩ",
+        "tested": true
+      },
+      {
+        "item": "gFS",
+        "datasheet": "— / 17.000 / — S",
+        "target": "17.000 S",
+        "condition": "VDS = -5 V、ID = -4 A (表)",
+        "model": "14.865 S",
+        "diff": "-2.135 S",
+        "tested": false
+      },
+      {
+        "item": "Ciss",
+        "datasheet": "— / 645.0 / — pF",
+        "target": "645.0 pF",
+        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
+        "model": "645.0 pF",
+        "diff": "+0.0001 pF",
+        "tested": true
+      },
+      {
+        "item": "Crss",
+        "datasheet": "— / 55.000 / — pF",
+        "target": "55.000 pF",
+        "condition": "VGS = 0 (表)",
+        "model": "55.000 pF",
         "diff": "+0.0000 pF",
         "tested": true
       }

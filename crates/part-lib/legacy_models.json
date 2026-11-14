@@ -203,5 +203,13 @@
   "descriptions": [
    "Nチャネル MOSFET 30V (SOT-23)。ロジックレベル駆動。簡易レベル1モデル(パラメータは概算)"
   ]
+ },
+ "AO3401A_SOT-23": {
+  "texts": [
+   ".model AO3401A PMOS(VTO=-1.0 KP=1.0 LAMBDA=0.03 CGS=500p CGD=60p)"
+  ],
+  "descriptions": [
+   "Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。簡易レベル1モデル(パラメータは概算)"
+  ]
  }
 }

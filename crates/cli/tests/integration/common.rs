@@ -15,7 +15,10 @@ pub struct Flags {
 fn shared_library() -> &'static (std::path::PathBuf, Vec<part_lib::PartDef>, Vec<String>) {
     static LIB: std::sync::OnceLock<(std::path::PathBuf, Vec<part_lib::PartDef>, Vec<String>)> = std::sync::OnceLock::new();
     LIB.get_or_init(|| {
+        // emptied first: the folder outlives the run, and a bundled part already installed there is never written again, so a
+        // part changed since the last run would be read in its old version
         let dir = std::env::temp_dir().join("ccad-test-shared-lib");
+        let _ = std::fs::remove_dir_all(&dir);
         let _ = part_lib::install_examples(&dir);
         let (lib, errors) = part_lib::load_library(&dir);
         (dir, lib, errors)

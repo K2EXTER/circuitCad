@@ -1,4 +1,4 @@
-//! The bundled transistor models (2N3904, 2N7000, AO3400A) measured the way their data sheets measure them, next to the data
+//! The bundled transistor models (2N3904, 2N7000, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
 //! sheets' numbers (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`).
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -88,8 +88,10 @@ fn id_sweep(part: &str, vds: f64, from: f64, to: f64) -> Vec<(f64, f64)> {
 /// fine one over that step finds it (two runs of `ccad`; a bisection took 42 and about 33 s per part). The slope there is that of the
 /// parabola through the three nearest points of the fine sweep (exact for the square law; the points are about 0.5 mV apart).
 fn gfs(part: &str, vds: f64, id: f64) -> f64 {
+    let id = id.abs();
     let cross = |pts: &[(f64, f64)]| pts.windows(2).position(|w| w[0].1 < id && w[1].1 >= id).unwrap_or_else(|| panic!("{part}: ID = {id} A not reached in {:?}..{:?}", pts.first(), pts.last()));
-    let coarse = id_sweep(part, vds, 0.0, 20.0);
+    // the gate goes the way of the drain: up for an N channel, down for a P channel
+    let coarse = id_sweep(part, vds, 0.0, 20.0 * vds.signum());
     let k = cross(&coarse);
     let fine = id_sweep(part, vds, coarse[k].0, coarse[k + 1].0);
     let j = cross(&fine);
@@ -97,7 +99,8 @@ fn gfs(part: &str, vds: f64, id: f64) -> f64 {
     let v = v0 + (id - i0) / (i1 - i0) * (v1 - v0);
     let m = j.clamp(1, fine.len() - 2);
     let ((xa, ya), (xb, yb), (xc, yc)) = (fine[m - 1], fine[m], fine[m + 1]);
-    ya * (2.0 * v - xb - xc) / ((xa - xb) * (xa - xc)) + yb * (2.0 * v - xa - xc) / ((xb - xa) * (xb - xc)) + yc * (2.0 * v - xa - xb) / ((xc - xa) * (xc - xb))
+    // |ID| falls with the gate of a P channel: the transconductance is the size of the slope
+    (ya * (2.0 * v - xb - xc) / ((xa - xb) * (xa - xc)) + yb * (2.0 * v - xa - xc) / ((xb - xa) * (xb - xc)) + yc * (2.0 * v - xa - xb) / ((xc - xa) * (xc - xb))).abs()
 }
 
 struct Row {
@@ -115,6 +118,7 @@ fn source(part: &str) -> &'static str {
     match part {
         "2N3904" => "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
+        "AO3401A" => "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。25 °C",
         _ => "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。25 °C",
     }
 }
@@ -166,9 +170,11 @@ fn rows() -> Vec<Row> {
         tol: Some(0.5),
     });
     // MOSFETs: VGS(th), RDS(on) at each gate voltage of the table, gFS, the gate capacitances
-    let mos: [(&'static str, (f64, f64), &[(f64, f64, f64, f64)], (f64, f64, f64), (f64, f64)); 2] = [
+    // a P channel is measured with the signs of its data sheet: VGS, ID and VDS negative (the same circuits, the sources turned round)
+    let mos: [(&'static str, (f64, f64), &[(f64, f64, f64, f64)], (f64, f64, f64), (f64, f64)); 3] = [
         ("2N7000", (2.1, 1e-3), &[(10.0, 0.5, 1.2, 5.0), (4.5, 0.075, 1.8, 5.3)], (0.32, 10.0, 0.2), (20.0, 4.0)),
         ("AO3400A", (1.05, 250e-6), &[(10.0, 5.7, 18.0e-3, 26.5e-3), (4.5, 5.0, 19.0e-3, 32.0e-3), (2.5, 3.0, 24.0e-3, 48.0e-3)], (33.0, 5.0, 5.7), (630.0, 50.0)),
+        ("AO3401A", (-0.9, -250e-6), &[(-10.0, -4.0, 41.0e-3, 50.0e-3), (-4.5, -3.5, 47.0e-3, 60.0e-3), (-2.5, -2.5, 60.0e-3, 85.0e-3)], (17.0, -5.0, -4.0), (645.0, 55.0)),
     ];
     for (part, (vt, it), points, (gm, gvds, gid), (ciss, crss)) in mos {
         v.push(Row { part, item: "しきい値 VGS(th)".into(), ds: [None, Some(vt), None], unit: "V", at: format!("VDS = VGS、ID = {} mA (表)", it * 1e3), measure: Box::new(move || vth(part, it)), tol: Some(0.05) });
@@ -281,12 +287,12 @@ fn transistor_models_match_their_data_sheets() {
 #[ignore]
 fn write_transistor_model_report() {
     let (body, tables) = report();
-    checks::write(tables, "2026-11-12");
+    checks::write(tables, "2026-11-14");
     let text = format!(
         "# 同梱のトランジスタ・MOSFET のモデルとデータシートの比べ\n\n\
          `crates/cli/tests/integration/transistor_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_transistor_model_report`)。\
          方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_transistor_models.py`(データシートから読んだ値はそこにある)。\n\n\
-         - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12)。グラフの読み取りは 1% ほどの誤差がある。\n\
+         - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12。AO3401A は 2026-11-14)。グラフの読み取りは 1% ほどの誤差がある。\n\
          - 2N3904 の hFE の typ はデータシートに無い。図 15 の相対値に、表の min 100 と max 300(10 mA)の幾何平均 173 を掛けた値と比べる。実物の hFE は 100〜300 と大きく違う。\n\
          - MOSFET はレベル1(2乗則)に直列抵抗 RD を足したもの。オン抵抗としきい値に合わせたので、飽和領域の gFS は合うとは限らない(比べるだけ。2N7000 は 36% 高い)。容量は電圧によらない一定の値。\n\
          - 「差」はモデル − typ(typ が無い行は max)。合格の幅はテストの各行。\n{body}"

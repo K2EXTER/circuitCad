@@ -124,7 +124,7 @@
           "kind": "model",
           "element": "M",
           "name": "AO3401A",
-          "text": ".model AO3401A PMOS(VTO=-1.0 KP=1.0 LAMBDA=0.03 CGS=500p CGD=60p)",
+          "text": ".model AO3401A PMOS(VTO=-0.8957 KP=27.62 RD=0.03698 CGS=5.9e-10 CGD=5.5e-11)",
           "pins": [
             "3",
             "1",
