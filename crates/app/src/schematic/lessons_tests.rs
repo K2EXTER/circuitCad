@@ -731,7 +731,7 @@ fn the_level_shift_lesson_ticks_its_three_steps_and_its_numbers_hold() {
     let (_, d_hi, d_rise) = look(&e, "V(D33)");
     let (l_lo, l_hi, l_rise) = look(&e, "V(L)");
     assert!((3.1..3.35).contains(&d_hi) && d_rise < 50e-9, "divider {d_hi} {d_rise}");
-    assert!(l_lo < 0.1 && (3.25..3.35).contains(&l_hi) && (300e-9..700e-9).contains(&l_rise), "BSS138 {l_lo} {l_hi} {l_rise}");
+    assert!(l_lo < 0.1 && (3.25..3.35).contains(&l_hi) && (200e-9..450e-9).contains(&l_rise), "BSS138 {l_lo} {l_hi} {l_rise}");
     set_value(&mut e, "R3", "10k");
     e.run_tran();
     e.update_lesson();

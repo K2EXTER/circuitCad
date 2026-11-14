@@ -1,9 +1,9 @@
 """Writes the bundled transistor models (M9) from their data sheets: 2N3904 and 2N3906 (NPN, PNP: Gummel-Poon) and the MOSFETs 2N7000,
-AO3400A and AO3401A (P channel) (level 1 with the series resistance RD).
+BSS138, AO3400A and AO3401A (P channel) (level 1 with the series resistance RD).
 
     python tools/gen_transistor_models.py        (needs scipy for the fits)
 
-Every number below was read on 2026-11-12 (AO3401A and 2N3906 on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs rendered
+Every number below was read on 2026-11-12 (AO3401A, 2N3906 and BSS138 on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs rendered
 as pictures (graph readings: the pixel position of the curve, good to about 1 %). The fits use the simulator's own equations
 (crates/sim-core/src/dc/devices.rs: bjt_eval, mos_eval). docs/model-policy.md says how bundled models are made;
 crates/cli/tests/integration/transistor_models.rs measures the models and writes docs/models/transistors.md and the on-screen tables.
@@ -190,6 +190,18 @@ MOS = {
         caps=(20e-12, 11e-12, 4e-12),
         gfs=(0.32, 10.0, 0.2),
         desc="Nチャネル MOSFET 60V 200mA (TO-92)。データシート (onsemi) の typ から作った等価モデル (レベル1 + 直列抵抗)",
+    ),
+    "BSS138_SOT-23": dict(
+        name="BSS138",
+        src="onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)",
+        url="https://www.onsemi.com/pdf/datasheet/bss138-d.pdf",
+        # VGS(th) typ 1.3 V at ID = 1 mA (VDS = VGS); RDS(on) typ 0.7 ohm (10 V) and 1.0 ohm (4.5 V), both at 0.22 A
+        vth=(1.3, 1e-3),
+        rds=[(10.0, 0.22, 0.7), (4.5, 0.22, 1.0)],
+        # Ciss 27, Coss 13, Crss 6 pF typ (VDS = 25 V, VGS = 0)
+        caps=(27e-12, 13e-12, 6e-12),
+        gfs=(0.5, 10.0, 0.22),
+        desc="N チャネル MOSFET 50V 0.22A (SOT-23, ピン1=G 2=S 3=D)。ロジックレベル駆動、レベル変換によく使われます。データシート (onsemi) の typ から作った等価モデル (レベル1 + 直列抵抗)",
     ),
     "AO3400A_SOT-23": dict(
         name="AO3400A",

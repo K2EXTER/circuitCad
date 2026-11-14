@@ -1,4 +1,4 @@
-//! The bundled transistor models (2N3904, 2N3906, 2N7000, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
+//! The bundled transistor models (2N3904, 2N3906, 2N7000, BSS138, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
 //! sheets' numbers (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`).
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -185,6 +185,7 @@ fn source(part: &str) -> &'static str {
         "2N3904" => "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
         "2N3906" => "onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)。25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
+        "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
         "AO3401A" => "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。25 °C",
         _ => "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。25 °C",
     }
@@ -251,8 +252,9 @@ net CO Q1.C RC.1
     }
     // MOSFETs: VGS(th), RDS(on) at each gate voltage of the table, gFS, the gate capacitances
     // a P channel is measured with the signs of its data sheet: VGS, ID and VDS negative (the same circuits, the sources turned round)
-    let mos: [(&'static str, (f64, f64), &[(f64, f64, f64, f64)], (f64, f64, f64), (f64, f64)); 3] = [
+    let mos: [(&'static str, (f64, f64), &[(f64, f64, f64, f64)], (f64, f64, f64), (f64, f64)); 4] = [
         ("2N7000", (2.1, 1e-3), &[(10.0, 0.5, 1.2, 5.0), (4.5, 0.075, 1.8, 5.3)], (0.32, 10.0, 0.2), (20.0, 4.0)),
+        ("BSS138", (1.3, 1e-3), &[(10.0, 0.22, 0.7, 3.5), (4.5, 0.22, 1.0, 6.0)], (0.5, 10.0, 0.22), (27.0, 6.0)),
         ("AO3400A", (1.05, 250e-6), &[(10.0, 5.7, 18.0e-3, 26.5e-3), (4.5, 5.0, 19.0e-3, 32.0e-3), (2.5, 3.0, 24.0e-3, 48.0e-3)], (33.0, 5.0, 5.7), (630.0, 50.0)),
         ("AO3401A", (-0.9, -250e-6), &[(-10.0, -4.0, 41.0e-3, 50.0e-3), (-4.5, -3.5, 47.0e-3, 60.0e-3), (-2.5, -2.5, 60.0e-3, 85.0e-3)], (17.0, -5.0, -4.0), (645.0, 55.0)),
     ];

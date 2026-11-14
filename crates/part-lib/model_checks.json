@@ -1215,6 +1215,67 @@
       }
     ]
   },
+  "BSS138": {
+    "fingerprint": "7ac43a957d2369ed",
+    "source": "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "— / 1.300 / — V",
+        "target": "1.300 V",
+        "condition": "VDS = VGS、ID = 1 mA (表)",
+        "model": "1.300 V",
+        "diff": "+0.0001 V",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = 10 V)",
+        "datasheet": "— / 0.7000 / 3.500 Ω",
+        "target": "0.7000 Ω",
+        "condition": "ID = 0.22 A (表)",
+        "model": "0.7000 Ω",
+        "diff": "-0.0000 Ω",
+        "tested": true
+      },
+      {
+        "item": "RDS(on) (VGS = 4.5 V)",
+        "datasheet": "— / 1.000 / 6.000 Ω",
+        "target": "1.000 Ω",
+        "condition": "ID = 0.22 A (表)",
+        "model": "1.000 Ω",
+        "diff": "+0.0000 Ω",
+        "tested": true
+      },
+      {
+        "item": "gFS",
+        "datasheet": "— / 0.5000 / — S",
+        "target": "0.5000 S",
+        "condition": "VDS = 10 V、ID = 0.22 A (表)",
+        "model": "0.5385 S",
+        "diff": "+0.0385 S",
+        "tested": false
+      },
+      {
+        "item": "Ciss",
+        "datasheet": "— / 27.000 / — pF",
+        "target": "27.000 pF",
+        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
+        "model": "27.000 pF",
+        "diff": "+0.0000 pF",
+        "tested": true
+      },
+      {
+        "item": "Crss",
+        "datasheet": "— / 6.000 / — pF",
+        "target": "6.000 pF",
+        "condition": "VGS = 0 (表)",
+        "model": "6.000 pF",
+        "diff": "+0.0000 pF",
+        "tested": true
+      }
+    ]
+  },
   "L78L05": {
     "fingerprint": "10e65ae18a35ee67",
     "source": "TI UA78L データシート SLVS010X (2023-06 改訂) の 6.7 節 (UA78L05、新しいチップ)。VI = 10 V、IO = 40 mA",
