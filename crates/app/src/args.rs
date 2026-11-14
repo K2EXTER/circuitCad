@@ -62,6 +62,15 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(t) = args.get(i + 1) {
             app.sch.find_in_form_pdf(t);
         }
+    // --kicad-lib <file>: the "KiCadから取り込み" window on that library
+    if let Some(i) = args.iter().position(|a| a == "--kicad-lib")
+        && let Some(f) = args.get(i + 1) {
+            app.sch.open_kicad_import_file(std::path::Path::new(f));
+        }
+    // --sim-settings: the "シミュレーション設定" window
+    if args.iter().any(|a| a == "--sim-settings") {
+        app.sch.open_sim_settings();
+    }
     if let Some(i) = args.iter().position(|a| a == "--form-table")
         && let Some(t) = args.get(i + 1) {
             app.sch.table_in_form_pdf(t);

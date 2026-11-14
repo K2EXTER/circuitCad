@@ -22,6 +22,11 @@ fn pick(ui: &mut egui::Ui, id: &str, label: &str, value: &mut f64, items: &[(f64
 
 impl SchEditor {
     /// Applies the settings to the solver (every frame, so analyses always see them) and shows the window.
+    /// Opens the "シミュレーション設定" window (`--sim-settings`).
+    pub fn open_sim_settings(&mut self) {
+        self.show_sim_opts = true;
+    }
+
     pub fn settings_window(&mut self, ctx: &egui::Context) {
         set_options(self.sim_opts);
         if !self.show_sim_opts {
@@ -30,15 +35,20 @@ impl SchEditor {
         let mut open = true;
         let mut o = self.sim_opts;
         egui::Window::new(i18n::tr("シミュレーション設定")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(380.0).show(ctx, |ui| {
+            // the presets: the one the values are now (if any) is shown chosen; a value changed by hand leaves none chosen
+            let presets = [
+                ("標準", "初期値に戻します", SimOptions::default()),
+                ("収束しやすく", "許容誤差をゆるめ、反復回数を増やし、gmin を大きくします。「収束しませんでした」と出るときに試しましょう。精度は少し落ちます", SimOptions { reltol: 1e-4, vntol: 1e-6, abstol: 1e-9, gmin: 1e-9, max_iter: 500, ..SimOptions::default() }),
+                ("高精度", "許容誤差を厳しくします。計算が遅くなり、収束しにくくなることもあります", SimOptions { reltol: 1e-9, vntol: 1e-10, abstol: 1e-15, gmin: 1e-14, max_iter: 150, ..SimOptions::default() }),
+            ];
             ui.horizontal(|ui| {
-                if ui.button(i18n::tr("標準")).on_hover_text(i18n::tr("初期値に戻します")).clicked() {
-                    o = SimOptions::default();
+                for (name, tip, p) in presets {
+                    if ui.selectable_label(o == p, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+                        o = p;
+                    }
                 }
-                if ui.button(i18n::tr("収束しやすく")).on_hover_text(i18n::tr("許容誤差をゆるめ、反復回数を増やし、gmin を大きくします。「収束しませんでした」と出るときに試しましょう。精度は少し落ちます")).clicked() {
-                    o = SimOptions { reltol: 1e-4, vntol: 1e-6, abstol: 1e-9, gmin: 1e-9, max_iter: 500, ..SimOptions::default() };
-                }
-                if ui.button(i18n::tr("高精度")).on_hover_text(i18n::tr("許容誤差を厳しくします。計算が遅くなり、収束しにくくなることもあります")).clicked() {
-                    o = SimOptions { reltol: 1e-9, vntol: 1e-10, abstol: 1e-15, gmin: 1e-14, max_iter: 150, ..SimOptions::default() };
+                if !presets.iter().any(|(_, _, p)| *p == o) {
+                    ui.weak(i18n::tr("(手で変えた値)")).on_hover_text(i18n::tr("どのまとめ設定とも違う値です。左のボタンで、まとめて変えられます"));
                 }
             });
             ui.separator();

@@ -41,6 +41,12 @@ impl KicadImport {
 impl SchEditor {
     pub(super) fn open_kicad_import(&mut self) {
         let Some(p) = rfd::FileDialog::new().add_filter("KiCad のライブラリ (.kicad_sym / .lib) か、メーカーの zip", &["kicad_sym", "lib", "zip"]).pick_file() else { return };
+        self.open_kicad_import_file(&p);
+    }
+
+    /// Opens the window on a KiCad library file (`--kicad-lib <file>` for screenshots, and the file dialog above).
+    pub fn open_kicad_import_file(&mut self, p: &std::path::Path) {
+        let p = p.to_path_buf();
         let is_zip = p.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip"));
         let parsed = if is_zip {
             kicad::read_package(&p)
@@ -87,7 +93,7 @@ impl SchEditor {
             ui.small(i18n::tr("ピン配置とフットプリントのパッドを取り込みます (zip なら、中の 3D モデルも)。KiCad の記号の絵とシミュレーションモデルは取り込みません (記号は箱になります)。"));
             ui.horizontal(|ui| {
                 ui.label(i18n::tr("検索"));
-                ui.text_edit_singleline(&mut k.filter).on_hover_text(i18n::tr("名前・説明に含まれる文字で絞り込みます"));
+                ui.add(egui::TextEdit::singleline(&mut k.filter).hint_text(i18n::tr("例: LM358、OPAMP"))).on_hover_text(i18n::tr("名前・説明に含まれる文字で絞り込みます"));
             });
             let f = k.filter.to_lowercase();
             egui::ScrollArea::vertical().max_height(220.0).id_salt("kicad_list").show(ui, |ui| {
@@ -103,6 +109,10 @@ impl SchEditor {
             });
             if let Some(i) = clicked {
                 k.select(i);
+            }
+            if k.sel.is_none() {
+                // the list reads as plain text: say that a part is to be picked from it
+                ui.colored_label(crate::theme::INFO, i18n::tr("↑ 取り込む部品を、一覧から1つ選んでください"));
             }
             if let Some(s) = k.sel.and_then(|i| k.syms.get(i)) {
                 ui.separator();
@@ -158,7 +168,12 @@ impl SchEditor {
                     crate::part_form::glyph_combo(ui, "kicad_glyph", &mut k.glyph, sym.as_ref());
                 });
             }
-            if ui.add_enabled(k.sel.is_some(), egui::Button::new(i18n::tr("ライブラリに追加"))).on_hover_text(i18n::tr("選んだ部品を、ライブラリに保存します")).clicked() {
+            if ui
+                .add_enabled(k.sel.is_some(), egui::Button::new(i18n::tr("ライブラリに追加")))
+                .on_hover_text(i18n::tr("選んだ部品を、ライブラリに保存します"))
+                .on_disabled_hover_text(i18n::tr("まだ部品を選んでいません。上の一覧から、取り込む部品を1つ選んでください"))
+                .clicked()
+            {
                 add = true;
             }
             if let Some(d) = &k.done {
