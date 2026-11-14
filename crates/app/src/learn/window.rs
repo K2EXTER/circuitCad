@@ -276,21 +276,36 @@ fn lesson_list(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next
     action
 }
 
-/// The map of a tree path: one row per level, an item per box, a line from each prerequisite down to what needs it.
+/// The map of a tree path: one row per level, an item per box, a line from each prerequisite down to what needs it. The boxes of a
+/// level are put in the order that crosses the fewest lines (`map_order`), the lines are curves that leave and enter their boxes
+/// straight down, and the lines of the box under the pointer are drawn bright, so which lesson leads to which can be followed.
 fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_ids: &[&str]) -> Option<Action> {
     const W: f32 = 196.0;
     const H: f32 = 60.0;
     const GX: f32 = 12.0;
-    const GY: f32 = 26.0;
+    const GY: f32 = 34.0;
     // room above the first row for the badge of the recommended box, which sits on the top edge of its box
     const TOP: f32 = 22.0;
     let all: Vec<&'static Item> = items(path).collect();
     let levels: Vec<usize> = all.iter().map(|i| level(path, i, 0)).collect();
     let rows_of_level = levels.iter().max().copied().unwrap_or(0) + 1;
+    // the lines: (prerequisite, item) by index in `all`
+    let edges: Vec<(usize, usize)> = all
+        .iter()
+        .enumerate()
+        .flat_map(|(k, item)| requirements(path, item).into_iter().filter_map(|p| all.iter().position(|i| i.id == p.id)).map(move |j| (j, k)).collect::<Vec<_>>())
+        .collect();
+    let order = map_order(&levels, rows_of_level, &edges);
     // a level with more boxes than fit in the window's width goes on to the next row, so the map never needs a sideways scroll
     let max_cols = (((ui.available_width() + GX) / (W + GX)).floor() as usize).max(1);
     let mut in_level = vec![0usize; rows_of_level];
-    let index_in_level: Vec<usize> = levels.iter().map(|&l| { in_level[l] += 1; in_level[l] - 1 }).collect();
+    let mut index_in_level = vec![0usize; all.len()];
+    for (l, ks) in order.iter().enumerate() {
+        for (i, &k) in ks.iter().enumerate() {
+            index_in_level[k] = i;
+        }
+        in_level[l] = ks.len();
+    }
     let mut first_row = vec![0usize; rows_of_level];
     let mut rows = 0;
     for l in 0..rows_of_level {
@@ -314,13 +329,22 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
             egui::Rect::from_min_size(area.min + egui::vec2(left, TOP + row as f32 * (H + GY)), egui::vec2(W, H))
         })
         .collect();
-    let line = ui.visuals().widgets.noninteractive.fg_stroke.color;
-    for (k, item) in all.iter().enumerate() {
-        for p in requirements(path, item) {
-            if let Some(j) = all.iter().position(|i| i.id == p.id) {
-                ui.painter().line_segment([boxes[j].center_bottom(), boxes[k].center_top()], egui::Stroke::new(1.0, line));
-            }
-        }
+    let hovered = ui.ctx().pointer_hover_pos().and_then(|p| boxes.iter().position(|b| b.contains(p)));
+    let line = ui.visuals().widgets.noninteractive.fg_stroke.color.gamma_multiply(0.7);
+    // the lines of the hovered box last, over the others
+    let mut drawn: Vec<&(usize, usize)> = edges.iter().collect();
+    drawn.sort_by_key(|(j, k)| hovered.is_some_and(|h| h == *j || h == *k));
+    for &&(j, k) in &drawn {
+        let lit = hovered.is_some_and(|h| h == j || h == k);
+        let (from, to) = (boxes[j].center_bottom(), boxes[k].center_top());
+        let bend = ((to.y - from.y) * 0.5).max(12.0);
+        let curve = egui::epaint::CubicBezierShape::from_points_stroke(
+            [from, from + egui::vec2(0.0, bend), to - egui::vec2(0.0, bend), to],
+            false,
+            Color32::TRANSPARENT,
+            egui::Stroke::new(if lit { 2.5 } else { 1.0 }, if lit { crate::theme::HIGHLIGHT } else { line }),
+        );
+        ui.painter().add(curve);
     }
     let mut action = None;
     // the one "次のおすすめ" the line above the map names
@@ -342,7 +366,9 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         let width = if is_recommended { 3.5 } else if next_ids.contains(&item.id) { 2.0 } else { 1.0 };
         painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(width, if is_recommended { crate::theme::HIGHLIGHT } else { stroke }), egui::StrokeKind::Inside);
         let galley = painter.layout(i18n::tr(item.title).to_string(), egui::FontId::proportional(14.0), text, W - 10.0);
-        painter.galley(boxes[k].min + egui::vec2(5.0, 4.0), galley, text);
+        // the title in the middle of its box
+        let at = boxes[k].center() - galley.size() / 2.0;
+        painter.galley(egui::pos2(at.x.max(boxes[k].min.x + 5.0), at.y.max(boxes[k].min.y + 4.0)), galley, text);
         if is_recommended {
             // a badge on the top edge: this is the one to take next
             let badge = egui::Rect::from_min_size(boxes[k].right_top() + egui::vec2(-80.0, -19.0), egui::vec2(78.0, 18.0));
@@ -355,4 +381,101 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         }
     }
     action
+}
+
+/// The order of the boxes in each level of a map (indices of the items), chosen to cross few lines: each level in turn is sorted by
+/// the mean place of the boxes it is joined to in the levels above (then below), a few times over, and the order with the fewest
+/// crossings is kept (the barycentre heuristic of layered drawings).
+fn map_order(levels: &[usize], n_levels: usize, edges: &[(usize, usize)]) -> Vec<Vec<usize>> {
+    let mut order: Vec<Vec<usize>> = (0..n_levels).map(|l| (0..levels.len()).filter(|&k| levels[k] == l).collect()).collect();
+    // where a box sits across its level, 0..1
+    let places = |order: &[Vec<usize>]| -> Vec<f64> {
+        let mut at = vec![0.0; levels.len()];
+        for ks in order {
+            for (i, &k) in ks.iter().enumerate() {
+                at[k] = (i as f64 + 0.5) / ks.len() as f64;
+            }
+        }
+        at
+    };
+    let crossings = |order: &[Vec<usize>]| map_crossings(levels, edges, order);
+    let mut best = (crossings(&order), order.clone());
+    for _ in 0..12 {
+        for down in [true, false] {
+            let ls: Vec<usize> = if down { (1..n_levels).collect() } else { (0..n_levels.saturating_sub(1)).rev().collect() };
+            for l in ls {
+                let at = places(&order);
+                let key = |k: usize| -> f64 {
+                    // the boxes it is joined to above (going down) or below (going up)
+                    let joined: Vec<f64> = edges
+                        .iter()
+                        .filter_map(|&(j, i)| if down && i == k && levels[j] < l { Some(at[j]) } else if !down && j == k && levels[i] > l { Some(at[i]) } else { None })
+                        .collect();
+                    if joined.is_empty() { at[k] } else { joined.iter().sum::<f64>() / joined.len() as f64 }
+                };
+                let mut keyed: Vec<(f64, usize)> = order[l].iter().map(|&k| (key(k), k)).collect();
+                keyed.sort_by(|a, b| a.0.total_cmp(&b.0));
+                order[l] = keyed.into_iter().map(|(_, k)| k).collect();
+            }
+            let c = crossings(&order);
+            if c < best.0 {
+                best = (c, order.clone());
+            }
+        }
+    }
+    best.1
+}
+
+/// How many lines of a map cross (straight lines between the places of the boxes in their levels).
+fn map_crossings(levels: &[usize], edges: &[(usize, usize)], order: &[Vec<usize>]) -> usize {
+    let mut at = vec![0.0; levels.len()];
+    for ks in order {
+        for (i, &k) in ks.iter().enumerate() {
+            at[k] = (i as f64 + 0.5) / ks.len() as f64;
+        }
+    }
+    let seg = |(j, k): (usize, usize)| ((at[j], levels[j] as f64), (at[k], levels[k] as f64));
+    let mut n = 0;
+    for (a, &e) in edges.iter().enumerate() {
+        for &f in &edges[a + 1..] {
+            if e.0 == f.0 || e.1 == f.1 || e.0 == f.1 || e.1 == f.0 {
+                continue;
+            }
+            let ((x1, y1), (x2, y2)) = seg(e);
+            let ((x3, y3), (x4, y4)) = seg(f);
+            let side = |ax: f64, ay: f64, bx: f64, by: f64, cx: f64, cy: f64| ((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)).signum();
+            if side(x1, y1, x2, y2, x3, y3) * side(x1, y1, x2, y2, x4, y4) < 0.0 && side(x3, y3, x4, y4, x1, y1) * side(x3, y3, x4, y4, x2, y2) < 0.0 {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+#[cfg(test)]
+mod map_tests {
+    use super::*;
+
+    /// The order of every tree path's map crosses no more lines than the order the items are listed in.
+    #[test]
+    fn the_map_order_crosses_no_more_lines_than_the_list() {
+        for path in crate::learn::PATHS.iter() {
+            let all: Vec<&'static Item> = items(path).collect();
+            let levels: Vec<usize> = all.iter().map(|i| level(path, i, 0)).collect();
+            let n = levels.iter().max().copied().unwrap_or(0) + 1;
+            let edges: Vec<(usize, usize)> = all
+                .iter()
+                .enumerate()
+                .flat_map(|(k, item)| requirements(path, item).into_iter().filter_map(|p| all.iter().position(|i| i.id == p.id)).map(move |j| (j, k)).collect::<Vec<_>>())
+                .collect();
+            let listed: Vec<Vec<usize>> = (0..n).map(|l| (0..levels.len()).filter(|&k| levels[k] == l).collect()).collect();
+            let ordered = map_order(&levels, n, &edges);
+            // every item once, each in its own level
+            let mut seen: Vec<usize> = ordered.iter().flatten().copied().collect();
+            seen.sort();
+            assert_eq!(seen, (0..all.len()).collect::<Vec<_>>(), "{}", path.id);
+            assert!(ordered.iter().enumerate().all(|(l, ks)| ks.iter().all(|&k| levels[k] == l)));
+            assert!(map_crossings(&levels, &edges, &ordered) <= map_crossings(&levels, &edges, &listed), "{}", path.id);
+        }
+    }
 }

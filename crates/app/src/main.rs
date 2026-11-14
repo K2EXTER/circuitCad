@@ -694,7 +694,7 @@ fn main() -> eframe::Result {
             if !opens_something {
                 app.look_for_recovery();
             }
-            app.welcome = !opens_something && app.recovery.is_none() && app.progress.needs_welcome();
+            app.welcome = app.welcome || !opens_something && app.recovery.is_none() && app.progress.needs_welcome();
             Ok(Box::new(app))
         }),
     );

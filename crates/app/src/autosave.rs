@@ -127,7 +127,28 @@ impl App {
                 (true, false) => "回路図",
                 _ => "基板",
             };
+            // wide enough for the whole title (the window takes the width of its text, and the title was cut short)
+            ui.set_min_width(440.0);
             ui.label(i18n::trf!("前回、{what}を保存しないまま終了したようです(自動保存は{})。", found.age_text()));
+            // which work it is: the files it was opened from (a new one had no name yet)
+            let name = |p: &Option<PathBuf>| p.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned());
+            egui::Grid::new("recovery_files").num_columns(2).spacing([12.0, 2.0]).show(ui, |ui| {
+                if let Some(p) = name(&found.project) {
+                    ui.label(i18n::tr("プロジェクト"));
+                    ui.strong(p);
+                    ui.end_row();
+                }
+                if found.sch {
+                    ui.label(i18n::tr("回路図"));
+                    ui.strong(name(&found.sch_path).unwrap_or_else(|| i18n::tr("(まだ名前を付けていない新しい回路図)").to_string()));
+                    ui.end_row();
+                }
+                if found.board {
+                    ui.label(i18n::tr("基板"));
+                    ui.strong(name(&found.board_path).unwrap_or_else(|| i18n::tr("(まだ名前を付けていない新しい基板)").to_string()));
+                    ui.end_row();
+                }
+            });
             ui.label(i18n::tr("復元すると、その続きから作業できます。"));
             ui.horizontal(|ui| {
                 if ui.button(i18n::tr("復元する")).on_hover_text(i18n::tr("自動保存したものを開きます。開いたあと、いつもどおり保存してください")).clicked() {

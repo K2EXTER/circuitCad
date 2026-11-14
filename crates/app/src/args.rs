@@ -79,6 +79,19 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(t) = args.get(i + 1) {
             app.sch.pick_in_form_pdf(t);
         }
+    // --welcome: the first-launch card (it is up only on a first launch with no arguments)
+    if args.iter().any(|a| a == "--welcome") {
+        app.welcome = true;
+    }
+    // --recovery-demo: the question about an unsaved copy, with a made-up copy (the real autosave folder is not read or touched)
+    if args.iter().any(|a| a == "--recovery-demo") {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        app.recovery = Some(crate::autosave::Found { sch: true, board: true, sch_path: Some("led_board.schjson".into()), board_path: None, project: None, saved_at: now.saturating_sub(300) });
+    }
+    // --title-block: the "図枠" window
+    if args.iter().any(|a| a == "--title-block") {
+        app.sch.open_title_block();
+    }
     if args.iter().any(|a| a == "--measure-guide") {
         app.measure.open = true;
     }
