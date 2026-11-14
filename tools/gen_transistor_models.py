@@ -1,9 +1,9 @@
-"""Writes the bundled transistor models (M9) from their data sheets: 2N3904 (NPN, Gummel-Poon) and the MOSFETs 2N7000,
+"""Writes the bundled transistor models (M9) from their data sheets: 2N3904 and 2N3906 (NPN, PNP: Gummel-Poon) and the MOSFETs 2N7000,
 AO3400A and AO3401A (P channel) (level 1 with the series resistance RD).
 
     python tools/gen_transistor_models.py        (needs scipy for the fits)
 
-Every number below was read on 2026-11-12 (AO3401A on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs rendered
+Every number below was read on 2026-11-12 (AO3401A and 2N3906 on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs rendered
 as pictures (graph readings: the pixel position of the curve, good to about 1 %). The fits use the simulator's own equations
 (crates/sim-core/src/dc/devices.rs: bjt_eval, mos_eval). docs/model-policy.md says how bundled models are made;
 crates/cli/tests/integration/transistor_models.rs measures the models and writes docs/models/transistors.md and the on-screen tables.
@@ -17,25 +17,60 @@ from scipy.optimize import fsolve, least_squares, minimize
 EX = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "crates", "part-lib", "examples")
 VT = 0.025865
 
-# ------------------------------------------------------------------ 2N3904: onsemi 2N3903/D Rev. 9 (2021-08), 25 C
-BJT_SRC = "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)"
-# Figure 15 (DC current gain, normalised, VCE = 1 V, 25 C). The data sheet has no typical hFE: the curve's peak is placed at
-# 173, the geometric mean of the table's min 100 and max 300 at 10 mA (the table's min at 0.1 / 1 / 50 / 100 mA stay below it)
-HFE_PEAK = 173.0
-HFE_NORM = [(0.1e-3, 0.443), (0.2e-3, 0.538), (0.5e-3, 0.676), (1e-3, 0.773), (2e-3, 0.868), (5e-3, 0.979), (10e-3, 0.988), (20e-3, 0.859), (50e-3, 0.493), (100e-3, 0.27)]
-# Figure 17 ("ON" voltages, 25 C). Its printed axis labels sit off the grid lines; the grid lines are a plain log axis from
-# 1 to 200 mA and were used. Below 5 mA the drawn VBE curve is flatter than any junction can be, so it is not used.
-VBE_ON = [(5e-3, 0.684), (10e-3, 0.706), (20e-3, 0.738), (50e-3, 0.79), (100e-3, 0.869)]
-VBE_SAT = [(10e-3, 0.745), (20e-3, 0.787), (50e-3, 0.848), (100e-3, 0.927)]
-VCE_SAT = [(20e-3, 0.117), (50e-3, 0.194), (100e-3, 0.36)]
-# Figure 3 (capacitance, 25 C): Cibo (emitter-base, collector open), Cobo (collector-base, emitter open)
-CIBO = [(0.1, 4.36e-12), (0.2, 4.24e-12), (0.5, 3.76e-12), (1.0, 3.30e-12), (2.0, 2.89e-12), (3.0, 2.67e-12), (5.0, 2.41e-12)]
-COBO = [(0.1, 3.55e-12), (0.2, 3.46e-12), (0.5, 3.18e-12), (1.0, 2.78e-12), (2.0, 2.39e-12), (5.0, 1.96e-12), (10.0, 1.69e-12), (20.0, 1.48e-12), (30.0, 1.39e-12)]
-# fT min 300 MHz (IC = 10 mA, VCE = 20 V): TF = 1 / (2 pi fT) (no typ is given: the model is as slow as the min allows)
-FT_MIN = 300e6
-# hoe 1 to 40 umho at IC = 1 mA, VCE = 10 V: VAF = IC / hoe - VCE with the geometric mean 6.3 umho
-VAF = round(1e-3 / math.sqrt(1e-6 * 40e-6) - 10.0, -1)
+# ------------------------------------------------------------------ bipolar transistors (Gummel-Poon), 25 C
+# Per part: hfe_norm (the normalised DC current gain curve, VCE = 1 V) scaled by hfe_peak; vbe_on (VBE at VCE = 1 V),
+# vbe_sat and vce_sat (IC/IB = 10) from the "ON" voltages graph; cibo / cobo (pF at the reverse voltage) from the capacitance
+# graph; ft_min (no typ is given: the model is as slow as the min allows, TF = 1 / (2 pi fT)); hoe (min, max at IC = 1 mA,
+# VCE = 10 V: VAF = IC / hoe - VCE with the geometric mean). A PNP is fitted with magnitudes (the equations are the same).
+BJT = {
+    "2N3904_TO-92": dict(
+        name="2N3904",
+        src="onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)",
+        url="https://www.onsemi.com/pdf/datasheet/2n3903-d.pdf",
+        desc="NPN 汎用トランジスタ (TO-92, ピン1=E 2=B 3=C)。データシート (onsemi) の表と代表特性から作った等価モデル",
+        figs=("図 15", "図 17", "図 3"),
+        # Figure 15. The data sheet has no typical hFE: the curve's peak is placed at 173, the geometric mean of the table's
+        # min 100 and max 300 at 10 mA (the table's min at 0.1 / 1 / 50 / 100 mA stay below it)
+        hfe_peak=173.0,
+        hfe_norm=[(0.1e-3, 0.443), (0.2e-3, 0.538), (0.5e-3, 0.676), (1e-3, 0.773), (2e-3, 0.868), (5e-3, 0.979), (10e-3, 0.988), (20e-3, 0.859), (50e-3, 0.493), (100e-3, 0.27)],
+        # Figure 17. Its printed axis labels sit off the grid lines; the grid lines are a plain log axis from 1 to 200 mA and
+        # were used. Below 5 mA the drawn VBE curve is flatter than any junction can be, so it is not used.
+        vbe_on=[(5e-3, 0.684), (10e-3, 0.706), (20e-3, 0.738), (50e-3, 0.79), (100e-3, 0.869)],
+        vbe_sat=[(10e-3, 0.745), (20e-3, 0.787), (50e-3, 0.848), (100e-3, 0.927)],
+        vce_sat=[(20e-3, 0.117), (50e-3, 0.194), (100e-3, 0.36)],
+        # Figure 3: Cibo (emitter-base, collector open), Cobo (collector-base, emitter open)
+        cibo=[(0.1, 4.36e-12), (0.2, 4.24e-12), (0.5, 3.76e-12), (1.0, 3.30e-12), (2.0, 2.89e-12), (3.0, 2.67e-12), (5.0, 2.41e-12)],
+        cobo=[(0.1, 3.55e-12), (0.2, 3.46e-12), (0.5, 3.18e-12), (1.0, 2.78e-12), (2.0, 2.39e-12), (5.0, 1.96e-12), (10.0, 1.69e-12), (20.0, 1.48e-12), (30.0, 1.39e-12)],
+        ft_min=300e6,
+        hoe=(1e-6, 40e-6),
+    ),
+    "2N3906_TO-92": dict(
+        name="2N3906",
+        pnp=True,
+        src="onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)",
+        url="https://www.onsemi.com/pdf/datasheet/2n3906-d.pdf",
+        desc="PNP 汎用トランジスタ (TO-92, ピン1=E 2=B 3=C)。データシート (onsemi) の表と代表特性から作った等価モデル",
+        figs=("図 13", "図 15", "図 3"),
+        # Figure 13 (read 2026-11-14). As for the 2N3904, no typical hFE: the peak (7 to 10 mA) is placed at 173, the geometric
+        # mean of the table's min 100 and max 300 at 10 mA (the table's min 60 / 80 / 60 / 30 at 0.1 / 1 / 50 / 100 mA stay below)
+        hfe_peak=173.0,
+        hfe_norm=[(0.1e-3, 0.774), (0.2e-3, 0.806), (0.5e-3, 0.854), (1e-3, 0.883), (2e-3, 0.921), (5e-3, 0.971), (10e-3, 0.988), (20e-3, 0.936), (50e-3, 0.511), (100e-3, 0.22)],
+        # Figure 15. Its printed axis labels (1, 2, 5, 10, 20, 50, 100, 200 mA) sit on grid lines, but the grid lines between
+        # them are not a plain log axis: the current is read on a log scale between the two nearest labels.
+        vbe_on=[(5e-3, 0.71), (10e-3, 0.727), (20e-3, 0.756), (50e-3, 0.81), (100e-3, 0.868)],
+        vbe_sat=[(10e-3, 0.757), (20e-3, 0.796), (50e-3, 0.85), (100e-3, 0.903)],
+        vce_sat=[(20e-3, 0.1), (50e-3, 0.136), (100e-3, 0.245)],
+        # Figure 3: the two curves meet above about 4 V; the one that goes on to 40 V is Cobo (VEBO is 5 V)
+        cibo=[(0.1, 6.05e-12), (0.2, 5.53e-12), (0.5, 4.72e-12), (1.0, 4.24e-12), (2.0, 3.78e-12), (3.0, 3.59e-12)],
+        cobo=[(0.1, 6.48e-12), (0.2, 6.04e-12), (0.5, 5.21e-12), (1.0, 4.57e-12), (2.0, 3.96e-12), (3.0, 3.59e-12), (5.0, 3.19e-12), (10.0, 2.71e-12), (20.0, 2.48e-12), (30.0, 2.45e-12)],
+        ft_min=250e6,
+        hoe=(3e-6, 60e-6),
+    ),
+}
 
+
+def vaf_of(b):
+    return round(1e-3 / math.sqrt(b["hoe"][0] * b["hoe"][1]) - 10.0, -1)
 
 def bjt_ev(p, vbe, vbc):
     ef, er = math.exp(min(vbe / VT, 200)), math.exp(min(vbc / VT, 200))
@@ -68,22 +103,22 @@ def bjt_sat(p, ic):
 BJT_NAMES = ["IS", "BF", "ISE", "NE", "IKF", "RB", "RE", "BR", "RC"]
 
 
-def bjt_unpack(x):
+def bjt_unpack(x, b):
     p = {k: (x[i] if k == "NE" else 10 ** x[i]) for i, k in enumerate(BJT_NAMES)}
-    p["VAF"] = VAF
+    p["VAF"] = vaf_of(b)
     return p
 
 
-def bjt_cost(x):
-    p = bjt_unpack(x)
+def bjt_cost(x, b):
+    p = bjt_unpack(x, b)
     # physical ranges: the leakage's emission coefficient and the reverse gain
     if not (1.2 <= p["NE"] <= 3.0 and 0.5 <= p["BR"] <= 50.0):
         return 1e6
     try:
-        e = sum(4 * math.log(bjt_on(p, ic)[1] / (HFE_PEAK * n)) ** 2 for ic, n in HFE_NORM)
-        e += sum(((bjt_on(p, ic)[0] - v) / 0.01) ** 2 for ic, v in VBE_ON)
-        e += sum(((bjt_sat(p, ic)[0] - v) / 0.015) ** 2 for ic, v in VBE_SAT)
-        e += sum(((bjt_sat(p, ic)[1] - v) / 0.02) ** 2 for ic, v in VCE_SAT)
+        e = sum(4 * math.log(bjt_on(p, ic)[1] / (b["hfe_peak"] * n)) ** 2 for ic, n in b["hfe_norm"])
+        e += sum(((bjt_on(p, ic)[0] - v) / 0.01) ** 2 for ic, v in b["vbe_on"])
+        e += sum(((bjt_sat(p, ic)[0] - v) / 0.015) ** 2 for ic, v in b["vbe_sat"])
+        e += sum(((bjt_sat(p, ic)[1] - v) / 0.02) ** 2 for ic, v in b["vce_sat"])
         return e
     except Exception:
         return 1e6
@@ -108,7 +143,7 @@ def g(x):
     return f"{x:.4g}"
 
 
-def bjt_model():
+def bjt_model(b):
     # a few starting points; the best fit is kept (Nelder-Mead finds local minima)
     starts = [
         [math.log10(2e-14), math.log10(200), math.log10(1e-13), 1.6, math.log10(0.05), 1.0, math.log10(0.3), math.log10(5), 0.0],
@@ -117,21 +152,25 @@ def bjt_model():
     ]
     best = None
     for x0 in starts:
-        r = minimize(bjt_cost, x0, method="Nelder-Mead", options={"maxiter": 20000, "maxfev": 20000, "xatol": 1e-7, "fatol": 1e-10})
-        r = minimize(bjt_cost, r.x, method="Nelder-Mead", options={"maxiter": 20000, "maxfev": 20000, "xatol": 1e-8, "fatol": 1e-11})
+        r = minimize(bjt_cost, x0, args=(b,), method="Nelder-Mead", options={"maxiter": 20000, "maxfev": 20000, "xatol": 1e-7, "fatol": 1e-10})
+        r = minimize(bjt_cost, r.x, args=(b,), method="Nelder-Mead", options={"maxiter": 20000, "maxfev": 20000, "xatol": 1e-8, "fatol": 1e-11})
         if best is None or r.fun < best.fun:
             best = r
-    print("2N3904 fit cost", round(best.fun, 3))
-    p = bjt_unpack(best.x)
-    cje, vje, mje = fit_cap(CIBO)
-    cjc, vjc, mjc = fit_cap(COBO)
-    tf = 1 / (2 * math.pi * FT_MIN)
-    text = (f".model 2N3904 NPN(IS={g(p['IS'])} BF={g(p['BF'])} NF=1 VAF={g(VAF)} IKF={g(p['IKF'])} ISE={g(p['ISE'])} NE={p['NE']:.3f} "
+    print(b["name"], "fit cost", round(best.fun, 3))
+    p = bjt_unpack(best.x, b)
+    vaf = p["VAF"]
+    cje, vje, mje = fit_cap(b["cibo"])
+    cjc, vjc, mjc = fit_cap(b["cobo"])
+    tf = 1 / (2 * math.pi * b["ft_min"])
+    kind = "PNP" if b.get("pnp") else "NPN"
+    fh, fon, fcap = b["figs"]
+    hoe = f"{b['hoe'][0] * 1e6:g}〜{b['hoe'][1] * 1e6:g} µmho"
+    text = (f".model {b['name']} {kind}(IS={g(p['IS'])} BF={g(p['BF'])} NF=1 VAF={g(vaf)} IKF={g(p['IKF'])} ISE={g(p['ISE'])} NE={p['NE']:.3f} "
             f"BR={g(p['BR'])} RB={g(p['RB'])} RE={g(p['RE'])} RC={g(p['RC'])} CJE={g(cje)} VJE={vje:g} MJE={mje:g} CJC={g(cjc)} VJC={vjc:g} MJC={mjc:g} TF={g(tf)})")
     limits = [
-        f"データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {BJT_SRC}。データシートとの比べは docs/models/transistors.md。",
-        "直流: 図 15 (hFE の電流による変化。相対値)・図 17 (VBE、VBE(sat)、VCE(sat)) に、IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。データシートに hFE の typ が無いので、山の高さは表の min 100 と max 300 (10 mA) の幾何平均 173 に置きました。実物の hFE は、同じ型番でも 100〜300 と大きく違います。",
-        f"容量: 図 3 の Cibo・Cobo に CJE・CJC を当てはめました。速さ: fT の min 300 MHz から TF を決めました (実物は、ふつうこれより速い)。Early 電圧 VAF {g(VAF)} V は、hoe (1〜40 µmho、1 mA) の中ほどから。",
+        f"データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {b['src']}。データシートとの比べは docs/models/transistors.md。",
+        f"直流: {fh} (hFE の電流による変化。相対値)・{fon} (VBE、VBE(sat)、VCE(sat)) に、IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。データシートに hFE の typ が無いので、山の高さは表の min 100 と max 300 (10 mA) の幾何平均 173 に置きました。実物の hFE は、同じ型番でも 100〜300 と大きく違います。",
+        f"容量: {fcap} の Cibo・Cobo に CJE・CJC を当てはめました。速さ: fT の min {b['ft_min'] / 1e6:g} MHz から TF を決めました (実物は、ふつうこれより速い)。Early 電圧 VAF {g(vaf)} V は、hoe ({hoe}、1 mA) の中ほどから。",
         "扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。",
         "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
     ]
@@ -238,9 +277,9 @@ def write(f, text, limits, src, url=None, desc=None):
     print("wrote", f, text)
 
 
-text, limits, _ = bjt_model()
-write("2N3904_TO-92", text, limits, BJT_SRC, "https://www.onsemi.com/pdf/datasheet/2n3903-d.pdf",
-      "NPN 汎用トランジスタ (TO-92, ピン1=E 2=B 3=C)。データシート (onsemi) の表と代表特性から作った等価モデル")
+for f, b in BJT.items():
+    text, limits, _ = bjt_model(b)
+    write(f, text, limits, b["src"], b["url"], b["desc"])
 for f, p in MOS.items():
     text, limits = mos_model(p)
     write(f, text, limits, p["src"], p["url"], p["desc"])

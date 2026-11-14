@@ -129,6 +129,11 @@ pub(super) fn changed(e: &SchEditor, refdes: &str) -> bool {
     value_of(&e.sch, refdes) != value_of(&e.lesson_base, refdes)
 }
 
+/// The PNP lesson's last step: the base resistor is down to 1.5k (or less) and the result is fresh.
+pub(super) fn pnp_strong_base(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 1500.0) && dc_fresh(e)
+}
+
 pub(super) fn r2_changed_and_measured(e: &SchEditor) -> bool {
     changed(e, "R2") && dc_fresh(e)
 }

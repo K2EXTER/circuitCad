@@ -211,5 +211,14 @@
   "descriptions": [
    "Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。簡易レベル1モデル(パラメータは概算)"
   ]
+ },
+ "2N3906_TO-92": {
+  "texts": [
+   ".model 2N3906 PNP(IS=1.4e-14 BF=180 BR=4)",
+   ".model 2N3906 PNP(IS=1.4e-14 BF=180 BR=4 RB=10)"
+  ],
+  "descriptions": [
+   "PNP 汎用トランジスタ (TO-92, ピン1=E 2=B 3=C)。簡易モデル(パラメータは概算)"
+  ]
  }
 }

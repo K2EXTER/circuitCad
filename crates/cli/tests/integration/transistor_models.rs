@@ -1,4 +1,4 @@
-//! The bundled transistor models (2N3904, 2N7000, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
+//! The bundled transistor models (2N3904, 2N3906, 2N7000, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
 //! sheets' numbers (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`).
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -38,34 +38,100 @@ fn cap_at(circuit: &str, bias: f64, guess: f64) -> f64 {
     (1.0 / (h * h) - 1.0).sqrt() / (2.0 * std::f64::consts::PI * f * r)
 }
 
-// ------------------------------------------------------------------ 2N3904
-/// Figure 15 (normalised hFE, 25 C) with its peak at 173 (the generator's choice: the data sheet has no typ).
-const HFE_NORM: [(f64, f64); 10] = [(0.1e-3, 0.443), (0.2e-3, 0.538), (0.5e-3, 0.676), (1e-3, 0.773), (2e-3, 0.868), (5e-3, 0.979), (10e-3, 0.988), (20e-3, 0.859), (50e-3, 0.493), (100e-3, 0.27)];
+// ------------------------------------------------------------------ bipolar transistors
+/// A bipolar transistor and its data sheet's numbers (the readings of the graphs are those of `tools/gen_transistor_models.py`).
+/// A PNP is measured with every source turned round; its numbers are sizes, as its data sheet prints them.
+struct Bjt {
+    part: &'static str,
+    pnp: bool,
+    /// The figures of hFE, of the "ON" voltages and of the capacitances
+    figs: (&'static str, &'static str, &'static str),
+    /// The normalised hFE curve (VCE = 1 V) with its peak at 173 (the generator's choice: the data sheets have no typ)
+    hfe_norm: [(f64, f64); 10],
+    /// The table's min hFE at 0.1, 1, 10, 50, 100 mA
+    hfe_min: [f64; 5],
+    vbe_on: [(f64, f64); 4],
+    vbe_sat: [(f64, f64, Option<f64>, Option<f64>); 2],
+    vce_sat: [(f64, Option<f64>, Option<f64>); 3],
+    /// (typ, max) pF: Cobo at VCB = 5 V, Cibo at VEB = 0.5 V
+    cobo: (f64, f64),
+    cibo: (f64, f64),
+}
+
 const HFE_PEAK: f64 = 173.0;
 
-fn hfe_ds(ic: f64) -> f64 {
-    let pts = HFE_NORM;
-    for w in pts.windows(2) {
-        let ((a, na), (b, nb)) = (w[0], w[1]);
-        if ic >= a && ic <= b {
-            let t = (ic.ln() - a.ln()) / (b.ln() - a.ln());
-            return HFE_PEAK * (na + t * (nb - na));
+static BJTS: [Bjt; 2] = [
+    Bjt {
+        part: "2N3904",
+        pnp: false,
+        figs: ("図 15", "図 17", "図 3"),
+        hfe_norm: [(0.1e-3, 0.443), (0.2e-3, 0.538), (0.5e-3, 0.676), (1e-3, 0.773), (2e-3, 0.868), (5e-3, 0.979), (10e-3, 0.988), (20e-3, 0.859), (50e-3, 0.493), (100e-3, 0.27)],
+        hfe_min: [40.0, 70.0, 100.0, 60.0, 30.0],
+        vbe_on: [(5e-3, 0.684), (10e-3, 0.706), (50e-3, 0.79), (100e-3, 0.869)],
+        vbe_sat: [(10e-3, 0.745, Some(0.65), Some(0.85)), (50e-3, 0.848, None, Some(0.95))],
+        vce_sat: [(10e-3, None, Some(0.2)), (50e-3, Some(0.194), Some(0.3)), (100e-3, Some(0.36), None)],
+        cobo: (1.96, 4.0),
+        cibo: (3.76, 8.0),
+    },
+    Bjt {
+        part: "2N3906",
+        pnp: true,
+        figs: ("図 13", "図 15", "図 3"),
+        hfe_norm: [(0.1e-3, 0.774), (0.2e-3, 0.806), (0.5e-3, 0.854), (1e-3, 0.883), (2e-3, 0.921), (5e-3, 0.971), (10e-3, 0.988), (20e-3, 0.936), (50e-3, 0.511), (100e-3, 0.22)],
+        hfe_min: [60.0, 80.0, 100.0, 60.0, 30.0],
+        vbe_on: [(5e-3, 0.71), (10e-3, 0.727), (50e-3, 0.81), (100e-3, 0.868)],
+        vbe_sat: [(10e-3, 0.757, Some(0.65), Some(0.85)), (50e-3, 0.85, None, Some(0.95))],
+        vce_sat: [(10e-3, None, Some(0.25)), (50e-3, Some(0.136), Some(0.4)), (100e-3, Some(0.245), None)],
+        cobo: (3.19, 4.5),
+        cibo: (4.72, 10.0),
+    },
+];
+
+impl Bjt {
+    fn hfe_ds(&self, ic: f64) -> f64 {
+        let pts = self.hfe_norm;
+        for w in pts.windows(2) {
+            let ((a, na), (b, nb)) = (w[0], w[1]);
+            if ic >= a && ic <= b {
+                let t = (ic.ln() - a.ln()) / (b.ln() - a.ln());
+                return HFE_PEAK * (na + t * (nb - na));
+            }
         }
+        HFE_PEAK * if ic < pts[0].0 { pts[0].1 } else { pts[pts.len() - 1].1 }
     }
-    HFE_PEAK * if ic < pts[0].0 { pts[0].1 } else { pts[pts.len() - 1].1 }
-}
 
-/// (IC, IB, VBE) at VCE = 1 V with a base current that gives about `ic` on the data sheet's curve.
-fn bjt_on(ic: f64) -> (f64, f64, f64) {
-    let ib = ic / hfe_ds(ic);
-    let p = probes(&format!("new\nadd 2N3904 as=Q1\nadd V 1 as=VC\nadd I {ib} as=IB\nnet C VC.+ Q1.C\nnet B IB.+ Q1.B\nnet GND VC.- IB.- Q1.E\n"), &["I(VC)", "V(B)"]);
-    (p[0].abs(), ib, p[1])
-}
+    /// +1 for an NPN, -1 for a PNP: the sources' values are multiplied by it
+    fn sign(&self) -> f64 {
+        if self.pnp { -1.0 } else { 1.0 }
+    }
 
-/// (VBE, VCE) with IC forced and IB = IC / 10.
-fn bjt_sat(ic: f64) -> (f64, f64) {
-    let p = probes(&format!("new\nadd 2N3904 as=Q1\nadd I {ic} as=IC\nadd I {} as=IB\nnet C IC.+ Q1.C\nnet B IB.+ Q1.B\nnet GND IC.- IB.- Q1.E\n", ic / 10.0), &["V(B)", "V(C)"]);
-    (p[0], p[1])
+    /// (|IC|, |IB|, |VBE|) at |VCE| = 1 V with a base current that gives about `ic` on the data sheet's curve.
+    fn on(&self, ic: f64) -> (f64, f64, f64) {
+        let (ib, s) = (ic / self.hfe_ds(ic), self.sign());
+        let p = probes(&format!("new
+add {} as=Q1
+add V {} as=VC
+add I {} as=IB
+net C VC.+ Q1.C
+net B IB.+ Q1.B
+net GND VC.- IB.- Q1.E
+", self.part, s, s * ib), &["I(VC)", "V(B)"]);
+        (p[0].abs(), ib, p[1].abs())
+    }
+
+    /// (|VBE|, |VCE|) with IC forced and IB = IC / 10.
+    fn sat(&self, ic: f64) -> (f64, f64) {
+        let s = self.sign();
+        let p = probes(&format!("new
+add {} as=Q1
+add I {} as=IC
+add I {} as=IB
+net C IC.+ Q1.C
+net B IB.+ Q1.B
+net GND IC.- IB.- Q1.E
+", self.part, s * ic, s * ic / 10.0), &["V(B)", "V(C)"]);
+        (p[0].abs(), p[1].abs())
+    }
 }
 
 // ------------------------------------------------------------------ MOSFETs
@@ -117,6 +183,7 @@ struct Row {
 fn source(part: &str) -> &'static str {
     match part {
         "2N3904" => "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
+        "2N3906" => "onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)。25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "AO3401A" => "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。25 °C",
         _ => "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。25 °C",
@@ -125,50 +192,63 @@ fn source(part: &str) -> &'static str {
 
 fn rows() -> Vec<Row> {
     let mut v = vec![];
-    // 2N3904: hFE and VBE at VCE = 1 V (Figure 15 / 17), the table's min hFE, saturation (Figure 17 and the table), capacitances
-    let mins = [(0.1e-3, 40.0), (1e-3, 70.0), (10e-3, 100.0), (50e-3, 60.0), (100e-3, 30.0)];
-    for ic in [0.1e-3, 1e-3, 10e-3, 50e-3, 100e-3] {
-        let min = mins.iter().find(|(i, _)| *i == ic).map(|m| m.1);
+    // bipolar: hFE and VBE at VCE = 1 V (the hFE and "ON" voltages graphs), the table's min hFE, saturation (the graph and the
+    // table), capacitances
+    for t in &BJTS {
+        let (part, (fh, fon, fcap)) = (t.part, t.figs);
+        for (k, ic) in [0.1e-3, 1e-3, 10e-3, 50e-3, 100e-3].into_iter().enumerate() {
+            v.push(Row {
+                part,
+                item: format!("hFE ({} mA)", ic * 1e3),
+                ds: [Some(t.hfe_min[k]), Some(t.hfe_ds(ic)), if ic == 10e-3 { Some(300.0) } else { None }],
+                unit: "",
+                at: format!("VCE = 1 V。typ は{fh}の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表"),
+                measure: Box::new(move || {
+                    let (i, ib, _) = t.on(ic);
+                    i / ib
+                }),
+                tol: Some(0.15 * t.hfe_ds(ic)),
+            });
+        }
+        for (ic, typ) in t.vbe_on {
+            v.push(Row { part, item: format!("VBE ({} mA)", ic * 1e3), ds: [None, Some(typ), None], unit: "V", at: format!("VCE = 1 V、{fon} (グラフから読んだ)"), measure: Box::new(move || t.on(ic).2), tol: Some(0.015) });
+        }
+        for (ic, typ, min, max) in t.vbe_sat {
+            v.push(Row { part, item: format!("VBE(sat) ({} mA)", ic * 1e3), ds: [min, Some(typ), max], unit: "V", at: format!("IC/IB = 10。typ は{fon}、min / max は表"), measure: Box::new(move || t.sat(ic).0), tol: Some(0.02) });
+        }
+        for (ic, typ, max) in t.vce_sat {
+            v.push(Row { part, item: format!("VCE(sat) ({} mA)", ic * 1e3), ds: [None, typ, max], unit: "V", at: format!("IC/IB = 10。typ は{fon}、max は表"), measure: Box::new(move || t.sat(ic).1), tol: typ.map(|_| 0.03) });
+        }
+        let s = t.sign();
         v.push(Row {
-            part: "2N3904",
-            item: format!("hFE ({} mA)", ic * 1e3),
-            ds: [min, Some(hfe_ds(ic)), if ic == 10e-3 { Some(300.0) } else { None }],
-            unit: "",
-            at: "VCE = 1 V。typ は図 15 の相対値 × 173 (表の min と max の幾何平均。データシートに typ は無い)。min / max は表".into(),
-            measure: Box::new(move || {
-                let (i, ib, _) = bjt_on(ic);
-                i / ib
-            }),
-            tol: Some(0.15 * hfe_ds(ic)),
+            part,
+            item: "Cobo (5 V)".into(),
+            ds: [None, Some(t.cobo.0), Some(t.cobo.1)],
+            unit: "pF",
+            at: format!("VCB = 5 V、IE = 0。typ は{fcap}、max は表"),
+            measure: Box::new(move || cap_at(&format!("add {part} as=Q1
+add R 1G as=RE
+net X Q1.C
+net GND Q1.B RE.2
+net EM Q1.E RE.1
+"), 5.0 * s, 2e-12) * 1e12),
+            tol: Some(0.3),
+        });
+        v.push(Row {
+            part,
+            item: "Cibo (0.5 V)".into(),
+            ds: [None, Some(t.cibo.0), Some(t.cibo.1)],
+            unit: "pF",
+            at: format!("VEB = 0.5 V、IC = 0。typ は{fcap}、max は表"),
+            measure: Box::new(move || cap_at(&format!("add {part} as=Q1
+add R 1G as=RC
+net X Q1.E
+net GND Q1.B RC.2
+net CO Q1.C RC.1
+"), 0.5 * s, 4e-12) * 1e12),
+            tol: Some(0.5),
         });
     }
-    for (ic, typ) in [(5e-3, 0.684), (10e-3, 0.706), (50e-3, 0.79), (100e-3, 0.869)] {
-        v.push(Row { part: "2N3904", item: format!("VBE ({} mA)", ic * 1e3), ds: [None, Some(typ), None], unit: "V", at: "VCE = 1 V、図 17 (グラフから読んだ)".into(), measure: Box::new(move || bjt_on(ic).2), tol: Some(0.015) });
-    }
-    for (ic, typ, min, max) in [(10e-3, 0.745, Some(0.65), Some(0.85)), (50e-3, 0.848, None, Some(0.95))] {
-        v.push(Row { part: "2N3904", item: format!("VBE(sat) ({} mA)", ic * 1e3), ds: [min, Some(typ), max], unit: "V", at: "IC/IB = 10。typ は図 17、min / max は表".into(), measure: Box::new(move || bjt_sat(ic).0), tol: Some(0.02) });
-    }
-    for (ic, typ, max) in [(10e-3, None, Some(0.2)), (50e-3, Some(0.194), Some(0.3)), (100e-3, Some(0.36), None)] {
-        v.push(Row { part: "2N3904", item: format!("VCE(sat) ({} mA)", ic * 1e3), ds: [None, typ, max], unit: "V", at: "IC/IB = 10。typ は図 17、max は表".into(), measure: Box::new(move || bjt_sat(ic).1), tol: typ.map(|_| 0.03) });
-    }
-    v.push(Row {
-        part: "2N3904",
-        item: "Cobo (5 V)".into(),
-        ds: [None, Some(1.96), Some(4.0)],
-        unit: "pF",
-        at: "VCB = 5 V、IE = 0。typ は図 3、max は表".into(),
-        measure: Box::new(|| cap_at("add 2N3904 as=Q1\nadd R 1G as=RE\nnet X Q1.C\nnet GND Q1.B RE.2\nnet EM Q1.E RE.1\n", 5.0, 2e-12) * 1e12),
-        tol: Some(0.3),
-    });
-    v.push(Row {
-        part: "2N3904",
-        item: "Cibo (0.5 V)".into(),
-        ds: [None, Some(3.76), Some(8.0)],
-        unit: "pF",
-        at: "VEB = 0.5 V、IC = 0。typ は図 3、max は表".into(),
-        measure: Box::new(|| cap_at("add 2N3904 as=Q1\nadd R 1G as=RC\nnet X Q1.E\nnet GND Q1.B RC.2\nnet CO Q1.C RC.1\n", 0.5, 4e-12) * 1e12),
-        tol: Some(0.5),
-    });
     // MOSFETs: VGS(th), RDS(on) at each gate voltage of the table, gFS, the gate capacitances
     // a P channel is measured with the signs of its data sheet: VGS, ID and VDS negative (the same circuits, the sources turned round)
     let mos: [(&'static str, (f64, f64), &[(f64, f64, f64, f64)], (f64, f64, f64), (f64, f64)); 3] = [

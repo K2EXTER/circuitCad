@@ -601,7 +601,8 @@ fn mosfet_sample_switches_around_2v_and_the_lesson_numbers_hold() {
     assert!(issues.iter().any(|x| x.refdes == "Q1"), "{issues:?}");
 }
 
-/// The PNP lesson: on when the input is Low, partly on with a large base resistor, a hot load at 47 ohms.
+/// The PNP lesson: on when the input is Low, partly on with a large base resistor, short of base current at 47 ohms
+/// (hFE falls at 100 mA), then saturated with 1k and a hot load.
 #[test]
 fn pnp_sample_switches_the_high_side_and_the_lesson_numbers_hold() {
     let sch = example_schematics().into_iter().find(|(n, _)| n == "pnp_highside.schjson").unwrap().1;
@@ -618,9 +619,12 @@ fn pnp_sample_switches_the_high_side_and_the_lesson_numbers_hold() {
     assert!(run("5", "4.7k", "220").0 < 0.01, "off when the input is High");
     let (part, _) = run("0", "47k", "220");
     assert!((0.6..1.3).contains(&part), "partly on with a large base resistor: {part}");
-    let (hot, issues) = run("0", "4.7k", "47");
-    assert!(hot > 4.7, "{hot}");
-    assert!(issues.iter().any(|x| x.refdes == "R3"), "{issues:?}");
+    // about 100 mA: hFE has fallen to about 40, so 4.7k does not saturate it (the lesson's step 3), 1k does (step 4)
+    let (short, _) = run("0", "4.7k", "47");
+    assert!((2.2..3.2).contains(&short), "not saturated at 100 mA with 4.7k: {short}");
+    let (hot, issues) = run("0", "1k", "47");
+    assert!(hot > 4.6, "{hot}");
+    assert!(issues.iter().any(|x| x.refdes == "R3" && x.level == sim_core::RatingLevel::Over), "{issues:?}");
 }
 
 /// The inverting amplifier lesson: gain -10 with 180 degrees of phase, a virtual ground, clipping at gain -100.

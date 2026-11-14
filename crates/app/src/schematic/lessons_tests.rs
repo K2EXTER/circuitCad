@@ -307,7 +307,7 @@ fn a_model_shows_where_it_comes_from_and_its_data_sheet_table() {
     assert!(super::panel::model_origin("LM358", &m) == (None, None), "an edited model is not the one that was measured");
     let behaviour = e.library.iter().find(|d| d.name == "TP4056").unwrap();
     assert!(super::panel::lib_hover_for_test(behaviour).contains("一般のモデル"));
-    let unrecorded = e.library.iter().find(|d| d.name == "2N3906").unwrap();
+    let unrecorded = e.library.iter().find(|d| d.name == "BC547").unwrap();
     assert!(super::panel::lib_hover_for_test(unrecorded).contains("記録なし"));
 }
 
