@@ -230,7 +230,7 @@ fn fit_transfer(p: &MosSpec, tr: &Transfer) -> Result<Out, String> {
     let (kp, rd, vto, rs) = (e(x[0]), e(x[1]), x[2], e(x[3]));
     let Caps { ciss, crss, .. } = p.caps;
     let (kind, sign) = if p.pch { ("PMOS", -1.0) } else { ("NMOS", 1.0) };
-    let text = format!(".model {} {kind}(VTO={} KP={} RD={} RS={} CGS={} CGD={})", p.common.name, g(sign * vto, 4), g(kp, 4), g(rd, 4), g(rs, 4), g(ciss - crss, 4), g(crss, 4));
+    let text = format!(".model {} {kind}(VTO={} KP={} RD={} RS={} CGS={} CGD={})", p.common.name, g(sign * vto, 4), g(kp, 4), g(if rd < 1e-9 { 0.0 } else { rd }, 4), g(if rs < 1e-9 { 0.0 } else { rs }, 4), g(ciss - crss, 4), g(crss, 4));
     let limits = vec![
         format!("データシートの代表特性と typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。", p.common.source),
         format!(

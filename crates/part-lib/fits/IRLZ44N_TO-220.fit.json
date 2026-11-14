@@ -1,0 +1,43 @@
+{
+  "kind": "mos",
+  "part": "IRLZ44N_TO-220",
+  "name": "IRLZ44N",
+  "pch": false,
+  "read": "2026-11-14",
+  "source": "International Rectifier (Infineon) IRLZ44NPbF データシート (PD-94831, 2003-11-11)",
+  "url": "https://www.infineon.com/assets/row/public/documents/24/49/infineon-irlz44n-datasheet-en.pdf",
+  "description": "N チャネル パワーMOSFET 55V 47A (TO-220, ピン1=G 2=D 3=S)。ロジックレベル駆動 (4〜5V でオン)。データシート (IR) の代表特性から作った等価モデル (レベル1 + 直列抵抗)",
+  "vth_range": [1.0, 2.0, 0.00025],
+  "transfer": {
+    "at": "図 3 (伝達特性の代表特性、VDS = 25 V) の 25 °C",
+    "vds": 25.0,
+    "points": [
+      [2.5, 5.15],
+      [2.75, 9.41],
+      [3.5, 36.86],
+      [4.0, 54.93],
+      [4.5, 77.76],
+      [5.0, 95.41],
+      [6.0, 132.4],
+      [7.0, 160.8]
+    ]
+  },
+  "rds": [
+    [10.0, 9.07, 0.0165],
+    [10.0, 30.5, 0.0164],
+    [4.0, 6.76, 0.0222],
+    [4.0, 21.07, 0.0237]
+  ],
+  "caps": {
+    "ciss": 1.7e-09,
+    "coss": 4e-10,
+    "crss": 1.5e-10
+  },
+  "remarks": [
+    "the PDF's text cannot be read out (its fonts carry no character codes): the table was read on the page drawn at 1.6 px/pt, and the graphs' axes were placed on the grid lines found with `ds grid` (thick: decades) and read with `ds trace` `xt=` / `yt=`",
+    "the table: VGS(th) min 1.0 / max 2.0 V (250 uA), RDS(on) max 22 / 25 / 35 mohm at 10 / 5 / 4 V; Ciss 1700, Coss 400, Crss 150 pF typ (VGS = 0, VDS = 25 V, 1 MHz)",
+    "rds: Figure 1 (25 C; the legend: 15, 12, 10, 8, 6, 4, 3, 2.5 V). At low VDS the curves from 6 to 15 V lie on each other (the top one, taken as 10 V: 9.07 A at 0.15 V, 30.5 A at 0.5 V); the next one is 4 V (6.76 A at 0.15 V, 21.07 A at 0.5 V)",
+    "transfer: Figure 3 (VDS = 25 V), the 25 C curve: below about 3 V the lower of the two, above it the upper",
+    "kept a .model without the body diode, as the part was bundled (the switching loss lesson's sample holds a copy; changing it to a .subckt would change the part's kind)"
+  ]
+}

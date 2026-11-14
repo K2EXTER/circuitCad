@@ -82,7 +82,7 @@
           "kind": "model",
           "element": "M",
           "name": "IRLZ44N",
-          "text": ".model IRLZ44N NMOS(VTO=1.7 KP=13 LAMBDA=0.01 CGS=1.4n CGD=0.2n)",
+          "text": ".model IRLZ44N NMOS(VTO=2.076 KP=81.19 RD=0 RS=0.01517 CGS=1.55e-09 CGD=1.5e-10)",
           "pins": [
             "2",
             "1",

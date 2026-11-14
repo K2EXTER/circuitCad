@@ -2736,19 +2736,19 @@ fn the_switching_loss_lesson_ticks_and_its_numbers_hold() {
     e.update_lesson();
     assert_eq!(progress(&e), 1, "{}", e.status);
     let (e100, f100) = loss(&e);
-    assert!((e100 - 0.857).abs() < 0.06 && (f100 - 76.0).abs() < 8.0, "{e100} {f100}");
+    assert!((e100 - 0.603).abs() < 0.05 && (f100 - 57.2).abs() < 6.0, "{e100} {f100}");
     set_value(&mut e, "R2", "10");
     e.run_tran();
     e.update_lesson();
     assert_eq!(progress(&e), 2, "{}", e.status);
     let (e10, f10) = loss(&e);
-    assert!((e10 - 0.231).abs() < 0.03 && (f10 - 7.5).abs() < 2.0 && f10 < f100 / 5.0, "a fast gate: {e10} {f10}");
+    assert!((e10 - 0.180).abs() < 0.03 && (f10 - 5.65).abs() < 1.5 && f10 < f100 / 5.0, "a fast gate: {e10} {f10}");
     set_value(&mut e, "R2", "470");
     e.run_tran();
     e.update_lesson();
     assert_eq!(progress(&e), 3, "{}", e.status);
     let (e470, f470) = loss(&e);
-    assert!((e470 - 3.44).abs() < 0.25 && (f470 - 359.0).abs() < 40.0 && e470 > 3.0 * e100, "a slow gate: {e470} {f470}");
+    assert!((e470 - 2.35).abs() < 0.2 && (f470 - 269.0).abs() < 30.0 && e470 > 3.0 * e100, "a slow gate: {e470} {f470}");
 }
 
 #[test]

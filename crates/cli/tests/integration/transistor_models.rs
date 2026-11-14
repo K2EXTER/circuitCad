@@ -292,6 +292,8 @@ fn source(part: &str) -> &'static str {
         "BD140" => "onsemi BD136/BD138/BD140 データシート (BD136/D Rev. 2, 2024-05)。25 °C",
         "IRF540N" => "Infineon IRF540NPbF データシート (Rev. 2.1, 2026-07-24)。25 °C",
         "IRFZ44N" => "Infineon IRFZ44NPbF データシート (Rev. 2.1, 2026-08-11)。25 °C",
+        "IRLZ44N" => "International Rectifier IRLZ44NPbF データシート (PD-94831, 2003-11-11)。25 °C",
+        "IRF9540N" => "International Rectifier IRF9540NPbF データシート (PD-94790A)。25 °C",
         "BC547" => "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
@@ -404,24 +406,38 @@ net CO Q1.C RC.1
     }
     // the power MOSFETs whose data sheets give VGS(th) and RDS(on) as min / max only (Infineon, the former IR): RDS(on) and the
     // body diode at the typical curves' values, the table's limits next to them
-    #[allow(clippy::type_complexity)]
-    let power: [(&'static str, f64, (f64, f64, f64), (f64, f64), f64); 2] = [
-        ("IRF540N", 0.044, (10.0, 16.0, 0.0395), (0.5, 0.7116), 1.2),
-        ("IRFZ44N", 0.0175, (10.0, 25.0, 0.0141), (0.5, 0.7179), 1.3),
+    // the power MOSFETs whose data sheets give VGS(th) and RDS(on) as min / max only (Infineon, the former IR): RDS(on) and the
+    // body diode at the typical curves' values, the table's limits next to them. A P channel is measured with its data sheet's
+    // signs (negative), as the AO3401A
+    struct Power {
+        part: &'static str,
+        sign: f64,
+        vth: (f64, f64),
+        rmax: f64,
+        on: (f64, f64, f64),
+        diode: Option<((f64, f64), f64)>,
+    }
+    let power = [
+        Power { part: "IRF540N", sign: 1.0, vth: (2.0, 4.0), rmax: 0.044, on: (10.0, 16.0, 0.0395), diode: Some(((0.5, 0.7116), 1.2)) },
+        Power { part: "IRFZ44N", sign: 1.0, vth: (2.0, 4.0), rmax: 0.0175, on: (10.0, 25.0, 0.0141), diode: Some(((0.5, 0.7179), 1.3)) },
+        Power { part: "IRLZ44N", sign: 1.0, vth: (1.0, 2.0), rmax: 0.022, on: (10.0, 25.0, 0.0165), diode: None },
+        Power { part: "IRF9540N", sign: -1.0, vth: (2.0, 4.0), rmax: 0.117, on: (10.0, 11.0, 0.1128), diode: Some(((0.5, 0.7224), 1.6)) },
     ];
-    for (part, rmax, (vgs, id, rtyp), (is_lo, vsd_lo), vsd_max) in power {
-        v.push(Row { part, item: "しきい値 VGS(th)".into(), ds: [Some(2.0), None, Some(4.0)], unit: "V", at: "VDS = VGS、ID = 250 µA (表は min・max だけ)".into(), measure: Box::new(move || vth(part, 250e-6)), tol: None });
+    for Power { part, sign: s, vth: (lo, hi), rmax, on: (vgs, id, rtyp), diode } in power {
+        v.push(Row { part, item: "しきい値 VGS(th)".into(), ds: [Some(lo), None, Some(hi)], unit: "V", at: "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)".into(), measure: Box::new(move || vth(part, s * 250e-6).abs()), tol: None });
         v.push(Row {
             part,
-            item: format!("RDS(on) (VGS = {vgs} V)"),
+            item: format!("RDS(on) (|VGS| = {vgs} V)"),
             ds: [None, Some(rtyp * 1e3), Some(rmax * 1e3)],
             unit: "mΩ",
-            at: format!("ID = {id} A。typ は図 1 の直線部分の傾き、max は表"),
-            measure: Box::new(move || rds(part, vgs, id) * 1e3),
+            at: format!("|ID| = {id} A。typ は図 1 の直線部分の傾き、max は表"),
+            measure: Box::new(move || rds(part, s * vgs, s * id) * 1e3),
             tol: Some(0.15 * rtyp * 1e3),
         });
-        v.push(Row { part, item: format!("VSD ({is_lo} A)"), ds: [None, Some(vsd_lo), None], unit: "V", at: "ボディダイオード、図 7 の 25 °C".into(), measure: Box::new(move || vsd(part, is_lo)), tol: Some(0.02) });
-        v.push(Row { part, item: format!("VSD ({id} A)"), ds: [None, None, Some(vsd_max)], unit: "V", at: "ボディダイオード、表の max".into(), measure: Box::new(move || vsd(part, id)), tol: None });
+        if let Some(((is_lo, vsd_lo), vsd_max)) = diode {
+            v.push(Row { part, item: format!("VSD ({is_lo} A)"), ds: [None, Some(vsd_lo), None], unit: "V", at: "ボディダイオード、図 7 の 25 °C".into(), measure: Box::new(move || vsd(part, s * is_lo)), tol: Some(0.02) });
+            v.push(Row { part, item: format!("VSD ({id} A)"), ds: [None, None, Some(vsd_max)], unit: "V", at: "ボディダイオード、表の max".into(), measure: Box::new(move || vsd(part, s * id)), tol: None });
+        }
     }
     v
 }

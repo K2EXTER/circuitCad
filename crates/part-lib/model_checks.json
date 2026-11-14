@@ -1849,16 +1849,16 @@
         "item": "しきい値 VGS(th)",
         "datasheet": "2.000 / — / 4.000 V",
         "target": "max 4.000 V",
-        "condition": "VDS = VGS、ID = 250 µA (表は min・max だけ)",
+        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
         "model": "3.547 V",
         "diff": "-0.4533 V",
         "tested": false
       },
       {
-        "item": "RDS(on) (VGS = 10 V)",
+        "item": "RDS(on) (|VGS| = 10 V)",
         "datasheet": "— / 39.500 / 44.000 mΩ",
         "target": "39.500 mΩ",
-        "condition": "ID = 16 A。typ は図 1 の直線部分の傾き、max は表",
+        "condition": "|ID| = 16 A。typ は図 1 の直線部分の傾き、max は表",
         "model": "39.778 mΩ",
         "diff": "+0.2781 mΩ",
         "tested": true
@@ -1883,6 +1883,49 @@
       }
     ]
   },
+  "IRF9540N": {
+    "fingerprint": "cbf23d1c6332fff9",
+    "source": "International Rectifier IRF9540NPbF データシート (PD-94790A)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "2.000 / — / 4.000 V",
+        "target": "max 4.000 V",
+        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
+        "model": "3.612 V",
+        "diff": "-0.3878 V",
+        "tested": false
+      },
+      {
+        "item": "RDS(on) (|VGS| = 10 V)",
+        "datasheet": "— / 112.8 / 117.0 mΩ",
+        "target": "112.8 mΩ",
+        "condition": "|ID| = 11 A。typ は図 1 の直線部分の傾き、max は表",
+        "model": "113.4 mΩ",
+        "diff": "+0.5902 mΩ",
+        "tested": true
+      },
+      {
+        "item": "VSD (0.5 A)",
+        "datasheet": "— / 0.7224 / — V",
+        "target": "0.7224 V",
+        "condition": "ボディダイオード、図 7 の 25 °C",
+        "model": "0.7212 V",
+        "diff": "-0.0012 V",
+        "tested": true
+      },
+      {
+        "item": "VSD (11 A)",
+        "datasheet": "— / — / 1.600 V",
+        "target": "max 1.600 V",
+        "condition": "ボディダイオード、表の max",
+        "model": "0.9003 V",
+        "diff": "-0.6997 V",
+        "tested": false
+      }
+    ]
+  },
   "IRFZ44N": {
     "fingerprint": "1c28a68aea22b582",
     "source": "Infineon IRFZ44NPbF データシート (Rev. 2.1, 2026-08-11)。25 °C",
@@ -1892,16 +1935,16 @@
         "item": "しきい値 VGS(th)",
         "datasheet": "2.000 / — / 4.000 V",
         "target": "max 4.000 V",
-        "condition": "VDS = VGS、ID = 250 µA (表は min・max だけ)",
+        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
         "model": "3.461 V",
         "diff": "-0.5393 V",
         "tested": false
       },
       {
-        "item": "RDS(on) (VGS = 10 V)",
+        "item": "RDS(on) (|VGS| = 10 V)",
         "datasheet": "— / 14.100 / 17.500 mΩ",
         "target": "14.100 mΩ",
-        "condition": "ID = 25 A。typ は図 1 の直線部分の傾き、max は表",
+        "condition": "|ID| = 25 A。typ は図 1 の直線部分の傾き、max は表",
         "model": "14.558 mΩ",
         "diff": "+0.4583 mΩ",
         "tested": true
@@ -1923,6 +1966,31 @@
         "model": "1.017 V",
         "diff": "-0.2827 V",
         "tested": false
+      }
+    ]
+  },
+  "IRLZ44N": {
+    "fingerprint": "fce561c867da9b9a",
+    "source": "International Rectifier IRLZ44NPbF データシート (PD-94831, 2003-11-11)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "しきい値 VGS(th)",
+        "datasheet": "1.000 / — / 2.000 V",
+        "target": "max 2.000 V",
+        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
+        "model": "2.078 V",
+        "diff": "+0.0785 V",
+        "tested": false
+      },
+      {
+        "item": "RDS(on) (|VGS| = 10 V)",
+        "datasheet": "— / 16.500 / 22.000 mΩ",
+        "target": "16.500 mΩ",
+        "condition": "|ID| = 25 A。typ は図 1 の直線部分の傾き、max は表",
+        "model": "16.807 mΩ",
+        "diff": "+0.3069 mΩ",
+        "tested": true
       }
     ]
   },
