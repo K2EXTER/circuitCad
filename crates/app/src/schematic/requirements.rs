@@ -39,11 +39,13 @@ fn list(text: &str) -> Vec<String> {
 text.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
 }
 
-/// A text box that shows `current` until it is edited; returns the new text when it changed.
+/// A text box that shows `current` until it is edited; returns the new text when it changed. The tooltip ends with the whole text,
+/// since a long name or list is cut off in a narrow column.
 fn text_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current: &str, width: f32, hover: &str) -> Option<String> {
 let t = buf.entry(key).or_insert_with(|| current.to_string());
+let whole = if t.trim().is_empty() { String::new() } else { format!("\n\n{t}") };
 // add_sized: a grid column would otherwise shrink the box to what the first frame left over
-let r = ui.add_sized([width, 20.0], egui::TextEdit::singleline(t)).on_hover_text(i18n::tr_dyn(hover));
+let r = ui.add_sized([width, 20.0], egui::TextEdit::singleline(t)).on_hover_text(format!("{}{whole}", i18n::tr_dyn(hover)));
 r.changed().then(|| t.clone())
 }
 
