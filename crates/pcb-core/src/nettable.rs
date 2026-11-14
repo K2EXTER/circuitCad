@@ -1,5 +1,5 @@
 //! The table of the nets: one row per net with its class, pads, track length (in all and per layer), vias, the thinnest and
-//! widest track, the pours it has and the connections still open. What the editor's "ネットの一覧" window and `board nets` show.
+//! widest track, the current declared for it with the width that needs, the pours it has and the connections still open. What the editor's "ネットの一覧" window and `board nets` show.
 
 use crate::drc::connectivity;
 use crate::model::*;
@@ -22,6 +22,10 @@ pub struct NetRow {
     /// Thinnest and widest track (mm); 0 with no track.
     pub thinnest: f64,
     pub widest: f64,
+    /// The current declared for the net (A, `Board.net_currents`; 0: none) and the track width it needs (mm, rounded up to 0.05 like the
+    /// editor's "推奨の線幅"; 0: no current).
+    pub current: f64,
+    pub needed: f64,
     /// The layers with a pour of the net.
     pub pours: Vec<String>,
     /// Connections not yet made of copper (yellow lines).
@@ -45,6 +49,7 @@ pub enum SortBy {
     Detour,
     Vias,
     Thinnest,
+    Current,
     Open,
 }
 
@@ -58,6 +63,7 @@ impl SortBy {
             "detour" => SortBy::Detour,
             "vias" => SortBy::Vias,
             "width" | "thinnest" => SortBy::Thinnest,
+            "current" => SortBy::Current,
             "open" => SortBy::Open,
             _ => return None,
         })
@@ -90,6 +96,8 @@ pub fn net_table(board: &Board, airwires: Option<&[Airwire]>) -> Vec<NetRow> {
                 vias: 0,
                 thinnest: 0.0,
                 widest: 0.0,
+                current: 0.0,
+                needed: 0.0,
                 pours: vec![],
                 open: 0,
             })
@@ -107,6 +115,12 @@ pub fn net_table(board: &Board, airwires: Option<&[Airwire]>) -> Vec<NetRow> {
         if let Some(r) = conn.track_net(i).and_then(|n| rows.get_mut(n)) {
             r.thinnest = if r.thinnest == 0.0 { t.width } else { r.thinnest.min(t.width) };
             r.widest = r.widest.max(t.width);
+        }
+    }
+    for (net, &amps) in &board.net_currents {
+        if let Some(r) = rows.get_mut(net).filter(|_| amps > 0.0) {
+            r.current = amps;
+            r.needed = crate::current::round_up_width(crate::current::width_for_current(amps, &crate::current::CopperSpec::default()));
         }
     }
     for z in &board.zones {
@@ -134,6 +148,7 @@ pub fn sort_rows(rows: &mut [NetRow], by: SortBy, descending: bool) {
             SortBy::Detour => r.detour().unwrap_or(0.0),
             SortBy::Vias => r.vias as f64,
             SortBy::Thinnest => r.thinnest,
+            SortBy::Current => r.current,
             SortBy::Open => r.open as f64,
             SortBy::Name | SortBy::Class => 0.0,
         }
@@ -165,14 +180,16 @@ pub fn table_csv(rows: &[NetRow]) -> String {
     for l in &layers {
         out.push_str(&format!(",{l}_mm"));
     }
-    out.push_str(",detour,vias,thinnest_mm,widest_mm,pours,open\n");
+    out.push_str(",detour,vias,thinnest_mm,widest_mm,current_a,recommended_mm,pours,open\n");
     for r in rows {
         out.push_str(&format!("{},{},{},{:.2}", quote(&r.net), quote(&r.class), r.pads, r.length));
         for l in &layers {
             out.push_str(&format!(",{:.2}", r.by_layer.get(l).copied().unwrap_or(0.0)));
         }
         let detour = r.detour().map_or(String::new(), |d| format!("{d:.2}"));
-        out.push_str(&format!(",{detour},{},{:.2},{:.2},{},{}\n", r.vias, r.thinnest, r.widest, quote(&r.pours.join(" ")), r.open));
+        // no current: both left empty (not 0, which would read as "0 A, needs nothing")
+        let (current, needed) = if r.current > 0.0 { (format!("{:.3}", r.current), format!("{:.2}", r.needed)) } else { (String::new(), String::new()) };
+        out.push_str(&format!(",{detour},{},{:.2},{:.2},{current},{needed},{},{}\n", r.vias, r.thinnest, r.widest, quote(&r.pours.join(" ")), r.open));
     }
     out
 }
@@ -227,6 +244,24 @@ mod tests {
         assert_eq!(rows[0].net, "VCC");
         let csv = table_csv(&rows);
         assert!(csv.starts_with("net,class,pads,length_mm,表面_mm,detour"), "{csv}");
-        assert!(csv.contains("VCC,Power,2,0.00,0.00,,0,0.00,0.00,,1"), "{csv}");
+        assert!(csv.contains("VCC,Power,2,0.00,0.00,,0,0.00,0.00,,,,1"), "{csv}");
+    }
+
+    /// A declared current is a column of the table and of its CSV, with the width it needs; a net without one leaves both empty.
+    #[test]
+    fn the_current_and_the_width_it_needs_are_in_the_table() {
+        let mut b = board();
+        b.net_currents.insert("VCC".into(), 2.0);
+        let mut rows = net_table(&b, None);
+        let vcc = rows.iter().find(|r| r.net == "VCC").unwrap();
+        let need = crate::current::round_up_width(crate::current::width_for_current(2.0, &crate::current::CopperSpec::default()));
+        assert_eq!((vcc.current, vcc.needed), (2.0, need));
+        assert!(need > 0.5, "2 A needs more than a thin signal track: {need}");
+        sort_rows(&mut rows, SortBy::Current, true);
+        assert_eq!(rows[0].net, "VCC");
+        let csv = table_csv(&rows);
+        assert!(csv.lines().next().unwrap().contains("widest_mm,current_a,recommended_mm,pours"), "{csv}");
+        assert!(csv.contains(&format!(",2.000,{need:.2},")), "{csv}");
+        assert!(csv.lines().any(|l| l.starts_with("SIG,") && l.contains(",,,")), "no current: empty cells\n{csv}");
     }
 }

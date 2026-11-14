@@ -44,6 +44,11 @@ impl BoardEditor {
             c.name.hash(&mut h);
             c.nets.hash(&mut h);
         }
+        // the currents are columns of the rows (and of the CSV)
+        for (n, a) in &self.board.net_currents {
+            n.hash(&mut h);
+            a.to_bits().hash(&mut h);
+        }
         let key = h.finish();
         if let Some((k, rows)) = &self.net_table.cache
             && *k == key {
@@ -126,7 +131,7 @@ impl BoardEditor {
                     self.sort_header(ui, "遠回り", SortBy::Detour, "配線の長さ ÷ パッドを直線で結んだ最短の長さ。1.0 前後がいちばん短く (途中で枝分かれすると 1 より少し小さくなることもあります)、大きいほど遠回り。ベタのあるネットは出しません");
                     self.sort_header(ui, "ビア", SortBy::Vias, "このネットのビア (層をつなぐ穴) の数");
                     self.sort_header(ui, "線幅 (mm)", SortBy::Thinnest, "このネットの配線の、いちばん細い〜いちばん太い線幅");
-                    ui.strong(i18n::tr("電流")).on_hover_text(i18n::tr("このネットに流れる最大の電流。打って変えられます。0 なら調べません"));
+                    self.sort_header(ui, "電流", SortBy::Current, "このネットに流れる最大の電流。打って変えられます。0 なら調べません");
                     ui.strong(i18n::tr("推奨の線幅 (mm)")).on_hover_text(i18n::tr("電流に要る線幅 (銅箔 35µm・温度上昇 10℃ の外層、IPC-2221)。✔ は今のいちばん細い配線で足りている、✖ は足りない"));
                     if stats {
                         ui.strong(i18n::tr("実効 (過渡)")).on_hover_text(i18n::tr("過渡解析の後半の電流の実効値。太さに使うのは、これです"));

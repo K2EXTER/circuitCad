@@ -101,7 +101,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board pour [net=GND]                  the GND pour of the editor (bottom copper + a via per surface pad); do it BEFORE autoplace: the poured net then drops out of the placement and the parts sit closer
   board stitch [net=GND] [pitch=5] [mode=grid|fence]   stitching vias where the net is poured on two layers (grid over the overlap, or a fence along the edge); do it AFTER route
   board fiducials [d=1.0] [open=3.0] [remove=1]   three pick-and-place marks near the corners (only for machine assembly)
-  board nets [sort=length|detour|vias|width|open|pads|class] [csv=file]   one row per net: class, length (per layer), detour, vias, widths, pours, open
+  board nets [sort=length|detour|vias|width|current|open|pads|class] [csv=file]   one row per net: class, length (per layer), detour, vias, widths, current + width it needs, pours, open
   board dim [outline | add X1,Y1 X2,Y2 [dir=aligned|h|v] [offset=2] | remove N | clear]   dimensions kept on the board (DXF and SVG only)
   board forbid [rect=x0,y0,x1,y1 | poly=x,y;x,y;x,y] [layers=top] [tracks=0] [vias=0] [pours=0] [parts=0] | remove N | clear   keep-out areas
   board autoplace
