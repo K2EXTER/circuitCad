@@ -1,0 +1,70 @@
+仕上がりの銅箔の厚さ。1 oz = 35 µm。外層は、めっきを含めた厚さです	Finished copper thickness. 1 oz = 35 µm. On outer layers this includes the plating
+エッチングで上が細る 	Etch narrows the top
+エッチング (銅を溶かして配線を作る工程) では、銅の上の面が下の面より細く、断面が台形になります。上の辺が下の辺より何 µm 細いか (両側の合計)。1 oz で 25 µm ほどが目安です。描いた線幅は下の辺の幅です。0 なら長方形で計算します	Etching (dissolving copper to form the tracks) leaves the top of the copper narrower than the bottom, so the cross-section is a trapezoid. How many µm narrower the top edge is than the bottom (both sides together). About 25 µm is typical for 1 oz. The drawn width is the bottom edge. 0 solves a rectangle
+レジスト (基板の上) 	Mask (on board)
+ソルダーレジスト (基板の緑などの膜) の、配線のない所の厚さ。20 µm ほどが目安です。0 ならレジストなしで計算します。外層だけに効きます	Thickness of the solder mask (the green or other coating) where there are no tracks. About 20 µm is typical. 0 solves without a mask. Affects outer layers only
+レジスト (銅の上) 	Mask (on copper)
+配線の上と横のレジストの厚さ。基板の上より薄く、10 µm ほどが目安です	Mask thickness on top of and beside the tracks. Thinner than on the board, about 10 µm is typical
+レジストの誘電率 	Mask εr
+ソルダーレジストの比誘電率。3.5〜4 ほどです	Relative permittivity of the solder mask. About 3.5 to 4
+断面と電界 (インピーダンス)	Cross-section and field (impedance)
+配線の断面のまわりの電界を、断面を細かい格子に分けて解き (電界ソルバ)、特性インピーダンスを求めます。銅はエッチング後の台形、外層はレジストをかぶった、仕上がりの形で解きます	Solves the electric field around the track's cross-section on a fine mesh (a field solver) to find the characteristic impedance. It solves the finished shape: the copper as an etched trapezoid, and outer layers covered by the mask
+外層	Outer layer
+表面・裏面の配線。下の銅 (基準面) との間に基板、上は空気とレジスト (マイクロストリップ)	A track on the top or bottom. Board material between it and the copper below (the reference plane), air and mask above (microstrip)
+4層以上の基板の内側の配線。上下を2枚のベタに挟まれ、まわりは全部基板 (ストリップライン)	A track inside a board of 4 or more layers. Between two planes above and below, with board material all around (stripline)
+描いた配線の幅 (銅の下の辺)	The drawn track width (the bottom edge of the copper)
+同じ幅の2本を並べ、逆向きの信号を流す (USB・LVDS など)。差動インピーダンスを出します	Two tracks of the same width side by side carrying opposite signals (USB, LVDS, etc.). Gives the differential impedance
+2本の配線の、銅の縁から縁までの距離	Edge-to-edge distance between the two tracks' copper
+横に GND の銅	GND copper beside
+配線の両横の、同じ層に GND のベタがある (グランド付きコプレーナ線路)。近いほどインピーダンスが下がります	A GND pour on the same layer on both sides of the track (grounded coplanar waveguide). The closer it is, the lower the impedance
+すき間 	Gap
+配線の縁から、横の GND の銅までの距離	Distance from the track's edge to the GND copper beside it
+層構成 (この基板の値)	Layer stack (this board's values)
+左パネルの「層構成 (層数・材料)」と同じ値です。ここで変えると基板の値も変わります。発注先の公式ページの積層構成に合わせてください	The same values as "Layer stack (layers, material)" in the left panel. Changing them here changes the board's values. Match them to the stack-up on your fab's official page
+電界を解いています… (式による目安: 約 {formula:.1} Ω)	Solving the field… (formula estimate: about {formula:.1} Ω)
+実効誘電率 εeff	Effective permittivity εeff
+信号は、まわりが全部この誘電率の材料であるかのように伝わります。外層は空気とレジストがあるので、基板の誘電率より小さくなります	The signal travels as if everything around it had this permittivity. On outer layers it is lower than the board's because of the air and the mask
+信号が 1 mm 進むのにかかる時間 (√εeff ÷ 光の速さ)。長さの合わせ込みの目安です	Time for the signal to travel 1 mm (√εeff ÷ speed of light). A guide for length matching
+容量・インダクタンス	Capacitance, inductance
+配線 1 m あたりの、GND との間の容量と、インダクタンス。Z0 = √(L / C)	Capacitance to GND and inductance per metre of track. Z0 = √(L / C)
+特性インピーダンス Z0	Characteristic impedance Z0
+この配線の特性インピーダンス (電界ソルバ)	This track's characteristic impedance (field solver)
+差動インピーダンス	Differential impedance
+2本に逆向きの信号を流したときの、2本の間のインピーダンス (= 2 × 奇モード)。USB は 90 Ω、LVDS・Ethernet は 100 Ω が目標です	The impedance between the two tracks when they carry opposite signals (= 2 × odd mode). USB targets 90 Ω, LVDS and Ethernet 100 Ω
+同相インピーダンス	Common-mode impedance
+2本に同じ向きの信号を流したときの、2本まとめたインピーダンス (= 偶モード ÷ 2)	The impedance of both tracks together when they carry the same signal (= even mode ÷ 2)
+奇モード・偶モード	Odd mode, even mode
+1本あたりのインピーダンス。逆向き (奇) と同じ向き (偶)。近づけるほど開きます	Impedance per track, driven in opposite directions (odd) and the same direction (even). The closer the tracks, the further apart they are
+教科書の式では	Textbook formula
+Hammerstad-Jensen・IPC-2141 の近似式 (銅は長方形、レジストなし)。速いかわりに ±10% ほどずれます。式と電界ソルバの差が、形の違い (台形・レジスト) と式の誤差です	The Hammerstad-Jensen and IPC-2141 approximations (rectangular copper, no mask). Fast, but about ±10% off. The difference from the field solver is the shape (trapezoid, mask) plus the formula's error
+求めたいインピーダンス。1本なら Z0 (50 Ω など)、差動ペアなら差動インピーダンス (90 Ω・100 Ω など)	The impedance you want. Z0 for a single track (50 Ω, etc.), the differential impedance for a pair (90 Ω, 100 Ω, etc.)
+線幅を求める	Find width
+目標のインピーダンスになる線幅を、電界ソルバで探して、上の線幅に入れます (ペアなら間隔はそのまま)	Finds the width that gives the target impedance with the field solver and puts it in the width above (for a pair, the space stays)
+この層構成では、{t:.0} Ω にできる線幅が見つかりません (0.03〜20 mm)。層の間隔や目標を見直してください	No width (0.03 to 20 mm) gives {t:.0} Ω with this layer stack. Check the layer spacing or the target
+間隔を求める	Find space
+目標の差動インピーダンスになる、2本の間隔を探します (線幅はそのまま)	Finds the space between the two tracks that gives the target differential impedance (the width stays)
+この線幅では、間隔をどう変えても差動 {t:.0} Ω になりません。線幅を変えてください	No space gives {t:.0} Ω differential at this width. Change the width
+図を描き直しています…	Redrawing the picture…
+配線の断面。色は電位で、赤がプラス、青がマイナス (差動ペアの逆側)、白が 0 V です。縞の1本ごとに 0.1 V 変わり、縞が詰まっている所ほど電界が強く、そこに電気のエネルギーが集まっています。横線は材料の境目 (基板・レジスト)、オレンジは銅です	The track's cross-section. The colour is the potential: red is positive, blue negative (the other side of a pair), white 0 V. Each line is 0.1 V; where the lines crowd together the field is strong and the electric energy gathers. Horizontal lines are material boundaries (board, mask); orange is copper
+幅 {mm:.2} mm の範囲 · 格子 {} 点で解きました	{mm:.2} mm wide · solved on {} mesh points
+基板の材料と、層の間隔です。配線の太さから特性インピーダンスを求める (電界ソルバ) のに使います。初期値は、ふつうの厚さ 1.6 mm の2層基板の値です。発注先の公式ページにある積層構成 (層の間隔・誘電率・銅箔・レジストの厚さ) に直すと、近づきます	The board material and layer spacing, used to work out the characteristic impedance from the track width (field solver). The defaults are those of an ordinary 1.6 mm two-layer board. Changing them to the stack-up on your fab's official page (layer spacing, permittivity, copper and mask thickness) gets closer
+この構成で、外層の 50 Ω は、線幅 約 {w:.3} mm です (電界ソルバ)	With this stack-up, 50 Ω on an outer layer is a width of about {w:.3} mm (field solver)
+この構成では、外層を 50 Ω にできる線幅がありません	No width makes 50 Ω on an outer layer with this stack-up
+外層の 50 Ω の線幅を計算しています…	Working out the 50 Ω width on outer layers…
+断面と電界を見る	Cross-section and field
+配線の断面のまわりの電界を絵で見て、線幅・差動ペア・横の GND からインピーダンス・遅延を求める窓を開きます	Opens a window that shows the field around a track's cross-section and works out the impedance and delay from the width, a pair, and GND beside it
+線幅 {shown:.2} mm → {z:.1} Ω	Width {shown:.2} mm → {z:.1} Ω
+{}。層構成 (誘電率・層の間隔・銅箔・レジスト) から、仕上がりの形 (エッチング後の台形・レジスト) で電界を解いた値です。入れた層構成が発注先のものと違えば、値も違います。左パネルの「層構成 (層数・材料)」で、発注先の値を入れてください	{}. Solved from the layer stack (permittivity, layer spacing, copper, mask) with the finished shape (etched trapezoid, mask). If the stack you entered differs from your fab's, so will the value. Enter your fab's values in "Layer stack (layers, material)" in the left panel
+線幅 {shown:.2} mm → 約 {z:.0} Ω (式の目安)	Width {shown:.2} mm → about {z:.0} Ω (formula)
+動かしている間は、教科書の式による目安 (±10% ほど) を出します。止めると、電界ソルバの値に変わります	While you drag, the textbook-formula estimate (about ±10%) is shown. When you stop, it changes to the field solver's value
+断面を見る	Cross-section
+この線幅・層の配線の断面と電界を、別の窓で見ます。差動ペアや横の GND も試せます	Shows the cross-section and field of a track of this width and layer in another window. You can also try a pair or GND beside it
+目標のインピーダンスになる線幅を、層構成から電界ソルバで求めて、このネットの配線とクラスの線幅にします (クラスがなければ作ります)。そのあと、発注前チェックが、目標から外れた配線を教えます	Works out the width for the target impedance from the layer stack with the field solver, and sets it for this net's tracks and class (making a class if there is none). The pre-order check then points out tracks off the target
+特性インピーダンス	Characteristic impedance
+高速の信号が配線を伝わるとき、配線が見せる抵抗のような値 (Ω)。線幅、下の銅までの距離、基板の材料で決まります。送る側・受ける側の値と合わないと、信号が跳ね返って波形が乱れます。50 Ω、差動ペアなら 90 Ω や 100 Ω がよく使われます。	The resistance-like value (Ω) a track presents to a fast signal travelling along it. Set by the track width, the distance to the copper below and the board material. If it does not match the driver and receiver, the signal reflects and the waveform is disturbed. 50 Ω is common, 90 Ω or 100 Ω for differential pairs.
+電界ソルバ	Field solver
+配線の断面を細かい格子に分けて、まわりの電界を計算で解き、特性インピーダンスを求める道具。教科書の式 (±10% ほど) より正確で、エッチングで台形になった銅や、レジストの膜も入れて解けます。基板エディタの「断面と電界を見る」で、電界の絵と一緒に見られます。	A tool that splits a track's cross-section into a fine mesh, solves the electric field around it and finds the characteristic impedance. More accurate than the textbook formulas (about ±10%), and it can include copper etched into a trapezoid and the solder mask. In the board editor, "Cross-section and field" shows it with a picture of the field.
+実効誘電率	Effective permittivity
+外層の配線は、上が空気、下が基板なので、信号は両方の間の誘電率の材料の中を進むかのように伝わります。その誘電率。信号の遅れは √εeff に比例し、FR-4 の外層で 1 mm あたり約 6 ps です。	An outer-layer track has air above and board below, so the signal travels as if in a material whose permittivity lies between the two. That permittivity. The signal delay is proportional to √εeff: about 6 ps per mm on an FR-4 outer layer.
+インピーダンス (電界ソルバ)	Impedance (field solver)
+ネットの窓の「インピーダンス」で、いまの線幅の特性インピーダンスが分かり、目標 (50 Ω など) の線幅を求められます。値は、左パネルの「層構成 (層数・材料)」の値から、エッチング後の台形の銅とレジストを入れて電界を解いたもの (電界ソルバ) です。発注先の積層構成の値 (層の間隔・誘電率・銅箔・レジスト) を入れてください。「断面と電界を見る」で、断面の電界の絵と、差動ペア・横に GND の銅がある配線も見られます。目標を決めると、発注前チェックが、外れた配線を教えます	The "Impedance" part of the net window shows the characteristic impedance of the current width and finds the width for a target (50 Ω, etc.). The value comes from solving the field (a field solver) with the values of "Layer stack (layers, material)" in the left panel, including the etched trapezoid copper and the solder mask. Enter your fab's stack-up values (layer spacing, permittivity, copper, mask). "Cross-section and field" shows a picture of the field in the cross-section, and also pairs and tracks with GND copper beside them. Once you set a target, the pre-order check points out tracks that are off

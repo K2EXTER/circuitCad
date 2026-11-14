@@ -702,6 +702,28 @@ fn board_impedance_goes_both_ways() {
     assert!(a.iter().any(|v| v["ok"] == false), "{a:?}");
 }
 
+/// The answer is the field solver's, with εeff, the delay and the closed forms beside it; the finished shape and the mask count, and
+/// ground copper beside the track lowers it. `method=formula` gives the closed forms alone.
+#[test]
+fn board_impedance_is_solved_from_the_field() {
+    let (a, ok) = run("board new 40 30\nboard impedance height=0.2 width=0.35\nboard impedance width=0.35 mask=0 mask_top=0 etch=0\nboard impedance width=0.35 ground_gap=0.15\nboard impedance width=0.2 space=0.2\nboard impedance width=0.35 method=formula\n");
+    assert!(ok, "{a:?}");
+    let answers: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "board" && v.get("stackup").is_some()).collect();
+    let (with_mask, bare, coplanar) = (answers[0]["z0"].as_f64().unwrap(), answers[1]["z0"].as_f64().unwrap(), answers[2]["z0"].as_f64().unwrap());
+    assert_eq!(answers[0]["method"], "field");
+    assert!(bare > with_mask, "the mask (and the full top of an unetched track) lowers it: {bare} vs {with_mask}");
+    assert!(coplanar < bare - 2.0, "ground beside it: {coplanar}");
+    let ee = answers[0]["er_eff"].as_f64().unwrap();
+    assert!((2.5..4.5).contains(&ee), "{ee}");
+    assert!(answers[0]["formula"]["z0"].as_f64().is_some());
+    let p = answers[3];
+    assert!(p["zdiff"].as_f64().unwrap() > 80.0 && p["odd"]["z"].as_f64().is_some() && p["zcommon"].as_f64().is_some(), "{p}");
+    assert_eq!(answers[4]["method"], "formula");
+    assert!(answers[4].get("er_eff").is_none());
+    let (a, _) = run("board new 40 30\nboard impedance width=0.3 ground_gap=0.2 method=formula\n");
+    assert!(a.iter().any(|v| v["ok"] == false), "{a:?}");
+}
+
 #[test]
 fn noise_of_an_rc_filter_is_the_kt_over_c_value_and_names_the_resistor() {
     // sqrt(kT/C) for 100 nF at 27 C is 0.203 uV, whatever the resistor is; all of it comes from R1

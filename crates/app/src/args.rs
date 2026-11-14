@@ -132,7 +132,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                         app.sch.set_tran_signals(n);
                     }
             }
-        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets"].iter().any(|f| args.iter().any(|a| a == f)) {
+        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets", "--field"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);
         }
@@ -467,6 +467,29 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     // --nets: the window with the table of the nets
     if args.iter().any(|a| a == "--nets") {
         app.board_ed.net_table.open = true;
+    }
+    // `--field [pair|inner|cpw]`: the cross-section window (a 0.2 mm pair, an inner layer, ground copper beside the track)
+    if let Some(i) = args.iter().position(|a| a == "--field") {
+        let f = &mut app.board_ed.field_view;
+        f.open = true;
+        match args.get(i + 1).map(String::as_str) {
+            Some("pair") => {
+                f.pair = true;
+                f.width = 0.2;
+            }
+            Some("inner") => {
+                f.inner = true;
+                f.pair = true;
+                f.width = 0.1;
+                f.space = 0.15;
+            }
+            Some("cpw") => {
+                f.coplanar = true;
+                f.width = 1.0;
+                f.gap = 0.2;
+            }
+            _ => {}
+        }
     }
     if let Some(i) = args.iter().position(|a| a == "--export")
         && let Some(dir) = args.get(i + 1) {

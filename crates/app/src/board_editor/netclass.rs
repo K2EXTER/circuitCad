@@ -9,17 +9,26 @@ impl BoardEditor {
         crate::widgets::section_header(ui, egui::Id::new("board_sec_層構"), false, "層構成 (層数・材料)", "基板の層の数と、材料・層の間隔 (誘電率・層の間隔・銅箔)。インピーダンスの目安に使います", |ui| {
             self.layer_count_ui(ui);
             ui.separator();
-            ui.small(i18n::tr("基板の材料と、層の間隔です。配線の太さから特性インピーダンスの目安を出すのに使います。初期値は、ふつうの厚さ 1.6 mm の2層基板の値です。発注先の公式ページにある積層構成 (層の間隔・誘電率・銅箔の厚さ) に直すと、近づきます"));
+            ui.small(i18n::tr("基板の材料と、層の間隔です。配線の太さから特性インピーダンスを求める (電界ソルバ) のに使います。初期値は、ふつうの厚さ 1.6 mm の2層基板の値です。発注先の公式ページにある積層構成 (層の間隔・誘電率・銅箔・レジストの厚さ) に直すと、近づきます"));
             let total = self.board.inner_layers as usize + 2;
             let mut s = self.board.stackup;
-            ui.horizontal_wrapped(|ui| {
-                ui.add(egui::DragValue::new(&mut s.er).speed(0.05).range(2.0..=12.0).prefix(i18n::tr("誘電率 "))).on_hover_text(i18n::tr("基板の材料の比誘電率。FR-4 は 4.2〜4.6 ほどで、材料と周波数で変わります"));
-                ui.add(egui::DragValue::new(&mut s.height).speed(0.01).range(0.05..=3.0).prefix(i18n::tr("外層から基準面まで ")).suffix(" mm")).on_hover_text(i18n::tr("外層の配線から、その下の銅 (2層基板なら反対の面、4層基板なら隣の内層のベタ) までの距離。2層の 1.6 mm 基板なら約 1.53 mm、4層基板なら 0.1〜0.2 mm ほどです"));
-                ui.add(egui::DragValue::new(&mut s.plane_gap).speed(0.01).range(0.1..=3.0).prefix(i18n::tr("内層の上下のベタの間 ")).suffix(" mm")).on_hover_text(i18n::tr("内層の配線を上下から挟む2枚のベタの間の距離 (ストリップライン)"));
-                ui.add(egui::DragValue::new(&mut s.copper_um).speed(1.0).range(9.0..=140.0).prefix(i18n::tr("銅箔 ")).suffix(" µm")).on_hover_text(i18n::tr("銅箔の厚さ。1 oz = 35 µm"));
-            });
-            if let Some(w) = pcb_core::impedance::width_for(&s, pcb_core::impedance::Kind::Microstrip, 50.0) {
-                ui.small(i18n::trf!("この構成で、外層の 50 Ω は、線幅 約 {w:.2} mm です"));
+            super::fieldview::stackup_fields(ui, &mut s);
+            match super::fieldview::width_for_z(ui.ctx(), &s, pcb_core::impedance::Kind::Microstrip, 50.0) {
+                Some(Some(w)) => {
+                    ui.small(i18n::trf!("この構成で、外層の 50 Ω は、線幅 約 {w:.3} mm です (電界ソルバ)"));
+                }
+                Some(None) => {
+                    ui.small(i18n::tr("この構成では、外層を 50 Ω にできる線幅がありません"));
+                }
+                None => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.small(i18n::tr("外層の 50 Ω の線幅を計算しています…"));
+                    });
+                }
+            }
+            if ui.button(i18n::tr("断面と電界を見る")).on_hover_text(i18n::tr("配線の断面のまわりの電界を絵で見て、線幅・差動ペア・横の GND からインピーダンス・遅延を求める窓を開きます")).clicked() {
+                self.field_view.open = true;
             }
             ui.horizontal(|ui| {
                 if ui.button(i18n::tr("この層数の目安を入れる")).on_hover_text(i18n::tr("2層なら、1.6 mm の基板の裏の銅までの距離 (1.53 mm)。4層以上なら、外層と隣のベタの間が薄い (0.2 mm) 例を入れます。層の間隔は発注先ごとに違うので、あくまで例です。公式ページの値に直してください")).clicked() {

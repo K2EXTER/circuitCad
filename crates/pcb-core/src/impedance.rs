@@ -1,6 +1,7 @@
 //! Characteristic impedance of a track from its width, and the width for a wanted impedance: a rule of thumb from the textbook
 //! closed forms (Hammerstad-Jensen for a microstrip, the IPC-2141 forms for a stripline and for a pair), good to about ±10 %.
-//! A maker's own figure (from its field solver and its real stack-up) is the one to trust; this is for choosing a width to start from.
+//! They are instant: the field solver (`fieldsolve`, the finished shape of the copper and the mask) starts its searches from them and
+//! a window shows them while a slider moves. The figures the app and the checks give are the solver's.
 //!
 //! The layer stack is `Stackup`: the permittivity of the board, the distance from an outer layer to the plane it runs over, and the
 //! copper thickness. The defaults are those of a plain 1.6 mm two-layer board; a maker's page has the real ones.
@@ -18,13 +19,21 @@ pub struct Stackup {
     pub height: f64,
     /// Distance (mm) between the two planes an inner layer lies between (a stripline), the track in the middle of them.
     pub plane_gap: f64,
-    /// Copper thickness (µm): 35 for "1 oz".
+    /// Finished copper thickness (µm): 35 for "1 oz" (on an outer layer, with the plating).
     pub copper_um: f64,
+    /// How much narrower the top of an etched track is than its bottom (µm, both sides together; about 25 for 1 oz). The drawn width
+    /// is the bottom. Only the field solver uses it.
+    pub etch_um: f64,
+    /// Solder mask over the outer layers: thickness on the board between the tracks (µm, 0 for none), over the copper, and its
+    /// relative permittivity. Only the field solver uses them.
+    pub mask_um: f64,
+    pub mask_top_um: f64,
+    pub mask_er: f64,
 }
 
 impl Default for Stackup {
     fn default() -> Self {
-        Self { er: 4.5, height: 1.53, plane_gap: 0.36, copper_um: 35.0 }
+        Self { er: 4.5, height: 1.53, plane_gap: 0.36, copper_um: 35.0, etch_um: 25.0, mask_um: 20.0, mask_top_um: 10.0, mask_er: 3.8 }
     }
 }
 
@@ -151,7 +160,7 @@ pub struct ImpedanceIssue {
 }
 
 /// The tracks of the nets that have a wanted impedance (in their class) whose impedance is more than `tolerance` (a fraction, 0.1 = 10 %)
-/// off it.
+/// off it. The impedance is the field solver's (`fieldsolve`: the finished copper, the mask), each width solved once.
 pub fn check_targets(board: &Board, tolerance: f64) -> Vec<ImpedanceIssue> {
     let conn = crate::drc::connectivity(board);
     let mut out: Vec<ImpedanceIssue> = vec![];
@@ -163,7 +172,7 @@ pub fn check_targets(board: &Board, tolerance: f64) -> Vec<ImpedanceIssue> {
                 if crate::current::is_excepted(board, net, i) {
                     continue;
                 }
-                let z = single_ended(&board.stackup, Kind::of(t.side), t.width);
+                let z = crate::fieldsolve::single_ended(&board.stackup, Kind::of(t.side), t.width);
                 if (z - target).abs() / target > tolerance && worst.is_none_or(|w| (z - target).abs() > (w.0 - target).abs()) {
                     worst = Some((z, t.width, t.a));
                 }

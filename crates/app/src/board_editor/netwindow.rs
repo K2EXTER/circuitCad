@@ -305,6 +305,7 @@ impl BoardEditor {
                         Some(mut v) => {
                             let hi = rec.map_or(3.0, |r| (r * 2.0).max(3.0));
                             let slider = ui.add(egui::Slider::new(&mut v, rules.min_track_width..=hi).logarithmic(true).fixed_decimals(2).suffix(" mm"));
+                            let dragging = slider.dragged();
                             slider.on_hover_text(i18n::tr("ドラッグすると、このネットの配線の太さが、動かした値にそろって変わります (配線がなければ、これから引く線の太さ)。ネットクラスに入っていれば、クラスの線幅も変わります。元に戻すで、ドラッグの前に戻せます"));
                             if slider_changed(start, v) {
                                 new_width = Some(v);
@@ -323,14 +324,24 @@ impl BoardEditor {
                             } else {
                                 ui.small(i18n::tr("電流を入れると、推奨の線幅と比べて、足りているか出ます"));
                             }
-                            // --- the impedance of a track of this width (a rule of thumb), and the width for a wanted one
+                            // --- the impedance of a track of this width (the field solver; the closed forms while a slider moves or it
+                            // is still solving), and the width for a wanted one
                             ui.separator();
-                            ui.strong(i18n::tr("インピーダンス (目安)"));
+                            ui.strong(i18n::tr("インピーダンス"));
                             let side = idx.first().map_or(self.side, |&i| self.board.tracks[i].side);
                             let kind = pcb_core::impedance::Kind::of(side);
                             let shown = new_width.unwrap_or(v);
-                            let z = pcb_core::impedance::single_ended(&self.board.stackup, kind, shown);
-                            ui.label(egui::RichText::new(i18n::trf!("線幅 {shown:.2} mm → 約 {z:.0} Ω")).strong()).on_hover_text(i18n::trf!("{}。教科書の式による目安で、±10% ほどの誤差があります。発注先の積層構成 (基板の厚さ・層の間隔・誘電率) に合わせた値が正確です。左パネルの「層構成 (層数・材料)」で、その値を入れると近づきます", kind.label()));
+                            let solved = if dragging { None } else { super::fieldview::single_z(ui.ctx(), &self.board.stackup, kind, shown) };
+                            let z = solved.unwrap_or_else(|| pcb_core::impedance::single_ended(&self.board.stackup, kind, shown));
+                            ui.horizontal(|ui| {
+                                match solved {
+                                    Some(_) => ui.label(egui::RichText::new(i18n::trf!("線幅 {shown:.2} mm → {z:.1} Ω")).strong()).on_hover_text(i18n::trf!("{}。層構成 (誘電率・層の間隔・銅箔・レジスト) から、仕上がりの形 (エッチング後の台形・レジスト) で電界を解いた値です。入れた層構成が発注先のものと違えば、値も違います。左パネルの「層構成 (層数・材料)」で、発注先の値を入れてください", kind.label())),
+                                    None => ui.label(egui::RichText::new(i18n::trf!("線幅 {shown:.2} mm → 約 {z:.0} Ω (式の目安)")).strong()).on_hover_text(i18n::tr("動かしている間は、教科書の式による目安 (±10% ほど) を出します。止めると、電界ソルバの値に変わります")),
+                                };
+                                if ui.small_button(i18n::tr("断面を見る")).on_hover_text(i18n::tr("この線幅・層の配線の断面と電界を、別の窓で見ます。差動ペアや横の GND も試せます")).clicked() {
+                                    self.open_field_view(shown, side);
+                                }
+                            });
                             let mut target = class_k.and_then(|k| classes[k].impedance).unwrap_or(self.z_target);
                             ui.horizontal_wrapped(|ui| {
                                 ui.label(i18n::tr("目標"));
@@ -340,8 +351,8 @@ impl BoardEditor {
                                         new_target = Some(target);
                                     }
                                 }
-                                if ui.button(i18n::tr("目標の線幅にする")).on_hover_text(i18n::tr("目標のインピーダンスになる線幅を、層構成から求めて、このネットの配線とクラスの線幅にします (クラスがなければ作ります)。そのあと、発注前チェックが、目標から外れた配線を教えます")).clicked() {
-                                    match pcb_core::impedance::width_for(&self.board.stackup, kind, target) {
+                                if ui.button(i18n::tr("目標の線幅にする")).on_hover_text(i18n::tr("目標のインピーダンスになる線幅を、層構成から電界ソルバで求めて、このネットの配線とクラスの線幅にします (クラスがなければ作ります)。そのあと、発注前チェックが、目標から外れた配線を教えます")).clicked() {
+                                    match pcb_core::fieldsolve::width_for(&self.board.stackup, &pcb_core::fieldsolve::Section::single(kind, 0.0), target) {
                                         Some(w) if w >= rules.min_track_width => {
                                             new_width = Some((w * 1000.0).round() / 1000.0);
                                             new_target = Some(target);

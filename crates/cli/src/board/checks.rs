@@ -33,68 +33,123 @@ impl Session {
     }
 
     pub(super) fn board_impedance(&mut self, rest: &[String]) -> Res {
-        // the impedance of a track and the width for a wanted one (a rule of thumb, +-10 %):
-        //   board impedance [er=4.5] [height=1.53] [gap=0.36] [copper=35] [layer=outer|inner]
+        // the impedance of a track and the width for a wanted one, from the field solver (the finished copper, the mask):
+        //   board impedance [er=4.5] [height=1.53] [gap=0.36] [copper=35] [etch=25] [mask=20] [mask_top=10] [mask_er=3.8]
+        //                   [layer=outer|inner] [ground_gap=G] [method=field|formula]
         //                   width=W [space=S]        -> the impedance of a track of width W (a pair S apart: also differential)
         //                   target=Z                 -> the width for Z ohm
         //                   diff=Z space=S          -> the width of each track of a pair S apart for Z ohm differential
         //                   diff=Z width=W          -> the space of a pair of tracks of width W for Z ohm differential
-        // `er`, `height`, `gap`, `copper` set the layer stack of the board first (and keep it)
+        // `er` ... `mask_er` set the layer stack of the board first (and keep it). `ground_gap` puts ground copper beside the track(s)
+        // that far from their outer edge (a grounded coplanar line). `method=formula` gives the textbook closed forms (+-10 %) instead.
+        use pcb_core::fieldsolve as fs;
         let (_, kv) = options(rest);
         let board = self.board_mut()?;
-        let get = |k: &str| -> Result<Option<f64>, String> { opt(&kv, k).map(|v| v.parse::<f64>().ok().filter(|x| *x > 0.0 && x.is_finite()).ok_or_else(|| format!("{k}={v}: a positive number is expected"))).transpose() };
-        if let Some(v) = get("er")? {
-            board.stackup.er = v;
-        }
-        if let Some(v) = get("height")? {
-            board.stackup.height = v;
-        }
-        if let Some(v) = get("gap")? {
-            board.stackup.plane_gap = v;
-        }
-        if let Some(v) = get("copper")? {
-            board.stackup.copper_um = v;
+        let num = |k: &str, zero_ok: bool| -> Result<Option<f64>, String> {
+            opt(&kv, k)
+                .map(|v| v.parse::<f64>().ok().filter(|x| (*x > 0.0 || (zero_ok && *x == 0.0)) && x.is_finite()).ok_or_else(|| format!("{k}={v}: a {} number is expected", if zero_ok { "non-negative" } else { "positive" })))
+                .transpose()
+        };
+        let get = |k: &str| num(k, false);
+        for (k, zero_ok, field) in [
+            ("er", false, &mut board.stackup.er as &mut f64),
+            ("height", false, &mut board.stackup.height),
+            ("gap", false, &mut board.stackup.plane_gap),
+            ("copper", false, &mut board.stackup.copper_um),
+            ("etch", true, &mut board.stackup.etch_um),
+            ("mask", true, &mut board.stackup.mask_um),
+            ("mask_top", true, &mut board.stackup.mask_top_um),
+            ("mask_er", false, &mut board.stackup.mask_er),
+        ] {
+            if let Some(v) = num(k, zero_ok)? {
+                *field = v;
+            }
         }
         let kind = match opt(&kv, "layer") {
             Some("inner") => pcb_core::impedance::Kind::Stripline,
             Some("outer") | None => pcb_core::impedance::Kind::Microstrip,
             Some(o) => return Err(format!("layer={o}: use outer or inner")),
         };
+        let field = match opt(&kv, "method") {
+            Some("field") | None => true,
+            Some("formula") => false,
+            Some(o) => return Err(format!("method={o}: use field (the field solver) or formula (the textbook closed forms, +-10 %)")),
+        };
+        let ground_gap = get("ground_gap")?;
+        if ground_gap.is_some() && !field {
+            return Err("ground_gap= needs method=field: the closed forms have no ground beside the track".into());
+        }
         let s = board.stackup;
+        let sec = fs::Section { kind, width: 0.0, space: None, ground_gap };
         let round = |x: f64| (x * 1000.0).round() / 1000.0;
         let (width, space, target, diff) = (get("width")?, get("space")?, get("target")?, get("diff")?);
-        let mut out = json!({"layer": kind.label(), "stackup": {"er": s.er, "height": s.height, "gap": s.plane_gap, "copper_um": s.copper_um}});
+        let mut out = json!({"layer": kind.label(), "method": if field { "field" } else { "formula" },
+            "stackup": {"er": s.er, "height": s.height, "gap": s.plane_gap, "copper_um": s.copper_um, "etch_um": s.etch_um, "mask_um": s.mask_um, "mask_top_um": s.mask_top_um, "mask_er": s.mask_er}});
         let m = out.as_object_mut().unwrap();
-        match (target, diff) {
+        if let Some(g) = ground_gap {
+            m.insert("ground_gap".into(), json!(g));
+        }
+        // the answer for the width (and space) found: the impedance and, from the solver, εeff and the delay
+        let (w, sp) = match (target, diff) {
             (Some(z), None) => {
-                let w = pcb_core::impedance::width_for(&s, kind, z).ok_or_else(|| format!("target={z}: no track width gives that impedance on this layer stack"))?;
+                let w = if field { fs::width_for(&s, &sec, z) } else { pcb_core::impedance::width_for(&s, kind, z) };
+                let w = w.ok_or_else(|| format!("target={z}: no track width gives that impedance on this layer stack"))?;
                 m.insert("target".into(), json!(z));
-                m.insert("width".into(), json!(round(w)));
+                (Some(round(w)), None)
             }
             (None, Some(z)) => match (width, space) {
                 (None, Some(sp)) => {
-                    let w = pcb_core::impedance::width_for_differential(&s, kind, sp, z).ok_or_else(|| format!("diff={z} space={sp}: no track width gives that differential impedance"))?;
+                    let w = if field { fs::width_for_differential(&s, &sec, sp, z) } else { pcb_core::impedance::width_for_differential(&s, kind, sp, z) };
+                    let w = w.ok_or_else(|| format!("diff={z} space={sp}: no track width gives that differential impedance"))?;
                     m.insert("diff".into(), json!(z));
-                    m.insert("space".into(), json!(sp));
-                    m.insert("width".into(), json!(round(w)));
+                    (Some(round(w)), Some(sp))
                 }
                 (Some(w), None) => {
-                    let sp = pcb_core::impedance::space_for_differential(&s, kind, w, z).ok_or_else(|| format!("diff={z} width={w}: no space gives that differential impedance"))?;
+                    let sp = if field { fs::space_for_differential(&s, &sec, w, z) } else { pcb_core::impedance::space_for_differential(&s, kind, w, z) };
+                    let sp = sp.ok_or_else(|| format!("diff={z} width={w}: no space gives that differential impedance"))?;
                     m.insert("diff".into(), json!(z));
-                    m.insert("width".into(), json!(w));
-                    m.insert("space".into(), json!(round(sp)));
+                    (Some(w), Some(round(sp)))
                 }
                 _ => return Err("diff=Z needs width=W (to find the space) or space=S (to find the width), one of them".into()),
             },
             (Some(_), Some(_)) => return Err("target=Z and diff=Z are two questions: ask one at a time".into()),
-            (None, None) => {
-                if let Some(w) = width {
-                    m.insert("width".into(), json!(w));
-                    m.insert("z0".into(), json!(round(pcb_core::impedance::single_ended(&s, kind, w))));
-                    if let Some(sp) = space {
-                        m.insert("space".into(), json!(sp));
-                        m.insert("zdiff".into(), json!(round(pcb_core::impedance::differential(&s, kind, w, sp))));
+            (None, None) => (width, space),
+        };
+        if let Some(w) = w {
+            m.insert("width".into(), json!(w));
+            if let Some(sp) = sp {
+                m.insert("space".into(), json!(sp));
+            }
+            if field {
+                let mode = |md: &fs::Mode| json!({"z": round(md.z), "er_eff": round(md.er_eff), "delay_ps_mm": round(md.delay_ps_mm), "c_pf_m": round(md.c_pf_m), "l_nh_m": round(md.l_nh_m)});
+                let one = fs::solve(&s, &fs::Section { width: w, space: None, ..sec });
+                m.insert("z0".into(), json!(round(one.main_z())));
+                if let fs::Solved::Single(md) = one {
+                    m.insert("er_eff".into(), json!(round(md.er_eff)));
+                    m.insert("delay_ps_mm".into(), json!(round(md.delay_ps_mm)));
+                    m.insert("single".into(), mode(&md));
+                }
+                if let Some(sp) = sp {
+                    let pair = fs::solve(&s, &fs::Section { width: w, space: Some(sp), ..sec });
+                    m.insert("zdiff".into(), json!(round(pair.main_z())));
+                    m.insert("zcommon".into(), json!(pair.common_z().map(round)));
+                    if let fs::Solved::Pair { odd, even } = pair {
+                        m.insert("odd".into(), mode(&odd));
+                        m.insert("even".into(), mode(&even));
                     }
+                }
+                // the closed forms next to it, to see how far off a rule of thumb is
+                let mut f = json!({"z0": round(pcb_core::impedance::single_ended(&s, kind, w))});
+                if let Some(sp) = sp {
+                    f["zdiff"] = json!(round(pcb_core::impedance::differential(&s, kind, w, sp)));
+                }
+                if ground_gap.is_none() {
+                    m.insert("formula".into(), f);
+                }
+            } else {
+                m.insert("z0".into(), json!(round(pcb_core::impedance::single_ended(&s, kind, w))));
+                if let Some(sp) = sp {
+                    m.insert("zdiff".into(), json!(round(pcb_core::impedance::differential(&s, kind, w, sp))));
                 }
             }
         }

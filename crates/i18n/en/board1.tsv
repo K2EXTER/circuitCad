@@ -328,7 +328,6 @@ DRC違反が{}件あります。修正してから書き出してください	Th
 board_sec_層構	
 層構成 (層数・材料)	Layer stack (layers, material)
 基板の層の数と、材料・層の間隔 (誘電率・層の間隔・銅箔)。インピーダンスの目安に使います	Number of board layers and the material and spacing (dielectric constant, layer spacing, copper). Used for impedance estimates
-基板の材料と、層の間隔です。配線の太さから特性インピーダンスの目安を出すのに使います。初期値は、ふつうの厚さ 1.6 mm の2層基板の値です。発注先の公式ページにある積層構成 (層の間隔・誘電率・銅箔の厚さ) に直すと、近づきます	The board material and layer spacing. Used to estimate characteristic impedance from track width. The defaults are for a normal 1.6 mm thick 2-layer board. Changing them to the stack-up on the fab's official page (layer spacing, dielectric constant, copper thickness) makes the estimate closer
 誘電率 	Dielectric constant 
 基板の材料の比誘電率。FR-4 は 4.2〜4.6 ほどで、材料と周波数で変わります	Relative dielectric constant of the board material. FR-4 is about 4.2–4.6 and varies with material and frequency
 外層から基準面まで 	Outer layer to plane 
@@ -336,8 +335,6 @@ board_sec_層構
 内層の上下のベタの間 	Between inner planes 
 内層の配線を上下から挟む2枚のベタの間の距離 (ストリップライン)	Distance between the two pours above and below an inner-layer track (stripline)
 銅箔 	Copper 
-銅箔の厚さ。1 oz = 35 µm	Copper thickness. 1 oz = 35 µm
-この構成で、外層の 50 Ω は、線幅 約 {w:.2} mm です	With this stack, 50 Ω on an outer layer is a track width of about {w:.2} mm
 この層数の目安を入れる	Use example for this layer count
 2層なら、1.6 mm の基板の裏の銅までの距離 (1.53 mm)。4層以上なら、外層と隣のベタの間が薄い (0.2 mm) 例を入れます。層の間隔は発注先ごとに違うので、あくまで例です。公式ページの値に直してください	For 2 layers, the distance to the bottom copper of a 1.6 mm board (1.53 mm). For 4 or more, an example with a thin gap (0.2 mm) between the outer layer and the next pour. Layer spacing differs by fab, so this is only an example. Change it to the values on the official page
 初期値に戻す	Reset to defaults
@@ -472,13 +469,9 @@ CSV をコピー	Copy CSV
 推奨まで上げる	Raise to recommended
 スライダーを、推奨の線幅にします	Sets the slider to the recommended width
 電流を入れると、推奨の線幅と比べて、足りているか出ます	Enter a current to see whether the width is enough compared with the recommended width
-インピーダンス (目安)	Impedance (estimate)
-線幅 {shown:.2} mm → 約 {z:.0} Ω	Width {shown:.2} mm → about {z:.0} Ω
-{}。教科書の式による目安で、±10% ほどの誤差があります。発注先の積層構成 (基板の厚さ・層の間隔・誘電率) に合わせた値が正確です。左パネルの「層構成 (層数・材料)」で、その値を入れると近づきます	{}. A textbook-formula estimate, about ±10% off. Values matched to the fab's stack-up (board thickness, layer spacing, dielectric constant) are accurate. Enter them in "Layer stack (layers, material)" in the left panel to get closer
 目標	Target
 このネットの配線を、この特性インピーダンスにしたい値。USB や高速信号は 50 Ω (差動なら 90 Ω や 100 Ω) などです	The characteristic impedance you want for this net's tracks. USB and fast signals use 50 Ω (90 Ω or 100 Ω for differential), etc.
 目標の線幅にする	Use target width
-目標のインピーダンスになる線幅を、層構成から求めて、このネットの配線とクラスの線幅にします (クラスがなければ作ります)。そのあと、発注前チェックが、目標から外れた配線を教えます	Finds the width for the target impedance from the layer stack and sets it as the width of this net's tracks and class (creates a class if there is none). After that, the pre-order check tells you about tracks off the target
 目標 {target:.0} Ω の線幅は {w:.3} mm で、基板の最小線幅 {:.2} mm より細くなります。層の間隔を薄くするか、目標を上げてください	The width for the target {target:.0} Ω is {w:.3} mm, thinner than the board's minimum track width {:.2} mm. Make the layer spacing thinner or raise the target
 この層構成では、{target:.0} Ω にできる線幅が見つかりません。左パネルの「層構成 (層数・材料)」の値を確かめてください	With this layer stack, no width gives {target:.0} Ω. Check the values in "Layer stack (layers, material)" in the left panel
 クラスの目標 {zt:.0} Ω から {:.0}% ずれています	{:.0}% off the class target of {zt:.0} Ω

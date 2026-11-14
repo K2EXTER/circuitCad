@@ -193,8 +193,8 @@ DRC のルールが {} より緩くなっています	The DRC rules are looser t
 例: {} は {:.1} A を流す設定で、{:.2} mm 以上 (銅箔 35µm・温度上昇 10℃ の目安) が必要ですが、細い所は {:.2} mm です。細い配線は熱を持ち、焼けたり基板が傷んだりします。左の「配線の太さ」で「推奨幅にする」を押しましょう	Example: {} is set to carry {:.1} A and needs {:.2} mm or more (rule of thumb for 35µm copper, 10°C rise), but its thinnest spot is {:.2} mm. Thin tracks get hot and can burn or damage the board. Press "Use recommended width" under "Track width" on the left
 電流を設定したネット {} 本は、配線の太さが足りています	The {} nets with a set current all have wide enough tracks
 目標のインピーダンスから外れた配線があります: {}	Some tracks are off their target impedance: {}
-例: {} は {:.0} Ω を目標にしていますが、{:.2} mm の配線は約 {:.0} Ω (目安) です。ネットの設定の窓の「目標の線幅にする」で、そろえられます。値は教科書の式による ±10% ほどの目安なので、発注先の積層構成と、そこの計算の値を確かめてください	Example: {} targets {:.0} Ω, but a {:.2} mm track is about {:.0} Ω (rough). Use "Use target width" in the net settings window to fix it. The value is a textbook-formula estimate of about ±10%, so check the fab's layer stack and its calculated values
-インピーダンスを決めたネット {} 組の配線は、目標に合っています (目安)	The tracks of the {} nets with a set impedance meet their targets (rough)
+例: {} は {:.0} Ω を目標にしていますが、{:.2} mm の配線は約 {:.0} Ω です。ネットの設定の窓の「目標の線幅にする」で、そろえられます。値は、層構成 (誘電率・層の間隔・銅箔・レジスト) から電界ソルバで求めたものです。入れた層構成が発注先のものと違えば値も違うので、発注先の積層構成と、そこの計算の値も確かめてください	Example: {} targets {:.0} Ω, but a {:.2} mm track is about {:.0} Ω. Use "Use target width" in the net settings window to fix it. The value comes from the field solver using the layer stack (permittivity, layer spacing, copper, solder mask). If the stack you entered differs from the fab's, so will the value: check the fab's layer stack and its calculated values too
+インピーダンスを決めたネット {} 組の配線は、目標に合っています (電界ソルバ)	The tracks of the {} nets with a set impedance meet their targets (field solver)
 シルク (白い印刷) に気になる所が {} 件あります	{} concerns on the silkscreen (white printing)
 例: {}	Example: {}
 ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります	{} spots where the solder mask strip between pads is too thin

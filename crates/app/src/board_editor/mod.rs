@@ -504,6 +504,8 @@ pub struct BoardEditor {
     pub live_drc: livedrc::LiveDrc,
     /// The "ネットの一覧" window.
     pub net_table: nettable::NetTableState,
+    /// The "断面と電界" window (`fieldview.rs`).
+    pub field_view: fieldview::FieldView,
     /// The impedance (Ω) last asked for in a net window.
     z_target: f64,
     /// The net a via is placed for with the Via tool: `None` = the net of what is under the pointer (a pad, a track, a pour).
@@ -660,6 +662,7 @@ impl Default for BoardEditor {
             net_win_note: None,
             live_drc: Default::default(),
             net_table: Default::default(),
+            field_view: Default::default(),
             z_target: 50.0,
             via_net: None,
             last_export_dir: None,
@@ -717,6 +720,7 @@ mod netwindow;
 mod requirements;
 mod sheets;
 mod nettable;
+mod fieldview;
 mod file;
 mod actions;
 mod canvas;
