@@ -1,6 +1,7 @@
-//! A 2-D field solver for the cross-section of a track: the potential around the copper is found on a mesh (finite volumes, the
-//! Laplace equation with the permittivity of each cell), the capacitance per length comes from the energy of that field, and the
-//! impedance from the capacitance with the board material and without it (`Z0 = η0 / √(k·k_air)`, `εeff = k / k_air`).
+//! A 2-D field solver for the cross-section of a track: the potential around the copper is found on a mesh (`quad.rs`: a quadtree
+//! fine only next to the copper, bilinear elements with the permittivity of each cell), the capacitance per length comes from the
+//! energy of that field, and the impedance from the capacitance with the board material and without it (`Z0 = η0 / √(k·k_air)`,
+//! `εeff = k / k_air`).
 //!
 //! Unlike the closed forms of `impedance.rs` (±10 %), it takes the copper thickness, a solder mask over the outer layer and copper
 //! of the ground beside the track (a grounded coplanar line) as they are, and checks itself against the exact answers of a thin
@@ -12,14 +13,18 @@
 
 use crate::impedance::{Kind, Stackup};
 
+mod quad;
+
 /// Impedance of free space (Ω): `Z0 = η0 / √(k·k_air)` with `k` the capacitance per length over ε0.
 const ETA0: f64 = 376.730_313_668;
 /// ps per mm at the speed of light (1 / c).
 const PS_PER_MM: f64 = 3.335_640_95;
-/// Mesh: the finest cell is the smallest feature over `.0`, growing by `.1` away from the edges. Each answer is solved on this mesh
-/// and on one twice as fine next to the edges, and the two extrapolated (Richardson: the error near the sharp copper edges falls
-/// about in proportion to the cell): within about 0.2 % of the exact thin stripline, where the fine mesh alone is 0.8 % off.
-const MESH: (f64, f64) = (8.0, 1.15);
+/// The quadtree mesh: cells of 1/160 of the smallest feature at the corners of the copper, 1/12 along its sides, growing by 0.3 of
+/// the distance from them. Within about 0.2 % of the exact answers with 1-3 thousand nodes (the rows-and-columns mesh needed 27
+/// thousand and an extrapolation from two meshes for that).
+const QUAD: quad::Params = quad::Params { corner_div: 160.0, edge_div: 12.0, grow: 0.3 };
+/// The rows-and-columns grid the picture of the field is sampled on (finest cell, growth).
+const DISPLAY: (f64, f64) = (16.0, 1.15);
 
 /// What the section looks like besides the stack-up: one track or a pair, and copper of the ground beside it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -102,7 +107,7 @@ fn memo_key(s: &Stackup, sec: &Section) -> Vec<u64> {
     ]
 }
 
-/// Solves the section (about 0.1 s for a microstrip, less for a stripline; the same question again is answered from memory).
+/// Solves the section (about 0.02 s for a track, twice that for a pair; the same question again is answered from memory).
 pub fn solve(s: &Stackup, sec: &Section) -> Solved {
     let key = memo_key(s, sec);
     if let Some(r) = MEMO.lock().unwrap().as_ref().and_then(|m| m.get(&key)) {
@@ -183,34 +188,31 @@ fn find(f: impl Fn(f64) -> f64, x0: f64, (lo, hi): (f64, f64), target: f64, fall
     Some((l * h).sqrt())
 }
 
-fn solve_now(s: &Stackup, sec: &Section) -> Solved {
-    // every mode on both meshes, with the materials and in air: independent solves, run side by side
-    let modes: &[bool] = if sec.space.is_some() { &[true, false] } else { &[false] };
-    let meshes: Vec<(bool, f64)> = modes.iter().flat_map(|&odd| [(odd, MESH.0), (odd, 2.0 * MESH.0)]).collect();
-    let geos: Vec<Geometry> = meshes.iter().map(|&(odd, div)| Geometry::meshed(s, sec, odd, div, MESH.1)).collect();
-    let jobs: Vec<(usize, bool)> = (0..geos.len()).flat_map(|g| [(g, false), (g, true)]).filter(|&(g, air)| !(air && geos[g].uniform())).collect();
-    let ks = crate::par::par_map(&jobs, |&(g, air)| geos[g].solve(air).k);
-    let k = |g: usize, air: bool| -> f64 {
-        match jobs.iter().position(|j| *j == (g, air)) {
-            Some(i) => ks[i],
-            // in one material throughout (a stripline) the air-filled answer is just k / εr
-            None => k_of(&jobs, &ks, g) / geos[g].eps[0].1,
-        }
-    };
-    // Richardson: the error falls about in proportion to the cell, so 2·fine − coarse
-    let mode = |m: usize| {
-        let (c, f) = (2 * m, 2 * m + 1);
-        Mode::from_k(2.0 * k(f, false) - k(c, false), 2.0 * k(f, true) - k(c, true))
-    };
-    if sec.space.is_some() {
-        Solved::Pair { odd: mode(0), even: mode(1) }
-    } else {
-        Solved::Single(mode(0))
-    }
+/// The quadtree mesh of a section, and εr when the whole box is of one material (a stripline: then the air-filled answer is k / εr).
+fn quad_mesh(s: &Stackup, sec: &Section) -> (quad::Mesh, Option<f64>) {
+    let (x, y) = extent(s, sec);
+    let dom = quad::domain(x, y, (sec.kind == Kind::Microstrip).then_some(s.height));
+    let sh = shapes(s, sec, Some((dom.0 * dom.1 as f64, dom.0 * dom.2 as f64)));
+    let one = (sh.eps.len() == 1 && sh.eps[0].0.x0 <= 0.0 && sh.eps[0].0.y0 <= 0.0 && sh.eps[0].0.y1 >= dom.0 * dom.2 as f64 - 1e-9).then(|| sh.eps[0].1);
+    (quad::Mesh::new(&sh, dom, QUAD), one)
 }
 
-fn k_of(jobs: &[(usize, bool)], ks: &[f64], g: usize) -> f64 {
-    ks[jobs.iter().position(|j| *j == (g, false)).expect("solved with the materials")]
+fn solve_now(s: &Stackup, sec: &Section) -> Solved {
+    let (mesh, one) = quad_mesh(s, sec);
+    // every mode with the materials and in air: independent solves on the same mesh, run side by side
+    let modes: &[bool] = if sec.space.is_some() { &[true, false] } else { &[false] };
+    let jobs: Vec<(bool, bool)> = modes.iter().flat_map(|&odd| [(odd, false), (odd, true)]).filter(|&(_, air)| !(air && one.is_some())).collect();
+    let ks = crate::par::par_map(&jobs, |&(odd, air)| mesh.solve(odd, air).0);
+    let k = |odd: bool, air: bool| match jobs.iter().position(|j| *j == (odd, air)) {
+        Some(i) => ks[i],
+        None => ks[jobs.iter().position(|j| *j == (odd, false)).expect("solved with the materials")] / one.unwrap_or(1.0),
+    };
+    let mode = |odd: bool| Mode::from_k(k(odd, false), k(odd, true));
+    if sec.space.is_some() {
+        Solved::Pair { odd: mode(true), even: mode(false) }
+    } else {
+        Solved::Single(mode(false))
+    }
 }
 
 /// Characteristic impedance (Ω) of one track, from the field.
@@ -237,25 +239,22 @@ pub struct FieldMap {
     pub copper: Vec<([[f64; 2]; 4], f64)>,
     /// The left edge is at 0 V (a pair driven in opposite directions): the left half is the mirror with the sign turned.
     pub odd: bool,
-    /// Number of mesh nodes and of the solver's iterations.
+    /// Number of nodes the potential was solved at (on the quadtree; `xs`, `ys` are where it is sampled for drawing).
     pub nodes: usize,
-    pub iterations: usize,
 }
 
 /// The field of a section for drawing (the odd mode for a pair: the one its differential impedance comes from).
 pub fn field_map(s: &Stackup, sec: &Section) -> FieldMap {
-    let g = Geometry::meshed(s, sec, sec.space.is_some(), 2.0 * MESH.0, MESH.1);
-    let r = g.solve(false);
-    FieldMap {
-        eps: r.eps,
-        copper: g.copper.iter().map(|c| (c.0.corners(), c.1)).collect(),
-        odd: g.odd,
-        nodes: g.xs.len() * g.ys.len(),
-        iterations: r.iterations,
-        xs: g.xs,
-        ys: g.ys,
-        v: r.v,
+    let g = Geometry::meshed(s, sec, sec.space.is_some(), DISPLAY.0, DISPLAY.1);
+    let (mesh, _) = quad_mesh(s, sec);
+    let (_, v) = mesh.solve(g.odd, false);
+    let mut pot = Vec::with_capacity(g.xs.len() * g.ys.len());
+    for &y in &g.ys {
+        for &x in &g.xs {
+            pot.push(mesh.potential(&v, x, y));
+        }
     }
+    FieldMap { eps: g.cell_eps(), copper: g.copper.iter().map(|c| (c.0.corners(), c.1)).collect(), odd: g.odd, nodes: mesh.nodes, xs: g.xs, ys: g.ys, v: pot }
 }
 
 /// A trapezoid with a flat bottom and top: `x0..x1` at `y0`, `tx0..tx1` at `y1` (a rectangle when they are the same). Etched copper
@@ -304,78 +303,107 @@ struct Geometry {
     odd: bool,
 }
 
-struct Field {
-    k: f64,
-    v: Vec<f64>,
-    eps: Vec<f64>,
-    iterations: usize,
+/// The materials and the copper of the right half of a section, in a box `xmax` × `ymax` (at least the one it needs; a mesh may
+/// ask for a bigger one). `fine` is the smallest size that matters (track, space, gap, copper and mask thickness, height).
+pub(crate) struct Shapes {
+    eps: Vec<(Rect, f64)>,
+    copper: Vec<(Rect, f64)>,
+    xmax: f64,
+    ymax: f64,
+    fine: f64,
+    width: f64,
+}
+
+/// The box a section needs: far enough that the field there no longer matters (20 times the size over a plane, 8 plane gaps in a
+/// stripline, where it falls off fast).
+fn extent(s: &Stackup, sec: &Section) -> (f64, f64) {
+    let t = (s.copper_um / 1000.0).max(0.0);
+    let w = sec.width.max(1e-4);
+    let x1 = sec.space.map_or(w / 2.0, |sp| sp.max(1e-4) / 2.0 + w);
+    match sec.kind {
+        Kind::Microstrip => {
+            let size = s.height + x1;
+            (x1 + 20.0 * size, s.height + t + 20.0 * size)
+        }
+        Kind::Stripline => {
+            let b = s.plane_gap.max(t + 1e-3);
+            (x1 + 8.0 * b, b)
+        }
+    }
+}
+
+fn shapes(s: &Stackup, sec: &Section, bigger: Option<(f64, f64)>) -> Shapes {
+    let (mut xmax, mut ymax) = extent(s, sec);
+    if let Some((x, y)) = bigger {
+        xmax = xmax.max(x);
+        if sec.kind == Kind::Microstrip {
+            ymax = ymax.max(y);
+        }
+    }
+    let t = (s.copper_um / 1000.0).max(0.0);
+    let w = sec.width.max(1e-4);
+    // the track(s) in the right half: one track straddles the middle, a pair starts half the space from it
+    let (x0, x1) = match sec.space {
+        Some(sp) => (sp.max(1e-4) / 2.0, sp.max(1e-4) / 2.0 + w),
+        None => (0.0, w / 2.0),
+    };
+    // the finished copper: the top narrower than the bottom by the etch (half of it on each outer edge; not at the middle of one
+    // track, which is not an edge)
+    let e = (s.etch_um / 1000.0).clamp(0.0, w * 0.9) / 2.0;
+    let etched = |x0: f64, x1: f64, y0: f64, y1: f64| Rect::trapezoid(x0, x1, y0, y1, if x0 > 0.0 { x0 + e } else { x0 }, x1 - e);
+    let mut eps = vec![];
+    let mut copper = vec![];
+    let mut feats = vec![w, s.height, s.plane_gap];
+    if let Some(sp) = sec.space {
+        feats.push(sp);
+    }
+    if let Some(g) = sec.ground_gap {
+        feats.push(g);
+    }
+    if t > 0.0 {
+        feats.push(t);
+    }
+    let ty0;
+    match sec.kind {
+        Kind::Microstrip => {
+            let h = s.height;
+            ty0 = h;
+            eps.push((Rect::new(0.0, xmax, 0.0, h), s.er));
+            let (m, mt) = (s.mask_um / 1000.0, s.mask_top_um / 1000.0);
+            if m > 0.0 {
+                feats.push(m);
+                eps.push((Rect::new(0.0, xmax, h, h + m), s.mask_er));
+            }
+            if mt > 0.0 {
+                feats.push(mt);
+                // over the copper it follows the copper's shape, as thick on the sides as on the top
+                let c = etched(x0, x1, h, h + t);
+                let inner = x0 > 0.0;
+                eps.push((Rect::trapezoid(if inner { x0 - mt } else { 0.0 }, x1 + mt, h, h + t + mt, if inner { c.tx0 - mt } else { 0.0 }, c.tx1 + mt), s.mask_er));
+                if let Some(g) = sec.ground_gap {
+                    eps.push((Rect::new(x1 + g - mt, xmax, h, h + t + mt), s.mask_er));
+                }
+            }
+        }
+        Kind::Stripline => {
+            let b = ymax;
+            ty0 = (b - t) / 2.0;
+            eps.push((Rect::new(0.0, xmax, 0.0, b), s.er));
+        }
+    }
+    copper.push((etched(x0, x1, ty0, ty0 + t), 1.0));
+    if let Some(g) = sec.ground_gap {
+        let gx = x1 + g.max(1e-4);
+        copper.push((Rect::trapezoid(gx, xmax, ty0, ty0 + t, gx + e, xmax), 0.0));
+    }
+    let fine = feats.iter().copied().filter(|f| *f > 0.0).fold(f64::INFINITY, f64::min);
+    Shapes { eps, copper, xmax, ymax, fine, width: w }
 }
 
 impl Geometry {
     fn meshed(s: &Stackup, sec: &Section, odd: bool, div: f64, ratio: f64) -> Self {
-        let t = (s.copper_um / 1000.0).max(0.0);
-        let w = sec.width.max(1e-4);
-        // the track(s) in the right half: one track straddles the middle, a pair starts half the space from it
-        let (x0, x1) = match sec.space {
-            Some(sp) => (sp.max(1e-4) / 2.0, sp.max(1e-4) / 2.0 + w),
-            None => (0.0, w / 2.0),
-        };
-        // the finished copper: the top narrower than the bottom by the etch (half of it on each outer edge; not at the middle of one
-        // track, which is not an edge)
-        let e = (s.etch_um / 1000.0).clamp(0.0, w * 0.9) / 2.0;
-        let etched = |x0: f64, x1: f64, y0: f64, y1: f64| Rect::trapezoid(x0, x1, y0, y1, if x0 > 0.0 { x0 + e } else { x0 }, x1 - e);
-        let mut eps = vec![];
-        let mut copper = vec![];
-        let mut feats = vec![w, s.height, s.plane_gap];
-        if let Some(sp) = sec.space {
-            feats.push(sp);
-        }
-        if let Some(g) = sec.ground_gap {
-            feats.push(g);
-        }
-        if t > 0.0 {
-            feats.push(t);
-        }
-        let (xmax, ymax, ty0);
-        match sec.kind {
-            Kind::Microstrip => {
-                let h = s.height;
-                let size = h + x1;
-                xmax = x1 + 20.0 * size;
-                ymax = h + t + 20.0 * size;
-                ty0 = h;
-                eps.push((Rect::new(0.0, xmax, 0.0, h), s.er));
-                let (m, mt) = (s.mask_um / 1000.0, s.mask_top_um / 1000.0);
-                if m > 0.0 {
-                    feats.push(m);
-                    eps.push((Rect::new(0.0, xmax, h, h + m), s.mask_er));
-                }
-                if mt > 0.0 {
-                    feats.push(mt);
-                    // over the copper it follows the copper's shape, as thick on the sides as on the top
-                    let c = etched(x0, x1, h, h + t);
-                    let inner = x0 > 0.0;
-                    eps.push((Rect::trapezoid(if inner { x0 - mt } else { 0.0 }, x1 + mt, h, h + t + mt, if inner { c.tx0 - mt } else { 0.0 }, c.tx1 + mt), s.mask_er));
-                    if let Some(g) = sec.ground_gap {
-                        eps.push((Rect::new(x1 + g - mt, xmax, h, h + t + mt), s.mask_er));
-                    }
-                }
-            }
-            Kind::Stripline => {
-                let b = s.plane_gap.max(t + 1e-3);
-                xmax = x1 + 8.0 * b;
-                ymax = b;
-                ty0 = (b - t) / 2.0;
-                eps.push((Rect::new(0.0, xmax, 0.0, b), s.er));
-            }
-        }
-        copper.push((etched(x0, x1, ty0, ty0 + t), 1.0));
-        if let Some(g) = sec.ground_gap {
-            let gx = x1 + g.max(1e-4);
-            copper.push((Rect::trapezoid(gx, xmax, ty0, ty0 + t, gx + e, xmax), 0.0));
-        }
+        let Shapes { eps, copper, xmax, ymax, fine, width: w } = shapes(s, sec, None);
         // fine cells at the copper's edges (the field is sharpest there), coarser at the edges of the materials, coarse at the box
-        let fine = feats.iter().copied().filter(|f| *f > 0.0).fold(f64::INFINITY, f64::min);
         let hmin = (fine / div).min(w / (div * 3.0));
         let (hmat, hbox) = (4.0 * hmin, (xmax.min(ymax)) / 50.0);
         let mut xk = vec![(0.0, hmin), (xmax, hbox)];
@@ -389,81 +417,20 @@ impl Geometry {
         Self { xs, ys, eps, copper, odd }
     }
 
-    fn uniform(&self) -> bool {
-        self.eps.len() == 1 && self.eps[0].0.x0 <= 0.0 && self.eps[0].0.x1 >= *self.xs.last().unwrap() && self.eps[0].0.y0 <= 0.0 && self.eps[0].0.y1 >= *self.ys.last().unwrap()
-    }
-
-    /// The field with the materials (or all air), and `k`: the capacitance per length of one track over ε0.
-    fn solve(&self, air: bool) -> Field {
+    /// εr of each cell of the grid (row by row).
+    fn cell_eps(&self) -> Vec<f64> {
         let (nx, ny) = (self.xs.len(), self.ys.len());
-        // permittivity of each cell
         let mut eps = vec![1.0; (nx - 1) * (ny - 1)];
-        if !air {
-            for j in 0..ny - 1 {
-                let yc = (self.ys[j] + self.ys[j + 1]) / 2.0;
-                for i in 0..nx - 1 {
-                    let xc = (self.xs[i] + self.xs[i + 1]) / 2.0;
-                    if let Some((_, e)) = self.eps.iter().rev().find(|(r, _)| r.holds(xc, yc)) {
-                        eps[j * (nx - 1) + i] = *e;
-                    }
-                }
-            }
-        }
-        // fixed nodes: the box (left only for the odd mode) and the copper
-        let mut fixed = vec![false; nx * ny];
-        let mut v = vec![0.0; nx * ny];
-        for j in 0..ny {
-            for i in 0..nx {
-                let p = j * nx + i;
-                if j == 0 || j == ny - 1 || i == nx - 1 || (self.odd && i == 0) {
-                    fixed[p] = true;
-                }
-            }
-        }
-        // the copper, also where it is on the box edge (a ground beside the track reaches the right edge; one track the middle)
-        for j in 0..ny {
-            for i in 0..nx {
-                if let Some((_, pot)) = self.copper.iter().find(|(r, _)| r.holds(self.xs[i], self.ys[j])) {
-                    let p = j * nx + i;
-                    fixed[p] = true;
-                    v[p] = *pot;
-                }
-            }
-        }
-        // conductances of the edges: ge to the right neighbour, gn to the one above
-        let mut ge = vec![0.0; nx * ny];
-        let mut gn = vec![0.0; nx * ny];
         for j in 0..ny - 1 {
-            let dy = self.ys[j + 1] - self.ys[j];
+            let yc = (self.ys[j] + self.ys[j + 1]) / 2.0;
             for i in 0..nx - 1 {
-                let dx = self.xs[i + 1] - self.xs[i];
-                let e = eps[j * (nx - 1) + i];
-                let (h, vv) = (e * dy / 2.0 / dx, e * dx / 2.0 / dy);
-                ge[j * nx + i] += h;
-                ge[(j + 1) * nx + i] += h;
-                gn[j * nx + i] += vv;
-                gn[j * nx + i + 1] += vv;
-            }
-        }
-        let iterations = pcg(nx, ny, &ge, &gn, &fixed, &mut v);
-        // energy of the half: W = ½ Σ g ΔV²
-        let mut w = 0.0;
-        for j in 0..ny {
-            for i in 0..nx {
-                let p = j * nx + i;
-                if i + 1 < nx {
-                    w += ge[p] * (v[p + 1] - v[p]).powi(2);
-                }
-                if j + 1 < ny {
-                    w += gn[p] * (v[p + nx] - v[p]).powi(2);
+                let xc = (self.xs[i] + self.xs[i + 1]) / 2.0;
+                if let Some((_, e)) = self.eps.iter().rev().find(|(r, _)| r.holds(xc, yc)) {
+                    eps[j * (nx - 1) + i] = *e;
                 }
             }
         }
-        w *= 0.5;
-        // the whole section has twice the energy; one track at 1 V alone: C = 2W; each track of a pair at ±1 V or both at 1 V: C = W
-        let lines = if self.copper.iter().any(|(r, p)| *p > 0.0 && r.x0 > 0.0) { 2.0 } else { 1.0 };
-        let k = 2.0 * (2.0 * w) / lines;
-        Field { k, v, eps, iterations }
+        eps
     }
 }
 
@@ -507,158 +474,6 @@ fn axis(mut keys: Vec<(f64, f64)>, ratio: f64, lo: f64, hi: f64) -> Vec<f64> {
         out.push(b);
     }
     out
-}
-
-/// Conjugate gradients with an incomplete Cholesky (no fill) preconditioner on the 5-point mesh; the fixed nodes keep their value.
-fn pcg(nx: usize, ny: usize, ge: &[f64], gn: &[f64], fixed: &[bool], v: &mut [f64]) -> usize {
-    let n = nx * ny;
-    let free = |p: usize| !fixed[p];
-    // couplings between free nodes only (0 at the end of a row and of the mesh)
-    let ce_v: Vec<f64> = (0..n).map(|p| if p % nx + 1 < nx && free(p) && free(p + 1) { ge[p] } else { 0.0 }).collect();
-    let cn_v: Vec<f64> = (0..n).map(|p| if p + nx < n && free(p) && free(p + nx) { gn[p] } else { 0.0 }).collect();
-    let ce = |p: usize| ce_v[p];
-    let cn = |p: usize| cn_v[p];
-    let mut diag = vec![0.0; n];
-    let mut b = vec![0.0; n];
-    for p in 0..n {
-        if !free(p) {
-            continue;
-        }
-        let (i, j) = (p % nx, p / nx);
-        let mut d = 0.0;
-        let mut add = |q: usize, g: f64| {
-            d += g;
-            if fixed[q] {
-                b[p] += g * v[q];
-            }
-        };
-        if i + 1 < nx {
-            add(p + 1, ge[p]);
-        }
-        if i > 0 {
-            add(p - 1, ge[p - 1]);
-        }
-        if j + 1 < ny {
-            add(p + nx, gn[p]);
-        }
-        if j > 0 {
-            add(p - nx, gn[p - nx]);
-        }
-        diag[p] = d;
-    }
-    // IC(0): d_p = a_pp - c_W² / d_W - c_S² / d_S
-    let mut dk = vec![1.0; n];
-    for p in 0..n {
-        if !free(p) {
-            continue;
-        }
-        let mut d = diag[p];
-        if p % nx > 0 {
-            let c = ce(p - 1);
-            if c != 0.0 {
-                d -= c * c / dk[p - 1];
-            }
-        }
-        if p >= nx {
-            let c = cn(p - nx);
-            if c != 0.0 {
-                d -= c * c / dk[p - nx];
-            }
-        }
-        dk[p] = if d > 1e-12 * diag[p] { d } else { diag[p] };
-    }
-    let apply = |x: &[f64], y: &mut [f64]| {
-        for p in 0..n {
-            if !free(p) {
-                y[p] = 0.0;
-                continue;
-            }
-            let mut s = diag[p] * x[p];
-            if p % nx + 1 < nx {
-                s -= ce(p) * x[p + 1];
-            }
-            if p % nx > 0 {
-                s -= ce(p - 1) * x[p - 1];
-            }
-            if p + nx < n {
-                s -= cn(p) * x[p + nx];
-            }
-            if p >= nx {
-                s -= cn(p - nx) * x[p - nx];
-            }
-            y[p] = s;
-        }
-    };
-    let precond = |r: &[f64], z: &mut [f64]| {
-        // (D + L) y = r, then (D + Lᵀ) z = D y
-        for p in 0..n {
-            if !free(p) {
-                z[p] = 0.0;
-                continue;
-            }
-            let mut s = r[p];
-            if p % nx > 0 {
-                s += ce(p - 1) * z[p - 1];
-            }
-            if p >= nx {
-                s += cn(p - nx) * z[p - nx];
-            }
-            z[p] = s / dk[p];
-        }
-        for p in (0..n).rev() {
-            if !free(p) {
-                continue;
-            }
-            let mut s = 0.0;
-            if p % nx + 1 < nx {
-                s += ce(p) * z[p + 1];
-            }
-            if p + nx < n {
-                s += cn(p) * z[p + nx];
-            }
-            z[p] += s / dk[p];
-        }
-    };
-    // x: the free values (start at 0), r = b - A x
-    let mut x = vec![0.0; n];
-    let mut r = b.clone();
-    let bnorm = b.iter().map(|x| x * x).sum::<f64>().sqrt().max(1e-300);
-    let mut z = vec![0.0; n];
-    precond(&r, &mut z);
-    let mut d = z.clone();
-    let mut rz: f64 = r.iter().zip(&z).map(|(a, b)| a * b).sum();
-    let mut q = vec![0.0; n];
-    let mut it = 0;
-    while it < 20_000 {
-        let rn = r.iter().map(|x| x * x).sum::<f64>().sqrt();
-        if rn <= 1e-8 * bnorm {
-            break;
-        }
-        apply(&d, &mut q);
-        let dq: f64 = d.iter().zip(&q).map(|(a, b)| a * b).sum();
-        if dq <= 0.0 {
-            break;
-        }
-        let alpha = rz / dq;
-        for p in 0..n {
-            x[p] += alpha * d[p];
-            r[p] -= alpha * q[p];
-        }
-        precond(&r, &mut z);
-        let rz2: f64 = r.iter().zip(&z).map(|(a, b)| a * b).sum();
-        let beta = rz2 / rz;
-        rz = rz2;
-        for p in 0..n {
-            d[p] = z[p] + beta * d[p];
-        }
-        it += 1;
-    }
-    for p in 0..n {
-        if free(p) {
-            v[p] = x[p];
-        }
-    }
-    it
 }
 
 #[cfg(test)]
@@ -797,7 +612,7 @@ mod tests {
         let nx = m.xs.len();
         assert!(m.v[..nx].iter().all(|v| *v == 0.0), "the plane");
         let j = m.ys.iter().position(|y| (*y - 1.53).abs() < 1e-9).unwrap();
-        assert_eq!(m.v[j * nx], 1.0, "the middle of the track");
+        assert!((m.v[j * nx] - 1.0).abs() < 1e-6, "the middle of the track: {}", m.v[j * nx]);
         assert!(m.v.iter().all(|v| (-1e-9..=1.0 + 1e-9).contains(v)));
     }
 }

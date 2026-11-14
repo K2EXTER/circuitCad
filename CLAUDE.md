@@ -36,7 +36,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 ## pcb-core (`crates/pcb-core/src`) — 詳細: `docs/code-notes/pcb-core.md`(目次。ファイル一覧は `pcb-core/output.md` の末尾)
 - モデル `model.rs`(層は `Side`、`NetClass`、`Rules`)/ フットプリント `footprints.rs` `package.rs` `parts.rs` / 回路図取込 `netlist.rs`
-- `drc/`(clearance・connectivity・path・pour・decoupling・thermal・silk・acute・area・slit・patch・geo …)/ `current.rs` `irdrop.rs` `nettable.rs`(ネットの一覧) `keepout.rs`(禁止領域) `impedance.rs`(式)`fieldsolve.rs`(断面の電界ソルバ) `diffpair.rs` `requirements.rs`
+- `drc/`(clearance・connectivity・path・pour・decoupling・thermal・silk・acute・area・slit・patch・geo …)/ `current.rs` `irdrop.rs` `nettable.rs`(ネットの一覧) `keepout.rs`(禁止領域) `impedance.rs`(式)`fieldsolve/`(断面の電界ソルバ。4分木のメッシュ `quad.rs`) `diffpair.rs` `requirements.rs`
 - 配置: `autoplace/`(order・blocks・ics・finish) `align.rs` `connectors.rs` `orient.rs` `swap.rs` `nudge.rs`(配線後に近くの部品を動かして引き直す)`renumber.rs`(部品番号を位置順に振り直す)`snippet.rs`(配置・配線のスニペット)`replicas.rs`(繰り返し構造の検出)
 - 熱: `heat_copper.rs`(ピンにつながった銅から部品の θ を見積もる。回路図に反映で自己発熱へ)
 - 銅・形: `zonefill.rs`(ベタの銅)`copper.rs`(配線後に足す銅)`groundpour.rs`(GNDベタ)`stitch.rs`(ビアの縫い付け)`fiducial.rs`(フィデューシャル)`outline.rs` `shape.rs` `geom.rs` `pinlabels.rs`
