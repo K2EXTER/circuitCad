@@ -3,7 +3,7 @@
 
     python tools/gen_diode_models.py
 
-Every number below was read on 2026-11-12 (1N5819 on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs
+Every number below was read on 2026-11-12 (1N5817 and 1N5819 on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs
 rendered as pictures (graph readings: the pixel position of the curve, so a reading is good to about 1 %).
 docs/model-policy.md says how bundled models are made; crates/cli/tests/integration/diode_models.rs measures the models and writes the
 comparison tables (docs/models/diodes.md, crates/part-lib/model_checks.json).
@@ -178,6 +178,14 @@ def limits(p, fit):
     ]
     return rows
 
+
+# 1N5817 (20 V): the same Figure 7 (shared by the three), so the same fit; only VRSM (24 V) differs
+PARTS["1N5817_DO-41"] = dict(
+    PARTS["1N5819_DO-41"],
+    name="1N5817",
+    bv=(24.0, 1e-3, "降伏はデータシートに無いので、非繰り返しの最大逆電圧 VRSM 24 V に置いた (電流は表の IR の最大 1 mA)"),
+    desc="1N5817 ショットキーバリアダイオード 20V 1A (DO-41、帯の側がカソード K)。データシート (onsemi) の代表特性から作った等価モデル",
+)
 
 for f, p in PARTS.items():
     path = os.path.join(EX, f + ".part.json")

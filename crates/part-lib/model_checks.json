@@ -281,6 +281,103 @@
       }
     ]
   },
+  "1N5817": {
+    "fingerprint": "8438e03ec51ddb43",
+    "source": "onsemi 1N5817〜1N5819 データシート (1N5817/D Rev. 11, 2021-08)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.05 A)",
+        "datasheet": "— / 0.2590 / — V",
+        "target": "0.2590 V",
+        "condition": "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)",
+        "model": "0.2582 V",
+        "diff": "-0.0008 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.1 A)",
+        "datasheet": "— / 0.2820 / — V",
+        "target": "0.2820 V",
+        "condition": "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)",
+        "model": "0.2813 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.5 A)",
+        "datasheet": "— / 0.3590 / — V",
+        "target": "0.3590 V",
+        "condition": "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)",
+        "model": "0.3582 V",
+        "diff": "-0.0008 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.4120 / — V",
+        "target": "0.4120 V",
+        "condition": "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)",
+        "model": "0.4181 V",
+        "diff": "+0.0061 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (2.5 A)",
+        "datasheet": "— / 0.5770 / — V",
+        "target": "0.5770 V",
+        "condition": "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)",
+        "model": "0.5655 V",
+        "diff": "-0.0115 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (4 A)",
+        "datasheet": "— / 0.6950 / — V",
+        "target": "0.6950 V",
+        "condition": "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)",
+        "model": "0.7007 V",
+        "diff": "+0.0057 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、0.1 A)",
+        "datasheet": "— / — / 0.3200 V",
+        "target": "max 0.3200 V",
+        "condition": "vF: 表の max (パルスで測る)",
+        "model": "0.2813 V",
+        "diff": "-0.0387 V",
+        "tested": false
+      },
+      {
+        "item": "順方向電圧 (表、1 A)",
+        "datasheet": "— / — / 0.4500 V",
+        "target": "max 0.4500 V",
+        "condition": "vF: 表の max (パルスで測る)",
+        "model": "0.4181 V",
+        "diff": "-0.0319 V",
+        "tested": false
+      },
+      {
+        "item": "順方向電圧 (表、3 A)",
+        "datasheet": "— / — / 0.7500 V",
+        "target": "max 0.7500 V",
+        "condition": "vF: 表の max (パルスで測る)",
+        "model": "0.6113 V",
+        "diff": "-0.1387 V",
+        "tested": false
+      },
+      {
+        "item": "逆電流 (20 V)",
+        "datasheet": "— / — / 1.000 mA",
+        "target": "max 1.000 mA",
+        "condition": "IR: 定格の直流電圧、TL = 25 °C (表の max。モデルは IS の分しか流れない)",
+        "model": "0.0049 mA",
+        "diff": "-0.9951 mA",
+        "tested": false
+      }
+    ]
+  },
   "1N5819": {
     "fingerprint": "8fea8930512ab92b",
     "source": "onsemi 1N5817〜1N5819 データシート (1N5817/D Rev. 11, 2021-08)。25 °C",

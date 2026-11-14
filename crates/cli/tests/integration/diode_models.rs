@@ -1,4 +1,4 @@
-//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5819) measured the way their data sheets measure them, next to the data sheets' numbers
+//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819) measured the way their data sheets measure them, next to the data sheets' numbers
 //! (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`), like `regulator_models.rs`.
 //!
 //! `diode_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -68,7 +68,7 @@ const ONSEMI_581X: &str = "onsemi 1N5817〜1N5819 データシート (1N5817/D R
 fn source(part: &str) -> &'static str {
     match part {
         "1N4148" => VISHAY_4148,
-        "1N5819" => ONSEMI_581X,
+        "1N5817" | "1N5819" => ONSEMI_581X,
         _ => ONSEMI_400X,
     }
 }
@@ -119,22 +119,25 @@ fn rows() -> Vec<Row> {
         let rated = if part == "1N4001" { 50.0 } else { 1000.0 };
         v.push(Row { part, item: format!("逆電流 ({rated} V)"), ds: [None, Some(0.05), Some(10.0)], unit: "µA", at: "IR: 定格の直流電圧、TJ = 25 °C".into(), measure: Box::new(move || ir(part, rated) * 1e6), tol: None });
     }
-    // 1N5819: Figure 7 at 25 C (shared by 1N5817 to 1N5819), the table's VF max, IR max (no capacitance in the data sheet)
-    for (i, typ) in [(0.05, 0.259), (0.1, 0.282), (0.5, 0.359), (1.0, 0.412), (2.5, 0.577), (4.0, 0.695)] {
-        v.push(Row {
-            part: "1N5819",
-            item: format!("順方向電圧 ({i} A)"),
-            ds: [None, Some(typ), None],
-            unit: "V",
-            at: "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)".into(),
-            measure: Box::new(move || vf("1N5819", i)),
-            tol: Some(0.02),
-        });
+    // 1N5817 / 1N5819: Figure 7 at 25 C (shared by 1N5817 to 1N5819), the table's VF max, IR max (no capacitance in the data
+    // sheet). The two models are the same fit; the table's max differ.
+    for (part, maxes, rated) in [("1N5817", [0.32, 0.45, 0.75], 20.0), ("1N5819", [0.34, 0.6, 0.9], 40.0)] {
+        for (i, typ) in [(0.05, 0.259), (0.1, 0.282), (0.5, 0.359), (1.0, 0.412), (2.5, 0.577), (4.0, 0.695)] {
+            v.push(Row {
+                part,
+                item: format!("順方向電圧 ({i} A)"),
+                ds: [None, Some(typ), None],
+                unit: "V",
+                at: "図 7 の 25 °C (グラフから読んだ。1N5817〜1N5819 で共通)".into(),
+                measure: Box::new(move || vf(part, i)),
+                tol: Some(0.02),
+            });
+        }
+        for (i, max) in [0.1, 1.0, 3.0].into_iter().zip(maxes) {
+            v.push(Row { part, item: format!("順方向電圧 (表、{i} A)"), ds: [None, None, Some(max)], unit: "V", at: "vF: 表の max (パルスで測る)".into(), measure: Box::new(move || vf(part, i)), tol: None });
+        }
+        v.push(Row { part, item: format!("逆電流 ({rated} V)"), ds: [None, None, Some(1.0)], unit: "mA", at: "IR: 定格の直流電圧、TL = 25 °C (表の max。モデルは IS の分しか流れない)".into(), measure: Box::new(move || ir(part, rated) * 1e3), tol: None });
     }
-    for (i, max) in [(0.1, 0.34), (1.0, 0.6), (3.0, 0.9)] {
-        v.push(Row { part: "1N5819", item: format!("順方向電圧 (表、{i} A)"), ds: [None, None, Some(max)], unit: "V", at: "vF: 表の max (パルスで測る)".into(), measure: Box::new(move || vf("1N5819", i)), tol: None });
-    }
-    v.push(Row { part: "1N5819", item: "逆電流 (40 V)".into(), ds: [None, None, Some(1.0)], unit: "mA", at: "IR: 定格の直流電圧、TL = 25 °C (表の max。モデルは IS の分しか流れない)".into(), measure: Box::new(|| ir("1N5819", 40.0) * 1e3), tol: None });
     v
 }
 
@@ -211,7 +214,7 @@ fn write_diode_model_report() {
         "# 同梱のダイオードのモデルとデータシートの比べ\n\n\
          `crates/cli/tests/integration/diode_models.rs` が作る表(`cargo test -p cli --test integration -- --ignored write_diode_model_report`)。\
          方針は `docs/model-policy.md`、モデルを作るのは `tools/gen_diode_models.py`(データシートから読んだ値はそこにある)。\n\n\
-         - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12。1N5819 は 2026-11-14)。グラフの読み取りは 1% ほどの誤差がある。\n\
+         - データシートの値は、各表の上に書いたデータシートの表と、描画したグラフから読んだ(2026-11-12。1N5817・1N5819 は 2026-11-14)。グラフの読み取りは 1% ほどの誤差がある。\n\
          - モデルの値は、データシートの条件に近い回路で circuitCad のシミュレータが測ったもの。接合容量は、100 kΩ と組んだローパスの利得から求めた。\n\
          - 「差」はモデル − typ(typ が無い行は max)。合格の幅はテストの各行(順方向電圧は ±15〜20 mV、接合容量は ±15%)。逆電流は比べるだけ(モデルは IS の分しか流れない)。\n{body}"
     );
