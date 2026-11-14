@@ -652,7 +652,7 @@ fn a_net_window_fetches_the_dc_current_of_its_net_and_the_list_window_draws() {
         input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
         let mut out = ctx.run_ui(input, |ui| {
             app.board_ed.net_window(ui.ctx());
-            app.board_ed.current_window(ui.ctx());
+            app.board_ed.net_table_window(ui.ctx());
         });
         out.textures_delta.clear();
     };
@@ -669,9 +669,9 @@ fn a_net_window_fetches_the_dc_current_of_its_net_and_the_list_window_draws() {
     // asked once: another frame does not ask again
     frame(&mut app);
     assert!(app.board_ed.net_current_request.is_none());
-    app.board_ed.current_win_open = true;
+    app.board_ed.net_table.open = true;
     frame(&mut app);
-    assert!(app.board_ed.current_win_open);
+    assert!(app.board_ed.net_table.open);
 }
 
 /// What is picked in the schematic is shown on the board (and in the 3D view), and what is picked on the board, on the sheet.

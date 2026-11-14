@@ -39,6 +39,11 @@ pub(super) struct State {
 }
 
 impl SchEditor {
+    /// Opens the "解析結果の表" window (the start arguments use it for screenshots).
+    pub fn open_result_table(&mut self) {
+        self.tables.results = true;
+    }
+
     /// Draws whichever of the two windows is open (called every frame from the side panel).
     pub(super) fn result_windows(&mut self, ctx: &egui::Context) {
         let mut st = std::mem::take(&mut self.tables);

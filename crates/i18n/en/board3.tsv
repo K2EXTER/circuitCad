@@ -100,7 +100,6 @@
 電流と電圧降下	Current and voltage drop
 流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます	Sets the needed track width from the current. Enter the current in the window that opens when you click a net's track or pad, or in the list window below
 全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。見出しのクリックで並べ替え、CSV でコピーもできます	Shows every net's track length (also per layer), detour ratio, via count, width, pours, unrouted count and net class in one table. Click a heading to sort; you can also copy it as CSV
-電流の一覧を別窓で開く	Open current list in a window
 全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます	Shows every net's current, recommended width and present track width (and RMS, 10 ms max and peak if you ran a transient analysis) in one table. You can take currents from the schematic's DC or transient analysis, and widen thin tracks to the recommended width
 電流に対して細いネット {thin} 本	{thin} nets too thin for their current
 計算する	Calculate
@@ -195,5 +194,5 @@ PNG保存	Save PNG
 高さの目安: {hh:.1} mm	Estimated height: {hh:.1} mm
 ケースの高さを {o:.1} mm 超えています	{o:.1} mm over the case height
 3D表示から {} を選びました (基板エディタで選択中)	Selected {} from the 3D view (selected in the board editor)
-流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、「電流の一覧を別窓で開く」の窓で入れます	Find the trace width a current needs. Enter the current in the window that opens when you click a net's trace or pad on the board, or in the "Open current list in a window" window
+流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、「ネットの一覧」の窓で入れます	Find the trace width a current needs. Enter the current in the window that opens when you click a net's trace or pad on the board, or in the "Net list" window
 色の目安 (緑・橙・赤)	What the colors mean (green, orange, red)

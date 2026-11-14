@@ -88,7 +88,6 @@ DRC: 違反 {} 件	DRC: {} violations
 回路のDC解析の電流を入れました ({a} A)。ピーク電流 (起動時・スイッチング) は入らないので、余裕を見てください	Entered currents from the circuit's DC analysis ({a} A). Peak currents (start-up, switching) are not included, so leave some margin
 回路のDC解析では、このネットに流れる電流が、ほとんどありません。電流を自分で入れると、推奨の線幅が出ます	The circuit's DC analysis shows almost no current in this net. Enter the current yourself to get a recommended track width
 回路のDC解析に、このネットが見つかりません (回路図とつながりが合っているか、基板の「回路図から取り込み」を確かめてください)	This net was not found in the circuit's DC analysis (check that the schematic and connections match, and the board's "Import from schematic")
-ネットの電流一覧	Net currents
 回路図から部品を取り込むと、ネットの一覧が出ます	Import parts from the schematic to see the list of nets
 DC解析の電流を入れる	Use DC analysis currents
 回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、全部のネットに入れます (いま入れてある電流は置き換わります)	Finds the current in each net with the schematic's DC analysis (operating point) and enters it for all nets (replaces the currents entered now)
@@ -372,6 +371,17 @@ GND と、流れる電流を決めたネットを入れた「電源」クラス�
  ほか{}	 and {} more
 {net} (回路図で名前のないつながり: {}{more})	{net} (unnamed connection in the schematic: {}{more})
 # crates/app/src/board_editor/nettable.rs
+電流はまだ入っていません。上の「DC解析の電流を入れる」か、電流の欄に打つと、その電流に要る線幅 (推奨) が出ます	No currents yet. Press "Use DC analysis currents" above, or type one into the Current column, to see the track width that current needs (recommended)
+長さ (mm)	Length (mm)
+{l}の配線の長さ (mm)	Track length on {l} (mm)
+線幅 (mm)	Track width (mm)
+このネットに流れる最大の電流。打って変えられます。0 なら調べません	The largest current in this net. You can type a new value. 0 means it is not checked
+推奨の線幅 (mm)	Recommended width (mm)
+電流に要る線幅 (銅箔 35µm・温度上昇 10℃ の外層、IPC-2221)。✔ は今のいちばん細い配線で足りている、✖ は足りない	The track width the current needs (35 µm copper, 10 °C rise, outer layer, IPC-2221). ✔ means the thinnest track now is wide enough, ✖ means it is not
+まだ配線がありません	No tracks yet
+今のいちばん細い配線は {t:.2} mm で、足りません	The thinnest track now is {t:.2} mm, which is not enough
+今のいちばん細い配線は {t:.2} mm で、足りています	The thinnest track now is {t:.2} mm, which is enough
+全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・電流と推奨の線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます。見出しのクリックで並べ替え、CSV でコピーもできます	See every net in one table: track length (also per layer), detour, via count, track width, current and recommended width, pours, unrouted count and net class. You can fill in currents from the schematic's DC or transient analysis and widen thin tracks to the recommended width. Click a heading to sort; you can also copy it as CSV
 絞り込み	Filter
 ネット名・クラス	Net name, class
 ネット名かネットクラスの名前に、この文字を含む行だけを出します (大文字・小文字は区別しません)	Shows only rows whose net name or net class name contains this text (not case-sensitive)

@@ -500,8 +500,6 @@ pub struct BoardEditor {
     /// The net the DC current was asked for (once per opening of its window), and what came of it (net, text).
     net_win_asked: Option<String>,
     net_win_note: Option<(String, String)>,
-    /// The window that lists the currents of all nets.
-    pub current_win_open: bool,
     /// The rule check while one works (`livedrc.rs`).
     pub live_drc: livedrc::LiveDrc,
     /// The "ネットの一覧" window.
@@ -660,7 +658,6 @@ impl Default for BoardEditor {
             dc_currents_ready: false,
             net_win_asked: None,
             net_win_note: None,
-            current_win_open: false,
             live_drc: Default::default(),
             net_table: Default::default(),
             z_target: 50.0,
@@ -719,7 +716,6 @@ mod netclass;
 mod netwindow;
 mod requirements;
 mod sheets;
-mod currentwindow;
 mod nettable;
 mod file;
 mod actions;

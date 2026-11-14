@@ -639,7 +639,6 @@ impl eframe::App for App {
         self.board_ed.dc_currents_ready = self.sch.dc_currents_ready();
         self.board_ed.order_window(ui.ctx());
         self.board_ed.net_window(ui.ctx());
-        self.board_ed.current_window(ui.ctx());
         self.board_ed.net_table_window(ui.ctx());
         self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());

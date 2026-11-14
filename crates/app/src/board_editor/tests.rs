@@ -2184,16 +2184,16 @@ fn the_mega_board_lesson_starts_half_routed_and_ticks_when_a_net_is_routed_and_d
     assert_eq!(e.finished_board_lesson().is_some(), clean);
 }
 
-/// Currents taken from the simulation open the window that lists them (not the width panel: that would switch the tool to the wire tool
+/// Currents taken from the simulation open the table of the nets (where they are columns) (not the width panel: that would switch the tool to the wire tool
 /// and push the step list below the fold); taken only to route ("未配線を全部つなぐ") they leave nothing open.
 #[test]
 fn the_currents_open_their_window_and_it_can_be_shut_again() {
     let mut e = BoardEditor::default();
     e.use_simulated_currents(Ok(vec![("GND".into(), 0.1)]), vec![]);
-    assert!(e.current_win_open, "the currents are shown in their window");
+    assert!(e.net_table.open, "the currents are shown in the table of the nets");
     assert_eq!(e.widths_open, None, "and the width panel is left alone");
     e.close_width_panel();
-    assert!(!e.current_win_open);
+    assert!(!e.net_table.open);
 }
 
 /// New parts land beside the outline, so an import that adds parts asks for the view to be fitted (the parts would otherwise sit

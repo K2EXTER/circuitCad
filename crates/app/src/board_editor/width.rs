@@ -35,7 +35,7 @@ impl BoardEditor {
     /// Closes the net-current panel that `use_simulated_currents` asked for.
     pub fn close_width_panel(&mut self) {
         self.widths_open = None;
-        self.current_win_open = false;
+        self.net_table.open = false;
     }
 
     /// Declares the simulated net currents (from the schematic's DC analysis) and opens the panel.
@@ -46,8 +46,8 @@ impl BoardEditor {
             Ok(list) => {
                 self.checkpoint();
                 let n = pcb_core::current::set_net_currents(&mut self.board, &list);
-                // the table of the currents opens in its own window
-                self.current_win_open = true;
+                // the currents are columns of the table of the nets
+                self.net_table.open = true;
                 self.status = if n == 0 {
                     "基板のネットに合う電流がありません。回路図から部品を取り込んだあとで試してください".into()
                 } else {
@@ -61,7 +61,7 @@ impl BoardEditor {
         // heading + (?) instead of a two-line paragraph; the buttons as one bar (ui-rules.md "基板パネルの帯")
         ui.horizontal(|ui| {
             crate::widgets::section_heading(ui, "電流と電圧降下");
-            crate::icons::help(ui, "流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、「電流の一覧を別窓で開く」の窓で入れます");
+            crate::icons::help(ui, "流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、「ネットの一覧」の窓で入れます");
         });
         let nets = self.board_nets();
         if nets.is_empty() {
@@ -70,15 +70,11 @@ impl BoardEditor {
         }
         let conn = drc::connectivity(&self.board);
         let thin = net_widths(&self.board, &conn, &CopperSpec::default()).iter().filter(|w| w.too_thin()).count();
-        let bar = crate::widgets::segment_row(ui, &[("ネットの一覧", true), ("電流の一覧を別窓で開く", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("ネットの一覧", true)]);
         if bar[0].clicked() {
             self.net_table.open = true;
         }
-        bar[0].clone().on_hover_text(i18n::tr("全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。見出しのクリックで並べ替え、CSV でコピーもできます"));
-        if bar[1].clicked() {
-            self.current_win_open = true;
-        }
-        bar[1].clone().on_hover_text(i18n::tr("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます"));
+        bar[0].clone().on_hover_text(i18n::tr("全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・電流と推奨の線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます。見出しのクリックで並べ替え、CSV でコピーもできます"));
         if thin > 0 {
             ui.colored_label(crate::theme::ERROR, i18n::trf!("電流に対して細いネット {thin} 本"));
         }
