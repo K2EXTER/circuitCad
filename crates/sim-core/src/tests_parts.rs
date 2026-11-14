@@ -157,7 +157,8 @@ fn the_zener_part_makes_a_five_volt_reference() {
         v(&dc_op(&c).unwrap(), "z")
     };
     let (a, b) = (run(12.0), run(15.0));
-    assert!(a > 5.0 && a < 5.35, "{a}");
+    // about 15 mA, below the 49 mA where the data sheet gives 5.1 V: a little lower (the model follows its knee)
+    assert!(a > 4.8 && a < 5.1, "{a}");
     assert!((b - a).abs() < 0.08, "line regulation {a} -> {b}");
     assert!((run(3.0) - 3.0).abs() < 1e-3, "no conduction below the zener voltage");
     assert!(run(-1.0) < -0.45, "forward biased the other way: the ordinary diode drop appears");

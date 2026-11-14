@@ -161,6 +161,7 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 rs: get("RS", 0.0),
                 bv: get("BV", f64::INFINITY),
                 ibv: get("IBV", 1e-3),
+                nbv: get("NBV", 0.0).max(0.0),
                 cj0: p.get("CJO").or(p.get("CJ0")).or(p.get("CJ")).copied().filter(|v| *v > 0.0).unwrap_or(0.0),
                 vj: p.get("VJ").copied().filter(|v| *v > 0.0).unwrap_or(1.0),
                 m: p.get("M").copied().filter(|v| *v > 0.0 && *v < 0.95).unwrap_or(0.5),
@@ -365,7 +366,7 @@ pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
             }
         };
         let used: &[&str] = match ty.as_str() {
-            "D" => &["IS", "N", "RS", "BV", "IBV", "CJO", "CJ0", "CJ", "VJ", "M", "FC", "TT", "ISR", "NR", "EG", "XTI"],
+            "D" => &["IS", "N", "RS", "BV", "IBV", "NBV", "CJO", "CJ0", "CJ", "VJ", "M", "FC", "TT", "ISR", "NR", "EG", "XTI"],
             "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB", "RC", "RE", "VAF", "VA", "VAR", "VB", "CJE", "VJE", "PE", "MJE", "ME", "CJC", "VJC", "PC", "MJC", "MC", "FC", "TF", "TR", "ISE", "C2", "NE", "ISC", "C4", "NC", "IKF", "IK", "IKR", "EG", "XTI", "XTB"],
             "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD", "CGSO", "CGDO", "RD", "RS"],
             "NJF" | "PJF" => &["BETA", "VTO", "LAMBDA", "CGS", "CGD", "RD", "RS"],

@@ -780,16 +780,17 @@ fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {
     set(&mut t, "R1", "1.5k");
     let slow = dc(&t);
     assert!(slow.element("D1").unwrap().current < 0.003 && r.voltage("A1").unwrap() - slow.voltage("A1").unwrap() < 0.15, "10x less current, ~0.1 V less");
-    // zener: ~5.2 V at 1k, falls apart at 100 ohm; the input moves the output only a little
+    // zener: ~5.0 V at 1k (below its 5.1 V: ~22 mA against the 49 mA test current), falls apart at 100 ohm; the input
+    // moves the output only a little
     let z = load("zener_regulator.schjson");
     let vout = |s: &Schematic| dc(s).voltage("VOUT").unwrap();
-    assert!((5.0..5.4).contains(&vout(&z)));
+    assert!((4.9..5.1).contains(&vout(&z)));
     let mut heavy = z.clone();
     set(&mut heavy, "R2", "100");
     assert!((3.3..3.9).contains(&vout(&heavy)), "starved zener");
     let mut mid = z.clone();
     set(&mut mid, "R2", "220");
-    assert!((4.95..5.2).contains(&vout(&mid)));
+    assert!((4.7..4.9).contains(&vout(&mid)));
     let (mut lo, mut hi) = (z.clone(), z.clone());
     set(&mut lo, "V1", "6");
     set(&mut hi, "V1", "15");
@@ -797,7 +798,7 @@ fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {
     // emitter follower: Vz - 0.7 V, holds under load, then the transistor runs hot
     let f = load("emitter_follower.schjson");
     let r = dc(&f);
-    assert!((4.3..4.5).contains(&r.voltage("VOUT").unwrap()) && (r.voltage("Z").unwrap() - r.voltage("VOUT").unwrap() - 0.7).abs() < 0.15);
+    assert!((4.1..4.25).contains(&r.voltage("VOUT").unwrap()) && (r.voltage("Z").unwrap() - r.voltage("VOUT").unwrap() - 0.7).abs() < 0.15);
     assert!(sim_core::check_ratings(&f, &r).is_empty(), "the sample itself is within ratings");
     let mut g = f.clone();
     set(&mut g, "R2", "47");

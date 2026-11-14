@@ -285,17 +285,17 @@ impl Compiled {
                     m.gn(*n, *cp, -gm);
                     m.gn(*n, *cn, *gm);
                 }
-                Ce::D { a, ai, k, rs, is, nvt, vcrit, bv, ibv, slot, dm, cap, .. } => {
+                Ce::D { a, ai, k, rs, is, nvt, vcrit: crit, bv, ibv, nbvt, slot, dm, cap, .. } => {
                     if *rs > 0.0 {
                         m.g(*a, *ai, 1.0 / rs);
                     }
                     let raw = v(x, *ai) - v(x, *k);
                     // in breakdown the junction is limited in the mirrored (-v - bv) variable, like SPICE
-                    let lim = if bv.is_finite() && raw < (-bv + 10.0 * nvt).min(0.0) {
+                    let lim = if bv.is_finite() && raw < (-bv + 10.0 * nbvt).min(0.0) {
                         let (rn, ro) = (-(raw + bv), -(vj[*slot] + bv));
-                        -(pnjlim(rn, ro, *nvt, *vcrit) + bv)
+                        -(pnjlim(rn, ro, *nbvt, vcrit(*nbvt, *is)) + bv)
                     } else {
-                        pnjlim(raw, vj[*slot], *nvt, *vcrit)
+                        pnjlim(raw, vj[*slot], *nvt, *crit)
                     };
                     if (lim - raw).abs() > 1e-12 {
                         limited = true;
@@ -307,9 +307,9 @@ impl Compiled {
                     id += ir_;
                     gd += gr_;
                     if bv.is_finite() {
-                        let eb = exp_safe(-(lim + bv) / nvt);
+                        let eb = exp_safe(-(lim + bv) / nbvt);
                         id -= ibv * eb;
-                        gd += ibv / nvt * eb;
+                        gd += ibv / nbvt * eb;
                     }
                     m.g(*ai, *k, gd);
                     m.current(*ai, *k, id - gd * lim);

@@ -53,7 +53,7 @@
           "kind": "model",
           "element": "D",
           "name": "1N4733A",
-          "text": ".model 1N4733A D(IS=50f N=1 RS=6.5 BV=5.1 IBV=49m)",
+          "text": ".model 1N4733A D(IS=1.827e-13 N=1.197 RS=0.6147 BV=5.07 IBV=0.049 NBV=5.011 EG=1.16 XTI=2 CJO=1.955e-10 VJ=0.3 M=0.23)",
           "pins": [
             "A",
             "K"

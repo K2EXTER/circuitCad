@@ -2070,17 +2070,17 @@ fn the_zener_basics_lesson_ticks_and_its_numbers_hold() {
     let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
     let z = &r.signal("V(Z)").unwrap().values;
     let at = |x: f64| z[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
-    assert!((at(4.0) - 4.0).abs() < 0.01 && (4.9..5.1).contains(&at(5.0)) && (5.15..5.25).contains(&at(12.0)), "knee");
+    assert!((at(4.0) - 4.0).abs() < 0.01 && (4.5..4.7).contains(&at(5.0)) && (4.93..5.03).contains(&at(12.0)), "knee");
     let v = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("Z").unwrap();
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 2);
-    assert!((v(&e) - 5.21).abs() < 0.05);
+    assert!((v(&e) - 4.98).abs() < 0.05);
     set_value(&mut e, "R1", "22");
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 3);
-    assert!((v(&e) - 6.7).abs() < 0.15);
+    assert!((v(&e) - 5.5).abs() < 0.1);
 }
 
 #[test]

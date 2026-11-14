@@ -77,7 +77,7 @@ pub(crate) enum Ce {
     I { name: String, from: usize, to: usize, wave: Waveform, ac: Option<(f64, f64)> },
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
-    D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, slot: usize, dm: DiodeModel, cap: Option<usize> },
+    D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, nbvt: f64, slot: usize, dm: DiodeModel, cap: Option<usize> },
     /// `bi` is the internal base node (equal to `b` when the model has no `rb`).
     Q { name: String, c: usize, b: usize, bi: usize, e: usize, ci: usize, ei: usize, m: BjtModel, slot: usize, cap: Option<usize> },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
@@ -691,11 +691,11 @@ impl Compiled {
                     let (i, vv) = (gm * (v(x, *cp) - v(x, *cn)), v(x, *p) - v(x, *n));
                     push(name, i, vv, vec![], vv * i);
                 }
-                Ce::D { name, a, ai, k, rs, is, nvt, bv, ibv, dm, .. } => {
+                Ce::D { name, a, ai, k, rs, is, nvt, bv, ibv, nbvt, dm, .. } => {
                     let vd = v(x, *ai) - v(x, *k);
                     let mut id = is * (exp_safe(vd / nvt) - 1.0) + diode_recomb(dm, vd).0;
                     if bv.is_finite() {
-                        id -= ibv * exp_safe(-(vd + bv) / nvt);
+                        id -= ibv * exp_safe(-(vd + bv) / nbvt);
                     }
                     let i = if *rs > 0.0 { (v(x, *a) - v(x, *ai)) / rs } else { id };
                     let vv = v(x, *a) - v(x, *k);

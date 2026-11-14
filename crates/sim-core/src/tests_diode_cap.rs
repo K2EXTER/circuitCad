@@ -1,4 +1,4 @@
-//! Diode charge storage: junction capacitance (CJO / VJ / M / FC) and the transit time TT.
+//! Diode charge storage: junction capacitance (CJO / VJ / M / FC) and the transit time TT. Also the breakdown's slope (NBV).
 
 use crate::*;
 
@@ -69,4 +69,34 @@ fn model_cards_read_the_diode_capacitance_parameters_and_area_scales_the_capacit
     add_subckt_instance(&mut c, "U1", "T", ".subckt T a gnd\nD1 a gnd DM 3\n.model DM D(CJO=2p)\n.ends T", &[a, 0]).unwrap();
     let cj = c.elements.iter().find_map(|e| match e { Element::Diode { model, .. } => Some(model.cj0), _ => None }).unwrap();
     assert!((cj / 6e-12 - 1.0).abs() < 1e-12, "{cj}");
+}
+
+/// The reverse voltage across a zener `model` carrying `i` amperes of breakdown current.
+fn zener_v(model: &DiodeModel, i: f64) -> f64 {
+    let mut c = Circuit::new();
+    let k = c.node("k");
+    c.add(Element::Diode { name: "D1".into(), a: 0, k, model: model.clone() });
+    c.add(Element::ISource { name: "I1".into(), from: 0, to: k, wave: parse_source(&i.to_string()).unwrap(), ac: None });
+    dc_op(&c).unwrap().voltage("k").unwrap()
+}
+
+#[test]
+fn nbv_sets_the_breakdown_slope_and_defaults_to_n() {
+    let models = crate::spice_in::parse_models(".model Z1 D(IS=1e-14 N=1 RS=2 BV=5 IBV=1m NBV=20)
+.model Z0 D(IS=1e-14 N=1 RS=2 BV=5 IBV=1m)").unwrap();
+    let get = |n: &str| match &models[n] {
+        crate::spice_in::Model::Diode(d) => d.clone(),
+        _ => panic!("not a diode"),
+    };
+    // dynamic resistance NBV·VT / I + RS, measured over ±1 % around 1 mA and 10 mA
+    for (name, nbv) in [("z1", 20.0), ("z0", 1.0)] {
+        let m = get(name);
+        for i in [1e-3, 10e-3] {
+            let rz = (zener_v(&m, i * 1.01) - zener_v(&m, i * 0.99)) / (0.02 * i);
+            let want = nbv * 0.025865 / i + 2.0;
+            assert!((rz / want - 1.0).abs() < 0.01, "{name} at {i}: {rz} vs {want}");
+        }
+        // at IBV the junction sits at BV (plus the series drop)
+        assert!((zener_v(&m, 1e-3) - (5.0 + 2e-3)).abs() < 1e-3, "{name}");
+    }
 }

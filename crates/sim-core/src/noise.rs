@@ -154,11 +154,11 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
     for e in &cm.ce {
         match e {
             Ce::R { name, a, b, g } => srcs.push(Src { name: name.clone(), p: *a, n: *b, s: kt4 * g }),
-            Ce::D { name, a, ai, k, rs, is, nvt, bv, ibv, slot, dm, .. } => {
+            Ce::D { name, a, ai, k, rs, is, nvt, bv, ibv, nbvt, slot, dm, .. } => {
                 let lim = op.vj[*slot];
                 let mut id = is * (exp_safe(lim / nvt) - 1.0) + crate::dc::diode_recomb(dm, lim).0;
                 if bv.is_finite() {
-                    id -= ibv * exp_safe(-(lim + bv) / nvt);
+                    id -= ibv * exp_safe(-(lim + bv) / nbvt);
                 }
                 srcs.push(Src { name: name.clone(), p: *ai, n: *k, s: 2.0 * Q_E * id.abs() });
                 if *rs > 0.0 {

@@ -75,7 +75,12 @@ fn writing_the_fit_back_changes_nothing_else_in_the_file() {
 fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
     for (s, f, _) in bundled() {
         let n = match &s {
-            Spec::Diode(d) => d.forward.points.len() + d.hot.as_ref().map_or(0, |h| h.points.len()) + d.capacitance.points.len(),
+            Spec::Diode(d) => {
+                d.forward.points.len()
+                    + d.hot.as_ref().map_or(0, |h| h.points.len())
+                    + d.capacitance.points.len()
+                    + d.zener.as_ref().map_or(0, |z| 2 * z.zz.len() - 1 + usize::from(z.zzt_typ.is_some()) + z.leak.len() + z.leak.iter().filter(|p| p[1] >= 1e-6).count())
+            }
             Spec::Bjt(b) => b.hfe_norm.len() + b.vbe_on.len() + b.vbe_sat.len() + b.vce_sat.len() + b.cibo.len() + b.cobo.len(),
             Spec::Darlington(d) => d.hfe.len() + d.vbe_on.len() + d.vbe_sat.len() + d.vce_sat.len() + if d.cib.len() >= 2 && d.cob.len() >= 2 { d.cib.len() + d.cob.len() } else { 0 },
             Spec::Mos(m) => {

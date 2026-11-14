@@ -281,6 +281,261 @@
       }
     ]
   },
+  "1N4728A": {
+    "fingerprint": "380c3fad54c9a557",
+    "source": "onsemi 1N4728A Series (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A (Document Number 85816, Rev. 2.7, 2024-11) のデータシート。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "ツェナー電圧 (76 mA)",
+        "datasheet": "3.140 / 3.300 / 3.470 V",
+        "target": "3.300 V",
+        "condition": "VZ: 表の公称 (min〜max は個体差) と試験電流 IZT",
+        "model": "3.300 V",
+        "diff": "-0.0003 V",
+        "tested": true
+      },
+      {
+        "item": "電圧の上がり (1 → 5 mA)",
+        "datasheet": "— / 0.5285 / — V",
+        "target": "0.5285 V",
+        "condition": "onsemi の図 7 の動抵抗 (交流で測る) を 1 mA から積分 (グラフから読んだ。低い電圧のツェナーでは図 8 の直流の点と食い違い、モデルは両方の間)",
+        "model": "0.5012 V",
+        "diff": "-0.0273 V",
+        "tested": false
+      },
+      {
+        "item": "電圧の上がり (1 → 20 mA)",
+        "datasheet": "— / 1.096 / — V",
+        "target": "1.096 V",
+        "condition": "onsemi の図 7 の動抵抗 (交流で測る) を 1 mA から積分 (グラフから読んだ。低い電圧のツェナーでは図 8 の直流の点と食い違い、モデルは両方の間)",
+        "model": "0.9399 V",
+        "diff": "-0.1561 V",
+        "tested": false
+      },
+      {
+        "item": "膝の電圧 (5.5 mA)",
+        "datasheet": "— / 2.640 / — V",
+        "target": "2.640 V",
+        "condition": "onsemi の図 8 (公称の 80 % の電圧で流れる電流の代表値、グラフから読んだ)",
+        "model": "2.444 V",
+        "diff": "-0.1958 V",
+        "tested": true
+      },
+      {
+        "item": "動抵抗 (5 mA)",
+        "datasheet": "— / 70.900 / — Ω",
+        "target": "70.900 Ω",
+        "condition": "onsemi の図 7 (60 Hz。降伏の傾きが 1 つの形では、膝の柔らかさと急な立ち上がりを同時には合わせきれない)",
+        "model": "62.589 Ω",
+        "diff": "-8.311 Ω",
+        "tested": false
+      },
+      {
+        "item": "動抵抗 ZZT (76 mA)",
+        "datasheet": "— / 10.000 / — Ω",
+        "target": "10.000 Ω",
+        "condition": "Vishay の表の typ (1 kHz。onsemi の表は max だけ)",
+        "model": "4.692 Ω",
+        "diff": "-5.308 Ω",
+        "tested": false
+      },
+      {
+        "item": "動抵抗 ZZK (1 mA)",
+        "datasheet": "— / — / 400.0 Ω",
+        "target": "max 400.0 Ω",
+        "condition": "表の max",
+        "model": "310.5 Ω",
+        "diff": "-89.513 Ω",
+        "tested": false
+      },
+      {
+        "item": "逆電流 (1 V)",
+        "datasheet": "— / — / 100.0 µA",
+        "target": "max 100.0 µA",
+        "condition": "IR: 表の max",
+        "model": "52.847 µA",
+        "diff": "-47.153 µA",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (0 V)",
+        "datasheet": "— / 355.0 / — pF",
+        "target": "355.0 pF",
+        "condition": "onsemi の図 9 (グラフから読んだ。降伏の裾の電流があるので 1 kΩ 越しに測る)",
+        "model": "359.2 pF",
+        "diff": "+4.211 pF",
+        "tested": true
+      }
+    ]
+  },
+  "1N4733A": {
+    "fingerprint": "eab4cd31ee3c0110",
+    "source": "onsemi 1N4728A Series (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A (Document Number 85816, Rev. 2.7, 2024-11) のデータシート。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "ツェナー電圧 (49 mA)",
+        "datasheet": "4.850 / 5.100 / 5.360 V",
+        "target": "5.100 V",
+        "condition": "VZ: 表の公称 (min〜max は個体差) と試験電流 IZT",
+        "model": "5.100 V",
+        "diff": "+0.0001 V",
+        "tested": true
+      },
+      {
+        "item": "電圧の上がり (1 → 5 mA)",
+        "datasheet": "— / 0.1806 / — V",
+        "target": "0.1806 V",
+        "condition": "onsemi の図 7 の動抵抗 (交流で測る) を 1 mA から積分 (グラフから読んだ。低い電圧のツェナーでは図 8 の直流の点と食い違い、モデルは両方の間)",
+        "model": "0.2111 V",
+        "diff": "+0.0305 V",
+        "tested": false
+      },
+      {
+        "item": "電圧の上がり (1 → 20 mA)",
+        "datasheet": "— / 0.2445 / — V",
+        "target": "0.2445 V",
+        "condition": "onsemi の図 7 の動抵抗 (交流で測る) を 1 mA から積分 (グラフから読んだ。低い電圧のツェナーでは図 8 の直流の点と食い違い、モデルは両方の間)",
+        "model": "0.4000 V",
+        "diff": "+0.1555 V",
+        "tested": false
+      },
+      {
+        "item": "膝の電圧 (41 µA)",
+        "datasheet": "— / 4.080 / — V",
+        "target": "4.080 V",
+        "condition": "onsemi の図 8 (公称の 80 % の電圧で流れる電流の代表値、グラフから読んだ)",
+        "model": "4.153 V",
+        "diff": "+0.0729 V",
+        "tested": true
+      },
+      {
+        "item": "動抵抗 (5 mA)",
+        "datasheet": "— / 9.220 / — Ω",
+        "target": "9.220 Ω",
+        "condition": "onsemi の図 7 (60 Hz。降伏の傾きが 1 つの形では、膝の柔らかさと急な立ち上がりを同時には合わせきれない)",
+        "model": "26.537 Ω",
+        "diff": "+17.317 Ω",
+        "tested": false
+      },
+      {
+        "item": "動抵抗 ZZT (49 mA)",
+        "datasheet": "— / 7.000 / — Ω",
+        "target": "7.000 Ω",
+        "condition": "Vishay の表の typ (1 kHz。onsemi の表は max だけ)",
+        "model": "3.260 Ω",
+        "diff": "-3.740 Ω",
+        "tested": false
+      },
+      {
+        "item": "動抵抗 ZZK (1 mA)",
+        "datasheet": "— / — / 550.0 Ω",
+        "target": "max 550.0 Ω",
+        "condition": "表の max",
+        "model": "130.2 Ω",
+        "diff": "-419.8 Ω",
+        "tested": false
+      },
+      {
+        "item": "逆電流 (1 V)",
+        "datasheet": "— / — / 10.000 µA",
+        "target": "max 10.000 µA",
+        "condition": "IR: 表の max",
+        "model": "0.0000 µA",
+        "diff": "-10.000 µA",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (0 V)",
+        "datasheet": "— / 195.0 / — pF",
+        "target": "195.0 pF",
+        "condition": "onsemi の図 9 (グラフから読んだ。降伏の裾の電流があるので 1 kΩ 越しに測る)",
+        "model": "195.6 pF",
+        "diff": "+0.6201 pF",
+        "tested": true
+      }
+    ]
+  },
+  "1N4742A": {
+    "fingerprint": "1d7b7efcc023ad1e",
+    "source": "onsemi 1N4728A Series (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A (Document Number 85816, Rev. 2.7, 2024-11) のデータシート。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "ツェナー電圧 (21 mA)",
+        "datasheet": "11.400 / 12.000 / 12.600 V",
+        "target": "12.000 V",
+        "condition": "VZ: 表の公称 (min〜max は個体差) と試験電流 IZT",
+        "model": "12.003 V",
+        "diff": "+0.0029 V",
+        "tested": true
+      },
+      {
+        "item": "電圧の上がり (1 → 5 mA)",
+        "datasheet": "— / 0.0552 / — V",
+        "target": "0.0552 V",
+        "condition": "onsemi の図 7 の動抵抗 (交流で測る) を 1 mA から積分 (グラフから読んだ。低い電圧のツェナーでは図 8 の直流の点と食い違い、モデルは両方の間)",
+        "model": "0.0634 V",
+        "diff": "+0.0082 V",
+        "tested": false
+      },
+      {
+        "item": "電圧の上がり (1 → 20 mA)",
+        "datasheet": "— / 0.1295 / — V",
+        "target": "0.1295 V",
+        "condition": "onsemi の図 7 の動抵抗 (交流で測る) を 1 mA から積分 (グラフから読んだ。低い電圧のツェナーでは図 8 の直流の点と食い違い、モデルは両方の間)",
+        "model": "0.1251 V",
+        "diff": "-0.0044 V",
+        "tested": false
+      },
+      {
+        "item": "動抵抗 (5 mA)",
+        "datasheet": "— / 7.160 / — Ω",
+        "target": "7.160 Ω",
+        "condition": "onsemi の図 7 (60 Hz。降伏の傾きが 1 つの形では、膝の柔らかさと急な立ち上がりを同時には合わせきれない)",
+        "model": "8.188 Ω",
+        "diff": "+1.028 Ω",
+        "tested": false
+      },
+      {
+        "item": "動抵抗 ZZT (21 mA)",
+        "datasheet": "— / 9.000 / — Ω",
+        "target": "9.000 Ω",
+        "condition": "Vishay の表の typ (1 kHz。onsemi の表は max だけ)",
+        "model": "2.418 Ω",
+        "diff": "-6.582 Ω",
+        "tested": false
+      },
+      {
+        "item": "動抵抗 ZZK (1 mA)",
+        "datasheet": "— / — / 700.0 Ω",
+        "target": "max 700.0 Ω",
+        "condition": "表の max",
+        "model": "38.482 Ω",
+        "diff": "-661.5 Ω",
+        "tested": false
+      },
+      {
+        "item": "逆電流 (9.1 V)",
+        "datasheet": "— / — / 5.000 µA",
+        "target": "max 5.000 µA",
+        "condition": "IR: 表の max",
+        "model": "0.0000 µA",
+        "diff": "-5.000 µA",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (0 V)",
+        "datasheet": "— / 96.000 / — pF",
+        "target": "96.000 pF",
+        "condition": "onsemi の図 9 (グラフから読んだ。降伏の裾の電流があるので 1 kΩ 越しに測る)",
+        "model": "97.830 pF",
+        "diff": "+1.830 pF",
+        "tested": true
+      }
+    ]
+  },
   "1N5408": {
     "fingerprint": "ed4c3cbbdc2563e5",
     "source": "Vishay 1N5400〜1N5408 データシート (Document Number 88516, Revision 19-Dec-2025)。25 °C",

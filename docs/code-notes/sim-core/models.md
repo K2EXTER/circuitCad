@@ -41,6 +41,7 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 ## 残りのモデルパラメータ(2026-10-15)
 - **BJT**(`dc/devices.rs bjt_eval`): 漏れ電流 `ISE/NE`(BE)・`ISC/NC`(BC) をベース電流へ足す(コレクタ電流は BC 漏れだけ引く)。高注入 `IKF`/`IKR`: 輸送電流を `2/(1+√(1+4·q2))`(`q2=If/IKF+Ir/IKR`)で割る。早期効果 `k` との積で微分を取る。`EG`・`XTI`・`XTB`(温度 `temperature.rs`。`XTB` の既定は従来どおり 1.5)。`.model` の別名 `C2`(=ISE)・`C4`(=ISC)・`IK`(=IKF)。
 - **ダイオード**: 再結合電流 `ISR/NR`(`diode_recomb`。DC/過渡/ノイズ/素子の電流表示で共通)、温度 `EG`・`XTI`(ショットキーは `EG≈0.69`・`XTI≈2` で、温度での飽和電流の増え方がシリコンと大きく違う)。
+- **ダイオードの降伏の傾き `NBV`**(2026-11-15): 降伏の電流 IBV·exp(−(V+BV)/(NBV·VT)) の放出係数。省けば `N` (ngspice と同じ。前のモデルは同じ式のまま)。動抵抗は NBV·VT/I + RS で、低い電圧のツェナーの柔らかい膝を表す (同梱の 1N4728A は 12、1N4733A は 5)。`DiodeModel::nbv`・`nbv_vt()`、`Ce::D` の `nbvt` (DC・過渡・ノイズ・素子の電流表示)、降伏側の電圧の制限 (`pnjlim`) も NBV·VT で。ngspice-47 は `NBV` を読み、`IBVL`・`NBVL` (低い電流の降伏) は無視する (そのため入れていない)。テストは `tests_diode_cap.rs` の `nbv_sets_the_breakdown_slope_and_defaults_to_n`。
 - **MOSFET**: ゲート重なり容量 `CGSO/CGDO`(F/m)に、素子の `W` と並列数 `M` を掛けて固定の CGS/CGD にする(`spice_in.rs` の `M` 行)。
 - **MOSFET の直列抵抗 `RD`/`RS`**(2026-11-12、NMOS/PMOS・NJF/PJF・VDMOS の `.model`): `Circuit::add_mosfet` が内部ノード `M1.d`/`M1.s` と抵抗 `M1.RD`/`M1.RS` を足し、チャネルとゲート容量は内部ノードにつなぐ。パワー MOSFET のオン抵抗は高いゲート電圧ではほぼこの抵抗なので、2乗則だけでは、しきい値と 2 つのゲート電圧のオン抵抗を同時に合わせられなかった(データシート版の 2N7000・AO3400A)。テスト `tests_mos.rs` の `series_resistances_add_to_the_on_resistance`。
 - 温度では、`ISE`・`ISC`・`ISR` も各自の `N` で同じ式にかけ、各 `N` を温度比で伸ばす(解く側の `VT` が 27℃ 固定のため)。

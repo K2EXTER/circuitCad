@@ -1,4 +1,5 @@
-//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, 1N5408, 1N5822, UF4007, BAT54) measured the way their data sheets measure them, next to the data sheets' numbers
+//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, 1N5408, 1N5822, UF4007, BAT54 and the zeners 1N4728A,
+//! 1N4733A, 1N4742A) measured the way their data sheets measure them, next to the data sheets' numbers
 //! (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`), like `regulator_models.rs`.
 //!
 //! `diode_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -31,6 +32,23 @@ fn vf(part: &str, i: f64) -> f64 {
 fn ir(part: &str, vr: f64) -> f64 {
     let a = run(&format!("new\nadd {part} as=D1\nadd V {vr} as=VR\nnet K VR.+ D1.K\nnet GND VR.- D1.A\ndc probe=I(VR)\n"));
     answer(&a, "dc")["probes"]["I(VR)"].as_f64().unwrap().abs()
+}
+
+/// The zener voltage (the reverse voltage) carrying `i` amps of breakdown current from a current source.
+fn vz(part: &str, i: f64) -> f64 {
+    let a = run(&format!("new
+add {part} as=D1
+add I {i} as=IZ
+net K IZ.+ D1.K
+net GND IZ.- D1.A
+dc probe=V(K)
+"));
+    answer(&a, "dc")["probes"]["V(K)"].as_f64().unwrap()
+}
+
+/// The zener's dynamic resistance at `i` amps (the voltage over ±1 % of the current).
+fn zz(part: &str, i: f64) -> f64 {
+    (vz(part, i * 1.01) - vz(part, i * 0.99)) / (0.02 * i)
 }
 
 /// Junction capacitance (F) at `vr` volts of reverse bias: the diode behind 100 kohm forms a low-pass; its gain at a frequency
@@ -72,6 +90,7 @@ const VISHAY_5400: &str = "Vishay 1N5400〜1N5408 データシート (Document N
 const VISHAY_5820: &str = "Vishay 1N5820〜1N5822 データシート (Document Number 88526, Revision 05-Apr-2019)。25 °C";
 const VISHAY_UF400X: &str = "Vishay UF4001〜UF4007 データシート (Document Number 88755, Revision 06-Apr-2020)。25 °C";
 const ONSEMI_BAT54: &str = "onsemi BAT54L データシート (BAT54LT1/D Rev. 18, 2024-11)。25 °C";
+const ZENER_47XX: &str = "onsemi 1N4728A Series (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A (Document Number 85816, Rev. 2.7, 2024-11) のデータシート。25 °C";
 const VISHAY_SS1X: &str = "Vishay SS12〜SS16 データシート (Document Number 88746, Revision 23-Apr-2020)。25 °C";
 
 fn source(part: &str) -> &'static str {
@@ -83,6 +102,7 @@ fn source(part: &str) -> &'static str {
         "1N5822" => VISHAY_5820,
         "UF4007" => VISHAY_UF400X,
         "BAT54" => ONSEMI_BAT54,
+        "1N4728A" | "1N4733A" | "1N4742A" => ZENER_47XX,
         _ => ONSEMI_400X,
     }
 }
@@ -190,6 +210,50 @@ fn rows() -> Vec<Row> {
     }
     v.push(Row { part: "BAT54", item: "全容量 (1 V)".into(), ds: [None, Some(7.6), Some(10.0)], unit: "pF", at: "CT: VR = 1 V、f = 1 MHz (表。図 4 は 8.1 pF)".into(), measure: Box::new(|| cap("BAT54", 1.0, 7.6e-12) * 1e12), tol: Some(1.2) });
     v.push(Row { part: "SS14", item: "逆電流 (40 V)".into(), ds: [None, None, Some(0.2)], unit: "mA", at: "IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない)".into(), measure: Box::new(|| ir("SS14", 40.0) * 1e3), tol: None });
+    // zeners: the table's VZ (min / nom / max at IZT), the rise of VZ from 1 mA (onsemi Figure 7's dynamic resistance
+    // integrated), Zz at 5 mA (Figure 7), the table's ZZT and ZZK max, IR max, the capacitance at 0 V (Figure 9)
+    // 3.14 is the 1N4728A's minimum zener voltage (V), not pi
+    #[allow(clippy::type_complexity, clippy::approx_constant)]
+    let zeners: [(&str, [f64; 3], f64, [f64; 2], f64, [f64; 2], f64, [f64; 2], f64); 3] = [
+        ("1N4728A", [3.14, 3.3, 3.47], 76e-3, [0.5285, 1.096], 70.9, [10.0, 400.0], 100.0, [1.0, 1.0], 355.0),
+        ("1N4733A", [4.85, 5.1, 5.36], 49e-3, [0.1806, 0.2445], 9.22, [7.0, 550.0], 10.0, [1.0, 1.0], 195.0),
+        ("1N4742A", [11.4, 12.0, 12.6], 21e-3, [0.05517, 0.1295], 7.16, [9.0, 700.0], 5.0, [9.1, 9.1], 96.0),
+    ];
+    for (part, [vmin, vnom, vmax], izt, [rise5, rise20], zz5, [zzt, zzk], irmax, [vr, _], c0) in zeners {
+        v.push(Row { part, item: format!("ツェナー電圧 ({} mA)", izt * 1e3), ds: [Some(vmin), Some(vnom), Some(vmax)], unit: "V", at: "VZ: 表の公称 (min〜max は個体差) と試験電流 IZT".into(), measure: Box::new(move || vz(part, izt)), tol: Some(0.01 * vnom) });
+        for (i, rise) in [(5e-3, rise5), (20e-3, rise20)] {
+            v.push(Row {
+                part,
+                item: format!("電圧の上がり (1 → {} mA)", i * 1e3),
+                ds: [None, Some(rise), None],
+                unit: "V",
+                at: "onsemi の図 7 の動抵抗 (交流で測る) を 1 mA から積分 (グラフから読んだ。低い電圧のツェナーでは図 8 の直流の点と食い違い、モデルは両方の間)".into(),
+                measure: Box::new(move || vz(part, i) - vz(part, 1e-3)),
+                tol: None,
+            });
+        }
+        // the knee's DC point (onsemi Figure 8: the typical leakage at 80 % of the nominal voltage), where it is breakdown current
+        if let Some((v_knee, i_knee)) = match part {
+            "1N4728A" => Some((2.64, 5.527e-3)),
+            "1N4733A" => Some((4.08, 41.4e-6)),
+            _ => None,
+        } {
+            v.push(Row {
+                part,
+                item: format!("膝の電圧 ({})", if i_knee >= 1e-3 { format!("{:.1} mA", i_knee * 1e3) } else { format!("{:.0} µA", i_knee * 1e6) }),
+                ds: [None, Some(v_knee), None],
+                unit: "V",
+                at: "onsemi の図 8 (公称の 80 % の電圧で流れる電流の代表値、グラフから読んだ)".into(),
+                measure: Box::new(move || vz(part, i_knee)),
+                tol: Some(0.2),
+            });
+        }
+        v.push(Row { part, item: "動抵抗 (5 mA)".into(), ds: [None, Some(zz5), None], unit: "Ω", at: "onsemi の図 7 (60 Hz。降伏の傾きが 1 つの形では、膝の柔らかさと急な立ち上がりを同時には合わせきれない)".into(), measure: Box::new(move || zz(part, 5e-3)), tol: None });
+        v.push(Row { part, item: format!("動抵抗 ZZT ({} mA)", izt * 1e3), ds: [None, Some(zzt), None], unit: "Ω", at: "Vishay の表の typ (1 kHz。onsemi の表は max だけ)".into(), measure: Box::new(move || zz(part, izt)), tol: None });
+        v.push(Row { part, item: "動抵抗 ZZK (1 mA)".into(), ds: [None, None, Some(zzk)], unit: "Ω", at: "表の max".into(), measure: Box::new(move || zz(part, 1e-3)), tol: None });
+        v.push(Row { part, item: format!("逆電流 ({vr} V)"), ds: [None, None, Some(irmax)], unit: "µA", at: "IR: 表の max".into(), measure: Box::new(move || ir(part, vr) * 1e6), tol: None });
+        v.push(Row { part, item: "接合容量 (0 V)".into(), ds: [None, Some(c0), None], unit: "pF", at: "onsemi の図 9 (グラフから読んだ。降伏の裾の電流があるので 1 kΩ 越しに測る)".into(), measure: Box::new(move || cap_r(part, 0.0, c0 * 1e-12, 1e3) * 1e12), tol: Some(0.15 * c0) });
+    }
     v
 }
 

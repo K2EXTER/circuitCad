@@ -12,6 +12,9 @@ pub struct DiodeModel {
     /// Reverse breakdown voltage (positive; infinite = none) and the reverse current at `-bv`.
     pub bv: f64,
     pub ibv: f64,
+    /// Emission coefficient of the breakdown current (SPICE `NBV`; 0 = the same as `n`, as in ngspice). A zener's knee:
+    /// its dynamic resistance in breakdown is NBV·VT / I + RS.
+    pub nbv: f64,
     /// Zero-bias junction capacitance (F), built-in potential (V), grading coefficient, the forward-bias knee of the
     /// depletion formula (fraction of the potential), and the transit time (s) of the diffusion charge.
     pub cj0: f64,
@@ -49,11 +52,16 @@ impl DiodeModel {
     pub fn has_charge(&self) -> bool {
         self.cj0 > 0.0 || self.tt > 0.0
     }
+
+    /// NBV·VT: the breakdown current's slope voltage (`n` when NBV is not given).
+    pub fn nbv_vt(&self) -> f64 {
+        (if self.nbv > 0.0 { self.nbv } else { self.n }) * crate::dc::VT
+    }
 }
 
 impl Default for DiodeModel {
     fn default() -> Self {
-        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3, cj0: 0.0, vj: 1.0, m: 0.5, fc: 0.5, tt: 0.0, isr: 0.0, nr: 2.0, eg: 1.11, xti: 3.0, ideal: None }
+        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3, nbv: 0.0, cj0: 0.0, vj: 1.0, m: 0.5, fc: 0.5, tt: 0.0, isr: 0.0, nr: 2.0, eg: 1.11, xti: 3.0, ideal: None }
     }
 }
 

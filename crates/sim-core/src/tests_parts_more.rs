@@ -104,14 +104,15 @@ fn schottky_diodes_drop_less_than_silicon_and_the_zener_clamps() {
     let (s1, s2, si) = (drop("1N5817", "A", "K"), drop("SS14", "2", "1"), drop("1N4007", "A", "K"));
     assert!(s1 < 0.45 && s2 < 0.45, "schottky {s1} {s2}");
     assert!(si > 0.55 && si < 0.85, "silicon {si}");
-    // a 3.3 V zener across the supply through 330 ohm
+    // a 3.3 V zener across the supply through 330 ohm: about 5 mA, far below its 76 mA test current, where a low-voltage
+    // zener's soft knee leaves it well under 3.3 V (the data sheet's Figure 8: 2.64 V at 5.5 mA)
     let def = part("1N4728A");
     let mut c = Circuit::new();
     vs(&mut c, "V1", "in", "0", 5.0);
     res(&mut c, "R1", "in", "k", 330.0);
     place(&mut c, &def, "D1", &[("A", "0"), ("K", "k")]);
     let z = v(&dc_op(&c).unwrap(), "k");
-    assert!((z - 3.3).abs() < 0.4, "{z}");
+    assert!((z - 2.6).abs() < 0.2, "{z}");
 }
 
 #[test]

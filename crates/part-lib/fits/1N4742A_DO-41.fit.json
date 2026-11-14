@@ -1,0 +1,154 @@
+{
+  "kind": "diode",
+  "part": "1N4742A_DO-41",
+  "name": "1N4742A",
+  "read": "2026-11-14",
+  "source": "onsemi 1N4728A Series データシート (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A データシート (Document Number 85816, Rev. 2.7, 2024-11)",
+  "url": "https://www.vishay.com/docs/85816/1n4728a.pdf",
+  "description": "1N4742A ツェナーダイオード 12V 1W (DO-41、帯の側がカソード K)。逆方向で定電圧を作る。データシート (onsemi・Vishay) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "Vishay の図 2 (順方向の代表特性) の 25 °C",
+    "points": [
+      [
+        3e-06,
+        0.5139
+      ],
+      [
+        1e-05,
+        0.5563
+      ],
+      [
+        3e-05,
+        0.585
+      ],
+      [
+        0.0001,
+        0.6206
+      ],
+      [
+        0.0003,
+        0.6562
+      ],
+      [
+        0.001,
+        0.6917
+      ],
+      [
+        0.003,
+        0.7323
+      ],
+      [
+        0.01,
+        0.7755
+      ],
+      [
+        0.03,
+        0.817
+      ]
+    ]
+  },
+  "hot": {
+    "temp": 150.0,
+    "points": [
+      [
+        3e-06,
+        0.2346
+      ],
+      [
+        1e-05,
+        0.2871
+      ],
+      [
+        3e-05,
+        0.326
+      ],
+      [
+        0.0001,
+        0.3734
+      ],
+      [
+        0.0003,
+        0.4225
+      ],
+      [
+        0.001,
+        0.4716
+      ],
+      [
+        0.003,
+        0.5275
+      ],
+      [
+        0.01,
+        0.5867
+      ],
+      [
+        0.03,
+        0.6435
+      ]
+    ]
+  },
+  "breakdown": {
+    "v": 12.0,
+    "i": 5e-06,
+    "note": "ツェナーの欄から (表の逆電流の max は 9.1 V で 5 µA)"
+  },
+  "capacitance": {
+    "at": "onsemi の図 9 (容量とツェナー電圧の代表特性) の 0 V・1 V・降伏の 50 % のバイアス",
+    "points": [
+      [
+        0.0,
+        9.6e-11
+      ],
+      [
+        1.0,
+        5.77e-11
+      ],
+      [
+        6.0,
+        4.59e-11
+      ]
+    ]
+  },
+  "no_recovery": "逆回復時間は扱いません (ツェナーのデータシートに trr は無い)。",
+  "zener": {
+    "at": "onsemi の図 7 (動抵抗とツェナー電圧の代表特性、25 °C、60 Hz)",
+    "vz": 12.0,
+    "izt": 0.021,
+    "zz": [
+      [
+        0.001,
+        32.8
+      ],
+      [
+        0.005,
+        7.16
+      ],
+      [
+        0.02,
+        3.83
+      ]
+    ],
+    "zzt_typ": [
+      9.0,
+      "Vishay の表の typ、1 kHz"
+    ],
+    "leak": [
+      [
+        9.6,
+        5.09e-09
+      ]
+    ],
+    "leak_at": "onsemi の図 8 (公称の 80 % の電圧の代表値)",
+    "tc": "表には無い。onsemi の図 2 では 12 V で約 +7〜+9 mV/°C"
+  },
+  "remarks": [
+    "two makers' sheets: onsemi's (1N4728A/D Rev. 2; onsemi no longer hosts it, the copy is from pccomponents.com) has the typical breakdown curves (figures 7 to 9), Vishay's (85816) the typical forward curve (figure 2) and Zzt typ. Both list the same nominal voltage, test current and maxima",
+    "forward, hot: Vishay figure 2, the 25 C and 150 C curves (colored), read with `ds trace ... rows` at 3 uA to 30 mA (the same for the three parts; the figure is for the series)",
+    "zener.zz: onsemi figure 7 (Zz against Vz at IZ = 1, 5, 20 mA), read at 12 V with `ds trace xt= yt=` (the labels are pictures; the ticks from `ds grid`: Vz 1/10/100 at 333.4/440.9/546.6 pt, Zz 1/10/100/1000 at 195.2/148.6/101.6/55.0 pt)",
+    "the model's NBV is fitted to the rise of the zener voltage from 1 to 20 mA (the readings integrated as power laws), so that the voltage across a range of current is right; the dynamic resistance at single currents is compared",
+    "zener.leak: onsemi figure 8 (typical leakage at 80 % of the nominal voltage), the 25 C curve: compared only",
+    "capacitance: onsemi figure 9 (0 V, 1 V and 50 % of breakdown bias): the 0 V curve at 12 V is under the label's frame, extended from 12.5 and 13 V (91 and 86 pF)",
+    "tc: onsemi figures 2 and 4 (not in the model: the simulator's BV does not change with temperature)"
+  ]
+}

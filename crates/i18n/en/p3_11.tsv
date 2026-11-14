@@ -115,18 +115,18 @@ R1 を 330Ω から 100Ω に小さくすると、LED に流れる電流 (いま
 約 3mA (1/3)	About 3mA (1/3)
 約 90mA (10 倍)	About 90mA (10 times)
 電流は (電源 − LED の電圧) ÷ R1 です。LED の電圧は 2V ほどで、あまり変わりません。R1 を 1/3.3 にすると、電流はほぼ 3 倍になります (10 倍にはなりません。LED の電圧が、電流とともに少し上がるためです)。LED は 20mA あたりが定格の目安です。	The current is (supply − LED voltage) ÷ R1. The LED voltage is about 2V and changes little. Making R1 1/3.3 makes the current almost 3 times larger (not 10 times, because the LED voltage rises a little with current). For an LED, about 20mA is the usual rating guideline.
-負荷 R2 を 1kΩ から 100Ω (重い負荷) にすると、出力 VOUT (いま約 5.2V) はどうなると思いますか?	If you change the load R2 from 1kΩ to 100Ω (a heavy load), what do you think happens to the output VOUT (now about 5.2V)?
-5.2V のまま (ツェナーが支える)	Stays at 5.2V (the Zener holds it)
+負荷 R2 を 1kΩ から 100Ω (重い負荷) にすると、出力 VOUT (いま約 5.0V) はどうなると思いますか?	If you change the load R2 from 1kΩ to 100Ω (a heavy load), what do you think happens to the output VOUT (now about 5.0V)?
+5.0V のまま (ツェナーが支える)	Stays at 5.0V (the Zener holds it)
 約 3.6V に下がる	Drops to about 3.6V
 約 4.5V に下がる	Drops to about 4.5V
 約 9V に上がる	Rises to about 9V
 R1 (150Ω) と R2 (100Ω) で分けると、9V × 100 ÷ 250 = 3.6V です。ツェナーの電圧 (約 5.1V) に届かないので、ツェナーに電流が流れず、安定化が働きません。ツェナーは、負荷に流す電流のあとに、まだ余りがあるときだけ、電圧を支えます。	Divided by R1 (150Ω) and R2 (100Ω), it is 9V × 100 ÷ 250 = 3.6V. This doesn't reach the Zener voltage (about 5.1V), so no current flows in the Zener and regulation doesn't work. A Zener only holds the voltage when there is current left over after supplying the load.
-負荷 R2 を 220Ω から 47Ω (必要な電流は約 5 倍) にすると、出力 VOUT (いま約 4.4V) はどうなると思いますか?	If you change the load R2 from 220Ω to 47Ω (about 5 times the current needed), what do you think happens to the output VOUT (now about 4.4V)?
-ほとんど変わらない (約 4.4V)	Hardly changes (about 4.4V)
+負荷 R2 を 220Ω から 47Ω (必要な電流は約 5 倍) にすると、出力 VOUT (いま約 4.2V) はどうなると思いますか?	If you change the load R2 from 220Ω to 47Ω (about 5 times the current needed), what do you think happens to the output VOUT (now about 4.2V)?
+ほとんど変わらない (約 4.0V)	Hardly changes (about 4.0V)
 約 3.5V に下がる	Drops to about 3.5V
 約 2.2V (半分) に下がる	Drops to about 2.2V (half)
 約 0.7V に下がる	Drops to about 0.7V
-トランジスタが、ベースに流れる小さな電流を 100 倍ほどにして、負荷へ流してくれます。ツェナーの電圧 (約 5.1V) からベース-エミッタ間の 0.7V ほどを引いた電圧のまま、ほとんど変わりません。ツェナーに負荷を直接つないだ前の回路 (重い負荷で崩れる) との違いです。	The transistor multiplies the small current into its base by about 100 and delivers it to the load. The output stays at the Zener voltage (about 5.1V) minus about 0.7V for the base-emitter, and hardly changes. That's the difference from the previous circuit with the load connected directly to the Zener (which collapses under a heavy load).
+トランジスタが、ベースに流れる小さな電流を 100 倍ほどにして、負荷へ流してくれます。ツェナーの電圧 (約 4.9V) からベース-エミッタ間の 0.7V ほどを引いた電圧のまま、ほとんど変わりません。ツェナーに負荷を直接つないだ前の回路 (重い負荷で崩れる) との違いです。	The transistor multiplies the small current into its base by about 100 and delivers it to the load. The output stays at the Zener voltage (about 4.9V) minus about 0.7V for the base-emitter, and hardly changes. That's the difference from the previous circuit with the load connected directly to the Zener (which collapses under a heavy load).
 R1 を 100Ω から 10Ω にして、LED に流れる電流を増やすと、電池の端子電圧 VBAT (いま約 2.86V) はどうなると思いますか?	If you change R1 from 100Ω to 10Ω to increase the LED current, what do you think happens to the battery terminal voltage VBAT (now about 2.86V)?
 2.86V のまま	Stays at 2.86V
 約 2.5V に下がる	Drops to about 2.5V

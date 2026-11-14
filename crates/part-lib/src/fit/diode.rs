@@ -1,5 +1,7 @@
 //! Diode: `IS`, `N`, `RS` through the forward points (the same least squares as the part form's diode,
 //! `part_lib::diode`), the band gap `EG` from a hot curve, `CJO`/`VJ`/`M` from the capacitance curve, `TT` from `trr`.
+//! A zener (`zener`): `BV`/`IBV` from the nominal voltage at the test current, `NBV` (the breakdown's slope) from the
+//! dynamic resistance read at a few currents.
 
 use super::num::g;
 use super::{LAST_WORD, Out, Row, amps, cap_at, fit_cap, row};
@@ -20,6 +22,67 @@ pub struct DiodeSpec {
     /// The sentence shown instead of the rectifier's "no trr" note (a Schottky diode: no stored charge).
     #[serde(default)]
     pub no_recovery: Option<String>,
+    /// A zener's breakdown (then `BV`/`IBV`/`NBV` come from here, not from `breakdown`).
+    #[serde(default)]
+    pub zener: Option<Zener>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Zener {
+    /// Where the dynamic resistance was read ("図 7 (動抵抗とツェナー電圧の代表特性) の 1・5・20 mA").
+    pub at: String,
+    /// The table's nominal zener voltage (V) at the test current `izt` (A).
+    pub vz: f64,
+    pub izt: f64,
+    /// (current A, dynamic resistance Ω) from the typical curves, two or more.
+    pub zz: Vec<[f64; 2]>,
+    /// The table's typical Zzt at `izt` (Ω) and where it is from: compared only (often another maker or frequency).
+    #[serde(default)]
+    pub zzt_typ: Option<(f64, String)>,
+    /// Typical leakage below the knee: (reverse voltage V, current A) and where it is from. Compared only.
+    #[serde(default)]
+    pub leak: Vec<[f64; 2]>,
+    #[serde(default)]
+    pub leak_at: String,
+    /// The temperature coefficient of the zener voltage, in words (the model does not have it).
+    pub tc: String,
+}
+
+/// The rise of the zener voltage from the first reading to each of the others, integrating the dynamic resistance
+/// through the readings as power laws (straight lines on the data sheet's log-log graph).
+fn rise_from_readings(zz: &[[f64; 2]]) -> Vec<f64> {
+    let mut out = vec![0.0];
+    for w in zz.windows(2) {
+        let ([i0, z0], [i1, z1]) = (w[0], w[1]);
+        let k = (z1 / z0).ln() / (i1 / i0).ln();
+        let seg = if (k + 1.0).abs() < 1e-9 { z0 * i0 * (i1 / i0).ln() } else { z0 * i0.powf(-k) * (i1.powf(k + 1.0) - i0.powf(k + 1.0)) / (k + 1.0) };
+        out.push(out.last().unwrap() + seg);
+    }
+    out
+}
+
+/// A typical leakage point at least this large is the breakdown's own tail (a low-voltage zener's soft knee) and goes into
+/// the fit; a smaller one is surface leakage below an abrupt knee and is only compared.
+const KNEE_LEAK: f64 = 1e-6;
+
+/// `NBV`·VT by least squares over two kinds of voltage: the model's rise NBV·VT·ln(I/I0) + RS·(I − I0) against the rise
+/// integrated from the dynamic resistance, and the drop from the test point, NBV·VT·ln(IZT/I) + RS·(IZT − I), against a
+/// DC point on the knee (`knee`: (V, I)). The dynamic resistance is measured with AC; on a soft knee it integrates to
+/// more than the DC points show, so both are kept.
+fn fit_nbvt(zz: &[[f64; 2]], rs: f64, vz: f64, izt: f64, knee: &[[f64; 2]]) -> f64 {
+    let rise = rise_from_readings(zz);
+    let (mut num, mut den) = (0.0, 0.0);
+    for (j, [i, _]) in zz.iter().enumerate().skip(1) {
+        let l = (i / zz[0][0]).ln();
+        num += l * (rise[j] - rs * (i - zz[0][0]));
+        den += l * l;
+    }
+    for [v, i] in knee {
+        let l = (izt / i).ln();
+        num += l * (vz - v - rs * (izt - i));
+        den += l * l;
+    }
+    num / den
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -111,9 +174,52 @@ pub fn fit(p: &DiodeSpec) -> Result<Out, String> {
         return Err("大きい電流で電圧の上がりが小さすぎて、直列抵抗 RS が負になりました。大きい電流の点の読みを確かめてください".into());
     }
     let (is, n) = ((-c / a).exp(), a / VT);
-    let mut text = format!(".model {} D(IS={} N={:.3} RS={} BV={} IBV={}", p.common.name, g(is, 4), n, g(rs, 4), g(p.breakdown.v, 4), g(p.breakdown.i, 4));
     let mut out: Vec<Row> = pts.iter().map(|[i, v]| row("VF", format!("{} (25 °C)", amps(*i)), *v, vf(is, n, rs, *i), "V")).collect();
     let mut notes = vec![];
+    let mut text = match &p.zener {
+        None => format!(".model {} D(IS={} N={:.3} RS={} BV={} IBV={}", p.common.name, g(is, 4), n, g(rs, 4), g(p.breakdown.v, 4), g(p.breakdown.i, 4)),
+        Some(z) => {
+            let mut zz = z.zz.clone();
+            zz.sort_by(|a, b| a[0].total_cmp(&b[0]));
+            if zz.len() < 2 || zz.iter().any(|[i, r]| !(*i > 0.0 && *r > 0.0)) {
+                return Err("ツェナーの動抵抗の点を 2 つ以上、電流 (A) と抵抗 (Ω) を 0 より大きい数で書いてください".into());
+            }
+            let knee: Vec<[f64; 2]> = z.leak.iter().filter(|[_, i]| *i >= KNEE_LEAK).copied().collect();
+            let nbvt = fit_nbvt(&zz, rs, z.vz, z.izt, &knee);
+            if !(nbvt > 0.0) {
+                return Err("動抵抗の読みから降伏の傾き NBV が求まりませんでした (順方向の直列抵抗 RS が動抵抗より大きい)。読みを確かめてください".into());
+            }
+            // IBV at the test current: there the voltage is BV + RS·IZT
+            let bv = z.vz - rs * z.izt;
+            let (nbv, model_rise) = (nbvt / VT, |i: f64| nbvt * (i / zz[0][0]).ln() + rs * (i - zz[0][0]));
+            let rise = rise_from_readings(&zz);
+            for [i, r] in &zz {
+                out.push(row("Zz", format!("IZ = {}", amps(*i)), *r, nbvt / i + rs, "Ω"));
+            }
+            for (j, [i, _]) in zz.iter().enumerate().skip(1) {
+                out.push(row("ΔVZ", format!("IZ = {} → {}", amps(zz[0][0]), amps(*i)), rise[j], model_rise(*i), "V"));
+            }
+            if let Some((r, at)) = &z.zzt_typ {
+                let mut x = row("Zzt", format!("IZ = {} ({at})", amps(z.izt)), *r, nbvt / z.izt + rs, "Ω");
+                x.compare_only = true;
+                out.push(x);
+            }
+            for [v, i] in &knee {
+                out.push(row("VZ", format!("IZ = {} ({})", amps(*i), z.leak_at), *v, z.vz - nbvt * (z.izt / i).ln() - rs * (z.izt - i), "V"));
+            }
+            for [v, i] in &z.leak {
+                // below the knee: the breakdown's exponential tail (RS drops nothing at these currents) and IS
+                let mut x = row("IR", format!("VR = {} V ({})", g(*v, 4), z.leak_at), *i, z.izt * ((v - bv) / nbvt).exp() + is, "A");
+                x.compare_only = true;
+                out.push(x);
+            }
+            // a single breakdown slope cannot follow a soft knee at a small current and a steep rise at a large one
+            for r in out.iter().filter(|r| r.item == "Zz" && r.error_pct().abs() > 25.0) {
+                notes.push(format!("Zz が {} で {:+.0}% ずれています。降伏の傾きが 1 つ (NBV) の形では、小さい電流の柔らかい膝と大きい電流の急な立ち上がりを同時には合わせきれないので、電流を増やしたときの電圧の上がり (ΔVZ) に合わせました", r.at, r.error_pct()));
+            }
+            format!(".model {} D(IS={} N={:.3} RS={} BV={} IBV={} NBV={}", p.common.name, g(is, 4), n, g(rs, 4), g(bv, 4), g(z.izt, 4), g(nbv, 4))
+        }
+    };
     if !(0.5..=3.0).contains(&n) {
         notes.push(format!("N が {n:.2} になりました。ふつうのダイオードは 1〜2 ほどです。順方向の点の読みを確かめてください"));
     }
@@ -143,8 +249,20 @@ pub fn fit(p: &DiodeSpec) -> Result<Out, String> {
         format!("データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/diodes.md。", p.common.source),
         format!("順方向: {} を読んだ {} 点に、IS・N・RS を当てはめました (部品作成フォームのダイオードと同じ計算)。", p.forward.at, pts.len()),
         if cap.points.is_empty() { format!("接合容量: {}。", cap.at) } else { format!("接合容量: {}。逆電圧で小さくなります。", cap.at) },
-        format!("降伏: {}。", p.breakdown.note),
+        match &p.zener {
+            None => format!("降伏: {}。", p.breakdown.note),
+            Some(z) => format!(
+                "ツェナー電圧: 表の公称 {} V ({}) に合わせ、{} の動抵抗から出した電流による電圧の上がり{}に、降伏の傾き NBV を合わせました (動抵抗は NBV·VT / I + RS)。個体差 (表の min〜max) は入っていません。",
+                g(z.vz, 4),
+                amps(z.izt),
+                z.at,
+                if z.leak.iter().any(|[_, i]| *i >= KNEE_LEAK) { format!("と、{} の膝の点", z.leak_at) } else { String::new() }
+            ),
+        },
     ];
+    if let Some(z) = &p.zener {
+        limits.push(format!("ツェナー電圧の温度係数: {}。シミュレーションのツェナー電圧は温度で変わりません。", z.tc));
+    }
     if let (Some(h), Some((lo, hi))) = (&p.hot, drift) {
         limits.push(format!("温度: 同じ図の {} °C の曲線に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 {lo:.1}〜{hi:.1} mV 下がります。", g(h.temp, 6)));
     }
@@ -157,7 +275,9 @@ pub fn fit(p: &DiodeSpec) -> Result<Out, String> {
     }
     limits.push(
         if p.hot.is_some() { "扱わないもの: " } else { "扱わないもの: 温度による順方向電圧の変化はシミュレータの標準の式 (1 °C あたり約 −2 mV)、" }.to_string()
-            + &if is > p.breakdown.i {
+            + &if p.zener.is_some() {
+                "降伏の手前の漏れ電流 (降伏の式の裾。データシートの代表値と桁で違うことがあります)、".to_string()
+            } else if is > p.breakdown.i {
                 format!("逆方向の漏れ電流 (IS の {}A。順方向の曲線に合わせた N が大きいので、表の逆電流の max {}A より大きく出ます)、", crate::passive::eng(is), crate::passive::eng(p.breakdown.i))
             } else {
                 "逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、".to_string()
@@ -170,7 +290,13 @@ pub fn fit(p: &DiodeSpec) -> Result<Out, String> {
     }
     // forward voltages 30 mV or more away (a hot curve at a large current: RS does not change with temperature here)
     let hot_at = p.hot.as_ref().map(|h| format!("({} °C)", g(h.temp, 6)));
-    for r in out.iter().filter(|r| r.unit == "V" && (r.model - r.datasheet).abs() >= 0.03) {
+    for r in out.iter().filter(|r| r.item == "ΔVZ" && (r.model - r.datasheet).abs() >= 0.03) {
+        notes.push(format!("ΔVZ (ツェナー電圧の上がり) が {} で {:+.0} mV ずれています。降伏の傾きが 1 つ (NBV) の形では合わせきれません (交流で測った動抵抗を積分した値は、直流の膝の点と食い違うことがあり、両方の間を取りました)", r.at, (r.model - r.datasheet) * 1e3));
+    }
+    for r in out.iter().filter(|r| r.item == "VZ" && (r.model - r.datasheet).abs() >= 0.03) {
+        notes.push(format!("VZ が {} で {:+.0} mV ずれています。膝の直流の点と、動抵抗から出した電圧の上がりの間を取りました", r.at, (r.model - r.datasheet) * 1e3));
+    }
+    for r in out.iter().filter(|r| r.item == "VF" && (r.model - r.datasheet).abs() >= 0.03) {
         let why = if hot_at.as_ref().is_some_and(|h| r.at.ends_with(h.as_str())) {
             "この形では直列抵抗 RS が温度で変わらないので、高い温度の大きい電流では合わせきれません"
         } else {

@@ -101,7 +101,7 @@ mod tests {
     /// "記録なし" and are the next to be rebuilt from their data sheets (docs/model-policy.md). Every other bundled model
     /// says where it comes from.
     const UNRECORDED: &[&str] = &[
-        "1N4728A", "1N4733A", "1N4742A", "BPW34", "PC817",
+        "BPW34", "PC817",
     ];
 
     #[test]

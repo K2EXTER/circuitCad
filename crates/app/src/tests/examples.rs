@@ -2526,36 +2526,38 @@ fn write_follower_example() {
     std::fs::write(root.join("emitter_follower.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
-/// Generates docs/examples/series_regulator.schjson (3.3 V zener reference + LM358 + NPN pass transistor
+/// Generates docs/examples/series_regulator.schjson (TL431 2.5 V reference + LM358 + NPN pass transistor
 /// and feedback divider -> 5 V, 100 ohm load):
 /// `cargo test -p app write_series_regulator_example -- --ignored`
 #[test]
 #[ignore]
 fn write_series_regulator_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
-    let (z, q, op) = (library_part("1N4728A"), library_part("2N3904"), library_part("LM358"));
+    let (z, q, op) = (library_part("TL431"), library_part("2N3904"), library_part("LM358"));
     let mut s = sch_core::Schematic::default();
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "9".into();
     let r1 = s.add(Kind::Resistor, (14, -10), 0);
     s.components[r1].value = "1k".into();
     s.components[r1].footprint = "R_1206".into();
-    let d1 = s.add_custom(z.symbol(), &z.default_value(), &z.footprint_name(), (28, 0), 1);
+    let d1 = s.add_custom(z.symbol(), &z.default_value(), &z.footprint_name(), (28, 0), 0);
     let u = s.add_custom(op.symbol(), &op.default_value(), &op.footprint_name(), (44, -4), 0);
     let q1 = s.add_custom(q.symbol(), &q.default_value(), &q.footprint_name(), (62, -8), 0);
     let r2 = s.add(Kind::Resistor, (78, 4), 1);
     s.components[r2].value = "100".into();
     s.components[r2].footprint = "R_2512".into();
     let r3 = s.add(Kind::Resistor, (62, 10), 1);
-    s.components[r3].value = "5.1k".into();
+    s.components[r3].value = "10k".into();
     let r4 = s.add(Kind::Resistor, (50, 14), 1);
     s.components[r4].value = "10k".into();
     label_pin(&mut s, v1, "+", "VIN");
     label_pin(&mut s, v1, "-", "GND");
     label_pin(&mut s, r1, "1", "VIN");
     label_pin(&mut s, r1, "2", "VREF");
-    label_pin(&mut s, d1, "K", "VREF");
-    label_pin(&mut s, d1, "A", "GND");
+    // TL431 as a 2.5 V reference: REF tied to the cathode
+    label_pin(&mut s, d1, "1", "VREF");
+    label_pin(&mut s, d1, "2", "VREF");
+    label_pin(&mut s, d1, "3", "GND");
     label_pin(&mut s, u, "3", "VREF");
     label_pin(&mut s, u, "2", "FB");
     label_pin(&mut s, u, "1", "DRIVE");

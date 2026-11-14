@@ -25,66 +25,84 @@
       "custom": null
     },
     {
-      "refdes": "D1",
+      "refdes": "U1",
       "kind": "Custom",
-      "value": "1N4728A",
+      "value": "TL431",
       "pos": [
         28,
         0
       ],
-      "rot": 1,
-      "footprint": "D_DO-41_P10.16",
+      "rot": 0,
+      "footprint": "SOT-23",
       "custom": {
-        "name": "1N4728A",
-        "prefix": "D",
+        "name": "TL431",
+        "prefix": "U",
         "pins": [
           {
-            "number": "K",
-            "name": "K",
-            "side": "right"
+            "number": "1",
+            "name": "CATHODE",
+            "side": "top"
           },
           {
-            "number": "A",
-            "name": "A",
+            "number": "2",
+            "name": "REF",
             "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "ANODE",
+            "side": "bottom"
           }
         ],
         "sim": {
-          "kind": "model",
-          "element": "D",
-          "name": "1N4728A",
-          "text": ".model 1N4728A D(IS=50f N=1 RS=10 BV=3.3 IBV=76m)",
+          "kind": "subckt",
+          "element": "",
+          "name": "TL431",
+          "text": ".subckt TL431 cat ref an\n* reference input current (typ, at 2.495 V)\nRref ref an 1.2475e+06\n* the cathode current rises with REF above the knee (slope 1 / dynamic impedance; a smooth knee 0.3 mV wide); REF moves with\n* the cathode voltage by the data sheet's ratio; the cathode needs about 1.2 V\nBk cat an I=0.0015*(0.5*(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)+abs(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))+ln(1+exp(-abs(((V(ref,an)-V(vt,an)-2.493--0.0014*(V(cat,an)-2.495))/0.0003)))))*step(V(cat,an)-1.2,0.2)\n* off-state cathode current (typ, at 36 V)\nRleak cat an 3.6e+08\n* the reference's difference from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVtol vt an DC 0\n* spread Vtol -0.055 0.055 vref (data sheet: 2.44 to 2.55 V)\n.ends TL431",
           "pins": [
-            "A",
-            "K"
+            "1",
+            "2",
+            "3"
           ],
           "params": {},
           "limits": [
-            "降伏電圧つきのダイオードのモデルです。電流を増やしたときのツェナー電圧の変化 (ツェナーインピーダンス) は簡易な式で、実物とずれます。",
-            "ツェナー電圧は温度で変わらない値です。実物は温度で変わります。",
-            "接合容量と逆回復時間は扱いません。許容損失 (W) を超えても壊れません。"
-          ]
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。データシートとの比べは docs/models/regulators.md。",
+            "再現しているもの: 基準電圧 2.495 V (IKA = 10 mA)、REF の入力電流 2 µA、ΔVref/ΔVKA −1.4 mV/V、動的インピーダンス 0.2 Ω、停止中のカソード電流 0.1 µA。",
+            "基準電圧の部品ごとの違い (2.440〜2.550 V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+            "扱わないもの: 温度による変化、最小カソード電流 (0.4 mA) より下で安定しなくなること (このモデルは小さな電流でも安定します)、周波数特性と容量負荷での発振、耐圧・最大電流を超えたときの破壊。",
+            "最終の確認は、メーカーの公式モデルで行ってください。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。25 °C"
+          }
         },
         "ratings": {
-          "i_max": 0.276,
-          "p_max": 1.0,
+          "v_max": 36.0,
+          "i_max": 0.1,
+          "p_max": 0.4,
           "rows": [
             {
-              "name": "ツェナー電圧",
-              "value": "3.3V ±5%",
-              "condition": "IZT = 76mA"
+              "name": "基準電圧",
+              "value": "2.495V (代表)",
+              "condition": "TL431, 25℃"
             },
             {
-              "name": "ツェナーインピーダンス",
-              "value": "10Ω (最大)",
-              "condition": "IZT = 76mA"
+              "name": "最小カソード電流",
+              "value": "1mA",
+              "condition": "regulation に必要"
+            },
+            {
+              "name": "REF 入力電流",
+              "value": "2µA (代表)"
             }
           ]
-        }
+        },
+        "glyph": "shunt_reg"
       }
     },
     {
-      "refdes": "U1",
+      "refdes": "U2",
       "kind": "Custom",
       "value": "LM358",
       "pos": [
@@ -137,13 +155,19 @@
           ],
           "params": {
             "gain_dc": 100000.0,
-            "gbw": 1000000.0
+            "gbw": 700000.0
           },
           "limits": [
-            "開ループ利得、1次の極 (GBW)、入力抵抗、出力抵抗、出力の振れ幅 (電源からの余裕) を再現する簡易マクロモデルです。チャネル1のみ記号にしてあります。",
-            "扱わないもの: 入力オフセット電圧、入力バイアス電流、スルーレート、電源電流、入力できる電圧の範囲、出力電流の限界、容量性の負荷での発振 (位相余裕)、電源電圧による GBW の変化。",
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI SLOS068AB の 5.7 節(B 版ではない LM358)。データシートとの比べは docs/models/opamps.md。",
+            "再現しているもの: 開ループ利得 100 dB、GBW 700 kHz、スルーレート 0.3 V/µs、電源電流 350 µA/回路、入力オフセット 3 mV、入力バイアス電流 20 nA、出力の振れ幅 (電源から 1.4 V / 5 mV)、出力の短絡電流 40 mA、1 kHz の入力換算雑音 40 nV/√Hz。オフセットの部品ごとの違い (±7 mV、データシートの max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+            "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、バイアス電流のばらつき (typ の値で固定)、チャネル2。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
             "電源ピンをつながないと、出力は 0V に張り付きます。"
-          ]
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "TI SLOS068AB(2024-10 改訂)"
+          }
         },
         "ratings": {
           "v_max": 32.0,
@@ -161,6 +185,10 @@
               "value": "3〜32V (単電源)"
             }
           ]
+        },
+        "glyph": "opamp",
+        "shops": {
+          "lcsc": "C7950"
         }
       }
     },
@@ -206,10 +234,16 @@
           ],
           "params": {},
           "limits": [
-            "電流増幅率 hFE (BF) は、電流によらず一定です。実物は、電流が小さいときと大きいときに下がり、個体差も大きいです。温度では少し変わるようにしてあります。",
-            "内部の容量と蓄積時間を含みません。そのため、ON/OFF の速さは実物より速く出ます。高速にスイッチする回路の見積もりには使えません。",
-            "耐圧・定格電流・許容損失を超えても壊れません。"
-          ]
+            "データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。データシートとの比べは docs/models/transistors.md。",
+            "直流: 図 15 (hFE の電流による変化。相対値)・図 17 (VBE、VBE(sat)、VCE(sat)) に、IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。データシートに hFE の typ が無いので、山の高さは表の min 100 と max 300 (10 mA) の幾何平均 173 に置きました。実物の hFE は、同じ型番でも 100〜300 と大きく違います。",
+            "容量: 図 3 の Cibo・Cobo に CJE・CJC を当てはめました。速さ: fT の min 300 MHz から TF を決めました (実物は、ふつうこれより速い)。Early 電圧 VAF 150 V は、hoe (1〜40 µmho、1 mA) の中ほどから。",
+            "扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)"
+          }
         },
         "ratings": {
           "v_max": 40.0,
@@ -231,7 +265,8 @@
               "value": "300MHz"
             }
           ]
-        }
+        },
+        "glyph": "npn"
       }
     },
     {
@@ -249,7 +284,7 @@
     {
       "refdes": "R3",
       "kind": "Resistor",
-      "value": "5.1k",
+      "value": "10k",
       "pos": [
         62,
         10
@@ -315,21 +350,31 @@
     {
       "a": [
         28,
-        4
-      ],
-      "b": [
-        28,
-        7
-      ]
-    },
-    {
-      "a": [
-        28,
         -4
       ],
       "b": [
         28,
         -7
+      ]
+    },
+    {
+      "a": [
+        24,
+        0
+      ],
+      "b": [
+        21,
+        0
+      ]
+    },
+    {
+      "a": [
+        28,
+        4
+      ],
+      "b": [
+        28,
+        7
       ]
     },
     {
@@ -385,31 +430,31 @@
     {
       "a": [
         62,
-        -12
+        -10
       ],
       "b": [
         62,
-        -15
+        -13
       ]
     },
     {
       "a": [
-        58,
+        60,
         -8
       ],
       "b": [
-        55,
+        57,
         -8
       ]
     },
     {
       "a": [
         62,
-        -4
+        -6
       ],
       "b": [
         62,
-        -1
+        -3
       ]
     },
     {
@@ -505,14 +550,21 @@
     {
       "pos": [
         28,
-        7
+        -7
+      ],
+      "text": "VREF"
+    },
+    {
+      "pos": [
+        21,
+        0
       ],
       "text": "VREF"
     },
     {
       "pos": [
         28,
-        -7
+        7
       ],
       "text": "GND"
     },
@@ -554,13 +606,13 @@
     {
       "pos": [
         62,
-        -15
+        -13
       ],
       "text": "VIN"
     },
     {
       "pos": [
-        55,
+        57,
         -8
       ],
       "text": "DRIVE"
@@ -568,7 +620,7 @@
     {
       "pos": [
         62,
-        -1
+        -3
       ],
       "text": "VOUT"
     },
@@ -614,5 +666,6 @@
       ],
       "text": "GND"
     }
-  ]
+  ],
+  "layout_version": 1
 }
