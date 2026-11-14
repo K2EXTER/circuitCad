@@ -169,7 +169,7 @@ impl PartForm {
         }
     }
 
-    /// A form that starts from this kind of part ("ic", "transistor", "nmos", "pmos", "diode", "chip", "connector", "connector2"), for scripts and screenshots.
+    /// A form that starts from this kind of part ("ic", "transistor", "nmos", "pmos", "npn", "pnp", "diode", "chip", "connector", "connector2"), for scripts and screenshots.
     pub fn for_type(name: &str) -> Self {
         let mut f = PartForm::default();
         // a kind of capacitor by its own name ("chip" is the small ceramic one)
@@ -179,7 +179,7 @@ impl PartForm {
             return f;
         }
         // "nmos" / "pmos": a transistor of that kind (its MOSFET section shows)
-        if name == "nmos" || name == "pmos" {
+        if matches!(name, "nmos" | "pmos" | "npn" | "pnp") {
             f.apply_type(PartType::Transistor);
             f.set_transistor(name);
             return f;

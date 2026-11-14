@@ -255,7 +255,11 @@ impl SheetView {
         if let Some(d) = self.doc.as_mut() {
             d.target = None;
             d.selecting = false;
-            d.graph = Some(GraphReader::new(d.page, dest));
+            // the same page's graph already set up: read another curve with its ticks (VBE(sat) and VCE(sat) share a figure)
+            match d.graph.as_mut() {
+                Some(g) if g.page == d.page && g.has_axes() => g.retarget(dest),
+                _ => d.graph = Some(GraphReader::new(d.page, dest)),
+            }
             self.open = true;
         }
     }

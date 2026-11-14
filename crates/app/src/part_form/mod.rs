@@ -197,8 +197,15 @@ pub struct PartForm {
     pub dio_n: f64,
     pub dio_rs: f64,
     pub dio_message: Option<Result<String, String>>,
+    /// Capacitance points ("reverse voltage capacitance" lines) from a graph; used instead of the one Cj when given.
+    pub dio_caps: String,
+    /// The fit of the same kind as the bundled diodes (`part_lib::fit`): the model and the table of gaps.
+    pub dio_result: Option<Result<part_lib::fit::Fitted, String>>,
+    /// What was taken from the PDF's table, or what was not found.
+    pub dio_found: Vec<(bool, String)>,
     /// The MOSFET section ("かんたん作成" from the data sheet's table).
     pub mos: mosfet::MosInput,
+    pub bjt: bjt::BjtInput,
     /// The leaded-part helper of the package tab: lead diameter, body length / diameter (axial) or lead spacing (radial), in mm as typed.
     pub thru_lead: String,
     pub thru_len: String,
@@ -340,7 +347,11 @@ impl Default for PartForm {
             dio_n: 1.5,
             dio_rs: 0.05,
             dio_message: None,
+            dio_caps: String::new(),
+            dio_result: None,
+            dio_found: vec![],
             mos: Default::default(),
+            bjt: Default::default(),
             thru_lead: String::new(),
             thru_len: String::new(),
             thru_dia: String::new(),
@@ -384,6 +395,7 @@ mod checklist;
 mod datasheet_view;
 mod graph_reader;
 mod mosfet;
+mod bjt;
 mod pdf_check;
 mod pdf_input;
 mod pin_import;

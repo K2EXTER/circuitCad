@@ -18,12 +18,39 @@ pub enum Mode {
 pub enum Dest {
     /// The diode's forward points ("current voltage" lines).
     DiodeForward,
+    /// The diode's capacitance ("reverse voltage capacitance" lines).
+    DiodeCap,
+    /// The transistor's fields ("IC value" lines; the capacitances "voltage capacitance").
+    BjtHfe,
+    BjtVbeOn,
+    BjtVbeSat,
+    BjtVceSat,
+    BjtCobo,
+    BjtCibo,
 }
 
 impl Dest {
     fn button(self) -> &'static str {
         match self {
             Dest::DiodeForward => "ダイオードの「順方向特性の点」に入れる",
+            Dest::DiodeCap => "ダイオードの「容量の点」に入れる",
+            Dest::BjtHfe => "トランジスタの「hFE」に入れる",
+            Dest::BjtVbeOn => "トランジスタの「VBE(on)」に入れる",
+            Dest::BjtVbeSat => "トランジスタの「VBE(sat)」に入れる",
+            Dest::BjtVceSat => "トランジスタの「VCE(sat)」に入れる",
+            Dest::BjtCobo => "トランジスタの「Cobo」に入れる",
+            Dest::BjtCibo => "トランジスタの「Cibo」に入れる",
+        }
+    }
+
+    /// The usual axes of its graph: (horizontal log, vertical log, the vertical value written first).
+    fn axes(self) -> (bool, bool, bool) {
+        match self {
+            // VF across, IF up on a log axis; the field wants "current voltage"
+            Dest::DiodeForward => (false, true, true),
+            Dest::DiodeCap | Dest::BjtCobo | Dest::BjtCibo => (true, true, false),
+            Dest::BjtHfe => (true, true, false),
+            Dest::BjtVbeOn | Dest::BjtVbeSat | Dest::BjtVceSat => (true, false, false),
         }
     }
 }
@@ -87,13 +114,14 @@ pub struct GraphReader {
 
 impl GraphReader {
     pub fn new(page: usize, dest: Option<Dest>) -> GraphReader {
+        let (xlog, ylog, swap) = dest.map_or((false, false, false), Dest::axes);
         GraphReader {
             page,
             mode: Some(Mode::XTick),
-            x: AxisInput::default(),
-            y: AxisInput { log: dest == Some(Dest::DiodeForward), ..Default::default() },
+            x: AxisInput { log: xlog, ..Default::default() },
+            y: AxisInput { log: ylog, ..Default::default() },
             points: vec![],
-            swap: dest == Some(Dest::DiodeForward),
+            swap,
             dest,
             snap: true,
             msg: None,
@@ -118,6 +146,21 @@ impl GraphReader {
         let mut v: Vec<(f64, f64)> = g.values().unwrap_or_default().into_iter().map(|(a, b)| if self.swap { (b * sy, a * sx) } else { (a * sx, b * sy) }).collect();
         v.sort_by(|a, b| a.0.total_cmp(&b.0));
         Ok(v)
+    }
+
+    /// Both axes are set (two readable ticks each).
+    pub fn has_axes(&self) -> bool {
+        self.x.axis().is_ok() && self.y.axis().is_ok()
+    }
+
+    /// Reads another curve of the same graph for another field: the ticks stay, the points go.
+    pub fn retarget(&mut self, dest: Option<Dest>) {
+        self.dest = dest;
+        self.points.clear();
+        self.msg = Some((true, i18n::tr("前に置いた目盛りをそのまま使います。別の図なら「目盛りから始め直す」を押します").to_string()));
+        if self.has_axes() {
+            self.mode = Some(Mode::Points);
+        }
     }
 
     pub fn take_out(&mut self) -> Option<GraphOut> {
@@ -282,9 +325,14 @@ impl GraphReader {
         if let Some((ok, m)) = &self.msg {
             ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::ERROR }, m);
         }
-        if ui.button(i18n::tr("グラフの読み取りを終える")).on_hover_text(i18n::tr("目盛りと点を消して、この窓を閉じます")).clicked() {
-            keep = false;
-        }
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(i18n::tr("目盛りから始め直す")).on_hover_text(i18n::tr("目盛りと点を消して、いま出ているページの別の図を読み始めます (送り先の欄はそのまま)")).clicked() {
+                *self = GraphReader::new(shown, self.dest);
+            }
+            if ui.button(i18n::tr("グラフの読み取りを終える")).on_hover_text(i18n::tr("目盛りと点を消して、この窓を閉じます")).clicked() {
+                keep = false;
+            }
+        });
         keep
     }
 }

@@ -66,6 +66,18 @@ impl SchEditor {
         }
     }
 
+    /// The transistor section of the form read from its PDF's table and fitted (`--form-bjt-pdf`), or filled with the
+    /// 2N3904 example and fitted (`--form-bjt-example`).
+    pub fn bjt_in_form(&mut self, from_pdf: bool) {
+        if let Some(f) = self.form.as_mut() {
+            if from_pdf {
+                f.bjt_from_pdf_and_fit();
+            } else {
+                f.bjt_example_and_fit();
+            }
+        }
+    }
+
     /// Waits for a click in the data sheet window for a field of the form (`--form-pick <field name>`).
     pub fn pick_in_form_pdf(&mut self, label: &str) {
         if let Some(f) = self.form.as_mut()

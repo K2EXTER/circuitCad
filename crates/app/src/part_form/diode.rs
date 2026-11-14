@@ -1,6 +1,8 @@
 //! "かんたん作成" for a rectifier / switching / Schottky diode: the learner reads a few points off the data
 //! sheet's forward characteristics, the form fits IS, N and RS, shows the curve against the points, and
 //! writes the `.model` card. The explanation is part of the section, so it doubles as a short tutorial.
+//! "ずれの表を見る" fits the same way as the bundled diodes (`part_lib::fit`, with the reverse ratings, the capacitance
+//! and trr) and lists how far the model lands from each number; "PDF の表から読む" takes IR (and its VR), CT and trr.
 
 use super::*;
 use part_lib::diode;
@@ -38,8 +40,140 @@ impl PartForm {
         Ok(m)
     }
 
+    /// The readings as the bundled diodes' fit takes them (`part_lib::fit::DiodeSpec`).
+    pub(super) fn dio_spec(&self) -> Result<part_lib::fit::Spec, String> {
+        let pts = self.dio_points()?;
+        let num = |label: &str, t: &str| -> Result<Option<f64>, String> {
+            let t = t.trim();
+            if t.is_empty() {
+                return Ok(None);
+            }
+            sim_core::parse_value(&t.to_ascii_lowercase()).filter(|v| *v > 0.0).map(Some).ok_or_else(|| format!("{label}「{t}」を、0 より大きい数で入力してください"))
+        };
+        let (Some(vrrm), Some(ir)) = (num("逆耐圧", &self.dio_vrrm)?, num("漏れ電流", &self.dio_ir)?) else {
+            return Err("ずれの表には、手順3 の逆耐圧と漏れ電流が要ります (表から写します)".into());
+        };
+        let mut caps = vec![];
+        for (n, line) in self.dio_caps.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+            let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
+            let v = |s: &str| sim_core::parse_value(s.to_ascii_lowercase().trim_end_matches(['v', 'f']));
+            match (t.first().and_then(|s| v(s)), t.get(1).and_then(|s| v(s))) {
+                (Some(vr), Some(c)) if vr >= 0.0 && c > 0.0 => caps.push([vr, c]),
+                _ => return Err(format!("容量の点の {}行目: 「逆電圧 容量」の形で入力してください (例: 4 15p)", n + 1)),
+            }
+        }
+        let cap_at = if !caps.is_empty() {
+            "容量と逆電圧のグラフから読んだ点".to_string()
+        } else if let Some(cj) = num("接合容量 Cj", &self.dio_cj)? {
+            let vr = sim_core::parse_value(&self.dio_cj_vr.trim().to_ascii_lowercase()).unwrap_or(0.0);
+            caps.push([vr, cj]);
+            "表の接合容量 1 点 (電圧による変化は VJ・M を仮定)".to_string()
+        } else {
+            "データシートの容量を入れていないので、入れていません".to_string()
+        };
+        let recovery = match num("逆回復時間 trr", &self.dio_trr)? {
+            Some(trr) => {
+                let i_f = num("trr の測定条件 IF", &self.dio_trr_if)?.ok_or("trr の測定条件の電流 IF を入れてください")?;
+                let i_r = num("trr の測定条件 IR", &self.dio_trr_ir)?.ok_or("trr の測定条件の電流 IR を入れてください")?;
+                serde_json::json!({"trr": trr, "if": i_f, "ir": i_r, "note": format!("表の trr {}s (IF = {}A、IR = {}A)", passive::eng(trr), passive::eng(i_f), passive::eng(i_r))})
+            }
+            None => serde_json::Value::Null,
+        };
+        let name = if self.name.trim().is_empty() { "D".to_string() } else { self.name.trim().to_string() };
+        let source = if self.datasheet.trim().is_empty() { "データシート".to_string() } else { self.datasheet.trim().to_string() };
+        let json = serde_json::json!({
+            "kind": "diode",
+            "part": name,
+            "name": diode::model_name(&name),
+            "source": source,
+            "forward": {"at": "順方向特性のグラフから読んだ点", "points": pts.iter().map(|(i, v)| [*i, *v]).collect::<Vec<_>>()},
+            "breakdown": {"v": vrrm, "i": ir, "note": format!("表の逆耐圧 {} V と、その漏れ電流 {}A", part_lib::fit::num::g(vrrm, 4), passive::eng(ir))},
+            "capacitance": {"at": cap_at, "points": caps},
+            "recovery": recovery,
+        });
+        serde_json::from_value(json).map_err(|e| e.to_string())
+    }
+
+    /// "ずれの表を見る": fits like the bundled diodes and puts IS / N / RS into the sliders too.
+    pub(super) fn dio_fit_table(&mut self) {
+        self.dio_result = Some(self.dio_spec().and_then(|s| part_lib::fit::fit(&s)));
+        if let Some(Ok(f)) = &self.dio_result {
+            let get = |k: &str| f.text.split_whitespace().find_map(|w| w.strip_prefix(&format!("{k}="))).and_then(|v| v.trim_end_matches(')').parse::<f64>().ok());
+            if let (Some(is), Some(n), Some(rs)) = (get("IS"), get("N"), get("RS")) {
+                (self.dio_is, self.dio_n, self.dio_rs) = (is, n, rs);
+            }
+        }
+    }
+
+    /// Fills VRRM / IR / Cj / trr from the open PDF's table (what is not found is said and left as it was).
+    pub(super) fn dio_fill_from_pdf(&mut self) {
+        use super::graph_reader::short;
+        use datasheet::spec_table::SpecValue;
+        let sheet = &self.sheet;
+        let first = |symbols: &[&str]| symbols.iter().map(|s| sheet.spec_values(s)).find(|v| !v.is_empty()).unwrap_or_default();
+        let at = |v: &SpecValue| format!("p.{}「{} {}」", v.page + 1, v.symbol, v.conditions);
+        let mut found = vec![];
+        // the leakage: its value at the rated voltage gives both numbers (VRRM is in the ratings table, which has no typ)
+        let ir = first(&["IR", "IRM"]);
+        let hot = |v: &SpecValue| v.conditions.contains("125") || v.conditions.contains("100");
+        match ir.iter().filter(|v| !hot(v)).find_map(|v| Some((v.typ_si().or(v.max_si())?.abs(), v.condition("VR"), v))) {
+            Some((i, vr, v)) => {
+                self.dio_ir = short(i);
+                if let Some(vr) = vr {
+                    self.dio_vrrm = short(vr.abs());
+                }
+                found.push((true, format!("IR {}A{}: {}", short(i), vr.map_or(String::new(), |vr| format!(" (VR = {} V を逆耐圧に)", short(vr.abs()))), at(v))));
+            }
+            None => found.push((false, "IR (逆電流) が表に見つかりません。逆耐圧と一緒に、自分で入れてください".to_string())),
+        }
+        let cj = first(&["CJ", "CT", "CD"]);
+        match cj.iter().find_map(|v| Some((v.typ_si().or(v.max_si())?.abs(), v.condition("VR").unwrap_or(0.0).abs(), v))) {
+            Some((c, vr, v)) => {
+                (self.dio_cj, self.dio_cj_vr) = (short(c), short(vr));
+                found.push((true, format!("容量 {}F ({} V): {}", short(c), short(vr), at(v))));
+            }
+            None => found.push((false, "接合容量が表に見つかりません".to_string())),
+        }
+        let trr = first(&["trr", "tRR"]);
+        match trr.iter().find_map(|v| Some((v.typ_si().or(v.max_si())?.abs(), v))) {
+            Some((t, v)) => {
+                self.dio_trr = short(t);
+                if let Some(i) = v.condition("IF") {
+                    self.dio_trr_if = short(i.abs());
+                }
+                if let Some(i) = v.condition("IR") {
+                    self.dio_trr_ir = short(i.abs());
+                }
+                found.push((true, format!("trr {}s: {}。IF・IR の条件を確かめてください", short(t), at(v))));
+            }
+            None => found.push((false, "trr が表に見つかりません (ショットキーなら無くて構いません)".to_string())),
+        }
+        self.dio_found = found;
+        self.dio_result = None;
+    }
+
     /// Write the model into the simulation tab (and the maximum voltage into the ratings).
     pub(super) fn dio_apply(&mut self) -> Result<String, String> {
+        if let Some(Ok(f)) = &self.dio_result {
+            // the model of the gaps table (the same fit as the bundled diodes, with its notes)
+            let pins = self.parse_pins()?;
+            let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
+            let (Some(a), Some(k)) = (find("A"), find("K")) else {
+                return Err("ピン表に、アノード A とカソード K の名前のピンが要ります (「③ ピン」で、名前を A と K にしてください)".into());
+            };
+            let (text, limits, source) = (f.text.clone(), f.limits.join("\n"), f.source.clone());
+            self.sim = SimChoice::Model;
+            self.sim_element = "D".into();
+            self.sim_name = text.split_whitespace().nth(1).unwrap_or("D").to_string();
+            self.sim_text = text;
+            self.sim_pins = format!("{a} {k}");
+            self.sim_limits = limits;
+            self.sim_origin = Some((sch_core::ModelOrigin::new(sch_core::OriginKind::Equivalent, source), self.sim_text.clone()));
+            if self.rt_v.trim().is_empty() && !self.dio_vrrm.trim().is_empty() {
+                self.rt_v = self.dio_vrrm.trim().to_string();
+            }
+            return Ok("ずれの表のモデル (同梱のダイオードと同じ作り方) を「② シミュレーション」に入れました。そちらの「試し読み」で確かめられます".into());
+        }
         if self.name.trim().is_empty() {
             return Err("先に「名前など」の部品名を入れてください (モデルの名前に使います。例: 1N4007)".into());
         }
@@ -169,7 +303,35 @@ impl PartForm {
             });
             ui.end_row();
         });
-        if ui.button(i18n::tr("手順5: このモデルを「② シミュレーション」に入れる")).on_hover_text(i18n::tr("モデルの文 (.model) を作って、② のシミュレーションの欄に入れます。逆耐圧は ① の定格の最大電圧にも入ります")).clicked() {
+        ui.horizontal(|ui| {
+            ui.label(i18n::tr("容量の点 (空でも可): 逆電圧 容量")).on_hover_text(i18n::tr("容量と逆電圧のグラフから読んだ点。1 行に「逆電圧 [V] 容量 [F]」。入れると、上の Cj 1 点の代わりに使い、電圧による変化も合わせます"));
+            if self.sheet.has_doc() && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓で、容量のグラフの目盛りと曲線の上をクリックして点を読みます")).clicked() {
+                self.sheet.start_graph(Some(super::graph_reader::Dest::DiodeCap));
+            }
+        });
+        ui.add(egui::TextEdit::multiline(&mut self.dio_caps).desired_rows(2).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("1 15p\n10 8p"));
+        ui.horizontal_wrapped(|ui| {
+            if self.sheet.has_doc() && ui.button(i18n::tr("PDF の表から読む")).on_hover_text(i18n::tr("開いているデータシートの表から、逆電流 IR (とその VR を逆耐圧に)・接合容量・trr を探して欄に入れます。入れた値は表と見比べて確かめてください")).clicked() {
+                self.dio_fill_from_pdf();
+            }
+            if ui.button(i18n::tr("ずれの表を見る (同梱と同じ作り方)")).on_hover_text(i18n::tr("同梱のダイオードと同じ当てはめで、モデルと、データシートの各値とのずれを並べます。モデルの形の限界の注意も出ます")).clicked() {
+                self.dio_fit_table();
+            }
+        });
+        for (ok, line) in &self.dio_found {
+            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+        }
+        match &self.dio_result {
+            Some(Ok(f)) => {
+                ui.monospace(&f.text);
+                super::mosfet::fit_table(ui, "dio_rows", f);
+            }
+            Some(Err(e)) => {
+                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+            }
+            None => {}
+        }
+        if ui.button(i18n::tr("手順5: このモデルを「② シミュレーション」に入れる")).on_hover_text(i18n::tr("モデルの文 (.model) を作って、② のシミュレーションの欄に入れます。ずれの表を作ったときは、そのモデル (注記つき) を入れます。逆耐圧は ① の定格の最大電圧にも入ります")).clicked() {
             self.dio_message = Some(self.dio_apply());
         }
         match &self.dio_message {
@@ -234,5 +396,27 @@ impl PartForm {
             }).collect();
             ui.label(egui::RichText::new(rows.join("\n")).size(13.5));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_gaps_table_fits_like_the_bundled_diodes_and_asks_for_the_reverse_ratings() {
+        let mut f = PartForm { name: "1N4007".into(), dio_points: EXAMPLE_POINTS.into(), ..Default::default() };
+        f.dio_fit_table();
+        assert!(matches!(&f.dio_result, Some(Err(e)) if e.contains("逆耐圧")), "{:?}", f.dio_result.as_ref().map(|r| r.as_ref().err()));
+        (f.dio_vrrm, f.dio_ir, f.dio_caps) = ("1000".into(), "5u".into(), "1 15p
+10 8p
+100 3.5p".into());
+        f.dio_fit_table();
+        let Some(Ok(r)) = &f.dio_result else { panic!("{:?}", f.dio_result.as_ref().map(|r| r.as_ref().err())) };
+        assert!(r.text.starts_with(".model 1N4007 D(") && r.text.contains("BV=1000") && r.text.contains("CJO="), "{}", r.text);
+        assert_eq!(r.rows.iter().filter(|x| x.item == "VF").count(), 3);
+        assert_eq!(r.rows.iter().filter(|x| x.item == "CJ").count(), 3);
+        // the sliders follow the fit
+        assert!((f.dio_n - 1.0).abs() < 2.0 && f.dio_is > 0.0);
     }
 }

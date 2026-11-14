@@ -22,3 +22,4 @@
 - `source_form.rs` 電源値フォーム。
 
 エディタは1つの型を複数ファイルの `impl` に分割している (子モジュールから親の非公開フィールドが見える)。型・フィールドは各 `mod.rs`。
+- 2026-11-15: トランジスタ (NPN・PNP) の「かんたん作成」`bjt.rs` と、ダイオードの「ずれの表を見る」(`diode.rs` の `dio_spec`・`dio_fit_table`・`dio_fill_from_pdf`)。どちらも同梱と同じ `part_lib::fit` で当てはめ、`mosfet::fit_table` の表を出す。グラフの窓の送り先 (`graph_reader::Dest`) を欄ごとに足し、同じページの続きは目盛りを引き継ぐ。詳細は `docs/datasheet-viewer-design.md` の段階10。

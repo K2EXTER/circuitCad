@@ -50,7 +50,8 @@ impl PartForm {
         });
         self.sheet_candidates(ui);
         let mosfet = self.ptype == Some(PartType::Transistor) && matches!(self.glyph.as_str(), "nmos" | "pmos");
-        if passive || diode || mosfet {
+        let bjt = self.ptype == Some(PartType::Transistor) && matches!(self.glyph.as_str(), "npn" | "pnp");
+        if passive || diode || mosfet || bjt {
             ui.add_space(6.0);
             ui.separator();
             if diode {
@@ -58,6 +59,9 @@ impl PartForm {
             }
             if mosfet {
                 self.mosfet_ui(ui);
+            }
+            if bjt {
+                self.bjt_ui(ui);
             }
             if passive {
                 self.passive_ui(ui);

@@ -42,6 +42,12 @@ impl PartForm {
                 self.dio_points = out.points.iter().map(|(i, v)| format!("{} {}", short(*i), short(*v))).collect::<Vec<_>>().join("\n");
                 self.dio_message = Some(self.dio_fit().map(|m| format!("p.{} のグラフの {} 点を入れました。{m}", out.page + 1, out.points.len())));
             }
+            Dest::DiodeCap => {
+                self.dio_caps = out.points.iter().map(|(v, c)| format!("{} {}", short(v.abs()), short(c.abs()))).collect::<Vec<_>>().join("
+");
+                self.dio_message = Some(Ok(format!("p.{} のグラフの {} 点を「容量の点」に入れました", out.page + 1, out.points.len())));
+            }
+            d => self.bjt_take_graph(d, &out.points, out.page),
         }
     }
 
