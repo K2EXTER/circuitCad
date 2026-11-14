@@ -2034,6 +2034,76 @@
       }
     ]
   },
+  "BPW34": {
+    "fingerprint": "c7d16e4c51196ed2",
+    "source": "Vishay BPW34, BPW34S データシート (Document Number 81521, Rev. 2.1, 2011-08)。25 °C、光は 950 nm",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "光電流 Ira (1 mW/cm²)",
+        "datasheet": "40.000 / 50.000 / — µA",
+        "target": "50.000 µA",
+        "condition": "VR = 5 V (表。図 3 は光の強さに比例)",
+        "model": "50.001 µA",
+        "diff": "+0.0010 µA",
+        "tested": true
+      },
+      {
+        "item": "光電流 Ira (0.1 mW/cm²)",
+        "datasheet": "— / 5.000 / — µA",
+        "target": "5.000 µA",
+        "condition": "VR = 5 V (図 3、グラフから読んだ)",
+        "model": "5.001 µA",
+        "diff": "+0.0010 µA",
+        "tested": true
+      },
+      {
+        "item": "短絡電流 Ik (1 mW/cm²)",
+        "datasheet": "— / 47.000 / — µA",
+        "target": "47.000 µA",
+        "condition": "表 (モデルは光電流 50 µA のまま)",
+        "model": "50.000 µA",
+        "diff": "+3.000 µA",
+        "tested": true
+      },
+      {
+        "item": "開放電圧 Vo (1 mW/cm²)",
+        "datasheet": "— / 0.3500 / — V",
+        "target": "0.3500 V",
+        "condition": "表",
+        "model": "0.3505 V",
+        "diff": "+0.0005 V",
+        "tested": true
+      },
+      {
+        "item": "暗電流 Iro (10 V)",
+        "datasheet": "— / 2.000 / 30.000 nA",
+        "target": "2.000 nA",
+        "condition": "表 (光なし)",
+        "model": "2.010 nA",
+        "diff": "+0.0099 nA",
+        "tested": true
+      },
+      {
+        "item": "容量 CD (0 V)",
+        "datasheet": "— / 70.000 / — pF",
+        "target": "70.000 pF",
+        "condition": "表 (f = 1 MHz、光なし)",
+        "model": "71.166 pF",
+        "diff": "+1.166 pF",
+        "tested": true
+      },
+      {
+        "item": "容量 CD (3 V)",
+        "datasheet": "— / 25.000 / 40.000 pF",
+        "target": "25.000 pF",
+        "condition": "表 (f = 1 MHz、光なし)",
+        "model": "26.585 pF",
+        "diff": "+1.585 pF",
+        "tested": true
+      }
+    ]
+  },
   "BSS138": {
     "fingerprint": "7ac43a957d2369ed",
     "source": "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
@@ -3337,6 +3407,58 @@
         "condition": "5.6 Vn: f = 1 kHz",
         "model": "5 nV/√Hz",
         "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "PC817": {
+    "fingerprint": "0877d070440d7f66",
+    "source": "Sharp PC817X シリーズ データシート (Sheet No. D2-A03101EN)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "LED の VF (20 mA)",
+        "datasheet": "— / 1.200 / 1.400 V",
+        "target": "1.200 V",
+        "condition": "表の typ・max (図 7 の 25 °C は 1.25 V)",
+        "model": "1.253 V",
+        "diff": "+0.0527 V",
+        "tested": true
+      },
+      {
+        "item": "IC (IF = 5 mA)",
+        "datasheet": "2.500 / 5.290 / 30.000 mA",
+        "target": "5.290 mA",
+        "condition": "VCE = 5 V。typ は図 8、min・max は表 (ランクの幅)",
+        "model": "5.801 mA",
+        "diff": "+0.5109 mA",
+        "tested": true
+      },
+      {
+        "item": "IC (IF = 10 mA)",
+        "datasheet": "— / 12.370 / — mA",
+        "target": "12.370 mA",
+        "condition": "VCE = 5 V。typ は図 8",
+        "model": "11.598 mA",
+        "diff": "-0.7724 mA",
+        "tested": true
+      },
+      {
+        "item": "IC (IF = 20 mA)",
+        "datasheet": "— / 25.100 / — mA",
+        "target": "25.100 mA",
+        "condition": "VCE = 5 V。typ は図 8",
+        "model": "23.187 mA",
+        "diff": "-1.913 mA",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat)",
+        "datasheet": "— / 0.1000 / 0.2000 V",
+        "target": "0.1000 V",
+        "condition": "IF = 20 mA、IC = 1 mA (表)",
+        "model": "0.1003 V",
+        "diff": "+0.0003 V",
         "tested": true
       }
     ]

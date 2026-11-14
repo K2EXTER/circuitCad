@@ -68,7 +68,7 @@ fn light_sensors() -> Schematic {
     label_pin(&mut s, rl, "1", "VLDR");
     label_pin(&mut s, rl, "2", "GND");
     label_pin(&mut s, rl, "L", "LUX");
-    resistor(&mut s, (58, 0), 1, "22k", "VCC", "VPD");
+    resistor(&mut s, (58, 0), 1, "33k", "VCC", "VPD");
     let d1 = part_at(&mut s, "BPW34", (58, 22), 0);
     label_pin(&mut s, d1, "K", "VPD");
     label_pin(&mut s, d1, "A", "GND");

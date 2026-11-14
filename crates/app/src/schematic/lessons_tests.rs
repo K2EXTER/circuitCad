@@ -307,8 +307,12 @@ fn a_model_shows_where_it_comes_from_and_its_data_sheet_table() {
     assert!(super::panel::model_origin("LM358", &m) == (None, None), "an edited model is not the one that was measured");
     let behaviour = e.library.iter().find(|d| d.name == "TP4056").unwrap();
     assert!(super::panel::lib_hover_for_test(behaviour).contains("一般のモデル"));
-    let unrecorded = e.library.iter().find(|d| d.name == "PC817").unwrap();
-    assert!(super::panel::lib_hover_for_test(unrecorded).contains("記録なし"));
+    // every bundled model now says where it comes from: a copy whose model was edited by hand and lost its origin
+    let mut unrecorded = e.library.iter().find(|d| d.name == "PC817").unwrap().clone();
+    let sim = unrecorded.sim.as_mut().unwrap();
+    sim.origin = None;
+    sim.text = sim.text.replace("BF=200", "BF=150");
+    assert!(super::panel::lib_hover_for_test(&unrecorded).contains("記録なし"));
 }
 
 /// The three power-supply lessons tick their steps as the learner acts and carry a real-experiment card.
@@ -1221,8 +1225,8 @@ fn the_light_lesson_ticks_its_four_steps_and_the_voltages_are_as_it_says() {
     e.update_lesson();
     assert_eq!(progress(&e), 3);
     assert!((0.55..0.72).contains(&v(&e, "VLDR")) && (1.6..1.8).contains(&v(&e, "VPD")), "brighter: {} {}", v(&e, "VLDR"), v(&e, "VPD"));
-    // the photodiode: twice the light, twice the current (5 V - VPD over 22k)
-    let current = |vpd: f64| (5.0 - vpd) / 22e3;
+    // the photodiode: twice the light, twice the current (5 V - VPD over 33k)
+    let current = |vpd: f64| (5.0 - vpd) / 33e3;
     assert!((current(1.7) / current(3.35) - 2.0).abs() < 0.1, "twice the light, twice the current");
     set_value(&mut e, "V3", "5");
     e.run_dc();
@@ -1231,7 +1235,7 @@ fn the_light_lesson_ticks_its_four_steps_and_the_voltages_are_as_it_says() {
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 4);
-    assert!((3.0..3.5).contains(&v(&e, "VPD")), "a 4.7k resistor keeps it out of saturation: {}", v(&e, "VPD"));
+    assert!((3.7..3.95).contains(&v(&e, "VPD")), "a 4.7k resistor keeps it out of saturation: {}", v(&e, "VPD"));
 }
 
 #[test]
@@ -2237,7 +2241,7 @@ fn the_phototransistor_basics_lesson_ticks_and_its_numbers_hold() {
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 1, "{}", e.status);
-    assert!((v(&e, "PDOUT") - 0.15).abs() < 0.01 && (v(&e, "COL") - 4.70).abs() < 0.03, "photodiode alone vs transistor");
+    assert!((v(&e, "PDOUT") - 0.10).abs() < 0.01 && (v(&e, "COL") - 4.80).abs() < 0.03, "photodiode alone vs transistor");
     e.run_sweep();
     e.update_lesson();
     assert_eq!(progress(&e), 2, "{}", e.status);
@@ -2245,13 +2249,13 @@ fn the_phototransistor_basics_lesson_ticks_and_its_numbers_hold() {
         let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
         let c = &r.signal("V(COL)").unwrap().values;
         let at = |x: f64| c[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
-        assert!((at(0.1) - 3.49).abs() < 0.05 && (at(0.3) - 0.63).abs() < 0.1 && (at(0.5) - 0.54).abs() < 0.05, "linear, then flat");
+        assert!((at(0.1) - 3.99).abs() < 0.05 && (at(0.3) - 1.98).abs() < 0.1 && (at(0.5) - 0.54).abs() < 0.05, "linear, then flat");
     }
     set_value(&mut e, "V2", "0.5");
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 3);
-    assert!((v(&e, "PDOUT") - 3.75).abs() < 0.05 && (v(&e, "COL") - 0.54).abs() < 0.05, "saturated");
+    assert!((v(&e, "PDOUT") - 2.5).abs() < 0.05 && (v(&e, "COL") - 0.54).abs() < 0.05, "saturated");
 }
 
 #[test]
@@ -2293,9 +2297,9 @@ fn the_photocoupler_basics_lesson_ticks_and_its_numbers_hold() {
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 1, "{}", e.status);
-    // CTR 100 %: the output current is the input current
+    // CTR about 110 % (the data sheet's output curves): the output current is 1.1 times the input current
     let (i_in, i_out) = ((5.0 - v(&e, "LEDA")) / 330.0, (5.0 - v(&e, "OUT")) / 220.0);
-    assert!((v(&e, "LEDA") - 1.23).abs() < 0.05 && (i_out / i_in - 1.0).abs() < 0.05, "ctr {i_in} {i_out}");
+    assert!((v(&e, "LEDA") - 1.19).abs() < 0.05 && (i_out / i_in - 1.09).abs() < 0.05, "ctr {i_in} {i_out}");
     e.run_sweep();
     e.update_lesson();
     assert_eq!(progress(&e), 2, "{}", e.status);
@@ -2303,13 +2307,13 @@ fn the_photocoupler_basics_lesson_ticks_and_its_numbers_hold() {
         let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
         let o = &r.signal("V(OUT)").unwrap().values;
         let at = |x: f64| o[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
-        assert!(at(0.5) > 4.99 && (at(3.0) - 3.73).abs() < 0.05 && (at(5.0) - 2.43).abs() < 0.05, "linear fall");
+        assert!(at(0.5) > 4.99 && (at(3.0) - 3.60).abs() < 0.05 && (at(5.0) - 2.22).abs() < 0.05, "linear fall");
     }
     set_value(&mut e, "R2", "1k");
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 3);
-    assert!((v(&e, "OUT") - 0.13).abs() < 0.05, "saturated");
+    assert!((v(&e, "OUT") - 0.16).abs() < 0.05, "saturated");
 }
 
 #[test]

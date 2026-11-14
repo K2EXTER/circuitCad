@@ -83,6 +83,8 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
             }
             Spec::Bjt(b) => b.hfe_norm.len() + b.vbe_on.len() + b.vbe_sat.len() + b.vce_sat.len() + b.cibo.len() + b.cobo.len(),
             Spec::Darlington(d) => d.hfe.len() + d.vbe_on.len() + d.vbe_sat.len() + d.vce_sat.len() + if d.cib.len() >= 2 && d.cob.len() >= 2 { d.cib.len() + d.cob.len() } else { 0 },
+            Spec::Photodiode(p) => p.light_points.len() + usize::from(p.isc.is_some()) + 1 + usize::from(p.voc_tc.is_some()) + 1 + p.capacitance.len(),
+            Spec::Optocoupler(o) => o.led.len() + usize::from(o.led_typ.is_some()) + o.output.len() + o.ctr_curve.len() + 1,
             Spec::Mos(m) => {
                 let threshold = if m.transfer.is_some() { usize::from(m.vth_range.is_some()) } else { 1 };
                 threshold + m.transfer.as_ref().map_or(0, |t| t.points.len()) + m.rds.len() + 2 + m.gfs.map_or(0, |_| 1) + m.body_diode.as_ref().map_or(0, |b| b.points.len())

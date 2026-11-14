@@ -405,5 +405,21 @@
   "descriptions": [
    "ツェナーダイオード 12V 1W (DO-41, 帯の側がカソード K)。簡易モデル(パラメータは概算)"
   ]
+ },
+ "BPW34": {
+  "texts": [
+   ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2, photocurrent 75 uA per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=75u*max(V(l),0)\nRsh a k 500Meg\n.model DPD D(IS=2n N=1.2 RS=10 BV=32 IBV=10u)\n.ends BPW34"
+  ],
+  "descriptions": [
+   "フォトダイオード BPW34 相当 (A=アノード K=カソード + 光量ピン)。光が当たると逆向きに電流が流れる。IRRAD ピンに電圧源をつなぎ、1V = 1mW/cm² として光の強さを与える(約75µA/mW/cm²)。ランドは概算"
+  ]
+ },
+ "PC817_DIP-4": {
+  "texts": [
+   ".subckt PC817 a k e c\n* input LED (Vf about 1.2 V at 20 mA); the output transistor gets a base current of CTR/BF times the LED current, CTR = 1.0 (100 %)\nVsen a an DC 0\nDled an k DLED\nBb e b I=0.005*I(Vsen)\nQo c b e QPT\n.model DLED D(IS=3e-14 N=1.7 RS=5)\n.model QPT NPN(BF=200 IS=1e-14 VAF=80)\n.ends PC817"
+  ],
+  "descriptions": [
+   "フォトカプラ PC817 相当 (DIP-4。1=アノード 2=カソード 3=エミッタ 4=コレクタ)。入力の LED の電流に比例した電流を、出力のトランジスタに流す (電流伝達率 CTR、ここでは 100%)。入力と出力は電気的に絶縁される。簡易モデルで、応答の遅さ (数 µs〜数十 µs) と CTR の個体差・温度変化は含まない"
+  ]
  }
 }

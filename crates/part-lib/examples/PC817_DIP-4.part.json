@@ -1,8 +1,8 @@
 {
   "name": "PC817",
   "category": "センサ",
-  "description": "フォトカプラ PC817 相当 (DIP-4。1=アノード 2=カソード 3=エミッタ 4=コレクタ)。入力の LED の電流に比例した電流を、出力のトランジスタに流す (電流伝達率 CTR、ここでは 100%)。入力と出力は電気的に絶縁される。簡易モデルで、応答の遅さ (数 µs〜数十 µs) と CTR の個体差・温度変化は含まない",
-  "datasheet": "",
+  "description": "フォトカプラ PC817 (DIP-4。1=アノード 2=カソード 3=エミッタ 4=コレクタ)。入力の LED の電流に比例した電流を、出力のトランジスタに流す (電流伝達率 CTR、ここでは約 110%)。入力と出力は電気的に絶縁される。データシート (Sharp) の代表特性から作った等価モデルで、CTR はランクと個体で 50〜600% と大きく違います",
+  "datasheet": "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8886/PC817X.pdf",
   "prefix": "U",
   "footprint_name": "DIP-4_W7.62",
   "pins": [
@@ -39,7 +39,7 @@
   "sim": {
     "kind": "subckt",
     "name": "PC817",
-    "text": ".subckt PC817 a k e c\n* input LED (Vf about 1.2 V at 20 mA); the output transistor gets a base current of CTR/BF times the LED current, CTR = 1.0 (100 %)\nVsen a an DC 0\nDled an k DLED\nBb e b I=0.005*I(Vsen)\nQo c b e QPT\n.model DLED D(IS=3e-14 N=1.7 RS=5)\n.model QPT NPN(BF=200 IS=1e-14 VAF=80)\n.ends PC817",
+    "text": ".subckt PC817 a k e c\n* input LED; the output transistor's base gets K times the LED current (CTR = K x BF x (1 + VCE/VAF))\nVsen a an DC 0\nDled an k DLED\nBb e b I=0.005286*I(Vsen)\nQo c b e QPT\n.model DLED D(IS=2.727e-22 N=0.9592 RS=5.895 BV=6 IBV=1e-05 CJO=3e-11 VJ=0.7 M=0.5)\n.model QPT NPN(IS=1e-14 BF=200 BR=0.235 VAF=44.16 TF=9.947e-09)\n.ends PC817",
     "pins": [
       "1",
       "2",
@@ -47,10 +47,18 @@
       "4"
     ],
     "limits": [
-      "電流伝達率 CTR (出力の電流 ÷ 入力の LED の電流) を 100% 一定とした簡易モデルです。実物の PC817 は、50〜600% (ランク別) の個体差があり、LED の電流が小さい (1mA 以下) と下がり、温度が上がっても下がり、使うほど (数年で) 下がります。",
-      "応答の遅さ (立ち上がり・立ち下がりが数 µs〜数十 µs) と、入力と出力の間の容量 (数 pF) は扱いません。数十 kHz 以上の信号には使えません。",
-      "入力と出力の絶縁は、回路図では GND を分けることで表します。絶縁耐圧 (PC817 は 5kV) と、沿面距離は、基板の設計で確保します。"
-    ]
+      "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: Sharp PC817X シリーズ データシート (Sheet No. D2-A03101EN)。データシートとの比べは docs/models/transistors.md。",
+      "入力の LED: 図 7 (順方向電流と電圧) の 25 °C を読んだ 6 点に、IS・N・RS を当てはめました。端子間容量 30pF。",
+      "出力: LED の電流の K 倍をトランジスタのベースに流します。図 8 (コレクタ電流と VCE、25 °C) の IF = 5・10・20 mA の線の平らな所 (VCE 3〜7 V) に K と Early 電圧 VAF (44.2 V) を合わせ、電流伝達率 CTR は IF = 5mA・VCE = 5V で約 116% です。内部のトランジスタの hFE は外から見えないので BF = 200 と置きました (仮の値。外から見えるのは CTR = K × BF だけ)。",
+      "CTR の個体差: 表の IC は IF = 5 mA・VCE = 5 V で 2.5〜30 mA (CTR 50〜600%)。ランク (A〜D など) で分けて売られます。実物は表の 50〜600% のどこかで、このモデルは 1 つの値です。図 6 (CTR と IF、VCE = 5 V) の CTR は別の個体 (高いランク) の曲線で、比べるだけにしました。",
+      "飽和: 表の VCE(sat) 0.1 V に、逆方向の電流増幅率 BR を合わせました。応答: 表のカットオフ周波数 (VCE = 5 V、IC = 2 mA、RL = 100 Ω) の 80 kHz から、通過時間 TF を決めました (立ち上がり・立ち下がりは数 µs)。",
+      "扱わないもの: 暗電流 (表の ICEO は max 100 nA)、温度による CTR の変化 (図 9。25 °C から 75 °C で約 30% 下がる)、CTR の IF による変化 (図 6 の山の形)、入力と出力の間の容量 (表の Cf 0.6 pF)、絶縁耐圧 (5 kV)。入力と出力の絶縁は、回路図では GND を分けることで表します。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Sharp PC817X シリーズ データシート (Sheet No. D2-A03101EN)"
+    }
   },
   "ratings": {
     "v_max": 35,

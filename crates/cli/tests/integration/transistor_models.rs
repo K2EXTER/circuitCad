@@ -1,4 +1,4 @@
-//! The bundled transistor models (2N3904, 2N3906, BC547, PN2222A, 2N7000, BSS138, AO3400A, AO3401A) measured the way their data sheets measure them, next to the data
+//! The bundled transistor models (2N3904, 2N3906, BC547, PN2222A, 2N7000, BSS138, AO3400A, AO3401A, the power and Darlington parts added since, and the optocoupler PC817) measured the way their data sheets measure them, next to the data
 //! sheets' numbers (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`).
 //!
 //! `transistor_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -403,6 +403,7 @@ fn source(part: &str) -> &'static str {
         "BC547" => "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
+        "PC817" => "Sharp PC817X シリーズ データシート (Sheet No. D2-A03101EN)。25 °C",
         "AO3401A" => "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。25 °C",
         _ => "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。25 °C",
     }
@@ -547,7 +548,47 @@ net CO Q1.C RC.1
             v.push(Row { part, item: format!("VSD ({id} A)"), ds: [None, None, Some(vsd_max)], unit: "V", at: "ボディダイオード、表の max".into(), measure: Box::new(move || vsd(part, s * id)), tol: None });
         }
     }
+    // PC817: the LED (Figure 7 and the table), the output current on the flat part (Figure 8; the table's 2.5 to 30 mA at
+    // IF = 5 mA is the spread of the ranks), VCE(sat) (the table)
+    v.push(Row { part: "PC817", item: "LED の VF (20 mA)".into(), ds: [None, Some(1.2), Some(1.4)], unit: "V", at: "表の typ・max (図 7 の 25 °C は 1.25 V)".into(), measure: Box::new(|| coupler(5e-3 * 4.0, 5.0).1), tol: Some(0.07) });
+    for (i_f, typ, min_max) in [(5e-3, 5.29, Some((2.5, 30.0))), (10e-3, 12.37, None), (20e-3, 25.1, None)] {
+        v.push(Row {
+            part: "PC817",
+            item: format!("IC (IF = {} mA)", i_f * 1e3),
+            ds: [min_max.map(|m| m.0), Some(typ), min_max.map(|m| m.1)],
+            unit: "mA",
+            at: format!("VCE = 5 V。typ は図 8{}", if min_max.is_some() { "、min・max は表 (ランクの幅)" } else { "" }),
+            measure: Box::new(move || coupler(i_f, 5.0).0 * 1e3),
+            tol: Some(0.15 * typ),
+        });
+    }
+    v.push(Row { part: "PC817", item: "VCE(sat)".into(), ds: [None, Some(0.1), Some(0.2)], unit: "V", at: "IF = 20 mA、IC = 1 mA (表)".into(), measure: Box::new(|| coupler_sat(20e-3, 1e-3)), tol: Some(0.03) });
     v
+}
+
+/// (IC, VF) of the PC817 with `i_f` into its LED and `vce` across its output.
+fn coupler(i_f: f64, vce: f64) -> (f64, f64) {
+    let p = probes(&format!("new
+add PC817 as=U1
+add I {i_f} as=IF
+add V {vce} as=VC
+net A IF.+ U1.1
+net C VC.+ U1.4
+net GND IF.- U1.2 U1.3 VC.-
+"), &["I(VC)", "V(A)"]);
+    (p[0].abs(), p[1])
+}
+
+/// The PC817's VCE with `i_f` into its LED and `ic` forced into its collector.
+fn coupler_sat(i_f: f64, ic: f64) -> f64 {
+    probes(&format!("new
+add PC817 as=U1
+add I {i_f} as=IF
+add I {ic} as=IC
+net A IF.+ U1.1
+net C IC.+ U1.4
+net GND IF.- IC.- U1.2 U1.3
+"), &["V(C)"])[0]
 }
 
 fn show(v: f64) -> String {

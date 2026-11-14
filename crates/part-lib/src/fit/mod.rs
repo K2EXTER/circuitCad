@@ -10,16 +10,19 @@ mod diode;
 mod edit;
 mod mos;
 pub mod num;
+mod opto;
 
 pub use bjt::BjtSpec;
 pub use darlington::DarlingtonSpec;
 pub use diode::DiodeSpec;
 pub use edit::write_part;
 pub use mos::{Caps, MosSpec};
+pub use opto::{OptocouplerSpec, PhotodiodeSpec};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt" or "mos".
+/// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt", "mos", "darlington", "photodiode"
+/// or "optocoupler".
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Spec {
@@ -27,6 +30,8 @@ pub enum Spec {
     Bjt(bjt::BjtSpec),
     Mos(mos::MosSpec),
     Darlington(darlington::DarlingtonSpec),
+    Photodiode(opto::PhotodiodeSpec),
+    Optocoupler(opto::OptocouplerSpec),
 }
 
 /// The fields every kind has.
@@ -58,12 +63,14 @@ impl Spec {
             Spec::Bjt(s) => &s.common,
             Spec::Mos(s) => &s.common,
             Spec::Darlington(s) => &s.common,
+            Spec::Photodiode(s) => &s.common,
+            Spec::Optocoupler(s) => &s.common,
         }
     }
 
     pub fn load(path: &Path) -> Result<Spec, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington。形は crates/part-lib/fits/ の例を見てください)", path.display()))
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler。形は crates/part-lib/fits/ の例を見てください)", path.display()))
     }
 }
 
@@ -113,6 +120,8 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
         Spec::Bjt(s) => bjt::fit(s)?,
         Spec::Mos(s) => mos::fit(s)?,
         Spec::Darlington(s) => darlington::fit(s)?,
+        Spec::Photodiode(s) => opto::fit_photodiode(s)?,
+        Spec::Optocoupler(s) => opto::fit_optocoupler(s)?,
     };
     Ok(Fitted { part: c.part.clone(), source: c.source.clone(), url: c.url.clone(), description: c.description.clone(), text, limits, rows, notes })
 }

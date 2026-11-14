@@ -100,9 +100,7 @@ mod tests {
     /// Bundled models whose source was never recorded (SPICE parameters of diodes, transistors and MOSFETs): they show
     /// "記録なし" and are the next to be rebuilt from their data sheets (docs/model-policy.md). Every other bundled model
     /// says where it comes from.
-    const UNRECORDED: &[&str] = &[
-        "BPW34", "PC817",
-    ];
+    const UNRECORDED: &[&str] = &[];
 
     #[test]
     fn every_bundled_model_says_where_it_comes_from_or_is_listed_as_unrecorded() {

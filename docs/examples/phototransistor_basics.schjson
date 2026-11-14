@@ -59,7 +59,7 @@
           "kind": "subckt",
           "element": "",
           "name": "BPW34",
-          "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2, photocurrent 75 uA per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=75u*max(V(l),0)\nRsh a k 500Meg\n.model DPD D(IS=2n N=1.2 RS=10 BV=32 IBV=10u)\n.ends BPW34",
+          "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2; photocurrent 5e-05 A per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=5e-05*max(V(l),0)\nRsh a k 5.172e+09\n.model DPD D(IS=6.64e-11 N=1 RS=10 BV=60 IBV=0.0001 CJO=7.114e-11 VJ=0.4 M=0.46)\n.ends BPW34",
           "pins": [
             "A",
             "K",
@@ -138,7 +138,7 @@
           "kind": "subckt",
           "element": "",
           "name": "BPW34",
-          "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2, photocurrent 75 uA per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=75u*max(V(l),0)\nRsh a k 500Meg\n.model DPD D(IS=2n N=1.2 RS=10 BV=32 IBV=10u)\n.ends BPW34",
+          "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2; photocurrent 5e-05 A per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=5e-05*max(V(l),0)\nRsh a k 5.172e+09\n.model DPD D(IS=6.64e-11 N=1 RS=10 BV=60 IBV=0.0001 CJO=7.114e-11 VJ=0.4 M=0.46)\n.ends BPW34",
           "pins": [
             "A",
             "K",

@@ -1,5 +1,5 @@
-//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, 1N5408, 1N5822, UF4007, BAT54 and the zeners 1N4728A,
-//! 1N4733A, 1N4742A) measured the way their data sheets measure them, next to the data sheets' numbers
+//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, 1N5408, 1N5822, UF4007, BAT54, the zeners 1N4728A,
+//! 1N4733A, 1N4742A and the photodiode BPW34) measured the way their data sheets measure them, next to the data sheets' numbers
 //! (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`), like `regulator_models.rs`.
 //!
 //! `diode_models_match_their_data_sheets` fails when a model leaves its data sheet by more than the row's tolerance.
@@ -91,6 +91,7 @@ const VISHAY_5820: &str = "Vishay 1N5820〜1N5822 データシート (Document N
 const VISHAY_UF400X: &str = "Vishay UF4001〜UF4007 データシート (Document Number 88755, Revision 06-Apr-2020)。25 °C";
 const ONSEMI_BAT54: &str = "onsemi BAT54L データシート (BAT54LT1/D Rev. 18, 2024-11)。25 °C";
 const ZENER_47XX: &str = "onsemi 1N4728A Series (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A (Document Number 85816, Rev. 2.7, 2024-11) のデータシート。25 °C";
+const VISHAY_BPW34: &str = "Vishay BPW34, BPW34S データシート (Document Number 81521, Rev. 2.1, 2011-08)。25 °C、光は 950 nm";
 const VISHAY_SS1X: &str = "Vishay SS12〜SS16 データシート (Document Number 88746, Revision 23-Apr-2020)。25 °C";
 
 fn source(part: &str) -> &'static str {
@@ -103,6 +104,7 @@ fn source(part: &str) -> &'static str {
         "UF4007" => VISHAY_UF400X,
         "BAT54" => ONSEMI_BAT54,
         "1N4728A" | "1N4733A" | "1N4742A" => ZENER_47XX,
+        "BPW34" => VISHAY_BPW34,
         _ => ONSEMI_400X,
     }
 }
@@ -254,7 +256,44 @@ fn rows() -> Vec<Row> {
         v.push(Row { part, item: format!("逆電流 ({vr} V)"), ds: [None, None, Some(irmax)], unit: "µA", at: "IR: 表の max".into(), measure: Box::new(move || ir(part, vr) * 1e6), tol: None });
         v.push(Row { part, item: "接合容量 (0 V)".into(), ds: [None, Some(c0), None], unit: "pF", at: "onsemi の図 9 (グラフから読んだ。降伏の裾の電流があるので 1 kΩ 越しに測る)".into(), measure: Box::new(move || cap_r(part, 0.0, c0 * 1e-12, 1e3) * 1e12), tol: Some(0.15 * c0) });
     }
+    // BPW34: the light current, the short-circuit current, the open-circuit voltage, the dark current, the capacitance (the table)
+    v.push(Row { part: "BPW34", item: "光電流 Ira (1 mW/cm²)".into(), ds: [Some(40.0), Some(50.0), None], unit: "µA", at: "VR = 5 V (表。図 3 は光の強さに比例)".into(), measure: Box::new(|| lit("BPW34", 1.0, 5.0) * 1e6), tol: Some(5.0) });
+    v.push(Row { part: "BPW34", item: "光電流 Ira (0.1 mW/cm²)".into(), ds: [None, Some(5.0), None], unit: "µA", at: "VR = 5 V (図 3、グラフから読んだ)".into(), measure: Box::new(|| lit("BPW34", 0.1, 5.0) * 1e6), tol: Some(0.5) });
+    v.push(Row { part: "BPW34", item: "短絡電流 Ik (1 mW/cm²)".into(), ds: [None, Some(47.0), None], unit: "µA", at: "表 (モデルは光電流 50 µA のまま)".into(), measure: Box::new(|| lit("BPW34", 1.0, 0.0) * 1e6), tol: Some(5.0) });
+    v.push(Row { part: "BPW34", item: "開放電圧 Vo (1 mW/cm²)".into(), ds: [None, Some(0.35), None], unit: "V", at: "表".into(), measure: Box::new(|| open_v("BPW34", 1.0)), tol: Some(0.02) });
+    v.push(Row { part: "BPW34", item: "暗電流 Iro (10 V)".into(), ds: [None, Some(2.0), Some(30.0)], unit: "nA", at: "表 (光なし)".into(), measure: Box::new(|| lit("BPW34", 0.0, 10.0) * 1e9), tol: Some(0.5) });
+    for (vr, typ, max) in [(0.0, 70.0, None), (3.0, 25.0, Some(40.0))] {
+        v.push(Row { part: "BPW34", item: format!("容量 CD ({vr} V)"), ds: [None, Some(typ), max], unit: "pF", at: "表 (f = 1 MHz、光なし)".into(), measure: Box::new(move || cap("BPW34", vr, typ * 1e-12) * 1e12), tol: Some(0.15 * typ) });
+    }
     v
+}
+
+/// The reverse current (A) of a photodiode lit to `ee` mW/cm² (its IRRAD pin) with `vr` volts across it (0: short circuit).
+fn lit(part: &str, ee: f64, vr: f64) -> f64 {
+    let a = run(&format!("new
+add {part} as=D1
+add V {vr} as=VR
+add V {ee} as=VL
+net K VR.+ D1.K
+net L VL.+ D1.L
+net GND VR.- VL.- D1.A
+dc probe=I(VR)
+"));
+    answer(&a, "dc")["probes"]["I(VR)"].as_f64().unwrap().abs()
+}
+
+/// The open-circuit voltage (A to K) of a photodiode lit to `ee` mW/cm² (1 Gohm keeps the node defined).
+fn open_v(part: &str, ee: f64) -> f64 {
+    let a = run(&format!("new
+add {part} as=D1
+add V {ee} as=VL
+add R 1G as=RX
+net X D1.A RX.1
+net L VL.+ D1.L
+net GND VL.- D1.K RX.2
+dc probe=V(X)
+"));
+    answer(&a, "dc")["probes"]["V(X)"].as_f64().unwrap()
 }
 
 fn show(v: f64) -> String {

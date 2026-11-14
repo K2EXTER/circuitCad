@@ -1,0 +1,97 @@
+{
+  "kind": "photodiode",
+  "part": "BPW34",
+  "name": "BPW34",
+  "read": "2026-11-15",
+  "source": "Vishay BPW34, BPW34S データシート (Document Number 81521, Rev. 2.1, 2011-08)",
+  "url": "https://www.vishay.com/docs/81521/bpw34.pdf",
+  "description": "フォトダイオード BPW34 (A=アノード K=カソード + 光量ピン)。光が当たると逆向きに電流が流れる。IRRAD ピンに電圧源をつなぎ、1V = 1mW/cm² として光の強さを与える (約 50µA/mW/cm²、波長 950nm)。データシート (Vishay) の代表特性から作った等価モデル。ランドは概算",
+  "sensitivity": [
+    5e-05,
+    "表の逆方向の光電流 Ira の typ 50 µA (Ee = 1 mW/cm²、λ = 950 nm、VR = 5 V)。図 3 は 0.01〜1 mW/cm² で比例"
+  ],
+  "light_points": [
+    [
+      0.01,
+      4.903e-07
+    ],
+    [
+      0.03,
+      1.509e-06
+    ],
+    [
+      0.1,
+      5.005e-06
+    ],
+    [
+      0.3,
+      1.483e-05
+    ],
+    [
+      1.0,
+      5.013e-05
+    ]
+  ],
+  "isc": 4.7e-05,
+  "voc": 0.35,
+  "voc_tc": -2.6,
+  "n": [
+    1.0,
+    "データシートに開放電圧は 1 つ (350 mV) しか無いので N = 1 と置いた。開放電圧の温度係数 (表の −2.6 mV/K) とほぼ合う"
+  ],
+  "rs": [
+    10.0,
+    "データシートに順方向の特性が無いので、前のモデルと同じ 10 Ω に置いた (光電流の範囲では効かない)"
+  ],
+  "dark": [
+    10.0,
+    2e-09
+  ],
+  "breakdown": {
+    "v": 60.0,
+    "i": 0.0001,
+    "note": "表の V(BR) の min 60 V (IR = 100 µA)"
+  },
+  "capacitance": [
+    [
+      0.0,
+      7e-11
+    ],
+    [
+      0.2,
+      6.192e-11
+    ],
+    [
+      1.0,
+      4.063e-11
+    ],
+    [
+      2.0,
+      3.091e-11
+    ],
+    [
+      3.0,
+      2.614e-11
+    ],
+    [
+      5.0,
+      2.055e-11
+    ],
+    [
+      10.0,
+      1.594e-11
+    ],
+    [
+      20.0,
+      1.189e-11
+    ]
+  ],
+  "cap_at": "表の CD typ 70 pF (0 V) と、図 6 (容量と逆電圧の代表特性、f = 1 MHz)",
+  "response": "応答の速さ (表の立ち上がり・立ち下がり 100 ns は、容量のほかに、光で生まれた電荷が動く時間を含みます。このモデルは接合容量だけで遅れます)、波長による感度 (図 7。950 nm 以外は感度が下がります)",
+  "remarks": [
+    "table (page 2): Ira typ 50 uA (min 40) at 1 mW/cm2, 950 nm, VR = 5 V; Ik 47 uA (short circuit, same light); Vo 350 mV, TKVo -2.6 mV/K; Iro typ 2 nA (max 30) at 10 V; CD 70 pF at 0 V, 25 pF (max 40) at 3 V; V(BR) min 60 V; tr = tf = 100 ns (VR = 10 V, RL = 1 kohm, 820 nm)",
+    "light_points: Figure 3 (Ira against Ee, VR = 5 V) with `ds trace` (log-log), a straight line: 50 uA per mW/cm2",
+    "capacitance: the table's 70 pF at 0 V and Figure 6 (E = 0, 1 MHz) at 0.2 to 20 V with `ds trace` (the 0.5 V reading lands on a grid line and is left out)",
+    "the old model had 75 uA per mW/cm2: the table's Ik at 1 klx (illuminant A), 70 uA, mistaken for the 950 nm value"
+  ]
+}

@@ -99,7 +99,7 @@
           "kind": "subckt",
           "element": "",
           "name": "PC817",
-          "text": ".subckt PC817 a k e c\n* input LED (Vf about 1.2 V at 20 mA); the output transistor gets a base current of CTR/BF times the LED current, CTR = 1.0 (100 %)\nVsen a an DC 0\nDled an k DLED\nBb e b I=0.005*I(Vsen)\nQo c b e QPT\n.model DLED D(IS=3e-14 N=1.7 RS=5)\n.model QPT NPN(BF=200 IS=1e-14 VAF=80)\n.ends PC817",
+          "text": ".subckt PC817 a k e c\n* input LED; the output transistor's base gets K times the LED current (CTR = K x BF x (1 + VCE/VAF))\nVsen a an DC 0\nDled an k DLED\nBb e b I=0.005286*I(Vsen)\nQo c b e QPT\n.model DLED D(IS=2.727e-22 N=0.9592 RS=5.895 BV=6 IBV=1e-05 CJO=3e-11 VJ=0.7 M=0.5)\n.model QPT NPN(IS=1e-14 BF=200 BR=0.235 VAF=44.16 TF=9.947e-09)\n.ends PC817",
           "pins": [
             "1",
             "2",

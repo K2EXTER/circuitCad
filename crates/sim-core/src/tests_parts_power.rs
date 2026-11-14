@@ -275,7 +275,7 @@ fn the_stimulus_sensors_respond_to_their_input_pin() {
     assert!((ldr(1.0) - 3.77e3).abs() < 100.0, "100 lx: {}", ldr(1.0));
     assert!(ldr(0.0) > 0.9e6, "dark: {}", ldr(0.0));
 
-    // photodiode, reverse biased through 10k: 75 uA per mW/cm2
+    // photodiode, reverse biased through 10k: 50 uA per mW/cm2 (the data sheet's Ira at 950 nm)
     let pd = |irr: f64| {
         let def = part("BPW34");
         let mut c = Circuit::new();
@@ -286,7 +286,7 @@ fn the_stimulus_sensors_respond_to_their_input_pin() {
         v(&dc_op(&c).unwrap(), "k")
     };
     assert!(pd(0.0) > 4.99, "dark: {}", pd(0.0));
-    assert!((pd(1.0) - 4.25).abs() < 0.03, "1 mW/cm2: {}", pd(1.0));
+    assert!((pd(1.0) - 4.5).abs() < 0.03, "1 mW/cm2: {}", pd(1.0));
 
     // Hall sensor: Vs/2 with no field, 1.4 mV/G at 5 V, saturates near the rails
     let hall = |b: f64, vcc: f64| {
