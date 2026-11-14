@@ -5,12 +5,14 @@
 //! `crates/part-lib/fits/`); `ccad fit FILE` runs it from the command line. Details: `docs/code-notes/part-lib.md`.
 
 mod bjt;
+mod darlington;
 mod diode;
 mod edit;
 mod mos;
 pub mod num;
 
 pub use bjt::BjtSpec;
+pub use darlington::DarlingtonSpec;
 pub use diode::DiodeSpec;
 pub use edit::write_part;
 pub use mos::{Caps, MosSpec};
@@ -24,6 +26,7 @@ pub enum Spec {
     Diode(diode::DiodeSpec),
     Bjt(bjt::BjtSpec),
     Mos(mos::MosSpec),
+    Darlington(darlington::DarlingtonSpec),
 }
 
 /// The fields every kind has.
@@ -54,12 +57,13 @@ impl Spec {
             Spec::Diode(s) => &s.common,
             Spec::Bjt(s) => &s.common,
             Spec::Mos(s) => &s.common,
+            Spec::Darlington(s) => &s.common,
         }
     }
 
     pub fn load(path: &Path) -> Result<Spec, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos。形は crates/part-lib/fits/ の例を見てください)", path.display()))
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington。形は crates/part-lib/fits/ の例を見てください)", path.display()))
     }
 }
 
@@ -108,6 +112,7 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
         Spec::Diode(s) => diode::fit(s)?,
         Spec::Bjt(s) => bjt::fit(s)?,
         Spec::Mos(s) => mos::fit(s)?,
+        Spec::Darlington(s) => darlington::fit(s)?,
     };
     Ok(Fitted { part: c.part.clone(), source: c.source.clone(), url: c.url.clone(), description: c.description.clone(), text, limits, rows, notes })
 }

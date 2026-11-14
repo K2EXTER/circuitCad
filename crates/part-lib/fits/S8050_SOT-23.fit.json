@@ -1,0 +1,77 @@
+{
+  "kind": "bjt",
+  "part": "S8050_SOT-23",
+  "name": "S8050",
+  "pnp": false,
+  "read": "2026-11-14",
+  "source": "JCET (江蘇長電) S8050 データシート (版 D、2014-10)",
+  "url": "https://atta.szlcsc.com/upload/public/pdf/source/20170415/1492237762328.pdf",
+  "description": "NPN 汎用トランジスタ 25V 500mA (SOT-23, ピン1=B 2=E 3=C)。データシート (JCET) の代表特性から作った等価モデル (同じ型番でもメーカーで特性が違います)",
+  "figs": {
+    "hfe": "hFE−IC の図",
+    "on": "VCEsat−IC・VBEsat−IC・IC−VBE の図",
+    "cap": "Cob/Cib の図"
+  },
+  "hfe_absolute": true,
+  "hfe_peak": 1.0,
+  "hfe_note": "表の hFE は min・max だけ (50 mA で 120〜400、ランクで分かれる) なので、hFE−IC の図 (VCE = 1 V、25 °C) の値をそのまま使いました。実物はランクと個体で大きく違います。",
+  "hfe_vce": 1.0,
+  "hfe_norm": [
+    [0.002, 227.3],
+    [0.005, 232.7],
+    [0.01, 235.4],
+    [0.02, 238.2],
+    [0.05, 239.2],
+    [0.1, 233.6],
+    [0.2, 212.7],
+    [0.3, 183.3]
+  ],
+  "on_vce": 1.0,
+  "vbe_on": [
+    [0.0002, 0.5543],
+    [0.001, 0.5988],
+    [0.01, 0.661],
+    [0.05, 0.7107],
+    [0.1, 0.7376],
+    [0.3, 0.7951]
+  ],
+  "vbe_sat": [
+    [0.003, 0.6618],
+    [0.01, 0.7045],
+    [0.03, 0.7483],
+    [0.1, 0.7992],
+    [0.3, 0.8807]
+  ],
+  "vce_sat": [
+    [0.01, 0.01706],
+    [0.03, 0.02308],
+    [0.1, 0.04814],
+    [0.2, 0.08356],
+    [0.3, 0.1177]
+  ],
+  "cibo": [
+    [0.2, 4.1e-11],
+    [0.5, 3.694e-11],
+    [1.0, 3.262e-11],
+    [2.0, 2.765e-11],
+    [5.0, 2.1e-11]
+  ],
+  "cobo": [
+    [0.2, 1.152e-11],
+    [0.5, 1.01e-11],
+    [1.0, 8.84e-12],
+    [2.0, 7.39e-12],
+    [5.0, 5.53e-12],
+    [10.0, 4.39e-12]
+  ],
+  "ft_typ": 280000000.0,
+  "vaf": [105.0, "出力特性 (Static Characteristic) の IB = 100・200 µA の線の傾きから (2〜16 V で 105・110 V)"],
+  "remarks": [
+    "S8050 has no single maker; this is JCET's (Jiangsu Changjiang), a common source, from LCSC's copy of the maker's PDF",
+    "read with `cargo run -p datasheet --example ds -- trace` on page 2 (hFE and fT with `keepthin`: the curves are thin and flat for long stretches and the minor grid is dotted; the solid decade lines that then come back were set aside). Each graph has two curves, 25 C and 100 C",
+    "hfe_norm: the hFE-IC figure (VCE = 1 V), the lower curve (25 C), 2 to 300 mA",
+    "vce_sat (mV in the figure), vbe_sat: beta = 10; 25 C is the lower VCE(sat) curve and the upper VBE(sat) one. vbe_on: the IC-VBE figure (VCE = 1 V), the right curve (25 C), read with `rows`",
+    "ft_typ: the fT-IC figure at 20 mA (VCE = 6 V; the table's condition), 280 MHz (the table gives min 150 MHz)",
+    "vaf: the static characteristic, IB = 100 uA: 21.3 mA at 2 V to 24.1 mA at 16 V; 200 uA: 42.9 to 45.2 mA from 2 to 8 V"
+  ]
+}

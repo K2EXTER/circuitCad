@@ -1,7 +1,7 @@
 {
   "name": "S8050",
   "category": "トランジスタ",
-  "description": "NPN 汎用トランジスタ 25V 500mA (SOT-23, ピン1=B 2=E 3=C)。簡易モデル(パラメータは概算)",
+  "description": "NPN 汎用トランジスタ 25V 500mA (SOT-23, ピン1=B 2=E 3=C)。データシート (JCET) の代表特性から作った等価モデル (同じ型番でもメーカーで特性が違います)",
   "prefix": "Q",
   "footprint_name": "SOT-23",
   "pins": [
@@ -54,19 +54,26 @@
     "kind": "model",
     "element": "Q",
     "name": "S8050",
-    "text": ".model S8050 NPN(IS=10f BF=250 BR=5 RB=20)",
+    "text": ".model S8050 NPN(IS=8.514e-14 BF=242.9 NF=1 VAF=105 IKF=0.9716 ISE=3.787e-24 NE=2.964 BR=50 RB=1.578 RE=0.131 RC=0.2185 CJE=4.451e-11 VJE=0.8 MJE=0.38 CJC=1.27e-11 VJC=0.6 MJC=0.37 TF=5.684e-10)",
     "pins": [
       "3",
       "1",
       "2"
     ],
     "limits": [
-      "電流増幅率 hFE (BF) は、電流によらず一定です。実物は、電流が小さいときと大きいときに下がり、個体差も大きいです。温度では少し変わるようにしてあります。",
-      "内部の容量と蓄積時間を含みません。そのため、ON/OFF の速さは実物より速く出ます。高速にスイッチする回路の見積もりには使えません。",
-      "耐圧・定格電流・許容損失を超えても壊れません。"
-    ]
+      "データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: JCET (江蘇長電) S8050 データシート (版 D、2014-10)。データシートとの比べは docs/models/transistors.md。",
+      "直流: hFE−IC の図 (hFE の電流による変化)・VCEsat−IC・VBEsat−IC・IC−VBE の図 (VBE、VBE(sat)、VCE(sat)) に、IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。表の hFE は min・max だけ (50 mA で 120〜400、ランクで分かれる) なので、hFE−IC の図 (VCE = 1 V、25 °C) の値をそのまま使いました。実物はランクと個体で大きく違います。",
+      "容量: Cob/Cib の図 の Cibo・Cobo に CJE・CJC を当てはめました。速さ: fT の typ 280 MHz から TF を決めました。Early 電圧 VAF 105 V は、出力特性 (Static Characteristic) の IB = 100・200 µA の線の傾きから (2〜16 V で 105・110 V)。",
+      "扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "JCET (江蘇長電) S8050 データシート (版 D、2014-10)"
+    }
   },
   "shops": {
     "lcsc": "C2146"
-  }
+  },
+  "datasheet": "https://atta.szlcsc.com/upload/public/pdf/source/20170415/1492237762328.pdf"
 }

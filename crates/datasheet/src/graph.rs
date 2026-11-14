@@ -137,17 +137,24 @@ fn ink(img: &crate::PageImage, x: i64, y: i64) -> bool {
 /// line keeps the grid's pixels. When the column runs along a black vertical grid line, the column 2 pixels over
 /// is used. Crossings inside `skip` (the boxes of the words printed in the plot: "25°C") are left out.
 pub fn curve_crossings(img: &crate::PageImage, px_per_pt: f32, x: f32, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f32> {
-    crossings(img, px_per_pt, x, y0, y1, skip, false)
+    crossings(img, px_per_pt, x, y0, y1, skip, false, false)
+}
+
+/// [`curve_crossings`] that keeps the thin straight lines: for graphs whose curves are thin and flat for long stretches
+/// (JCET's hFE curves) and whose minor grid is dotted. The solid grid lines then come back too, at their ticks' values.
+pub fn curve_crossings_keep_thin(img: &crate::PageImage, px_per_pt: f32, x: f32, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f32> {
+    crossings(img, px_per_pt, x, y0, y1, skip, false, true)
 }
 
 /// [`curve_crossings`] along the horizontal line at page y, between page x0 and x1: where the curves are at that
 /// height (a diode's forward voltage at a current). Straight vertical lines (the grid) are left out the same way.
 pub fn curve_crossings_row(img: &crate::PageImage, px_per_pt: f32, y: f32, x0: f32, x1: f32, skip: &[crate::Rect]) -> Vec<f32> {
-    crossings(img, px_per_pt, y, x0, x1, skip, true)
+    crossings(img, px_per_pt, y, x0, x1, skip, true, false)
 }
 
 /// The scan for both: along a pixel line at `at` (a column, or a row when `row`) from `from` to `to` (page points).
-fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32, skip: &[crate::Rect], row: bool) -> Vec<f32> {
+#[allow(clippy::too_many_arguments)]
+fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32, skip: &[crate::Rect], row: bool, keep_thin: bool) -> Vec<f32> {
     // ink at (position along the scan, position of the scan line)
     let px = |along: i64, line: i64| if row { ink(img, along, line) } else { ink(img, line, along) };
     let (top, bottom) = ((from.min(to) * px_per_pt).round() as i64, (from.max(to) * px_per_pt).round() as i64);
@@ -190,7 +197,7 @@ fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32
     }
     let straight = |r: &(i64, i64)| {
         let min_extent = (r.0..=r.1).map(|a| extent(a, long)).min().unwrap_or(0);
-        (r.1 - r.0 < thin && min_extent >= short) || (r.1 - r.0 < (2.0 * px_per_pt) as i64 && extent(r.0 + (r.1 - r.0) / 2, very_long) >= very_long)
+        (!keep_thin && r.1 - r.0 < thin && min_extent >= short) || (r.1 - r.0 < (2.0 * px_per_pt) as i64 && extent(r.0 + (r.1 - r.0) / 2, very_long) >= very_long)
     };
     let c = col as f32 / px_per_pt;
     runs.iter()
@@ -209,6 +216,12 @@ impl Graph {
     pub fn curve_values(&self, img: &crate::PageImage, px_per_pt: f32, xv: f64, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f64> {
         let Some(x) = self.x.position(xv) else { return vec![] };
         curve_crossings(img, px_per_pt, x, y0, y1, skip).into_iter().filter_map(|y| self.y.value(y)).collect()
+    }
+
+    /// [`Graph::curve_values`] keeping thin straight lines ([`curve_crossings_keep_thin`]).
+    pub fn curve_values_keep_thin(&self, img: &crate::PageImage, px_per_pt: f32, xv: f64, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f64> {
+        let Some(x) = self.x.position(xv) else { return vec![] };
+        curve_crossings_keep_thin(img, px_per_pt, x, y0, y1, skip).into_iter().filter_map(|y| self.y.value(y)).collect()
     }
 
     /// The values on the horizontal axis where the curves are at `yv` (a value of the vertical axis), between page x

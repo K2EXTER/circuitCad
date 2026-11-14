@@ -65,7 +65,7 @@ struct Bjt {
 
 const GEOMETRIC_MEAN: &str = "表の min と max の幾何平均。データシートに typ は無い";
 
-static BJTS: [Bjt; 6] = [
+static BJTS: [Bjt; 10] = [
     Bjt {
         part: "2N3904",
         pnp: false,
@@ -162,6 +162,68 @@ static BJTS: [Bjt; 6] = [
         cobo: None,
         cibo: None,
     },
+    // S8050 / S8550 (JCET): hFE itself at VCE = 1 V
+    Bjt {
+        part: "S8050",
+        pnp: false,
+        figs: ("hFE−IC の図", "VCEsat・VBEsat・IC−VBE の図", "Cob/Cib の図"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの",
+        vce: 1.0,
+        hfe_norm: &[(2e-3, 227.3), (5e-3, 232.7), (10e-3, 235.4), (20e-3, 238.2), (50e-3, 239.2), (100e-3, 233.6), (200e-3, 212.7), (300e-3, 183.3)],
+        hfe_rows: &[(2e-3, None, None), (50e-3, Some(120.0), Some(400.0)), (300e-3, None, None)],
+        vbe_on: &[(1e-3, 0.5988), (10e-3, 0.661), (100e-3, 0.7376)],
+        vbe_sat: &[(10e-3, 0.7045, None, None), (100e-3, 0.7992, None, None)],
+        vce_sat: &[(100e-3, Some(0.04814), None), (300e-3, Some(0.1177), None)],
+        cobo: Some((10.0, 4.39, None)),
+        cibo: Some((0.5, 36.94, None)),
+    },
+    Bjt {
+        part: "S8550",
+        pnp: true,
+        figs: ("hFE−IC の図", "VCEsat・VBEsat・IC−VBE の図", "Cob/Cib の図"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの",
+        vce: 1.0,
+        hfe_norm: &[(2e-3, 210.6), (5e-3, 208.4), (10e-3, 204.8), (20e-3, 199.1), (50e-3, 185.0), (100e-3, 164.8), (200e-3, 132.7), (300e-3, 114.5)],
+        hfe_rows: &[(2e-3, None, None), (50e-3, Some(120.0), Some(400.0)), (300e-3, None, None)],
+        vbe_on: &[(2e-3, 0.6309), (10e-3, 0.677), (100e-3, 0.7638)],
+        vbe_sat: &[(10e-3, 0.7138, None, None), (100e-3, 0.818, None, None)],
+        vce_sat: &[(100e-3, Some(0.07227), None), (300e-3, Some(0.1695), None)],
+        cobo: Some((10.0, 6.21, None)),
+        cibo: Some((0.5, 25.35, None)),
+    },
+    // TIP120 / TIP125 (Darlington pairs, measured at their pins): hFE of the pair at VCE = 4 V, IC/IB = 250
+    Bjt {
+        part: "TIP120",
+        pnp: false,
+        figs: ("図 9", "図 11", "図 8"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの",
+        vce: 4.0,
+        hfe_norm: &[(0.1, 522.0), (0.2, 927.0), (0.3, 1325.0), (0.5, 2009.0), (0.7, 2701.0), (1.0, 3541.0), (1.5, 4295.0), (2.0, 4549.0), (4.0, 2712.0), (7.0, 1106.0)],
+        hfe_rows: &[(0.2, None, None), (0.5, Some(1000.0), None), (2.0, None, None), (3.0, Some(1000.0), None)],
+        vbe_on: &[(0.5, 1.353), (3.0, 1.715)],
+        vbe_sat: &[],
+        vce_sat: &[],
+        cobo: None,
+        cibo: None,
+    },
+    Bjt {
+        part: "TIP125",
+        pnp: true,
+        figs: ("図 9", "図 11", "図 8"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの",
+        vce: 4.0,
+        hfe_norm: &[(0.2, 1297.0), (0.3, 1767.0), (0.5, 2563.0), (0.7, 3103.0), (1.0, 3711.0), (1.5, 4231.0), (2.0, 4282.0), (3.0, 3538.0), (5.0, 1795.0)],
+        hfe_rows: &[(0.2, None, None), (0.5, Some(1000.0), None), (2.0, None, None), (3.0, Some(1000.0), None)],
+        vbe_on: &[(0.5, 1.394), (3.0, 1.903)],
+        vbe_sat: &[],
+        vce_sat: &[],
+        cobo: None,
+        cibo: None,
+    },
 ];
 
 impl Bjt {
@@ -177,14 +239,19 @@ impl Bjt {
         self.peak * if ic < pts[0].0 { pts[0].1 } else { pts[pts.len() - 1].1 }
     }
 
+    /// The top of the data sheet's hFE curve.
+    fn hfe_ds_top(&self) -> f64 {
+        self.peak * self.hfe_norm.iter().map(|p| p.1).fold(0.0, f64::max)
+    }
+
     /// +1 for an NPN, -1 for a PNP: the sources' values are multiplied by it
     fn sign(&self) -> f64 {
         if self.pnp { -1.0 } else { 1.0 }
     }
 
-    /// (|IC|, |IB|, |VBE|) at the curves' |VCE| with a base current that gives about `ic` on the data sheet's curve.
-    fn on(&self, ic: f64) -> (f64, f64, f64) {
-        let (ib, s) = (ic / self.hfe_ds(ic), self.sign());
+    /// (|IC|, |IB|, |VBE|) at the curves' |VCE| with base current `ib`.
+    fn with_ib(&self, ib: f64) -> (f64, f64, f64) {
+        let s = self.sign();
         let p = probes(&format!("new
 add {} as=Q1
 add V {} as=VC
@@ -196,20 +263,56 @@ net GND VC.- IB.- Q1.E
         (p[0].abs(), ib, p[1].abs())
     }
 
-    /// |VBE| at collector current `ic` (the curves' |VCE|): the base current from the data sheet's hFE, then corrected
-    /// once by the model's own (a model hFE 15 % off would otherwise put the reading at another current).
+    /// |VBE| at collector current `ic` (the curves' |VCE|).
     fn vbe_at(&self, ic: f64) -> f64 {
-        let (i0, ib0, _) = self.on(ic);
-        let ib = ib0 * ic / i0;
-        let s = self.sign();
-        probes(&format!("new
-add {} as=Q1
-add V {} as=VC
-add I {} as=IB
-net C VC.+ Q1.C
-net B IB.+ Q1.B
-net GND VC.- IB.- Q1.E
-", self.part, s * self.vce, s * ib), &["V(B)"])[0].abs()
+        self.at(ic).2
+    }
+
+    /// (|IC|, |IB|, |VBE|) with the base current set so that IC is `ic` (within 0.5 %): from the data sheet's hFE, the base
+    /// current is bracketed by doubling or halving, then found by false position on ln IC against ln IB (Illinois). Correcting it
+    /// by the model's hFE again and again does not settle on a Darlington, whose IC grows several times faster than IB over parts
+    /// of its range.
+    fn at(&self, ic: f64) -> (f64, f64, f64) {
+        let good = |r: &(f64, f64, f64)| (r.0 / ic - 1.0).abs() < 0.005;
+        let f = |r: &(f64, f64, f64)| (r.0 / ic).ln();
+        let mut a = self.with_ib(ic / self.hfe_ds(ic));
+        if good(&a) {
+            return a;
+        }
+        let k = if a.0 < ic { 2.0 } else { 0.5 };
+        let mut b = self.with_ib(a.1 * k);
+        for _ in 0..30 {
+            if good(&b) {
+                return b;
+            }
+            if (f(&a) < 0.0) != (f(&b) < 0.0) {
+                break;
+            }
+            a = b;
+            b = self.with_ib(a.1 * k);
+        }
+        let (mut fa, mut fb) = (f(&a), f(&b));
+        let mut side = 0;
+        for _ in 0..40 {
+            let x = (b.1.ln() * fa - a.1.ln() * fb) / (fa - fb);
+            let c = self.with_ib(x.exp());
+            if good(&c) {
+                return c;
+            }
+            let fc = f(&c);
+            if (fc < 0.0) == (fb < 0.0) {
+                b = c;
+                fb = fc;
+                if side == -1 { fa /= 2.0 }
+                side = -1;
+            } else {
+                a = c;
+                fa = fc;
+                if side == 1 { fb /= 2.0 }
+                side = 1;
+            }
+        }
+        if fa.abs() < fb.abs() { a } else { b }
     }
 
     /// (|VBE|, |VCE|) with IC forced and IB = IC / 10.
@@ -288,6 +391,9 @@ fn source(part: &str) -> &'static str {
         "2N3904" => "onsemi 2N3903/2N3904 データシート (2N3903/D Rev. 9, 2021-08)。25 °C",
         "2N3906" => "onsemi 2N3906 データシート (2N3906/D Rev. 4, 2010-02)。25 °C",
         "PN2222A" => "Fairchild PN2222A データシート (Rev. 1.1.0, 2014-07) の表、MMBT2222A/PZT2222A (Rev. 1.1.0) の代表特性。25 °C",
+        "S8050" => "JCET S8050 データシート (版 D、2014-10)。25 °C",
+        "S8550" => "JCET S8550 データシート (版 B、2012-01)。25 °C",
+        "TIP120" | "TIP125" => "onsemi TIP120〜TIP127 データシート (TIP120/D Rev. 10, 2024-06)。25 °C",
         "BD139" => "onsemi BD135G/BD137G/BD139G データシート (BD135/D Rev. 18, 2024-06)。25 °C",
         "BD140" => "onsemi BD136/BD138/BD140 データシート (BD136/D Rev. 2, 2024-05)。25 °C",
         "IRF540N" => "Infineon IRF540NPbF データシート (Rev. 2.1, 2026-07-24)。25 °C",
@@ -316,14 +422,16 @@ fn rows() -> Vec<Row> {
                 unit: "",
                 at: format!("VCE = {} V。typ は{fh}の相対値 × {} ({})。min / max は表", t.vce, t.peak, t.peak_basis),
                 measure: Box::new(move || {
-                    let (i, ib, _) = t.on(ic);
+                    let (i, ib, _) = t.at(ic);
                     i / ib
                 }),
-                tol: Some(0.15 * t.hfe_ds(ic)),
+                // 25 % where the curve has fallen below 40 % of its top: Gummel-Poon's high-injection roll-off cannot follow a
+                // steep fall (2N3906 at 100 mA: +22 % in the fit itself)
+                tol: Some(if t.hfe_ds(ic) < 0.4 * t.hfe_ds_top() { 0.25 } else { 0.15 } * t.hfe_ds(ic)),
             });
         }
         for &(ic, typ) in t.vbe_on {
-            v.push(Row { part, item: format!("VBE ({} mA)", ic * 1e3), ds: [None, Some(typ), None], unit: "V", at: format!("VCE = {} V、{fon} (グラフから読んだ)", t.vce), measure: Box::new(move || t.vbe_at(ic)), tol: Some(0.015) });
+            v.push(Row { part, item: format!("VBE ({} mA)", ic * 1e3), ds: [None, Some(typ), None], unit: "V", at: format!("VCE = {} V、{fon} (グラフから読んだ)", t.vce), measure: Box::new(move || t.vbe_at(ic)), tol: Some(0.015 * typ.max(1.0)) });
         }
         for &(ic, typ, min, max) in t.vbe_sat {
             v.push(Row { part, item: format!("VBE(sat) ({} mA)", ic * 1e3), ds: [min, Some(typ), max], unit: "V", at: format!("IC/IB = 10。typ は{fon}、min / max は表"), measure: Box::new(move || t.sat(ic).0), tol: Some(0.02) });

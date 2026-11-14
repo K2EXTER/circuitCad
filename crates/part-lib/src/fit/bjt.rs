@@ -73,22 +73,22 @@ pub struct Figs {
 const VT: f64 = crate::diode::VT;
 
 #[derive(Clone, Copy, Debug)]
-struct P {
-    is: f64,
-    bf: f64,
-    ise: f64,
-    ne: f64,
-    ikf: f64,
-    rb: f64,
-    re: f64,
-    br: f64,
-    rc: f64,
-    vaf: f64,
-    nf: f64,
+pub(super) struct P {
+    pub(super) is: f64,
+    pub(super) bf: f64,
+    pub(super) ise: f64,
+    pub(super) ne: f64,
+    pub(super) ikf: f64,
+    pub(super) rb: f64,
+    pub(super) re: f64,
+    pub(super) br: f64,
+    pub(super) rc: f64,
+    pub(super) vaf: f64,
+    pub(super) nf: f64,
 }
 
 /// (collector current, base current) of the intrinsic transistor.
-fn ev(p: &P, vbe: f64, vbc: f64) -> (f64, f64) {
+pub(super) fn ev(p: &P, vbe: f64, vbc: f64) -> (f64, f64) {
     let (ef, er) = ((vbe / (p.nf * VT)).min(200.0).exp(), (vbc / VT).min(200.0).exp());
     let (iff, ir) = (p.is * (ef - 1.0), p.is * (er - 1.0));
     let q2 = iff / p.ikf;

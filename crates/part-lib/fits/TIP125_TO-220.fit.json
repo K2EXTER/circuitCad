@@ -1,0 +1,92 @@
+{
+  "kind": "darlington",
+  "read": "2026-11-14",
+  "source": "onsemi TIP120〜TIP122 / TIP125〜TIP127 データシート (TIP120/D Rev. 10, 2024-06)",
+  "url": "https://www.onsemi.com/pdf/datasheet/tip120-d.pdf",
+  "r1": 8000.0,
+  "r2": 120.0,
+  "area": 10.0,
+  "figs": {
+    "hfe": "図 9",
+    "on": "図 11",
+    "cap": "図 8"
+  },
+  "hfe_vce": 4.0,
+  "on_vce": 4.0,
+  "sat_ratio": 250.0,
+  "ft": [
+    4000000.0,
+    "表の |hfe| の min 4 (1 MHz) から。実物はふつうこれより速い"
+  ],
+  "vaf": [
+    100.0,
+    "データシートに出力の特性が無いので、仮に 100 V としました"
+  ],
+  "diode": [
+    "IS=1e-09 N=1.5 RS=0.05",
+    "データシートに特性が無いので、前のモデルと同じ一般的な値 (IS = 1 nA、N = 1.5、RS = 0.05 Ω) を仮に置きました"
+  ],
+  "part": "TIP125_TO-220",
+  "name": "TIP125",
+  "pnp": true,
+  "description": "PNP ダーリントン・パワートランジスタ 60V 5A (TO-220, ピン1=B 2=C 3=E)。TIP120 の相補。ハイサイド駆動に。データシート (onsemi) の代表特性から作った等価モデル",
+  "hfe": [
+    [0.2, 1297],
+    [0.3, 1767],
+    [0.5, 2563],
+    [0.7, 3103],
+    [1.0, 3711],
+    [1.5, 4231],
+    [2.0, 4282],
+    [3.0, 3538],
+    [5.0, 1795]
+  ],
+  "vbe_on": [
+    [0.2, 1.292],
+    [0.5, 1.394],
+    [1.0, 1.496],
+    [2.0, 1.719],
+    [3.0, 1.903],
+    [4.0, 2.064]
+  ],
+  "vbe_sat": [
+    [0.2, 1.24],
+    [0.5, 1.344],
+    [1.0, 1.496],
+    [2.0, 1.719],
+    [3.0, 1.903],
+    [4.0, 2.064]
+  ],
+  "vce_sat": [
+    [0.2, 0.746],
+    [0.5, 0.797],
+    [1.0, 0.916],
+    [2.0, 1.138],
+    [3.0, 1.357],
+    [4.0, 1.559],
+    [7.0, 2.179]
+  ],
+  "cib": [
+    [0.1, 1.42e-10],
+    [0.5, 1.222e-10],
+    [1.0, 1.075e-10],
+    [2.0, 9.11e-11]
+  ],
+  "cob": [
+    [0.1, 2.352e-10],
+    [0.5, 2.231e-10],
+    [1.0, 2.108e-10],
+    [2.0, 1.972e-10],
+    [5.0, 1.703e-10],
+    [10.0, 1.475e-10],
+    [20.0, 1.222e-10],
+    [40.0, 9.66e-11]
+  ],
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace` on pages 5 and 6 and checked against the rendered pages; the right graphs of Figures 9 and 11 are the PNP ones (labelled as magnitudes there)",
+    "hfe: Figure 9 (VCE = -4 V), the middle of the three curves (25 C)",
+    "vbe_on, vbe_sat, vce_sat: Figure 11: for the PNP the VBE (VCE = -4 V) line is above the VBE(sat) one below 1 A; from 1 A they lie on each other (the one value is used for both)",
+    "cib, cob: Figure 8, the solid (PNP) curves",
+    "r1, r2: the data sheet's schematic. area, VAF and the diode are assumptions (not in the data sheet), said in the limits"
+  ]
+}

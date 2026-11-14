@@ -77,6 +77,7 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
         let n = match &s {
             Spec::Diode(d) => d.forward.points.len() + d.hot.as_ref().map_or(0, |h| h.points.len()) + d.capacitance.points.len(),
             Spec::Bjt(b) => b.hfe_norm.len() + b.vbe_on.len() + b.vbe_sat.len() + b.vce_sat.len() + b.cibo.len() + b.cobo.len(),
+            Spec::Darlington(d) => d.hfe.len() + d.vbe_on.len() + d.vbe_sat.len() + d.vce_sat.len() + if d.cib.len() >= 2 && d.cob.len() >= 2 { d.cib.len() + d.cob.len() } else { 0 },
             Spec::Mos(m) => {
                 let threshold = if m.transfer.is_some() { usize::from(m.vth_range.is_some()) } else { 1 };
                 threshold + m.transfer.as_ref().map_or(0, |t| t.points.len()) + m.rds.len() + 2 + m.gfs.map_or(0, |_| 1) + m.body_diode.as_ref().map_or(0, |b| b.points.len())
@@ -85,8 +86,9 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
         assert_eq!(f.rows.len(), n, "{}", f.part);
         // a reading the model's form cannot follow is said in a note (with its condition); the others stay near
         for r in f.rows.iter().filter(|r| !r.compare_only && !f.notes.iter().any(|n| n.contains(&r.at) && n.starts_with(&r.item))) {
-            // voltages to 35 mV (a Schottky's hot curve is the loosest), the rest to 25 %
-            let ok = if r.unit == "V" { (r.model - r.datasheet).abs() < 0.035 } else { r.error_pct().abs() < 25.0 };
+            // voltages to 35 mV (a Schottky's hot curve is the loosest; twice that for a Darlington's two junctions), the rest to 25 %
+            let volts = if matches!(s, Spec::Darlington(_)) { 0.07 } else { 0.035 };
+            let ok = if r.unit == "V" { (r.model - r.datasheet).abs() < volts } else { r.error_pct().abs() < 25.0 };
             assert!(ok, "{} {} {}: {} vs {}", f.part, r.item, r.at, r.model, r.datasheet);
         }
     }

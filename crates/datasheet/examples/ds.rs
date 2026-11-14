@@ -4,7 +4,7 @@
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
 //!     cargo run -p datasheet --example ds -- labels FILE.pdf PAGE [box=x0,y0,x1,y1]   numbers on the page (tick labels)
 //!     cargo run -p datasheet --example ds -- render FILE.pdf PAGE OUT.png [scale=2] [box=x0,y0,x1,y1]
-//!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=x0,y0,x1,y1 x=L1,L2 y=L1,L2 [xlog] [ylog] [rows] [abs] at=V1,V2,...
+//!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=x0,y0,x1,y1 x=L1,L2 y=L1,L2 [xlog] [ylog] [rows] [abs] [keepthin] at=V1,V2,...
 //!     cargo run -p datasheet --example ds -- grid   FILE.pdf PAGE box=x0,y0,x1,y1   the grid lines (for labels that are pictures:
 //!                                                                                  then trace with xt=V@X,.. yt=V@Y,..)
 //!
@@ -132,7 +132,11 @@ fn main() -> Result<(), String> {
                     continue;
                 }
                 let skip: Vec<Rect> = ds.words(p).iter().map(|w| w.rect).collect();
-                let vals = g.curve_values(&img, k, v, top - 1.0, bottom + 1.0, &skip);
+                let vals = if args.iter().any(|a| a == "keepthin") {
+                    g.curve_values_keep_thin(&img, k, v, top - 1.0, bottom + 1.0, &skip)
+                } else {
+                    g.curve_values(&img, k, v, top - 1.0, bottom + 1.0, &skip)
+                };
                 println!("{v}\t{}", vals.iter().map(|x| format!("{x:.5}")).collect::<Vec<_>>().join("\t"));
             }
         }

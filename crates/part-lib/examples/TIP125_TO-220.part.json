@@ -1,7 +1,7 @@
 {
   "name": "TIP125",
   "category": "トランジスタ",
-  "description": "PNP ダーリントン・パワートランジスタ 60V 5A (TO-220, ピン1=B 2=C 3=E)。TIP120 の相補。ハイサイド駆動用。簡易モデル(パラメータは概算)",
+  "description": "PNP ダーリントン・パワートランジスタ 60V 5A (TO-220, ピン1=B 2=C 3=E)。TIP120 の相補。ハイサイド駆動に。データシート (onsemi) の代表特性から作った等価モデル",
   "prefix": "Q",
   "footprint_name": "TO-220-3",
   "pins": [
@@ -31,17 +31,23 @@
   "sim": {
     "kind": "subckt",
     "name": "TIP125",
-    "text": ".subckt TIP125 c b e\nQ1 c b n1 QD\nQ2 c n1 e QP\nR1 b n1 8k\nR2 n1 e 120\nDd c e DD\n.model QD PNP(IS=1e-13 BF=40 BR=3)\n.model QP PNP(IS=1e-12 BF=40 BR=3)\n.model DD D(IS=1e-9 N=1.5 RS=0.05)\n.ends TIP125",
+    "text": ".subckt TIP125 c b e\nQ1 c b n1 QD\nQ2 c n1 e QP\nR1 b n1 8000\nR2 n1 e 120\nDd c e DD\n.model QD PNP(IS=3.26e-13 BF=101 VAF=100 IKF=0.2756 ISE=9.865e-23 NE=3.000 BR=0.5136 RB=0.004869 RE=1.309 RC=0.4816 CJE=1.5e-11 VJE=0.6 MJE=0.34 CJC=2.473e-11 VJC=1.2 MJC=0.25 TF=3.979e-08)\n.model QP PNP(IS=3.26e-12 BF=101 VAF=100 IKF=2.756 ISE=9.865e-22 NE=3.000 BR=0.5136 RB=0.0004869 RE=0.1309 RC=0.04816 CJE=1.5e-10 VJE=0.6 MJE=0.34 CJC=2.473e-10 VJC=1.2 MJC=0.25 TF=3.979e-08)\n.model DD D(IS=1e-09 N=1.5 RS=0.05)\n.ends TIP125",
     "pins": [
       "2",
       "1",
       "3"
     ],
     "limits": [
-      "2つのトランジスタ(Ebers-Moll)と内蔵抵抗 8kΩ・120Ω、ダンパーダイオードで作った簡易モデルです。電流増幅率は電流で変わりません(実物は大電流で下がります)。",
-      "ベース・エミッタ間は約 1.4V(2段分)になります。飽和電圧は実物(最大 2V)より小さめに出ることがあります。",
-      "耐圧・定格電流を超えても壊れません。熱による変化も扱いません。"
-    ]
+      "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi TIP120〜TIP122 / TIP125〜TIP127 データシート (TIP120/D Rev. 10, 2024-06)。データシートとの比べは docs/models/transistors.md。",
+      "ダーリントン接続 (駆動の Q1、出力の Q2、内蔵の抵抗 R1 = 8000Ω・R2 = 120Ω。データシートの図の値) を 1 つの回路として解き、図 9 (2 個合わせた hFE)・図 11 (VBE、VBE(sat)、VCE(sat)) に、出力の Q2 の IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。駆動の Q1 は同じ作りで 10 分の 1 の大きさと仮定しました (データシートに無い)。",
+      "容量: 図 8 の Cib・Cob に CJE・CJC を当てはめました (Q1 は大きさの比で小さく)。速さ: fT 4 MHz (表の |hfe| の min 4 (1 MHz) から。実物はふつうこれより速い) から TF を決めました。Early 電圧 VAF 100 V は、データシートに出力の特性が無いので、仮に 100 V としました。コレクタとエミッタの間のダイオード: データシートに特性が無いので、前のモデルと同じ一般的な値 (IS = 1 nA、N = 1.5、RS = 0.05 Ω) を仮に置きました。",
+      "扱わないもの: 蓄積時間 (TR)、温度によるパラメータの変化はシミュレータの標準の式、二次降伏、耐圧・定格電流・許容損失を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "onsemi TIP120〜TIP122 / TIP125〜TIP127 データシート (TIP120/D Rev. 10, 2024-06)"
+    }
   },
   "ratings": {
     "v_max": 60,
@@ -64,5 +70,6 @@
         "condition": "IC = 3A, VCE = 3V"
       }
     ]
-  }
+  },
+  "datasheet": "https://www.onsemi.com/pdf/datasheet/tip120-d.pdf"
 }

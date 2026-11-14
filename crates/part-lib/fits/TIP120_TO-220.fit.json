@@ -1,0 +1,88 @@
+{
+  "kind": "darlington",
+  "read": "2026-11-14",
+  "source": "onsemi TIP120〜TIP122 / TIP125〜TIP127 データシート (TIP120/D Rev. 10, 2024-06)",
+  "url": "https://www.onsemi.com/pdf/datasheet/tip120-d.pdf",
+  "r1": 8000.0,
+  "r2": 120.0,
+  "area": 10.0,
+  "figs": {
+    "hfe": "図 9",
+    "on": "図 11",
+    "cap": "図 8"
+  },
+  "hfe_vce": 4.0,
+  "on_vce": 4.0,
+  "sat_ratio": 250.0,
+  "ft": [
+    4000000.0,
+    "表の |hfe| の min 4 (1 MHz) から。実物はふつうこれより速い"
+  ],
+  "vaf": [
+    100.0,
+    "データシートに出力の特性が無いので、仮に 100 V としました"
+  ],
+  "diode": [
+    "IS=1e-09 N=1.5 RS=0.05",
+    "データシートに特性が無いので、前のモデルと同じ一般的な値 (IS = 1 nA、N = 1.5、RS = 0.05 Ω) を仮に置きました"
+  ],
+  "part": "TIP120_TO-220",
+  "name": "TIP120",
+  "pnp": false,
+  "description": "NPN ダーリントン・パワートランジスタ 60V 5A (TO-220, ピン1=B 2=C 3=E)。マイコンから小さな電流でモーターやリレーを駆動。データシート (onsemi) の代表特性から作った等価モデル",
+  "hfe": [
+    [0.1, 522],
+    [0.2, 927],
+    [0.3, 1325],
+    [0.5, 2009],
+    [0.7, 2701],
+    [1.0, 3541],
+    [1.5, 4295],
+    [2.0, 4549],
+    [4.0, 2712],
+    [7.0, 1106]
+  ],
+  "vbe_on": [
+    [0.2, 1.29],
+    [0.5, 1.353],
+    [1.0, 1.44],
+    [2.0, 1.583],
+    [3.0, 1.715],
+    [5.0, 2.01],
+    [7.0, 2.337]
+  ],
+  "vbe_sat": [
+    [0.2, 1.34],
+    [0.5, 1.412],
+    [1.0, 1.44],
+    [2.0, 1.663],
+    [3.0, 1.838],
+    [5.0, 2.218],
+    [7.0, 2.59]
+  ],
+  "vce_sat": [
+    [0.2, 0.716],
+    [0.5, 0.752],
+    [1.0, 0.853],
+    [2.0, 1.017],
+    [3.0, 1.147],
+    [5.0, 1.42],
+    [7.0, 1.732]
+  ],
+  "cib": [
+    [0.1, 1.043e-10],
+    [1.0, 7.26e-11],
+    [2.0, 5.93e-11]
+  ],
+  "cob": [
+    [0.1, 1.569e-10],
+    [0.5, 1.411e-10]
+  ],
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace` on pages 5 and 6 and checked against the rendered pages; the left graphs of Figures 9 and 11 are the NPN ones",
+    "hfe: Figure 9 (VCE = 4 V), the middle of the three curves (25 C; 150 C above, -55 C below). Only the currents where the three are told apart are used; at 3 and 5 A the 150 C and 25 C curves lie on each other",
+    "vbe_on, vbe_sat, vce_sat: Figure 11 (IC/IB = 250 and VCE = 4 V): VBE(sat) is the top line, VBE the middle one, VCE(sat) the bottom one; at 1 A the two VBE lines meet (the one value is used for both)",
+    "cib, cob: Figure 8, the dashed (NPN) curves; dashes are found only at some voltages (Cob at 0.1 and 0.5 V, Cib at 0.1, 1 and 2 V)",
+    "r1, r2: the data sheet's schematic (about 8 kohm and 120 ohm). area (the driver ten times smaller), VAF and the diode are assumptions (not in the data sheet), said in the limits"
+  ]
+}

@@ -349,5 +349,37 @@
   "descriptions": [
    "N チャネル パワーMOSFET 55V 47A (TO-220, ピン1=G 2=D 3=S)。ロジックレベル駆動 (5V で十分オン、Rds(on) 約 22mΩ)。簡易モデル(パラメータは概算)"
   ]
+ },
+ "S8050_SOT-23": {
+  "texts": [
+   ".model S8050 NPN(IS=10f BF=250 BR=5 RB=20)"
+  ],
+  "descriptions": [
+   "NPN 汎用トランジスタ 25V 500mA (SOT-23, ピン1=B 2=E 3=C)。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "S8550_SOT-23": {
+  "texts": [
+   ".model S8550 PNP(IS=10f BF=250 BR=5 RB=20)"
+  ],
+  "descriptions": [
+   "PNP 汎用トランジスタ 25V 500mA (SOT-23, ピン1=B 2=E 3=C。S8050 の相補)。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "TIP120_TO-220": {
+  "texts": [
+   ".subckt TIP120 c b e\nQ1 c b n1 QD\nQ2 c n1 e QP\nR1 b n1 8k\nR2 n1 e 120\nDd e c DD\n.model QD NPN(IS=1e-13 BF=40 BR=3)\n.model QP NPN(IS=1e-12 BF=40 BR=3)\n.model DD D(IS=1e-9 N=1.5 RS=0.05)\n.ends TIP120"
+  ],
+  "descriptions": [
+   "NPN ダーリントン・パワートランジスタ 60V 5A (TO-220, ピン1=B 2=C 3=E)。マイコンから小さな電流でモーターやリレーを駆動。簡易モデル(パラメータは概算)"
+  ]
+ },
+ "TIP125_TO-220": {
+  "texts": [
+   ".subckt TIP125 c b e\nQ1 c b n1 QD\nQ2 c n1 e QP\nR1 b n1 8k\nR2 n1 e 120\nDd c e DD\n.model QD PNP(IS=1e-13 BF=40 BR=3)\n.model QP PNP(IS=1e-12 BF=40 BR=3)\n.model DD D(IS=1e-9 N=1.5 RS=0.05)\n.ends TIP125"
+  ],
+  "descriptions": [
+   "PNP ダーリントン・パワートランジスタ 60V 5A (TO-220, ピン1=B 2=C 3=E)。TIP120 の相補。ハイサイド駆動用。簡易モデル(パラメータは概算)"
+  ]
  }
 }
