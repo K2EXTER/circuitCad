@@ -62,7 +62,7 @@ ui.add(egui::DragValue::new(v).speed(speed).range(0.0..=1000.0).suffix(suffix).m
 
 /// The columns of the nets table: the details toggle, then what a row says (the delete button follows without a width).
 const NET_HEADS: [&str; 8] = ["", "名前", "ネット (, 区切り)", "役割", "線幅", "間隔", "電流", "理由"];
-const NET_COLS: [f32; 8] = [86.0, 160.0, 220.0, 170.0, 80.0, 80.0, 80.0, 340.0];
+const NET_COLS: [f32; 8] = [90.0, 124.0, 140.0, 164.0, 76.0, 76.0, 68.0, 210.0];
 
 /// A cell of a fixed width, its content at the left, so that the rows of the nets table line up without a grid (a grid cannot hold
 /// a row's details under it across all its columns).
@@ -424,7 +424,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                                 let now = Role::parse(&r.role).unwrap_or(Role::None);
                                 let mut pick = now;
                                 fixed(ui, NET_COLS[3], |ui| {
-                                    egui::ComboBox::from_id_salt(("req_role", k)).selected_text(i18n::tr_dyn(&now.label())).width(NET_COLS[3] - 30.0).show_ui(ui, |ui| {
+                                    egui::ComboBox::from_id_salt(("req_role", k)).selected_text(i18n::tr_dyn(&now.label())).width(NET_COLS[3] - 20.0).show_ui(ui, |ui| {
                                         for role in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
                                             ui.selectable_value(&mut pick, role, i18n::tr_dyn(&role.label()));
                                         }
