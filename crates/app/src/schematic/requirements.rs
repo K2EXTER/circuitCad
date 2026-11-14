@@ -60,6 +60,147 @@ fn number_cell(ui: &mut egui::Ui, v: &mut f64, suffix: &str, speed: f64, hover: 
 ui.add(egui::DragValue::new(v).speed(speed).range(0.0..=1000.0).suffix(suffix).max_decimals(3)).on_hover_text(hover);
 }
 
+/// The columns of the nets table: the details toggle, then what a row says (the delete button follows without a width).
+const NET_HEADS: [&str; 8] = ["", "名前", "ネット (, 区切り)", "役割", "線幅", "間隔", "電流", "理由"];
+const NET_COLS: [f32; 8] = [86.0, 160.0, 220.0, 170.0, 80.0, 80.0, 80.0, 340.0];
+
+/// A cell of a fixed width, its content at the left, so that the rows of the nets table line up without a grid (a grid cannot hold
+/// a row's details under it across all its columns).
+fn fixed<R>(ui: &mut egui::Ui, w: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    // exactly `w` wide even when the content would grow (a role's long name in its menu button is cut off, not pushing the next cells)
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(w, 20.0), egui::Sense::hover());
+    let mut cell = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    cell.set_clip_rect(rect.intersect(ui.clip_rect()));
+    add(&mut cell)
+}
+
+/// How many of a row's details are set (they are not seen while the row is folded, so the toggle shows the count).
+fn details_set(r: &NetRule) -> usize {
+    [r.order.is_some(), !r.vias.is_empty(), !r.layers.is_empty(), r.max_length > 0.0, r.max_vias > 0, r.max_neck > 0.0].iter().filter(|b| **b).count() + r.links.len()
+}
+
+/// The "詳しく" toggle at the head of a row: a triangle like a fold, and the number of details that are set.
+fn details_toggle(ui: &mut egui::Ui, open: &mut bool, set: usize) -> egui::Response {
+    let text = if set > 0 { i18n::trf!("詳しく ({})", set) } else { i18n::tr("詳しく").to_string() };
+    let col = if set > 0 { ui.visuals().strong_text_color() } else { ui.visuals().weak_text_color() };
+    let g = ui.painter().layout_no_wrap(text, egui::TextStyle::Body.resolve(ui.style()), col);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(NET_COLS[0], 20.0), egui::Sense::click());
+    if resp.clicked() {
+        *open = !*open;
+    }
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    let c = Pos2::new(rect.min.x + 8.0, rect.center().y);
+    let tri = if *open { vec![c + Vec2::new(-4.0, -2.5), c + Vec2::new(4.0, -2.5), c + Vec2::new(0.0, 3.5)] } else { vec![c + Vec2::new(-2.5, -4.0), c + Vec2::new(-2.5, 4.0), c + Vec2::new(3.5, 0.0)] };
+    ui.painter().add(egui::Shape::convex_polygon(tri, col, Stroke::NONE));
+    ui.painter().galley(Pos2::new(rect.min.x + 16.0, rect.center().y - g.size().y / 2.0), g, col);
+    resp.on_hover_text(i18n::tr("この行の細かい決まり (配線の順番・ビア・使う層・長さとビア数の上限・部品間の線幅) を、行のすぐ下に開きます。括弧の数は、決めてある項目の数です"))
+}
+
+/// The details of one row of the nets table, under the row: what the role decides (routing order, vias) changed for this row only,
+/// the layers and limits of its copper, and the widths of tracks between two parts. Returns whether something changed.
+fn net_row_details(ui: &mut egui::Ui, buf: &mut Buffers, k: usize, r: &mut NetRule) -> bool {
+    let mut changed = false;
+    egui::Frame::group(ui.style()).inner_margin(egui::Margin::symmetric(8, 6)).show(ui, |ui| ui.vertical(|ui| {
+        ui.horizontal(|ui| {
+            crate::icons::help(ui, "役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。
+・使う層: 自動配線がこの層だけにトラックを引きます (表面なら top、裏面なら bottom、内層は inner1 ... を , で区切る。空ならどの層でも)。ほかの層に配線があると、基板の点検が指摘します
+・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし
+・ビアの上限: 1つのネットのビアの数。0 なら上限なし (ビアは、戻り電流の道が切れ、インダクタンスも増える)
+・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし");
+            let role = Role::parse(&r.role).unwrap_or(Role::None);
+            let by_role = if role == Role::None { Role::Power.priority() } else { role.priority() };
+            ui.label(i18n::tr("配線の順番 (小さいほど先)"));
+            let shown = match r.order {
+                None => format!("役割のとおり ({by_role})"),
+                Some(o) => o.to_string(),
+            };
+            egui::ComboBox::from_id_salt(("prop_order", k)).selected_text(i18n::tr_dyn(&shown)).width(150.0).show_ui(ui, |ui| {
+                if ui.selectable_label(r.order.is_none(), i18n::trf!("役割のとおり ({by_role})")).clicked() {
+                    r.order = None;
+                    changed = true;
+                }
+                for o in 0..=9u8 {
+                    if ui.selectable_label(r.order == Some(o), o.to_string()).clicked() {
+                        r.order = Some(o);
+                        changed = true;
+                    }
+                }
+            });
+            ui.add_space(12.0);
+            ui.label(i18n::tr("ビア"));
+            let via_text = match r.vias.as_str() {
+                "none" => "使わない",
+                "allow" => "使ってよい",
+                _ => if role == Role::Sense { "役割のとおり (使わない)" } else { "役割のとおり (使ってよい)" },
+            };
+            egui::ComboBox::from_id_salt(("prop_vias", k)).selected_text(i18n::tr(via_text)).width(190.0).show_ui(ui, |ui| {
+                for (key, label) in [("", "役割のとおり"), ("none", "使わない"), ("allow", "使ってよい")] {
+                    if ui.selectable_label(r.vias == key, i18n::tr(label)).clicked() {
+                        r.vias = key.to_string();
+                        changed = true;
+                    }
+                }
+            });
+            ui.add_space(12.0);
+            ui.label(i18n::tr("使う層 (, 区切り)"));
+            if let Some(s) = text_cell(ui, buf, (6, k, 0), &r.layers.join(","), 130.0, "この行のネットのトラックを引ける層: top (表面)・bottom (裏面)・inner1 ... を , で区切ります。空なら、どの層でも") {
+                r.layers = list(&s).into_iter().map(|x| x.to_ascii_lowercase()).collect();
+                changed = true;
+            }
+        });
+        ui.horizontal(|ui| {
+            let before = (r.max_length, r.max_vias, r.max_neck);
+            ui.label(i18n::tr("長さの上限"));
+            number_cell(ui, &mut r.max_length, " mm", 1.0, "1つのネットのトラックの長さの合計の上限。0 なら上限なし");
+            ui.add_space(12.0);
+            ui.label(i18n::tr("ビアの上限"));
+            ui.add(egui::DragValue::new(&mut r.max_vias).speed(0.1).range(0..=1000).suffix(i18n::tr(" 個"))).on_hover_text(i18n::tr("1つのネットのビアの数の上限。0 なら上限なし"));
+            ui.add_space(12.0);
+            ui.label(i18n::tr("細い配線の上限"));
+            number_cell(ui, &mut r.max_neck, " mm", 0.5, "線幅が行の線幅より細いトラックの合計の上限 (細い引き出しなど)。0 なら上限なし");
+            changed |= before != (r.max_length, r.max_vias, r.max_neck);
+        });
+        ui.horizontal(|ui| {
+            ui.label(i18n::tr("部品間の線幅")).on_hover_text(i18n::tr("上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。"));
+            crate::icons::help(ui, "例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです");
+            if ui.small_button(i18n::tr("＋ 線を足す")).on_hover_text(i18n::tr("この行のネットに、部品間の線幅を足します")).clicked() {
+                r.links.push(LinkWidth { width: r.width.max(0.25), ..Default::default() });
+                buf.clear();
+                changed = true;
+            }
+        });
+        let mut remove = None;
+        for (j, l) in r.links.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                if let Some(t) = text_cell(ui, buf, (3, k * 100 + j, 0), &l.a, 70.0, "1つめの部品の部品番号") {
+                    l.a = t.trim().to_string();
+                    changed = true;
+                }
+                ui.label("—");
+                if let Some(t) = text_cell(ui, buf, (3, k * 100 + j, 1), &l.b, 70.0, "2つめの部品の部品番号") {
+                    l.b = t.trim().to_string();
+                    changed = true;
+                }
+                let before = l.width;
+                number_cell(ui, &mut l.width, " mm", 0.05, "この2つの部品の間の線の幅。0 は行の幅のまま");
+                changed |= before != l.width;
+                if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この線の設定を消します")).clicked() {
+                    remove = Some(j);
+                }
+            });
+        }
+        if let Some(j) = remove {
+            r.links.remove(j);
+            buf.clear();
+            changed = true;
+        }
+    }));
+    changed
+}
+
 /// The colours of the rows' frames, one after another.
 const FRAME_COLORS: [Color32; 6] = [
 Color32::from_rgb(40, 150, 90),
@@ -255,49 +396,67 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
             if tab == ReqTab::Nets {
                 ui.scope(|ui| {
                     crate::icons::help_small(ui, "1行が、基板の1つのネットクラスになります", "ネット名の末尾に * を付けると、その名前で始まるすべてのネットです (例: GN* は GN1〜GN10)。幅と間隔を 0 にすると、基板の既定のままです。電流を書くと、配線の太さの推奨と電圧降下の計算に使われます");
-                    let mut remove = None;
-                    egui::Grid::new("req_net_grid").num_columns(8).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                        for h in ["名前", "ネット (, 区切り)", "役割", "線幅", "間隔", "電流", "理由", ""] {
-                            ui.strong(i18n::tr(h));
-                        }
-                        ui.end_row();
-                        for (k, r) in spec.net_rules.iter_mut().enumerate() {
-                            if let Some(t) = text_cell(ui, buf, (0, k, 0), &r.name, 170.0, "この行の名前。基板ではネットクラスの名前になります") {
-                                r.name = t;
-                                changed = true;
-                            }
-                            if let Some(t) = text_cell(ui, buf, (0, k, 1), &r.nets.join(","), 230.0, "ネット名を , で区切って書きます。末尾が * なら、その名前で始まるネットすべて") {
-                                r.nets = list(&t);
-                                changed = true;
-                            }
-                            let now = Role::parse(&r.role).unwrap_or(Role::None);
-                            let mut pick = now;
-                            egui::ComboBox::from_id_salt(("req_role", k)).selected_text(i18n::tr_dyn(&now.label())).show_ui(ui, |ui| {
-                                for role in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
-                                    ui.selectable_value(&mut pick, role, i18n::tr_dyn(&role.label()));
-                                }
-                            })
-                            .response
-                            .on_hover_text(i18n::tr("ネットが何のためのものか。自動配線は、大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に引きます。検出のネットは、ビアなしで引きます"));
-                            if pick != now {
-                                r.role = if pick == Role::None { String::new() } else { pick.name().to_string() };
-                                changed = true;
-                            }
-                            let before = (r.width, r.clearance, r.current);
-                            number_cell(ui, &mut r.width, " mm", 0.05, "配線の太さ。0 は基板の既定のまま");
-                            number_cell(ui, &mut r.clearance, " mm", 0.05, "ほかの銅との間隔。0 は基板の既定のまま (基板の最小値より小さくはなりません)");
-                            number_cell(ui, &mut r.current, " A", 0.05, "このネットに流れる電流の目安。0 は指定なし");
-                            changed |= before != (r.width, r.clearance, r.current);
-                            if let Some(t) = reason_cell(ui, buf, (0, k, 2), &r.note, 370.0, "なぜその値・その役割にするかの理由。数字は「何を」、理由は「なぜ」を伝えます。あとで読み返す人 (自分も) のために書いておきます") {
-                                r.note = t;
-                                changed = true;
-                            }
-                            if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この行を消します")).clicked() {
-                                remove = Some(k);
-                            }
-                            ui.end_row();
+                    // one table: each row opens its own details (routing properties, track widths between parts) right under it,
+                    // instead of the same rows repeated in two more tables further down
+                    ui.horizontal(|ui| {
+                        for (h, w) in NET_HEADS.iter().zip(NET_COLS) {
+                            fixed(ui, w, |ui| ui.strong(i18n::tr(h)));
                         }
                     });
+                    let mut remove = None;
+                    let stripe = ui.visuals().faint_bg_color;
+                    for (k, r) in spec.net_rules.iter_mut().enumerate() {
+                        let open_id = egui::Id::new(("req_net_open", k));
+                        let mut open = ui.data_mut(|d| d.get_temp::<bool>(open_id)).unwrap_or(false);
+                        egui::Frame::NONE.fill(if k % 2 == 1 { stripe } else { Color32::TRANSPARENT }).corner_radius(3.0).show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                if details_toggle(ui, &mut open, details_set(r)).clicked() {
+                                    ui.data_mut(|d| d.insert_temp(open_id, open));
+                                }
+                                if let Some(t) = text_cell(ui, buf, (0, k, 0), &r.name, NET_COLS[1], "この行の名前。基板ではネットクラスの名前になります") {
+                                    r.name = t;
+                                    changed = true;
+                                }
+                                if let Some(t) = text_cell(ui, buf, (0, k, 1), &r.nets.join(","), NET_COLS[2], "ネット名を , で区切って書きます。末尾が * なら、その名前で始まるネットすべて") {
+                                    r.nets = list(&t);
+                                    changed = true;
+                                }
+                                let now = Role::parse(&r.role).unwrap_or(Role::None);
+                                let mut pick = now;
+                                fixed(ui, NET_COLS[3], |ui| {
+                                    egui::ComboBox::from_id_salt(("req_role", k)).selected_text(i18n::tr_dyn(&now.label())).width(NET_COLS[3] - 30.0).show_ui(ui, |ui| {
+                                        for role in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
+                                            ui.selectable_value(&mut pick, role, i18n::tr_dyn(&role.label()));
+                                        }
+                                    })
+                                    .response
+                                    .on_hover_text(i18n::tr("ネットが何のためのものか。自動配線は、大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に引きます。検出のネットは、ビアなしで引きます"));
+                                });
+                                if pick != now {
+                                    r.role = if pick == Role::None { String::new() } else { pick.name().to_string() };
+                                    changed = true;
+                                }
+                                let before = (r.width, r.clearance, r.current);
+                                fixed(ui, NET_COLS[4], |ui| number_cell(ui, &mut r.width, " mm", 0.05, "配線の太さ。0 は基板の既定のまま"));
+                                fixed(ui, NET_COLS[5], |ui| number_cell(ui, &mut r.clearance, " mm", 0.05, "ほかの銅との間隔。0 は基板の既定のまま (基板の最小値より小さくはなりません)"));
+                                fixed(ui, NET_COLS[6], |ui| number_cell(ui, &mut r.current, " A", 0.05, "このネットに流れる電流の目安。0 は指定なし"));
+                                changed |= before != (r.width, r.clearance, r.current);
+                                if let Some(t) = reason_cell(ui, buf, (0, k, 2), &r.note, NET_COLS[7], "なぜその値・その役割にするかの理由。数字は「何を」、理由は「なぜ」を伝えます。あとで読み返す人 (自分も) のために書いておきます") {
+                                    r.note = t;
+                                    changed = true;
+                                }
+                                if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この行を消します")).clicked() {
+                                    remove = Some(k);
+                                }
+                            });
+                            if open {
+                                ui.horizontal(|ui| {
+                                    ui.add_space(NET_COLS[0] + ui.spacing().item_spacing.x);
+                                    changed |= net_row_details(ui, buf, k, r);
+                                });
+                            }
+                        });
+                    }
                     if let Some(k) = remove {
                         spec.net_rules.remove(k);
                         buf.clear();
@@ -308,105 +467,6 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                         buf.clear();
                         changed = true;
                     }
-                    egui::CollapsingHeader::new(i18n::tr("詳細: 配線の性質 (順番・ビア・層・長さ・ビア数・細い配線) (?)")).id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty() || !r.layers.is_empty() || r.max_length > 0.0 || r.max_vias > 0 || r.max_neck > 0.0)).show(ui, |ui| {
-                        ui.label(i18n::tr("役割がきめている「配線の順番」と「ビアを使うか」と、使う層・長さの上限を、行ごとに決めます。")).on_hover_text(i18n::tr("役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。
-・使う層: 自動配線がこの層だけにトラックを引きます (表面なら top、裏面なら bottom、内層は inner1 ... を , で区切る。空ならどの層でも)。ほかの層に配線があると、基板の点検が指摘します
-・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし
-・ビアの上限: 1つのネットのビアの数。0 なら上限なし (ビアは、戻り電流の道が切れ、インダクタンスも増える)
-・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし"));
-                        egui::Grid::new("req_props_grid").num_columns(7).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
-                            for h in ["行", "配線の順番 (小さいほど先)", "ビア", "使う層 (, 区切り)", "長さの上限", "ビアの上限", "細い配線の上限"] {
-                                ui.strong(i18n::tr(h));
-                            }
-                            ui.end_row();
-                            for (k, r) in spec.net_rules.iter_mut().enumerate() {
-                                ui.label(&r.name);
-                                let role = Role::parse(&r.role).unwrap_or(Role::None);
-                                let by_role = if role == Role::None { Role::Power.priority() } else { role.priority() };
-                                let shown = match r.order {
-                                    None => format!("役割のとおり ({by_role})"),
-                                    Some(o) => o.to_string(),
-                                };
-                                egui::ComboBox::from_id_salt(("prop_order", k)).selected_text(i18n::tr_dyn(&shown)).width(150.0).show_ui(ui, |ui| {
-                                    if ui.selectable_label(r.order.is_none(), i18n::trf!("役割のとおり ({by_role})")).clicked() {
-                                        r.order = None;
-                                        changed = true;
-                                    }
-                                    for o in 0..=9u8 {
-                                        if ui.selectable_label(r.order == Some(o), o.to_string()).clicked() {
-                                            r.order = Some(o);
-                                            changed = true;
-                                        }
-                                    }
-                                });
-                                let via_text = match r.vias.as_str() {
-                                    "none" => "使わない",
-                                    "allow" => "使ってよい",
-                                    _ => if role == Role::Sense { "役割のとおり (使わない)" } else { "役割のとおり (使ってよい)" },
-                                };
-                                egui::ComboBox::from_id_salt(("prop_vias", k)).selected_text(i18n::tr(via_text)).width(190.0).show_ui(ui, |ui| {
-                                    for (key, label) in [("", "役割のとおり"), ("none", "使わない"), ("allow", "使ってよい")] {
-                                        if ui.selectable_label(r.vias == key, i18n::tr(label)).clicked() {
-                                            r.vias = key.to_string();
-                                            changed = true;
-                                        }
-                                    }
-                                });
-                                if let Some(s) = text_cell(ui, buf, (6, k, 0), &r.layers.join(","), 130.0, "この行のネットのトラックを引ける層: top (表面)・bottom (裏面)・inner1 ... を , で区切ります。空なら、どの層でも") {
-                                    r.layers = list(&s).into_iter().map(|x| x.to_ascii_lowercase()).collect();
-                                    changed = true;
-                                }
-                                let before = r.max_length;
-                                number_cell(ui, &mut r.max_length, " mm", 1.0, "1つのネットのトラックの長さの合計の上限。0 なら上限なし");
-                                changed |= r.max_length != before;
-                                let before = r.max_vias;
-                                ui.add(egui::DragValue::new(&mut r.max_vias).speed(0.1).range(0..=1000).suffix(i18n::tr(" 個"))).on_hover_text(i18n::tr("1つのネットのビアの数の上限。0 なら上限なし"));
-                                changed |= r.max_vias != before;
-                                let before = r.max_neck;
-                                number_cell(ui, &mut r.max_neck, " mm", 0.5, "線幅が行の線幅より細いトラックの合計の上限 (細い引き出しなど)。0 なら上限なし");
-                                changed |= r.max_neck != before;
-                                ui.end_row();
-                            }
-                        });
-                    });
-                    egui::CollapsingHeader::new(i18n::tr("詳細: 部品間の線幅 (?)")).id_salt("req_links").default_open(spec.net_rules.iter().any(|r| !r.links.is_empty())).show(ui, |ui| {
-                        ui.label(i18n::tr("上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。")).on_hover_text(i18n::tr("例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです"));
-                        for (k, r) in spec.net_rules.iter_mut().enumerate() {
-                            ui.horizontal(|ui| {
-                                ui.strong(&r.name);
-                                if ui.small_button(i18n::tr("＋ 線を足す")).on_hover_text(i18n::tr("この行のネットに、部品間の線幅を足します")).clicked() {
-                                    r.links.push(LinkWidth { width: r.width.max(0.25), ..Default::default() });
-                                    buf.clear();
-                                    changed = true;
-                                }
-                            });
-                            let mut remove = None;
-                            for (j, l) in r.links.iter_mut().enumerate() {
-                                ui.horizontal(|ui| {
-                                    if let Some(t) = text_cell(ui, buf, (3, k * 100 + j, 0), &l.a, 70.0, "1つめの部品の部品番号") {
-                                        l.a = t.trim().to_string();
-                                        changed = true;
-                                    }
-                                    ui.label("—");
-                                    if let Some(t) = text_cell(ui, buf, (3, k * 100 + j, 1), &l.b, 70.0, "2つめの部品の部品番号") {
-                                        l.b = t.trim().to_string();
-                                        changed = true;
-                                    }
-                                    let before = l.width;
-                                    number_cell(ui, &mut l.width, " mm", 0.05, "この2つの部品の間の線の幅。0 は行の幅のまま");
-                                    changed |= before != l.width;
-                                    if ui.small_button(i18n::tr("削除")).on_hover_text(i18n::tr("この線の設定を消します")).clicked() {
-                                        remove = Some(j);
-                                    }
-                                });
-                            }
-                            if let Some(j) = remove {
-                                r.links.remove(j);
-                                buf.clear();
-                                changed = true;
-                            }
-                        }
-                    });
                 });
             }
             if tab == ReqTab::Place {

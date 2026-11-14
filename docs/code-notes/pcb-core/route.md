@@ -72,7 +72,7 @@
 - `breakout.rs` 足の間隔が細かい IC(行のピッチ ≤ 0.8 mm、8 パッド以上)の足から、出口の短い線を先に引く(`breakout`。辺の真ん中の足はまっすぐ `MID_LEN`、両端の足は `BASE + STEP * 端からの順` まで出てから外向きに `RUN`。近くの別ネットのパッド・線との間隔と、同じネットの狭いすき間を見て、置けない足は飛ばす。IC ごとに DRC が増えたら取り消す)。`autoroute_sized` が、全体の配線で通らない接続が残ったときだけ、この線を引いてやり直し、通らない接続が少ないほうを採る(`RouteOptions.breakout`、既定オン。同数なら引かないほう)。ミリオームメーターの既定の配置で 通らない接続が 7 → 4 本(ADC 周りは全部通る)、同梱サンプル 67 件は変化なし(`arduino_mega_usb` は時間が +30 秒)。常に引くと tp5100 の配線が +17〜24% 長くなるため、失敗したときだけにした。端の足を先に置く案・出口の帯を広げる案は、バイパスコンデンサが遠くなって悪化し不採用。
 ## ネットクラスの数の上限: ビア数と細い配線(2026-11-05)
 - 点検は `requirements.rs` の `net_findings`(長さの上限と同じ所。1本ごとに `FindingKind::Net` の指摘、`item` がネット名、`actual`/`limit`)。ビアは `CopperIndex::net_of` で数え、細い配線はトラックの幅が `track_width − 1e-6` 未満のものの長さの合計。
-- 画面は回路図の「設計の要件」の「詳細: 配線の性質」の表(「ビアの上限」「細い配線の上限」)。CLI は `req net … max_vias= max_neck=` と `board class … max_vias= max_neck=`(答えにも出る)。
+- 画面は回路図の「設計の要件」のネットの行の「詳しく」(「ビアの上限」「細い配線の上限」)。CLI は `req net … max_vias= max_neck=` と `board class … max_vias= max_neck=`(答えにも出る)。
 - 他のソフトとの対応: Altium の Maximum Via Count と Routing Neck-Down(細い区間の合計の長さの上限)、KiCad の `via_count`。
 
 - `drc/` DRC (`mod.rs`=`check`・`clearance`・`shorts` / `connectivity.rs` 銅の接続グループ / `path.rs` 2つのパッドの間の銅の道筋(トラックとビアをたどる。長さ・ビア数・層・分かれ目)・ネット間の間隔・ガードの被覆 / `geo.rs` 距離計算 / `silk.rs` シルクとマスク帯 / `thermal.rs` サーマルビア / `pour.rs` ベタ(細いかけら・島・分断・上書き) / `decoupling.rs` バイパスコンデンサ / `acute.rs` 鋭角 / `tests.rs`) / `current.rs` 配線の太さと電流 / `irdrop.rs` 電圧降下 + レイアウト後シミュレーション用の配線抵抗 (`wiring_resistances` → `sim-core::from_schematic_with_wiring`) / `diffpair.rs` 差動ペア

@@ -135,10 +135,7 @@ vcc vdd 3v3 5v rail 電源ネット
 ＋ ネットの役割を足す	+ Add net role
 新しい行を足します	Add a new row
 役割{}	Role{}
-詳細: 配線の性質 (順番・ビア・層・長さ・ビア数・細い配線) (?)	Details: routing properties (order, vias, layers, length, via count, thin tracks) (?)
-役割がきめている「配線の順番」と「ビアを使うか」と、使う層・長さの上限を、行ごとに決めます。	For each row, set the "routing order" and "use vias or not" that the role decides, plus the layers to use and length limits.
 役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。\n・使う層: 自動配線がこの層だけにトラックを引きます (表面なら top、裏面なら bottom、内層は inner1 ... を , で区切る。空ならどの層でも)。ほかの層に配線があると、基板の点検が指摘します\n・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし\n・ビアの上限: 1つのネットのビアの数。0 なら上限なし (ビアは、戻り電流の道が切れ、インダクタンスも増える)\n・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし	A role is a template of properties. Autoroute routes in this order: power 0, switching 1, sense 2, analog 3, logic 4, no role 5 (a wide net with no role is 0, like power). Sense does not use vias. Changing it here lets you give just this row a different order, allow vias for sense, or forbid vias with no role, without changing the role. Set it to "As the role" and the role decides again.\n- Layers: autoroute routes tracks only on these layers (top for the top side, bottom for the bottom, inner1 ... for inner layers, comma separated; blank means any layer). If tracks are on other layers, the board check reports it\n- Length limit: total track length of one net (mm). 0 means no limit\n- Via limit: number of vias in one net. 0 means no limit (vias break the return current path and add inductance)\n- Thin track limit: total length of tracks thinner than the row's width (mm). Keeps thin breakouts from getting too long. 0 means no limit
-行	Row
 配線の順番 (小さいほど先)	Routing order (lower first)
 使う層 (, 区切り)	Layers (comma separated)
 長さの上限	Length limit
@@ -155,10 +152,12 @@ vcc vdd 3v3 5v rail 電源ネット
  個	 pcs
 1つのネットのビアの数の上限。0 なら上限なし	Limit on the number of vias in one net. 0 means no limit
 線幅が行の線幅より細いトラックの合計の上限 (細い引き出しなど)。0 なら上限なし	Limit on the total length of tracks thinner than the row's width (thin breakouts, etc.). 0 means no limit
-詳細: 部品間の線幅 (?)	Details: track width between parts (?)
 上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。	For advanced users. Gives only the track between two parts in a net a different width.
 例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです	Example: wide 0.6 mm from the battery (CB1) to the buck IC (U7), thin 0.3 mm from U7 to the LDO (U4). Autoroute routes between the two parts written here first, at this width, then connects the rest of the net. Width 0 keeps the row's width
 ＋ 線を足す	+ Add track
+詳しく ({})	Details ({})
+部品間の線幅	Track width between parts
+この行の細かい決まり (配線の順番・ビア・使う層・長さとビア数の上限・部品間の線幅) を、行のすぐ下に開きます。括弧の数は、決めてある項目の数です	Opens this row's finer rules (routing order, vias, layers, length and via limits, track widths between parts) right under the row. The number in brackets is how many of them are set
 この行のネットに、部品間の線幅を足します	Add a track width between parts to this row's nets
 1つめの部品の部品番号	Refdes of the first part
 2つめの部品の部品番号	Refdes of the second part
