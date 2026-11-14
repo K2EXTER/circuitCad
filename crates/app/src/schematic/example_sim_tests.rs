@@ -735,6 +735,36 @@ fn the_bus_sample_is_clean_and_a_too_wide_bus_is_found() {
     assert!(all(&e.sch).iter().any(|m| m.contains("D8") && m.contains("どこにも")), "{:?}", all(&e.sch));
 }
 
+/// The two-way bus sample: while DIR is high the B side follows the counter on the A side; when DIR falls the 245 turns round and
+/// the A side reads the resistors' 5 from the B side, with no fight on the bus (the buffer U2 lets go of A in time).
+#[test]
+fn the_two_way_bus_sample_turns_round_with_dir_and_never_fights() {
+    let mut e = SchEditor::default();
+    e.load_path(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/bus_transceiver.schjson"));
+    let all = |s: &Schematic| sch_core::erc(s).into_iter().map(|p| p.message).collect::<Vec<_>>();
+    assert_eq!(all(&e.sch), Vec::<String>::new());
+    // the sample opens with its own end time (16 ms: both directions)
+    assert_eq!(e.tran_tstop, "16m");
+    e.run_tran();
+    let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+    // (with U2's 1OE on GND instead, U2 and the 245 both drive A1..A4 from 8 ms: "2 つ以上の出力が違う値を同時に出しています")
+    assert!(!r.warnings.iter().any(|w| w.contains("違う値を同時に") || w.contains("どの出力も")), "{:?}", r.warnings);
+    let bus = |side: &str, t: f64| {
+        let i = r.time.partition_point(|x| *x < t);
+        let bits: Vec<&[f64]> = (1..=4).rev().map(|k| r.signal(&format!("V({side}{k})")).unwrap().values.as_slice()).collect();
+        crate::logic_plot::bus_value(&bits, i, crate::logic_plot::thresholds(5.0))
+    };
+    // the counter counts the 1 kHz clock; mid-way between edges A and B agree
+    for k in 0..7 {
+        let t = (k as f64 + 0.5) * 1e-3;
+        assert_eq!(bus("A", t), bus("B", t), "at {t}");
+        assert_eq!(bus("A", t), Some(k + 1), "at {t}");
+    }
+    for t in [9.5e-3, 12.5e-3, 15.5e-3] {
+        assert_eq!((bus("A", t), bus("B", t)), (Some(5), Some(5)), "at {t}");
+    }
+}
+
 /// The programming-header check: the ISP sample is quiet; a programming pin cut off the header is found; the Arduino-style board
 /// (ISP header, FTDI header with the reset through a capacitor) is quiet once the chip carries its programming pins.
 #[test]

@@ -1,0 +1,41 @@
+# A two-way bus through a 74HC245: one set of wires A1..A4 that carries data both ways.
+# DIR high (0..8 ms): the counter U1 drives the A side through the 3-state buffer U2 (enabled by NDIR low), and the 245 copies A
+# to the B side (B1..B4 follow the count). DIR low (8..16 ms): U2 lets go of the A side, the 245 turns round and drives A from the
+# B side, where four resistors set the value 5 (B1 and B3 high), like DIP switches. The digital view shows A[1..4] and B[1..4].
+# Build: cargo run -p cli -- docs/examples/bus_transceiver.ccad, then put "analysis": {"tran_stop": "16m", "tran_step": "10u", ...}
+# into the .schjson (the end time the sample opens with)
+new
+add V 5 as=V1
+add V 0 as=VCK
+value VCK "PULSE(0 5 0 1u 1u 0.5m 1m)"
+add V 0 as=VDIR
+value VDIR "PULSE(5 0 8m 1u 1u 8m 16m)"
+add 74HC161 as=U1
+add 74HC244 as=U2
+add 74HC04 as=U3
+add 74HC245 as=U4
+add R 10k as=R1
+add R 10k as=R2
+add R 10k as=R3
+add R 10k as=R4
+net VCC V1.+ U1.VCC U2.VCC U3.VCC U4.VCC U1.CLR U1.LOAD U1.ENP U1.ENT U2.2OE R1.1 R3.1
+net GND V1.- VCK.- VDIR.- U1.GND U2.GND U3.GND U4.GND U1.A U1.B U1.C U1.D U2.2A1 U2.2A2 U2.2A3 U2.2A4 U3.2A U3.3A U3.4A U3.5A U3.6A U4.OE U4.A5 U4.A6 U4.A7 U4.A8 U4.B5 U4.B6 U4.B7 U4.B8 R2.1 R4.1
+net CLK VCK.+ U1.CLK
+net DIR VDIR.+ U3.1A U4.DIR
+net NDIR U3.1Y U2.1OE
+net QA U1.QA U2.1A1
+net QB U1.QB U2.1A2
+net QC U1.QC U2.1A3
+net QD U1.QD U2.1A4
+net A1 U2.1Y1 U4.A1
+net A2 U2.1Y2 U4.A2
+net A3 U2.1Y3 U4.A3
+net A4 U2.1Y4 U4.A4
+net B1 U4.B1 R1.2
+net B2 U4.B2 R2.2
+net B3 U4.B3 R3.2
+net B4 U4.B4 R4.2
+nc U1.RCO U2.2Y1 U2.2Y2 U2.2Y3 U2.2Y4 U3.2Y U3.3Y U3.4Y U3.5Y U3.6Y
+erc
+tran 16m 10u probe=V(DIR),V(A1),V(A2),V(A3),V(A4),V(B1),V(B2),V(B3),V(B4)
+save docs/examples/bus_transceiver.schjson
