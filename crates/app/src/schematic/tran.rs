@@ -30,6 +30,13 @@ impl SchEditor {
         }
     }
 
+    /// Shows the transient result as logic lanes and buses (command line `--digital`).
+    pub fn show_digital(&mut self) {
+        if let Some(v) = self.tran.as_mut() {
+            v.logic = true;
+        }
+    }
+
     /// Picks the nets whose waveforms are drawn (command line `--signals CLK,Q1,Q2`).
     pub fn set_tran_signals(&mut self, nets: &str) {
         if let Some(v) = self.tran.as_mut() {
@@ -81,6 +88,11 @@ impl SchEditor {
         let parts = outcome.as_ref().map(|r| sim_core::ripple_reports(&self.with_library_ratings(), r, ambient)).unwrap_or_default();
         let ghost = self.tran.as_ref().and_then(|v| v.ghost.clone());
         let power = self.tran.as_ref().map(|v| v.power.clone()).unwrap_or_default();
+        // the digital view stays as it was (or opens by itself for a circuit with logic parts)
+        let (logic, logic_vcc, logic_radix) = match self.tran.as_ref() {
+            Some(v) => (v.logic, v.logic_vcc.clone(), v.logic_radix),
+            None => (false, String::new(), Default::default()),
+        };
         self.tran = Some(TranView {
             ghost,
             power,
@@ -95,6 +107,9 @@ impl SchEditor {
             spec_cache: None,
             thd_f0: String::new(),
             signature: self.signature(),
+            logic,
+            logic_vcc,
+            logic_radix,
         });
         self.wave_mode = WaveMode::Tran;
     }
@@ -107,13 +122,29 @@ impl SchEditor {
         let mut start_probe = false;
         let mut open_help = false;
         let mut longer = false;
-        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, .. } = view;
+        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, logic, logic_vcc, logic_radix, .. } = view;
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(i18n::tr("過渡解析の波形")).strong().color(crate::theme::INFO));
             if crate::widgets::close_x(ui, "波形") {
                 close = true;
             }
-            ui.checkbox(spectrum, i18n::tr("スペクトル表示")).on_hover_text(i18n::tr("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います"));
+            if ui.checkbox(spectrum, i18n::tr("スペクトル表示")).on_hover_text(i18n::tr("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います")).changed() && *spectrum {
+                *logic = false;
+            }
+            if ui.checkbox(logic, i18n::tr("デジタル表示")).on_hover_text(i18n::tr("選んだ電圧を、ロジックアナライザのように High / Low の帯で表示します。D0・D1 のように番号だけが違うネットは 1 本のバスにまとめて、値を数字で出します。しきい値は 74HC と同じ、電源の 30 % と 70 % (その間は不定 X で赤)")).changed() && *logic {
+                *spectrum = false;
+            }
+            if *logic {
+                ui.label(i18n::tr("電源"));
+                ui.add(egui::TextEdit::singleline(logic_vcc).desired_width(44.0).hint_text(i18n::tr("自動")))
+                    .on_hover_text(i18n::tr("しきい値を決める電源電圧 (V)。空欄なら、選んだ信号のいちばん高い電圧を電源とみなします。3.3V の回路なら 3.3 と入れてください"));
+                ui.label("V");
+                use crate::logic_plot::Radix;
+                for (r, name) in [(Radix::Dec, "10進"), (Radix::Hex, "16進"), (Radix::Bin, "2進")] {
+                    ui.selectable_value(logic_radix, r, i18n::tr(name))
+                        .on_hover_text(i18n::tr("バスの値の書き方: 10 進数・16 進数 (末尾に h)・2 進数。不定のビットがあるときは X"));
+                }
+            }
             if *spectrum {
                 ui.label(i18n::tr("解析範囲"));
                 let tip = "スペクトルを計算する時間の範囲 (秒)。立ち上がり直後を除いた範囲を指定してください。縦軸は各周波数の成分の振幅 (ピーク値の V。目盛りは対数)";
@@ -519,6 +550,31 @@ impl SchEditor {
                         // the amplitude itself (peak volts) on a log scale: the curve is dB with 0 dB = 1 V
                         let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1.0, "V")) };
                         plot::draw_group(ui, rect, egui::Id::new("spectrum"), &traces, sp_state, 0, &style, true);
+                        return;
+                    }
+                    if *logic {
+                        let names: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n) && res.signal(n).is_some_and(|s| s.unit == "V")).collect();
+                        if names.is_empty() {
+                            ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
+                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から電圧の信号を選んでください (デジタル表示は電圧だけ)"), FontId::proportional(14.0), Color32::from_gray(150));
+                            return;
+                        }
+                        let vals: Vec<&[f64]> = names.iter().filter_map(|n| res.signal(n)).map(|s| s.values.as_slice()).collect();
+                        let vcc = parse_value(logic_vcc).filter(|v| *v > 0.0).unwrap_or_else(|| crate::logic_plot::guess_vcc(&vals));
+                        let lanes = crate::logic_plot::lanes(&names);
+                        let open_id = egui::Id::new("logic_open_buses");
+                        let mut open: Vec<String> = ui.data_mut(|d| d.get_temp(open_id)).unwrap_or_default();
+                        let rows = crate::logic_plot::rows(&lanes, &open);
+                        let signals: Vec<(&str, &[f64])> = names.iter().zip(&vals).map(|(n, v)| (*n, *v)).collect();
+                        // many lanes scroll inside the plot's place
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                            egui::ScrollArea::vertical().id_salt("logic_lanes").auto_shrink([false, false]).show(ui, |ui| {
+                                let h = crate::logic_plot::height(rows.len()).max(rect.height());
+                                let (r, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), h), Sense::hover());
+                                crate::logic_plot::draw(ui, r, egui::Id::new("logic"), &res.time, &rows, &mut open, &signals, crate::logic_plot::thresholds(vcc), *logic_radix, st);
+                            });
+                        });
+                        ui.data_mut(|d| d.insert_temp(open_id, open));
                         return;
                     }
                     // traces per unit group, colours assigned in list order

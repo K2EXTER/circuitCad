@@ -92,6 +92,9 @@ impl SchEditor {
                             n.spec_plot = o.spec_plot;
                             n.ghost = before.or(o.ghost);
                             n.power = o.power;
+                            n.logic = o.logic;
+                            n.logic_vcc = o.logic_vcc;
+                            n.logic_radix = o.logic_radix;
                         }
                     }
             }

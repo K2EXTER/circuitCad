@@ -213,7 +213,7 @@ pub fn nice_ticks(lo: f64, hi: f64, target: usize) -> (Vec<f64>, f64) {
 pub const CURSOR_COLORS: [Color32; 2] = [Color32::from_rgb(255, 235, 120), Color32::from_rgb(120, 235, 255)];
 
 /// A click puts cursor A, then B; after that it moves whichever cursor is nearer (on the axis the plot uses).
-fn place_cursor(c: &mut [Option<f64>; 2], t: f64, log: bool) {
+pub(crate) fn place_cursor(c: &mut [Option<f64>; 2], t: f64, log: bool) {
     let ax = |x: f64| if log { x.max(1e-300).log10() } else { x };
     match (c[0], c[1]) {
         (None, _) => c[0] = Some(t),

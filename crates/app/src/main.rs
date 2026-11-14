@@ -20,6 +20,7 @@ mod measure_guide;
 mod samples;
 mod learn;
 mod part_form;
+mod logic_plot;
 mod plot;
 /// Starting width of the left tool panels. The panels only grow to fit their widest line (the analysis tab, a selected part's
 /// form, the wire tool's settings), so a narrow start made the circuit shift sideways whenever the tab or the selection changed.

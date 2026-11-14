@@ -483,6 +483,11 @@ struct TranView {
     parts: Vec<sim_core::RippleReport>,
     /// The schematic this result was computed from.
     signature: String,
+    /// The digital view (logic lanes and buses, `logic_plot`) instead of the analog curves; the supply its thresholds are taken
+    /// from (empty = the highest voltage shown) and how a bus value is written.
+    logic: bool,
+    logic_vcc: String,
+    logic_radix: crate::logic_plot::Radix,
 }
 
 /// A finished DC analysis, remembered with the schematic it was computed from.
