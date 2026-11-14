@@ -127,7 +127,7 @@ vcc vdd 3v3 5v rail 電源ネット
 理由	Reason
 この行の名前。基板ではネットクラスの名前になります	Name of this row. On the board it becomes the net class name
 ネット名を , で区切って書きます。末尾が * なら、その名前で始まるネットすべて	Write net names separated by commas. A name ending in * means every net starting with that name
-ネットが何のためのものか。自動配線は、大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に引きます。検出のネットは、ビアなしで引きます	What the net is for. Autoroute routes in this order: high current → switching node → sense → analog → logic. Sense nets are routed without vias
+ネットが何のためのものか。役割が変えるのは自動配線だけです: 大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に先に引き (先に引くほど短く・まっすぐ通りやすい)、検出のネットはビアなしで引きます。線幅は変わりません (太さは「線幅」と「電流」の欄で決めます)。DRC と自動配置は役割を見ません	What the net is for. The role only changes the autorouter: it routes big current → switching node → sense → analog → logic, in that order (routed earlier means shorter and straighter), and routes sense nets without vias. It does not change the track width (the "Width" and "Current" columns set that). The DRC and the autoplacer do not look at the role
 配線の太さ。0 は基板の既定のまま	Track width. 0 keeps the board default
 ほかの銅との間隔。0 は基板の既定のまま (基板の最小値より小さくはなりません)	Clearance to other copper. 0 keeps the board default (never smaller than the board minimum)
 このネットに流れる電流の目安。0 は指定なし	Rough current through this net. 0 means not specified

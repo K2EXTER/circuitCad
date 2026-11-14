@@ -473,7 +473,7 @@ CSV をコピー	Copy CSV
 この層構成では、{target:.0} Ω にできる線幅が見つかりません。左パネルの「層構成 (層数・材料)」の値を確かめてください	With this layer stack, no width gives {target:.0} Ω. Check the values in "Layer stack (layers, material)" in the left panel
 クラスの目標 {zt:.0} Ω から {:.0}% ずれています	{:.0}% off the class target of {zt:.0} Ω
 役割	Role
-このクラスのネットの役割です。自動配線は、役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に引きます。「検出」のネットはビアを使わず、パッドと同じ層だけで引きます	Role of this class's nets. Autoroute routes in role order (high current → switching node → sense → analog → logic). "Sense" nets use no vias and are routed only on the pads' layer
+このクラスのネットの役割です。役割が変えるのは自動配線だけです: 役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に先に引き (先に引くほど短く・まっすぐ通りやすい)、「検出」のネットはビアを使わず、パッドと同じ層だけで引きます。線幅は変わりません (太さはクラスの線幅とネットの電流で決まります)。DRC と自動配置は役割を見ません	The role of this class's nets. The role only changes the autorouter: it routes in the order of the roles (big current → switching node → sense → analog → logic; routed earlier means shorter and straighter), and routes "sense" nets without vias, only on the layer of their pads. It does not change the track width (the class's width and the net's current set that). The DRC and the autoplacer do not look at the role
 ほかのネットの銅が、このクラスの銅から離れる距離	How far copper of other nets stays from this class's copper
 線幅は「線幅」タブのスライダーで変えます (いま {:.2} mm)	Change the width with the slider in the "Width" tab (now {:.2} mm)
 いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます	Now routed with the board-wide settings (width {:.2} mm, via {:.2}/{:.2} mm)

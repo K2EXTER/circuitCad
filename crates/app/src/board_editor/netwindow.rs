@@ -385,7 +385,7 @@ impl BoardEditor {
                                     for r in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
                                         ui.selectable_value(&mut c.role, r, r.label());
                                     }
-                                }).response.on_hover_text(i18n::tr("このクラスのネットの役割です。自動配線は、役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に引きます。「検出」のネットはビアを使わず、パッドと同じ層だけで引きます"));
+                                }).response.on_hover_text(i18n::tr("このクラスのネットの役割です。役割が変えるのは自動配線だけです: 役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に先に引き (先に引くほど短く・まっすぐ通りやすい)、「検出」のネットはビアを使わず、パッドと同じ層だけで引きます。線幅は変わりません (太さはクラスの線幅とネットの電流で決まります)。DRC と自動配置は役割を見ません"));
                             });
                             ui.horizontal_wrapped(|ui| {
                                 ui.add(egui::DragValue::new(&mut c.clearance).speed(0.01).range(rules.min_clearance..=5.0).prefix(i18n::tr("間隔 ")).suffix(" mm")).on_hover_text(i18n::tr("ほかのネットの銅が、このクラスの銅から離れる距離"));

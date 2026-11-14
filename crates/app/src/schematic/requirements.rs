@@ -432,7 +432,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                                         }
                                     })
                                     .response
-                                    .on_hover_text(i18n::tr("ネットが何のためのものか。自動配線は、大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に引きます。検出のネットは、ビアなしで引きます"));
+                                    .on_hover_text(i18n::tr("ネットが何のためのものか。役割が変えるのは自動配線だけです: 大電流 → スイッチングノード → 検出 → アナログ → ロジックの順に先に引き (先に引くほど短く・まっすぐ通りやすい)、検出のネットはビアなしで引きます。線幅は変わりません (太さは「線幅」と「電流」の欄で決めます)。DRC と自動配置は役割を見ません"));
                                 });
                                 if pick != now {
                                     r.role = if pick == Role::None { String::new() } else { pick.name().to_string() };
