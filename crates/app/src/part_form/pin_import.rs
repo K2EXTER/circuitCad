@@ -109,7 +109,7 @@ impl TablePanel {
             for (label, col, tip) in choices {
                 ui.label(i18n::tr(label));
                 let shown = labels.get(*col).cloned().unwrap_or_default();
-                egui::ComboBox::from_id_salt(label).selected_text(shown).width(260.0).show_ui(ui, |ui| {
+                egui::ComboBox::from_id_salt(label).selected_text(shown).width(240.0).show_ui(ui, |ui| {
                     for (c, text) in labels.iter().enumerate() {
                         ui.selectable_value(col, c, text);
                     }
@@ -138,7 +138,8 @@ impl TablePanel {
                 });
             });
         });
-        ui.horizontal(|ui| {
+        // wrapped: the window sits over the left panel and is about as narrow
+        ui.horizontal_wrapped(|ui| {
             let ok = self.lines() > 0;
             if ui.add_enabled(ok, egui::Button::new(i18n::tr("ピン表に置き換える"))).on_hover_text(i18n::tr("「③ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます")).clicked() {
                 action = Action::Apply(PinMode::Replace);

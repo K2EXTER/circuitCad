@@ -293,6 +293,14 @@ impl SheetView {
     }
 
     /// Starts a search as if the text had been typed and "探す" pressed (`--form-find`, for screenshots).
+    /// Reads the table in `area` (points) of `page` (from 0) as if it had been dragged round (`--form-table`, for screenshots).
+    pub fn open_table_at(&mut self, page: usize, area: Rect) {
+        if let Some(d) = self.doc.as_mut() {
+            d.page = page.min(d.ds.page_count().saturating_sub(1));
+            d.panel = Some(TablePanel::new(d.page, area, d.ds.table_in(d.page, area)));
+        }
+    }
+
     pub fn find(&mut self, text: &str) {
         if let Some(d) = self.doc.as_mut() {
             // the name of a heading ("ピン配置") searches that heading, like its button
@@ -362,7 +370,9 @@ impl SheetView {
         {
             let mut keep = true;
             let mut action = Action::None;
-            egui::Window::new(i18n::tr("ピン表の取り込み")).open(&mut keep).default_size([440.0, 460.0]).resizable(true).show(ctx, |ui| {
+            // over the left panel (its parts list is not used while making a part), so the form's pin table and the data sheet stay
+            // in sight to compare with
+            egui::Window::new(i18n::tr("ピン表の取り込み")).open(&mut keep).default_pos([8.0, 56.0]).default_size([crate::PANEL_WIDTH - 20.0, 460.0]).resizable(true).show(ctx, |ui| {
                 action = panel.ui(ui, current);
             });
             match action {

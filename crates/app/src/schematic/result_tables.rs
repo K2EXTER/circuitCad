@@ -44,6 +44,11 @@ impl SchEditor {
         self.tables.results = true;
     }
 
+    /// Opens the "ネットリスト" window (`--netlist`, for screenshots).
+    pub fn open_netlist(&mut self) {
+        self.tables.netlist = true;
+    }
+
     /// Draws whichever of the two windows is open (called every frame from the side panel).
     pub(super) fn result_windows(&mut self, ctx: &egui::Context) {
         let mut st = std::mem::take(&mut self.tables);
@@ -106,12 +111,15 @@ impl SchEditor {
                     NodeSort::Name => rows.sort_by(|a, b| a.0.cmp(&b.0)),
                     NodeSort::VoltageHigh => rows.sort_by(|a, b| b.1.total_cmp(&a.1)),
                 }
-                egui::Grid::new("res_nodes").striped(true).num_columns(2).show(ui, |ui| {
+                egui::Grid::new("res_nodes").striped(true).num_columns(2).spacing([24.0, 4.0]).show(ui, |ui| {
+                    ui.strong(i18n::tr("ノード"));
+                    num_head(ui, "電圧");
+                    ui.end_row();
                     for (n, v) in rows {
                         if ui.link(n.as_str()).on_hover_text(i18n::tr("クリックで、このネットにつながる部品を回路図で選びます")).clicked() {
                             *goto_net = Some(n.clone());
                         }
-                        ui.label(eng(*v, "V"));
+                        num(ui, eng(*v, "V"));
                         ui.end_row();
                     }
                 });
@@ -123,19 +131,19 @@ impl SchEditor {
                     ElemSort::Power => rows.sort_by(|a, b| b.power.abs().total_cmp(&a.power.abs())),
                     ElemSort::Current => rows.sort_by(|a, b| b.current.abs().total_cmp(&a.current.abs())),
                 }
-                egui::Grid::new("res_elems").striped(true).num_columns(4).show(ui, |ui| {
+                egui::Grid::new("res_elems").striped(true).num_columns(4).spacing([24.0, 4.0]).show(ui, |ui| {
                     ui.strong(i18n::tr("素子"));
-                    ui.strong(i18n::tr("電流"));
-                    ui.strong(i18n::tr("電圧"));
-                    ui.strong(i18n::tr("電力"));
+                    num_head(ui, "電流");
+                    num_head(ui, "電圧");
+                    num_head(ui, "電力");
                     ui.end_row();
                     for e in rows {
                         if ui.link(e.name.as_str()).on_hover_text(i18n::tr("クリックで、この部品を回路図で選びます")).clicked() {
                             *goto = Some(e.name.clone());
                         }
-                        ui.label(eng(e.current, "A"));
-                        ui.label(eng(e.voltage, "V"));
-                        ui.label(eng(e.power, "W"));
+                        num(ui, eng(e.current, "A"));
+                        num(ui, eng(e.voltage, "V"));
+                        num(ui, eng(e.power, "W"));
                         ui.end_row();
                     }
                 });
@@ -149,20 +157,26 @@ impl SchEditor {
             .on_hover_text(i18n::tr("ネットの名前か、そのネットにつながるピン (例: R1) に、この文字が入っているものだけを出します"));
         let needle = st.net_filter.to_lowercase();
         let nets = extract(&self.sch);
+        // a table: the net, how many pins, the pins (wrapped in their column)
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            for n in &nets {
-                let pins: Vec<String> = n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
-                if !needle.is_empty() && !n.name.to_lowercase().contains(&needle) && !pins.iter().any(|p| p.to_lowercase().contains(&needle)) {
-                    continue;
-                }
-                ui.horizontal_wrapped(|ui| {
+            egui::Grid::new("netlist_rows").striped(true).num_columns(3).spacing([16.0, 4.0]).show(ui, |ui| {
+                ui.strong(i18n::tr("ネット"));
+                num_head(ui, "ピン数");
+                ui.strong(i18n::tr("つながるピン (部品.ピン)"));
+                ui.end_row();
+                for n in &nets {
+                    let pins: Vec<String> = n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
+                    if !needle.is_empty() && !n.name.to_lowercase().contains(&needle) && !pins.iter().any(|p| p.to_lowercase().contains(&needle)) {
+                        continue;
+                    }
                     if ui.link(egui::RichText::new(&n.name).strong()).on_hover_text(i18n::tr("クリックで、このネットにつながる部品を回路図で選びます")).clicked() {
                         *goto_net = Some(n.name.clone());
                     }
-                    ui.label(i18n::trf!("({} ピン)", pins.len()));
-                    ui.label(pins.join(", "));
-                });
-            }
+                    num(ui, pins.len().to_string());
+                    ui.add(egui::Label::new(pins.join(", ")).wrap());
+                    ui.end_row();
+                }
+            });
         });
     }
 
@@ -195,4 +209,17 @@ impl SchEditor {
             None => self.status = format!("ネット {name} につながる部品が見つかりません"),
         }
     }
+}
+
+/// A number in a table cell: monospace and right-aligned in a fixed width, so the digits of a column line up.
+fn num(ui: &mut egui::Ui, text: String) {
+    ui.label(egui::RichText::new(format!("{text:>10}")).monospace());
+}
+
+/// The heading of a column of `num`s, right-aligned like them.
+fn num_head(ui: &mut egui::Ui, name: &str) {
+    let t = i18n::tr(name);
+    // a Japanese letter is two columns wide in the monospace font
+    let width: usize = t.chars().map(|c| if c.is_ascii() { 1 } else { 2 }).sum();
+    ui.label(egui::RichText::new(format!("{}{t}", " ".repeat(10usize.saturating_sub(width)))).monospace().strong());
 }

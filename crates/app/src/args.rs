@@ -62,6 +62,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(t) = args.get(i + 1) {
             app.sch.find_in_form_pdf(t);
         }
+    if let Some(i) = args.iter().position(|a| a == "--form-table")
+        && let Some(t) = args.get(i + 1) {
+            app.sch.table_in_form_pdf(t);
+        }
     if let Some(i) = args.iter().position(|a| a == "--form-pick")
         && let Some(t) = args.get(i + 1) {
             app.sch.pick_in_form_pdf(t);
@@ -169,6 +173,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         // --results: the "解析結果の表" window open (after --dc), for screenshots
         if args.iter().any(|a| a == "--results") {
             app.sch.open_result_table();
+        }
+        if args.iter().any(|a| a == "--netlist") {
+            app.sch.open_netlist();
+        }
+        // --wizard <n>: the "値の決め方" window on its n-th calculator
+        if let Some(i) = args.iter().position(|a| a == "--wizard") {
+            app.sch.open_wizard(args.get(i + 1).and_then(|k| k.parse().ok()).unwrap_or(0));
         }
         // --section <key>: the analysis tab with that section open (dc, variation, coverage ...)
         if let Some(i) = args.iter().position(|a| a == "--section")

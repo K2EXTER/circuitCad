@@ -12,6 +12,15 @@ pub(super) struct Calc {
     pub run: fn(&[f64]) -> Result<CalcOut, String>,
 }
 
+/// The calculators by what they are for (titles of `CALCS`), the order of the drop-down.
+pub(super) const GROUPS: &[(&str, &[&str])] = &[
+    ("抵抗の値", &["LEDの電流制限抵抗", "分圧 (抵抗2本で電圧を下げる)", "RCフィルタの抵抗"]),
+    ("電源", &["3端子レギュレータ (78xx) まわり", "整流の平滑コンデンサ", "降圧コンバータのコイルとコンデンサ", "昇圧コンバータのコイルとコンデンサ", "ツェナーダイオードで電圧を一定にする", "電池の持ち時間"]),
+    ("スイッチ", &["トランジスタのスイッチ (ベース抵抗)", "MOSFET のスイッチ (発熱とゲート抵抗)"]),
+    ("アナログ", &["オペアンプの増幅 (抵抗の値)"]),
+    ("熱・保護・基板", &["熱 (温度と放熱板)", "ヒューズの選び方", "基板の配線の太さ (電流から)"]),
+];
+
 pub(super) const CALCS: &[Calc] = &[
     Calc {
         title: "LEDの電流制限抵抗",
@@ -253,13 +262,33 @@ impl SchEditor {
         };
         let mut apply = None;
         egui::Window::new(i18n::tr("値の決め方")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                for (k, c) in CALCS.iter().enumerate() {
-                    if ui.selectable_label(self.wiz_kind == k, i18n::tr(c.title)).clicked() && self.wiz_kind != k {
-                        self.open_wizard(k);
-                    }
-                }
+            // one drop-down with the calculators under their groups: a row of 16 buttons took half the window and moved about as
+            // the chosen one grew
+            let mut pick = None;
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr("計算"));
+                egui::ComboBox::from_id_salt("wiz_pick")
+                    .width(340.0)
+                    .height(520.0)
+                    .selected_text(i18n::tr(CALCS[self.wiz_kind].title))
+                    .show_ui(ui, |ui| {
+                        for (group, titles) in GROUPS {
+                            ui.label(egui::RichText::new(i18n::tr(group)).small().weak());
+                            for t in *titles {
+                                if let Some(k) = CALCS.iter().position(|c| c.title == *t)
+                                    && ui.selectable_label(self.wiz_kind == k, format!("    {}", i18n::tr(t))).clicked()
+                                {
+                                    pick = Some(k);
+                                }
+                            }
+                        }
+                    })
+                    .response
+                    .on_hover_text(i18n::tr("何の値を決めるかを選びます (抵抗の値・電源・スイッチ・アナログ・熱と保護と基板に分けてあります)"));
             });
+            if let Some(k) = pick.filter(|k| *k != self.wiz_kind) {
+                self.open_wizard(k);
+            }
             ui.separator();
             let calc = &CALCS[self.wiz_kind];
             ui.label(i18n::tr(calc.about));
@@ -321,5 +350,19 @@ impl SchEditor {
         if !open {
             self.wiz_open = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+
+    #[test]
+    fn every_calculator_is_in_one_group() {
+        for c in CALCS {
+            let n = GROUPS.iter().flat_map(|(_, t)| t.iter()).filter(|t| **t == c.title).count();
+            assert_eq!(n, 1, "{} is in {n} groups", c.title);
+        }
+        assert_eq!(GROUPS.iter().map(|(_, t)| t.len()).sum::<usize>(), CALCS.len(), "a group names a calculator that is not there");
     }
 }

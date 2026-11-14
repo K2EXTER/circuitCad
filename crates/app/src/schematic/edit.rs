@@ -44,6 +44,14 @@ impl SchEditor {
         }
     }
 
+    /// Reads a table of the form's data sheet (`--form-table page,x0,y0,x1,y1`, points, page from 1).
+    pub fn table_in_form_pdf(&mut self, spec: &str) {
+        let v: Vec<f32> = spec.split(',').filter_map(|t| t.trim().parse().ok()).collect();
+        if let (Some(f), [p, x0, y0, x1, y1]) = (self.form.as_mut(), v.as_slice()) {
+            f.sheet.open_table_at((*p as usize).saturating_sub(1), datasheet::Rect { x0: *x0, y0: *y0, x1: *x1, y1: *y1 });
+        }
+    }
+
     /// Waits for a click in the data sheet window for a field of the form (`--form-pick <field name>`).
     pub fn pick_in_form_pdf(&mut self, label: &str) {
         if let Some(f) = self.form.as_mut()
