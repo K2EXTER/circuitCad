@@ -100,7 +100,7 @@ pub(super) const POWER_PATH: LearningPath = LearningPath {
             name: "2. 基礎: 電源をつくる部品",
             about: "ダイオード・コンデンサ・ツェナー・トランジスタ。電圧を整え、ならし、一定にし、電流を増やす部品の働きです",
             items: &[
-                Item { requires: Some(&["led"]), ..lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")) },
+                Item { requires: Some(&["led"]), ..lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.2〜0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")) },
                 Item { requires: Some(&["diode_curve"]), ..lesson("rectifier", "交流を直流にする (整流・平滑・リップル)", "整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません")) },
                 Item { requires: Some(&["rectifier"]), ..I_ELECTROLYTIC_LIFE },
                 Item { build: true, requires: Some(&["diode_curve", "divider"]), ..lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")) },

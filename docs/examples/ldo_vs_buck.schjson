@@ -208,7 +208,7 @@
           "kind": "model",
           "element": "D",
           "name": "1N5819",
-          "text": ".model 1N5819 D(IS=500n N=1.1 RS=0.04 BV=40 IBV=1m)",
+          "text": ".model 1N5819 D(IS=4.885e-06 N=1.064 RS=0.0815 BV=48 IBV=0.001 EG=0.584 XTI=2)",
           "pins": [
             "A",
             "K"

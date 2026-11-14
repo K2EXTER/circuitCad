@@ -3,7 +3,7 @@
 
     python tools/gen_diode_models.py
 
-Every number below was read on 2026-11-12 from the data sheet named next to it, from the tables and from the graphs
+Every number below was read on 2026-11-12 (1N5819 on 2026-11-14) from the data sheet named next to it, from the tables and from the graphs
 rendered as pictures (graph readings: the pixel position of the curve, so a reading is good to about 1 %).
 docs/model-policy.md says how bundled models are made; crates/cli/tests/integration/diode_models.rs measures the models and writes the
 comparison tables (docs/models/diodes.md, crates/part-lib/model_checks.json).
@@ -17,6 +17,7 @@ VT = 0.025865  # the simulator's kT/q at 27 C (part-lib diode.rs)
 
 VISHAY_4148 = "Vishay 1N4148 データシート (Document Number 81857, Rev. 1.6, 2024-11)"
 ONSEMI_400X = "onsemi 1N4001〜1N4007 データシート (1N4001/D Rev. 18, 2024-06)"
+ONSEMI_581X = "onsemi 1N5817〜1N5819 データシート (1N5817/D Rev. 11, 2021-08)"
 
 PARTS = {
     "1N4148": dict(
@@ -62,6 +63,27 @@ PARTS = {
         trr=None,
         desc="整流ダイオード 1000V 1A (DO-41、帯の側がカソード K)。データシート (onsemi) の代表特性から作った等価モデル",
     ),
+    "1N5819_DO-41": dict(
+        name="1N5819",
+        src=ONSEMI_581X,
+        url="https://www.onsemi.com/pdf/datasheet/1n5817-d.pdf",
+        # Figure 7 (typical forward voltage, shared by 1N5817 to 1N5819), the 25 C curve (read 2026-11-14). Above about 2 A the
+        # 25 C and 100 C curves lie on each other; at 4 A the one line was read.
+        forward=[(0.03, 0.243), (0.05, 0.259), (0.1, 0.282), (0.25, 0.316), (0.5, 0.359), (1.0, 0.412), (1.5, 0.47), (2.5, 0.577), (4.0, 0.695)],
+        forward_at="図 7 (順方向電圧の代表特性。1N5817〜1N5819 で共通) の 25 °C",
+        # the same figure's 100 C curve (TC): the band gap EG is fitted to it with XTI = 2 (the silicon default EG = 1.11 made
+        # the forward voltage fall about 3 mV per degree; the curves show about 1.2 mV at 0.1 A)
+        hot=(100.0, [(0.03, 0.128), (0.04, 0.143), (0.05, 0.154), (0.1, 0.189), (0.15, 0.21), (0.25, 0.238), (0.3, 0.247), (0.4, 0.265), (0.5, 0.281), (0.7, 0.319), (1.0, 0.367)]),
+        # no breakdown is specified: VRSM (non-repetitive peak), and the table's IR max at the rated voltage
+        bv=(48.0, 1e-3, "降伏はデータシートに無いので、非繰り返しの最大逆電圧 VRSM 48 V に置いた (電流は表の IR の最大 1 mA)"),
+        # the data sheet gives no capacitance (no value, no curve)
+        cap=None,
+        cap_at="データシートに容量の値もグラフも無いので、入れていません (実物にはあり、高い周波数で効きます)",
+        trr=None,
+        # a Schottky diode has no stored charge (majority carriers): TT stays 0
+        no_trr="逆回復は扱いません (ショットキーは多数キャリアで動き、蓄積する電荷がほとんど無い。データシートにも trr は無い)。",
+        desc="1N5819 ショットキーバリアダイオード 40V 1A (DO-41、帯の側がカソード K)。データシート (onsemi) の代表特性から作った等価モデル",
+    ),
 }
 
 
@@ -105,11 +127,29 @@ def sig(x):
     return f"{x:.4g}"
 
 
+K_OVER_Q = 8.617333e-5  # the simulator's temperature scaling (sim-core temperature.rs, nominal 27 C)
+
+
+def fit_eg(is_, n, rs, temp, points, xti=2.0):
+    """The band gap EG (to 1 mV) that puts the model's forward voltage at `temp` C on `points`, scaled as the simulator does."""
+    r = (temp + 273.15) / 300.15
+    def v(i, eg):
+        is_t = is_ * r ** (xti / n) * math.exp(eg / (n * K_OVER_Q * (temp + 273.15)) * (r - 1))
+        return n * r * K_OVER_Q * 300.15 * math.log(i / is_t + 1) + rs * i
+    return min(range(300, 1200), key=lambda m: sum((v(i, m / 1000) - u) ** 2 for i, u in points)) / 1000, xti
+
+
 def model(p):
     is_, n, rs = fit_forward(p["forward"])
-    cj0, vj, mm = fit_cap(p["cap"])
     bv, ibv, _ = p["bv"]
-    text = f".model {p['name']} D(IS={sig(is_)} N={n:.3f} RS={sig(rs)} BV={sig(bv)} IBV={sig(ibv)} CJO={sig(cj0)} VJ={vj:g} M={mm:g}"
+    text = f".model {p['name']} D(IS={sig(is_)} N={n:.3f} RS={sig(rs)} BV={sig(bv)} IBV={sig(ibv)}"
+    if p.get("hot"):
+        eg, xti = fit_eg(is_, n, rs, *p["hot"])
+        text += f" EG={eg:g} XTI={xti:g}"
+    cj0 = vj = mm = None
+    if p["cap"]:
+        cj0, vj, mm = fit_cap(p["cap"])
+        text += f" CJO={sig(cj0)} VJ={vj:g} M={mm:g}"
     if p["trr"]:
         trr, i_f, i_r, _ = p["trr"]
         text += f" TT={sig(trr / math.log(1 + i_f / i_r))}"
@@ -121,15 +161,19 @@ def limits(p, fit):
     rows = [
         f"データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {p['src']}。データシートとの比べは docs/models/diodes.md。",
         f"順方向: {p['forward_at']} を読んだ {len(p['forward'])} 点に、IS・N・RS を当てはめました (部品作成フォームのダイオードと同じ計算)。",
-        f"接合容量: {p['cap_at']}。逆電圧で小さくなります。",
+        f"接合容量: {p['cap_at']}。逆電圧で小さくなります。" if p["cap"] else f"接合容量: {p['cap_at']}。",
         f"降伏: {p['bv'][2]}。",
     ]
+    if p.get("hot"):
+        rows.append(f"温度: 同じ図の {p['hot'][0]:g} °C の曲線に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 1.2〜1.5 mV 下がります。")
     if p["trr"]:
         rows.append(f"逆回復: {p['trr'][3]} から、蓄積時間 TT を決めました (max の値なので、実物はふつう、これより速く戻ります)。")
+    elif p.get("no_trr"):
+        rows.append(p["no_trr"])
     else:
         rows.append("逆回復時間は扱いません (データシートに trr が無い。標準の整流用で、数 µs ほど逆向きに流れます。逆回復のレッスンのサンプルは、自分で TT を足しています)。")
     rows += [
-        "扱わないもの: 温度による順方向電圧の変化はシミュレータの標準の式 (1 °C あたり約 −2 mV)、逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、自己発熱。耐圧や定格電流を超えても壊れません。",
+        ("扱わないもの: " if p.get("hot") else "扱わないもの: 温度による順方向電圧の変化はシミュレータの標準の式 (1 °C あたり約 −2 mV)、") + "逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、自己発熱。耐圧や定格電流を超えても壊れません。",
         "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
     ]
     return rows
