@@ -337,7 +337,7 @@ fn parse_ngspice_voltages(text: &str) -> std::collections::HashMap<String, f64> 
 #[ignore]
 fn vendor_xcheck() {
     let Ok(dir) = std::env::var("SPICE_MODEL_DIR") else { return };
-    let exe = std::env::var("NGSPICE").unwrap_or_else(|_| r"F:\Tools\ngspice\Spice64\bin\ngspice_con.exe".into());
+    let Some(exe) = sch_core::find_ngspice(None).map(|p| p.display().to_string()) else { return println!("{}", sch_core::NGSPICE_MISSING) };
     let want: usize = std::env::var("SPICE_XCHECK_N").ok().and_then(|v| v.parse().ok()).unwrap_or(150);
     let work = std::env::temp_dir().join("circuitcad_vendor_xcheck");
     let _ = std::fs::create_dir_all(&work);
@@ -513,7 +513,7 @@ fn interp(times: &[f64], values: &[f64], t: f64) -> f64 {
 #[ignore]
 fn vendor_xcheck_tran() {
     let Ok(dir) = std::env::var("SPICE_MODEL_DIR") else { return };
-    let exe = std::env::var("NGSPICE").unwrap_or_else(|_| r"F:\Tools\ngspice\Spice64\bin\ngspice_con.exe".into());
+    let Some(exe) = sch_core::find_ngspice(None).map(|p| p.display().to_string()) else { return println!("{}", sch_core::NGSPICE_MISSING) };
     let want: usize = std::env::var("SPICE_XCHECK_N").ok().and_then(|v| v.parse().ok()).unwrap_or(80);
     let work = std::env::temp_dir().join("circuitcad_vendor_xcheck_tran");
     let _ = std::fs::create_dir_all(&work);

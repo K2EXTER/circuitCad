@@ -10,6 +10,38 @@
 //! * Digital cells (`Y` lines) become XSPICE code models between bridges (`ngspice_digital`).
 
 use std::collections::HashMap;
+use std::path::PathBuf;
+
+/// Where ngspice (the console program) is looked for, in order: the path given (`--ngspice EXE`), the `NGSPICE` environment
+/// variable, `ngspice_con` and `ngspice` on the PATH, and the folder the Windows zip of ngspice is meant to be unpacked into
+/// (`C:\Spice64`). Nothing of one developer's machine: put ngspice on the PATH or set `NGSPICE` (docs/integration-policy.md).
+pub fn find_ngspice(given: Option<&str>) -> Option<PathBuf> {
+    let candidates = [
+        given.map(PathBuf::from),
+        std::env::var_os("NGSPICE").map(PathBuf::from),
+        Some(PathBuf::from("ngspice_con")),
+        Some(PathBuf::from("ngspice")),
+        Some(PathBuf::from(r"C:\Spice64\bin\ngspice_con.exe")),
+    ];
+    candidates.into_iter().flatten().find(|p| std::process::Command::new(p).arg("-v").output().is_ok())
+}
+
+/// What to tell someone whose machine has no ngspice: where it comes from and how this program finds it.
+pub const NGSPICE_MISSING: &str = "ngspice が見つかりません。https://ngspice.sourceforge.io/ から入れて (Windows は zip を C:\\ に展開すると C:\\Spice64)、PATH に入れるか、環境変数 NGSPICE に ngspice_con.exe の場所を書くか、--ngspice <exe> で指定してください";
+
+/// The `examples` folder that comes with ngspice (beside its `bin`), when ngspice is found: a few tests read real files from it.
+pub fn ngspice_examples() -> Option<PathBuf> {
+    let exe = find_ngspice(None)?;
+    // a bare name found on the PATH has no folder: ask the system where it is
+    let exe = if exe.is_absolute() { exe } else { which(&exe)? };
+    let dir = exe.parent()?.parent()?.join("examples");
+    dir.is_dir().then_some(dir)
+}
+
+fn which(name: &std::path::Path) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path).flat_map(|d| [d.join(name), d.join(name).with_extension("exe")]).find(|p| p.is_file())
+}
 
 /// A switch model as our engine reads it (defaults as in `SwitchModel::default`).
 #[derive(Clone, Copy, Debug)]

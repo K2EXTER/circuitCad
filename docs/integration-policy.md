@@ -36,7 +36,7 @@
 
 | 相手 | 形 | 場所 |
 |---|---|---|
-| ngspice | 呼ぶ(検算。無ければ検算だけ使えない) | `app/src/xcheck*.rs`、`tools/sim_compare.py`。**直すこと**: `find_ngspice` の探す順に開発者の手元のパス(`F:\Tools\ngspice\…`)が入っている。決まり 2 に合わせて設定と PATH にする |
+| ngspice | 呼ぶ(検算。無ければ検算だけ使えない) | `app/src/xcheck*.rs`、`tools/sim_compare.py`。探す順は `sch_core::find_ngspice`: `--ngspice EXE` → 環境変数 `NGSPICE` → PATH の `ngspice_con`・`ngspice` → `C:\Spice64\bin\ngspice_con.exe`(Windows の zip を展開する既定の場所)。見つからないときの案内は `NGSPICE_MISSING`。ngspice の例のファイルを読む試験は `ngspice_examples()`(無ければ飛ばす) |
 | KiCad(記号・フットプリント・回路図) | ファイルを読む | `part-lib/src/kicad*.rs` |
 | LTspice(回路図 `.asc`) | ファイルを読む | `part-lib/src/ltspice*.rs` |
 | メーカーの SPICE モデル | ファイルを読む(zip の索引も) | `sim-core/src/spice_in.rs`・`spice_flat.rs`、`docs/model-policy.md` |

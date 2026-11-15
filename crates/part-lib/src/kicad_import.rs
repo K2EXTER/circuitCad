@@ -368,8 +368,9 @@ mod tests {
 
     #[test]
     fn the_real_ecl_sheet_becomes_a_schematic_with_the_same_nets() {
-        let path = r"F:\Tools\ngspice\Spice64\examples\osdi\hicuml0\KiCad\ECL-OR.kicad_sch";
-        let Ok(text) = std::fs::read_to_string(path) else { return };
+        // the sheet comes with ngspice's examples: skipped when ngspice is not on this machine
+        let Some(ex) = sch_core::ngspice_examples() else { return };
+        let Ok(text) = std::fs::read_to_string(ex.join("osdi/hicuml0/KiCad/ECL-OR.kicad_sch")) else { return };
         let k = parse_schematic(&text).unwrap();
         let imp = import(&k);
         let nets = sch_core::extract(&imp.sch);

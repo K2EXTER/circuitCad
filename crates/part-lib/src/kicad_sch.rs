@@ -533,7 +533,7 @@ mod tests {
     /// (`ECL-OR.cir`). The parts on each net must be the same. (Skipped when the examples are not on this machine.)
     #[test]
     fn a_real_kicad_sheet_gives_the_nets_kicad_wrote() {
-        let dir = std::path::Path::new(r"F:\Tools\ngspice\Spice64\examples\osdi\hicuml0");
+        let Some(dir) = sch_core::ngspice_examples().map(|e| e.join("osdi").join("hicuml0")) else { return };
         let (Ok(sch), Ok(cir)) = (std::fs::read_to_string(dir.join("KiCad").join("ECL-OR.kicad_sch")), std::fs::read_to_string(dir.join("ECL-OR.cir"))) else {
             return;
         };

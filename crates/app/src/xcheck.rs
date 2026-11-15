@@ -107,14 +107,7 @@ pub fn compare(ours: &[(String, f64)], theirs: &[(String, f64)]) -> Outcome {
 }
 
 fn find_ngspice(arg: Option<&str>) -> Option<PathBuf> {
-    let cands = [
-        arg.map(PathBuf::from),
-        std::env::var_os("NGSPICE").map(PathBuf::from),
-        Some(PathBuf::from(r"F:\Tools\ngspice\Spice64\bin\ngspice_con.exe")),
-        Some(PathBuf::from("ngspice_con")),
-        Some(PathBuf::from("ngspice")),
-    ];
-    cands.into_iter().flatten().find(|p| Command::new(p).arg("-v").output().is_ok())
+    sch_core::find_ngspice(arg)
 }
 
 /// Our side of the check: the schematic with time-varying sources replaced by their DC value, and our
@@ -426,8 +419,7 @@ pub fn run_cli(args: &[String]) -> bool {
         let report = match (args.get(i + 1).filter(|a| !a.starts_with("--")), find_ngspice(val("--ngspice"))) {
             (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> --ac [--golden <保存先.json> [--keep-set]] [--ngspice <exe>] [--out report.txt]
 ".to_string(),
-            (_, None) => "ngspice が見つかりません。--ngspice <exe> か環境変数 NGSPICE で指定してください
-".to_string(),
+            (_, None) => format!("{}\n", sch_core::NGSPICE_MISSING),
             (Some(p), Some(exe)) => crate::xcheck_ac::run_path(Path::new(p), &exe, val("--golden").map(Path::new), keep_set),
         };
         let _ = std::fs::write(val("--out").unwrap_or("xcheck_ac_report.txt"), &report);
@@ -443,7 +435,7 @@ pub fn run_cli(args: &[String]) -> bool {
     let out = val("--out").unwrap_or(if tran { "xcheck_tran_report.txt" } else { "xcheck_report.txt" });
     let report = match (args.get(i + 1).filter(|a| !a.starts_with("--")), find_ngspice(val("--ngspice"))) {
         (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> [--tran [--tstop 秒] [--tstep 秒] [--ourstep 秒] [--ngstep 秒] [--lte 許容]] [--ngspice <exe>] [--out report.txt]\n".to_string(),
-        (_, None) => "ngspice が見つかりません。--ngspice <exe> か環境変数 NGSPICE で指定してください\n".to_string(),
+        (_, None) => format!("{}\n", sch_core::NGSPICE_MISSING),
         (Some(p), Some(exe)) if tran => {
             let num = |flag: &str| val(flag).and_then(parse_value);
             crate::xcheck_tran::run_path(

@@ -19,8 +19,8 @@ Usage:
 Snapshot options:
     --rev REV        build and measure a commit instead of the working tree (git worktree under target/sim-compare/,
                      with its own target directory: the first build takes a few minutes, later ones are incremental)
-    --ngspice [EXE]  also time ngspice on the same examples (default F:\\Tools\\ngspice\\Spice64\\bin\\ngspice_con.exe or
-                     $NGSPICE)
+    --ngspice [EXE]  also time ngspice on the same examples (default $NGSPICE, else ngspice_con / ngspice on
+                     the PATH, else C:\\Spice64\\bin\\ngspice_con.exe)
     --no-bench       skip tests_bench (about 30 s)
     --only A,B       only these examples (also leaves the demos and the bench out)
     --repeat N       runs per case, the best time is kept (default 3)
@@ -43,7 +43,9 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = os.path.join(ROOT, "target", "sim-compare")
-DEFAULT_NGSPICE = r"F:\Tools\ngspice\Spice64\bin\ngspice_con.exe"
+# where ngspice is looked for when neither --ngspice nor NGSPICE says (as sch_core::find_ngspice): the PATH, then the folder the
+# Windows zip is meant to be unpacked into
+DEFAULT_NGSPICE = shutil.which("ngspice_con") or shutil.which("ngspice") or r"C:\Spice64\bin\ngspice_con.exe"
 TIME = re.compile(r"\d+(\.\d+)?(e-?\d+)? ?(ms|s|µs|us)\b")
 
 

@@ -309,7 +309,10 @@ fn mixed_signal_oscillator() {
     let deck = format!("{body}.options reltol=1e-4\n.control\nset noaskquit\nset wr_vecnames\ntran 10u 8m\nwrdata {} v(osc)\n.endc\n.end\n", data.display().to_string().replace('\\', "/"));
     let cir = work.join("mixed.cir");
     std::fs::write(&cir, deck).unwrap();
-    let exe = r"F:\Tools\ngspice\Spice64\bin\ngspice_con.exe";
+    let Some(exe) = sch_core::find_ngspice(None) else {
+        println!("{}", sch_core::NGSPICE_MISSING);
+        return;
+    };
     let t1 = std::time::Instant::now();
     let _ = std::process::Command::new(exe).arg("-b").arg(&cir).output().unwrap();
     let ng_secs = t1.elapsed().as_secs_f64();
