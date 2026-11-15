@@ -27,6 +27,8 @@ pub enum Dest {
     BjtVceSat,
     BjtCobo,
     BjtCibo,
+    /// The transient thermal impedance ("time Zth" lines).
+    Zth,
 }
 
 impl Dest {
@@ -40,6 +42,7 @@ impl Dest {
             Dest::BjtVceSat => "トランジスタの「VCE(sat)」に入れる",
             Dest::BjtCobo => "トランジスタの「Cobo」に入れる",
             Dest::BjtCibo => "トランジスタの「Cibo」に入れる",
+            Dest::Zth => "「過渡熱抵抗 (Zth) の点」に入れる",
         }
     }
 
@@ -48,7 +51,7 @@ impl Dest {
         match self {
             // VF across, IF up on a log axis; the field wants "current voltage"
             Dest::DiodeForward => (false, true, true),
-            Dest::DiodeCap | Dest::BjtCobo | Dest::BjtCibo => (true, true, false),
+            Dest::DiodeCap | Dest::BjtCobo | Dest::BjtCibo | Dest::Zth => (true, true, false),
             Dest::BjtHfe => (true, true, false),
             Dest::BjtVbeOn | Dest::BjtVbeSat | Dest::BjtVceSat => (true, false, false),
         }

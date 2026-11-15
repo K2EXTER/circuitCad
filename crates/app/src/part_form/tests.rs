@@ -155,6 +155,28 @@ mod ratings_tests {
         assert!(f.to_def().unwrap().land_unverified);
     }
 
+    /// The Zth stages and the temperature limits are saved with the part, come back when it is edited, and a bad line is explained.
+    #[test]
+    fn the_zth_stages_and_the_temperature_limits_are_saved_and_read_back() {
+        let mut f = form();
+        f.rt_t = "150".into();
+        f.rt_derate = "25".into();
+        f.rt_zth = "0.2 1m\n0.6, 20m\n".into();
+        let def = f.to_def().unwrap();
+        let r = def.ratings.clone().unwrap();
+        assert_eq!((r.t_max, r.derate_from), (Some(150.0), Some(25.0)));
+        assert_eq!(r.zth, vec![[0.2, 1e-3], [0.6, 0.02]]);
+        let back = PartForm::from_def(&def);
+        assert_eq!(crate::part_form::parse::zth_stages(&back.rt_zth).unwrap(), r.zth);
+        f.rt_zth = "0.2".into();
+        assert!(f.to_def().unwrap_err().contains("1 行目"));
+        // points read off a curve fit back to stages
+        f.rt_zth_points = (0..9).map(|k| { let t = 1e-4 * 10f64.powf(k as f64 * 0.5); format!("{t} {}\n", 0.2 * (1.0 - (-t / 1e-3).exp()) + 0.6 * (1.0 - (-t / 0.02).exp())) }).collect();
+        let pts = crate::part_form::parse::zth_points(&f.rt_zth_points).unwrap();
+        let (st, err) = sim_core::fit_foster(&pts, 4).unwrap();
+        assert!(err < 0.01 && (st.iter().map(|s| s[0]).sum::<f64>() - 0.8).abs() < 0.02, "{st:?}");
+    }
+
     /// The checklist adds the items to look up; typing a value turns a line into a data sheet row, and the
     /// note to the learner (※...) is not saved as a condition.
     #[test]

@@ -2045,6 +2045,22 @@ fn heattran_warms_a_part_by_the_pulse_not_by_the_steady_state() {
     assert!(last(&a, "heattran")["parts"][0]["rise_peak_k"].as_f64().unwrap() > 24.0);
     let (_, ok) = run(&format!("{head}heattran 1.1 parts=R1 couple=R1:R9:50\n"));
     assert!(!ok);
+    // Zth stages (10 K/W in 1 ms, 40 K/W in 100 ms) with the rest of θ (50 K/W) on the slow capacity: the 1 s pulse now warms by
+    // 0.25 x (10 + 40 (1 - e^-10)) = 12.5 K plus the slow stage's 0.25 x 50 x (1 - e^-0.4) = 4.1 K
+    let (a, ok) = run(&format!("{head}thermal R1 zth=10:1m,40:100m\nheattran 1.1 parts=R1 tstep=5m\n"));
+    assert!(ok, "{a:?}");
+    let p = &last(&a, "heattran")["parts"][0];
+    assert_eq!(p["heat_stages"], 3, "{p}");
+    let rise = p["rise_peak_k"].as_f64().unwrap();
+    assert!((rise - 16.6).abs() < 0.6, "{p}");
+    // the same stages fitted from points of their curve
+    let pts: Vec<String> = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 0.1, 0.3, 1.0, 3.0].iter().map(|t: &f64| format!("{t}:{}", 10.0 * (1.0 - (-t / 1e-3).exp()) + 40.0 * (1.0 - (-t / 0.1).exp()))).collect();
+    let (a, ok) = run(&format!("{head}thermal R1 zthfit={}\n", pts.join(",")));
+    assert!(ok, "{a:?}");
+    let t = last(&a, "thermal");
+    assert!(t["fit"]["rms_error_pct"].as_f64().unwrap() < 1.0 && (t["fit"]["total_k_per_w"].as_f64().unwrap() - 50.0).abs() < 1.0, "{t}");
+    let (a, _) = run(&format!("{head}thermal R1 zth=10:0\n"));
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("above zero"), "{a:?}");
 }
 
 /// `board matchpairs` brings the shorter differential pair to the length of the longer one, on both lines.

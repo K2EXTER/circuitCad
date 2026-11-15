@@ -467,9 +467,9 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "pins": n, "names": c.pin_names})))
     }
 
-    /// `thermal REF [theta=K/W] [tc=ppm] [cth=J/K] [tmax=C]`: the heat resistance, the temperature coefficient, the heat capacity and the highest temperature of a part for `heat` / `heattran` (0 = back to the guess).
+    /// `thermal REF [theta=K/W] [tc=ppm] [cth=J/K] [tmax=C] [zth=R:TAU,...] [zthfit=T:Z,...]`: the heat resistance, the temperature coefficient, the heat capacity, the highest temperature and the transient heat resistance (Foster stages, or fitted to points of the data sheet's Zth curve) of a part for `heat` / `heattran` (0 = back to the guess).
     pub fn thermal(&mut self, args: &[String]) -> Res {
-        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K] [tmax=C]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity, the highest temperature from the library part or a guess from the kind)
+        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K] [tmax=C] [zth=R:TAU,R:TAU...] [zthfit=T:Z,T:Z...]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity, the highest temperature from the library part or a guess from the kind, zth=0 back to the library part's stages; zthfit fits up to 4 stages to points read off the data sheet's single-pulse Zth curve)
 thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts through the board's copper, kept in the file and used by heattran; K/W of 0 removes it)";
         let (pos, kv) = options(args);
         if let Some(spec) = opt(&kv, "link") {
@@ -490,7 +490,26 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let [r] = pos.as_slice() else { return Err(usage.into()) };
         let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && (k == "tc" || *x >= 0.0)).ok_or_else(|| format!("{k}={s} is not a number{}", if k == "tc" { "" } else { " (zero or more)" }))).transpose();
         let (theta, tc, cth, tmax) = (num("theta")?, num("tc")?, num("cth")?, num("tmax")?);
-        if theta.is_none() && tc.is_none() && cth.is_none() && tmax.is_none() {
+        // pairs "a:b,a:b" (Zth stages R:tau, or curve points t:z)
+        let pairs = |k: &str| -> Result<Option<Vec<(f64, f64)>>, String> {
+            let Some(text) = opt(&kv, k) else { return Ok(None) };
+            if text.trim() == "0" {
+                return Ok(Some(vec![]));
+            }
+            text.split(',').map(str::trim).filter(|s| !s.is_empty()).map(|item| {
+                let (a, b) = item.split_once(':').ok_or_else(|| format!("{k}: '{item}' is not a pair: write A:B, for example 0.5:1m"))?;
+                let (a, b) = (sim_core::parse_value(a.trim()), sim_core::parse_value(b.trim()));
+                a.zip(b).filter(|(a, b)| *a > 0.0 && *b > 0.0).ok_or_else(|| format!("{k}: '{item}' needs two numbers above zero"))
+            }).collect::<Result<Vec<_>, String>>().map(Some)
+        };
+        let mut zth: Option<Vec<[f64; 2]>> = pairs("zth")?.map(|v| v.into_iter().map(|(r, t)| [r, t]).collect());
+        let mut fit_note = None;
+        if let Some(points) = pairs("zthfit")? {
+            let (st, err) = sim_core::fit_foster(&points, 4)?;
+            fit_note = Some(json!({"stages": st.len(), "rms_error_pct": err * 100.0, "total_k_per_w": st.iter().map(|s| s[0]).sum::<f64>()}));
+            zth = Some(st);
+        }
+        if theta.is_none() && tc.is_none() && cth.is_none() && tmax.is_none() && zth.is_none() {
             return Err(usage.into());
         }
         let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
@@ -506,7 +525,10 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         if let Some(x) = tmax {
             c.t_max = x;
         }
-        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth, "t_max_c": c.t_max})))
+        if let Some(z) = zth {
+            c.zth = z;
+        }
+        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth, "t_max_c": c.t_max, "zth": c.zth, "fit": fit_note})))
     }
 
     /// `heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300,...] (else the links kept by `thermal link=`) [tstep=] [temp=27] [uic] [samples=8]`: a transient run whose power becomes
@@ -557,6 +579,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
                     "temp_peak_c": temp + p.rise_peak, "added_by_neighbours_k": p.rise_peak - p.rise_alone,
                     "working_temp_c": p.temp_working_c, "change_ppm": p.change * 1e6,
                     "steady_state_rise_k": p.power_peak * p.theta, "samples_time_power_rise": series,
+                    "heat_stages": p.stages,
                     "t_max_c": check_of(&p.name).map(|c| c.limit.t_max), "t_max_from": check_of(&p.name).map(|c| format!("{:?}", c.limit.source).to_lowercase()), "margin_at_peak_k": check_of(&p.name).map(|c| c.margin_k), "derated_power_w": check_of(&p.name).and_then(|c| c.p_derated), "temperature": check_of(&p.name).map(|c| level(c.level))})
             })
             .collect();

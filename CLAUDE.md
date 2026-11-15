@@ -32,7 +32,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - 動作点 `dc/`(build・devices・mna・newton・linalg・digital)/ 過渡 `tran.rs` / `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs`(FFT・THD)/ `temperature.rs`
 - 回路図→素子 `from_schematic.rs`(新しい部品種別はここ)/ `spice_in.rs` ライブラリ読込 / `spice_flat.rs` ベンダー形式のSPICE文の展開 / `expr.rs` 式の評価 / `netcurrent.rs` ネットごとの電流 / `dc/seq.rs` 記憶つき素子 / `waveform.rs` / `value.rs` / `options.rs` / `par.rs` 並列 / `diagnose.rs` 失敗時の原因
 - 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `troubleshoot` `loopgain` `polezero` `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage`
-- 熱: `selfheat.rs` 自己発熱 / `heat_tran.rs` 温度の時間変化
+- 熱: `selfheat.rs` 自己発熱 / `heat_tran.rs` 温度の時間変化 / `zth.rs` 過渡熱抵抗の段(データシートの曲線に当てはめ)
 - `designcalc.rs` 値の計算(足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)
 - `tests_*.rs` は機能別
 

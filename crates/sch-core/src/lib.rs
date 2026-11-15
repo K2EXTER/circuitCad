@@ -187,6 +187,10 @@ pub struct Component {
     /// after the self-heating run; 0 = the library part's rating, else a guess from the kind of part.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub t_max: f64,
+    /// Transient heat resistance as Foster stages `[R K/W, τ s]` (from the data sheet's Zth curve), for the temperature-over-time run;
+    /// empty = the library part's, else one stage (θ with the heat capacity `cth`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zth: Vec<[f64; 2]>,
     /// A sheet symbol: this part stands for another sheet (see `hierarchy.rs`); its reference designator is the instance name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sub: Option<SubRef>,
@@ -533,6 +537,7 @@ impl Schematic {
             tc_ppm: 0.0,
             cth: 0.0,
             t_max: 0.0,
+            zth: vec![],
             sub: None,
             shops: Default::default(),
         });
@@ -556,6 +561,7 @@ impl Schematic {
             tc_ppm: 0.0,
             cth: 0.0,
             t_max: 0.0,
+            zth: vec![],
             sub: None,
             shops: Default::default(),
         });
@@ -683,6 +689,10 @@ pub struct PartRatings {
     /// derating curve (70 °C for most chip resistors, 25 °C for most transistors).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub derate_from: Option<f64>,
+    /// The data sheet's transient thermal impedance (Zth, junction to case) as Foster stages `[R K/W, τ s]`: the temperature a power
+    /// step brings is `P · Σ R (1 − e^(−t/τ))`. Fitted to points read off the curve (`sim_core::fit_foster`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zth: Vec<[f64; 2]>,
     /// Rated / typical figures from the data sheet, free form.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rows: Vec<SpecRow>,
@@ -749,7 +759,7 @@ impl LifeRating {
 
 impl PartRatings {
     pub fn is_empty(&self) -> bool {
-        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
     }
 
     /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.

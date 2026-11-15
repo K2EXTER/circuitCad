@@ -231,6 +231,11 @@ pub struct PartForm {
     /// The highest temperature of the junction or element [°C] and the surrounding temperature the rated power starts to fall from.
     pub rt_t: String,
     pub rt_derate: String,
+    /// The transient thermal impedance: points read off the data sheet's Zth curve ("time Zth" lines), the Foster stages ("R τ" lines)
+    /// and what the last fit said.
+    pub rt_zth_points: String,
+    pub rt_zth: String,
+    pub rt_zth_msg: Option<Result<String, String>>,
     pub rt_rows: String,
     /// An electrolytic capacitor's rated ripple current [A rms] and the frequency it is given at, the data sheet's
     /// multiplier table (one `frequency multiplier` per line), and its endurance (hours at a temperature).
@@ -375,6 +380,9 @@ impl Default for PartForm {
             rt_p: String::new(),
             rt_t: String::new(),
             rt_derate: String::new(),
+            rt_zth_points: String::new(),
+            rt_zth: String::new(),
+            rt_zth_msg: None,
             rt_rows: String::new(),
             rt_ripple: String::new(),
             rt_ripple_f: "100k".into(),

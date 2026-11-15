@@ -163,6 +163,7 @@ impl PartForm {
                 ui.add(egui::TextEdit::singleline(&mut self.rt_derate).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 70 / 25"));
                 ui.end_row();
             });
+            self.zth_ui(ui);
             // only where it belongs: an electrolytic / tantalum capacitor, a part that already has such figures, or
             // a part whose kind was not chosen
             let filled = !self.rt_ripple.trim().is_empty() || !self.rt_life_h.trim().is_empty();
@@ -607,3 +608,39 @@ fn pkg_label(k: PkgKind) -> &'static str {
         PkgKind::Row2 => "2列 (ヘッダ 2×N)",
     }
 }
+
+impl PartForm {
+    /// "過渡熱抵抗 (Zth)": points of the data sheet's transient thermal impedance curve, fitted to Foster stages (`sim_core::fit_foster`)
+    /// that the temperature-over-time run uses for the short pulses.
+    fn zth_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new(i18n::tr("過渡熱抵抗 (Zth、短いパルスの温度)")).id_salt("rt_zth").default_open(!self.rt_zth.trim().is_empty()).show(ui, |ui| {
+            ui.label(egui::RichText::new(i18n::tr("パワー MOSFET やトランジスタのデータシートにある「Transient Thermal Impedance」の曲線 (横軸がパルスの時間、縦軸が Zth) から点を読み、段 (熱抵抗と時定数の組) に当てはめます。「温度の時間変化」で、短いパルスの温度の山が合うようになります")).weak());
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr("曲線の点: 時間 [s] Zth [K/W]")).on_hover_text(i18n::tr("1 行に 1 点。単一パルス (Single Pulse) の曲線を、左の立ち上がりから右の平らになる所まで 6〜10 点。デューティ比の付いた曲線ではなく単一パルスのものを読みます。縦軸が「正規化」(r(t)) のときは、θjc を掛けて K/W にします"));
+                if self.sheet.has_doc() && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓で、Zth のグラフの目盛りと曲線の上をクリックして点を読みます (両軸とも対数)")).clicked() {
+                    self.sheet.start_graph(Some(super::graph_reader::Dest::Zth));
+                }
+            });
+            ui.add(egui::TextEdit::multiline(&mut self.rt_zth_points).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("100u 0.05\n1m 0.2\n10m 0.6\n100m 1.2\n1 1.6"));
+            if ui.button(i18n::tr("段に当てはめる")).on_hover_text(i18n::tr("点に合う段 (最大 4 段) を探して、下の「段」に入れます。合い方 (ずれの大きさ) も出します")).clicked() {
+                self.rt_zth_msg = Some(super::parse::zth_points(&self.rt_zth_points).and_then(|pts| sim_core::fit_foster(&pts, 4)).map(|(st, err)| {
+                    self.rt_zth = st.iter().map(|[r, t]| format!("{} {}", super::graph_reader::short(*r), super::graph_reader::short(*t))).collect::<Vec<_>>().join("\n");
+                    let total: f64 = st.iter().map(|s| s[0]).sum();
+                    format!("{} 段に当てはめました (点とのずれ 平均 {:.1} %、熱抵抗の合計 {:.3} K/W = 長いパルスの Zth)", st.len(), err * 100.0, total)
+                }));
+            }
+            match &self.rt_zth_msg {
+                Some(Ok(m)) => {
+                    ui.colored_label(crate::theme::OK, m);
+                }
+                Some(Err(e)) => {
+                    ui.colored_label(crate::theme::ERROR, e);
+                }
+                None => {}
+            }
+            ui.label(i18n::tr("段: 熱抵抗 [K/W] 時定数 [s]")).on_hover_text(i18n::tr("1 行に 1 段。温度の上がり方は、電力 × Σ 熱抵抗 × (1 − e^(−時間 ÷ 時定数))。熱抵抗の合計は接合部からケースまで (θjc) で、部品の熱抵抗 θ の残り (ケースから空気まで) は、熱容量の 1 段として足されます"));
+            ui.add(egui::TextEdit::multiline(&mut self.rt_zth).desired_rows(2).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("0.2 1m\n0.6 20m\n1.2 500m"));
+        });
+    }
+}
+

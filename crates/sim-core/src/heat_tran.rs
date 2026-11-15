@@ -17,8 +17,11 @@ use sch_core::Schematic;
 #[derive(Clone, Debug, PartialEq)]
 pub struct ThermalNode {
     pub heater: Heater,
-    /// Heat capacity (J/K). 0: no capacity, the part follows its power at once (steady state at every moment).
+    /// Heat capacity (J/K). 0: no capacity, the part follows its power at once (steady state at every moment). With `zth`, the capacity of
+    /// what θ has beyond the stages (the case, the board).
     pub cth: f64,
+    /// Transient heat resistance as Foster stages `[R K/W, τ s]` (the data sheet's Zth, junction to case); empty = one stage (θ, cth).
+    pub zth: Vec<[f64; 2]>,
 }
 
 /// Heat that flows between two parts (by name) through the board: a heat resistance (K/W).
@@ -49,6 +52,8 @@ pub struct HeatTranPart {
     pub change: f64,
     /// How many diodes and transistors the part holds (for its temperature limit: `ratings::temperature_limit`).
     pub junctions: usize,
+    /// The heat stages it was worked out with (1 without Zth; the Zth stages and the rest of θ with it).
+    pub stages: usize,
     pub power: Vec<f64>,
     pub rise: Vec<f64>,
 }
@@ -126,7 +131,9 @@ pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[
         } else {
             circuit.tempcos.iter().find(|(n, _, _)| elements.contains(n)).map_or((0.0, 0.0), |(_, a, b)| (*a, *b))
         };
-        out.push(ThermalNode { heater: Heater { name: name.to_string(), elements, theta, tc1, tc2 }, cth: comp.cth });
+        // the Zth stages: the part's own, else the library part's
+        let zth = if comp.zth.is_empty() { comp.custom.as_ref().and_then(|c| c.ratings.as_ref()).map(|r| r.zth.clone()).unwrap_or_default() } else { comp.zth.clone() };
+        out.push(ThermalNode { heater: Heater { name: name.to_string(), elements, theta, tc1, tc2 }, cth: comp.cth, zth });
     }
     Ok(out)
 }
@@ -176,34 +183,66 @@ fn solve(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Vec<f64> {
     x
 }
 
-/// Rise (K) of every node over the surroundings at every time point: `C·du/dt = P − u/θ − Σ (u − u_other)/θ_link`, integrated by the backward
-/// Euler step on the points of `time` (the power in a step is the mean of its two ends). The run starts with everything at the surroundings.
+/// The heat stages of a part as (heat resistance K/W, heat capacity J/K): its Foster stages `zth` (C = τ / R) and, for what its θ has
+/// beyond them (case to air, the board), one stage with its heat capacity `cth`; without `zth`, the one stage (θ, cth).
+fn stages_of(nd: &ThermalNode) -> Vec<(f64, f64)> {
+    if nd.zth.is_empty() {
+        return vec![(nd.heater.theta, nd.cth)];
+    }
+    let mut st: Vec<(f64, f64)> = nd.zth.iter().map(|[r, tau]| (*r, tau / r)).collect();
+    let rest = nd.heater.theta - nd.zth.iter().map(|s| s[0]).sum::<f64>();
+    if rest > 1e-9 {
+        st.push((rest, nd.cth));
+    }
+    st
+}
+
+/// Rise (K) of every node over the surroundings at every time point. Each node is a chain of stages in series (Foster: each stage `s` of
+/// node `k` carries the node's net power, `C_s·du_s/dt = P_k − Q_k − u_s/R_s`, and the node's rise is `Σ u_s`); `Q_k = Σ (U_k − U_other)/θ_link`
+/// is the heat that leaves through the links. With one stage per node this is `C·du/dt = P − u/θ − Σ (u − u_other)/θ_link`. Integrated by the
+/// backward Euler step on the points of `time` (the power in a step is the mean of its two ends). The run starts with everything at the surroundings.
 fn integrate(time: &[f64], power: &[Vec<f64>], nodes: &[ThermalNode], links: &[(usize, usize, f64)]) -> Vec<Vec<f64>> {
     let n = nodes.len();
-    let mut g = vec![vec![0.0; n]; n];
+    // every stage: (its node, R, C)
+    let mut stage: Vec<(usize, f64, f64)> = vec![];
     for (k, nd) in nodes.iter().enumerate() {
-        g[k][k] += 1.0 / nd.heater.theta;
+        stage.extend(stages_of(nd).into_iter().map(|(r, c)| (k, r, c)));
+    }
+    let of = |k: usize| -> Vec<usize> { (0..stage.len()).filter(|&s| stage[s].0 == k).collect() };
+    let m_n = stage.len();
+    let mut g = vec![vec![0.0; m_n]; m_n];
+    for (s, &(_, r, _)) in stage.iter().enumerate() {
+        g[s][s] += 1.0 / r;
     }
     for &(a, b, th) in links {
-        g[a][a] += 1.0 / th;
-        g[b][b] += 1.0 / th;
-        g[a][b] -= 1.0 / th;
-        g[b][a] -= 1.0 / th;
+        // the link's heat (U_a − U_b)/θ leaves every stage of `a` and enters every stage of `b`
+        for (from, to) in [(a, b), (b, a)] {
+            for s in of(from) {
+                for s2 in of(from) {
+                    g[s][s2] += 1.0 / th;
+                }
+                for s2 in of(to) {
+                    g[s][s2] -= 1.0 / th;
+                }
+            }
+        }
     }
+    let mut x_prev = vec![0.0; m_n];
     let mut u = vec![vec![0.0; time.len()]; n];
     for i in 1..time.len() {
         let dt = (time[i] - time[i - 1]).max(1e-15);
         let mut m = g.clone();
-        let mut rhs = vec![0.0; n];
-        for k in 0..n {
-            let c = nodes[k].cth / dt;
-            m[k][k] += c;
-            rhs[k] = c * u[k][i - 1] + 0.5 * (power[k][i - 1] + power[k][i]);
+        let mut rhs = vec![0.0; m_n];
+        for (s, &(k, _, c)) in stage.iter().enumerate() {
+            let c = c / dt;
+            m[s][s] += c;
+            rhs[s] = c * x_prev[s] + 0.5 * (power[k][i - 1] + power[k][i]);
         }
         let x = solve(m, rhs);
-        for k in 0..n {
-            u[k][i] = x[k];
+        for (s, &(k, _, _)) in stage.iter().enumerate() {
+            u[k][i] += x[s];
         }
+        x_prev = x;
     }
     u
 }
@@ -212,6 +251,9 @@ fn integrate(time: &[f64], power: &[Vec<f64>], nodes: &[ThermalNode], links: &[(
 pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink], t_amb: f64, s: &TranSettings) -> Result<HeatTran, SimError> {
     if nodes.is_empty() {
         return Err(SimError::Invalid("no part to warm: name at least one (parts=Q1,RS1)".into()));
+    }
+    if let Some(nd) = nodes.iter().find(|n| n.zth.iter().any(|[r, tau]| !(*r > 0.0 && *tau > 0.0))) {
+        return Err(SimError::Invalid(format!("{}: every Zth stage needs a heat resistance and a time constant above zero", nd.heater.name)));
     }
     if let Some(nd) = nodes.iter().find(|n| !(n.heater.theta > 0.0) || n.cth < 0.0) {
         return Err(SimError::Invalid(format!("{}: the heat resistance must be above zero and the heat capacity zero or more", nd.heater.name)));
@@ -314,6 +356,7 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
                         temp_working_c: weighted[k],
                         change: scale(&nd.heater, weighted[k]) / scale(&nd.heater, t_amb) - 1.0,
                         junctions: junctions[k].len(),
+                        stages: stages_of(nd).len(),
                         power: power[k].clone(),
                         rise: rise[k].clone(),
                     }
@@ -341,7 +384,7 @@ mod tests {
     }
 
     fn node(name: &str, theta: f64, cth: f64) -> ThermalNode {
-        ThermalNode { heater: Heater { name: name.into(), elements: vec![name.into()], theta, tc1: 0.0, tc2: 0.0 }, cth }
+        ThermalNode { heater: Heater { name: name.into(), elements: vec![name.into()], theta, tc1: 0.0, tc2: 0.0 }, cth, zth: vec![] }
     }
 
     #[test]
@@ -365,12 +408,36 @@ mod tests {
         assert!((alone.parts[0].rise_peak - 25.0).abs() < 0.2);
         assert!((tied.parts[0].rise_peak - tied.parts[0].rise_alone).abs() < 0.2);
         // a cold neighbour: R2 given no power (R2 not in the circuit as a heater of its own) takes the heat from R1
-        let cold = ThermalNode { heater: Heater { name: "X".into(), elements: vec![], theta: 100.0, tc1: 0.0, tc2: 0.0 }, cth: 0.05 };
+        let cold = ThermalNode { heater: Heater { name: "X".into(), elements: vec![], theta: 100.0, tc1: 0.0, tc2: 0.0 }, cth: 0.05, zth: vec![] };
         let r = heat_tran(&pulse(1e3), &[node("R1", 100.0, 0.05), cold], &[ThermalLink { a: "R1".into(), b: "X".into(), theta: 100.0 }], 25.0, &s).unwrap();
         let (hot, x) = (&r.parts[0], &r.parts[1]);
         // R1: 0.25 W into θ=100 in parallel with 100+100 → 100‖200 = 66.7 K/W → 16.7 K; X sits at half of that (divider 100/200)
         assert!((hot.rise_peak - 16.67).abs() < 0.3 && (x.rise_peak - 8.33).abs() < 0.3, "{} {}", hot.rise_peak, x.rise_peak);
         assert!(hot.rise_alone > hot.rise_peak + 5.0);
+    }
+
+    #[test]
+    fn zth_stages_give_the_fast_rise_of_a_short_pulse() {
+        // 0.25 W for 50 ms into stages of 10 K/W in 1 ms and 40 K/W in 100 ms (θ 50 K/W, nothing beyond the stages):
+        // at the end of the pulse 0.25 x (10 (1 - e^-50) + 40 (1 - e^-0.5)) = 6.43 K
+        let mut n = node("R1", 50.0, 0.0);
+        n.zth = vec![[10.0, 1e-3], [40.0, 0.1]];
+        let r = heat_tran(&pulse(0.05), &[n.clone()], &[], 25.0, &TranSettings { tstop: 0.08, tstep: 5e-5, uic: false }).unwrap();
+        let want = 0.25 * (10.0 * (1.0 - (-50.0f64).exp()) + 40.0 * (1.0 - (-0.5f64).exp()));
+        let p = &r.parts[0];
+        assert!((p.rise_peak - want).abs() < 0.03 * want, "{} vs {want}", p.rise_peak);
+        assert_eq!(p.stages, 2);
+        // one stage with the same θ and the same slow capacity misses the junction's fast part: lower
+        let one = heat_tran(&pulse(0.05), &[node("R1", 50.0, 0.1 / 40.0)], &[], 25.0, &TranSettings { tstop: 0.08, tstep: 5e-5, uic: false }).unwrap();
+        assert!(one.parts[0].rise_peak < 0.8 * p.rise_peak, "{} vs {}", one.parts[0].rise_peak, p.rise_peak);
+        // what θ has beyond the stages is one more stage with the part's capacity
+        n.heater.theta = 80.0;
+        n.cth = 1.0;
+        let r = heat_tran(&pulse(0.05), &[n], &[], 25.0, &TranSettings { tstop: 0.08, tstep: 5e-5, uic: false }).unwrap();
+        assert_eq!(r.parts[0].stages, 3);
+        assert!(r.parts[0].rise_peak > p.rise_peak, "the slow 30 K/W stage adds a little");
+        let bad = ThermalNode { zth: vec![[0.0, 1e-3]], ..node("R1", 50.0, 0.0) };
+        assert!(heat_tran(&pulse(0.05), &[bad], &[], 25.0, &TranSettings { tstop: 0.08, tstep: 5e-5, uic: false }).is_err());
     }
 
     #[test]
@@ -382,7 +449,7 @@ mod tests {
         c.add(Element::VSource { name: "V1".into(), p: a, n: 0, wave: crate::waveform::Waveform::Pulse { v1: 0.0, v2: 5.0, td: 0.0, tr: 1e-6, tf: 1e-6, pw: 1e3, per: 1e4 }, ac: None });
         c.add(Element::Resistor { name: "R1".into(), a, b: o, r: 100.0 });
         c.add(Element::Diode { name: "D1".into(), a: o, k: 0, model: crate::circuit::DiodeModel::default() });
-        let hot = ThermalNode { heater: Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0 }, cth: 0.002 };
+        let hot = ThermalNode { heater: Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0 }, cth: 0.002, zth: vec![] };
         let r = heat_tran(&c, &[hot], &[], 27.0, &TranSettings { tstop: 6.0, tstep: 0.05, uic: false }).unwrap();
         let (cold_v, warm_v) = (*r.cold.signal("V(o)").unwrap().values.last().unwrap(), *r.tran.signal("V(o)").unwrap().values.last().unwrap());
         let rise = r.parts[0].rise_end;

@@ -117,8 +117,9 @@ impl SchEditor {
                     }
                     ui.end_row();
                     for (k, p) in v.parts.iter().enumerate() {
+                        let stages = if p.stages > 1 { i18n::trf!("。過渡熱抵抗 (Zth) の {} 段で計算 (部品作成の「データシートの情報」で入れたもの)", p.stages) } else { String::new() };
                         ui.label(egui::RichText::new(&p.name).color(curve_color(k)))
-                            .on_hover_text(i18n::trf!("最高 {:.1} ℃ (周囲 {} ℃ + {:.1} K、{:.3} 秒)。電力をかけている間の平均 {:.1} ℃", v.ambient + p.rise_peak, v.ambient, p.rise_peak, p.peak_time, p.temp_working_c));
+                            .on_hover_text(format!("{}{stages}", i18n::trf!("最高 {:.1} ℃ (周囲 {} ℃ + {:.1} K、{:.3} 秒)。電力をかけている間の平均 {:.1} ℃", v.ambient + p.rise_peak, v.ambient, p.rise_peak, p.peak_time, p.temp_working_c)));
                         ui.label(fmt_power(p.power_peak));
                         let check = v.checks.iter().find(|c| c.name == p.name);
                         let rise_col = match check.and_then(|c| c.level) {

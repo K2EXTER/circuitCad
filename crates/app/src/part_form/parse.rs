@@ -253,7 +253,7 @@ impl PartForm {
                 Some(LifeRating { hours, temp_c })
             }
         };
-        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, t_max: num("最高温度", &self.rt_t)?, derate_from: num("電力を下げ始める温度", &self.rt_derate)?, rows, ripple, life };
+        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, t_max: num("最高温度", &self.rt_t)?, derate_from: num("電力を下げ始める温度", &self.rt_derate)?, zth: zth_stages(&self.rt_zth)?, rows, ripple, life };
         Ok(Some(r).filter(|r| !r.is_empty()))
     }
 
@@ -408,3 +408,37 @@ impl PartForm {
         Ok(def)
     }
 }
+
+/// The Zth stages as typed, one "R τ" pair per line (K/W and seconds, with SI suffixes: "0.5 1m").
+pub(super) fn zth_stages(text: &str) -> Result<Vec<[f64; 2]>, String> {
+    let mut out = vec![];
+    for (n, line) in text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+        let w: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',').filter(|w| !w.is_empty()).collect();
+        let pair = match w.as_slice() {
+            [r, t] => sim_core::parse_value(r).zip(sim_core::parse_value(t)),
+            _ => None,
+        };
+        match pair {
+            Some((r, t)) if r > 0.0 && t > 0.0 => out.push([r, t]),
+            _ => return Err(format!("過渡熱抵抗の段の {} 行目「{}」は、「熱抵抗 [K/W] 時定数 [s]」の 2 つの数にしてください (例: 0.5 1m)", n + 1, line.trim())),
+        }
+    }
+    Ok(out)
+}
+
+/// The points read off a Zth curve, one "time Zth" pair per line (seconds and K/W).
+pub(super) fn zth_points(text: &str) -> Result<Vec<(f64, f64)>, String> {
+    let mut out = vec![];
+    for (n, line) in text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+        let w: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',').filter(|w| !w.is_empty()).collect();
+        match w.as_slice() {
+            [t, z] => match sim_core::parse_value(t).zip(sim_core::parse_value(z)) {
+                Some(p) => out.push(p),
+                None => return Err(format!("Zth の点の {} 行目「{}」を数として読めません", n + 1, line.trim())),
+            },
+            _ => return Err(format!("Zth の点の {} 行目「{}」は、「時間 [s] Zth [K/W]」の 2 つの数にしてください (例: 1m 0.2)", n + 1, line.trim())),
+        }
+    }
+    Ok(out)
+}
+

@@ -47,6 +47,10 @@ impl PartForm {
 ");
                 self.dio_message = Some(Ok(format!("p.{} のグラフの {} 点を「容量の点」に入れました", out.page + 1, out.points.len())));
             }
+            Dest::Zth => {
+                self.rt_zth_points = out.points.iter().map(|(t, z)| format!("{} {}", short(t.abs()), short(z.abs()))).collect::<Vec<_>>().join("\n");
+                self.rt_zth_msg = Some(Ok(format!("p.{} のグラフの {} 点を入れました。「段に当てはめる」を押してください", out.page + 1, out.points.len())));
+            }
             d => self.bjt_take_graph(d, &out.points, out.page),
         }
     }

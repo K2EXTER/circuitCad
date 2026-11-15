@@ -385,7 +385,7 @@ mod temp_tests {
         let mut sch = Schematic::default();
         let q = sch.add(Kind::Npn, (0, 0), 0);
         let name = sch.components[q].refdes.clone();
-        let p = crate::HeatTranPart { name: name.clone(), theta: 300.0, cth: 0.01, power_peak: 2.0, power_mean: 0.05, rise_peak: 145.0, peak_time: 0.012, rise_end: 3.0, rise_alone: 145.0, temp_working_c: 80.0, change: 0.0, junctions: 1, power: vec![], rise: vec![] };
+        let p = crate::HeatTranPart { name: name.clone(), theta: 300.0, cth: 0.01, power_peak: 2.0, power_mean: 0.05, rise_peak: 145.0, peak_time: 0.012, rise_end: 3.0, rise_alone: 145.0, temp_working_c: 80.0, change: 0.0, junctions: 1, stages: 1, power: vec![], rise: vec![] };
         let c = check_peak_temperatures(&sch, &[p], 25.0).remove(0);
         assert_eq!((c.temp_c, c.limit.t_max, c.level), (170.0, 150.0, Some(RatingLevel::Over)));
         assert!(c.message.contains("0.012 秒"), "{}", c.message);
