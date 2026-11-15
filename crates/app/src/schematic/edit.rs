@@ -62,6 +62,13 @@ impl SchEditor {
         }
     }
 
+    /// Makes the draft from the whole data sheet and puts all of it in (`--form-draft`, for screenshots).
+    pub fn draft_in_form(&mut self) {
+        if let Some(f) = self.form.as_mut() {
+            f.draft_all();
+        }
+    }
+
     /// Opens the big window of the cut-out drawing (`--drawing-big`, for screenshots).
     pub fn drawing_big_in_form(&mut self) {
         if let Some(f) = self.form.as_mut() {

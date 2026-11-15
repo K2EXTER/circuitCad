@@ -268,6 +268,8 @@ pub struct PartForm {
     pub sources: Vec<pdf_input::Source>,
     /// What the last click in the PDF did: (worked, message).
     pub pick_msg: Option<(bool, String)>,
+    /// The draft read from the whole data sheet, while its window is open (`draft.rs`).
+    pub(super) draft: Option<draft::FormDraft>,
     /// The pin table of the data sheet the pins are compared with, and the last comparison.
     pub pin_ref: Option<pdf_check::PinRef>,
     pub pin_check: Option<pdf_check::PinCheck>,
@@ -412,6 +414,7 @@ impl Default for PartForm {
             sheet: datasheet_view::SheetView::default(),
             sources: vec![],
             pick_msg: None,
+            draft: None,
             pin_ref: None,
             pin_check: None,
             dim_ref: None,
@@ -450,6 +453,7 @@ mod tabs;
 mod step3d;
 mod solidcraft;
 mod drawing_pick;
+mod draft;
 mod template;
 mod trial;
 #[cfg(test)]
@@ -467,6 +471,7 @@ impl PartForm {
         let built = self.to_def();
         self.sheet.take_dropped(ui.ctx());
         self.sheet.window(ui.ctx());
+        self.draft_window(ui.ctx());
         self.take_pdf_pick();
         self.take_pdf_pins();
         self.take_pdf_graph();
@@ -500,6 +505,7 @@ impl PartForm {
                     }
                 }).response.on_hover_text(i18n::tr("部品がもうファイルになっているとき (メーカーや KiCad の部品) は、このフォームを使わずに、そのファイルをライブラリに追加できます"));
                 self.sheet.open_button(ui);
+                self.draft_button(ui);
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                     crate::widgets::tab_bar(ui, &mut self.tab, &tabs);
                 });

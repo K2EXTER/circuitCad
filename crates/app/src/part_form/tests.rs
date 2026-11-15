@@ -1166,3 +1166,34 @@ fn the_extra_pad_table_follows_a_text_changed_from_outside() {
     out.textures_delta.clear();
     assert_eq!(f.extra_rows.len(), 2, "an example button changed the text");
 }
+
+/// "データシートから下書き" on real data sheets (skipped without them): TI's SN74HC14 gives its name, an IC, 14 pins from the pin
+/// table and a dual-row package; AO3400A gives a MOSFET with the values of its table.
+#[test]
+fn a_draft_from_real_data_sheets() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter");
+    let hc14 = dir.join("sn74hc14.pdf");
+    if hc14.exists() {
+        let mut f = PartForm::default();
+        f.sheet.load(&hc14);
+        let d = f.make_draft().unwrap();
+        assert_eq!(d.kind.map(|k| k.1), Some("ロジックIC"));
+        let done = f.apply_draft(&d);
+        assert_eq!(f.name, "SNx4HC14", "{done:?}");
+        assert_eq!(f.ptype, Some(PartType::Ic));
+        assert_eq!(f.pins_text.lines().count(), 14, "{}", f.pins_text);
+        assert!(f.pins_text.starts_with("1 1A") && f.pins_text.contains("8 4Y") && f.pins_text.ends_with("14 VCC"), "{}", f.pins_text);
+        assert!(f.pkg == PkgKind::Dual, "{done:?}");
+    }
+    let ao = dir.join("AO3400A_ds.pdf");
+    if ao.exists() {
+        let mut f = PartForm::default();
+        f.sheet.load(&ao);
+        let d = f.make_draft().unwrap();
+        let done = f.apply_draft(&d);
+        assert_eq!((f.name.as_str(), f.glyph.as_str()), ("AO3400A", "nmos"), "{done:?}");
+        assert!(done.iter().any(|l| l.contains("MOSFET の値")), "{done:?}");
+        // "SOT23" written without its dash: the built-in footprint
+        assert_eq!(f.fp_preset, "SOT-23", "{done:?}");
+    }
+}

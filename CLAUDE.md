@@ -23,7 +23,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `design-spec` | 設計の要件の表の型(`DesignSpec`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が共有 |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
 | `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。メーカーのシリーズ(値ごとの部品に展開。`series.rs`、`series/*.series.json`)。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、LTspice の回路図の取り込み(`ltspice*.rs`)、データシートの読み(`fits/*.fit.json`)から等価モデルを当てはめる `fit/`(`ccad fit`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
-| `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ・グラフの軸と点と曲線の読み `graph.rs`・電気的特性の表の値 `spec_table.rs`・コマンドラインで調べる `examples/ds.rs`(`docs/datasheet-viewer-design.md`) |
+| `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ・丸ごとの下書き `draft.rs`(パッケージ名・ピンの表・寸法表)・グラフの軸と点と曲線の読み `graph.rs`・電気的特性の表の値 `spec_table.rs`・コマンドラインで調べる `examples/ds.rs`(`docs/datasheet-viewer-design.md`) |
 | `i18n` | 英語の画面。日本語の文を鍵にした表 `en/*.tsv`、`tr` / `trf!` / `tr_dyn`、`tools/i18n.py`(包む・未訳の一覧)。`docs/code-notes/i18n.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
 | `cli` | `ccad`: 画面なしの操作窓口(1行1コマンドのスクリプト。`ccad mcp` で MCP サーバー。`board/` は基板の命令を話題ごとのファイルに分けてある。`docs/cli.md`、`docs/code-notes/cli.md`) |
@@ -37,7 +37,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `tests_*.rs` は機能別
 
 ## pcb-core (`crates/pcb-core/src`) — 詳細: `docs/code-notes/pcb-core.md`(目次。ファイル一覧は `pcb-core/output.md` の末尾)
-- モデル `model.rs`(層は `Side`、`NetClass`、`Rules`)/ フットプリント `footprints.rs` `package.rs` `parts.rs` / 回路図取込 `netlist.rs`
+- モデル `model.rs`(層は `Side`、`NetClass`、`Rules`)/ フットプリント `footprints.rs` `package.rs` `parts.rs` `land.rs`(寸法表からガルウィングのランド) / 回路図取込 `netlist.rs`
 - `drc/`(clearance・connectivity・path・pour・decoupling・thermal・silk・acute・area・slit・patch・geo …)/ `current.rs` `irdrop.rs` `nettable.rs`(ネットの一覧) `keepout.rs`(禁止領域) `impedance.rs`(式)`fieldsolve/`(断面の電界ソルバ。4分木のメッシュ `quad.rs`) `diffpair.rs` `requirements.rs`
 - 配置: `autoplace/`(order・blocks・ics・finish) `align.rs` `connectors.rs` `orient.rs` `swap.rs` `nudge.rs`(配線後に近くの部品を動かして引き直す)`renumber.rs`(部品番号を位置順に振り直す)`snippet.rs`(配置・配線のスニペット)`replicas.rs`(繰り返し構造の検出)
 - 熱: `heat_copper.rs`(ピンにつながった銅から部品の θ を見積もる。回路図に反映で自己発熱へ)
@@ -52,7 +52,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 |---|---|
 | `main.rs` / `prefs.rs` / `settings_window.rs` / `icons.rs` | `App`・メニュー / 設定の保存 / 設定の窓 / ツールのアイコン |
 | `args.rs` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
-| `plot.rs` `logic_plot.rs` / `part_form/` | 波形描画・デジタル表示 (High/Low の帯とバス) / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `graph_reader` グラフから点を読む / `mosfet` MOSFET を表の値から / `bjt` トランジスタをグラフの点から / `logic` ロジック IC を論理式から / `drawing_pick` 切り出した図の縮尺合わせ / `checklist` `trial` `vendor` `zchart` `preview`) |
+| `plot.rs` `logic_plot.rs` / `part_form/` | 波形描画・デジタル表示 (High/Low の帯とバス) / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `graph_reader` グラフから点を読む / `mosfet` MOSFET を表の値から / `bjt` トランジスタをグラフの点から / `logic` ロジック IC を論理式から / `draft` データシートから下書き / `drawing_pick` 切り出した図の縮尺合わせ / `checklist` `trial` `vendor` `zchart` `preview`) |
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
 | `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |

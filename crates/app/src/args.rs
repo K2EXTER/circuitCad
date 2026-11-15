@@ -79,6 +79,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             app.sch.drawing_in_form_pdf(view, spec);
         }
     }
+    // --form-draft: "データシートから下書き" with everything found put in (after --form-pdf)
+    if args.iter().any(|a| a == "--form-draft") {
+        app.sch.draft_in_form();
+    }
     // --drawing-big: the big window of the cut-out drawing, with two points and a length in inches (for screenshots)
     if args.iter().any(|a| a == "--drawing-big") {
         app.sch.drawing_big_in_form();

@@ -241,6 +241,11 @@ impl SheetView {
         self.doc.is_some()
     }
 
+    /// The open data sheet itself (for reading it whole: `draft.rs`).
+    pub fn datasheet(&self) -> Option<&Datasheet> {
+        self.doc.as_ref().map(|d| &d.ds)
+    }
+
     /// What the first pages suggest (part numbers and the kind of part), when a PDF is open.
     pub fn candidates(&self) -> Option<&Candidates> {
         self.doc.as_ref().map(|d| &d.candidates)
