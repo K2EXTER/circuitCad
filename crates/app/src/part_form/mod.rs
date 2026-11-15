@@ -206,6 +206,8 @@ pub struct PartForm {
     /// The MOSFET section ("かんたん作成" from the data sheet's table).
     pub mos: mosfet::MosInput,
     pub bjt: bjt::BjtInput,
+    /// The logic IC box: inputs and one Boolean expression per output (`logic.rs`).
+    pub logic: logic::LogicInput,
     /// The leaded-part helper of the package tab: lead diameter, body length / diameter (axial) or lead spacing (radial), in mm as typed.
     pub thru_lead: String,
     pub thru_len: String,
@@ -352,6 +354,7 @@ impl Default for PartForm {
             dio_found: vec![],
             mos: Default::default(),
             bjt: Default::default(),
+            logic: Default::default(),
             thru_lead: String::new(),
             thru_len: String::new(),
             thru_dia: String::new(),
@@ -396,6 +399,7 @@ mod datasheet_view;
 mod graph_reader;
 mod mosfet;
 mod bjt;
+mod logic;
 mod pdf_check;
 mod pdf_input;
 mod pin_import;

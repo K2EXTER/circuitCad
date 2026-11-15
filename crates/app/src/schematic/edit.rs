@@ -78,6 +78,13 @@ impl SchEditor {
         }
     }
 
+    /// The logic IC box with the half adder, applied (`--form-logic-example`, with `--new-part ic`).
+    pub fn logic_in_form(&mut self) {
+        if let Some(f) = self.form.as_mut() {
+            f.logic_example();
+        }
+    }
+
     /// Waits for a click in the data sheet window for a field of the form (`--form-pick <field name>`).
     pub fn pick_in_form_pdf(&mut self, label: &str) {
         if let Some(f) = self.form.as_mut()

@@ -73,6 +73,7 @@ impl PartForm {
             Some(PartType::Ic) => {
                 ui.label(egui::RichText::new(i18n::tr("かんたん作成 (ひな形)")).strong());
                 self.template_ui(ui);
+                self.logic_ui(ui);
                 self.order_guide(ui, "ほかの IC の入力の順番:");
             }
             Some(PartType::Transistor | PartType::Diode | PartType::Connector) if !diode => {
