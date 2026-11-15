@@ -405,7 +405,7 @@ impl SheetView {
     pub fn open_table_at(&mut self, page: usize, area: Rect) {
         if let Some(d) = self.doc.as_mut() {
             d.page = page.min(d.ds.page_count().saturating_sub(1));
-            d.panel = Some(TablePanel::new(d.page, area, d.ds.table_in(d.page, area)));
+            d.panel = Some(TablePanel::new(d.page, area, d.ds.table_in(d.page, area)).with_drawing(drawing_pins(&d.ds, d.page, area)));
         }
     }
 
@@ -500,7 +500,7 @@ impl SheetView {
             match action {
                 Action::Apply(mode) => {
                     let (num_col, name_col) = panel.columns();
-                    d.pins_out = Some(PinImport { lines: panel.text.clone(), mode, page: panel.page, area: panel.area, num_col, name_col });
+                    d.pins_out = Some(PinImport { lines: panel.text.clone(), mode, page: panel.page, area: panel.area, num_col, name_col, from_drawing: panel.as_drawing });
                     d.panel = None;
                 }
                 Action::Cancel => d.panel = None,
@@ -509,6 +509,11 @@ impl SheetView {
             }
         }
     }
+}
+
+/// The pins of a pin drawing in `area` (the first whose numbers run 1, 2, 3 …), for the table window.
+fn drawing_pins(ds: &Datasheet, page: usize, area: Rect) -> Option<Vec<(String, String)>> {
+    datasheet::pin_diagram::pins_in_drawings(ds.words(page), area).into_iter().find(|p| datasheet::draft::plausible_pins(p))
 }
 
 /// Part numbers (from the title and from the file name) and the kind of part.
@@ -662,7 +667,7 @@ impl Opened {
                         if let Some(view) = self.cut_view.take() {
                             self.drawing_out = cut_drawing(&self.ds, self.page, area, view);
                         } else {
-                            self.panel = Some(TablePanel::new(self.page, area, self.ds.table_in(self.page, area)));
+                            self.panel = Some(TablePanel::new(self.page, area, self.ds.table_in(self.page, area)).with_drawing(drawing_pins(&self.ds, self.page, area)));
                             self.selecting = false;
                         }
                     }

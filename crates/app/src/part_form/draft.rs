@@ -14,7 +14,11 @@ pub struct FormDraft {
     /// The package names, the likeliest first, and the one chosen.
     pub packages: Vec<PackageName>,
     pub package: usize,
-    pub pins: Option<FoundPins>,
+    /// The pins from the pin table and from the pin drawing (whichever were found), and the one used.
+    pub pin_sources: Vec<FoundPins>,
+    pub pin_pick: usize,
+    /// The table and the drawing were both found and gave the same pins.
+    pub pins_agree: bool,
     pub dims: Option<DimTable>,
     /// Use: name, kind, package, pins, body, model.
     pub use_: [bool; 6],
@@ -79,14 +83,24 @@ impl PartForm {
         let c = self.sheet.candidates();
         let name = c.and_then(|c| c.names.first().cloned());
         let kind = c.and_then(|c| c.category).and_then(|cat| kind_of(cat).map(|k| (k, cat)));
-        let pins = ds.find_pin_table();
+        // the pins: from the table and from the drawing. When they differ the drawing goes first: it is of one package, where a
+        // table's rows of several numbers ("2, 3, 6, 7") and several packages' columns are read wrong more easily
+        let mut pin_sources: Vec<FoundPins> = ds.find_pin_table().into_iter().collect();
+        let mut pins_agree = false;
+        if let Some(d) = ds.find_pin_drawing() {
+            match pin_sources.first() {
+                Some(t) if t.pins == d.pins => pins_agree = true,
+                Some(_) => pin_sources.insert(0, d),
+                None => pin_sources.push(d),
+            }
+        }
         let mut packages = ds.package_names();
         packages.truncate(6);
         // with the pins counted, a name that says that many pins (or says none) first
-        let package = pins.as_ref().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))).unwrap_or(0);
+        let package = pin_sources.first().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))).unwrap_or(0);
         let dims = ds.dimension_table();
         let model = matches!(kind.map(|k| k.0), Some(PartType::Transistor | PartType::Diode));
-        Some(FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), pins.is_some(), dims.is_some(), model], name, kind, packages, package, pins, dims, open: true })
+        Some(FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, open: true })
     }
 
     /// Puts the chosen parts of the draft into the form; returns what was done, line by line.
@@ -110,12 +124,13 @@ impl PartForm {
             done.push(format!("部品名: {n}"));
         }
         if d.use_[3]
-            && let Some(p) = &d.pins
+            && let Some(p) = d.pin_sources.get(d.pin_pick)
         {
             self.pins_text = datasheet::pin_lines(&p.pins);
-            self.pin_ref = Some(super::pdf_check::PinRef { page: p.page, area: p.area, num_col: p.num_col, name_col: p.name_col });
+            // a table can be read again to compare with later; a drawing cannot
+            self.pin_ref = (!p.from_drawing).then_some(super::pdf_check::PinRef { page: p.page, area: p.area, num_col: p.num_col, name_col: p.name_col });
             self.pin_check = None;
-            done.push(format!("ピン: p.{} の表から {} 本", p.page + 1, p.pins.len()));
+            done.push(format!("ピン: p.{} の{}から {} 本", p.page + 1, if p.from_drawing { "ピン配置の図" } else { "表" }, p.pins.len()));
         }
         let s = d.dims.as_ref().map(sizes);
         if d.use_[2]
@@ -259,18 +274,33 @@ impl PartForm {
                 }
                 ui.end_row();
                 // pins
-                ui.add_enabled(d.pins.is_some(), egui::Checkbox::new(&mut d.use_[3], i18n::tr("ピン")));
-                match &d.pins {
-                    Some(p) => {
+                ui.add_enabled(!d.pin_sources.is_empty(), egui::Checkbox::new(&mut d.use_[3], i18n::tr("ピン")));
+                if d.pin_sources.is_empty() {
+                    ui.label(none()).on_hover_text(i18n::tr("ピンの表も、番号と名前の書かれたピン配置の図も見つかりませんでした。データシートの窓の「ピン表を囲む」で、表か図を囲んで読めます"));
+                    ui.label("");
+                } else {
+                    ui.vertical(|ui| {
+                        if d.pin_sources.len() > 1 {
+                            ui.horizontal(|ui| {
+                                for (k, p) in d.pin_sources.iter().enumerate() {
+                                    ui.selectable_value(&mut d.pin_pick, k, if p.from_drawing { i18n::tr("図から") } else { i18n::tr("表から") });
+                                }
+                                ui.colored_label(crate::theme::WARN, i18n::tr("表と図で違います")).on_hover_text(i18n::tr("ピンの表とピン配置の図で、読めたピンが違いました。両方のページを開いて、正しい方を選んでください (表は、いくつものパッケージの列や「2, 3, 6, 7」のような行を読み違えることがあります)"));
+                            });
+                        }
+                        let p = &d.pin_sources[d.pin_pick.min(d.pin_sources.len() - 1)];
                         let list: Vec<String> = p.pins.iter().take(10).map(|(n, m)| format!("{n} {m}")).collect();
                         let more = if p.pins.len() > 10 { i18n::trf!(" ほか {} 本", p.pins.len() - 10) } else { String::new() };
-                        ui.label(format!("{}{more}", list.join(", "))).on_hover_text(i18n::tr("「ピン配置」の見出しの下の表から読みました。番号と名前の組が表のとおりか、ページで確かめてください"));
-                        page_button(ui, Some(p.page), &mut go);
-                    }
-                    None => {
-                        ui.label(none()).on_hover_text(i18n::tr("ピンの表が見つかりませんでした (図だけのデータシートなど)。データシートの窓の「ピン表を囲む」で、表を囲んで読めます"));
-                        ui.label("");
-                    }
+                        ui.label(format!("{}{more}", list.join(", "))).on_hover_text(if p.from_drawing { i18n::tr("ピン配置の図の、番号のすぐ横 (か上下) の名前を読みました。図のとおりか、ページで確かめてください") } else { i18n::tr("「ピン配置」の見出しの下の表から読みました。番号と名前の組が表のとおりか、ページで確かめてください") });
+                        if d.pins_agree {
+                            ui.small(egui::RichText::new(i18n::tr("✔ 表とピン配置の図が一致しています")).color(crate::theme::OK));
+                        }
+                        if d.pin_sources.len() == 1 && p.from_drawing {
+                            ui.small(i18n::tr("ピン配置の図から読みました (表は見つかりませんでした)"));
+                        }
+                    });
+                    let p = &d.pin_sources[d.pin_pick.min(d.pin_sources.len() - 1)];
+                    page_button(ui, Some(p.page), &mut go);
                 }
                 ui.end_row();
                 // body

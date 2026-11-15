@@ -1197,3 +1197,22 @@ fn a_draft_from_real_data_sheets() {
         assert_eq!(f.fp_preset, "SOT-23", "{done:?}");
     }
 }
+
+/// LM317L: its pin table reads wrong ("2, 3, 6, 7" rows) and its pin drawing right; the draft offers both, the drawing first, and the
+/// drawing's pins go in without a table to compare with later (skipped without the file).
+#[test]
+fn a_draft_takes_the_pin_drawing_when_the_table_differs() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/lm317l.pdf");
+    if !path.exists() {
+        return;
+    }
+    let mut f = PartForm::default();
+    f.sheet.load(&path);
+    let d = f.make_draft().unwrap();
+    assert_eq!(d.pin_sources.len(), 2);
+    assert!(d.pin_sources[0].from_drawing && !d.pins_agree);
+    let done = f.apply_draft(&d);
+    assert_eq!(f.pins_text, "1 INPUT\n2 OUTPUT\n3 OUTPUT\n4 ADJUSTMENT\n5 NC\n6 OUTPUT\n7 OUTPUT\n8 NC", "{done:?}");
+    assert!(f.pin_ref.is_none());
+    assert!(done.iter().any(|l| l.contains("ピン配置の図")), "{done:?}");
+}

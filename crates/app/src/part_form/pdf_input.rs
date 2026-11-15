@@ -19,7 +19,8 @@ impl PartForm {
         use super::pin_import::PinMode;
         let Some(imp) = self.sheet.take_pins() else { return };
         // the table stays the one the pins are compared with from now on
-        self.pin_ref = Some(super::pdf_check::PinRef { page: imp.page, area: imp.area, num_col: imp.num_col, name_col: imp.name_col });
+        // a drawing has no columns to read again: nothing to compare with later
+        self.pin_ref = (!imp.from_drawing).then_some(super::pdf_check::PinRef { page: imp.page, area: imp.area, num_col: imp.num_col, name_col: imp.name_col });
         self.pin_check = None;
         let read = imp.lines.lines().count();
         self.pick_msg = Some(match imp.mode {

@@ -232,6 +232,8 @@ pub struct FoundPins {
     pub num_col: usize,
     pub name_col: usize,
     pub pins: Vec<(String, String)>,
+    /// Read off a pin drawing (`pin_diagram`), not a table: there are no columns to read again.
+    pub from_drawing: bool,
 }
 
 impl Datasheet {
@@ -272,12 +274,28 @@ impl Datasheet {
                     let Some((num_col, name_col)) = crate::guess_columns(&table) else { continue };
                     let pins = crate::pins_from(&table, num_col, name_col);
                     if plausible_pins(&pins) {
-                        found.push(FoundPins { page, area, num_col, name_col, pins });
+                        found.push(FoundPins { page, area, num_col, name_col, pins, from_drawing: false });
                     }
                 }
             }
             if let Some(best) = found.into_iter().min_by(|a, b| twice(&a.pins).cmp(&twice(&b.pins)).then(b.pins.len().cmp(&a.pins.len()))) {
                 return Some(best);
+            }
+        }
+        None
+    }
+
+    /// The pins of the first pin drawing under a "Pin Configuration" heading (`pin_diagram`): for data sheets with no pin table, or to
+    /// check one.
+    pub fn find_pin_drawing(&self) -> Option<FoundPins> {
+        let queries = Heading::PinConfig.queries();
+        for page in 0..self.page_count() {
+            let Some((w, h)) = self.page_size(page) else { continue };
+            for hit in self.search_page_any(page, &queries).into_iter().filter(|h| !h.in_contents) {
+                let area = Rect { x0: 0.0, y0: hit.rect.y1, x1: w, y1: h * FOOT };
+                if let Some(pins) = crate::pin_diagram::pins_in_drawings(self.words(page), area).into_iter().find(|p| plausible_pins(p)) {
+                    return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, from_drawing: true });
+                }
             }
         }
         None
@@ -408,6 +426,27 @@ mod real_pdf {
         assert!(ds.dimension_table().is_none(), "{:?}", ds.dimension_table());
     }
 
+    /// Pin drawings of TI and Analog Devices (skipped without the files): beside each other, the names over the numbers' ends ("V"
+    /// over "IN"), the part number and the figure's number turned on its side inside the drawing, and LM317L whose table of several
+    /// numbers in a row ("2, 3, 6, 7") is read wrong but whose drawing is right.
+    #[test]
+    fn pin_drawings_are_read() {
+        let lines = |f: &str| open(f).and_then(|ds| ds.find_pin_drawing()).map(|p| crate::pin_lines(&p.pins).replace('\n', ", "));
+        let want = [
+            ("sn74hc14.pdf", "1 1A, 2 1Y, 3 2A, 4 2Y, 5 3A, 6 3Y, 7 GND, 8 4Y, 9 4A, 10 5Y, 11 5A, 12 6Y, 13 6A, 14 VCC"),
+            ("lm393.pdf", "1 1OUT, 2 1IN-, 3 1IN+, 4 GND, 5 2IN+, 6 2IN-, 7 2OUT, 8 VCC"),
+            ("lm317l.pdf", "1 INPUT, 2 OUTPUT, 3 OUTPUT, 4 ADJUSTMENT, 5 NC, 6 OUTPUT, 7 OUTPUT, 8 NC"),
+            ("tmux1101.pdf", "1 D, 2 S, 3 GND, 4 SEL, 5 VDD"),
+            ("ref5025-ep.pdf", "1 DNC, 2 VIN, 3 TEMP, 4 GND, 5 TRIM/NR, 6 VOUT, 7 NC, 8 DNC"),
+            ("ada4522-1_4522-2_4522-4.pdf", "1 NIC, 2 -IN, 3 +IN, 4 V-, 5 NIC, 6 OUT, 7 V+, 8 NIC"),
+        ];
+        for (f, w) in want {
+            if open(f).is_some() {
+                assert_eq!(lines(f).as_deref(), Some(w), "{f}");
+            }
+        }
+    }
+
     /// TI's pin tables: under "Pin Functions", below a header that spans the columns, above the page's foot; not the pin drawing above
     /// it, which reads as a table with its two sides mixed up (skipped without the files).
     #[test]
@@ -456,6 +495,7 @@ mod real_pins {
         for f in ["sn74hc14.pdf", "lm393.pdf", "AO3400A_ds.pdf", "NDT3055L-D.pdf", "lm317l.pdf", "tmux1101.pdf", "ref5025-ep.pdf", "cd74hc4017.pdf", "ada4522-1_4522-2_4522-4.pdf"] {
             let Ok(ds) = crate::Datasheet::open_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter").join(f)) else { continue };
             let p = ds.find_pin_table();
+            eprintln!("{f}: drawing {:?}", ds.find_pin_drawing().map(|p| (p.page + 1, crate::pin_lines(&p.pins).replace('\n', ", "))));
             eprintln!("{f}: names {:?} pkg {:?} pins {:?} dims {:?}", ds.name_candidates().first(), ds.package_names().iter().take(3).map(|p| (p.name.clone(), p.count)).collect::<Vec<_>>(), p.map(|p| (p.page + 1, p.pins)), ds.dimension_table().map(|t| (t.page + 1, t.rows.len())));
         }
     }

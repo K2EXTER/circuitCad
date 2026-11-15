@@ -24,6 +24,8 @@ pub struct PinImport {
     pub area: Rect,
     pub num_col: usize,
     pub name_col: usize,
+    /// Read as a pin drawing, not a table (there are no columns to read again).
+    pub from_drawing: bool,
 }
 
 pub enum Action {
@@ -53,15 +55,31 @@ pub struct TablePanel {
     guessed: bool,
     /// The pins as lines; a person may edit them before they go in.
     pub text: String,
+    /// The same area read as a pin drawing (numbers with names beside them: `datasheet::pin_diagram`), when it gives a drawing; and
+    /// whether that is what is used.
+    drawing: Option<String>,
+    pub as_drawing: bool,
 }
 
 impl TablePanel {
     pub fn new(page: usize, area: Rect, table: Table) -> Self {
         let guess = datasheet::guess_columns(&table);
         let (num_col, name_col) = guess.unwrap_or((0, 1.min(table.columns.saturating_sub(1))));
-        let mut p = TablePanel { page, area, table, num_col, name_col, guessed: guess.is_some(), text: String::new() };
+        let mut p = TablePanel { page, area, table, num_col, name_col, guessed: guess.is_some(), text: String::new(), drawing: None, as_drawing: false };
         p.recompute();
         p
+    }
+
+    /// The pins of the area read as a pin drawing. When the table does not give pins that run 1, 2, 3 … and the drawing does, the
+    /// drawing is used.
+    pub fn with_drawing(mut self, pins: Option<Vec<(String, String)>>) -> Self {
+        self.drawing = pins.map(|p| datasheet::pin_lines(&p));
+        let table_ok = datasheet::draft::plausible_pins(&parse_pin_lines(&self.text));
+        if !table_ok && let Some(d) = &self.drawing {
+            self.text = d.clone();
+            self.as_drawing = true;
+        }
+        self
     }
 
     /// The columns in use: (number, name).
@@ -95,12 +113,33 @@ impl TablePanel {
             }
             return action;
         }
-        ui.small(i18n::trf!("p.{} の表を読みました ({} 行 × {} 列)", self.page + 1, self.table.cells.len(), self.table.columns));
-        if !self.guessed {
+        if let Some(d) = self.drawing.clone() {
+            ui.horizontal(|ui| {
+                let (was, mut now) = (self.as_drawing, self.as_drawing);
+                ui.selectable_value(&mut now, false, i18n::tr("表として読む")).on_hover_text(i18n::tr("囲んだ所を、行と列の表として読みます"));
+                ui.selectable_value(&mut now, true, i18n::tr("ピン配置の図として読む")).on_hover_text(i18n::tr("囲んだ所を、パッケージの図として読みます。ピン番号のすぐ横 (か上下) にある名前を、その番号の名前にします。番号が 1 から抜けなく並ぶ図だけを読みます"));
+                if now != was {
+                    self.as_drawing = now;
+                    if now {
+                        self.text = d.clone();
+                    } else {
+                        self.recompute();
+                    }
+                }
+            });
+        }
+        if self.as_drawing {
+            ui.small(i18n::trf!("p.{} のピン配置の図を読みました。番号の横の名前です", self.page + 1));
+        } else {
+            ui.small(i18n::trf!("p.{} の表を読みました ({} 行 × {} 列)", self.page + 1, self.table.cells.len(), self.table.columns));
+        }
+        if self.as_drawing {
+        } else if !self.guessed {
             ui.colored_label(egui::Color32::from_rgb(230, 160, 60), i18n::tr("ピン番号の列が見つかりませんでした。下で、番号の列と名前の列を選んでください"));
         }
         let labels: Vec<String> = (0..self.table.columns).map(|c| self.column_label(c)).collect();
         let (mut num, mut name) = (self.num_col, self.name_col);
+        if !self.as_drawing {
         egui::Grid::new("pin_import_cols").num_columns(2).show(ui, |ui| {
             let choices = [
                 ("番号の列", &mut num, "ピン番号 (1, 2, 3 …) が並んでいる列。パッケージごとに列があるときは、使うパッケージの列を選びます。番号と名前が1つのセルにあるときは、名前の列にも同じ列を選びます"),
@@ -117,6 +156,7 @@ impl TablePanel {
                 ui.end_row();
             }
         });
+        }
         let changed = (num, name) != (self.num_col, self.name_col);
         (self.num_col, self.name_col) = (num, name);
         if changed {
@@ -147,7 +187,7 @@ impl TablePanel {
             if ui.add_enabled(ok, egui::Button::new(i18n::tr("ピン表のあとに足す"))).on_hover_text(i18n::tr("いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします")).clicked() {
                 action = Action::Apply(PinMode::Append);
             }
-            if ui.add_enabled(ok, egui::Button::new(i18n::tr("この表と比べるだけ"))).on_hover_text(i18n::tr("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します")).clicked() {
+            if ui.add_enabled(ok && !self.as_drawing, egui::Button::new(i18n::tr("この表と比べるだけ"))).on_disabled_hover_text(i18n::tr("図から読んだピンは、あとで読み直して比べることができません。比べるときは表を囲んでください")).on_hover_text(i18n::tr("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します")).clicked() {
                 action = Action::Apply(PinMode::CheckOnly);
             }
             if ui.button(i18n::tr("やめる")).clicked() {
@@ -224,5 +264,19 @@ mod tests {
     fn an_empty_table_is_not_a_panel_with_pins() {
         let p = TablePanel::new(0, Rect::default(), Table::default());
         assert_eq!(p.lines(), 0);
+    }
+
+    /// A table that gives no pins but a drawing that does: the panel starts on the drawing; switching back reads the table again.
+    #[test]
+    fn a_drawing_is_used_when_the_table_gives_no_pins() {
+        let rows = vec![vec!["Figure".to_string(), "4-1".to_string()]];
+        let drawing = vec![("1".to_string(), "IN".to_string()), ("2".to_string(), "GND".to_string()), ("3".to_string(), "OUT".to_string())];
+        let p = TablePanel::new(0, Rect::default(), Table { cells: rows.clone(), columns: 2 }).with_drawing(Some(drawing.clone()));
+        assert!(p.as_drawing);
+        assert_eq!(p.text, "1 IN\n2 GND\n3 OUT");
+        // a good table stays the table
+        let good = vec![vec!["1".into(), "VCC".into()], vec!["2".into(), "GND".into()], vec!["3".into(), "OUT".into()]];
+        let q = TablePanel::new(0, Rect::default(), Table { cells: good, columns: 2 }).with_drawing(Some(drawing));
+        assert!(!q.as_drawing && q.text.starts_with("1 VCC"));
     }
 }
