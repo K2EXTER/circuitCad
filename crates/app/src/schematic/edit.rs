@@ -62,6 +62,13 @@ impl SchEditor {
         }
     }
 
+    /// Opens the big window of the cut-out drawing (`--drawing-big`, for screenshots).
+    pub fn drawing_big_in_form(&mut self) {
+        if let Some(f) = self.form.as_mut() {
+            f.drawing_big_for_screenshot();
+        }
+    }
+
     /// Reads a graph of the form's data sheet (`--form-graph "page|x=..|y=..|pts=x:y,.."`, for screenshots).
     pub fn graph_in_form_pdf(&mut self, spec: &str) {
         if let Some(f) = self.form.as_mut() {

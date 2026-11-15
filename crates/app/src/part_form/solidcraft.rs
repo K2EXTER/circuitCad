@@ -43,23 +43,39 @@ pub struct Drawing {
     pub size: [usize; 2],
     /// The cut's width in PDF points (1/72 in): the drawing's size as printed, used until two points set the scale.
     pub width_pt: f64,
-    /// Two points on the picture (pixels) and their true distance (mm).
+    /// Two points on the picture (pixels) and their true distance, in inches when `inch` (as the drawing's numbers are written).
     pub a: Option<[f32; 2]>,
     pub b: Option<[f32; 2]>,
-    pub dist_mm: f64,
+    pub dist: f64,
+    pub inch: bool,
+    /// The big window (`drawing_pick.rs`): open, its zoom and pan, and the point being dragged (0 = a, 1 = b).
+    pub big: bool,
+    pub zoom: f32,
+    pub pan: egui::Vec2,
+    pub dragging: Option<u8>,
     tex: Option<egui::TextureHandle>,
 }
 
 impl Drawing {
     pub fn new(view: View, page: usize, rgba: Vec<u8>, size: [usize; 2], width_pt: f64) -> Drawing {
-        Drawing { view, page, rgba, size, width_pt, a: None, b: None, dist_mm: 0.0, tex: None }
+        Drawing { view, page, rgba, size, width_pt, a: None, b: None, dist: 0.0, inch: false, big: false, zoom: 1.0, pan: egui::Vec2::ZERO, dragging: None, tex: None }
+    }
+
+    /// The distance between the two points in millimetres.
+    pub fn dist_mm(&self) -> f64 {
+        if self.inch { self.dist * 25.4 } else { self.dist }
     }
 
     /// Millimetres per pixel, when two points and their distance are set.
     fn calibrated(&self) -> Option<f64> {
         let (a, b) = (self.a?, self.b?);
         let px = f64::from(((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt());
-        (px > 2.0 && self.dist_mm > 0.0).then(|| self.dist_mm / px)
+        (px > 2.0 && self.dist > 0.0).then(|| self.dist_mm() / px)
+    }
+
+    /// The picture as a texture (made once).
+    pub fn texture(&mut self, ctx: &egui::Context) -> egui::TextureHandle {
+        self.tex.get_or_insert_with(|| ctx.load_texture(format!("sc_drawing_{:?}", self.view), egui::ColorImage::from_rgba_unmultiplied(self.size, &self.rgba), egui::TextureOptions::LINEAR)).clone()
     }
 
     /// The picture's width in millimetres: from the two points, else as printed (data sheet drawings are rarely printed 1:1).
@@ -171,13 +187,21 @@ impl PartForm {
             self.sc_drawings.retain(|x| x.view != view);
             self.sc_drawings.push(d);
             self.sc_drawings.sort_by_key(|x| x.view == View::Side);
-            self.sc_msg = Some(Ok(i18n::trf!("「{}」を切り出しました。図の中の寸法線の両端を 2 回クリックし、その長さ (mm) を入れると縮尺が合います", i18n::tr(view.label()))));
+            self.sc_msg = Some(Ok(i18n::trf!("「{}」を切り出しました。図の中の寸法線の両端を 2 回クリックし、その長さ (mm かインチ) を入れると縮尺が合います。小さくて選びにくいときは「大きく開く」", i18n::tr(view.label()))));
         }
     }
 
     /// Takes a drawing cut out just now (`--form-drawing`, before the first frame).
     pub fn take_drawing_now(&mut self) {
         self.take_pdf_drawing();
+    }
+
+    /// Opens the big window of the first drawing with two points and a length in inches (`--drawing-big`, for screenshots).
+    pub fn drawing_big_for_screenshot(&mut self) {
+        if let Some(d) = self.sc_drawings.first_mut() {
+            let (w, h) = (d.size[0] as f32, d.size[1] as f32);
+            (d.a, d.b, d.dist, d.inch, d.big, d.zoom) = (Some([w * 0.3, h * 0.4]), Some([w * 0.6, h * 0.4]), 0.264, true, true, 1.5);
+        }
     }
 
     /// Writes the drawings and the script into the part's folder, makes the design with SolidCraft's command line and opens it.
@@ -241,10 +265,13 @@ impl PartForm {
                         remove = Some(k);
                     }
                 });
-                drawing_calibrate_ui(ui, d);
+                super::drawing_pick::calibrate_ui(ui, d);
             }
             if let Some(k) = remove {
                 self.sc_drawings.remove(k);
+            }
+            for d in &mut self.sc_drawings {
+                super::drawing_pick::big_window(ui.ctx(), d);
             }
             ui.checkbox(&mut self.sc_starter, i18n::trf!("たたき台に本体の箱を入れる ({:.2} × {:.2} × 高さ {:.2} mm)", self.body_w, self.body_h, self.height))
                 .on_hover_text(i18n::tr("「① 基本」「④ 部品の形」に入れた本体の幅・奥行き・高さで、半透明の箱を置きます。下絵と大きさを見比べたり、そのまま形を作り始めたりできます"));
@@ -274,39 +301,6 @@ impl PartForm {
         });
         self.solidcraft_poll(ui.ctx());
     }
-}
-
-/// The cut-out picture, small, where two clicks set the scale.
-fn drawing_calibrate_ui(ui: &mut egui::Ui, d: &mut Drawing) {
-    let tex = d.tex.get_or_insert_with(|| ui.ctx().load_texture(format!("sc_drawing_{:?}", d.view), egui::ColorImage::from_rgba_unmultiplied(d.size, &d.rgba), egui::TextureOptions::LINEAR)).clone();
-    let shown = (ui.available_width().min(320.0)) / d.size[0] as f32;
-    let size = egui::vec2(d.size[0] as f32, d.size[1] as f32) * shown;
-    let resp = ui.add(egui::Image::new((tex.id(), size)).sense(egui::Sense::click())).on_hover_text(i18n::tr("寸法の分かる線 (寸法線の両端の矢印など) の、片方の端をクリックし、もう片方の端をクリックします。3 回目のクリックでやり直します"));
-    let to_screen = |p: [f32; 2]| resp.rect.min + egui::vec2(p[0], p[1]) * shown;
-    if resp.clicked()
-        && let Some(pos) = resp.interact_pointer_pos()
-    {
-        let p = (pos - resp.rect.min) / shown;
-        let p = [p.x, p.y];
-        match (d.a, d.b) {
-            (Some(_), None) => d.b = Some(p),
-            _ => {
-                d.a = Some(p);
-                d.b = None;
-            }
-        }
-    }
-    let red = egui::Color32::from_rgb(230, 40, 40);
-    for p in [d.a, d.b].into_iter().flatten() {
-        ui.painter().circle_stroke(to_screen(p), 4.0, egui::Stroke::new(1.5, red));
-    }
-    if let (Some(a), Some(b)) = (d.a, d.b) {
-        ui.painter().line_segment([to_screen(a), to_screen(b)], egui::Stroke::new(1.5, red));
-    }
-    ui.horizontal(|ui| {
-        ui.label(i18n::tr("2 点の間の長さ"));
-        ui.add_enabled(d.b.is_some(), egui::DragValue::new(&mut d.dist_mm).range(0.0..=500.0).speed(0.05).suffix(" mm")).on_hover_text(i18n::tr("クリックした 2 点の、本当の長さ (図の寸法の数字)。これで図の縮尺が決まります"));
-    });
 }
 
 #[cfg(test)]
@@ -382,8 +376,11 @@ mod tests {
         // 50 pixels are 5 mm: the 200-pixel picture is 20 mm wide
         d.a = Some([10.0, 10.0]);
         d.b = Some([60.0, 10.0]);
-        d.dist_mm = 5.0;
+        d.dist = 5.0;
         assert!((d.width_mm() - 20.0).abs() < 1e-9);
+        // the same line written in inches: 0.2 in = 5.08 mm
+        (d.dist, d.inch) = (0.2, true);
+        assert!((d.dist_mm() - 5.08).abs() < 1e-12 && (d.width_mm() - 20.32).abs() < 1e-9);
         assert!(d.png().unwrap().starts_with(&[0x89, b'P', b'N', b'G']));
     }
 }

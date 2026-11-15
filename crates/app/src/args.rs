@@ -79,6 +79,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             app.sch.drawing_in_form_pdf(view, spec);
         }
     }
+    // --drawing-big: the big window of the cut-out drawing, with two points and a length in inches (for screenshots)
+    if args.iter().any(|a| a == "--drawing-big") {
+        app.sch.drawing_big_in_form();
+    }
     if let Some(i) = args.iter().position(|a| a == "--form-table")
         && let Some(t) = args.get(i + 1) {
             app.sch.table_in_form_pdf(t);

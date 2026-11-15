@@ -449,6 +449,7 @@ mod preview;
 mod tabs;
 mod step3d;
 mod solidcraft;
+mod drawing_pick;
 mod template;
 mod trial;
 #[cfg(test)]
