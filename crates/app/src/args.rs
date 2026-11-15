@@ -539,6 +539,11 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--3d-cpu") {
             app.board_ed.view3d_use_gpu(false);
         }
+        // --3d-look clay|color and --3d-ao 0|1: how the GPU picture looks (for screenshots)
+        let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str);
+        if val("--3d-look").is_some() || val("--3d-ao").is_some() {
+            app.board_ed.view3d_look(val("--3d-look") == Some("clay"), val("--3d-ao") != Some("0"));
+        }
         // --3d-net <net>: light that net's copper in the 3D view (for screenshots)
         if let Some(i) = args.iter().position(|a| a == "--3d-net")
             && let Some(n) = args.get(i + 1) {

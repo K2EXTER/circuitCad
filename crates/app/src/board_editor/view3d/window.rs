@@ -94,6 +94,11 @@ impl BoardEditor {
                 ui.checkbox(&mut v.spin, i18n::tr("自動回転")).on_hover_text(i18n::tr("ゆっくり回して、いろいろな向きから見せます"));
                 if gpu::ready() {
                     ui.checkbox(&mut v.use_gpu, i18n::tr("GPU で描く")).on_hover_text(i18n::tr("グラフィックス (GPU) で描きます。部品の形が細かくても軽く回せます。表示がおかしいときは外すと、これまでの描き方 (CPU) に戻ります"));
+                    if v.use_gpu {
+                        ui.selectable_value(&mut v.look, gpu::Look::Color, i18n::tr("色")).on_hover_text(i18n::tr("基板の絵と部品の色で描きます"));
+                        ui.selectable_value(&mut v.look, gpu::Look::Clay, i18n::tr("白")).on_hover_text(i18n::tr("基板も部品も白で描きます。形と凹凸が見やすく、熱の色を重ねるときの土台になります (ケースの高さを超えた部品の赤と、ネットの強調は残ります)"));
+                        ui.checkbox(&mut v.ao, i18n::tr("陰 (AO)")).on_hover_text(i18n::tr("面と面が寄り合う所・部品の根元・凹んだ所を暗くします (アンビエントオクルージョン)。立体の重なりが分かりやすくなります"));
+                    }
                 }
                 if ui.button(i18n::tr("更新")).on_hover_text(i18n::tr("基板エディタで変更した内容を反映します")).clicked() {
                     stale = true;
@@ -202,7 +207,7 @@ impl BoardEditor {
                     v.gpu_geometry = Some(std::sync::Arc::new(gpu::Geometry::build(scene, v.generation)));
                 }
                 if let Some(g) = &v.gpu_geometry {
-                    let frame = gpu::Frame { geometry: g.clone(), cam, rect: resp.rect, ppp: ui.ctx().pixels_per_point(), show_parts: v.show_parts, hover: v.hover, selected };
+                    let frame = gpu::Frame { geometry: g.clone(), cam, rect: resp.rect, ppp: ui.ctx().pixels_per_point(), show_parts: v.show_parts, hover: v.hover, selected, look: v.look, ao: v.ao };
                     painter.add(eframe::egui_wgpu::Callback::new_paint_callback(resp.rect, gpu::Paint(frame)));
                 }
                 v.cache = None;

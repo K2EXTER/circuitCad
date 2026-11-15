@@ -73,6 +73,9 @@ pub(super) struct View3d {
     case_d: f64,
     /// Draw on the GPU when it is there (the switch in the window; off = the software picture).
     use_gpu: bool,
+    /// How the GPU paints the faces, and whether it darkens creases and corners (ambient occlusion).
+    look: gpu::Look,
+    ao: bool,
     /// The scene as GPU vertex data, kept while the scene and what shows in it stay the same.
     gpu_geometry: Option<std::sync::Arc<gpu::Geometry>>,
 }
@@ -99,7 +102,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true }
     }
 }
 
@@ -113,6 +116,12 @@ impl BoardEditor {
     /// Draws the 3D view on the GPU (when there is one) or with the software picture (`--3d-cpu`).
     pub fn view3d_use_gpu(&mut self, on: bool) {
         self.view3d.use_gpu = on;
+    }
+
+    /// The GPU's look: white (`--3d-look clay`) or the colours, and the ambient occlusion on or off (`--3d-ao 0`).
+    pub fn view3d_look(&mut self, clay: bool, ao: bool) {
+        self.view3d.look = if clay { gpu::Look::Clay } else { gpu::Look::Color };
+        self.view3d.ao = ao;
     }
 
     /// Picks the net to light in the 3D view (`--3d-net`, for screenshots).

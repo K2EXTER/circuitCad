@@ -6,13 +6,20 @@
 //! The camera is the software one (`Cam`): the same view-space rotation, and the clip coordinates written so that the GPU's perspective
 //! divide gives exactly `Cam::project`'s screen point. Lighting is `scene::light` on the face's view-space normal; the board's faces are
 //! the board pictures, unlit. The part under the pointer is found on the CPU (`pick`): the pointer's ray against the parts' triangles.
+//!
+//! Looks (`Look`): the colours as the software picture, or white ("clay", every face a light grey except the parts over the case height and
+//! the highlighted net). Ambient occlusion (`ao`): the scene pass also writes each pixel's normal; an AO pass looks round every window pixel
+//! within `AO_RADIUS` mm (16 directions over the hemisphere of its normal, turned by a hash of the pixel) and darkens it as much as other
+//! surfaces stand in front of those points (screen-space AO from the depth image); the last pass blurs it over 5 × 5 pixels of about the same
+//! depth (so it does not bleed over edges) and multiplies the colour by it.
 
 use super::*;
 use eframe::egui_wgpu;
 use eframe::wgpu;
 use std::sync::Arc;
 
-/// The off-screen picture is this many times the window's pixels in each direction (smooth edges after shrinking).
+/// The off-screen picture is this many times the window's pixels in each direction (smooth edges after shrinking). The AO shader takes 2 as
+/// written (`fs_ao`).
 const SS: u32 = 2;
 const BACKGROUND: [u8; 3] = [34, 38, 46];
 
@@ -48,12 +55,12 @@ fn push_vtx(out: &mut Vec<u8>, v: &Vtx) {
     out.extend_from_slice(&v.tex.to_le_bytes());
 }
 
-/// A line's end: position and colour.
-fn push_line_vtx(out: &mut Vec<u8>, p: [f32; 3], c: [u8; 3]) {
+/// A line's end: position and colour; `alpha` 254 marks a part's face edge (grey in the white look), 255 a case line.
+fn push_line_vtx(out: &mut Vec<u8>, p: [f32; 3], c: [u8; 3], alpha: u8) {
     for f in &p {
         out.extend_from_slice(&f.to_le_bytes());
     }
-    out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+    out.extend_from_slice(&[c[0], c[1], c[2], alpha]);
 }
 const LINE_BYTES: u64 = 16;
 
@@ -148,8 +155,12 @@ impl Geometry {
         // the lines: the case height rings and the case box
         let mut lines = vec![];
         let line = |out: &mut Vec<u8>, a: [f64; 3], b: [f64; 3], c: [u8; 3]| {
-            push_line_vtx(out, f3(a), c);
-            push_line_vtx(out, f3(b), c);
+            push_line_vtx(out, f3(a), c, 255);
+            push_line_vtx(out, f3(b), c, 255);
+        };
+        let edge = |out: &mut Vec<u8>, a: [f64; 3], b: [f64; 3], c: [u8; 3]| {
+            push_line_vtx(out, f3(a), c, 254);
+            push_line_vtx(out, f3(b), c, 254);
         };
         for (side, ring) in scene.rings.iter().enumerate() {
             if let Some(l) = ring {
@@ -174,16 +185,23 @@ impl Geometry {
         let board_lines = count(&lines, LINE_BYTES);
         // the parts: guessed solids (with a thin dark edge round every face) and makers' meshes; a part over the case height is red
         let red = [225, 50, 40];
+        let warn = |mut v: Vtx, on: bool| {
+            if on {
+                v.tex = 4;
+            }
+            v
+        };
         for b in &scene.boxes {
             let too_tall = scene.over.get(b.part).is_some_and(|o| *o > 1e-6);
             let color = if too_tall { red } else { b.color };
             for (corners, normal) in solid_faces(b) {
                 for i in 1..corners.len().saturating_sub(1) {
-                    tri(&mut tris, [flat(corners[0], normal, color, b.part as u32), flat(corners[i], normal, color, b.part as u32), flat(corners[i + 1], normal, color, b.part as u32)]);
+                    let v = |p: [f64; 3]| warn(flat(p, normal, color, b.part as u32), too_tall);
+                    tri(&mut tris, [v(corners[0]), v(corners[i]), v(corners[i + 1])]);
                 }
                 let dark = shade3(b.color, 0.4);
                 for i in 0..corners.len() {
-                    line(&mut lines, corners[i], corners[(i + 1) % corners.len()], dark);
+                    edge(&mut lines, corners[i], corners[(i + 1) % corners.len()], dark);
                 }
             }
         }
@@ -195,13 +213,24 @@ impl Geometry {
                 let Some(normal) = face_normal(a, b, d) else { continue };
                 let base = m.mesh.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
                 let color = if too_tall { red } else { base };
-                tri(&mut tris, [flat(a, normal, color, m.part as u32), flat(b, normal, color, m.part as u32), flat(d, normal, color, m.part as u32)]);
+                let vv = |p: [f64; 3]| warn(flat(p, normal, color, m.part as u32), too_tall);
+                tri(&mut tris, [vv(a), vv(b), vv(d)]);
             }
         }
         let pic = |i: usize| (scene.pv.frame.w as u32, scene.pv.frame.h as u32, Arc::new(scene.img[i].iter().flatten().copied().collect::<Vec<u8>>()));
         let (verts, line_verts) = (count(&tris, VTX_BYTES), count(&lines, LINE_BYTES));
         Geometry { key: (scene.serial, generation), tris, board_verts, verts, lines, board_lines, line_verts, pics: [pic(0), pic(1)] }
     }
+}
+
+/// How the faces are painted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub(super) enum Look {
+    /// The board pictures and the parts' colours, as the software picture.
+    #[default]
+    Color,
+    /// Every face white (light grey), to see the shapes; with ambient occlusion it reads like a clay model.
+    Clay,
 }
 
 /// What one frame of the window asks the GPU for.
@@ -214,7 +243,13 @@ pub(super) struct Frame {
     pub show_parts: bool,
     pub hover: Option<usize>,
     pub selected: Option<usize>,
+    pub look: Look,
+    /// Darken the creases and corners (ambient occlusion).
+    pub ao: bool,
 }
+
+/// How far (mm) round each point the ambient occlusion looks for surfaces in front.
+const AO_RADIUS: f32 = 2.0;
 
 /// The camera as the shader takes it: the rotation rows, the centre and distance, how view space maps to clip space, the depth range and
 /// the parts to mark.
@@ -244,12 +279,15 @@ fn camera_uniform(f: &Frame) -> Vec<u8> {
     for v in [near, far] {
         out.extend_from_slice(&v.to_le_bytes());
     }
-    for v in [f.hover.map_or(NO_PART, |h| h as u32), f.selected.map_or(NO_PART, |s| s as u32)] {
+    for v in [f.hover.map_or(NO_PART, |h| h as u32), f.selected.map_or(NO_PART, |s| s as u32), (f.look == Look::Clay) as u32, f.ao as u32] {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+    for v in [AO_RADIUS, 0.0, 0.0, 0.0] {
         out.extend_from_slice(&v.to_le_bytes());
     }
     out
 }
-const CAMERA_BYTES: u64 = 3 * 16 + 16 + 16 + 16;
+const CAMERA_BYTES: u64 = 3 * 16 + 16 + 16 + 16 + 16 + 16;
 
 const SHADER: &str = r#"
 struct Camera {
@@ -257,6 +295,7 @@ struct Camera {
     center_dist: vec4<f32>,
     proj: vec4<f32>,
     near: f32, far: f32, hover: u32, selected: u32,
+    clay: u32, ao: u32, ao_radius: f32, _pad: f32,
 };
 @group(0) @binding(0) var<uniform> cam: Camera;
 @group(1) @binding(0) var top_pic: texture_2d<f32>;
@@ -299,30 +338,40 @@ fn vs_face(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @locatio
 struct Targets {
     @location(0) color: vec4<f32>,
     @location(1) part: u32,
+    @location(2) normal: vec4<f32>,
 };
 
 @fragment
 fn fs_face(i: FaceOut) -> Targets {
     var o: Targets;
     o.part = i.part;
-    if (normalize(i.normal).z <= 1e-4) { discard; }
-    if (i.tex == 1u) {
+    let n = normalize(i.normal);
+    if (n.z <= 1e-4) { discard; }
+    o.normal = vec4<f32>(n * 0.5 + vec3<f32>(0.5), 1.0);
+    // white: the board and the parts light grey, lit; the highlighted net and the parts over the case height keep their colours
+    var base = i.color.rgb;
+    var lit = true;
+    if (cam.clay == 1u) {
+        if (i.tex == 1u || i.tex == 2u) { base = vec3<f32>(0.80); }
+        else if (i.tex == 0u) { base = vec3<f32>(0.93); }
+        if (i.tex == 3u) { lit = false; }
+    } else if (i.tex == 1u) {
         o.color = vec4<f32>(textureSample(top_pic, pic_sampler, i.uv).rgb, 1.0);
         return o;
-    }
-    if (i.tex == 2u) {
+    } else if (i.tex == 2u) {
         o.color = vec4<f32>(textureSample(bottom_pic, pic_sampler, i.uv).rgb, 1.0);
         return o;
+    } else if (i.tex == 3u) {
+        lit = false;
     }
-    if (i.tex == 3u) {
-        o.color = i.color;
+    if (!lit) {
+        o.color = vec4<f32>(base, 1.0);
         return o;
     }
     // lit from above-left of the viewer, as scene::light; a face turned away from the viewer is not drawn (as the software picture)
-    let n = normalize(i.normal);
     let l = vec3<f32>(-0.35, 0.45, 0.82);
     let k = clamp(0.45 + 0.6 * max(dot(n, l), 0.0), 0.0, 1.3);
-    var c = min(i.color.rgb * k, vec3<f32>(1.0));
+    var c = min(base * k, vec3<f32>(1.0));
     if (i.part == cam.hover && cam.hover != 0xffffffffu) {
         c = min(c + vec3<f32>(50.0, 50.0, 30.0) / 255.0, vec3<f32>(1.0));
     }
@@ -348,17 +397,107 @@ fn vs_line(@location(0) pos: vec3<f32>, @location(1) color: vec4<f32>) -> LineOu
 @fragment
 fn fs_line(i: LineOut) -> Targets {
     var o: Targets;
-    o.color = i.color;
+    o.color = vec4<f32>(i.color.rgb, 1.0);
+    // white: the parts' face edges (alpha below 1) are left out (the shading and the occlusion show the shape); the case lines stay
+    if (cam.clay == 1u && i.color.a < 0.999) { discard; }
     o.part = 0xffffffffu;
+    o.normal = vec4<f32>(0.5, 0.5, 1.0, 1.0);
     return o;
 }
 "#;
 
+const AO: &str = r#"
+struct Camera {
+    r0: vec4<f32>, r1: vec4<f32>, r2: vec4<f32>,
+    center_dist: vec4<f32>,
+    proj: vec4<f32>,
+    near: f32, far: f32, hover: u32, selected: u32,
+    clay: u32, ao: u32, ao_radius: f32, _pad: f32,
+};
+@group(0) @binding(0) var<uniform> cam: Camera;
+@group(1) @binding(0) var depth_img: texture_depth_2d;
+@group(1) @binding(1) var normal_img: texture_2d<f32>;
+
+@vertex
+fn vs_full(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+    let x = f32((i << 1u) & 2u) * 2.0 - 1.0;
+    let y = f32(i & 2u) * 2.0 - 1.0;
+    return vec4<f32>(x, y, 0.0, 1.0);
+}
+
+// the view-space point of a texel of the scene pictures, from its depth
+fn view_at(t: vec2<i32>, size: vec2<f32>) -> vec4<f32> {
+    let d = textureLoad(depth_img, t, 0);
+    if (d >= 1.0) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
+    let w = cam.near * cam.far / (cam.far - d * (cam.far - cam.near));
+    let ndc = vec2<f32>((f32(t.x) + 0.5) / size.x * 2.0 - 1.0, 1.0 - (f32(t.y) + 0.5) / size.y * 2.0);
+    return vec4<f32>((ndc.x - cam.proj.z) * w / cam.proj.x, (ndc.y - cam.proj.w) * w / cam.proj.y, cam.center_dist.w - w, 1.0);
+}
+
+fn hash(p: vec2<f32>) -> f32 {
+    return fract(sin(dot(p, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+}
+
+@fragment
+fn fs_ao(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
+    let size = vec2<f32>(textureDimensions(depth_img));
+    let out_px = vec2<i32>(floor(frag.xy));
+    // the scene pictures are SS (2) times the window: the middle of this pixel's block of texels
+    let ss = 2;
+    let t = out_px * ss + vec2<i32>(ss / 2);
+    let p = view_at(t, size);
+    if (p.w == 0.0) { return vec4<f32>(1.0); }
+    let n = normalize(textureLoad(normal_img, t, 0).xyz * 2.0 - vec3<f32>(1.0));
+    // a frame round the normal, turned by a hash of the pixel so the samples differ from pixel to pixel (the blur evens them out)
+    let a = hash(frag.xy) * 6.2831853;
+    var tangent = normalize(cross(n, select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), abs(n.x) > 0.8)));
+    let b0 = cross(n, tangent);
+    tangent = cos(a) * tangent + sin(a) * b0;
+    let bitangent = cross(n, tangent);
+    var occluded = 0.0;
+    let count = 16;
+    for (var k = 0; k < count; k++) {
+        // a spiral over the hemisphere, nearer the point first
+        let fk = f32(k) + 0.5;
+        let up = 1.0 - fk / f32(count);
+        let r = sqrt(1.0 - up * up);
+        let phi = fk * 2.39996323;
+        let dir = tangent * (r * cos(phi)) + bitangent * (r * sin(phi)) + n * max(up, 0.15);
+        let scale = mix(0.25, 1.0, (fk / f32(count)) * (fk / f32(count)));
+        let s = p.xyz + dir * cam.ao_radius * scale;
+        let w = cam.center_dist.w - s.z;
+        if (w <= cam.near) { continue; }
+        let ndc = vec2<f32>(s.x * cam.proj.x / w + cam.proj.z, s.y * cam.proj.y / w + cam.proj.w);
+        let tt = vec2<i32>(floor(vec2<f32>((ndc.x + 1.0) * 0.5 * size.x, (1.0 - ndc.y) * 0.5 * size.y)));
+        if (tt.x < 0 || tt.y < 0 || tt.x >= i32(size.x) || tt.y >= i32(size.y)) { continue; }
+        let q = view_at(tt, size);
+        if (q.w == 0.0) { continue; }
+        // a surface in front of the sample point, near enough to count
+        let range = smoothstep(0.0, 1.0, cam.ao_radius / max(abs(p.z - q.z), 1e-4));
+        if (q.z >= s.z + 0.02) { occluded += range; }
+    }
+    let ao = clamp(1.0 - occluded / f32(count) * 1.8, 0.0, 1.0);
+    return vec4<f32>(ao, ao, ao, 1.0);
+}
+"#;
+
 const COMPOSITE: &str = r#"
-struct Comp { ss: u32, hover: u32, selected: u32, _pad: u32, origin: vec2<f32>, _pad2: vec2<f32> };
+struct Comp { ss: u32, hover: u32, selected: u32, ao: u32, origin: vec2<f32>, near: f32, far: f32 };
 @group(0) @binding(0) var color_img: texture_2d<f32>;
 @group(0) @binding(1) var part_img: texture_2d<u32>;
 @group(0) @binding(2) var<uniform> comp: Comp;
+@group(0) @binding(3) var ao_img: texture_2d<f32>;
+@group(0) @binding(4) var depth_img: texture_depth_2d;
+
+// the distance from the eye at a window pixel (the middle of its block of scene texels); 0 for the background
+fn eye_dist(px: vec2<i32>) -> f32 {
+    let ss = i32(comp.ss);
+    let size = vec2<i32>(textureDimensions(depth_img));
+    let t = clamp(px * ss + vec2<i32>(ss / 2), vec2<i32>(0), size - vec2<i32>(1));
+    let d = textureLoad(depth_img, t, 0);
+    if (d >= 1.0) { return 0.0; }
+    return comp.near * comp.far / (comp.far - d * (comp.far - comp.near));
+}
 
 @vertex
 fn vs_full(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -384,6 +523,26 @@ fn fs_full(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
         }
     }
     var c = sum / f32(ss * ss);
+    if (comp.ao == 1u) {
+        // the occlusion blurred over 5 x 5 pixels of about the same distance from the eye (so it does not bleed over an edge)
+        let w0 = eye_dist(px);
+        if (w0 > 0.0) {
+            let size = vec2<i32>(textureDimensions(ao_img));
+            var total = 0.0;
+            var weight = 0.0;
+            for (var dy = -2; dy <= 2; dy++) {
+                for (var dx = -2; dx <= 2; dx++) {
+                    let q = clamp(px + vec2<i32>(dx, dy), vec2<i32>(0), size - vec2<i32>(1));
+                    let w = eye_dist(q);
+                    if (w > 0.0 && abs(w - w0) < 0.01 * w0) {
+                        total += textureLoad(ao_img, q, 0).r;
+                        weight += 1.0;
+                    }
+                }
+            }
+            if (weight > 0.0) { c = c * (total / weight); }
+        }
+    }
     // an outline just outside the selected part (cyan) and the part under the pointer (yellow), two pixels wide
     let centre = px * ss + vec2<i32>(ss / 2);
     let own = part_at(centre);
@@ -404,12 +563,15 @@ fn fs_full(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
 }
 "#;
 
-/// Off-screen pictures of one size.
+/// Off-screen pictures of one size (the scene's at `SS` times the window, the occlusion's at the window's).
 struct Targets {
     size: [u32; 2],
     depth: wgpu::TextureView,
     color: wgpu::TextureView,
     part: wgpu::TextureView,
+    normal: wgpu::TextureView,
+    ao: wgpu::TextureView,
+    ao_bind: wgpu::BindGroup,
     comp_bind: wgpu::BindGroup,
 }
 
@@ -429,8 +591,10 @@ struct Uploaded {
 pub(crate) struct Resources {
     face_pipe: wgpu::RenderPipeline,
     line_pipe: wgpu::RenderPipeline,
+    ao_pipe: wgpu::RenderPipeline,
     comp_pipe: wgpu::RenderPipeline,
     pic_layout: wgpu::BindGroupLayout,
+    ao_layout: wgpu::BindGroupLayout,
     comp_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     cam_buf: wgpu::Buffer,
@@ -443,6 +607,8 @@ pub(crate) struct Resources {
 const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const PART_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+const AO_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
 
 /// Makes the pipelines and hands them to egui-wgpu; called once when the window is made with wgpu. `msaa` is the sample count of egui's
 /// own drawing (the last pass draws into it).
@@ -450,6 +616,7 @@ pub(crate) fn init(rs: &egui_wgpu::RenderState, msaa: u32) {
     let device = &rs.device;
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("view3d"), source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
     let comp_module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("view3d_composite"), source: wgpu::ShaderSource::Wgsl(COMPOSITE.into()) });
+    let ao_module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("view3d_ao"), source: wgpu::ShaderSource::Wgsl(AO.into()) });
     let uniform_entry = |binding: u32, vis: wgpu::ShaderStages| wgpu::BindGroupLayoutEntry { binding, visibility: vis, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None };
     let cam_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("view3d_cam"), entries: &[uniform_entry(0, wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT)] });
     let tex_entry = |binding: u32, sample: wgpu::TextureSampleType| wgpu::BindGroupLayoutEntry {
@@ -468,13 +635,25 @@ pub(crate) fn init(rs: &egui_wgpu::RenderState, msaa: u32) {
     });
     let comp_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("view3d_comp"),
-        entries: &[tex_entry(0, wgpu::TextureSampleType::Float { filterable: false }), tex_entry(1, wgpu::TextureSampleType::Uint), uniform_entry(2, wgpu::ShaderStages::FRAGMENT)],
+        entries: &[
+            tex_entry(0, wgpu::TextureSampleType::Float { filterable: false }),
+            tex_entry(1, wgpu::TextureSampleType::Uint),
+            uniform_entry(2, wgpu::ShaderStages::FRAGMENT),
+            tex_entry(3, wgpu::TextureSampleType::Float { filterable: false }),
+            tex_entry(4, wgpu::TextureSampleType::Depth),
+        ],
+    });
+    let ao_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("view3d_ao"),
+        entries: &[tex_entry(0, wgpu::TextureSampleType::Depth), tex_entry(1, wgpu::TextureSampleType::Float { filterable: false })],
     });
     let scene_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("view3d_scene"), bind_group_layouts: &[Some(&cam_layout), Some(&pic_layout)], immediate_size: 0 });
     let comp_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("view3d_comp"), bind_group_layouts: &[Some(&comp_layout)], immediate_size: 0 });
+    let ao_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("view3d_ao"), bind_group_layouts: &[Some(&cam_layout), Some(&ao_layout)], immediate_size: 0 });
     let targets = [
         Some(wgpu::ColorTargetState { format: COLOR_FORMAT, blend: None, write_mask: wgpu::ColorWrites::ALL }),
         Some(wgpu::ColorTargetState { format: PART_FORMAT, blend: None, write_mask: wgpu::ColorWrites::ALL }),
+        Some(wgpu::ColorTargetState { format: NORMAL_FORMAT, blend: None, write_mask: wgpu::ColorWrites::ALL }),
     ];
     let depth = Some(wgpu::DepthStencilState { format: DEPTH_FORMAT, depth_write_enabled: Some(true), depth_compare: Some(wgpu::CompareFunction::LessEqual), stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() });
     let scene_pipe = |label: &str, vs: &str, fs: &str, layout: wgpu::VertexBufferLayout, topology: wgpu::PrimitiveTopology| {
@@ -504,6 +683,17 @@ pub(crate) fn init(rs: &egui_wgpu::RenderState, msaa: u32) {
         wgpu::VertexBufferLayout { array_stride: LINE_BYTES, step_mode: wgpu::VertexStepMode::Vertex, attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm8x4] },
         wgpu::PrimitiveTopology::LineList,
     );
+    let ao_pipe = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("view3d_ao"),
+        layout: Some(&ao_pl),
+        vertex: wgpu::VertexState { module: &ao_module, entry_point: Some("vs_full"), buffers: &[], compilation_options: Default::default() },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState { module: &ao_module, entry_point: Some("fs_ao"), targets: &[Some(wgpu::ColorTargetState { format: AO_FORMAT, blend: None, write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+        multiview_mask: None,
+        cache: None,
+    });
     let comp_pipe = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("view3d_composite"),
         layout: Some(&comp_pl),
@@ -519,7 +709,7 @@ pub(crate) fn init(rs: &egui_wgpu::RenderState, msaa: u32) {
     let cam_bind = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("view3d_cam"), layout: &cam_layout, entries: &[wgpu::BindGroupEntry { binding: 0, resource: cam_buf.as_entire_binding() }] });
     let comp_buf = device.create_buffer(&wgpu::BufferDescriptor { label: Some("view3d_comp"), size: 32, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("view3d_pics"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, ..Default::default() });
-    rs.renderer.write().callback_resources.insert(Resources { face_pipe, line_pipe, comp_pipe, pic_layout, comp_layout, sampler, cam_buf, cam_bind, comp_buf, targets: None, scene: None });
+    rs.renderer.write().callback_resources.insert(Resources { face_pipe, line_pipe, ao_pipe, comp_pipe, pic_layout, ao_layout, comp_layout, sampler, cam_buf, cam_bind, comp_buf, targets: None, scene: None });
     READY.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -577,7 +767,13 @@ impl egui_wgpu::CallbackTrait for Paint {
         }
         let size = [((f.rect.width() * f.ppp).round().max(1.0) as u32) * SS, ((f.rect.height() * f.ppp).round().max(1.0) as u32) * SS];
         if r.targets.as_ref().is_none_or(|t| t.size != size) {
-            let (depth, color, part) = (target(device, size, DEPTH_FORMAT, false), target(device, size, COLOR_FORMAT, true), target(device, size, PART_FORMAT, true));
+            let (depth, color, part, normal) = (target(device, size, DEPTH_FORMAT, true), target(device, size, COLOR_FORMAT, true), target(device, size, PART_FORMAT, true), target(device, size, NORMAL_FORMAT, true));
+            let ao = target(device, [size[0] / SS, size[1] / SS], AO_FORMAT, true);
+            let ao_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("view3d_ao"),
+                layout: &r.ao_layout,
+                entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) }, wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&normal) }],
+            });
             let comp_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("view3d_comp"),
                 layout: &r.comp_layout,
@@ -585,16 +781,18 @@ impl egui_wgpu::CallbackTrait for Paint {
                     wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&color) },
                     wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&part) },
                     wgpu::BindGroupEntry { binding: 2, resource: r.comp_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&ao) },
+                    wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::TextureView(&depth) },
                 ],
             });
-            r.targets = Some(Targets { size, depth, color, part, comp_bind });
+            r.targets = Some(Targets { size, depth, color, part, normal, ao, ao_bind, comp_bind });
         }
         queue.write_buffer(&r.cam_buf, 0, &camera_uniform(f));
         let mut comp = vec![];
-        for v in [SS, f.hover.map_or(NO_PART, |h| h as u32), f.selected.map_or(NO_PART, |s| s as u32), 0] {
+        for v in [SS, f.hover.map_or(NO_PART, |h| h as u32), f.selected.map_or(NO_PART, |s| s as u32), f.ao as u32] {
             comp.extend_from_slice(&v.to_le_bytes());
         }
-        for v in [(f.rect.min.x * f.ppp).round(), (f.rect.min.y * f.ppp).round(), 0.0, 0.0] {
+        for v in [(f.rect.min.x * f.ppp).round(), (f.rect.min.y * f.ppp).round(), f.cam.dist * 0.05, f.cam.dist * 4.0] {
             comp.extend_from_slice(&v.to_le_bytes());
         }
         queue.write_buffer(&r.comp_buf, 0, &comp);
@@ -605,6 +803,7 @@ impl egui_wgpu::CallbackTrait for Paint {
             color_attachments: &[
                 Some(wgpu::RenderPassColorAttachment { view: &t.color, resolve_target: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: bg[0], g: bg[1], b: bg[2], a: 1.0 }), store: wgpu::StoreOp::Store }, depth_slice: None }),
                 Some(wgpu::RenderPassColorAttachment { view: &t.part, resolve_target: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: f64::from(NO_PART), g: 0.0, b: 0.0, a: 0.0 }), store: wgpu::StoreOp::Store }, depth_slice: None }),
+                Some(wgpu::RenderPassColorAttachment { view: &t.normal, resolve_target: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 }), store: wgpu::StoreOp::Store }, depth_slice: None }),
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment { view: &t.depth, depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }), stencil_ops: None }),
             occlusion_query_set: None,
@@ -622,6 +821,20 @@ impl egui_wgpu::CallbackTrait for Paint {
             pass.draw(0..if f.show_parts { s.line_verts } else { s.board_lines }, 0..1);
         }
         drop(pass);
+        if f.ao {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("view3d_ao"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &t.ao, resolve_target: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::WHITE), store: wgpu::StoreOp::Store }, depth_slice: None })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&r.ao_pipe);
+            pass.set_bind_group(0, &r.cam_bind, &[]);
+            pass.set_bind_group(1, &t.ao_bind, &[]);
+            pass.draw(0..3, 0..1);
+        }
         vec![]
     }
 
