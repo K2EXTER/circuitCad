@@ -1,7 +1,7 @@
 //! The "差動ペア" panel: pick two nets, route them side by side, even out their lengths.
 
 use super::*;
-use pcb_core::diffpair::{match_pairs, pair_report, suggest_pairs, tune_length, DiffPair};
+use pcb_core::diffpair::{match_pairs, pair_report_with, suggest_pairs, tune_length, DiffPair};
 
 impl BoardEditor {
     pub(super) fn panel_pairs(&mut self, ui: &mut egui::Ui) {
@@ -61,8 +61,10 @@ impl BoardEditor {
                     }
                 });
             }
+            let conn = (!self.board.diff_pairs.is_empty()).then(|| self.cached_connectivity());
             for d in &self.board.diff_pairs {
-                let r = pair_report(&self.board, d);
+                let Some(conn) = conn.as_deref() else { break };
+                let r = pair_report_with(&self.board, conn, d);
                 if r.len_p == 0.0 && r.len_n == 0.0 {
                     continue;
                 }

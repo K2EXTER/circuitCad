@@ -52,16 +52,17 @@ impl BoardEditor {
         }
     }
 
-    /// Work out which net the pointer is on (Select tool, no drag going on).
+    /// Work out which net the pointer is on (Select tool, and the Track tool before a track is started; no drag going on).
     pub(super) fn update_net_focus(&mut self, resp: &egui::Response, rect: Rect) {
         self.hover_net = None;
-        if self.tool != Tool::Select || self.alt_pan || self.boxsel.is_some() || self.gdrag.is_some() || resp.dragged() {
+        let track_idle = self.tool == Tool::Track && self.pending.is_none() && !self.trunk_mode;
+        if !(self.tool == Tool::Select || track_idle) || self.alt_pan || self.boxsel.is_some() || self.gdrag.is_some() || resp.dragged() {
             return;
         }
         let Some(pos) = resp.hover_pos() else { return };
         let net = self.net_under(self.to_world(rect, pos));
         // the window is opened from the right-click menu; while it is open a click on copper of another net switches it, a click on nothing closes it
-        if self.net_win.is_some() && resp.clicked_by(egui::PointerButton::Primary) {
+        if self.tool == Tool::Select && self.net_win.is_some() && resp.clicked_by(egui::PointerButton::Primary) {
             self.net_win = net.clone();
         }
         self.hover_net = net.map(|n| (n, pos));

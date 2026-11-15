@@ -3649,3 +3649,31 @@ fn smd_pad_tool_uses_its_own_size_and_shape() {
     e.click(p(8.0, 5.0));
     assert_eq!(e.board.pads.last().unwrap().shape, PadShape::Oval { w: 0.6, h: 1.5 });
 }
+
+/// The net under the pointer glows in the Select tool and in the Track tool before a track is started (not while one is drawn).
+#[test]
+fn hover_glow_in_select_and_track_tools() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut sch = crate::schematic::SchEditor::default();
+    sch.load_path(root.join("mixed_signal.schjson"));
+    let mut e = BoardEditor::default();
+    e.import_from_schematic(&sch);
+    e.board.set_rect_outline(0.0, 0.0, 80.0, 60.0);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(screen);
+    let ctx = egui::Context::default();
+    let pad = e.board.pads.iter().find(|p| !p.net.is_empty()).unwrap().clone();
+    let p = e.to_screen(screen, pad.pos);
+    let mut hover = |e: &mut BoardEditor| {
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events: vec![egui::Event::PointerMoved(p)], ..Default::default() }, |ui| e.canvas(ui));
+            out.textures_delta.clear();
+        }
+        e.hover_net.as_ref().map(|(n, _)| n.clone())
+    };
+    assert_eq!(hover(&mut e), Some(pad.net.clone()), "select tool");
+    e.tool = Tool::Track;
+    assert_eq!(hover(&mut e), Some(pad.net.clone()), "track tool, nothing started");
+    e.pending = Some(pad.pos);
+    assert_eq!(hover(&mut e), None, "track tool, a track being drawn");
+}

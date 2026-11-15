@@ -6,8 +6,10 @@ use pcb_core::meander::{self, MeanderStyle};
 
 impl BoardEditor {
     pub(super) fn panel_lengths(&mut self, ui: &mut egui::Ui) {
-        let nets: Vec<(String, f64)> = self.board_nets().into_iter().map(|n| (n.clone(), meander::length_of(&self.board, &n))).filter(|(_, l)| *l > 0.0).collect();
         egui::CollapsingHeader::new(i18n::trf!("長さ合わせ (蛇行) ({}) (?)", self.meander_nets.len())).id_salt("meander").default_open(false).show(ui, |ui| {
+            // one connectivity for all the nets (it is cached while the board does not change), and only while the section is open
+            let lens = meander::lengths(&self.board, &self.cached_connectivity());
+            let nets: Vec<(String, f64)> = self.board_nets().into_iter().filter_map(|n| lens.get(&n).copied().filter(|l| *l > 0.0).map(|l| (n, l))).collect();
             if nets.is_empty() {
                 ui.small(i18n::tr("配線されたネットがありません"));
                 return;

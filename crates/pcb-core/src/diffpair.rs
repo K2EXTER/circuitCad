@@ -95,7 +95,11 @@ fn parallel(a: Point, b: Point, c: Point, d: Point) -> bool {
 }
 
 pub fn pair_report(board: &Board, pair: &DiffPair) -> PairReport {
-    let conn = connectivity(board);
+    pair_report_with(board, &connectivity(board), pair)
+}
+
+/// [`pair_report`] from a connectivity already worked out (the panel shows every pair each frame).
+pub fn pair_report_with(board: &Board, conn: &crate::drc::Connectivity, pair: &DiffPair) -> PairReport {
     let of = |net: &str| -> Vec<&Track> { board.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some(net)).map(|(_, t)| t).collect() };
     let (tp, tn) = (of(&pair.p), of(&pair.n));
     let vias = |net: &str| (0..board.vias.len()).filter(|&i| conn.via_net(i) == Some(net)).count();

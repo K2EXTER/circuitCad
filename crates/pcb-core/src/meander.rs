@@ -49,6 +49,17 @@ pub fn length_of(board: &Board, net: &str) -> f64 {
     board.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some(net)).map(|(_, t)| seg_len(t)).sum()
 }
 
+/// The routed length of every net with tracks, from one connectivity (a panel that lists many nets every frame).
+pub fn lengths(board: &Board, conn: &crate::drc::Connectivity) -> std::collections::HashMap<String, f64> {
+    let mut out = std::collections::HashMap::new();
+    for (i, t) in board.tracks.iter().enumerate() {
+        if let Some(n) = conn.track_net(i) {
+            *out.entry(n.to_string()).or_insert(0.0) += seg_len(t);
+        }
+    }
+    out
+}
+
 fn poly_len(pts: &[Point]) -> f64 {
     pts.windows(2).map(|w| w[0].dist(w[1])).sum()
 }
