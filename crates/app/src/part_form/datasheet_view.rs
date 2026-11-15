@@ -156,6 +156,10 @@ struct Opened {
     picked: Option<Picked>,
     /// The pin table is being cut out: drag a rectangle over it.
     selecting: bool,
+    /// An outline drawing is being cut out (for SolidCraft): drag a rectangle over it.
+    cut_view: Option<super::solidcraft::View>,
+    /// The drawing cut out, for the form to take.
+    drawing_out: Option<super::solidcraft::Drawing>,
     drag_from: Option<egui::Pos2>,
     /// The pins read from the rectangle, being checked.
     panel: Option<TablePanel>,
@@ -216,6 +220,8 @@ impl SheetView {
                     target: None,
                     picked: None,
                     selecting: false,
+                    cut_view: None,
+                    drawing_out: None,
                     drag_from: None,
                     panel: None,
                     pins_out: None,
@@ -313,6 +319,30 @@ impl SheetView {
     /// The points the person sent to the form since the last call.
     pub fn take_graph(&mut self) -> Option<GraphOut> {
         self.doc.as_mut().and_then(|d| d.graph.as_mut()).and_then(|g| g.take_out())
+    }
+
+    /// The form asks for an outline drawing to be cut out (for SolidCraft): the window comes forward and waits for a rectangle.
+    pub fn start_drawing_cut(&mut self, view: super::solidcraft::View) {
+        if let Some(d) = self.doc.as_mut() {
+            d.cut_view = Some(view);
+            d.selecting = false;
+            d.target = None;
+            self.open = true;
+        }
+    }
+
+    /// Cuts the drawing in `area` (points) of `page` (from 0) as if it had been dragged round (`--form-drawing`, for screenshots).
+    pub fn cut_drawing_at(&mut self, view: super::solidcraft::View, page: usize, area: Rect) {
+        if let Some(d) = self.doc.as_mut() {
+            d.page = page;
+            d.drawing_out = cut_drawing(&d.ds, page, area, view);
+            self.open = true;
+        }
+    }
+
+    /// The drawing cut out since the last call.
+    pub fn take_drawing(&mut self) -> Option<super::solidcraft::Drawing> {
+        self.doc.as_mut().and_then(|d| d.drawing_out.take())
     }
 
     /// The form asks for the pin table to be cut out: the window comes forward and waits for a rectangle.
@@ -495,9 +525,10 @@ impl Opened {
         if std::mem::take(&mut self.fit) {
             self.zoom = ((ui.available_width() - 24.0) / pw).clamp(ZOOM_MIN, ZOOM_MAX);
         }
-        if (self.target.is_some() || self.selecting || self.graph.as_ref().is_some_and(|g| g.mode.is_some())) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        if (self.target.is_some() || self.selecting || self.cut_view.is_some() || self.graph.as_ref().is_some_and(|g| g.mode.is_some())) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.target = None;
             self.selecting = false;
+            self.cut_view = None;
             if let Some(g) = self.graph.as_mut() {
                 g.mode = None;
             }
@@ -531,6 +562,14 @@ impl Opened {
                 ui.colored_label(crate::theme::INFO, t.ask());
                 if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("選ぶのをやめます (Esc キーでも)")).clicked() {
                     self.target = None;
+                }
+            });
+        }
+        if let Some(view) = self.cut_view {
+            ui.horizontal(|ui| {
+                ui.colored_label(crate::theme::INFO, i18n::trf!("外形図の「{}」を、下のページでドラッグして囲んでください (寸法の数字と線が入るように)", i18n::tr(view.label())));
+                if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("囲むのをやめます (Esc キーでも)")).clicked() {
+                    self.cut_view = None;
                 }
             });
         }
@@ -582,7 +621,7 @@ impl Opened {
             }
         }
         let Some(tex_id) = self.texture.as_ref().map(|t| t.handle.id()) else { return };
-        let sense = if self.selecting { egui::Sense::click_and_drag() } else { egui::Sense::click() };
+        let sense = if self.selecting || self.cut_view.is_some() { egui::Sense::click_and_drag() } else { egui::Sense::click() };
         let page_size = (w, h);
         let resp = ui.add(egui::Image::new((tex_id, size)).sense(sense));
         let origin = resp.rect.min;
@@ -599,8 +638,8 @@ impl Opened {
                 }
             }
         }
-        // cutting out the pin table: a rectangle is dragged over it
-        if self.selecting {
+        // cutting out the pin table or an outline drawing: a rectangle is dragged over it
+        if self.selecting || self.cut_view.is_some() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
             if resp.drag_started() {
                 // where the button went down, not where the pointer is when egui notices the drag
@@ -615,8 +654,12 @@ impl Opened {
                     // a click or a speck is not a table
                     if b.x - a.x > 20.0 && b.y - a.y > 10.0 {
                         let area = Rect { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
-                        self.panel = Some(TablePanel::new(self.page, area, self.ds.table_in(self.page, area)));
-                        self.selecting = false;
+                        if let Some(view) = self.cut_view.take() {
+                            self.drawing_out = cut_drawing(&self.ds, self.page, area, view);
+                        } else {
+                            self.panel = Some(TablePanel::new(self.page, area, self.ds.table_in(self.page, area)));
+                            self.selecting = false;
+                        }
                     }
                     self.drag_from = None;
                 }
@@ -814,3 +857,21 @@ impl Opened {
         }
     }
 }
+
+/// The picture of `area` (PDF points) of a page, drawn sharp enough to read the dimensions (about 1600 pixels across, 2 to 6 pixels a point).
+fn cut_drawing(ds: &Datasheet, page: usize, area: Rect, view: super::solidcraft::View) -> Option<super::solidcraft::Drawing> {
+    let (w, h) = (f64::from(area.x1 - area.x0), f64::from(area.y1 - area.y0));
+    let scale = (1600.0 / w.max(h)).clamp(2.0, 6.0) as f32;
+    let img = ds.render(page, scale).ok()?;
+    let (x0, y0) = (((area.x0 * scale).max(0.0) as usize).min(img.width), ((area.y0 * scale).max(0.0) as usize).min(img.height));
+    let (x1, y1) = (((area.x1 * scale) as usize).min(img.width), ((area.y1 * scale) as usize).min(img.height));
+    if x1 <= x0 + 1 || y1 <= y0 + 1 {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity((x1 - x0) * (y1 - y0) * 4);
+    for y in y0..y1 {
+        rgba.extend_from_slice(&img.rgba[(y * img.width + x0) * 4..(y * img.width + x1) * 4]);
+    }
+    Some(super::solidcraft::Drawing::new(view, page, rgba, [x1 - x0, y1 - y0], w))
+}
+

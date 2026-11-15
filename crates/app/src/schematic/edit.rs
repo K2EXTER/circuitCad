@@ -52,6 +52,16 @@ impl SchEditor {
         }
     }
 
+    /// Cuts an outline drawing out of the form's data sheet for SolidCraft (`--form-drawing top|side "page,x0,y0,x1,y1"`, for screenshots).
+    pub fn drawing_in_form_pdf(&mut self, view: &str, spec: &str) {
+        let v: Vec<f32> = spec.split(',').filter_map(|t| t.trim().parse().ok()).collect();
+        let view = if view == "side" { crate::part_form::SolidCraftView::Side } else { crate::part_form::SolidCraftView::Top };
+        if let (Some(f), [p, x0, y0, x1, y1]) = (self.form.as_mut(), v.as_slice()) {
+            f.sheet.cut_drawing_at(view, (*p as usize).saturating_sub(1), datasheet::Rect { x0: *x0, y0: *y0, x1: *x1, y1: *y1 });
+            f.take_drawing_now();
+        }
+    }
+
     /// Reads a graph of the form's data sheet (`--form-graph "page|x=..|y=..|pts=x:y,.."`, for screenshots).
     pub fn graph_in_form_pdf(&mut self, spec: &str) {
         if let Some(f) = self.form.as_mut() {

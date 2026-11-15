@@ -13,6 +13,7 @@
 | よく使う解析(DC・過渡・AC・ノイズ・自己発熱 …)を、外部のソフトなしで動かすこと | HDL・マイコンの命令のシミュレーション(Verilator・Icarus Verilog・simavr)。波形を読み込んで重ねる |
 | 外部のソフトに渡すファイルを作ることと、戻ってきたファイルを読むこと | ASIC 全体(OpenROAD・Magic・KLayout、オープンな PDK) |
 | | 3 次元の電磁界の解析(アンテナ・放射・ビアやコネクタの細かいモデル) |
+| | 部品の 3D の形を作る CAD(押し出し・回転・面取り・ブーリアン)。SolidCraft など |
 | | 検算(ngspice) |
 
 初学者に「まず○○を入れてください」と言うと、そこで止まる。**よく使う機能は、外部のソフトを入れなくても動くこと**を守る。外部のソフトが要るのは、中級者以上が使う機能と、検算だけにする。
@@ -41,7 +42,8 @@
 | LTspice(回路図 `.asc`) | ファイルを読む | `part-lib/src/ltspice*.rs` |
 | メーカーの SPICE モデル | ファイルを読む(zip の索引も) | `sim-core/src/spice_in.rs`・`spice_flat.rs`、`docs/model-policy.md` |
 | 基板の製造 | ファイルを書く(Gerber・Excellon・BOM・部品の位置) | `pcb-core/src/gerber.rs` ほか |
-| ケースの CAD | ファイルを読み書きする(DXF、STEP の書き出し) | `pcb-core/src/dxf*.rs`・`step.rs` |
+| ケースの CAD | ファイルを読み書きする(DXF、STEP の書き出し) | `pcb-core/src/dxf*.rs`・`step.rs`・`step_out.rs` |
+| SolidCraft(Rust 製のパラメトリック CAD、MIT / Apache-2.0、0.42 で確かめた) | STEP でつなぐ。部品の 3D の形を作る道具として使う(下の「部品の 3D の形」) | 呼び出しのコードは無い。`docs/library.md` の「3D の形を自分で作る」 |
 | データシート(PDF) | 自前で読む(`hayro`) | `crates/datasheet` |
 | AI のエージェント | MCP サーバー(`ccad mcp`) | `crates/cli` |
 
@@ -51,3 +53,15 @@
 - ファーム: ピン定義のヘッダ・devicetree を書く(W1)、照合(W2)、ビルドと書き込み(W4)、命令のシミュレータとの連携(W5)
 - RF: Touchstone の読み書き(R3)
 - 高速デジタル: IBIS を読む(S3)
+
+## 部品の 3D の形(2026-11-15)
+
+メーカーの STEP は再配布できないことが多く、同梱できない。STEP が無い部品の形は、利用者が作れる必要がある。そのための CAD を circuitCad の中に作るのはやめた: 置く・押し出す・回転体までは中くらいで作れるが、ブーリアン(形の足し算・引き算)・後からの角の丸め・拘束は大掛かりで、外にもう良いものがある。代わりに **SolidCraft** と STEP でつなぐ。
+
+- **確かめたこと(2026-11-15、SolidCraft 0.42)**: circuitCad が書いた基板の STEP(`board step`、サンプル `rlc_board`)を SolidCraft の形状カーネル(NVIDIA の SMLib を Rust に移した SolidCore)で読むと、13 個の立体が名前つきで、全部「閉じた立体」、警告なし、基板の体積 1575.5 mm³(40 × 25 × 1.6 mm から穴を引いた値)。逆に SolidCraft の STEP(本物の円柱を含む)を circuitCad の `step::read_step` で読むと、体積の差 0.7 %(円柱を三角形に分けた分)。電解コンデンサの形を SolidCraft で作り、部品作成フォームの「3D の形」で読み込めることも確かめた。
+- **台本で使える**: `solidcraft-cli run 台本.json --out 部品.step` で、コマンドを並べた JSON(`[{"command": "solid.cylinder", "params": {...}}, ...]`)から STEP ができる。MCP(`solidcraft-cli mcp`)をつなげば画面を見ながら作れるが、無くても AI がデータシートの寸法から台本を書ける。`solidcraft-cli commands` がコマンドと引数の一覧(JSON)、`solidcraft-cli eval --in 部品.step` が立体ごとの体積・閉じているか、`snapshot` が絵。
+- **同梱はしない**: SolidCraft は別の実行ファイルとして使う(決まり 2・3)。無くても circuitCad は困らない(メーカーの STEP を読む、パッドからの推測の箱、のまま)。
+- **部品作成フォームからつなぐ(2026-11-15)**: 「STEP が無いとき: SolidCraft で形を作る」で、データシートの外形図を切り出して縮尺を合わせ、`solidcraft-cli run 台本.json --save part.sc` で下絵(`canvas.insert`。上から見た図は XY、横から見た図は x = +X・y = +Z の面を部品の後ろに立てる。XZ の面は 2 つ目の軸が −Z で絵が逆さになるので使わない)とたたき台の箱の設計を作り、`solidcraft.exe part.sc` で開く。作業フォルダ(一時フォルダの `circuitcad_solidcraft/部品名/`)の `part.step` が書かれたら自動で読み込む。SolidCraft の場所は `SOLIDCRAFT_DIR` → PATH → `C:\Program Files\SolidCraft`。
+- **SolidCraft が無くなったとき(版が若く、先行きは分からない)の備え**: つなぎ目を細く保つ。SolidCraft に特有なのは台本を作る関数 `part_form/solidcraft.rs` の `script` と、2 つの実行ファイルの名前だけ。切り出した図は普通の PNG で、作業フォルダに残るので、FreeCAD や Fusion のキャンバスにもそのまま使える。戻ってくるのは標準の STEP で、どの CAD で作っても同じ読み込み(`step::read_step`)を通る。SolidCraft の独自形式(`.sc`)は circuitCad に保存しない。止まったら、台本の部分だけを別の CAD(FreeCAD の Python マクロなど)に書き換えればよい。
+- 版が若い(本人たちの説明では「簡単な部品なら使える」)。カーネルをライブラリとして組み込む(STEP の書き出しを本当の曲面にする E3b など)のは、単独のクレートとして安定してから考える。
+

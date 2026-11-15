@@ -71,6 +71,14 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if args.iter().any(|a| a == "--sim-settings") {
         app.sch.open_sim_settings();
     }
+    // --form-drawing top|side "page,x0,y0,x1,y1": an outline drawing of the form's PDF cut out for SolidCraft (repeat for the other view)
+    for (i, a) in args.iter().enumerate() {
+        if a == "--form-drawing"
+            && let (Some(view), Some(spec)) = (args.get(i + 1), args.get(i + 2))
+        {
+            app.sch.drawing_in_form_pdf(view, spec);
+        }
+    }
     if let Some(i) = args.iter().position(|a| a == "--form-table")
         && let Some(t) = args.get(i + 1) {
             app.sch.table_in_form_pdf(t);

@@ -359,6 +359,7 @@ impl PartForm {
         self.body_section(ui);
         ui.add_space(6.0);
         self.step3d_ui(ui);
+        self.solidcraft_ui(ui);
     }
 
     /// 1. パッド: the package kind, the built-in footprint or the dimensions, the thermal pad, the extra pads and holes.

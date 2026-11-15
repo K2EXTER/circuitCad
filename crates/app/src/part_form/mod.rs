@@ -255,6 +255,13 @@ pub struct PartForm {
     pub trial_message: Option<trial::Trial>,
     /// The data sheet (PDF) window opened beside the form.
     pub sheet: datasheet_view::SheetView,
+    /// "SolidCraft で形を作る": the outline drawings cut out of the data sheet, whether to add a starting body, the folder of the last
+    /// opening (watched for the exported STEP), when that STEP last changed, and what happened.
+    pub sc_drawings: Vec<solidcraft::Drawing>,
+    pub sc_starter: bool,
+    pub sc_dir: Option<std::path::PathBuf>,
+    pub sc_seen: Option<std::time::SystemTime>,
+    pub sc_msg: Option<Result<String, String>>,
     /// Where the numbers that were clicked in the PDF came from (field, page, text).
     pub sources: Vec<pdf_input::Source>,
     /// What the last click in the PDF did: (worked, message).
@@ -383,6 +390,11 @@ impl Default for PartForm {
             rt_zth_points: String::new(),
             rt_zth: String::new(),
             rt_zth_msg: None,
+            sc_drawings: vec![],
+            sc_starter: true,
+            sc_dir: None,
+            sc_seen: None,
+            sc_msg: None,
             rt_rows: String::new(),
             rt_ripple: String::new(),
             rt_ripple_f: "100k".into(),
@@ -433,12 +445,14 @@ mod thru;
 mod preview;
 mod tabs;
 mod step3d;
+mod solidcraft;
 mod template;
 mod trial;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use step3d::mesh_over_pads;
+pub(crate) use solidcraft::View as SolidCraftView;
 use checklist::*;
 use parse::*;
 
@@ -452,6 +466,7 @@ impl PartForm {
         self.take_pdf_pick();
         self.take_pdf_pins();
         self.take_pdf_graph();
+        self.take_pdf_drawing();
         self.sync_pdf_checks();
         let labels: Vec<String> = FORM_TABS
             .iter()

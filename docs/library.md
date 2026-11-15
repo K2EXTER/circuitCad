@@ -340,3 +340,33 @@ SOT-223 のタブのように、同じ部品の同じピン番号のパッドが
 - 三角形が多すぎるファイルは、1万2千個ほどに間引いて保存します。丸い面は、外形の点で切るだけなので、ドームやフィレットは少数の平らな面になります。
 - 保存した部品を回路図から基板に取り込むと、基板の「3Dで見る」に、この形で出ます。ケースの高さの確認 (「ケースに入る高さ」) にも、この形の高さを使います。
 - ファイルは自分でダウンロードしたものを使い、メーカーの使用条件を確かめてください。組み立てデータ (複数の部品が配置されたもの) や、曲面だけのデータは、うまく読めないことがあります。
+
+### 3D の形を自分で作る (STEP が無い部品)
+**部品作成フォームから SolidCraft を開く**: 「④ 部品の形」の「STEP が無いとき: SolidCraft で形を作る」で、次の順に進めます。
+
+1. 「データシート (PDF) を開く…」で、部品のデータシートを開きます。
+2. 「上から見た図 を切り出す」を押し、データシートの窓で外形図 (Dimensions・Package Outline) の上から見た図を、寸法の数字と線が入るようにドラッグで囲みます。横から見た図も同じように切り出します。
+3. 切り出した図の、寸法の分かる線の両端を 2 回クリックし、その長さ (図の寸法の数字、mm) を入れます。これで図の縮尺が合います。
+4. 「SolidCraft で開く」を押すと、図を下絵 (キャンバス) にし、本体の幅・奥行き・高さの半透明の箱をたたき台に置いた設計で、SolidCraft が開きます。
+5. SolidCraft で形を作り、「ファイル → 書き出し → STEP」で、作業フォルダに `part.step` という名前で保存します。保存すると、フォームに自動で読み込まれます (「作業フォルダを開く」で場所を確かめられます)。
+
+SolidCraft が入っていないときは、入れ方を案内します。切り出した図は作業フォルダに PNG で残るので、ほかの CAD の下絵にも使えます。
+
+メーカーが STEP を配っていない部品は、無料の CAD で形を作って STEP に書き出し、上の「STEP を読み込む…」で付けます。circuitCad では **SolidCraft** (Rust 製のオープンソースの CAD、MIT / Apache-2.0) で確かめました (版 0.42)。
+
+- 画面で作る: 円柱・箱・押し出し・回転・面取りで本体と足を作り、「Export → STEP」で書き出します。単位は mm、基板の面を z = 0 にして、足を下 (−z) に伸ばすと、向きを直さずに済みます。
+- 台本で作る: コマンドを並べた JSON を `solidcraft-cli run 台本.json --out 部品.step` に渡すと STEP ができます。例 (電解コンデンサの形。寸法は一般的な Ø6.3 × 11 mm で、特定の品ではありません):
+
+```json
+[
+  {"command": "solid.cylinder", "params": {"diameter": 6.3, "height": 11, "base": [0, 0, 0.5], "body_name": "can"}},
+  {"command": "solid.chamfer", "params": {"edges": [[3.15, 0, 11.5]], "distance": 0.4, "body": "can"}},
+  {"command": "solid.cylinder", "params": {"diameter": 0.5, "height": 4, "base": [-1.0, 0, -3.5], "body_name": "lead_minus"}},
+  {"command": "solid.cylinder", "params": {"diameter": 0.5, "height": 4, "base": [1.0, 0, -3.5], "body_name": "lead_plus"}},
+  {"command": "appearance.assign", "params": {"bodies": ["can"], "color": "#1f3fa0"}},
+  {"command": "appearance.assign", "params": {"bodies": ["lead_minus", "lead_plus"], "color": "#c8c8c8"}}
+]
+```
+
+- 寸法は、データシートの外形図 (Dimensions / Package Outline) から取ります。足の間隔はフットプリントのピッチに合わせます (上の例は 2.0 mm)。
+- コマンドと引数の一覧は `solidcraft-cli commands`、できた STEP の体積や閉じているかは `solidcraft-cli eval --in 部品.step` で見られます。
