@@ -186,6 +186,17 @@ fn cost(x: &[f64], b: &BjtSpec, vaf: f64) -> f64 {
     if e.is_finite() { e } else { 1e6 }
 }
 
+/// The fit's objective for a model card as written (`.model … NPN(IS=… BF=…)`): how far it is from the readings, as the fit measures it.
+pub(super) fn objective(b: &BjtSpec, text: &str) -> Option<f64> {
+    let m = super::card_params(text, None)?;
+    let l = |k: &str| m.get(k).map(|v| v.log10());
+    let mut x = vec![l("IS")?, l("BF")?, l("ISE")?, *m.get("NE")?, l("IKF")?, l("RB")?, l("RE")?, l("BR")?, l("RC")?];
+    if b.fit_nf {
+        x.push(*m.get("NF")?);
+    }
+    Some(cost(&x, b, *m.get("VAF")?))
+}
+
 pub fn fit(b: &BjtSpec) -> Result<Out, String> {
     if b.hfe_norm.len() < 3 || b.vbe_on.len() < 2 || b.vbe_sat.len() < 2 || b.vce_sat.len() < 2 {
         return Err("点が足りません。hFE の曲線は 3 点以上、VBE・VBE(sat)・VCE(sat) は 2 点以上読んでください".into());

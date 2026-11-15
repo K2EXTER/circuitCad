@@ -113,6 +113,23 @@ pub struct Fitted {
 }
 
 /// Fits the model to the readings.
+/// The values of a `.model` card in `text` (the first, or the one named `name`): `IS=1e-14` → ("IS", 1e-14).
+pub(crate) fn card_params(text: &str, name: Option<&str>) -> Option<std::collections::BTreeMap<String, f64>> {
+    let card = text.lines().map(str::trim).filter(|l| l.starts_with(".model")).find(|l| name.is_none_or(|n| l.split_whitespace().nth(1) == Some(n)))?;
+    let inner = card.split_once('(')?.1.trim_end_matches(')');
+    Some(inner.split_whitespace().filter_map(|kv| kv.split_once('=')).filter_map(|(k, v)| Some((k.to_string(), v.parse().ok()?))).collect())
+}
+
+/// The fit's own objective (the sum it makes as small as it can: how far the model is from the readings) for a model as written, for
+/// the kinds whose fit is a search that may end in a slightly different place on another system (the transistors: `None` for the rest).
+pub fn objective(spec: &Spec, text: &str) -> Option<f64> {
+    match spec {
+        Spec::Bjt(b) => bjt::objective(b, text),
+        Spec::Darlington(d) => darlington::objective(d, text),
+        _ => None,
+    }
+}
+
 pub fn fit(spec: &Spec) -> Result<Fitted, String> {
     let c = spec.common();
     let (text, limits, rows, notes) = match spec {

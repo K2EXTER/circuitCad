@@ -195,6 +195,14 @@ fn cost(x: &[f64], d: &DarlingtonSpec) -> f64 {
     if e.is_finite() { e } else { 1e6 }
 }
 
+/// The fit's objective for a pair as written (its output transistor's card `QP`): how far it is from the readings, as the fit measures it.
+pub(super) fn objective(d: &DarlingtonSpec, text: &str) -> Option<f64> {
+    let m = super::card_params(text, Some("QP"))?;
+    let l = |k: &str| m.get(k).map(|v| v.log10());
+    let x = [l("IS")?, l("BF")?, l("ISE")?, *m.get("NE")?, l("IKF")?, l("RB")?, l("RE")?, l("BR")?, l("RC")?];
+    Some(cost(&x, d))
+}
+
 pub fn fit(d: &DarlingtonSpec) -> Result<Out, String> {
     if d.hfe.len() < 3 || d.vbe_on.len() < 2 || d.vbe_sat.len() < 2 || d.vce_sat.len() < 2 {
         return Err("点が足りません。hFE は 3 点以上、VBE・VBE(sat)・VCE(sat) は 2 点以上読んでください".into());
