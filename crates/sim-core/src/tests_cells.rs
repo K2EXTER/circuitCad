@@ -369,6 +369,67 @@ fn an_output_enable_can_be_active_low() {
     assert!((y(2.0e-6) - 2.5).abs() < 0.1, "disabled (oe high): the output lets go and the divider decides: {}", y(2.0e-6));
 }
 
+/// The enable and disable times (`ten=`, `tdis=`): an output on a divider comes on 50 ns after its enable rises and lets go 20 ns
+/// after it falls; an enable pulse shorter than the enable time never reaches the output.
+#[test]
+fn an_output_comes_on_and_lets_go_after_its_enable_and_disable_times() {
+    let run = |oe: &str| {
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss d oe y", "Y1 buf y 0 vss vcc 60 0.5 0 0 0 ten=50n tdis=20n oe=oe d");
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        c.add(Element::vdc("Vd", n[2], 0, 5.0));
+        pwl_source(&mut c, "Voe", n[3], oe);
+        let top = c.node("top");
+        c.add(Element::vdc("Vtop", top, 0, 5.0));
+        c.add(Element::Resistor { name: "Rup".into(), a: n[4], b: top, r: 10e3 });
+        c.add(Element::Resistor { name: "Rdn".into(), a: n[4], b: 0, r: 10e3 });
+        transient(&c, &TranSettings { tstop: 3e-6, tstep: 20e-9, uic: false }).unwrap()
+    };
+    // enabled from 1 us to 2 us (the enable crosses its threshold at about 1.0005 and 2.0005 us)
+    let r = run("PWL(0 0 1u 0 1.001u 5 2u 5 2.001u 0)");
+    // (a step lands on the moment and the output shows from the next point, as for an output's own delay: at most one step later)
+    let y = |t: f64| at(&r, "V(y)", t);
+    let off_before = |t0: f64, t1: f64, hi: bool| r.time.iter().zip(&r.signal("V(y)").unwrap().values).filter(|(t, _)| **t > t0 && **t < t1).all(|(_, v)| (*v > 4.0) == hi);
+    assert!(off_before(0.5e-6, 1.0504e-6, false), "still let go until 50 ns after the enable");
+    assert!(y(1.0505e-6 + 21e-9) > 4.5, "on one step after: {}", y(1.0505e-6 + 21e-9));
+    assert!(off_before(1.1e-6, 2.0204e-6, true), "on until 20 ns after the enable fell");
+    assert!(y(2.0205e-6 + 21e-9) < 3.0, "let go one step after: {}", y(2.0205e-6 + 21e-9));
+    // a 30 ns enable pulse: shorter than the 50 ns enable time, the output never comes on
+    let short = run("PWL(0 0 1u 0 1.001u 5 1.03u 5 1.031u 0)");
+    assert!(short.signal("V(y)").unwrap().values.iter().all(|v| *v < 3.0), "the short enable was swallowed");
+}
+
+/// A bus that turns round: driver 1 is turned off and driver 2 on at the same moment. When driver 1 lets go more slowly than
+/// driver 2 comes on, the two fight for the difference; when it lets go faster, they do not (the net floats in between).
+#[test]
+fn a_bus_turnaround_fights_when_the_disable_is_slower_than_the_enable() {
+    let run = |tdis: &str, ten: &str| {
+        let mut c = Circuit::new();
+        let n = place(
+            &mut c,
+            "vcc vss e out",
+            &format!("Yn inv en2 0 vss vcc 60 0.5 0 0 0 e
+Y1 buf bus 0 vss vcc 60 0.5 0 0 0 ten={ten} tdis={tdis} oe=e vcc
+Y2 buf bus 0 vss vcc 60 0.5 0 0 0 ten={ten} tdis={tdis} oe=en2 vss
+Y3 buf out 0 vss vcc 60 0.5 0 0 0 bus"),
+        );
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        pwl_source(&mut c, "Ve", n[2], "PWL(0 5 1u 5 1.001u 0)");
+        c.add(Element::Resistor { name: "Rl".into(), a: n[3], b: 0, r: 10e3 });
+        transient(&c, &TranSettings { tstop: 2e-6, tstep: 20e-9, uic: false }).unwrap()
+    };
+    let fight = |r: &TranResult| r.warnings.iter().any(|w| w.contains("違う値を同時に"));
+    let float = |r: &TranResult| r.warnings.iter().any(|w| w.contains("どの出力も出ていません"));
+    let slow_off = run("30n", "10n");
+    assert!(fight(&slow_off) && !float(&slow_off), "{:?}", slow_off.warnings);
+    let fast_off = run("5n", "20n");
+    assert!(!fight(&fast_off) && float(&fast_off), "{:?}", fast_off.warnings);
+    // the bus ends up driven low by driver 2 either way
+    assert!(at(&fast_off, "V(out)", 1.9e-6) < 0.5);
+}
+
 /// Two open-drain outputs and a pull-up: the node is high only when both let go (a wired AND), low when either pulls. The matrix
 /// changes with who is pulling, and the solution follows it.
 #[test]

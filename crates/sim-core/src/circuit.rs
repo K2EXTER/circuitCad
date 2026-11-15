@@ -271,6 +271,10 @@ pub struct CellSupply {
     pub th: f64,
     /// The shortest high or low pulse (seconds) the clock input of a flip-flop or the enable of a latch may have (0 = not checked).
     pub tw: f64,
+    /// How long the output takes to come on after its enable turns it on, and to let go after the enable turns it off (seconds,
+    /// 0 = at once: tPZH / tPZL and tPHZ / tPLZ of the data sheets, one value each).
+    pub ten: f64,
+    pub tdis: f64,
     /// Output enable: the node that lets the output out (`None` = always), whether it enables when it is low, and whether the
     /// output is open-drain (a high output is off).
     pub oe: Option<usize>,

@@ -35,6 +35,8 @@ pub(crate) struct DCell {
     pub tsu: f64,
     pub th: f64,
     pub tw: f64,
+    pub ten: f64,
+    pub tdis: f64,
     /// The output enable node, whether it enables when low, whether the output is open-drain.
     pub oe: Option<usize>,
     pub oe_low: bool,
@@ -67,7 +69,8 @@ pub(crate) struct Dig {
     pub pend_due: Vec<f64>,
     /// Per cell: the number of the latest schedule (an event with another number is out of date: the output changed its mind).
     pub ver: Vec<u64>,
-    /// The events to come: (time bits, order, kind 0 = an output arrives / 1 = a cell reads its inputs, cell, schedule number).
+    /// The events to come: (time bits, order, kind 0 = an output arrives / 1 = a cell reads its inputs / 2 = an output enable
+    /// arrives, cell, schedule number).
     pub heap: std::collections::BinaryHeap<std::cmp::Reverse<(u64, u64, u8, usize, u64)>>,
     pub seq: u64,
     /// The time of the last `dig_update`.
@@ -86,6 +89,11 @@ pub(crate) struct Dig {
     pub en: Vec<bool>,
     /// The cells whose output enable changed in the evaluation that is going on.
     pub pending_en: Vec<usize>,
+    /// Per cell: the enable it is heading for after its enable or disable time, when it gets there, and the number of that
+    /// schedule (like `pend`, `pend_due` and `ver` for the output).
+    pub en_pend: Vec<Option<bool>>,
+    pub en_due: Vec<f64>,
+    pub en_ver: Vec<u64>,
     /// Per node: 0 = fine, 1 = two outputs fight, 2 = no output drives it. And the findings, grouped by node and kind:
     /// (node, kind, count, time of the first).
     pub bus_state: Vec<u8>,
@@ -190,9 +198,32 @@ impl Compiled {
             let lvl = self.oe_level(d, ci);
             d.seen[c.slot0 + c.ins.len()] = lvl;
             let en = lvl != c.oe_low;
-            if en != d.en[ci] {
-                d.en[ci] = en;
-                d.pending_en.push(ci);
+            let delay = if en { c.ten } else { c.tdis };
+            match te {
+                // the enable and disable times: the output comes on or lets go later; an enable that turns back before then
+                // never happens (like the output's own delay)
+                Some(te) if delay > 0.0 && d.done_first[ci] => {
+                    if en == d.en[ci] {
+                        if d.en_pend[ci].take().is_some() {
+                            d.en_ver[ci] += 1;
+                        }
+                    } else if d.en_pend[ci] != Some(en) {
+                        d.en_pend[ci] = Some(en);
+                        d.en_ver[ci] += 1;
+                        d.en_due[ci] = te + delay;
+                        d.seq += 1;
+                        d.heap.push(std::cmp::Reverse(((te + delay).to_bits(), d.seq, 2u8, ci, d.en_ver[ci])));
+                    }
+                }
+                _ => {
+                    if d.en_pend[ci].take().is_some() {
+                        d.en_ver[ci] += 1;
+                    }
+                    if en != d.en[ci] {
+                        d.en[ci] = en;
+                        d.pending_en.push(ci);
+                    }
+                }
             }
         }
         // the data inputs of an edge-triggered flip-flop (timing checks)
@@ -371,7 +402,9 @@ impl Compiled {
             let state = if state == 2 && self.dnets.fanout[node].is_empty() { 0 } else { state };
             if state != d.bus_state[node] {
                 d.bus_state[node] = state;
-                if state != 0 {
+                // a static solution passes through states on its way (every output starts enabled until its enable is read):
+                // only where it settles counts (`note_static_bus`)
+                if state != 0 && te.is_some() {
                     match d.bus.iter_mut().find(|b| b.0 == node && b.1 == state) {
                         Some(b) => b.2 += 1,
                         None => d.bus.push((node, state, 1, te.unwrap_or(0.0))),
@@ -518,6 +551,16 @@ impl Compiled {
         d.queued = w.queued;
     }
 
+    /// The fights and floats a static solution settled in (noted once each; the passing states of the settling are not).
+    fn note_static_bus(d: &mut Dig, t: f64) {
+        for node in 0..d.bus_state.len() {
+            let state = d.bus_state[node];
+            if state != 0 && !d.bus.iter().any(|b| b.0 == node && b.1 == state) {
+                d.bus.push((node, state, 1, t));
+            }
+        }
+    }
+
     /// A clock edge of flip-flop `ci` at `te`: the setup time of its data inputs, and the margin that is left.
     fn timing_edge(&self, d: &mut Dig, ci: usize, te: f64, data: &[usize]) {
         let c = &self.cells[ci];
@@ -564,7 +607,9 @@ impl Compiled {
     /// The time of the next change of an output that sits on an analog node: the transient run lands a step on it.
     pub(crate) fn dig_next_event(&self) -> Option<f64> {
         let d = self.dig.borrow();
-        self.dstat.analog_out_cells.iter().filter(|&&ci| d.pend[ci].is_some()).map(|&ci| d.pend_due[ci]).min_by(|a, b| a.total_cmp(b))
+        let outs = self.dstat.analog_out_cells.iter().filter(|&&ci| d.pend[ci].is_some()).map(|&ci| d.pend_due[ci]);
+        let ens = self.dstat.analog_out_cells.iter().filter(|&&ci| d.en_pend[ci].is_some()).map(|&ci| d.en_due[ci]);
+        outs.chain(ens).min_by(|a, b| a.total_cmp(b))
     }
 
     /// Take the accepted solution `x` (at time `time`; `None` = a static solution: the delays are left out) in: refresh the
@@ -677,6 +722,7 @@ impl Compiled {
         }
         if !timed {
             self.settle(d, &mut w, t, false);
+            Self::note_static_bus(d, t);
         } else {
             let limit = t + 1e-12 * t.abs() + 1e-18;
             while let Some(&std::cmp::Reverse(top)) = d.heap.peek() {
@@ -686,6 +732,7 @@ impl Compiled {
                 }
                 // everything due at this moment: the outputs that arrive, then the cells that read their inputs
                 let mut arrive: Vec<(usize, u64)> = vec![];
+                let mut enable: Vec<(usize, u64)> = vec![];
                 let mut read: Vec<usize> = vec![];
                 while let Some(&std::cmp::Reverse(item)) = d.heap.peek() {
                     if item.0 != top.0 {
@@ -694,6 +741,8 @@ impl Compiled {
                     d.heap.pop();
                     if item.2 == 0 {
                         arrive.push((item.3, item.4));
+                    } else if item.2 == 2 {
+                        enable.push((item.3, item.4));
                     } else {
                         read.push(item.3);
                     }
@@ -706,6 +755,16 @@ impl Compiled {
                         self.apply_out(d, &mut w, ci, q, Some(te), &mut mem_next);
                     }
                 }
+                for (ci, ver) in enable {
+                    if d.en_ver[ci] == ver
+                        && let Some(en) = d.en_pend[ci].take()
+                        && en != d.en[ci]
+                    {
+                        d.en[ci] = en;
+                        d.pending_en.push(ci);
+                    }
+                }
+                self.flush_en(d, &mut w, Some(te), &mut mem_next);
                 for ci in read {
                     if is_memory(self.cells[ci].kind) {
                         w.mem.push(ci);
