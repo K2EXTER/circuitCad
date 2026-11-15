@@ -20,6 +20,12 @@ const CALCS: &[(&str, &str, &[&str], Run)] = &[
         &["vin_V", "vout_V", "current_mA", "theta_ja_C_per_W", "theta_jc_C_per_W", "ambient_C", "tj_max_C"],
         |v| sim_core::heat_design(v[0], v[1], v[2], v[3], v[4], v[5], v[6]),
     ),
+    (
+        "cooling",
+        "from a part's loss: its junction temperature, and the board copper area (joined to its pins) or the heat sink that brings it 20 % under its maximum",
+        &["loss_W", "theta_ja_min_pad_C_per_W", "theta_jc_C_per_W", "ambient_C", "tj_max_C", "copper_um"],
+        |v| sim_core::cooling_design(v[0], v[1], v[2], v[3], v[4], v[5], pcb_core::heat_copper::copper_conductance),
+    ),
     ("fuse", "choosing a fuse", &["normal_mA", "supply_V", "fault_resistance_ohm", "part_max_mA"], |v| sim_core::fuse_design(v[0], v[1], v[2], v[3])),
     ("npn_switch", "base resistor of a transistor switch", &["input_V", "load_mA", "hfe"], |v| sim_core::transistor_switch(v[0], v[1], v[2])),
     ("smoothing", "smoothing capacitor after a rectifier", &["transformer_Vrms", "load_mA", "mains_Hz", "ripple_Vpp"], |v| sim_core::smoothing_cap(v[0], v[1], v[2], v[3])),

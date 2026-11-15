@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+use sim_core::{boost_design, cooling_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -18,7 +18,7 @@ pub(super) const GROUPS: &[(&str, &[&str])] = &[
     ("電源", &["3端子レギュレータ (78xx) まわり", "整流の平滑コンデンサ", "降圧コンバータのコイルとコンデンサ", "昇圧コンバータのコイルとコンデンサ", "ツェナーダイオードで電圧を一定にする", "電池の持ち時間"]),
     ("スイッチ", &["トランジスタのスイッチ (ベース抵抗)", "MOSFET のスイッチ (発熱とゲート抵抗)"]),
     ("アナログ", &["オペアンプの増幅 (抵抗の値)"]),
-    ("熱・保護・基板", &["熱 (温度と放熱板)", "ヒューズの選び方", "基板の配線の太さ (電流から)"]),
+    ("熱・保護・基板", &["熱 (温度と放熱板)", "放熱 (損失から、銅の面積と放熱板)", "ヒューズの選び方", "基板の配線の太さ (電流から)"]),
 ];
 
 pub(super) const CALCS: &[Calc] = &[
@@ -74,6 +74,19 @@ pub(super) const CALCS: &[Calc] = &[
             ("最大接合温度 (℃)", "125", "部品の中の温度の上限。データシートで確認 (78xx は 125 ℃)"),
         ],
         run: |v| heat_design(v[0], v[1], v[2], v[3], v[4], v[5], v[6]),
+    },
+    Calc {
+        title: "放熱 (損失から、銅の面積と放熱板)",
+        about: "部品の損失 (W) から、何もしないときの温度と、目標の温度まで下げるのに要る基板の銅の面積、または放熱板の熱抵抗を見積もります。表面実装の部品 (SOT-223・DPAK など) の放熱の設計に",
+        inputs: &[
+            ("損失 (W)", "1", "部品が熱にする電力。線形の電源なら (入力 − 出力) × 電流、MOSFET なら I² × Rds(on)。自己発熱の表の「電力」も使えます"),
+            ("熱抵抗 θja (℃/W)", "110", "最小のパッド (銅を広げないとき) の、部品の中から空気までの熱抵抗。データシートで確認 (SOT-223 は約 110)"),
+            ("熱抵抗 θjc (℃/W)", "15", "部品の中からケース (タブ) まで。放熱板の計算に使う (データシートで確認)"),
+            ("周囲温度 (℃)", "25", "部品のまわりの空気の温度。箱の中では 40〜50 ℃ で考える"),
+            ("最大接合温度 (℃)", "150", "部品の中の温度の上限。データシートで確認 (多くの半導体は 125〜175 ℃)"),
+            ("銅箔の厚さ (µm)", "35", "基板の銅の厚さ。ふつうは 35 µm (1 oz)、厚銅は 70 µm (2 oz)"),
+        ],
+        run: |v| cooling_design(v[0], v[1], v[2], v[3], v[4], v[5], pcb_core::heat_copper::copper_conductance),
     },
     Calc {
         title: "ヒューズの選び方",

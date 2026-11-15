@@ -296,6 +296,21 @@ fn calc_lists_runs_and_refuses_wrong_arguments() {
 }
 
 #[test]
+fn the_cooling_calculator_inverts_the_board_copper_back_to_its_datasheet_point() {
+    // the copper law is fitted to NDT3055L (SOT-223, 2 oz): 110 K/W on the minimum pad (10.6 mm²), 42 K/W on 1 in² (645 mm²).
+    // Asking for 42 K/W (1 W, 25 C around, goal 0.8 x 77.5 + 5 = 67 C) must give back the 645 - 10.6 = 634.6 mm² beyond the pads.
+    let (a, ok) = run("calc cooling 1 110 15 25 77.5 70\n");
+    assert!(ok, "{a:?}");
+    let area = a[0]["rows"].as_array().unwrap().iter().find(|r| r["label"] == "要る銅の面積").unwrap()["value"].as_str().unwrap().to_string();
+    let mm2: f64 = area.split(' ').next().unwrap().parse().unwrap();
+    assert!((mm2 - 634.6).abs() < 1.5, "{area}");
+    // thinner copper spreads worse: the same goal on 35 µm needs more
+    let (a, _) = run("calc cooling 1 110 15 25 77.5 35\n");
+    let thin = a[0]["rows"].as_array().unwrap().iter().find(|r| r["label"] == "要る銅の面積").unwrap()["value"].as_str().unwrap().to_string();
+    assert!(thin.split(' ').next().unwrap().parse::<f64>().unwrap() > mm2 * 1.5, "{thin}");
+}
+
+#[test]
 fn ac_and_spec_judge_an_rc_filter_against_the_designed_cutoff() {
     let build = "new\nadd V as=V1\nadd R 1.6k as=R1\nadd C 100n as=C1\nvalue V1 \"0 AC 1\"\nnet IN V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\n";
     // 1 / (2 pi 1.6k 100n) = 995 Hz

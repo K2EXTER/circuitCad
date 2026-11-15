@@ -252,6 +252,88 @@ pub fn heat_design(vin: f64, vout: f64, i_ma: f64, theta_ja: f64, theta_jc: f64,
     Ok(o)
 }
 
+/// The largest copper area (mm², beyond the part's own pads) the cooling calculator offers: about what lies within the 20 mm the
+/// board's copper is counted in (`pcb_core::heat_copper::REACH_MM`) on one layer.
+const COPPER_MAX_MM2: f64 = 1600.0;
+/// The area the copper formula was fitted up to (1 in², the last datasheet point of `pcb_core::heat_copper`).
+const COPPER_FITTED_MM2: f64 = 645.0;
+
+/// Cooling from the power a part loses: the junction temperature with nothing added, and what brings it below the goal (20 % under the
+/// maximum, as in [`heat_design`]): the board copper joined to its pins (`copper(area mm², thickness µm)` gives the conductance W/K that
+/// copper adds beside the part's own θ; the app and the CLI pass `pcb_core::heat_copper::copper_conductance`), or a heat sink.
+pub fn cooling_design(p_w: f64, theta_own: f64, theta_jc: f64, t_amb: f64, t_jmax: f64, copper_um: f64, copper: fn(f64, f64) -> f64) -> Result<CalcOut, String> {
+    let (p, theta_own, theta_jc, copper_um) = (pos("損失", p_w)?, pos("熱抵抗 θja", theta_own)?, pos("熱抵抗 θjc", theta_jc)?, pos("銅箔の厚さ", copper_um)?);
+    if t_jmax <= t_amb {
+        return Err(format!("最大接合温度 ({t_jmax} ℃) は周囲温度 ({t_amb} ℃) より高くしてください"));
+    }
+    let tj_bare = t_amb + p * theta_own;
+    let tj_goal = t_jmax - 0.2 * (t_jmax - t_amb);
+    let theta_total = (tj_goal - t_amb) / p;
+    let with = |a: f64| 1.0 / (1.0 / theta_own + copper(a, copper_um));
+    let mut o = CalcOut::default();
+    o.rows = vec![
+        ("損失 P".into(), format!("{p:.2} W")),
+        ("何もしないときの Tj".into(), format!("{tj_bare:.0} ℃ (上限 {t_jmax:.0} ℃)")),
+        ("目標の Tj".into(), format!("{tj_goal:.0} ℃ 以下")),
+        ("全体の熱抵抗の上限".into(), format!("{theta_total:.1} ℃/W")),
+    ];
+    o.steps = vec![
+        format!("何もしないとき: Tj = 周囲 {t_amb} ℃ + P × θja = {t_amb} + {p:.2} × {theta_own} = {tj_bare:.0} ℃"),
+        format!("余裕を見て、Tj を {tj_goal:.0} ℃ (上限の手前 2 割) 以下にしたい。熱抵抗の全体を ({tj_goal:.0} − {t_amb}) ÷ {p:.2} = {theta_total:.1} ℃/W 以下にする"),
+    ];
+    if theta_own <= theta_total {
+        o.rows.push(("判定".into(), "銅を広げなくても、放熱板なしでも使えます".into()));
+    } else {
+        // the copper: the conductance it must add, and the area that gives it (the formula grows with the area: bisection)
+        let g_need = 1.0 / theta_total - 1.0 / theta_own;
+        o.steps.push(format!(
+            "銅で冷やす: 銅は部品の θ と並列の熱の道 (コンダクタンス G)。1 ÷ θ = 1 ÷ θja + G なので、G = 1 ÷ {theta_total:.1} − 1 ÷ {theta_own} = {:.4} W/K が要る",
+            g_need
+        ));
+        if copper(COPPER_MAX_MM2, copper_um) < g_need {
+            o.rows.push(("要る銅の面積".into(), format!("{COPPER_MAX_MM2:.0} mm² でも足りません (放熱板が要ります)")));
+            o.steps.push(format!("ピンにつながる銅を {COPPER_MAX_MM2:.0} mm² (部品のまわり 20 mm 以内、1 層) まで広げても、熱抵抗は {:.1} ℃/W までしか下がらない", with(COPPER_MAX_MM2)));
+        } else {
+            let (mut lo, mut hi) = (0.0, COPPER_MAX_MM2);
+            for _ in 0..60 {
+                let mid = 0.5 * (lo + hi);
+                if copper(mid, copper_um) < g_need { lo = mid } else { hi = mid }
+            }
+            let side = hi.sqrt();
+            o.rows.push(("要る銅の面積".into(), format!("{hi:.0} mm² (約 {side:.0} × {side:.0} mm、パッドのほかに)")));
+            o.steps.push(format!(
+                "その G になる銅の面積は {hi:.0} mm² (銅箔 {copper_um} µm。データシートの曲線に合わせた式 G = k·A^n から逆に解いた)。ピンにつながる銅 (ベタや太い配線) をこれだけ広げる"
+            ));
+            if hi > COPPER_FITTED_MM2 {
+                o.cautions.push(format!("要る銅が {COPPER_FITTED_MM2:.0} mm² (1 平方インチ) を超えました。銅の式は 1 平方インチまでのデータシートの点で作ったので、その先は外挿で、実際はこれより効きにくいことがあります"));
+            }
+        }
+        // the heat sink: junction -> case -> sink (mounting about 1 ℃/W) -> air
+        let theta_cs = 1.0;
+        let theta_sa = theta_total - theta_jc - theta_cs;
+        if theta_sa > 0.0 {
+            o.rows.push(("または、放熱板の熱抵抗".into(), format!("{theta_sa:.1} ℃/W 以下")));
+            o.steps.push(format!("放熱板で冷やす: 接合部 → ケース (θjc {theta_jc}) → 放熱板 (取り付け 約 {theta_cs}) → 空気。放熱板は {theta_total:.1} − {theta_jc} − {theta_cs} = {theta_sa:.1} ℃/W 以下"));
+        } else {
+            o.rows.push(("または、放熱板".into(), "放熱板でも足りません".into()));
+            o.cautions.push(format!("θjc ({theta_jc} ℃/W) と取り付けだけで、全体の上限 {theta_total:.1} ℃/W を使い切ります。損失を減らす (電圧の差を小さくする、部品を分ける) か、θjc の小さい部品にします"));
+        }
+    }
+    // how the temperature falls as the copper grows
+    let areas = [0.0, 100.0, 300.0, COPPER_FITTED_MM2, COPPER_MAX_MM2];
+    let table: Vec<String> = areas.iter().map(|&a| { let th = with(a); format!("{a:.0} mm² → {th:.0} ℃/W・{:.0} ℃", t_amb + p * th) }).collect();
+    o.steps.push(format!("銅の面積と熱抵抗・Tj (放熱板なし): {}", table.join(" / ")));
+    o.cautions.push("銅の効き目は、1 つのデータシート (SOT-223 の曲線) に合わせた目安です。風・まわりの部品・内層で ±数十 % 変わります。大事なときは温度を測って確かめます".into());
+    o.cautions.push("数えるのは、部品のピンにつながった銅で、部品の中心から 20 mm 以内のものです (基板の「シミュレーションに反映」と同じ)。遠くの銅は冷えていて、あまり効きません".into());
+    o.cautions.push("TO-220 のように放熱板に付ける部品は、熱がおもに放熱板へ逃げるので、基板の銅はあまり効きません。表面実装の部品 (SOT-223・DPAK など) で銅が効きます".into());
+    o.faults = vec![
+        "銅がピンにつながっていない (別のネットのベタ・サーマルリリーフの細い足だけ): 熱の道にならず、温度が下がらない".into(),
+        "放熱板の取り付けがゆるい/グリスなし: θcs が大きくなって温度が下がらない".into(),
+        "周囲が高温 (箱の中): 周囲温度の分だけ Tj が上がる。25 ℃ でなく 40〜50 ℃ で見積もる".into(),
+    ];
+    Ok(o)
+}
+
 /// Fuse choice: the standard rating above `i_ma / 0.7`, checked against the supply voltage and the part to protect.
 pub fn fuse_design(i_ma: f64, vsupply: f64, r_fault: f64, part_max_ma: f64) -> Result<CalcOut, String> {
     let (i, v, rf, imax) = (pos("通常の電流", i_ma)? / 1000.0, pos("電源電圧", vsupply)?, pos("ショート時の抵抗", r_fault)?, pos("守る部品の最大電流", part_max_ma)? / 1000.0);
@@ -778,6 +860,28 @@ mod tests {
         assert!(cool.rows.iter().any(|(_, v)| v.contains("放熱板なしで使えます")));
         assert!(heat_design(5.0, 5.0, 100.0, 50.0, 5.0, 25.0, 125.0).is_err());
         assert!(heat_design(12.0, 5.0, 100.0, 50.0, 5.0, 130.0, 125.0).is_err());
+    }
+
+    #[test]
+    fn cooling_design_finds_the_copper_area_and_the_heat_sink_for_a_loss() {
+        // a simple copper law for the test: 0.1 mW/K per mm², whatever the thickness
+        fn linear(a: f64, _t: f64) -> f64 {
+            1e-4 * a
+        }
+        let row = |o: &CalcOut, k: &str| o.rows.iter().find(|(x, _)| x == k).map(|(_, v)| v.clone()).unwrap_or_default();
+        // 1 W on 110 K/W: Tj 135 C; the goal 105 C needs 80 K/W, G = 1/80 - 1/110 = 3.41 mW/K -> 34 mm²; or a sink of 80 - 5 - 1 = 74 K/W
+        let o = cooling_design(1.0, 110.0, 5.0, 25.0, 125.0, 35.0, linear).unwrap();
+        assert!(row(&o, "何もしないときの Tj").starts_with("135"), "{:?}", o.rows);
+        assert!(row(&o, "要る銅の面積").starts_with("34 mm²"), "{:?}", o.rows);
+        assert!(row(&o, "または、放熱板の熱抵抗").starts_with("74.0"), "{:?}", o.rows);
+        // 20 W: 4 K/W, more than 1600 mm² can give (0.16 W/K)
+        let hot = cooling_design(20.0, 110.0, 1.0, 25.0, 125.0, 35.0, linear).unwrap();
+        assert!(row(&hot, "要る銅の面積").contains("足りません"), "{:?}", hot.rows);
+        // 0.5 W: 160 K/W allowed, the part alone is enough
+        let cool = cooling_design(0.5, 110.0, 5.0, 25.0, 125.0, 35.0, linear).unwrap();
+        assert!(row(&cool, "判定").contains("使えます"), "{:?}", cool.rows);
+        assert!(cooling_design(1.0, 110.0, 5.0, 130.0, 125.0, 35.0, linear).is_err());
+        assert!(cooling_design(0.0, 110.0, 5.0, 25.0, 125.0, 35.0, linear).is_err());
     }
 
     #[test]
