@@ -230,6 +230,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         {
             eprintln!("--section {k}: no such section of the analysis tab");
         }
+        // --selfheat: the "自己発熱" result worked out (with `--section selfheat`, for screenshots)
+        if args.iter().any(|a| a == "--selfheat") {
+            app.sch.heat_view = Some(app.sch.run_self_heat());
+        }
         if args.iter().any(|a| a == "--requirements") {
             app.sch.open_requirements();
             if args.iter().any(|a| a == "--dc") {

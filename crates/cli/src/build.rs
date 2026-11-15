@@ -565,7 +565,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         Ok(obj(json!({"ambient_c": temp, "tstop": tstop, "rounds": r.rounds, "parts": rows, "moved_at_s": t_at, "moved": nets, "notes": notes})))
     }
 
-    /// `heat [temp=27] [top=10]`: the DC point with the resistors warmed by their own power (`sim_core::self_heat`): per part the power,
+    /// `heat [temp=27] [top=10]`: the DC point with the resistors, diodes and transistors warmed by their own power (`sim_core::self_heat`): per part the power,
     /// the rise, the temperature and the change of its value, and the nodes that move because of it.
     pub fn heat(&mut self, args: &[String]) -> Res {
         let gate = self.erc_gate()?;
@@ -583,13 +583,13 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let rows: Vec<Value> = parts
             .iter()
             .take(top)
-            .map(|p| json!({"part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6}))
+            .map(|p| json!({"part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6, "junctions": p.junctions, "junction_cold_v": p.junction_v.map(|v| v.0), "junction_warm_v": p.junction_v.map(|v| v.1)}))
             .collect();
         let mut moved: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-12).collect();
         moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
         let nodes: Vec<Value> = moved.iter().take(top).map(|(n, a, b)| json!({"net": n, "cold_v": a, "warm_v": b, "shift_v": b - a})).collect();
         let mut notes = vec![];
-        let hot: Vec<&str> = parts.iter().filter(|p| p.tc1 == 0.0 && p.tc2 == 0.0).map(|p| p.name.as_str()).collect();
+        let hot: Vec<&str> = parts.iter().filter(|p| p.tc1 == 0.0 && p.tc2 == 0.0 && p.junctions == 0).map(|p| p.name.as_str()).collect();
         if !hot.is_empty() {
             notes.push(format!("{} warm up but have no temperature coefficient, so their value does not change (set one: thermal REF tc=PPM): the rise is still real, for the neighbours and the thermal EMF", hot.join(", ")));
         }

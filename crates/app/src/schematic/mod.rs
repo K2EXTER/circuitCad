@@ -293,7 +293,7 @@ pub struct SchEditor {
     focus_section: Option<&'static str>,
     /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
     /// The last self-heating run (the section "自己発熱") and the surrounding temperature typed for it.
-    heat_view: Option<Result<selfheat::HeatView, String>>,
+    pub(crate) heat_view: Option<Result<selfheat::HeatView, String>>,
     heat_ambient: String,
     /// The temperature-over-time block: its last answer and its inputs (parts, seconds, "A:B:K/W" couplings).
     htran: Option<Result<selfheat_tran::HeatTranView, String>>,

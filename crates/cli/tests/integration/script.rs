@@ -2270,6 +2270,29 @@ fn a_makers_series_is_listed_once_and_placed_by_its_value() {
 }
 
 #[test]
+fn a_transistor_without_an_emitter_resistor_draws_more_current_as_it_warms() {
+    // the sample bjt_self_heat: Q1 has its base held by a divider, Q2 has 100 ohm in its emitter; both start at about 5 mA
+    let sample = format!("{}/../../docs/examples/bjt_self_heat.schjson", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}
+heat
+"));
+    assert!(ok, "{a:?}");
+    let h = last(&a, "heat");
+    let part = |r: &str| h["parts"].as_array().unwrap().iter().find(|p| p["part"] == r).unwrap().clone();
+    let ic = |vce: f64, ve: f64| (12.0 - vce - ve) / 330.0;
+    let node = |n: &str, k: &str| h["nodes"].as_array().unwrap().iter().find(|x| x["net"] == n).map_or(0.0, |x| x[k].as_f64().unwrap());
+    let (q1, q2) = (part("Q1"), part("Q2"));
+    let v = |p: &serde_json::Value, k: &str| p[k].as_f64().unwrap();
+    let (q1c, q1w) = (ic(v(&q1, "junction_cold_v"), 0.0), ic(v(&q1, "junction_warm_v"), 0.0));
+    let (q2c, q2w) = (ic(v(&q2, "junction_cold_v"), node("E2", "cold_v")), ic(v(&q2, "junction_warm_v"), node("E2", "warm_v")));
+    assert!((q1c - 5.5e-3).abs() < 0.5e-3 && (q2c - 5.3e-3).abs() < 0.5e-3, "cold {q1c} {q2c}");
+    // the junction at a fixed base voltage: the current more than doubles; with the emitter resistor it moves a few percent
+    assert!(q1w / q1c > 2.0 && q2w / q2c < 1.08 && q2w > q2c, "Q1 {q1c}->{q1w}, Q2 {q2c}->{q2w}");
+    assert!(v(&q1, "rise_k") > 25.0 && (v(&q1, "rise_k") - v(&q1, "theta_k_per_w") * v(&q1, "power_w")).abs() < 1e-3, "{q1}");
+    assert_eq!(q1["junctions"], 1);
+}
+
+#[test]
 fn a_murata_mlcc_loses_capacitance_under_dc_bias_as_its_data_sheet_shows() {
     // GRM188R61C106MA73 (10 µF X5R 16 V 0603): the data sheet's DC bias curve gives -49 % at 4 V, -76 % at 8 V and -89 % at 16 V.
     // With 100 Ω the cutoff 1 / (2π R C) moves up by the same factor.

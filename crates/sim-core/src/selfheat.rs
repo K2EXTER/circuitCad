@@ -1,6 +1,7 @@
-//! Self-heating of resistors. A resistor that carries current warms up by `P · θ` above its surroundings (θ in K/W is the heat
-//! resistance from the resistive element to the air, board copper included), and a resistor with a temperature coefficient
-//! changes its value as it warms, which changes the current and the power: the answer is found by iterating until the
+//! Self-heating of resistors, diodes and transistors. A part that carries current warms up by `P · θ` above its surroundings (θ in
+//! K/W is the heat resistance from the part to the air, board copper included). A resistor with a temperature coefficient changes
+//! its value as it warms, and a diode, LED, bipolar or MOS transistor its model (the rules of `temperature.rs`: a silicon junction
+//! drops about 2 mV less per °C), which changes the current and the power: the answer is found by iterating until the
 //! temperatures stop moving. This is a steady state (DC); the board's own heat spreading is in θ, not simulated.
 
 use crate::circuit::{Circuit, Element};
@@ -9,12 +10,13 @@ use crate::temperature::T_NOM_C;
 use sch_core::{Component, Kind, Schematic};
 use std::collections::BTreeMap;
 
-/// A part that warms itself: the resistors inside it (all share one temperature), its heat resistance and temperature coefficients.
+/// A part that warms itself: the resistors, diodes and transistors inside it (all share one temperature), its heat resistance and
+/// the temperature coefficients of its resistors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Heater {
     /// The part (reference designator).
     pub name: String,
-    /// Names of its resistor elements in the circuit (a library part may hold several).
+    /// Names of its resistor, diode and transistor elements in the circuit (a library part may hold several).
     pub elements: Vec<String>,
     /// Heat resistance from the element to the surroundings (K/W).
     pub theta: f64,
@@ -37,6 +39,10 @@ pub struct HeatedPart {
     pub theta: f64,
     pub tc1: f64,
     pub tc2: f64,
+    /// How many diodes and transistors the part holds (their models follow its temperature).
+    pub junctions: usize,
+    /// For a part with one diode or transistor: the voltage across it (diode a−k, transistor C−E or D−S) cold and warm (V).
+    pub junction_v: Option<(f64, f64)>,
 }
 
 #[derive(Clone, Debug)]
@@ -54,15 +60,17 @@ pub fn default_theta(footprint: &str) -> Option<f64> {
     crate::package_power_limit(footprint).map(|p| 85.0 / p)
 }
 
-/// The parts of a schematic that can heat themselves: every resistor, and library parts that hold resistors. θ comes from the part
-/// (`theta`, or a guess from the package); the temperature coefficient from the part (`tc_ppm`) or from the model (`TC=`).
+/// The parts of a schematic that can heat themselves: every resistor, diode, LED and transistor, and library parts that hold
+/// resistors, diodes or transistors. θ comes from the part (`theta`, or a guess from the package); the temperature coefficient of the
+/// resistors from the part (`tc_ppm`) or from the model (`TC=`).
 ///
 /// `copper` holds, by reference, the conductance (W/K) that the board's copper joined to the part adds beside its own θ
 /// (`pcb_core::heat_copper`, carried over with the board's wiring); empty when there is no board.
 pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit, copper: &BTreeMap<String, f64>) -> Vec<Heater> {
     let mut out = vec![];
     for comp in &sch.components {
-        if !matches!(comp.kind, Kind::Resistor | Kind::Custom) {
+        let resistors = matches!(comp.kind, Kind::Resistor | Kind::Custom);
+        if !resistors && !matches!(comp.kind, Kind::Diode | Kind::Led | Kind::Npn) {
             continue;
         }
         let r = comp.refdes.as_str();
@@ -70,10 +78,12 @@ pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit, copper: &BTree
         let elements: Vec<String> = circuit
             .elements
             .iter()
-            .filter_map(|e| match e {
-                Element::Resistor { name, .. } if name == r || name.starts_with(&prefix) => Some(name.clone()),
-                _ => None,
+            .filter(|e| e.name() == r || e.name().starts_with(&prefix))
+            .filter(|e| match e {
+                Element::Resistor { .. } => resistors,
+                _ => is_junction(e),
             })
+            .map(|e| e.name().to_string())
             .collect();
         if elements.is_empty() {
             continue;
@@ -103,6 +113,10 @@ pub fn part_theta(comp: &Component, copper: &BTreeMap<String, f64>) -> f64 {
     }
 }
 
+fn is_junction(e: &Element) -> bool {
+    matches!(e, Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. })
+}
+
 pub(crate) fn scale(h: &Heater, temp_c: f64) -> f64 {
     let d = temp_c - T_NOM_C;
     (1.0 + h.tc1 * d + h.tc2 * d * d).max(0.01)
@@ -113,15 +127,17 @@ pub fn self_heat(circuit: &Circuit, heaters: &[Heater], t_amb: f64) -> Result<Se
     // the heated resistors keep their own coefficients; everything else is taken to the surrounding temperature
     let mut base = circuit.clone();
     base.tempcos.retain(|(n, _, _)| !heaters.iter().any(|h| h.elements.contains(n)));
-    let base = base.at_temperature(t_amb);
     let nominal = |name: &str| -> f64 {
         circuit.elements.iter().find_map(|e| match e {
             Element::Resistor { name: n, r, .. } if n == name => Some(*r),
             _ => None,
         }).unwrap_or(0.0)
     };
+    // the diodes and transistors of each part: their models follow the part's temperature
+    let junctions: Vec<Vec<String>> = heaters.iter().map(|h| circuit.elements.iter().filter(|e| is_junction(e) && h.elements.iter().any(|n| n == e.name())).map(|e| e.name().to_string()).collect()).collect();
     let build = |temps: &[f64]| -> Circuit {
-        let mut c = base.clone();
+        let own: Vec<(String, f64)> = junctions.iter().zip(temps).flat_map(|(names, &t)| names.iter().map(move |n| (n.clone(), t))).collect();
+        let mut c = base.at_temperatures(t_amb, &own);
         for (h, &t) in heaters.iter().zip(temps) {
             for e in &mut c.elements {
                 if let Element::Resistor { name, r, .. } = e {
@@ -162,7 +178,11 @@ pub fn self_heat(circuit: &Circuit, heaters: &[Heater], t_amb: f64) -> Result<Se
         .enumerate()
         .map(|(k, h)| {
             let power: f64 = h.elements.iter().filter_map(|n| warm.element(n)).map(|e| e.power.max(0.0)).sum();
-            HeatedPart { name: h.name.clone(), power, rise: temps[k] - t_amb, temp_c: temps[k], change: scale(h, temps[k]) / scale(h, t_amb) - 1.0, theta: h.theta, tc1: h.tc1, tc2: h.tc2 }
+            let junction_v = match junctions[k].as_slice() {
+                [one] => cold.element(one).zip(warm.element(one)).map(|(a, b)| (a.voltage, b.voltage)),
+                _ => None,
+            };
+            HeatedPart { name: h.name.clone(), power, rise: temps[k] - t_amb, temp_c: temps[k], change: scale(h, temps[k]) / scale(h, t_amb) - 1.0, theta: h.theta, tc1: h.tc1, tc2: h.tc2, junctions: junctions[k].len(), junction_v }
         })
         .collect();
     Ok(SelfHeat { parts, warm, cold, rounds })
@@ -202,6 +222,25 @@ mod tests {
         // the cold answer is the one without the warming (R1 at 25 °C: 2 K under the 27 °C the coefficient is counted from)
         assert!((r.cold.voltage("o").unwrap() - 1000.0 / 199.8).abs() < 1e-9);
         assert!(r.warm.voltage("o").unwrap() < 5.0);
+    }
+
+    #[test]
+    fn a_diode_that_warms_itself_drops_less_voltage_in_the_steady_state() {
+        // 5 V into 100 ohm and a diode: about 30 mW in the diode, with 500 K/W it warms by about 15 K and gives up about 2 mV per K
+        let mut c = Circuit::new();
+        let (a, o) = (c.node("a"), c.node("o"));
+        c.add(Element::vdc("V1", a, 0, 5.0));
+        c.add(Element::Resistor { name: "R1".into(), a, b: o, r: 100.0 });
+        c.add(Element::Diode { name: "D1".into(), a: o, k: 0, model: crate::circuit::DiodeModel::default() });
+        let d1 = Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0 };
+        let r = self_heat(&c, &[d1], 27.0).unwrap();
+        let p = &r.parts[0];
+        assert!(p.rise > 10.0 && (p.rise - 500.0 * p.power).abs() < 1e-3, "{p:?}");
+        let (cold, warm) = p.junction_v.unwrap();
+        assert_eq!(p.junctions, 1);
+        assert!((cold - r.cold.voltage("o").unwrap()).abs() < 1e-9 && (warm - r.warm.voltage("o").unwrap()).abs() < 1e-9);
+        let per_k = (cold - warm) / p.rise;
+        assert!(per_k > 1.2e-3 && per_k < 2.6e-3, "{per_k} V/K");
     }
 
     #[test]

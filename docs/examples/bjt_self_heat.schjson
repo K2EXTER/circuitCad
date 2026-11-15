@@ -1,0 +1,294 @@
+{
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        8,
+        10
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "12"
+    },
+    {
+      "custom": null,
+      "footprint": "SOT-23",
+      "kind": "Npn",
+      "pos": [
+        20,
+        10
+      ],
+      "refdes": "Q1",
+      "rot": 0,
+      "value": "2N3904"
+    },
+    {
+      "custom": null,
+      "footprint": "SOT-23",
+      "kind": "Npn",
+      "pos": [
+        34,
+        10
+      ],
+      "refdes": "Q2",
+      "rot": 0,
+      "value": "2N3904"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        48,
+        8
+      ],
+      "refdes": "R1",
+      "rot": 0,
+      "value": "10k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        62,
+        8
+      ],
+      "refdes": "R2",
+      "rot": 0,
+      "value": "750"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        76,
+        8
+      ],
+      "refdes": "R3",
+      "rot": 0,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        90,
+        8
+      ],
+      "refdes": "R4",
+      "rot": 0,
+      "value": "10k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        104,
+        8
+      ],
+      "refdes": "R5",
+      "rot": 0,
+      "value": "1.3k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        10,
+        22
+      ],
+      "refdes": "R6",
+      "rot": 0,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        24,
+        22
+      ],
+      "refdes": "R7",
+      "rot": 0,
+      "value": "100"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "Ground",
+      "pos": [
+        8,
+        12
+      ],
+      "refdes": "#PWR01",
+      "rot": 0,
+      "value": "GND"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        46,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        74,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        88,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        8,
+        22
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        50,
+        8
+      ],
+      "text": "B1"
+    },
+    {
+      "pos": [
+        60,
+        8
+      ],
+      "text": "B1"
+    },
+    {
+      "pos": [
+        18,
+        10
+      ],
+      "text": "B1"
+    },
+    {
+      "pos": [
+        78,
+        8
+      ],
+      "text": "C1"
+    },
+    {
+      "pos": [
+        22,
+        8
+      ],
+      "text": "C1"
+    },
+    {
+      "pos": [
+        92,
+        8
+      ],
+      "text": "B2"
+    },
+    {
+      "pos": [
+        102,
+        8
+      ],
+      "text": "B2"
+    },
+    {
+      "pos": [
+        32,
+        10
+      ],
+      "text": "B2"
+    },
+    {
+      "pos": [
+        12,
+        22
+      ],
+      "text": "C2"
+    },
+    {
+      "pos": [
+        36,
+        8
+      ],
+      "text": "C2"
+    },
+    {
+      "pos": [
+        36,
+        12
+      ],
+      "text": "E2"
+    },
+    {
+      "pos": [
+        22,
+        22
+      ],
+      "text": "E2"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        64,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        22,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        106,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        26,
+        22
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": []
+}

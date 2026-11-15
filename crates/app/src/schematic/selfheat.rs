@@ -1,4 +1,4 @@
-//! The "自己発熱" section of the analysis tab: the resistors warmed by their own power (`sim_core::self_heat`).
+//! The "自己発熱" section of the analysis tab: the resistors, diodes and transistors warmed by their own power (`sim_core::self_heat`).
 
 use super::*;
 
@@ -30,14 +30,14 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.heat_ambient).desired_width(40.0)).on_hover_text(i18n::tr("部品のまわりの空気の温度 (℃)。部品の温度は、これに「電力 × 熱抵抗」を足したものになります"));
             ui.label("℃");
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "自己発熱を計算"), "自己発熱を計算").on_hover_text(i18n::tr("電流が流れる抵抗は、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "自己発熱を計算"), "自己発熱を計算").on_hover_text(i18n::tr("電流が流れる抵抗・ダイオード・LED・トランジスタは、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) や、温まると電圧が下がるダイオード・トランジスタ (1 ℃ で約 2 mV) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)")).clicked() {
             self.heat_view = Some(self.run_self_heat());
             if let Some(Err(e)) = &self.heat_view {
                 self.status = format!("自己発熱の計算に失敗: {e}");
             }
         }
         let Some(view) = self.heat_view.take() else {
-            ui.label(egui::RichText::new(i18n::tr("電流が流れる抵抗の温度上昇と、それで値がどれだけ動くかを見ます")).small());
+            ui.label(egui::RichText::new(i18n::tr("電流が流れる部品 (抵抗・ダイオード・トランジスタ) の温度上昇と、それで値や電圧がどれだけ動くかを見ます")).small());
             return;
         };
         match &view {
@@ -46,7 +46,7 @@ impl SchEditor {
             }
             Ok(v) => {
                 if v.parts.is_empty() {
-                    ui.label(i18n::tr("電力が出ている抵抗はありません"));
+                    ui.label(i18n::tr("電力が出ている部品はありません"));
                 }
                 let mut edits: Vec<(String, f64, f64)> = vec![];
                 let own = self.own_thetas();
@@ -59,10 +59,22 @@ impl SchEditor {
                         ui.label(&p.name).on_hover_text(i18n::trf!("温度 {:.1} ℃ (周囲 {} ℃ + {:.1} K)", p.temp_c, v.ambient, p.rise));
                         ui.label(fmt_power(p.power));
                         ui.label(format!("{:.1} K", p.rise)).on_hover_text(i18n::tr("周囲の温度より、これだけ高くなります"));
-                        ui.label(format!("{:+.0} ppm", p.change * 1e6)).on_hover_text(i18n::tr("温まったことで、抵抗値が冷えているときよりどれだけ変わったか (100 ppm = 0.01 %)。温度係数が 0 なら変わりません"));
+                        // a diode or transistor alone: its voltage moves, not a resistance
+                        let semi = self.sch.components.iter().any(|c| c.refdes == p.name && matches!(c.kind, sch_core::Kind::Diode | sch_core::Kind::Led | sch_core::Kind::Npn));
+                        if let Some((cold, warm)) = p.junction_v {
+                            ui.label(format!("{:+.1} mV", (warm - cold) * 1e3)).on_hover_text(i18n::trf!("温まって、この部品の電圧 (ダイオードは順方向の電圧、トランジスタはコレクタ・エミッタ間) が {cold:.4} V から {warm:.4} V になりました。シリコンの接合は、1 ℃ 温まると約 2 mV 下がります"));
+                        } else if semi || (p.junctions > 0 && p.tc1 == 0.0 && p.tc2 == 0.0) {
+                            ui.label("—").on_hover_text(i18n::tr("中のダイオード・トランジスタは、この部品の温度で計算しています (電圧の変化は「温まって動いたところ」を見てください)"));
+                        } else {
+                            ui.label(format!("{:+.0} ppm", p.change * 1e6)).on_hover_text(i18n::tr("温まったことで、抵抗値が冷えているときよりどれだけ変わったか (100 ppm = 0.01 %)。温度係数が 0 なら変わりません"));
+                        }
                         let (mut theta, mut tc) = (own.get(&p.name).copied().unwrap_or(p.theta), p.tc1 * 1e6);
                         let a = theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name));
-                        let b = ui.add(egui::DragValue::new(&mut tc).range(-5000.0..=5000.0).speed(1.0)).on_hover_text(i18n::tr("温度係数: 1 K 温まると抵抗値が何 ppm 変わるか。データシートの値 (シャント抵抗なら ±25 〜 ±100 ppm/K など) を入れます"));
+                        let b = if semi {
+                            ui.label("—").on_hover_text(i18n::tr("温度係数は抵抗のものです。ダイオード・トランジスタの温度による変化は、モデルの決まり (飽和電流・しきい値の温度の式) で入ります"))
+                        } else {
+                            ui.add(egui::DragValue::new(&mut tc).range(-5000.0..=5000.0).speed(1.0)).on_hover_text(i18n::tr("温度係数: 1 K 温まると抵抗値が何 ppm 変わるか。データシートの値 (シャント抵抗なら ±25 〜 ±100 ppm/K など) を入れます"))
+                        };
                         if a.changed() || b.changed() {
                             edits.push((p.name.clone(), theta, tc));
                         }
@@ -81,7 +93,7 @@ impl SchEditor {
                         ui.label(egui::RichText::new(format!("{n}: {:.6} V → {:.6} V ({:+.3} mV)", a, b, (b - a) * 1e3)).small());
                     }
                 }
-                ui.label(egui::RichText::new(i18n::tr("熱抵抗を入れていない部品は、パッケージの大きさからの目安 (定格電力から) です。データシートの値に直してください")).small()).on_hover_text(i18n::tr("チップ抵抗は、周囲 70 ℃ で定格の電力をかけると 155 ℃ になるものとして、θ ≈ 85 K ÷ 定格電力 としています"));
+                ui.label(egui::RichText::new(i18n::tr("熱抵抗を入れていない部品は、パッケージの大きさからの目安 (定格電力から) です。データシートの値 (θJA) に直してください")).small()).on_hover_text(i18n::tr("チップ抵抗は、周囲 70 ℃ で定格の電力をかけると 155 ℃ になるものとして、θ ≈ 85 K ÷ 定格電力 としています"));
             }
         }
         self.heat_view = Some(view);
