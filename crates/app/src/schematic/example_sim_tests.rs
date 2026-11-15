@@ -792,6 +792,17 @@ fn the_sar_sample_agrees_with_the_flash_converter_at_every_end_of_conversion() {
     assert!(seen & 1 != 0 && seen & (1 << 15) != 0, "the sine reaches both ends: {seen:b}");
 }
 
+/// The blinker's supply ramps up from 0 V over 2 ms: while it is a few millivolts, the 74HC74's clock and data flip together.
+/// That is no setup violation (no logic part works below about 1 V): the run reports none.
+#[test]
+fn a_ramping_supply_is_no_timing_violation_in_the_blinker_sample() {
+    let mut e = editor_with("logic_blinker.schjson");
+    e.set_tran_settings("20m", "");
+    e.run_tran();
+    let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+    assert!(r.timing.violations.is_empty(), "{:?}", r.timing);
+}
+
 /// The programming-header check: the ISP sample is quiet; a programming pin cut off the header is found; the Arduino-style board
 /// (ISP header, FTDI header with the reset through a capacitor) is quiet once the chip carries its programming pins.
 #[test]

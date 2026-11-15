@@ -266,6 +266,32 @@ fn the_hold_time_is_checked_after_the_clock_edge() {
     assert!(bad.warnings.iter().any(|w| w.contains("ホールド時間が足りません")), "{:?}", bad.warnings);
 }
 
+/// Data that changes together with every clock edge breaks the setup time each time: what the flip-flop holds is not sure, so
+/// it takes 0 or 1 by a coin (both turn up over 20 edges), the same way in every run; the warning says so.
+#[test]
+fn a_flip_flop_that_breaks_its_setup_time_holds_either_value_the_same_way_every_run() {
+    let run = || {
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss d clk q", "YF dff q 0 vss vcc 60 0.5 0 0 0 tsu=20n d clk 0 0");
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        // the data changes at the clock's rising edges (every 1 us), 0 s before them: the setup time is broken at every edge
+        let d = parse_source_full("PULSE(0 5 1u 1n 1n 1u 2u)").unwrap();
+        c.add(Element::VSource { name: "Vd".into(), p: n[2], n: 0, wave: d.wave, ac: d.ac });
+        let ck = parse_source_full("PULSE(0 5 1u 1n 1n 0.5u 1u)").unwrap();
+        c.add(Element::VSource { name: "Vck".into(), p: n[3], n: 0, wave: ck.wave, ac: ck.ac });
+        c.add(Element::Resistor { name: "Rl".into(), a: n[4], b: 0, r: 10e3 });
+        transient(&c, &TranSettings { tstop: 21.5e-6, tstep: 20e-9, uic: false }).unwrap()
+    };
+    let r = run();
+    assert_eq!(r.timing.violations.len(), 1, "{:?}", r.timing);
+    let held: Vec<bool> = (1..21).map(|k| at(&r, "V(q)", k as f64 * 1e-6 + 0.7e-6) > 2.5).collect();
+    assert!(held.iter().any(|b| *b) && held.iter().any(|b| !*b), "{held:?}");
+    let again: Vec<bool> = (1..21).map(|k| at(&run(), "V(q)", k as f64 * 1e-6 + 0.7e-6) > 2.5).collect();
+    assert_eq!(held, again, "the same every run");
+    assert!(r.warnings.iter().any(|w| w.contains("乱数で選んでいます")), "{:?}", r.warnings);
+}
+
 /// A clock with a 40 ns high pulse: a flip-flop asking for 30 ns is fine, one asking for 60 ns reports the pulse width, every
 /// time it happened (the times are kept for the marks on the digital view).
 #[test]

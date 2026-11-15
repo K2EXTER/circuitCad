@@ -692,7 +692,11 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
                 TimingKind::Hold => "ホールド時間",
                 TimingKind::PulseWidth => "クロックのパルス幅",
             };
-            warnings.push(format!("{}: {name}が足りません ({} 回。最初は {})。{what}。この回の出力は実物では不定で、ここでは古いデータを取り込んだ値です", v.cell, v.count, format_time(v.first_time)));
+            let tail = match v.kind {
+                TimingKind::Setup | TimingKind::Hold => "この回の出力は実物では不定 (0 にも 1 にもなりうる) で、ここでは 0 か 1 を乱数で選んでいます (毎回同じ選び方)",
+                TimingKind::PulseWidth => "実物では取り込みに失敗することがあります (ここでは普通に取り込みます)",
+            };
+            warnings.push(format!("{}: {name}が足りません ({} 回。最初は {})。{what}。{tail}", v.cell, v.count, format_time(v.first_time)));
         }
     }
     warnings.dedup();

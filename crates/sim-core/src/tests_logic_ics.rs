@@ -795,3 +795,23 @@ fn the_adc4_sar_finds_one_bit_per_clock_and_ends_with_floor_of_sixteen_times_the
         }
     }
 }
+
+/// The sample-and-hold of the ADC4_SAR: AIN jumps from code 5 to code 12 right after START falls, in the middle of the
+/// conversion; the answer is still 5, the voltage held when START fell.
+#[test]
+fn the_adc4_sar_converts_the_voltage_held_when_start_falls() {
+    let mut c = Circuit::new();
+    place(&mut c, "ADC4_SAR");
+    supply(&mut c, 5.0);
+    let (v5, v12) = (5.5 / 16.0 * 5.0, 12.5 / 16.0 * 5.0);
+    source(&mut c, "Vin", "AIN", &format!("PWL(0 {v5} 0.9u {v5} 0.95u {v12})"));
+    source(&mut c, "Vclk", "CLK", "PULSE(0 5 0.5u 1n 1n 0.5u 1u)");
+    source(&mut c, "Vst", "START", "PULSE(0 5 0.2u 1n 1n 0.6u 8u)");
+    for p in ["D0", "D1", "D2", "D3", "EOC"] {
+        load(&mut c, p);
+    }
+    let r = transient(&c, &TranSettings { tstop: 7e-6, tstep: 20e-9, uic: false }).unwrap();
+    let code: usize = (0..4).map(|k| usize::from(at(&r, &format!("D{k}"), 6.5e-6) > 2.5) << k).sum();
+    assert!(at(&r, "EOC", 6.5e-6) > 2.5);
+    assert_eq!(code, 5, "the held voltage is converted, not the one AIN jumped to");
+}

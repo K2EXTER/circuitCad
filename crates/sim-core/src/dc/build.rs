@@ -264,6 +264,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         last_fall: vec![-1e30; cells.len()],
         viol: vec![],
         tightest: None,
+        coin: 0,
         seq: 0,
         t_prev: 0.0,
     });

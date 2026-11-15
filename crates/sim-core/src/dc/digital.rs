@@ -85,6 +85,8 @@ pub(crate) struct Dig {
     pub viol: Vec<crate::TimingViolation>,
     /// The smallest margin found at a clock edge: (cell, margin, time between this clock edge and the one before).
     pub tightest: Option<(String, f64, f64)>,
+    /// The state of the coin a flip-flop that broke its setup or hold time tosses for what it holds (the same tosses every run).
+    pub coin: u64,
     /// Per cell: whether its output is enabled (always, without an output enable).
     pub en: Vec<bool>,
     /// The cells whose output enable changed in the evaluation that is going on.
@@ -236,10 +238,12 @@ impl Compiled {
             for k in 0..c.ins.len() {
                 if now[k] != before[k] {
                     // a data input that changes soon after the clock edge breaks the hold time
-                    if c.th > 0.0 && data.contains(&k) {
+                    if c.th > 0.0 && data.contains(&k) && self.powered(d, ci) {
                         let le = d.last_edge[ci];
                         if te > le && te - le < c.th - 1e-15 {
                             self.note_violation(d, ci, crate::TimingKind::Hold, te, te - le, c.th);
+                            // what it took at the edge is not sure: a real one may go either way
+                            d.st[ci] = toss(&mut d.coin);
                         }
                     }
                     d.last_change[c.slot0 + k] = te;
@@ -275,6 +279,7 @@ impl Compiled {
                 if set || reset {
                     new = set && !reset || (set && reset && old);
                 } else {
+                    let mut unsure = false;
                     let edge = clk_at.is_some_and(|k| started && !at(&before, k) && at(&now, k));
                     let fall = clk_at.is_some_and(|k| started && at(&before, k) && !at(&now, k));
                     if let Some(te) = te {
@@ -282,9 +287,9 @@ impl Compiled {
                         // are about that closing edge; a flip-flop's about the rising clock
                         let closing = if c.kind == Dlatch { fall } else { edge };
                         if closing {
-                            self.timing_edge(d, ci, te, data);
+                            unsure = self.timing_edge(d, ci, te, data);
                         }
-                        if c.tw > 0.0 && (edge || fall) {
+                        if c.tw > 0.0 && (edge || fall) && self.powered(d, ci) {
                             // the pulse that just ended: low before a rising edge, high before a falling one
                             let start = if edge { d.last_fall[ci] } else { d.last_rise[ci] };
                             if start > -1e29 && te - start < c.tw - 1e-15 {
@@ -339,6 +344,11 @@ impl Compiled {
                             }
                         }
                         _ => {}
+                    }
+                    // the data changed too close to the edge: a real flip-flop may take either value (it may even hang between
+                    // the two for a while); here it takes one of them by a coin that falls the same way every run
+                    if unsure {
+                        new = toss(&mut d.coin);
                     }
                 }
                 d.st[ci] = new;
@@ -562,17 +572,27 @@ impl Compiled {
     }
 
     /// A clock edge of flip-flop `ci` at `te`: the setup time of its data inputs, and the margin that is left.
-    fn timing_edge(&self, d: &mut Dig, ci: usize, te: f64, data: &[usize]) {
+    /// Whether cell `ci` has enough supply for its timing to mean anything: below 1 V no logic part works (a supply that is
+    /// still ramping up flips the inputs and the clock together, which is no violation).
+    fn powered(&self, d: &Dig, ci: usize) -> bool {
+        let (vss, vcc) = d.gsup[self.dstat.cell_group[ci]];
+        vcc - vss >= POWERED
+    }
+
+    /// Returns whether the setup time was broken (what the flip-flop takes is then not sure).
+    fn timing_edge(&self, d: &mut Dig, ci: usize, te: f64, data: &[usize]) -> bool {
         let c = &self.cells[ci];
         let interval = te - d.last_edge[ci];
         d.last_edge[ci] = te;
-        if c.tsu <= 0.0 {
-            return;
+        if c.tsu <= 0.0 || !self.powered(d, ci) {
+            return false;
         }
+        let mut broken = false;
         for &k in data {
             let dt = te - d.last_change[c.slot0 + k];
             if dt < c.tsu - 1e-15 {
                 self.note_violation(d, ci, crate::TimingKind::Setup, te, dt, c.tsu);
+                broken = true;
             }
             // the margin to the setup time (how much later the data could arrive); the time since the clock edge before is NaN
             // for the first edge
@@ -581,6 +601,7 @@ impl Compiled {
                 d.tightest = Some((c.name.clone(), margin, if interval < 1e29 { interval } else { f64::NAN }));
             }
         }
+        broken
     }
 
     fn note_violation(&self, d: &mut Dig, ci: usize, kind: crate::TimingKind, time: f64, margin: f64, required: f64) {
@@ -863,3 +884,16 @@ pub(crate) fn cell_drive(&self, ci: usize, inverted: bool) -> Option<(f64, (f64,
         self.cells.iter().enumerate().filter(|(_, c)| is_memory(c.kind)).map(|(i, c)| (c.name.clone(), d.st[i])).collect()
     }
 }
+
+/// A coin for the flip-flops that broke their setup or hold time: splitmix64, so a run is the same every time.
+fn toss(state: &mut u64) -> bool {
+    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut z = *state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    // the top bit: the lowest bit of splitmix64 merely alternates (1, 0, 1, 0, ...)
+    (z ^ (z >> 31)) >> 63 == 1
+}
+
+/// The supply (volts) below which the timing of a cell is not checked.
+const POWERED: f64 = 1.0;

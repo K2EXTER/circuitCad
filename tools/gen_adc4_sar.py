@@ -16,7 +16,8 @@ L = [
     "* ADC4_SAR teaching model: a 4-bit successive-approximation converter. A rising CLK edge with START high clears the result and",
     "* starts; the next four edges try D3, D2, D1, D0 in turn: the bit under trial is set, the internal DAC gives code / 16 of the",
     "* supply, and the comparator (AIN above the DAC) keeps or clears the bit. EOC goes high with the fourth result (5 clocks",
-    "* after START) and stays high until the next START. code = floor(16 * AIN / supply). No sample-and-hold: AIN is read at each trial.",
+    "* after START) and stays high until the next START. code = floor(16 * AIN / supply). A sample-and-hold follows AIN while START",
+    "* is high and holds it when START falls: the comparator reads the held voltage, so AIN may move during the conversion.",
     ".subckt ADC4_SAR ain clk start d0 d1 d2 d3 eoc vcc gnd",
     "* the token that walks through the four trials: t3 one clock after START, then t2, t1, t0",
     "Yt3 dff t3 0 gnd vcc 60 0.5 0 0 0 start clk 0 0",
@@ -38,7 +39,12 @@ for j in (3, 2, 1, 0):
 L += [
     "* the DAC (code / 16 of the supply, read without load) and the comparator (high when AIN is above it, 1 mV wide)",
     "Bdac dac gnd V=V(vcc,gnd)*(8*step(V(c3,gnd)-0.5*V(vcc,gnd),1m)+4*step(V(c2,gnd)-0.5*V(vcc,gnd),1m)+2*step(V(c1,gnd)-0.5*V(vcc,gnd),1m)+step(V(c0,gnd)-0.5*V(vcc,gnd),1m))/16",
-    "Bcmp cmp gnd V=V(vcc,gnd)*step(V(ain,gnd)-V(dac,gnd),1m)",
+    "* sample-and-hold: a switch (on while START is above half the supply) into 100 pF; the comparator reads the held voltage",
+    "Bsh shc gnd V=V(start,gnd)/max(V(vcc,gnd),1m)",
+    "Ssh ain hold shc gnd SWSH",
+    "Chold hold gnd 100p",
+    ".model SWSH SW(RON=100 ROFF=1T VT=0.5 VW=0.1)",
+    "Bcmp cmp gnd V=V(vcc,gnd)*step(V(hold,gnd)-V(dac,gnd),1m)",
     ".ends ADC4_SAR",
 ]
 text = "\n".join(L)
@@ -49,7 +55,7 @@ side = {"AIN": "left", "CLK": "left", "START": "left", "EOC": "right", "GND": "b
 part = {
     "name": "ADC4_SAR",
     "category": "ロジックIC",
-    "description": "4 ビットの逐次比較型 AD コンバータ (教材用の動作モデル、DIP-10)。START を High にして CLK を入れると、次の 4 クロックで D3 から D0 の順に 1 ビットずつ決め、5 クロック目に EOC が High になります。値は floor(16 × AIN ÷ 電源電圧) (電源 5V なら 1 きざみ 0.3125V)。比較器 1 個で済むかわりに、変換にクロックが要ります",
+    "description": "4 ビットの逐次比較型 AD コンバータ (教材用の動作モデル、DIP-10)。START を High にして CLK を入れると、START を下げたときの AIN を保持して、次の 4 クロックで D3 から D0 の順に 1 ビットずつ決め、5 クロック目に EOC が High になります。値は floor(16 × AIN ÷ 電源電圧) (電源 5V なら 1 きざみ 0.3125V)。比較器 1 個で済むかわりに、変換にクロックが要ります",
     "prefix": "U",
     "footprint_name": "DIP-10_W7.62",
     "pins": [{"number": str(i + 1), "name": n, "side": side[n]} for i, n in enumerate(order)],
@@ -64,7 +70,8 @@ part = {
         "limits": [
             "デジタルセル (行列の外で計算する素子) と、式で書いた DAC と比較器で作った動作モデルです。実在の部品ではなく、教材用です。逐次比較 (二分探索) の動き: 1 クロックに 1 ビットずつ、上の桁から「1 にしてみて、AIN を超えたら 0 に戻す」を繰り返します。",
             "変換の基準 (満量程) は VCC と GND の電位差です。AIN が GND〜VCC の外に出ると、0 か 15 に張り付きます。",
-            "サンプルホールドはありません。変換の途中で AIN が動くと、ビットごとに違う時刻の AIN を読んだ値になります (実物の逐次比較型は、変換の始めに入力を保持します)。比較器にヒステリシスやオフセットはなく、AIN の入力抵抗は無限大です。CLK から D0〜D3・EOC の遅れは 20ns の一定値です。",
+            "サンプルホールド: START が High の間は AIN に追従し (100Ω と 100pF)、START が Low になった瞬間の電圧を保持して、その電圧を変換します。変換の途中で AIN が動いても、答えは START を下げたときの値です。START を High にしたままにすると、保持せずに追従し続けます。",
+            "比較器にヒステリシスやオフセットはなく、保持の電圧は漏れません (保持の容量の漏れ・スイッチの電荷の注入は表しません)。AIN から見えるのは、START が High の間だけ 100Ω + 100pF です。CLK から D0〜D3・EOC の遅れは 20ns の一定値です。",
         ],
         "origin": {"kind": "generic", "source": "ロジックの動作モデル (しきい値は電源の半分、出力抵抗 60 Ω、遅れは一定の見積もり)"},
     },

@@ -238,7 +238,7 @@ DC動作点が求まらなかったため、すべてゼロの状態から始め
 データがクロックの {} 後に変わっています (クロックのあと {} は変わってはいけません)。データの経路に遅れを足すか、クロックのずれを減らしてください	Data changes {} after the clock (it must not change for {} after the clock). Add delay to the data path or reduce the clock skew
 セットアップ時間	setup time
 ホールド時間	hold time
-{}: {name}が足りません ({} 回。最初は {})。{what}。この回の出力は実物では不定で、ここでは古いデータを取り込んだ値です	{}: {name} violated ({} times; first at {}). {what}. On real hardware the output of this cycle is undefined; here it takes the old data
+{}: {name}が足りません ({} 回。最初は {})。{what}。{tail}	{}: {name} violated ({} times; first at {}). {what}. {tail}
 # crates/sim-core/src/value.rs
 値が空です	The value is empty
 値「{first}」を数値にできません	Cannot turn the value "{first}" into a number
