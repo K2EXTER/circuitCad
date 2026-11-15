@@ -3,6 +3,7 @@
 
 mod netlist;
 mod ngspice;
+mod ngspice_digital;
 mod backannotate;
 mod renumber;
 mod bus;

@@ -7,6 +7,7 @@
 //!   (that smoothness is what lets Newton's method settle latches and comparators); ngspice's `SW`
 //!   model has no `vw` and switches sharply. Each `S` element becomes a `B` current source with
 //!   the same smooth conductance.
+//! * Digital cells (`Y` lines) become XSPICE code models between bridges (`ngspice_digital`).
 
 use std::collections::HashMap;
 
@@ -93,6 +94,8 @@ pub fn convert_text(text: &str) -> String {
         .lines()
         .filter(|l| switch_model(l).is_none())
         .map(|l| switch_to_b(l, &models).unwrap_or_else(|| l.to_string()))
+        // a digital cell becomes XSPICE code models between bridges (`ngspice_digital`)
+        .flat_map(|l| crate::ngspice_digital::cell_to_xspice(&l).unwrap_or_else(|| vec![l]))
         .map(|l| convert_line(&l))
         .collect();
     lines.join("\n") + if text.ends_with('\n') { "\n" } else { "" }

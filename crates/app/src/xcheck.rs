@@ -134,12 +134,13 @@ fn our_side(s: &Schematic) -> Result<(Schematic, Result<Vec<(String, f64)>, Stri
     if flat.components.iter().any(|c| c.kind == Kind::Custom && c.custom.as_ref().is_none_or(|x| x.sim.is_none())) {
         return Err(Outcome::Skipped("シミュレーションモデルのない部品があります".into()));
     }
-    // a flip-flop written as a PSpice `U dff(n)` (a stored state inside the element) is something ngspice cannot read
+    // a flip-flop written as a PSpice `U dff(n)` (a stored state inside the element) is something ngspice cannot read (our digital
+    // cells, the `Y` lines, go to ngspice as XSPICE code models: `sch_core::ngspice`)
     let seq = |c: &&sch_core::Component| {
-        c.custom.as_ref().and_then(|x| x.sim.as_ref()).is_some_and(|m| ["dff(", "jkff(", "dltch(", "srff("].iter().any(|k| m.text.contains(k)) || m.text.lines().any(|l| l.trim_start().starts_with('Y')))
+        c.custom.as_ref().and_then(|x| x.sim.as_ref()).is_some_and(|m| ["dff(", "jkff(", "dltch(", "srff("].iter().any(|k| m.text.contains(k)))
     };
-    if flat.components.iter().filter(seq).next().is_some() {
-        return Err(Outcome::Skipped("ngspice が読めない部品 (デジタルセルの Y 行、U dff など) があります".into()));
+    if flat.components.iter().any(|c| seq(&c)) {
+        return Err(Outcome::Skipped("ngspice が読めない部品 (U dff など) があります".into()));
     }
     let circuit = match from_schematic(&flat) {
         Ok(c) => c,

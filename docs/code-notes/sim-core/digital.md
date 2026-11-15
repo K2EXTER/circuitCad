@@ -23,7 +23,7 @@
 - 違い: 出力は 0 V / 5 V 固定、入力のしきい値は 2.5 V(電源が 5 V でないと合わない)。VCC ピンは見ない。状態の変化は最大で 1 刻み遅れる。PRE・CLR は負論理のまま。
 - `74HC4017` のモデルは、この部品を元にした生成物(`S1`〜`S22`)なので、そのまま(スイッチ版)。
 - 出力は 60Ω の抵抗を通す(`R1 q1i q1 60` など)。理想の電圧源のままだと、サンプルの LED の電流が 9.25 mA になり、`logic_blinker` のテスト(2〜8 mA)が落ちた。
-- ngspice は `U dff(1)` を読めない。`app/src/xcheck.rs` の `our_side` は、`dff(` などを含む部品があれば「対象外」にし、`docs/xcheck/ngspice_dc.json` から `logic_blinker` を外した(`mixed_signal` は元から保存の対象外)。
+- ngspice は `U dff(1)` を読めない。`app/src/xcheck.rs` の `our_side` は、`dff(` などを含む部品があれば「対象外」にする。デジタルセルの `Y` 行は、2026-11-15 から XSPICE に変換して検算する(`sch-core/src/ngspice_digital.rs`、`docs/code-notes/app/basics.md` の検算の節)。
 - サンプル(`logic_blinker` `mixed_signal.schjson` `mixed_signal.ccproj`)は回路図の中に部品の定義(`custom`)を持っているので、74HC74 の `sim` を新しいものに置き換えた(波形の周波数・デューティは前と同じ。`logic_blinker` の内部ノード `U2.m1` などは無くなった)。
 
 → この後、`Y` 行のセルに替えた(下の「デジタルセル」)。ここにある「出力は 0 V / 5 V 固定」「電源に追従しない」は、いまは当てはまらない(電源のピンに追従する)。
