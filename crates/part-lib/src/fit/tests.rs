@@ -54,10 +54,11 @@ fn the_bundled_models_are_what_their_readings_give() {
         if !apart.is_empty() {
             // a transistor's fit is a search in nine dimensions: the last bit of exp and log differs between systems (Windows, Linux,
             // macOS), and the search can end in another place of a flat valley. Then the fit must match the readings as well as the
-            // bundled model does, by the fit's own measure
+            // bundled model does, by the fit's own measure: within a quarter (BD139 ends at 1.54 on Linux, 1.82 on Windows and 2.04
+            // on macOS)
             let (Some(a), Some(b)) = (objective(&spec, &sim.text), objective(&spec, &f.text)) else { panic!("{}: {apart:?}", f.part) };
             eprintln!("{}: bundled {a:.4}, fit {b:.4}: {apart:?}", f.part);
-            assert!(b <= a * 1.10 + 1e-6, "{}: the fit matches the readings worse ({b:.4}) than the bundled model ({a:.4}): {apart:?}", f.part);
+            assert!(b <= a * 1.25 + 1e-6, "{}: the fit matches the readings worse ({b:.4}) than the bundled model ({a:.4}): {apart:?}", f.part);
         }
         assert_eq!(sim.limits, f.limits, "{}", f.part);
         assert_eq!(sim.origin.map(|o| o.source), Some(f.source.clone()), "{}", f.part);
