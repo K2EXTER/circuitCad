@@ -131,36 +131,70 @@ fn ink(img: &crate::PageImage, x: i64, y: i64) -> bool {
     lum < 100 || (chroma > 90 && lum < 160)
 }
 
+/// Which pixels count as a curve: any curve's ink, or only ink of one curve's colour (a graph with a red and a blue
+/// curve; a black curve among coloured ones).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Colour {
+    Any,
+    Like([u8; 3]),
+}
+
+fn rgb(img: &crate::PageImage, x: i64, y: i64) -> [i32; 3] {
+    let i = (y as usize * img.width + x as usize) * 4;
+    [img.rgba[i] as i32, img.rgba[i + 1] as i32, img.rgba[i + 2] as i32]
+}
+
+fn chroma(c: [i32; 3]) -> i32 {
+    c[0].max(c[1]).max(c[2]) - c[0].min(c[1]).min(c[2])
+}
+
+/// [`ink`] of the colour asked for: a black (grey-ish) curve takes no strongly coloured pixel, a coloured one only
+/// pixels near its colour.
+fn ink_of(img: &crate::PageImage, x: i64, y: i64, colour: Colour) -> bool {
+    if !ink(img, x, y) {
+        return false;
+    }
+    match colour {
+        Colour::Any => true,
+        Colour::Like(t) => {
+            let (t, p) = ([t[0] as i32, t[1] as i32, t[2] as i32], rgb(img, x, y));
+            if chroma(t) < 60 { chroma(p) < 90 } else { chroma(p) > 60 && (0..3).map(|i| (p[i] - t[i]).abs()).sum::<i32>() < 220 }
+        }
+    }
+}
+
 /// Where curves cross the vertical line at page x (points), between page y0 and y1: the centre (page points) of
 /// each run of ink in that pixel column. `px_per_pt` is the picture's scale. Straight horizontal lines (the grid,
 /// an axis) are left out: their pixels go on at the same height well to both sides. A curve that crosses a grid
 /// line keeps the grid's pixels. When the column runs along a black vertical grid line, the column 2 pixels over
 /// is used. Crossings inside `skip` (the boxes of the words printed in the plot: "25°C") are left out.
 pub fn curve_crossings(img: &crate::PageImage, px_per_pt: f32, x: f32, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f32> {
-    crossings(img, px_per_pt, x, y0, y1, skip, false, false)
+    crossings(img, px_per_pt, x, y0, y1, skip, false, false, Colour::Any, true).1.iter().map(|r| (r.0 + r.1) / 2.0).collect()
 }
 
 /// [`curve_crossings`] that keeps the thin straight lines: for graphs whose curves are thin and flat for long stretches
 /// (JCET's hFE curves) and whose minor grid is dotted. The solid grid lines then come back too, at their ticks' values.
 pub fn curve_crossings_keep_thin(img: &crate::PageImage, px_per_pt: f32, x: f32, y0: f32, y1: f32, skip: &[crate::Rect]) -> Vec<f32> {
-    crossings(img, px_per_pt, x, y0, y1, skip, false, true)
+    crossings(img, px_per_pt, x, y0, y1, skip, false, true, Colour::Any, true).1.iter().map(|r| (r.0 + r.1) / 2.0).collect()
 }
 
 /// [`curve_crossings`] along the horizontal line at page y, between page x0 and x1: where the curves are at that
 /// height (a diode's forward voltage at a current). Straight vertical lines (the grid) are left out the same way.
 pub fn curve_crossings_row(img: &crate::PageImage, px_per_pt: f32, y: f32, x0: f32, x1: f32, skip: &[crate::Rect]) -> Vec<f32> {
-    crossings(img, px_per_pt, y, x0, x1, skip, true, false)
+    crossings(img, px_per_pt, y, x0, x1, skip, true, false, Colour::Any, true).1.iter().map(|r| (r.0 + r.1) / 2.0).collect()
 }
 
-/// The scan for both: along a pixel line at `at` (a column, or a row when `row`) from `from` to `to` (page points).
+/// The scan for all: along a pixel line at `at` (a column, or a row when `row`) from `from` to `to` (page points), of
+/// ink of `colour`. With `shift`, the line with the least ink within 1 point is scanned instead (off a black grid line
+/// along it). Returns the line scanned and the runs of ink (start and end along the scan), in page points.
 #[allow(clippy::too_many_arguments)]
-fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32, skip: &[crate::Rect], row: bool, keep_thin: bool) -> Vec<f32> {
+fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32, skip: &[crate::Rect], row: bool, keep_thin: bool, colour: Colour, shift: bool) -> (f32, Vec<(f32, f32)>) {
     // ink at (position along the scan, position of the scan line)
-    let px = |along: i64, line: i64| if row { ink(img, along, line) } else { ink(img, line, along) };
+    let px = |along: i64, line: i64| if row { ink_of(img, along, line, colour) } else { ink_of(img, line, along, colour) };
     let (top, bottom) = ((from.min(to) * px_per_pt).round() as i64, (from.max(to) * px_per_pt).round() as i64);
     // the line with the least ink within 1 point of `at` (off a black grid line running along it), the nearest of equals
     let l0 = (at * px_per_pt).round() as i64;
-    let reach = px_per_pt.round().max(1.0) as i64;
+    let reach = if shift { px_per_pt.round().max(1.0) as i64 } else { 0 };
     let col = (-reach..=reach)
         .map(|d| (d, (top..=bottom).filter(|&a| px(a, l0 + d)).count()))
         .min_by(|a, b| a.1.cmp(&b.1).then(a.0.abs().cmp(&b.0.abs())))
@@ -200,14 +234,156 @@ fn crossings(img: &crate::PageImage, px_per_pt: f32, at: f32, from: f32, to: f32
         (!keep_thin && r.1 - r.0 < thin && min_extent >= short) || (r.1 - r.0 < (2.0 * px_per_pt) as i64 && extent(r.0 + (r.1 - r.0) / 2, very_long) >= very_long)
     };
     let c = col as f32 / px_per_pt;
-    runs.iter()
+    let found = runs
+        .iter()
         .filter(|r| !straight(r))
-        .map(|r| (r.0 + r.1) as f32 / 2.0 / px_per_pt)
-        .filter(|&a| {
+        .map(|r| (r.0 as f32 / px_per_pt, r.1 as f32 / px_per_pt))
+        .filter(|&(lo, hi)| {
+            let a = (lo + hi) / 2.0;
             let (x, y) = if row { (a, c) } else { (c, a) };
             !skip.iter().any(|w| w.x0 - 1.0 <= x && x <= w.x1 + 1.0 && w.y0 - 1.0 <= y && y <= w.y1 + 1.0)
         })
-        .collect()
+        .collect();
+    (c, found)
+}
+
+/// Follows the curve under page point `seed` (within 6 points above or below it) to both sides, keeping to its colour,
+/// and returns its centre line left to right (page points, every half point). Where curves cross, the one going on
+/// the way this one was going is kept (the slope so far predicts the next height). The trace ends where the curve
+/// does (no ink of its colour for 6 points), at the page's edge, or where it runs into a long straight line of its
+/// colour (the graph's frame). Empty when there is no curve near the seed. A curve that turns back (two heights at one
+/// x on the same curve) is followed only up to the turn.
+pub fn trace_curve(img: &crate::PageImage, px_per_pt: f32, seed: (f32, f32), skip: &[crate::Rect]) -> Vec<(f32, f32)> {
+    let (sx, found) = crossings(img, px_per_pt, seed.0, seed.1 - 6.0, seed.1 + 6.0, skip, false, false, Colour::Any, true);
+    let Some(sy) = found.into_iter().map(|r| (r.0 + r.1) / 2.0).min_by(|a, b| (a - seed.1).abs().total_cmp(&(b - seed.1).abs())) else { return vec![] };
+    let colour = colour_at(img, px_per_pt, sx, sy);
+    let mut left = follow(img, px_per_pt, (sx, sy), -1.0, skip, colour);
+    left.reverse();
+    left.push((sx, sy));
+    left.extend(follow(img, px_per_pt, (sx, sy), 1.0, skip, colour));
+    left
+}
+
+/// The colour of the curve at page point (x, y): its darkest or most coloured pixel within a pixel around.
+fn colour_at(img: &crate::PageImage, px_per_pt: f32, x: f32, y: f32) -> Colour {
+    let (cx, cy) = ((x * px_per_pt).round() as i64, (y * px_per_pt).round() as i64);
+    let best = (-1..=1)
+        .flat_map(|dx| (-1..=1).map(move |dy| (cx + dx, cy + dy)))
+        .filter(|&(x, y)| ink(img, x, y))
+        .map(|(x, y)| rgb(img, x, y))
+        .min_by_key(|c| (299 * c[0] + 587 * c[1] + 114 * c[2]) / 1000 - chroma(*c));
+    best.map_or(Colour::Any, |c| Colour::Like([c[0] as u8, c[1] as u8, c[2] as u8]))
+}
+
+/// How far ink of `colour` runs along the pixel row at page point (x, y), both ways together (page points; gaps of 2
+/// pixels allowed), up to `cap` points each way.
+fn row_extent(img: &crate::PageImage, px_per_pt: f32, x: f32, y: f32, colour: Colour, cap: f32) -> f32 {
+    let (cx, cy, cap) = ((x * px_per_pt).round() as i64, (y * px_per_pt).round() as i64, (cap * px_per_pt) as i64);
+    let reach = |dir: i64| {
+        let (mut l, mut gap) = (cx, 0);
+        while gap <= 2 && (l - cx).abs() <= cap {
+            l += dir;
+            gap = if ink_of(img, l, cy, colour) { 0 } else { gap + 1 };
+        }
+        (l - cx).abs() - gap as i64
+    };
+    (reach(-1) + reach(1)) as f32 / px_per_pt
+}
+
+/// One side of [`trace_curve`]: from `start` towards `dir` (+1 right, -1 left), not including `start`.
+fn follow(img: &crate::PageImage, px_per_pt: f32, start: (f32, f32), dir: f32, skip: &[crate::Rect], colour: Colour) -> Vec<(f32, f32)> {
+    const STEP: f32 = 0.5;
+    const MAX_GAP: f32 = 6.0;
+    // a row of the curve's colour this long is a frame or grid line, not the curve
+    const FRAME: f32 = 100.0;
+    let page_w = img.width as f32 / px_per_pt;
+    let (mut x, mut y, mut slope) = (start.0, start.1, None::<f32>);
+    let mut probe = x;
+    let mut out: Vec<(f32, f32)> = vec![];
+    let mut on_line = 0;
+    // the curve's own stroke across it (page points), from the runs taken so far: a run much thicker than the stroke
+    // at the slope is where another curve runs into this one
+    let mut strokes: Vec<f32> = vec![];
+    loop {
+        probe += dir * STEP;
+        if probe < 0.0 || probe > page_w {
+            break;
+        }
+        let s = slope.unwrap_or(0.0);
+        let pred = y + s * (probe - x);
+        // wide enough for the step's rise on a steep stretch, and for the first step (no slope known yet)
+        let w = (3.0 + s.abs() * (probe - x).abs() * 2.0).min(40.0) + if slope.is_none() { 3.0 } else { 0.0 };
+        let (_, found) = crossings(img, px_per_pt, probe, pred - w, pred + w, skip, false, false, colour, false);
+        let dist = |r: &(f32, f32)| if r.0 <= pred && pred <= r.1 { 0.0 } else { (r.0 - pred).abs().min((r.1 - pred).abs()) };
+        let near = found.into_iter().min_by(|a, b| dist(a).total_cmp(&dist(b)));
+        let px = 1.0 / px_per_pt;
+        // a run filling the whole window says nothing about where the curve is (a steep stretch, a vertical grid line)
+        let fills = |r: &(f32, f32)| r.0 <= pred - w + px && r.1 >= pred + w - px;
+        // nor does a run of this curve merged with another one crossing it: go on as predicted through it
+        let stroke = {
+            let mut t = strokes.clone();
+            t.sort_by(f32::total_cmp);
+            t.get(t.len() / 2).copied()
+        };
+        let merged = |r: &(f32, f32)| slope.is_some() && stroke.is_some_and(|t| r.1 - r.0 > 2.0 * t * (1.0 + s * s).sqrt() + 2.0 * px);
+        let Some(run) = near.filter(|r| !fills(r) && !merged(r)) else {
+            if (probe - x).abs() > MAX_GAP {
+                break;
+            }
+            continue;
+        };
+        let ny = (run.0 + run.1) / 2.0;
+        // the rows within a point of the centre: a curve merged into the frame has its centre beside the frame's row
+        let along_line = (-2..=2).any(|d| row_extent(img, px_per_pt, probe, ny + d as f32 * 0.5, colour, FRAME) >= FRAME);
+        if along_line {
+            on_line += 1;
+            // ran into the frame (4 points along it; a curve crossing a black grid line leaves it sooner): drop the
+            // points already taken on it
+            if on_line as f32 * STEP >= 4.0 {
+                out.truncate(out.len().saturating_sub(on_line - 1));
+                break;
+            }
+        } else {
+            on_line = 0;
+        }
+        (x, y) = (probe, ny);
+        out.push((x, y));
+        strokes.push((run.1 - run.0 + px) / (1.0 + s * s).sqrt());
+        if strokes.len() > 40 {
+            strokes.remove(0);
+        }
+        // the slope over the last 4 points of the path: where two curves run together for a moment (their runs merge
+        // into one), the centre wanders, and a slope from the last step alone would take the other curve's way
+        let back = out.iter().rev().find(|p| (p.0 - x).abs() >= 4.0).copied().unwrap_or(start);
+        if (back.0 - x).abs() > 0.1 {
+            slope = Some(((y - back.1) / (x - back.0)).clamp(-20.0, 20.0));
+        }
+    }
+    out
+}
+
+/// `n` points spread evenly along a path (by its length on the page, so a steep stretch gets its share), the ends
+/// included. The path as it is when it has no more points than that.
+pub fn spread_along(path: &[(f32, f32)], n: usize) -> Vec<(f32, f32)> {
+    if path.len() <= n.max(2) || n < 2 {
+        return path.to_vec();
+    }
+    let mut acc = vec![0.0f32];
+    for w in path.windows(2) {
+        acc.push(acc[acc.len() - 1] + ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt());
+    }
+    let total = acc[acc.len() - 1];
+    let mut out = vec![];
+    let mut j = 0;
+    for i in 0..n {
+        let d = total * i as f32 / (n - 1) as f32;
+        while j + 2 < acc.len() && acc[j + 1] < d {
+            j += 1;
+        }
+        let f = if acc[j + 1] > acc[j] { ((d - acc[j]) / (acc[j + 1] - acc[j])).clamp(0.0, 1.0) } else { 0.0 };
+        out.push((path[j].0 + f * (path[j + 1].0 - path[j].0), path[j].1 + f * (path[j + 1].1 - path[j].1)));
+    }
+    out
 }
 
 impl Graph {
@@ -369,6 +545,108 @@ mod tests {
         assert_eq!(curve_crossings(&img, 1.0, 20.0, 0.0, 99.0, &[]), vec![30.5]);
     }
 
+    type Curves = Vec<(&'static str, fn(f32) -> f32)>;
+
+    /// A 200 x 120 point graph at 2 pixels per point: grey grid, black frame (10..190, 10..110), two black lines
+    /// crossing in an X at x = 110, a red wave across both, and a steep exponential (crossing all three) that lies on
+    /// the bottom frame at first. Each curve is 1.5 points thick.
+    fn crossing_curves() -> (crate::PageImage, Curves) {
+        let k = 2.0f32;
+        let (w, h) = (400usize, 240usize);
+        let mut rgba = vec![255u8; w * h * 4];
+        let mut put = |x: i64, y: i64, c: [u8; 3]| {
+            if x >= 0 && y >= 0 && (x as usize) < w && (y as usize) < h {
+                let i = (y as usize * w + x as usize) * 4;
+                rgba[i..i + 3].copy_from_slice(&c);
+            }
+        };
+        for g in (20..190).step_by(20) {
+            for t in 0..h as i64 {
+                put((g as f32 * k) as i64, t, [170, 170, 170]);
+            }
+            for t in 0..w as i64 {
+                put(t, (g as f32 * k * 0.6) as i64, [170, 170, 170]);
+            }
+        }
+        let curves: Curves = vec![
+            ("up", |x| 100.0 - 0.4 * (x - 10.0)),
+            ("down", |x| 20.0 + 0.4 * (x - 10.0)),
+            ("red", |x| 60.0 + 20.0 * (x / 20.0).sin()),
+            ("exp", |x| 110.0 - ((x - 120.0) / 10.0).exp()),
+        ];
+        for (name, f) in &curves {
+            let c = if *name == "red" { [220, 30, 30] } else { [0, 0, 0] };
+            let mut x = 10.0f32;
+            while x <= 190.0 {
+                let y = f(x);
+                if (10.0..=110.0).contains(&y) {
+                    for dx in -2..=2 {
+                        for dy in -2..=2 {
+                            if dx * dx + dy * dy <= 2 {
+                                put((x * k) as i64 + dx, (y * k) as i64 + dy, c);
+                            }
+                        }
+                    }
+                }
+                x += 0.02;
+            }
+        }
+        for t in (10.0 * k) as i64..=(190.0 * k) as i64 {
+            put(t, (10.0 * k) as i64, [0, 0, 0]);
+            put(t, (110.0 * k) as i64, [0, 0, 0]);
+        }
+        for t in (10.0 * k) as i64..=(110.0 * k) as i64 {
+            put((10.0 * k) as i64, t, [0, 0, 0]);
+            put((190.0 * k) as i64, t, [0, 0, 0]);
+        }
+        (crate::PageImage { width: w, height: h, rgba }, curves)
+    }
+
+    #[test]
+    fn a_curve_is_followed_through_crossings_to_the_frame() {
+        let (img, curves) = crossing_curves();
+        let f = |name: &str| curves.iter().find(|c| c.0 == name).unwrap().1;
+        for (name, seed_x) in [("up", 30.0), ("down", 130.0), ("red", 30.0)] {
+            let c = f(name);
+            let path = trace_curve(&img, 2.0, (seed_x, c(seed_x) + 2.0), &[]);
+            let (x0, x1) = (path[0].0, path[path.len() - 1].0);
+            assert!(x0 < 14.0 && x1 > 186.0, "{name}: from {x0} to {x1}: {:?}", &path[path.len().saturating_sub(12)..]);
+            // on its own curve all the way: the X at 110 and the curves crossing it do not make it change lines. Where
+            // two lines overlap (or the red one is painted over part of the black stroke), the centre lies off by up to 1.5
+            // points for a moment.
+            let off: Vec<_> = path.iter().filter(|p| (p.1 - c(p.0)).abs() >= 0.75).map(|p| (p.0, p.1, c(p.0))).collect();
+            assert!(off.iter().all(|p| (p.1 - p.2).abs() < 2.0) && off.len() * 15 < path.len(), "{name}: {off:?}");
+        }
+    }
+
+    #[test]
+    fn a_steep_curve_leaves_the_frame_and_climbs_to_the_top() {
+        let (img, curves) = crossing_curves();
+        let c = curves.iter().find(|c| c.0 == "exp").unwrap().1;
+        let path = trace_curve(&img, 2.0, (150.0, c(150.0)), &[]);
+        let (first, last) = (path[0], path[path.len() - 1]);
+        // where it lies on the bottom frame, the frame is not taken for the curve (it leaves the frame near x = 124)
+        assert!(first.0 > 105.0, "started at {first:?}");
+        assert!(last.1 < 16.0, "ended at {last:?}");
+        // near the curve (by distance: on the steep part a column's run is long)
+        for &(x, y) in &path {
+            let d = (0..=2000).map(|i| 10.0 + i as f32 * 0.09).map(|t| ((t - x).powi(2) + (c(t) - y).powi(2)).sqrt()).fold(f32::MAX, f32::min);
+            assert!(d < 1.5, "({x}, {y}) is {d} from the curve");
+        }
+        // points spread along it by length: the steep end gets as many as the flat start
+        let pts = spread_along(&path, 10);
+        assert_eq!(pts.len(), 10);
+        assert_eq!(pts[0], first);
+        assert!((pts[9].0 - last.0).abs() < 1e-3 && (pts[9].1 - last.1).abs() < 1e-3);
+        assert!(pts.iter().filter(|p| p.1 < 60.0).count() >= 4, "{pts:?}");
+    }
+
+    #[test]
+    fn no_curve_near_the_seed_traces_nothing() {
+        let (img, _) = crossing_curves();
+        assert!(trace_curve(&img, 2.0, (150.0, 230.0 / 2.0 + 5.0), &[]).is_empty());
+    }
+
     #[test]
     fn tick_labels_are_read_as_printed() {
         for (t, v) in [("10", 10.0), ("0.1", 0.1), ("1.0E-3", 1e-3), ("10m", 0.01), ("1µ", 1e-6), ("100k", 1e5), ("\u{2212}5", -5.0), ("1,000", 1000.0)] {
@@ -421,5 +699,21 @@ mod real_pdf {
                 assert!((a / b).log10().abs() < 0.05, "{v}: {got:?}");
             }
         }
+        // one click on the 25 °C curve follows it: the same readings come off the traced line, and it does not go over
+        // to the 125 °C curve
+        let seed = (g.x.position(0.5).unwrap(), g.y.position(0.00126).unwrap());
+        let path = trace_curve(&img, k, seed, &skip);
+        let read = |v: f64| {
+            let px = g.x.position(v).unwrap();
+            let p = path.iter().min_by(|a, b| (a.0 - px).abs().total_cmp(&(b.0 - px).abs())).unwrap();
+            assert!((p.0 - px).abs() < 1.0, "{v}: the trace does not reach it ({:?} .. {:?})", path[0], path[path.len() - 1]);
+            g.y.value(p.1).unwrap()
+        };
+        for (v, want) in [(0.5, 0.00126), (0.6, 0.056)] {
+            let got = read(v);
+            assert!((got / want).log10().abs() < 0.05, "{v}: {got}");
+        }
+        let pts = spread_along(&path, 12);
+        assert_eq!(pts.len(), 12);
     }
 }

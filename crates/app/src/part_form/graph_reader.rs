@@ -1,6 +1,8 @@
 //! "グラフから点を読む" in the data sheet window (M10, step 2): the person clicks the tick labels of both axes (or a
 //! grid line and types its value), then clicks on the curve; the points come out as numbers, to copy (lines or
-//! the `.fit.json` form) or to put into the form's field that asked for them. The arithmetic is `datasheet::graph`.
+//! the `.fit.json` form) or to put into the form's field that asked for them. In 「曲線をたどる」 one click on a curve
+//! follows it to its ends and spreads points along it (`datasheet::graph::trace_curve`). The arithmetic is
+//! `datasheet::graph`.
 
 use datasheet::graph::{Axis, Graph, Tick, tick_value};
 use eframe::egui::{self, Color32};
@@ -11,6 +13,8 @@ pub enum Mode {
     XTick,
     YTick,
     Points,
+    /// A click on a curve follows it and adds points spread along it.
+    Trace,
 }
 
 /// The form's field that asked for the points.
@@ -111,6 +115,10 @@ pub struct GraphReader {
     dest: Option<Dest>,
     /// A click near a curve goes to the curve's centre line (the page's picture is read in the click's column).
     pub snap: bool,
+    /// How many points a traced curve gives.
+    trace_n: usize,
+    /// The curves followed so far (page points), drawn so the person sees which curve was taken.
+    traced: Vec<(Vec<(f32, f32)>, usize)>,
     msg: Option<(bool, String)>,
     out: Option<GraphOut>,
 }
@@ -127,6 +135,8 @@ impl GraphReader {
             swap,
             dest,
             snap: true,
+            trace_n: 12,
+            traced: vec![],
             msg: None,
             out: None,
         }
@@ -160,6 +170,7 @@ impl GraphReader {
     pub fn retarget(&mut self, dest: Option<Dest>) {
         self.dest = dest;
         self.points.clear();
+        self.traced.clear();
         self.msg = Some((true, i18n::tr("前に置いた目盛りをそのまま使います。別の図なら「目盛りから始め直す」を押します").to_string()));
         if self.has_axes() {
             self.mode = Some(Mode::Points);
@@ -183,7 +194,8 @@ impl GraphReader {
                 None => self.y.ticks.push((p.1, String::new())),
             },
             Some(Mode::Points) => self.points.push(p),
-            None => {}
+            // the window follows the curve under the click and hands the line to `add_trace`
+            Some(Mode::Trace) | None => {}
         }
         // two ticks on the horizontal axis: go on with the vertical one; then with the points
         if self.mode == Some(Mode::XTick) && self.x.ticks.len() >= 2 && self.y.ticks.is_empty() {
@@ -191,6 +203,32 @@ impl GraphReader {
         } else if self.mode == Some(Mode::YTick) && self.y.ticks.len() >= 2 && self.points.is_empty() && self.x.axis().is_ok() && self.y.axis().is_ok() {
             self.mode = Some(Mode::Points);
         }
+    }
+
+    /// Adds points spread along a curve followed from a click (`datasheet::graph::trace_curve`; empty when nothing was
+    /// near the click).
+    pub fn add_trace(&mut self, path: Vec<(f32, f32)>) {
+        if path.len() < 2 {
+            self.msg = Some((false, i18n::tr("クリックした所の上下 6 pt に曲線が見つかりません。曲線の線の上をクリックしてください (拡大すると当てやすくなります)").to_string()));
+            return;
+        }
+        let pts = datasheet::graph::spread_along(&path, self.trace_n);
+        let n = pts.len();
+        self.points.extend(pts);
+        self.traced.push((path, n));
+        self.msg = Some((true, i18n::trf!("曲線をたどって {} 点を足しました。ページの赤い線が、読みたい曲線の上を端まで通っているか確かめてください", n)));
+    }
+
+    /// Takes back the last traced curve and the points it added.
+    fn remove_last_trace(&mut self) {
+        if let Some((_, n)) = self.traced.pop() {
+            self.points.truncate(self.points.len().saturating_sub(n));
+        }
+    }
+
+    /// The page position of values of the axes as printed (for `--form-graph`).
+    pub fn position_of(&self, xv: f64, yv: f64) -> Option<(f32, f32)> {
+        Some((self.x.axis().ok()?.position(xv)?, self.y.axis().ok()?.position(yv)?))
     }
 
     /// Adds a point at values of the axes as printed (for `--form-graph`, screenshots): placed where the axes put it.
@@ -223,6 +261,11 @@ impl GraphReader {
             painter.text(a + egui::vec2(2.0, -2.0), egui::Align2::LEFT_BOTTOM, text, egui::FontId::proportional(14.0), tick);
         }
         let red = Color32::from_rgb(230, 40, 40);
+        let line = Color32::from_rgba_unmultiplied(230, 40, 40, 140);
+        for (path, _) in &self.traced {
+            let pts: Vec<egui::Pos2> = path.iter().map(|&(x, y)| to_screen(x, y)).collect();
+            painter.add(egui::Shape::line(pts, egui::Stroke::new(2.0, line)));
+        }
         for (n, &(x, y)) in self.points.iter().enumerate() {
             let c = to_screen(x, y);
             painter.circle_stroke(c, 4.0, egui::Stroke::new(1.5, red));
@@ -235,7 +278,7 @@ impl GraphReader {
     /// The panel. `shown` is the page on screen; returns false when the reading should be dropped.
     pub fn ui(&mut self, ui: &mut egui::Ui, shown: usize) -> bool {
         let mut keep = true;
-        ui.label(egui::RichText::new(i18n::tr("1. 横軸の目盛りの数字を 2 つ以上クリック → 2. 縦軸の目盛りの数字を 2 つ以上クリック → 3. 曲線の上をクリックして点を取る。数字が文字でない図は、目盛りの線をクリックして値を入れます。拡大すると正確に取れます")).small());
+        ui.label(egui::RichText::new(i18n::tr("1. 横軸の目盛りの数字を 2 つ以上クリック → 2. 縦軸の目盛りの数字を 2 つ以上クリック → 3. 曲線の上をクリックして点を取る (「曲線をたどる」なら 1 回のクリックで曲線の端から端まで)。数字が文字でない図は、目盛りの線をクリックして値を入れます。拡大すると正確に取れます")).small());
         if shown != self.page {
             ui.horizontal_wrapped(|ui| {
                 ui.colored_label(crate::theme::WARN, i18n::trf!("このグラフは p.{} のものです", self.page + 1));
@@ -294,6 +337,15 @@ impl GraphReader {
             }
             if !self.points.is_empty() && ui.small_button(i18n::tr("点を全部消す")).on_hover_text(i18n::tr("取った点を全部消します (目盛りは残します)")).clicked() {
                 self.points.clear();
+                self.traced.clear();
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            set_mode(ui, Mode::Trace, "曲線をたどる", "曲線の上を 1 回クリックすると、その曲線を左右の端までたどり、長さに沿って同じ間隔で点を足します。曲線の色 (黒・赤・青 …) を見分け、交わる所では向きの続く方をたどります。たどった線はページに赤く出ます。曲線が重なって走る所・破線・途中で折り返す曲線は、途中で止まるか、外れることがあります", &mut self.mode);
+            ui.label(i18n::tr("点の数"));
+            ui.add(egui::DragValue::new(&mut self.trace_n).range(3..=60)).on_hover_text(i18n::tr("1 本の曲線から取る点の数。曲線の長さに沿って同じ間隔で並べます (急な所にも点が入ります)"));
+            if !self.traced.is_empty() && ui.small_button(i18n::tr("最後の曲線を消す")).on_hover_text(i18n::tr("最後にたどった曲線と、その点を消します")).clicked() {
+                self.remove_last_trace();
             }
         });
         ui.checkbox(&mut self.swap, i18n::tr("縦軸の値を先に書く")).on_hover_text(i18n::tr("ダイオードの順方向特性は横軸が電圧・縦軸が電流ですが、入れる欄は「電流 電圧」の順です。そのときは入れます"));
@@ -374,6 +426,30 @@ mod tests {
         assert!((v[1].0 - 0.1).abs() < 1e-12 && (v[1].1 - 0.8).abs() < 1e-9, "{v:?}");
         assert_eq!(short(v[0].0), "0.01");
         assert_eq!(short(2e-5), "20u");
+    }
+
+    #[test]
+    fn a_traced_curve_adds_points_along_it_and_goes_away_as_one() {
+        let mut g = GraphReader::new(0, None);
+        g.click((100.0, 0.0), Some(("0", (100.0, 0.0))));
+        g.click((200.0, 0.0), Some(("1", (200.0, 0.0))));
+        g.click((0.0, 300.0), Some(("0", (0.0, 300.0))));
+        g.click((0.0, 100.0), Some(("1", (0.0, 100.0))));
+        g.points.push((150.0, 200.0));
+        g.trace_n = 5;
+        // a straight line from (0, 0) to (1, 1) in values, traced every half point
+        let path: Vec<(f32, f32)> = (0..=200).map(|i| (100.0 + i as f32 * 0.5, 300.0 - i as f32)).collect();
+        g.add_trace(path);
+        let v = g.values().unwrap();
+        assert_eq!(v.len(), 6, "{v:?}");
+        assert!(v.iter().any(|p| (p.0 - 0.25).abs() < 1e-6 && (p.1 - 0.25).abs() < 1e-6), "{v:?}");
+        // nothing near the click: a message, no points
+        g.add_trace(vec![]);
+        assert_eq!(g.points.len(), 6);
+        assert!(g.msg.as_ref().is_some_and(|m| !m.0));
+        // 「最後の曲線を消す」 takes that curve's points and leaves the one picked by hand
+        g.remove_last_trace();
+        assert_eq!(g.points, vec![(150.0, 200.0)]);
     }
 
     #[test]

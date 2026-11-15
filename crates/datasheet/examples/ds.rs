@@ -5,6 +5,7 @@
 //!     cargo run -p datasheet --example ds -- labels FILE.pdf PAGE [box=x0,y0,x1,y1]   numbers on the page (tick labels)
 //!     cargo run -p datasheet --example ds -- render FILE.pdf PAGE OUT.png [scale=2] [box=x0,y0,x1,y1]
 //!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=x0,y0,x1,y1 x=L1,L2 y=L1,L2 [xlog] [ylog] [rows] [abs] [keepthin] at=V1,V2,...
+//!     cargo run -p datasheet --example ds -- trace  FILE.pdf PAGE box=.. x=.. y=.. follow=X:Y [n=12]   follow one curve
 //!     cargo run -p datasheet --example ds -- grid   FILE.pdf PAGE box=x0,y0,x1,y1   the grid lines (for labels that are pictures:
 //!                                                                                  then trace with xt=V@X,.. yt=V@Y,..)
 //!
@@ -12,6 +13,9 @@
 //! the tick labels named in `x=` (the lowest of that text in the box) and `y=` (the leftmost), then the curves'
 //! values at each `at=` value of the horizontal axis, from the page's picture (`datasheet::graph::curve_crossings`);
 //! with `rows`, `at=` is a value of the vertical axis and the answer is where the curves are across (left to right).
+//! With `follow=X:Y` (a point on a curve, in the axes' values) the one curve through it is followed to its ends
+//! (`datasheet::graph::trace_curve`) and `n=` points spread along it are printed (`spread_along`), as the graph window's
+//! 「曲線をたどる」 does.
 //! Readings for the bundled parts go into `crates/part-lib/fits/*.fit.json`.
 
 use datasheet::graph::{Axis, Graph, Tick, number_labels};
@@ -124,6 +128,24 @@ fn main() -> Result<(), String> {
             let k = img.width as f32 / ds.page_size(p).map_or(1.0, |s| s.0);
             // `rows`: at= is a value of the vertical axis, and the answer the horizontal values (a forward voltage at a current)
             let rows = args.iter().any(|a| a == "rows");
+            if let Some(f) = arg(&args, "follow") {
+                let (fx, fy) = f.split_once(':').ok_or("follow=X:Y (values of the axes)")?;
+                let (fx, fy) = (datasheet::graph::tick_value(fx).ok_or("follow: X")?, datasheet::graph::tick_value(fy).ok_or("follow: Y")?);
+                let seed = (g.x.position(fx).ok_or("follow: X off the axis")?, g.y.position(fy).ok_or("follow: Y off the axis")?);
+                let skip: Vec<Rect> = ds.words(p).iter().map(|w| w.rect).collect();
+                let path = datasheet::graph::trace_curve(&img, k, seed, &skip);
+                if path.is_empty() {
+                    return Err("no curve within 6 points of follow=".into());
+                }
+                let n: usize = arg(&args, "n").and_then(|s| s.parse().ok()).unwrap_or(12);
+                println!("# traced {} steps, page x {:.1} .. {:.1}", path.len(), path[0].0, path[path.len() - 1].0);
+                for (x, y) in datasheet::graph::spread_along(&path, n) {
+                    if let Some((a, b)) = g.value_at(x, y) {
+                        println!("{a:.5}	{b:.5}");
+                    }
+                }
+                return Ok(());
+            }
             for v in arg(&args, "at").unwrap_or("").split(',').filter_map(datasheet::graph::tick_value) {
                 if rows {
                     let skip: Vec<Rect> = ds.words(p).iter().map(|w| w.rect).collect();

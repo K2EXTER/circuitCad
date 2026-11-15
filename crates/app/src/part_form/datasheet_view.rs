@@ -277,7 +277,7 @@ impl SheetView {
 
     /// Reads a graph for a screenshot (`--form-graph "page|x=0.2,0.8|y=1.0E-04,1.0E+00|pts=0.55:1e-3,0.62:1e-2"`, page
     /// from 1): the labels are clicked where they are printed (the last one on the page with that text), the points
-    /// are placed at their values.
+    /// are placed at their values. `trace=0.5:1.26e-3` follows the curve through that point (「曲線をたどる」).
     pub fn graph_for_screenshot(&mut self, spec: &str) {
         let mut parts = spec.split('|');
         let page = parts.next().and_then(|p| p.trim().parse::<usize>().ok()).unwrap_or(1).saturating_sub(1);
@@ -299,6 +299,15 @@ impl SheetView {
                         if let Some(l) = l {
                             g.click((l.1, l.2), Some((&l.0, (l.1, l.2))));
                             d.jump = Some(Rect { x0: l.1, y0: l.2, x1: l.1, y1: l.2 });
+                        }
+                    }
+                    "trace" => {
+                        if let Some((a, b)) = item.split_once(':')
+                            && let (Ok(a), Ok(b)) = (a.parse(), b.parse())
+                            && let Some((x, y)) = g.position_of(a, b)
+                        {
+                            let path = d.trace_at(x, y);
+                            g.add_trace(path);
                         }
                     }
                     "pts" => {
@@ -684,6 +693,18 @@ impl Opened {
                 let p = (pos - origin) / zoom;
                 self.curve_near(p.x, p.y)
             }
+            (Some(Mode::Trace), Some(pos)) => {
+                let p = (pos - origin) / zoom;
+                self.curve_near(p.x, p.y)
+            }
+            _ => None,
+        };
+        // following a curve: a click traces the curve under the pointer (before the reader is borrowed below)
+        let traced = match (self.graph.as_ref().filter(|g| g.page == self.page).and_then(|g| g.mode), resp.hover_pos()) {
+            (Some(Mode::Trace), Some(pos)) if resp.clicked() => {
+                let p = (pos - origin) / zoom;
+                Some(self.trace_at(p.x, p.y))
+            }
             _ => None,
         };
         // reading a graph: the ticks and points are drawn; a click adds a tick (on a label: its number) or a point
@@ -698,7 +719,7 @@ impl Opened {
                     let c = origin + p * zoom;
                     ui.painter().line_segment([c - Vec2::new(8.0, 0.0), c + Vec2::new(8.0, 0.0)], egui::Stroke::new(1.5, egui::Color32::from_rgb(230, 40, 40)));
                 }
-                let label = if mode == Mode::Points {
+                let label = if matches!(mode, Mode::Points | Mode::Trace) {
                     None
                 } else {
                     self.ds.words(self.page).iter().find(|w| w.rect.x0 - 1.0 <= p.x && p.x <= w.rect.x1 + 1.0 && w.rect.y0 <= p.y && p.y <= w.rect.y1).and_then(|w| {
@@ -715,14 +736,16 @@ impl Opened {
                         ui.painter().rect_stroke(on_screen(r).expand(1.0), 2.0, egui::Stroke::new(1.5, crate::theme::INFO), egui::StrokeKind::Outside);
                         format!("目盛り {t}")
                     }
-                    (None, Mode::Points) => match g.value_at((p.x, p.y)) {
+                    (None, Mode::Points | Mode::Trace) => match g.value_at((p.x, p.y)) {
                         Some((a, b)) => format!("({}, {}){}", super::graph_reader::short(a), super::graph_reader::short(b), if snapped.is_some() { "  曲線に合わせました" } else { "" }),
                         None => "先に横軸と縦軸の目盛りを 2 つずつ入れてください".into(),
                     },
                     (None, _) => "ここを目盛りにします (値はあとで入れます)".into(),
                 };
                 resp.clone().on_hover_text(tip);
-                if resp.clicked() {
+                if let Some(path) = traced {
+                    g.add_trace(path);
+                } else if resp.clicked() {
                     g.click((p.x, p.y), label.as_ref().map(|(t, c, _)| (t.as_str(), *c)));
                 }
             }
@@ -762,6 +785,19 @@ impl Opened {
         let (_, img, k) = self.snap.as_ref()?;
         let skip: Vec<Rect> = self.ds.words(self.page).iter().map(|w| w.rect).collect();
         datasheet::graph::curve_crossings(img, *k, x, y - 6.0, y + 6.0, &skip).into_iter().min_by(|a, b| (a - y).abs().total_cmp(&(b - y).abs()))
+    }
+
+    /// The curve under page point (x, y) followed to its ends (`datasheet::graph::trace_curve` on the same picture as
+    /// [`Self::curve_near`]).
+    fn trace_at(&mut self, x: f32, y: f32) -> Vec<(f32, f32)> {
+        if self.snap.as_ref().is_none_or(|s| s.0 != self.page) {
+            let Ok(img) = self.ds.render(self.page, 4.0) else { return vec![] };
+            let Some(k) = self.ds.page_size(self.page).map(|s| img.width as f32 / s.0) else { return vec![] };
+            self.snap = Some((self.page, img, k));
+        }
+        let Some((_, img, k)) = self.snap.as_ref() else { return vec![] };
+        let skip: Vec<Rect> = self.ds.words(self.page).iter().map(|w| w.rect).collect();
+        datasheet::graph::trace_curve(img, *k, (x, y), &skip)
     }
 
     /// The search box, the heading buttons, the hit counter and the list of hits.
