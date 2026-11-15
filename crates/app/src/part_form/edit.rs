@@ -91,6 +91,8 @@ impl PartForm {
             f.rt_v = r.v_max.map(num).unwrap_or_default();
             f.rt_i = r.i_max.map(num).unwrap_or_default();
             f.rt_p = r.p_max.map(num).unwrap_or_default();
+            f.rt_t = r.t_max.map(num).unwrap_or_default();
+            f.rt_derate = r.derate_from.map(num).unwrap_or_default();
             f.rt_rows = r.rows.iter().map(|row| format!("{} | {} | {}", row.name, row.value, row.condition)).collect::<Vec<_>>().join("\n");
             if let Some(rp) = &r.ripple {
                 f.rt_ripple = num(rp.i_rms);

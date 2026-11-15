@@ -233,6 +233,151 @@ pub fn check_ratings(sch: &Schematic, dc: &DcResult) -> Vec<RatingIssue> {
     out
 }
 
+/// Where a part's temperature limit was taken from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LimitSource {
+    /// Given on the part in the schematic (`Component.t_max`).
+    Part,
+    /// The library part's data sheet ratings (`PartRatings.t_max`).
+    Datasheet,
+    /// A typical value for the kind of part: to be confirmed.
+    Guess,
+}
+
+/// The highest temperature a part may reach, and the surrounding temperature its rated power starts to fall from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TempLimit {
+    pub t_max: f64,
+    pub derate_from: Option<f64>,
+    pub source: LimitSource,
+}
+
+/// A part's temperature limit: its own setting, else the library part's ratings, else a typical value for its kind (a chip resistor's
+/// element 155 °C with the power lowered from 70 °C, a diode or transistor's junction 150 °C, an LED 100 °C, an IC 125 °C). `junctions`
+/// is how many diodes or transistors the part holds (a library part without any is taken as a resistor).
+pub fn temperature_limit(comp: &Component, junctions: usize) -> TempLimit {
+    let rated = comp.custom.as_ref().and_then(|c| c.ratings.as_ref());
+    let guess = match comp.kind {
+        Kind::Resistor => (155.0, Some(70.0)),
+        Kind::Diode | Kind::Npn => (150.0, Some(25.0)),
+        Kind::Led => (100.0, None),
+        _ if junctions > 0 => (125.0, None),
+        _ => (155.0, Some(70.0)),
+    };
+    let derate_from = rated.and_then(|r| r.derate_from).or(guess.1);
+    if comp.t_max > 0.0 {
+        TempLimit { t_max: comp.t_max, derate_from, source: LimitSource::Part }
+    } else if let Some(t) = rated.and_then(|r| r.t_max) {
+        TempLimit { t_max: t, derate_from, source: LimitSource::Datasheet }
+    } else {
+        TempLimit { t_max: guess.0, derate_from, source: LimitSource::Guess }
+    }
+}
+
+/// One warmed part against its temperature limit.
+#[derive(Clone, Debug)]
+pub struct TempCheck {
+    pub name: String,
+    pub temp_c: f64,
+    pub limit: TempLimit,
+    /// How far below the limit it stays (K; negative when over).
+    pub margin_k: f64,
+    /// The rated power lowered for the surrounding temperature (W), when the part has a rated power and the surroundings are above
+    /// the temperature it starts to fall from.
+    pub p_derated: Option<f64>,
+    /// `None`: fine. `Caution`: above the goal (20 % of the way from the surroundings to the limit, as in the calculators). `Over`: past the
+    /// limit, or more power than the lowered rating.
+    pub level: Option<RatingLevel>,
+    pub message: String,
+    pub hint: String,
+}
+
+/// The self-heating result checked against each part's temperature limit and, above the derating temperature, its lowered rated power.
+pub fn check_temperatures(sch: &Schematic, parts: &[crate::HeatedPart], t_amb: f64) -> Vec<TempCheck> {
+    let mut out = vec![];
+    for p in parts {
+        let Some(comp) = sch.components.iter().find(|c| c.refdes == p.name) else { continue };
+        let limit = temperature_limit(comp, p.junctions);
+        let margin_k = limit.t_max - p.temp_c;
+        let goal = limit.t_max - 0.2 * (limit.t_max - t_amb);
+        // the rated power: the data sheet's, or for a resistor the package's typical one
+        let rated = comp.custom.as_ref().and_then(|c| c.ratings.as_ref()).and_then(|r| r.p_max).or_else(|| (comp.kind == Kind::Resistor).then(|| package_power_limit(&comp.footprint_name())).flatten());
+        let p_derated = match (rated, limit.derate_from) {
+            (Some(pr), Some(d)) if t_amb > d && limit.t_max > d => Some(pr * ((limit.t_max - t_amb) / (limit.t_max - d)).max(0.0)),
+            _ => None,
+        };
+        let guessed = if limit.source == LimitSource::Guess { " (上限は部品の種類からの目安。データシートの値を入れてください)" } else { "" };
+        let (level, message, hint) = if p.temp_c > limit.t_max {
+            (
+                Some(RatingLevel::Over),
+                format!("{} は {:.0} ℃ になり、上限 {:.0} ℃ を {:.0} K 超えます{guessed}", p.name, p.temp_c, limit.t_max, -margin_k),
+                "このままでは壊れるか、寿命が大きく縮みます。熱抵抗を下げる (銅を広げる・放熱板。「値の決め方」の「放熱」で面積が分かります)、損失を減らす、定格の大きい部品にする、のどれかです".to_string(),
+            )
+        } else if p_derated.is_some_and(|pd| p.power > pd) {
+            let pd = p_derated.unwrap_or_default();
+            (
+                Some(RatingLevel::Over),
+                format!("{} の電力 {:.3} W は、周囲 {t_amb:.0} ℃ で下げた定格 {pd:.3} W を超えます (定格は {:.0} ℃ から下がります){guessed}", p.name, p.power, limit.derate_from.unwrap_or_default()),
+                "まわりが熱いと、部品が出してよい電力は下がります (データシートの低減曲線)。定格の大きい部品にするか、損失を減らします".to_string(),
+            )
+        } else if p.temp_c > goal {
+            (
+                Some(RatingLevel::Caution),
+                format!("{} は {:.0} ℃ で、上限 {:.0} ℃ まで {margin_k:.0} K しかありません (目安は {goal:.0} ℃ 以下){guessed}", p.name, p.temp_c, limit.t_max),
+                "動きますが余裕が少なく、箱に入れる・夏の暑さで上限に近づきます。熱抵抗を下げるか、損失を減らすと安心です".to_string(),
+            )
+        } else {
+            (None, format!("{} は {:.0} ℃ (上限 {:.0} ℃ まで {margin_k:.0} K){guessed}", p.name, p.temp_c, limit.t_max), String::new())
+        };
+        out.push(TempCheck { name: p.name.clone(), temp_c: p.temp_c, limit, margin_k, p_derated, level, message, hint });
+    }
+    out.sort_by(|a, b| b.level.cmp(&a.level).then(a.margin_k.total_cmp(&b.margin_k)));
+    out
+}
+
+#[cfg(test)]
+mod temp_tests {
+    use super::*;
+
+    fn part(name: &str, temp_c: f64, power: f64, junctions: usize) -> crate::HeatedPart {
+        crate::HeatedPart { name: name.into(), power, rise: temp_c - 25.0, temp_c, change: 0.0, theta: 100.0, tc1: 0.0, tc2: 0.0, junctions, junction_v: None }
+    }
+
+    #[test]
+    fn a_part_is_judged_against_its_own_limit_then_the_library_then_a_guess() {
+        let mut sch = Schematic::default();
+        let r = sch.add(Kind::Resistor, (0, 0), 0);
+        let q = sch.add(Kind::Npn, (20, 0), 0);
+        let (rn, qn) = (sch.components[r].refdes.clone(), sch.components[q].refdes.clone());
+        // guesses: the resistor's element 155 C, the transistor's junction 150 C
+        let checks = check_temperatures(&sch, &[part(&rn, 60.0, 0.01, 0), part(&qn, 160.0, 0.5, 1)], 25.0);
+        let (cr, cq) = (checks.iter().find(|c| c.name == rn).unwrap(), checks.iter().find(|c| c.name == qn).unwrap());
+        assert_eq!((cr.limit.t_max, cr.limit.source, cr.level), (155.0, LimitSource::Guess, None));
+        assert_eq!((cq.limit.t_max, cq.level), (150.0, Some(RatingLevel::Over)));
+        assert!(cq.message.contains("10 K 超え") && cq.message.contains("目安"), "{}", cq.message);
+        assert_eq!(checks[0].name, qn, "the worst first");
+        // its own limit wins; 130 C on 150 C with the surroundings at 25 C is past the goal of 125 C
+        sch.components[q].t_max = 150.0;
+        let c = check_temperatures(&sch, &[part(&qn, 130.0, 0.5, 1)], 25.0).remove(0);
+        assert_eq!((c.limit.source, c.level), (LimitSource::Part, Some(RatingLevel::Caution)));
+        assert!(!c.message.contains("種類からの目安"), "{}", c.message);
+    }
+
+    #[test]
+    fn a_resistor_in_a_hot_place_gets_a_lower_rated_power() {
+        // 0603 (0.1 W typical) at 100 C around: 0.1 x (155 - 100) / (155 - 70) = 0.0647 W, so 0.08 W is too much even though
+        // the element itself stays under 155 C
+        let mut sch = Schematic::default();
+        let r = sch.add(Kind::Resistor, (0, 0), 0);
+        sch.components[r].footprint = "R_0603".into();
+        let name = sch.components[r].refdes.clone();
+        let c = check_temperatures(&sch, &[part(&name, 140.0, 0.08, 0)], 100.0).remove(0);
+        assert!((c.p_derated.unwrap() - 0.1 * 55.0 / 85.0).abs() < 1e-9, "{c:?}");
+        assert_eq!(c.level, Some(RatingLevel::Over));
+        assert!(c.message.contains("下げた定格"), "{}", c.message);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

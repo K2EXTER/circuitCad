@@ -392,7 +392,7 @@ impl SeriesDef {
                 "limits": limits,
                 "origin": { "kind": "equivalent", "source": format!("{} {} のデータシートの公称値と許容差 ({})", self.maker, self.series, self.checked) }
             },
-            "ratings": { "v_max": v_max, "p_max": power, "rows": rows },
+            "ratings": { "v_max": v_max, "p_max": power, "t_max": self.derate_zero_c, "derate_from": self.derate_from_c, "rows": rows },
             "glyph": "resistor",
             "body": self.outline
         });
@@ -422,6 +422,8 @@ impl SeriesDef {
                 if let Some(r) = p.ratings.as_mut() {
                     r.v_max = Some(v_max);
                     r.p_max = Some(power);
+                    r.t_max = Some(self.derate_zero_c);
+                    r.derate_from = Some(self.derate_from_c);
                     r.rows = rows;
                 }
                 p
@@ -610,6 +612,9 @@ mod tests {
         let r = d.ratings.as_ref().unwrap();
         assert!((r.v_max.unwrap() - 21.679).abs() < 0.01, "{:?}", r.v_max);
         assert_eq!(erj().part(1e6).ratings.unwrap().v_max, Some(75.0));
+        // the data sheet's derating line reaches the temperature check: power falls from 70 C to nothing at 155 C
+        let rt = erj().part(1e3).ratings.unwrap();
+        assert_eq!((rt.derate_from, rt.t_max), (Some(70.0), Some(155.0)));
         assert_eq!(d.footprint().unwrap().pads.len(), 2);
     }
 

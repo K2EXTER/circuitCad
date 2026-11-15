@@ -228,6 +228,9 @@ pub struct PartForm {
     pub rt_v: String,
     pub rt_i: String,
     pub rt_p: String,
+    /// The highest temperature of the junction or element [°C] and the surrounding temperature the rated power starts to fall from.
+    pub rt_t: String,
+    pub rt_derate: String,
     pub rt_rows: String,
     /// An electrolytic capacitor's rated ripple current [A rms] and the frequency it is given at, the data sheet's
     /// multiplier table (one `frequency multiplier` per line), and its endurance (hours at a temperature).
@@ -370,6 +373,8 @@ impl Default for PartForm {
             rt_v: String::new(),
             rt_i: String::new(),
             rt_p: String::new(),
+            rt_t: String::new(),
+            rt_derate: String::new(),
             rt_rows: String::new(),
             rt_ripple: String::new(),
             rt_ripple_f: "100k".into(),

@@ -467,9 +467,9 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "pins": n, "names": c.pin_names})))
     }
 
-    /// `thermal REF [theta=K/W] [tc=ppm] [cth=J/K]`: the heat resistance, the temperature coefficient and the heat capacity of a part for `heat` / `heattran` (0 = back to the guess).
+    /// `thermal REF [theta=K/W] [tc=ppm] [cth=J/K] [tmax=C]`: the heat resistance, the temperature coefficient, the heat capacity and the highest temperature of a part for `heat` / `heattran` (0 = back to the guess).
     pub fn thermal(&mut self, args: &[String]) -> Res {
-        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity)
+        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K] [tmax=C]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity, the highest temperature from the library part or a guess from the kind)
 thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts through the board's copper, kept in the file and used by heattran; K/W of 0 removes it)";
         let (pos, kv) = options(args);
         if let Some(spec) = opt(&kv, "link") {
@@ -489,8 +489,8 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         }
         let [r] = pos.as_slice() else { return Err(usage.into()) };
         let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && (k == "tc" || *x >= 0.0)).ok_or_else(|| format!("{k}={s} is not a number{}", if k == "tc" { "" } else { " (zero or more)" }))).transpose();
-        let (theta, tc, cth) = (num("theta")?, num("tc")?, num("cth")?);
-        if theta.is_none() && tc.is_none() && cth.is_none() {
+        let (theta, tc, cth, tmax) = (num("theta")?, num("tc")?, num("cth")?, num("tmax")?);
+        if theta.is_none() && tc.is_none() && cth.is_none() && tmax.is_none() {
             return Err(usage.into());
         }
         let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
@@ -503,7 +503,10 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         if let Some(x) = cth {
             c.cth = x;
         }
-        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth})))
+        if let Some(x) = tmax {
+            c.t_max = x;
+        }
+        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth, "t_max_c": c.t_max})))
     }
 
     /// `heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300,...] (else the links kept by `thermal link=`) [tstep=] [temp=27] [uic] [samples=8]`: a transient run whose power becomes
@@ -580,10 +583,18 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         self.last_dc = Some(r.warm.clone());
         let mut parts: Vec<&sim_core::HeatedPart> = r.parts.iter().filter(|p| p.power > 1e-9).collect();
         parts.sort_by(|a, b| b.rise.total_cmp(&a.rise));
+        let owned: Vec<sim_core::HeatedPart> = parts.iter().map(|p| (*p).clone()).collect();
+        let checks = sim_core::check_temperatures(&self.sch, &owned, temp);
+        let check_of = |name: &str| checks.iter().find(|c| c.name == name);
+        let level = |l: Option<sim_core::RatingLevel>| match l {
+            Some(sim_core::RatingLevel::Over) => "over",
+            Some(sim_core::RatingLevel::Caution) => "caution",
+            None => "ok",
+        };
         let rows: Vec<Value> = parts
             .iter()
             .take(top)
-            .map(|p| json!({"part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6, "junctions": p.junctions, "junction_cold_v": p.junction_v.map(|v| v.0), "junction_warm_v": p.junction_v.map(|v| v.1)}))
+            .map(|p| json!({"t_max_c": check_of(&p.name).map(|c| c.limit.t_max), "t_max_from": check_of(&p.name).map(|c| format!("{:?}", c.limit.source).to_lowercase()), "margin_k": check_of(&p.name).map(|c| c.margin_k), "derated_power_w": check_of(&p.name).and_then(|c| c.p_derated), "temperature": check_of(&p.name).map(|c| level(c.level)), "part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6, "junctions": p.junctions, "junction_cold_v": p.junction_v.map(|v| v.0), "junction_warm_v": p.junction_v.map(|v| v.1)}))
             .collect();
         let mut moved: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-12).collect();
         moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
@@ -595,8 +606,12 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         }
         notes.push("own_theta is a guess from the package unless set (thermal REF theta=K/W): the heat resistance from the resistor to the air on the smallest pads".to_string());
         notes.push(copper_note(&copper, self.board.is_some(), self.post_layout));
+        if checks.iter().any(|c| c.limit.source == sim_core::LimitSource::Guess) {
+            notes.push("t_max_from 'guess' is a typical limit for the kind of part (chip resistor 155 C derated from 70 C, diode/transistor 150 C, LED 100 C, IC 125 C): set the data sheet's with thermal REF tmax=C".to_string());
+        }
         notes.extend(gate);
-        Ok(obj(json!({"ambient_c": temp, "rounds": r.rounds, "parts": rows, "nodes": nodes, "notes": notes})))
+        let problems: Vec<Value> = checks.iter().filter(|c| c.level.is_some()).map(|c| json!({"part": c.name, "level": level(c.level), "message": c.message, "hint": c.hint})).collect();
+        Ok(obj(json!({"ambient_c": temp, "rounds": r.rounds, "parts": rows, "temperature_problems": problems, "nodes": nodes, "notes": notes})))
     }
 
     /// The points of the pins `REF.PIN` stands for (a pin name shared by several pins means all of them).

@@ -156,6 +156,12 @@ impl PartForm {
                 ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 0.5 / 625m / 1"));
                 self.pick_button(ui, datasheet_view::Target::MaxP, "PDFから選ぶ");
                 ui.end_row();
+                ui.label(i18n::tr("最高温度 [℃]")).on_hover_text(i18n::tr("部品の中が達してよい最高の温度。半導体は接合部の温度 Tj の最大 (多くは 125〜175 ℃)、抵抗は抵抗体の上限 (チップ抵抗は多くが 155 ℃)。自己発熱の計算のあと、この温度と比べて余裕を出します"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_t).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 150 / 155"));
+                ui.end_row();
+                ui.label(i18n::tr("電力を下げ始める温度 [℃]")).on_hover_text(i18n::tr("データシートの「定格電力の低減曲線」で、まわりの温度がこれを超えると最大電力が下がり始め、最高温度で 0 になります (チップ抵抗は多くが 70 ℃、トランジスタは 25 ℃)"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_derate).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 70 / 25"));
+                ui.end_row();
             });
             // only where it belongs: an electrolytic / tantalum capacitor, a part that already has such figures, or
             // a part whose kind was not chosen

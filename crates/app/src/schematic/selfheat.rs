@@ -8,6 +8,8 @@ pub(crate) struct HeatView {
     pub parts: Vec<sim_core::HeatedPart>,
     /// (net, volts cold, volts warm) for the nets that moved the most.
     pub nodes: Vec<(String, f64, f64)>,
+    /// Each warmed part against its temperature limit (`sim_core::check_temperatures`), the worst first.
+    pub checks: Vec<sim_core::TempCheck>,
 }
 
 impl SchEditor {
@@ -21,7 +23,8 @@ impl SchEditor {
         let mut nodes: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-9).collect();
         nodes.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
         nodes.truncate(8);
-        Ok(HeatView { ambient, parts, nodes })
+        let checks = sim_core::check_temperatures(&self.sch, &parts, ambient);
+        Ok(HeatView { ambient, parts, nodes, checks })
     }
 
     pub(super) fn panel_selfheat(&mut self, ui: &mut egui::Ui) {
@@ -49,20 +52,30 @@ impl SchEditor {
                     ui.label(i18n::tr("電力が出ている部品はありません"));
                 }
                 let mut edits: Vec<(String, f64, f64)> = vec![];
+                let mut limit_edits: Vec<(String, f64)> = vec![];
                 let own = self.own_thetas();
-                egui::Grid::new("selfheat_grid").num_columns(6).striped(true).show(ui, |ui| {
-                    for h in ["部品", "電力", "上昇", "値の変化", "熱抵抗 K/W", "係数 ppm/K"] {
-                        ui.label(egui::RichText::new(h).small().strong());
+                egui::Grid::new("selfheat_grid").num_columns(7).striped(true).spacing([6.0, 4.0]).show(ui, |ui| {
+                    for (h, tip) in [("部品", ""), ("電力", ""), ("上昇", ""), ("値の変化", ""), ("θ K/W", "熱抵抗 (K/W)"), ("係数", "温度係数 (ppm/K)"), ("上限 ℃", "部品の最高温度 (℃)")] {
+                        let r = ui.label(egui::RichText::new(h).small().strong());
+                        if !tip.is_empty() {
+                            r.on_hover_text(i18n::tr(tip));
+                        }
                     }
                     ui.end_row();
                     for p in &v.parts {
                         ui.label(&p.name).on_hover_text(i18n::trf!("温度 {:.1} ℃ (周囲 {} ℃ + {:.1} K)", p.temp_c, v.ambient, p.rise));
                         ui.label(fmt_power(p.power));
-                        ui.label(format!("{:.1} K", p.rise)).on_hover_text(i18n::tr("周囲の温度より、これだけ高くなります"));
+                        let check = v.checks.iter().find(|c| c.name == p.name);
+                        let rise_col = match check.and_then(|c| c.level) {
+                            Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
+                            Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
+                            None => ui.visuals().text_color(),
+                        };
+                        ui.label(egui::RichText::new(format!("{:.1} K", p.rise)).color(rise_col)).on_hover_text(check.map_or_else(|| i18n::tr("周囲の温度より、これだけ高くなります").to_string(), |c| i18n::tr_dyn(&c.message)));
                         // a diode or transistor alone: its voltage moves, not a resistance
                         let semi = self.sch.components.iter().any(|c| c.refdes == p.name && matches!(c.kind, sch_core::Kind::Diode | sch_core::Kind::Led | sch_core::Kind::Npn));
                         if let Some((cold, warm)) = p.junction_v {
-                            ui.label(format!("{:+.1} mV", (warm - cold) * 1e3)).on_hover_text(i18n::trf!("温まって、この部品の電圧 (ダイオードは順方向の電圧、トランジスタはコレクタ・エミッタ間) が {cold:.4} V から {warm:.4} V になりました。シリコンの接合は、1 ℃ 温まると約 2 mV 下がります"));
+                            ui.label(format!("{:+.0} mV", (warm - cold) * 1e3)).on_hover_text(i18n::trf!("温まって、この部品の電圧 (ダイオードは順方向の電圧、トランジスタはコレクタ・エミッタ間) が {cold:.4} V から {warm:.4} V になりました。シリコンの接合は、1 ℃ 温まると約 2 mV 下がります"));
                         } else if semi || (p.junctions > 0 && p.tc1 == 0.0 && p.tc2 == 0.0) {
                             ui.label("—").on_hover_text(i18n::tr("中のダイオード・トランジスタは、この部品の温度で計算しています (電圧の変化は「温まって動いたところ」を見てください)"));
                         } else {
@@ -73,14 +86,34 @@ impl SchEditor {
                         let b = if semi {
                             ui.label("—").on_hover_text(i18n::tr("温度係数は抵抗のものです。ダイオード・トランジスタの温度による変化は、モデルの決まり (飽和電流・しきい値の温度の式) で入ります"))
                         } else {
-                            ui.add(egui::DragValue::new(&mut tc).range(-5000.0..=5000.0).speed(1.0)).on_hover_text(i18n::tr("温度係数: 1 K 温まると抵抗値が何 ppm 変わるか。データシートの値 (シャント抵抗なら ±25 〜 ±100 ppm/K など) を入れます"))
+                            ui.add(egui::DragValue::new(&mut tc).range(-5000.0..=5000.0).speed(1.0).max_decimals(0)).on_hover_text(i18n::tr("温度係数: 1 K 温まると抵抗値が何 ppm 変わるか。データシートの値 (シャント抵抗なら ±25 〜 ±100 ppm/K など) を入れます"))
                         };
                         if a.changed() || b.changed() {
                             edits.push((p.name.clone(), theta, tc));
                         }
+                        if let Some(c) = check {
+                            let mut t = c.limit.t_max;
+                            let guess = c.limit.source == sim_core::LimitSource::Guess;
+                            let r = ui.add(egui::DragValue::new(&mut t).range(40.0..=400.0).speed(1.0).max_decimals(0).suffix(if guess { "?" } else { "" })).on_hover_text(i18n::tr("部品の中が達してよい最高の温度 (半導体は接合部の Tj の最大、抵抗は抵抗体の上限)。「?」は部品の種類からの目安です。データシートの値に直してください。変えたら、もう一度計算してください"));
+                            if r.changed() {
+                                limit_edits.push((p.name.clone(), t));
+                            }
+                        } else {
+                            ui.label("");
+                        }
                         ui.end_row();
                     }
                 });
+                for (name, t) in limit_edits {
+                    if let Some(c) = self.sch.components.iter_mut().find(|c| c.refdes == name) {
+                        c.t_max = t;
+                    }
+                }
+                // the parts near or past their limit, with what to do
+                for c in v.checks.iter().filter(|c| c.level.is_some()) {
+                    let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::ERROR } else { crate::theme::WARN };
+                    ui.colored_label(col, format!("⚠ {}", i18n::tr_dyn(&c.message))).on_hover_text(i18n::tr_dyn(&c.hint));
+                }
                 for (name, theta, tc) in edits {
                     if let Some(c) = self.sch.components.iter_mut().find(|c| c.refdes == name) {
                         c.theta = theta;
@@ -115,7 +148,7 @@ impl SchEditor {
 /// The θ cell of a heat table: the part's own θ to edit, and when the board's copper helps, the θ it has with it.
 pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, copper: Option<&(f64, f64)>) -> egui::Response {
     ui.horizontal(|ui| {
-        let r = ui.add(egui::DragValue::new(own).range(0.1..=1000.0).speed(0.5)).on_hover_text(i18n::tr("部品の熱抵抗 (K/W): 部品から空気までの熱の伝わりにくさ。データシートの「最小のパッド」の値を入れます (入れないと、パッケージの定格電力からの目安)。基板を回路図に反映していると、つながった銅の放熱ぶんが自動で足されます。変えたら、もう一度計算してください"));
+        let r = ui.add(egui::DragValue::new(own).range(0.1..=1000.0).speed(0.5).max_decimals(1)).on_hover_text(i18n::tr("部品の熱抵抗 (K/W): 部品から空気までの熱の伝わりにくさ。データシートの「最小のパッド」の値を入れます (入れないと、パッケージの定格電力からの目安)。基板を回路図に反映していると、つながった銅の放熱ぶんが自動で足されます。変えたら、もう一度計算してください"));
         if let Some((_, mm2)) = copper {
             ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::OK)).on_hover_text(i18n::trf!(
                 "基板の銅を入れた熱抵抗: {:.0} K/W。ピンにつながった銅 (部品の中心から 20 mm 以内、パッドのほかに {:.0} mm²) が熱を広げます。銅 35 µm (1 oz) として、SOT-223 のデータシートの曲線 (最小のパッド 110 K/W、1 in² で 42 K/W、2 oz) から見積もった目安です。正確には実物で測ってください",

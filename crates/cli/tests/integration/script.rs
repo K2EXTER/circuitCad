@@ -2308,6 +2308,25 @@ heat
 }
 
 #[test]
+fn heat_judges_each_part_against_its_temperature_limit_and_lowered_rating() {
+    let sample = format!("{}/../../docs/examples/bjt_self_heat.schjson", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}\nheat\nheat temp=110\nthermal Q1 tmax=115\nheat temp=110\n"));
+    assert!(ok, "{a:?}");
+    let heats: Vec<&serde_json::Value> = a.iter().filter(|v| v["cmd"] == "heat").collect();
+    let part = |h: &serde_json::Value, r: &str| h["parts"].as_array().unwrap().iter().find(|p| p["part"] == r).unwrap().clone();
+    let problem = |h: &serde_json::Value, r: &str| h["temperature_problems"].as_array().unwrap().iter().find(|p| p["part"] == r).cloned();
+    // 27 C around: everything well inside its (guessed) limit
+    assert!(heats[0]["temperature_problems"].as_array().unwrap().is_empty(), "{}", heats[0]);
+    assert_eq!((part(heats[0], "Q1")["t_max_c"].as_f64(), part(heats[0], "Q1")["t_max_from"].as_str()), (Some(150.0), Some("guess")));
+    // 110 C around: Q1 (no emitter resistor) draws far more, and its collector resistor R3 (0603) goes past its limit
+    let r3 = problem(heats[1], "R3").expect("R3 over its limit");
+    assert!(r3["level"] == "over" && r3["message"].as_str().unwrap().contains("超えます"), "{r3}");
+    // a 115 C limit on Q1 puts it over
+    let q1 = part(heats[2], "Q1");
+    assert!(q1["t_max_c"] == 115.0 && q1["t_max_from"] == "part" && q1["temperature"] == "over" && q1["margin_k"].as_f64().unwrap() < 0.0, "{q1}");
+}
+
+#[test]
 fn a_murata_mlcc_loses_capacitance_under_dc_bias_as_its_data_sheet_shows() {
     // GRM188R61C106MA73 (10 µF X5R 16 V 0603): the data sheet's DC bias curve gives -49 % at 4 V, -76 % at 8 V and -89 % at 16 V.
     // With 100 Ω the cutoff 1 / (2π R C) moves up by the same factor.

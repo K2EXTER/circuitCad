@@ -183,6 +183,10 @@ pub struct Component {
     /// Heat capacity (J/K) of the part and the copper it warms, for the temperature-over-time run; 0 = none given.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub cth: f64,
+    /// Highest temperature (°C) the part may reach (a semiconductor's junction, a resistor's element), for the temperature check
+    /// after the self-heating run; 0 = the library part's rating, else a guess from the kind of part.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub t_max: f64,
     /// A sheet symbol: this part stands for another sheet (see `hierarchy.rs`); its reference designator is the instance name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sub: Option<SubRef>,
@@ -528,6 +532,7 @@ impl Schematic {
             theta: 0.0,
             tc_ppm: 0.0,
             cth: 0.0,
+            t_max: 0.0,
             sub: None,
             shops: Default::default(),
         });
@@ -550,6 +555,7 @@ impl Schematic {
             theta: 0.0,
             tc_ppm: 0.0,
             cth: 0.0,
+            t_max: 0.0,
             sub: None,
             shops: Default::default(),
         });
@@ -670,6 +676,13 @@ pub struct PartRatings {
     /// Largest power the part may dissipate, in watts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub p_max: Option<f64>,
+    /// Highest temperature (°C) of the junction or the element, from the data sheet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub t_max: Option<f64>,
+    /// The surrounding temperature (°C) above which the rated power `p_max` must be lowered (to zero at `t_max`): the data sheet's
+    /// derating curve (70 °C for most chip resistors, 25 °C for most transistors).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derate_from: Option<f64>,
     /// Rated / typical figures from the data sheet, free form.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rows: Vec<SpecRow>,
@@ -736,7 +749,7 @@ impl LifeRating {
 
 impl PartRatings {
     pub fn is_empty(&self) -> bool {
-        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
     }
 
     /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.
@@ -751,6 +764,9 @@ impl PartRatings {
         }
         if let Some(p) = self.p_max {
             max.push(format!("電力 {}", fmt(p, "W")));
+        }
+        if let Some(t) = self.t_max {
+            max.push(format!("温度 {}", fmt(t, "℃")));
         }
         let mut t = String::new();
         if !max.is_empty() {
