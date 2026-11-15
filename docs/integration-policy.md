@@ -20,7 +20,7 @@
 
 ## 連携のしかたの決まり
 
-1. **ファイルでつなぐのを先にする。** 制約ファイル(.pcf・.xdc・.qsf・.lpf)、VCD、Touchstone(.sNp)、IBIS(.ibs)、SPICE のネットリスト、Gerber・Excellon・DXF・STEP のような決まった形式でつなぐ。外部のソフトの版が変わっても壊れにくく、外部のソフトなしでテストできる(ファイルの読み書きの試験は、手で書いた小さなファイルで行う)。
+1. **ファイルでつなぐのを先にする。** 制約ファイル(.pcf・.xdc・.qsf・.lpf)、VCD、Touchstone(.sNp)、IBIS(.ibs)、SPICE のネットリスト、Gerber・Excellon・DXF・STEP・OBJ のような決まった形式でつなぐ。外部のソフトの版が変わっても壊れにくく、外部のソフトなしでテストできる(ファイルの読み書きの試験は、手で書いた小さなファイルで行う)。
 2. **外部のソフトを呼ぶときは、無くても困らないようにする。** 見つからなければ、その機能だけ使えなくし、何が無くてどう入れるかを日本語で出す(原因と対処が分かるエラーメッセージの規約どおり)。ほかの機能は止めない。外部のソフトの場所は、設定で指定でき、無ければ PATH から探す。開発者の手元のパスを決め打ちしない。
 3. **同梱はライセンスを確かめてから。** GPL などのツールは、別の実行ファイルとして呼ぶだけにして、circuitCad の中に組み込まない(リンクしない)。同梱するものは `THIRD_PARTY_LICENSES.txt` に入れる(`docs/release-process.md`)。メーカーのモデルの扱いは `docs/model-policy.md`。
 4. **CLI と MCP で同じことができるようにする。** 外部のツールを呼ぶ処理も `ccad` の命令にし、画面のボタンはそれを呼ぶ。スクリプトや GitHub Actions で同じ流れを回せる。
@@ -62,6 +62,7 @@
 - **台本で使える**: `solidcraft-cli run 台本.json --out 部品.step` で、コマンドを並べた JSON(`[{"command": "solid.cylinder", "params": {...}}, ...]`)から STEP ができる。MCP(`solidcraft-cli mcp`)をつなげば画面を見ながら作れるが、無くても AI がデータシートの寸法から台本を書ける。`solidcraft-cli commands` がコマンドと引数の一覧(JSON)、`solidcraft-cli eval --in 部品.step` が立体ごとの体積・閉じているか、`snapshot` が絵。
 - **同梱はしない**: SolidCraft は別の実行ファイルとして使う(決まり 2・3)。無くても circuitCad は困らない(メーカーの STEP を読む、パッドからの推測の箱、のまま)。
 - **部品作成フォームからつなぐ(2026-11-15)**: 「STEP が無いとき: SolidCraft で形を作る」で、データシートの外形図を切り出して縮尺を合わせ、`solidcraft-cli run 台本.json --save part.sc` で下絵(`canvas.insert`。上から見た図は XY、横から見た図は x = +X・y = +Z の面を部品の後ろに立てる。XZ の面は 2 つ目の軸が −Z で絵が逆さになるので使わない)とたたき台の箱の設計を作り、`solidcraft.exe part.sc` で開く。作業フォルダ(一時フォルダの `circuitcad_solidcraft/部品名/`)の `part.step` が書かれたら自動で読み込む。SolidCraft の場所は `SOLIDCRAFT_DIR` → PATH → `C:\Program Files\SolidCraft`。
+- **三角形も借りる(E8、2026-11-15)**: STEP を読むとき、SolidCraft があれば `solidcraft-cli run --in 部品.step --out 部品.obj --quality standard` で曲面を細かく三角形にした OBJ を読む(`pcb-core/mesh_io.rs`、フォームの `step_load`)。無ければ・読めなければ自前の読み込みに戻る。OBJ は Blender・FreeCAD でも作れる。
 - **SolidCraft が無くなったとき(版が若く、先行きは分からない)の備え**: つなぎ目を細く保つ。SolidCraft に特有なのは台本を作る関数 `part_form/solidcraft.rs` の `script` と、2 つの実行ファイルの名前だけ。切り出した図は普通の PNG で、作業フォルダに残るので、FreeCAD や Fusion のキャンバスにもそのまま使える。戻ってくるのは標準の STEP で、どの CAD で作っても同じ読み込み(`step::read_step`)を通る。SolidCraft の独自形式(`.sc`)は circuitCad に保存しない。止まったら、台本の部分だけを別の CAD(FreeCAD の Python マクロなど)に書き換えればよい。
 - 版が若い(本人たちの説明では「簡単な部品なら使える」)。カーネルをライブラリとして組み込む(STEP の書き出しを本当の曲面にする E3b など)のは、単独のクレートとして安定してから考える。
 

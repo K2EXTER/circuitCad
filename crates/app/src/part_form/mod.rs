@@ -91,6 +91,8 @@ pub struct PartForm {
     /// The STEP as it was read, and how it is turned and placed to make `model3d` (see `step3d.rs`).
     pub step_base: Option<pcb_core::mesh::Mesh3d>,
     pub step_file: String,
+    /// Who turned the STEP into triangles (SolidCraft when it is installed).
+    pub step_by: step3d::StepBy,
     /// The pads were not checked against the data sheet's land pattern drawing (an estimate): saved as `PartDef.land_unverified`.
     pub land_unverified: bool,
     pub step_rot: [u8; 3],
@@ -285,6 +287,7 @@ impl Default for PartForm {
             model3d: None,
             step_base: None,
             step_file: String::new(),
+            step_by: Default::default(),
             land_unverified: false,
             step_rot: [0; 3],
             step_center: true,

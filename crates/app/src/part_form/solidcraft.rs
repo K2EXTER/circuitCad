@@ -95,6 +95,30 @@ pub fn find_solidcraft() -> Option<(PathBuf, PathBuf)> {
     pair(Path::new(r"C:\Program Files\SolidCraft"))
 }
 
+/// The triangles of a STEP file as SolidCraft cuts them (`solidcraft-cli run --in FILE --out FILE.obj`): every curved face follows its
+/// surface (a dome, a round, a free-form face), where our own reader makes flat patches of what is not a plane, a cylinder, a cone, a
+/// sphere or a torus. `None` when SolidCraft is not installed; the caller then reads the STEP itself.
+pub fn tessellate_step(step: &Path) -> Option<Result<pcb_core::mesh::Mesh3d, String>> {
+    let (cli, _) = find_solidcraft()?;
+    let dir = std::env::temp_dir().join("circuitcad_solidcraft").join(format!("_mesh_{}", std::process::id()));
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return Some(Err(format!("{}: {e}", dir.display())));
+    }
+    let obj = dir.join("part.obj");
+    let _ = std::fs::remove_file(&obj);
+    let run = std::process::Command::new(&cli).arg("run").arg("--in").arg(step).arg("--out").arg(&obj).arg("--quality").arg("standard").arg("--quiet").output();
+    let result = match run {
+        Err(e) => Err(format!("{}: {e}", cli.display())),
+        Ok(out) if !out.status.success() => Err(format!("SolidCraft が STEP を読めませんでした: {}", String::from_utf8_lossy(&out.stderr).lines().last().unwrap_or(""))),
+        Ok(_) => {
+            let colors = std::fs::read_to_string(obj.with_extension("mtl")).map(|t| pcb_core::mesh_io::read_mtl(&t)).unwrap_or_default();
+            std::fs::read_to_string(&obj).map_err(|e| format!("{}: {e}", obj.display())).and_then(|t| pcb_core::mesh_io::read_obj(&t, &colors))
+        }
+    };
+    let _ = std::fs::remove_dir_all(&dir);
+    Some(result)
+}
+
 /// What to tell someone without SolidCraft.
 pub const SOLIDCRAFT_MISSING: &str = "SolidCraft が見つかりません。無料のオープンソースの CAD で、PowerShell で「winget install bherbruck.SolidCraft」と入れるか、github.com/bherbruck/solidcraft から入れてください。別の場所に入れたときは、環境変数 SOLIDCRAFT_DIR にそのフォルダを書きます。切り出した図 (PNG) は、ほかの CAD の下絵にも使えます";
 
@@ -325,6 +349,29 @@ mod tests {
         let text = String::from_utf8_lossy(&bytes);
         assert!(text.contains("document.json"), "a SolidCraft design");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// When SolidCraft is installed, a STEP comes back as its triangles: a board with a round hole (written by circuitCad) keeps its size,
+    /// and the hole's wall is cut more finely than our own 16-sided hole (skipped without SolidCraft).
+    #[test]
+    fn solidcraft_cuts_a_step_into_triangles() {
+        if find_solidcraft().is_none() {
+            return;
+        }
+        let mut b = pcb_core::model::Board::new("t", 20.0, 10.0);
+        b.holes.push(pcb_core::model::Hole { pos: pcb_core::model::Point::new(10.0, 5.0), drill: 3.0, slot: 0.0, slot_v: false, refdes: String::new() });
+        let path = std::env::temp_dir().join("circuitcad_tess_test.step");
+        std::fs::write(&path, pcb_core::step_out::write(&b)).unwrap();
+        let m = tessellate_step(&path).unwrap().unwrap();
+        let (lo, hi) = m.bounds().unwrap();
+        assert!((hi[0] - lo[0] - 20.0).abs() < 1e-3 && (hi[1] - lo[1] - 10.0).abs() < 1e-3 && (hi[2] - lo[2] - 1.6).abs() < 1e-3, "{lo:?} {hi:?}");
+        assert!(m.volume() > 0.0 && m.triangles.len() >= 12, "{} triangles", m.triangles.len());
+        let _ = std::fs::remove_file(&path);
+        // a file that is not a STEP is explained, not a crash
+        let bad = std::env::temp_dir().join("circuitcad_tess_bad.step");
+        std::fs::write(&bad, "not a step").unwrap();
+        assert!(tessellate_step(&bad).unwrap().is_err());
+        let _ = std::fs::remove_file(&bad);
     }
 
     #[test]

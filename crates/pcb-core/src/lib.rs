@@ -68,6 +68,7 @@ pub mod slot;
 pub mod smooth;
 pub mod step;
 pub mod step_out;
+pub mod mesh_io;
 pub mod stitch;
 pub mod swap;
 pub mod strokefont;

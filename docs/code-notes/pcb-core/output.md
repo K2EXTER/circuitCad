@@ -85,6 +85,7 @@
 - `case.rs` 箱のケースの内寸に、基板が入るか・背の高い部品がないか(3D 表示の「内寸」と `ccad board case`)
 - `dxf_in.rs` ケースの図面(DXF)から外形と穴を取る(画面のファイルメニューと `ccad board dxf_import`)
 - `dxf.rs` ケース設計用の DXF(外形・穴・パッドのドリル・部品の箱。画面のファイルメニューと `ccad board dxf`)
+- `mesh_io.rs` 三角形の OBJ(と色の MTL)の読み書き(`read_obj`・`read_mtl`・`write_obj`。面は扇に分けて三角形、`a/b/c` は頂点だけ、負の番号は後ろから、`usemtl` の色は MTL の `Kd`、無ければ灰色。書くときは名前ごとに `o`、色ごとに材質 `cN`)。SolidCraft の三角形を部品の 3D の形にする(候補 E8)
 - `step_out.rs` 基板と部品の立体の STEP(AP214、平らな面だけ。画面のファイルメニューと `ccad board step`)
 - `shops.rs` 購入リスト(店の型番・検索リンク。`ccad board shopping`、`*-shopping.csv`)
 - `fab.rs` 発注先と発注前チェック / `export.rs` 製造一式 / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・配置CSV / `gerber_view.rs` 書き出しの読み戻し / `strokefont.rs` シルク文字

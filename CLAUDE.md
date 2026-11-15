@@ -43,7 +43,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - 熱: `heat_copper.rs`(ピンにつながった銅から部品の θ を見積もる。回路図に反映で自己発熱へ)
 - 銅・形: `zonefill.rs`(ベタの銅)`copper.rs`(配線後に足す銅)`groundpour.rs`(GNDベタ)`stitch.rs`(ビアの縫い付け)`fiducial.rs`(フィデューシャル)`outline.rs` `shape.rs` `geom.rs` `pinlabels.rs`
 - 配線: `autoroute.rs` `shove.rs` `ratsnest.rs` `reroute.rs` `merge.rs` `breakout.rs` `bridge.rs` `trunk.rs` `slot.rs` `padentry.rs` `meander.rs` `smooth.rs` `quality.rs`
-- 3D・ケース: `body.rs` `model3d.rs` `step.rs` `step_out.rs`(STEP の書き出し) `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` `dimension.rs`(寸法線) / 絵と図: `svg.rs` `picture.rs`
+- 3D・ケース: `body.rs` `model3d.rs` `step.rs` `step_out.rs`(STEP の書き出し)`mesh_io.rs`(OBJ の読み書き) `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` `dimension.rs`(寸法線) / 絵と図: `svg.rs` `picture.rs`
 - 出力: `fab.rs`(発注前チェック)`export.rs` `gerber.rs` `excellon.rs` `assembly.rs` `shops.rs` `gerber_view.rs`
 - 修理の練習 `breakage.rs`、文字 `labels.rs`(部品番号をよける。7 か所+力)`strokefont.rs` `silkedit.rs`(シルクの文字・部品番号・線を手で直す。発注先の下限を守る)
 

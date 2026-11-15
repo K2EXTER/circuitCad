@@ -51,7 +51,14 @@ impl PartForm {
 
     /// Reads a STEP file as the part's 3D shape (the message tells what went wrong when it cannot be read).
     pub(super) fn step_load(&mut self, path: &std::path::Path) {
-        let result = std::fs::read(path).map_err(|e| format!("読み込めません: {e}")).and_then(|b| pcb_core::step::read_step(&b));
+        // SolidCraft cuts the curved faces finely when it is installed; else (or when it cannot read the file) our own reader
+        let own = || std::fs::read(path).map_err(|e| format!("読み込めません: {e}")).and_then(|b| pcb_core::step::read_step(&b));
+        let (result, by) = match super::solidcraft::tessellate_step(path) {
+            Some(Ok(mesh)) => (Ok(mesh), StepBy::SolidCraft),
+            Some(Err(e)) => (own(), StepBy::OwnAfter(e)),
+            None => (own(), StepBy::Own),
+        };
+        self.step_by = by;
         match result {
             Ok(mesh) => {
                 let mesh = thin_out(mesh, KEEP_TRIANGLES);
@@ -98,6 +105,17 @@ impl PartForm {
             };
             let (lo, hi) = m.bounds().unwrap_or(([0.0; 3], [0.0; 3]));
             ui.small(i18n::trf!("{}  三角形 {}  大きさ {:.2} × {:.2} × {:.2} mm", self.step_file, m.triangles.len(), hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]));
+            match &self.step_by {
+                StepBy::SolidCraft => {
+                    ui.small(i18n::tr("曲面は SolidCraft で細かく三角形にしました")).on_hover_text(i18n::tr("SolidCraft が入っているので、ドームや角の丸めも曲面のとおりに三角形にしました。多すぎるときは間引いて保存します"));
+                }
+                StepBy::OwnAfter(e) => {
+                    ui.small(i18n::tr("circuitCad の読み込みで読みました (SolidCraft では読めませんでした)")).on_hover_text(i18n::tr_dyn(e));
+                }
+                StepBy::Own => {
+                    ui.small(i18n::tr("circuitCad の読み込みで読みました")).on_hover_text(i18n::tr("ドーム・角の丸め・自由な曲面は、平らな面になります。無料の CAD「SolidCraft」を入れておくと、曲面のとおりに細かく三角形にします"));
+                }
+            }
             let mut changed = false;
             ui.horizontal_wrapped(|ui| {
                 ui.label(i18n::tr("向き:"));
@@ -247,3 +265,16 @@ fn mesh_view(ui: &mut egui::Ui, m: &Mesh3d, pads: &[(f64, f64, f64, f64)], front
         }
     }
 }
+
+/// Who turned the last STEP into triangles.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum StepBy {
+    /// Our own reader (SolidCraft is not installed).
+    #[default]
+    Own,
+    /// SolidCraft, cutting every curved face finely.
+    SolidCraft,
+    /// Our own reader, because SolidCraft could not read the file (why).
+    OwnAfter(String),
+}
+
