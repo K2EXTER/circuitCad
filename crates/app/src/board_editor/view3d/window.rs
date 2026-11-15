@@ -45,6 +45,10 @@ impl BoardEditor {
             if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_case(spec)) {
                 self.view3d.generation += 1;
             }
+            let temps = if self.view3d.heat_on { self.view3d.temps.clone() } else { None };
+            if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_heat(temps.as_ref())) {
+                self.view3d.generation += 1;
+            }
         }
         let mut open = true;
         let mut retex = false;
@@ -91,6 +95,7 @@ impl BoardEditor {
                     ui.add(egui::DragValue::new(&mut v.case_w).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("内寸 幅 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の幅。基板が入るかを調べます (縁との隙間は 0.5 mm を見込みます)。0 にすると調べません。青い枠がケースの内側です"));
                     ui.add(egui::DragValue::new(&mut v.case_d).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("奥行 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)"));
                 }
+                ui.checkbox(&mut v.heat_on, i18n::tr("温度の色")).on_hover_text(i18n::tr("部品を温度の色で塗ります (サーマルカメラのような見え方)。温度は回路図の「自己発熱」の計算の結果で、電力 × 熱抵抗から出した目安です。青いほど周囲の温度に近く、黄色・白いほど熱い部品です。白の見た目 (GPU) と合わせると見やすくなります"));
                 ui.checkbox(&mut v.spin, i18n::tr("自動回転")).on_hover_text(i18n::tr("ゆっくり回して、いろいろな向きから見せます"));
                 if gpu::ready() {
                     ui.checkbox(&mut v.use_gpu, i18n::tr("GPU で描く")).on_hover_text(i18n::tr("グラフィックス (GPU) で描きます。部品の形が細かくても軽く回せます。表示がおかしいときは外すと、これまでの描き方 (CPU) に戻ります"));
@@ -141,6 +146,33 @@ impl BoardEditor {
                 info += &i18n::trf!(" / 裏側 {r} ({t:.1} mm)");
             }
             ui.small(info);
+            if v.heat_on {
+                match &v.temps {
+                    None => {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(crate::theme::WARN, i18n::tr("温度がまだありません。回路図の自己発熱を計算すると、部品が温度の色になります"));
+                            if ui.button(i18n::tr("自己発熱を計算")).on_hover_text(i18n::tr("回路図の直流の動作点から、部品ごとの電力と温度を計算します (回路図の解析タブの「自己発熱」と同じ。周囲の温度もそこで変えられます)")).clicked() {
+                                v.heat_request = true;
+                            }
+                        });
+                    }
+                    Some(t) => {
+                        let mut hot: Vec<&(String, f64, f64)> = t.parts.iter().collect();
+                        hot.sort_by(|a, b| b.1.total_cmp(&a.1));
+                        let names: Vec<String> = hot.iter().take(4).map(|p| format!("{} {:.0} ℃", p.0, p.1)).collect();
+                        let missing = t.parts.iter().filter(|p| !scene.parts.iter().any(|q| q.0 == p.0)).count();
+                        ui.horizontal_wrapped(|ui| {
+                            ui.small(if names.is_empty() { i18n::trf!("周囲 {:.0} ℃。電力が出ている部品はありません", t.ambient) } else { i18n::trf!("周囲 {:.0} ℃。熱い順: {}", t.ambient, names.join(", ")) });
+                            if missing > 0 {
+                                ui.small(i18n::trf!("(基板に無い部品 {missing} 個は描けません)"));
+                            }
+                            if ui.small_button(i18n::tr("計算し直す")).on_hover_text(i18n::tr("回路図を変えたあとに、自己発熱をもう一度計算します")).clicked() {
+                                v.heat_request = true;
+                            }
+                        });
+                    }
+                }
+            }
             if v.check_height && v.case_w > 0.0 && v.case_d > 0.0 {
                 let r = pcb_core::case::check(&self.board, &pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, clearance: 0.5, ..Default::default() });
                 if r.fits {
@@ -257,6 +289,11 @@ impl BoardEditor {
                     hover = (id != NO_PART && v.show_parts).then_some(id as usize);
                 }
             }
+            if v.heat_on
+                && let Some(t) = &v.temps
+            {
+                heat::legend(&painter, resp.rect, t);
+            }
             if !v.touched {
                 // what to do with the picture, until the first time it is turned or zoomed
                 let lines = ["ドラッグ: 回す  /  右ドラッグ: 動かす  /  ホイール: 拡大・縮小  /  ダブルクリック: 元の向きに戻す", "上の「ケース高さ」を入れると、ケースに入らない高さの部品が赤くなります"];
@@ -293,6 +330,14 @@ impl BoardEditor {
                             ui.label(i18n::trf!("値: {}", if val.is_empty() { "—" } else { val }));
                             ui.label(i18n::trf!("フットプリント: {}", if fp.is_empty() { "—" } else { fp }));
                             ui.label(i18n::trf!("高さの目安: {hh:.1} mm"));
+                            if v.heat_on
+                                && let Some(t) = &v.temps
+                            {
+                                match scene.temps.get(i).copied().flatten() {
+                                    Some((tc, w)) => ui.label(i18n::trf!("温度の目安: {tc:.1} ℃ (電力 {}、周囲 +{:.1} K)", fmt_watts(w), tc - t.ambient)),
+                                    None => ui.label(i18n::trf!("温度の目安: 周囲と同じ {:.0} ℃ (電力が出ていない、または回路図に無い部品)", t.ambient)),
+                                };
+                            }
                             if let Some(o) = scene.over.get(i).filter(|o| **o > 1e-6) {
                                 ui.colored_label(crate::theme::ERROR, i18n::trf!("ケースの高さを {o:.1} mm 超えています"));
                             }
@@ -333,4 +378,9 @@ impl BoardEditor {
             self.view3d.scene = None;
         }
     }
+}
+
+/// A power for the tooltip (W, mW or µW).
+fn fmt_watts(w: f64) -> String {
+    if w >= 1.0 { format!("{w:.2} W") } else if w >= 1e-3 { format!("{:.1} mW", w * 1e3) } else { format!("{:.1} µW", w * 1e6) }
 }

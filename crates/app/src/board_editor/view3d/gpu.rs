@@ -102,6 +102,12 @@ impl Geometry {
         self.key
     }
 
+    /// The `tex` of every part vertex (after the board's), to see which parts keep their colour in the white look.
+    #[cfg(test)]
+    pub(super) fn part_texes(&self) -> Vec<u32> {
+        self.tris.chunks(VTX_BYTES as usize).skip(self.board_verts as usize).map(|v| u32::from_le_bytes(v[40..44].try_into().unwrap())).collect()
+    }
+
     /// Vertices of the board alone and of everything (three a triangle).
     #[cfg(test)]
     pub(super) fn counts(&self) -> (u32, u32) {
@@ -183,8 +189,8 @@ impl Geometry {
             }
         }
         let board_lines = count(&lines, LINE_BYTES);
-        // the parts: guessed solids (with a thin dark edge round every face) and makers' meshes; a part over the case height is red
-        let red = [225, 50, 40];
+        // the parts: guessed solids (with a thin dark edge round every face) and makers' meshes; a part over the case height is red, and
+        // with the heat colours on every part is painted by its temperature (both kept in the white look, tex 4)
         let warn = |mut v: Vtx, on: bool| {
             if on {
                 v.tex = 4;
@@ -192,8 +198,8 @@ impl Geometry {
             v
         };
         for b in &scene.boxes {
-            let too_tall = scene.over.get(b.part).is_some_and(|o| *o > 1e-6);
-            let color = if too_tall { red } else { b.color };
+            let too_tall = scene.part_marked(b.part);
+            let color = scene.part_color(b.part, b.color);
             for (corners, normal) in solid_faces(b) {
                 for i in 1..corners.len().saturating_sub(1) {
                     let v = |p: [f64; 3]| warn(flat(p, normal, color, b.part as u32), too_tall);
@@ -206,13 +212,13 @@ impl Geometry {
             }
         }
         for m in &scene.meshes {
-            let too_tall = scene.over.get(m.part).is_some_and(|o| *o > 1e-6);
+            let too_tall = scene.part_marked(m.part);
             let v: Vec<[f64; 3]> = m.mesh.vertices.iter().map(|p| p.map(f64::from)).collect();
             for (t, c) in m.mesh.triangles.iter().zip(&m.mesh.tri_color) {
                 let (a, b, d) = (v[t[0] as usize], v[t[1] as usize], v[t[2] as usize]);
                 let Some(normal) = face_normal(a, b, d) else { continue };
                 let base = m.mesh.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
-                let color = if too_tall { red } else { base };
+                let color = scene.part_color(m.part, base);
                 let vv = |p: [f64; 3]| warn(flat(p, normal, color, m.part as u32), too_tall);
                 tri(&mut tris, [vv(a), vv(b), vv(d)]);
             }

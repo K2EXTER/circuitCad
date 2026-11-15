@@ -34,6 +34,11 @@ pub(super) struct Scene {
     pub(super) glow: Vec<(bool, [Point; 3])>,
     /// This scene's own number (the GPU's copy of it is replaced when another scene is built).
     pub(super) serial: u64,
+    /// The heat colour of every part (`None`: its own colour), its `(temperature °C, power W)` when the run warmed it, and the
+    /// temperatures these were made for (`heat.rs`).
+    pub(super) heat: Vec<Option<[u8; 3]>>,
+    pub(super) temps: Vec<Option<(f64, f64)>>,
+    pub(super) heat_applied: Option<PartTemps>,
 }
 
 /// Brightness for a face whose normal (view space) is `n`: lit from above-left of the viewer.
@@ -158,7 +163,7 @@ impl Scene {
         let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
         nets.sort();
         nets.dedup();
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial() })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial(), heat: vec![None; board.parts.len()], temps: vec![None; board.parts.len()], heat_applied: None })
     }
 
     /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face
@@ -288,8 +293,7 @@ impl Scene {
                 if nv[2] <= 1e-4 {
                     continue;
                 }
-                let too_tall = self.over.get(b.part).is_some_and(|o| *o > 1e-6);
-                let mut color = shade3(if too_tall { [225, 50, 40] } else { b.color }, light(nv));
+                let mut color = shade3(self.part_color(b.part, b.color), light(nv));
                 if hover == Some(b.part) {
                     color = [color[0].saturating_add(50), color[1].saturating_add(50), color[2].saturating_add(30)];
                 }
@@ -306,7 +310,6 @@ impl Scene {
             }
         }
         for m in &self.meshes {
-            let too_tall = self.over.get(m.part).is_some_and(|o| *o > 1e-6);
             let verts: Vec<[f64; 3]> = m.mesh.vertices.iter().map(|v| v.map(f64::from)).collect();
             for (t, c) in m.mesh.triangles.iter().zip(&m.mesh.tri_color) {
                 let (a, b, d) = (verts[t[0] as usize], verts[t[1] as usize], verts[t[2] as usize]);
@@ -321,7 +324,7 @@ impl Scene {
                     continue;
                 }
                 let base = m.mesh.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
-                let mut color = shade3(if too_tall { [225, 50, 40] } else { base }, light(nv));
+                let mut color = shade3(self.part_color(m.part, base), light(nv));
                 if hover == Some(m.part) {
                     color = [color[0].saturating_add(50), color[1].saturating_add(50), color[2].saturating_add(30)];
                 }

@@ -117,6 +117,25 @@ impl App {
         }
     }
 
+    /// The schematic's self-heating temperatures go to the board's 3D view while it paints the parts by temperature; its button to work them
+    /// out runs the schematic's calculation here.
+    fn sync_heat(&mut self) {
+        if self.board_ed.take_heat_request() {
+            self.sch.heat_view = Some(self.sch.run_self_heat());
+            if let Some(Err(e)) = &self.sch.heat_view {
+                self.board_ed.status = format!("自己発熱の計算に失敗: {e} (回路図の電源やつながりを確かめてください)");
+            }
+        }
+        if !self.board_ed.view3d_wants_heat() {
+            return;
+        }
+        let temps = match &self.sch.heat_view {
+            Some(Ok(v)) => Some(board_editor::PartTemps { ambient: v.ambient, parts: v.parts.iter().map(|p| (p.name.clone(), p.temp_c, p.power)).collect() }),
+            _ => None,
+        };
+        self.board_ed.set_part_temps(temps);
+    }
+
     /// Carry the board's copper resistance to the schematic's simulations, or take it away.
     fn apply_post_layout(&mut self, on: bool) {
         if !on {
@@ -173,6 +192,7 @@ impl eframe::App for App {
             }
         }
         self.sync_focus();
+        self.sync_heat();
         self.finish_screenshot(ui);
         self.tick_auto_screenshot(ui);
         // F1, and the small "操作" buttons of the panels, open the guide

@@ -13,6 +13,7 @@ use pcb_core::model3d::{part_boxes, part_height_on, part_meshes, BodyShape, Part
 mod camera;
 mod glow;
 mod gpu;
+mod heat;
 mod picture;
 mod scene;
 #[cfg(test)]
@@ -21,6 +22,7 @@ mod window;
 
 use camera::*;
 use glow::*;
+pub(crate) use heat::PartTemps;
 use picture::*;
 use scene::*;
 
@@ -78,6 +80,10 @@ pub(super) struct View3d {
     ao: bool,
     /// The scene as GPU vertex data, kept while the scene and what shows in it stay the same.
     gpu_geometry: Option<std::sync::Arc<gpu::Geometry>>,
+    /// Paint the parts by temperature, the temperatures handed over from the schematic, and a request to work them out there.
+    heat_on: bool,
+    temps: Option<PartTemps>,
+    heat_request: bool,
 }
 
 /// A finished picture of the scene: what it was drawn for, the image, and the part at each pixel.
@@ -102,7 +108,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true, heat_on: false, temps: None, heat_request: false }
     }
 }
 
@@ -122,6 +128,16 @@ impl BoardEditor {
     pub fn view3d_look(&mut self, clay: bool, ao: bool) {
         self.view3d.look = if clay { gpu::Look::Clay } else { gpu::Look::Color };
         self.view3d.ao = ao;
+    }
+
+    /// Whether the 3D window asked for the schematic's self-heating to be worked out (taken once).
+    pub(crate) fn take_heat_request(&mut self) -> bool {
+        std::mem::take(&mut self.view3d.heat_request)
+    }
+
+    /// Whether the 3D window paints the parts by temperature (the App hands the temperatures over only then).
+    pub(crate) fn view3d_wants_heat(&self) -> bool {
+        self.view3d.open && self.view3d.heat_on
     }
 
     /// Picks the net to light in the 3D view (`--3d-net`, for screenshots).

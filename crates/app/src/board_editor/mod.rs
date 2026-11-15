@@ -735,6 +735,7 @@ pub fn set_multisampled(on: bool) {
 
 pub(crate) use draw::capsule;
 pub(crate) use view3d::gpu_init as view3d_gpu_init;
+pub(crate) use view3d::PartTemps;
 mod order;
 mod measure;
 mod livedrc;

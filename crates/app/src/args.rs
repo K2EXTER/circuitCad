@@ -186,6 +186,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                         app.sch.set_tran_signals(n);
                     }
             }
+        // --selfheat: the schematic's self-heating worked out (the 3D view's heat colours, `--3d-heat`, use it)
+        if args.iter().any(|a| a == "--selfheat") {
+            app.sch.heat_view = Some(app.sch.run_self_heat());
+        }
         if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets", "--field"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);
@@ -543,6 +547,10 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str);
         if val("--3d-look").is_some() || val("--3d-ao").is_some() {
             app.board_ed.view3d_look(val("--3d-look") == Some("clay"), val("--3d-ao") != Some("0"));
+        }
+        // --3d-heat: paint the parts by the schematic's self-heating temperatures (with `--selfheat`, for screenshots)
+        if args.iter().any(|a| a == "--3d-heat") {
+            app.board_ed.view3d_heat(true);
         }
         // --3d-net <net>: light that net's copper in the 3D view (for screenshots)
         if let Some(i) = args.iter().position(|a| a == "--3d-net")

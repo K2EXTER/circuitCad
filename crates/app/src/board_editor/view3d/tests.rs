@@ -356,6 +356,65 @@ mod view3d_tests {
         }
     }
 
+    /// The heat colours: the palette runs from dark blue (cold) to pale yellow (hot) and gets brighter all the way; the scale
+    /// runs from the ambient to the hottest part, but at least `MIN_SPAN` K.
+    #[test]
+    fn the_heat_palette_runs_cold_to_hot_and_the_scale_has_a_floor() {
+        let bright = |c: [u8; 3]| c.iter().map(|&v| v as u32).sum::<u32>();
+        let mut last = 0;
+        for k in 0..=20 {
+            let b = bright(heat::heat_color(k as f64 / 20.0));
+            assert!(b >= last, "step {k}: {b} < {last}");
+            last = b;
+        }
+        let cold = heat::heat_color(0.0);
+        assert!(cold[2] > cold[0] && cold[2] > cold[1], "cold is blue: {cold:?}");
+        assert_eq!(heat::heat_color(-1.0), cold);
+        assert_eq!(heat::heat_color(f64::NAN), cold);
+        assert_eq!(heat::heat_color(2.0), heat::heat_color(1.0));
+        let t = |hot: f64| heat::PartTemps { ambient: 25.0, parts: vec![("R1".into(), hot, 0.1)] };
+        assert_eq!(heat::scale(&t(80.0)), (25.0, 80.0));
+        assert_eq!(heat::scale(&t(27.0)), (25.0, 25.0 + heat::MIN_SPAN));
+    }
+
+    /// With the temperatures on, a warmed part is painted hot and the others at the cold end (the ambient), in both the software and
+    /// the GPU picture (kept in the white look); taking them away gives the parts their own colours back.
+    #[test]
+    fn parts_are_painted_by_their_temperature() {
+        let b = tall_and_short();
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        let c1 = s.parts.iter().position(|p| p.0 == "C1").unwrap();
+        let r1 = s.parts.iter().position(|p| p.0 == "R1").unwrap();
+        let temps = heat::PartTemps { ambient: 25.0, parts: vec![("C1".into(), 85.0, 0.5), ("NOT_ON_BOARD".into(), 40.0, 0.1)] };
+        assert!(s.set_heat(Some(&temps)));
+        assert!(!s.set_heat(Some(&temps)), "same temperatures: nothing to redraw");
+        assert_eq!(s.heat[c1], Some(heat::heat_color(1.0)));
+        assert_eq!(s.heat[r1], Some(heat::heat_color(0.0)), "a part the run did not warm is at the ambient");
+        assert_eq!(s.temps[c1], Some((85.0, 0.5)));
+        assert_eq!(s.temps[r1], None);
+        assert!(s.part_marked(c1) && s.part_marked(r1));
+        // the hot can seen from above is pale yellow, the cold resistor blue
+        let (rect, cam) = top_view(&s);
+        let (img, ..) = snapshot(&s, rect, &cam, true, Quality::Fine(1), None, None);
+        let at = |p: [f64; 3]| {
+            let (q, _) = cam.project(p);
+            img[q.y.round() as usize * 800 + q.x.round() as usize]
+        };
+        let can = at([20.0, 20.0, BOARD_THICKNESS + 4.5]);
+        assert!(can[0] > 200 && can[1] > 150, "hot can: {can:?}");
+        let rb = s.boxes.iter().find(|bx| bx.part == r1).unwrap();
+        let res = at([(rb.lo[0] + rb.hi[0]) / 2.0, (rb.lo[1] + rb.hi[1]) / 2.0, rb.hi[2]]);
+        assert!(res[2] > res[0] && res[2] > res[1], "cold resistor: {res:?}");
+        // the GPU's data marks every part to keep its colour in the white look
+        let g = gpu::Geometry::build(&s, 1);
+        assert!(g.part_texes().iter().all(|t| *t == 4), "{:?}", g.part_texes());
+        // off: the own colours again
+        assert!(s.set_heat(None));
+        assert!(s.heat.iter().all(Option::is_none));
+        let g = gpu::Geometry::build(&s, 2);
+        assert!(g.part_texes().iter().all(|t| *t == 0));
+    }
+
     /// The GPU's vertex data: the board's faces and edge first (drawn alone when the parts are hidden), then the parts; rebuilt for a new
     /// generation.
     #[test]
