@@ -165,15 +165,26 @@ fn parse(expr: &str, names: &[String]) -> Result<Ex, String> {
     Ok(e)
 }
 
+/// One output: its name, its expression, the variables it reads (by index into `Logic::vars`, the first = the table's lowest
+/// address bit), and for a flip-flop the input whose rising edge stores the expression.
+#[derive(Debug)]
+pub(super) struct Out {
+    pub name: String,
+    ex: Ex,
+    reads: Vec<usize>,
+    pub clock: Option<usize>,
+}
+
 /// The inputs and the outputs with their expressions, checked.
 #[derive(Debug)]
 pub(super) struct Logic {
     pub inputs: Vec<String>,
-    /// (name, expression, the inputs it reads by index, first = the table's lowest address bit)
-    outputs: Vec<(String, Ex, Vec<usize>)>,
+    /// What an expression may read: the inputs, then the flip-flop outputs (their present state).
+    pub vars: Vec<String>,
+    pub outputs: Vec<Out>,
 }
 
-/// The most inputs one output may read (a table of 2^12 rows).
+/// The most variables one output may read (a table of 2^12 rows).
 const MAX_INPUTS: usize = 12;
 
 impl LogicInput {
@@ -183,23 +194,20 @@ impl LogicInput {
             return Err(i18n::tr("入力ピンの名前を 1 つ以上入れてください (例: A B)").to_string());
         }
         let bad = |n: &str| !n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || n.chars().all(|c| c.is_ascii_digit());
-        let mut outputs = vec![];
+        // first the lines: name, expression, clock (`Q = !Q @ CLK`: a flip-flop that stores the expression at CLK's rising edge)
+        let mut lines: Vec<(String, String, Option<String>)> = vec![];
         for line in self.outputs.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
-            let (name, expr) = line.split_once('=').ok_or_else(|| i18n::trf!("「{}」に「=」がありません。出力は 1 行に 1 つ、「Y = A & B」の形で書きます", line))?;
-            let name = name.trim().to_string();
-            let ex = parse(expr, &inputs).map_err(|e| i18n::trf!("{} の式: {}", name, e))?;
-            let mut vars = vec![];
-            ex.vars(&mut vars);
-            vars.sort_unstable();
-            if vars.len() > MAX_INPUTS {
-                return Err(i18n::trf!("{} は入力を {} 本読んでいます。1 つの出力が読めるのは {} 本までです", name, vars.len(), MAX_INPUTS));
-            }
-            outputs.push((name, ex, vars));
+            let (name, rest) = line.split_once('=').ok_or_else(|| i18n::trf!("「{}」に「=」がありません。出力は 1 行に 1 つ、「Y = A & B」の形で書きます", line))?;
+            let (expr, clock) = match rest.split_once('@') {
+                Some((e, c)) => (e.to_string(), Some(c.trim().to_string())),
+                None => (rest.to_string(), None),
+            };
+            lines.push((name.trim().to_string(), expr, clock));
         }
-        if outputs.is_empty() {
+        if lines.is_empty() {
             return Err(i18n::tr("出力を 1 行に 1 つ、「Y = A & B」の形で書いてください").to_string());
         }
-        let mut all: Vec<&String> = inputs.iter().chain(outputs.iter().map(|o| &o.0)).collect();
+        let mut all: Vec<&String> = inputs.iter().chain(lines.iter().map(|o| &o.0)).collect();
         if let Some(n) = all.iter().find(|n| bad(n)) {
             return Err(i18n::trf!("ピンの名前「{}」は、英数字と _ だけで、数字だけでない名前にしてください", n));
         }
@@ -210,51 +218,83 @@ impl LogicInput {
         if let Some(n) = all.iter().find(|n| ["VCC", "GND"].contains(&n.to_ascii_uppercase().as_str())) {
             return Err(i18n::trf!("「{}」は電源のピンとして自動で付くので、入力・出力には使えません", n));
         }
-        Ok(Logic { inputs, outputs })
+        let vars: Vec<String> = inputs.iter().cloned().chain(lines.iter().filter(|l| l.2.is_some()).map(|l| l.0.clone())).collect();
+        let mut outputs = vec![];
+        for (name, expr, clock) in lines.iter() {
+            let ex = parse(expr, &vars).map_err(|e| {
+                // an output without a clock is no variable: say so rather than "not an input"
+                let words: Vec<&str> = expr.split(|c: char| !c.is_alphanumeric() && c != '_').collect();
+                match lines.iter().find(|l| l.2.is_none() && words.iter().any(|w| w.eq_ignore_ascii_case(&l.0))) {
+                    Some(l) => i18n::trf!("{} の式: 出力 {} は式に使えません (使えるのは入力と、「@ クロック」の付いた出力だけ)", name, l.0),
+                    None => i18n::trf!("{} の式: {}", name, e),
+                }
+            })?;
+            let clock = match clock {
+                None => None,
+                Some(c) => Some(inputs.iter().position(|i| i.eq_ignore_ascii_case(c)).ok_or_else(|| i18n::trf!("{} の「@ {}」: クロックは入力ピンの名前にしてください", name, c))?),
+            };
+            let mut reads = vec![];
+            ex.vars(&mut reads);
+            reads.sort_unstable();
+            if reads.len() > MAX_INPUTS {
+                return Err(i18n::trf!("{} は入力を {} 本読んでいます。1 つの出力が読めるのは {} 本までです", name, reads.len(), MAX_INPUTS));
+            }
+            outputs.push(Out { name: name.clone(), ex, reads, clock });
+        }
+        Ok(Logic { inputs, vars, outputs })
     }
 }
 
 impl Logic {
-    /// The truth table: every combination of the inputs (the first input is the lowest bit) and the outputs.
+    /// The truth table: every combination of the variables (the inputs, then the flip-flops' present state; the first is the
+    /// lowest bit) and each output (a flip-flop: the value it stores at its clock edge).
     pub(super) fn table(&self) -> Vec<(Vec<bool>, Vec<bool>)> {
-        let n = self.inputs.len();
+        let n = self.vars.len();
         (0..1usize << n)
             .map(|a| {
                 let v: Vec<bool> = (0..n).map(|k| a >> k & 1 == 1).collect();
-                let o = self.outputs.iter().map(|(_, e, _)| e.eval(&v)).collect();
+                let o = self.outputs.iter().map(|o| o.ex.eval(&v)).collect();
                 (v, o)
             })
             .collect()
     }
 
-    /// The model: one table cell per output, reading only the inputs its expression uses.
+    /// The model: one table cell per output, reading only the variables its expression uses; a flip-flop output stores its
+    /// cell's value at its clock's rising edge.
     pub(super) fn subckt(&self, name: &str, delay_ns: f64) -> String {
         let low = |s: &str| s.to_ascii_lowercase();
-        let pins: Vec<String> = self.inputs.iter().map(|s| low(s)).chain(self.outputs.iter().map(|o| low(&o.0))).collect();
+        let pins: Vec<String> = self.inputs.iter().map(|s| low(s)).chain(self.outputs.iter().map(|o| low(&o.name))).collect();
         let mut l = vec![
             format!("* {name}: made from Boolean expressions in the part form (one table cell per output, delay {delay_ns} ns)"),
             format!(".subckt {name} {} gnd vcc", pins.join(" ")),
         ];
-        for (out, ex, vars) in &self.outputs {
-            let o = low(out);
-            l.push(format!("* {out}"));
-            if vars.is_empty() {
+        for out in &self.outputs {
+            let o = low(&out.name);
+            l.push(format!("* {}{}", out.name, out.clock.map_or(String::new(), |c| format!(" (stored at the rising edge of {})", self.inputs[c]))));
+            // the cell's own node: the output itself, or the flip-flop's data input
+            let node = if out.clock.is_some() { format!("{o}_d") } else { o.clone() };
+            if out.reads.is_empty() {
                 // a constant: a buffer from the supply or from ground
-                let src = if ex.eval(&vec![false; self.inputs.len()]) { "vcc" } else { "gnd" };
-                l.push(format!("Y{o} buf {o} 0 gnd vcc 60 0.5 0 0 0 {src}"));
-                continue;
+                let src = if out.ex.eval(&vec![false; self.vars.len()]) { "vcc" } else { "gnd" };
+                l.push(format!("Y{o} buf {node} 0 gnd vcc 60 0.5 0 0 0 {src}"));
+            } else {
+                let words: Vec<&str> = (0..1usize << out.reads.len())
+                    .map(|a| {
+                        let mut v = vec![false; self.vars.len()];
+                        for (k, i) in out.reads.iter().enumerate() {
+                            v[*i] = a >> k & 1 == 1;
+                        }
+                        if out.ex.eval(&v) { "1" } else { "0" }
+                    })
+                    .collect();
+                let ins: Vec<String> = out.reads.iter().map(|i| low(&self.vars[*i])).collect();
+                // a flip-flop's next value has no delay of its own: the delay is from the clock to the output
+                let td = if out.clock.is_some() { String::new() } else { format!("td={delay_ns}n ") };
+                l.push(format!("Y{o} lut {node} 0 gnd vcc 60 0.5 0 0 0 {td}table={} {}", words.join(","), ins.join(" ")));
             }
-            let words: Vec<&str> = (0..1usize << vars.len())
-                .map(|a| {
-                    let mut v = vec![false; self.inputs.len()];
-                    for (k, i) in vars.iter().enumerate() {
-                        v[*i] = a >> k & 1 == 1;
-                    }
-                    if ex.eval(&v) { "1" } else { "0" }
-                })
-                .collect();
-            let ins: Vec<String> = vars.iter().map(|i| low(&self.inputs[*i])).collect();
-            l.push(format!("Y{o} lut {o} 0 gnd vcc 60 0.5 0 0 0 td={delay_ns}n table={} {}", words.join(","), ins.join(" ")));
+            if let Some(c) = out.clock {
+                l.push(format!("Y{o}_ff dff {o} 0 gnd vcc 60 0.5 0 0 0 td={delay_ns}n {node} {} 0 0", low(&self.inputs[c])));
+            }
         }
         l.push(format!(".ends {name}"));
         l.join("\n")
@@ -280,8 +320,8 @@ impl PartForm {
         for n in &g.inputs {
             pins.push(format!("{} {n} left", pins.len() + 1));
         }
-        for (n, _, _) in &g.outputs {
-            pins.push(format!("{} {n} right", pins.len() + 1));
+        for o in &g.outputs {
+            pins.push(format!("{} {} right", pins.len() + 1, o.name));
         }
         let gnd = pins.len() + 1;
         pins.push(format!("{gnd} GND bottom"));
@@ -327,6 +367,7 @@ C = A & B".into();
                     ("半加算器", "1 ビットの足し算: S = A と B の排他的論理和、C = 桁上がり", "A B", "S = A ^ B\nC = A & B"),
                     ("多数決 (3 入力)", "3 つのうち 2 つ以上が 1 なら 1", "A B C", "Y = (A & B) | (B & C) | (A & C)"),
                     ("2 → 1 セレクタ", "S が 0 なら A、1 なら B を出す", "A B S", "Y = (A & !S) | (B & S)"),
+                    ("2 ビットカウンタ", "CLK の立ち上がりごとに 0 → 1 → 2 → 3 → 0 と数える。「@ CLK」の付いた出力は、クロックで値を覚えるフリップフロップ", "CLK", "Q0 = !Q0 @ CLK\nQ1 = Q1 ^ Q0 @ CLK"),
                 ];
                 for (label, tip, ins, outs) in examples {
                     if ui.small_button(i18n::tr(label)).on_hover_text(i18n::tr(tip)).clicked() {
@@ -342,7 +383,7 @@ C = A & B".into();
                 ui.end_row();
                 ui.label(i18n::tr("出力 (1 行に 1 つ)"));
                 ui.add(egui::TextEdit::multiline(&mut self.logic.outputs).desired_rows(3).desired_width(260.0).font(egui::TextStyle::Monospace))
-                    .on_hover_text(i18n::tr("「出力の名前 = 式」を 1 行に 1 つ。式に使えるのは 入力ピンの名前・0・1・! (否定)・& (かつ)・^ (排他的論理和)・| (または)・括弧。not・and・xor・or と書いてもかまいません。強さの順は ! > & > ^ > |"));
+                    .on_hover_text(i18n::tr("「出力の名前 = 式」を 1 行に 1 つ。式に使えるのは 入力ピンの名前・0・1・! (否定)・& (かつ)・^ (排他的論理和)・| (または)・括弧。not・and・xor・or と書いてもかまいません。強さの順は ! > & > ^ > |。行の最後に「@ CLK」(入力ピンの名前) を付けると、その出力はクロックの立ち上がりで式の値を覚えるフリップフロップになり、ほかの式でも使えます (例: Q = !Q @ CLK)"));
                 ui.end_row();
                 ui.label(i18n::tr("遅延"));
                 ui.add(egui::DragValue::new(&mut self.logic.delay_ns).speed(0.5).range(0.0..=10000.0).suffix(" ns"))
@@ -351,11 +392,16 @@ C = A & B".into();
             });
             // the truth table as it is typed (up to 5 inputs: 32 rows)
             match self.logic.read() {
-                Ok(g) if g.inputs.len() <= 5 => {
-                    ui.label(egui::RichText::new(i18n::tr("真理値表")).small().weak());
+                Ok(g) if g.vars.len() <= 5 => {
+                    let regs = g.outputs.iter().any(|o| o.clock.is_some());
+                    ui.label(egui::RichText::new(i18n::tr(if regs { "真理値表 (Q+ はクロックの立ち上がりで Q に入る値)" } else { "真理値表" })).small().weak());
                     egui::Grid::new("logic_table").striped(true).spacing([10.0, 0.0]).show(ui, |ui| {
-                        for n in g.inputs.iter().chain(g.outputs.iter().map(|o| &o.0)) {
+                        for n in &g.vars {
                             ui.label(egui::RichText::new(n).monospace().strong());
+                        }
+                        for o in &g.outputs {
+                            let head = if o.clock.is_some() { format!("{}+", o.name) } else { o.name.clone() };
+                            ui.label(egui::RichText::new(head).monospace().strong().color(crate::theme::INFO));
                         }
                         ui.end_row();
                         for (ins, outs) in g.table() {
@@ -370,7 +416,7 @@ C = A & B".into();
                     });
                 }
                 Ok(g) => {
-                    ui.small(i18n::trf!("入力が {} 本あるので、真理値表 ({} 行) は出しません", g.inputs.len(), 1usize << g.inputs.len()));
+                    ui.small(i18n::trf!("入力 (と記憶) が {} 本あるので、真理値表 ({} 行) は出しません", g.vars.len(), 1usize << g.vars.len()));
                 }
                 Err(e) => {
                     ui.colored_label(crate::theme::WARN, e);
@@ -449,5 +495,47 @@ mod tests {
         let g = logic("A", "H = 1\nL = 0").unwrap();
         let t = g.subckt("K", 5.0);
         assert!(t.contains("Yh buf h 0 gnd vcc 60 0.5 0 0 0 vcc") && t.contains("Yl buf l 0 gnd vcc 60 0.5 0 0 0 gnd"), "{t}");
+    }
+
+    #[test]
+    fn outputs_with_a_clock_are_flip_flops_and_a_two_bit_counter_counts() {
+        let mut f = PartForm { name: "CNT2".into(), ..Default::default() };
+        f.logic.inputs = "CLK".into();
+        f.logic.outputs = "Q0 = !Q0 @ CLK
+Q1 = Q1 ^ Q0 @ CLK".into();
+        f.apply_logic();
+        assert!(f.sim_text.contains("Yq0_ff dff q0 0 gnd vcc 60 0.5 0 0 0 td=10n q0_d clk 0 0"), "{}", f.sim_text);
+        assert!(f.sim_text.contains("Yq1 lut q1_d 0 gnd vcc 60 0.5 0 0 0 table=0,1,1,0 q0 q1"), "{}", f.sim_text);
+        // clock rising every 1 us from 0.5 us: the count after each edge
+        let mut c = sim_core::Circuit::new();
+        let n: Vec<usize> = ["clk", "q0", "q1", "vcc"].iter().map(|x| c.node(x)).collect();
+        sim_core::add_subckt_instance(&mut c, "U1", "CNT2", &f.sim_text, &[n[0], n[1], n[2], 0, n[3]]).unwrap();
+        c.add(sim_core::Element::vdc("Vcc", n[3], 0, 5.0));
+        let ck = sim_core::parse_source_full("PULSE(0 5 0.5u 1n 1n 0.5u 1u)").unwrap();
+        c.add(sim_core::Element::VSource { name: "Vck".into(), p: n[0], n: 0, wave: ck.wave, ac: ck.ac });
+        for k in [1, 2] {
+            c.add(sim_core::Element::Resistor { name: format!("R{k}"), a: n[k], b: 0, r: 10e3 });
+        }
+        let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 5e-6, tstep: 20e-9, uic: false }).unwrap();
+        let at = |name: &str, t: f64| {
+            let s = r.signal(name).unwrap();
+            let i = r.time.partition_point(|x| *x < t);
+            s.values[i] > 2.5
+        };
+        let count = |t: f64| usize::from(at("V(q0)", t)) + 2 * usize::from(at("V(q1)", t));
+        let start = count(0.3e-6);
+        let seq: Vec<usize> = (0..5).map(|k| count(0.9e-6 + k as f64 * 1e-6)).collect();
+        let want: Vec<usize> = (1..=5).map(|k| (start + k) % 4).collect();
+        assert_eq!(seq, want, "start {start}");
+    }
+
+    #[test]
+    fn a_plain_output_cannot_be_read_and_a_clock_must_be_an_input() {
+        assert!(logic("A B", "Y = A & B
+Z = Y | A").unwrap_err().contains("出力 Y は式に使えません"));
+        assert!(logic("A", "Q = A @ CK").unwrap_err().contains("CK"));
+        // a flip-flop output may be read
+        assert!(logic("D CLK", "Q = D @ CLK
+Y = !Q").is_ok());
     }
 }
