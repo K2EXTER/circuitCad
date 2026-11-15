@@ -535,6 +535,10 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     }
     if args.iter().any(|a| a == "--3d") {
         app.board_ed.open_view3d();
+        // --3d-cpu: the software picture even when the GPU is there (to compare the two)
+        if args.iter().any(|a| a == "--3d-cpu") {
+            app.board_ed.view3d_use_gpu(false);
+        }
         // --3d-net <net>: light that net's copper in the 3D view (for screenshots)
         if let Some(i) = args.iter().position(|a| a == "--3d-net")
             && let Some(n) = args.get(i + 1) {

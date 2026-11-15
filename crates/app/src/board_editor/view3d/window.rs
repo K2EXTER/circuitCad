@@ -92,6 +92,9 @@ impl BoardEditor {
                     ui.add(egui::DragValue::new(&mut v.case_d).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("奥行 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)"));
                 }
                 ui.checkbox(&mut v.spin, i18n::tr("自動回転")).on_hover_text(i18n::tr("ゆっくり回して、いろいろな向きから見せます"));
+                if gpu::ready() {
+                    ui.checkbox(&mut v.use_gpu, i18n::tr("GPU で描く")).on_hover_text(i18n::tr("グラフィックス (GPU) で描きます。部品の形が細かくても軽く回せます。表示がおかしいときは外すと、これまでの描き方 (CPU) に戻ります"));
+                }
                 if ui.button(i18n::tr("更新")).on_hover_text(i18n::tr("基板エディタで変更した内容を反映します")).clicked() {
                     stale = true;
                 }
@@ -192,6 +195,18 @@ impl BoardEditor {
                 ui.ctx().request_repaint();
             }
             let cam = camera(scene, resp.rect, v.yaw, v.pitch, v.zoom, v.pan);
+            let on_gpu = v.use_gpu && gpu::ready();
+            if on_gpu {
+                // the GPU draws every frame; its vertex data is made again only when the scene or what shows in it changes
+                if v.gpu_geometry.as_ref().is_none_or(|g| g.key() != (scene.serial, v.generation)) {
+                    v.gpu_geometry = Some(std::sync::Arc::new(gpu::Geometry::build(scene, v.generation)));
+                }
+                if let Some(g) = &v.gpu_geometry {
+                    let frame = gpu::Frame { geometry: g.clone(), cam, rect: resp.rect, ppp: ui.ctx().pixels_per_point(), show_parts: v.show_parts, hover: v.hover, selected };
+                    painter.add(eframe::egui_wgpu::Callback::new_paint_callback(resp.rect, gpu::Paint(frame)));
+                }
+                v.cache = None;
+            }
             // the picture: drawn at twice the size and averaged (release builds), and kept while nothing in it changes
             let quality = if moving { Quality::Draft } else { Quality::Fine(if cfg!(debug_assertions) { 1 } else { 2 }) };
             let size_px = [resp.rect.width().round().max(1.0) as usize, resp.rect.height().round().max(1.0) as usize];
@@ -208,7 +223,7 @@ impl BoardEditor {
                 // one more frame once it stops, to draw the full picture
                 ui.ctx().request_repaint();
             }
-            if v.cache.as_ref().is_none_or(|c| c.key != key) {
+            if !on_gpu && v.cache.as_ref().is_none_or(|c| c.key != key) {
                 let (pixels, ids, w, h) = snapshot(scene, resp.rect, &cam, v.show_parts, quality, v.hover, selected);
                 let rgba: Vec<u8> = pixels.iter().flatten().copied().collect();
                 let tex = ui.ctx().load_texture("board3d_view", egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba), egui::TextureOptions::LINEAR);
@@ -226,7 +241,9 @@ impl BoardEditor {
                 }
             }
             let mut hover = None;
-            if let Some(c) = &v.cache {
+            if on_gpu {
+                hover = resp.hover_pos().and_then(|p| gpu::pick(scene, &cam, p, v.show_parts));
+            } else if let Some(c) = &v.cache {
                 painter.image(c.tex.id(), resp.rect, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
                 if let Some(p) = resp.hover_pos()
                     && let Some(k) = sample_at(resp.rect, c.size, p)

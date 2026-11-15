@@ -32,6 +32,8 @@ pub(super) struct Scene {
     pub(super) case_key: Option<[u64; 5]>,
     /// Copper of the highlighted net as triangles (`true` = bottom face), drawn just above the board picture.
     pub(super) glow: Vec<(bool, [Point; 3])>,
+    /// This scene's own number (the GPU's copy of it is replaced when another scene is built).
+    pub(super) serial: u64,
 }
 
 /// Brightness for a face whose normal (view space) is `n`: lit from above-left of the viewer.
@@ -156,7 +158,7 @@ impl Scene {
         let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
         nets.sort();
         nets.dedup();
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![] })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial() })
     }
 
     /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face

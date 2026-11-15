@@ -1,7 +1,9 @@
 //! "3Dで見る" window: the board as the fab will make it (the picture rebuilt from the exported
 //! fabrication files, put on the top and bottom faces) with solids for every part. Drawn by a small
 //! software rasteriser (`raster3d`): perspective projection, back-face culling and a depth buffer, so what is
-//! nearer always hides what is behind it. Hovering a part names it, clicking selects it in the board editor.
+//! nearer always hides what is behind it. When the window is drawn with wgpu, the picture is drawn on the GPU instead (`gpu.rs`, same
+//! camera and look; the software picture stays for saving a PNG, the tests, and the switch). Hovering a part names it, clicking selects it in
+//! the board editor.
 
 use super::raster3d::{outline_part, Buffers, Paint, Picture, Vert, NO_PART};
 use super::*;
@@ -10,6 +12,7 @@ use pcb_core::model3d::{part_boxes, part_height_on, part_meshes, BodyShape, Part
 
 mod camera;
 mod glow;
+mod gpu;
 mod picture;
 mod scene;
 #[cfg(test)]
@@ -24,6 +27,11 @@ use scene::*;
 /// Colour of the highlighted net, and how far (mm) it floats above the board so it wins the depth test.
 const GLOW: [u8; 3] = [255, 60, 170];
 const GLOW_LIFT: f64 = 0.05;
+/// Makes the GPU's pipelines for the 3D view (once, when the window is made with wgpu); `msaa` is the sample count of egui's drawing.
+pub(crate) fn gpu_init(rs: &eframe::egui_wgpu::RenderState, msaa: u32) {
+    gpu::init(rs, msaa);
+}
+
 /// Largest zoom (the scroll wheel and "選択部品へ寄る" share it).
 const MAX_ZOOM: f32 = 30.0;
 
@@ -63,6 +71,10 @@ pub(super) struct View3d {
     /// The inside size of the case (width, depth in mm; 0 = not given).
     case_w: f64,
     case_d: f64,
+    /// Draw on the GPU when it is there (the switch in the window; off = the software picture).
+    use_gpu: bool,
+    /// The scene as GPU vertex data, kept while the scene and what shows in it stay the same.
+    gpu_geometry: Option<std::sync::Arc<gpu::Geometry>>,
 }
 
 /// A finished picture of the scene: what it was drawn for, the image, and the part at each pixel.
@@ -87,7 +99,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0 }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None }
     }
 }
 
@@ -96,6 +108,11 @@ impl BoardEditor {
     pub fn open_view3d(&mut self) {
         self.view3d.open = true;
         self.view3d.stale = true;
+    }
+
+    /// Draws the 3D view on the GPU (when there is one) or with the software picture (`--3d-cpu`).
+    pub fn view3d_use_gpu(&mut self, on: bool) {
+        self.view3d.use_gpu = on;
     }
 
     /// Picks the net to light in the 3D view (`--3d-net`, for screenshots).

@@ -682,8 +682,12 @@ fn main() -> eframe::Result {
             multisampling: if smooth_edges { 4 } else { 0 },
             ..Default::default()
         },
-        Box::new(|cc| {
+        Box::new(move |cc| {
             install_japanese_font(&cc.egui_ctx);
+            // the 3D view draws on the GPU when the window is drawn with wgpu (the last pass draws into egui's own, multisampled or not)
+            if let Some(rs) = &cc.wgpu_render_state {
+                board_editor::view3d_gpu_init(rs, if smooth_edges { 4 } else { 1 });
+            }
             let mut app = App::default();
             app.progress = learn::Progress::load(&learn::Progress::default_file());
             let prefs = prefs::Prefs::load(&prefs::Prefs::default_file());

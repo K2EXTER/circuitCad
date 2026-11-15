@@ -335,4 +335,106 @@ mod view3d_tests {
         b.outline.clear();
         assert!(Scene::build(&b, &ctx, true, true).is_err());
     }
+
+    /// The GPU path finds the part under the pointer on the CPU (the ray against the parts' triangles), as the software picture's part image
+    /// does: the middle of each resistor from above and at a slant, nothing over bare board, and nothing when the parts are hidden.
+    #[test]
+    fn the_part_under_the_pointer_is_found_by_its_ray() {
+        let b = two_resistors();
+        let s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 500.0));
+        for pitch in [std::f32::consts::FRAC_PI_2, 0.9] {
+            let cam = camera(&s, rect, 0.3, pitch, 1.0, Vec2::ZERO);
+            for (i, x) in [(0usize, 8.0), (1, 30.0)] {
+                let top = s.boxes.iter().filter(|bx| bx.part == i).map(|bx| bx.hi[2]).fold(0.0, f64::max);
+                let (p, _) = cam.project([x, 12.0, top]);
+                assert_eq!(gpu::pick(&s, &cam, p, true), Some(i), "part {i} at pitch {pitch}");
+                assert_eq!(gpu::pick(&s, &cam, p, false), None, "parts hidden");
+            }
+            let (p, _) = cam.project([20.0, 5.0, BOARD_THICKNESS]);
+            assert_eq!(gpu::pick(&s, &cam, p, true), None, "bare board");
+        }
+    }
+
+    /// The GPU's vertex data: the board's faces and edge first (drawn alone when the parts are hidden), then the parts; rebuilt for a new
+    /// generation.
+    #[test]
+    fn the_gpu_vertex_data_holds_the_board_then_the_parts() {
+        let b = two_resistors();
+        let s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        let g = gpu::Geometry::build(&s, 7);
+        assert_eq!(g.key(), (s.serial, 7));
+        let (board, all) = g.counts();
+        // the outline is a rectangle: 2 triangles on each face and 2 on each of the 4 sides
+        assert_eq!(board, 3 * (2 * 2 + 4 * 2));
+        let part_tris: usize = s.boxes.iter().map(|bx| solid_faces(bx).iter().map(|(c, _)| c.len() - 2).sum::<usize>()).sum();
+        assert_eq!(all - board, 3 * part_tris as u32);
+        let other = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        assert_ne!(other.serial, s.serial, "another scene is uploaded again");
+    }
+
+    /// How long a picture takes with many fine part meshes (as SolidCraft cuts them): sets the triangles a part may keep (候補 E8 ③).
+    /// `cargo test -p app view3d_mesh_cost -- --ignored --nocapture` (add `--release` for the times of the shipped program).
+    #[test]
+    #[ignore]
+    fn view3d_mesh_cost() {
+        use pcb_core::mesh::Mesh3d;
+        // a cylinder of `seg` sides and `rows` bands: 2 seg (rows + 1) triangles
+        fn cylinder(seg: usize, rows: usize) -> Mesh3d {
+            let mut m = Mesh3d { palette: vec![[40, 70, 160]], ..Default::default() };
+            for r in 0..=rows {
+                for k in 0..seg {
+                    let a = std::f32::consts::TAU * k as f32 / seg as f32;
+                    m.vertices.push([2.5 * a.cos(), 2.5 * a.sin(), 11.0 * r as f32 / rows as f32]);
+                }
+            }
+            for r in 0..rows {
+                for k in 0..seg {
+                    let (i, j) = ((r * seg + k) as u32, (r * seg + (k + 1) % seg) as u32);
+                    let s = seg as u32;
+                    m.triangles.push([i, j, j + s]);
+                    m.triangles.push([i, j + s, i + s]);
+                }
+            }
+            let (bot, top) = (m.vertices.len() as u32, m.vertices.len() as u32 + 1);
+            m.vertices.push([0.0, 0.0, 0.0]);
+            m.vertices.push([0.0, 0.0, 11.0]);
+            let s = seg as u32;
+            for k in 0..s {
+                m.triangles.push([bot, (k + 1) % s, k]);
+                m.triangles.push([top, rows as u32 * s + k, rows as u32 * s + (k + 1) % s]);
+            }
+            m.tri_color = vec![0; m.triangles.len()];
+            m
+        }
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 680.0));
+        println!("parts  tris/part  total     build ms  draft ms  fine(1) ms  fine(2) ms");
+        for (parts, seg, rows) in [(10, 32, 4), (50, 32, 4), (10, 64, 40), (50, 64, 40), (50, 64, 10), (100, 64, 10), (50, 128, 40), (100, 128, 40)] {
+            let mut b = Board::new("t", 100.0, 80.0);
+            let mut fp = pcb_core::footprints::get("R_0805").unwrap();
+            fp.name = "MESHED".into();
+            b.add_footprint(fp);
+            let mesh = cylinder(seg, rows);
+            let per = mesh.triangles.len();
+            b.models3d.insert("MESHED".into(), mesh);
+            for i in 0..parts {
+                let (x, y) = (8.0 + (i % 10) as f64 * 9.0, 8.0 + (i / 10) as f64 * 7.0);
+                b.set_part(pcb_core::model::Part { refdes: format!("C{i}"), value: "x".into(), footprint: "MESHED".into(), pos: Point::new(x, y), rot: 0, side: pcb_core::model::Side::Top }).unwrap();
+            }
+            let t = std::time::Instant::now();
+            let s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+            let build = t.elapsed().as_secs_f64() * 1000.0;
+            let cam = camera(&s, rect, 0.6, 0.7, 1.0, Vec2::ZERO);
+            let time = |q: Quality| {
+                let t = std::time::Instant::now();
+                for _ in 0..3 {
+                    let _ = snapshot(&s, rect, &cam, true, q, None, None);
+                }
+                t.elapsed().as_secs_f64() * 1000.0 / 3.0
+            };
+            let (d, f1, f2) = (time(Quality::Draft), time(Quality::Fine(1)), time(Quality::Fine(2)));
+            println!("{parts:5}  {per:9}  {:7}  {build:8.1}  {d:8.1}  {f1:10.1}  {f2:10.1}", parts * per);
+        }
+    }
 }
+
