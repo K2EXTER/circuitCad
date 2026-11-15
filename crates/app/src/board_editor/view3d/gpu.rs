@@ -307,11 +307,17 @@ fn to_view(p: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(dot(cam.r0.xyz, rel), dot(cam.r1.xyz, rel), dot(cam.r2.xyz, rel));
 }
 
-fn to_clip(v: vec3<f32>) -> vec4<f32> {
+// `lift` (mm) pulls the depth towards the viewer without moving the point on the screen (lines over the faces they lie on)
+fn to_clip_lifted(v: vec3<f32>, lift: f32) -> vec4<f32> {
     let w = cam.center_dist.w - v.z;
     // depth after the divide: 0 at `near`, 1 at `far`, in 1/w (which the GPU interpolates correctly across a triangle)
-    let z = (cam.far * w - cam.near * cam.far) / (cam.far - cam.near);
+    let wd = w - lift;
+    let z = (cam.far * wd - cam.near * cam.far) / (cam.far - cam.near) * (w / wd);
     return vec4<f32>(v.x * cam.proj.x + cam.proj.z * w, v.y * cam.proj.y + cam.proj.w * w, z, w);
+}
+
+fn to_clip(v: vec3<f32>) -> vec4<f32> {
+    return to_clip_lifted(v, 0.0);
 }
 
 struct FaceOut {
@@ -387,9 +393,9 @@ struct LineOut {
 @vertex
 fn vs_line(@location(0) pos: vec3<f32>, @location(1) color: vec4<f32>) -> LineOut {
     var o: LineOut;
-    o.pos = to_clip(to_view(pos));
-    // a little nearer than the faces they lie on, so they are not hidden by them
-    o.pos.z = o.pos.z - 0.0005 * o.pos.w;
+    // 0.03 mm nearer than the faces they lie on, so they are not hidden by them (a fixed step in the depth scale would be millimetres at a
+    // distance and let the edges behind a part show through)
+    o.pos = to_clip_lifted(to_view(pos), 0.03);
     o.color = color;
     return o;
 }
