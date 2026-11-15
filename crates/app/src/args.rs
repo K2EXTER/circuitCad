@@ -230,6 +230,18 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         {
             eprintln!("--section {k}: no such section of the analysis tab");
         }
+        // --ambient C: the surrounding temperature of the heat runs below
+        if let Some(t) = args.iter().position(|a| a == "--ambient").and_then(|i| args.get(i + 1)) {
+            app.sch.heat_ambient = t.clone();
+        }
+        // --heattran PARTS TSTOP: the "温度の時間変化" worked out for those parts (with `--section selfheat`, for screenshots)
+        if let Some(i) = args.iter().position(|a| a == "--heattran")
+            && let (Some(parts), Some(stop)) = (args.get(i + 1), args.get(i + 2))
+        {
+            app.sch.htran_parts = parts.clone();
+            app.sch.htran_stop = stop.clone();
+            app.sch.htran = Some(app.sch.run_heat_tran());
+        }
         // --selfheat: the "自己発熱" result worked out (with `--section selfheat`, for screenshots)
         if args.iter().any(|a| a == "--selfheat") {
             app.sch.heat_view = Some(app.sch.run_self_heat());

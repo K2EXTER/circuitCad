@@ -294,11 +294,11 @@ pub struct SchEditor {
     /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
     /// The last self-heating run (the section "自己発熱") and the surrounding temperature typed for it.
     pub(crate) heat_view: Option<Result<selfheat::HeatView, String>>,
-    heat_ambient: String,
+    pub(crate) heat_ambient: String,
     /// The temperature-over-time block: its last answer and its inputs (parts, seconds, "A:B:K/W" couplings).
-    htran: Option<Result<selfheat_tran::HeatTranView, String>>,
-    htran_parts: String,
-    htran_stop: String,
+    pub(crate) htran: Option<Result<selfheat_tran::HeatTranView, String>>,
+    pub(crate) htran_parts: String,
+    pub(crate) htran_stop: String,
     htran_links: String,
     /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
     htran_links_seen: Vec<(String, String, f64)>,

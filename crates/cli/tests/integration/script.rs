@@ -2033,6 +2033,13 @@ fn heattran_warms_a_part_by_the_pulse_not_by_the_steady_state() {
     let rise = p["rise_peak_k"].as_f64().unwrap();
     assert!(rise > 4.2 && rise < 4.8, "{p}");
     assert!((p["steady_state_rise_k"].as_f64().unwrap() - 25.0).abs() < 0.1, "{p}");
+    assert_eq!(p["temperature"], "ok", "{p}");
+    // the peak (27 + 4.5 C) is what meets the limit: 30 C is passed for a moment, and the message says when
+    let (a, ok) = run(&format!("{head}thermal R1 tmax=30\nheattran 1.1 parts=R1 tstep=5m\n"));
+    assert!(ok, "{a:?}");
+    let h = last(&a, "heattran");
+    assert!(h["parts"][0]["temperature"] == "over" && h["parts"][0]["margin_at_peak_k"].as_f64().unwrap() < 0.0, "{h}");
+    assert!(h["temperature_problems"][0]["message"].as_str().unwrap().contains("秒"), "{h}");
     let (a, ok) = run(&format!("{head}thermal R1 cth=0\nheattran 1.1 parts=R1 tstep=5m\n"));
     assert!(ok, "{a:?}");
     assert!(last(&a, "heattran")["parts"][0]["rise_peak_k"].as_f64().unwrap() > 24.0);

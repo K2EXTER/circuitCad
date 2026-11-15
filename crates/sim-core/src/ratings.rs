@@ -335,6 +335,22 @@ pub fn check_temperatures(sch: &Schematic, parts: &[crate::HeatedPart], t_amb: f
     out
 }
 
+/// The temperature-over-time result checked the same way: each part's highest temperature against its limit, and its mean power against
+/// the rating lowered for the surroundings (a rated power is for continuous power). The message says when the peak came.
+pub fn check_peak_temperatures(sch: &Schematic, parts: &[crate::HeatTranPart], t_amb: f64) -> Vec<TempCheck> {
+    let as_steady: Vec<crate::HeatedPart> = parts
+        .iter()
+        .map(|p| crate::HeatedPart { name: p.name.clone(), power: p.power_mean, rise: p.rise_peak, temp_c: t_amb + p.rise_peak, change: p.change, theta: p.theta, tc1: 0.0, tc2: 0.0, junctions: p.junctions, junction_v: None })
+        .collect();
+    let mut out = check_temperatures(sch, &as_steady, t_amb);
+    for c in &mut out {
+        if let Some(p) = parts.iter().find(|p| p.name == c.name) {
+            c.message = format!("{}。いちばん熱いのは {:.3} 秒", c.message, p.peak_time);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod temp_tests {
     use super::*;
@@ -361,6 +377,18 @@ mod temp_tests {
         let c = check_temperatures(&sch, &[part(&qn, 130.0, 0.5, 1)], 25.0).remove(0);
         assert_eq!((c.limit.source, c.level), (LimitSource::Part, Some(RatingLevel::Caution)));
         assert!(!c.message.contains("種類からの目安"), "{}", c.message);
+    }
+
+    #[test]
+    fn the_peak_of_a_pulse_is_what_meets_the_limit() {
+        // a transistor whose pulse takes it to 170 C for a moment, though on average it stays far cooler
+        let mut sch = Schematic::default();
+        let q = sch.add(Kind::Npn, (0, 0), 0);
+        let name = sch.components[q].refdes.clone();
+        let p = crate::HeatTranPart { name: name.clone(), theta: 300.0, cth: 0.01, power_peak: 2.0, power_mean: 0.05, rise_peak: 145.0, peak_time: 0.012, rise_end: 3.0, rise_alone: 145.0, temp_working_c: 80.0, change: 0.0, junctions: 1, power: vec![], rise: vec![] };
+        let c = check_peak_temperatures(&sch, &[p], 25.0).remove(0);
+        assert_eq!((c.temp_c, c.limit.t_max, c.level), (170.0, 150.0, Some(RatingLevel::Over)));
+        assert!(c.message.contains("0.012 秒"), "{}", c.message);
     }
 
     #[test]

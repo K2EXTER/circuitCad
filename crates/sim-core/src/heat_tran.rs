@@ -47,6 +47,8 @@ pub struct HeatTranPart {
     pub temp_working_c: f64,
     /// Change of its value from the surroundings' temperature to that one (relative; 0 when it has no temperature coefficient).
     pub change: f64,
+    /// How many diodes and transistors the part holds (for its temperature limit: `ratings::temperature_limit`).
+    pub junctions: usize,
     pub power: Vec<f64>,
     pub rise: Vec<f64>,
 }
@@ -311,6 +313,7 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
                         rise_alone: alone[k].iter().cloned().fold(0.0, f64::max),
                         temp_working_c: weighted[k],
                         change: scale(&nd.heater, weighted[k]) / scale(&nd.heater, t_amb) - 1.0,
+                        junctions: junctions[k].len(),
                         power: power[k].clone(),
                         rise: rise[k].clone(),
                     }

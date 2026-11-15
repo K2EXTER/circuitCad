@@ -539,6 +539,13 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         self.last_tran = Some(r.tran.clone());
         let n = r.time.len();
         let at = |k: usize| k * (n - 1) / (samples - 1);
+        let checks = sim_core::check_peak_temperatures(&self.sch, &r.parts, temp);
+        let check_of = |name: &str| checks.iter().find(|c| c.name == name);
+        let level = |l: Option<sim_core::RatingLevel>| match l {
+            Some(sim_core::RatingLevel::Over) => "over",
+            Some(sim_core::RatingLevel::Caution) => "caution",
+            None => "ok",
+        };
         let rows: Vec<Value> = r
             .parts
             .iter()
@@ -549,7 +556,8 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
                     "rise_peak_k": p.rise_peak, "peak_at_s": p.peak_time, "rise_end_k": p.rise_end,
                     "temp_peak_c": temp + p.rise_peak, "added_by_neighbours_k": p.rise_peak - p.rise_alone,
                     "working_temp_c": p.temp_working_c, "change_ppm": p.change * 1e6,
-                    "steady_state_rise_k": p.power_peak * p.theta, "samples_time_power_rise": series})
+                    "steady_state_rise_k": p.power_peak * p.theta, "samples_time_power_rise": series,
+                    "t_max_c": check_of(&p.name).map(|c| c.limit.t_max), "t_max_from": check_of(&p.name).map(|c| format!("{:?}", c.limit.source).to_lowercase()), "margin_at_peak_k": check_of(&p.name).map(|c| c.margin_k), "derated_power_w": check_of(&p.name).and_then(|c| c.p_derated), "temperature": check_of(&p.name).map(|c| level(c.level))})
             })
             .collect();
         let mut notes = vec!["each part is one heat capacity and one heat resistance to the surroundings: a rough picture, not a field solution".to_string(), copper_note(&copper, self.board.is_some(), self.post_layout)];
@@ -565,7 +573,8 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let (t_at, moved) = r.moved(8);
         let nets: Vec<Value> = moved.iter().map(|(n, a, b)| json!({"signal": n, "cold": a, "warm": b, "shift": b - a})).collect();
         notes.extend(gate);
-        Ok(obj(json!({"ambient_c": temp, "tstop": tstop, "rounds": r.rounds, "parts": rows, "moved_at_s": t_at, "moved": nets, "notes": notes})))
+        let problems: Vec<Value> = checks.iter().filter(|c| c.level.is_some()).map(|c| json!({"part": c.name, "level": level(c.level), "message": c.message, "hint": c.hint})).collect();
+        Ok(obj(json!({"ambient_c": temp, "tstop": tstop, "rounds": r.rounds, "parts": rows, "temperature_problems": problems, "moved_at_s": t_at, "moved": nets, "notes": notes})))
     }
 
     /// `heat [temp=27] [top=10]`: the DC point with the resistors, diodes and transistors warmed by their own power (`sim_core::self_heat`): per part the power,

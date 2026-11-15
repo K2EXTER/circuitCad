@@ -67,7 +67,7 @@ pub use chain::{chain_failure, ChainEnd, ChainReport, ChainStep};
 pub use par::{par_map, par_map_progress};
 pub use fault::{faults_of, motor_inside, likelihood, Likelihood, TURN_SHORTS, assess_safety, Danger, FaultSafety, describe_fault, break_pin, break_part, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, Broken, applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
 pub use diagnose::diagnose;
-pub use ratings::{check_ratings, check_temperatures, meets, package_power_limit, requirement, stress, temperature_limit, LimitSource, RatingIssue, RatingLevel, Requirement, Stress, TempCheck, TempLimit};
+pub use ratings::{check_peak_temperatures, check_ratings, check_temperatures, meets, package_power_limit, requirement, stress, temperature_limit, LimitSource, RatingIssue, RatingLevel, Requirement, Stress, TempCheck, TempLimit};
 pub use ripple::{ripple_reports, RippleReport, MAX_LIFE_HOURS, RIPPLE_HEATING_AT_RATED_C};
 pub use netcurrent::{net_currents, net_currents_tran, NetStat, HEAT_WINDOW};
 pub use dc::{dc_op, last_convergence_trouble, DcResult, ElementResult, SimError};

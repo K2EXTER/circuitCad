@@ -4,7 +4,7 @@
 use super::*;
 
 /// What the last run found.
-pub(super) struct HeatTranView {
+pub(crate) struct HeatTranView {
     pub ambient: f64,
     pub tstop: f64,
     pub time: Vec<f64>,
@@ -12,6 +12,8 @@ pub(super) struct HeatTranView {
     /// When the shifts below are taken, and (signal, volts cold, volts warm).
     pub moved_at: f64,
     pub moved: Vec<(String, f64, f64)>,
+    /// Each part's highest temperature against its limit (`sim_core::check_peak_temperatures`).
+    pub checks: Vec<sim_core::TempCheck>,
 }
 
 /// "Q1:RS1:150, ..." -> (part, part, K/W) per link.
@@ -39,7 +41,7 @@ impl SchEditor {
         self.htran_links_seen = links;
     }
 
-    pub(super) fn run_heat_tran(&mut self) -> Result<HeatTranView, String> {
+    pub(crate) fn run_heat_tran(&mut self) -> Result<HeatTranView, String> {
         let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
         let tstop = sim_core::parse_value(self.htran_stop.trim()).filter(|t| *t > 0.0 && t.is_finite()).ok_or("時間を、0 より大きい数で入力してください (例: 0.6 や 600m。秒)")?;
         let refs: Vec<String> = self.htran_parts.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
@@ -54,7 +56,8 @@ impl SchEditor {
         let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs, &self.copper_g())?;
         let r = sim_core::heat_tran(&c, &nodes, &links, ambient, &sim_core::TranSettings { tstop, tstep: sim_core::auto_tstep(tstop), uic: false }).map_err(|e| e.to_string())?;
         let (moved_at, moved) = r.moved(6);
-        Ok(HeatTranView { ambient, tstop, time: r.time.clone(), parts: r.parts.clone(), moved_at, moved })
+        let checks = sim_core::check_peak_temperatures(&self.sch, &r.parts, ambient);
+        Ok(HeatTranView { ambient, tstop, time: r.time.clone(), parts: r.parts.clone(), moved_at, moved, checks })
     }
 
     pub(super) fn panel_heat_tran(&mut self, ui: &mut egui::Ui) {
@@ -103,21 +106,34 @@ impl SchEditor {
             }
             Ok(v) => {
                 let mut edits: Vec<(String, f64, f64)> = vec![];
+                let mut limit_edits: Vec<(String, f64)> = vec![];
                 let own = self.own_thetas();
-                egui::Grid::new("htran_grid").num_columns(6).striped(true).show(ui, |ui| {
-                    for h in ["部品", "電力(最大)", "上昇(最大)", "熱抵抗 K/W", "熱容量 J/K", "定常なら"] {
-                        ui.label(egui::RichText::new(h).small().strong());
+                egui::Grid::new("htran_grid").num_columns(7).striped(true).spacing([6.0, 4.0]).show(ui, |ui| {
+                    for (h, tip) in [("部品", ""), ("電力(最大)", ""), ("上昇(最大)", ""), ("θ K/W", "熱抵抗 (K/W)"), ("熱容量 J/K", ""), ("定常なら", ""), ("上限 ℃", "部品の最高温度 (℃)")] {
+                        let r = ui.label(egui::RichText::new(h).small().strong());
+                        if !tip.is_empty() {
+                            r.on_hover_text(i18n::tr(tip));
+                        }
                     }
                     ui.end_row();
                     for (k, p) in v.parts.iter().enumerate() {
                         ui.label(egui::RichText::new(&p.name).color(curve_color(k)))
                             .on_hover_text(i18n::trf!("最高 {:.1} ℃ (周囲 {} ℃ + {:.1} K、{:.3} 秒)。電力をかけている間の平均 {:.1} ℃", v.ambient + p.rise_peak, v.ambient, p.rise_peak, p.peak_time, p.temp_working_c));
                         ui.label(fmt_power(p.power_peak));
-                        ui.label(format!("{:.1} K", p.rise_peak)).on_hover_text(i18n::trf!(
+                        let check = v.checks.iter().find(|c| c.name == p.name);
+                        let rise_col = match check.and_then(|c| c.level) {
+                            Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
+                            Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
+                            None => ui.visuals().text_color(),
+                        };
+                        let neighbours = i18n::trf!(
                             "相手の部品から受けた熱: {:+.2} K (結合を外したときとの差。熱を逃がす側はマイナス)。値の変化 {:+.0} ppm",
                             p.rise_peak - p.rise_alone,
                             p.change * 1e6
-                        ));
+                        );
+                        let tip = check.map_or(neighbours.clone(), |c| format!("{}
+{neighbours}", i18n::tr_dyn(&c.message)));
+                        ui.label(egui::RichText::new(format!("{:.1} K", p.rise_peak)).color(rise_col)).on_hover_text(tip);
                         let (mut theta, mut cth) = (own.get(&p.name).copied().unwrap_or(p.theta), p.cth);
                         let a = super::selfheat::theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name));
                         let b = ui
@@ -127,6 +143,16 @@ impl SchEditor {
                             edits.push((p.name.clone(), theta, cth));
                         }
                         ui.label(format!("{:.0} K", p.power_peak * p.theta)).on_hover_text(i18n::tr("同じ電力を流し続けたとき (定常) の上昇。通電が短いほど、最大の上昇はこれよりずっと低くなります"));
+                        if let Some(c) = check {
+                            let mut t = c.limit.t_max;
+                            let guess = c.limit.source == sim_core::LimitSource::Guess;
+                            let r = ui.add(egui::DragValue::new(&mut t).range(40.0..=400.0).speed(1.0).max_decimals(0).suffix(if guess { "?" } else { "" })).on_hover_text(i18n::tr("部品の中が達してよい最高の温度 (半導体は接合部の Tj の最大、抵抗は抵抗体の上限)。いちばん熱い瞬間の温度と比べます。「?」は部品の種類からの目安です。データシートの値に直してください。変えたら、もう一度計算してください"));
+                            if r.changed() {
+                                limit_edits.push((p.name.clone(), t));
+                            }
+                        } else {
+                            ui.label("");
+                        }
                         ui.end_row();
                     }
                 });
@@ -135,6 +161,15 @@ impl SchEditor {
                         c.theta = theta;
                         c.cth = cth;
                     }
+                }
+                for (name, t) in limit_edits {
+                    if let Some(c) = self.sch.components.iter_mut().find(|c| c.refdes == name) {
+                        c.t_max = t;
+                    }
+                }
+                for c in v.checks.iter().filter(|c| c.level.is_some()) {
+                    let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::ERROR } else { crate::theme::WARN };
+                    ui.colored_label(col, format!("⚠ {}", i18n::tr_dyn(&c.message))).on_hover_text(i18n::tr_dyn(&c.hint));
                 }
                 draw_rise_chart(ui, v);
                 if !v.moved.is_empty() {
@@ -168,10 +203,18 @@ fn curve_color(k: usize) -> egui::Color32 {
 
 /// The temperature rise of each part over time, as lines.
 fn draw_rise_chart(ui: &mut egui::Ui, v: &HeatTranView) {
-    let top = v.parts.iter().map(|p| p.rise_peak).fold(0.0, f64::max).max(1e-9);
+    // the limit (as a rise over the surroundings) of each part that comes near it or past it is drawn too, so the scale takes it in
+    let limits: Vec<(usize, f64)> = v
+        .parts
+        .iter()
+        .enumerate()
+        .filter_map(|(k, p)| v.checks.iter().find(|c| c.name == p.name && c.level.is_some()).map(|c| (k, c.limit.t_max - v.ambient)))
+        .filter(|(_, l)| *l > 0.0)
+        .collect();
+    let top = v.parts.iter().map(|p| p.rise_peak).chain(limits.iter().map(|l| l.1)).fold(0.0, f64::max).max(1e-9);
     let size = egui::vec2(ui.available_width().clamp(180.0, 420.0), 120.0);
     let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::hover());
-    resp.on_hover_text(i18n::tr("各部品の、周囲の温度からの上昇 (K) の時間変化。横軸は時間、縦軸は上昇"));
+    resp.on_hover_text(i18n::tr("各部品の、周囲の温度からの上昇 (K) の時間変化。横軸は時間、縦軸は上昇。上限に近づいた・超えた部品は、上限を同じ色の点線で描きます"));
     let plot = rect.shrink2(egui::vec2(34.0, 14.0));
     let painter = ui.painter_at(rect);
     let weak = ui.visuals().weak_text_color();
@@ -184,5 +227,10 @@ fn draw_rise_chart(ui: &mut egui::Ui, v: &HeatTranView) {
         let pts: Vec<egui::Pos2> =
             v.time.iter().zip(&p.rise).map(|(t, u)| egui::pos2(plot.left() + (t / v.tstop) as f32 * plot.width(), plot.bottom() - (u / top) as f32 * plot.height())).collect();
         painter.add(egui::Shape::line(pts, egui::Stroke::new(1.5, curve_color(k))));
+    }
+    for (k, lim) in limits {
+        let y = plot.bottom() - (lim / top) as f32 * plot.height();
+        painter.add(egui::Shape::dashed_line(&[egui::pos2(plot.left(), y), egui::pos2(plot.right(), y)], egui::Stroke::new(1.0, curve_color(k)), 5.0, 4.0));
+        painter.text(egui::pos2(plot.right() - 2.0, y - 1.0), egui::Align2::RIGHT_BOTTOM, i18n::tr("上限"), egui::FontId::proportional(10.0), curve_color(k));
     }
 }
