@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum | --digital]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-logic-example]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -92,8 +92,8 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         app.sch.bjt_in_form(false);
     }
     // --form-logic-example: the logic IC box (--new-part ic) with the half adder, made into pins and a model
-    if args.iter().any(|a| a == "--form-logic-example") {
-        app.sch.logic_in_form();
+    if let Some(i) = args.iter().position(|a| a == "--form-logic-example") {
+        app.sch.logic_in_form(args.get(i + 1).is_some_and(|a| a == "counter"));
     }
     if let Some(i) = args.iter().position(|a| a == "--form-pick")
         && let Some(t) = args.get(i + 1) {

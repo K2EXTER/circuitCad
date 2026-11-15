@@ -79,9 +79,9 @@ impl SchEditor {
     }
 
     /// The logic IC box with the half adder, applied (`--form-logic-example`, with `--new-part ic`).
-    pub fn logic_in_form(&mut self) {
+    pub fn logic_in_form(&mut self, counter: bool) {
         if let Some(f) = self.form.as_mut() {
-            f.logic_example();
+            f.logic_example(counter);
         }
     }
 

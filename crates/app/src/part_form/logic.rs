@@ -173,6 +173,9 @@ pub(super) struct Out {
     ex: Ex,
     reads: Vec<usize>,
     pub clock: Option<usize>,
+    /// The asynchronous clear and set of a flip-flop: (input, active low).
+    clear: Option<(usize, bool)>,
+    set: Option<(usize, bool)>,
 }
 
 /// The inputs and the outputs with their expressions, checked.
@@ -229,32 +232,65 @@ impl LogicInput {
                     None => i18n::trf!("{} の式: {}", name, e),
                 }
             })?;
-            let clock = match clock {
-                None => None,
-                Some(c) => Some(inputs.iter().position(|i| i.eq_ignore_ascii_case(c)).ok_or_else(|| i18n::trf!("{} の「@ {}」: クロックは入力ピンの名前にしてください", name, c))?),
-            };
+            // `@ CLK [clear [!]PIN] [set [!]PIN]`: the clock, then the asynchronous clear and set (`!` = active low)
+            let input = |w: &str| inputs.iter().position(|i| i.eq_ignore_ascii_case(w));
+            let (mut clock_at, mut clear, mut set) = (None, None, None);
+            if let Some(c) = clock {
+                let words: Vec<&str> = c.split_whitespace().collect();
+                let first = words.first().copied().unwrap_or("");
+                clock_at = Some(input(first).ok_or_else(|| i18n::trf!("{} の「@ {}」: クロックは入力ピンの名前にしてください", name, first))?);
+                let mut k = 1;
+                while k < words.len() {
+                    let which = words[k].to_ascii_lowercase();
+                    let pin = words.get(k + 1).copied().ok_or_else(|| i18n::trf!("{} の「{}」のあとに入力ピンの名前が要ります (例: clear !RST)", name, words[k]))?;
+                    let (low, pin) = match pin.strip_prefix('!') {
+                        Some(p) => (true, p),
+                        None => (false, pin),
+                    };
+                    let at = input(pin).ok_or_else(|| i18n::trf!("{} の「{} {}」: {} は入力ピンにありません", name, words[k], words[k + 1], pin))?;
+                    match which.as_str() {
+                        "clear" | "reset" | "clr" => clear = Some((at, low)),
+                        "set" | "preset" | "pre" => set = Some((at, low)),
+                        _ => return Err(i18n::trf!("{} の「@」のあとの「{}」が分かりません。クロックの名前のあとに書けるのは clear (0 にする) と set (1 にする) です (例: @ CLK clear !RST)", name, words[k])),
+                    }
+                    k += 2;
+                }
+            }
+            let clock = clock_at;
             let mut reads = vec![];
             ex.vars(&mut reads);
             reads.sort_unstable();
             if reads.len() > MAX_INPUTS {
                 return Err(i18n::trf!("{} は入力を {} 本読んでいます。1 つの出力が読めるのは {} 本までです", name, reads.len(), MAX_INPUTS));
             }
-            outputs.push(Out { name: name.clone(), ex, reads, clock });
+            outputs.push(Out { name: name.clone(), ex, reads, clock, clear, set });
         }
         Ok(Logic { inputs, vars, outputs })
     }
 }
 
 impl Logic {
-    /// The truth table: every combination of the variables (the inputs, then the flip-flops' present state; the first is the
-    /// lowest bit) and each output (a flip-flop: the value it stores at its clock edge).
+    /// The variables some expression reads (a clock or a clear that no expression uses has no column), by index into `vars`.
+    pub(super) fn used(&self) -> Vec<usize> {
+        let mut u: Vec<usize> = self.outputs.iter().flat_map(|o| o.reads.iter().copied()).collect();
+        u.sort_unstable();
+        u.dedup();
+        u
+    }
+
+    /// The truth table: every combination of the variables the expressions read (`used`; the inputs, then the flip-flops'
+    /// present state; the first is the lowest bit) and each output (a flip-flop: the value it stores at its clock edge).
     pub(super) fn table(&self) -> Vec<(Vec<bool>, Vec<bool>)> {
-        let n = self.vars.len();
-        (0..1usize << n)
+        let used = self.used();
+        (0..1usize << used.len())
             .map(|a| {
-                let v: Vec<bool> = (0..n).map(|k| a >> k & 1 == 1).collect();
+                let shown: Vec<bool> = (0..used.len()).map(|k| a >> k & 1 == 1).collect();
+                let mut v = vec![false; self.vars.len()];
+                for (k, i) in used.iter().enumerate() {
+                    v[*i] = shown[k];
+                }
                 let o = self.outputs.iter().map(|o| o.ex.eval(&v)).collect();
-                (v, o)
+                (shown, o)
             })
             .collect()
     }
@@ -293,7 +329,10 @@ impl Logic {
                 l.push(format!("Y{o} lut {node} 0 gnd vcc 60 0.5 0 0 0 {td}table={} {}", words.join(","), ins.join(" ")));
             }
             if let Some(c) = out.clock {
-                l.push(format!("Y{o}_ff dff {o} 0 gnd vcc 60 0.5 0 0 0 td={delay_ns}n {node} {} 0 0", low(&self.inputs[c])));
+                // set and clear: their pins and whether they act when low (an unused one is tied low and acts when high: never)
+                let pin = |x: Option<(usize, bool)>| x.map_or(("0".to_string(), false), |(i, lo)| (low(&self.inputs[i]), lo));
+                let ((sp, sl), (rp, rl)) = (pin(out.set), pin(out.clear));
+                l.push(format!("Y{o}_ff dff {o} 0 gnd vcc 60 0.5 0 {} {} td={delay_ns}n {node} {} {sp} {rp}", u8::from(sl), u8::from(rl), low(&self.inputs[c])));
             }
         }
         l.push(format!(".ends {name}"));
@@ -346,14 +385,21 @@ impl PartForm {
         self.logic.message = i18n::trf!("ピン {} 本とモデルを作りました。このあと、下の「パッケージ」を選び、ピン番号をデータシートの番号に合わせて保存します", pins.len());
     }
 
-    /// The half adder in the box, made into pins and a model (the screenshot of `--form-logic-example`).
-    pub fn logic_example(&mut self) {
+    /// The half adder (or with `counter`, the 2-bit counter) in the box, made into pins and a model (the screenshot of
+    /// `--form-logic-example [counter]`).
+    pub fn logic_example(&mut self, counter: bool) {
         if self.name.trim().is_empty() {
-            self.name = "HALF_ADDER".into();
+            self.name = if counter { "COUNTER2" } else { "HALF_ADDER" }.into();
         }
-        self.logic.inputs = "A B".into();
-        self.logic.outputs = "S = A ^ B
+        if counter {
+            self.logic.inputs = "CLK RST".into();
+            self.logic.outputs = "Q0 = !Q0 @ CLK clear !RST
+Q1 = Q1 ^ Q0 @ CLK clear !RST".into();
+        } else {
+            self.logic.inputs = "A B".into();
+            self.logic.outputs = "S = A ^ B
 C = A & B".into();
+        }
         self.apply_logic();
     }
 
@@ -367,7 +413,7 @@ C = A & B".into();
                     ("半加算器", "1 ビットの足し算: S = A と B の排他的論理和、C = 桁上がり", "A B", "S = A ^ B\nC = A & B"),
                     ("多数決 (3 入力)", "3 つのうち 2 つ以上が 1 なら 1", "A B C", "Y = (A & B) | (B & C) | (A & C)"),
                     ("2 → 1 セレクタ", "S が 0 なら A、1 なら B を出す", "A B S", "Y = (A & !S) | (B & S)"),
-                    ("2 ビットカウンタ", "CLK の立ち上がりごとに 0 → 1 → 2 → 3 → 0 と数える。「@ CLK」の付いた出力は、クロックで値を覚えるフリップフロップ", "CLK", "Q0 = !Q0 @ CLK\nQ1 = Q1 ^ Q0 @ CLK"),
+                    ("2 ビットカウンタ", "CLK の立ち上がりごとに 0 → 1 → 2 → 3 → 0 と数える。「@ CLK」の付いた出力は、クロックで値を覚えるフリップフロップ。RST を Low にすると 0 に戻る (clear !RST)", "CLK RST", "Q0 = !Q0 @ CLK clear !RST\nQ1 = Q1 ^ Q0 @ CLK clear !RST"),
                 ];
                 for (label, tip, ins, outs) in examples {
                     if ui.small_button(i18n::tr(label)).on_hover_text(i18n::tr(tip)).clicked() {
@@ -383,7 +429,7 @@ C = A & B".into();
                 ui.end_row();
                 ui.label(i18n::tr("出力 (1 行に 1 つ)"));
                 ui.add(egui::TextEdit::multiline(&mut self.logic.outputs).desired_rows(3).desired_width(260.0).font(egui::TextStyle::Monospace))
-                    .on_hover_text(i18n::tr("「出力の名前 = 式」を 1 行に 1 つ。式に使えるのは 入力ピンの名前・0・1・! (否定)・& (かつ)・^ (排他的論理和)・| (または)・括弧。not・and・xor・or と書いてもかまいません。強さの順は ! > & > ^ > |。行の最後に「@ CLK」(入力ピンの名前) を付けると、その出力はクロックの立ち上がりで式の値を覚えるフリップフロップになり、ほかの式でも使えます (例: Q = !Q @ CLK)"));
+                    .on_hover_text(i18n::tr("「出力の名前 = 式」を 1 行に 1 つ。式に使えるのは 入力ピンの名前・0・1・! (否定)・& (かつ)・^ (排他的論理和)・| (または)・括弧。not・and・xor・or と書いてもかまいません。強さの順は ! > & > ^ > |。行の最後に「@ CLK」(入力ピンの名前) を付けると、その出力はクロックの立ち上がりで式の値を覚えるフリップフロップになり、ほかの式でも使えます (例: Q = !Q @ CLK)。続けて「clear RST」「set PRE」で、クロックと関係なく 0 / 1 にする入力を付けられます (! を付けると Low で働く: clear !RST)"));
                 ui.end_row();
                 ui.label(i18n::tr("遅延"));
                 ui.add(egui::DragValue::new(&mut self.logic.delay_ns).speed(0.5).range(0.0..=10000.0).suffix(" ns"))
@@ -392,11 +438,12 @@ C = A & B".into();
             });
             // the truth table as it is typed (up to 5 inputs: 32 rows)
             match self.logic.read() {
-                Ok(g) if g.vars.len() <= 5 => {
+                Ok(g) if g.used().len() <= 5 => {
                     let regs = g.outputs.iter().any(|o| o.clock.is_some());
-                    ui.label(egui::RichText::new(i18n::tr(if regs { "真理値表 (Q+ はクロックの立ち上がりで Q に入る値)" } else { "真理値表" })).small().weak());
+                    let note = if regs { "真理値表 (Q+ はクロックの立ち上がりで Q に入る値。clear・set が働いている間は、それが優先)" } else { "真理値表" };
+                    ui.label(egui::RichText::new(i18n::tr(note)).small().weak());
                     egui::Grid::new("logic_table").striped(true).spacing([10.0, 0.0]).show(ui, |ui| {
-                        for n in &g.vars {
+                        for n in g.used().iter().map(|i| &g.vars[*i]) {
                             ui.label(egui::RichText::new(n).monospace().strong());
                         }
                         for o in &g.outputs {
@@ -416,7 +463,7 @@ C = A & B".into();
                     });
                 }
                 Ok(g) => {
-                    ui.small(i18n::trf!("入力 (と記憶) が {} 本あるので、真理値表 ({} 行) は出しません", g.vars.len(), 1usize << g.vars.len()));
+                    ui.small(i18n::trf!("式が読む入力 (と記憶) が {} 本あるので、真理値表 ({} 行) は出しません", g.used().len(), 1usize << g.used().len()));
                 }
                 Err(e) => {
                     ui.colored_label(crate::theme::WARN, e);
@@ -534,8 +581,40 @@ Q1 = Q1 ^ Q0 @ CLK".into();
         assert!(logic("A B", "Y = A & B
 Z = Y | A").unwrap_err().contains("出力 Y は式に使えません"));
         assert!(logic("A", "Q = A @ CK").unwrap_err().contains("CK"));
+        assert!(logic("A C", "Q = A @ C reload A").unwrap_err().contains("reload"));
+        assert!(logic("A C", "Q = A @ C clear").unwrap_err().contains("clear"));
         // a flip-flop output may be read
         assert!(logic("D CLK", "Q = D @ CLK
 Y = !Q").is_ok());
+    }
+
+    #[test]
+    fn a_clear_input_puts_the_counter_back_to_zero_whatever_the_clock() {
+        let mut f = PartForm { name: "CNT2R".into(), ..Default::default() };
+        f.logic.inputs = "CLK RST".into();
+        f.logic.outputs = "Q0 = !Q0 @ CLK clear !RST
+Q1 = Q1 ^ Q0 @ CLK clear !RST".into();
+        f.apply_logic();
+        // set unused (tied low, acts when high), clear active low on rst
+        assert!(f.sim_text.contains("Yq0_ff dff q0 0 gnd vcc 60 0.5 0 0 1 td=10n q0_d clk 0 rst"), "{}", f.sim_text);
+        let mut c = sim_core::Circuit::new();
+        let n: Vec<usize> = ["clk", "rst", "q0", "q1", "vcc"].iter().map(|x| c.node(x)).collect();
+        sim_core::add_subckt_instance(&mut c, "U1", "CNT2R", &f.sim_text, &[n[0], n[1], n[2], n[3], 0, n[4]]).unwrap();
+        c.add(sim_core::Element::vdc("Vcc", n[4], 0, 5.0));
+        let ck = sim_core::parse_source_full("PULSE(0 5 0.5u 1n 1n 0.5u 1u)").unwrap();
+        c.add(sim_core::Element::VSource { name: "Vck".into(), p: n[0], n: 0, wave: ck.wave, ac: ck.ac });
+        // RST low (clearing) until 0.2 us and again from 3.2 to 3.4 us
+        let rs = sim_core::parse_source_full("PWL(0 0 0.2u 0 0.201u 5 3.2u 5 3.201u 0 3.4u 0 3.401u 5)").unwrap();
+        c.add(sim_core::Element::VSource { name: "Vrst".into(), p: n[1], n: 0, wave: rs.wave, ac: rs.ac });
+        for k in [2, 3] {
+            c.add(sim_core::Element::Resistor { name: format!("R{k}"), a: n[k], b: 0, r: 10e3 });
+        }
+        let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 5e-6, tstep: 20e-9, uic: false }).unwrap();
+        let count = |t: f64| {
+            let i = r.time.partition_point(|x| *x < t);
+            usize::from(r.signal("V(q0)").unwrap().values[i] > 2.5) + 2 * usize::from(r.signal("V(q1)").unwrap().values[i] > 2.5)
+        };
+        // cleared, then 1, 2, 3 after the edges at 0.5, 1.5, 2.5 us; cleared again at 3.2 us; 1 and 2 after the edges at 3.5 and 4.5 us
+        assert_eq!([0.3e-6, 0.9e-6, 1.9e-6, 2.9e-6, 3.3e-6, 3.9e-6, 4.9e-6].map(count), [0, 1, 2, 3, 0, 1, 2]);
     }
 }
