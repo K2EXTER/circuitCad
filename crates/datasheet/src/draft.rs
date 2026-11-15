@@ -20,7 +20,7 @@ pub struct PackageName {
 
 /// Families of packages, longest first where one starts another ("sot-223" before "sot-23").
 const FAMILIES: &[&str] = &[
-    "sot-223", "sot-23", "sot-89", "sot-323", "sot-363", "sot-563", "sc-70", "sc-88", "sc-74", "soic", "tssop", "msop", "vssop", "ssop", "so", "pdip", "dip", "to-220", "to-92", "to-252", "to-263", "dpak", "d2pak", "qfn", "dfn", "lqfp", "tqfp", "qfp", "sod-123", "sod-323", "sod-523",
+    "sot-223", "sot-23", "sot-89", "sot-323", "sot-363", "sot-563", "sc-70", "sc-88", "sc-74", "soic", "tssop", "msop", "vssop", "ssop", "sop", "so", "wson", "vson", "son", "pdip", "dip", "to-220", "to-92", "to-252", "to-263", "dpak", "d2pak", "qfn", "dfn", "lqfp", "tqfp", "qfp", "sod-123", "sod-323", "sod-523",
     "do-214ac", "do-214aa", "do-214ab", "do-35", "do-41", "sma", "smb", "smc",
 ];
 
@@ -496,6 +496,7 @@ mod real_pins {
             let Ok(ds) = crate::Datasheet::open_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter").join(f)) else { continue };
             let p = ds.find_pin_table();
             eprintln!("{f}: drawing {:?}", ds.find_pin_drawing().map(|p| (p.page + 1, crate::pin_lines(&p.pins).replace('\n', ", "))));
+            eprintln!("{f}: land {:?}", ds.land_patterns().iter().map(|l| (l.page + 1, l.family, l.pins, l.pad_l, l.pad_w, l.pitch, l.row)).collect::<Vec<_>>());
             eprintln!("{f}: names {:?} pkg {:?} pins {:?} dims {:?}", ds.name_candidates().first(), ds.package_names().iter().take(3).map(|p| (p.name.clone(), p.count)).collect::<Vec<_>>(), p.map(|p| (p.page + 1, p.pins)), ds.dimension_table().map(|t| (t.page + 1, t.rows.len())));
         }
     }

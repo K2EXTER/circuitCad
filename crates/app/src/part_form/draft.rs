@@ -6,6 +6,7 @@
 
 use super::*;
 use datasheet::draft::{DimTable, FoundPins, PackageName};
+use datasheet::land::LandPattern;
 
 /// What was found, and which of it goes in.
 pub struct FormDraft {
@@ -20,6 +21,8 @@ pub struct FormDraft {
     /// The table and the drawing were both found and gave the same pins.
     pub pins_agree: bool,
     pub dims: Option<DimTable>,
+    /// The recommended land patterns of the data sheet (one per package it draws).
+    pub lands: Vec<LandPattern>,
     /// Use: name, kind, package, pins, body, model.
     pub use_: [bool; 6],
     pub open: bool,
@@ -44,7 +47,21 @@ fn builtin_footprint(p: &PackageName) -> Option<String> {
 
 /// Package families whose leads stand in two rows (the form's "デュアル").
 fn is_dual(family: &str) -> bool {
-    matches!(family, "soic" | "so" | "tssop" | "msop" | "vssop" | "ssop" | "dip" | "pdip")
+    matches!(family, "soic" | "so" | "sop" | "tssop" | "msop" | "vssop" | "ssop" | "dip" | "pdip")
+}
+
+impl FormDraft {
+    /// How many pins the part has: what the pins found say, else the package's name.
+    fn pin_count(&self) -> Option<u32> {
+        self.pin_sources.get(self.pin_pick).map(|p| p.pins.len() as u32).or(self.packages.get(self.package).and_then(|p| p.pins))
+    }
+
+    /// The recommended land pattern of the chosen package (its family and pin count), when the data sheet draws it in two rows.
+    pub(super) fn land(&self) -> Option<&LandPattern> {
+        let p = self.packages.get(self.package)?;
+        let n = self.pin_count();
+        self.lands.iter().find(|l| l.dual() && l.family == Some(p.family) && n.is_none_or(|n| n == l.pins))
+    }
 }
 
 /// The body's width across the rows, its length along them, its height, the lead span tip to tip, a foot's length and a lead's width,
@@ -99,8 +116,9 @@ impl PartForm {
         // with the pins counted, a name that says that many pins (or says none) first
         let package = pin_sources.first().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))).unwrap_or(0);
         let dims = ds.dimension_table();
+        let lands = ds.land_patterns();
         let model = matches!(kind.map(|k| k.0), Some(PartType::Transistor | PartType::Diode));
-        Some(FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, open: true })
+        Some(FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, open: true })
     }
 
     /// Puts the chosen parts of the draft into the form; returns what was done, line by line.
@@ -144,7 +162,17 @@ impl PartForm {
                 self.pkg = PkgKind::Dual;
                 self.tht = matches!(p.family, "dip" | "pdip");
                 let mut how = format!("パッケージ: {} (デュアル)", p.name);
-                if let Some(s) = &s {
+                if let Some(l) = d.land() {
+                    // the maker's own land pattern goes before any calculation
+                    if let Some(e) = l.pitch {
+                        self.pitch = e;
+                    }
+                    if let Some(r) = l.row {
+                        self.row = r;
+                    }
+                    (self.len, self.width) = (l.pad_l, l.pad_w);
+                    how += &format!("、パッドは推奨ランドパターン (p.{}) の {:.2} × {:.2} mm・列の間 {:.2} mm・ピッチ {} mm", l.page + 1, l.pad_l, l.pad_w, self.row, l.pitch.map_or("—".into(), |e| format!("{e:.2}")));
+                } else if let Some(s) = &s {
                     if let Some(e) = s.pitch {
                         self.pitch = e;
                         how += &format!("、ピッチ {e:.2} mm");
@@ -273,6 +301,19 @@ impl PartForm {
                     page_button(ui, Some(d.packages[d.package].page), &mut go);
                 }
                 ui.end_row();
+                // its land pattern
+                if let Some(l) = d.land() {
+                    ui.label("");
+                    ui.small(i18n::trf!("推奨ランドパターン: パッド {:.2} × {:.2} mm、列の間 {}、ピッチ {} mm", l.pad_l, l.pad_w, l.row.map_or("—".into(), |r| format!("{r:.2}")), l.pitch.map_or("—".into(), |e| format!("{e:.2}"))))
+                        .on_hover_text(i18n::tr("データシートの推奨ランドパターンの図の「14X (1.55)」のような書き方から読みました (14 個あるのがパッド、ピン数 − 2 個あるのがピッチ、1 つだけの大きな数が列の中心の間)。パッケージを入れると、この寸法でパッドを作ります"));
+                    page_button(ui, Some(l.page), &mut go);
+                    ui.end_row();
+                } else if d.packages.get(d.package).is_some_and(|p| is_dual(p.family)) {
+                    ui.label("");
+                    ui.small(egui::RichText::new(i18n::tr("推奨ランドパターンは読めませんでした (寸法表があれば、IPC の式でパッドを計算します)")).weak());
+                    ui.label("");
+                    ui.end_row();
+                }
                 // pins
                 ui.add_enabled(!d.pin_sources.is_empty(), egui::Checkbox::new(&mut d.use_[3], i18n::tr("ピン")));
                 if d.pin_sources.is_empty() {

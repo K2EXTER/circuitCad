@@ -1184,6 +1184,11 @@ fn a_draft_from_real_data_sheets() {
         assert_eq!(f.pins_text.lines().count(), 14, "{}", f.pins_text);
         assert!(f.pins_text.starts_with("1 1A") && f.pins_text.contains("8 4Y") && f.pins_text.ends_with("14 VCC"), "{}", f.pins_text);
         assert!(f.pkg == PkgKind::Dual, "{done:?}");
+        // the pads of TI's land pattern for the package chosen (TSSOP-14 is written most: 0.65 pitch, 5.8 between the rows)
+        let l = d.land().unwrap();
+        assert_eq!(l.family, Some("tssop"));
+        assert_eq!((f.pitch, f.row, f.len, f.width), (0.65, 5.8, 1.5, 0.45), "{done:?}");
+        assert!(done.iter().any(|x| x.contains("推奨ランドパターン (p.36)")), "{done:?}");
     }
     let ao = dir.join("AO3400A_ds.pdf");
     if ao.exists() {
