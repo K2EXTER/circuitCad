@@ -497,6 +497,7 @@ mod real_pins {
             let p = ds.find_pin_table();
             eprintln!("{f}: drawing {:?}", ds.find_pin_drawing().map(|p| (p.page + 1, crate::pin_lines(&p.pins).replace('\n', ", "))));
             eprintln!("{f}: land {:?}", ds.land_patterns().iter().map(|l| (l.page + 1, l.family, l.pins, l.pad_l, l.pad_w, l.pitch, l.row)).collect::<Vec<_>>());
+            eprintln!("{f}: absmax {:?}", ds.absolute_maximum().iter().map(|r| format!("{}={}{}", r.symbol, r.value, r.unit)).collect::<Vec<_>>());
             eprintln!("{f}: names {:?} pkg {:?} pins {:?} dims {:?}", ds.name_candidates().first(), ds.package_names().iter().take(3).map(|p| (p.name.clone(), p.count)).collect::<Vec<_>>(), p.map(|p| (p.page + 1, p.pins)), ds.dimension_table().map(|t| (t.page + 1, t.rows.len())));
         }
     }

@@ -11,6 +11,7 @@ mod dimensions;
 pub mod draft;
 pub mod pin_diagram;
 pub mod land;
+pub mod absmax;
 pub mod graph;
 pub mod spec_table;
 mod headings;

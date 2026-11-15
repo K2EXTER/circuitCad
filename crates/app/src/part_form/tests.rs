@@ -1200,6 +1200,8 @@ fn a_draft_from_real_data_sheets() {
         assert!(done.iter().any(|l| l.contains("MOSFET の値")), "{done:?}");
         // "SOT23" written without its dash: the built-in footprint
         assert_eq!(f.fp_preset, "SOT-23", "{done:?}");
+        // the ratings from the absolute maximum ratings table: VDS, ID (at 25 °C, printed over its symbol), PD, TJ
+        assert_eq!((f.rt_v.as_str(), f.rt_i.as_str(), f.rt_p.as_str(), f.rt_t.as_str()), ("30", "5.7", "1.4", "150"), "{done:?}");
     }
 }
 

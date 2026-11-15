@@ -6,6 +6,7 @@
 
 use super::*;
 use datasheet::draft::{DimTable, FoundPins, PackageName};
+use datasheet::absmax::Rating;
 use datasheet::land::LandPattern;
 
 /// What was found, and which of it goes in.
@@ -23,8 +24,10 @@ pub struct FormDraft {
     pub dims: Option<DimTable>,
     /// The recommended land patterns of the data sheet (one per package it draws).
     pub lands: Vec<LandPattern>,
-    /// Use: name, kind, package, pins, body, model.
-    pub use_: [bool; 6],
+    /// The rows of the absolute maximum ratings table.
+    pub ratings: Vec<Rating>,
+    /// Use: name, kind, package, pins, body, model, ratings.
+    pub use_: [bool; 7],
     pub open: bool,
 }
 
@@ -54,6 +57,22 @@ impl FormDraft {
     /// How many pins the part has: what the pins found say, else the package's name.
     fn pin_count(&self) -> Option<u32> {
         self.pin_sources.get(self.pin_pick).map(|p| p.pins.len() as u32).or(self.packages.get(self.package).and_then(|p| p.pins))
+    }
+
+    /// The most voltage, current and power and the highest temperature from the absolute maximum ratings, by the symbols of the kind
+    /// of part (a MOSFET's VDS and ID, a transistor's VCEO and IC, a diode's VRRM and IF(AV), an IC's supply voltage).
+    pub(super) fn max_ratings(&self) -> [Option<&Rating>; 4] {
+        use datasheet::absmax::pick;
+        let cat = self.kind.map(|k| k.1).unwrap_or("");
+        let r = &self.ratings;
+        let (v, i): (&[&str], &[&str]) = match cat {
+            "MOSFET" => (&["VDS", "VDSS"], &["ID"]),
+            "トランジスタ" => (&["VCEO", "VCE"], &["IC"]),
+            "ダイオード" => (&["VRRM", "VRWM", "VR"], &["IF(AV)", "IFAV", "IO", "IF"]),
+            "ツェナーダイオード" => (&[], &["IZM", "IZ"]),
+            _ => (&["VCC", "VDD", "VIN", "VI", "VS", "V+"], &["IO", "IOUT"]),
+        };
+        [pick(r, v), pick(r, i), pick(r, &["PD", "Ptot", "PTOT"]), pick(r, &["TJ", "Tj"])]
     }
 
     /// The recommended land pattern of the chosen package (its family and pin count), when the data sheet draws it in two rows.
@@ -117,8 +136,11 @@ impl PartForm {
         let package = pin_sources.first().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))).unwrap_or(0);
         let dims = ds.dimension_table();
         let lands = ds.land_patterns();
+        let ratings = ds.absolute_maximum();
         let model = matches!(kind.map(|k| k.0), Some(PartType::Transistor | PartType::Diode));
-        Some(FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, open: true })
+        let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, open: true };
+        d.use_[6] = d.max_ratings().iter().any(Option::is_some);
+        Some(d)
     }
 
     /// Puts the chosen parts of the draft into the form; returns what was done, line by line.
@@ -201,6 +223,23 @@ impl PartForm {
             if let Some(h) = s.height {
                 self.height = h;
                 done.push(format!("高さ: {h:.2} mm (寸法表の A の最大)"));
+            }
+        }
+        if d.use_[6] {
+            let m = d.max_ratings();
+            let mut put = vec![];
+            for (k, (field, unit)) in [(&mut self.rt_v, "V"), (&mut self.rt_i, "A"), (&mut self.rt_p, "W")].into_iter().enumerate() {
+                if let Some(r) = m[k] {
+                    *field = passive::eng(r.value);
+                    put.push(format!("{} {}{unit}", r.symbol, passive::eng(r.value)));
+                }
+            }
+            if let Some(r) = m[3] {
+                self.rt_t = format!("{}", r.value);
+                put.push(format!("{} {} ℃", r.symbol, r.value));
+            }
+            if let Some(p) = m.iter().flatten().next() {
+                done.push(format!("定格: p.{} の絶対最大定格から {}", p.page + 1, put.join("・")));
             }
         }
         if d.use_[5] {
@@ -365,6 +404,20 @@ impl PartForm {
                 ui.add_enabled(model_kind, egui::Checkbox::new(&mut d.use_[5], i18n::tr("特性の値")));
                 ui.label(if model_kind { egui::RichText::new(i18n::tr("電気的特性の表から読みます (入れたあと「② シミュレーション」で確かめます)")) } else { egui::RichText::new(i18n::tr("トランジスタ・MOSFET・ダイオードのとき")).weak() });
                 ui.label("");
+                ui.end_row();
+                // ratings
+                let m: Vec<Option<Rating>> = d.max_ratings().iter().map(|r| r.cloned()).collect();
+                let any = m.iter().any(Option::is_some);
+                ui.add_enabled(any, egui::Checkbox::new(&mut d.use_[6], i18n::tr("定格")));
+                if any {
+                    let units = ["V", "A", "W", "℃"];
+                    let parts: Vec<String> = m.iter().zip(units).filter_map(|(r, u)| r.as_ref().map(|r| format!("{} {}{}", r.symbol, if u == "℃" { format!("{} ", r.value) } else { passive::eng(r.value) }, u))).collect();
+                    ui.label(parts.join("、")).on_hover_text(i18n::tr("「絶対最大定格」の表から、部品の種類に合う記号 (MOSFET なら VDS・ID、トランジスタなら VCEO・IC、ダイオードなら VRRM・IF(AV)、IC なら電源電圧) の最大の値を読みました。「⑤ 定格」の最大電圧・電流・電力・最高温度に入ります"));
+                    page_button(ui, m.iter().flatten().next().map(|r| r.page), &mut go);
+                } else {
+                    ui.label(none()).on_hover_text(i18n::tr("「絶対最大定格」の表が文字で見つからないか、部品の種類の記号がありませんでした"));
+                    ui.label("");
+                }
                 ui.end_row();
             });
             ui.separator();
