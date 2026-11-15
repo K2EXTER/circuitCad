@@ -163,7 +163,10 @@ fn cost(x: &[f64], b: &BjtSpec, vaf: f64) -> f64 {
     // physical ranges: the leakage's emission coefficient, the reverse gain, and the ideal gain BF within 4 times the
     // curve's top (a wide hFE curve otherwise pulls BF to tens of thousands with a tiny IKF)
     let top = b.hfe_norm.iter().map(|r| r[1]).fold(0.0, f64::max) * b.hfe_peak;
-    if !((1.2..=3.0).contains(&p.ne) && (0.5..=50.0).contains(&p.br) && p.bf <= 4.0 * top && (1.0..=1.5).contains(&p.nf)) {
+    // and the knee current IKF within a hundred times the curve's largest current: past that it no longer bends the curve, and the
+    // search may wander off to 1e43 (BD139 on Linux), which the simulator then carries as a number with no meaning
+    let imax = b.hfe_norm.iter().map(|r| r[0]).fold(0.0, f64::max);
+    if !((1.2..=3.0).contains(&p.ne) && (0.5..=50.0).contains(&p.br) && p.bf <= 4.0 * top && (1.0..=1.5).contains(&p.nf) && p.ikf <= 100.0 * imax) {
         return 1e6;
     }
     let mut e = 0.0;
@@ -193,6 +196,17 @@ pub(super) fn objective(b: &BjtSpec, text: &str) -> Option<f64> {
     let mut x = vec![l("IS")?, l("BF")?, l("ISE")?, *m.get("NE")?, l("IKF")?, l("RB")?, l("RE")?, l("BR")?, l("RC")?];
     if b.fit_nf {
         x.push(*m.get("NF")?);
+    }
+    // a value the fit left on the edge of its range comes back just past it once written with four digits (BC547's BF = 1318
+    // against 4 × 329.4): back just inside the edge (10^log10 of the edge itself can land a last bit past it)
+    let top = b.hfe_norm.iter().map(|r| r[1]).fold(0.0, f64::max) * b.hfe_peak;
+    let imax = b.hfe_norm.iter().map(|r| r[0]).fold(0.0, f64::max);
+    x[1] = x[1].min((4.0 * top * (1.0 - 1e-9)).log10());
+    x[3] = x[3].clamp(1.2, 3.0);
+    x[4] = x[4].min((100.0 * imax * (1.0 - 1e-9)).log10());
+    x[7] = x[7].clamp((0.5f64 * (1.0 + 1e-9)).log10(), (50.0f64 * (1.0 - 1e-9)).log10());
+    if let Some(nf) = x.get_mut(9) {
+        *nf = nf.clamp(1.0, 1.5);
     }
     Some(cost(&x, b, *m.get("VAF")?))
 }

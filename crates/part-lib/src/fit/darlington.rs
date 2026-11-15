@@ -172,7 +172,9 @@ fn cost(x: &[f64], d: &DarlingtonSpec) -> f64 {
     let (q1, q2) = pair(x, d);
     let top = d.hfe.iter().map(|r| r[1]).fold(0.0, f64::max);
     // BF within 20 times the square root of the pair's top hFE (each transistor gives about that root)
-    if !((1.2..=3.0).contains(&q2.ne) && (0.5..=50.0).contains(&q2.br) && q2.bf <= 20.0 * top.sqrt()) {
+    // the knee current within a hundred times the largest current read (see `bjt::cost`)
+    let imax = d.hfe.iter().map(|r| r[0]).fold(0.0, f64::max);
+    if !((1.2..=3.0).contains(&q2.ne) && (0.5..=50.0).contains(&q2.br) && q2.bf <= 20.0 * top.sqrt() && q2.ikf <= 100.0 * imax) {
         return 1e6;
     }
     let mut e = 0.0;
@@ -199,7 +201,14 @@ fn cost(x: &[f64], d: &DarlingtonSpec) -> f64 {
 pub(super) fn objective(d: &DarlingtonSpec, text: &str) -> Option<f64> {
     let m = super::card_params(text, Some("QP"))?;
     let l = |k: &str| m.get(k).map(|v| v.log10());
-    let x = [l("IS")?, l("BF")?, l("ISE")?, *m.get("NE")?, l("IKF")?, l("RB")?, l("RE")?, l("BR")?, l("RC")?];
+    let mut x = [l("IS")?, l("BF")?, l("ISE")?, *m.get("NE")?, l("IKF")?, l("RB")?, l("RE")?, l("BR")?, l("RC")?];
+    // back onto the edges of the fit's ranges (see `bjt::objective`)
+    let top = d.hfe.iter().map(|r| r[1]).fold(0.0, f64::max);
+    let imax = d.hfe.iter().map(|r| r[0]).fold(0.0, f64::max);
+    x[1] = x[1].min((20.0 * top.sqrt() * (1.0 - 1e-9)).log10());
+    x[3] = x[3].clamp(1.2, 3.0);
+    x[4] = x[4].min((100.0 * imax * (1.0 - 1e-9)).log10());
+    x[7] = x[7].clamp((0.5f64 * (1.0 + 1e-9)).log10(), (50.0f64 * (1.0 - 1e-9)).log10());
     Some(cost(&x, d))
 }
 

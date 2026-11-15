@@ -50,6 +50,11 @@ fn the_bundled_models_are_what_their_readings_give() {
         // from the last digit of a BJT parameter (the old saturation solve stopped at a looser tolerance)
         let (was, now) = (params(&sim.text), params(&f.text));
         assert_eq!(was.keys().collect::<Vec<_>>(), now.keys().collect::<Vec<_>>(), "{}", f.part);
+        // a transistor's model as written is inside the fit's ranges: the comparison below means something (BC547's BF sat a
+        // rounding past its edge, and its measure was the 1e6 of a model out of range)
+        if let Some(a) = objective(&spec, &sim.text) {
+            assert!(a < 1e5, "{}: the bundled model is out of the fit's ranges ({a})", f.part);
+        }
         let apart: Vec<String> = was.iter().filter(|(k, a)| (now[*k] - **a).abs() > 2e-3 * a.abs() + 1e-30).map(|(k, a)| format!("{k}: bundled {a}, fit {}", now[k])).collect();
         if !apart.is_empty() {
             // a transistor's fit is a search in nine dimensions: the last bit of exp and log differs between systems (Windows, Linux,
