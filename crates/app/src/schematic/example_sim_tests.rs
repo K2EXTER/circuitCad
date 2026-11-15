@@ -765,6 +765,33 @@ fn the_two_way_bus_sample_turns_round_with_dir_and_never_fights() {
     }
 }
 
+/// The two AD converters of the sample read the same slow sine: whenever the successive-approximation converter has finished
+/// (EOC high), its code is the flash converter's, give or take one (the sine moves during the 40 us of a conversion, and the
+/// flash converter reads it at a later clock).
+#[test]
+fn the_sar_sample_agrees_with_the_flash_converter_at_every_end_of_conversion() {
+    let mut e = SchEditor::default();
+    e.load_path(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/sar_adc.schjson"));
+    assert_eq!(e.tran_tstop, "5m");
+    e.run_tran();
+    let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+    let th = crate::logic_plot::thresholds(5.0);
+    let bits = |p: &str| (0..4).rev().map(|k| r.signal(&format!("V({p}{k})")).unwrap().values.as_slice()).collect::<Vec<_>>();
+    let (f, s) = (bits("F"), bits("S"));
+    let eoc = r.signal("V(EOC)").unwrap();
+    let mut seen = 0;
+    // the moments just before each START: the end of every conversion (80 us apart, START at 2 us into each window)
+    for k in 1..62 {
+        let t = k as f64 * 80e-6 + 1e-6;
+        let i = r.time.partition_point(|x| *x < t);
+        assert!(eoc.values[i] > 4.0, "EOC high before START at {t}");
+        let (a, b) = (crate::logic_plot::bus_value(&f, i, th).unwrap() as i64, crate::logic_plot::bus_value(&s, i, th).unwrap() as i64);
+        assert!((a - b).abs() <= 1, "flash {a}, SAR {b} at {t}");
+        seen |= 1 << b;
+    }
+    assert!(seen & 1 != 0 && seen & (1 << 15) != 0, "the sine reaches both ends: {seen:b}");
+}
+
 /// The programming-header check: the ISP sample is quiet; a programming pin cut off the header is found; the Arduino-style board
 /// (ISP header, FTDI header with the reset through a capacitor) is quiet once the chip carries its programming pins.
 #[test]

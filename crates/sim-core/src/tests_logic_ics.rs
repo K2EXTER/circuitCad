@@ -758,3 +758,40 @@ fn the_adc4_flash_reads_floor_of_sixteen_times_the_input_over_the_supply() {
         }
     }
 }
+
+/// The 4-bit successive-approximation converter: START at a rising CLK edge, then one bit per clock from D3 down; five clocks
+/// after START, EOC is high and D3..D0 hold floor(16 * AIN / supply). Every code on 5 V, and a few on 3.3 V.
+#[test]
+fn the_adc4_sar_finds_one_bit_per_clock_and_ends_with_floor_of_sixteen_times_the_input() {
+    for (vcc, codes) in [(5.0, (0..16).collect::<Vec<usize>>()), (3.3, vec![0, 5, 10, 15])] {
+        let mut c = Circuit::new();
+        place(&mut c, "ADC4_SAR");
+        supply(&mut c, vcc);
+        // one conversion per 8 us: AIN steps to the middle of a code, START is high over the first clock edge of the window
+        let n = codes.len();
+        let mut ain = String::from("PWL(0 0");
+        for (j, code) in codes.iter().enumerate() {
+            let (t0, v) = (j as f64 * 8e-6, (*code as f64 + 0.5) / 16.0 * vcc);
+            ain += &format!(" {} {} {} {}", t0 + 0.05e-6, v, t0 + 8e-6, v);
+        }
+        ain.push(')');
+        source(&mut c, "Vin", "AIN", &ain);
+        // clock: rising edges at 0.5, 1.5, ... us; START high from 0.2 to 0.8 us of every 8 us
+        source(&mut c, "Vclk", "CLK", &format!("PULSE(0 {vcc} 0.5u 1n 1n 0.5u 1u)"));
+        source(&mut c, "Vst", "START", &format!("PULSE(0 {vcc} 0.2u 1n 1n 0.6u 8u)"));
+        for p in ["D0", "D1", "D2", "D3", "EOC"] {
+            load(&mut c, p);
+        }
+        let r = transient(&c, &TranSettings { tstop: n as f64 * 8e-6, tstep: 20e-9, uic: false }).unwrap();
+        for (j, code) in codes.iter().enumerate() {
+            let t0 = j as f64 * 8e-6;
+            let read = |t: f64| -> usize { (0..4).map(|k| usize::from(at(&r, &format!("D{k}"), t) > vcc / 2.0) << k).sum() };
+            // START at 0.5 us clears; trials at 1.5 (D3), 2.5 (D2), 3.5 (D1), 4.5 (D0) us; EOC from 4.5 us
+            assert!(at(&r, "EOC", t0 + 4.0e-6) < vcc / 2.0, "EOC still low during the conversion of {code}");
+            assert!(at(&r, "EOC", t0 + 7.9e-6) > vcc / 2.0, "EOC high after the conversion of {code}");
+            assert_eq!(read(t0 + 7.9e-6), *code, "code {code} on {vcc} V");
+            // after the first trial the top bit is already decided
+            assert_eq!(read(t0 + 1.9e-6) >> 3, code >> 3, "D3 decided first ({code} on {vcc} V)");
+        }
+    }
+}

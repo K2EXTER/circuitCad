@@ -1,0 +1,32 @@
+# Two 4-bit AD converters read the same slow sine: the flash ADC4_FLASH (15 comparators, a new result at every clock) and the
+# successive-approximation ADC4_SAR (one comparator, one bit per clock: START, then D3..D0, a result every 8 clocks with EOC).
+# The digital view shows F[0..3] (flash) and S[0..3] (SAR) side by side.
+# Build: cargo run -p cli -- docs/examples/sar_adc.ccad, then put "analysis": {"tran_stop": "5m", "tran_step": "2u", ...}
+# into the .schjson (the end time the sample opens with)
+new
+add V 5 as=V1
+add V 0 as=VIN
+value VIN "SIN(2.5 2.3 200)"
+add V 0 as=VCK
+value VCK "PULSE(0 5 5u 100n 100n 5u 10u)"
+add V 0 as=VST
+value VST "PULSE(0 5 2u 100n 100n 6u 80u)"
+add ADC4_FLASH as=U1
+add ADC4_SAR as=U2
+net VCC V1.+ U1.VCC U2.VCC
+net GND V1.- VIN.- VCK.- VST.- U1.GND U2.GND
+net AIN VIN.+ U1.AIN U2.AIN
+net CLK VCK.+ U1.CLK U2.CLK
+net START VST.+ U2.START
+net F0 U1.D0
+net F1 U1.D1
+net F2 U1.D2
+net F3 U1.D3
+net S0 U2.D0
+net S1 U2.D1
+net S2 U2.D2
+net S3 U2.D3
+net EOC U2.EOC
+erc
+tran 5m 2u probe=V(AIN),V(EOC),V(F3),V(S3)
+save docs/examples/sar_adc.schjson

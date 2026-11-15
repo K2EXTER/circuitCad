@@ -1,0 +1,95 @@
+{
+  "name": "ADC4_SAR",
+  "category": "ロジックIC",
+  "description": "4 ビットの逐次比較型 AD コンバータ (教材用の動作モデル、DIP-10)。START を High にして CLK を入れると、次の 4 クロックで D3 から D0 の順に 1 ビットずつ決め、5 クロック目に EOC が High になります。値は floor(16 × AIN ÷ 電源電圧) (電源 5V なら 1 きざみ 0.3125V)。比較器 1 個で済むかわりに、変換にクロックが要ります",
+  "prefix": "U",
+  "footprint_name": "DIP-10_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "AIN",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "CLK",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "START",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "EOC",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "6",
+      "name": "D0",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "D1",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "D2",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "D3",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 10,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "ADC4_SAR",
+    "text": "* ADC4_SAR teaching model: a 4-bit successive-approximation converter. A rising CLK edge with START high clears the result and\n* starts; the next four edges try D3, D2, D1, D0 in turn: the bit under trial is set, the internal DAC gives code / 16 of the\n* supply, and the comparator (AIN above the DAC) keeps or clears the bit. EOC goes high with the fourth result (5 clocks\n* after START) and stays high until the next START. code = floor(16 * AIN / supply). No sample-and-hold: AIN is read at each trial.\n.subckt ADC4_SAR ain clk start d0 d1 d2 d3 eoc vcc gnd\n* the token that walks through the four trials: t3 one clock after START, then t2, t1, t0\nYt3 dff t3 0 gnd vcc 60 0.5 0 0 0 start clk 0 0\nYt2 dff t2 0 gnd vcc 60 0.5 0 0 0 t3 clk 0 0\nYt1 dff t1 0 gnd vcc 60 0.5 0 0 0 t2 clk 0 0\nYt0 dff t0 0 gnd vcc 60 0.5 0 0 0 t1 clk 0 0\n* the result: during its trial a bit takes the comparator, otherwise it keeps its value; START clears it\nYn3 lut n3 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t3 cmp d3\nYd3 dff d3 0 gnd vcc 60 0.5 0 0 0 td=20n n3 clk 0 0\nYn2 lut n2 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t2 cmp d2\nYd2 dff d2 0 gnd vcc 60 0.5 0 0 0 td=20n n2 clk 0 0\nYn1 lut n1 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t1 cmp d1\nYd1 dff d1 0 gnd vcc 60 0.5 0 0 0 td=20n n1 clk 0 0\nYn0 lut n0 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t0 cmp d0\nYd0 dff d0 0 gnd vcc 60 0.5 0 0 0 td=20n n0 clk 0 0\nYne lut ne 0 gnd vcc 60 0.5 0 0 0 table=0,0,1,0,1,0,1,0 start t0 eoc\nYe dff eoc 0 gnd vcc 60 0.5 0 0 0 td=20n ne clk 0 0\n* the code the DAC is given: the result with the bit under trial set\nYc3 or c3 0 gnd vcc 60 0.5 0 0 0 d3 t3\nYc2 or c2 0 gnd vcc 60 0.5 0 0 0 d2 t2\nYc1 or c1 0 gnd vcc 60 0.5 0 0 0 d1 t1\nYc0 or c0 0 gnd vcc 60 0.5 0 0 0 d0 t0\n* the DAC (code / 16 of the supply, read without load) and the comparator (high when AIN is above it, 1 mV wide)\nBdac dac gnd V=V(vcc,gnd)*(8*step(V(c3,gnd)-0.5*V(vcc,gnd),1m)+4*step(V(c2,gnd)-0.5*V(vcc,gnd),1m)+2*step(V(c1,gnd)-0.5*V(vcc,gnd),1m)+step(V(c0,gnd)-0.5*V(vcc,gnd),1m))/16\nBcmp cmp gnd V=V(vcc,gnd)*step(V(ain,gnd)-V(dac,gnd),1m)\n.ends ADC4_SAR",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "6",
+      "7",
+      "8",
+      "9",
+      "4",
+      "10",
+      "5"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) と、式で書いた DAC と比較器で作った動作モデルです。実在の部品ではなく、教材用です。逐次比較 (二分探索) の動き: 1 クロックに 1 ビットずつ、上の桁から「1 にしてみて、AIN を超えたら 0 に戻す」を繰り返します。",
+      "変換の基準 (満量程) は VCC と GND の電位差です。AIN が GND〜VCC の外に出ると、0 か 15 に張り付きます。",
+      "サンプルホールドはありません。変換の途中で AIN が動くと、ビットごとに違う時刻の AIN を読んだ値になります (実物の逐次比較型は、変換の始めに入力を保持します)。比較器にヒステリシスやオフセットはなく、AIN の入力抵抗は無限大です。CLK から D0〜D3・EOC の遅れは 20ns の一定値です。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "ロジックの動作モデル (しきい値は電源の半分、出力抵抗 60 Ω、遅れは一定の見積もり)"
+    }
+  }
+}

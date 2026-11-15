@@ -1,0 +1,432 @@
+{
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        8,
+        10
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "5"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        18,
+        10
+      ],
+      "refdes": "VIN",
+      "rot": 0,
+      "value": "SIN(2.5 2.3 200)"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        28,
+        10
+      ],
+      "refdes": "VCK",
+      "rot": 0,
+      "value": "PULSE(0 5 5u 100n 100n 5u 10u)"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        38,
+        10
+      ],
+      "refdes": "VST",
+      "rot": 0,
+      "value": "PULSE(0 5 2u 100n 100n 6u 80u)"
+    },
+    {
+      "custom": {
+        "name": "ADC4_FLASH",
+        "pins": [
+          {
+            "name": "AIN",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "CLK",
+            "number": "2",
+            "side": "left"
+          },
+          {
+            "name": "D0",
+            "number": "3",
+            "side": "right"
+          },
+          {
+            "name": "GND",
+            "number": "4",
+            "side": "bottom"
+          },
+          {
+            "name": "D1",
+            "number": "5",
+            "side": "right"
+          },
+          {
+            "name": "D2",
+            "number": "6",
+            "side": "right"
+          },
+          {
+            "name": "D3",
+            "number": "7",
+            "side": "right"
+          },
+          {
+            "name": "VCC",
+            "number": "8",
+            "side": "top"
+          }
+        ],
+        "prefix": "U",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "デジタルセル (行列の外で計算する素子) で作った動作モデルです。実物の部品ではなく、教材用です。15 個の比較器 (しきい値が電源の k/16 のセル) と、15 個の D フリップフロップ、エンコーダでできています。",
+            "満点の電圧 (基準) は、VCC と GND の電位差です。別の基準電圧は取れません。AIN が GND〜VCC の外に出ると、0 か 15 に張り付きます。",
+            "AIN の入力抵抗は無限大 (電流が流れない)、比較器にヒステリシスやオフセットはありません。遅延は CLK→出力 20ns の一定値で、サンプルホールドの時間や変換時間は表しません。使わない入力は、GND か電源につないでください。"
+          ],
+          "name": "ADC4_FLASH",
+          "params": {},
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ],
+          "text": "* ADC4_FLASH teaching model: a 4-bit flash converter. 15 comparators (digital cells whose input threshold is k/16 of the supply) read AIN; a flip-flop per comparator keeps the result at the rising edge of CLK; an encoder turns the thermometer code into a 4-bit number: code = floor(16 * AIN / supply). Delay from CLK to D0..D3 20 ns (a generic value).\n.subckt ADC4_FLASH ain clk d0 gnd d1 d2 d3 vcc\nYc1 buf c1 0 gnd vcc 60 0.0625 0 0 0 ain\nYf1 dff t1 0 gnd vcc 60 0.5 0 0 0 c1 clk 0 0\nYc2 buf c2 0 gnd vcc 60 0.125 0 0 0 ain\nYf2 dff t2 0 gnd vcc 60 0.5 0 0 0 c2 clk 0 0\nYc3 buf c3 0 gnd vcc 60 0.1875 0 0 0 ain\nYf3 dff t3 0 gnd vcc 60 0.5 0 0 0 c3 clk 0 0\nYc4 buf c4 0 gnd vcc 60 0.25 0 0 0 ain\nYf4 dff t4 0 gnd vcc 60 0.5 0 0 0 c4 clk 0 0\nYc5 buf c5 0 gnd vcc 60 0.3125 0 0 0 ain\nYf5 dff t5 0 gnd vcc 60 0.5 0 0 0 c5 clk 0 0\nYc6 buf c6 0 gnd vcc 60 0.375 0 0 0 ain\nYf6 dff t6 0 gnd vcc 60 0.5 0 0 0 c6 clk 0 0\nYc7 buf c7 0 gnd vcc 60 0.4375 0 0 0 ain\nYf7 dff t7 0 gnd vcc 60 0.5 0 0 0 c7 clk 0 0\nYc8 buf c8 0 gnd vcc 60 0.5 0 0 0 ain\nYf8 dff t8 0 gnd vcc 60 0.5 0 0 0 c8 clk 0 0\nYc9 buf c9 0 gnd vcc 60 0.5625 0 0 0 ain\nYf9 dff t9 0 gnd vcc 60 0.5 0 0 0 c9 clk 0 0\nYc10 buf c10 0 gnd vcc 60 0.625 0 0 0 ain\nYf10 dff t10 0 gnd vcc 60 0.5 0 0 0 c10 clk 0 0\nYc11 buf c11 0 gnd vcc 60 0.6875 0 0 0 ain\nYf11 dff t11 0 gnd vcc 60 0.5 0 0 0 c11 clk 0 0\nYc12 buf c12 0 gnd vcc 60 0.75 0 0 0 ain\nYf12 dff t12 0 gnd vcc 60 0.5 0 0 0 c12 clk 0 0\nYc13 buf c13 0 gnd vcc 60 0.8125 0 0 0 ain\nYf13 dff t13 0 gnd vcc 60 0.5 0 0 0 c13 clk 0 0\nYc14 buf c14 0 gnd vcc 60 0.875 0 0 0 ain\nYf14 dff t14 0 gnd vcc 60 0.5 0 0 0 c14 clk 0 0\nYc15 buf c15 0 gnd vcc 60 0.9375 0 0 0 ain\nYf15 dff t15 0 gnd vcc 60 0.5 0 0 0 c15 clk 0 0\nYn2 inv nt2 0 gnd vcc 60 0.5 0 0 0 t2\nYn4 inv nt4 0 gnd vcc 60 0.5 0 0 0 t4\nYn6 inv nt6 0 gnd vcc 60 0.5 0 0 0 t6\nYn8 inv nt8 0 gnd vcc 60 0.5 0 0 0 t8\nYn10 inv nt10 0 gnd vcc 60 0.5 0 0 0 t10\nYn12 inv nt12 0 gnd vcc 60 0.5 0 0 0 t12\nYn14 inv nt14 0 gnd vcc 60 0.5 0 0 0 t14\nYd3 buf d3 0 gnd vcc 60 0.5 0 0 0 td=20n t8\nYb2a and b2a 0 gnd vcc 60 0.5 0 0 0 t4 nt8\nYd2 or d2 0 gnd vcc 60 0.5 0 0 0 td=20n b2a t12\nYb1a and b1a 0 gnd vcc 60 0.5 0 0 0 t2 nt4\nYb1b and b1b 0 gnd vcc 60 0.5 0 0 0 t6 nt8\nYb1c and b1c 0 gnd vcc 60 0.5 0 0 0 t10 nt12\nYd1 or d1 0 gnd vcc 60 0.5 0 0 0 td=20n b1a b1b b1c t14\nYb0_1 and b0_1 0 gnd vcc 60 0.5 0 0 0 t1 nt2\nYb0_3 and b0_3 0 gnd vcc 60 0.5 0 0 0 t3 nt4\nYb0_5 and b0_5 0 gnd vcc 60 0.5 0 0 0 t5 nt6\nYb0_7 and b0_7 0 gnd vcc 60 0.5 0 0 0 t7 nt8\nYb0_9 and b0_9 0 gnd vcc 60 0.5 0 0 0 t9 nt10\nYb0_11 and b0_11 0 gnd vcc 60 0.5 0 0 0 t11 nt12\nYb0_13 and b0_13 0 gnd vcc 60 0.5 0 0 0 t13 nt14\nYd0 or d0 0 gnd vcc 60 0.5 0 0 0 td=20n b0_1 b0_3 b0_5 b0_7 b0_9 b0_11 b0_13 t15\n.ends ADC4_FLASH"
+        }
+      },
+      "footprint": "DIP-8_W7.62",
+      "kind": "Custom",
+      "pos": [
+        52,
+        14
+      ],
+      "refdes": "U1",
+      "rot": 0,
+      "value": "ADC4_FLASH"
+    },
+    {
+      "custom": {
+        "name": "ADC4_SAR",
+        "pins": [
+          {
+            "name": "AIN",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "CLK",
+            "number": "2",
+            "side": "left"
+          },
+          {
+            "name": "START",
+            "number": "3",
+            "side": "left"
+          },
+          {
+            "name": "EOC",
+            "number": "4",
+            "side": "right"
+          },
+          {
+            "name": "GND",
+            "number": "5",
+            "side": "bottom"
+          },
+          {
+            "name": "D0",
+            "number": "6",
+            "side": "right"
+          },
+          {
+            "name": "D1",
+            "number": "7",
+            "side": "right"
+          },
+          {
+            "name": "D2",
+            "number": "8",
+            "side": "right"
+          },
+          {
+            "name": "D3",
+            "number": "9",
+            "side": "right"
+          },
+          {
+            "name": "VCC",
+            "number": "10",
+            "side": "top"
+          }
+        ],
+        "prefix": "U",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "デジタルセル (行列の外で計算する素子) と、式で書いた DAC と比較器で作った動作モデルです。実在の部品ではなく、教材用です。逐次比較 (二分探索) の動き: 1 クロックに 1 ビットずつ、上の桁から「1 にしてみて、AIN を超えたら 0 に戻す」を繰り返します。",
+            "変換の基準 (満量程) は VCC と GND の電位差です。AIN が GND〜VCC の外に出ると、0 か 15 に張り付きます。",
+            "サンプルホールドはありません。変換の途中で AIN が動くと、ビットごとに違う時刻の AIN を読んだ値になります (実物の逐次比較型は、変換の始めに入力を保持します)。比較器にヒステリシスやオフセットはなく、AIN の入力抵抗は無限大です。CLK から D0〜D3・EOC の遅れは 20ns の一定値です。"
+          ],
+          "name": "ADC4_SAR",
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力抵抗 60 Ω、遅れは一定の見積もり)"
+          },
+          "params": {},
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "6",
+            "7",
+            "8",
+            "9",
+            "4",
+            "10",
+            "5"
+          ],
+          "text": "* ADC4_SAR teaching model: a 4-bit successive-approximation converter. A rising CLK edge with START high clears the result and\n* starts; the next four edges try D3, D2, D1, D0 in turn: the bit under trial is set, the internal DAC gives code / 16 of the\n* supply, and the comparator (AIN above the DAC) keeps or clears the bit. EOC goes high with the fourth result (5 clocks\n* after START) and stays high until the next START. code = floor(16 * AIN / supply). No sample-and-hold: AIN is read at each trial.\n.subckt ADC4_SAR ain clk start d0 d1 d2 d3 eoc vcc gnd\n* the token that walks through the four trials: t3 one clock after START, then t2, t1, t0\nYt3 dff t3 0 gnd vcc 60 0.5 0 0 0 start clk 0 0\nYt2 dff t2 0 gnd vcc 60 0.5 0 0 0 t3 clk 0 0\nYt1 dff t1 0 gnd vcc 60 0.5 0 0 0 t2 clk 0 0\nYt0 dff t0 0 gnd vcc 60 0.5 0 0 0 t1 clk 0 0\n* the result: during its trial a bit takes the comparator, otherwise it keeps its value; START clears it\nYn3 lut n3 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t3 cmp d3\nYd3 dff d3 0 gnd vcc 60 0.5 0 0 0 td=20n n3 clk 0 0\nYn2 lut n2 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t2 cmp d2\nYd2 dff d2 0 gnd vcc 60 0.5 0 0 0 td=20n n2 clk 0 0\nYn1 lut n1 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t1 cmp d1\nYd1 dff d1 0 gnd vcc 60 0.5 0 0 0 td=20n n1 clk 0 0\nYn0 lut n0 0 gnd vcc 60 0.5 0 0 0 table=0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0 start t0 cmp d0\nYd0 dff d0 0 gnd vcc 60 0.5 0 0 0 td=20n n0 clk 0 0\nYne lut ne 0 gnd vcc 60 0.5 0 0 0 table=0,0,1,0,1,0,1,0 start t0 eoc\nYe dff eoc 0 gnd vcc 60 0.5 0 0 0 td=20n ne clk 0 0\n* the code the DAC is given: the result with the bit under trial set\nYc3 or c3 0 gnd vcc 60 0.5 0 0 0 d3 t3\nYc2 or c2 0 gnd vcc 60 0.5 0 0 0 d2 t2\nYc1 or c1 0 gnd vcc 60 0.5 0 0 0 d1 t1\nYc0 or c0 0 gnd vcc 60 0.5 0 0 0 d0 t0\n* the DAC (code / 16 of the supply, read without load) and the comparator (high when AIN is above it, 1 mV wide)\nBdac dac gnd V=V(vcc,gnd)*(8*step(V(c3,gnd)-0.5*V(vcc,gnd),1m)+4*step(V(c2,gnd)-0.5*V(vcc,gnd),1m)+2*step(V(c1,gnd)-0.5*V(vcc,gnd),1m)+step(V(c0,gnd)-0.5*V(vcc,gnd),1m))/16\nBcmp cmp gnd V=V(vcc,gnd)*step(V(ain,gnd)-V(dac,gnd),1m)\n.ends ADC4_SAR"
+        }
+      },
+      "footprint": "DIP-10_W7.62",
+      "kind": "Custom",
+      "pos": [
+        70,
+        15
+      ],
+      "refdes": "U2",
+      "rot": 0,
+      "value": "ADC4_SAR"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "Ground",
+      "pos": [
+        8,
+        12
+      ],
+      "refdes": "#PWR01",
+      "rot": 0,
+      "value": "GND"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        52,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        70,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        18,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        28,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        38,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        52,
+        20
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        70,
+        22
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        18,
+        8
+      ],
+      "text": "AIN"
+    },
+    {
+      "pos": [
+        48,
+        13
+      ],
+      "text": "AIN"
+    },
+    {
+      "pos": [
+        66,
+        13
+      ],
+      "text": "AIN"
+    },
+    {
+      "pos": [
+        28,
+        8
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        48,
+        15
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        66,
+        15
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        38,
+        8
+      ],
+      "text": "START"
+    },
+    {
+      "pos": [
+        66,
+        17
+      ],
+      "text": "START"
+    },
+    {
+      "pos": [
+        56,
+        11
+      ],
+      "text": "F0"
+    },
+    {
+      "pos": [
+        56,
+        13
+      ],
+      "text": "F1"
+    },
+    {
+      "pos": [
+        56,
+        15
+      ],
+      "text": "F2"
+    },
+    {
+      "pos": [
+        56,
+        17
+      ],
+      "text": "F3"
+    },
+    {
+      "pos": [
+        74,
+        13
+      ],
+      "text": "S0"
+    },
+    {
+      "pos": [
+        74,
+        15
+      ],
+      "text": "S1"
+    },
+    {
+      "pos": [
+        74,
+        17
+      ],
+      "text": "S2"
+    },
+    {
+      "pos": [
+        74,
+        19
+      ],
+      "text": "S3"
+    },
+    {
+      "pos": [
+        74,
+        11
+      ],
+      "text": "EOC"
+    }
+  ],
+  "layout_version": 1,
+  "wires": [],
+  "analysis": {
+    "tran_stop": "5m",
+    "tran_step": "2u",
+    "tran_uic": false,
+    "ac_start": "10",
+    "ac_stop": "1Meg",
+    "ac_ppd": "20"
+  }
+}
