@@ -42,6 +42,9 @@
 - 出力: DXF の層 `DIMENSIONS`(線と、回転・中央そろえの TEXT)。SVG は表面の図だけ(裏面は鏡に映すので文字が逆になる)で、図の範囲を寸法線まで広げる。ガーバーには出さない。DXF を読み直しても外形は変わらない(`dxf_in.rs` のテスト)。
 - CLI `board dim`、アプリは距離を測るツールの Enter・H・V と「外形の寸法線」。
 
+## step_out.rs — 基板と部品の立体の STEP(候補 E3、2026-11-15)
+ケースの CAD(Fusion・FreeCAD・SolidWorks)に渡す STEP(AP214)。`solids` が立体の一覧: 基板(外形を `model3d::BOARD_THICKNESS` に立ち上げ、取り付け穴 `Board.holes` とリード部品のパッドの穴をあけたもの。穴は 16 角形、長穴は両端が半円。外形からはみ出す穴・ほかの穴と重なる穴は入れない。ビアは入れない)と、3D ビューと同じ部品の立体(`part_boxes` の箱と円柱(24 角柱)、`part_meshes` のメーカーの STEP の三角形。三角形は同じ点の頂点をまとめる)。立体は部品番号(基板は基板の名前)の名前と、3D ビューと同じ色(`STYLED_ITEM`。メッシュはいちばん多い色)。`write` は平らな面だけの B-rep: 頂点ごとに `VERTEX_POINT`、辺は 2 つの頂点の組ごとに 1 つの `EDGE_CURVE`(`LINE`)、面は `ADVANCED_FACE` に `PLANE`(法線は Newell)と外の輪 `FACE_OUTER_BOUND`・穴の輪 `FACE_BOUND`、立体ごとに `CLOSED_SHELL` と `MANIFOLD_SOLID_BREP`、全部を 1 つの `ADVANCED_BREP_SHAPE_REPRESENTATION` に(組み立ての構造は持たない)。単位は mm、基板の裏面が z = 0。名前の日本語は `\X2\…\X0\`(続く文字は 1 つにまとめる)。画面は基板エディタの「ファイル → 基板と部品の立体をSTEPで保存…」、CLI は `board step FILE`。試験: 基板の体積(穴の多角形を引いた分)と辺の閉じ方、円柱の向きと体積、自前の STEP の読み込み(`step.rs`)で同じ位置と体積に戻る(穴のある面も)。**市販の CAD で開いて確かめてはいない**(この PC に CAD が無い)。曲面を持たないので、メーカーの部品の丸い面は三角形のまま。
+
 ## dxf.rs — ケース設計用の DXF(2026-11-08)
 - `dxf::mechanical(&Board) -> String`: ASCII の DXF R12(AC1009。LINE・CIRCLE・ARC・TEXT だけ)。単位は mm。基板の y も DXF の y も上向きなので、そのまま書く(上から見た形になる)。
 - 層: `BOARD_OUTLINE`(外形の線)、`HOLES`(取り付け穴。長穴は2本の線+2つの円弧)、`PAD_DRILLS`(パッドのドリル)、`PARTS`(部品のパッド全体を囲む箱。部品の本体の大きさではない)、`PART_NAMES`(部品番号)。
@@ -82,6 +85,7 @@
 - `case.rs` 箱のケースの内寸に、基板が入るか・背の高い部品がないか(3D 表示の「内寸」と `ccad board case`)
 - `dxf_in.rs` ケースの図面(DXF)から外形と穴を取る(画面のファイルメニューと `ccad board dxf_import`)
 - `dxf.rs` ケース設計用の DXF(外形・穴・パッドのドリル・部品の箱。画面のファイルメニューと `ccad board dxf`)
+- `step_out.rs` 基板と部品の立体の STEP(AP214、平らな面だけ。画面のファイルメニューと `ccad board step`)
 - `shops.rs` 購入リスト(店の型番・検索リンク。`ccad board shopping`、`*-shopping.csv`)
 - `fab.rs` 発注先と発注前チェック / `export.rs` 製造一式 / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・配置CSV / `gerber_view.rs` 書き出しの読み戻し / `strokefont.rs` シルク文字
 - model3d.rs の形の追加(E1 の第2段階、2026-11-08): `Kind` に `Shell`(USB・DC ジャック・RJ45 の金属シェル)・`Terminal`(端子台)・`Transformer`(EI トランス)・`Buzzer` を足した。見分けはフットプリント名(`usb`・`jack`・`barrel`・`rj45`・`terminalblock`・`transformer`・`buzzer`)。シェルは部品番号が J・P・X のときだけ(USB の保護 IC を コネクタにしないため)。シェルは低い黒い土台の上に銀色の箱(土台は高さの12%、0.8〜1.6 mm)。端子台は緑の箱の上にパッドごとのねじ(円柱+溝の細い箱)。トランスは鉄心(高さいっぱい、パッドの長い辺の両端を12%ずつ削る)と、その両端にはみ出す銅色のコイル(高さの70%)。ブザーは黒い円柱(直径はパッド間隔の1.6倍、最小9 mm)の上に音の穴の黒い円。**高さは `TALL_FOOTPRINTS` の目安**(`usb` 7.0・`usb_micro` 2.8・`usb_c` 3.3・`usb_b` 11・`barrel` 11・`jack` 10・`buzzer` 9)で、実物とは数 mm 違いうる(部品の `height` か STEP が優先)。ケースの高さの確認(`part_total_height`)にも効く。同梱の部品で形が変わるのは USB_DEMO_TH・端子台(AC3P)・トランス(TR100 など)。ジャック・ブザーの同梱部品はまだ無く、名前で形が出るだけ。

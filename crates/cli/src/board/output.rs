@@ -100,6 +100,18 @@ impl Session {
         Ok(obj(json!({"file": f, "outline_points": board.outline.len(), "holes": board.holes.len(), "parts": board.parts.len()})))
     }
 
+    pub(super) fn board_step(&mut self, rest: &[String]) -> Res {
+        let f = rest.first().ok_or("board step FILE.step   (the board raised to 1.6 mm with its mounting and through-hole drills, and every part's solid as the 3D view draws it, named by designator and coloured, in mm, for the case's CAD; flat faces only: cylinders are 24-sided prisms, holes 16-sided)")?;
+        let board = self.board_mut()?;
+        if board.outline.len() < 3 {
+            return Err("the board has no outline yet (board new W H, or board dxf_import)".into());
+        }
+        let solids = pcb_core::step_out::solids(board);
+        let names: Vec<&str> = solids.iter().map(|s| s.name.as_str()).collect();
+        std::fs::write(f, pcb_core::step_out::write(board)).map_err(|e| format!("{f}: {e}"))?;
+        Ok(obj(json!({"file": f, "solids": solids.len(), "faces": solids.iter().map(|s| s.faces.len()).sum::<usize>(), "names": names})))
+    }
+
     pub(super) fn board_fab(&mut self, rest: &[String]) -> Res {
         let dir = std::path::Path::new(rest.first().ok_or("board fab DIR")?);
         let board = self.board_mut()?;

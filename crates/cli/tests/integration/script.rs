@@ -631,6 +631,24 @@ fn a_model_from_a_maker_zip_can_be_found_used_added_and_simulated() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `board step` writes the board and the parts' solids as a STEP file our own reader takes back.
+#[test]
+fn board_step_writes_the_board_and_the_parts_as_solids() {
+    let sample = format!("{}/../../docs/examples/rlc_board.pcbjson", env!("CARGO_MANIFEST_DIR"));
+    let file = std::env::temp_dir().join("ccad_board_step_test.step");
+    let (a, ok) = run(&format!("board open {sample}\nboard step {}\n", file.display()));
+    assert!(ok, "{a:?}");
+    let s = last(&a, "board");
+    let names: Vec<&str> = s["names"].as_array().unwrap().iter().map(|n| n.as_str().unwrap()).collect();
+    assert!(s["solids"].as_u64().unwrap() > 4 && names[0] == "rlc" && names.contains(&"R1") && names.contains(&"C1"), "{s}");
+    let m = pcb_core::step::read_step(&std::fs::read(&file).unwrap()).unwrap();
+    assert!(m.volume() > 0.0 && m.bounds().unwrap().0[2].abs() < 1e-3, "the board's bottom at z = 0");
+    let _ = std::fs::remove_file(&file);
+    let (a, ok) = run(&format!("board new 40 30\nboard step {}\n", file.display()));
+    assert!(ok && last(&a, "board")["solids"] == 1, "a bare board is one solid: {a:?}");
+    let _ = std::fs::remove_file(&file);
+}
+
 /// `board class` makes, lists, changes and removes net classes, and refuses values below the board's floor.
 #[test]
 fn board_class_makes_lists_and_removes_classes() {

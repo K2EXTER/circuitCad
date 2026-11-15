@@ -55,6 +55,22 @@ impl BoardEditor {
         }
     }
 
+    /// Write the board and the parts' solids as a STEP file, for the case's CAD (`pcb_core::step_out`).
+    pub fn export_step(&mut self) {
+        if self.board.outline.len() < 3 {
+            self.status = "基板の外形がありません。先に外形を決めてから、STEP を保存してください".into();
+            return;
+        }
+        let name = format!("{}.step", if self.board.name.is_empty() { "board" } else { &self.board.name });
+        if let Some(p) = rfd::FileDialog::new().add_filter("STEP (ケース設計用の立体)", &["step", "stp"]).set_file_name(name).save_file() {
+            let n = pcb_core::step_out::solids(&self.board).len();
+            self.status = match std::fs::write(&p, pcb_core::step_out::write(&self.board)) {
+                Ok(()) => format!("STEP を保存しました ({n} 個の立体: 基板と部品): {}", p.display()),
+                Err(e) => format!("STEP の保存に失敗: {e}"),
+            };
+        }
+    }
+
     /// Take the outline and the holes from a DXF drawing of the case (the loose holes of before are replaced; the parts stay where they are).
     pub fn import_dxf(&mut self) {
         let Some(p) = rfd::FileDialog::new().add_filter("DXF (ケースの図面)", &["dxf"]).pick_file() else { return };

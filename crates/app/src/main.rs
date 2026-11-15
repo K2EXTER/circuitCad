@@ -394,6 +394,10 @@ impl eframe::App for App {
                         self.board_ed.export_dxf();
                         ui.close();
                     }
+                    if !sch_mode && ui.button(i18n::tr("基板と部品の立体をSTEPで保存…")).on_hover_text(i18n::tr("基板 (外形を厚さ 1.6 mm に立ち上げ、取り付け穴とリード部品の穴をあけたもの) と、3D で見えている部品の立体を、STEP (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に読み込んで、ケースに収まるか・ぶつからないかを立体で確かめるのに使います。部品は部品番号の名前の立体になり、色も付きます。面はすべて平らで、円柱は 24 角柱、穴は 16 角形です。ビア・銅・シルクは入りません")).clicked() {
+                        self.board_ed.export_step();
+                        ui.close();
+                    }
                     if !sch_mode {
                         for (label, side) in [("基板の表面をSVGで保存…", pcb_core::Side::Top), ("基板の裏面をSVGで保存…", pcb_core::Side::Bottom)] {
                             if ui.button(label).on_hover_text(i18n::tr("基板の絵を、拡大しても粗くならない図 (SVG) にします。銅・シルク・穴は、発注用の Gerber と同じデータから描くので、できあがりの姿です。記事・レポート・印刷に使えます。裏面は、基板を裏返して下から見た向きです")).clicked() {
