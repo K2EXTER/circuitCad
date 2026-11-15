@@ -13,6 +13,8 @@ pub(super) struct Scene {
     pub(super) boxes: Vec<PartBox>,
     /// Parts that come with a mesh of their own (a maker's STEP), already placed on the board.
     pub(super) meshes: Vec<PartMesh>,
+    /// The smooth normal of every corner of every mesh triangle (`Mesh3d::corner_normals`, made once with the scene).
+    pub(super) mesh_normals: Vec<Vec<Option<[[f32; 3]; 3]>>>,
     /// `(refdes, value, footprint, height above the board)` for every part, in `Board::parts` order.
     pub(super) parts: Vec<(String, String, String, f64)>,
     /// The tallest part on each side, for case checks.
@@ -102,6 +104,46 @@ pub(super) fn solid_faces(b: &PartBox) -> Vec<Face3> {
     }
 }
 
+/// Faces that turn less than this (degrees) from their neighbours shade as one curved surface (a cylinder cut into 16 sides turns
+/// 22.5° from side to side); sharper edges, a box's 90° or a 45° chamfer, stay sharp.
+pub(super) const CREASE_DEG: f64 = 40.0;
+
+/// Whether the edge `p`-`q` of a face of the guessed solid `b` is drawn as a dark line: every edge but those between two sides of a
+/// cylinder (along its axis), which shade as one surface.
+pub(super) fn hard_edge(b: &PartBox, normal: [f32; 3], p: [f64; 3], q: [f64; 3]) -> bool {
+    let BodyShape::Cylinder(axis) = b.shape else { return true };
+    let a = axis as usize;
+    normal[a].abs() > 0.5 || (0..3).any(|k| k != a && (p[k] - q[k]).abs() > 1e-9)
+}
+
+/// The colour `c` made lighter by `d` (the part under the pointer).
+pub(super) fn brighten(c: [u8; 3], d: [u8; 3]) -> [u8; 3] {
+    [c[0].saturating_add(d[0]), c[1].saturating_add(d[1]), c[2].saturating_add(d[2])]
+}
+
+/// The normal the light is worked out with at corner `p` of a face of the guessed solid `b`: round on a cylinder's side (straight out
+/// from its axis, so the 32 sides shade as one surface), the face's own elsewhere.
+pub(super) fn solid_shade(b: &PartBox, p: [f64; 3], normal: [f32; 3]) -> [f32; 3] {
+    let BodyShape::Cylinder(axis) = b.shape else { return normal };
+    let a = axis as usize;
+    if normal[a].abs() > 0.5 {
+        return normal; // a cap
+    }
+    let (i, j) = ((a + 1) % 3, (a + 2) % 3);
+    let (ri, rj) = (((b.hi[i] - b.lo[i]) / 2.0).max(1e-9), ((b.hi[j] - b.lo[j]) / 2.0).max(1e-9));
+    let (ci, cj) = ((b.lo[i] + b.hi[i]) / 2.0, (b.lo[j] + b.hi[j]) / 2.0);
+    // the gradient of the ellipse's equation: outward and square to its side
+    let (gi, gj) = ((p[i] - ci) / (ri * ri), (p[j] - cj) / (rj * rj));
+    let len = gi.hypot(gj);
+    if len < 1e-12 {
+        return normal;
+    }
+    let mut n = [0.0f32; 3];
+    n[i] = (gi / len) as f32;
+    n[j] = (gj / len) as f32;
+    n
+}
+
 pub(super) fn shade3(c: [u8; 3], k: f32) -> [u8; 3] {
     let k = k.clamp(0.0, 1.3);
     [(c[0] as f32 * k).min(255.0) as u8, (c[1] as f32 * k).min(255.0) as u8, (c[2] as f32 * k).min(255.0) as u8]
@@ -123,6 +165,7 @@ impl Scene {
         let (lo, hi) = board.bounds().ok_or("基板の外形がありません")?;
         let img = Self::images(&pv, mask, silk);
         let meshes = part_meshes(board);
+        let mesh_normals = meshes.iter().map(|m| m.mesh.corner_normals(CREASE_DEG)).collect();
         // how high a mesh stands above the face its part is on
         let mesh_height = |m: &PartMesh| {
             let zs = m.mesh.vertices.iter().map(|v| f64::from(v[2]));
@@ -163,7 +206,7 @@ impl Scene {
         let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
         nets.sort();
         nets.dedup();
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial(), heat: vec![None; board.parts.len()], temps: vec![None; board.parts.len()], heat_applied: None })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, mesh_normals, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial(), heat: vec![None; board.parts.len()], temps: vec![None; board.parts.len()], heat_applied: None })
     }
 
     /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face
@@ -293,25 +336,27 @@ impl Scene {
                 if nv[2] <= 1e-4 {
                     continue;
                 }
-                let mut color = shade3(self.part_color(b.part, b.color), light(nv));
-                if hover == Some(b.part) {
-                    color = [color[0].saturating_add(50), color[1].saturating_add(50), color[2].saturating_add(30)];
-                }
+                let base = self.part_color(b.part, b.color);
+                let lift = if hover == Some(b.part) { [50, 50, 30] } else { [0, 0, 0] };
+                let lit = |p: &[f64; 3]| brighten(shade3(base, light(cam.dir(solid_shade(b, *p, normal)))), lift);
                 let vs: Vec<Vert> = corners.iter().map(|p| vert(*p, [0.0, 0.0])).collect();
-                let paint = Paint::Flat { color, part: b.part as u32 };
+                let cs: Vec<[u8; 3]> = corners.iter().map(lit).collect();
                 for k in 1..vs.len().saturating_sub(1) {
-                    buf.triangle([vs[0], vs[k], vs[k + 1]], paint, &pics);
+                    buf.triangle([vs[0], vs[k], vs[k + 1]], Paint::Shaded { colors: [cs[0], cs[k], cs[k + 1]], part: b.part as u32 }, &pics);
                 }
                 // a thin dark edge round every face, so the shape reads even where two faces are lit alike
                 let dark = shade3(b.color, 0.4);
                 for k in 0..vs.len() {
-                    buf.line(vs[k], vs[(k + 1) % vs.len()], dark);
+                    let k1 = (k + 1) % vs.len();
+                    if hard_edge(b, normal, corners[k], corners[k1]) {
+                        buf.line(vs[k], vs[k1], dark);
+                    }
                 }
             }
         }
-        for m in &self.meshes {
+        for (m, smooth) in self.meshes.iter().zip(&self.mesh_normals) {
             let verts: Vec<[f64; 3]> = m.mesh.vertices.iter().map(|v| v.map(f64::from)).collect();
-            for (t, c) in m.mesh.triangles.iter().zip(&m.mesh.tri_color) {
+            for ((t, c), sn) in m.mesh.triangles.iter().zip(&m.mesh.tri_color).zip(smooth) {
                 let (a, b, d) = (verts[t[0] as usize], verts[t[1] as usize], verts[t[2] as usize]);
                 let (u, w) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [d[0] - a[0], d[1] - a[1], d[2] - a[2]]);
                 let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
@@ -323,12 +368,15 @@ impl Scene {
                 if nv[2] <= 1e-4 {
                     continue;
                 }
-                let base = m.mesh.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
-                let mut color = shade3(self.part_color(m.part, base), light(nv));
-                if hover == Some(m.part) {
-                    color = [color[0].saturating_add(50), color[1].saturating_add(50), color[2].saturating_add(30)];
-                }
-                buf.triangle([vert(a, [0.0, 0.0]), vert(b, [0.0, 0.0]), vert(d, [0.0, 0.0])], Paint::Flat { color, part: m.part as u32 }, &pics);
+                let base = self.part_color(m.part, m.mesh.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]));
+                let lift = if hover == Some(m.part) { [50, 50, 30] } else { [0, 0, 0] };
+                // the corner's smooth normal, or the face's where it has turned away from the viewer (at the outline)
+                let lit = |n: [f32; 3]| {
+                    let v = cam.dir(n);
+                    brighten(shade3(base, light(if v[2] > 0.0 { v } else { nv })), lift)
+                };
+                let cs = sn.map_or([lit([nv[0], nv[1], nv[2]]); 3], |sn| sn.map(lit));
+                buf.triangle([vert(a, [0.0, 0.0]), vert(b, [0.0, 0.0]), vert(d, [0.0, 0.0])], Paint::Shaded { colors: cs, part: m.part as u32 }, &pics);
             }
         }
         buf

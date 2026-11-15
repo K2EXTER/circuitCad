@@ -356,6 +356,79 @@ mod view3d_tests {
         }
     }
 
+    /// A guessed cylinder shades round: the light at a corner of a side comes from straight out of the axis, and only the rims
+    /// (and every edge of a box) are drawn as dark lines, not the seams between the 32 sides.
+    #[test]
+    fn a_guessed_cylinder_has_round_normals_and_no_seams() {
+        let cyl = PartBox { shape: BodyShape::Cylinder(2), lo: [0.0, 0.0, 1.6], hi: [4.0, 4.0, 6.0], ..solid_box(BodyShape::Box) };
+        let n = solid_shade(&cyl, [4.0, 2.0, 3.0], [0.98, 0.1, 0.0]);
+        assert!((n[0] - 1.0).abs() < 1e-6 && n[1].abs() < 1e-6 && n[2] == 0.0, "{n:?}");
+        assert_eq!(solid_shade(&cyl, [4.0, 2.0, 6.0], [0.0, 0.0, 1.0]), [0.0, 0.0, 1.0], "the cap keeps its own");
+        assert_eq!(solid_shade(&solid_box(BodyShape::Box), [4.0, 2.0, 3.0], [1.0, 0.0, 0.0]), [1.0, 0.0, 0.0]);
+        // a side's edge along the axis is soft, its rim edge hard; a box's edges are all hard
+        assert!(!hard_edge(&cyl, [1.0, 0.0, 0.0], [4.0, 2.0, 1.6], [4.0, 2.0, 6.0]));
+        assert!(hard_edge(&cyl, [1.0, 0.0, 0.0], [4.0, 2.0, 1.6], [3.9, 2.8, 1.6]));
+        assert!(hard_edge(&solid_box(BodyShape::Box), [1.0, 0.0, 0.0], [4.0, 0.0, 1.6], [4.0, 0.0, 4.0]));
+    }
+
+    /// A cylinder of radius 4 and height 6 cut into 16 flat sides, each its own quad (as a STEP gives them), with caps.
+    fn faceted_cylinder() -> pcb_core::mesh::Mesh3d {
+        let seg = 16;
+        let mut m = pcb_core::mesh::Mesh3d { palette: vec![[200, 200, 200]], ..Default::default() };
+        let at = |k: usize, z: f32| {
+            let t = std::f32::consts::TAU * k as f32 / seg as f32;
+            [4.0 * t.cos(), 4.0 * t.sin(), z]
+        };
+        for k in 0..seg {
+            let b = m.vertices.len() as u32;
+            m.vertices.extend([at(k, 0.0), at(k + 1, 0.0), at(k + 1, 6.0), at(k, 6.0)]);
+            m.triangles.extend([[b, b + 1, b + 2], [b, b + 2, b + 3]]);
+        }
+        for (z, up) in [(6.0, true), (0.0, false)] {
+            let c = m.vertices.len() as u32;
+            m.vertices.push([0.0, 0.0, z]);
+            m.vertices.extend((0..seg).map(|k| at(k, z)));
+            for k in 0..seg as u32 {
+                let (a, b) = (c + 1 + k, c + 1 + (k + 1) % seg as u32);
+                m.triangles.push(if up { [c, a, b] } else { [c, b, a] });
+            }
+        }
+        m.tri_color = vec![0; m.triangles.len()];
+        m
+    }
+
+    /// Seen from the side, a cylinder made of flat sides shades without steps between the sides (smooth normals); with every face
+    /// kept flat the steps are plain.
+    #[test]
+    fn a_faceted_mesh_shades_without_steps() {
+        let mut b = two_resistors();
+        let mut pad = Pad::new(Point::new(20.0, 20.0), PadShape::Rect { w: 1.2, h: 1.6 }, None, Side::Top);
+        pad.refdes = "U1".into();
+        b.pads.push(pad);
+        b.models3d.insert("CYL".into(), faceted_cylinder());
+        b.parts.push(pcb_core::Part { refdes: "U1".into(), value: "x".into(), footprint: "CYL".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top });
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 500.0));
+        let cam = camera(&s, rect, 0.3, 0.1, 6.0, Vec2::ZERO);
+        // the largest step between neighbouring pixels across the middle of the cylinder's side (away from its outline)
+        let steps = |s: &Scene| {
+            let (img, ..) = snapshot(s, rect, &cam, true, Quality::Fine(1), None, None);
+            let z = BOARD_THICKNESS + 3.0;
+            let (l, _) = cam.project([20.0 - 4.0 * 0.3f64.cos(), 20.0 + 4.0 * 0.3f64.sin(), z]);
+            let (r, _) = cam.project([20.0 + 4.0 * 0.3f64.cos(), 20.0 - 4.0 * 0.3f64.sin(), z]);
+            let (x0, x1) = (l.x.min(r.x), l.x.max(r.x));
+            let (a, e) = ((x0 + 0.15 * (x1 - x0)) as usize, (x1 - 0.15 * (x1 - x0)) as usize);
+            assert!(e > a + 40, "the cylinder is big enough to see: {a}..{e}");
+            let y = l.y.round() as usize;
+            let px = |x: usize| img[y * 800 + x];
+            (a..e).map(|x| (0..3).map(|k| (px(x + 1)[k] as i32 - px(x)[k] as i32).abs()).max().unwrap()).max().unwrap()
+        };
+        let smooth = steps(&s);
+        s.mesh_normals = s.meshes.iter().map(|m| m.mesh.corner_normals(1.0)).collect();
+        let flat = steps(&s);
+        assert!(smooth <= 6 && flat >= 12, "smooth {smooth}, flat {flat}");
+    }
+
     /// The heat colours: the palette runs from dark blue (cold) to pale yellow (hot) and gets brighter all the way; the scale
     /// runs from the ambient to the hottest part, but at least `MIN_SPAN` K.
     #[test]

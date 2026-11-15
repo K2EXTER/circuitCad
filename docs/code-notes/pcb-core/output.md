@@ -12,6 +12,8 @@
 
 ### step.rs・mesh.rs — メーカーの STEP を3Dの形にする
 `read_step(&[u8]) -> Mesh3d`(ミリメートル・部品の座標、`mesh.rs` の `Mesh3d` = 頂点・三角形・色の表)。文字コードは問わない(バイト列で読む)。読むもの: `MANIFOLD_SOLID_BREP` / `BREP_WITH_VOIDS` / `SHELL_BASED_SURFACE_MODEL` の面(`ADVANCED_FACE`)、面は平面・円柱・円錐・球・トーラス(ほかは「外形の点を通る平らな面」)、辺は直線・円・楕円・B-スプライン、長さの単位(`unit_mm`。インチ変換つき単位を先に見る)、色(`STYLED_ITEM` から `COLOUR_RGB` をたどる)。読まないもの: 組み立て(`NEXT_ASSEMBLY_USAGE_OCCURRENCE`・`MAPPED_ITEM`)による部品の移動、曲面の内側の点(丸い面は外形の点だけで切るので、ドームは少数の平らな面になる)。
+
+`Mesh3d::face_normals`・`corner_normals(crease_deg)`: 3D ビューのなめらかな陰影のための角ごとの法線(同じ点で会う三角形のうち折り目の角度より曲がっていないものを、角度の重みで平均。詳しくは `app/board.md` の「なめらかな法線」)。
 - 三角形分割は `i_triangle`。**曲面の面は「長方形に点がたくさん」なので、`preserve_input_collinear` を立てて点を落とさないこと**(落とすと円柱の側面が2枚の三角形になる)。面の向きは、面の外向き(平面は軸、円柱・円錐は軸からの向き、球は中心から)に合わせて三角形の回り順を直す。テストは体積(発散定理)で向きを確かめる。
 - 曲線のあらさは `Step::tol`(0.03 mm)。円は弧の高さが tol 以内になる分割数、B-スプラインは33点にしてから Douglas-Peucker。実物(アルミ電解コンデンサ、SolidWorks 出力、1.6MB)で約3400三角形・35ms。
 - **組み立ての配置(2026-11-02)**: 足のように「1個の形を定義して、位置を変えて何度も置く」STEP は、`Step::placements` が配置の鎖(`Chain`=部品の座標→組み立ての座標の枠の組)を作り、置く場所の数だけ立体を読む。読むのは `MAPPED_ITEM`(`REPRESENTATION_MAP` の原点→対象の枠)と、2つの表現の間の `REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION`(単独でも複合でも。どちらが部品かは `CONTEXT_DEPENDENT_SHAPE_REPRESENTATION` の組み立て使用で決め、無ければ rep1 が部品)の `ITEM_DEFINED_TRANSFORMATION`。配置がなければ従来どおり(座標のまま)。以前は未対応で、SOIC の足が全部中心の1か所に重なった。

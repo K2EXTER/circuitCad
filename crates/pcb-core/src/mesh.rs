@@ -33,6 +33,71 @@ impl Mesh3d {
         Some((lo, hi))
     }
 
+    /// The unit normal of every triangle (from its corners' order; `None` for a triangle with no area).
+    pub fn face_normals(&self) -> Vec<Option<[f32; 3]>> {
+        self.triangles.iter().map(|t| unit(self.area_normal(t))).collect()
+    }
+
+    /// Twice the area times the outward normal of triangle `t` (counter-clockwise from outside).
+    fn area_normal(&self, t: &[u32; 3]) -> [f64; 3] {
+        let p = |k: usize| self.vertices[t[k] as usize].map(f64::from);
+        let (a, b, c) = (p(0), p(1), p(2));
+        let (u, w) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+        [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
+    }
+
+    /// A normal for each corner of each triangle, for smooth shading: the mean of the normals of the triangles that meet at that
+    /// point, each weighted by its angle there (so how a face was cut into triangles does not tilt it) (corners closer than `WELD` mm count as one point, as a STEP or OBJ often repeats the corners of each face)
+    /// and that turn less than `crease_deg` from this triangle. A curved surface cut into flat triangles then shades as a curve,
+    /// while the edges of a box (90°) or a chamfer stay sharp. A triangle with no area gets `None` (it is not drawn).
+    pub fn corner_normals(&self, crease_deg: f64) -> Vec<Option<[[f32; 3]; 3]>> {
+        const WELD: f64 = 1e-3;
+        let key = |v: &[f32; 3]| v.map(|x| (f64::from(x) / WELD).round() as i64);
+        let unit_n: Vec<Option<[f64; 3]>> = self.triangles.iter().map(|t| unit64(self.area_normal(t))).collect();
+        let mut at: std::collections::HashMap<[i64; 3], Vec<u32>> = std::collections::HashMap::new();
+        for (i, t) in self.triangles.iter().enumerate() {
+            if unit_n[i].is_none() {
+                continue;
+            }
+            for &c in t {
+                at.entry(key(&self.vertices[c as usize])).or_default().push(i as u32);
+            }
+        }
+        let cos = crease_deg.to_radians().cos();
+        self.triangles
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let n = unit_n[i]?;
+                Some(t.map(|c| {
+                    let mut sum = [0.0f64; 3];
+                    let here = key(&self.vertices[c as usize]);
+                    for &j in at.get(&here).map_or(&[][..], |v| v.as_slice()) {
+                        let Some(m) = unit_n[j as usize] else { continue };
+                        if n[0] * m[0] + n[1] * m[1] + n[2] * m[2] >= cos {
+                            let w = self.corner_angle(&self.triangles[j as usize], here, &key);
+                            sum = [sum[0] + m[0] * w, sum[1] + m[1] * w, sum[2] + m[2] * w];
+                        }
+                    }
+                    unit64(sum).unwrap_or(n).map(|x| x as f32)
+                }))
+            })
+            .collect()
+    }
+
+    /// The angle (radians) of triangle `t` at its corner whose welded key is `here` (0 if none is).
+    fn corner_angle(&self, t: &[u32; 3], here: [i64; 3], key: &impl Fn(&[f32; 3]) -> [i64; 3]) -> f64 {
+        let Some(k) = (0..3).find(|&k| key(&self.vertices[t[k] as usize]) == here) else { return 0.0 };
+        let p = |i: usize| self.vertices[t[i % 3] as usize].map(f64::from);
+        let (a, b, c) = (p(k), p(k + 1), p(k + 2));
+        let (u, w) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+        let (lu, lw) = ((u[0] * u[0] + u[1] * u[1] + u[2] * u[2]).sqrt(), (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt());
+        if lu < 1e-12 || lw < 1e-12 {
+            return 0.0;
+        }
+        ((u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) / (lu * lw)).clamp(-1.0, 1.0).acos()
+    }
+
     /// Enclosed volume (mm³) by the divergence theorem: positive when the triangles face outwards.
     pub fn volume(&self) -> f64 {
         self.triangles
@@ -87,5 +152,91 @@ impl Mesh3d {
             *v = [(x + d[0]) as f32, (y + d[1]) as f32, (f64::from(v[2]) + d[2]) as f32];
         }
         m
+    }
+}
+
+fn unit64(n: [f64; 3]) -> Option<[f64; 3]> {
+    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    (len > 1e-12).then(|| n.map(|x| x / len))
+}
+
+fn unit(n: [f64; 3]) -> Option<[f32; 3]> {
+    unit64(n).map(|v| v.map(|x| x as f32))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A cylinder of radius 1 along z, `seg` sides, each side face a separate quad (its own corners, as a STEP gives them), with caps.
+    fn cylinder(seg: usize) -> Mesh3d {
+        let mut m = Mesh3d { palette: vec![[200, 200, 200]], ..Default::default() };
+        let at = |k: usize, z: f32| {
+            let t = std::f32::consts::TAU * k as f32 / seg as f32;
+            [t.cos(), t.sin(), z]
+        };
+        for k in 0..seg {
+            let b = m.vertices.len() as u32;
+            m.vertices.extend([at(k, 0.0), at(k + 1, 0.0), at(k + 1, 2.0), at(k, 2.0)]);
+            m.triangles.extend([[b, b + 1, b + 2], [b, b + 2, b + 3]]);
+        }
+        for (z, up) in [(2.0, true), (0.0, false)] {
+            let c = m.vertices.len() as u32;
+            m.vertices.push([0.0, 0.0, z]);
+            for k in 0..seg {
+                m.vertices.push(at(k, z));
+            }
+            for k in 0..seg as u32 {
+                let (a, b) = (c + 1 + k, c + 1 + (k + 1) % seg as u32);
+                m.triangles.push(if up { [c, a, b] } else { [c, b, a] });
+            }
+        }
+        m.tri_color = vec![0; m.triangles.len()];
+        m
+    }
+
+    /// The sides of a cylinder shade round: each corner's normal points straight out from the axis (across the separate side
+    /// faces), while the rim against the flat caps stays sharp (the caps keep their own normal).
+    #[test]
+    fn a_cylinder_shades_round_and_keeps_its_rim_sharp() {
+        let m = cylinder(24);
+        let n = m.corner_normals(40.0);
+        for (t, cn) in m.triangles.iter().zip(&n) {
+            let cn = cn.unwrap();
+            let face = m.face_normals()[0];
+            assert!(face.is_some());
+            for (k, &c) in t.iter().enumerate() {
+                let v = m.vertices[c as usize];
+                let r = (v[0] * v[0] + v[1] * v[1]).sqrt();
+                let nk = cn[k];
+                if nk[2].abs() > 0.99 {
+                    continue; // a cap
+                }
+                assert!((r - 1.0).abs() < 1e-5);
+                assert!((nk[0] - v[0]).abs() < 1e-4 && (nk[1] - v[1]).abs() < 1e-4 && nk[2].abs() < 1e-5, "side corner {v:?}: {nk:?}");
+            }
+        }
+        // every cap corner keeps the cap's own normal, even on the rim
+        let sides = 2 * 24;
+        for cn in &n[sides..] {
+            for nk in cn.unwrap() {
+                assert!(nk[2].abs() > 0.9999, "{nk:?}");
+            }
+        }
+        // a crease of 1° keeps every face flat: the corners have the face's own normal
+        let flat = m.corner_normals(1.0);
+        for (f, cn) in m.face_normals().iter().zip(&flat) {
+            let f = f.unwrap();
+            for nk in cn.unwrap() {
+                assert!((0..3).all(|k| (nk[k] - f[k]).abs() < 1e-5));
+            }
+        }
+    }
+
+    #[test]
+    fn a_triangle_with_no_area_has_no_normals() {
+        let m = Mesh3d { vertices: vec![[0.0; 3], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], triangles: vec![[0, 1, 2]], palette: vec![[0; 3]], tri_color: vec![0] };
+        assert_eq!(m.corner_normals(40.0), vec![None]);
+        assert_eq!(m.face_normals(), vec![None]);
     }
 }

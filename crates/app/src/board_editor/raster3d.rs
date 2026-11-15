@@ -15,6 +15,8 @@ pub(super) enum Paint {
     Texture(usize),
     /// One colour. `part` is what a click on it selects.
     Flat { color: [u8; 3], part: u32 },
+    /// A colour at each corner, blended across the triangle (smooth shading of a curved surface).
+    Shaded { colors: [[u8; 3]; 3], part: u32 },
 }
 
 /// One corner: screen position (in buffer pixels), nearness `q` (1 / distance along the view axis: bigger is
@@ -99,6 +101,12 @@ impl Buffers {
                 match paint {
                     Paint::Flat { color, part } => {
                         self.color[i] = color;
+                        self.id[i] = part;
+                    }
+                    Paint::Shaded { colors, part } => {
+                        // blended by the position on the surface (perspective-correct, as the texture)
+                        let (a, b, c) = (w0 * v[0].q / q, w1 * v[1].q / q, w2 * v[2].q / q);
+                        self.color[i] = [0, 1, 2].map(|k| (a * colors[0][k] as f32 + b * colors[1][k] as f32 + c * colors[2][k] as f32).round().clamp(0.0, 255.0) as u8);
                         self.id[i] = part;
                     }
                     Paint::Texture(side) => {

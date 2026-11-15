@@ -30,8 +30,9 @@ pub(crate) fn ready() -> bool {
     READY.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// One vertex of a face: position (mm), view-independent normal, colour, part (`NO_PART` for the board), picture coordinates and which
-/// picture (0 none, 1 top, 2 bottom).
+/// One vertex of a face: position (mm), view-independent normal of the flat face (which side is the front), colour, part (`NO_PART` for
+/// the board), picture coordinates, which picture (0 none, 1 top, 2 bottom), and the normal the light is worked out with (the corner's
+/// smooth normal on a curved surface, else the face's).
 #[derive(Clone, Copy)]
 struct Vtx {
     pos: [f32; 3],
@@ -40,8 +41,9 @@ struct Vtx {
     part: u32,
     uv: [f32; 2],
     tex: u32,
+    shade: [f32; 3],
 }
-const VTX_BYTES: u64 = 44;
+const VTX_BYTES: u64 = 56;
 
 fn push_vtx(out: &mut Vec<u8>, v: &Vtx) {
     for f in v.pos.iter().chain(&v.normal) {
@@ -53,6 +55,9 @@ fn push_vtx(out: &mut Vec<u8>, v: &Vtx) {
         out.extend_from_slice(&f.to_le_bytes());
     }
     out.extend_from_slice(&v.tex.to_le_bytes());
+    for f in &v.shade {
+        out.extend_from_slice(&f.to_le_bytes());
+    }
 }
 
 /// A line's end: position and colour; `alpha` 254 marks a part's face edge (grey in the white look), 255 a case line.
@@ -123,7 +128,7 @@ impl Geometry {
         };
         let count = |bytes: &Vec<u8>, each: u64| (bytes.len() as u64 / each) as u32;
         let fr = scene.pv.frame;
-        let flat = |p: [f64; 3], normal: [f32; 3], color: [u8; 3], part: u32| Vtx { pos: f3(p), normal, color: [color[0], color[1], color[2], 255], part, uv: [0.0; 2], tex: 0 };
+        let flat = |p: [f64; 3], normal: [f32; 3], color: [u8; 3], part: u32| Vtx { pos: f3(p), normal, color: [color[0], color[1], color[2], 255], part, uv: [0.0; 2], tex: 0, shade: normal };
         // the board's faces, painted with the board pictures (mapped by the picture's own frame, as the software picture does)
         for bottom in [false, true] {
             let z = if bottom { 0.0 } else { BOARD_THICKNESS };
@@ -132,13 +137,13 @@ impl Geometry {
                 let corner = |p: &Point| {
                     let u = ((p.x - fr.x0) * fr.px / fr.w as f64) as f32;
                     let v = ((fr.y1 - p.y) * fr.px / fr.h as f64) as f32;
-                    Vtx { pos: f3([p.x, p.y, z]), normal, color: [255; 4], part: NO_PART, uv: [if bottom { 1.0 - u } else { u }, v], tex: 1 + bottom as u32 }
+                    Vtx { pos: f3([p.x, p.y, z]), normal, color: [255; 4], part: NO_PART, uv: [if bottom { 1.0 - u } else { u }, v], tex: 1 + bottom as u32, shade: normal }
                 };
                 tri(&mut tris, [corner(&t[0]), corner(&t[1]), corner(&t[2])]);
             }
             let zg = if bottom { -GLOW_LIFT } else { BOARD_THICKNESS + GLOW_LIFT };
             for (_, t) in scene.glow.iter().filter(|(b, _)| *b == bottom) {
-                let vs = t.map(|p| Vtx { pos: f3([p.x, p.y, zg]), normal, color: [GLOW[0], GLOW[1], GLOW[2], 255], part: NO_PART, uv: [0.0; 2], tex: 3 });
+                let vs = t.map(|p| Vtx { pos: f3([p.x, p.y, zg]), normal, color: [GLOW[0], GLOW[1], GLOW[2], 255], part: NO_PART, uv: [0.0; 2], tex: 3, shade: normal });
                 tri(&mut tris, vs);
             }
         }
@@ -202,25 +207,29 @@ impl Geometry {
             let color = scene.part_color(b.part, b.color);
             for (corners, normal) in solid_faces(b) {
                 for i in 1..corners.len().saturating_sub(1) {
-                    let v = |p: [f64; 3]| warn(flat(p, normal, color, b.part as u32), too_tall);
+                    let v = |p: [f64; 3]| warn(Vtx { shade: solid_shade(b, p, normal), ..flat(p, normal, color, b.part as u32) }, too_tall);
                     tri(&mut tris, [v(corners[0]), v(corners[i]), v(corners[i + 1])]);
                 }
                 let dark = shade3(b.color, 0.4);
                 for i in 0..corners.len() {
-                    edge(&mut lines, corners[i], corners[(i + 1) % corners.len()], dark);
+                    let (p, q) = (corners[i], corners[(i + 1) % corners.len()]);
+                    if hard_edge(b, normal, p, q) {
+                        edge(&mut lines, p, q, dark);
+                    }
                 }
             }
         }
-        for m in &scene.meshes {
+        for (m, smooth) in scene.meshes.iter().zip(&scene.mesh_normals) {
             let too_tall = scene.part_marked(m.part);
             let v: Vec<[f64; 3]> = m.mesh.vertices.iter().map(|p| p.map(f64::from)).collect();
-            for (t, c) in m.mesh.triangles.iter().zip(&m.mesh.tri_color) {
+            for ((t, c), sn) in m.mesh.triangles.iter().zip(&m.mesh.tri_color).zip(smooth) {
                 let (a, b, d) = (v[t[0] as usize], v[t[1] as usize], v[t[2] as usize]);
                 let Some(normal) = face_normal(a, b, d) else { continue };
+                let sn = sn.unwrap_or([normal; 3]);
                 let base = m.mesh.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
                 let color = scene.part_color(m.part, base);
-                let vv = |p: [f64; 3]| warn(flat(p, normal, color, m.part as u32), too_tall);
-                tri(&mut tris, [vv(a), vv(b), vv(d)]);
+                let vv = |p: [f64; 3], k: usize| warn(Vtx { shade: sn[k], ..flat(p, normal, color, m.part as u32) }, too_tall);
+                tri(&mut tris, [vv(a, 0), vv(b, 1), vv(d, 2)]);
             }
         }
         let pic = |i: usize| (scene.pv.frame.w as u32, scene.pv.frame.h as u32, Arc::new(scene.img[i].iter().flatten().copied().collect::<Vec<u8>>()));
@@ -333,14 +342,16 @@ struct FaceOut {
     @location(2) uv: vec2<f32>,
     @location(3) @interpolate(flat) part: u32,
     @location(4) @interpolate(flat) tex: u32,
+    @location(5) shade: vec3<f32>,
 };
 
 @vertex
-fn vs_face(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) color: vec4<f32>, @location(3) part: u32, @location(4) uv: vec2<f32>, @location(5) tex: u32) -> FaceOut {
+fn vs_face(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) color: vec4<f32>, @location(3) part: u32, @location(4) uv: vec2<f32>, @location(5) tex: u32, @location(6) shade: vec3<f32>) -> FaceOut {
     var o: FaceOut;
     o.pos = to_clip(to_view(pos));
     o.color = color;
     o.normal = vec3<f32>(dot(cam.r0.xyz, normal), dot(cam.r1.xyz, normal), dot(cam.r2.xyz, normal));
+    o.shade = vec3<f32>(dot(cam.r0.xyz, shade), dot(cam.r1.xyz, shade), dot(cam.r2.xyz, shade));
     o.uv = uv;
     o.part = part;
     o.tex = tex;
@@ -357,8 +368,12 @@ struct Targets {
 fn fs_face(i: FaceOut) -> Targets {
     var o: Targets;
     o.part = i.part;
-    let n = normalize(i.normal);
-    if (n.z <= 1e-4) { discard; }
+    // the flat face decides the front (as the software picture); the smooth normal lights it, unless at the outline it has
+    // turned away from the viewer
+    let n_face = normalize(i.normal);
+    if (n_face.z <= 1e-4) { discard; }
+    var n = normalize(i.shade);
+    if (n.z <= 0.0) { n = n_face; }
     o.normal = vec4<f32>(n * 0.5 + vec3<f32>(0.5), 1.0);
     // white: the board and the parts light grey, lit; the highlighted net and the parts over the case height keep their colours
     var base = i.color.rgb;
@@ -685,7 +700,7 @@ pub(crate) fn init(rs: &egui_wgpu::RenderState, msaa: u32) {
         "view3d_faces",
         "vs_face",
         "fs_face",
-        wgpu::VertexBufferLayout { array_stride: VTX_BYTES, step_mode: wgpu::VertexStepMode::Vertex, attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Unorm8x4, 3 => Uint32, 4 => Float32x2, 5 => Uint32] },
+        wgpu::VertexBufferLayout { array_stride: VTX_BYTES, step_mode: wgpu::VertexStepMode::Vertex, attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Unorm8x4, 3 => Uint32, 4 => Float32x2, 5 => Uint32, 6 => Float32x3] },
         wgpu::PrimitiveTopology::TriangleList,
     );
     let line_pipe = scene_pipe(
