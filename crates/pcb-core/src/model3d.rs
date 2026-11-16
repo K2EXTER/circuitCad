@@ -57,12 +57,51 @@ pub enum Kind {
     Transformer,
     /// A round buzzer: a black can with the sound hole in the top.
     Buzzer,
+    /// A holder for a cylindrical cell (AA, AAA, 18650): an open tray with the cell lying in it.
+    BatteryTray,
+    /// A coin cell holder (CR2032 ...): a round base, the coin and the spring clip over it.
+    CoinHolder,
+    /// A holder for a 5 x 20 mm glass fuse: two clips with the fuse lying in them.
+    FuseHolder,
+    /// An HC-49 quartz crystal: a metal can with round ends.
+    Crystal,
+    /// A relay: a closed box with a printed label on top.
+    Relay,
+    /// A tactile push switch: a square body, a metal plate and a round button.
+    Tact,
+    /// A slide switch: a body with a knob on top.
+    Slide,
+    /// A DIP switch: a body between the two rows of pins with a little lever for every switch.
+    DipSwitch,
     /// Anything else: one box.
     Other,
 }
 
 fn is_through_hole(fp: &str) -> bool {
     ["axial", "disc", "dip", "to-92", "to-220", "pinheader", "5mm", "do-", "transformer", "radial"].iter().any(|k| fp.contains(k))
+}
+
+/// Does this battery holder footprint (lower case) hold a coin cell? KiCad names them by the cell (CR2032) or by the size
+/// (Keystone_3034_1x20mm, Keystone_1058_1x2032).
+fn is_coin_holder(fp: &str) -> bool {
+    ["cr2", "cr1", "coin", "x20mm", "x2032", "x12mm", "x16mm", "x1220"].iter().any(|k| fp.contains(k))
+}
+
+/// The diameter of the cell a holder takes (mm), from its footprint name (lower case).
+fn cell_diameter(fp: &str) -> Option<f64> {
+    if is_coin_holder(fp) {
+        return Some(if fp.contains("1220") || fp.contains("12mm") { 12.5 } else if fp.contains("16") { 16.0 } else { 20.0 });
+    }
+    // longer names first: "aaa" contains "aa"
+    [("18650", 18.4), ("aaa", 10.5), ("aa", 14.5)].iter().find(|(k, _)| fp.contains(k)).map(|r| r.1)
+}
+
+/// The height of a tactile switch written in its footprint name ("SW_PUSH_6mm_H5mm"), mm above the board.
+fn height_in_name(fp: &str) -> Option<f64> {
+    fp.match_indices("_h").find_map(|(at, _)| {
+        let rest = &fp[at + 2..];
+        rest[..rest.find("mm")?].parse::<f64>().ok().filter(|h| (1.0..=30.0).contains(h))
+    })
 }
 
 fn prefix(refdes: &str) -> char {
@@ -92,6 +131,28 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
     if fp.contains("buzzer") {
         return Kind::Buzzer;
     }
+    if fp.contains("batteryholder") {
+        return if is_coin_holder(&fp) { Kind::CoinHolder } else { Kind::BatteryTray };
+    }
+    if fp.contains("5x20") || fp.contains("fuseholder") {
+        return Kind::FuseHolder;
+    }
+    if fp.contains("hc49") || fp.contains("hc-49") {
+        return Kind::Crystal;
+    }
+    if fp.contains("relay") {
+        return Kind::Relay;
+    }
+    // a DIP switch footprint also says "slide" (KiCad's SW_DIP_SPSTx04_Slide_...), so it is asked first
+    if fp.contains("sw_dip") {
+        return Kind::DipSwitch;
+    }
+    if fp.contains("sw_push") || fp.contains("tact") {
+        return Kind::Tact;
+    }
+    if fp.contains("sw_slide") {
+        return Kind::Slide;
+    }
     // a connector is told by its footprint (and not by a letter alone: a USB protection IC is not a connector)
     if matches!(prefix(refdes), 'J' | 'P' | 'X') && ["usb", "jack", "barrel", "rj45"].iter().any(|k| fp.contains(k)) {
         return Kind::Shell;
@@ -111,7 +172,7 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
 
 /// Footprints (a part of the name, in lower case) of parts that stand tall, with the typical height of the body in mm and its colour.
 /// Estimates from the usual packages: the real part may be a few mm different, so give the footprint a `height` when it matters.
-const TALL_FOOTPRINTS: [(&str, f64, [u8; 3]); 13] = [
+const TALL_FOOTPRINTS: &[(&str, f64, [u8; 3])] = &[
     // connectors with a metal shell; the sizes are the usual ones of each family (the maker's drawing may differ by a few mm)
     ("usb_micro", 2.8, [190, 190, 200]),
     ("usb_c", 3.3, [190, 190, 200]),
@@ -123,9 +184,29 @@ const TALL_FOOTPRINTS: [(&str, f64, [u8; 3]); 13] = [
     ("xtal_3225", 0.9, [190, 190, 200]),
     ("terminalblock", 10.0, [30, 110, 60]),
     ("transformer", 25.0, [60, 60, 70]),
+    ("batteryholder_18650", 21.0, [40, 40, 44]),
+    ("batteryholder_aaa", 12.5, [40, 40, 44]),
     ("batteryholder_aa", 16.0, [40, 40, 44]),
     ("batteryholder_cr2032", 5.0, [150, 150, 158]),
-    ("fuse_5x20", 9.0, [200, 190, 150]),
+    ("5x20", 9.0, [200, 190, 150]),
+    ("fuseholder", 9.0, [200, 190, 150]),
+    // HC-49: the tall can (HC-49/U, 13.5 mm), the low one (HC-49/S, KiCad's HC49-4H, 3.5 mm) and the one lying on a plastic base (SMD)
+    ("hc49-4h", 3.5, [196, 198, 204]),
+    ("hc-49s", 3.5, [196, 198, 204]),
+    ("hc49s", 3.5, [196, 198, 204]),
+    ("smd_hc49", 4.3, [196, 198, 204]),
+    ("hc49", 13.5, [196, 198, 204]),
+    ("hc-49", 13.5, [196, 198, 204]),
+    // relays: the small signal relay (Omron G6K), the 10 A power relays (Omron G5LE, the blue Songle SRD) and the rest
+    ("g6k", 5.2, [30, 30, 34]),
+    ("g5le", 18.8, [30, 30, 34]),
+    ("srd", 15.3, [40, 80, 170]),
+    ("relay", 15.0, [30, 30, 34]),
+    // switches: a DIP switch first (its name also says "slide")
+    ("sw_dip", 5.0, [40, 80, 170]),
+    ("sw_push", 4.3, [30, 30, 34]),
+    ("tact", 4.3, [30, 30, 34]),
+    ("sw_slide", 7.0, [196, 198, 204]),
 ];
 
 /// How far a TO-220's metal tab stands above its plastic body (mm).
@@ -141,7 +222,17 @@ pub fn part_style(refdes: &str, footprint: &str) -> (f64, [u8; 3]) {
     // parts that stand tall by their footprint, whatever they are called: typical heights, for the case check (a footprint's
     // own `height` wins over these; they are estimates, not a maker's drawing)
     if let Some(r) = TALL_FOOTPRINTS.iter().find(|(key, _, _)| fp.contains(key)) {
-        return (r.1, r.2);
+        // a tactile switch says its height in the name (SW_PUSH_6mm_H5mm)
+        let h = if matches!(part_kind(refdes, footprint), Kind::Tact) { height_in_name(&fp).unwrap_or(r.1) } else { r.1 };
+        return (h, r.2);
+    }
+    // a battery holder by another name (Keystone_3034_1x20mm): low for a coin, as tall as the cell otherwise
+    if fp.contains("batteryholder") {
+        return match cell_diameter(&fp) {
+            Some(_) if is_coin_holder(&fp) => (5.0, [150, 150, 158]),
+            Some(d) => (d + 1.5, [40, 40, 44]),
+            None => (16.0, [40, 40, 44]),
+        };
     }
     match prefix(refdes) {
         'R' if th => (2.4, [196, 160, 110]),
@@ -363,6 +454,7 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
         hi = Point::new(hi.x.max(p.pos.x + w / 2.0), hi.y.max(p.pos.y + h / 2.0));
     }
     let (kind, (h, color)) = (part_kind(&part.refdes, &part.footprint), style_in(board, part));
+    let fpl = part.footprint.to_ascii_lowercase();
     let prefix = prefix(&part.refdes);
     // the cathode (diode, LED) and the minus lead (electrolytic) of a polarized part
     let cathode = pad_named(&pads, &["K"]);
@@ -515,7 +607,11 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             // a low plastic base the size of the footprint, the metal shell over it (a little inside, so the base shows round the foot)
             let base = (h * 0.12).clamp(0.8, 1.6);
             let s = 0.3_f64.min(sx.min(sy) * 0.1);
-            vec![solid([lo.x, lo.y, 0.0], [hi.x, hi.y, base], [30, 30, 34], b), solid([lo.x + s, lo.y + s, base], [hi.x - s, hi.y - s, h], color, b)]
+            let (slo, shi) = ([lo.x + s, lo.y + s], [hi.x - s, hi.y - s]);
+            let mut v = vec![solid([lo.x, lo.y, 0.0], [hi.x, hi.y, base], [30, 30, 34], b), solid([slo[0], slo[1], base], [shi[0], shi[1], h], color, b)];
+            let round = ["jack", "barrel"].iter().any(|k| fpl.contains(k));
+            v.extend(board.bounds().map(|(blo, bhi)| shell_mouth(slo, shi, [base, h], [cx, cy], (blo, bhi), round)));
+            v
         }
         Kind::Terminal => {
             // the block with a screw (and its slot) on top of each terminal
@@ -533,11 +629,205 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             vec![solid([lo.x, lo.y, 0.0], [hi.x, hi.y, h * 0.7], [150, 92, 50], b), solid([core_lo[0], core_lo[1], 0.0], [core_hi[0], core_hi[1], h], color, b)]
         }
         Kind::Buzzer => {
-            let dia = (sx.max(sy) * 1.6).max(9.0);
+            // the diameter the name says (Buzzer_D12_P7.6), else a guess from the pads
+            let named = fpl.match_indices("_d").find_map(|(at, _)| {
+                let rest = &fpl[at + 2..];
+                rest[..rest.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(rest.len())].parse::<f64>().ok().filter(|d| (5.0..=40.0).contains(d))
+            });
+            let dia = named.unwrap_or((sx.max(sy) * 1.6).max(9.0));
             vec![solid([cx - dia / 2.0, cy - dia / 2.0, 0.0], [cx + dia / 2.0, cy + dia / 2.0, h], color, BodyShape::Cylinder(2)), solid([cx - 1.2, cy - 1.2, h], [cx + 1.2, cy + 1.2, h + 0.05], [8, 8, 10], BodyShape::Cylinder(2))]
+        }
+        Kind::BatteryTray => battery_tray(&pads, &fpl, [cx, cy], along_x, h, color),
+        Kind::CoinHolder => coin_holder(&pads, &fpl, [cx, cy], along_x, h),
+        Kind::FuseHolder => fuse_holder(&pads, [cx, cy], along_x, h),
+        Kind::Crystal => {
+            // the can is longer than its two legs are apart: the size of the package, round at both ends
+            let (len, wid) = if fpl.contains("smd") { (11.4, 4.7) } else { (11.0, 4.65) };
+            let (r, a) = (wid / 2.0, len / 2.0 - wid / 2.0);
+            let f = Frame { c: [cx, cy], along_x };
+            vec![f.at([-a, a], [-r, r], [0.0, h], color, b), f.at([-a - r, -a + r], [-r, r], [0.0, h], color, BodyShape::Cylinder(2)), f.at([a - r, a + r], [-r, r], [0.0, h], color, BodyShape::Cylinder(2))]
+        }
+        Kind::Relay => {
+            // the closed box a little bigger than its pins, with the printed label on top
+            let m = 2.0;
+            let (blo, bhi) = ([lo.x - m, lo.y - m], [hi.x + m, hi.y + m]);
+            let (iw, ih) = ((bhi[0] - blo[0]) * 0.2, (bhi[1] - blo[1]) * 0.25);
+            vec![solid([blo[0], blo[1], 0.0], [bhi[0], bhi[1], h], color, b), solid([blo[0] + iw, blo[1] + ih, h], [bhi[0] - iw, bhi[1] - ih, h + 0.05], MARK, b)]
+        }
+        Kind::Tact => {
+            // the square body (6 x 6 or 12 x 12 by the name, else as big as the pads), the metal plate, the round button
+            let side = if fpl.contains("12mm") { 12.0 } else if fpl.contains("6mm") || sx.max(sy) >= 6.0 { 6.0 } else { (sx.max(sy) * 0.8).max(2.0) };
+            let h = h.max(1.5);
+            let (body, plate) = (h * 0.7, h * 0.7 + 0.25);
+            let (q, k) = (side / 2.0, side * 0.55 / 2.0);
+            vec![
+                solid([cx - q, cy - q, 0.0], [cx + q, cy + q, body], [30, 30, 34], b),
+                solid([cx - q, cy - q, body], [cx + q, cy + q, plate], SILVER, b),
+                solid([cx - k, cy - k, plate], [cx + k, cy + k, h], color, BodyShape::Cylinder(2)),
+            ]
+        }
+        Kind::Slide => {
+            // the body along the row of pins, the knob standing on it, pushed to one end
+            let f = Frame { c: [cx, cy], along_x };
+            let (len, wid) = (if along_x { sx } else { sy } + 1.0, (if along_x { sy } else { sx }).max(3.5));
+            let top = h * 0.55;
+            let (kl, kw) = (len * 0.18, wid * 0.4);
+            vec![f.at([-len / 2.0, len / 2.0], [-wid / 2.0, wid / 2.0], [0.0, top], color, b), f.at([-len / 6.0 - kl / 2.0, -len / 6.0 + kl / 2.0], [-kw / 2.0, kw / 2.0], [top, h], [30, 30, 34], b)]
+        }
+        Kind::DipSwitch => {
+            // the body between the two rows of pins; a white lever for every pair of pins across
+            let xs: BTreeSet<i64> = pads.iter().map(|p| (p.pos.x * 100.0).round() as i64).collect();
+            let ys: BTreeSet<i64> = pads.iter().map(|p| (p.pos.y * 100.0).round() as i64).collect();
+            let rows_along_y = xs.len() <= 2 && ys.len() > 1;
+            let (shx, shy) = if rows_along_y { (1.4, -0.3) } else { (-0.3, 1.4) };
+            let (blo, bhi) = ([lo.x + shx, lo.y + shy], [hi.x - shx, hi.y - shy]);
+            let top = (h - 0.6).max(1.0);
+            let mut v = vec![solid([blo[0], blo[1], 0.0], [bhi[0], bhi[1], top], color, b)];
+            let (across, at) = if rows_along_y { (bhi[0] - blo[0], ys) } else { (bhi[1] - blo[1], xs) };
+            let (kl, kw) = (across * 0.3, 0.9);
+            for p in at {
+                let p = p as f64 / 100.0;
+                // the lever sits towards the ON side (pin 1's row)
+                let (k0, k1) = (-kl * 0.1, kl * 0.9);
+                v.push(if rows_along_y {
+                    solid([cx + k0 - kl / 2.0, p - kw / 2.0, top], [cx + k1 - kl / 2.0, p + kw / 2.0, h], MARK, b)
+                } else {
+                    solid([p - kw / 2.0, cy + k0 - kl / 2.0, top], [p + kw / 2.0, cy + k1 - kl / 2.0, h], MARK, b)
+                });
+            }
+            v
         }
         Kind::Other => vec![solid([lo.x - 0.1, lo.y - 0.1, 0.0], [hi.x + 0.1, hi.y + 0.1, h], color, b)],
     }
+}
+
+/// Positions along and across the long way of a part (its centre `c`), for the parts drawn along the row of their pins.
+struct Frame {
+    c: [f64; 2],
+    along_x: bool,
+}
+
+impl Frame {
+    /// A solid `a` along the part, `p` across it and `z` above the board.
+    fn at(&self, a: [f64; 2], p: [f64; 2], z: [f64; 2], color: [u8; 3], shape: BodyShape) -> Solid {
+        if self.along_x {
+            solid([self.c[0] + a[0], self.c[1] + p[0], z[0]], [self.c[0] + a[1], self.c[1] + p[1], z[1]], color, shape)
+        } else {
+            solid([self.c[0] + p[0], self.c[1] + a[0], z[0]], [self.c[0] + p[1], self.c[1] + a[1], z[1]], color, shape)
+        }
+    }
+
+    /// A cylinder lying along the part.
+    fn axis(&self) -> BodyShape {
+        BodyShape::Cylinder(if self.along_x { 0 } else { 1 })
+    }
+
+    /// Where a pad is along the part, from the centre.
+    fn along(&self, p: &Pad) -> f64 {
+        if self.along_x { p.pos.x - self.c[0] } else { p.pos.y - self.c[1] }
+    }
+}
+
+/// The distance between the outermost pad centres along the part.
+fn pad_span(pads: &[&Pad], f: &Frame) -> f64 {
+    let at: Vec<f64> = pads.iter().map(|p| f.along(p)).collect();
+    at.iter().cloned().fold(f64::MIN, f64::max) - at.iter().cloned().fold(f64::MAX, f64::min)
+}
+
+/// Which way the + end is along the part (pin "+", else pin 1): 1 or -1.
+fn plus_end(pads: &[&Pad], f: &Frame) -> f64 {
+    pad_named(pads, &["+", "1"]).map(|p| if f.along(p) < 0.0 { -1.0 } else { 1.0 }).unwrap_or(1.0)
+}
+
+const CELL: [u8; 3] = [50, 100, 170];
+const HOLDER: [u8; 3] = [40, 40, 44];
+const GLASS: [u8; 3] = [200, 222, 230];
+
+/// An open tray between the two contacts with the cell lying in it: the + end has the silver cap and the little nub.
+fn battery_tray(pads: &[&Pad], fpl: &str, c: [f64; 2], along_x: bool, h: f64, color: [u8; 3]) -> Vec<Solid> {
+    let f = Frame { c, along_x };
+    let b = BodyShape::Box;
+    let span = pad_span(pads, &f);
+    let floor = 1.0;
+    let dia = cell_diameter(fpl).unwrap_or(h - 1.5).min(h - floor).max(3.0);
+    let (len, wid) = (span + 4.0, dia + 2.4);
+    let (l2, w2, wall) = (len / 2.0, wid / 2.0, 1.2);
+    let mut v = vec![
+        f.at([-l2, l2], [-w2, w2], [0.0, floor], color, b),
+        f.at([-l2, l2], [-w2, -w2 + wall], [floor, floor + dia * 0.6], color, b),
+        f.at([-l2, l2], [w2 - wall, w2], [floor, floor + dia * 0.6], color, b),
+        f.at([-l2, -l2 + 1.5], [-w2, w2], [floor, h], color, b),
+        f.at([l2 - 1.5, l2], [-w2, w2], [floor, h], color, b),
+    ];
+    // the cell between the end walls: the sleeve, the flat minus end and the + end with its nub
+    // `u` runs towards the + end; the cell fills the inside of the tray (len - 3), the last 1 mm of it is the nub
+    let (inside, r, zc) = ((len - 3.0) / 2.0, dia / 2.0, floor + dia / 2.0);
+    let s = plus_end(pads, &f);
+    let along = |u0: f64, u1: f64| [(s * u0).min(s * u1), (s * u0).max(s * u1)];
+    let round = |rr: f64| ([-rr, rr], [zc - rr, zc + rr]);
+    let (sleeve, cap, nub) = (round(r), round(r + 0.03), round(r * 0.35));
+    v.push(f.at(along(-inside + 0.8, inside - 2.0), sleeve.0, sleeve.1, CELL, f.axis()));
+    v.push(f.at(along(-inside, -inside + 0.8), cap.0, cap.1, SILVER, f.axis()));
+    v.push(f.at(along(inside - 2.0, inside - 1.0), cap.0, cap.1, SILVER, f.axis()));
+    v.push(f.at(along(inside - 1.0, inside), nub.0, nub.1, SILVER, f.axis()));
+    v
+}
+
+/// A coin cell holder: the round black base, the coin in it and the spring clip from the + contact over the coin.
+fn coin_holder(pads: &[&Pad], fpl: &str, c: [f64; 2], along_x: bool, h: f64) -> Vec<Solid> {
+    let f = Frame { c, along_x };
+    let dia = cell_diameter(fpl).unwrap_or(20.0);
+    let (r, base_r, floor) = (dia / 2.0, dia / 2.0 + 1.25, 1.0_f64);
+    let coin_top = (floor + 3.2).min(h - 0.3);
+    let round = BodyShape::Cylinder(2);
+    let mut v = vec![f.at([-base_r, base_r], [-base_r, base_r], [0.0, floor], HOLDER, round), f.at([-r, r], [-r, r], [floor, coin_top], SILVER, round)];
+    let s = plus_end(pads, &f);
+    let reach = (pad_span(pads, &f) / 2.0).max(r);
+    let a = [(s * reach).min(0.0), (s * reach).max(0.0)];
+    v.push(f.at(a, [-dia * 0.15, dia * 0.15], [coin_top, h.max(coin_top + 0.2)], SILVER, BodyShape::Box));
+    v
+}
+
+/// Two clips standing at the contacts with the 5 x 20 mm glass fuse lying in them: silver caps at its ends, glass between.
+fn fuse_holder(pads: &[&Pad], c: [f64; 2], along_x: bool, h: f64) -> Vec<Solid> {
+    let f = Frame { c, along_x };
+    let b = BodyShape::Box;
+    let (r, half, cap) = (2.5, 10.0, 5.0);
+    let zc = (h - r - 0.1).max(r);
+    let z = [zc - r, zc + r];
+    let at = pad_span(pads, &f) / 2.0;
+    let mut v = vec![];
+    for s in [-1.0, 1.0] {
+        // a clip from a little inside its contact out past it, as high as the middle of the fuse
+        let (a0, a1) = (s * (at - 3.0), s * (at + 1.5));
+        v.push(f.at([a0.min(a1), a0.max(a1)], [-3.5, 3.5], [0.0, zc], [200, 190, 150], b));
+        let (c0, c1) = (s * (half - cap), s * half);
+        v.push(f.at([c0.min(c1), c0.max(c1)], [-r, r], z, SILVER, f.axis()));
+    }
+    v.push(f.at([-(half - cap), half - cap], [-r * 0.96, r * 0.96], [zc - r * 0.96, zc + r * 0.96], GLASS, f.axis()));
+    v
+}
+
+/// The opening of a connector in a metal shell, on the side that faces the nearest board edge (the plug goes in from the
+/// edge): a dark round hole for a DC jack, a dark slot for USB and the like.
+fn shell_mouth(lo: [f64; 2], hi: [f64; 2], z: [f64; 2], c: [f64; 2], (blo, bhi): (Point, Point), round: bool) -> Solid {
+    const HOLE: [u8; 3] = [8, 8, 10];
+    let gaps = [(c[0] - blo.x, 0, -1.0), (bhi.x - c[0], 0, 1.0), (c[1] - blo.y, 1, -1.0), (bhi.y - c[1], 1, 1.0)];
+    let (_, axis, dir) = gaps.iter().copied().min_by(|a, b| a.0.total_cmp(&b.0)).unwrap();
+    let face = if dir < 0.0 { lo[axis] } else { hi[axis] };
+    // from a little outside the face to a little inside it
+    let (n0, n1) = ((face + dir * 0.06).min(face - dir * 0.3), (face + dir * 0.06).max(face - dir * 0.3));
+    let other = 1 - axis;
+    let (mid, width, height, zc) = ((lo[other] + hi[other]) / 2.0, hi[other] - lo[other], z[1] - z[0], (z[0] + z[1]) / 2.0);
+    let (half_w, half_h) = if round { let d = 0.6 * width.min(height) / 2.0; (d, d) } else { (0.35 * width, 0.25 * height) };
+    let (mut l, mut h) = ([0.0; 3], [0.0; 3]);
+    l[axis] = n0;
+    h[axis] = n1;
+    l[other] = mid - half_w;
+    h[other] = mid + half_w;
+    l[2] = zc - half_h;
+    h[2] = zc + half_h;
+    solid(l, h, HOLE, if round { BodyShape::Cylinder(axis as u8) } else { BodyShape::Box })
 }
 
 /// The solids of every part that has pads. Bottom-side parts hang below the board.
@@ -927,9 +1217,13 @@ mod tests {
         assert_eq!(part_kind("U1", "USBLC6-2SC6"), Kind::SmdIc, "a USB protection chip is not a connector");
         let b = board_with("J1", "USB_DEMO_TH", &[(16.5, 20.0), (19.0, 20.0), (21.0, 20.0), (23.5, 20.0), (13.5, 16.0), (26.5, 16.0)]);
         let boxes = part_boxes(&b);
-        assert_eq!(boxes.len(), 2, "the plastic base and the shell (the pins show as pads)");
+        assert_eq!(boxes.len(), 3, "the plastic base, the shell and its opening (the pins show as pads)");
         let shell = boxes.iter().find(|x| x.color == [190, 190, 200]).expect("a silver shell");
         assert!((shell.hi[2] - (BOARD_THICKNESS + 7.0)).abs() < 1e-9, "a USB-A is about 7 mm tall");
+        // the shell is nearer the bottom edge (y = 0) than the others: the slot is on the low-y face
+        let mouth = boxes.iter().find(|x| x.color == [8, 8, 10]).expect("the opening");
+        assert_eq!(mouth.shape, BodyShape::Box, "a USB opening is a slot");
+        assert!(mouth.lo[1] < shell.lo[1] && mouth.hi[1] > shell.lo[1] && mouth.hi[1] - mouth.lo[1] < 0.5, "on the face towards the edge: {mouth:?}");
         assert_eq!(part_style("J1", "USB_C_Receptacle").0, 3.3);
         assert_eq!(part_style("J1", "USB_Micro-B").0, 2.8);
 
@@ -939,6 +1233,97 @@ mod tests {
         let boxes = part_boxes(&t);
         assert_eq!(boxes.iter().filter(|x| x.shape == BodyShape::Cylinder(2)).count(), 4, "a screw head per terminal");
         assert_eq!(boxes.len(), 1 + 4 * 2, "the block, and a screw with its slot on each terminal");
+    }
+
+    /// The opening of a DC jack is a round hole, on the face towards whichever board edge is nearest.
+    #[test]
+    fn a_jack_opens_towards_the_nearest_board_edge() {
+        for (x, face_x) in [(55.0, true), (5.0, false)] {
+            let b = board_with("J1", "BarrelJack_Horizontal", &[(x - 3.0, 20.0), (x + 3.0, 20.0), (x, 24.7)]);
+            let boxes = part_boxes(&b);
+            let shell = boxes.iter().max_by(|a, c| a.hi[2].total_cmp(&c.hi[2])).unwrap();
+            let mouth = boxes.iter().find(|x| x.color == [8, 8, 10]).expect("the opening");
+            assert_eq!(mouth.shape, BodyShape::Cylinder(0), "a round hole along x");
+            let face = if face_x { shell.hi[0] } else { shell.lo[0] };
+            assert!(mouth.lo[0] < face && face < mouth.hi[0], "the hole is on the face towards the edge at x = {}: {mouth:?}", if face_x { 60 } else { 0 });
+        }
+    }
+
+    /// Holders: the cell lies in its tray with the nub at the + end; the coin sits in a round base under its clip; the
+    /// glass fuse lies in two clips at the height of their tops.
+    #[test]
+    fn holders_show_the_cell_coin_or_fuse_in_them() {
+        assert_eq!(part_kind("BT1", "BatteryHolder_AA"), Kind::BatteryTray);
+        assert_eq!(part_kind("BT1", "BatteryHolder_Keystone_3034_1x20mm"), Kind::CoinHolder);
+        assert_eq!(part_kind("F1", "Fuse_5x20_P22.5"), Kind::FuseHolder);
+        assert_eq!(part_style("BT1", "BatteryHolder_Keystone_3034_1x20mm").0, 5.0, "a coin holder is low whatever it is called");
+        assert_eq!(part_style("BT1", "BatteryHolder_AAA").0, 12.5, "AAA is not AA");
+
+        // AA: pads 50 mm apart, pin 1 (+) on the right
+        let b = board_with("BT1", "BatteryHolder_AA", &[(55.0, 20.0), (5.0, 20.0)]);
+        let boxes = part_boxes(&b);
+        let cell = boxes.iter().find(|x| x.color == CELL).expect("the cell");
+        assert_eq!(cell.shape, BodyShape::Cylinder(0), "lying along the pads");
+        assert!(((cell.hi[2] - cell.lo[2]) - 14.5).abs() < 1e-9, "an AA is 14.5 mm across");
+        assert!(boxes.iter().all(|x| x.hi[2] <= BOARD_THICKNESS + 16.0 + 1e-9), "nothing above the holder's height");
+        let nub = boxes.iter().filter(|x| x.color == SILVER).min_by(|a, c| (a.hi[1] - a.lo[1]).total_cmp(&(c.hi[1] - c.lo[1]))).unwrap();
+        assert!(nub.lo[0] > 30.0, "the nub is at the + end (pin 1, right): {nub:?}");
+
+        let c = board_with("BT2", "BatteryHolder_CR2032", &[(10.0, 20.0), (30.0, 20.0)]);
+        let boxes = part_boxes(&c);
+        let coin = boxes.iter().find(|x| x.color == SILVER && x.shape == BodyShape::Cylinder(2)).expect("the coin");
+        assert!(((coin.hi[0] - coin.lo[0]) - 20.0).abs() < 1e-9 && ((coin.hi[2] - coin.lo[2]) - 3.2).abs() < 1e-9, "20 mm across, 3.2 mm thick");
+        assert_eq!(boxes.len(), 3, "base, coin and clip");
+
+        let f = board_with("F1", "Fuse_5x20_P22.5", &[(8.75, 20.0), (31.25, 20.0)]);
+        let boxes = part_boxes(&f);
+        let glass = boxes.iter().find(|x| x.color == GLASS).expect("the glass");
+        assert!(((glass.hi[0] - glass.lo[0]) - 10.0).abs() < 1e-9, "the glass between the 5 mm caps of a 20 mm fuse");
+        let clip_top = boxes.iter().filter(|x| x.shape == BodyShape::Box).map(|x| x.hi[2]).fold(0.0, f64::max);
+        assert!((clip_top - (glass.lo[2] + glass.hi[2]) / 2.0).abs() < 1e-9, "the clips reach the middle of the fuse");
+    }
+
+    /// A crystal is the size of its can, not of its two legs; a relay is a box with a label; a tactile switch has its
+    /// button (as high as the name says); a slide switch its knob; a DIP switch a lever for every switch.
+    #[test]
+    fn crystals_relays_and_switches_have_their_shapes() {
+        assert_eq!(part_kind("Y1", "Crystal_HC49-4H_Vertical"), Kind::Crystal);
+        assert_eq!(part_style("Y1", "Crystal_HC49-4H_Vertical").0, 3.5);
+        assert_eq!(part_style("Y1", "Crystal_HC49-U_Vertical").0, 13.5);
+        let y = board_with("Y1", "Crystal_HC49-U_Vertical", &[(17.56, 20.0), (22.44, 20.0)]);
+        let boxes = part_boxes(&y);
+        let x0 = boxes.iter().map(|b| b.lo[0]).fold(f64::MAX, f64::min);
+        let x1 = boxes.iter().map(|b| b.hi[0]).fold(f64::MIN, f64::max);
+        assert!(((x1 - x0) - 11.0).abs() < 1e-9, "the can is 11 mm long");
+        assert_eq!(boxes.iter().filter(|b| b.shape == BodyShape::Cylinder(2)).count(), 2, "round ends");
+
+        assert_eq!(part_kind("K1", "Relay_SPDT_SANYOU_SRD_Series_Form_C"), Kind::Relay);
+        assert_eq!(part_style("K1", "Relay_SPDT_SANYOU_SRD_Series_Form_C"), (15.3, [40, 80, 170]), "the blue SRD");
+        let k = board_with("K1", "Relay_SPDT_SANYOU_SRD_Series_Form_C", &[(10.0, 15.0), (22.0, 15.0), (10.0, 27.0), (22.0, 27.0), (12.0, 21.0)]);
+        let boxes = part_boxes(&k);
+        assert_eq!(boxes.len(), 2, "the box and its label");
+        assert!(boxes.iter().any(|b| b.color == MARK && b.lo[2] >= BOARD_THICKNESS + 15.3 - 1e-9), "the label on top");
+
+        assert_eq!(part_kind("SW1", "SW_PUSH_6mm_H5mm"), Kind::Tact);
+        assert_eq!(part_style("SW1", "SW_PUSH_6mm_H5mm").0, 5.0, "the height in the name");
+        assert_eq!(part_style("SW1", "SW_PUSH_6mm").0, 4.3);
+        let t = board_with("SW1", "SW_PUSH_6mm", &[(16.75, 17.75), (23.25, 17.75), (16.75, 22.25), (23.25, 22.25)]);
+        let boxes = part_boxes(&t);
+        let body = boxes.iter().find(|b| b.color == [30, 30, 34] && b.shape == BodyShape::Box).unwrap();
+        assert!(((body.hi[0] - body.lo[0]) - 6.0).abs() < 1e-9, "6 x 6 mm");
+        assert!(boxes.iter().any(|b| b.shape == BodyShape::Cylinder(2) && (b.hi[2] - (BOARD_THICKNESS + 4.3)).abs() < 1e-9), "the button on top");
+
+        let s = board_with("SW2", "SW_Slide_1P2T_CK_OS102011MS2Q", &[(18.0, 20.0), (20.0, 20.0), (22.0, 20.0)]);
+        assert_eq!(part_kind("SW2", "SW_Slide_1P2T_CK_OS102011MS2Q"), Kind::Slide);
+        assert_eq!(part_boxes(&s).len(), 2, "the body and the knob");
+
+        // a 4-way DIP switch: two rows of four pins 7.62 mm apart, 2.54 mm pitch (its name also says "Slide")
+        let fp = "SW_DIP_SPSTx04_Slide_9.78x12.34mm_W7.62mm_P2.54mm";
+        assert_eq!(part_kind("SW3", fp), Kind::DipSwitch);
+        let pins: Vec<(f64, f64)> = (0..4).flat_map(|i| [(16.19, 16.19 + 2.54 * i as f64), (23.81, 16.19 + 2.54 * i as f64)]).collect();
+        let d = board_with("SW3", fp, &pins);
+        let boxes = part_boxes(&d);
+        assert_eq!(boxes.iter().filter(|b| b.color == MARK).count(), 4, "a lever for each switch");
     }
 
     #[test]
@@ -956,7 +1341,7 @@ mod tests {
         let boxes = part_boxes(&z);
         let can = boxes.iter().find(|x| x.hi[2] - BOARD_THICKNESS > 8.0).expect("the can");
         assert_eq!(can.shape, BodyShape::Cylinder(2));
-        assert!(can.hi[0] - can.lo[0] >= 12.0 - 1e-9, "wide enough for a 12 mm buzzer");
+        assert!(((can.hi[0] - can.lo[0]) - 12.0).abs() < 1e-9, "the 12 mm the name says");
         assert_eq!(boxes.iter().filter(|x| x.color == [8, 8, 10]).count(), 1, "the sound hole");
         // the height counts in the case check (9 mm)
         assert_eq!(part_total_height("BZ1", "Buzzer_D12_P7.6"), 9.0);

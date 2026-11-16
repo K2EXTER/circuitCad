@@ -1,0 +1,34 @@
+{
+  "name": "BUZZER_5V",
+  "category": "ブザー",
+  "description": "電子ブザー (発振回路入り、5V、直径 12 mm、足の間隔 7.6 mm)。+ と − に電圧をかけるだけで鳴る (自分で音の信号を作らなくてよい)。5V で約 30mA。+ の足が長い。シミュレーションでは、鳴っているときの電流だけを抵抗で表す (音・発振は出ない)",
+  "prefix": "BZ",
+  "glyph": "buzzer",
+  "footprint_name": "Buzzer_D12_P7.6",
+  "pins": [
+    { "number": "1", "name": "+", "side": "bottom" },
+    { "number": "2", "name": "-", "side": "bottom" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "1", "x": -3.8, "y": 0, "shape": "rect", "w": 1.8, "h": 1.8, "drill": 1.0 },
+      { "pin": "2", "x": 3.8, "y": 0, "shape": "circle", "w": 1.8, "drill": 1.0 }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "BUZZER_5V",
+    "text": ".subckt BUZZER_5V p n\n* the current of a sounding 5 V buzzer (about 30 mA at 5 V) as a resistor\nRb p n 167\n.ends BUZZER_5V",
+    "pins": ["1", "2"],
+    "limits": [
+      "鳴っているときの平均の電流 (5V で約 30mA) を、167Ω の抵抗で表しています。中の発振回路と音は出ません。電源の電流と、駆動するトランジスタの選び方を確かめるためのモデルです。",
+      "実物は、ある電圧 (3V 前後) より下では鳴らず、電流も少なくなります。逆向きにつなぐと鳴りません。このモデルは、どちらの向きでも抵抗として電流を流します。",
+      "電流と鳴り始める電圧は、品番で大きく違います (5V で 20〜40mA ほど)。使う品のデータシートで確かめてください。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "一般的な品の概算"
+    }
+  }
+}

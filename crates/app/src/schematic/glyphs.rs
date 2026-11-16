@@ -12,8 +12,8 @@ type P = (f32, f32);
 /// Which body a part gets: the `glyph` of the part when it names one, else a guess from the part
 /// name and pin names (so parts installed before the glyphs existed look right too).
 pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 19] = [
-        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal", "comparator", "motor",
+    const KNOWN: [&str; 20] = [
+        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal", "comparator", "motor", "buzzer",
     ];
     if let Some(g) = KNOWN.iter().find(|g| **g == sym.glyph) {
         return Some(g);
@@ -398,6 +398,28 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
             }
             Some(v)
         }
+        "buzzer" => {
+            // a half circle standing on its flat side (JIS C 0617 / IEC 60617), the leads up from the pins to the flat side,
+            // a small + beside the plus lead
+            let (plus, minus) = (pt(find(l, &["+"])?), pt(find(l, &["-"])?));
+            let base = 0.4f32;
+            let half = (plus.0.abs().max(minus.0.abs()) + 0.4).max(1.0);
+            let mut v = vec![L(-half, base, half, base), L(plus.0, plus.1, plus.0, base), L(minus.0, minus.1, minus.0, base)];
+            let n = 16;
+            let at = |j: usize| {
+                let a = std::f32::consts::PI * j as f32 / n as f32;
+                (-half * a.cos(), base - half * a.sin())
+            };
+            for j in 0..n {
+                let (p, q) = (at(j), at(j + 1));
+                v.push(L(p.0, p.1, q.0, q.1));
+            }
+            let s = if plus.0 <= minus.0 { -1.0 } else { 1.0 };
+            let (x, y) = (plus.0 + 0.45 * s, base + 0.5);
+            v.push(L(x - 0.25, y, x + 0.25, y));
+            v.push(L(x, y - 0.25, x, y + 0.25));
+            Some(v)
+        }
         "battery" => {
             let (plus, minus) = (pt(find(l, &["+"])?), pt(find(l, &["-"])?));
             let s = if plus.0 >= minus.0 { 1.0 } else { -1.0 };
@@ -577,6 +599,24 @@ mod tests {
         assert_eq!(l.pins.iter().map(|p| p.tip).max_by_key(|t| t.0).unwrap().0, 2);
         assert_eq!(l.pins.iter().map(|p| p.tip.1).max().unwrap(), 3);
         assert_eq!(lines.iter().filter(|s| (s.0 - s.2).abs() == 0.5 || (s.1 - s.3).abs() == 1.4).count(), 4);
+    }
+
+    /// The buzzer is a half circle on its flat side, both leads coming up from the pins below to the flat side.
+    #[test]
+    fn the_buzzer_is_a_dome_with_its_leads_below() {
+        let text = part_lib::EXAMPLES.iter().find(|(n, _)| *n == "BUZZER_5V").unwrap().1;
+        let d: part_lib::PartDef = serde_json::from_str(text).unwrap();
+        let sym = d.symbol();
+        assert_eq!(body_glyph(&sym), Some("buzzer"));
+        let l = sym.layout();
+        let lines: Vec<(f32, f32, f32, f32)> = body("buzzer", &l).unwrap().iter().filter_map(|s| if let L(a, b, c, d) = s { Some((*a, *b, *c, *d)) } else { None }).collect();
+        for p in &l.pins {
+            let t = (p.tip.0 as f32, p.tip.1 as f32);
+            assert!(t.1 > 0.4, "pin {} is below the flat side", p.number);
+            assert!(lines.iter().any(|s| (s.0, s.1) == t && s.0 == s.2 && s.3 == 0.4), "a straight lead up from pin {}", p.number);
+        }
+        // the dome rises above the flat side
+        assert!(lines.iter().any(|s| s.1.min(s.3) < -0.6), "the dome");
     }
 }
 

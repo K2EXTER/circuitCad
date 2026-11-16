@@ -39,6 +39,7 @@ pub const GLYPH_CHOICES: &[(&str, &str, &str)] = &[
     ("crystal", "水晶振動子", "ピン名 X1 X2 (2端子なら 1 2)"),
     ("ldr", "光センサ (LDR)", "ピン名 A B (光は L)"),
     ("motor", "モーター", "ピン名 + - (回転数は SPD)"),
+    ("buzzer", "ブザー", "ピン名 + - (ピンは下)"),
     ("capacitor", "コンデンサ (2ピン専用)", TWO_PIN_TIP),
     ("electrolytic", "電解コンデンサ (2ピン専用)", TWO_PIN_TIP),
     ("resistor", "抵抗 (2ピン専用)", TWO_PIN_TIP),

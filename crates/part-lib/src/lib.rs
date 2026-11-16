@@ -97,8 +97,8 @@ pub struct Issue {
 }
 
 /// Glyphs that draw a standard body (diode, transistor ...) inside the box; the pins keep their box positions.
-pub const BODY_GLYPHS: [&str; 31] = [
-    "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "ac3p", "crystal", "comparator", "regulator",
+pub const BODY_GLYPHS: [&str; 33] = [
+    "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "ac3p", "crystal", "comparator", "motor", "buzzer", "regulator",
     "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg",
     // "box" = the plain box with the pin names, whatever the name and pins suggest
     "box",
@@ -395,6 +395,7 @@ pub fn swap_for(name: &str, lib: &[PartDef]) -> Option<pcb_core::swap::SwapSpec>
 pub const EXAMPLES: &[(&str, &str)] = &[
     ("NE555_DIP-8", include_str!("../examples/NE555_DIP-8.part.json")),
     ("USB_DEMO_TH", include_str!("../examples/USB_DEMO_TH.part.json")),
+    ("DC_JACK_DEMO_TH", include_str!("../examples/DC_JACK_DEMO_TH.part.json")),
     ("TESTPOINT_PAD_1.5", include_str!("../examples/TESTPOINT_PAD_1.5.part.json")),
     ("TESTPOINT_THT_1.0", include_str!("../examples/TESTPOINT_THT_1.0.part.json")),
     ("AVR_ISP_2x3", include_str!("../examples/AVR_ISP_2x3.part.json")),
@@ -559,6 +560,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("BPW34", include_str!("../examples/BPW34.part.json")),
     ("PC817_DIP-4", include_str!("../examples/PC817_DIP-4.part.json")),
     ("FUSE_1A", include_str!("../examples/FUSE_1A.part.json")),
+    ("BUZZER_5V", include_str!("../examples/BUZZER_5V.part.json")),
     ("MOV_14V", include_str!("../examples/MOV_14V.part.json")),
     ("SS49E_TO-92", include_str!("../examples/SS49E_TO-92.part.json")),
     ("ACS712-05B_SOIC-8", include_str!("../examples/ACS712-05B_SOIC-8.part.json")),

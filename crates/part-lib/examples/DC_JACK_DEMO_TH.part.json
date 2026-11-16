@@ -1,0 +1,20 @@
+{
+  "name": "DC_JACK_DEMO_TH",
+  "category": "コネクタ",
+  "description": "DCジャック (外径 5.5 mm・中心 2.1 mm のプラグを差す電源の口) 風のスルーホール部品の【見本】。中心ピン (+)・外側 (−)・プラグを抜くと外側につながる切替ピン (SW) の3本で、ピンは平たい板なので長穴です。3Dでは、口が基板のいちばん近い縁の側に開きます (縁に置くと、プラグを外から差せる)。寸法は仕組みを見せるための例で、実際のジャックの寸法ではありません。実物に使うときは、データシートの推奨ランドパターンで「新規作成」からつくり直してください。シミュレーションモデルなし(基板設計用)",
+  "prefix": "J",
+  "footprint_name": "DCJack_DEMO_TH",
+  "pins": [
+    { "number": "1", "name": "+", "side": "right" },
+    { "number": "2", "name": "-", "side": "right" },
+    { "number": "3", "name": "SW", "side": "right" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "1", "x": 0, "y": 0, "shape": "oval", "w": 2.0, "h": 3.6, "drill": 1.0, "slot": 2.6, "slot_v": true },
+      { "pin": "2", "x": -6.0, "y": 0, "shape": "oval", "w": 2.0, "h": 3.6, "drill": 1.0, "slot": 2.6, "slot_v": true },
+      { "pin": "3", "x": -3.0, "y": 4.7, "shape": "oval", "w": 3.6, "h": 2.0, "drill": 1.0, "slot": 2.6 }
+    ]
+  }
+}
