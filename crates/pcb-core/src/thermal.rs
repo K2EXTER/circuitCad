@@ -28,8 +28,10 @@ const STEFAN: f64 = 5.670e-8;
 const RHO_C_CU: f64 = 8.96e6 * 0.385;
 const RHO_C_FR4: f64 = 1.85e6 * 1.1;
 const G: f64 = 9.81;
-/// Most cells per layer: the pitch grows on big boards to stay near this.
-const MAX_CELLS: f64 = 60_000.0;
+/// Most nodes over all the copper layers: the pitch grows from 0.5 mm on big boards and boards of many layers to stay near this (a
+/// 100 × 80 mm two-layer board keeps 0.5 mm; four layers of 100 × 76 mm get about 0.7 mm). Between 0.5 and 1 mm the answers move by
+/// about 1.5 %, and the time goes with the nodes.
+const MAX_NODES: f64 = 64_000.0;
 
 /// How the board stands in the air.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -276,7 +278,7 @@ pub(crate) fn model(board: &Board, copper_um: f64, cell_mm: f64) -> Result<Model
     if !(wmm > 0.0 && hmm > 0.0) {
         return Err("基板の外形に広さがありません".into());
     }
-    let d = if cell_mm > 0.0 { cell_mm } else { 0.5f64.max((wmm * hmm / MAX_CELLS).sqrt()) };
+    let d = if cell_mm > 0.0 { cell_mm } else { 0.5f64.max((wmm * hmm * board.copper_layers().len() as f64 / MAX_NODES).sqrt()) };
     let (w, h) = ((wmm / d).ceil() as usize, (hmm / d).ceil() as usize);
     let mut grid = Grid { x0: lo.x, y0: lo.y, d, w, h, inside: vec![false; w * h] };
     for c in 0..w * h {
@@ -436,9 +438,15 @@ pub(crate) struct Csr {
     g: Vec<f64>,
     /// The sum of the conductances of each row (the diagonal without the air).
     pub sum: Vec<f64>,
-    /// The group of each node for the two-level preconditioner, and the number of groups (`Model::groups`); empty = Jacobi alone.
-    pub agg: Vec<u32>,
-    pub groups: usize,
+    /// Where each node is, for the multigrid preconditioner (`Place`); empty = Jacobi alone.
+    pub place: Vec<Place>,
+}
+
+/// Where a node is: a cell of a layer (column, row), or a part's junction (its own, never merged with another).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum Place {
+    Cell { layer: u8, i: u32, j: u32 },
+    Junction(u32),
 }
 
 impl Csr {
@@ -463,106 +471,304 @@ impl Csr {
                 sum[x] += w;
             }
         }
-        Csr { start: count, col, g, sum, agg: vec![], groups: 0 }
+        Csr { start: count, col, g, sum, place: vec![] }
     }
 
     /// `out = diag·v − offdiag·v`.
     fn apply(&self, diag: &[f64], v: &[f64], out: &mut [f64]) {
-        for i in 0..diag.len() {
-            let mut s = diag[i] * v[i];
-            for k in self.start[i]..self.start[i + 1] {
-                s -= self.g[k] * v[self.col[k] as usize];
-            }
-            out[i] = s;
-        }
+        spmv(&self.start, &self.col, &self.g, diag, v, out);
     }
 }
 
-/// The two-level preconditioner: Jacobi on every node, plus a correction on groups of nodes (blocks of cells of a layer, and each
-/// junction on its own) solved exactly. Jacobi only damps the error from cell to cell; the error that spans the board (heat that has to
-/// spread through the copper to the air far away) is what makes plain Jacobi CG need hundreds of steps, and the groups take it out in
-/// one: `z = D⁻¹ r + P (Pᵀ A P)⁻¹ Pᵀ r`, with P the piecewise-constant spreading of a group's value to its nodes. Symmetric and positive
-/// definite as A is, so CG still applies.
-struct TwoLevel {
-    inv: Vec<f64>,
-    agg: Vec<u32>,
-    groups: usize,
-    /// The coarse matrix `Pᵀ A P` factored as L·Lᵀ (dense, row by row).
+/// `out = diag·v − offdiag·v` for a matrix in compressed rows.
+fn spmv(start: &[usize], col: &[u32], g: &[f64], diag: &[f64], v: &[f64], out: &mut [f64]) {
+    for i in 0..diag.len() {
+        let mut s = diag[i] * v[i];
+        for k in start[i]..start[i + 1] {
+            s -= g[k] * v[col[k] as usize];
+        }
+        out[i] = s;
+    }
+}
+
+/// One level of the multigrid: its matrix (`diag` and the conductances between nodes, rows compressed) and how its nodes merge into the
+/// next level's (`up`).
+struct Level {
+    diag: Vec<f64>,
+    start: Vec<usize>,
+    col: Vec<u32>,
+    g: Vec<f64>,
+    /// The coarser node each node of this level merges into (empty on the coarsest).
+    up: Vec<u32>,
+    /// On a coarser level: the conductances inside each merged node (taken from the sum of its parts' diagonals).
+    inner: Vec<f64>,
+}
+
+impl Level {
+    fn n(&self) -> usize {
+        self.diag.len()
+    }
+
+    /// `out = A·v`.
+    fn apply(&self, v: &[f64], out: &mut [f64]) {
+        spmv(&self.start, &self.col, &self.g, &self.diag, v, out);
+    }
+}
+
+/// The multigrid preconditioner: the cells of each layer merged 2 × 2 into coarser cells, level after level (a part's junction stays a
+/// node of its own), until a few hundred nodes are left, which are solved directly (Cholesky). One V-cycle per CG step: damped Jacobi
+/// sweeps smooth the error from cell to cell on each level, and the coarser levels take out what spreads over the board (heat that has
+/// to cross the copper to reach the air far away), which plain Jacobi needs hundreds of steps for. The coarse matrices are `Pᵀ A P`
+/// with P the piecewise-constant spreading of a merged node to its parts; with as many sweeps before as after, the V-cycle is symmetric
+/// and positive definite, so CG still applies, and the steps needed hardly grow with the board.
+struct Multigrid {
+    levels: Vec<Level>,
+    /// The coarsest matrix factored (L, row by row).
     chol: Vec<f64>,
 }
 
-impl TwoLevel {
-    fn new(a: &Csr, diag: &[f64]) -> Option<TwoLevel> {
-        let nc = a.groups;
-        if nc == 0 || a.agg.len() != diag.len() {
+/// Damping and number of the Jacobi sweeps before and after the coarser levels, and how much of the coarse correction is taken (more
+/// than all of it: a merged node spreads its value evenly, which falls short of a smooth error). Chosen on three boards (thermal_bench,
+/// thermal_bench_board): one sweep and 1.6 were as quick as any other choice tried, within the ±20 % the timings move from run to run.
+const MG_OMEGA: f64 = 0.7;
+const MG_SWEEPS: usize = 1;
+const MG_OVER: f64 = 1.6;
+/// The coarsest level is solved directly once it has at most this many nodes (its factor is redone on every refresh).
+const MG_COARSEST: usize = 200;
+/// The multigrid is used from this many nodes (about 100 × 80 mm of one layer at 1 mm, or 40 × 50 mm at 0.5 mm).
+const MG_FROM: usize = 16_000;
+
+/// The dense Cholesky factor (L, row by row) of a level's matrix; `None` if it is not positive definite.
+fn factor(level: &Level) -> Option<Vec<f64>> {
+    let nc = level.n();
+    let mut c = vec![0.0; nc * nc];
+    for i in 0..nc {
+        c[i * nc + i] += level.diag[i];
+        for k in level.start[i]..level.start[i + 1] {
+            c[i * nc + level.col[k] as usize] -= level.g[k];
+        }
+    }
+    for j in 0..nc {
+        let mut d = c[j * nc + j];
+        for k in 0..j {
+            d -= c[j * nc + k] * c[j * nc + k];
+        }
+        if !(d > 0.0) {
             return None;
         }
-        let mut c = vec![0.0; nc * nc];
-        for i in 0..diag.len() {
-            let gi = a.agg[i] as usize;
-            c[gi * nc + gi] += diag[i];
-            for k in a.start[i]..a.start[i + 1] {
-                let gj = a.agg[a.col[k] as usize] as usize;
-                c[gi * nc + gj] -= a.g[k];
-            }
-        }
-        // Cholesky in place (lower triangle)
-        for j in 0..nc {
-            let mut d = c[j * nc + j];
+        let d = d.sqrt();
+        c[j * nc + j] = d;
+        for i in j + 1..nc {
+            let mut v = c[i * nc + j];
             for k in 0..j {
-                d -= c[j * nc + k] * c[j * nc + k];
+                v -= c[i * nc + k] * c[j * nc + k];
             }
-            if !(d > 0.0) {
-                return None;
-            }
-            let d = d.sqrt();
-            c[j * nc + j] = d;
-            for i in j + 1..nc {
-                let mut v = c[i * nc + j];
-                for k in 0..j {
-                    v -= c[i * nc + k] * c[j * nc + k];
-                }
-                c[i * nc + j] = v / d;
-            }
+            c[i * nc + j] = v / d;
         }
-        Some(TwoLevel { inv: diag.iter().map(|d| 1.0 / d).collect(), agg: a.agg.clone(), groups: nc, chol: c })
+    }
+    Some(c)
+}
+
+impl Multigrid {
+    fn new(a: &Csr, diag: &[f64]) -> Option<Multigrid> {
+        // a small grid: Jacobi alone is quick, and building the levels would cost more than it saves
+        if a.place.len() != diag.len() || diag.len() < MG_FROM {
+            return None;
+        }
+        let mut place = a.place.clone();
+        let mut level = Level { diag: diag.to_vec(), start: a.start.clone(), col: a.col.clone(), g: a.g.clone(), up: vec![], inner: vec![] };
+        let mut levels = vec![];
+        while level.n() > MG_COARSEST {
+            // merge: cells 2 × 2 within a layer, junctions alone
+            let mut index: std::collections::HashMap<Place, u32> = std::collections::HashMap::new();
+            let mut coarse_place = vec![];
+            let up: Vec<u32> = place
+                .iter()
+                .map(|p| {
+                    let key = match *p {
+                        Place::Cell { layer, i, j } => Place::Cell { layer, i: i / 2, j: j / 2 },
+                        junction => junction,
+                    };
+                    *index.entry(key).or_insert_with(|| {
+                        coarse_place.push(key);
+                        (coarse_place.len() - 1) as u32
+                    })
+                })
+                .collect();
+            let nc = coarse_place.len();
+            if nc as f64 > 0.9 * level.n() as f64 {
+                break; // nothing left to merge (all junctions)
+            }
+            // Pᵀ A P: the diagonal takes the node's own and loses the conductances inside a merged node
+            let mut cdiag = vec![0.0; nc];
+            let mut inner = vec![0.0; nc];
+            let mut rows: Vec<std::collections::HashMap<u32, f64>> = vec![std::collections::HashMap::new(); nc];
+            for i in 0..level.n() {
+                let ci = up[i];
+                cdiag[ci as usize] += level.diag[i];
+                for k in level.start[i]..level.start[i + 1] {
+                    let cj = up[level.col[k] as usize];
+                    if cj == ci {
+                        cdiag[ci as usize] -= level.g[k];
+                        inner[ci as usize] += level.g[k];
+                    } else {
+                        *rows[ci as usize].entry(cj).or_insert(0.0) += level.g[k];
+                    }
+                }
+            }
+            let mut start = vec![0usize; nc + 1];
+            let (mut col, mut g) = (vec![], vec![]);
+            for (r, row) in rows.iter().enumerate() {
+                let mut entries: Vec<(&u32, &f64)> = row.iter().collect();
+                entries.sort_by_key(|e| *e.0);
+                for (c, v) in entries {
+                    col.push(*c);
+                    g.push(*v);
+                }
+                start[r + 1] = col.len();
+            }
+            level.up = up;
+            levels.push(level);
+            level = Level { diag: cdiag, start, col, g, up: vec![], inner };
+            place = coarse_place;
+        }
+        let chol = factor(&level)?;
+        levels.push(level);
+        Some(Multigrid { levels, chol })
     }
 
-    fn apply(&self, r: &[f64], z: &mut [f64]) {
-        let nc = self.groups;
-        let mut y = vec![0.0; nc];
-        for (i, v) in r.iter().enumerate() {
-            y[self.agg[i] as usize] += v;
+    /// The same network with another diagonal (the air's h and the heat capacity over the step change only the diagonal): each coarser
+    /// diagonal is the sum of its parts' less what lies inside, and the coarsest is factored again. `false` if it cannot be.
+    fn refresh(&mut self, diag: &[f64]) -> bool {
+        if diag.len() != self.levels[0].n() {
+            return false;
         }
-        // L y' = y, Lᵀ x = y'
-        for i in 0..nc {
-            let mut v = y[i];
-            for k in 0..i {
-                v -= self.chol[i * nc + k] * y[k];
+        self.levels[0].diag.copy_from_slice(diag);
+        for l in 1..self.levels.len() {
+            let (fine, coarse) = self.levels.split_at_mut(l);
+            let (f, c) = (&fine[l - 1], &mut coarse[0]);
+            for (ci, inner) in c.diag.iter_mut().zip(&c.inner) {
+                *ci = -inner;
             }
-            y[i] = v / self.chol[i * nc + i];
-        }
-        for i in (0..nc).rev() {
-            let mut v = y[i];
-            for k in i + 1..nc {
-                v -= self.chol[k * nc + i] * y[k];
+            for i in 0..f.n() {
+                c.diag[f.up[i] as usize] += f.diag[i];
             }
-            y[i] = v / self.chol[i * nc + i];
         }
-        for (i, zi) in z.iter_mut().enumerate() {
-            *zi = r[i] * self.inv[i] + y[self.agg[i] as usize];
+        match factor(self.levels.last().unwrap()) {
+            Some(c) => {
+                self.chol = c;
+                true
+            }
+            None => false,
         }
+    }
+
+    /// One V-cycle from zero on level `l` for the right-hand side `r`.
+    fn cycle(&self, l: usize, r: &[f64]) -> Vec<f64> {
+        let lv = &self.levels[l];
+        let n = lv.n();
+        if l + 1 == self.levels.len() {
+            // L y = r, Lᵀ x = y
+            let mut y = r.to_vec();
+            for i in 0..n {
+                let mut v = y[i];
+                for k in 0..i {
+                    v -= self.chol[i * n + k] * y[k];
+                }
+                y[i] = v / self.chol[i * n + i];
+            }
+            for i in (0..n).rev() {
+                let mut v = y[i];
+                for k in i + 1..n {
+                    v -= self.chol[k * n + i] * y[k];
+                }
+                y[i] = v / self.chol[i * n + i];
+            }
+            return y;
+        }
+        let mut z = vec![0.0; n];
+        let mut az = vec![0.0; n];
+        let sweep = |z: &mut Vec<f64>, az: &mut Vec<f64>| {
+            lv.apply(z, az);
+            for i in 0..n {
+                z[i] += MG_OMEGA * (r[i] - az[i]) / lv.diag[i];
+            }
+        };
+        for _ in 0..MG_SWEEPS {
+            sweep(&mut z, &mut az);
+        }
+        lv.apply(&z, &mut az);
+        let nc = self.levels[l + 1].n();
+        let mut rc = vec![0.0; nc];
+        for i in 0..n {
+            rc[lv.up[i] as usize] += r[i] - az[i];
+        }
+        let zc = self.cycle(l + 1, &rc);
+        for i in 0..n {
+            z[i] += MG_OVER * zc[lv.up[i] as usize];
+        }
+        for _ in 0..MG_SWEEPS {
+            sweep(&mut z, &mut az);
+        }
+        z
     }
 }
 
-/// `A x = b` with A = diag − off-diagonal conductances, by preconditioned conjugate gradients from `x` (the two-level preconditioner
-/// when the matrix has its groups, else Jacobi), until the residual is `tol` of `b`. Returns the iterations.
-pub(crate) fn cg(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> usize {
+/// Solves the same network again and again with other diagonals (the rounds of h, the steps of time), keeping the multigrid's levels
+/// and refreshing only their diagonals.
+pub(crate) struct Solver<'a> {
+    a: &'a Csr,
+    mg: Option<Multigrid>,
+}
+
+impl<'a> Solver<'a> {
+    pub fn new(a: &'a Csr) -> Self {
+        Solver { a, mg: None }
+    }
+
+    /// Makes the preconditioner fit `diag` (built the first time, refreshed after), and returns it.
+    fn ready(&mut self, diag: &[f64]) -> Option<&Multigrid> {
+        let fresh = match &mut self.mg {
+            Some(m) => m.refresh(diag),
+            None => false,
+        };
+        if !fresh {
+            self.mg = Multigrid::new(self.a, diag);
+        }
+        self.mg.as_ref()
+    }
+
+    /// `solve` trying Jacobi first: a step of time short against the network's own (the heat capacity over the step outweighs the
+    /// conductances) is solved by Jacobi in a few steps, cheaper than building the levels' diagonals and cycling through them; only if
+    /// that does not settle within `JACOBI_FIRST` steps does the multigrid take over from where it got.
+    pub fn solve_easy_first(&mut self, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> usize {
+        const JACOBI_FIRST: usize = 15;
+        let its = cg_upto(self.a, diag, b, x, tol, None, JACOBI_FIRST);
+        if its < JACOBI_FIRST {
+            return its;
+        }
+        its + self.solve(diag, b, x, tol)
+    }
+
+    /// `A x = b` from `x` until the residual is `tol` of `b`. Returns the iterations.
+    pub fn solve(&mut self, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> usize {
+        let a = self.a;
+        let mg = self.ready(diag);
+        cg_with(a, diag, b, x, tol, mg)
+    }
+}
+
+
+fn cg_with(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64, mg: Option<&Multigrid>) -> usize {
+    cg_upto(a, diag, b, x, tol, mg, 20_000)
+}
+
+/// `cg_with` stopping after `max_iter` steps (returns `max_iter` then, the answer as far as it got in `x`).
+fn cg_upto(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64, mg: Option<&Multigrid>, max_iter: usize) -> usize {
     let n = b.len();
-    let two = TwoLevel::new(a, diag);
     let inv: Vec<f64> = diag.iter().map(|d| 1.0 / d).collect();
-    let precond = |r: &[f64], z: &mut [f64]| match &two {
-        Some(t) => t.apply(r, z),
+    let precond = |r: &[f64], z: &mut Vec<f64>| match mg {
+        Some(m) => *z = m.cycle(0, r),
         None => {
             for i in 0..r.len() {
                 z[i] = r[i] * inv[i];
@@ -580,7 +786,7 @@ pub(crate) fn cg(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> u
     let mut rz: f64 = (0..n).map(|i| r[i] * z[i]).sum();
     let limit = (tol * b.iter().map(|v| v * v).sum::<f64>().sqrt()).powi(2).max(1e-300);
     let mut ap = vec![0.0; n];
-    for it in 0..20_000 {
+    for it in 0..max_iter {
         a.apply(diag, &p, &mut ap);
         let pap: f64 = p.iter().zip(&ap).map(|(a, b)| a * b).sum();
         if !(pap > 0.0) {
@@ -604,48 +810,24 @@ pub(crate) fn cg(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> u
             p[i] = z[i] + beta * p[i];
         }
     }
-    20_000
+    max_iter
 }
 
 impl Model {
-    /// The groups of the two-level preconditioner for this model's nodes and `extra` junctions after them: square blocks of cells of each
-    /// layer, sized for about 250 groups in all, and each junction a group of its own.
-    fn groups(&self, extra: usize) -> (Vec<u32>, usize) {
-        let per_layer = (self.nodes() / self.layers.len().max(1)).max(1) as f64;
-        // a small grid: Jacobi alone is quick, and the coarse factorization would cost more than it saves
-        if per_layer < 8000.0 {
-            return (vec![], 0);
-        }
-        let target = (250.0 / self.layers.len() as f64).max(1.0);
-        let bs = ((per_layer / target).sqrt().ceil() as usize).max(1);
-        let (bw, bh) = (self.grid.w.div_ceil(bs), self.grid.h.div_ceil(bs));
-        // only the blocks that hold a node get a number
-        let mut id = vec![u32::MAX; self.layers.len() * bw * bh];
-        let mut agg = Vec::with_capacity(self.nodes() + extra);
-        let mut next = 0u32;
-        for &(l, c) in &self.cell_of {
-            let (i, j) = (c % self.grid.w, c / self.grid.w);
-            let b = l * bw * bh + (j / bs) * bw + i / bs;
-            if id[b] == u32::MAX {
-                id[b] = next;
-                next += 1;
-            }
-            agg.push(id[b]);
-        }
-        for _ in 0..extra {
-            agg.push(next);
-            next += 1;
-        }
-        (agg, next as usize)
+    /// Where each node is (for the multigrid), the model's nodes then `extra` junctions.
+    fn places(&self, extra: usize) -> Vec<Place> {
+        let mut out: Vec<Place> = self.cell_of.iter().map(|&(l, c)| Place::Cell { layer: l as u8, i: (c % self.grid.w) as u32, j: (c / self.grid.w) as u32 }).collect();
+        out.extend((0..extra).map(|e| Place::Junction(e as u32)));
+        out
     }
 }
 
-/// The matrix of a model with its junctions, its groups set for the two-level preconditioner.
+/// The matrix of a model with its junctions, knowing where its nodes are (for the multigrid).
 fn system(m: &Model, extra: &[(usize, usize, f64)], junctions: usize) -> Csr {
     let n = m.nodes() + junctions;
     let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(extra).copied().collect();
     let mut csr = Csr::new(n, &edges);
-    (csr.agg, csr.groups) = m.groups(junctions);
+    csr.place = m.places(junctions);
     csr
 }
 
@@ -676,6 +858,7 @@ fn air_conductance(m: &Model, spec: &ThermalSpec, rise: &[f64], air: &mut [f64])
 fn solve_rise(m: &Model, spec: &ThermalSpec, extra: &[(usize, usize, f64)], extra_air: &[f64], q: &[f64], rise: &mut Vec<f64>) -> (Vec<f64>, usize) {
     let n = m.nodes() + extra_air.len();
     let csr = system(m, extra, extra_air.len());
+    let mut solver = Solver::new(&csr);
     if rise.len() != n {
         *rise = vec![10.0; n];
     }
@@ -694,7 +877,7 @@ fn solve_rise(m: &Model, spec: &ThermalSpec, extra: &[(usize, usize, f64)], extr
             diag[m.nodes() + e] += g;
         }
         let before = rise.clone();
-        cg(&csr, &diag, q, rise, if settled { 1e-7 } else { 1e-3 });
+        solver.solve(&diag, q, rise, if settled { 1e-6 } else { 1e-3 });
         if settled {
             break;
         }
@@ -913,12 +1096,14 @@ pub fn thermal_matrix(board: &Board, sources: &[HeatSource], copper_um: f64, spe
     for (e, g) in extra_air.iter().enumerate() {
         diag[n0 + e] += g;
     }
+    // one hierarchy for every source: the network and its diagonal are the same, only the right-hand side moves
+    let mg = Multigrid::new(&csr, &diag);
     let ks: Vec<usize> = (0..sources.len()).collect();
     let cols: Vec<Vec<f64>> = crate::par::par_map(&ks, |&k| {
         let mut q = vec![0.0; n];
         q[n0 + k] = 1.0;
         let mut x = vec![0.0; n];
-        cg(&csr, &diag, &q, &mut x, 1e-8);
+        cg_with(&csr, &diag, &q, &mut x, 1e-6, mg.as_ref());
         (0..sources.len()).map(|i| x[n0 + i]).collect()
     });
     let r = (0..sources.len()).map(|i| (0..sources.len()).map(|j| cols[j][i]).collect()).collect();
@@ -959,6 +1144,7 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], traces: &[TraceH
     let n0 = m.nodes();
     let n = n0 + sources.len();
     let csr = system(&m, &extra, sources.len());
+    let mut solver = Solver::new(&csr);
     let mut cap = m.cap.clone();
     cap.extend(sources.iter().map(|s| s.cth.max(1e-6)));
     // the wiring's own heat, held from t = 0; the parts' power is set step by step
@@ -1030,7 +1216,7 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], traces: &[TraceH
             diag[k] += cap[k] / step;
             b[k] = q[k] + cap[k] / step * rise[k];
         }
-        cg(&csr, &diag, &b, &mut rise, 1e-5);
+        solver.solve_easy_first(&diag, &b, &mut rise, 1e-5);
         t = end;
         times.push(t);
         for (e, p) in parts.iter_mut().enumerate() {
@@ -1437,6 +1623,82 @@ mod datasheet {
             let (r, map) = thermal_matrix(&b, &src, 35.0, &spec).unwrap();
             drop(hot_pairs_with(&b, &src, &r, &map, 35.0, &spec).unwrap());
         });
+    }
+
+    /// The steps on a real board with many parts: `THERMAL_BENCH_BOARD=path.pcbjson|.ccproj` (else the sample `mixed_signal`),
+    /// every part a heat source of a made-up power (50 mW, 300 mW with more than 4 pads):
+    /// `cargo test --release -p pcb-core thermal_bench_board -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn thermal_bench_board() {
+        let path = std::env::var("THERMAL_BENCH_BOARD").unwrap_or_else(|_| format!("{}/../../docs/examples/mixed_signal.ccproj", env!("CARGO_MANIFEST_DIR")));
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let bv = if v.get("pads").is_some() { v } else if let Some(d) = v.get("designs") { d[0]["board"].clone() } else { v["board"].clone() };
+        let b: Board = serde_json::from_value(bv).unwrap();
+        let mut src: Vec<HeatSource> = b
+            .parts
+            .iter()
+            .map(|p| {
+                let pads = b.pads.iter().filter(|x| x.refdes == p.refdes).count();
+                HeatSource::new(&p.refdes, if pads > 4 { 0.3 } else { 0.05 }, 120.0, 10.0, 0.0)
+            })
+            .collect();
+        src.sort_by(|a, c| c.power.total_cmp(&a.power));
+        let hot: Vec<HeatSource> = src.iter().take(24).cloned().collect();
+        let spec = ThermalSpec::default();
+        eprintln!("BENCH board {path}: {} parts, {} pads, {} tracks, {} pours, {} layers", b.parts.len(), b.pads.len(), b.tracks.len(), b.zones.len(), b.copper_layers().len());
+        let time = |what: &str, f: &mut dyn FnMut()| {
+            let t0 = std::time::Instant::now();
+            f();
+            eprintln!("BENCH {what}: {:.0} ms", t0.elapsed().as_secs_f64() * 1e3);
+        };
+        let m = model(&b, 35.0, 0.0).unwrap();
+        eprintln!("BENCH grid {} × {} at {:.2} mm, {} nodes", m.grid.w, m.grid.h, m.grid.d, m.nodes());
+        // the steps of one tight solve: 1 W into the hottest junction, the air's h of a 10 K rise
+        {
+            let (extra, extra_air, _) = junctions(&b, &m, &hot);
+            let csr = system(&m, &extra, hot.len());
+            let mut air = vec![0.0; m.nodes() + hot.len()];
+            air_conductance(&m, &spec, &vec![10.0; m.nodes()], &mut air);
+            let mut diag = csr.sum.clone();
+            for k in 0..diag.len() {
+                diag[k] += if k < m.nodes() { air[k] } else { extra_air[k - m.nodes()] };
+            }
+            let mut q = vec![0.0; diag.len()];
+            q[m.nodes()] = 1.0;
+            let t0 = std::time::Instant::now();
+            let mg = Multigrid::new(&csr, &diag);
+            let setup = t0.elapsed();
+            let mut x = vec![0.0; diag.len()];
+            let its = cg_with(&csr, &diag, &q, &mut x, 1e-6, mg.as_ref());
+            eprintln!("BENCH one solve: multigrid {} levels, setup {:.0} ms, {its} steps, {:.0} ms", mg.as_ref().map_or(0, |m| m.levels.len()), setup.as_secs_f64() * 1e3, t0.elapsed().as_secs_f64() * 1e3);
+            let t1 = std::time::Instant::now();
+            let mut x = vec![0.0; diag.len()];
+            let its = cg_with(&csr, &diag, &q, &mut x, 1e-6, None);
+            eprintln!("BENCH one solve: Jacobi {its} steps, {:.0} ms", t1.elapsed().as_secs_f64() * 1e3);
+        }
+        // what the automatic pitch gives against 0.5 mm: each part's rise
+        if m.grid.d > 0.51 {
+            let auto = thermal_map(&b, &src, 35.0, &spec).unwrap();
+            let fine = thermal_map(&b, &src, 35.0, &ThermalSpec { cell_mm: 0.5, ..spec }).unwrap();
+            let (mut worst, mut at) = (0.0f64, String::new());
+            for (a, f) in auto.parts.iter().zip(&fine.parts) {
+                let (ra, rf) = (a.junction - 25.0, f.junction - 25.0);
+                if (ra - rf).abs() > worst {
+                    worst = (ra - rf).abs();
+                    at = format!("{} {:.1} K at {:.2} mm, {:.1} K at 0.5 mm", a.refdes, ra, m.grid.d, rf);
+                }
+            }
+            eprintln!("BENCH the pitch: largest change of a part's rise {worst:.2} K ({at})");
+        }
+        time("model (pours filled)", &mut || drop(model(&b, 35.0, 0.0).unwrap()));
+        time(&format!("map, all {} parts", src.len()), &mut || drop(thermal_map(&b, &src, 35.0, &spec).unwrap()));
+        time("matrix, 24 hottest", &mut || drop(thermal_matrix(&b, &hot, 35.0, &spec).unwrap()));
+        time("window: map of all and pairs of the 24", &mut || {
+            drop(thermal_map(&b, &src, 35.0, &spec).unwrap());
+            drop(hot_pairs(&b, &hot, 35.0, &spec).unwrap());
+        });
+        time("warm-up 600 s, all parts", &mut || drop(thermal_transient(&b, &src, &[], 35.0, &spec, 600.0, 8).unwrap()));
     }
 
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the

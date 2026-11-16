@@ -42,7 +42,7 @@ impl SchEditor {
         };
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
         let ghost = self.ac.as_ref().and_then(|v| v.ghost.clone());
-        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: false, psrr_run: false, notes: vec![] });
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: false, psrr_run: false, cmrr_run: false, notes: vec![] });
         self.wave_mode = WaveMode::Ac;
     }
 
@@ -52,9 +52,9 @@ impl SchEditor {
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
-        let AcView { outcome, selected, plot: st, ghost, psrr_run, pz_run, loop_run, notes, .. } = view;
+        let AcView { outcome, selected, plot: st, ghost, psrr_run, cmrr_run, pz_run, loop_run, notes, .. } = view;
         ui.horizontal(|ui| {
-            crate::widgets::heading_inline(ui, if *psrr_run { "電源除去比 (電源の揺れが届く割合)" } else if *loop_run { "ループゲイン (帰還を1周したゲイン)" } else if *pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if *psrr_run { i18n::tr("選んだ電源にだけ 1 V の揺れを入れたとき、各点に届く揺れの大きさです。-60 dB なら 1 V の揺れが 1 mV に (除去比 60 dB)。周波数が高い所で悪くなるのが普通で、そこはコンデンサで吸います") } else if *pz_run { i18n::tr("H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります") } else if *loop_run { i18n::tr("0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)") } else { i18n::tr("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります") });
+            crate::widgets::heading_inline(ui, if *cmrr_run { "同相除去比 (CMRR)" } else if *psrr_run { "電源除去比 (電源の揺れが届く割合)" } else if *loop_run { "ループゲイン (帰還を1周したゲイン)" } else if *pz_run { "伝達関数と、極・零から作った当てはめ" } else { "AC解析 (ボード線図)" }).on_hover_text(if *cmrr_run { i18n::tr("CMRR = 差動ゲイン Ad ÷ 同相ゲイン Acm。2 つの入力の差 (欲しい信号) を、2 つに共通の揺れ (雑音・電源のハム) より何 dB 大きく増幅するかです。大きいほどよく、抵抗の組の合い方で決まります") } else if *psrr_run { i18n::tr("選んだ電源にだけ 1 V の揺れを入れたとき、各点に届く揺れの大きさです。-60 dB なら 1 V の揺れが 1 mV に (除去比 60 dB)。周波数が高い所で悪くなるのが普通で、そこはコンデンサで吸います") } else if *pz_run { i18n::tr("H = 出力 ÷ 入力。「当てはめ」が回路の応答にぴったり重なっていれば、見つかった極と零で、この応答を説明できています。左の「解析」タブの「極と零」に、極と零の周波数の一覧があります") } else if *loop_run { i18n::tr("0 dB = 1 倍。0 dB を横切る所の位相が -180° まで余裕があれば安定です (位相余裕 45° 以上が目安)。T が本当のループゲインで、Tv・Ti は電圧だけ・電流だけを入れたときの値 (T とずれる所は、切った所の両側のインピーダンスが違う所です)") } else { i18n::tr("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります") });
             if crate::widgets::close_x(ui, "波形") {
                 close = true;
             }
@@ -127,7 +127,7 @@ impl SchEditor {
                         // a ripple share has no cutoff to speak of
                         // (nor a result the note above calls unusable)
                         let unusable = notes.iter().any(|n| n.starts_with('▲'));
-                        if !corner.is_empty() && !*psrr_run && !unusable {
+                        if !corner.is_empty() && !*psrr_run && !*cmrr_run && !unusable {
                             egui::Grid::new("ac_corner_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                 ui.label("");
                                 for (name, _) in &corner {
@@ -147,7 +147,7 @@ impl SchEditor {
                             });
                         }
                         // a ripple share or a fitted transfer function has no loop to be stable or not
-                        if !*psrr_run && !*pz_run {
+                        if !*psrr_run && !*cmrr_run && !*pz_run {
                         egui::CollapsingHeader::new(i18n::tr("安定性の余裕 (位相余裕・ゲイン余裕)")).show(ui, |ui| {
                             let margins: Vec<(String, sim_core::Margins)> = order
                                 .iter()

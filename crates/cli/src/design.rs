@@ -519,6 +519,65 @@ impl Session {
             "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
     }
 
+    /// `cmrr NET F0 F1 [plus=V3] [minus=V4] [ppd=10] [tol_r=1] [runs=300] [seed=1]`: common-mode rejection at NET, and its spread
+    /// when the resistors are drawn inside tol_r (%) at F0.
+    pub fn cmrr(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        if pos.len() < 3 {
+            return Err("cmrr NET FSTART FSTOP [plus=V3] [minus=V4] [ppd=10] [tol_r=1] [runs=300] [seed=1]   (plus/minus: the voltage sources on the + and - inputs, else the first two with an AC value; tol_r=0 leaves out the spread)".into());
+        }
+        let num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("'{s}' is not a positive frequency (write 10, 1k, 100k ...)"));
+        let (f0, f1) = (num(&pos[1])?, num(&pos[2])?);
+        let ppd: usize = opt(&kv, "ppd").and_then(|s| s.parse().ok()).unwrap_or(10);
+        let tol_r: f64 = match opt(&kv, "tol_r") {
+            Some(s) => s.trim_end_matches('%').parse::<f64>().ok().filter(|t| (0.0..100.0).contains(t)).ok_or_else(|| format!("tol_r={s}: percent, 0 to below 100"))?,
+            None => 1.0,
+        };
+        let runs: usize = match opt(&kv, "runs") {
+            Some(s) => s.parse().ok().filter(|v| (1..=20_000).contains(v)).ok_or_else(|| format!("runs={s}: 1 to 20000"))?,
+            None => 300,
+        };
+        let seed: u64 = opt(&kv, "seed").and_then(|s| s.parse().ok()).unwrap_or(1);
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let found = sim_core::cmrr_input_sources(&c);
+        let pick = |key: &str, k: usize| opt(&kv, key).map(|s| s.trim().to_string()).or_else(|| found.get(k).cloned()).ok_or_else(|| format!("cmrr: no voltage source for the {} input (name it with {key}=)", if k == 0 { "+" } else { "-" }));
+        let (plus, minus) = (pick("plus", 0)?, pick("minus", 1)?);
+        let net = pos[0].trim().to_string();
+        let s = sim_core::CmrrSettings { plus: plus.clone(), minus: minus.clone(), output: net.clone(), ac: sim_core::AcSettings { fstart: f0, fstop: f1, sweep: sim_core::AcSweep::Decade(ppd) } };
+        let r = sim_core::cmrr(&c, &s).map_err(|e| format!("{e} (sources: {})", found.join(", ")))?;
+        let sum = r.summary().ok_or("cmrr: no frequency points")?;
+        let (ad, acm) = (r.diff.db(), r.common.db());
+        let mut decades = vec![];
+        let mut f = f0;
+        while f <= f1 * 1.0001 {
+            let i = r.freq.iter().enumerate().min_by(|a, b| (a.1 / f).ln().abs().total_cmp(&(b.1 / f).ln().abs())).map(|(i, _)| i).unwrap_or(0);
+            decades.push(json!({"hz": round6(r.freq[i]), "cmrr_db": round6(r.cmrr_db[i]), "ad_db": round6(ad[i]), "acm_db": round6(acm[i])}));
+            f *= 10.0;
+        }
+        let spread = if tol_r > 0.0 {
+            let sp = sim_core::cmrr_spread(&c, &s, f0, tol_r / 100.0, runs, seed).map_err(|e| e.to_string())?;
+            let alone: Vec<Value> = sp.alone.iter().map(|(n, v)| json!({"part": n, "cmrr_db": round6(*v)})).collect();
+            Some(json!({"hz": f0, "tol_r_percent": tol_r, "runs": runs, "solved": sp.values.len(),
+                "min_db": sp.quantile(0.0).map(round6), "p5_db": sp.quantile(0.05).map(round6), "median_db": sp.quantile(0.5).map(round6),
+                "one_resistor_high": alone}))
+        } else {
+            None
+        };
+        let mut warnings: Vec<String> = r.warnings.clone();
+        if c.elements.iter().any(|e| e.name().contains('.')) {
+            warnings.push("the bundled op amp models have no CMRR of their own: with matched resistors the answer has no limit (capped at 200 dB); a real op amp stops at its data sheet's CMRR (70 to 100 dB is common)".into());
+        }
+        warnings.extend(gate.iter().cloned());
+        Ok(obj(json!({"circuit_ok": gate.is_none(), "plus": plus, "minus": minus, "net": net,
+            "differential_gain": r.diff.mag()[0], "per_decade": decades,
+            "at": sum.at.iter().map(|(f, d)| json!({"hz": f, "cmrr_db": round6(*d)})).collect::<Vec<_>>(),
+            "lowest_frequency": {"hz": sum.low.0, "cmrr_db": round6(sum.low.1)}, "worst": {"hz": sum.worst.0, "cmrr_db": round6(sum.worst.1)},
+            "resistor_spread": spread,
+            "note": "Ad = output for a 1 V difference between the inputs, Acm = output for 1 V on both; cmrr_db = 20 log |Ad / Acm| (at most 200). resistor_spread: every resistor drawn evenly inside tol_r at FSTART; one_resistor_high = the CMRR with only that resistor at +tol_r, the most harmful first",
+            "warnings": warnings})))
+    }
+
     /// `noise OUT[,REF] F0 F1 [ppd=10] [input=V1] [temp=27] [top=8]`: thermal and shot noise at an output node.
     pub fn noise(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);

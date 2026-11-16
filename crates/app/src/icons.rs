@@ -71,6 +71,8 @@ pub enum Icon {
     PoleZero,
     /// A big ripple in, a small one out (PSRR).
     Ripple,
+    /// A difference amplifier: two inputs into a triangle (CMRR).
+    DiffAmp,
     /// A jagged line (noise).
     Noise,
     /// A curve with a sharp valley (impedance).
@@ -192,6 +194,17 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             p.line(wave(0.06, 0.3), s);
             p.line(wave(0.6, 0.06), s);
             p.line_segment([q(0.43, 0.5), q(0.55, 0.5)], Stroke::new(1.0, c));
+        }
+        Icon::DiffAmp => {
+            // an amplifier triangle with + and − inputs, and the same wiggle on both (the common part it throws away)
+            p.add(egui::Shape::closed_line(vec![q(0.42, 0.18), q(0.42, 0.82), q(0.9, 0.5)], s));
+            for y in [0.33, 0.67] {
+                let pts: Vec<Pos2> = (0..=6).map(|i| q(0.06 + 0.36 * i as f32 / 6.0, y - 0.06 * (i as f32 / 6.0 * std::f32::consts::TAU).sin())).collect();
+                p.line(pts, s);
+            }
+            p.line_segment([q(0.47, 0.33), q(0.55, 0.33)], Stroke::new(1.0, c));
+            p.line_segment([q(0.51, 0.29), q(0.51, 0.37)], Stroke::new(1.0, c));
+            p.line_segment([q(0.47, 0.67), q(0.55, 0.67)], Stroke::new(1.0, c));
         }
         Icon::Noise => {
             let ys = [0.5, 0.3, 0.62, 0.42, 0.75, 0.25, 0.55, 0.38, 0.7, 0.45, 0.6, 0.33, 0.5];

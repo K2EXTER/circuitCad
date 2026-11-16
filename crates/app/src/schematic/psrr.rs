@@ -75,7 +75,7 @@ impl SchEditor {
             Ok((r, _, _, lines)) => (Ok(r), lines),
             Err(e) => (Err(e), vec![]),
         };
-        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: false, psrr_run: true, notes });
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: false, pz_run: false, psrr_run: true, cmrr_run: false, notes });
         self.wave_mode = WaveMode::Ac;
     }
 

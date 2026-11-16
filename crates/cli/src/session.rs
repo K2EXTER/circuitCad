@@ -105,6 +105,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   psrr NET FSTART FSTOP [supply=V1] [ppd=10]
                                         supply rejection: a 1 V ripple on one DC supply alone (the first one if not named), the share
                                         that reaches NET per decade (dB) and the rejection at 100 Hz, 1 kHz ...; the worst frequency
+  cmrr NET FSTART FSTOP [plus=V3] [minus=V4] [ppd=10] [tol_r=1] [runs=300]
+                                        common-mode rejection of a difference amplifier: the + and - inputs' sources driven apart (Ad) and
+                                        together (Acm), CMRR = |Ad/Acm| per decade; tol_r= draws the resistors and gives the spread (0 = none)
   noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]
                                         thermal / shot noise at net OUT (or the difference OUT,REF): rms over the band,
                                         density per decade, the biggest contributors; input=V1 also refers it to that source
@@ -350,6 +353,7 @@ impl Session {
             "noise" => self.noise(args),
             "zout" => self.zout(args),
             "psrr" => self.psrr(args),
+            "cmrr" => self.cmrr(args),
             "diagnose" => self.diagnose(args),
             "loopgain" => self.loopgain(args),
             "pz" => self.pz(args),

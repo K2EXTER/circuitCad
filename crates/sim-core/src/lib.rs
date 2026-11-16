@@ -47,6 +47,7 @@ pub(crate) mod tran;
 mod worstcase;
 mod sensitivity;
 mod psrr;
+mod cmrr;
 mod troubleshoot;
 #[cfg(not(test))]
 mod tran;
@@ -59,6 +60,7 @@ pub use expr::Expr;
 pub use loopgain::{loop_gain, BreakDirection, LoopGain};
 pub use troubleshoot::{diagnose as troubleshoot, hypotheses as fault_hypotheses, spread as reading_spread, Diagnosis, Hypothesis, NextPoint, Reading, Suspect};
 pub use psrr::{psrr_summary, supply_sources, with_supply_ripple, PsrrSummary};
+pub use cmrr::{cmrr, cmrr_input_sources, cmrr_spread, Cmrr, CmrrSettings, CmrrSpread, CMRR_CAP_DB};
 pub use sensitivity::{sensitivity, SensPart, SensSettings, Sensitivity};
 pub use worstcase::{worst_case, WcPart, WcSettings, WorstCase};
 pub use impedance::{character as z_character, impedance_analysis, z_extrema, ImpedanceResult, ZExtremum};

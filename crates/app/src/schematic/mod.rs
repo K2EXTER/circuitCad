@@ -208,6 +208,11 @@ pub struct SchEditor {
     loop_part: String,
     psrr_source: String,
     psrr_out: String,
+    /// CMRR: the sources on the + and − inputs, the output net and the resistor tolerance (%) of the spread.
+    cmrr_plus: String,
+    cmrr_minus: String,
+    cmrr_out: String,
+    cmrr_tol: String,
     loop_from: String,
     loop_pick: bool,
     /// Waiting for a click on the canvas to choose the noise output node.
@@ -473,7 +478,9 @@ struct AcView {
     pz_run: bool,
     /// The curves answer a ripple on one supply (`run_psrr`): a recompute redoes that.
     psrr_run: bool,
-    /// Figures shown above the plot (the rejection of a `run_psrr`).
+    /// The curves are a common-mode rejection (`run_cmrr`): a recompute redoes that.
+    cmrr_run: bool,
+    /// Figures shown above the plot (the rejection of a `run_psrr` / `run_cmrr`).
     notes: Vec<String>,
 }
 
@@ -665,6 +672,10 @@ impl Default for SchEditor {
             loop_part: String::new(),
             psrr_source: String::new(),
             psrr_out: String::new(),
+            cmrr_plus: String::new(),
+            cmrr_minus: String::new(),
+            cmrr_out: String::new(),
+            cmrr_tol: "1".into(),
             loop_from: String::new(),
             loop_pick: false,
             src_form: None,
@@ -861,6 +872,7 @@ mod variation;
 mod sensitivity;
 mod tolerance;
 mod psrr;
+mod cmrr;
 mod troubleshoot;
 mod repair_practice;
 mod tran;

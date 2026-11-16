@@ -116,7 +116,7 @@ fn splitmix64(mut x: u64) -> u64 {
 }
 
 /// Uniform in [0, 1), number `k` of stream `seed`.
-fn uniform(seed: u64, k: u64) -> f64 {
+pub(crate) fn uniform(seed: u64, k: u64) -> f64 {
     (splitmix64(seed ^ k.wrapping_mul(0xD6E8_FEB8_6659_FD93)) >> 11) as f64 / (1u64 << 53) as f64
 }
 

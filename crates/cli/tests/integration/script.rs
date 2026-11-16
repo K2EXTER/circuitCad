@@ -2371,6 +2371,28 @@ psrr out 10 100k supply=V9
 }
 
 #[test]
+fn cmrr_of_the_difference_amplifier_sample_and_its_spread_with_one_percent_resistors() {
+    let sample = format!("{}/../../docs/examples/cmrr_diffamp.schjson", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}\ncmrr OUT 10 100k tol_r=1 runs=100\nvalue R4 101k\ncmrr OUT 100 100 tol_r=0\ncmrr OUT 10 100k plus=V3 minus=V3\n"));
+    assert!(!ok, "the last line drives both inputs from one source");
+    let rows: Vec<&Value> = a.iter().filter(|v| v.get("per_decade").is_some()).collect();
+    assert_eq!(rows.len(), 2, "{a:?}");
+    let m = rows[0];
+    assert_eq!((m["plus"].as_str(), m["minus"].as_str()), (Some("V3"), Some("V4")), "{m}");
+    assert!((m["differential_gain"].as_f64().unwrap() - 10.0).abs() < 0.05, "{m}");
+    assert!(m["lowest_frequency"]["cmrr_db"].as_f64().unwrap() > 100.0, "matched resistors: {m}");
+    // 1 % resistors: the worst case of a gain-10 difference amplifier is (1 + 10) / 0.04 → 48.8 dB
+    let sp = &m["resistor_spread"];
+    let (lo, med) = (sp["min_db"].as_f64().unwrap(), sp["median_db"].as_f64().unwrap());
+    assert!(lo > 47.0 && med > lo && med < 90.0, "{sp}");
+    assert_eq!(sp["one_resistor_high"].as_array().unwrap().len(), 4);
+    // R4 1 % high alone: about 61 dB
+    let one = rows[1]["lowest_frequency"]["cmrr_db"].as_f64().unwrap();
+    assert!((one - 60.9).abs() < 1.0, "{}", rows[1]);
+    assert!(rows[1]["resistor_spread"].is_null());
+}
+
+#[test]
 fn open_and_save_keep_what_the_app_stores_next_to_the_circuit() {
     // the sample carries a spec table and bench recordings; a tolerance is added to it here
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rc_lowpass_measured.schjson");

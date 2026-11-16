@@ -429,6 +429,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 // its settings next to the result (the tolerances and the box for the models' min / max)
                 app.sch.show_analysis_section("variation");
             }
+        if let Some(i) = args.iter().position(|a| a == "--cmrr")
+            && let (Some(p), Some(m), Some(out)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
+                // --cmrr <+ source or -> <- source or -> <node>  (uses the --ac frequency range; '-' picks the first input sources)
+                let dash = |s: &String| if s == "-" { String::new() } else { s.clone() };
+                app.sch.set_cmrr_settings(&dash(p), &dash(m), out);
+                app.sch.analyze_cmrr();
+            }
         if let Some(i) = args.iter().position(|a| a == "--psrr")
             && let (Some(src), Some(out)) = (args.get(i + 1), args.get(i + 2)) {
                 // --psrr <supply source or -> <node>  (uses the --ac frequency range)
