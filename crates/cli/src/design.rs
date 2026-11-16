@@ -282,6 +282,15 @@ impl Session {
         });
         let pct = |x: f64| if r.nominal.abs() > 1e-30 { Some(round6((x - r.nominal) / r.nominal.abs() * 100.0)) } else { None };
         let sens: Vec<Value> = r.sensitivity.iter().filter(|(_, d)| *d != 0.0).take(top).map(|(n, d)| json!({"part": n, "change_at_high_end": d})).collect();
+        let yield_json = r.yield_report(lo, hi).map(|y| {
+            let failing: Vec<Value> = y.culprits.iter().filter(|c| c.shift.abs() >= 0.2).take(top).map(|c| json!({"part": c.name, "side": if c.above { "above" } else { "below" }, "shift": round6(c.shift), "share_of_failures": round6(c.share)})).collect();
+            json!({
+                "percent": round6(y.yield_frac * 100.0), "passed": y.passed, "runs": y.runs, "below": y.below, "above": y.above, "unsolved": y.unsolved,
+                "interval_95_percent": [round6(y.interval.0 * 100.0), round6(y.interval.1 * 100.0)],
+                "cpk": y.cpk.map(round6), "cp": y.cp.map(round6), "expected_out_ppm": y.expected_out.map(|o| round6(o * 1e6)),
+                "failing_parts": failing
+            })
+        });
         let mut warnings: Vec<String> = gate.into_iter().collect();
         if r.failed > 0 {
             warnings.push(format!("{} of {runs} random circuits did not solve and are left out", r.failed));
@@ -300,9 +309,10 @@ impl Session {
             "nominal": r.nominal, "mean": st.mean, "std": st.std, "min": st.min, "max": st.max,
             "range_95": [q(0.025), q(0.975)], "range_95_percent_from_nominal": [pct(q(0.025)), pct(q(0.975))],
             "within_limits_percent": inside,
+            "yield": yield_json,
             "histogram": {"from": h_lo, "to": h_hi, "counts": counts},
             "parts": sens,
-            "meaning": "each part is drawn uniformly inside its tolerance; range_95 holds the middle 95 % of the runs (a few built boards should land there); parts = how far the result moves when only that part is at the high end of its tolerance, the biggest first; within_limits_percent = share of runs inside lo..hi",
+            "meaning": "each part is drawn uniformly inside its tolerance; range_95 holds the middle 95 % of the runs (a few built boards should land there); parts = how far the result moves when only that part is at the high end of its tolerance, the biggest first; within_limits_percent = share of solved runs inside lo..hi; yield (with lo= / hi=): percent = passed / all runs (unsolved runs fail), interval_95_percent = Wilson interval, cpk = distance from the mean to the nearer limit / 3 sigma (1.33 is the usual target), cp = (hi - lo) / 6 sigma, expected_out_ppm = normal estimate outside the limits, failing_parts = for the runs above (side=above) or below (side=below) the limits, the mean draw (-1 low end .. +1 high end) minus that on passing runs, sorted by |shift| x share_of_failures",
             "warnings": warnings
         })))
     }

@@ -195,3 +195,21 @@ fn a_spread_on_a_missing_or_fixed_element_is_a_warning() {
     assert_eq!(c.warnings.len(), 2, "{:?}", c.warnings);
     assert!(c.warnings[0].contains("Vx") && c.warnings[1].contains("E1"));
 }
+
+#[test]
+fn yield_of_a_divider_against_a_requirement() {
+    let r = monte_carlo(&divider(), &settings(400, 0.05)).unwrap();
+    assert_eq!((r.varied.len(), r.draws.len()), (2, r.values.len()));
+    // the high side only: boards with R2 high and R1 low fail, the low limit is far away
+    let y = r.yield_report(Some(2.0), Some(2.55)).unwrap();
+    assert_eq!(y.below, 0);
+    assert!(y.above > 0 && y.passed > y.above, "{y:?}");
+    assert!(y.interval.0 < y.yield_frac && y.yield_frac < y.interval.1);
+    // R1 and R2 push the result the same amount in opposite directions: R2 high on the failures, R1 low
+    let shift = |n: &str| y.culprits.iter().find(|c| c.name == n).unwrap().shift;
+    assert!(shift("R2") > 0.4 && shift("R1") < -0.4, "{:?}", y.culprits);
+    // a centred, wide window: every board passes and Cpk is large
+    let y = r.yield_report(Some(2.25), Some(2.75)).unwrap();
+    assert_eq!(y.passed, y.runs);
+    assert!(y.cpk.unwrap() > 1.33 && y.culprits.is_empty(), "{y:?}");
+}

@@ -67,6 +67,34 @@ fn the_divider_example_shows_a_spread_around_half_the_supply() {
 }
 
 #[test]
+fn a_variation_run_takes_its_limits_from_the_spec_table() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/divider_tolerance.schjson");
+    let mut e = SchEditor::default();
+    e.load_path(path);
+    // a cut-off row on the node is not a voltage range: only the DC voltage row is taken
+    e.add_spec(SpecKindIndex::AC_CUTOFF, "V(MID)", "1k", "2k", "");
+    e.add_spec(SpecKindIndex::DC_VOLTAGE, "MID", "2.45", "2.55", "");
+    e.mc_out = "MID".into();
+    e.run_mc();
+    assert_eq!((e.mc_lo.as_str(), e.mc_hi.as_str()), ("2.45", "2.55"));
+    let r = e.mc.as_ref().unwrap().outcome.as_ref().unwrap();
+    let y = r.yield_report(parse_value(&e.mc_lo), parse_value(&e.mc_hi)).unwrap();
+    assert_eq!(y.runs, 300);
+    assert!(y.cpk.is_some());
+    // a range typed by hand is kept on the next run
+    e.mc_hi = "2.6".into();
+    e.run_mc();
+    assert_eq!(e.mc_hi, "2.6");
+}
+
+/// `SpecKind::ALL` positions, as `add_spec` takes them.
+struct SpecKindIndex;
+impl SpecKindIndex {
+    const DC_VOLTAGE: usize = 0;
+    const AC_CUTOFF: usize = 6;
+}
+
+#[test]
 fn monte_carlo_can_measure_the_cutoff_of_the_rc_filter() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rc_lowpass.schjson");
     let mut e = SchEditor::default();

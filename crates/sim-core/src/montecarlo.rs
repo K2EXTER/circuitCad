@@ -63,6 +63,10 @@ pub struct McResult {
     /// For each part with a tolerance: the change of the output when only that part is
     /// `+tolerance` high, sorted by size (largest first). A model's spread (`U1:offset`) is at its high end.
     pub sensitivity: Vec<(String, f64)>,
+    /// The parts and model figures that were drawn (`R1`, `U1:offset`), in the order of `draws`.
+    pub varied: Vec<String>,
+    /// For each run in `values` (same order): where each varied part was drawn, -1 at the low end of its range, +1 at the high end.
+    pub draws: Vec<Vec<f64>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -259,17 +263,23 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
     let run_ids: Vec<usize> = (0..s.runs).collect();
     let measured = crate::par_map(&run_ids, |&run| {
         let mut c = circuit.clone();
+        let mut x = Vec::with_capacity(toleranced.len());
         for (k, (i, swing, _)) in toleranced.iter().enumerate() {
             let u = uniform(s.seed, (run * toleranced.len() + k) as u64);
+            x.push(2.0 * u - 1.0);
             swing_to(&mut c.elements[*i], *swing, 2.0 * u - 1.0);
         }
-        measure(&c, &output, &s.measure)
+        (measure(&c, &output, &s.measure), x)
     });
     let mut values = vec![];
+    let mut draws = vec![];
     let mut failed = 0;
-    for m in measured {
+    for (m, x) in measured {
         match m {
-            Ok(v) if v.is_finite() => values.push(v),
+            Ok(v) if v.is_finite() => {
+                values.push(v);
+                draws.push(x);
+            }
             _ => failed += 1,
         }
     }
@@ -282,5 +292,6 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
     let mut sensitivity: Vec<(String, f64)> = swung.into_iter().flatten().collect();
     sensitivity.sort_by(|a, b| b.1.abs().total_cmp(&a.1.abs()));
     let unit = s.measure.unit();
-    Ok(McResult { output, unit, nominal, values, failed, sensitivity })
+    let varied = toleranced.into_iter().map(|(_, _, name)| name).collect();
+    Ok(McResult { output, unit, nominal, values, failed, sensitivity, varied, draws })
 }

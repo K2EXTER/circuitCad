@@ -828,6 +828,16 @@ mc mid tol_v=5
     assert!(r95[0].as_f64().unwrap() < 2.5 && r95[1].as_f64().unwrap() > 2.5, "{m}");
     let inside = m["within_limits_percent"].as_f64().unwrap();
     assert!(inside > 50.0 && inside < 100.0, "{m}");
+    // the yield against the same limits: every run solved, so it is the same share; the limits are about 2σ, Cpk well below 1
+    let y = &m["yield"];
+    assert_eq!(y["percent"], m["within_limits_percent"], "{m}");
+    assert_eq!(y["runs"], 500);
+    let cpk = y["cpk"].as_f64().unwrap();
+    assert!(cpk > 0.3 && cpk < 1.0, "{y}");
+    // both sides fail, each side on its own: above the limit R2 was high (and R1 low), below it the other way round
+    let parts = y["failing_parts"].as_array().unwrap();
+    let shift = |part: &str, side: &str| parts.iter().find(|p| p["part"] == part && p["side"] == side).and_then(|p| p["shift"].as_f64());
+    assert!(shift("R2", "above").unwrap() > 0.4 && shift("R2", "below").unwrap() < -0.4, "{y}");
     assert_eq!(m["histogram"]["counts"].as_array().unwrap().iter().map(|c| c.as_u64().unwrap()).sum::<u64>(), 500);
     assert_eq!(m["parts"].as_array().unwrap().len(), 2, "{m}");
     // the same seed gives the same draws

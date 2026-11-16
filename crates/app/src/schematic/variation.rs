@@ -97,6 +97,13 @@ impl SchEditor {
             }
             _ => None,
         };
+        // judge the run against the spec table's range on the same node, unless a range is typed already
+        if self.mc_lo.trim().is_empty()
+            && self.mc_hi.trim().is_empty()
+            && let Some((lo, hi)) = self.spec_limits_for(&settings.output, self.mc_kind == McKind::Ac)
+        {
+            (self.mc_lo, self.mc_hi) = (lo, hi);
+        }
         self.mc = Some(McView { outcome, worst });
         self.wave_mode = WaveMode::Mc;
     }
@@ -135,6 +142,9 @@ impl SchEditor {
     }
 
     pub(super) fn mc_wave_panel(&mut self, ui: &mut egui::Ui) {
+        let from_spec = self.mc.as_ref().and_then(|v| v.outcome.as_ref().ok()).and_then(|r| self.spec_limits_for(&r.output, r.unit == "Hz"));
+        let (mut lo_text, mut hi_text) = (self.mc_lo.clone(), self.mc_hi.clone());
+        let (lim_lo, lim_hi) = (parse_value(&lo_text), parse_value(&hi_text));
         let Some(view) = self.mc.as_ref() else { return };
         let worst = view.worst.clone();
         let mut close = false;
@@ -187,6 +197,8 @@ impl SchEditor {
                         if res.failed > 0 {
                             ui.colored_label(crate::theme::WARN, i18n::trf!("{} 回は計算が収束しませんでした", res.failed));
                         }
+                        ui.separator();
+                        yield_section(ui, res, &mut lo_text, &mut hi_text, from_spec.as_ref(), lim_lo, lim_hi);
                         if let Some(w) = &worst {
                             ui.separator();
                             ui.label(i18n::tr("最悪ケース (全部品が誤差の端にあるとき)")).on_hover_text(i18n::tr("ランダムではなく、結果がいちばん小さく (大きく) なるように、すべての部品を許容差の端に置いて計算した値です。ばらつき解析の最小・最大は「たまたま出た値」ですが、これは「これより外には出ない」値です"));
@@ -224,17 +236,120 @@ impl SchEditor {
                         }
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
-                    draw_histogram(ui, rect, res, &st, worst.as_ref());
+                    draw_histogram(ui, rect, res, &st, worst.as_ref(), (lim_lo, lim_hi));
                 });
             }
         }
+        (self.mc_lo, self.mc_hi) = (lo_text, hi_text);
         if close {
             self.mc = None;
         }
     }
 }
 
-fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McStats, worst: Option<&sim_core::WorstCase>) {
+/// The range a run is judged against, and its yield, Cpk and the parts behind the failures.
+fn yield_section(ui: &mut egui::Ui, res: &McResult, lo_text: &mut String, hi_text: &mut String, from_spec: Option<&(String, String)>, lo: Option<f64>, hi: Option<f64>) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label(i18n::tr("合格の範囲")).on_hover_text(i18n::tr(
+            "作りたい回路の目標の範囲。ランダムに作った回路のうち何 % がこの範囲に入るか (合格率) と、範囲までの余裕 (Cpk) を出します。片方だけでもかまいません。スペック (合否) の表に同じ点の行があれば、実行したときに入ります",
+        ));
+        ui.add(egui::TextEdit::singleline(lo_text).desired_width(44.0).hint_text(i18n::tr("下限"))).on_hover_text(i18n::tr("下限。空なら下限なし。3.2 や 1.2k のように書けます"));
+        ui.label("〜");
+        ui.add(egui::TextEdit::singleline(hi_text).desired_width(44.0).hint_text(i18n::tr("上限"))).on_hover_text(i18n::tr("上限。空なら上限なし"));
+        ui.label(res.unit);
+        if let Some((l, h)) = from_spec
+            && (l != lo_text || h != hi_text)
+            && ui.small_button(i18n::tr("表から")).on_hover_text(i18n::tr("スペック (合否) の表で、同じ点に書いた範囲を入れます")).clicked()
+        {
+            (*lo_text, *hi_text) = (l.clone(), h.clone());
+        }
+    });
+    let unreadable = [(&*lo_text, lo), (&*hi_text, hi)].iter().any(|(t, v)| !t.trim().is_empty() && v.is_none());
+    if unreadable {
+        ui.colored_label(crate::theme::WARN, i18n::tr("範囲が数値として読めません (例: 4.75、1.1k)"));
+        return;
+    }
+    let Some(y) = res.yield_report(lo, hi) else {
+        if lo.zip(hi).is_some_and(|(l, h)| l > h) {
+            ui.colored_label(crate::theme::WARN, i18n::tr("下限が上限より大きくなっています"));
+        } else {
+            ui.small(i18n::tr("範囲を入れると、合格率と Cpk を出します"));
+        }
+        return;
+    };
+    let pct = y.yield_frac * 100.0;
+    let color = if y.passed == y.runs { crate::theme::OK } else if pct >= 95.0 { crate::theme::WARN } else { crate::theme::ERROR };
+    egui::Grid::new("mc_yield").num_columns(2).show(ui, |ui| {
+        let tip_text = i18n::trf!(
+            "範囲に入った回路の割合。収束しなかった回は不合格に数えます。{} 回では、本当の合格率は 95% の確からしさで {:.1}〜{:.1} % の間です (回数を増やすと狭くなります)",
+            y.runs,
+            y.interval.0 * 100.0,
+            y.interval.1 * 100.0
+        );
+        let tip = tip_text.as_str();
+        ui.label(i18n::tr("合格率")).on_hover_text(tip);
+        ui.colored_label(color, format!("{pct:.1} % ({}/{})", y.passed, y.runs)).on_hover_text(tip);
+        ui.end_row();
+        if y.below + y.above > 0 {
+            ui.label(i18n::tr("範囲の外"));
+            ui.label(i18n::trf!("下に {} 回・上に {} 回", y.below, y.above));
+            ui.end_row();
+        }
+        match y.cpk {
+            Some(cpk) => {
+                let tip = i18n::tr("工程能力指数。平均から近いほうの限度までの距離を 3σ で割った値。1.33 以上なら量産でもまず外れない、1.0 なら限度がちょうど 3σ (約 0.3% が外れる)、1 未満なら目に見えて外れます");
+                let (word, c) = if cpk >= 1.33 {
+                    (i18n::tr("十分"), crate::theme::OK)
+                } else if cpk >= 1.0 {
+                    (i18n::tr("ぎりぎり"), crate::theme::WARN)
+                } else {
+                    (i18n::tr("足りない"), crate::theme::ERROR)
+                };
+                ui.label("Cpk").on_hover_text(tip);
+                ui.colored_label(c, format!("{cpk:.2} ({word})")).on_hover_text(tip);
+                ui.end_row();
+                if let Some(cp) = y.cp {
+                    let tip = i18n::tr("範囲の幅を 6σ で割った値。中心のずれを考えない Cpk です。Cp が大きいのに Cpk が小さいなら、ばらつきは小さく、中心がずれています");
+                    ui.label("Cp").on_hover_text(tip);
+                    ui.label(format!("{cp:.2}")).on_hover_text(tip);
+                    ui.end_row();
+                }
+                if let Some(out) = y.expected_out {
+                    let tip = i18n::tr("平均と σ から正規分布で見積もった、範囲の外に出る割合。回数では数えられない小さな割合の目安です (部品は範囲の中で均等に動かすので、実際の裾はこれより細く、見積もりは安全側です)");
+                    ui.label(i18n::tr("外れる見込み")).on_hover_text(tip);
+                    ui.label(if out >= 1e-3 { format!("{:.2} %", out * 100.0) } else { format!("{:.1} ppm", out * 1e6) }).on_hover_text(tip);
+                    ui.end_row();
+                }
+            }
+            None => {
+                ui.label("Cpk");
+                ui.label(i18n::tr("ばらつきが無く、出せません"));
+                ui.end_row();
+            }
+        }
+    });
+    let culprits: Vec<_> = y.culprits.iter().filter(|c| c.shift.abs() >= 0.2).take(5).collect();
+    if !culprits.is_empty() {
+        let tip = i18n::tr("上限を超えた回路と下限を下回った回路を分けて、その部品が許容差の範囲 (−1 が下端、+1 が上端) のどこにあったかの平均から、合格した回路での平均を引いた値。±1 に近いほど、その部品の誤差が不合格の原因です");
+        ui.label(i18n::tr("不合格の回路で寄っていた部品")).on_hover_text(tip);
+        egui::Grid::new("mc_culprits").num_columns(2).show(ui, |ui| {
+            for c in &culprits {
+                ui.label(varied_name(&c.name)).on_hover_text(tip);
+                let side = if c.above { i18n::tr("上に外れた回") } else { i18n::tr("下に外れた回") };
+                ui.label(format!("{side}: {} ({:+.2})", if c.shift > 0.0 { i18n::tr("大きい側") } else { i18n::tr("小さい側") }, c.shift)).on_hover_text(tip);
+                ui.end_row();
+            }
+        });
+    }
+    if y.cp.zip(y.cpk).is_some_and(|(cp, cpk)| cp >= 1.33 && cpk < 1.0) {
+        ui.small(i18n::tr("ばらつきは範囲に比べて小さいのに、中心が限度に寄っています。設計値を範囲の真ん中に寄せると合格率が上がります"));
+    } else if let Some(c) = culprits.first() {
+        let name = varied_name(&c.name);
+        ui.small(i18n::trf!("{name} の誤差を小さくする (許容差の小さい部品にする) と、合格率が上がります"));
+    }
+}
+
+fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McStats, worst: Option<&sim_core::WorstCase>, limits: (Option<f64>, Option<f64>)) {
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
     let (lo, hi, bins) = res.histogram(24);
@@ -261,6 +376,12 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
         let (dx, al) = if x > plot.center().x + plot.width() * 0.35 { (-3.0, Align2::RIGHT_BOTTOM) } else { (3.0, Align2::LEFT_BOTTOM) };
         p.text(Pos2::new(x + dx, y), al, i18n::tr_dyn(label), FontId::proportional(11.0), color);
     };
+    // the limits of the yield check, when they fall on the axis (a far one would squeeze the bars)
+    for (v, label) in [(limits.0, "下限"), (limits.1, "上限")] {
+        if let Some(v) = v.filter(|v| (a..=b).contains(v)) {
+            mark(v, crate::theme::WARN, label, false);
+        }
+    }
     mark(res.nominal, Color32::WHITE, "設計値", true);
     mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
     if let Some(w) = worst {

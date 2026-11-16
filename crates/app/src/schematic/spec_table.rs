@@ -96,6 +96,15 @@ const PASS: Color32 = Color32::from_rgb(90, 190, 110);
 const FAIL: Color32 = crate::theme::ERROR;
 
 impl SchEditor {
+    /// The range typed in the first row of the table on the node a variation run measures (DC voltage rows, or -3 dB rows when
+    /// `cutoff`), as the texts typed: the yield of the run is judged against it.
+    pub(super) fn spec_limits_for(&self, node: &str, cutoff: bool) -> Option<(String, String)> {
+        self.specs
+            .iter()
+            .find(|r| tolerance_query(r.spec.kind, &r.spec.target).is_some_and(|(k, n)| n == node.trim() && (k == SpecKind::AcCutoffWorst) == cutoff))
+            .map(|r| (r.lo.clone(), r.hi.clone()))
+    }
+
     /// The table as it is saved with the sheet.
     pub fn spec_items(&self) -> Vec<SpecItem> {
         self.specs
