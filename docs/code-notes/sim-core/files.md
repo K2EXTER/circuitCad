@@ -12,6 +12,7 @@
 - `measure.rs` 波形の自動測定・安定余裕 / `stepmetrics.rs` ステップ応答の指標・整定時間(`settling_times`。CLI の `tran settle=`)・負荷の急変(`load_step`) / `power.rs` 電力と効率 / `spec.rs` スペック(合否の表)
 - `troubleshoot.rs` 故障診断(測った電圧から故障を推定、次に測る点。画面は「症状から原因を探す」、CLI `diagnose`)
 - `psrr.rs` 電源除去比(1つの電源だけを揺らす回路と、除去比のまとめ。画面は「電源除去比 (PSRR)」、CLI `psrr`)
+- `cmrr.rs` 同相除去比(+ と − の入力の信号源を逆向き・同じ向きに揺らす 2 回の AC 解析と、抵抗のばらつき。画面は「同相除去比 (CMRR)」、CLI `cmrr`)
 - `sensitivity.rs` 感度(部品を1つずつ ±1% 動かして効く順に。画面は「温度とばらつき」の「感度を計算」)
 - `worstcase.rs` 最悪ケース解析(全部品を許容差の端に置いた角を実際に解く。CLI `worst`、画面はばらつき解析の窓の「最悪ケース」。スペックの合否には `SpecKind::*Worst`)
 - `loopgain.rs` ループゲイン(ループを1か所切って電圧・電流を1回ずつ注入する Middlebrook 法。位相余裕。CLI `loopgain`、画面は解析タブの「ループゲイン」)
