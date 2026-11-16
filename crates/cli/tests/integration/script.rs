@@ -2022,6 +2022,28 @@ fn a_heat_sink_cools_a_part_only_beyond_its_case() {
     assert!((bare["theta_jc_k_per_w"].as_f64().unwrap() - 100.0 * 12.0 / 110.0).abs() < 1e-9, "the guess: {bare}");
 }
 
+/// `board heatmap` (H7): the board's temperature on a grid. Two 2512 resistors of the same 0.75 W: R1's pads sit in pours of their own
+/// nets, R2's on thin tracks only, so R1 runs much cooler; the hottest spot is at R2, every part is warmer than the air, and the
+/// junction sits above the copper under its pads.
+#[test]
+fn heatmap_shows_the_pour_spreading_one_resistors_heat() {
+    // the sample heat_copper: R1's pads in pours of their own nets (VIN, GND), R2 on thin tracks
+    let sample = format!("{}/../../docs/examples/heat_copper.ccproj", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}
+board heatmap temp=25 cell=1
+"));
+    assert!(ok, "{a:?}");
+    let h = a.iter().find(|v| v["cmd"] == "board" && v["hottest_c"].is_number()).unwrap_or_else(|| panic!("{a:?}"));
+    let part = |n: &str| h["parts"].as_array().unwrap().iter().find(|p| p["part"] == n).cloned().unwrap();
+    let (r1, r2) = (part("R1"), part("R2"));
+    let (j1, j2) = (r1["junction_c"].as_f64().unwrap(), r2["junction_c"].as_f64().unwrap());
+    assert!(j1 < 25.0 + 0.75 * (j2 - 25.0), "the pours cool R1: {r1} {r2}");
+    assert!(j1 > 30.0 && r1["pads_c"].as_f64().unwrap() < j1, "{r1}");
+    let at = h["hottest_at"].as_array().unwrap();
+    assert!((at[0].as_f64().unwrap() - 70.0).abs() < 5.0, "the hottest spot is at R2: {h}");
+    assert!((5.0..20.0).contains(&h["h_top_w_m2k"].as_f64().unwrap()), "{h}");
+}
+
 /// With the board carried over (`board postlayout on`), a part's θ takes the copper joined to its pins: a GND pour under the board spreads
 /// R2's heat, so it warms less than on its own 100 K/W; R1's own θ stays what it was given.
 #[test]

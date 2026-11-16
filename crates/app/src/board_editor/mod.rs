@@ -506,6 +506,8 @@ pub struct BoardEditor {
     pub net_table: nettable::NetTableState,
     /// The "断面と電界" window (`fieldview.rs`).
     pub field_view: fieldview::FieldView,
+    /// The "熱の地図" window (`thermalmap.rs`).
+    pub thermal: thermalmap::ThermalView,
     /// The impedance (Ω) last asked for in a net window.
     z_target: f64,
     /// The net a via is placed for with the Via tool: `None` = the net of what is under the pointer (a pad, a track, a pour).
@@ -663,6 +665,7 @@ impl Default for BoardEditor {
             live_drc: Default::default(),
             net_table: Default::default(),
             field_view: Default::default(),
+            thermal: Default::default(),
             z_target: 50.0,
             via_net: None,
             last_export_dir: None,
@@ -721,6 +724,7 @@ mod requirements;
 mod sheets;
 mod nettable;
 mod fieldview;
+mod thermalmap;
 mod file;
 mod actions;
 mod canvas;

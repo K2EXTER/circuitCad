@@ -22,7 +22,7 @@ mod window;
 
 use camera::*;
 use glow::*;
-pub(crate) use heat::PartTemps;
+pub(crate) use heat::{heat_color, PartTemps};
 use picture::*;
 use scene::*;
 

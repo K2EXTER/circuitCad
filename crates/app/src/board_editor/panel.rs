@@ -294,6 +294,9 @@ impl BoardEditor {
                     let n = pcb_core::drc::add_thermal_vias(&mut self.board);
                     self.status = if n > 0 { format!("サーマルビアを {n} 個置きました。裏面に同じネットのゾーンを作ってください") } else { "サーマルビアを置けませんでした (パッドが小さい、または他の穴に近すぎます)".into() };
                 }
+                if ui.button(i18n::tr("熱の地図…")).on_hover_text(i18n::tr("回路図の自己発熱の電力から、基板のどこが何 ℃ になるかを計算して、サーマルカメラのような色で重ねます。ベタやビアで熱がどう広がるかが分かります")).clicked() {
+                    self.open_thermal_view();
+                }
             }) {
                 opened = Some(Step::Check);
             }

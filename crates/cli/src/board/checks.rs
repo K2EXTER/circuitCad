@@ -418,6 +418,50 @@ impl Session {
             "note": "Resistance and inductance are measured from each net's supply pad (a connector if there is one) through tracks, vias and pours; unrouted nets add nothing, so run 'board route' first. The inductance is per pad, and so is the capacitance (the copper over a pour, taken as ground: 'picofarad', a flat estimate within about 10 %, neighbouring traces not counted; with the inductance it makes a long trace ring); 'couplings' counts the magnetic coupling (k) between wires of different nets, which lowers the loop inductance of a supply trace and its close return (V(REF.PIN.wire) probes the pin). Both show in ac and fast tran, not in dc."})))
     }
 
+    /// `board heatmap [temp=27] [standing] [alt=M] [cell=MM]`: the board's temperature map (H7) from the schematic's self-heating powers.
+    pub(super) fn board_heatmap(&mut self, rest: &[String]) -> Res {
+        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM]   (the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
+        let (pos, kv) = options(rest);
+        let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number
+{usage}")));
+        let spec = pcb_core::thermal::ThermalSpec {
+            ambient_c: num("temp", 27.0)?,
+            orientation: if pos.iter().any(|w| w.eq_ignore_ascii_case("standing")) { pcb_core::thermal::Orientation::Standing } else { pcb_core::thermal::Orientation::Flat },
+            altitude_m: num("alt", 0.0)?,
+            cell_mm: num("cell", 0.0)?,
+            ..Default::default()
+        };
+        let c = self.circuit()?;
+        let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &Default::default());
+        let r = sim_core::self_heat(&c, &heaters, spec.ambient_c).map_err(|e| e.to_string())?;
+        let sources: Vec<pcb_core::thermal::HeatSource> = r
+            .parts
+            .iter()
+            .filter(|p| p.power > 1e-9)
+            .filter_map(|p| {
+                let comp = self.sch.components.iter().find(|x| x.refdes == p.name)?;
+                Some(pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(comp), sim_core::theta_jc(comp).0, comp.heatsink))
+            })
+            .collect();
+        if sources.is_empty() {
+            return Err("no part gives off heat: run 'heat' to see the self-heating of the schematic".into());
+        }
+        let board = self.board_mut()?;
+        let t0 = std::time::Instant::now();
+        let m = pcb_core::thermal::thermal_map(board, &sources, board.stackup.copper_um, &spec)?;
+        let (t, at) = m.hottest();
+        let parts: Vec<Value> = m
+            .parts
+            .iter()
+            .map(|p| {
+                let own = r.parts.iter().find(|x| x.name == p.refdes).map(|x| x.temp_c);
+                json!({"part": p.refdes, "power_w": p.power, "junction_c": p.junction, "pads_c": p.pad_temp, "pads_max_c": p.pad_max, "self_heat_c": own})
+            })
+            .collect();
+        Ok(obj(json!({"hottest_c": t, "hottest_at": [at.x, at.y], "ambient_c": m.ambient_c, "h_top_w_m2k": m.h_top, "h_bottom_w_m2k": m.h_bottom, "cell_mm": m.grid.d, "cells": m.grid.w * m.grid.h, "layers": m.layers.len(), "rounds": m.rounds, "ms": t0.elapsed().as_secs_f64() * 1e3, "parts": parts,
+            "note": "A guide (about ±20-30 %): natural convection and radiation from both faces, no forced air or neighbours' shading. junction_c is the part's inside, through θjc to the copper under its pads and through its body to the air; self_heat_c is the schematic's self-heating with θ alone, to compare."})))
+    }
+
     pub(super) fn board_check(&mut self, rest: &[String]) -> Res {
         // the same pre-order check as the app's "発注の準備"
         let (_, kv) = options(rest);

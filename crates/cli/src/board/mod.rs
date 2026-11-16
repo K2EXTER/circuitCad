@@ -72,6 +72,7 @@ impl Session {
             "status" => self.board_status(rest),
             "currents" => self.board_currents(rest),
             "postlayout" => self.board_postlayout(rest),
+            "heatmap" => self.board_heatmap(rest),
             "save" => self.board_save(rest),
             "open" => self.board_open(rest),
             "check" => self.board_check(rest),

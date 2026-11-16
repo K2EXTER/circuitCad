@@ -24,7 +24,7 @@ pub(super) fn scale(t: &PartTemps) -> (f64, f64) {
 }
 
 /// A thermal camera's palette ("ironbow"): dark blue at `f` = 0 through purple, red and orange to pale yellow at 1.
-pub(super) fn heat_color(f: f64) -> [u8; 3] {
+pub(crate) fn heat_color(f: f64) -> [u8; 3] {
     const STOPS: [[f64; 3]; 6] = [[20.0, 24.0, 90.0], [110.0, 20.0, 150.0], [200.0, 30.0, 90.0], [240.0, 100.0, 20.0], [255.0, 190.0, 40.0], [255.0, 250.0, 200.0]];
     let f = if f.is_finite() { f.clamp(0.0, 1.0) } else { 0.0 };
     let x = f * (STOPS.len() - 1) as f64;

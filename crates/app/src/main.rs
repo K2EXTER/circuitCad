@@ -132,6 +132,15 @@ impl App {
                 self.board_ed.status = format!("自己発熱の計算に失敗: {e} (回路図の電源やつながりを確かめてください)");
             }
         }
+        if self.board_ed.take_thermal_request() {
+            self.sch.heat_view = Some(self.sch.run_self_heat());
+            let sources = match &self.sch.heat_view {
+                Some(Ok(v)) => Ok(self.sch.thermal_sources(v)),
+                Some(Err(e)) => Err(format!("自己発熱の計算に失敗: {e} (回路図の電源やつながりを確かめてください)")),
+                None => Err("自己発熱を計算できませんでした".into()),
+            };
+            self.board_ed.run_thermal_map(sources);
+        }
         if !self.board_ed.view3d_wants_heat() {
             return;
         }
@@ -696,6 +705,7 @@ impl eframe::App for App {
         self.board_ed.net_window(ui.ctx());
         self.board_ed.net_table_window(ui.ctx());
         self.board_ed.field_window(ui.ctx());
+        self.board_ed.thermal_window(ui.ctx());
         self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());
         egui::Panel::left("board_tools").default_size(PANEL_WIDTH).min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));

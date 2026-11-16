@@ -230,7 +230,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--selfheat") {
             app.sch.heat_view = Some(app.sch.run_self_heat());
         }
-        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets", "--field"].iter().any(|f| args.iter().any(|a| a == f)) {
+        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets", "--field", "--thermal-map"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);
         }
@@ -576,6 +576,17 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         if let (Some(net), Some(a)) = (args.get(i + 1), args.get(i + 2).and_then(|a| a.parse::<f64>().ok())) {
             app.board_ed.show_ir_drop(net, a);
         }
+    }
+    // --thermal-map [standing]: the "熱の地図" window worked out from the schematic's self-heating, its colours over the board
+    if let Some(i) = args.iter().position(|a| a == "--thermal-map") {
+        if args.get(i + 1).is_some_and(|s| s == "standing") {
+            app.board_ed.thermal.spec.orientation = pcb_core::thermal::Orientation::Standing;
+        }
+        app.board_ed.open_thermal_view();
+        let run = app.sch.run_self_heat();
+        let sources = run.as_ref().map(|v| app.sch.thermal_sources(v)).map_err(|e| e.clone());
+        app.sch.heat_view = Some(run);
+        app.board_ed.run_thermal_map(sources);
     }
     if args.iter().any(|a| a == "--3d") {
         app.board_ed.open_view3d();

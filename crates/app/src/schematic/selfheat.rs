@@ -13,6 +13,21 @@ pub(crate) struct HeatView {
 }
 
 impl SchEditor {
+    /// The heat sources of the board's temperature map from a self-heating run: each warmed part's power, its own θ, θjc and heat sink;
+    /// with the run's temperatures (to compare) and the air's.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn thermal_sources(&self, v: &HeatView) -> (Vec<pcb_core::thermal::HeatSource>, Vec<(String, f64)>, f64) {
+        let src = v
+            .parts
+            .iter()
+            .filter_map(|p| {
+                let c = self.sch.components.iter().find(|c| c.refdes == p.name)?;
+                Some(pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(c), sim_core::theta_jc(c).0, c.heatsink))
+            })
+            .collect();
+        (src, v.parts.iter().map(|p| (p.name.clone(), p.temp_c)).collect(), v.ambient)
+    }
+
     pub(crate) fn run_self_heat(&mut self) -> Result<HeatView, String> {
         let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;

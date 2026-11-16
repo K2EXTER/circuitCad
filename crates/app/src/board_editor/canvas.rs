@@ -27,6 +27,7 @@ impl BoardEditor {
         self.draw_keepouts(&painter, rect);
         self.update_net_focus(&resp, rect);
         self.draw_copper(&painter, rect);
+        self.draw_thermal(&painter, rect);
         self.draw_net_focus(&painter, rect);
         self.draw_highlight(&painter, rect, conn.as_deref());
         self.draw_overlays(&painter, rect);

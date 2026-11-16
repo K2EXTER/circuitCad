@@ -259,9 +259,22 @@ impl Session {
                 Ok(obj(json!({})))
             }
             "open" => {
-                let f = args.first().ok_or("open FILE.schjson")?;
+                let f = args.first().ok_or("open FILE.schjson | FILE.ccproj (a project of one board: its schematic and its board)")?;
                 let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
                 let mut v: Value = serde_json::from_str(&text).map_err(|e| format!("{f}: {e}"))?;
+                // a project of one board (`.ccproj`, format 1): its schematic, and its board as the session's board
+                if v.get("schematic").is_some() && v.get("designs").is_none() {
+                    let board: Option<Board> = v.get("board").cloned().map(serde_json::from_value).transpose().map_err(|e| format!("{f}: the board could not be read: {e}"))?;
+                    let has_board = board.is_some();
+                    if board.is_some() {
+                        self.board = board;
+                    }
+                    v = v["schematic"].take();
+                    self.extras.clear();
+                    self.sch = serde_json::from_value(v).map_err(|e| format!("{f}: {e}"))?;
+                    self.cursor = self.cursor_below();
+                    return Ok(obj(json!({"parts": self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).count(), "board": has_board})));
+                }
                 // the app keeps its spec table, bench recordings and tolerances in the same file: set aside, written back by `save`
                 self.extras.clear();
                 if let Value::Object(m) = &mut v {
