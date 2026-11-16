@@ -22,7 +22,9 @@ impl SchEditor {
             .iter()
             .filter_map(|p| {
                 let c = self.sch.components.iter().find(|c| c.refdes == p.name)?;
-                Some(pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(c), sim_core::theta_jc(c).0, c.heatsink))
+                let mut s = pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(c), sim_core::theta_jc(c).0, c.heatsink);
+                s.cth = c.cth;
+                Some(s)
             })
             .collect();
         (src, v.parts.iter().map(|p| (p.name.clone(), p.temp_c)).collect(), v.ambient)

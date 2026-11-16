@@ -2044,6 +2044,28 @@ board heatmap temp=25 cell=1
     assert!((5.0..20.0).contains(&h["h_top_w_m2k"].as_f64().unwrap()), "{h}");
 }
 
+/// `board heatmap tran=`: the sample's 90 × 40 mm board holds about 11.7 J/K of FR-4 (90 × 40 × 1.6 mm³ × 2.0 J/cm³·K) and warms in
+/// minutes; its parts rise moment by moment and, 20 minutes on, stand where the steady map has them.
+#[test]
+fn heatmap_shows_the_board_warming_up() {
+    let sample = format!("{}/../../docs/examples/heat_copper.ccproj", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}
+board heatmap temp=25 cell=1 tran=1200
+"));
+    assert!(ok, "{a:?}");
+    let h = a.iter().find(|v| v["warm_up"].is_object()).unwrap();
+    let w = &h["warm_up"];
+    let cap = w["board_heat_capacity_j_per_k"].as_f64().unwrap();
+    assert!((11.5..12.5).contains(&cap), "{w}");
+    assert!((60.0..400.0).contains(&w["board_time_constant_s"].as_f64().unwrap()), "{w}");
+    let r2 = |m: &Value| m["parts"].as_array().unwrap().iter().find(|p| p["part"] == "R2").unwrap()["junction_c"].as_f64().unwrap();
+    let moments = w["moments"].as_array().unwrap();
+    assert!(moments.windows(2).all(|x| r2(&x[1]) >= r2(&x[0]) - 1e-6), "{w}");
+    let steady = h["parts"].as_array().unwrap().iter().find(|p| p["part"] == "R2").unwrap()["junction_c"].as_f64().unwrap();
+    let end = r2(moments.last().unwrap());
+    assert!((end - steady).abs() < 0.03 * (steady - 25.0), "20 minutes on {end}, steady {steady}");
+}
+
 /// `board heatmap` lists the parts that warm each other: R2 moved next to R1 on the sample gets about 14 K from it, so the pair comes with
 /// a distance to keep; as a requirement (`req apart`, taken to the board by `board import`), the board's requirement check reports the two
 /// as too close.

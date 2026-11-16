@@ -420,7 +420,7 @@ impl Session {
 
     /// `board heatmap [temp=27] [standing] [alt=M] [cell=MM]`: the board's temperature map (H7) from the schematic's self-heating powers.
     pub(super) fn board_heatmap(&mut self, rest: &[String]) -> Res {
-        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM]   (the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
+        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM] [tran=SECONDS]   (tran = also the board warming up from the moment the parts are switched on: its heat capacity, time constant and each part's temperature at some moments; the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
         let (pos, kv) = options(rest);
         let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number
 {usage}")));
@@ -440,12 +440,16 @@ impl Session {
             .filter(|p| p.power > 1e-9)
             .filter_map(|p| {
                 let comp = self.sch.components.iter().find(|x| x.refdes == p.name)?;
-                Some(pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(comp), sim_core::theta_jc(comp).0, comp.heatsink))
+                let mut s = pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(comp), sim_core::theta_jc(comp).0, comp.heatsink);
+                s.cth = comp.cth;
+                Some(s)
             })
             .collect();
         if sources.is_empty() {
             return Err("no part gives off heat: run 'heat' to see the self-heating of the schematic".into());
         }
+        let tran = opt(&kv, "tran").map(|s| sim_core::parse_value(s).filter(|x| *x > 0.0 && x.is_finite()).ok_or_else(|| format!("tran={s}: a time in seconds above zero
+{usage}"))).transpose()?;
         let board = self.board_mut()?;
         let t0 = std::time::Instant::now();
         let m = pcb_core::thermal::thermal_map(board, &sources, board.stackup.copper_um, &spec)?;
@@ -467,7 +471,22 @@ impl Session {
                 json!({"part": p.refdes, "power_w": p.power, "junction_c": p.junction, "pads_c": p.pad_temp, "pads_max_c": p.pad_max, "self_heat_c": own})
             })
             .collect();
-        Ok(obj(json!({"hottest_c": t, "hottest_at": [at.x, at.y], "ambient_c": m.ambient_c, "h_top_w_m2k": m.h_top, "h_bottom_w_m2k": m.h_bottom, "cell_mm": m.grid.d, "cells": m.grid.w * m.grid.h, "layers": m.layers.len(), "rounds": m.rounds, "ms": t0.elapsed().as_secs_f64() * 1e3, "parts": parts, "hot_pairs": pairs,
+        let warm_up = match tran {
+            Some(end) => {
+                let tr = pcb_core::thermal::thermal_transient(board, &sources, board.stackup.copper_um, &spec, end, 8)?;
+                let moments: Vec<Value> = tr
+                    .frames
+                    .iter()
+                    .map(|(t, _)| {
+                        let k = tr.times.iter().position(|x| (x - t).abs() < 1e-9 * t.max(1.0)).unwrap_or(tr.times.len() - 1);
+                        json!({"t_s": t, "parts": tr.parts.iter().map(|(n, v)| json!({"part": n, "junction_c": v[k]})).collect::<Vec<Value>>()})
+                    })
+                    .collect();
+                json!({"end_s": end, "board_heat_capacity_j_per_k": tr.board_cth, "board_time_constant_s": tr.board_tau, "moments": moments})
+            }
+            None => Value::Null,
+        };
+        Ok(obj(json!({"warm_up": warm_up, "hottest_c": t, "hottest_at": [at.x, at.y], "ambient_c": m.ambient_c, "h_top_w_m2k": m.h_top, "h_bottom_w_m2k": m.h_bottom, "cell_mm": m.grid.d, "cells": m.grid.w * m.grid.h, "layers": m.layers.len(), "rounds": m.rounds, "ms": t0.elapsed().as_secs_f64() * 1e3, "parts": parts, "hot_pairs": pairs,
             "note": "A guide (about ±20-30 %): natural convection and radiation from both faces, no forced air or neighbours' shading. junction_c is the part's inside, through θjc to the copper under its pads and through its body to the air; self_heat_c is the schematic's self-heating with θ alone, to compare. hot_pairs: parts that get at least 3 K and 15 % of their rise from each other through the board, with suggest_mm, a distance (pad centre to centre) where that falls to half (a guide from the board's heat spreading length); 'req apart NAME a=A b=B min=MM' keeps them apart as a requirement."})))
     }
 

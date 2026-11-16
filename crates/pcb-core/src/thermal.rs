@@ -24,6 +24,9 @@ const K_FR4_THROUGH: f64 = 0.3;
 const BOARD_MM: f64 = 1.6;
 const PLATING_MM: f64 = 0.025;
 const STEFAN: f64 = 5.670e-8;
+/// Heat capacity per volume (J/m³·K): copper 8.96 g/cm³ × 0.385 J/g·K, FR-4 1.85 g/cm³ × 1.1 J/g·K.
+const RHO_C_CU: f64 = 8.96e6 * 0.385;
+const RHO_C_FR4: f64 = 1.85e6 * 1.1;
 const G: f64 = 9.81;
 /// Most cells per layer: the pitch grows on big boards to stay near this.
 const MAX_CELLS: f64 = 60_000.0;
@@ -177,6 +180,8 @@ pub(crate) struct Model {
     length_m: f64,
     /// The board's sheet conductance (W/K across a square, every layer added), the mean over the board: how well it spreads heat.
     mean_sheet: f64,
+    /// Heat capacity (J/K) of each node: its copper and its share of the FR-4.
+    cap: Vec<f64>,
 }
 
 impl Model {
@@ -301,11 +306,14 @@ pub(crate) fn model(board: &Board, copper_um: f64, cell_mm: f64) -> Result<Model
     // nodes
     let mut node = vec![usize::MAX; n_layers * w * h];
     let mut cell_of = vec![];
+    let mut cap = vec![];
+    let cell_area = (d * 1e-3) * (d * 1e-3);
     for l in 0..cover.len() {
         for c in 0..w * h {
             if grid.inside[c] {
                 node[l * w * h + c] = cell_of.len();
                 cell_of.push((l, c));
+                cap.push(cell_area * (cover[l][c] * copper_um * 1e-6 * RHO_C_CU + BOARD_MM * 1e-3 / n_layers as f64 * RHO_C_FR4));
             }
         }
     }
@@ -366,7 +374,7 @@ pub(crate) fn model(board: &Board, copper_um: f64, cell_mm: f64) -> Result<Model
     let perimeter: f64 = (0..board.outline.len()).map(|k| board.outline[k].dist(board.outline[(k + 1) % board.outline.len()])).sum();
     let inside_cells = grid.inside.iter().filter(|x| **x).count().max(1) as f64;
     let mean_sheet = cover.iter().map(|cov| (0..w * h).filter(|c| grid.inside[*c]).map(|c| sheet(cov[c])).sum::<f64>() / inside_cells).sum();
-    Ok(Model { grid, layers, node, cell_of, edges, length_m: inside_area / perimeter.max(1e-9) * 1e-3, mean_sheet })
+    Ok(Model { grid, layers, node, cell_of, edges, length_m: inside_area / perimeter.max(1e-9) * 1e-3, mean_sheet, cap })
 }
 
 /// The grid nodes under a part's pads, each with its share (by count of covered cells, adding to 1).
@@ -500,21 +508,31 @@ pub(crate) fn cg(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> u
 /// The steady temperature rise (K above the air) of every node for heat `q` (W per node), and the per-node conductance to the air
 /// that agrees with it.
 /// `extra` holds the conductances (W/K) of nodes past the grid's (the parts' junctions) and `extra_air` their own way to the air (W/K, fixed).
+/// Each grid node's conductance to the air (W/K) at its rise `rise[k]` (the faces it carries: the top face on the first layer, the
+/// bottom face on the last, both on a board of one layer); the nodes past the grid's get 0.
+fn air_conductance(m: &Model, spec: &ThermalSpec, rise: &[f64], air: &mut [f64]) {
+    let last = m.layers.len() - 1;
+    let face_area = (m.grid.d * 1e-3).powi(2);
+    let pressure = pressure_at(spec.altitude_m);
+    let standing = spec.orientation == Orientation::Standing;
+    let length = if standing { m.grid.h as f64 * m.grid.d * 1e-3 } else { m.length_m };
+    for (k, &(l, _)) in m.cell_of.iter().enumerate() {
+        let mut g = 0.0;
+        for (face_layer, is_top) in [(0, true), (last, false)] {
+            if l == face_layer {
+                let facing = if standing { None } else { Some(is_top) };
+                let (c, r) = h_air(rise[k], spec.ambient_c, length, facing, spec.emissivity, pressure);
+                g += (c + r) * face_area;
+            }
+        }
+        air[k] = g;
+    }
+}
+
 fn solve_rise(m: &Model, spec: &ThermalSpec, extra: &[(usize, usize, f64)], extra_air: &[f64], q: &[f64], rise: &mut Vec<f64>) -> (Vec<f64>, usize) {
     let n = m.nodes() + extra_air.len();
     let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(extra).copied().collect();
     let csr = Csr::new(n, &edges);
-    let last = m.layers.len() - 1;
-    let face_area = (m.grid.d * 1e-3).powi(2);
-    let pressure = pressure_at(spec.altitude_m);
-    let up = |l: usize| match spec.orientation {
-        Orientation::Flat => Some(l == 0),
-        Orientation::Standing => None,
-    };
-    let length = match spec.orientation {
-        Orientation::Flat => m.length_m,
-        Orientation::Standing => m.grid.h as f64 * m.grid.d * 1e-3,
-    };
     if rise.len() != n {
         *rise = vec![10.0; n];
     }
@@ -525,18 +543,9 @@ fn solve_rise(m: &Model, spec: &ThermalSpec, extra: &[(usize, usize, f64)], extr
     for round in 0..16 {
         rounds = round + 1;
         let mut diag = csr.sum.clone();
-        for (k, &(l, _)) in m.cell_of.iter().enumerate() {
-            // the top face is on the first layer, the bottom face on the last (both on a board of one layer)
-            let mut g = 0.0;
-            for (face_layer, is_top) in [(0, true), (last, false)] {
-                if l == face_layer {
-                    let facing = up(0).map(|_| is_top);
-                    let (c, r) = h_air(rise[k], spec.ambient_c, length, facing, spec.emissivity, pressure);
-                    g += (c + r) * face_area;
-                }
-            }
-            air[k] = g;
-            diag[k] += g;
+        air_conductance(m, spec, rise, &mut air);
+        for k in 0..m.nodes() {
+            diag[k] += air[k];
         }
         for (e, g) in extra_air.iter().enumerate() {
             diag[m.nodes() + e] += g;
@@ -555,12 +564,14 @@ fn solve_rise(m: &Model, spec: &ThermalSpec, extra: &[(usize, usize, f64)], extr
 
 /// A part that heats the board: its power and the two ways out of its junction (or element), to the copper under its pads through
 /// `theta_jc` and to the air through its own body and leads `theta_body` (0 = none).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct HeatSource {
     pub refdes: String,
     pub power: f64,
     pub theta_jc: f64,
     pub theta_body: f64,
+    /// The part's own heat capacity (J/K) for the map over time; 0 = it follows its power at once.
+    pub cth: f64,
 }
 
 /// The share of a part's own case-to-air θ (its data sheet's minimum pad) that its body and leads carry to the air by themselves: what
@@ -586,7 +597,7 @@ impl HeatSource {
         if heatsink > 0.0 {
             g += 1.0 / heatsink;
         }
-        HeatSource { refdes: refdes.into(), power, theta_jc: jc, theta_body: if g > 0.0 { 1.0 / g } else { 0.0 } }
+        HeatSource { refdes: refdes.into(), power, theta_jc: jc, theta_body: if g > 0.0 { 1.0 / g } else { 0.0 }, cth: 0.0 }
     }
 }
 
@@ -684,6 +695,106 @@ pub fn thermal_matrix(board: &Board, sources: &[HeatSource], copper_um: f64, spe
     });
     let r = (0..sources.len()).map(|i| (0..sources.len()).map(|j| cols[j][i]).collect()).collect();
     Ok((r, map))
+}
+
+/// The board warming up after its parts are switched on (their powers held from t = 0): pictures of the map at some moments and every
+/// part's junction over time.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ThermalTransient {
+    pub grid: Grid,
+    pub layers: Vec<Side>,
+    pub ambient_c: f64,
+    /// The moments (s) of the steps.
+    pub times: Vec<f64>,
+    /// Each source's junction (°C) at every step.
+    pub parts: Vec<(String, Vec<f64>)>,
+    /// Pictures of the map: (moment s, temperature °C per layer per cell, `NaN` off the board), at about `frames` moments spread
+    /// evenly on a log scale of time, the last at the end.
+    pub frames: Vec<(f64, Vec<Vec<f32>>)>,
+    /// The board's own heat capacity (J/K, copper and FR-4) and its time to warm (s): the capacity over its whole conductance to the air.
+    pub board_cth: f64,
+    pub board_tau: f64,
+}
+
+/// How the board warms from the air's temperature when the sources' powers are switched on at t = 0, until `t_end` seconds: backward
+/// Euler (stable whatever the step) with steps growing from `t_end`/10⁵ (at least 1 ms) by a constant factor, about 120 of them; each
+/// cell's h follows its rise of the step before. Each node's heat capacity is its copper and FR-4; a part's junction has its own `cth`
+/// (0: a little, so it follows its power within a step).
+pub fn thermal_transient(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec, t_end: f64, frames: usize) -> Result<ThermalTransient, String> {
+    if !(t_end > 0.0) {
+        return Err("時間は 0 より長くしてください".into());
+    }
+    let m = model(board, copper_um, spec.cell_mm)?;
+    let (extra, extra_air, _) = junctions(board, &m, sources);
+    let n0 = m.nodes();
+    let n = n0 + sources.len();
+    let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(&extra).copied().collect();
+    let csr = Csr::new(n, &edges);
+    let mut cap = m.cap.clone();
+    cap.extend(sources.iter().map(|s| s.cth.max(1e-6)));
+    let mut q = vec![0.0; n];
+    for (e, s) in sources.iter().enumerate() {
+        q[n0 + e] = s.power;
+    }
+    // steps: geometric from dt0 to t_end
+    let steps = 120usize;
+    let dt0 = (t_end * 1e-5).max(1e-3).min(t_end / steps as f64);
+    let growth = if t_end / dt0 > steps as f64 {
+        // dt0 · (g^steps − 1) / (g − 1) = t_end
+        let (mut lo, mut hi): (f64, f64) = (1.0 + 1e-9, 2.0);
+        for _ in 0..100 {
+            let mid = 0.5 * (lo + hi);
+            if dt0 * (mid.powi(steps as i32) - 1.0) / (mid - 1.0) < t_end { lo = mid } else { hi = mid }
+        }
+        hi
+    } else {
+        1.0
+    };
+    let frame_at: Vec<f64> = (1..=frames.max(1)).map(|k| t_end * 10f64.powf(-3.0 * (frames.max(1) - k) as f64 / frames.max(1) as f64)).collect();
+    let mut rise = vec![0.0; n];
+    let mut air = vec![0.0; n];
+    let mut times = vec![0.0];
+    let mut parts: Vec<(String, Vec<f64>)> = sources.iter().map(|s| (s.refdes.clone(), vec![spec.ambient_c])).collect();
+    let mut shots = vec![];
+    let (w, h) = (m.grid.w, m.grid.h);
+    let picture = |rise: &[f64]| -> Vec<Vec<f32>> {
+        let mut t = vec![vec![f32::NAN; w * h]; m.layers.len()];
+        for (k, &(l, c)) in m.cell_of.iter().enumerate() {
+            t[l][c] = (spec.ambient_c + rise[k]) as f32;
+        }
+        t
+    };
+    let (mut t, mut dt) = (0.0, dt0);
+    let mut next_frame = 0;
+    while t < t_end * (1.0 - 1e-9) {
+        let step = dt.min(t_end - t);
+        air_conductance(&m, spec, &rise, &mut air);
+        let mut diag = csr.sum.clone();
+        let mut b = vec![0.0; n];
+        for k in 0..n {
+            if k < n0 {
+                diag[k] += air[k];
+            } else {
+                diag[k] += extra_air[k - n0];
+            }
+            diag[k] += cap[k] / step;
+            b[k] = q[k] + cap[k] / step * rise[k];
+        }
+        cg(&csr, &diag, &b, &mut rise, 1e-7);
+        t += step;
+        dt *= growth;
+        times.push(t);
+        for (e, p) in parts.iter_mut().enumerate() {
+            p.1.push(spec.ambient_c + rise[n0 + e]);
+        }
+        while next_frame < frame_at.len() && t >= frame_at[next_frame] * (1.0 - 1e-9) {
+            shots.push((t, picture(&rise)));
+            next_frame += 1;
+        }
+    }
+    let board_cth: f64 = m.cap.iter().sum();
+    let g_air: f64 = air[..n0].iter().sum();
+    Ok(ThermalTransient { grid: m.grid.clone(), layers: m.layers.clone(), ambient_c: spec.ambient_c, times, parts, frames: shots, board_cth, board_tau: board_cth / g_air.max(1e-12) })
 }
 
 /// Two parts that warm each other noticeably through the board.
@@ -861,11 +972,44 @@ mod datasheet {
         assert!(hot_pairs(&pair(60.0), &src, 35.0, &spec).unwrap().is_empty());
     }
 
+    /// The map over time: a 100 × 80 mm two-layer board holds about 26 J/K of FR-4 (the candidate's figure; its copper pads add
+    /// little) and warms in minutes; run long, it ends on the steady map; a part with its own heat capacity rises at first as
+    /// P·t/C, and later than one without.
+    #[test]
+    fn the_board_warms_over_minutes_to_its_steady_map() {
+        let mut b = Board::new("t", 100.0, 80.0);
+        for dx in [-1.6, 1.6] {
+            let mut p = Pad::new(Point::new(50.0 + dx, 40.0), PadShape::Rect { w: 1.6, h: 1.2 }, None, Side::Top);
+            p.refdes = "R1".into();
+            b.pads.push(p);
+        }
+        let spec = ThermalSpec { cell_mm: 2.0, ..Default::default() };
+        let mut src = HeatSource::new("R1", 1.0, 120.0, 0.0, 0.0);
+        let steady = thermal_map(&b, std::slice::from_ref(&src), 35.0, &spec).unwrap();
+        let tr = thermal_transient(&b, std::slice::from_ref(&src), 35.0, &spec, 3000.0, 6).unwrap();
+        assert!((25.0..28.0).contains(&tr.board_cth), "FR-4 100 × 80 × 1.6 mm: {} J/K", tr.board_cth);
+        assert!((60.0..400.0).contains(&tr.board_tau), "minutes: {} s", tr.board_tau);
+        let end = *tr.parts[0].1.last().unwrap();
+        assert!((end - steady.parts[0].junction).abs() < 0.02 * (steady.parts[0].junction - 25.0), "the end {end}, the steady map {}", steady.parts[0].junction);
+        assert_eq!(tr.frames.len(), 6);
+        assert!((tr.frames.last().unwrap().0 - 3000.0).abs() < 1e-6);
+        // the hottest cell rises frame after frame
+        let hot = |f: &Vec<Vec<f32>>| f.iter().flatten().filter(|x| x.is_finite()).fold(0f32, |a, b| a.max(*b));
+        assert!(tr.frames.windows(2).all(|w| hot(&w[1].1) >= hot(&w[0].1) - 1e-3));
+        // its own 0.05 J/K: after 10 ms it has risen by about P·t/C = 0.2 K, far below where the part without one already is
+        src.cth = 0.05;
+        let slow = thermal_transient(&b, std::slice::from_ref(&src), 35.0, &spec, 1.0, 4).unwrap();
+        let at = |tr: &ThermalTransient, t: f64| tr.times.iter().position(|x| *x >= t).map(|k| tr.parts[0].1[k] - 25.0).unwrap();
+        let early = at(&slow, 0.01);
+        assert!((0.1..0.3).contains(&early), "{early} K after 10 ms");
+        assert!(at(&tr, 0.01) > 5.0 * early);
+    }
+
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the
     /// grid with the part's body to the air (`BODY_SHARE`, fitted to the first point only) gives all three within 12 %.
     #[test]
     fn the_grid_follows_the_datasheet_curve_of_a_sot223() {
-        let q1 = HeatSource { refdes: "Q1".into(), power: 1.0, theta_jc: 12.0, theta_body: body_theta(110.0 - 12.0) };
+        let q1 = HeatSource { refdes: "Q1".into(), power: 1.0, theta_jc: 12.0, theta_body: body_theta(110.0 - 12.0), ..Default::default() };
         let spec = ThermalSpec { cell_mm: 1.0, ..Default::default() };
         for (a, want) in [(0.0, 110.0), (0.066 * 645.16, 95.0), (645.16, 42.0)] {
             let m = thermal_map(&sot223_board(a), std::slice::from_ref(&q1), 70.0, &spec).unwrap();

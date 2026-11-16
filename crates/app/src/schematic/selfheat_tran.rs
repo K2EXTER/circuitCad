@@ -199,14 +199,7 @@ fn fmt_power(w: f64) -> String {
 }
 
 fn curve_color(k: usize) -> egui::Color32 {
-    const COLORS: [egui::Color32; 5] = [
-        egui::Color32::from_rgb(240, 150, 60),
-        egui::Color32::from_rgb(90, 170, 240),
-        egui::Color32::from_rgb(120, 210, 120),
-        egui::Color32::from_rgb(220, 110, 200),
-        egui::Color32::from_rgb(220, 210, 90),
-    ];
-    COLORS[k % COLORS.len()]
+    crate::theme::series_color(k)
 }
 
 /// The temperature rise of each part over time, as lines.

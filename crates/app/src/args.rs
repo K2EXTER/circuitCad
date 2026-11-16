@@ -594,6 +594,15 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         let sources = run.as_ref().map(|v| app.sch.thermal_sources(v)).map_err(|e| e.clone());
         app.sch.heat_view = Some(run);
         app.board_ed.run_thermal_map(sources);
+        // --thermal-tran SECONDS [FRAME]: the board warming up, that frame (0..7) on the board
+        if let Some(j) = args.iter().position(|a| a == "--thermal-tran")
+            && let Some(t) = args.get(j + 1).and_then(|t| t.parse::<f64>().ok()) {
+                app.board_ed.thermal.tran_end = t;
+                app.board_ed.run_thermal_transient();
+                if let Some(f) = args.get(j + 2).and_then(|f| f.parse::<usize>().ok()) {
+                    app.board_ed.thermal.show_frame = Some(f);
+                }
+            }
     }
     if args.iter().any(|a| a == "--3d") {
         app.board_ed.open_view3d();

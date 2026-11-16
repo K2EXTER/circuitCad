@@ -3,7 +3,7 @@
 //! over when the window asks for them (`take_thermal_request`, `run_thermal_map`).
 
 use super::*;
-use pcb_core::thermal::{HeatSource, Orientation, ThermalMap, ThermalSpec};
+use pcb_core::thermal::{HeatSource, Orientation, ThermalMap, ThermalSpec, ThermalTransient};
 
 #[derive(Default)]
 pub struct ThermalView {
@@ -18,8 +18,12 @@ pub struct ThermalView {
     pub own_temps: Vec<(String, f64)>,
     /// The heat sources of the last map.
     sources: Vec<HeatSource>,
-    /// The picture of the shown layer: (layer, texture).
-    texture: Option<(usize, egui::TextureHandle)>,
+    /// The picture of the shown layer: (layer, frame of the run over time or `None` for the steady map, texture).
+    texture: Option<(usize, Option<usize>, egui::TextureHandle)>,
+    /// The run over time (switched on at t = 0), how long it runs (s), and the frame shown on the board (`None`: the steady map).
+    pub transient: Option<Result<ThermalTransient, String>>,
+    pub tran_end: f64,
+    pub show_frame: Option<usize>,
     request: bool,
     /// Milliseconds the last map took.
     pub took_ms: f64,
@@ -87,6 +91,20 @@ impl BoardEditor {
         }
     }
 
+    /// The board warming up from the air's temperature, the sources of the last map switched on at t = 0, for `tran_end` seconds.
+    pub(crate) fn run_thermal_transient(&mut self) {
+        let end = if self.thermal.tran_end > 0.0 { self.thermal.tran_end } else { 600.0 };
+        self.thermal.texture = None;
+        self.thermal.transient = Some(if self.thermal.sources.is_empty() {
+            Err("先に「熱の地図を計算」を押してください".into())
+        } else {
+            pcb_core::thermal::thermal_transient(&self.board, &self.thermal.sources, self.board.stackup.copper_um, &self.thermal.spec, end, 8)
+        });
+        if let Some(Ok(tr)) = &self.thermal.transient {
+            self.thermal.show_frame = Some(tr.frames.len().saturating_sub(1));
+        }
+    }
+
     /// The scale of the colours (°C): the air to the hottest cell (at least 10 K).
     fn thermal_scale(m: &ThermalMap) -> (f64, f64) {
         let top = m.temp.iter().flatten().filter(|t| t.is_finite()).fold(m.ambient_c, |a, b| a.max(*b));
@@ -100,11 +118,20 @@ impl BoardEditor {
         }
         let Some(Ok(m)) = &self.thermal.result else { return };
         let layer = self.thermal.layer.min(m.layers.len() - 1);
-        if self.thermal.texture.as_ref().is_none_or(|(l, _)| *l != layer) {
+        // a frame of the run over time, on the steady map's colour scale (so that the colours mean the same temperatures)
+        let frame = match (&self.thermal.transient, self.thermal.show_frame) {
+            (Some(Ok(tr)), Some(k)) if k < tr.frames.len() && tr.grid == m.grid => Some(k),
+            _ => None,
+        };
+        if self.thermal.texture.as_ref().is_none_or(|(l, f, _)| *l != layer || *f != frame) {
             let (lo, hi) = Self::thermal_scale(m);
             let g = &m.grid;
+            let temps: Vec<f64> = match (frame, &self.thermal.transient) {
+                (Some(k), Some(Ok(tr))) => tr.frames[k].1[layer].iter().map(|x| *x as f64).collect(),
+                _ => m.temp[layer].clone(),
+            };
             let mut img = egui::ColorImage::new([g.w, g.h], vec![Color32::TRANSPARENT; g.w * g.h]);
-            for (c, t) in m.temp[layer].iter().enumerate() {
+            for (c, t) in temps.iter().enumerate() {
                 if t.is_finite() {
                     let [r, gg, b] = super::view3d::heat_color((t - lo) / (hi - lo));
                     // rows go up in y on the board, down in the picture
@@ -112,9 +139,9 @@ impl BoardEditor {
                     img.pixels[j * g.w + i] = Color32::from_rgba_unmultiplied(r, gg, b, 170);
                 }
             }
-            self.thermal.texture = Some((layer, painter.ctx().load_texture("thermal_map", img, egui::TextureOptions::LINEAR)));
+            self.thermal.texture = Some((layer, frame, painter.ctx().load_texture("thermal_map", img, egui::TextureOptions::LINEAR)));
         }
-        let Some((_, tex)) = &self.thermal.texture else { return };
+        let Some((_, _, tex)) = &self.thermal.texture else { return };
         let g = &m.grid;
         let a = self.to_screen(rect, Point::new(g.x0, g.y0 + g.h as f64 * g.d));
         let b = self.to_screen(rect, Point::new(g.x0 + g.w as f64 * g.d, g.y0));
@@ -131,7 +158,11 @@ impl BoardEditor {
         let font = egui::FontId::proportional(13.0);
         painter.text(Pos2::new(bar.left(), bar.top() - 2.0), egui::Align2::LEFT_BOTTOM, format!("{lo:.0} ℃"), font.clone(), Color32::WHITE);
         painter.text(Pos2::new(bar.right(), bar.top() - 2.0), egui::Align2::RIGHT_BOTTOM, format!("{hi:.0} ℃"), font.clone(), Color32::WHITE);
-        painter.text(Pos2::new(bar.right() + 8.0, bar.center().y), egui::Align2::LEFT_CENTER, i18n::tr("熱の地図 (目安)"), font, Color32::WHITE);
+        let label = match (frame, &self.thermal.transient) {
+            (Some(k), Some(Ok(tr))) => i18n::trf!("熱の地図 (目安)・電源を入れて {}", fmt_time(tr.frames[k].0)),
+            _ => i18n::tr("熱の地図 (目安)").to_string(),
+        };
+        painter.text(Pos2::new(bar.right() + 8.0, bar.center().y), egui::Align2::LEFT_CENTER, label, font, Color32::WHITE);
     }
 
     pub fn thermal_window(&mut self, ctx: &egui::Context) {
@@ -222,6 +253,7 @@ impl BoardEditor {
                             self.suggest_apart(k);
                         }
                     }
+                    self.thermal_transient_ui(ui);
                     ui.label(egui::RichText::new(i18n::tr("目安です: 風・まわりの部品・ケースで ±20〜30 % ずれます。部品の本体から空気への熱は、SOT-223 のデータシートの曲線に合わせた割合で入れています")).small().weak());
                 }
             }
@@ -229,6 +261,88 @@ impl BoardEditor {
         if !open {
             self.thermal.open = false;
             self.thermal.overlay = false;
+        }
+    }
+}
+
+impl BoardEditor {
+    /// "時間の変化": how long, the button, the moment shown on the board, and each part's temperature over time.
+    fn thermal_transient_ui(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+        ui.label(egui::RichText::new(i18n::tr("時間の変化 (電源を入れてから)")).strong()).on_hover_text(i18n::tr("部品の電力を時刻 0 で入れたときに、基板が温まっていく様子です。部品は秒で、基板は分で温まります。銅と FR-4 の熱容量 (重さ × 比熱) と、部品の熱容量 (回路図の「温度の時間変化」の熱容量) で計算します"));
+        ui.horizontal(|ui| {
+            if self.thermal.tran_end <= 0.0 {
+                self.thermal.tran_end = 600.0;
+            }
+            ui.label(i18n::tr("時間"));
+            ui.add(egui::DragValue::new(&mut self.thermal.tran_end).range(0.1..=36000.0).speed(10.0).suffix(" s")).on_hover_text(i18n::tr("何秒後まで計算するか。基板全体が落ち着くには、ふつう 10〜30 分かかります"));
+            if ui.button(i18n::tr("時間の変化を計算")).on_hover_text(i18n::tr("いま計算した地図の部品の電力を、時刻 0 で入れて、温まっていく様子を計算します (時間は対数で刻みます)")).clicked() {
+                self.run_thermal_transient();
+            }
+        });
+        let Some(tr) = &self.thermal.transient else { return };
+        let tr = match tr {
+            Ok(tr) => tr,
+            Err(e) => {
+                ui.colored_label(crate::theme::ERROR, e);
+                return;
+            }
+        };
+        ui.label(egui::RichText::new(i18n::trf!("基板の熱容量 {:.1} J/K (銅と FR-4)、温まる時定数 約 {} (熱容量 ÷ 空気へ逃げる熱のしやすさ)", tr.board_cth, fmt_time(tr.board_tau))).small());
+        // the moment shown on the board
+        let mut k = self.thermal.show_frame.unwrap_or(tr.frames.len().saturating_sub(1)).min(tr.frames.len().saturating_sub(1));
+        let mut steady = self.thermal.show_frame.is_none();
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut steady, i18n::tr("落ち着いた温度を表示")).on_hover_text(i18n::tr("基板の色を、時間の変化でなく、上の落ち着いた (定常の) 地図にします"));
+            ui.add_enabled(!steady && tr.frames.len() > 1, egui::Slider::new(&mut k, 0..=tr.frames.len().saturating_sub(1)).show_value(false))
+                .on_hover_text(i18n::tr("基板に重ねる時刻を選びます"));
+            if let Some((t, _)) = tr.frames.get(k) {
+                ui.label(fmt_time(*t));
+            }
+        });
+        let pick = if steady { None } else { Some(k) };
+        if pick != self.thermal.show_frame {
+            self.thermal.show_frame = pick;
+        }
+        draw_temp_chart(ui, tr);
+    }
+}
+
+/// A time for people: "0.5 秒", "40 秒", "3.2 分".
+fn fmt_time(t: f64) -> String {
+    if t < 1.0 {
+        format!("{:.0} ms", t * 1e3)
+    } else if t < 120.0 {
+        i18n::trf!("{:.1} 秒", t)
+    } else {
+        i18n::trf!("{:.1} 分", t / 60.0)
+    }
+}
+
+/// Each part's temperature over time, time on a log scale.
+fn draw_temp_chart(ui: &mut egui::Ui, tr: &ThermalTransient) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width().max(300.0), 150.0), Sense::hover());
+    let plot = Rect::from_min_max(rect.min + egui::vec2(46.0, 6.0), rect.max - egui::vec2(8.0, 18.0));
+    let painter = ui.painter_at(rect);
+    let weak = ui.visuals().weak_text_color();
+    painter.rect_stroke(plot, 0.0, egui::Stroke::new(1.0, weak), egui::StrokeKind::Inside);
+    let top = tr.parts.iter().flat_map(|p| p.1.iter().copied()).fold(tr.ambient_c + 1.0, f64::max);
+    let t0 = tr.times.get(1).copied().unwrap_or(1e-3).max(1e-6);
+    let t1 = tr.times.last().copied().unwrap_or(1.0).max(t0 * 10.0);
+    let x = |t: f64| plot.left() + plot.width() * (((t.max(t0)).ln() - t0.ln()) / (t1.ln() - t0.ln())) as f32;
+    let y = |c: f64| plot.bottom() - plot.height() * ((c - tr.ambient_c) / (top - tr.ambient_c)) as f32;
+    let font = egui::FontId::proportional(11.0);
+    painter.text(Pos2::new(plot.left() - 3.0, plot.top()), egui::Align2::RIGHT_TOP, format!("{top:.0} ℃"), font.clone(), weak);
+    painter.text(Pos2::new(plot.left() - 3.0, plot.bottom()), egui::Align2::RIGHT_BOTTOM, format!("{:.0} ℃", tr.ambient_c), font.clone(), weak);
+    painter.text(Pos2::new(plot.left(), plot.bottom() + 2.0), egui::Align2::LEFT_TOP, fmt_time(t0), font.clone(), weak);
+    painter.text(Pos2::new(plot.right(), plot.bottom() + 2.0), egui::Align2::RIGHT_TOP, fmt_time(t1), font.clone(), weak);
+    for (k, (name, temps)) in tr.parts.iter().enumerate() {
+        let col = crate::theme::series_color(k);
+        let pts: Vec<Pos2> = tr.times.iter().zip(temps).skip(1).map(|(t, c)| Pos2::new(x(*t), y(*c))).collect();
+        painter.add(egui::Shape::line(pts, egui::Stroke::new(1.5, col)));
+        if let Some(c) = temps.last() {
+            // kept inside the chart: the hottest line ends at its top edge
+            painter.text(Pos2::new(plot.right() - 2.0, (y(*c) - 1.0).max(plot.top() + 13.0)), egui::Align2::RIGHT_BOTTOM, format!("{name} {c:.0} ℃"), font.clone(), col);
         }
     }
 }

@@ -74,3 +74,15 @@ pub const ERROR: Color32 = Color32::from_rgb(244, 123, 116);
 pub const WARN: Color32 = Color32::from_rgb(223, 145, 26);
 /// Something is fine (a check passed, a step done).
 pub const OK: Color32 = Color32::from_rgb(89, 190, 108);
+
+/// Colours of the lines of a small chart, one per series (the heat charts).
+pub fn series_color(k: usize) -> egui::Color32 {
+    const COLORS: [egui::Color32; 5] = [
+        egui::Color32::from_rgb(240, 150, 60),
+        egui::Color32::from_rgb(90, 170, 240),
+        egui::Color32::from_rgb(120, 210, 120),
+        egui::Color32::from_rgb(220, 110, 200),
+        egui::Color32::from_rgb(220, 210, 90),
+    ];
+    COLORS[k % COLORS.len()]
+}
