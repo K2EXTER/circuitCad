@@ -445,9 +445,41 @@ mod view3d_tests {
         assert_eq!(heat::heat_color(-1.0), cold);
         assert_eq!(heat::heat_color(f64::NAN), cold);
         assert_eq!(heat::heat_color(2.0), heat::heat_color(1.0));
-        let t = |hot: f64| heat::PartTemps { ambient: 25.0, parts: vec![("R1".into(), hot, 0.1)] };
+        let t = |hot: f64| heat::PartTemps { ambient: 25.0, parts: vec![("R1".into(), hot, 0.1)], ..Default::default() };
         assert_eq!(heat::scale(&t(80.0)), (25.0, 80.0));
         assert_eq!(heat::scale(&t(27.0)), (25.0, 25.0 + heat::MIN_SPAN));
+    }
+
+    /// With the board's heat map worked out and the heat colours on, the board's faces are painted by the map (the face at the hot
+    /// part turns from its own colour to the map's), the parts take the map's temperatures, and turning the colours off gives the faces
+    /// their own pictures back.
+    #[test]
+    fn the_board_is_painted_by_its_heat_map() {
+        let b = tall_and_short();
+        let mut e = BoardEditor { board: b.clone(), ..Default::default() };
+        e.view3d.scene = Some(Scene::build(&b, &egui::Context::default(), true, true).unwrap());
+        let plain = e.view3d.scene.as_ref().unwrap().img.clone();
+        let src = [pcb_core::thermal::HeatSource::new("C1", 1.0, 100.0, 0.0, 0.0)];
+        let map = pcb_core::thermal::thermal_map(&b, &src, 35.0, &pcb_core::thermal::ThermalSpec { cell_mm: 1.0, ..Default::default() }).unwrap();
+        let junction = map.parts[0].junction;
+        e.thermal.result = Some(Ok(map));
+        e.thermal.serial = 1;
+        e.view3d.heat_on = true;
+        e.sync_heat_map();
+        let painted = e.view3d.scene.as_ref().unwrap().img.clone();
+        let changed = painted[0].iter().zip(&plain[0]).filter(|(a, b)| a != b).count();
+        assert!(changed > plain[0].iter().filter(|p| p[3] > 0).count() / 2, "most of the top face is painted: {changed}");
+        let t = e.view3d.temps.clone().unwrap();
+        assert_eq!(t.parts[0].0, "C1");
+        assert!((t.parts[0].1 - junction).abs() < 1e-9 && t.source == "熱の地図" && t.hottest > 25.0, "{t:?}");
+        // the same map again: nothing to paint
+        let generation = e.view3d.generation;
+        e.sync_heat_map();
+        assert_eq!(e.view3d.generation, generation);
+        // off: the faces as they were
+        e.view3d.heat_on = false;
+        e.sync_heat_map();
+        assert_eq!(e.view3d.scene.as_ref().unwrap().img, plain);
     }
 
     /// With the temperatures on, a warmed part is painted hot and the others at the cold end (the ambient), in both the software and
@@ -458,7 +490,7 @@ mod view3d_tests {
         let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
         let c1 = s.parts.iter().position(|p| p.0 == "C1").unwrap();
         let r1 = s.parts.iter().position(|p| p.0 == "R1").unwrap();
-        let temps = heat::PartTemps { ambient: 25.0, parts: vec![("C1".into(), 85.0, 0.5), ("NOT_ON_BOARD".into(), 40.0, 0.1)] };
+        let temps = heat::PartTemps { ambient: 25.0, parts: vec![("C1".into(), 85.0, 0.5), ("NOT_ON_BOARD".into(), 40.0, 0.1)], ..Default::default() };
         assert!(s.set_heat(Some(&temps)));
         assert!(!s.set_heat(Some(&temps)), "same temperatures: nothing to redraw");
         assert_eq!(s.heat[c1], Some(heat::heat_color(1.0)));

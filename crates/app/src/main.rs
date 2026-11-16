@@ -150,7 +150,7 @@ impl App {
             return;
         }
         let temps = match &self.sch.heat_view {
-            Some(Ok(v)) => Some(board_editor::PartTemps { ambient: v.ambient, parts: v.parts.iter().map(|p| (p.name.clone(), p.temp_c, p.power)).collect() }),
+            Some(Ok(v)) => Some(board_editor::PartTemps { ambient: v.ambient, parts: v.parts.iter().map(|p| (p.name.clone(), p.temp_c, p.power)).collect(), ..Default::default() }),
             _ => None,
         };
         self.board_ed.set_part_temps(temps);

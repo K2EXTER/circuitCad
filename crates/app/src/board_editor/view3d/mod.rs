@@ -83,6 +83,8 @@ pub(super) struct View3d {
     /// Paint the parts by temperature, the temperatures handed over from the schematic, and a request to work them out there.
     heat_on: bool,
     temps: Option<PartTemps>,
+    /// What the board's faces are painted with: (the heat map's serial, the moment, mask, silk); `None`: their own pictures.
+    board_heat: Option<(u64, Option<usize>, bool, bool)>,
     heat_request: bool,
     /// The other boards of a multi-board project where they stand, in this board's frame (set by the app: `set_view3d_others`).
     others: Vec<pcb_core::mesh::Mesh3d>,
@@ -110,7 +112,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true, heat_on: false, temps: None, heat_request: false, others: vec![] }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true, heat_on: false, temps: None, board_heat: None, heat_request: false, others: vec![] }
     }
 }
 

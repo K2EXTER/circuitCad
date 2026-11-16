@@ -12,6 +12,11 @@ pub(crate) struct PartTemps {
     pub ambient: f64,
     /// `(refdes, temperature °C, power W)` of the parts the run warmed.
     pub parts: Vec<(String, f64, f64)>,
+    /// The hottest spot of the board's heat map when the board is painted too (°C; 0 = no map): the scale reaches it.
+    pub hottest: f64,
+    /// Where the temperatures come from, shown under the legend ("熱の地図", and on a second line "38 秒後" for a moment of the map over
+    /// time); empty = the self-heating run.
+    pub source: String,
 }
 
 /// The narrowest scale (K): the hot end is at least this far above the ambient.
@@ -19,7 +24,7 @@ pub(super) const MIN_SPAN: f64 = 10.0;
 
 /// The ends of the colour scale (°C).
 pub(super) fn scale(t: &PartTemps) -> (f64, f64) {
-    let top = t.parts.iter().map(|p| p.1).fold(t.ambient, f64::max);
+    let top = t.parts.iter().map(|p| p.1).fold(t.ambient.max(t.hottest), f64::max);
     (t.ambient, top.max(t.ambient + MIN_SPAN))
 }
 
@@ -71,7 +76,8 @@ pub(super) fn legend(painter: &egui::Painter, rect: Rect, t: &PartTemps) {
     let (lo, hi) = scale(t);
     let (w, h) = (16.0, (rect.height() * 0.4).clamp(80.0, 220.0));
     let bar = Rect::from_min_size(Pos2::new(rect.right() - 70.0, rect.top() + 34.0), Vec2::new(w, h));
-    painter.rect_filled(Rect::from_min_max(bar.min - Vec2::new(8.0, 28.0), Pos2::new(rect.right() - 6.0, bar.bottom() + 10.0)), 4.0, Color32::from_black_alpha(150));
+    let foot = 10.0 + 14.0 * t.source.lines().count() as f32;
+    painter.rect_filled(Rect::from_min_max(bar.min - Vec2::new(8.0, 28.0), Pos2::new(rect.right() - 6.0, bar.bottom() + foot)), 4.0, Color32::from_black_alpha(150));
     const N: usize = 32;
     for k in 0..N {
         let f = k as f32 / N as f32;
@@ -81,11 +87,92 @@ pub(super) fn legend(painter: &egui::Painter, rect: Rect, t: &PartTemps) {
     }
     let font = egui::FontId::proportional(11.0);
     painter.text(Pos2::new(bar.left() - 2.0, bar.top() - 22.0), egui::Align2::LEFT_TOP, i18n::tr("温度 (目安)"), font.clone(), Color32::WHITE);
+    if !t.source.is_empty() {
+        painter.text(Pos2::new(bar.left() - 2.0, bar.bottom() + 8.0), egui::Align2::LEFT_TOP, &t.source, font.clone(), Color32::WHITE);
+    }
     painter.text(Pos2::new(bar.right() + 4.0, bar.top()), egui::Align2::LEFT_TOP, format!("{hi:.0} ℃"), font.clone(), Color32::WHITE);
     painter.text(Pos2::new(bar.right() + 4.0, bar.bottom()), egui::Align2::LEFT_BOTTOM, format!("{lo:.0} ℃"), font, Color32::WHITE);
 }
 
+/// Paints a face's picture (`bottom`: the mirrored one) with the board's heat map: each board pixel takes the colour of its cell's
+/// temperature on `temps` (one layer of the map), mixed with what was drawn there so the copper and the silk still show.
+pub(super) fn tint(img: &mut [[u8; 4]], frame: pcb_core::gerber_view::Frame, bottom: bool, grid: &pcb_core::thermal::Grid, temps: &[f64], lo: f64, hi: f64) {
+    for j in 0..frame.h {
+        for i in 0..frame.w {
+            let px = &mut img[j * frame.w + i];
+            if px[3] == 0 {
+                continue;
+            }
+            let col = if bottom { frame.w as f64 - i as f64 - 0.5 } else { i as f64 + 0.5 };
+            let p = pcb_core::model::Point::new(frame.x0 + col / frame.px, frame.y1 - (j as f64 + 0.5) / frame.px);
+            let Some(t) = grid.cell_at(p).map(|c| temps[c]).filter(|t| t.is_finite()) else { continue };
+            let c = heat_color((t - lo) / (hi - lo));
+            for k in 0..3 {
+                px[k] = (0.7 * c[k] as f64 + 0.3 * px[k] as f64).round() as u8;
+            }
+        }
+    }
+}
+
 impl BoardEditor {
+    /// With the heat colours on and the board's heat map worked out: the parts take their junctions from the map (or the moment of the
+    /// map over time picked in its window), and the board's two faces are painted with its top and bottom layers on the same scale.
+    /// Without a map: the self-heating run's temperatures and the faces as they are. The faces are painted again only when the map,
+    /// the moment or the look changes.
+    pub(super) fn sync_heat_map(&mut self) {
+        let map = match (&self.thermal.result, self.view3d.heat_on) {
+            (Some(Ok(m)), true) => Some(m),
+            _ => None,
+        };
+        let key = map.map(|_| (self.thermal.serial, self.thermal.show_frame, self.view3d.mask, self.view3d.silk));
+        let Some(m) = map else {
+            if self.view3d.board_heat.is_some() {
+                self.view3d.board_heat = None;
+                if let Some(s) = &mut self.view3d.scene {
+                    s.img = Scene::images(&s.pv, self.view3d.mask, self.view3d.silk);
+                    self.view3d.generation += 1;
+                }
+            }
+            return;
+        };
+        // the moment of the map over time, if one is picked
+        let frame = match (&self.thermal.transient, self.thermal.show_frame) {
+            (Some(Ok(tr)), Some(k)) if k < tr.frames.len() && tr.grid == m.grid => Some((tr, k)),
+            _ => None,
+        };
+        let layers: Vec<Vec<f64>> = match frame {
+            Some((tr, k)) => tr.frames[k].1.iter().map(|l| l.iter().map(|x| *x as f64).collect()).collect(),
+            None => m.temp.clone(),
+        };
+        let parts: Vec<(String, f64, f64)> = match frame {
+            Some((tr, k)) => {
+                let at = tr.times.iter().position(|t| (t - tr.frames[k].0).abs() <= 1e-9 * tr.frames[k].0.max(1.0)).unwrap_or(tr.times.len() - 1);
+                tr.parts.iter().zip(&m.parts).map(|((n, v), p)| (n.clone(), v[at], p.power)).collect()
+            }
+            None => m.parts.iter().map(|p| (p.refdes.clone(), p.junction, p.power)).collect(),
+        };
+        let hottest = layers.iter().flatten().filter(|t| t.is_finite()).fold(m.ambient_c, |a, b| a.max(*b));
+        let source = match frame {
+            Some((tr, k)) => format!("{}
+{}", i18n::tr("熱の地図"), i18n::trf!("{:.0} 秒後", tr.frames[k].0)),
+            None => i18n::tr("熱の地図").to_string(),
+        };
+        let temps = PartTemps { ambient: m.ambient_c, parts, hottest, source };
+        if self.view3d.board_heat != key {
+            let (lo, hi) = scale(&temps);
+            if let Some(s) = &mut self.view3d.scene {
+                let mut img = Scene::images(&s.pv, self.view3d.mask, self.view3d.silk);
+                let last = layers.len() - 1;
+                tint(&mut img[0], s.pv.frame, false, &m.grid, &layers[0], lo, hi);
+                tint(&mut img[1], s.pv.frame, true, &m.grid, &layers[last], lo, hi);
+                s.img = img;
+                self.view3d.generation += 1;
+                self.view3d.board_heat = key;
+            }
+        }
+        self.view3d.temps = Some(temps);
+    }
+
     /// The temperatures of the schematic's self-heating run (`None`: no run, or it failed), for the heat colours of the 3D view.
     pub(crate) fn set_part_temps(&mut self, temps: Option<PartTemps>) {
         self.view3d.temps = temps;

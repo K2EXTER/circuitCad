@@ -24,6 +24,8 @@ pub struct ThermalView {
     pub transient: Option<Result<ThermalTransient, String>>,
     pub tran_end: f64,
     pub show_frame: Option<usize>,
+    /// Counts the maps and runs worked out (the 3D view paints the board again when it changes).
+    pub serial: u64,
     request: bool,
     /// Milliseconds the last map took.
     pub took_ms: f64,
@@ -86,6 +88,9 @@ impl BoardEditor {
             _ => vec![],
         };
         self.thermal.took_ms = t0.elapsed().as_secs_f64() * 1e3;
+        self.thermal.serial += 1;
+        self.thermal.transient = None;
+        self.thermal.show_frame = None;
         if let Some(Ok(_)) = &self.thermal.result {
             self.thermal.overlay = true;
         }
@@ -103,6 +108,7 @@ impl BoardEditor {
         if let Some(Ok(tr)) = &self.thermal.transient {
             self.thermal.show_frame = Some(tr.frames.len().saturating_sub(1));
         }
+        self.thermal.serial += 1;
     }
 
     /// The scale of the colours (°C): the air to the hottest cell (at least 10 K).

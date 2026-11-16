@@ -46,6 +46,7 @@ impl BoardEditor {
             if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_case(spec, &self.board)) {
                 self.view3d.generation += 1;
             }
+            self.sync_heat_map();
             let temps = if self.view3d.heat_on { self.view3d.temps.clone() } else { None };
             if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_heat(temps.as_ref())) {
                 self.view3d.generation += 1;
@@ -98,7 +99,7 @@ impl BoardEditor {
                     ui.add(egui::DragValue::new(&mut v.case_w).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("内寸 幅 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の幅。基板が入るかを調べます (縁との隙間は 0.5 mm を見込みます)。0 にすると調べません。青い枠がケースの内側です"));
                     ui.add(egui::DragValue::new(&mut v.case_d).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("奥行 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)"));
                 }
-                ui.checkbox(&mut v.heat_on, i18n::tr("温度の色")).on_hover_text(i18n::tr("部品を温度の色で塗ります (サーマルカメラのような見え方)。温度は回路図の「自己発熱」の計算の結果で、電力 × 熱抵抗から出した目安です。青いほど周囲の温度に近く、黄色・白いほど熱い部品です。白の見た目 (GPU) と合わせると見やすくなります"));
+                ui.checkbox(&mut v.heat_on, i18n::tr("温度の色")).on_hover_text(i18n::tr("部品を温度の色で塗ります (サーマルカメラのような見え方)。温度は回路図の「自己発熱」の計算の結果で、電力 × 熱抵抗から出した目安です。基板の「熱の地図」を計算してあれば、基板の表と裏もその温度で塗り、部品はその地図の温度になります (時間の変化の時刻を選んでいれば、その時刻)。青いほど周囲の温度に近く、黄色・白いほど熱い所です。白の見た目 (GPU) と合わせると見やすくなります"));
                 ui.checkbox(&mut v.spin, i18n::tr("自動回転")).on_hover_text(i18n::tr("ゆっくり回して、いろいろな向きから見せます"));
                 if gpu::ready() {
                     ui.checkbox(&mut v.use_gpu, i18n::tr("GPU で描く")).on_hover_text(i18n::tr("グラフィックス (GPU) で描きます。部品の形が細かくても軽く回せます。表示がおかしいときは外すと、これまでの描き方 (CPU) に戻ります"));
@@ -433,6 +434,8 @@ impl BoardEditor {
         if retex && let Some(s) = &mut self.view3d.scene {
             s.img = Scene::images(&s.pv, self.view3d.mask, self.view3d.silk);
             self.view3d.generation += 1;
+            // the heat map is painted on the new pictures again
+            self.view3d.board_heat = None;
         }
         if let Some(i) = pick {
             self.selected = Some(Item::Part(i));
