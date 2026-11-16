@@ -235,6 +235,8 @@ pub struct PartForm {
     /// The highest temperature of the junction or element [°C] and the surrounding temperature the rated power starts to fall from.
     pub rt_t: String,
     pub rt_derate: String,
+    /// θjc (K/W), junction to case.
+    pub rt_jc: String,
     /// The transient thermal impedance: points read off the data sheet's Zth curve ("time Zth" lines), the Foster stages ("R τ" lines)
     /// and what the last fit said.
     pub rt_zth_points: String,
@@ -399,6 +401,7 @@ impl Default for PartForm {
             rt_p: String::new(),
             rt_t: String::new(),
             rt_derate: String::new(),
+            rt_jc: String::new(),
             rt_zth_points: String::new(),
             rt_zth: String::new(),
             rt_zth_msg: None,

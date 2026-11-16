@@ -113,13 +113,46 @@ pub fn own_theta(comp: &Component) -> f64 {
     if comp.theta > 0.0 { comp.theta } else { default_theta(&comp.footprint_name()).unwrap_or(100.0) }
 }
 
-/// A part's θ (K/W) with the board's copper: its own θ in parallel with the copper's conductance from `copper` (W/K).
+/// The share of θ taken for θjc when neither the part nor its library part gives one: NDT3055L's 12 of 110 K/W (SOT-223, minimum
+/// pad), the data sheet the board copper's law is fitted to, so that a part without θjc meets the copper as that part did.
+pub const JC_GUESS_SHARE: f64 = 12.0 / 110.0;
+
+/// A part's θjc (K/W, junction or element to case) and whether it is a guess: what it was given, its library part's, or a share of its
+/// own θ (`JC_GUESS_SHARE`). Never above its own θ.
+pub fn theta_jc(comp: &Component) -> (f64, bool) {
+    let own = own_theta(comp);
+    let given = if comp.theta_jc > 0.0 { Some(comp.theta_jc) } else { comp.custom.as_ref().and_then(|c| c.ratings.as_ref()).and_then(|r| r.theta_jc).filter(|x| *x > 0.0) };
+    match given {
+        Some(jc) => (jc.min(own), false),
+        None => (own * JC_GUESS_SHARE, true),
+    }
+}
+
+/// θ (K/W) of a part split at its case: `jc` from the junction to the case, then the case's own way to the air (`own − jc`) in parallel
+/// with the board copper's conductance `g` (W/K) and a heat sink of `sink` K/W (0 = none). The copper and the sink only shorten the
+/// path beyond the case: a part with a large θjc gains little from them.
+pub fn split_theta(own: f64, jc: f64, g: f64, sink: f64) -> f64 {
+    let jc = jc.clamp(0.0, own);
+    let ca = own - jc;
+    if !(ca > 1e-12) {
+        return own;
+    }
+    let mut gc = 1.0 / ca + g.max(0.0);
+    if sink > 0.0 {
+        gc += 1.0 / sink;
+    }
+    jc + 1.0 / gc
+}
+
+/// A part's θ (K/W) with the board's copper and its heat sink: θjc, then its own case-to-air θ in parallel with the copper's conductance
+/// from `copper` (W/K) and the heat sink (`Component::heatsink`).
 pub fn part_theta(comp: &Component, copper: &BTreeMap<String, f64>) -> f64 {
     let own = own_theta(comp);
-    match copper.get(&comp.refdes) {
-        Some(&g) if g > 0.0 => 1.0 / (1.0 / own + g),
-        _ => own,
+    let g = copper.get(&comp.refdes).copied().unwrap_or(0.0);
+    if !(g > 0.0) && !(comp.heatsink > 0.0) {
+        return own;
     }
+    split_theta(own, theta_jc(comp).0, g, comp.heatsink)
 }
 
 fn is_junction(e: &Element) -> bool {
@@ -243,6 +276,35 @@ mod tests {
 
     fn heater(theta: f64, tc1: f64) -> Heater {
         Heater { name: "R1".into(), elements: vec!["R1".into()], theta, tc1, tc2: 0.0, through_pins: false }
+    }
+
+    /// θ split at the case (H5): the copper and a heat sink only shorten the way from the case to the air, so θjc stays whatever they do.
+    #[test]
+    fn copper_and_a_heat_sink_act_beyond_the_case_only() {
+        let mut s = Schematic::default();
+        let i = s.add(Kind::Resistor, (0, 0), 0);
+        let c = &mut s.components[i];
+        c.theta = 50.0;
+        let none = BTreeMap::new();
+        assert_eq!(part_theta(c, &none), 50.0, "nothing beside it: its own θ");
+        // no θjc given: a share of θ (NDT3055L's 12 of 110), marked as a guess
+        let (jc, guess) = theta_jc(c);
+        assert!(guess && (jc - 50.0 * 12.0 / 110.0).abs() < 1e-12);
+        // θjc 5 and a 10 K/W heat sink: 5 + 1/(1/45 + 1/10) = 13.18 K/W
+        c.theta_jc = 5.0;
+        c.heatsink = 10.0;
+        assert!((part_theta(c, &none) - (5.0 + 1.0 / (1.0 / 45.0 + 0.1))).abs() < 1e-9);
+        // however big the sink and the copper, θ never falls below θjc
+        c.heatsink = 1e-6;
+        let copper = BTreeMap::from([(c.refdes.clone(), 100.0)]);
+        let t = part_theta(c, &copper);
+        assert!(t > 5.0 && t < 5.001, "{t}");
+        // a θjc above θ is taken as θ: nothing helps
+        assert_eq!(split_theta(50.0, 80.0, 1.0, 1.0), 50.0);
+        // 0 puts it back to the guess
+        c.theta_jc = 0.0;
+        c.heatsink = 0.0;
+        assert!(theta_jc(c).1);
     }
 
     #[test]

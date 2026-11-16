@@ -2,10 +2,12 @@
 //! thermal resistance (θ, K/W) that copper brings down.
 //!
 //! A part's θ to the air is given for the smallest pads (the datasheet's "minimum pad", or the guess from the
-//! package's rated power). Copper joined to its pins spreads the heat into a bigger surface: a conductance `G`
-//! (W/K) in parallel, `θ = 1 / (1/θ_part + G)`. `G` grows with the copper added around the pads, less than in
+//! package's rated power). It is split at the case: θjc from the junction to the case, which no copper helps,
+//! and the case's own way to the air θca = θ − θjc. Copper joined to its pins spreads the heat into a bigger
+//! surface: a conductance `G` (W/K) beside θca, `θ = θjc + 1 / (1/θca + G)` (`sim_core::split_theta`).
+//! `G` grows with the copper added around the pads, less than in
 //! proportion (the far copper is cooler: heat has to spread through 35 µm of copper to reach it):
-//! `G = k · A^n`, fitted to one datasheet curve, NDT3055L (onsemi, SOT-223, 2 oz copper):
+//! `G = k · A^n`, fitted to one datasheet curve, NDT3055L (onsemi, SOT-223, 2 oz copper, θjc 12 K/W):
 //! 110 K/W on the minimum pad, 95 K/W on 0.066 in², 42 K/W on 1 in². The pads of SOT-223's tab and pin 2
 //! (10.6 mm²) are the minimum pad, so `A` is what lies beyond them. Thinner copper spreads worse:
 //! `G` is scaled by `√(t / 70 µm)` (a wide copper plate's fin conductance goes as √(k·t·h)).
@@ -23,11 +25,13 @@ pub const REACH_MM: f64 = 20.0;
 const REF_THICKNESS_UM: f64 = 70.0;
 const REF_PAD_MM2: f64 = 10.6;
 const REF_MIN_THETA: f64 = 110.0;
+/// NDT3055L's θ from the junction to the case (K/W): the copper only acts beyond it.
+pub const REF_JC: f64 = 12.0;
 const REF_POINTS: [(f64, f64); 2] = [(0.066 * 645.16, 95.0), (645.16, 42.0)];
 
 /// `(k, n)` of `G = k · A^n` (W/K, A in mm² beyond the pads) on 70 µm copper, from the datasheet points.
 fn fit() -> (f64, f64) {
-    let g = |theta: f64| 1.0 / theta - 1.0 / REF_MIN_THETA;
+    let g = |theta: f64| 1.0 / (theta - REF_JC) - 1.0 / (REF_MIN_THETA - REF_JC);
     let [(a1, t1), (a2, t2)] = REF_POINTS;
     let (a1, a2) = (a1 - REF_PAD_MM2, a2 - REF_PAD_MM2);
     let n = (g(t2) / g(t1)).ln() / (a2 / a1).ln();
@@ -43,12 +47,14 @@ pub fn copper_conductance(extra_mm2: f64, thickness_um: f64) -> f64 {
     k * extra_mm2.powf(n) * (thickness_um / REF_THICKNESS_UM).sqrt()
 }
 
-/// A part's θ with the copper's conductance `g` (W/K) beside its own `theta` (K/W).
-pub fn theta_with_copper(theta: f64, g: f64) -> f64 {
-    if !(theta > 0.0) {
+/// A part's θ with the copper's conductance `g` (W/K) beside the case-to-air part of its own `theta` (K/W), `jc` being its θjc
+/// (the same as `sim_core::split_theta` without a heat sink).
+pub fn theta_with_copper(theta: f64, jc: f64, g: f64) -> f64 {
+    let jc = jc.clamp(0.0, theta.max(0.0));
+    if !(theta - jc > 1e-12) {
         return theta;
     }
-    1.0 / (1.0 / theta + g.max(0.0))
+    jc + 1.0 / (1.0 / (theta - jc) + g.max(0.0))
 }
 
 /// The copper of one net of a part.
@@ -123,13 +129,13 @@ mod tests {
     fn the_fit_goes_through_the_datasheet_points() {
         for (area, theta) in REF_POINTS {
             let g = copper_conductance(area - REF_PAD_MM2, REF_THICKNESS_UM);
-            let got = theta_with_copper(REF_MIN_THETA, g);
+            let got = theta_with_copper(REF_MIN_THETA, REF_JC, g);
             assert!((got - theta).abs() < 1e-6, "{area} mm²: {got} K/W, the datasheet says {theta}");
         }
         // no copper beyond the pads: the part's own θ
-        assert_eq!(theta_with_copper(110.0, copper_conductance(0.0, 35.0)), 110.0);
-        // 1 oz spreads less than 2 oz: 1 in² gives about 51 K/W instead of 42
-        let one_oz = theta_with_copper(110.0, copper_conductance(645.16 - REF_PAD_MM2, 35.0));
+        assert!((theta_with_copper(110.0, REF_JC, copper_conductance(0.0, 35.0)) - 110.0).abs() < 1e-9);
+        // 1 oz spreads less than 2 oz: 1 in² gives about 50 K/W instead of 42
+        let one_oz = theta_with_copper(110.0, REF_JC, copper_conductance(645.16 - REF_PAD_MM2, 35.0));
         assert!((48.0..55.0).contains(&one_oz), "{one_oz}");
     }
 
@@ -165,7 +171,7 @@ mod tests {
         // the reach of 20 mm from the part's middle (x = 30) keeps the half disc to its right that lies within
         // the pour's 25.4 mm height: about 434 mm² of the 645
         assert!(drn.extra > 400.0 && drn.extra < 450.0, "{drn:?}");
-        let theta = theta_with_copper(110.0, poured[0].conductance);
+        let theta = theta_with_copper(110.0, REF_JC, poured[0].conductance);
         assert!((45.0..60.0).contains(&theta), "{theta}");
 
         // a long thin track far out adds little

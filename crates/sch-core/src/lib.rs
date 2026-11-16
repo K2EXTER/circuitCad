@@ -192,6 +192,14 @@ pub struct Component {
     /// empty = the library part's, else one stage (θ with the heat capacity `cth`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zth: Vec<[f64; 2]>,
+    /// Heat resistance (K/W) from the junction or element to the part's case (θjc): the part of `theta` that the board copper and a
+    /// heat sink cannot help, as they only work from the case outwards; 0 = the library part's, else a guess (a share of θ).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub theta_jc: f64,
+    /// A heat sink on the part's case: its heat resistance (K/W) from the case to the air, the mounting (grease, pad) included;
+    /// 0 = none.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub heatsink: f64,
     /// A sheet symbol: this part stands for another sheet (see `hierarchy.rs`); its reference designator is the instance name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sub: Option<SubRef>,
@@ -539,6 +547,8 @@ impl Schematic {
             cth: 0.0,
             t_max: 0.0,
             zth: vec![],
+            theta_jc: 0.0,
+            heatsink: 0.0,
             sub: None,
             shops: Default::default(),
         });
@@ -563,6 +573,8 @@ impl Schematic {
             cth: 0.0,
             t_max: 0.0,
             zth: vec![],
+            theta_jc: 0.0,
+            heatsink: 0.0,
             sub: None,
             shops: Default::default(),
         });
@@ -694,6 +706,9 @@ pub struct PartRatings {
     /// step brings is `P · Σ R (1 − e^(−t/τ))`. Fitted to points read off the curve (`sim_core::fit_foster`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zth: Vec<[f64; 2]>,
+    /// Heat resistance from the junction to the case (θjc, K/W), from the data sheet: the copper and a heat sink act only beyond it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theta_jc: Option<f64>,
     /// Rated / typical figures from the data sheet, free form.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rows: Vec<SpecRow>,
@@ -760,7 +775,7 @@ impl LifeRating {
 
 impl PartRatings {
     pub fn is_empty(&self) -> bool {
-        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.theta_jc.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
     }
 
     /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.

@@ -161,10 +161,12 @@ mod ratings_tests {
         let mut f = form();
         f.rt_t = "150".into();
         f.rt_derate = "25".into();
+        f.rt_jc = "12".into();
         f.rt_zth = "0.2 1m\n0.6, 20m\n".into();
         let def = f.to_def().unwrap();
         let r = def.ratings.clone().unwrap();
-        assert_eq!((r.t_max, r.derate_from), (Some(150.0), Some(25.0)));
+        assert_eq!((r.t_max, r.derate_from, r.theta_jc), (Some(150.0), Some(25.0), Some(12.0)));
+        assert_eq!(PartForm::from_def(&def).rt_jc, "12");
         assert_eq!(r.zth, vec![[0.2, 1e-3], [0.6, 0.02]]);
         let back = PartForm::from_def(&def);
         assert_eq!(crate::part_form::parse::zth_stages(&back.rt_zth).unwrap(), r.zth);

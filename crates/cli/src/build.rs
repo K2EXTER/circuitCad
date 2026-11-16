@@ -467,9 +467,9 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "pins": n, "names": c.pin_names})))
     }
 
-    /// `thermal REF [theta=K/W] [tc=ppm] [cth=J/K] [tmax=C] [zth=R:TAU,...] [zthfit=T:Z,...]`: the heat resistance, the temperature coefficient, the heat capacity, the highest temperature and the transient heat resistance (Foster stages, or fitted to points of the data sheet's Zth curve) of a part for `heat` / `heattran` (0 = back to the guess).
+    /// `thermal REF [theta=K/W] [jc=K/W] [sink=K/W] [tc=ppm] [cth=J/K] [tmax=C] [zth=R:TAU,...] [zthfit=T:Z,...]`: the heat resistance, its part from the junction to the case, a heat sink, the temperature coefficient, the heat capacity, the highest temperature and the transient heat resistance (Foster stages, or fitted to points of the data sheet's Zth curve) of a part for `heat` / `heattran` (0 = back to the guess).
     pub fn thermal(&mut self, args: &[String]) -> Res {
-        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K] [tmax=C] [zth=R:TAU,R:TAU...] [zthfit=T:Z,T:Z...]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity, the highest temperature from the library part or a guess from the kind, zth=0 back to the library part's stages; zthfit fits up to 4 stages to points read off the data sheet's single-pulse Zth curve)
+        let usage = "thermal REF [theta=K/W] [jc=K/W] [sink=K/W] [tc=ppm/K] [cth=J/K] [tmax=C] [zth=R:TAU,R:TAU...] [zthfit=T:Z,T:Z...]   (jc is theta from the junction to the case, which the board copper and a heat sink cannot help; sink is a heat sink's theta from the case to the air, the mounting included. 0 puts a value back to the default: theta from the package, jc a share of theta, no heat sink, tc from the model, no heat capacity, the highest temperature from the library part or a guess from the kind, zth=0 back to the library part's stages; zthfit fits up to 4 stages to points read off the data sheet's single-pulse Zth curve)
 thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts through the board's copper, kept in the file and used by heattran; K/W of 0 removes it)";
         let (pos, kv) = options(args);
         if let Some(spec) = opt(&kv, "link") {
@@ -489,7 +489,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         }
         let [r] = pos.as_slice() else { return Err(usage.into()) };
         let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && (k == "tc" || *x >= 0.0)).ok_or_else(|| format!("{k}={s} is not a number{}", if k == "tc" { "" } else { " (zero or more)" }))).transpose();
-        let (theta, tc, cth, tmax) = (num("theta")?, num("tc")?, num("cth")?, num("tmax")?);
+        let (theta, tc, cth, tmax, jc, sink) = (num("theta")?, num("tc")?, num("cth")?, num("tmax")?, num("jc")?, num("sink")?);
         // pairs "a:b,a:b" (Zth stages R:tau, or curve points t:z)
         let pairs = |k: &str| -> Result<Option<Vec<(f64, f64)>>, String> {
             let Some(text) = opt(&kv, k) else { return Ok(None) };
@@ -509,7 +509,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
             fit_note = Some(json!({"stages": st.len(), "rms_error_pct": err * 100.0, "total_k_per_w": st.iter().map(|s| s[0]).sum::<f64>()}));
             zth = Some(st);
         }
-        if theta.is_none() && tc.is_none() && cth.is_none() && tmax.is_none() && zth.is_none() {
+        if theta.is_none() && tc.is_none() && cth.is_none() && tmax.is_none() && zth.is_none() && jc.is_none() && sink.is_none() {
             return Err(usage.into());
         }
         let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
@@ -528,7 +528,14 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         if let Some(z) = zth {
             c.zth = z;
         }
-        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth, "t_max_c": c.t_max, "zth": c.zth, "fit": fit_note})))
+        if let Some(x) = jc {
+            c.theta_jc = x;
+        }
+        if let Some(x) = sink {
+            c.heatsink = x;
+        }
+        let (jc, jc_guess) = sim_core::theta_jc(c);
+        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "theta_jc": jc, "theta_jc_guess": jc_guess, "heatsink_k_per_w": c.heatsink, "theta_with_sink": sim_core::part_theta(c, &Default::default()), "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth, "t_max_c": c.t_max, "zth": c.zth, "fit": fit_note})))
     }
 
     /// `heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300,...] (else the links kept by `thermal link=`) [tstep=] [temp=27] [uic] [samples=8]`: a transient run whose power becomes
@@ -626,7 +633,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let rows: Vec<Value> = parts
             .iter()
             .take(top)
-            .map(|p| json!({"t_max_c": check_of(&p.name).map(|c| c.limit.t_max), "t_max_from": check_of(&p.name).map(|c| format!("{:?}", c.limit.source).to_lowercase()), "margin_k": check_of(&p.name).map(|c| c.margin_k), "derated_power_w": check_of(&p.name).and_then(|c| c.p_derated), "temperature": check_of(&p.name).map(|c| level(c.level)), "part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6, "junctions": p.junctions, "junction_cold_v": p.junction_v.map(|v| v.0), "junction_warm_v": p.junction_v.map(|v| v.1)}))
+            .map(|p| json!({"t_max_c": check_of(&p.name).map(|c| c.limit.t_max), "t_max_from": check_of(&p.name).map(|c| format!("{:?}", c.limit.source).to_lowercase()), "margin_k": check_of(&p.name).map(|c| c.margin_k), "derated_power_w": check_of(&p.name).and_then(|c| c.p_derated), "temperature": check_of(&p.name).map(|c| level(c.level)), "part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "theta_jc_k_per_w": self.case_of(&p.name).map(|c| c.0), "heatsink_k_per_w": self.case_of(&p.name).map(|c| c.1), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6, "junctions": p.junctions, "junction_cold_v": p.junction_v.map(|v| v.0), "junction_warm_v": p.junction_v.map(|v| v.1)}))
             .collect();
         let mut moved: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-12).collect();
         moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
@@ -833,6 +840,11 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
     /// A part's own θ (K/W, smallest pads): what it was given, or the guess from its package.
     fn own_theta(&self, refdes: &str) -> Option<f64> {
         self.sch.components.iter().find(|c| c.refdes == refdes).map(sim_core::own_theta)
+    }
+
+    /// A part's θjc (K/W, given or the guess) and heat sink (K/W, 0 = none).
+    fn case_of(&self, refdes: &str) -> Option<(f64, f64)> {
+        self.sch.components.iter().find(|c| c.refdes == refdes).map(|c| (sim_core::theta_jc(c).0, c.heatsink))
     }
 
     /// The board copper beside each part's θ, by reference: (W/K, mm² beyond its pads); empty unless `board postlayout on`.

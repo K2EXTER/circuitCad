@@ -269,7 +269,7 @@ pub fn cooling_design(p_w: f64, theta_own: f64, theta_jc: f64, t_amb: f64, t_jma
     let tj_bare = t_amb + p * theta_own;
     let tj_goal = t_jmax - 0.2 * (t_jmax - t_amb);
     let theta_total = (tj_goal - t_amb) / p;
-    let with = |a: f64| 1.0 / (1.0 / theta_own + copper(a, copper_um));
+    let with = |a: f64| crate::split_theta(theta_own, theta_jc, copper(a, copper_um), 0.0);
     let mut o = CalcOut::default();
     o.rows = vec![
         ("損失 P".into(), format!("{p:.2} W")),
@@ -284,13 +284,15 @@ pub fn cooling_design(p_w: f64, theta_own: f64, theta_jc: f64, t_amb: f64, t_jma
     if theta_own <= theta_total {
         o.rows.push(("判定".into(), "銅を広げなくても、放熱板なしでも使えます".into()));
     } else {
-        // the copper: the conductance it must add, and the area that gives it (the formula grows with the area: bisection)
-        let g_need = 1.0 / theta_total - 1.0 / theta_own;
+        // the copper: the conductance it must add beyond the case, and the area that gives it (the formula grows with the area: bisection)
+        let jc = theta_jc.min(theta_own);
+        let theta_ca = theta_own - jc;
+        let g_need = if theta_total > jc { 1.0 / (theta_total - jc) - 1.0 / theta_ca } else { f64::INFINITY };
         o.steps.push(format!(
-            "銅で冷やす: 銅は部品の θ と並列の熱の道 (コンダクタンス G)。1 ÷ θ = 1 ÷ θja + G なので、G = 1 ÷ {theta_total:.1} − 1 ÷ {theta_own} = {:.4} W/K が要る",
+            "銅で冷やす: 銅はケースから先の熱の道 (ケース → 空気 θca = θja − θjc = {theta_own} − {jc} = {theta_ca:.1} ℃/W) と並列 (コンダクタンス G)。θ = θjc + 1 ÷ (1 ÷ θca + G) なので、G = 1 ÷ ({theta_total:.1} − {jc}) − 1 ÷ {theta_ca:.1} = {:.4} W/K が要る",
             g_need
         ));
-        if copper(COPPER_MAX_MM2, copper_um) < g_need {
+        if !g_need.is_finite() || copper(COPPER_MAX_MM2, copper_um) < g_need {
             o.rows.push(("要る銅の面積".into(), format!("{COPPER_MAX_MM2:.0} mm² でも足りません (放熱板が要ります)")));
             o.steps.push(format!("ピンにつながる銅を {COPPER_MAX_MM2:.0} mm² (部品のまわり 20 mm 以内、1 層) まで広げても、熱抵抗は {:.1} ℃/W までしか下がらない", with(COPPER_MAX_MM2)));
         } else {
@@ -869,10 +871,11 @@ mod tests {
             1e-4 * a
         }
         let row = |o: &CalcOut, k: &str| o.rows.iter().find(|(x, _)| x == k).map(|(_, v)| v.clone()).unwrap_or_default();
-        // 1 W on 110 K/W: Tj 135 C; the goal 105 C needs 80 K/W, G = 1/80 - 1/110 = 3.41 mW/K -> 34 mm²; or a sink of 80 - 5 - 1 = 74 K/W
+        // 1 W on 110 K/W (θjc 5): Tj 135 C; the goal 105 C needs 80 K/W, the copper beyond the case G = 1/(80 - 5) - 1/105 = 3.81 mW/K
+        // -> 38 mm²; or a sink of 80 - 5 - 1 = 74 K/W
         let o = cooling_design(1.0, 110.0, 5.0, 25.0, 125.0, 35.0, linear).unwrap();
         assert!(row(&o, "何もしないときの Tj").starts_with("135"), "{:?}", o.rows);
-        assert!(row(&o, "要る銅の面積").starts_with("34 mm²"), "{:?}", o.rows);
+        assert!(row(&o, "要る銅の面積").starts_with("38 mm²"), "{:?}", o.rows);
         assert!(row(&o, "または、放熱板の熱抵抗").starts_with("74.0"), "{:?}", o.rows);
         // 20 W: 4 K/W, more than 1600 mm² can give (0.16 W/K)
         let hot = cooling_design(20.0, 110.0, 1.0, 25.0, 125.0, 35.0, linear).unwrap();

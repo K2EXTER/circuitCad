@@ -53,6 +53,7 @@ impl SchEditor {
                 }
                 let mut edits: Vec<(String, f64, f64)> = vec![];
                 let mut limit_edits: Vec<(String, f64)> = vec![];
+                let mut case_edits: Vec<(String, CaseHeat)> = vec![];
                 let own = self.own_thetas();
                 egui::Grid::new("selfheat_grid").num_columns(7).striped(true).spacing([6.0, 4.0]).show(ui, |ui| {
                     for (h, tip) in [("部品", ""), ("電力", ""), ("上昇", ""), ("値の変化", ""), ("θ K/W", "熱抵抗 (K/W)"), ("係数", "温度係数 (ppm/K)"), ("上限 ℃", "部品の最高温度 (℃)")] {
@@ -82,7 +83,11 @@ impl SchEditor {
                             ui.label(format!("{:+.0} ppm", p.change * 1e6)).on_hover_text(i18n::tr("温まったことで、抵抗値が冷えているときよりどれだけ変わったか (100 ppm = 0.01 %)。温度係数が 0 なら変わりません"));
                         }
                         let (mut theta, mut tc) = (own.get(&p.name).copied().unwrap_or(p.theta), p.tc1 * 1e6);
-                        let a = theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name));
+                        let mut case = self.case_heat(&p.name);
+                        let a = theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name), &mut case);
+                        if case.changed {
+                            case_edits.push((p.name.clone(), case));
+                        }
                         let b = if semi {
                             ui.label("—").on_hover_text(i18n::tr("温度係数は抵抗のものです。ダイオード・トランジスタの温度による変化は、モデルの決まり (飽和電流・しきい値の温度の式) で入ります"))
                         } else {
@@ -109,6 +114,7 @@ impl SchEditor {
                         c.t_max = t;
                     }
                 }
+                self.apply_case_heat(case_edits);
                 // the parts near or past their limit, with what to do
                 for c in v.checks.iter().filter(|c| c.level.is_some()) {
                     let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::ERROR } else { crate::theme::WARN };
@@ -143,19 +149,77 @@ impl SchEditor {
     pub(super) fn own_thetas(&self) -> std::collections::BTreeMap<String, f64> {
         self.sch.components.iter().map(|c| (c.refdes.clone(), sim_core::own_theta(c))).collect()
     }
+
+    /// A part's θjc and heat sink, for the θ cell.
+    pub(super) fn case_heat(&self, name: &str) -> CaseHeat {
+        self.sch.components.iter().find(|c| c.refdes == name).map_or(CaseHeat { jc: 0.0, jc_guess: true, sink: 0.0, changed: false }, |c| {
+            let (jc, jc_guess) = sim_core::theta_jc(c);
+            CaseHeat { jc, jc_guess, sink: c.heatsink, changed: false }
+        })
+    }
+
+    /// θjc and heat sinks changed in a heat table.
+    pub(super) fn apply_case_heat(&mut self, edits: Vec<(String, CaseHeat)>) {
+        for (name, h) in edits {
+            if let Some(c) = self.sch.components.iter_mut().find(|c| c.refdes == name) {
+                if !h.jc_guess {
+                    c.theta_jc = h.jc;
+                }
+                c.heatsink = h.sink;
+            }
+        }
+    }
 }
 
-/// The θ cell of a heat table: the part's own θ to edit, and when the board's copper helps, the θ it has with it.
-pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, copper: Option<&(f64, f64)>) -> egui::Response {
+/// A part's way from the junction to its case (θjc) and its heat sink, as the θ cell shows and edits them.
+pub(super) struct CaseHeat {
+    pub jc: f64,
+    /// θjc is the guess (a share of θ), not a number from the data sheet.
+    pub jc_guess: bool,
+    /// The heat sink's θ (K/W, case to air, the mounting included); 0 = none.
+    pub sink: f64,
+    pub changed: bool,
+}
+
+/// The θ cell of a heat table: the part's own θ to edit, when the board's copper or a heat sink helps the θ it has with them, and a
+/// menu with its θjc and heat sink (`case`, `changed` set when either was edited).
+pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, copper: Option<&(f64, f64)>, case: &mut CaseHeat) -> egui::Response {
     ui.horizontal(|ui| {
         let r = ui.add(egui::DragValue::new(own).range(0.1..=1000.0).speed(0.5).max_decimals(1)).on_hover_text(i18n::tr("部品の熱抵抗 (K/W): 部品から空気までの熱の伝わりにくさ。データシートの「最小のパッド」の値を入れます (入れないと、パッケージの定格電力からの目安)。基板を回路図に反映していると、つながった銅の放熱ぶんが自動で足されます。変えたら、もう一度計算してください"));
-        if let Some((_, mm2)) = copper {
-            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::OK)).on_hover_text(i18n::trf!(
-                "基板の銅を入れた熱抵抗: {:.0} K/W。ピンにつながった銅 (部品の中心から 20 mm 以内、パッドのほかに {:.0} mm²) が熱を広げます。銅 35 µm (1 oz) として、SOT-223 のデータシートの曲線 (最小のパッド 110 K/W、1 in² で 42 K/W、2 oz) から見積もった目安です。正確には実物で測ってください",
-                with_copper,
-                mm2
-            ));
+        if copper.is_some() || case.sink > 0.0 {
+            let mut tip = vec![i18n::trf!("銅と放熱板を入れた熱抵抗: {:.0} K/W = θjc {:.1} + (ケース → 空気 {:.1} と、銅・放熱板の並列)", with_copper, case.jc, *own - case.jc)];
+            if let Some((_, mm2)) = copper {
+                tip.push(i18n::trf!(
+                    "ピンにつながった銅 (部品の中心から 20 mm 以内、パッドのほかに {:.0} mm²) が熱を広げます。銅 35 µm (1 oz) として、SOT-223 のデータシートの曲線 (最小のパッド 110 K/W、1 in² で 42 K/W、2 oz、θjc 12 K/W) から見積もった目安です。正確には実物で測ってください",
+                    mm2
+                ));
+            }
+            if case.sink > 0.0 {
+                tip.push(i18n::trf!("放熱板 {:.1} K/W (ケース → 空気、取り付けを含む)", case.sink));
+            }
+            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::OK)).on_hover_text(tip.join("\n"));
         }
+        ui.menu_button(if case.sink > 0.0 { i18n::tr("放熱✓") } else { i18n::tr("放熱") }, |ui| {
+            ui.label(egui::RichText::new(i18n::tr("ケースと放熱板")).strong());
+            ui.label(egui::RichText::new(i18n::tr("熱は 接合部 → ケース → 空気 と流れます。基板の銅と放熱板は、ケースから先の道を増やすだけなので、θjc の分は残ります")).small());
+            egui::Grid::new("case_heat").num_columns(2).show(ui, |ui| {
+                ui.label(i18n::tr("θjc K/W")).on_hover_text(i18n::tr("接合部 (部品の中) からケース (パッケージの外側・放熱タブ) までの熱抵抗。データシートの「Junction to Case」(RθJC)。「?」は θ の 1 割ほどの目安です (銅の式を合わせた SOT-223 の部品の割合)"));
+                let r = ui.add(egui::DragValue::new(&mut case.jc).range(0.0..=*own).speed(0.1).max_decimals(2).suffix(if case.jc_guess { "?" } else { "" }));
+                if r.changed() {
+                    case.jc_guess = false;
+                    case.changed = true;
+                }
+                ui.end_row();
+                ui.label(i18n::tr("放熱板 K/W")).on_hover_text(i18n::tr("放熱板のケースから空気までの熱抵抗 (放熱板のデータシートの値に、取り付け (グリス・シート) の 0.5〜1 K/W を足したもの)。0 で放熱板なし。小さいほどよく冷えます"));
+                if ui.add(egui::DragValue::new(&mut case.sink).range(0.0..=200.0).speed(0.1).max_decimals(1)).changed() {
+                    case.changed = true;
+                }
+                ui.end_row();
+            });
+            ui.label(egui::RichText::new(i18n::tr("変えたら、もう一度計算してください")).small().weak());
+        })
+        .response
+        .on_hover_text(i18n::tr("θjc (接合部 → ケース) と放熱板"));
         r
     })
     .inner

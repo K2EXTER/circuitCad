@@ -107,6 +107,7 @@ impl SchEditor {
             Ok(v) => {
                 let mut edits: Vec<(String, f64, f64)> = vec![];
                 let mut limit_edits: Vec<(String, f64)> = vec![];
+                let mut case_edits: Vec<(String, super::selfheat::CaseHeat)> = vec![];
                 let own = self.own_thetas();
                 egui::Grid::new("htran_grid").num_columns(7).striped(true).spacing([6.0, 4.0]).show(ui, |ui| {
                     for (h, tip) in [("部品", ""), ("電力(最大)", ""), ("上昇(最大)", ""), ("θ K/W", "熱抵抗 (K/W)"), ("熱容量 J/K", ""), ("定常なら", ""), ("上限 ℃", "部品の最高温度 (℃)")] {
@@ -136,7 +137,11 @@ impl SchEditor {
 {neighbours}", i18n::tr_dyn(&c.message)));
                         ui.label(egui::RichText::new(format!("{:.1} K", p.rise_peak)).color(rise_col)).on_hover_text(tip);
                         let (mut theta, mut cth) = (own.get(&p.name).copied().unwrap_or(p.theta), p.cth);
-                        let a = super::selfheat::theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name));
+                        let mut case = self.case_heat(&p.name);
+                        let a = super::selfheat::theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name), &mut case);
+                        if case.changed {
+                            case_edits.push((p.name.clone(), case));
+                        }
                         let b = ui
                             .add(egui::DragValue::new(&mut cth).range(0.0..=100.0).speed(0.005).max_decimals(3))
                             .on_hover_text(i18n::tr("熱容量 (J/K): 部品とそのまわりの銅を 1 K 温めるのに要る熱。短い通電の温度の上がりは、これでほぼ決まります (上昇 ≒ 電力 × 時間 ÷ 熱容量)。データシートに数字がないことが多いので、推測の値です。0 だと定常の温度になります"));
@@ -163,6 +168,7 @@ impl SchEditor {
                         c.cth = cth;
                     }
                 }
+                self.apply_case_heat(case_edits);
                 for (name, t) in limit_edits {
                     if let Some(c) = self.sch.components.iter_mut().find(|c| c.refdes == name) {
                         c.t_max = t;

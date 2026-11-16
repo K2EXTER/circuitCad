@@ -3079,3 +3079,64 @@ fn the_multiboard_sample_checks_clean() {
     assert!(pcb_core::stack::clashes(&boards).is_empty(), "{:?}", pcb_core::stack::clashes(&boards));
     assert!(places[1].offset[2] > 8.0, "above the header: {:?}", places[1]);
 }
+
+/// The heat-sink sample: the same LM7805 (TO-220) twice, 12 V in and a 0.5 A load each, U1 bare and U2 on a heat sink.
+fn heatsink_schematic() -> sch_core::Schematic {
+    let u = library_part("LM7805");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label_pin(&mut s, v1, "+", "VIN");
+    label_pin(&mut s, v1, "-", "GND");
+    for (k, out) in [(0, "VOUT1"), (1, "VOUT2")] {
+        let y = k * 30;
+        let ui = s.add_custom(u.symbol(), &u.default_value(), &u.footprint_name(), (30, y - 4), 0);
+        // the data sheet's θ from the junction to the air (the library part's row "50℃/W", TO-220 standing in the air)
+        s.components[ui].theta = 50.0;
+        if k == 1 {
+            // a small clip-on heat sink: about 10 K/W from the case to the air, the grease included
+            s.components[ui].heatsink = 10.0;
+        }
+        let c = s.add(Kind::Capacitor, (46, y + 4), 1);
+        s.components[c].value = "100n".into();
+        // the load: 0.5 A drawn from the output (a test source, as an electronic load would)
+        let i = s.add(Kind::ISource, (62, y + 4), 1);
+        s.components[i].value = "0.5".into();
+        label_pin(&mut s, ui, "1", "VIN");
+        label_pin(&mut s, ui, "2", "GND");
+        label_pin(&mut s, ui, "3", out);
+        label_pin(&mut s, c, "1", out);
+        label_pin(&mut s, c, "2", "GND");
+        label_pin(&mut s, i, "-", out);
+        label_pin(&mut s, i, "+", "GND");
+    }
+    s
+}
+
+/// Generates docs/examples/regulator_heatsink.schjson: `cargo test -p app write_heatsink_example -- --ignored`
+#[test]
+#[ignore]
+fn write_heatsink_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("regulator_heatsink.schjson"), serde_json::to_string_pretty(&heatsink_schematic()).unwrap()).unwrap();
+}
+
+/// The heat-sink sample as shipped: both regulators drop 7 V at 0.5 A (3.5 W). U1 alone climbs 175 K, past its junction's limit; U2's
+/// heat sink takes the case side of θ (50 − θjc) down beside 10 K/W, and it stays near 48 K. The output is 5 V on both.
+#[test]
+fn heatsink_sample_keeps_the_regulator_on_the_sink_cool() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/regulator_heatsink.schjson");
+    let s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(s, heatsink_schematic(), "regenerate with write_heatsink_example");
+    let c = sim_core::from_schematic(&s).unwrap();
+    let heaters = sim_core::heaters_from_schematic(&s, &c, &Default::default());
+    let h = sim_core::self_heat(&c, &heaters, 25.0).unwrap();
+    let part = |n: &str| h.parts.iter().find(|p| p.name == n).unwrap();
+    let (u1, u2) = (part("U1"), part("U2"));
+    assert!((u1.power - 3.5).abs() < 0.1 && (u2.power - 3.5).abs() < 0.1, "{u1:?} {u2:?}");
+    assert!(u1.rise > 160.0, "{u1:?}");
+    assert!((40.0..55.0).contains(&u2.rise), "{u2:?}");
+    for out in ["VOUT1", "VOUT2"] {
+        assert!((h.warm.voltage(out).unwrap() - 5.0).abs() < 0.3, "{out}");
+    }
+}

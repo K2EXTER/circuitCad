@@ -178,17 +178,23 @@ pub fn check_ratings(sch: &Schematic, dc: &DcResult) -> Vec<RatingIssue> {
             Kind::Resistor | Kind::Npn | Kind::Custom | Kind::Diode => {
                 // the data sheet's maximum power when the part has one, else the usual limit of its package
                 let from_sheet = c.custom.as_ref().and_then(|s| s.ratings.as_ref()).and_then(|r| r.p_max);
-                let (Some(p), Some(limit)) = (dissipation(dc, c), from_sheet.or_else(|| package_power_limit(&fp))) else { continue };
+                // a part on a heat sink is not held to its package's free-air guess: what the sink lets it dissipate at 25 °C around
+                // ((highest temperature − 25) / θ with the sink)
+                let on_sink = (c.heatsink > 0.0).then(|| {
+                    let junctions = usize::from(matches!(c.kind, Kind::Npn | Kind::Diode | Kind::Custom));
+                    (temperature_limit(c, junctions).t_max - 25.0) / crate::part_theta(c, &Default::default())
+                });
+                let (Some(p), Some(limit)) = (dissipation(dc, c), from_sheet.or(on_sink).or_else(|| package_power_limit(&fp))) else { continue };
                 let Some(lv) = level(p, limit) else { continue };
                 let word = if lv == RatingLevel::Over { "目安を超えています" } else { "余裕が少ないです" };
-                let basis = if from_sheet.is_some() { "最大定格" } else { "この形の目安" };
+                let basis = if from_sheet.is_some() { "最大定格" } else if on_sink.is_some() { "放熱板つきの目安" } else { "この形の目安" };
                 let motor = dc.element(&format!("{}.LW", c.refdes)).is_some();
                 let hint = if motor {
                     "モーターの巻線の発熱 (電流² × 巻線の抵抗) です。負荷が重い・軸が止まっていると電流が増えて熱くなります。負荷を軽くするか、電圧を下げるか、大きいモーターにします"
                 } else if c.kind == Kind::Resistor {
                     "抵抗値を大きくして電流を減らすか、大きい形(1206 / 2512 や 1/2W 品)に変えます。発熱は P = V × I = I² × R で決まります"
                 } else {
-                    "電圧差を減らす(入力電圧を下げる / 電流を減らす)か、放熱板つきの形(TO-220 など)にします。LDO やリニアレギュレータは (入力 − 出力) × 電流 が熱になります"
+                    "電圧差を減らす(入力電圧を下げる / 電流を減らす)か、放熱板つきの形(TO-220 など)にして放熱板を付けます (自己発熱の表の熱抵抗の横の「放熱」に放熱板の熱抵抗を入れると、それで判定します)。LDO やリニアレギュレータは (入力 − 出力) × 電流 が熱になります"
                 };
                 push(
                     lv,
@@ -522,7 +528,9 @@ mod examples {
             let s: Schematic = serde_json::from_str(&std::fs::read_to_string(e.path()).unwrap()).unwrap();
             let Ok(c) = from_schematic(&s) else { continue };
             let Ok(dc) = dc_op(&c) else { continue };
-            let bad: Vec<_> = check_ratings(&s, &dc).into_iter().filter(|i| i.level == RatingLevel::Over).collect();
+            // regulator_heatsink's U1 is the regulator without a heat sink, there to be too hot beside U2 on its sink
+            let meant = |i: &RatingIssue| e.file_name() == "regulator_heatsink.schjson" && i.refdes == "U1";
+            let bad: Vec<_> = check_ratings(&s, &dc).into_iter().filter(|i| i.level == RatingLevel::Over && !meant(i)).collect();
             assert!(bad.is_empty(), "{}: {:?}", e.file_name().to_string_lossy(), bad);
         }
     }

@@ -297,15 +297,15 @@ fn calc_lists_runs_and_refuses_wrong_arguments() {
 
 #[test]
 fn the_cooling_calculator_inverts_the_board_copper_back_to_its_datasheet_point() {
-    // the copper law is fitted to NDT3055L (SOT-223, 2 oz): 110 K/W on the minimum pad (10.6 mm²), 42 K/W on 1 in² (645 mm²).
+    // the copper law is fitted to NDT3055L (SOT-223, 2 oz, θjc 12 K/W): 110 K/W on the minimum pad (10.6 mm²), 42 K/W on 1 in² (645 mm²).
     // Asking for 42 K/W (1 W, 25 C around, goal 0.8 x 77.5 + 5 = 67 C) must give back the 645 - 10.6 = 634.6 mm² beyond the pads.
-    let (a, ok) = run("calc cooling 1 110 15 25 77.5 70\n");
+    let (a, ok) = run("calc cooling 1 110 12 25 77.5 70\n");
     assert!(ok, "{a:?}");
     let area = a[0]["rows"].as_array().unwrap().iter().find(|r| r["label"] == "要る銅の面積").unwrap()["value"].as_str().unwrap().to_string();
     let mm2: f64 = area.split(' ').next().unwrap().parse().unwrap();
     assert!((mm2 - 634.6).abs() < 1.5, "{area}");
     // thinner copper spreads worse: the same goal on 35 µm needs more
-    let (a, _) = run("calc cooling 1 110 15 25 77.5 35\n");
+    let (a, _) = run("calc cooling 1 110 12 25 77.5 35\n");
     let thin = a[0]["rows"].as_array().unwrap().iter().find(|r| r["label"] == "要る銅の面積").unwrap()["value"].as_str().unwrap().to_string();
     assert!(thin.split(' ').next().unwrap().parse::<f64>().unwrap() > mm2 * 1.5, "{thin}");
 }
@@ -2003,6 +2003,23 @@ fn heat_warms_a_resistor_by_its_own_power_and_moves_the_nets() {
     // a wrong value is refused
     let (_, ok) = run("new\nadd R 1k as=R1\nthermal R1 theta=-3\n");
     assert!(!ok);
+}
+
+/// `thermal REF jc= sink=` (H5): a heat sink only shortens the way beyond the case. 1 W into R1 of 100 K/W with θjc 20 and a 10 K/W sink:
+/// 20 + 1/(1/80 + 1/10) = 28.9 K; `sink=0` takes it off, `jc=0` puts θjc back to the guess.
+#[test]
+fn a_heat_sink_cools_a_part_only_beyond_its_case() {
+    let (a, ok) = run("new\nadd V 10 as=V1\nadd R 100 as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nthermal R1 theta=100 jc=20 sink=10\nheat temp=25\nthermal R1 sink=0 jc=0\nheat temp=25\n");
+    assert!(ok, "{a:?}");
+    let t = a.iter().find(|v| v["cmd"] == "thermal").unwrap();
+    assert_eq!((t["theta_jc"].as_f64(), t["heatsink_k_per_w"].as_f64(), t["theta_jc_guess"].as_bool()), (Some(20.0), Some(10.0), Some(false)), "{t}");
+    let heats: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "heat").collect();
+    let r1 = |h: &Value| h["parts"].as_array().unwrap().iter().find(|p| p["part"] == "R1").cloned().unwrap();
+    let (sunk, bare) = (r1(heats[0]), r1(heats[1]));
+    assert!((sunk["theta_k_per_w"].as_f64().unwrap() - (20.0 + 1.0 / (1.0 / 80.0 + 0.1))).abs() < 1e-9, "{sunk}");
+    assert!((sunk["rise_k"].as_f64().unwrap() - 28.9).abs() < 0.1, "1 W: {sunk}");
+    assert_eq!(bare["theta_k_per_w"].as_f64().unwrap(), 100.0, "{bare}");
+    assert!((bare["theta_jc_k_per_w"].as_f64().unwrap() - 100.0 * 12.0 / 110.0).abs() < 1e-9, "the guess: {bare}");
 }
 
 /// With the board carried over (`board postlayout on`), a part's θ takes the copper joined to its pins: a GND pour under the board spreads

@@ -253,7 +253,7 @@ impl PartForm {
                 Some(LifeRating { hours, temp_c })
             }
         };
-        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, t_max: num("最高温度", &self.rt_t)?, derate_from: num("電力を下げ始める温度", &self.rt_derate)?, zth: zth_stages(&self.rt_zth)?, rows, ripple, life };
+        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, t_max: num("最高温度", &self.rt_t)?, derate_from: num("電力を下げ始める温度", &self.rt_derate)?, theta_jc: num("熱抵抗 θjc", &self.rt_jc)?, zth: zth_stages(&self.rt_zth)?, rows, ripple, life };
         Ok(Some(r).filter(|r| !r.is_empty()))
     }
 
