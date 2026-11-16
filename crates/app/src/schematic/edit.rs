@@ -117,7 +117,8 @@ impl SchEditor {
     }
 
     /// The op-amp or regulator box of the form made: "opamp" (the LM358 example), "opamp-pdf" (read from the form's PDF),
-    /// "fixed" (LM7805) or "adj" (LM317). The symbol is set so that the box is the one shown.
+    /// "fixed" (LM7805), "adj" (LM317), "opto" (PC817), "photodiode" (BPW34) or "darlington" (TIP120). The symbol is set
+    /// so that the box is the one shown.
     pub fn linear_in_form(&mut self, what: &str) {
         if let Some(f) = self.form.as_mut() {
             match what {
@@ -125,6 +126,12 @@ impl SchEditor {
                     f.glyph = "opamp".into();
                     if what == "opamp" { f.opamp_example_and_make() } else { f.opamp_from_pdf_and_make() }
                 }
+                "opto" => f.opto_example_and_make(),
+                "photodiode" => {
+                    f.glyph = "photodiode".into();
+                    f.photodiode_example_and_make();
+                }
+                "darlington" => f.darlington_example_and_fit(),
                 _ => {
                     f.glyph = "regulator".into();
                     f.regulator_example_and_make(what == "adj");

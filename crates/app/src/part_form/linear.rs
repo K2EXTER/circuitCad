@@ -394,11 +394,11 @@ fn lm358() -> fit::OpampSpec {
 }
 
 impl PartForm {
-    fn linear_source(&self) -> String {
+    pub(super) fn linear_source(&self) -> String {
         if self.datasheet.trim().is_empty() { "データシート".to_string() } else { self.datasheet.trim().to_string() }
     }
 
-    fn linear_name(&self, fallback: &str) -> String {
+    pub(super) fn linear_name(&self, fallback: &str) -> String {
         if self.name.trim().is_empty() { fallback.to_string() } else { self.name.trim().to_string() }
     }
 
@@ -434,7 +434,7 @@ impl PartForm {
     }
 
     /// Puts a template's model into the simulation tab, its pins found by name.
-    fn linear_apply(&mut self, f: &Fitted, roles: &[(&str, &[&str])]) -> Result<String, String> {
+    pub(super) fn linear_apply(&mut self, f: &Fitted, roles: &[(&str, &[&str])]) -> Result<String, String> {
         let pins = self.parse_pins()?;
         let mut order = vec![];
         for (role, names) in roles {
@@ -455,7 +455,7 @@ impl PartForm {
         Ok("モデルを「② シミュレーション」に入れました。そちらの「試し読み」で確かめられます".into())
     }
 
-    fn result_box(ui: &mut egui::Ui, result: &Option<Result<Fitted, String>>, message: &Option<(bool, String)>) {
+    pub(super) fn result_box(ui: &mut egui::Ui, result: &Option<Result<Fitted, String>>, message: &Option<(bool, String)>) {
         match result {
             Some(Ok(f)) => {
                 egui::CollapsingHeader::new(i18n::tr("できたモデル (SPICE の文)")).id_salt(("lin_text", f.part.as_str())).show(ui, |ui| {

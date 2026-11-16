@@ -210,6 +210,10 @@ pub struct PartForm {
     pub bjt: bjt::BjtInput,
     pub opamp: linear::OpampInput,
     pub reg: linear::RegulatorInput,
+    /// The Darlington box (`darlington.rs`), the optocoupler and photodiode boxes (`opto.rs`).
+    pub darl: darlington::DarlingtonInput,
+    pub opto: opto::OptoInput,
+    pub pd: opto::PhotodiodeInput,
     /// The logic IC box: inputs and one Boolean expression per output (`logic.rs`).
     pub logic: logic::LogicInput,
     /// The leaded-part helper of the package tab: lead diameter, body length / diameter (axial) or lead spacing (radial), in mm as typed.
@@ -383,6 +387,9 @@ impl Default for PartForm {
             bjt: Default::default(),
             opamp: Default::default(),
             reg: Default::default(),
+            darl: Default::default(),
+            opto: Default::default(),
+            pd: Default::default(),
             logic: Default::default(),
             thru_lead: String::new(),
             thru_len: String::new(),
@@ -442,7 +449,9 @@ mod datasheet_view;
 mod graph_reader;
 mod mosfet;
 mod bjt;
+mod darlington;
 mod linear;
+mod opto;
 mod logic;
 mod pdf_check;
 mod pdf_input;

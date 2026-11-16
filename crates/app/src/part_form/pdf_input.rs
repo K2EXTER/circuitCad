@@ -52,6 +52,8 @@ impl PartForm {
                 self.rt_zth_points = out.points.iter().map(|(t, z)| format!("{} {}", short(t.abs()), short(z.abs()))).collect::<Vec<_>>().join("\n");
                 self.rt_zth_msg = Some(Ok(format!("p.{} のグラフの {} 点を入れました。「段に当てはめる」を押してください", out.page + 1, out.points.len())));
             }
+            Dest::DarlHfe | Dest::DarlVbeOn | Dest::DarlVbeSat | Dest::DarlVceSat => self.darl_take_graph(out.dest, &out.points, out.page),
+            Dest::OptoLed | Dest::OptoCtr | Dest::PdLight | Dest::PdCap => self.opto_take_graph(out.dest, &out.points, out.page),
             d => self.bjt_take_graph(d, &out.points, out.page),
         }
     }

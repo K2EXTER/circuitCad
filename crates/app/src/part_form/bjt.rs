@@ -58,7 +58,7 @@ impl Default for BjtInput {
 /// The bundled 2N3904's readings (the example button).
 const EXAMPLE: &str = include_str!("../../../part-lib/fits/2N3904_TO-92.fit.json");
 
-fn num(label: &str, t: &str) -> Result<f64, String> {
+pub(super) fn num(label: &str, t: &str) -> Result<f64, String> {
     let l = t.trim().to_ascii_lowercase();
     // "300MHz": in SPICE's way of writing numbers "m" is milli, so the unit's prefix is turned into "meg" / "g" first
     let l = if let Some(n) = l.strip_suffix("mhz") { format!("{n}meg") } else if let Some(n) = l.strip_suffix("ghz") { format!("{n}g") } else { l.trim_end_matches("hz").to_string() };
@@ -67,7 +67,7 @@ fn num(label: &str, t: &str) -> Result<f64, String> {
 }
 
 /// "value value" lines as pairs (magnitudes: a PNP's negative readings are taken as they are drawn).
-fn pairs(label: &str, text: &str) -> Result<Vec<[f64; 2]>, String> {
+pub(super) fn pairs(label: &str, text: &str) -> Result<Vec<[f64; 2]>, String> {
     let mut out = vec![];
     for (n, line) in text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
         let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
@@ -80,7 +80,21 @@ fn pairs(label: &str, text: &str) -> Result<Vec<[f64; 2]>, String> {
     Ok(out)
 }
 
-fn lines(points: &[[f64; 2]]) -> String {
+/// Like [`pairs`], but the first number of a line may be 0 (a capacitance at 0 V).
+pub(super) fn pairs_from_zero(label: &str, text: &str) -> Result<Vec<[f64; 2]>, String> {
+    let zero_first = |l: &str| l.split(|c: char| c.is_whitespace() || c == ',').find(|w| !w.is_empty()).and_then(|w| sim_core::parse_value(w.trim_end_matches('v'))) == Some(0.0);
+    let (zeros, rest): (Vec<&str>, Vec<&str>) = text.lines().partition(|l| zero_first(l));
+    let mut out = pairs(label, &rest.join("
+"))?;
+    for l in zeros {
+        let second = l.split(|c: char| c.is_whitespace() || c == ',').filter(|w| !w.is_empty()).nth(1).unwrap_or("");
+        out.push([0.0, num(label, second)?]);
+    }
+    out.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    Ok(out)
+}
+
+pub(super) fn lines(points: &[[f64; 2]]) -> String {
     use super::graph_reader::short;
     points.iter().map(|[a, b]| format!("{} {}", short(*a), short(*b))).collect::<Vec<_>>().join("\n")
 }

@@ -31,6 +31,17 @@ pub enum Dest {
     BjtVceSat,
     BjtCobo,
     BjtCibo,
+    /// The Darlington's fields ("IC value" lines).
+    DarlHfe,
+    DarlVbeOn,
+    DarlVbeSat,
+    DarlVceSat,
+    /// The optocoupler's LED ("IF VF" lines) and its CTR curve ("IF CTR%" lines, compared only).
+    OptoLed,
+    OptoCtr,
+    /// The photodiode's light current ("irradiance current" lines) and capacitance ("reverse voltage capacitance").
+    PdLight,
+    PdCap,
     /// The transient thermal impedance ("time Zth" lines).
     Zth,
 }
@@ -47,6 +58,14 @@ impl Dest {
             Dest::BjtCobo => "トランジスタの「Cobo」に入れる",
             Dest::BjtCibo => "トランジスタの「Cibo」に入れる",
             Dest::Zth => "「過渡熱抵抗 (Zth) の点」に入れる",
+            Dest::DarlHfe => "ダーリントンの「hFE」に入れる",
+            Dest::DarlVbeOn => "ダーリントンの「VBE(on)」に入れる",
+            Dest::DarlVbeSat => "ダーリントンの「VBE(sat)」に入れる",
+            Dest::DarlVceSat => "ダーリントンの「VCE(sat)」に入れる",
+            Dest::OptoLed => "フォトカプラの「LED の順方向」に入れる",
+            Dest::OptoCtr => "フォトカプラの「CTR の曲線」に入れる",
+            Dest::PdLight => "フォトダイオードの「光電流」に入れる",
+            Dest::PdCap => "フォトダイオードの「容量」に入れる",
         }
     }
 
@@ -54,7 +73,10 @@ impl Dest {
     fn axes(self) -> (bool, bool, bool) {
         match self {
             // VF across, IF up on a log axis; the field wants "current voltage"
-            Dest::DiodeForward => (false, true, true),
+            Dest::DiodeForward | Dest::OptoLed => (false, true, true),
+            Dest::PdLight | Dest::PdCap => (true, true, false),
+            Dest::DarlHfe => (true, true, false),
+            Dest::DarlVbeOn | Dest::DarlVbeSat | Dest::DarlVceSat | Dest::OptoCtr => (true, false, false),
             Dest::DiodeCap | Dest::BjtCobo | Dest::BjtCibo | Dest::Zth => (true, true, false),
             Dest::BjtHfe => (true, true, false),
             Dest::BjtVbeOn | Dest::BjtVbeSat | Dest::BjtVceSat => (true, false, false),

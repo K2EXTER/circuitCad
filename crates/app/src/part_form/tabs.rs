@@ -54,7 +54,9 @@ impl PartForm {
         if passive || diode || mosfet || bjt {
             ui.add_space(6.0);
             ui.separator();
-            if diode {
+            if diode && self.glyph == "photodiode" {
+                self.photodiode_ui(ui);
+            } else if diode {
                 self.diode_ui(ui);
             }
             if mosfet {
@@ -62,6 +64,8 @@ impl PartForm {
             }
             if bjt {
                 self.bjt_ui(ui);
+                ui.add_space(4.0);
+                egui::CollapsingHeader::new(i18n::tr("ダーリントン (TIP120 など、2 個入り) のモデルをデータシートのグラフから作る")).id_salt("darl_box").default_open(self.darl.result.is_some()).show(ui, |ui| self.darlington_ui(ui));
             }
             if passive {
                 self.passive_ui(ui);
@@ -79,6 +83,7 @@ impl PartForm {
                     _ => {
                         egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").show(ui, |ui| self.opamp_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").show(ui, |ui| self.regulator_ui(ui));
+                        egui::CollapsingHeader::new(i18n::tr("フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る")).id_salt("opto_box").default_open(self.opto.result.is_some()).show(ui, |ui| self.opto_ui(ui));
                     }
                 }
                 self.template_ui(ui);
