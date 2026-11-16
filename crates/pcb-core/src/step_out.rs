@@ -1,11 +1,15 @@
-//! The board and its parts as a STEP file (ISO 10303-21, AP214), for the case's CAD (Fusion, FreeCAD, SolidWorks ...): one solid for the
+//! The board and its parts as a STEP file (ISO 10303-21, AP214), for the case's CAD (Fusion, FreeCAD, SolidWorks ...), as an assembly: the
+//! board (`<name>_PCB`) and every part a product of its own (`NEXT_ASSEMBLY_USAGE_OCCURRENCE`, placed where it is: the shapes keep the
+//! board's coordinates and the placements are the identity), so the CAD can pick a part and move it. One solid for the
 //! board (its outline raised to `model3d::BOARD_THICKNESS`, with the mounting holes and the through-hole drills cut through) and one per part
 //! solid that the 3D view draws (`model3d::part_boxes`: boxes and cylinders, and `model3d::part_meshes`: the maker's STEP read into
 //! triangles). Every solid is named (the board's name, or the part's designator) and coloured as in the 3D view.
 //!
-//! All faces are flat (a cylinder is a 24-sided prism, a hole a 16-sided one): written as `ADVANCED_FACE`s on `PLANE`s bounded by `LINE`
-//! edges, a closed shell per solid (`MANIFOLD_SOLID_BREP`), all in one `ADVANCED_BREP_SHAPE_REPRESENTATION`. A maker's model goes out as the
-//! triangles it was read into (the curved faces of the original are not kept). Vias, copper and silkscreen are not written.
+//! Round things are written round (E3b, 2026-11-16): a part's cylinder as two half `CYLINDRICAL_SURFACE` faces and two flat caps bounded by
+//! `CIRCLE` arcs, the board's round holes and slots with walls of `CYLINDRICAL_SURFACE` and `PLANE` faces (`Exact`). Everything else is flat:
+//! `ADVANCED_FACE`s on `PLANE`s bounded by `LINE` edges, a closed shell per solid (`MANIFOLD_SOLID_BREP`). A maker's model goes out as the
+//! triangles it was read into (the curved faces of the original are not kept). Vias, copper and silkscreen are not written. `solids` keeps
+//! the flat-faced version of every solid (a cylinder a 24-sided prism, a hole a 16-sided one) for the volume and the names.
 
 use crate::geom::{inside_polygon, signed_area};
 use crate::model::*;
@@ -21,6 +25,17 @@ pub struct Solid {
     pub color: [u8; 3],
     pub vertices: Vec<[f64; 3]>,
     pub faces: Vec<(Vec<usize>, Vec<Vec<usize>>)>,
+    /// The solid as it really is, when it is round somewhere: the file is written from this, the flat faces above stay for the volume.
+    pub exact: Option<Exact>,
+}
+
+/// A solid with round faces, written with its curved surfaces.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Exact {
+    /// A round cylinder: the centre of one end, the unit direction to the other, the radius and the length.
+    Cylinder { base: [f64; 3], axis: [f64; 3], radius: f64, length: f64 },
+    /// A flat plate between `z0` and `z1` over `outline` with round holes and slots cut through it: (centre, drill, slot length, along y).
+    Plate { outline: Vec<Point>, holes: Vec<(Point, f64, f64, bool)>, z0: f64, z1: f64 },
 }
 
 const HOLE_SIDES: usize = 16;
@@ -89,7 +104,9 @@ pub fn board_solid(board: &Board) -> Option<Solid> {
     if board.outline.len() < 3 {
         return None;
     }
-    let mut holes: Vec<(Point, f64, Vec<Point>)> = vec![];
+    // (centre, reach, the faceted loop, the hole as written round)
+    type Kept = (Point, f64, Vec<Point>, (Point, f64, f64, bool));
+    let mut holes: Vec<Kept> = vec![];
     let candidates = board.holes.iter().map(|h| (h.pos, h.drill, h.slot, h.slot_v)).chain(board.pads.iter().filter_map(|p| p.drill.map(|d| (p.pos, d, p.slot, p.slot_v))));
     for (pos, drill, slot, v) in candidates {
         if !(drill > 0.0) {
@@ -97,13 +114,15 @@ pub fn board_solid(board: &Board) -> Option<Solid> {
         }
         let reach = drill.max(slot) / 2.0;
         let l = hole_loop(pos, drill, slot, v);
-        if !l.iter().all(|p| inside_polygon(&board.outline, *p)) || holes.iter().any(|(q, r, _)| q.dist(pos) < reach + r + 0.01) {
+        if !l.iter().all(|p| inside_polygon(&board.outline, *p)) || holes.iter().any(|(q, r, ..)| q.dist(pos) < reach + r + 0.01) {
             continue;
         }
-        holes.push((pos, reach, l));
+        holes.push((pos, reach, l, (pos, drill, slot, v)));
     }
     let name = if board.name.is_empty() { "board".to_string() } else { board.name.clone() };
-    Some(prism(&name, BOARD_COLOR, &board.outline, &holes.into_iter().map(|h| h.2).collect::<Vec<_>>(), 0.0, BOARD_THICKNESS))
+    let mut s = prism(&name, BOARD_COLOR, &board.outline, &holes.iter().map(|h| h.2.clone()).collect::<Vec<_>>(), 0.0, BOARD_THICKNESS);
+    s.exact = Some(Exact::Plate { outline: board.outline.clone(), holes: holes.into_iter().map(|h| h.3).collect(), z0: 0.0, z1: BOARD_THICKNESS });
+    Some(s)
 }
 
 /// One solid of a part: a box, or a cylinder (a 24-sided prism) along its axis.
@@ -130,6 +149,14 @@ fn part_solid(b: &PartBox) -> Solid {
                 q[v] = p[1];
                 q[w] = p[2];
                 *p = q;
+            }
+            // round (not squashed): written as a true cylinder
+            if (ru - rv).abs() < 1e-9 && ru > 0.0 && hi[w] > lo[w] {
+                let mut base = [0.0; 3];
+                (base[u], base[v], base[w]) = (cu, cv, lo[w]);
+                let mut axis = [0.0; 3];
+                axis[w] = 1.0;
+                s.exact = Some(Exact::Cylinder { base, axis, radius: ru, length: hi[w] - lo[w] });
             }
             s
         }
@@ -308,6 +335,198 @@ fn write_solid(o: &mut Out, s: &Solid) -> Option<usize> {
     Some(o.add(format!("MANIFOLD_SOLID_BREP('{}',#{shell})", text(&s.name))))
 }
 
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+fn add3(a: [f64; 3], b: [f64; 3], k: f64) -> [f64; 3] {
+    [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]]
+}
+
+/// A piece of a hole's outline in the board's plane, from one point to the next counter-clockwise: straight, or an arc round `centre`.
+#[derive(Clone, Copy)]
+enum Seg {
+    Line,
+    Arc(Point),
+}
+
+/// A hole's outline counter-clockwise: its corners and the piece from each to the next (a round hole is two half circles; a slot a half
+/// circle, a side, a half circle and a side).
+fn hole_profile(c: Point, drill: f64, slot: f64, along_y: bool) -> Vec<(Point, Seg)> {
+    let r = drill / 2.0;
+    if slot <= drill {
+        return vec![(Point::new(c.x + r, c.y), Seg::Arc(c)), (Point::new(c.x - r, c.y), Seg::Arc(c))];
+    }
+    let half = (slot - drill) / 2.0;
+    if along_y {
+        let (c1, c2) = (Point::new(c.x, c.y + half), Point::new(c.x, c.y - half));
+        vec![(Point::new(c1.x + r, c1.y), Seg::Arc(c1)), (Point::new(c1.x - r, c1.y), Seg::Line), (Point::new(c2.x - r, c2.y), Seg::Arc(c2)), (Point::new(c2.x + r, c2.y), Seg::Line)]
+    } else {
+        let (c1, c2) = (Point::new(c.x + half, c.y), Point::new(c.x - half, c.y));
+        vec![(Point::new(c1.x, c1.y - r), Seg::Arc(c1)), (Point::new(c1.x, c1.y + r), Seg::Line), (Point::new(c2.x, c2.y + r), Seg::Arc(c2)), (Point::new(c2.x, c2.y - r), Seg::Line)]
+    }
+}
+
+impl Out {
+    fn placement(&mut self, at: [f64; 3], axis: [f64; 3], refdir: [f64; 3]) -> usize {
+        let (p, a, r) = (self.point(at), self.direction(axis), self.direction(refdir));
+        self.add(format!("AXIS2_PLACEMENT_3D('',#{p},#{a},#{r})"))
+    }
+
+    fn vertex(&mut self, p: [f64; 3]) -> usize {
+        let pt = self.point(p);
+        self.add(format!("VERTEX_POINT('',#{pt})"))
+    }
+
+    /// A straight edge from `a` (vertex `va`) to `b` (vertex `vb`).
+    fn line_edge(&mut self, a: [f64; 3], b: [f64; 3], va: usize, vb: usize) -> usize {
+        let d = sub(b, a);
+        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        let (p, dir) = (self.point(a), self.direction(unit(d).unwrap_or([1.0, 0.0, 0.0])));
+        let vec = self.add(format!("VECTOR('',#{dir},{})", real(len)));
+        let line = self.add(format!("LINE('',#{p},#{vec})"));
+        self.add(format!("EDGE_CURVE('',#{va},#{vb},#{line},.T.)"))
+    }
+
+    /// An arc of the circle `circle` from vertex `va` to `vb`, counter-clockwise about the circle's axis.
+    fn arc_edge(&mut self, circle: usize, va: usize, vb: usize) -> usize {
+        self.add(format!("EDGE_CURVE('',#{va},#{vb},#{circle},.T.)"))
+    }
+
+    /// A face of `surface` bounded by loops of (edge, used along it): the first the outer bound.
+    fn face(&mut self, loops: &[Vec<(usize, bool)>], surface: usize, same_sense: bool) -> usize {
+        let mut bounds = vec![];
+        for (k, l) in loops.iter().enumerate() {
+            let oes: Vec<String> = l.iter().map(|(e, along)| format!("#{}", self.add(format!("ORIENTED_EDGE('',*,*,#{e},{})", if *along { ".T." } else { ".F." })))).collect();
+            let lp = self.add(format!("EDGE_LOOP('',({}))", oes.join(",")));
+            bounds.push(format!("#{}", self.add(format!("{}('',#{lp},.T.)", if k == 0 { "FACE_OUTER_BOUND" } else { "FACE_BOUND" }))));
+        }
+        self.add(format!("ADVANCED_FACE('',({}),#{surface},{})", bounds.join(","), if same_sense { ".T." } else { ".F." }))
+    }
+
+    fn plane(&mut self, at: [f64; 3], normal: [f64; 3], refdir: [f64; 3]) -> usize {
+        let pl = self.placement(at, normal, refdir);
+        self.add(format!("PLANE('',#{pl})"))
+    }
+}
+
+/// A round cylinder: two half cylinders between two arcs at each end (no seam edge), and the two round caps.
+fn write_cylinder(o: &mut Out, base: [f64; 3], axis: [f64; 3], r: f64, len: f64) -> Vec<usize> {
+    // a reference direction across the axis: θ = 0 there, θ = π opposite
+    let refdir = unit(cross(axis, if axis[2].abs() < 0.9 { [0.0, 0.0, 1.0] } else { [1.0, 0.0, 0.0] })).unwrap_or([1.0, 0.0, 0.0]);
+    let top = add3(base, axis, len);
+    let (p0b, p1b, p0t, p1t) = (add3(base, refdir, r), add3(base, refdir, -r), add3(top, refdir, r), add3(top, refdir, -r));
+    let (v0b, v1b, v0t, v1t) = (o.vertex(p0b), o.vertex(p1b), o.vertex(p0t), o.vertex(p1t));
+    let pb = o.placement(base, axis, refdir);
+    let cb = o.add(format!("CIRCLE('',#{pb},{})", real(r)));
+    let pt = o.placement(top, axis, refdir);
+    let ct = o.add(format!("CIRCLE('',#{pt},{})", real(r)));
+    let (ab, bb, at, bt) = (o.arc_edge(cb, v0b, v1b), o.arc_edge(cb, v1b, v0b), o.arc_edge(ct, v0t, v1t), o.arc_edge(ct, v1t, v0t));
+    let (l0, l1) = (o.line_edge(p0b, p0t, v0b, v0t), o.line_edge(p1b, p1t, v1b, v1t));
+    let place = o.placement(base, axis, refdir);
+    let surf = o.add(format!("CYLINDRICAL_SURFACE('',#{place},{})", real(r)));
+    let side_a = o.face(&[vec![(ab, true), (l1, true), (at, false), (l0, false)]], surf, true);
+    let side_b = o.face(&[vec![(bb, true), (l0, true), (bt, false), (l1, false)]], surf, true);
+    let top_pl = o.plane(top, axis, refdir);
+    let cap_t = o.face(&[vec![(at, true), (bt, true)]], top_pl, true);
+    let bot_pl = o.plane(base, [-axis[0], -axis[1], -axis[2]], refdir);
+    let cap_b = o.face(&[vec![(bb, false), (ab, false)]], bot_pl, true);
+    vec![side_a, side_b, cap_t, cap_b]
+}
+
+/// A plate between `z0` and `z1`: the outline's straight walls, and round holes and slots with walls of cylinders and planes.
+fn write_plate(o: &mut Out, outline: &[Point], holes: &[(Point, f64, f64, bool)], z0: f64, z1: f64) -> Vec<usize> {
+    let (zx, up, down) = ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -1.0]);
+    let mut outer = outline.to_vec();
+    if signed_area(&outer) < 0.0 {
+        outer.reverse();
+    }
+    let at = |p: Point, z: f64| [p.x, p.y, z];
+    let mut faces = vec![];
+    // the outline: bottom and top corners, the edges along the bottom, the top and up the corners
+    let n = outer.len();
+    let vb: Vec<usize> = outer.iter().map(|p| o.vertex(at(*p, z0))).collect();
+    let vt: Vec<usize> = outer.iter().map(|p| o.vertex(at(*p, z1))).collect();
+    let eb: Vec<usize> = (0..n).map(|i| o.line_edge(at(outer[i], z0), at(outer[(i + 1) % n], z0), vb[i], vb[(i + 1) % n])).collect();
+    let et: Vec<usize> = (0..n).map(|i| o.line_edge(at(outer[i], z1), at(outer[(i + 1) % n], z1), vt[i], vt[(i + 1) % n])).collect();
+    let ev: Vec<usize> = (0..n).map(|i| o.line_edge(at(outer[i], z0), at(outer[i], z1), vb[i], vt[i])).collect();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let Some(dir) = unit(sub(at(outer[j], z0), at(outer[i], z0))) else { continue };
+        // the material is on the left of a counter-clockwise outline: the wall faces right
+        let pl = o.plane(at(outer[i], z0), cross(dir, up), dir);
+        faces.push(o.face(&[vec![(eb[i], true), (ev[j], true), (et[i], false), (ev[i], false)]], pl, true));
+    }
+    // the holes: each corner's bottom and top vertices, the pieces along the bottom and the top, and the edges up the corners
+    let mut top_loops: Vec<Vec<(usize, bool)>> = vec![(0..n).map(|i| (et[i], true)).collect()];
+    let mut bottom_loops: Vec<Vec<(usize, bool)>> = vec![(0..n).rev().map(|i| (eb[i], false)).collect()];
+    for &(c, drill, slot, along_y) in holes {
+        let prof = hole_profile(c, drill, slot, along_y);
+        let m = prof.len();
+        let hb: Vec<usize> = prof.iter().map(|(p, _)| o.vertex(at(*p, z0))).collect();
+        let ht: Vec<usize> = prof.iter().map(|(p, _)| o.vertex(at(*p, z1))).collect();
+        let hv: Vec<usize> = (0..m).map(|i| o.line_edge(at(prof[i].0, z0), at(prof[i].0, z1), hb[i], ht[i])).collect();
+        let mut sb = vec![];
+        let mut st = vec![];
+        for i in 0..m {
+            let j = (i + 1) % m;
+            let (a, b) = (prof[i].0, prof[j].0);
+            match prof[i].1 {
+                Seg::Line => {
+                    sb.push(o.line_edge(at(a, z0), at(b, z0), hb[i], hb[j]));
+                    st.push(o.line_edge(at(a, z1), at(b, z1), ht[i], ht[j]));
+                }
+                Seg::Arc(centre) => {
+                    let r = a.dist(centre);
+                    let mut circle = |z: f64| {
+                        let pl = o.placement(at(centre, z), up, zx);
+                        o.add(format!("CIRCLE('',#{pl},{})", real(r)))
+                    };
+                    let (cb, ct) = (circle(z0), circle(z1));
+                    sb.push(o.arc_edge(cb, hb[i], hb[j]));
+                    st.push(o.arc_edge(ct, ht[i], ht[j]));
+                }
+            }
+        }
+        // the hole in the top face runs clockwise seen from above, in the bottom face counter-clockwise
+        top_loops.push((0..m).rev().map(|i| (st[i], false)).collect());
+        bottom_loops.push((0..m).map(|i| (sb[i], true)).collect());
+        // the walls face into the hole
+        for i in 0..m {
+            let j = (i + 1) % m;
+            let lp = vec![(st[i], true), (hv[j], false), (sb[i], false), (hv[i], true)];
+            match prof[i].1 {
+                Seg::Arc(centre) => {
+                    let place = o.placement(at(centre, z0), up, zx);
+                    let surf = o.add(format!("CYLINDRICAL_SURFACE('',#{place},{})", real(prof[i].0.dist(centre))));
+                    faces.push(o.face(&[lp], surf, false));
+                }
+                Seg::Line => {
+                    let dir = unit(sub(at(prof[j].0, z0), at(prof[i].0, z0))).unwrap_or(zx);
+                    let pl = o.plane(at(prof[i].0, z0), cross(up, dir), dir);
+                    faces.push(o.face(&[lp], pl, true));
+                }
+            }
+        }
+    }
+    let top_pl = o.plane([0.0, 0.0, z1], up, zx);
+    faces.push(o.face(&top_loops, top_pl, true));
+    let bot_pl = o.plane([0.0, 0.0, z0], down, zx);
+    faces.push(o.face(&bottom_loops, bot_pl, true));
+    faces
+}
+
+/// A solid with round faces; returns the `MANIFOLD_SOLID_BREP`.
+fn write_exact(o: &mut Out, name: &str, e: &Exact) -> usize {
+    let faces = match e {
+        Exact::Cylinder { base, axis, radius, length } => write_cylinder(o, *base, *axis, *radius, *length),
+        Exact::Plate { outline, holes, z0, z1 } => write_plate(o, outline, holes, *z0, *z1),
+    };
+    let list: Vec<String> = faces.iter().map(|f| format!("#{f}")).collect();
+    let shell = o.add(format!("CLOSED_SHELL('',({}))", list.join(",")));
+    o.add(format!("MANIFOLD_SOLID_BREP('{}',#{shell})", text(name)))
+}
+
 /// The board and its parts as a STEP file (AP214), lengths in millimetres, the board's bottom face at z = 0.
 pub fn write(board: &Board) -> String {
     let name = if board.name.is_empty() { "board".to_string() } else { board.name.clone() };
@@ -315,12 +534,7 @@ pub fn write(board: &Board) -> String {
     let app = o.add("APPLICATION_CONTEXT('core data for automotive mechanical design processes')");
     o.add(format!("APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2000,#{app})"));
     let pctx = o.add(format!("PRODUCT_CONTEXT('',#{app},'mechanical')"));
-    let product = o.add(format!("PRODUCT('{0}','{0}','',(#{pctx}))", text(&name)));
-    o.add(format!("PRODUCT_RELATED_PRODUCT_CATEGORY('part',$,(#{product}))"));
-    let form = o.add(format!("PRODUCT_DEFINITION_FORMATION('','',#{product})"));
     let dctx = o.add(format!("PRODUCT_DEFINITION_CONTEXT('part definition',#{app},'design')"));
-    let def = o.add(format!("PRODUCT_DEFINITION('design','',#{form},#{dctx})"));
-    let pds = o.add(format!("PRODUCT_DEFINITION_SHAPE('','',#{def})"));
     let mm = o.add("(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.))");
     let rad = o.add("(NAMED_UNIT(*)PLANE_ANGLE_UNIT()SI_UNIT($,.RADIAN.))");
     let sr = o.add("(NAMED_UNIT(*)SI_UNIT($,.STERADIAN.)SOLID_ANGLE_UNIT())");
@@ -328,31 +542,94 @@ pub fn write(board: &Board) -> String {
     let ctx = o.add(format!(
         "(GEOMETRIC_REPRESENTATION_CONTEXT(3)GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((#{unc}))GLOBAL_UNIT_ASSIGNED_CONTEXT((#{mm},#{rad},#{sr}))REPRESENTATION_CONTEXT('Context #1','3D Context with UNIT and UNCERTAINTY'))"
     ));
-    let origin = o.point([0.0; 3]);
-    let (z, x) = (o.direction([0.0, 0.0, 1.0]), o.direction([1.0, 0.0, 0.0]));
-    let axes = o.add(format!("AXIS2_PLACEMENT_3D('',#{origin},#{z},#{x})"));
-    let mut items = vec![format!("#{axes}")];
-    let mut styled = vec![];
-    for s in solids(board) {
-        let Some(id) = write_solid(&mut o, &s) else { continue };
-        items.push(format!("#{id}"));
-        let [r, g, b] = s.color.map(|c| f64::from(c) / 255.0);
-        let colour = o.add(format!("COLOUR_RGB('',{},{},{})", real(r), real(g), real(b)));
-        let fill = o.add(format!("FILL_AREA_STYLE_COLOUR('',#{colour})"));
-        let area = o.add(format!("FILL_AREA_STYLE('',(#{fill}))"));
-        let surf = o.add(format!("SURFACE_STYLE_FILL_AREA(#{area})"));
-        let side = o.add(format!("SURFACE_SIDE_STYLE('',(#{surf}))"));
-        let usage = o.add(format!("SURFACE_STYLE_USAGE(.BOTH.,#{side})"));
-        let assign = o.add(format!("PRESENTATION_STYLE_ASSIGNMENT((#{usage}))"));
-        styled.push(format!("#{}", o.add(format!("STYLED_ITEM('color',(#{assign}),#{id})"))));
+    // a product: its definition, and the shape that definition has
+    let product = |o: &mut Out, n: &str| -> (usize, usize) {
+        let p = o.add(format!("PRODUCT('{0}','{0}','',(#{pctx}))", text(n)));
+        o.add(format!("PRODUCT_RELATED_PRODUCT_CATEGORY('part',$,(#{p}))"));
+        let form = o.add(format!("PRODUCT_DEFINITION_FORMATION('','',#{p})"));
+        let def = o.add(format!("PRODUCT_DEFINITION('design','',#{form},#{dctx})"));
+        let pds = o.add(format!("PRODUCT_DEFINITION_SHAPE('','',#{def})"));
+        (def, pds)
+    };
+    let origin_axes = |o: &mut Out| -> usize {
+        let origin = o.point([0.0; 3]);
+        let (z, x) = (o.direction([0.0, 0.0, 1.0]), o.direction([1.0, 0.0, 0.0]));
+        o.add(format!("AXIS2_PLACEMENT_3D('',#{origin},#{z},#{x})"))
+    };
+    // the assembly: the board and every part, each a product of its own so that the case's CAD can pick and move it
+    let (root_def, root_pds) = product(&mut o, &name);
+    let root_axes = origin_axes(&mut o);
+    let mut groups: Vec<(String, Vec<Solid>)> = vec![];
+    for (k, s) in solids(board).into_iter().enumerate() {
+        // the board's solid first, then the parts by designator (a part's several solids stay together)
+        let key = if k == 0 && s.exact.as_ref().is_some_and(|e| matches!(e, Exact::Plate { .. })) { format!("{name}_PCB") } else { s.name.clone() };
+        match groups.iter_mut().find(|g| g.0 == key) {
+            Some(g) => g.1.push(s),
+            None => groups.push((key, vec![s])),
+        }
     }
-    let rep = o.add(format!("ADVANCED_BREP_SHAPE_REPRESENTATION('{}',({}),#{ctx})", text(&name), items.join(",")));
-    o.add(format!("SHAPE_DEFINITION_REPRESENTATION(#{pds},#{rep})"));
+    let mut styled = vec![];
+    let mut children = vec![];
+    for (gname, group) in &groups {
+        let axes = origin_axes(&mut o);
+        let mut items = vec![format!("#{axes}")];
+        for s in group {
+            let id = match &s.exact {
+                Some(e) => write_exact(&mut o, &s.name, e),
+                None => match write_solid(&mut o, s) {
+                    Some(id) => id,
+                    None => continue,
+                },
+            };
+            items.push(format!("#{id}"));
+            let [r, g, b] = s.color.map(|c| f64::from(c) / 255.0);
+            let colour = o.add(format!("COLOUR_RGB('',{},{},{})", real(r), real(g), real(b)));
+            let fill = o.add(format!("FILL_AREA_STYLE_COLOUR('',#{colour})"));
+            let area = o.add(format!("FILL_AREA_STYLE('',(#{fill}))"));
+            let surf = o.add(format!("SURFACE_STYLE_FILL_AREA(#{area})"));
+            let side = o.add(format!("SURFACE_SIDE_STYLE('',(#{surf}))"));
+            let usage = o.add(format!("SURFACE_STYLE_USAGE(.BOTH.,#{side})"));
+            let assign = o.add(format!("PRESENTATION_STYLE_ASSIGNMENT((#{usage}))"));
+            styled.push(format!("#{}", o.add(format!("STYLED_ITEM('color',(#{assign}),#{id})"))));
+        }
+        if items.len() == 1 {
+            continue;
+        }
+        let (def, pds) = product(&mut o, gname);
+        let rep = o.add(format!("ADVANCED_BREP_SHAPE_REPRESENTATION('{}',({}),#{ctx})", text(gname), items.join(",")));
+        o.add(format!("SHAPE_DEFINITION_REPRESENTATION(#{pds},#{rep})"));
+        children.push((gname.clone(), def, rep, axes));
+    }
+    // the root holds the parts where they are: every part's frame is the board's (an identity placement)
+    let mut root_items = vec![format!("#{root_axes}")];
+    let mut placements = vec![];
+    for _ in &children {
+        placements.push(origin_axes(&mut o));
+    }
+    root_items.extend(placements.iter().map(|p| format!("#{p}")));
+    let root_rep = o.add(format!("SHAPE_REPRESENTATION('{}',({}),#{ctx})", text(&name), root_items.join(",")));
+    o.add(format!("SHAPE_DEFINITION_REPRESENTATION(#{root_pds},#{root_rep})"));
+    for ((cname, def, rep, axes), at) in children.iter().zip(&placements) {
+        let nauo = o.add(format!("NEXT_ASSEMBLY_USAGE_OCCURRENCE('{0}','{0}','',#{root_def},#{def},$)", text(cname)));
+        let pds = o.add(format!("PRODUCT_DEFINITION_SHAPE('','',#{nauo})"));
+        let idt = o.add(format!("ITEM_DEFINED_TRANSFORMATION('','',#{axes},#{at})"));
+        let rel = o.add(format!("(REPRESENTATION_RELATIONSHIP('','',#{rep},#{root_rep})REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#{idt})SHAPE_REPRESENTATION_RELATIONSHIP())"));
+        o.add(format!("CONTEXT_DEPENDENT_SHAPE_REPRESENTATION(#{rel},#{pds})"));
+    }
     if !styled.is_empty() {
         o.add(format!("MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION('',({}),#{ctx})", styled.join(",")));
     }
     format!(
-        "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('circuitCad board and parts'),'2;1');\nFILE_NAME('{0}.step','',(''),(''),'circuitCad','circuitCad','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN {{ 1 0 10303 214 1 1 1 1 }}'));\nENDSEC;\nDATA;\n{1}ENDSEC;\nEND-ISO-10303-21;\n",
+        "ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('circuitCad board and parts'),'2;1');
+FILE_NAME('{0}.step','',(''),(''),'circuitCad','circuitCad','');
+FILE_SCHEMA(('AUTOMOTIVE_DESIGN {{ 1 0 10303 214 1 1 1 1 }}'));
+ENDSEC;
+DATA;
+{1}ENDSEC;
+END-ISO-10303-21;
+",
         text(&name),
         o.body
     )
@@ -428,6 +705,10 @@ mod tests {
         assert!(text.starts_with("ISO-10303-21;"));
         assert!(text.contains("MANIFOLD_SOLID_BREP('R1'"), "named after the part");
         assert!(text.contains("PRODUCT('\\X2\\30C630B930C857FA677F\\X0\\'"), "the Japanese name is escaped as one run");
+        // an assembly: the board and the resistor each a product of their own, under the board's
+        assert_eq!(text.matches("NEXT_ASSEMBLY_USAGE_OCCURRENCE(").count(), 2, "the board and R1");
+        assert!(text.contains("PRODUCT('R1','R1'") && text.contains("_PCB','"), "products named after the part and the board");
+        assert!(edges_pair_up(&text));
         let m = crate::step::read_step(text.as_bytes()).unwrap();
         let (lo, hi) = m.bounds().unwrap();
         assert!(lo[0].abs() < 1e-3 && lo[1].abs() < 1e-3 && lo[2].abs() < 1e-3 && (hi[0] - 40.0).abs() < 1e-3 && (hi[1] - 30.0).abs() < 1e-3, "{lo:?} {hi:?}");
@@ -438,5 +719,68 @@ mod tests {
         let m = crate::step::read_step(write(&b).as_bytes()).unwrap();
         let want: f64 = solids(&b).iter().map(volume).sum();
         assert!((m.volume() - want).abs() < 1e-3 * want, "with a hole: {} vs {want}", m.volume());
+    }
+
+    /// Every `EDGE_CURVE` of the file used by exactly two oriented edges, once along it and once against it (each solid closed).
+    fn edges_pair_up(text: &str) -> bool {
+        let mut uses: HashMap<String, (i32, i32)> = HashMap::new();
+        for line in text.lines().filter(|l| l.contains("ORIENTED_EDGE(")) {
+            let inner = &line[line.find("ORIENTED_EDGE(").unwrap()..];
+            let parts: Vec<&str> = inner.trim_end_matches(");").split(',').collect();
+            let (edge, sense) = (parts[3].trim().to_string(), parts[4].trim());
+            let e = uses.entry(edge).or_default();
+            if sense.starts_with(".T.") { e.0 += 1 } else { e.1 += 1 }
+        }
+        let edges = text.lines().filter(|l| l.contains("=EDGE_CURVE(")).count();
+        uses.len() == edges && uses.values().all(|u| *u == (1, 1))
+    }
+
+    /// Round holes, slots both ways and the parts' cylinders are written with curved faces and circles, and the file stays closed.
+    #[test]
+    fn round_holes_slots_and_cylinders_are_written_round() {
+        let mut b = Board::new("t", 30.0, 20.0);
+        b.holes.push(Hole { pos: Point::new(4.0, 4.0), drill: 3.2, slot: 0.0, slot_v: false, refdes: String::new() });
+        b.holes.push(Hole { pos: Point::new(15.0, 4.0), drill: 1.2, slot: 4.0, slot_v: false, refdes: String::new() });
+        b.holes.push(Hole { pos: Point::new(26.0, 14.0), drill: 1.0, slot: 3.0, slot_v: true, refdes: String::new() });
+        let s = board_solid(&b).unwrap();
+        assert!(matches!(&s.exact, Some(Exact::Plate { holes, .. }) if holes.len() == 3));
+        let pb = PartBox { refdes: "C1".into(), part: 0, lo: [10.0, 8.0, 1.6], hi: [16.0, 14.0, 12.6], color: [10, 20, 30], bottom: false, shape: BodyShape::Cylinder(2) };
+        assert!(matches!(part_solid(&pb).exact, Some(Exact::Cylinder { radius, length, .. }) if radius == 3.0 && length == 11.0));
+        // squashed (an elliptic cross-section): stays faceted
+        assert!(part_solid(&PartBox { hi: [17.0, 14.0, 12.6], ..pb.clone() }).exact.is_none());
+        let mut o = Out { body: String::new(), next: 1 };
+        let id = write_exact(&mut o, "t", s.exact.as_ref().unwrap());
+        write_exact(&mut o, "C1", part_solid(&pb).exact.as_ref().unwrap());
+        assert!(id > 0);
+        // round hole: 1 cylinder (two half walls on one surface each); a slot: 2; the can: 1 (its two halves)
+        assert_eq!(o.body.matches("CYLINDRICAL_SURFACE(").count(), 2 + 2 + 2 + 1, "{}", o.body.matches("CYLINDRICAL_SURFACE(").count());
+        assert!(edges_pair_up(&o.body), "every edge used once each way");
+        // the reader takes the file back: the box round it is the board's
+        let m = crate::step::read_step(write(&b).as_bytes()).unwrap();
+        let (lo, hi) = m.bounds().unwrap();
+        assert!((hi[0] - lo[0] - 30.0).abs() < 1e-3 && (hi[2] - lo[2] - BOARD_THICKNESS).abs() < 1e-3);
+    }
+
+    /// SolidCraft (its SMLib kernel) reads the file as closed solids of the exact volume: the board less a round hole and two slots,
+    /// a cylinder of π r² h (`--ignored`: needs SolidCraft).
+    #[test]
+    #[ignore]
+    fn solidcraft_reads_the_round_faces_exactly() {
+        let Some((cli, _)) = crate::shape_script::find_solidcraft() else { panic!("SolidCraft is not installed") };
+        let mut b = Board::new("t", 30.0, 20.0);
+        b.holes.push(Hole { pos: Point::new(4.0, 4.0), drill: 3.2, slot: 0.0, slot_v: false, refdes: String::new() });
+        b.holes.push(Hole { pos: Point::new(15.0, 4.0), drill: 1.2, slot: 4.0, slot_v: false, refdes: String::new() });
+        b.holes.push(Hole { pos: Point::new(26.0, 14.0), drill: 1.0, slot: 3.0, slot_v: true, refdes: String::new() });
+        let dir = std::env::temp_dir().join("circuitcad_step_round");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (step, obj) = (dir.join("b.step"), dir.join("b.obj"));
+        std::fs::write(&step, write(&b)).unwrap();
+        let out = std::process::Command::new(cli).arg("run").arg("--in").arg(&step).arg("--out").arg(&obj).arg("--quality").arg("fine").arg("--quiet").output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let m = crate::mesh_io::read_obj(&std::fs::read_to_string(&obj).unwrap(), &Default::default()).unwrap();
+        let pi = std::f64::consts::PI;
+        let holes = pi * 1.6 * 1.6 + (pi * 0.6 * 0.6 + 1.2 * 2.8) + (pi * 0.5 * 0.5 + 1.0 * 2.0);
+        let want = (30.0 * 20.0 - holes) * BOARD_THICKNESS;
+        assert!((m.volume() - want).abs() < 1e-3 * want, "{} vs {want}", m.volume());
     }
 }

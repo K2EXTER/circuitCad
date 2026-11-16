@@ -114,7 +114,7 @@ impl Session {
     }
 
     pub(super) fn board_step(&mut self, rest: &[String]) -> Res {
-        let f = rest.first().ok_or("board step FILE.step   (the board raised to 1.6 mm with its mounting and through-hole drills, and every part's solid as the 3D view draws it, named by designator and coloured, in mm, for the case's CAD; flat faces only: cylinders are 24-sided prisms, holes 16-sided)")?;
+        let f = rest.first().ok_or("board step FILE.step   (the board raised to 1.6 mm with its mounting and through-hole drills, and every part's solid as the 3D view draws it, named by designator and coloured, in mm, for the case's CAD; an assembly with the board and every part a product of its own; cylinders, round holes and slots written round, a maker's mesh as its triangles)")?;
         let board = self.board_mut()?;
         if board.outline.len() < 3 {
             return Err("the board has no outline yet (board new W H, or board dxf_import)".into());

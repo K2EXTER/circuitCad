@@ -414,7 +414,7 @@ impl eframe::App for App {
                         self.board_ed.export_dxf();
                         ui.close();
                     }
-                    if !sch_mode && ui.button(i18n::tr("基板と部品の立体をSTEPで保存…")).on_hover_text(i18n::tr("基板 (外形を厚さ 1.6 mm に立ち上げ、取り付け穴とリード部品の穴をあけたもの) と、3D で見えている部品の立体を、STEP (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に読み込んで、ケースに収まるか・ぶつからないかを立体で確かめるのに使います。部品は部品番号の名前の立体になり、色も付きます。面はすべて平らで、円柱は 24 角柱、穴は 16 角形です。ビア・銅・シルクは入りません")).clicked() {
+                    if !sch_mode && ui.button(i18n::tr("基板と部品の立体をSTEPで保存…")).on_hover_text(i18n::tr("基板 (外形を厚さ 1.6 mm に立ち上げ、取り付け穴とリード部品の穴をあけたもの) と、3D で見えている部品の立体を、STEP (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に読み込んで、ケースに収まるか・ぶつからないかを立体で確かめるのに使います。基板と部品はそれぞれ別の部品 (組み立て) になり、ケースの CAD で部品ごとに選んだり動かしたりできます。部品は部品番号の名前で、色も付きます。円柱・丸い穴・長穴は本当の曲面で書きます (メーカーの 3D の形は三角形のまま)。ビア・銅・シルクは入りません")).clicked() {
                         self.board_ed.export_step();
                         ui.close();
                     }
