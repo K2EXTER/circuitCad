@@ -56,11 +56,15 @@ pub struct ThermalSpec {
     pub emissivity: f64,
     /// The side of a cell (mm); 0 = 0.5 mm, or coarser on a big board.
     pub cell_mm: f64,
+    /// In a case: the room from the top face to the lid and from the bottom face to the floor (mm; 0 = open air). Across a thin gap
+    /// the still air carries the heat by conduction, k / gap, when that beats convection.
+    pub gap_top_mm: f64,
+    pub gap_bottom_mm: f64,
 }
 
 impl Default for ThermalSpec {
     fn default() -> Self {
-        Self { ambient_c: 25.0, orientation: Orientation::Flat, altitude_m: 0.0, emissivity: 0.9, cell_mm: 0.0 }
+        Self { ambient_c: 25.0, orientation: Orientation::Flat, altitude_m: 0.0, emissivity: 0.9, cell_mm: 0.0, gap_top_mm: 0.0, gap_bottom_mm: 0.0 }
     }
 }
 
@@ -847,7 +851,12 @@ fn air_conductance(m: &Model, spec: &ThermalSpec, rise: &[f64], air: &mut [f64])
         for (face_layer, is_top) in [(0, true), (last, false)] {
             if l == face_layer {
                 let facing = if standing { None } else { Some(is_top) };
-                let (c, r) = h_air(rise[k], spec.ambient_c, length, facing, spec.emissivity, pressure);
+                let (mut c, r) = h_air(rise[k], spec.ambient_c, length, facing, spec.emissivity, pressure);
+                // a thin layer of still air to the lid or the floor: conduction across it
+                let gap = if is_top { spec.gap_top_mm } else { spec.gap_bottom_mm };
+                if gap > 0.0 {
+                    c = c.max(0.0263 / (gap * 1e-3));
+                }
                 g += (c + r) * face_area;
             }
         }

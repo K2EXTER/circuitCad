@@ -420,7 +420,7 @@ impl Session {
 
     /// `board heatmap [temp=27] [standing] [alt=M] [cell=MM]`: the board's temperature map (H7) from the schematic's self-heating powers.
     pub(super) fn board_heatmap(&mut self, rest: &[String]) -> Res {
-        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM] [tran=SECONDS [power=circuit [repeat=1]]]   (tran = also the board warming up from the moment the parts are switched on: its heat capacity, time constant and each part's temperature at some moments; power=circuit drives it with each part's power over time from the last 'heattran' run (parts it did not run keep their steady power), repeat=1 repeats that run's power with its length as the period (a PWM) instead of holding its last value; the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
+        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM] [case=W,D,TOP,BOTTOM[,WALL][,alu]] [tran=SECONDS [power=circuit [repeat=1]]]   (case = the board in a closed case: inside width and depth, the room above and below the board, the wall (2 mm) in mm, ABS resin or alu (anodised aluminium); the case's air and walls warm by the heat, and the board sits in that; tran = also the board warming up from the moment the parts are switched on: its heat capacity, time constant and each part's temperature at some moments; power=circuit drives it with each part's power over time from the last 'heattran' run (parts it did not run keep their steady power), repeat=1 repeats that run's power with its length as the period (a PWM) instead of holding its last value; the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
         let (pos, kv) = options(rest);
         let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number
 {usage}")));
@@ -445,6 +445,25 @@ impl Session {
                 Some(s)
             })
             .collect();
+        let case = match opt(&kv, "case") {
+            None => None,
+            Some(text) => {
+                let words: Vec<&str> = text.split(',').map(str::trim).collect();
+                let nums: Vec<f64> = words.iter().filter_map(|w| w.parse::<f64>().ok()).collect();
+                if nums.len() < 4 {
+                    return Err(format!("case={text}: write W,D,TOP,BOTTOM[,WALL][,alu] in mm
+{usage}"));
+                }
+                Some(pcb_core::case_heat::CaseHeat {
+                    inner_w: nums[0],
+                    inner_d: nums[1],
+                    top_mm: nums[2],
+                    bottom_mm: nums[3],
+                    wall_mm: nums.get(4).copied().unwrap_or(2.0),
+                    material: if words.iter().any(|w| w.eq_ignore_ascii_case("alu")) { pcb_core::case_heat::CaseMaterial::Aluminium } else { pcb_core::case_heat::CaseMaterial::Plastic },
+                })
+            }
+        };
         // power=circuit: the last heattran run's power over time, on the parts it ran (a part only pulsed is added)
         let circuit = opt(&kv, "power").is_some_and(|p| p.eq_ignore_ascii_case("circuit"));
         let repeat = opt(&kv, "repeat").is_some_and(|r| r == "1");
@@ -483,7 +502,14 @@ impl Session {
         hot.truncate(sim_core::BOARD_HEATERS_MAX);
         let copper = board.stackup.copper_um;
         // every source one of them: the matrix's own map is the map (one solve for both)
-        let (m, found) = if hot.len() == sources.len() && !hot.is_empty() {
+        let mut case_air = None;
+        let (m, found) = if let Some(case) = &case {
+            let (map, air) = pcb_core::case_heat::thermal_map_in_case(board, &sources, &[], copper, &spec, case)?;
+            let inside = pcb_core::thermal::ThermalSpec { ambient_c: air.board_ambient_c, gap_top_mm: case.top_mm, gap_bottom_mm: case.bottom_mm, ..spec };
+            let found = if hot.len() >= 2 { pcb_core::thermal::hot_pairs(board, &hot, copper, &inside)? } else { vec![] };
+            case_air = Some(air);
+            (map, found)
+        } else if hot.len() == sources.len() && !hot.is_empty() {
             let (r, map) = pcb_core::thermal::thermal_matrix(board, &hot, copper, &spec)?;
             let found = pcb_core::thermal::hot_pairs_with(board, &hot, &r, &map, copper, &spec)?;
             (map, found)
@@ -507,7 +533,13 @@ impl Session {
             .collect();
         let warm_up = match tran {
             Some(end) => {
-                let tr = pcb_core::thermal::thermal_transient(board, &driven, &[], board.stackup.copper_um, &spec, end, 8)?;
+                let tr = match (&case, &case_air) {
+                    (Some(c), Some(air)) => {
+                        let inside = pcb_core::thermal::ThermalSpec { ambient_c: air.board_ambient_c, gap_top_mm: c.top_mm, gap_bottom_mm: c.bottom_mm, ..spec };
+                        pcb_core::case_heat::transient_in_case(pcb_core::thermal::thermal_transient(board, &driven, &[], board.stackup.copper_um, &inside, end, 8)?, air, spec.ambient_c)
+                    }
+                    _ => pcb_core::thermal::thermal_transient(board, &driven, &[], board.stackup.copper_um, &spec, end, 8)?,
+                };
                 let moments: Vec<Value> = tr
                     .frames
                     .iter()
@@ -520,7 +552,8 @@ impl Session {
             }
             None => Value::Null,
         };
-        Ok(obj(json!({"warm_up": warm_up, "hottest_c": t, "hottest_at": [at.x, at.y], "ambient_c": m.ambient_c, "h_top_w_m2k": m.h_top, "h_bottom_w_m2k": m.h_bottom, "cell_mm": m.grid.d, "cells": m.grid.w * m.grid.h, "layers": m.layers.len(), "rounds": m.rounds, "ms": t0.elapsed().as_secs_f64() * 1e3, "parts": parts, "hot_pairs": pairs,
+        let case_out = case_air.as_ref().map(|a| json!({"power_w": a.power, "air_c": a.air_c, "wall_c": a.wall_c, "board_ambient_c": a.board_ambient_c, "r_air_k_per_w": a.r_air, "r_wall_k_per_w": a.r_wall, "r_out_k_per_w": a.r_out, "h_in_w_m2k": a.h_in, "h_out_w_m2k": a.h_out, "heat_capacity_j_per_k": a.cth, "time_constant_s": a.tau}));
+        Ok(obj(json!({"case": case_out, "warm_up": warm_up, "hottest_c": t, "hottest_at": [at.x, at.y], "ambient_c": m.ambient_c, "h_top_w_m2k": m.h_top, "h_bottom_w_m2k": m.h_bottom, "cell_mm": m.grid.d, "cells": m.grid.w * m.grid.h, "layers": m.layers.len(), "rounds": m.rounds, "ms": t0.elapsed().as_secs_f64() * 1e3, "parts": parts, "hot_pairs": pairs,
             "note": "A guide (about ±20-30 %): natural convection and radiation from both faces, no forced air or neighbours' shading. junction_c is the part's inside, through θjc to the copper under its pads and through its body to the air; self_heat_c is the schematic's self-heating with θ alone, to compare. hot_pairs: parts that get at least 3 K and 15 % of their rise from each other through the board, with suggest_mm, a distance (pad centre to centre) where that falls to half (a guide from the board's heat spreading length); 'req apart NAME a=A b=B min=MM' keeps them apart as a requirement."})))
     }
 

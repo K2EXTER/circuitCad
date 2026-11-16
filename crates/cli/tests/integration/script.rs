@@ -2146,6 +2146,32 @@ heatsweep 50 0 5
     assert!(!ok);
 }
 
+/// `board heatmap case=`: the sample's 1.5 W in a closed 100 × 50 mm ABS box (15 mm above the board, 5 mm below) warms the air inside
+/// by about 15 K, and R2 runs hotter by about what the board's surroundings rose; an aluminium box is hardly cooler (the outer surface
+/// carries the heat, not the wall).
+#[test]
+fn heatmap_in_a_case_warms_the_board_by_what_the_case_adds() {
+    let sample = format!("{}/../../docs/examples/heat_copper.ccproj", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}
+board heatmap temp=25 cell=1
+board heatmap temp=25 cell=1 case=100,50,15,5
+board heatmap temp=25 cell=1 case=100,50,15,5,2,alu
+board heatmap temp=25 case=100
+"));
+    assert!(!ok, "a case needs four numbers");
+    let maps: Vec<&Value> = a.iter().filter(|v| v["hottest_c"].is_number()).collect();
+    let r2 = |v: &Value| v["parts"].as_array().unwrap().iter().find(|p| p["part"] == "R2").unwrap()["junction_c"].as_f64().unwrap();
+    let (open, abs, alu) = (maps[0], maps[1], maps[2]);
+    assert!(open["case"].is_null());
+    let c = &abs["case"];
+    let (air, seen) = (c["air_c"].as_f64().unwrap(), c["board_ambient_c"].as_f64().unwrap());
+    assert!((8.0..25.0).contains(&(air - 25.0)) && seen < air && seen > c["wall_c"].as_f64().unwrap(), "{c}");
+    let shift = seen - 25.0;
+    assert!((r2(abs) - r2(open) - shift).abs() < 0.4 * shift, "R2 open {} in the case {}, the surroundings +{shift}", r2(open), r2(abs));
+    let alu_seen = alu["case"]["board_ambient_c"].as_f64().unwrap();
+    assert!(alu_seen < seen && seen - alu_seen < 0.15 * shift, "{alu_seen} {seen}");
+}
+
 /// `board heatmap` lists the parts that warm each other: R2 moved next to R1 on the sample gets about 14 K from it, so the pair comes with
 /// a distance to keep; as a requirement (`req apart`, taken to the board by `board import`), the board's requirement check reports the two
 /// as too close.

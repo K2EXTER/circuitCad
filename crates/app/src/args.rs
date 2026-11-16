@@ -604,6 +604,15 @@ fn apply_board_args(app: &mut App, args: &[String]) {
             app.board_ed.thermal.spec.orientation = pcb_core::thermal::Orientation::Standing;
         }
         app.board_ed.open_thermal_view();
+        // --thermal-case W D TOP BOTTOM: the board in a closed case of that inside (mm)
+        if let Some(j) = args.iter().position(|a| a == "--thermal-case") {
+            let n: Vec<f64> = args.iter().skip(j + 1).take(4).filter_map(|a| a.parse().ok()).collect();
+            if let [w, d, top, bottom] = n.as_slice() {
+                let c = &mut app.board_ed.thermal.case;
+                (c.inner_w, c.inner_d, c.top_mm, c.bottom_mm) = (*w, *d, *top, *bottom);
+                app.board_ed.thermal.in_case = true;
+            }
+        }
         let run = app.sch.run_self_heat();
         let sources = run.as_ref().map(|v| app.sch.thermal_sources(v)).map_err(|e| e.clone());
         if let Ok(v) = &run {

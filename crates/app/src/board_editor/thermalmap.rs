@@ -36,6 +36,10 @@ pub struct ThermalView {
     pub driven_by: String,
     /// The wiring's own heat for the next map (from the schematic's self-heating with the board carried over; empty otherwise).
     pub traces: Vec<pcb_core::thermal::TraceHeat>,
+    /// The board in a closed case (H10): the case, and what it came to with the last map.
+    pub in_case: bool,
+    pub case: pcb_core::case_heat::CaseHeat,
+    pub case_air: Option<pcb_core::case_heat::CaseAir>,
     request: bool,
     /// Milliseconds the last map took.
     pub took_ms: f64,
@@ -104,6 +108,17 @@ impl BoardEditor {
             hot.sort_by(|a, b| b.power.total_cmp(&a.power));
             hot.truncate(sim_core::BOARD_HEATERS_MAX);
             let spec = self.thermal.spec;
+            self.thermal.case_air = None;
+            if self.thermal.in_case {
+                // in the case: the map with what the board sees inside, the pairs on the same surroundings
+                let (map, air) = pcb_core::case_heat::thermal_map_in_case(&self.board, &src, &self.thermal.traces, copper, &spec, &self.thermal.case)?;
+                let inside = pcb_core::thermal::ThermalSpec { ambient_c: air.board_ambient_c, gap_top_mm: self.thermal.case.top_mm, gap_bottom_mm: self.thermal.case.bottom_mm, ..spec };
+                if hot.len() >= 2 {
+                    pairs = pcb_core::thermal::hot_pairs(&self.board, &hot, copper, &inside).unwrap_or_default();
+                }
+                self.thermal.case_air = Some(air);
+                return Ok(map);
+            }
             if hot.len() == src.len() && self.thermal.traces.is_empty() {
                 // every source is one of them: the matrix's own map is the map (one solve for both)
                 let (r, map) = pcb_core::thermal::thermal_matrix(&self.board, &hot, copper, &spec)?;
@@ -154,7 +169,19 @@ impl BoardEditor {
             Ok(s) if driven => i18n::trf!("回路の過渡解析の電力: {}", s.iter().filter(|x| !x.profile.is_empty()).map(|x| x.refdes.as_str()).collect::<Vec<_>>().join(", ")),
             _ => String::new(),
         };
-        self.thermal.transient = Some(src.and_then(|s| pcb_core::thermal::thermal_transient(&self.board, &s, &self.thermal.traces, self.board.stackup.copper_um, &self.thermal.spec, end, 8)));
+        let case = if self.thermal.in_case { self.thermal.case_air.clone() } else { None };
+        let spec = match &case {
+            Some(air) => pcb_core::thermal::ThermalSpec { ambient_c: air.board_ambient_c, gap_top_mm: self.thermal.case.top_mm, gap_bottom_mm: self.thermal.case.bottom_mm, ..self.thermal.spec },
+            None => self.thermal.spec,
+        };
+        let room = self.thermal.spec.ambient_c;
+        self.thermal.transient = Some(src.and_then(|s| {
+            let tr = pcb_core::thermal::thermal_transient(&self.board, &s, &self.thermal.traces, self.board.stackup.copper_um, &spec, end, 8)?;
+            Ok(match &case {
+                Some(air) => pcb_core::case_heat::transient_in_case(tr, air, room),
+                None => tr,
+            })
+        }));
         if let Some(Ok(tr)) = &self.thermal.transient {
             self.thermal.show_frame = Some(tr.frames.len().saturating_sub(1));
         }
@@ -274,6 +301,7 @@ impl BoardEditor {
                 ui.label(i18n::tr("標高"));
                 ui.add(egui::DragValue::new(&mut s.altitude_m).range(0.0..=5000.0).speed(10.0).suffix(" m")).on_hover_text(i18n::tr("高い所では空気が薄く、対流で運べる熱が減ります (3000 m で約 2 割)。放射は変わりません"));
             });
+            self.case_heat_ui(ui);
             ui.horizontal(|ui| {
                 if crate::widgets::primary_button_wide(ui, true, "熱の地図を計算").on_hover_text(i18n::tr("回路図の自己発熱を計算し、その電力を部品のパッドから基板に入れて、温度の分布を出します。周囲の温度は回路図の「自己発熱」の値です")).clicked() {
                     self.thermal.request = true;
@@ -290,6 +318,14 @@ impl BoardEditor {
                     self.thermal_transient_ui(ui);
                 }
                 Some(Ok(m)) => {
+                    if let Some(air) = &self.thermal.case_air {
+                        let room = self.thermal.spec.ambient_c;
+                        ui.label(i18n::trf!("ケースの中: 空気 {:.1} ℃・壁 {:.1} ℃ (周囲 {:.0} ℃ より {:+.1} K)。基板は {:.1} ℃ の中にいるのと同じです", air.air_c, air.wall_c, room, air.air_c - room, air.board_ambient_c))
+                            .on_hover_text(i18n::trf!(
+                                "熱 {:.2} W がケースを通って外へ出ます。熱抵抗: 中の空気 → 壁 {:.1} K/W (内側の対流 h {:.1} W/m²K)、壁 {:.2} K/W、外側 → 部屋 {:.1} K/W (対流と放射 h {:.1} W/m²K、内側の面積 {:.0} cm²)。基板の熱の約半分は空気へ、残りは放射で壁へ直接。ケースが温まる時定数 約 {} (壁の熱容量 {:.0} J/K)",
+                                air.power, air.r_air, air.h_in, air.r_wall, air.r_out, air.h_out, air.area * 1e4, fmt_time(air.tau), air.cth
+                            ));
+                    }
                     let (t, at) = m.hottest();
                     ui.label(i18n::trf!("いちばん熱いのは ({:.1}, {:.1}) の {:.1} ℃ (周囲 {:.0} ℃ + {:.1} K)", at.x, at.y, t, m.ambient_c, t - m.ambient_c));
                     if m.trace_power >= 1e-3 {
@@ -360,6 +396,51 @@ impl BoardEditor {
 }
 
 impl BoardEditor {
+    /// "ケースに入れる": the case round the board (inside size, room above and below, wall, material).
+    fn case_heat_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut self.thermal.in_case, i18n::tr("ケースに入れる")).on_hover_text(i18n::tr(
+                "閉じたケースに入れたときの温度を計算します。基板の熱は、中の空気と、放射で壁へ伝わり、壁を通って外の空気へ逃げます。ケースの中はその分だけ周囲より暖かくなり、基板はその中で温まります。通気口・ファンは入っていません",
+            ));
+            if self.thermal.in_case && self.thermal.case.inner_w <= 0.0
+                && let Some((lo, hi)) = self.board.bounds() {
+                    // a first guess: the board with 5 mm round it
+                    self.thermal.case.inner_w = ((hi.x - lo.x) + 10.0).round();
+                    self.thermal.case.inner_d = ((hi.y - lo.y) + 10.0).round();
+                }
+        });
+        if !self.thermal.in_case {
+            return;
+        }
+        let c = &mut self.thermal.case;
+        egui::Grid::new("case_heat_grid").num_columns(4).show(ui, |ui| {
+            ui.label(i18n::tr("内寸"));
+            ui.add(egui::DragValue::new(&mut c.inner_w).range(5.0..=1000.0).speed(0.5).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の幅"));
+            ui.add(egui::DragValue::new(&mut c.inner_d).range(5.0..=1000.0).speed(0.5).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の奥行"));
+            ui.label("");
+            ui.end_row();
+            ui.label(i18n::tr("上・下の空き"));
+            ui.add(egui::DragValue::new(&mut c.top_mm).range(0.5..=300.0).speed(0.5).suffix(" mm")).on_hover_text(i18n::tr("基板の表の面からふたまで。狭いと、空気は動かず、熱は空気の層を伝わって (伝導で) ふたへ渡ります"));
+            ui.add(egui::DragValue::new(&mut c.bottom_mm).range(0.5..=300.0).speed(0.5).suffix(" mm")).on_hover_text(i18n::tr("基板の裏の面から底まで (ねじの柱の高さなど)"));
+            ui.label("");
+            ui.end_row();
+            ui.label(i18n::tr("壁"));
+            ui.add(egui::DragValue::new(&mut c.wall_mm).range(0.3..=20.0).speed(0.1).suffix(" mm")).on_hover_text(i18n::tr("壁の厚さ。樹脂でも薄い壁はあまり熱を妨げません。効くのはケースの外側の広さです"));
+            egui::ComboBox::from_id_salt("case_material")
+                .selected_text(match c.material {
+                    pcb_core::case_heat::CaseMaterial::Plastic => i18n::tr("樹脂 (ABS)"),
+                    pcb_core::case_heat::CaseMaterial::Aluminium => i18n::tr("アルミ (アルマイト)"),
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut c.material, pcb_core::case_heat::CaseMaterial::Plastic, i18n::tr("樹脂 (ABS)"));
+                    ui.selectable_value(&mut c.material, pcb_core::case_heat::CaseMaterial::Aluminium, i18n::tr("アルミ (アルマイト)"))
+                        .on_hover_text(i18n::tr("黒や色のアルマイト・塗装 (放射率 0.8)。磨いたままのアルミは放射が 1 割しかなく、かえって熱がこもります"));
+                });
+            ui.label("");
+            ui.end_row();
+        });
+    }
+
     /// "時間の変化": how long, the button, the moment shown on the board, and each part's temperature over time.
     fn thermal_transient_ui(&mut self, ui: &mut egui::Ui) {
         ui.separator();

@@ -805,3 +805,32 @@ fn the_circuits_power_over_time_drives_the_boards_map() {
     let shown = app.board_ed.shown_heat().expect("a moment of the run is painted");
     assert!(shown.moment.is_some() && shown.scale.1 >= top2);
 }
+
+/// The heat map's "ケースに入れる": the sample in a closed box comes out hotter than in the open by about what the case adds, the window
+/// keeps what the case came to, and the run over time in the case starts from the room.
+#[test]
+fn the_heat_map_in_a_case_is_hotter_and_its_warm_up_starts_from_the_room() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.load_project(root.join("heat_copper.ccproj"));
+    app.board_ed.thermal.spec.cell_mm = 1.0;
+    let v = app.sch.run_self_heat().unwrap();
+    app.board_ed.run_thermal_map(Ok(app.sch.thermal_sources(&v)));
+    let open = app.board_ed.thermal.result.clone().unwrap().unwrap();
+    app.board_ed.thermal.in_case = true;
+    app.board_ed.thermal.case = pcb_core::case_heat::CaseHeat { inner_w: 100.0, inner_d: 50.0, top_mm: 15.0, bottom_mm: 5.0, ..Default::default() };
+    app.board_ed.run_thermal_map(Ok(app.sch.thermal_sources(&v)));
+    let inside = app.board_ed.thermal.result.clone().unwrap().unwrap();
+    let air = app.board_ed.thermal.case_air.clone().expect("the case worked out");
+    let shift = air.board_ambient_c - v.ambient;
+    let j = |m: &pcb_core::thermal::ThermalMap| m.parts.iter().find(|p| p.refdes == "R2").unwrap().junction;
+    assert!(shift > 5.0 && (j(&inside) - j(&open) - shift).abs() < 0.4 * shift, "open {} in the case {} (+{shift})", j(&open), j(&inside));
+    app.board_ed.thermal.tran_end = 3000.0;
+    app.board_ed.run_thermal_transient(None);
+    let tr = match &app.board_ed.thermal.transient {
+        Some(Ok(tr)) => tr.clone(),
+        _ => panic!("no run over time"),
+    };
+    let r2 = &tr.parts.iter().find(|p| p.0 == "R2").unwrap().1;
+    assert!((r2[0] - v.ambient).abs() < 0.5 && tr.ambient_c == v.ambient, "starts from the room: {}", r2[0]);
+}
