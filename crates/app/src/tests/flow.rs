@@ -630,11 +630,29 @@ fn heat_copper_project_shows_the_pour_cooling_one_resistor() {
 
     app.apply_post_layout(true);
     assert!(app.sch.heat_copper["R1"].1 > 400.0, "{:?}", app.sch.heat_copper);
-    let (r1, r2) = (rise(&mut app, "R1"), rise(&mut app, "R2"));
-    assert!(r1 < 0.6 * r2 && r2 > 55.0, "with the pour {r1} K, without {r2} K");
+    // the board carried over: the two resistors are solved on the board's grid, and warm each other a little through it
+    let v = app.sch.run_self_heat().unwrap();
+    let part = |n: &str| v.parts.iter().find(|p| p.name == n).unwrap().clone();
+    let (r1, r2) = (part("R1"), part("R2"));
+    assert!(r1.rise < 0.6 * r2.rise && r2.rise > 55.0, "with the pour {} K, without {} K", r1.rise, r2.rise);
+    assert!(app.sch.board_heat_parts.len() == 2 && r1.from_others > 0.0 && r2.from_others > 0.0, "{:?}", app.sch.board_heat_parts);
+    // the same as the board's map: the two ways agree
+    let src = app.sch.thermal_sources(&v).0;
+    let map = pcb_core::thermal::thermal_map(&app.board_ed.board, &src, app.board_ed.board.stackup.copper_um, &pcb_core::thermal::ThermalSpec { ambient_c: v.ambient, ..Default::default() }).unwrap();
+    let j2 = map.parts.iter().find(|p| p.refdes == "R2").unwrap().junction - v.ambient;
+    assert!((j2 / r2.rise - 1.0).abs() < 0.05, "map {j2} K, heat run {} K", r2.rise);
+    // the temperature over time takes the same board: R2 heated for a long time reaches about its steady rise
+    app.sch.htran_parts = "R1,R2".into();
+    app.sch.htran_stop = "2000".into();
+    let t = app.sch.run_heat_tran().unwrap();
+    let r2t = t.parts.iter().find(|p| p.name == "R2").unwrap();
+    // its θ to the air alone is a little above the matrix's own (part of its heat leaves through R1), and the long run lands on the
+    // steady rise of the self-heating run
+    assert!(r2t.theta >= r2.theta && r2t.theta < 1.1 * r2.theta, "{} {}", r2t.theta, r2.theta);
+    assert!((r2t.rise_peak / r2.rise - 1.0).abs() < 0.02, "over time {} K, steady {} K", r2t.rise_peak, r2.rise);
 
     app.apply_post_layout(false);
-    assert!(app.sch.heat_copper.is_empty());
+    assert!(app.sch.heat_copper.is_empty() && app.sch.board_heat.is_none());
 }
 
 /// Opening the window of a net with no current asks the schematic's DC analysis for that net alone and declares it (the others are left

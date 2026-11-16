@@ -9,5 +9,12 @@
 - **解き方**: 共役勾配(ヤコビの前処理、圧縮行 `Csr`)。76 × 114 mm の 2 層・0.5 mm(7 万節)で、開発ビルド(opt-level 1)0.5 s、1 mm で 0.03〜0.2 s。1 mm と 0.5 mm の差は 1.5 % 以内なので、試験は 1 mm。
 - **画面**: 基板エディタの「③ 確認する」の「熱の地図…」(`board_editor/thermalmap.rs`)。窓で置き方・標高、「熱の地図を計算」で App が回路図の自己発熱を計算して `thermal_sources`(部品ごとの電力・θ・θjc・放熱板)を渡す(`take_thermal_request` → `run_thermal_map`)。結果: いちばん熱い所・h・表(電力・部品の温度・パッドの銅・自己発熱の温度)、「基板に色を重ねる」と層の選択。色は 3D の温度の色と同じ `heat_color`、半透明の絵を銅のあと・シルクの前に描き、左下に目盛り。撮影用 `--thermal-map [standing]`(サンプル `heat_copper.ccproj`: R1 はベタで 67 ℃、R2 は細い配線で 108 ℃、自己発熱の式では両方 91 ℃)。
 - **CLI**: `board heatmap [temp=] [standing] [alt=] [cell=]`。`open FILE.ccproj` で基板 1 枚のプロジェクトの回路図と基板を読めるようにした。試験 `heatmap_shows_the_pour_spreading_one_resistors_heat`。
+- **回路図に反映(段 ②、2026-11-16)**: `thermal_matrix(board, sources, 銅, spec) -> (R, 地図)`。まず実際の電力で地図を解いて h を決め、その h のまま、部品ごとに接合部へ 1 W を入れて解く(`par_map` で並列)。`R[i][j]` = 部品 j の 1 W で部品 i の接合部が何 K 上がるか。h を固定するので R·P は地図の接合部と一致し、R は対称(試験 `the_matrix_adds_the_heat_of_the_parts_as_the_map_does`)。sim-core 側:
+  - `board_heaters(sch, circuit, heaters, on_board)`: 冷えた動作点で 1 mW 以上・いちばん大きい部品の 1 % 以上の電力の部品を、大きい順に最大 24 個(`BOARD_HEATERS_MAX`)。ほかは θ の式(`heat_copper`)のまま。
+  - 自己発熱: `heaters_with_matrix` で部品の θ を R の対角に、残りを結合 `(a, b, K/W)` にし、`self_heat_coupled` が目標を `周囲 + θ·P + Σ R·P_ほか` に。`HeatedPart.from_others` にほかの部品から受けた分。
+  - 温度の時間変化: `network_from_matrix` が G = R⁻¹ を、行の和(空気への θ)と、対角でない成分の符号を変えたもの(部品どうしの結合 `ThermalLink`)にする(負の結合は落とす)。`nodes_with_matrix` は、走らせない部品への結合をその部品の空気への道に足し、手で入れた結合は行列にない組だけ残す。
+  - アプリ: 「シミュレーションに反映」で基板の複製を `SchEditor.board_heat`(`schematic/board_heat.rs`)に持ち、`run_self_heat`・`run_heat_tran` が使う。行列は、基板の形・選んだ部品・その θ/θjc/放熱板・周囲温度の鍵で取っておく(電力は h にしか効かないので鍵に入れない)。表の θ の横の「→ θ」は基板からの値(ホバーで説明)、上昇のホバーに「ほかの部品から受けた熱」、表の下に「基板の熱の地図から: R1, R2」。撮影用に `.ccproj` でも `--section` が効くようにした(`--post-layout --section selfheat --selfheat`)。
+  - CLI: `board postlayout on` のあとの `heat`・`heattran` が同じ行列を使う(`heat` に `board_grid`・`from_others_k`)。
+  - サンプル `heat_copper` を反映すると、R1 は θ 85 → 53 K/W・+40 K、R2 は 85 → 107 K/W・+80 K(細い配線では、θ の式の 82 より高い。格子は FR-4 と細い配線だけでは熱が広がらないと見る)。互いに 0.09 K。過渡は 2000 秒で定常の上昇に 2 % 以内で合う(試験 `heat_copper_project_shows_the_pour_cooling_one_resistor`)。CLI の試験 `heat_with_postlayout_lowers_theta_by_the_copper_joined_to_the_pins` は、自動配置で隣り合った 2 本の抵抗が基板を通って約 13 K 温め合うようになった(θ は 100 → 86 に下がるが、上昇は 25 → 34 K)。
 - **限界**: 強制空冷なし、まわりの部品の陰なし、FR-4 は 1 つの材料、内層は等間隔、部品の本体は 1 つの割合。±20〜30 %。
-- **残り(H7 の続き)**: 回路図に反映(部品ごとに 1 W を入れた熱抵抗の行列 R を作り、定常の自己発熱を ΔT = R·P で、過渡には R⁻¹ を部品どうしの結合と周囲への θ に。`heat_copper` の式に替わる)、時間の変化の地図(熱容量と後退オイラー)、発熱する部品が近いときの `keep_apart` の候補、配線の抵抗に局所の温度。
+- **残り(H7 の続き)**: 時間の変化の地図(熱容量と後退オイラー)、発熱する部品が近いときの `keep_apart` の候補、配線の抵抗に局所の温度。過渡の部品の熱容量 `cth` は部品の値のまま(基板の熱容量は入っていない)。

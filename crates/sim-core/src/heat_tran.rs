@@ -399,6 +399,86 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
     }
 }
 
+/// The board's matrix on the parts of a temperature-over-time run: each named part's θ to the air from the network behind the matrix
+/// (with the links to parts that are not run counted as more ways to the air: those stay near the air's temperature), the links between
+/// the parts run, and the given `links` kept for pairs the matrix does not cover. Unchanged if the matrix cannot be inverted.
+pub fn nodes_with_matrix(nodes: &mut [ThermalNode], links: Vec<ThermalLink>, names: &[String], r: &[Vec<f64>]) -> Vec<ThermalLink> {
+    let Some((thetas, net)) = network_from_matrix(names, r) else { return links };
+    let run: Vec<String> = nodes.iter().map(|n| n.heater.name.clone()).collect();
+    for n in nodes.iter_mut() {
+        let Some(k) = names.iter().position(|x| *x == n.heater.name) else { continue };
+        let mut g = 1.0 / thetas[k];
+        for l in &net {
+            let other = if l.a == names[k] {
+                &l.b
+            } else if l.b == names[k] {
+                &l.a
+            } else {
+                continue;
+            };
+            if !run.contains(other) {
+                g += 1.0 / l.theta;
+            }
+        }
+        n.heater.theta = 1.0 / g;
+    }
+    let covered = |a: &str, b: &str| names.iter().any(|x| x == a) && names.iter().any(|x| x == b);
+    let mut out: Vec<ThermalLink> = net.into_iter().filter(|l| run.contains(&l.a) && run.contains(&l.b)).collect();
+    out.extend(links.into_iter().filter(|l| !covered(&l.a, &l.b)));
+    out
+}
+
+/// The board's thermal matrix (`r[i][j]`: K of part i per W in part j) as the network `heat_tran` takes: its inverse G is a set of
+/// conductances, the negated off-diagonal entries between two parts (`ThermalLink`, θ = 1/g) and each row's sum to the air (the
+/// part's θ). Parts that the matrix says do not touch get no link; a link that comes out negative (a matrix of a board with a few
+/// parts left out is not quite a network) is dropped. `None` if the matrix cannot be inverted.
+pub fn network_from_matrix(names: &[String], r: &[Vec<f64>]) -> Option<(Vec<f64>, Vec<ThermalLink>)> {
+    let n = names.len();
+    if r.len() != n || r.iter().any(|row| row.len() != n) {
+        return None;
+    }
+    // Gauss-Jordan with partial pivoting
+    let mut a: Vec<Vec<f64>> = r.iter().map(|row| row.clone()).collect();
+    let mut g: Vec<Vec<f64>> = (0..n).map(|i| (0..n).map(|j| if i == j { 1.0 } else { 0.0 }).collect()).collect();
+    for c in 0..n {
+        let p = (c..n).max_by(|x, y| a[*x][c].abs().total_cmp(&a[*y][c].abs()))?;
+        if !(a[p][c].abs() > 1e-300) {
+            return None;
+        }
+        a.swap(c, p);
+        g.swap(c, p);
+        let d = a[c][c];
+        for k in 0..n {
+            a[c][k] /= d;
+            g[c][k] /= d;
+        }
+        for i in 0..n {
+            if i != c {
+                let f = a[i][c];
+                if f != 0.0 {
+                    for k in 0..n {
+                        a[i][k] -= f * a[c][k];
+                        g[i][k] -= f * g[c][k];
+                    }
+                }
+            }
+        }
+    }
+    let mut thetas = vec![];
+    let mut links = vec![];
+    for i in 0..n {
+        let to_air: f64 = g[i].iter().sum();
+        thetas.push(if to_air > 0.0 { 1.0 / to_air } else { f64::INFINITY });
+        for j in i + 1..n {
+            let gij = -0.5 * (g[i][j] + g[j][i]);
+            if gij > 1e-12 {
+                links.push(ThermalLink { a: names[i].clone(), b: names[j].clone(), theta: 1.0 / gij });
+            }
+        }
+    }
+    Some((thetas, links))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,6 +495,23 @@ mod tests {
 
     fn node(name: &str, theta: f64, cth: f64) -> ThermalNode {
         ThermalNode { heater: Heater { name: name.into(), elements: vec![name.into()], theta, tc1: 0.0, tc2: 0.0, through_pins: false }, cth, zth: vec![] }
+    }
+
+    /// The network behind a matrix comes back: two parts with 100 and 200 K/W to the air and 50 K/W between them give the matrix of that
+    /// network, and inverting it finds those three again.
+    #[test]
+    fn a_matrix_turns_back_into_the_network_it_came_from() {
+        // conductances: g1 = 0.01, g2 = 0.005 to the air, g12 = 0.02 between
+        let (g1, g2, g12) = (0.01, 0.005, 0.02);
+        let gm = [[g1 + g12, -g12], [-g12, g2 + g12]];
+        let det = gm[0][0] * gm[1][1] - gm[0][1] * gm[1][0];
+        let r = vec![vec![gm[1][1] / det, -gm[0][1] / det], vec![-gm[1][0] / det, gm[0][0] / det]];
+        let names = vec!["A".to_string(), "B".to_string()];
+        let (thetas, links) = network_from_matrix(&names, &r).unwrap();
+        assert!((thetas[0] - 100.0).abs() < 1e-9 && (thetas[1] - 200.0).abs() < 1e-9, "{thetas:?}");
+        assert_eq!(links.len(), 1);
+        assert!((links[0].theta - 50.0).abs() < 1e-9 && links[0].a == "A" && links[0].b == "B");
+        assert!(network_from_matrix(&names, &[vec![1.0, 1.0], vec![1.0, 1.0]]).is_none(), "a matrix that cannot be inverted");
     }
 
     #[test]

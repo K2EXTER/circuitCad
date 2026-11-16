@@ -230,6 +230,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--selfheat") {
             app.sch.heat_view = Some(app.sch.run_self_heat());
         }
+        // --section <key>: the analysis tab with that section open (as for a schematic file)
+        if let Some(i) = args.iter().position(|a| a == "--section")
+            && let Some(k) = args.get(i + 1)
+            && !app.sch.open_analysis_section(k)
+        {
+            eprintln!("--section {k}: no such section of the analysis tab");
+        }
         if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets", "--field", "--thermal-map"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);

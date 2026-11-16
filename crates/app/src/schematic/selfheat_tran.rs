@@ -53,7 +53,8 @@ impl SchEditor {
         self.store_links(parsed.clone());
         let links: Vec<sim_core::ThermalLink> = parsed.into_iter().map(|(a, b, theta)| sim_core::ThermalLink { a, b, theta }).collect();
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
-        let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs, &self.copper_g())?;
+        let mut nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs, &self.copper_g())?;
+        let links = self.tran_nodes_on_board(&c, &mut nodes, links, ambient)?;
         let r = sim_core::heat_tran(&c, &nodes, &links, ambient, &sim_core::TranSettings { tstop, tstep: sim_core::auto_tstep(tstop), uic: false }).map_err(|e| e.to_string())?;
         let (moved_at, moved) = r.moved(6);
         let checks = sim_core::check_peak_temperatures(&self.sch, &r.parts, ambient);
@@ -138,7 +139,7 @@ impl SchEditor {
                         ui.label(egui::RichText::new(format!("{:.1} K", p.rise_peak)).color(rise_col)).on_hover_text(tip);
                         let (mut theta, mut cth) = (own.get(&p.name).copied().unwrap_or(p.theta), p.cth);
                         let mut case = self.case_heat(&p.name);
-                        let a = super::selfheat::theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name), &mut case);
+                        let a = super::selfheat::theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name), &mut case, self.board_heat_parts.contains(&p.name));
                         if case.changed {
                             case_edits.push((p.name.clone(), case));
                         }

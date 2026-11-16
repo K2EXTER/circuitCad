@@ -32,7 +32,8 @@ impl SchEditor {
         let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &self.copper_g());
-        let r = sim_core::self_heat(&c, &heaters, ambient).map_err(|e| e.to_string())?;
+        let (heaters, mutual) = self.heaters_on_board(&c, heaters, ambient)?;
+        let r = sim_core::self_heat_coupled(&c, &heaters, ambient, &mutual).map_err(|e| e.to_string())?;
         let mut parts: Vec<_> = r.parts.iter().filter(|p| p.power > 1e-9).cloned().collect();
         parts.sort_by(|a, b| b.rise.total_cmp(&a.rise));
         let mut nodes: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-9).collect();
@@ -87,7 +88,12 @@ impl SchEditor {
                             Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
                             None => ui.visuals().text_color(),
                         };
-                        ui.label(egui::RichText::new(format!("{:.1} K", p.rise)).color(rise_col)).on_hover_text(check.map_or_else(|| i18n::tr("周囲の温度より、これだけ高くなります").to_string(), |c| i18n::tr_dyn(&c.message)));
+                        let mut tip = check.map_or_else(|| i18n::tr("周囲の温度より、これだけ高くなります").to_string(), |c| i18n::tr_dyn(&c.message));
+                        if p.from_others > 0.05 {
+                            tip.push_str(&format!("
+{}", i18n::trf!("うち {:.1} K は、基板を通ってほかの部品から受けた熱です", p.from_others)));
+                        }
+                        ui.label(egui::RichText::new(format!("{:.1} K", p.rise)).color(rise_col)).on_hover_text(tip);
                         // a diode or transistor alone: its voltage moves, not a resistance
                         let semi = self.sch.components.iter().any(|c| c.refdes == p.name && matches!(c.kind, sch_core::Kind::Diode | sch_core::Kind::Led | sch_core::Kind::Npn));
                         if let Some((cold, warm)) = p.junction_v {
@@ -99,7 +105,7 @@ impl SchEditor {
                         }
                         let (mut theta, mut tc) = (own.get(&p.name).copied().unwrap_or(p.theta), p.tc1 * 1e6);
                         let mut case = self.case_heat(&p.name);
-                        let a = theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name), &mut case);
+                        let a = theta_cell(ui, &mut theta, p.theta, self.heat_copper.get(&p.name), &mut case, self.board_heat_parts.contains(&p.name));
                         if case.changed {
                             case_edits.push((p.name.clone(), case));
                         }
@@ -146,6 +152,10 @@ impl SchEditor {
                     for (n, a, b) in &v.nodes {
                         ui.label(egui::RichText::new(format!("{n}: {:.6} V → {:.6} V ({:+.3} mV)", a, b, (b - a) * 1e3)).small());
                     }
+                }
+                if !self.board_heat_parts.is_empty() {
+                    ui.label(egui::RichText::new(i18n::trf!("基板の熱の地図から: {} (基板を「シミュレーションに反映」しています。部品どうしが基板を通って温め合う分も入っています)", self.board_heat_parts.join(", "))).small().color(crate::theme::OK))
+                        .on_hover_text(i18n::tr("電力の出ている部品 (1 mW 以上、最大 24 個) を基板の升目に置き、部品ごとに 1 W を入れて解いた熱抵抗の表 (行列) を使っています。ほかの部品は、熱抵抗の式 (銅の面積から) のままです"));
                 }
                 ui.label(egui::RichText::new(i18n::tr("熱抵抗を入れていない部品は、パッケージの大きさからの目安 (定格電力から) です。データシートの値 (θJA) に直してください")).small()).on_hover_text(i18n::tr("チップ抵抗は、周囲 70 ℃ で定格の電力をかけると 155 ℃ になるものとして、θ ≈ 85 K ÷ 定格電力 としています"));
             }
@@ -198,10 +208,17 @@ pub(super) struct CaseHeat {
 
 /// The θ cell of a heat table: the part's own θ to edit, when the board's copper or a heat sink helps the θ it has with them, and a
 /// menu with its θjc and heat sink (`case`, `changed` set when either was edited).
-pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, copper: Option<&(f64, f64)>, case: &mut CaseHeat) -> egui::Response {
+pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, copper: Option<&(f64, f64)>, case: &mut CaseHeat, board: bool) -> egui::Response {
     ui.horizontal(|ui| {
         let r = ui.add(egui::DragValue::new(own).range(0.1..=1000.0).speed(0.5).max_decimals(1)).on_hover_text(i18n::tr("部品の熱抵抗 (K/W): 部品から空気までの熱の伝わりにくさ。データシートの「最小のパッド」の値を入れます (入れないと、パッケージの定格電力からの目安)。基板を回路図に反映していると、つながった銅の放熱ぶんが自動で足されます。変えたら、もう一度計算してください"));
-        if copper.is_some() || case.sink > 0.0 {
+        if board {
+            let tip = i18n::trf!(
+                "基板の熱の地図 (升目の計算) から求めた熱抵抗: {:.0} K/W。基板の銅 (ベタ・配線・ビア) と、表と裏の面から空気への対流と放射を解いた値で、θjc {:.1} K/W と放熱板も入っています。ほかの部品から受ける熱は、上昇の欄に足してあります。目安で、風やケースで ±20〜30 % ずれます",
+                with_copper,
+                case.jc
+            );
+            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::OK)).on_hover_text(tip);
+        } else if copper.is_some() || case.sink > 0.0 {
             let mut tip = vec![i18n::trf!("銅と放熱板を入れた熱抵抗: {:.0} K/W = θjc {:.1} + (ケース → 空気 {:.1} と、銅・放熱板の並列)", with_copper, case.jc, *own - case.jc)];
             if let Some((_, mm2)) = copper {
                 tip.push(i18n::trf!(

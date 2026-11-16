@@ -589,7 +589,12 @@ impl HeatSource {
 /// The temperature map of `board` with the parts' heat `sources`, its copper `copper_um` thick.
 pub fn thermal_map(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec) -> Result<ThermalMap, String> {
     let m = model(board, copper_um, spec.cell_mm)?;
-    let (rise, air, under, rounds) = solve_with_parts(board, &m, sources, spec, &mut vec![]);
+    Ok(map_of(board, &m, sources, spec).0)
+}
+
+/// The map on a built model, and the grid's conductance to the air it settled at.
+fn map_of(board: &Board, m: &Model, sources: &[HeatSource], spec: &ThermalSpec) -> (ThermalMap, Vec<f64>) {
+    let (rise, air, under, rounds) = solve_with_parts(board, m, sources, spec, &mut vec![]);
     let (w, h) = (m.grid.w, m.grid.h);
     let mut temp = vec![vec![f64::NAN; w * h]; m.layers.len()];
     for (k, &(l, c)) in m.cell_of.iter().enumerate() {
@@ -610,32 +615,71 @@ pub fn thermal_map(board: &Board, sources: &[HeatSource], copper_um: f64, spec: 
         let a = (m.grid.d * 1e-3).powi(2) * if m.layers.len() == 1 { 2.0 } else { 1.0 };
         ks.iter().map(|k| air[*k] / a).sum::<f64>() / ks.len().max(1) as f64
     };
-    Ok(ThermalMap { h_top: face_h(0), h_bottom: face_h(m.layers.len() - 1), grid: m.grid.clone(), layers: m.layers.clone(), temp, ambient_c: spec.ambient_c, parts, rounds })
+    (ThermalMap { h_top: face_h(0), h_bottom: face_h(m.layers.len() - 1), grid: m.grid.clone(), layers: m.layers.clone(), temp, ambient_c: spec.ambient_c, parts, rounds }, air)
+}
+
+/// The rise of every node (the grid's, then one junction per source), the grid's conductance to the air, the pad cells of each source
+/// The junction nodes of the sources (numbered after the grid's): their conductances to the pads, their own way to the air, and the
+/// pad cells of each.
+#[allow(clippy::type_complexity)]
+fn junctions(board: &Board, m: &Model, sources: &[HeatSource]) -> (Vec<(usize, usize, f64)>, Vec<f64>, Vec<Vec<(usize, f64)>>) {
+    let n0 = m.nodes();
+    let under: Vec<Vec<(usize, f64)>> = sources.iter().map(|s| pad_cells(board, m, &s.refdes)).collect();
+    let mut extra = vec![];
+    let mut extra_air = vec![];
+    for (e, (s, cells)) in sources.iter().zip(&under).enumerate() {
+        let jc = s.theta_jc.max(1e-3);
+        for (n, f) in cells {
+            extra.push((n0 + e, *n, f / jc));
+        }
+        // a part with no pads on the board keeps its heat to its body
+        let body = if s.theta_body > 0.0 { 1.0 / s.theta_body } else { 0.0 };
+        extra_air.push(if cells.is_empty() && body == 0.0 { 1e-9 } else { body });
+    }
+    (extra, extra_air, under)
 }
 
 /// The rise of every node (the grid's, then one junction per source), the grid's conductance to the air, the pad cells of each source
 /// and the rounds; `rise` is where to start from (empty: anywhere).
 fn solve_with_parts(board: &Board, m: &Model, sources: &[HeatSource], spec: &ThermalSpec, rise: &mut Vec<f64>) -> (Vec<f64>, Vec<f64>, Vec<Vec<(usize, f64)>>, usize) {
-    let n0 = m.nodes();
-    let under: Vec<Vec<(usize, f64)>> = sources.iter().map(|s| pad_cells(board, m, &s.refdes)).collect();
-    let mut extra = vec![];
-    let mut extra_air = vec![];
-    let mut q = vec![0.0; n0 + sources.len()];
-    for (e, (s, cells)) in sources.iter().zip(&under).enumerate() {
-        let j = n0 + e;
-        let jc = s.theta_jc.max(1e-3);
-        for (n, f) in cells {
-            extra.push((j, *n, f / jc));
-        }
-        extra_air.push(if s.theta_body > 0.0 { 1.0 / s.theta_body } else { 0.0 });
-        // a part with no pads on the board keeps its heat to its body
-        if cells.is_empty() && extra_air[e] == 0.0 {
-            extra_air[e] = 1e-9;
-        }
-        q[j] = s.power;
+    let (extra, extra_air, under) = junctions(board, m, sources);
+    let mut q = vec![0.0; m.nodes() + sources.len()];
+    for (e, s) in sources.iter().enumerate() {
+        q[m.nodes() + e] = s.power;
     }
     let (air, rounds) = solve_rise(m, spec, &extra, &extra_air, &q, rise);
     (rise.clone(), air, under, rounds)
+}
+
+/// How the parts warm each other through the board: `r[i][j]` is the rise (K) of part i's junction for 1 W in part j (`r[i][i]` its
+/// own θ with the board). The air's `h` is the one of the map at the sources' powers (it follows the temperature), then held: the
+/// matrix is the board's answer near that point, and heat adds up in it (`ΔT = R·P`). One solve per source, in parallel. The map at
+/// those powers comes back with it.
+pub fn thermal_matrix(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec) -> Result<(Vec<Vec<f64>>, ThermalMap), String> {
+    let m = model(board, copper_um, spec.cell_mm)?;
+    let (map, air) = map_of(board, &m, sources, spec);
+    let (extra, extra_air, _) = junctions(board, &m, sources);
+    let n0 = m.nodes();
+    let n = n0 + sources.len();
+    let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(&extra).copied().collect();
+    let csr = Csr::new(n, &edges);
+    let mut diag = csr.sum.clone();
+    for k in 0..n0 {
+        diag[k] += air[k];
+    }
+    for (e, g) in extra_air.iter().enumerate() {
+        diag[n0 + e] += g;
+    }
+    let ks: Vec<usize> = (0..sources.len()).collect();
+    let cols: Vec<Vec<f64>> = crate::par::par_map(&ks, |&k| {
+        let mut q = vec![0.0; n];
+        q[n0 + k] = 1.0;
+        let mut x = vec![0.0; n];
+        cg(&csr, &diag, &q, &mut x, 1e-8);
+        (0..sources.len()).map(|i| x[n0 + i]).collect()
+    });
+    let r = (0..sources.len()).map(|i| (0..sources.len()).map(|j| cols[j][i]).collect()).collect();
+    Ok((r, map))
 }
 
 #[cfg(test)]
@@ -688,6 +732,39 @@ mod datasheet {
             b.zones.push(z);
         }
         b
+    }
+
+    /// The matrix of two parts on one board: R·P gives back the map's junctions (the same held h), it is symmetric (heat from i to j
+    /// is heat from j to i), a part warms itself more than its neighbour, and the nearer neighbour gets more.
+    #[test]
+    fn the_matrix_adds_the_heat_of_the_parts_as_the_map_does() {
+        let mut b = sot223_board(645.16);
+        for (name, x) in [("R1", 20.0), ("R2", 60.0)] {
+            for dx in [-1.6, 1.6] {
+                let mut p = Pad::new(Point::new(x + dx, 57.15), PadShape::Rect { w: 1.2, h: 1.6 }, None, Side::Top);
+                p.refdes = name.into();
+                b.pads.push(p);
+            }
+        }
+        let src = vec![
+            HeatSource::new("Q1", 1.0, 110.0, 12.0, 0.0),
+            HeatSource::new("R1", 0.3, 300.0, 0.0, 0.0),
+            HeatSource::new("R2", 0.2, 300.0, 0.0, 0.0),
+        ];
+        let spec = ThermalSpec { cell_mm: 1.0, ..Default::default() };
+        let (r, map) = thermal_matrix(&b, &src, 70.0, &spec).unwrap();
+        for i in 0..3 {
+            let sum: f64 = (0..3).map(|j| r[i][j] * src[j].power).sum();
+            assert!((sum - (map.parts[i].junction - 25.0)).abs() < 1e-3 * sum, "{i}: R·P {sum} against the map {}", map.parts[i].junction - 25.0);
+            for j in 0..3 {
+                assert!((r[i][j] - r[j][i]).abs() < 1e-4 * r[i][i], "R[{i}][{j}] {} R[{j}][{i}] {}", r[i][j], r[j][i]);
+                if i != j {
+                    assert!(r[i][j] > 0.0 && r[i][j] < r[i][i], "{r:?}");
+                }
+            }
+        }
+        // the nearer the more: R1, about 20 mm from Q1, gets more of Q1's watt than R2 gets of R1's, 40 mm away
+        assert!(r[1][0] > r[2][1], "{r:?}");
     }
 
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the

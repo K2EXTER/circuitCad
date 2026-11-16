@@ -563,7 +563,11 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let c = self.circuit()?;
         let copper = self.heat_copper();
         let g: std::collections::BTreeMap<String, f64> = copper.iter().map(|(k, v)| (k.clone(), v.0)).collect();
-        let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs, &g)?;
+        let mut nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs, &g)?;
+        let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
+        if let Some((names, m)) = self.board_matrix(&c, &heaters, temp)? {
+            links = sim_core::nodes_with_matrix(&mut nodes, links, &names, &m);
+        }
         let r = sim_core::heat_tran(&c, &nodes, &links, temp, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
         self.last_tran = Some(r.tran.clone());
         let n = r.time.len();
@@ -617,8 +621,11 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let c = self.circuit()?;
         let copper = self.heat_copper();
         let g: std::collections::BTreeMap<String, f64> = copper.iter().map(|(k, v)| (k.clone(), v.0)).collect();
-        let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
-        let r = sim_core::self_heat(&c, &heaters, temp).map_err(|e| dc_fail(&c, e))?;
+        let mut heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
+        let on_grid = self.board_matrix(&c, &heaters, temp)?;
+        let mutual = on_grid.as_ref().map(|(names, m)| sim_core::heaters_with_matrix(&mut heaters, names, m)).unwrap_or_default();
+        let grid_parts: Vec<String> = on_grid.map(|(n, _)| n).unwrap_or_default();
+        let r = sim_core::self_heat_coupled(&c, &heaters, temp, &mutual).map_err(|e| dc_fail(&c, e))?;
         self.last_dc = Some(r.warm.clone());
         let mut parts: Vec<&sim_core::HeatedPart> = r.parts.iter().filter(|p| p.power > 1e-9).collect();
         parts.sort_by(|a, b| b.rise.total_cmp(&a.rise));
@@ -633,7 +640,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let rows: Vec<Value> = parts
             .iter()
             .take(top)
-            .map(|p| json!({"t_max_c": check_of(&p.name).map(|c| c.limit.t_max), "t_max_from": check_of(&p.name).map(|c| format!("{:?}", c.limit.source).to_lowercase()), "margin_k": check_of(&p.name).map(|c| c.margin_k), "derated_power_w": check_of(&p.name).and_then(|c| c.p_derated), "temperature": check_of(&p.name).map(|c| level(c.level)), "part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "theta_jc_k_per_w": self.case_of(&p.name).map(|c| c.0), "heatsink_k_per_w": self.case_of(&p.name).map(|c| c.1), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6, "junctions": p.junctions, "junction_cold_v": p.junction_v.map(|v| v.0), "junction_warm_v": p.junction_v.map(|v| v.1)}))
+            .map(|p| json!({"t_max_c": check_of(&p.name).map(|c| c.limit.t_max), "t_max_from": check_of(&p.name).map(|c| format!("{:?}", c.limit.source).to_lowercase()), "margin_k": check_of(&p.name).map(|c| c.margin_k), "derated_power_w": check_of(&p.name).and_then(|c| c.p_derated), "temperature": check_of(&p.name).map(|c| level(c.level)), "part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "own_theta_k_per_w": self.own_theta(&p.name), "theta_jc_k_per_w": self.case_of(&p.name).map(|c| c.0), "heatsink_k_per_w": self.case_of(&p.name).map(|c| c.1), "board_copper_mm2": copper.get(&p.name).map(|c| c.1), "tc_ppm_per_k": p.tc1 * 1e6, "junctions": p.junctions, "junction_cold_v": p.junction_v.map(|v| v.0), "junction_warm_v": p.junction_v.map(|v| v.1), "board_grid": grid_parts.contains(&p.name), "from_others_k": p.from_others}))
             .collect();
         let mut moved: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-12).collect();
         moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
@@ -848,6 +855,20 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
     }
 
     /// The board copper beside each part's θ, by reference: (W/K, mm² beyond its pads); empty unless `board postlayout on`.
+    /// With the board carried over (`board postlayout on`), the parts that give off heat on the board's grid: (parts, matrix K/W).
+    #[allow(clippy::type_complexity)]
+    fn board_matrix(&self, c: &sim_core::Circuit, heaters: &[sim_core::Heater], ambient: f64) -> Result<Option<(Vec<String>, Vec<Vec<f64>>)>, String> {
+        let (Some(b), true) = (&self.board, self.post_layout) else { return Ok(None) };
+        let parts = sim_core::board_heaters(&self.sch, c, heaters, |n| b.pads.iter().any(|p| p.refdes == n)).map_err(|e| e.to_string())?;
+        if parts.is_empty() {
+            return Ok(None);
+        }
+        let sources: Vec<pcb_core::thermal::HeatSource> = parts.iter().map(|p| pcb_core::thermal::HeatSource::new(&p.name, p.power, p.own_theta, p.theta_jc, p.heatsink)).collect();
+        let spec = pcb_core::thermal::ThermalSpec { ambient_c: ambient, ..Default::default() };
+        let (r, _) = pcb_core::thermal::thermal_matrix(b, &sources, b.stackup.copper_um, &spec)?;
+        Ok(Some((parts.into_iter().map(|p| p.name).collect(), r)))
+    }
+
     fn heat_copper(&self) -> std::collections::BTreeMap<String, (f64, f64)> {
         match (&self.board, self.post_layout) {
             (Some(b), true) => pcb_core::heat_copper::conductances(b, pcb_core::irdrop::IrSpec::default().thickness_um),

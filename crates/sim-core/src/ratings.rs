@@ -346,7 +346,7 @@ pub fn check_temperatures(sch: &Schematic, parts: &[crate::HeatedPart], t_amb: f
 pub fn check_peak_temperatures(sch: &Schematic, parts: &[crate::HeatTranPart], t_amb: f64) -> Vec<TempCheck> {
     let as_steady: Vec<crate::HeatedPart> = parts
         .iter()
-        .map(|p| crate::HeatedPart { name: p.name.clone(), power: p.power_mean, rise: p.rise_peak, temp_c: t_amb + p.rise_peak, change: p.change, theta: p.theta, tc1: 0.0, tc2: 0.0, junctions: p.junctions, junction_v: None })
+        .map(|p| crate::HeatedPart { name: p.name.clone(), power: p.power_mean, rise: p.rise_peak, temp_c: t_amb + p.rise_peak, change: p.change, theta: p.theta, tc1: 0.0, tc2: 0.0, from_others: 0.0, junctions: p.junctions, junction_v: None })
         .collect();
     let mut out = check_temperatures(sch, &as_steady, t_amb);
     for c in &mut out {
@@ -362,7 +362,7 @@ mod temp_tests {
     use super::*;
 
     fn part(name: &str, temp_c: f64, power: f64, junctions: usize) -> crate::HeatedPart {
-        crate::HeatedPart { name: name.into(), power, rise: temp_c - 25.0, temp_c, change: 0.0, theta: 100.0, tc1: 0.0, tc2: 0.0, junctions, junction_v: None }
+        crate::HeatedPart { name: name.into(), power, rise: temp_c - 25.0, temp_c, change: 0.0, theta: 100.0, tc1: 0.0, tc2: 0.0, from_others: 0.0, junctions, junction_v: None }
     }
 
     #[test]

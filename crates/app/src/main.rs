@@ -157,6 +157,7 @@ impl App {
             self.sch.wiring.clear();
             self.sch.couplings.clear();
             self.sch.heat_copper.clear();
+            self.sch.board_heat = None;
             self.board_ed.post_layout_fresh = false;
             self.board_ed.status = "配線の抵抗・インダクタンス・容量を外しました。回路図のシミュレーションは理想の配線に戻ります".into();
             return;
@@ -165,6 +166,8 @@ impl App {
         let series = pcb_core::irdrop::wiring_resistances(&self.board_ed.board, &spec);
         self.sch.couplings = pcb_core::irdrop::wiring_couplings(&series, &spec).into_iter().map(|c| sim_core::WiringK { a: c.a, b: c.b, k: c.k }).collect();
         self.sch.heat_copper = pcb_core::heat_copper::conductances(&self.board_ed.board, spec.thickness_um);
+        // the heat runs put the parts that give off heat on the board's temperature grid
+        self.sch.board_heat = Some(schematic::BoardHeat::new(self.board_ed.board.clone()));
         self.sch.wiring = series.into_iter().map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry, farad: w.farad }).collect();
         self.board_ed.post_layout_fresh = !self.sch.wiring.is_empty();
         self.board_ed.status = if self.sch.wiring.is_empty() {

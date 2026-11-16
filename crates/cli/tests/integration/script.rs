@@ -2044,8 +2044,9 @@ board heatmap temp=25 cell=1
     assert!((5.0..20.0).contains(&h["h_top_w_m2k"].as_f64().unwrap()), "{h}");
 }
 
-/// With the board carried over (`board postlayout on`), a part's θ takes the copper joined to its pins: a GND pour under the board spreads
-/// R2's heat, so it warms less than on its own 100 K/W; R1's own θ stays what it was given.
+/// With the board carried over (`board postlayout on`), the parts that give off heat are solved on the board's grid: a GND pour under the
+/// board spreads R2's heat, so its θ falls below its own 100 K/W, while R1 beside it adds heat through the board; R1's own θ stays what it
+/// was given.
 #[test]
 fn heat_with_postlayout_lowers_theta_by_the_copper_joined_to_the_pins() {
     let (a, ok) = run("new
@@ -2075,7 +2076,11 @@ heat
     assert!(theta < 90.0 && theta > 20.0, "{after}");
     assert_eq!(after["own_theta_k_per_w"].as_f64().unwrap(), 100.0);
     assert!(after["board_copper_mm2"].as_f64().unwrap() > 100.0, "{after}");
-    assert!(after["rise_k"].as_f64().unwrap() < before["rise_k"].as_f64().unwrap());
+    // the board's grid: R2's own θ comes down, but R1 sits next to it and warms it through the board; the rise is both
+    assert_eq!(after["board_grid"].as_bool(), Some(true), "{after}");
+    let from = after["from_others_k"].as_f64().unwrap();
+    assert!(from > 1.0, "R1 next to it adds heat: {after}");
+    assert!((after["rise_k"].as_f64().unwrap() - (theta * after["power_w"].as_f64().unwrap() + from)).abs() < 1e-3, "{after}");
     assert!(heats[1]["notes"].as_array().unwrap().iter().any(|n| n.as_str().unwrap().contains("board copper")), "{}", heats[1]);
 }
 

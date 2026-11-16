@@ -224,6 +224,10 @@ pub struct SchEditor {
     /// The board copper joined to each part's pins (with `wiring`), by reference: (conductance W/K beside the part's θ,
     /// mm² beyond its pads). `pcb_core::heat_copper`.
     pub heat_copper: std::collections::BTreeMap<String, (f64, f64)>,
+    /// The board carried over for the heat runs: its temperature grid replaces the θ of the parts that give off heat (`board_heat.rs`).
+    pub(crate) board_heat: Option<board_heat::BoardHeat>,
+    /// The parts the last heat run took from the board's grid.
+    pub(crate) board_heat_parts: Vec<String>,
     temp_from: String,
     temp_to: String,
     temp_step: String,
@@ -658,6 +662,8 @@ impl Default for SchEditor {
             temp_c: "27".into(),
             wiring: vec![],
             heat_copper: Default::default(),
+            board_heat: None,
+            board_heat_parts: vec![],
             couplings: vec![],
             temp_from: "-20".into(),
             temp_to: "80".into(),
@@ -862,6 +868,8 @@ mod interact;
 pub(crate) mod panel;
 mod coverage;
 mod selfheat;
+mod board_heat;
+pub(crate) use board_heat::BoardHeat;
 mod selfheat_tran;
 mod fault;
 mod spec_table;

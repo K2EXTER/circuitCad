@@ -78,9 +78,9 @@ pub use montecarlo::{minus_3db, monte_carlo, McMeasure, McResult, McSettings, Mc
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
 pub use from_schematic::{from_schematic, from_schematic_with_pin_fault, from_schematic_with_wiring, from_schematic_with_layout, ConvertError, PinFaultSpec, PinHow, WiringK, WiringR};
 pub use spice_in::{add_model_instance, add_subckt_instance, decode_spice_text, ignored_model_params, parse_models};
-pub use heat_tran::{heat_tran, thermal_nodes_from_schematic, HeatTran, HeatTranPart, ThermalLink, ThermalNode};
+pub use heat_tran::{heat_tran, network_from_matrix, nodes_with_matrix, thermal_nodes_from_schematic, HeatTran, HeatTranPart, ThermalLink, ThermalNode};
 pub use zth::{fit_foster, zth_at};
-pub use selfheat::{part_power, default_theta, heaters_from_schematic, own_theta, part_theta, self_heat, split_theta, theta_jc, JC_GUESS_SHARE, HeatedPart, Heater, SelfHeat};
+pub use selfheat::{part_power, default_theta, heaters_from_schematic, own_theta, part_theta, self_heat, self_heat_coupled, heaters_with_matrix, board_heaters, BoardHeater, BOARD_HEATERS_MAX, split_theta, theta_jc, JC_GUESS_SHARE, HeatedPart, Heater, SelfHeat};
 pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{auto_tstep, format_time, transient, transient_with, Signal, TimingKind, TimingReport, TimingViolation, TranResult, TranSettings};
 pub use stepmetrics::{load_step, settling_times, step_metrics, LoadStep, Settling, StepMetrics};
