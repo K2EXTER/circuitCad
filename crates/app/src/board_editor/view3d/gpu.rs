@@ -192,6 +192,9 @@ impl Geometry {
                 }
                 line(&mut lines, [a.0, a.1, w.z0], [a.0, a.1, w.z1], col);
             }
+            for (a, b, c) in &w.lines {
+                line(&mut lines, *a, *b, *c);
+            }
         }
         let board_lines = count(&lines, LINE_BYTES);
         // the parts: guessed solids (with a thin dark edge round every face) and makers' meshes; a part over the case height is red, and

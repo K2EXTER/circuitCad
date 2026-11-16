@@ -42,7 +42,7 @@ impl BoardEditor {
                 self.view3d.generation += 1;
             }
             let spec = on.then(|| pcb_core::case::CaseSpec { inner_w: self.view3d.case_w, inner_d: self.view3d.case_d, top, bottom, clearance: 0.5 });
-            if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_case(spec)) {
+            if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_case(spec, &self.board)) {
                 self.view3d.generation += 1;
             }
             let temps = if self.view3d.heat_on { self.view3d.temps.clone() } else { None };
@@ -180,6 +180,35 @@ impl BoardEditor {
                     ui.colored_label(crate::theme::OK, i18n::trf!("✔ 基板 {:.1} × {:.1} mm はケースの底に入ります{how}。余り: {:.1} × {:.1} mm", r.board_w, r.board_d, r.spare_w, r.spare_d));
                 } else {
                     ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ 基板 {:.1} × {:.1} mm はケースの底 ({:.1} × {:.1} mm、縁の隙間込み) に入りません (足りない分: 幅 {:.1} / 奥行 {:.1} mm)", r.board_w, r.board_d, v.case_w - 1.0, v.case_d - 1.0, (-r.spare_w).max(0.0), (-r.spare_d).max(0.0)));
+                }
+                // the screw posts (orange, red when they run into something) and the openings in the walls (pink)
+                if let Some(ins) = scene.case.as_ref().map(|w| &w.inside) {
+                    ui.horizontal_wrapped(|ui| {
+                        if let Some(p) = ins.posts.first() {
+                            ui.small(i18n::trf!("ねじ柱 {} 本 ({}、高さ {:.1} mm、外径 {:.1} mm・下穴 {:.1} mm)", ins.posts.len(), p.screw, p.height, p.outer_d, p.pilot_d))
+                                .on_hover_text(i18n::tr("基板の取り付け穴の真下に立てる柱です (橙)。高さは「裏」の高さ (無ければ 5 mm)。ねじは穴の径から決めています。下穴はタッピングねじ用です"));
+                        }
+                        if !ins.openings.is_empty() {
+                            let names: Vec<String> = ins.openings.iter().map(|o| format!("{} ({})", o.refdes, i18n::tr(o.wall.label()))).collect();
+                            ui.small(i18n::trf!("壁の穴: {}", names.join(", "))).on_hover_text(i18n::tr("基板の縁のコネクタ (USB・DC ジャック・端子台) と、縁からはみ出す部品のために、壁にあける穴です (桃色の四角)。まわりに 0.5 mm の余裕を足しています"));
+                        }
+                        if ui.small_button(i18n::tr("ケースの図面 (DXF) を保存…")).on_hover_text(i18n::tr("ケースの底 (柱の位置・外径・下穴) と、まわりに開いた 4 枚の壁 (内側から見た穴の位置と大きさ) の図面です。ケースの CAD や、市販のケースに穴をあける型紙に使えます")).clicked() {
+                            let spec = pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, top: v.limit_top, bottom: v.limit_bottom, clearance: 0.5 };
+                            let name = format!("{}_case.dxf", if self.board.name.is_empty() { "board" } else { &self.board.name });
+                            if let Some(path) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).set_file_name(name).save_file() {
+                                self.status = match pcb_core::case::drawing(&self.board, &spec).and_then(|t| std::fs::write(&path, t).map_err(|e| e.to_string())) {
+                                    Ok(()) => i18n::trf!("ケースの図面を保存しました: {}", path.display()),
+                                    Err(e) => i18n::trf!("ケースの図面を保存できません: {e}"),
+                                };
+                            }
+                        }
+                    });
+                    for p in ins.posts.iter().filter(|p| p.problem.is_some()) {
+                        ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ 穴 ({:.1}, {:.1}) の柱: {}", p.hole.x, p.hole.y, i18n::tr_dyn(p.problem.as_deref().unwrap_or(""))));
+                    }
+                    for n in &ins.notes {
+                        ui.colored_label(crate::theme::WARN, i18n::tr_dyn(n));
+                    }
                 }
             }
             if v.check_height {

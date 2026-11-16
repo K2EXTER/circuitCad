@@ -49,13 +49,70 @@ pub(super) fn light(n: [f32; 3]) -> f32 {
     0.45 + 0.6 * (n[0] * l[0] + n[1] * l[1] + n[2] * l[2]).max(0.0)
 }
 
-/// The wire frame of the case's inside: x and y of two corners, z of the floor and the lid.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// The wire frame of the case's inside: x and y of two corners, z of the floor and the lid; and the screw posts and the openings
+/// in the walls (`pcb_core::case::inside`) as lines (from, to, colour), all in the board's frame.
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct CaseWire {
     pub lo: Point,
     pub hi: Point,
     pub z0: f64,
     pub z1: f64,
+    pub lines: Vec<([f64; 3], [f64; 3], [u8; 3])>,
+    /// The posts, openings and notes the lines were drawn from (for the window's text).
+    pub inside: pcb_core::case::Inside,
+}
+
+/// The colours of the posts (red when they run into something) and of the openings.
+const POST: [u8; 3] = [240, 160, 60];
+const POST_BAD: [u8; 3] = [240, 70, 60];
+const OPENING: [u8; 3] = [230, 90, 220];
+
+/// The case's frame, posts and openings for the 3D view, in the board's frame (`None`: no floor given).
+pub(super) fn case_wire(board: &pcb_core::model::Board, spec: &pcb_core::case::CaseSpec) -> Option<CaseWire> {
+    use pcb_core::case::Wall;
+    let seat = pcb_core::case::seat(board, spec)?;
+    let (w, d) = (spec.inner_w, spec.inner_d);
+    let (a, b) = (seat.unplace(Point::new(0.0, 0.0)), seat.unplace(Point::new(w, d)));
+    let z0 = -seat.raise;
+    let z1 = BOARD_THICKNESS + if spec.top > 0.0 { spec.top } else { 10.0 };
+    let ins = pcb_core::case::inside(board, spec);
+    let mut lines = vec![];
+    for p in &ins.posts {
+        let col = if p.problem.is_some() { POST_BAD } else { POST };
+        let r = p.outer_d / 2.0;
+        let n = 16;
+        let at = |k: usize| {
+            let t = std::f64::consts::TAU * k as f64 / n as f64;
+            (p.hole.x + r * t.cos(), p.hole.y + r * t.sin())
+        };
+        for k in 0..n {
+            let (q0, q1) = (at(k), at(k + 1));
+            for z in [z0, 0.0] {
+                lines.push(([q0.0, q0.1, z], [q1.0, q1.1, z], col));
+            }
+            if k % 4 == 0 {
+                lines.push(([q0.0, q0.1, z0], [q0.0, q0.1, 0.0], col));
+            }
+        }
+    }
+    // an opening: its four corners on the wall's inside face, from the case's frame (z up from the floor) to the board's
+    let on_wall = |wall: Wall, along: f64, up: f64| {
+        let c = match wall {
+            Wall::Front => Point::new(along, 0.0),
+            Wall::Back => Point::new(along, d),
+            Wall::Left => Point::new(0.0, along),
+            Wall::Right => Point::new(w, along),
+        };
+        let q = seat.unplace(c);
+        [q.x, q.y, up - seat.raise]
+    };
+    for o in &ins.openings {
+        let c = [on_wall(o.wall, o.along.0, o.up.0), on_wall(o.wall, o.along.1, o.up.0), on_wall(o.wall, o.along.1, o.up.1), on_wall(o.wall, o.along.0, o.up.1)];
+        for i in 0..4 {
+            lines.push((c[i], c[(i + 1) % 4], OPENING));
+        }
+    }
+    Some(CaseWire { lo: Point::new(a.x.min(b.x), a.y.min(b.y)), hi: Point::new(a.x.max(b.x), a.y.max(b.y)), z0, z1, lines, inside: ins })
 }
 
 pub(super) type Face3 = (Vec<[f64; 3]>, [f32; 3]);
@@ -223,19 +280,14 @@ impl Scene {
         true
     }
 
-    /// Shows the inside of the case as a wire box (`None`: no box). Returns whether anything changed.
-    pub(super) fn set_case(&mut self, spec: Option<pcb_core::case::CaseSpec>) -> bool {
+    /// Shows the inside of the case as a wire box with its posts and openings (`None`: no box). Returns whether anything changed.
+    pub(super) fn set_case(&mut self, spec: Option<pcb_core::case::CaseSpec>, board: &pcb_core::model::Board) -> bool {
         let key = spec.map(|s| [s.inner_w.to_bits(), s.inner_d.to_bits(), s.top.to_bits(), s.bottom.to_bits(), s.clearance.to_bits()]);
         if self.case_key == key {
             return false;
         }
         self.case_key = key;
-        self.case = spec.filter(|s| s.inner_w > 0.0 && s.inner_d > 0.0).map(|s| {
-            let r = pcb_core::case::check(&pcb_core::model::Board { outline: self.outline.clone(), ..pcb_core::model::Board::new("", 0.0, 0.0) }, &s);
-            let (w, d) = if r.turned { (s.inner_d, s.inner_w) } else { (s.inner_w, s.inner_d) };
-            let c = Point::new((self.lo.x + self.hi.x) / 2.0, (self.lo.y + self.hi.y) / 2.0);
-            CaseWire { lo: Point::new(c.x - w / 2.0, c.y - d / 2.0), hi: Point::new(c.x + w / 2.0, c.y + d / 2.0), z0: -if s.bottom > 0.0 { s.bottom } else { 0.0 }, z1: BOARD_THICKNESS + if s.top > 0.0 { s.top } else { 10.0 } }
-        });
+        self.case = spec.filter(|s| s.inner_w > 0.0 && s.inner_d > 0.0).and_then(|s| case_wire(board, &s));
         true
     }
 
@@ -325,6 +377,9 @@ impl Scene {
                     buf.line(vert([a.0, a.1, z], [0.0, 0.0]), vert([b.0, b.1, z], [0.0, 0.0]), col);
                 }
                 buf.line(vert([a.0, a.1, w.z0], [0.0, 0.0]), vert([a.0, a.1, w.z1], [0.0, 0.0]), col);
+            }
+            for (a, b, c) in &w.lines {
+                buf.line(vert(*a, [0.0, 0.0]), vert(*b, [0.0, 0.0]), *c);
             }
         }
         if !show_parts {

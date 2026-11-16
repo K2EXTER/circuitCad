@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum | --digital]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d [--3d-cam yaw,pitch,zoom]] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-opamp-example] [--form-opamp-pdf] [--form-regulator-example [adj]] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d [--3d-cam yaw,pitch,zoom] [--3d-case w,d,top,bottom]] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-opamp-example] [--form-opamp-pdf] [--form-regulator-example [adj]] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -574,6 +574,13 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str);
         if val("--3d-look").is_some() || val("--3d-ao").is_some() {
             app.board_ed.view3d_look(val("--3d-look") == Some("clay"), val("--3d-ao") != Some("0"));
+        }
+        // --3d-case w,d,top,bottom: the case check with the case's inside (screw posts and wall openings in the picture)
+        if let Some(c) = val("--3d-case") {
+            let n: Vec<f64> = c.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            if n.len() == 4 {
+                app.board_ed.view3d_case(n[0], n[1], n[2], n[3]);
+            }
         }
         // --3d-cam yaw,pitch[,zoom]: the angle of the 3D view in degrees (for screenshots from another side)
         if let Some(c) = val("--3d-cam") {

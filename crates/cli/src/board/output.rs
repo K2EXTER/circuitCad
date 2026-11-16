@@ -73,13 +73,26 @@ impl Session {
         let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(|| format!("{k}={s} is not a size in mm (zero or more)"))).transpose();
         let spec = pcb_core::case::CaseSpec { inner_w: num("w")?.unwrap_or(0.0), inner_d: num("d")?.unwrap_or(0.0), top: num("top")?.unwrap_or(0.0), bottom: num("bottom")?.unwrap_or(0.0), clearance: num("clear")?.unwrap_or(0.5) };
         if spec.inner_w == 0.0 && spec.inner_d == 0.0 && spec.top == 0.0 && spec.bottom == 0.0 {
-            return Err("board case [w=MM d=MM] [top=MM] [bottom=MM] [clear=0.5]   (the inside of the case: width and depth for the floor, the room above and below the board for the parts' heights)".into());
+            return Err("board case [w=MM d=MM] [top=MM] [bottom=MM] [clear=0.5] [dxf=FILE]   (the inside of the case: width and depth for the floor, the room above and below the board for the parts' heights. With w and d it also answers the screw posts under the mounting holes (bottom = their height, else 5 mm) and the openings in the walls for the connectors at the edge; dxf= writes the case's drawing: the floor with the posts and the walls folded out with the openings)".into());
         }
         let board = self.board_mut()?;
         let r = pcb_core::case::check(board, &spec);
         let tall: Vec<Value> = r.too_tall.iter().map(|(p, s, h, o)| json!({"part": p, "side": format!("{s:?}"), "height_mm": h, "over_mm": o})).collect();
-        Ok(obj(json!({"ok": r.ok(), "board_mm": [r.board_w, r.board_d], "floor_checked": r.floor_checked, "fits": r.fits, "turned_a_quarter": r.turned, "spare_mm": [r.spare_w, r.spare_d], "too_tall": tall,
-            "note": "the heights of the parts are the 3D view's (a footprint's own height, else a guess by kind); the board's size is the box round its outline and parts"})))
+        let mut out = json!({"ok": r.ok(), "board_mm": [r.board_w, r.board_d], "floor_checked": r.floor_checked, "fits": r.fits, "turned_a_quarter": r.turned, "spare_mm": [r.spare_w, r.spare_d], "too_tall": tall,
+            "note": "the heights of the parts are the 3D view's (a footprint's own height, else a guess by kind); the board's size is the box round its outline and parts"});
+        if r.floor_checked {
+            // inside the case: x along the width, y along the depth from the inner left front corner, z up from the floor
+            let ins = pcb_core::case::inside(board, &spec);
+            let r1 = |v: f64| (v * 100.0).round() / 100.0;
+            out["posts"] = json!(ins.posts.iter().map(|p| json!({"hole": [r1(p.hole.x), r1(p.hole.y)], "at": [r1(p.at.x), r1(p.at.y)], "height_mm": p.height, "screw": p.screw, "outer_d": p.outer_d, "pilot_d": p.pilot_d, "problem": p.problem})).collect::<Vec<_>>());
+            out["openings"] = json!(ins.openings.iter().map(|o| json!({"part": o.refdes, "wall": o.wall.label(), "along_mm": [r1(o.along.0), r1(o.along.1)], "along_from": o.wall.along_from(), "up_mm": [r1(o.up.0), r1(o.up.1)], "to_wall_mm": r1(o.to_wall)})).collect::<Vec<_>>());
+            out["case_notes"] = json!(ins.notes);
+            if let Some(f) = opt(&kv, "dxf") {
+                std::fs::write(f, pcb_core::case::drawing(board, &spec)?).map_err(|e| format!("{f}: {e}"))?;
+                out["dxf"] = json!(f);
+            }
+        }
+        Ok(obj(out))
     }
 
     pub(super) fn board_dxf_import(&mut self, rest: &[String]) -> Res {

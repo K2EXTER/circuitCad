@@ -873,6 +873,28 @@ pub fn body_extent(board: &Board, part: &Part) -> Option<(Point, Point)> {
     Some((lo, hi))
 }
 
+/// The box round everything the 3D view draws for each part (its mesh, else its guessed solids), by index into `Board::parts`:
+/// x and y in board coordinates, z = 0 at the bottom face of the board.
+pub fn part_solid_extents(board: &Board) -> Vec<Option<([f64; 3], [f64; 3])>> {
+    let mut out: Vec<Option<([f64; 3], [f64; 3])>> = vec![None; board.parts.len()];
+    let mut grow = |i: usize, lo: [f64; 3], hi: [f64; 3]| {
+        let e = out[i].get_or_insert((lo, hi));
+        for k in 0..3 {
+            e.0[k] = e.0[k].min(lo[k]);
+            e.1[k] = e.1[k].max(hi[k]);
+        }
+    };
+    for b in part_boxes(board) {
+        grow(b.part, b.lo, b.hi);
+    }
+    for m in part_meshes(board) {
+        if let Some((lo, hi)) = m.mesh.bounds() {
+            grow(m.part, lo, hi);
+        }
+    }
+    out
+}
+
 /// The mesh of a part, placed on the board: x and y in board coordinates, z = 0 at the bottom face of the board
 /// (`BOARD_THICKNESS` at the top).
 #[derive(Clone, Debug, PartialEq)]

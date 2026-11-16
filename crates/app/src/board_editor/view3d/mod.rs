@@ -133,6 +133,13 @@ impl BoardEditor {
         self.view3d.touched = true;
     }
 
+    /// Turns on the case check with the case's inside (`--3d-case w,d,top,bottom` for screenshots): width, depth, the room above
+    /// and below the board (mm).
+    pub fn view3d_case(&mut self, w: f64, d: f64, top: f64, bottom: f64) {
+        let v = &mut self.view3d;
+        (v.check_height, v.case_w, v.case_d, v.limit_top, v.limit_bottom) = (true, w, d, top, bottom);
+    }
+
     pub fn view3d_look(&mut self, clay: bool, ao: bool) {
         self.view3d.look = if clay { gpu::Look::Clay } else { gpu::Look::Color };
         self.view3d.ao = ao;
