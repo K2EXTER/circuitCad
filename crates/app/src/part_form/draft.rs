@@ -1,7 +1,7 @@
 //! "データシートから下書き": one button that reads the whole data sheet and fills what it can find into the form at once: the part
 //! number, the kind of part, the package (a built-in footprint, or a dual row with lands from the dimension table), the pins (the
-//! pin table found under its heading), the body's size and height, and for a MOSFET, a transistor or a diode the values of its
-//! electrical characteristics table. Everything is listed with the page it came from and a box to leave it out, and goes in only
+//! pin table found under its heading), the body's size and height, and for a MOSFET, a transistor, a diode, an op amp, an
+//! optocoupler, a photodiode or a Darlington the values of its electrical characteristics table (into that kind's box). Everything is listed with the page it came from and a box to leave it out, and goes in only
 //! when the person presses the button: these are guesses from a document's layout, to be checked.
 
 use super::*;
@@ -34,11 +34,25 @@ pub struct FormDraft {
 /// The form's kind of part for a category the data sheet suggests.
 fn kind_of(category: &str) -> Option<PartType> {
     Some(match category {
-        "MOSFET" | "トランジスタ" => PartType::Transistor,
-        "ダイオード" | "ツェナーダイオード" => PartType::Diode,
-        "コンパレータ" | "オペアンプ" | "レギュレータ" | "アナログスイッチ" | "ロジックIC" | "マイコン" => PartType::Ic,
+        "MOSFET" | "トランジスタ" | "ダーリントン" => PartType::Transistor,
+        "ダイオード" | "ツェナーダイオード" | "フォトダイオード" => PartType::Diode,
+        "コンパレータ" | "オペアンプ" | "フォトカプラ" | "レギュレータ" | "アナログスイッチ" | "ロジックIC" | "マイコン" => PartType::Ic,
         _ => return None,
     })
+}
+
+/// The part list's category for a kind the data sheet suggests (the bundled PC817 and BPW34 are sensors).
+fn list_category(kind: &'static str) -> &'static str {
+    match kind {
+        "フォトカプラ" | "フォトダイオード" => "センサ",
+        "ダーリントン" => "トランジスタ",
+        k => k,
+    }
+}
+
+/// Whether the form has a box that the electrical characteristics table can fill, for this kind.
+fn has_model(kind: Option<(PartType, &'static str)>) -> bool {
+    kind.is_some_and(|(t, cat)| matches!(t, PartType::Transistor | PartType::Diode) || matches!(cat, "オペアンプ" | "フォトカプラ"))
 }
 
 /// A built-in footprint of the same name as a package ("SOT-23", "TO-92").
@@ -137,7 +151,7 @@ impl PartForm {
         let dims = ds.dimension_table();
         let lands = ds.land_patterns();
         let ratings = ds.absolute_maximum();
-        let model = matches!(kind.map(|k| k.0), Some(PartType::Transistor | PartType::Diode));
+        let model = has_model(kind);
         let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, open: true };
         d.use_[6] = d.max_ratings().iter().any(Option::is_some);
         Some(d)
@@ -151,9 +165,11 @@ impl PartForm {
             && let Some((k, cat)) = d.kind
         {
             self.apply_type(k);
-            self.category = cat.to_string();
-            if cat == "MOSFET" {
-                self.glyph = "nmos".into();
+            self.category = list_category(cat).to_string();
+            match cat {
+                "MOSFET" => self.glyph = "nmos".into(),
+                "フォトダイオード" => self.glyph = "photodiode".into(),
+                _ => {}
             }
             done.push(format!("種類: {cat}"));
         }
@@ -244,7 +260,33 @@ impl PartForm {
         }
         if d.use_[5] {
             let sheet = &self.sheet;
-            match d.kind.map(|k| k.0) {
+            let values = |s: &str| sheet.spec_values(s);
+            // the kinds with a box of their own; the box opens to show what went in
+            let boxed = match d.kind.map(|k| k.1) {
+                Some("オペアンプ") => {
+                    self.opamp.fill_from_pdf(values);
+                    Some(("opamp_box", "オペアンプ"))
+                }
+                Some("フォトカプラ") => {
+                    self.opto.fill_from_pdf(values);
+                    Some(("opto_box", "フォトカプラ"))
+                }
+                Some("フォトダイオード") => {
+                    self.pd.fill_from_pdf(values);
+                    Some(("", "フォトダイオード"))
+                }
+                Some("ダーリントン") => {
+                    self.darl.fill_from_pdf(values);
+                    Some(("darl_box", "ダーリントン"))
+                }
+                _ => None,
+            };
+            if let Some((id, what)) = boxed {
+                self.model_box = (!id.is_empty()).then_some(id);
+                done.push(format!("{what}の値: 電気的特性の表から (「かんたん作成」の欄に。曲線は図から足して、「② シミュレーション」で確かめてください)"));
+            }
+            let sheet = &self.sheet;
+            match d.kind.map(|k| k.0).filter(|_| boxed.is_none()) {
                 Some(PartType::Transistor) if self.glyph == "nmos" || self.glyph == "pmos" => {
                     self.mos.fill_from_pdf(|s| sheet.spec_values(s));
                     done.push("MOSFET の値: 電気的特性の表から (「② シミュレーション」で確かめてモデルを作ってください)".into());
@@ -400,9 +442,9 @@ impl PartForm {
                 }
                 ui.end_row();
                 // model
-                let model_kind = matches!(d.kind.map(|k| k.0), Some(PartType::Transistor | PartType::Diode));
+                let model_kind = has_model(d.kind);
                 ui.add_enabled(model_kind, egui::Checkbox::new(&mut d.use_[5], i18n::tr("特性の値")));
-                ui.label(if model_kind { egui::RichText::new(i18n::tr("電気的特性の表から読みます (入れたあと「② シミュレーション」で確かめます)")) } else { egui::RichText::new(i18n::tr("トランジスタ・MOSFET・ダイオードのとき")).weak() });
+                ui.label(if model_kind { egui::RichText::new(i18n::tr("電気的特性の表から読みます (入れたあと「② シミュレーション」で確かめます)")) } else { egui::RichText::new(i18n::tr("トランジスタ・MOSFET・ダイオード・オペアンプ・フォトカプラ・フォトダイオード・ダーリントンのとき")).weak() });
                 ui.label("");
                 ui.end_row();
                 // ratings
@@ -474,6 +516,11 @@ mod tests {
         assert_eq!(kind_of("MOSFET"), Some(PartType::Transistor));
         assert_eq!(kind_of("オペアンプ"), Some(PartType::Ic));
         assert_eq!(kind_of("?"), None);
+        // the light parts and the Darlington: their own boxes, the bundled parts' list categories
+        assert_eq!((kind_of("フォトカプラ"), list_category("フォトカプラ")), (Some(PartType::Ic), "センサ"));
+        assert_eq!((kind_of("フォトダイオード"), list_category("フォトダイオード")), (Some(PartType::Diode), "センサ"));
+        assert_eq!((kind_of("ダーリントン"), list_category("ダーリントン")), (Some(PartType::Transistor), "トランジスタ"));
+        assert!(has_model(Some((PartType::Ic, "オペアンプ"))) && !has_model(Some((PartType::Ic, "ロジックIC"))));
         let p = |name: &str, family: &'static str| PackageName { name: name.into(), family, pins: None, count: 1, page: 0 };
         assert_eq!(builtin_footprint(&p("SOT-23", "sot-23")).as_deref(), Some("SOT-23"));
         assert_eq!(builtin_footprint(&p("TO-92", "to-92")).as_deref(), Some("TO-92"));

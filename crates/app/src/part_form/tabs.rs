@@ -1,6 +1,11 @@
 use super::*;
 
 impl PartForm {
+    /// `Some(true)` once for the model box the draft filled (it opens to show what went in), else `None`.
+    fn open_box(&mut self, id: &str) -> Option<bool> {
+        self.model_box.take_if(|b| *b == id).map(|_| true)
+    }
+
     /// The ① basic information tab. What is offered depends on the kind chosen at the top: a capacitor, resistor or
     /// coil can start from its data sheet numbers (below the name fields, which that fills in), an IC may start from
     /// the charger template, and the other kinds just get the fields.
@@ -65,7 +70,8 @@ impl PartForm {
             if bjt {
                 self.bjt_ui(ui);
                 ui.add_space(4.0);
-                egui::CollapsingHeader::new(i18n::tr("ダーリントン (TIP120 など、2 個入り) のモデルをデータシートのグラフから作る")).id_salt("darl_box").default_open(self.darl.result.is_some()).show(ui, |ui| self.darlington_ui(ui));
+                let open = self.open_box("darl_box");
+                egui::CollapsingHeader::new(i18n::tr("ダーリントン (TIP120 など、2 個入り) のモデルをデータシートのグラフから作る")).id_salt("darl_box").default_open(self.darl.result.is_some()).open(open).show(ui, |ui| self.darlington_ui(ui));
             }
             if passive {
                 self.passive_ui(ui);
@@ -81,9 +87,10 @@ impl PartForm {
                     "opamp" => self.opamp_ui(ui),
                     "regulator" => self.regulator_ui(ui),
                     _ => {
-                        egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").show(ui, |ui| self.opamp_ui(ui));
+                        let (opamp, opto) = (self.open_box("opamp_box"), self.open_box("opto_box"));
+                        egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").open(opamp).show(ui, |ui| self.opamp_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").show(ui, |ui| self.regulator_ui(ui));
-                        egui::CollapsingHeader::new(i18n::tr("フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る")).id_salt("opto_box").default_open(self.opto.result.is_some()).show(ui, |ui| self.opto_ui(ui));
+                        egui::CollapsingHeader::new(i18n::tr("フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る")).id_salt("opto_box").default_open(self.opto.result.is_some()).open(opto).show(ui, |ui| self.opto_ui(ui));
                     }
                 }
                 self.template_ui(ui);

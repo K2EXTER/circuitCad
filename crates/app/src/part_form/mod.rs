@@ -214,6 +214,8 @@ pub struct PartForm {
     pub darl: darlington::DarlingtonInput,
     pub opto: opto::OptoInput,
     pub pd: opto::PhotodiodeInput,
+    /// A model box the draft filled, to open once (its id: "opamp_box", "opto_box", "darl_box").
+    model_box: Option<&'static str>,
     /// The logic IC box: inputs and one Boolean expression per output (`logic.rs`).
     pub logic: logic::LogicInput,
     /// The leaded-part helper of the package tab: lead diameter, body length / diameter (axial) or lead spacing (radial), in mm as typed.
@@ -388,6 +390,7 @@ impl Default for PartForm {
             opamp: Default::default(),
             reg: Default::default(),
             darl: Default::default(),
+            model_box: None,
             opto: Default::default(),
             pd: Default::default(),
             logic: Default::default(),
@@ -452,6 +455,7 @@ mod bjt;
 mod darlington;
 mod linear;
 mod opto;
+mod table_fill;
 mod logic;
 mod pdf_check;
 mod pdf_input;

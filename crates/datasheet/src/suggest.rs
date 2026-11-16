@@ -84,6 +84,9 @@ const KINDS: &[(&str, &[&str])] = &[
     ("コンパレータ", &["comparator", "コンパレータ"]),
     ("オペアンプ", &["operational amplifier", "op amp", "op-amp", "オペアンプ", "演算増幅器"]),
     ("レギュレータ", &["regulator", "low dropout", "low-dropout", "converter", "step-down", "buck", "dc-dc", "レギュレータ", "コンバータ", "降圧", "スイッチングレギュレータ"]),
+    ("フォトカプラ", &["photocoupler", "optocoupler", "opto-coupler", "optoisolator", "opto-isolator", "photo coupler", "フォトカプラ"]),
+    ("フォトダイオード", &["photodiode", "photo diode", "フォトダイオード"]),
+    ("ダーリントン", &["darlington", "ダーリントン"]),
     ("MOSFET", &["mosfet", "mos fet", "power mos", "n-channel", "p-channel", "enhancement mode", " fet "]),
     ("ツェナーダイオード", &["zener", "ツェナー"]),
     ("ダイオード", &["rectifier", "schottky", "diode", "ダイオード", "整流"]),
@@ -92,6 +95,20 @@ const KINDS: &[(&str, &[&str])] = &[
     ("ロジックIC", &["logic gate", "logic family", "logic ic", "cmos logic", "flip-flop", "schmitt", "nand", "counter", "ロジック", "カウンタ"]),
     ("マイコン", &["microcontroller", "mcu", "マイコン", "マイクロコントローラ"]),
 ];
+
+/// How often `key` (a word of kind `kind`) is in `text`, leaving out where it is part of a longer word of another kind:
+/// a "photodiode" is not a "diode", a "phototransistor" (in an optocoupler's sheet) not a "transistor".
+fn hits(text: &str, key: &str, kind: &str) -> usize {
+    let inside: usize = KINDS
+        .iter()
+        .filter(|(other, _)| *other != kind)
+        .flat_map(|(_, keys)| keys.iter())
+        .filter(|longer| longer.len() > key.len() && longer.contains(key))
+        .map(|longer| text.matches(longer).count())
+        .sum();
+    let photo_transistor = if key == "transistor" { text.matches("phototransistor").count() + text.matches("photo transistor").count() } else { 0 };
+    text.matches(key).count().saturating_sub(inside + photo_transistor)
+}
 
 /// A word in the title's lettering (at least this part of the biggest on the first page) counts this many times
 /// more than one in the text: a part is what its title says it is.
@@ -107,15 +124,26 @@ pub fn category_hint(first_pages: &[&[Word]]) -> Option<&'static str> {
     let title = join(page0.iter().filter(|w| w.em >= 0.6 * biggest).collect());
     KINDS
         .iter()
-        .map(|(name, keys)| (*name, keys.iter().map(|k| all.matches(k).count() + TITLE_WEIGHT * title.matches(k).count()).sum::<usize>()))
+        .map(|(name, keys)| (*name, keys.iter().map(|k| hits(&all, k, name) + TITLE_WEIGHT * hits(&title, k, name)).sum::<usize>()))
         .filter(|(_, n)| *n > 0)
         .fold(None, |best: Option<(&str, usize)>, c| if best.is_none_or(|b| c.1 > b.1) { Some(c) } else { best })
         .map(|(name, _)| name)
+        // a Darlington's sheet says "transistor" far more often than "Darlington"; another transistor's says the
+        // word not at all
+        .map(|name| if name == "トランジスタ" && all.contains("darlington") { "ダーリントン" } else { name })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_word_inside_a_longer_word_of_another_kind_does_not_count() {
+        let text = "silicon pin photodiode. the photodiode is a diode for light";
+        assert_eq!((hits(text, "diode", "ダイオード"), hits(text, "photodiode", "フォトダイオード")), (1, 2));
+        let opto = "photocoupler: an infrared emitting diode and a phototransistor. transistor output";
+        assert_eq!(hits(opto, "transistor", "トランジスタ"), 1);
+    }
 
     #[test]
     fn part_numbers_are_told_from_values_and_packages() {

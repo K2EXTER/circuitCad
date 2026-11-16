@@ -30,6 +30,8 @@ pub struct DarlingtonInput {
     pub ft: String,
     /// Early voltage (V); empty: 100 V assumed.
     pub vaf: String,
+    /// What was taken from the PDF's table (one line each), or what was not found.
+    pub found: Vec<(bool, String)>,
     pub result: Option<Result<Fitted, String>>,
     pub message: Option<(bool, String)>,
 }
@@ -51,6 +53,7 @@ impl Default for DarlingtonInput {
             cob: String::new(),
             ft: String::new(),
             vaf: String::new(),
+            found: vec![],
             result: None,
             message: None,
         }
@@ -127,6 +130,7 @@ impl DarlingtonInput {
             cob: lines(&get("cob")),
             ft: v["ft"][0].as_f64().map(|f| format!("{f}")).unwrap_or_default(),
             vaf: String::new(),
+            found: vec![],
             result: None,
             message: None,
         };
@@ -178,8 +182,19 @@ impl PartForm {
                 ui.label(egui::RichText::new(i18n::trf!("・{t}")).small());
             }
         });
-        if ui.button(i18n::tr("TIP120 の例を入れる")).on_hover_text(i18n::tr("同梱の TIP120 を作ったときにグラフから読んだ点を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
-            self.darlington_example_and_fit();
+        ui.horizontal_wrapped(|ui| {
+            if self.sheet.has_doc()
+                && ui.button(i18n::tr("PDF の表から読む")).on_hover_text(i18n::tr("開いているデータシートの「電気的特性」の表から、hFE・VBE・飽和電圧の typ (IC つき)、fT (無ければ |hfe| × 周波数)、Cob・Cib を探して欄に入れます。多くの表は保証値 (min・max) だけなので、曲線は図から読みます")).clicked()
+            {
+                let sheet = &self.sheet;
+                self.darl.fill_from_pdf(|s| sheet.spec_values(s));
+            }
+            if ui.button(i18n::tr("TIP120 の例を入れる")).on_hover_text(i18n::tr("同梱の TIP120 を作ったときにグラフから読んだ点を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
+                self.darlington_example_and_fit();
+            }
+        });
+        for (ok, line) in &self.darl.found {
+            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
         let has_doc = self.sheet.has_doc();
         let mut start = None;

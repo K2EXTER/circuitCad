@@ -30,6 +30,8 @@ pub struct OptoInput {
     pub sat_ic: String,
     /// The cut-off frequency (Hz).
     pub fc: String,
+    /// What was taken from the PDF's table (one line each), or what was not found.
+    pub found: Vec<(bool, String)>,
     pub result: Option<Result<Fitted, String>>,
     pub message: Option<(bool, String)>,
 }
@@ -49,6 +51,7 @@ impl Default for OptoInput {
             sat_if: "20m".into(),
             sat_ic: "1m".into(),
             fc: String::new(),
+            found: vec![],
             result: None,
             message: None,
         }
@@ -77,6 +80,8 @@ pub struct PhotodiodeInput {
     pub ibv: String,
     /// (reverse voltage, capacitance) lines.
     pub cap: String,
+    /// What was taken from the PDF's table (one line each), or what was not found.
+    pub found: Vec<(bool, String)>,
     pub result: Option<Result<Fitted, String>>,
     pub message: Option<(bool, String)>,
 }
@@ -96,6 +101,7 @@ impl Default for PhotodiodeInput {
             bv: String::new(),
             ibv: "100u".into(),
             cap: String::new(),
+            found: vec![],
             result: None,
             message: None,
         }
@@ -133,13 +139,13 @@ fn triples(label: &str, text: &str) -> Result<Vec<[f64; 3]>, String> {
 
 /// "value value" lines with every digit (the examples: `lines` rounds to 4 digits, and the LED's IS moves with the
 /// fourth digit of VF).
-fn exact(points: &[[f64; 2]]) -> String {
+pub(super) fn exact(points: &[[f64; 2]]) -> String {
     points.iter().map(|[a, b]| format!("{} {}", digits(*a), digits(*b))).collect::<Vec<_>>().join("
 ")
 }
 
 /// A number with 6 significant digits, small ones with an SI prefix (`61.92p`).
-fn digits(v: f64) -> String {
+pub(super) fn digits(v: f64) -> String {
     let g = |x: f64| part_lib::fit::num::g(x, 6);
     match v.abs() {
         0.0 => "0".into(),
@@ -205,6 +211,7 @@ impl OptoInput {
             sat_if: short(s.vce_sat[1]),
             sat_ic: short(s.vce_sat[2]),
             fc: format!("{}", s.fc.0),
+            found: vec![],
             result: None,
             message: None,
         };
@@ -266,6 +273,7 @@ impl PhotodiodeInput {
             bv: short(s.breakdown.v),
             ibv: short(s.breakdown.i),
             cap: exact(&s.capacitance),
+            found: vec![],
             result: None,
             message: None,
         };
@@ -334,8 +342,19 @@ impl PartForm {
                 ui.label(egui::RichText::new(i18n::trf!("・{t}")).small());
             }
         });
-        if ui.button(i18n::tr("PC817 の例を入れる")).on_hover_text(i18n::tr("同梱の PC817 を作ったときにグラフと表から読んだ値を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
-            self.opto_example_and_make();
+        ui.horizontal_wrapped(|ui| {
+            if self.sheet.has_doc()
+                && ui.button(i18n::tr("PDF の表から読む")).on_hover_text(i18n::tr("開いているデータシートの「電気的特性」の表から、VF・LED の容量・CTR の範囲 (CTR の行、無ければ IF のときの IC から)・VCE(sat) とその条件・カットオフ周波数を探して欄に入れます。LED と出力の曲線は図から読みます")).clicked()
+            {
+                let sheet = &self.sheet;
+                self.opto.fill_from_pdf(|s| sheet.spec_values(s));
+            }
+            if ui.button(i18n::tr("PC817 の例を入れる")).on_hover_text(i18n::tr("同梱の PC817 を作ったときにグラフと表から読んだ値を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
+                self.opto_example_and_make();
+            }
+        });
+        for (ok, line) in &self.opto.found {
+            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
         let has_doc = self.sheet.has_doc();
         let mut start = None;
@@ -405,8 +424,19 @@ impl PartForm {
                 ui.label(egui::RichText::new(i18n::trf!("・{t}")).small());
             }
         });
-        if ui.button(i18n::tr("BPW34 の例を入れる")).on_hover_text(i18n::tr("同梱の BPW34 を作ったときに表と図から読んだ値を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
-            self.photodiode_example_and_make();
+        ui.horizontal_wrapped(|ui| {
+            if self.sheet.has_doc()
+                && ui.button(i18n::tr("PDF の表から読む")).on_hover_text(i18n::tr("開いているデータシートの「電気的特性」の表から、光電流 (mW/cm² あたりに直す)・短絡電流・開放電圧とその温度係数・暗電流・降伏電圧・容量を探して欄に入れます")).clicked()
+            {
+                let sheet = &self.sheet;
+                self.pd.fill_from_pdf(|s| sheet.spec_values(s));
+            }
+            if ui.button(i18n::tr("BPW34 の例を入れる")).on_hover_text(i18n::tr("同梱の BPW34 を作ったときに表と図から読んだ値を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
+                self.photodiode_example_and_make();
+            }
+        });
+        for (ok, line) in &self.pd.found {
+            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
         let has_doc = self.sheet.has_doc();
         let mut start = None;
