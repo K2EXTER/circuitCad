@@ -95,6 +95,41 @@ impl Session {
         Ok(obj(out))
     }
 
+    /// `board case_step [FILE] [dx= dy= dz=] [rot=0..3] | off`: the case read from its STEP, placed round the board (moved by dx/dy/dz and
+    /// turned by rot quarter turns from where it first stood), and what it runs into.
+    pub(super) fn board_case_step(&mut self, rest: &[String]) -> Res {
+        let (pos, kv) = options(rest);
+        let board = self.board_mut()?;
+        if pos.first().is_some_and(|p| p == "off") {
+            board.case3d = None;
+            return Ok(obj(json!({"case": null})));
+        }
+        if let Some(f) = pos.first() {
+            let bytes = std::fs::read(f).map_err(|e| format!("{f}: {e}"))?;
+            let name = std::path::Path::new(f).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            board.case3d = Some(pcb_core::case_model::CaseModel::from_step(&bytes, &name, board)?);
+        }
+        let Some(case) = board.case3d.as_mut() else {
+            return Err("board case_step FILE.step [dx=MM dy=MM dz=MM] [rot=0..3]   (the case read from its STEP, set round the board: the middle of its box over the board's, its bottom 5 mm below the board; dx/dy/dz move it, rot turns it by quarter turns. 'board case_step' alone checks it again, 'board case_step off' takes it away)".into());
+        };
+        for (k, axis) in [("dx", 0), ("dy", 1), ("dz", 2)] {
+            if let Some(v) = opt(&kv, k) {
+                case.offset[axis] += sim_core::parse_value(v).ok_or_else(|| format!("{k}={v}: a length in mm"))?;
+            }
+        }
+        if let Some(r) = opt(&kv, "rot") {
+            case.rot = r.parse::<u8>().map_err(|_| format!("rot={r}: 0, 1, 2 or 3 quarter turns"))? % 4;
+        }
+        let case = case.clone();
+        let board = self.board_mut()?;
+        let hits = pcb_core::case_model::collisions(board, &case);
+        let names: Vec<&str> = hits.parts.iter().map(|i| board.parts[*i].refdes.as_str()).collect();
+        let r1 = |v: f64| (v * 100.0).round() / 100.0;
+        Ok(obj(json!({"file": case.file, "triangles": case.mesh.triangles.len(), "size_mm": case.size().map(r1), "offset_mm": case.offset.map(r1), "rot": case.rot,
+            "collides": names, "board_collides": hits.board, "ok": names.is_empty() && !hits.board,
+            "note": "parts are checked by the boxes the 3D view draws, so a round part next to a wall can be reported though it just clears it"})))
+    }
+
     pub(super) fn board_dxf_import(&mut self, rest: &[String]) -> Res {
         let (pos, kv) = options(rest);
         let f = pos.first().ok_or("board dxf_import FILE.dxf [layer=NAME] [origin=0]   (the outline = the biggest closed loop of lines, arcs and polylines; circles inside it become holes; origin=0 keeps the drawing's coordinates instead of moving the lower left corner to 0,0)")?;

@@ -196,6 +196,9 @@ impl Geometry {
                 line(&mut lines, *a, *b, *c);
             }
         }
+        for (a, b) in &scene.case_lines {
+            line(&mut lines, *a, *b, super::scene::CASE_STEP);
+        }
         let board_lines = count(&lines, LINE_BYTES);
         // the parts: guessed solids (with a thin dark edge round every face) and makers' meshes; a part over the case height is red, and
         // with the heat colours on every part is painted by its temperature (both kept in the white look, tex 4)

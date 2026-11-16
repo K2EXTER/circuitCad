@@ -78,6 +78,7 @@ impl Session {
             "shopping" => self.board_shopping(rest),
             "svg" => self.board_svg(rest),
             "case" => self.board_case(rest),
+            "case_step" => self.board_case_step(rest),
             "dxf_import" => self.board_dxf_import(rest),
             "dxf" => self.board_dxf(rest),
             "step" => self.board_step(rest),

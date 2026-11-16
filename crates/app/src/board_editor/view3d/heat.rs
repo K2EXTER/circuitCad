@@ -52,17 +52,17 @@ impl Scene {
         true
     }
 
-    /// The colour a part is painted with: its temperature, red over the case height, or its own.
+    /// The colour a part is painted with: its temperature, red over the case height or running into the case read from its STEP, or its own.
     pub(super) fn part_color(&self, part: usize, own: [u8; 3]) -> [u8; 3] {
         if let Some(Some(c)) = self.heat.get(part) {
             return *c;
         }
-        if self.over.get(part).is_some_and(|o| *o > 1e-6) { [225, 50, 40] } else { own }
+        if self.over.get(part).is_some_and(|o| *o > 1e-6) || self.case_hits.get(part).copied().unwrap_or(false) { [225, 50, 40] } else { own }
     }
 
     /// Whether the part keeps its colour in the white look (painted by temperature or over the case height).
     pub(super) fn part_marked(&self, part: usize) -> bool {
-        self.heat.get(part).is_some_and(Option::is_some) || self.over.get(part).is_some_and(|o| *o > 1e-6)
+        self.heat.get(part).is_some_and(Option::is_some) || self.over.get(part).is_some_and(|o| *o > 1e-6) || self.case_hits.get(part).copied().unwrap_or(false)
     }
 }
 

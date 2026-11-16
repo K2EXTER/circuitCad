@@ -41,7 +41,35 @@ pub(super) struct Scene {
     pub(super) heat: Vec<Option<[u8; 3]>>,
     pub(super) temps: Vec<Option<(f64, f64)>>,
     pub(super) heat_applied: Option<PartTemps>,
+    /// The case read from its STEP (`Board::case3d`): the lines of its sharp edges, and the parts (by index) and whether the board that it
+    /// runs into (`pcb_core::case_model::collisions`).
+    pub(super) case_lines: Vec<([f64; 3], [f64; 3])>,
+    pub(super) case_hits: Vec<bool>,
+    pub(super) case_board_hit: bool,
 }
+
+/// The case read from its STEP for the view: its edge lines, which parts it runs into, and whether the board.
+type CaseView = (Vec<([f64; 3], [f64; 3])>, Vec<bool>, bool);
+
+fn case_model_view(board: &Board) -> CaseView {
+    match &board.case3d {
+        Some(c) => {
+            let h = pcb_core::case_model::collisions(board, c);
+            (c.edge_lines(), (0..board.parts.len()).map(|i| h.parts.contains(&i)).collect(), h.board)
+        }
+        None => (vec![], vec![false; board.parts.len()], false),
+    }
+}
+
+impl Scene {
+    /// The case read from its STEP again (moved, turned or taken away), without building the rest of the scene.
+    pub(super) fn set_case_model(&mut self, board: &Board) {
+        (self.case_lines, self.case_hits, self.case_board_hit) = case_model_view(board);
+    }
+}
+
+/// The colour of the case read from its STEP (its edges).
+pub(super) const CASE_STEP: [u8; 3] = [150, 200, 230];
 
 /// Brightness for a face whose normal (view space) is `n`: lit from above-left of the viewer.
 pub(super) fn light(n: [f32; 3]) -> f32 {
@@ -263,7 +291,8 @@ impl Scene {
         let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
         nets.sort();
         nets.dedup();
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, mesh_normals, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial(), heat: vec![None; board.parts.len()], temps: vec![None; board.parts.len()], heat_applied: None })
+        let (case_lines, case_hits, case_board_hit) = case_model_view(board);
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, mesh_normals, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial(), heat: vec![None; board.parts.len()], temps: vec![None; board.parts.len()], heat_applied: None, case_lines, case_hits, case_board_hit })
     }
 
     /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face
@@ -381,6 +410,9 @@ impl Scene {
             for (a, b, c) in &w.lines {
                 buf.line(vert(*a, [0.0, 0.0]), vert(*b, [0.0, 0.0]), *c);
             }
+        }
+        for (a, b) in &self.case_lines {
+            buf.line(vert(*a, [0.0, 0.0]), vert(*b, [0.0, 0.0]), CASE_STEP);
         }
         if !show_parts {
             return buf;

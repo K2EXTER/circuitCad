@@ -53,6 +53,8 @@ impl BoardEditor {
         let mut open = true;
         let mut retex = false;
         let mut stale = false;
+        // a change to the case read from its STEP (`Some(None)`: taken away), made after the window so it can be undone
+        let mut case_change: Option<Option<pcb_core::case_model::CaseModel>> = None;
         let mut want_help = false;
         let mut save_png = false;
         let mut note: Option<String> = None;
@@ -219,6 +221,48 @@ impl BoardEditor {
                     let names: Vec<String> = over.iter().take(6).map(|(r, o)| format!("{r} (+{o:.1} mm)")).collect();
                     let more = if over.len() > 6 { format!(" ほか {} 個", over.len() - 6) } else { String::new() };
                     ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
+                }
+            }
+            // the case read from its STEP: read / move / turn / take away, and what it runs into
+            ui.horizontal_wrapped(|ui| {
+                if ui.small_button(i18n::tr("ケースの STEP を読む…")).on_hover_text(i18n::tr("ケースを設計した CAD の STEP を読み、基板のまわりに置きます (箱の真ん中を基板の真ん中に、底を基板の 5 mm 下に)。ケースは鋭い辺の線 (水色) で描き、ぶつかる部品は赤くなります。位置は下の数字で合わせます")).clicked()
+                    && let Some(path) = rfd::FileDialog::new().add_filter("STEP", &["step", "stp", "STEP", "STP"]).pick_file()
+                {
+                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    match std::fs::read(&path).map_err(|e| e.to_string()).and_then(|b| pcb_core::case_model::CaseModel::from_step(&b, &name, &self.board)) {
+                        Ok(c) => case_change = Some(Some(c)),
+                        Err(e) => self.status = i18n::trf!("ケースの STEP を読めません: {e}"),
+                    }
+                }
+                if let Some(c) = self.board.case3d.clone() {
+                    let s = c.size();
+                    ui.small(i18n::trf!("{} ({:.1} × {:.1} × {:.1} mm)", c.file, s[0], s[1], s[2]));
+                    let mut moved = c.clone();
+                    for (k, label) in [(0, "x "), (1, "y "), (2, "z ")] {
+                        ui.add(egui::DragValue::new(&mut moved.offset[k]).speed(0.1).prefix(label).suffix(" mm")).on_hover_text(i18n::tr("ケースの位置 (ケースの STEP の原点を、基板の座標のどこに置くか)。z は基板の裏の面が 0 です"));
+                    }
+                    if ui.small_button(i18n::tr("90° 回す")).on_hover_text(i18n::tr("ケースを上から見て左回りに 90° 回します")).clicked() {
+                        moved.rot = (moved.rot + 1) % 4;
+                    }
+                    if moved != c {
+                        case_change = Some(Some(moved));
+                    }
+                    if ui.small_button(i18n::tr("外す")).on_hover_text(i18n::tr("読んだケースを基板から外します")).clicked() {
+                        case_change = Some(None);
+                    }
+                }
+            });
+            if self.board.case3d.is_some() {
+                let names: Vec<&str> = scene.case_hits.iter().enumerate().filter(|(_, h)| **h).filter_map(|(i, _)| self.board.parts.get(i).map(|p| p.refdes.as_str())).collect();
+                if names.is_empty() && !scene.case_board_hit {
+                    ui.colored_label(crate::theme::OK, i18n::tr("✔ ケースにぶつかる部品はありません"));
+                } else {
+                    let mut what = names.join(", ");
+                    if scene.case_board_hit {
+                        what = if what.is_empty() { i18n::tr("基板").to_string() } else { format!("{} {what}", i18n::tr("基板,")) };
+                    }
+                    ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ ケースにぶつかるかもしれません (赤): {what}"))
+                        .on_hover_text(i18n::tr("部品は 3D で描く箱で調べるので、壁のすぐそばの丸い部品は、実際には当たらなくても出ることがあります。足が床に当たるときは、柱を高くするかケースを下げます"));
                 }
             }
             let size = ui.available_size().max(Vec2::new(300.0, 240.0));
@@ -398,6 +442,16 @@ impl BoardEditor {
         }
         if want_help {
             self.help_request = Some(crate::help::HelpTab::View3d);
+        }
+        if let Some(c) = case_change {
+            // one undo step for a whole drag of a position
+            self.checkpoint_once();
+            self.board.case3d = c;
+            // only the case is drawn again (not the board's pictures)
+            if let Some(sc) = self.view3d.scene.as_mut() {
+                sc.set_case_model(&self.board);
+                self.view3d.generation += 1;
+            }
         }
         if stale {
             self.view3d.stale = true;
