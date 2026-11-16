@@ -33,6 +33,8 @@ mod ratings;
 mod ripple;
 mod heat_tran;
 mod selfheat;
+mod ambient;
+pub use ambient::{ambient_sweep, AmbientPoint, AmbientSweep, NetDrift, PartWorst};
 mod spec;
 mod spectrum;
 mod spice_in;

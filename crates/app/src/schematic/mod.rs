@@ -302,6 +302,11 @@ pub struct SchEditor {
     /// The temperature-over-time block: its last answer and its inputs (parts, seconds, "A:B:K/W" couplings).
     pub(crate) htran: Option<Result<selfheat_tran::HeatTranView, String>>,
     pub(crate) htran_parts: String,
+    /// "周囲の温度を振る": from, to, step (°C) and the last result.
+    pub(crate) amb_from: String,
+    pub(crate) amb_to: String,
+    pub(crate) amb_step: String,
+    pub(crate) amb_view: Option<Result<sim_core::AmbientSweep, String>>,
     pub(crate) htran_stop: String,
     htran_links: String,
     /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
@@ -714,6 +719,10 @@ impl Default for SchEditor {
             heat_ambient: "27".into(),
             htran: None,
             htran_parts: String::new(),
+            amb_from: "-20".into(),
+            amb_to: "85".into(),
+            amb_step: "5".into(),
+            amb_view: None,
             htran_stop: "0.6".into(),
             htran_links_seen: vec![],
             htran_links: String::new(),
@@ -869,6 +878,7 @@ pub(crate) mod panel;
 mod coverage;
 mod selfheat;
 mod board_heat;
+mod ambient_ui;
 pub(crate) use board_heat::BoardHeat;
 mod selfheat_tran;
 mod fault;

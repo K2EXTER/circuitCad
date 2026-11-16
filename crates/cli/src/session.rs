@@ -341,6 +341,7 @@ impl Session {
             "coverage" => self.coverage(),
             "heat" => self.heat(args),
             "heattran" => self.heattran(args),
+            "heatsweep" => self.heatsweep(args),
             "thermal" => self.thermal(args),
             "spice" => Ok(obj(json!({"text": sch_core::to_spice(&self.sch, "ccad")}))),
             "dc" => self.dc(args),

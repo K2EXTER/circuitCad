@@ -538,6 +538,30 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "theta_jc": jc, "theta_jc_guess": jc_guess, "heatsink_k_per_w": c.heatsink, "theta_with_sink": sim_core::part_theta(c, &Default::default()), "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth, "t_max_c": c.t_max, "zth": c.zth, "fit": fit_note})))
     }
 
+    /// `heatsweep FROM TO STEP`: the ambient swept with the self-heating (`sim_core::ambient_sweep`): each part's hottest, the ambient
+    /// where it reaches its limit, its rise at both ends, and the nets that move most.
+    pub fn heatsweep(&mut self, args: &[String]) -> Res {
+        let usage = "heatsweep FROM TO STEP   (°C: the surrounding temperature swept with the self-heating, e.g. heatsweep -20 85 5; each part's hottest, the ambient where it reaches its temperature limit, its rise above the air at both ends; with 'board postlayout on' the board's grid as in 'heat')";
+        let (pos, _) = options(args);
+        let nums: Vec<f64> = pos.iter().map(|s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("'{s}' is not a number\n{usage}"))).collect::<Result<_, _>>()?;
+        let [t0, t1, step] = nums.as_slice() else { return Err(usage.into()) };
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let copper = self.heat_copper();
+        let g: std::collections::BTreeMap<String, f64> = copper.iter().map(|(k, v)| (k.clone(), v.0)).collect();
+        let mut heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
+        let mutual = self.board_matrix(&c, &heaters, 0.5 * (t0 + t1))?.map(|(names, m)| sim_core::heaters_with_matrix(&mut heaters, &names, &m)).unwrap_or_default();
+        let r = sim_core::ambient_sweep(&self.sch, &c, &heaters, &mutual, *t0, *t1, *step).map_err(|e| dc_fail(&c, e))?;
+        let parts: Vec<Value> = r
+            .worst
+            .iter()
+            .map(|w| json!({"part": w.name, "hottest_c": w.hottest_c, "at_ambient_c": w.at_ambient, "t_max_c": w.t_max, "t_max_guessed": w.guessed_limit, "over_from_ambient_c": w.over_from, "caution_from_ambient_c": w.caution_from, "rise_low_k": w.rise_low, "rise_high_k": w.rise_high, "derated_power_over": w.derated_over}))
+            .collect();
+        let nets: Vec<Value> = r.nets.iter().map(|n| json!({"net": n.net, "at_low_v": n.at_low, "at_high_v": n.at_high, "min_v": n.low, "max_v": n.high})).collect();
+        let notes: Vec<String> = gate.into_iter().collect();
+        Ok(obj(json!({"points": r.points.len(), "parts": parts, "nets": nets, "runaway": r.runaway.as_ref().map(|(t, why)| json!({"ambient_c": t, "why": why})), "notes": notes})))
+    }
+
     /// `heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300,...] (else the links kept by `thermal link=`) [tstep=] [temp=27] [uic] [samples=8]`: a transient run whose power becomes
     /// temperatures over time (`sim_core::heat_tran`). Each part is one heat resistance (`thermal REF theta=`) and heat capacity
     /// (`thermal REF cth=`) to the surroundings; `couple=A:B:K/W` ties two parts by a heat resistance of their own.

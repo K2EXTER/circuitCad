@@ -158,6 +158,7 @@ impl SchEditor {
                                 "selfheat" => {
                                     self.panel_selfheat(ui);
                                     self.panel_heat_tran(ui);
+                                    self.panel_ambient_sweep(ui);
                                 }
                                 _ => self.panel_fault(ui),
                             }

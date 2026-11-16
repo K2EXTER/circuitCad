@@ -2105,6 +2105,37 @@ board heatmap tran=10 power=circuit
     assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("heattran"));
 }
 
+/// `heatsweep`: the heat-sink sample's U2 rises 48 K above the air whatever the air, so it reaches its 125 °C (guessed) limit at about
+/// 77 °C around; in the transistor sample the collector resistor of the transistor without an emitter resistor goes from a few kelvin
+/// at 0 °C to past its limit at 80 °C (the transistor nearly saturates), while the other half stays nearly as it was.
+#[test]
+fn heatsweep_finds_the_ambient_where_a_part_reaches_its_limit() {
+    let ex = |n: &str| format!("{}/../../docs/examples/{n}.schjson", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {}
+heatsweep -20 85 5
+", ex("regulator_heatsink")));
+    assert!(ok, "{a:?}");
+    let part = |v: &Value, n: &str| v["parts"].as_array().unwrap().iter().find(|p| p["part"] == n).cloned().unwrap();
+    let h = a.last().unwrap();
+    assert_eq!(h["points"].as_u64(), Some(22));
+    let u2 = part(h, "U2");
+    let at = u2["over_from_ambient_c"].as_f64().unwrap();
+    assert!((74.0..80.0).contains(&at), "{u2}");
+    assert_eq!(part(h, "U1")["over_from_ambient_c"].as_f64(), Some(-20.0), "U1 is past its limit from the start");
+    let (a, ok) = run(&format!("open {}
+heatsweep 0 80 20
+", ex("bjt_self_heat")));
+    assert!(ok, "{a:?}");
+    let h = a.last().unwrap();
+    let (r3, r6) = (part(h, "R3"), part(h, "R6"));
+    assert!(r3["rise_low_k"].as_f64().unwrap() < 10.0 && r3["over_from_ambient_c"].is_number(), "{r3}");
+    assert!(r6["over_from_ambient_c"].is_null() && r6["rise_high_k"].as_f64().unwrap() < 2.0 * r6["rise_low_k"].as_f64().unwrap(), "{r6}");
+    let (_, ok) = run("new
+heatsweep 50 0 5
+");
+    assert!(!ok);
+}
+
 /// `board heatmap` lists the parts that warm each other: R2 moved next to R1 on the sample gets about 14 K from it, so the pair comes with
 /// a distance to keep; as a requirement (`req apart`, taken to the board by `board import`), the board's requirement check reports the two
 /// as too close.

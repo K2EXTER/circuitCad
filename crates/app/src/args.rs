@@ -301,6 +301,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             app.sch.htran_stop = stop.clone();
             app.sch.htran = Some(app.sch.run_heat_tran());
         }
+        // --ambient-sweep FROM TO STEP: "周囲の温度を振る" worked out (with `--section selfheat`, for screenshots)
+        if let Some(i) = args.iter().position(|a| a == "--ambient-sweep")
+            && let (Some(a), Some(b), Some(s)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3))
+        {
+            (app.sch.amb_from, app.sch.amb_to, app.sch.amb_step) = (a.clone(), b.clone(), s.clone());
+            app.sch.amb_view = Some(app.sch.run_ambient_sweep());
+        }
         // --selfheat: the "自己発熱" result worked out (with `--section selfheat`, for screenshots)
         if args.iter().any(|a| a == "--selfheat") {
             app.sch.heat_view = Some(app.sch.run_self_heat());
