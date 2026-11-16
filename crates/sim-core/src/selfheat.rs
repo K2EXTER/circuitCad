@@ -84,7 +84,7 @@ pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit, copper: &BTree
         let elements: Vec<String> = circuit
             .elements
             .iter()
-            .filter(|e| e.name() == r || e.name().starts_with(&prefix))
+            .filter(|e| e.name() == r || (e.name().starts_with(&prefix) && !is_board_wiring(e.name())))
             .filter(|e| match e {
                 Element::Resistor { .. } => resistors,
                 _ => is_junction(e),
@@ -219,6 +219,13 @@ fn from_others(links: &[(usize, usize, f64)], powers: &[f64], n: usize) -> Vec<f
     out
 }
 
+/// Whether an element is the board's wiring in front of a pin (`REF.PIN.RW` and its inductor, damping and capacitance, added by
+/// `from_schematic_with_layout`): it carries the pin's current but its heat is the board's copper, not the part's (the board's map
+/// takes it as a heat source of its own).
+pub fn is_board_wiring(name: &str) -> bool {
+    [".RW", ".LW", ".RD", ".CW"].iter().any(|s| name.ends_with(s))
+}
+
 fn is_junction(e: &Element) -> bool {
     matches!(e, Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. })
 }
@@ -234,7 +241,7 @@ pub fn part_power(circuit: &Circuit, h: &Heater, r: &DcResult) -> f64 {
         return h.elements.iter().filter_map(|n| r.element(n)).map(|e| e.power.max(0.0)).sum();
     }
     let prefix = format!("{}.", h.name);
-    let mine = |n: &str| n == h.name || n.starts_with(&prefix) || h.elements.iter().any(|e| e == n);
+    let mine = |n: &str| n == h.name || (n.starts_with(&prefix) && !is_board_wiring(n)) || h.elements.iter().any(|e| e == n);
     let store = |n: &str| circuit.elements.iter().any(|e| matches!(e, Element::VSource { name, .. } | Element::ISource { name, .. } if name == n));
     r.elements.iter().filter(|e| mine(&e.name)).map(|e| if e.power < 0.0 && store(&e.name) { 0.0 } else { e.power }).sum::<f64>().max(0.0)
 }
@@ -354,6 +361,32 @@ mod tests {
 
     fn heater(theta: f64, tc1: f64) -> Heater {
         Heater { name: "R1".into(), elements: vec!["R1".into()], theta, tc1, tc2: 0.0, through_pins: false }
+    }
+
+    /// The board's wiring in front of a pin is not the part's: R1's heater holds R1 alone, not `R1.1.RW`, and its power is R1's own
+    /// I²R even when the wiring carries the same current.
+    #[test]
+    fn the_boards_wiring_is_not_part_of_the_parts_heat() {
+        let mut s = Schematic::default();
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "10".into();
+        let r = s.add(Kind::Resistor, (20, 0), 0);
+        s.components[r].value = "100".into();
+        let (vp, vm) = (s.components[v].pins()[0].1, s.components[v].pins()[1].1);
+        let (r1, r2) = (s.components[r].pins()[0].1, s.components[r].pins()[1].1);
+        s.wires.push(sch_core::Wire { a: vp, b: r1 });
+        s.wires.push(sch_core::Wire { a: r2, b: (r2.0, vm.1) });
+        s.wires.push(sch_core::Wire { a: (r2.0, vm.1), b: vm });
+        s.labels.push(sch_core::Label { pos: vm, text: "GND".into() });
+        let wiring = [crate::WiringR { refdes: "R1".into(), pin: "1".into(), ohm: 1.0, henry: 0.0, farad: 0.0 }];
+        let c = crate::from_schematic_with_wiring(&s, &wiring).unwrap();
+        assert!(c.elements.iter().any(|e| e.name() == "R1.1.RW"));
+        let h = heaters_from_schematic(&s, &c, &BTreeMap::new());
+        let r1 = h.iter().find(|h| h.name == "R1").unwrap();
+        assert_eq!(r1.elements, vec!["R1".to_string()]);
+        let dc = dc_op(&c).unwrap();
+        let i: f64 = 10.0 / 101.0;
+        assert!((part_power(&c, r1, &dc) - i * i * 100.0).abs() < 1e-9, "R1's own heat, not its wiring's");
     }
 
     /// Two parts on one board (the board's matrix): R2 has no temperature coefficient, so its power stays 0.25 W, and R1 also gets 20 K/W

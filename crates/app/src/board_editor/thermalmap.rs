@@ -32,6 +32,8 @@ pub struct ThermalView {
     tran_request: bool,
     /// What drove the last run over time, for the window ("回路の過渡解析の電力: Q1, RS1").
     pub driven_by: String,
+    /// The wiring's own heat for the next map (from the schematic's self-heating with the board carried over; empty otherwise).
+    pub traces: Vec<pcb_core::thermal::TraceHeat>,
     request: bool,
     /// Milliseconds the last map took.
     pub took_ms: f64,
@@ -89,10 +91,10 @@ impl BoardEditor {
             self.thermal.spec.ambient_c = ambient;
             self.thermal.own_temps = own;
             self.thermal.sources = src.clone();
-            if src.is_empty() {
+            if src.is_empty() && self.thermal.traces.is_empty() {
                 return Err("電力の出ている部品がありません。回路図の「自己発熱」で電力の出る部品があるか確かめてください".into());
             }
-            pcb_core::thermal::thermal_map(&self.board, &src, self.board.stackup.copper_um, &self.thermal.spec)
+            pcb_core::thermal::thermal_map_with(&self.board, &src, &self.thermal.traces, self.board.stackup.copper_um, &self.thermal.spec)
         }));
         // the pairs of parts that warm each other: the parts with real power only (as the schematic's heat runs take from the board)
         self.thermal.pairs = match &self.thermal.result {
@@ -277,6 +279,10 @@ impl BoardEditor {
                 Some(Ok(m)) => {
                     let (t, at) = m.hottest();
                     ui.label(i18n::trf!("いちばん熱いのは ({:.1}, {:.1}) の {:.1} ℃ (周囲 {:.0} ℃ + {:.1} K)", at.x, at.y, t, m.ambient_c, t - m.ambient_c));
+                    if m.trace_power >= 1e-3 {
+                        ui.label(i18n::trf!("配線そのものの発熱 {:.0} mW も入れています (電流² × 配線の抵抗)", m.trace_power * 1e3))
+                            .on_hover_text(i18n::tr("基板を「シミュレーションに反映」していると、パッドの配線の抵抗に流れる電流の熱を、配線の道すじに沿って基板に入れます。大電流の細い配線は、自分で温まります"));
+                    }
                     ui.label(egui::RichText::new(i18n::trf!("空気へ逃げる熱のしやすさ h: 表 {:.1}・裏 {:.1} W/m²K (対流と放射)。升目 {:.1} mm、{:.0} ms", m.h_top, m.h_bottom, m.grid.d, self.thermal.took_ms)).small())
                         .on_hover_text(i18n::tr("h は温度差で変わる (温度差の 1/4 乗) ので、地図と h を交互に計算して合わせています。放射 (ソルダーレジストの放射率 0.9) は、対流と同じくらい効きます"));
                     ui.horizontal(|ui| {

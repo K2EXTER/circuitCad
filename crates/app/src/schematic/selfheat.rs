@@ -12,6 +12,8 @@ pub(crate) struct HeatView {
     pub checks: Vec<sim_core::TempCheck>,
     /// With the board carried over: the pads' wiring that the board's heat made most resistive (the hottest first).
     pub wiring_warm: Vec<pcb_core::thermal::WarmWiring>,
+    /// With the board carried over: the wiring's own heat at the warm operating point, for the board's heat map.
+    pub traces: Vec<pcb_core::thermal::TraceHeat>,
 }
 
 impl SchEditor {
@@ -65,7 +67,7 @@ impl SchEditor {
         // with the board carried over, its copper is as warm as the map says: once more on the warmer wiring (the cold answer stays the
         // one on copper at 25 °C)
         let mut wiring_warm = vec![];
-        let r = match self.warm_wiring(&first.parts, ambient) {
+        let r = match self.warm_wiring(&first.parts, ambient, &first.warm) {
             Some((wiring, warm)) if warm.iter().any(|w| (w.factor - 1.0).abs() > 1e-4) => {
                 let c2 = sim_core::from_schematic_with_layout(&self.sch, &wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
                 let mut again = sim_core::self_heat_coupled(&c2, &heaters, ambient, &mutual).map_err(|e| e.to_string())?;
@@ -83,7 +85,8 @@ impl SchEditor {
         nodes.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
         nodes.truncate(8);
         let checks = sim_core::check_temperatures(&self.sch, &parts, ambient);
-        Ok(HeatView { ambient, parts, nodes, checks, wiring_warm })
+        let traces = self.trace_heats(&r.warm);
+        Ok(HeatView { ambient, parts, nodes, checks, wiring_warm, traces })
     }
 
     pub(super) fn panel_selfheat(&mut self, ui: &mut egui::Ui) {

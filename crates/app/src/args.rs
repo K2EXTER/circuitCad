@@ -592,6 +592,9 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         app.board_ed.open_thermal_view();
         let run = app.sch.run_self_heat();
         let sources = run.as_ref().map(|v| app.sch.thermal_sources(v)).map_err(|e| e.clone());
+        if let Ok(v) = &run {
+            app.board_ed.thermal.traces = v.traces.clone();
+        }
         app.sch.heat_view = Some(run);
         app.board_ed.run_thermal_map(sources);
         // --thermal-tran SECONDS [FRAME]: the board warming up, that frame (0..7) on the board

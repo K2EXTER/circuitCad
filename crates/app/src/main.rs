@@ -135,7 +135,10 @@ impl App {
         if self.board_ed.take_thermal_request() {
             self.sch.heat_view = Some(self.sch.run_self_heat());
             let sources = match &self.sch.heat_view {
-                Some(Ok(v)) => Ok(self.sch.thermal_sources(v)),
+                Some(Ok(v)) => {
+                    self.board_ed.thermal.traces = v.traces.clone();
+                    Ok(self.sch.thermal_sources(v))
+                }
                 Some(Err(e)) => Err(format!("自己発熱の計算に失敗: {e} (回路図の電源やつながりを確かめてください)")),
                 None => Err("自己発熱を計算できませんでした".into()),
             };

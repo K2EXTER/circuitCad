@@ -115,7 +115,7 @@ pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[
             .iter()
             .filter_map(|e| match e {
                 Element::Resistor { name: n, .. } | Element::Diode { name: n, .. } | Element::Bjt { name: n, .. } | Element::Mosfet { name: n, .. }
-                    if n == name || n.starts_with(&prefix) =>
+                    if n == name || (n.starts_with(&prefix) && !crate::selfheat::is_board_wiring(n)) =>
                 {
                     Some(n.clone())
                 }
@@ -327,7 +327,7 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
                 }
                 // every element of the part, as in `selfheat::part_power` (an independent source that gives power is a store, not heat)
                 let prefix = format!("{}.", nd.heater.name);
-                for e in c.elements.iter().filter(|e| e.name() == nd.heater.name || e.name().starts_with(&prefix) || nd.heater.elements.iter().any(|n| n == e.name())) {
+                for e in c.elements.iter().filter(|e| e.name() == nd.heater.name || (e.name().starts_with(&prefix) && !crate::selfheat::is_board_wiring(e.name())) || nd.heater.elements.iter().any(|n| n == e.name())) {
                     let store = matches!(e, Element::VSource { .. } | Element::ISource { .. });
                     for (a, b) in sum.iter_mut().zip(element_power(&c, &tr, e)) {
                         *a += if store && b < 0.0 { 0.0 } else { b };

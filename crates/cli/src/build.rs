@@ -628,7 +628,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let first = sim_core::self_heat_coupled(&c, &heaters, temp, &mutual).map_err(|e| dc_fail(&c, e))?;
         // with the board's grid, its copper is as warm as the map says: once more on the warmer wiring (cold stays the 25 °C copper)
         let mut wiring_warm = vec![];
-        let r = match self.warm_wiring(&first.parts, temp, !grid_parts.is_empty()) {
+        let r = match self.warm_wiring(&first.parts, temp, !grid_parts.is_empty(), &first.warm) {
             Some((wiring, warm)) if warm.iter().any(|w| (w.factor - 1.0).abs() > 1e-4) => {
                 let (_, couplings) = self.layout_parts();
                 let c2 = circuit_of(&self.sch, &wiring, &couplings)?;
@@ -886,7 +886,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
 
     /// The board's wiring as warm as its map at the parts' powers (each pad's way at its mean temperature), and how warm each is; `None`
     /// unless the board is carried over and parts are on its grid.
-    fn warm_wiring(&self, parts: &[sim_core::HeatedPart], ambient: f64, on_grid: bool) -> Option<(Vec<sim_core::WiringR>, Vec<pcb_core::thermal::WarmWiring>)> {
+    fn warm_wiring(&self, parts: &[sim_core::HeatedPart], ambient: f64, on_grid: bool, dc: &sim_core::DcResult) -> Option<(Vec<sim_core::WiringR>, Vec<pcb_core::thermal::WarmWiring>)> {
         let (Some(b), true, true) = (&self.board, self.post_layout, on_grid) else { return None };
         let sources: Vec<pcb_core::thermal::HeatSource> = parts
             .iter()
@@ -897,8 +897,17 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
             })
             .collect();
         let spec = pcb_core::thermal::ThermalSpec { ambient_c: ambient, ..Default::default() };
-        let map = pcb_core::thermal::thermal_map(b, &sources, b.stackup.copper_um, &spec).ok()?;
         let series = pcb_core::irdrop::wiring_resistances(b, &pcb_core::irdrop::IrSpec::default());
+        // the wiring's own I²R, along its way (shared over the pads of a pin)
+        let traces: Vec<pcb_core::thermal::TraceHeat> = series
+            .iter()
+            .filter_map(|s| {
+                let e = dc.element(&format!("{}.{}.RW", s.refdes, s.pin))?;
+                let ways = series.iter().filter(|x| x.refdes == s.refdes && x.pin == s.pin).count().max(1);
+                (e.power > 0.0).then(|| pcb_core::thermal::TraceHeat { path: s.path.clone(), power: e.power / ways as f64 })
+            })
+            .collect();
+        let map = pcb_core::thermal::thermal_map_with(b, &sources, &traces, b.stackup.copper_um, &spec).ok()?;
         let warm = pcb_core::thermal::wiring_heat_factors(b, &series, &map);
         let (wiring, _) = self.layout_parts();
         let wiring = wiring

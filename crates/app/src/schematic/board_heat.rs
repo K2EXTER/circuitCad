@@ -60,7 +60,25 @@ impl SchEditor {
 
     /// The wiring as warm as the board makes it: the map at the parts' powers of a self-heating run, each pad's wiring at the mean
     /// temperature of its way (`pcb_core::thermal::wiring_heat_factors`). `None` without a board carried over or a part on it.
-    pub(super) fn warm_wiring(&self, parts: &[sim_core::HeatedPart], ambient: f64) -> Option<(Vec<sim_core::WiringR>, Vec<pcb_core::thermal::WarmWiring>)> {
+    /// The wiring's own heat at an operating point: each pin's I²R (its `REF.PIN.RW` resistor) over the ways of that pin's pads (shared
+    /// evenly when a pin has several pads). Empty without a board carried over.
+    pub(crate) fn trace_heats(&self, dc: &sim_core::DcResult) -> Vec<pcb_core::thermal::TraceHeat> {
+        let Some(bh) = &self.board_heat else { return vec![] };
+        let mut out = vec![];
+        for w in &self.wiring {
+            let Some(e) = dc.element(&format!("{}.{}.RW", w.refdes, w.pin)) else { continue };
+            let ways: Vec<&pcb_core::irdrop::PadSeries> = bh.series.iter().filter(|s| s.refdes == w.refdes && s.pin == w.pin).collect();
+            if ways.is_empty() || !(e.power > 0.0) {
+                continue;
+            }
+            for s in &ways {
+                out.push(pcb_core::thermal::TraceHeat { path: s.path.clone(), power: e.power / ways.len() as f64 });
+            }
+        }
+        out
+    }
+
+    pub(super) fn warm_wiring(&self, parts: &[sim_core::HeatedPart], ambient: f64, dc: &sim_core::DcResult) -> Option<(Vec<sim_core::WiringR>, Vec<pcb_core::thermal::WarmWiring>)> {
         let bh = self.board_heat.as_ref()?;
         if self.wiring.is_empty() || self.board_heat_parts.is_empty() {
             return None;
@@ -74,7 +92,8 @@ impl SchEditor {
             })
             .collect();
         let spec = pcb_core::thermal::ThermalSpec { ambient_c: ambient, ..Default::default() };
-        let map = pcb_core::thermal::thermal_map(&bh.board, &sources, bh.board.stackup.copper_um, &spec).ok()?;
+        let traces = self.trace_heats(dc);
+        let map = pcb_core::thermal::thermal_map_with(&bh.board, &sources, &traces, bh.board.stackup.copper_um, &spec).ok()?;
         let warm = pcb_core::thermal::wiring_heat_factors(&bh.board, &bh.series, &map);
         let wiring = self
             .wiring

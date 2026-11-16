@@ -143,6 +143,16 @@ pub struct ThermalMap {
     pub h_bottom: f64,
     /// Rounds of map-and-h.
     pub rounds: usize,
+    /// The heat of the wiring itself put into the map (W, `TraceHeat`).
+    pub trace_power: f64,
+}
+
+/// The heat of a pad's wiring itself (its I²R, W), put into the copper along its way (`irdrop::PadSeries::path`; the pieces through
+/// vias are left out), by length, on the layer of each piece's height.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TraceHeat {
+    pub path: Vec<crate::irdrop::PathSeg>,
+    pub power: f64,
 }
 
 impl ThermalMap {
@@ -632,13 +642,50 @@ impl HeatSource {
 
 /// The temperature map of `board` with the parts' heat `sources`, its copper `copper_um` thick.
 pub fn thermal_map(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec) -> Result<ThermalMap, String> {
+    thermal_map_with(board, sources, &[], copper_um, spec)
+}
+
+/// `thermal_map` with the wiring's own heat (`TraceHeat`) too.
+pub fn thermal_map_with(board: &Board, sources: &[HeatSource], traces: &[TraceHeat], copper_um: f64, spec: &ThermalSpec) -> Result<ThermalMap, String> {
     let m = model(board, copper_um, spec.cell_mm)?;
-    Ok(map_of(board, &m, sources, spec).0)
+    Ok(map_of(board, &m, sources, traces, spec).0)
+}
+
+/// The heat (W) of the wiring into the grid's nodes: each piece of a way sampled at the cell size, its share of the power by length,
+/// on the layer whose height is nearest the piece's (`PathSeg::z`, mm above the top copper).
+fn trace_heat_into(m: &Model, traces: &[TraceHeat], q: &mut [f64]) -> f64 {
+    let (w, h) = (m.grid.w, m.grid.h);
+    let last = m.layers.len().saturating_sub(1);
+    let mut put = 0.0;
+    for t in traces.iter().filter(|t| t.power > 0.0) {
+        let pieces: Vec<&crate::irdrop::PathSeg> = t.path.iter().filter(|s| s.a.dist(s.b) > 1e-9).collect();
+        let total: f64 = pieces.iter().map(|s| s.a.dist(s.b)).sum();
+        if !(total > 0.0) {
+            continue;
+        }
+        for s in pieces {
+            let l = s.a.dist(s.b);
+            let layer = if last == 0 { 0 } else { ((s.z / BOARD_MM) * last as f64).round().clamp(0.0, last as f64) as usize };
+            let n = (l / m.grid.d).ceil().max(1.0) as usize;
+            for k in 0..n {
+                let f = (k as f64 + 0.5) / n as f64;
+                let p = Point::new(s.a.x + f * (s.b.x - s.a.x), s.a.y + f * (s.b.y - s.a.y));
+                let Some(c) = m.grid.cell_at(p) else { continue };
+                let node = m.node[layer * w * h + c];
+                if node != usize::MAX {
+                    let share = t.power * l / total / n as f64;
+                    q[node] += share;
+                    put += share;
+                }
+            }
+        }
+    }
+    put
 }
 
 /// The map on a built model, and the grid's conductance to the air it settled at.
-fn map_of(board: &Board, m: &Model, sources: &[HeatSource], spec: &ThermalSpec) -> (ThermalMap, Vec<f64>) {
-    let (rise, air, under, rounds) = solve_with_parts(board, m, sources, spec, &mut vec![]);
+fn map_of(board: &Board, m: &Model, sources: &[HeatSource], traces: &[TraceHeat], spec: &ThermalSpec) -> (ThermalMap, Vec<f64>) {
+    let (rise, air, under, rounds, trace_power) = solve_with_parts(board, m, sources, traces, spec, &mut vec![]);
     let (w, h) = (m.grid.w, m.grid.h);
     let mut temp = vec![vec![f64::NAN; w * h]; m.layers.len()];
     for (k, &(l, c)) in m.cell_of.iter().enumerate() {
@@ -659,7 +706,7 @@ fn map_of(board: &Board, m: &Model, sources: &[HeatSource], spec: &ThermalSpec) 
         let a = (m.grid.d * 1e-3).powi(2) * if m.layers.len() == 1 { 2.0 } else { 1.0 };
         ks.iter().map(|k| air[*k] / a).sum::<f64>() / ks.len().max(1) as f64
     };
-    (ThermalMap { h_top: face_h(0), h_bottom: face_h(m.layers.len() - 1), grid: m.grid.clone(), layers: m.layers.clone(), temp, ambient_c: spec.ambient_c, parts, rounds }, air)
+    (ThermalMap { h_top: face_h(0), h_bottom: face_h(m.layers.len() - 1), grid: m.grid.clone(), layers: m.layers.clone(), temp, ambient_c: spec.ambient_c, parts, rounds, trace_power }, air)
 }
 
 /// The rise of every node (the grid's, then one junction per source), the grid's conductance to the air, the pad cells of each source
@@ -685,14 +732,16 @@ fn junctions(board: &Board, m: &Model, sources: &[HeatSource]) -> (Vec<(usize, u
 
 /// The rise of every node (the grid's, then one junction per source), the grid's conductance to the air, the pad cells of each source
 /// and the rounds; `rise` is where to start from (empty: anywhere).
-fn solve_with_parts(board: &Board, m: &Model, sources: &[HeatSource], spec: &ThermalSpec, rise: &mut Vec<f64>) -> (Vec<f64>, Vec<f64>, Vec<Vec<(usize, f64)>>, usize) {
+#[allow(clippy::type_complexity)]
+fn solve_with_parts(board: &Board, m: &Model, sources: &[HeatSource], traces: &[TraceHeat], spec: &ThermalSpec, rise: &mut Vec<f64>) -> (Vec<f64>, Vec<f64>, Vec<Vec<(usize, f64)>>, usize, f64) {
     let (extra, extra_air, under) = junctions(board, m, sources);
     let mut q = vec![0.0; m.nodes() + sources.len()];
     for (e, s) in sources.iter().enumerate() {
         q[m.nodes() + e] = s.power;
     }
+    let trace_power = trace_heat_into(m, traces, &mut q);
     let (air, rounds) = solve_rise(m, spec, &extra, &extra_air, &q, rise);
-    (rise.clone(), air, under, rounds)
+    (rise.clone(), air, under, rounds, trace_power)
 }
 
 /// How the parts warm each other through the board: `r[i][j]` is the rise (K) of part i's junction for 1 W in part j (`r[i][i]` its
@@ -701,7 +750,7 @@ fn solve_with_parts(board: &Board, m: &Model, sources: &[HeatSource], spec: &The
 /// those powers comes back with it.
 pub fn thermal_matrix(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec) -> Result<(Vec<Vec<f64>>, ThermalMap), String> {
     let m = model(board, copper_um, spec.cell_mm)?;
-    let (map, air) = map_of(board, &m, sources, spec);
+    let (map, air) = map_of(board, &m, sources, &[], spec);
     let (extra, extra_air, _) = junctions(board, &m, sources);
     let n0 = m.nodes();
     let n = n0 + sources.len();
@@ -986,7 +1035,7 @@ mod tests {
 #[cfg(test)]
 mod datasheet {
     use super::*;
-    use crate::model::{Pad, PadShape, Side, Zone};
+    use crate::model::{Pad, PadShape, Side, Track, Zone};
 
     /// NDT3055L's test board as the data sheet leaves it to guess: a JEDEC-sized one-layer FR-4 board (76.2 × 114.3 mm), the SOT-223 in the
     /// middle, the drain copper a square of `copper_mm2` around the tab (0 = the pads alone).
@@ -1150,6 +1199,26 @@ mod datasheet {
         let end = *p.parts[0].1.last().unwrap();
         assert!(end < top && end < 25.0 + 0.5 * (top - 25.0), "cooled after it: {end} from {top}");
         assert!(top < 25.0 + 2.0 * (ea - 25.0), "10 s of 2 W is far from its steady rise: {top}");
+    }
+
+    /// A wiring's own heat: 1 W along a 40 mm track warms the cells along it (more than a point 10 mm beside it), the map counts the
+    /// watt, and in the steady state the air takes all of it (Σ G_air·rise = the power put in).
+    #[test]
+    fn the_wirings_own_heat_warms_the_copper_along_it() {
+        let mut b = Board::new("t", 80.0, 40.0);
+        b.tracks.push(Track { side: Side::Top, a: Point::new(20.0, 20.0), b: Point::new(60.0, 20.0), width: 0.5 });
+        let path = vec![crate::irdrop::PathSeg { a: Point::new(20.0, 20.0), b: Point::new(60.0, 20.0), z: 0.0, z2: 0.0, width: 0.5, plane: None }];
+        let spec = ThermalSpec { cell_mm: 1.0, ..Default::default() };
+        let map = thermal_map_with(&b, &[], &[TraceHeat { path: path.clone(), power: 1.0 }], 35.0, &spec).unwrap();
+        assert!((map.trace_power - 1.0).abs() < 1e-9, "{}", map.trace_power);
+        let (on, beside) = (map.at(Side::Top, Point::new(40.0, 20.0)).unwrap(), map.at(Side::Top, Point::new(40.0, 30.0)).unwrap());
+        assert!(on > beside && beside > 25.0, "{on} on the track, {beside} beside it");
+        // the energy balance of the steady state
+        let m = model(&b, 35.0, 1.0).unwrap();
+        let mut rise = vec![];
+        let (r, air, _, _, put) = solve_with_parts(&b, &m, &[], &[TraceHeat { path, power: 1.0 }], &spec, &mut rise);
+        let out: f64 = (0..m.nodes()).map(|k| air[k] * r[k]).sum();
+        assert!((out - put).abs() < 0.02 * put, "{out} W leaves, {put} W in");
     }
 
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the
