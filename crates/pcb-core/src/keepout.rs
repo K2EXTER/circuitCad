@@ -97,8 +97,8 @@ pub fn keepout_checks(board: &Board) -> Vec<Violation> {
         }
         if k.parts {
             for p in board.parts.iter().filter(|p| k.on(p.side)) {
-                let pads: Vec<&Pad> = board.pads.iter().filter(|q| q.refdes == p.refdes).collect();
-                let Some((lo, hi)) = pad_box(&pads) else { continue };
+                // the part's room: its pads and the body its data gives (a housing can reach past the pads)
+                let Some((lo, hi)) = crate::autoplace::extent(board, &p.refdes) else { continue };
                 let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)];
                 let inside = (0..4).any(|c| k.touches_segment(corners[c], corners[(c + 1) % 4], 0.0)) || inside_polygon(&corners, k.polygon[0]);
                 if inside {
@@ -108,22 +108,6 @@ pub fn keepout_checks(board: &Board) -> Vec<Violation> {
         }
     }
     out
-}
-
-fn pad_box(pads: &[&Pad]) -> Option<(Point, Point)> {
-    let mut it = pads.iter();
-    let first = it.next()?;
-    let b = |p: &Pad| {
-        let (w, h) = p.shape.size();
-        (Point::new(p.pos.x - w / 2.0, p.pos.y - h / 2.0), Point::new(p.pos.x + w / 2.0, p.pos.y + h / 2.0))
-    };
-    let (mut lo, mut hi) = b(first);
-    for p in it {
-        let (a, c) = b(p);
-        lo = Point::new(lo.x.min(a.x), lo.y.min(a.y));
-        hi = Point::new(hi.x.max(c.x), hi.y.max(c.y));
-    }
-    Some((lo, hi))
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 mod acute;
 mod area;
+mod bodies;
 mod connectivity;
 mod decoupling;
 pub(crate) mod geo;
@@ -24,6 +25,7 @@ mod thermal;
 
 pub use acute::*;
 pub use area::*;
+pub use bodies::*;
 pub use connectivity::*;
 pub use decoupling::*;
 pub use geo::*;
@@ -124,6 +126,7 @@ pub fn check(board: &Board) -> Vec<Violation> {
     out.extend(shorts(board));
     out.extend(crate::fiducial::fiducial_checks(board));
     out.extend(crate::keepout::keepout_checks(board));
+    out.extend(body_overlap_checks(board));
     out
 }
 

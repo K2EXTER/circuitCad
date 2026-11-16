@@ -847,6 +847,32 @@ pub fn part_boxes(board: &Board) -> Vec<PartBox> {
     out
 }
 
+/// Where a part's body lies on the board (x, y), as far as its data tells: the mesh of its 3D shape (`Board::models3d`, a
+/// maker's STEP or a template) or the body the data sheet gives (the footprint's `body`), turned and mirrored with the part.
+/// `None` when it has neither: the guessed shapes above come from the pads, so they add nothing to the pads' own extent.
+/// Placement leaves room for this (`autoplace::extent`) and the DRC checks that two bodies do not overlap.
+pub fn body_extent(board: &Board, part: &Part) -> Option<(Point, Point)> {
+    let bottom = part.side == Side::Bottom;
+    let (llo, lhi) = if let Some(m) = board.models3d.get(&part.footprint) {
+        let (lo, hi) = m.bounds()?;
+        ([lo[0], lo[1]], [hi[0], hi[1]])
+    } else {
+        let body = board.footprint(&part.footprint).and_then(|f| f.body).filter(|b| b.w > 0.0 && (b.shape == "circle" || b.h > 0.0))?;
+        let (w, h) = if body.shape == "circle" { (body.w, body.w) } else { (body.w, body.h) };
+        ([body.x - w / 2.0, body.y - h / 2.0], [body.x + w / 2.0, body.y + h / 2.0])
+    };
+    // the four corners turned with the part (quarter turns keep the box square to the axes)
+    let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
+    for (x, y) in [(llo[0], llo[1]), (lhi[0], llo[1]), (lhi[0], lhi[1]), (llo[0], lhi[1])] {
+        let local = if bottom { Point::new(-x, y) } else { Point::new(x, y) };
+        let r = crate::parts::rotate(local, part.rot);
+        let (px, py) = (part.pos.x + r.x, part.pos.y + r.y);
+        lo = Point::new(lo.x.min(px), lo.y.min(py));
+        hi = Point::new(hi.x.max(px), hi.y.max(py));
+    }
+    Some((lo, hi))
+}
+
 /// The mesh of a part, placed on the board: x and y in board coordinates, z = 0 at the bottom face of the board
 /// (`BOARD_THICKNESS` at the top).
 #[derive(Clone, Debug, PartialEq)]

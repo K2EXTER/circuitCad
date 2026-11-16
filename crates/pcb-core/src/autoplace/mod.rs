@@ -52,7 +52,9 @@ pub struct PlaceReport {
     pub locked: usize,
 }
 
-pub(crate) fn extent(board: &Board, refdes: &str) -> Option<(Point, Point)> {
+/// The room a part takes on the board: its pads, and its body where the part's data gives one that reaches past them (a DC
+/// jack's housing, a relay's case: `model3d::body_extent`). A part without pads takes none.
+pub fn extent(board: &Board, refdes: &str) -> Option<(Point, Point)> {
     let mut lo = Point::new(f64::MAX, f64::MAX);
     let mut hi = Point::new(f64::MIN, f64::MIN);
     let mut any = false;
@@ -64,7 +66,14 @@ pub(crate) fn extent(board: &Board, refdes: &str) -> Option<(Point, Point)> {
         hi.y = hi.y.max(p.pos.y + h / 2.0);
         any = true;
     }
-    any.then_some((lo, hi))
+    if !any {
+        return None;
+    }
+    if let Some((blo, bhi)) = board.parts.iter().find(|p| p.refdes == refdes).and_then(|p| crate::model3d::body_extent(board, p)) {
+        lo = Point::new(lo.x.min(blo.x), lo.y.min(blo.y));
+        hi = Point::new(hi.x.max(bhi.x), hi.y.max(bhi.y));
+    }
+    Some((lo, hi))
 }
 
 /// Lay every part out in rows starting at the origin and replace the outline by a rectangle
