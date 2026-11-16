@@ -81,12 +81,16 @@ impl FormDraft {
         let r = &self.ratings;
         let (v, i): (&[&str], &[&str]) = match cat {
             "MOSFET" => (&["VDS", "VDSS"], &["ID"]),
-            "トランジスタ" => (&["VCEO", "VCE"], &["IC"]),
+            "トランジスタ" | "ダーリントン" => (&["VCEO", "VCE"], &["IC"]),
+            // an optocoupler as the bundled PC817: the output's voltage, the LED's current, the collector's power
+            "フォトカプラ" => (&["VCEO", "VCE"], &["IF"]),
+            "フォトダイオード" => (&["VR"], &[]),
             "ダイオード" => (&["VRRM", "VRWM", "VR"], &["IF(AV)", "IFAV", "IO", "IF"]),
             "ツェナーダイオード" => (&[], &["IZM", "IZ"]),
             _ => (&["VCC", "VDD", "VIN", "VI", "VS", "V+"], &["IO", "IOUT"]),
         };
-        [pick(r, v), pick(r, i), pick(r, &["PD", "Ptot", "PTOT"]), pick(r, &["TJ", "Tj"])]
+        let p: &[&str] = if cat == "フォトカプラ" { &["PC", "Ptot", "PD"] } else { &["PD", "Ptot", "PV"] };
+        [pick(r, v), pick(r, i), pick(r, p), pick(r, &["TJ", "Tj"])]
     }
 
     /// The recommended land pattern of the chosen package (its family and pin count), when the data sheet draws it in two rows.
@@ -150,7 +154,8 @@ impl PartForm {
         let package = pin_sources.first().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))).unwrap_or(0);
         let dims = ds.dimension_table();
         let lands = ds.land_patterns();
-        let ratings = ds.absolute_maximum();
+        // a table with a column per part number ("TIP120, TIP121, TIP122") gives the named part's column
+        let ratings = ds.absolute_maximum_of(name.as_deref());
         let model = has_model(kind);
         let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, open: true };
         d.use_[6] = d.max_ratings().iter().any(Option::is_some);

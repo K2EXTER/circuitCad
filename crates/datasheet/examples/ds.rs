@@ -1,6 +1,7 @@
 //! Looking into a data sheet from the command line, for making a part's model from it (docs/model-policy.md):
 //!
 //!     cargo run -p datasheet --example ds -- text   FILE.pdf PAGE              the words of a page, line by line, with x
+//!     cargo run -p datasheet --example ds -- absmax FILE.pdf                   the absolute maximum ratings read (the first part number's column)
 //!     cargo run -p datasheet --example ds -- kind   FILE.pdf                   the kind of part and the part numbers it suggests
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
 //!     cargo run -p datasheet --example ds -- labels FILE.pdf PAGE [box=x0,y0,x1,y1]   numbers on the page (tick labels)
@@ -62,6 +63,11 @@ fn main() -> Result<(), String> {
                 line += &format!(" [{:.0}]{}", x.rect.x0, x.text);
             }
             println!("{line}");
+        }
+        "absmax" => {
+            for r in ds.absolute_maximum_of(ds.name_candidates().first().map(String::as_str)) {
+                println!("p.{} {} {} {}", r.page + 1, r.symbol, r.value, r.unit);
+            }
         }
         "kind" => {
             println!("{:?} {:?}", ds.category_hint(), ds.name_candidates());

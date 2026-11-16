@@ -16,7 +16,7 @@ pub struct Rating {
 }
 
 /// Headings that end the table.
-const NEXT: &[&str] = &["recommended operating", "electrical characteristics", "thermal characteristics", "thermal information", "esd ratings", "推奨動作条件", "電気的特性", "熱特性", "熱に関する情報"];
+const NEXT: &[&str] = &["recommended operating", "electrical characteristics", "electro-optical", "optical characteristics", "basic characteristics", "thermal characteristics", "thermal information", "esd ratings", "推奨動作条件", "電気的特性", "熱特性", "熱に関する情報"];
 
 /// A symbol of a rating: V, I, P or T, then a few letters or digits ("VDS", "ID", "IF(AV)", "TJ", "VCEO"), a trailing comma dropped.
 fn symbol(t: &str) -> Option<String> {
@@ -38,9 +38,14 @@ fn number(t: &str) -> Option<(f64, Option<String>)> {
     (rest.is_empty() || unit_scale(rest).is_some()).then(|| (v, (!rest.is_empty()).then(|| rest.to_string())))
 }
 
+/// "Vdc", "mAdc" (onsemi's units) as "V", "mA".
+fn without_dc(u: &str) -> &str {
+    u.strip_suffix("dc").or_else(|| u.strip_suffix("DC")).filter(|r| !r.is_empty()).unwrap_or(u)
+}
+
 /// The scale of a unit word to SI: "mA" → 1e-3, "V" → 1, "°C" → 1.
 fn unit_scale(u: &str) -> Option<f64> {
-    let u = u.trim().replace('℃', "°c");
+    let u = without_dc(u.trim()).replace('℃', "°c");
     let u = u.as_str();
     let base = ["v", "a", "w", "°c", "c"];
     if base.contains(&u.to_lowercase().as_str()) {
@@ -60,7 +65,9 @@ fn unit_scale(u: &str) -> Option<f64> {
 }
 
 /// The rows of a table on a page, from `top` down to the next table's heading.
-pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32) -> Vec<Rating> {
+/// `part`: the part number, for a table with a column per part ("TIP120, TIP121, TIP122" over "60 80 100"): its column's
+/// number is taken where a row has one number per column; otherwise (and for temperatures) the largest.
+pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32, part: Option<&str>) -> Vec<Rating> {
     let inside: Vec<&Word> = words.iter().filter(|w| w.rect.y0 > top && w.rect.y1 < bottom).collect();
     // the table ends at the next table's heading
     let joined = |y: f32| {
@@ -70,6 +77,11 @@ pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32) -> Vec<Rating
     };
     let end = inside.iter().map(|w| w.baseline()).filter(|y| NEXT.iter().any(|n| joined(*y).contains(n))).fold(bottom, f32::min);
     let rows: Vec<&Word> = inside.into_iter().filter(|w| w.baseline() < end - 1.0).collect();
+    // the part's column: its name in a line of two or more part numbers (x of its centre, how many columns)
+    let column = part.and_then(|name| {
+        let names = |y: f32| rows.iter().filter(|o| (o.baseline() - y).abs() < 2.0 && crate::suggest::looks_like_part_number(o.text.trim().trim_end_matches(','))).count();
+        rows.iter().find(|w| w.text.trim().trim_end_matches(',').eq_ignore_ascii_case(name.trim())).map(|w| ((w.rect.x0 + w.rect.x1) / 2.0, names(w.baseline()))).filter(|c| c.1 >= 2)
+    });
     let mut out: Vec<Rating> = vec![];
     for (w, sym) in rows.iter().filter_map(|w| symbol(&w.text).map(|sym| (w, sym))) {
         // the numbers right of the symbol on its line and on the lines within 8 points (a row whose label takes two lines, or one
@@ -87,7 +99,7 @@ pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32) -> Vec<Rating
             })
         };
         let fits = |unit: &str| {
-            let base = unit.to_lowercase().replace('℃', "°c");
+            let base = without_dc(unit).to_lowercase().replace('℃', "°c");
             match sym.chars().next() {
                 Some('V') => base.ends_with('v'),
                 Some('I') => base.ends_with('a'),
@@ -96,7 +108,27 @@ pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32) -> Vec<Rating
                 _ => false,
             }
         };
-        let best = found.iter().filter_map(|(n, v, inside)| unit_of(n, inside).filter(|u| fits(u)).map(|u| (*v, u))).max_by(|a, b| a.0.total_cmp(&b.0));
+        // a minus printed as a word of its own just left of the number ("– 65 to +150")
+        let signed = |n: &Word, v: f64| {
+            let dash = rows.iter().any(|o| (o.baseline() - n.baseline()).abs() < 2.0 && matches!(o.text.trim(), "–" | "−" | "-") && o.rect.x1 <= n.rect.x0 + 0.5 && n.rect.x0 - o.rect.x1 < 4.0);
+            if dash { -v.abs() } else { v }
+        };
+        let fitting: Vec<(f64, String, &Word)> = found
+            .iter()
+            .filter_map(|(n, v, inside)| unit_of(n, inside).filter(|u| fits(u)).map(|u| (signed(n, *v), u, *n)))
+            // a temperature's maximum is above zero: "−55 to °C" whose upper end is drawn, not written, has none
+            .filter(|f| !sym.starts_with('T') || f.0 > 0.0)
+            .collect();
+        let on_line = fitting.iter().filter(|f| (f.2.baseline() - w.baseline()).abs() < 2.0).count();
+        let best = match column {
+            // one number per part on the symbol's line: the part's own
+            Some((x, n)) if !sym.starts_with('T') && on_line == n => fitting
+                .iter()
+                .filter(|f| (f.2.baseline() - w.baseline()).abs() < 2.0)
+                .min_by(|a, b| ((a.2.rect.x0 + a.2.rect.x1) / 2.0 - x).abs().total_cmp(&((b.2.rect.x0 + b.2.rect.x1) / 2.0 - x).abs())),
+            _ => fitting.iter().max_by(|a, b| a.0.total_cmp(&b.0)),
+        }
+        .map(|f| (f.0, f.1.clone()));
         let Some((value, unit)) = best else { continue };
         if !out.iter().any(|r| r.symbol == sym) {
             let scale = unit_scale(&unit).unwrap_or(1.0);
@@ -109,11 +141,16 @@ pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32) -> Vec<Rating
 impl Datasheet {
     /// The rows of the absolute maximum ratings table (its first page that has rows).
     pub fn absolute_maximum(&self) -> Vec<Rating> {
+        self.absolute_maximum_of(None)
+    }
+
+    /// The same, the column of `part` taken in a table with a column per part number.
+    pub fn absolute_maximum_of(&self, part: Option<&str>) -> Vec<Rating> {
         let q = Heading::AbsMax.queries();
         for page in 0..self.page_count() {
             let h = self.page_size(page).map_or(842.0, |s| s.1);
             for hit in self.search_page_any(page, &q).into_iter().filter(|h| !h.in_contents) {
-                let r = ratings(page, self.words(page), hit.rect.y1, h * 0.92);
+                let r = ratings(page, self.words(page), hit.rect.y1, h * 0.92, part);
                 if r.len() >= 2 {
                     return r;
                 }
@@ -150,7 +187,7 @@ mod tests {
             w("-55", 356.0, 527.0), w("to", 370.0, 527.0), w("150", 379.0, 527.0), w("°C", 479.0, 527.0), w("TJ,", 262.0, 527.0), w("TSTG", 275.0, 527.0),
             w("Thermal", 87.0, 548.0), w("Characteristics", 120.0, 548.0), w("RθJA", 262.0, 560.0), w("90", 369.0, 560.0), w("°C/W", 481.0, 560.0),
         ];
-        let r = ratings(0, &words, 420.0, 700.0);
+        let r = ratings(0, &words, 420.0, 700.0, None);
         let v = |s: &str| pick(&r, &[s]).map(|x| x.value);
         assert_eq!(v("VDS"), Some(30.0));
         assert_eq!(v("VGS"), Some(12.0));
@@ -159,8 +196,41 @@ mod tests {
         assert!(r.iter().all(|x| !x.symbol.starts_with('R')), "the thermal table is not read");
     }
 
+    /// TIP120's table (onsemi): a column per part, "Vdc" and "Adc", one value shared by the columns, a range of temperatures.
+    #[test]
+    fn a_table_with_a_column_per_part() {
+        let words = vec![
+            w("TIP120,", 388.0, 72.0), w("TIP121,", 428.0, 72.0), w("TIP122,", 469.0, 72.0),
+            w("Collector−Emitter", 127.0, 97.0), w("VCEO", 80.0, 97.0), w("60", 397.0, 97.0), w("80", 438.0, 97.0), w("100", 477.0, 97.0), w("Vdc", 521.0, 97.0),
+            w("IC", 86.0, 140.0), w("5.0", 437.0, 140.0), w("Adc", 521.0, 140.0),
+            w("IB", 86.0, 165.0), w("120", 436.0, 165.0), w("mAdc", 518.0, 165.0),
+            w("TJ,", 77.0, 244.0), w("–65", 421.0, 244.0), w("to", 437.0, 244.0), w("+150", 446.0, 244.0), w("°C", 523.0, 244.0),
+        ];
+        let v = |r: &[Rating], s: &str| pick(r, &[s]).map(|x| x.value);
+        let r = ratings(0, &words, 60.0, 300.0, Some("TIP120"));
+        assert_eq!((v(&r, "VCEO"), v(&r, "IC"), v(&r, "IB"), v(&r, "TJ")), (Some(60.0), Some(5.0), Some(0.12), Some(150.0)), "{r:?}");
+        assert_eq!(v(&ratings(0, &words, 60.0, 300.0, Some("TIP122")), "VCEO"), Some(100.0));
+        // without the part, the largest (the table's own rule)
+        assert_eq!(v(&ratings(0, &words, 60.0, 300.0, None), "VCEO"), Some(100.0));
+    }
+
+    /// A temperature range whose upper end is not in the text (P2N2222A: "−55 to °C"), or whose minus is a word of its own
+    /// (1N4728A: "– 65 to °C"): no maximum, not 55 or 65.
+    #[test]
+    fn a_temperature_without_its_upper_end_is_not_read() {
+        for low in [vec![w("−55", 271.0, 359.0)], vec![w("–", 263.0, 359.0), w("65", 269.0, 359.0)]] {
+            let mut words = vec![w("TJ,", 231.0, 359.0), w("to", 288.0, 359.0), w("°C", 315.0, 359.0), w("VCEO", 231.0, 340.0), w("40", 271.0, 340.0), w("Vdc", 315.0, 340.0)];
+            words.extend(low);
+            let r = ratings(0, &words, 300.0, 400.0, None);
+            assert!(pick(&r, &["TJ"]).is_none() && pick(&r, &["VCEO"]).is_some(), "{r:?}");
+        }
+        let words = vec![w("TJ,", 231.0, 359.0), w("–", 263.0, 359.0), w("65", 269.0, 359.0), w("to", 288.0, 359.0), w("+200", 300.0, 359.0), w("°C", 335.0, 359.0)];
+        assert_eq!(pick(&ratings(0, &words, 300.0, 400.0, None), &["TJ"]).map(|x| x.value), Some(200.0));
+    }
+
     #[test]
     fn units_scale_to_si() {
+        assert_eq!(unit_scale("mAdc"), Some(1e-3));
         assert_eq!(unit_scale("mA"), Some(1e-3));
         assert_eq!(unit_scale("V"), Some(1.0));
         assert_eq!(unit_scale("℃"), Some(1.0));

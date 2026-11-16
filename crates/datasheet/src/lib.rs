@@ -96,6 +96,10 @@ impl Datasheet {
         let mut hits: Vec<Hit> = queries.iter().flat_map(|q| self.search_page(page, q)).collect();
         hits.sort_by(|a, b| a.rect.y0.total_cmp(&b.rect.y0).then(a.rect.x0.total_cmp(&b.rect.x0)));
         hits.dedup_by(|b, a| a.rect == b.rect);
+        // a shorter way of writing found inside a longer one ("Maximum Ratings" in "Absolute Maximum Ratings") is the same heading
+        let inside = |a: &Rect, b: &Rect| a != b && a.x0 >= b.x0 - 0.5 && a.x1 <= b.x1 + 0.5 && a.y0 >= b.y0 - 0.5 && a.y1 <= b.y1 + 0.5;
+        let all = hits.clone();
+        hits.retain(|h| !all.iter().any(|o| inside(&h.rect, &o.rect)));
         hits
     }
 
