@@ -570,6 +570,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         }
         let r = sim_core::heat_tran(&c, &nodes, &links, temp, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
         self.last_tran = Some(r.tran.clone());
+        self.last_heat_power = Some((r.time.clone(), r.parts.iter().map(|p| (p.name.clone(), p.power.clone())).collect()));
         let n = r.time.len();
         let at = |k: usize| k * (n - 1) / (samples - 1);
         let checks = sim_core::check_peak_temperatures(&self.sch, &r.parts, temp);

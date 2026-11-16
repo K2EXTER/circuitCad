@@ -28,6 +28,8 @@ pub struct ThermalView {
     pub serial: u64,
     /// Drive the run over time with the circuit's power over time (the schematic's "温度の時間変化" run) instead of a constant.
     pub use_circuit: bool,
+    /// The circuit's power over time repeats (a PWM, a load that comes and goes) instead of holding its last value.
+    pub repeat: bool,
     /// The window asked for a run with the circuit's power (the App hands the sources with their profiles to `run_thermal_transient`).
     tran_request: bool,
     /// What drove the last run over time, for the window ("回路の過渡解析の電力: Q1, RS1").
@@ -129,6 +131,8 @@ impl BoardEditor {
     /// The board warming up from the air's temperature for `tran_end` seconds: the sources of the last map switched on at t = 0, or
     /// `sources` (with the circuit's power over time) when given, or the error that kept them from being made.
     pub(crate) fn run_thermal_transient(&mut self, sources: Option<Result<Vec<HeatSource>, String>>) {
+        let repeat = self.thermal.repeat;
+        let sources = sources.map(|r| r.map(|v| v.into_iter().map(|s| HeatSource { repeat: repeat && !s.profile.is_empty(), ..s }).collect::<Vec<_>>()));
         let end = if self.thermal.tran_end > 0.0 { self.thermal.tran_end } else { 600.0 };
         self.thermal.texture = None;
         let driven = sources.is_some();
@@ -141,7 +145,7 @@ impl BoardEditor {
             Ok(s) if driven => i18n::trf!("回路の過渡解析の電力: {}", s.iter().filter(|x| !x.profile.is_empty()).map(|x| x.refdes.as_str()).collect::<Vec<_>>().join(", ")),
             _ => String::new(),
         };
-        self.thermal.transient = Some(src.and_then(|s| pcb_core::thermal::thermal_transient(&self.board, &s, self.board.stackup.copper_um, &self.thermal.spec, end, 8)));
+        self.thermal.transient = Some(src.and_then(|s| pcb_core::thermal::thermal_transient(&self.board, &s, &self.thermal.traces, self.board.stackup.copper_um, &self.thermal.spec, end, 8)));
         if let Some(Ok(tr)) = &self.thermal.transient {
             self.thermal.show_frame = Some(tr.frames.len().saturating_sub(1));
         }
@@ -366,6 +370,9 @@ impl BoardEditor {
             }
         });
         ui.checkbox(&mut self.thermal.use_circuit, i18n::tr("回路の過渡解析の電力を使う")).on_hover_text(i18n::tr("回路図の「温度の時間変化」で計算した、部品ごとの電力の時間の変化 (パルス・起動時の突入など) で温めます。その計算に入れていない部品は、自己発熱の一定の電力です。過渡解析の時間より先は、最後の電力が続くものとします"));
+        if self.thermal.use_circuit {
+            ui.checkbox(&mut self.thermal.repeat, i18n::tr("くり返す")).on_hover_text(i18n::tr("回路の過渡解析の電力を、その長さを周期としてくり返します (PWM や、つないだり外したりする負荷)。長い刻みでは、周期の平均の電力で温まります。外すと、過渡解析の最後の電力が続きます"));
+        }
         if !self.thermal.driven_by.is_empty() {
             ui.label(egui::RichText::new(&self.thermal.driven_by).small());
         }

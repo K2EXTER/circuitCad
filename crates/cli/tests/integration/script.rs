@@ -2066,6 +2066,45 @@ board heatmap temp=25 cell=1 tran=1200
     assert!((end - steady).abs() < 0.03 * (steady - 25.0), "20 minutes on {end}, steady {steady}");
 }
 
+/// `board heatmap tran= power=circuit`: the sample's supply made a PWM (5 V for 0.5 s of every 1 s), its `heattran` run of one period
+/// drives the board. Holding that run's last value (0 V) the board cools after the first half second; repeating it, the board warms
+/// to about where half the steady power takes it.
+#[test]
+fn heatmap_warms_the_board_with_the_circuits_power_over_time() {
+    let sample = format!("{}/../../docs/examples/heat_copper.ccproj", env!("CARGO_MANIFEST_DIR"));
+    let head = format!("open {sample}
+value V1 PULSE(0 5 0 1m 1m 0.5 1)
+heattran 1 parts=R1,R2
+");
+    let r2_end = |a: &[Value]| {
+        let w = &a.iter().find(|v| v["warm_up"].is_object()).unwrap_or_else(|| panic!("{a:?}"))["warm_up"];
+        let last = w["moments"].as_array().unwrap().last().unwrap();
+        (last["parts"].as_array().unwrap().iter().find(|p| p["part"] == "R2").unwrap()["junction_c"].as_f64().unwrap(), w.clone())
+    };
+    let (a, ok) = run(&format!("{head}board heatmap temp=25 cell=2 tran=1200 power=circuit
+"));
+    assert!(ok, "{a:?}");
+    let (held, w) = r2_end(&a);
+    assert_eq!(w["driven_by_circuit"].as_array().unwrap().len(), 2, "{w}");
+    let (a, ok) = run(&format!("{head}board heatmap temp=25 cell=2 tran=1200 power=circuit repeat=1
+"));
+    assert!(ok, "{a:?}");
+    let (repeated, _) = r2_end(&a);
+    // the steady map at the full power, for the half
+    let (a, _) = run(&format!("open {sample}
+board heatmap temp=25 cell=2
+"));
+    let full = a.iter().find(|v| v["parts"].is_array() && v["hottest_c"].is_number()).unwrap()["parts"].as_array().unwrap().iter().find(|p| p["part"] == "R2").unwrap()["junction_c"].as_f64().unwrap();
+    assert!(held < 30.0, "after one half second of power the board has cooled again: {held}");
+    let half = 25.0 + 0.5 * (full - 25.0);
+    assert!((repeated - half).abs() < 0.15 * (full - 25.0), "the PWM ends near half the steady rise: {repeated} against {half}");
+    // without a heattran run first: what to do
+    let (a, ok) = run(&format!("open {sample}
+board heatmap tran=10 power=circuit
+"));
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("heattran"));
+}
+
 /// `board heatmap` lists the parts that warm each other: R2 moved next to R1 on the sample gets about 14 K from it, so the pair comes with
 /// a distance to keep; as a requirement (`req apart`, taken to the board by `board import`), the board's requirement check reports the two
 /// as too close.

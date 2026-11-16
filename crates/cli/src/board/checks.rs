@@ -420,7 +420,7 @@ impl Session {
 
     /// `board heatmap [temp=27] [standing] [alt=M] [cell=MM]`: the board's temperature map (H7) from the schematic's self-heating powers.
     pub(super) fn board_heatmap(&mut self, rest: &[String]) -> Res {
-        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM] [tran=SECONDS]   (tran = also the board warming up from the moment the parts are switched on: its heat capacity, time constant and each part's temperature at some moments; the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
+        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM] [tran=SECONDS [power=circuit [repeat=1]]]   (tran = also the board warming up from the moment the parts are switched on: its heat capacity, time constant and each part's temperature at some moments; power=circuit drives it with each part's power over time from the last 'heattran' run (parts it did not run keep their steady power), repeat=1 repeats that run's power with its length as the period (a PWM) instead of holding its last value; the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
         let (pos, kv) = options(rest);
         let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number
 {usage}")));
@@ -445,7 +445,31 @@ impl Session {
                 Some(s)
             })
             .collect();
-        if sources.is_empty() {
+        // power=circuit: the last heattran run's power over time, on the parts it ran (a part only pulsed is added)
+        let circuit = opt(&kv, "power").is_some_and(|p| p.eq_ignore_ascii_case("circuit"));
+        let repeat = opt(&kv, "repeat").is_some_and(|r| r == "1");
+        let mut driven = sources.clone();
+        if circuit {
+            let (time, powers) = self.last_heat_power.clone().ok_or("power=circuit: run 'heattran TSTOP parts=...' first (its power over time drives the board)")?;
+            for (name, p) in powers {
+                let profile: Vec<(f64, f64)> = time.iter().copied().zip(p).collect();
+                match driven.iter_mut().find(|s| s.refdes == name) {
+                    Some(s) => {
+                        s.profile = profile;
+                        s.repeat = repeat;
+                    }
+                    None => {
+                        let Some(comp) = self.sch.components.iter().find(|x| x.refdes == name) else { continue };
+                        let mut s = pcb_core::thermal::HeatSource::new(&name, 0.0, sim_core::own_theta(comp), sim_core::theta_jc(comp).0, comp.heatsink);
+                        s.cth = comp.cth;
+                        s.profile = profile;
+                        s.repeat = repeat;
+                        driven.push(s);
+                    }
+                }
+            }
+        }
+        if sources.is_empty() && !circuit {
             return Err("no part gives off heat: run 'heat' to see the self-heating of the schematic".into());
         }
         let tran = opt(&kv, "tran").map(|s| sim_core::parse_value(s).filter(|x| *x > 0.0 && x.is_finite()).ok_or_else(|| format!("tran={s}: a time in seconds above zero
@@ -473,7 +497,7 @@ impl Session {
             .collect();
         let warm_up = match tran {
             Some(end) => {
-                let tr = pcb_core::thermal::thermal_transient(board, &sources, board.stackup.copper_um, &spec, end, 8)?;
+                let tr = pcb_core::thermal::thermal_transient(board, &driven, &[], board.stackup.copper_um, &spec, end, 8)?;
                 let moments: Vec<Value> = tr
                     .frames
                     .iter()
@@ -482,7 +506,7 @@ impl Session {
                         json!({"t_s": t, "parts": tr.parts.iter().map(|(n, v)| json!({"part": n, "junction_c": v[k]})).collect::<Vec<Value>>()})
                     })
                     .collect();
-                json!({"end_s": end, "board_heat_capacity_j_per_k": tr.board_cth, "board_time_constant_s": tr.board_tau, "moments": moments})
+                json!({"end_s": end, "board_heat_capacity_j_per_k": tr.board_cth, "board_time_constant_s": tr.board_tau, "moments": moments, "driven_by_circuit": driven.iter().filter(|s| !s.profile.is_empty()).map(|s| s.refdes.clone()).collect::<Vec<_>>(), "repeat": repeat})
             }
             None => Value::Null,
         };

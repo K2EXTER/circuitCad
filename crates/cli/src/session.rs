@@ -171,6 +171,8 @@ pub struct Session {
     /// The latest analysis answers, which `spec` reads. Any edit of the schematic clears them.
     pub last_dc: Option<sim_core::DcResult>,
     pub last_tran: Option<sim_core::TranResult>,
+    /// The last `heattran` run's time points and each part's power at them (for `board heatmap tran= power=circuit`).
+    pub last_heat_power: Option<(Vec<f64>, Vec<(String, Vec<f64>)>)>,
     pub last_ac: Option<sim_core::AcResult>,
     /// `board postlayout on`: analyses add the board's copper resistance in series with the pads.
     pub post_layout: bool,
@@ -239,7 +241,7 @@ impl Session {
 
     /// A session on a library already read from `dir` (the tests read it once for all the scripts that do not write parts).
     pub fn with_library(lib_dir: std::path::PathBuf, lib: Vec<part_lib::PartDef>, lib_errors: Vec<String>) -> Self {
-        Session { sch: Schematic::default(), lib, lib_dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false, first_sheet_name: None }
+        Session { sch: Schematic::default(), lib, lib_dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_heat_power: None, last_ac: None, post_layout: false, first_sheet_name: None }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
