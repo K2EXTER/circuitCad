@@ -23,6 +23,10 @@ pub struct Heater {
     /// `R(T) = R·(1 + tc1·ΔT + tc2·ΔT²)` with ΔT from 27 °C.
     pub tc1: f64,
     pub tc2: f64,
+    /// Its heat is the power that comes in through its pins (every element inside it, controlled sources included: a library part's
+    /// macro model, whose resistors and diodes are only clamps and sensing). False: the power of its resistors, diodes and transistors
+    /// (a plain part, and a cell, whose source stores the energy instead of turning it into heat).
+    pub through_pins: bool,
 }
 
 /// What a heated part did.
@@ -94,9 +98,14 @@ pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit, copper: &BTree
         } else {
             circuit.tempcos.iter().find(|(n, _, _)| elements.contains(n)).map_or((0.0, 0.0), |(_, a, b)| (*a, *b))
         };
-        out.push(Heater { name: r.to_string(), elements, theta, tc1, tc2 });
+        out.push(Heater { name: r.to_string(), elements, theta, tc1, tc2, through_pins: through_pins(comp) });
     }
     out
+}
+
+/// Whether a part's heat is the power through its pins (`Heater::through_pins`): a library part that is not a cell.
+pub fn through_pins(comp: &Component) -> bool {
+    comp.kind == Kind::Custom && comp.custom.as_ref().is_some_and(|c| c.glyph != "battery" && !(c.glyph.is_empty() && c.inferred_glyph() == "battery"))
 }
 
 /// A part's own θ (K/W, on the smallest pads): what it was given, or the guess from its package.
@@ -115,6 +124,22 @@ pub fn part_theta(comp: &Component, copper: &BTreeMap<String, f64>) -> f64 {
 
 fn is_junction(e: &Element) -> bool {
     matches!(e, Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. })
+}
+
+/// The heat a part gives off (W) at an operating point: what every element inside it absorbs, its controlled sources included. For a
+/// library part's macro model that is the power that comes in through its pins (Tellegen: the sum over the elements of a subcircuit
+/// is the sum of pin voltage × current into the pin), e.g. a regulator's (in − out) × current, which its resistors and diodes alone
+/// miss: those are often only clamps and sensing, whose own large currents are balanced by the sources that drive them. An independent
+/// source that gives power (a cell's voltage) is a store of energy, not heat, and is left out; one that takes power (a model's
+/// quiescent current between its supply pins) is heat. Never below zero (a part that gives energy back is not cooling).
+pub fn part_power(circuit: &Circuit, h: &Heater, r: &DcResult) -> f64 {
+    if !h.through_pins {
+        return h.elements.iter().filter_map(|n| r.element(n)).map(|e| e.power.max(0.0)).sum();
+    }
+    let prefix = format!("{}.", h.name);
+    let mine = |n: &str| n == h.name || n.starts_with(&prefix) || h.elements.iter().any(|e| e == n);
+    let store = |n: &str| circuit.elements.iter().any(|e| matches!(e, Element::VSource { name, .. } | Element::ISource { name, .. } if name == n));
+    r.elements.iter().filter(|e| mine(&e.name)).map(|e| if e.power < 0.0 && store(&e.name) { 0.0 } else { e.power }).sum::<f64>().max(0.0)
 }
 
 pub(crate) fn scale(h: &Heater, temp_c: f64) -> f64 {
@@ -160,7 +185,7 @@ pub fn self_heat(circuit: &Circuit, heaters: &[Heater], t_amb: f64) -> Result<Se
         rounds = round;
         let mut moved: f64 = 0.0;
         for (k, h) in heaters.iter().enumerate() {
-            powers[k] = h.elements.iter().filter_map(|n| warm.element(n)).map(|e| e.power.max(0.0)).sum();
+            powers[k] = part_power(circuit, h, &warm);
             let target = t_amb + h.theta * powers[k];
             if target > 1000.0 {
                 return Err(SimError::Invalid(format!("{} の温度が 1000 ℃ を超えます (電力 {:.1} W × 熱抵抗 {} K/W)。電流を減らすか、熱抵抗の小さい部品にしてください", h.name, powers[k], h.theta)));
@@ -191,7 +216,7 @@ pub fn self_heat(circuit: &Circuit, heaters: &[Heater], t_amb: f64) -> Result<Se
         .iter()
         .enumerate()
         .map(|(k, h)| {
-            let power: f64 = h.elements.iter().filter_map(|n| warm.element(n)).map(|e| e.power.max(0.0)).sum();
+            let power = part_power(circuit, h, &warm);
             let junction_v = match junctions[k].as_slice() {
                 [one] => cold.element(one).zip(warm.element(one)).map(|(a, b)| (a.voltage, b.voltage)),
                 _ => None,
@@ -217,7 +242,7 @@ mod tests {
     }
 
     fn heater(theta: f64, tc1: f64) -> Heater {
-        Heater { name: "R1".into(), elements: vec!["R1".into()], theta, tc1, tc2: 0.0 }
+        Heater { name: "R1".into(), elements: vec!["R1".into()], theta, tc1, tc2: 0.0, through_pins: false }
     }
 
     #[test]
@@ -248,7 +273,7 @@ mod tests {
         c.add(Element::vdc("V1", a, 0, 5.0));
         c.add(Element::Resistor { name: "R1".into(), a, b: o, r: 100.0 });
         c.add(Element::Diode { name: "D1".into(), a: o, k: 0, model: crate::circuit::DiodeModel::default() });
-        let d1 = Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0 };
+        let d1 = Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0, through_pins: false };
         let r = self_heat(&c, &[d1], 27.0).unwrap();
         let p = &r.parts[0];
         assert!(p.rise > 10.0 && (p.rise - 500.0 * p.power).abs() < 1e-3, "{p:?}");
@@ -276,6 +301,45 @@ mod tests {
         let n = other.node("n");
         other.add(Element::vdc("V1", n, 0, 1.0));
         assert!((dc_op_from(&other, &first).unwrap().voltage("n").unwrap() - 1.0).abs() < 1e-12);
+    }
+
+    /// A regulator-like macro model: the output follows a controlled source (no resistor carries the load current), and a clamp
+    /// drives 1 k with thousands of volts when the input is dead. Its heat is the power through its pins, (in − out) × load, not the
+    /// clamp's; a cell's heat is its resistor's, its source stores the energy.
+    #[test]
+    fn a_macro_model_gives_the_heat_through_its_pins_and_a_cell_its_resistor() {
+        let model = |vin: f64| {
+            let mut c = Circuit::new();
+            let (i, o, x) = (c.node("in"), c.node("out"), c.node("U1.x"));
+            c.add(Element::vdc("V1", i, 0, vin));
+            c.add(Element::Vcvs { name: "U1.E".into(), p: o, n: 0, cp: i, cn: 0, gain: 0.5 });
+            // the output current is taken from the input (as the bundled regulators do): V(out) / 10 ohm from `in` to ground
+            c.add(Element::Vccs { name: "U1.G".into(), p: i, n: 0, cp: o, cn: 0, gm: 0.1 });
+            // the clamp: 1000 x (2.5 V - in) into 1 k when the input is low
+            c.add(Element::Vcvs { name: "U1.Ex".into(), p: x, n: 0, cp: o, cn: i, gain: -1000.0 });
+            c.add(Element::Resistor { name: "U1.Rx".into(), a: x, b: 0, r: 1e3 });
+            c.add(Element::Resistor { name: "RL".into(), a: o, b: 0, r: 10.0 });
+            c
+        };
+        let u1 = Heater { name: "U1".into(), elements: vec!["U1.Rx".into()], theta: 50.0, tc1: 0.0, tc2: 0.0, through_pins: true };
+        // 10 V in, 5 V across 10 ohm: 0.5 A through the part, (10 − 5) × 0.5 = 2.5 W; the clamp's kilowatts cancel with its source
+        let c = model(10.0);
+        let r = dc_op(&c).unwrap();
+        let clamp = r.element("U1.Rx").unwrap().power;
+        assert!(clamp > 1e3, "{clamp}");
+        assert!((part_power(&c, &u1, &r) - 2.5).abs() < 1e-4, "{}", part_power(&c, &u1, &r));
+        // the old way (its resistors only) would have taken the clamp's kilowatts
+        let old = Heater { through_pins: false, ..u1.clone() };
+        assert!(part_power(&c, &old, &r) > 1e3);
+        // a cell: 3 V source behind 1 ohm into 2 ohm: 1 A, 1 W in its resistor, the source's 3 W are not heat
+        let mut c = Circuit::new();
+        let (p, m) = (c.node("p"), c.node("BT1.m"));
+        c.add(Element::vdc("BT1.V", m, 0, 3.0));
+        c.add(Element::Resistor { name: "BT1.R".into(), a: m, b: p, r: 1.0 });
+        c.add(Element::Resistor { name: "RL".into(), a: p, b: 0, r: 2.0 });
+        let r = dc_op(&c).unwrap();
+        let cell = Heater { name: "BT1".into(), elements: vec!["BT1.R".into()], theta: 50.0, tc1: 0.0, tc2: 0.0, through_pins: true };
+        assert!((part_power(&c, &cell, &r) - 1.0).abs() < 1e-9);
     }
 
     #[test]

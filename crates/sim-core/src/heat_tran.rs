@@ -133,12 +133,13 @@ pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[
         };
         // the Zth stages: the part's own, else the library part's
         let zth = if comp.zth.is_empty() { comp.custom.as_ref().and_then(|c| c.ratings.as_ref()).map(|r| r.zth.clone()).unwrap_or_default() } else { comp.zth.clone() };
-        out.push(ThermalNode { heater: Heater { name: name.to_string(), elements, theta, tc1, tc2 }, cth: comp.cth, zth });
+        out.push(ThermalNode { heater: Heater { name: name.to_string(), elements, theta, tc1, tc2, through_pins: crate::selfheat::through_pins(comp) }, cth: comp.cth, zth });
     }
     Ok(out)
 }
 
-/// Power (W) of one element at every time point of a run (never below zero: a part that gives energy back is not cooling).
+/// Power (W) one element absorbs at every time point of a run (negative: it gives power). A transistor counts its collector–emitter
+/// (drain–source) power; the two-terminal elements their current times the voltage from their first node to their second.
 fn element_power(c: &Circuit, tr: &TranResult, e: &Element) -> Vec<f64> {
     let n = tr.time.len();
     let volt = |idx: usize| -> Vec<f64> {
@@ -151,13 +152,16 @@ fn element_power(c: &Circuit, tr: &TranResult, e: &Element) -> Vec<f64> {
     let cur = |name: &str| tr.signal(&format!("I({name})")).map_or(vec![0.0; n], |s| s.values.clone());
     let across = |name: &str, p: usize, q: usize| -> Vec<f64> {
         let (i, vp, vq) = (cur(name), volt(p), volt(q));
-        (0..n).map(|k| (i[k] * (vp[k] - vq[k])).max(0.0)).collect()
+        (0..n).map(|k| i[k] * (vp[k] - vq[k])).collect()
     };
     match e {
         Element::Resistor { name, r, .. } => cur(name).iter().map(|i| i * i * r).collect(),
         Element::Diode { name, a, k, .. } => across(name, *a, *k),
         Element::Bjt { name, c: col, e: em, .. } => across(name, *col, *em),
         Element::Mosfet { name, d, s, .. } => across(name, *d, *s),
+        Element::Capacitor { name, a, b, .. } | Element::Inductor { name, a, b, .. } | Element::ChargeCap { name, a, b, .. } | Element::Switch { name, a, b, .. } => across(name, *a, *b),
+        Element::VSource { name, p, n: m, .. } | Element::Vcvs { name, p, n: m, .. } | Element::BSource { name, p, n: m, .. } | Element::Vccs { name, p, n: m, .. } => across(name, *p, *m),
+        Element::ISource { name, from, to, .. } => across(name, *from, *to),
         _ => vec![0.0; n],
     }
 }
@@ -313,11 +317,23 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
             .iter()
             .map(|nd| {
                 let mut sum = vec![0.0; tr.time.len()];
-                for e in c.elements.iter().filter(|e| nd.heater.elements.iter().any(|n| n == e.name())) {
+                if !nd.heater.through_pins {
+                    for e in c.elements.iter().filter(|e| nd.heater.elements.iter().any(|n| n == e.name())) {
+                        for (a, b) in sum.iter_mut().zip(element_power(&c, &tr, e)) {
+                            *a += b.max(0.0);
+                        }
+                    }
+                    return sum;
+                }
+                // every element of the part, as in `selfheat::part_power` (an independent source that gives power is a store, not heat)
+                let prefix = format!("{}.", nd.heater.name);
+                for e in c.elements.iter().filter(|e| e.name() == nd.heater.name || e.name().starts_with(&prefix) || nd.heater.elements.iter().any(|n| n == e.name())) {
+                    let store = matches!(e, Element::VSource { .. } | Element::ISource { .. });
                     for (a, b) in sum.iter_mut().zip(element_power(&c, &tr, e)) {
-                        *a += b;
+                        *a += if store && b < 0.0 { 0.0 } else { b };
                     }
                 }
+                sum.iter_mut().for_each(|p| *p = p.max(0.0));
                 sum
             })
             .collect();
@@ -398,7 +414,7 @@ mod tests {
     }
 
     fn node(name: &str, theta: f64, cth: f64) -> ThermalNode {
-        ThermalNode { heater: Heater { name: name.into(), elements: vec![name.into()], theta, tc1: 0.0, tc2: 0.0 }, cth, zth: vec![] }
+        ThermalNode { heater: Heater { name: name.into(), elements: vec![name.into()], theta, tc1: 0.0, tc2: 0.0, through_pins: false }, cth, zth: vec![] }
     }
 
     #[test]
@@ -422,7 +438,7 @@ mod tests {
         assert!((alone.parts[0].rise_peak - 25.0).abs() < 0.2);
         assert!((tied.parts[0].rise_peak - tied.parts[0].rise_alone).abs() < 0.2);
         // a cold neighbour: R2 given no power (R2 not in the circuit as a heater of its own) takes the heat from R1
-        let cold = ThermalNode { heater: Heater { name: "X".into(), elements: vec![], theta: 100.0, tc1: 0.0, tc2: 0.0 }, cth: 0.05, zth: vec![] };
+        let cold = ThermalNode { heater: Heater { name: "X".into(), elements: vec![], theta: 100.0, tc1: 0.0, tc2: 0.0, through_pins: false }, cth: 0.05, zth: vec![] };
         let r = heat_tran(&pulse(1e3), &[node("R1", 100.0, 0.05), cold], &[ThermalLink { a: "R1".into(), b: "X".into(), theta: 100.0 }], 25.0, &s).unwrap();
         let (hot, x) = (&r.parts[0], &r.parts[1]);
         // R1: 0.25 W into θ=100 in parallel with 100+100 → 100‖200 = 66.7 K/W → 16.7 K; X sits at half of that (divider 100/200)
@@ -463,7 +479,7 @@ mod tests {
         c.add(Element::VSource { name: "V1".into(), p: a, n: 0, wave: crate::waveform::Waveform::Pulse { v1: 0.0, v2: 5.0, td: 0.0, tr: 1e-6, tf: 1e-6, pw: 1e3, per: 1e4 }, ac: None });
         c.add(Element::Resistor { name: "R1".into(), a, b: o, r: 100.0 });
         c.add(Element::Diode { name: "D1".into(), a: o, k: 0, model: crate::circuit::DiodeModel::default() });
-        let hot = ThermalNode { heater: Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0 }, cth: 0.002, zth: vec![] };
+        let hot = ThermalNode { heater: Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0, through_pins: false }, cth: 0.002, zth: vec![] };
         let r = heat_tran(&c, &[hot], &[], 27.0, &TranSettings { tstop: 6.0, tstep: 0.05, uic: false }).unwrap();
         let (cold_v, warm_v) = (*r.cold.signal("V(o)").unwrap().values.last().unwrap(), *r.tran.signal("V(o)").unwrap().values.last().unwrap());
         let rise = r.parts[0].rise_end;
