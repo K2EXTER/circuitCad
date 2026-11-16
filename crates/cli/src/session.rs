@@ -70,6 +70,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   project check FILE.ccproj             the links between the boards' connectors checked pin by pin (the same net names on both sides,
                                         power not on ground, pins not crossed, a signal not ending in an open pin)
   project bom FILE.ccproj OUT.csv       the parts of all boards counted together (times the copies of each board), one column per board
+  project step FILE.ccproj OUT.step     the boards placed in 3D (stacked by their connectors in the app) as one STEP, and what collides
  3D body of a part
   shape [TEMPLATE|auto] part=NAME [DIM=mm ...] [dir=DIR] [max=TRIANGLES] [write]
                                         a body from a template (dc_jack, tact, relay, terminal; 'auto' picks by the footprint) as a

@@ -9,7 +9,8 @@ impl BoardEditor {
             self.view3d.stale = false;
             self.view3d.generation += 1;
             match Scene::build(&self.board, ctx, self.view3d.mask, self.view3d.silk) {
-                Ok(s) => {
+                Ok(mut s) => {
+                    s.set_others(&self.view3d.others);
                     self.view3d.scene = Some(s);
                     self.view3d.error = None;
                     self.apply_net_glow();

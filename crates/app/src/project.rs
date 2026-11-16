@@ -42,11 +42,13 @@ pub struct System {
     pub active: usize,
     pub parked: Vec<Option<Design>>,
     pub links: Vec<sch_core::system::BoardLink>,
+    /// Where each board stands in 3D, in the first placed board's frame (`None`: not put together in 3D yet).
+    pub places: Vec<Option<pcb_core::stack::Place>>,
 }
 
 impl Default for System {
     fn default() -> Self {
-        System { names: vec!["基板1".into()], copies: vec![1], active: 0, parked: vec![None], links: vec![] }
+        System { names: vec!["基板1".into()], copies: vec![1], active: 0, parked: vec![None], links: vec![], places: vec![None] }
     }
 }
 
@@ -87,6 +89,7 @@ pub fn save_system(path: &Path, current: &Design, system: &System) -> Result<(),
         designs.push(serde_json::json!({
             "name": name,
             "copies": system.copies.get(k).copied().unwrap_or(1),
+            "place": system.places.get(k).copied().flatten(),
             "schematic": sheet_value(&d.schematic, &d.specs, &d.bench, &d.settings)?,
             "board": d.board,
         }));
@@ -109,7 +112,7 @@ pub fn parse(text: &str) -> Result<Project, String> {
     }
     // format 2: several boards
     if let Some(serde_json::Value::Array(list)) = value.get_mut("designs").map(serde_json::Value::take) {
-        let mut system = System { names: vec![], copies: vec![], active: 0, parked: vec![], links: vec![] };
+        let mut system = System { names: vec![], copies: vec![], active: 0, parked: vec![], links: vec![], places: vec![] };
         for (k, mut d) in list.into_iter().enumerate() {
             let name = d.get("name").and_then(|n| n.as_str()).map(str::to_string).unwrap_or_else(|| format!("基板{}", k + 1));
             let copies = d.get("copies").and_then(|c| c.as_u64()).unwrap_or(1).max(1) as usize;
@@ -117,6 +120,7 @@ pub fn parse(text: &str) -> Result<Project, String> {
             system.names.push(name);
             system.copies.push(copies);
             system.parked.push(Some(one));
+            system.places.push(d.get("place").cloned().and_then(|v| serde_json::from_value(v).ok()));
         }
         if system.names.is_empty() {
             return Err("プロジェクトに基板がありません".into());
@@ -183,7 +187,8 @@ mod tests {
             Design { schematic: s, board: Board::new(n, 30.0, 20.0), specs: vec![], bench: BenchData::default(), settings: SheetSettings::default() }
         };
         let link = sch_core::system::BoardLink { a: sch_core::system::LinkEnd { design: "main".into(), refdes: "J1".into() }, b: sch_core::system::LinkEnd { design: "sensor".into(), refdes: "J2".into() }, pairs: vec![] };
-        let system = System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 3], active: 1, parked: vec![Some(mk("main")), None], links: vec![link.clone()] };
+        let up = pcb_core::stack::Place::new(1, false, [3.0, 4.0, 11.0]);
+        let system = System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 3], active: 1, parked: vec![Some(mk("main")), None], links: vec![link.clone()], places: vec![Some(Default::default()), Some(up)] };
         save_system(&f, &mk("sensor"), &system).unwrap();
         let text = std::fs::read_to_string(&f).unwrap();
         assert!(text.contains("\"version\": 2"));
@@ -192,6 +197,7 @@ mod tests {
         assert_eq!((p.system.names.clone(), p.system.copies.clone(), p.system.active), (vec!["main".to_string(), "sensor".to_string()], vec![1, 3], 1));
         assert!(p.system.parked[0].as_ref().is_some_and(|d| d.board.name == "main") && p.system.parked[1].is_none());
         assert_eq!(p.system.links, vec![link]);
+        assert_eq!(p.system.places, vec![Some(Default::default()), Some(up)], "where the boards stand in 3D");
         // one board, no link: format 1 as before
         save_system(&f, &mk("solo"), &System::default()).unwrap();
         assert!(std::fs::read_to_string(&f).unwrap().contains("\"version\": 1"));

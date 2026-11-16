@@ -117,6 +117,7 @@ impl App {
                 self.board_ed.adopt(pr.board, None);
                 self.system = pr.system;
                 self.system_dirty = false;
+                self.refresh_stack();
                 self.project = Some(p.clone());
                 if self.system.names.len() > 1 {
                     format!("プロジェクトを開きました ({} 枚の基板。いまは「{}」): {}", self.system.names.len(), self.system.names[self.system.active], p.display())

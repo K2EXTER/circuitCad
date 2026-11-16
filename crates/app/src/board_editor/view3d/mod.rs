@@ -84,6 +84,8 @@ pub(super) struct View3d {
     heat_on: bool,
     temps: Option<PartTemps>,
     heat_request: bool,
+    /// The other boards of a multi-board project where they stand, in this board's frame (set by the app: `set_view3d_others`).
+    others: Vec<pcb_core::mesh::Mesh3d>,
 }
 
 /// A finished picture of the scene: what it was drawn for, the image, and the part at each pixel.
@@ -108,7 +110,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true, heat_on: false, temps: None, heat_request: false }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true, heat_on: false, temps: None, heat_request: false, others: vec![] }
     }
 }
 
@@ -131,6 +133,15 @@ impl BoardEditor {
         self.view3d.pitch = pitch_deg.to_radians();
         self.view3d.zoom = zoom.clamp(0.2, MAX_ZOOM);
         self.view3d.touched = true;
+    }
+
+    /// The other boards of a multi-board project to draw with this one (in this board's frame; empty: none).
+    pub fn set_view3d_others(&mut self, others: Vec<pcb_core::mesh::Mesh3d>) {
+        if let Some(sc) = self.view3d.scene.as_mut() {
+            sc.set_others(&others);
+        }
+        self.view3d.others = others;
+        self.view3d.generation += 1;
     }
 
     /// Turns on the case check with the case's inside (`--3d-case w,d,top,bottom` for screenshots): width, depth, the room above

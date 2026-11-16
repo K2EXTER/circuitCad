@@ -530,6 +530,39 @@ fn write_exact(o: &mut Out, name: &str, e: &Exact) -> usize {
 /// The board and its parts as a STEP file (AP214), lengths in millimetres, the board's bottom face at z = 0.
 pub fn write(board: &Board) -> String {
     let name = if board.name.is_empty() { "board".to_string() } else { board.name.clone() };
+    let mut groups: Vec<(String, Vec<Solid>, Axes)> = vec![];
+    for (k, s) in solids(board).into_iter().enumerate() {
+        // the board's solid first, then the parts by designator (a part's several solids stay together)
+        let key = if k == 0 && s.exact.as_ref().is_some_and(|e| matches!(e, Exact::Plate { .. })) { format!("{name}_PCB") } else { s.name.clone() };
+        match groups.iter_mut().find(|g| g.0 == key) {
+            Some(g) => g.1.push(s),
+            None => groups.push((key, vec![s], IDENTITY)),
+        }
+    }
+    write_assembly(&name, groups)
+}
+
+/// Several boards put together (E5): one product per board with all its solids, placed where the board stands (`stack::Place`, a real
+/// placement, unlike the parts of one board which keep the board's frame).
+pub fn write_system(name: &str, boards: &[(&str, &Board, crate::stack::Place)]) -> String {
+    let groups = boards
+        .iter()
+        .map(|(n, b, pl)| {
+            let col = |k: usize| [f64::from(pl.m[0][k]), f64::from(pl.m[1][k]), f64::from(pl.m[2][k])];
+            (n.to_string(), solids(b), [pl.offset, col(2), col(0)])
+        })
+        .collect();
+    write_assembly(name, groups)
+}
+
+/// Where a product stands in the assembly: its origin, z axis and x axis.
+type Axes = [[f64; 3]; 3];
+const IDENTITY: Axes = [[0.0; 3], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]];
+
+/// The STEP file of an assembly: under the root product named `name`, one product per group (its solids in one representation) placed
+/// by its axes.
+fn write_assembly(name: &str, groups: Vec<(String, Vec<Solid>, Axes)>) -> String {
+    let name = name.to_string();
     let mut o = Out { body: String::new(), next: 1 };
     let app = o.add("APPLICATION_CONTEXT('core data for automotive mechanical design processes')");
     o.add(format!("APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2000,#{app})"));
@@ -559,18 +592,9 @@ pub fn write(board: &Board) -> String {
     // the assembly: the board and every part, each a product of its own so that the case's CAD can pick and move it
     let (root_def, root_pds) = product(&mut o, &name);
     let root_axes = origin_axes(&mut o);
-    let mut groups: Vec<(String, Vec<Solid>)> = vec![];
-    for (k, s) in solids(board).into_iter().enumerate() {
-        // the board's solid first, then the parts by designator (a part's several solids stay together)
-        let key = if k == 0 && s.exact.as_ref().is_some_and(|e| matches!(e, Exact::Plate { .. })) { format!("{name}_PCB") } else { s.name.clone() };
-        match groups.iter_mut().find(|g| g.0 == key) {
-            Some(g) => g.1.push(s),
-            None => groups.push((key, vec![s])),
-        }
-    }
     let mut styled = vec![];
     let mut children = vec![];
-    for (gname, group) in &groups {
+    for (gname, group, at) in &groups {
         let axes = origin_axes(&mut o);
         let mut items = vec![format!("#{axes}")];
         for s in group {
@@ -598,18 +622,19 @@ pub fn write(board: &Board) -> String {
         let (def, pds) = product(&mut o, gname);
         let rep = o.add(format!("ADVANCED_BREP_SHAPE_REPRESENTATION('{}',({}),#{ctx})", text(gname), items.join(",")));
         o.add(format!("SHAPE_DEFINITION_REPRESENTATION(#{pds},#{rep})"));
-        children.push((gname.clone(), def, rep, axes));
+        children.push((gname.clone(), def, rep, axes, *at));
     }
-    // the root holds the parts where they are: every part's frame is the board's (an identity placement)
+    // the root holds every group where it stands (the parts of one board: the board's frame, an identity placement)
     let mut root_items = vec![format!("#{root_axes}")];
     let mut placements = vec![];
-    for _ in &children {
-        placements.push(origin_axes(&mut o));
+    for (.., at) in &children {
+        let (p, z, x) = (o.point(at[0]), o.direction(at[1]), o.direction(at[2]));
+        placements.push(o.add(format!("AXIS2_PLACEMENT_3D('',#{p},#{z},#{x})")));
     }
     root_items.extend(placements.iter().map(|p| format!("#{p}")));
     let root_rep = o.add(format!("SHAPE_REPRESENTATION('{}',({}),#{ctx})", text(&name), root_items.join(",")));
     o.add(format!("SHAPE_DEFINITION_REPRESENTATION(#{root_pds},#{root_rep})"));
-    for ((cname, def, rep, axes), at) in children.iter().zip(&placements) {
+    for ((cname, def, rep, axes, _), at) in children.iter().zip(&placements) {
         let nauo = o.add(format!("NEXT_ASSEMBLY_USAGE_OCCURRENCE('{0}','{0}','',#{root_def},#{def},$)", text(cname)));
         let pds = o.add(format!("PRODUCT_DEFINITION_SHAPE('','',#{nauo})"));
         let idt = o.add(format!("ITEM_DEFINED_TRANSFORMATION('','',#{axes},#{at})"));
@@ -781,6 +806,24 @@ mod tests {
         let pi = std::f64::consts::PI;
         let holes = pi * 1.6 * 1.6 + (pi * 0.6 * 0.6 + 1.2 * 2.8) + (pi * 0.5 * 0.5 + 1.0 * 2.0);
         let want = (30.0 * 20.0 - holes) * BOARD_THICKNESS;
+        assert!((m.volume() - want).abs() < 1e-3 * want, "{} vs {want}", m.volume());
+    }
+
+    /// Two boards stacked: the system STEP has a product per board, the second placed above the first; read back, the whole spans both.
+    #[test]
+    fn a_system_of_boards_is_written_with_each_board_where_it_stands() {
+        let a = Board::new("main", 40.0, 30.0);
+        let b = Board::new("sensor", 20.0, 10.0);
+        let place = crate::stack::Place::new(1, false, [30.0, 5.0, 12.0]);
+        let text = write_system("set", &[("main", &a, crate::stack::Place::default()), ("sensor", &b, place)]);
+        assert_eq!(text.matches("NEXT_ASSEMBLY_USAGE_OCCURRENCE(").count(), 2);
+        assert!(edges_pair_up(&text));
+        let m = crate::step::read_step(text.as_bytes()).unwrap();
+        let (lo, hi) = m.bounds().unwrap();
+        // the sensor board turned a quarter: 10 x 20 from (20, 5) to (30, 25), its bottom 12 mm up
+        assert!((hi[2] - (12.0 + BOARD_THICKNESS)).abs() < 1e-3 && lo[2].abs() < 1e-3, "{lo:?} {hi:?}");
+        assert!((hi[0] - 40.0).abs() < 1e-3 && (hi[1] - 30.0).abs() < 1e-3);
+        let want = (40.0 * 30.0 + 20.0 * 10.0) * BOARD_THICKNESS;
         assert!((m.volume() - want).abs() < 1e-3 * want, "{} vs {want}", m.volume());
     }
 }

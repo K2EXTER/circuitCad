@@ -238,6 +238,18 @@ impl Geometry {
                 tri(&mut tris, [vv(a, 0), vv(b, 1), vv(d, 2)]);
             }
         }
+        // the other boards of the project (no part number: never picked or outlined)
+        for (m, smooth) in &scene.others {
+            let v: Vec<[f64; 3]> = m.vertices.iter().map(|p| p.map(f64::from)).collect();
+            for ((t, c), sn) in m.triangles.iter().zip(&m.tri_color).zip(smooth) {
+                let (a, b, d) = (v[t[0] as usize], v[t[1] as usize], v[t[2] as usize]);
+                let Some(normal) = face_normal(a, b, d) else { continue };
+                let sn = sn.unwrap_or([normal; 3]);
+                let color = m.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
+                let vv = |p: [f64; 3], k: usize| Vtx { shade: sn[k], ..flat(p, normal, color, u32::MAX) };
+                tri(&mut tris, [vv(a, 0), vv(b, 1), vv(d, 2)]);
+            }
+        }
         let pic = |i: usize| (scene.pv.frame.w as u32, scene.pv.frame.h as u32, Arc::new(scene.img[i].iter().flatten().copied().collect::<Vec<u8>>()));
         let (verts, line_verts) = (count(&tris, VTX_BYTES), count(&lines, LINE_BYTES));
         Geometry { key: (scene.serial, generation), tris, board_verts, verts, lines, board_lines, line_verts, pics: [pic(0), pic(1)] }

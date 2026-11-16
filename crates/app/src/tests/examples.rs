@@ -2987,8 +2987,23 @@ fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
     sensor.components[c].footprint = "C_0805".into();
     label(&mut sensor, c, "1", "+5V");
     label(&mut sensor, c, "2", "GND");
-    let design = |s: sch_core::Schematic, n: &str| crate::project::Design { schematic: s, board: pcb_core::Board::new(n, 40.0, 30.0), specs: vec![], bench: Default::default(), settings: Default::default() };
-    vec![("main".into(), design(main, "main")), ("sensor".into(), design(sensor, "sensor"))]
+    // each board: the parts taken from its schematic and placed by hand (the headers at the left edge)
+    let design = |s: sch_core::Schematic, n: &str, size: (f64, f64), places: &[(&str, f64, f64)]| {
+        let mut app = App::default();
+        app.sch.adopt(s.clone(), None);
+        app.board_ed.import_from_schematic(&app.sch);
+        let b = &mut app.board_ed.board;
+        b.name = n.into();
+        b.set_rect_outline(0.0, 0.0, size.0, size.1);
+        for (r, x, y) in places {
+            b.place_part(r, Point::new(*x, *y), 0);
+        }
+        crate::project::Design { schematic: s, board: b.clone(), specs: vec![], bench: Default::default(), settings: Default::default() }
+    };
+    vec![
+        ("main".into(), design(main, "main", (40.0, 30.0), &[("J1", 6.0, 22.0), ("R1", 25.0, 20.0), ("R2", 25.0, 10.0)])),
+        ("sensor".into(), design(sensor, "sensor", (20.0, 15.0), &[("J1", 4.0, 12.0), ("C1", 13.0, 7.0)])),
+    ]
 }
 
 fn multiboard_link() -> sch_core::system::BoardLink {
@@ -3004,7 +3019,12 @@ fn write_multiboard_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut d = multiboard_designs();
     let (_, main) = d.remove(0);
-    let system = crate::project::System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 3], active: 0, parked: vec![None, Some(d.remove(0).1)], links: vec![multiboard_link()] };
+    let (_, sensor) = d.remove(0);
+    // the sensor board stacked on the main board by the two headers (the height of the main board's header)
+    let gap = pcb_core::stack::connector_height(&main.board, "J1").unwrap();
+    let up = pcb_core::stack::mate(&main.board, "J1", &sensor.board, "J1", &[], gap, false).unwrap();
+    assert!(up.worst < 1e-6, "{up:?}");
+    let system = crate::project::System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 3], active: 0, parked: vec![None, Some(sensor)], links: vec![multiboard_link()], places: vec![Some(Default::default()), Some(up.place)] };
     crate::project::save_system(&root.join("multiboard_i2c.ccproj"), &main, &system).unwrap();
 }
 
@@ -3024,4 +3044,9 @@ fn the_multiboard_sample_checks_clean() {
     assert_eq!(header.total, 1 + 3, "one header on the main board, one on each of the three sensor boards");
     let r = rows.iter().find(|r| r.value == "4.7k").unwrap();
     assert_eq!(r.total, 2);
+    // stacked in 3D: the sensor board above the main board's header, nothing running into anything
+    let places: Vec<pcb_core::stack::Place> = p.system.places.iter().map(|x| x.unwrap()).collect();
+    let boards = [("main", &p.board, places[0]), ("sensor", &sensor.board, places[1])];
+    assert!(pcb_core::stack::clashes(&boards).is_empty(), "{:?}", pcb_core::stack::clashes(&boards));
+    assert!(places[1].offset[2] > 8.0, "above the header: {:?}", places[1]);
 }

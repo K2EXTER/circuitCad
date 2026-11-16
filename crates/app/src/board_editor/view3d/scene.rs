@@ -46,6 +46,9 @@ pub(super) struct Scene {
     pub(super) case_lines: Vec<([f64; 3], [f64; 3])>,
     pub(super) case_hits: Vec<bool>,
     pub(super) case_board_hit: bool,
+    /// The other boards of a multi-board project where they stand (`BoardEditor::others3d`), drawn like a maker's mesh but not picked,
+    /// with their corner normals.
+    pub(super) others: Vec<(pcb_core::mesh::Mesh3d, CornerNormals)>,
 }
 
 /// The case read from its STEP for the view: its edge lines, which parts it runs into, and whether the board.
@@ -62,11 +65,19 @@ fn case_model_view(board: &Board) -> CaseView {
 }
 
 impl Scene {
+    /// The other boards of the project to draw with this one (in this board's frame).
+    pub(super) fn set_others(&mut self, others: &[pcb_core::mesh::Mesh3d]) {
+        self.others = others.iter().map(|m| (m.clone(), m.corner_normals(CREASE_DEG))).collect();
+    }
+
     /// The case read from its STEP again (moved, turned or taken away), without building the rest of the scene.
     pub(super) fn set_case_model(&mut self, board: &Board) {
         (self.case_lines, self.case_hits, self.case_board_hit) = case_model_view(board);
     }
 }
+
+/// The smooth normal at each corner of each triangle of a mesh (`None`: flat).
+pub(super) type CornerNormals = Vec<Option<[[f32; 3]; 3]>>;
 
 /// The colour of the case read from its STEP (its edges).
 pub(super) const CASE_STEP: [u8; 3] = [150, 200, 230];
@@ -292,7 +303,7 @@ impl Scene {
         nets.sort();
         nets.dedup();
         let (case_lines, case_hits, case_board_hit) = case_model_view(board);
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, mesh_normals, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial(), heat: vec![None; board.parts.len()], temps: vec![None; board.parts.len()], heat_applied: None, case_lines, case_hits, case_board_hit })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, mesh_normals, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![], serial: super::gpu::next_serial(), heat: vec![None; board.parts.len()], temps: vec![None; board.parts.len()], heat_applied: None, case_lines, case_hits, case_board_hit, others: vec![] })
     }
 
     /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face
@@ -464,6 +475,30 @@ impl Scene {
                 };
                 let cs = sn.map_or([lit([nv[0], nv[1], nv[2]]); 3], |sn| sn.map(lit));
                 buf.triangle([vert(a, [0.0, 0.0]), vert(b, [0.0, 0.0]), vert(d, [0.0, 0.0])], Paint::Shaded { colors: cs, part: m.part as u32 }, &pics);
+            }
+        }
+        // the other boards of the project: not a part of this board (no part number, never picked)
+        for (m, smooth) in &self.others {
+            let verts: Vec<[f64; 3]> = m.vertices.iter().map(|v| v.map(f64::from)).collect();
+            for ((t, c), sn) in m.triangles.iter().zip(&m.tri_color).zip(smooth) {
+                let (a, b, d) = (verts[t[0] as usize], verts[t[1] as usize], verts[t[2] as usize]);
+                let (u, w) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [d[0] - a[0], d[1] - a[1], d[2] - a[2]]);
+                let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+                let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                if len < 1e-12 {
+                    continue;
+                }
+                let nv = cam.dir([(n[0] / len) as f32, (n[1] / len) as f32, (n[2] / len) as f32]);
+                if nv[2] <= 1e-4 {
+                    continue;
+                }
+                let base = m.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
+                let lit = |n: [f32; 3]| {
+                    let v = cam.dir(n);
+                    shade3(base, light(if v[2] > 0.0 { v } else { nv }))
+                };
+                let cs = sn.map_or([lit([nv[0], nv[1], nv[2]]); 3], |sn| sn.map(lit));
+                buf.triangle([vert(a, [0.0, 0.0]), vert(b, [0.0, 0.0]), vert(d, [0.0, 0.0])], Paint::Shaded { colors: cs, part: u32::MAX }, &pics);
             }
         }
         buf

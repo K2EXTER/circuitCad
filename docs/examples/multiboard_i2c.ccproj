@@ -35,8 +35,192 @@
             "y": 30.0
           }
         ],
-        "pads": [],
-        "parts": [],
+        "pads": [
+          {
+            "drill": 1.0,
+            "net": "+5V",
+            "pin": "1",
+            "pos": {
+              "x": 6.0,
+              "y": 22.0
+            },
+            "refdes": "J1",
+            "shape": {
+              "Rect": {
+                "h": 1.7,
+                "w": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": 1.0,
+            "net": "GND",
+            "pin": "2",
+            "pos": {
+              "x": 6.0,
+              "y": 19.46
+            },
+            "refdes": "J1",
+            "shape": {
+              "Circle": {
+                "d": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": 1.0,
+            "net": "SCL",
+            "pin": "3",
+            "pos": {
+              "x": 6.0,
+              "y": 16.92
+            },
+            "refdes": "J1",
+            "shape": {
+              "Circle": {
+                "d": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": 1.0,
+            "net": "SCL",
+            "pin": "4",
+            "pos": {
+              "x": 6.0,
+              "y": 14.379999999999999
+            },
+            "refdes": "J1",
+            "shape": {
+              "Circle": {
+                "d": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": null,
+            "net": "+5V",
+            "pin": "1",
+            "pos": {
+              "x": 24.0875,
+              "y": 20.0
+            },
+            "refdes": "R1",
+            "shape": {
+              "Rect": {
+                "h": 1.4,
+                "w": 1.025
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": null,
+            "net": "SCL",
+            "pin": "2",
+            "pos": {
+              "x": 25.9125,
+              "y": 20.0
+            },
+            "refdes": "R1",
+            "shape": {
+              "Rect": {
+                "h": 1.4,
+                "w": 1.025
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": null,
+            "net": "+5V",
+            "pin": "1",
+            "pos": {
+              "x": 24.0875,
+              "y": 10.0
+            },
+            "refdes": "R2",
+            "shape": {
+              "Rect": {
+                "h": 1.4,
+                "w": 1.025
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": null,
+            "net": "SCL",
+            "pin": "2",
+            "pos": {
+              "x": 25.9125,
+              "y": 10.0
+            },
+            "refdes": "R2",
+            "shape": {
+              "Rect": {
+                "h": 1.4,
+                "w": 1.025
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          }
+        ],
+        "parts": [
+          {
+            "footprint": "PinHeader_1x4",
+            "pos": {
+              "x": 6.0,
+              "y": 22.0
+            },
+            "refdes": "J1",
+            "rot": 0,
+            "side": "Top",
+            "value": "Conn"
+          },
+          {
+            "footprint": "R_0805",
+            "pos": {
+              "x": 25.0,
+              "y": 20.0
+            },
+            "refdes": "R1",
+            "rot": 0,
+            "side": "Top",
+            "value": "4.7k"
+          },
+          {
+            "footprint": "R_0805",
+            "pos": {
+              "x": 25.0,
+              "y": 10.0
+            },
+            "refdes": "R2",
+            "rot": 0,
+            "side": "Top",
+            "value": "4.7k"
+          }
+        ],
         "rules": {
           "edge_clearance": 0.3,
           "mask_expansion": 0.05,
@@ -48,14 +232,229 @@
           "min_track_width": 0.15,
           "outline_width": 0.1
         },
-        "silk": [],
-        "texts": [],
+        "silk": [
+          {
+            "a": {
+              "x": 4.8500000000000005,
+              "y": 13.229999999999999
+            },
+            "b": {
+              "x": 7.1499999999999995,
+              "y": 13.229999999999999
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 7.1499999999999995,
+              "y": 13.229999999999999
+            },
+            "b": {
+              "x": 7.1499999999999995,
+              "y": 23.150000000000002
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 7.1499999999999995,
+              "y": 23.150000000000002
+            },
+            "b": {
+              "x": 4.8500000000000005,
+              "y": 23.150000000000002
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 4.8500000000000005,
+              "y": 23.150000000000002
+            },
+            "b": {
+              "x": 4.8500000000000005,
+              "y": 13.229999999999999
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 23.275,
+              "y": 19.0
+            },
+            "b": {
+              "x": 26.725,
+              "y": 19.0
+            },
+            "refdes": "R1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 26.725,
+              "y": 19.0
+            },
+            "b": {
+              "x": 26.725,
+              "y": 21.0
+            },
+            "refdes": "R1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 26.725,
+              "y": 21.0
+            },
+            "b": {
+              "x": 23.275,
+              "y": 21.0
+            },
+            "refdes": "R1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 23.275,
+              "y": 21.0
+            },
+            "b": {
+              "x": 23.275,
+              "y": 19.0
+            },
+            "refdes": "R1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 23.275,
+              "y": 9.0
+            },
+            "b": {
+              "x": 26.725,
+              "y": 9.0
+            },
+            "refdes": "R2",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 26.725,
+              "y": 9.0
+            },
+            "b": {
+              "x": 26.725,
+              "y": 11.0
+            },
+            "refdes": "R2",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 26.725,
+              "y": 11.0
+            },
+            "b": {
+              "x": 23.275,
+              "y": 11.0
+            },
+            "refdes": "R2",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 23.275,
+              "y": 11.0
+            },
+            "b": {
+              "x": 23.275,
+              "y": 9.0
+            },
+            "refdes": "R2",
+            "side": "Top",
+            "width": 0.15
+          }
+        ],
+        "texts": [
+          {
+            "height": 1.0,
+            "pos": {
+              "x": 6.0,
+              "y": 23.85
+            },
+            "refdes": "J1",
+            "rot": 0,
+            "side": "Top",
+            "text": "J1"
+          },
+          {
+            "height": 1.0,
+            "pos": {
+              "x": 25.0,
+              "y": 21.7
+            },
+            "refdes": "R1",
+            "rot": 0,
+            "side": "Top",
+            "text": "R1"
+          },
+          {
+            "height": 1.0,
+            "pos": {
+              "x": 25.0,
+              "y": 11.7
+            },
+            "refdes": "R2",
+            "rot": 0,
+            "side": "Top",
+            "text": "R2"
+          }
+        ],
         "tracks": [],
         "vias": [],
         "zones": []
       },
       "copies": 1,
       "name": "main",
+      "place": {
+        "m": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
       "schematic": {
         "components": [
           {
@@ -262,20 +661,155 @@
             "y": 0.0
           },
           {
-            "x": 40.0,
+            "x": 20.0,
             "y": 0.0
           },
           {
-            "x": 40.0,
-            "y": 30.0
+            "x": 20.0,
+            "y": 15.0
           },
           {
             "x": 0.0,
-            "y": 30.0
+            "y": 15.0
           }
         ],
-        "pads": [],
-        "parts": [],
+        "pads": [
+          {
+            "drill": 1.0,
+            "net": "+5V",
+            "pin": "1",
+            "pos": {
+              "x": 4.0,
+              "y": 12.0
+            },
+            "refdes": "J1",
+            "shape": {
+              "Rect": {
+                "h": 1.7,
+                "w": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": 1.0,
+            "net": "GND",
+            "pin": "2",
+            "pos": {
+              "x": 4.0,
+              "y": 9.46
+            },
+            "refdes": "J1",
+            "shape": {
+              "Circle": {
+                "d": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": 1.0,
+            "net": "SCL",
+            "pin": "3",
+            "pos": {
+              "x": 4.0,
+              "y": 6.92
+            },
+            "refdes": "J1",
+            "shape": {
+              "Circle": {
+                "d": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": 1.0,
+            "net": "SCL",
+            "pin": "4",
+            "pos": {
+              "x": 4.0,
+              "y": 4.38
+            },
+            "refdes": "J1",
+            "shape": {
+              "Circle": {
+                "d": 1.7
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": null,
+            "net": "+5V",
+            "pin": "1",
+            "pos": {
+              "x": 12.0875,
+              "y": 7.0
+            },
+            "refdes": "C1",
+            "shape": {
+              "Rect": {
+                "h": 1.4,
+                "w": 1.025
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          },
+          {
+            "drill": null,
+            "net": "GND",
+            "pin": "2",
+            "pos": {
+              "x": 13.9125,
+              "y": 7.0
+            },
+            "refdes": "C1",
+            "shape": {
+              "Rect": {
+                "h": 1.4,
+                "w": 1.025
+              }
+            },
+            "side": "Top",
+            "slot": 0.0,
+            "slot_v": false
+          }
+        ],
+        "parts": [
+          {
+            "footprint": "PinHeader_1x4",
+            "pos": {
+              "x": 4.0,
+              "y": 12.0
+            },
+            "refdes": "J1",
+            "rot": 0,
+            "side": "Top",
+            "value": "Conn"
+          },
+          {
+            "footprint": "C_0805",
+            "pos": {
+              "x": 13.0,
+              "y": 7.0
+            },
+            "refdes": "C1",
+            "rot": 0,
+            "side": "Top",
+            "value": "100n"
+          }
+        ],
         "rules": {
           "edge_clearance": 0.3,
           "mask_expansion": 0.05,
@@ -287,14 +821,166 @@
           "min_track_width": 0.15,
           "outline_width": 0.1
         },
-        "silk": [],
-        "texts": [],
+        "silk": [
+          {
+            "a": {
+              "x": 2.85,
+              "y": 3.23
+            },
+            "b": {
+              "x": 5.1499999999999995,
+              "y": 3.23
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 5.1499999999999995,
+              "y": 3.23
+            },
+            "b": {
+              "x": 5.1499999999999995,
+              "y": 13.15
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 5.1499999999999995,
+              "y": 13.15
+            },
+            "b": {
+              "x": 2.85,
+              "y": 13.15
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 2.85,
+              "y": 13.15
+            },
+            "b": {
+              "x": 2.85,
+              "y": 3.23
+            },
+            "refdes": "J1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 11.275,
+              "y": 6.0
+            },
+            "b": {
+              "x": 14.725,
+              "y": 6.0
+            },
+            "refdes": "C1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 14.725,
+              "y": 6.0
+            },
+            "b": {
+              "x": 14.725,
+              "y": 8.0
+            },
+            "refdes": "C1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 14.725,
+              "y": 8.0
+            },
+            "b": {
+              "x": 11.275,
+              "y": 8.0
+            },
+            "refdes": "C1",
+            "side": "Top",
+            "width": 0.15
+          },
+          {
+            "a": {
+              "x": 11.275,
+              "y": 8.0
+            },
+            "b": {
+              "x": 11.275,
+              "y": 6.0
+            },
+            "refdes": "C1",
+            "side": "Top",
+            "width": 0.15
+          }
+        ],
+        "texts": [
+          {
+            "height": 1.0,
+            "pos": {
+              "x": 4.0,
+              "y": 13.85
+            },
+            "refdes": "J1",
+            "rot": 0,
+            "side": "Top",
+            "text": "J1"
+          },
+          {
+            "height": 1.0,
+            "pos": {
+              "x": 13.0,
+              "y": 8.7
+            },
+            "refdes": "C1",
+            "rot": 0,
+            "side": "Top",
+            "text": "C1"
+          }
+        ],
         "tracks": [],
         "vias": [],
         "zones": []
       },
       "copies": 3,
       "name": "sensor",
+      "place": {
+        "m": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "offset": [
+          2.0,
+          10.0,
+          10.1
+        ]
+      },
       "schematic": {
         "components": [
           {

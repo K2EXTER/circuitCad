@@ -8,7 +8,21 @@ use sch_core::Schematic;
 use sch_core::system::BoardLink;
 use serde_json::{Value, json};
 
-const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv   (a project of several boards: the links between their connectors checked pin by pin, and the parts of all boards counted together)";
+const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP)";
+
+/// The boards of a project file that are placed in 3D: (name, board, where it stands).
+fn placed(file: &str) -> Result<Vec<(String, pcb_core::Board, pcb_core::stack::Place)>, String> {
+    let text = std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("{file}: not a project ({e})"))?;
+    let mut out = vec![];
+    for (k, d) in v.get("designs").and_then(Value::as_array).into_iter().flatten().enumerate() {
+        let Some(place) = d.get("place").cloned().and_then(|p| serde_json::from_value(p).ok()) else { continue };
+        let name = d.get("name").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("board{}", k + 1));
+        let board = serde_json::from_value(d.get("board").cloned().ok_or("a board without its board")?).map_err(|e| format!("{name}: the board could not be read: {e}"))?;
+        out.push((name, board, place));
+    }
+    Ok(out)
+}
 
 /// The boards of a project file: (name, how many are built, schematic), and the links.
 type Boards = (Vec<(String, usize, Schematic)>, Vec<BoardLink>);
@@ -58,6 +72,18 @@ impl crate::session::Session {
                 let names: Vec<&str> = designs.iter().map(|d| d.0).collect();
                 std::fs::write(out, sch_core::system::bom_csv(&rows, &names)).map_err(|e| format!("{out}: {e}"))?;
                 Ok(obj(json!({"file": out, "rows": rows.len(), "parts": rows.iter().map(|r| r.total).sum::<usize>()})))
+            }
+            "step" => {
+                let out = pos.get(2).ok_or(USAGE)?;
+                let boards = placed(file)?;
+                if boards.is_empty() {
+                    return Err("no board of this project is placed in 3D (in the app: the link's 3D で重ねる)".into());
+                }
+                let list: Vec<(&str, &pcb_core::Board, pcb_core::stack::Place)> = boards.iter().map(|(n, b, p)| (n.as_str(), b, *p)).collect();
+                let name = std::path::Path::new(file).file_stem().map_or_else(|| "system".to_string(), |s| s.to_string_lossy().to_string());
+                std::fs::write(out, pcb_core::step_out::write_system(&name, &list)).map_err(|e| format!("{out}: {e}"))?;
+                let clashes = pcb_core::stack::clashes(&list);
+                Ok(obj(json!({"file": out, "boards": boards.iter().map(|b| b.0.clone()).collect::<Vec<_>>(), "clashes": clashes})))
             }
             _ => Err(USAGE.into()),
         }
