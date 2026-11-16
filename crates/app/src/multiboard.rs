@@ -22,6 +22,8 @@ pub struct BoardsWindow {
     gap: f64,
     over: bool,
     clashes: Option<Vec<(String, String, String, String)>>,
+    /// The whole system's operating point, pin by pin (as of the last run).
+    readings: Option<Result<Vec<sim_core::system::PinReading>, String>>,
 }
 
 /// The connectors of a schematic (designators of J, P, CN ... and pin headers), for picking the ends of a link.
@@ -208,6 +210,24 @@ impl App {
         }
     }
 
+    /// The whole system as one schematic, saved to a file (asks for it): to run any analysis on it in the schematic editor.
+    fn save_merged(&mut self) {
+        let designs = self.designs();
+        match sch_core::system::merge(&designs, &self.system.links) {
+            Err(e) => self.boards.message = Some(Err(e)),
+            Ok((s, _)) => {
+                if let Some(p) = rfd::FileDialog::new().add_filter(i18n::tr("回路図"), &["schjson"]).set_file_name("system.schjson").save_file() {
+                    self.boards.message = Some(
+                        serde_json::to_string_pretty(&s)
+                            .map_err(|e| e.to_string())
+                            .and_then(|t| std::fs::write(&p, t).map_err(|e| e.to_string()))
+                            .map(|_| i18n::trf!("全体の回路図を保存しました: {}。「ファイル → 開く」で開くと、過渡解析や AC 解析も全体でできます (コネクタのピンには 0 V の電源 VLINK… が入っていて、その電流がピンを流れる電流です)", p.display())),
+                    );
+                }
+            }
+        }
+    }
+
     /// The boards placed in 3D as one STEP (asks for the file).
     fn save_system_step(&mut self) {
         let placed = self.placed_boards();
@@ -237,6 +257,12 @@ impl App {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("system_bom.csv").save_file() {
             self.boards.message = Some(std::fs::write(&p, csv).map(|_| i18n::trf!("全体の部品表を保存しました ({} 行): {}", rows.len(), p.display())).map_err(|e| e.to_string()));
         }
+    }
+
+    /// The whole system's operating point into the window (`--system-dc`, for screenshots).
+    pub(crate) fn run_system_dc(&mut self) {
+        let designs = self.designs();
+        self.boards.readings = Some(sim_core::system::system_dc(&designs, &self.system.links));
     }
 
     /// Opens the multi-board sample (two boards linked by their headers) with its window.
@@ -275,6 +301,8 @@ impl App {
         let mut stack = None;
         let mut look = false;
         let mut step = false;
+        let mut run = false;
+        let mut merged = false;
         egui::Window::new(i18n::tr("基板どうしのつなぎ")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(560.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(i18n::tr("ひとつのプロジェクトに、いくつかの基板 (回路図と基板の組) を入れて、コネクタどうしのつなぎを調べます。編集できるのは選んでいる 1 枚です (切り替えると、元に戻す履歴はそこから始まります)")).weak());
             ui.separator();
@@ -397,6 +425,46 @@ impl App {
                     ui.colored_label(col, i18n::tr_dyn(&f.message)).on_hover_text(i18n::tr_dyn(&f.hint));
                 }
             }
+            // the whole system simulated as one circuit
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!self.system.links.is_empty(), egui::Button::new(i18n::tr("全体をシミュレーション (DC)"))).on_hover_text(i18n::tr("すべての基板の回路図をつないで 1 つの回路にし、DC 動作点を計算します。つないだコネクタのピンごとに、両側の電圧と、ピンを流れる電流 (A から B へ) が出ます。電源の基板からほかの基板へ、どれだけ電流が流れるかが分かります")).clicked() {
+                    run = true;
+                }
+                if ui.add_enabled(!self.system.links.is_empty(), egui::Button::new(i18n::tr("全体の回路図を保存…"))).on_hover_text(i18n::tr("すべての基板をつないだ 1 枚の回路図 (.schjson) を保存します。開くと、過渡解析・AC 解析も全体でできます。部品番号には基板の名前が付きます (R1_main)")).clicked() {
+                    merged = true;
+                }
+            });
+            match &self.boards.readings {
+                Some(Ok(list)) if !list.is_empty() => {
+                    egui::Grid::new("system_dc").striped(true).num_columns(5).show(ui, |ui| {
+                        for h in ["ピン", "A のネット", "B のネット", "電圧", "電流 (A → B)"] {
+                            ui.label(egui::RichText::new(i18n::tr(h)).strong());
+                        }
+                        ui.end_row();
+                        for r in list {
+                            let l = &self.system.links[r.probe.link];
+                            ui.label(format!("{}.{}-{} ↔ {}.{}-{}", l.a.design, l.a.refdes, r.probe.pins.0, l.b.design, l.b.refdes, r.probe.pins.1));
+                            ui.label(&r.probe.net_a);
+                            ui.label(&r.probe.net_b);
+                            ui.label(format!("{:.3} V", r.v_a));
+                            let total = if r.probe.shared > 1 { i18n::trf!(" ({} ピンの合計)", r.probe.shared) } else { String::new() };
+                            ui.label(match r.current {
+                                Some(i) if i.abs() >= 1e-3 => format!("{:.2} mA{total}", i * 1e3),
+                                Some(i) => format!("{:.1} µA{total}", i * 1e6),
+                                None => i18n::tr("(GND どうし)").to_string(),
+                            });
+                            ui.end_row();
+                        }
+                    });
+                }
+                Some(Ok(_)) => {
+                    ui.label(egui::RichText::new(i18n::tr("つないだピンに、どちらかの基板で何もつながっていません")).weak());
+                }
+                Some(Err(e)) => {
+                    ui.colored_label(crate::theme::ERROR, i18n::trf!("全体の回路を解けませんでした: {e}"));
+                }
+                None => {}
+            }
             ui.horizontal(|ui| {
                 if ui.button(i18n::tr("全体の部品表 (CSV) を保存…")).on_hover_text(i18n::tr("すべての基板の部品を、種類ごとに数えた表です (基板ごとの部品番号と、作る枚数を掛けた合計)。まとめて買うときに使います")).clicked() {
                     bom = true;
@@ -459,6 +527,12 @@ impl App {
         }
         if step {
             self.save_system_step();
+        }
+        if run {
+            self.run_system_dc();
+        }
+        if merged {
+            self.save_merged();
         }
         if !open {
             self.boards.open = false;

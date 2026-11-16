@@ -185,6 +185,139 @@ pub fn check(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Vec<Finding
     out
 }
 
+/// A connector pin of the merged circuit (`merge`): the link and its pins, the 0 V source that joins the two sides (its current is the
+/// current from side A to side B through the pin), and the nets of the two sides in the merged circuit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LinkProbe {
+    pub link: usize,
+    pub pins: (String, String),
+    /// The 0 V source's designator; empty when both sides are ground (they are one net already).
+    pub source: String,
+    pub net_a: String,
+    pub net_b: String,
+    /// The names of the two sides in the simulated circuit (the labels put on the connector pins; `GND` on ground).
+    pub node_a: String,
+    pub node_b: String,
+    /// How many pins share the source (pins of the two connectors on the same two nets, such as two +5V pins: one source for them all,
+    /// since two 0 V sources side by side cannot be solved; its current is their total).
+    pub shared: usize,
+}
+
+/// A name usable in a designator: the board's name with anything but ASCII letters and digits left out (`B2` when nothing is left).
+fn tag(name: &str, k: usize) -> String {
+    let t: String = name.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    if t.is_empty() { format!("B{}", k + 1) } else { t }
+}
+
+/// A net of board `board` in the merged circuit: ground stays the one ground of every board; every other name gets the board's name in
+/// front (`main.SDA`), so that two boards' nets of the same name stay apart unless a link joins them.
+fn merged_net(board: &str, net: &str) -> String {
+    if role(net) == Role::Ground { if net == "0" { "0".into() } else { "GND".into() } } else { format!("{board}.{net}") }
+}
+
+/// The whole system as one circuit, to simulate (E5, stage 3): every board's schematic (flattened) side by side, the designators with the
+/// board's name behind them (`R1_main`), the nets with it in front (`main.SDA`, ground shared), and for every pin of every link a 0 V
+/// source for the simulation only between the two sides (labels on the two connector pins): the sides are joined, and the source's current
+/// is what flows through the pin. A pin pair with both sides on ground needs no source; a pin with nothing on one side is left out.
+pub fn merge(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Result<(Schematic, Vec<LinkProbe>), String> {
+    use crate::{Component, Kind, Label, Wire};
+    let mut out = Schematic::default();
+    let mut x0 = 0i32;
+    // where each board's connector pins landed, by (board, designator, pin)
+    let mut pin_at: HashMap<(String, String, String), crate::Pt> = HashMap::new();
+    for (k, (name, sch)) in designs.iter().enumerate() {
+        let t = tag(name, k);
+        let flat = sch.flat();
+        let xs = flat.components.iter().map(|c| c.pos.0).chain(flat.wires.iter().flat_map(|w| [w.a.0, w.b.0])).chain(flat.labels.iter().map(|l| l.pos.0));
+        let (lo, hi) = xs.fold((i32::MAX, i32::MIN), |(lo, hi), x| (lo.min(x), hi.max(x)));
+        let (lo, hi) = if lo > hi { (0, 0) } else { (lo, hi) };
+        let dx = x0 - lo + 20;
+        let shift = |p: crate::Pt| (p.0 + dx, p.1);
+        for c in &flat.components {
+            let mut c: Component = c.clone();
+            c.pos = shift(c.pos);
+            if c.kind == Kind::Power {
+                c.value = merged_net(name, &c.value);
+            }
+            if !c.kind.is_power_symbol() {
+                for (pin, at) in c.pins() {
+                    pin_at.insert((name.to_string(), c.refdes.clone(), pin), at);
+                }
+                c.refdes = format!("{}_{t}", c.refdes);
+            }
+            out.components.push(c);
+        }
+        out.wires.extend(flat.wires.iter().map(|w| Wire { a: shift(w.a), b: shift(w.b) }));
+        out.labels.extend(flat.labels.iter().map(|l| Label { pos: shift(l.pos), text: merged_net(name, &l.text) }));
+        out.thermal_links.extend(flat.thermal_links.iter().map(|(a, b, g)| (format!("{a}_{t}"), format!("{b}_{t}"), *g)));
+        x0 += hi - lo + 60;
+    }
+    // the 0 V sources, in a column to the right of every board
+    let mut probes = vec![];
+    let nets: HashMap<&str, HashMap<(String, String), String>> = designs.iter().map(|(n, s)| (*n, pin_nets(s))).collect();
+    let mut y = 0;
+    for (k, link) in links.iter().enumerate() {
+        let find = |n: &str| designs.iter().find(|(d, _)| *d == n).map(|(_, s)| *s);
+        let (Some(sa), Some(sb)) = (find(&link.a.design), find(&link.b.design)) else { return Err(format!("基板「{}」か「{}」がありません", link.a.design, link.b.design)) };
+        let (Some(pa), Some(pb)) = (pins_of(sa, &link.a.refdes), pins_of(sb, &link.b.refdes)) else { return Err(format!("{}.{} か {}.{} が回路図にありません", link.a.design, link.a.refdes, link.b.design, link.b.refdes)) };
+        for (p, q) in pin_pairs(link, &pa, &pb) {
+            let na = nets[link.a.design.as_str()].get(&(link.a.refdes.clone(), p.clone())).cloned();
+            let nb = nets[link.b.design.as_str()].get(&(link.b.refdes.clone(), q.clone())).cloned();
+            let (Some(na), Some(nb)) = (na, nb) else { continue };
+            let (ma, mb) = (merged_net(&link.a.design, &na), merged_net(&link.b.design, &nb));
+            let mut probe = LinkProbe { link: k, pins: (p.clone(), q.clone()), source: String::new(), net_a: ma.clone(), net_b: mb.clone(), node_a: ma.clone(), node_b: mb.clone(), shared: 1 };
+            if role(&na) == Role::Ground && role(&nb) == Role::Ground {
+                probes.push(probe);
+                continue;
+            }
+            // the source's two ends named after the two sides' nets; a net without a name gets one on the connector pin
+            // (`main.J1-3`), readable in the merged schematic
+            let mut side = |board: &str, refdes: &str, pin: &str, net: &str, merged: &str| -> Result<String, String> {
+                if role(net) != Role::Unnamed {
+                    return Ok(merged.to_string());
+                }
+                let name = format!("{board}.{refdes}-{pin}");
+                let at = pin_at.get(&(board.to_string(), refdes.to_string(), pin.to_string())).copied().ok_or("コネクタのピンの位置がわかりません")?;
+                out.labels.push(Label { pos: at, text: name.clone() });
+                Ok(name)
+            };
+            let la = side(&link.a.design, &link.a.refdes, &p, &na, &ma)?;
+            let lb = side(&link.b.design, &link.b.refdes, &q, &nb, &mb)?;
+            // the same two nets already joined (another pin of the same supply): the same source carries this pin too
+            if role(&na) != Role::Unnamed && role(&nb) != Role::Unnamed
+                && let Some(prev) = probes.iter().position(|x: &LinkProbe| !x.source.is_empty() && x.net_a == ma && x.net_b == mb)
+            {
+                probe.source = probes[prev].source.clone();
+                (probe.node_a, probe.node_b) = (la, lb);
+                let n = probes.iter().filter(|x| x.source == probe.source).count() + 1;
+                for x in probes.iter_mut().filter(|x| x.source == probe.source) {
+                    x.shared = n;
+                }
+                probe.shared = n;
+                probes.push(probe);
+                continue;
+            }
+            let refdes = format!("VLINK{}_{}", k + 1, p);
+            let i = out.add(Kind::VSource, (x0 + 20, y), 0);
+            let v = &mut out.components[i];
+            v.refdes = refdes.clone();
+            v.value = "0".into();
+            v.sim_only = true;
+            let pins = v.pins();
+            for (pin, at) in &pins {
+                out.labels.push(Label { pos: *at, text: if pin == "+" { la.clone() } else { lb.clone() } });
+            }
+            // the next source clear of this one's pins (a pin of one landing on a pin of the next would join two links)
+            let (top, bottom) = pins.iter().fold((i32::MAX, i32::MIN), |(t, b), (_, at)| (t.min(at.1), b.max(at.1)));
+            y += (bottom - top).max(0) + 6;
+            probe.source = refdes;
+            (probe.node_a, probe.node_b) = (la, lb);
+            probes.push(probe);
+        }
+    }
+    Ok((out, probes))
+}
+
 /// A line of the whole system's parts list: one kind of part (same part name, value and footprint), how many on each board and in all.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BomRow {

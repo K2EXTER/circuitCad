@@ -6,6 +6,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 mod ac;
+pub mod system;
 mod zth;
 mod chain;
 mod circuit;

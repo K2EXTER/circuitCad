@@ -2965,14 +2965,24 @@ fn write_diff_lanes_board() {
 /// The two boards of the multi-board sample: a main board with the I2C pull-ups (R1, R2 4.7k to +5V) and a 4-pin header J1 (+5V, GND,
 /// SDA, SCL), and a sensor board with the same header and its decoupling capacitor C1. Both headers are named the same, pin for pin.
 fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
+    // the header's labels to the right of each pin (the `label` helper would run the lower pins' wires down through the next pin)
     let header = |s: &mut sch_core::Schematic| {
         let j = s.add(Kind::Header(4), (0, 0), 0);
         for (pin, net) in [("1", "+5V"), ("2", "GND"), ("3", "SDA"), ("4", "SCL")] {
-            label(s, j, pin, net);
+            let (_, pt) = s.components[j].pins().into_iter().find(|(n, _)| n == pin).unwrap();
+            let end = (pt.0 + 3, pt.1);
+            s.wires.push(Wire { a: pt, b: end });
+            s.labels.push(sch_core::Label { pos: end, text: net.into() });
         }
     };
     let mut main = sch_core::Schematic::default();
     header(&mut main);
+    // the supply of the system (a USB port, say): 5 V on the main board, for the simulation only
+    let v = main.add(Kind::VSource, (20, 40), 0);
+    main.components[v].value = "5".into();
+    main.components[v].sim_only = true;
+    label(&mut main, v, "+", "+5V");
+    label(&mut main, v, "-", "GND");
     for (k, net) in ["SDA", "SCL"].into_iter().enumerate() {
         let r = main.add(Kind::Resistor, (40, 15 * k as i32), 1);
         main.components[r].value = "4.7k".into();
@@ -2987,6 +2997,12 @@ fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
     sensor.components[c].footprint = "C_0805".into();
     label(&mut sensor, c, "1", "+5V");
     label(&mut sensor, c, "2", "GND");
+    // what the sensor draws, as a 1 kΩ load (5 mA at 5 V)
+    let r = sensor.add(Kind::Resistor, (40, 15), 1);
+    sensor.components[r].value = "1k".into();
+    sensor.components[r].footprint = "R_0805".into();
+    label(&mut sensor, r, "1", "+5V");
+    label(&mut sensor, r, "2", "GND");
     // each board: the parts taken from its schematic and placed by hand (the headers at the left edge)
     let design = |s: sch_core::Schematic, n: &str, size: (f64, f64), places: &[(&str, f64, f64)]| {
         let mut app = App::default();
@@ -3002,7 +3018,7 @@ fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
     };
     vec![
         ("main".into(), design(main, "main", (40.0, 30.0), &[("J1", 6.0, 22.0), ("R1", 25.0, 20.0), ("R2", 25.0, 10.0)])),
-        ("sensor".into(), design(sensor, "sensor", (20.0, 15.0), &[("J1", 4.0, 12.0), ("C1", 13.0, 7.0)])),
+        ("sensor".into(), design(sensor, "sensor", (20.0, 15.0), &[("J1", 4.0, 12.0), ("C1", 13.0, 7.0), ("R1", 13.0, 11.0)])),
     ]
 }
 
@@ -3039,11 +3055,24 @@ fn the_multiboard_sample_checks_clean() {
     let designs = [("main", &p.schematic), ("sensor", &sensor.schematic)];
     let findings = sch_core::system::check(&designs, &p.system.links);
     assert!(findings.is_empty(), "{findings:?}");
+    // every header pin on a net of its own (SDA and SCL apart): the check compares names, so the same slip on both boards would pass it
+    for (_, s) in designs {
+        let nets = sch_core::system::pin_nets(s);
+        let mut names: Vec<&String> = (1..=4).filter_map(|k| nets.get(&("J1".to_string(), k.to_string()))).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), 4, "{names:?}");
+    }
     let rows = sch_core::system::system_bom(&designs, &p.system.copies);
     let header = rows.iter().find(|r| r.part.contains("ヘッダ")).unwrap();
     assert_eq!(header.total, 1 + 3, "one header on the main board, one on each of the three sensor boards");
     let r = rows.iter().find(|r| r.value == "4.7k").unwrap();
     assert_eq!(r.total, 2);
+    assert!(rows.iter().all(|r| r.part != "電源"), "the supply is for the simulation only");
+    // the whole system simulated: 5 V reaches the sensor board, and its 1 kΩ draws 5 mA through pin 1 of the headers
+    let readings = sim_core::system::system_dc(&designs, &p.system.links).unwrap();
+    let pin1 = readings.iter().find(|r| r.probe.pins.0 == "1").unwrap();
+    assert!((pin1.v_b - 5.0).abs() < 1e-6 && (pin1.current.unwrap() - 5e-3).abs() < 1e-6, "{pin1:?}");
     // stacked in 3D: the sensor board above the main board's header, nothing running into anything
     let places: Vec<pcb_core::stack::Place> = p.system.places.iter().map(|x| x.unwrap()).collect();
     let boards = [("main", &p.board, places[0]), ("sensor", &sensor.board, places[1])];

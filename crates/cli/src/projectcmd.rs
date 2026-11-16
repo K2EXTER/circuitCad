@@ -8,7 +8,7 @@ use sch_core::Schematic;
 use sch_core::system::BoardLink;
 use serde_json::{Value, json};
 
-const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP)";
+const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project merge FILE.ccproj OUT.schjson   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, the whole system as one schematic)";
 
 /// The boards of a project file that are placed in 3D: (name, board, where it stands).
 fn placed(file: &str) -> Result<Vec<(String, pcb_core::Board, pcb_core::stack::Place)>, String> {
@@ -72,6 +72,23 @@ impl crate::session::Session {
                 let names: Vec<&str> = designs.iter().map(|d| d.0).collect();
                 std::fs::write(out, sch_core::system::bom_csv(&rows, &names)).map_err(|e| format!("{out}: {e}"))?;
                 Ok(obj(json!({"file": out, "rows": rows.len(), "parts": rows.iter().map(|r| r.total).sum::<usize>()})))
+            }
+            "merge" => {
+                let out = pos.get(2).ok_or(USAGE)?;
+                let (s, probes) = sch_core::system::merge(&designs, &links)?;
+                std::fs::write(out, serde_json::to_string_pretty(&s).map_err(|e| e.to_string())?).map_err(|e| format!("{out}: {e}"))?;
+                Ok(obj(json!({"file": out, "parts": s.components.len(), "link_sources": probes.iter().filter(|p| !p.source.is_empty()).map(|p| p.source.clone()).collect::<Vec<_>>()})))
+            }
+            "dc" => {
+                let readings = sim_core::system::system_dc(&designs, &links)?;
+                let list: Vec<Value> = readings
+                    .iter()
+                    .map(|r| {
+                        let l = &links[r.probe.link];
+                        json!({"pin": format!("{}.{}-{} <-> {}.{}-{}", l.a.design, l.a.refdes, r.probe.pins.0, l.b.design, l.b.refdes, r.probe.pins.1), "net_a": r.probe.net_a, "net_b": r.probe.net_b, "v_a": r.v_a, "v_b": r.v_b, "current_a_to_b": r.current})
+                    })
+                    .collect();
+                Ok(obj(json!({"pins": list})))
             }
             "step" => {
                 let out = pos.get(2).ok_or(USAGE)?;

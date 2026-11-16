@@ -50,6 +50,9 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     // --multiboard-sample: the multi-board sample with its window of boards and links
     if args.iter().any(|a| a == "--multiboard-sample") {
         app.open_multiboard_sample();
+        if args.iter().any(|x| x == "--system-dc") {
+            app.run_system_dc();
+        }
         // with --3d: the main board's 3D view with the stacked sensor board in it
         if args.iter().any(|a| a == "--3d") {
             app.boards.open = false;
