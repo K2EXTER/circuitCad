@@ -141,6 +141,11 @@ impl App {
             };
             self.board_ed.run_thermal_map(sources);
         }
+        if let Some(k) = self.board_ed.take_apart_request() {
+            self.board_ed.status = format!("回路図の「設計の要件」に「{}」({} と {} を {} mm 離す) を足しました", k.name, k.a.join(","), k.b.join(","), k.min_dist);
+            self.sch.sch.requirements.apart.push(k);
+            self.sch.req_dirty = true;
+        }
         if !self.board_ed.view3d_wants_heat() {
             return;
         }

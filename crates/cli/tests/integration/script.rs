@@ -2044,6 +2044,39 @@ board heatmap temp=25 cell=1
     assert!((5.0..20.0).contains(&h["h_top_w_m2k"].as_f64().unwrap()), "{h}");
 }
 
+/// `board heatmap` lists the parts that warm each other: R2 moved next to R1 on the sample gets about 14 K from it, so the pair comes with
+/// a distance to keep; as a requirement (`req apart`, taken to the board by `board import`), the board's requirement check reports the two
+/// as too close.
+#[test]
+fn heatmap_suggests_keeping_hot_neighbours_apart() {
+    let sample = format!("{}/../../docs/examples/heat_copper.ccproj", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}
+board move R2 30 8
+board heatmap temp=25 cell=1
+"));
+    assert!(ok, "{a:?}");
+    let h = a.iter().find(|v| v["hot_pairs"].is_array()).unwrap();
+    let pairs = h["hot_pairs"].as_array().unwrap();
+    assert_eq!(pairs.len(), 1, "{h}");
+    let p = &pairs[0];
+    let (d, keep) = (p["dist_mm"].as_f64().unwrap(), p["suggest_mm"].as_f64().unwrap());
+    assert!(p["a_from_b_k"].as_f64().unwrap() > 3.0 && keep > d + 2.0, "{p}");
+    let (a, ok) = run(&format!("open {sample}
+board move R2 30 8
+req apart heat a=R1 b=R2 min={keep}
+board import
+board req
+"));
+    assert!(ok, "{a:?}");
+    let check = a.last().unwrap();
+    assert!(check["findings"].as_array().unwrap().iter().any(|f| f.to_string().contains("heat")), "{check}");
+    // the sample as it is: the two are 50 mm apart, no pair
+    let (a, _) = run(&format!("open {sample}
+board heatmap temp=25 cell=1
+"));
+    assert!(a.iter().find(|v| v["hot_pairs"].is_array()).unwrap()["hot_pairs"].as_array().unwrap().is_empty());
+}
+
 /// With the board carried over (`board postlayout on`), the parts that give off heat are solved on the board's grid: a GND pour under the
 /// board spreads R2's heat, so its θ falls below its own 100 K/W, while R1 beside it adds heat through the board; R1's own θ stays what it
 /// was given.

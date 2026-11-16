@@ -738,3 +738,24 @@ fn command_line_opens_an_analysis_section() {
     apply_args(&mut app, &args);
     assert!(app.sch.analysis_section_open("coverage"), "the coverage section is the one open");
 }
+
+/// The heat map's "離す要件に足す": with R2 moved next to R1 the window lists the pair, and the button's path puts a "離す" requirement
+/// of the suggested distance into the schematic's design spec (from where it goes to the board like any other requirement).
+#[test]
+fn a_hot_pair_on_the_heat_map_becomes_a_keep_apart_requirement() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.load_project(root.join("heat_copper.ccproj"));
+    app.board_ed.board.place_part("R2", pcb_core::model::Point::new(30.0, 8.0), 0);
+    app.board_ed.thermal.spec.cell_mm = 1.0;
+    let v = app.sch.run_self_heat().unwrap();
+    app.board_ed.run_thermal_map(Ok(app.sch.thermal_sources(&v)));
+    let pairs = app.board_ed.thermal.pairs.clone();
+    assert_eq!(pairs.len(), 1, "{pairs:?}");
+    app.board_ed.suggest_apart(0);
+    app.sync_heat();
+    let apart = &app.sch.sch.requirements.apart;
+    assert_eq!(apart.len(), 1);
+    assert_eq!((apart[0].a.clone(), apart[0].b.clone(), apart[0].min_dist), (vec!["R1".to_string()], vec!["R2".to_string()], pairs[0].suggest_mm));
+    assert!(app.sch.req_dirty, "the board takes it on its next sync");
+}

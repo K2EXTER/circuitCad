@@ -16,11 +16,17 @@ pub struct ThermalView {
     pub result: Option<Result<ThermalMap, String>>,
     /// The self-heating run's temperature of each part (°C), to compare.
     pub own_temps: Vec<(String, f64)>,
+    /// The heat sources of the last map.
+    sources: Vec<HeatSource>,
     /// The picture of the shown layer: (layer, texture).
     texture: Option<(usize, egui::TextureHandle)>,
     request: bool,
     /// Milliseconds the last map took.
     pub took_ms: f64,
+    /// Parts that warm each other noticeably (`pcb_core::thermal::hot_pairs`).
+    pub pairs: Vec<pcb_core::thermal::HotPair>,
+    /// A "離す" requirement to add to the schematic's design spec (the App takes it).
+    apart_request: Option<design_spec::KeepApart>,
 }
 
 impl BoardEditor {
@@ -33,6 +39,24 @@ impl BoardEditor {
         std::mem::take(&mut self.thermal.request)
     }
 
+    /// Asks for the "離す" requirement of the `k`-th hot pair (the App puts it into the schematic's design spec).
+    pub(crate) fn suggest_apart(&mut self, k: usize) {
+        let Some(p) = self.thermal.pairs.get(k) else { return };
+        let (hot, from) = if p.a_from_b >= p.b_from_a { (&p.a, p.a_from_b) } else { (&p.b, p.b_from_a) };
+        self.thermal.apart_request = Some(design_spec::KeepApart {
+            name: format!("熱 {}-{}", p.a, p.b),
+            a: vec![p.a.clone()],
+            b: vec![p.b.clone()],
+            min_dist: p.suggest_mm,
+            note: i18n::trf!("熱の地図: {:.1} mm で {} が +{:.1} K 受けていた", p.dist_mm, hot, from),
+        });
+    }
+
+    /// A "離す" requirement the window asked for, to go into the schematic's design spec.
+    pub(crate) fn take_apart_request(&mut self) -> Option<design_spec::KeepApart> {
+        self.thermal.apart_request.take()
+    }
+
     /// The map with these heat sources (from the schematic's self-heating run) and the air's temperature.
     pub(crate) fn run_thermal_map(&mut self, sources: Result<(Vec<HeatSource>, Vec<(String, f64)>, f64), String>) {
         let t0 = std::time::Instant::now();
@@ -40,11 +64,23 @@ impl BoardEditor {
         self.thermal.result = Some(sources.and_then(|(src, own, ambient)| {
             self.thermal.spec.ambient_c = ambient;
             self.thermal.own_temps = own;
+            self.thermal.sources = src.clone();
             if src.is_empty() {
                 return Err("電力の出ている部品がありません。回路図の「自己発熱」で電力の出る部品があるか確かめてください".into());
             }
             pcb_core::thermal::thermal_map(&self.board, &src, self.board.stackup.copper_um, &self.thermal.spec)
         }));
+        // the pairs of parts that warm each other: the parts with real power only (as the schematic's heat runs take from the board)
+        self.thermal.pairs = match &self.thermal.result {
+            Some(Ok(m)) => {
+                let top = m.parts.iter().map(|p| p.power).fold(0.0, f64::max);
+                let mut hot: Vec<HeatSource> = m.parts.iter().filter(|p| p.power >= 1e-3 && p.power >= 0.01 * top).filter_map(|p| self.thermal.sources.iter().find(|s| s.refdes == p.refdes).cloned()).collect();
+                hot.sort_by(|a, b| b.power.total_cmp(&a.power));
+                hot.truncate(sim_core::BOARD_HEATERS_MAX);
+                pcb_core::thermal::hot_pairs(&self.board, &hot, self.board.stackup.copper_um, &self.thermal.spec).unwrap_or_default()
+            }
+            _ => vec![],
+        };
         self.thermal.took_ms = t0.elapsed().as_secs_f64() * 1e3;
         if let Some(Ok(_)) = &self.thermal.result {
             self.thermal.overlay = true;
@@ -165,6 +201,27 @@ impl BoardEditor {
                             ui.end_row();
                         }
                     });
+                    // parts that warm each other: a "離す" requirement, one click away
+                    if !self.thermal.pairs.is_empty() {
+                        ui.separator();
+                        ui.label(egui::RichText::new(i18n::tr("熱い部品どうしが近い")).strong()).on_hover_text(i18n::tr("基板を通ってほかの部品から受ける熱が 3 K 以上で、その部品の上昇の 15 % 以上の組です。離すと、お互いに温め合う分が減ります"));
+                        let mut add = None;
+                        for (k, p) in self.thermal.pairs.iter().enumerate() {
+                            let (hot, from, rise) = if p.a_from_b >= p.b_from_a { (&p.a, p.a_from_b, p.rise_a) } else { (&p.b, p.b_from_a, p.rise_b) };
+                            let have = self.board.keep_apart.iter().any(|k| (k.a.contains(&p.a) && k.b.contains(&p.b)) || (k.a.contains(&p.b) && k.b.contains(&p.a)));
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(i18n::trf!("{} と {}: {:.1} mm。{} はもう一方から +{:.1} K (上昇の {:.0} %)", p.a, p.b, p.dist_mm, hot, from, 100.0 * from / rise.max(1e-9)));
+                                if have {
+                                    ui.label(egui::RichText::new(i18n::tr("離す要件あり")).small().weak());
+                                } else if ui.small_button(i18n::trf!("{:.0} mm 離す要件に足す", p.suggest_mm)).on_hover_text(i18n::tr("回路図の「設計の要件」に「離す」組を足します (パッドの中心どうしの距離の下限)。自動配置はこの距離を守るように並べ、DRC の要件の点検が近すぎる組を知らせます。距離は、基板が熱を広げる長さからの目安で、もう一方から受ける熱が、知らせる目安の半分になる所です")).clicked() {
+                                    add = Some(k);
+                                }
+                            });
+                        }
+                        if let Some(k) = add {
+                            self.suggest_apart(k);
+                        }
+                    }
                     ui.label(egui::RichText::new(i18n::tr("目安です: 風・まわりの部品・ケースで ±20〜30 % ずれます。部品の本体から空気への熱は、SOT-223 のデータシートの曲線に合わせた割合で入れています")).small().weak());
                 }
             }

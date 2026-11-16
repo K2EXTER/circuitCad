@@ -449,6 +449,15 @@ impl Session {
         let board = self.board_mut()?;
         let t0 = std::time::Instant::now();
         let m = pcb_core::thermal::thermal_map(board, &sources, board.stackup.copper_um, &spec)?;
+        // the parts with real power that warm each other noticeably, with a distance to keep them apart
+        let top = sources.iter().map(|s| s.power).fold(0.0, f64::max);
+        let mut hot: Vec<pcb_core::thermal::HeatSource> = sources.iter().filter(|s| s.power >= 1e-3 && s.power >= 0.01 * top).cloned().collect();
+        hot.sort_by(|a, b| b.power.total_cmp(&a.power));
+        hot.truncate(sim_core::BOARD_HEATERS_MAX);
+        let pairs: Vec<Value> = pcb_core::thermal::hot_pairs(board, &hot, board.stackup.copper_um, &spec)?
+            .iter()
+            .map(|p| json!({"a": p.a, "b": p.b, "dist_mm": p.dist_mm, "a_from_b_k": p.a_from_b, "b_from_a_k": p.b_from_a, "rise_a_k": p.rise_a, "rise_b_k": p.rise_b, "suggest_mm": p.suggest_mm}))
+            .collect();
         let (t, at) = m.hottest();
         let parts: Vec<Value> = m
             .parts
@@ -458,8 +467,8 @@ impl Session {
                 json!({"part": p.refdes, "power_w": p.power, "junction_c": p.junction, "pads_c": p.pad_temp, "pads_max_c": p.pad_max, "self_heat_c": own})
             })
             .collect();
-        Ok(obj(json!({"hottest_c": t, "hottest_at": [at.x, at.y], "ambient_c": m.ambient_c, "h_top_w_m2k": m.h_top, "h_bottom_w_m2k": m.h_bottom, "cell_mm": m.grid.d, "cells": m.grid.w * m.grid.h, "layers": m.layers.len(), "rounds": m.rounds, "ms": t0.elapsed().as_secs_f64() * 1e3, "parts": parts,
-            "note": "A guide (about ±20-30 %): natural convection and radiation from both faces, no forced air or neighbours' shading. junction_c is the part's inside, through θjc to the copper under its pads and through its body to the air; self_heat_c is the schematic's self-heating with θ alone, to compare."})))
+        Ok(obj(json!({"hottest_c": t, "hottest_at": [at.x, at.y], "ambient_c": m.ambient_c, "h_top_w_m2k": m.h_top, "h_bottom_w_m2k": m.h_bottom, "cell_mm": m.grid.d, "cells": m.grid.w * m.grid.h, "layers": m.layers.len(), "rounds": m.rounds, "ms": t0.elapsed().as_secs_f64() * 1e3, "parts": parts, "hot_pairs": pairs,
+            "note": "A guide (about ±20-30 %): natural convection and radiation from both faces, no forced air or neighbours' shading. junction_c is the part's inside, through θjc to the copper under its pads and through its body to the air; self_heat_c is the schematic's self-heating with θ alone, to compare. hot_pairs: parts that get at least 3 K and 15 % of their rise from each other through the board, with suggest_mm, a distance (pad centre to centre) where that falls to half (a guide from the board's heat spreading length); 'req apart NAME a=A b=B min=MM' keeps them apart as a requirement."})))
     }
 
     pub(super) fn board_check(&mut self, rest: &[String]) -> Res {

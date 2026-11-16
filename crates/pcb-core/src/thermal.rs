@@ -175,6 +175,8 @@ pub(crate) struct Model {
     edges: Vec<(usize, usize, f64)>,
     /// Characteristic length (m) of the faces for the convection law.
     length_m: f64,
+    /// The board's sheet conductance (W/K across a square, every layer added), the mean over the board: how well it spreads heat.
+    mean_sheet: f64,
 }
 
 impl Model {
@@ -362,7 +364,9 @@ pub(crate) fn model(board: &Board, copper_um: f64, cell_mm: f64) -> Result<Model
     }
     let inside_area: f64 = grid.inside.iter().filter(|x| **x).count() as f64 * d * d;
     let perimeter: f64 = (0..board.outline.len()).map(|k| board.outline[k].dist(board.outline[(k + 1) % board.outline.len()])).sum();
-    Ok(Model { grid, layers, node, cell_of, edges, length_m: inside_area / perimeter.max(1e-9) * 1e-3 })
+    let inside_cells = grid.inside.iter().filter(|x| **x).count().max(1) as f64;
+    let mean_sheet = cover.iter().map(|cov| (0..w * h).filter(|c| grid.inside[*c]).map(|c| sheet(cov[c])).sum::<f64>() / inside_cells).sum();
+    Ok(Model { grid, layers, node, cell_of, edges, length_m: inside_area / perimeter.max(1e-9) * 1e-3, mean_sheet })
 }
 
 /// The grid nodes under a part's pads, each with its share (by count of covered cells, adding to 1).
@@ -682,6 +686,66 @@ pub fn thermal_matrix(board: &Board, sources: &[HeatSource], copper_um: f64, spe
     Ok((r, map))
 }
 
+/// Two parts that warm each other noticeably through the board.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HotPair {
+    pub a: String,
+    pub b: String,
+    /// The nearest pads of the two (mm, centre to centre, as the "離す" requirement measures).
+    pub dist_mm: f64,
+    /// The rise (K) each gets from the other's heat, and its whole rise.
+    pub a_from_b: f64,
+    pub b_from_a: f64,
+    pub rise_a: f64,
+    pub rise_b: f64,
+    /// A distance (mm) at which the heat from the other falls to half the level that flags it (a guide from the board's spreading
+    /// length).
+    pub suggest_mm: f64,
+}
+
+/// The heat a part gets from a neighbour flags the pair when it is at least this (K) and this share of the part's rise.
+pub const HOT_PAIR_K: f64 = 3.0;
+pub const HOT_PAIR_SHARE: f64 = 0.15;
+
+/// The pairs of parts that warm each other noticeably (`HOT_PAIR_K` and `HOT_PAIR_SHARE`), the strongest first, with a distance to
+/// keep them apart. From the board's matrix at the sources' powers. The distance: a plate cooled by the air spreads heat over a length
+/// λ = √(sheet conductance / h) (the board's mean copper and FR-4, both faces' h), and far from a source the heat falls as
+/// e^(−r/λ)/√r; the coupling as it is at today's distance is scaled by that until it is half the flagging level.
+pub fn hot_pairs(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec) -> Result<Vec<HotPair>, String> {
+    let m = model(board, copper_um, spec.cell_mm)?;
+    let (r, map) = thermal_matrix(board, sources, copper_um, spec)?;
+    let h = (map.h_top + map.h_bottom).max(1.0);
+    let lambda_mm = (m.mean_sheet / h).sqrt() * 1e3;
+    let pads = |n: &str| board.pads.iter().filter(|p| p.refdes == n).map(|p| p.pos).collect::<Vec<Point>>();
+    let mut out = vec![];
+    for i in 0..sources.len() {
+        for j in i + 1..sources.len() {
+            let (pi, pj) = (pads(&sources[i].refdes), pads(&sources[j].refdes));
+            let Some(d) = pi.iter().flat_map(|a| pj.iter().map(move |b| a.dist(*b))).min_by(f64::total_cmp) else { continue };
+            let (rise_i, rise_j) = (map.parts[i].junction - map.ambient_c, map.parts[j].junction - map.ambient_c);
+            let (ij, ji) = (r[i][j] * sources[j].power, r[j][i] * sources[i].power);
+            let level = |rise: f64| HOT_PAIR_K.max(HOT_PAIR_SHARE * rise);
+            let over = (ij / level(rise_i)).max(ji / level(rise_j));
+            if over < 1.0 {
+                continue;
+            }
+            // the distance where the coupling is half the level: c(r) = c(d) · √(d/r) · e^(−(r − d)/λ)
+            let want = 0.5 / over;
+            let d0 = d.max(0.5);
+            let fall = |x: f64| (d0 / x).sqrt() * (-(x - d0) / lambda_mm.max(0.5)).exp();
+            let (mut lo, mut hi) = (d0, d0 + 40.0 * lambda_mm.max(0.5));
+            for _ in 0..60 {
+                let mid = 0.5 * (lo + hi);
+                if fall(mid) > want { lo = mid } else { hi = mid }
+            }
+            let suggest_mm = hi.ceil().max(d + 2.0).ceil();
+            out.push(HotPair { a: sources[i].refdes.clone(), b: sources[j].refdes.clone(), dist_mm: d, a_from_b: ij, b_from_a: ji, rise_a: rise_i, rise_b: rise_j, suggest_mm });
+        }
+    }
+    out.sort_by(|x, y| y.a_from_b.max(y.b_from_a).total_cmp(&x.a_from_b.max(x.b_from_a)));
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -765,6 +829,36 @@ mod datasheet {
         }
         // the nearer the more: R1, about 20 mm from Q1, gets more of Q1's watt than R2 gets of R1's, 40 mm away
         assert!(r[1][0] > r[2][1], "{r:?}");
+    }
+
+    /// Two parts of 0.5 W each, 6 mm apart on a bare board, warm each other by more than the flagging level: a pair, with a distance
+    /// further than now at which the coupling is about half that level. The same two 60 mm apart are not a pair.
+    #[test]
+    fn hot_neighbours_are_found_and_a_distance_is_suggested() {
+        let pair = |gap: f64| {
+            let mut b = Board::new("t", 100.0, 60.0);
+            for (name, x) in [("R1", 20.0), ("R2", 20.0 + gap)] {
+                for dy in [-1.6, 1.6] {
+                    let mut p = Pad::new(Point::new(x, 30.0 + dy), PadShape::Rect { w: 1.6, h: 1.2 }, None, Side::Top);
+                    p.refdes = name.into();
+                    b.pads.push(p);
+                }
+            }
+            b
+        };
+        let src = vec![HeatSource::new("R1", 0.5, 150.0, 0.0, 0.0), HeatSource::new("R2", 0.5, 150.0, 0.0, 0.0)];
+        let spec = ThermalSpec { cell_mm: 1.0, ..Default::default() };
+        let near = hot_pairs(&pair(6.0), &src, 35.0, &spec).unwrap();
+        assert_eq!(near.len(), 1, "{near:?}");
+        let p = &near[0];
+        assert!((p.dist_mm - 6.0).abs() < 1e-9 && p.a_from_b > HOT_PAIR_K && p.suggest_mm > 8.0, "{p:?}");
+        // at the suggested distance the coupling is what the spreading length promised: about half the level that flagged it
+        // (15.1 K at 6 mm; at 10 mm the grid gives 7.1 K against the aimed 7.4 K)
+        let level = HOT_PAIR_K.max(HOT_PAIR_SHARE * p.rise_a);
+        let (r, _) = thermal_matrix(&pair(p.suggest_mm), &src, 35.0, &spec).unwrap();
+        let there = r[0][1] * 0.5;
+        assert!(there < 0.6 * level && there > 0.3 * level, "{there} K at {} mm, the level {level}", p.suggest_mm);
+        assert!(hot_pairs(&pair(60.0), &src, 35.0, &spec).unwrap().is_empty());
     }
 
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the
