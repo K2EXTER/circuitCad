@@ -32,6 +32,30 @@ impl SchEditor {
         (src, v.parts.iter().map(|p| (p.name.clone(), p.temp_c)).collect(), v.ambient)
     }
 
+    /// The heat sources of the board's map over time driven by the circuit's power over time: the last "温度の時間変化" run's parts get
+    /// their power as profiles (a part only pulsed, with no steady power, is added), the other sources of the last map (`sources`, may be
+    /// none) keep their steady power.
+    pub(crate) fn thermal_profiles(&self, sources: &[pcb_core::thermal::HeatSource]) -> Result<Vec<pcb_core::thermal::HeatSource>, String> {
+        let Some(Ok(v)) = &self.htran else {
+            return Err("先に回路図の解析タブで「温度の時間変化」を計算してください (部品ごとの電力の時間の変化を使います)".into());
+        };
+        let mut out = sources.to_vec();
+        for p in &v.parts {
+            let profile: Vec<(f64, f64)> = v.time.iter().copied().zip(p.power.iter().copied()).collect();
+            match out.iter_mut().find(|s| s.refdes == p.name) {
+                Some(s) => s.profile = profile,
+                None => {
+                    let Some(c) = self.sch.components.iter().find(|c| c.refdes == p.name) else { continue };
+                    let mut s = pcb_core::thermal::HeatSource::new(&p.name, 0.0, sim_core::own_theta(c), sim_core::theta_jc(c).0, c.heatsink);
+                    s.cth = c.cth;
+                    s.profile = profile;
+                    out.push(s);
+                }
+            }
+        }
+        Ok(out)
+    }
+
     pub(crate) fn run_self_heat(&mut self) -> Result<HeatView, String> {
         let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;

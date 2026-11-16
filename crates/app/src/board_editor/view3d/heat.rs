@@ -120,12 +120,9 @@ impl BoardEditor {
     /// Without a map: the self-heating run's temperatures and the faces as they are. The faces are painted again only when the map,
     /// the moment or the look changes.
     pub(super) fn sync_heat_map(&mut self) {
-        let map = match (&self.thermal.result, self.view3d.heat_on) {
-            (Some(Ok(m)), true) => Some(m),
-            _ => None,
-        };
-        let key = map.map(|_| (self.thermal.serial, self.thermal.show_frame, self.view3d.mask, self.view3d.silk));
-        let Some(m) = map else {
+        let shown = if self.view3d.heat_on { self.shown_heat() } else { None };
+        let key = shown.as_ref().map(|sh| (self.thermal.serial, sh.frame, self.view3d.mask, self.view3d.silk));
+        let Some(sh) = shown else {
             if self.view3d.board_heat.is_some() {
                 self.view3d.board_heat = None;
                 if let Some(s) = &mut self.view3d.scene {
@@ -135,36 +132,18 @@ impl BoardEditor {
             }
             return;
         };
-        // the moment of the map over time, if one is picked
-        let frame = match (&self.thermal.transient, self.thermal.show_frame) {
-            (Some(Ok(tr)), Some(k)) if k < tr.frames.len() && tr.grid == m.grid => Some((tr, k)),
-            _ => None,
-        };
-        let layers: Vec<Vec<f64>> = match frame {
-            Some((tr, k)) => tr.frames[k].1.iter().map(|l| l.iter().map(|x| *x as f64).collect()).collect(),
-            None => m.temp.clone(),
-        };
-        let parts: Vec<(String, f64, f64)> = match frame {
-            Some((tr, k)) => {
-                let at = tr.times.iter().position(|t| (t - tr.frames[k].0).abs() <= 1e-9 * tr.frames[k].0.max(1.0)).unwrap_or(tr.times.len() - 1);
-                tr.parts.iter().zip(&m.parts).map(|((n, v), p)| (n.clone(), v[at], p.power)).collect()
-            }
-            None => m.parts.iter().map(|p| (p.refdes.clone(), p.junction, p.power)).collect(),
-        };
-        let hottest = layers.iter().flatten().filter(|t| t.is_finite()).fold(m.ambient_c, |a, b| a.max(*b));
-        let source = match frame {
-            Some((tr, k)) => format!("{}
-{}", i18n::tr("熱の地図"), i18n::trf!("{:.0} 秒後", tr.frames[k].0)),
+        let source = match sh.moment {
+            Some(t) => format!("{}\n{}", i18n::tr("熱の地図"), i18n::trf!("{:.0} 秒後", t)),
             None => i18n::tr("熱の地図").to_string(),
         };
-        let temps = PartTemps { ambient: m.ambient_c, parts, hottest, source };
+        let temps = PartTemps { ambient: sh.ambient, parts: sh.parts.clone(), hottest: sh.scale.1, source };
         if self.view3d.board_heat != key {
-            let (lo, hi) = scale(&temps);
+            let (lo, hi) = sh.scale;
             if let Some(s) = &mut self.view3d.scene {
                 let mut img = Scene::images(&s.pv, self.view3d.mask, self.view3d.silk);
-                let last = layers.len() - 1;
-                tint(&mut img[0], s.pv.frame, false, &m.grid, &layers[0], lo, hi);
-                tint(&mut img[1], s.pv.frame, true, &m.grid, &layers[last], lo, hi);
+                let last = sh.layers.len() - 1;
+                tint(&mut img[0], s.pv.frame, false, &sh.grid, &sh.layers[0], lo, hi);
+                tint(&mut img[1], s.pv.frame, true, &sh.grid, &sh.layers[last], lo, hi);
                 s.img = img;
                 self.view3d.generation += 1;
                 self.view3d.board_heat = key;

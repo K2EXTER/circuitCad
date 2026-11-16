@@ -26,6 +26,12 @@ pub struct ThermalView {
     pub show_frame: Option<usize>,
     /// Counts the maps and runs worked out (the 3D view paints the board again when it changes).
     pub serial: u64,
+    /// Drive the run over time with the circuit's power over time (the schematic's "温度の時間変化" run) instead of a constant.
+    pub use_circuit: bool,
+    /// The window asked for a run with the circuit's power (the App hands the sources with their profiles to `run_thermal_transient`).
+    tran_request: bool,
+    /// What drove the last run over time, for the window ("回路の過渡解析の電力: Q1, RS1").
+    pub driven_by: String,
     request: bool,
     /// Milliseconds the last map took.
     pub took_ms: f64,
@@ -33,6 +39,18 @@ pub struct ThermalView {
     pub pairs: Vec<pcb_core::thermal::HotPair>,
     /// A "離す" requirement to add to the schematic's design spec (the App takes it).
     apart_request: Option<design_spec::KeepApart>,
+}
+
+/// What the board is painted with (`BoardEditor::shown_heat`): the grid, each layer's temperatures (°C, `NaN` off the board), the air,
+/// the colour scale, the parts' (name, °C, W), and the moment of the run over time (s) and its frame when it is one.
+pub(crate) struct ShownHeat {
+    pub grid: pcb_core::thermal::Grid,
+    pub layers: Vec<Vec<f64>>,
+    pub ambient: f64,
+    pub scale: (f64, f64),
+    pub parts: Vec<(String, f64, f64)>,
+    pub moment: Option<f64>,
+    pub frame: Option<usize>,
 }
 
 impl BoardEditor {
@@ -96,25 +114,83 @@ impl BoardEditor {
         }
     }
 
-    /// The board warming up from the air's temperature, the sources of the last map switched on at t = 0, for `tran_end` seconds.
-    pub(crate) fn run_thermal_transient(&mut self) {
+    /// Whether the window asked for a run over time with the circuit's power (the App then builds the sources with their profiles).
+    pub(crate) fn take_thermal_tran_request(&mut self) -> bool {
+        std::mem::take(&mut self.thermal.tran_request)
+    }
+
+    /// The parts of the last map (the App adds the circuit's power over time to them).
+    pub(crate) fn thermal_sources(&self) -> &[HeatSource] {
+        &self.thermal.sources
+    }
+
+    /// The board warming up from the air's temperature for `tran_end` seconds: the sources of the last map switched on at t = 0, or
+    /// `sources` (with the circuit's power over time) when given, or the error that kept them from being made.
+    pub(crate) fn run_thermal_transient(&mut self, sources: Option<Result<Vec<HeatSource>, String>>) {
         let end = if self.thermal.tran_end > 0.0 { self.thermal.tran_end } else { 600.0 };
         self.thermal.texture = None;
-        self.thermal.transient = Some(if self.thermal.sources.is_empty() {
-            Err("先に「熱の地図を計算」を押してください".into())
-        } else {
-            pcb_core::thermal::thermal_transient(&self.board, &self.thermal.sources, self.board.stackup.copper_um, &self.thermal.spec, end, 8)
-        });
+        let driven = sources.is_some();
+        let src = match sources {
+            Some(s) => s,
+            None if self.thermal.sources.is_empty() => Err("先に「熱の地図を計算」を押してください".into()),
+            None => Ok(self.thermal.sources.clone()),
+        };
+        self.thermal.driven_by = match &src {
+            Ok(s) if driven => i18n::trf!("回路の過渡解析の電力: {}", s.iter().filter(|x| !x.profile.is_empty()).map(|x| x.refdes.as_str()).collect::<Vec<_>>().join(", ")),
+            _ => String::new(),
+        };
+        self.thermal.transient = Some(src.and_then(|s| pcb_core::thermal::thermal_transient(&self.board, &s, self.board.stackup.copper_um, &self.thermal.spec, end, 8)));
         if let Some(Ok(tr)) = &self.thermal.transient {
             self.thermal.show_frame = Some(tr.frames.len().saturating_sub(1));
         }
         self.thermal.serial += 1;
     }
 
-    /// The scale of the colours (°C): the air to the hottest cell (at least 10 K).
-    fn thermal_scale(m: &ThermalMap) -> (f64, f64) {
-        let top = m.temp.iter().flatten().filter(|t| t.is_finite()).fold(m.ambient_c, |a, b| a.max(*b));
-        (m.ambient_c, top.max(m.ambient_c + 10.0))
+    /// What the board is painted with: the moment of the run over time picked in the window, or else the steady map; one colour scale
+    /// for both (the air to the hottest of the steady map and of the whole run, at least 10 K), so a colour means the same temperature
+    /// at every moment. `None` with nothing worked out.
+    pub(crate) fn shown_heat(&self) -> Option<ShownHeat> {
+        let map = match &self.thermal.result {
+            Some(Ok(m)) => Some(m),
+            _ => None,
+        };
+        let tr = match &self.thermal.transient {
+            Some(Ok(tr)) => Some(tr),
+            _ => None,
+        };
+        let mut top = f64::MIN;
+        let mut ambient = f64::NAN;
+        if let Some(m) = map {
+            ambient = m.ambient_c;
+            top = m.temp.iter().flatten().filter(|t| t.is_finite()).fold(top, |a, b| a.max(*b));
+            top = m.parts.iter().map(|p| p.junction).fold(top, f64::max);
+        }
+        if let Some(tr) = tr {
+            ambient = tr.ambient_c;
+            top = tr.frames.iter().flat_map(|f| f.1.iter().flatten()).filter(|t| t.is_finite()).fold(top, |a, b| a.max(*b as f64));
+            top = tr.parts.iter().flat_map(|p| p.1.iter().copied()).fold(top, f64::max);
+        }
+        if !ambient.is_finite() {
+            return None;
+        }
+        let scale = (ambient, top.max(ambient + 10.0));
+        match (tr, self.thermal.show_frame) {
+            (Some(tr), Some(k)) if k < tr.frames.len() => {
+                let (t, layers) = &tr.frames[k];
+                let at = tr.times.iter().position(|x| (x - t).abs() <= 1e-9 * t.max(1.0)).unwrap_or(tr.times.len() - 1);
+                let power = |n: &str| map.and_then(|m| m.parts.iter().find(|p| p.refdes == n)).map_or(0.0, |p| p.power);
+                Some(ShownHeat {
+                    grid: tr.grid.clone(),
+                    layers: layers.iter().map(|l| l.iter().map(|x| *x as f64).collect()).collect(),
+                    ambient,
+                    scale,
+                    parts: tr.parts.iter().map(|(n, v)| (n.clone(), v[at], power(n))).collect(),
+                    moment: Some(*t),
+                    frame: Some(k),
+                })
+            }
+            _ => map.map(|m| ShownHeat { grid: m.grid.clone(), layers: m.temp.clone(), ambient, scale, parts: m.parts.iter().map(|p| (p.refdes.clone(), p.junction, p.power)).collect(), moment: None, frame: None }),
+        }
     }
 
     /// The colour of the shown layer over the board (after the copper, under the silk and the marks).
@@ -122,22 +198,13 @@ impl BoardEditor {
         if !self.thermal.overlay {
             return;
         }
-        let Some(Ok(m)) = &self.thermal.result else { return };
-        let layer = self.thermal.layer.min(m.layers.len() - 1);
-        // a frame of the run over time, on the steady map's colour scale (so that the colours mean the same temperatures)
-        let frame = match (&self.thermal.transient, self.thermal.show_frame) {
-            (Some(Ok(tr)), Some(k)) if k < tr.frames.len() && tr.grid == m.grid => Some(k),
-            _ => None,
-        };
-        if self.thermal.texture.as_ref().is_none_or(|(l, f, _)| *l != layer || *f != frame) {
-            let (lo, hi) = Self::thermal_scale(m);
-            let g = &m.grid;
-            let temps: Vec<f64> = match (frame, &self.thermal.transient) {
-                (Some(k), Some(Ok(tr))) => tr.frames[k].1[layer].iter().map(|x| *x as f64).collect(),
-                _ => m.temp[layer].clone(),
-            };
+        let Some(sh) = self.shown_heat() else { return };
+        let layer = self.thermal.layer.min(sh.layers.len() - 1);
+        let (lo, hi) = sh.scale;
+        if self.thermal.texture.as_ref().is_none_or(|(l, f, _)| *l != layer || *f != sh.frame) {
+            let g = &sh.grid;
             let mut img = egui::ColorImage::new([g.w, g.h], vec![Color32::TRANSPARENT; g.w * g.h]);
-            for (c, t) in temps.iter().enumerate() {
+            for (c, t) in sh.layers[layer].iter().enumerate() {
                 if t.is_finite() {
                     let [r, gg, b] = super::view3d::heat_color((t - lo) / (hi - lo));
                     // rows go up in y on the board, down in the picture
@@ -145,15 +212,14 @@ impl BoardEditor {
                     img.pixels[j * g.w + i] = Color32::from_rgba_unmultiplied(r, gg, b, 170);
                 }
             }
-            self.thermal.texture = Some((layer, frame, painter.ctx().load_texture("thermal_map", img, egui::TextureOptions::LINEAR)));
+            self.thermal.texture = Some((layer, sh.frame, painter.ctx().load_texture("thermal_map", img, egui::TextureOptions::LINEAR)));
         }
         let Some((_, _, tex)) = &self.thermal.texture else { return };
-        let g = &m.grid;
+        let g = &sh.grid;
         let a = self.to_screen(rect, Point::new(g.x0, g.y0 + g.h as f64 * g.d));
         let b = self.to_screen(rect, Point::new(g.x0 + g.w as f64 * g.d, g.y0));
         painter.image(tex.id(), Rect::from_two_pos(a, b), Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
         // the scale, at the canvas's bottom left
-        let (lo, hi) = Self::thermal_scale(m);
         let bar = Rect::from_min_size(Pos2::new(rect.left() + 56.0, rect.bottom() - 34.0), egui::vec2(160.0, 10.0));
         for k in 0..32 {
             let f = k as f64 / 31.0;
@@ -164,9 +230,9 @@ impl BoardEditor {
         let font = egui::FontId::proportional(13.0);
         painter.text(Pos2::new(bar.left(), bar.top() - 2.0), egui::Align2::LEFT_BOTTOM, format!("{lo:.0} ℃"), font.clone(), Color32::WHITE);
         painter.text(Pos2::new(bar.right(), bar.top() - 2.0), egui::Align2::RIGHT_BOTTOM, format!("{hi:.0} ℃"), font.clone(), Color32::WHITE);
-        let label = match (frame, &self.thermal.transient) {
-            (Some(k), Some(Ok(tr))) => i18n::trf!("熱の地図 (目安)・電源を入れて {}", fmt_time(tr.frames[k].0)),
-            _ => i18n::tr("熱の地図 (目安)").to_string(),
+        let label = match sh.moment {
+            Some(t) => i18n::trf!("熱の地図 (目安)・電源を入れて {}", fmt_time(t)),
+            None => i18n::tr("熱の地図 (目安)").to_string(),
         };
         painter.text(Pos2::new(bar.right() + 8.0, bar.center().y), egui::Align2::LEFT_CENTER, label, font, Color32::WHITE);
     }
@@ -204,6 +270,9 @@ impl BoardEditor {
                 }
                 Some(Err(e)) => {
                     ui.colored_label(crate::theme::ERROR, e);
+                    // a circuit that only pulses has no steady power: its run over time still works
+                    ui.checkbox(&mut self.thermal.overlay, i18n::tr("基板に色を重ねる"));
+                    self.thermal_transient_ui(ui);
                 }
                 Some(Ok(m)) => {
                     let (t, at) = m.hottest();
@@ -283,9 +352,17 @@ impl BoardEditor {
             ui.label(i18n::tr("時間"));
             ui.add(egui::DragValue::new(&mut self.thermal.tran_end).range(0.1..=36000.0).speed(10.0).suffix(" s")).on_hover_text(i18n::tr("何秒後まで計算するか。基板全体が落ち着くには、ふつう 10〜30 分かかります"));
             if ui.button(i18n::tr("時間の変化を計算")).on_hover_text(i18n::tr("いま計算した地図の部品の電力を、時刻 0 で入れて、温まっていく様子を計算します (時間は対数で刻みます)")).clicked() {
-                self.run_thermal_transient();
+                if self.thermal.use_circuit {
+                    self.thermal.tran_request = true;
+                } else {
+                    self.run_thermal_transient(None);
+                }
             }
         });
+        ui.checkbox(&mut self.thermal.use_circuit, i18n::tr("回路の過渡解析の電力を使う")).on_hover_text(i18n::tr("回路図の「温度の時間変化」で計算した、部品ごとの電力の時間の変化 (パルス・起動時の突入など) で温めます。その計算に入れていない部品は、自己発熱の一定の電力です。過渡解析の時間より先は、最後の電力が続くものとします"));
+        if !self.thermal.driven_by.is_empty() {
+            ui.label(egui::RichText::new(&self.thermal.driven_by).small());
+        }
         let Some(tr) = &self.thermal.transient else { return };
         let tr = match tr {
             Ok(tr) => tr,

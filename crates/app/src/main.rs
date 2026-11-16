@@ -141,6 +141,10 @@ impl App {
             };
             self.board_ed.run_thermal_map(sources);
         }
+        if self.board_ed.take_thermal_tran_request() {
+            let sources = self.sch.thermal_profiles(self.board_ed.thermal_sources());
+            self.board_ed.run_thermal_transient(Some(sources));
+        }
         if let Some(k) = self.board_ed.take_apart_request() {
             self.board_ed.status = format!("回路図の「設計の要件」に「{}」({} と {} を {} mm 離す) を足しました", k.name, k.a.join(","), k.b.join(","), k.min_dist);
             self.sch.sch.requirements.apart.push(k);

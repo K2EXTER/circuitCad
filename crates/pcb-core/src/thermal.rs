@@ -572,6 +572,35 @@ pub struct HeatSource {
     pub theta_body: f64,
     /// The part's own heat capacity (J/K) for the map over time; 0 = it follows its power at once.
     pub cth: f64,
+    /// For the map over time: its power over time `(s, W)`, straight between the points, the last value held after them (the
+    /// circuit's transient run); empty = `power` from t = 0.
+    pub profile: Vec<(f64, f64)>,
+}
+
+/// The mean (W) of a power profile (straight between its points, the first value before them and the last after) over `[a, b]`.
+pub fn profile_mean(profile: &[(f64, f64)], a: f64, b: f64) -> f64 {
+    let Some(&(t_first, p_first)) = profile.first() else { return 0.0 };
+    let &(t_last, p_last) = profile.last().unwrap();
+    if !(b > a) {
+        return p_first;
+    }
+    // the integral from a to b, piece by piece
+    let mut sum = 0.0;
+    if a < t_first {
+        sum += p_first * (b.min(t_first) - a);
+    }
+    if b > t_last {
+        sum += p_last * (b - a.max(t_last));
+    }
+    for w in profile.windows(2) {
+        let ((t0, p0), (t1, p1)) = (w[0], w[1]);
+        let (lo, hi) = (a.max(t0), b.min(t1));
+        if hi > lo && t1 > t0 {
+            let at = |t: f64| p0 + (p1 - p0) * (t - t0) / (t1 - t0);
+            sum += 0.5 * (at(lo) + at(hi)) * (hi - lo);
+        }
+    }
+    sum / (b - a)
 }
 
 /// The share of a part's own case-to-air θ (its data sheet's minimum pad) that its body and leads carry to the air by themselves: what
@@ -597,7 +626,7 @@ impl HeatSource {
         if heatsink > 0.0 {
             g += 1.0 / heatsink;
         }
-        HeatSource { refdes: refdes.into(), power, theta_jc: jc, theta_body: if g > 0.0 { 1.0 / g } else { 0.0 }, cth: 0.0 }
+        HeatSource { refdes: refdes.into(), power, theta_jc: jc, theta_body: if g > 0.0 { 1.0 / g } else { 0.0 }, cth: 0.0, profile: vec![] }
     }
 }
 
@@ -716,9 +745,10 @@ pub struct ThermalTransient {
     pub board_tau: f64,
 }
 
-/// How the board warms from the air's temperature when the sources' powers are switched on at t = 0, until `t_end` seconds: backward
-/// Euler (stable whatever the step) with steps growing from `t_end`/10⁵ (at least 1 ms) by a constant factor, about 120 of them; each
-/// cell's h follows its rise of the step before. Each node's heat capacity is its copper and FR-4; a part's junction has its own `cth`
+/// How the board warms from the air's temperature when the sources' powers are switched on at t = 0 (or follow their `profile`), until
+/// `t_end` seconds: backward Euler (stable whatever the step) with steps growing from `t_end`/10⁵ (at least 1 ms) by a constant factor,
+/// about 120 of them, and a step end at every point of the profiles too; a step's power is the profile's mean over it (the energy of a
+/// pulse shorter than a step is kept). Each cell's h follows its rise of the step before. Each node's heat capacity is its copper and FR-4; a part's junction has its own `cth`
 /// (0: a little, so it follows its power within a step).
 pub fn thermal_transient(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec, t_end: f64, frames: usize) -> Result<ThermalTransient, String> {
     if !(t_end > 0.0) {
@@ -733,9 +763,6 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], copper_um: f64, 
     let mut cap = m.cap.clone();
     cap.extend(sources.iter().map(|s| s.cth.max(1e-6)));
     let mut q = vec![0.0; n];
-    for (e, s) in sources.iter().enumerate() {
-        q[n0 + e] = s.power;
-    }
     // steps: geometric from dt0 to t_end
     let steps = 120usize;
     let dt0 = (t_end * 1e-5).max(1e-3).min(t_end / steps as f64);
@@ -750,6 +777,22 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], copper_um: f64, 
     } else {
         1.0
     };
+    // where the steps end: the geometric ones, and the points of the sources' power profiles (at most 2000 of them, evenly thinned),
+    // so a pulse of the circuit is stepped through
+    let mut ends: Vec<f64> = vec![];
+    let (mut t, mut dt) = (0.0, dt0);
+    while t < t_end * (1.0 - 1e-9) {
+        t = (t + dt).min(t_end);
+        ends.push(t);
+        dt *= growth;
+    }
+    let mut points: Vec<f64> = sources.iter().flat_map(|s| s.profile.iter().map(|p| p.0)).filter(|t| *t > 0.0 && *t < t_end).collect();
+    points.sort_by(f64::total_cmp);
+    points.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
+    let every = points.len().div_ceil(2000).max(1);
+    ends.extend(points.into_iter().step_by(every));
+    ends.sort_by(f64::total_cmp);
+    ends.dedup_by(|a, b| (*a - *b).abs() <= 1e-9 * b.abs().max(1e-6));
     let frame_at: Vec<f64> = (1..=frames.max(1)).map(|k| t_end * 10f64.powf(-3.0 * (frames.max(1) - k) as f64 / frames.max(1) as f64)).collect();
     let mut rise = vec![0.0; n];
     let mut air = vec![0.0; n];
@@ -764,10 +807,16 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], copper_um: f64, 
         }
         t
     };
-    let (mut t, mut dt) = (0.0, dt0);
+    let mut t = 0.0;
     let mut next_frame = 0;
-    while t < t_end * (1.0 - 1e-9) {
-        let step = dt.min(t_end - t);
+    for &end in &ends {
+        let step = end - t;
+        if !(step > 0.0) {
+            continue;
+        }
+        for (e, s) in sources.iter().enumerate() {
+            q[n0 + e] = if s.profile.is_empty() { s.power } else { profile_mean(&s.profile, t, end) };
+        }
         air_conductance(&m, spec, &rise, &mut air);
         let mut diag = csr.sum.clone();
         let mut b = vec![0.0; n];
@@ -781,8 +830,7 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], copper_um: f64, 
             b[k] = q[k] + cap[k] / step * rise[k];
         }
         cg(&csr, &diag, &b, &mut rise, 1e-7);
-        t += step;
-        dt *= growth;
+        t = end;
         times.push(t);
         for (e, p) in parts.iter_mut().enumerate() {
             p.1.push(spec.ambient_c + rise[n0 + e]);
@@ -904,6 +952,19 @@ pub fn hot_pairs(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &T
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The mean of a power profile over a step is its exact integral: a ramp's middle, a pulse narrower than the step by its area, the
+    /// held ends outside the points.
+    #[test]
+    fn a_profile_gives_its_exact_mean_over_a_step() {
+        let ramp = [(0.0, 0.0), (10.0, 10.0)];
+        assert!((profile_mean(&ramp, 0.0, 10.0) - 5.0).abs() < 1e-12);
+        assert!((profile_mean(&ramp, 10.0, 20.0) - 10.0).abs() < 1e-12, "held after the end");
+        // 2 W for 1 ms in the middle of a 10 ms step: 0.2 W on average
+        let pulse = [(0.0, 0.0), (4.5e-3, 0.0), (4.5e-3, 2.0), (5.5e-3, 2.0), (5.5e-3, 0.0), (1.0, 0.0)];
+        assert!((profile_mean(&pulse, 0.0, 0.01) - 0.2).abs() < 1e-9, "{}", profile_mean(&pulse, 0.0, 0.01));
+        assert_eq!(profile_mean(&[], 0.0, 1.0), 0.0);
+    }
 
     /// The worked example of the candidate: an 80 mm plate 30 K above the air gives about 6.6 W/m²K of convection and 6.7 of radiation.
     #[test]
@@ -1063,6 +1124,32 @@ mod datasheet {
         assert!(w[0].temp_c > 25.5 && w[0].temp_c < pad_t, "{w:?}, the pad {pad_t}");
         assert!((w[1].temp_c - pad_t).abs() < 0.5 * (pad_t - 25.0), "{w:?}");
         assert!((w[1].factor - (1.0 + CU_TEMPCO * (w[1].temp_c - 25.0))).abs() < 1e-12);
+    }
+
+    /// The circuit's power over time drives the map: a profile that holds 1 W gives the plain run; 2 W for the first 10 s then nothing
+    /// heats the part until 10 s and lets it cool after, far below where 2 W held would take it.
+    #[test]
+    fn a_power_profile_drives_the_map_over_time() {
+        let mut b = Board::new("t", 60.0, 40.0);
+        for dx in [-1.6, 1.6] {
+            let mut p = Pad::new(Point::new(30.0 + dx, 20.0), PadShape::Rect { w: 1.6, h: 1.2 }, None, Side::Top);
+            p.refdes = "R1".into();
+            b.pads.push(p);
+        }
+        let spec = ThermalSpec { cell_mm: 2.0, ..Default::default() };
+        let plain = HeatSource { cth: 0.05, ..HeatSource::new("R1", 1.0, 120.0, 0.0, 0.0) };
+        let held = HeatSource { profile: vec![(0.0, 1.0), (300.0, 1.0)], ..plain.clone() };
+        let a = thermal_transient(&b, std::slice::from_ref(&plain), 35.0, &spec, 300.0, 4).unwrap();
+        let c = thermal_transient(&b, std::slice::from_ref(&held), 35.0, &spec, 300.0, 4).unwrap();
+        let (ea, ec) = (*a.parts[0].1.last().unwrap(), *c.parts[0].1.last().unwrap());
+        assert!((ea - ec).abs() < 1e-6 * ea, "{ea} {ec}");
+        let pulse = HeatSource { profile: vec![(0.0, 2.0), (10.0, 2.0), (10.0, 0.0), (300.0, 0.0)], ..plain };
+        let p = thermal_transient(&b, &[pulse], 35.0, &spec, 300.0, 4).unwrap();
+        let (k, top) = p.parts[0].1.iter().enumerate().fold((0, f64::MIN), |m, (k, v)| if *v > m.1 { (k, *v) } else { m });
+        assert!((p.times[k] - 10.0).abs() < 1e-6, "the peak at the end of the pulse: {} s", p.times[k]);
+        let end = *p.parts[0].1.last().unwrap();
+        assert!(end < top && end < 25.0 + 0.5 * (top - 25.0), "cooled after it: {end} from {top}");
+        assert!(top < 25.0 + 2.0 * (ea - 25.0), "10 s of 2 W is far from its steady rise: {top}");
     }
 
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the

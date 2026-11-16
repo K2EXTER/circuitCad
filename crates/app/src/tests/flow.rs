@@ -761,3 +761,41 @@ fn a_hot_pair_on_the_heat_map_becomes_a_keep_apart_requirement() {
     assert_eq!((apart[0].a.clone(), apart[0].b.clone(), apart[0].min_dist), (vec!["R1".to_string()], vec!["R2".to_string()], pairs[0].suggest_mm));
     assert!(app.sch.req_dirty, "the board takes it on its next sync");
 }
+
+/// The board's map over time driven by the circuit: V1 of the heat_copper sample made a 5 s pulse. With no steady power the steady map
+/// has nothing to show, but the schematic's "温度の時間変化" run gives each resistor's power over time, and the board warms during the
+/// pulse and cools after it: the peak at 5 s, R2 (thin tracks) above R1 (pours), and the moment can be painted on the board.
+#[test]
+fn the_circuits_power_over_time_drives_the_boards_map() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.load_project(root.join("heat_copper.ccproj"));
+    let v1 = app.sch.sch.components.iter().position(|c| c.refdes == "V1").unwrap();
+    app.sch.sch.components[v1].value = "PULSE(0 5 0 1m 1m 5 1000)".into();
+    app.board_ed.thermal.spec.cell_mm = 1.0;
+    // without the run over time of the schematic: what to do first
+    assert!(app.sch.thermal_profiles(&[]).unwrap_err().contains("温度の時間変化"));
+    app.sch.htran_parts = "R1,R2".into();
+    app.sch.htran_stop = "10".into();
+    app.sch.htran = Some(app.sch.run_heat_tran());
+    let src = app.sch.thermal_profiles(app.board_ed.thermal_sources()).unwrap();
+    assert_eq!(src.len(), 2, "both pulsed parts are added with their power over time");
+    app.board_ed.thermal.tran_end = 60.0;
+    app.board_ed.run_thermal_transient(Some(Ok(src)));
+    let tr = match &app.board_ed.thermal.transient {
+        Some(Ok(tr)) => tr.clone(),
+        other => panic!("{:?}", other.as_ref().map(|r| r.as_ref().err())),
+    };
+    let peak = |n: &str| {
+        let v = &tr.parts.iter().find(|p| p.0 == n).unwrap().1;
+        let (k, top) = v.iter().enumerate().fold((0, f64::MIN), |m, (k, x)| if *x > m.1 { (k, *x) } else { m });
+        (tr.times[k], top, *v.last().unwrap())
+    };
+    let (t2, top2, end2) = peak("R2");
+    let (_, top1, _) = peak("R1");
+    assert!((t2 - 5.0).abs() < 0.3, "the peak at the end of the pulse: {t2} s");
+    assert!(top2 > top1 && end2 < top2, "R2 {top2} (then {end2}), R1 {top1}");
+    assert!(app.board_ed.thermal.driven_by.contains("R2"));
+    let shown = app.board_ed.shown_heat().expect("a moment of the run is painted");
+    assert!(shown.moment.is_some() && shown.scale.1 >= top2);
+}
