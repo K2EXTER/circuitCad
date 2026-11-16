@@ -30,7 +30,7 @@ fn group_heading(ui: &mut egui::Ui, text: &str, tip: &str) {
 
 impl BoardEditor {
     /// How many heat pads lack thermal vias (counted again only when the copper changed).
-    fn thermal_lacking(&self) -> usize {
+    pub(super) fn thermal_lacking(&self) -> usize {
         let key = pcb_core::zonefill::geometry_key(&self.board);
         match self.thermal_cache.get() {
             Some((k, n)) if k == key => n,
@@ -263,7 +263,7 @@ impl BoardEditor {
                 self.panel_smooth(ui);
                 self.panel_fiducials(ui);
             });
-            if step_header(ui, Step::Check, open_step, round, checked, "③ 確認する", "「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。電流と電圧降下・放熱もここで確かめます", |ui| {
+            if step_header(ui, Step::Check, open_step, round, checked, "③ 確認する", "「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。その下で、電気 (電流と電圧降下)・熱 (熱の地図) を確かめ、「回路図に反映」で基板の配線と熱を回路図の解析に入れます", |ui| {
                 if crate::widgets::primary_button_wide(ui, true, "DRC を実行").on_hover_text(i18n::tr("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう")).clicked() {
                     self.run_drc();
                 }
@@ -283,20 +283,9 @@ impl BoardEditor {
                 ui.separator();
                 self.panel_widths(ui);
                 ui.separator();
-                let lacking = self.thermal_lacking();
-                if lacking > 0
-                    && ui
-                        .button(i18n::trf!("サーマルビアを置く ({lacking} 個の放熱パッド)"))
-                        .on_hover_text(i18n::tr("放熱パッド (ICの裏のパッドなど) の中に、熱を裏面へ逃がすビアを格子状に置きます。そのあと、裏面に同じネット (たいてい GND) のゾーンを作ると、熱が基板全体に広がります"))
-                        .clicked()
-                {
-                    self.checkpoint();
-                    let n = pcb_core::drc::add_thermal_vias(&mut self.board);
-                    self.status = if n > 0 { format!("サーマルビアを {n} 個置きました。裏面に同じネットのゾーンを作ってください") } else { "サーマルビアを置けませんでした (パッドが小さい、または他の穴に近すぎます)".into() };
-                }
-                if ui.button(i18n::tr("熱の地図…")).on_hover_text(i18n::tr("回路図の自己発熱の電力から、基板のどこが何 ℃ になるかを計算して、サーマルカメラのような色で重ねます。ベタやビアで熱がどう広がるかが分かります")).clicked() {
-                    self.open_thermal_view();
-                }
+                self.panel_heat(ui);
+                ui.separator();
+                self.panel_reflect(ui);
             }) {
                 opened = Some(Step::Check);
             }

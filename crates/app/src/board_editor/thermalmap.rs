@@ -89,6 +89,8 @@ impl BoardEditor {
     pub(crate) fn run_thermal_map(&mut self, sources: Result<(Vec<HeatSource>, Vec<(String, f64)>, f64), String>) {
         let t0 = std::time::Instant::now();
         self.thermal.texture = None;
+        let copper = self.board.stackup.copper_um;
+        let mut pairs = vec![];
         self.thermal.result = Some(sources.and_then(|(src, own, ambient)| {
             self.thermal.spec.ambient_c = ambient;
             self.thermal.own_temps = own;
@@ -96,19 +98,26 @@ impl BoardEditor {
             if src.is_empty() && self.thermal.traces.is_empty() {
                 return Err("電力の出ている部品がありません。回路図の「自己発熱」で電力の出る部品があるか確かめてください".into());
             }
-            pcb_core::thermal::thermal_map_with(&self.board, &src, &self.thermal.traces, self.board.stackup.copper_um, &self.thermal.spec)
-        }));
-        // the pairs of parts that warm each other: the parts with real power only (as the schematic's heat runs take from the board)
-        self.thermal.pairs = match &self.thermal.result {
-            Some(Ok(m)) => {
-                let top = m.parts.iter().map(|p| p.power).fold(0.0, f64::max);
-                let mut hot: Vec<HeatSource> = m.parts.iter().filter(|p| p.power >= 1e-3 && p.power >= 0.01 * top).filter_map(|p| self.thermal.sources.iter().find(|s| s.refdes == p.refdes).cloned()).collect();
-                hot.sort_by(|a, b| b.power.total_cmp(&a.power));
-                hot.truncate(sim_core::BOARD_HEATERS_MAX);
-                pcb_core::thermal::hot_pairs(&self.board, &hot, self.board.stackup.copper_um, &self.thermal.spec).unwrap_or_default()
+            // the parts that warm each other: those with real power only (as the schematic's heat runs take from the board)
+            let top = src.iter().map(|s| s.power).fold(0.0, f64::max);
+            let mut hot: Vec<HeatSource> = src.iter().filter(|s| s.power >= 1e-3 && s.power >= 0.01 * top).cloned().collect();
+            hot.sort_by(|a, b| b.power.total_cmp(&a.power));
+            hot.truncate(sim_core::BOARD_HEATERS_MAX);
+            let spec = self.thermal.spec;
+            if hot.len() == src.len() && self.thermal.traces.is_empty() {
+                // every source is one of them: the matrix's own map is the map (one solve for both)
+                let (r, map) = pcb_core::thermal::thermal_matrix(&self.board, &hot, copper, &spec)?;
+                pairs = pcb_core::thermal::hot_pairs_with(&self.board, &hot, &r, &map, copper, &spec).unwrap_or_default();
+                Ok(map)
+            } else {
+                let map = pcb_core::thermal::thermal_map_with(&self.board, &src, &self.thermal.traces, copper, &spec)?;
+                if hot.len() >= 2 {
+                    pairs = pcb_core::thermal::hot_pairs(&self.board, &hot, copper, &spec).unwrap_or_default();
+                }
+                Ok(map)
             }
-            _ => vec![],
-        };
+        }));
+        self.thermal.pairs = pairs;
         self.thermal.took_ms = t0.elapsed().as_secs_f64() * 1e3;
         self.thermal.serial += 1;
         self.thermal.transient = None;

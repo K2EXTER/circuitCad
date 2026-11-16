@@ -630,6 +630,7 @@ fn heat_copper_project_shows_the_pour_cooling_one_resistor() {
 
     app.apply_post_layout(true);
     assert!(app.sch.heat_copper["R1"].1 > 400.0, "{:?}", app.sch.heat_copper);
+    assert!(app.board_ed.post_layout_on.is_some(), "the board's \"回路図に反映\" shows it is on");
     // the board carried over: the two resistors are solved on the board's grid, and warm each other a little through it
     let v = app.sch.run_self_heat().unwrap();
     let part = |n: &str| v.parts.iter().find(|p| p.name == n).unwrap().clone();
@@ -659,7 +660,7 @@ fn heat_copper_project_shows_the_pour_cooling_one_resistor() {
     assert!((r2t.rise_peak / r2.rise - 1.0).abs() < 0.02, "over time {} K, steady {} K", r2t.rise_peak, r2.rise);
 
     app.apply_post_layout(false);
-    assert!(app.sch.heat_copper.is_empty() && app.sch.board_heat.is_none());
+    assert!(app.sch.heat_copper.is_empty() && app.sch.board_heat.is_none() && app.board_ed.post_layout_on.is_none());
 }
 
 /// Opening the window of a net with no current asks the schematic's DC analysis for that net alone and declares it (the others are left

@@ -436,6 +436,9 @@ pub(crate) struct Csr {
     g: Vec<f64>,
     /// The sum of the conductances of each row (the diagonal without the air).
     pub sum: Vec<f64>,
+    /// The group of each node for the two-level preconditioner, and the number of groups (`Model::groups`); empty = Jacobi alone.
+    pub agg: Vec<u32>,
+    pub groups: usize,
 }
 
 impl Csr {
@@ -460,7 +463,7 @@ impl Csr {
                 sum[x] += w;
             }
         }
-        Csr { start: count, col, g, sum }
+        Csr { start: count, col, g, sum, agg: vec![], groups: 0 }
     }
 
     /// `out = diag·v − offdiag·v`.
@@ -475,18 +478,106 @@ impl Csr {
     }
 }
 
-/// `A x = b` with A = diag − off-diagonal conductances, by Jacobi-preconditioned conjugate gradients from `x`, until the residual is
-/// `tol` of `b`. Returns the iterations.
+/// The two-level preconditioner: Jacobi on every node, plus a correction on groups of nodes (blocks of cells of a layer, and each
+/// junction on its own) solved exactly. Jacobi only damps the error from cell to cell; the error that spans the board (heat that has to
+/// spread through the copper to the air far away) is what makes plain Jacobi CG need hundreds of steps, and the groups take it out in
+/// one: `z = D⁻¹ r + P (Pᵀ A P)⁻¹ Pᵀ r`, with P the piecewise-constant spreading of a group's value to its nodes. Symmetric and positive
+/// definite as A is, so CG still applies.
+struct TwoLevel {
+    inv: Vec<f64>,
+    agg: Vec<u32>,
+    groups: usize,
+    /// The coarse matrix `Pᵀ A P` factored as L·Lᵀ (dense, row by row).
+    chol: Vec<f64>,
+}
+
+impl TwoLevel {
+    fn new(a: &Csr, diag: &[f64]) -> Option<TwoLevel> {
+        let nc = a.groups;
+        if nc == 0 || a.agg.len() != diag.len() {
+            return None;
+        }
+        let mut c = vec![0.0; nc * nc];
+        for i in 0..diag.len() {
+            let gi = a.agg[i] as usize;
+            c[gi * nc + gi] += diag[i];
+            for k in a.start[i]..a.start[i + 1] {
+                let gj = a.agg[a.col[k] as usize] as usize;
+                c[gi * nc + gj] -= a.g[k];
+            }
+        }
+        // Cholesky in place (lower triangle)
+        for j in 0..nc {
+            let mut d = c[j * nc + j];
+            for k in 0..j {
+                d -= c[j * nc + k] * c[j * nc + k];
+            }
+            if !(d > 0.0) {
+                return None;
+            }
+            let d = d.sqrt();
+            c[j * nc + j] = d;
+            for i in j + 1..nc {
+                let mut v = c[i * nc + j];
+                for k in 0..j {
+                    v -= c[i * nc + k] * c[j * nc + k];
+                }
+                c[i * nc + j] = v / d;
+            }
+        }
+        Some(TwoLevel { inv: diag.iter().map(|d| 1.0 / d).collect(), agg: a.agg.clone(), groups: nc, chol: c })
+    }
+
+    fn apply(&self, r: &[f64], z: &mut [f64]) {
+        let nc = self.groups;
+        let mut y = vec![0.0; nc];
+        for (i, v) in r.iter().enumerate() {
+            y[self.agg[i] as usize] += v;
+        }
+        // L y' = y, Lᵀ x = y'
+        for i in 0..nc {
+            let mut v = y[i];
+            for k in 0..i {
+                v -= self.chol[i * nc + k] * y[k];
+            }
+            y[i] = v / self.chol[i * nc + i];
+        }
+        for i in (0..nc).rev() {
+            let mut v = y[i];
+            for k in i + 1..nc {
+                v -= self.chol[k * nc + i] * y[k];
+            }
+            y[i] = v / self.chol[i * nc + i];
+        }
+        for (i, zi) in z.iter_mut().enumerate() {
+            *zi = r[i] * self.inv[i] + y[self.agg[i] as usize];
+        }
+    }
+}
+
+/// `A x = b` with A = diag − off-diagonal conductances, by preconditioned conjugate gradients from `x` (the two-level preconditioner
+/// when the matrix has its groups, else Jacobi), until the residual is `tol` of `b`. Returns the iterations.
 pub(crate) fn cg(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> usize {
     let n = b.len();
+    let two = TwoLevel::new(a, diag);
     let inv: Vec<f64> = diag.iter().map(|d| 1.0 / d).collect();
+    let precond = |r: &[f64], z: &mut [f64]| match &two {
+        Some(t) => t.apply(r, z),
+        None => {
+            for i in 0..r.len() {
+                z[i] = r[i] * inv[i];
+            }
+        }
+    };
     let mut r = vec![0.0; n];
     a.apply(diag, x, &mut r);
     for i in 0..n {
         r[i] = b[i] - r[i];
     }
-    let mut p: Vec<f64> = (0..n).map(|i| r[i] * inv[i]).collect();
-    let mut rz: f64 = (0..n).map(|i| r[i] * p[i]).sum();
+    let mut z = vec![0.0; n];
+    precond(&r, &mut z);
+    let mut p = z.clone();
+    let mut rz: f64 = (0..n).map(|i| r[i] * z[i]).sum();
     let limit = (tol * b.iter().map(|v| v * v).sum::<f64>().sqrt()).powi(2).max(1e-300);
     let mut ap = vec![0.0; n];
     for it in 0..20_000 {
@@ -496,23 +587,66 @@ pub(crate) fn cg(a: &Csr, diag: &[f64], b: &[f64], x: &mut [f64], tol: f64) -> u
             return it;
         }
         let alpha = rz / pap;
-        let (mut rz2, mut rr) = (0.0, 0.0);
+        let mut rr = 0.0;
         for i in 0..n {
             x[i] += alpha * p[i];
             r[i] -= alpha * ap[i];
-            rz2 += r[i] * r[i] * inv[i];
             rr += r[i] * r[i];
         }
         if rr < limit {
             return it + 1;
         }
+        precond(&r, &mut z);
+        let rz2: f64 = (0..n).map(|i| r[i] * z[i]).sum();
         let beta = rz2 / rz;
         rz = rz2;
         for i in 0..n {
-            p[i] = r[i] * inv[i] + beta * p[i];
+            p[i] = z[i] + beta * p[i];
         }
     }
     20_000
+}
+
+impl Model {
+    /// The groups of the two-level preconditioner for this model's nodes and `extra` junctions after them: square blocks of cells of each
+    /// layer, sized for about 250 groups in all, and each junction a group of its own.
+    fn groups(&self, extra: usize) -> (Vec<u32>, usize) {
+        let per_layer = (self.nodes() / self.layers.len().max(1)).max(1) as f64;
+        // a small grid: Jacobi alone is quick, and the coarse factorization would cost more than it saves
+        if per_layer < 8000.0 {
+            return (vec![], 0);
+        }
+        let target = (250.0 / self.layers.len() as f64).max(1.0);
+        let bs = ((per_layer / target).sqrt().ceil() as usize).max(1);
+        let (bw, bh) = (self.grid.w.div_ceil(bs), self.grid.h.div_ceil(bs));
+        // only the blocks that hold a node get a number
+        let mut id = vec![u32::MAX; self.layers.len() * bw * bh];
+        let mut agg = Vec::with_capacity(self.nodes() + extra);
+        let mut next = 0u32;
+        for &(l, c) in &self.cell_of {
+            let (i, j) = (c % self.grid.w, c / self.grid.w);
+            let b = l * bw * bh + (j / bs) * bw + i / bs;
+            if id[b] == u32::MAX {
+                id[b] = next;
+                next += 1;
+            }
+            agg.push(id[b]);
+        }
+        for _ in 0..extra {
+            agg.push(next);
+            next += 1;
+        }
+        (agg, next as usize)
+    }
+}
+
+/// The matrix of a model with its junctions, its groups set for the two-level preconditioner.
+fn system(m: &Model, extra: &[(usize, usize, f64)], junctions: usize) -> Csr {
+    let n = m.nodes() + junctions;
+    let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(extra).copied().collect();
+    let mut csr = Csr::new(n, &edges);
+    (csr.agg, csr.groups) = m.groups(junctions);
+    csr
 }
 
 /// The steady temperature rise (K above the air) of every node for heat `q` (W per node), and the per-node conductance to the air
@@ -541,8 +675,7 @@ fn air_conductance(m: &Model, spec: &ThermalSpec, rise: &[f64], air: &mut [f64])
 
 fn solve_rise(m: &Model, spec: &ThermalSpec, extra: &[(usize, usize, f64)], extra_air: &[f64], q: &[f64], rise: &mut Vec<f64>) -> (Vec<f64>, usize) {
     let n = m.nodes() + extra_air.len();
-    let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(extra).copied().collect();
-    let csr = Csr::new(n, &edges);
+    let csr = system(m, extra, extra_air.len());
     if rise.len() != n {
         *rise = vec![10.0; n];
     }
@@ -772,8 +905,7 @@ pub fn thermal_matrix(board: &Board, sources: &[HeatSource], copper_um: f64, spe
     let (extra, extra_air, _) = junctions(board, &m, sources);
     let n0 = m.nodes();
     let n = n0 + sources.len();
-    let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(&extra).copied().collect();
-    let csr = Csr::new(n, &edges);
+    let csr = system(&m, &extra, sources.len());
     let mut diag = csr.sum.clone();
     for k in 0..n0 {
         diag[k] += air[k];
@@ -814,7 +946,7 @@ pub struct ThermalTransient {
 
 /// How the board warms from the air's temperature when the sources' powers are switched on at t = 0 (or follow their `profile`), until
 /// `t_end` seconds: backward Euler (stable whatever the step) with steps growing from `t_end`/10⁵ (at least 1 ms) by a constant factor,
-/// about 120 of them, and a step end at every point of the profiles too; a step's power is the profile's mean over it (the energy of a
+/// about 60 of them, and a step end at every point of the profiles too; a step's power is the profile's mean over it (the energy of a
 /// pulse shorter than a step is kept; a repeating profile is averaged over the periods a long step holds). The wiring's own heat
 /// (`traces`) is held from t = 0. Each cell's h follows its rise of the step before. Each node's heat capacity is its copper and FR-4; a part's junction has its own `cth`
 /// (0: a little, so it follows its power within a step).
@@ -826,15 +958,14 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], traces: &[TraceH
     let (extra, extra_air, _) = junctions(board, &m, sources);
     let n0 = m.nodes();
     let n = n0 + sources.len();
-    let edges: Vec<(usize, usize, f64)> = m.edges.iter().chain(&extra).copied().collect();
-    let csr = Csr::new(n, &edges);
+    let csr = system(&m, &extra, sources.len());
     let mut cap = m.cap.clone();
     cap.extend(sources.iter().map(|s| s.cth.max(1e-6)));
     // the wiring's own heat, held from t = 0; the parts' power is set step by step
     let mut q = vec![0.0; n];
     trace_heat_into(&m, traces, &mut q);
     // steps: geometric from dt0 to t_end
-    let steps = 120usize;
+    let steps = 60usize;
     let dt0 = (t_end * 1e-5).max(1e-3).min(t_end / steps as f64);
     let growth = if t_end / dt0 > steps as f64 {
         // dt0 · (g^steps − 1) / (g − 1) = t_end
@@ -899,7 +1030,7 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], traces: &[TraceH
             diag[k] += cap[k] / step;
             b[k] = q[k] + cap[k] / step * rise[k];
         }
-        cg(&csr, &diag, &b, &mut rise, 1e-7);
+        cg(&csr, &diag, &b, &mut rise, 1e-5);
         t = end;
         times.push(t);
         for (e, p) in parts.iter_mut().enumerate() {
@@ -985,8 +1116,13 @@ pub const HOT_PAIR_SHARE: f64 = 0.15;
 /// λ = √(sheet conductance / h) (the board's mean copper and FR-4, both faces' h), and far from a source the heat falls as
 /// e^(−r/λ)/√r; the coupling as it is at today's distance is scaled by that until it is half the flagging level.
 pub fn hot_pairs(board: &Board, sources: &[HeatSource], copper_um: f64, spec: &ThermalSpec) -> Result<Vec<HotPair>, String> {
-    let m = model(board, copper_um, spec.cell_mm)?;
     let (r, map) = thermal_matrix(board, sources, copper_um, spec)?;
+    hot_pairs_with(board, sources, &r, &map, copper_um, spec)
+}
+
+/// `hot_pairs` from a matrix and its map already worked out for these `sources` (`thermal_matrix`): no solve of its own.
+pub fn hot_pairs_with(board: &Board, sources: &[HeatSource], r: &[Vec<f64>], map: &ThermalMap, copper_um: f64, spec: &ThermalSpec) -> Result<Vec<HotPair>, String> {
+    let m = model(board, copper_um, spec.cell_mm)?;
     let h = (map.h_top + map.h_bottom).max(1.0);
     let lambda_mm = (m.mean_sheet / h).sqrt() * 1e3;
     let pads = |n: &str| board.pads.iter().filter(|p| p.refdes == n).map(|p| p.pos).collect::<Vec<Point>>();
@@ -1263,6 +1399,44 @@ mod datasheet {
         let c = thermal_transient(&b, std::slice::from_ref(&chopped), &[], 35.0, &spec, 600.0, 4).unwrap();
         let (ea, ec) = (*a.parts[0].1.last().unwrap(), *c.parts[0].1.last().unwrap());
         assert!((ea - ec).abs() < 0.02 * (ea - 25.0), "1 W held {ea}, the PWM {ec}");
+    }
+
+    /// The time each step takes on a board of the usual size (100 × 80 mm, two layers, a ground pour on the bottom, 8 parts that heat):
+    /// `cargo test --release -p pcb-core thermal_bench -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn thermal_bench() {
+        let mut b = Board::new("t", 100.0, 80.0);
+        let mut src = vec![];
+        for k in 0..8 {
+            let name = format!("R{}", k + 1);
+            let (x, y) = (15.0 + 10.0 * k as f64, if k % 2 == 0 { 25.0 } else { 55.0 });
+            for dx in [-1.6, 1.6] {
+                let mut p = Pad::new(Point::new(x + dx, y), PadShape::Rect { w: 1.6, h: 1.2 }, None, Side::Top);
+                p.refdes = name.clone();
+                p.net = if dx < 0.0 { format!("N{k}") } else { "GND".into() };
+                b.pads.push(p);
+            }
+            src.push(HeatSource::new(&name, 0.3 + 0.05 * k as f64, 150.0, 0.0, 0.0));
+        }
+        let mut z = Zone::new("GND", Side::Bottom, vec![Point::new(1.0, 1.0), Point::new(99.0, 1.0), Point::new(99.0, 79.0), Point::new(1.0, 79.0)]);
+        z.clearance = 0.3;
+        b.zones.push(z);
+        let spec = ThermalSpec::default();
+        let time = |what: &str, f: &mut dyn FnMut()| {
+            let t0 = std::time::Instant::now();
+            f();
+            eprintln!("BENCH {what}: {:.0} ms", t0.elapsed().as_secs_f64() * 1e3);
+        };
+        time("model", &mut || drop(model(&b, 35.0, 0.0).unwrap()));
+        time("map", &mut || drop(thermal_map(&b, &src, 35.0, &spec).unwrap()));
+        time("matrix (8 parts)", &mut || drop(thermal_matrix(&b, &src, 35.0, &spec).unwrap()));
+        time("hot pairs", &mut || drop(hot_pairs(&b, &src, 35.0, &spec).unwrap()));
+        time("warm-up 600 s", &mut || drop(thermal_transient(&b, &src, &[], 35.0, &spec, 600.0, 8).unwrap()));
+        time("window: matrix and its map, pairs (one solve)", &mut || {
+            let (r, map) = thermal_matrix(&b, &src, 35.0, &spec).unwrap();
+            drop(hot_pairs_with(&b, &src, &r, &map, 35.0, &spec).unwrap());
+        });
     }
 
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the

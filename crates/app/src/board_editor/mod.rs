@@ -397,6 +397,9 @@ pub struct BoardEditor {
     pub current_stats: Vec<sim_core::NetStat>,
     /// The copper resistance of the current copper is in the schematic's analyses (set by `App`, cleared when the copper is widened).
     pub post_layout_fresh: bool,
+    /// The board is carried over to the schematic's analyses (its wiring and its heat; set by `App`), and the copper's fingerprint then
+    /// (to tell the board was changed since).
+    pub post_layout_on: Option<f64>,
     violations: Vec<drc::Violation>,
     import_notes: Vec<String>,
     /// Counts changes (one per `checkpoint`) and replaced boards; `saved_rev` is its value when the board was last saved or opened.
@@ -605,6 +608,7 @@ impl Default for BoardEditor {
             currents_tried: false,
             current_stats: vec![],
             post_layout_fresh: false,
+            post_layout_on: None,
             violations: vec![],
             import_notes: vec![],
             rev: 0,
@@ -740,6 +744,7 @@ pub fn set_multisampled(on: bool) {
 pub(crate) use draw::capsule;
 pub(crate) use view3d::gpu_init as view3d_gpu_init;
 pub(crate) use view3d::PartTemps;
+pub(crate) use width::copper_fingerprint;
 mod order;
 mod measure;
 mod livedrc;

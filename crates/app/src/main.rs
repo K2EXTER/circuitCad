@@ -171,6 +171,7 @@ impl App {
             self.sch.heat_copper.clear();
             self.sch.board_heat = None;
             self.board_ed.post_layout_fresh = false;
+            self.board_ed.post_layout_on = None;
             self.board_ed.status = "配線の抵抗・インダクタンス・容量を外しました。回路図のシミュレーションは理想の配線に戻ります".into();
             return;
         }
@@ -182,6 +183,7 @@ impl App {
         self.sch.board_heat = Some(schematic::BoardHeat::new(self.board_ed.board.clone(), series.clone()));
         self.sch.wiring = series.into_iter().map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry, farad: w.farad }).collect();
         self.board_ed.post_layout_fresh = !self.sch.wiring.is_empty();
+        self.board_ed.post_layout_on = (!self.sch.wiring.is_empty()).then(|| board_editor::copper_fingerprint(&self.board_ed.board));
         self.board_ed.status = if self.sch.wiring.is_empty() {
             "配線されたネットがないので、反映するものがありません。先に配線してください".into()
         } else {
@@ -281,7 +283,7 @@ impl eframe::App for App {
             self.mode = Mode::Schematic;
             self.sch.open_requirements();
         }
-        if let Some(on) = self.board_ed.post_layout_request.take() {
+        if let Some(on) = self.board_ed.post_layout_request.take().or_else(|| self.sch.post_layout_request.take()) {
             self.apply_post_layout(on);
         }
         if let Some(t) = self.sch.help_request.take().or_else(|| self.board_ed.help_request.take()) {

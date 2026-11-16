@@ -228,6 +228,8 @@ pub struct SchEditor {
     pub(crate) board_heat: Option<board_heat::BoardHeat>,
     /// The parts the last heat run took from the board's grid.
     pub(crate) board_heat_parts: Vec<String>,
+    /// The analysis tab's "外す": take the board's wiring and heat away (the App does it).
+    pub(crate) post_layout_request: Option<bool>,
     temp_from: String,
     temp_to: String,
     temp_step: String,
@@ -669,6 +671,7 @@ impl Default for SchEditor {
             heat_copper: Default::default(),
             board_heat: None,
             board_heat_parts: vec![],
+            post_layout_request: None,
             couplings: vec![],
             temp_from: "-20".into(),
             temp_to: "80".into(),

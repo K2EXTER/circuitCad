@@ -476,13 +476,23 @@ impl Session {
 {usage}"))).transpose()?;
         let board = self.board_mut()?;
         let t0 = std::time::Instant::now();
-        let m = pcb_core::thermal::thermal_map(board, &sources, board.stackup.copper_um, &spec)?;
         // the parts with real power that warm each other noticeably, with a distance to keep them apart
         let top = sources.iter().map(|s| s.power).fold(0.0, f64::max);
         let mut hot: Vec<pcb_core::thermal::HeatSource> = sources.iter().filter(|s| s.power >= 1e-3 && s.power >= 0.01 * top).cloned().collect();
         hot.sort_by(|a, b| b.power.total_cmp(&a.power));
         hot.truncate(sim_core::BOARD_HEATERS_MAX);
-        let pairs: Vec<Value> = pcb_core::thermal::hot_pairs(board, &hot, board.stackup.copper_um, &spec)?
+        let copper = board.stackup.copper_um;
+        // every source one of them: the matrix's own map is the map (one solve for both)
+        let (m, found) = if hot.len() == sources.len() && !hot.is_empty() {
+            let (r, map) = pcb_core::thermal::thermal_matrix(board, &hot, copper, &spec)?;
+            let found = pcb_core::thermal::hot_pairs_with(board, &hot, &r, &map, copper, &spec)?;
+            (map, found)
+        } else {
+            let map = pcb_core::thermal::thermal_map(board, &sources, copper, &spec)?;
+            let found = if hot.len() >= 2 { pcb_core::thermal::hot_pairs(board, &hot, copper, &spec)? } else { vec![] };
+            (map, found)
+        };
+        let pairs: Vec<Value> = found
             .iter()
             .map(|p| json!({"a": p.a, "b": p.b, "dist_mm": p.dist_mm, "a_from_b_k": p.a_from_b, "b_from_a_k": p.b_from_a, "rise_a_k": p.rise_a, "rise_b_k": p.rise_b, "suggest_mm": p.suggest_mm}))
             .collect();

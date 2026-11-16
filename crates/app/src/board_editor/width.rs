@@ -83,7 +83,7 @@ impl BoardEditor {
 }
 
 /// A number that changes whenever the copper or the declared currents change (to tell a stale result).
-fn copper_fingerprint(b: &Board) -> f64 {
+pub(crate) fn copper_fingerprint(b: &Board) -> f64 {
     let mut s = 0.0;
     for (i, t) in b.tracks.iter().enumerate() {
         s += (i as f64 + 1.0) * (t.a.x * 1.3 + t.a.y * 1.7 + t.b.x * 2.1 + t.b.y * 2.9 + t.width * 7.0 + if t.side == Side::Top { 0.0 } else { 3.3 });
@@ -104,6 +104,55 @@ fn copper_fingerprint(b: &Board) -> f64 {
 }
 
 impl BoardEditor {
+    /// "熱": the board's heat map and the thermal vias.
+    pub(super) fn panel_heat(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            crate::widgets::section_heading(ui, "熱");
+            crate::icons::help(ui, "部品の熱が基板のどこをどれだけ温めるかを調べます。熱の地図は回路図の「自己発熱」の電力から、銅 (ベタ・配線・ビア) が熱を広げ、表と裏の面から空気へ逃げる様子を計算します。部品どうしが近すぎるときの「離す」候補、電源を入れてからの時間の変化も出ます");
+        });
+        let bar = crate::widgets::segment_row(ui, &[("熱の地図…", true)]);
+        if bar[0].clicked() {
+            self.open_thermal_view();
+        }
+        bar[0].clone().on_hover_text(i18n::tr("回路図の自己発熱の電力から、基板のどこが何 ℃ になるかを計算して、サーマルカメラのような色で重ねます。ベタやビアで熱がどう広がるかが分かります"));
+        let lacking = self.thermal_lacking();
+        if lacking > 0
+            && ui
+                .button(i18n::trf!("サーマルビアを置く ({lacking} 個の放熱パッド)"))
+                .on_hover_text(i18n::tr("放熱パッド (ICの裏のパッドなど) の中に、熱を裏面へ逃がすビアを格子状に置きます。そのあと、裏面に同じネット (たいてい GND) のゾーンを作ると、熱が基板全体に広がります"))
+                .clicked()
+        {
+            self.checkpoint();
+            let n = pcb_core::drc::add_thermal_vias(&mut self.board);
+            self.status = if n > 0 { format!("サーマルビアを {n} 個置きました。裏面に同じネットのゾーンを作ってください") } else { "サーマルビアを置けませんでした (パッドが小さい、または他の穴に近すぎます)".into() };
+        }
+    }
+
+    /// "回路図に反映": what the board carries over to the schematic's analyses, whether it is on, and the button to carry it (again) or
+    /// to take it away.
+    pub(super) fn panel_reflect(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            crate::widgets::section_heading(ui, "回路図に反映");
+            crate::icons::help(ui, "この基板を回路図の解析に入れます。電気: 電源の入口から各ピンまでの配線の抵抗・インダクタンス・容量が、ピンの手前に直列に入ります (DC・過渡・AC・ノイズ)。熱: 自己発熱と温度の時間変化が、基板の熱の地図から部品の熱抵抗と部品どうしの温め合いを取り、配線の抵抗は配線の温度で計算します。配線していないネットは理想の線のままです");
+        });
+        let state = match self.post_layout_on {
+            None => egui::RichText::new(i18n::tr("いまは反映していません (回路図は理想の配線)")).weak(),
+            Some(fp) if (fp - copper_fingerprint(&self.board)).abs() > 1e-9 => egui::RichText::new(i18n::tr("反映中。そのあと基板が変わりました (もう一度押すと新しい配線で)")).color(crate::theme::WARN),
+            Some(_) => egui::RichText::new(i18n::tr("反映中: 配線の抵抗・インダクタンス・容量、基板の熱")).color(crate::theme::OK),
+        };
+        ui.label(state.small());
+        let on = self.post_layout_on.is_some();
+        let bar = crate::widgets::segment_row(ui, &[("シミュレーションに反映", true), ("外す", on)]);
+        if bar[0].clicked() {
+            self.post_layout_request = Some(true);
+        }
+        bar[0].clone().on_hover_text(i18n::tr("この基板の配線と熱を、回路図のシミュレーションに入れます。「配線を細くしたら電圧が落ちた」「ベタを広げたら部品が冷えた」を回路図の解析で確かめられます"));
+        if bar[1].clicked() {
+            self.post_layout_request = Some(false);
+        }
+        bar[1].clone().on_hover_text(i18n::tr("配線の抵抗と基板の熱を外し、回路図を理想の配線に戻します"));
+    }
+
     /// Declares a current for `net`, computes the drop and opens the panel (command line `--ir <net> <amps>`).
     pub fn show_ir_drop(&mut self, net: &str, amps: f64) {
         self.board.net_currents.insert(net.to_string(), amps);
@@ -118,23 +167,13 @@ impl BoardEditor {
         ui.horizontal(|ui| {
             crate::widgets::section_heading(ui, "配線の電圧降下");
             crate::icons::help(ui, "電流を入れたネットについて、配線の抵抗による電圧降下を調べます (電源とGNDの両方を調べると、部品に届く電圧が分かります)");
-            // turning the copper back off is a small action on this line, so the bar below keeps two wide buttons
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button(i18n::tr("やめる")).on_hover_text(i18n::tr("配線の抵抗を入れない理想の回路に戻します")).clicked() {
-                    self.post_layout_request = Some(false);
-                }
-            });
         });
-        let bar = crate::widgets::segment_row(ui, &[("計算する", true), ("シミュレーションに反映", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("計算する", true)]);
         if bar[0].clicked() {
             let fp = copper_fingerprint(&self.board);
             self.ir_drop = Some((fp, pcb_core::irdrop::net_drops(&self.board, &pcb_core::irdrop::IrSpec::default())));
         }
         bar[0].clone().on_hover_text(i18n::tr("上で入れた電流が流れたとき、電源の入口から各ピンまでの配線 (銅箔・ビア) で何 V 下がるかを求めます。配線を変えたら、もう一度押してください"));
-        if bar[1].clicked() {
-            self.post_layout_request = Some(true);
-        }
-        bar[1].clone().on_hover_text(i18n::tr("この基板の配線の抵抗とインダクタンスを、回路図のシミュレーション (DC・過渡・AC・ノイズ) に入れます。電源の入口から各ピンまでの銅箔の抵抗 (DCから効く) とインダクタンス (ACや速い変化で効く。細く長い配線で約 1 nH/mm。近くを並んで走る別のネットの配線とは磁気の結合も入れます) が、ピンの手前に直列に入ります。「配線を細くしたら電圧が落ちた」を波形で確かめられます。配線していないネットは理想の線のままです"));
         let fp = copper_fingerprint(&self.board);
         let Some((made_for, nets)) = self.ir_drop.as_ref() else {
             return;

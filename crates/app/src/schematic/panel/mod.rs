@@ -104,6 +104,18 @@ impl SchEditor {
                         .desired_width(f32::INFINITY),
                 )
                 .on_hover_text(i18n::tr("解析の名前と説明から探します。空にすると全部に戻ります"));
+                // the board carried over: what is in the analyses, and the way back to the ideal wiring
+                if !self.wiring.is_empty() {
+                    ui.horizontal(|ui| {
+                        let what = if self.board_heat.is_some() { i18n::tr("基板を反映中: 配線の抵抗・インダクタンス・容量、基板の熱") } else { i18n::tr("基板を反映中: 配線の抵抗・インダクタンス・容量") };
+                        ui.label(egui::RichText::new(what).small().color(crate::theme::OK)).on_hover_text(i18n::tr(
+                            "基板エディタの「③ 確認する」の「回路図に反映」で、基板の配線と熱が解析に入っています。DC・過渡・AC・ノイズは配線の抵抗などを、自己発熱と温度の時間変化は基板の熱の地図の熱抵抗を使います",
+                        ));
+                        if ui.small_button(i18n::tr("外す")).on_hover_text(i18n::tr("配線の抵抗と基板の熱を外し、理想の配線に戻します")).clicked() {
+                            self.post_layout_request = Some(false);
+                        }
+                    });
+                }
                 // the selected part's values, to change one and run again without going back to the drawing tab
                 if self.selected_part_band(ui, true) {
                     crate::widgets::group_gap(ui);
