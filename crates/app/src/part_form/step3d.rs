@@ -5,7 +5,7 @@ use super::*;
 use pcb_core::mesh::Mesh3d;
 
 /// The most triangles kept with a part (a bigger mesh is thinned out): the 3D view draws every one each frame.
-const KEEP_TRIANGLES: usize = 12_000;
+const KEEP_TRIANGLES: usize = pcb_core::mesh::KEEP_TRIANGLES;
 
 impl PartForm {
     /// The pads of the footprint as the form builds it: (x, y, w, h).
@@ -165,40 +165,7 @@ pub(crate) fn mesh_over_pads(bytes: &[u8], def: &PartDef) -> Result<Mesh3d, Stri
     Ok(m.shifted([cx - (lo[0] + hi[0]) / 2.0, cy - (lo[1] + hi[1]) / 2.0, -lo[2]]))
 }
 
-/// The mesh with at most about `keep` triangles: the vertices are snapped to a grid that gets coarser until it fits, and
-/// the triangles that fall flat are dropped. A preview needs the outline, not every facet.
-pub(crate) fn thin_out(mesh: Mesh3d, keep: usize) -> Mesh3d {
-    if mesh.triangles.len() <= keep {
-        return mesh;
-    }
-    let Some((lo, hi)) = mesh.bounds() else { return mesh };
-    let size = (hi[0] - lo[0]).max(hi[1] - lo[1]).max(hi[2] - lo[2]).max(1e-6);
-    let mut cells = 400.0;
-    loop {
-        let step = size / cells;
-        let mut index: std::collections::HashMap<(i64, i64, i64), u32> = std::collections::HashMap::new();
-        let mut out = Mesh3d { palette: mesh.palette.clone(), ..Default::default() };
-        let mut map = vec![0u32; mesh.vertices.len()];
-        for (i, v) in mesh.vertices.iter().enumerate() {
-            let key = ((f64::from(v[0]) / step).round() as i64, (f64::from(v[1]) / step).round() as i64, (f64::from(v[2]) / step).round() as i64);
-            map[i] = *index.entry(key).or_insert_with(|| {
-                out.vertices.push([(key.0 as f64 * step) as f32, (key.1 as f64 * step) as f32, (key.2 as f64 * step) as f32]);
-                (out.vertices.len() - 1) as u32
-            });
-        }
-        for (t, c) in mesh.triangles.iter().zip(&mesh.tri_color) {
-            let n = [map[t[0] as usize], map[t[1] as usize], map[t[2] as usize]];
-            if n[0] != n[1] && n[1] != n[2] && n[0] != n[2] {
-                out.triangles.push(n);
-                out.tri_color.push(*c);
-            }
-        }
-        if out.triangles.len() <= keep || cells < 20.0 {
-            return out;
-        }
-        cells *= 0.8;
-    }
-}
+pub(crate) use pcb_core::mesh::thin_out;
 
 /// A small picture of the mesh from above (`front` false) or from the front: filled facets, far ones first.
 fn mesh_view(ui: &mut egui::Ui, m: &Mesh3d, pads: &[(f64, f64, f64, f64)], front: bool) {

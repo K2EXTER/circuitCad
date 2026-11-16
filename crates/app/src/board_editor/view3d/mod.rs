@@ -125,6 +125,14 @@ impl BoardEditor {
     }
 
     /// The GPU's look: white (`--3d-look clay`) or the colours, and the ambient occlusion on or off (`--3d-ao 0`).
+    /// Turns the 3D view (`--3d-cam yaw,pitch,zoom` for screenshots): yaw and pitch in degrees, zoom 1 = the whole board.
+    pub fn view3d_camera(&mut self, yaw_deg: f32, pitch_deg: f32, zoom: f32) {
+        self.view3d.yaw = yaw_deg.to_radians();
+        self.view3d.pitch = pitch_deg.to_radians();
+        self.view3d.zoom = zoom.clamp(0.2, MAX_ZOOM);
+        self.view3d.touched = true;
+    }
+
     pub fn view3d_look(&mut self, clay: bool, ao: bool) {
         self.view3d.look = if clay { gpu::Look::Clay } else { gpu::Look::Color };
         self.view3d.ao = ao;

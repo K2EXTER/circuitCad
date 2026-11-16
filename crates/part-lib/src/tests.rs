@@ -965,3 +965,35 @@ fn every_rebuild_of_a_model_is_offered_once() {
     assert_ne!(rebuilt_key("LM358_SOIC-8", text), "LM358_SOIC-8+model2026-11");
     assert_eq!(rebuilt_key("LM358_SOIC-8", text), rebuilt_key("LM358_SOIC-8", text));
 }
+
+/// The bundled DC jack and the three-phase source's terminal block carry a 3D body (from a SolidCraft template, a few hundred
+/// triangles standing on the board with the legs below it); an installed copy without it gets it once, an edited one does not.
+#[test]
+fn bundled_template_bodies_and_old_copies_get_them_once() {
+    for name in ["DC_JACK_DEMO_TH", "AC3P_10V_50Hz"] {
+        let m = example(name).model3d.unwrap_or_else(|| panic!("{name} has a 3D body"));
+        assert!((100..2_000).contains(&m.triangles.len()), "{name}: {} triangles", m.triangles.len());
+        let (lo, hi) = m.bounds().unwrap();
+        assert!(lo[2] < -3.0 && hi[2] > 9.0, "{name}: legs below the board, body above: {lo:?} {hi:?}");
+    }
+    let bundled = example("AC3P_10V_50Hz");
+    let dir = std::env::temp_dir().join(format!("cc_body3d_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut old = bundled.clone();
+    old.model3d = None;
+    let file = dir.join(format!("AC3P_10V_50Hz{}", crate::FILE_SUFFIX));
+    std::fs::write(&file, serde_json::to_string_pretty(&old).unwrap()).unwrap();
+    std::fs::write(dir.join(".bundled"), "AC3P_10V_50Hz").unwrap();
+    install_examples(&dir).unwrap();
+    let after: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert!(after.model3d.is_some(), "the unmodified copy gets the body");
+    let mut edited = old.clone();
+    edited.description = "my own words".into();
+    std::fs::write(&file, serde_json::to_string_pretty(&edited).unwrap()).unwrap();
+    std::fs::write(dir.join(".bundled"), "AC3P_10V_50Hz").unwrap();
+    install_examples(&dir).unwrap();
+    let kept: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert!(kept.model3d.is_none() && kept.description == "my own words", "an edited copy stays as it is");
+    let _ = std::fs::remove_dir_all(&dir);
+}

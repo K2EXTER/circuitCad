@@ -266,6 +266,9 @@ pub struct PartForm {
     pub sc_dir: Option<std::path::PathBuf>,
     pub sc_seen: Option<std::time::SystemTime>,
     pub sc_msg: Option<Result<String, String>>,
+    /// "ひな形から作る": the template picked (None = the one that fits the footprint) and the dimensions changed from its usual ones.
+    pub sc_template: Option<pcb_core::shape_script::Template>,
+    pub sc_dims: std::collections::BTreeMap<String, f64>,
     /// Where the numbers that were clicked in the PDF came from (field, page, text).
     pub sources: Vec<pdf_input::Source>,
     /// What the last click in the PDF did: (worked, message).
@@ -404,6 +407,8 @@ impl Default for PartForm {
             sc_dir: None,
             sc_seen: None,
             sc_msg: None,
+            sc_template: None,
+            sc_dims: Default::default(),
             rt_rows: String::new(),
             rt_ripple: String::new(),
             rt_ripple_f: "100k".into(),

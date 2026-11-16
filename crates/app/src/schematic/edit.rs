@@ -23,6 +23,20 @@ impl SchEditor {
         }
     }
 
+    /// Opens a library part in the part form (`--edit-part <name>`, as its 編集 button does).
+    pub fn edit_part_in_form(&mut self, name: &str) {
+        if let Some(d) = self.library.iter().find(|d| d.name.eq_ignore_ascii_case(name)).cloned() {
+            self.form = Some(crate::part_form::PartForm::from_def(&d));
+        }
+    }
+
+    /// Builds the open form's 3D shape from its template with SolidCraft (`--form-shape`, for screenshots).
+    pub fn form_shape_from_template(&mut self) {
+        if let Some(f) = self.form.as_mut() {
+            f.sc_msg = Some(f.shape_from_template());
+        }
+    }
+
     /// Reads a STEP file into the open new-part form (`--form-step <file>`).
     pub fn load_step_into_form(&mut self, path: &std::path::Path) {
         if let Some(f) = self.form.as_mut() {

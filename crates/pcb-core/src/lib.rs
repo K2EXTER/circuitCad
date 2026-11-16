@@ -62,6 +62,7 @@ pub mod ratsnest;
 pub(crate) mod replicas;
 pub mod reroute;
 pub mod shape;
+pub mod shape_script;
 pub mod shops;
 pub mod requirements;
 pub mod shove;

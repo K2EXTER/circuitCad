@@ -66,6 +66,11 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         data sheet: answers the .model card, its notes and each reading next to the model's
                                         value (rows, error_pct); 'write' puts it into DIR/<part>.part.json (default: the library).
                                         The file's form: crates/part-lib/fits/*.fit.json (the bundled parts' readings)
+ 3D body of a part
+  shape [TEMPLATE|auto] part=NAME [DIM=mm ...] [dir=DIR] [max=TRIANGLES] [write]
+                                        a body from a template (dc_jack, tact, relay, terminal; 'auto' picks by the footprint) as a
+                                        SolidCraft script on the part's own pads; with SolidCraft installed it builds the body
+                                        ('write' puts it into the part, max= thins it). 'shape' alone lists the templates and their dimensions
  Design help
   calc [KEY NUMBER ...]                 value calculators (led, divider, rc, regulator, buck, boost, opamp, ...): no
                                         arguments lists them with their inputs; the answer has the value, steps, cautions
@@ -330,6 +335,7 @@ impl Session {
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),
             "fit" => self.fit(args),
+            "shape" => self.shape(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),
             "req" => self.req(args),

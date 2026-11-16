@@ -700,6 +700,23 @@ fn is_original_without_ratings(file: &Path, bundled: &str) -> bool {
     old == new
 }
 
+/// Key recorded in `.bundled` once a part has been offered its 3D body (`model3d`).
+fn body3d_key(name: &str) -> String {
+    format!("{name}+body3d")
+}
+
+/// Is the file an unmodified copy of the bundled part from before it carried a 3D body?
+/// (Equal to the bundled part in every field except `model3d`.)
+fn is_original_without_body3d(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
+    if new.model3d.is_none() || old.model3d.is_some() {
+        return false;
+    }
+    new.model3d = None;
+    old == new
+}
+
 /// Key recorded in `.bundled` once a part has been offered its corrected pads.
 fn pads_key(name: &str) -> String {
     format!("{name}+pads")
@@ -876,6 +893,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if !fresh.contains(&file) && file.exists() && is_original_without_shops(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
+    // parts that gained a 3D body (built from a SolidCraft template, 2026-11-16): replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = body3d_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if !fresh.contains(&file) && file.exists() && is_original_without_body3d(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);

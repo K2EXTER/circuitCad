@@ -15,6 +15,7 @@ pub mod mcp;
 mod models;
 mod reqcmd;
 pub mod runner;
+mod shapecmd;
 mod sheetcmd;
 pub mod session;
 

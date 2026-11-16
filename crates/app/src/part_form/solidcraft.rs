@@ -94,22 +94,7 @@ impl Drawing {
     }
 }
 
-/// The SolidCraft programs: (command line, app). `SOLIDCRAFT_DIR` names the folder; else the PATH; else the usual install folder.
-pub fn find_solidcraft() -> Option<(PathBuf, PathBuf)> {
-    let pair = |dir: &Path| {
-        let (cli, app) = (dir.join("solidcraft-cli.exe"), dir.join("solidcraft.exe"));
-        (cli.is_file() && app.is_file()).then_some((cli, app))
-    };
-    if let Some(d) = std::env::var_os("SOLIDCRAFT_DIR") {
-        return pair(Path::new(&d));
-    }
-    if let Some(path) = std::env::var_os("PATH")
-        && let Some(found) = std::env::split_paths(&path).find_map(|d| pair(&d))
-    {
-        return Some(found);
-    }
-    pair(Path::new(r"C:\Program Files\SolidCraft"))
-}
+pub use pcb_core::shape_script::{Template, find_solidcraft};
 
 /// The triangles of a STEP file as SolidCraft cuts them (`solidcraft-cli run --in FILE --out FILE.obj`): every curved face follows its
 /// surface (a dome, a round, a free-form face), where our own reader makes flat patches of what is not a plane, a cylinder, a cone, a
@@ -243,9 +228,90 @@ impl PartForm {
         ctx.request_repaint_after(std::time::Duration::from_secs(1));
     }
 
+    /// The template that would be used: the one picked, else the one that fits the footprint.
+    fn shape_template(&self) -> Option<Template> {
+        self.sc_template.or_else(|| {
+            let def = self.to_def().ok()?;
+            Template::for_footprint(&def.prefix, &def.footprint_name())
+        })
+    }
+
+    /// Builds the body from the template with SolidCraft and takes it as the part's 3D shape (in the footprint's frame
+    /// already: not centred or dropped again).
+    pub(crate) fn shape_from_template(&mut self) -> Result<String, String> {
+        let t = self.shape_template().ok_or_else(|| i18n::tr("ひな形を選んでください (このフットプリントに合うひな形が見つかりません)").to_string())?;
+        let def = self.to_def()?;
+        let fp = def.footprint()?;
+        let script = pcb_core::shape_script::script(t, &self.sc_dims, &fp.pads)?;
+        let (cli, _) = find_solidcraft().ok_or_else(|| i18n::tr(SOLIDCRAFT_MISSING).to_string())?;
+        let dir = work_dir(&def.name).join("template");
+        let mesh = pcb_core::shape_script::build(&cli, &script, &dir)?;
+        let n = mesh.triangles.len();
+        self.step_base = Some(mesh);
+        self.step_rot = [0; 3];
+        (self.step_center, self.step_drop) = (false, false);
+        self.step_file = i18n::trf!("ひな形: {}", i18n::tr(t.label()));
+        self.step_by = super::step3d::StepBy::SolidCraft;
+        self.step_msg = String::new();
+        self.step_apply();
+        self.sc_dir = Some(dir.clone());
+        Ok(i18n::trf!("「{}」の形を作りました (三角形 {n} 個)。上から・横から見た図で確かめてください。SolidCraft の台本 shape.json は {} にあり、SolidCraft で開いて直せます", i18n::tr(t.label()), dir.display()))
+    }
+
+    /// "ひな形から作る": pick a template, change its dimensions, build it.
+    fn shape_template_ui(&mut self, ui: &mut egui::Ui, found: bool) {
+        ui.label(egui::RichText::new(i18n::tr("ひな形から作る")).strong());
+        ui.label(egui::RichText::new(i18n::tr("DC ジャック・タクトスイッチ・リレー・ねじ端子台は、寸法を入れるだけで形を作れます。足はこの部品のパッドの穴に立ちます。寸法の既定はよくある大きさなので、データシートの値に直してください")).weak());
+        let auto = self.to_def().ok().and_then(|d| Template::for_footprint(&d.prefix, &d.footprint_name()));
+        let shown = |t: Option<Template>| match t {
+            Some(t) => i18n::tr(t.label()).to_string(),
+            None => i18n::tr("(合うひな形なし)").to_string(),
+        };
+        let before = self.sc_template;
+        egui::ComboBox::from_id_salt("part_shape_template")
+            .selected_text(match self.sc_template {
+                None => i18n::trf!("フットプリントから: {}", shown(auto)),
+                Some(t) => i18n::tr(t.label()).to_string(),
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.sc_template, None, i18n::trf!("フットプリントから: {}", shown(auto)));
+                for t in Template::ALL {
+                    ui.selectable_value(&mut self.sc_template, Some(t), i18n::tr(t.label()));
+                }
+            })
+            .response
+            .on_hover_text(i18n::tr("フットプリントの名前 (jack・sw_push・relay・terminalblock など) から合うひな形を選びます。違うときは選び直します"));
+        if self.sc_template != before {
+            self.sc_dims.clear();
+        }
+        let Some(t) = self.shape_template() else { return };
+        egui::Grid::new("part_shape_dims").num_columns(2).show(ui, |ui| {
+            for p in t.params() {
+                let mut v = self.sc_dims.get(p.key).copied().unwrap_or(p.default);
+                ui.label(i18n::tr(p.label));
+                if ui.add(egui::DragValue::new(&mut v).speed(0.1).max_decimals(2)).on_hover_text(i18n::trf!("既定は {}", p.default)).changed() {
+                    self.sc_dims.insert(p.key.to_string(), v);
+                }
+                ui.end_row();
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui.add_enabled(found, egui::Button::new(i18n::tr("ひな形で形を作る"))).on_hover_text(i18n::tr("SolidCraft で形を作って、この部品の 3D の形にします (1〜2 秒)。SolidCraft の画面は開きません")).on_disabled_hover_text(i18n::tr(SOLIDCRAFT_MISSING)).clicked() {
+                self.sc_msg = Some(self.shape_from_template());
+            }
+            if !self.sc_dims.is_empty() && ui.small_button(i18n::tr("寸法を既定に戻す")).clicked() {
+                self.sc_dims.clear();
+            }
+        });
+        ui.separator();
+    }
+
     /// The "SolidCraft で形を作る" panel inside the 3D section.
     pub(super) fn solidcraft_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new(i18n::tr("STEP が無いとき: SolidCraft で形を作る")).id_salt("part_solidcraft").default_open(!self.sc_drawings.is_empty()).show(ui, |ui| {
+        let open = !self.sc_drawings.is_empty() || self.shape_template().is_some();
+        egui::CollapsingHeader::new(i18n::tr("STEP が無いとき: SolidCraft で形を作る")).id_salt("part_solidcraft").default_open(open).show(ui, |ui| {
+            self.shape_template_ui(ui, find_solidcraft().is_some());
+            ui.label(egui::RichText::new(i18n::tr("データシートから作る")).strong());
             ui.label(egui::RichText::new(i18n::tr("データシートの外形図 (Package Outline・Dimensions) を切り出して、無料の CAD「SolidCraft」に下絵として渡します。SolidCraft で形を作って STEP で保存すると、ここに読み込みます")).weak());
             let has_doc = self.sheet.has_doc();
             ui.horizontal_wrapped(|ui| {
