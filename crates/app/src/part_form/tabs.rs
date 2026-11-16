@@ -72,6 +72,15 @@ impl PartForm {
         match self.ptype {
             Some(PartType::Ic) => {
                 ui.label(egui::RichText::new(i18n::tr("かんたん作成 (ひな形)")).strong());
+                // the op-amp and regulator boxes open by themselves for those symbols; for another IC they wait closed
+                match self.glyph.as_str() {
+                    "opamp" => self.opamp_ui(ui),
+                    "regulator" => self.regulator_ui(ui),
+                    _ => {
+                        egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").show(ui, |ui| self.opamp_ui(ui));
+                        egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").show(ui, |ui| self.regulator_ui(ui));
+                    }
+                }
                 self.template_ui(ui);
                 self.logic_ui(ui);
                 self.order_guide(ui, "ほかの IC の入力の順番:");

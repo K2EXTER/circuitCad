@@ -31,6 +31,13 @@ pub fn edit_part(text: &str, f: &Fitted) -> Result<String, String> {
     if !f.url.is_empty() {
         t = set(&t, &["datasheet"], &json!(f.url))?;
     }
+    // only the parameters the part already has (a fixed regulator has `vout`, the adjustable one `vref`)
+    let has: Value = serde_json::from_str(&t).map_err(|e| format!("部品のファイルが読めません ({e})"))?;
+    for (k, v) in &f.params {
+        if has["sim"]["params"].get(k).is_some() {
+            t = set(&t, &["sim", "params", k], &json!(v))?;
+        }
+    }
     Ok(t)
 }
 
@@ -195,6 +202,7 @@ mod tests {
             limits: vec!["a".into(), "b \"q\"".into()],
             rows: vec![],
             notes: vec![],
+            params: vec![],
         }
     }
 

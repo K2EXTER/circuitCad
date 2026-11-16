@@ -1,0 +1,17 @@
+{
+  "kind": "shunt",
+  "part": "TL431_SOT-23",
+  "name": "TL431",
+  "read": "2026-11-11",
+  "source": "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。25 °C",
+  "cite": "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)",
+  "vref": 2.495,
+  "vref_min": 2.44,
+  "vref_max": 2.55,
+  "iref": 2e-06,
+  "dvref_dvka": -0.0014,
+  "zka": 0.2,
+  "ioff": 1e-07,
+  "ioff_v": 36.0,
+  "imin": 0.0004
+}

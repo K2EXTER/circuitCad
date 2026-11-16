@@ -71,6 +71,27 @@ fn the_bundled_models_are_what_their_readings_give() {
     }
 }
 
+/// The op amps, regulators and the TL431 (made by `tools/gen_opamp_models.py` and `gen_regulator_models.py` before M3):
+/// the templates give the bundled model to the character, and the description and parameters the part has.
+#[test]
+fn the_templates_give_the_bundled_op_amps_and_regulators_exactly() {
+    let mut n = 0;
+    for (spec, f, part) in bundled() {
+        if !matches!(spec, Spec::Opamp(_) | Spec::Regulator(_) | Spec::Shunt(_)) {
+            continue;
+        }
+        n += 1;
+        let d: crate::PartDef = serde_json::from_str(&part).unwrap();
+        let sim = d.sim.unwrap();
+        assert_eq!(sim.text, f.text, "{}", f.part);
+        if matches!(spec, Spec::Opamp(_)) {
+            assert_eq!(d.description, f.description, "{}", f.part);
+        }
+        assert_eq!(edit::edit_part(&part, &f).unwrap(), part, "{}: writing the model back changes the file", f.part);
+    }
+    assert_eq!(n, 15, "6 op amps, 8 regulators and the TL431");
+}
+
 #[test]
 fn writing_the_fit_back_changes_nothing_else_in_the_file() {
     for (_, f, part) in bundled() {
@@ -101,6 +122,9 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
                 let threshold = if m.transfer.is_some() { usize::from(m.vth_range.is_some()) } else { 1 };
                 threshold + m.transfer.as_ref().map_or(0, |t| t.points.len()) + m.rds.len() + 2 + m.gfs.map_or(0, |_| 1) + m.body_diode.as_ref().map_or(0, |b| b.points.len())
             }
+            // built from typ values with a template, not fitted: nothing to compare here (the measuring tests in
+            // crates/cli/tests/integration/{opamp,regulator}_models.rs compare them with their data sheets)
+            Spec::Opamp(_) | Spec::Regulator(_) | Spec::Shunt(_) => 0,
         };
         assert_eq!(f.rows.len(), n, "{}", f.part);
         // a reading the model's form cannot follow is said in a note (with its condition); the others stay near

@@ -1,0 +1,41 @@
+{
+  "kind": "regulator",
+  "part": "MCP1700-3302_SOT-23",
+  "name": "MCP1700-3302",
+  "read": "2026-11-11",
+  "source": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA",
+  "cite": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS (VIN = 4.3 V、ILOAD = 100 µA)",
+  "from_figures": "ライン・レギュレーションは表の typ「±0.75 %/V」をそのまま使った (表の値。代表特性の図は見ていない)。出力電圧の min と max (±2.0 %) は、新しい版の DS20001826E (2018) の表から写した",
+  "vout": 3.3,
+  "vrange": [
+    3.234,
+    3.3659999999999997
+  ],
+  "vin0": 4.3,
+  "line": 0.024749999999999998,
+  "rout": 0.13205282112845138,
+  "vdo0": 0.0,
+  "rdo": 0.712,
+  "iq": 1.6e-06,
+  "ilim": [
+    {
+      "diff": 1.0,
+      "amps": 0.408
+    },
+    {
+      "diff": 6.0,
+      "amps": 0.408
+    }
+  ],
+  "rr": 44.0,
+  "rr_f": 100.0,
+  "noise": {
+    "density": 3e-06
+  },
+  "remarks": [
+    "vrange = (3.3 * 0.98, 3.3 * 1.02)",
+    "line = 0.75e-2 * 3.3",
+    "rout = 0.01 * 3.3 / 0.2499",
+    "rdo = 0.178 / 0.25"
+  ]
+}

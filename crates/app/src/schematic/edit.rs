@@ -102,6 +102,23 @@ impl SchEditor {
         }
     }
 
+    /// The op-amp or regulator box of the form made: "opamp" (the LM358 example), "opamp-pdf" (read from the form's PDF),
+    /// "fixed" (LM7805) or "adj" (LM317). The symbol is set so that the box is the one shown.
+    pub fn linear_in_form(&mut self, what: &str) {
+        if let Some(f) = self.form.as_mut() {
+            match what {
+                "opamp" | "opamp-pdf" => {
+                    f.glyph = "opamp".into();
+                    if what == "opamp" { f.opamp_example_and_make() } else { f.opamp_from_pdf_and_make() }
+                }
+                _ => {
+                    f.glyph = "regulator".into();
+                    f.regulator_example_and_make(what == "adj");
+                }
+            }
+        }
+    }
+
     /// The logic IC box with the half adder, applied (`--form-logic-example`, with `--new-part ic`).
     pub fn logic_in_form(&mut self, counter: bool) {
         if let Some(f) = self.form.as_mut() {

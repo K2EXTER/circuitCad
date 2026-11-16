@@ -1,0 +1,41 @@
+{
+  "kind": "regulator",
+  "part": "AMS1117-3.3_SOT-223",
+  "name": "AMS1117-3.3",
+  "read": "2026-11-11",
+  "source": "Advanced Monolithic Systems AMS1117 データシートの ELECTRICAL CHARACTERISTICS。25 °C",
+  "cite": "Advanced Monolithic Systems AMS1117 データシートの ELECTRICAL CHARACTERISTICS (AMS1117-3.3)",
+  "vout": 3.3,
+  "vrange": [
+    3.251,
+    3.349
+  ],
+  "vin0": 4.8,
+  "line": 4.761904761904762e-05,
+  "rout": 0.00375,
+  "vdo0": 1.1,
+  "rdo": 0.0,
+  "iq": 0.005,
+  "ilim": [
+    {
+      "diff": 1.5,
+      "amps": 1.1
+    },
+    {
+      "diff": 12.0,
+      "amps": 1.1
+    }
+  ],
+  "rr": 72.0,
+  "rr_f": 120.0,
+  "noise": {
+    "rms": 9.9e-05,
+    "f_low": 10.0,
+    "f_high": 10000.0
+  },
+  "remarks": [
+    "line = 0.5e-3 / 10.5",
+    "rout = 3e-3 / 0.8",
+    "noise = (3.3 * 0.003e-2, 10, 10e3)"
+  ]
+}

@@ -2,7 +2,9 @@
 //! (table values and points read on its graphs); [`fit`] turns it into the `.model` card, the notes shown with the model
 //! (`sim.limits`) and a table of how far the model lands from each reading. [`write_part`] puts the model into the
 //! part's `.part.json`. The bundled diodes, transistors and MOSFETs are made this way (their readings are in
-//! `crates/part-lib/fits/`); `ccad fit FILE` runs it from the command line. Details: `docs/code-notes/part-lib.md`.
+//! `crates/part-lib/fits/`); `ccad fit FILE` runs it from the command line. Op amps, linear regulators and shunt
+//! references are not fitted but built from the data sheet's typ values with a template (`opamp`, `regulator`; M3).
+//! Details: `docs/code-notes/part-lib.md`.
 
 mod bjt;
 mod darlington;
@@ -10,19 +12,23 @@ mod diode;
 mod edit;
 mod mos;
 pub mod num;
+pub mod opamp;
 mod opto;
+pub mod regulator;
 
 pub use bjt::BjtSpec;
 pub use darlington::DarlingtonSpec;
 pub use diode::DiodeSpec;
 pub use edit::write_part;
 pub use mos::{Caps, MosSpec};
+pub use opamp::OpampSpec;
 pub use opto::{OptocouplerSpec, PhotodiodeSpec};
+pub use regulator::{RegulatorSpec, ShuntSpec};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt", "mos", "darlington", "photodiode"
-/// or "optocoupler".
+/// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt", "mos", "darlington", "photodiode",
+/// "optocoupler", "opamp", "regulator" or "shunt".
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Spec {
@@ -32,6 +38,9 @@ pub enum Spec {
     Darlington(darlington::DarlingtonSpec),
     Photodiode(opto::PhotodiodeSpec),
     Optocoupler(opto::OptocouplerSpec),
+    Opamp(opamp::OpampSpec),
+    Regulator(regulator::RegulatorSpec),
+    Shunt(regulator::ShuntSpec),
 }
 
 /// The fields every kind has.
@@ -65,12 +74,15 @@ impl Spec {
             Spec::Darlington(s) => &s.common,
             Spec::Photodiode(s) => &s.common,
             Spec::Optocoupler(s) => &s.common,
+            Spec::Opamp(s) => &s.common,
+            Spec::Regulator(s) => &s.common,
+            Spec::Shunt(s) => &s.common,
         }
     }
 
     pub fn load(path: &Path) -> Result<Spec, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler。形は crates/part-lib/fits/ の例を見てください)", path.display()))
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / regulator / shunt。形は crates/part-lib/fits/ の例を見てください)", path.display()))
     }
 }
 
@@ -110,6 +122,9 @@ pub struct Fitted {
     pub rows: Vec<Row>,
     /// Things to look at (a reading the model's form cannot follow).
     pub notes: Vec<String>,
+    /// Values of the part's `sim.params` the model sets (written only where the part has them: a regulator's `vout`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<(String, f64)>,
 }
 
 /// Fits the model to the readings.
@@ -139,8 +154,16 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
         Spec::Darlington(s) => darlington::fit(s)?,
         Spec::Photodiode(s) => opto::fit_photodiode(s)?,
         Spec::Optocoupler(s) => opto::fit_optocoupler(s)?,
+        Spec::Opamp(s) => opamp::fit(s)?,
+        Spec::Regulator(s) => regulator::fit_regulator(s)?,
+        Spec::Shunt(s) => regulator::fit_shunt(s)?,
     };
-    Ok(Fitted { part: c.part.clone(), source: c.source.clone(), url: c.url.clone(), description: c.description.clone(), text, limits, rows, notes })
+    let (description, params) = match spec {
+        Spec::Opamp(s) => (opamp::description(s), vec![("gbw".into(), s.gbw), ("gain_dc".into(), 10f64.powf(s.aol_db / 20.0).round())]),
+        Spec::Regulator(s) => (c.description.clone(), regulator::regulator_params(s)),
+        _ => (c.description.clone(), vec![]),
+    };
+    Ok(Fitted { part: c.part.clone(), source: c.source.clone(), url: c.url.clone(), description, text, limits, rows, notes, params })
 }
 
 /// The output of each kind's fit: the card, the limits, the rows and the notes.
