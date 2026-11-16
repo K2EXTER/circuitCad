@@ -695,10 +695,22 @@ impl Step {
     fn loop_points(&self, lp: u32, reversed: bool) -> Vec<V3> {
         let mut out: Vec<V3> = vec![];
         let Some(Val::List(edges)) = self.args(lp).get(1) else { return out };
+        // a seam (the edge where a closed surface meets itself, gone up and back down in the same loop) is left out: in (u, v) both
+        // passes lie at the same angle and the outline would fold back on itself; the rest still closes (`close_wrapped`)
+        let edge_of = |e: &Val| r#ref(e).and_then(|oe| self.args(oe).get(3).and_then(r#ref));
+        let mut uses: HashMap<u32, usize> = HashMap::new();
+        for e in edges {
+            if let Some(id) = edge_of(e) {
+                *uses.entry(id).or_default() += 1;
+            }
+        }
         for e in edges {
             let Some(oe) = r#ref(e) else { continue };
             let a = self.args(oe);
             let Some(edge) = a.get(3).and_then(r#ref) else { continue };
+            if uses.get(&edge).copied().unwrap_or(0) > 1 {
+                continue;
+            }
             let Some(mut pts) = self.edge_points(edge) else { continue };
             if !is_true(a.get(4)) {
                 pts.reverse();
@@ -801,7 +813,32 @@ fn flatten(surf: Surf, loops: &[Vec<V3>]) -> Vec<Vec<[f64; 2]>> {
         Surf::Cylinder(f, r) => angular(&f, &|t, z, _| (t * r, z)),
         Surf::Cone(f, r) => angular(&f, &|t, z, rho| (t * r.max(rho).max(1e-3), z)),
         Surf::Sphere(f, r) => angular(&f, &|t, z, _| (t * r, (z / r).clamp(-1.0, 1.0).asin() * r)),
-        Surf::Torus(f, big, small) => angular(&f, &|t, z, rho| (t * big, (z).atan2(rho - big) * small)),
+        Surf::Torus(f, big, small) => {
+            // the angle round the tube can cross ±π (a face on the inner side of the ring, as a concave fillet is): kept going
+            // without jumps along each loop like the angle round the axis, and every loop on the same turn as the outline
+            let mut uv = angular(&f, &|t, z, rho| (t * big, (z).atan2(rho - big) * small));
+            let period = TAU * small;
+            for l in uv.iter_mut() {
+                for i in 1..l.len() {
+                    let prev = l[i - 1][1];
+                    while l[i][1] - prev > period / 2.0 {
+                        l[i][1] -= period;
+                    }
+                    while l[i][1] - prev < -period / 2.0 {
+                        l[i][1] += period;
+                    }
+                }
+            }
+            let mean = |l: &Vec<[f64; 2]>| l.iter().map(|p| p[1]).sum::<f64>() / l.len().max(1) as f64;
+            let centre = uv.first().map_or(0.0, mean);
+            for l in uv.iter_mut().skip(1) {
+                let k = ((centre - mean(l)) / period).round();
+                for p in l.iter_mut() {
+                    p[1] += k * period;
+                }
+            }
+            uv
+        }
         Surf::Other => {
             let f = plane_frame();
             loops.iter().map(|l| l.iter().map(|p| { let (x, y, _) = f.rel(*p); [x, y] }).collect()).collect()
@@ -809,12 +846,187 @@ fn flatten(surf: Surf, loops: &[Vec<V3>]) -> Vec<Vec<[f64; 2]>> {
     }
 }
 
-/// Triangles of a polygon with holes, as corner indices into the concatenation of `loops`.
-fn triangulate(loops: &[Vec<[f64; 2]>]) -> Vec<[usize; 3]> {
+/// One turn round the axis of a curved surface, in its u (as `flatten` lays it out), and the latitude of its poles in v (spheres only).
+fn turn_and_pole(surf: Surf) -> Option<(f64, Option<f64>)> {
+    match surf {
+        Surf::Cylinder(_, r) if r > 0.0 => Some((TAU * r, None)),
+        Surf::Sphere(_, r) if r > 0.0 => Some((TAU * r, Some(PI / 2.0 * r))),
+        Surf::Torus(_, big, _) if big > 0.0 => Some((TAU * big, None)),
+        _ => None,
+    }
+}
+
+/// A face whose outline goes all the way round its surface's axis has no area in (u, v) as `flatten` lays it out (the loop is a line from
+/// one turn to the next). Two such loops going opposite ways (a band of a cylinder or a torus, written without a seam edge) are joined into
+/// one outline; one alone on a sphere (a dome) is closed over the pole on the side the face is on: the left of the loop in (u, v) when the
+/// face goes with its surface (`same`), else the right. `loops` (3D) and `uv` stay index for index alike.
+fn close_wrapped(surf: Surf, same: bool, tol: f64, loops: &mut Vec<Vec<V3>>, uv: &mut Vec<Vec<[f64; 2]>>) {
+    let Some((turn, pole)) = turn_and_pole(surf) else { return };
+    // how far each loop runs along u, end to end (`flatten` keeps the angle going without jumps)
+    let run = |l: &Vec<[f64; 2]>| l.last().map_or(0.0, |e| e[0] - l[0][0]);
+    let wrapping: Vec<usize> = (0..uv.len()).filter(|&i| uv[i].len() >= 2 && run(&uv[i]).abs() > 0.75 * turn).collect();
+    match wrapping.as_slice() {
+        [a, b] if run(&uv[*a]).signum() != run(&uv[*b]).signum() => {
+            let (a, b) = (*a, *b);
+            // the second loop moved by whole turns to start where the first ends, then the two as one outline
+            let end = uv[a].last().map_or(0.0, |e| e[0]);
+            let k = ((end - uv[b][0][0]) / turn).round();
+            let moved: Vec<[f64; 2]> = uv[b].iter().map(|p| [p[0] + k * turn, p[1]]).collect();
+            let (lb, ub) = (loops[b].clone(), moved);
+            loops[a].extend(lb);
+            uv[a].extend(ub);
+            loops.remove(b);
+            uv.remove(b);
+            if a != 0 && b != 0 {
+                return;
+            }
+            // the joined loop is the face's outline
+            let a = if b < a { a - 1 } else { a };
+            loops.swap(0, a);
+            uv.swap(0, a);
+        }
+        [a] => {
+            let (Some(pv), Surf::Sphere(f, r)) = (pole, surf) else { return };
+            let a = *a;
+            let dir = run(&uv[a]).signum();
+            // the face's side of the loop: up (towards +v) when it is on the left of a loop running +u
+            let up = (dir > 0.0) == same;
+            let v = if up { pv } else { -pv };
+            let top = add(f.o, mul(f.z, if up { r } else { -r }));
+            // the loop closes back to its start a whole turn on: that point again first, so the last piece of the loop is not lost
+            let first = (uv[a][0], loops[a][0]);
+            uv[a].push([first.0[0] + dir * turn, first.0[1]]);
+            loops[a].push(first.1);
+            let (u_end, u_start) = (uv[a].last().map_or(0.0, |e| e[0]), uv[a][0][0]);
+            // up the meridian at the loop's end to the pole, along the pole, and down the meridian at its start: the meridians are
+            // curved on the sphere, so they get points of their own (a straight chord from the loop to the pole cuts through the dome)
+            let v_end = uv[a].last().map_or(0.0, |e| e[1]);
+            let v_start = uv[a][0][1];
+            let at = |u: f64, vv: f64| {
+                let (t, phi) = (u / r, vv / r);
+                add(f.at(r * phi.cos(), r * phi.cos(), t), mul(f.z, r * phi.sin()))
+            };
+            let step = (8.0 * r * tol).sqrt().max(1e-3);
+            let n_up = (((v - v_end).abs() / step).ceil() as usize).max(1);
+            for k in 1..n_up {
+                let vv = v_end + (v - v_end) * k as f64 / n_up as f64;
+                uv[a].push([u_end, vv]);
+                loops[a].push(at(u_end, vv));
+            }
+            uv[a].push([u_end, v]);
+            loops[a].push(top);
+            uv[a].push([u_start, v]);
+            loops[a].push(top);
+            let n_down = (((v - v_start).abs() / step).ceil() as usize).max(1);
+            for k in 1..n_down {
+                let vv = v + (v_start - v) * k as f64 / n_down as f64;
+                uv[a].push([u_start, vv]);
+                loops[a].push(at(u_start, vv));
+            }
+            if a != 0 {
+                loops.swap(0, a);
+                uv.swap(0, a);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// At most this many points inside one curved face (a big dome gets them further apart).
+const MAX_INNER: usize = 3000;
+
+/// Is the point inside the face (inside an odd number of its loops)?
+fn inside_loops(loops: &[Vec<[f64; 2]>], p: [f64; 2]) -> bool {
+    let mut odd = false;
+    for l in loops {
+        for i in 0..l.len() {
+            let (a, b) = (l[i], l[(i + 1) % l.len()]);
+            if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < a[0] + (p[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0]) {
+                odd = !odd;
+            }
+        }
+    }
+    odd
+}
+
+/// How far the point is from the face's outlines.
+fn edge_distance(loops: &[Vec<[f64; 2]>], p: [f64; 2]) -> f64 {
+    let mut best = f64::MAX;
+    for l in loops {
+        for i in 0..l.len() {
+            let (a, b) = (l[i], l[(i + 1) % l.len()]);
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let len2 = (dx * dx + dy * dy).max(1e-18);
+            let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0);
+            best = best.min(d2(p, [a[0] + t * dx, a[1] + t * dy]).sqrt());
+        }
+    }
+    best
+}
+
+/// The way from a curved face's (u, v) (as `flatten` lays it out) back to the surface, and the spacing of points along u and v that keeps
+/// the flat triangles between them within `tol` of it (a chord of length s on a radius R sags s^2 / 8R). Planes need no points inside;
+/// cones and other surfaces have no way back here and are left as they were.
+type Back = Box<dyn Fn(f64, f64) -> V3>;
+fn surface_grid(surf: Surf, tol: f64) -> Option<(f64, f64, Back)> {
+    match surf {
+        Surf::Cylinder(f, r) if r > 0.0 => {
+            // straight along the axis: the points there only hold the rows across it
+            let s = (8.0 * r * tol).sqrt();
+            Some((s, s * 4.0, Box::new(move |u, v| add(f.at(r, r, u / r), mul(f.z, v)))))
+        }
+        Surf::Sphere(f, r) if r > 0.0 => {
+            let s = (8.0 * r * tol).sqrt();
+            Some((s, s, Box::new(move |u, v| {
+                let (t, phi) = (u / r, v / r);
+                add(f.at(r * phi.cos(), r * phi.cos(), t), mul(f.z, r * phi.sin()))
+            })))
+        }
+        Surf::Torus(f, big, small) if small > 0.0 && big > 0.0 => {
+            let s = (8.0 * small.min(big) * tol).sqrt();
+            Some((s, s, Box::new(move |u, v| {
+                let (t, phi) = (u / big, v / small);
+                let rho = big + small * phi.cos();
+                add(f.at(rho, rho, t), mul(f.z, small * phi.sin()))
+            })))
+        }
+        _ => None,
+    }
+}
+
+/// Points inside a curved face, in its (u, v) and on the surface: a grid of the spacing `surface_grid` gives (wider on a big face, at
+/// most `MAX_INNER` points), clear of the outlines, so that a dome or a round comes out round and not as a few flat facets cut along
+/// its outline.
+fn inner_points(surf: Surf, uv: &[Vec<[f64; 2]>], tol: f64) -> Vec<([f64; 2], V3)> {
+    let Some((su, sv, back)) = surface_grid(surf, tol) else { return vec![] };
+    let Some(outer) = uv.first() else { return vec![] };
+    let (lo, hi) = outer.iter().fold(([f64::MAX; 2], [f64::MIN; 2]), |(lo, hi), p| ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])]));
+    let (mut su, mut sv) = (su.max(1e-4), sv.max(1e-4));
+    while ((hi[0] - lo[0]) / su + 1.0) * ((hi[1] - lo[1]) / sv + 1.0) > MAX_INNER as f64 {
+        su *= 1.25;
+        sv *= 1.25;
+    }
+    let (nu, nv) = (((hi[0] - lo[0]) / su).floor() as usize, ((hi[1] - lo[1]) / sv).floor() as usize);
+    // the grid centred on the face's box
+    let (u0, v0) = (lo[0] + (hi[0] - lo[0] - nu as f64 * su) / 2.0, lo[1] + (hi[1] - lo[1] - nv as f64 * sv) / 2.0);
+    let mut out = vec![];
+    for i in 0..=nu {
+        for j in 0..=nv {
+            let p = [u0 + i as f64 * su, v0 + j as f64 * sv];
+            if inside_loops(uv, p) && edge_distance(uv, p) > 0.4 * su.min(sv) {
+                out.push((p, back(p[0], p[1])));
+            }
+        }
+    }
+    out
+}
+
+/// Triangles of a polygon with holes and extra points inside it, as corner indices into the concatenation of `loops` and then `inner`.
+fn triangulate(loops: &[Vec<[f64; 2]>], inner: &[[f64; 2]]) -> Vec<[usize; 3]> {
     use i_overlay::core::fill_rule::FillRule;
     use i_triangle::float::custom::CustomTriangulatable;
     use i_triangle::int::validation::Validation;
-    let flat: Vec<[f64; 2]> = loops.iter().flatten().copied().collect();
+    let flat: Vec<[f64; 2]> = loops.iter().flatten().chain(inner.iter()).copied().collect();
     if flat.len() < 3 {
         return vec![];
     }
@@ -826,13 +1038,23 @@ fn triangulate(loops: &[Vec<[f64; 2]>]) -> Vec<[usize; 3]> {
     let mut validation = Validation::<i32>::with_fill_rule(FillRule::EvenOdd);
     validation.options.preserve_input_collinear = true;
     validation.options.preserve_output_collinear = true;
-    let t = contours.as_slice().custom_triangulate(validation).to_triangulation::<u32>();
-    // the triangulation hands back the points as numbers: find each one among the input points
-    let which: Vec<usize> = t
-        .points
-        .iter()
-        .map(|p| (0..flat.len()).min_by(|&i, &j| d2(flat[i], *p).total_cmp(&d2(flat[j], *p))).unwrap_or(0))
-        .collect();
+    // with points inside, the triangles are made Delaunay (edges flipped): else long slivers join the outline to far rows of the grid and
+    // fold back and forth across a dome
+    let t = if inner.is_empty() { contours.as_slice().custom_triangulate(validation).to_triangulation::<u32>() } else { contours.as_slice().custom_triangulate_with_steiner_points(inner, validation).into_delaunay().to_triangulation::<u32>() };
+    // the triangulation hands back the points as numbers: find each one among the input points (the nearest, looked for in a grid)
+    let (lo, hi) = flat.iter().fold(([f64::MAX; 2], [f64::MIN; 2]), |(lo, hi), p| ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])]));
+    let cell = ((hi[0] - lo[0]).max(hi[1] - lo[1]) / (flat.len() as f64).sqrt().max(1.0)).max(1e-9);
+    let key = |p: [f64; 2]| (((p[0] - lo[0]) / cell).floor() as i64, ((p[1] - lo[1]) / cell).floor() as i64);
+    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (i, p) in flat.iter().enumerate() {
+        grid.entry(key(*p)).or_default().push(i);
+    }
+    let nearest = |p: [f64; 2]| -> usize {
+        let (kx, ky) = key(p);
+        let near = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (kx + dx, ky + dy))).filter_map(|k| grid.get(&k)).flatten().copied();
+        near.min_by(|&i, &j| d2(flat[i], p).total_cmp(&d2(flat[j], p))).unwrap_or_else(|| (0..flat.len()).min_by(|&i, &j| d2(flat[i], p).total_cmp(&d2(flat[j], p))).unwrap_or(0))
+    };
+    let which: Vec<usize> = t.points.iter().map(|p| nearest(*p)).collect();
     t.indices.as_chunks::<3>().0.iter().map(|i| [which[i[0] as usize], which[i[1] as usize], which[i[2] as usize]]).collect()
 }
 
@@ -888,11 +1110,13 @@ impl Step {
         if let Some(k) = outer {
             loops.swap(0, k);
         }
-        let uv = flatten(surf, &loops);
-        let flat_pts: Vec<V3> = loops.iter().flatten().copied().collect();
+        let mut uv = flatten(surf, &loops);
+        close_wrapped(surf, same, self.tol, &mut loops, &mut uv);
+        let inner = inner_points(surf, &uv, self.tol);
+        let flat_pts: Vec<V3> = loops.iter().flatten().copied().chain(inner.iter().map(|p| p.1)).collect();
         // the corners are moved to where the solid stands; the sides of the triangles are judged in the solid's own frame
         let placed: Vec<V3> = flat_pts.iter().map(|p| place(&b.chain, *p)).collect();
-        let tris = triangulate(&uv);
+        let tris = triangulate(&uv, &inner.iter().map(|p| p.0).collect::<Vec<_>>());
         if tris.is_empty() {
             return;
         }
@@ -1238,6 +1462,38 @@ mod tests {
 
 
 #[cfg(test)]
+mod curved {
+    /// A hemisphere of radius 5 (SolidCraft's STEP: one sphere face bounded by the equator, with a seam up to the pole) comes out round:
+    /// before the faces got points inside, the dome was a flat disc and its volume a few mm³ of 262.
+    #[test]
+    fn a_dome_is_round_inside() {
+        let m = super::read_step(include_bytes!("../testdata/dome_r5.step")).unwrap();
+        let want = 2.0 / 3.0 * std::f64::consts::PI * 125.0;
+        let (_, hi) = m.bounds().unwrap();
+        assert!((hi[2] - 5.0).abs() < 1e-3, "up to the pole: {hi:?}");
+        assert!((m.volume() - want).abs() < 0.03 * want, "{} vs {want}", m.volume());
+        assert!(m.triangles.len() < 1500, "{} triangles", m.triangles.len());
+    }
+
+    /// A post on a plate with a concave fillet round its foot and a convex one round its top (two tori, the foot's on the inner side of
+    /// its ring where the angle round the tube crosses ±π): within 0.5 % of SolidCraft's 688.02 mm³.
+    #[test]
+    fn concave_and_convex_fillets_keep_their_volume() {
+        let m = super::read_step(include_bytes!("../testdata/post_with_fillets.step")).unwrap();
+        let want = 688.0201268;
+        assert!((m.volume() - want).abs() < 0.005 * want, "{} vs {want}", m.volume());
+    }
+
+    /// The dome and a block with rounded edges (cylinders, and B-spline corners that are still flat) within 2 % of SolidCraft's volume.
+    #[test]
+    fn rounded_shapes_keep_their_volume() {
+        let m = super::read_step(include_bytes!("../testdata/dome_and_rounded_block.step")).unwrap();
+        let want = 261.7993878 + 1133.250720;
+        assert!((m.volume() - want).abs() < 0.02 * want, "{} vs {want}", m.volume());
+    }
+}
+
+#[cfg(test)]
 mod real_file {
     /// Reads the file named by the environment variable CCAD_STEP (for trying a maker's file by hand).
     #[test]
@@ -1250,4 +1506,5 @@ mod real_file {
         println!("triangles {} vertices {} colours {:?} bounds {:?} volume {:.2} in {:?}", m.triangles.len(), m.vertices.len(), m.palette, m.bounds(), m.volume(), t0.elapsed());
     }
 }
+
 
