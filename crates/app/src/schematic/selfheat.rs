@@ -10,6 +10,8 @@ pub(crate) struct HeatView {
     pub nodes: Vec<(String, f64, f64)>,
     /// Each warmed part against its temperature limit (`sim_core::check_temperatures`), the worst first.
     pub checks: Vec<sim_core::TempCheck>,
+    /// With the board carried over: the pads' wiring that the board's heat made most resistive (the hottest first).
+    pub wiring_warm: Vec<pcb_core::thermal::WarmWiring>,
 }
 
 impl SchEditor {
@@ -35,14 +37,29 @@ impl SchEditor {
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &self.copper_g());
         let (heaters, mutual) = self.heaters_on_board(&c, heaters, ambient)?;
-        let r = sim_core::self_heat_coupled(&c, &heaters, ambient, &mutual).map_err(|e| e.to_string())?;
+        let first = sim_core::self_heat_coupled(&c, &heaters, ambient, &mutual).map_err(|e| e.to_string())?;
+        // with the board carried over, its copper is as warm as the map says: once more on the warmer wiring (the cold answer stays the
+        // one on copper at 25 °C)
+        let mut wiring_warm = vec![];
+        let r = match self.warm_wiring(&first.parts, ambient) {
+            Some((wiring, warm)) if warm.iter().any(|w| (w.factor - 1.0).abs() > 1e-4) => {
+                let c2 = sim_core::from_schematic_with_layout(&self.sch, &wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
+                let mut again = sim_core::self_heat_coupled(&c2, &heaters, ambient, &mutual).map_err(|e| e.to_string())?;
+                again.cold = first.cold.clone();
+                wiring_warm = warm;
+                wiring_warm.sort_by(|a, b| b.temp_c.total_cmp(&a.temp_c));
+                wiring_warm.truncate(6);
+                again
+            }
+            _ => first,
+        };
         let mut parts: Vec<_> = r.parts.iter().filter(|p| p.power > 1e-9).cloned().collect();
         parts.sort_by(|a, b| b.rise.total_cmp(&a.rise));
         let mut nodes: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-9).collect();
         nodes.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
         nodes.truncate(8);
         let checks = sim_core::check_temperatures(&self.sch, &parts, ambient);
-        Ok(HeatView { ambient, parts, nodes, checks })
+        Ok(HeatView { ambient, parts, nodes, checks, wiring_warm })
     }
 
     pub(super) fn panel_selfheat(&mut self, ui: &mut egui::Ui) {
@@ -154,6 +171,12 @@ impl SchEditor {
                     for (n, a, b) in &v.nodes {
                         ui.label(egui::RichText::new(format!("{n}: {:.6} V → {:.6} V ({:+.3} mV)", a, b, (b - a) * 1e3)).small());
                     }
+                }
+                if let Some(w) = v.wiring_warm.first() {
+                    let list: Vec<String> = v.wiring_warm.iter().take(3).map(|w| format!("{}.{} {:.0} ℃ (+{:.1} %)", w.refdes, w.pin, w.temp_c, (w.factor - 1.0) * 100.0)).collect();
+                    // the normal size: at the small one this font draws 8 much like 0
+                    ui.label(i18n::trf!("配線も温まって抵抗が増えています: {}", list.join("、")))
+                        .on_hover_text(i18n::trf!("銅の抵抗は 1 ℃ で約 0.39 % 増えます。基板の熱の地図で、パッドの配線 (電源のパッドからの道すじ) の平均の温度を出し、その抵抗で計算し直しました。いちばん熱いのは {}.{} の配線 ({} ネット)。上の「温まって動いたところ」に、その分も入っています", w.refdes, w.pin, w.net));
                 }
                 if !self.board_heat_parts.is_empty() {
                     ui.label(egui::RichText::new(i18n::trf!("基板の熱の地図から: {} (基板を「シミュレーションに反映」しています。部品どうしが基板を通って温め合う分も入っています)", self.board_heat_parts.join(", "))).small().color(crate::theme::OK))

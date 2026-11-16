@@ -2136,6 +2136,9 @@ heat
     let from = after["from_others_k"].as_f64().unwrap();
     assert!(from > 1.0, "R1 next to it adds heat: {after}");
     assert!((after["rise_k"].as_f64().unwrap() - (theta * after["power_w"].as_f64().unwrap() + from)).abs() < 1e-3, "{after}");
+    // its copper is warm too: the wiring is worked out again at the map's temperature, a few per cent more resistive
+    let warm = heats[1]["wiring_warm"].as_array().unwrap();
+    assert!(!warm.is_empty() && warm.iter().all(|w| w["temp_c"].as_f64().unwrap() > 27.0 && w["resistance_factor"].as_f64().unwrap() > 1.0), "{}", heats[1]);
     assert!(heats[1]["notes"].as_array().unwrap().iter().any(|n| n.as_str().unwrap().contains("board copper")), "{}", heats[1]);
 }
 

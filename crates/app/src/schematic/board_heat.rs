@@ -8,13 +8,15 @@ use super::*;
 /// The board carried over for the heat, and the last matrix worked out on it.
 pub(crate) struct BoardHeat {
     pub board: pcb_core::model::Board,
+    /// Each pad's wiring with its way from the supply pad (for its temperature on the map).
+    pub series: Vec<pcb_core::irdrop::PadSeries>,
     /// (key of what it was worked out for, the parts, the matrix in K/W).
     cache: Option<(u64, Vec<String>, Vec<Vec<f64>>)>,
 }
 
 impl BoardHeat {
-    pub fn new(board: pcb_core::model::Board) -> Self {
-        Self { board, cache: None }
+    pub fn new(board: pcb_core::model::Board, series: Vec<pcb_core::irdrop::PadSeries>) -> Self {
+        Self { board, series, cache: None }
     }
 }
 
@@ -54,6 +56,35 @@ impl SchEditor {
             bh.cache = Some((key, names.clone(), r.clone()));
         }
         Ok(Some((names, r)))
+    }
+
+    /// The wiring as warm as the board makes it: the map at the parts' powers of a self-heating run, each pad's wiring at the mean
+    /// temperature of its way (`pcb_core::thermal::wiring_heat_factors`). `None` without a board carried over or a part on it.
+    pub(super) fn warm_wiring(&self, parts: &[sim_core::HeatedPart], ambient: f64) -> Option<(Vec<sim_core::WiringR>, Vec<pcb_core::thermal::WarmWiring>)> {
+        let bh = self.board_heat.as_ref()?;
+        if self.wiring.is_empty() || self.board_heat_parts.is_empty() {
+            return None;
+        }
+        let sources: Vec<pcb_core::thermal::HeatSource> = parts
+            .iter()
+            .filter(|p| p.power > 1e-9)
+            .filter_map(|p| {
+                let c = self.sch.components.iter().find(|c| c.refdes == p.name)?;
+                Some(pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(c), sim_core::theta_jc(c).0, c.heatsink))
+            })
+            .collect();
+        let spec = pcb_core::thermal::ThermalSpec { ambient_c: ambient, ..Default::default() };
+        let map = pcb_core::thermal::thermal_map(&bh.board, &sources, bh.board.stackup.copper_um, &spec).ok()?;
+        let warm = pcb_core::thermal::wiring_heat_factors(&bh.board, &bh.series, &map);
+        let wiring = self
+            .wiring
+            .iter()
+            .map(|w| {
+                let f = warm.iter().find(|x| x.refdes == w.refdes && x.pin == w.pin).map_or(1.0, |x| x.factor);
+                sim_core::WiringR { ohm: w.ohm * f, ..w.clone() }
+            })
+            .collect();
+        Some((wiring, warm))
     }
 
     /// The heaters with the board's θ, and the board's couplings between them (a, b, K of a per W in b), for `self_heat_coupled`.

@@ -797,6 +797,50 @@ pub fn thermal_transient(board: &Board, sources: &[HeatSource], copper_um: f64, 
     Ok(ThermalTransient { grid: m.grid.clone(), layers: m.layers.clone(), ambient_c: spec.ambient_c, times, parts, frames: shots, board_cth, board_tau: board_cth / g_air.max(1e-12) })
 }
 
+/// Copper's resistance rises by this share per kelvin (0.393 %/K), from the 25 °C its resistivity is taken at (`irdrop`).
+pub const CU_TEMPCO: f64 = 0.00393;
+
+/// A pad's wiring warmed by the board: its mean temperature along the way from the supply pad, and how much its resistance grows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WarmWiring {
+    pub refdes: String,
+    pub pin: String,
+    pub net: String,
+    pub temp_c: f64,
+    /// The resistance at that temperature over the one at 25 °C.
+    pub factor: f64,
+}
+
+/// The temperature of each pad's wiring (`irdrop::wiring_resistances`) on the map: the mean along its tracks, weighted by length
+/// (the layers at a point averaged), or the temperature at the pad when its way has no tracks (a pour). Copper's resistance follows
+/// as `1 + CU_TEMPCO·(T − 25)`.
+pub fn wiring_heat_factors(board: &Board, series: &[crate::irdrop::PadSeries], map: &ThermalMap) -> Vec<WarmWiring> {
+    let at = |p: Point| -> Option<f64> {
+        let c = map.grid.cell_at(p)?;
+        let v: Vec<f64> = map.temp.iter().map(|t| t[c]).filter(|x| x.is_finite()).collect();
+        (!v.is_empty()).then(|| v.iter().sum::<f64>() / v.len() as f64)
+    };
+    series
+        .iter()
+        .filter_map(|s| {
+            let (mut sum, mut len) = (0.0, 0.0);
+            for seg in s.path.iter().filter(|g| g.a.dist(g.b) > 1e-9) {
+                let l = seg.a.dist(seg.b);
+                let n = (l / map.grid.d).ceil().max(1.0) as usize;
+                for k in 0..n {
+                    let f = (k as f64 + 0.5) / n as f64;
+                    if let Some(t) = at(Point::new(seg.a.x + f * (seg.b.x - seg.a.x), seg.a.y + f * (seg.b.y - seg.a.y))) {
+                        sum += t * l / n as f64;
+                        len += l / n as f64;
+                    }
+                }
+            }
+            let temp = if len > 0.0 { sum / len } else { at(board.pads.iter().find(|p| p.refdes == s.refdes && p.pin == s.pin)?.pos)? };
+            Some(WarmWiring { refdes: s.refdes.clone(), pin: s.pin.clone(), net: s.net.clone(), temp_c: temp, factor: 1.0 + CU_TEMPCO * (temp - 25.0) })
+        })
+        .collect()
+}
+
 /// Two parts that warm each other noticeably through the board.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HotPair {
@@ -1003,6 +1047,22 @@ mod datasheet {
         let early = at(&slow, 0.01);
         assert!((0.1..0.3).contains(&early), "{early} K after 10 ms");
         assert!(at(&tr, 0.01) > 5.0 * early);
+    }
+
+    /// A pad's wiring takes the mean temperature along its way: a track from the cool corner to the hot part is between the two, and
+    /// warmer than the air by less than the part's pads; a wiring with no track (a pour) takes the pad's own temperature.
+    #[test]
+    fn wiring_takes_the_temperature_along_its_way() {
+        let b = sot223_board(0.0);
+        let map = thermal_map(&b, &[HeatSource::new("Q1", 1.0, 110.0, 12.0, 0.0)], 70.0, &ThermalSpec { cell_mm: 1.0, ..Default::default() }).unwrap();
+        let pad = b.pads.iter().find(|p| p.pin == "2" && matches!(p.shape, PadShape::Rect { h, .. } if h > 3.0)).unwrap().pos;
+        let seg = |a: Point, z: Point| crate::irdrop::PathSeg { a, b: z, z: 0.0, z2: 0.0, width: 0.5, plane: None };
+        let series = |path: Vec<crate::irdrop::PathSeg>| crate::irdrop::PadSeries { net: "DRN".into(), refdes: "Q1".into(), pin: "2".into(), ohm: 0.01, henry: 0.0, farad: 0.0, path };
+        let w = wiring_heat_factors(&b, &[series(vec![seg(Point::new(5.0, 5.0), pad)]), series(vec![])], &map);
+        let pad_t = map.at(Side::Top, pad).unwrap();
+        assert!(w[0].temp_c > 25.5 && w[0].temp_c < pad_t, "{w:?}, the pad {pad_t}");
+        assert!((w[1].temp_c - pad_t).abs() < 0.5 * (pad_t - 25.0), "{w:?}");
+        assert!((w[1].factor - (1.0 + CU_TEMPCO * (w[1].temp_c - 25.0))).abs() < 1e-12);
     }
 
     /// NDT3055L on its three data sheet points (110 K/W on the minimum pad, 95 on 0.066 in², 42 on 1 in², 2 oz copper, θjc 12): the

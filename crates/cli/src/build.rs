@@ -625,7 +625,21 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let on_grid = self.board_matrix(&c, &heaters, temp)?;
         let mutual = on_grid.as_ref().map(|(names, m)| sim_core::heaters_with_matrix(&mut heaters, names, m)).unwrap_or_default();
         let grid_parts: Vec<String> = on_grid.map(|(n, _)| n).unwrap_or_default();
-        let r = sim_core::self_heat_coupled(&c, &heaters, temp, &mutual).map_err(|e| dc_fail(&c, e))?;
+        let first = sim_core::self_heat_coupled(&c, &heaters, temp, &mutual).map_err(|e| dc_fail(&c, e))?;
+        // with the board's grid, its copper is as warm as the map says: once more on the warmer wiring (cold stays the 25 °C copper)
+        let mut wiring_warm = vec![];
+        let r = match self.warm_wiring(&first.parts, temp, !grid_parts.is_empty()) {
+            Some((wiring, warm)) if warm.iter().any(|w| (w.factor - 1.0).abs() > 1e-4) => {
+                let (_, couplings) = self.layout_parts();
+                let c2 = circuit_of(&self.sch, &wiring, &couplings)?;
+                let mut again = sim_core::self_heat_coupled(&c2, &heaters, temp, &mutual).map_err(|e| dc_fail(&c2, e))?;
+                again.cold = first.cold.clone();
+                wiring_warm = warm;
+                wiring_warm.sort_by(|a, b| b.temp_c.total_cmp(&a.temp_c));
+                again
+            }
+            _ => first,
+        };
         self.last_dc = Some(r.warm.clone());
         let mut parts: Vec<&sim_core::HeatedPart> = r.parts.iter().filter(|p| p.power > 1e-9).collect();
         parts.sort_by(|a, b| b.rise.total_cmp(&a.rise));
@@ -657,7 +671,8 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         }
         notes.extend(gate);
         let problems: Vec<Value> = checks.iter().filter(|c| c.level.is_some()).map(|c| json!({"part": c.name, "level": level(c.level), "message": c.message, "hint": c.hint})).collect();
-        Ok(obj(json!({"ambient_c": temp, "rounds": r.rounds, "parts": rows, "temperature_problems": problems, "nodes": nodes, "notes": notes})))
+        let warm_rows: Vec<Value> = wiring_warm.iter().take(top).map(|w| json!({"pad": format!("{}.{}", w.refdes, w.pin), "net": w.net, "temp_c": w.temp_c, "resistance_factor": w.factor})).collect();
+        Ok(obj(json!({"ambient_c": temp, "rounds": r.rounds, "parts": rows, "temperature_problems": problems, "nodes": nodes, "wiring_warm": warm_rows, "notes": notes})))
     }
 
     /// The points of the pins `REF.PIN` stands for (a pin name shared by several pins means all of them).
@@ -867,6 +882,33 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let spec = pcb_core::thermal::ThermalSpec { ambient_c: ambient, ..Default::default() };
         let (r, _) = pcb_core::thermal::thermal_matrix(b, &sources, b.stackup.copper_um, &spec)?;
         Ok(Some((parts.into_iter().map(|p| p.name).collect(), r)))
+    }
+
+    /// The board's wiring as warm as its map at the parts' powers (each pad's way at its mean temperature), and how warm each is; `None`
+    /// unless the board is carried over and parts are on its grid.
+    fn warm_wiring(&self, parts: &[sim_core::HeatedPart], ambient: f64, on_grid: bool) -> Option<(Vec<sim_core::WiringR>, Vec<pcb_core::thermal::WarmWiring>)> {
+        let (Some(b), true, true) = (&self.board, self.post_layout, on_grid) else { return None };
+        let sources: Vec<pcb_core::thermal::HeatSource> = parts
+            .iter()
+            .filter(|p| p.power > 1e-9)
+            .filter_map(|p| {
+                let c = self.sch.components.iter().find(|c| c.refdes == p.name)?;
+                Some(pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(c), sim_core::theta_jc(c).0, c.heatsink))
+            })
+            .collect();
+        let spec = pcb_core::thermal::ThermalSpec { ambient_c: ambient, ..Default::default() };
+        let map = pcb_core::thermal::thermal_map(b, &sources, b.stackup.copper_um, &spec).ok()?;
+        let series = pcb_core::irdrop::wiring_resistances(b, &pcb_core::irdrop::IrSpec::default());
+        let warm = pcb_core::thermal::wiring_heat_factors(b, &series, &map);
+        let (wiring, _) = self.layout_parts();
+        let wiring = wiring
+            .into_iter()
+            .map(|w| {
+                let f = warm.iter().find(|x| x.refdes == w.refdes && x.pin == w.pin).map_or(1.0, |x| x.factor);
+                sim_core::WiringR { ohm: w.ohm * f, ..w }
+            })
+            .collect();
+        Some((wiring, warm))
     }
 
     fn heat_copper(&self) -> std::collections::BTreeMap<String, (f64, f64)> {

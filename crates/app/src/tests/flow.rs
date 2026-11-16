@@ -634,6 +634,8 @@ fn heat_copper_project_shows_the_pour_cooling_one_resistor() {
     let v = app.sch.run_self_heat().unwrap();
     let part = |n: &str| v.parts.iter().find(|p| p.name == n).unwrap().clone();
     let (r1, r2) = (part("R1"), part("R2"));
+    // the wiring is warmed too: every pad's way from V1 is above the air (about 42 to 48 °C here), a few per cent more resistive
+    assert!(!v.wiring_warm.is_empty() && v.wiring_warm.iter().all(|w| w.temp_c > v.ambient + 5.0 && w.factor > 1.02 && w.factor < 1.3), "{:?}", v.wiring_warm);
     assert!(r1.rise < 0.6 * r2.rise && r2.rise > 55.0, "with the pour {} K, without {} K", r1.rise, r2.rise);
     assert!(app.sch.board_heat_parts.len() == 2 && r1.from_others > 0.0 && r2.from_others > 0.0, "{:?}", app.sch.board_heat_parts);
     // the same as the board's map: the two ways agree
