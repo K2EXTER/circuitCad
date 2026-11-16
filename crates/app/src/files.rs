@@ -25,7 +25,7 @@ pub(super) fn ask_unsaved(what: &str) -> Ask {
 impl App {
     /// Has the schematic or the board changed since it was last saved or opened?
     pub(super) fn dirty(&self) -> bool {
-        self.sch.dirty() || self.board_ed.dirty()
+        self.sch.dirty() || self.board_ed.dirty() || self.system_dirty
     }
 
     /// Before the work is thrown away (open, new, close): when something is unsaved, ask. True = go on.
@@ -83,11 +83,12 @@ impl App {
             self.project.clone()
         };
         let Some(p) = path else { return };
-        let msg = match project::save(&p, &self.sch.sch, &self.board_ed.board, &self.sch.spec_items(), self.sch.bench_data(), &self.sch.sheet_settings()) {
+        let msg = match project::save_system(&p, &self.current_design(), &self.system) {
             Ok(()) => {
                 self.project = Some(p.clone());
                 self.sch.mark_saved();
                 self.board_ed.mark_saved();
+                self.system_dirty = false;
                 format!("プロジェクトを保存しました (回路図と基板): {}", p.display())
             }
             Err(e) => format!("プロジェクトを保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください"),
@@ -114,8 +115,14 @@ impl App {
                 self.sch.set_bench(pr.bench);
                 self.sch.set_sheet_settings(pr.settings);
                 self.board_ed.adopt(pr.board, None);
+                self.system = pr.system;
+                self.system_dirty = false;
                 self.project = Some(p.clone());
-                format!("プロジェクトを開きました: {}", p.display())
+                if self.system.names.len() > 1 {
+                    format!("プロジェクトを開きました ({} 枚の基板。いまは「{}」): {}", self.system.names.len(), self.system.names[self.system.active], p.display())
+                } else {
+                    format!("プロジェクトを開きました: {}", p.display())
+                }
             }
             Err(e) => format!("プロジェクトを開けませんでした: {e}"),
         };

@@ -2961,3 +2961,67 @@ fn write_diff_lanes_board() {
     std::fs::create_dir_all(root.join("work_in_progress")).unwrap();
     std::fs::write(root.join("work_in_progress/diff_lanes_routed.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
 }
+
+/// The two boards of the multi-board sample: a main board with the I2C pull-ups (R1, R2 4.7k to +5V) and a 4-pin header J1 (+5V, GND,
+/// SDA, SCL), and a sensor board with the same header and its decoupling capacitor C1. Both headers are named the same, pin for pin.
+fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
+    let header = |s: &mut sch_core::Schematic| {
+        let j = s.add(Kind::Header(4), (0, 0), 0);
+        for (pin, net) in [("1", "+5V"), ("2", "GND"), ("3", "SDA"), ("4", "SCL")] {
+            label(s, j, pin, net);
+        }
+    };
+    let mut main = sch_core::Schematic::default();
+    header(&mut main);
+    for (k, net) in ["SDA", "SCL"].into_iter().enumerate() {
+        let r = main.add(Kind::Resistor, (40, 15 * k as i32), 1);
+        main.components[r].value = "4.7k".into();
+        main.components[r].footprint = "R_0805".into();
+        label(&mut main, r, "1", "+5V");
+        label(&mut main, r, "2", net);
+    }
+    let mut sensor = sch_core::Schematic::default();
+    header(&mut sensor);
+    let c = sensor.add(Kind::Capacitor, (40, 0), 1);
+    sensor.components[c].value = "100n".into();
+    sensor.components[c].footprint = "C_0805".into();
+    label(&mut sensor, c, "1", "+5V");
+    label(&mut sensor, c, "2", "GND");
+    let design = |s: sch_core::Schematic, n: &str| crate::project::Design { schematic: s, board: pcb_core::Board::new(n, 40.0, 30.0), specs: vec![], bench: Default::default(), settings: Default::default() };
+    vec![("main".into(), design(main, "main")), ("sensor".into(), design(sensor, "sensor"))]
+}
+
+fn multiboard_link() -> sch_core::system::BoardLink {
+    use sch_core::system::{BoardLink, LinkEnd};
+    BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![] }
+}
+
+/// Generates docs/examples/multiboard_i2c.ccproj, the multi-board sample (two boards and the link of their headers; three sensor boards
+/// are built): `cargo test -p app write_multiboard_example -- --ignored`
+#[test]
+#[ignore]
+fn write_multiboard_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut d = multiboard_designs();
+    let (_, main) = d.remove(0);
+    let system = crate::project::System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 3], active: 0, parked: vec![None, Some(d.remove(0).1)], links: vec![multiboard_link()] };
+    crate::project::save_system(&root.join("multiboard_i2c.ccproj"), &main, &system).unwrap();
+}
+
+/// The multi-board sample opens with its two boards and link, the link checks clean (the same names pin for pin), and the whole parts
+/// list counts the sensor board three times.
+#[test]
+fn the_multiboard_sample_checks_clean() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let p = crate::project::load(&root.join("multiboard_i2c.ccproj")).unwrap();
+    assert_eq!(p.system.names, vec!["main".to_string(), "sensor".to_string()]);
+    let sensor = p.system.parked[1].as_ref().unwrap();
+    let designs = [("main", &p.schematic), ("sensor", &sensor.schematic)];
+    let findings = sch_core::system::check(&designs, &p.system.links);
+    assert!(findings.is_empty(), "{findings:?}");
+    let rows = sch_core::system::system_bom(&designs, &p.system.copies);
+    let header = rows.iter().find(|r| r.part.contains("ヘッダ")).unwrap();
+    assert_eq!(header.total, 1 + 3, "one header on the main board, one on each of the three sensor boards");
+    let r = rows.iter().find(|r| r.value == "4.7k").unwrap();
+    assert_eq!(r.total, 2);
+}

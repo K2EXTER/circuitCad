@@ -18,7 +18,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 | クレート | 役割 |
 |---|---|
-| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`) |
+| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`)、複数の基板のつなぎの照合と全体の部品表 `system.rs` |
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が共有 |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
@@ -54,6 +54,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `args.rs` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
 | `plot.rs` `logic_plot.rs` / `part_form/` | 波形描画・デジタル表示 (High/Low の帯とバス) / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `graph_reader` グラフから点を読む / `mosfet` MOSFET を表の値から / `bjt` トランジスタをグラフの点から / `linear` オペアンプ・レギュレータを表の typ から / `logic` ロジック IC を論理式から / `draft` データシートから下書き / `drawing_pick` 切り出した図の縮尺合わせ / `checklist` `trial` `vendor` `zchart` `preview`) |
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
+| `multiboard.rs` | 複数の基板 (E5): プロジェクトの基板の切り替え・足す・外す、「基板どうしのつなぎ」の窓(`project.rs` の `System`、形式 2) |
 | `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |
 | `samples.rs` `source_form.rs` `link.rs` `xcheck*.rs` | サンプル一覧(`docs/examples`)/ 電源値フォーム / 回路図・基板・3D の連動 / ngspice との検算 |

@@ -47,6 +47,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         app.sch.open_part_form_for(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
     }
     // --edit-part <name>: a library part in the part form; --form-shape builds its 3D shape from the template (SolidCraft)
+    // --multiboard-sample: the multi-board sample with its window of boards and links
+    if args.iter().any(|a| a == "--multiboard-sample") {
+        app.open_multiboard_sample();
+    }
     if let Some(i) = args.iter().position(|a| a == "--edit-part")
         && let Some(n) = args.get(i + 1)
     {

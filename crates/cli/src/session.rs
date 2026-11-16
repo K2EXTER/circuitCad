@@ -66,6 +66,10 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         data sheet: answers the .model card, its notes and each reading next to the model's
                                         value (rows, error_pct); 'write' puts it into DIR/<part>.part.json (default: the library).
                                         The file's form: crates/part-lib/fits/*.fit.json (the bundled parts' readings)
+ Several boards in one project
+  project check FILE.ccproj             the links between the boards' connectors checked pin by pin (the same net names on both sides,
+                                        power not on ground, pins not crossed, a signal not ending in an open pin)
+  project bom FILE.ccproj OUT.csv       the parts of all boards counted together (times the copies of each board), one column per board
  3D body of a part
   shape [TEMPLATE|auto] part=NAME [DIM=mm ...] [dir=DIR] [max=TRIANGLES] [write]
                                         a body from a template (dc_jack, tact, relay, terminal; 'auto' picks by the footprint) as a
@@ -336,6 +340,7 @@ impl Session {
             "models" | "murata" => self.models(args),
             "fit" => self.fit(args),
             "shape" => self.shape(args),
+            "project" => self.project(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),
             "req" => self.req(args),

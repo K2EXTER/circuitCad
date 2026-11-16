@@ -17,6 +17,7 @@ mod icons;
 mod link;
 mod bench_guide;
 mod measure_guide;
+mod multiboard;
 mod samples;
 mod learn;
 mod part_form;
@@ -80,6 +81,11 @@ struct App {
     auto_shot: Option<(std::path::PathBuf, u32)>,
     /// The `.ccproj` file the schematic and board were opened from / last saved to.
     project: Option<std::path::PathBuf>,
+    /// The boards of the project (one unless several were added) and the links between them (`multiboard.rs`); whether the boards parked
+    /// aside have changes not saved; the window of the boards and links.
+    system: project::System,
+    system_dirty: bool,
+    boards: multiboard::BoardsWindow,
     /// Set once the user agreed to close (or a script closes the window), so the unsaved-changes question is not asked again.
     closing_ok: bool,
     /// The first-launch welcome card is up (only when started with no arguments and no lesson finished yet).
@@ -162,7 +168,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
     }
 }
 
@@ -312,6 +318,7 @@ impl eframe::App for App {
             }
         }
         // the hands-on checklists: every box ticked records the item
+        self.boards_window(ui.ctx());
         if let Some(id) = self.bench.show(ui.ctx(), &self.progress) {
             self.progress.mark(id);
         }
@@ -334,6 +341,18 @@ impl eframe::App for App {
                 let stale = !self.board_ed.schematic_diff(&self.sch).is_empty();
                 ui.selectable_value(&mut self.mode, Mode::Board, if stale { i18n::tr("基板パターン ●") } else { i18n::tr("基板パターン") })
                     .on_hover_text(if stale { i18n::tr("回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)") } else { i18n::tr("基板の画面。回路図から部品を取り込んで、配置・配線します") });
+                // a project of several boards: which one is in the editors
+                if self.system.names.len() > 1 {
+                    let mut k = self.system.active;
+                    egui::ComboBox::from_id_salt("board_of_system").selected_text(format!("{} {}", i18n::tr("基板:"), self.system.names[k])).show_ui(ui, |ui| {
+                        for (i, n) in self.system.names.iter().enumerate() {
+                            ui.selectable_value(&mut k, i, n);
+                        }
+                    }).response.on_hover_text(i18n::tr("このプロジェクトの基板 (回路図と基板の組) を切り替えます。つなぎは「ファイル → 基板どうしのつなぎ…」"));
+                    if k != self.system.active {
+                        self.switch_board(k);
+                    }
+                }
                 ui.separator();
                 let sch_mode = self.mode == Mode::Schematic;
                 ui.menu_button(i18n::tr("ファイル"), |ui| {
@@ -347,6 +366,10 @@ impl eframe::App for App {
                     }
                     if ui.button(i18n::tr("名前を付けてプロジェクトを保存…")).on_hover_text(i18n::tr("回路図と基板を、別の名前のプロジェクトとして保存します")).clicked() {
                         self.save_project(true);
+                        ui.close();
+                    }
+                    if ui.button(i18n::tr("基板どうしのつなぎ… (複数の基板)")).on_hover_text(i18n::tr("ひとつのプロジェクトに基板を足して、コネクタどうしのつなぎを登録し、ピンごとに信号が合っているかを調べます。全体の部品表も出せます")).clicked() {
+                        self.boards.open = true;
                         ui.close();
                     }
                     ui.separator();
@@ -377,6 +400,13 @@ impl eframe::App for App {
                                 }
                                 ui.close();
                             }
+                        }
+                        ui.separator();
+                        if ui.button(i18n::tr("複数の基板のサンプル (メイン基板とセンサー基板を I2C でつなぐ)")).on_hover_text(i18n::tr("2 枚の基板 (回路図と基板の組) を 1 つのプロジェクトに入れ、両方のコネクタ J1 をつないだ例です。「基板どうしのつなぎ」の窓で、ピンごとの信号の照合と、全体の部品表 (センサー基板は 3 枚作る) を見られます")).clicked() {
+                            if self.confirm_unsaved("開くと、いまの回路図と基板は置き換わります。") {
+                                self.open_multiboard_sample();
+                            }
+                            ui.close();
                         }
                     }).response.on_hover_text(i18n::tr("できあがった回路をすぐ開いて、動かしてみます。保存するときは別の名前になるので、サンプルは壊れません"));
                     if ui.button(i18n::tr("保存")).on_hover_text(i18n::tr("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます")).clicked() {
