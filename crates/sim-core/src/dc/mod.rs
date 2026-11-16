@@ -54,6 +54,17 @@ pub struct DcResult {
     pub warnings: Vec<String>,
     /// The stored state (true = 1) of every flip-flop / latch / Schmitt trigger the answer was found with.
     pub seq_states: Vec<(String, bool)>,
+    /// The solution vector, junction states and stored states the answer was found with: where `dc_op_from` starts the next solve.
+    pub(crate) start: Start,
+}
+
+/// Where a solve of the same circuit with slightly different values can start: the last solution, its junction states and the stored
+/// states of its flip-flops.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Start {
+    pub x: Vec<f64>,
+    pub vj: Vec<f64>,
+    pub seq: Vec<f64>,
 }
 
 impl DcResult {
@@ -120,6 +131,8 @@ pub(crate) struct Compiled {
     /// Where the stamps of an assembly land (`mna::StampPlan`), and the stamp list of the last assembly, kept for its capacity.
     stamp_plan: std::cell::RefCell<Option<mna::StampPlan>>,
     log_spare: std::cell::RefCell<Vec<(u32, u32, f64)>>,
+    /// Where `Strategy::Direct` starts instead of zero (`dc_op_from`): the answer of the same circuit with slightly different values.
+    pub(crate) start: Option<(Vec<f64>, Vec<f64>)>,
     /// Where the last `Strategy::Gmin` of this `solve_op` gave up, for `Strategy::GminLong` to go on from (see `GminStall`).
     gmin_stall: std::cell::RefCell<Option<GminStall>>,
     pub(crate) ce: Vec<Ce>,
@@ -305,6 +318,7 @@ impl Compiled {
             // `newton` and the full 150 plain iterations only made its failure four times as long, see `newton::DC_PLAIN_CAP`)
             Strategy::Direct => {
                 let ctx = Ctx::dc(crate::options::options().gmin, 1.0);
+                let (zero_x, zero_vj) = self.start.clone().unwrap_or((zero_x, zero_vj));
                 match self.newton_plain_capped(zero_x.clone(), zero_vj.clone(), &ctx, newton::DC_PLAIN_CAP) {
                     Err(Fail::NoConv) => self.newton_with(zero_x, zero_vj, &ctx, true, 1.0, f64::INFINITY),
                     other => other,
@@ -616,12 +630,33 @@ pub fn last_convergence_trouble() -> Option<String> {
     TROUBLE.with(|t| t.borrow().clone())
 }
 
+/// `dc_op` of a circuit that differs from the one `prev` was solved for only in its values (the same elements and nodes): the solve
+/// starts from `prev`'s answer and stored states, which takes a few Newton steps where a solve from zero may need gmin or source
+/// stepping. When that start does not converge, the usual strategies follow from zero.
+pub fn dc_op_from(circuit: &Circuit, prev: &DcResult) -> Result<DcResult, SimError> {
+    let mut r = dc_op_inner(circuit, &DC_ORDER_WIDEN, Some(&prev.start))?;
+    r.warnings.extend(moving_source_warning(circuit));
+    Ok(r)
+}
+
 pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResult, SimError> {
+    dc_op_inner(circuit, order, None)
+}
+
+fn dc_op_inner(circuit: &Circuit, order: &[Strategy], start: Option<&Start>) -> Result<DcResult, SimError> {
     if !has_ground(circuit) {
         return Err(SimError::NoGround);
     }
     let mut warnings = floating_warnings(circuit);
-    let cm = compile(circuit);
+    let mut cm = compile(circuit);
+    if let Some(s) = start
+        && s.x.len() == cm.n_unknowns
+        && s.vj.len() == cm.n_slots
+        && s.seq.len() == cm.seq_state.borrow().len()
+    {
+        cm.start = Some((s.x.clone(), s.vj.clone()));
+        *cm.seq_state.borrow_mut() = s.seq.clone();
+    }
     let (att, name) = solve_op(&cm, order)?;
     if newton::LIMITED_USED.with(|c| c.get()) {
         warnings.push("この答えは、ふつうの方法では収束せず、1回の変化を小さくした特別な反復で求めました。2つの状態を持つ回路 (555 の点滅・フリップフロップ・ヒステリシスつきの比較器) や発振回路では、実際には落ち着かない点が出ることがあります。時間を追って確かめるには「過渡解析」を使ってください".to_string());
@@ -644,7 +679,8 @@ fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, mut warnings: Ve
             ones
         ));
     }
-    DcResult { voltages, elements: els, iterations: att.iterations, strategy, warnings, seq_states }
+    let start = Start { x: att.x.clone(), vj: att.vj.clone(), seq: cm.seq_state.borrow().clone() };
+    DcResult { voltages, elements: els, iterations: att.iterations, strategy, warnings, seq_states, start }
 }
 
 impl Compiled {

@@ -5,7 +5,7 @@
 //! temperatures stop moving. This is a steady state (DC); the board's own heat spreading is in θ, not simulated.
 
 use crate::circuit::{Circuit, Element};
-use crate::dc::{dc_op, DcResult, SimError};
+use crate::dc::{dc_op, dc_op_from, DcResult, SimError};
 use crate::temperature::T_NOM_C;
 use sch_core::{Component, Kind, Schematic};
 use std::collections::BTreeMap;
@@ -153,6 +153,8 @@ pub fn self_heat(circuit: &Circuit, heaters: &[Heater], t_amb: f64) -> Result<Se
     let cold = dc_op(&build(&temps))?;
     let mut warm = cold.clone();
     let mut powers = vec![0.0; heaters.len()];
+    // each part's temperature and target of the previous round
+    let mut last: Vec<Option<(f64, f64)>> = vec![None; heaters.len()];
     let mut rounds = 0;
     for round in 1..=60 {
         rounds = round;
@@ -163,12 +165,24 @@ pub fn self_heat(circuit: &Circuit, heaters: &[Heater], t_amb: f64) -> Result<Se
             if target > 1000.0 {
                 return Err(SimError::Invalid(format!("{} の温度が 1000 ℃ を超えます (電力 {:.1} W × 熱抵抗 {} K/W)。電流を減らすか、熱抵抗の小さい部品にしてください", h.name, powers[k], h.theta)));
             }
-            // half a step: a resistor whose value rises with heat would otherwise swing between two temperatures
-            let next = temps[k] + 0.6 * (target - temps[k]);
+            // The step towards the target: the secant of the last two rounds gives how the target follows the part's own temperature
+            // (slope s), and the step 1/(1 − s) lands where the two meet. A resistor whose value rises with heat has s < 0 (the plain
+            // step would swing between two temperatures), a transistor biased by a fixed voltage s > 0 (the plain step crawls). Without
+            // a slope yet, or when it says the part runs away (s near 1 or above), the old fixed fraction of the step.
+            let step = match last[k] {
+                Some((t0, g0)) if (temps[k] - t0).abs() > 1e-12 => {
+                    let s = (target - g0) / (temps[k] - t0);
+                    if s < 0.9 { (1.0 / (1.0 - s)).clamp(0.2, 10.0) } else { 0.6 }
+                }
+                _ => 0.6,
+            };
+            last[k] = Some((temps[k], target));
+            let next = temps[k] + step * (target - temps[k]);
             moved = moved.max((next - temps[k]).abs());
             temps[k] = next;
         }
-        warm = dc_op(&build(&temps))?;
+        // the values moved only a little since the last round: start from its answer
+        warm = dc_op_from(&build(&temps), &warm)?;
         if moved < 1e-6 {
             break;
         }
@@ -219,6 +233,8 @@ mod tests {
         let rhot = 100.0 * (1.0 + 1e-3 * (p.temp_c - 27.0));
         assert!((p.power - 100.0 * rhot / (rhot + 100.0).powi(2)).abs() < 1e-6, "{p:?}");
         assert!((p.rise - 100.0 * p.power).abs() < 1e-3, "{p:?}");
+        // the secant step lands in a few rounds (the fixed 0.6 step took about twenty)
+        assert!(r.rounds <= 6, "{}", r.rounds);
         // the cold answer is the one without the warming (R1 at 25 °C: 2 K under the 27 °C the coefficient is counted from)
         assert!((r.cold.voltage("o").unwrap() - 1000.0 / 199.8).abs() < 1e-9);
         assert!(r.warm.voltage("o").unwrap() < 5.0);
@@ -241,6 +257,25 @@ mod tests {
         assert!((cold - r.cold.voltage("o").unwrap()).abs() < 1e-9 && (warm - r.warm.voltage("o").unwrap()).abs() < 1e-9);
         let per_k = (cold - warm) / p.rise;
         assert!(per_k > 1.2e-3 && per_k < 2.6e-3, "{per_k} V/K");
+    }
+
+    #[test]
+    fn a_solve_from_the_last_answer_gives_the_same_point_in_fewer_steps() {
+        let mut c = Circuit::new();
+        let (a, o) = (c.node("a"), c.node("o"));
+        c.add(Element::vdc("V1", a, 0, 5.0));
+        c.add(Element::Resistor { name: "R1".into(), a, b: o, r: 100.0 });
+        c.add(Element::Diode { name: "D1".into(), a: o, k: 0, model: crate::circuit::DiodeModel::default() });
+        let first = dc_op(&c).unwrap();
+        let warmer = c.at_temperatures(27.0, &[("D1".into(), 40.0)]);
+        let (fresh, from) = (dc_op(&warmer).unwrap(), dc_op_from(&warmer, &first).unwrap());
+        assert!((fresh.voltage("o").unwrap() - from.voltage("o").unwrap()).abs() < 1e-9);
+        assert!(from.iterations < fresh.iterations, "{} vs {}", from.iterations, fresh.iterations);
+        // another circuit (other unknowns): the start is not used, and the answer is still right
+        let mut other = Circuit::new();
+        let n = other.node("n");
+        other.add(Element::vdc("V1", n, 0, 1.0));
+        assert!((dc_op_from(&other, &first).unwrap().voltage("n").unwrap() - 1.0).abs() < 1e-12);
     }
 
     #[test]

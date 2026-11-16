@@ -290,6 +290,8 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
     let mut temps = vec![t_amb; nodes.len()];
     let mut rounds = 0;
     let mut cold: Option<TranResult> = None;
+    // each part's temperature of the previous run and the working temperature it gave
+    let mut last: Vec<Option<(f64, f64)>> = vec![None; nodes.len()];
     loop {
         rounds += 1;
         let own: Vec<(String, f64)> = junctions.iter().zip(&temps).flat_map(|(names, &t)| names.iter().map(move |n| (n.clone(), t))).collect();
@@ -365,7 +367,19 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
             let cold = cold.unwrap_or_else(|| tr.clone());
             return Ok(HeatTran { time: tr.time.clone(), parts, rounds, tran: tr, cold });
         }
-        temps = weighted;
+        // as in `self_heat`: the secant of the last two rounds says how the working temperature follows the one the run was made at, and
+        // the step 1/(1 − s) lands where they meet (the plain step `temps = weighted` crawls when a warmer transistor draws more)
+        for k in 0..nodes.len() {
+            let step = match last[k] {
+                Some((t0, w0)) if (temps[k] - t0).abs() > 1e-9 => {
+                    let s = (weighted[k] - w0) / (temps[k] - t0);
+                    if s < 0.9 { (1.0 / (1.0 - s)).clamp(0.2, 10.0) } else { 1.0 }
+                }
+                _ => 1.0,
+            };
+            last[k] = Some((temps[k], weighted[k]));
+            temps[k] += step * (weighted[k] - temps[k]);
+        }
     }
 }
 
