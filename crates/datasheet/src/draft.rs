@@ -236,6 +236,9 @@ pub struct FoundPins {
     pub io: Vec<(String, String)>,
     /// Read off a pin drawing (`pin_diagram`), not a table: there are no columns to read again.
     pub from_drawing: bool,
+    /// The packages whose column of numbers it is, in a table of a column per package ("SOT-23", "TO-220/TO-263/SOT-223" for
+    /// columns of the same pins); None for a table of one.
+    pub package: Option<String>,
 }
 
 impl Datasheet {
@@ -259,11 +262,17 @@ impl Datasheet {
     /// shows the first part number's table first), the candidate with the fewest names twice (a pin drawing read as a table mixes its
     /// two sides up: "GND" twice), then the most pins.
     pub fn find_pin_table(&self) -> Option<FoundPins> {
+        self.find_pin_tables().into_iter().next()
+    }
+
+    /// The pin table as `find_pin_table` finds it; of a table of a column of numbers per package (`pin_table::package_columns`), the
+    /// pins of each package, the column the table's columns were guessed by first.
+    pub fn find_pin_tables(&self) -> Vec<FoundPins> {
         let queries = Heading::PinConfig.queries();
         let twice = |pins: &[(String, String)]| pins.iter().enumerate().filter(|(i, p)| pins[..*i].iter().any(|q| q.1 == p.1)).count();
         for page in 0..self.page_count() {
             let Some((w, h)) = self.page_size(page) else { continue };
-            let mut found: Vec<FoundPins> = vec![];
+            let mut found: Vec<Vec<FoundPins>> = vec![];
             for hit in self.search_page_any(page, &queries).into_iter().filter(|h| !h.in_contents) {
                 // from the heading, and from each of the next lines: a table's header rows ("NAME  NS, PW, J") can span its columns
                 // and run them together, so starting below them reads the columns apart
@@ -279,15 +288,41 @@ impl Datasheet {
                     let pins = crate::pins_from(&table, num_col, name_col);
                     if plausible_pins(&pins) {
                         let io = crate::io_cells(&table, num_col, name_col);
-                        found.push(FoundPins { page, area, num_col, name_col, pins, io, from_drawing: false });
+                        let columns = crate::pin_table::package_columns(&table, num_col);
+                        let label = |c: usize| columns.iter().find(|p| p.0 == c).map(|p| p.1.clone());
+                        let first = label(num_col);
+                        let mut group = vec![FoundPins { page, area, num_col, name_col, pins, io, from_drawing: false, package: first.clone() }];
+                        for (c, pkg) in columns.iter().filter(|p| Some(&p.1) != first.as_ref()) {
+                            let pins = crate::pins_from(&table, *c, name_col);
+                            if !plausible_pins(&pins) {
+                                continue;
+                            }
+                            // packages of the same pins are one choice ("TO-220/TO-263/SOT-223", LM317)
+                            match group.iter_mut().find(|g| g.pins == pins) {
+                                Some(g) => {
+                                    let names = g.package.get_or_insert_with(String::new);
+                                    if !names.split('/').any(|n| n == pkg) {
+                                        if !names.is_empty() {
+                                            names.push('/');
+                                        }
+                                        names.push_str(pkg);
+                                    }
+                                }
+                                None => {
+                                    let io = crate::io_cells(&table, *c, name_col);
+                                    group.push(FoundPins { page, area, num_col: *c, name_col, pins, io, from_drawing: false, package: Some(pkg.clone()) });
+                                }
+                            }
+                        }
+                        found.push(group);
                     }
                 }
             }
-            if let Some(best) = found.into_iter().min_by(|a, b| twice(&a.pins).cmp(&twice(&b.pins)).then(b.pins.len().cmp(&a.pins.len()))) {
-                return Some(best);
+            if let Some(best) = found.into_iter().min_by(|a, b| twice(&a[0].pins).cmp(&twice(&b[0].pins)).then(b[0].pins.len().cmp(&a[0].pins.len()))) {
+                return best;
             }
         }
-        None
+        vec![]
     }
 
     /// The pins of the first pin drawing under a "Pin Configuration" heading (`pin_diagram`): for data sheets with no pin table, or to
@@ -299,7 +334,7 @@ impl Datasheet {
             for hit in self.search_page_any(page, &queries).into_iter().filter(|h| !h.in_contents) {
                 let area = Rect { x0: 0.0, y0: hit.rect.y1, x1: w, y1: h * FOOT };
                 if let Some(pins) = crate::pin_diagram::pins_in_drawings(self.words(page), area).into_iter().find(|p| plausible_pins(p)) {
-                    return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, io: vec![], from_drawing: true });
+                    return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, io: vec![], from_drawing: true, package: None });
                 }
             }
         }

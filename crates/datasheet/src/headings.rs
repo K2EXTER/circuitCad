@@ -40,7 +40,7 @@ impl Heading {
     /// How data sheets write it, in English and in Japanese.
     pub fn terms(self) -> &'static [&'static str] {
         match self {
-            Heading::PinConfig => &["pin configuration", "pin assignment", "pin functions", "pin description", "pinout", "ピン配置", "端子配列", "ピン構成", "端子構成", "ピン機能", "端子機能", "ピン説明", "端子説明"],
+            Heading::PinConfig => &["pin configuration", "pin assignment", "pin function", "pin description", "pinout", "ピン配置", "端子配列", "ピン構成", "端子構成", "ピン機能", "端子機能", "ピン説明", "端子説明"],
             Heading::LandPattern => &["land pattern", "recommended footprint", "recommended pad", "recommended solder", "ランドパターン", "ランド パターン", "ランド・パターン", "推奨パッド", "推奨ランド", "実装パターン", "パッド寸法", "推奨はんだ"],
             Heading::Package => &["package outline", "package dimensions", "mechanical data", "outline dimensions", "外形寸法", "外形図", "パッケージ寸法", "パッケージ外形", "パッケージ情報", "メカニカル", "機械的データ"],
             Heading::AbsMax => &["absolute maximum ratings", "absolute maximum rating", "maximum ratings", "絶対最大定格", "絶対最大"],

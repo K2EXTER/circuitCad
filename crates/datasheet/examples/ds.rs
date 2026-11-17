@@ -84,11 +84,16 @@ fn main() -> Result<(), String> {
         }
         "pins" => {
             // ds pins FILE: the pin table and the pin drawing the draft would take
-            for (what, found) in [("table", ds.find_pin_table()), ("drawing", ds.find_pin_drawing())] {
-                match found {
-                    Some(f) => println!("{what} p.{}: {}  io: {:?}", f.page + 1, datasheet::pin_lines(&f.pins).replace('\n', ", "), f.io),
-                    None => println!("{what}: none"),
-                }
+            let tables = ds.find_pin_tables();
+            if tables.is_empty() {
+                println!("table: none");
+            }
+            for f in tables {
+                println!("table p.{}{}: {}  io: {:?}", f.page + 1, f.package.map_or(String::new(), |p| format!(" [{p}]")), datasheet::pin_lines(&f.pins).replace('\n', ", "), f.io);
+            }
+            match ds.find_pin_drawing() {
+                Some(f) => println!("drawing p.{}: {}", f.page + 1, datasheet::pin_lines(&f.pins).replace('\n', ", ")),
+                None => println!("drawing: none"),
             }
         }
         "parts" => {

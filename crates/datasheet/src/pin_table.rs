@@ -135,6 +135,18 @@ fn expand_numbers(s: &str) -> Vec<String> {
 /// A pin name: one short word that starts with a letter or a digit and has a letter ("VCC", "1IN-", "RESET/GPIO0").
 /// A cell of several words is a description.
 fn is_pin_name(s: &str) -> bool {
+    subscripted(s).is_some() || one_word_name(s)
+}
+
+/// A name whose subscript the page sets apart ("V OUT", "V IN": Microchip's MCP1700), as one word ("VOUT").
+fn subscripted(s: &str) -> Option<String> {
+    let mut t = s.split_whitespace();
+    let (a, b) = (t.next()?, t.next()?);
+    let upper = |w: &str| w.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit());
+    (t.next().is_none() && a.len() == 1 && upper(a) && (1..=4).contains(&b.len()) && upper(b) && b.chars().next().is_some_and(|c| c.is_ascii_alphabetic())).then(|| format!("{a}{b}"))
+}
+
+fn one_word_name(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 16
         && !s.chars().any(char::is_whitespace)
@@ -190,7 +202,7 @@ pub fn pins_from(t: &Table, num_col: usize, name_col: usize) -> Vec<(String, Str
             let Some(pair) = split_number_name(num) else { continue };
             pair
         } else {
-            let first = name.split_whitespace().next().unwrap_or("").to_string();
+            let first = subscripted(name).unwrap_or_else(|| name.split_whitespace().next().unwrap_or("").to_string());
             (num.clone(), first)
         };
         let name = name.replace(['\u{2212}', '\u{2013}'], "-");
@@ -209,6 +221,30 @@ pub fn pins_from(t: &Table, num_col: usize, name_col: usize) -> Vec<(String, Str
         out.sort_by_key(|(n, _)| n.parse::<u32>().unwrap_or(u32::MAX));
     }
     out
+}
+
+/// The columns of pin numbers headed by a package each ("Pin No." over "SOT-23", "SOT-89", "TO-92", "2x2 DFN-6": Microchip's
+/// MCP1700), as (column, package name): the columns with about as many pin numbers as `num_col`, each with a package's name in it.
+/// Empty unless two or more are.
+pub fn package_columns(t: &Table, num_col: usize) -> Vec<(usize, String)> {
+    let numbers = |c: usize| t.cells.iter().filter(|r| is_pin_number(&r[c])).count();
+    let want = numbers(num_col);
+    let out: Vec<(usize, String)> = (0..t.columns)
+        .filter(|&c| want >= 2 && numbers(c) * 2 >= want)
+        .flat_map(|c| {
+            let labels: Vec<&str> = t.cells.iter().flat_map(|r| r[c].split_whitespace()).filter(|w| crate::draft::package_of(w).is_some()).collect();
+            // two packages' columns read as one ("SOT-89 TO-92" over "1 1", "3 3"): each package, when each cell repeats one number
+            let same = t.cells.iter().filter(|r| is_pin_number(&r[c])).all(|r| {
+                let mut w = r[c].split_whitespace();
+                let first = w.next();
+                w.all(|x| Some(x) == first)
+            });
+            let take = if same { labels.len() } else { labels.len().min(1) };
+            // (without the brackets and commas around it: "(SOIC),", "、VSSOP、")
+            labels.into_iter().take(take).map(move |l| (c, l.trim_matches(|ch: char| !ch.is_alphanumeric() && ch != '-').to_string())).collect::<Vec<_>>()
+        })
+        .collect();
+    if out.len() >= 2 { out } else { vec![] }
 }
 
 /// The type in a type column's cell: its first word, as a description may run into the cell ("I Input voltage supply.", LP5907);
@@ -351,6 +387,28 @@ mod tests {
 
     fn table(rows: &[&[&str]]) -> Table {
         Table { cells: rows.iter().map(|r| r.iter().map(|c| c.to_string()).collect()).collect(), columns: rows[0].len() }
+    }
+
+    /// Microchip's MCP1700: a column of numbers per package under "Pin No.", two of them read as one, names with their
+    /// subscripts apart ("V OUT").
+    #[test]
+    fn a_column_of_numbers_per_package() {
+        let t = table(&[
+            &["Pin No.", "Pin No. Pin No.", "Pin No.", "", ""],
+            &["", "", "", "Name", "Function"],
+            &["SOT-23", "SOT-89 TO-92", "2x2 DFN-6", "", ""],
+            &["1", "1 1", "3", "GND", "Ground Terminal"],
+            &["2", "3 3", "6", "V OUT", "Regulated Voltage Output"],
+            &["3", "2 2", "1", "V IN", "Unregulated Supply Voltage"],
+            &["—", "— —", "2, 4, 5", "NC", "No Connect"],
+        ]);
+        assert!(is_pin_name("V OUT") && !is_pin_name("No Connect"));
+        let cols = package_columns(&t, 2);
+        assert_eq!(cols, vec![(0, "SOT-23".to_string()), (1, "SOT-89".to_string()), (1, "TO-92".to_string()), (2, "DFN-6".to_string())]);
+        assert_eq!(pins_from(&t, 0, 3), vec![("1".to_string(), "GND".to_string()), ("2".to_string(), "VOUT".to_string()), ("3".to_string(), "VIN".to_string())]);
+        assert_eq!(pins_from(&t, 1, 3)[1], ("2".to_string(), "VIN".to_string()));
+        // one column of numbers: no packages to pick
+        assert!(package_columns(&table(&[&["Name", "SOIC"], &["OUT", "1"], &["IN", "2"]]), 1).is_empty());
     }
 
     #[test]

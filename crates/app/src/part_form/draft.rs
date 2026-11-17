@@ -98,6 +98,14 @@ fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Option<String>
     }
 }
 
+/// Which of the pins found are of the package `k` (by the packages over their column: "SOT-89/TO-92"), when a table has a column per
+/// package.
+fn pins_of_package(sources: &[FoundPins], k: &PackageName) -> Option<usize> {
+    sources.iter().position(|s| {
+        s.package.as_deref().is_some_and(|names| names.split('/').any(|n| datasheet::draft::package_of(n).is_some_and(|(f, _)| f == k.family)))
+    })
+}
+
 /// A tab printed as a pin of its own with the name of pin 2 ("TAB OUTPUT" beside "2 OUTPUT", TI's LM317 in SOT-223):
 /// its number. The built-in SOT-223 makes the tab pad 2.
 fn tab_as_pin_2(pins: &[(String, String)]) -> Option<String> {
@@ -187,11 +195,13 @@ impl PartForm {
         // the pins: from the table and from the drawing. When they differ the drawing goes first: it is of one package, where a
         // table's rows of several numbers ("2, 3, 6, 7") and several packages' columns are read wrong more easily. A drawing with
         // fewer pins than the table is not all of it (LP5907's drawing gave 2 of its 5 pins): the table then goes first
-        let mut pin_sources: Vec<FoundPins> = ds.find_pin_table().into_iter().collect();
+        // (a table of a column per package gives the pins of each)
+        let mut pin_sources: Vec<FoundPins> = ds.find_pin_tables();
         let mut pins_agree = false;
         if let Some(d) = ds.find_pin_drawing() {
             match pin_sources.first() {
-                Some(t) if t.pins == d.pins => pins_agree = true,
+                // (any package's column: the drawing is of one package)
+                Some(_) if pin_sources.iter().any(|t| t.pins == d.pins) => pins_agree = true,
                 Some(t) if d.pins.len() < t.pins.len() => pin_sources.push(d),
                 Some(_) => pin_sources.insert(0, d),
                 None => pin_sources.push(d),
@@ -201,6 +211,8 @@ impl PartForm {
         packages.truncate(6);
         // with the pins counted, a name that says that many pins (or says none) first
         let package = pin_sources.first().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))).unwrap_or(0);
+        // the pins of that package, in a table of a column per package
+        let pin_pick = packages.get(package).and_then(|k| pins_of_package(&pin_sources, k)).unwrap_or(0);
         let dims = ds.dimension_table();
         let lands = ds.land_patterns();
         // a table with a column per part number ("TIP120, TIP121, TIP122") gives the named part's column
@@ -208,7 +220,7 @@ impl PartForm {
         let recommended = ds.recommended_operating_of(name.as_deref());
         let model = has_model(kind);
         let p_type = ds.p_type();
-        let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, recommended, p_type, open: true };
+        let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick, pins_agree, dims, lands, ratings, recommended, p_type, open: true };
         d.use_[6] = d.max_ratings().iter().any(Option::is_some);
         Some(d)
     }
@@ -468,11 +480,18 @@ impl PartForm {
                     ui.label("");
                 } else {
                     let shown = d.packages[d.package].name.clone();
+                    let before = d.package;
                     egui::ComboBox::from_id_salt("draft_pkg").selected_text(&shown).show_ui(ui, |ui| {
                         for (k, p) in d.packages.iter().enumerate() {
                             ui.selectable_value(&mut d.package, k, i18n::trf!("{} ({} 回)", p.name, p.count));
                         }
                     }).response.on_hover_text(i18n::tr("データシートに書かれている回数の多い順です。いくつかのパッケージがあるデータシートでは、使うものを選んでください"));
+                    // another package: its own pins, when the table has a column per package
+                    if d.package != before
+                        && let Some(k) = pins_of_package(&d.pin_sources, &d.packages[d.package])
+                    {
+                        d.pin_pick = k;
+                    }
                     page_button(ui, Some(d.packages[d.package].page), &mut go);
                 }
                 ui.end_row();
@@ -499,9 +518,18 @@ impl PartForm {
                         if d.pin_sources.len() > 1 {
                             ui.horizontal(|ui| {
                                 for (k, p) in d.pin_sources.iter().enumerate() {
-                                    ui.selectable_value(&mut d.pin_pick, k, if p.from_drawing { i18n::tr("図から") } else { i18n::tr("表から") });
+                                    let label = match (&p.package, p.from_drawing) {
+                                        (_, true) => i18n::tr("図から").to_string(),
+                                        (Some(pkg), false) => pkg.clone(),
+                                        (None, false) => i18n::tr("表から").to_string(),
+                                    };
+                                    ui.selectable_value(&mut d.pin_pick, k, label);
                                 }
-                                ui.colored_label(crate::theme::WARN, i18n::tr("表と図で違います")).on_hover_text(i18n::tr("ピンの表とピン配置の図で、読めたピンが違いました。両方のページを開いて、正しい方を選んでください (表は、いくつものパッケージの列や「2, 3, 6, 7」のような行を読み違えることがあります)"));
+                                if d.pin_sources.iter().any(|p| p.package.is_some()) {
+                                    ui.small(i18n::tr("パッケージごとの列")).on_hover_text(i18n::tr("ピンの表にパッケージごとの番号の列がありました。使うパッケージの列を選んでください (上のパッケージを選ぶと、その列に合わせます)"));
+                                } else {
+                                    ui.colored_label(crate::theme::WARN, i18n::tr("表と図で違います")).on_hover_text(i18n::tr("ピンの表とピン配置の図で、読めたピンが違いました。両方のページを開いて、正しい方を選んでください (表は、いくつものパッケージの列や「2, 3, 6, 7」のような行を読み違えることがあります)"));
+                                }
                             });
                         }
                         let p = &d.pin_sources[d.pin_pick.min(d.pin_sources.len() - 1)];
@@ -634,6 +662,12 @@ mod tests {
         let lm317: Vec<(String, String)> = [("1", "ADJUST"), ("2", "OUTPUT"), ("3", "INPUT"), ("TAB", "OUTPUT")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
         assert_eq!(tab_as_pin_2(&lm317).as_deref(), Some("TAB"));
         assert_eq!(tab_as_pin_2(&lm317[..3]), None);
+        // a table of a column per package: the pins of the package chosen
+        let src = |pkg: Option<&str>, n: usize| FoundPins { page: 0, area: datasheet::Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, num_col: 0, name_col: 1, pins: (1..=n).map(|i| (i.to_string(), format!("P{i}"))).collect(), io: vec![], from_drawing: false, package: pkg.map(str::to_string) };
+        let sources = vec![src(Some("DFN-6"), 7), src(Some("SOT-23"), 3), src(Some("SOT-89/TO-92"), 3)];
+        assert_eq!(pins_of_package(&sources, &p("TO-92", "to-92")), Some(2));
+        assert_eq!(pins_of_package(&sources, &p("SOT-23", "sot-23")), Some(1));
+        assert_eq!(pins_of_package(&[src(None, 3)], &p("SOT-23", "sot-23")), None);
         assert!(is_dual("tssop") && !is_dual("sot-223"));
     }
 }
