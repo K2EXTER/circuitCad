@@ -186,7 +186,7 @@ impl Datasheet {
                 Word::plain(&w.text, Rect { x0, y0, x1, y1 })
             })
             .collect();
-        let mut axes = axes::read(&words, f.area, f.rect)?;
+        let mut axes = axes::read_ocr(&words, f.area, f.rect)?;
         // the vertical axis's title is printed up the page: read it off the picture turned a quarter clockwise (a pixel
         // (x, y) of it is (y, height - 1 - x) of the crop), left of the plot
         if axes.y.prefix == 1.0 {

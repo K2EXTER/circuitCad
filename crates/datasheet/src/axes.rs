@@ -48,8 +48,9 @@ fn labels(words: &[Word], area: Rect) -> Vec<Label> {
         while x <= w.rect.x1 {
             if let Some((t, x0, x1)) = w.token_span_at(x) {
                 let t = t.trim_end_matches('%');
+                // (the same number printed again over itself, a fraction of a point off: one label)
                 if let Some(value) = crate::graph::tick_value(t)
-                    && !out.iter().any(|l| (l.x0 - x0).abs() < 0.1 && (l.y - y).abs() < 0.1)
+                    && !out.iter().any(|l| ((l.x0 - x0).abs() < 0.1 && (l.y - y).abs() < 0.1) || (l.text == t && (l.x0 - x0).abs() < 1.5 && (l.y - y).abs() < 1.5))
                 {
                     out.push(Label { text: t.to_string(), value, x0, x1, y });
                 }
@@ -213,16 +214,36 @@ pub(crate) fn unit_prefix(words: &[&Word]) -> Option<f64> {
 /// one caption, the one nearest the caption's middle (the left one on a tie). None when the numbers do not make two
 /// axes of three labels or more each (labels drawn as pictures, a bar chart, a graph with numbers inside).
 pub fn read(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
+    read_lined(words, area, caption, 2.0)
+}
+
+/// [`read`] for words read by the OCR: their boxes are a little uneven, so a column's labels line up within `line`
+/// points rather than 2.
+pub fn read_ocr(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
+    read_lined(words, area, caption, 4.0)
+}
+
+fn read_lined(words: &[Word], area: Rect, caption: Rect, line: f32) -> Option<ReadAxes> {
     let wide = Rect { x0: area.x0 - 140.0, y0: area.y0 - 20.0, x1: area.x1 + 140.0, y1: area.y1 + 20.0 };
     let all = labels(words, wide);
+    // a PNP's graph has negative numbers (−10 −100 −1000 on a log axis): when the axes do not come out as printed, they
+    // are read as magnitudes (the form wants magnitudes)
+    read_labels(&all, words, caption, line).or_else(|| {
+        all.iter().any(|l| l.value < 0.0).then_some(())?;
+        let magnitudes: Vec<Label> = all.iter().map(|l| Label { text: l.text.trim_start_matches(['-', '\u{2212}']).to_string(), value: l.value.abs(), ..l.clone() }).collect();
+        read_labels(&magnitudes, words, caption, line)
+    })
+}
+
+fn read_labels(all: &[Label], words: &[Word], caption: Rect, line: f32) -> Option<ReadAxes> {
     let mut best: Option<(f32, ReadAxes)> = None;
     // columns of labels on the left of a plot: right edges in line (or centres), values going one way; a column split
     // where the labels are far apart (two graphs one over the other)
     let mut cols: Vec<Vec<&Label>> = vec![];
-    for l0 in &all {
+    for l0 in all {
         for key in [|l: &Label| l.x1, |l: &Label| l.cx()] {
             let k0 = key(l0);
-            let mut col: Vec<&Label> = all.iter().filter(|l| (key(l) - k0).abs() < 2.0).collect();
+            let mut col: Vec<&Label> = all.iter().filter(|l| (key(l) - k0).abs() < line).collect();
             col.sort_by(|a, b| a.y.total_cmp(&b.y));
             col.dedup_by(|b, a| (a.y - b.y).abs() < 1.5);
             if col.len() < 3 {
@@ -241,7 +262,26 @@ pub fn read(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
             cols.push(run);
         }
     }
-    cols.retain(|c| monotonic(&c.iter().map(|l| (l.y, l.value)).collect::<Vec<_>>()));
+    // the longest stretch of each run whose values go one way (the graph above's last label may line up with the
+    // column: 1N5400's "0.01" over "100 10 1")
+    let cols: Vec<Vec<&Label>> = cols
+        .into_iter()
+        .filter_map(|c| {
+            let mut best: Option<(usize, usize)> = None;
+            for i in 0..c.len() {
+                for j in (i + 3..=c.len()).rev() {
+                    if monotonic(&c[i..j].iter().map(|l| (l.y, l.value)).collect::<Vec<_>>()) {
+                        if best.is_none_or(|(a, b)| j - i > b - a) {
+                            best = Some((i, j));
+                        }
+                        break;
+                    }
+                }
+            }
+            best.map(|(i, j)| c[i..j].to_vec())
+        })
+        .collect();
+    let mut cols = cols;
     cols.sort_by(|a, b| a[0].y.total_cmp(&b[0].y).then(a[0].x1.total_cmp(&b[0].x1)));
     cols.dedup_by(|b, a| a.len() == b.len() && a.iter().zip(b.iter()).all(|(p, q)| std::ptr::eq(*p, *q)));
     for col in &cols {
@@ -254,8 +294,15 @@ pub fn read(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
             steps.sort_by(|a, b| a.total_cmp(b));
             let reach = (1.5 * steps[steps.len() / 2]).max(25.0);
             let mut row: Vec<&Label> = all.iter().filter(|l| l.y > bottom + 1.0 && l.y < bottom + reach && l.cx() > col_x1 && l.x0 < col_x1 + 400.0).collect();
-            // the line with the most labels (not a lone "0" at the foot of the next graph's column)
-            let Some(row_y) = row.iter().map(|l| l.y).max_by_key(|y| (row.iter().filter(|l| (l.y - y).abs() < 1.5).count(), -(*y as i64))) else { continue };
+            // the nearest line with two labels or more (not a lone "0" at the foot of the next graph's column; not the
+            // fuller row of a graph beside it, a little lower)
+            let mut ys: Vec<f32> = row.iter().map(|l| l.y).collect();
+            ys.sort_by(|a, b| a.total_cmp(b));
+            // the line of the label nearest the column, when it has two labels or more (the graph beside it may print
+            // its row a point or two higher)
+            let line_of = |y: f32| row.iter().filter(|l| (l.y - y).abs() < 1.5).count();
+            let first = row.iter().min_by(|a, b| a.cx().total_cmp(&b.cx())).map(|l| l.y).filter(|y| line_of(*y) >= 2);
+            let Some(row_y) = first.or_else(|| ys.iter().copied().find(|y| line_of(*y) >= 2)) else { continue };
             row.retain(|l| (l.y - row_y).abs() < 1.5);
             row.sort_by(|a, b| a.cx().total_cmp(&b.cx()));
             if row.len() >= 3 {
@@ -301,7 +348,8 @@ pub fn read(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
             // under its own caption a graph spans the caption's middle; one caption under two graphs (TIP120's NPN and
             // PNP) is between them, and the left one is taken (the first part named)
             let mid = (caption.x0 + caption.x1) / 2.0;
-            let d = if x0 <= mid && mid <= x1 { 0.0 } else { 1e6 + ((x0 + x1) / 2.0 - mid).abs().min((mid - x1).abs()).max(0.0).div_euclid(150.0) * 1e3 } + x0 / 1000.0;
+            // (between columns of one graph, the one with more labels: right edges and centres may line up differently)
+            let d = if x0 <= mid && mid <= x1 { 0.0 } else { 1e6 + ((x0 + x1) / 2.0 - mid).abs().min((mid - x1).abs()).max(0.0).div_euclid(150.0) * 1e3 } + x0 / 1000.0 - 0.01 * (col.len() + row.len()) as f32;
             if best.as_ref().is_none_or(|b| d < b.0) {
                 best = Some((d, axes));
             }
@@ -341,6 +389,43 @@ mod tests {
         assert!(a.x.log && a.y.log);
         assert_eq!(a.x.prefix, 1.0);
         assert_eq!(a.y.ticks[0].1, "20000");
+    }
+
+    #[test]
+    fn a_label_of_the_graph_above_in_line_with_the_column_is_left_out() {
+        // "0.01" (the graph above's lowest label) right-aligned with "100 10 1"
+        let mut words = vec![w("0.01", 84.0, 30.0)];
+        for (i, v) in ["100", "10", "1"].iter().enumerate() {
+            words.push(w(v, 100.0 - 4.0 * v.len() as f32, 100.0 + 65.0 * i as f32));
+        }
+        for (i, v) in ["0.1", "1", "10", "100"].iter().enumerate() {
+            words.push(w(v, 104.0 + 52.0 * i as f32, 238.0));
+        }
+        let a = read(&words, Rect { x0: 80.0, y0: 20.0, x1: 330.0, y1: 260.0 }, Rect { x0: 150.0, y0: 260.0, x1: 250.0, y1: 268.0 }).unwrap();
+        assert_eq!(a.y.ticks.iter().map(|t| t.1.as_str()).collect::<Vec<_>>(), vec!["100", "10", "1"]);
+        assert!(a.x.log && a.y.log);
+    }
+
+    #[test]
+    fn a_pnp_graph_with_negative_numbers_is_read_as_magnitudes() {
+        // hFE 0 … 100 up, IC −10 … −1000 mA across on a log axis
+        let mut words = vec![];
+        for (i, v) in ["100", "80", "60", "40", "20", "0"].iter().enumerate() {
+            words.push(w(v, 100.0 - 4.0 * v.len() as f32, 100.0 + 30.0 * i as f32));
+        }
+        for (i, v) in ["\u{2212}10", "\u{2212}100", "\u{2212}1000"].iter().enumerate() {
+            words.push(w(v, 102.0 + 90.0 * i as f32, 262.0));
+        }
+        let a = read(&words, Rect { x0: 80.0, y0: 60.0, x1: 330.0, y1: 280.0 }, Rect { x0: 150.0, y0: 280.0, x1: 250.0, y1: 288.0 }).unwrap();
+        assert!(a.x.log && !a.y.log);
+        assert_eq!(a.x.ticks.iter().map(|t| t.1.as_str()).collect::<Vec<_>>(), vec!["10", "100", "1000"]);
+    }
+
+    #[test]
+    fn a_number_printed_twice_over_itself_is_one_label() {
+        let words = vec![w("0.1", 88.47, 644.9), w("0.1", 88.75, 644.8), w("1", 144.2, 644.9)];
+        let l = labels(&words, Rect { x0: 0.0, y0: 0.0, x1: 500.0, y1: 900.0 });
+        assert_eq!(l.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["0.1", "1"]);
     }
 
     #[test]

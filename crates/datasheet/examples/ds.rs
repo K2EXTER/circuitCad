@@ -150,6 +150,14 @@ fn main() -> Result<(), String> {
                 println!("{:6.1} {:6.1}  {}", b.x0 + o.x0 / k, b.y0 + (o.y0 + o.y1) / 2.0 / k, o.text);
             }
         }
+        "words" => {
+            // every word of a page with its box and the code points of its text (to see odd characters)
+            let p = page()?;
+            let b = rect(arg(&args, "box"));
+            for w in ds.words(p).iter().filter(|w| inside(&b, w.rect.x0, w.rect.y0)) {
+                println!("{:7.2} {:7.2} {:7.2} {:7.2}  {:?} {:?}", w.rect.x0, w.rect.y0, w.rect.x1, w.rect.y1, w.text, w.text.chars().map(|c| c as u32).collect::<Vec<_>>());
+            }
+        }
         "kind" => {
             println!("{:?} {:?}", ds.category_hint(), ds.name_candidates());
         }
