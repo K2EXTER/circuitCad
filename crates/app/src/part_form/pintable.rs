@@ -65,6 +65,145 @@ pub(super) fn guess_kinds(rows: &mut [PinRow]) {
     }
 }
 
+/// The columns of the CSV, as its first line names them.
+const CSV_HEAD: &str = "number,name,side,kind,sim,gap";
+
+/// The rows as CSV (with the line of the column names), for editing in a spreadsheet: the names of a 100-pin IC are
+/// quicker to fix there (KiCad 10 does the same with its pin table).
+pub(super) fn csv_of(rows: &[PinRow]) -> String {
+    let cell = |s: &str| if s.contains([',', '"', '\n']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() };
+    let mut out = String::from(CSV_HEAD);
+    for r in rows.iter().filter(|r| !(r.number.is_empty() && r.name.is_empty())) {
+        let kind = r.kind.map_or("", |k| k.word());
+        let gap = if r.gap > 0 { r.gap.to_string() } else { String::new() };
+        out += &format!("\n{},{},{},{},{},{}", cell(&r.number), cell(&r.name), r.side, kind, if r.sim { "1" } else { "" }, gap);
+    }
+    out.push('\n');
+    out
+}
+
+/// The cells of one CSV line ("a,\"b,c\",d": a quoted cell may hold commas and doubled quotes).
+fn csv_cells(line: &str) -> Vec<String> {
+    let mut cells = vec![String::new()];
+    let mut quoted = false;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (c, quoted) {
+            ('"', true) if chars.peek() == Some(&'"') => {
+                chars.next();
+                cells.last_mut().unwrap().push('"');
+            }
+            ('"', _) => quoted = !quoted,
+            (',' | ';' | '\t', false) => cells.push(String::new()),
+            (c, _) => cells.last_mut().unwrap().push(c),
+        }
+    }
+    cells.into_iter().map(|c| c.trim().to_string()).collect()
+}
+
+/// Which column a heading names: our own words, the Japanese of the table, and KiCad's pin table ("Number", "Name",
+/// "Orientation", "Electrical Type").
+fn csv_column(head: &str) -> Option<usize> {
+    let h = head.trim().to_lowercase();
+    let h = h.as_str();
+    Some(match h {
+        "number" | "pin" | "pin number" | "no" | "no." | "番号" | "ピン番号" => 0,
+        "name" | "pin name" | "名前" | "ピン名" => 1,
+        "side" | "orientation" | "向き" => 2,
+        "kind" | "type" | "electrical type" | "種類" => 3,
+        "sim" => 4,
+        "gap" | "空き" => 5,
+        _ => return None,
+    })
+}
+
+fn csv_side(s: &str) -> Option<&'static str> {
+    Some(match s.trim().to_lowercase().as_str() {
+        "" | "自動" | "auto" => "",
+        "left" | "l" | "左" => "left",
+        "right" | "r" | "右" => "right",
+        "top" | "up" | "t" | "上" => "top",
+        "bottom" | "down" | "b" | "下" => "bottom",
+        _ => return None,
+    })
+}
+
+/// A kind from its word (`in`), its name on screen (入力), or KiCad's electrical type ("input", "power_in",
+/// "No connect"); an empty cell is no kind.
+fn csv_kind(s: &str) -> Result<Option<sch_core::PinKind>, ()> {
+    use sch_core::PinKind::*;
+    let t = s.trim().to_lowercase().replace([' ', '-'], "_");
+    if t.is_empty() || t == "指定なし" {
+        return Ok(None);
+    }
+    if let Some(k) = sch_core::PinKind::from_word(&t).or_else(|| sch_core::PinKind::ALL.into_iter().find(|k| k.label() == s.trim())) {
+        return Ok(Some(k));
+    }
+    Ok(Some(match t.as_str() {
+        "input" => Input,
+        "output" => Output,
+        "bidirectional" | "bidir" | "i/o" => Bidir,
+        "open_collector" | "open_drain" | "open_emitter" => OpenDrain,
+        "power_in" | "power_input" => PowerIn,
+        "power_out" | "power_output" => PowerOut,
+        "passive" => Passive,
+        "no_connect" | "not_connected" | "unconnected" | "未接続" => Nc,
+        _ => return Err(()),
+    }))
+}
+
+/// The rows of a CSV of the pin table (`csv_of`, or a spreadsheet's). The first line names the columns when it holds
+/// "number" / "番号" and "name" / "名前" (in any order, other columns ignored); otherwise the columns are number, name,
+/// side, kind. A file that is not UTF-8 is refused before this (`read_pin_csv`).
+pub(super) fn rows_from_csv(text: &str) -> Result<Vec<PinRow>, String> {
+    let text = text.trim_start_matches('\u{feff}');
+    let mut lines = text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()).peekable();
+    let first = lines.peek().map(|(_, l)| csv_cells(l)).unwrap_or_default();
+    let named: Vec<Option<usize>> = first.iter().map(|h| csv_column(h)).collect();
+    let header = named.contains(&Some(0)) && named.contains(&Some(1));
+    let cols: Vec<Option<usize>> = if header {
+        lines.next();
+        named
+    } else {
+        (0..4).map(Some).collect()
+    };
+    let mut rows = vec![];
+    for (i, line) in lines {
+        let cells = csv_cells(line);
+        let get = |c: usize| cols.iter().position(|x| *x == Some(c)).and_then(|p| cells.get(p)).map_or("", String::as_str);
+        let mut r = PinRow { number: get(0).to_string(), name: get(1).to_string(), ..PinRow::default() };
+        clean(&mut r.number);
+        clean(&mut r.name);
+        if r.number.is_empty() && r.name.is_empty() {
+            continue;
+        }
+        r.side = csv_side(get(2)).ok_or_else(|| i18n::trf!("{} 行目: 向き「{}」が分かりません。left・right・top・bottom (左・右・上・下) か空にしてください", i + 1, get(2)))?.to_string();
+        r.kind = csv_kind(get(3)).map_err(|_| i18n::trf!("{} 行目: 種類「{}」が分かりません。in・out・io・od・pwr・pwrout・pas・nc (入力・出力など) か空にしてください", i + 1, get(3)))?;
+        r.sim = matches!(get(4).to_lowercase().as_str(), "1" | "true" | "yes" | "sim" | "○" | "x");
+        r.gap = match get(5) {
+            "" => 0,
+            g => g.parse::<u8>().map_err(|_| i18n::trf!("{} 行目: 空き「{}」は 0〜{} の数にしてください", i + 1, g, MAX_GAP))?.min(MAX_GAP),
+        };
+        rows.push(r);
+    }
+    if rows.is_empty() {
+        return Err(i18n::tr("ピンの行がありません。1 行目に number,name (番号,名前) の列の名前、2 行目からピンを書きます").to_string());
+    }
+    let mut seen = std::collections::HashSet::new();
+    if let Some(r) = rows.iter().find(|r| !r.number.is_empty() && !seen.insert(r.number.clone())) {
+        return Err(i18n::trf!("番号 {} のピンが 2 つあります。番号は重ならないようにしてください", r.number));
+    }
+    Ok(rows)
+}
+
+/// The rows of a CSV file. Excel on Japanese Windows writes "CSV (コンマ区切り)" in Shift_JIS: asked to save as
+/// "CSV UTF-8" instead, as the names would be garbled.
+fn read_pin_csv(path: &std::path::Path) -> Result<Vec<PinRow>, String> {
+    let bytes = std::fs::read(path).map_err(|e| i18n::trf!("{} を読めません: {e}", path.display()))?;
+    let text = String::from_utf8(bytes).map_err(|_| i18n::tr("文字コードが UTF-8 ではありません。Excel なら「名前を付けて保存」で「CSV UTF-8 (コンマ区切り)」を選んで保存し直してください").to_string())?;
+    rows_from_csv(&text)
+}
+
 fn side_word(s: PinSide) -> &'static str {
     match s {
         PinSide::Left => "left",
@@ -243,12 +382,38 @@ impl PartForm {
             {
                 guess_kinds(&mut rows);
             }
+            if ui.add_enabled(!rows.is_empty(), egui::Button::new(i18n::tr("CSV に書き出す…"))).on_hover_text(i18n::tr("ピン表を CSV にします (番号・名前・向き・種類・sim・空き)。Excel などで名前をまとめて直し、「CSV から読む」で戻せます")).clicked()
+                && let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(format!("{}_pins.csv", if self.name.is_empty() { "part" } else { self.name.as_str() })).save_file()
+            {
+                // with a byte order mark, so that Excel reads the Japanese as UTF-8
+                self.pin_csv_msg = Some(std::fs::write(&p, format!("\u{feff}{}", csv_of(&rows))).map(|_| i18n::trf!("{} に書き出しました", p.display())).map_err(|e| i18n::trf!("{} に書けません: {e}", p.display())));
+            }
+            if ui.button(i18n::tr("CSV から読む…")).on_hover_text(i18n::tr("CSV のピン表で、この表を置き換えます。1 行目に列の名前 (number,name,side,kind … か 番号,名前,向き,種類。KiCad のピン表の書き出しも可)、無ければ 番号・名前・向き・種類 の順と見なします。UTF-8 で保存したものを読みます")).clicked()
+                && let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv", "txt"]).pick_file()
+            {
+                match read_pin_csv(&p) {
+                    Ok(new) => {
+                        self.pin_csv_msg = Some(Ok(i18n::trf!("{} から {} 本のピンを読みました", p.display(), new.len())));
+                        rows = new;
+                    }
+                    Err(e) => self.pin_csv_msg = Some(Err(e)),
+                }
+            }
             if !roles.is_empty() && ui.button(i18n::tr("名前で合わせる")).on_hover_text(i18n::tr("ピンの名前 (か番号) が、モデルの端子の名前と同じものを、自動で選びます。合うものがない端子は、選び直しになります")).clicked() {
                 for (j, role) in roles.iter().enumerate() {
                     sim[j] = rows.iter().find(|p| p.name.eq_ignore_ascii_case(role) || p.number.eq_ignore_ascii_case(role)).map_or(OPEN.into(), |p| p.number.clone());
                 }
             }
         });
+        match &self.pin_csv_msg {
+            Some(Ok(m)) => {
+                ui.small(m);
+            }
+            Some(Err(e)) => {
+                ui.colored_label(crate::theme::ERROR, e);
+            }
+            None => {}
+        }
         if !roles.is_empty() {
             let unused: Vec<&str> = rows.iter().filter(|p| !p.number.is_empty() && !sim.contains(&p.number)).map(|p| p.name.as_str()).collect();
             if !unused.is_empty() {
@@ -266,5 +431,41 @@ impl PartForm {
             }
             self.sim_pins = sim.join(" ");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pin_table_goes_to_csv_and_back() {
+        let rows = rows_of("1 IN+ left gap=1 kind=in\n2 \"V-\" right\n3 OUT kind=out\n4 IRRAD bottom sim");
+        let csv = csv_of(&rows);
+        assert!(csv.starts_with("number,name,side,kind,sim,gap\n1,IN+,left,in,,1\n"), "{csv}");
+        assert_eq!(rows_from_csv(&format!("\u{feff}{csv}")).unwrap(), rows, "with Excel's byte order mark too");
+    }
+
+    /// A spreadsheet's CSV: headings in Japanese or KiCad's, columns in another order, quoted cells, sides and kinds as
+    /// words; without headings the columns are number, name, side, kind.
+    #[test]
+    fn a_spreadsheet_or_kicad_csv_is_read() {
+        let ja = rows_from_csv("名前,番号,種類,向き\n\"VCC, 5V\",8,電源入力,右\nGND,4,pwr,左\n").unwrap();
+        assert_eq!((ja[0].number.as_str(), ja[0].name.as_str(), ja[0].side.as_str(), ja[0].kind), ("8", "VCC5V", "right", Some(sch_core::PinKind::PowerIn)));
+        assert_eq!(ja[1].side, "left");
+        let kicad = rows_from_csv("Number,Name,Electrical Type,Graphic Style,Orientation\n1,EN,Input,Line,Left\n2,NC,No connect,Line,\n").unwrap();
+        assert_eq!((kicad[0].kind, kicad[0].side.as_str(), kicad[1].kind), (Some(sch_core::PinKind::Input), "left", Some(sch_core::PinKind::Nc)));
+        let bare = rows_from_csv("1,A\n2,K,right\n").unwrap();
+        assert_eq!((bare.len(), bare[1].side.as_str()), (2, "right"));
+    }
+
+    #[test]
+    fn a_csv_that_cannot_be_a_pin_table_says_which_line() {
+        let side = rows_from_csv("number,name,side\n1,A,left\n2,B,middle\n").unwrap_err();
+        assert!(side.contains("3 行目") && side.contains("middle"), "{side}");
+        let kind = rows_from_csv("number,name,kind\n1,A,analog\n").unwrap_err();
+        assert!(kind.contains("2 行目"), "{kind}");
+        assert!(rows_from_csv("number,name\n1,A\n1,B\n").unwrap_err().contains("番号 1"));
+        assert!(rows_from_csv("number,name\n").is_err());
     }
 }

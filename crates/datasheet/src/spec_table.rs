@@ -115,6 +115,10 @@ struct Header {
     /// The symbol column's heading (x0, x1), when there is one ("Symbol", "記号"): the symbols are under it, which
     /// may be right of the parameter names and the conditions (onsemi's small-signal transistors).
     symbol: Option<(f32, f32)>,
+    /// Where the conditions end: the leftmost min column of the header line. A table with a group of min / typ / max
+    /// for each grade side by side (onsemi's MC7800: MC78xxB and MC78xxC) is read in one group; the cells of the
+    /// other ("− 0.2 −") are not conditions.
+    cond_end: f32,
 }
 
 fn centre(r: &Rect) -> (f32, f32) {
@@ -135,20 +139,31 @@ fn headers(words: &[Word]) -> Vec<Header> {
         let Some(min) = same(&["min", "minimum", "最小"]).filter(|m| *m < centre(&w.rect).0) else { continue };
         let max = centre(&w.rect).0;
         let typ = same(&["typ", "typical", "標準", "代表値"]).filter(|t| min < *t && *t < max);
-        let unit = same(&["units", "unit", "単位"]);
-        let conditions = words.iter().filter(|o| (centre(&o.rect).1 - y).abs() < 4.0 && (normalize(&o.text).contains("condition") || o.text.contains("条件"))).map(|o| o.rect.x0).fold(None, |a: Option<f32>, x| Some(a.map_or(x, |a| a.min(x))));
-        let symbol = words.iter().find(|o| (centre(&o.rect).1 - y).abs() < 4.0 && is(o, &["symbol", "sym", "記号"])).map(|o| (o.rect.x0, o.rect.x1));
+        // the other headings on the line, or on the line above when the header takes two ("Parameter Symbol Unit
+        // Conditions" over "Limits" over "Min. Typ. Max.", ROHM's Japanese data sheets): up to 12 points above
+        let on_line = |o: &Word| (centre(&o.rect).1 - y).abs() < 4.0;
+        let above = |o: &Word| (-12.0..=-4.0).contains(&(centre(&o.rect).1 - y));
+        let heading = |names: &[&str]| words.iter().filter(|o| on_line(o) && is(o, names)).map(|o| centre(&o.rect).0).next().or_else(|| words.iter().filter(|o| above(o) && is(o, names)).map(|o| centre(&o.rect).0).next());
+        let unit = same(&["units", "unit", "単位"]).or_else(|| heading(&["units", "unit", "単位"]));
+        let cond = |o: &Word| normalize(&o.text).contains("condition") || o.text.contains("条件");
+        let first_x = |f: &dyn Fn(&Word) -> bool| words.iter().filter(|o| f(o) && cond(o)).map(|o| o.rect.x0).fold(None, |a: Option<f32>, x| Some(a.map_or(x, |a| a.min(x))));
+        let conditions = first_x(&on_line).or_else(|| first_x(&above));
+        let symbol = words.iter().find(|o| on_line(o) && is(o, &["symbol", "sym", "記号"])).or_else(|| words.iter().find(|o| above(o) && is(o, &["symbol", "sym", "記号"]))).map(|o| (o.rect.x0, o.rect.x1));
         if !out.iter().any(|h: &Header| (h.y - y).abs() < 4.0) {
-            out.push(Header { y, min, typ, max, unit, conditions, symbol });
+            out.push(Header { y, min, typ, max, unit, conditions, symbol, cond_end: min });
         }
+    }
+    let mins: Vec<(f32, f32)> = words.iter().filter(|w| is(w, &["min", "minimum", "最小"])).map(|w| centre(&w.rect)).collect();
+    for h in &mut out {
+        h.cond_end = mins.iter().filter(|(_, y)| (y - h.y).abs() < 4.0).map(|&(x, _)| x).fold(h.min, f32::min);
     }
     out.sort_by(|a, b| a.y.total_cmp(&b.y));
     out
 }
 
-/// A number in a cell ("1.05", "−0.9", "±12" is not a value), as printed.
+/// A number in a cell ("1.05", "−0.9", "–3" with an en dash as TI's LP5907 prints it; "±12" is not a value), as printed.
 fn number(t: &str) -> Option<f64> {
-    let t = t.trim().replace('\u{2212}', "-");
+    let t = t.trim().replace(['\u{2212}', '\u{2013}'], "-");
     if t.starts_with('±') {
         return None;
     }
@@ -163,8 +178,9 @@ fn line_at(words: &[Word], y: f32) -> Vec<&Word> {
 }
 
 /// The symbol's key for matching: no spaces, no brackets ("V GS(th)" -> "VGSth"), lower case unless `case`.
+/// (Japanese data sheets write the delta as "⊿", the right triangle: "⊿VO" is ΔVO, not VO.)
 fn key(s: &str, case: bool) -> String {
-    let t: String = s.chars().filter(|c| c.is_alphanumeric()).collect();
+    let t: String = s.chars().map(|c| if c == '⊿' { 'Δ' } else { c }).filter(|c| c.is_alphanumeric()).collect();
     if case { t } else { normalize(&t) }
 }
 
@@ -233,7 +249,10 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: boo
         // a line belongs to the symbol printed on it; a line without one to the nearest symbol that has no numbers on
         // its own line (a symbol printed once in the middle of its lines: RDS(ON) at three gate voltages)
         let sym_y: Vec<f32> = symbols.iter().map(|w| centre(&w.rect).1).collect();
-        let bare: Vec<bool> = sym_y.iter().map(|&sy| !ys.iter().any(|&y| (y - sy).abs() < 3.0)).collect();
+        // (a "±40" on the symbol's own line is its value, only not read: LM358's ISC does not take the sink current's
+        // lines above it)
+        let signed = |sy: f32| body.iter().any(|w| (centre(&w.rect).1 - sy).abs() < 3.0 && w.text.trim().starts_with('±') && column(h, centre(&w.rect).0).is_some());
+        let bare: Vec<bool> = sym_y.iter().map(|&sy| !ys.iter().any(|&y| (y - sy).abs() < 3.0) && !signed(sy)).collect();
         let owner = |y: f32| -> Option<usize> {
             if let Some(i) = sym_y.iter().position(|&sy| (sy - y).abs() < 3.0) {
                 return Some(i);
@@ -259,7 +278,7 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: boo
                     }
                 }
                 let conditions = conditions_near(words, h, left, y, (top, end), &symbols, symbol_on_right);
-                let unit = unit_near(&band, h, y);
+                let unit = unit_near(words, &band, h, y);
                 out.push(SpecValue { page, symbol: symbol_text(&body, s), conditions, min: v[0], typ: v[1], max: v[2], unit, rect: rect.unwrap_or(s.rect) });
             }
         }
@@ -288,7 +307,7 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: boo
                 }
                 // the conditions of this line or the nearest above it within the row (not the line of the next name)
                 let conditions = conditions_near(words, h, left, y, (top, y + 3.0), &symbols, true);
-                let unit = unit_near(&band, h, y);
+                let unit = unit_near(words, &band, h, y);
                 out.push(SpecValue { page, symbol: name.text.clone(), conditions, min: v[0], typ: v[1], max: v[2], unit, rect: rect.unwrap_or(name.rect) });
             }
         }
@@ -351,7 +370,13 @@ fn joined(words: &[&Word]) -> String {
 /// With `downward` (a table whose rows start at their symbol), the conditions are borrowed only from above: a
 /// condition line applies to the lines under it.
 fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f32, f32), symbols: &[&&Word], downward: bool) -> String {
-    let in_cond = |w: &Word| w.rect.x0 >= left - 2.0 && w.rect.x1 < h.min - 8.0 && !symbols.iter().any(|s| std::ptr::eq(**s, w));
+    // a conditions column right of the values and the unit (ROHM's Japanese data sheets): the words of the line there
+    // (its heading is centred over it: the column starts up to 40 points left of it, right of the unit)
+    if let Some(c) = h.conditions.filter(|c| *c > h.max) {
+        let from = (c - 40.0).max(h.unit.map_or(h.max, |u| u + 10.0));
+        return joined(&line_at(words, y).into_iter().filter(|w| w.rect.x0 >= from).collect::<Vec<_>>());
+    }
+    let in_cond = |w: &Word| w.rect.x0 >= left - 2.0 && w.rect.x1 < h.cond_end - 8.0 && !symbols.iter().any(|s| std::ptr::eq(**s, w));
     let at = |y: f32| -> String { joined(&line_at(words, y).into_iter().filter(|w| in_cond(w)).collect::<Vec<_>>()) };
     // the conditions of a line only: from the word before the first '=' or bracket to the last word with an '=' or a
     // closing bracket and the number and unit after it
@@ -437,14 +462,21 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f
     }
 }
 
-/// The unit in the units column nearest to line `y` within the row.
-fn unit_near(band: &[&&Word], h: &Header, y: f32) -> Option<String> {
+/// The unit in the units column nearest to line `y` within the row, or just above the row on a line without values
+/// (TI's LP5907: "%VOUT" by the parameter's name, 12 points over its "–3 3" and outside the row of ΔVOUT under it).
+fn unit_near(words: &[Word], band: &[&&Word], h: &Header, y: f32) -> Option<String> {
     let ux = h.unit?;
     // a unit with a prefix, or a percentage ("%/V", "%VO", "%/W": a regulator's line and load regulation)
-    band.iter()
-        .filter(|w| (centre(&w.rect).0 - ux).abs() < 20.0 && (prefix(&w.text).is_some() || w.text.trim().starts_with('%')))
-        .min_by(|a, b| (centre(&a.rect).1 - y).abs().total_cmp(&(centre(&b.rect).1 - y).abs()))
-        .map(|w| w.text.trim().to_string())
+    let is_unit = |w: &Word| (centre(&w.rect).0 - ux).abs() < 20.0 && (prefix(&w.text).is_some() || w.text.trim().starts_with('%'));
+    let no_values = |c: f32| !words.iter().any(|o| (centre(&o.rect).1 - c).abs() < 3.0 && number(&o.text).is_some() && column(h, centre(&o.rect).0).is_some());
+    let above = words.iter().filter(|w| is_unit(w) && centre(&w.rect).1 < y && y - centre(&w.rect).1 < 14.0 && no_values(centre(&w.rect).1));
+    let nearest = |c: &mut dyn Iterator<Item = &Word>| c.min_by(|a, b| (centre(&a.rect).1 - y).abs().total_cmp(&(centre(&b.rect).1 - y).abs())).map(|w| w.text.trim().to_string());
+    // first a unit on this line or on a line without values: a unit printed on another line with values is more likely
+    // that line's (LM358: the "mV" of the rail swing over the source current's "–20 –30", whose "mA" is 17 points
+    // below them); else any unit of the row (a unit printed once on one of the two lines of a row)
+    let own_or_free = |w: &Word| (centre(&w.rect).1 - y).abs() < 3.0 || no_values(centre(&w.rect).1);
+    nearest(&mut band.iter().map(|w| &***w).filter(|w| is_unit(w) && own_or_free(w)).chain(above))
+        .or_else(|| nearest(&mut band.iter().map(|w| &***w).filter(|w| is_unit(w))))
 }
 
 #[cfg(test)]
@@ -537,6 +569,80 @@ mod tests {
         let load = find_by_name(0, &words, "Load");
         assert_eq!((load[0].typ, load[0].conditions.as_str()), (Some(0.001), "IOUT = 1mA to 250mA"), "{load:?}");
         assert!(find_by_name(0, &words, "Output").is_empty(), "the line of ISC is ISC's");
+    }
+
+    /// TI's LP5907: the output voltage tolerance under ΔVOUT prints its min with an en dash ("–3") and its unit
+    /// ("%VOUT") by the parameter's name, 12 points over the values and outside the row; the next line's "%/V" is not it.
+    #[test]
+    fn an_en_dash_minus_and_a_unit_above_the_values() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let line = |x: f32, y: f32, text: &str| -> Vec<Word> {
+            let mut x = x;
+            text.split(' ').map(|t| { let r = w(t, x, y); x += 5.0 * t.chars().count() as f32 + 3.0; r }).collect()
+        };
+        let mut words = vec![w("PARAMETER", 116.0, 300.0), w("TEST", 274.0, 300.0), w("CONDITIONS", 297.0, 300.0), w("MIN", 419.0, 300.0), w("TYP", 458.0, 300.0), w("MAX", 495.0, 300.0), w("UNIT", 526.0, 300.0)];
+        words.extend(line(106.0, 355.0, "Output voltage tolerance"));
+        words.push(w("%VOUT", 523.0, 355.0));
+        words.extend(line(228.0, 366.0, "IOUT = 1mA to 250mA"));
+        words.extend([w("–3", 424.0, 366.0), w("3", 500.0, 366.0)]);
+        words.push(w("ΔVOUT", 59.0, 374.0));
+        words.extend(line(106.0, 395.0, "Line regulation"));
+        words.extend([w("0.02", 458.0, 395.0), w("%/V", 528.0, 395.0)]);
+        let v = find(0, &words, "ΔVOUT");
+        let tol = v.iter().find(|v| v.max == Some(3.0)).expect("the tolerance's line");
+        assert_eq!((tol.min, tol.unit.as_deref()), (Some(-3.0), Some("%VOUT")), "{v:?}");
+    }
+
+    /// onsemi's MC7800: a group of min / typ / max for each grade side by side; the cells of the left group ("− 0.2 −")
+    /// are not the conditions of the row read in the right one.
+    #[test]
+    fn the_cells_of_another_column_group_are_not_conditions() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let line = |x: f32, y: f32, text: &str| -> Vec<Word> {
+            let mut x = x;
+            text.split(' ').map(|t| { let r = w(t, x, y); x += 5.0 * t.chars().count() as f32 + 3.0; r }).collect()
+        };
+        let mut words = vec![w("Characteristic", 65.0, 300.0), w("Symbol", 260.0, 300.0)];
+        words.extend(line(306.0, 300.0, "Min Typ Max"));
+        words.extend([w("Min", 421.0, 300.0), w("Typ", 456.0, 300.0), w("Max", 498.0, 300.0), w("Unit", 529.0, 300.0)]);
+        words.extend(line(65.0, 340.0, "Short Circuit Current Limit (TA = 25°C)"));
+        words.extend([w("ISC", 265.0, 340.0), w("A", 533.0, 340.0)]);
+        words.extend(line(73.0, 349.0, "Vin = 35 Vdc"));
+        words.extend([w("−", 306.0, 349.0), w("0.2", 341.0, 349.0), w("−", 383.0, 349.0), w("−", 421.0, 349.0), w("0.6", 456.0, 349.0), w("−", 498.0, 349.0)]);
+        let v = find(0, &words, "ISC");
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(v[0].conditions.contains("Vin = 35 Vdc") && !v[0].conditions.contains("0.2"), "{v:?}");
+    }
+
+    /// TI's LM358: the short-circuit current is printed "±40 ±60" (not read) on the line of its symbol; the lines of the
+    /// sink current above it stay the output current's, and the unit of the line over the source current's values is
+    /// not theirs (their "mA" is below them).
+    #[test]
+    fn a_signed_value_keeps_its_symbol_from_taking_the_lines_above() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let line = |x: f32, y: f32, text: &str| -> Vec<Word> {
+            let mut x = x;
+            text.split(' ').map(|t| { let r = w(t, x, y); x += 5.0 * t.chars().count() as f32 + 3.0; r }).collect()
+        };
+        let mut words = vec![w("PARAMETER", 87.0, 300.0), w("TEST", 230.0, 300.0), w("CONDITIONS", 255.0, 300.0), w("MIN", 440.0, 300.0), w("TYP", 475.0, 300.0), w("MAX", 509.0, 300.0), w("UNIT", 533.0, 300.0)];
+        words.extend(line(184.0, 320.0, "VS = 5 V"));
+        words.extend([w("5", 479.0, 320.0), w("20", 516.0, 320.0), w("mV", 535.0, 320.0)]);
+        words.extend([w("–20", 436.0, 331.0), w("–30", 472.0, 331.0)]);
+        words.extend(line(184.0, 337.0, "VS = 15 V; VO = 0 V"));
+        words.push(w("mA", 535.0, 348.0));
+        words.extend([w("IO", 59.0, 360.0), w("Output", 87.0, 360.0)]);
+        words.extend(line(184.0, 360.0, "VS = 15 V; VO = 15 V"));
+        words.extend([w("10", 440.0, 355.0), w("20", 475.0, 355.0)]);
+        words.extend(line(184.0, 373.0, "VO = 200 mV"));
+        words.extend([w("60", 456.0, 373.0), w("100", 481.0, 373.0), w("μA", 537.0, 373.0)]);
+        words.extend([w("ISC", 59.0, 385.0), w("Short-circuit", 87.0, 385.0)]);
+        words.extend(line(184.0, 385.0, "VS = 20 V"));
+        words.extend([w("±40", 481.0, 385.0), w("±60", 515.0, 385.0), w("mA", 537.0, 385.0)]);
+        assert!(find(0, &words, "ISC").is_empty(), "{:?}", find(0, &words, "ISC"));
+        let io = find(0, &words, "IO");
+        assert!(io.iter().any(|v| v.min == Some(60.0)), "the sink current at 200 mV is IO's: {io:?}");
+        let source = io.iter().find(|v| v.min == Some(-20.0)).expect("the source current");
+        assert_eq!(source.unit.as_deref(), Some("mA"), "{io:?}");
     }
 
     #[test]
@@ -641,5 +747,23 @@ mod real_pdf {
         let g = &ds.spec_values("gFS")[0];
         assert_eq!((g.typ_si(), g.condition("VDS"), g.condition("ID")), (Some(33.0), Some(5.0), Some(5.7)));
         assert!(ds.spec_values("hFE").is_empty());
+    }
+
+    /// ROHM's Japanese table: "Parameter Symbol Unit Conditions" over "Limits" over "Min. Typ. Max.", the symbols right of
+    /// the Japanese names, the conditions right of the unit; and "⊿VO" (the right triangle) is ΔVO, not VO.
+    #[test]
+    fn a_header_over_two_lines_and_conditions_on_the_right() {
+        use super::*;
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let words = vec![
+            w("Parameter", 109.0, 341.0), w("Symbol", 221.0, 341.0), w("Unit", 408.0, 341.0), w("Conditions", 475.0, 341.0),
+            w("Min.", 282.0, 348.0), w("Typ.", 326.0, 348.0), w("Max.", 367.0, 348.0),
+            w("入出力電圧差1", 62.0, 416.0), w("VCO1", 228.0, 416.0), w("-", 289.0, 416.0), w("0.12", 326.0, 416.0), w("0.19", 368.0, 416.0), w("V", 413.0, 416.0), w("VCC=5V,", 437.0, 416.0), w("IO=300mA", 476.0, 416.0),
+            w("出力安定度", 62.0, 430.0), w("⊿VO", 226.0, 430.0), w("-", 289.0, 430.0), w("1", 333.0, 430.0), w("10", 370.0, 430.0), w("mV", 411.0, 430.0), w("IO=0→1A", 437.0, 430.0),
+        ];
+        let v = find(0, &words, "VCO1");
+        assert_eq!((v.len(), v[0].typ, v[0].max, v[0].unit.as_deref(), v[0].conditions.as_str()), (1, Some(0.12), Some(0.19), Some("V"), "VCC=5V, IO=300mA"), "{v:?}");
+        assert!(find(0, &words, "VO").is_empty(), "⊿VO is not VO");
+        assert_eq!(find(0, &words, "ΔVO")[0].max, Some(10.0));
     }
 }

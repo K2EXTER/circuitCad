@@ -16,7 +16,7 @@ pub struct Rating {
 }
 
 /// Headings that end the table.
-const NEXT: &[&str] = &["recommended operating", "electrical characteristics", "electro-optical", "optical characteristics", "basic characteristics", "thermal characteristics", "thermal information", "esd ratings", "推奨動作条件", "電気的特性", "熱特性", "熱に関する情報"];
+const NEXT: &[&str] = &["recommended operating", "electrical characteristics", "electro-optical", "optical characteristics", "basic characteristics", "thermal characteristics", "thermal information", "esd ratings", "推奨動作条件", "推奨動作範囲", "電気的特性", "熱特性", "熱に関する情報"];
 
 /// A symbol of a rating: V, I, P or T, then a few letters or digits ("VDS", "ID", "IF(AV)", "TJ", "VCEO"), a trailing comma dropped.
 fn symbol(t: &str) -> Option<String> {
@@ -55,6 +55,12 @@ fn label_symbol(text: &str) -> Option<&'static str> {
 /// A number of the table: "30", "±12", "-55", "0.9"; with the unit written in the same word ("30V") taken apart.
 fn number(t: &str) -> Option<(f64, Option<String>)> {
     let t = normalize(t.trim()).replace('±', "");
+    // a range in one word, as Japanese data sheets write it ("-0.3～10.0", ROHM): its upper end (the full-width wave
+    // dash is "~" after `normalize`)
+    let t = match t.split_once('~') {
+        Some((_, hi)) if !hi.trim().is_empty() => hi.trim().to_string(),
+        _ => t,
+    };
     let split = t.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+')).unwrap_or(t.len());
     let (n, rest) = t.split_at(split);
     let v: f64 = n.parse().ok()?;
@@ -337,5 +343,22 @@ mod real_pdf {
         assert!(r.iter().any(|x| x.symbol == "VI-VO" && x.value == 40.0), "{r:?}");
         assert!(!r.iter().any(|x| x.symbol == "VI"), "the rail-relative input voltage: {r:?}");
         assert!(r.iter().any(|x| x.symbol == "Tstg"));
+    }
+
+    /// ROHM's Japanese table: a range in one word with a full-width wave dash ("-0.3～10.0"), and a footnote mark ("*1") beside it
+    /// that is not the value; the table ends at 推奨動作範囲.
+    #[test]
+    fn a_japanese_range_in_one_word() {
+        use super::*;
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let words = vec![
+            w("VCC", 229.0, 88.0), w("-0.3～10.0", 306.0, 88.0), w("1", 354.0, 85.0), w("*", 351.0, 88.0), w("V", 411.0, 88.0),
+            w("Tstg", 228.0, 146.0), w("-55～+150", 313.0, 146.0), w("℃", 409.0, 146.0),
+            w("推奨動作範囲(Ta=25℃)", 52.0, 212.0),
+            w("IO", 234.0, 292.0), w("1.5", 359.0, 292.0), w("A", 412.0, 292.0),
+        ];
+        let r = ratings(4, &words, 70.0, 800.0, None);
+        let got: Vec<(&str, f64)> = r.iter().map(|r| (r.symbol.as_str(), r.value)).collect();
+        assert_eq!(got, vec![("VCC", 10.0), ("Tstg", 150.0)], "{r:?}");
     }
 }

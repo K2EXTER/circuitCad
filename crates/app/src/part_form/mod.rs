@@ -111,6 +111,8 @@ pub struct PartForm {
     /// The rows of the pin table and the text they were read from (see `pintable.rs`).
     pub(super) pin_rows: Vec<pintable::PinRow>,
     pub(super) pin_rows_of: Option<String>,
+    /// What the last CSV of the pin table did (written to / read from which file, or why not).
+    pub(super) pin_csv_msg: Option<Result<String, String>>,
     /// The rows of the extra pads table and the text they were read from (see `padtable.rs`).
     pub(super) extra_rows: Vec<padtable::ExtraRow>,
     pub(super) extra_rows_of: Option<String>,
@@ -328,6 +330,7 @@ impl Default for PartForm {
             type_base: None,
             pin_rows: vec![],
             pin_rows_of: None,
+            pin_csv_msg: None,
             extra_rows: vec![],
             extra_rows_of: None,
             pending_type: None,

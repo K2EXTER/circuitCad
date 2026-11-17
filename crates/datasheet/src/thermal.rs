@@ -100,6 +100,31 @@ pub fn read(page: usize, words: &[Word]) -> Vec<ThermalRow> {
     let mut out = vec![];
     for (i, toks) in lines.iter().enumerate() {
         let text = toks.join(" ");
+        // the Japanese derating, in a note under the table ("Ta≧25℃の場合は、9.6mW/℃で軽減。", ROHM): the slope and its unit
+        // in one word with the text after it
+        if text.contains("軽減") || text.contains("低減") || text.contains("減じ") {
+            let slope = toks.iter().find_map(|t| {
+                let at = t.find("mw/").or_else(|| t.find("w/"))?;
+                let digits: String = t[..at].chars().rev().take_while(|c| c.is_ascii_digit() || *c == '.').collect::<Vec<_>>().into_iter().rev().collect();
+                let unit: String = t[at..].chars().take_while(|c| !matches!(c, 'で' | '、' | '。' | ')' | ' ')).collect();
+                Some(digits.parse::<f64>().ok()? * per_kelvin(&unit)?)
+            });
+            if let Some(slope) = slope.filter(|s| *s > 0.0) {
+                // "Ta≧25℃": the temperature the power starts to fall from
+                let after = |name: &str| {
+                    text.match_indices(name).find_map(|(i, _)| {
+                        let rest = text[i + name.len()..].trim_start();
+                        let rest = rest.strip_prefix(['≧', '≥', '>', '='])?;
+                        let d: String = rest.trim_start().chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+                        d.parse::<f64>().ok()
+                    })
+                };
+                let case = after("tc").is_some();
+                let from = after("tc").or_else(|| after("ta"));
+                out.push(ThermalRow { page, to: if case { To::Case } else { To::Ambient }, k_per_w: 1.0 / slope, text: text.clone(), from_derating: true, derate_from: from, columns: 1, per_package: false });
+                continue;
+            }
+        }
         if text.contains("derat") && text.contains("above") {
             // "Derate above 25°C 5.0 mW/°C": the slope before its unit, the temperature after "above"
             let Some(u) = toks.iter().position(|t| per_kelvin(t).is_some()) else { continue };
@@ -211,5 +236,15 @@ mod tests {
         assert!(on_large_copper("Mounted on 1 in2 FR-4 pad"));
         assert!(!on_large_copper("Thermal Resistance, Junction-to-Ambient 200 °C/W"));
         assert!(on_large_copper("RθJA Junction-to-ambient thermal resistance 97.1 °C/W"), "TI's table");
+    }
+
+    /// ROHM's Japanese note under the ratings: "Ta≧25℃の場合は、9.6mW/℃で軽減。" (the slope in one word with the text after it).
+    #[test]
+    fn a_japanese_derating_note_gives_the_resistance() {
+        let w = line(&["※3:", "70mm×70mm×1.6mm", "ガラスエポキシ基板実装時。Ta≧25℃の場合は、9.6mW/℃で軽減。"], 265.0);
+        let r = read(3, &w);
+        assert_eq!(r.len(), 1, "{r:?}");
+        assert!((r[0].k_per_w - 104.17).abs() < 0.01 && r[0].from_derating && r[0].to == To::Ambient, "{r:?}");
+        assert_eq!(r[0].derate_from, Some(25.0));
     }
 }
