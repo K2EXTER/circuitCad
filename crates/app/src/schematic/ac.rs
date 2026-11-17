@@ -50,6 +50,7 @@ impl SchEditor {
     pub(super) fn ac_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.ac.as_mut() else { return };
         let (bench, bench_ui) = (&mut self.bench.ac, &mut self.bench_ui);
+        let (loop_chart, loop_squeeze, loop_xy) = (&mut self.loop_chart, &mut self.loop_squeeze, &mut self.loop_xy);
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
@@ -62,8 +63,13 @@ impl SchEditor {
             if ui.small_button(i18n::tr("操作")).on_hover_text(i18n::tr("波形のズーム・測定カーソル・信号の選び方を開きます")).clicked() {
                 open_help = true;
             }
-            if outcome.is_ok() {
+            if outcome.is_ok() && !(*loop_run && *loop_chart != loopgain::LoopChart::Bode) {
                 plot::range_button(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
+            }
+            // a loop gain can also be drawn as a Nyquist or Nichols chart
+            if *loop_run && outcome.is_ok() {
+                ui.separator();
+                SchEditor::loop_chart_buttons(loop_chart, loop_squeeze, loop_xy, ui);
             }
         });
         match outcome {
@@ -228,6 +234,11 @@ impl SchEditor {
                         });
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    if *loop_run && *loop_chart != loopgain::LoopChart::Bode && let Some(sg) = res.signal("T ループゲイン") {
+                        let t: Vec<sim_core::C64> = sg.re.iter().zip(&sg.im).map(|(re, im)| sim_core::C64::new(*re, *im)).collect();
+                        loopgain::draw_loop_chart(ui, rect, &res.freq, &t, *loop_chart, *loop_squeeze, loop_xy);
+                        return;
+                    }
                     let chosen: Vec<(&str, Vec<f64>, Vec<f64>)> = order
                         .iter()
                         .filter(|n| selected.contains(**n))

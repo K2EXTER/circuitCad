@@ -15,8 +15,9 @@
 - `cmrr.rs` 同相除去比(+ と − の入力の信号源を逆向き・同じ向きに揺らす 2 回の AC 解析と、抵抗のばらつき。画面は「同相除去比 (CMRR)」、CLI `cmrr`)
 - `sensitivity.rs` 感度(部品を1つずつ ±1% 動かして効く順に。画面は「温度とばらつき」の「感度を計算」)
 - `worstcase.rs` 最悪ケース解析(全部品を許容差の端に置いた角を実際に解く。CLI `worst`、画面はばらつき解析の窓の「最悪ケース」。スペックの合否には `SpecKind::*Worst`)
-- `loopgain.rs` ループゲイン(ループを1か所切って電圧・電流を1回ずつ注入する Middlebrook 法。位相余裕。CLI `loopgain`、画面は解析タブの「ループゲイン」)
+- `loopgain.rs` ループゲイン(ループを1か所切って電圧・電流を1回ずつ注入する Middlebrook 法。位相余裕。ナイキスト線図・ニコルス線図の印。CLI `loopgain` `nyquist`、画面は解析タブの「ループゲイン」)
 - `polezero.rs` 極と零(AC応答に分数の式を当てはめて根を求める。CLI `pz`、画面は解析タブの「極と零」)
+- `rootlocus.rs` 根軌跡(部品の値を振りながら極と零を求め、極の道すじをつなぐ。CLI `locus`、画面は解析タブの「根軌跡」)。ループゲインのナイキスト線図・ニコルス線図の印は `loopgain.rs` の `stability_marks`・`nyquist_squeeze`(CLI `nyquist`)
 - `impedance.rs` ネットから見たインピーダンス(電源をすべて切り 1 A の試験電流を入れる。山・谷の検出。CLI `zout`、画面は解析タブの「インピーダンス」)
 - `ratings.rs` 定格チェック / `ripple.rs` 電解コンデンサのリップルと寿命
 - `fault.rs` 故障シミュレーション / `chain.rs` 連鎖故障

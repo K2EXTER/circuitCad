@@ -48,20 +48,111 @@ impl LoopGain {
 
     /// Phase in degrees, continuous along the sweep and starting in (-180, 180].
     pub fn phase_deg(&self) -> Vec<f64> {
-        let mut out: Vec<f64> = Vec::with_capacity(self.t.len());
-        for t in &self.t {
-            let mut p = t.arg_deg();
-            if let Some(&prev) = out.last() {
-                while p - prev > 180.0 {
-                    p -= 360.0;
-                }
-                while p - prev < -180.0 {
-                    p += 360.0;
-                }
+        phase_deg_of(&self.t)
+    }
+
+    /// The crossovers and the point nearest to -1, for the Nyquist and Nichols charts.
+    pub fn marks(&self) -> StabilityMarks {
+        stability_marks(&self.freq, &self.t)
+    }
+}
+
+/// Points of a loop gain to mark on a Nyquist or Nichols chart. On a Nyquist chart (Re T, Im T) the closed loop 1 + T is
+/// stable as long as the curve keeps to the right of -1 (does not go round it); the margins say how far it keeps.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StabilityMarks {
+    /// Where |T| = 1 (the gain crossover): the frequency and T there, on the unit circle. Its angle from -1 is the phase margin.
+    pub gain_cross: Option<(f64, C64)>,
+    /// Where the phase is -180 degrees (the phase crossover): the frequency and T there, on the negative real axis between 0 and
+    /// -1 when the gain margin is positive (T = -1/10^(GM/20)).
+    pub phase_cross: Option<(f64, C64)>,
+    /// The point of the curve nearest to -1: the frequency, T there and the distance |1 + T| (the modulus margin, 0.5 or more is
+    /// good). 1 / |1 + T| is the peak of the sensitivity: how much the feedback amplifies a disturbance at that frequency.
+    pub nearest: Option<(f64, C64, f64)>,
+}
+
+impl StabilityMarks {
+    /// The distance from -1 as the peak of the sensitivity in dB (20 log 1/|1+T|; 6 dB or less is good).
+    pub fn sensitivity_peak_db(&self) -> Option<f64> {
+        self.nearest.map(|(_, _, d)| -20.0 * d.max(1e-15).log10())
+    }
+}
+
+/// T at the frequency `f`, between the sampled points (linear in log f).
+fn t_at(freq: &[f64], t: &[C64], f: f64) -> Option<C64> {
+    let k = freq.windows(2).position(|w| w[0] <= f && f <= w[1])?;
+    let (f0, f1) = (freq[k], freq[k + 1]);
+    let a = if f1 > f0 && f0 > 0.0 { (f / f0).ln() / (f1 / f0).ln() } else { 0.0 };
+    Some(t[k] * C64::new(1.0 - a, 0.0) + t[k + 1] * C64::new(a, 0.0))
+}
+
+/// The crossover points and the point nearest to -1 of a loop gain `t` sampled at `freq` (the same crossings as
+/// `measure::stability_margins`, so the Bode table and the Nyquist and Nichols charts agree).
+pub fn stability_marks(freq: &[f64], t: &[C64]) -> StabilityMarks {
+    let mut out = StabilityMarks::default();
+    if freq.len() < 2 || freq.len() != t.len() {
+        return out;
+    }
+    let db: Vec<f64> = t.iter().map(|t| 20.0 * t.abs().max(1e-15).log10()).collect();
+    let ph = phase_deg_of(t);
+    if let Some(m) = crate::measure::stability_margins(freq, &db, &ph) {
+        out.gain_cross = m.gain_crossover.and_then(|f| Some((f, t_at(freq, t, f)?)));
+        out.phase_cross = m.phase_crossover.and_then(|f| Some((f, t_at(freq, t, f)?)));
+    }
+    out.nearest = freq
+        .iter()
+        .zip(t)
+        .map(|(f, t)| (*f, *t, (*t + C64::new(1.0, 0.0)).abs()))
+        .filter(|(_, _, d)| d.is_finite())
+        .min_by(|a, b| a.2.total_cmp(&b.2));
+    out
+}
+
+/// A loop gain squeezed for drawing on a Nyquist chart: inside the unit circle as it is, outside it the distance from the
+/// origin is 1 + log10 |T| (|T| = 10 is drawn at 2, 1000 at 4). The angle is kept, so -1, the unit circle and the margins are
+/// where they are on the plain chart, and a loop gain of 10^5 at low frequency does not push them to a dot in the middle.
+pub fn nyquist_squeeze(t: C64) -> C64 {
+    let r = t.abs();
+    if !(r > 1.0) || !r.is_finite() {
+        return t;
+    }
+    t * C64::new((1.0 + r.log10()) / r, 0.0)
+}
+
+/// Phase in degrees of a sampled complex response, continuous along the sweep and starting in (-180, 180].
+fn phase_deg_of(t: &[C64]) -> Vec<f64> {
+    let mut out: Vec<f64> = Vec::with_capacity(t.len());
+    for t in t {
+        let mut p = t.arg_deg();
+        if let Some(&prev) = out.last() {
+            while p - prev > 180.0 {
+                p -= 360.0;
             }
-            out.push(p);
+            while p - prev < -180.0 {
+                p += 360.0;
+            }
         }
-        out
+        out.push(p);
+    }
+    out
+}
+
+impl BreakDirection {
+    /// The direction that puts the net `from` on the output side of the part `part` (Auto when `from` is empty). An error names
+    /// the two nets the part is between when `from` is neither.
+    pub fn from_net(c: &Circuit, part: &str, from: &str) -> Result<BreakDirection, String> {
+        if from.trim().is_empty() {
+            return Ok(BreakDirection::Auto);
+        }
+        let e = c.elements.iter().find(|e| e.name().eq_ignore_ascii_case(part.trim())).ok_or_else(|| format!("部品 {part} がありません"))?;
+        let (a, b) = terminals(e).ok_or_else(|| format!("{part} は切れません。ループの途中の抵抗・コンデンサ・コイルを選んでください"))?;
+        if c.names[a].eq_ignore_ascii_case(from.trim()) {
+            Ok(BreakDirection::AToB)
+        } else if c.names[b].eq_ignore_ascii_case(from.trim()) {
+            Ok(BreakDirection::BToA)
+        } else {
+            Err(format!("{part} は {} と {} の間にあるので、出力側のネットはそのどちらかにしてください (「{from}」ではなく)", c.names[a], c.names[b]))
+        }
     }
 }
 
@@ -256,6 +347,61 @@ mod tests {
         // one pole and a flat 100x gain: the phase stays far above -180
         assert!(m.phase_margin.unwrap() > 85.0, "{:?}", m.phase_margin);
         assert!(m.gain_crossover.is_some());
+    }
+
+    /// T = K / (1 + s/w_p)^3: the phase is -180 degrees at w = sqrt(3) w_p, where |T| = K / 8, so the curve crosses the negative
+    /// real axis at -K/8; |T| = 1 where (1 + (w/w_p)^2)^(3/2) = K.
+    fn three_pole(k: f64) -> (Vec<f64>, Vec<C64>) {
+        let fp = 1000.0;
+        let f: Vec<f64> = (0..=300).map(|i| 10f64.powf(1.0 + i as f64 * 0.01)).collect();
+        let t = f.iter().map(|&f| {
+            let d = C64::new(1.0, f / fp);
+            C64::new(k, 0.0) / (d * d * d)
+        });
+        (f.clone(), t.collect())
+    }
+
+    #[test]
+    fn nyquist_marks_sit_where_the_formulas_put_them() {
+        let (f, t) = three_pole(4.0);
+        let m = stability_marks(&f, &t);
+        let (fp, tp) = m.phase_cross.expect("a phase crossover");
+        assert!((fp / (1000.0 * 3f64.sqrt()) - 1.0).abs() < 1e-3, "{fp}");
+        assert!((tp.re + 0.5).abs() < 2e-3 && tp.im.abs() < 2e-3, "{tp:?}");
+        let (fg, tg) = m.gain_cross.expect("a gain crossover");
+        let wg = (4f64.powf(2.0 / 3.0) - 1.0).sqrt() * 1000.0;
+        assert!((fg / wg - 1.0).abs() < 1e-3, "{fg} vs {wg}");
+        assert!((tg.abs() - 1.0).abs() < 1e-3);
+        // the angle of the crossover point from the negative real axis is the phase margin of the Bode table
+        let pm = crate::measure::stability_margins(&f, &t.iter().map(|t| 20.0 * t.abs().log10()).collect::<Vec<_>>(), &phase_deg_of(&t)).unwrap().phase_margin.unwrap();
+        assert!((180.0 + tg.arg_deg() - pm).abs() < 0.05, "{} vs {pm}", 180.0 + tg.arg_deg());
+        // nearest to -1: no farther than the phase crossover (0.5 away), and 1/|1+T| is the sensitivity peak
+        let (_, _, d) = m.nearest.unwrap();
+        assert!(d <= 0.5 + 1e-3 && d > 0.3, "{d}");
+        assert!((m.sensitivity_peak_db().unwrap() + 20.0 * d.log10()).abs() < 1e-9);
+        // too much gain: the curve passes beyond -1 and the phase crossover is left of it
+        let (f, t) = three_pole(20.0);
+        assert!(stability_marks(&f, &t).phase_cross.unwrap().1.re < -1.0);
+    }
+
+    #[test]
+    fn the_squeezed_nyquist_keeps_the_unit_circle_and_the_angle() {
+        let z = C64::new(-0.3, 0.4);
+        assert_eq!(nyquist_squeeze(z), z);
+        let big = C64::from_polar(1000.0, -120.0);
+        let s = nyquist_squeeze(big);
+        assert!((s.abs() - 4.0).abs() < 1e-9 && (s.arg_deg() + 120.0).abs() < 1e-9);
+        assert!((nyquist_squeeze(C64::new(-1.0, 0.0)).re + 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_output_net_picks_the_direction() {
+        let c = amp();
+        assert_eq!(BreakDirection::from_net(&c, "R1", "OUT"), Ok(BreakDirection::AToB));
+        assert_eq!(BreakDirection::from_net(&c, "r1", "fb"), Ok(BreakDirection::BToA));
+        assert_eq!(BreakDirection::from_net(&c, "R1", ""), Ok(BreakDirection::Auto));
+        assert!(BreakDirection::from_net(&c, "R1", "DRV").unwrap_err().contains("OUT"));
+        assert!(BreakDirection::from_net(&c, "E1", "OUT").is_err());
     }
 
     #[test]

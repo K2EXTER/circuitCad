@@ -1,0 +1,599 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "0 AC 1",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        14,
+        0
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        26,
+        0
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10n",
+      "pos": [
+        24,
+        -10
+      ],
+      "rot": 0,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "10n",
+      "pos": [
+        34,
+        8
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        52,
+        -10
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        16,
+        22
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM358",
+      "pos": [
+        44,
+        2
+      ],
+      "rot": 0,
+      "footprint": "SOIC-8_P1.27",
+      "custom": {
+        "name": "LM358",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "3",
+            "name": "IN+",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "IN-",
+            "side": "left"
+          },
+          {
+            "number": "1",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "8",
+            "name": "V+",
+            "side": "top"
+          },
+          {
+            "number": "4",
+            "name": "V-",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM358",
+          "text": ".subckt LM358 inp inn out vp vn\n* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance\nVos inp i1 DC 0.003\n* spread Vos -0.007 0.007 offset (data sheet: max 7 mV either way)\nEn i1 i2 nz 0 9.8247\nRnz nz 0 1k\nIbp inp vn DC -2e-08\nIbn inn vn DC -2e-08\n* spread Ibp -2e-08 -2.5e-07 ib+ (data sheet: typ 20 nA, max 250 nA; no min, so from typ)\n* spread Ibn -2e-08 -2.5e-07 ib- (data sheet: typ 20 nA, max 250 nA; no min, so from typ)\nRin inp inn 2Meg\n* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)\nBgm 0 n0 I=limit(0.00439823*V(i2,inn),-0.0003,0.0003)\nRp n0 0 2.27364e+07\nCp n0 0 1e-09\n* output swing: clamped hu below vp and hl above vn\nEu u 0 vp 0 1\nVhu u uh DC 1.4\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.005\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\n* output: ro, current limited to the short-circuit current, taken from vp (source) and returned to vn (sink)\nBsrc vp out I=limit((V(n)-V(out))/50,-0.04,0.04)*step(limit((V(n)-V(out))/50,-0.04,0.04),1u)\nBsnk out vn I=-limit((V(n)-V(out))/50,-0.04,0.04)*step(-limit((V(n)-V(out))/50,-0.04,0.04),1u)\n* quiescent current of one amplifier\nIq vp vn DC 0.00035\n* spread Iq 0.00035 0.0006 iq (data sheet: typ 350 uA, max 600 uA; no min, so from typ)\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
+          "pins": [
+            "3",
+            "2",
+            "1",
+            "8",
+            "4"
+          ],
+          "params": {
+            "gain_dc": 100000.0,
+            "gbw": 700000.0
+          },
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: TI SLOS068AB の 5.7 節(B 版ではない LM358)。データシートとの比べは docs/models/opamps.md。",
+            "再現しているもの: 開ループ利得 100 dB、GBW 700 kHz、スルーレート 0.3 V/µs、電源電流 350 µA/回路、入力オフセット 3 mV、入力バイアス電流 20 nA、出力の振れ幅 (電源から 1.4 V / 5 mV)、出力の短絡電流 40 mA、1 kHz の入力換算雑音 40 nV/√Hz。部品ごとの違い (オフセット ±7 mV、バイアス電流 20 nA〜250 nA (入力ごと)、電源電流 350 µA〜600 µA。データシートの max、min が無いものは typ から) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+            "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、チャネル2。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。",
+            "電源ピンをつながないと、出力は 0V に張り付きます。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "TI SLOS068AB(2024-10 改訂)"
+          }
+        },
+        "ratings": {
+          "v_max": 32.0,
+          "rows": [
+            {
+              "name": "利得帯域幅積",
+              "value": "1MHz (代表)"
+            },
+            {
+              "name": "入力オフセット電圧",
+              "value": "2mV (代表)"
+            },
+            {
+              "name": "電源電圧",
+              "value": "3〜32V (単電源)"
+            }
+          ]
+        },
+        "glyph": "opamp",
+        "shops": {
+          "lcsc": "C7950"
+        }
+      }
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        62,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        62,
+        10
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        0
+      ],
+      "b": [
+        9,
+        0
+      ]
+    },
+    {
+      "a": [
+        16,
+        0
+      ],
+      "b": [
+        19,
+        0
+      ]
+    },
+    {
+      "a": [
+        24,
+        0
+      ],
+      "b": [
+        21,
+        0
+      ]
+    },
+    {
+      "a": [
+        28,
+        0
+      ],
+      "b": [
+        31,
+        0
+      ]
+    },
+    {
+      "a": [
+        22,
+        -10
+      ],
+      "b": [
+        19,
+        -10
+      ]
+    },
+    {
+      "a": [
+        26,
+        -10
+      ],
+      "b": [
+        29,
+        -10
+      ]
+    },
+    {
+      "a": [
+        34,
+        6
+      ],
+      "b": [
+        34,
+        3
+      ]
+    },
+    {
+      "a": [
+        34,
+        10
+      ],
+      "b": [
+        34,
+        13
+      ]
+    },
+    {
+      "a": [
+        50,
+        -10
+      ],
+      "b": [
+        47,
+        -10
+      ]
+    },
+    {
+      "a": [
+        54,
+        -10
+      ],
+      "b": [
+        57,
+        -10
+      ]
+    },
+    {
+      "a": [
+        16,
+        20
+      ],
+      "b": [
+        16,
+        17
+      ]
+    },
+    {
+      "a": [
+        16,
+        24
+      ],
+      "b": [
+        16,
+        27
+      ]
+    },
+    {
+      "a": [
+        40,
+        1
+      ],
+      "b": [
+        37,
+        1
+      ]
+    },
+    {
+      "a": [
+        40,
+        3
+      ],
+      "b": [
+        37,
+        3
+      ]
+    },
+    {
+      "a": [
+        48,
+        2
+      ],
+      "b": [
+        51,
+        2
+      ]
+    },
+    {
+      "a": [
+        44,
+        -2
+      ],
+      "b": [
+        44,
+        -5
+      ]
+    },
+    {
+      "a": [
+        44,
+        6
+      ],
+      "b": [
+        44,
+        9
+      ]
+    },
+    {
+      "a": [
+        62,
+        -8
+      ],
+      "b": [
+        62,
+        -11
+      ]
+    },
+    {
+      "a": [
+        62,
+        -4
+      ],
+      "b": [
+        62,
+        -1
+      ]
+    },
+    {
+      "a": [
+        62,
+        8
+      ],
+      "b": [
+        62,
+        5
+      ]
+    },
+    {
+      "a": [
+        62,
+        12
+      ],
+      "b": [
+        62,
+        15
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        9,
+        0
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        19,
+        0
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        21,
+        0
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        31,
+        0
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        19,
+        -10
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        29,
+        -10
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        34,
+        3
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        34,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        47,
+        -10
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        57,
+        -10
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        16,
+        17
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        16,
+        27
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        1
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        37,
+        3
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        51,
+        2
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        44,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        44,
+        9
+      ],
+      "text": "VEE"
+    },
+    {
+      "pos": [
+        62,
+        -11
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        62,
+        -1
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        62,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        62,
+        15
+      ],
+      "text": "VEE"
+    }
+  ],
+  "layout_version": 1
+}
