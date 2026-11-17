@@ -300,6 +300,10 @@ pub struct PartForm {
     pub request: Option<FormRequest>,
     /// Parts made at once (every voltage of a regulator: `reg_make_all`), for the editor to save into the library.
     pub batch: Vec<PartDef>,
+    /// The boxes of the thermistor, crystal and TVS sections (`simple_kinds.rs`).
+    pub ntc: simple_kinds::NtcInput,
+    pub xtal: simple_kinds::CrystalInput,
+    pub tvs: simple_kinds::TvsInput,
     /// The library part being edited (None = a new part), see `edit.rs`.
     pub orig: Option<PartDef>,
     /// Keep the package of `orig` as it is (a pad list written by hand): the dimensions of the package tab do not describe it.
@@ -457,6 +461,9 @@ impl Default for PartForm {
             dim_ref: None,
             request: None,
             batch: vec![],
+            ntc: Default::default(),
+            xtal: Default::default(),
+            tvs: Default::default(),
             orig: None,
             keep_package: false,
         }
@@ -475,6 +482,7 @@ mod table_fill;
 mod heat_fill;
 mod companion_fill;
 mod reg_fill;
+pub mod simple_kinds;
 mod logic;
 mod pdf_check;
 mod pdf_input;

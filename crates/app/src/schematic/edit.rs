@@ -200,6 +200,34 @@ impl SchEditor {
                     f.photodiode_example_and_make();
                 }
                 "darlington" => f.darlington_example_and_fit(),
+                // the thermistor (--new-part resistor), crystal and TVS (--new-part diode) boxes, the model put into ②
+                "ntc" | "crystal" | "tvs" | "tvs-pdf" => {
+                    use crate::part_form::simple_kinds::Simple;
+                    let k = match what {
+                        "ntc" => Simple::Ntc,
+                        "crystal" => Simple::Crystal,
+                        _ => Simple::Tvs,
+                    };
+                    match what {
+                        "crystal" => {
+                            (f.glyph, f.prefix) = ("crystal".into(), "Y".into());
+                            f.pins_text = "1 X1
+2 GND
+3 X2
+4 GND".into();
+                        }
+                        "tvs" | "tvs-pdf" => f.glyph = "tvs".into(),
+                        _ => {}
+                    }
+                    if what == "tvs-pdf" {
+                        f.tvs_from_pdf_and_make();
+                    } else {
+                        f.simple_example_and_make(k);
+                    }
+                    if let Err(e) = f.simple_apply_pub(k) {
+                        eprintln!("not applied: {e}");
+                    }
+                }
                 _ => {
                     f.glyph = "regulator".into();
                     f.regulator_example_and_make(what == "adj");

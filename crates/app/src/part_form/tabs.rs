@@ -61,8 +61,13 @@ impl PartForm {
             ui.separator();
             if diode && self.glyph == "photodiode" {
                 self.photodiode_ui(ui);
+            } else if diode && self.glyph == "tvs" {
+                crate::widgets::section_heading(ui, "かんたん作成: TVS ダイオードを表の値からつくる");
+                self.tvs_ui(ui);
             } else if diode {
                 self.diode_ui(ui);
+                ui.add_space(4.0);
+                egui::CollapsingHeader::new(i18n::tr("TVS ダイオード (サージ・静電気の吸収) のモデルを表の値から作る")).id_salt("tvs_box").default_open(self.tvs.result.is_some()).show(ui, |ui| self.tvs_ui(ui));
             }
             if mosfet {
                 self.mosfet_ui(ui);
@@ -75,7 +80,17 @@ impl PartForm {
             }
             if passive {
                 self.passive_ui(ui);
+                if self.ptype == Some(PartType::Resistor) {
+                    ui.add_space(4.0);
+                    egui::CollapsingHeader::new(i18n::tr("NTC サーミスタ (温度で抵抗が変わる) のモデルを R25 と B 定数から作る")).id_salt("ntc_box").default_open(self.ntc.result.is_some()).show(ui, |ui| self.ntc_ui(ui));
+                }
             }
+        }
+        // a crystal: its own box whatever kind of part was chosen
+        if self.glyph == "crystal" {
+            ui.add_space(6.0);
+            crate::widgets::section_heading(ui, "かんたん作成: 水晶・セラミック発振子を表の値からつくる");
+            self.crystal_ui(ui);
         }
 
         ui.add_space(6.0);
@@ -91,6 +106,18 @@ impl PartForm {
                         egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").open(opamp).show(ui, |ui| self.opamp_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").open(reg).show(ui, |ui| self.regulator_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る")).id_salt("opto_box").default_open(self.opto.result.is_some()).open(opto).show(ui, |ui| self.opto_ui(ui));
+                        if self.glyph != "crystal" {
+                            egui::CollapsingHeader::new(i18n::tr("水晶・セラミック発振子のモデルを表の値から作る (記号の形を「水晶」に)")).id_salt("xtal_box").default_open(self.xtal.result.is_some()).show(ui, |ui| {
+                                if ui.button(i18n::tr("記号を水晶にして始める")).on_hover_text(i18n::tr("記号の形を水晶にし、ピンを X1・GND・X2・GND の 4 つにします (2 端子のものは、③ ピンで 2 つにします)")).clicked() {
+                                    self.glyph = "crystal".into();
+                                    self.prefix = "Y".into();
+                                    self.pins_text = "1 X1
+2 GND
+3 X2
+4 GND".into();
+                                }
+                            });
+                        }
                     }
                 }
                 self.template_ui(ui);

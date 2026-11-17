@@ -125,6 +125,9 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
             // built from typ values with a template, not fitted: nothing to compare here (the measuring tests in
             // crates/cli/tests/integration/{opamp,regulator}_models.rs compare them with their data sheets)
             Spec::Opamp(_) | Spec::Regulator(_) | Spec::Shunt(_) => 0,
+            Spec::Ntc(n) => n.table.len(),
+            Spec::Crystal(c) => 1 + usize::from(c.cl.is_some()),
+            Spec::Tvs(_) => 3,
         };
         assert_eq!(f.rows.len(), n, "{}", f.part);
         // a reading the model's form cannot follow is said in a note (with its condition); the others stay near
