@@ -39,6 +39,10 @@ pub struct Datasheet {
     pages: usize,
     /// The words of each page, read the first time they are asked for.
     words: Vec<OnceCell<Vec<Word>>>,
+    /// Pages without text (a scanned PDF) are read by the OCR (`set_ocr`).
+    ocr: std::cell::Cell<bool>,
+    /// The words the OCR read off each page without text.
+    ocr_words: Vec<OnceCell<Vec<Word>>>,
 }
 
 /// A drawn page: straight RGBA, 4 bytes per pixel, opaque white background.
@@ -61,7 +65,7 @@ impl Datasheet {
         if pages == 0 {
             return Err("このPDFにはページがありません".into());
         }
-        Ok(Self { pdf, pages, words: (0..pages).map(|_| OnceCell::new()).collect() })
+        Ok(Self { pdf, pages, words: (0..pages).map(|_| OnceCell::new()).collect(), ocr: std::cell::Cell::new(false), ocr_words: (0..pages).map(|_| OnceCell::new()).collect() })
     }
 
     /// Reads a PDF file.
@@ -79,15 +83,65 @@ impl Datasheet {
         self.pdf.pages().get(page).map(|p| p.render_dimensions())
     }
 
-    /// The words of a page with their places (points from the top left of the page as drawn). Empty for a page that is
-    /// only a picture, and for a page number that does not exist.
+    /// The words of a page with their places (points from the top left of the page as drawn). For a page that is only
+    /// a picture: the words the OCR reads off it when `set_ocr` is on, else none. None for a page that does not exist.
     pub fn words(&self, page: usize) -> &[Word] {
+        let text = self.text_words(page);
+        if !text.is_empty() || !self.ocr.get() {
+            return text;
+        }
+        let Some(cell) = self.ocr_words.get(page) else { return &[] };
+        cell.get_or_init(|| self.read_page_by_ocr(page))
+    }
+
+    /// The words printed as text on a page (no OCR).
+    pub fn text_words(&self, page: usize) -> &[Word] {
         let Some(cell) = self.words.get(page) else { return &[] };
         cell.get_or_init(|| {
             let pages = self.pdf.pages();
             let Some(p) = pages.get(page) else { return vec![] };
             catch_unwind(AssertUnwindSafe(|| text::read_words(p))).unwrap_or_default()
         })
+    }
+
+    /// Reads the pages that have no text with the OCR (a scanned data sheet): each the first time its words are asked
+    /// for, a second or so a page.
+    pub fn set_ocr(&self, on: bool) {
+        self.ocr.set(on);
+    }
+
+    pub fn ocr_on(&self) -> bool {
+        self.ocr.get()
+    }
+
+    /// The page has words printed as text (not only a picture).
+    pub fn has_text(&self, page: usize) -> bool {
+        !self.text_words(page).is_empty()
+    }
+
+    /// The page has been read by the OCR (its words are ready without waiting).
+    pub fn ocr_done(&self, page: usize) -> bool {
+        self.has_text(page) || self.ocr_words.get(page).is_some_and(|c| c.get().is_some())
+    }
+
+    /// The words of a page without text, read off it drawn at 4 pixels per point (8-point letters 32 pixels high) in
+    /// tiles the OCR takes. Type the OCR often misreads is put right (`ocr::fix_word`).
+    fn read_page_by_ocr(&self, page: usize) -> Vec<Word> {
+        let (Some(max), Some((pw, _))) = (ocr::max_side(), self.page_size(page)) else { return vec![] };
+        let Ok(img) = self.render(page, 4.0) else { return vec![] };
+        let k = img.width as f32 / pw;
+        let Some(words) = ocr::read_tiled(&img, max.min(4000), 200) else { return vec![] };
+        // the baseline of a line: the lowest bottom of its words without descenders is near it; the median bottom is
+        // close enough for telling lines apart
+        let mut out = vec![];
+        for w in &words {
+            let mut bottoms: Vec<f32> = words.iter().filter(|o| o.line == w.line).map(|o| o.y1).collect();
+            bottoms.sort_by(|a, b| a.total_cmp(b));
+            let base = bottoms[bottoms.len() / 2] / k;
+            let text = ocr::fix_word(&w.text);
+            out.push(Word::on_line(&text, Rect { x0: w.x0 / k, y0: w.y0 / k, x1: w.x1 / k, y1: w.y1 / k }, base));
+        }
+        out
     }
 
     /// Where `query` is on a page.

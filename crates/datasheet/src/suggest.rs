@@ -143,6 +143,8 @@ pub fn category_hint(first_pages: &[&[Word]]) -> Option<&'static str> {
         // a Darlington's sheet says "transistor" far more often than "Darlington"; another transistor's says the
         // word not at all
         .map(|name| if name == "トランジスタ" && all.contains("darlington") { "ダーリントン" } else { name })
+        // nothing else: "PNP Silicon" on a sheet whose "transistor" the OCR misspelt (a scan)
+        .or_else(|| ["npn", "pnp", "bipolar"].iter().any(|k| all.split(|c: char| !c.is_alphanumeric()).any(|w| w == *k)).then_some("トランジスタ"))
 }
 
 #[cfg(test)]
@@ -155,6 +157,14 @@ mod tests {
         assert_eq!((hits(text, "diode", "ダイオード"), hits(text, "photodiode", "フォトダイオード")), (1, 2));
         let opto = "photocoupler: an infrared emitting diode and a phototransistor. transistor output";
         assert_eq!(hits(opto, "transistor", "トランジスタ"), 1);
+    }
+
+    #[test]
+    fn a_misspelt_transistor_is_told_by_npn_or_pnp() {
+        let page = vec![Word::for_test("General", 0.0, 0.0, 30.0, 8.0), Word::for_test("Tansistors", 32.0, 0.0, 80.0, 8.0), Word::for_test("PNP", 0.0, 10.0, 15.0, 18.0), Word::for_test("Silicon", 17.0, 10.0, 50.0, 18.0)];
+        assert_eq!(category_hint(&[&page]), Some("トランジスタ"));
+        let regulator = vec![Word::for_test("Voltage", 0.0, 0.0, 30.0, 8.0), Word::for_test("Regulator", 32.0, 0.0, 80.0, 8.0), Word::for_test("NPN", 0.0, 10.0, 15.0, 18.0)];
+        assert_ne!(category_hint(&[&regulator]), Some("トランジスタ"), "another kind named: that one");
     }
 
     #[test]

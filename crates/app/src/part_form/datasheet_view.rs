@@ -136,6 +136,9 @@ pub struct SheetView {
 struct Opened {
     ds: Datasheet,
     name: String,
+    path: std::path::PathBuf,
+    /// A PDF of pictures only (a scan) is read by the OCR, a page a frame: the next page to read.
+    ocr_next: Option<usize>,
     candidates: Candidates,
     page: usize,
     /// Screen points per PDF point.
@@ -209,9 +212,14 @@ impl SheetView {
             Ok(ds) => {
                 let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
                 let candidates = candidates_of(&ds, path);
+                // pictures only (a scan): the OCR reads the pages, a page a frame, so search, tables and the draft work
+                let scan = !ds.has_text(0) && datasheet::ocr::max_side().is_some();
+                ds.set_ocr(scan);
                 self.doc = Some(Opened {
                     ds,
                     name,
+                    path: path.to_path_buf(),
+                    ocr_next: scan.then_some(0),
                     candidates,
                     page: 0,
                     zoom: 1.0,
@@ -254,6 +262,12 @@ impl SheetView {
     /// What the first pages suggest (part numbers and the kind of part), when a PDF is open.
     pub fn candidates(&self) -> Option<&Candidates> {
         self.doc.as_ref().map(|d| &d.candidates)
+    }
+
+    /// The candidates read again now (a scanned PDF: from the words the OCR reads, which may not have been read when it
+    /// was opened).
+    pub fn fresh_candidates(&self) -> Option<Candidates> {
+        self.doc.as_ref().map(|d| candidates_of(&d.ds, &d.path))
     }
 
     /// The form asks for a word to be clicked in the PDF: the window comes forward and waits.
@@ -588,6 +602,42 @@ fn candidates_of(ds: &Datasheet, path: &Path) -> Candidates {
 }
 
 impl Opened {
+    /// Reading a scanned PDF with the OCR: one page a frame with the progress and a button to stop; afterwards a note
+    /// that the words were read off pictures. A PDF without text that is not being read offers to read it.
+    fn ocr_ui(&mut self, ui: &mut egui::Ui) {
+        let pages = self.ds.page_count();
+        if let Some(p) = self.ocr_next {
+            // the page shown first, then the rest in order
+            let next = if !self.ds.ocr_done(self.page) { self.page } else { p };
+            let _ = self.ds.words(next);
+            let left = (0..pages).find(|&q| !self.ds.ocr_done(q));
+            self.ocr_next = left;
+            if left.is_none() {
+                // the part names and the kind from the words now read
+                self.candidates = candidates_of(&self.ds, &self.path);
+            }
+            let done = (0..pages).filter(|&q| self.ds.ocr_done(q)).count();
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(crate::theme::INFO, i18n::trf!("画像の PDF なので、文字認識で文字を読み取っています… {done}/{pages} ページ"));
+                if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("読み取りをやめます。読み終えたページの文字はそのまま使えます")).clicked() {
+                    self.ocr_next = None;
+                    self.ds.set_ocr(false);
+                }
+            });
+            ui.ctx().request_repaint();
+        } else if self.ds.ocr_on() {
+            ui.label(egui::RichText::new(i18n::tr("このPDFの文字は、Windows の文字認識でページの絵から読みました。読み違いがあるので、入れた値は絵と見比べてください")).small().color(crate::theme::WARN));
+        } else if !self.ds.has_text(self.page) && datasheet::ocr::max_side().is_some() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new(i18n::tr("このページには文字がありません (画像の PDF)")).small());
+                if ui.button(i18n::tr("文字を読み取る (OCR)")).on_hover_text(i18n::tr("Windows の文字認識で、文字の無いページの絵から文字を読みます (1 ページ 1 秒ほど)。読めた文字で検索・表の読み取り・下書きが使えます")).clicked() {
+                    self.ds.set_ocr(true);
+                    self.ocr_next = Some(0);
+                }
+            });
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui) {
         let pages = self.ds.page_count();
         let (pw, _) = self.ds.page_size(self.page).unwrap_or((595.0, 842.0));
@@ -602,6 +652,7 @@ impl Opened {
                 g.mode = None;
             }
         }
+        self.ocr_ui(ui);
         ui.horizontal_wrapped(|ui| {
             if ui.add_enabled(self.page > 0, egui::Button::new("◀")).on_hover_text(i18n::tr("前のページ")).clicked() {
                 self.page -= 1;
@@ -921,7 +972,7 @@ impl Opened {
                 ui.ctx().request_repaint();
                 format!("探しています… {}/{} ページ", s.next_page, pages)
             } else if s.hits.is_empty() && !s.any_text {
-                "このPDFには検索できる文字がありません (画像のPDFかもしれません)。絵を見て探してください".to_string()
+                "このPDFには検索できる文字がありません (画像のPDFかもしれません)。上の「文字を読み取る (OCR)」で読めます。読めないときは絵を見て探してください".to_string()
             } else if s.hits.is_empty() {
                 "見つかりませんでした。別の書き方 (略さない・省く) で探してみてください".to_string()
             } else if s.hits.len() >= MAX_HITS {

@@ -5,6 +5,7 @@
 //!     cargo run -p datasheet --example ds -- axes FILE.pdf                     the axes read from the tick labels of each graph the form uses
 //!     cargo run -p datasheet --example ds -- pick FILE.pdf                     the curve each graph's field would take, and the label it was taken by
 //!     cargo run -p datasheet --example ds -- ocr FILE.pdf PAGE                 the words the OCR of Windows reads off the drawn page
+//!     (any command) ... ocr=1                                               pages without text read by the OCR (a scanned PDF)
 //!     cargo run -p datasheet --example ds -- absmax FILE.pdf                   the absolute maximum ratings read (the first part number's column)
 //!     cargo run -p datasheet --example ds -- kind   FILE.pdf                   the kind of part and the part numbers it suggests
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
@@ -47,6 +48,8 @@ fn main() -> Result<(), String> {
         return Err("ds text|table|labels|render|trace FILE.pdf ... (crates/datasheet/examples/ds.rs)".into());
     };
     let ds = Datasheet::open_file(std::path::Path::new(file))?;
+    // `ocr=1`: pages without text (a scanned PDF) are read by the OCR of Windows
+    ds.set_ocr(args.iter().any(|a| a == "ocr=1"));
     let page = || -> Result<usize, String> { args.get(2).and_then(|p| p.parse::<usize>().ok()).filter(|p| *p >= 1).map(|p| p - 1).ok_or_else(|| "PAGE (from 1)".to_string()) };
     match cmd.as_str() {
         "text" => {

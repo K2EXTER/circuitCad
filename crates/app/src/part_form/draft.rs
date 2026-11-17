@@ -134,7 +134,9 @@ impl PartForm {
     /// Reads the open data sheet for a draft (`None` without one).
     pub(super) fn make_draft(&self) -> Option<FormDraft> {
         let ds = self.sheet.datasheet()?;
-        let c = self.sheet.candidates();
+        // a scanned PDF: the candidates from the words the OCR reads now
+        let fresh = if ds.ocr_on() { self.sheet.fresh_candidates() } else { None };
+        let c = fresh.as_ref().or(self.sheet.candidates());
         let name = c.and_then(|c| c.names.first().cloned());
         let kind = c.and_then(|c| c.category).and_then(|cat| kind_of(cat).map(|k| (k, cat)));
         // the pins: from the table and from the drawing. When they differ the drawing goes first: it is of one package, where a

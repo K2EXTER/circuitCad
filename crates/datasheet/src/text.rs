@@ -47,9 +47,14 @@ impl Word {
     /// A word read some other way (by the OCR off a picture): the characters evenly spread over its box, the font as
     /// high as the box.
     pub(crate) fn plain(text: &str, rect: Rect) -> Word {
+        Word::on_line(text, rect, rect.y1)
+    }
+
+    /// [`Word::plain`] on a given baseline (the words of one OCR line share it, though "g" and "p" reach lower).
+    pub(crate) fn on_line(text: &str, rect: Rect, baseline: f32) -> Word {
         let n = text.chars().count().max(1) as f32;
         let xs = (0..text.chars().count()).map(|i| rect.x0 + (rect.x1 - rect.x0) * i as f32 / n).collect();
-        Word { text: text.into(), rect, baseline: rect.y1, em: (rect.y1 - rect.y0).max(1.0), xs }
+        Word { text: text.into(), rect, baseline, em: (rect.y1 - rect.y0).max(1.0), xs }
     }
 
     /// A word for tests: the characters evenly spread over the rectangle, a 8 point font.

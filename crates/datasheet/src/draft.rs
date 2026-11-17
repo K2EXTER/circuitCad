@@ -247,7 +247,9 @@ impl Datasheet {
     pub fn dimension_table(&self) -> Option<DimTable> {
         let mut pages = self.dimension_pages();
         pages.extend((0..self.page_count()).filter(|p| !pages.contains(p)).collect::<Vec<_>>());
-        pages.into_iter().find_map(|p| dimension_table(p, self.words(p)))
+        // a table with a size over 100 mm is not a part's (numbers misread, by the OCR on a scan)
+        let plausible = |t: &DimTable| t.rows.iter().all(|(_, d)| d.typical().is_none_or(|v| v <= 100.0));
+        pages.into_iter().find_map(|p| dimension_table(p, self.words(p)).filter(plausible))
     }
 
     /// The pin table under a "Pin Configuration" heading: from each such heading down to the page's end, read as a table. Of the first
