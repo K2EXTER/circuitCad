@@ -269,7 +269,7 @@ impl BoardEditor {
             let x0 = bar.left() + bar.width() * k as f32 / 32.0;
             painter.rect_filled(Rect::from_min_size(Pos2::new(x0, bar.top()), egui::vec2(bar.width() / 32.0 + 0.5, bar.height())), 0.0, Color32::from_rgb(r, gg, b));
         }
-        let font = egui::FontId::proportional(13.0);
+        let font = crate::theme::canvas_font(&painter, 13.0);
         painter.text(Pos2::new(bar.left(), bar.top() - 2.0), egui::Align2::LEFT_BOTTOM, format!("{lo:.0} ℃"), font.clone(), Color32::WHITE);
         painter.text(Pos2::new(bar.right(), bar.top() - 2.0), egui::Align2::RIGHT_BOTTOM, format!("{hi:.0} ℃"), font.clone(), Color32::WHITE);
         let label = match sh.moment {

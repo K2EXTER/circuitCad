@@ -57,7 +57,7 @@ impl BoardEditor {
             }
             // the length, upright along the line (the screen's y points down, so the angle turns the other way)
             let size = (d.text_height as f32 * z).clamp(9.0, 40.0);
-            let galley = painter.layout_no_wrap(format!("{} mm", g.text), egui::FontId::proportional(size), col);
+            let galley = painter.layout_no_wrap(format!("{} mm", g.text), crate::theme::canvas_font(&painter, size), col);
             let at = self.to_screen(rect, g.text_at);
             let angle = -(g.angle as f32).to_radians();
             let half = galley.size() / 2.0;

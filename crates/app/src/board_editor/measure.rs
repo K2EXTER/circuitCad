@@ -1,7 +1,6 @@
 //! The measuring tool: two clicks give the distance between the points (nothing on the board changes).
 
 use super::*;
-use eframe::egui::FontId;
 
 /// "12.70 mm (ΔX 12.70 / ΔY 0.00, 角度 0°, 500 mil)" for the line from `a` to `b`.
 pub(super) fn measure_text(a: Point, b: Point) -> String {
@@ -46,7 +45,7 @@ impl BoardEditor {
         painter.line_segment([corner, sb], thin);
         let text = measure_text(a, b);
         let mid = Pos2::new((sa.x + sb.x) / 2.0, (sa.y + sb.y) / 2.0) + Vec2::new(8.0, -8.0);
-        let galley = painter.layout_no_wrap(text, FontId::proportional(13.0), Color32::BLACK);
+        let galley = painter.layout_no_wrap(text, crate::theme::canvas_font(&painter, 13.0), Color32::BLACK);
         let bg = Rect::from_min_size(mid - Vec2::new(0.0, galley.size().y), galley.size()).expand(3.0);
         painter.rect_filled(bg, 3.0, col);
         painter.galley(bg.min + Vec2::splat(3.0), galley, Color32::BLACK);

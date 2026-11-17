@@ -200,6 +200,8 @@ impl Default for App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // the panel text sizes, off the sizes at which the font drops the minus on this screen (UI scale, monitor DPI)
+        theme::keep_minus_signs(ui.ctx());
         // closing the window with unsaved changes: ask first
         if ui.ctx().input(|i| i.viewport().close_requested()) && !self.closing_ok && self.dirty() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);

@@ -90,7 +90,7 @@ impl BoardEditor {
                 // y is up on the board: the top left corner of the group on the screen
                 let at = self.to_screen(rect, Point::new(lo.x, hi.y));
                 ribbon::flush(painter, &mut mesh);
-                let galley = painter.layout_no_wrap(name.clone(), egui::FontId::proportional(13.0), Color32::BLACK);
+                let galley = painter.layout_no_wrap(name.clone(), crate::theme::canvas_font(&painter, 13.0), Color32::BLACK);
                 let tag = Rect::from_min_size(at + Vec2::new(0.0, -galley.size().y - 6.0), galley.size() + Vec2::new(8.0, 3.0));
                 painter.rect_filled(tag, 3.0, *col);
                 painter.galley(tag.min + Vec2::new(4.0, 1.5), galley, Color32::BLACK);

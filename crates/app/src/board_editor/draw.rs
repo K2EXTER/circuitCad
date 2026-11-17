@@ -587,9 +587,9 @@ impl BoardEditor {
             }
             let tag = egui::Rect::from_center_size(center + Vec2::new(r + 8.0, -r - 2.0), Vec2::new(18.0, 16.0));
             painter.rect_filled(tag, 3.0, color);
-            painter.text(tag.center(), egui::Align2::CENTER_CENTER, number.to_string(), egui::FontId::proportional(13.0), Color32::BLACK);
+            painter.text(tag.center(), egui::Align2::CENTER_CENTER, number.to_string(), crate::theme::canvas_font(&painter, 13.0), Color32::BLACK);
             if focused {
-                let msg = painter.layout(c.title.clone(), egui::FontId::proportional(13.0), Color32::WHITE, 320.0);
+                let msg = painter.layout(c.title.clone(), crate::theme::canvas_font(&painter, 13.0), Color32::WHITE, 320.0);
                 let box_pos = tag.right_top() + Vec2::new(6.0, 0.0);
                 painter.rect_filled(Rect::from_min_size(box_pos, msg.size() + Vec2::new(10.0, 6.0)), 3.0, Color32::from_black_alpha(210));
                 painter.galley(box_pos + Vec2::new(5.0, 3.0), msg, Color32::WHITE);
@@ -636,7 +636,7 @@ impl BoardEditor {
                 painter.circle_stroke(scr, self.via_dia as f32 * self.zoom / 2.0, Stroke::new(1.5, Color32::from_rgb(60, 170, 90)));
                 let net = self.via_net_at(p);
                 let text = if net.is_empty() { "ビア (ネットなし)".to_string() } else { format!("ビア → ネット {net}") };
-                painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, text, egui::FontId::proportional(13.0), Color32::from_rgb(120, 225, 160));
+                painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, text, crate::theme::canvas_font(&painter, 13.0), Color32::from_rgb(120, 225, 160));
             }
             Tool::Track => {
                 if let Some(a) = self.pending {
@@ -667,7 +667,7 @@ impl BoardEditor {
                         } else {
                             format!("{pushed} 本を押しのけます")
                         };
-                        painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, msg, egui::FontId::proportional(13.0), base);
+                        painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, msg, crate::theme::canvas_font(&painter, 13.0), base);
                     }
                 }
             }

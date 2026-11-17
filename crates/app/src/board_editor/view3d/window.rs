@@ -372,7 +372,7 @@ impl BoardEditor {
             if !v.touched {
                 // what to do with the picture, until the first time it is turned or zoomed
                 let lines = ["ドラッグ: 回す  /  右ドラッグ: 動かす  /  ホイール: 拡大・縮小  /  ダブルクリック: 元の向きに戻す", "上の「ケース高さ」を入れると、ケースに入らない高さの部品が赤くなります"];
-                let font = egui::FontId::proportional(13.0);
+                let font = crate::theme::canvas_font(&painter, 13.0);
                 let mut y = resp.rect.bottom() - 10.0;
                 for line in lines.iter().rev() {
                     let g = painter.layout_no_wrap(i18n::tr(line).to_string(), font.clone(), Color32::WHITE);

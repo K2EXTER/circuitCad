@@ -127,7 +127,7 @@ impl BoardEditor {
                     }
                 }
                 Err(e) => {
-                    painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, e, egui::FontId::proportional(13.0), Color32::from_rgb(255, 120, 90));
+                    painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, e, crate::theme::canvas_font(&painter, 13.0), Color32::from_rgb(255, 120, 90));
                 }
             }
         }

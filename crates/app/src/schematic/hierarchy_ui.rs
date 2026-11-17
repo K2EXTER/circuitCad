@@ -72,7 +72,7 @@ impl SchEditor {
                 PortDir::Out => format!("{} >", port.name),
                 PortDir::Io => format!("<> {}", port.name),
             };
-            let galley = painter.layout_no_wrap(text, FontId::proportional(13.0), PORT_TEXT);
+            let galley = painter.layout_no_wrap(text, crate::theme::canvas_font(&painter, 13.0), PORT_TEXT);
             let (w, h) = (galley.size().x, 8.0);
             let pts = vec![p, p + Vec2::new(6.0, -h), p + Vec2::new(12.0 + w, -h), p + Vec2::new(12.0 + w, h), p + Vec2::new(6.0, h)];
             painter.add(egui::Shape::convex_polygon(pts, PORT_FILL, egui::Stroke::new(if sel { 2.5 } else { 1.2 }, if sel { Color32::from_rgb(0, 80, 220) } else { PORT_EDGE })));

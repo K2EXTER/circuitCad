@@ -83,7 +83,7 @@ impl SchEditor {
                     painter.line_segment([at + Vec2::new(-4.5, 4.5), at + Vec2::new(4.5, -4.5)], s);
                 }
             }
-            let f = FontId::proportional((self.zoom * 0.55).clamp(8.0, 18.0));
+            let f = crate::theme::canvas_font(&painter, (self.zoom * 0.55).clamp(8.0, 18.0));
             let (x0, x1, y0, y1) = comp_extents(c);
             if c.kind.is_power_symbol() {
                 if c.kind == Kind::Power {
@@ -145,7 +145,7 @@ impl SchEditor {
                 p + Vec2::new(5.0, -3.0),
                 Align2::LEFT_BOTTOM,
                 &l.text,
-                FontId::proportional(13.0),
+                crate::theme::canvas_font(&painter, 13.0),
                 if sel { Color32::from_rgb(0, 80, 220) } else if sch_core::is_bus_label(&l.text) { Color32::from_rgb(40, 70, 170) } else { Color32::from_rgb(0, 100, 100) },
             );
         }
@@ -183,7 +183,7 @@ impl SchEditor {
             .labels
             .iter()
             .map(|l| {
-                let g = painter.layout_no_wrap(l.text.clone(), FontId::proportional(13.0), Color32::BLACK);
+                let g = painter.layout_no_wrap(l.text.clone(), crate::theme::canvas_font(&painter, 13.0), Color32::BLACK);
                 let at = self.to_screen(rect, (l.pos.0 as f32, l.pos.1 as f32)) + Vec2::new(5.0, -3.0);
                 Rect::from_min_size(Pos2::new(at.x, at.y - g.size().y), g.size())
             })
@@ -193,7 +193,7 @@ impl SchEditor {
     pub(super) fn draw_voltages(&self, painter: &egui::Painter, rect: Rect) {
         if self.show_v
             && let Some(dc) = self.dc.as_ref().filter(|d| d.signature == self.signature_cached()) {
-                let f = FontId::proportional((self.zoom * 0.5).clamp(9.0, 14.0));
+                let f = crate::theme::canvas_font(&painter, (self.zoom * 0.5).clamp(9.0, 14.0));
                 for (pt, v) in &dc.marks {
                     let galley = painter.layout_no_wrap(eng(*v, "V"), f.clone(), Color32::from_rgb(10, 60, 200));
                     // a pin that has a net label on it or at the end of a short level wire: the voltage goes beside the label
@@ -201,14 +201,14 @@ impl SchEditor {
                     // a power symbol (VCC, 5V ...) on the pin has its value drawn above it: the voltage stacks above that
                     let power = self.sch.components.iter().find(|c| c.kind == Kind::Power && c.pos == *pt);
                     let top_left = if let Some(c) = power {
-                        let name_font = FontId::proportional((self.zoom * 0.55).clamp(8.0, 18.0));
+                        let name_font = crate::theme::canvas_font(&painter, (self.zoom * 0.55).clamp(8.0, 18.0));
                         let name_h = painter.layout_no_wrap(c.value.clone(), name_font, Color32::BLACK).size().y;
                         let at = self.to_screen(rect, (c.pos.0 as f32, c.pos.1 as f32 - 0.8));
                         Pos2::new(at.x - galley.size().x / 2.0, at.y - name_h - 1.0 - galley.size().y)
                     } else { match self.label_anchor(*pt) {
                         Some((l, spot)) => {
                             let at = self.to_screen(rect, (l.pos.0 as f32, l.pos.1 as f32));
-                            let name = painter.layout_no_wrap(l.text.clone(), FontId::proportional(13.0), Color32::BLACK).size();
+                            let name = painter.layout_no_wrap(l.text.clone(), crate::theme::canvas_font(&painter, 13.0), Color32::BLACK).size();
                             match spot {
                                 VoltageSpot::AfterName => Pos2::new(at.x + 5.0 + name.x + 6.0, at.y - 3.0 - galley.size().y),
                                 VoltageSpot::BeforeDot => Pos2::new(at.x - 6.0 - galley.size().x, at.y - 3.0 - galley.size().y),
@@ -227,7 +227,7 @@ impl SchEditor {
         if self.show_i
             && let Some(dc) = self.dc.as_ref().filter(|d| d.signature == self.signature_cached())
             && let Ok(res) = &dc.outcome {
-                let f = FontId::proportional((self.zoom * 0.5).clamp(9.0, 14.0));
+                let f = crate::theme::canvas_font(&painter, (self.zoom * 0.5).clamp(9.0, 14.0));
                 let col = Color32::from_rgb(200, 90, 0);
                 let label_rects = self.label_rects(painter, rect);
                 for c in self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()) {
@@ -316,7 +316,7 @@ impl SchEditor {
                     None => ("(接続なし)".to_string(), Color32::from_gray(130)),
                 };
                 painter.circle_stroke(sp, 7.0, Stroke::new(2.0, col));
-                let g = painter.layout_no_wrap(txt, FontId::proportional(13.0), Color32::WHITE);
+                let g = painter.layout_no_wrap(txt, crate::theme::canvas_font(&painter, 13.0), Color32::WHITE);
                 let r = Rect::from_min_size(sp + Vec2::new(12.0, 10.0), g.size()).expand(3.0);
                 painter.rect_filled(r, 3.0, Color32::from_rgba_unmultiplied(40, 40, 40, 220));
                 painter.galley(r.min + Vec2::new(3.0, 3.0), g, col);

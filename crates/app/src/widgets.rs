@@ -268,19 +268,21 @@ pub fn segment_bar(ui: &mut egui::Ui, items: &[(&str, bool)], selected: Option<u
             }
             let colour = if chosen { ui.visuals().strong_text_color() } else if *enabled { ui.style().interact(&resp).text_color() } else { widgets.noninteractive.text_color().gamma_multiply(0.5) };
             // a label longer than its cell (English is often longer than the Japanese it was sized for) first gets a size or two
-            // smaller (whole pixels: this font loses its thin minus at fractional sizes), then is cut with "…"
+            // smaller (never a size at which this font loses its thin minus: `theme::readable_size`), then is cut with "…"
             let text = i18n::tr_dyn(label);
             let base = egui::TextStyle::Button.resolve(ui.style());
             let room = width - 8.0;
+            let ppp = ui.ctx().pixels_per_point();
+            let smaller = |by: f32| crate::theme::readable_size((base.size - by).round(), ppp);
             let mut galley = ui.painter().layout_no_wrap(text.clone(), base.clone(), colour);
-            for size in [base.size - 1.0, base.size - 2.0] {
+            for by in [1.0, 2.0] {
                 if galley.size().x <= room {
                     break;
                 }
-                galley = ui.painter().layout_no_wrap(text.clone(), egui::FontId::new(size.round(), base.family.clone()), colour);
+                galley = ui.painter().layout_no_wrap(text.clone(), egui::FontId::new(smaller(by), base.family.clone()), colour);
             }
             if galley.size().x > room {
-                let mut job = egui::text::LayoutJob::simple_singleline(text, egui::FontId::new((base.size - 2.0).round(), base.family.clone()), colour);
+                let mut job = egui::text::LayoutJob::simple_singleline(text, egui::FontId::new(smaller(2.0), base.family.clone()), colour);
                 job.wrap = egui::text::TextWrapping { max_width: room, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
                 galley = ui.painter().layout_job(job);
             }

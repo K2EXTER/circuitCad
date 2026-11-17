@@ -68,6 +68,42 @@ pub fn apply(style: &mut egui::Style) {
     v.menu_corner_radius = egui::CornerRadius::same(6);
 }
 
+/// Screen pixel sizes (font size × pixels per point) at which the bundled Japanese font draws no hyphen / minus stroke at all:
+/// "-5.000 V" came out as "5.000 V". Measured on screen from 5 to 30 px at UI scales 1.0 and 1.25 (2026-11-17); whole and
+/// fractional sizes alike, every other size keeps the stroke.
+const MINUS_LOST: [(f32, f32); 2] = [(7.5, 8.5), (12.5, 13.5)];
+
+/// `size` (points), moved just above a band of `MINUS_LOST` when it falls in one on a screen of `ppp` pixels per point.
+pub fn readable_size(size: f32, ppp: f32) -> f32 {
+    let px = size * ppp;
+    MINUS_LOST.iter().find(|(lo, hi)| px >= *lo && px < *hi).map_or(size, |(_, hi)| hi / ppp)
+}
+
+/// The font for text painted on a canvas or chart at `size` points (a fixed size or one that follows the zoom): never a size at
+/// which the minus of a value vanishes.
+pub fn canvas_font(painter: &egui::Painter, size: f32) -> egui::FontId {
+    egui::FontId::proportional(readable_size(size, painter.ctx().pixels_per_point()))
+}
+
+/// The panel text sizes (body and buttons 14, small 12, monospace 14), kept out of `MINUS_LOST` on this screen: at a UI scale
+/// such as 1.1 the small text lands on 13.2 px. Cheap enough for every frame; it only writes when the pixels per point change.
+pub fn keep_minus_signs(ctx: &egui::Context) {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static LAST: AtomicU32 = AtomicU32::new(0);
+    let ppp = ctx.pixels_per_point();
+    if LAST.swap(ppp.to_bits(), Ordering::Relaxed) == ppp.to_bits() {
+        return;
+    }
+    let (body, small) = (readable_size(14.0, ppp), readable_size(12.0, ppp));
+    ctx.all_styles_mut(|style| {
+        for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
+            style.text_styles.insert(ts, egui::FontId::proportional(body));
+        }
+        style.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(small));
+        style.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::monospace(body));
+    });
+}
+
 /// Something is wrong (an error, a failed check, a violation).
 pub const ERROR: Color32 = Color32::from_rgb(244, 123, 116);
 /// Something to watch (a warning, a caution, a value near its limit).
@@ -85,4 +121,28 @@ pub fn series_color(k: usize) -> egui::Color32 {
         egui::Color32::from_rgb(220, 210, 90),
     ];
     COLORS[k % COLORS.len()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_size_where_the_font_drops_the_minus_moves_just_above_it() {
+        // at 100 %: 13 px (the old net labels) and 8 px (the smallest pin numbers) lose the stroke, 12 and 14 keep it
+        assert_eq!(readable_size(13.0, 1.0), 13.5);
+        assert_eq!(readable_size(8.0, 1.0), 8.5);
+        assert_eq!(readable_size(12.0, 1.0), 12.0);
+        assert_eq!(readable_size(14.0, 1.0), 14.0);
+        // the bands are screen pixels: at a UI scale of 1.1 the 12 px small text is 13.2 px on screen
+        assert!((readable_size(12.0, 1.1) * 1.1 - 13.5).abs() < 1e-4);
+        assert_eq!(readable_size(14.0, 1.25), 14.0);
+        // whatever the zoom of a canvas gives, the size that comes out is never in a band
+        for k in 0..400 {
+            for ppp in [1.0, 1.1, 1.25, 1.5, 2.0] {
+                let px = readable_size(5.0 + k as f32 * 0.07, ppp) * ppp;
+                assert!(MINUS_LOST.iter().all(|(lo, hi)| px < *lo || px >= hi - 1e-3), "{px} px at {ppp}");
+            }
+        }
+    }
 }

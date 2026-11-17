@@ -108,7 +108,7 @@ fn pick_area(ui: &mut egui::Ui, d: &mut Drawing, size: Vec2, big: bool) {
             if big {
                 painter.line_segment([s - Vec2::X * 10.0, s + Vec2::X * 10.0], Stroke::new(1.0, red));
                 painter.line_segment([s - Vec2::Y * 10.0, s + Vec2::Y * 10.0], Stroke::new(1.0, red));
-                painter.text(s + Vec2::new(8.0, -8.0), egui::Align2::LEFT_BOTTOM, if k == 0 { "1" } else { "2" }, egui::FontId::proportional(13.0), red);
+                painter.text(s + Vec2::new(8.0, -8.0), egui::Align2::LEFT_BOTTOM, if k == 0 { "1" } else { "2" }, crate::theme::canvas_font(&painter, 13.0), red);
             }
         }
     }

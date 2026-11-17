@@ -20,7 +20,7 @@ impl SchEditor {
         painter.rect_stroke(frame, 0.0, Stroke::new(1.5, ink), egui::StrokeKind::Inside);
         let mut y = frame.top() + 3.0;
         for (label, text, size) in rows {
-            let font = egui::FontId::proportional(size);
+            let font = crate::theme::canvas_font(&painter, size);
             if label.is_empty() {
                 painter.text(Pos2::new(frame.left() + 8.0, y + 2.0), Align2::LEFT_TOP, text, font, ink);
             } else {

@@ -285,7 +285,7 @@ impl SchEditor {
                 self.draw_symbol(painter, rect, c.kind, c.pos, c.rot, color);
                 // the name of each pin of a pin header, on the side of the body away from the pins (where the net labels go), upright whatever the turn
                 if let Kind::Header(n) = c.kind {
-                    let font = FontId::proportional((self.zoom * 0.5).clamp(12.0, 16.0));
+                    let font = crate::theme::canvas_font(&painter, (self.zoom * 0.5).clamp(12.0, 16.0));
                     for i in 0..n as usize {
                         if let Some(name) = c.pin_name(&(i + 1).to_string()) {
                             let r = rot_f((-0.4, 2.0 * i as f32), c.rot);
@@ -313,7 +313,7 @@ impl SchEditor {
                 let r = rot_f((x, y), rot);
                 self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
             };
-            let num_font = FontId::proportional((self.zoom * 0.34).clamp(6.0, 11.0));
+            let num_font = crate::theme::canvas_font(&painter, (self.zoom * 0.34).clamp(6.0, 11.0));
             for p in &l.pins {
                 let (mx, my) = ((p.tip.0 + p.edge.0) as f32 / 2.0, (p.tip.1 + p.edge.1) as f32 / 2.0);
                 let off = if matches!(p.side, PinSide::Left | PinSide::Right) { (0.0, -0.45) } else { (0.45, 0.0) };
@@ -334,7 +334,7 @@ impl SchEditor {
                 self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
             };
             let stroke = Stroke::new(1.6, color);
-            let num_font = FontId::proportional((self.zoom * 0.34).clamp(6.0, 11.0));
+            let num_font = crate::theme::canvas_font(&painter, (self.zoom * 0.34).clamp(6.0, 11.0));
             for p in &l.pins {
                 let s = if p.tip.0 < 0 { -2.0 } else { 2.0 };
                 painter.line_segment([tr(p.tip.0 as f32, p.tip.1 as f32), tr(s, 0.0)], stroke);
@@ -380,8 +380,8 @@ impl SchEditor {
         if let Some(g) = super::glyphs::overlay_glyph(sym) {
             self.draw_shapes(painter, rect, super::glyphs::overlay(g, &l), pos, rot, color);
         }
-        let name_font = FontId::proportional((self.zoom * 0.42).clamp(7.0, 14.0));
-        let num_font = FontId::proportional((self.zoom * 0.34).clamp(6.0, 11.0));
+        let name_font = crate::theme::canvas_font(&painter, (self.zoom * 0.42).clamp(7.0, 14.0));
+        let num_font = crate::theme::canvas_font(&painter, (self.zoom * 0.34).clamp(6.0, 11.0));
         for p in &l.pins {
             let (tx, ty, ex, ey) = (p.tip.0 as f32, p.tip.1 as f32, p.edge.0 as f32, p.edge.1 as f32);
             painter.line_segment([tr(tx, ty), tr(ex, ey)], stroke);
