@@ -28,6 +28,30 @@ fn symbol(t: &str) -> Option<String> {
     ok.then(|| t.to_string())
 }
 
+/// The symbol a row stands for when it is written in words only (TI's LM317: "Input-output voltage differential −0.3 40 V" with no
+/// symbol): the input-output differential ("VI-VO"), the input or supply voltage, the output current, the power dissipation, the
+/// junction temperature. None for other words.
+fn label_symbol(text: &str) -> Option<&'static str> {
+    let t = normalize(text).replace(['-', '–', '−'], " ");
+    let t: String = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    let has = |k: &str| t.contains(k);
+    Some(if (has("input output") || has("input to output")) && has("differential") {
+        "VI-VO"
+    } else if t.starts_with("input voltage") {
+        "VI"
+    } else if t.starts_with("supply voltage") {
+        "VCC"
+    } else if t.starts_with("output current") {
+        "IO"
+    } else if has("power dissipation") {
+        "PD"
+    } else if has("junction temperature") {
+        "TJ"
+    } else {
+        return None;
+    })
+}
+
 /// A number of the table: "30", "±12", "-55", "0.9"; with the unit written in the same word ("30V") taken apart.
 fn number(t: &str) -> Option<(f64, Option<String>)> {
     let t = normalize(t.trim()).replace('±', "");
@@ -83,7 +107,30 @@ pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32, part: Option<
         rows.iter().find(|w| w.text.trim().trim_end_matches(',').eq_ignore_ascii_case(name.trim())).map(|w| ((w.rect.x0 + w.rect.x1) / 2.0, names(w.baseline()))).filter(|c| c.1 >= 2)
     });
     let mut out: Vec<Rating> = vec![];
-    for (w, sym) in rows.iter().filter_map(|w| symbol(&w.text).map(|sym| (w, sym))) {
+    // the rows with a symbol, then the rows written in words only: the last word of the label (left of the row's first number)
+    // stands for the symbol
+    let mut keyed: Vec<(&Word, String)> = rows.iter().filter_map(|w| symbol(&w.text).map(|sym| (*w, sym))).collect();
+    let mut lines: Vec<f32> = rows.iter().map(|w| w.baseline()).collect();
+    lines.sort_by(f32::total_cmp);
+    lines.dedup_by(|a, b| (*a - *b).abs() < 2.0);
+    for y in lines {
+        let mut line: Vec<&Word> = rows.iter().filter(|w| (w.baseline() - y).abs() < 2.0).copied().collect();
+        line.sort_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
+        if line.iter().any(|w| symbol(&w.text).is_some()) || keyed.iter().any(|(k, _)| (k.baseline() - y).abs() < 8.0 && line.iter().any(|w| w.rect.x0 > k.rect.x1 && number(&w.text).is_some())) {
+            continue;
+        }
+        // a limit written from a supply rail ("(V-) - 300 mV to (V+) + 300 mV") is not a value of its own
+        let whole = normalize(&line.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" "));
+        if ["v+", "v-", "v−", "vcc", "vdd", "vee", "vss"].iter().any(|r| whole.split(|c: char| c.is_whitespace() || c == '(' || c == ')').any(|t| t == *r)) {
+            continue;
+        }
+        let label: Vec<&Word> = line.iter().take_while(|w| number(&w.text).is_none() && !matches!(w.text.trim(), "–" | "−" | "-")).copied().collect();
+        let text = label.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+        if let (Some(sym), Some(last)) = (label_symbol(&text), label.last()) {
+            keyed.push((last, sym.to_string()));
+        }
+    }
+    for (w, sym) in keyed {
         // the numbers right of the symbol on its line and on the lines within 8 points (a row whose label takes two lines, or one
         // line per version: "36 non-B" over "-0.3 … V" over "38 B only"): the largest
         let found: Vec<(&Word, f64, Option<String>)> = rows.iter().filter(|o| (o.baseline() - w.baseline()).abs() < 8.0 && o.rect.x0 > w.rect.x1).filter_map(|o| number(&o.text).map(|(v, u)| (*o, v, u))).collect();
@@ -147,6 +194,24 @@ impl Datasheet {
     /// The same, the column of `part` taken in a table with a column per part number.
     pub fn absolute_maximum_of(&self, part: Option<&str>) -> Vec<Rating> {
         let q = Heading::AbsMax.queries();
+        for page in 0..self.page_count() {
+            let h = self.page_size(page).map_or(842.0, |s| s.1);
+            for hit in self.search_page_any(page, &q).into_iter().filter(|h| !h.in_contents) {
+                let r = ratings(page, self.words(page), hit.rect.y1, h * 0.92, part);
+                if r.len() >= 2 {
+                    return r;
+                }
+            }
+        }
+        vec![]
+    }
+}
+
+impl Datasheet {
+    /// The rows of the recommended operating conditions table, read as the absolute maximum ratings are (the largest value of
+    /// each row): a part whose absolute maximum ratings give no current (TI's LM317) gives its output current here.
+    pub fn recommended_operating_of(&self, part: Option<&str>) -> Vec<Rating> {
+        let q: Vec<crate::Query> = ["recommended operating conditions", "recommended operating condition", "推奨動作条件"].iter().filter_map(|t| crate::Query::new(t)).collect();
         for page in 0..self.page_count() {
             let h = self.page_size(page).map_or(842.0, |s| s.1);
             for hit in self.search_page_any(page, &q).into_iter().filter(|h| !h.in_contents) {
@@ -253,5 +318,24 @@ mod real_pdf {
             let v = |s: &str| super::pick(&r, &[s]).map(|x| x.value);
             assert_eq!((v("VDS"), v("ID"), v("PD"), v("TJ")), (Some(30.0), Some(5.7), Some(1.4), Some(150.0)), "{r:?}");
         }
+    }
+
+    /// Rows written in words only (TI's LM317 has no symbol column): the input-output differential; a limit written from a supply
+    /// rail is not one (ADA4522's "(V-) - 300 mV to (V+) + 300 mV").
+    #[test]
+    fn rows_without_a_symbol_are_read_by_their_words() {
+        use super::ratings;
+        use crate::text::Word;
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let words = vec![
+            w("Power", 59.0, 150.0), w("dissipation", 84.0, 150.0), w("Internally", 381.0, 150.0), w("limited", 416.0, 150.0),
+            w("Input-output", 59.0, 164.0), w("voltage", 104.0, 164.0), w("differential", 132.0, 164.0), w("−0.3", 353.0, 164.0), w("40", 455.0, 164.0), w("V", 529.0, 164.0),
+            w("Input", 59.0, 178.0), w("Voltage", 82.0, 178.0), w("(V-)", 267.0, 178.0), w("-", 281.0, 178.0), w("300", 286.0, 178.0), w("mV", 301.0, 178.0),
+            w("Tstg", 137.0, 192.0), w("Storage", 59.0, 192.0), w("150", 453.0, 192.0), w("°C", 528.0, 192.0),
+        ];
+        let r = ratings(0, &words, 100.0, 300.0, None);
+        assert!(r.iter().any(|x| x.symbol == "VI-VO" && x.value == 40.0), "{r:?}");
+        assert!(!r.iter().any(|x| x.symbol == "VI"), "the rail-relative input voltage: {r:?}");
+        assert!(r.iter().any(|x| x.symbol == "Tstg"));
     }
 }

@@ -177,6 +177,9 @@ impl RegulatorInput {
             let diff = match volts.as_slice() {
                 [d] if c.contains("vin-vout") || c.contains("vi-vo") => Some(*d),
                 [d] if c.contains("vin=") || c.contains("vi=") => self.vout.parse::<f64>().ok().map(|vo| d - vo).filter(|d| *d > 0.0),
+                // the row's own words with one voltage, the difference's name borrowed from the next row ("≤ 15V · (VIN −
+                // VOUT) = 40V", TI's LM317)
+                _ if c.contains("vin-vout") || c.contains("vi-vo") => v.conditions.split(" · ").next().map(|own| with_units(own, VOLTS)).filter(|o| o.len() == 1 && v.conditions.contains(" · ")).map(|o| o[0]),
                 _ => None,
             };
             if let Some(d) = diff
@@ -304,6 +307,8 @@ mod tests {
             v(7, "Minimum", "(VIN − VOUT) = 40V", None, 3.5, Some(10.0), Some("mA")),
             v(7, "Current", "(VIN − VOUT) = 40V PD < PMAX, TJ = 25°C", Some(0.15), 0.4, None, Some("A")),
             v(7, "Ripple", "VOUT = 10V, f = 120Hz, CADJ = 10μF", Some(62.0), 64.0, None, None),
+            // the row at the small difference, its own words with one voltage and the next row's name borrowed (TI's LM317)
+            v(7, "Current", "15V (3) · (VIN − VOUT) = 40V PD < PMAX (3), TJ =", Some(1.5), 2.2, None, Some("A")),
         ];
         let mut r = RegulatorInput::default();
         r.fill_from_pdf("LM317", |s| table.iter().filter(|x| x.symbol == s).cloned().collect());
@@ -312,7 +317,7 @@ mod tests {
         assert_eq!(r.line, "0.01%/V");
         assert_eq!(r.load, "0.1% 1.49");
         assert_eq!((r.iadj.as_str(), r.iadj_max.as_str(), r.min_load.as_str()), ("50u", "100u", "3.5m"));
-        assert_eq!(r.ilim, "40 400m");
+        assert_eq!(r.ilim, "15 2.2\n40 400m");
         assert_eq!((r.rr.as_str(), r.rr_f.as_str(), r.rr_vout.as_str()), ("64", "120", "10"));
         assert!(r.found.iter().any(|(ok, l)| !ok && l.contains("ドロップアウト")), "no dropout row: said");
         // a dropout row read off by a line (5 mV) is passed over for the next

@@ -24,8 +24,9 @@ pub struct FormDraft {
     pub dims: Option<DimTable>,
     /// The recommended land patterns of the data sheet (one per package it draws).
     pub lands: Vec<LandPattern>,
-    /// The rows of the absolute maximum ratings table.
+    /// The rows of the absolute maximum ratings table, and of the recommended operating conditions (for a current the first lacks).
     pub ratings: Vec<Rating>,
+    pub recommended: Vec<Rating>,
     /// A P type (PNP, P-channel) by what the sheet says, for the symbol.
     pub p_type: Option<bool>,
     /// Use: name, kind, package, pins, body, model, ratings.
@@ -89,10 +90,12 @@ impl FormDraft {
             "フォトダイオード" => (&["VR"], &[]),
             "ダイオード" => (&["VRRM", "VRWM", "VR"], &["IF(AV)", "IFAV", "IO", "IF"]),
             "ツェナーダイオード" => (&[], &["IZM", "IZ"]),
-            _ => (&["VCC", "VDD", "VIN", "VI", "VS", "V+"], &["IO", "IOUT"]),
+            // an adjustable regulator floats: its limit is the input-output differential (LM317)
+            _ => (&["VCC", "VDD", "VIN", "VI", "VS", "V+", "VI-VO"], &["IO", "IOUT"]),
         };
         let p: &[&str] = if cat == "フォトカプラ" { &["PC", "Ptot", "PD"] } else { &["PD", "Ptot", "PV"] };
-        [pick(r, v), pick(r, i), pick(r, p), pick(r, &["TJ", "Tj"])]
+        // a current the absolute maximum ratings do not give (they say "internally limited"): the recommended operating maximum
+        [pick(r, v), pick(r, i).or_else(|| pick(&self.recommended, i)), pick(r, p), pick(r, &["TJ", "Tj"])]
     }
 
     /// The recommended land pattern of the chosen package (its family and pin count), when the data sheet draws it in two rows.
@@ -162,9 +165,10 @@ impl PartForm {
         let lands = ds.land_patterns();
         // a table with a column per part number ("TIP120, TIP121, TIP122") gives the named part's column
         let ratings = ds.absolute_maximum_of(name.as_deref());
+        let recommended = ds.recommended_operating_of(name.as_deref());
         let model = has_model(kind);
         let p_type = ds.p_type();
-        let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, p_type, open: true };
+        let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, recommended, p_type, open: true };
         d.use_[6] = d.max_ratings().iter().any(Option::is_some);
         Some(d)
     }
@@ -262,7 +266,8 @@ impl PartForm {
             for (k, (field, unit)) in [(&mut self.rt_v, "V"), (&mut self.rt_i, "A"), (&mut self.rt_p, "W")].into_iter().enumerate() {
                 if let Some(r) = m[k] {
                     *field = passive::eng(r.value);
-                    put.push(format!("{} {}{unit}", r.symbol, passive::eng(r.value)));
+                    let from = if d.recommended.iter().any(|x| std::ptr::eq(x, r)) { format!(" (p.{} の推奨動作条件の最大)", r.page + 1) } else { String::new() };
+                    put.push(format!("{} {}{unit}{from}", r.symbol, passive::eng(r.value)));
                 }
             }
             if let Some(r) = m[3] {

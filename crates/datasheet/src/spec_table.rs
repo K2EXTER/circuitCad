@@ -322,6 +322,22 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f
     };
     let own = at(y);
     if own.contains('=') {
+        // a range broken over two lines ("IO = 10mA to" over "1500mA, TJ = 25°C", TI's LM317): its end from the next line
+        let toks: Vec<&str> = own.split(' ').collect();
+        if let Some(i) = toks.iter().position(|t| *t == "to")
+            && !toks.get(i + 1).is_some_and(|n| n.starts_with(|c: char| c.is_ascii_digit()))
+        {
+            let next = words
+                .iter()
+                .filter(|w| in_cond(w) && centre(&w.rect).1 > y + 4.0 && centre(&w.rect).1 < y + 16.0)
+                .min_by(|a, b| (centre(&a.rect).1, a.rect.x0).partial_cmp(&(centre(&b.rect).1, b.rect.x0)).unwrap_or(std::cmp::Ordering::Equal))
+                .filter(|w| w.text.starts_with(|c: char| c.is_ascii_digit()));
+            if let Some(n) = next {
+                let mut t: Vec<&str> = toks.clone();
+                t.insert(i + 1, n.text.trim());
+                return t.join(" ");
+            }
+        }
         return own;
     }
     let reach = if downward { 80.0 } else { 30.0 };
@@ -351,8 +367,9 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f
 /// The unit in the units column nearest to line `y` within the row.
 fn unit_near(band: &[&&Word], h: &Header, y: f32) -> Option<String> {
     let ux = h.unit?;
+    // a unit with a prefix, or a percentage ("%/V", "%VO", "%/W": a regulator's line and load regulation)
     band.iter()
-        .filter(|w| (centre(&w.rect).0 - ux).abs() < 20.0 && prefix(&w.text).is_some())
+        .filter(|w| (centre(&w.rect).0 - ux).abs() < 20.0 && (prefix(&w.text).is_some() || w.text.trim().starts_with('%')))
         .min_by(|a, b| (centre(&a.rect).1 - y).abs().total_cmp(&(centre(&b.rect).1 - y).abs()))
         .map(|w| w.text.trim().to_string())
 }
@@ -371,6 +388,22 @@ mod tests {
             w("VF", 20.0, 134.0), w("順電圧", 70.0, 134.0), w("V", 384.0, 134.0),
             w("IF=1A", 150.0, 140.0), w("0.45", 300.0, 140.0), w("0.55", 340.0, 140.0),
         ]
+    }
+
+    /// TI's LM317: a percentage unit ("%/V") is the row's, not the "mV" of the next; a range broken over two lines takes its end.
+    #[test]
+    fn a_percentage_unit_and_a_range_over_two_lines_are_read() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let words = vec![
+            w("PARAMETER", 60.0, 100.0), w("TEST", 185.0, 100.0), w("CONDITIONS", 210.0, 100.0), w("MIN", 437.0, 100.0), w("TYP", 473.0, 100.0), w("MAX", 502.0, 100.0), w("UNIT", 529.0, 100.0),
+            w("Line", 60.0, 120.0), w("TJ", 185.0, 120.0), w("=", 196.0, 120.0), w("25°C", 203.0, 120.0), w("0.01", 473.0, 120.0), w("0.04", 504.0, 120.0), w("%/V", 531.0, 120.0),
+            w("Load", 60.0, 150.0), w("IO", 185.0, 150.0), w("=", 196.0, 150.0), w("10mA", 203.0, 150.0), w("to", 230.0, 150.0), w("20", 479.0, 150.0), w("70", 511.0, 150.0), w("mV", 533.0, 150.0),
+            w("1500mA,", 185.0, 160.0),
+        ];
+        let line = find(0, &words, "Line");
+        assert_eq!((line[0].typ, line[0].unit.as_deref()), (Some(0.01), Some("%/V")), "{line:?}");
+        let load = find(0, &words, "Load");
+        assert!(load[0].conditions.contains("10mA to 1500mA"), "{load:?}");
     }
 
     #[test]
