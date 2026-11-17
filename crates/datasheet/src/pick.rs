@@ -212,11 +212,13 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
     let mut labels: Vec<(u8, String, Rect)> = lines_in(words, around).into_iter().filter_map(|(t, r)| wanted(curve, names, &t).map(|k| (k, t, r))).collect();
     labels.sort_by_key(|l| l.0);
     match traces.len() {
-        0 => return Pick::None,
+        // (no curve: a legend may still give one by its colour)
+        0 if labels.is_empty() => return Pick::None,
         // one curve found: that one, unless the field's own label is printed away from it (the other curves of the
         // graph were not found)
-        1 if !labels.iter().any(|l| l.0 == 0 && distance(l.2, &traces[0]) >= 25.0) => {
-            return if goes_its_way(&traces[0], curve, axes) { Pick::One { path: traces.remove(0), by: String::new() } } else { Pick::Several(traces) };
+        // (one that goes the wrong way is pieces of other curves joined: the labels may still find the curve by its colour)
+        1 if !labels.iter().any(|l| l.0 == 0 && distance(l.2, &traces[0]) >= 25.0) && goes_its_way(&traces[0], curve, axes) => {
+            return Pick::One { path: traces.remove(0), by: String::new() };
         }
         _ => {}
     }
@@ -235,10 +237,100 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
         .filter(|(d, i, by, r)| !names_a_curve(by) || !others.iter().any(|o| o != r && distance(*o, &traces[*i]) < *d - 1.0))
         .map(|(d, i, by, _)| (d, i, by))
         .min_by(|a, b| a.0.total_cmp(&b.0));
-    match best {
-        Some((d, i, by)) if d < 25.0 => Pick::One { path: traces.swap_remove(i), by },
-        _ => Pick::Several(all),
+    if let Some((d, i, by)) = best
+        && d < 25.0
+    {
+        return Pick::One { path: traces.swap_remove(i), by };
     }
+    // the wanted label away from its curve with an arrow to it (MCP1700's "TJ = +25°C" between two curves): when every
+    // other curve has its own temperature label on it and one curve is left, that one
+    if kind == 1
+        && let Some(by) = labels.iter().find(|l| l.0 == kind).map(|l| l.1.clone())
+    {
+        let other: Vec<Rect> = lines_in(words, around).into_iter().filter(|(t, _)| names_a_curve(t) && wanted(curve, names, t) != Some(1)).map(|l| l.1).collect();
+        // the curve each other label names: the nearest to it, when it is close
+        let claimed: Vec<usize> = other
+            .iter()
+            .filter_map(|o| traces.iter().enumerate().map(|(i, t)| (distance(*o, t), i)).min_by(|a, b| a.0.total_cmp(&b.0)).filter(|m| m.0 < 25.0).map(|m| m.1))
+            .collect();
+        let left: Vec<usize> = (0..traces.len()).filter(|i| !claimed.contains(i)).collect();
+        // (and it runs across most of the plot: a piece where the curves bunch up is no curve, Vishay's SS12)
+        let across = |t: &[(f32, f32)]| t.last().zip(t.first()).map_or(0.0, |(l, f)| l.0 - f.0) >= 0.5 * (b.x1 - b.x0);
+        if traces.len() >= 2 && left.len() == 1 && claimed.len() == traces.len() - 1 && across(&traces[left[0]]) {
+            return Pick::One { path: traces.swap_remove(left[0]), by };
+        }
+    }
+    // a legend: the label beside a short line in its curve's colour (LT3045's "25°C" after a green line), the curve
+    // followed by that colour
+    for l in labels.iter().filter(|l| l.0 == kind) {
+        if let Some(path) = by_colour(img, px_per_pt, b, l.2)
+            && goes_its_way(&path, curve, axes)
+        {
+            return Pick::One { path, by: l.1.clone() };
+        }
+    }
+    if all.is_empty() { Pick::None } else { Pick::Several(all) }
+}
+
+/// The colour of a legend's line sample just left of (or else right of) a label: the mean of its coloured pixels (not
+/// black, grey or white), None without one.
+fn legend_colour(img: &crate::PageImage, k: f32, label: Rect) -> Option<[f32; 3]> {
+    let side = |x0: f32, x1: f32| {
+        let mut sum = [0.0f32; 3];
+        let mut n = 0;
+        for py in ((label.y0 - 1.0) * k) as usize..((label.y1 + 1.0) * k) as usize {
+            for px in (x0.max(0.0) * k) as usize..(x1 * k) as usize {
+                if let Some(c) = pixel(img, px, py)
+                    && coloured(c)
+                {
+                    for (s, v) in sum.iter_mut().zip(c) {
+                        *s += v as f32;
+                    }
+                    n += 1;
+                }
+            }
+        }
+        (n >= 6).then(|| sum.map(|s| s / n as f32))
+    };
+    side(label.x0 - 30.0, label.x0 - 1.0).or_else(|| side(label.x1 + 1.0, label.x1 + 30.0))
+}
+
+/// The pixel at (px, py), None outside the picture.
+fn pixel(img: &crate::PageImage, px: usize, py: usize) -> Option<[u8; 3]> {
+    (px < img.width && py < img.height).then(|| {
+        let i = (py * img.width + px) * 4;
+        [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]]
+    })
+}
+
+/// A pixel of a colour (red, green, blue lines), not black, grey or white.
+fn coloured(c: [u8; 3]) -> bool {
+    let (hi, lo) = (c.iter().copied().max().unwrap_or(0), c.iter().copied().min().unwrap_or(0));
+    hi - lo >= 60
+}
+
+/// The curve of the legend's colour beside `label`, followed through the plot `b` column by column (the middle of the
+/// pixels near that colour, away from the legend itself): None when there is no legend colour, or the colour is found
+/// in fewer than a quarter of the plot's columns.
+fn by_colour(img: &crate::PageImage, k: f32, b: Rect, label: Rect) -> Option<Vec<(f32, f32)>> {
+    let want = legend_colour(img, k, label)?;
+    let legend = Rect { x0: label.x0 - 33.0, y0: label.y0 - 4.0, x1: label.x1 + 33.0, y1: label.y1 + 4.0 };
+    let near = |c: [u8; 3]| c.iter().zip(want).map(|(a, w)| (*a as f32 - w).abs()).sum::<f32>() < 70.0;
+    let (x0, x1, y0, y1) = ((b.x0 * k) as usize, (b.x1 * k) as usize, (b.y0 * k) as usize, (b.y1 * k) as usize);
+    let mut path = vec![];
+    for px in x0..=x1 {
+        let x = px as f32 / k;
+        let ys: Vec<usize> = (y0..=y1)
+            .filter(|&py| {
+                let y = py as f32 / k;
+                !(x >= legend.x0 && x <= legend.x1 && y >= legend.y0 && y <= legend.y1) && pixel(img, px, py).is_some_and(|c| coloured(c) && near(c))
+            })
+            .collect();
+        if let Some(&y) = ys.get(ys.len() / 2) {
+            path.push((x, y as f32 / k));
+        }
+    }
+    (path.len() * 4 > x1.saturating_sub(x0)).then_some(path)
 }
 
 #[cfg(test)]
@@ -311,6 +403,45 @@ mod tests {
         // one curve: that one
         let img = page(&[(60.0, -0.2)]);
         assert!(matches!(pick(&img, 2.0, &[], &axes(), Curve::Forward, &[]), Pick::One { by, .. } if by.is_empty()));
+    }
+
+    #[test]
+    fn a_label_away_from_its_curve_and_a_legend_by_colour() {
+        let y_at = |p: &Pick, x: f32| match p {
+            Pick::One { path, .. } => path.iter().find(|q| (q.0 - x).abs() < 0.3).map(|q| q.1),
+            _ => None,
+        };
+        // MCP1700: "+125°C" and "−40°C" on their curves, "TJ = +25°C" off them with an arrow: the curve left over
+        let img = page(&[(40.0, -0.2), (60.0, -0.2), (80.0, -0.2)]);
+        let words = vec![label("+125°C", 30.0, 36.0), label("TJ = +25°C", 100.0, 8.0), label("−40°C", 30.0, 76.0)];
+        let p = pick(&img, 2.0, &words, &axes(), Curve::DcGain, &[]);
+        assert!(matches!(&p, Pick::One { by, .. } if by == "TJ = +25°C"), "{p:?}");
+        assert!((y_at(&p, 100.0).unwrap() - 44.5).abs() < 1.5, "{p:?}");
+
+        // LT3045: flat lines in colours (the grey of a dashed line's gaps is not traced) and a legend of short lines
+        let k = 2.0f32;
+        let (w, h) = ((200.0 * k) as usize, (120.0 * k) as usize);
+        let mut rgba = vec![255u8; w * h * 4];
+        let mut draw = |x0: f32, x1: f32, y: f32, c: [u8; 3]| {
+            let mut x = x0;
+            while x <= x1 {
+                for dy in 0..2 {
+                    let i = (((y * k) as usize + dy) * w + (x * k) as usize) * 4;
+                    rgba[i..i + 3].copy_from_slice(&c);
+                }
+                x += 0.25;
+            }
+        };
+        let (red, green) = ([220, 30, 40], [40, 140, 60]);
+        draw(20.0, 180.0, 40.0, red);
+        draw(20.0, 180.0, 60.0, green);
+        draw(30.0, 45.0, 90.0, red);
+        draw(30.0, 45.0, 100.0, green);
+        let img = crate::PageImage { width: w, height: h, rgba };
+        let words = vec![label("150°C", 50.0, 90.0), label("25°C", 50.0, 100.0)];
+        let p = pick(&img, 2.0, &words, &axes(), Curve::Dropout, &[]);
+        assert!(matches!(&p, Pick::One { by, .. } if by == "25°C"), "{p:?}");
+        assert!((y_at(&p, 100.0).unwrap() - 60.5).abs() < 1.0, "the green line, not the legend's: {p:?}");
     }
 
     #[test]
