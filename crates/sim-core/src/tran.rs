@@ -303,405 +303,609 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
 /// nodes stores a value of every node and element at every step otherwise, which is more work (and memory) than the
 /// simulation itself. `None` records everything.
 pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(&str) -> bool>) -> Result<TranResult, SimError> {
-    if !(s.tstop.is_finite() && s.tstop > 0.0) {
-        return Err(SimError::Invalid("終了時間は正の値にしてください".into()));
-    }
-    if !(s.tstep.is_finite() && s.tstep > 0.0) {
-        return Err(SimError::Invalid("時間刻みは正の値にしてください".into()));
-    }
-    if s.tstop / s.tstep > MAX_POINTS {
-        return Err(SimError::Invalid(format!("終了時間 / 時間刻み が大きすぎます (最大 {} 点)", MAX_POINTS as u64)));
-    }
-    if !has_ground(circuit) {
-        return Err(SimError::NoGround);
-    }
-    let mut warnings = floating_warnings(circuit);
-    for e in &circuit.elements {
-        if let crate::Element::VSource { name, wave, .. } | crate::Element::ISource { name, wave, .. } = e
-            && let Some(ts) = wave.noise_period()
-                && s.tstep > ts / 3.0 {
-                    warnings.push(format!(
-                        "{name}: ノイズの最高周波数に対して時間刻みが粗すぎます (刻みは {:.3e} 秒以下を推奨)",
-                        ts / 3.0
-                    ));
-                }
-    }
-    let cm = compile(circuit);
+    let mut run = TranRun::start(circuit, s, keep)?;
+    run.advance_to(s.tstop)?;
+    Ok(run.finish())
+}
 
-    // initial point
-    let (mut x, mut vj) = if s.uic {
-        (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
-    } else {
-        match start_point(circuit, &cm) {
-            Ok((x, vj)) => (x, vj),
-            // an oscillator has no stable operating point (with the capacitors open it sits on
-            // the unstable balance point): start from zero charge instead, like SPICE's UIC
-            Err(SimError::NoConvergence) => {
-                warnings.push("DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです。ゆっくり落ち着く回路では、始めの部分が電源を入れた直後の様子になります)".into());
-                (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
+/// A transient run that keeps its state between calls: started once, then solved on to later and later times (`advance_to`),
+/// with the sources changed in between if wanted (`set_source`). `transient` is one `advance_to` up to the stop time; a run that
+/// is solved in pieces takes the same steps except that each piece ends on a step (like a source corner), so the answers agree
+/// to the accuracy of the step control (exactly, for a circuit without capacitors and inductors, whose answer does not depend on
+/// the steps). For a display that follows the clock (the live logic view of the schematic), a long session against the
+/// hardware, or a waveform that is watched while values change.
+pub struct TranRun {
+    cm: crate::dc::Compiled,
+    s: TranSettings,
+    x: Vec<f64>,
+    vj: Vec<f64>,
+    cap_v: Vec<f64>,
+    cap_i: Vec<f64>,
+    ind_i: Vec<f64>,
+    ind_v: Vec<f64>,
+    /// The times the integrator must land on (source corners) and the next one not yet passed.
+    bps: Vec<f64>,
+    bp_idx: usize,
+    result: TranResult,
+    warnings: Vec<String>,
+    /// (node, index in `result.signals`) of the node voltages kept, and the index of every element's current (None = not kept).
+    node_slots: Vec<(usize, usize)>,
+    element_slots: Vec<Option<usize>>,
+    any_element: bool,
+    eps: f64,
+    t: f64,
+    force_be: bool,
+    lte_rel: f64,
+    h_min: f64,
+    h_ctrl: f64,
+    hist: Vec<Sample>,
+    wiring_l: Vec<usize>,
+    abs_i: Vec<f64>,
+    crawl: bool,
+}
+
+impl TranRun {
+    /// Checks the settings, finds the starting point (the DC operating point, or zero with `uic`) and records it at time 0.
+    /// `s.tstop` is the end the run may be solved to (`extend` moves it on).
+    pub fn start(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(&str) -> bool>) -> Result<TranRun, SimError> {
+        if !(s.tstop.is_finite() && s.tstop > 0.0) {
+            return Err(SimError::Invalid("終了時間は正の値にしてください".into()));
+        }
+        if !(s.tstep.is_finite() && s.tstep > 0.0) {
+            return Err(SimError::Invalid("時間刻みは正の値にしてください".into()));
+        }
+        if s.tstop / s.tstep > MAX_POINTS {
+            return Err(SimError::Invalid(format!("終了時間 / 時間刻み が大きすぎます (最大 {} 点)", MAX_POINTS as u64)));
+        }
+        if !has_ground(circuit) {
+            return Err(SimError::NoGround);
+        }
+        let mut warnings = floating_warnings(circuit);
+        for e in &circuit.elements {
+            if let crate::Element::VSource { name, wave, .. } | crate::Element::ISource { name, wave, .. } = e
+                && let Some(ts) = wave.noise_period()
+                && s.tstep > ts / 3.0
+            {
+                warnings.push(format!("{name}: ノイズの最高周波数に対して時間刻みが粗すぎます (刻みは {:.3e} 秒以下を推奨)", ts / 3.0));
             }
-            Err(e) => return Err(e),
         }
-    };
+        let cm = compile(circuit);
 
-    // memory elements start from the levels of the initial point (solve_op settles them itself, a start with held capacitor
-    // voltages or from zero needs this)
-    for _ in 0..4 {
-        if !(cm.has_seq() && cm.seq_update(None, &x)) {
-            break;
-        }
-    }
-
-    // digital cells start from the levels of the initial point
-    if cm.has_cells() {
-        cm.dig_begin_run(&x);
-        cm.fix_nodes(&mut x);
-    }
-
-    let mut cap_v = vec![0.0; cm.n_caps];
-    let mut cap_i = vec![0.0; cm.n_caps];
-    let mut ind_i = vec![0.0; cm.n_inds];
-    let mut ind_v = vec![0.0; cm.n_inds];
-    for e in &cm.ce {
-        match e {
-            Ce::C { a, b, idx, .. } => cap_v[*idx] = v(&x, *a) - v(&x, *b),
-            Ce::L { br, idx, .. } => ind_i[*idx] = x[*br],
-            Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
-                let pol = if m.pnp { -1.0 } else { 1.0 };
-                cap_v[*idx] = pol * (v(&x, *bi) - v(&x, *ei));
-                cap_v[*idx + 1] = pol * (v(&x, *bi) - v(&x, *ci));
-            }
-            Ce::D { ai, k, cap: Some(idx), .. } => cap_v[*idx] = v(&x, *ai) - v(&x, *k),
-            Ce::Cq { a, b, c, idx, .. } => {
-                cap_v[*idx] = v(&x, *a) - v(&x, *b);
-                cap_v[*idx + 1] = c.eval(&x, 0.0).0;
-            }
-            _ => {}
-        }
-    }
-
-    // times the integrator must land on
-    let mut bps: Vec<f64> = vec![];
-    for e in &circuit.elements {
-        match e {
-            crate::Element::VSource { wave, .. } | crate::Element::ISource { wave, .. } => bps.extend(wave.breakpoints(s.tstop)),
-            _ => {}
-        }
-    }
-    bps.sort_by(|a, b| a.total_cmp(b));
-    bps.dedup_by(|a, b| (*a - *b).abs() <= 1e-15 * s.tstop.max(1e-12));
-    let mut bp_idx = 0;
-
-    let mut result = TranResult { time: vec![], signals: vec![], warnings: vec![], retries: 0, rejected: 0, timing: TimingReport::default() };
-    let wanted = |name: &str| keep.is_none_or(|f| f(name));
-    // (node, index in `result.signals`) of the node voltages kept, and the index of every element's current (None = not kept)
-    let mut node_slots: Vec<(usize, usize)> = vec![];
-    for i in 1..cm.node_names.len() {
-        let name = format!("V({})", cm.node_names[i]);
-        if wanted(&name) {
-            node_slots.push((i, result.signals.len()));
-            result.signals.push(Signal { name, unit: "V", values: vec![] });
-        }
-    }
-    let first = cm.element_results(&x, Some(0.0), &cap_i);
-    let mut element_slots: Vec<Option<usize>> = vec![];
-    for e in &first {
-        let name = format!("I({})", e.name);
-        if wanted(&name) {
-            element_slots.push(Some(result.signals.len()));
-            result.signals.push(Signal { name, unit: "A", values: vec![] });
+        // initial point
+        let (mut x, vj) = if s.uic {
+            (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
         } else {
-            element_slots.push(None);
+            match start_point(circuit, &cm) {
+                Ok((x, vj)) => (x, vj),
+                // an oscillator has no stable operating point (with the capacitors open it sits on
+                // the unstable balance point): start from zero charge instead, like SPICE's UIC
+                Err(SimError::NoConvergence) => {
+                    warnings.push("DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです。ゆっくり落ち着く回路では、始めの部分が電源を入れた直後の様子になります)".into());
+                    (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
+                }
+                Err(e) => return Err(e),
+            }
+        };
+
+        // memory elements start from the levels of the initial point (solve_op settles them itself, a start with held capacitor
+        // voltages or from zero needs this)
+        for _ in 0..4 {
+            if !(cm.has_seq() && cm.seq_update(None, &x)) {
+                break;
+            }
         }
+
+        // digital cells start from the levels of the initial point
+        if cm.has_cells() {
+            cm.dig_begin_run(&x);
+            cm.fix_nodes(&mut x);
+        }
+
+        let mut cap_v = vec![0.0; cm.n_caps];
+        let cap_i = vec![0.0; cm.n_caps];
+        let mut ind_i = vec![0.0; cm.n_inds];
+        let ind_v = vec![0.0; cm.n_inds];
+        for e in &cm.ce {
+            match e {
+                Ce::C { a, b, idx, .. } => cap_v[*idx] = v(&x, *a) - v(&x, *b),
+                Ce::L { br, idx, .. } => ind_i[*idx] = x[*br],
+                Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
+                    let pol = if m.pnp { -1.0 } else { 1.0 };
+                    cap_v[*idx] = pol * (v(&x, *bi) - v(&x, *ei));
+                    cap_v[*idx + 1] = pol * (v(&x, *bi) - v(&x, *ci));
+                }
+                Ce::D { ai, k, cap: Some(idx), .. } => cap_v[*idx] = v(&x, *ai) - v(&x, *k),
+                Ce::Cq { a, b, c, idx, .. } => {
+                    cap_v[*idx] = v(&x, *a) - v(&x, *b);
+                    cap_v[*idx + 1] = c.eval(&x, 0.0).0;
+                }
+                _ => {}
+            }
+        }
+
+        let mut result = TranResult { time: vec![], signals: vec![], warnings: vec![], retries: 0, rejected: 0, timing: TimingReport::default() };
+        let wanted = |name: &str| keep.is_none_or(|f| f(name));
+        let mut node_slots: Vec<(usize, usize)> = vec![];
+        for i in 1..cm.node_names.len() {
+            let name = format!("V({})", cm.node_names[i]);
+            if wanted(&name) {
+                node_slots.push((i, result.signals.len()));
+                result.signals.push(Signal { name, unit: "V", values: vec![] });
+            }
+        }
+        let first = cm.element_results(&x, Some(0.0), &cap_i);
+        let mut element_slots: Vec<Option<usize>> = vec![];
+        for e in &first {
+            let name = format!("I({})", e.name);
+            if wanted(&name) {
+                element_slots.push(Some(result.signals.len()));
+                result.signals.push(Signal { name, unit: "A", values: vec![] });
+            } else {
+                element_slots.push(None);
+            }
+        }
+        let any_element = element_slots.iter().any(|s| s.is_some());
+        // the absolute current tolerance of every inductor; the board's wiring inductors and the capacitors' series inductances raise
+        // theirs with the current they carry (`WIRING_INDUCTOR`, `ESL_INDUCTORS`)
+        let wiring_l: Vec<usize> = cm.ce.iter().filter_map(|e| match e { Ce::L { name, idx, .. } if name.ends_with(WIRING_INDUCTOR) || ESL_INDUCTORS.iter().any(|e| name.ends_with(e)) => Some(*idx), _ => None }).collect();
+        let abs_i = vec![LTE_ABS_I; cm.n_inds];
+        let hist = vec![(0.0, cap_v.clone(), ind_i.clone())];
+        let mut run = TranRun {
+            s: s.clone(),
+            x,
+            vj,
+            cap_v,
+            cap_i,
+            ind_i,
+            ind_v,
+            bps: vec![],
+            bp_idx: 0,
+            result,
+            warnings,
+            node_slots,
+            element_slots,
+            any_element,
+            eps: 1e-12 * s.tstop,
+            t: 0.0,
+            // first step: no derivative history yet
+            force_be: true,
+            lte_rel: crate::options::options().lte_reltol,
+            // `tstep` is the largest step; `h_ctrl` is the step the error control currently trusts
+            h_min: s.tstep * 1e-4,
+            h_ctrl: s.tstep / 10.0,
+            // the last accepted points (time, capacitor voltages, inductor currents) for the error estimate;
+            // a source corner breaks the smoothness, so the history restarts there
+            hist,
+            wiring_l,
+            abs_i,
+            // the circuit is in a transition the largest step cannot cross but small steps can follow (see `CRAWL`)
+            crawl: false,
+            cm,
+        };
+        run.find_corners();
+        run.record();
+        Ok(run)
     }
-    let any_element = element_slots.iter().any(|s| s.is_some());
-    let record = |res: &mut TranResult, t: f64, x: &[f64], cap_i: &[f64], cm: &crate::dc::Compiled| {
-        res.time.push(t);
-        for &(i, si) in &node_slots {
-            res.signals[si].values.push(cm.node_voltage(x, i));
+
+    /// The source corners from now to the end of the run, in order.
+    fn find_corners(&mut self) {
+        let mut bps: Vec<f64> = vec![];
+        for e in &self.cm.ce {
+            if let Ce::V { wave, .. } | Ce::I { wave, .. } = e {
+                bps.extend(wave.breakpoints(self.s.tstop).into_iter().filter(|&b| b > self.t + self.eps));
+            }
         }
-        if any_element {
+        bps.sort_by(|a, b| a.total_cmp(b));
+        bps.dedup_by(|a, b| (*a - *b).abs() <= 1e-15 * self.s.tstop.max(1e-12));
+        self.bps = bps;
+        self.bp_idx = 0;
+    }
+
+    fn record(&mut self) {
+        let res = &mut self.result;
+        res.time.push(self.t);
+        for &(i, si) in &self.node_slots {
+            res.signals[si].values.push(self.cm.node_voltage(&self.x, i));
+        }
+        if self.any_element {
             let mut k = 0;
-            cm.visit_elements(x, Some(t), cap_i, |_, current, _, _, _| {
-                if let Some(Some(si)) = element_slots.get(k) {
+            let slots = &self.element_slots;
+            self.cm.visit_elements(&self.x, Some(self.t), &self.cap_i, |_, current, _, _, _| {
+                if let Some(Some(si)) = slots.get(k) {
                     res.signals[*si].values.push(current);
                 }
                 k += 1;
             });
         }
-    };
-    record(&mut result, 0.0, &x, &cap_i, &cm);
+    }
 
-    let eps = 1e-12 * s.tstop;
-    let mut t = 0.0;
-    let mut force_be = true; // first step: no derivative history yet
-    let lte_rel = crate::options::options().lte_reltol;
-    // `tstep` is the largest step; `h_ctrl` is the step the error control currently trusts
-    let h_min = s.tstep * 1e-4;
-    let mut h_ctrl = s.tstep / 10.0;
-    // the last accepted points (time, capacitor voltages, inductor currents) for the error estimate;
-    // a source corner breaks the smoothness, so the history restarts there
-    let mut hist: Vec<(f64, Vec<f64>, Vec<f64>)> = vec![(0.0, cap_v.clone(), ind_i.clone())];
-    // the absolute current tolerance of every inductor; the board's wiring inductors and the capacitors' series inductances raise
-    // theirs with the current they carry (`WIRING_INDUCTOR`, `ESL_INDUCTORS`)
-    let wiring_l: Vec<usize> = cm.ce.iter().filter_map(|e| match e { Ce::L { name, idx, .. } if name.ends_with(WIRING_INDUCTOR) || ESL_INDUCTORS.iter().any(|e| name.ends_with(e)) => Some(*idx), _ => None }).collect();
-    let mut abs_i = vec![LTE_ABS_I; cm.n_inds];
-    // the circuit is in a transition the largest step cannot cross but small steps can follow (see `CRAWL`)
-    let mut crawl = false;
-    while t < s.tstop - eps {
-        while bp_idx < bps.len() && bps[bp_idx] <= t + eps {
-            bp_idx += 1;
-        }
-        let mut h = h_ctrl.min(s.tstep).min(s.tstop - t);
-        let wanted = h;
-        let mut lands_on_bp = false;
-        if bp_idx < bps.len() && t + h >= bps[bp_idx] - eps {
-            h = bps[bp_idx] - t;
-            lands_on_bp = true;
-        }
-        // the next change of an output that sits on an analog node (a delayed output of a digital cell): land a step on it
-        if cm.has_cells()
-            && let Some(te) = cm.dig_next_event()
-            && te > t + eps
-            && te < t + h - eps
-        {
-            h = te - t;
-        }
-        if t + h >= s.tstop - eps {
-            h = s.tstop - t;
-        }
+    /// The time the run has been solved to.
+    pub fn time(&self) -> f64 {
+        self.t
+    }
 
-        let mut retried = false;
-        let mut rejects = 0;
-        // the size that failed first and whether the largest step was tried, for `crawl` after the step
-        let mut step_first;
-        let mut step_jumped = false;
-        // one pass per tried step size: Newton (shrinking on failure), then the error check
-        let (att, ratio, order) = 'step: loop {
-            let mut tries = 0;
-            let mut h_back = 0.0;
-            let h_first = h;
-            step_first = h_first;
-            // the largest step was tried after a failure: if it lands, the circuit has flipped (see `SNAP_EARLY`)
-            let mut jumped = false;
-            let att: Attempt = loop {
-                let trap = !(force_be || retried);
-                let ctx = Ctx {
-                    gmin: crate::options::options().gmin,
-                    scale: 1.0,
-                    t: t + h,
-                    dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v, capped: tries < CAPPED_TRIES }),
-                    sw_widen: 1.0,
-                    seed_g: None,
-                };
-                let solved = if crawl && tries < 4 && !jumped { cm.newton_plain_capped(x.clone(), vj.clone(), &ctx, CRAWL_CAP) } else { cm.newton(x.clone(), vj.clone(), &ctx) };
-                match solved {
-                    Ok(a) if jumped && h > JUMP_SEARCH * h_first => {
-                        // The largest step landed beyond the flip, which may lie anywhere within it: the step would draw the edge over
-                        // its whole length and hand a later digital input the new level that much late (a 555's output and the gate
-                        // after it, 15 us late at 10 us steps). Look for the shortest step that still lands, between the size that
-                        // failed and this one (by halving their ratio, as fails cost the most): the edge is then within a factor
-                        // `JUMP_SEARCH` of the step that found it.
-                        let (mut lo, mut hi, mut a) = (h_first, h, a);
-                        while hi > JUMP_SEARCH * lo {
-                            let mid = (lo * hi).sqrt();
-                            let ctx = Ctx {
-                                gmin: crate::options::options().gmin,
-                                scale: 1.0,
-                                t: t + mid,
-                                dynamic: Some(Dyn { h: mid, trap: false, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v, capped: true }),
-                                sw_widen: 1.0,
-                                seed_g: None,
-                            };
-                            match cm.newton(x.clone(), vj.clone(), &ctx) {
-                                Ok(b) => (hi, a) = (mid, b),
-                                Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
-                                Err(crate::dc::Fail::NoConv) => {
-                                    result.retries += 1;
-                                    lo = mid;
+    /// The end the run may be solved to.
+    pub fn stop_time(&self) -> f64 {
+        self.s.tstop
+    }
+
+    /// Lets the run go on to `tstop` (a later end than the one it started with).
+    pub fn extend(&mut self, tstop: f64) {
+        if tstop > self.s.tstop {
+            self.s.tstop = tstop;
+            self.find_corners();
+        }
+    }
+
+    /// Changes the waveform of the voltage or current source `name` from now on (a switch flipped by hand, a clock driven by the
+    /// user). The change is a corner: the next step starts afresh (backward Euler, no error history), short. Returns whether there
+    /// is such a source.
+    pub fn set_source(&mut self, name: &str, wave: crate::waveform::Waveform) -> bool {
+        let mut found = false;
+        for e in &mut self.cm.ce {
+            if let Ce::V { name: n, wave: w, .. } | Ce::I { name: n, wave: w, .. } = e
+                && n == name
+            {
+                *w = wave.clone();
+                found = true;
+            }
+        }
+        if found {
+            self.force_be = true;
+            self.hist.clear();
+            self.h_ctrl = self.h_min;
+            self.find_corners();
+        }
+        found
+    }
+
+    /// The voltage of node `name` now (digital nets included).
+    pub fn voltage(&self, name: &str) -> Option<f64> {
+        let i = self.cm.node_names.iter().position(|n| n == name)?;
+        Some(self.cm.node_voltage(&self.x, i))
+    }
+
+    /// Every node (but ground) with its voltage now.
+    pub fn voltages(&self) -> Vec<(String, f64)> {
+        (1..self.cm.node_names.len()).map(|i| (self.cm.node_names[i].clone(), self.cm.node_voltage(&self.x, i))).collect()
+    }
+
+    /// When the next output of a digital cell is due to change (its propagation delay running), if one is on its way.
+    pub fn next_digital_event(&self) -> Option<f64> {
+        self.cm.dig_next_any_event()
+    }
+
+    /// The largest supply (volts between the two supply pins) of the digital cells now: the High level of the logic.
+    pub fn logic_supply(&self) -> Option<f64> {
+        self.cm.dig_supply_max()
+    }
+
+    /// The names and stored states (0 / 1) of the flip-flops and latches among the digital cells.
+    pub fn cell_states(&self) -> Vec<(String, bool)> {
+        self.cm.cell_states()
+    }
+
+    /// Takes the points recorded since the start or the last `drain` (the signals keep their names; the run goes on recording).
+    pub fn drain(&mut self) -> TranResult {
+        let mut out = TranResult { time: std::mem::take(&mut self.result.time), signals: vec![], warnings: vec![], retries: self.result.retries, rejected: self.result.rejected, timing: TimingReport::default() };
+        for s in &mut self.result.signals {
+            out.signals.push(Signal { name: s.name.clone(), unit: s.unit, values: std::mem::take(&mut s.values) });
+        }
+        out
+    }
+
+    /// Solves on from the present time to `t_end` (at most the stop time), recording every accepted step; the last step lands on
+    /// `t_end`. Nothing happens when `t_end` is not later than now. A digital output on an analog node (one behind its output
+    /// resistance) that changes exactly at `t_end` is in the circuit equations of the next step, as in a run solved at once: the
+    /// voltages read now still have the old level there (the digital nets have the new one). Solve a little past an event to see it.
+    pub fn advance_to(&mut self, t_end: f64) -> Result<(), SimError> {
+        let t_end = t_end.min(self.s.tstop);
+        let s = self.s.clone();
+        let eps = self.eps;
+        let (h_min, lte_rel) = (self.h_min, self.lte_rel);
+        let mut t = self.t;
+        let mut x = std::mem::take(&mut self.x);
+        let mut vj = std::mem::take(&mut self.vj);
+        let (mut force_be, mut h_ctrl, mut crawl, mut bp_idx) = (self.force_be, self.h_ctrl, self.crawl, self.bp_idx);
+        let out = self.solve_on(t_end, &s, eps, (h_min, lte_rel), (&mut t, &mut x, &mut vj), (&mut force_be, &mut h_ctrl, &mut crawl, &mut bp_idx));
+        self.t = t;
+        self.x = x;
+        self.vj = vj;
+        (self.force_be, self.h_ctrl, self.crawl, self.bp_idx) = (force_be, h_ctrl, crawl, bp_idx);
+        out
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn solve_on(
+        &mut self,
+        t_end: f64,
+        s: &TranSettings,
+        eps: f64,
+        (h_min, lte_rel): (f64, f64),
+        (t, x, vj): (&mut f64, &mut Vec<f64>, &mut Vec<f64>),
+        (force_be, h_ctrl, crawl, bp_idx): (&mut bool, &mut f64, &mut bool, &mut usize),
+    ) -> Result<(), SimError> {
+        let cm = &self.cm;
+        let bps = &self.bps;
+        while *t < t_end - eps {
+            while *bp_idx < bps.len() && bps[*bp_idx] <= *t + eps {
+                *bp_idx += 1;
+            }
+            let mut h = h_ctrl.min(s.tstep).min(t_end - *t);
+            let wanted = h;
+            let mut lands_on_bp = false;
+            if *bp_idx < bps.len() && *t + h >= bps[*bp_idx] - eps {
+                h = bps[*bp_idx] - *t;
+                lands_on_bp = true;
+            }
+            // the next change of an output that sits on an analog node (a delayed output of a digital cell): land a step on it
+            if cm.has_cells()
+                && let Some(te) = cm.dig_next_event()
+                && te > *t + eps
+                && te < *t + h - eps
+            {
+                h = te - *t;
+            }
+            if *t + h >= t_end - eps {
+                h = t_end - *t;
+            }
+
+            let (cap_v, cap_i, ind_i, ind_v) = (&self.cap_v, &self.cap_i, &self.ind_i, &self.ind_v);
+            let mut retried = false;
+            let mut rejects = 0;
+            // the size that failed first and whether the largest step was tried, for `crawl` after the step
+            let mut step_first;
+            let mut step_jumped = false;
+            // one pass per tried step size: Newton (shrinking on failure), then the error check
+            let (att, ratio, order) = 'step: loop {
+                let mut tries = 0;
+                let mut h_back = 0.0;
+                let h_first = h;
+                step_first = h_first;
+                // the largest step was tried after a failure: if it lands, the circuit has flipped (see `SNAP_EARLY`)
+                let mut jumped = false;
+                let att: Attempt = loop {
+                    let trap = !(*force_be || retried);
+                    let ctx = Ctx {
+                        gmin: crate::options::options().gmin,
+                        scale: 1.0,
+                        t: *t + h,
+                        dynamic: Some(Dyn { h, trap, cap_v, cap_i, ind_i, ind_v, capped: tries < CAPPED_TRIES }),
+                        sw_widen: 1.0,
+                        seed_g: None,
+                    };
+                    let solved = if *crawl && tries < 4 && !jumped { cm.newton_plain_capped(x.clone(), vj.clone(), &ctx, CRAWL_CAP) } else { cm.newton(x.clone(), vj.clone(), &ctx) };
+                    match solved {
+                        Ok(a) if jumped && h > JUMP_SEARCH * h_first => {
+                            // The largest step landed beyond the flip, which may lie anywhere within it: the step would draw the edge over
+                            // its whole length and hand a later digital input the new level that much late (a 555's output and the gate
+                            // after it, 15 us late at 10 us steps). Look for the shortest step that still lands, between the size that
+                            // failed and this one (by halving their ratio, as fails cost the most): the edge is then within a factor
+                            // `JUMP_SEARCH` of the step that found it.
+                            let (mut lo, mut hi, mut a) = (h_first, h, a);
+                            while hi > JUMP_SEARCH * lo {
+                                let mid = (lo * hi).sqrt();
+                                let ctx = Ctx {
+                                    gmin: crate::options::options().gmin,
+                                    scale: 1.0,
+                                    t: *t + mid,
+                                    dynamic: Some(Dyn { h: mid, trap: false, cap_v, cap_i, ind_i, ind_v, capped: true }),
+                                    sw_widen: 1.0,
+                                    seed_g: None,
+                                };
+                                match cm.newton(x.clone(), vj.clone(), &ctx) {
+                                    Ok(b) => (hi, a) = (mid, b),
+                                    Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
+                                    Err(crate::dc::Fail::NoConv) => {
+                                        self.result.retries += 1;
+                                        lo = mid;
+                                    }
                                 }
                             }
+                            if hi < h {
+                                h = hi;
+                                lands_on_bp = false;
+                            }
+                            break a;
                         }
-                        if hi < h {
-                            h = hi;
+                        Ok(a) => break a,
+                        Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
+                        Err(crate::dc::Fail::NoConv) => {
+                            tries += 1;
+                            self.result.retries += 1;
                             lands_on_bp = false;
-                        }
-                        break a;
-                    }
-                    Ok(a) => break a,
-                    Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
-                    Err(crate::dc::Fail::NoConv) => {
-                        tries += 1;
-                        result.retries += 1;
-                        lands_on_bp = false;
-                        // the trapezoidal rule keeps the old capacitor current, which for a fast
-                        // switching event no step size can fix: retry with backward Euler
-                        retried = true;
-                        if (tries == 4 || (tries == if crawl { 2 } else { 1 } && h_first <= SNAP_EARLY * h_min)) && h * 16.0 < s.tstep.min(s.tstop - t) {
-                            // An instant switching event (a latch, a logic gate) may have no solution
-                            // close to the old state at all, yet one far away that a big step lands on:
-                            // shrinking never helps there, so try the largest step once, then go on shrinking.
-                            h_back = h / 4.0;
-                            jumped = true;
-                            step_jumped = true;
-                            h = s.tstep.min(s.tstop - t);
-                            if bp_idx < bps.len() && t + h >= bps[bp_idx] - eps {
-                                h = bps[bp_idx] - t;
-                                lands_on_bp = true;
-                            }
-                        } else if h_back > 0.0 {
-                            // the largest step did not land either: try a few sizes between it and the step that was failing, since the
-                            // state after the flip may only be reachable from a step of a certain size
-                            if h > 64.0 * h_first {
-                                h /= 16.0;
+                            // the trapezoidal rule keeps the old capacitor current, which for a fast
+                            // switching event no step size can fix: retry with backward Euler
+                            retried = true;
+                            if (tries == 4 || (tries == if *crawl { 2 } else { 1 } && h_first <= SNAP_EARLY * h_min)) && h * 16.0 < s.tstep.min(t_end - *t) {
+                                // An instant switching event (a latch, a logic gate) may have no solution
+                                // close to the old state at all, yet one far away that a big step lands on:
+                                // shrinking never helps there, so try the largest step once, then go on shrinking.
+                                h_back = h / 4.0;
+                                jumped = true;
+                                step_jumped = true;
+                                h = s.tstep.min(t_end - *t);
+                                if *bp_idx < bps.len() && *t + h >= bps[*bp_idx] - eps {
+                                    h = bps[*bp_idx] - *t;
+                                    lands_on_bp = true;
+                                }
+                            } else if h_back > 0.0 {
+                                // the largest step did not land either: try a few sizes between it and the step that was failing, since the
+                                // state after the flip may only be reachable from a step of a certain size
+                                if h > 64.0 * h_first {
+                                    h /= 16.0;
+                                } else {
+                                    h = h_back;
+                                    h_back = 0.0;
+                                }
                             } else {
-                                h = h_back;
-                                h_back = 0.0;
+                                h /= 4.0;
                             }
-                        } else {
-                            h /= 4.0;
-                        }
-                        if tries > 16 || h < 1e-18 {
-                            return Err(SimError::NoConvergence);
+                            if tries > 16 || h < 1e-18 {
+                                return Err(SimError::NoConvergence);
+                            }
                         }
                     }
-                }
-            };
-            let trap = !(force_be || retried);
-            let order = if trap { 3.0 } else { 2.0 };
-            let (cv, il) = reactive_state(&cm, &att.x);
-            let abs_v = lte_abs_voltages(&cm, &att.x);
-            let ratio = step_error_ratio(&hist, t + h, (&cv, &il), (&abs_v, &abs_i), trap, lte_rel);
-            match ratio {
-                // too inaccurate: redo this step with a smaller one (unless it is already tiny)
-                // (not after a step that landed beyond a flip: its error estimate spans the jump, and redoing the step only repeats
-                // the search for the edge, as many times as `rejects` allows, to land on the same step again)
-                Some(r) if r > 1.0 && h > h_min && rejects < 12 && !(jumped && h > 4.0 * h_first) => {
-                    rejects += 1;
-                    result.rejected += 1;
-                    lands_on_bp = false;
-                    h *= (0.9 * r.powf(-1.0 / order)).clamp(0.125, 0.9);
-                }
-                _ => break 'step (att, ratio, order),
-            }
-        };
-
-        // accept the step: update the integration state from the new solution
-        let trap = !(force_be || retried);
-        for e in &cm.ce {
-            match e {
-                Ce::C { a, b, c, idx, .. } => {
-                    let vn = v(&att.x, *a) - v(&att.x, *b);
-                    let geq = if trap { 2.0 * c / h } else { c / h };
-                    cap_i[*idx] = geq * (vn - cap_v[*idx]) - if trap { cap_i[*idx] } else { 0.0 };
-                    cap_v[*idx] = vn;
-                }
-                Ce::L { p, n, br, idx, .. } => {
-                    ind_i[*idx] = att.x[*br];
-                    ind_v[*idx] = v(&att.x, *p) - v(&att.x, *n);
-                }
-                Ce::D { ai, k, nvt, dm, cap: Some(idx), .. } => {
-                    let kk = if trap { 2.0 } else { 1.0 };
-                    let vnew = v(&att.x, *ai) - v(&att.x, *k);
-                    let (q_new, q_old) = (crate::dc::diode_q(dm, *nvt, vnew).0, crate::dc::diode_q(dm, *nvt, cap_v[*idx]).0);
-                    cap_i[*idx] = kk / h * (q_new - q_old) - if trap { cap_i[*idx] } else { 0.0 };
-                    cap_v[*idx] = vnew;
-                }
-                Ce::Cq { a, b, c, idx, .. } => {
-                    let kk = if trap { 2.0 } else { 1.0 };
-                    let q_new = c.eval(&att.x, t + h).0;
-                    cap_i[*idx] = kk / h * (q_new - cap_v[*idx + 1]) - if trap { cap_i[*idx] } else { 0.0 };
-                    cap_v[*idx] = v(&att.x, *a) - v(&att.x, *b);
-                    cap_v[*idx + 1] = q_new;
-                }
-                Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
-                    let pol = if m.pnp { -1.0 } else { 1.0 };
-                    let k = if trap { 2.0 } else { 1.0 };
-                    let vn = [pol * (v(&att.x, *bi) - v(&att.x, *ei)), pol * (v(&att.x, *bi) - v(&att.x, *ci))];
-                    for (j, vnew) in vn.into_iter().enumerate() {
-                        let (q_new, q_old) = if j == 0 { (crate::dc::bjt_qbe(m, vnew, vn[1]).0, crate::dc::bjt_qbe(m, cap_v[*idx], cap_v[*idx + 1]).0) } else { (crate::dc::bjt_qbc(m, vnew).0, crate::dc::bjt_qbc(m, cap_v[*idx + 1]).0) };
-                        cap_i[*idx + j] = k / h * (q_new - q_old) - if trap { cap_i[*idx + j] } else { 0.0 };
-                        cap_v[*idx + j] = vnew;
+                };
+                let trap = !(*force_be || retried);
+                let order = if trap { 3.0 } else { 2.0 };
+                let (cv, il) = reactive_state(cm, &att.x);
+                let abs_v = lte_abs_voltages(cm, &att.x);
+                let ratio = step_error_ratio(&self.hist, *t + h, (&cv, &il), (&abs_v, &self.abs_i), trap, lte_rel);
+                match ratio {
+                    // too inaccurate: redo this step with a smaller one (unless it is already tiny)
+                    // (not after a step that landed beyond a flip: its error estimate spans the jump, and redoing the step only repeats
+                    // the search for the edge, as many times as `rejects` allows, to land on the same step again)
+                    Some(r) if r > 1.0 && h > h_min && rejects < 12 && !(jumped && h > 4.0 * h_first) => {
+                        rejects += 1;
+                        self.result.rejected += 1;
+                        lands_on_bp = false;
+                        h *= (0.9 * r.powf(-1.0 / order)).clamp(0.125, 0.9);
                     }
+                    _ => break 'step (att, ratio, order),
                 }
-                _ => {}
+            };
+
+            // accept the step: update the integration state from the new solution
+            let trap = !(*force_be || retried);
+            let (cap_v, cap_i, ind_i, ind_v) = (&mut self.cap_v, &mut self.cap_i, &mut self.ind_i, &mut self.ind_v);
+            for e in &cm.ce {
+                match e {
+                    Ce::C { a, b, c, idx, .. } => {
+                        let vn = v(&att.x, *a) - v(&att.x, *b);
+                        let geq = if trap { 2.0 * c / h } else { c / h };
+                        cap_i[*idx] = geq * (vn - cap_v[*idx]) - if trap { cap_i[*idx] } else { 0.0 };
+                        cap_v[*idx] = vn;
+                    }
+                    Ce::L { p, n, br, idx, .. } => {
+                        ind_i[*idx] = att.x[*br];
+                        ind_v[*idx] = v(&att.x, *p) - v(&att.x, *n);
+                    }
+                    Ce::D { ai, k, nvt, dm, cap: Some(idx), .. } => {
+                        let kk = if trap { 2.0 } else { 1.0 };
+                        let vnew = v(&att.x, *ai) - v(&att.x, *k);
+                        let (q_new, q_old) = (crate::dc::diode_q(dm, *nvt, vnew).0, crate::dc::diode_q(dm, *nvt, cap_v[*idx]).0);
+                        cap_i[*idx] = kk / h * (q_new - q_old) - if trap { cap_i[*idx] } else { 0.0 };
+                        cap_v[*idx] = vnew;
+                    }
+                    Ce::Cq { a, b, c, idx, .. } => {
+                        let kk = if trap { 2.0 } else { 1.0 };
+                        let q_new = c.eval(&att.x, *t + h).0;
+                        cap_i[*idx] = kk / h * (q_new - cap_v[*idx + 1]) - if trap { cap_i[*idx] } else { 0.0 };
+                        cap_v[*idx] = v(&att.x, *a) - v(&att.x, *b);
+                        cap_v[*idx + 1] = q_new;
+                    }
+                    Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
+                        let pol = if m.pnp { -1.0 } else { 1.0 };
+                        let k = if trap { 2.0 } else { 1.0 };
+                        let vn = [pol * (v(&att.x, *bi) - v(&att.x, *ei)), pol * (v(&att.x, *bi) - v(&att.x, *ci))];
+                        for (j, vnew) in vn.into_iter().enumerate() {
+                            let (q_new, q_old) = if j == 0 { (crate::dc::bjt_qbe(m, vnew, vn[1]).0, crate::dc::bjt_qbe(m, cap_v[*idx], cap_v[*idx + 1]).0) } else { (crate::dc::bjt_qbc(m, vnew).0, crate::dc::bjt_qbc(m, cap_v[*idx + 1]).0) };
+                            cap_i[*idx + j] = k / h * (q_new - q_old) - if trap { cap_i[*idx + j] } else { 0.0 };
+                            cap_v[*idx + j] = vnew;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            #[cfg(test)]
+            STATS.with(|st| st.borrow_mut().push((*t, h, if lands_on_bp { 1 } else if rejects > 0 { 2 } else if retried { 3 } else if h >= s.tstep * 0.999 { 4 } else { 0 }, WORST.with(|w| w.get()).0, WORST.with(|w| w.get()).1)));
+            *t = if lands_on_bp { bps[*bp_idx] } else { *t + h };
+            // a flip-flop or latch that changed: its outputs jump at the next step, so restart like at a source corner
+            let seq_changed = cm.has_seq() && cm.seq_update(Some(x.as_slice()), &att.x);
+            // digital cells: an output on an analog node that changed jumps at the next step, like a flip-flop's
+            let seq_changed = seq_changed | (cm.has_cells() && cm.dig_update(&att.x, Some(*t)).0);
+            *x = att.x;
+            // (the voltages of the digital nets are read from the cells when recorded, `Compiled::node_voltage`)
+            *vj = att.vj;
+            // the step after a retry has no reliable current history either
+            *force_be = lands_on_bp || retried || seq_changed;
+            {
+                // record (like `record`, which cannot be called while `cm` and `bps` are borrowed)
+                let res = &mut self.result;
+                res.time.push(*t);
+                for &(i, si) in &self.node_slots {
+                    res.signals[si].values.push(cm.node_voltage(x, i));
+                }
+                if self.any_element {
+                    let mut k = 0;
+                    let slots = &self.element_slots;
+                    cm.visit_elements(x, Some(*t), cap_i, |_, current, _, _, _| {
+                        if let Some(Some(si)) = slots.get(k) {
+                            res.signals[*si].values.push(current);
+                        }
+                        k += 1;
+                    });
+                }
+            }
+
+            // a jump that did not land, after which a shorter step went through: the circuit is in the middle of its transition
+            // (see `CRAWL`). It ends with a jump that lands or with a step back at the sizes of the quiet circuit.
+            let was_crawling = *crawl;
+            if step_jumped {
+                *crawl = h < step_first;
+            } else if h >= CRAWL * h_min {
+                *crawl = false;
+            }
+            // the steps of a transition are taken with backward Euler: the trapezoidal rule leaves an oscillation from point to
+            // point behind it that holds the error control at a few microseconds for tens of milliseconds
+            *force_be |= *crawl || was_crawling;
+            // the next step: grow while the error estimate leaves room, never beyond `tstep`
+            if lands_on_bp || seq_changed {
+                self.hist.clear();
+                // restart from about the length of the step that reached the corner
+                *h_ctrl = h.max(s.tstep * 1e-3).min(s.tstep);
+            } else if retried {
+                *h_ctrl = if *crawl { (2.0 * h).min(s.tstep) } else { h.max(h_min) };
+            } else if h >= wanted * 0.999 || rejects > 0 || ratio.is_some_and(|r| r > 1.0) {
+                let mut growth = ratio.map_or(2.0, |r| (0.9 * r.max(1e-12).powf(-1.0 / order)).clamp(0.5, 2.0));
+                // a step that had to be redone has found the size the circuit allows here: trying twice that again
+                // only earns another rejection, but holding the old size for good starves the multivibrator flips
+                if rejects > 0 {
+                    growth = growth.min(1.05);
+                }
+                *h_ctrl = (h * growth).clamp(if *crawl { 0.0 } else { h_min }, s.tstep);
+            }
+            // else: the step was cut short by the end of the run (not by the error control); keep the controller's value
+            for &k in &self.wiring_l {
+                self.abs_i[k] = self.abs_i[k].max(lte_rel * ind_i[k].abs());
+            }
+            self.hist.push((*t, cap_v.clone(), ind_i.clone()));
+            if self.hist.len() > 3 {
+                self.hist.remove(0);
             }
         }
-        #[cfg(test)]
-        STATS.with(|st| st.borrow_mut().push((t, h, if lands_on_bp { 1 } else if rejects > 0 { 2 } else if retried { 3 } else if h >= s.tstep * 0.999 { 4 } else { 0 }, WORST.with(|w| w.get()).0, WORST.with(|w| w.get()).1)));
-        t = if lands_on_bp { bps[bp_idx] } else { t + h };
-        // a flip-flop or latch that changed: its outputs jump at the next step, so restart like at a source corner
-        let seq_changed = cm.has_seq() && cm.seq_update(Some(&x), &att.x);
-        // digital cells: an output on an analog node that changed jumps at the next step, like a flip-flop's
-        let seq_changed = seq_changed | (cm.has_cells() && cm.dig_update(&att.x, Some(t)).0);
-        x = att.x;
-        // (the voltages of the digital nets are read from the cells when recorded, `Compiled::node_voltage`)
-        vj = att.vj;
-        // the step after a retry has no reliable current history either
-        force_be = lands_on_bp || retried || seq_changed;
-        record(&mut result, t, &x, &cap_i, &cm);
+        Ok(())
+    }
 
-        // a jump that did not land, after which a shorter step went through: the circuit is in the middle of its transition
-        // (see `CRAWL`). It ends with a jump that lands or with a step back at the sizes of the quiet circuit.
-        let was_crawling = crawl;
-        if step_jumped {
-            crawl = h < step_first;
-        } else if h >= CRAWL * h_min {
-            crawl = false;
-        }
-        // the steps of a transition are taken with backward Euler: the trapezoidal rule leaves an oscillation from point to
-        // point behind it that holds the error control at a few microseconds for tens of milliseconds
-        force_be |= crawl || was_crawling;
-        // the next step: grow while the error estimate leaves room, never beyond `tstep`
-        if lands_on_bp || seq_changed {
-            hist.clear();
-            // restart from about the length of the step that reached the corner
-            h_ctrl = h.max(s.tstep * 1e-3).min(s.tstep);
-        } else if retried {
-            h_ctrl = if crawl { (2.0 * h).min(s.tstep) } else { h.max(h_min) };
-        } else if h >= wanted * 0.999 || rejects > 0 || ratio.is_some_and(|r| r > 1.0) {
-            let mut growth = ratio.map_or(2.0, |r| (0.9 * r.max(1e-12).powf(-1.0 / order)).clamp(0.5, 2.0));
-            // a step that had to be redone has found the size the circuit allows here: trying twice that again
-            // only earns another rejection, but holding the old size for good starves the multivibrator flips
-            if rejects > 0 {
-                growth = growth.min(1.05);
+    /// Ends the run: the warnings (of the start, the buses, the timing checks) and everything recorded since the last `drain`.
+    pub fn finish(self) -> TranResult {
+        let TranRun { cm, mut warnings, mut result, .. } = self;
+        if cm.has_cells() {
+            warnings.extend(cm.bus_warnings());
+            result.timing = cm.timing_report();
+            for v in &result.timing.violations {
+                let what = match v.kind {
+                    TimingKind::Setup => format!("データがクロックの {} 前に変わっています (必要なのは {} 以上)。クロックを遅くするか、データまでの遅れ (ゲートの段数) を短くしてください", format_time(v.worst_margin), format_time(v.required)),
+                    TimingKind::Hold => format!("データがクロックの {} 後に変わっています (クロックのあと {} は変わってはいけません)。データの経路に遅れを足すか、クロックのずれを減らしてください", format_time(v.worst_margin), format_time(v.required)),
+                    TimingKind::PulseWidth => format!("クロックのパルスの幅が {} しかありません ({} 以上が必要)。クロックを遅くするか、デューティ比を 50 % に近づけてください", format_time(v.worst_margin), format_time(v.required)),
+                };
+                let name = match v.kind {
+                    TimingKind::Setup => "セットアップ時間",
+                    TimingKind::Hold => "ホールド時間",
+                    TimingKind::PulseWidth => "クロックのパルス幅",
+                };
+                let tail = match v.kind {
+                    TimingKind::Setup | TimingKind::Hold => "この回の出力は実物では不定 (0 にも 1 にもなりうる) で、ここでは 0 か 1 を乱数で選んでいます (毎回同じ選び方)",
+                    TimingKind::PulseWidth => "実物では取り込みに失敗することがあります (ここでは普通に取り込みます)",
+                };
+                warnings.push(format!("{}: {name}が足りません ({} 回。最初は {})。{what}。{tail}", v.cell, v.count, format_time(v.first_time)));
             }
-            h_ctrl = (h * growth).clamp(if crawl { 0.0 } else { h_min }, s.tstep);
         }
-        // else: the step was cut short by the end of the run (not by the error control); keep the controller's value
-        for &k in &wiring_l {
-            abs_i[k] = abs_i[k].max(lte_rel * ind_i[k].abs());
-        }
-        hist.push((t, cap_v.clone(), ind_i.clone()));
-        if hist.len() > 3 {
-            hist.remove(0);
-        }
+        warnings.dedup();
+        result.warnings = warnings;
+        result
     }
-
-    if cm.has_cells() {
-        warnings.extend(cm.bus_warnings());
-        result.timing = cm.timing_report();
-        for v in &result.timing.violations {
-            let what = match v.kind {
-                TimingKind::Setup => format!("データがクロックの {} 前に変わっています (必要なのは {} 以上)。クロックを遅くするか、データまでの遅れ (ゲートの段数) を短くしてください", format_time(v.worst_margin), format_time(v.required)),
-                TimingKind::Hold => format!("データがクロックの {} 後に変わっています (クロックのあと {} は変わってはいけません)。データの経路に遅れを足すか、クロックのずれを減らしてください", format_time(v.worst_margin), format_time(v.required)),
-                TimingKind::PulseWidth => format!("クロックのパルスの幅が {} しかありません ({} 以上が必要)。クロックを遅くするか、デューティ比を 50 % に近づけてください", format_time(v.worst_margin), format_time(v.required)),
-            };
-            let name = match v.kind {
-                TimingKind::Setup => "セットアップ時間",
-                TimingKind::Hold => "ホールド時間",
-                TimingKind::PulseWidth => "クロックのパルス幅",
-            };
-            let tail = match v.kind {
-                TimingKind::Setup | TimingKind::Hold => "この回の出力は実物では不定 (0 にも 1 にもなりうる) で、ここでは 0 か 1 を乱数で選んでいます (毎回同じ選び方)",
-                TimingKind::PulseWidth => "実物では取り込みに失敗することがあります (ここでは普通に取り込みます)",
-            };
-            warnings.push(format!("{}: {name}が足りません ({} 回。最初は {})。{what}。{tail}", v.cell, v.count, format_time(v.first_time)));
-        }
-    }
-    warnings.dedup();
-    result.warnings = warnings;
-    Ok(result)
 }
 
 #[cfg(test)]

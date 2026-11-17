@@ -94,7 +94,7 @@ pub use heat_tran::{heat_tran, network_from_matrix, nodes_with_matrix, thermal_n
 pub use zth::{fit_foster, zth_at};
 pub use selfheat::{part_power, default_theta, heaters_from_schematic, own_theta, part_theta, self_heat, self_heat_coupled, is_board_wiring, heaters_with_matrix, board_heaters, BoardHeater, BOARD_HEATERS_MAX, split_theta, theta_jc, JC_GUESS_SHARE, HeatedPart, Heater, SelfHeat};
 pub use temperature::{temp_sweep, T_NOM_C};
-pub use tran::{auto_tstep, format_time, transient, transient_with, Signal, TimingKind, TimingReport, TimingViolation, TranResult, TranSettings};
+pub use tran::{auto_tstep, format_time, transient, transient_with, Signal, TranRun, TimingKind, TimingReport, TimingViolation, TranResult, TranSettings};
 pub use stepmetrics::{load_step, settling_times, step_metrics, LoadStep, Settling, StepMetrics};
 pub use power::{efficiency, mean_power};
 pub use spec::{compare_measured, compare_measured_in, compare_readings, split_readings, ReadingsCompare, evaluate as evaluate_spec, evaluate_worst as evaluate_worst_spec, in_range, measure as measure_spec, Agreement, Inputs as SpecInputs, MeasuredCompare, Spec, SpecEval, SpecKind};
@@ -136,6 +136,8 @@ mod tests_params;
 mod tests_dcsweep;
 #[cfg(test)]
 mod tests_cells;
+#[cfg(test)]
+mod tests_tranrun;
 #[cfg(test)]
 mod tests_logic;
 #[cfg(test)]
