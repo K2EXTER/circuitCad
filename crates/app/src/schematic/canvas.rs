@@ -23,6 +23,7 @@ impl SchEditor {
     pub fn canvas(&mut self, ui: &mut egui::Ui) {
         self.track_history(ui);
         self.live_update();
+        self.live_logic_frame(ui);
         if self.live_waiting {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
         }
@@ -45,6 +46,7 @@ impl SchEditor {
         self.draw_buses(&painter, rect);
         self.draw_junctions(&painter, rect);
         self.draw_components(&painter, rect);
+        self.draw_live_logic(&painter, rect);
         self.draw_linked(&painter, rect);
         self.draw_requirement_frames(&painter, rect);
         self.view_overlay(ui, rect);
@@ -57,6 +59,12 @@ impl SchEditor {
         self.volt_legend(ui, rect);
         self.stale_band(ui, rect);
         self.net_menu_ui(ui);
+        if self.live_logic.is_some() {
+            // the learning mode: the canvas only pans, zooms and clicks the switches (no editing)
+            self.live_logic_input(ui, &resp, rect);
+            self.live_logic_ui(ui, rect);
+            return;
+        }
         if self.alt_pan {
             return; // the drag moves the view: no selection box, no moving of parts
         }

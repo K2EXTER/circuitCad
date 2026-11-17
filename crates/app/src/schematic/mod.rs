@@ -374,6 +374,8 @@ pub struct SchEditor {
     diag: troubleshoot::DiagState,
     /// Repair practice with the virtual meter (the "修理の道" lessons): the hidden fault and the readings.
     repair: Option<repair_practice::RepairPractice>,
+    /// "デジタル回路を動かしながら見る": the learning mode over the canvas while it is on (`live_logic.rs`).
+    live_logic: Option<live_logic::LiveLogic>,
     /// The "break every part" scan while it runs on its own thread.
     scan_run: Option<fault::ScanRun>,
     fault_chain: Option<Result<sim_core::ChainReport, Vec<String>>>,
@@ -884,6 +886,7 @@ impl Default for SchEditor {
             scan_rare: false,
             diag: Default::default(),
             repair: None,
+            live_logic: None,
             scan_run: None,
             fault_chain: None,
             sweep_src: String::new(),
@@ -988,6 +991,7 @@ mod psrr;
 mod cmrr;
 mod troubleshoot;
 mod repair_practice;
+mod live_logic;
 mod tran;
 mod dc;
 mod library;

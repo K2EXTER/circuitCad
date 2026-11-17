@@ -1,0 +1,874 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "VCK",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 1u 1u 0.5 1)",
+      "pos": [
+        0,
+        30
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "74HC161",
+      "pos": [
+        40,
+        20
+      ],
+      "rot": 0,
+      "footprint": "DIP-16_W7.62",
+      "custom": {
+        "name": "74HC161",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "CLR",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "CLK",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "C",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "D",
+            "side": "left"
+          },
+          {
+            "number": "7",
+            "name": "ENP",
+            "side": "left"
+          },
+          {
+            "number": "8",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "9",
+            "name": "LOAD",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "ENT",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "QD",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "QC",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "QB",
+            "side": "right"
+          },
+          {
+            "number": "14",
+            "name": "QA",
+            "side": "right"
+          },
+          {
+            "number": "15",
+            "name": "RCO",
+            "side": "right"
+          },
+          {
+            "number": "16",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC161",
+          "text": "* 74HC161 behavioural model: four D flip-flop cells (Y lines) with the count / load logic in front of them (the synchronous counter of the data sheet SCLS297); clear is asynchronous and active low, load is synchronous and active low and wins over the enables. Delays: clock to Q 25 ns, to RCO about 37 ns.\n.subckt 74HC161 clr clk a b c d enp gnd load ent qd qc qb qa rco vcc\nYnl inv nload 0 gnd vcc 60 0.5 0 0 0 load\nYen and en 0 gnd vcc 60 0.5 0 0 0 enp ent\nYt1 and t1 0 gnd vcc 60 0.5 0 0 0 en qa\nYt2 and t2 0 gnd vcc 60 0.5 0 0 0 en qa qb\nYt3 and t3 0 gnd vcc 60 0.5 0 0 0 en qa qb qc\nYxa xor xa 0 gnd vcc 60 0.5 0 0 0 qa en\nYla and la 0 gnd vcc 60 0.5 0 0 0 nload a\nYca and ca 0 gnd vcc 60 0.5 0 0 0 load xa\nYda or da 0 gnd vcc 60 0.5 0 0 0 la ca\nYFa dff qa 0 gnd vcc 60 0.5 0 0 1 td=25n da clk 0 clr\nYxb xor xb 0 gnd vcc 60 0.5 0 0 0 qb t1\nYlb and lb 0 gnd vcc 60 0.5 0 0 0 nload b\nYcb and cb 0 gnd vcc 60 0.5 0 0 0 load xb\nYdb or db 0 gnd vcc 60 0.5 0 0 0 lb cb\nYFb dff qb 0 gnd vcc 60 0.5 0 0 1 td=25n db clk 0 clr\nYxc xor xc 0 gnd vcc 60 0.5 0 0 0 qc t2\nYlc and lc 0 gnd vcc 60 0.5 0 0 0 nload c\nYcc and cc 0 gnd vcc 60 0.5 0 0 0 load xc\nYdc or dc 0 gnd vcc 60 0.5 0 0 0 lc cc\nYFc dff qc 0 gnd vcc 60 0.5 0 0 1 td=25n dc clk 0 clr\nYxd xor xd 0 gnd vcc 60 0.5 0 0 0 qd t3\nYld and ld 0 gnd vcc 60 0.5 0 0 0 nload d\nYcd and cd 0 gnd vcc 60 0.5 0 0 0 load xd\nYdd or dd 0 gnd vcc 60 0.5 0 0 0 ld cd\nYFd dff qd 0 gnd vcc 60 0.5 0 0 1 td=25n dd clk 0 clr\nYrco and rco 0 gnd vcc 60 0.5 0 0 0 td=12n ent qa qb qc qd\n.ends 74HC161",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "params": {},
+          "limits": [
+            "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+            "遅延は、クロック→Q を 25ns、クロック→RCO を約 37ns (ENT→RCO は 12ns) の代表値にしてあります (4.5V・25℃ のデータシートの値: クロック→Q 25ns、クロック→RCO 24ns、ENT→RCO 17ns)。",
+            "扱わないもの: 入力容量、電源電流、セットアップ/ホールド時間の点検 (データシートでは、データ 30ns、LOAD 27ns、ENP・ENT 34ns、CLR を戻すのが 25ns、ホールドは 0)。",
+            "使わない入力は、GND か電源につないでください (つながないと Low として扱い、CLR と LOAD は働いた状態になります)。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力は約 60 Ω、遅れは 5 V・25 °C の代表値)"
+          }
+        },
+        "glyph": "counter"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        80,
+        5
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        94,
+        5
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        80,
+        21
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        94,
+        21
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        80,
+        37
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D3",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        94,
+        37
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        80,
+        53
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D4",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        94,
+        53
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        28
+      ],
+      "b": [
+        0,
+        25
+      ]
+    },
+    {
+      "a": [
+        0,
+        32
+      ],
+      "b": [
+        0,
+        35
+      ]
+    },
+    {
+      "a": [
+        36,
+        12
+      ],
+      "b": [
+        33,
+        12
+      ]
+    },
+    {
+      "a": [
+        36,
+        14
+      ],
+      "b": [
+        33,
+        14
+      ]
+    },
+    {
+      "a": [
+        36,
+        16
+      ],
+      "b": [
+        33,
+        16
+      ]
+    },
+    {
+      "a": [
+        36,
+        18
+      ],
+      "b": [
+        33,
+        18
+      ]
+    },
+    {
+      "a": [
+        36,
+        20
+      ],
+      "b": [
+        33,
+        20
+      ]
+    },
+    {
+      "a": [
+        36,
+        22
+      ],
+      "b": [
+        33,
+        22
+      ]
+    },
+    {
+      "a": [
+        36,
+        24
+      ],
+      "b": [
+        33,
+        24
+      ]
+    },
+    {
+      "a": [
+        40,
+        31
+      ],
+      "b": [
+        40,
+        34
+      ]
+    },
+    {
+      "a": [
+        36,
+        26
+      ],
+      "b": [
+        33,
+        26
+      ]
+    },
+    {
+      "a": [
+        36,
+        28
+      ],
+      "b": [
+        33,
+        28
+      ]
+    },
+    {
+      "a": [
+        44,
+        16
+      ],
+      "b": [
+        47,
+        16
+      ]
+    },
+    {
+      "a": [
+        44,
+        18
+      ],
+      "b": [
+        47,
+        18
+      ]
+    },
+    {
+      "a": [
+        44,
+        20
+      ],
+      "b": [
+        47,
+        20
+      ]
+    },
+    {
+      "a": [
+        44,
+        22
+      ],
+      "b": [
+        47,
+        22
+      ]
+    },
+    {
+      "a": [
+        44,
+        24
+      ],
+      "b": [
+        47,
+        24
+      ]
+    },
+    {
+      "a": [
+        40,
+        9
+      ],
+      "b": [
+        40,
+        6
+      ]
+    },
+    {
+      "a": [
+        80,
+        3
+      ],
+      "b": [
+        80,
+        0
+      ]
+    },
+    {
+      "a": [
+        80,
+        7
+      ],
+      "b": [
+        80,
+        10
+      ]
+    },
+    {
+      "a": [
+        92,
+        5
+      ],
+      "b": [
+        89,
+        5
+      ]
+    },
+    {
+      "a": [
+        96,
+        5
+      ],
+      "b": [
+        99,
+        5
+      ]
+    },
+    {
+      "a": [
+        80,
+        19
+      ],
+      "b": [
+        80,
+        16
+      ]
+    },
+    {
+      "a": [
+        80,
+        23
+      ],
+      "b": [
+        80,
+        26
+      ]
+    },
+    {
+      "a": [
+        92,
+        21
+      ],
+      "b": [
+        89,
+        21
+      ]
+    },
+    {
+      "a": [
+        96,
+        21
+      ],
+      "b": [
+        99,
+        21
+      ]
+    },
+    {
+      "a": [
+        80,
+        35
+      ],
+      "b": [
+        80,
+        32
+      ]
+    },
+    {
+      "a": [
+        80,
+        39
+      ],
+      "b": [
+        80,
+        42
+      ]
+    },
+    {
+      "a": [
+        92,
+        37
+      ],
+      "b": [
+        89,
+        37
+      ]
+    },
+    {
+      "a": [
+        96,
+        37
+      ],
+      "b": [
+        99,
+        37
+      ]
+    },
+    {
+      "a": [
+        80,
+        51
+      ],
+      "b": [
+        80,
+        48
+      ]
+    },
+    {
+      "a": [
+        80,
+        55
+      ],
+      "b": [
+        80,
+        58
+      ]
+    },
+    {
+      "a": [
+        92,
+        53
+      ],
+      "b": [
+        89,
+        53
+      ]
+    },
+    {
+      "a": [
+        96,
+        53
+      ],
+      "b": [
+        99,
+        53
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        25
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        0,
+        35
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        12
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        33,
+        14
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        33,
+        16
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        20
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        22
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        24
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        40,
+        34
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        26
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        33,
+        28
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        47,
+        16
+      ],
+      "text": "Q3"
+    },
+    {
+      "pos": [
+        47,
+        18
+      ],
+      "text": "Q2"
+    },
+    {
+      "pos": [
+        47,
+        20
+      ],
+      "text": "Q1"
+    },
+    {
+      "pos": [
+        47,
+        22
+      ],
+      "text": "Q0"
+    },
+    {
+      "pos": [
+        47,
+        24
+      ],
+      "text": "RCO"
+    },
+    {
+      "pos": [
+        40,
+        6
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        80,
+        0
+      ],
+      "text": "Q0"
+    },
+    {
+      "pos": [
+        80,
+        10
+      ],
+      "text": "LQ0"
+    },
+    {
+      "pos": [
+        89,
+        5
+      ],
+      "text": "LQ0"
+    },
+    {
+      "pos": [
+        99,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        80,
+        16
+      ],
+      "text": "Q1"
+    },
+    {
+      "pos": [
+        80,
+        26
+      ],
+      "text": "LQ1"
+    },
+    {
+      "pos": [
+        89,
+        21
+      ],
+      "text": "LQ1"
+    },
+    {
+      "pos": [
+        99,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        80,
+        32
+      ],
+      "text": "Q2"
+    },
+    {
+      "pos": [
+        80,
+        42
+      ],
+      "text": "LQ2"
+    },
+    {
+      "pos": [
+        89,
+        37
+      ],
+      "text": "LQ2"
+    },
+    {
+      "pos": [
+        99,
+        37
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        80,
+        48
+      ],
+      "text": "Q3"
+    },
+    {
+      "pos": [
+        80,
+        58
+      ],
+      "text": "LQ3"
+    },
+    {
+      "pos": [
+        89,
+        53
+      ],
+      "text": "LQ3"
+    },
+    {
+      "pos": [
+        99,
+        53
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

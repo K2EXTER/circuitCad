@@ -83,7 +83,7 @@ impl SchEditor {
             });
             painter.line_segment(
                 [self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32))],
-                Stroke::new(if sel { 3.0 } else { 2.2 }, if sel { crate::canvas_theme::col(crate::canvas_theme::Role::Selection) } else { tint.unwrap_or(crate::canvas_theme::col(crate::canvas_theme::Role::Wire)) }),
+                Stroke::new(if sel { 3.0 } else { 2.2 }, if sel { crate::canvas_theme::col(crate::canvas_theme::Role::Selection) } else { self.live_wire_colour(i).or(tint).unwrap_or(crate::canvas_theme::col(crate::canvas_theme::Role::Wire)) }),
             );
         }
     }

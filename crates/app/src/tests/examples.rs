@@ -1109,6 +1109,107 @@ fn write_logic_basics_example() {
     std::fs::write(root.join("logic_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// `label`, but the stub leaves a pin on the left or right of a part sideways whatever the part's proportions (`label` goes by the
+/// longer offset from the centre, and on a tall IC the stubs of its side pins ran up through the next pins).
+fn side_label(s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str) {
+    let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+    let c = s.components[idx].pos;
+    let dx = pt.0 - c.0;
+    let end = if dx.abs() >= 2 { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * (pt.1 - c.1).signum()) };
+    s.wires.push(Wire { a: pt, b: end });
+    s.labels.push(sch_core::Label { pos: end, text: text.into() });
+}
+
+/// The live logic samples (`schematic/live_logic.rs`): a 5 V supply V1 on VCC / GND, and a library part placed by name.
+fn live_base() -> (sch_core::Schematic, impl Fn(&mut sch_core::Schematic, &str, (i32, i32)) -> usize) {
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    side_label(&mut s, v1, "+", "VCC");
+    side_label(&mut s, v1, "-", "GND");
+    let place = |s: &mut sch_core::Schematic, name: &str, at: (i32, i32)| {
+        let d = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == name).unwrap();
+        s.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), at, 0)
+    };
+    (s, place)
+}
+
+/// An LED with its 330 ohm resistor from net `from` to ground, at `at`.
+fn live_led(s: &mut sch_core::Schematic, from: &str, at: (i32, i32)) {
+    let r = s.add(Kind::Resistor, at, 1);
+    s.components[r].value = "330".into();
+    side_label(s, r, "1", from);
+    side_label(s, r, "2", &format!("L{from}"));
+    let d = s.add(Kind::Led, (at.0 + 14, at.1), 0);
+    side_label(s, d, "A", &format!("L{from}"));
+    side_label(s, d, "K", "GND");
+}
+
+/// Generates docs/examples/half_adder.schjson for the live logic lesson: slide switches SW1 (A) and SW2 (B) between GND and VCC, a
+/// 74HC86 (S = A xor B) and a 74HC08 (C = A and B), an LED on S and on C: `cargo test -p app write_live_logic_examples -- --ignored`
+/// (writes the SR latch and the counter too).
+#[test]
+#[ignore]
+fn write_live_logic_examples() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    // half adder
+    let (mut s, place) = live_base();
+    for (k, net) in ["A", "B"].iter().enumerate() {
+        let sw = place(&mut s, "SW_SLIDE", (20, 10 + 16 * k as i32));
+        side_label(&mut s, sw, "1", "GND");
+        side_label(&mut s, sw, "2", net);
+        side_label(&mut s, sw, "3", "VCC");
+    }
+    // pins of the 74HC86 / 74HC08: 1A 1B 1Y 2A 2B 2Y GND 3Y 3A 3B 4Y 4A 4B VCC
+    for (k, (part, out)) in [("74HC86", "S"), ("74HC08", "C")].iter().enumerate() {
+        let u = place(&mut s, part, (55, 12 + 30 * k as i32));
+        for (pin, net) in [("1", "A"), ("2", "B"), ("3", out), ("4", "GND"), ("5", "GND"), ("7", "GND"), ("9", "GND"), ("10", "GND"), ("12", "GND"), ("13", "GND"), ("14", "VCC")] {
+            side_label(&mut s, u, pin, net);
+        }
+    }
+    live_led(&mut s, "S", (90, 12));
+    live_led(&mut s, "C", (90, 42));
+    std::fs::write(root.join("half_adder.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+
+    // SR latch: two NAND gates of a 74HC00 (Q = !(S_N & QB), QB = !(R_N & Q)), push buttons to GND with 10k pull-ups; the other two
+    // NAND gates, as inverters, drive the LEDs (LED_Q = !QB = Q, LED_QB = !Q = QB), so the latch's own nets carry no load
+    let (mut s, place) = live_base();
+    for (k, net) in ["S_N", "R_N"].iter().enumerate() {
+        let y = 10 + 20 * k as i32;
+        let r = s.add(Kind::Resistor, (20, y), 1);
+        s.components[r].value = "10k".into();
+        side_label(&mut s, r, "1", "VCC");
+        side_label(&mut s, r, "2", net);
+        let sw = place(&mut s, "SW_PUSH", (38, y));
+        side_label(&mut s, sw, "1", net);
+        side_label(&mut s, sw, "2", "GND");
+    }
+    let u = place(&mut s, "74HC00", (70, 22));
+    for (pin, net) in [("1", "S_N"), ("2", "QB"), ("3", "Q"), ("4", "R_N"), ("5", "Q"), ("6", "QB"), ("7", "GND"), ("8", "LED_Q"), ("9", "QB"), ("10", "QB"), ("11", "LED_QB"), ("12", "Q"), ("13", "Q"), ("14", "VCC")] {
+        side_label(&mut s, u, pin, net);
+    }
+    live_led(&mut s, "LED_Q", (100, 12));
+    live_led(&mut s, "LED_QB", (100, 32));
+    std::fs::write(root.join("sr_latch.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+
+    // counter: a 74HC161 counts the clock VCK (its pulse becomes the clock of the live mode), an LED on each of Q0..Q3
+    let (mut s, place) = live_base();
+    let vck = s.add(Kind::VSource, (0, 30), 0);
+    s.components[vck].refdes = "VCK".into();
+    s.components[vck].value = "PULSE(0 5 0 1u 1u 0.5 1)".into();
+    side_label(&mut s, vck, "+", "CLK");
+    side_label(&mut s, vck, "-", "GND");
+    // pins: 1 CLR 2 CLK 3 A 4 B 5 C 6 D 7 ENP 8 GND 9 LOAD 10 ENT 11 QD 12 QC 13 QB 14 QA 15 RCO 16 VCC
+    let u = place(&mut s, "74HC161", (40, 20));
+    for (pin, net) in [("1", "VCC"), ("2", "CLK"), ("3", "GND"), ("4", "GND"), ("5", "GND"), ("6", "GND"), ("7", "VCC"), ("8", "GND"), ("9", "VCC"), ("10", "VCC"), ("11", "Q3"), ("12", "Q2"), ("13", "Q1"), ("14", "Q0"), ("15", "RCO"), ("16", "VCC")] {
+        side_label(&mut s, u, pin, net);
+    }
+    for k in 0..4 {
+        live_led(&mut s, &format!("Q{k}"), (80, 5 + 16 * k));
+    }
+    std::fs::write(root.join("live_counter.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/speaker_basics.schjson for the speaker / buzzer lesson: each is driven by its own 1 V AC source, so that
 /// I(V1) and I(V2) tell the impedance (1 V / current). V1 -> an 8 ohm speaker: voice coil R1 8 ohm + L1 0.1 mH in series with the
 /// mechanical resonance (R2 24 ohm || L2 2.12 mH || C1 33 uF, about 600 Hz). V2 -> a piezo buzzer: C2 15 nF in parallel with the series

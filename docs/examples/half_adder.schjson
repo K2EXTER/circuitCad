@@ -1,0 +1,1083 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "SW1",
+      "kind": "Custom",
+      "value": "SW_SLIDE",
+      "pos": [
+        20,
+        10
+      ],
+      "rot": 0,
+      "footprint": "SW_Slide_SPDT_P2.54",
+      "custom": {
+        "name": "SW_SLIDE",
+        "prefix": "SW",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "COM",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "B",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "SW_SLIDE",
+          "text": ".subckt SW_SLIDE a com b\n* the lever is at B while Vpos is 1 V (0 V = at A): the live logic view of the schematic flips it on a click\nS1 com a pos 0 SWTOA\nS2 com b pos 0 SWTOB\nVpos pos 0 0\n.model SWTOA SW(RON=0.05 ROFF=1G VT=0.5 VW=-0.1)\n.model SWTOB SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends SW_SLIDE",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {},
+          "limits": [
+            "つながっている側は 0.05Ω、もう一方は 1GΩ の理想のスイッチです。実物は、切り替える瞬間に接点が跳ねたり (チャタリング)、どちらにもつながらない一瞬があったりします。このモデルは一度に切り替わります。",
+            "ふつうの解析 (DC・過渡など) では、A 側につないだまま計算します。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "学習用の理想のスイッチ (2.54mm 間隔の 3 ピンのスライドスイッチ)"
+          }
+        },
+        "ratings": {
+          "v_max": 30.0,
+          "i_max": 0.3,
+          "rows": [
+            {
+              "name": "定格",
+              "value": "30V 0.3A",
+              "condition": "DC (小形のスライドスイッチの代表値)"
+            }
+          ]
+        },
+        "glyph": "switch_spdt"
+      }
+    },
+    {
+      "refdes": "SW2",
+      "kind": "Custom",
+      "value": "SW_SLIDE",
+      "pos": [
+        20,
+        26
+      ],
+      "rot": 0,
+      "footprint": "SW_Slide_SPDT_P2.54",
+      "custom": {
+        "name": "SW_SLIDE",
+        "prefix": "SW",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "COM",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "B",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "SW_SLIDE",
+          "text": ".subckt SW_SLIDE a com b\n* the lever is at B while Vpos is 1 V (0 V = at A): the live logic view of the schematic flips it on a click\nS1 com a pos 0 SWTOA\nS2 com b pos 0 SWTOB\nVpos pos 0 0\n.model SWTOA SW(RON=0.05 ROFF=1G VT=0.5 VW=-0.1)\n.model SWTOB SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends SW_SLIDE",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {},
+          "limits": [
+            "つながっている側は 0.05Ω、もう一方は 1GΩ の理想のスイッチです。実物は、切り替える瞬間に接点が跳ねたり (チャタリング)、どちらにもつながらない一瞬があったりします。このモデルは一度に切り替わります。",
+            "ふつうの解析 (DC・過渡など) では、A 側につないだまま計算します。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "学習用の理想のスイッチ (2.54mm 間隔の 3 ピンのスライドスイッチ)"
+          }
+        },
+        "ratings": {
+          "v_max": 30.0,
+          "i_max": 0.3,
+          "rows": [
+            {
+              "name": "定格",
+              "value": "30V 0.3A",
+              "condition": "DC (小形のスライドスイッチの代表値)"
+            }
+          ]
+        },
+        "glyph": "switch_spdt"
+      }
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "74HC86",
+      "pos": [
+        55,
+        12
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC86",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "1B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "1Y",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "2A",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "2B",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "2Y",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "3Y",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "3A",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "3B",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "4Y",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "4A",
+            "side": "left"
+          },
+          {
+            "number": "13",
+            "name": "4B",
+            "side": "left"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC86",
+          "text": "* 74HC86 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. Propagation delay 11 ns.\n.subckt 74HC86 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nY1 xor y1 0 gnd vcc 60 0.5 0 0 0 td=11n a1 b1\nY2 xor y2 0 gnd vcc 60 0.5 0 0 0 td=11n a2 b2\nY3 xor y3 0 gnd vcc 60 0.5 0 0 0 td=11n a3 b3\nY4 xor y4 0 gnd vcc 60 0.5 0 0 0 td=11n a4 b4\n.ends 74HC86",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "ゲートを「デジタルセル」(行列の外で評価する素子) で表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。ゲートどうしだけをつなぐ配線は、回路の方程式に入りません (波形には電圧が出ます)。",
+            "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。伝搬遅延は、5V・25℃ での代表値を 1 つ決めたもの (立ち上がりと立ち下がりの差、電源電圧や温度による変化は含みません)。数値は必ずデータシートで確かめてください。",
+            "使わない入力は、GND か電源につないでください (つながないと、Low として扱います)。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力は約 60 Ω、遅れは 5 V・25 °C の代表値)"
+          }
+        },
+        "glyph": "gate_xor"
+      }
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "74HC08",
+      "pos": [
+        55,
+        42
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC08",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "1B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "1Y",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "2A",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "2B",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "2Y",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "3Y",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "3A",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "3B",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "4Y",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "4A",
+            "side": "left"
+          },
+          {
+            "number": "13",
+            "name": "4B",
+            "side": "left"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC08",
+          "text": "* 74HC08 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. Propagation delay 10 ns.\n.subckt 74HC08 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nY1 and y1 0 gnd vcc 60 0.5 0 0 0 td=10n a1 b1\nY2 and y2 0 gnd vcc 60 0.5 0 0 0 td=10n a2 b2\nY3 and y3 0 gnd vcc 60 0.5 0 0 0 td=10n a3 b3\nY4 and y4 0 gnd vcc 60 0.5 0 0 0 td=10n a4 b4\n.ends 74HC08",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "ゲートを「デジタルセル」(行列の外で評価する素子) で表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。ゲートどうしだけをつなぐ配線は、回路の方程式に入りません (波形には電圧が出ます)。",
+            "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。伝搬遅延は、5V・25℃ での代表値を 1 つ決めたもの (立ち上がりと立ち下がりの差、電源電圧や温度による変化は含みません)。数値は必ずデータシートで確かめてください。",
+            "使わない入力は、GND か電源につないでください (つながないと、Low として扱います)。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力は約 60 Ω、遅れは 5 V・25 °C の代表値)"
+          }
+        },
+        "glyph": "gate_and"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        12
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        12
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        42
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        42
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        9
+      ],
+      "b": [
+        27,
+        9
+      ]
+    },
+    {
+      "a": [
+        16,
+        10
+      ],
+      "b": [
+        13,
+        10
+      ]
+    },
+    {
+      "a": [
+        24,
+        11
+      ],
+      "b": [
+        27,
+        11
+      ]
+    },
+    {
+      "a": [
+        24,
+        25
+      ],
+      "b": [
+        27,
+        25
+      ]
+    },
+    {
+      "a": [
+        16,
+        26
+      ],
+      "b": [
+        13,
+        26
+      ]
+    },
+    {
+      "a": [
+        24,
+        27
+      ],
+      "b": [
+        27,
+        27
+      ]
+    },
+    {
+      "a": [
+        51,
+        5
+      ],
+      "b": [
+        48,
+        5
+      ]
+    },
+    {
+      "a": [
+        51,
+        7
+      ],
+      "b": [
+        48,
+        7
+      ]
+    },
+    {
+      "a": [
+        59,
+        9
+      ],
+      "b": [
+        62,
+        9
+      ]
+    },
+    {
+      "a": [
+        51,
+        9
+      ],
+      "b": [
+        48,
+        9
+      ]
+    },
+    {
+      "a": [
+        51,
+        11
+      ],
+      "b": [
+        48,
+        11
+      ]
+    },
+    {
+      "a": [
+        55,
+        22
+      ],
+      "b": [
+        55,
+        25
+      ]
+    },
+    {
+      "a": [
+        51,
+        13
+      ],
+      "b": [
+        48,
+        13
+      ]
+    },
+    {
+      "a": [
+        51,
+        15
+      ],
+      "b": [
+        48,
+        15
+      ]
+    },
+    {
+      "a": [
+        51,
+        17
+      ],
+      "b": [
+        48,
+        17
+      ]
+    },
+    {
+      "a": [
+        51,
+        19
+      ],
+      "b": [
+        48,
+        19
+      ]
+    },
+    {
+      "a": [
+        55,
+        2
+      ],
+      "b": [
+        55,
+        -1
+      ]
+    },
+    {
+      "a": [
+        51,
+        35
+      ],
+      "b": [
+        48,
+        35
+      ]
+    },
+    {
+      "a": [
+        51,
+        37
+      ],
+      "b": [
+        48,
+        37
+      ]
+    },
+    {
+      "a": [
+        59,
+        39
+      ],
+      "b": [
+        62,
+        39
+      ]
+    },
+    {
+      "a": [
+        51,
+        39
+      ],
+      "b": [
+        48,
+        39
+      ]
+    },
+    {
+      "a": [
+        51,
+        41
+      ],
+      "b": [
+        48,
+        41
+      ]
+    },
+    {
+      "a": [
+        55,
+        52
+      ],
+      "b": [
+        55,
+        55
+      ]
+    },
+    {
+      "a": [
+        51,
+        43
+      ],
+      "b": [
+        48,
+        43
+      ]
+    },
+    {
+      "a": [
+        51,
+        45
+      ],
+      "b": [
+        48,
+        45
+      ]
+    },
+    {
+      "a": [
+        51,
+        47
+      ],
+      "b": [
+        48,
+        47
+      ]
+    },
+    {
+      "a": [
+        51,
+        49
+      ],
+      "b": [
+        48,
+        49
+      ]
+    },
+    {
+      "a": [
+        55,
+        32
+      ],
+      "b": [
+        55,
+        29
+      ]
+    },
+    {
+      "a": [
+        90,
+        10
+      ],
+      "b": [
+        90,
+        7
+      ]
+    },
+    {
+      "a": [
+        90,
+        14
+      ],
+      "b": [
+        90,
+        17
+      ]
+    },
+    {
+      "a": [
+        102,
+        12
+      ],
+      "b": [
+        99,
+        12
+      ]
+    },
+    {
+      "a": [
+        106,
+        12
+      ],
+      "b": [
+        109,
+        12
+      ]
+    },
+    {
+      "a": [
+        90,
+        40
+      ],
+      "b": [
+        90,
+        37
+      ]
+    },
+    {
+      "a": [
+        90,
+        44
+      ],
+      "b": [
+        90,
+        47
+      ]
+    },
+    {
+      "a": [
+        102,
+        42
+      ],
+      "b": [
+        99,
+        42
+      ]
+    },
+    {
+      "a": [
+        106,
+        42
+      ],
+      "b": [
+        109,
+        42
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        13,
+        10
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        27,
+        11
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        27,
+        25
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        13,
+        26
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        27,
+        27
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        48,
+        5
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        48,
+        7
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        62,
+        9
+      ],
+      "text": "S"
+    },
+    {
+      "pos": [
+        48,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        11
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        55,
+        25
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        15
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        17
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        55,
+        -1
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        48,
+        35
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        48,
+        37
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        62,
+        39
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        48,
+        39
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        41
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        55,
+        55
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        43
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        45
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        47
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        49
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        55,
+        29
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        90,
+        7
+      ],
+      "text": "S"
+    },
+    {
+      "pos": [
+        90,
+        17
+      ],
+      "text": "LS"
+    },
+    {
+      "pos": [
+        99,
+        12
+      ],
+      "text": "LS"
+    },
+    {
+      "pos": [
+        109,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        37
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        90,
+        47
+      ],
+      "text": "LC"
+    },
+    {
+      "pos": [
+        99,
+        42
+      ],
+      "text": "LC"
+    },
+    {
+      "pos": [
+        109,
+        42
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

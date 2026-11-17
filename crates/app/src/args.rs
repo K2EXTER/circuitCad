@@ -541,6 +541,12 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                     app.sch.show_digital();
                 }
             }
+        // "デジタル回路を動かしながら見る": `--live-logic [SW1,SW2]` flips the switches named, `--live-slow` turns slow motion on
+        if let Some(i) = args.iter().position(|a| a == "--live-logic") {
+            app.sch.start_live_logic();
+            let flip = args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |a| a.as_str());
+            app.sch.live_logic_args(flip, args.iter().any(|a| a == "--live-slow"));
+        }
     }
     if let Some(p) = args.iter().find(|a| a.ends_with(".pcbjson")) {
         app.mode = Mode::Board;
