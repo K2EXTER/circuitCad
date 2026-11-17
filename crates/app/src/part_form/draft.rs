@@ -296,6 +296,7 @@ impl PartForm {
                 Some("レギュレータ") => {
                     let name = self.name.clone();
                     self.reg.fill_from_pdf(&name, values);
+                    self.reg_find_variants();
                     Some(("reg_box", "レギュレータ"))
                 }
                 Some("フォトカプラ") => {

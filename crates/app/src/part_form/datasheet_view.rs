@@ -408,6 +408,12 @@ impl SheetView {
         self.doc.as_ref().map(|d| d.ds.thermal()).unwrap_or_default()
     }
 
+    /// The part numbers of `name`'s family in the open PDF and the output voltages it lists as options (none when no PDF
+    /// is open; `Datasheet::part_numbers`, `voltage_options`).
+    pub fn part_numbers(&self, name: &str) -> (Vec<(String, usize)>, Vec<f64>) {
+        self.doc.as_ref().map(|d| (d.ds.part_numbers(name), d.ds.voltage_options())).unwrap_or_default()
+    }
+
     /// A Darlington's resistors R1, R2 [Ω] and the page, from the open PDF's circuit drawing (`Datasheet::darlington_resistors`).
     pub fn darlington_resistors(&self) -> Option<(f64, f64, usize)> {
         self.doc.as_ref().and_then(|d| d.ds.darlington_resistors())

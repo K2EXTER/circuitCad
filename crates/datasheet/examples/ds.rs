@@ -91,6 +91,14 @@ fn main() -> Result<(), String> {
                 }
             }
         }
+        "parts" => {
+            // the part numbers of a family (`ds parts FILE NAME`) and the voltage options
+            let name = args.get(2).ok_or("parts FILE NAME")?;
+            for (p, page) in ds.part_numbers(name) {
+                println!("p.{} {p}", page + 1);
+            }
+            println!("options {:?}", ds.voltage_options());
+        }
         "caps" => {
             // ds caps FILE: the capacitors named with a value
             for c in ds.capacitors() {

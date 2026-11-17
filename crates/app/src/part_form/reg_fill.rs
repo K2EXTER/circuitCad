@@ -58,9 +58,12 @@ pub fn nominal_from_name(name: &str) -> Option<f64> {
         if let Some(i) = n.find(pre) {
             let rest = n[i + 2..].trim_start_matches(['L', 'M']);
             let d: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-            // "7800" names the family, not a voltage
+            // "7800" names the family, not a voltage; a 78xx is 24 V at most: "78L33" and "78L033" are 3.3 V (TI's UA78L)
             if d.len() == 2 {
-                return d.parse::<f64>().ok().filter(|v| *v > 0.0);
+                return d.parse::<f64>().ok().filter(|v| *v > 0.0).map(|v| if v > 24.0 { v / 10.0 } else { v });
+            }
+            if d.len() == 3 && d.starts_with('0') {
+                return d.parse::<f64>().ok().filter(|v| *v > 0.0).map(|v| v / 10.0);
             }
         }
     }
@@ -302,6 +305,54 @@ impl RegulatorInput {
     }
 }
 
+/// The output voltages of a data sheet for several, each once with its shortest part number, lowest first: the voltage
+/// each part number tells (`nominal_from_name`: "LP5907MFX-3.3", "MC7812CTG", "MCP1700T-3302E"), then the listed
+/// options with no part number of their own, named after the family ("MCP1700-2.8"). None for a part of one voltage.
+pub fn variants(parts: &[(String, usize)], options: &[f64], name: &str) -> Vec<(f64, String)> {
+    let mut out: Vec<(f64, String)> = vec![];
+    for (p, _) in parts {
+        let Some(v) = nominal_from_name(p).filter(|v| *v > 0.0 && *v <= 60.0) else { continue };
+        // the shortest part number of a voltage names it ("AMS1117-3.3" before "AMS1117CD-3.3", "MC7805" before "MC7805B")
+        match out.iter_mut().find(|o| (o.0 - v).abs() < 1e-9) {
+            Some(o) if p.len() < o.1.len() => o.1 = p.clone(),
+            Some(_) => {}
+            None => out.push((v, p.clone())),
+        }
+    }
+    let family = datasheet::ordering::family(name);
+    for &v in options {
+        if !out.iter().any(|o| (o.0 - v).abs() < 1e-9) {
+            out.push((v, format!("{family}-{}", show(v))));
+        }
+    }
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    if out.len() < 2 { vec![] } else { out }
+}
+
+impl super::PartForm {
+    /// The regulator's voltage variants from the open PDF's part numbers (shown as buttons in its section).
+    pub(super) fn reg_find_variants(&mut self) {
+        let (parts, options) = self.sheet.part_numbers(&self.name);
+        self.reg.variants = variants(&parts, &options, &self.name);
+        if !self.reg.variants.is_empty() && self.reg.vout.trim().is_empty() && !self.reg.adjustable {
+            self.reg.found.push((true, format!("この 1 冊は出力電圧が {} 通りあります。下の「電圧違い」で型番を選ぶと、出力電圧が入ります", self.reg.variants.len())));
+        }
+    }
+
+    /// One of the variants picked: its part number as the part's name, the table read again for it (the page of its
+    /// voltage, MC7800), and its voltage as the output when the table has none (LP5907: "±2 %" only).
+    pub(super) fn reg_choose_variant(&mut self, v: f64, part: &str) {
+        self.name = part.to_string();
+        let (sheet, name) = (&self.sheet, self.name.clone());
+        self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
+        if self.reg.vout.trim().is_empty() {
+            self.reg.vout = show(v);
+            self.reg.found.insert(0, (true, format!("出力電圧 {} V: 型番 {part} から", show(v))));
+        }
+        self.reg.result = None;
+    }
+}
+
 /// A number to 3 significant digits (a value read off a graph).
 fn three(v: f64) -> f64 {
     format!("{v:.2e}").parse().unwrap_or(v)
@@ -364,7 +415,7 @@ mod tests {
         assert!((span("5.0 mA ≤ IO ≤ 1.0 A", AMPS).unwrap() - 0.995).abs() < 1e-12);
         assert_eq!(span("TJ = 25°C", VOLTS), None);
         assert_eq!(with_units("f = 120Hz", HERTZ), vec![120.0]);
-        for (n, want) in [("MC7805", Some(5.0)), ("UA78L12", Some(12.0)), ("AMS1117-3.3", Some(3.3)), ("MCP1700-3302", Some(3.3)), ("LP5907-18", Some(1.8)), ("LM317", None), ("MC7800", None)] {
+        for (n, want) in [("MC7805", Some(5.0)), ("UA78L12", Some(12.0)), ("AMS1117-3.3", Some(3.3)), ("MCP1700-3302", Some(3.3)), ("LP5907-18", Some(1.8)), ("LM317", None), ("MC7800", None), ("UA78L33", Some(3.3)), ("UA78L033", Some(3.3)), ("MCP1700T-3302E", Some(3.3)), ("LP5907MFX-2.85", Some(2.85))] {
             assert_eq!(nominal_from_name(n), want, "{n}");
         }
     }
@@ -428,6 +479,24 @@ mod tests {
         let t2 = [v(2, "Dropout", "VIN = 6.5V", None, 5.0, Some(20.0), Some("mV")), v(2, "Dropout", "IOUT = 0.8A", None, 1.1, Some(1.3), Some("V"))];
         r.fill_from_pdf("AMS1117", |s| t2.iter().filter(|x| x.symbol == s).cloned().collect());
         assert_eq!(r.vdo0, "1.1");
+    }
+
+    #[test]
+    fn voltage_variants_from_part_numbers() {
+        let parts: Vec<(String, usize)> = ["LP5907SN", "LP5907A33YKMR", "LP5907MFX1.2NOPBG4", "LP5907MFX-1.2", "LP5907MFX-3.3", "LP5907SNX-2.75"].iter().map(|p| (p.to_string(), 30)).collect();
+        let v = variants(&parts, &[], "LP5907");
+        assert_eq!(v, vec![(1.2, "LP5907MFX-1.2".to_string()), (2.75, "LP5907SNX-2.75".to_string()), (3.3, "LP5907MFX-3.3".to_string())]);
+        // the options listed with no part number of their own
+        let parts = vec![("MCP1700T-3302E".to_string(), 20)];
+        let v = variants(&parts, &[1.2, 3.3], "MCP1700");
+        assert_eq!(v, vec![(1.2, "MCP1700-1.2".to_string()), (3.3, "MCP1700T-3302E".to_string())]);
+        // one voltage: nothing to pick
+        assert!(variants(&[("LM317KCS".to_string(), 3)], &[], "LM317").is_empty());
+        // picked: the part's name and, the table having none, its voltage
+        let mut f = crate::part_form::PartForm { name: "LP5907".into(), ..Default::default() };
+        f.reg_choose_variant(3.3, "LP5907MFX-3.3");
+        assert_eq!((f.name.as_str(), f.reg.vout.as_str()), ("LP5907MFX-3.3", "3.3"));
+        assert!(f.reg.found[0].1.contains("LP5907MFX-3.3"), "{:?}", f.reg.found);
     }
 
     #[test]

@@ -20,6 +20,7 @@ pub mod ocr;
 pub mod spec_table;
 pub mod thermal;
 pub mod companions;
+pub mod ordering;
 mod headings;
 mod pin_table;
 mod suggest;
@@ -215,6 +216,19 @@ impl Datasheet {
     pub fn capacitors(&self) -> Vec<companions::FoundCap> {
         let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
         companions::read(&pages)
+    }
+
+    /// The part numbers of `name`'s family the data sheet names (its ordering information), each with its first page
+    /// (`ordering::part_numbers`).
+    pub fn part_numbers(&self, name: &str) -> Vec<(String, usize)> {
+        let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
+        ordering::part_numbers(&pages, &ordering::family(name))
+    }
+
+    /// The output voltages the data sheet lists as options (`ordering::voltage_options`).
+    pub fn voltage_options(&self) -> Vec<f64> {
+        let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
+        ordering::voltage_options(&pages)
     }
 
     /// The thermal resistances of every page (`thermal::read`): the thermal table's rows and the power deratings.

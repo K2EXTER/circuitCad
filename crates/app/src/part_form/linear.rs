@@ -62,6 +62,8 @@ pub struct RegulatorInput {
     pub message: Option<(bool, String)>,
     /// What "PDF の表から読む" put in or could not find, one line each.
     pub found: Vec<(bool, String)>,
+    /// The output voltages the data sheet's part numbers tell, each with its first part number (`reg_fill::variants`).
+    pub variants: Vec<(f64, String)>,
 }
 
 /// A number as typed, with an SI prefix and an optional unit after it ("700kHz", "-20nA", "2Meg").
@@ -580,6 +582,7 @@ impl PartForm {
                 let (sheet, name) = (&self.sheet, self.name.clone());
                 self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
                 self.reg.result = None;
+                self.reg_find_variants();
             }
             if ui.button(i18n::tr("LM7805 の例を入れる")).on_hover_text(i18n::tr("同梱の LM7805 を作ったときの値 (onsemi のデータシートの typ) を入れます")).clicked() {
                 self.regulator_example_and_make(false);
@@ -591,6 +594,23 @@ impl PartForm {
         });
         for (ok, line) in &self.reg.found {
             ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+        }
+        // one data sheet for several output voltages (LP5907, MC7800, AMS1117): the person picks one
+        if !self.reg.adjustable && !self.reg.variants.is_empty() {
+            let mut pick = None;
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new(i18n::tr("電圧違い (注文情報):")).small())
+                    .on_hover_text(i18n::tr("データシートの型番から読んだ出力電圧です。選ぶと、その型番を部品名にして表を読み直します (電圧ごとにページの分かれた表は、そのページの値を使います)"));
+                for (v, part) in &self.reg.variants {
+                    let on = super::linear::show(*v) == self.reg.vout.trim();
+                    if ui.selectable_label(on, format!("{} V", super::linear::show(*v))).on_hover_text(i18n::trf!("{part} (出力 {} V)", super::linear::show(*v))).clicked() {
+                        pick = Some((*v, part.clone()));
+                    }
+                }
+            });
+            if let Some((v, part)) = pick {
+                self.reg_choose_variant(v, &part);
+            }
         }
         {
             use super::graph_reader::Dest;

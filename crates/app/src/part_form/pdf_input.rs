@@ -68,6 +68,7 @@ impl PartForm {
                 // a part pasted from a draft has no name in the section: the form's
                 let name = self.name.clone();
                 self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
+                self.reg_find_variants();
             }
             _ => {}
         }
@@ -92,6 +93,10 @@ impl PartForm {
         if section == "reg" {
             for (ok, line) in &self.reg.found {
                 eprintln!("{} table: {line}", if *ok { "ok" } else { "--" });
+            }
+            if !self.reg.variants.is_empty() {
+                let list: Vec<String> = self.reg.variants.iter().map(|(v, p)| format!("{} V {p}", super::linear::show(*v))).collect();
+                eprintln!("variants: {}", list.join(", "));
             }
         }
         for (_, ok, line) in &self.graph_all {
