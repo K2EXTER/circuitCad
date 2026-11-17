@@ -59,10 +59,50 @@ fn has_model(kind: Option<(PartType, &'static str)>) -> bool {
 }
 
 /// A built-in footprint of the same name as a package ("SOT-23", "TO-92").
-fn builtin_footprint(p: &PackageName) -> Option<String> {
+fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Option<String> {
     let names = pcb_core::footprints::names();
     let base = p.family.to_uppercase();
-    names.into_iter().find(|n| n.eq_ignore_ascii_case(&p.name) || n.eq_ignore_ascii_case(&base))
+    let count = pins.map(<[String]>::len).or(p.pins.map(|n| n as usize));
+    // the name as written, its family, and either with the pin count ("SOT-23" of a 5-pin part is the SOT-23-5)
+    let mut wanted = vec![p.name.clone(), base.clone()];
+    if let Some(n) = count {
+        wanted.extend([format!("{}-{n}", p.name), format!("{base}-{n}")]);
+    }
+    // its pads named as the part's pins are numbered (not the 3-pin SOT-23 for a 5-pin LDO, nor the lettered B/E/C one
+    // for pins 1 to 3), else as many pads as the package's name says
+    let fits = |n: &str| {
+        let Some(f) = pcb_core::footprints::get(n) else { return false };
+        let mut pads: Vec<&str> = f.pads.iter().map(|p| p.pin.as_str()).collect();
+        pads.sort_unstable();
+        pads.dedup();
+        match (pins, count) {
+            (Some(nums), _) => {
+                let mut want: Vec<&str> = nums.iter().map(String::as_str).collect();
+                want.sort_unstable();
+                want.dedup();
+                pads == want
+            }
+            (None, Some(k)) => pads.len() == k,
+            (None, None) => true,
+        }
+    };
+    if let Some(n) = wanted.iter().find_map(|w| names.iter().find(|n| n.eq_ignore_ascii_case(w) && fits(n)).cloned()) {
+        return Some(n);
+    }
+    // the pin count unknown: the one outline of that name with a count ("TO-220" → "TO-220-3"; not the SOT-23-5 or -6)
+    let up = format!("{}-", p.name.to_uppercase());
+    let mut with_count = names.iter().filter(|n| count.is_none() && n.to_uppercase().starts_with(&up));
+    match (with_count.next(), with_count.next()) {
+        (Some(n), None) => Some(n.clone()),
+        _ => None,
+    }
+}
+
+/// A tab printed as a pin of its own with the name of pin 2 ("TAB OUTPUT" beside "2 OUTPUT", TI's LM317 in SOT-223):
+/// its number. The built-in SOT-223 makes the tab pad 2.
+fn tab_as_pin_2(pins: &[(String, String)]) -> Option<String> {
+    let two = pins.iter().find(|p| p.0 == "2")?;
+    pins.iter().find(|p| (p.0.eq_ignore_ascii_case("TAB") || p.0 == "4") && p.1.eq_ignore_ascii_case(&two.1)).map(|p| p.0.clone())
 }
 
 /// Package families whose leads stand in two rows (the form's "デュアル").
@@ -211,9 +251,26 @@ impl PartForm {
         if d.use_[2]
             && let Some(p) = d.packages.get(d.package)
         {
-            if let Some(fp) = builtin_footprint(p) {
+            // the pins put in (a tab with pin 2's name is pin 2's pad), or else the form's: their numbers
+            let pins: Option<Vec<(String, String)>> = d.use_[3].then(|| d.pin_sources.get(d.pin_pick).map(|p| p.pins.clone())).flatten();
+            let tab = pins.as_deref().and_then(tab_as_pin_2);
+            let numbers: Vec<String> = match &pins {
+                Some(v) => v.iter().map(|p| p.0.clone()).filter(|n| Some(n) != tab.as_ref()).collect(),
+                None => self.pins_text.lines().filter_map(|l| l.split_whitespace().next().map(str::to_string)).collect(),
+            };
+            // the draft's own pins must fit; the form's (a template's) may be the person's to change, so the name alone will do
+            let fp = builtin_footprint(p, Some(&numbers)).or_else(|| if pins.is_none() { builtin_footprint(p, None) } else { None });
+            if let Some(fp) = fp {
                 self.fp_preset = fp.clone();
-                done.push(format!("パッケージ: {} (組み込みの {fp})", p.name));
+                let mut how = format!("パッケージ: {} (組み込みの {fp})", p.name);
+                if fp == "SOT-223"
+                    && let Some(t) = &tab
+                {
+                    // the tab's own line goes: its pad is pin 2's
+                    self.pins_text = self.pins_text.lines().filter(|l| l.split_whitespace().next() != Some(t.as_str())).collect::<Vec<_>>().join("\n");
+                    how += &format!("。{t} は 2 番と同じピンなので、タブのパッドを 2 番にしました");
+                }
+                done.push(how);
             } else if is_dual(p.family) {
                 self.fp_preset.clear();
                 self.pkg = PkgKind::Dual;
@@ -559,9 +616,24 @@ mod tests {
         assert_eq!((kind_of("ダーリントン"), list_category("ダーリントン")), (Some(PartType::Transistor), "トランジスタ"));
         assert!(has_model(Some((PartType::Ic, "オペアンプ"))) && !has_model(Some((PartType::Ic, "ロジックIC"))));
         let p = |name: &str, family: &'static str| PackageName { name: name.into(), family, pins: None, count: 1, page: 0 };
-        assert_eq!(builtin_footprint(&p("SOT-23", "sot-23")).as_deref(), Some("SOT-23"));
-        assert_eq!(builtin_footprint(&p("TO-92", "to-92")).as_deref(), Some("TO-92"));
-        assert!(builtin_footprint(&p("SOIC-8", "soic")).is_none());
+        assert_eq!(builtin_footprint(&p("SOT-23", "sot-23"), None).as_deref(), Some("SOT-23"));
+        assert_eq!(builtin_footprint(&p("TO-92", "to-92"), None).as_deref(), Some("TO-92"));
+        assert!(builtin_footprint(&p("SOIC-8", "soic"), None).is_none());
+        // the pins' numbers pick the outline: a 5-pin part's "SOT-23" is the SOT-23-5, pins 1 to 3 the numbered SOT-23
+        let nums = |n: usize| (1..=n).map(|i| i.to_string()).collect::<Vec<_>>();
+        assert_eq!(builtin_footprint(&p("SOT-23", "sot-23"), Some(&nums(5))).as_deref(), Some("SOT-23-5"));
+        assert_eq!(builtin_footprint(&p("SOT-23", "sot-23"), Some(&nums(3))).as_deref(), Some("SOT-23-3"));
+        let bec: Vec<String> = ["B", "E", "C"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(builtin_footprint(&p("SOT-23", "sot-23"), Some(&bec)).as_deref(), Some("SOT-23"));
+        assert!(builtin_footprint(&p("SOT-23", "sot-23"), Some(&nums(8))).is_none());
+        assert_eq!(builtin_footprint(&p("SOT-223", "sot-223"), Some(&nums(3))).as_deref(), Some("SOT-223"));
+        assert_eq!(builtin_footprint(&p("TO-220", "to-220"), Some(&nums(3))).as_deref(), Some("TO-220-3"));
+        assert_eq!(builtin_footprint(&p("TO-220", "to-220"), None).as_deref(), Some("TO-220-3"), "the one TO-220");
+        assert_eq!(builtin_footprint(&p("SOT-23", "sot-23"), None).as_deref(), Some("SOT-23"));
+        // LM317's tab printed with the output's name
+        let lm317: Vec<(String, String)> = [("1", "ADJUST"), ("2", "OUTPUT"), ("3", "INPUT"), ("TAB", "OUTPUT")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        assert_eq!(tab_as_pin_2(&lm317).as_deref(), Some("TAB"));
+        assert_eq!(tab_as_pin_2(&lm317[..3]), None);
         assert!(is_dual("tssop") && !is_dual("sot-223"));
     }
 }

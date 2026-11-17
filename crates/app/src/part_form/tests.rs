@@ -1221,8 +1221,12 @@ fn a_draft_from_real_data_sheets() {
         let done = f.apply_draft(&d);
         assert_eq!((f.name.as_str(), f.glyph.as_str()), ("AO3400A", "nmos"), "{done:?}");
         assert!(done.iter().any(|l| l.contains("MOSFET の値")), "{done:?}");
-        // "SOT23" written without its dash: the built-in footprint
-        assert_eq!(f.fp_preset, "SOT-23", "{done:?}");
+        // "SOT23" written without its dash: the built-in footprint, with a pad for each pin's number
+        assert!(f.fp_preset.starts_with("SOT-23"), "{done:?}");
+        let fp = pcb_core::footprints::get(&f.fp_preset).unwrap();
+        for n in f.pins_text.lines().filter_map(|l| l.split_whitespace().next()) {
+            assert!(fp.pads.iter().any(|p| p.pin == n), "pin {n} on {}: {done:?}", f.fp_preset);
+        }
         // the ratings from the absolute maximum ratings table: VDS, ID (at 25 °C, printed over its symbol), PD, TJ
         assert_eq!((f.rt_v.as_str(), f.rt_i.as_str(), f.rt_p.as_str(), f.rt_t.as_str()), ("30", "5.7", "1.4", "150"), "{done:?}");
     }

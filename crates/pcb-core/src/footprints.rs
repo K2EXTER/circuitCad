@@ -124,7 +124,7 @@ fn wire_pads_sized(name: &str, pins: &[String], pad_d: f64, drill: f64) -> Footp
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
         "R_0603", "R_0805", "R_0805_Reflow", "R_1206", "R_2512", "C_0402", "C_0603", "C_0805", "C_0805_Reflow", "C_1206", "C_1210", "L_0805", "LED_0805", "D_SOD-123", "CT_3528-21", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
-        "D_DO-35_7.62", "LED_5mm", "TO-92", "SOT-23", "PinHeader_1x2_PM",
+        "D_DO-35_7.62", "LED_5mm", "TO-92", "TO-92-3", "SOT-23", "SOT-23-3", "SOT-23-5", "SOT-23-6", "SOT-223", "TO-220-3", "PinHeader_1x2_PM",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -193,6 +193,54 @@ pub fn get(name: &str) -> Option<Footprint> {
                 silk: vec![],
                 body: None,
                 pads: vec![pad("B", -0.95, 0.95, s, None), pad("E", 0.95, 0.95, s, None), pad("C", 0.0, -0.95, s, None)],
+            }
+        }
+        // the TO-92 with its pins numbered left to right (2N3904: 1 = E, 2 = B, 3 = C), pin 1 square
+        "TO-92-3" => {
+            let s = PadShape::Circle { d: 1.5 };
+            Footprint { name: name.into(), holes: vec![], height: None, silk: vec![], body: None, pads: vec![pad("1", -2.54, 0.0, PadShape::Rect { w: 1.5, h: 1.5 }, Some(0.8)), pad("2", 0.0, 0.0, s, Some(0.8)), pad("3", 2.54, 0.0, s, Some(0.8))] }
+        }
+        // the SOT-23 with its pins numbered (1 = B, 2 = E, 3 = C of a transistor; a MOSFET's G, S, D): parts made from a data
+        // sheet number their pins
+        "SOT-23-3" => {
+            let s = PadShape::Rect { w: 0.9, h: 0.8 };
+            Footprint { name: name.into(), holes: vec![], height: None, silk: vec![], body: None, pads: vec![pad("1", -0.95, 0.95, s, None), pad("2", 0.95, 0.95, s, None), pad("3", 0.0, -0.95, s, None)] }
+        }
+        // ICs' small outlines, pins numbered (the lands of the bundled MCP6001 and AMS1117, as KiCad's): SOT-23-5/6 pins 1 to
+        // 3 along one side and the rest back along the other
+        "SOT-23-5" | "SOT-23-6" => {
+            let s = PadShape::Rect { w: 0.6, h: 1.1 };
+            let n = if name == "SOT-23-5" { 5 } else { 6 };
+            let mut pads = vec![pad("1", -0.95, -1.3, s, None), pad("2", 0.0, -1.3, s, None), pad("3", 0.95, -1.3, s, None), pad("4", 0.95, 1.3, s, None)];
+            if n == 5 {
+                pads.push(pad("5", -0.95, 1.3, s, None));
+            } else {
+                pads.extend([pad("5", 0.0, 1.3, s, None), pad("6", -0.95, 1.3, s, None)]);
+            }
+            Footprint { name: name.into(), holes: vec![], height: None, silk: vec![], body: None, pads }
+        }
+        // SOT-223: three pins and the tab, which is pin 2 (regulators' output, transistors' collector: KiCad's TabPin2)
+        "SOT-223" => {
+            let s = PadShape::Rect { w: 2.0, h: 1.5 };
+            Footprint {
+                name: name.into(),
+                holes: vec![],
+                height: None,
+                silk: vec![],
+                body: None,
+                pads: vec![pad("1", -3.15, 2.3, s, None), pad("2", -3.15, 0.0, s, None), pad("3", -3.15, -2.3, s, None), pad("2", 3.15, 0.0, PadShape::Rect { w: 2.0, h: 3.8 }, None)],
+            }
+        }
+        // TO-220 standing up: three leads 2.54 apart, pin 1 square (the bundled LM7805's)
+        "TO-220-3" => {
+            let s = PadShape::Circle { d: 2.0 };
+            Footprint {
+                name: name.into(),
+                holes: vec![],
+                height: None,
+                silk: vec![],
+                body: None,
+                pads: vec![pad("1", -2.54, 0.0, PadShape::Rect { w: 2.0, h: 2.0 }, Some(1.1)), pad("2", 0.0, 0.0, s, Some(1.1)), pad("3", 2.54, 0.0, s, Some(1.1))],
             }
         }
         "PinHeader_1x2_PM" => header(name, &["+".to_string(), "-".to_string()]),
@@ -291,6 +339,22 @@ fn outline(name: &str) -> Vec<FpLine> {
 #[cfg(test)]
 mod wire_pad_tests {
     use super::*;
+
+    #[test]
+    fn small_ic_outlines_have_numbered_pads() {
+        let count = |n: &str| get(n).map(|f| f.pads.len());
+        assert_eq!(count("TO-92-3"), Some(3));
+        assert_eq!((count("SOT-23-3"), count("SOT-23-5"), count("SOT-23-6"), count("SOT-223"), count("TO-220-3")), (Some(3), Some(5), Some(6), Some(4), Some(3)));
+        // the numbered SOT-23 lies as the lettered one
+        let (a, b) = (get("SOT-23").unwrap(), get("SOT-23-3").unwrap());
+        assert!(a.pads.iter().zip(&b.pads).all(|(p, q)| (p.pos.x - q.pos.x).abs() < 1e-9 && (p.pos.y - q.pos.y).abs() < 1e-9));
+        let tab = get("SOT-223").unwrap();
+        assert_eq!(tab.pads.iter().filter(|p| p.pin == "2").count(), 2, "the tab is pin 2");
+        assert!(get("TO-220-3").unwrap().pads.iter().all(|p| p.drill == Some(1.1)));
+        for n in ["SOT-23-5", "SOT-23-6", "SOT-223", "TO-220-3"] {
+            assert!(names().iter().any(|m| m == n), "{n}");
+        }
+    }
 
     #[test]
     fn wire_pads_are_round_holes_on_the_header_pitch() {
