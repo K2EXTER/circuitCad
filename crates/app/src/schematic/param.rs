@@ -29,7 +29,7 @@ impl SchEditor {
     }
 
     /// Parts whose value is a plain number (R, C, L): the ones that can be swept.
-    fn sweepable(&self) -> Vec<(String, String)> {
+    pub(super) fn sweepable(&self) -> Vec<(String, String)> {
         self.sch
             .components
             .iter()
@@ -39,7 +39,7 @@ impl SchEditor {
     }
 
     /// Picks a part and proposes a range of 1/10 to 10 times its value.
-    fn param_choose(&mut self, refdes: &str, value: &str) {
+    pub(super) fn param_choose(&mut self, refdes: &str, value: &str) {
         self.param_part = refdes.into();
         if let Some(v) = parse_value(value.split_whitespace().next().unwrap_or("")).filter(|v| *v > 0.0) {
             self.param_from = format_value(v / 10.0);

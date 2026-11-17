@@ -108,6 +108,12 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   psrr NET FSTART FSTOP [supply=V1] [ppd=10]
                                         supply rejection: a 1 V ripple on one DC supply alone (the first one if not named), the share
                                         that reaches NET per decade (dB) and the rejection at 100 Hz, 1 kHz ...; the worst frequency
+  nyquist PART FSTART FSTOP [ppd=10] [from=NET] [points=0]
+                                        the loop gain (cut at PART, as 'loopgain') as a Nyquist chart: the crossovers as points of T, the point
+                                        nearest to -1 and its distance |1+T| (0.5 or more is good), the sensitivity peak in dB
+  locus PART FROM TO OUT FSTART FSTOP [in=NET] [n=15] [lin] [ppd=20]
+                                        root locus: PART stepped from FROM to TO, the poles of V(OUT)/V(in) at each value (in Hz), the
+                                        smallest damping, and the first value where a pole reaches the right half plane (oscillation)
   cmrr NET FSTART FSTOP [plus=V3] [minus=V4] [ppd=10] [tol_r=1] [runs=300]
                                         common-mode rejection of a difference amplifier: the + and - inputs' sources driven apart (Ad) and
                                         together (Acm), CMRR = |Ad/Acm| per decade; tol_r= draws the resistors and gives the spread (0 = none)
@@ -361,6 +367,8 @@ impl Session {
             "diagnose" => self.diagnose(args),
             "loopgain" => self.loopgain(args),
             "pz" => self.pz(args),
+            "nyquist" => self.nyquist(args),
+            "locus" => self.locus(args),
             "worst" => self.worst(args),
             "poweron" => self.poweron(args),
             "mc" => self.mc(args),

@@ -3,6 +3,8 @@
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke};
 
+pub mod xy;
+
 pub struct Trace<'a> {
     pub name: &'a str,
     pub color: Color32,

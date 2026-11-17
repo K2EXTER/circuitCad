@@ -14,6 +14,7 @@ impl SchEditor {
             WaveMode::Sens => self.sens.is_some(),
             WaveMode::Param => self.param.is_some(),
             WaveMode::Fault => self.fault_wave.is_some(),
+            WaveMode::Locus => self.locus.is_some(),
         }
     }
 
@@ -29,6 +30,7 @@ impl SchEditor {
             WaveMode::Sens => self.sens_wave_panel(ui),
             WaveMode::Param => self.param_wave_panel(ui),
             WaveMode::Fault => self.fault_wave_panel(ui),
+            WaveMode::Locus => self.locus_wave_panel(ui),
         }
     }
 

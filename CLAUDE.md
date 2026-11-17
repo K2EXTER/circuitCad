@@ -32,7 +32,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`(目次。ファイル一覧は `sim-core/files.md`)
 - 動作点 `dc/`(build・devices・mna・newton・linalg・digital)/ 過渡 `tran.rs` / `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs`(FFT・THD)/ `temperature.rs`
 - 回路図→素子 `from_schematic.rs`(新しい部品種別はここ)/ `spice_in.rs` ライブラリ読込 / `spice_flat.rs` ベンダー形式のSPICE文の展開 / `expr.rs` 式の評価 / `netcurrent.rs` ネットごとの電流 / `dc/seq.rs` 記憶つき素子 / `waveform.rs` / `value.rs` / `options.rs` / `par.rs` 並列 / `diagnose.rs` 失敗時の原因
-- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `cmrr` `troubleshoot` `loopgain` `polezero` `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage` `poweron`(最初の電源投入: 電流制限の値と正常な電流の範囲。画面 `power_on_guide.rs`、CLI `poweron`)
+- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `cmrr` `troubleshoot` `loopgain`(ナイキスト・ニコルスの印も) `polezero` `rootlocus`(根軌跡) `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage` `poweron`(最初の電源投入: 電流制限の値と正常な電流の範囲。画面 `power_on_guide.rs`、CLI `poweron`)
 - 熱: `selfheat.rs` 自己発熱 / `ambient.rs` 周囲の温度を振る(自己発熱込みの最悪ケース)/ `heat_tran.rs` 温度の時間変化 / `zth.rs` 過渡熱抵抗の段(データシートの曲線に当てはめ)
 - `designcalc.rs` 値の計算(足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)/ `filterdesign.rs` アクティブフィルタの段と部品(回路図に置くのは `schematic/filter_place.rs`)
 - `tests_*.rs` は機能別

@@ -1,6 +1,6 @@
 use super::*;
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum | --digital]] [--post-layout [--schematic]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--loop-chart nyquist|nichols [plain]] [--locus part from to count out in|- [f0 f1 ppd]] [--tran stop step [--spectrum | --digital]] [--post-layout [--schematic]]
 /// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d [--3d-cam yaw,pitch,zoom] [--3d-case w,d,top,bottom]] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-graph-for DarlHfe] [--form-graph-all bjt|darl|diode|opto|pd|reg [--form-save dir]] [--form-companions] [--form-save dir] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-opamp-example] [--form-opamp-pdf] [--form-regulator-example [adj]] [--form-opto-example] [--form-photodiode-example] [--form-darlington-example] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
@@ -443,6 +443,22 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 }
                 app.sch.set_loop_settings(part, args.get(i + 2).filter(|a| !a.starts_with("--") && *a != "-").map_or("", |a| a.as_str()));
                 app.sch.analyze_loop();
+            }
+        if let Some(i) = args.iter().position(|a| a == "--loop-chart")
+            && let Some(kind) = args.get(i + 1) {
+                // --loop-chart nyquist|nichols [plain]  (draw the loop gain of --loop that way; "plain": the Nyquist chart unsqueezed)
+                app.sch.set_loop_chart(kind, args.get(i + 2).is_some_and(|a| a == "plain"));
+            }
+        if let Some(i) = args.iter().position(|a| a == "--locus")
+            && let (Some(part), Some(a), Some(b), Some(n), Some(out), Some(input)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3), args.get(i + 4), args.get(i + 5), args.get(i + 6)) {
+                // --locus <part> <from> <to> <count> <output net> <input net or -> [f0 f1 ppd]  (the root locus, by ratio steps)
+                if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 7), args.get(i + 8), args.get(i + 9))
+                    && !f0.starts_with("--") {
+                    app.sch.set_ac_settings(f0, f1, p);
+                }
+                app.sch.set_locus_settings(part, a, b, n, out, if input == "-" { "" } else { input });
+                app.sch.analyze_locus();
+                app.sch.show_analysis_section("rootlocus");
             }
         if let Some(i) = args.iter().position(|a| a == "--z") {
             // --z <net> <reference net or -> <parts to take out, comma separated, or -> (uses the --ac frequency range)

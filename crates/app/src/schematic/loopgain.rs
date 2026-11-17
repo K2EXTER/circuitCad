@@ -2,7 +2,154 @@
 //! signal "T".
 
 use super::*;
-use sim_core::{loop_gain, AcSignal, BreakDirection};
+use crate::plot::xy::{self, Line, XyCurve, XyMark, XyStyle, XyView};
+use sim_core::{loop_gain, nyquist_squeeze, stability_marks, AcSignal, BreakDirection, C64};
+
+/// How the loop gain is drawn: the Bode plot (gain and phase over frequency), or the same curve as one line in the plane.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub(crate) enum LoopChart {
+    #[default]
+    Bode,
+    /// Re T against Im T, with -1 (the closed loop 1 + T is zero there).
+    Nyquist,
+    /// Phase against gain in dB, with (-180°, 0 dB).
+    Nichols,
+}
+
+impl LoopChart {
+    pub(super) const ALL: [(LoopChart, &'static str, &'static str); 3] = [
+        (LoopChart::Bode, "ボード線図", "ゲインと位相を、周波数を横軸に 2 段で描きます"),
+        (
+            LoopChart::Nyquist,
+            "ナイキスト線図",
+            "ループゲイン T を、周波数を変えながら複素数の平面に 1 本の線で描きます。線が -1 の点 (赤い ×) の右を通れば安定で、-1 から離れているほど余裕があります。単位円との交点が位相余裕、負の実軸との交点がゲイン余裕です",
+        ),
+        (
+            LoopChart::Nichols,
+            "ニコルス線図",
+            "横軸を位相、縦軸をゲイン (dB) にして T を 1 本の線で描きます。(-180°, 0 dB) の点 (赤い ×) の右下を通れば安定です。0 dB の線との交点から -180° までの横の距離が位相余裕、-180° の線との交点から 0 dB までの縦の距離がゲイン余裕です",
+        ),
+    ];
+}
+
+const RED: Color32 = Color32::from_rgb(255, 110, 100);
+const GREEN: Color32 = Color32::from_rgb(110, 210, 130);
+const AMBER: Color32 = Color32::from_rgb(240, 190, 80);
+
+/// The marks shared by the two charts, as (point on the chart, label) pairs: the gain crossover, the phase crossover, the point
+/// nearest to -1. `place` turns a T into a point of the chart.
+fn margin_marks(freq: &[f64], t: &[C64], place: &dyn Fn(f64, C64) -> (f64, f64), nearest: bool) -> Vec<XyMark> {
+    let m = stability_marks(freq, t);
+    let mut out = vec![];
+    if let Some((f, tg)) = m.gain_cross {
+        let pm = 180.0 + tg.arg_deg();
+        let pm = if pm > 180.0 { pm - 360.0 } else { pm };
+        out.push(XyMark { at: place(f, tg), color: if pm >= 45.0 { GREEN } else { AMBER }, shape: xy::Shape::Dot, inline: false, text: format!("位相余裕 {pm:.0}° ({})", eng(f, "Hz")) });
+    }
+    if let Some((f, tp)) = m.phase_cross {
+        let gm = -20.0 * tp.abs().max(1e-15).log10();
+        out.push(XyMark { at: place(f, tp), color: if gm >= 6.0 { GREEN } else { AMBER }, shape: xy::Shape::Square, inline: false, text: format!("ゲイン余裕 {gm:.1} dB ({})", eng(f, "Hz")) });
+    }
+    if nearest && let Some((f, tn, d)) = m.nearest {
+        out.push(XyMark { at: place(f, tn), color: Color32::from_gray(220), shape: xy::Shape::Ring, inline: false, text: format!("-1 に最も近い所: 距離 {d:.2} ({})", eng(f, "Hz")) });
+    }
+    out
+}
+
+/// Draws the loop gain `t` as a Nyquist or Nichols chart in `rect`.
+pub(super) fn draw_loop_chart(ui: &mut egui::Ui, rect: Rect, freq: &[f64], t: &[C64], chart: LoopChart, squeeze: bool, view: &mut XyView) {
+    let tags = freq;
+    match chart {
+        LoopChart::Bode => {}
+        LoopChart::Nyquist => {
+            let map = |z: C64| if squeeze { nyquist_squeeze(z) } else { z };
+            let pts: Vec<(f64, f64)> = t.iter().map(|z| map(*z)).map(|z| (z.re, z.im)).collect();
+            // the negative frequencies are the mirror image; together they close the curve the criterion counts round -1
+            let mirror: Vec<(f64, f64)> = pts.iter().map(|p| (p.0, -p.1)).collect();
+            let circle: Vec<(f64, f64)> = (0..=96).map(|k| k as f64 / 96.0 * std::f64::consts::TAU).map(|a| (a.cos(), a.sin())).collect();
+            let curves = [
+                XyCurve { name: "単位円 |T| = 1", color: Color32::from_gray(110), pts: &circle, tags: &[], line: Line::Dashed },
+                XyCurve { name: "T (負の周波数)", color: plot::ghost_color(PALETTE[0]), pts: &mirror, tags: &[], line: Line::Dashed },
+                XyCurve { name: "T", color: PALETTE[0], pts: &pts, tags, line: Line::Solid },
+            ];
+            let mut marks = vec![XyMark { at: (-1.0, 0.0), color: RED, shape: xy::Shape::Cross, text: "-1".into(), inline: true }];
+            marks.extend(margin_marks(freq, t, &|_, z| { let z = map(z); (z.re, z.im) }, true));
+            // the plain chart opens around -1 (a loop gain of 10^5 would make it a dot); the squeezed one shows everything
+            let fit = (!squeeze).then_some(((-2.2, 1.4), (-1.8, 1.8)));
+            let style = XyStyle { x_name: "実部 Re T", y_name: "虚部 Im T", x_unit: "", y_unit: "", plain: true, tag_name: "f", tag_unit: "Hz", shade_right: false };
+            xy::draw_xy(ui, rect, egui::Id::new("loop_nyquist"), view, &curves, &marks, fit, &style);
+        }
+        LoopChart::Nichols => {
+            let db: Vec<f64> = t.iter().map(|z| 20.0 * z.abs().max(1e-15).log10()).collect();
+            let ph = continuous_phase(t);
+            let pts: Vec<(f64, f64)> = ph.iter().copied().zip(db.iter().copied()).collect();
+            let (plo, phi) = ph.iter().fold((-180.0f64, 0.0f64), |a, p| (a.0.min(*p), a.1.max(*p)));
+            let (dlo, dhi) = db.iter().fold((0.0f64, 0.0f64), |a, d| (a.0.min(*d), a.1.max(*d)));
+            let vline = [(-180.0, dlo - 10.0), (-180.0, dhi + 10.0)];
+            let hline = [(plo - 30.0, 0.0), (phi + 30.0, 0.0)];
+            let curves = [
+                XyCurve { name: "-180°", color: Color32::from_gray(110), pts: &vline, tags: &[], line: Line::Dashed },
+                XyCurve { name: "0 dB", color: Color32::from_gray(110), pts: &hline, tags: &[], line: Line::Dashed },
+                XyCurve { name: "T", color: PALETTE[0], pts: &pts, tags, line: Line::Solid },
+            ];
+            let mut marks = vec![XyMark { at: (-180.0, 0.0), color: RED, shape: xy::Shape::Cross, text: "(-180°, 0 dB)".into(), inline: true }];
+            // the phase on this chart is the continuous one, so a crossover point is put at the phase of the curve there
+            let at_phase = |f: f64| {
+                let k = freq.partition_point(|x| *x < f).clamp(1, freq.len() - 1);
+                let a = ((f / freq[k - 1]).ln() / (freq[k] / freq[k - 1]).ln()).clamp(0.0, 1.0);
+                ph[k - 1] * (1.0 - a) + ph[k] * a
+            };
+            marks.extend(margin_marks(freq, t, &|f, z| (at_phase(f), 20.0 * z.abs().max(1e-15).log10()), false));
+            let fit = ((plo.min(-200.0), phi.max(0.0)), (dlo.max(-80.0), dhi.max(10.0)));
+            let style = XyStyle { x_name: "位相 (°)", y_name: "ゲイン (dB)", x_unit: "°", y_unit: "", plain: true, tag_name: "f", tag_unit: "Hz", shade_right: false };
+            xy::draw_xy(ui, rect, egui::Id::new("loop_nichols"), view, &curves, &marks, Some(fit), &style);
+        }
+    }
+}
+
+/// Phase in degrees, continuous along the sweep and starting in (-180, 180] (the Bode plot's phase).
+fn continuous_phase(t: &[C64]) -> Vec<f64> {
+    let mut out: Vec<f64> = Vec::with_capacity(t.len());
+    for z in t {
+        let mut p = z.arg_deg();
+        if let Some(&prev) = out.last() {
+            while p - prev > 180.0 {
+                p -= 360.0;
+            }
+            while p - prev < -180.0 {
+                p += 360.0;
+            }
+        }
+        out.push(p);
+    }
+    out
+}
+
+impl SchEditor {
+    /// Draw the loop gain as `kind` ("nyquist", "nichols", else the Bode plot); `plain` leaves the Nyquist chart unsqueezed.
+    pub fn set_loop_chart(&mut self, kind: &str, plain: bool) {
+        self.loop_chart = match kind {
+            "nyquist" => LoopChart::Nyquist,
+            "nichols" => LoopChart::Nichols,
+            _ => LoopChart::Bode,
+        };
+        self.loop_squeeze = !plain;
+        self.loop_xy = XyView::new(self.loop_chart == LoopChart::Nyquist);
+    }
+
+    /// The chart buttons over a loop gain result (Bode / Nyquist / Nichols) and the squeeze switch of the Nyquist chart.
+    pub(super) fn loop_chart_buttons(chart: &mut LoopChart, squeeze: &mut bool, view: &mut XyView, ui: &mut egui::Ui) {
+        for (c, name, hover) in LoopChart::ALL {
+            if ui.selectable_label(*chart == c, i18n::tr(name)).on_hover_text(i18n::tr(hover)).clicked() && *chart != c {
+                *chart = c;
+                *view = XyView::new(c == LoopChart::Nyquist);
+            }
+        }
+        if *chart == LoopChart::Nyquist && ui.checkbox(squeeze, i18n::tr("大きい所を縮める")).on_hover_text(i18n::tr("|T| が 1 より大きい所を、1 + log10|T| の距離に縮めて描きます (向きはそのまま)。低い周波数のループゲインは何万倍にもなり、そのままでは -1 の近くが点のようになるためです。単位円の内側と -1 の点、余裕の印の位置は変わりません。オフにすると、ふつうの目盛りで -1 の近くを描きます (ホイールで縮小して全体)")).changed() {
+            view.auto = true;
+        }
+    }
+}
 
 /// A note for a loop that has the bundled op-amp models in it: most are one-pole amplifiers (a gain, one pole, an output
 /// resistor), so the phase margin they give is larger than a real part's, which has a second pole. None without such a model.

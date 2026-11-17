@@ -508,6 +508,50 @@ fn write_rlc_poles_example() {
     std::fs::write(root.join("rlc_poles.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/sallen_key_locus.schjson for the root locus: a Sallen-Key low-pass (R1 = R2 = 10 kohm, C1 = C2 = 10 nF,
+/// f0 = 1.59 kHz) on an LM358 with the gain K = 1 + RF/RG set by RF (RG = 10 kohm). Q = 1/(3 - K): RF = 10 kohm gives Q = 1, and
+/// over RF = 20 kohm (K = 3) the poles cross into the right half plane: `cargo test -p app write_sallen_key_locus_example -- --ignored`
+#[test]
+#[ignore]
+fn write_sallen_key_locus_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = library_part("LM358");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "0 AC 1".into();
+    label_pin(&mut s, v1, "+", "IN");
+    label_pin(&mut s, v1, "-", "GND");
+    // (refdes kind, value, position, rotation, net of pin 1, net of pin 2)
+    for (kind, value, pos, rot, a, b) in [
+        (Kind::Resistor, "10k", (14, 0), 0, "IN", "A"),
+        (Kind::Resistor, "10k", (26, 0), 0, "A", "B"),
+        (Kind::Capacitor, "10n", (24, -10), 0, "A", "OUT"),
+        (Kind::Capacitor, "10n", (34, 8), 1, "B", "GND"),
+        (Kind::Resistor, "10k", (52, -10), 0, "FB", "OUT"),
+        (Kind::Resistor, "10k", (16, 22), 1, "FB", "GND"),
+    ] {
+        let k = s.add(kind, pos, rot);
+        s.components[k].value = value.into();
+        label_pin(&mut s, k, "1", a);
+        label_pin(&mut s, k, "2", b);
+    }
+    let u = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (44, 2), 0);
+    label_pin(&mut s, u, "3", "B");
+    label_pin(&mut s, u, "2", "FB");
+    label_pin(&mut s, u, "1", "OUT");
+    label_pin(&mut s, u, "8", "VCC");
+    label_pin(&mut s, u, "4", "VEE");
+    let vp = s.add(Kind::VSource, (62, -6), 0);
+    s.components[vp].value = "5".into();
+    let vn = s.add(Kind::VSource, (62, 10), 0);
+    s.components[vn].value = "5".into();
+    label_pin(&mut s, vp, "+", "VCC");
+    label_pin(&mut s, vp, "-", "GND");
+    label_pin(&mut s, vn, "+", "GND");
+    label_pin(&mut s, vn, "-", "VEE");
+    std::fs::write(root.join("sallen_key_locus.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/capacitor_basics.schjson for the capacitor lesson: a 5 V triangle wave (1 ms up, 1 ms down) through a
 /// 10 ohm sense resistor into C1 = 1 uF (the current is C*dV/dt = +-5 mA), and a 5 V step through R2 = 1 kohm into C2 = 1 uF
 /// (tau = 1 ms): `cargo test -p app write_capacitor_basics_example -- --ignored`

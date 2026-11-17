@@ -214,6 +214,13 @@ pub struct SchEditor {
     pz: Option<polezero::PzSummary>,
     /// The loop gain box: the part to cut, the net on its output side, and waiting for a click to choose them (shares `noise_pick`).
     loop_part: String,
+    /// How a loop gain result is drawn (Bode / Nyquist / Nichols), the squeeze of the Nyquist chart and its pan and zoom.
+    loop_chart: loopgain::LoopChart,
+    loop_squeeze: bool,
+    loop_xy: crate::plot::xy::XyView,
+    /// The root locus: the last result and the number of values (the part and its range are the parameter sweep's).
+    locus: Option<rootlocus::LocusView>,
+    locus_n: String,
     psrr_source: String,
     psrr_out: String,
     /// CMRR: the sources on the + and − inputs, the output net and the resistor tolerance (%) of the spread.
@@ -406,6 +413,7 @@ enum WaveMode {
     Sens,
     Param,
     Fault,
+    Locus,
 }
 
 /// A finished DC sweep: transfer curves with the signals to draw.
@@ -556,6 +564,7 @@ enum LastRun {
     Psrr,
     Cmrr,
     Param,
+    Locus,
 }
 
 impl SchEditor {
@@ -573,6 +582,7 @@ impl SchEditor {
             LastRun::Psrr => self.analyze_psrr(),
             LastRun::Cmrr => self.analyze_cmrr(),
             LastRun::Param => self.analyze_param(),
+            LastRun::Locus => self.analyze_locus(),
         }
     }
 
@@ -590,6 +600,7 @@ impl SchEditor {
             LastRun::Psrr => "電源除去比",
             LastRun::Cmrr => "同相除去比",
             LastRun::Param => "パラメータスイープ",
+            LastRun::Locus => "根軌跡",
         }
     }
 }
@@ -769,6 +780,11 @@ impl Default for SchEditor {
             pz_pick: false,
             pz: None,
             loop_part: String::new(),
+            loop_chart: loopgain::LoopChart::Bode,
+            loop_squeeze: true,
+            loop_xy: crate::plot::xy::XyView::new(true),
+            locus: None,
+            locus_n: "15".into(),
             psrr_source: String::new(),
             psrr_out: String::new(),
             cmrr_plus: String::new(),
@@ -964,6 +980,7 @@ mod noise;
 mod loopgain;
 mod impedance;
 mod polezero;
+mod rootlocus;
 mod variation;
 mod sensitivity;
 mod tolerance;
