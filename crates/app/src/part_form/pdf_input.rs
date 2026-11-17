@@ -134,6 +134,8 @@ impl PartForm {
                 self.add_light_pin();
                 self.linear_apply(&f, super::opto::PD_ROLES)?
             }
+            // the part as the form has it
+            "" => String::new(),
             _ => return Err(format!("知らない欄: {section}")),
         };
         let def = self.to_def()?;

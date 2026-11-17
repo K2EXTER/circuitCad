@@ -57,6 +57,7 @@ impl PartForm {
             })
             .collect::<Vec<_>>()
             .join("\n");
+        f.companions_text = PartForm::companions_text_of(&def.companions, &def.pins);
         match &def.package {
             PackageSpec::Chip2 { pitch, pad_len, pad_width } => {
                 (f.pkg, f.pitch, f.len, f.width) = (PkgKind::Chip2, *pitch, *pad_len, *pad_width);

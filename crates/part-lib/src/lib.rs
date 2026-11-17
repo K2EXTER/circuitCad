@@ -91,6 +91,9 @@ pub struct PartDef {
     /// has all its pins on a connector.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub programming: Vec<sch_core::ProgInterface>,
+    /// The parts the data sheet recommends beside it (`sch_core::Companion`: a regulator's input and output capacitors).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub companions: Vec<sch_core::Companion>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -148,6 +151,7 @@ impl PartDef {
             glyph: self.glyph.clone(),
             shops: self.shops.clone(),
             programming: self.programming.clone(),
+            companions: self.companions.clone(),
         }
     }
 

@@ -201,3 +201,9 @@
 - 値がパッケージごとに列で並ぶ行 (TI の Thermal Information: LM317L の「RθJA 97.1 96.5 98.18 51.5 44 43.7」) は、どれがこの部品か決められないので入れず、そう知らせる (`ThermalRow::columns` が 3 以上)。TI の「Junction-to-ambient thermal resistance」の行は JEDEC の大きい基板 (2s2p) の値なので θja に入れない (`on_large_copper`)。
 - ピン表の I/O の列 (`pin_table::io_cells`: 番号・名前の列のほかで、ピンの行の 6 割以上が I・O・I/O・P・OD・— などの列) を、ピンの種類の案にする (`docs/code-notes/app/partform.md` のピンの種類)。SN74HC14 で 1A 入力・1Y 出力、VCC は「—」なので名前から電源入力。
 - 自己発熱 (`sim_core::own_theta`): 回路図の部品の θ が 0 なら、ライブラリ部品の `theta_ja`、無ければパッケージからの推定。保存した 2N3903 は θ 200 K/W で 0.245 W に 49 K (前はパッケージの推定)。
+
+## 段階19: 推奨の周辺部品 (2026-11-17、候補 Q5)
+
+- `datasheet/companions.rs` の `read(pages)` (`Datasheet::capacitors`): 行の中の「CIN = 1µF」「CIN=1µF」「COUT ≥ 2.2 µF」「CADJ = 10μF」(コンデンサの名前は C と短い尾: IN・OUT・I・O・BYP・NR・SS・FF・BOOT・BST・SET・REF・ADJ か 1〜2 桁の数字。単位は F、uF とギリシャ文字の μ も µ に)。名前ごとに、いちばん多く書かれた値 (表の条件が多くの行で繰り返す)。`ds caps FILE`。
+- 手元: LM317L CIN 1 µF ×4・COUT 1 µF ×2・C1 0.1 µF・C2 1 µF、LP5907 CIN・COUT 1 µF、ADR45xx CIN 0.1 µF・COUT 1 µF、LT3045 COUT 10 µF・CSET 0.47 µF、AMS1117 COUT 22 µF、TI の LM317 CADJ 10 µF、TPS62933 COUT 44 µF・CSS 33 nF。MC7800 は文字が無い (図の中)。
+- フォームの「推奨の周辺部品」(`docs/code-notes/app/partform.md`) と、回路図の「推奨の周辺部品を置く」・CLI の `companions REF` (`sch-core/companions.rs`)。保存した LM317L で C1 が INPUT と GND、C2 が OUTPUT と GND の間に置かれる (試験 `form_models.rs`)。

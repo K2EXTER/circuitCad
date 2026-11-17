@@ -157,6 +157,7 @@ fn opamp() -> CustomSymbol {
         ratings: None,
         shops: Default::default(),
         programming: vec![],
+        companions: vec![],
         glyph: String::new(),
         name: "LM358".into(),
         prefix: "U".into(),
@@ -460,6 +461,7 @@ fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
         ratings: None,
         shops: Default::default(),
         programming: vec![],
+        companions: vec![],
         glyph: "pmos".into(),
         name: "AO3401A".into(),
         prefix: "Q".into(),
@@ -570,6 +572,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         ratings: None,
         shops: Default::default(),
         programming: vec![],
+        companions: vec![],
         glyph: "electrolytic".into(),
     };
     let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default() };
@@ -782,7 +785,7 @@ fn a_part_numbers_of_its_own_win_over_those_of_its_library_part_and_are_not_writ
     let old = serde_json::to_string(&Component { shops: Default::default(), ..c.clone() }).unwrap();
     assert!(serde_json::from_str::<Component>(&old).is_ok());
     // a blank number takes the library part's number away
-    let mut sym = CustomSymbol { name: "X".into(), prefix: "R".into(), pins: vec![], sim: None, ratings: None, shops: Default::default(), programming: vec![], glyph: String::new() };
+    let mut sym = CustomSymbol { name: "X".into(), prefix: "R".into(), pins: vec![], sim: None, ratings: None, shops: Default::default(), programming: vec![], glyph: String::new(), companions: vec![] };
     sym.shops.insert("lcsc".into(), "C1".into());
     sym.shops.insert("digikey".into(), "X".into());
     c.custom = Some(sym);

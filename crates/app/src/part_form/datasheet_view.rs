@@ -398,6 +398,11 @@ impl SheetView {
         d.graph = Some(g);
     }
 
+    /// The capacitors the open PDF names with a value (`Datasheet::capacitors`; none when no PDF is open).
+    pub fn capacitors(&self) -> Vec<datasheet::companions::FoundCap> {
+        self.doc.as_ref().map(|d| d.ds.capacitors()).unwrap_or_default()
+    }
+
     /// The open PDF's thermal resistances (`Datasheet::thermal`; none when no PDF is open).
     pub fn thermal(&self) -> Vec<datasheet::thermal::ThermalRow> {
         self.doc.as_ref().map(|d| d.ds.thermal()).unwrap_or_default()

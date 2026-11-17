@@ -19,6 +19,7 @@ pub mod pick;
 pub mod ocr;
 pub mod spec_table;
 pub mod thermal;
+pub mod companions;
 mod headings;
 mod pin_table;
 mod suggest;
@@ -204,6 +205,12 @@ impl Datasheet {
     /// graph), each once, in SI units as magnitudes (`figures::conditions`).
     pub fn figure_condition(&self, f: &figures::Figure, name: &str) -> Vec<f64> {
         figures::conditions(self.words(f.page), f, name)
+    }
+
+    /// The capacitors the data sheet names with a value ("CIN = 1µF": `companions::read`), each with its most written value.
+    pub fn capacitors(&self) -> Vec<companions::FoundCap> {
+        let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
+        companions::read(&pages)
     }
 
     /// The thermal resistances of every page (`thermal::read`): the thermal table's rows and the power deratings.

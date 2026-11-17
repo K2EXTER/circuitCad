@@ -5,7 +5,7 @@ CLAUDE.md の表の元の文。各クレートの機能の幅が分かる。
 
 | クレート | 役割 |
 |---|---|
-| `sch-core` | 回路図モデル (`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ピンの電気的な種類 `pinkind.rs` (`PinKind`: 入力・出力・入出力・オープンドレイン・電源入力・電源出力・受動・NC、`guess` はデータシートの I/O の欄 → 名前。ERC は種類のあるピンで 出力どうし・入力だけのネット・つないだ NC を指摘し、電源ピンの点検にも使う)、ネット抽出 `netlist.rs` (`extract`, `net_at`, `erc` — 指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方を書く)、SPICE出力 `spice.rs`、ngspice方言 `ngspice.rs`、基板で入れ替えたピンを回路図へ戻す `backannotate.rs`、バス(`D[0..7]` のラベルと太い線。ネットの名前にはならず、点検だけ)`bus.rs`、書き込み用ピンがヘッダに出ているかの点検 `programming.rs`、階層(シートの記号と子シート。`flat()` の中で展開する。設計 `docs/hierarchy-design.md`)`hierarchy.rs`、複数の基板(E5)のつなぎの照合と全体の部品表 `system.rs`(下の「複数の基板」) |
+| `sch-core` | 回路図モデル (`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、推奨の周辺部品を置く `companions.rs` (`Schematic::place_companions`: 部品の `CustomSymbol::companions` をピンの外側に縦に置き、ピンからの線と GND の記号か相手のピンへの線。同じピンの 2 つ目からは 3 升ずつ外へ)、ピンの電気的な種類 `pinkind.rs` (`PinKind`: 入力・出力・入出力・オープンドレイン・電源入力・電源出力・受動・NC、`guess` はデータシートの I/O の欄 → 名前。ERC は種類のあるピンで 出力どうし・入力だけのネット・つないだ NC を指摘し、電源ピンの点検にも使う)、ネット抽出 `netlist.rs` (`extract`, `net_at`, `erc` — 指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方を書く)、SPICE出力 `spice.rs`、ngspice方言 `ngspice.rs`、基板で入れ替えたピンを回路図へ戻す `backannotate.rs`、バス(`D[0..7]` のラベルと太い線。ネットの名前にはならず、点検だけ)`bus.rs`、書き込み用ピンがヘッダに出ているかの点検 `programming.rs`、階層(シートの記号と子シート。`flat()` の中で展開する。設計 `docs/hierarchy-design.md`)`hierarchy.rs`、複数の基板(E5)のつなぎの照合と全体の部品表 `system.rs`(下の「複数の基板」) |
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`: ネットの役割・近くに置く組・離す組・バイパスの対応・道筋の測定 `Measure`・承知した例外 `Waiver`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が同じ型を使う |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |

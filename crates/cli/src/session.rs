@@ -338,6 +338,7 @@ impl Session {
             "pinnames" => self.pin_names(args),
             "net" => self.net(args),
             "nc" => self.nc(args),
+            "companions" => self.companions(args),
             "remove" => self.remove(args),
             "list" => Ok(self.list()),
             "erc" => self.erc(),

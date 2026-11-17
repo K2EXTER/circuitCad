@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum | --digital]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d [--3d-cam yaw,pitch,zoom] [--3d-case w,d,top,bottom]] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-graph-for DarlHfe] [--form-graph-all bjt|darl|diode|opto|pd [--form-save dir]] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-opamp-example] [--form-opamp-pdf] [--form-regulator-example [adj]] [--form-opto-example] [--form-photodiode-example] [--form-darlington-example] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d [--3d-cam yaw,pitch,zoom] [--3d-case w,d,top,bottom]] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-graph-for DarlHfe] [--form-graph-all bjt|darl|diode|opto|pd [--form-save dir]] [--form-companions] [--form-save dir] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-opamp-example] [--form-opamp-pdf] [--form-regulator-example [adj]] [--form-opto-example] [--form-photodiode-example] [--form-darlington-example] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -135,6 +135,18 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 std::process::exit(if ok { 0 } else { 1 });
             }
         }
+    // --form-companions: 「推奨の周辺部品」 read from the form's PDF; with --form-save DIR (and no --form-graph-all) the part is
+    // saved as the form has it, and the app quits
+    if args.iter().any(|a| a == "--form-companions") {
+        app.sch.companions_in_form();
+    }
+    if !args.iter().any(|a| a == "--form-graph-all")
+        && let Some(j) = args.iter().position(|a| a == "--form-save")
+        && let Some(dir) = args.get(j + 1)
+    {
+        let ok = app.sch.save_form_part("", std::path::Path::new(dir));
+        std::process::exit(if ok { 0 } else { 1 });
+    }
     // --form-mos-pdf: the MOSFET section read from the form's PDF and fitted
     if args.iter().any(|a| a == "--form-mos-pdf") {
         app.sch.mos_from_form_pdf();

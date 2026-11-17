@@ -222,7 +222,7 @@ impl Schematic {
             let side = if p.dir == PortDir::Out { PinSide::Right } else { PinSide::Left };
             pins.push(SymPin { number: p.name.clone(), name: p.name.clone(), side, sim_only: false, gap: 0, kind: None });
         }
-        CustomSymbol { name: self.sheet_name(k), prefix: "CH".into(), pins, sim: None, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![] }
+        CustomSymbol { name: self.sheet_name(k), prefix: "CH".into(), pins, sim: None, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![], companions: vec![] }
     }
 
     /// Puts a sheet symbol for sheet `child` on the sheet being edited. `None` when there is no such sheet, or it is the sheet

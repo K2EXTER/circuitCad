@@ -18,12 +18,12 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 | クレート | 役割 |
 |---|---|
-| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`)、ピンの電気的な種類 `pinkind.rs`(ERC が使う)、複数の基板のつなぎの照合と全体の部品表 `system.rs` |
+| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`)、ピンの電気的な種類 `pinkind.rs`(ERC が使う)、推奨の周辺部品を置く `companions.rs`、複数の基板のつなぎの照合と全体の部品表 `system.rs` |
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が共有 |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
 | `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。メーカーのシリーズ(値ごとの部品に展開。`series.rs`、`series/*.series.json`)。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、LTspice の回路図の取り込み(`ltspice*.rs`)、データシートの読み(`fits/*.fit.json`)から等価モデルを当てはめる `fit/`(`ccad fit`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
-| `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ・丸ごとの下書き `draft.rs`(パッケージ名・ピンの表・寸法表)・ピン配置の図 `pin_diagram.rs`・推奨ランドパターン `land.rs`・絶対最大定格 `absmax.rs`・グラフの軸と点と曲線の読み `graph.rs`・図の見出しと何のグラフか `figures.rs`・目盛りを図の数字から `axes.rs`・欄の曲線を選んでたどる `pick.rs`・絵の文字を Windows の OCR で `ocr.rs`・電気的特性の表の値 `spec_table.rs`・熱抵抗 (θJA・θJC・低減の行) `thermal.rs`・コマンドラインで調べる `examples/ds.rs`(`docs/datasheet-viewer-design.md`) |
+| `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ・丸ごとの下書き `draft.rs`(パッケージ名・ピンの表・寸法表)・ピン配置の図 `pin_diagram.rs`・推奨ランドパターン `land.rs`・絶対最大定格 `absmax.rs`・グラフの軸と点と曲線の読み `graph.rs`・図の見出しと何のグラフか `figures.rs`・目盛りを図の数字から `axes.rs`・欄の曲線を選んでたどる `pick.rs`・絵の文字を Windows の OCR で `ocr.rs`・電気的特性の表の値 `spec_table.rs`・熱抵抗 (θJA・θJC・低減の行) `thermal.rs`・推奨のコンデンサ (CIN = 1µF) `companions.rs`・コマンドラインで調べる `examples/ds.rs`(`docs/datasheet-viewer-design.md`) |
 | `i18n` | 英語の画面。日本語の文を鍵にした表 `en/*.tsv`、`tr` / `trf!` / `tr_dyn`、`tools/i18n.py`(包む・未訳の一覧)。`docs/code-notes/i18n.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
 | `cli` | `ccad`: 画面なしの操作窓口(1行1コマンドのスクリプト。`ccad mcp` で MCP サーバー。`board/` は基板の命令を話題ごとのファイルに分けてある。`docs/cli.md`、`docs/code-notes/cli.md`) |

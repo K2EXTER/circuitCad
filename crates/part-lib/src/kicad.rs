@@ -554,6 +554,7 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
         model3d: None,
         swap: None,
         programming: vec![],
+        companions: vec![],
     })
 }
 

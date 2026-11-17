@@ -14,6 +14,7 @@ mod hierarchy;
 mod sheets;
 mod spice;
 mod pinkind;
+mod companions;
 pub use pinkind::PinKind;
 pub mod system;
 pub use backannotate::BackAnnotation;
@@ -858,6 +859,22 @@ pub struct CustomSymbol {
     /// its pins on a connector. Empty = not a programmable part (or not known).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub programming: Vec<ProgInterface>,
+    /// The parts the data sheet says to put beside it (a regulator's input and output capacitors): placed with it on request.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub companions: Vec<Companion>,
+}
+
+/// A part the data sheet recommends beside this one: `kind` ("C", "R", "L") of `value` between the pin `pin` (its number) and
+/// `to`: "GND" (a ground symbol) or another pin's number. `name` is the data sheet's ("CIN"), `note` its conditions and page.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Companion {
+    pub name: String,
+    pub kind: String,
+    pub value: String,
+    pub pin: String,
+    pub to: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
 }
 
 /// One way to write the program into a chip: a name for people ("ISP (SPI)") and the pin names it needs.

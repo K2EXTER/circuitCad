@@ -1,0 +1,94 @@
+{
+  "name": "FORM_LM317L",
+  "category": "レギュレータ",
+  "description": "",
+  "datasheet": "",
+  "prefix": "U",
+  "value": null,
+  "pins": [
+    {
+      "number": "1",
+      "name": "INPUT",
+      "side": null
+    },
+    {
+      "number": "2",
+      "name": "OUTPUT",
+      "side": null
+    },
+    {
+      "number": "3",
+      "name": "OUTPUT",
+      "side": null
+    },
+    {
+      "number": "4",
+      "name": "ADJUSTMENT",
+      "side": null
+    },
+    {
+      "number": "5",
+      "name": "NC",
+      "side": null,
+      "kind": "nc"
+    },
+    {
+      "number": "6",
+      "name": "OUTPUT",
+      "side": null
+    },
+    {
+      "number": "7",
+      "name": "OUTPUT",
+      "side": null
+    },
+    {
+      "number": "8",
+      "name": "NC",
+      "side": null,
+      "kind": "nc"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 8,
+    "pitch": 1.27,
+    "row_spacing": 5.4,
+    "pad_len": 1.55,
+    "pad_width": 0.6,
+    "drill": null
+  },
+  "footprint_name": null,
+  "sim": null,
+  "ratings": {
+    "v_max": 40.0,
+    "t_max": 150.0
+  },
+  "body": {
+    "shape": "rect",
+    "w": 3.9000000000000004,
+    "h": 2.37,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "dot",
+    "mark_pin": ""
+  },
+  "companions": [
+    {
+      "name": "CIN",
+      "kind": "C",
+      "value": "1u",
+      "pin": "1",
+      "to": "GND",
+      "note": "データシートの p.7"
+    },
+    {
+      "name": "COUT",
+      "kind": "C",
+      "value": "1u",
+      "pin": "2",
+      "to": "GND",
+      "note": "データシートの p.8"
+    }
+  ]
+}

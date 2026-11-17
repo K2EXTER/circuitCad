@@ -126,6 +126,16 @@ impl SchEditor {
         }
     }
 
+    /// 「推奨の周辺部品」 of the form read from its PDF (`--form-companions`): what was found, on stderr.
+    pub fn companions_in_form(&mut self) {
+        let Some(f) = self.form.as_mut() else { return };
+        f.fill_companions_from_pdf();
+        for (ok, line) in &f.companions_msg {
+            eprintln!("{} {line}", if *ok { "ok" } else { "no" });
+        }
+        eprintln!("companions:\n{}", f.companions_text);
+    }
+
     /// Fills the form's MOSFET section from its PDF's table and fits it (`--form-mos-pdf`, for screenshots).
     pub fn mos_from_form_pdf(&mut self) {
         if let Some(f) = self.form.as_mut() {

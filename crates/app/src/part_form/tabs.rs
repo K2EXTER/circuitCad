@@ -202,6 +202,7 @@ impl PartForm {
                     ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::OK } else { crate::theme::WARN }));
                 }
             }
+            self.companions_ui(ui);
             self.zth_ui(ui);
             // only where it belongs: an electrolytic / tantalum capacitor, a part that already has such figures, or
             // a part whose kind was not chosen

@@ -82,6 +82,12 @@ fn main() -> Result<(), String> {
                 println!("p.{} {:?} {} ({side})", f.page + 1, f.curves, f.caption);
             }
         }
+        "caps" => {
+            // ds caps FILE: the capacitors named with a value
+            for c in ds.capacitors() {
+                println!("{} {}{:.3e} F  x{}  p.{}", c.name, if c.at_least { ">= " } else { "" }, c.farads, c.count, c.page + 1);
+            }
+        }
         "thermal" => {
             // ds thermal FILE: the thermal resistances (table rows and deratings)
             for r in ds.thermal() {

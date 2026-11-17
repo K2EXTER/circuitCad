@@ -12,6 +12,7 @@ impl SchEditor {
         self.label_net_ui(ui);
         self.port_editor_ui(ui);
         let mut open_sheet: Option<usize> = None;
+        let mut place_companions: Option<usize> = None;
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
                 let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());
@@ -190,6 +191,17 @@ impl SchEditor {
                             .on_hover_text(i18n::tr("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)"));
                     });
                 }
+                // the parts its data sheet recommends beside it (a regulator's capacitors)
+                if let Some(n) = c.custom.as_ref().map(|s| s.companions.len()).filter(|n| *n > 0) {
+                    let names: Vec<String> = c.custom.as_ref().map(|s| s.companions.iter().map(|x| format!("{} {}", x.name, x.value)).collect()).unwrap_or_default();
+                    if ui
+                        .button(i18n::trf!("推奨の周辺部品を置く ({n})"))
+                        .on_hover_text(i18n::trf!("データシートがこの部品のそばに付けるように言う部品 ({}) を、ピンのそばに置いて線をつなぎます (GND の側は GND の記号)。置いたあと、位置は動かせます。元に戻すは Ctrl+Z", names.join("、")))
+                        .clicked()
+                    {
+                        place_companions = Some(i);
+                    }
+                }
                 if let Some(sub) = c.sub.as_mut() {
                     if ui.button(i18n::tr("シートの中を開く")).on_hover_text(i18n::tr("この記号が表すシートを開きます (記号のダブルクリックでも開きます)。直すと、同じシートを使う全部の記号に効きます")).clicked() {
                         open_sheet = Some(sub.sheet);
@@ -221,6 +233,12 @@ impl SchEditor {
             }
         if let Some(k) = open_sheet {
             self.enter_sheet(k);
+        }
+        if let Some(k) = place_companions {
+            self.status = match self.sch.place_companions(k) {
+                Ok(placed) => i18n::trf!("推奨の周辺部品を置きました: {}", placed.join("・")),
+                Err(e) => e,
+            };
         }
         // one row of actions on the selection: rotate, the clipboard, delete
         if self.has_selection() || !self.clipboard.is_empty() {

@@ -168,6 +168,7 @@ mod tests {
             glyph: "electrolytic".into(),
             shops: Default::default(),
             programming: vec![],
+            companions: vec![],
         };
         s.add_custom(sym, "100u", "", (10, 10), 0);
         s

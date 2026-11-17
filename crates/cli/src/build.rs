@@ -748,6 +748,16 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         Ok(obj(json!({"changed": changed, "no_connects": all})))
     }
 
+    /// `companions REF`: the parts the library part's data sheet recommends beside it (its input and output capacitors), placed next
+    /// to their pins and wired (`Schematic::place_companions`).
+    pub fn companions(&mut self, args: &[String]) -> Res {
+        let r = args.first().ok_or("companions REF")?;
+        let i = self.sch.components.iter().position(|c| c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        let list: Vec<Value> = self.sch.components[i].custom.as_ref().map_or(vec![], |s| s.companions.iter().map(|c| json!({"name": c.name, "kind": c.kind, "value": c.value, "pin": c.pin, "to": c.to, "note": c.note})).collect());
+        let placed = self.sch.place_companions(i)?;
+        Ok(obj(json!({"placed": placed, "companions": list})))
+    }
+
     pub fn net(&mut self, args: &[String]) -> Res {
         if args.len() < 2 {
             return Err("net NAME REF.PIN [REF.PIN ...]".into());

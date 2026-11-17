@@ -77,6 +77,20 @@ fn a_darlington_read_from_its_data_sheet_has_its_gain() {
 }
 
 #[test]
+fn the_capacitors_a_data_sheet_recommends_are_placed_on_their_pins() {
+    // LM317L (TI): "CIN = 1µF" and "COUT = 1µF" in the conditions of its tables, saved as the part's companions on INPUT and
+    // OUTPUT; `companions U1` puts each between its pin and a ground symbol
+    let a = run("new\nadd FORM_LM317L as=U1\ncompanions U1\nlist\n");
+    let placed = a.iter().find(|v| v["cmd"] == "companions").unwrap();
+    assert_eq!(placed["placed"], serde_json::json!(["C1", "C2"]), "{placed}");
+    let list = a.iter().find(|v| v["cmd"] == "list").unwrap();
+    let net_of = |pin: &str| list["nets"].as_array().unwrap().iter().find(|n| n["pins"].as_array().unwrap().iter().any(|p| p == pin)).map(|n| n["net"].as_str().unwrap().to_string());
+    assert_eq!(net_of("C1.1"), net_of("U1.1"), "CIN on INPUT: {list}");
+    assert_eq!(net_of("C2.1"), net_of("U1.2"), "COUT on OUTPUT: {list}");
+    assert_eq!((net_of("C1.2").as_deref(), net_of("C2.2").as_deref()), (Some("GND"), Some("GND")));
+}
+
+#[test]
 fn a_diode_read_from_its_data_sheet_has_its_forward_voltage() {
     // 1N4148 (Vishay): the forward curve (Tj = 25 °C) about 0.72 V at 10 mA, 0.87 V at 100 mA
     let a = run("new\nadd FORM_1N4148 as=D1\nadd I 10m as=IF\nnet A IF.+ D1.A\nnet GND IF.- D1.K\nerc\ndc probe=V(a)\nvalue IF 100m\ndc probe=V(a)\n");

@@ -446,7 +446,7 @@ mod tests {
         let c = &mut s.components[i];
         let guess = own_theta(c);
         let ratings = sch_core::PartRatings { theta_ja: Some(200.0), ..Default::default() };
-        c.custom = Some(sch_core::CustomSymbol { name: "Q".into(), prefix: "Q".into(), pins: vec![], sim: None, ratings: Some(ratings), glyph: String::new(), shops: Default::default(), programming: vec![] });
+        c.custom = Some(sch_core::CustomSymbol { name: "Q".into(), prefix: "Q".into(), pins: vec![], sim: None, ratings: Some(ratings), glyph: String::new(), shops: Default::default(), programming: vec![], companions: vec![] });
         assert_eq!(own_theta(c), 200.0, "the data sheet's θJA, not the package guess {guess}");
         // the part's own θ goes first
         c.theta = 150.0;

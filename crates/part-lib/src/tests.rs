@@ -532,6 +532,7 @@ fn write_chip_examples() {
             model3d: None,
             swap: None,
             programming: vec![],
+            companions: vec![],
             shops: existing_shops(format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"))),
             land_unverified: false,
         };

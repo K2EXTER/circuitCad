@@ -390,6 +390,7 @@ impl PartForm {
                 origin: self.sim_origin.as_ref().filter(|(_, t)| *t == self.sim_text).map(|(o, _)| o.clone()),
             }),
         };
+        let companions = self.parse_companions(&pins)?;
         let mut def = PartDef {
             name: self.name.trim().to_string(),
             category: self.category.trim().to_string(),
@@ -419,6 +420,7 @@ impl PartForm {
             model3d: self.model3d.clone(),
             swap: None,
             programming: vec![],
+            companions,
         };
         self.keep_hidden(&mut def);
         Ok(def)
