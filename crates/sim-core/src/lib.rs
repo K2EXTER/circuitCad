@@ -14,6 +14,7 @@ mod coverage;
 mod dc;
 mod dcsweep;
 mod designcalc;
+mod filterdesign;
 mod diagnose;
 mod expr;
 mod fault;
@@ -55,6 +56,7 @@ mod value;
 mod waveform;
 
 pub use coverage::{model_coverage, ModelCoverage, PartNote};
+pub use filterdesign::{design_filter, prototype_sections, FilterDesign, FilterFamily, FilterShape, FilterSpec, FilterTopology, OpampNets, Stage as FilterStage, StageKind, StagePart};
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use expr::Expr;
 pub use loopgain::{loop_gain, BreakDirection, LoopGain};
@@ -69,7 +71,7 @@ pub use circuit::{BjtModel, CellKind, CellSupply, Circuit, DiodeModel, Element, 
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
-pub use designcalc::{boost_design, cooling_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, e24, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+pub use designcalc::{boost_design, cooling_design, filter_design, filter_spec, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, e24, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 pub use chain::{chain_failure, ChainEnd, ChainReport, ChainStep};
 pub use par::{par_map, par_map_progress};
 pub use fault::{faults_of, motor_inside, likelihood, Likelihood, TURN_SHORTS, assess_safety, Danger, FaultSafety, describe_fault, break_pin, break_part, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, Broken, applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};

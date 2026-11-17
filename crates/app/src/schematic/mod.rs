@@ -981,6 +981,7 @@ mod stretch;
 mod erc_skip;
 mod net_hints;
 mod snippet;
+mod filter_place;
 mod sheets_ui;
 mod history;
 mod hint;

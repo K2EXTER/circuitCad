@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{boost_design, cooling_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+use sim_core::{boost_design, cooling_design, filter_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -17,9 +17,12 @@ pub(super) const GROUPS: &[(&str, &[&str])] = &[
     ("抵抗の値", &["LEDの電流制限抵抗", "分圧 (抵抗2本で電圧を下げる)", "RCフィルタの抵抗"]),
     ("電源", &["3端子レギュレータ (78xx) まわり", "整流の平滑コンデンサ", "降圧コンバータのコイルとコンデンサ", "昇圧コンバータのコイルとコンデンサ", "ツェナーダイオードで電圧を一定にする", "電池の持ち時間"]),
     ("スイッチ", &["トランジスタのスイッチ (ベース抵抗)", "MOSFET のスイッチ (発熱とゲート抵抗)"]),
-    ("アナログ", &["オペアンプの増幅 (抵抗の値)"]),
+    ("アナログ", &["オペアンプの増幅 (抵抗の値)", FILTER_TITLE]),
     ("熱・保護・基板", &["熱 (温度と放熱板)", "放熱 (損失から、銅の面積と放熱板)", "ヒューズの選び方", "基板の配線の太さ (電流から)"]),
 ];
+
+/// The filter calculator, which can also put its circuit on the sheet (`filter_place.rs`).
+pub(super) const FILTER_TITLE: &str = "アクティブフィルタ (バターワース・ベッセル・チェビシェフ)";
 
 pub(super) const CALCS: &[Calc] = &[
     Calc {
@@ -172,6 +175,21 @@ pub(super) const CALCS: &[Calc] = &[
         run: |v| opamp_gain(v[0], v[1], v[2], v[3], v[4], v[5]),
     },
     Calc {
+        title: FILTER_TITLE,
+        about: "オペアンプのフィルタの部品を決めます。種類・形・次数・周波数から、1 次の RC・サレンキー・多重帰還の段に分け、コンデンサは E12、抵抗は E24 か E96 に丸めます。「回路図に置いて AC で確かめる」で、AC 解析の図に目標の特性を重ねて見られます",
+        inputs: &[
+            ("種類 (0 = バターワース, 1 = ベッセル, 2 = チェビシェフ)", "0", "バターワースは通過域がいちばん平ら。ベッセルは波形の形を崩さない (落ち方はゆるやか)。チェビシェフは通過域が少し波打つかわりに、遮断の先で急に落ちる"),
+            ("形 (0 = ローパス, 1 = ハイパス, 2 = バンドパス)", "0", "ローパスは低い周波数を通し、ハイパスは高い周波数を通し、バンドパスは中心の周波数のまわりだけ通します"),
+            ("次数", "4", "大きいほど遮断の先で急に落ちます (1 次で 1 桁ごとに 20 dB、4 次で 80 dB)。2 次ごとにオペアンプが 1 つ要ります。1〜8 (バンドパスは 1〜4 で、できるのはその 2 倍の次数)"),
+            ("周波数 (Hz)", "1k", "ローパス・ハイパスは遮断周波数 (バターワース・ベッセルは −3 dB、チェビシェフはリップルの端)。バンドパスは中心の周波数"),
+            ("帯域幅 (Hz, バンドパスだけ)", "200", "バンドパスで通す幅 (上の端 − 下の端)。中心の 1/10 なら、よく切れるが部品の誤差に敏感になります"),
+            ("リップル (dB, チェビシェフだけ)", "1", "通過域の波の大きさ。0.5 か 1 dB がよく使われます。大きいほど遮断の先で急に落ちます"),
+            ("回路 (0 = サレンキー, 1 = 多重帰還)", "0", "サレンキーは部品が少なく出力の向きが同じ。多重帰還は高い周波数の漏れが少なく、向きが逆になります (バンドパスはいつも多重帰還)"),
+            ("抵抗の系列 (24 = E24, 96 = E96)", "96", "E96 (±1 %) は細かい値があり、目標に近づきます。E24 (±5 %) は手に入りやすい値です"),
+        ],
+        run: |v| filter_design(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]),
+    },
+    Calc {
         title: "電池の持ち時間",
         about: "電池の容量と負荷の電流から、持ち時間の目安と、内部抵抗による電圧の下がりを調べます。コイン電池に大きな電流を流してよいかの判断にも使えます",
         inputs: &[
@@ -274,6 +292,7 @@ impl SchEditor {
             _ => None,
         };
         let mut apply = None;
+        let mut place = false;
         egui::Window::new(i18n::tr("値の決め方")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
             // one drop-down with the calculators under their groups: a row of 16 buttons took half the window and moved about as
             // the chosen one grew
@@ -310,8 +329,26 @@ impl SchEditor {
             }
             egui::Grid::new("wiz_inputs").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                 for (k, (label, _, tip)) in calc.inputs.iter().enumerate() {
-                    ui.label(i18n::tr(label)).on_hover_text(i18n::tr(tip));
-                    ui.add(egui::TextEdit::singleline(&mut self.wiz_in[k]).desired_width(90.0)).on_hover_text(i18n::tr(tip));
+                    if let Some((head, opts)) = choices(label) {
+                        // "(0 = A, 1 = B)": a drop-down instead of typing the number
+                        ui.label(i18n::tr_dyn(head)).on_hover_text(i18n::tr(tip));
+                        let now = parse_value(&self.wiz_in[k]);
+                        let shown = opts.iter().find(|(v, _)| Some(*v) == now).map_or_else(|| self.wiz_in[k].clone(), |(_, n)| i18n::tr_dyn(n).to_string());
+                        egui::ComboBox::from_id_salt(("wiz_choice", k))
+                            .selected_text(shown)
+                            .show_ui(ui, |ui| {
+                                for (v, n) in &opts {
+                                    if ui.selectable_label(now == Some(*v), i18n::tr_dyn(n)).clicked() {
+                                        self.wiz_in[k] = format_value(*v);
+                                    }
+                                }
+                            })
+                            .response
+                            .on_hover_text(i18n::tr(tip));
+                    } else {
+                        ui.label(i18n::tr(label)).on_hover_text(i18n::tr(tip));
+                        ui.add(egui::TextEdit::singleline(&mut self.wiz_in[k]).desired_width(90.0)).on_hover_text(i18n::tr(tip));
+                    }
                     ui.end_row();
                 }
             });
@@ -328,6 +365,14 @@ impl SchEditor {
                             ui.end_row();
                         }
                     });
+                    if calc.title == FILTER_TITLE
+                        && ui
+                            .button(i18n::tr("回路図に置いて AC で確かめる"))
+                            .on_hover_text(i18n::tr("計算した段をオペアンプ (TL072) で回路図の空いた所に置き、入力 (AC 1) と ±5 V の電源も付けて AC 解析をします。目標の特性は図に点で重なります (Ctrl+Z で戻せます)"))
+                            .clicked()
+                    {
+                        place = true;
+                    }
                     if let Some(p) = &out.primary {
                         ui.horizontal(|ui| {
                             let b = crate::widgets::unless(ui, (!(selected_value.is_some())).then_some("回路図で部品を 1 つ選ぶと、その値を変えられます"), egui::Button::new(i18n::trf!("選択中の部品の値を {p} にする")));
@@ -360,10 +405,33 @@ impl SchEditor {
         {
             c.value = v;
         }
+        if place {
+            let r = self.wizard_filter().and_then(|d| self.place_filter(&d));
+            if let Err(e) = r {
+                self.status = format!("フィルタを置けません: {e}");
+            }
+        }
         if !open {
             self.wiz_open = false;
         }
     }
+
+    /// The filter of the filter calculator's inputs.
+    pub(super) fn wizard_filter(&self) -> Result<sim_core::FilterDesign, String> {
+        let v: Vec<f64> = self.wiz_in.iter().map(|t| parse_value(t).ok_or_else(|| format!("「{t}」を数値で入力してください"))).collect::<Result<_, _>>()?;
+        if v.len() != 8 {
+            return Err("フィルタの計算を選んでください".into());
+        }
+        sim_core::design_filter(&sim_core::filter_spec(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7])?)
+    }
+}
+
+/// An input label that ends in "(0 = A, 1 = B, ...)": the part before it and the (number, name) choices.
+fn choices(label: &str) -> Option<(&str, Vec<(f64, &str)>)> {
+    let inner = label.strip_suffix(')')?;
+    let (head, list) = inner.rsplit_once(" (")?;
+    let opts: Option<Vec<(f64, &str)>> = list.split(", ").map(|o| o.split_once(" = ").and_then(|(v, n)| Some((v.trim().parse::<f64>().ok()?, n.trim())))).collect();
+    opts.filter(|o| o.len() >= 2).map(|o| (head, o))
 }
 
 #[cfg(test)]
@@ -377,5 +445,23 @@ mod group_tests {
             assert_eq!(n, 1, "{} is in {n} groups", c.title);
         }
         assert_eq!(GROUPS.iter().map(|(_, t)| t.len()).sum::<usize>(), CALCS.len(), "a group names a calculator that is not there");
+    }
+
+    #[test]
+    fn coded_inputs_become_choices() {
+        let (head, o) = choices("回路 (0 = サレンキー, 1 = 多重帰還)").unwrap();
+        assert_eq!(head, "回路");
+        assert_eq!(o, vec![(0.0, "サレンキー"), (1.0, "多重帰還")]);
+        assert_eq!(choices("抵抗の系列 (24 = E24, 96 = E96)").unwrap().1[1], (96.0, "E96"));
+        assert!(choices("周波数 (Hz)").is_none());
+        assert!(choices("帯域幅 (Hz, バンドパスだけ)").is_none());
+    }
+
+    #[test]
+    fn the_filter_calculator_gives_a_design() {
+        let mut e = SchEditor::default();
+        e.open_wizard(CALCS.iter().position(|c| c.title == FILTER_TITLE).unwrap());
+        assert!(e.wizard_result().is_ok());
+        assert_eq!(e.wizard_filter().unwrap().stages.len(), 2, "4th order: two stages");
     }
 }

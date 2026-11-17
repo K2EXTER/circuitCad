@@ -50,6 +50,12 @@ const CALCS: &[(&str, &str, &[&str], Run)] = &[
     ),
     ("battery", "how long a battery lasts", &["capacity_mAh", "load_mA", "internal_ohm", "voltage_V", "usable_pct"], |v| sim_core::battery_life(v[0], v[1], v[2], v[3], v[4])),
     ("zener", "series resistor of a zener regulator", &["vin_V", "vz_V", "load_mA", "iz_min_mA"], |v| sim_core::zener_regulator(v[0], v[1], v[2], v[3])),
+    (
+        "filter",
+        "active filter: Butterworth / Bessel / Chebyshev low-, high- or band-pass as RC, Sallen-Key or multiple-feedback stages, E12 capacitors and E24 / E96 resistors",
+        &["family_0butter_1bessel_2cheby", "shape_0lp_1hp_2bp", "order", "freq_Hz", "bandwidth_Hz", "ripple_dB", "topology_0sk_1mfb", "series_24_or_96"],
+        |v| sim_core::filter_design(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]),
+    ),
 ];
 
 /// The options `worst` and `mc` share: `tol_r= tol_c= tol_l= tol_v=` (percent) and `measure=` with its `f=` / `tran=` range.
