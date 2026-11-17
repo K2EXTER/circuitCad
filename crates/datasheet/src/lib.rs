@@ -13,6 +13,7 @@ pub mod pin_diagram;
 pub mod land;
 pub mod absmax;
 pub mod graph;
+pub mod figures;
 pub mod spec_table;
 mod headings;
 mod pin_table;
@@ -132,6 +133,13 @@ impl Datasheet {
     /// Part numbers the first page may be about, the likeliest first (for a person to pick from).
     pub fn name_candidates(&self) -> Vec<String> {
         suggest::name_candidates(self.words(0))
+    }
+
+    /// The graph captions of every page and the curve each graph shows (`figures::figures`).
+    pub fn figures(&self) -> Vec<figures::Figure> {
+        let mut all: Vec<figures::Figure> = (0..self.pages).flat_map(|p| figures::figures(p, self.words(p))).collect();
+        figures::place_graphs(&mut all);
+        all
     }
 
     /// The kind of part the first pages talk about most, as a category name of the part list.

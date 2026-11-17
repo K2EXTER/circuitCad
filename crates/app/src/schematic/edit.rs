@@ -97,6 +97,13 @@ impl SchEditor {
         }
     }
 
+    /// "グラフから読む" of a field (`--form-graph-for DarlHfe`, for screenshots): the PDF goes to that field's graph.
+    pub fn graph_for_in_form_pdf(&mut self, name: &str) {
+        if let Some(f) = self.form.as_mut() {
+            f.graph_for(name);
+        }
+    }
+
     /// Fills the form's MOSFET section from its PDF's table and fits it (`--form-mos-pdf`, for screenshots).
     pub fn mos_from_form_pdf(&mut self) {
         if let Some(f) = self.form.as_mut() {

@@ -34,6 +34,13 @@ impl PartForm {
         });
     }
 
+    /// A field's "グラフから読む" by the field's name in the code ("DarlHfe"; `--form-graph-for`, for screenshots).
+    pub fn graph_for(&mut self, name: &str) {
+        if let Some(d) = super::graph_reader::Dest::by_name(name) {
+            self.sheet.start_graph(Some(d));
+        }
+    }
+
     /// Takes the points read off a graph that the person sent to the form, and puts them in their field.
     pub(super) fn take_pdf_graph(&mut self) {
         use super::graph_reader::{Dest, short};

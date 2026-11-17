@@ -642,7 +642,7 @@ impl PartForm {
             ui.label(egui::RichText::new(i18n::tr("パワー MOSFET やトランジスタのデータシートにある「Transient Thermal Impedance」の曲線 (横軸がパルスの時間、縦軸が Zth) から点を読み、段 (熱抵抗と時定数の組) に当てはめます。「温度の時間変化」で、短いパルスの温度の山が合うようになります")).weak());
             ui.horizontal(|ui| {
                 ui.label(i18n::tr("曲線の点: 時間 [s] Zth [K/W]")).on_hover_text(i18n::tr("1 行に 1 点。単一パルス (Single Pulse) の曲線を、左の立ち上がりから右の平らになる所まで 6〜10 点。デューティ比の付いた曲線ではなく単一パルスのものを読みます。縦軸が「正規化」(r(t)) のときは、θjc を掛けて K/W にします"));
-                if self.sheet.has_doc() && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓で、Zth のグラフの目盛りと曲線の上をクリックして点を読みます (両軸とも対数)")).clicked() {
+                if self.sheet.has_doc() && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓が、図の見出し (Transient Thermal Impedance など) から Zth のグラフのページへ移ります。目盛りと曲線の上をクリックして点を読みます (両軸とも対数)")).clicked() {
                     self.sheet.start_graph(Some(super::graph_reader::Dest::Zth));
                 }
             });

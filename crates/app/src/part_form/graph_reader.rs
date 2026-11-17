@@ -69,6 +69,63 @@ impl Dest {
         }
     }
 
+    pub const ALL: [Dest; 17] = [
+        Dest::DiodeForward,
+        Dest::DiodeCap,
+        Dest::BjtHfe,
+        Dest::BjtVbeOn,
+        Dest::BjtVbeSat,
+        Dest::BjtVceSat,
+        Dest::BjtCobo,
+        Dest::BjtCibo,
+        Dest::DarlHfe,
+        Dest::DarlVbeOn,
+        Dest::DarlVbeSat,
+        Dest::DarlVceSat,
+        Dest::OptoLed,
+        Dest::OptoCtr,
+        Dest::PdLight,
+        Dest::PdCap,
+        Dest::Zth,
+    ];
+
+    /// The field by its name in the code ("DarlHfe"), for `--form-graph-for`.
+    pub fn by_name(name: &str) -> Option<Dest> {
+        Dest::ALL.into_iter().find(|d| format!("{d:?}").eq_ignore_ascii_case(name))
+    }
+
+    /// The curve its graph shows, to find the graph by its caption.
+    pub fn curve(self) -> datasheet::figures::Curve {
+        use datasheet::figures::Curve;
+        match self {
+            Dest::DiodeForward | Dest::OptoLed => Curve::Forward,
+            Dest::DiodeCap | Dest::BjtCobo | Dest::BjtCibo | Dest::PdCap => Curve::Capacitance,
+            Dest::BjtHfe | Dest::DarlHfe => Curve::DcGain,
+            Dest::BjtVbeOn | Dest::DarlVbeOn => Curve::VbeOn,
+            Dest::BjtVbeSat | Dest::DarlVbeSat => Curve::VbeSat,
+            Dest::BjtVceSat | Dest::DarlVceSat => Curve::VceSat,
+            Dest::Zth => Curve::ThermalImpedance,
+            Dest::OptoCtr => Curve::Ctr,
+            Dest::PdLight => Curve::LightCurrent,
+        }
+    }
+
+    /// The name of that graph, for the search list and the messages.
+    pub fn curve_name(self) -> &'static str {
+        use datasheet::figures::Curve;
+        match self.curve() {
+            Curve::Forward => "順方向特性",
+            Curve::Capacitance => "容量",
+            Curve::DcGain => "hFE",
+            Curve::VbeOn => "VBE(on)",
+            Curve::VbeSat => "VBE(sat)",
+            Curve::VceSat => "VCE(sat)",
+            Curve::ThermalImpedance => "過渡熱抵抗",
+            Curve::Ctr => "CTR",
+            Curve::LightCurrent => "光電流",
+        }
+    }
+
     /// The usual axes of its graph: (horizontal log, vertical log, the vertical value written first).
     fn axes(self) -> (bool, bool, bool) {
         match self {
@@ -188,6 +245,11 @@ impl GraphReader {
         self.x.axis().is_ok() && self.y.axis().is_ok()
     }
 
+    /// A message under the panel (where the graph was found, or that it was not).
+    pub fn note(&mut self, text: String) {
+        self.msg = Some((true, text));
+    }
+
     /// Reads another curve of the same graph for another field: the ticks stay, the points go.
     pub fn retarget(&mut self, dest: Option<Dest>) {
         self.dest = dest;
@@ -301,6 +363,10 @@ impl GraphReader {
     pub fn ui(&mut self, ui: &mut egui::Ui, shown: usize) -> bool {
         let mut keep = true;
         ui.label(egui::RichText::new(i18n::tr("1. 横軸の目盛りの数字を 2 つ以上クリック → 2. 縦軸の目盛りの数字を 2 つ以上クリック → 3. 曲線の上をクリックして点を取る (「曲線をたどる」なら 1 回のクリックで曲線の端から端まで)。数字が文字でない図は、目盛りの線をクリックして値を入れます。拡大すると正確に取れます")).small());
+        // nothing placed yet: the reading goes with the page turned to (another graph of the list)
+        if shown != self.page && self.x.ticks.is_empty() && self.y.ticks.is_empty() && self.points.is_empty() {
+            self.page = shown;
+        }
         if shown != self.page {
             ui.horizontal_wrapped(|ui| {
                 ui.colored_label(crate::theme::WARN, i18n::trf!("このグラフは p.{} のものです", self.page + 1));

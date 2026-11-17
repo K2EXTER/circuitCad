@@ -169,6 +169,8 @@ struct Opened {
     graph: Option<GraphReader>,
     /// The page drawn at a fixed scale for finding curves under the pointer (page, picture, pixels per point).
     snap: Option<(usize, datasheet::PageImage, f32)>,
+    /// The graph captions of the whole PDF, read the first time a field asks for its graph.
+    figures: Option<Vec<datasheet::figures::Figure>>,
 }
 
 /// A search that goes on a few pages per frame, so that a long data sheet does not freeze the window.
@@ -183,11 +185,13 @@ struct Search {
     current: Option<usize>,
     /// Letters were found on at least one page (false: the PDF may be all pictures).
     any_text: bool,
+    /// Where to bring into view for each hit, when not the hit itself (a graph above or below its caption).
+    focus: Vec<Rect>,
 }
 
 impl Search {
     fn new(queries: Vec<Query>, title: Option<&'static str>) -> Option<Search> {
-        if queries.is_empty() { None } else { Some(Search { queries, title, next_page: 0, hits: vec![], current: None, any_text: false }) }
+        if queries.is_empty() { None } else { Some(Search { queries, title, next_page: 0, hits: vec![], current: None, any_text: false, focus: vec![] }) }
     }
 }
 
@@ -227,6 +231,7 @@ impl SheetView {
                     pins_out: None,
                     graph: None,
                     snap: None,
+                    figures: None,
                 });
                 self.msg.clear();
                 self.open = true;
@@ -262,14 +267,40 @@ impl SheetView {
 
     /// The form (or the window's own button) starts reading points off a graph on the page shown. `dest` is the
     /// form's field the points can be sent to.
+    /// The page goes to the graph the field's curve is drawn in, found by its caption ("Figure 9. DC Current Gain"):
+    /// the page shown when it has one, else the likeliest. The other graphs of that curve are listed like search hits.
     pub fn start_graph(&mut self, dest: Option<Dest>) {
         if let Some(d) = self.doc.as_mut() {
             d.target = None;
             d.selecting = false;
+            let mut note = None;
+            if let Some(dest) = dest {
+                let figures = d.figures.get_or_insert_with(|| d.ds.figures());
+                let found = datasheet::figures::showing(figures, dest.curve());
+                if found.is_empty() {
+                    note = Some(i18n::trf!("「{}」のグラフの見出しは見つかりませんでした。ページをめくってグラフを探してください", i18n::tr(dest.curve_name())));
+                } else {
+                    let hits: Vec<Hit> = found.iter().map(|f| Hit { page: f.page, rect: f.rect, text: f.caption.clone(), context: f.caption.clone(), in_contents: false }).collect();
+                    let focus: Vec<Rect> = found.iter().map(|f| f.area).collect();
+                    let at = hits.iter().position(|h| h.page == d.page).unwrap_or(0);
+                    if hits[at].page != d.page || d.graph.as_ref().is_none_or(|g| g.page != d.page) {
+                        d.jump = Some(focus[at]);
+                    }
+                    d.page = hits[at].page;
+                    let n = hits.len();
+                    d.search = Some(Search { queries: vec![], title: Some(dest.curve_name()), next_page: d.ds.page_count(), hits, current: Some(at), any_text: true, focus });
+                    if n > 1 {
+                        note = Some(i18n::trf!("「{}」のグラフが {n} 枚あります。違う図なら、検索の一覧から選んでください", i18n::tr(dest.curve_name())));
+                    }
+                }
+            }
             // the same page's graph already set up: read another curve with its ticks (VBE(sat) and VCE(sat) share a figure)
             match d.graph.as_mut() {
                 Some(g) if g.page == d.page && g.has_axes() => g.retarget(dest),
                 _ => d.graph = Some(GraphReader::new(d.page, dest)),
+            }
+            if let (Some(g), Some(n)) = (d.graph.as_mut(), note) {
+                g.note(n);
             }
             self.open = true;
         }
@@ -605,8 +636,11 @@ impl Opened {
         let ctx = ui.ctx().clone();
         let mut scroll = egui::ScrollArea::both().auto_shrink([false, false]);
         if let Some(r) = self.jump.take() {
+            // centred, but never past its top left corner (a whole graph taller than the window, or the window's size
+            // not known yet in the frame it opens)
             let centre = Vec2::new(r.x0 + r.x1, r.y0 + r.y1) * 0.5 * self.zoom;
-            scroll = scroll.scroll_offset((centre - self.viewport * 0.5).max(Vec2::ZERO));
+            let corner = Vec2::new(r.x0, r.y0) * self.zoom;
+            scroll = scroll.scroll_offset((centre - self.viewport * 0.5).min(corner).max(Vec2::ZERO));
         }
         let area = scroll.show(ui, |ui| self.page_image(ui, &ctx));
         self.viewport = area.inner_rect.size();
@@ -899,7 +933,7 @@ impl Opened {
         {
             s.current = Some(i);
             self.page = h.page;
-            self.jump = Some(h.rect);
+            self.jump = Some(s.focus.get(i).copied().unwrap_or(h.rect));
         }
     }
 }
