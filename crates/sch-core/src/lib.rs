@@ -709,6 +709,11 @@ pub struct PartRatings {
     /// Heat resistance from the junction to the case (θjc, K/W), from the data sheet: the copper and a heat sink act only beyond it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theta_jc: Option<f64>,
+    /// Heat resistance from the junction to the air (θJA, K/W) with the part on its smallest pads (or a leaded part in free air), from
+    /// the data sheet: the self-heating run's θ of a placed part whose own θ is not given (the board copper is added to it). A θJA
+    /// measured on a large board (JEDEC 2s2p, 1 in² of copper) is not this one: the copper is counted from the board instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theta_ja: Option<f64>,
     /// Rated / typical figures from the data sheet, free form.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rows: Vec<SpecRow>,
@@ -775,7 +780,7 @@ impl LifeRating {
 
 impl PartRatings {
     pub fn is_empty(&self) -> bool {
-        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.theta_jc.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.theta_jc.is_none() && self.theta_ja.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
     }
 
     /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.

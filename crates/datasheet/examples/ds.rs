@@ -82,6 +82,12 @@ fn main() -> Result<(), String> {
                 println!("p.{} {:?} {} ({side})", f.page + 1, f.curves, f.caption);
             }
         }
+        "thermal" => {
+            // ds thermal FILE: the thermal resistances (table rows and deratings)
+            for r in ds.thermal() {
+                println!("p.{} {:?} {:.3} K/W{}{}  | {}", r.page + 1, r.to, r.k_per_w, if r.from_derating { " (derating)" } else { "" }, r.derate_from.map_or(String::new(), |t| format!(" from {t} °C")), r.text);
+            }
+        }
         "cond" => {
             // ds cond FILE NAME: the values of NAME=… printed in each graph ("VCE")
             let name = args.get(2).map(String::as_str).unwrap_or("VCE");

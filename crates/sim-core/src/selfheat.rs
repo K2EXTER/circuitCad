@@ -110,9 +110,14 @@ pub fn through_pins(comp: &Component) -> bool {
     comp.kind == Kind::Custom && comp.custom.as_ref().is_some_and(|c| c.glyph != "battery" && !(c.glyph.is_empty() && c.inferred_glyph() == "battery"))
 }
 
-/// A part's own θ (K/W, on the smallest pads): what it was given, or the guess from its package.
+/// A part's own θ (K/W, on the smallest pads): what it was given, else its library part's θJA from the data sheet, else the guess
+/// from its package.
 pub fn own_theta(comp: &Component) -> f64 {
-    if comp.theta > 0.0 { comp.theta } else { default_theta(&comp.footprint_name()).unwrap_or(100.0) }
+    if comp.theta > 0.0 {
+        return comp.theta;
+    }
+    let ja = comp.custom.as_ref().and_then(|c| c.ratings.as_ref()).and_then(|r| r.theta_ja).filter(|x| *x > 0.0);
+    ja.or_else(|| default_theta(&comp.footprint_name())).unwrap_or(100.0)
 }
 
 /// The share of θ taken for θjc when neither the part nor its library part gives one: NDT3055L's 12 of 110 K/W (SOT-223, minimum
@@ -432,6 +437,20 @@ mod tests {
         c.theta_jc = 0.0;
         c.heatsink = 0.0;
         assert!(theta_jc(c).1);
+    }
+
+    #[test]
+    fn a_library_parts_theta_ja_is_its_own_theta_when_none_is_given() {
+        let mut s = Schematic::default();
+        let i = s.add(Kind::Custom, (0, 0), 0);
+        let c = &mut s.components[i];
+        let guess = own_theta(c);
+        let ratings = sch_core::PartRatings { theta_ja: Some(200.0), ..Default::default() };
+        c.custom = Some(sch_core::CustomSymbol { name: "Q".into(), prefix: "Q".into(), pins: vec![], sim: None, ratings: Some(ratings), glyph: String::new(), shops: Default::default(), programming: vec![] });
+        assert_eq!(own_theta(c), 200.0, "the data sheet's θJA, not the package guess {guess}");
+        // the part's own θ goes first
+        c.theta = 150.0;
+        assert_eq!(own_theta(c), 150.0);
     }
 
     #[test]

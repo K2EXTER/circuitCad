@@ -243,6 +243,9 @@ pub struct PartForm {
     pub rt_derate: String,
     /// θjc (K/W), junction to case.
     pub rt_jc: String,
+    /// θJA (K/W), junction to air on the smallest pads, and what 「PDF の熱の表から読む」 said.
+    pub rt_ja: String,
+    pub rt_heat_msg: Vec<(bool, String)>,
     /// The transient thermal impedance: points read off the data sheet's Zth curve ("time Zth" lines), the Foster stages ("R τ" lines)
     /// and what the last fit said.
     pub rt_zth_points: String,
@@ -414,6 +417,8 @@ impl Default for PartForm {
             rt_t: String::new(),
             rt_derate: String::new(),
             rt_jc: String::new(),
+            rt_ja: String::new(),
+            rt_heat_msg: vec![],
             rt_zth_points: String::new(),
             rt_zth: String::new(),
             rt_zth_msg: None,
@@ -459,6 +464,7 @@ mod darlington;
 mod linear;
 mod opto;
 mod table_fill;
+mod heat_fill;
 mod reg_fill;
 mod logic;
 mod pdf_check;

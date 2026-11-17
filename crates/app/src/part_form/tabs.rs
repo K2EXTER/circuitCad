@@ -186,7 +186,22 @@ impl PartForm {
                 ui.label(i18n::tr("熱抵抗 θjc [K/W]")).on_hover_text(i18n::tr("接合部 (部品の中) からケース (パッケージの外側、放熱タブ) までの熱抵抗。データシートの「Thermal Resistance, Junction to Case」(RθJC)。基板の銅や放熱板は、ケースから先の熱の道にしか効かないので、自己発熱の計算はこの分を残して銅と放熱板を足します。空けると θ の 1 割ほどの目安"));
                 ui.add(egui::TextEdit::singleline(&mut self.rt_jc).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 12 (SOT-223) / 3 (TO-220)"));
                 ui.end_row();
+                ui.label(i18n::tr("熱抵抗 θja [K/W]")).on_hover_text(i18n::tr("接合部 (部品の中) から空気までの熱抵抗。データシートの「Thermal Resistance, Junction to Ambient」(RθJA)。最小のパッド (リード部品は空中) で測った値を入れます。自己発熱の計算で、回路図の部品の θ を空にしたとき、この値を使います (基板の銅の効きは、基板から足します)。大きい基板 (JEDEC 2s2p・1 in² の銅) の値は、ここに入れません"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_ja).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 200 (TO-92) / 62 (TO-220)"));
+                ui.end_row();
             });
+            if self.sheet.has_doc() {
+                if ui
+                    .button(i18n::tr("PDF の熱の表から読む"))
+                    .on_hover_text(i18n::tr("開いているデータシートの熱特性の表 (Thermal Resistance, Junction to Ambient / Case / Lead) と、絶対最大定格の許容損失の低減 (Derate above 25°C 5.0 mW/°C: 1 ÷ 5.0 mW/°C = 200 K/W) から、θja・θjc・電力を下げ始める温度を入れます"))
+                    .clicked()
+                {
+                    self.fill_heat_from_pdf();
+                }
+                for (ok, line) in &self.rt_heat_msg {
+                    ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::OK } else { crate::theme::WARN }));
+                }
+            }
             self.zth_ui(ui);
             // only where it belongs: an electrolytic / tantalum capacitor, a part that already has such figures, or
             // a part whose kind was not chosen

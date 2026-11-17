@@ -398,6 +398,11 @@ impl SheetView {
         d.graph = Some(g);
     }
 
+    /// The open PDF's thermal resistances (`Datasheet::thermal`; none when no PDF is open).
+    pub fn thermal(&self) -> Vec<datasheet::thermal::ThermalRow> {
+        self.doc.as_ref().map(|d| d.ds.thermal()).unwrap_or_default()
+    }
+
     /// A Darlington's resistors R1, R2 [Ω] and the page, from the open PDF's circuit drawing (`Datasheet::darlington_resistors`).
     pub fn darlington_resistors(&self) -> Option<(f64, f64, usize)> {
         self.doc.as_ref().and_then(|d| d.ds.darlington_resistors())

@@ -107,7 +107,7 @@ fn starts_caption(w: &Word, next: Option<&&Word>) -> bool {
 }
 
 /// The words of a page in lines (by baseline), each left to right.
-fn lines(words: &[Word]) -> Vec<Vec<&Word>> {
+pub(crate) fn lines(words: &[Word]) -> Vec<Vec<&Word>> {
     let mut sorted: Vec<&Word> = words.iter().collect();
     sorted.sort_by(|a, b| a.baseline().total_cmp(&b.baseline()).then(a.rect.x0.total_cmp(&b.rect.x0)));
     let mut out: Vec<Vec<&Word>> = vec![];

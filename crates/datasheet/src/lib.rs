@@ -18,6 +18,7 @@ pub mod axes;
 pub mod pick;
 pub mod ocr;
 pub mod spec_table;
+pub mod thermal;
 mod headings;
 mod pin_table;
 mod suggest;
@@ -203,6 +204,11 @@ impl Datasheet {
     /// graph), each once, in SI units as magnitudes (`figures::conditions`).
     pub fn figure_condition(&self, f: &figures::Figure, name: &str) -> Vec<f64> {
         figures::conditions(self.words(f.page), f, name)
+    }
+
+    /// The thermal resistances of every page (`thermal::read`): the thermal table's rows and the power deratings.
+    pub fn thermal(&self) -> Vec<thermal::ThermalRow> {
+        (0..self.pages).flat_map(|p| thermal::read(p, self.words(p))).collect()
     }
 
     /// A Darlington's two resistors (R1, R2 in ohms) from the circuit drawing, and the page (`figures::darlington_resistors`).

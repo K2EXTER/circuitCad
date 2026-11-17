@@ -270,6 +270,12 @@ impl PartForm {
             if let Some(p) = m.iter().flatten().next() {
                 done.push(format!("定格: p.{} の絶対最大定格から {}", p.page + 1, put.join("・")));
             }
+            // the thermal resistances with the ratings (θJA, θjc, the derating's start)
+            self.fill_heat_from_pdf();
+            let heat: Vec<String> = [("θja", &self.rt_ja), ("θjc", &self.rt_jc)].iter().filter(|(_, v)| !v.is_empty()).map(|(n, v)| format!("{n} {v} K/W")).collect();
+            if !heat.is_empty() {
+                done.push(format!("熱: {}", heat.join("・")));
+            }
         }
         if d.use_[5] {
             let sheet = &self.sheet;
