@@ -198,6 +198,10 @@ impl Datasheet {
     pub fn figures(&self) -> Vec<figures::Figure> {
         let mut all: Vec<figures::Figure> = (0..self.pages).flat_map(|p| figures::figures(p, self.words(p))).collect();
         figures::place_graphs(&mut all);
+        // the graphs with a title and no numbered caption (Linear Technology, AMS), after the vote: their graphs are below
+        let titled: Vec<figures::Figure> = (0..self.pages).flat_map(|p| figures::titled(p, self.words(p), &all)).collect();
+        all.extend(titled);
+        all.sort_by_key(|f| f.page);
         all
     }
 

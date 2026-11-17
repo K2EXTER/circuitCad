@@ -473,6 +473,8 @@ impl SheetView {
                         _ => why = i18n::trf!("p.{} の図の曲線から点が取れません", f.page + 1),
                     }
                 }
+                // one line found that goes the wrong way for the curve: pieces of other curves joined (dashed lines), not the curve
+                datasheet::pick::Pick::Several(c) if c.len() == 1 => why = i18n::trf!("p.{} の図で見つかった線が{}の曲線らしくありません (破線などの別の線をつないだ恐れ)", f.page + 1, i18n::tr(dest.curve_name())),
                 datasheet::pick::Pick::Several(c) => why = i18n::trf!("p.{} の図に曲線が {} 本あり、どれか決められません。「グラフから読む」で候補の線に色が付きます", f.page + 1, c.len()),
                 datasheet::pick::Pick::None => why = i18n::trf!("p.{} の図に曲線が見つかりません", f.page + 1),
             }

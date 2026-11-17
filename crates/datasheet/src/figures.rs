@@ -135,7 +135,7 @@ fn plain(w: &str) -> String {
 }
 
 /// The caption's text breaks off and goes on on the next line: it ends on a joining word, or has a "vs." with at most
-/// one word after it; or the next line starts with "vs.".
+/// one word after it; or the next line has "vs." among its first three words.
 fn runs_on(text: &[&str], next: &[&str]) -> bool {
     let words: Vec<String> = text.iter().map(|t| plain(t)).filter(|t| !t.is_empty()).collect();
     let Some(last) = words.last() else { return false };
@@ -145,7 +145,9 @@ fn runs_on(text: &[&str], next: &[&str]) -> bool {
     if let Some(i) = words.iter().rposition(|w| w == "vs" || w == "versus") {
         return words.len() - i - 1 <= 1;
     }
-    next.first().is_some_and(|f| ["vs", "versus"].contains(&plain(f).as_str()))
+    // the next line starts with "vs.", or has it among its first words ("Power Supply Ripple" / "Rejection vs. Frequency",
+    // Microchip's MCP1700)
+    next.iter().take(3).any(|f| ["vs", "versus"].contains(&plain(f).as_str()))
 }
 
 /// The graph captions of a page.
@@ -186,6 +188,137 @@ pub fn figures(page: usize, words: &[Word]) -> Vec<Figure> {
             let curves = curves(&caption);
             let (area, other, numbers) = sides(words, rect);
             out.push(Figure { page, rect, caption, curves, area, other, numbers });
+        }
+    }
+    out
+}
+
+/// The union of two rectangles.
+fn union(a: Rect, b: Rect) -> Rect {
+    Rect { x0: a.x0.min(b.x0), y0: a.y0.min(b.y0), x1: a.x1.max(b.x1), y1: a.y1.max(b.y1) }
+}
+
+/// A line's words in pieces parted by gaps wider than two letters (titles of graphs side by side on one line).
+fn pieces<'a>(line: &[&'a Word]) -> Vec<Vec<&'a Word>> {
+    let mut out: Vec<Vec<&Word>> = vec![];
+    for (i, w) in line.iter().enumerate() {
+        match out.last_mut() {
+            Some(p) if i > 0 && w.rect.x0 - line[i - 1].rect.x1 <= 2.0 * w.em().max(4.0) => p.push(w),
+            _ => out.push(vec![w]),
+        }
+    }
+    out
+}
+
+/// A line of words that reads as a title: two words of three letters or more, and no "=" (a condition in the plot).
+fn texty(line: &[&Word]) -> bool {
+    line.iter().filter(|w| w.text.chars().filter(|c| c.is_alphabetic()).count() >= 3).count() >= 2 && !line.iter().any(|w| w.text.contains('='))
+}
+
+/// The graphs of a page that have a title instead of a numbered caption, as their captions (text joined with " vs "
+/// and the horizontal axis' title, so that `curves` can tell what is shown against what). Two ways of printing them:
+///
+/// - Linear Technology (LT3045): no "Figure"; each graph's title above it (one to three lines), the horizontal axis'
+///   title under it, and a code at its lower right ("3045 G43"). The code marks the graph's column (the 185 points to
+///   its left) and its bottom; the title is the first lines of words of the column below the code above it.
+/// - A short line with "vs." and the graph's numbers below it (AMS1117: "Ripple Rejection vs. Current"), two graphs
+///   side by side on one line parted by a wide gap.
+///
+/// A title inside a numbered caption's graph (`captioned`) is left out: that caption names it.
+pub fn titled(page: usize, words: &[Word], captioned: &[Figure]) -> Vec<Figure> {
+    let lines = lines(words);
+    let mid = |r: &Rect| ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0);
+    let inside = |r: &Rect, a: &Rect| {
+        let (x, y) = mid(r);
+        x > a.x0 && x < a.x1 && y > a.y0 && y < a.y1
+    };
+    let named = |area: &Rect| captioned.iter().any(|f| f.page == page && (inside(&f.rect, area) || inside(area, &f.area)));
+    let mut out: Vec<Figure> = vec![];
+    // Linear Technology's codes: "G07" just after a word with a digit ("3045")
+    let mut codes: Vec<Rect> = vec![];
+    for l in &lines {
+        for i in 1..l.len() {
+            let t = l[i].text.as_str();
+            let code = (3..=4).contains(&t.len()) && t.starts_with('G') && t[1..].chars().all(|c| c.is_ascii_digit());
+            let before = l[i - 1];
+            if code && l[i].rect.x0 - before.rect.x1 < 6.0 && before.text.len() <= 6 && before.text.chars().any(|c| c.is_ascii_digit()) {
+                codes.push(union(before.rect, l[i].rect));
+            }
+        }
+    }
+    for c in &codes {
+        let (x0, x1) = (c.x1 - 185.0, c.x1 + 8.0);
+        // the code above in the same column (the graph above ends there), or as far as a graph reaches
+        let top = codes.iter().filter(|o| o.y1 < c.y0 - 20.0 && o.x1 > x0 && o.x0 < x1).map(|o| o.y1).fold(c.y0 - GRAPH_REACH, f32::max);
+        // the pieces of each line (parted by wide gaps) that lie in the column: the page's heading running across the
+        // columns ("TYPICAL PERFORMANCE CHARACTERISTICS TJ = 25°C, unless otherwise noted.") is no column's
+        let col: Vec<Vec<&Word>> = lines
+            .iter()
+            .flat_map(|l| pieces(l))
+            .filter(|p| {
+                let (a, b) = (p[0].rect, p[p.len() - 1].rect);
+                a.x0 >= x0 - 2.0 && b.x1 <= x1 + 2.0 && a.y0 > top && a.y1 < c.y0
+            })
+            .collect();
+        let Some(first) = col.iter().position(|l| texty(l)) else { continue };
+        let em = col[first][0].em().max(4.0);
+        let mut title: Vec<&Word> = col[first].clone();
+        let mut base = col[first][0].baseline();
+        for l in &col[first + 1..] {
+            if l[0].baseline() - base < 1.8 * em && texty(l) {
+                title.extend(l.iter().copied());
+                base = l[0].baseline();
+            } else {
+                break;
+            }
+        }
+        // the horizontal axis' title: the line just above the code
+        let axis: Vec<&str> = col
+            .iter()
+            .rev()
+            .find(|l| c.y0 - l[0].rect.y1 < 14.0 && l.iter().any(|w| w.text.chars().filter(|ch| ch.is_alphabetic()).count() >= 3))
+            .map(|l| l.iter().map(|w| w.text.as_str()).collect())
+            .unwrap_or_default();
+        let rect = title.iter().fold(title[0].rect, |r, w| union(r, w.rect));
+        let area = Rect { x0, y0: rect.y0, x1, y1: c.y1 };
+        if named(&area) {
+            continue;
+        }
+        let head: Vec<&str> = title.iter().map(|w| w.text.as_str()).collect();
+        let caption = if axis.is_empty() { head.join(" ") } else { format!("{} vs {}", head.join(" "), axis.join(" ")) };
+        let curves = curves(&caption);
+        out.push(Figure { page, rect, caption, curves, area, other: Rect { x0, y0: rect.y0, x1: x0, y1: rect.y0 }, numbers: (0, 0) });
+    }
+    // short lines with "vs." and a graph below
+    for line in &lines {
+        for part in pieces(line) {
+            let part = &part[..];
+            let plain_words: Vec<String> = part.iter().map(|w| plain(&w.text)).filter(|t| !t.is_empty()).collect();
+            // "vs." or a lower case "vs" ("VS" is the supply voltage's symbol: "VS = 3V to 36V", LM324); no condition ("=")
+            let vs = part.iter().any(|w| {
+                let t = w.text.trim_end_matches(',');
+                t == "vs" || t.eq_ignore_ascii_case("vs.") || t.eq_ignore_ascii_case("versus")
+            });
+            if plain_words.len() > 10 || plain_words.len() < 3 || !vs || part.iter().any(|w| w.text.contains('=')) || starts_caption(part[0], part.get(1)) {
+                continue;
+            }
+            // a numbered caption the caption reader missed ("図 図 6-1. On-Resistance vs …", whose graph is above it) and
+            // a piece of a sentence ("… low output drift versus") are not titles
+            let lower_start = part[0].text.chars().next().is_some_and(|c| c.is_lowercase());
+            if lower_start || part.iter().any(|w| w.text.starts_with('図') || plain(&w.text).starts_with("fig")) {
+                continue;
+            }
+            let rect = part.iter().fold(part[0].rect, |r, w| union(r, w.rect));
+            if out.iter().any(|f| inside(&rect, &f.area)) {
+                continue;
+            }
+            let (above, below, numbers) = sides(words, rect);
+            if numbers.1 < 3 || named(&below) {
+                continue;
+            }
+            let caption: String = part.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+            let curves = curves(&caption);
+            out.push(Figure { page, rect, caption, curves, area: below, other: above, numbers: (0, 0) });
         }
     }
     out
@@ -453,6 +586,49 @@ mod tests {
         assert_eq!(f[1].caption, "Fig.7 DC Current Gain", "the line below is under Fig.6, not Fig.7");
         assert_eq!(f[1].curves, vec![Curve::DcGain]);
         assert_eq!(showing(&f, Curve::DcGain)[0].page, 2);
+    }
+
+    #[test]
+    fn graphs_titled_without_a_number_are_found() {
+        // Linear Technology: a heading across the page, each graph's title above it, its axis' title and code under it
+        let mut words: Vec<Word> = ["TYPICAL", "PERFORMANCE", "CHARACTERISTICS", "TJ", "=", "25°C,", "unless", "otherwise", "noted."]
+            .iter()
+            .scan(45.0, |x, t| {
+                let word = w(t, *x, 91.0);
+                *x = word.rect.x1 + 4.0;
+                Some(word)
+            })
+            .collect();
+        for (t, x) in [("Typical", 74.0), ("Dropout", 112.0), ("Voltage", 150.0), ("Power", 251.0), ("Supply", 281.0), ("Ripple", 316.0), ("Rejection", 350.0)] {
+            words.push(w(t, x, 136.0));
+        }
+        for (t, x, y) in [("500", 55.0, 150.0), ("250", 55.0, 215.0), ("0", 60.0, 280.0), ("OUTPUT", 100.0, 290.0), ("CURRENT", 133.0, 290.0), ("(mA)", 171.0, 290.0)] {
+            words.push(w(t, x, y));
+        }
+        for (t, x) in [("FREQUENCY", 290.0), ("(Hz)", 340.0)] {
+            words.push(w(t, x, 290.0));
+        }
+        for (t, x) in [("3045", 180.0), ("G14", 201.0), ("3045", 380.0), ("G43", 401.0)] {
+            words.push(w(t, x, 302.0));
+        }
+        let f = titled(4, &words, &[]);
+        assert_eq!(f.len(), 2, "{f:?}");
+        assert_eq!(f[0].caption, "Typical Dropout Voltage vs OUTPUT CURRENT (mA)", "the page's heading is no graph's title");
+        assert_eq!(f[0].curves, vec![Curve::Dropout]);
+        assert_eq!(f[1].caption, "Power Supply Ripple Rejection vs FREQUENCY (Hz)");
+        assert_eq!(f[1].curves, vec![Curve::Ripple]);
+        assert!(f[0].area.y0 < f[0].area.y1 && f[0].area.y1 >= 302.0 - 8.0, "the graph is below its title, down to the code");
+
+        // AMS: a title with "vs." over numbers, beside one without; "VS" the supply voltage is not "vs."
+        let mut words = vec![w("Load", 50.0, 300.0), w("Regulation", 75.0, 300.0), w("Ripple", 330.0, 300.0), w("Rejection", 365.0, 300.0), w("vs.", 415.0, 300.0), w("Current", 435.0, 300.0)];
+        for (i, y) in [350.0, 380.0, 410.0].iter().enumerate() {
+            words.push(w(&format!("{}", 10 * (i + 1)), 340.0, *y));
+            words.push(w(&format!("{}", 10 * (i + 1)), 60.0, y + 300.0));
+        }
+        words.extend([w("VS", 50.0, 600.0), w("=", 65.0, 600.0), w("3V", 75.0, 600.0), w("to", 90.0, 600.0), w("36V", 102.0, 600.0)]);
+        let f = titled(5, &words, &[]);
+        assert_eq!(f.iter().map(|f| f.caption.as_str()).collect::<Vec<_>>(), vec!["Ripple Rejection vs. Current"]);
+        assert!(f[0].area.y0 >= 290.0, "the graph is below the title");
     }
 
     #[test]

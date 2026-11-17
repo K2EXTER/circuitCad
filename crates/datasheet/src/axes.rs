@@ -379,7 +379,9 @@ fn read_labels(all: &[Label], words: &[Word], caption: Rect, line: f32) -> Optio
             let (x0, x1) = (row[0].x0, row[row.len() - 1].x1);
             // the titles: under the row (across), left of the column (up)
             let under: Vec<&Word> = words.iter().filter(|w| w.rect.y0 > row_y && w.rect.y0 < row_y + 22.0 && w.rect.x1 > x0 && w.rect.x0 < x1).collect();
-            let left: Vec<&Word> = words.iter().filter(|w| w.rect.x1 < col[0].x0 + 1.0 && w.rect.x1 > col[0].x0 - 30.0 && w.rect.y1 > col[0].y - 10.0 && w.rect.y0 < bottom + 10.0).collect();
+            // (by the middle of a word: a title turned up the page may reach a point past the numbers' left edge, LT3045)
+            let col_x0 = col.iter().map(|l| l.x0).fold(f32::MAX, f32::min);
+            let left: Vec<&Word> = words.iter().filter(|w| (w.rect.x0 + w.rect.x1) / 2.0 < col_x0 && w.rect.x1 > col_x0 - 30.0 && w.rect.y1 > col[0].y - 10.0 && w.rect.y0 < bottom + 10.0).collect();
             let axes = ReadAxes {
                 x: ReadAxis { ticks: row.iter().map(|l| (l.cx(), l.text.clone())).collect(), log: xlog, prefix: unit_prefix(&under).unwrap_or(1.0) },
                 y: ReadAxis { ticks: col.iter().map(|l| (l.y, l.text.clone())).collect(), log: ylog, prefix: unit_prefix(&left).unwrap_or(1.0) },
