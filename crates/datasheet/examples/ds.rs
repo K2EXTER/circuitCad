@@ -8,6 +8,7 @@
 //!     (any command) ... ocr=1                                               pages without text read by the OCR (a scanned PDF)
 //!     cargo run -p datasheet --example ds -- absmax FILE.pdf                   the absolute maximum ratings read (the first part number's column)
 //!     cargo run -p datasheet --example ds -- kind   FILE.pdf                   the kind of part and the part numbers it suggests
+//!     cargo run -p datasheet --example ds -- fet    FILE.pdf [FAMILY]          a MOSFET's pins with no numbers printed (`fet_pins`)
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
 //!     cargo run -p datasheet --example ds -- labels FILE.pdf PAGE [box=x0,y0,x1,y1]   numbers on the page (tick labels)
 //!     cargo run -p datasheet --example ds -- render FILE.pdf PAGE OUT.png [scale=2] [box=x0,y0,x1,y1]
@@ -97,6 +98,13 @@ fn main() -> Result<(), String> {
             match ds.find_pin_drawing() {
                 Some(f) => println!("drawing p.{}: {}", f.page + 1, datasheet::pin_lines(&f.pins).replace('\n', ", ")),
                 None => println!("drawing: none"),
+            }
+        }
+        "fet" => {
+            // ds fet FILE [FAMILY]: a MOSFET's pins from a sentence or a front view's letters (`fet_pins`)
+            match ds.fet_pins(args.get(2).map(String::as_str)) {
+                Some(p) => println!("p.{} {:?}: {}", p.page + 1, p.from, datasheet::pin_lines(&p.pins).replace('\n', ", ")),
+                None => println!("none"),
             }
         }
         "parts" => {

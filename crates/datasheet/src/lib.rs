@@ -22,6 +22,7 @@ pub mod thermal;
 pub mod companions;
 pub mod ordering;
 pub mod pin_list;
+pub mod fet_pins;
 mod headings;
 mod pin_table;
 mod suggest;
