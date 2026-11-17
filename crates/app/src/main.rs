@@ -448,6 +448,9 @@ impl eframe::App for App {
                             if ui.button(i18n::tr(s.title)).on_hover_text(i18n::tr(s.about)).clicked() {
                                 if self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") && self.sch.open_sample(s.title, s.json) {
                                     self.mode = Mode::Schematic;
+                                    if s.live {
+                                        self.sch.start_live_logic();
+                                    }
                                 }
                                 ui.close();
                             }
@@ -520,6 +523,17 @@ impl eframe::App for App {
                     }
                     if ui.button(i18n::tr("最初の電源投入のガイド…")).on_hover_text(i18n::tr("組み立てた基板に初めて電源を入れるときの、電流制限の値と、正常なら流れる電流の範囲を、いまの回路図から出します。測った電流を入れると、多すぎ・少なすぎのときに疑う所を並べます")).clicked() {
                         self.power_on.open_for(&self.sch);
+                        ui.close();
+                    }
+                    let live_tip = if self.sch.live_logic_active() { i18n::tr("動かすのをやめて、回路図の編集に戻ります (キャンバスの上の帯の「終わる」と同じ)") } else { i18n::tr("いまの回路図のデジタル回路を、スイッチをクリックして動かします。配線が High / Low の色になり、LED が光り、真理値表とロジックアナライザが出ます。クロック (パルスの電源) は、つまみの速さと「1 クロック」で動きます。動かしている間は編集できません") };
+                    let live_label = if self.sch.live_logic_active() { i18n::tr("デジタル回路を動かすのをやめる") } else { i18n::tr("デジタル回路を動かしながら見る") };
+                    if ui.button(live_label).on_hover_text(live_tip).clicked() {
+                        if self.sch.live_logic_active() {
+                            self.sch.stop_live_logic();
+                        } else {
+                            self.sch.start_live_logic();
+                        }
+                        self.mode = Mode::Schematic;
                         ui.close();
                     }
                     if ui.button(i18n::tr("用語集・索引…")).on_hover_text(i18n::tr("電子回路の言葉と、このソフトの言葉を、読みと説明つきで引けます。語を選ぶと、その語が出てくるレッスンも分かります")).clicked() {

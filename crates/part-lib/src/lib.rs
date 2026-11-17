@@ -103,9 +103,10 @@ pub struct Issue {
 }
 
 /// Glyphs that draw a standard body (diode, transistor ...) inside the box; the pins keep their box positions.
-pub const BODY_GLYPHS: [&str; 33] = [
+pub const BODY_GLYPHS: [&str; 35] = [
     "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "ac3p", "crystal", "comparator", "motor", "buzzer", "regulator",
     "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg",
+    "switch_push", "switch_spdt",
     // "box" = the plain box with the pin names, whatever the name and pins suggest
     "box",
 ];
@@ -525,6 +526,8 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("ATtiny85_SOIC-8", include_str!("../examples/ATtiny85_SOIC-8.part.json")),
     ("BSS138_SOT-23", include_str!("../examples/BSS138_SOT-23.part.json")),
     ("SW_SAMPLE_DEMO", include_str!("../examples/SW_SAMPLE_DEMO.part.json")),
+    ("SW_PUSH", include_str!("../examples/SW_PUSH.part.json")),
+    ("SW_SLIDE", include_str!("../examples/SW_SLIDE.part.json")),
     ("IRLZ44N_TO-220", include_str!("../examples/IRLZ44N_TO-220.part.json")),
     ("LM317_TO-220", include_str!("../examples/LM317_TO-220.part.json")),
     ("LM324_SOIC-14", include_str!("../examples/LM324_SOIC-14.part.json")),

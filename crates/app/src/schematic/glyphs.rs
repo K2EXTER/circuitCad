@@ -12,8 +12,9 @@ type P = (f32, f32);
 /// Which body a part gets: the `glyph` of the part when it names one, else a guess from the part
 /// name and pin names (so parts installed before the glyphs existed look right too).
 pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 20] = [
+    const KNOWN: [&str; 22] = [
         "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal", "comparator", "motor", "buzzer",
+        "switch_push", "switch_spdt",
     ];
     if let Some(g) = KNOWN.iter().find(|g| **g == sym.glyph) {
         return Some(g);
@@ -418,6 +419,24 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
             let (x, y) = (plus.0 + 0.45 * s, base + 0.5);
             v.push(L(x - 0.25, y, x + 0.25, y));
             v.push(L(x, y - 0.25, x, y + 0.25));
+            Some(v)
+        }
+        "switch_push" => {
+            // two contacts and the bar above them that the button pushes down (JIS C 0617: a make contact with a push button)
+            let (a, b) = (pt(l.pins.first()?), pt(l.pins.get(1)?));
+            let (ca, cb) = ((a.0.signum() * 0.7, 0.0), (b.0.signum() * 0.7, 0.0));
+            let mut v = vec![L(a.0, a.1, ca.0, ca.1), L(b.0, b.1, cb.0, cb.1), C(ca.0, ca.1, 0.12), C(cb.0, cb.1, 0.12)];
+            v.extend([L(-0.8, -0.55, 0.8, -0.55), L(0.0, -0.55, 0.0, -1.2), L(-0.4, -1.2, 0.4, -1.2)]);
+            Some(v)
+        }
+        "switch_spdt" => {
+            // the common contact on one side, A and B on the other, the lever resting on A (`live_logic` draws where it is)
+            let (com, a, b) = (pt(find(l, &["COM"])?), pt(find(l, &["A"])?), pt(find(l, &["B"])?));
+            let s = if a.0 >= com.0 { 1.0 } else { -1.0 };
+            let (cc, ca, cb) = ((-0.7 * s, com.1), (0.7 * s, a.1), (0.7 * s, b.1));
+            let mut v = vec![L(com.0, com.1, cc.0, cc.1), L(a.0, a.1, ca.0, ca.1), L(b.0, b.1, cb.0, cb.1)];
+            v.extend([C(cc.0, cc.1, 0.12), C(ca.0, ca.1, 0.12), C(cb.0, cb.1, 0.12)]);
+            v.push(L(cc.0, cc.1, ca.0 - 0.15 * s, ca.1 + 0.1 * (cc.1 - ca.1).signum()));
             Some(v)
         }
         "battery" => {

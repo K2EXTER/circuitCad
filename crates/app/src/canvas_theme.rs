@@ -27,6 +27,12 @@ pub enum Role {
     Selection,
     Error,
     Warning,
+    /// The live logic view (`schematic/live_logic.rs`): a net at High, at Low, at neither (X: between the thresholds, or not
+    /// driven), and a lit LED.
+    LogicHigh,
+    LogicLow,
+    LogicX,
+    LedOn,
     /// The ground under a number drawn over the lines (not offered for editing: it follows the ground).
     TextChip,
 }
@@ -50,6 +56,10 @@ pub const ROLES: &[(Role, &str, &str, &str)] = &[
     (Role::Selection, "selection", "選択", "選んでいるもの"),
     (Role::Error, "error", "まちがい", "ERC のまちがいの印"),
     (Role::Warning, "warning", "注意", "ERC の注意の印・故障の印"),
+    (Role::LogicHigh, "logic_high", "High (1)", "デジタル回路を動かすときの、High のネット"),
+    (Role::LogicLow, "logic_low", "Low (0)", "デジタル回路を動かすときの、Low のネット"),
+    (Role::LogicX, "logic_x", "不定 (X)", "デジタル回路を動かすときの、High とも Low とも言えないネット"),
+    (Role::LedOn, "led_on", "光った LED", "デジタル回路を動かすときの、光っている LED"),
 ];
 
 const N: usize = Role::TextChip as usize + 1;
@@ -128,6 +138,10 @@ pub const DARK: Palette = pal(
         rgb(110, 170, 255),                             // Selection
         rgb(244, 110, 200),                             // Error
         rgb(236, 170, 50),                              // Warning
+        rgb(255, 96, 80),                               // LogicHigh
+        rgb(70, 140, 255),                              // LogicLow
+        rgb(235, 200, 60),                              // LogicX
+        rgb(255, 70, 40),                               // LedOn
         Color32::from_rgba_premultiplied(18, 19, 22, 210), // TextChip
     ],
     rgb(118, 122, 130),
@@ -154,6 +168,10 @@ pub const PAPER: Palette = pal(
         rgb(0, 80, 220),                                      // Selection
         rgb(230, 0, 200),                                     // Error
         rgb(190, 110, 0),                                     // Warning
+        rgb(210, 30, 20),                                     // LogicHigh
+        rgb(20, 80, 210),                                     // LogicLow
+        rgb(160, 120, 0),                                     // LogicX
+        rgb(230, 40, 20),                                     // LedOn
         Color32::from_rgba_premultiplied(255, 255, 255, 190), // TextChip
     ],
     Color32::from_gray(150),

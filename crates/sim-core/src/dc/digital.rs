@@ -633,6 +633,21 @@ impl Compiled {
         outs.chain(ens).min_by(|a, b| a.total_cmp(b))
     }
 
+    /// The time of the next change of any cell's output or output enable (digital nets included), for a run that is stepped one
+    /// event at a time (`TranRun::next_digital_event`).
+    pub(crate) fn dig_next_any_event(&self) -> Option<f64> {
+        let d = self.dig.borrow();
+        let outs = (0..self.cells.len()).filter(|&ci| d.pend.get(ci).is_some_and(|p| p.is_some())).map(|ci| d.pend_due[ci]);
+        let ens = (0..self.cells.len()).filter(|&ci| d.en_pend.get(ci).is_some_and(|p| p.is_some())).map(|ci| d.en_due[ci]);
+        outs.chain(ens).min_by(|a, b| a.total_cmp(b))
+    }
+
+    /// The largest supply of the cells (volts from vss to vcc) at the last accepted solution.
+    pub(crate) fn dig_supply_max(&self) -> Option<f64> {
+        let d = self.dig.borrow();
+        d.gsup.iter().map(|(vss, vcc)| vcc - vss).max_by(|a, b| a.total_cmp(b))
+    }
+
     /// Take the accepted solution `x` (at time `time`; `None` = a static solution: the delays are left out) in: refresh the
     /// supplies and the analog inputs, then settle the cells. Returns whether the circuit equations have to be solved again (an
     /// output on an analog node changed, or a supply moved enough to matter) and whether any cell output changed at all.
