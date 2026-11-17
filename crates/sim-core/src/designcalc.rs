@@ -727,6 +727,129 @@ pub fn opamp_gain(gain: f64, rf_ohm: f64, inverting: f64, gbw_khz: f64, vsupply:
     Ok(o)
 }
 
+#[allow(clippy::too_many_arguments)]
+/// The filter spec from the calculator's numbers (codes as the inputs' labels say).
+pub fn filter_spec(family: f64, shape: f64, order: f64, freq: f64, bandwidth: f64, ripple: f64, topology: f64, series: f64) -> Result<crate::FilterSpec, String> {
+    use crate::{FilterFamily, FilterShape, FilterTopology};
+    let code = |name: &str, v: f64, n: usize| -> Result<usize, String> {
+        let k = v.round();
+        if v.is_finite() && k >= 0.0 && (k as usize) < n && (v - k).abs() < 1e-9 { Ok(k as usize) } else { Err(format!("{name}は 0〜{} の番号で選んでください", n - 1)) }
+    };
+    let family = match code("種類", family, 3)? {
+        0 => FilterFamily::Butterworth,
+        1 => FilterFamily::Bessel,
+        _ => FilterFamily::Chebyshev(ripple),
+    };
+    let shape = [FilterShape::LowPass, FilterShape::HighPass, FilterShape::BandPass][code("形", shape, 3)?];
+    let topology = [FilterTopology::SallenKey, FilterTopology::Mfb][code("回路", topology, 2)?];
+    if !(order.is_finite() && order.fract() == 0.0 && order >= 1.0) {
+        return Err("次数は 1 以上の整数にしてください".into());
+    }
+    let e96 = match series.round() as i64 {
+        24 => false,
+        96 => true,
+        _ => return Err("抵抗の系列は 24 (E24) か 96 (E96) にしてください".into()),
+    };
+    Ok(crate::FilterSpec { family, shape, order: order as usize, freq: pos("周波数", freq)?, bandwidth: bandwidth.max(0.0), topology, e96 })
+}
+
+#[allow(clippy::too_many_arguments)]
+/// Active filter: the stages, their parts (E12 capacitors, E24 / E96 resistors) and how far the rounding moves the response.
+pub fn filter_design(family: f64, shape: f64, order: f64, freq: f64, bandwidth: f64, ripple: f64, topology: f64, series: f64) -> Result<CalcOut, String> {
+    use crate::{FilterFamily, FilterShape, FilterTopology};
+    let spec = filter_spec(family, shape, order, freq, bandwidth, ripple, topology, series)?;
+    let d = crate::design_filter(&spec)?;
+    let fam = match spec.family {
+        FilterFamily::Butterworth => "バターワース".to_string(),
+        FilterFamily::Bessel => "ベッセル".to_string(),
+        FilterFamily::Chebyshev(r) => format!("チェビシェフ (リップル {r} dB)"),
+    };
+    let bp = spec.shape == FilterShape::BandPass;
+    let (shape_name, n_total) = match spec.shape {
+        FilterShape::LowPass => ("ローパス", spec.order),
+        FilterShape::HighPass => ("ハイパス", spec.order),
+        FilterShape::BandPass => ("バンドパス", spec.order * 2),
+    };
+    let series_name = if spec.e96 { "E96" } else { "E24" };
+    let hz = |f: f64| format!("{}Hz", format_value(f));
+    let mut o = CalcOut::default();
+    o.rows.push((
+        "フィルタ".into(),
+        if bp { format!("{n_total} 次 {fam} {shape_name} (中心 {}・帯域幅 {})", hz(spec.freq), hz(spec.bandwidth)) } else { format!("{n_total} 次 {fam} {shape_name} ({})", hz(spec.freq)) },
+    ));
+    let inverting = d.stages.iter().filter(|s| s.kind.inverts()).count();
+    o.rows.push(("オペアンプの段".into(), format!("{} 段{}", d.stages.len(), if inverting % 2 == 1 { " (出力の向きは逆さ: 位相 180°)" } else { "" })));
+    for (k, st) in d.stages.iter().enumerate() {
+        let head = if st.q == 0.0 { format!("f0 = {}", hz(st.f0)) } else { format!("f0 = {}・Q = {:.3}", hz(st.f0), st.q) };
+        o.rows.push((format!("段 {}: {}", k + 1, st.kind.name()), head));
+        let mut parts: Vec<String> = st.r_e.iter().zip(&st.r).enumerate().map(|(i, (e, x))| format!("R{} = {} ({})", i + 1, r(*e), format_value(*x))).collect();
+        parts.extend(st.c.iter().enumerate().map(|(i, c)| format!("C{} = {}F", i + 1, format_value(*c))));
+        o.rows.push((format!("　段 {} の部品", k + 1), parts.join("、")));
+    }
+    let f_check = spec.freq;
+    let (ideal, real) = (d.db(f_check, false), d.db(f_check, true));
+    o.rows.push((
+        format!("{}での利得 (目標 → {series_name} に丸めたあと)", if bp { "中心" } else { "遮断周波数" }),
+        format!("{ideal:.2} dB → {real:.2} dB"),
+    ));
+    o.steps = vec![
+        format!("{fam} の {} 次の極 (正規化した値) を、1 次 (実数の極) と 2 次 (複素数の極の対) の段に分けます。Q の低い段から順に並べます (Q の高い段は山ができるので、後ろに置くと途中で振り切れにくい)", spec.order),
+        match spec.shape {
+            FilterShape::LowPass => "ローパス: 各段の f0 = 遮断周波数 × 極の大きさ".into(),
+            FilterShape::HighPass => "ハイパス: s → 1/s の置き換えで、各段の f0 = 遮断周波数 ÷ 極の大きさ (Q は同じ)".into(),
+            FilterShape::BandPass => "バンドパス: s → (s² + ω0²) ÷ (帯域幅 × s) の置き換えで、極 1 つが 2 つになり、中心の少し上と下にずらした 2 次の段に分かれます".into(),
+        },
+        "コンデンサは種類の少ない E12 から先に決め (抵抗が 10 kΩ 前後になる値)、抵抗をちょうどの値で計算してから、系列に丸めます".into(),
+        "どの段も遠い所の利得は 1 (多重帰還は −1) です。偶数次のチェビシェフは通過域が 0〜+リップルの間で揺れ、遮断周波数で 0 dB に戻ります (奇数次は 0〜−リップル)".into(),
+    ];
+    let mut said: Vec<&str> = vec![];
+    for st in &d.stages {
+        let f = stage_formula(st.kind);
+        if !said.contains(&f) {
+            said.push(f);
+            o.steps.push(f.into());
+        }
+    }
+    if bp && spec.topology == FilterTopology::SallenKey {
+        o.cautions.push("バンドパスは多重帰還の回路で作ります (サレンキーのバンドパスは、ゲインと Q が一緒に動いて調整しにくいため)".into());
+    }
+    let gbw = d.stages.iter().map(|s| 100.0 * s.f0 * s.q.max(1.0) * s.gain.max(1.0)).fold(0.0, f64::max);
+    o.cautions.push(format!("オペアンプの利得帯域幅積 (GBW) は、100 × Q × f0 の最大 ≒ {} 以上を選びます。足りないと高い Q の段の山がずれます (LM358 は 1 MHz、TL072 は 3 MHz)", hz(gbw)));
+    o.cautions.push("コンデンサは C0G (CH) のセラミックかフィルムにします。高誘電率のセラミック (X7R など) は電圧と温度で容量が変わり、特性がずれます".into());
+    if !spec.e96 {
+        o.cautions.push("E24 (±5 %) の抵抗は丸めの誤差が数 % 出ます。Q の高い段 (チェビシェフ・高い次数) は E96 (±1 %) にすると目標に近づきます".into());
+    }
+    if matches!(spec.family, FilterFamily::Chebyshev(_)) {
+        o.cautions.push("チェビシェフは通過域に波 (リップル) があり、波形が鳴りやすいです。パルスや波形の形を保ちたいならベッセル、平らさならバターワースにします".into());
+    }
+    if spec.family == FilterFamily::Bessel {
+        o.cautions.push("ベッセルは遮断周波数を過ぎてからの落ち方がゆるやかです (波形の形・遅れの揃い方を優先した特性)。切れの良さが要るならバターワースかチェビシェフにします".into());
+    }
+    if d.stages.iter().any(|s| s.r.iter().any(|v| !(1e3..=1e6).contains(v))) {
+        o.cautions.push("1 kΩ〜1 MΩ から外れる抵抗があります。オペアンプの出力の負担 (小さい抵抗) やノイズ・バイアス電流 (大きい抵抗) に気をつけます".into());
+    }
+    o.cautions.push("回路図に置くと、AC 解析の図に目標の特性が点で重なります。ずれていれば、丸めの誤差かオペアンプの帯域です".into());
+    o.faults = vec![
+        "Q の高い段のコンデンサが誤差でずれる: 山が大きくなり、発振ぎりぎりのリンギングが出ます".into(),
+        "帰還のコンデンサ (サレンキーの C1) が断線: その段はただの RC になり、遮断の近くが丸くなります".into(),
+        "オペアンプの帯域が足りない: 高い周波数で減衰が戻ってきます (サレンキーのローパスは、高い所で入力がそのまま抜けやすい)".into(),
+        "片電源で GND の基準 (VCC/2) を作り忘れる: 出力が電源の端に張り付きます".into(),
+    ];
+    Ok(o)
+}
+
+fn stage_formula(k: crate::StageKind) -> &'static str {
+    use crate::StageKind::*;
+    match k {
+        RcLowPass | RcHighPass => "1 次の段 (RC + ボルテージフォロワ): f0 = 1 ÷ (2π R1 C1)",
+        SkLowPass => "サレンキー ローパス (ゲイン 1): f0 = 1 ÷ (2π √(R1 R2 C1 C2))、Q = √(R1 R2 C1 C2) ÷ (C2 (R1 + R2))。C1 ≥ 4Q² C2 が要ります",
+        SkHighPass => "サレンキー ハイパス (ゲイン 1、C1 = C2 = C): R1 = 1 ÷ (2Q ω0 C)、R2 = 2Q ÷ (ω0 C)",
+        MfbLowPass => "多重帰還 ローパス (ゲイン −1、R1 = R2): ω0² = 1 ÷ (R2 R3 C1 C2)、ω0/Q = (1/R1 + 1/R2 + 1/R3) ÷ C1。C1 ≥ 8Q² C2 が要ります",
+        MfbHighPass => "多重帰還 ハイパス (ゲイン −1、C がすべて同じ): R1 = 1 ÷ (3Q ω0 C)、R2 = 3Q ÷ (ω0 C)",
+        MfbBandPass => "多重帰還 バンドパス (C1 = C2 = C): R3 = 2Q ÷ (ω0 C)、中心の利得 A = R3 ÷ (2 R1)、R2 = 1 ÷ (ω0 C (2Q − A/Q))",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -899,5 +1022,19 @@ mod tests {
         // a weak supply never blows it
         assert!(fuse_design(300.0, 3.0, 5.0, 1000.0).unwrap().cautions.iter().any(|c| c.contains("届きません")));
         assert!(fuse_design(20000.0, 9.0, 0.5, 1000.0).is_err());
+    }
+
+    #[test]
+    fn filter_calculator_reads_its_codes() {
+        // 4th-order Butterworth low-pass, Sallen-Key, E96: two stages, −3 dB at the cut-off
+        let o = filter_design(0.0, 0.0, 4.0, 1e3, 0.0, 1.0, 0.0, 96.0).unwrap();
+        assert!(o.rows.iter().any(|(k, _)| k == "段 2: サレンキー ローパス"), "{:?}", o.rows);
+        assert!(o.rows.iter().any(|(_, v)| v.starts_with("-3.01 dB")));
+        // MFB band-pass: an odd number of inverting stages is said
+        let o = filter_design(0.0, 2.0, 1.0, 1e3, 100.0, 1.0, 1.0, 24.0).unwrap();
+        assert!(o.rows.iter().any(|(_, v)| v.contains("逆さ")));
+        assert!(filter_design(3.0, 0.0, 2.0, 1e3, 0.0, 1.0, 0.0, 96.0).is_err(), "family code out of range");
+        assert!(filter_design(0.0, 0.0, 2.5, 1e3, 0.0, 1.0, 0.0, 96.0).is_err(), "order not whole");
+        assert!(filter_design(0.0, 0.0, 2.0, 1e3, 0.0, 1.0, 0.0, 12.0).is_err(), "series");
     }
 }
