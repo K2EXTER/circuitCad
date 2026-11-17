@@ -2,6 +2,12 @@
 //! Brent's root finder and the Nelder-Mead minimiser (both as SciPy has them, so a fit lands where the old Python
 //! generator's did), and a Levenberg-Marquardt least squares for a few parameters.
 
+/// A series resistance of a model card: below 1 mΩ it is none ("0"). A fit can drive one towards zero (TIP120's RB
+/// came out 6.6e-97 Ω), and a resistance that small is a conductance of 1e96 S the simulator cannot solve with.
+pub fn ohms(r: f64) -> String {
+    if r < 1e-3 { "0".into() } else { g(r, 4) }
+}
+
 /// Python's `format(x, f".{prec}g")`: `prec` significant digits, trailing zeros removed, scientific outside 1e-4 .. 10^prec.
 pub fn g(x: f64, prec: usize) -> String {
     if x == 0.0 {

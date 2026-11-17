@@ -1,0 +1,63 @@
+{
+  "name": "FORM_TIP120",
+  "category": "トランジスタ",
+  "description": "",
+  "datasheet": "",
+  "prefix": "Q",
+  "value": null,
+  "pins": [
+    {
+      "number": "1",
+      "name": "E",
+      "side": "bottom"
+    },
+    {
+      "number": "2",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "C",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 3,
+    "pitch": 2.54,
+    "pad_d": 1.5,
+    "drill": 0.8
+  },
+  "footprint_name": null,
+  "sim": {
+    "kind": "subckt",
+    "element": "D",
+    "name": "TIP120",
+    "text": ".subckt TIP120 c b e\nQ1 c b n1 QD\nQ2 c n1 e QP\nR1 b n1 8000\nR2 n1 e 120\nDd e c DD\n.model QD NPN(IS=3.112e-13 BF=264.4 VAF=100 IKF=0.05868 ISE=2.728e-08 NE=3.000 BR=7.198 RB=0 RE=0.9202 RC=0 TF=3.979e-08)\n.model QP NPN(IS=3.112e-12 BF=264.4 VAF=100 IKF=0.5868 ISE=2.728e-07 NE=3.000 BR=7.198 RB=0 RE=0.09202 RC=0 TF=3.979e-08)\n.model DD D(IS=1e-09 N=1.5 RS=0.05)\n.ends TIP120",
+    "pins": [
+      "3",
+      "2",
+      "1"
+    ],
+    "params": {},
+    "limits": [
+      "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: データシート。データシートとの比べは docs/models/transistors.md。",
+      "ダーリントン接続 (駆動の Q1、出力の Q2、内蔵の抵抗 R1 = 8000Ω・R2 = 120Ω。データシートの図の値) を 1 つの回路として解き、hFE と IC の図 (2 個合わせた hFE)・「ON」電圧の図 (VBE、VBE(sat)、VCE(sat)) に、出力の Q2 の IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。駆動の Q1 は同じ作りで 10 分の 1 の大きさと仮定しました (データシートに無い)。",
+      "容量: データシートに無いので入れていません。速さ: fT 4 MHz (入力した値) から TF を決めました。Early 電圧 VAF 100 V は、入力が無いので 100 V と仮定しました (データシートに出力の特性が無いことが多い)。コレクタとエミッタの間のダイオード: データシートに特性が無いので、一般的な値 (IS = 1 nA、N = 1.5、RS = 0.05 Ω) を仮に置きました。",
+      "扱わないもの: 蓄積時間 (TR)、温度によるパラメータの変化はシミュレータの標準の式、二次降伏、耐圧・定格電流・許容損失を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "データシート"
+    }
+  },
+  "ratings": {
+    "v_max": 60.0,
+    "i_max": 5.0,
+    "p_max": 65.0,
+    "t_max": 150.0
+  },
+  "glyph": "npn"
+}

@@ -214,6 +214,9 @@ pub struct GraphReader {
     trace_n: usize,
     /// The curves followed so far (page points), drawn so the person sees which curve was taken.
     traced: Vec<(Vec<(f32, f32)>, usize)>,
+    /// The curves found on the graph when no label told which one the field wants (`datasheet::pick::Pick::Several`),
+    /// drawn in colours for the person to click one.
+    candidates: Vec<Vec<(f32, f32)>>,
     msg: Option<(bool, String)>,
     out: Option<GraphOut>,
 }
@@ -232,6 +235,7 @@ impl GraphReader {
             snap: true,
             trace_n: 12,
             traced: vec![],
+            candidates: vec![],
             msg: None,
             out: None,
         }
@@ -307,6 +311,21 @@ impl GraphReader {
         ));
     }
 
+    /// Shows the curves to pick from (each in its own colour, numbered at its right end).
+    pub fn show_candidates(&mut self, curves: Vec<Vec<(f32, f32)>>) {
+        self.candidates = curves;
+    }
+
+    /// The candidate curve passing within 5 points of a click (the nearest), taken out with the others put away; None
+    /// when no candidate is near (the click then follows the curve under it as usual).
+    pub fn take_candidate(&mut self, p: (f32, f32)) -> Option<Vec<(f32, f32)>> {
+        let dist = |c: &Vec<(f32, f32)>| c.iter().map(|q| (q.0 - p.0).hypot(q.1 - p.1)).fold(f32::MAX, f32::min);
+        let i = (0..self.candidates.len()).filter(|&i| dist(&self.candidates[i]) < 5.0).min_by(|&a, &b| dist(&self.candidates[a]).total_cmp(&dist(&self.candidates[b])))?;
+        let path = self.candidates.swap_remove(i);
+        self.candidates.clear();
+        Some(path)
+    }
+
     /// A message under the panel (where the graph was found, or that it was not), after the one already there.
     pub fn note(&mut self, text: String) {
         self.msg = Some(match self.msg.take() {
@@ -320,6 +339,7 @@ impl GraphReader {
         self.dest = dest;
         self.points.clear();
         self.traced.clear();
+        self.candidates.clear();
         self.msg = Some((true, i18n::tr("前に置いた目盛りをそのまま使います。別の図なら「目盛りから始め直す」を押します").to_string()));
         if self.has_axes() {
             self.mode = Some(Mode::Points);
@@ -408,6 +428,23 @@ impl GraphReader {
             let (a, b) = (to_screen(0.0, *at), to_screen(page_size.0, *at));
             painter.line_segment([a, b], egui::Stroke::new(1.0, tick));
             painter.text(a + egui::vec2(2.0, -2.0), egui::Align2::LEFT_BOTTOM, text, egui::FontId::proportional(14.0), tick);
+        }
+        // the candidates to pick from: each its own colour (none red, the colour of a curve taken), its number at its right end
+        const COLOURS: [Color32; 6] = [
+            Color32::from_rgb(20, 150, 70),
+            Color32::from_rgb(40, 110, 230),
+            Color32::from_rgb(230, 140, 20),
+            Color32::from_rgb(160, 60, 200),
+            Color32::from_rgb(0, 160, 170),
+            Color32::from_rgb(140, 100, 40),
+        ];
+        for (i, c) in self.candidates.iter().enumerate() {
+            let colour = COLOURS[i % COLOURS.len()];
+            let pts: Vec<egui::Pos2> = c.iter().map(|&(x, y)| to_screen(x, y)).collect();
+            painter.add(egui::Shape::line(pts, egui::Stroke::new(3.0, colour.gamma_multiply(0.75))));
+            if let Some(&(x, y)) = c.iter().max_by(|a, b| a.0.total_cmp(&b.0)) {
+                painter.text(to_screen(x, y) + egui::vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, format!("{}", i + 1), egui::FontId::proportional(15.0), colour);
+            }
         }
         let red = Color32::from_rgb(230, 40, 40);
         let line = Color32::from_rgba_unmultiplied(230, 40, 40, 140);
@@ -637,5 +674,16 @@ mod tests {
         g.x.ticks[0].1 = "0".into();
         g.x.ticks[1].1 = "5".into();
         assert!(g.values().unwrap_err().contains("縦軸"));
+    }
+
+    #[test]
+    fn a_click_near_a_candidate_takes_it_whole() {
+        let mut g = GraphReader::new(0, None);
+        let low: Vec<(f32, f32)> = (0..20).map(|i| (100.0 + 5.0 * i as f32, 200.0)).collect();
+        let high: Vec<(f32, f32)> = (0..20).map(|i| (100.0 + 5.0 * i as f32, 150.0)).collect();
+        g.show_candidates(vec![low, high.clone()]);
+        assert_eq!(g.take_candidate((300.0, 175.0)), None, "far from both: the click traces as usual");
+        assert_eq!(g.take_candidate((131.0, 152.0)), Some(high));
+        assert!(g.candidates.is_empty(), "the others are put away");
     }
 }

@@ -3,7 +3,7 @@
 //! starting points, as the Python generator did with SciPy); `CJE`/`CJC` from the Cibo/Cobo curves, `TF` from fT,
 //! `VAF` from hoe. A PNP is fitted with magnitudes (the equations are the same).
 
-use super::num::{brentq, g, nelder_mead};
+use super::num::{brentq, g, nelder_mead, ohms};
 use super::{LAST_WORD, Out, Row, amps, cap_at, fit_cap, row};
 use serde::Deserialize;
 
@@ -273,9 +273,9 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
         g(p.ise, 4),
         p.ne,
         g(p.br, 4),
-        g(p.rb, 4),
-        g(p.re, 4),
-        g(p.rc, 4),
+        ohms(p.rb),
+        ohms(p.re),
+        ohms(p.rc),
     );
     let speed = match (b.ft_typ, ft) {
         (Some(f), _) => format!("fT の typ {} MHz から TF を決めました", g(f / 1e6, 6)),

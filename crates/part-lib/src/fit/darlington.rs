@@ -5,7 +5,7 @@
 //! IC/IB). One Gummel-Poon model is fitted for the output transistor; the driver is the same, `area` times smaller.
 
 use super::bjt::{P, ev};
-use super::num::{g, nelder_mead};
+use super::num::{g, nelder_mead, ohms};
 use super::{LAST_WORD, Out, Row, amps, cap_at, fit_cap, row};
 use serde::Deserialize;
 
@@ -261,9 +261,9 @@ pub fn fit(d: &DarlingtonSpec) -> Result<Out, String> {
             g(p.ise, 4),
             p.ne,
             g(p.br, 4),
-            g(p.rb, 4),
-            g(p.re, 4),
-            g(p.rc, 4),
+            ohms(p.rb),
+            ohms(p.re),
+            ohms(p.rc),
             caps(a)
         )
     };

@@ -295,6 +295,7 @@ impl PartForm {
                 }
                 Some("ダーリントン") => {
                     self.darl.fill_from_pdf(values);
+                    self.darl.put_resistors(self.sheet.darlington_resistors());
                     Some(("darl_box", "ダーリントン"))
                 }
                 _ => None,

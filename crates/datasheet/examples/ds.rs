@@ -125,7 +125,7 @@ fn main() -> Result<(), String> {
                     }
                     let what = match picked {
                         datasheet::pick::Pick::One { path, by } => format!("one by {by:?}: x {:.0}..{:.0} y {:.0}..{:.0}", path[0].0, path[path.len() - 1].0, path[0].1, path[path.len() - 1].1),
-                        datasheet::pick::Pick::Several(n) => format!("{n} curves, no label"),
+                        datasheet::pick::Pick::Several(c) => format!("{} curves, no label", c.len()),
                         datasheet::pick::Pick::None => "no curve".into(),
                     };
                     println!("p.{} {} {c:?}{tag}: {what}", f.page + 1, f.caption);

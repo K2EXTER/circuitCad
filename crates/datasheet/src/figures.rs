@@ -283,6 +283,49 @@ pub fn conditions(words: &[Word], f: &Figure, name: &str) -> Vec<f64> {
     out
 }
 
+/// The two resistors a Darlington's circuit drawing gives (R1 from the base to the middle point, R2 from there to the
+/// emitter), as (R1, R2) in ohms: the first line of a page with two values each after "≈" ("≈ 8.0 k ≈ 120", onsemi's
+/// TIP120) or after "R1" / "R2" with an ohm unit ("R1 Typ. = 5 kΩ R2 Typ. = 150 Ω"). R1 is the larger. None without one.
+pub fn darlington_resistors(words: &[Word]) -> Option<(f64, f64)> {
+    // a value and its unit: "8.0" "k", "8.0k", "5" "kΩ", "150Ω"
+    let value = |toks: &[String], i: usize, needs_ohm: bool| -> Option<f64> {
+        let t = toks.get(i)?.trim_start_matches(['≈', '~', '=']);
+        let digits: String = t.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+        let x: f64 = digits.parse().ok()?;
+        let unit = match &t[digits.len()..] {
+            "" => toks.get(i + 1).map(String::as_str).filter(|u| ["k", "kω", "ω", "m", "mω", "ohm", "ohms"].contains(u)).unwrap_or(""),
+            u => u,
+        };
+        let k = match unit.trim_end_matches(['ω', 's']).trim_end_matches("ohm") {
+            "k" => 1e3,
+            "m" => 1e6,
+            _ => 1.0,
+        };
+        (!needs_ohm || !unit.is_empty()).then_some(x * k)
+    };
+    for line in lines(words) {
+        // "Ω" as the Greek omega, lower case: "kω"
+        let toks: Vec<String> = line.iter().map(|w| normalize(&w.text).replace('\u{2126}', "ω")).collect();
+        let mut found = vec![];
+        for (i, t) in toks.iter().enumerate() {
+            if t.starts_with('≈') || t == "~" {
+                let at = if t.len() > '≈'.len_utf8() && t.starts_with('≈') { i } else { i + 1 };
+                found.extend(value(&toks, at, false));
+            } else if t == "r1" || t == "r2" {
+                // the next value within a few words ("R1 Typ. = 5 kΩ")
+                found.extend((i + 1..(i + 5).min(toks.len())).find_map(|j| value(&toks, j, true)));
+            }
+        }
+        if let [a, b, ..] = found[..] {
+            let (r1, r2) = (a.max(b), a.min(b));
+            if r1 > r2 && (500.0..=100e3).contains(&r1) && (20.0..=10e3).contains(&r2) {
+                return Some((r1, r2));
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -439,5 +482,18 @@ mod tests {
         // one curve per voltage, the minus of a PNP's dropped
         let words = [t("VCE", 300.0, 100.0, 312.0, 108.0), t("=", 314.0, 100.0, 318.0, 108.0), t("1.0", 320.0, 100.0, 328.0, 108.0), t("V", 330.0, 100.0, 334.0, 108.0), t("VCE", 300.0, 200.0, 312.0, 208.0), t("=", 314.0, 200.0, 318.0, 208.0), t("\u{2212}10", 320.0, 200.0, 330.0, 208.0), t("V", 332.0, 200.0, 336.0, 208.0)];
         assert_eq!(conditions(&words, &fig, "VCE"), vec![1.0, 10.0]);
+    }
+
+    #[test]
+    fn a_darlingtons_resistors_are_read_off_its_drawing() {
+        let line = |texts: &[&str], y: f32| -> Vec<Word> { texts.iter().enumerate().map(|(i, t)| Word::for_test(t, 100.0 + 30.0 * i as f32, y, 120.0 + 30.0 * i as f32, y + 8.0)).collect() };
+        // onsemi's TIP120: the values only, for the NPN and the PNP side by side
+        let w = line(&["≈", "8.0", "k", "≈", "120", "≈", "8.0", "k", "≈", "120"], 100.0);
+        assert_eq!(darlington_resistors(&w), Some((8000.0, 120.0)));
+        // with the names and ohms; a line of other numbers before it is not it
+        let mut w = line(&["Base", "Current", "120", "mAdc"], 50.0);
+        w.extend(line(&["R1", "Typ.", "=", "5", "k\u{2126}", "R2", "Typ.", "=", "150", "\u{2126}"], 100.0));
+        assert_eq!(darlington_resistors(&w), Some((5000.0, 150.0)));
+        assert_eq!(darlington_resistors(&line(&["≈", "8.0", "k"], 100.0)), None);
     }
 }

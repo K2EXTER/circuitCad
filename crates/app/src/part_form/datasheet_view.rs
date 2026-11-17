@@ -329,7 +329,11 @@ impl SheetView {
                         {
                             match d.pick_curve(a, dest) {
                                 datasheet::pick::Pick::One { path, by } => g.auto_trace(path, &by),
-                                datasheet::pick::Pick::Several(n) => g.note(i18n::trf!("この図には曲線が {n} 本あり、どれを読むか決められませんでした。読みたい曲線を 1 回クリックしてください")),
+                                datasheet::pick::Pick::Several(c) => {
+                                    let n = c.len();
+                                    g.show_candidates(c);
+                                    g.note(i18n::trf!("この図には曲線が {n} 本あり、どれを読むか決められませんでした。色を付けた候補の線から、読みたい曲線を 1 回クリックしてください (候補にない線もクリックでたどれます)"));
+                                }
                                 datasheet::pick::Pick::None => {}
                             }
                         }
@@ -394,6 +398,11 @@ impl SheetView {
         d.graph = Some(g);
     }
 
+    /// A Darlington's resistors R1, R2 [Ω] and the page, from the open PDF's circuit drawing (`Datasheet::darlington_resistors`).
+    pub fn darlington_resistors(&self) -> Option<(f64, f64, usize)> {
+        self.doc.as_ref().and_then(|d| d.ds.darlington_resistors())
+    }
+
     /// The rows of `symbol` in the open PDF's electrical characteristics tables (none when no PDF is open).
     pub fn spec_values(&self, symbol: &str) -> Vec<datasheet::spec_table::SpecValue> {
         self.doc.as_ref().map(|d| d.ds.spec_values(symbol)).unwrap_or_default()
@@ -448,7 +457,7 @@ impl SheetView {
                         _ => why = i18n::trf!("p.{} の図の曲線から点が取れません", f.page + 1),
                     }
                 }
-                datasheet::pick::Pick::Several(n) => why = i18n::trf!("p.{} の図に曲線が {n} 本あり、どれか決められません", f.page + 1),
+                datasheet::pick::Pick::Several(c) => why = i18n::trf!("p.{} の図に曲線が {} 本あり、どれか決められません。「グラフから読む」で候補の線に色が付きます", f.page + 1, c.len()),
                 datasheet::pick::Pick::None => why = i18n::trf!("p.{} の図に曲線が見つかりません", f.page + 1),
             }
         }
@@ -868,7 +877,11 @@ impl Opened {
         let traced = match (self.graph.as_ref().filter(|g| g.page == self.page).and_then(|g| g.mode), resp.hover_pos()) {
             (Some(Mode::Trace), Some(pos)) if resp.clicked() => {
                 let p = (pos - origin) / zoom;
-                Some(self.trace_at(p.x, p.y))
+                // a candidate curve near the click is taken as found (whole, with its joined pieces)
+                match self.graph.as_mut().and_then(|g| g.take_candidate((p.x, p.y))) {
+                    Some(path) => Some(path),
+                    None => Some(self.trace_at(p.x, p.y)),
+                }
             }
             _ => None,
         };

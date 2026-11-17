@@ -314,6 +314,16 @@ impl DarlingtonInput {
         self.found = found;
         self.result = None;
     }
+
+    /// The resistors read off the data sheet's circuit drawing (R1, R2 [Ω], page): into their fields, and the line
+    /// saying they are missing becomes one saying where they came from.
+    pub fn put_resistors(&mut self, read: Option<(f64, f64, usize)>) {
+        let Some((r1, r2, page)) = read else { return };
+        self.r1 = part_lib::passive::eng(r1);
+        self.r2 = part_lib::passive::eng(r2);
+        self.found.retain(|f| !f.1.starts_with("内蔵の抵抗"));
+        self.found.push((true, format!("内蔵の抵抗 R1 {}Ω・R2 {}Ω: p.{} の回路の図", self.r1, self.r2, page + 1)));
+    }
 }
 
 #[cfg(test)]
@@ -395,6 +405,12 @@ mod tests {
         assert!(d.hfe.is_empty());
         let says = |w: &str| d.found.iter().any(|f| !f.0 && f.1.contains(w));
         assert!(says("保証値") && says("R1・R2"), "{:?}", d.found);
+        // the resistors from the drawing take the place of the line saying they are missing
+        d.put_resistors(Some((8000.0, 120.0, 2)));
+        assert_eq!((d.r1.as_str(), d.r2.as_str()), ("8k", "120"));
+        assert!(d.found.iter().any(|f| f.0 && f.1.contains("p.3")) && !d.found.iter().any(|f| !f.0 && f.1.contains("R1・R2")), "{:?}", d.found);
+        d.put_resistors(None);
+        assert_eq!(d.r1, "8k", "nothing read leaves them");
         // typ rows with their currents go in, the saturation condition with them
         let table = [
             v("hFE", "IC = 0.5 A, VCE = 3 V", None, Some(2000.0), None, None),

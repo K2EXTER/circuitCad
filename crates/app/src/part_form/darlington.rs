@@ -188,6 +188,7 @@ impl PartForm {
             {
                 let sheet = &self.sheet;
                 self.darl.fill_from_pdf(|s| sheet.spec_values(s));
+                self.darl.put_resistors(sheet.darlington_resistors());
             }
             if ui.button(i18n::tr("TIP120 の例を入れる")).on_hover_text(i18n::tr("同梱の TIP120 を作ったときにグラフから読んだ点を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
                 self.darlington_example_and_fit();

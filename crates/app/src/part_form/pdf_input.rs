@@ -57,7 +57,10 @@ impl PartForm {
         let sheet = &self.sheet;
         match dests.first() {
             Some(Dest::BjtHfe) => self.bjt.fill_from_pdf(&self.name, |s| sheet.spec_values(s)),
-            Some(Dest::DarlHfe) => self.darl.fill_from_pdf(|s| sheet.spec_values(s)),
+            Some(Dest::DarlHfe) => {
+                self.darl.fill_from_pdf(|s| sheet.spec_values(s));
+                self.darl.put_resistors(sheet.darlington_resistors());
+            }
             Some(Dest::OptoLed) => self.opto.fill_from_pdf(|s| sheet.spec_values(s)),
             Some(Dest::PdLight) => self.pd.fill_from_pdf(|s| sheet.spec_values(s)),
             Some(Dest::DiodeForward) => self.dio_fill_from_pdf(),

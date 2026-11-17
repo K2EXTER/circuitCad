@@ -205,6 +205,11 @@ impl Datasheet {
         figures::conditions(self.words(f.page), f, name)
     }
 
+    /// A Darlington's two resistors (R1, R2 in ohms) from the circuit drawing, and the page (`figures::darlington_resistors`).
+    pub fn darlington_resistors(&self) -> Option<(f64, f64, usize)> {
+        (0..self.pages).find_map(|p| figures::darlington_resistors(self.words(p)).map(|(a, b)| (a, b, p)))
+    }
+
     /// The axes of a figure's graph read from its tick labels (`axes::read`).
     /// When the tick labels are drawn as lines rather than letters, they are read off the drawn graph by the OCR
     /// (`ocr`, Windows only), and the axis titles turned up the page off the picture turned a quarter.

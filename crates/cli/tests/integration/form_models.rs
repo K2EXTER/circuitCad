@@ -65,6 +65,18 @@ fn a_transistor_read_from_its_data_sheet_has_its_gain() {
 }
 
 #[test]
+fn a_darlington_read_from_its_data_sheet_has_its_gain() {
+    // TIP120 (onsemi TIP120-D): R1 8 kΩ and R2 120 Ω read off the circuit drawing; base current 1 mA at VCE = 4 V.
+    // Figure 9 gives an hFE of about 3700 at 3 A (the model 3100); Figure 11 a VBE(on) of about 1.9 V at 3.5 A.
+    // The fit had made RB 6.6e-97 Ω and the circuit did not converge
+    let a = run("new\nadd FORM_TIP120 as=Q1\nadd I 1m as=IB\nadd V 4 as=VC\n\
+                 net B IB.+ Q1.B\nnet C VC.+ Q1.C\nnet GND IB.- VC.- Q1.E\nerc\ndc probe=V(b),I(VC)\n");
+    let dc = dcs(&a)[0];
+    near("hFE", probe(dc, "I(VC)").abs() / 1e-3, 3400.0, 0.2);
+    near("VBE", probe(dc, "V(b)"), 1.85, 0.06);
+}
+
+#[test]
 fn a_diode_read_from_its_data_sheet_has_its_forward_voltage() {
     // 1N4148 (Vishay): the forward curve (Tj = 25 °C) about 0.72 V at 10 mA, 0.87 V at 100 mA
     let a = run("new\nadd FORM_1N4148 as=D1\nadd I 10m as=IF\nnet A IF.+ D1.A\nnet GND IF.- D1.K\nerc\ndc probe=V(a)\nvalue IF 100m\ndc probe=V(a)\n");

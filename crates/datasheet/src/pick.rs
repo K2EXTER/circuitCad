@@ -10,8 +10,9 @@ use crate::text::{Rect, Word, normalize};
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pick {
     One { path: Vec<(f32, f32)>, by: String },
-    /// Several curves and no label tells which: the person clicks one.
-    Several(usize),
+    /// Several curves and no label tells which: the person clicks one. The curves found (page points), to be shown as
+    /// the ones to pick from.
+    Several(Vec<Vec<(f32, f32)>>),
     None,
 }
 
@@ -214,13 +215,13 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
         // one curve found: that one, unless the field's own label is printed away from it (the other curves of the
         // graph were not found)
         1 if !labels.iter().any(|l| l.0 == 0 && distance(l.2, &traces[0]) >= 25.0) => {
-            return if goes_its_way(&traces[0], curve, axes) { Pick::One { path: traces.remove(0), by: String::new() } } else { Pick::Several(1) };
+            return if goes_its_way(&traces[0], curve, axes) { Pick::One { path: traces.remove(0), by: String::new() } } else { Pick::Several(traces) };
         }
         _ => {}
     }
-    let Some(kind) = labels.first().map(|l| l.0) else { return Pick::Several(traces.len()) };
+    let Some(kind) = labels.first().map(|l| l.0) else { return Pick::Several(traces) };
     // a line going the wrong way for the curve (a label's leader line) is not what a label names
-    let n = traces.len();
+    let all = traces.clone();
     traces.retain(|t| goes_its_way(t, curve, axes));
     // the curve nearest to one of the labels of that kind; a label far from every curve (a note in a corner) tells nothing
     // and, for a temperature, not a curve another temperature's label is nearer to ("+25°C" printed on its curve where that curve was not traced
@@ -235,7 +236,7 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
         .min_by(|a, b| a.0.total_cmp(&b.0));
     match best {
         Some((d, i, by)) if d < 25.0 => Pick::One { path: traces.swap_remove(i), by },
-        _ => Pick::Several(n),
+        _ => Pick::Several(all),
     }
 }
 
@@ -300,12 +301,12 @@ mod tests {
         assert!(matches!(&p, Pick::One { by, .. } if by == "25°C"), "{p:?}");
         assert!((y_at(&p, 100.0).unwrap() - 44.5).abs() < 1.5);
         // no label: the person picks
-        assert_eq!(pick(&img, 2.0, &[], &axes(), Curve::DcGain, &[]), Pick::Several(3));
+        assert!(matches!(pick(&img, 2.0, &[], &axes(), Curve::DcGain, &[]), Pick::Several(c) if c.len() == 3));
         // the 25 °C curve not traced (2N3903's Figure 15): its label does not take the 150 °C curve, which its own
         // label is nearer to
         let img = page(&[(40.0, -0.2), (80.0, -0.2)]);
         let words = vec![label("150°C", 30.0, 36.0), label("25°C", 30.0, 50.0), label("−55°C", 30.0, 76.0)];
-        assert_eq!(pick(&img, 2.0, &words, &axes(), Curve::DcGain, &[]), Pick::Several(2));
+        assert!(matches!(pick(&img, 2.0, &words, &axes(), Curve::DcGain, &[]), Pick::Several(c) if c.len() == 2));
         // one curve: that one
         let img = page(&[(60.0, -0.2)]);
         assert!(matches!(pick(&img, 2.0, &[], &axes(), Curve::Forward, &[]), Pick::One { by, .. } if by.is_empty()));
