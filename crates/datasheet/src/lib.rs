@@ -14,6 +14,7 @@ pub mod land;
 pub mod absmax;
 pub mod graph;
 pub mod figures;
+pub mod axes;
 pub mod spec_table;
 mod headings;
 mod pin_table;
@@ -140,6 +141,11 @@ impl Datasheet {
         let mut all: Vec<figures::Figure> = (0..self.pages).flat_map(|p| figures::figures(p, self.words(p))).collect();
         figures::place_graphs(&mut all);
         all
+    }
+
+    /// The axes of a figure's graph read from its tick labels (`axes::read`).
+    pub fn figure_axes(&self, f: &figures::Figure) -> Option<axes::ReadAxes> {
+        axes::read(self.words(f.page), f.area, f.rect)
     }
 
     /// The kind of part the first pages talk about most, as a category name of the part list.

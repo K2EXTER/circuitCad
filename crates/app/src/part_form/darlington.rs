@@ -261,7 +261,7 @@ pub(super) fn curve_row(ui: &mut egui::Ui, has_doc: bool, label: &str, tip: &str
     egui::ScrollArea::vertical().id_salt(label).max_height(64.0).show(ui, |ui| {
         ui.add(egui::TextEdit::multiline(field).desired_rows(3).desired_width(170.0).min_size(egui::vec2(170.0, 0.0)).font(egui::TextStyle::Monospace).hint_text(hint));
     });
-    if has_doc && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓が、図の見出しからこの図のページへ移ります。目盛りと曲線の上をクリックして点を読みます")).clicked() {
+    if has_doc && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓が、図の見出しからこの図のページへ移り、軸の目盛りも図の数字から入れます。曲線を 1 回クリックすると点が取れます (目盛りが読めない図は、目盛りからクリック)")).clicked() {
         *start = Some(dest);
     }
 }

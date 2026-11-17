@@ -2,6 +2,7 @@
 //!
 //!     cargo run -p datasheet --example ds -- text   FILE.pdf PAGE              the words of a page, line by line, with x
 //!     cargo run -p datasheet --example ds -- figures FILE.pdf                  the graph captions, the curve each shows, the side of its graph
+//!     cargo run -p datasheet --example ds -- axes FILE.pdf                     the axes read from the tick labels of each graph the form uses
 //!     cargo run -p datasheet --example ds -- absmax FILE.pdf                   the absolute maximum ratings read (the first part number's column)
 //!     cargo run -p datasheet --example ds -- kind   FILE.pdf                   the kind of part and the part numbers it suggests
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
@@ -74,6 +75,18 @@ fn main() -> Result<(), String> {
             for f in ds.figures() {
                 let side = if f.area.y0 < f.rect.y0 { "graph above" } else { "graph below" };
                 println!("p.{} {:?} {} ({side})", f.page + 1, f.curves, f.caption);
+            }
+        }
+        "axes" => {
+            for f in ds.figures().iter().filter(|f| !f.curves.is_empty()) {
+                let show = |a: &datasheet::axes::ReadAxis| format!("{}{} ×{} [{}]", if a.log { "log " } else { "" }, a.ticks.len(), a.prefix, a.ticks.iter().map(|t| t.1.as_str()).collect::<Vec<_>>().join(" "));
+                match ds.figure_axes(f) {
+                    Some(a) => println!("p.{} {:?} {}
+    x: {}
+    y: {}", f.page + 1, f.curves, f.caption, show(&a.x), show(&a.y)),
+                    None => println!("p.{} {:?} {}
+    (no axes)", f.page + 1, f.curves, f.caption),
+                }
             }
         }
         "kind" => {

@@ -245,9 +245,36 @@ impl GraphReader {
         self.x.axis().is_ok() && self.y.axis().is_ok()
     }
 
-    /// A message under the panel (where the graph was found, or that it was not).
+    /// Starts with the axes read from the graph's tick labels (`datasheet::axes`): the person only clicks the curve
+    /// ("曲線をたどる"). Says what was read, so a wrong axis is seen at once.
+    pub fn set_axes(&mut self, a: &datasheet::axes::ReadAxes) {
+        let scale = |k: f64| SCALES.iter().position(|s| (s.1 / k - 1.0).abs() < 1e-6).unwrap_or(0);
+        for (axis, read) in [(&mut self.x, &a.x), (&mut self.y, &a.y)] {
+            axis.ticks = read.ticks.clone();
+            axis.log = read.log;
+            axis.scale = scale(read.prefix);
+        }
+        if !self.has_axes() {
+            return;
+        }
+        self.mode = Some(Mode::Trace);
+        let say = |axis: &AxisInput| {
+            let (first, last) = (axis.ticks.first().map_or("", |t| t.1.as_str()), axis.ticks.last().map_or("", |t| t.1.as_str()));
+            let unit = if axis.scale == 0 { String::new() } else { format!(" {}", i18n::tr(SCALES[axis.scale].0)) };
+            format!("{first}〜{last}{}{unit}", if axis.log { i18n::tr(" (対数)") } else { "" })
+        };
+        self.msg = Some((
+            true,
+            i18n::trf!("目盛りを図の数字から読みました (横 {}、縦 {})。曲線を 1 回クリックしてください。青い線が目盛りの数字に合っていなければ「目盛りから始め直す」", say(&self.x), say(&self.y)),
+        ));
+    }
+
+    /// A message under the panel (where the graph was found, or that it was not), after the one already there.
     pub fn note(&mut self, text: String) {
-        self.msg = Some((true, text));
+        self.msg = Some(match self.msg.take() {
+            Some((ok, m)) => (ok, format!("{m}\n{text}")),
+            None => (true, text),
+        });
     }
 
     /// Reads another curve of the same graph for another field: the ticks stay, the points go.
@@ -514,6 +541,28 @@ mod tests {
         assert!((v[1].0 - 0.1).abs() < 1e-12 && (v[1].1 - 0.8).abs() < 1e-9, "{v:?}");
         assert_eq!(short(v[0].0), "0.01");
         assert_eq!(short(2e-5), "20u");
+    }
+
+    #[test]
+    fn axes_read_from_the_page_leave_one_click_on_the_curve() {
+        use datasheet::axes::{ReadAxes, ReadAxis};
+        let mut g = GraphReader::new(6, Some(Dest::OptoLed));
+        let ticks = |v: &[(f32, &str)]| v.iter().map(|(a, t)| (*a, t.to_string())).collect();
+        g.set_axes(&ReadAxes {
+            x: ReadAxis { ticks: ticks(&[(100.0, "0"), (150.0, "0.5"), (200.0, "1.0")]), log: false, prefix: 1.0 },
+            y: ReadAxis { ticks: ticks(&[(50.0, "500"), (100.0, "50"), (150.0, "5")]), log: true, prefix: 1e-3 },
+        });
+        assert_eq!(g.mode, Some(Mode::Trace));
+        assert!(g.has_axes() && g.y.log && !g.x.log);
+        assert_eq!(SCALES[g.y.scale].1, 1e-3, "(mA)");
+        g.points.push((150.0, 100.0));
+        // swapped for the LED field: 50 mA at 0.5 V
+        let v = g.values().unwrap();
+        assert!((v[0].0 - 0.05).abs() < 1e-9 && (v[0].1 - 0.5).abs() < 1e-9, "{v:?}");
+        // axes that do not make two ticks each leave the reading as it was
+        let mut g = GraphReader::new(6, None);
+        g.set_axes(&ReadAxes { x: ReadAxis { ticks: vec![], log: false, prefix: 1.0 }, y: ReadAxis { ticks: vec![], log: false, prefix: 1.0 } });
+        assert_eq!(g.mode, Some(Mode::XTick));
     }
 
     #[test]

@@ -274,6 +274,7 @@ impl SheetView {
             d.target = None;
             d.selecting = false;
             let mut note = None;
+            let mut axes = None;
             if let Some(dest) = dest {
                 let figures = d.figures.get_or_insert_with(|| d.ds.figures());
                 let found = datasheet::figures::showing(figures, dest.curve());
@@ -287,6 +288,7 @@ impl SheetView {
                         d.jump = Some(focus[at]);
                     }
                     d.page = hits[at].page;
+                    axes = d.ds.figure_axes(found[at]);
                     let n = hits.len();
                     d.search = Some(Search { queries: vec![], title: Some(dest.curve_name()), next_page: d.ds.page_count(), hits, current: Some(at), any_text: true, focus });
                     if n > 1 {
@@ -297,7 +299,14 @@ impl SheetView {
             // the same page's graph already set up: read another curve with its ticks (VBE(sat) and VCE(sat) share a figure)
             match d.graph.as_mut() {
                 Some(g) if g.page == d.page && g.has_axes() => g.retarget(dest),
-                _ => d.graph = Some(GraphReader::new(d.page, dest)),
+                _ => {
+                    let mut g = GraphReader::new(d.page, dest);
+                    // the axes from the tick labels around the graph: one click on the curve is left
+                    if let Some(a) = &axes {
+                        g.set_axes(a);
+                    }
+                    d.graph = Some(g);
+                }
             }
             if let (Some(g), Some(n)) = (d.graph.as_mut(), note) {
                 g.note(n);

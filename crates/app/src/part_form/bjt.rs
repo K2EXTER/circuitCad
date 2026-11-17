@@ -346,7 +346,7 @@ impl PartForm {
                 egui::ScrollArea::vertical().id_salt(label).max_height(64.0).show(ui, |ui| {
                     ui.add(egui::TextEdit::multiline(field).desired_rows(3).desired_width(170.0).min_size(egui::vec2(170.0, 0.0)).font(egui::TextStyle::Monospace).hint_text(hint));
                 });
-                if has_doc && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓が、図の見出し (DC Current Gain など) からこの図のページへ移ります。目盛りと曲線の上をクリックして点を読みます。同じページの図なら、目盛りはそのまま使えます")).clicked() {
+                if has_doc && ui.small_button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの窓が、図の見出し (DC Current Gain など) からこの図のページへ移り、軸の目盛りも図の数字から入れます。曲線を 1 回クリックすると点が取れます (目盛りが読めない図は、目盛りからクリック)。同じページの図なら、目盛りはそのまま使えます")).clicked() {
                     *start = Some(dest);
                 }
             };
