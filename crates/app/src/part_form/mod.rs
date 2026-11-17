@@ -281,6 +281,8 @@ pub struct PartForm {
     pub sources: Vec<pdf_input::Source>,
     /// What the last click in the PDF did: (worked, message).
     pub pick_msg: Option<(bool, String)>,
+    /// What 「表とグラフから全部読む」 read, a line a field: (field, read, line).
+    pub(super) graph_all: Vec<(graph_reader::Dest, bool, String)>,
     /// The draft read from the whole data sheet, while its window is open (`draft.rs`).
     pub(super) draft: Option<draft::FormDraft>,
     /// The pin table of the data sheet the pins are compared with, and the last comparison.
@@ -436,6 +438,7 @@ impl Default for PartForm {
             sheet: datasheet_view::SheetView::default(),
             sources: vec![],
             pick_msg: None,
+            graph_all: vec![],
             draft: None,
             pin_ref: None,
             pin_check: None,

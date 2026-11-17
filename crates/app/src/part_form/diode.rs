@@ -252,6 +252,7 @@ impl PartForm {
             {
                 self.sheet.start_graph(Some(super::graph_reader::Dest::DiodeForward));
             }
+            self.read_all_button(ui, &[super::graph_reader::Dest::DiodeForward, super::graph_reader::Dest::DiodeCap]);
             if ui.button(i18n::tr("1N4007 の例を入れる")).on_hover_text(i18n::tr("練習用の読み取り例を入れます。自分のデータシートのグラフで、読み直してみてください")).clicked() {
                 self.dio_points = EXAMPLE_POINTS.into();
                 self.dio_vrrm = "1000".into();

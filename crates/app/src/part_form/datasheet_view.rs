@@ -399,6 +399,52 @@ impl SheetView {
         self.doc.as_ref().map(|d| d.ds.spec_values(symbol)).unwrap_or_default()
     }
 
+    /// Reads the field `dest`'s curve without a click (「表とグラフから全部読む」): the graphs with its caption in turn
+    /// (at most 3), each with its axes from the tick labels and the curve picked by its label or as the only one; the
+    /// first that gives points. Why none did, when none did. The window and the page shown are left as they were.
+    pub fn read_curve(&mut self, dest: Dest) -> Result<GraphOut, String> {
+        let d = self.doc.as_mut().ok_or_else(|| i18n::tr("PDF が開いていません").to_string())?;
+        let figures = d.figures.get_or_insert_with(|| d.ds.figures()).clone();
+        let found = datasheet::figures::showing(&figures, dest.curve());
+        if found.is_empty() {
+            return Err(i18n::tr("図の見出しが見つかりません").to_string());
+        }
+        let mut why = String::new();
+        for f in found.iter().take(3) {
+            let Some(a) = d.ds.figure_axes(f) else {
+                why = i18n::trf!("p.{} の図の目盛りが読めません", f.page + 1);
+                continue;
+            };
+            let mut g = GraphReader::new(f.page, Some(dest));
+            g.set_axes(&a);
+            if !g.has_axes() {
+                why = i18n::trf!("p.{} の図の目盛りが読めません", f.page + 1);
+                continue;
+            }
+            // an hFE graph normalized to 1 (BC546's Figure 7) is not hFE
+            let top = a.y.ticks.iter().filter_map(|t| datasheet::graph::tick_value(&t.1)).fold(0.0_f64, f64::max);
+            if dest.curve() == datasheet::figures::Curve::DcGain && top > 0.0 && top <= 5.0 {
+                why = i18n::trf!("p.{} の図は 1 を基準にした比 (normalized) です", f.page + 1);
+                continue;
+            }
+            match d.pick_curve_on(f.page, &a, dest) {
+                datasheet::pick::Pick::One { path, by } => {
+                    g.auto_trace(path, &by);
+                    match g.values() {
+                        Ok(points) if !points.is_empty() => {
+                            let by = if by.is_empty() { String::new() } else { i18n::trf!("「{}」の曲線", by) };
+                            return Ok(GraphOut { dest, points, page: f.page, by });
+                        }
+                        _ => why = i18n::trf!("p.{} の図の曲線から点が取れません", f.page + 1),
+                    }
+                }
+                datasheet::pick::Pick::Several(n) => why = i18n::trf!("p.{} の図に曲線が {n} 本あり、どれか決められません", f.page + 1),
+                datasheet::pick::Pick::None => why = i18n::trf!("p.{} の図に曲線が見つかりません", f.page + 1),
+            }
+        }
+        Err(why)
+    }
+
     /// The points the person sent to the form since the last call.
     pub fn take_graph(&mut self) -> Option<GraphOut> {
         self.doc.as_mut().and_then(|d| d.graph.as_mut()).and_then(|g| g.take_out())
@@ -899,13 +945,18 @@ impl Opened {
     /// The curve the field `dest` wants on the graph with axes `a` on the page shown (`datasheet::pick`, on the same
     /// picture as [`Self::curve_near`]).
     fn pick_curve(&mut self, a: &datasheet::axes::ReadAxes, dest: Dest) -> datasheet::pick::Pick {
-        if self.snap.as_ref().is_none_or(|s| s.0 != self.page) {
-            let Ok(img) = self.ds.render(self.page, 4.0) else { return datasheet::pick::Pick::None };
-            let Some(k) = self.ds.page_size(self.page).map(|s| img.width as f32 / s.0) else { return datasheet::pick::Pick::None };
-            self.snap = Some((self.page, img, k));
+        self.pick_curve_on(self.page, a, dest)
+    }
+
+    /// [`Self::pick_curve`] on the graph of page `page`.
+    fn pick_curve_on(&mut self, page: usize, a: &datasheet::axes::ReadAxes, dest: Dest) -> datasheet::pick::Pick {
+        if self.snap.as_ref().is_none_or(|s| s.0 != page) {
+            let Ok(img) = self.ds.render(page, 4.0) else { return datasheet::pick::Pick::None };
+            let Some(k) = self.ds.page_size(page).map(|s| img.width as f32 / s.0) else { return datasheet::pick::Pick::None };
+            self.snap = Some((page, img, k));
         }
         let Some((_, img, k)) = self.snap.as_ref() else { return datasheet::pick::Pick::None };
-        datasheet::pick::pick(img, *k, self.ds.words(self.page), a, dest.curve(), dest.label_names())
+        datasheet::pick::pick(img, *k, self.ds.words(page), a, dest.curve(), dest.label_names())
     }
 
     /// The curve under page point (x, y) followed to its ends (`datasheet::graph::trace_curve` on the same picture as

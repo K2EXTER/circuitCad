@@ -138,7 +138,7 @@ impl DarlingtonInput {
 }
 
 impl PartForm {
-    fn darl_fit(&mut self) {
+    pub(super) fn darl_fit(&mut self) {
         let (name, source) = (self.linear_name("DARL"), self.linear_source());
         let pnp = self.glyph == "pnp";
         self.darl.result = Some(self.darl.spec(&name, &source, pnp).and_then(|s| fit::fit(&s)));
@@ -196,6 +196,7 @@ impl PartForm {
         for (ok, line) in &self.darl.found {
             ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
+        self.read_all_button(ui, &[Dest::DarlHfe, Dest::DarlVbeOn, Dest::DarlVbeSat, Dest::DarlVceSat]);
         let has_doc = self.sheet.has_doc();
         let mut start = None;
         let d = &mut self.darl;

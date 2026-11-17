@@ -104,6 +104,13 @@ impl SchEditor {
         }
     }
 
+    /// A section's 「表とグラフから全部読む」 in the form (`--form-graph-all bjt`).
+    pub fn graph_all_in_form_pdf(&mut self, section: &str) {
+        if let Some(f) = self.form.as_mut() {
+            f.graph_all_for(section);
+        }
+    }
+
     /// Fills the form's MOSFET section from its PDF's table and fits it (`--form-mos-pdf`, for screenshots).
     pub fn mos_from_form_pdf(&mut self) {
         if let Some(f) = self.form.as_mut() {

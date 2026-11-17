@@ -281,13 +281,13 @@ impl PhotodiodeInput {
 }
 
 impl PartForm {
-    fn opto_make(&mut self) {
+    pub(super) fn opto_make(&mut self) {
         let (name, source) = (self.linear_name("OPTO"), self.linear_source());
         self.opto.result = Some(self.opto.spec(&name, &source).and_then(|s| fit::fit(&s)));
         self.opto.message = None;
     }
 
-    fn pd_make(&mut self) {
+    pub(super) fn pd_make(&mut self) {
         let (name, source) = (self.linear_name("PD"), self.linear_source());
         let mut spec = self.pd.spec(&name, &source);
         // the temperature coefficient of the open-circuit voltage is negative (num reads magnitudes)
@@ -356,6 +356,7 @@ impl PartForm {
         for (ok, line) in &self.opto.found {
             ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
+        self.read_all_button(ui, &[Dest::OptoLed, Dest::OptoCtr]);
         let has_doc = self.sheet.has_doc();
         let mut start = None;
         let o = &mut self.opto;
@@ -438,6 +439,7 @@ impl PartForm {
         for (ok, line) in &self.pd.found {
             ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
+        self.read_all_button(ui, &[Dest::PdLight, Dest::PdCap]);
         let has_doc = self.sheet.has_doc();
         let mut start = None;
         let p = &mut self.pd;

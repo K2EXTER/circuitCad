@@ -114,6 +114,42 @@ fn smooth_part(path: &[(f32, f32)]) -> Vec<(f32, f32)> {
     path[best].to_vec()
 }
 
+/// Pieces of traces joined where one carries on another: the next piece starts less than 25 points to the right of
+/// where one ends, on the line the end was going along (within 2 points and a fifth of the gap). The nearest such
+/// piece is taken, so curves running side by side stay apart.
+fn joined(mut pieces: Vec<Vec<(f32, f32)>>) -> Vec<Vec<(f32, f32)>> {
+    pieces.sort_by(|a, b| a[0].0.total_cmp(&b[0].0));
+    let mut out: Vec<Vec<(f32, f32)>> = vec![];
+    let mut used = vec![false; pieces.len()];
+    for i in 0..pieces.len() {
+        if used[i] {
+            continue;
+        }
+        used[i] = true;
+        let mut path = pieces[i].clone();
+        loop {
+            let end = *path.last().unwrap();
+            // the slope over the last 3 points of the trace
+            let back = path.iter().rev().find(|p| end.0 - p.0 >= 3.0).copied();
+            let slope = back.map_or(0.0, |p| (end.1 - p.1) / (end.0 - p.0));
+            let next = (0..pieces.len())
+                .filter(|&j| !used[j])
+                .filter_map(|j| {
+                    let s = pieces[j][0];
+                    let gap = s.0 - end.0;
+                    let off = (s.1 - (end.1 + slope * gap)).abs();
+                    (gap > -0.5 && gap < 25.0 && off < 2.0 + 0.2 * gap.max(0.0)).then_some((off + gap * 0.1, j))
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0));
+            let Some((_, j)) = next else { break };
+            used[j] = true;
+            path.extend(pieces[j].iter().copied());
+        }
+        out.push(path);
+    }
+    out
+}
+
 /// The way a curve of this kind goes, in its value against the horizontal value: up (a diode's current with its
 /// voltage), down (a capacitance with the reverse voltage), or either (hFE and CTR rise and fall).
 fn rising(curve: Curve) -> Option<bool> {
@@ -155,13 +191,14 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
             }
             let path: Vec<(f32, f32)> = crate::graph::trace_curve(img, px_per_pt, (x, y), &skip).into_iter().filter(|p| p.0 >= b.x0 - 1.0 && p.0 <= b.x1 + 1.0 && p.1 >= b.y0 - 1.0 && p.1 <= b.y1 + 1.0).collect();
             let path = smooth_part(&path);
-            // a curve, not a short mark (an arrow, a bit of a label)
-            let wide = path.last().zip(path.first()).map_or(0.0, |(l, f)| l.0 - f.0);
-            if wide > 0.15 * (b.x1 - b.x0) && !traces.iter().any(|t| same(t, &path)) {
+            if path.len() >= 2 && !traces.iter().any(|t| same(t, &path)) {
                 traces.push(path);
             }
         }
     }
+    // a curve broken where it crosses a black grid line (Vishay's 1N5400) is put back together; then only curves, not
+    // short marks (an arrow, a bit of a label)
+    let mut traces: Vec<Vec<(f32, f32)>> = joined(traces).into_iter().filter(|p| p.last().zip(p.first()).map_or(0.0, |(l, f)| l.0 - f.0) > 0.15 * (b.x1 - b.x0)).collect();
     // the labels in the plot (and a little around it) that name the wanted curve, the most telling kind first
     let around = Rect { x0: b.x0 - 5.0, y0: b.y0 - 5.0, x1: b.x1 + 5.0, y1: b.y1 + 5.0 };
     let mut labels: Vec<(u8, String, Rect)> = lines_in(words, around).into_iter().filter_map(|(t, r)| wanted(curve, names, &t).map(|k| (k, t, r))).collect();
@@ -176,6 +213,9 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
         _ => {}
     }
     let Some(kind) = labels.first().map(|l| l.0) else { return Pick::Several(traces.len()) };
+    // a line going the wrong way for the curve (a label's leader line) is not what a label names
+    let n = traces.len();
+    traces.retain(|t| goes_its_way(t, curve, axes));
     // the curve nearest to one of the labels of that kind; a label far from every curve (a note in a corner) tells nothing
     let best = labels
         .iter()
@@ -183,8 +223,8 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
         .flat_map(|l| traces.iter().enumerate().map(move |(i, t)| (distance(l.2, t), i, l.1.clone())))
         .min_by(|a, b| a.0.total_cmp(&b.0));
     match best {
-        Some((d, i, by)) if d < 25.0 && goes_its_way(&traces[i], curve, axes) => Pick::One { path: traces.swap_remove(i), by },
-        _ => Pick::Several(traces.len()),
+        Some((d, i, by)) if d < 25.0 => Pick::One { path: traces.swap_remove(i), by },
+        _ => Pick::Several(n),
     }
 }
 
@@ -271,6 +311,16 @@ mod tests {
         assert!(!goes_its_way(&[(20.0, 30.0), (30.0, 70.0), (40.0, 90.0)], Curve::Forward, &up));
         assert!(goes_its_way(&[(20.0, 30.0), (30.0, 70.0), (40.0, 90.0)], Curve::Capacitance, &up));
         assert!(goes_its_way(&[(20.0, 30.0), (30.0, 70.0), (40.0, 30.0)], Curve::DcGain, &up));
+    }
+
+    #[test]
+    fn a_curve_broken_at_grid_lines_is_put_back_together() {
+        // y = 100 − x / 2 in three pieces with gaps at x 40 and 80, and a curve 20 points below in one piece
+        let line = |x0: i32, x1: i32, a: f32| (x0 * 2..=x1 * 2).map(|i| (i as f32 / 2.0, a - i as f32 / 4.0)).collect::<Vec<_>>();
+        let j = joined(vec![line(52, 80, 100.0), line(10, 38, 100.0), line(10, 120, 120.0), line(84, 120, 100.0)]);
+        assert_eq!(j.len(), 2, "{:?}", j.iter().map(|p| (p[0], *p.last().unwrap())).collect::<Vec<_>>());
+        let top = j.iter().find(|p| p[0].1 < 100.0).unwrap();
+        assert_eq!((top[0].0, top.last().unwrap().0), (10.0, 120.0));
     }
 
     #[test]

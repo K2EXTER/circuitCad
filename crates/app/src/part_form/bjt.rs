@@ -249,7 +249,7 @@ impl PartForm {
         self.glyph == "pnp"
     }
 
-    fn bjt_fit(&mut self) {
+    pub(super) fn bjt_fit(&mut self) {
         let source = if self.datasheet.trim().is_empty() { "データシート".to_string() } else { self.datasheet.trim().to_string() };
         let name = if self.name.trim().is_empty() { "BJT".to_string() } else { self.name.trim().to_string() };
         self.bjt.result = Some(self.bjt.spec(&name, &source, self.bjt_pnp()).and_then(|s| fit::fit(&s)));
@@ -337,6 +337,7 @@ impl PartForm {
         for (ok, line) in &self.bjt.found {
             ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
+        self.read_all_button(ui, &[Dest::BjtHfe, Dest::BjtVbeOn, Dest::BjtVbeSat, Dest::BjtVceSat, Dest::BjtCobo, Dest::BjtCibo]);
         let has_doc = self.sheet.has_doc();
         let mut start = None;
         egui::Grid::new("bjt_inputs").num_columns(6).show(ui, |ui| {

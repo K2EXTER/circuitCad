@@ -131,6 +131,8 @@ fn settle(v: &[(f32, f64)]) -> Option<(std::ops::Range<usize>, bool)> {
 
 /// The multiplier of a unit in brackets ("mA" 1e-3), None when it is not a unit.
 fn bracket_unit(t: &str) -> Option<f64> {
+    // "(mAdc)", "(Vdc)": a direct current or voltage (onsemi)
+    let t = without_dc(t);
     let up = t.to_ascii_uppercase();
     if ["AMP", "AMPS", "VOLT", "VOLTS", "A", "V"].contains(&up.as_str()) {
         return Some(1.0);
@@ -149,6 +151,11 @@ fn bracket_unit(t: &str) -> Option<f64> {
         }
     }
     None
+}
+
+/// A unit without its "dc" ("mAdc" → "mA").
+fn without_dc(t: &str) -> &str {
+    t.strip_suffix("dc").or_else(|| t.strip_suffix("DC")).filter(|u| !u.is_empty()).unwrap_or(t)
 }
 
 /// The multiplier of a unit written in an axis title: "(mA)" 1e-3, "(µA)" 1e-6, "(pF)" 1e-12, "(A)" or "AMP" 1. A title
@@ -177,7 +184,8 @@ pub(crate) fn unit_prefix(words: &[&Word]) -> Option<f64> {
     }
     for w in words {
         for t in w.tokens() {
-            let t = t.trim_matches(|c: char| c == '(' || c == ')' || c == ',' || c == '[' || c == ']');
+            let raw = t.trim_matches(|c: char| c == '(' || c == ')' || c == ',' || c == '[' || c == ']');
+            let t = without_dc(raw);
             // a unit per something ("mW/cm²" is the unit the form wants as written)
             if w.text.contains(&format!("{t}/")) {
                 continue;
@@ -199,7 +207,7 @@ pub(crate) fn unit_prefix(words: &[&Word]) -> Option<f64> {
                         _ => continue,
                     };
                     // a bare "A" or "V" is often a symbol in the title ("V" in "VF, ..."): only in brackets
-                    if p.is_empty() && !w.text.contains(&format!("({u})")) && !w.text.contains(&format!("[{u}]")) {
+                    if p.is_empty() && !w.text.contains(&format!("({raw})")) && !w.text.contains(&format!("[{raw}]")) {
                         continue;
                     }
                     return Some(k);
@@ -484,5 +492,15 @@ mod tests {
         let l = labels(&words, Rect { x0: 0.0, y0: 0.0, x1: 500.0, y1: 500.0 });
         assert_eq!(l.iter().map(|l| l.value).collect::<Vec<_>>(), vec![10.0, 100.0, 1000.0]);
         assert_eq!(l[1].text, "1E2");
+    }
+
+    #[test]
+    fn a_unit_with_dc_after_it() {
+        let t = |s: &str| Word::for_test(s, 0.0, 0.0, 10.0, 8.0);
+        let (ma, v, vce) = (t("(mAdc)"), t("(Vdc)"), t("VCE,"));
+        assert_eq!(unit_prefix(&[&t("COLLECTOR"), &ma]), Some(1e-3));
+        assert_eq!(unit_prefix(&[&v]), Some(1.0));
+        assert_eq!(bracket_unit("mAdc"), Some(1e-3));
+        assert_eq!(unit_prefix(&[&vce]), None, "a symbol is not a unit");
     }
 }

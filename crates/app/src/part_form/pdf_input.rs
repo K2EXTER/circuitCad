@@ -43,12 +43,134 @@ impl PartForm {
 
     /// Takes the points read off a graph that the person sent to the form, and puts them in their field.
     pub(super) fn take_pdf_graph(&mut self) {
+        if let Some(out) = self.sheet.take_graph() {
+            self.put_graph(&out);
+        }
+    }
+
+    /// 「表とグラフから全部読む」: the section's values from the electrical characteristics table (as its 「PDF の表から
+    /// 読む」), then every curve field read off its graph without a click (`SheetView::read_curve`: the curve read
+    /// takes the place of the table's points), then the model made from what is in the fields. A field whose graph
+    /// could not be read keeps what it had; each field gets a line of what was read or why not (`--form-graph-all`).
+    pub fn read_all_graphs(&mut self, dests: &[super::graph_reader::Dest]) {
+        use super::graph_reader::Dest;
+        let sheet = &self.sheet;
+        match dests.first() {
+            Some(Dest::BjtHfe) => self.bjt.fill_from_pdf(&self.name, |s| sheet.spec_values(s)),
+            Some(Dest::DarlHfe) => self.darl.fill_from_pdf(|s| sheet.spec_values(s)),
+            Some(Dest::OptoLed) => self.opto.fill_from_pdf(|s| sheet.spec_values(s)),
+            Some(Dest::PdLight) => self.pd.fill_from_pdf(|s| sheet.spec_values(s)),
+            Some(Dest::DiodeForward) => self.dio_fill_from_pdf(),
+            _ => {}
+        }
+        let read: Vec<_> = dests.iter().map(|&d| (d, self.sheet.read_curve(d))).collect();
+        self.take_read_curves(read);
+    }
+
+    /// 「表とグラフから全部読む」 of a section by its name (`--form-graph-all`): bjt, darl, diode, opto, pd.
+    pub fn graph_all_for(&mut self, section: &str) {
+        use super::graph_reader::Dest;
+        let dests: &[Dest] = match section {
+            "bjt" => &[Dest::BjtHfe, Dest::BjtVbeOn, Dest::BjtVbeSat, Dest::BjtVceSat, Dest::BjtCobo, Dest::BjtCibo],
+            "darl" => &[Dest::DarlHfe, Dest::DarlVbeOn, Dest::DarlVbeSat, Dest::DarlVceSat],
+            "diode" => &[Dest::DiodeForward, Dest::DiodeCap],
+            "opto" => &[Dest::OptoLed, Dest::OptoCtr],
+            "pd" => &[Dest::PdLight, Dest::PdCap],
+            _ => return,
+        };
+        self.read_all_graphs(dests);
+        for (_, ok, line) in &self.graph_all {
+            eprintln!("{} {line}", if *ok { "ok" } else { "--" });
+        }
+        // the model made from them, for a script to look at
+        let result = match section {
+            "bjt" => self.bjt.result.as_ref(),
+            "darl" => self.darl.result.as_ref(),
+            "opto" => self.opto.result.as_ref(),
+            "pd" => self.pd.result.as_ref(),
+            _ => None,
+        };
+        match result {
+            Some(Ok(f)) => {
+                let worst = f.rows.iter().filter(|r| !r.compare_only).map(|r| r.error_pct().abs()).fold(0.0, f64::max);
+                eprintln!("model {} (rows {}, worst {worst:.0}%)", f.text.lines().find(|l| l.starts_with(".model")).unwrap_or(""), f.rows.len());
+            }
+            Some(Err(e)) => eprintln!("model error: {e}"),
+            None => {}
+        }
+        if let Some(m) = &self.dio_message {
+            eprintln!("diode {m:?}");
+        }
+        for (name, text) in [("hfe", &self.bjt.hfe), ("vbe_on", &self.bjt.vbe_on), ("darl_hfe", &self.darl.hfe), ("dio", &self.dio_points)] {
+            if !text.is_empty() {
+                eprintln!("{name}: {}", text.lines().collect::<Vec<_>>().join(" | "));
+            }
+        }
+    }
+
+    /// Puts the curves read by 「表とグラフから全部読む」 in their fields, says what was read, and makes the model.
+    pub(super) fn take_read_curves(&mut self, read: Vec<(super::graph_reader::Dest, Result<super::graph_reader::GraphOut, String>)>) {
+        use super::graph_reader::Dest;
+        self.graph_all.clear();
+        let Some(&(first, _)) = read.first() else { return };
+        for (d, r) in read {
+            let field = i18n::tr(d.curve_name());
+            // the two capacitances of a transistor have their own names
+            let field = match d {
+                Dest::BjtCobo => "Cobo",
+                Dest::BjtCibo => "Cibo",
+                Dest::OptoLed => i18n::tr("LED の順方向"),
+                _ => field,
+            };
+            match r {
+                Ok(out) => {
+                    let by = if out.by.is_empty() { String::new() } else { format!(" ({})", out.by) };
+                    self.graph_all.push((d, true, i18n::trf!("{field}: p.{} の図から {} 点{by}", out.page + 1, out.points.len())));
+                    self.put_graph(&out);
+                }
+                Err(why) => self.graph_all.push((d, false, i18n::trf!("{field}: 読めませんでした ({why})。欄の「グラフから読む」で、曲線をクリックしてください"))),
+            }
+        }
+        if !self.graph_all.iter().any(|l| l.1) {
+            return;
+        }
+        // the model from the fields as they are now (the points read and what was there)
+        match first {
+            Dest::DiodeForward | Dest::DiodeCap => self.dio_message = Some(self.dio_fit()),
+            Dest::BjtHfe | Dest::BjtVbeOn | Dest::BjtVbeSat | Dest::BjtVceSat | Dest::BjtCobo | Dest::BjtCibo => self.bjt_fit(),
+            Dest::DarlHfe | Dest::DarlVbeOn | Dest::DarlVbeSat | Dest::DarlVceSat => self.darl_fit(),
+            Dest::OptoLed | Dest::OptoCtr => self.opto_make(),
+            Dest::PdLight | Dest::PdCap => self.pd_make(),
+            Dest::Zth => {}
+        }
+    }
+
+    /// The 「表とグラフから全部読む」 button of a section and the lines of what it read. Nothing while no PDF is open.
+    pub(super) fn read_all_button(&mut self, ui: &mut egui::Ui, dests: &[super::graph_reader::Dest]) {
+        if !self.sheet.has_doc() {
+            return;
+        }
+        if ui
+            .button(i18n::tr("表とグラフから全部読む"))
+            .on_hover_text(i18n::tr("「PDF の表から読む」のあと、下の曲線の欄を全部、図の見出しから探した図で読みます (目盛りは図の数字から、曲線はラベルか 1 本だけのものを選びます)。読めた欄を入れて、モデルを作ります。読めなかった欄は、欄の「グラフから読む」で曲線をクリックします。図によって数秒かかります"))
+            .clicked()
+        {
+            self.read_all_graphs(dests);
+        }
+        for (_, ok, line) in self.graph_all.iter().filter(|l| dests.contains(&l.0)) {
+            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+        }
+    }
+
+    /// Puts points read off a graph in their field.
+    pub(super) fn put_graph(&mut self, out: &super::graph_reader::GraphOut) {
         use super::graph_reader::{Dest, short};
-        let Some(out) = self.sheet.take_graph() else { return };
         match out.dest {
             Dest::DiodeForward => {
-                self.dio_points = out.points.iter().map(|(i, v)| format!("{} {}", short(*i), short(*v))).collect::<Vec<_>>().join("\n");
-                self.dio_message = Some(self.dio_fit().map(|m| format!("p.{} のグラフの {} 点を入れました。{m}", out.page + 1, out.points.len())));
+                // the fit wants currents 1.5 times apart or more: a traced curve has points close together at its top
+                let points = apart(&out.points, 1.5);
+                self.dio_points = points.iter().map(|(i, v)| format!("{} {}", short(*i), short(*v))).collect::<Vec<_>>().join("\n");
+                self.dio_message = Some(self.dio_fit().map(|m| format!("p.{} のグラフの {} 点を入れました。{m}", out.page + 1, points.len())));
             }
             Dest::DiodeCap => {
                 self.dio_caps = out.points.iter().map(|(v, c)| format!("{} {}", short(v.abs()), short(c.abs()))).collect::<Vec<_>>().join("
@@ -162,6 +284,24 @@ impl PartForm {
     }
 }
 
+/// Points sorted by their first value with the next at least `ratio` times the one before: the rest are left out,
+/// except the last (the largest current, which tells the series resistance) that takes the place of the one before it.
+pub(super) fn apart(points: &[(f64, f64)], ratio: f64) -> Vec<(f64, f64)> {
+    let mut out: Vec<(f64, f64)> = vec![];
+    for &p in points {
+        match out.last() {
+            Some(l) if p.0 < l.0 * ratio => {}
+            _ => out.push(p),
+        }
+    }
+    if let (Some(&last), Some(kept)) = (points.last(), out.last_mut())
+        && *kept != last
+    {
+        *kept = last;
+    }
+    out
+}
+
 /// 1.27 -> "1.27", 0.2 -> "0.2", 30.0 -> "30": the number as a person writes it in a box.
 pub(super) fn number_text(x: f64) -> String {
     let s = format!("{x:.6}");
@@ -226,6 +366,36 @@ mod tests {
         let mut f = PartForm::default();
         pick(&mut f, Target::Name, "LM393B,", None);
         assert_eq!(f.name, "LM393B");
+    }
+
+    #[test]
+    fn curves_read_together_fill_their_fields_and_say_what_failed() {
+        use super::super::graph_reader::{Dest, GraphOut};
+        let mut f = PartForm::default();
+        f.bjt.cibo = "0.5 8p".into();
+        let out = |dest, points: &[(f64, f64)], by: &str| Ok(GraphOut { dest, points: points.to_vec(), page: 4, by: by.into() });
+        f.take_read_curves(vec![
+            (Dest::BjtHfe, out(Dest::BjtHfe, &[(1e-3, 100.0), (1e-2, 150.0), (0.1, 90.0)], "25°C")),
+            (Dest::BjtVbeOn, out(Dest::BjtVbeOn, &[(1e-3, 0.65), (1e-2, 0.72), (0.1, 0.83)], "")),
+            (Dest::BjtCibo, Err("図の見出しが見つかりません".into())),
+        ]);
+        assert!(f.bjt.hfe.contains("150") && f.bjt.vbe_on.contains("0.72"));
+        assert_eq!(f.bjt.cibo, "0.5 8p", "a curve not read leaves the field as it was");
+        let lines: Vec<&str> = f.graph_all.iter().map(|l| l.2.as_str()).collect();
+        assert!(lines[0].contains("p.5") && lines[0].contains("3 点") && lines[0].contains("25°C"), "{lines:?}");
+        assert!(!f.graph_all[2].1 && lines[2].starts_with("Cibo") && lines[2].contains("見出し"), "{lines:?}");
+        assert!(f.bjt.result.is_some(), "the model is made from the fields");
+        // nothing read: no model
+        let mut f = PartForm::default();
+        f.take_read_curves(vec![(Dest::PdLight, Err("x".into()))]);
+        assert!(f.pd.result.is_none() && f.graph_all.len() == 1);
+    }
+
+    #[test]
+    fn traced_points_are_thinned_to_currents_apart() {
+        let p = [(1.0, 0.6), (1.2, 0.61), (2.0, 0.65), (60.0, 1.4), (82.0, 1.57)];
+        assert_eq!(apart(&p, 1.5), vec![(1.0, 0.6), (2.0, 0.65), (82.0, 1.57)], "the largest takes the place of 60");
+        assert_eq!(apart(&[], 1.5), vec![]);
     }
 
     #[test]
