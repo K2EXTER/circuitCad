@@ -193,7 +193,16 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool) -> Vec<SpecV
         // too) and goes down to the next symbol
         let symbol_on_right = h.symbol.is_some_and(|s| s.0 > first_x + 60.0);
         // (a "Conditions" heading may be centred over its column: the column starts up to 40 points left of it)
-        let left = h.conditions.map(|c| (c - 40.0).max(first_x)).unwrap_or(if symbol_on_right { first_x } else { h.min - 120.0 });
+        // or further, where its conditions start: a name just before an "=" (TI's LP5907: "f = 100Hz", "IOUT = 20mA" from
+        // 46 points left of "TEST CONDITIONS")
+        let starts = |c: f32| {
+            body.iter()
+                .filter(|w| w.rect.x0 > c - 90.0 && w.rect.x0 < c - 40.0 && w.text.chars().next().is_some_and(|ch| ch.is_alphabetic()))
+                .filter(|w| body.iter().any(|e| e.text.starts_with('=') && e.rect.x0 > w.rect.x0 && e.rect.x0 - w.rect.x1 < 25.0 && (centre(&e.rect).1 - centre(&w.rect).1).abs() < 4.0))
+                .map(|w| w.rect.x0)
+                .fold(c - 40.0, f32::min)
+        };
+        let left = h.conditions.map(|c| starts(c).max(first_x)).unwrap_or(if symbol_on_right { first_x } else { h.min - 120.0 });
         // symbols: under the symbol heading, or the first word of a line in the table's first column (left
         // aligned; the parameter's name follows)
         let under = |w: &Word| match h.symbol {
@@ -314,7 +323,16 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f
         let l: Vec<&str> = text.split(' ').collect();
         let Some(last) = l.iter().rposition(|w| w.contains('=') || w.contains(')')) else { return String::new() };
         let mut end = last + 1;
-        while end < l.len() && end <= last + 2 && (number(l[end]).is_some() || prefix(l[end].trim_end_matches(',')).is_some()) {
+        // the number and unit after it, and a range's end ("(VOUT(NOM) + 1V) to 5.5V", LP5907)
+        // (a number and its unit may be one word: "10Hz", "5.5V,")
+        // (not a part's name: "2N3903")
+        let value = |t: &str| {
+            let t = t.trim_end_matches(',');
+            let digits = t.trim_start_matches(['-', '−']);
+            let unit = digits.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+            number(t).is_some() || prefix(t).is_some() || (unit.len() < digits.len() && (unit.is_empty() || prefix(unit).is_some()))
+        };
+        while end < l.len() && end <= last + 4 && (value(l[end]) || (l[end] == "to" && l.get(end + 1).is_some_and(|n| value(n)))) {
             end += 1;
         }
         let first = l[..=last].iter().position(|w| w.contains('=') || w.starts_with('(')).unwrap_or(0).saturating_sub(1);
@@ -337,6 +355,24 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f
                 t.insert(i + 1, n.text.trim());
                 return t.join(" ");
             }
+        }
+        // a condition shared by the row's lines, on a line of the row with no values (LP5907's noise: "BW = 10Hz to
+        // 100kHz" by the parameter's name, "IOUT = 1mA" and "IOUT = 250mA" on the lines of the values)
+        let line_y = |w: &Word| centre(&w.rect).1;
+        // (only the line of the row's symbol: another line of the row may be a line of values in other columns, NDS7002A's
+        // "TC = 125°C")
+        let on_symbol = |c: f32| symbols.iter().any(|s| (centre(&s.rect).1 - c).abs() < 4.0);
+        let mut shared: Vec<f32> = words
+            .iter()
+            .filter(|w| w.text.contains('=') && in_cond(w) && (top..end).contains(&line_y(w)) && (line_y(w) - y).abs() > 3.0 && on_symbol(line_y(w)))
+            .map(line_y)
+            .collect();
+        shared.dedup_by(|a, b| (*a - *b).abs() < 3.0);
+        // (a value may sit between the two lines of its conditions: LM317's "65" 4.8 points below)
+        let has_values = |c: f32| words.iter().any(|w| (line_y(w) - c).abs() < 6.0 && w.rect.x0 >= h.min - 8.0 && number(&w.text).is_some());
+        let with: Vec<String> = shared.into_iter().filter(|&c| !has_values(c)).map(conditions_only).filter(|t| !t.is_empty() && !own.contains(t.as_str())).collect();
+        if !with.is_empty() {
+            return format!("{own} · {}", with.join(" · "));
         }
         return own;
     }
@@ -404,6 +440,37 @@ mod tests {
         assert_eq!((line[0].typ, line[0].unit.as_deref()), (Some(0.01), Some("%/V")), "{line:?}");
         let load = find(0, &words, "Load");
         assert!(load[0].conditions.contains("10mA to 1500mA"), "{load:?}");
+    }
+
+    /// TI's LP5907: the conditions start left of their heading, a frequency on each line of the PSRR, and the noise's
+    /// band once on the line of its symbol with a current on each line of values.
+    #[test]
+    fn conditions_left_of_their_heading_and_one_for_the_row() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let line = |x: f32, y: f32, text: &str| -> Vec<Word> {
+            let mut x = x;
+            text.split(' ').map(|t| { let r = w(t, x, y); x += 5.0 * t.chars().count() as f32 + 3.0; r }).collect()
+        };
+        let mut words = vec![w("PARAMETER", 116.0, 300.0), w("TEST", 274.0, 300.0), w("CONDITIONS", 297.0, 300.0), w("MIN", 419.0, 300.0), w("TYP", 458.0, 300.0), w("MAX", 495.0, 300.0), w("UNIT", 526.0, 300.0)];
+        words.extend(line(228.0, 320.0, "f = 100Hz, IOUT = 20mA"));
+        words.push(w("90", 464.0, 320.0));
+        words.extend([w("PSRR", 59.0, 327.0), w("Power-supply", 106.0, 327.0), w("dB", 530.0, 327.0)]);
+        words.extend(line(228.0, 334.0, "f = 1kHz, IOUT = 20mA"));
+        words.push(w("82", 464.0, 334.0));
+        words.extend(line(327.0, 360.0, "IOUT = 1mA"));
+        words.push(w("10", 464.0, 360.0));
+        words.extend([w("eN", 59.0, 367.0), w("Output", 106.0, 367.0), w("noise", 132.0, 367.0), w("µVRMS", 524.0, 367.0)]);
+        words.extend(line(228.0, 366.0, "BW = 10Hz to 100kHz"));
+        words.extend(line(327.0, 374.0, "IOUT = 250mA"));
+        words.push(w("6.5", 462.0, 374.0));
+        let psrr = find(0, &words, "PSRR");
+        assert_eq!(psrr.len(), 2, "{psrr:?}");
+        assert_eq!((psrr[0].typ, psrr[0].condition("f")), (Some(90.0), Some(100.0)), "{psrr:?}");
+        assert_eq!(psrr[1].condition("f"), Some(1000.0));
+        let en = find(0, &words, "eN");
+        assert_eq!(en.len(), 2, "{en:?}");
+        assert!(en.iter().all(|v| v.conditions.contains("BW = 10Hz to 100kHz")), "{en:?}");
+        assert!(en[0].typ == Some(10.0) && en[0].conditions.starts_with("IOUT = 1mA"), "{en:?}");
     }
 
     #[test]
