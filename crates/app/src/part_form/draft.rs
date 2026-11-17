@@ -26,6 +26,8 @@ pub struct FormDraft {
     pub lands: Vec<LandPattern>,
     /// The rows of the absolute maximum ratings table.
     pub ratings: Vec<Rating>,
+    /// A P type (PNP, P-channel) by what the sheet says, for the symbol.
+    pub p_type: Option<bool>,
     /// Use: name, kind, package, pins, body, model, ratings.
     pub use_: [bool; 7],
     pub open: bool,
@@ -159,7 +161,8 @@ impl PartForm {
         // a table with a column per part number ("TIP120, TIP121, TIP122") gives the named part's column
         let ratings = ds.absolute_maximum_of(name.as_deref());
         let model = has_model(kind);
-        let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, open: true };
+        let p_type = ds.p_type();
+        let mut d = FormDraft { use_: [name.is_some(), kind.is_some(), !packages.is_empty(), !pin_sources.is_empty(), dims.is_some(), model, false], name, kind, packages, package, pin_sources, pin_pick: 0, pins_agree, dims, lands, ratings, p_type, open: true };
         d.use_[6] = d.max_ratings().iter().any(Option::is_some);
         Some(d)
     }
@@ -173,12 +176,15 @@ impl PartForm {
         {
             self.apply_type(k);
             self.category = list_category(cat).to_string();
+            // the symbol's polarity by what the sheet says (2N3906: "PNP Silicon")
+            let p = d.p_type == Some(true);
             match cat {
-                "MOSFET" => self.glyph = "nmos".into(),
+                "MOSFET" => self.glyph = if p { "pmos" } else { "nmos" }.into(),
+                "トランジスタ" | "ダーリントン" if p => self.glyph = "pnp".into(),
                 "フォトダイオード" => self.glyph = "photodiode".into(),
                 _ => {}
             }
-            done.push(format!("種類: {cat}"));
+            done.push(format!("種類: {cat}{}", if p && matches!(cat, "MOSFET" | "トランジスタ" | "ダーリントン") { " (P 形)" } else { "" }));
         }
         if d.use_[0]
             && let Some(n) = &d.name

@@ -147,6 +147,18 @@ pub fn category_hint(first_pages: &[&[Word]]) -> Option<&'static str> {
         .or_else(|| ["npn", "pnp", "bipolar"].iter().any(|k| all.split(|c: char| !c.is_alphanumeric()).any(|w| w == *k)).then_some("トランジスタ"))
 }
 
+/// Whether a transistor is a P type: "PNP" or "P-Channel" said more often than "NPN" or "N-Channel" on the first
+/// pages (a sheet for a complementary pair says both: the more frequent, which is the first part's, wins; a tie is N).
+/// None when neither is said.
+pub fn p_type(first_pages: &[&[Word]]) -> Option<bool> {
+    let text: String = first_pages.iter().flat_map(|p| p.iter()).map(|w| normalize(&w.text)).collect::<Vec<_>>().join(" ");
+    let words: Vec<&str> = text.split(|c: char| !(c.is_alphanumeric() || c == '-')).filter(|w| !w.is_empty()).collect();
+    let count = |keys: &[&str]| words.iter().filter(|w| keys.contains(w)).count() + keys.iter().filter(|k| k.contains(' ')).map(|k| text.matches(*k).count()).sum::<usize>();
+    let p = count(&["pnp", "p-channel", "p-ch", "p channel"]);
+    let n = count(&["npn", "n-channel", "n-ch", "n channel"]);
+    (p + n > 0).then_some(p > n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,6 +177,16 @@ mod tests {
         assert_eq!(category_hint(&[&page]), Some("トランジスタ"));
         let regulator = vec![Word::for_test("Voltage", 0.0, 0.0, 30.0, 8.0), Word::for_test("Regulator", 32.0, 0.0, 80.0, 8.0), Word::for_test("NPN", 0.0, 10.0, 15.0, 18.0)];
         assert_ne!(category_hint(&[&regulator]), Some("トランジスタ"), "another kind named: that one");
+    }
+
+    #[test]
+    fn a_p_type_is_told_by_what_the_sheet_says() {
+        let page = |t: &str| t.split(' ').enumerate().map(|(i, w)| Word::for_test(w, 10.0 * i as f32, 0.0, 10.0 * i as f32 + 8.0, 8.0)).collect::<Vec<_>>();
+        assert_eq!(p_type(&[&page("General Purpose Transistors PNP Silicon")]), Some(true));
+        assert_eq!(p_type(&[&page("NPN Silicon Transistor")]), Some(false));
+        assert_eq!(p_type(&[&page("P-Channel Enhancement Mode MOSFET")]), Some(true));
+        assert_eq!(p_type(&[&page("Darlington NPN TIP120 NPN TIP125 PNP")]), Some(false), "a pair: the more frequent");
+        assert_eq!(p_type(&[&page("Op amp")]), None);
     }
 
     #[test]

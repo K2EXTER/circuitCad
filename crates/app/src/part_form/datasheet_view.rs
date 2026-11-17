@@ -319,6 +319,11 @@ impl SheetView {
                     // itself when its label (or being the only one) tells which
                     if let Some(a) = &axes {
                         g.set_axes(a);
+                        // an hFE graph "normalized" to 1 at one current (BC546's Figure 7): its numbers are ratios
+                        let top = a.y.ticks.iter().filter_map(|t| datasheet::graph::tick_value(&t.1)).fold(0.0_f64, f64::max);
+                        if dest.is_some_and(|d| d.curve() == datasheet::figures::Curve::DcGain) && top > 0.0 && top <= 5.0 {
+                            g.note(i18n::trf!("この図の縦軸は {top} までで、hFE の値でなく 1 つの電流での値を 1 とした比 (normalized) のようです。表の hFE (その電流の値) を掛けて入れるか、ほかの図を使ってください"));
+                        }
                         if let Some(dest) = dest
                             && g.has_axes()
                         {

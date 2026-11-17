@@ -101,7 +101,22 @@ fn main() -> Result<(), String> {
                 let k = img.width as f32 / ds.page_size(f.page).map_or(1.0, |s| s.0);
                 let names: Vec<(&str, &[&str])> = if f.curves.contains(&datasheet::figures::Curve::Capacitance) { vec![("Cob", &["cob", "cobo"]), ("Cib", &["cib", "cibo"]), ("", &[])] } else { vec![("", &[])] };
                 for (&c, (tag, names)) in f.curves.iter().flat_map(|c| names.iter().map(move |n| (c, n))) {
-                    let what = match datasheet::pick::pick(&img, k, ds.words(f.page), &a, c, names) {
+                    let picked = datasheet::pick::pick(&img, k, ds.words(f.page), &a, c, names);
+                    // `save=DIR`: the page with the curve taken drawn in red, one picture a curve
+                    if let (Some(dir), datasheet::pick::Pick::One { path, .. }) = (arg(&args, "save"), &picked) {
+                        let mut pic = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.rgba.clone()).ok_or("picture")?;
+                        for &(x, y) in path {
+                            for d in -2i32..=2 {
+                                let (px, py) = ((x * k) as i32, (y * k) as i32 + d);
+                                if px >= 0 && py >= 0 && (px as u32) < pic.width() && (py as u32) < pic.height() {
+                                    pic.put_pixel(px as u32, py as u32, image::Rgba([255, 0, 0, 255]));
+                                }
+                            }
+                        }
+                        let out = format!("{dir}/pick_p{}_{c:?}{tag}.png", f.page + 1);
+                        pic.save(&out).map_err(|e| e.to_string())?;
+                    }
+                    let what = match picked {
                         datasheet::pick::Pick::One { path, by } => format!("one by {by:?}: x {:.0}..{:.0} y {:.0}..{:.0}", path[0].0, path[path.len() - 1].0, path[0].1, path[path.len() - 1].1),
                         datasheet::pick::Pick::Several(n) => format!("{n} curves, no label"),
                         datasheet::pick::Pick::None => "no curve".into(),
@@ -162,7 +177,7 @@ fn main() -> Result<(), String> {
             }
         }
         "kind" => {
-            println!("{:?} {:?}", ds.category_hint(), ds.name_candidates());
+            println!("{:?} {:?} p_type={:?}", ds.category_hint(), ds.name_candidates(), ds.p_type());
         }
         "table" => {
             for sym in &args[2..] {

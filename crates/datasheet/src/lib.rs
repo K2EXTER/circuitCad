@@ -260,6 +260,12 @@ impl Datasheet {
         Some(axes)
     }
 
+    /// The transistor is a P type (PNP, P-channel) by what the first pages say; None when they say neither.
+    pub fn p_type(&self) -> Option<bool> {
+        let first: Vec<&[Word]> = (0..self.pages.min(2)).map(|p| self.words(p)).collect();
+        suggest::p_type(&first)
+    }
+
     /// The kind of part the first pages talk about most, as a category name of the part list.
     pub fn category_hint(&self) -> Option<&'static str> {
         let first: Vec<&[Word]> = (0..self.pages.min(2)).map(|p| self.words(p)).collect();
