@@ -91,9 +91,16 @@ fn distance((a, b): (f32, f32), x: f32) -> f32 {
     if x < a { a - x } else if x > b { x - b } else { 0.0 }
 }
 
-/// "1", "12", "A3", "5-8", "2, 3": what a pin number cell looks like.
+/// "1", "12", "A3", "5-8", "2, 3", "2, TAB": what a pin number cell looks like (a tab or a pad beside a number, as TI writes the
+/// output of a regulator on its tab).
 pub fn is_pin_number(s: &str) -> bool {
-    !expand_numbers(s).is_empty() && s.split([' ', ',', '/', '\u{3001}']).filter(|t| !t.is_empty()).all(|t| single_number(t) || range(t).is_some())
+    let tokens: Vec<&str> = s.split([' ', ',', '/', '\u{3001}']).filter(|t| !t.is_empty()).collect();
+    tokens.iter().any(|t| single_number(t) || range(t).is_some()) && tokens.iter().all(|t| single_number(t) || range(t).is_some() || is_tab(t))
+}
+
+/// A tab or an exposed pad written as a pin ("TAB", "EP", "PAD").
+fn is_tab(t: &str) -> bool {
+    ["TAB", "EP", "PAD"].contains(&t.to_ascii_uppercase().as_str())
 }
 
 /// "A3" or "12": up to two letters, then 1 to 3 digits.
@@ -116,6 +123,8 @@ fn expand_numbers(s: &str) -> Vec<String> {
     for t in s.split([' ', ',', '/', '\u{3001}']).filter(|t| !t.is_empty()) {
         if single_number(t) {
             out.push(t.to_string());
+        } else if is_tab(t) {
+            out.push(t.to_ascii_uppercase());
         } else if let Some((a, b)) = range(t) {
             out.extend((a..=b).map(|n| n.to_string()));
         }
@@ -195,15 +204,26 @@ pub fn pins_from(t: &Table, num_col: usize, name_col: usize) -> Vec<(String, Str
             }
         }
     }
-    if out.iter().all(|(n, _)| n.chars().all(|c| c.is_ascii_digit())) {
-        out.sort_by_key(|(n, _)| n.parse::<u32>().unwrap_or(0));
+    // in number order when the numbers are numbers; a tab or a pad ("TAB", "EP") after them
+    if out.iter().all(|(n, _)| n.chars().all(|c| c.is_ascii_digit()) || is_tab(n)) {
+        out.sort_by_key(|(n, _)| n.parse::<u32>().unwrap_or(u32::MAX));
     }
     out
 }
 
+/// The type in a type column's cell: its first word, as a description may run into the cell ("I Input voltage supply.", LP5907);
+/// "I/O (1)" keeps its note.
+fn io_word(c: &str) -> &str {
+    let c = c.trim();
+    match c.split_whitespace().nth(1) {
+        Some(second) if second.starts_with('(') => c,
+        _ => c.split_whitespace().next().unwrap_or(""),
+    }
+}
+
 /// A cell of a pin table's type column: "I", "O", "I/O", "OD", "P", "G", "—", "I/O(1)" (a note's number after it).
 fn is_io_cell(c: &str) -> bool {
-    let c: String = c.trim().to_ascii_uppercase().chars().filter(|c| !c.is_whitespace() && *c != '(' && *c != ')').collect();
+    let c: String = io_word(c).to_ascii_uppercase().chars().filter(|c| !c.is_whitespace() && *c != '(' && *c != ')').collect();
     let c = c.trim_end_matches(|ch: char| ch.is_ascii_digit());
     [
         "I", "O", "I/O", "IO", "B", "OD", "OC", "O/OD", "P", "PWR", "POWER", "S", "G", "GND", "GROUND", "AI", "AO", "DI", "DO", "NC", "-", "—", "–", "N/A", "IN", "OUT", "INPUT", "OUTPUT", "SUPPLY",
@@ -234,7 +254,7 @@ pub fn io_cells(t: &Table, num_col: usize, name_col: usize) -> Vec<(String, Stri
         let num = if num_col == name_col { split_number_name(&r[num_col]).map(|p| p.0).unwrap_or_default() } else { r[num_col].clone() };
         for n in expand_numbers(&num) {
             if !out.iter().any(|(m, _)| *m == n) {
-                out.push((n, r[col].trim().to_string()));
+                out.push((n, io_word(&r[col]).to_string()));
             }
         }
     }
@@ -352,6 +372,12 @@ mod tests {
         let io: Vec<String> = io_cells(&t, 1, 0).iter().map(|(n, c)| format!("{n}:{c}")).collect();
         assert_eq!(io, ["1:O", "2:I", "4:-", "8:-"]);
         assert!(io_cells(&table(&[&["1", "A"], &["2", "B"]]), 0, 1).is_empty(), "no type column");
+        // TI's LM317: the output on pin 2 and on the tab; a description run into the type cell (LP5907)
+        let lm = table(&[&["NAME", "SOT-223", "I/O"], &["ADJUST", "1", "—"], &["INPUT", "3", "I Input voltage pin."], &["OUTPUT", "2, TAB", "O"]]);
+        assert_eq!(guess_columns(&lm), Some((1, 0)));
+        assert_eq!(pin_lines(&pins_from(&lm, 1, 0)), "1 ADJUST\n2 OUTPUT\n3 INPUT\nTAB OUTPUT");
+        assert_eq!(io_cells(&lm, 1, 0)[1], ("3".to_string(), "I".to_string()));
+        assert!(!is_pin_number("TAB"), "a tab alone is not a number");
         // the other number column and a column that is not names
         assert_eq!(pins_from(&t, 2, 0).len(), 4);
         assert!(pins_from(&t, 0, 4).is_empty());

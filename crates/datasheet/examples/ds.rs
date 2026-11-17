@@ -82,6 +82,15 @@ fn main() -> Result<(), String> {
                 println!("p.{} {:?} {} ({side})", f.page + 1, f.curves, f.caption);
             }
         }
+        "pins" => {
+            // ds pins FILE: the pin table and the pin drawing the draft would take
+            for (what, found) in [("table", ds.find_pin_table()), ("drawing", ds.find_pin_drawing())] {
+                match found {
+                    Some(f) => println!("{what} p.{}: {}  io: {:?}", f.page + 1, datasheet::pin_lines(&f.pins).replace('\n', ", "), f.io),
+                    None => println!("{what}: none"),
+                }
+            }
+        }
         "caps" => {
             // ds caps FILE: the capacitors named with a value
             for c in ds.capacitors() {

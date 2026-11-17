@@ -32,6 +32,10 @@ pub struct ThermalRow {
     /// How many value cells the row has before its unit (numbers and dashes): 3 or more is a table with a column per package
     /// (TI's "Thermal Information"), where the value taken (the last) need not be the part's.
     pub columns: usize,
+    /// The values are one per package (several of them), so the one taken need not be the part's: 3 or more values, or 2 in TI's
+    /// "Thermal Information" table ("RθJA Junction-to-ambient thermal resistance 59.6 41.0", its columns being packages; another
+    /// maker's two values are a typ and a max).
+    pub per_package: bool,
 }
 
 /// A plain number ("200", "0.52"), not a word with digits in it.
@@ -118,7 +122,7 @@ pub fn read(page: usize, words: &[Word]) -> Vec<ThermalRow> {
                     None
                 }
             });
-            out.push(ThermalRow { page, to: if case == Some(true) { To::Case } else { To::Ambient }, k_per_w: 1.0 / slope, text: text.clone(), from_derating: true, derate_from: from, columns: 1 });
+            out.push(ThermalRow { page, to: if case == Some(true) { To::Case } else { To::Ambient }, k_per_w: 1.0 / slope, text: text.clone(), from_derating: true, derate_from: from, columns: 1, per_package: false });
             continue;
         }
         let symbol = toks.iter().any(|t| {
@@ -144,8 +148,11 @@ pub fn read(page: usize, words: &[Word]) -> Vec<ThermalRow> {
         let Some(v) = (0..u).rev().take(2).find_map(|k| if k > 0 && toks[k - 1].trim_start_matches('(') == "note" { None } else { number(&toks[k]) }) else { continue };
         let Some(to) = to_of(toks) else { continue };
         let columns = toks[..u].iter().filter(|t| number(t).is_some() || matches!(t.as_str(), "-" | "—" | "–")).count();
+        // TI's words: "junction-to-ambient thermal resistance", the kind before "thermal resistance"
+        let ti = matches!((text.find("junction-to"), text.find("thermal resistance")), (Some(j), Some(t)) if j < t);
+        let per_package = columns >= 3 || (columns >= 2 && ti);
         if v > 0.0 {
-            out.push(ThermalRow { page, to, k_per_w: v, text, from_derating: false, derate_from: None, columns });
+            out.push(ThermalRow { page, to, k_per_w: v, text, from_derating: false, derate_from: None, columns, per_package });
         }
     }
     out
@@ -191,6 +198,11 @@ mod tests {
         // TI's table: a column per package
         let w = line(&["RθJA", "Junction-to-ambient", "thermal", "resistance", "139.5", "156.7", "149.4", "°C/W"], 100.0);
         assert_eq!(read(0, &w)[0].columns, 3);
+        // TI's two packages (LM317's new chip) are packages too; another maker's "typ max" is not (AO3400A)
+        let w = line(&["Rθ(JA)", "Junction-to-ambient", "thermal", "resistance", "59.6", "41.0", "°C/W"], 100.0);
+        assert!(read(0, &w)[0].per_package);
+        let w = line(&["Maximum", "Junction-to-Ambient", "Steady-State", "100", "125", "°C/W"], 100.0);
+        assert!(!read(0, &w)[0].per_package);
     }
 
     #[test]

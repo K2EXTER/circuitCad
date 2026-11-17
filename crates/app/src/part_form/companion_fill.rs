@@ -19,7 +19,12 @@ fn pin_for(cap: &str, pins: &[PinDef]) -> Option<(String, String)> {
         "BOOT" | "BST" => Some((find(&["BOOT", "BST", "CB"])?, find(&["SW", "LX", "PH"])?)),
         "FF" => Some((find(&["FB"])?, find(&["VOUT", "OUT", "OUTPUT", "VO"])?)),
         "" => None,
-        t => pins.iter().find(|p| p.name.to_ascii_uppercase().split('/').any(|part| part == t)).map(|p| (p.number.clone(), gnd())),
+        // the name itself, or a longer name it starts ("ADJ" of TI's "ADJUST", "ADJUSTMENT")
+        t => pins
+            .iter()
+            .find(|p| p.name.to_ascii_uppercase().split('/').any(|part| part == t))
+            .or_else(|| pins.iter().find(|p| t.len() >= 2 && p.name.to_ascii_uppercase().starts_with(t)))
+            .map(|p| (p.number.clone(), gnd())),
     }
 }
 
@@ -141,5 +146,11 @@ mod tests {
         assert_eq!(pin_for("COUT", &pins), Some(("3".into(), "GND".into())));
         assert_eq!(pin_for("CADJ", &pins), Some(("4".into(), "GND".into())));
         assert_eq!(pin_for("C1", &pins), None);
+        // TI's LM317 names its pin "ADJUST"
+        let mut f = PartForm::default();
+        f.pins_text = "1 ADJUST\n2 OUTPUT\n3 INPUT".into();
+        let pins = f.parse_pins().unwrap();
+        assert_eq!(pin_for("CADJ", &pins), Some(("1".into(), "GND".into())));
+        assert_eq!(pin_for("CIN", &pins), Some(("3".into(), "GND".into())));
     }
 }

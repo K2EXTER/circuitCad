@@ -142,12 +142,14 @@ impl PartForm {
         let name = c.and_then(|c| c.names.first().cloned());
         let kind = c.and_then(|c| c.category).and_then(|cat| kind_of(cat).map(|k| (k, cat)));
         // the pins: from the table and from the drawing. When they differ the drawing goes first: it is of one package, where a
-        // table's rows of several numbers ("2, 3, 6, 7") and several packages' columns are read wrong more easily
+        // table's rows of several numbers ("2, 3, 6, 7") and several packages' columns are read wrong more easily. A drawing with
+        // fewer pins than the table is not all of it (LP5907's drawing gave 2 of its 5 pins): the table then goes first
         let mut pin_sources: Vec<FoundPins> = ds.find_pin_table().into_iter().collect();
         let mut pins_agree = false;
         if let Some(d) = ds.find_pin_drawing() {
             match pin_sources.first() {
                 Some(t) if t.pins == d.pins => pins_agree = true,
+                Some(t) if d.pins.len() < t.pins.len() => pin_sources.push(d),
                 Some(_) => pin_sources.insert(0, d),
                 None => pin_sources.push(d),
             }
@@ -335,6 +337,10 @@ impl PartForm {
     pub fn draft_all(&mut self) {
         if let Some(d) = self.make_draft() {
             let done = self.apply_draft(&d);
+            // what went in, for scripts (`--form-draft`)
+            for line in &done {
+                eprintln!("draft: {line}");
+            }
             self.pick_msg = Some((true, done.join(" / ")));
             self.draft = Some(FormDraft { open: true, ..d });
         }
