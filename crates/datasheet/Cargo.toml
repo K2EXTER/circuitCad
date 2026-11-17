@@ -9,6 +9,10 @@ repository = "https://github.com/K2EXTER/circuitCad"
 [dependencies]
 hayro = "0.8.0"
 
+# the OCR built into Windows, for tick labels drawn as lines (`ocr.rs`); already a dependency of the window libraries
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams"] }
+
 [dev-dependencies]
 # the `ds` example writes page pictures (already a dependency of app and cli: no new crate)
 image = { version = "0.25", default-features = false, features = ["png"] }

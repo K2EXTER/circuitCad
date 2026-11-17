@@ -16,6 +16,7 @@ pub mod graph;
 pub mod figures;
 pub mod axes;
 pub mod pick;
+pub mod ocr;
 pub mod spec_table;
 mod headings;
 mod pin_table;
@@ -145,8 +146,60 @@ impl Datasheet {
     }
 
     /// The axes of a figure's graph read from its tick labels (`axes::read`).
+    /// When the tick labels are drawn as lines rather than letters, they are read off the drawn graph by the OCR
+    /// (`ocr`, Windows only), and the axis titles turned up the page off the picture turned a quarter.
     pub fn figure_axes(&self, f: &figures::Figure) -> Option<axes::ReadAxes> {
-        axes::read(self.words(f.page), f.area, f.rect)
+        axes::read(self.words(f.page), f.area, f.rect).or_else(|| self.figure_axes_by_ocr(f))
+    }
+
+    fn figure_axes_by_ocr(&self, f: &figures::Figure) -> Option<axes::ReadAxes> {
+        // the OCR reads small digits differently at different sizes: 4 pixels per point (6-point labels 24 pixels
+        // high), then 6
+        [4.0, 6.0].into_iter().find_map(|px| self.figure_axes_by_ocr_at(f, px))
+    }
+
+    fn figure_axes_by_ocr_at(&self, f: &figures::Figure, px_per_pt: f32) -> Option<axes::ReadAxes> {
+        let (pw, ph) = self.page_size(f.page)?;
+        // the same area axes::read looks in, on the page
+        let area = Rect { x0: (f.area.x0 - 140.0).max(0.0), y0: (f.area.y0 - 20.0).max(0.0), x1: (f.area.x1 + 140.0).min(pw), y1: (f.area.y1 + 20.0).min(ph) };
+        // less when the area would be too big for the OCR
+        let k = (2500.0 / (area.x1 - area.x0).max(area.y1 - area.y0)).min(px_per_pt);
+        let page = self.render(f.page, k).ok()?;
+        let k = page.width as f32 / pw;
+        let (cx0, cy0) = ((area.x0 * k) as usize, (area.y0 * k) as usize);
+        let (cw, ch) = (((area.x1 - area.x0) * k) as usize, ((area.y1 - area.y0) * k) as usize);
+        let (cw, ch) = (cw.min(page.width - cx0), ch.min(page.height - cy0));
+        let mut rgba = Vec::with_capacity(cw * ch * 4);
+        for y in cy0..cy0 + ch {
+            rgba.extend_from_slice(&page.rgba[(y * page.width + cx0) * 4..(y * page.width + cx0 + cw) * 4]);
+        }
+        let crop = PageImage { width: cw, height: ch, rgba };
+        let to_page = |x: f32, y: f32| (area.x0 + x / k, area.y0 + y / k);
+        let words: Vec<Word> = ocr::joined(ocr::read(&crop)?)
+            .into_iter()
+            .map(|w| {
+                let ((x0, y0), (x1, y1)) = (to_page(w.x0, w.y0), to_page(w.x1, w.y1));
+                Word::plain(&w.text, Rect { x0, y0, x1, y1 })
+            })
+            .collect();
+        let mut axes = axes::read(&words, f.area, f.rect)?;
+        // the vertical axis's title is printed up the page: read it off the picture turned a quarter clockwise (a pixel
+        // (x, y) of it is (y, height - 1 - x) of the crop), left of the plot
+        if axes.y.prefix == 1.0 {
+            let left = axes.x.ticks.iter().map(|t| t.0).fold(f32::MAX, f32::min);
+            let titles: Vec<Word> = ocr::read(&ocr::turned(&crop))
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|w| {
+                    let ((x0, y0), (x1, y1)) = (to_page(w.y0, ch as f32 - w.x1), to_page(w.y1, ch as f32 - w.x0));
+                    (x1 < left).then(|| Word::plain(&w.text, Rect { x0, y0, x1, y1 }))
+                })
+                .collect();
+            if let Some(k) = axes::unit_prefix(&titles.iter().collect::<Vec<_>>()) {
+                axes.y.prefix = k;
+            }
+        }
+        Some(axes)
     }
 
     /// The kind of part the first pages talk about most, as a category name of the part list.

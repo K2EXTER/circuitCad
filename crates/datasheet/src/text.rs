@@ -44,6 +44,14 @@ fn is_separator(c: char) -> bool {
 }
 
 impl Word {
+    /// A word read some other way (by the OCR off a picture): the characters evenly spread over its box, the font as
+    /// high as the box.
+    pub(crate) fn plain(text: &str, rect: Rect) -> Word {
+        let n = text.chars().count().max(1) as f32;
+        let xs = (0..text.chars().count()).map(|i| rect.x0 + (rect.x1 - rect.x0) * i as f32 / n).collect();
+        Word { text: text.into(), rect, baseline: rect.y1, em: (rect.y1 - rect.y0).max(1.0), xs }
+    }
+
     /// A word for tests: the characters evenly spread over the rectangle, a 8 point font.
     #[cfg(test)]
     pub(crate) fn for_test(text: &str, x0: f32, y0: f32, x1: f32, y1: f32) -> Word {

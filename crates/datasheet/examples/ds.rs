@@ -4,6 +4,7 @@
 //!     cargo run -p datasheet --example ds -- figures FILE.pdf                  the graph captions, the curve each shows, the side of its graph
 //!     cargo run -p datasheet --example ds -- axes FILE.pdf                     the axes read from the tick labels of each graph the form uses
 //!     cargo run -p datasheet --example ds -- pick FILE.pdf                     the curve each graph's field would take, and the label it was taken by
+//!     cargo run -p datasheet --example ds -- ocr FILE.pdf PAGE                 the words the OCR of Windows reads off the drawn page
 //!     cargo run -p datasheet --example ds -- absmax FILE.pdf                   the absolute maximum ratings read (the first part number's column)
 //!     cargo run -p datasheet --example ds -- kind   FILE.pdf                   the kind of part and the part numbers it suggests
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
@@ -104,6 +105,16 @@ fn main() -> Result<(), String> {
                     };
                     println!("p.{} {} {c:?}{tag}: {what}", f.page + 1, f.caption);
                 }
+            }
+        }
+        "ocr" => {
+            // the words the OCR reads off a page (drawn to fit the OCR's largest picture), in page points
+            let p = page()?;
+            let (w, h) = ds.page_size(p).ok_or("page size")?;
+            let img = ds.render(p, 2400.0 / w.max(h))?;
+            let k = img.width as f32 / w;
+            for o in datasheet::ocr::read(&img).ok_or("no OCR (Windows only)")? {
+                println!("{:6.1} {:6.1}  {}", o.x0 / k, (o.y0 + o.y1) / 2.0 / k, o.text);
             }
         }
         "kind" => {

@@ -93,6 +93,20 @@ fn miss(v: &[(f32, f64)], log: bool) -> f64 {
     v.iter().map(|p| ((f(p.1) - fa) / (fb - fa) - ((p.0 - a.0) / (b.0 - a.0)) as f64).abs()).fold(0.0, f64::max)
 }
 
+/// A label of a linear axis that is off the line through the others by more than a tenth of a step (an OCR's "600"
+/// among 0, 500, 1000). The line is the median of the slopes between neighbours and the median offset, so one bad
+/// label does not move it.
+fn misread(v: &[(f32, f64)]) -> Option<usize> {
+    let median = |mut x: Vec<f64>| {
+        x.sort_by(|a, b| a.total_cmp(b));
+        x[x.len() / 2]
+    };
+    let slope = median(v.windows(2).map(|w| (w[1].1 - w[0].1) / (w[1].0 - w[0].0) as f64).collect());
+    let offset = median(v.iter().map(|p| p.1 - slope * p.0 as f64).collect());
+    let step = (v[v.len() - 1].1 - v[0].1).abs() / (v.len() - 1) as f64;
+    v.iter().position(|p| (offset + slope * p.0 as f64 - p.1).abs() > 0.1 * step)
+}
+
 /// Whether an axis is log, and the labels that make it: all of them, or without a stray one at an end (a "0" under a
 /// log axis, the next graph's first label). None when no even scale fits (the labels are not one axis).
 fn settle(v: &[(f32, f64)]) -> Option<(std::ops::Range<usize>, bool)> {
@@ -104,6 +118,10 @@ fn settle(v: &[(f32, f64)]) -> Option<(std::ops::Range<usize>, bool)> {
         }
         let (lin, log) = (miss(part, false), miss(part, true));
         if lin.min(log) < 0.1 {
+            // a linear axis is printed evenly: a label off its place by a tenth of a step is misread (by the OCR)
+            if lin <= log && misread(part).is_some() {
+                continue;
+            }
             return Some((r, log < lin));
         }
     }
@@ -134,7 +152,7 @@ fn bracket_unit(t: &str) -> Option<f64> {
 
 /// The multiplier of a unit written in an axis title: "(mA)" 1e-3, "(µA)" 1e-6, "(pF)" 1e-12, "(A)" or "AMP" 1. A title
 /// printed turned up the page comes as one letter per word: the letters of each column are read bottom to top.
-fn unit_prefix(words: &[&Word]) -> Option<f64> {
+pub(crate) fn unit_prefix(words: &[&Word]) -> Option<f64> {
     let mut columns: Vec<(f32, Vec<&Word>)> = vec![];
     for w in words.iter().filter(|w| w.text.chars().count() <= 2) {
         let x = (w.rect.x0 + w.rect.x1) / 2.0;
@@ -268,7 +286,10 @@ pub fn read(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
                 y: ReadAxis { ticks: col.iter().map(|l| (l.y, l.text.clone())).collect(), log: ylog, prefix: unit_prefix(&left).unwrap_or(1.0) },
             };
             // the graph nearest the caption's middle; on a tie (one caption under two graphs) the left one
-            let d = (((x0 + x1) / 2.0 - (caption.x0 + caption.x1) / 2.0).abs() / 20.0).round() * 1000.0 + x0 / 1000.0;
+            // under its own caption a graph spans the caption's middle; one caption under two graphs (TIP120's NPN and
+            // PNP) is between them, and the left one is taken (the first part named)
+            let mid = (caption.x0 + caption.x1) / 2.0;
+            let d = if x0 <= mid && mid <= x1 { 0.0 } else { 1e6 + ((x0 + x1) / 2.0 - mid).abs().min((mid - x1).abs()).max(0.0).div_euclid(150.0) * 1e3 } + x0 / 1000.0;
             if best.as_ref().is_none_or(|b| d < b.0) {
                 best = Some((d, axes));
             }
@@ -308,6 +329,19 @@ mod tests {
         assert!(a.x.log && a.y.log);
         assert_eq!(a.x.prefix, 1.0);
         assert_eq!(a.y.ticks[0].1, "20000");
+    }
+
+    #[test]
+    fn a_misread_label_of_a_linear_axis_is_left_out() {
+        let even: Vec<(f32, f64)> = (0..7).map(|i| (100.0 + 30.0 * i as f32, 500.0 * i as f64)).collect();
+        assert_eq!(settle(&even), Some((0..7, false)));
+        let mut bad = even.clone();
+        bad[1].1 = 600.0;
+        // 600 where 500 belongs: no even scale with it (only the end labels may be dropped, and it is not one)
+        assert_eq!(settle(&bad), None);
+        bad[1].1 = 500.0;
+        bad[0].1 = 100.0;
+        assert_eq!(settle(&bad), Some((1..7, false)), "a misread end label is dropped");
     }
 
     #[test]
