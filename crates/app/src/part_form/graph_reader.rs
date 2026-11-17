@@ -111,6 +111,16 @@ impl Dest {
     }
 
     /// The name of that graph, for the search list and the messages.
+    /// The names a label in the graph may give its curve, when the graph has several kinds (the output and input
+    /// capacitances on one graph).
+    pub fn label_names(self) -> &'static [&'static str] {
+        match self {
+            Dest::BjtCobo => &["cob", "cobo", "ccb"],
+            Dest::BjtCibo => &["cib", "cibo", "ceb"],
+            _ => &[],
+        }
+    }
+
     pub fn curve_name(self) -> &'static str {
         use datasheet::figures::Curve;
         match self.curve() {
@@ -258,14 +268,36 @@ impl GraphReader {
             return;
         }
         self.mode = Some(Mode::Trace);
+        self.msg = Some((
+            true,
+            i18n::trf!("目盛りを図の数字から読みました ({})。曲線を 1 回クリックしてください。青い線が目盛りの数字に合っていなければ「目盛りから始め直す」", self.axes_said()),
+        ));
+    }
+
+    /// The axes as set, for a message: "横 0〜3.5、縦 500〜1 (対数) m (1/1000)".
+    fn axes_said(&self) -> String {
         let say = |axis: &AxisInput| {
             let (first, last) = (axis.ticks.first().map_or("", |t| t.1.as_str()), axis.ticks.last().map_or("", |t| t.1.as_str()));
             let unit = if axis.scale == 0 { String::new() } else { format!(" {}", i18n::tr(SCALES[axis.scale].0)) };
             format!("{first}〜{last}{}{unit}", if axis.log { i18n::tr(" (対数)") } else { "" })
         };
+        i18n::trf!("横 {}、縦 {}", say(&self.x), say(&self.y))
+    }
+
+    /// The curve the field wants, found and followed without a click (`datasheet::pick`): its points are taken, and the
+    /// message says which curve it is (by its label), to be checked against the red line.
+    pub fn auto_trace(&mut self, path: Vec<(f32, f32)>, by: &str) {
+        self.add_trace(path);
+        let Some((_, n)) = self.traced.last() else { return };
+        let which = if by.is_empty() { i18n::tr("図にただ 1 本の曲線").to_string() } else { i18n::trf!("「{}」の曲線", by) };
         self.msg = Some((
             true,
-            i18n::trf!("目盛りを図の数字から読みました (横 {}、縦 {})。曲線を 1 回クリックしてください。青い線が目盛りの数字に合っていなければ「目盛りから始め直す」", say(&self.x), say(&self.y)),
+            i18n::trf!(
+                "目盛り ({}) と{}を図から読み、{} 点を取りました。青い線が目盛りの数字に、赤い線が読みたい曲線に合っているか確かめて、下のボタンで欄に入れてください。曲線が違えば「最後の曲線を消す」を押して、読みたい曲線をクリックします",
+                self.axes_said(),
+                which,
+                n
+            ),
         ));
     }
 

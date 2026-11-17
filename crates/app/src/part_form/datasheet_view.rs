@@ -301,9 +301,19 @@ impl SheetView {
                 Some(g) if g.page == d.page && g.has_axes() => g.retarget(dest),
                 _ => {
                     let mut g = GraphReader::new(d.page, dest);
-                    // the axes from the tick labels around the graph: one click on the curve is left
+                    // the axes from the tick labels around the graph: one click on the curve is left; and the curve
+                    // itself when its label (or being the only one) tells which
                     if let Some(a) = &axes {
                         g.set_axes(a);
+                        if let Some(dest) = dest
+                            && g.has_axes()
+                        {
+                            match d.pick_curve(a, dest) {
+                                datasheet::pick::Pick::One { path, by } => g.auto_trace(path, &by),
+                                datasheet::pick::Pick::Several(n) => g.note(i18n::trf!("この図には曲線が {n} 本あり、どれを読むか決められませんでした。読みたい曲線を 1 回クリックしてください")),
+                                datasheet::pick::Pick::None => {}
+                            }
+                        }
                     }
                     d.graph = Some(g);
                 }
@@ -828,6 +838,18 @@ impl Opened {
         let (_, img, k) = self.snap.as_ref()?;
         let skip: Vec<Rect> = self.ds.words(self.page).iter().map(|w| w.rect).collect();
         datasheet::graph::curve_crossings(img, *k, x, y - 6.0, y + 6.0, &skip).into_iter().min_by(|a, b| (a - y).abs().total_cmp(&(b - y).abs()))
+    }
+
+    /// The curve the field `dest` wants on the graph with axes `a` on the page shown (`datasheet::pick`, on the same
+    /// picture as [`Self::curve_near`]).
+    fn pick_curve(&mut self, a: &datasheet::axes::ReadAxes, dest: Dest) -> datasheet::pick::Pick {
+        if self.snap.as_ref().is_none_or(|s| s.0 != self.page) {
+            let Ok(img) = self.ds.render(self.page, 4.0) else { return datasheet::pick::Pick::None };
+            let Some(k) = self.ds.page_size(self.page).map(|s| img.width as f32 / s.0) else { return datasheet::pick::Pick::None };
+            self.snap = Some((self.page, img, k));
+        }
+        let Some((_, img, k)) = self.snap.as_ref() else { return datasheet::pick::Pick::None };
+        datasheet::pick::pick(img, *k, self.ds.words(self.page), a, dest.curve(), dest.label_names())
     }
 
     /// The curve under page point (x, y) followed to its ends (`datasheet::graph::trace_curve` on the same picture as

@@ -15,6 +15,7 @@ pub mod absmax;
 pub mod graph;
 pub mod figures;
 pub mod axes;
+pub mod pick;
 pub mod spec_table;
 mod headings;
 mod pin_table;

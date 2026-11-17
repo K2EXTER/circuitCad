@@ -3,6 +3,7 @@
 //!     cargo run -p datasheet --example ds -- text   FILE.pdf PAGE              the words of a page, line by line, with x
 //!     cargo run -p datasheet --example ds -- figures FILE.pdf                  the graph captions, the curve each shows, the side of its graph
 //!     cargo run -p datasheet --example ds -- axes FILE.pdf                     the axes read from the tick labels of each graph the form uses
+//!     cargo run -p datasheet --example ds -- pick FILE.pdf                     the curve each graph's field would take, and the label it was taken by
 //!     cargo run -p datasheet --example ds -- absmax FILE.pdf                   the absolute maximum ratings read (the first part number's column)
 //!     cargo run -p datasheet --example ds -- kind   FILE.pdf                   the kind of part and the part numbers it suggests
 //!     cargo run -p datasheet --example ds -- table  FILE.pdf SYMBOL [...]      min / typ / max, unit, conditions of a symbol
@@ -86,6 +87,22 @@ fn main() -> Result<(), String> {
     y: {}", f.page + 1, f.curves, f.caption, show(&a.x), show(&a.y)),
                     None => println!("p.{} {:?} {}
     (no axes)", f.page + 1, f.curves, f.caption),
+                }
+            }
+        }
+        "pick" => {
+            for f in ds.figures().iter().filter(|f| !f.curves.is_empty()) {
+                let Some(a) = ds.figure_axes(f) else { continue };
+                let img = ds.render(f.page, 4.0)?;
+                let k = img.width as f32 / ds.page_size(f.page).map_or(1.0, |s| s.0);
+                let names: Vec<(&str, &[&str])> = if f.curves.contains(&datasheet::figures::Curve::Capacitance) { vec![("Cob", &["cob", "cobo"]), ("Cib", &["cib", "cibo"]), ("", &[])] } else { vec![("", &[])] };
+                for (&c, (tag, names)) in f.curves.iter().flat_map(|c| names.iter().map(move |n| (c, n))) {
+                    let what = match datasheet::pick::pick(&img, k, ds.words(f.page), &a, c, names) {
+                        datasheet::pick::Pick::One { path, by } => format!("one by {by:?}: x {:.0}..{:.0} y {:.0}..{:.0}", path[0].0, path[path.len() - 1].0, path[0].1, path[path.len() - 1].1),
+                        datasheet::pick::Pick::Several(n) => format!("{n} curves, no label"),
+                        datasheet::pick::Pick::None => "no curve".into(),
+                    };
+                    println!("p.{} {} {c:?}{tag}: {what}", f.page + 1, f.caption);
                 }
             }
         }
