@@ -12,6 +12,14 @@ built more than --days after it and it is itself older than --days, so a crate b
 dependencies) is never touched. Its files in deps/ and its folders in .fingerprint/, build/ and incremental/ go
 together. Removing too much only costs a rebuild of that crate.
 
+rustc's incremental folders (incremental/<crate>-<hash>/) are not named like deps/ and hold one session folder
+(s-<time>-<id>-<svh>, with s-<time>-<id>.lock) per build; an older session that rustc did not delete stays beside the
+newest and doubles the folder (2026-11-18: 6.1 GB, the larger crates with two sessions of 350-580 MB). All sessions but
+the newest go when they are more than an hour old (a build in another session may still be writing the newest).
+
+Loose files right in target/ (screenshots, a quick .dxf or .svg written there by hand) go when older than --days;
+Cargo's own .rustc_info.json and CACHEDIR.TAG stay.
+
 Folders in target/ that are not a profile Cargo writes here (debug, release), rust-analyzer's (flycheck*), or a tool's
 (sim-compare, doc) are another build folder made by pointing CARGO_TARGET_DIR at it: a whole second copy of every
 dependency (target/shot 2.9 GB, target/ui-impl 3.6 GB). They are listed always and removed with --extra.
@@ -94,6 +102,46 @@ def stale_versions(profile, days, now):
     return stale
 
 
+CARGO_FILES = {".rustc_info.json", "CACHEDIR.TAG"}
+SESSION_MIN_AGE = 3600.0
+
+
+def old_sessions(profile, now):
+    """Incremental session folders (and their lock files) that a newer session of the same crate replaced."""
+    folder = os.path.join(profile, "incremental")
+    if not os.path.isdir(folder):
+        return []
+    stale = []
+    for crate in os.listdir(folder):
+        path = os.path.join(folder, crate)
+        if not os.path.isdir(path):
+            continue
+        sessions = [e for e in os.listdir(path) if e.startswith("s-") and os.path.isdir(os.path.join(path, e))]
+        if len(sessions) < 2:
+            continue
+        times = {s: newest(os.path.join(path, s)) for s in sessions}
+        latest = max(sessions, key=times.get)
+        for s in sessions:
+            if s == latest or now - times[s] < SESSION_MIN_AGE:
+                continue
+            stale.append(os.path.join(path, s))
+            # s-<time>-<id>-<svh> locks with s-<time>-<id>.lock
+            lock = os.path.join(path, s.rsplit("-", 1)[0] + ".lock")
+            if os.path.isfile(lock):
+                stale.append(lock)
+    return stale
+
+
+def loose_files(days, now):
+    """Files right in target/ that are not Cargo's and are older than `days`."""
+    out = []
+    for entry in os.listdir(TARGET):
+        path = os.path.join(TARGET, entry)
+        if os.path.isfile(path) and entry not in CARGO_FILES and now - os.path.getmtime(path) > days * DAY:
+            out.append(path)
+    return out
+
+
 def gb(n):
     return f"{n / 1024 ** 3:.2f} GB"
 
@@ -110,18 +158,24 @@ def main():
     verb = "would remove" if a.dry_run else "removed"
 
     total, kept = 0, 0
-    for p in PROFILES:
-        profile = os.path.join(TARGET, p)
-        if not os.path.isdir(profile):
-            continue
-        paths = stale_versions(profile, a.days, now)
+
+    def take(label, paths):
+        nonlocal total, kept
         n = sum(size(x) for x in paths)
         if not a.dry_run:
             locked = [x for x in paths if not remove(x)]
             kept += len(locked)
             n -= sum(size(x) for x in locked if os.path.exists(x))
         total += n
-        print(f"target/{p}: {verb} {len(paths)} old files and folders, {gb(n)}")
+        print(f"{label}: {verb} {len(paths)}, {gb(n)}")
+
+    for p in PROFILES:
+        profile = os.path.join(TARGET, p)
+        if not os.path.isdir(profile):
+            continue
+        take(f"target/{p} old versions", stale_versions(profile, a.days, now))
+        take(f"target/{p} old incremental sessions", old_sessions(profile, now))
+    take("target/ loose files", loose_files(a.days, now))
 
     for entry in sorted(os.listdir(TARGET)):
         path = os.path.join(TARGET, entry)
