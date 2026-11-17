@@ -1,7 +1,7 @@
 import csv, json, math, os, re, sys
 
 S = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, r"F:\circuitCad\tools")
+sys.path.insert(0, S)
 import fasthenry_cases as fc
 
 w = 2 * math.pi * 1000.0
@@ -38,7 +38,7 @@ for name, kind, fh, o in rows:
         worst[name.split()[0]] = max(worst.get(name.split()[0], 0), abs(d) if d == d else 0)
 print("worst |diff| per group:", {k: round(v, 2) for k, v in worst.items()})
 if write_csv:
-    with open(r"F:\circuitCad\tools\fasthenry_results.csv", "w", encoding="ascii", newline="\n") as f:
+    with open(os.path.join(S, "fasthenry_results.csv"), "w", encoding="ascii", newline="\n") as f:
         f.write("case,fasthenry_nH,ours_nH\n")
         for name, kind, fh, o in rows:
             f.write(f"{name},{fh:.3f},{o:.3f}\n")

@@ -92,7 +92,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## 規約
 - テストの回し方と足し方の決まり(2 秒を超えたら直す・同じ形は表に 1 行・正しさは下の層で)は `docs/code-notes/tests.md`。
 - ビルドは本体の `target/` だけを使う。`CARGO_TARGET_DIR` で `target/` の中や外に別の置き場所を作らない(依存を丸ごとビルドし直して数 GB 増える)。撮影などで起動する exe は一時フォルダに写してから起動する(動いている exe は上書きできないので、次のビルドが止まらない)。worktree のセッションは、マージしたら worktree ごと消す。
-- 子のセッションを worktree で並べるとき(親が管理し子が実装する形): 子が最初のビルドをする前に、親が本体の `target/debug` をその worktree に写しておく(`robocopy F:\circuitCad\target\debug <worktree>\target\debug /E /XD incremental /MT:8 /NFL /NDL /NJH`)。空の `target/` だと依存を最適化つきで全部ビルドし直し、何本も同時だと CPU を取り合って遅い(2026-11-18、3 本で rustc 17 本・CPU 100 %)。写したあとの最初のビルドで、自分のクレートだけがビルドされることを確かめる。同時に走らせる子は 2 本まで(論理 8 スレッド)。
+- 子のセッションを worktree で並べるとき(親が管理し子が実装する形): 子が最初のビルドをする前に、親が本体の `target/debug` をその worktree に写しておく(`robocopy E:\circuitCad\target\debug <worktree>\target\debug /E /XD incremental /MT:8 /NFL /NDL /NJH`)。空の `target/` だと依存を最適化つきで全部ビルドし直し、何本も同時だと CPU を取り合って遅い(2026-11-18、3 本で rustc 17 本・CPU 100 %)。写したあとの最初のビルドで、自分のクレートだけがビルドされることを確かめる。同時に走らせる子は 2 本まで(論理 8 スレッド)。リポジトリは NVMe の `E:\circuitCad` に置く(2026-11-18 にハードディスクの F: から移した。F: では target の 5 GB を写すのに 98 秒かかり、ビルドも遅かった)。
 - ボタン・入力欄には `on_hover_text` で説明を付ける。エラーメッセージは原因と対処が分かる日本語で。
 - 回路図の変更はフレームごとの比較(`schematic/history.rs`)でUndoに入る。`self.sch` を直接変えれば自動で履歴になる。基板は変更前に `checkpoint()` を呼ぶ。
 - 自動配線・自動再計算のように「結果を採用する前に検証する」処理は、失敗時に元の状態を変えないこと。
