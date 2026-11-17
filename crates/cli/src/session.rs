@@ -96,6 +96,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         the DC point for a range of values of one part (a V source, R, C, L): one row per value; the part keeps its value
   worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]
                                         worst case: the smallest and largest value of one result with every part at an end of its tolerance (%)
+  poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1]
+                                        first power-on of a built board: each supply's current at its printed values, the range a working
+                                        board falls in (tolerances, data sheet min / max, self-heating), the current limit to set; measured= judges a reading
   mc NET [measure=dc|cutoff|rise|...] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=]
                                         Monte Carlo: parts drawn at random inside their tolerance; mean, std, the 95 % range a few built
                                         boards should land in, a histogram, the parts that matter; lo=/hi= give the share inside the limits
@@ -359,6 +362,7 @@ impl Session {
             "loopgain" => self.loopgain(args),
             "pz" => self.pz(args),
             "worst" => self.worst(args),
+            "poweron" => self.poweron(args),
             "mc" => self.mc(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),

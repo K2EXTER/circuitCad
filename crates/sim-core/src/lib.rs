@@ -45,6 +45,7 @@ mod temperature;
 #[cfg(test)]
 pub(crate) mod tran;
 mod worstcase;
+mod poweron;
 mod sensitivity;
 mod psrr;
 mod cmrr;
@@ -63,6 +64,7 @@ pub use psrr::{psrr_summary, supply_sources, with_supply_ripple, PsrrSummary};
 pub use cmrr::{cmrr, cmrr_input_sources, cmrr_spread, Cmrr, CmrrSettings, CmrrSpread, CMRR_CAP_DB};
 pub use sensitivity::{sensitivity, SensPart, SensSettings, Sensitivity};
 pub use worstcase::{worst_case, WcPart, WcSettings, WorstCase};
+pub use poweron::{nice_up, power_on, PowerOn, PowerOnSettings, Reading as PowerOnReading, SupplyCurrent, LIMIT_FLOOR};
 pub use impedance::{character as z_character, impedance_analysis, z_extrema, ImpedanceResult, ZExtremum};
 pub use polezero::{pole_zero, transfer_function, PoleZero, Root, TransferFunction};
 pub use circuit::{BjtModel, CellKind, CellSupply, Circuit, DiodeModel, Element, MosModel, SeqKind, SeqLevels, Spread, SwitchModel};
@@ -164,6 +166,8 @@ mod tests_bench;
 mod tests_perf;
 #[cfg(test)]
 mod tests_worstcase;
+#[cfg(test)]
+mod tests_poweron;
 #[cfg(test)]
 mod tests_accuracy_ac;
 #[cfg(test)]

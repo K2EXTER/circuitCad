@@ -13,6 +13,13 @@ pub struct Task {
     pub checks: &'static [&'static str],
 }
 
+impl Task {
+    /// The step that turns the board on: it gets a button to the first power-on guide (`power_on_guide.rs`).
+    pub fn is_power_on(&self) -> bool {
+        self.title.contains("電源を入れる")
+    }
+}
+
 pub struct Guide {
     /// The id of the learning-path item (the progress key).
     pub id: &'static str,
@@ -155,6 +162,8 @@ pub struct BenchGuide {
     pub open: Option<&'static str>,
     /// Ticked boxes: (guide id, task, check).
     ticks: BTreeSet<(&'static str, usize, usize)>,
+    /// The power-on step's button was pressed: the caller opens the first power-on guide (`power_on_guide.rs`) for the schematic.
+    pub want_power_on: bool,
 }
 
 impl BenchGuide {
@@ -179,6 +188,9 @@ impl BenchGuide {
             for (ti, task) in g.tasks.iter().enumerate() {
                 ui.strong(i18n::tr(task.title));
                 ui.label(spaced(task.detail).color(NOTE));
+                if task.is_power_on() && ui.button(i18n::tr("電流制限の値と、正常な電流の範囲を見る…")).on_hover_text(i18n::tr("いまの回路図から、電源に入れる電流制限の値と、正常なら流れる電流の範囲を出す「最初の電源投入のガイド」を開きます")).clicked() {
+                    self.want_power_on = true;
+                }
                 for (ci, check) in task.checks.iter().enumerate() {
                     let key = (g.id, ti, ci);
                     let mut on = self.ticks.contains(&key);
@@ -259,6 +271,14 @@ mod tests {
         assert_eq!(frame(&ctx, &mut g, &progress), Some("solder"));
         progress.mark("solder");
         assert_eq!(frame(&ctx, &mut g, &progress), None, "recorded once");
+    }
+
+    #[test]
+    fn the_soldering_guides_lead_to_the_power_on_guide() {
+        for g in [&SOLDER, &SOLDER_TQFP100] {
+            assert_eq!(g.tasks.iter().filter(|t| t.is_power_on()).count(), 1, "{}", g.id);
+        }
+        assert!(!BOOTLOAD.tasks.iter().any(|t| t.is_power_on()));
     }
 
     #[test]

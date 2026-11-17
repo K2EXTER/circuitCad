@@ -37,7 +37,7 @@ impl SchEditor {
     pub fn why_not(&self, act: Act) -> Option<&'static str> {
         let empty = self.sch.components.is_empty();
         match act {
-            Act::Rerun | Act::Erc if empty => Some("回路図に部品がありません"),
+            Act::Rerun | Act::Erc | Act::PowerOn if empty => Some("回路図に部品がありません"),
             Act::SelectAll if empty && self.sch.wires.is_empty() && self.sch.labels.is_empty() => Some("回路図に何もありません"),
             Act::Rotate | Act::Delete if self.selected.is_none() && self.multi.is_empty() && act == Act::Delete => Some("先に、消すものを選んでください"),
             _ => None,

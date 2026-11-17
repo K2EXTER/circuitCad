@@ -1,0 +1,23 @@
+# A small board to bring up for the first time: 9 V in through a reverse-polarity diode (1N4007), a 7805 regulator to 5 V,
+# a power LED with 330 ohm and a 1k load. The first power-on guide (学ぶ → 最初の電源投入のガイド, or `poweron` here) gives the
+# current the 9 V supply should deliver, the range of a working board and the current limit to set on the bench supply.
+# Build: cargo run -p cli -- docs/examples/power_on.ccad
+new
+add V 9 as=V1
+add 1N4007 as=D1
+add LM7805 as=U1
+add C 330n as=C1
+add C 100n as=C2
+add R 330 as=R1
+add LED as=D2
+add R 1k as=R2
+net VIN V1.+ D1.A
+net VREG D1.K U1.IN C1.1
+net 5V U1.OUT C2.1 R1.1 R2.1
+net LEDA R1.2 D2.A
+net GND V1.- U1.GND C1.2 C2.2 D2.K R2.2
+erc
+dc
+poweron
+poweron measured=60m
+save docs/examples/power_on.schjson

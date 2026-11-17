@@ -541,6 +541,17 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             }
         }
     }
+    // `--bench ID`: the hands-on checklist of a learning-path item (`bench_guide.rs`: solder, bootload, solder_tqfp100)
+    if let Some(id) = args.iter().position(|a| a == "--bench").and_then(|i| args.get(i + 1)) {
+        app.bench.show_guide(id);
+    }
+    // `--power-on [mA]`: the first power-on guide for the opened schematic, with a reading typed in
+    if let Some(i) = args.iter().position(|a| a == "--power-on") {
+        app.power_on.open_for(&app.sch);
+        if let Some(ma) = args.get(i + 1).filter(|a| a.parse::<f64>().is_ok()) {
+            app.power_on.set_measured_main(ma);
+        }
+    }
     // `--pdf file.pdf`: the same sheet as a one-page PDF, then quit
     if let Some(i) = args.iter().position(|a| a == "--pdf")
         && let Some(p) = args.get(i + 1) {

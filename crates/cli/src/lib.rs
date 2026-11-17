@@ -13,6 +13,7 @@ mod fitcmd;
 mod libcmd;
 pub mod mcp;
 mod models;
+mod poweroncmd;
 mod reqcmd;
 pub mod runner;
 mod projectcmd;
