@@ -201,6 +201,46 @@ pub fn pins_from(t: &Table, num_col: usize, name_col: usize) -> Vec<(String, Str
     out
 }
 
+/// A cell of a pin table's type column: "I", "O", "I/O", "OD", "P", "G", "—", "I/O(1)" (a note's number after it).
+fn is_io_cell(c: &str) -> bool {
+    let c: String = c.trim().to_ascii_uppercase().chars().filter(|c| !c.is_whitespace() && *c != '(' && *c != ')').collect();
+    let c = c.trim_end_matches(|ch: char| ch.is_ascii_digit());
+    [
+        "I", "O", "I/O", "IO", "B", "OD", "OC", "O/OD", "P", "PWR", "POWER", "S", "G", "GND", "GROUND", "AI", "AO", "DI", "DO", "NC", "-", "—", "–", "N/A", "IN", "OUT", "INPUT", "OUTPUT", "SUPPLY",
+        "BIDIR",
+    ]
+    .contains(&c)
+}
+
+/// The pin table's type column ("I/O", "TYPE"), when it has one: the column beside the number and the name whose cells in the pin
+/// rows are mostly I, O, I/O, P …; then per pin number its cell, for the form to turn into the pin's kind. Empty without one.
+pub fn io_cells(t: &Table, num_col: usize, name_col: usize) -> Vec<(String, String)> {
+    let pin_rows: Vec<&Vec<String>> = t
+        .cells
+        .iter()
+        .filter(|r| {
+            let (Some(num), Some(name)) = (r.get(num_col), r.get(name_col)) else { return false };
+            if num_col == name_col { split_number_name(num).is_some() } else { is_pin_number(num) && is_pin_name(name.split_whitespace().next().unwrap_or("")) }
+        })
+        .collect();
+    let col = (0..t.columns)
+        .filter(|c| *c != num_col && *c != name_col)
+        .map(|c| (c, pin_rows.iter().filter(|r| is_io_cell(&r[c])).count()))
+        .filter(|(_, n)| *n >= 2 && n * 10 >= pin_rows.len() * 6)
+        .max_by_key(|(_, n)| *n);
+    let Some((col, _)) = col else { return vec![] };
+    let mut out: Vec<(String, String)> = vec![];
+    for r in pin_rows {
+        let num = if num_col == name_col { split_number_name(&r[num_col]).map(|p| p.0).unwrap_or_default() } else { r[num_col].clone() };
+        for n in expand_numbers(&num) {
+            if !out.iter().any(|(m, _)| *m == n) {
+                out.push((n, r[col].trim().to_string()));
+            }
+        }
+    }
+    out
+}
+
 /// The pins as the form's pin box takes them: one "number name" per line.
 pub fn pin_lines(pins: &[(String, String)]) -> String {
     pins.iter().map(|(n, name)| format!("{n} {name}")).collect::<Vec<_>>().join("\n")
@@ -308,6 +348,10 @@ mod tests {
         let pins = pins_from(&t, 1, 0);
         assert_eq!(pins.iter().map(|(n, m)| format!("{n}:{m}")).collect::<Vec<_>>(), ["1:1OUT", "2:1IN-", "4:GND", "8:VCC"]);
         assert_eq!(pin_lines(&pins), "1 1OUT\n2 1IN-\n4 GND\n8 VCC");
+        // the I/O column, by pin number
+        let io: Vec<String> = io_cells(&t, 1, 0).iter().map(|(n, c)| format!("{n}:{c}")).collect();
+        assert_eq!(io, ["1:O", "2:I", "4:-", "8:-"]);
+        assert!(io_cells(&table(&[&["1", "A"], &["2", "B"]]), 0, 1).is_empty(), "no type column");
         // the other number column and a column that is not names
         assert_eq!(pins_from(&t, 2, 0).len(), 4);
         assert!(pins_from(&t, 0, 4).is_empty());

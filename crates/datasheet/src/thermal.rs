@@ -29,6 +29,9 @@ pub struct ThermalRow {
     pub from_derating: bool,
     /// For a derating row: the temperature the power starts to fall from (°C).
     pub derate_from: Option<f64>,
+    /// How many value cells the row has before its unit (numbers and dashes): 3 or more is a table with a column per package
+    /// (TI's "Thermal Information"), where the value taken (the last) need not be the part's.
+    pub columns: usize,
 }
 
 /// A plain number ("200", "0.52"), not a word with digits in it.
@@ -115,7 +118,7 @@ pub fn read(page: usize, words: &[Word]) -> Vec<ThermalRow> {
                     None
                 }
             });
-            out.push(ThermalRow { page, to: if case == Some(true) { To::Case } else { To::Ambient }, k_per_w: 1.0 / slope, text: text.clone(), from_derating: true, derate_from: from });
+            out.push(ThermalRow { page, to: if case == Some(true) { To::Case } else { To::Ambient }, k_per_w: 1.0 / slope, text: text.clone(), from_derating: true, derate_from: from, columns: 1 });
             continue;
         }
         let symbol = toks.iter().any(|t| {
@@ -140,18 +143,21 @@ pub fn read(page: usize, words: &[Word]) -> Vec<ThermalRow> {
         // the value nearest before the unit (the max of "typ max"), not a note's number ("Note 1")
         let Some(v) = (0..u).rev().take(2).find_map(|k| if k > 0 && toks[k - 1].trim_start_matches('(') == "note" { None } else { number(&toks[k]) }) else { continue };
         let Some(to) = to_of(toks) else { continue };
+        let columns = toks[..u].iter().filter(|t| number(t).is_some() || matches!(t.as_str(), "-" | "—" | "–")).count();
         if v > 0.0 {
-            out.push(ThermalRow { page, to, k_per_w: v, text, from_derating: false, derate_from: None });
+            out.push(ThermalRow { page, to, k_per_w: v, text, from_derating: false, derate_from: None, columns });
         }
     }
     out
 }
 
 /// What a junction-to-ambient row says about the board it was measured on: true for a large board or added copper
-/// (JEDEC's 2s2p "high-K" board, "1 in²" of copper), where the part alone on its smallest pads runs hotter.
+/// (JEDEC's 2s2p "high-K" board, "1 in²" of copper), where the part alone on its smallest pads runs hotter. TI's "Thermal
+/// Information" table ("RθJA Junction-to-ambient thermal resistance", the words in that order) is on JEDEC's high-K board, as its
+/// note says.
 pub fn on_large_copper(text: &str) -> bool {
-    let t = normalize(text);
-    ["2s2p", "high-k", "high k", "51-7", "in2", "in²", "inch", "cm2", "cm²", "copper area", "2 oz", "1 oz", "heatsink", "heat sink"].iter().any(|k| t.contains(k))
+    let t = normalize(text).replace(['−', '–'], "-");
+    ["2s2p", "high-k", "high k", "51-7", "in2", "in²", "inch", "cm2", "cm²", "copper area", "2 oz", "1 oz", "heatsink", "heat sink", "ambient thermal resistance"].iter().any(|k| t.contains(k))
 }
 
 #[cfg(test)]
@@ -182,6 +188,9 @@ mod tests {
         assert_eq!((read(0, &w)[0].to, read(0, &w)[0].k_per_w), (To::Ambient, 20.0));
         // a line with a junction and no thermal resistance unit is not a row
         assert!(read(0, &line(&["Junction", "Temperature", "150", "°C"], 100.0)).is_empty());
+        // TI's table: a column per package
+        let w = line(&["RθJA", "Junction-to-ambient", "thermal", "resistance", "139.5", "156.7", "149.4", "°C/W"], 100.0);
+        assert_eq!(read(0, &w)[0].columns, 3);
     }
 
     #[test]
@@ -189,5 +198,6 @@ mod tests {
         assert!(on_large_copper("Thermal Resistance, Junction-to-Ambient (Note 1: JEDEC 2s2p)"));
         assert!(on_large_copper("Mounted on 1 in2 FR-4 pad"));
         assert!(!on_large_copper("Thermal Resistance, Junction-to-Ambient 200 °C/W"));
+        assert!(on_large_copper("RθJA Junction-to-ambient thermal resistance 97.1 °C/W"), "TI's table");
     }
 }

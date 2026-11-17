@@ -588,6 +588,10 @@ fn kicad_symbol_pins_and_sides() {
     let left: Vec<_> = lm.pins.iter().filter(|p| p.side == Some(PinSide::Left)).map(|p| p.number.as_str()).collect();
     assert_eq!(left, ["2", "3"]);
     assert_eq!(syms[2].pins.len(), 2, "extends takes the parent's pins");
+    // the pins' electrical types come along
+    let kind = |n: &str| lm.pins.iter().find(|p| p.number == n).unwrap().kind;
+    assert_eq!((kind("1"), kind("2"), kind("8")), (Some(sch_core::PinKind::Output), Some(sch_core::PinKind::Input), Some(sch_core::PinKind::PowerIn)));
+    assert_eq!(syms[1].pins[0].kind, Some(sch_core::PinKind::Passive));
 }
 
 #[test]

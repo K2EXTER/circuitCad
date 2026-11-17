@@ -41,15 +41,21 @@ pub(super) fn parse_ohm(t: &str) -> Option<f64> {
 
 /// The words of a pin line (`number name [side]`) without its `gap=N` word, and that N as typed: the empty places
 /// left before the pin on its side of the symbol.
-pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool) {
+pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool, Option<&str>) {
     let mut gap = None;
     let mut sim = false;
+    let mut kind = None;
     let words = line
         .split(|c: char| c.is_whitespace() || c == ',')
         .filter(|s| !s.is_empty())
         .filter(|s| match s.strip_prefix("gap=") {
             Some(v) => {
                 gap = Some(v);
+                false
+            }
+            // the pin's electrical kind (`sch_core::PinKind::word`)
+            None if s.starts_with("kind=") => {
+                kind = s.strip_prefix("kind=");
                 false
             }
             // a pin of the simulation model only (a photodiode's light input): no pad on the board
@@ -60,7 +66,7 @@ pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool) {
             None => true,
         })
         .collect();
-    (words, gap, sim)
+    (words, gap, sim, kind)
 }
 
 /// The most empty places a pin may have before it (a bigger number is a typing mistake, not a layout).
@@ -194,7 +200,11 @@ impl PartForm {
     pub(super) fn parse_pins(&self) -> Result<Vec<PinDef>, String> {
         let mut out = vec![];
         for (n, line) in self.pins_text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
-            let (t, gap, sim_only) = pin_tokens(line);
+            let (t, gap, sim_only, kind) = pin_tokens(line);
+            let kind = match kind {
+                None => None,
+                Some(k) => Some(sch_core::PinKind::from_word(k).ok_or_else(|| format!("{}行目: 種類「kind={k}」は {} のどれかです", n + 1, sch_core::PinKind::ALL.map(|k| k.word()).join(" / ")))?),
+            };
             if t.len() < 2 {
                 return Err(format!("{}行目: 「番号 名前」の形式で入力してください", n + 1));
             }
@@ -206,7 +216,7 @@ impl PartForm {
                 None => None,
                 Some(s) => Some(parse_side(s).ok_or_else(|| format!("{}行目: 向き「{s}」は left/right/top/bottom のいずれかです", n + 1))?),
             };
-            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only, gap });
+            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only, gap, kind });
         }
         Ok(out)
     }

@@ -155,6 +155,25 @@ mod ratings_tests {
         assert!(f.to_def().unwrap().land_unverified);
     }
 
+    /// A pin's kind (`kind=out`) and θja are saved with the part and come back when it is edited; an unknown kind is explained.
+    #[test]
+    fn the_pin_kinds_and_theta_ja_are_saved_and_read_back() {
+        let mut f = form();
+        f.pins_text = "1 A kind=pas\n2 K".into();
+        f.rt_ja = "200".into();
+        let def = f.to_def().unwrap();
+        assert_eq!((def.pins[0].kind, def.pins[1].kind), (Some(sch_core::PinKind::Passive), None));
+        assert_eq!(def.ratings.as_ref().and_then(|r| r.theta_ja), Some(200.0));
+        let back = PartForm::from_def(&def);
+        assert_eq!((back.pins_text.as_str(), back.rt_ja.as_str()), ("1 A kind=pas\n2 K", "200"));
+        f.pins_text = "1 A kind=xx\n2 K".into();
+        assert!(f.to_def().unwrap_err().contains("kind=xx"));
+        // 「名前から種類を入れる」: the names that say one
+        let mut rows = super::pintable::rows_of("1 VCC\n2 FB\n3 OUT kind=od");
+        super::pintable::guess_kinds(&mut rows);
+        assert_eq!(rows.iter().map(|r| r.kind).collect::<Vec<_>>(), vec![Some(sch_core::PinKind::PowerIn), None, Some(sch_core::PinKind::OpenDrain)]);
+    }
+
     /// The Zth stages and the temperature limits are saved with the part, come back when it is edited, and a bad line is explained.
     #[test]
     fn the_zth_stages_and_the_temperature_limits_are_saved_and_read_back() {
@@ -1184,7 +1203,9 @@ fn a_draft_from_real_data_sheets() {
         assert_eq!(f.name, "SNx4HC14", "{done:?}");
         assert_eq!(f.ptype, Some(PartType::Ic));
         assert_eq!(f.pins_text.lines().count(), 14, "{}", f.pins_text);
-        assert!(f.pins_text.starts_with("1 1A") && f.pins_text.contains("8 4Y") && f.pins_text.ends_with("14 VCC"), "{}", f.pins_text);
+        assert!(f.pins_text.starts_with("1 1A") && f.pins_text.contains("8 4Y") && f.pins_text.contains("14 VCC"), "{}", f.pins_text);
+        // the kinds from the table's I/O column (I, O; the supply's dash leaves VCC to its name)
+        assert!(f.pins_text.starts_with("1 1A kind=in\n2 1Y kind=out") && f.pins_text.ends_with("14 VCC kind=pwr"), "{}", f.pins_text);
         assert!(f.pkg == PkgKind::Dual, "{done:?}");
         // the pads of TI's land pattern for the package chosen (TSSOP-14 is written most: 0.65 pitch, 5.8 between the rows)
         let l = d.land().unwrap();
@@ -1221,7 +1242,7 @@ fn a_draft_takes_the_pin_drawing_when_the_table_differs() {
     assert_eq!(d.pin_sources.len(), 2);
     assert!(d.pin_sources[0].from_drawing && !d.pins_agree);
     let done = f.apply_draft(&d);
-    assert_eq!(f.pins_text, "1 INPUT\n2 OUTPUT\n3 OUTPUT\n4 ADJUSTMENT\n5 NC\n6 OUTPUT\n7 OUTPUT\n8 NC", "{done:?}");
+    assert_eq!(f.pins_text, "1 INPUT\n2 OUTPUT\n3 OUTPUT\n4 ADJUSTMENT\n5 NC kind=nc\n6 OUTPUT\n7 OUTPUT\n8 NC kind=nc", "{done:?}");
     assert!(f.pin_ref.is_none());
     assert!(done.iter().any(|l| l.contains("ピン配置の図")), "{done:?}");
 }

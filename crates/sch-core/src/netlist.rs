@@ -1,5 +1,5 @@
 use crate::hierarchy::GENERATED;
-use crate::{on_segment, sheet_of, Kind, Label, Pt, Schematic, SHEET_STRIDE};
+use crate::{on_segment, sheet_of, Kind, Label, PinKind, Pt, Schematic, SHEET_STRIDE};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -440,13 +440,15 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
 
     // ---- checks that need the whole netlist
     let driven_by_source = |ni: usize| nets[ni].pins.iter().any(|p| comp(&p.refdes).is_some_and(|c| matches!(c.kind, Kind::VSource | Kind::Header(_))));
+    // the electrical kind a library part's pin was given (`PinKind`), if any
+    let kind_of = |r: &str, pin: &str| comp(r).and_then(|c| c.custom.as_ref()).and_then(|sym| sym.pins.iter().find(|q| q.number == pin)).and_then(|q| q.kind);
     // a supply net may also be fed by the output pin of another library part (a regulator)
     let fed_by_output = |ni: usize, me: &str| {
         nets[ni].pins.iter().any(|p| {
             p.refdes != me
                 && comp(&p.refdes).and_then(|c| c.custom.as_ref()).and_then(|sym| sym.pins.iter().find(|q| q.number == p.pin)).is_some_and(|q| {
                     let n = q.name.to_ascii_uppercase();
-                    n.starts_with("OUT") || n.starts_with("VOUT") || n == "VO"
+                    q.kind == Some(PinKind::PowerOut) || n.starts_with("OUT") || n.starts_with("VOUT") || n == "VO"
                 })
         })
     };
@@ -493,8 +495,9 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
         let Some(sym) = &c.custom else { continue };
         for (pin, at) in c.pins() {
             let Some(name) = sym.pins.iter().find(|p| p.number == pin).map(|p| p.name.to_ascii_uppercase()) else { continue };
-            let is_vcc = ["VCC", "VDD", "V+", "VIN"].iter().any(|n| name.starts_with(n));
             let is_gnd = ["GND", "VSS", "V-", "VEE"].iter().any(|n| name == *n);
+            // by name, or a supply input by its kind (AVDD, VBAT, VS …) that is not a ground
+            let is_vcc = ["VCC", "VDD", "V+", "VIN"].iter().any(|n| name.starts_with(n)) || (!is_gnd && sym.pins.iter().find(|p| p.number == pin).is_some_and(|p| p.kind == Some(PinKind::PowerIn)) && !name.contains("GND"));
             let Some(ni) = net_index(&c.refdes, &pin) else { continue };
             if nets[ni].pins.len() < 2 {
                 continue; // already reported as an unconnected pin
@@ -515,6 +518,44 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
                     "IC のグランドピンは、回路の基準 (GND) につなぎます。つながっていないと電流の戻り道がなく、IC が動きません",
                 ));
             }
+        }
+    }
+
+    // pins with an electrical kind (`PinKind`): outputs that fight, inputs that nothing drives, NC pins wired
+    let pin_at = |r: &str, pin: &str| comp(r).and_then(|c| c.pins().into_iter().find(|(n, _)| n == pin).map(|(_, at)| at));
+    let said = |p: &PinRef| {
+        let name = comp(&p.refdes).and_then(|c| c.custom.as_ref()).and_then(|sym| sym.pins.iter().find(|q| q.number == p.pin)).map_or(String::new(), |q| format!(" ({})", q.name));
+        format!("{}.{}{name}", p.refdes, p.pin)
+    };
+    for n in &nets {
+        if n.pins.len() < 2 {
+            continue;
+        }
+        let kinds: Vec<Option<PinKind>> = n.pins.iter().map(|p| kind_of(&p.refdes, &p.pin)).collect();
+        let drivers: Vec<&PinRef> = n.pins.iter().zip(&kinds).filter(|(_, k)| matches!(k, Some(PinKind::Output | PinKind::PowerOut))).map(|(p, _)| p).collect();
+        if drivers.len() >= 2 {
+            out.push(Problem::new(
+                Warning,
+                format!("出力どうしがつながっています: {}", drivers.iter().map(|p| said(p)).collect::<Vec<_>>().join("・")),
+                pin_at(&drivers[1].refdes, &drivers[1].pin),
+                "2 つの出力 (電源の出力も) が同じ線につながると、片方が High、もう片方が Low のとき大きな電流が流れて壊れることがあります。片方を外すか、オープンドレインの出力とプルアップ抵抗にしましょう",
+            ));
+        }
+        if kinds.iter().all(|k| *k == Some(PinKind::Input)) {
+            out.push(Problem::new(
+                Warning,
+                format!("入力ピンだけがつながっていて、電圧を決めるものがありません: {}", n.pins.iter().map(said).collect::<Vec<_>>().join("・")),
+                pin_at(&n.pins[0].refdes, &n.pins[0].pin),
+                "入力ピンは電圧を決めません。何もつながっていないのと同じで、High と Low の間をふらつきます。出力ピン・電源・抵抗 (プルアップかプルダウン) のどれかにつなぎましょう",
+            ));
+        }
+        for (p, _) in n.pins.iter().zip(&kinds).filter(|(_, k)| **k == Some(PinKind::Nc)) {
+            out.push(Problem::new(
+                Warning,
+                format!("{} は未接続 (NC) のピンですが、線がつながっています", said(p)),
+                pin_at(&p.refdes, &p.pin),
+                "NC のピンは中で何にもつながっていないか、メーカーが「つながないこと」としているピンです。データシートを確かめて、線を外しましょう",
+            ));
         }
     }
 

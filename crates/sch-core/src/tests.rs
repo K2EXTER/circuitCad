@@ -152,7 +152,7 @@ fn spice_deck() {
 }
 
 fn opamp() -> CustomSymbol {
-    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0 };
+    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
     CustomSymbol {
         ratings: None,
         shops: Default::default(),
@@ -455,7 +455,7 @@ fn labels_that_differ_only_in_case_are_a_warning() {
 
 #[test]
 fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
-    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0 };
+    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
     let fet = CustomSymbol {
         ratings: None,
         shops: Default::default(),
@@ -512,10 +512,56 @@ fn ic_power_pins_must_reach_a_supply_but_a_regulator_output_counts() {
     assert!(!has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
 }
 
+/// The pins' electrical kinds: outputs tied together, a net of inputs only, a wired NC pin. Pins without a kind are not judged.
+#[test]
+fn pins_with_a_kind_are_checked_for_fights_and_floating_inputs() {
+    let typed = || {
+        let mut sym = opamp();
+        for p in &mut sym.pins {
+            p.kind = PinKind::guess_from_name(&p.name);
+        }
+        sym
+    };
+    let mut s = Schematic::default();
+    let a = s.add_custom(typed(), "LM358", "SOIC-8", (10, 10), 0);
+    let b = s.add_custom(typed(), "LM358", "SOIC-8", (40, 40), 0);
+    let pin = |s: &Schematic, i: usize, name: &str| s.components[i].pins().into_iter().find(|p| p.0 == name).unwrap().1;
+    let join = |s: &mut Schematic, x: (i32, i32), y: (i32, i32)| {
+        wire(s, x, (x.0, y.1));
+        wire(s, (x.0, y.1), y);
+    };
+    // OUT to OUT: they fight
+    let (o1, o2) = (pin(&s, a, "1"), pin(&s, b, "1"));
+    join(&mut s, o1, o2);
+    assert!(has(&erc(&s), "出力どうし"), "{:?}", erc(&s));
+    // IN+ to IN+ and nothing else: nothing sets the voltage
+    s.wires.clear();
+    let (i1, i2) = (pin(&s, a, "3"), pin(&s, b, "3"));
+    join(&mut s, i1, i2);
+    assert!(has(&erc(&s), "入力ピンだけ"), "{:?}", erc(&s));
+    // an output on it drives it: fine
+    join(&mut s, o1, i1);
+    assert!(!has(&erc(&s), "入力ピンだけ") && !has(&erc(&s), "出力どうし"), "{:?}", erc(&s));
+    // NC wired
+    s.wires.clear();
+    let (n1, n2) = (pin(&s, a, "5"), pin(&s, b, "5"));
+    join(&mut s, n1, n2);
+    assert!(has(&erc(&s), "未接続 (NC)"), "{:?}", erc(&s));
+    // the same circuit with pins of no kind says none of it
+    s.wires.clear();
+    for c in &mut s.components {
+        if let Some(sym) = c.custom.as_mut() {
+            sym.pins.iter_mut().for_each(|p| p.kind = None);
+        }
+    }
+    join(&mut s, o1, o2);
+    assert!(!has(&erc(&s), "出力どうし"));
+}
+
 #[test]
 fn old_two_lead_glyph_sheet_gets_short_leads() {
     // a version-0 sheet: electrolytic cap at (10,10) whose pins used to sit at +-4, wires on them
-    let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false, gap: 0 };
+    let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false, gap: 0, kind: None };
     let sym = CustomSymbol {
         name: "CE".into(),
         prefix: "C".into(),

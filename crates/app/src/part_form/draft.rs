@@ -195,7 +195,7 @@ impl PartForm {
         if d.use_[3]
             && let Some(p) = d.pin_sources.get(d.pin_pick)
         {
-            self.pins_text = datasheet::pin_lines(&p.pins);
+            self.pins_text = super::pin_import::lines_with_kinds(&p.pins, &p.io);
             // a table can be read again to compare with later; a drawing cannot
             self.pin_ref = (!p.from_drawing).then_some(super::pdf_check::PinRef { page: p.page, area: p.area, num_col: p.num_col, name_col: p.name_col });
             self.pin_check = None;

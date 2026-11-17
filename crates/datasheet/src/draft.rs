@@ -232,6 +232,8 @@ pub struct FoundPins {
     pub num_col: usize,
     pub name_col: usize,
     pub pins: Vec<(String, String)>,
+    /// The table's type column by pin number ("I", "O", "I/O" …: `io_cells`); empty without one, and for a drawing.
+    pub io: Vec<(String, String)>,
     /// Read off a pin drawing (`pin_diagram`), not a table: there are no columns to read again.
     pub from_drawing: bool,
 }
@@ -276,7 +278,8 @@ impl Datasheet {
                     let Some((num_col, name_col)) = crate::guess_columns(&table) else { continue };
                     let pins = crate::pins_from(&table, num_col, name_col);
                     if plausible_pins(&pins) {
-                        found.push(FoundPins { page, area, num_col, name_col, pins, from_drawing: false });
+                        let io = crate::io_cells(&table, num_col, name_col);
+                        found.push(FoundPins { page, area, num_col, name_col, pins, io, from_drawing: false });
                     }
                 }
             }
@@ -296,7 +299,7 @@ impl Datasheet {
             for hit in self.search_page_any(page, &queries).into_iter().filter(|h| !h.in_contents) {
                 let area = Rect { x0: 0.0, y0: hit.rect.y1, x1: w, y1: h * FOOT };
                 if let Some(pins) = crate::pin_diagram::pins_in_drawings(self.words(page), area).into_iter().find(|p| plausible_pins(p)) {
-                    return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, from_drawing: true });
+                    return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, io: vec![], from_drawing: true });
                 }
             }
         }

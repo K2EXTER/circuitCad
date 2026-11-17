@@ -137,7 +137,26 @@ fn side_of(angle: f64) -> PinSide {
     }
 }
 
-fn collect_pins(sym: &Node, out: &mut Vec<(PinSide, f64, f64, String, String)>) {
+/// A pin as read: (side, x, y, number, name, electrical type).
+type RawPin = (PinSide, f64, f64, String, String, Option<sch_core::PinKind>);
+
+/// KiCad's electrical type of a pin (`(pin power_in line …)`) as ours; None for "unspecified" and "free".
+fn kicad_kind(t: &str) -> Option<sch_core::PinKind> {
+    use sch_core::PinKind::*;
+    Some(match t {
+        "input" => Input,
+        "output" => Output,
+        "bidirectional" | "tri_state" => Bidir,
+        "open_collector" | "open_emitter" => OpenDrain,
+        "power_in" => PowerIn,
+        "power_out" => PowerOut,
+        "passive" => Passive,
+        "no_connect" => Nc,
+        _ => return None,
+    })
+}
+
+fn collect_pins(sym: &Node, out: &mut Vec<RawPin>) {
     for n in sym.items().iter().skip(1) {
         match n.head() {
             Some("pin") => {
@@ -148,7 +167,7 @@ fn collect_pins(sym: &Node, out: &mut Vec<(PinSide, f64, f64, String, String)>) 
                 }
                 let name = n.find("name").and_then(|x| x.arg(0)).unwrap_or("~");
                 let name = if name == "~" || name.is_empty() { num } else { name };
-                out.push((side_of(at.num(2).unwrap_or(0.0)), at.num(0).unwrap_or(0.0), at.num(1).unwrap_or(0.0), num.to_string(), name.to_string()));
+                out.push((side_of(at.num(2).unwrap_or(0.0)), at.num(0).unwrap_or(0.0), at.num(1).unwrap_or(0.0), num.to_string(), name.to_string(), n.arg(0).and_then(kicad_kind)));
             }
             Some("symbol") => collect_pins(n, out),
             _ => {}
@@ -158,7 +177,7 @@ fn collect_pins(sym: &Node, out: &mut Vec<(PinSide, f64, f64, String, String)>) 
 
 /// Pins as (side, x, y, number, name): top to bottom on the left/right, left to right on the top/bottom, as the part file lists them.
 /// A pin number that came twice (another unit of the same part) is kept once.
-fn ordered_pins(raw: Vec<(PinSide, f64, f64, String, String)>) -> Vec<PinDef> {
+fn ordered_pins(raw: Vec<RawPin>) -> Vec<PinDef> {
     let mut seen = std::collections::HashSet::new();
     let mut v: Vec<_> = raw.into_iter().filter(|r| seen.insert(r.3.clone())).collect();
     v.sort_by(|a, b| {
@@ -173,7 +192,7 @@ fn ordered_pins(raw: Vec<(PinSide, f64, f64, String, String)>) -> Vec<PinDef> {
             _ => a.1.total_cmp(&b.1),
         })
     });
-    v.into_iter().map(|(side, _, _, number, name)| PinDef { number, name, side: Some(side), sim_only: false, gap: 0 }).collect()
+    v.into_iter().map(|(side, _, _, number, name, kind)| PinDef { number, name, side: Some(side), sim_only: false, gap: 0, kind }).collect()
 }
 
 fn prop<'a>(sym: &'a Node, key: &str) -> &'a str {
@@ -264,7 +283,7 @@ pub fn parse_legacy_lib(text: &str) -> Result<Vec<KicadSymbol>, String> {
     }
     let mut out = vec![];
     // the part being read, and its pins
-    let mut cur: Option<(KicadSymbol, Vec<(PinSide, f64, f64, String, String)>)> = None;
+    let mut cur: Option<(KicadSymbol, Vec<RawPin>)> = None;
     let mut in_draw = false;
     for line in text.lines() {
         let w = words(line);
@@ -316,7 +335,19 @@ pub fn parse_legacy_lib(text: &str) -> Result<Vec<KicadSymbol>, String> {
                     "U" => PinSide::Bottom,
                     _ => PinSide::Top,
                 };
-                pins.push((side, x, y, number, name));
+                // the electrical type after the sizes, the unit and the body style: I O B T P U W w C E N
+                let kind = w.get(11).and_then(|t| match t.as_str() {
+                    "I" => kicad_kind("input"),
+                    "O" => kicad_kind("output"),
+                    "B" | "T" => kicad_kind("bidirectional"),
+                    "P" => kicad_kind("passive"),
+                    "W" => kicad_kind("power_in"),
+                    "w" => kicad_kind("power_out"),
+                    "C" | "E" => kicad_kind("open_collector"),
+                    "N" => kicad_kind("no_connect"),
+                    _ => None,
+                });
+                pins.push((side, x, y, number, name, kind));
             }
             h if !in_draw && h.len() == 2 && h.starts_with('F') && w.len() >= 2 => {
                 let Some((sym, _)) = cur.as_mut() else { continue };

@@ -45,6 +45,21 @@ pub fn parse_pin_lines(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// The pin lines with each pin's kind proposed (`PinKind::guess`: the table's type column, else the name): "1 OUT kind=out". A
+/// pin neither says stays without one.
+pub fn lines_with_kinds(pins: &[(String, String)], io: &[(String, String)]) -> String {
+    pins.iter()
+        .map(|(n, name)| {
+            let cell = io.iter().find(|(m, _)| m == n).map(|(_, c)| c.as_str());
+            match sch_core::PinKind::guess(name, cell) {
+                Some(k) => format!("{n} {name} kind={}", k.word()),
+                None => format!("{n} {name}"),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub struct TablePanel {
     pub page: usize,
     pub area: Rect,
@@ -73,7 +88,7 @@ impl TablePanel {
     /// The pins of the area read as a pin drawing. When the table does not give pins that run 1, 2, 3 … and the drawing does, the
     /// drawing is used.
     pub fn with_drawing(mut self, pins: Option<Vec<(String, String)>>) -> Self {
-        self.drawing = pins.map(|p| datasheet::pin_lines(&p));
+        self.drawing = pins.map(|p| lines_with_kinds(&p, &[]));
         let table_ok = datasheet::draft::plausible_pins(&parse_pin_lines(&self.text));
         if !table_ok && let Some(d) = &self.drawing {
             self.text = d.clone();
@@ -89,7 +104,8 @@ impl TablePanel {
 
     fn recompute(&mut self) {
         if self.num_col < self.table.columns && self.name_col < self.table.columns {
-            self.text = datasheet::pin_lines(&datasheet::pins_from(&self.table, self.num_col, self.name_col));
+            let pins = datasheet::pins_from(&self.table, self.num_col, self.name_col);
+            self.text = lines_with_kinds(&pins, &datasheet::io_cells(&self.table, self.num_col, self.name_col));
         }
     }
 
@@ -241,10 +257,11 @@ mod tests {
         let rows: Vec<Vec<String>> = [["Name", "No.", "Alt"], ["VIN", "1", "9"], ["GND", "2", "8"], ["OUT", "3", "7"]].iter().map(|r| r.iter().map(|c| c.to_string()).collect()).collect();
         let mut p = TablePanel::new(2, Rect::default(), Table { cells: rows, columns: 3 });
         assert!(p.guessed);
-        assert_eq!(p.text, "1 VIN\n2 GND\n3 OUT");
+        // each pin with the kind its name proposes
+        assert_eq!(p.text, "1 VIN kind=pwr\n2 GND kind=pwr\n3 OUT kind=out");
         p.num_col = 2;
         p.recompute();
-        assert_eq!(p.text, "7 OUT\n8 GND\n9 VIN");
+        assert_eq!(p.text, "7 OUT kind=out\n8 GND kind=pwr\n9 VIN kind=pwr");
         assert_eq!(p.lines(), 3);
         assert!(p.column_label(1).starts_with("列2: No."));
     }
@@ -273,7 +290,7 @@ mod tests {
         let drawing = vec![("1".to_string(), "IN".to_string()), ("2".to_string(), "GND".to_string()), ("3".to_string(), "OUT".to_string())];
         let p = TablePanel::new(0, Rect::default(), Table { cells: rows.clone(), columns: 2 }).with_drawing(Some(drawing.clone()));
         assert!(p.as_drawing);
-        assert_eq!(p.text, "1 IN\n2 GND\n3 OUT");
+        assert_eq!(p.text, "1 IN kind=in\n2 GND kind=pwr\n3 OUT kind=out");
         // a good table stays the table
         let good = vec![vec!["1".into(), "VCC".into()], vec!["2".into(), "GND".into()], vec!["3".into(), "OUT".into()]];
         let q = TablePanel::new(0, Rect::default(), Table { cells: good, columns: 2 }).with_drawing(Some(drawing));

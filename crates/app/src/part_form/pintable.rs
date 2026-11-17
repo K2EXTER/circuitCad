@@ -19,6 +19,8 @@ pub struct PinRow {
     pub gap: u8,
     /// A pin of the simulation model only, with no pad (`sim` in the text).
     pub sim: bool,
+    /// The electrical kind (`kind=in` in the text); None = not said.
+    pub kind: Option<sch_core::PinKind>,
 }
 
 /// The rows of a pin text (a line with only a number gives a row with an empty name).
@@ -26,10 +28,11 @@ pub(super) fn rows_of(text: &str) -> Vec<PinRow> {
     text.lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
-            let (t, gap, sim) = pin_tokens(l);
+            let (t, gap, sim, kind) = pin_tokens(l);
+            let kind = kind.and_then(sch_core::PinKind::from_word);
             let side = t.get(2).and_then(|s| parse_side(s)).map_or("", side_word);
             let gap = gap.and_then(|g| g.parse::<u8>().ok()).unwrap_or(0).min(MAX_GAP);
-            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into(), gap, sim }
+            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into(), gap, sim, kind }
         })
         .collect()
 }
@@ -46,10 +49,20 @@ pub(super) fn text_of(rows: &[PinRow]) -> String {
             if r.sim {
                 l.push_str(" sim");
             }
+            if let Some(k) = r.kind {
+                l.push_str(&format!(" kind={}", k.word()));
+            }
             l
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Puts the kind its name says into each row that has none (`PinKind::guess_from_name`).
+pub(super) fn guess_kinds(rows: &mut [PinRow]) {
+    for r in rows.iter_mut().filter(|r| r.kind.is_none()) {
+        r.kind = sch_core::PinKind::guess_from_name(&r.name);
+    }
 }
 
 fn side_word(s: PinSide) -> &'static str {
@@ -99,11 +112,12 @@ impl PartForm {
                 ui.small(i18n::tr("「モデルの端子」は、貼った SPICE モデルの端子が、どのピンにあたるかです (選ばないピンは、シミュレーションではどこにもつながりません)"));
             }
         });
-        egui::Grid::new("pin_table").num_columns(if roles.is_empty() { 6 } else { 7 }).spacing([8.0, 4.0]).striped(true).show(ui, |ui| {
+        egui::Grid::new("pin_table").num_columns(if roles.is_empty() { 7 } else { 8 }).spacing([8.0, 4.0]).striped(true).show(ui, |ui| {
             ui.small("");
             ui.small(i18n::tr("番号"));
             ui.small(i18n::tr("名前"));
             ui.small(i18n::tr("向き"));
+            ui.small(i18n::tr("種類")).on_hover_text(i18n::tr("ピンの電気的な種類 (入力・出力・電源など)。回路図の点検 (ERC) が、出力どうしのつながり・何も駆動しない入力・つないだ NC のピンを見つけるのに使います。「自動」は指定なし (名前による点検だけ)"));
             ui.small(i18n::tr("sim")).on_hover_text(i18n::tr("シミュレーション専用のピン (基板にパッドを出しません)"));
             if !roles.is_empty() {
                 ui.small(i18n::tr("モデルの端子"));
@@ -144,6 +158,23 @@ impl PartForm {
                     })
                     .response
                     .on_hover_text(i18n::tr("記号のどちらの辺にこのピンを出すか。「自動」なら、前半が左、後半が右です"));
+                let guess = sch_core::PinKind::guess_from_name(&rows[i].name);
+                let shown = match (rows[i].kind, guess) {
+                    (Some(k), _) => i18n::tr(k.label()).to_string(),
+                    (None, Some(g)) => i18n::trf!("指定なし ({}?)", i18n::tr(g.label())),
+                    (None, None) => i18n::tr("指定なし").to_string(),
+                };
+                egui::ComboBox::from_id_salt(("pin_kind", i))
+                    .selected_text(shown)
+                    .width(96.0)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut rows[i].kind, None, i18n::tr("指定なし"));
+                        for k in sch_core::PinKind::ALL {
+                            ui.selectable_value(&mut rows[i].kind, Some(k), i18n::tr(k.label()));
+                        }
+                    })
+                    .response
+                    .on_hover_text(i18n::tr("このピンの電気的な種類。「?」は名前からの推測で、まだ入っていません (表の下の「名前から種類を入れる」で入ります)"));
                 ui.checkbox(&mut rows[i].sim, "").on_hover_text(i18n::tr("シミュレーション専用のピン: 回路図の記号とモデルにはあり、基板にパッドを出しません (フォトダイオードの光の強さの IRRAD など)"));
                 if !roles.is_empty() {
                     let mine = if rows[i].number.is_empty() { None } else { sim.iter().position(|s| *s == rows[i].number) };
@@ -203,6 +234,14 @@ impl PartForm {
                 let alternating = rows.len() >= 2 && rows.iter().enumerate().all(|(i, r)| r.side == if i % 2 == 0 { "left" } else { "right" });
                 let side = if alternating { if rows.len().is_multiple_of(2) { "left" } else { "right" }.to_string() } else { side };
                 rows.push(PinRow { number: next.to_string(), side, ..PinRow::default() });
+            }
+            let guessable = rows.iter().any(|r| r.kind.is_none() && sch_core::PinKind::guess_from_name(&r.name).is_some());
+            if ui
+                .add_enabled(guessable, egui::Button::new(i18n::tr("名前から種類を入れる")))
+                .on_hover_text(i18n::tr("種類が「指定なし」のピンに、名前から推測した種類 (VCC・GND は電源入力、NC は未接続、OUT は出力、IN・EN は入力など) を入れます。推測できない名前 (FB・SW など) と、もう種類のあるピンはそのままです。データシートで確かめてください"))
+                .clicked()
+            {
+                guess_kinds(&mut rows);
             }
             if !roles.is_empty() && ui.button(i18n::tr("名前で合わせる")).on_hover_text(i18n::tr("ピンの名前 (か番号) が、モデルの端子の名前と同じものを、自動で選びます。合うものがない端子は、選び直しになります")).clicked() {
                 for (j, role) in roles.iter().enumerate() {

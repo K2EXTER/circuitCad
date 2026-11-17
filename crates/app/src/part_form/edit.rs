@@ -49,7 +49,11 @@ impl PartForm {
                     None => format!("{} {}", p.number, p.name),
                 };
                 let l = if p.gap > 0 { format!("{l} gap={}", p.gap) } else { l };
-                if p.sim_only { format!("{l} sim") } else { l }
+                let l = if p.sim_only { format!("{l} sim") } else { l };
+                match p.kind {
+                    Some(k) => format!("{l} kind={}", k.word()),
+                    None => l,
+                }
             })
             .collect::<Vec<_>>()
             .join("\n");

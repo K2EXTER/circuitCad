@@ -85,7 +85,7 @@ fn main() -> Result<(), String> {
         "thermal" => {
             // ds thermal FILE: the thermal resistances (table rows and deratings)
             for r in ds.thermal() {
-                println!("p.{} {:?} {:.3} K/W{}{}  | {}", r.page + 1, r.to, r.k_per_w, if r.from_derating { " (derating)" } else { "" }, r.derate_from.map_or(String::new(), |t| format!(" from {t} °C")), r.text);
+                println!("p.{} {:?} {:.3} K/W cols={}{}{}  | {}", r.page + 1, r.to, r.k_per_w, r.columns, if r.from_derating { " (derating)" } else { "" }, r.derate_from.map_or(String::new(), |t| format!(" from {t} °C")), r.text);
             }
         }
         "cond" => {

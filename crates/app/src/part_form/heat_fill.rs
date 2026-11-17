@@ -18,9 +18,15 @@ pub struct HeatRead {
     pub lines: Vec<(bool, String)>,
 }
 
-/// The thermal table's row of a kind, else the one from a derating.
+/// The thermal table's row of a kind, else the one from a derating. A row with a value per package (3 or more) is not taken.
 fn best(rows: &[ThermalRow], to: To) -> Option<&ThermalRow> {
-    rows.iter().find(|r| r.to == to && !r.from_derating).or_else(|| rows.iter().find(|r| r.to == to))
+    let one = |r: &&ThermalRow| r.to == to && r.columns < 3;
+    rows.iter().filter(one).find(|r| !r.from_derating).or_else(|| rows.iter().find(one))
+}
+
+/// A row of the kind with a value per package, when that is all there is.
+fn per_package(rows: &[ThermalRow], to: To) -> Option<&ThermalRow> {
+    rows.iter().find(|r| r.to == to && r.columns >= 3)
 }
 
 /// Where a row came from, for the line.
@@ -43,11 +49,18 @@ pub fn heat_from_rows(rows: &[ThermalRow]) -> HeatRead {
             h.ja = Some(r.k_per_w);
             h.lines.push((true, format!("θJA {} K/W (接合部 → 空気): {}。自己発熱の計算で、この部品の θ になります", short(r.k_per_w), source(r))));
         }
-        None => h.lines.push((false, "θJA (Thermal Resistance, Junction-to-Ambient・RθJA) も、許容損失の低減 (Derate above … mW/°C) も見つかりません。θ はパッケージから推定します".into())),
+        None => match per_package(rows, To::Ambient) {
+            Some(r) => h.lines.push((false, format!("θJA の行 (p.{}) は値がパッケージごとに {} 列あり、どれがこの部品か決められません。表の見出しで部品のパッケージの列を見て、手で入れてください: {}", r.page + 1, r.columns, r.text))),
+            None => h.lines.push((false, "θJA (Thermal Resistance, Junction-to-Ambient・RθJA) も、許容損失の低減 (Derate above … mW/°C) も見つかりません。θ はパッケージから推定します".into())),
+        },
     }
-    if let Some(r) = best(rows, To::Case) {
-        h.jc = Some(r.k_per_w);
-        h.lines.push((true, format!("θjc {} K/W (接合部 → ケース): {}", short(r.k_per_w), source(r))));
+    match (best(rows, To::Case), per_package(rows, To::Case)) {
+        (Some(r), _) => {
+            h.jc = Some(r.k_per_w);
+            h.lines.push((true, format!("θjc {} K/W (接合部 → ケース): {}", short(r.k_per_w), source(r))));
+        }
+        (None, Some(r)) => h.lines.push((false, format!("θjc の行 (p.{}) は値がパッケージごとに {} 列あり、決められません: {}", r.page + 1, r.columns, r.text))),
+        (None, None) => {}
     }
     if let Some(r) = best(rows, To::Lead) {
         h.rows.push(format!("RθJL | {} K/W | {}", short(r.k_per_w), r.text));
@@ -97,7 +110,7 @@ mod tests {
     use super::*;
 
     fn row(to: To, v: f64, text: &str, derating: Option<f64>) -> ThermalRow {
-        ThermalRow { page: 1, to, k_per_w: v, text: text.into(), from_derating: derating.is_some(), derate_from: derating }
+        ThermalRow { page: 1, to, k_per_w: v, text: text.into(), from_derating: derating.is_some(), derate_from: derating, columns: 1 }
     }
 
     #[test]
@@ -123,6 +136,12 @@ mod tests {
         assert_eq!(h.ja, Some(200.0));
         assert!(h.lines[0].1.contains("逆数"));
         assert!(!heat_from_rows(&[]).lines[0].0, "nothing found says so");
+        // TI's columns per package: not taken, and said why
+        let mut ti = row(To::Ambient, 43.7, "rθja 97.1 96.5 98.18 51.5 44 43.7 °c/w", None);
+        ti.columns = 6;
+        let h = heat_from_rows(&[ti]);
+        assert_eq!(h.ja, None);
+        assert!(h.lines[0].1.contains("パッケージごと"), "{:?}", h.lines);
     }
 
     #[test]

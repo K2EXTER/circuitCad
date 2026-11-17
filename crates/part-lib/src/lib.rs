@@ -29,6 +29,9 @@ pub struct PinDef {
     /// Empty places before this pin on its side of the symbol (see `SymPin::gap`).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub gap: u8,
+    /// What the pin does electrically (`sch_core::PinKind`), for the ERC; omitted = not said.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<sch_core::PinKind>,
 }
 
 fn is_zero(v: &u8) -> bool {
@@ -137,6 +140,7 @@ impl PartDef {
                     side: p.side.unwrap_or(if i < half { PinSide::Left } else { PinSide::Right }),
                     sim_only: p.sim_only,
                     gap: p.gap,
+                    kind: p.kind,
                 })
                 .collect(),
             sim: self.sim.clone(),

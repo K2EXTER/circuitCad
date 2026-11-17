@@ -26,7 +26,7 @@ mod text;
 mod value;
 pub use headings::{HEADINGS, Heading};
 pub use dimensions::{Found, PageLength, find_length};
-pub use pin_table::{PinCompare, PinDiff, PinDiffKind, Table, compare_pins, guess_columns, pin_lines, pins_from, read_table};
+pub use pin_table::{PinCompare, PinDiff, PinDiffKind, Table, compare_pins, guess_columns, io_cells, pin_lines, pins_from, read_table};
 pub use suggest::looks_like_part_number;
 pub use text::{Hit, Query, Rect, Word, normalize};
 pub use value::{Converted, Quantity, Value, convert, is_unit_word, parse_value};

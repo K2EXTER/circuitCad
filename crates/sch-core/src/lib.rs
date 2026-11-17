@@ -13,6 +13,8 @@ mod requirements;
 mod hierarchy;
 mod sheets;
 mod spice;
+mod pinkind;
+pub use pinkind::PinKind;
 pub mod system;
 pub use backannotate::BackAnnotation;
 pub use bus::{bus_member, bus_members, is_bus_label, parse_bus};
@@ -606,6 +608,9 @@ pub struct SymPin {
     /// signals, as data sheets draw them). 0 = none.
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub gap: u8,
+    /// What the pin does electrically, for the ERC (`PinKind`); None = not said (the checks by name only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<PinKind>,
 }
 
 fn is_zero_u8(v: &u8) -> bool {
