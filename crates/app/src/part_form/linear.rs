@@ -60,6 +60,8 @@ pub struct RegulatorInput {
     pub noise: String,
     pub result: Option<Result<Fitted, String>>,
     pub message: Option<(bool, String)>,
+    /// What "PDF の表から読む" put in or could not find, one line each.
+    pub found: Vec<(bool, String)>,
 }
 
 /// A number as typed, with an SI prefix and an optional unit after it ("700kHz", "-20nA", "2Meg").
@@ -81,7 +83,7 @@ fn numbers(label: &str, t: &str) -> Result<Vec<f64>, String> {
 }
 
 /// A number for a box: SI prefix, 6 digits ("5.25Meg", "1.4m", "106.02").
-fn show(v: f64) -> String {
+pub(super) fn show(v: f64) -> String {
     if v == 0.0 {
         return "0".into();
     }
@@ -264,7 +266,7 @@ impl OpampInput {
 }
 
 /// The temperatures written in a table row's conditions ("TA = 125°C", "−40°C +125°C", "25 °C").
-fn temperatures(conditions: &str) -> Vec<f64> {
+pub(super) fn temperatures(conditions: &str) -> Vec<f64> {
     let t = conditions.replace('\u{2212}', "-").replace(" °C", "°C");
     t.match_indices("°C")
         .filter_map(|(i, _)| {
@@ -563,6 +565,13 @@ impl PartForm {
             }
         });
         ui.horizontal_wrapped(|ui| {
+            if self.sheet.has_doc()
+                && ui.button(i18n::tr("PDF の表から読む")).on_hover_text(i18n::tr("開いているデータシートの「電気的特性」の表から、出力電圧 (可変なら基準電圧)・ライン / ロード・レギュレーション (条件の範囲と)・ドロップアウト・グラウンド電流 (可変なら ADJ の電流と最小負荷)・電流制限・リップル除去・雑音の typ を探して欄に入れます。25 °C の行を使い、部品名の電圧 (7805 なら 5 V) のページを先に見ます。入れた値は表と見比べて確かめてください")).clicked()
+            {
+                let (sheet, name) = (&self.sheet, self.name.clone());
+                self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
+                self.reg.result = None;
+            }
             if ui.button(i18n::tr("LM7805 の例を入れる")).on_hover_text(i18n::tr("同梱の LM7805 を作ったときの値 (onsemi のデータシートの typ) を入れます")).clicked() {
                 self.regulator_example_and_make(false);
             }
@@ -571,6 +580,9 @@ impl PartForm {
             }
             ui.checkbox(&mut self.reg.adjustable, i18n::tr("可変 (ADJ ピン)")).on_hover_text(i18n::tr("LM317 のように、抵抗 2 本で出力電圧を決める部品。ピンは IN・ADJ・OUT"));
         });
+        for (ok, line) in &self.reg.found {
+            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+        }
         let r = &mut self.reg;
         let adj = r.adjustable;
         egui::Grid::new("reg_inputs").num_columns(2).show(ui, |ui| {

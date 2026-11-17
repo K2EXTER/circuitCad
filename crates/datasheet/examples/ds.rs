@@ -108,13 +108,46 @@ fn main() -> Result<(), String> {
             }
         }
         "ocr" => {
-            // the words the OCR reads off a page (drawn to fit the OCR's largest picture), in page points
+            // the words the OCR reads off a page, in page points: `box=x0,y0,x1,y1` a part of it, `px=4` pixels per
+            // point, `bin=160` black and white at that grey, `thick=1` strokes made thicker by that many pixels
             let p = page()?;
             let (w, h) = ds.page_size(p).ok_or("page size")?;
-            let img = ds.render(p, 2400.0 / w.max(h))?;
-            let k = img.width as f32 / w;
-            for o in datasheet::ocr::read(&img).ok_or("no OCR (Windows only)")? {
-                println!("{:6.1} {:6.1}  {}", o.x0 / k, (o.y0 + o.y1) / 2.0 / k, o.text);
+            let b = rect(arg(&args, "box")).unwrap_or(Rect { x0: 0.0, y0: 0.0, x1: w, y1: h });
+            let px: f32 = arg(&args, "px").and_then(|s| s.parse().ok()).unwrap_or(2400.0 / (b.x1 - b.x0).max(b.y1 - b.y0));
+            let page_img = ds.render(p, px)?;
+            let k = page_img.width as f32 / w;
+            let (cx, cy) = ((b.x0 * k) as usize, (b.y0 * k) as usize);
+            let (cw, ch) = ((((b.x1 - b.x0) * k) as usize).min(page_img.width - cx), (((b.y1 - b.y0) * k) as usize).min(page_img.height - cy));
+            let mut rgba = Vec::with_capacity(cw * ch * 4);
+            for y in cy..cy + ch {
+                rgba.extend_from_slice(&page_img.rgba[(y * page_img.width + cx) * 4..(y * page_img.width + cx + cw) * 4]);
+            }
+            let mut img = datasheet::PageImage { width: cw, height: ch, rgba };
+            if let Some(t) = arg(&args, "bin").and_then(|s| s.parse::<u32>().ok()) {
+                for q in img.rgba.as_chunks_mut::<4>().0 {
+                    let l = (299 * q[0] as u32 + 587 * q[1] as u32 + 114 * q[2] as u32) / 1000;
+                    let v = if l < t { 0 } else { 255 };
+                    q[..3].copy_from_slice(&[v, v, v]);
+                }
+            }
+            if let Some(n) = arg(&args, "thick").and_then(|s| s.parse::<usize>().ok()) {
+                for _ in 0..n {
+                    let src = img.rgba.clone();
+                    let dark = |x: usize, y: usize| src[(y * cw + x) * 4] < 128;
+                    for y in 1..ch - 1 {
+                        for x in 1..cw - 1 {
+                            if dark(x - 1, y) || dark(x + 1, y) || dark(x, y - 1) || dark(x, y + 1) {
+                                img.rgba[(y * cw + x) * 4..(y * cw + x) * 4 + 3].copy_from_slice(&[0, 0, 0]);
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(out) = arg(&args, "save") {
+                image::RgbaImage::from_raw(cw as u32, ch as u32, img.rgba.clone()).ok_or("image")?.save(out).map_err(|e| e.to_string())?;
+            }
+            for o in datasheet::ocr::read(&img).ok_or("no OCR (Windows only, or the picture is too big)")? {
+                println!("{:6.1} {:6.1}  {}", b.x0 + o.x0 / k, b.y0 + (o.y0 + o.y1) / 2.0 / k, o.text);
             }
         }
         "kind" => {

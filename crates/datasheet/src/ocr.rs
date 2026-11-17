@@ -19,6 +19,18 @@ pub fn read(img: &PageImage) -> Option<Vec<OcrWord>> {
     imp::read(img)
 }
 
+/// The picture in black and white: darker than `grey` (0 to 255) is black. Faint grid lines and the grey edges of
+/// small digits go, and the OCR reads the digits more surely (the IRF540N's capacitance graph).
+pub fn black_and_white(img: &PageImage, grey: u32) -> PageImage {
+    let mut rgba = img.rgba.clone();
+    for q in rgba.as_chunks_mut::<4>().0 {
+        let l = (299 * q[0] as u32 + 587 * q[1] as u32 + 114 * q[2] as u32) / 1000;
+        let v = if l < grey { 0 } else { 255 };
+        q[..3].copy_from_slice(&[v, v, v]);
+    }
+    PageImage { width: img.width, height: img.height, rgba }
+}
+
 /// The picture turned a quarter clockwise: a title printed up the page (an axis's) reads left to right in it. A pixel
 /// (x, y) of the turned picture is (y, height - 1 - x) of the original.
 pub fn turned(img: &PageImage) -> PageImage {
@@ -36,9 +48,9 @@ pub fn turned(img: &PageImage) -> PageImage {
 }
 
 /// Letters the OCR takes digits for, in a word made of digits and such letters only ("1O0" is 100, "l0" is 10, "ooo"
-/// is 000; a lone "o" or "I" stays a letter).
+/// is 000, "soo" is 500; a lone "o", "I" or "s" stays a letter).
 pub fn as_number(text: &str) -> String {
-    let like = |c: char| c.is_ascii_digit() || ".,Oo|lI".contains(c);
+    let like = |c: char| c.is_ascii_digit() || ".,Oo|lISs".contains(c);
     if !text.chars().all(like) || (text.chars().count() < 2 && !text.chars().any(|c| c.is_ascii_digit())) {
         return text.to_string();
     }
@@ -47,6 +59,7 @@ pub fn as_number(text: &str) -> String {
         .map(|c| match c {
             'O' | 'o' => '0',
             'l' | 'I' | '|' => '1',
+            'S' | 's' => '5',
             _ => c,
         })
         .collect();
@@ -64,7 +77,7 @@ pub fn joined(words: Vec<OcrWord>) -> Vec<OcrWord> {
     let mut words: Vec<OcrWord> = words.into_iter().map(|w| OcrWord { text: as_number(&w.text), ..w }).collect();
     words.sort_by(|a, b| a.y0.total_cmp(&b.y0).then(a.x0.total_cmp(&b.x0)));
     // digits, or letters the OCR takes digits for (a lone "I" before "000")
-    let number = |t: &str| !t.is_empty() && t.chars().all(|c| c.is_ascii_digit() || ".Oo|lI".contains(c));
+    let number = |t: &str| !t.is_empty() && t.chars().all(|c| c.is_ascii_digit() || ".Oo|lISs".contains(c));
     for w in words {
         if let Some(last) = out.iter_mut().rev().find(|l| (l.y0 - w.y0).abs() < 0.3 * (w.y1 - w.y0) && w.x0 > l.x0) {
             let gap = w.x0 - last.x1;
@@ -95,7 +108,7 @@ mod imp {
         // straight RGBA to BGRA, then the work on a thread of its own (WinRT in the multithreaded apartment, not the
         // window's thread)
         let mut bgra = img.rgba.clone();
-        for p in bgra.chunks_exact_mut(4) {
+        for p in bgra.as_chunks_mut::<4>().0 {
             p.swap(0, 2);
         }
         let (w, h) = (img.width as i32, img.height as i32);
@@ -145,6 +158,8 @@ mod tests {
         assert_eq!(as_number("Coss"), "Coss", "a word stays a word");
         assert_eq!(as_number("ooo"), "000");
         assert_eq!(as_number("o"), "o");
+        assert_eq!(as_number("soo"), "500");
+        assert_eq!(as_number("Coss"), "Coss");
     }
 
     #[test]

@@ -87,9 +87,9 @@ impl PartForm {
                     "opamp" => self.opamp_ui(ui),
                     "regulator" => self.regulator_ui(ui),
                     _ => {
-                        let (opamp, opto) = (self.open_box("opamp_box"), self.open_box("opto_box"));
+                        let (opamp, opto, reg) = (self.open_box("opamp_box"), self.open_box("opto_box"), self.open_box("reg_box"));
                         egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").open(opamp).show(ui, |ui| self.opamp_ui(ui));
-                        egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").show(ui, |ui| self.regulator_ui(ui));
+                        egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").open(reg).show(ui, |ui| self.regulator_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る")).id_salt("opto_box").default_open(self.opto.result.is_some()).open(opto).show(ui, |ui| self.opto_ui(ui));
                     }
                 }

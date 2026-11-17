@@ -153,12 +153,12 @@ impl Datasheet {
     }
 
     fn figure_axes_by_ocr(&self, f: &figures::Figure) -> Option<axes::ReadAxes> {
-        // the OCR reads small digits differently at different sizes: 4 pixels per point (6-point labels 24 pixels
-        // high), then 6
-        [4.0, 6.0].into_iter().find_map(|px| self.figure_axes_by_ocr_at(f, px))
+        // the OCR reads small digits differently at different sizes and in black and white: 4 pixels per point
+        // (6-point labels 24 pixels high), 6, 6 in black and white (grey 200 and darker is black), 3, 3 in black and white
+        [(4.0, None), (6.0, None), (6.0, Some(200)), (3.0, None), (3.0, Some(200))].into_iter().find_map(|(px, bw)| self.figure_axes_by_ocr_at(f, px, bw))
     }
 
-    fn figure_axes_by_ocr_at(&self, f: &figures::Figure, px_per_pt: f32) -> Option<axes::ReadAxes> {
+    fn figure_axes_by_ocr_at(&self, f: &figures::Figure, px_per_pt: f32, bw: Option<u32>) -> Option<axes::ReadAxes> {
         let (pw, ph) = self.page_size(f.page)?;
         // the same area axes::read looks in, on the page
         let area = Rect { x0: (f.area.x0 - 140.0).max(0.0), y0: (f.area.y0 - 20.0).max(0.0), x1: (f.area.x1 + 140.0).min(pw), y1: (f.area.y1 + 20.0).min(ph) };
@@ -174,6 +174,10 @@ impl Datasheet {
             rgba.extend_from_slice(&page.rgba[(y * page.width + cx0) * 4..(y * page.width + cx0 + cw) * 4]);
         }
         let crop = PageImage { width: cw, height: ch, rgba };
+        let crop = match bw {
+            Some(grey) => ocr::black_and_white(&crop, grey),
+            None => crop,
+        };
         let to_page = |x: f32, y: f32| (area.x0 + x / k, area.y0 + y / k);
         let words: Vec<Word> = ocr::joined(ocr::read(&crop)?)
             .into_iter()

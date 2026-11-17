@@ -456,6 +456,7 @@ mod darlington;
 mod linear;
 mod opto;
 mod table_fill;
+mod reg_fill;
 mod logic;
 mod pdf_check;
 mod pdf_input;

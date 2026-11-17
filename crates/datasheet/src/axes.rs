@@ -249,7 +249,11 @@ pub fn read(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
             let pts: Vec<(f32, f64)> = col.iter().map(|l| (l.y, l.value)).collect();
             let (col_x1, bottom) = (col.iter().map(|l| l.x1).fold(f32::MIN, f32::max), col[col.len() - 1].y);
             // the row under the plot, starting at the column and up to the next graph
-            let mut row: Vec<&Label> = all.iter().filter(|l| l.y > bottom + 1.0 && l.y < bottom + 25.0 && l.cx() > col_x1 && l.x0 < col_x1 + 400.0).collect();
+            // (within 25 points, or a step and a half of the column when its bottom label is not printed: "0")
+            let mut steps: Vec<f32> = col.windows(2).map(|w| w[1].y - w[0].y).collect();
+            steps.sort_by(|a, b| a.total_cmp(b));
+            let reach = (1.5 * steps[steps.len() / 2]).max(25.0);
+            let mut row: Vec<&Label> = all.iter().filter(|l| l.y > bottom + 1.0 && l.y < bottom + reach && l.cx() > col_x1 && l.x0 < col_x1 + 400.0).collect();
             // the line with the most labels (not a lone "0" at the foot of the next graph's column)
             let Some(row_y) = row.iter().map(|l| l.y).max_by_key(|y| (row.iter().filter(|l| (l.y - y).abs() < 1.5).count(), -(*y as i64))) else { continue };
             row.retain(|l| (l.y - row_y).abs() < 1.5);
@@ -266,15 +270,23 @@ pub fn read(words: &[Word], area: Rect, caption: Rect) -> Option<ReadAxes> {
             if let Some(back) = row.windows(2).position(|w| w[1].value <= w[0].value) {
                 row.truncate(back + 1);
             }
-            // the row starts at the plot's left edge, just right of the column
-            if row.first().is_none_or(|l| l.cx() - col_x1 > 40.0) {
-                continue;
-            }
             let xp: Vec<(f32, f64)> = row.iter().map(|l| (l.cx(), l.value)).collect();
-            if !monotonic(&xp) {
+            // two labels a power of ten apart and well apart make a log axis by themselves (the OCR missed the "1" of
+            // "1 10 100")
+            let decades = |v: &[(f32, f64)]| {
+                v.len() == 2 && v[0].1 > 0.0 && v[1].1 > v[0].1 && (v[1].0 - v[0].0) > 40.0 && {
+                    let d = (v[1].1 / v[0].1).log10();
+                    d >= 0.99 && (d - d.round()).abs() < 1e-6
+                }
+            };
+            // the row starts at the plot's left edge, just right of the column (two decades: the first label may be
+            // the missed one, a label's spacing further)
+            let start = row.first().map_or(f32::MAX, |l| l.cx() - col_x1);
+            if start > 40.0 && !(decades(&xp) && start <= xp[1].0 - xp[0].0 + 40.0) {
                 continue;
             }
-            let (Some((xr, xlog)), Some((yr, ylog))) = (settle(&xp), settle(&pts)) else { continue };
+            let xs = if decades(&xp) { Some((0..2, true)) } else if monotonic(&xp) { settle(&xp) } else { None };
+            let (Some((xr, xlog)), Some((yr, ylog))) = (xs, settle(&pts)) else { continue };
             let row = &row[xr];
             let col = &col[yr];
             let (x0, x1) = (row[0].x0, row[row.len() - 1].x1);
@@ -329,6 +341,22 @@ mod tests {
         assert!(a.x.log && a.y.log);
         assert_eq!(a.x.prefix, 1.0);
         assert_eq!(a.y.ticks[0].1, "20000");
+    }
+
+    #[test]
+    fn two_labels_a_decade_apart_make_a_log_axis() {
+        let mut words = vec![];
+        for (i, v) in ["3000", "2500", "2000", "1500", "1000", "500"].iter().enumerate() {
+            words.push(w(v, 100.0 - 4.0 * v.len() as f32, 100.0 + 34.0 * i as f32));
+        }
+        words.push(w("10", 190.0, 300.0));
+        words.push(w("100", 290.0, 300.0));
+        let a = read(&words, Rect { x0: 80.0, y0: 60.0, x1: 330.0, y1: 320.0 }, Rect { x0: 150.0, y0: 320.0, x1: 250.0, y1: 328.0 }).unwrap();
+        assert!(a.x.log && a.x.ticks.len() == 2 && !a.y.log, "{a:?}");
+        // two labels that are not a decade apart are not an axis
+        words.retain(|w| w.text != "100");
+        words.push(w("50", 290.0, 300.0));
+        assert!(read(&words, Rect { x0: 80.0, y0: 60.0, x1: 330.0, y1: 320.0 }, Rect { x0: 150.0, y0: 320.0, x1: 250.0, y1: 328.0 }).is_none());
     }
 
     #[test]

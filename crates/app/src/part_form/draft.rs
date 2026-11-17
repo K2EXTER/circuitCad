@@ -52,7 +52,7 @@ fn list_category(kind: &'static str) -> &'static str {
 
 /// Whether the form has a box that the electrical characteristics table can fill, for this kind.
 fn has_model(kind: Option<(PartType, &'static str)>) -> bool {
-    kind.is_some_and(|(t, cat)| matches!(t, PartType::Transistor | PartType::Diode) || matches!(cat, "オペアンプ" | "フォトカプラ"))
+    kind.is_some_and(|(t, cat)| matches!(t, PartType::Transistor | PartType::Diode) || matches!(cat, "オペアンプ" | "フォトカプラ" | "レギュレータ"))
 }
 
 /// A built-in footprint of the same name as a package ("SOT-23", "TO-92").
@@ -271,6 +271,11 @@ impl PartForm {
                 Some("オペアンプ") => {
                     self.opamp.fill_from_pdf(values);
                     Some(("opamp_box", "オペアンプ"))
+                }
+                Some("レギュレータ") => {
+                    let name = self.name.clone();
+                    self.reg.fill_from_pdf(&name, values);
+                    Some(("reg_box", "レギュレータ"))
                 }
                 Some("フォトカプラ") => {
                     self.opto.fill_from_pdf(values);
