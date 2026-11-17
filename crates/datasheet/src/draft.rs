@@ -325,6 +325,28 @@ impl Datasheet {
         vec![]
     }
 
+    /// The pins of a list in lines of their own (`pin_list`): the case outline style the first two pages name the part by
+    /// ("STYLE 1", onsemi), else the first list under no style ("Pin 1. Input" / "2. Ground" / "3. Output", MC7800). None
+    /// when the styles are listed and the part's is not named.
+    pub fn find_pin_list(&self) -> Option<FoundPins> {
+        let lists: Vec<crate::pin_list::PinList> = (0..self.page_count()).flat_map(|p| crate::pin_list::lists(p, self.words(p))).collect();
+        let style = (0..self.page_count().min(2)).find_map(|p| crate::pin_list::part_style(self.words(p)));
+        let pick = match style {
+            Some(s) => lists.iter().find(|l| l.style == Some(s)),
+            None => lists.iter().find(|l| l.style.is_none()),
+        }?;
+        plausible_pins(&pick.pins).then(|| FoundPins {
+            page: pick.page,
+            area: pick.rect,
+            num_col: 0,
+            name_col: 0,
+            pins: pick.pins.clone(),
+            io: vec![],
+            from_drawing: true,
+            package: pick.style.map(|s| format!("STYLE {s}")),
+        })
+    }
+
     /// The pins of the first pin drawing under a "Pin Configuration" heading (`pin_diagram`): for data sheets with no pin table, or to
     /// check one.
     pub fn find_pin_drawing(&self) -> Option<FoundPins> {

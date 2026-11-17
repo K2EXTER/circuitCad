@@ -265,3 +265,18 @@
 - `Datasheet::find_pin_tables`: 列ごとのピン (`FoundPins::package`)、同じピンの列は 1 つにまとめて「TO-220/TO-263/SOT-223」。`find_pin_table` はその最初。`ds pins` は全部出す。
 - 下書き: ピンの候補にパッケージの名前のボタン (「パッケージごとの列」)、最初はパッケージの名前の合う列、パッケージを選び直すとその列に。図と一致はどの列とでも。
 - 手元の全 PDF で前後を比べ、最初の候補は変わらず (MCP1700 は前は表が無かった)。MCP1700 は SOT-23 で 1 GND・2 VOUT・3 VIN (同梱の MCP1700-3302 と同じ) と SOT-23-3、SOT-89/TO-92・DFN-6 も選べる。LM324 の 20 本の列が「SOIC」と出るのは見出しの読みのまとまりのため (ラベルは手がかり)。
+
+## 段階27: 共通の記号の下の行を名前で引く (2026-11-17)
+
+- `spec_table::find_by_name` (`Datasheet::spec_values` は、どのページにもその記号の行が無いときだけ使う): 記号の列の 1 つの記号の下に名前の違う行が並ぶ表 (TI の LP5907: ΔVOUT の下に「Line regulation」と「Load regulation」) で、値の行のパラメータの名前の最初の語が探す語の行。自分の行に記号のある行 (MCP1700 の「Output Short Circuit Current … IOUT_SC」) は記号の名前なので使わない。条件はその行か、行の中の上の行から。前はページごとに使って、UA78L の p.4 の「Output current」を p.5 の「Output」記号と混ぜていた (出力電圧 100 mV)。
+- レギュレータのロード・レギュレーションの「%/mA」(電流 1 mA あたりの %) は、変化の電流を掛けて全体の % に。
+- 手元の全 PDF で前後を比べ、消えた行は無い。足された行は記号の行の無いデータシートの名前の行だけ。LP5907 はライン 0.02 %/V・ロード 0.249 % (249 mA の変化)。
+
+## 段階28: ピンの一覧 (2026-11-17)
+
+- `datasheet/pin_list.rs`: 行ごとのピンの一覧。「PIN 1.」(か「Pin 1.」) と、下の行の同じ位置の「2.」「3.」… (間に別の文の行があってもよい: MC7800 の「Pin 1. Input」/「2. Ground」/「3. Output」はパッケージの絵の横で本文と行が混ざる)。名前は最初の語を大文字で、「NO CONNECTION」は NC。すぐ上の「STYLE n:」はその一覧の型 (onsemi の外形図のページに型がいくつも並ぶ)。`part_style`: 1・2 ページ目の「STYLE n」(コロンなし、「CASE 29 STYLE 1」)。
+- `Datasheet::find_pin_list`: 部品の型の一覧、型の名前が無ければ型の無い一覧。型の一覧しかなく部品の型が分からなければ無し。`ds pins` に「list」の行。
+- 下書き: 表も図も無いときにこの一覧 (「外形図の STYLE 1 の一覧から」)。パッケージは、ピンの数の合う名前に組み込みの形が無く、いちばん多く書かれた名前に合う形があればそちら (MC7800 は DPAK-3 でなく TO-220)。2 番と同じ名前のタブのピン (TIP120 の 4 COLLECTOR) は、形にその番号のパッドが無ければ 2 番のパッドにまとめる (SOT-223 だけでなく TO-220 も)。
+- モデルを入れるときのピンの役 (`pin_import::role_letter`): COLLECTOR・BASE・EMITTER・DRAIN・GATE・SOURCE・ANODE・CATHODE を C・B・E・D・G・S・A・K として探す (トランジスタ・MOSFET・ダイオードの節)。レギュレータの GND の役に GROUND。
+- 手元: MC7800 は TO-220-3 で INPUT・GROUND・OUTPUT、2N3903 は STYLE 1 で EMITTER・BASE・COLLECTOR (TO-92-3、モデルを入れて保存まで)、P2N2222A・BC546 は STYLE 17 で COLLECTOR・BASE・EMITTER、TIP120 は STYLE 1 で BASE・COLLECTOR・EMITTER (タブは 2 番)、BAT54 は STYLE 8 で ANODE・NC・CATHODE。
+- まだ: MOSFET (AO3400A・BSS138・IRF540N) のピンは記号の絵の G・D・S だけで番号が無い。PN2222A・BD135/136 は型の名前が読めない。ピンの図が絵だけの PDF は OCR が要る。

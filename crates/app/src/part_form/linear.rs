@@ -417,7 +417,7 @@ impl PartForm {
         if self.reg.adjustable {
             &[("入力", &["IN", "VIN", "INPUT"]), ("ADJ", &["ADJ", "ADJUST"]), ("出力", &["OUT", "VOUT", "OUTPUT"])]
         } else {
-            &[("入力", &["IN", "VIN", "INPUT", "VI"]), ("GND", &["GND", "COM", "COMMON"]), ("出力", &["OUT", "VOUT", "OUTPUT", "VO"])]
+            &[("入力", &["IN", "VIN", "INPUT", "VI"]), ("GND", &["GND", "COM", "COMMON", "GROUND"]), ("出力", &["OUT", "VOUT", "OUTPUT", "VO"])]
         }
     }
 

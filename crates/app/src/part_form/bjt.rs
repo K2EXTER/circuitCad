@@ -265,7 +265,7 @@ impl PartForm {
     pub(super) fn bjt_apply(&mut self) -> Result<String, String> {
         let Some(Ok(f)) = &self.bjt.result else { return Err("先に「モデルを作ってずれを見る」を押してください".into()) };
         let pins = self.parse_pins()?;
-        let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
+        let find = |n: &str| pins.iter().find(|p| super::pin_import::role_letter(&p.name).eq_ignore_ascii_case(n)).map(|p| p.number.clone());
         let (Some(c), Some(b), Some(e)) = (find("C"), find("B"), find("E")) else {
             return Err("ピン表に、C・B・E の名前のピンが要ります (「③ ピン」で直してください)".into());
         };

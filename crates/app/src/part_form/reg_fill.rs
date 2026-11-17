@@ -128,7 +128,13 @@ impl RegulatorInput {
                 if unit.contains("%/V") {
                     *field = format!("{pct}%/V");
                 } else if let Some(s) = span(&v.conditions, units) {
-                    *field = if unit.contains('%') { format!("{pct}% {}", show(s)) } else { format!("{} {}", show(si(v, typ, 1e-3)), show(s)) };
+                    // a percentage per unit of the change ("0.001 %/mA", LP5907): times the change in that unit
+                    let per = unit.split_once("%/").and_then(|(_, u)| datasheet::spec_table::prefix(u));
+                    *field = match per {
+                        Some(k) if k > 0.0 => format!("{}% {}", fit::num::g(typ * s / k, 6), show(s)),
+                        _ if unit.contains('%') => format!("{pct}% {}", show(s)),
+                        _ => format!("{} {}", show(si(v, typ, 1e-3)), show(s)),
+                    };
                 } else {
                     continue;
                 }
@@ -479,6 +485,10 @@ mod tests {
         let t2 = [v(2, "Dropout", "VIN = 6.5V", None, 5.0, Some(20.0), Some("mV")), v(2, "Dropout", "IOUT = 0.8A", None, 1.1, Some(1.3), Some("V"))];
         r.fill_from_pdf("AMS1117", |s| t2.iter().filter(|x| x.symbol == s).cloned().collect());
         assert_eq!(r.vdo0, "1.1");
+        // a load regulation per milliamp (LP5907's 0.001 %/mA over 1 mA to 250 mA): 0.249 % over the change
+        let t3 = [v(4, "Load", "IOUT = 1mA to 250mA", None, 0.001, None, Some("%/mA"))];
+        r.fill_from_pdf("LP5907", |s| t3.iter().filter(|x| x.symbol == s).cloned().collect());
+        assert_eq!(r.load, "0.249% 249m");
     }
 
     #[test]

@@ -240,6 +240,23 @@ pub fn merged(current: &str, lines: &str, append: bool) -> String {
     out.join("\n")
 }
 
+/// A pin's name as the letter of its role when it is written out ("COLLECTOR" → "C", "Gate" → "G", "CATHODE" → "K": a case
+/// outline's style list, onsemi), else as it is. The sections that put a model in find their pins by these letters.
+pub(super) fn role_letter(name: &str) -> String {
+    match name.to_ascii_uppercase().as_str() {
+        "COLLECTOR" => "C",
+        "BASE" => "B",
+        "EMITTER" => "E",
+        "DRAIN" => "D",
+        "GATE" => "G",
+        "SOURCE" => "S",
+        "ANODE" => "A",
+        "CATHODE" => "K",
+        _ => return name.to_string(),
+    }
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

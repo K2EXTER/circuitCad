@@ -207,10 +207,23 @@ impl PartForm {
                 None => pin_sources.push(d),
             }
         }
+        // no table and no drawing: a list of the pins in lines ("Pin 1. Input", MC7800; the case outline's style, onsemi)
+        if pin_sources.is_empty()
+            && let Some(l) = ds.find_pin_list()
+        {
+            pin_sources.push(l);
+        }
         let mut packages = ds.package_names();
         packages.truncate(6);
         // with the pins counted, a name that says that many pins (or says none) first
-        let package = pin_sources.first().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))).unwrap_or(0);
+        // (but not one with no built-in outline over the most written one that has an outline for the pins: MC7800's TO-220, not its DPAK-3)
+        let numbers: Option<Vec<String>> = pin_sources.first().map(|p| p.pins.iter().map(|q| q.0.clone()).collect());
+        let fits = |k: &PackageName| builtin_footprint(k, numbers.as_deref()).is_some();
+        let package = match pin_sources.first().and_then(|p| packages.iter().position(|k| k.pins == Some(p.pins.len() as u32))) {
+            Some(i) if !fits(&packages[i]) && packages.first().is_some_and(fits) => 0,
+            Some(i) => i,
+            None => 0,
+        };
         // the pins of that package, in a table of a column per package
         let pin_pick = packages.get(package).and_then(|k| pins_of_package(&pin_sources, k)).unwrap_or(0);
         let dims = ds.dimension_table();
@@ -257,7 +270,12 @@ impl PartForm {
             // a table can be read again to compare with later; a drawing cannot
             self.pin_ref = (!p.from_drawing).then_some(super::pdf_check::PinRef { page: p.page, area: p.area, num_col: p.num_col, name_col: p.name_col });
             self.pin_check = None;
-            done.push(format!("ピン: p.{} の{}から {} 本", p.page + 1, if p.from_drawing { "ピン配置の図" } else { "表" }, p.pins.len()));
+            let from = match (&p.package, p.from_drawing) {
+                (Some(s), true) => format!("外形図の {s} の一覧"),
+                (_, true) => "ピン配置の図か一覧".to_string(),
+                (_, false) => "表".to_string(),
+            };
+            done.push(format!("ピン: p.{} の{from}から {} 本", p.page + 1, p.pins.len()));
         }
         let s = d.dims.as_ref().map(sizes);
         if d.use_[2]
@@ -275,12 +293,13 @@ impl PartForm {
             if let Some(fp) = fp {
                 self.fp_preset = fp.clone();
                 let mut how = format!("パッケージ: {} (組み込みの {fp})", p.name);
-                if fp == "SOT-223"
-                    && let Some(t) = &tab
+                // the tab's own line goes when the outline has no pad of its number: its pad is pin 2's (the SOT-223's tab, a
+                // TO-220's tab on the middle lead)
+                if let Some(t) = &tab
+                    && pcb_core::footprints::get(&fp).is_some_and(|f| !f.pads.iter().any(|p| p.pin == *t))
                 {
-                    // the tab's own line goes: its pad is pin 2's
                     self.pins_text = self.pins_text.lines().filter(|l| l.split_whitespace().next() != Some(t.as_str())).collect::<Vec<_>>().join("\n");
-                    how += &format!("。{t} は 2 番と同じピンなので、タブのパッドを 2 番にしました");
+                    how += &format!("。{t} は 2 番と同じピン (タブ) なので、2 番のパッドにまとめました");
                 }
                 done.push(how);
             } else if is_dual(p.family) {
@@ -540,7 +559,11 @@ impl PartForm {
                             ui.small(egui::RichText::new(i18n::tr("✔ 表とピン配置の図が一致しています")).color(crate::theme::OK));
                         }
                         if d.pin_sources.len() == 1 && p.from_drawing {
-                            ui.small(i18n::tr("ピン配置の図から読みました (表は見つかりませんでした)"));
+                            match p.package.as_deref() {
+                                // a case outline's style (onsemi: "STYLE 1" named on the first page)
+                                Some(s) => ui.small(i18n::trf!("外形図の {s} のピンの一覧から読みました (1 ページ目にその型と書かれています)")),
+                                None => ui.small(i18n::tr("ピン配置の図か、ピンの一覧から読みました (表は見つかりませんでした)")),
+                            };
                         }
                     });
                     let p = &d.pin_sources[d.pin_pick.min(d.pin_sources.len() - 1)];

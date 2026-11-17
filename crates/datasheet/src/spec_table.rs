@@ -171,11 +171,19 @@ fn key(s: &str, case: bool) -> String {
 /// The rows of `symbol` on a page. The case is kept when the page has the symbol in that case (hFE, the DC gain,
 /// and hfe, the small-signal one, are different rows); otherwise it is ignored (VGS(th), VGS(TH)).
 pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
-    let exact = find_case(page, words, symbol, true);
-    if exact.is_empty() { find_case(page, words, symbol, false) } else { exact }
+    // a symbol as written, then in any case
+    let exact = find_case(page, words, symbol, true, false);
+    if exact.is_empty() { find_case(page, words, symbol, false, false) } else { exact }
 }
 
-fn find_case(page: usize, words: &[Word], symbol: &str, case: bool) -> Vec<SpecValue> {
+/// The lines whose parameter's name starts with `name` under a symbol shared by several (TI's LP5907: "Line regulation" and
+/// "Load regulation" under one ΔVOUT). For a data sheet where `find` finds no row of that symbol on any page: a page's
+/// "Output current" is not another page's "Output" symbol (UA78L).
+pub fn find_by_name(page: usize, words: &[Word], name: &str) -> Vec<SpecValue> {
+    find_case(page, words, name, true, true)
+}
+
+fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: bool) -> Vec<SpecValue> {
     let want = key(symbol, case);
     if want.is_empty() {
         return vec![];
@@ -236,7 +244,7 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool) -> Vec<SpecV
             let nearest = |only_bare: bool| (0..sym_y.len()).filter(|&i| !only_bare || bare[i]).min_by(|&a, &b| (sym_y[a] - y).abs().total_cmp(&(sym_y[b] - y).abs()));
             nearest(true).filter(|&i| (sym_y[i] - y).abs() < 30.0).or_else(|| nearest(false))
         };
-        for (si, s) in symbols.iter().enumerate().filter(|(_, w)| key(&symbol_text(&body, w), case) == want) {
+        for (si, s) in symbols.iter().enumerate().filter(|(_, w)| !by_name && key(&symbol_text(&body, w), case) == want) {
             let mine: Vec<f32> = ys.iter().copied().filter(|&y| owner(y) == Some(si)).collect();
             let sy = sym_y[si];
             let (top, end) = (mine.iter().copied().fold(sy, f32::min) - 6.0, mine.iter().copied().fold(sy, f32::max) + 6.0);
@@ -253,6 +261,35 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool) -> Vec<SpecV
                 let conditions = conditions_near(words, h, left, y, (top, end), &symbols, symbol_on_right);
                 let unit = unit_near(&band, h, y);
                 out.push(SpecValue { page, symbol: symbol_text(&body, s), conditions, min: v[0], typ: v[1], max: v[2], unit, rect: rect.unwrap_or(s.rect) });
+            }
+        }
+        // no symbol of that name: a line whose parameter's name starts with it, under a symbol shared by several (TI's LP5907:
+        // "Line regulation" and "Load regulation" under one ΔVOUT)
+        if by_name {
+            for &y in &ys {
+                let Some(si) = owner(y) else { continue };
+                // a line of its own symbol is named by it ("Output Short Circuit Current IOUT_SC", MCP1700), not by its first word
+                if (sym_y[si] - y).abs() < 3.0 {
+                    continue;
+                }
+                let line = line_at(words, y);
+                let name = line.iter().filter(|w| w.rect.x1 < left - 2.0 && !symbols.iter().any(|s| std::ptr::eq(**s, **w)) && w.text.starts_with(|c: char| c.is_alphabetic())).min_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
+                let Some(name) = name.filter(|n| key(&n.text, case) == want) else { continue };
+                let mine: Vec<f32> = ys.iter().copied().filter(|&o| owner(o) == Some(si)).collect();
+                let sy = sym_y[si];
+                let (top, end) = (mine.iter().copied().fold(sy, f32::min) - 6.0, mine.iter().copied().fold(sy, f32::max) + 6.0);
+                let band: Vec<&&Word> = body.iter().filter(|w| (top..end).contains(&centre(&w.rect).1)).collect();
+                let (mut v, mut rect) = ([None, None, None], None::<Rect>);
+                for w in &line {
+                    if let (Some(x), Some(c)) = (number(&w.text), column(h, centre(&w.rect).0)) {
+                        v[c] = Some(x);
+                        rect = Some(rect.map_or(w.rect, |r| Rect { x0: r.x0.min(w.rect.x0), y0: r.y0.min(w.rect.y0), x1: r.x1.max(w.rect.x1), y1: r.y1.max(w.rect.y1) }));
+                    }
+                }
+                // the conditions of this line or the nearest above it within the row (not the line of the next name)
+                let conditions = conditions_near(words, h, left, y, (top, y + 3.0), &symbols, true);
+                let unit = unit_near(&band, h, y);
+                out.push(SpecValue { page, symbol: name.text.clone(), conditions, min: v[0], typ: v[1], max: v[2], unit, rect: rect.unwrap_or(name.rect) });
             }
         }
     }
@@ -471,6 +508,35 @@ mod tests {
         assert_eq!(en.len(), 2, "{en:?}");
         assert!(en.iter().all(|v| v.conditions.contains("BW = 10Hz to 100kHz")), "{en:?}");
         assert!(en[0].typ == Some(10.0) && en[0].conditions.starts_with("IOUT = 1mA"), "{en:?}");
+    }
+
+    /// TI's LP5907: "Line regulation" and "Load regulation" under one ΔVOUT, their names on the lines of their values; another
+    /// row's name on the line of its own symbol is not looked up by name.
+    #[test]
+    fn lines_named_under_a_shared_symbol() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let line = |x: f32, y: f32, text: &str| -> Vec<Word> {
+            let mut x = x;
+            text.split(' ').map(|t| { let r = w(t, x, y); x += 5.0 * t.chars().count() as f32 + 3.0; r }).collect()
+        };
+        let mut words = vec![w("PARAMETER", 116.0, 300.0), w("TEST", 274.0, 300.0), w("CONDITIONS", 297.0, 300.0), w("MIN", 419.0, 300.0), w("TYP", 458.0, 300.0), w("MAX", 495.0, 300.0), w("UNIT", 526.0, 300.0)];
+        words.push(w("ΔVOUT", 59.0, 330.0));
+        words.extend(line(228.0, 340.0, "VIN = 3.3V to 5.5V,"));
+        words.extend(line(106.0, 345.0, "Line regulation"));
+        words.extend([w("0.02", 458.0, 345.0), w("%/V", 528.0, 345.0)]);
+        words.extend(line(106.0, 365.0, "Load regulation"));
+        words.extend(line(228.0, 365.0, "IOUT = 1mA to 250mA"));
+        words.extend([w("0.001", 453.0, 365.0), w("%/mA", 525.0, 365.0)]);
+        words.extend([w("ISC", 59.0, 390.0)]);
+        words.extend(line(106.0, 390.0, "Output short circuit current"));
+        words.extend([w("408", 458.0, 390.0), w("mA", 528.0, 390.0)]);
+        assert!(find(0, &words, "Line").is_empty(), "no symbol \"Line\"");
+        let line_reg = find_by_name(0, &words, "Line");
+        assert_eq!((line_reg.len(), line_reg[0].typ, line_reg[0].unit.as_deref()), (1, Some(0.02), Some("%/V")), "{line_reg:?}");
+        assert!(line_reg[0].conditions.contains("3.3V to 5.5V"), "{line_reg:?}");
+        let load = find_by_name(0, &words, "Load");
+        assert_eq!((load[0].typ, load[0].conditions.as_str()), (Some(0.001), "IOUT = 1mA to 250mA"), "{load:?}");
+        assert!(find_by_name(0, &words, "Output").is_empty(), "the line of ISC is ISC's");
     }
 
     #[test]

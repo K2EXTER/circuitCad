@@ -146,7 +146,7 @@ impl PartForm {
     fn mos_apply(&mut self) -> Result<String, String> {
         let Some(Ok(f)) = &self.mos.result else { return Err("先に「モデルを作ってずれを見る」を押してください".into()) };
         let pins = self.parse_pins()?;
-        let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
+        let find = |n: &str| pins.iter().find(|p| super::pin_import::role_letter(&p.name).eq_ignore_ascii_case(n)).map(|p| p.number.clone());
         let (Some(d), Some(g), Some(s)) = (find("D"), find("G"), find("S")) else {
             return Err("ピン表に、D・G・S の名前のピンが要ります (「③ ピン」で直してください)".into());
         };

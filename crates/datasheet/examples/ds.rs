@@ -91,6 +91,9 @@ fn main() -> Result<(), String> {
             for f in tables {
                 println!("table p.{}{}: {}  io: {:?}", f.page + 1, f.package.map_or(String::new(), |p| format!(" [{p}]")), datasheet::pin_lines(&f.pins).replace('\n', ", "), f.io);
             }
+            if let Some(f) = ds.find_pin_list() {
+                println!("list p.{}{}: {}", f.page + 1, f.package.map_or(String::new(), |p| format!(" [{p}]")), datasheet::pin_lines(&f.pins).replace('\n', ", "));
+            }
             match ds.find_pin_drawing() {
                 Some(f) => println!("drawing p.{}: {}", f.page + 1, datasheet::pin_lines(&f.pins).replace('\n', ", ")),
                 None => println!("drawing: none"),

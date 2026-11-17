@@ -21,6 +21,7 @@ pub mod spec_table;
 pub mod thermal;
 pub mod companions;
 pub mod ordering;
+pub mod pin_list;
 mod headings;
 mod pin_table;
 mod suggest;
@@ -181,9 +182,15 @@ impl Datasheet {
     }
 
     /// The unit written right after a word on its line ("mm" after "0.65"), if there is one.
-    /// The rows of `symbol` in the electrical characteristics tables of every page (`spec_table::find`).
+    /// The rows of `symbol` in the electrical characteristics tables of every page (`spec_table::find`), or, with none, the lines
+    /// of that parameter's name under a shared symbol (`spec_table::find_by_name`).
     pub fn spec_values(&self, symbol: &str) -> Vec<spec_table::SpecValue> {
-        (0..self.page_count()).flat_map(|p| spec_table::find(p, self.words(p), symbol)).collect()
+        let found: Vec<spec_table::SpecValue> = (0..self.page_count()).flat_map(|p| spec_table::find(p, self.words(p), symbol)).collect();
+        if !found.is_empty() {
+            return found;
+        }
+        // no row of that symbol anywhere: lines named so under a shared symbol
+        (0..self.page_count()).flat_map(|p| spec_table::find_by_name(p, self.words(p), symbol)).collect()
     }
 
     pub fn unit_after(&self, page: usize, word: &Word) -> Option<String> {

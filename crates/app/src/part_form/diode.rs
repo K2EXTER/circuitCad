@@ -168,7 +168,7 @@ impl PartForm {
         if let Some(Ok(f)) = &self.dio_result {
             // the model of the gaps table (the same fit as the bundled diodes, with its notes)
             let pins = self.parse_pins()?;
-            let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
+            let find = |n: &str| pins.iter().find(|p| super::pin_import::role_letter(&p.name).eq_ignore_ascii_case(n)).map(|p| p.number.clone());
             let (Some(a), Some(k)) = (find("A"), find("K")) else {
                 return Err("ピン表に、アノード A とカソード K の名前のピンが要ります (「③ ピン」で、名前を A と K にしてください)".into());
             };
@@ -189,7 +189,7 @@ impl PartForm {
             return Err("先に「名前など」の部品名を入れてください (モデルの名前に使います。例: 1N4007)".into());
         }
         let pins = self.parse_pins()?;
-        let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
+        let find = |n: &str| pins.iter().find(|p| super::pin_import::role_letter(&p.name).eq_ignore_ascii_case(n)).map(|p| p.number.clone());
         let (Some(a), Some(k)) = (find("A"), find("K")) else {
             return Err("ピン表に、アノード A とカソード K の名前のピンが要ります (「③ ピン」で、名前を A と K にしてください)".into());
         };
