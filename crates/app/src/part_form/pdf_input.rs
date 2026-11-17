@@ -94,6 +94,9 @@ impl PartForm {
             Some(Ok(f)) => {
                 let worst = f.rows.iter().filter(|r| !r.compare_only).map(|r| r.error_pct().abs()).fold(0.0, f64::max);
                 eprintln!("model {} (rows {}, worst {worst:.0}%)", f.text.lines().find(|l| l.starts_with(".model")).unwrap_or(""), f.rows.len());
+                for r in &f.rows {
+                    eprintln!("  {} {}: {} / {} {} ({:+.0}%){}", r.item, r.at, part_lib::fit::num::g(r.datasheet, 4), part_lib::fit::num::g(r.model, 4), r.unit, r.error_pct(), if r.compare_only { " compare" } else { "" });
+                }
             }
             Some(Err(e)) => eprintln!("model error: {e}"),
             None => {}
@@ -106,6 +109,75 @@ impl PartForm {
                 eprintln!("{name}: {}", text.lines().collect::<Vec<_>>().join(" | "));
             }
         }
+    }
+
+    /// The section's model put into the simulation tab (its 「② シミュレーション」に入れる) and the part saved into `dir`
+    /// as the form's save button does (`--form-save`, to place the part in a circuit with `ccad --lib dir`).
+    pub fn use_model_and_save(&mut self, section: &str, dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
+        let not_made = || "モデルができていません".to_string();
+        match section {
+            "bjt" => self.bjt_apply()?,
+            "diode" => self.dio_apply()?,
+            "darl" => {
+                let Some(Ok(f)) = self.darl.result.clone() else { return Err(not_made()) };
+                self.linear_apply(&f, &[("コレクタ", &["C", "COLLECTOR"]), ("ベース", &["B", "BASE"]), ("エミッタ", &["E", "EMITTER"])])?
+            }
+            "opto" => {
+                let Some(Ok(f)) = self.opto.result.clone() else { return Err(not_made()) };
+                self.linear_apply(&f, &[("LED のアノード", &["A", "ANODE"]), ("LED のカソード", &["K", "CATHODE"]), ("エミッタ", &["E", "EMITTER"]), ("コレクタ", &["C", "COLLECTOR"])])?
+            }
+            "pd" => {
+                let Some(Ok(f)) = self.pd.result.clone() else { return Err(not_made()) };
+                self.linear_apply(&f, &[("アノード", &["A", "ANODE"]), ("カソード", &["K", "CATHODE"]), ("光の強さ", &["IRRAD", "L"])])?
+            }
+            _ => return Err(format!("知らない欄: {section}")),
+        };
+        let def = self.to_def()?;
+        part_lib::save(dir, &def).map_err(|e| e.to_string())
+    }
+
+    /// The factor that turns a normalized hFE curve ((IC, ratio) points) into hFE, and a sentence of how: the table's
+    /// hFE row (the part's own rank when the table has rows per rank) at the current nearest the curve's peak, its typ or
+    /// else the geometric mean of its min and max (as the bundled 2N3904), divided by the curve's ratio there.
+    pub(super) fn hfe_scale(&self, points: &[(f64, f64)]) -> Result<(f64, String), String> {
+        let none = || i18n::tr("表に、図の電流の範囲の hFE の typ も min・max もありません。表の hFE を掛けて入れてください").to_string();
+        if points.len() < 2 {
+            return Err(none());
+        }
+        let ratio_at = |ic: f64| -> Option<f64> {
+            let w = points.windows(2).find(|w| (w[0].0.min(w[1].0)..=w[0].0.max(w[1].0)).contains(&ic))?;
+            let t = (ic.ln() - w[0].0.ln()) / (w[1].0.ln() - w[0].0.ln());
+            Some((w[0].1.ln() + t.clamp(0.0, 1.0) * (w[1].1.ln() - w[0].1.ln())).exp())
+        };
+        let peak = points.iter().max_by(|a, b| a.1.total_cmp(&b.1)).map_or(1e-2, |p| p.0);
+        let mut rows = self.sheet.spec_values("hFE");
+        if rows.is_empty() {
+            rows = self.sheet.spec_values("HFE");
+        }
+        // rows per rank: only the part's own ("BC546B/547B/548B · (IC = 2.0 mA ...)" for BC546B; the first row of a
+        // group carries its names after the conditions, "(IC = 100 mA ...) BC547A/548A", and is another rank's)
+        let name = self.name.trim();
+        if !name.is_empty() && rows.iter().any(|v| v.conditions.contains(name)) {
+            rows.retain(|v| v.conditions.contains(name));
+        }
+        let best = rows
+            .iter()
+            .filter_map(|v| {
+                let ic = v.condition("IC")?.abs();
+                let (h, how) = match (v.typ, v.min, v.max) {
+                    (Some(t), _, _) => (t.abs(), i18n::trf!("typ {}", part_lib::fit::num::g(t.abs(), 3))),
+                    (None, Some(a), Some(b)) if a.abs() > 0.0 && b.abs() > a.abs() => {
+                        let g = (a.abs() * b.abs()).sqrt();
+                        (g, i18n::trf!("min {}・max {} の幾何平均 {}", part_lib::fit::num::g(a.abs(), 3), part_lib::fit::num::g(b.abs(), 3), part_lib::fit::num::g(g, 3)))
+                    }
+                    _ => return None,
+                };
+                let r = ratio_at(ic)?;
+                Some(((ic / peak).ln().abs(), h / r, how, ic, v.page))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        let (_, k, how, ic, page) = best.ok_or_else(none)?;
+        Ok((k, i18n::trf!("hFE の図が比 (normalized) なので、表 (p.{}) の hFE {how} (IC = {}A) に合わせました。実物の hFE は、ランクと個体で大きく違います", page + 1, part_lib::passive::eng(ic))))
     }
 
     /// Puts the curves read by 「表とグラフから全部読む」 in their fields, says what was read, and makes the model.
@@ -122,11 +194,28 @@ impl PartForm {
                 Dest::OptoLed => i18n::tr("LED の順方向"),
                 _ => field,
             };
+            // a normalized hFE graph: its ratios times the table's hFE
+            let mut scaled = None;
+            let r = match r {
+                Ok(mut out) if out.normalized => match self.hfe_scale(&out.points) {
+                    Ok((k, note)) => {
+                        out.points.iter_mut().for_each(|p| p.1 *= k);
+                        scaled = Some(note);
+                        Ok(out)
+                    }
+                    Err(e) => Err(i18n::trf!("p.{} の図は 1 を基準にした比 (normalized) で、{e}", out.page + 1)),
+                },
+                r => r,
+            };
             match r {
                 Ok(out) => {
                     let by = if out.by.is_empty() { String::new() } else { format!(" ({})", out.by) };
-                    self.graph_all.push((d, true, i18n::trf!("{field}: p.{} の図から {} 点{by}", out.page + 1, out.points.len())));
+                    let how = scaled.as_ref().map_or(String::new(), |n| format!("。{n}"));
+                    self.graph_all.push((d, true, i18n::trf!("{field}: p.{} の図から {} 点{by}{how}", out.page + 1, out.points.len())));
                     self.put_graph(&out);
+                    if scaled.is_some() {
+                        self.bjt.hfe_note = scaled;
+                    }
                 }
                 Err(why) => self.graph_all.push((d, false, i18n::trf!("{field}: 読めませんでした ({why})。欄の「グラフから読む」で、曲線をクリックしてください"))),
             }
@@ -373,7 +462,7 @@ mod tests {
         use super::super::graph_reader::{Dest, GraphOut};
         let mut f = PartForm::default();
         f.bjt.cibo = "0.5 8p".into();
-        let out = |dest, points: &[(f64, f64)], by: &str| Ok(GraphOut { dest, points: points.to_vec(), page: 4, by: by.into() });
+        let out = |dest, points: &[(f64, f64)], by: &str| Ok(GraphOut { dest, points: points.to_vec(), page: 4, by: by.into(), normalized: false });
         f.take_read_curves(vec![
             (Dest::BjtHfe, out(Dest::BjtHfe, &[(1e-3, 100.0), (1e-2, 150.0), (0.1, 90.0)], "25°C")),
             (Dest::BjtVbeOn, out(Dest::BjtVbeOn, &[(1e-3, 0.65), (1e-2, 0.72), (0.1, 0.83)], "")),
@@ -389,6 +478,13 @@ mod tests {
         let mut f = PartForm::default();
         f.take_read_curves(vec![(Dest::PdLight, Err("x".into()))]);
         assert!(f.pd.result.is_none() && f.graph_all.len() == 1);
+        // a normalized hFE curve with no table hFE to scale it by: not put in, and why
+        let mut f = PartForm::default();
+        f.bjt.hfe = "1m 100".into();
+        let ratios = GraphOut { dest: Dest::BjtHfe, points: vec![(1e-3, 0.7), (1e-2, 1.0), (0.1, 0.5)], page: 5, by: String::new(), normalized: true };
+        f.take_read_curves(vec![(Dest::BjtHfe, Ok(ratios))]);
+        assert_eq!(f.bjt.hfe, "1m 100");
+        assert!(!f.graph_all[0].1 && f.graph_all[0].2.contains("normalized"), "{:?}", f.graph_all);
     }
 
     #[test]

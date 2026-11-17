@@ -111,6 +111,21 @@ impl SchEditor {
         }
     }
 
+    /// The form's model of a section put to use and the part saved into `dir` (`--form-save dir`); prints the file or why not.
+    pub fn save_form_part(&mut self, section: &str, dir: &std::path::Path) -> bool {
+        let Some(f) = self.form.as_mut() else { return false };
+        match f.use_model_and_save(section, dir) {
+            Ok(p) => {
+                println!("saved {}", p.display());
+                true
+            }
+            Err(e) => {
+                eprintln!("not saved: {e}");
+                false
+            }
+        }
+    }
+
     /// Fills the form's MOSFET section from its PDF's table and fits it (`--form-mos-pdf`, for screenshots).
     pub fn mos_from_form_pdf(&mut self) {
         if let Some(f) = self.form.as_mut() {

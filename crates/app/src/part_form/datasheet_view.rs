@@ -421,9 +421,11 @@ impl SheetView {
                 why = i18n::trf!("p.{} の図の目盛りが読めません", f.page + 1);
                 continue;
             }
-            // an hFE graph normalized to 1 (BC546's Figure 7) is not hFE
+            // an hFE graph normalized to 1 (BC546's Figure 7) is not hFE: a transistor's is read as ratios and scaled by
+            // the table's hFE in the form; a Darlington's is not used
             let top = a.y.ticks.iter().filter_map(|t| datasheet::graph::tick_value(&t.1)).fold(0.0_f64, f64::max);
-            if dest.curve() == datasheet::figures::Curve::DcGain && top > 0.0 && top <= 5.0 {
+            let normalized = dest.curve() == datasheet::figures::Curve::DcGain && top > 0.0 && top <= 5.0;
+            if normalized && dest != Dest::BjtHfe {
                 why = i18n::trf!("p.{} の図は 1 を基準にした比 (normalized) です", f.page + 1);
                 continue;
             }
@@ -433,7 +435,7 @@ impl SheetView {
                     match g.values() {
                         Ok(points) if !points.is_empty() => {
                             let by = if by.is_empty() { String::new() } else { i18n::trf!("「{}」の曲線", by) };
-                            return Ok(GraphOut { dest, points, page: f.page, by });
+                            return Ok(GraphOut { dest, points, page: f.page, by, normalized });
                         }
                         _ => why = i18n::trf!("p.{} の図の曲線から点が取れません", f.page + 1),
                     }

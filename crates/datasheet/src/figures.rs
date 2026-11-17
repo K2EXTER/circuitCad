@@ -246,15 +246,14 @@ pub fn curves(caption: &str) -> Vec<Curve> {
     vec![]
 }
 
-/// The figures that show `curve`, the likeliest first: a "DC current gain" before a plain "current gain" (that can be the
-/// small signal one), then in page order.
+/// The figures that show `curve`, the likeliest first, in page order. When a sheet has a "DC current gain", its plain
+/// "current gain" figures are the small signal hfe (2N3903's "h parameters" at 1 kHz) and are left out.
 pub fn showing(figures: &[Figure], curve: Curve) -> Vec<&Figure> {
     let mut v: Vec<&Figure> = figures.iter().filter(|f| f.curves.contains(&curve)).collect();
-    let rank = |f: &Figure| {
-        let t = normalize(&f.caption);
-        u8::from(!(curve == Curve::DcGain && t.contains("dc")))
-    };
-    v.sort_by_key(|f| rank(f));
+    let dc = |f: &Figure| normalize(&f.caption).contains("dc");
+    if curve == Curve::DcGain && v.iter().any(|f| dc(f)) {
+        v.retain(|f| dc(f));
+    }
     v
 }
 
@@ -367,5 +366,19 @@ mod tests {
         assert_eq!(f[1].caption, "Fig.7 DC Current Gain", "the line below is under Fig.6, not Fig.7");
         assert_eq!(f[1].curves, vec![Curve::DcGain]);
         assert_eq!(showing(&f, Curve::DcGain)[0].page, 2);
+    }
+
+    #[test]
+    fn a_plain_current_gain_is_left_out_beside_a_dc_one() {
+        let fig = |page: usize, caption: &str| {
+            let r = Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 };
+            Figure { page, rect: r, caption: caption.into(), curves: vec![Curve::DcGain], area: r, other: r, numbers: (0, 0) }
+        };
+        // 2N3903: the small signal hfe on p.5, the DC gain on p.6
+        let f = [fig(4, "Figure 11. Current Gain"), fig(5, "Figure 15. DC Current Gain")];
+        let pages: Vec<usize> = showing(&f, Curve::DcGain).iter().map(|f| f.page).collect();
+        assert_eq!(pages, vec![5]);
+        // with no DC one, the plain one is what there is
+        assert_eq!(showing(&f[..1], Curve::DcGain).len(), 1);
     }
 }

@@ -63,11 +63,13 @@ pub fn condition(text: &str, name: &str) -> Option<f64> {
         }
         closed = *ends;
     }
-    for part in &parts {
+    for (i, part) in parts.iter().enumerate() {
         let Some((k, v)) = part.split_once('=') else { continue };
         if normalize(k) != key {
             continue;
         }
+        // "IF = IR = 10 mA": a name with no value of its own has the next one's
+        let v = if v.trim().is_empty() { parts.get(i + 1).and_then(|p| p.split_once('=')).map_or("", |n| n.1) } else { v };
         let v = v.trim_start_matches(['±', '-', '+']);
         let digits: String = v.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
         let x: f64 = digits.parse().ok()?;
@@ -80,7 +82,8 @@ pub fn condition(text: &str, name: &str) -> Option<f64> {
 pub fn prefix(unit: &str) -> Option<f64> {
     // the ohm sign (U+2126) stands for the Greek capital omega in some fonts' text
     let u = unit.trim().trim_end_matches(['.', ')']).trim_start_matches('(').replace('\u{2126}', "Ω");
-    let u = u.as_str();
+    // onsemi's "mAdc", "Vdc": a direct value's unit
+    let u = u.strip_suffix("dc").or_else(|| u.strip_suffix("DC")).filter(|p| !p.is_empty()).unwrap_or(&u);
     const BASES: [&str; 11] = ["V", "A", "Ω", "ohm", "F", "S", "s", "W", "Hz", "C", "mho"];
     for b in BASES {
         if let Some(p) = u.strip_suffix(b) {
@@ -423,6 +426,13 @@ mod tests {
         assert_eq!(prefix("µA"), Some(1e-6));
         assert_eq!(prefix("nC"), Some(1e-9));
         assert_eq!(prefix("mm"), None);
+        // onsemi's direct-value units: 10 mAdc is 10 mA
+        assert_eq!(prefix("mAdc"), Some(1e-3));
+        assert_eq!(prefix("Vdc"), Some(1.0));
+        assert_eq!(condition("(IC = 10 mAdc, VCE = 1.0 Vdc)", "IC"), Some(10.0 * 1e-3));
+        // a chain: 1N4148's trr at "IF = IR = 10 mA"
+        assert_eq!(condition("IF = IR = 10 mA,", "IF"), Some(10.0 * 1e-3));
+        assert_eq!(condition("IF = IR = 10 mA,", "IR"), Some(10.0 * 1e-3));
         assert_eq!(prefix("Typ"), None);
         assert_eq!(condition("VGS=4.5V, ID=250µA", "ID"), Some(250e-6));
         assert_eq!(condition("VGS=4.5V, ID=250µA", "vgs"), Some(4.5));

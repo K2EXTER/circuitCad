@@ -61,6 +61,12 @@ fn wanted(curve: Curve, names: &[&str], text: &str) -> Option<u8> {
     room.then_some(1)
 }
 
+/// A label that names one curve of several: a temperature ("TJ = +125°C", "-55 °C").
+fn names_a_curve(text: &str) -> bool {
+    let t: String = normalize(text).chars().filter(|c| !c.is_whitespace()).collect();
+    t.char_indices().any(|(i, c)| c.is_ascii_digit() && ["°c", "˚c", "ºc"].iter().any(|u| t[i + c.len_utf8()..].starts_with(u)))
+}
+
 /// The lines of words inside a box, each as its text and its box.
 fn lines_in(words: &[Word], area: Rect) -> Vec<(String, Rect)> {
     let mut inside: Vec<&Word> = words.iter().filter(|w| w.rect.x0 >= area.x0 && w.rect.x1 <= area.x1 && w.rect.y0 >= area.y0 && w.rect.y1 <= area.y1).collect();
@@ -217,10 +223,15 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
     let n = traces.len();
     traces.retain(|t| goes_its_way(t, curve, axes));
     // the curve nearest to one of the labels of that kind; a label far from every curve (a note in a corner) tells nothing
+    // and, for a temperature, not a curve another temperature's label is nearer to ("+25°C" printed on its curve where that curve was not traced
+    // takes the +125 °C curve passing by, which its own "+125°C" is nearer to: 2N3903's Figure 15)
+    let others: Vec<Rect> = lines_in(words, around).into_iter().filter(|(t, _)| names_a_curve(t)).map(|l| l.1).collect();
     let best = labels
         .iter()
         .filter(|l| l.0 == kind)
-        .flat_map(|l| traces.iter().enumerate().map(move |(i, t)| (distance(l.2, t), i, l.1.clone())))
+        .flat_map(|l| traces.iter().enumerate().map(move |(i, t)| (distance(l.2, t), i, l.1.clone(), l.2)))
+        .filter(|(d, i, by, r)| !names_a_curve(by) || !others.iter().any(|o| o != r && distance(*o, &traces[*i]) < *d - 1.0))
+        .map(|(d, i, by, _)| (d, i, by))
         .min_by(|a, b| a.0.total_cmp(&b.0));
     match best {
         Some((d, i, by)) if d < 25.0 => Pick::One { path: traces.swap_remove(i), by },
@@ -290,6 +301,11 @@ mod tests {
         assert!((y_at(&p, 100.0).unwrap() - 44.5).abs() < 1.5);
         // no label: the person picks
         assert_eq!(pick(&img, 2.0, &[], &axes(), Curve::DcGain, &[]), Pick::Several(3));
+        // the 25 °C curve not traced (2N3903's Figure 15): its label does not take the 150 °C curve, which its own
+        // label is nearer to
+        let img = page(&[(40.0, -0.2), (80.0, -0.2)]);
+        let words = vec![label("150°C", 30.0, 36.0), label("25°C", 30.0, 50.0), label("−55°C", 30.0, 76.0)];
+        assert_eq!(pick(&img, 2.0, &words, &axes(), Curve::DcGain, &[]), Pick::Several(2));
         // one curve: that one
         let img = page(&[(60.0, -0.2)]);
         assert!(matches!(pick(&img, 2.0, &[], &axes(), Curve::Forward, &[]), Pick::One { by, .. } if by.is_empty()));

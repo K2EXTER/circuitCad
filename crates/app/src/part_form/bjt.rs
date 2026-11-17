@@ -9,6 +9,8 @@ use part_lib::fit::{self, Fitted};
 pub struct BjtInput {
     /// (IC, hFE) lines: the hFE graph's values themselves.
     pub hfe: String,
+    /// How the hFE values were made from a normalized graph (the table's hFE they were scaled to), for the model's notes.
+    pub hfe_note: Option<String>,
     /// VCE of the hFE curve.
     pub hfe_vce: String,
     /// (IC, VBE) lines at `on_vce`.
@@ -37,6 +39,7 @@ impl Default for BjtInput {
     fn default() -> Self {
         BjtInput {
             hfe: String::new(),
+            hfe_note: None,
             hfe_vce: "1".into(),
             vbe_on: String::new(),
             on_vce: "1".into(),
@@ -127,7 +130,7 @@ impl BjtInput {
             "figs": {"hfe": "hFE と IC の図", "on": "VBE・飽和電圧の図", "cap": "容量の図"},
             "hfe_peak": 1.0,
             "hfe_absolute": true,
-            "hfe_note": "hFE と IC の図の値をそのまま使いました。実物の hFE は、ランクと個体で大きく違います (表の min・max)。",
+            "hfe_note": self.hfe_note.clone().unwrap_or_else(|| "hFE と IC の図の値をそのまま使いました。実物の hFE は、ランクと個体で大きく違います (表の min・max)。".into()),
             "hfe_norm": hfe,
             "hfe_vce": num("hFE の VCE", &self.hfe_vce)?,
             "fit_nf": self.fit_nf,
@@ -151,6 +154,7 @@ impl BjtInput {
         let peak = v["hfe_peak"].as_f64().unwrap_or(1.0);
         let hfe: Vec<[f64; 2]> = get("hfe_norm").into_iter().map(|[i, h]| [i, h * peak]).collect();
         self.hfe = lines(&hfe);
+        self.hfe_note = None;
         self.vbe_on = lines(&get("vbe_on"));
         self.vbe_sat = lines(&get("vbe_sat"));
         self.vce_sat = lines(&get("vce_sat"));
@@ -172,6 +176,7 @@ impl BjtInput {
         use super::graph_reader::short;
         use datasheet::spec_table::SpecValue;
         self.found.clear();
+        self.hfe_note = None;
         // hFE has no unit: its typ as printed
         let typ = |v: &SpecValue| if v.unit.as_deref().is_none_or(|u| u.trim().is_empty() || u == "-" || u == "—") { v.typ.map(f64::abs) } else { v.typ_si().map(f64::abs) };
         let at = |v: &SpecValue| format!("p.{}「{} {}」", v.page + 1, v.symbol, v.conditions);
@@ -257,7 +262,7 @@ impl PartForm {
     }
 
     /// Puts the fitted model into the simulation tab.
-    fn bjt_apply(&mut self) -> Result<String, String> {
+    pub(super) fn bjt_apply(&mut self) -> Result<String, String> {
         let Some(Ok(f)) = &self.bjt.result else { return Err("先に「モデルを作ってずれを見る」を押してください".into()) };
         let pins = self.parse_pins()?;
         let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
@@ -288,6 +293,9 @@ impl PartForm {
             _ => return,
         };
         *field = text;
+        if dest == Dest::BjtHfe {
+            self.bjt.hfe_note = None;
+        }
         self.bjt.result = None;
         self.bjt.message = Some((true, format!("p.{} のグラフの {} 点を入れました", page + 1, points.len())));
     }

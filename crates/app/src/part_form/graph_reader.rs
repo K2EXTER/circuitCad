@@ -159,6 +159,8 @@ pub struct GraphOut {
     pub page: usize,
     /// Which curve was taken by its label ("「Cob」の曲線"), empty when the graph had one or it was clicked.
     pub by: String,
+    /// An hFE graph normalized to 1 at one current (2N3903's Figure 15): the values are ratios, to be scaled by the table.
+    pub normalized: bool,
 }
 
 /// Units the axis labels may be printed in: a label "10" on a "mA" axis is 0.01 A.
@@ -517,7 +519,7 @@ impl GraphReader {
                     if let Some(d) = self.dest
                         && ui.button(i18n::tr(d.button())).on_hover_text(i18n::tr("取った点を、部品作成フォームの欄に入れます (前の中身は置き換えます)")).clicked()
                     {
-                        self.out = Some(GraphOut { dest: d, points: v.clone(), page: self.page, by: String::new() });
+                        self.out = Some(GraphOut { dest: d, points: v.clone(), page: self.page, by: String::new(), normalized: false });
                         self.msg = Some((true, i18n::trf!("{} 点をフォームに入れました", v.len())));
                     }
                 });

@@ -113,10 +113,21 @@ impl PartForm {
         let first = |symbols: &[&str]| symbols.iter().map(|s| sheet.spec_values(s)).find(|v| !v.is_empty()).unwrap_or_default();
         let at = |v: &SpecValue| format!("p.{}「{} {}」", v.page + 1, v.symbol, v.conditions);
         let mut found = vec![];
-        // the leakage: its value at the rated voltage gives both numbers (VRRM is in the ratings table, which has no typ)
+        // the breakdown: the table's V(BR) (its min, at its IR) as the bundled diodes have it (1N4148: 100 V at 100 µA)
+        let br = first(&["V(BR)", "V(BR)R", "VBR", "V(BR)RM"]);
+        let breakdown = br.iter().find_map(|v| Some((v.min_si().or(v.typ_si())?.abs(), v.condition("IR")?.abs(), v)));
+        if let Some((vbr, i, v)) = breakdown {
+            (self.dio_vrrm, self.dio_ir) = (short(vbr), short(i));
+            found.push((true, format!("降伏 V(BR) {} V (IR = {}A): {}", short(vbr), short(i), at(v))));
+        }
+        // else the leakage at the highest voltage measured, at room temperature (1N4148's 5 µA at 75 V, not 25 nA at
+        // 20 V: the model's breakdown is put there) (VRRM is in the ratings table, which has no typ)
         let ir = first(&["IR", "IRM"]);
-        let hot = |v: &SpecValue| v.conditions.contains("125") || v.conditions.contains("100");
-        match ir.iter().filter(|v| !hot(v)).find_map(|v| Some((v.typ_si().or(v.max_si())?.abs(), v.condition("VR"), v))) {
+        let hot = |v: &SpecValue| ["Tj", "TJ", "TA", "Ta", "Tamb", "TC"].iter().any(|t| v.condition(t).is_some_and(|c| c > 30.0));
+        let mut ir: Vec<&SpecValue> = ir.iter().filter(|v| !hot(v)).collect();
+        ir.sort_by(|a, b| b.condition("VR").unwrap_or(0.0).total_cmp(&a.condition("VR").unwrap_or(0.0)));
+        match ir.iter().find_map(|v| Some((v.typ_si().or(v.max_si())?.abs(), v.condition("VR"), *v))) {
+            _ if breakdown.is_some() => {}
             Some((i, vr, v)) => {
                 self.dio_ir = short(i);
                 if let Some(vr) = vr {
