@@ -59,12 +59,13 @@ fn has_model(kind: Option<(PartType, &'static str)>) -> bool {
 }
 
 /// A built-in footprint of the same name as a package ("SOT-23", "TO-92").
-fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Option<String> {
+pub(super) fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Option<String> {
     let names = pcb_core::footprints::names();
     let base = p.family.to_uppercase();
     let count = pins.map(<[String]>::len).or(p.pins.map(|n| n as usize));
-    // the name as written, its family, and either with the pin count ("SOT-23" of a 5-pin part is the SOT-23-5)
-    let mut wanted = vec![p.name.clone(), base.clone()];
+    // the name as written, its family, and either with the pin count ("SOT-23" of a 5-pin part is the SOT-23-5); a diode's
+    // outline by its "D_" name ("SOD-123" is the D_SOD-123)
+    let mut wanted = vec![p.name.clone(), base.clone(), format!("D_{base}")];
     if let Some(n) = count {
         wanted.extend([format!("{}-{n}", p.name), format!("{base}-{n}")]);
     }
@@ -113,9 +114,19 @@ fn tab_as_pin_2(pins: &[(String, String)]) -> Option<String> {
     pins.iter().find(|p| (p.0.eq_ignore_ascii_case("TAB") || p.0 == "4") && p.1.eq_ignore_ascii_case(&two.1)).map(|p| p.0.clone())
 }
 
-/// Package families whose leads stand in two rows (the form's "デュアル").
+/// Package families whose leads stand in two rows (the form's "デュアル"): the small outlines, and the 6- and 8-lead SOT and SC
+/// outlines (three or four leads a side).
 fn is_dual(family: &str) -> bool {
-    matches!(family, "soic" | "so" | "sop" | "tssop" | "msop" | "vssop" | "ssop" | "dip" | "pdip")
+    matches!(family, "soic" | "so" | "sop" | "tssop" | "msop" | "vssop" | "ssop" | "dip" | "pdip" | "sot-363" | "sot-563" | "sot-583" | "sc-88" | "sc-74")
+}
+
+/// The pin of an exposed pad in a pin table: a row named as one ("EP", "PAD", "THERMAL PAD", "EXPOSED PAD", "PowerPAD").
+fn exposed_pad_pin(pins: &str) -> Option<String> {
+    pins.lines().find_map(|l| {
+        let mut t = l.split_whitespace();
+        let (num, name) = (t.next()?, t.next()?.to_ascii_uppercase());
+        matches!(name.as_str(), "EP" | "PAD" | "EPAD" | "THERMAL" | "THERMALPAD" | "EXPOSED" | "EXPOSEDPAD" | "POWERPAD" | "SLUG").then(|| num.to_string())
+    })
 }
 
 impl FormDraft {
@@ -146,11 +157,13 @@ impl FormDraft {
         [pick(r, v), pick(r, i).or_else(|| pick(&self.recommended, i)), pick(r, p), pick(r, &["TJ", "Tj"])]
     }
 
-    /// The recommended land pattern of the chosen package (its family and pin count), when the data sheet draws it in two rows.
+    /// The recommended land pattern of the chosen package (its family and pin count), when the data sheet draws it in two rows or
+    /// on four sides. An exposed pad's pin may be among the pins counted (16 pins and the pad as pin 17).
     pub(super) fn land(&self) -> Option<&LandPattern> {
         let p = self.packages.get(self.package)?;
         let n = self.pin_count();
-        self.lands.iter().find(|l| l.dual() && l.family == Some(p.family) && n.is_none_or(|n| n == l.pins))
+        let pins_fit = |l: &LandPattern| n.is_none_or(|n| n == l.pins || (l.ep.is_some() && n == l.pins + 1));
+        self.lands.iter().find(|l| (l.dual() || l.four_sided()) && l.family == Some(p.family) && pins_fit(l))
     }
 }
 
@@ -164,6 +177,10 @@ pub(super) struct Sizes {
     pub span: Option<(f64, f64)>,
     pub foot: Option<(f64, f64)>,
     pub lead_w: Option<(f64, f64)>,
+    /// The body across the rows (E) as (min, max): a no-lead package's terminals end at its edge.
+    pub e: Option<(f64, f64)>,
+    /// A no-lead package's exposed pad: E2 across the rows, D2 along them.
+    pub ep: Option<(f64, f64)>,
 }
 
 pub(super) fn sizes(t: &DimTable) -> Sizes {
@@ -180,6 +197,8 @@ pub(super) fn sizes(t: &DimTable) -> Sizes {
         span,
         foot: t.get("L").and_then(|d| d.range()),
         lead_w: t.get("b").and_then(|d| d.range()),
+        e: t.get("E").and_then(|d| d.range()),
+        ep: typ("E2").zip(typ("D2")),
     }
 }
 
@@ -302,6 +321,15 @@ impl PartForm {
                     how += &format!("。{t} は 2 番と同じピン (タブ) なので、2 番のパッドにまとめました");
                 }
                 done.push(how);
+            } else if let Some(sides) = datasheet::draft::no_lead_sides(p.family) {
+                done.push(self.apply_no_lead(p, sides, d.land(), s.as_ref()));
+            } else if datasheet::draft::two_terminal(p.family)
+                && let Some((span, foot, w)) = s.as_ref().and_then(|s| Some((s.span.or(s.e)?, s.foot?, s.lead_w?)))
+                && let Some(g) = pcb_core::land::gull_wing(span, foot, w)
+            {
+                self.fp_preset.clear();
+                (self.pkg, self.pitch, self.len, self.width) = (PkgKind::Chip2, g.row, g.pad_l, g.pad_w);
+                done.push(format!("パッケージ: {} (2 端子)、パッドは寸法表から IPC の式で {:.2} × {:.2} mm・中心の間 {:.2} mm (推奨のパッドの図があれば見比べてください)", p.name, g.pad_l, g.pad_w, g.row));
             } else if is_dual(p.family) {
                 self.fp_preset.clear();
                 self.pkg = PkgKind::Dual;
@@ -427,9 +455,89 @@ impl PartForm {
         done
     }
 
+    /// A QFN (pads on four sides: the form's "クアッド") or a SON / DFN (two rows: "デュアル") with its exposed pad: the pads from
+    /// the maker's land pattern when it draws one, else from the dimension table by IPC's sums for flat terminals (body E, terminal
+    /// L and b, pitch e), the exposed pad from the drawing or from E2 × D2. The pad's pin is the pin table's EP / PAD row, else the
+    /// drawing's number in it, else the next number, and a row for it is added. Returns the line for the list of what was done.
+    pub(super) fn apply_no_lead(&mut self, p: &PackageName, sides: u32, land: Option<&LandPattern>, s: Option<&Sizes>) -> String {
+        self.fp_preset.clear();
+        self.tht = false;
+        self.pkg = if sides == 4 { PkgKind::Quad } else { PkgKind::Dual };
+        let shape = if sides == 4 { "クアッド" } else { "デュアル" };
+        let mut how = format!("パッケージ: {} ({shape}、足の無い形)", p.name);
+        let mut ep = None;
+        if let Some(l) = land {
+            if let Some(e) = l.pitch {
+                self.pitch = e;
+            }
+            if let Some(r) = l.row {
+                if sides == 4 {
+                    self.span = r;
+                } else {
+                    self.row = r;
+                }
+            }
+            (self.len, self.width) = (l.pad_l, l.pad_w);
+            ep = l.ep.map(|e| (e, l.ep_pin.clone()));
+            how += &format!("、パッドは推奨ランドパターン (p.{}) の {:.2} × {:.2} mm・向かいのパッドの中心の間 {:.2} mm・ピッチ {} mm", l.page + 1, l.pad_l, l.pad_w, l.row.unwrap_or(0.0), l.pitch.map_or("—".into(), |e| format!("{e:.2}")));
+        } else if let Some(s) = s {
+            if let Some(e) = s.pitch {
+                self.pitch = e;
+            }
+            if let (Some(span), Some(foot), Some(w)) = (s.e, s.foot, s.lead_w)
+                && let Some(mut g) = pcb_core::land::no_lead(span, foot, w)
+            {
+                // the pads' inner ends kept 0.2 mm off the exposed pad (IPC's heel side can reach it)
+                if let Some((across, _)) = s.ep {
+                    let outer = g.row / 2.0 + g.pad_l / 2.0;
+                    let least = across / 2.0 + 0.2;
+                    if g.row / 2.0 - g.pad_l / 2.0 < least {
+                        g.pad_l = (outer - least).max(0.2);
+                        g.row = 2.0 * (outer - g.pad_l / 2.0);
+                    }
+                }
+                if sides == 4 {
+                    self.span = g.row;
+                } else {
+                    self.row = g.row;
+                }
+                (self.len, self.width) = (g.pad_l, g.pad_w);
+                how += &format!("、パッドは寸法表から IPC の式で {:.2} × {:.2} mm・向かいのパッドの中心の間 {:.2} mm・ピッチ {} mm (推奨ランドパターンがあれば見比べてください)", g.pad_l, g.pad_w, g.row, s.pitch.map_or("—".into(), |e| format!("{e:.2}")));
+            }
+            ep = s.ep.map(|e| (e, None));
+        }
+        match ep {
+            Some(((w, h), drawn)) => {
+                let pin = exposed_pad_pin(&self.pins_text).or(drawn).unwrap_or_else(|| {
+                    let top = self.pins_text.lines().filter_map(|l| l.split_whitespace().next()?.parse::<u32>().ok()).max().unwrap_or(0);
+                    (top + 1).to_string()
+                });
+                if !self.pins_text.lines().any(|l| l.split_whitespace().next() == Some(pin.as_str())) {
+                    if !self.pins_text.is_empty() && !self.pins_text.ends_with('\n') {
+                        self.pins_text.push('\n');
+                    }
+                    self.pins_text += &format!("{pin} EP");
+                }
+                (self.thermal_on, self.thermal_pin, self.thermal_w, self.thermal_h) = (true, pin.clone(), w, h);
+                how += &format!("。放熱パッド {w:.2} × {h:.2} mm (ピン {pin}。GND などにつなぐなら、ピン表の名前を直してください)");
+            }
+            None => {
+                self.thermal_on = false;
+                how += "。放熱パッドの寸法は見つかりませんでした (寸法表の D2・E2 か推奨ランドパターンを見て「④ 部品の形」で入れてください)";
+            }
+        }
+        how
+    }
+
     /// For the command line: the draft made and all of it put in (`--form-draft`, for screenshots and checks).
-    pub fn draft_all(&mut self) {
-        if let Some(d) = self.make_draft() {
+    pub fn draft_all(&mut self, package: Option<&str>) {
+        if let Some(mut d) = self.make_draft() {
+            if let Some(k) = package.and_then(|f| d.packages.iter().position(|p| p.family.eq_ignore_ascii_case(f))) {
+                d.package = k;
+                if let Some(j) = pins_of_package(&d.pin_sources, &d.packages[k]) {
+                    d.pin_pick = j;
+                }
+            }
             let done = self.apply_draft(&d);
             // what went in, for scripts (`--form-draft`)
             for line in &done {
@@ -517,13 +625,14 @@ impl PartForm {
                 // its land pattern
                 if let Some(l) = d.land() {
                     ui.label("");
-                    ui.small(i18n::trf!("推奨ランドパターン: パッド {:.2} × {:.2} mm、列の間 {}、ピッチ {} mm", l.pad_l, l.pad_w, l.row.map_or("—".into(), |r| format!("{r:.2}")), l.pitch.map_or("—".into(), |e| format!("{e:.2}"))))
+                    let ep = l.ep.map_or(String::new(), |(w, h)| i18n::trf!("、放熱パッド {:.2} × {:.2} mm", w, h));
+                    ui.small(i18n::trf!("推奨ランドパターン: パッド {:.2} × {:.2} mm、列の間 {}、ピッチ {} mm{}", l.pad_l, l.pad_w, l.row.map_or("—".into(), |r| format!("{r:.2}")), l.pitch.map_or("—".into(), |e| format!("{e:.2}")), ep))
                         .on_hover_text(i18n::tr("データシートの推奨ランドパターンの図の「14X (1.55)」のような書き方から読みました (14 個あるのがパッド、ピン数 − 2 個あるのがピッチ、1 つだけの大きな数が列の中心の間)。パッケージを入れると、この寸法でパッドを作ります"));
                     page_button(ui, Some(l.page), &mut go);
                     ui.end_row();
-                } else if d.packages.get(d.package).is_some_and(|p| is_dual(p.family)) {
+                } else if d.packages.get(d.package).is_some_and(|p| is_dual(p.family) || datasheet::draft::no_lead_sides(p.family).is_some() || datasheet::draft::two_terminal(p.family)) {
                     ui.label("");
-                    ui.small(egui::RichText::new(i18n::tr("推奨ランドパターンは読めませんでした (寸法表があれば、IPC の式でパッドを計算します)")).weak());
+                    ui.small(egui::RichText::new(i18n::tr("推奨ランドパターンは読めませんでした (寸法表があれば、IPC の式でパッドを計算します。QFN・SON は D2・E2 が放熱パッド)")).weak());
                     ui.label("");
                     ui.end_row();
                 }
@@ -656,6 +765,42 @@ mod tests {
         assert_eq!(s.span, Some((5.8, 6.2)));
     }
 
+    /// A QFN from its dimension table (no land drawing): クアッド, the pads by IPC's no-lead sums kept off the exposed pad, the
+    /// exposed pad E2 × D2 as a new pin after the last; a SON from TI's land drawing: デュアル, the drawing's pad and its number.
+    #[test]
+    fn no_lead_packages_get_their_exposed_pad() {
+        let qfn = table(&[("A", Some(0.8), Some(0.85), Some(0.9)), ("b", Some(0.18), Some(0.25), Some(0.30)), ("D", Some(2.9), Some(3.0), Some(3.1)), ("D2", Some(1.6), Some(1.7), Some(1.8)), ("E", Some(2.9), Some(3.0), Some(3.1)), ("E2", Some(1.6), Some(1.7), Some(1.8)), ("e", None, Some(0.5), None), ("L", Some(0.3), Some(0.4), Some(0.5))]);
+        let s = sizes(&qfn);
+        let mut f = PartForm { pins_text: (1..=16).map(|i| format!("{i} P{i}")).collect::<Vec<_>>().join("\n"), ..Default::default() };
+        let p = PackageName { name: "QFN-16".into(), family: "qfn", pins: Some(16), count: 1, page: 0 };
+        let how = f.apply_no_lead(&p, 4, None, Some(&s));
+        assert!(f.pkg == PkgKind::Quad && f.fp_preset.is_empty(), "{how}");
+        assert_eq!(f.pitch, 0.5);
+        // the inner ends 0.2 mm off the 1.7 mm pad, the outer ends where IPC puts them
+        assert!((f.span / 2.0 - f.len / 2.0 - (0.85 + 0.2)).abs() < 1e-9, "{how}");
+        assert!((f.span / 2.0 + f.len / 2.0 - 3.93 / 2.0).abs() < 0.03, "{how}");
+        assert!((f.thermal_on, f.thermal_pin.as_str(), f.thermal_w, f.thermal_h) == (true, "17", 1.7, 1.7), "{how}");
+        assert!(f.pins_text.ends_with("16 P16\n17 EP"));
+        let def = f.to_def().unwrap();
+        let fp = def.package.build("QFN").unwrap();
+        assert_eq!(fp.pads.len(), 17);
+
+        // TI's WSON-8 land, a pin table that names the pad already
+        let land = LandPattern { page: 48, family: Some("wson"), pins: 8, pad_l: 0.5, pad_w: 0.25, pitch: Some(0.5), row: Some(1.9), quad: false, ep: Some((0.9, 1.6)), ep_pin: Some("9".into()) };
+        let mut f = PartForm { pins_text: "1 OUT1\n2 IN1-\n3 IN1+\n4 GND\n5 IN2+\n6 IN2-\n7 OUT2\n8 VCC\n9 PAD".into(), ..Default::default() };
+        let p = PackageName { name: "WSON".into(), family: "wson", pins: None, count: 1, page: 0 };
+        let how = f.apply_no_lead(&p, 2, Some(&land), None);
+        assert!(f.pkg == PkgKind::Dual && (f.pitch, f.row, f.len, f.width) == (0.5, 1.9, 0.5, 0.25), "{how}");
+        assert!((f.thermal_pin.as_str(), f.thermal_w, f.thermal_h) == ("9", 0.9, 1.6) && f.pins_text.lines().count() == 9, "{how}");
+        assert!(how.contains("推奨ランドパターン (p.49)"), "{how}");
+        // no exposed pad found: none made, and said so
+        let mut f = PartForm::default();
+        let how = f.apply_no_lead(&p, 2, Some(&LandPattern { ep: None, ep_pin: None, ..land }), None);
+        assert!(!f.thermal_on && how.contains("D2・E2"), "{how}");
+        assert_eq!(exposed_pad_pin("1 A\n17 EP"), Some("17".into()));
+        assert_eq!(exposed_pad_pin("1 A\n2 B"), None);
+    }
+
     #[test]
     fn categories_and_packages_map_to_the_form() {
         assert_eq!(kind_of("MOSFET"), Some(PartType::Transistor));
@@ -691,6 +836,8 @@ mod tests {
         assert_eq!(pins_of_package(&sources, &p("TO-92", "to-92")), Some(2));
         assert_eq!(pins_of_package(&sources, &p("SOT-23", "sot-23")), Some(1));
         assert_eq!(pins_of_package(&[src(None, 3)], &p("SOT-23", "sot-23")), None);
-        assert!(is_dual("tssop") && !is_dual("sot-223"));
+        assert!(is_dual("tssop") && is_dual("sot-363") && !is_dual("sot-223"));
+        // a diode's outline by its D_ name
+        assert_eq!(builtin_footprint(&p("SOD-123", "sod-123"), None).as_deref(), Some("D_SOD-123"));
     }
 }

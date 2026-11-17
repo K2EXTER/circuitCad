@@ -414,6 +414,11 @@ impl SheetView {
         self.doc.as_ref().map(|d| (d.ds.part_numbers(name), d.ds.voltage_options())).unwrap_or_default()
     }
 
+    /// The package of each part number of the family of `name` (`Datasheet::part_packages`).
+    pub fn part_packages(&self, name: &str) -> Vec<(String, String)> {
+        self.doc.as_ref().map(|d| d.ds.part_packages(name)).unwrap_or_default()
+    }
+
     /// A Darlington's resistors R1, R2 [Ω] and the page, from the open PDF's circuit drawing (`Datasheet::darlington_resistors`).
     pub fn darlington_resistors(&self) -> Option<(f64, f64, usize)> {
         self.doc.as_ref().and_then(|d| d.ds.darlington_resistors())

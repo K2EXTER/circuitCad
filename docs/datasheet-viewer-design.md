@@ -280,3 +280,22 @@
 - モデルを入れるときのピンの役 (`pin_import::role_letter`): COLLECTOR・BASE・EMITTER・DRAIN・GATE・SOURCE・ANODE・CATHODE を C・B・E・D・G・S・A・K として探す (トランジスタ・MOSFET・ダイオードの節)。レギュレータの GND の役に GROUND。
 - 手元: MC7800 は TO-220-3 で INPUT・GROUND・OUTPUT、2N3903 は STYLE 1 で EMITTER・BASE・COLLECTOR (TO-92-3、モデルを入れて保存まで)、P2N2222A・BC546 は STYLE 17 で COLLECTOR・BASE・EMITTER、TIP120 は STYLE 1 で BASE・COLLECTOR・EMITTER (タブは 2 番)、BAT54 は STYLE 8 で ANODE・NC・CATHODE。
 - まだ: MOSFET (AO3400A・BSS138・IRF540N) のピンは記号の絵の G・D・S だけで番号が無い。PN2222A・BD135/136 は型の名前が読めない。ピンの図が絵だけの PDF は OCR が要る。
+
+## 段階29: QFN・SON のランドパターンと放熱パッド (2026-11-18、候補 Q3 の一部)
+
+- パッケージの名前 (`draft.rs` の `FAMILIES`): VQFN・WQFN・UQFN・X2QFN・LFCSP・USON・X2SON・VDFN・UDFN・WDFN・TDFN・SOT-583 を足した。裸の「so」を最後に移した (前は「so」が先に当たって SON・SOD-123 などが読めなかった)。`no_lead_sides` (QFN 系は 4 辺、SON・DFN 系は 2 列)、`two_terminal` (SOD・SMA・DO-214)。
+- TI の推奨ランドパターン (`land.rs`): 4 辺の QFN はピッチが ピン数 − 4 個の隙間 (「12X (0.5)」)。題名が QFN 系か、ピン数 − 4 の数があってピン数 − 2 が無ければ 4 辺 (`LandPattern::quad`・`four_sided`)。括弧が数字と離れた「( 1.68)」もつなぐ。うしろか真下に「TYP」のある大きさ (ビアの間隔「(0.58) TYP」) と「HOLE」「VIA」「DRILL」の大きさ (穴径。数があっても数えない: TO-92 の「3X ( 0.85) HOLE」) は列の間と放熱パッドの候補にしない。放熱パッド (`ep`・`ep_pin`) は、図の中にピン数 + 1 の番号があるとき、列の間より小さく パッドの幅より大きい裸の大きさの大きい 2 つ (2 つめが 1 つめの半分より小さければ正方形)。2 列では列のパッドの間に入らない方を列に沿う向きに。
+- 実物: LM339B の WQFN-16 (RTE) は 4 辺・0.6 × 0.24・ピッチ 0.5・向かいの中心の間 2.8・放熱パッド 1.68 角 (ピン 17)。LM393B の WSON-8 (DSG) は 0.5 × 0.25・ピッチ 0.5・列の間 1.9・放熱パッド 0.9 × 1.6 (ピン 9)。手元のほかの PDF の読みは前と同じ。
+- 寸法表から (`pcb_core::land::no_lead`): 推奨ランドパターンが無ければ、本体の E・端子の L・b と IPC の足の無い形の目標で列 (クアッドは向かい) の間とパッド、D2・E2 から放熱パッド。パッドの内の端は放熱パッドから 0.2 mm 離す (IPC の式は内へ長く、放熱パッドに近づく)。
+- 下書き (`part_form/draft.rs` の `apply_no_lead`): QFN 系は「クアッド」、SON・DFN 系は「デュアル」と放熱パッド。放熱パッドのピンは、ピン表の EP・PAD・THERMAL・EXPOSED・POWERPAD の行、無ければ図の番号、無ければ最後の番号 + 1 で、ピン表に「N EP」の行を足す。推奨ランドパターンの選び方は、ピン数がランドのピン数か + 1 (放熱パッドをピンに数える表) で合えばよい。2 端子の形 (SOD-323 など、組み込みが無いもの) は寸法表から `gull_wing` で 2 端子チップに。6 本足の SOT-363・SOT-563・SC-88・SC-74 と 8 本の SOT-583 はデュアル。SOD-123 は組み込みの D_SOD-123。
+- 撮影用の起動引数 `--form-draft-package wson` (`--form-draft` で使うパッケージの系列)。
+- まだ: onsemi・Nexperia・ST の推奨パッドの図 (Nexperia は「0.5 (2×)」のようにパッドとレジストの両方に同じ数が付き、どちらがパッドか文字からは決められない。LTC (ADI) は「0.70 ±0.05」のように数の無い寸法)。寸法表が文字で無い (線の絵の) PDF。QFN の向かいの間が縦横で違う形 (`PackageSpec::Quad` は 1 つの値)。
+
+## 段階30: 電圧違いをまとめて作る (2026-11-18、候補 Q17)
+
+- 型番のパッケージ (`ordering::part_packages`、`Datasheet::part_packages`): 注文情報の表の行で、型番の右のセル (同じ行の次の型番まで) にある最初のパッケージ名 (`draft::package_of`)。TI の「LP5907MFX-1.2/NOPB Active Production SOT-23 (DBV)」は SOT-23、「X2SON (DQN)」は X2SON。DSBGA は名前の表に無いので付かない。
+- 版の選び方 (`reg_fill::versions`): 電圧ごとに、パッケージごとのいちばん短い型番。パッケージの分からない電圧は 1 版でフォームのパッケージ。
+- 作り方 (`PartForm::reg_series`): 版ごとに表をその型番で読み直し (電圧ごとのページ)、出力電圧が表に無ければ型番の電圧、範囲は比で、入力電圧は差でずらす。組み込みの形はピン表の番号で選ぶ (TO-220 → TO-220-3、SOT-23 → SOT-23-5)。組み込みの形が無いパッケージ (DPAK・X2SON・DSBGA) と、ピン表が組み込みの形に合わない版は作らず、理由を出す。モデルは版ごとに当てはめ直し、`.subckt` の名前は型番。全部を `part_lib::variants::VariantSeries` にして展開し、ライブラリに保存する。
+- 確かめ: MC7800 の書き方の注文情報の表を書いた 1 ページの PDF (手で作ったもの、リポジトリには入れない) で、下書き → LM7805 の例の値 → `--form-variants DIR` が MC7805CT・MC7809CT・MC7812CT・MC7815CT を TO-220-3 で作り (MC7805BDT は DPAK で作らない)、`ccad --lib DIR` で MC7812CT に 20 V を入れると出力 12.00 V。手元に LP5907・MC7800 の本物の PDF が無く、実物の注文情報の表では確かめていない。
+- まだ: 組み込みの形の無いパッケージ (DPAK・D2PAK・X2SON・DSBGA)、温度範囲違い、レギュレータ以外 (基準電圧・MOSFET の型番違い)、版をシリーズのファイルとしてライブラリに置くこと (今は版ごとのふつうの部品)。
+

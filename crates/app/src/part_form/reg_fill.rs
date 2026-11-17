@@ -340,6 +340,9 @@ impl super::PartForm {
     pub(super) fn reg_find_variants(&mut self) {
         let (parts, options) = self.sheet.part_numbers(&self.name);
         self.reg.variants = variants(&parts, &options, &self.name);
+        // the packages the part numbers are ordered in (for making every version at once)
+        self.reg.parts = parts.iter().filter_map(|(p, _)| nominal_from_name(p).map(|v| (v, p.clone()))).collect();
+        self.reg.packages = self.sheet.part_packages(&self.name);
         if !self.reg.variants.is_empty() && self.reg.vout.trim().is_empty() && !self.reg.adjustable {
             self.reg.found.push((true, format!("この 1 冊は出力電圧が {} 通りあります。下の「電圧違い」で型番を選ぶと、出力電圧が入ります", self.reg.variants.len())));
         }
@@ -356,6 +359,142 @@ impl super::PartForm {
             self.reg.found.insert(0, (true, format!("出力電圧 {} V: 型番 {part} から", show(v))));
         }
         self.reg.result = None;
+    }
+}
+
+/// The versions to make of a family: per voltage, one part number per package (the shortest), from the part numbers
+/// (`parts`: voltage, part number) and their packages (`packages`: part number, package name). A voltage whose part numbers
+/// name no package is one version, named as `variants` names it, in the form's package (`None`).
+pub fn versions(variants: &[(f64, String)], parts: &[(f64, String)], packages: &[(String, String)]) -> Vec<(f64, String, Option<String>)> {
+    let mut out: Vec<(f64, String, Option<String>)> = vec![];
+    for (v, first) in variants {
+        let mut here: Vec<(String, String)> = vec![];
+        for (_, p) in parts.iter().filter(|(pv, _)| (pv - v).abs() < 1e-9) {
+            let Some(pkg) = packages.iter().find(|(n, _)| n.eq_ignore_ascii_case(p)).map(|x| x.1.clone()) else { continue };
+            match here.iter_mut().find(|h| h.1 == pkg) {
+                Some(h) if p.len() < h.0.len() => h.0 = p.clone(),
+                Some(_) => {}
+                None => here.push((p.clone(), pkg)),
+            }
+        }
+        if here.is_empty() {
+            out.push((*v, first.clone(), None));
+        } else {
+            out.extend(here.into_iter().map(|(p, pkg)| (*v, p, Some(pkg))));
+        }
+    }
+    out
+}
+
+impl super::PartForm {
+    /// Every voltage (and package) of the data sheet made at once, as a family (`part_lib::variants::VariantSeries`): for each
+    /// version the table read again for its part number (`reg_choose_variant`), the regulator fitted at its voltage, put into
+    /// 「② シミュレーション」, and its package's built-in footprint chosen (a package with none is left out and said so). The form
+    /// is put back as it was. Returns the family and one line per version left out.
+    pub(super) fn reg_series(&mut self) -> Result<(part_lib::variants::VariantSeries, Vec<String>), String> {
+        if self.reg.adjustable || self.reg.variants.is_empty() {
+            return Err("電圧違いの型番がありません (「PDF の表から読む」で注文情報の型番を探します)".into());
+        }
+        let list = versions(&self.reg.variants, &self.reg.parts, &self.reg.packages);
+        // what is changed for each version, to put back
+        let keep = (self.name.clone(), self.reg.clone(), self.sim, self.sim_name.clone(), self.sim_text.clone(), self.sim_pins.clone(), self.sim_limits.clone(), self.sim_origin.clone(), self.description.clone(), self.fp_preset.clone());
+        let numbers: Vec<String> = self.pins_text.lines().filter_map(|l| l.split_whitespace().next().map(str::to_string)).collect();
+        let mut made: Vec<(part_lib::PartDef, part_lib::variants::Variant)> = vec![];
+        let mut left = vec![];
+        for (v, part, pkg) in &list {
+            self.name = keep.0.clone();
+            self.reg = keep.1.clone();
+            self.description = keep.8.clone();
+            self.fp_preset = keep.9.clone();
+            // the version's own output: its table's (page of its voltage), else its part number's. What the table does not
+            // give again for it follows its voltage: the output's range in proportion, the test input by the difference
+            let old = keep.1.vout.trim().parse::<f64>().ok().filter(|o| *o > 0.0);
+            self.reg.vout.clear();
+            self.reg.vrange.clear();
+            self.reg_choose_variant(*v, part);
+            if let Some(o) = old {
+                let nums = |t: &str| t.split_whitespace().map(str::parse::<f64>).collect::<Result<Vec<_>, _>>().ok();
+                if self.reg.vrange.trim().is_empty()
+                    && let Some(r) = nums(&keep.1.vrange).filter(|r| r.len() == 2)
+                {
+                    self.reg.vrange = format!("{} {}", show(r[0] * v / o), show(r[1] * v / o));
+                }
+                if self.reg.vin0 == keep.1.vin0
+                    && let Ok(vin) = keep.1.vin0.trim().parse::<f64>()
+                {
+                    self.reg.vin0 = show(vin + v - o);
+                }
+            }
+            if let Some(pkg) = pkg {
+                let Some((family, pins)) = datasheet::draft::package_of(pkg) else { continue };
+                let name = datasheet::draft::PackageName { name: pkg.clone(), family, pins, count: 1, page: 0 };
+                match super::draft::builtin_footprint(&name, Some(&numbers)) {
+                    Some(fp) => self.fp_preset = fp,
+                    None => {
+                        left.push(match super::draft::builtin_footprint(&name, None) {
+                            Some(fp) => format!("{part} ({pkg}): ピン表の番号 ({}) が組み込みの {fp} のパッドと合わないので作りませんでした (「③ ピン」を直してください)", numbers.join(" ")),
+                            None => format!("{part} ({pkg}): 組み込みの形が無いので作りませんでした"),
+                        });
+                        continue;
+                    }
+                }
+            }
+            self.regulator_make();
+            let fitted = match self.reg.result.clone() {
+                Some(Ok(f)) => f,
+                Some(Err(e)) => {
+                    left.push(format!("{part}: {e}"));
+                    continue;
+                }
+                None => continue,
+            };
+            let def = self.linear_apply(&fitted, self.reg_roles()).and_then(|_| self.to_def());
+            match def {
+                Ok(d) => {
+                    let note = match pkg {
+                        Some(p) => format!("出力 {} V、{p}", show(*v)),
+                        None => format!("出力 {} V", show(*v)),
+                    };
+                    let variant = part_lib::variants::Variant { name: d.name.clone(), value: format!("{}V", show(*v)), sim: d.sim.clone(), package: Some((d.footprint_name(), d.package.clone())), note };
+                    made.push((d, variant));
+                }
+                Err(e) => left.push(format!("{part}: {e}")),
+            }
+        }
+        (self.name, self.reg, self.sim, self.sim_name, self.sim_text, self.sim_pins, self.sim_limits, self.sim_origin, self.description, self.fp_preset) = keep;
+        let Some(base) = made.first().map(|m| m.0.clone()) else { return Err(format!("1 つも作れませんでした: {}", left.join(" / "))) };
+        // the base's description is the form's own (each version adds its voltage and package)
+        let base = part_lib::PartDef { description: self.description.clone(), ..base };
+        let series = part_lib::variants::VariantSeries { series: datasheet::ordering::family(&self.name), base, variants: made.into_iter().map(|m| m.1).collect() };
+        Ok((series, left))
+    }
+
+    /// The versions read from the open PDF (keeping the regulator's values) and all made (`--form-variants`).
+    pub fn reg_variants_and_make_all(&mut self) {
+        self.reg_find_variants();
+        self.reg_make_all();
+    }
+
+    /// The regulator section's last message (for the command line).
+    pub fn reg_message(&self) -> String {
+        self.reg.message.as_ref().map_or(String::new(), |m| m.1.clone())
+    }
+
+    /// The button's work: the family made and its parts handed to the editor to save (`PartForm::batch`).
+    pub(super) fn reg_make_all(&mut self) {
+        match self.reg_series() {
+            Ok((series, left)) => {
+                let parts = series.expand();
+                let names: Vec<String> = parts.iter().map(|p| p.name.clone()).collect();
+                let mut msg = format!("{} 部品を作ってライブラリに保存します: {}", parts.len(), names.join("、"));
+                if !left.is_empty() {
+                    msg += &format!(" (作らなかったもの: {})", left.join(" / "));
+                }
+                self.reg.message = Some((true, msg));
+                self.batch = parts;
+            }
+            Err(e) => self.reg.message = Some((false, e)),
+        }
     }
 }
 
@@ -489,6 +628,48 @@ mod tests {
         let t3 = [v(4, "Load", "IOUT = 1mA to 250mA", None, 0.001, None, Some("%/mA"))];
         r.fill_from_pdf("LP5907", |s| t3.iter().filter(|x| x.symbol == s).cloned().collect());
         assert_eq!(r.load, "0.249% 249m");
+    }
+
+    /// Per voltage one part number per package (the shortest); a voltage whose part numbers name no package is one version.
+    #[test]
+    fn versions_by_voltage_and_package() {
+        let s = |x: &str| x.to_string();
+        let variants = vec![(1.8, s("LP5907MFX-1.8")), (3.3, s("LP5907MFX-3.3")), (5.0, s("LP5907-5"))];
+        let parts = vec![(1.8, s("LP5907MFX-1.8")), (1.8, s("LP5907SNX-1.8")), (3.3, s("LP5907MFX-3.3")), (3.3, s("LP5907MFXQ-3.3"))];
+        let packages = vec![(s("LP5907MFX-1.8"), s("SOT-23")), (s("LP5907SNX-1.8"), s("X2SON")), (s("LP5907MFX-3.3"), s("SOT-23")), (s("LP5907MFXQ-3.3"), s("SOT-23"))];
+        assert_eq!(
+            versions(&variants, &parts, &packages),
+            vec![(1.8, s("LP5907MFX-1.8"), Some(s("SOT-23"))), (1.8, s("LP5907SNX-1.8"), Some(s("X2SON"))), (3.3, s("LP5907MFX-3.3"), Some(s("SOT-23"))), (5.0, s("LP5907-5"), None)]
+        );
+    }
+
+    /// Every version made at once (no PDF: the LM7805 example's values): a part per voltage in its package's built-in
+    /// footprint, each with its own model at its voltage; a package with no built-in outline left out and said so; the form as
+    /// it was afterwards.
+    #[test]
+    fn every_voltage_is_made_at_once() {
+        let mut f = super::super::PartForm { name: "MC7800".into(), pins_text: "1 IN\n2 GND\n3 OUT".into(), fp_preset: "TO-220-3".into(), ..Default::default() };
+        f.regulator_example_and_make(false);
+        let s = |x: &str| x.to_string();
+        f.reg.variants = vec![(5.0, s("MC7805CT")), (12.0, s("MC7812CT"))];
+        f.reg.parts = vec![(5.0, s("MC7805CT")), (5.0, s("MC7805BDT")), (12.0, s("MC7812CT"))];
+        f.reg.packages = vec![(s("MC7805CT"), s("TO-220")), (s("MC7805BDT"), s("DPAK")), (s("MC7812CT"), s("TO-220"))];
+        let before = (f.name.clone(), f.reg.vout.clone(), f.sim_text.clone(), f.fp_preset.clone());
+        let (series, left) = f.reg_series().unwrap();
+        assert_eq!(series.series, "MC78");
+        let parts = series.expand();
+        let names: Vec<&str> = parts.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["MC7805CT", "MC7812CT"], "{left:?}");
+        assert!(left.len() == 1 && left[0].contains("MC7805BDT") && left[0].contains("DPAK"), "{left:?}");
+        assert_eq!(parts[0].footprint_name.as_deref(), Some("TO-220-3"));
+        assert_eq!(parts[1].value.as_deref(), Some("12V"));
+        let (a, b) = (parts[0].sim.as_ref().unwrap(), parts[1].sim.as_ref().unwrap());
+        assert!(a.text.contains("MC7805CT") && b.text.contains("MC7812CT") && a.text != b.text);
+        assert!(parts[1].description.starts_with("MC78 の 出力 12 V、TO-220"), "{}", parts[1].description);
+        assert_eq!((f.name.clone(), f.reg.vout.clone(), f.sim_text.clone(), f.fp_preset.clone()), before, "the form put back");
+        // the button hands them over for saving
+        f.reg_make_all();
+        assert_eq!(f.batch.len(), 2);
     }
 
     #[test]

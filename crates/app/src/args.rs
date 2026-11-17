@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--loop-chart nyquist|nichols [plain]] [--locus part from to count out in|- [f0 f1 ppd]] [--tran stop step [--spectrum | --digital]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d [--3d-cam yaw,pitch,zoom] [--3d-case w,d,top,bottom]] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-graph-for DarlHfe] [--form-graph-all bjt|darl|diode|opto|pd|reg [--form-save dir]] [--form-companions] [--form-save dir] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-opamp-example] [--form-opamp-pdf] [--form-regulator-example [adj]] [--form-opto-example] [--form-photodiode-example] [--form-darlington-example] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d [--3d-cam yaw,pitch,zoom] [--3d-case w,d,top,bottom]] [--order] [--nets] [--results] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field] [--form-graph spec] [--form-graph-for DarlHfe] [--form-graph-all bjt|darl|diode|opto|pd|reg [--form-save dir]] [--form-companions] [--form-save dir] [--form-mos-pdf] [--form-bjt-pdf] [--form-bjt-example] [--form-opamp-example] [--form-opamp-pdf] [--form-regulator-example [adj]] [--form-variants [dir]] [--form-draft [--form-draft-package wson]] [--form-opto-example] [--form-photodiode-example] [--form-darlington-example] [--form-ntc-example] [--form-crystal-example] [--form-tvs-example] [--form-tvs-pdf] [--form-logic-example [counter]]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -101,9 +101,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             app.sch.drawing_in_form_pdf(view, spec);
         }
     }
-    // --form-draft: "データシートから下書き" with everything found put in (after --form-pdf)
+    // --form-draft: "データシートから下書き" with everything found put in (after --form-pdf); --form-draft-package FAMILY picks the
+    // package of that family ("wson", "qfn") instead of the one written most
     if args.iter().any(|a| a == "--form-draft") {
-        app.sch.draft_in_form();
+        let pkg = args.iter().position(|a| a == "--form-draft-package").and_then(|i| args.get(i + 1));
+        app.sch.draft_in_form(pkg.map(String::as_str));
     }
     // --drawing-big: the big window of the cut-out drawing, with two points and a length in inches (for screenshots)
     if args.iter().any(|a| a == "--drawing-big") {
@@ -140,13 +142,6 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if args.iter().any(|a| a == "--form-companions") {
         app.sch.companions_in_form();
     }
-    if !args.iter().any(|a| a == "--form-graph-all")
-        && let Some(j) = args.iter().position(|a| a == "--form-save")
-        && let Some(dir) = args.get(j + 1)
-    {
-        let ok = app.sch.save_form_part("", std::path::Path::new(dir));
-        std::process::exit(if ok { 0 } else { 1 });
-    }
     // --form-mos-pdf: the MOSFET section read from the form's PDF and fitted
     if args.iter().any(|a| a == "--form-mos-pdf") {
         app.sch.mos_from_form_pdf();
@@ -165,8 +160,17 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--form-regulator-example") {
         app.sch.linear_in_form(if args.get(i + 1).is_some_and(|a| a == "adj") { "adj" } else { "fixed" });
     }
-    // --form-opto-example (--new-part ic) / --form-photodiode-example (--new-part diode) / --form-darlington-example (--new-part npn)
-    for (flag, what) in [("--form-opto-example", "opto"), ("--form-photodiode-example", "photodiode"), ("--form-darlington-example", "darlington")] {
+    // --form-variants [DIR]: the regulator's voltage versions found in the form's PDF and made at once (after the regulator's
+    // values are in: --form-regulator-example or --form-graph-all reg); with DIR the parts are saved there and the app quits
+    if let Some(i) = args.iter().position(|a| a == "--form-variants") {
+        let dir = args.get(i + 1).filter(|a| !a.starts_with("--"));
+        if let Some(ok) = app.sch.variants_in_form(dir.map(std::path::Path::new)) {
+            std::process::exit(if ok { 0 } else { 1 });
+        }
+    }
+    // --form-opto-example (--new-part ic) / --form-photodiode-example (--new-part diode) / --form-darlington-example (--new-part npn) /
+    // --form-ntc-example (--new-part resistor) / --form-crystal-example / --form-tvs-example (--new-part diode) / --form-tvs-pdf (its table)
+    for (flag, what) in [("--form-opto-example", "opto"), ("--form-photodiode-example", "photodiode"), ("--form-darlington-example", "darlington"), ("--form-ntc-example", "ntc"), ("--form-crystal-example", "crystal"), ("--form-tvs-example", "tvs"), ("--form-tvs-pdf", "tvs-pdf")] {
         if args.iter().any(|a| a == flag) {
             app.sch.linear_in_form(what);
         }
@@ -177,6 +181,14 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     // --form-logic-example: the logic IC box (--new-part ic) with the half adder, made into pins and a model
     if let Some(i) = args.iter().position(|a| a == "--form-logic-example") {
         app.sch.logic_in_form(args.get(i + 1).is_some_and(|a| a == "counter"));
+    }
+    // --form-save DIR without --form-graph-all: the part as the form has it (after the examples above) saved, and quit
+    if !args.iter().any(|a| a == "--form-graph-all")
+        && let Some(j) = args.iter().position(|a| a == "--form-save")
+        && let Some(dir) = args.get(j + 1)
+    {
+        let ok = app.sch.save_form_part("", std::path::Path::new(dir));
+        std::process::exit(if ok { 0 } else { 1 });
     }
     if let Some(i) = args.iter().position(|a| a == "--form-pick")
         && let Some(t) = args.get(i + 1) {

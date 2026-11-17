@@ -15,6 +15,7 @@ pub mod num;
 pub mod opamp;
 mod opto;
 pub mod regulator;
+pub mod simple;
 
 pub use bjt::BjtSpec;
 pub use darlington::DarlingtonSpec;
@@ -24,11 +25,12 @@ pub use mos::{Caps, MosSpec};
 pub use opamp::OpampSpec;
 pub use opto::{OptocouplerSpec, PhotodiodeSpec};
 pub use regulator::{RegulatorSpec, ShuntSpec};
+pub use simple::{CrystalSpec, NtcSpec, TvsSpec};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt", "mos", "darlington", "photodiode",
-/// "optocoupler", "opamp", "regulator" or "shunt".
+/// "optocoupler", "opamp", "regulator", "shunt", "ntc", "crystal" or "tvs".
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Spec {
@@ -41,6 +43,9 @@ pub enum Spec {
     Opamp(opamp::OpampSpec),
     Regulator(regulator::RegulatorSpec),
     Shunt(regulator::ShuntSpec),
+    Ntc(simple::NtcSpec),
+    Crystal(simple::CrystalSpec),
+    Tvs(simple::TvsSpec),
 }
 
 /// The fields every kind has.
@@ -77,12 +82,15 @@ impl Spec {
             Spec::Opamp(s) => &s.common,
             Spec::Regulator(s) => &s.common,
             Spec::Shunt(s) => &s.common,
+            Spec::Ntc(s) => &s.common,
+            Spec::Crystal(s) => &s.common,
+            Spec::Tvs(s) => &s.common,
         }
     }
 
     pub fn load(path: &Path) -> Result<Spec, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / regulator / shunt。形は crates/part-lib/fits/ の例を見てください)", path.display()))
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / regulator / shunt / ntc / crystal / tvs。形は crates/part-lib/fits/ の例を見てください)", path.display()))
     }
 }
 
@@ -157,6 +165,9 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
         Spec::Opamp(s) => opamp::fit(s)?,
         Spec::Regulator(s) => regulator::fit_regulator(s)?,
         Spec::Shunt(s) => regulator::fit_shunt(s)?,
+        Spec::Ntc(s) => simple::fit_ntc(s)?,
+        Spec::Crystal(s) => simple::fit_crystal(s)?,
+        Spec::Tvs(s) => simple::fit_tvs(s)?,
     };
     let (description, params) = match spec {
         Spec::Opamp(s) => (opamp::description(s), vec![("gbw".into(), s.gbw), ("gain_dc".into(), 10f64.powf(s.aol_db / 20.0).round())]),
