@@ -1232,6 +1232,25 @@ fn a_draft_from_real_data_sheets() {
     }
 }
 
+/// LM393B with its WSON-8 chosen: two rows of TI's land pattern (0.5 × 0.25, 1.9 apart) and the exposed pad 0.9 × 1.6 as pin 9
+/// (skipped without the file).
+#[test]
+fn a_draft_of_a_wson_has_its_exposed_pad() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/lm393.pdf");
+    if !path.exists() {
+        return;
+    }
+    let mut f = PartForm::default();
+    f.sheet.load(&path);
+    let mut d = f.make_draft().unwrap();
+    let Some(k) = d.packages.iter().position(|p| p.family == "wson") else { panic!("{:?}", d.packages) };
+    d.package = k;
+    let done = f.apply_draft(&d);
+    assert!(f.pkg == PkgKind::Dual && (f.pitch, f.row, f.len, f.width) == (0.5, 1.9, 0.5, 0.25), "{done:?}");
+    assert!(f.thermal_on && (f.thermal_pin.as_str(), f.thermal_w, f.thermal_h) == ("9", 0.9, 1.6), "{done:?}");
+    assert!(f.to_def().is_ok(), "{done:?}");
+}
+
 /// LM317L: its pin table reads wrong ("2, 3, 6, 7" rows) and its pin drawing right; the draft offers both, the drawing first, and the
 /// drawing's pins go in without a table to compare with later (skipped without the file).
 #[test]

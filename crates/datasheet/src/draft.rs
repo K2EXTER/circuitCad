@@ -18,11 +18,27 @@ pub struct PackageName {
     pub page: usize,
 }
 
-/// Families of packages, longest first where one starts another ("sot-223" before "sot-23").
+/// Families of packages, longest first where one starts another ("sot-223" before "sot-23"; the bare "so" last, after "son",
+/// "sod-123" and the others it starts).
 const FAMILIES: &[&str] = &[
-    "sot-223", "sot-23", "sot-89", "sot-323", "sot-363", "sot-563", "sc-70", "sc-88", "sc-74", "soic", "tssop", "msop", "vssop", "ssop", "sop", "so", "wson", "vson", "son", "pdip", "dip", "to-220", "to-92", "to-252", "to-263", "dpak", "d2pak", "qfn", "dfn", "lqfp", "tqfp", "qfp", "sod-123", "sod-323", "sod-523",
-    "do-214ac", "do-214aa", "do-214ab", "do-35", "do-41", "sma", "smb", "smc",
+    "sot-223", "sot-23", "sot-89", "sot-323", "sot-363", "sot-563", "sot-583", "sc-70", "sc-88", "sc-74", "soic", "tssop", "msop", "vssop", "ssop", "sop", "wson", "vson", "uson", "x2son", "son", "pdip", "dip", "to-220", "to-92", "to-252", "to-263", "dpak", "d2pak", "vqfn", "wqfn", "uqfn", "x2qfn", "qfn", "lfcsp", "vdfn", "udfn", "wdfn", "tdfn", "dfn", "lqfp", "tqfp", "qfp", "sod-123", "sod-323", "sod-523",
+    "do-214ac", "do-214aa", "do-214ab", "do-35", "do-41", "sma", "smb", "smc", "so",
 ];
+
+/// Packages whose terminals are flat pads under the body's edge with an exposed pad in the middle (no leads): on four sides
+/// (QFN, LFCSP) or two (SON, DFN). The number of sides.
+pub fn no_lead_sides(family: &str) -> Option<u32> {
+    match family {
+        "qfn" | "vqfn" | "wqfn" | "uqfn" | "x2qfn" | "lfcsp" => Some(4),
+        "son" | "wson" | "vson" | "uson" | "x2son" | "dfn" | "vdfn" | "udfn" | "wdfn" | "tdfn" => Some(2),
+        _ => None,
+    }
+}
+
+/// Two-terminal packages of diodes and the like (the leads at the two ends).
+pub fn two_terminal(family: &str) -> bool {
+    matches!(family, "sod-123" | "sod-323" | "sod-523" | "sma" | "smb" | "smc" | "do-214ac" | "do-214aa" | "do-214ab")
+}
 
 /// One word as a package name: the family and the pin count written with it ("soic-8", "soic8", "8-soic", "sot-23-5").
 pub fn package_of(word: &str) -> Option<(&'static str, Option<u32>)> {
@@ -408,6 +424,14 @@ mod tests {
         assert_eq!(package_of("SOT223"), Some(("sot-223", None)));
         assert_eq!(package_of("SOLDER"), None);
         assert_eq!(package_of("smart"), None);
+        // no-lead and two-terminal ones, which the bare "so" used to cut short
+        assert_eq!(package_of("SON-8"), Some(("son", Some(8))));
+        assert_eq!(package_of("SOD-323"), Some(("sod-323", None)));
+        assert_eq!(package_of("WQFN"), Some(("wqfn", None)));
+        assert_eq!(package_of("VQFN-20"), Some(("vqfn", Some(20))));
+        assert_eq!(package_of("SO-8"), Some(("so", Some(8))));
+        assert_eq!((no_lead_sides("wqfn"), no_lead_sides("wson"), no_lead_sides("soic")), (Some(4), Some(2), None));
+        assert!(two_terminal("sod-123") && !two_terminal("sot-23"));
     }
 
     #[test]
@@ -554,7 +578,7 @@ mod real_pins {
     #[test]
     #[ignore]
     fn print_found() {
-        for f in ["sn74hc14.pdf", "lm393.pdf", "AO3400A_ds.pdf", "NDT3055L-D.pdf", "lm317l.pdf", "tmux1101.pdf", "ref5025-ep.pdf", "cd74hc4017.pdf", "ada4522-1_4522-2_4522-4.pdf"] {
+        for f in ["sn74hc14.pdf", "lm393.pdf", "AO3400A_ds.pdf", "NDT3055L-D.pdf", "lm317l.pdf", "tmux1101.pdf", "ref5025-ep.pdf", "cd74hc4017.pdf", "ada4522-1_4522-2_4522-4.pdf", "lt3045.pdf", "tps62933.pdf", "tl431.pdf", "lm139.pdf", "PESD5V0U1BA.pdf", "PESD5V0V1BL-Q.pdf"] {
             let Ok(ds) = crate::Datasheet::open_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter").join(f)) else { continue };
             let p = ds.find_pin_table();
             eprintln!("{f}: drawing {:?}", ds.find_pin_drawing().map(|p| (p.page + 1, crate::pin_lines(&p.pins).replace('\n', ", "))));

@@ -101,9 +101,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             app.sch.drawing_in_form_pdf(view, spec);
         }
     }
-    // --form-draft: "データシートから下書き" with everything found put in (after --form-pdf)
+    // --form-draft: "データシートから下書き" with everything found put in (after --form-pdf); --form-draft-package FAMILY picks the
+    // package of that family ("wson", "qfn") instead of the one written most
     if args.iter().any(|a| a == "--form-draft") {
-        app.sch.draft_in_form();
+        let pkg = args.iter().position(|a| a == "--form-draft-package").and_then(|i| args.get(i + 1));
+        app.sch.draft_in_form(pkg.map(String::as_str));
     }
     // --drawing-big: the big window of the cut-out drawing, with two points and a length in inches (for screenshots)
     if args.iter().any(|a| a == "--drawing-big") {

@@ -6,6 +6,11 @@
 const TOE: f64 = 0.35;
 const HEEL: f64 = 0.35;
 const SIDE: f64 = 0.03;
+/// For flat terminals under the body's edge (QFN, SON, DFN), IPC-7351's nominal goals: the toe reaches out, the heel and the
+/// sides take none (the side a little in).
+const NL_TOE: f64 = 0.40;
+const NL_HEEL: f64 = 0.0;
+const NL_SIDE: f64 = -0.04;
 /// Board (fabrication) and placement tolerances (mm).
 const FAB: f64 = 0.10;
 const PLACE: f64 = 0.05;
@@ -23,6 +28,17 @@ pub struct GullWing {
 
 /// See `GullWing`. `None` when a size is not positive or the pads would overlap across the body.
 pub fn gull_wing(span: (f64, f64), foot: (f64, f64), lead_w: (f64, f64)) -> Option<GullWing> {
+    lands(span, foot, lead_w, (TOE, HEEL, SIDE))
+}
+
+/// The lands of a row of flat terminals of a no-lead package (QFN, SON, DFN): `span` is the body's size across the rows (D or E:
+/// the terminals end at its edge), `foot` the terminal's length (L) and `lead_w` its width (b), each (min, max) in mm. The same
+/// sums as `gull_wing` with the no-lead fillet goals. The exposed pad is not here: its land is the data sheet's D2 × E2.
+pub fn no_lead(span: (f64, f64), foot: (f64, f64), lead_w: (f64, f64)) -> Option<GullWing> {
+    lands(span, foot, lead_w, (NL_TOE, NL_HEEL, NL_SIDE))
+}
+
+fn lands(span: (f64, f64), foot: (f64, f64), lead_w: (f64, f64), (toe, heel, side): (f64, f64, f64)) -> Option<GullWing> {
     let ok = |r: (f64, f64)| r.0 > 0.0 && r.1 >= r.0;
     if !ok(span) || !ok(foot) || !ok(lead_w) {
         return None;
@@ -30,13 +46,13 @@ pub fn gull_wing(span: (f64, f64), foot: (f64, f64), lead_w: (f64, f64)) -> Opti
     let (cl, ct, cw) = (span.1 - span.0, foot.1 - foot.0, lead_w.1 - lead_w.0);
     let tol = |c: f64| (c * c + FAB * FAB + PLACE * PLACE).sqrt();
     // outside: the shortest span plus the toe fillets
-    let z = span.0 + 2.0 * TOE + tol(cl);
+    let z = span.0 + 2.0 * toe + tol(cl);
     // inside: between the heels. Its tolerance from those of the span and of the feet, as a root of squares
     let s_min = span.0 - 2.0 * foot.1;
     let cs = (cl * cl + 2.0 * ct * ct).sqrt();
     let s_max = (span.1 - 2.0 * foot.0).min(s_min + cs);
-    let g = s_max - 2.0 * HEEL - tol(cs);
-    let x = lead_w.0 + 2.0 * SIDE + tol(cw);
+    let g = s_max - 2.0 * heel - tol(cs);
+    let x = lead_w.0 + 2.0 * side + tol(cw);
     (g > 0.0 && z > g).then_some(GullWing { row: (z + g) / 2.0, pad_l: (z - g) / 2.0, pad_w: x })
 }
 
@@ -53,6 +69,18 @@ mod tests {
         assert!((4.6..=5.5).contains(&g.row) && (1.4..=2.3).contains(&g.pad_l), "{g:?}");
         // the pads reach past the leads' tips
         assert!(g.row / 2.0 + g.pad_l / 2.0 > 6.2 / 2.0);
+    }
+
+    /// A 3 × 3 mm QFN-16 at 0.5 mm (JEDEC MO-220 WEED: E 2.90–3.10, L 0.30–0.50, b 0.18–0.30): IPC's calculator gives pads about
+    /// 1.0 × 0.26 mm (outer ends 3.9 mm apart); TI's own land is shorter (0.6 × 0.24, 2.8 between opposite pads' centres).
+    #[test]
+    fn qfn16_lands_are_like_the_makers() {
+        let g = no_lead((2.90, 3.10), (0.30, 0.50), (0.18, 0.30)).unwrap();
+        assert!((0.9..=1.1).contains(&g.pad_l) && (0.2..=0.32).contains(&g.pad_w) && (2.75..=3.0).contains(&g.row), "{g:?}");
+        assert!((g.row + g.pad_l - 3.93).abs() < 0.05, "{g:?}");
+        // the toe reaches out past the body; the heel stays inside
+        assert!(g.row / 2.0 + g.pad_l / 2.0 > 3.1 / 2.0);
+        assert!(g.row / 2.0 - g.pad_l / 2.0 < 2.9 / 2.0 - 0.3);
     }
 
     #[test]

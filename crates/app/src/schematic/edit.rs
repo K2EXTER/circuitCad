@@ -77,9 +77,9 @@ impl SchEditor {
     }
 
     /// Makes the draft from the whole data sheet and puts all of it in (`--form-draft`, for screenshots).
-    pub fn draft_in_form(&mut self) {
+    pub fn draft_in_form(&mut self, package: Option<&str>) {
         if let Some(f) = self.form.as_mut() {
-            f.draft_all();
+            f.draft_all(package);
         }
     }
 
