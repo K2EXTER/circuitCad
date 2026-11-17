@@ -280,7 +280,27 @@ impl PhotodiodeInput {
     }
 }
 
+/// The photodiode's model terminals by pin name: anode, cathode and the light input of the simulation only.
+pub(super) const PD_ROLES: &[(&str, &[&str])] = &[("アノード", &["A", "ANODE"]), ("カソード", &["K", "CATHODE"]), ("光の強さ (シミュレーション専用)", &["IRRAD", "L", "LIGHT"])];
+
+const LIGHT_PIN_ADDED: &str = "光の強さのピン IRRAD (シミュレーション専用、基板には出ません) を「③ ピン」に足しました";
+
 impl PartForm {
+    /// Adds the light input pin a photodiode's model needs, when the pin table has none named IRRAD, L or LIGHT: "IRRAD"
+    /// on the symbol's bottom, for the simulation only (no pad), as the bundled BPW34 has it. True when it was added.
+    pub(super) fn add_light_pin(&mut self) -> bool {
+        let pins = self.parse_pins().unwrap_or_default();
+        if pins.iter().any(|p| ["IRRAD", "L", "LIGHT"].iter().any(|n| p.name.eq_ignore_ascii_case(n))) {
+            return false;
+        }
+        let number = ["L", "IRRAD", "LIGHT"].into_iter().find(|n| !pins.iter().any(|p| p.number.eq_ignore_ascii_case(n))).unwrap_or("L");
+        if !self.pins_text.trim().is_empty() && !self.pins_text.ends_with('\n') {
+            self.pins_text.push('\n');
+        }
+        self.pins_text.push_str(&format!("{number} IRRAD bottom sim"));
+        true
+    }
+
     pub(super) fn opto_make(&mut self) {
         let (name, source) = (self.linear_name("OPTO"), self.linear_source());
         self.opto.result = Some(self.opto.spec(&name, &source).and_then(|s| fit::fit(&s)));
@@ -413,7 +433,7 @@ impl PartForm {
     pub(super) fn photodiode_ui(&mut self, ui: &mut egui::Ui) {
         use super::graph_reader::Dest;
         crate::widgets::section_heading(ui, "かんたん作成: フォトダイオードをデータシートの表からつくる");
-        crate::icons::help_small(ui, "光電流・開放電圧・暗電流・容量からモデルを作ります", "同梱の BPW34 と同じ作り方です。光の強さはシミュレーション専用のピン IRRAD (1 V = 1 mW/cm²) で与えます。ピンは A・K と IRRAD (か L) の名前で探すので、「③ ピン」に IRRAD のピンを足しておいてください (基板には出ません)");
+        crate::icons::help_small(ui, "光電流・開放電圧・暗電流・容量からモデルを作ります", "同梱の BPW34 と同じ作り方です。光の強さはシミュレーション専用のピン IRRAD (1 V = 1 mW/cm²) で与えます。ピンは A・K と IRRAD (か L) の名前で探します。IRRAD のピンが無ければ、「② シミュレーション」に入れるときに「③ ピン」へシミュレーション専用のピンとして足します (基板には出ません)");
         egui::CollapsingHeader::new(i18n::tr("考え方: どの値を使う? (はじめての人はここから)")).id_salt("pd_howto").show(ui, |ui| {
             for t in [
                 "感度: 表の「逆方向の光電流 (Ira・IL)」の typ。測定の光の強さ (Ee) が 1 mW/cm² でなければ、その値で割ります。光の強さに比例するとして扱います。",
@@ -474,8 +494,9 @@ impl PartForm {
             if let Some(Ok(f)) = self.pd.result.clone()
                 && ui.button(i18n::tr("「② シミュレーション」に入れる")).on_hover_text(i18n::tr("作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (A・K・IRRAD)")).clicked()
             {
-                let roles: &[(&str, &[&str])] = &[("アノード", &["A", "ANODE"]), ("カソード", &["K", "CATHODE"]), ("光の強さ (シミュレーション専用)", &["IRRAD", "L", "LIGHT"])];
-                self.pd.message = Some(match self.linear_apply(&f, roles) {
+                let added = self.add_light_pin();
+                self.pd.message = Some(match self.linear_apply(&f, PD_ROLES) {
+                    Ok(m) if added => (true, format!("{m}。{}", i18n::tr(LIGHT_PIN_ADDED))),
                     Ok(m) => (true, m),
                     Err(e) => (false, e),
                 });
@@ -541,5 +562,24 @@ mod tests {
         p.example();
         p.cap.clear();
         assert!(p.spec("X", "s").unwrap_err().contains("容量"));
+    }
+
+    #[test]
+    fn the_light_pin_is_added_for_the_simulation_only() {
+        let mut f = PartForm::default();
+        f.pins_text = "1 A\n2 K".into();
+        assert!(f.add_light_pin());
+        assert!(!f.add_light_pin(), "once");
+        let pins = f.parse_pins().unwrap();
+        assert_eq!((pins[2].number.as_str(), pins[2].name.as_str(), pins[2].sim_only), ("L", "IRRAD", true));
+        assert!(!pins[0].sim_only);
+        // a pin named L is the light input already
+        let mut f = PartForm::default();
+        f.pins_text = "1 A\n2 K\n3 L".into();
+        assert!(!f.add_light_pin());
+        // the pin table keeps the mark
+        let rows = super::super::pintable::rows_of("1 A\nL IRRAD bottom sim");
+        assert!(rows[1].sim && !rows[0].sim);
+        assert_eq!(super::super::pintable::text_of(&rows), "1 A\nL IRRAD bottom sim");
     }
 }

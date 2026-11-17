@@ -1,0 +1,62 @@
+{
+  "name": "FORM_1N4148",
+  "category": "ダイオード",
+  "description": "",
+  "datasheet": "",
+  "prefix": "D",
+  "value": null,
+  "pins": [
+    {
+      "number": "1",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "A",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 2,
+    "pitch": 7.62,
+    "pad_d": 1.8,
+    "drill": 0.9
+  },
+  "footprint_name": null,
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "1N4148",
+    "text": ".model 1N4148 D(IS=5.676e-9 N=1.946 RS=3.539e-1 BV=1.000e2 IBV=1.000e-4 CJO=4.000e-12 VJ=0.7 M=0.5 TT=1.154e-8)",
+    "pins": [
+      "2",
+      "1"
+    ],
+    "params": {},
+    "limits": [
+      "IS・N・RS は、データシートのグラフから読み取った点に合わせた近似です。個体差と温度で、実物は変わります。",
+      "接合容量・逆回復時間は、入れた数値だけの近似です (入れていなければ扱いません)。",
+      "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+    ],
+    "origin": {
+      "kind": "equivalent"
+    }
+  },
+  "ratings": {
+    "v_max": 100.0,
+    "i_max": 0.15,
+    "p_max": 0.44
+  },
+  "glyph": "diode",
+  "body": {
+    "shape": "rect",
+    "w": 1.8,
+    "h": 3.8,
+    "x": 0.0,
+    "y": -3.81,
+    "mark": "bar",
+    "mark_pin": "1"
+  }
+}

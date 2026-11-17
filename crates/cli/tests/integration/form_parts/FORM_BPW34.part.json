@@ -1,0 +1,74 @@
+{
+  "name": "FORM_BPW34",
+  "category": "センサ",
+  "description": "",
+  "datasheet": "",
+  "prefix": "D",
+  "value": null,
+  "pins": [
+    {
+      "number": "1",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "L",
+      "name": "IRRAD",
+      "side": "bottom",
+      "sim_only": true
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 2,
+    "pitch": 7.62,
+    "pad_d": 1.8,
+    "drill": 0.9
+  },
+  "footprint_name": null,
+  "sim": {
+    "kind": "subckt",
+    "element": "D",
+    "name": "BPW34",
+    "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2; photocurrent 5e-05 A per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=5e-05*max(V(l),0)\nRsh a k 5.172e+09\n.model DPD D(IS=6.64e-11 N=1 RS=10 BV=60 IBV=0.0001 CJO=7.823e-11 VJ=0.3 M=0.45)\n.ends BPW34",
+    "pins": [
+      "2",
+      "1",
+      "L"
+    ],
+    "params": {},
+    "limits": [
+      "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: データシート。データシートとの比べは docs/models/diodes.md。",
+      "シミュレーション専用ピン IRRAD (基板には出ません): 電圧源をつなぎ、その電圧で光の強さ [mW/cm²] を与えます (1V = 1mW/cm²)。つながないと 0。光電流は 50uA/(mW/cm²) (入力した光電流 (1 mW/cm² あたり))。光の強さに比例し、波長による感度の違いは扱いません。",
+      "ダイオード: 開放電圧 0.35 V (1 mW/cm²) から IS を決めました (N = 1: データシートに開放電圧が 1 つしか無いので N = 1 と置きました)。直列抵抗 RS = 10 Ω (データシートに順方向の特性が無いので 10 Ω と置きました (光電流の範囲では効きません))。暗電流 2 nA (10 V) から並列の抵抗 5.17 GΩ を決めました。",
+      "接合容量: 入力した容量の点。逆電圧で小さくなります (0 V で 78.2 pF)。降伏: 入力した降伏電圧。",
+      "扱わないもの: 応答の速さ (光で生まれた電荷が動く時間。このモデルは接合容量だけで遅れます)、波長による感度、暗電流の温度による増え方、自己発熱。",
+      "使い方: 逆バイアス (カソードを + 側) で電流を読むか、トランスインピーダンスアンプにつなぎます。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "データシート"
+    }
+  },
+  "ratings": {
+    "v_max": 60.0,
+    "p_max": 0.215,
+    "t_max": 100.0
+  },
+  "glyph": "photodiode",
+  "body": {
+    "shape": "rect",
+    "w": 1.8,
+    "h": 3.8,
+    "x": 0.0,
+    "y": -3.81,
+    "mark": "bar",
+    "mark_pin": "1"
+  }
+}

@@ -48,7 +48,8 @@ impl PartForm {
                     Some(s) => format!("{} {} {}", p.number, p.name, side_word(s)),
                     None => format!("{} {}", p.number, p.name),
                 };
-                if p.gap > 0 { format!("{l} gap={}", p.gap) } else { l }
+                let l = if p.gap > 0 { format!("{l} gap={}", p.gap) } else { l };
+                if p.sim_only { format!("{l} sim") } else { l }
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -140,9 +141,6 @@ impl PartForm {
         }
         if let (Some(m), Some(om)) = (def.sim.as_mut(), o.sim.as_ref()) {
             m.params = om.params.clone();
-        }
-        for p in &mut def.pins {
-            p.sim_only = o.pins.iter().any(|q| q.number == p.number && q.sim_only);
         }
     }
 }

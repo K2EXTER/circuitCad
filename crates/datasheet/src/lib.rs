@@ -199,6 +199,12 @@ impl Datasheet {
         all
     }
 
+    /// The values of a measuring condition printed in a figure's graph or under its caption ("VCE = 10 V" of an hFE
+    /// graph), each once, in SI units as magnitudes (`figures::conditions`).
+    pub fn figure_condition(&self, f: &figures::Figure, name: &str) -> Vec<f64> {
+        figures::conditions(self.words(f.page), f, name)
+    }
+
     /// The axes of a figure's graph read from its tick labels (`axes::read`).
     /// When the tick labels are drawn as lines rather than letters, they are read off the drawn graph by the OCR
     /// (`ocr`, Windows only), and the axis titles turned up the page off the picture turned a quarter.

@@ -257,6 +257,32 @@ pub fn showing(figures: &[Figure], curve: Curve) -> Vec<&Figure> {
     v
 }
 
+/// The values of `name=…` printed in a figure's graph or in the two lines under its caption ("VCE = 10 V", "(VCE = 5.0
+/// Vdc, f = 1.0 kHz)"), each once, in the order they are printed. A graph of one curve per value (P2N2222A's
+/// "VCE = 1.0 V" and "10 V") gives several.
+pub fn conditions(words: &[Word], f: &Figure, name: &str) -> Vec<f64> {
+    let under = Rect { x0: f.area.x0, y0: f.rect.y0 - 1.0, x1: f.area.x1, y1: f.rect.y1 + 24.0 };
+    let area = Rect { x0: f.area.x0, y0: f.area.y0.min(under.y0), x1: f.area.x1, y1: f.area.y1.max(under.y1) };
+    let inside = |r: &Rect| r.x0 >= area.x0 && r.x1 <= area.x1 && r.y0 >= area.y0 && r.y1 <= area.y1;
+    let key = normalize(name);
+    let mut out: Vec<f64> = vec![];
+    for w in words.iter().filter(|w| inside(&w.rect) && normalize(&w.text).trim_start_matches('(').starts_with(&key)) {
+        // the name and the few words to its right, which may sit a little higher ("VCE" with its subscript drawn
+        // lower than "= 1.0 V" in 2N3903's Figure 15), and may reach past the area at the graph's right edge
+        let mid = |r: &Rect| (r.y0 + r.y1) / 2.0;
+        let mut right: Vec<&Word> = words.iter().filter(|o| o.rect.x0 > w.rect.x0 && o.rect.x0 - w.rect.x1 < 40.0 && (mid(&o.rect) - mid(&w.rect)).abs() < 4.0).collect();
+        right.sort_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
+        let text = std::iter::once(w).chain(right.into_iter().take(4)).map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+        if let Some(v) = crate::spec_table::condition(&text, name)
+            && v > 0.0
+            && !out.iter().any(|o| (o - v).abs() <= 1e-9 * v.max(1.0))
+        {
+            out.push(v);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,5 +406,38 @@ mod tests {
         assert_eq!(pages, vec![5]);
         // with no DC one, the plain one is what there is
         assert_eq!(showing(&f[..1], Curve::DcGain).len(), 1);
+    }
+
+    #[test]
+    fn the_condition_printed_in_a_graph_is_read() {
+        let t = Word::for_test;
+        // 2N3903's Figure 15: the graph above its caption, "VCE" drawn 3 points lower than "= 1.0 V" and the "V"
+        // past the area's right edge; "VCE(sat)" and a graph outside the area are not it
+        let fig = Figure {
+            page: 0,
+            rect: Rect { x0: 250.0, y0: 260.0, x1: 370.0, y1: 268.0 },
+            caption: "Figure 15. DC Current Gain".into(),
+            curves: vec![Curve::DcGain],
+            area: Rect { x0: 190.0, y0: 30.0, x1: 513.0, y1: 268.0 },
+            other: Rect { x0: 190.0, y0: 260.0, x1: 513.0, y1: 498.0 },
+            numbers: (0, 0),
+        };
+        let words = [
+            t("VCE", 487.0, 93.0, 499.0, 101.0),
+            t("=", 501.0, 90.0, 505.0, 98.0),
+            t("1.0", 507.0, 90.0, 515.0, 98.0),
+            t("V", 517.0, 90.0, 521.0, 98.0),
+            t("VCE(sat)", 300.0, 150.0, 330.0, 158.0),
+            t("@", 332.0, 150.0, 338.0, 158.0),
+            t("=", 340.0, 150.0, 344.0, 158.0),
+            t("10", 346.0, 150.0, 354.0, 158.0),
+            t("VCE", 300.0, 400.0, 312.0, 408.0),
+            t("=10", 314.0, 400.0, 326.0, 408.0),
+            t("V", 328.0, 400.0, 332.0, 408.0),
+        ];
+        assert_eq!(conditions(&words, &fig, "VCE"), vec![1.0]);
+        // one curve per voltage, the minus of a PNP's dropped
+        let words = [t("VCE", 300.0, 100.0, 312.0, 108.0), t("=", 314.0, 100.0, 318.0, 108.0), t("1.0", 320.0, 100.0, 328.0, 108.0), t("V", 330.0, 100.0, 334.0, 108.0), t("VCE", 300.0, 200.0, 312.0, 208.0), t("=", 314.0, 200.0, 318.0, 208.0), t("\u{2212}10", 320.0, 200.0, 330.0, 208.0), t("V", 332.0, 200.0, 336.0, 208.0)];
+        assert_eq!(conditions(&words, &fig, "VCE"), vec![1.0, 10.0]);
     }
 }

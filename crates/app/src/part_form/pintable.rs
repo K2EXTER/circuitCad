@@ -17,6 +17,8 @@ pub struct PinRow {
     pub side: String,
     /// Empty places before the pin on its side of the symbol (`gap=N` in the text).
     pub gap: u8,
+    /// A pin of the simulation model only, with no pad (`sim` in the text).
+    pub sim: bool,
 }
 
 /// The rows of a pin text (a line with only a number gives a row with an empty name).
@@ -24,10 +26,10 @@ pub(super) fn rows_of(text: &str) -> Vec<PinRow> {
     text.lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
-            let (t, gap) = pin_tokens(l);
+            let (t, gap, sim) = pin_tokens(l);
             let side = t.get(2).and_then(|s| parse_side(s)).map_or("", side_word);
             let gap = gap.and_then(|g| g.parse::<u8>().ok()).unwrap_or(0).min(MAX_GAP);
-            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into(), gap }
+            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into(), gap, sim }
         })
         .collect()
 }
@@ -40,6 +42,9 @@ pub(super) fn text_of(rows: &[PinRow]) -> String {
             let mut l = if r.side.is_empty() { format!("{} {}", r.number, r.name) } else { format!("{} {} {}", r.number, r.name, r.side) };
             if r.gap > 0 {
                 l.push_str(&format!(" gap={}", r.gap));
+            }
+            if r.sim {
+                l.push_str(" sim");
             }
             l
         })
@@ -94,11 +99,12 @@ impl PartForm {
                 ui.small(i18n::tr("「モデルの端子」は、貼った SPICE モデルの端子が、どのピンにあたるかです (選ばないピンは、シミュレーションではどこにもつながりません)"));
             }
         });
-        egui::Grid::new("pin_table").num_columns(if roles.is_empty() { 5 } else { 6 }).spacing([8.0, 4.0]).striped(true).show(ui, |ui| {
+        egui::Grid::new("pin_table").num_columns(if roles.is_empty() { 6 } else { 7 }).spacing([8.0, 4.0]).striped(true).show(ui, |ui| {
             ui.small("");
             ui.small(i18n::tr("番号"));
             ui.small(i18n::tr("名前"));
             ui.small(i18n::tr("向き"));
+            ui.small(i18n::tr("sim")).on_hover_text(i18n::tr("シミュレーション専用のピン (基板にパッドを出しません)"));
             if !roles.is_empty() {
                 ui.small(i18n::tr("モデルの端子"));
             }
@@ -138,6 +144,7 @@ impl PartForm {
                     })
                     .response
                     .on_hover_text(i18n::tr("記号のどちらの辺にこのピンを出すか。「自動」なら、前半が左、後半が右です"));
+                ui.checkbox(&mut rows[i].sim, "").on_hover_text(i18n::tr("シミュレーション専用のピン: 回路図の記号とモデルにはあり、基板にパッドを出しません (フォトダイオードの光の強さの IRRAD など)"));
                 if !roles.is_empty() {
                     let mine = if rows[i].number.is_empty() { None } else { sim.iter().position(|s| *s == rows[i].number) };
                     let label = |j: usize| i18n::trf!("端子 {} ({})", j + 1, roles.get(j).map_or("", |s| s.as_str()));

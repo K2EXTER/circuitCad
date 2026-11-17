@@ -82,6 +82,13 @@ fn main() -> Result<(), String> {
                 println!("p.{} {:?} {} ({side})", f.page + 1, f.curves, f.caption);
             }
         }
+        "cond" => {
+            // ds cond FILE NAME: the values of NAME=… printed in each graph ("VCE")
+            let name = args.get(2).map(String::as_str).unwrap_or("VCE");
+            for f in ds.figures().iter().filter(|f| !f.curves.is_empty()) {
+                println!("p.{} {:?} {}: {:?}", f.page + 1, f.curves, f.caption, ds.figure_condition(f, name));
+            }
+        }
         "axes" => {
             for f in ds.figures().iter().filter(|f| !f.curves.is_empty()) {
                 let show = |a: &datasheet::axes::ReadAxis| format!("{}{} ×{} [{}]", if a.log { "log " } else { "" }, a.ticks.len(), a.prefix, a.ticks.iter().map(|t| t.1.as_str()).collect::<Vec<_>>().join(" "));

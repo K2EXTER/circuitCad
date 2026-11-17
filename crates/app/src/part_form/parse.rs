@@ -41,8 +41,9 @@ pub(super) fn parse_ohm(t: &str) -> Option<f64> {
 
 /// The words of a pin line (`number name [side]`) without its `gap=N` word, and that N as typed: the empty places
 /// left before the pin on its side of the symbol.
-pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>) {
+pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool) {
     let mut gap = None;
+    let mut sim = false;
     let words = line
         .split(|c: char| c.is_whitespace() || c == ',')
         .filter(|s| !s.is_empty())
@@ -51,10 +52,15 @@ pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>) {
                 gap = Some(v);
                 false
             }
+            // a pin of the simulation model only (a photodiode's light input): no pad on the board
+            None if s.eq_ignore_ascii_case("sim") => {
+                sim = true;
+                false
+            }
             None => true,
         })
         .collect();
-    (words, gap)
+    (words, gap, sim)
 }
 
 /// The most empty places a pin may have before it (a bigger number is a typing mistake, not a layout).
@@ -188,7 +194,7 @@ impl PartForm {
     pub(super) fn parse_pins(&self) -> Result<Vec<PinDef>, String> {
         let mut out = vec![];
         for (n, line) in self.pins_text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
-            let (t, gap) = pin_tokens(line);
+            let (t, gap, sim_only) = pin_tokens(line);
             if t.len() < 2 {
                 return Err(format!("{}行目: 「番号 名前」の形式で入力してください", n + 1));
             }
@@ -200,7 +206,7 @@ impl PartForm {
                 None => None,
                 Some(s) => Some(parse_side(s).ok_or_else(|| format!("{}行目: 向き「{s}」は left/right/top/bottom のいずれかです", n + 1))?),
             };
-            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only: false, gap });
+            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only, gap });
         }
         Ok(out)
     }
@@ -322,7 +328,7 @@ impl PartForm {
             extra_pads.push(PadSpec { pin: pin.to_string(), x: 0.0, y: 0.0, shape: "rect".into(), w: self.thermal_w, h: self.thermal_h, drill: None, slot: 0.0, slot_v: false });
         }
         // pins that only exist as extra pads (the shell, say) are not part of the package's row of pads
-        let n = self.orig_pad_count(&pins).unwrap_or_else(|| pins.iter().filter(|p| !extra_pads.iter().any(|e| e.pin == p.number)).count());
+        let n = self.orig_pad_count(&pins).unwrap_or_else(|| pins.iter().filter(|p| !p.sim_only && !extra_pads.iter().any(|e| e.pin == p.number)).count());
         let package = match self.pkg {
             PkgKind::Chip2 => PackageSpec::Chip2 { pitch: self.pitch, pad_len: self.len, pad_width: self.width },
             PkgKind::Dual => PackageSpec::Dual {

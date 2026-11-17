@@ -70,7 +70,7 @@ pub fn condition(text: &str, name: &str) -> Option<f64> {
         }
         // "IF = IR = 10 mA": a name with no value of its own has the next one's
         let v = if v.trim().is_empty() { parts.get(i + 1).and_then(|p| p.split_once('=')).map_or("", |n| n.1) } else { v };
-        let v = v.trim_start_matches(['±', '-', '+']);
+        let v = v.trim().trim_start_matches(['±', '-', '+', '\u{2212}']);
         let digits: String = v.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
         let x: f64 = digits.parse().ok()?;
         return Some(x * prefix(&v[digits.len()..]).unwrap_or(1.0));

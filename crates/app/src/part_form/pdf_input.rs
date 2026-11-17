@@ -128,7 +128,8 @@ impl PartForm {
             }
             "pd" => {
                 let Some(Ok(f)) = self.pd.result.clone() else { return Err(not_made()) };
-                self.linear_apply(&f, &[("アノード", &["A", "ANODE"]), ("カソード", &["K", "CATHODE"]), ("光の強さ", &["IRRAD", "L"])])?
+                self.add_light_pin();
+                self.linear_apply(&f, super::opto::PD_ROLES)?
             }
             _ => return Err(format!("知らない欄: {section}")),
         };
@@ -211,8 +212,20 @@ impl PartForm {
                 Ok(out) => {
                     let by = if out.by.is_empty() { String::new() } else { format!(" ({})", out.by) };
                     let how = scaled.as_ref().map_or(String::new(), |n| format!("。{n}"));
-                    self.graph_all.push((d, true, i18n::trf!("{field}: p.{} の図から {} 点{by}{how}", out.page + 1, out.points.len())));
+                    let at = out.vce.map_or(String::new(), |v| format!(" (VCE = {} V)", number_text(v)));
+                    self.graph_all.push((d, true, i18n::trf!("{field}: p.{} の図から {} 点{by}{at}{how}", out.page + 1, out.points.len())));
                     self.put_graph(&out);
+                    // the graph's VCE into its field, so the fit takes the curve at the voltage it was measured at
+                    if let Some(v) = out.vce {
+                        let v = number_text(v);
+                        match d {
+                            Dest::BjtHfe => self.bjt.hfe_vce = v,
+                            Dest::BjtVbeOn => self.bjt.on_vce = v,
+                            Dest::DarlHfe => self.darl.hfe_vce = v,
+                            Dest::DarlVbeOn => self.darl.on_vce = v,
+                            _ => {}
+                        }
+                    }
                     if scaled.is_some() {
                         self.bjt.hfe_note = scaled;
                     }
@@ -462,9 +475,9 @@ mod tests {
         use super::super::graph_reader::{Dest, GraphOut};
         let mut f = PartForm::default();
         f.bjt.cibo = "0.5 8p".into();
-        let out = |dest, points: &[(f64, f64)], by: &str| Ok(GraphOut { dest, points: points.to_vec(), page: 4, by: by.into(), normalized: false });
+        let out = |dest, points: &[(f64, f64)], by: &str| Ok(GraphOut { dest, points: points.to_vec(), page: 4, by: by.into(), normalized: false, vce: None });
         f.take_read_curves(vec![
-            (Dest::BjtHfe, out(Dest::BjtHfe, &[(1e-3, 100.0), (1e-2, 150.0), (0.1, 90.0)], "25°C")),
+            (Dest::BjtHfe, out(Dest::BjtHfe, &[(1e-3, 100.0), (1e-2, 150.0), (0.1, 90.0)], "25°C").map(|o| GraphOut { vce: Some(5.0), ..o })),
             (Dest::BjtVbeOn, out(Dest::BjtVbeOn, &[(1e-3, 0.65), (1e-2, 0.72), (0.1, 0.83)], "")),
             (Dest::BjtCibo, Err("図の見出しが見つかりません".into())),
         ]);
@@ -474,6 +487,9 @@ mod tests {
         assert!(lines[0].contains("p.5") && lines[0].contains("3 点") && lines[0].contains("25°C"), "{lines:?}");
         assert!(!f.graph_all[2].1 && lines[2].starts_with("Cibo") && lines[2].contains("見出し"), "{lines:?}");
         assert!(f.bjt.result.is_some(), "the model is made from the fields");
+        // the VCE the hFE graph prints goes into its field (the fit takes the curve at it); VBE(on)'s said none
+        assert_eq!((f.bjt.hfe_vce.as_str(), f.bjt.on_vce.as_str()), ("5", "1"));
+        assert!(lines[0].contains("VCE = 5 V"), "{lines:?}");
         // nothing read: no model
         let mut f = PartForm::default();
         f.take_read_curves(vec![(Dest::PdLight, Err("x".into()))]);
@@ -481,7 +497,7 @@ mod tests {
         // a normalized hFE curve with no table hFE to scale it by: not put in, and why
         let mut f = PartForm::default();
         f.bjt.hfe = "1m 100".into();
-        let ratios = GraphOut { dest: Dest::BjtHfe, points: vec![(1e-3, 0.7), (1e-2, 1.0), (0.1, 0.5)], page: 5, by: String::new(), normalized: true };
+        let ratios = GraphOut { dest: Dest::BjtHfe, points: vec![(1e-3, 0.7), (1e-2, 1.0), (0.1, 0.5)], page: 5, by: String::new(), normalized: true, vce: None };
         f.take_read_curves(vec![(Dest::BjtHfe, Ok(ratios))]);
         assert_eq!(f.bjt.hfe, "1m 100");
         assert!(!f.graph_all[0].1 && f.graph_all[0].2.contains("normalized"), "{:?}", f.graph_all);

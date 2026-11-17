@@ -434,8 +434,16 @@ impl SheetView {
                     g.auto_trace(path, &by);
                     match g.values() {
                         Ok(points) if !points.is_empty() => {
+                            // the VCE it was measured at: the picked curve's own label, else the one the graph prints
+                            let vce = match dest {
+                                Dest::BjtHfe | Dest::BjtVbeOn | Dest::DarlHfe | Dest::DarlVbeOn => datasheet::spec_table::condition(&by, "VCE").or_else(|| match d.ds.figure_condition(f, "VCE")[..] {
+                                    [v] => Some(v),
+                                    _ => None,
+                                }),
+                                _ => None,
+                            };
                             let by = if by.is_empty() { String::new() } else { i18n::trf!("「{}」の曲線", by) };
-                            return Ok(GraphOut { dest, points, page: f.page, by, normalized });
+                            return Ok(GraphOut { dest, points, page: f.page, by, normalized, vce });
                         }
                         _ => why = i18n::trf!("p.{} の図の曲線から点が取れません", f.page + 1),
                     }
