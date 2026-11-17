@@ -410,7 +410,16 @@ impl PartForm {
         self.opamp.message = None;
     }
 
-    fn regulator_make(&mut self) {
+    /// The regulator's pins by role, found by name (IN・GND or ADJ・OUT).
+    pub(super) fn reg_roles(&self) -> &'static [(&'static str, &'static [&'static str])] {
+        if self.reg.adjustable {
+            &[("入力", &["IN", "VIN", "INPUT"]), ("ADJ", &["ADJ", "ADJUST"]), ("出力", &["OUT", "VOUT", "OUTPUT"])]
+        } else {
+            &[("入力", &["IN", "VIN", "INPUT", "VI"]), ("GND", &["GND", "COM", "COMMON"]), ("出力", &["OUT", "VOUT", "OUTPUT", "VO"])]
+        }
+    }
+
+    pub(super) fn regulator_make(&mut self) {
         let (name, source) = (self.linear_name("REG"), self.linear_source());
         self.reg.result = Some(self.reg.spec(&name, &source).and_then(|s| fit::fit(&fit::Spec::Regulator(s))));
         self.reg.message = None;
@@ -583,6 +592,25 @@ impl PartForm {
         for (ok, line) in &self.reg.found {
             ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
         }
+        {
+            use super::graph_reader::Dest;
+            self.read_all_button(ui, &[Dest::RegDropout, Dest::RegRipple, Dest::RegNoise]);
+            // one graph by a click, for a field the read-all could not read
+            if self.sheet.has_doc() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new(i18n::tr("グラフから読む:")).small());
+                    for (d, label, tip) in [
+                        (Dest::RegDropout, "ドロップアウト", "「Dropout Voltage vs Load Current」の図で曲線をクリックします。点に直線を当てて、ドロップアウトと電流による増えを入れます"),
+                        (Dest::RegRipple, "リップル除去", "「Ripple Rejection vs Frequency」の図で曲線をクリックします。欄の周波数 (空なら 120 Hz) の値を、表に無いときに入れます"),
+                        (Dest::RegNoise, "雑音", "「Noise Spectral Density」の図で曲線をクリックします。1 kHz の密度を、表に無いときに入れます"),
+                    ] {
+                        if ui.small_button(i18n::tr(label)).on_hover_text(i18n::tr(tip)).clicked() {
+                            self.sheet.start_graph(Some(d));
+                        }
+                    }
+                });
+            }
+        }
         let r = &mut self.reg;
         let adj = r.adjustable;
         egui::Grid::new("reg_inputs").num_columns(2).show(ui, |ui| {
@@ -625,12 +653,7 @@ impl PartForm {
             if let Some(Ok(f)) = self.reg.result.clone()
                 && ui.button(i18n::tr("「② シミュレーション」に入れる")).on_hover_text(i18n::tr("作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (IN・GND か ADJ・OUT)")).clicked()
             {
-                let roles: &[(&str, &[&str])] = if self.reg.adjustable {
-                    &[("入力", &["IN", "VIN", "INPUT"]), ("ADJ", &["ADJ", "ADJUST"]), ("出力", &["OUT", "VOUT", "OUTPUT"])]
-                } else {
-                    &[("入力", &["IN", "VIN", "INPUT", "VI"]), ("GND", &["GND", "COM", "COMMON"]), ("出力", &["OUT", "VOUT", "OUTPUT", "VO"])]
-                };
-                self.reg.message = Some(match self.linear_apply(&f, roles) {
+                self.reg.message = Some(match self.linear_apply(&f, self.reg_roles()) {
                     Ok(m) => (true, m),
                     Err(e) => (false, e),
                 });

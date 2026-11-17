@@ -48,6 +48,8 @@ fn labels(words: &[Word], area: Rect) -> Vec<Label> {
         while x <= w.rect.x1 {
             if let Some((t, x0, x1)) = w.token_span_at(x) {
                 let t = t.trim_end_matches('%');
+                // "1x10" before a raised exponent (TI's UA78L): a "10" for the exponents below
+                let t = if ["1x10", "1×10", "1X10", "1·10"].contains(&t) { "10" } else { t };
                 // (the same number printed again over itself, a fraction of a point off: one label)
                 if let Some(value) = crate::graph::tick_value(t)
                     && !out.iter().any(|l| ((l.x0 - x0).abs() < 0.1 && (l.y - y).abs() < 0.1) || (l.text == t && (l.x0 - x0).abs() < 1.5 && (l.y - y).abs() < 1.5))
@@ -131,6 +133,9 @@ fn settle(v: &[(f32, f64)]) -> Option<(std::ops::Range<usize>, bool)> {
 
 /// The multiplier of a unit in brackets ("mA" 1e-3), None when it is not a unit.
 fn bracket_unit(t: &str) -> Option<f64> {
+    if let Some(k) = per_root_hertz(t) {
+        return Some(k);
+    }
     // "(mAdc)", "(Vdc)": a direct current or voltage (onsemi)
     let t = without_dc(t);
     let up = t.to_ascii_uppercase();
@@ -151,6 +156,26 @@ fn bracket_unit(t: &str) -> Option<f64> {
         }
     }
     None
+}
+
+/// The multiplier of a noise density's unit, a voltage or current per root hertz: "nV/√Hz" 1e-9, "µV/rtHz", and
+/// "nVrms/Hz" as a title turned up the page reads without its root sign (ADR4525). None for any other unit.
+fn per_root_hertz(t: &str) -> Option<f64> {
+    let (num, den) = t.split_once('/')?;
+    let den = den.trim_start_matches(['√', '(']).trim_start_matches("rt").trim_start_matches("sqrt").trim_end_matches(')').trim_start_matches('(');
+    if den != "Hz" {
+        return None;
+    }
+    let num = num.trim().trim_end_matches("rms").trim_end_matches("RMS").trim();
+    ["V", "A"].iter().find_map(|u| num.strip_suffix(u)).and_then(|p| match p {
+        "" => Some(1.0),
+        "m" => Some(1e-3),
+        "µ" | "μ" | "u" => Some(1e-6),
+        "n" => Some(1e-9),
+        "p" => Some(1e-12),
+        "f" => Some(1e-15),
+        _ => None,
+    })
 }
 
 /// A unit without its "dc" ("mAdc" → "mA").
@@ -183,8 +208,15 @@ pub(crate) fn unit_prefix(words: &[&Word]) -> Option<f64> {
         }
     }
     for w in words {
+        // a noise density's unit as one word ("(nV/√Hz)"; its tokens part at the slash)
+        if let Some(k) = per_root_hertz(w.text.trim_matches(|c: char| c == '(' || c == ')' || c == '[' || c == ']')) {
+            return Some(k);
+        }
         for t in w.tokens() {
             let raw = t.trim_matches(|c: char| c == '(' || c == ')' || c == ',' || c == '[' || c == ']');
+            if let Some(k) = per_root_hertz(raw) {
+                return Some(k);
+            }
             let t = without_dc(raw);
             // a unit per something ("mW/cm²" is the unit the form wants as written)
             if w.text.contains(&format!("{t}/")) {
@@ -502,5 +534,15 @@ mod tests {
         assert_eq!(unit_prefix(&[&v]), Some(1.0));
         assert_eq!(bracket_unit("mAdc"), Some(1e-3));
         assert_eq!(unit_prefix(&[&vce]), None, "a symbol is not a unit");
+    }
+
+    #[test]
+    fn a_noise_density_unit_gives_its_voltage_prefix() {
+        let t = |s: &str| Word::for_test(s, 0.0, 0.0, 10.0, 8.0);
+        assert_eq!(unit_prefix(&[&t("(nV/√Hz)")]), Some(1e-9));
+        assert_eq!(unit_prefix(&[&t("µV/√Hz")]), Some(1e-6));
+        assert_eq!(bracket_unit("nVrms/Hz"), Some(1e-9), "the root sign lost from a title turned up the page");
+        assert_eq!(bracket_unit("µV/rtHz"), Some(1e-6));
+        assert_eq!(unit_prefix(&[&t("mW/cm²")]), None, "other units per something stay as written");
     }
 }

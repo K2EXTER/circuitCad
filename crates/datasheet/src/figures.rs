@@ -21,6 +21,12 @@ pub enum Curve {
     Ctr,
     /// A photodiode's light current against irradiance.
     LightCurrent,
+    /// A regulator's dropout voltage against its output (load) current.
+    Dropout,
+    /// Ripple rejection (PSRR) against frequency.
+    Ripple,
+    /// Output (or input-referred) noise spectral density against frequency.
+    NoiseDensity,
 }
 
 /// A graph's caption on a page.
@@ -201,7 +207,7 @@ pub fn curves(caption: &str) -> Vec<Curve> {
         return vec![Curve::ThermalImpedance];
     }
     // what is shown, and what it is shown against
-    let split = [" vs ", " versus ", " variation with "].iter().filter_map(|s| t.find(s).map(|i| (i, s.len()))).min();
+    let split = [" vs ", " versus ", " variation with ", " as a function of "].iter().filter_map(|s| t.find(s).map(|i| (i, s.len()))).min();
     let (what, against) = match split {
         Some((i, n)) => (&t[..i + 1], &t[i + n - 1..]),
         None => (t.as_str(), ""),
@@ -210,6 +216,18 @@ pub fn curves(caption: &str) -> Vec<Curve> {
         || has(against, &[" temperature", " ambient", " wavelength", " angular", " duty", " illuminance", " time ", " load resistance", " lead length", "温度"])
     {
         return vec![];
+    }
+    // a regulator's curves: the dropout against the current it carries; the ripple rejection and the noise density against frequency
+    if has(what, &[" dropout", "ドロップアウト"]) {
+        return if has(against, &[" current", " load", "電流"]) { vec![Curve::Dropout] } else { vec![] };
+    }
+    if has(what, &[" ripple rejection", " psrr ", " power supply rejection", " supply rejection", "リップル除去"]) {
+        // a caption that does not say against what (TI's "Ripple Rejection (New Chip, CSO: RFB)") is taken too: the
+        // form reads it only when its horizontal axis is a log one (frequency)
+        return if (against.is_empty() && !has(what, &[" circuit"])) || has(against, &[" frequency", "周波数"]) { vec![Curve::Ripple] } else { vec![] };
+    }
+    if has(what, &[" noise spectral density", " noise density", " noise voltage density", "雑音密度"]) || (has(what, &[" noise", "雑音"]) && has(against, &[" frequency", "周波数"])) {
+        return vec![Curve::NoiseDensity];
     }
     if has(what, &[" capacitance", "容量"]) && !has(what, &[" gate charge"]) {
         return vec![Curve::Capacitance];

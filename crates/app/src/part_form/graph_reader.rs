@@ -44,6 +44,11 @@ pub enum Dest {
     PdCap,
     /// The transient thermal impedance ("time Zth" lines).
     Zth,
+    /// The regulator's dropout against its output current (a line fitted: vdo0 + rdo × I), its ripple rejection
+    /// against frequency (the value at the field's frequency) and its output noise density (the value at 1 kHz).
+    RegDropout,
+    RegRipple,
+    RegNoise,
 }
 
 impl Dest {
@@ -66,10 +71,13 @@ impl Dest {
             Dest::OptoCtr => "フォトカプラの「CTR の曲線」に入れる",
             Dest::PdLight => "フォトダイオードの「光電流」に入れる",
             Dest::PdCap => "フォトダイオードの「容量」に入れる",
+            Dest::RegDropout => "レギュレータの「ドロップアウト」に入れる",
+            Dest::RegRipple => "レギュレータの「リップル除去」に入れる",
+            Dest::RegNoise => "レギュレータの「出力雑音」に入れる",
         }
     }
 
-    pub const ALL: [Dest; 17] = [
+    pub const ALL: [Dest; 20] = [
         Dest::DiodeForward,
         Dest::DiodeCap,
         Dest::BjtHfe,
@@ -87,6 +95,9 @@ impl Dest {
         Dest::PdLight,
         Dest::PdCap,
         Dest::Zth,
+        Dest::RegDropout,
+        Dest::RegRipple,
+        Dest::RegNoise,
     ];
 
     /// The field by its name in the code ("DarlHfe"), for `--form-graph-for`.
@@ -107,6 +118,9 @@ impl Dest {
             Dest::Zth => Curve::ThermalImpedance,
             Dest::OptoCtr => Curve::Ctr,
             Dest::PdLight => Curve::LightCurrent,
+            Dest::RegDropout => Curve::Dropout,
+            Dest::RegRipple => Curve::Ripple,
+            Dest::RegNoise => Curve::NoiseDensity,
         }
     }
 
@@ -133,6 +147,9 @@ impl Dest {
             Curve::ThermalImpedance => "過渡熱抵抗",
             Curve::Ctr => "CTR",
             Curve::LightCurrent => "光電流",
+            Curve::Dropout => "ドロップアウト",
+            Curve::Ripple => "リップル除去",
+            Curve::NoiseDensity => "雑音密度",
         }
     }
 
@@ -147,6 +164,9 @@ impl Dest {
             Dest::DiodeCap | Dest::BjtCobo | Dest::BjtCibo | Dest::Zth => (true, true, false),
             Dest::BjtHfe => (true, true, false),
             Dest::BjtVbeOn | Dest::BjtVbeSat | Dest::BjtVceSat => (true, false, false),
+            Dest::RegDropout => (false, false, false),
+            Dest::RegRipple => (true, false, false),
+            Dest::RegNoise => (true, true, false),
         }
     }
 }

@@ -64,13 +64,18 @@ impl PartForm {
             Some(Dest::OptoLed) => self.opto.fill_from_pdf(|s| sheet.spec_values(s)),
             Some(Dest::PdLight) => self.pd.fill_from_pdf(|s| sheet.spec_values(s)),
             Some(Dest::DiodeForward) => self.dio_fill_from_pdf(),
+            Some(Dest::RegDropout) => {
+                // a part pasted from a draft has no name in the section: the form's
+                let name = self.name.clone();
+                self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
+            }
             _ => {}
         }
         let read: Vec<_> = dests.iter().map(|&d| (d, self.sheet.read_curve(d))).collect();
         self.take_read_curves(read);
     }
 
-    /// 「表とグラフから全部読む」 of a section by its name (`--form-graph-all`): bjt, darl, diode, opto, pd.
+    /// 「表とグラフから全部読む」 of a section by its name (`--form-graph-all`): bjt, darl, diode, opto, pd, reg.
     pub fn graph_all_for(&mut self, section: &str) {
         use super::graph_reader::Dest;
         let dests: &[Dest] = match section {
@@ -79,9 +84,16 @@ impl PartForm {
             "diode" => &[Dest::DiodeForward, Dest::DiodeCap],
             "opto" => &[Dest::OptoLed, Dest::OptoCtr],
             "pd" => &[Dest::PdLight, Dest::PdCap],
+            "reg" => &[Dest::RegDropout, Dest::RegRipple, Dest::RegNoise],
             _ => return,
         };
         self.read_all_graphs(dests);
+        // what the table gave first (the regulator's fields are values, not curves: the graph's are said beside them)
+        if section == "reg" {
+            for (ok, line) in &self.reg.found {
+                eprintln!("{} table: {line}", if *ok { "ok" } else { "--" });
+            }
+        }
         for (_, ok, line) in &self.graph_all {
             eprintln!("{} {line}", if *ok { "ok" } else { "--" });
         }
@@ -91,6 +103,7 @@ impl PartForm {
             "darl" => self.darl.result.as_ref(),
             "opto" => self.opto.result.as_ref(),
             "pd" => self.pd.result.as_ref(),
+            "reg" => self.reg.result.as_ref(),
             _ => None,
         };
         match result {
@@ -133,6 +146,10 @@ impl PartForm {
                 let Some(Ok(f)) = self.pd.result.clone() else { return Err(not_made()) };
                 self.add_light_pin();
                 self.linear_apply(&f, super::opto::PD_ROLES)?
+            }
+            "reg" => {
+                let Some(Ok(f)) = self.reg.result.clone() else { return Err(not_made()) };
+                self.linear_apply(&f, self.reg_roles())?
             }
             // the part as the form has it
             "" => String::new(),
@@ -214,6 +231,15 @@ impl PartForm {
                 r => r,
             };
             match r {
+                // a regulator's curve gives a value or two: the line says which, or why it was not used
+                Ok(out) if matches!(d, Dest::RegDropout | Dest::RegRipple | Dest::RegNoise) => {
+                    let line = self.reg.take_graph(d, &out.points, out.page);
+                    let by = if out.by.is_empty() { String::new() } else { format!(" ({})", out.by) };
+                    match line {
+                        Ok(l) => self.graph_all.push((d, true, format!("{l}{by}"))),
+                        Err(e) => self.graph_all.push((d, false, format!("{field}: {e}"))),
+                    }
+                }
                 Ok(out) => {
                     let by = if out.by.is_empty() { String::new() } else { format!(" ({})", out.by) };
                     let how = scaled.as_ref().map_or(String::new(), |n| format!("。{n}"));
@@ -248,6 +274,7 @@ impl PartForm {
             Dest::DarlHfe | Dest::DarlVbeOn | Dest::DarlVbeSat | Dest::DarlVceSat => self.darl_fit(),
             Dest::OptoLed | Dest::OptoCtr => self.opto_make(),
             Dest::PdLight | Dest::PdCap => self.pd_make(),
+            Dest::RegDropout | Dest::RegRipple | Dest::RegNoise => self.regulator_make(),
             Dest::Zth => {}
         }
     }
@@ -290,6 +317,12 @@ impl PartForm {
             }
             Dest::DarlHfe | Dest::DarlVbeOn | Dest::DarlVbeSat | Dest::DarlVceSat => self.darl_take_graph(out.dest, &out.points, out.page),
             Dest::OptoLed | Dest::OptoCtr | Dest::PdLight | Dest::PdCap => self.opto_take_graph(out.dest, &out.points, out.page),
+            Dest::RegDropout | Dest::RegRipple | Dest::RegNoise => {
+                self.reg.message = Some(match self.reg.take_graph(out.dest, &out.points, out.page) {
+                    Ok(l) => (true, i18n::trf!("{l}。「モデルを作る」を押してください")),
+                    Err(e) => (false, e),
+                });
+            }
             d => self.bjt_take_graph(d, &out.points, out.page),
         }
     }

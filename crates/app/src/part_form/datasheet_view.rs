@@ -440,6 +440,12 @@ impl SheetView {
                 why = i18n::trf!("p.{} の図の目盛りが読めません", f.page + 1);
                 continue;
             }
+            // a regulator's curve against frequency is on a log axis: a linear one is another graph's (the axes of the
+            // graph beside it, LM317's Figure 6-12) or not against frequency (LP5907's "Noise Density Test")
+            if matches!(dest, Dest::RegRipple | Dest::RegNoise) && !a.x.log {
+                why = i18n::trf!("p.{} の図の横軸が周波数 (対数) ではありません", f.page + 1);
+                continue;
+            }
             // an hFE graph normalized to 1 (BC546's Figure 7) is not hFE: a transistor's is read as ratios and scaled by
             // the table's hFE in the form; a Darlington's is not used
             let top = a.y.ticks.iter().filter_map(|t| datasheet::graph::tick_value(&t.1)).fold(0.0_f64, f64::max);
