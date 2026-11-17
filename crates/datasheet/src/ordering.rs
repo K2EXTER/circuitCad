@@ -56,6 +56,38 @@ pub fn part_numbers(pages: &[&[Word]], family: &str) -> Vec<(String, usize)> {
     out
 }
 
+/// The package each part number is ordered in, from the ordering table's line: the first package name (`draft::package_of`)
+/// right of the part number on its line ("LP5907MFX-3.3/NOPB  Active  Production  SOT-23 (DBV) | 5" → "SOT-23"). Of a part
+/// number written several times, the first line that names a package. Part numbers on no such line are left out.
+pub fn part_packages(pages: &[&[Word]], family: &str) -> Vec<(String, String)> {
+    let fam = family.to_ascii_uppercase();
+    let mut out: Vec<(String, String)> = vec![];
+    if fam.len() < 3 {
+        return out;
+    }
+    for words in pages {
+        for line in crate::figures::lines(words) {
+            for (k, w) in line.iter().enumerate() {
+                let t = clean(w.text.trim());
+                if !t.to_ascii_uppercase().starts_with(&fam) || t.len() <= fam.len() || out.iter().any(|o| o.0.eq_ignore_ascii_case(&t)) {
+                    continue;
+                }
+                // the next part number on the line ends this one's cells
+                let cells = line[k + 1..].iter().take_while(|n| !clean(n.text.trim()).to_ascii_uppercase().starts_with(&fam));
+                let pkg = cells.flat_map(|n| n.tokens().map(str::to_string).collect::<Vec<_>>()).find_map(|tok| crate::draft::package_of(&tok));
+                if let Some((f, pins)) = pkg {
+                    let name = match pins {
+                        Some(n) => format!("{}-{n}", f.to_uppercase()),
+                        None => f.to_uppercase(),
+                    };
+                    out.push((t, name));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The output voltages a data sheet lists as its options: the numbers with "V" after "Output Voltage Options" (or
 /// "fixed output voltages") on its line and the two lines after it ("Standard Output Voltage Options:" / "- 1.2V, 1.8V,
 /// 2.5V, 2.8V, 3.0V, 3.3V, 5.0V", MCP1700). Each once, in the order written.
@@ -121,6 +153,21 @@ mod tests {
         let mc = line("MC7805ABD2TR4G 5.0 V NCV7805ABD2TR4G* MC7812CTG", 100.0);
         let pages: Vec<&[Word]> = vec![&mc];
         assert_eq!(part_numbers(&pages, &family("MC7800")).into_iter().map(|p| p.0).collect::<Vec<_>>(), vec!["MC7805ABD2TR4G", "MC7812CTG"]);
+    }
+
+    /// TI's ordering table: a part number per line and its package a few cells to the right; a line with two part numbers
+    /// gives each the package after it.
+    #[test]
+    fn part_numbers_get_their_packages() {
+        let mut p = line("LP5907MFX-1.2/NOPB Active Production SOT-23 (DBV) | 5 3000 | LARGE T&R", 100.0);
+        p.extend(line("LP5907SNX-1.2/NOPB Active Production X2SON (DQN) | 4 3000", 112.0));
+        p.extend(line("LP5907UVE-1.2/NOPB Active Production DSBGA (YKG) | 4", 124.0));
+        p.extend(line("LP5907MFX-1.2/NOPB.A Active Production SOT-23 (DBV) | 5", 136.0));
+        p.extend(line("MC7805CTG TO-220 MC7805CD2TG D2PAK", 148.0));
+        let pages: Vec<&[Word]> = vec![&p];
+        let got = part_packages(&pages, "LP5907");
+        assert_eq!(got, vec![("LP5907MFX-1.2".to_string(), "SOT-23".to_string()), ("LP5907SNX-1.2".into(), "X2SON".into())], "DSBGA is no package name the draft knows");
+        assert_eq!(part_packages(&pages, "MC78"), vec![("MC7805CTG".to_string(), "TO-220".to_string()), ("MC7805CD2TG".into(), "D2PAK".into())]);
     }
 
     #[test]

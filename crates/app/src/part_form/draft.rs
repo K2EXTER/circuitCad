@@ -59,7 +59,7 @@ fn has_model(kind: Option<(PartType, &'static str)>) -> bool {
 }
 
 /// A built-in footprint of the same name as a package ("SOT-23", "TO-92").
-fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Option<String> {
+pub(super) fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Option<String> {
     let names = pcb_core::footprints::names();
     let base = p.family.to_uppercase();
     let count = pins.map(<[String]>::len).or(p.pins.map(|n| n as usize));

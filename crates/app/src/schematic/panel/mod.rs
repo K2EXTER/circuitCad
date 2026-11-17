@@ -335,6 +335,13 @@ impl SchEditor {
                 Some(crate::part_form::FormRequest::ImportKicad) => self.open_kicad_import(),
                 None => {}
             }
+            // several parts made at once (every voltage of a regulator)
+            if !form.batch.is_empty() {
+                let parts = std::mem::take(&mut form.batch);
+                let failed: Vec<String> = parts.iter().filter_map(|d| part_lib::save(&self.lib_dir, d).err().map(|e| format!("{}: {e}", d.name))).collect();
+                self.reload_library();
+                self.status = if failed.is_empty() { format!("ライブラリに {} 部品を保存しました", parts.len()) } else { format!("保存できなかった部品があります: {}", failed.join(" / ")) };
+            }
             match saved {
                 Some(def) => match part_lib::save(&self.lib_dir, &def) {
                     Ok(p) => {

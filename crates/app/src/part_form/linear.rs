@@ -64,6 +64,10 @@ pub struct RegulatorInput {
     pub found: Vec<(bool, String)>,
     /// The output voltages the data sheet's part numbers tell, each with its first part number (`reg_fill::variants`).
     pub variants: Vec<(f64, String)>,
+    /// Every part number with a voltage in its name (voltage, part number), and the package each is ordered in (part number,
+    /// package): for making every version at once (`reg_fill::versions`).
+    pub parts: Vec<(f64, String)>,
+    pub packages: Vec<(String, String)>,
 }
 
 /// A number as typed, with an SI prefix and an optional unit after it ("700kHz", "-20nA", "2Meg").
@@ -610,6 +614,10 @@ impl PartForm {
             });
             if let Some((v, part)) = pick {
                 self.reg_choose_variant(v, &part);
+            }
+            let n = super::reg_fill::versions(&self.reg.variants, &self.reg.parts, &self.reg.packages).len();
+            if ui.button(i18n::trf!("電圧違いをまとめて作る ({n} 通り)")).on_hover_text(i18n::tr("注文情報の型番の電圧ごと (パッケージ違いがあればそのパッケージごと) に、表をその型番で読み直してモデルを作り、ピンと「④ 部品の形」はこのフォームのまま (パッケージの分かる型番は組み込みの形) で、部品を全部ライブラリに保存します。組み込みの形が無いパッケージは作りません。先にピン表を確かめてください")).clicked() {
+                self.reg_make_all();
             }
         }
         {

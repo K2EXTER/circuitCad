@@ -298,6 +298,8 @@ pub struct PartForm {
     pub dim_ref: Option<pdf_check::DimRef>,
     /// Set by the file buttons of the basic tab; the editor takes it after the frame.
     pub request: Option<FormRequest>,
+    /// Parts made at once (every voltage of a regulator: `reg_make_all`), for the editor to save into the library.
+    pub batch: Vec<PartDef>,
     /// The library part being edited (None = a new part), see `edit.rs`.
     pub orig: Option<PartDef>,
     /// Keep the package of `orig` as it is (a pad list written by hand): the dimensions of the package tab do not describe it.
@@ -454,6 +456,7 @@ impl Default for PartForm {
             pin_check: None,
             dim_ref: None,
             request: None,
+            batch: vec![],
             orig: None,
             keep_package: false,
         }

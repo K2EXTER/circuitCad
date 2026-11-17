@@ -232,6 +232,12 @@ impl Datasheet {
         ordering::part_numbers(&pages, &ordering::family(name))
     }
 
+    /// The package of each part number of the family of `name`, from its ordering table's line (`ordering::part_packages`).
+    pub fn part_packages(&self, name: &str) -> Vec<(String, String)> {
+        let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
+        ordering::part_packages(&pages, &ordering::family(name))
+    }
+
     /// The output voltages the data sheet lists as options (`ordering::voltage_options`).
     pub fn voltage_options(&self) -> Vec<f64> {
         let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();

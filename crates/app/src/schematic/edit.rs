@@ -158,6 +158,35 @@ impl SchEditor {
     /// The op-amp or regulator box of the form made: "opamp" (the LM358 example), "opamp-pdf" (read from the form's PDF),
     /// "fixed" (LM7805), "adj" (LM317), "opto" (PC817), "photodiode" (BPW34) or "darlington" (TIP120). The symbol is set
     /// so that the box is the one shown.
+    /// The regulator's voltage versions of the form's PDF made at once (`--form-variants [DIR]`): without `dir` the form shows
+    /// what it made and saves nothing (for screenshots; None), with it the parts are saved there and each printed (Some(saved
+    /// them all)).
+    pub fn variants_in_form(&mut self, dir: Option<&std::path::Path>) -> Option<bool> {
+        let f = self.form.as_mut()?;
+        f.reg_variants_and_make_all();
+        // a screenshot only shows what was made: nothing goes into the library
+        let Some(dir) = dir else {
+            f.batch.clear();
+            return None;
+        };
+        if f.batch.is_empty() {
+            eprintln!("not saved: {}", f.reg_message());
+            return Some(false);
+        }
+        let mut ok = true;
+        for d in std::mem::take(&mut f.batch) {
+            match part_lib::save(dir, &d) {
+                Ok(p) => println!("saved {} ({})", p.display(), d.description),
+                Err(e) => {
+                    eprintln!("not saved: {}: {e}", d.name);
+                    ok = false;
+                }
+            }
+        }
+        eprintln!("{}", f.reg_message());
+        Some(ok)
+    }
+
     pub fn linear_in_form(&mut self, what: &str) {
         if let Some(f) = self.form.as_mut() {
             match what {

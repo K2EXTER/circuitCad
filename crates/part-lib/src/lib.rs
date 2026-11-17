@@ -937,6 +937,7 @@ pub mod passive;
 pub mod series;
 pub mod templates;
 pub mod thru_hole;
+pub mod variants;
 
 #[cfg(test)]
 mod tests;
