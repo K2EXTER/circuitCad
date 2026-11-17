@@ -1,0 +1,86 @@
+{
+  "name": "SW_PUSH",
+  "category": "スイッチ",
+  "description": "押しボタン (タクトスイッチ 6mm 角、押している間だけ閉じる)。ピン 1 と 2 は押すとつながる (基板では 1 と 2 がそれぞれ 2 本ずつ)。回路図の「デジタル回路を動かす」では、押しボタンをクリックしている間だけ閉じる。ふつうの解析では離したまま (開いている)",
+  "prefix": "SW",
+  "glyph": "switch_push",
+  "footprint_name": "SW_Tactile_6x6",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -3.25,
+        "y": -2.25,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 1.0
+      },
+      {
+        "pin": "1",
+        "x": 3.25,
+        "y": -2.25,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 1.0
+      },
+      {
+        "pin": "2",
+        "x": -3.25,
+        "y": 2.25,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 1.0
+      },
+      {
+        "pin": "2",
+        "x": 3.25,
+        "y": 2.25,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 1.0
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "SW_PUSH",
+    "text": ".subckt SW_PUSH 1 2\n* pressed while Vpress is 1 V (0 V = released): the live logic view of the schematic sets it while the button is held down\nS1 1 2 press 0 SWPUSH\nVpress press 0 0\n.model SWPUSH SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends SW_PUSH",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "limits": [
+      "押していないときは 1GΩ、押したときは 0.05Ω の理想のスイッチです。実物は、押した瞬間と離した瞬間に接点が何度も跳ねて (チャタリング、数 ms)、ロジック IC には何回も押したように見えることがあります。このモデルは跳ねません。",
+      "ふつうの解析 (DC・過渡など) では、離したまま (開いた状態) で計算します。押した状態を調べるには、回路図の「デジタル回路を動かす」を使います。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "学習用の理想のスイッチ (6mm 角のタクトスイッチの足の位置)"
+    }
+  },
+  "ratings": {
+    "v_max": 12,
+    "i_max": 0.05,
+    "rows": [
+      {
+        "name": "定格",
+        "value": "12V 50mA",
+        "condition": "DC (6mm 角のタクトスイッチの代表値)"
+      }
+    ]
+  }
+}

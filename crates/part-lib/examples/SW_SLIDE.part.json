@@ -1,0 +1,84 @@
+{
+  "name": "SW_SLIDE",
+  "category": "スイッチ",
+  "description": "スライドスイッチ (1 回路 2 接点、ピンの間隔 2.54mm)。COM が A か B のどちらかにつながる。A を GND、B を電源にすると、COM が 0 / 1 を出す (プルダウンの抵抗が要らない)。回路図の「デジタル回路を動かす」では、クリックで切り替わる。ふつうの解析では A 側",
+  "prefix": "SW",
+  "glyph": "switch_spdt",
+  "footprint_name": "SW_Slide_SPDT_P2.54",
+  "pins": [
+    {
+      "number": "1",
+      "name": "A",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "COM",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "B",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.9
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.9
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.9
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "SW_SLIDE",
+    "text": ".subckt SW_SLIDE a com b\n* the lever is at B while Vpos is 1 V (0 V = at A): the live logic view of the schematic flips it on a click\nS1 com a pos 0 SWTOA\nS2 com b pos 0 SWTOB\nVpos pos 0 0\n.model SWTOA SW(RON=0.05 ROFF=1G VT=0.5 VW=-0.1)\n.model SWTOB SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends SW_SLIDE",
+    "pins": [
+      "1",
+      "2",
+      "3"
+    ],
+    "limits": [
+      "つながっている側は 0.05Ω、もう一方は 1GΩ の理想のスイッチです。実物は、切り替える瞬間に接点が跳ねたり (チャタリング)、どちらにもつながらない一瞬があったりします。このモデルは一度に切り替わります。",
+      "ふつうの解析 (DC・過渡など) では、A 側につないだまま計算します。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "学習用の理想のスイッチ (2.54mm 間隔の 3 ピンのスライドスイッチ)"
+    }
+  },
+  "ratings": {
+    "v_max": 30,
+    "i_max": 0.3,
+    "rows": [
+      {
+        "name": "定格",
+        "value": "30V 0.3A",
+        "condition": "DC (小形のスライドスイッチの代表値)"
+      }
+    ]
+  }
+}
