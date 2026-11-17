@@ -634,7 +634,7 @@ impl SchEditor {
             if ui.button(i18n::tr("連鎖故障を追う")).on_hover_text(i18n::tr("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)")).clicked() {
                 self.run_fault_chain();
             }
-            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new(i18n::tr("よくある故障を順に試す"))).on_hover_text(i18n::tr("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます")).clicked() {
+            if crate::widgets::unless(ui, (!(self.scan_run.is_none())).then_some("いま試しています。終わるまでお待ちください"), egui::Button::new(i18n::tr("よくある故障を順に試す"))).on_hover_text(i18n::tr("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます")).clicked() {
                 self.start_fault_scan();
             }
             ui.checkbox(&mut self.scan_rare, i18n::tr("まれな故障も含める")).on_hover_text(i18n::tr("入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります"));
@@ -727,7 +727,9 @@ impl SchEditor {
         }
         if !self.fault_scan.is_empty() {
             let mut pick = None;
-            let scan = egui::CollapsingHeader::new(i18n::tr("危険な順 (定格超え → 電圧の変化)")).default_open(true).show(ui, |ui| {
+            // a heading, not a fold: the section around it already folds (at most two levels)
+            let head = ui.label(egui::RichText::new(i18n::tr("危険な順 (定格超え → 電圧の変化)")).strong());
+            {
                 egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                     for (k, row) in self.fault_scan.iter().enumerate() {
                         let effect = if row.severity.is_infinite() {
@@ -751,11 +753,11 @@ impl SchEditor {
                         }
                     }
                 });
-            });
-            if self.fault_scroll && self.fault_view.is_none() {
-                ui.scroll_to_rect(scan.header_response.rect, Some(egui::Align::Min));
             }
-            scan.header_response.on_hover_text(i18n::tr("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです"));
+            if self.fault_scroll && self.fault_view.is_none() {
+                ui.scroll_to_rect(head.rect, Some(egui::Align::Min));
+            }
+            head.on_hover_text(i18n::tr("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです"));
             if let Some(k) = pick {
                 let row = &self.fault_scan[k];
                 (self.fault_part, self.fault_pin, self.fault_kind, self.fault_pin_how) = (row.part.clone(), row.pin.clone(), row.fault_kind, 0);

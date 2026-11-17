@@ -26,6 +26,7 @@ impl SchEditor {
     }
 
     pub fn analyze_psrr(&mut self) {
+        self.last_run = LastRun::Psrr;
         self.run_psrr();
     }
 

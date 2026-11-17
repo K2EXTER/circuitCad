@@ -29,7 +29,7 @@ impl SchEditor {
         self.sheet_tabs(ui);
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let rect = resp.rect;
-        painter.rect_filled(rect, 0.0, SCH_BG);
+        painter.rect_filled(rect, 0.0, crate::canvas_theme::col(crate::canvas_theme::Role::Bg));
         if self.dc.is_some() {
             self.sig_cache = self.signature();
         }
@@ -54,6 +54,9 @@ impl SchEditor {
         self.draw_currents(&painter, rect);
         self.draw_problems(&painter, rect);
         self.draw_noise_overlay(&painter, rect);
+        self.volt_legend(ui, rect);
+        self.stale_band(ui, rect);
+        self.net_menu_ui(ui);
         if self.alt_pan {
             return; // the drag moves the view: no selection box, no moving of parts
         }
@@ -172,6 +175,7 @@ impl SchEditor {
             if ui.input(|i| i.key_pressed(egui::Key::F)) {
                 self.fit_pending = true;
             }
+            self.table_keys(ui);
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.pending = None;
                 self.selected = None;

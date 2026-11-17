@@ -45,7 +45,7 @@ $failed = @()
 foreach ($name in $shots.Keys) {
     if ($Only -ne "" -and $name -ne $Only) { continue }
     $png = Join-Path $out "$name.png"
-    $argv = @($shots[$name]) + @("--screenshot", $png)
+    $argv = @($shots[$name]) + @("--screenshot", $png, "--paper")
     if ($Lang -ne "") { $argv += @("--lang", $Lang) }
     $p = Start-Process -FilePath $Exe -ArgumentList $argv -PassThru
     if (-not $p.WaitForExit(120000)) {

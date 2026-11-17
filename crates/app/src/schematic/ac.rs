@@ -4,6 +4,7 @@ use super::*;
 
 impl SchEditor {
     pub fn analyze_ac(&mut self) {
+        self.last_run = LastRun::Ac;
         self.run_ac();
     }
 

@@ -175,6 +175,14 @@ pub struct SchEditor {
     dc: Option<DcView>,
     show_v: bool,
     show_i: bool,
+    /// How the wires are coloured by voltage (the legend's switches) and the menu of a right-clicked net.
+    vscale: VoltScale,
+    net_menu: Option<(String, Pos2)>,
+    /// The analysis run last, which F5 and the band over an out-of-date result run again.
+    last_run: LastRun,
+    /// The analyses pinned (★) to the top of the analysis tab (kept in `settings.json`), and whether that changed this frame.
+    pub analysis_pins: Vec<String>,
+    pub analysis_pins_changed: bool,
     sig_cache: String,
     /// The DC currents of the nets, with the signature of the circuit they were worked out for: the board's net window asks for
     /// them each time it opens, and the DC solve of a big circuit takes seconds.
@@ -522,7 +530,11 @@ struct DcView {
     marks: Vec<(Pt, f64)>,
     /// Voltage of each wire's net (same order as `Schematic::wires`).
     wire_v: Vec<Option<f64>>,
-    /// Range of the node voltages, for colouring.
+    /// The two ends of each wire when the result was made, to find a wire's voltage after the wires change.
+    wire_ends: Vec<(Pt, Pt)>,
+    /// Range of the wire voltages (not the nodes inside the parts' models); the colours take theirs from the wires shown
+    /// (`vscale.rs`), the tests read this.
+    #[cfg_attr(not(test), allow(dead_code))]
     v_range: (f64, f64),
     /// Set when this is a what-if result with a broken part ("R1 を断線"), not the real circuit.
     fault: Option<String>,
@@ -530,15 +542,97 @@ struct DcView {
     ratings: Vec<sim_core::RatingIssue>,
 }
 
-/// Wire colour for a net voltage: blue at the lowest voltage of the circuit, red at the highest.
-fn volt_color(v: f64, (lo, hi): (f64, f64)) -> Color32 {
-    if hi - lo < 1e-9 {
-        return WIRE;
+/// The analyses F5 can run again (the ones that need nothing picked first).
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum LastRun {
+    Dc,
+    Tran,
+    Ac,
+    Noise,
+    Sweep,
+    Impedance,
+    Loop,
+    PoleZero,
+    Psrr,
+    Cmrr,
+    Param,
+}
+
+impl SchEditor {
+    /// Runs the analysis run last again (F5, and the band over an out-of-date result).
+    pub fn rerun_last(&mut self) {
+        match self.last_run {
+            LastRun::Dc => self.analyze_dc(),
+            LastRun::Tran => self.analyze_tran(),
+            LastRun::Ac => self.analyze_ac(),
+            LastRun::Noise => self.analyze_noise(),
+            LastRun::Sweep => self.analyze_sweep(),
+            LastRun::Impedance => self.analyze_impedance(),
+            LastRun::Loop => self.analyze_loop(),
+            LastRun::PoleZero => self.analyze_pz(),
+            LastRun::Psrr => self.analyze_psrr(),
+            LastRun::Cmrr => self.analyze_cmrr(),
+            LastRun::Param => self.analyze_param(),
+        }
     }
-    let t = ((v - lo) / (hi - lo)).clamp(0.0, 1.0) as f32;
-    let (a, b) = ([40.0, 90.0, 220.0], [225.0, 50.0, 40.0]);
-    let m = |k: usize| (a[k] + (b[k] - a[k]) * t) as u8;
-    Color32::from_rgb(m(0), m(1), m(2))
+
+    /// The name of the analysis F5 runs, for the palette and the hover.
+    pub fn last_run_name(&self) -> &'static str {
+        match self.last_run {
+            LastRun::Dc => "DC動作点",
+            LastRun::Tran => "過渡解析",
+            LastRun::Ac => "AC解析",
+            LastRun::Noise => "ノイズ解析",
+            LastRun::Sweep => "DCスイープ",
+            LastRun::Impedance => "インピーダンス",
+            LastRun::Loop => "ループゲイン",
+            LastRun::PoleZero => "極と零",
+            LastRun::Psrr => "電源除去比",
+            LastRun::Cmrr => "同相除去比",
+            LastRun::Param => "パラメータスイープ",
+        }
+    }
+}
+
+/// How the wires are coloured by their voltage: the two switches of the legend in the canvas corner.
+#[derive(Clone, Default, PartialEq, Debug)]
+pub(crate) struct VoltScale {
+    /// Steps of ten (1 mV, 10 mV, 100 mV, 1 V, 10 V) instead of steps in proportion to the largest voltage shown.
+    pub decades: bool,
+    /// The net the voltages are measured from (like moving a scope's ground clip); `None` = ground.
+    pub reference: Option<String>,
+}
+
+/// Below this (in proportion: a hundredth of the range; in decades: 1 mV) a wire counts as 0 V and is gray.
+const DECADE_FLOOR: f64 = 1e-3;
+
+/// The step of a voltage, already taken from the reference: 0 = about 0 V, 1..=5 above, -1..=-5 below. In proportion the
+/// steps split the largest voltage shown on each side (`lo` ≤ 0 ≤ `hi`); in decades a step is a power of ten from 1 mV.
+fn volt_step(v: f64, (lo, hi): (f64, f64), decades: bool) -> i32 {
+    if decades {
+        let a = v.abs();
+        if a < DECADE_FLOOR {
+            return 0;
+        }
+        let k = ((a / DECADE_FLOOR).log10().floor() as i32 + 1).clamp(1, 5);
+        return if v > 0.0 { k } else { -k };
+    }
+    let span = hi.max(-lo);
+    if span < 1e-9 || v.abs() < span * 0.01 {
+        return 0;
+    }
+    let side = if v > 0.0 { hi } else { -lo };
+    let k = ((v.abs() / side.max(1e-12)) * 5.0).ceil().clamp(1.0, 5.0) as i32;
+    if v > 0.0 { k } else { -k }
+}
+
+fn step_colour(step: i32) -> Color32 {
+    let p = crate::canvas_theme::palette();
+    match step {
+        0 => p.zero,
+        s if s > 0 => p.above[(s - 1) as usize],
+        s => p.below[(-s - 1) as usize],
+    }
 }
 
 /// Engineering notation: 4.700 mA, 12.00 V, 250.0 nA.
@@ -645,6 +739,11 @@ impl Default for SchEditor {
             dc: None,
             show_i: true,
             show_v: true,
+            vscale: VoltScale::default(),
+            net_menu: None,
+            last_run: LastRun::Dc,
+            analysis_pins: crate::prefs::Prefs::default().analysis_pins,
+            analysis_pins_changed: false,
             sig_cache: String::new(),
             dc_currents_cache: std::cell::RefCell::new(None),
             dc_currents_rev: std::cell::Cell::new(None),
@@ -837,9 +936,6 @@ impl Default for SchEditor {
 }
 
 
-const SCH_BG: Color32 = Color32::from_rgb(250, 248, 235);
-const SYM: Color32 = Color32::from_rgb(120, 20, 20);
-const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
 
 // The editor is one type spread over several files; the child modules see its private fields.
 use lessons::ActiveLesson;
@@ -890,11 +986,14 @@ mod history;
 mod hint;
 mod canvas;
 mod draw;
+mod vscale;
+mod acts;
 mod pdf;
 mod svg;
 mod title_block;
 mod interact;
 pub(crate) mod panel;
+pub(crate) use panel::analysis_sections;
 mod coverage;
 mod selfheat;
 mod board_heat;

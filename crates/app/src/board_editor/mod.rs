@@ -50,9 +50,16 @@ fn tool_tip(t: Tool) -> &'static str {
     }
 }
 
-/// The number key that picks a tool: 1-9 and 0 in the order of `TOOLS`.
-fn tool_key(t: Tool) -> Option<char> {
-    TOOLS.iter().position(|(x, _, _)| *x == t).filter(|i| *i < 10).and_then(|i| char::from_digit(((i + 1) % 10) as u32, 10))
+/// The letter of a tool (`crate::actions::ACTIONS`: W wire, V via, M measure; Esc goes back to Select). The other
+/// tools are picked in the toolbar or the palette (Ctrl+K).
+fn tool_key(t: Tool) -> Option<&'static str> {
+    match t {
+        Tool::Select => Some("Esc"),
+        Tool::Track => Some("W"),
+        Tool::Via => Some("V"),
+        Tool::Measure => Some("M"),
+        _ => None,
+    }
 }
 
 const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
@@ -67,7 +74,6 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::Hole, "取付穴", Icon::Hole),
     (Tool::Silk, "シルク線", Icon::Silk),
     (Tool::Measure, "距離を測る", Icon::Ruler),
-    // (last: the number keys of the tools before it stay as they were)
     (Tool::Keepout, "禁止領域", Icon::Keepout),
     (Tool::Text, "シルクの文字", Icon::Text),
 ];
@@ -732,6 +738,7 @@ mod thermalmap;
 mod file;
 mod actions;
 mod canvas;
+mod acts;
 mod interact;
 mod draw;
 mod ribbon;

@@ -16,6 +16,7 @@ impl SchEditor {
     }
 
     pub fn analyze_cmrr(&mut self) {
+        self.last_run = LastRun::Cmrr;
         self.run_cmrr();
     }
 

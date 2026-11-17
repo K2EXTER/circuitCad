@@ -34,6 +34,17 @@ pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
 /// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"). Buttons are grey until pressed and the same size, so
 /// this looks like any other button; it exists so the main actions stay easy to find in the code (and to restyle in one place).
 #[allow(dead_code)] // the documented main-action button (ui-rules.md); the panels use `primary_button_wide` right now
+/// A control that cannot be used while `why_not` is `Some`: greyed out, and the reason shows when the pointer rests on
+/// it. A greyed-out button never leaves the user guessing (`docs/code-notes/app/ui-rules.md`, 2026-11-17): use this
+/// instead of `ui.add_enabled` for buttons.
+pub fn unless(ui: &mut egui::Ui, why_not: Option<&str>, w: impl egui::Widget) -> egui::Response {
+    let r = ui.add_enabled(why_not.is_none(), w);
+    match why_not {
+        Some(m) => r.on_disabled_hover_text(i18n::tr_dyn(m)),
+        None => r,
+    }
+}
+
 pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
     ui.add_enabled(enabled, egui::Button::new(i18n::tr_dyn(label)))
 }

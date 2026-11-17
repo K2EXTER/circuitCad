@@ -36,6 +36,7 @@ impl SchEditor {
     }
 
     pub fn analyze_loop(&mut self) {
+        self.last_run = LastRun::Loop;
         self.run_loop();
     }
 

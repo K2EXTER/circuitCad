@@ -228,6 +228,11 @@ impl SchEditor {
                 self.selected = Some(Sel::Comp(i));
                 self.popup_serial += 1;
                 self.part_popup = Some((i, pos, self.popup_serial));
+            } else if matches!(self.tool, Tool::Select)
+                && let Some(pos) = resp.interact_pointer_pos()
+            {
+                // a wire, pin or label: measure the voltage colours from its net
+                self.open_net_menu(snapped, pos);
             }
         }
     }

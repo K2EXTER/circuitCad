@@ -152,11 +152,13 @@ impl SchEditor {
                     }
                 }
             }
-            let vs = res.voltages.iter().map(|(_, v)| *v);
+            // the wires only: the nodes inside a part's model (an op-amp's −5801 V) made every wire the top colour
+            let vs = wire_v.iter().flatten().copied();
             v_range = (vs.clone().fold(0.0, f64::min), vs.fold(0.0, f64::max));
         }
         let ratings = outcome.as_ref().map(|r| sim_core::check_ratings(&self.with_library_ratings(), r)).unwrap_or_default();
-        DcView { outcome, signature: self.signature(), pin_v, marks, wire_v, v_range, fault, ratings }
+        let wire_ends = self.sch.wires.iter().map(|w| (w.a, w.b)).collect();
+        DcView { outcome, signature: self.signature(), pin_v, marks, wire_v, wire_ends, v_range, fault, ratings }
     }
 
     /// Where the voltages are written on the sheet: one per net, not one per pin, so a wire does not carry the same "5.000 V" at
@@ -215,6 +217,7 @@ impl SchEditor {
     }
 
     pub fn analyze_dc(&mut self) {
+        self.last_run = LastRun::Dc;
         self.run_dc();
     }
 

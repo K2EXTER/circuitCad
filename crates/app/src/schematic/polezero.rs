@@ -37,6 +37,7 @@ impl SchEditor {
     }
 
     pub fn analyze_pz(&mut self) {
+        self.last_run = LastRun::PoleZero;
         self.run_pz();
     }
 

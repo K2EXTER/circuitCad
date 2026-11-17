@@ -13,6 +13,7 @@ pub(super) struct ZView {
 
 impl SchEditor {
     pub fn analyze_impedance(&mut self) {
+        self.last_run = LastRun::Impedance;
         self.run_z();
     }
 

@@ -202,7 +202,7 @@ impl SchEditor {
     }
 
     /// Selects the first part on a net (the net itself cannot be selected) and brings it to the middle of the sheet.
-    fn goto_net(&mut self, name: &str) {
+    pub(super) fn goto_net(&mut self, name: &str) {
         let first = extract(&self.sch).into_iter().find(|n| n.name == name).and_then(|n| n.pins.first().map(|p| p.refdes.clone()));
         match first {
             Some(r) => self.goto_part(&r),

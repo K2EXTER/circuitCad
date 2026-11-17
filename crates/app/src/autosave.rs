@@ -107,8 +107,11 @@ impl App {
         self.last_autosave = std::time::Instant::now();
         let (sch, board) = (self.sch.autosave_json(), self.board_ed.autosave_json());
         let paths = [self.sch.path.as_deref(), self.board_ed.path.as_deref(), self.project.as_deref()];
-        if let Err(e) = write(&default_dir(), sch.as_deref(), board.as_deref(), paths) {
-            self.sch.status = format!("自動保存できませんでした: {e}");
+        let had_work = sch.is_some() || board.is_some();
+        match write(&default_dir(), sch.as_deref(), board.as_deref(), paths) {
+            Err(e) => self.sch.status = format!("自動保存できませんでした: {e}"),
+            Ok(()) if had_work => self.autosaved_at = Some(std::time::Instant::now()),
+            Ok(()) => {}
         }
     }
 

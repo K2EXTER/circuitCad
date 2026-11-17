@@ -330,7 +330,7 @@ impl SchEditor {
                     });
                     if let Some(p) = &out.primary {
                         ui.horizontal(|ui| {
-                            let b = ui.add_enabled(selected_value.is_some(), egui::Button::new(i18n::trf!("選択中の部品の値を {p} にする")));
+                            let b = crate::widgets::unless(ui, (!(selected_value.is_some())).then_some("回路図で部品を 1 つ選ぶと、その値を変えられます"), egui::Button::new(i18n::trf!("選択中の部品の値を {p} にする")));
                             if b.on_hover_text(i18n::tr("回路図で抵抗・コンデンサ・コイルを選ぶと押せます。選んだ部品の値を、この結果で置き換えます (Ctrl+Z で戻せます)")).clicked() {
                                 apply = selected_value.map(|i| (i, p.clone()));
                             }

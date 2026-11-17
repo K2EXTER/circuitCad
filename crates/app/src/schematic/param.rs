@@ -24,6 +24,7 @@ impl SchEditor {
     }
 
     pub fn analyze_param(&mut self) {
+        self.last_run = LastRun::Param;
         self.run_param();
     }
 

@@ -211,7 +211,7 @@ impl BoardEditor {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(orange, i18n::tr_dyn(&f.message));
                     let can = !self.waive_reason.trim().is_empty();
-                    if ui.add_enabled(can, egui::Button::new(i18n::tr("承知する")).small()).on_hover_text(i18n::tr("この指摘を、理由つきで「承知した例外」にします。点検の件数に数えず、基板の上では黄土色で出ます。理由を上の欄に書いてから押します。回路図の側の表にも書き込まれます")).clicked() {
+                    if crate::widgets::unless(ui, (!(can)).then_some("上の欄に理由を書くと押せます"), egui::Button::new(i18n::tr("承知する")).small()).on_hover_text(i18n::tr("この指摘を、理由つきで「承知した例外」にします。点検の件数に数えず、基板の上では黄土色で出ます。理由を上の欄に書いてから押します。回路図の側の表にも書き込まれます")).clicked() {
                         let w = design_spec::Waiver { kind: f.kind.key().into(), name: f.name.clone(), item: f.item.clone(), note: self.waive_reason.trim().to_string() };
                         self.checkpoint();
                         self.board.waivers.push(w.clone());

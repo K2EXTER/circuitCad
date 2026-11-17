@@ -276,7 +276,7 @@ impl SchEditor {
                             self.to_screen(rect, (c.pos.0 as f32 + r.0, c.pos.1 as f32 + r.1))
                         })
                         .collect();
-                    painter.add(egui::Shape::convex_polygon(pts, Color32::from_rgb(214, 230, 250), Stroke::NONE));
+                    painter.add(egui::Shape::convex_polygon(pts, crate::canvas_theme::col(crate::canvas_theme::Role::PartFill), Stroke::NONE));
                 }
                 self.draw_custom(painter, rect, sym, c.pos, c.rot, color)
             }
@@ -285,7 +285,7 @@ impl SchEditor {
                 self.draw_symbol(painter, rect, c.kind, c.pos, c.rot, color);
                 // the name of each pin of a pin header, on the side of the body away from the pins (where the net labels go), upright whatever the turn
                 if let Kind::Header(n) = c.kind {
-                    let font = crate::theme::canvas_font(&painter, (self.zoom * 0.5).clamp(12.0, 16.0));
+                    let font = crate::theme::canvas_font(painter, (self.zoom * 0.5).clamp(12.0, 16.0));
                     for i in 0..n as usize {
                         if let Some(name) = c.pin_name(&(i + 1).to_string()) {
                             let r = rot_f((-0.4, 2.0 * i as f32), c.rot);
@@ -313,11 +313,10 @@ impl SchEditor {
                 let r = rot_f((x, y), rot);
                 self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
             };
-            let num_font = crate::theme::canvas_font(&painter, (self.zoom * 0.34).clamp(6.0, 11.0));
             for p in &l.pins {
                 let (mx, my) = ((p.tip.0 + p.edge.0) as f32 / 2.0, (p.tip.1 + p.edge.1) as f32 / 2.0);
                 let off = if matches!(p.side, PinSide::Left | PinSide::Right) { (0.0, -0.45) } else { (0.45, 0.0) };
-                painter.text(tr(mx + off.0, my + off.1), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
+                self.pin_number(painter, tr(mx + off.0, my + off.1), &p.number);
             }
             return;
         }
@@ -334,11 +333,10 @@ impl SchEditor {
                 self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
             };
             let stroke = Stroke::new(1.6, color);
-            let num_font = crate::theme::canvas_font(&painter, (self.zoom * 0.34).clamp(6.0, 11.0));
             for p in &l.pins {
                 let s = if p.tip.0 < 0 { -2.0 } else { 2.0 };
                 painter.line_segment([tr(p.tip.0 as f32, p.tip.1 as f32), tr(s, 0.0)], stroke);
-                painter.text(tr((p.tip.0 as f32 + s) / 2.0, -0.45), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
+                self.pin_number(painter, tr((p.tip.0 as f32 + s) / 2.0, -0.45), &p.number);
             }
             self.draw_symbol(painter, rect, kind, pos, rot, color);
             // a leaded resistor of a maker's series: its colour bands inside the box, read from pin 1 (the left end)
@@ -380,8 +378,7 @@ impl SchEditor {
         if let Some(g) = super::glyphs::overlay_glyph(sym) {
             self.draw_shapes(painter, rect, super::glyphs::overlay(g, &l), pos, rot, color);
         }
-        let name_font = crate::theme::canvas_font(&painter, (self.zoom * 0.42).clamp(7.0, 14.0));
-        let num_font = crate::theme::canvas_font(&painter, (self.zoom * 0.34).clamp(6.0, 11.0));
+        let name_font = self.tier_font(painter, super::draw::Tier::Sub, 0.42);
         for p in &l.pins {
             let (tx, ty, ex, ey) = (p.tip.0 as f32, p.tip.1 as f32, p.edge.0 as f32, p.edge.1 as f32);
             painter.line_segment([tr(tx, ty), tr(ex, ey)], stroke);
@@ -402,11 +399,13 @@ impl SchEditor {
             } else {
                 Align2::CENTER_BOTTOM
             };
-            painter.text(tr(ex + inward.0 * 0.3, ey + inward.1 * 0.3), anchor, &p.name, name_font.clone(), color);
+            if let Some(f) = &name_font {
+                painter.text(tr(ex + inward.0 * 0.3, ey + inward.1 * 0.3), anchor, &p.name, f.clone(), color);
+            }
             // pin number beside the lead
             let (mx, my) = ((tx + ex) / 2.0, (ty + ey) / 2.0);
             let off = if matches!(p.side, PinSide::Left | PinSide::Right) { (0.0, -0.45) } else { (0.45, 0.0) };
-            painter.text(tr(mx + off.0, my + off.1), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
+            self.pin_number(painter, tr(mx + off.0, my + off.1), &p.number);
         }
     }
 

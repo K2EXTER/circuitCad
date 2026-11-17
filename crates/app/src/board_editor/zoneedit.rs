@@ -145,7 +145,7 @@ impl BoardEditor {
         }
         if let EditTarget::Corner(h) = target
             && !h.mid
-            && ui.add_enabled(n > 3 || is_arc && n > 2, egui::Button::new(i18n::tr("この頂点を消す"))).clicked()
+            && crate::widgets::unless(ui, (!(n > 3 || is_arc && n > 2)).then_some("これ以上消すと形になりません"), egui::Button::new(i18n::tr("この頂点を消す"))).clicked()
         {
             self.vsel = Some(h);
             self.delete_picked_vertex();

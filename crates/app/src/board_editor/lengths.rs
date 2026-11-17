@@ -33,12 +33,12 @@ impl BoardEditor {
             });
             ui.add(egui::DragValue::new(&mut self.meander.height_max).speed(0.1).range(0.5..=10.0).prefix(i18n::tr("山の高さ ")).suffix(" mm")).on_hover_text(i18n::tr("蛇行の山の高さの目安 (上限)。大きいほど山の数が減りますが、周りの配線とぶつかりやすくなります"));
             let picked: Vec<String> = nets.iter().map(|(n, _)| n.clone()).filter(|n| self.meander_nets.contains(n)).collect();
-            if ui.add_enabled(picked.len() >= 2, egui::Button::new(i18n::tr("選んだネットを一番長いものに合わせる"))).on_hover_text(i18n::tr("選んだネットのうち、いちばん長いものに、ほかのネットの長さをそろえます。短いネットの、まっすぐな長い配線に蛇行を入れます。ルール違反になる所には入れません。元に戻すで取り消せます")).clicked() {
+            if crate::widgets::unless(ui, (!(picked.len() >= 2)).then_some("ネットを 2 本以上選ぶと、長さをそろえられます"), egui::Button::new(i18n::tr("選んだネットを一番長いものに合わせる"))).on_hover_text(i18n::tr("選んだネットのうち、いちばん長いものに、ほかのネットの長さをそろえます。短いネットの、まっすぐな長い配線に蛇行を入れます。ルール違反になる所には入れません。元に戻すで取り消せます")).clicked() {
                 self.match_lengths(&picked, None);
             }
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut self.meander_target).speed(0.5).range(0.0..=1000.0).prefix(i18n::tr("目標 ")).suffix(" mm"));
-                if ui.add_enabled(!picked.is_empty() && self.meander_target > 0.0, egui::Button::new(i18n::tr("指定の長さに合わせる"))).on_hover_text(i18n::tr("選んだネットすべてを、指定した長さにします (いちばん長いネットがそれより長いときは、いちばん長いものに合わせます)")).clicked() {
+                if crate::widgets::unless(ui, (!(!picked.is_empty() && self.meander_target > 0.0)).then_some("ネットを選び、目標の長さ (mm) を入れると押せます"), egui::Button::new(i18n::tr("指定の長さに合わせる"))).on_hover_text(i18n::tr("選んだネットすべてを、指定した長さにします (いちばん長いネットがそれより長いときは、いちばん長いものに合わせます)")).clicked() {
                     self.match_lengths(&picked, Some(self.meander_target));
                 }
             });

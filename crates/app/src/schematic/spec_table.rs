@@ -420,11 +420,10 @@ impl SchEditor {
                         }
                         let c = r.each.iter().find(|e| e.level == r.level).cloned().unwrap_or(c);
                         if !c.hints.is_empty() {
-                            egui::CollapsingHeader::new(i18n::tr("差の理由の手がかり")).id_salt(("spec_why", i)).show(ui, |ui| {
-                                for h in &c.hints {
-                                    ui.small(i18n::trf!("・{h}"));
-                                }
-                            });
+                            // in a hover, not a fold inside the folding section (at most two levels)
+                            let why: Vec<String> = c.hints.iter().map(|h| i18n::trf!("・{h}")).collect();
+                            crate::icons::help_small(ui, "差の理由の手がかり", &why.join("
+"));
                         }
                     }
                 }

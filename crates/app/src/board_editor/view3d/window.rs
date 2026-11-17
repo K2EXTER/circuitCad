@@ -112,7 +112,7 @@ impl BoardEditor {
                 if ui.button(i18n::tr("更新")).on_hover_text(i18n::tr("基板エディタで変更した内容を反映します")).clicked() {
                     stale = true;
                 }
-                if ui.add_enabled(selected.is_some(), egui::Button::new(i18n::tr("選択部品へ寄る"))).on_hover_text(i18n::tr("基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます")).clicked() {
+                if crate::widgets::unless(ui, (!(selected.is_some())).then_some("部品を選ぶと、そこへ寄れます"), egui::Button::new(i18n::tr("選択部品へ寄る"))).on_hover_text(i18n::tr("基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます")).clicked() {
                     v.focus = selected;
                 }
                 if ui.button(i18n::tr("PNG保存")).on_hover_text(i18n::tr("いま見えている向きの絵を画像ファイルに保存します (発注前の確認や、人に見せるときに)")).clicked() {

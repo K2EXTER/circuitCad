@@ -201,11 +201,11 @@ impl BoardEditor {
             }
         }
         ui.separator();
-        if ui.add_enabled(!self.poly_verts.is_empty(), egui::Button::new(i18n::tr("最後の点を戻す (Backspace)"))).clicked() {
+        if crate::widgets::unless(ui, (!(!self.poly_verts.is_empty())).then_some("まだ点を置いていません"), egui::Button::new(i18n::tr("最後の点を戻す (Backspace)"))).clicked() {
             self.poly_back();
             ui.close();
         }
-        if ui.add_enabled(self.poly.len() >= 3, egui::Button::new(i18n::tr("確定 (閉じて、ベタ・外形にする)"))).clicked() {
+        if crate::widgets::unless(ui, (!(self.poly.len() >= 3)).then_some("点を 3 つ以上置くと確定できます"), egui::Button::new(i18n::tr("確定 (閉じて、ベタ・外形にする)"))).clicked() {
             self.finish_polygon();
             ui.close();
         }

@@ -90,14 +90,20 @@ impl BoardEditor {
             self.redo();
             return;
         }
-        // number keys pick a tool (1-9, 0), in the order of the toolbar
+        if cmd && pressed(Key::A) {
+            self.select_all();
+            return;
+        }
+        // letters pick the tools used most (`crate::actions::ACTIONS`: the same letter means the same in the schematic);
+        // the others are in the toolbar and the palette (Ctrl+K). Number keys were the toolbar's order, which changed
+        // whenever a tool was added.
         if !cmd && !shift && !ui.input(|i| i.modifiers.alt) {
-            let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9, Key::Num0];
-            if let Some(k) = digits.iter().position(|k| pressed(*k))
-                && let Some((t, _, _)) = TOOLS.get(k)
-            {
-                self.set_tool(*t);
-                return;
+            let routing = self.tool == Tool::Track && self.pending.is_some();
+            for (k, t) in [(Key::W, Tool::Track), (Key::M, Tool::Measure), (Key::V, Tool::Via)] {
+                if pressed(k) && !(k == Key::V && routing) {
+                    self.set_tool(t);
+                    return;
+                }
             }
         }
         // R, B and Delete act on what is selected, and only the Select tool selects: in another tool they do nothing
@@ -124,9 +130,9 @@ impl BoardEditor {
             self.multi.clear();
             self.boxsel = None;
         }
-        // a finished measurement is kept as a dimension: Enter as it is, H only its width, V only its height
+        // a finished measurement is kept as a dimension: Enter as it is, X only its width, Y only its height (V is the via)
         if self.tool == Tool::Measure && !cmd && matches!(self.measure, Some((_, Some(_)))) {
-            for (k, dir) in [(Key::Enter, pcb_core::dimension::DimDir::Aligned), (Key::H, pcb_core::dimension::DimDir::Horizontal), (Key::V, pcb_core::dimension::DimDir::Vertical)] {
+            for (k, dir) in [(Key::Enter, pcb_core::dimension::DimDir::Aligned), (Key::X, pcb_core::dimension::DimDir::Horizontal), (Key::Y, pcb_core::dimension::DimDir::Vertical)] {
                 if pressed(k) {
                     self.keep_measure(dir);
                     return;
@@ -228,17 +234,24 @@ mod tests {
         e
     }
 
-    /// The number keys pick the tools in the order of the toolbar (1 = select ... 0 = silk), and the toolbar shows them.
+    /// The letters of the table pick the tools (W wire, V via, M measure) and the toolbar shows them; a number key no
+    /// longer does anything. V while a track is being drawn drops a via instead.
     #[test]
-    fn number_keys_pick_tools() {
+    fn letter_keys_pick_tools() {
         let mut e = editor();
-        press(&mut e, egui::Key::Num2);
+        press(&mut e, egui::Key::W);
         assert!(e.tool == Tool::Track);
-        press(&mut e, egui::Key::Num0);
-        assert!(e.tool == Tool::Silk);
-        press(&mut e, egui::Key::Num1);
-        assert!(e.tool == Tool::Select);
-        assert_eq!((tool_key(Tool::Select), tool_key(Tool::Silk)), (Some('1'), Some('0')));
+        press(&mut e, egui::Key::M);
+        assert!(e.tool == Tool::Measure);
+        press(&mut e, egui::Key::V);
+        assert!(e.tool == Tool::Via);
+        press(&mut e, egui::Key::Num2);
+        assert!(e.tool == Tool::Via, "number keys are not tools any more");
+        assert_eq!((tool_key(Tool::Track), tool_key(Tool::Silk)), (Some("W"), None));
+        for (t, k) in [(Tool::Track, "W"), (Tool::Via, "V"), (Tool::Measure, "M")] {
+            let act = crate::actions::ACTIONS.iter().find(|a| a.key == k).expect("the key is in the table");
+            assert_eq!(tool_key(t), Some(act.key));
+        }
     }
 
     /// R, B and Delete reach a selected part or track only from the Select tool, so a part picked earlier is

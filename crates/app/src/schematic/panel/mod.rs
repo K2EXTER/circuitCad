@@ -23,6 +23,14 @@ const ANALYSIS_SECTIONS: &[(&str, &str, &str)] = &[
     ("fault", "故障シミュレーション", "部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます"),
 ];
 
+/// How many analyses can be pinned (★) to the top of the analysis tab.
+const MAX_ANALYSIS_PINS: usize = 6;
+
+/// The analysis sections (key, title, what it shows), for the command palette.
+pub fn analysis_sections() -> &'static [(&'static str, &'static str, &'static str)] {
+    ANALYSIS_SECTIONS
+}
+
 /// The analyses in groups by what they are for: (heading, when to use them, section keys). Every key of `ANALYSIS_SECTIONS` is in one group.
 const ANALYSIS_GROUPS: &[(&str, &str, &[&str])] = &[
     ("基本", "まずここから。電圧・電流 (DC)、時間の変化 (過渡)、周波数の特性 (AC) を見ます", &["dc", "tran", "ac"]),
@@ -136,58 +144,40 @@ impl SchEditor {
                     filter.is_empty()
                         || [title, hint, key].iter().any(|s| s.to_lowercase().contains(&filter) || i18n::tr_dyn(s).to_lowercase().contains(&filter))
                 };
-                let mut shown = 0;
-                for (heading, when, keys) in ANALYSIS_GROUPS {
-                    let sections: Vec<_> =
-                        ANALYSIS_SECTIONS.iter().filter(|(k, t, h)| keys.contains(k) && matches(k, t, h)).collect();
-                    if sections.is_empty() {
-                        continue;
+                if filter.is_empty() && !lesson {
+                    // the pinned analyses (★), then the one opened from the list, the palette or the command line; the rest
+                    // in the list below (`docs/code-notes/app/ui-rules.md`: a fixed few, the rest in a list)
+                    let mut keys: Vec<&'static str> = ANALYSIS_SECTIONS.iter().map(|(k, ..)| *k).filter(|k| self.analysis_pins.iter().any(|p| p == k)).collect();
+                    keys.sort_by_key(|k| self.analysis_pins.iter().position(|p| p == k));
+                    if let Some(f) = self.focus_section.filter(|f| !keys.contains(f)) {
+                        keys.push(f);
                     }
-                    if shown > 0 {
-                        ui.add_space(4.0);
-                    }
-                    crate::icons::help_small(ui, heading, when);
-                    for (key, title, hint) in sections {
-                        shown += 1;
-                        let id = egui::Id::new(("analysis_section", *key, self.sec_gen, lesson));
-                        let open = lesson || self.focus_section.unwrap_or("dc") == *key;
-                        let was = egui::collapsing_header::CollapsingState::load(ui.ctx(), id).map_or(open, |s| s.is_open());
-                        let done = self.analysis_has_result(key);
-                        crate::widgets::section_header_marked(ui, id, open, title, hint, Some(analysis_icon(key)), done, |ui| {
-                            match *key {
-                                "dc" => self.panel_dc(ui),
-                                "tran" => self.panel_tran(ui),
-                                "ac" => self.panel_ac(ui),
-                                "sweep" => self.panel_sweep(ui),
-                                "param" => self.panel_param(ui),
-                                "noise" => self.panel_noise(ui),
-                                "psrr" => self.panel_psrr(ui),
-                                "cmrr" => self.panel_cmrr(ui),
-                                "diagnose" => self.panel_troubleshoot(ui),
-                                "loopgain" => self.panel_loop(ui),
-                                "impedance" => self.panel_z(ui),
-                                "polezero" => self.panel_pz(ui),
-                                "variation" => self.panel_variation(ui),
-                                "spec" => self.panel_spec(ui),
-                                "coverage" => self.panel_coverage(ui),
-                                "selfheat" => {
-                                    self.panel_selfheat(ui);
-                                    self.panel_heat_tran(ui);
-                                    self.panel_ambient_sweep(ui);
-                                }
-                                _ => self.panel_fault(ui),
-                            }
-                        });
-                        // opening one section closes the others (outside a lesson): the open one gets the height
-                        let now = egui::collapsing_header::CollapsingState::load(ui.ctx(), id).is_some_and(|s| s.is_open());
-                        if !lesson && now && !was {
-                            self.focus_section = Some(key);
-                            self.sec_gen += 1;
+                    for key in keys {
+                        if let Some((k, t, h)) = ANALYSIS_SECTIONS.iter().find(|(k, ..)| *k == key) {
+                            self.analysis_section(ui, k, t, h, lesson);
                         }
                     }
-                }
-                if shown == 0 {
-                    ui.weak(i18n::tr("その言葉に合う解析はありません"));
+                    self.analysis_list(ui);
+                } else {
+                    let mut shown = 0;
+                    for (heading, when, keys) in ANALYSIS_GROUPS {
+                        let sections: Vec<_> =
+                            ANALYSIS_SECTIONS.iter().filter(|(k, t, h)| keys.contains(k) && matches(k, t, h)).collect();
+                        if sections.is_empty() {
+                            continue;
+                        }
+                        if shown > 0 {
+                            ui.add_space(4.0);
+                        }
+                        crate::icons::help_small(ui, heading, when);
+                        for (key, title, hint) in sections {
+                            shown += 1;
+                            self.analysis_section(ui, key, title, hint, lesson);
+                        }
+                    }
+                    if shown == 0 {
+                        ui.weak(i18n::tr("その言葉に合う解析はありません"));
+                    }
                 }
                 self.panel_results(ui);
             }
@@ -213,7 +203,21 @@ impl SchEditor {
                 let r = if n == 0 { 4 } else { 0 };
                 let e = if n == 3 { 4 } else { 0 };
                 let corners = egui::CornerRadius { nw: r, sw: r, ne: e, se: e };
-                if crate::icons::segment_button(ui, icon, label, "", self.tool == tool, true, tip, width, corners).clicked() {
+                // the keys of `crate::actions::ACTIONS` (the same letter picks the same tool on the board)
+                let shown_key = match tool {
+                    Tool::Wire => crate::actions::action(crate::actions::Act::Wire).key,
+                    Tool::Label => crate::actions::action(crate::actions::Act::NetLabel).key,
+                    _ => "",
+                };
+                let key = match tool {
+                    // Esc only in the hover: the button is too narrow for it
+                    Tool::Select => crate::actions::action(crate::actions::Act::Cancel).key,
+                    Tool::Wire => crate::actions::action(crate::actions::Act::Wire).key,
+                    Tool::Label => crate::actions::action(crate::actions::Act::NetLabel).key,
+                    _ => "",
+                };
+                let tip = if key.is_empty() { i18n::tr(tip).to_string() } else { format!("{} ({key})", i18n::tr(tip)) };
+                if crate::icons::segment_button(ui, icon, label, shown_key, self.tool == tool, true, &tip, width, corners).clicked() {
                     self.tool = tool;
                 }
             }
@@ -247,12 +251,7 @@ impl SchEditor {
         ui.add_space(crate::theme::SPACE_S);
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
         if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text(i18n::tr("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です")).clicked() {
-            self.problems = erc(&self.sch);
-            self.problems.extend(self.conversion_problems());
-            self.erc_focus = None;
-            self.erc_ran = true;
-            let errors = self.problems.iter().filter(|p| p.severity == Severity::Error).count();
-            self.status = format!("ERC: エラー {} 件、注意 {} 件", errors, self.problems.len() - errors);
+            self.run_erc();
         }
         // the other two checks of the design: its requirements table, and areas left out of the ERC while drawing
         let skip_enabled = self.selection_box_exists();
@@ -359,6 +358,83 @@ pub(super) fn lib_hover_for_test(d: &part_lib::PartDef) -> String {
 }
 
 impl SchEditor {
+    /// One analysis section (its band and, when open, its settings and run button). Opening one closes the others
+    /// outside a lesson.
+    fn analysis_section(&mut self, ui: &mut egui::Ui, key: &'static str, title: &'static str, hint: &'static str, lesson: bool) {
+        let id = egui::Id::new(("analysis_section", key, self.sec_gen, lesson));
+        let open = lesson || self.focus_section.unwrap_or("dc") == key;
+        let was = egui::collapsing_header::CollapsingState::load(ui.ctx(), id).map_or(open, |s| s.is_open());
+        let done = self.analysis_has_result(key);
+        crate::widgets::section_header_marked(ui, id, open, title, hint, Some(analysis_icon(key)), done, |ui| {
+            match key {
+                "dc" => self.panel_dc(ui),
+                "tran" => self.panel_tran(ui),
+                "ac" => self.panel_ac(ui),
+                "sweep" => self.panel_sweep(ui),
+                "param" => self.panel_param(ui),
+                "noise" => self.panel_noise(ui),
+                "psrr" => self.panel_psrr(ui),
+                "cmrr" => self.panel_cmrr(ui),
+                "diagnose" => self.panel_troubleshoot(ui),
+                "loopgain" => self.panel_loop(ui),
+                "impedance" => self.panel_z(ui),
+                "polezero" => self.panel_pz(ui),
+                "variation" => self.panel_variation(ui),
+                "spec" => self.panel_spec(ui),
+                "coverage" => self.panel_coverage(ui),
+                "selfheat" => {
+                    self.panel_selfheat(ui);
+                    self.panel_heat_tran(ui);
+                    self.panel_ambient_sweep(ui);
+                }
+                _ => self.panel_fault(ui),
+            }
+        });
+        // opening one section closes the others (outside a lesson): the open one gets the height
+        let now = egui::collapsing_header::CollapsingState::load(ui.ctx(), id).is_some_and(|s| s.is_open());
+        if !lesson && now && !was {
+            self.focus_section = Some(key);
+            self.sec_gen += 1;
+        }
+    }
+
+    /// "すべての解析": every analysis as one line under its group, with a ★ to keep it in the panel. A click on the name
+    /// opens it above (under the pinned ones).
+    fn analysis_list(&mut self, ui: &mut egui::Ui) {
+        crate::widgets::group_gap(ui);
+        let title = i18n::trf!("すべての解析 ({})", ANALYSIS_SECTIONS.len());
+        let hint = "全部の解析を、用途ごとに 1 行ずつ出します。名前を押すと上に開き、☆ を押すと、いつも上に出しておけます (★ は 6 個まで)";
+        crate::widgets::section_header(ui, egui::Id::new("analysis_all_list"), self.analysis_pins.is_empty(), &title, hint, |ui| self.analysis_rows(ui));
+    }
+
+    fn analysis_rows(&mut self, ui: &mut egui::Ui) {
+        let full = self.analysis_pins.len() >= MAX_ANALYSIS_PINS;
+        for (heading, when, keys) in ANALYSIS_GROUPS {
+            crate::icons::help_small(ui, heading, when);
+            for key in keys.iter() {
+                let Some((k, title, hint)) = ANALYSIS_SECTIONS.iter().find(|(k, ..)| k == key) else { continue };
+                let pinned = self.analysis_pins.iter().any(|p| p == k);
+                ui.horizontal(|ui| {
+                    let star = if pinned { "★" } else { "☆" };
+                    let why = (!pinned && full).then_some("★ は 6 個までです。どれかの ★ を外すと留められます");
+                    let tip = if pinned { i18n::tr("★ を外して、パネルに出すのをやめます") } else { i18n::tr("★ を付けて、パネルの上にいつも出しておきます") };
+                    if crate::widgets::unless(ui, why, egui::Button::new(star).small().frame(false)).on_hover_text(tip).clicked() {
+                        if pinned {
+                            self.analysis_pins.retain(|p| p != k);
+                        } else {
+                            self.analysis_pins.push(k.to_string());
+                        }
+                        self.analysis_pins_changed = true;
+                    }
+                    let open_now = self.focus_section == Some(*k);
+                    if ui.selectable_label(open_now, i18n::tr(title)).on_hover_text(i18n::tr(hint)).clicked() {
+                        self.show_analysis_section(k);
+                    }
+                });
+            }
+        }
+    }
+
     /// The analysis tab with one section open, by its key (`dc`, `variation`, `coverage` ...: `ANALYSIS_SECTIONS`). False for
     /// a key that is not a section (command line `--section`).
     pub fn open_analysis_section(&mut self, key: &str) -> bool {

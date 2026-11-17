@@ -1,5 +1,5 @@
 //! Dimensions kept on the board (`pcb_core::dimension`): drawn on the canvas, made from a measurement of the measuring tool
-//! (Enter keeps it as it is, H only its width, V only its height) or from the outline (a button), and taken off again.
+//! (Enter keeps it as it is, X only its width, Y only its height) or from the outline (a button), and taken off again.
 
 use super::*;
 use pcb_core::dimension::{add_outline_dimensions, DimDir, Dimension};

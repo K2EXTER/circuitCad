@@ -4,6 +4,7 @@ use super::*;
 
 impl SchEditor {
     pub fn analyze_noise(&mut self) {
+        self.last_run = LastRun::Noise;
         self.run_noise();
     }
 

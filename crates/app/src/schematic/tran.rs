@@ -20,6 +20,7 @@ impl SchEditor {
     }
 
     pub fn analyze_tran(&mut self) {
+        self.last_run = LastRun::Tran;
         self.run_tran();
     }
 

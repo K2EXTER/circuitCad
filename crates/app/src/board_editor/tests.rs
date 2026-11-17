@@ -2318,7 +2318,6 @@ fn trunk_mode_is_part_of_the_wire_tool() {
     e.trunk_mode = false;
     e.click(p(15.05, 18.825));
     assert!(e.trunk_pads.is_empty() && e.pending.is_some(), "the wire tool starts a track as always");
-    assert_eq!((tool_key(Tool::Select), tool_key(Tool::Silk)), (Some('1'), Some('0')));
 }
 
 /// The net under the pointer: a pad, a track of the pad's net, and nothing on bare board.

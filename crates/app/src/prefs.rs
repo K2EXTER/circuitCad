@@ -37,11 +37,19 @@ pub struct Prefs {
     pub default_author: String,
     /// The board's grid when the app starts, mm.
     pub board_grid: f64,
+    /// The schematic canvas's colours: the theme ("dark" or "paper") and the user's own colour for some roles
+    /// (`canvas_theme::ROLES` keys).
+    pub canvas_theme: String,
+    pub canvas_colors: Vec<(String, [u8; 3])>,
+    /// The rows pinned with ★ in the command palette (`actions::ACTIONS` ids, `analysis:dc`, `term:電圧` …).
+    pub palette_pins: Vec<String>,
+    /// The analyses kept at the top of the analysis tab (★, `ANALYSIS_SECTIONS` keys).
+    pub analysis_pins: Vec<String>,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Self { icon_only: false, show_hints: true, model_zips: vec![], req_frames: true, req_groups: true, req_lines: true, sheet_colors: true, smooth_edges: true, link_selection: true, lang: "ja".into(), ui_scale: 1.0, show_tips: true, autosave_secs: 60, wheel_speed: 1.0, wheel_invert: false, default_author: String::new(), board_grid: 0.5 }
+        Self { icon_only: false, show_hints: true, model_zips: vec![], req_frames: true, req_groups: true, req_lines: true, sheet_colors: true, smooth_edges: true, link_selection: true, lang: "ja".into(), ui_scale: 1.0, show_tips: true, autosave_secs: 60, wheel_speed: 1.0, wheel_invert: false, default_author: String::new(), board_grid: 0.5, canvas_theme: "dark".into(), canvas_colors: vec![], palette_pins: vec!["save".into(), "erc".into(), "fit".into()], analysis_pins: vec!["dc".into(), "tran".into(), "ac".into()] }
     }
 }
 
@@ -77,13 +85,42 @@ impl Prefs {
             wheel_invert: get("wheel_invert", d.wheel_invert),
             default_author: json.as_ref().and_then(|v| v.get("default_author")).and_then(|s| s.as_str()).unwrap_or_default().to_string(),
             board_grid: num("board_grid", d.board_grid, 0.0, 5.0),
+            canvas_theme: json.as_ref().and_then(|v| v.get("canvas_theme")).and_then(|s| s.as_str()).and_then(crate::canvas_theme::Theme::parse).unwrap_or_default().key().to_string(),
+            canvas_colors: json
+                .as_ref()
+                .and_then(|v| v.get("canvas_colors"))
+                .and_then(|o| o.as_object())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, c)| {
+                            let a = c.as_array()?;
+                            let n = |i: usize| a.get(i).and_then(|x| x.as_u64()).filter(|x| *x <= 255).map(|x| x as u8);
+                            Some((k.clone(), [n(0)?, n(1)?, n(2)?]))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            palette_pins: json
+                .as_ref()
+                .and_then(|v| v.get("palette_pins"))
+                .and_then(|a| a.as_array())
+                .map(|a| a.iter().filter_map(|s| s.as_str()).map(String::from).collect())
+                .unwrap_or(d.palette_pins),
+            analysis_pins: json
+                .as_ref()
+                .and_then(|v| v.get("analysis_pins"))
+                .and_then(|a| a.as_array())
+                .map(|a| a.iter().filter_map(|s| s.as_str()).map(String::from).collect())
+                .unwrap_or(d.analysis_pins),
         }
     }
 
     /// Writes the file; the error text says what to do (the setting then only lasts until the app closes).
     pub fn save(&self, file: &Path) -> Result<(), String> {
         let json = serde_json::json!({ "version": 1, "icon_only": self.icon_only, "show_hints": self.show_hints, "model_zips": self.model_zips, "req_frames": self.req_frames, "req_groups": self.req_groups, "req_lines": self.req_lines, "sheet_colors": self.sheet_colors, "smooth_edges": self.smooth_edges, "link_selection": self.link_selection, "lang": self.lang,
-            "ui_scale": self.ui_scale, "show_tips": self.show_tips, "autosave_secs": self.autosave_secs, "wheel_speed": self.wheel_speed, "wheel_invert": self.wheel_invert, "default_author": self.default_author, "board_grid": self.board_grid });
+            "ui_scale": self.ui_scale, "show_tips": self.show_tips, "autosave_secs": self.autosave_secs, "wheel_speed": self.wheel_speed, "wheel_invert": self.wheel_invert, "default_author": self.default_author, "board_grid": self.board_grid,
+            "canvas_theme": self.canvas_theme, "canvas_colors": self.canvas_colors.iter().map(|(k, c)| (k.clone(), serde_json::json!(c))).collect::<serde_json::Map<_, _>>(),
+            "palette_pins": self.palette_pins, "analysis_pins": self.analysis_pins });
         file.parent()
             .map_or(Ok(()), std::fs::create_dir_all)
             .and_then(|_| std::fs::write(file, serde_json::to_string_pretty(&json).unwrap_or_default()))
@@ -112,7 +149,7 @@ mod tests {
         let d = std::env::temp_dir().join(format!("cc_prefs_{}", std::process::id()));
         let f = d.join("settings.json");
         assert_eq!(Prefs::load(&f), Prefs::default(), "no file: defaults");
-        let p = Prefs { icon_only: true, show_hints: false, model_zips: vec!["C:/m/grm.zip".into()], req_frames: false, req_groups: true, req_lines: false, sheet_colors: false, smooth_edges: false, link_selection: false, lang: "en".into(), ui_scale: 1.25, show_tips: false, autosave_secs: 0, wheel_speed: 2.0, wheel_invert: true, default_author: "山田".into(), board_grid: 1.27 };
+        let p = Prefs { icon_only: true, show_hints: false, model_zips: vec!["C:/m/grm.zip".into()], req_frames: false, req_groups: true, req_lines: false, sheet_colors: false, smooth_edges: false, link_selection: false, lang: "en".into(), ui_scale: 1.25, show_tips: false, autosave_secs: 0, wheel_speed: 2.0, wheel_invert: true, default_author: "山田".into(), board_grid: 1.27, canvas_theme: "paper".into(), canvas_colors: vec![("wire".into(), [1, 2, 3])], palette_pins: vec!["analysis:ac".into()], analysis_pins: vec!["noise".into()] };
         p.save(&f).unwrap();
         assert_eq!(Prefs::load(&f), p);
         std::fs::write(&f, r#"{"icon_only": true}"#).unwrap();

@@ -16,15 +16,20 @@ const MARGIN: f32 = 12.0;
 const BORDER: f32 = 16.0;
 const FONT_FAMILY: &str = "'BIZ UDGothic','BIZ UDPGothic','Yu Gothic UI','Meiryo','Hiragino Sans','Noto Sans CJK JP',sans-serif";
 
+/// Pictures written out are always on paper, whatever theme the canvas uses.
+fn paper_bg() -> egui::Color32 {
+    crate::canvas_theme::PAPER.get(crate::canvas_theme::Role::Bg)
+}
+
 impl SchEditor {
     /// The shown sheet as an SVG document, or `None` when it has nothing on it.
     pub fn sheet_svg(&mut self) -> Option<String> {
-        self.sheet_shapes().map(|shapes| shapes_to_svg(&shapes, SCH_BG))
+        crate::canvas_theme::with_paper(|| self.sheet_shapes()).map(|shapes| shapes_to_svg(&shapes, paper_bg()))
     }
 
     /// The shown sheet as a PDF file's bytes, or `None` when it has nothing on it.
     pub fn sheet_pdf(&mut self) -> Option<Vec<u8>> {
-        self.sheet_shapes().map(|shapes| super::pdf::shapes_to_pdf(&shapes, SCH_BG))
+        crate::canvas_theme::with_paper(|| self.sheet_shapes()).map(|shapes| super::pdf::shapes_to_pdf(&shapes, paper_bg()))
     }
 
     /// What egui draws for the shown sheet (at the export zoom, without the selection), for the pictures made from it.

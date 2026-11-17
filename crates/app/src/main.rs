@@ -36,6 +36,9 @@ mod source_form;
 mod startup;
 mod theme;
 mod tips;
+mod canvas_theme;
+mod actions;
+mod app_actions;
 mod widgets;
 mod xcheck;
 mod xcheck_ac;
@@ -93,6 +96,11 @@ struct App {
     /// A copy of unsaved work left by an earlier run (asked about at start-up), and when the copy was last written.
     recovery: Option<autosave::Found>,
     last_autosave: std::time::Instant,
+    /// When unsaved work was last copied by the autosave (shown on the status line).
+    autosaved_at: Option<std::time::Instant>,
+    /// The command palette (Ctrl+K) and what was chosen in it lately.
+    palette: actions::Palette,
+    palette_recent: Vec<String>,
     /// The settings as last applied (`settings_window.rs`); the editors keep their own copies of what they use.
     prefs: prefs::Prefs,
     settings_open: bool,
@@ -194,7 +202,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
     }
 }
 
@@ -229,6 +237,9 @@ impl eframe::App for App {
         self.sync_heat();
         self.finish_screenshot(ui);
         self.tick_auto_screenshot(ui);
+        self.global_keys(ui.ctx());
+        self.palette_ui(ui.ctx());
+        self.save_analysis_pins();
         // F1, and the small "操作" buttons of the panels, open the guide
         if ui.input(|i| i.key_pressed(egui::Key::F1)) {
             self.help.show(if self.mode == Mode::Schematic { help::HelpTab::Schematic } else { help::HelpTab::Board });
@@ -365,10 +376,16 @@ impl eframe::App for App {
         }
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.selectable_value(&mut self.mode, Mode::Schematic, i18n::tr("回路図")).on_hover_text(i18n::tr("回路図の画面。部品を置いて配線し、シミュレーションします"));
+                // a small dot = not saved; ⚠ (orange) = the board does not match the schematic
+                let unsaved = |dirty: bool| if dirty { " •" } else { "" };
+                let sch_tab = format!("{}{}", i18n::tr("回路図"), unsaved(self.sch.dirty()));
+                ui.selectable_value(&mut self.mode, Mode::Schematic, sch_tab)
+                    .on_hover_text(if self.sch.dirty() { i18n::tr("回路図の画面。• は保存していない変更があるしるしです") } else { i18n::tr("回路図の画面。部品を置いて配線し、シミュレーションします") });
                 let stale = !self.board_ed.schematic_diff(&self.sch).is_empty();
-                ui.selectable_value(&mut self.mode, Mode::Board, if stale { i18n::tr("基板パターン ●") } else { i18n::tr("基板パターン") })
-                    .on_hover_text(if stale { i18n::tr("回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)") } else { i18n::tr("基板の画面。回路図から部品を取り込んで、配置・配線します") });
+                let board_tab = format!("{}{}{}", i18n::tr("基板パターン"), unsaved(self.board_ed.dirty()), if stale { " ⚠" } else { "" });
+                let board_tab = if stale { egui::RichText::new(board_tab).color(crate::theme::WARN) } else { egui::RichText::new(board_tab) };
+                ui.selectable_value(&mut self.mode, Mode::Board, board_tab)
+                    .on_hover_text(if stale { i18n::tr("⚠ 回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)") } else { i18n::tr("基板の画面。回路図から部品を取り込んで、配置・配線します。• は保存していない変更があるしるしです") });
                 // a project of several boards: which one is in the editors
                 if self.system.names.len() > 1 {
                     let mut k = self.system.active;
@@ -402,11 +419,11 @@ impl eframe::App for App {
                     }
                     ui.separator();
                     ui.label(if sch_mode { i18n::tr("いまの回路図だけ") } else { i18n::tr("いまの基板だけ") });
-                    if ui.button(i18n::tr("新規")).on_hover_text(i18n::tr("いまの図を空にして、新しく始めます")).clicked() && self.confirm_unsaved_one(sch_mode, "新規にすると、いまの図は消えます。") {
+                    if ui.add(egui::Button::new(i18n::tr("新規")).shortcut_text(crate::actions::action(crate::actions::Act::New).key)).on_hover_text(i18n::tr("いまの図を空にして、新しく始めます")).clicked() && self.confirm_unsaved_one(sch_mode, "新規にすると、いまの図は消えます。") {
                         if sch_mode { self.sch.new_file() } else { self.board_ed.new_file() }
                         ui.close();
                     }
-                    if ui.button(i18n::tr("開く…")).on_hover_text(i18n::tr("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」")).clicked() && self.confirm_unsaved_one(sch_mode, "開くと、いまの図は置き換わります。") {
+                    if ui.add(egui::Button::new(i18n::tr("開く…")).shortcut_text(crate::actions::action(crate::actions::Act::Open).key)).on_hover_text(i18n::tr("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」")).clicked() && self.confirm_unsaved_one(sch_mode, "開くと、いまの図は置き換わります。") {
                         if sch_mode { self.sch.open() } else { self.board_ed.open() }
                         ui.close();
                     }
@@ -437,10 +454,10 @@ impl eframe::App for App {
                             ui.close();
                         }
                     }).response.on_hover_text(i18n::tr("できあがった回路をすぐ開いて、動かしてみます。保存するときは別の名前になるので、サンプルは壊れません"));
-                    if ui.button(i18n::tr("保存")).on_hover_text(i18n::tr("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます")).clicked() {
+                    if ui.add(egui::Button::new(i18n::tr("保存")).shortcut_text(crate::actions::action(crate::actions::Act::Save).key)).on_hover_text(i18n::tr("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます")).clicked() {
                         if sch_mode { self.sch.save(false) } else { self.board_ed.save(false) }
                     }
-                    if ui.button(i18n::tr("名前を付けて保存…")).on_hover_text(i18n::tr("別の名前で保存します")).clicked() {
+                    if ui.add(egui::Button::new(i18n::tr("名前を付けて保存…")).shortcut_text(crate::actions::action(crate::actions::Act::SaveAs).key)).on_hover_text(i18n::tr("別の名前で保存します")).clicked() {
                         if sch_mode { self.sch.save(true) } else { self.board_ed.save(true) }
                     }
                     ui.separator();
@@ -611,6 +628,15 @@ impl eframe::App for App {
                     });
                 });
                 ui.menu_button(i18n::tr("編集"), |ui| {
+                    if ui.add(egui::Button::new(i18n::tr("操作を探す…")).shortcut_text(crate::actions::action(crate::actions::Act::Palette).key)).on_hover_text(i18n::tr("名前や、したいことの言葉で、メニュー・解析・ツール・用語を探して実行します。キーも書いてあるので、使ううちに覚えられます")).clicked() {
+                        self.run_act(crate::actions::Act::Palette);
+                        ui.close();
+                    }
+                    if ui.add(egui::Button::new(i18n::tr("部品・ネットを探す…")).shortcut_text(crate::actions::action(crate::actions::Act::Find).key)).on_hover_text(i18n::tr("部品番号 (R1) やネットの名前 (VCC) で探して、回路図のその場所へ移ります")).clicked() {
+                        self.run_act(crate::actions::Act::Find);
+                        ui.close();
+                    }
+                    ui.separator();
                     if ui.button(i18n::tr("元に戻す (Ctrl+Z)")).on_hover_text(i18n::tr("直前の操作を取り消します")).clicked() {
                         if sch_mode { self.sch.undo() } else { self.board_ed.undo() }
                     }
@@ -688,10 +714,25 @@ impl eframe::App for App {
                 } else {
                     ui.label(status.as_str());
                 }
-                if self.show_hints && self.prefs.show_tips {
+                let dirty = self.dirty();
+                let autosaved = self.autosaved_at.filter(|_| dirty).map(|t| t.elapsed().as_secs() / 60);
+                let tips = self.show_hints && self.prefs.show_tips;
+                if dirty || tips {
                     // rotate the general tips every 12 seconds
                     let t = ui.input(|i| i.time);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // the right end: whether the work is saved (and when the autosave last kept a copy)
+                        if dirty {
+                            if let Some(m) = autosaved {
+                                let when = if m == 0 { i18n::tr("自動保存 たった今").to_string() } else { i18n::trf!("自動保存 {m} 分前") };
+                                ui.label(egui::RichText::new(when).weak()).on_hover_text(i18n::tr("保存していない作業は、設定の間隔で別の所にコピーしてあります。落ちても、次の起動で戻せます"));
+                            }
+                            ui.label(i18n::tr("保存していない変更があります")).on_hover_text(i18n::tr("Ctrl+S で保存します"));
+                            ui.separator();
+                        }
+                        if !tips {
+                            return;
+                        }
                         ui.add(egui::Label::new(egui::RichText::new(i18n::trf!("豆知識: {}", i18n::tr(TIPS[(t / 12.0) as usize % TIPS.len()]))).weak()).truncate());
                     });
                     ui.request_repaint_after(std::time::Duration::from_secs(2));
@@ -778,7 +819,7 @@ fn main() -> eframe::Result {
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);
             // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)
-            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && a != "--lang" && !(i > 0 && (args[i - 1] == "--screenshot" || args[i - 1] == "--lang")));
+            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && a != "--lang" && a != "--paper" && !(i > 0 && (args[i - 1] == "--screenshot" || args[i - 1] == "--lang")));
             if !opens_something {
                 app.look_for_recovery();
             }

@@ -78,9 +78,10 @@ fn dc_result_colours_every_wire_and_reports_part_currents() {
     assert!(dc.wire_v.iter().all(|v| v.is_some()), "every wire belongs to a net with a voltage");
     assert!(dc.v_range.1 > dc.v_range.0);
     assert!(e.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).all(|c| res.element(&c.refdes).is_some()));
-    // blue at the bottom of the range, red at the top
-    let (lo, hi) = (volt_color(0.0, (0.0, 5.0)), volt_color(5.0, (0.0, 5.0)));
-    assert!(lo.b() > lo.r() && hi.r() > hi.b());
+    // 0 V is the neutral step, the top of the range the last warm step
+    assert_eq!((volt_step(0.0, (0.0, 5.0), false), volt_step(5.0, (0.0, 5.0), false)), (0, 5));
+    let p = crate::canvas_theme::palette();
+    assert_eq!((step_colour(0), step_colour(5)), (p.zero, p.above[4]));
 }
 
 #[test]
@@ -307,4 +308,25 @@ fn bus_lines_can_be_picked_moved_and_deleted_with_undo() {
     e.multi = hits;
     e.start_group_drag((0, 8));
     assert_eq!(e.gdrag.as_ref().unwrap().buses.len(), 1);
+}
+
+/// After the circuit changes, the DC result stays (faint, with the band) and each wire keeps its voltage by its ends,
+/// so an added wire gets none and the old wires do not swap colours.
+#[test]
+fn an_old_dc_result_stays_faint_and_wires_keep_their_own_voltage() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/led.schjson");
+    let mut e = editor();
+    e.sch = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    e.run_dc();
+    e.sig_cache = e.signature();
+    assert!(!e.dc_stale());
+    let before: Vec<Option<f64>> = (0..e.sch.wires.len()).map(|i| e.wire_voltage(e.dc.as_ref().unwrap(), i)).collect();
+    // a new wire at the front shifts every index
+    e.sch.wires.insert(0, sch_core::Wire { a: (90, 90), b: (95, 90) });
+    e.sig_cache = e.signature();
+    assert!(e.dc_stale(), "the circuit changed");
+    let d = e.dc.as_ref().unwrap();
+    assert_eq!(e.wire_voltage(d, 0), None, "the new wire has no voltage yet");
+    let after: Vec<Option<f64>> = (1..e.sch.wires.len()).map(|i| e.wire_voltage(d, i)).collect();
+    assert_eq!(after, before, "the old wires keep their own voltages");
 }

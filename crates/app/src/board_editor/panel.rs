@@ -387,7 +387,7 @@ impl BoardEditor {
 
     fn tool_buttons(&mut self, ui: &mut egui::Ui, tools: &[(Tool, &'static str, Icon)]) {
         for (t, name, icon) in tools {
-            let key = tool_key(*t).map(|k| k.to_string()).unwrap_or_default();
+            let key = tool_key(*t).unwrap_or_default();
             if crate::icons::icon_button_key(ui, *icon, name, &key, self.tool == *t, true, tool_tip(*t)).clicked() {
                 self.set_tool(*t);
             }
@@ -869,7 +869,7 @@ impl BoardEditor {
                 ui.horizontal(|ui| {
                     hide = ui.button(i18n::tr("印刷しない")).on_hover_text(i18n::tr("この部品番号をシルクに印刷しません (部品が密集して置き場がないとき)。部品を選ぶと「部品番号を印刷する」で戻せます")).clicked();
                     let moved = self.board.label_offsets.contains_key(&r);
-                    if ui.add_enabled(moved, egui::Button::new(i18n::tr("元の位置に戻す (Delete)"))).on_hover_text(i18n::tr("動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません")).clicked() {
+                    if crate::widgets::unless(ui, (!(moved)).then_some("部品はまだ動かしていません"), egui::Button::new(i18n::tr("元の位置に戻す (Delete)"))).on_hover_text(i18n::tr("動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません")).clicked() {
                         self.delete(sel);
                     }
                 });

@@ -59,7 +59,7 @@ impl SchEditor {
                 if ui.button(i18n::tr("判定する")).on_hover_text(i18n::tr("いまの回路をシミュレーションして、目標を満たしているか調べます。何度でも押せます")).clicked() {
                     judge = true;
                 }
-                if ui.add_enabled(hints < ch.hints.len(), egui::Button::new(i18n::trf!("ヒントを見る ({hints} / {})", ch.hints.len()))).on_hover_text(i18n::tr("行き詰まったら、少しずつヒントを出します。最後のヒントは、答えの目安です")).clicked() {
+                if crate::widgets::unless(ui, (!(hints < ch.hints.len())).then_some("ヒントはこれで全部です"), egui::Button::new(i18n::trf!("ヒントを見る ({hints} / {})", ch.hints.len()))).on_hover_text(i18n::tr("行き詰まったら、少しずつヒントを出します。最後のヒントは、答えの目安です")).clicked() {
                     more_hint = true;
                 }
                 if ui.button(i18n::tr("答えの回路を見る")).on_hover_text(i18n::tr("できあがりの回路を、いまの回路と入れ替えます (Ctrl+Z で戻せます)。答えは 1 つではありません。判定を通れば、別の値や形でも正解です")).clicked() {

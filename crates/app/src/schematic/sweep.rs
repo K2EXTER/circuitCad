@@ -4,6 +4,7 @@ use super::*;
 
 impl SchEditor {
     pub fn analyze_sweep(&mut self) {
+        self.last_run = LastRun::Sweep;
         self.run_sweep();
     }
 

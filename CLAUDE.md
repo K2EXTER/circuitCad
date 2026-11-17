@@ -57,12 +57,13 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `multiboard.rs` | 複数の基板 (E5): プロジェクトの基板の切り替え・足す・外す、「基板どうしのつなぎ」の窓(`project.rs` の `System`、形式 2) |
 | `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |
+| `canvas_theme.rs` `actions.rs` `app_actions.rs` | 回路図のキャンバスの色の役の表 (暗い地 / 紙・使う人の色) / 操作とキーの表と Ctrl+K のパレット / 窓全体のキーとパレットの中身 |
 | `samples.rs` `source_form.rs` `link.rs` `xcheck*.rs` | サンプル一覧(`docs/examples`)/ 電源値フォーム / 回路図・基板・3D の連動 / ngspice との検算 |
 | `tests/` | 統合テスト `flow.rs` と、サンプル生成 `examples.rs` の `write_*`(`--ignored`) |
 
 エディタは1つの型を複数ファイルの `impl` に分割している(子モジュールから親の非公開フィールドが見える)。
 
-- `schematic/`(`SchEditor`): `mod.rs` 型 / `canvas` `draw` `interact` `symbols` 描画と操作 / `panel/`(`mod` ツール・ERC・フォーム / `parts` 部品一覧 / `properties` 選択部品の設定)`analysis_panel` `hint` 左パネル / `edit` `stretch` `history` `file` `clipboard` `snippet` `sheets_ui` `hierarchy_ui` `title_block`(図枠)`svg`・`pdf`(回路図の書き出し)`requirements`(設計の要件の窓)`bench_data`(実測を波形に重ねる)`repair_practice`(修理の練習の仮想テスター)`quick` `library` `settings` `glyphs` `erc_skip` `net_hints` `kicad_import` `result_tables` `linked`/ 各解析 `dc` `tran` `ac` `sweep` `noise` `wave` `fault` `param` `variation` `sensitivity` `psrr` `cmrr` `troubleshoot` `spec_table` `power_ui` `selfheat*` / 学習 `lessons/` `challenge/` `wizard.rs`
+- `schematic/`(`SchEditor`): `mod.rs` 型 / `canvas` `draw` `interact` `symbols` 描画と操作 / `panel/`(`mod` ツール・ERC・フォーム / `parts` 部品一覧 / `properties` 選択部品の設定)`analysis_panel` `hint` 左パネル / `edit` `stretch` `history` `file` `clipboard` `snippet` `sheets_ui` `hierarchy_ui` `title_block`(図枠)`svg`・`pdf`(回路図の書き出し)`vscale`(電圧の色の段・凡例・基準のネット・古い結果を薄く)`acts`(操作の表の回路図の分)`requirements`(設計の要件の窓)`bench_data`(実測を波形に重ねる)`repair_practice`(修理の練習の仮想テスター)`quick` `library` `settings` `glyphs` `erc_skip` `net_hints` `kicad_import` `result_tables` `linked`/ 各解析 `dc` `tran` `ac` `sweep` `noise` `wave` `fault` `param` `variation` `sensitivity` `psrr` `cmrr` `troubleshoot` `spec_table` `power_ui` `selfheat*` / 学習 `lessons/` `challenge/` `wizard.rs`
 - `board_editor/`(`BoardEditor`): `mod.rs` 型 / `canvas` `interact` `draw` `panel` / `select` `route` `tools` `ribbon` `padlead` `livepath` `tracking` `shoving` / `align` `lengths` `pairs` `layers` `netclass` `netwindow` `nettable`(ネットの一覧の窓。電流と推奨の線幅も) `fieldview`(断面と電界の窓。インピーダンス) `zoneedit` `repair` `ruler` `measure`(距離を測るツール)`dimensions`(寸法線)`livedrc`(作業中の点検)`keepouts`(禁止領域のツール)`snippet``smoothing` `linked` `netglow` `width` `order` / `file` `actions` `history` `view` / `view3d/`(camera・scene・glow・gpu(GPU で描く)・heat(温度の色))と `raster3d.rs`(3D のソフトウェア描画)/ `requirements.rs`
 
 ## 「〜を変えたい」早見表

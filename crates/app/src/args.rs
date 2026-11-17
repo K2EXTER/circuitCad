@@ -241,6 +241,15 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(p) = args.get(i + 1) {
             app.auto_shot = Some((p.into(), 40));
         }
+    // `--palette [words]`: the command palette open (with the words typed), for a screenshot
+    if let Some(i) = args.iter().position(|a| a == "--palette") {
+        app.palette.open = true;
+        app.palette.query = args.get(i + 1).filter(|q| !q.starts_with("--")).cloned().unwrap_or_default();
+    }
+    // the pictures for the README are on paper, whatever theme the user has (`--paper`)
+    if args.iter().any(|a| a == "--paper") {
+        crate::canvas_theme::set_palette(crate::canvas_theme::PAPER);
+    }
     if let Some(p) = args.iter().find(|a| a.ends_with(".ccproj")) {
         app.load_project(p.into());
         // `--select R1` also picks the part of a project's schematic (the board and the 3D view show it: the linked pick)

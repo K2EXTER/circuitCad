@@ -96,7 +96,7 @@ impl BoardEditor {
                     }
                 });
             }
-            if ui.add_enabled(!picks.is_empty(), egui::Button::new(i18n::trf!("選んだ配線を例外にする ({} 本)", picks.len()))).on_hover_text(i18n::tr("基板で選んだ、このネットの配線を、いまの太さのまま例外にします。選択ツールで配線をクリック (Shift で複数) してから押します")).clicked() {
+            if crate::widgets::unless(ui, (!(!picks.is_empty())).then_some("基板で、このネットの配線を選ぶと押せます"), egui::Button::new(i18n::trf!("選んだ配線を例外にする ({} 本)", picks.len()))).on_hover_text(i18n::tr("基板で選んだ、このネットの配線を、いまの太さのまま例外にします。選択ツールで配線をクリック (Shift で複数) してから押します")).clicked() {
                 add = true;
             }
         });

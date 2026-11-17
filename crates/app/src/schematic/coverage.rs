@@ -43,7 +43,9 @@ impl SchEditor {
                 .on_hover_text(i18n::tr("「データシートと比べた」モデルは、部品の欄の「データシートとの比べ」に、データシートの値とモデルの値が並んでいます。「記録なし」のモデルは、どの資料から作ったか分からないので、結果は目安として見て、大事な値はデータシートで確かめてください"));
         }
         let orange = crate::theme::WARN;
-        let section = |ui: &mut egui::Ui, id: &str, title: String, tip: &str, open: bool, color: Option<egui::Color32>, list: &[sim_core::PartNote]| {
+        // headings, not folds: the section around them already folds (at most two levels). `open` lists every note;
+        // otherwise the notes are in the hover of each part's name.
+        let section = |ui: &mut egui::Ui, _id: &str, title: String, tip: &str, open: bool, color: Option<egui::Color32>, list: &[sim_core::PartNote]| {
             if list.is_empty() {
                 return;
             }
@@ -51,18 +53,30 @@ impl SchEditor {
                 Some(c) => egui::RichText::new(title).color(c),
                 None => egui::RichText::new(title),
             };
-            egui::CollapsingHeader::new(text).id_salt(("coverage", id)).default_open(open).show(ui, |ui| {
+            ui.label(text.strong()).on_hover_text(tip);
+            ui.horizontal_wrapped(|ui| {
                 for p in list {
-                    ui.label(egui::RichText::new(format!("{} ({})", p.refdes, p.value)).strong());
+                    let mut hover = String::new();
                     if let Some((o, _)) = origins.get(&p.refdes) {
-                        let line = egui::RichText::new(super::panel::origin_kind_text(o.as_ref())).small();
-                        ui.label(if o.is_none() { line.color(orange) } else { line });
+                        hover.push_str(super::panel::origin_kind_text(o.as_ref()));
                     }
                     for n in &p.notes {
-                        ui.label(i18n::trf!("・{n}"));
+                        hover.push_str(&format!("
+・{n}"));
+                    }
+                    let name = ui.label(egui::RichText::new(format!("{} ({})", p.refdes, p.value)).color(if origins.get(&p.refdes).is_some_and(|(o, _)| o.is_none()) { orange } else { ui.visuals().text_color() }));
+                    if !hover.is_empty() {
+                        name.on_hover_text(hover.trim_start());
                     }
                 }
-            }).header_response.on_hover_text(tip);
+            });
+            if open {
+                for p in list {
+                    for n in &p.notes {
+                        ui.small(i18n::trf!("{}: {n}", p.refdes));
+                    }
+                }
+            }
         };
         section(ui, "ignored", format!("計算に入っていない部品 {} 個", cov.ignored.len()), "モデルがないので、回路にないものとして計算します。部品の編集で、モデルのある部品に替えるか、ライブラリにモデルを足してください", true, Some(orange), &cov.ignored);
         section(ui, "generic", format!("汎用の標準値で計算 {} 個", cov.generic.len()), "ダイオード・LED・NPN の基本の部品は、型番の特性ではなく、標準の値で計算します。型番まで合わせたいときは、ライブラリの部品に替えます", false, None, &cov.generic);

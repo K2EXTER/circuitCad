@@ -11,6 +11,7 @@ pub enum SettingsTab {
     Input,
     Files,
     Board,
+    Colors,
 }
 
 /// The sizes of the screen offered (a free number would make the window jump under the pointer while it is dragged).
@@ -33,7 +34,9 @@ impl App {
         icons::set_icon_only(p.icon_only);
         ctx.set_zoom_factor(p.ui_scale);
         prefs::set_wheel(p.wheel_speed, p.wheel_invert);
+        crate::canvas_theme::set_palette(crate::canvas_theme::build(crate::canvas_theme::Theme::parse(&p.canvas_theme).unwrap_or_default(), &p.canvas_colors));
         self.sch.default_author = p.default_author.clone();
+        self.sch.analysis_pins = p.analysis_pins.clone();
         self.prefs = p.clone();
     }
 
@@ -61,6 +64,7 @@ impl App {
                     (SettingsTab::Input, "操作", "マウスのホイールでの拡大・縮小と、回路図・基板・3D の連動"),
                     (SettingsTab::Files, "ファイル", "自動保存と、図枠の作者"),
                     (SettingsTab::Board, "基板", "基板エディタの初めの値"),
+                    (SettingsTab::Colors, "色", "回路図のキャンバスの色 (暗い地 / 紙) と、役ごとの色"),
                 ],
             );
             ui.add_space(4.0);
@@ -69,6 +73,7 @@ impl App {
                 SettingsTab::Input => input_tab(ui, &mut p),
                 SettingsTab::Files => files_tab(ui, &mut p),
                 SettingsTab::Board => board_tab(ui, &mut p),
+                SettingsTab::Colors => colors_tab(ui, &mut p),
             });
             if tab == SettingsTab::Input {
                 ui.separator();
@@ -107,6 +112,8 @@ impl App {
             wheel_invert: p.wheel_invert,
             default_author: p.default_author.clone(),
             board_grid: p.board_grid,
+            canvas_theme: p.canvas_theme.clone(),
+            canvas_colors: p.canvas_colors.clone(),
             ..Prefs::load(&file)
         }
         .save(&file);
@@ -148,6 +155,46 @@ fn look_tab(ui: &mut egui::Ui, p: &mut Prefs, restart_note: bool) {
     ui.label(i18n::tr("描き方"));
     let note = if restart_note { i18n::tr(" (次の起動から)") } else { "" };
     ui.checkbox(&mut p.smooth_edges, i18n::trf!("線の縁をなめらかにする{note}")).on_hover_text(i18n::tr("画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)"));
+    ui.end_row();
+}
+
+/// The canvas's theme and the colour of each role. A colour that is hard to see on the ground is marked ▲; each
+/// changed colour has a button that puts the theme's back. The pictures written out (SVG, PDF) are always on paper.
+fn colors_tab(ui: &mut egui::Ui, p: &mut Prefs) {
+    use crate::canvas_theme::{build, contrast, hard_to_see, Role, Theme, ROLES};
+    let theme = Theme::parse(&p.canvas_theme).unwrap_or_default();
+    ui.label(i18n::tr("キャンバス")).on_hover_text(i18n::tr("回路図を描く所の色です。書き出す絵 (SVG・PDF) は、どちらでもいつも紙の色です"));
+    ui.horizontal(|ui| {
+        for (t, name, hint) in [(Theme::Dark, "暗い地", "暗い地に明るい灰色の部品。色は解析の結果 (電圧・電流・まちがい) にだけ使います"), (Theme::Paper, "紙", "印刷した回路図と同じ、白い紙の色")] {
+            if ui.selectable_label(theme == t, i18n::tr(name)).on_hover_text(i18n::tr(hint)).clicked() && theme != t {
+                p.canvas_theme = t.key().to_string();
+            }
+        }
+    });
+    ui.end_row();
+    let pal = build(theme, &p.canvas_colors);
+    for (role, key, name, what) in ROLES {
+        let mut c = pal.get(*role);
+        ui.label(i18n::tr(name)).on_hover_text(i18n::tr(what));
+        ui.horizontal(|ui| {
+            if ui.color_edit_button_srgba(&mut c).on_hover_text(i18n::tr("押して色を選びます")).changed() {
+                let [r, g, b, _] = c.to_array();
+                p.canvas_colors.retain(|(k, _)| k != key);
+                p.canvas_colors.push((key.to_string(), [r, g, b]));
+            }
+            if hard_to_see(&pal, *role) {
+                ui.colored_label(crate::theme::WARN, "▲").on_hover_text(i18n::trf!("地との差が小さく、見えにくい色です (コントラスト {:.1} : 1。線や印は 3 : 1 以上が目安)", contrast(c, pal.get(Role::Bg))));
+            }
+            if p.canvas_colors.iter().any(|(k, _)| k == key) && ui.small_button(i18n::tr("戻す")).on_hover_text(i18n::tr("このテーマの色に戻します")).clicked() {
+                p.canvas_colors.retain(|(k, _)| k != key);
+            }
+        });
+        ui.end_row();
+    }
+    ui.label("");
+    if ui.add_enabled(!p.canvas_colors.is_empty(), egui::Button::new(i18n::tr("すべての色をテーマに戻す"))).on_hover_text(i18n::tr("変えた色をすべて、選んでいるテーマの色に戻します")).on_disabled_hover_text(i18n::tr("色はまだ変えていません")).clicked() {
+        p.canvas_colors.clear();
+    }
     ui.end_row();
 }
 

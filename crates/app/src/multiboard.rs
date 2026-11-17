@@ -322,7 +322,7 @@ impl App {
                     if ui.add_sized([120.0, 20.0], egui::TextEdit::singleline(&mut name)).on_hover_text(i18n::tr("基板の名前 (つなぎにも使います)")).lost_focus() && name != self.system.names[k] {
                         rename = Some((k, name));
                     }
-                    if ui.add_enabled(self.system.names.len() > 1, egui::Button::new(i18n::tr("外す")).small()).on_hover_text(i18n::tr("この基板をプロジェクトから外します (その基板のつなぎも消えます)")).clicked() {
+                    if crate::widgets::unless(ui, (!(self.system.names.len() > 1)).then_some("基板が 1 つだけなので外せません"), egui::Button::new(i18n::tr("外す")).small()).on_hover_text(i18n::tr("この基板をプロジェクトから外します (その基板のつなぎも消えます)")).clicked() {
                         remove = Some(k);
                     }
                     ui.end_row();
@@ -427,10 +427,10 @@ impl App {
             }
             // the whole system simulated as one circuit
             ui.horizontal(|ui| {
-                if ui.add_enabled(!self.system.links.is_empty(), egui::Button::new(i18n::tr("全体をシミュレーション (DC)"))).on_hover_text(i18n::tr("すべての基板の回路図をつないで 1 つの回路にし、DC 動作点を計算します。つないだコネクタのピンごとに、両側の電圧と、ピンを流れる電流 (A から B へ) が出ます。電源の基板からほかの基板へ、どれだけ電流が流れるかが分かります")).clicked() {
+                if crate::widgets::unless(ui, (!(!self.system.links.is_empty())).then_some("基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます"), egui::Button::new(i18n::tr("全体をシミュレーション (DC)"))).on_hover_text(i18n::tr("すべての基板の回路図をつないで 1 つの回路にし、DC 動作点を計算します。つないだコネクタのピンごとに、両側の電圧と、ピンを流れる電流 (A から B へ) が出ます。電源の基板からほかの基板へ、どれだけ電流が流れるかが分かります")).clicked() {
                     run = true;
                 }
-                if ui.add_enabled(!self.system.links.is_empty(), egui::Button::new(i18n::tr("全体の回路図を保存…"))).on_hover_text(i18n::tr("すべての基板をつないだ 1 枚の回路図 (.schjson) を保存します。開くと、過渡解析・AC 解析も全体でできます。部品番号には基板の名前が付きます (R1_main)")).clicked() {
+                if crate::widgets::unless(ui, (!(!self.system.links.is_empty())).then_some("基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます"), egui::Button::new(i18n::tr("全体の回路図を保存…"))).on_hover_text(i18n::tr("すべての基板をつないだ 1 枚の回路図 (.schjson) を保存します。開くと、過渡解析・AC 解析も全体でできます。部品番号には基板の名前が付きます (R1_main)")).clicked() {
                     merged = true;
                 }
             });
