@@ -158,6 +158,7 @@ impl App {
             }
             Act::Help => self.help.show(if sch_mode { help::HelpTab::Schematic } else { help::HelpTab::Board }),
             Act::Glossary => self.glossary.open_at(""),
+            Act::PowerOn => self.power_on.open_for(&self.sch),
             Act::Settings => self.open_settings(),
             Act::Calc => {
                 self.mode = Mode::Schematic;

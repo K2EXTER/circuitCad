@@ -16,6 +16,7 @@ mod help;
 mod icons;
 mod link;
 mod bench_guide;
+mod power_on_guide;
 mod measure_guide;
 mod multiboard;
 mod samples;
@@ -80,6 +81,7 @@ struct App {
     /// The guide window of the bench step ("組み立てて、性能を測る").
     measure: measure_guide::MeasureGuide,
     bench: bench_guide::BenchGuide,
+    power_on: power_on_guide::PowerOnGuide,
     /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
     auto_shot: Option<(std::path::PathBuf, u32)>,
     /// The `.ccproj` file the schematic and board were opened from / last saved to.
@@ -202,7 +204,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), power_on: Default::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
     }
 }
 
@@ -361,6 +363,10 @@ impl eframe::App for App {
         if let Some(id) = self.bench.show(ui.ctx(), &self.progress) {
             self.progress.mark(id);
         }
+        if std::mem::take(&mut self.bench.want_power_on) {
+            self.power_on.open_for(&self.sch);
+        }
+        self.power_on.show(ui.ctx(), &self.sch);
         // the bench step: the guide window, and "three readings compared with the simulation" finishes it
         let compared = self.sch.compared_measurements();
         if compared >= 3 {
@@ -510,6 +516,10 @@ impl eframe::App for App {
                 ui.menu_button(i18n::tr("学ぶ"), |ui| {
                     if ui.button(i18n::tr("学習パス (地図) を開く…")).on_hover_text(i18n::tr("学習パスの窓を開きます。パス (部品の素顔・安定化電源・Arduino 互換ボードなど) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります")).clicked() {
                         self.learn.open = true;
+                        ui.close();
+                    }
+                    if ui.button(i18n::tr("最初の電源投入のガイド…")).on_hover_text(i18n::tr("組み立てた基板に初めて電源を入れるときの、電流制限の値と、正常なら流れる電流の範囲を、いまの回路図から出します。測った電流を入れると、多すぎ・少なすぎのときに疑う所を並べます")).clicked() {
+                        self.power_on.open_for(&self.sch);
                         ui.close();
                     }
                     if ui.button(i18n::tr("用語集・索引…")).on_hover_text(i18n::tr("電子回路の言葉と、このソフトの言葉を、読みと説明つきで引けます。語を選ぶと、その語が出てくるレッスンも分かります")).clicked() {

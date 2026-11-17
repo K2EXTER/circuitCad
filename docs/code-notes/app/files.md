@@ -19,7 +19,7 @@
 | `logic_plot.rs` | 過渡解析のデジタル表示 (High/Low の帯・バスの値。`docs/code-notes/app/analysis.md` の「デジタル表示」) |
 | `part_form/` | 部品作成フォーム (`parse` 入力→`PartDef` / `kind` 種類 / `tabs` 各タブ / `chip` チップ部品 / `template` 充電IC / `step3d` STEPの3Dの形 / `preview` / `checklist` / `datasheet_view` データシート(PDF)の窓 / `graph_reader` グラフから点を読む小窓 (1 点ずつ・「曲線をたどる」で 1 本まるごと。`docs/datasheet-viewer-design.md` の段階7) / `mosfet` MOSFET のかんたん作成 (表の typ → `part_lib::fit` → ずれの表 `fit_table`。段階8)) |
 | `glossary.rs` | 用語集・索引 (「学ぶ」→「用語集・索引…」、`--glossary [語]`)。`TERMS` に語(名前・読み・別名・説明。回路の言葉とソフトの言葉)を足す。どのレッスンに出るかは、レッスンの本文から自動で探す(手で対応表は書かない)。レッスンの窓の「このレッスンの用語」にも使う |
-| `learn/`(`mod.rs` 記録・型・進み具合の計算 / `paths.rs` 各パスの段階と項目 / `window.rs` 窓・樹形図・ウェルカムカード / `tests.rs`) / `measure_guide.rs` / `bench_guide.rs` / `help.rs` / `project.rs` | 学習パス(直線と樹形図。ウェルカムカードも) / 学習パス最後の「組み立てて測る」の窓 / 実機の作業のチェックリスト窓(はんだ付け・ブートローダ。`Kind::Hands`) / 操作ガイド窓 (操作の説明はここに足す) / `.ccproj` |
+| `learn/`(`mod.rs` 記録・型・進み具合の計算 / `paths.rs` 各パスの段階と項目 / `window.rs` 窓・樹形図・ウェルカムカード / `tests.rs`) / `measure_guide.rs` / `bench_guide.rs` / `power_on_guide.rs` / `help.rs` / `project.rs` | 学習パス(直線と樹形図。ウェルカムカードも) / 学習パス最後の「組み立てて測る」の窓 / 実機の作業のチェックリスト窓(はんだ付け・ブートローダ。`Kind::Hands`) / 最初の電源投入のガイド(電流制限の値・正常な電流・測った電流の判定) / 操作ガイド窓 (操作の説明はここに足す) / `.ccproj` |
 | `samples.rs` | 「ファイル → サンプル回路を開く」の一覧 (`docs/examples` を埋め込む) |
 | `source_form.rs` | 電源値フォーム |
 | `xcheck.rs` / `xcheck_tran.rs` / `xcheck_ac.rs` | 開発用: ngspice との検算 (`--xcheck`) |

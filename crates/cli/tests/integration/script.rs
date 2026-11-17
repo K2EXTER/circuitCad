@@ -2680,3 +2680,31 @@ fn fit_makes_a_model_from_data_sheet_readings_and_writes_it_into_the_part() {
     let (a, ok) = run("fit nowhere.fit.json\n");
     assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("nowhere"), "{a:?}");
 }
+
+#[test]
+fn poweron_gives_the_range_and_the_limit_and_judges_a_reading() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 250 as=R1
+add R 250 as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+poweron tol_r=5
+poweron tol_r=5 measured=10m
+poweron tol_r=5 measured=0.5m supply=v1
+poweron measured=abc
+");
+    assert!(!ok, "measured=abc is refused");
+    let p = last(&a, "poweron");
+    assert!(p["error"].as_str().unwrap().contains("measured=abc"), "{p}");
+    let rows: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "poweron" && v["ok"] == true).collect();
+    let s = &rows[0]["supplies"][0];
+    assert_eq!(s["supply"], "V1");
+    let (min, max, limit) = (s["min_a"].as_f64().unwrap(), s["max_a"].as_f64().unwrap(), s["limit_a"].as_f64().unwrap());
+    assert!((min - 5.0 / 525.0).abs() < 1e-9 && (max - 5.0 / 475.0).abs() < 1e-9 && (limit - 0.02).abs() < 1e-12, "{s}");
+    assert!(rows[0]["reading"].is_null());
+    assert_eq!(rows[1]["reading"]["verdict"], "normal");
+    assert_eq!(rows[2]["reading"]["verdict"], "nothing");
+    assert!(!rows[2]["reading"]["causes"].as_array().unwrap().is_empty());
+}

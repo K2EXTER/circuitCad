@@ -955,7 +955,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         Some((wiring, warm))
     }
 
-    fn heat_copper(&self) -> std::collections::BTreeMap<String, (f64, f64)> {
+    pub(crate) fn heat_copper(&self) -> std::collections::BTreeMap<String, (f64, f64)> {
         match (&self.board, self.post_layout) {
             (Some(b), true) => pcb_core::heat_copper::conductances(b, pcb_core::irdrop::IrSpec::default().thickness_um),
             _ => Default::default(),
