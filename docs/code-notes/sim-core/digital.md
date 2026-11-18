@@ -145,6 +145,7 @@
 - 試験: `tests_cells.rs`(7 セグメントの表の全アドレス、多数決の `lut` と遅延、不正な表の拒否)、`tests_logic_ics.rs`(ROM + R-2R で 32 アドレスの電圧、OE の Hi-Z、ADC の 16 段 × 5V と 3.3V)。サンプル `dac_adc_sine`。
 
 ## 続きから解く過渡解析(`TranRun`、`tran.rs`、2026-11-18、候補 B8)
+- `snapshot()` は今の状態を `DcResult` にして返す(ノードの電圧とグランド、素子ごとの今の電流・電圧・電力)。動いている回路に定格の点検 `check_ratings` をかけるため(ブレッドボードで電源のつまみを上げると LED が焦げる、B6)。試験 `a_snapshot_is_the_operating_point_now`。
 - `transient_with` の中身を `TranRun` に分けた: `start`(設定の点検・動作点・時刻 0 の記録)→ `advance_to(t)`(今から `t` まで解き、最後の刻みは `t` に着く)→ `finish`(バスと時間の点検の警告)。`transient` は `start` + `advance_to(tstop)` + `finish` で、**刻みも答えも前と同じ**(sim-core の全試験 560 件が通る。`sim_compare.py` は release と別の target の置き場所が要るので、この変更では回していない)。
 - 途中で: `set_source(名前, 波形)`(電源の波形を今から変える。電源の角と同じく、次の刻みは後退オイラーで短く、誤差の履歴を捨てる)、`extend(tstop)`(終わりを延ばす)、`drain`(記録した点を取り出す。長く回すとき)、`voltage`・`voltages`(今の電圧。デジタル網も)、`next_digital_event`(どれかのセルの出力が遅れの後に変わる時刻。`dig_next_any_event`)、`logic_supply`(セルの電源の最大。`dig_supply_max`)、`cell_states`。
 - 区切って解くと、区切りの所で刻みが止まるので、コンデンサのある回路は刻みの制御の精度の範囲で合う(試験 `tests_tranrun.rs` の RC)。コンデンサの無いデジタルの回路は刻みによらず、頭から解いた答えと**ちょうど同じ**(同じ試験の 2 ビットのカウンタを 37 個に区切る)。

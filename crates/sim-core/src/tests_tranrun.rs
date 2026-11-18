@@ -129,3 +129,25 @@ fn a_source_changed_between_pieces_acts_from_then_on() {
     run.advance_to(1.5).unwrap();
     assert_eq!(run.time(), 1.5);
 }
+
+/// The snapshot of a run is its operating point now: at the start it is the DC point (a 5 V source, 1 kohm and an LED-like diode),
+/// and after the source is raised it carries the larger current, which the rating check reads.
+#[test]
+fn a_snapshot_is_the_operating_point_now() {
+    let mut c = Circuit::new();
+    let (a, k) = (c.node("a"), c.node("k"));
+    c.add(Element::vdc("V1", a, 0, 5.0));
+    c.add(Element::Resistor { name: "R1".into(), a, b: k, r: 1e3 });
+    c.add(Element::Resistor { name: "R2".into(), a: k, b: 0, r: 1e3 });
+    let dc = dc_op(&c).unwrap();
+    let mut run = TranRun::start(&c, &TranSettings { tstop: 1.0, tstep: 1e-3, uic: false }, None).unwrap();
+    let snap = run.snapshot();
+    assert!((snap.element("R1").unwrap().current - dc.element("R1").unwrap().current).abs() < 1e-9);
+    assert_eq!(snap.voltages[0], dc.voltages[0], "ground is in it, named as the DC point names it");
+    assert!((snap.voltage("k").unwrap() - 2.5).abs() < 1e-6, "{:?} / dc {:?}", snap.voltages, dc.voltages);
+    run.set_source("V1", Waveform::Dc(10.0));
+    run.advance_to(0.01).unwrap();
+    let snap = run.snapshot();
+    assert!((snap.element("R1").unwrap().current - 5e-3).abs() < 1e-8, "{}", snap.element("R1").unwrap().current);
+    assert!((snap.element("R1").unwrap().power - 25e-3).abs() < 1e-7);
+}

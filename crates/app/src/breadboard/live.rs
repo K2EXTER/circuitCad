@@ -108,6 +108,11 @@ impl Live {
         self.volts.iter().find(|(n, _)| n.eq_ignore_ascii_case(net)).map(|(_, v)| *v)
     }
 
+    /// The operating point now (for the rating check while it runs).
+    pub fn snapshot(&self) -> Option<sim_core::DcResult> {
+        self.run.as_ref().map(|r| r.snapshot())
+    }
+
     pub fn current(&self, element: &str) -> Option<f64> {
         self.currents.get(element).copied()
     }

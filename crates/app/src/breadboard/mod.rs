@@ -68,6 +68,8 @@ pub struct BreadboardView {
     live_failed: Option<String>,
     /// The mouse went down on a switch (not a drag or a click of the tool).
     switch_down: bool,
+    /// The rating check of the circuit while it runs.
+    watch: Option<Watch>,
     /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
     knob_values: std::collections::BTreeMap<String, f64>,
     temp_c: Option<f64>,
@@ -77,6 +79,58 @@ pub struct BreadboardView {
 
 /// The DC point of the board's circuit: the current through each part, and the parts past (or near) their ratings.
 pub type BoardDc = (Vec<(String, f64)>, Vec<sim_core::RatingIssue>);
+
+/// How long (seconds of the circuit's time) a part must stay past its rating to burn: a moment's inrush does not burn it.
+const BURN_HOLD: f64 = 0.02;
+/// The time constant (seconds of the circuit's time) of the average the currents and powers are checked by: a part heats up by
+/// the mean of what it carries (a resistor on a sine is not burnt by its peaks), while a voltage breaks a part down at once.
+const HEAT_TAU: f64 = 0.1;
+
+/// The rating check of the running circuit: the schematic with the library's ratings, the parts burnt (they stay burnt until the
+/// power is switched off, as a real one does), the parts near their ratings now, and since when each part has been past its rating.
+struct Watch {
+    rated: sch_core::Schematic,
+    burnt: Vec<sim_core::RatingIssue>,
+    hot: Vec<sim_core::RatingIssue>,
+    over_since: std::collections::BTreeMap<String, f64>,
+    /// Each element's current and power averaged over `HEAT_TAU`, and the time of the last check.
+    avg: std::collections::BTreeMap<String, (f64, f64)>,
+    last: f64,
+}
+
+impl Watch {
+    fn new(rated: sch_core::Schematic) -> Watch {
+        Watch { rated, burnt: vec![], hot: vec![], over_since: Default::default(), avg: Default::default(), last: 0.0 }
+    }
+
+    /// Checks the running circuit now. `start`: the operating point the run starts from (a steady state: past the rating there
+    /// burns at once).
+    fn check(&mut self, sch: &SchEditor, lv: &Live, start: bool) {
+        let Some(mut snap) = lv.snapshot() else { return };
+        let t = lv.time();
+        // the currents and powers checked are their averages (the voltages are the ones now)
+        let keep = if start { 0.0 } else { (-(t - self.last).max(0.0) / HEAT_TAU).exp() };
+        self.last = t;
+        for e in &mut snap.elements {
+            let a = self.avg.entry(e.name.clone()).or_insert((e.current, e.power));
+            *a = (keep * a.0 + (1.0 - keep) * e.current, keep * a.1 + (1.0 - keep) * e.power);
+            (e.current, e.power) = *a;
+        }
+        let now = sch.board_ratings(&self.rated, &snap);
+        let over = |r: &sim_core::RatingIssue| r.level == sim_core::RatingLevel::Over;
+        self.over_since.retain(|k, _| now.iter().any(|r| &r.refdes == k && over(r)));
+        for r in now.iter().filter(|r| over(r)) {
+            if self.burnt.iter().any(|b| b.refdes == r.refdes) {
+                continue;
+            }
+            let since = *self.over_since.entry(r.refdes.clone()).or_insert(t);
+            if start || t - since >= BURN_HOLD {
+                self.burnt.push(r.clone());
+            }
+        }
+        self.hot = now.into_iter().filter(|r| !over(r) && !self.burnt.iter().any(|b| b.refdes == r.refdes)).collect();
+    }
+}
 
 /// The breadboard's own circuit with the power on.
 struct Board {
@@ -258,8 +312,12 @@ impl BreadboardView {
         });
     }
 
-    /// The parts past (or near) their ratings on the board's circuit with the power on.
+    /// The parts past (or near) their ratings on the board's circuit with the power on: while it runs, the parts burnt so far and
+    /// the ones near their ratings now; else at its DC point.
     fn issues(&self) -> Vec<sim_core::RatingIssue> {
+        if let Some(w) = self.watch.as_ref().filter(|_| self.powered) {
+            return w.burnt.iter().chain(&w.hot).cloned().collect();
+        }
         match &self.board {
             Some(Board { dc: Ok((_, r)), .. }) if self.powered => r.clone(),
             _ => vec![],
@@ -270,7 +328,7 @@ impl BreadboardView {
     /// point found, and it runs in time; each frame the time goes on, and the panel shows the time, the speed and the switches.
     fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
         if !self.powered {
-            (self.live, self.board, self.run_key, self.live_failed) = (None, None, None, None);
+            (self.live, self.board, self.run_key, self.live_failed, self.watch) = (None, None, None, None, None);
             self.knob_values.clear();
             self.switch_down = false;
             return;
@@ -281,6 +339,7 @@ impl BreadboardView {
             let on: Vec<String> = self.live.as_ref().map(|v| v.switches.iter().filter(|s| s.on && !s.push).map(|s| s.refdes.clone()).collect()).unwrap_or_default();
             self.live = None;
             self.live_failed = None;
+            self.watch = None;
             let nets = board_nets(&sch.sch, l);
             let dc = sch.board_dc(&nets, self.temp_c);
             match sch.board_circuit(&nets, self.temp_c) {
@@ -301,6 +360,9 @@ impl BreadboardView {
                             lv.press(k);
                         }
                     }
+                    let mut w = Watch::new(sch.rated_schematic());
+                    w.check(sch, &lv, true);
+                    self.watch = Some(w);
                     self.live = Some(lv);
                 }
                 Err(e) => self.live_failed = Some(e),
@@ -321,6 +383,9 @@ impl BreadboardView {
             return;
         }
         lv.frame(ui.input(|i| i.time));
+        if let Some(w) = self.watch.as_mut() {
+            w.check(sch, lv, false);
+        }
         ui.ctx().request_repaint();
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(i18n::trf!("動いています  {} s", format!("{:.2}", lv.time()))).color(crate::theme::OK));
@@ -1079,6 +1144,42 @@ mod tests {
         run(&mut app);
         let warm = read(&app);
         assert!(cool.iter().zip(&warm).any(|(a, b)| (a - b).abs() > 0.2), "{cool:?} -> {warm:?}");
+    }
+
+    /// The rating check follows the running circuit: the supply's knob turned up past what the LED's resistor allows burns the LED
+    /// once it has stayed there a moment; turned back down, the LED stays burnt until the power is switched off.
+    #[test]
+    fn turning_the_supply_up_burns_the_led_while_it_runs() {
+        let (mut app, mut run) = power_on_app("led.schjson");
+        let r1 = app.sch.sch.components.iter().position(|c| c.refdes == "R1").unwrap();
+        app.sch.sch.components[r1].value = "180".into();
+        app.breadboard.powered = true;
+        run(&mut app);
+        assert!(burnt(&app).is_empty(), "about 16 mA at 5 V: {:?}", app.breadboard.issues());
+        let turn = |app: &mut App, v: f64| {
+            let lv = app.breadboard.live.as_mut().unwrap();
+            let k = lv.knob_index("V1").expect("the supply is a knob");
+            lv.set_knob(k, v);
+        };
+        let step = |app: &mut App, run: &mut dyn FnMut(&mut App)| {
+            app.breadboard.live.as_mut().unwrap().advance(0.015);
+            run(app);
+        };
+        turn(&mut app, 10.0);
+        step(&mut app, &mut run);
+        assert!(burnt(&app).is_empty(), "a moment past the rating does not burn it yet");
+        for _ in 0..20 {
+            step(&mut app, &mut run);
+        }
+        assert!(burnt(&app).contains(&"D1".to_string()), "{:?}", app.breadboard.issues());
+        turn(&mut app, 5.0);
+        step(&mut app, &mut run);
+        assert!(burnt(&app).contains(&"D1".to_string()), "a burnt LED stays burnt");
+        app.breadboard.powered = false;
+        run(&mut app);
+        app.breadboard.powered = true;
+        run(&mut app);
+        assert!(burnt(&app).is_empty(), "switched off and on with the knob back: a new start");
     }
 
     #[test]

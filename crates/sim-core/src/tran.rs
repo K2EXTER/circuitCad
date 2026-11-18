@@ -591,6 +591,22 @@ impl TranRun {
         (1..self.cm.node_names.len()).map(|i| (self.cm.node_names[i].clone(), self.cm.node_voltage(&self.x, i))).collect()
     }
 
+    /// The state now as an operating point: every node's voltage (ground included) and every element's current, voltage and
+    /// power at this instant. What the rating check (`check_ratings`) reads while a circuit runs (a supply turned up burns its LED).
+    pub fn snapshot(&self) -> crate::dc::DcResult {
+        let mut voltages = vec![(self.cm.node_names[0].clone(), 0.0)];
+        voltages.extend(self.voltages());
+        crate::dc::DcResult {
+            voltages,
+            elements: self.cm.element_results(&self.x, Some(self.t), &self.cap_i),
+            iterations: 0,
+            strategy: "tran",
+            warnings: vec![],
+            seq_states: self.cell_states(),
+            start: Default::default(),
+        }
+    }
+
     /// When the next output of a digital cell is due to change (its propagation delay running), if one is on its way.
     pub fn next_digital_event(&self) -> Option<f64> {
         self.cm.dig_next_any_event()

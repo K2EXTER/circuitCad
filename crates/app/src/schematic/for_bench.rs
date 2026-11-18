@@ -36,7 +36,19 @@ impl SchEditor {
     pub fn board_dc(&self, nets: &sch_core::breadboard::BoardNets, temp_c: Option<f64>) -> Result<crate::breadboard::BoardDc, String> {
         let c = self.board_circuit(nets, temp_c)?;
         let r = sim_core::dc_op(&c).map_err(|e| e.to_string())?;
-        let mut ratings = sim_core::check_ratings(&self.with_library_ratings(), &r);
+        let ratings = self.board_ratings(&self.rated_schematic(), &r);
+        Ok((r.elements.iter().map(|e| (e.name.clone(), e.current)).collect(), ratings))
+    }
+
+    /// The schematic with the library's ratings on its parts, for `board_ratings` (made once per run, not every frame).
+    pub fn rated_schematic(&self) -> Schematic {
+        self.with_library_ratings()
+    }
+
+    /// The parts past (or near) their ratings at operating point `r` of the board (the DC point, or the running circuit now),
+    /// and a supply that is shorted.
+    pub fn board_ratings(&self, rated: &Schematic, r: &sim_core::DcResult) -> Vec<sim_core::RatingIssue> {
+        let mut ratings = sim_core::check_ratings(rated, r);
         // a supply giving amperes on a breadboard: its + and − are joined (a bench supply would trip, a battery heat up)
         for e in &r.elements {
             let supply = self.sch.components.iter().any(|c| c.refdes == e.name && c.kind == Kind::VSource);
@@ -49,7 +61,7 @@ impl SchEditor {
                 });
             }
         }
-        Ok((r.elements.iter().map(|e| (e.name.clone(), e.current)).collect(), ratings))
+        ratings
     }
 
     /// The switches clicked on the breadboard while it runs: (part, the source in its model that holds the position, push button).
