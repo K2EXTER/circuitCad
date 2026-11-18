@@ -22,7 +22,7 @@ pub mod thermal;
 pub mod companions;
 pub mod ordering;
 pub mod pin_list;
-pub mod fet_pins;
+pub mod lead_pins;
 mod headings;
 mod pin_table;
 mod suggest;
@@ -258,7 +258,10 @@ impl Datasheet {
 
     /// Part numbers the first page may be about, the likeliest first (for a person to pick from).
     pub fn name_candidates(&self) -> Vec<String> {
-        suggest::name_candidates(self.words(0))
+        let first = suggest::name_candidates(self.words(0));
+        // a first page that names no part (onsemi's notice before a Fairchild sheet: "… Is Now Part of ON Semiconductor"):
+        // the next page's (PN2222A)
+        if first.is_empty() && self.pages > 1 { suggest::name_candidates(self.words(1)) } else { first }
     }
 
     /// The graph captions of every page and the curve each graph shows (`figures::figures`).

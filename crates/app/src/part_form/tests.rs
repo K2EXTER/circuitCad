@@ -1230,7 +1230,7 @@ fn a_draft_from_real_data_sheets() {
         // the ratings from the absolute maximum ratings table: VDS, ID (at 25 °C, printed over its symbol), PD, TJ
         assert_eq!((f.rt_v.as_str(), f.rt_i.as_str(), f.rt_p.as_str(), f.rt_t.as_str()), ("30", "5.7", "1.4", "150"), "{done:?}");
         // no lead is numbered (G, D, S only in the drawings): the SOT-23's usual order is offered, not ticked (候補 Q13)
-        let (pkg, _) = d.pins_usual.clone().expect("the usual order offered");
+        let (pkg, _, _) = d.pins_usual.clone().expect("the usual order offered");
         assert!(pkg.starts_with("SOT"), "{pkg}");
         assert!(!d.use_[3]);
         assert_eq!(datasheet::pin_lines(&d.pin_sources[0].pins), "1 G\n2 S\n3 D");
@@ -1249,7 +1249,18 @@ fn a_draft_from_real_data_sheets() {
         assert!(d.pins_usual.is_none() && d.use_[3], "{:?}", d.pin_sources);
         let done = f.apply_draft(&d);
         assert!(f.pins_text.starts_with("1 G\n2 D\n3 S"), "{}: {done:?}", f.pins_text);
-        assert!(done.iter().any(|l| l.contains("G・D・S の並び")), "{done:?}");
+        assert!(done.iter().any(|l| l.contains("図の文字の並び")), "{done:?}");
+    }
+    // PN2222A (onsemi's notice on page 1, the sheet from page 2): its name from page 2, and "E B C" under the TO-92's picture
+    let pn = dir.join("pn2222a-d.pdf");
+    if pn.exists() {
+        let mut f = PartForm::default();
+        f.sheet.load(&pn);
+        let d = f.make_draft().unwrap();
+        assert_eq!(d.name.as_deref(), Some("PN2222A"));
+        assert!(d.pins_usual.is_none() && d.use_[3], "{:?}", d.pin_sources);
+        let done = f.apply_draft(&d);
+        assert!(f.pins_text.starts_with("1 E\n2 B\n3 C"), "{}: {done:?}", f.pins_text);
     }
 }
 

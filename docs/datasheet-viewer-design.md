@@ -318,7 +318,7 @@
 
 ## 段階32: 番号の無い MOSFET のピン (2026-11-18、候補 Q13)
 
-- `datasheet/fet_pins.rs` (`Datasheet::fet_pins`): ピンの表・図・一覧のどれも見つからない MOSFET で、確かな順に
+- `datasheet/lead_pins.rs` (`Datasheet::lead_pins`。段階34 で `fet_pins.rs` から名前を変えた): ピンの表・図・一覧のどれも見つからない MOSFET で、確かな順に
   1. 文: 「Pin 1 = Gate」「1. Gate 2. Drain 3. Source」(行をまたぐ一覧も)「Pin 1: G」。1 文字の G・D・S は「Pin」の後だけ (表の「1 S」の欄と取り違えない)。G・S が 1 つずつ、D は 1 つ (タブ付きの 4 本なら 2 つ)、番号が重ならないものだけ。外形図の STYLE の一覧のあるページ (onsemi の「STYLE 2: PIN 1. GATE …」がいくつも並ぶ) は飛ばす (どの STYLE かは `find_pin_list` が決める)。手元の MC7800 の p.25 がこれに当たっていた。
   2. 正面から見るパッケージ (SOT-223・TO-220・TO-252・TO-263・DPAK・D2PAK・TO-92、`front_view`) のピン配置の図: 「Pinout」などの見出しの下 150 pt・ページの半分の中で、1 行に G・D・S の 1 文字が 1 つずつ 80 pt 以内に並べば、左から 1・2・3。onsemi の NDT3055L (SOT-223) は 1 G・2 D・3 S。
   3. パッケージのよくある並び (`usual`): SOT-23・SOT-323・SC-70 は 1 G・2 S・3 D (AO3400A・BSS138・2N7002)、電力用 (SOT-223・TO-220・DPAK …) は 1 G・2 D・3 S (NDT3055L・IRF540N)、TO-92 は 1 S・2 G・3 D (2N7000・BS170)。データシートから読んだものではないので、下書きの「ピン」にチェックを入れずに出し、「データシートにピンの番号がありません。… のよくある並びです」と注意する (`FormDraft::pins_usual`)。
@@ -335,3 +335,13 @@
 - アプリ: データシートの窓の「表とグラフから全部読む」などの曲線の選び (`datasheet_view.rs` の `pick_curve_on`) が表の条件を使う。
 - 確かめ: 手元の全 PDF (34 冊) で前後を比べ、変わったのは LT3045 の 6 枚 (PSRR の負荷電流ごと・COUT ごとの図、雑音密度の CSET・COUT・負荷電流ごとの図) と ADA4522 の利得ごとの雑音密度 (表の AV = 100)。どれも選んだ線を絵で確かめた。
 - まだ: 図全体が絵でラベルが文字に無い図 (LM317 のリップル除去の CADJ、OCR でラベルを読む)、LP5907 の「PSRR Loads Averaged」の 2 本 (ラベルが無い)、見出しと図の結び付けの取り違え (LM358 の Figure 5-13)。
+
+## 段階34: 番号の無いトランジスタのピンと、表紙の次のページの型の名前 (2026-11-18、候補 Q14)
+
+- 段階32 の読み (`lead_pins.rs`、`fet_pins.rs` から名前を変えた) をトランジスタ・ダーリントンにも: 端子の名前 Base・Collector・Emitter と 1 文字の B・C・E。G・D・S と B・C・E は混ぜない (`complete`)。点の無い一覧「1 BASE 2 EMITTER 3 COLLECTOR」も文として読む。
+- 正面から見る形の絵の文字は、見出し (Pinout) の下に無ければ、最初の 3 ページのパッケージ名 (「TO-92」) のまわり (左右 120 pt・上下 60 pt) でも探す。onsemi (旧 Fairchild) の PN2222A は TO-92 の絵の下の「E B C」から 1 E・2 B・3 C。
+- よくある並び (`usual(family, bipolar)`): トランジスタは SOT-23 が 1 B・2 E・3 C (MMBT3904・BC847)、電力用 (SOT-223・TO-220・DPAK …) が 1 B・2 C・3 E (TIP120・BCP56・MJD31)、TO-92 が 1 E・2 B・3 C (2N3904・PN2222A。BC547 は逆の C B E と注意に書く)。
+- 型の名前の候補 (`Datasheet::name_candidates`): 1 ページ目に無ければ 2 ページ目から。onsemi が旧 Fairchild のデータシートの前に付けた「Is Now Part of ON Semiconductor」の 1 ページ目のため、PN2222A の名前が出なかった。
+- 下書き: 種類がトランジスタ・ダーリントンのときも (`make_draft`)。注意の文は種類の名前で (「SOT-23 のトランジスタのよくある並びです」)。
+- 確かめ: PN2222A は下書きで部品名・TO-92 (組み込みの TO-92-3)・1 E・2 B・3 C。MMBT3904 は前と同じく外形図の STYLE 6 の一覧から 1 BASE・2 EMITTER・3 COLLECTOR。手元の全 PDF で `ds fet` が当たるのは NDT3055L と PN2222A だけ。ST の BD135 はサイトが応答しなかった。
+- まだ: ピンの図が絵だけの PDF (OCR で端子の文字を読む)、PN2222A の絶対最大定格 (記号が「V」と下付きの「CEO」の 2 語に分かれていて読めない)、TO-126 (BD135) はパッケージ名の表に無い。

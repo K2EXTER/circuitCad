@@ -21,9 +21,9 @@ pub struct FormDraft {
     pub pin_pick: usize,
     /// The table and the drawing were both found and gave the same pins.
     pub pins_agree: bool,
-    /// The pins are the usual order of the package (a MOSFET whose sheet numbers no lead), not read from the sheet: the
-    /// package's name and the parts that order was seen on. Not ticked until the person checks the drawing.
-    pub pins_usual: Option<(String, &'static str)>,
+    /// The pins are the usual order of the package (a MOSFET or transistor whose sheet numbers no lead), not read from the
+    /// sheet: the package's name, the parts that order was seen on, and the kind ("MOSFET", "トランジスタ"). Not ticked until the person checks the drawing.
+    pub pins_usual: Option<(String, &'static str, &'static str)>,
     pub dims: Option<DimTable>,
     /// The recommended land patterns of the data sheet (one per package it draws).
     pub lands: Vec<LandPattern>,
@@ -237,21 +237,24 @@ impl PartForm {
         }
         let mut packages = ds.package_names();
         packages.truncate(6);
-        // a MOSFET whose sheet numbers no lead (G, D, S only in its drawings, 候補 Q13): a sentence that numbers them, the letters
-        // of a front view's pinout drawing, or else the package's usual order, offered but not ticked
+        // a MOSFET or transistor whose sheet numbers no lead (G, D, S or E, B, C only in its drawings, 候補 Q13・Q14): a sentence
+        // that numbers them, the letters of a front view's drawing, or else the package's usual order, offered but not ticked
         let mut pins_usual = None;
-        if pin_sources.is_empty() && kind.is_some_and(|k| k.1 == "MOSFET") {
+        let leaded = kind.map(|k| k.1).filter(|k| matches!(*k, "MOSFET" | "トランジスタ" | "ダーリントン"));
+        if pin_sources.is_empty()
+            && let Some(what) = leaded
+        {
             let family = packages.first().map(|p| p.family);
-            if let Some(p) = ds.fet_pins(family) {
+            if let Some(p) = ds.lead_pins(family) {
                 let how = match p.from {
-                    datasheet::fet_pins::FetPinsFrom::Text => "文",
-                    _ => "ピン配置の図の G・D・S の並び",
+                    datasheet::lead_pins::LeadPinsFrom::Text => "文",
+                    _ => "図の文字の並び",
                 };
                 pin_sources.push(FoundPins { page: p.page, area: p.area, num_col: 0, name_col: 0, pins: p.pins, io: vec![], from_drawing: true, package: Some(how.into()) });
-            } else if let Some((pins, seen)) = family.and_then(datasheet::fet_pins::usual) {
+            } else if let Some((pins, seen)) = family.and_then(|f| datasheet::lead_pins::usual(f, what != "MOSFET")) {
                 let page = packages.first().map_or(0, |p| p.page);
                 pin_sources.push(FoundPins { page, area: datasheet::Rect { x0: 0.0, y0: 0.0, x1: 0.0, y1: 0.0 }, num_col: 0, name_col: 0, pins, io: vec![], from_drawing: true, package: None });
-                pins_usual = Some((packages[0].name.clone(), seen));
+                pins_usual = Some((packages[0].name.clone(), seen, what));
             }
         }
         // with the pins counted, a name that says that many pins (or says none) first
@@ -317,7 +320,7 @@ impl PartForm {
                 (_, false) => "表".to_string(),
             };
             match &d.pins_usual {
-                Some((pkg, _)) => done.push(format!("ピン: {pkg} の MOSFET のよくある並び ({})。データシートの図で確かめてください", super::pin_import::lines_with_kinds(&p.pins, &[]).replace('\n', "・"))),
+                Some((pkg, _, what)) => done.push(format!("ピン: {pkg} の{what}のよくある並び ({})。データシートの図で確かめてください", super::pin_import::lines_with_kinds(&p.pins, &[]).replace('\n', "・"))),
                 None => done.push(format!("ピン: p.{} の{from}から {} 本", p.page + 1, p.pins.len())),
             }
         }
@@ -692,15 +695,15 @@ impl PartForm {
                         if d.pins_agree {
                             ui.small(egui::RichText::new(i18n::tr("✔ 表とピン配置の図が一致しています")).color(crate::theme::OK));
                         }
-                        if let Some((pkg, seen)) = &d.pins_usual {
-                            ui.colored_label(crate::theme::WARN, i18n::trf!("データシートにピンの番号がありません。{pkg} の MOSFET のよくある並びです"))
-                                .on_hover_text(i18n::trf!("この PDF は G・D・S を記号と外形の絵にしか書いていません。{pkg} ではこの並びが多い ({seen} など) ものの、メーカーによって違います。外形図の絵と見比べて、合っていれば「ピン」にチェックを入れてください。違えば「③ ピン」で直します"));
+                        if let Some((pkg, seen, what)) = &d.pins_usual {
+                            ui.colored_label(crate::theme::WARN, i18n::trf!("データシートにピンの番号がありません。{pkg} の{}のよくある並びです", i18n::tr(what)))
+                                .on_hover_text(i18n::trf!("この PDF は端子 (G・D・S や E・B・C) を記号と外形の絵にしか書いていません。{pkg} ではこの並びが多い ({seen} など) ものの、メーカーによって違います。外形図の絵と見比べて、合っていれば「ピン」にチェックを入れてください。違えば「③ ピン」で直します"));
                         } else if d.pin_sources.len() == 1 && p.from_drawing {
                             match p.package.as_deref() {
                                 // a case outline's style (onsemi: "STYLE 1" named on the first page)
                                 Some(s) if s.starts_with("STYLE") => ui.small(i18n::trf!("外形図の {s} のピンの一覧から読みました (1 ページ目にその型と書かれています)")),
                                 Some("文") => ui.small(i18n::tr("「Pin 1 = Gate」のような文から読みました")),
-                                Some(_) => ui.small(i18n::tr("ピン配置の図の G・D・S の文字の並び (正面から見て左から 1・2・3) から読みました。図で確かめてください")),
+                                Some(_) => ui.small(i18n::tr("外形の絵の端子の文字 (G・D・S や E・B・C) の並び (正面から見て左から 1・2・3) から読みました。図で確かめてください")),
                                 None => ui.small(i18n::tr("ピン配置の図か、ピンの一覧から読みました (表は見つかりませんでした)")),
                             };
                         }
