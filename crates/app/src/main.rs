@@ -196,6 +196,11 @@ impl App {
             B::BoardRepairLesson => self.start_board_lesson(7),
             B::Guide(id) => self.bench.show_guide(id),
             B::MeasureGuide => self.measure.open = true,
+            B::SaveSheet => {
+                if let Some(msg) = self.bench_tab.save_sheet(&self.board_ed.board) {
+                    self.sch.status = msg;
+                }
+            }
         }
     }
 

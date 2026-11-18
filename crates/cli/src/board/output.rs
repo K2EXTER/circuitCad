@@ -1,4 +1,4 @@
-//! Board commands that save, open or write files: save, open, shopping, svg, case, dxf_import, dxf, fab.
+//! Board commands that save, open or write files: save, open, shopping, svg, assembly, case, dxf_import, dxf, fab.
 
 use super::*;
 
@@ -66,6 +66,24 @@ impl Session {
         let svg = pcb_core::svg::board_svg(board, &pcb_core::svg::SvgOpts { side, silk })?;
         std::fs::write(f, &svg).map_err(|e| format!("{f}: {e}"))?;
         Ok(obj(json!({"file": f, "side": format!("{side:?}"), "bytes": svg.len()})))
+    }
+
+    /// The order of hand soldering (lowest first) with the orientation marks, and with a file the printable sheet (B3).
+    pub(super) fn board_assembly(&mut self, rest: &[String]) -> Res {
+        let (pos, _) = options(rest);
+        let board = self.board_mut()?;
+        let order = pcb_core::assembly_sheet::fitting_order(board);
+        let parts: Vec<Value> = order
+            .iter()
+            .map(|f| json!({"refdes": f.refdes, "value": f.value, "kind": f.kind, "height_mm": (f.height * 10.0).round() / 10.0, "mark": f.mark.map(|(m, _)| m.label()), "bottom": f.bottom}))
+            .collect();
+        let mut answer = json!({"parts": parts, "note": "lowest body first (the board lies flat while each part is soldered); mark = which pin carries the orientation mark"});
+        if let Some(f) = pos.first() {
+            let svg = pcb_core::assembly_sheet::assembly_svg(board, &[])?;
+            std::fs::write(f, &svg).map_err(|e| format!("{f}: {e}"))?;
+            answer["file"] = json!(f);
+        }
+        Ok(obj(answer))
     }
 
     pub(super) fn board_case(&mut self, rest: &[String]) -> Res {

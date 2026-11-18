@@ -6,6 +6,7 @@
 
 pub mod align;
 pub mod assembly;
+pub mod assembly_sheet;
 pub mod autoplace;
 pub mod autoroute;
 pub mod body;

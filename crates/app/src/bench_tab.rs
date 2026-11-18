@@ -9,6 +9,7 @@ use crate::learn::{spaced, NOTE};
 use crate::power_on_guide::PowerOnGuide;
 use crate::schematic::SchEditor;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke};
+use pcb_core::assembly_sheet::{fitting_order, FitItem};
 use pcb_core::{Board, PadShape, Point, Side};
 use std::collections::BTreeSet;
 
@@ -70,31 +71,20 @@ pub enum BenchAction {
     /// Open a hands-on checklist (`bench_guide::GUIDES`).
     Guide(&'static str),
     MeasureGuide,
-}
-
-/// One part in the order of fitting.
-#[derive(Clone, Debug)]
-struct Fit {
-    refdes: String,
-    value: String,
-    footprint: String,
-    /// Height of the body above the board (mm), as far as the 3D data tells.
-    height: f64,
-    /// It goes on one way only (diodes, LEDs, ICs, transistors, electrolytic capacitors): pin 1 is marked on the drawing.
-    polar: bool,
-    bottom: bool,
+    /// Save the printable assembly sheet (`BenchTab::save_sheet`).
+    SaveSheet,
 }
 
 #[derive(Default)]
 pub struct BenchTab {
     pub step: Step,
-    /// Parts ticked as fitted (by reference designator). Kept while the app runs.
+    /// Parts ticked as fitted (by reference designator). Kept while the app runs (the printed sheet is the record to keep).
     fitted: BTreeSet<String>,
     /// The part or the net picked in the list or on the drawing: it glows brightest.
     picked_part: Option<String>,
     picked_net: Option<String>,
     /// The order of fitting and the board it was worked out for (its parts' designators and footprints).
-    order: Vec<Fit>,
+    order: Vec<FitItem>,
     order_key: String,
     /// The DC point was worked out once on opening the step "測る" (not again every frame when it fails).
     dc_asked: bool,
@@ -111,40 +101,9 @@ fn is_connector(refdes: &str) -> bool {
     matches!(letters.to_ascii_uppercase().as_str(), "J" | "CN" | "P" | "X" | "BT")
 }
 
-fn is_polar(refdes: &str, footprint: &str) -> bool {
-    let letters: String = refdes.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
-    let fp = footprint.to_ascii_lowercase();
-    matches!(letters.to_ascii_uppercase().as_str(), "D" | "LED" | "U" | "IC" | "Q" | "BT") || fp.contains("cp_") || fp.contains("elec") || fp.contains("tantal") || fp.contains("polar")
-}
-
 fn is_ground(net: &str) -> bool {
     let n = net.to_ascii_uppercase();
     n == "GND" || n == "0" || n == "AGND" || n == "DGND" || n == "VSS"
-}
-
-/// The parts of the board, lowest body first (resistors and diodes before ICs, capacitors and connectors): the usual order of
-/// hand soldering, so the board lies flat on the bench while each part is soldered.
-fn fitting_order(board: &Board) -> Vec<Fit> {
-    let boxes = pcb_core::model3d::part_boxes(board);
-    let mut out: Vec<Fit> = board
-        .parts
-        .iter()
-        .filter(|p| !pcb_core::assembly::is_bare_copper(&p.footprint))
-        .map(|p| {
-            let from_boxes = boxes.iter().filter(|b| b.refdes == p.refdes).map(|b| b.hi[2] - b.lo[2]).fold(0.0_f64, f64::max);
-            let from_mesh = board.models3d.get(&p.footprint).and_then(|m| m.bounds()).map(|(lo, hi)| hi[2] - lo[2]).unwrap_or(0.0);
-            let from_fp = board.footprint(&p.footprint).and_then(|f| f.height).unwrap_or(0.0);
-            let height = if from_mesh > 0.0 { from_mesh } else if from_fp > 0.0 { from_fp } else { from_boxes };
-            Fit { refdes: p.refdes.clone(), value: p.value.clone(), footprint: p.footprint.clone(), height, polar: is_polar(&p.refdes, &p.footprint), bottom: p.side == Side::Bottom }
-        })
-        .collect();
-    // same height: by designator, R2 before R10
-    let natural = |s: &str| {
-        let (a, n): (String, String) = (s.chars().take_while(|c| !c.is_ascii_digit()).collect(), s.chars().skip_while(|c| !c.is_ascii_digit()).collect());
-        (a, n.parse::<u64>().unwrap_or(0), s.to_string())
-    };
-    out.sort_by(|a, b| a.height.total_cmp(&b.height).then_with(|| natural(&a.refdes).cmp(&natural(&b.refdes))));
-    out
 }
 
 impl BenchTab {
@@ -174,10 +133,21 @@ impl BenchTab {
         }
     }
 
+    /// Writes the printable assembly sheet (`pcb_core::assembly_sheet`) where the person picks; returns the message for the status line.
+    pub fn save_sheet(&self, board: &Board) -> Option<String> {
+        let name = format!("{}-assembly.svg", if board.name.is_empty() { "board" } else { &board.name });
+        let p = rfd::FileDialog::new().add_filter("SVG", &["svg"]).set_file_name(name).save_file()?;
+        let fitted: Vec<String> = self.fitted.iter().cloned().collect();
+        Some(match pcb_core::assembly_sheet::assembly_svg(board, &fitted).and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string())) {
+            Ok(()) => format!("組み立て表を保存しました: {} (ブラウザで開いて印刷できます)", p.display()),
+            Err(e) => format!("組み立て表を保存できませんでした: {e} (保存先のフォルダに書き込めるか確かめてください)"),
+        })
+    }
+
     /// The status line's hint while the tab is open.
     pub fn hint(&self) -> String {
         match self.step {
-            Step::Assemble => "部品を背の低い順に付け、付けたら左の一覧に印をつけます。次に付ける部品が黄色く光ります (赤い点は 1 番ピンの目安)".into(),
+            Step::Assemble => "部品を背の低い順に付け、付けたら左の一覧に印をつけます。次に付ける部品が黄色く光り、向きのある部品には赤い印が出ます".into(),
             Step::PowerOn => "電流を制限できる電源で、左の「電流制限に入れる値」に合わせてから電源を入れ、落ち着いた電流を入れて比べます".into(),
             Step::Measure => "左の一覧で点を選ぶと、基板の絵の上でそのネットのパッドが光ります。黒い棒は青い GND へ".into(),
             Step::Judge => "測った値を表の「実測」欄に書くと、シミュレーションとの差と、合っているかが出ます".into(),
@@ -239,6 +209,9 @@ impl BenchTab {
         } else {
             let n = self.order.iter().filter(|f| self.fitted.contains(&f.refdes)).count();
             ui.add(egui::ProgressBar::new(n as f32 / self.order.len() as f32).text(i18n::trf!("付けた部品 {n} / {}", self.order.len())));
+            if ui.button(i18n::tr("組み立て表を印刷用に保存 (SVG)…")).on_hover_text(i18n::tr("基板の配置図 (向きの印つき) と、付ける順の部品の一覧 (□ に印をつけながら進める) を、A4 の幅の 1 枚の図 (SVG) にします。ブラウザで開いて印刷するか、印刷から PDF にできます。いま印をつけた部品は、印がついた形で入ります")).clicked() {
+                *action = Some(BenchAction::SaveSheet);
+            }
             if board.parts.iter().any(|p| p.side == Side::Bottom) {
                 ui.label(egui::RichText::new(i18n::tr("「裏」の部品は、基板を裏返して付けます (絵では薄く描きます)")).color(NOTE));
             }
@@ -264,8 +237,8 @@ impl BenchTab {
                     }
                     ui.label(&f.value).on_hover_text(&f.footprint);
                     let mut notes = vec![];
-                    if f.polar {
-                        notes.push(i18n::tr("向きあり").to_string());
+                    if let Some((m, _)) = f.mark {
+                        notes.push(i18n::trf!("向き: {}", i18n::tr(m.label())));
                     }
                     if f.bottom {
                         notes.push(i18n::tr("裏").to_string());
@@ -274,8 +247,8 @@ impl BenchTab {
                         notes.push(format!("{:.1} mm", f.height));
                     }
                     let l = ui.label(egui::RichText::new(notes.join("・")).color(NOTE));
-                    if f.polar {
-                        l.on_hover_text(i18n::tr("向きのある部品です。基板の絵の赤い点が 1 番ピン (ダイオードはカソード側の印、電解コンデンサは + の印) の目安です。データシートと基板のシルクの印で確かめます"));
+                    if f.mark.is_some() {
+                        l.on_hover_text(i18n::tr("向きのある部品です。基板の絵の赤い印 (1 = 1 番ピン、K = カソード、+ = 電解コンデンサの + 側) に合わせて付けます。データシートと基板のシルクの印でも確かめます"));
                     }
                     ui.end_row();
                 }
@@ -400,7 +373,6 @@ impl BenchTab {
                 }
         };
         let probe_ground = matches!(self.step, Step::Measure | Step::Judge);
-        let polar: BTreeSet<&str> = self.order.iter().filter(|f| f.polar).map(|f| f.refdes.as_str()).collect();
         // the parts: a box round the body (or the pads), the designator in it
         let mut boxes: Vec<(usize, Rect)> = vec![];
         for (i, part) in board.parts.iter().enumerate() {
@@ -465,8 +437,11 @@ impl BenchTab {
         }
         // pin 1 of the parts that go on one way only, while fitting
         if self.step == Step::Assemble {
-            for pad in board.pads.iter().filter(|p| polar.contains(p.refdes.as_str()) && matches!(p.pin.as_str(), "1" | "K" | "+")) {
-                painter.circle_filled(to(pad.pos), 3.5, PIN1);
+            let font = egui::FontId::proportional(12.0);
+            for (m, at) in self.order.iter().filter_map(|f| f.mark) {
+                let p = to(at);
+                painter.circle_stroke(p, 5.0, Stroke::new(2.0, PIN1));
+                painter.text(p + egui::vec2(7.0, -7.0), egui::Align2::LEFT_BOTTOM, m.letter(), font.clone(), PIN1);
             }
         }
         // the designators on top
@@ -478,7 +453,7 @@ impl BenchTab {
         }
         // the legend of this step
         let legend = match self.step {
-            Step::Assemble => "黄: 次に付ける部品・選んだ部品　緑: 付けた部品　赤い点: 1 番ピンの目安",
+            Step::Assemble => "黄: 次に付ける部品・選んだ部品　緑: 付けた部品　赤: 向きの印 (1 = 1 番ピン、K = カソード、+ = 電解コンデンサの + 側)",
             Step::PowerOn => "黄: 電源をつなぐ所 (コネクタ・電源の部品)",
             Step::Measure | Step::Judge => "黄: 測る点 (赤い棒)　青: GND (黒い棒)",
             Step::Repair => "症状から原因を探すのは、回路図の上で行います",
@@ -563,7 +538,7 @@ mod tests {
         assert!(t.order.windows(2).all(|w| w[0].height <= w[1].height), "{:?}", t.order.iter().map(|f| (&f.refdes, f.height)).collect::<Vec<_>>());
         let first = t.next_to_fit();
         assert!(!first.is_empty());
-        assert!(t.order.iter().filter(|f| f.refdes.starts_with('D')).all(|f| f.polar), "diodes and LEDs are marked as going on one way");
+        assert!(t.order.iter().filter(|f| f.refdes.starts_with('D')).all(|f| f.mark.is_some()), "diodes and LEDs are marked as going on one way");
         let first: Vec<String> = first.into_iter().map(String::from).collect();
         t.fitted.extend(first.iter().cloned());
         assert!(t.next_to_fit().iter().all(|r| !first.iter().any(|f| f == r)), "the fitted ones are not asked for again");

@@ -161,6 +161,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board guard net=A guard=GRDA          guard tracks on both sides of a sense net's top tracks; board copper net=DRN rect=... patches of copper; board nudge moves small parts to open a route; board layers 4; board class ...
   board save FILE.pcbjson / board open FILE.pcbjson
   board shopping [boards=N] [spare=0] [file=PATH]  what to buy: per value and footprint the quantity (qty), spares of chip R/C/L/LED (spare, 2 or a tenth; spare=0 off), their sum (buy) and, for each shop (akizuki, digikey, lcsc), the part number if the library part has one, else a search link
+  board assembly [F.svg]  the order of hand soldering (lowest body first) with the orientation marks (pin 1, cathode K, + of an electrolytic); with a file, the printable assembly sheet (the drawing and a list with a box to tick)
   board fab DIR                         Gerber, drill, BOM, placement and the zip
 ";
 

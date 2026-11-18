@@ -93,6 +93,7 @@
 - `requirements.rs` 回路図の「設計の要件」の表を基板に取り込み(ネットクラス・電流・組・距離)、組の広がりと離す距離を点検する。自動配置は組を1つの塊にする(`ccad board req`)
 - `step.rs`・`mesh.rs` メーカーの STEP を三角形のメッシュ(`Mesh3d`)にして、部品の3Dの形にする(`PartDef.model3d` → `Board.models3d` → `model3d.rs` の `part_meshes`)
 - `svg.rs` 基板の1つの面の SVG(Gerber を読み戻して描く。画面のファイルメニューと `ccad board svg`)
+- `assembly_sheet.rs` はんだ付けの順 (背の低い順)・向きの印 (1 番ピン・カソード・+ 側)・印刷用の組み立て表の SVG (B3。実機のタブと `ccad board assembly`。詳細は `app/bench-tab.md`)
 - `link.rs`(app)回路図・基板・3D で選んだ部品とネットの連動(`App::sync_focus`。設定でオフにできる。詳細 `docs/code-notes/app.md`)
 - `case.rs` 箱のケースの内寸に、基板が入るか・背の高い部品がないか(3D 表示の「内寸」と `ccad board case`)
 - `dxf_in.rs` ケースの図面(DXF)から外形と穴を取る(画面のファイルメニューと `ccad board dxf_import`)
