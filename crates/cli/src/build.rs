@@ -893,7 +893,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
     }
 
     /// The copper of the board as extra resistances and couplings, when `board postlayout on` asks for it.
-    fn layout_parts(&self) -> (Vec<sim_core::WiringR>, Vec<sim_core::WiringK>) {
+    pub(crate) fn layout_parts(&self) -> (Vec<sim_core::WiringR>, Vec<sim_core::WiringK>) {
         match (&self.board, self.post_layout) {
             (Some(b), true) => post_layout_parts(b),
             _ => (vec![], vec![]),

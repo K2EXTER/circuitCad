@@ -100,6 +100,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         the DC point for a range of values of one part (a V source, R, C, L): one row per value; the part keeps its value
   worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]
                                         worst case: the smallest and largest value of one result with every part at an end of its tolerance (%)
+  battery tran=STOP[:STEP] [from=T] [to=T] [node=NET v_min=V]
+                                        how long the battery parts last: the average current over from..to of a transient run (default its second
+                                        half; take whole periods of an intermittent load), the charge at which node falls under v_min, the hours
   poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1]
                                         first power-on of a built board: each supply's current at its printed values, the range a working
                                         board falls in (tolerances, data sheet min / max, self-heating), the current limit to set; measured= judges a reading
@@ -376,6 +379,7 @@ impl Session {
             "locus" => self.locus(args),
             "worst" => self.worst(args),
             "poweron" => self.poweron(args),
+            "battery" => self.battery(args),
             "mc" => self.mc(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),

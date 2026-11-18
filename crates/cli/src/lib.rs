@@ -16,6 +16,7 @@ mod locuscmd;
 pub mod mcp;
 mod models;
 mod poweroncmd;
+mod batterycmd;
 mod reqcmd;
 pub mod runner;
 mod projectcmd;

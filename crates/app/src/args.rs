@@ -342,6 +342,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if let Some(i) = args.iter().position(|a| a == "--wizard") {
             app.sch.open_wizard(args.get(i + 1).and_then(|k| k.parse().ok()).unwrap_or(0));
         }
+        // `--battery`: the battery life of the sheet with its saved settings ("電池の持ち時間")
+        if args.iter().any(|a| a == "--battery") {
+            app.sch.run_battery();
+            app.sch.open_analysis_section("battery");
+        }
         // --section <key>: the analysis tab with that section open (dc, variation, coverage ...)
         if let Some(i) = args.iter().position(|a| a == "--section")
             && let Some(k) = args.get(i + 1)

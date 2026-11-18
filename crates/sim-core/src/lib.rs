@@ -37,6 +37,7 @@ mod ripple;
 mod heat_tran;
 mod selfheat;
 mod ambient;
+pub mod battery;
 pub use ambient::{ambient_sweep, AmbientPoint, AmbientSweep, NetDrift, PartWorst};
 mod spec;
 mod spectrum;

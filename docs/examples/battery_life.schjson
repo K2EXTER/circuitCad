@@ -1,0 +1,374 @@
+{
+  "analysis": {
+    "ac_ppd": "20",
+    "ac_start": "10",
+    "ac_stop": "1Meg",
+    "tran_step": "50u",
+    "tran_stop": "300m",
+    "tran_uic": false
+  },
+  "battery": {
+    "from": "100m",
+    "node": "3V3",
+    "to": "300m",
+    "v_min": "3.2"
+  },
+  "components": [
+    {
+      "custom": {
+        "glyph": "battery",
+        "name": "LIION_18650",
+        "pins": [
+          {
+            "name": "+",
+            "number": "1",
+            "side": "right"
+          },
+          {
+            "name": "-",
+            "number": "2",
+            "side": "left"
+          }
+        ],
+        "prefix": "BT",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "新品 (満充電) から始まる電池モデルです。容量 2600 mAh、内部抵抗 0.06 Ω、開放電圧は残量でなだらかに変わり、終わり際に急に下がります。負荷電流で電池の残量が減り、内部抵抗で端子電圧が下がるのを再現します。",
+            "扱わないもの: 温度による容量と内部抵抗の変化、大電流での実効容量の低下 (大電流ほど取り出せる量が減ります)、使い込みによる劣化、自己放電、保護回路。数値は一般的な品の概算で、メーカー・品種で大きく違います。",
+            "電池の中身は、残量を蓄える巨大なコンデンサと、残量で電圧が決まる電圧源、内部抵抗の組み合わせです。DC解析や解析の開始点では、残量は満充電として扱います (時間 0 だけ残量を 1 に固定しています)。長い時間 (時間〜日単位) を過渡解析で見るときは、時間刻みを大きくしてください。",
+            "過放電・過充電・過電流の保護回路は含みません。実機では保護回路つきの電池や保護ICと組み合わせます。充電は専用の充電ICで行います。"
+          ],
+          "name": "LIION_18650",
+          "origin": {
+            "kind": "generic",
+            "source": "一般的な品の概算"
+          },
+          "params": {
+            "capacity_mah": 2600.0,
+            "rint": 0.06
+          },
+          "pins": [
+            "1",
+            "2"
+          ],
+          "text": ".subckt LIION_18650 p n\nRs p pi 0.06\nBv pi n V=3.0+1.2*(0.5*limit(V(soc),0,1)+0.500*(1-exp(-8*limit(V(soc),0,1))))\nBi soc 0 I=if(V(soc)>0,-I(Bv),0)\nCsoc soc 0 9360\nBpull soc 0 I=if(time<1u,1000*(V(soc)-1),0)\n.ends LIION_18650"
+        }
+      },
+      "footprint": "Battery_Wire_1x2_P2.54",
+      "kind": "Custom",
+      "pos": [
+        0,
+        0
+      ],
+      "refdes": "BT1",
+      "rot": 0,
+      "value": "LIION_18650"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        20,
+        0
+      ],
+      "refdes": "C1",
+      "rot": 1,
+      "value": "1u"
+    },
+    {
+      "custom": {
+        "glyph": "regulator",
+        "name": "MCP1700-3302",
+        "pins": [
+          {
+            "name": "VIN",
+            "number": "3",
+            "side": "left"
+          },
+          {
+            "name": "VOUT",
+            "number": "2",
+            "side": "right"
+          },
+          {
+            "name": "GND",
+            "number": "1",
+            "side": "bottom"
+          }
+        ],
+        "prefix": "U",
+        "ratings": {
+          "i_max": 0.25,
+          "rows": [
+            {
+              "name": "出力電圧",
+              "value": "3.3V ±2%"
+            },
+            {
+              "condition": "IO = 250mA",
+              "name": "ドロップアウト電圧",
+              "value": "0.18V (代表)"
+            }
+          ],
+          "v_max": 6.0
+        },
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS (VIN = 4.3 V、ILOAD = 100 µA)。データシートとの比べは docs/models/regulators.md。",
+            "再現しているもの: 出力 3.3 V、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、グラウンド電流 0.0016 mA (入力が数 V 以上で)、電流制限 (入出力の差で変わる)、リップル除去 44 dB (100 Hz。どの周波数でも同じとした)、出力雑音 3000 nV/√Hz (平ら)。",
+            "データシートの表に無い値: ライン・レギュレーションは表の typ「±0.75 %/V」をそのまま使った (表の値。代表特性の図は見ていない)。出力電圧の min と max (±2.0 %) は、新しい版の DS20001826E (2018) の表から写した。",
+            "出力電圧の部品ごとの違い (3.234〜3.366 V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+            "扱わないもの: 温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む)。",
+            "最終の確認は、メーカーの公式モデルで行ってください。"
+          ],
+          "name": "MCP1700-3302",
+          "origin": {
+            "kind": "equivalent",
+            "source": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA"
+          },
+          "params": {
+            "dropout": 0.712,
+            "vout": 3.3
+          },
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "text": ".subckt MCP1700-3302 in gnd out\n* line regulation through a slow path (the data sheet's DC figure) and the ripple from the input (flat, the ripple rejection)\nElf lfa gnd in gnd 1\nRlf lfa lf 1.59Meg\nClf lf gnd 100n\n* output noise (taken as flat over the data sheet's band): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\n* the output's difference from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVtol vt gnd DC 0\n* spread Vtol -0.066 0.066 vout (data sheet: 3.234 to 3.366 V)\nBtgt t0 gnd V=3.3+0.0184404*(V(lf,gnd)-4.3)+0.00630957*(V(in,gnd)-4.3)+V(vt,gnd)\nEn tgt t0 nz gnd 736.852\n* the ceiling the input leaves (the dropout)\nBdo ind gnd V=V(in,gnd)-0-0.579947*I(Vs)\n* the target, no higher than the dropout's ceiling\nEx1 xh1 gnd tgt ind 1000\nD1 xh1 yh1 DREG\nRy1 yh1 gnd 1k\nEy1 y1 gnd yh1 gnd 0.001\nEc1 c1 gnd tgt y1 1\n* the current limit: the current the target asks for (amps as volts), no more than the limit\nBu u gnd V=(V(c1,gnd)-V(out,gnd))/0.132053\nBlim cl gnd V=limit(0.408+0*(V(in,gnd)-V(out,gnd)-1),0.408,0.408)\nEx2 xh2 gnd u cl 1000\nD2 xh2 yh2 DREG\nRy2 yh2 gnd 1k\nEy2 y2 gnd yh2 gnd 0.001\nEc2 uc gnd u y2 1\nBc2 c2 gnd V=V(out,gnd)+0.132053*V(uc,gnd)\n* output through the load regulation's resistance; the output current comes from the input (both ways, as the earlier\n* bundled models did: a dead or reversed input then leaves the output near 0 V)\nEo o gnd c2 gnd 1\nVs o os DC 0\nRo os out 0.132053\nBin in gnd I=I(Vs)\n* ground (quiescent) current: flat above a few volts, like a resistor near 0 V\nBq in gnd I=1.6e-06*tanh(V(in,gnd)/2)\n.model DREG D(IS=1e-12 N=1)\n.ends MCP1700-3302"
+        }
+      },
+      "footprint": "SOT-23",
+      "kind": "Custom",
+      "pos": [
+        40,
+        0
+      ],
+      "refdes": "U1",
+      "rot": 0,
+      "value": "MCP1700-3302"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        60,
+        0
+      ],
+      "refdes": "C2",
+      "rot": 1,
+      "value": "1u"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "ISource",
+      "pos": [
+        78,
+        0
+      ],
+      "refdes": "I1",
+      "rot": 1,
+      "sim_only": true,
+      "value": "PULSE(1m 100m 10m 10u 10u 5m 100m)"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        5,
+        0
+      ],
+      "text": "VBAT"
+    },
+    {
+      "pos": [
+        -5,
+        0
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "VBAT"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        0
+      ],
+      "text": "VBAT"
+    },
+    {
+      "pos": [
+        40,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        47,
+        0
+      ],
+      "text": "3V3"
+    },
+    {
+      "pos": [
+        60,
+        -5
+      ],
+      "text": "3V3"
+    },
+    {
+      "pos": [
+        60,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        73,
+        0
+      ],
+      "text": "3V3"
+    },
+    {
+      "pos": [
+        83,
+        0
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": [
+    {
+      "a": [
+        2,
+        0
+      ],
+      "b": [
+        5,
+        0
+      ]
+    },
+    {
+      "a": [
+        -2,
+        0
+      ],
+      "b": [
+        -5,
+        0
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        36,
+        0
+      ],
+      "b": [
+        33,
+        0
+      ]
+    },
+    {
+      "a": [
+        40,
+        4
+      ],
+      "b": [
+        40,
+        7
+      ]
+    },
+    {
+      "a": [
+        44,
+        0
+      ],
+      "b": [
+        47,
+        0
+      ]
+    },
+    {
+      "a": [
+        60,
+        -2
+      ],
+      "b": [
+        60,
+        -5
+      ]
+    },
+    {
+      "a": [
+        60,
+        2
+      ],
+      "b": [
+        60,
+        5
+      ]
+    },
+    {
+      "a": [
+        76,
+        0
+      ],
+      "b": [
+        73,
+        0
+      ]
+    },
+    {
+      "a": [
+        80,
+        0
+      ],
+      "b": [
+        83,
+        0
+      ]
+    }
+  ]
+}

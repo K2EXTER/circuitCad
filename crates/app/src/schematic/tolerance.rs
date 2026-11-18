@@ -23,6 +23,12 @@ pub struct SheetSettings {
     pub ac_start: String,
     pub ac_stop: String,
     pub ac_ppd: String,
+    /// The battery life (`battery.rs`): the stretch of the transient run to average (empty = the second half), and the net that must
+    /// stay at or above a voltage for the circuit to work (empty = the battery is used to its own end).
+    pub bat_from: String,
+    pub bat_to: String,
+    pub bat_node: String,
+    pub bat_vmin: String,
 }
 
 impl Default for SheetSettings {
@@ -39,6 +45,10 @@ impl Default for SheetSettings {
             ac_start: "10".into(),
             ac_stop: "1Meg".into(),
             ac_ppd: "20".into(),
+            bat_from: String::new(),
+            bat_to: String::new(),
+            bat_node: String::new(),
+            bat_vmin: String::new(),
         }
     }
 }
@@ -72,6 +82,9 @@ pub fn with_settings(sheet: &mut serde_json::Value, t: &SheetSettings) {
             serde_json::json!({"tran_stop": t.tran_stop, "tran_step": t.tran_step, "tran_uic": t.tran_uic, "ac_start": t.ac_start, "ac_stop": t.ac_stop, "ac_ppd": t.ac_ppd}),
         );
     }
+    if [&t.bat_from, &t.bat_to, &t.bat_node, &t.bat_vmin].iter().any(|s| !s.is_empty()) {
+        obj.insert("battery".into(), serde_json::json!({"from": t.bat_from, "to": t.bat_to, "node": t.bat_node, "v_min": t.bat_vmin}));
+    }
 }
 
 /// Takes the settings out of a sheet's JSON (the defaults for what a file does not have; a box that is missing keeps its default).
@@ -98,6 +111,13 @@ pub fn take_settings(sheet: &mut serde_json::Value) -> SheetSettings {
             t.tran_uic = b;
         }
     }
+    if let Some(v) = obj.remove("battery") {
+        for (key, slot) in [("from", &mut t.bat_from), ("to", &mut t.bat_to), ("node", &mut t.bat_node), ("v_min", &mut t.bat_vmin)] {
+            if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
+                *slot = s.to_string();
+            }
+        }
+    }
     t
 }
 
@@ -115,6 +135,10 @@ impl SchEditor {
             ac_start: self.ac_fstart.clone(),
             ac_stop: self.ac_fstop.clone(),
             ac_ppd: self.ac_ppd.clone(),
+            bat_from: self.bat_from.clone(),
+            bat_to: self.bat_to.clone(),
+            bat_node: self.bat_node.clone(),
+            bat_vmin: self.bat_vmin.clone(),
         }
     }
 
@@ -131,6 +155,10 @@ impl SchEditor {
         self.ac_fstart = t.ac_start.clone();
         self.ac_fstop = t.ac_stop.clone();
         self.ac_ppd = t.ac_ppd.clone();
+        self.bat_from = t.bat_from.clone();
+        self.bat_to = t.bat_to.clone();
+        self.bat_node = t.bat_node.clone();
+        self.bat_vmin = t.bat_vmin.clone();
         self.saved_tol = t;
     }
 }

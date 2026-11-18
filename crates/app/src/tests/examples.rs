@@ -3285,3 +3285,45 @@ fn heatsink_sample_keeps_the_regulator_on_the_sink_cool() {
         assert!((h.warm.voltage(out).unwrap() - 5.0).abs() < 0.3, "{out}");
     }
 }
+
+/// Generates docs/examples/battery_life.schjson for the battery life analysis (B2): a Li-ion 18650 cell (BT1) feeds an MCP1700 3.3 V
+/// regulator (U1, 1 uF on each side); the load (I1) is a microcontroller that sleeps at 1 mA and wakes every 100 ms for 5 ms at
+/// 100 mA (a radio sending). Swapping U1 for the AMS1117-3.3 (dropout 1.1 V) shows the circuit stopping with charge still left:
+/// `cargo test -p app write_battery_life_example -- --ignored`
+#[test]
+#[ignore]
+fn write_battery_life_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str| {
+        let (_, t) = part_lib::EXAMPLES.iter().find(|(k, _)| *k == n || k.strip_suffix(".part.json") == Some(n)).unwrap_or_else(|| panic!("{n}"));
+        serde_json::from_str::<part_lib::PartDef>(t).unwrap()
+    };
+    let mut s = sch_core::Schematic::default();
+    let cell = find("LIION_18650");
+    let b = s.add_custom(cell.symbol(), &cell.default_value(), &cell.footprint_name(), (0, 0), 0);
+    label(&mut s, b, "1", "VBAT");
+    label(&mut s, b, "2", "GND");
+    let cin = s.add(Kind::Capacitor, (20, 0), 1);
+    s.components[cin].value = "1u".into();
+    label(&mut s, cin, "1", "VBAT");
+    label(&mut s, cin, "2", "GND");
+    let reg = find("MCP1700-3302_SOT-23");
+    let u = s.add_custom(reg.symbol(), &reg.default_value(), &reg.footprint_name(), (40, 0), 0);
+    label(&mut s, u, "3", "VBAT");
+    label(&mut s, u, "1", "GND");
+    label(&mut s, u, "2", "3V3");
+    let cout = s.add(Kind::Capacitor, (60, 0), 1);
+    s.components[cout].value = "1u".into();
+    label(&mut s, cout, "1", "3V3");
+    label(&mut s, cout, "2", "GND");
+    // the microcontroller: 1 mA asleep, 100 mA for 5 ms every 100 ms
+    let i = s.add(Kind::ISource, (78, 0), 1);
+    s.components[i].value = "PULSE(1m 100m 10m 10u 10u 5m 100m)".into();
+    label(&mut s, i, "-", "3V3");
+    label(&mut s, i, "+", "GND");
+    // opens ready to run: 300 ms of transient, averaged over two whole periods of the load, the 3.3 V rail kept at 3.2 V or more
+    let mut v = serde_json::to_value(&s).unwrap();
+    let settings = crate::schematic::SheetSettings { tran_stop: "300m".into(), tran_step: "50u".into(), bat_from: "100m".into(), bat_to: "300m".into(), bat_node: "3V3".into(), bat_vmin: "3.2".into(), ..Default::default() };
+    crate::schematic::with_settings(&mut v, &settings);
+    std::fs::write(root.join("battery_life.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}

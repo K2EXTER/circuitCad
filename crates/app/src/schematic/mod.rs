@@ -333,6 +333,13 @@ pub struct SchEditor {
     pub(crate) amb_step: String,
     pub(crate) amb_view: Option<Result<sim_core::AmbientSweep, String>>,
     pub(crate) htran_stop: String,
+    /// "電池の持ち時間" (`battery.rs`): the stretch to average and the condition to keep working, as typed (saved with the sheet), and
+    /// the last answer with the transient run it was found from.
+    pub(crate) bat_from: String,
+    pub(crate) bat_to: String,
+    pub(crate) bat_node: String,
+    pub(crate) bat_vmin: String,
+    pub(crate) bat_view: Option<Result<Vec<sim_core::battery::BatteryLife>, String>>,
     htran_links: String,
     /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
     htran_links_seen: Vec<(String, String, f64)>,
@@ -860,6 +867,11 @@ impl Default for SchEditor {
             amb_step: "5".into(),
             amb_view: None,
             htran_stop: "0.6".into(),
+            bat_from: String::new(),
+            bat_to: String::new(),
+            bat_node: String::new(),
+            bat_vmin: String::new(),
+            bat_view: None,
             htran_links_seen: vec![],
             htran_links: String::new(),
             coverage_cache: None,
@@ -1027,6 +1039,7 @@ mod spec_table;
 mod bench_data;
 mod power_ui;
 mod power_on;
+mod battery;
 mod for_bench;
 mod requirements;
 mod wizard;

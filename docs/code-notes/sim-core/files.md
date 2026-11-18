@@ -15,6 +15,7 @@
 - `cmrr.rs` 同相除去比(+ と − の入力の信号源を逆向き・同じ向きに揺らす 2 回の AC 解析と、抵抗のばらつき。画面は「同相除去比 (CMRR)」、CLI `cmrr`)
 - `sensitivity.rs` 感度(部品を1つずつ ±1% 動かして効く順に。画面は「温度とばらつき」の「感度を計算」)
 - `worstcase.rs` 最悪ケース解析(全部品を許容差の端に置いた角を実際に解く。CLI `worst`、画面はばらつき解析の窓の「最悪ケース」。スペックの合否には `SpecKind::*Worst`)
+- `battery.rs` 電池の持ち時間(B2。過渡解析の平均の電流と、残量を減らして DC で探す止まる残量。CLI `battery`、画面は `app/src/schematic/battery.rs`)
 - `poweron.rs` 最初の電源投入のガイド(B1。電源ごとの電流・正常な範囲・電流制限の値・測った電流の判定と疑う所。CLI `poweron`、画面は `app/src/power_on_guide.rs`)
 - `loopgain.rs` ループゲイン(ループを1か所切って電圧・電流を1回ずつ注入する Middlebrook 法。位相余裕。ナイキスト線図・ニコルス線図の印。CLI `loopgain` `nyquist`、画面は解析タブの「ループゲイン」)
 - `polezero.rs` 極と零(AC応答に分数の式を当てはめて根を求める。CLI `pz`、画面は解析タブの「極と零」)
