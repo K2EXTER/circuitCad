@@ -3358,3 +3358,19 @@ fn write_pot_dimmer_example() {
     label(&mut s, d1, "K", "GND");
     std::fs::write(root.join("pot_dimmer.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
+
+/// Generates docs/examples/buzzer_button.schjson (the buzzer's sound on the breadboard, B6 ②): a push button SW1 from 5 V to the
+/// buzzer BZ1's + (net S), its − on ground: `cargo test -p app write_buzzer_button_example -- --ignored`
+#[test]
+#[ignore]
+fn write_buzzer_button_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let (mut s, place) = live_base();
+    let sw = place(&mut s, "SW_PUSH", (20, 0));
+    side_label(&mut s, sw, "1", "VCC");
+    side_label(&mut s, sw, "2", "S");
+    let bz = place(&mut s, "BUZZER_5V", (40, 4));
+    side_label(&mut s, bz, "1", "S");
+    side_label(&mut s, bz, "2", "GND");
+    std::fs::write(root.join("buzzer_button.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}

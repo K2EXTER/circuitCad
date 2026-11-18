@@ -15,6 +15,7 @@ use sch_core::breadboard::{auto_layout, board_nets, check, moved, net_at, rotate
 use std::collections::BTreeSet;
 
 mod live;
+mod sound;
 use live::Live;
 
 /// What the person is dragging: the part, and the hole the pointer started on.
@@ -80,6 +81,9 @@ pub struct BreadboardView {
     temp_c: Option<f64>,
     /// Switches to move once the circuit starts running (`--proto-flip SW1,SW2`, for screenshots).
     pub flip_on_start: Vec<String>,
+    /// The buzzers' tone through the speakers, and whether the learner turned it off.
+    beeper: sound::Beeper,
+    sound_off: bool,
 }
 
 /// The DC point of the board's circuit: the current through each part, and the parts past (or near) their ratings.
@@ -335,6 +339,31 @@ impl BreadboardView {
     /// With the power on: the circuit as the board joins it is worked out (again when the schematic or the layout changes), its DC
     /// point found, and it runs in time; each frame the time goes on, and the panel shows the time, the speed and the switches.
     fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
+        self.run_frame(ui, sch, l, matches);
+        let step = self.buzz_step(sch, l);
+        self.beeper.set(step);
+    }
+
+    /// Stops the buzzers' tone (the tab is left).
+    pub fn silence(&mut self) {
+        self.beeper.set(None);
+    }
+
+    /// The buzzers on the board with the voltage from their + to their − now (not the burnt ones).
+    fn buzzers(&self, sch: &SchEditor, l: &Layout) -> Vec<(String, f64)> {
+        let (Some(lv), Some(b)) = (self.live.as_ref().filter(|v| self.powered && v.error.is_none()), self.board.as_ref()) else { return vec![] };
+        buzzer_volts(sch, l, &b.nets, lv).into_iter().filter(|(r, _)| !self.broken.iter().any(|(e, _)| element_of(e, r))).collect()
+    }
+
+    /// How loud the tone is: the loudest buzzer sounding, or None (none sounds, or the sound is off).
+    fn buzz_step(&self, sch: &SchEditor, l: &Layout) -> Option<u8> {
+        if self.sound_off {
+            return None;
+        }
+        self.buzzers(sch, l).into_iter().filter_map(|(_, v)| sound::loudness(v)).max()
+    }
+
+    fn run_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
         if !self.powered {
             (self.live, self.board, self.run_key, self.live_failed, self.watch) = (None, None, None, None, None);
             self.knob_values.clear();
@@ -433,6 +462,16 @@ impl BreadboardView {
                 }
             });
         });
+        if l.parts.iter().any(|p| is_buzzer(sch, &p.refdes)) {
+            let mut on = !self.sound_off;
+            if ui
+                .checkbox(&mut on, i18n::tr("ブザーの音を鳴らす"))
+                .on_hover_text(i18n::trf!("鳴っているブザーの音 (約 {} Hz) をスピーカーから出します。ブザーの + が − より約 {} V 以上高いと鳴り、電圧が高いほど大きくなります。逆向きでは鳴りません", sound::BUZZ_HZ, sound::BUZZ_FROM))
+                .changed()
+            {
+                self.sound_off = !on;
+            }
+        }
         if !lv.knobs.is_empty() {
             ui.label(egui::RichText::new(i18n::tr("つまみ (電源・信号源の電圧、ボリューム)")).strong())
                 .on_hover_text(i18n::tr("ブレッドボードの外の電源や信号源の電圧と、ボリュームのつまみを、動かしたまま変えます。実験用の電源のつまみを回す・センサーに当てる光を強くする・ボリュームを回す、の代わりです"));
@@ -831,7 +870,8 @@ impl BreadboardView {
             }
         }
         if let (Some(lv), Some(b)) = (running, &self.board) {
-            draw_running(&painter, sch, &l, &b.nets, lv, to, pitch, &font, ui.input(|i| i.time));
+            let sounding = self.buzzers(sch, &l);
+            draw_running(&painter, sch, &l, &b.nets, lv, &sounding, to, pitch, &font, ui.input(|i| i.time));
         }
         for r in &issues {
             let Some(p) = l.parts.iter().find(|p| p.refdes == r.refdes) else { continue };
@@ -906,15 +946,8 @@ impl BreadboardView {
 
 /// The marks of the running circuit over the parts: where each switch is, a motor's speed, a buzzer that sounds.
 #[allow(clippy::too_many_arguments)]
-fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &BoardNets, lv: &Live, to: impl Fn(Hole) -> Pos2 + Copy, pitch: f32, font: &egui::FontId, now: f64) {
-    let volt = |p: &sch_core::breadboard::Placed, pin: &str| -> Option<f64> {
-        // a lead's hole, or (a simulation-only pin like a motor's speed) the net the board gives the pin
-        let n = match p.leads.iter().find(|(q, _)| q.eq_ignore_ascii_case(pin)) {
-            Some((_, h)) => nets.at(*h)?,
-            None => nets.pins.iter().find(|((r, q), _)| *r == p.refdes && q.eq_ignore_ascii_case(pin))?.1.as_str(),
-        };
-        if is_ground(n) { Some(0.0) } else { lv.voltage(n) }
-    };
+fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &BoardNets, lv: &Live, sounding: &[(String, f64)], to: impl Fn(Hole) -> Pos2 + Copy, pitch: f32, font: &egui::FontId, now: f64) {
+    let volt = |p: &sch_core::breadboard::Placed, pin: &str| pin_volts(p, pin, nets, lv);
     for p in &l.parts {
         let rect = part_rect(p, to, pitch);
         if let Some(s) = lv.switch_index(&p.refdes).map(|k| &lv.switches[k]) {
@@ -946,11 +979,7 @@ fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &Boa
             painter.text(c + Vec2::new(pitch * 1.1, 0.0), egui::Align2::LEFT_CENTER, format!("{:.0} rpm", rpm), font.clone(), Color32::from_gray(40));
         }
         if model.contains("BUZZER") {
-            let v = match (p.leads.first(), p.leads.get(1)) {
-                (Some((a, _)), Some((b, _))) => volt(p, a).zip(volt(p, b)).map(|(x, y)| (x - y).abs()),
-                _ => None,
-            };
-            if v.is_some_and(|v| v > 1.0) {
+            if sounding.iter().any(|(r, v)| *r == p.refdes && sound::loudness(*v).is_some()) {
                 // sound waves, pulsing
                 let c = rect.center();
                 let k = (now * 4.0).fract() as f32;
@@ -962,6 +991,32 @@ fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &Boa
             }
         }
     }
+}
+
+/// The voltage at a part's pin: its lead's hole, or (a simulation-only pin like a motor's speed) the net the board gives the pin.
+fn pin_volts(p: &sch_core::breadboard::Placed, pin: &str, nets: &BoardNets, lv: &Live) -> Option<f64> {
+    let n = match p.leads.iter().find(|(q, _)| q.eq_ignore_ascii_case(pin)) {
+        Some((_, h)) => nets.at(*h)?,
+        None => nets.pins.iter().find(|((r, q), _)| *r == p.refdes && q.eq_ignore_ascii_case(pin))?.1.as_str(),
+    };
+    if is_ground(n) { Some(0.0) } else { lv.voltage(n) }
+}
+
+/// A library buzzer (its model's name says so).
+fn is_buzzer(sch: &SchEditor, refdes: &str) -> bool {
+    sch.sch.components.iter().find(|c| c.refdes == refdes).and_then(|c| c.custom.as_ref()).is_some_and(|c| c.name.to_ascii_uppercase().contains("BUZZER"))
+}
+
+/// Each buzzer on the board and the voltage of its first lead (+) above its second (−) now.
+fn buzzer_volts(sch: &SchEditor, l: &Layout, nets: &BoardNets, lv: &Live) -> Vec<(String, f64)> {
+    l.parts
+        .iter()
+        .filter(|p| is_buzzer(sch, &p.refdes))
+        .filter_map(|p| {
+            let (a, b) = (&p.leads.first()?.0, &p.leads.get(1)?.0);
+            Some((p.refdes.clone(), pin_volts(p, a, nets, lv)? - pin_volts(p, b, nets, lv)?))
+        })
+        .collect()
 }
 
 fn is_ground(n: &str) -> bool {
@@ -1298,6 +1353,56 @@ mod tests {
 
     /// The potentiometer is a knob while it runs: turned towards pin 1 (5 V) the transistor lights the LED, towards pin 3 (GND)
     /// it goes dark.
+    /// The buzzer sounds while its push button is held, louder with more voltage, not at all on too little or with the sound off.
+    #[test]
+    fn the_buzzer_sounds_while_its_button_is_held() {
+        let (mut app, mut run) = power_on_app("buzzer_button.schjson");
+        app.breadboard.powered = true;
+        run(&mut app);
+        let step = |app: &App| {
+            let l = auto_layout(&app.sch.sch);
+            app.breadboard.buzz_step(&app.sch, &l)
+        };
+        assert_eq!(step(&app), None, "silent until the button is pressed");
+        let lv = app.breadboard.live.as_mut().unwrap();
+        let k = lv.switch_index("SW1").unwrap();
+        lv.press(k);
+        lv.advance(0.01);
+        run(&mut app);
+        let l = auto_layout(&app.sch.sch);
+        let v = app.breadboard.buzzers(&app.sch, &l);
+        assert!(v.iter().any(|(r, v)| r == "BZ1" && *v > 4.5), "{v:?}");
+        assert_eq!(step(&app), Some(4), "loud at 5 V");
+        assert!(app.breadboard.beeper.is_playing());
+        // the supply turned down to 2.7 V: quieter; to 2 V: silent
+        let lv = app.breadboard.live.as_mut().unwrap();
+        let s = lv.knob_index("V1").unwrap();
+        lv.set_knob(s, 2.7);
+        lv.advance(0.01);
+        assert_eq!(step(&app), Some(1));
+        let lv = app.breadboard.live.as_mut().unwrap();
+        lv.set_knob(s, 2.0);
+        lv.advance(0.01);
+        assert_eq!(step(&app), None);
+        let lv = app.breadboard.live.as_mut().unwrap();
+        lv.set_knob(s, 5.0);
+        lv.advance(0.01);
+        app.breadboard.sound_off = true;
+        assert_eq!(step(&app), None, "the learner turned the sound off");
+        app.breadboard.sound_off = false;
+        // released: silent again; leaving the tab stops the tone
+        app.breadboard.live.as_mut().unwrap().release();
+        app.breadboard.live.as_mut().unwrap().advance(0.01);
+        assert_eq!(step(&app), None);
+        app.breadboard.live.as_mut().unwrap().press(k);
+        app.breadboard.live.as_mut().unwrap().advance(0.01);
+        run(&mut app);
+        assert!(app.breadboard.beeper.is_playing());
+        app.mode = Mode::Schematic;
+        run(&mut app);
+        assert!(!app.breadboard.beeper.is_playing());
+    }
+
     #[test]
     fn turning_the_pot_dims_the_led() {
         let (mut app, mut run) = power_on_app("pot_dimmer.schjson");

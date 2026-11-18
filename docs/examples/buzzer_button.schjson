@@ -1,0 +1,229 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "SW1",
+      "kind": "Custom",
+      "value": "SW_PUSH",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 0,
+      "footprint": "SW_Tactile_6x6",
+      "custom": {
+        "name": "SW_PUSH",
+        "prefix": "SW",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "SW_PUSH",
+          "text": ".subckt SW_PUSH 1 2\n* pressed while Vpress is 1 V (0 V = released): the live logic view of the schematic sets it while the button is held down\nS1 1 2 press 0 SWPUSH\nVpress press 0 0\n.model SWPUSH SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends SW_PUSH",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "押していないときは 1GΩ、押したときは 0.05Ω の理想のスイッチです。実物は、押した瞬間と離した瞬間に接点が何度も跳ねて (チャタリング、数 ms)、ロジック IC には何回も押したように見えることがあります。このモデルは跳ねません。",
+            "ふつうの解析 (DC・過渡など) では、離したまま (開いた状態) で計算します。押した状態を調べるには、回路図の「デジタル回路を動かす」を使います。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "学習用の理想のスイッチ (6mm 角のタクトスイッチの足の位置)"
+          }
+        },
+        "ratings": {
+          "v_max": 12.0,
+          "i_max": 0.05,
+          "rows": [
+            {
+              "name": "定格",
+              "value": "12V 50mA",
+              "condition": "DC (6mm 角のタクトスイッチの代表値)"
+            }
+          ]
+        },
+        "glyph": "switch_push"
+      }
+    },
+    {
+      "refdes": "BZ1",
+      "kind": "Custom",
+      "value": "BUZZER_5V",
+      "pos": [
+        40,
+        4
+      ],
+      "rot": 0,
+      "footprint": "Buzzer_D12_P7.6",
+      "custom": {
+        "name": "BUZZER_5V",
+        "prefix": "BZ",
+        "pins": [
+          {
+            "number": "1",
+            "name": "+",
+            "side": "bottom"
+          },
+          {
+            "number": "2",
+            "name": "-",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "BUZZER_5V",
+          "text": ".subckt BUZZER_5V p n\n* the current of a sounding 5 V buzzer (about 30 mA at 5 V) as a resistor\nRb p n 167\n.ends BUZZER_5V",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "鳴っているときの平均の電流 (5V で約 30mA) を、167Ω の抵抗で表しています。中の発振回路と音は出ません。電源の電流と、駆動するトランジスタの選び方を確かめるためのモデルです。",
+            "実物は、ある電圧 (3V 前後) より下では鳴らず、電流も少なくなります。逆向きにつなぐと鳴りません。このモデルは、どちらの向きでも抵抗として電流を流します。",
+            "電流と鳴り始める電圧は、品番で大きく違います (5V で 20〜40mA ほど)。使う品のデータシートで確かめてください。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "一般的な品の概算"
+          }
+        },
+        "glyph": "buzzer"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        16,
+        0
+      ],
+      "b": [
+        13,
+        0
+      ]
+    },
+    {
+      "a": [
+        24,
+        0
+      ],
+      "b": [
+        27,
+        0
+      ]
+    },
+    {
+      "a": [
+        39,
+        8
+      ],
+      "b": [
+        39,
+        11
+      ]
+    },
+    {
+      "a": [
+        41,
+        8
+      ],
+      "b": [
+        41,
+        11
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        13,
+        0
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        27,
+        0
+      ],
+      "text": "S"
+    },
+    {
+      "pos": [
+        39,
+        11
+      ],
+      "text": "S"
+    },
+    {
+      "pos": [
+        41,
+        11
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

@@ -820,6 +820,10 @@ impl eframe::App for App {
                 });
             }
         });
+        if self.mode != Mode::Proto {
+            // the buzzers sound only while their tab is shown
+            self.breadboard.silence();
+        }
         if self.mode == Mode::Proto {
             egui::Panel::left("proto_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.breadboard.panel(ui, &mut self.sch));
             let focus = self.sch.focus().part;
