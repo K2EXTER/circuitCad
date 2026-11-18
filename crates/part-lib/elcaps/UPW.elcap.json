@@ -1,0 +1,41 @@
+{
+  "maker": "Nichicon",
+  "series": "UPW",
+  "feature": "小形・低インピーダンス・スイッチング電源向け",
+  "datasheet": "https://www.nichicon.co.jp/english/series_items/catalog_pdf/e-upw.pdf",
+  "source": "データシート e-upw.pdf (UPW series、CAT.8100N)",
+  "checked": "2026-11-18",
+  "temp": [-55, 105],
+  "tolerance_pct": 20,
+  "leak_k": 0.03,
+  "leak_min_ua": 0,
+  "leak_minutes": 1,
+  "coeff_freqs": [50, 120, 300, 1000, 10000],
+  "coeffs": [
+    { "cap_max": 47, "k": [0.20, 0.30, 0.50, 0.80, 1.00] },
+    { "cap_max": 330, "k": [0.55, 0.65, 0.75, 0.85, 1.00] },
+    { "cap_max": 1000, "k": [0.70, 0.75, 0.80, 0.90, 1.00] },
+    { "cap_max": 15000, "k": [0.80, 0.85, 0.90, 0.95, 1.00] }
+  ],
+  "life": [
+    { "d_max": 8, "hours": 3000 },
+    { "d_min": 10, "d_max": 10, "hours": 5000 },
+    { "d_min": 12.5, "d_max": 12.5, "hours": 7000 },
+    { "d_min": 16, "hours": 8000 }
+  ],
+  "leads": [
+    { "d": 8, "pitch": 3.5, "lead": 0.6 },
+    { "d": 10, "pitch": 5.0, "lead": 0.6 },
+    { "d": 12.5, "pitch": 5.0, "lead": 0.6, "long_over": 25, "long_lead": 0.8 },
+    { "d": 16, "pitch": 7.5, "lead": 0.8 },
+    { "d": 18, "pitch": 7.5, "lead": 0.8 }
+  ],
+  "order_note": "リードの切りそろえ・曲げ・テープ包装は、型番の末尾 (12 桁目の大きさの記号) のあとに記号を足す (大きさの記号の無い型番は「1」を足してから)。AEC-Q200 の認定品もある (メーカーに問い合わせ)。",
+  "bundle": [
+    "UPW1C221MPD", "UPW1C471MPD", "UPW1C102MPD",
+    "UPW1E331MPD", "UPW1E102MHD",
+    "UPW1V101MPD", "UPW1V221MPD", "UPW1V471MPD",
+    "UPW1H101MPD", "UPW1H221MPD", "UPW1H471MHD",
+    "UPW1J101MPD", "UPW2A470MPD"
+  ]
+}

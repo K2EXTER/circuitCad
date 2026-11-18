@@ -33,6 +33,8 @@ pub struct Series {
     pub leak_min_ua: f64,
     /// The highest rated voltage the formula is for (Nichicon UVR: 100 V; above, the table's own value). None: all.
     pub leak_v_max: Option<f64>,
+    /// Minutes after the rated voltage is applied that the leakage is given for (Nichicon UPW: 1). None: 2.
+    pub leak_minutes: Option<f64>,
     /// The frequencies of the ripple current's coefficient table (Hz).
     pub coeff_freqs: Vec<f64>,
     /// Its rows, by capacitance: the first with `cap_max` ≥ the part's capacitance.
@@ -198,8 +200,8 @@ impl Series {
         }
     }
 
-    fn leak_condition(&self, volts: f64) -> &'static str {
-        if self.formula_for(volts) { "定格電圧で 2 分後・20 ℃" } else { "定格電圧・20 ℃ (データシートの表の条件)" }
+    fn leak_condition(&self, volts: f64) -> String {
+        if self.formula_for(volts) { format!("定格電圧で {} 分後・20 ℃", g(self.leak_minutes.unwrap_or(2.0))) } else { "定格電圧・20 ℃ (データシートの表の条件)".into() }
     }
 }
 
@@ -370,7 +372,7 @@ pub fn leakage_mismatches<'a>(s: &Series, rows: &'a [Row]) -> Vec<&'a Row> {
     rows.iter().filter(|r| s.formula_for(r.volts) && r.leak_ua.is_some_and(|l| (l - s.leakage(r.cap_uf, r.volts)).abs() > 0.06 + 0.001 * l)).collect()
 }
 
-const BUNDLED: &[&str] = &[include_str!("../elcaps/UHE.elcap.json"), include_str!("../elcaps/ZLJ.elcap.json"), include_str!("../elcaps/UVR.elcap.json")];
+const BUNDLED: &[&str] = &[include_str!("../elcaps/UHE.elcap.json"), include_str!("../elcaps/ZLJ.elcap.json"), include_str!("../elcaps/UVR.elcap.json"), include_str!("../elcaps/UPW.elcap.json")];
 
 #[cfg(test)]
 mod tests {
@@ -443,6 +445,19 @@ mod tests {
         assert_eq!(s.leakage_of(&r), Some(1508.0));
         assert!(leakage_mismatches(&s, std::slice::from_ref(&r)).is_empty());
         assert!(s.bundle.iter().all(|b| crate::EXAMPLES.iter().any(|e| e.0 == b)), "every bundled UVR part is in EXAMPLES");
+    }
+
+    /// Nichicon UPW: leakage 0.03 CV after 1 minute (`leak_minutes`), life by diameter only.
+    #[test]
+    fn the_bundled_upw_parts_are_made_from_their_rows() {
+        let s = Series::named("UPW").unwrap();
+        let mut r = row("UPW1C102MPD", 1000.0, 16.0, (10.0, 20.0), (0.052, 0.104), 1220.0);
+        r.leak_ua = Some(480.0);
+        let bundled = crate::EXAMPLES.iter().find(|e| e.0 == r.part).unwrap().1;
+        assert_eq!(to_text(&make(&s, &r).unwrap()), bundled.replace("\r\n", "\n"));
+        assert!(leakage_mismatches(&s, std::slice::from_ref(&r)).is_empty());
+        assert_eq!((s.life_hours(8.0, 11.5, 16.0), s.life_hours(12.5, 25.0, 50.0), s.life_hours(18.0, 40.0, 100.0)), (Some(3000.0), Some(7000.0), Some(8000.0)));
+        assert!(s.bundle.iter().all(|b| crate::EXAMPLES.iter().any(|e| e.0 == b)), "every bundled UPW part is in EXAMPLES");
     }
 
     #[test]

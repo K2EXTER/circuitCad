@@ -173,4 +173,21 @@ mod real_pdf {
             assert!(rows.iter().any(|r| &r.part == b), "{b} in the table");
         }
     }
+
+    /// Nichicon UPW (e-upw.pdf; skipped without the file in microohm-meter/): 197 rows on four pages, every leakage
+    /// value 0.03 CV.
+    #[test]
+    fn nichicon_upw() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/e-upw.pdf");
+        let Ok(ds) = datasheet::Datasheet::open_file(&path) else { return };
+        let rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
+        assert_eq!(rows.len(), 197);
+        let s = elcap::Series::for_table(&rows, std::iter::empty()).expect("UPW");
+        assert!(elcap::leakage_mismatches(&s, &rows).is_empty());
+        let r = rows.iter().find(|r| r.part == "UPW1H821MHD6").unwrap();
+        assert_eq!((r.d_mm, r.l_mm, r.ripple_a, r.impedance.clone()), (18.0, 20.0, 2.42, vec![(20.0, 100e3, 0.042), (-10.0, 100e3, 0.084)]));
+        for b in &s.bundle {
+            assert!(rows.iter().any(|r| &r.part == b), "{b} in the table");
+        }
+    }
 }

@@ -88,3 +88,4 @@ gspice` にあるときだけ実行され、無ければ何もせず通る)。�
 - 型番の無い表 (2026-11-18): `Series::part_pattern` ({V}・{C}・{D}・{L}) と `Series::name`、`name_rows(series, rows)` (型番の空の行に、型紙か「C_1000u_16V_10x20」)。`ccad lineup` とフォームが、読んだすぐあとに呼ぶ。
 - Rubycon ZLJ 13 個 (2026-11-18): `elcaps/ZLJ.elcap.json` (型紙「{V}ZLJ{C}M{O}{D}X{L}」、`marks` の「●」→ EFU、寿命は径・長さ・電圧の 11 行、漏れ電流は 0.01 CV か 3 µA)。`ccad lineup microohm-meter/ZLJ.pdf pick=bundle write dir=crates/part-lib/examples` で書いた。`Series::for_table`・`named`、`LifeRule::l_min`・`l_max`。
 - Nichicon UVR 13 個 (2026-11-18): 汎用品で表にインピーダンスが無いので、`make` は tanδ (120 Hz) から ESR を出す (`Row::tan_d`)。`elcaps/UVR.elcap.json`: 85 ℃・2000 時間、補正係数は電圧の範囲ごと (`CoeffRow::v_min`・`v_max`)、漏れ電流の式は 100 V まで (`Series::leak_v_max`、上は表の値)。
+- Nichicon UPW 13 個 (2026-11-18): `elcaps/UPW.elcap.json` (寿命は径だけで決まる、漏れ電流 0.03 CV・1 分後 = `Series::leak_minutes`、−55〜105 ℃)。
