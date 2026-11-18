@@ -22,6 +22,7 @@ pub fn elcap_row(r: &datasheet::lineup::ElcapRow) -> elcap::Row {
         ripple_freq_hz: r.ripple_freq_hz,
         ripple_temp_c: r.ripple_temp_c,
         leak_ua: r.leak_ua,
+        tan_d: r.tan_d,
         page: Some(r.page),
         mark: r.mark.clone(),
     }
@@ -51,7 +52,7 @@ impl crate::session::Session {
             .iter()
             .map(|r| {
                 json!({"part": r.part, "page": r.page.map(|p| p + 1), "cap_uf": r.cap_uf, "volts": r.volts, "size": format!("{}x{}", r.d_mm, r.l_mm),
-                       "impedance": r.impedance, "ripple_a": r.ripple_a, "leak_ua": r.leak_ua})
+                       "impedance": r.impedance, "ripple_a": r.ripple_a, "ripple_hz": r.ripple_freq_hz, "ripple_temp_c": r.ripple_temp_c, "tan_d": r.tan_d, "leak_ua": r.leak_ua})
             })
             .collect();
         let mut out = json!({"rows": rows.len(), "series": series.as_ref().map(|s| format!("{} {}", s.maker, s.series))});
@@ -149,6 +150,25 @@ mod real_pdf {
         assert_eq!(names.len(), 278, "every part number once");
         let r = rows.iter().find(|r| r.part == "100ZLJ270MEFU12.5X30").expect("a low mark");
         assert_eq!((r.ripple_a, r.impedance[0].2), (2.52, 0.033));
+        for b in &s.bundle {
+            assert!(rows.iter().any(|r| &r.part == b), "{b} in the table");
+        }
+    }
+
+    /// Nichicon UVR (e-uvr.pdf; skipped without the file in microohm-meter/): no impedance column, two leakage columns
+    /// of which the second is empty from 160 V; every row's leakage after 2 minutes is 0.01 CV up to 100 V.
+    #[test]
+    fn nichicon_uvr_general_purpose() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/e-uvr.pdf");
+        let Ok(ds) = datasheet::Datasheet::open_file(&path) else { return };
+        let rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
+        assert_eq!(rows.len(), 111);
+        let s = elcap::Series::for_table(&rows, std::iter::empty()).expect("UVR");
+        assert!(elcap::leakage_mismatches(&s, &rows).is_empty());
+        let r = rows.iter().find(|r| r.part == "UVR1H101MPD").unwrap();
+        assert_eq!((r.tan_d, r.leak_ua, r.ripple_a, r.ripple_freq_hz, r.ripple_temp_c), (Some(0.12), Some(50.0), 0.26, 120.0, 85.0));
+        let r = rows.iter().find(|r| r.part == "UVR2W470MHD").unwrap();
+        assert_eq!((r.volts, r.leak_ua), (450.0, Some(946.0)));
         for b in &s.bundle {
             assert!(rows.iter().any(|r| &r.part == b), "{b} in the table");
         }

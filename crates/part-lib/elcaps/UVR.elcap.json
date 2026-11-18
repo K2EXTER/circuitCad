@@ -1,0 +1,39 @@
+{
+  "maker": "Nichicon",
+  "series": "UVR",
+  "feature": "汎用・小形",
+  "datasheet": "https://www.nichicon.co.jp/english/series_items/catalog_pdf/e-uvr.pdf",
+  "source": "データシート e-uvr.pdf (UVR series、CAT.8100M)",
+  "checked": "2026-11-18",
+  "temp": [-40, 85],
+  "tolerance_pct": 20,
+  "leak_k": 0.01,
+  "leak_min_ua": 0,
+  "leak_v_max": 100,
+  "coeff_freqs": [50, 120, 300, 1000, 10000],
+  "coeffs": [
+    { "v_max": 100, "cap_max": 47, "k": [0.75, 1.00, 1.35, 1.57, 2.00] },
+    { "v_max": 100, "cap_max": 470, "k": [0.80, 1.00, 1.23, 1.34, 1.50] },
+    { "v_max": 100, "cap_max": 22000, "k": [0.85, 1.00, 1.10, 1.13, 1.15] },
+    { "v_min": 160, "cap_max": 220, "k": [0.80, 1.00, 1.25, 1.40, 1.60] },
+    { "v_min": 160, "cap_max": 330, "k": [0.90, 1.00, 1.10, 1.13, 1.15] }
+  ],
+  "life": [
+    { "hours": 2000 }
+  ],
+  "leads": [
+    { "d": 8, "pitch": 3.5, "lead": 0.6 },
+    { "d": 10, "pitch": 5.0, "lead": 0.6 },
+    { "d": 12.5, "pitch": 5.0, "lead": 0.6 },
+    { "d": 16, "pitch": 7.5, "lead": 0.8 },
+    { "d": 18, "pitch": 7.5, "lead": 0.8 }
+  ],
+  "order_note": "リードの切りそろえ・曲げ・テープ包装は、型番の末尾 (12 桁目の大きさの記号) のあとに記号を足す (大きさの記号の無い型番は「1」を足してから)。",
+  "bundle": [
+    "UVR1C471MPD", "UVR1C102MPD", "UVR1C222MHD",
+    "UVR1E221MPD", "UVR1E471MPD", "UVR1E102MPD", "UVR1E222MHD",
+    "UVR1V471MPD", "UVR1V102MHD",
+    "UVR1H101MPD", "UVR1H471MHD", "UVR1H102MHD",
+    "UVR1J101MPD"
+  ]
+}

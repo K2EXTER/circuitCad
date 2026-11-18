@@ -140,8 +140,9 @@ pub fn lineups_on(page: usize, words: &[Word]) -> Vec<Lineup> {
 
 /// One table from its rows: the columns, the header and the groups.
 fn build<'a>(page: usize, ls: &[Vec<&'a Word>], rows: Vec<Found<'a>>) -> Option<Lineup> {
-    // columns: the centres of the cells, grouped where they lie close; a group with cells in fewer than half the rows is
-    // no column (the rated voltage written once beside a group of rows)
+    // columns: the centres of the cells, grouped where they lie close; a group with cells in fewer than a quarter of the
+    // rows is no column (the rated voltage written once beside a group of rows), a column may be empty ("—") in most
+    // rows (Nichicon UVR's leakage after 2 minutes, given up to 100 V only)
     let mut xs: Vec<(f32, f32, f32)> = rows.iter().flat_map(|r| r.2.iter().chain(r.1.iter()).map(|w| (center(w).0, w.rect.x0, w.rect.x1))).collect();
     xs.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut groups: Vec<Vec<(f32, f32, f32)>> = vec![];
@@ -151,7 +152,7 @@ fn build<'a>(page: usize, ls: &[Vec<&'a Word>], rows: Vec<Found<'a>>) -> Option<
             _ => groups.push(vec![x]),
         }
     }
-    let need = rows.len().div_ceil(2);
+    let need = rows.len().div_ceil(4).max(2);
     // (centre, left, right)
     let cols: Vec<(f32, f32, f32)> = groups
         .iter()

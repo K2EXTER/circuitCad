@@ -30,6 +30,7 @@ fn row_of(r: &datasheet::lineup::ElcapRow) -> elcap::Row {
         ripple_freq_hz: r.ripple_freq_hz,
         ripple_temp_c: r.ripple_temp_c,
         leak_ua: r.leak_ua,
+        tan_d: r.tan_d,
         page: Some(r.page),
         mark: r.mark.clone(),
     }
