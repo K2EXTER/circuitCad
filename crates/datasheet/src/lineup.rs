@@ -2,7 +2,7 @@
 //! "Dimensions" table: capacitance, case size, tan δ, leakage, impedance, ripple current, part number). A row is a line
 //! with one part number and at least three numbers; the columns are the places where most rows have a cell, and each
 //! column is named by the header words above the first row. [`electrolytic`] reads an aluminium electrolytic capacitor's
-//! values out of such rows (`ccad lineup`, the part form's lineup picker).
+//! values out of such rows (`ccad lineup`, the part form's lineup picker), [`inductor`] a power inductor's.
 
 use crate::suggest::looks_like_part_number;
 use crate::text::Word;
@@ -207,11 +207,19 @@ fn build<'a>(page: usize, ls: &[Vec<&'a Word>], rows: Vec<Found<'a>>) -> Option<
         .iter()
         .map(|(_, part, values, mark)| {
             let mut cells = vec![String::new(); cols.len()];
+            // two words in one cell (a figure of a drawing beside the table on about the same line, Bourns's "2.5"): the
+            // one nearest the row's height (its part number's, else the middle of its values)
+            let mut ys: Vec<f32> = values.iter().map(|w| center(w).1).collect();
+            ys.sort_by(|a, b| a.total_cmp(b));
+            let row_y = part.map_or(ys[ys.len() / 2], |p| center(p).1);
+            let mut off = vec![f32::MAX; cols.len()];
             for w in values.iter().chain(part.iter()) {
-                if let Some(i) = col_of(center(w).0)
-                    && cells[i].is_empty()
-                {
-                    cells[i] = w.text.trim().to_string();
+                if let Some(i) = col_of(center(w).0) {
+                    let d = (center(w).1 - row_y).abs();
+                    if d < off[i] {
+                        off[i] = d;
+                        cells[i] = w.text.trim().to_string();
+                    }
                 }
             }
             (center(values[0]).1, LineupRow { part: part.map_or(String::new(), |p| p.text.trim().to_string()), cells, group: String::new(), mark: mark.clone() })
@@ -372,6 +380,95 @@ fn role(header: &str, cells: &[&str]) -> Role {
         return Role::Volts;
     }
     Role::Other
+}
+
+/// One power inductor of a lineup table (Bourns SRN6045: part number, L, tolerance, Q, test frequency, SRF, DCR,
+/// Irms, Isat).
+#[derive(Clone, Debug, PartialEq)]
+pub struct InductorRow {
+    pub page: usize,
+    pub part: String,
+    pub l_uh: f64,
+    /// Tolerance (± %).
+    pub tol_pct: Option<f64>,
+    /// DC resistance (Ω) and whether the table gives it as a maximum (else typical).
+    pub dcr_ohm: Option<f64>,
+    pub dcr_max: bool,
+    /// The current that warms the part by the data sheet's rise (A rms).
+    pub i_rms: Option<f64>,
+    /// The current at which the inductance has fallen by the data sheet's drop (A).
+    pub i_sat: Option<f64>,
+    /// Self-resonant frequency (Hz).
+    pub srf_hz: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum IndRole {
+    L,
+    Tol,
+    /// (in mΩ, a maximum)
+    Dcr(bool, bool),
+    Irms,
+    Isat,
+    /// in MHz
+    Srf,
+    Other,
+}
+
+fn ind_role(header: &str) -> IndRole {
+    let h = squash(header);
+    let words: Vec<String> = crate::text::normalize(header).split_whitespace().map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_string()).collect();
+    if h.contains("tol") {
+        return IndRole::Tol;
+    }
+    if h.contains("isat") || h.contains("saturation") || h.contains("飽和") {
+        return IndRole::Isat;
+    }
+    if h.contains("irms") || (h.contains("ir") && h.contains("temp")) || h.contains("heat") || h.contains("温度上昇") || h.contains("rated current") || h.contains("ratedcurrent") || h.contains("idc") {
+        return IndRole::Irms;
+    }
+    if h.contains("dcr") || h.contains("resistance") || h.contains("直流抵抗") {
+        return IndRole::Dcr(h.contains("mω") || h.contains("mohm"), h.contains("max"));
+    }
+    if h.contains("srf") || h.contains("self-resonant") || h.contains("selfresonant") {
+        return IndRole::Srf;
+    }
+    if h.contains("test") || h.contains("freq") || words.iter().any(|w| w == "q") {
+        return IndRole::Other;
+    }
+    if h.contains("inductance") || h.contains("µh") || h.contains("μh") || h.contains("uh") || words.iter().any(|w| w == "l") {
+        return IndRole::L;
+    }
+    IndRole::Other
+}
+
+/// The power inductors of the lineup tables: rows with an inductance column.
+pub fn inductor(tables: &[Lineup]) -> Vec<InductorRow> {
+    let mut out = vec![];
+    for t in tables {
+        let roles: Vec<IndRole> = t.headers.iter().map(|h| ind_role(h)).collect();
+        let Some(l_col) = roles.iter().position(|r| *r == IndRole::L) else { continue };
+        for r in &t.rows {
+            let Some(l_uh) = number(&r.cells[l_col]) else { continue };
+            let mut row = InductorRow { page: t.page, part: r.part.clone(), l_uh, tol_pct: None, dcr_ohm: None, dcr_max: false, i_rms: None, i_sat: None, srf_hz: None };
+            for (i, role) in roles.iter().enumerate() {
+                let Some(v) = number(&r.cells[i]) else { continue };
+                match *role {
+                    IndRole::Tol => row.tol_pct = Some(v),
+                    IndRole::Dcr(milli, max) => {
+                        row.dcr_ohm = Some(if milli { v / 1000.0 } else { v });
+                        row.dcr_max = max;
+                    }
+                    IndRole::Irms => row.i_rms = Some(v),
+                    IndRole::Isat => row.i_sat = Some(v),
+                    IndRole::Srf => row.srf_hz = Some(v * 1e6),
+                    _ => {}
+                }
+            }
+            out.push(row);
+        }
+    }
+    out
 }
 
 /// Rated voltage from a capacitor's part number: the EIA code after the series letters (Nichicon "UHE1C331MPD",

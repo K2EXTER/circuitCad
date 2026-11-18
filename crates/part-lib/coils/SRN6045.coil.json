@@ -1,0 +1,22 @@
+{
+  "maker": "Bourns",
+  "series": "SRN6045",
+  "feature": "半シールド",
+  "datasheet": "https://www.bourns.com/docs/Product-Datasheets/SRN6045.pdf",
+  "source": "データシート SRN6045.pdf (SRN6045 Series)",
+  "checked": "2026-11-18",
+  "temp": [-40, 125],
+  "sat_drop": 0.3,
+  "rise_c": 40,
+  "body_w": 6.0,
+  "body_d": 6.0,
+  "height": 4.5,
+  "pad_w": 2.0,
+  "pad_l": 6.0,
+  "pad_pitch": 4.3,
+  "order_note": "型番は SRN6045- と値の記号 (100 = 10 µH、4R7 = 4.7 µH。末尾の Y は ±30 %、M は ±20 %)。",
+  "bundle": [
+    "SRN6045-2R2Y", "SRN6045-3R3Y", "SRN6045-4R7Y", "SRN6045-6R8Y",
+    "SRN6045-100M", "SRN6045-150M", "SRN6045-220M", "SRN6045-330M", "SRN6045-470M", "SRN6045-101M"
+  ]
+}

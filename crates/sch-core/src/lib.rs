@@ -729,6 +729,21 @@ pub struct PartRatings {
     /// The endurance of an electrolytic capacitor: hours at its highest temperature.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub life: Option<LifeRating>,
+    /// A power inductor's rated currents: the heating (rms) and the saturation (peak) one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coil: Option<CoilRating>,
+}
+
+/// A power inductor's rated currents from its data sheet: `i_rms` the rms current that warms it by the data sheet's
+/// rise (40 °C on most), `i_sat` the current at which its inductance has fallen by `sat_drop` (0.3 = 30 %).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct CoilRating {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub i_rms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub i_sat: Option<f64>,
+    #[serde(default)]
+    pub sat_drop: f64,
 }
 
 /// Rated ripple current: `i_rms` amperes (rms) at `freq_hz`, at the capacitor's highest temperature.
@@ -786,7 +801,7 @@ impl LifeRating {
 
 impl PartRatings {
     pub fn is_empty(&self) -> bool {
-        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.theta_jc.is_none() && self.theta_ja.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.theta_jc.is_none() && self.theta_ja.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none() && self.coil.is_none()
     }
 
     /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.

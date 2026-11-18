@@ -1,11 +1,11 @@
 //! `lineup FILE.pdf [series=FILE.elcap.json] [pick=PN,PN|bundle|all] [write] [dir=DIR]`: the lineup table of an
 //! aluminium electrolytic capacitor's data sheet (`datasheet::lineup`), and the parts made from its rows with the series'
-//! tables (`part_lib::elcap`). Without `pick` it lists the rows; `write` puts the picked parts into `DIR` (default: the
-//! session's library) and loads them.
+//! tables (`part_lib::elcap`); a power inductor's table when there is no capacitor's (`part_lib::coil`). Without `pick`
+//! it lists the rows; `write` puts the picked parts into `DIR` (default: the session's library) and loads them.
 
 use crate::Res;
 use crate::session::{obj, opt, options};
-use part_lib::elcap;
+use part_lib::{coil, elcap};
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -28,7 +28,63 @@ pub fn elcap_row(r: &datasheet::lineup::ElcapRow) -> elcap::Row {
     }
 }
 
+/// An inductor's row read off the PDF as the part maker takes it.
+pub fn coil_row(r: &datasheet::lineup::InductorRow) -> coil::Row {
+    coil::Row { part: r.part.clone(), l_uh: r.l_uh, tol_pct: r.tol_pct, dcr_ohm: r.dcr_ohm, dcr_max: r.dcr_max, i_rms: r.i_rms, i_sat: r.i_sat, srf_hz: r.srf_hz }
+}
+
 impl crate::session::Session {
+    /// `lineup` for a power inductor's table: the rows, or the picked parts made with the bundled series (`coils/`).
+    fn lineup_coils(&mut self, rows: Vec<coil::Row>, words: &[String], kv: &[(String, String)]) -> Res {
+        let series = match opt(kv, "series") {
+            Some(n) => Some(coil::Series::named(n).ok_or_else(|| format!("コイルのシリーズ「{n}」は同梱にありません (crates/part-lib/coils/)"))?),
+            None => rows.iter().find_map(|r| coil::Series::for_part(&r.part)),
+        };
+        let mut out = json!({"kind": "inductor", "rows": rows.len(), "series": series.as_ref().map(|s| format!("{} {}", s.maker, s.series))});
+        let Some(pick) = opt(kv, "pick") else {
+            let listed: Vec<_> = rows.iter().map(|r| json!({"part": r.part, "l_uh": r.l_uh, "tol_pct": r.tol_pct, "dcr_ohm": r.dcr_ohm, "dcr_max": r.dcr_max, "i_rms": r.i_rms, "i_sat": r.i_sat, "srf_hz": r.srf_hz})).collect();
+            out["list"] = json!(listed);
+            return Ok(obj(out));
+        };
+        let s = series.ok_or("コイルのシリーズの表がありません。同梱は crates/part-lib/coils/ を見本に作ってください")?;
+        let names: Vec<String> = match pick {
+            "bundle" => s.bundle.clone(),
+            "all" => rows.iter().map(|r| r.part.clone()).collect(),
+            list => list.split(',').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect(),
+        };
+        let dir = opt(kv, "dir").map(PathBuf::from).unwrap_or_else(|| self.lib_dir.clone());
+        let write = words.iter().any(|w| w.eq_ignore_ascii_case("write"));
+        let (mut made, mut errors) = (vec![], vec![]);
+        for n in &names {
+            let Some(r) = rows.iter().find(|r| r.part.eq_ignore_ascii_case(n)) else {
+                errors.push(format!("{n}: 表にありません"));
+                continue;
+            };
+            match coil::make(&s, r) {
+                Ok(p) => {
+                    let mut m = json!({"part": p.name, "model": p.sim.as_ref().map(|m| m.text.clone())});
+                    if write {
+                        let path = elcap::write(&dir, &p)?;
+                        m["written"] = json!(path.display().to_string());
+                        if dir == self.lib_dir {
+                            match self.lib.iter_mut().find(|x| x.name == p.name) {
+                                Some(x) => *x = p,
+                                None => self.lib.push(p),
+                            }
+                        }
+                    }
+                    made.push(m);
+                }
+                Err(e) => errors.push(e),
+            }
+        }
+        out["made"] = json!(made);
+        if !errors.is_empty() {
+            out["errors"] = json!(errors);
+        }
+        Ok(obj(out))
+    }
+
     pub fn lineup(&mut self, args: &[String]) -> Res {
         let (words, kv) = options(args);
         let usage = "lineup FILE.pdf [series=FILE.elcap.json|NAME] [pick=PN,PN|bundle|all] [write] [dir=DIR]";
@@ -36,7 +92,11 @@ impl crate::session::Session {
         let ds = datasheet::Datasheet::open_file(&PathBuf::from(file.as_str()))?;
         let mut rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
         if rows.is_empty() {
-            return Err(format!("{file}: 型番ごとの行の表 (容量・大きさ・型番の列) が見つかりませんでした。文字の無い PDF や、列が崩れる PDF は読めません"));
+            let coils: Vec<coil::Row> = ds.inductor_rows().iter().map(coil_row).collect();
+            if !coils.is_empty() {
+                return self.lineup_coils(coils, &words, &kv);
+            }
+            return Err(format!("{file}: 型番ごとの行の表 (電解コンデンサは容量・大きさ・型番、コイルはインダクタンスと型番の列) が見つかりませんでした。文字の無い PDF や、列が崩れる PDF は読めません"));
         }
         let series = match opt(&kv, "series") {
             // a file, or the name of a bundled series ("ZLJ")
@@ -188,6 +248,25 @@ mod real_pdf {
         assert_eq!((r.d_mm, r.l_mm, r.ripple_a, r.impedance.clone()), (18.0, 20.0, 2.42, vec![(20.0, 100e3, 0.042), (-10.0, 100e3, 0.084)]));
         for b in &s.bundle {
             assert!(rows.iter().any(|r| &r.part == b), "{b} in the table");
+        }
+    }
+
+    /// Bourns SRN6045 (SRN6045.pdf; skipped without the file in microohm-meter/): a power inductor's table, with a
+    /// figure of the drawing beside it on the 22 uH row's line.
+    #[test]
+    fn bourns_srn6045_inductors() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/SRN6045.pdf");
+        let Ok(ds) = datasheet::Datasheet::open_file(&path) else { return };
+        assert!(ds.electrolytic_rows().is_empty());
+        let rows: Vec<coil::Row> = ds.inductor_rows().iter().map(coil_row).collect();
+        assert_eq!(rows.len(), 16);
+        let r = rows.iter().find(|r| r.part == "SRN6045-220M").unwrap();
+        assert_eq!((r.l_uh, r.tol_pct, r.dcr_ohm, r.dcr_max, r.i_rms, r.i_sat, r.srf_hz), (22.0, Some(20.0), Some(0.142), true, Some(1.5), Some(1.9), Some(11e6)));
+        let s = coil::Series::for_part(&rows[0].part).expect("SRN6045");
+        for b in &s.bundle {
+            let r = rows.iter().find(|r| &r.part == b).unwrap_or_else(|| panic!("{b} in the table"));
+            let bundled = part_lib::EXAMPLES.iter().find(|e| e.0 == b).unwrap().1;
+            assert_eq!(coil::to_text(&coil::make(&s, r).unwrap()), bundled.replace("\r\n", "\n"), "{b}");
         }
     }
 }

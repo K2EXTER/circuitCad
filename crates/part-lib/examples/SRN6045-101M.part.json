@@ -1,0 +1,116 @@
+{
+  "name": "SRN6045-101M",
+  "category": "コイル",
+  "description": "Bourns SRN6045 パワーインダクタ (半シールド) 100 µH ±20 %。DCR 494 mΩ 以下、定格電流 0.7 A (温度上昇 40 ℃)、飽和電流 0.8 A (インダクタンスが 30 % 下がる電流)、自己共振周波数 5 MHz。本体 6 × 6 × 高さ 4.5 mm、パッドはデータシートの推奨ランド (2 × 6 mm、中心の間隔 4.3 mm)。型番は SRN6045- と値の記号 (100 = 10 µH、4R7 = 4.7 µH。末尾の Y は ±30 %、M は ±20 %)。データシート SRN6045.pdf (SRN6045 Series) で確かめた (2026-11-18)",
+  "datasheet": "https://www.bourns.com/docs/Product-Datasheets/SRN6045.pdf",
+  "prefix": "L",
+  "value": "100u",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.15,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 6.0,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 2.15,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 6.0,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "L_Bourns_SRN6045",
+  "height": 4.5,
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "SRN6045_101M",
+    "text": ".subckt SRN6045_101M 1 2\nRdcr 1 n_dcr 494m TC1=3.9300e-3\nL1 n_dcr 2 100u ISAT=8.0000e-1 LDROP=0.300\nCp 1 2 10.132p\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "温度による値の変化は扱いません (温度係数を入れると反映できます)。",
+      "磁気飽和は、インダクタンスが L / (1 + (電流 / i0)²) で下がる式で近似します (Isat で 30% 低下)。実物の曲線の形とは少し違い、温度による Isat の変化は扱いません。",
+      "DCR は銅の温度係数 (1℃ あたり約 0.4%) で、温度とともに増えます。",
+      "DCR はデータシートの最大値です。実物はこれより少し小さいことが多いです。",
+      "インダクタンスの許容差、周波数による損失 (コアの損失) は入れていません。定格電流と飽和電流は、過渡解析のあと「部品の定格」で電流と比べます。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Bourns SRN6045 のデータシート (データシート SRN6045.pdf (SRN6045 Series)) のインダクタンス・DCR・飽和電流・自己共振周波数"
+    }
+  },
+  "ratings": {
+    "rows": [
+      {
+        "name": "DCR",
+        "value": "494 mΩ 以下",
+        "condition": "最大"
+      },
+      {
+        "name": "定格電流 (Irms)",
+        "value": "0.7 A",
+        "condition": "温度上昇 40 ℃"
+      },
+      {
+        "name": "飽和電流 (Isat)",
+        "value": "0.8 A",
+        "condition": "インダクタンスが 30 % 下がる"
+      },
+      {
+        "name": "自己共振周波数",
+        "value": "5 MHz",
+        "condition": "typ"
+      },
+      {
+        "name": "使える温度",
+        "value": "−40〜125 ℃",
+        "condition": "自分の温度上昇を含めて"
+      }
+    ],
+    "coil": {
+      "i_rms": 0.7,
+      "i_sat": 0.8,
+      "sat_drop": 0.3
+    }
+  },
+  "glyph": "inductor",
+  "body": {
+    "shape": "rect",
+    "w": 6.0,
+    "h": 6.0,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "none",
+    "mark_pin": ""
+  }
+}

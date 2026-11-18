@@ -478,6 +478,16 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("UPW1H471MHD", include_str!("../examples/UPW1H471MHD.part.json")),
     ("UPW1J101MPD", include_str!("../examples/UPW1J101MPD.part.json")),
     ("UPW2A470MPD", include_str!("../examples/UPW2A470MPD.part.json")),
+    ("SRN6045-2R2Y", include_str!("../examples/SRN6045-2R2Y.part.json")),
+    ("SRN6045-3R3Y", include_str!("../examples/SRN6045-3R3Y.part.json")),
+    ("SRN6045-4R7Y", include_str!("../examples/SRN6045-4R7Y.part.json")),
+    ("SRN6045-6R8Y", include_str!("../examples/SRN6045-6R8Y.part.json")),
+    ("SRN6045-100M", include_str!("../examples/SRN6045-100M.part.json")),
+    ("SRN6045-150M", include_str!("../examples/SRN6045-150M.part.json")),
+    ("SRN6045-220M", include_str!("../examples/SRN6045-220M.part.json")),
+    ("SRN6045-330M", include_str!("../examples/SRN6045-330M.part.json")),
+    ("SRN6045-470M", include_str!("../examples/SRN6045-470M.part.json")),
+    ("SRN6045-101M", include_str!("../examples/SRN6045-101M.part.json")),
     ("GRM1882C1H102JA01", include_str!("../examples/GRM1882C1H102JA01.part.json")),
     ("GRM1882C1H103JA01", include_str!("../examples/GRM1882C1H103JA01.part.json")),
     ("GRM188R72A104KA35", include_str!("../examples/GRM188R72A104KA35.part.json")),
@@ -978,6 +988,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+pub mod coil;
 pub mod diode;
 pub mod elcap;
 pub mod fit;

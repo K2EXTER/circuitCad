@@ -252,6 +252,12 @@ fn main() -> Result<(), String> {
                 println!("{:7.1} {:7.1}  {}", o.x0, (o.y0 + o.y1) / 2.0, o.text);
             }
         }
+        "inductors" => {
+            // ds inductors FILE: the power inductors of the lineup tables (`Datasheet::inductor_rows`)
+            for r in ds.inductor_rows() {
+                println!("{r:?}");
+            }
+        }
         "words" => {
             // every word of a page with its box and the code points of its text (to see odd characters)
             let p = page()?;

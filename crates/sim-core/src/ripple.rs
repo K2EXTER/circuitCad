@@ -1,6 +1,7 @@
 //! Ripple current and life of electrolytic capacitors in a transient run: the rms of the current that flows
 //! through the part (the AC part of it) against the data sheet's rated ripple current, and the life the
-//! data sheet's endurance promises at the temperature the part really runs at.
+//! data sheet's endurance promises at the temperature the part really runs at. Power inductors with rated currents
+//! (`CoilRating`): the rms of the whole current against the heating rating, its peak against the saturation current.
 
 use crate::ratings::RatingLevel;
 use crate::tran::TranResult;
@@ -29,11 +30,35 @@ pub struct RippleReport {
     pub core_temp_c: f64,
     /// The life at that temperature (hours), when the part gives its endurance.
     pub life_hours: Option<f64>,
+    /// An inductor's report (`i_rms` is then the rms of the whole current, DC included, and `allowed` its heating
+    /// rating): the largest current in the run and the saturation current with its drop.
+    pub coil: Option<CoilReport>,
+}
+
+/// The saturation side of an inductor's report.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CoilReport {
+    /// Largest |current| over the second half of the run (A).
+    pub peak: f64,
+    pub i_sat: Option<f64>,
+    pub sat_drop: f64,
+    pub sat_level: Option<RatingLevel>,
 }
 
 impl RippleReport {
     /// The finding in one sentence of Japanese.
     pub fn message(&self) -> String {
+        if let Some(c) = &self.coil {
+            let mut t = format!("{} の電流 実効値 {}", self.refdes, fmt_a(self.i_rms));
+            if let Some(a) = self.allowed {
+                t.push_str(&format!(" (定格 {} の {:.0}%{})", fmt_a(a), self.i_rms / a * 100.0, word(level_of(self.i_rms, a))));
+            }
+            t.push_str(&format!("、最大 {}", fmt_a(c.peak)));
+            if let Some(s) = c.i_sat {
+                t.push_str(&format!(" (飽和電流 {} の {:.0}%{})", fmt_a(s), c.peak / s * 100.0, word(c.sat_level)));
+            }
+            return t;
+        }
         let mut t = format!("{} のリップル電流 {}", self.refdes, fmt_a(self.i_rms));
         if self.freq > 0.0 {
             t.push_str(&format!(" ({}Hz)", fmt_hz(self.freq)));
@@ -51,6 +76,13 @@ impl RippleReport {
 
     /// What to do about it; empty when nothing is wrong.
     pub fn hint(&self) -> &'static str {
+        if let Some(c) = &self.coil {
+            return match (c.sat_level, self.allowed.and_then(|a| level_of(self.i_rms, a))) {
+                (Some(_), _) => "電流の山が飽和電流 (データシートの Isat、インダクタンスが下がり始める電流) に近いか超えています。インダクタンスが下がるとリップル電流が増え、さらに飽和します。Isat の大きい (大きい形の) コイルにするか、インダクタンスを上げてリップルを減らします。",
+                (None, Some(_)) => "電流の実効値が定格電流 (発熱で決まる値) に近いか超えています。コイルが熱くなります。DCR の小さい・定格電流の大きいコイルにします。",
+                (None, None) => "",
+            };
+        }
         match self.level {
             Some(_) => "リップル電流は、コンデンサの中で熱になって寿命を縮めます。容量の大きい部品・ESR の小さい部品・定格リップル電流の大きい部品を選ぶか、同じ部品を並列にして電流を分けます。",
             None => "",
@@ -71,6 +103,51 @@ impl RippleReport {
             self.core_temp_c
         ))
     }
+}
+
+/// Over the rating, within 80 % of it, or well below.
+fn level_of(i: f64, rating: f64) -> Option<RatingLevel> {
+    if i > rating {
+        Some(RatingLevel::Over)
+    } else if i > 0.8 * rating {
+        Some(RatingLevel::Caution)
+    } else {
+        None
+    }
+}
+
+fn word(l: Option<RatingLevel>) -> &'static str {
+    match l {
+        Some(RatingLevel::Over) => "、超えています",
+        Some(RatingLevel::Caution) => "、余裕が少ないです",
+        None => "",
+    }
+}
+
+/// The worse of two levels.
+fn worse(a: Option<RatingLevel>, b: Option<RatingLevel>) -> Option<RatingLevel> {
+    match (a, b) {
+        (Some(RatingLevel::Over), _) | (_, Some(RatingLevel::Over)) => Some(RatingLevel::Over),
+        (Some(_), _) | (_, Some(_)) => Some(RatingLevel::Caution),
+        _ => None,
+    }
+}
+
+/// The current through a library inductor: its model is the coil in series with its winding's resistance.
+fn coil_current<'a>(tran: &'a TranResult, refdes: &str) -> Option<&'a [f64]> {
+    [format!("I({refdes}.L1)"), format!("I({refdes}.Rdcr)"), format!("I({refdes})")].iter().find_map(|n| tran.signal(n)).map(|s| s.values.as_slice())
+}
+
+/// The rms of the whole current and the largest |current|, over the samples from `t0` on.
+fn rms_and_peak(time: &[f64], i: &[f64], t0: f64) -> Option<(f64, f64)> {
+    let start = time.iter().position(|t| *t >= t0)?;
+    let (t, v) = (&time[start..], &i[start..]);
+    let span = t.last()? - t.first()?;
+    if t.len() < 3 || span <= 0.0 {
+        return None;
+    }
+    let sq: f64 = t.windows(2).zip(v.windows(2)).map(|(tt, vv)| (tt[1] - tt[0]) * (vv[0] * vv[0] + vv[0] * vv[1] + vv[1] * vv[1]) / 3.0).sum();
+    Some(((sq / span).sqrt(), v.iter().fold(0.0f64, |m, x| m.max(x.abs()))))
 }
 
 fn fmt_a(a: f64) -> String {
@@ -127,6 +204,15 @@ pub fn ripple_reports(sch: &Schematic, tran: &TranResult, ambient_c: f64) -> Vec
     let t0 = t_first + (t_last - t_first) / 2.0;
     for c in &sch.components {
         let Some(rt) = c.custom.as_ref().and_then(|s| s.ratings.as_ref()) else { continue };
+        if let Some(coil) = &rt.coil {
+            let Some(current) = coil_current(tran, &c.refdes) else { continue };
+            let Some((i_rms, peak)) = rms_and_peak(&tran.time, current, t0) else { continue };
+            let sat_level = coil.i_sat.and_then(|s| level_of(peak, s));
+            let level = worse(coil.i_rms.and_then(|a| level_of(i_rms, a)), sat_level);
+            let report = CoilReport { peak, i_sat: coil.i_sat, sat_drop: coil.sat_drop, sat_level };
+            out.push(RippleReport { refdes: c.refdes.clone(), i_rms, freq: 0.0, allowed: coil.i_rms, level, core_temp_c: ambient_c, life_hours: None, coil: Some(report) });
+            continue;
+        }
         if rt.ripple.is_none() && rt.life.is_none() {
             continue;
         }
@@ -145,7 +231,7 @@ pub fn ripple_reports(sch: &Schematic, tran: &TranResult, ambient_c: f64) -> Vec
         });
         let core = ambient_c + allowed.map_or(0.0, |a| RIPPLE_HEATING_AT_RATED_C * (i_rms / a).powi(2));
         let life_hours = rt.life.as_ref().map(|l| l.at(core).min(MAX_LIFE_HOURS));
-        out.push(RippleReport { refdes: c.refdes.clone(), i_rms, freq, allowed, level, core_temp_c: core, life_hours });
+        out.push(RippleReport { refdes: c.refdes.clone(), i_rms, freq, allowed, level, core_temp_c: core, life_hours, coil: None });
     }
     out
 }
@@ -186,6 +272,24 @@ mod tests {
             k += 1;
         }
         TranResult { time, signals: vec![Signal { name: "I(C1.C1)".into(), unit: "A", values: i }], warnings: vec![], retries: 0, rejected: 0, timing: Default::default() }
+    }
+
+    /// A power inductor: the rms of the whole current (DC included) against its heating rating, the peak against Isat.
+    #[test]
+    fn a_coil_is_held_to_its_rms_and_saturation_currents() {
+        let mut s = sheet(None, None);
+        let r = s.components[0].custom.as_mut().unwrap().ratings.as_mut().unwrap();
+        r.coil = Some(sch_core::CoilRating { i_rms: Some(2.5), i_sat: Some(3.0), sat_drop: 0.3 });
+        // 2 A DC with a 1 A peak sine on it: rms about 2.12 A, peak 3 A
+        let mut tran = run(1.0, 2.0, 100e3);
+        tran.signals[0].name = "I(C1.L1)".into();
+        let r = &ripple_reports(&s, &tran, 25.0)[0];
+        let c = r.coil.as_ref().unwrap();
+        assert!((r.i_rms - (4.0f64 + 0.5).sqrt()).abs() < 0.02, "{}", r.i_rms);
+        assert!((c.peak - 3.0).abs() < 0.01, "{}", c.peak);
+        assert_eq!((c.sat_level, r.level), (Some(RatingLevel::Caution), Some(RatingLevel::Caution)));
+        assert!(r.message().contains("飽和電流 3.00 A の 100%") && r.hint().contains("飽和"), "{}", r.message());
+        assert!(r.life_text().is_none());
     }
 
     #[test]

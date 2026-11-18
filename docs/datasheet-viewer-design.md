@@ -453,3 +453,9 @@
 
 - Nichicon UPW (低インピーダンス、e-upw.pdf) は道具の直しなしで 197 行 (4 ページ) が読めた。漏れ電流の列がどの行も 0.03 CV と合う (読みの確かめ)、50 V の 26 行を絵と見比べて同じ。
 - 部品の作り方の直し: 漏れ電流の時間が 1 分 (今までは「2 分後」と決め打ち)。`elcap::Series::leak_minutes`。
+
+## 段階48: パワーインダクタの一覧の表 (2026-11-18、候補 P5)
+
+- Bourns SRN6045 の電気的特性の表 (型番・L・許容差・Q・測定周波数・SRF・DCR 最大・Irms・Isat) を `lineup::inductor` で読む。列の役は見出しから: 「Tol」→ 許容差、「Isat」「saturation」→ 飽和電流、「Irms」「rated current」「heat」→ 定格電流、「DCR」「resistance」→ DCR (「mΩ」なら 1/1000、「Max」なら最大値)、「SRF」→ 自己共振周波数 (MHz)、「Test」「Freq」「Q」→ 使わない、「Inductance」「µH」「L」→ インダクタンス。`Datasheet::inductor_rows`、`ds inductors FILE`。
+- 読みの直し: 1 つのセルに語が 2 つ入るとき (表の横の寸法図の「2.5」が SRN6045-220M の行の SRF の列にかかった) は、行の型番 (無ければ値の真ん中) の高さに近いほうを取る。今までは左のほうを取っていた。UHE・ZLJ・UVR・UPW・YXF の読みは変わらない。
+- 実物: SRN6045 の 16 行がすべて絵と同じ。

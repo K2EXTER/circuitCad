@@ -388,6 +388,11 @@ impl Datasheet {
         lineup::lineups(&pages)
     }
 
+    /// The power inductors of the lineup tables (`lineup::inductor`).
+    pub fn inductor_rows(&self) -> Vec<lineup::InductorRow> {
+        lineup::inductor(&self.lineups())
+    }
+
     /// The aluminium electrolytic capacitors of the lineup tables (`lineup::electrolytic`).
     pub fn electrolytic_rows(&self) -> Vec<lineup::ElcapRow> {
         lineup::electrolytic(&self.lineups())
