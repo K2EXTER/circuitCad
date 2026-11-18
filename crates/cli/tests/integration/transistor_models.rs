@@ -73,11 +73,14 @@ struct Bjt {
     /// (reverse voltage, typ, max) pF: Cobo (VCB), Cibo (VEB); None when the data sheet gives none (BD140)
     cobo: Option<(f64, f64, Option<f64>)>,
     cibo: Option<(f64, f64, Option<f64>)>,
+    /// The collector current from which the hFE curve falls faster than Gummel-Poon's roll-off can (more than half per
+    /// doubling of the current): the hFE rows there are held to 30 %
+    steep_from: Option<f64>,
 }
 
 const GEOMETRIC_MEAN: &str = "表の min と max の幾何平均。データシートに typ は無い";
 
-static BJTS: [Bjt; 10] = [
+static BJTS: [Bjt; 13] = [
     Bjt {
         part: "2N3904",
         pnp: false,
@@ -92,6 +95,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(10e-3, None, Some(0.2)), (50e-3, Some(0.194), Some(0.3)), (100e-3, Some(0.36), None)],
         cobo: Some((5.0, 1.96, Some(4.0))),
         cibo: Some((0.5, 3.76, Some(8.0))),
+        steep_from: None,
     },
     Bjt {
         part: "2N3906",
@@ -107,6 +111,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(10e-3, None, Some(0.25)), (50e-3, Some(0.136), Some(0.4)), (100e-3, Some(0.245), None)],
         cobo: Some((5.0, 3.19, Some(4.5))),
         cibo: Some((0.5, 4.72, Some(10.0))),
+        steep_from: None,
     },
     // BC547 (B grade): its data sheet gives the hFE and VBE(on) curves at VCE = 10 V; the table's hFE typ 290 (2 mA, 5 V)
     // set the curve's height. The table's Cibo typ (10 pF) is far from its Figure 5 (5.8 pF at 0.5 V): the figure is the typ here
@@ -124,6 +129,59 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(10e-3, Some(0.0706), None), (50e-3, Some(0.184), None), (70e-3, Some(0.263), None)],
         cobo: Some((10.0, 1.74, Some(4.5))),
         cibo: Some((0.5, 5.78, None)),
+        steep_from: None,
+    },
+    // BC557 (B grade), the PNP of the BC547: its curves at VCE = -10 V, the height from the table's typ 290 (2 mA, 5 V)
+    Bjt {
+        part: "BC557",
+        pnp: true,
+        figs: ("図 1", "図 2", "図 5"),
+        peak: 291.0,
+        peak_basis: "表の typ 290 (BC557B、2 mA、5 V) に合わせた高さ",
+        vce: 10.0,
+        hfe_norm: &[(0.2e-3, 0.8702), (0.3e-3, 0.8916), (0.5e-3, 0.9186), (1e-3, 0.9564), (2e-3, 0.9981), (5e-3, 1.0519), (10e-3, 1.0845), (20e-3, 1.0862), (30e-3, 1.0602), (50e-3, 0.9891), (70e-3, 0.9039), (100e-3, 0.788)],
+        hfe_rows: &[(0.5e-3, None, None), (2e-3, Some(180.0), Some(460.0)), (10e-3, None, None), (50e-3, None, None), (100e-3, None, None)],
+        vbe_on: &[(1e-3, 0.6628), (10e-3, 0.7433), (50e-3, 0.8582), (70e-3, 0.8924)],
+        vbe_sat: &[(10e-3, 0.7995, None, None), (50e-3, 0.9141, None, None)],
+        vce_sat: &[(10e-3, Some(0.0712), None), (50e-3, Some(0.1766), None), (70e-3, Some(0.2248), None)],
+        cobo: Some((10.0, 2.37, Some(6.0))),
+        cibo: Some((1.0, 9.15, None)),
+        steep_from: None,
+    },
+    // MMBT3904 / MMBT3906: the SOT-23 versions of the 2N3904 / 2N3906, with their own data sheets; hFE itself at VCE = 1 V
+    Bjt {
+        part: "MMBT3904",
+        pnp: false,
+        figs: ("図 15", "図 17〜19", "図 3"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの (25 °C)",
+        vce: 1.0,
+        hfe_norm: &[(0.2e-3, 220.81), (0.5e-3, 215.67), (1e-3, 212.99), (2e-3, 210.55), (5e-3, 204.76), (10e-3, 201.23), (20e-3, 205.6), (50e-3, 175.26), (100e-3, 91.49)],
+        hfe_rows: &[(1e-3, Some(70.0), None), (10e-3, Some(100.0), Some(300.0)), (50e-3, Some(60.0), None), (100e-3, Some(30.0), None)],
+        vbe_on: &[(5e-3, 0.7175), (10e-3, 0.7406), (50e-3, 0.8172), (100e-3, 0.8856)],
+        vbe_sat: &[(10e-3, 0.7772, Some(0.65), Some(0.85)), (50e-3, 0.8571, None, Some(0.95))],
+        vce_sat: &[(10e-3, Some(0.0424), Some(0.2)), (50e-3, Some(0.0799), Some(0.3)), (100e-3, Some(0.133), None)],
+        cobo: Some((5.0, 1.95, Some(4.0))),
+        cibo: Some((0.5, 3.77, Some(8.0))),
+        // Figure 15: 175 at 50 mA, 91 at 100 mA, 41 at 200 mA
+        steep_from: Some(50e-3),
+    },
+    Bjt {
+        part: "MMBT3906",
+        pnp: true,
+        figs: ("図 13", "図 15〜17", "図 3"),
+        peak: 1.0,
+        peak_basis: "図の hFE そのもの (25 °C)",
+        vce: 1.0,
+        hfe_norm: &[(1e-3, 187.13), (2e-3, 184.94), (5e-3, 183.13), (10e-3, 179.49), (20e-3, 174.82), (50e-3, 152.8), (100e-3, 67.81)],
+        hfe_rows: &[(1e-3, Some(80.0), None), (10e-3, Some(100.0), Some(300.0)), (50e-3, Some(60.0), None), (100e-3, Some(30.0), None)],
+        vbe_on: &[(5e-3, 0.7201), (10e-3, 0.744), (50e-3, 0.8193), (100e-3, 0.8902)],
+        vbe_sat: &[(10e-3, 0.7896, Some(0.65), Some(0.85)), (50e-3, 0.883, None, Some(0.95))],
+        vce_sat: &[(10e-3, Some(0.0646), Some(0.25)), (50e-3, Some(0.1469), Some(0.4)), (100e-3, Some(0.2167), None)],
+        cobo: Some((5.0, 3.26, Some(4.5))),
+        cibo: Some((0.5, 4.91, Some(10.0))),
+        // Figure 13: 153 at 50 mA, 68 at 100 mA, 21 at 200 mA
+        steep_from: Some(50e-3),
     },
     // PN2222A: its data sheet (Fairchild Rev. 1.1.0) has min and max only; the typ curves are those of MMBT2222A/PZT2222A
     // (the same table), whose Figure 3 gives hFE itself (peak 1) at VCE = 5 V
@@ -141,6 +199,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(50e-3, Some(0.0689), None), (100e-3, Some(0.0964), None), (150e-3, None, Some(0.3))],
         cobo: Some((10.0, 4.19, Some(8.0))),
         cibo: Some((0.5, 18.45, Some(25.0))),
+        steep_from: None,
     },
     // BD139 / BD140: their data sheets (onsemi BD135/D, BD136/D) give hFE itself at VCE = 2 V; no fT, no hoe, and the BD140 no
     // capacitance either
@@ -158,6 +217,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(200e-3, Some(0.0493), None), (500e-3, Some(0.0945), Some(0.5))],
         cobo: Some((10.0, 12.3, None)),
         cibo: Some((1.0, 232.4, None)),
+        steep_from: None,
     },
     Bjt {
         part: "BD140",
@@ -173,6 +233,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(100e-3, Some(0.0558), None), (500e-3, Some(0.1325), Some(0.5))],
         cobo: None,
         cibo: None,
+        steep_from: None,
     },
     // S8050 / S8550 (JCET): hFE itself at VCE = 1 V
     Bjt {
@@ -189,6 +250,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(100e-3, Some(0.04814), None), (300e-3, Some(0.1177), None)],
         cobo: Some((10.0, 4.39, None)),
         cibo: Some((0.5, 36.94, None)),
+        steep_from: None,
     },
     Bjt {
         part: "S8550",
@@ -204,6 +266,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[(100e-3, Some(0.07227), None), (300e-3, Some(0.1695), None)],
         cobo: Some((10.0, 6.21, None)),
         cibo: Some((0.5, 25.35, None)),
+        steep_from: None,
     },
     // TIP120 / TIP125 (Darlington pairs, measured at their pins): hFE of the pair at VCE = 4 V, IC/IB = 250
     Bjt {
@@ -220,6 +283,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[],
         cobo: None,
         cibo: None,
+        steep_from: None,
     },
     Bjt {
         part: "TIP125",
@@ -235,6 +299,7 @@ static BJTS: [Bjt; 10] = [
         vce_sat: &[],
         cobo: None,
         cibo: None,
+        steep_from: None,
     },
 ];
 
@@ -416,6 +481,9 @@ fn source(part: &str) -> &'static str {
         "IRLML6401" => "Infineon (IR) IRLML6401PbF データシート (2014-04-28 版)。25 °C",
         "IRLB8721" => "International Rectifier IRLB8721PbF データシート (PD-97390, 2009-04)。25 °C",
         "BC547" => "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
+        "BC557" => "onsemi BC556B/BC557A,B,C/BC558B データシート (BC556B/D Rev. 3, 2007-03)。BC557B、25 °C",
+        "MMBT3904" => "onsemi MMBT3904L データシート (MMBT3904LT1/D Rev. 15, 2026-09)。25 °C",
+        "MMBT3906" => "onsemi MMBT3906L データシート (MMBT3906LT1/D Rev. 15, 2026-09)。25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
         "PC817" => "Sharp PC817X シリーズ データシート (Sheet No. D2-A03101EN)。25 °C",
@@ -443,7 +511,7 @@ fn rows() -> Vec<Row> {
                 }),
                 // 25 % where the curve has fallen below 40 % of its top: Gummel-Poon's high-injection roll-off cannot follow a
                 // steep fall (2N3906 at 100 mA: +22 % in the fit itself)
-                tol: Some(if t.hfe_ds(ic) < 0.4 * t.hfe_ds_top() { 0.25 } else { 0.15 } * t.hfe_ds(ic)),
+                tol: Some(if t.steep_from.is_some_and(|f| ic >= f) { 0.3 } else if t.hfe_ds(ic) < 0.4 * t.hfe_ds_top() { 0.25 } else { 0.15 } * t.hfe_ds(ic)),
             });
         }
         for &(ic, typ) in t.vbe_on {

@@ -15,6 +15,7 @@
 | | IRLML6344 / IRLML6401 | SOT-23 | MOSFET (サブ回路) | Infineon。ピン1=G 2=S 3=D。マイコンから直接動かせるロジックレベル。6344 は N チャネル 30 V 5 A (2.5 V でオン、22 mΩ @ 4.5 V)、6401 は P チャネル −12 V −4.3 A (−1.8 V でオン。電源の入れ切り・逆接続の保護に)。ボディダイオードつき。データシートとの比べは docs/models/transistors.md |
 | トランジスタ | 2N3904 / 2N3906 | TO-92 | Ebers-Moll | ピン1=E 2=B 3=C |
 | | BC547 | TO-92 | Ebers-Moll | ピン1=C 2=B 3=E (2N3904 と逆) |
+| | BC557 | TO-92 | Ebers-Moll | BC547 と対の PNP (B ランク、hFE typ 290)。ピン1=C 2=B 3=E (2N3906 と逆)。データシートとの比べは docs/models/transistors.md |
 | 整流・ショットキー・スイッチング | 1N4001 / 1N5819 / 1N4148 | DO-41 / DO-35 | ダイオード | 帯の側がカソード K |
 | ツェナー | 1N4733A (5.1V) | DO-41 | 降伏電圧つきダイオード | |
 | オペアンプ | LM358 / TL072 / MCP6002 | SOIC-8 | マクロモデル | チャネル1のみ記号化 |
@@ -57,6 +58,7 @@
 
 | トランジスタ (追加) | PN2222A | TO-92 | Ebers-Moll | ピン1=E 2=B 3=C |
 | | S8050 (NPN) / S8550 (PNP) | SOT-23 | Ebers-Moll | ピン1=B 2=E 3=C |
+| | MMBT3904 (NPN) / MMBT3906 (PNP) | SOT-23 | Ebers-Moll | 2N3904・2N3906 の面実装版。ピン1=B 2=E 3=C。40 V 200 mA、θJA 556 ℃/W (最小のパッドで 225 mW)。データシートとの比べは docs/models/transistors.md |
 | MOSFET (追加) | BSS138 | SOT-23 | レベル1 NMOS | ピン1=G 2=S 3=D。ロジックレベル駆動 |
 | スイッチ (学習用) | SW_SAMPLE_DEMO | 4パッド | 電圧制御スイッチ (`SW`) | ピン1-2 が通り道、ピン3(CTRL)がピン4(REF)より 2.5V 高いとオン(100Ω)。ADC のレッスン用の理想スイッチで、実物の部品ではない |
 | | IRLZ44N | TO-220 | レベル1 NMOS | ピン1=G 2=D 3=S。5V 駆動のパワーMOSFET |

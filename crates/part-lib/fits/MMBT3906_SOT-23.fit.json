@@ -1,0 +1,226 @@
+{
+  "kind": "bjt",
+  "part": "MMBT3906_SOT-23",
+  "name": "MMBT3906",
+  "pnp": true,
+  "read": "2026-11-18",
+  "source": "onsemi MMBT3906L データシート (MMBT3906LT1/D Rev. 15, 2026-09)",
+  "url": "https://www.onsemi.com/pdf/datasheet/mmbt3906lt1-d.pdf",
+  "description": "PNP 汎用トランジスタ (SOT-23, ピン1=B 2=E 3=C)。2N3906 の面実装版で、MMBT3904 と対になる PNP。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "figs": {
+    "hfe": "図 13",
+    "on": "図 15〜17",
+    "cap": "図 3"
+  },
+  "hfe_absolute": true,
+  "hfe_peak": 1.0,
+  "hfe_note": "表の hFE は min・max だけ (10 mA で 100〜300) なので、図 13 (VCE = −1 V、25 °C) の値をそのまま使いました。実物の hFE は個体で大きく違います。",
+  "fit_nf": true,
+  "hfe_vce": 1.0,
+  "hfe_norm": [
+    [
+      0.001,
+      187.13
+    ],
+    [
+      0.002,
+      184.94
+    ],
+    [
+      0.005,
+      183.13
+    ],
+    [
+      0.01,
+      179.49
+    ],
+    [
+      0.02,
+      174.82
+    ],
+    [
+      0.05,
+      152.8
+    ],
+    [
+      0.1,
+      67.81
+    ]
+  ],
+  "on_vce": 1.0,
+  "vbe_on": [
+    [
+      0.0001,
+      0.6201
+    ],
+    [
+      0.0002,
+      0.6378
+    ],
+    [
+      0.0005,
+      0.6618
+    ],
+    [
+      0.001,
+      0.6798
+    ],
+    [
+      0.002,
+      0.6968
+    ],
+    [
+      0.005,
+      0.7201
+    ],
+    [
+      0.01,
+      0.744
+    ],
+    [
+      0.02,
+      0.7701
+    ],
+    [
+      0.05,
+      0.8193
+    ],
+    [
+      0.1,
+      0.8902
+    ]
+  ],
+  "vbe_sat": [
+    [
+      0.001,
+      0.7021
+    ],
+    [
+      0.005,
+      0.7632
+    ],
+    [
+      0.01,
+      0.7896
+    ],
+    [
+      0.02,
+      0.8234
+    ],
+    [
+      0.05,
+      0.883
+    ],
+    [
+      0.1,
+      0.943
+    ],
+    [
+      0.2,
+      1.0275
+    ]
+  ],
+  "vce_sat": [
+    [
+      0.001,
+      0.0376
+    ],
+    [
+      0.002,
+      0.0398
+    ],
+    [
+      0.005,
+      0.049
+    ],
+    [
+      0.01,
+      0.0646
+    ],
+    [
+      0.02,
+      0.0909
+    ],
+    [
+      0.05,
+      0.1469
+    ],
+    [
+      0.1,
+      0.2167
+    ]
+  ],
+  "cibo": [
+    [
+      0.1,
+      6.3388e-12
+    ],
+    [
+      0.2,
+      5.7062e-12
+    ],
+    [
+      0.5,
+      4.9100999999999994e-12
+    ],
+    [
+      1.0,
+      4.3978e-12
+    ],
+    [
+      2.0,
+      3.9055e-12
+    ],
+    [
+      5.0,
+      3.3376000000000002e-12
+    ]
+  ],
+  "cobo": [
+    [
+      0.1,
+      6.8320999999999995e-12
+    ],
+    [
+      0.2,
+      6.278e-12
+    ],
+    [
+      0.5,
+      5.423099999999999e-12
+    ],
+    [
+      1.0,
+      4.7644e-12
+    ],
+    [
+      2.0,
+      4.1028e-12
+    ],
+    [
+      5.0,
+      3.2561e-12
+    ],
+    [
+      10.0,
+      2.7416e-12
+    ],
+    [
+      20.0,
+      2.4912e-12
+    ]
+  ],
+  "ft_min": 250000000.0,
+  "hoe": [
+    3e-06,
+    6e-05
+  ],
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace ... strokes` (the curves' vector lines in the PDF; the tick labels with minus signs given by position: `xt=` / `yt=`)",
+    "hfe_norm: Figure 13 (DC current gain, VCE = -1 V), the 25 C curve (the middle one) as hFE itself; the table: 60 (0.1 mA), 80 (1 mA), 100 to 300 (10 mA), 60 (50 mA), 30 (100 mA) min",
+    "vce_sat, vbe_sat: Figures 15 and 16 (IC/IB = 10), the 25 C curves (in the middle at large currents); vbe_on: Figure 17 (VCE = -1 V), 25 C. The table: VCE(sat) max 0.25 V (10 mA) and 0.4 V (50 mA), VBE(sat) 0.65 to 0.85 V (10 mA)",
+    "cibo, cobo: Figure 3 (Cibo to 5 V). The table: Cobo max 4.5 pF (5 V), Cibo max 10 pF (0.5 V)",
+    "ft_min: the table's fT min 250 MHz (no typ); hoe: the table's 3 to 60 umhos (1 mA, 10 V)",
+    "fit_nf: with NF fitted VCE(sat) stays within 10 mV; the 200 mA point of Figure 13 (at the rated current, hFE 21) is left out, as for the 2N3906 (to 100 mA): Gummel-Poon cannot follow so steep a fall"
+  ]
+}

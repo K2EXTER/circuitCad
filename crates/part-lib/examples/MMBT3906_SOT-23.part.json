@@ -1,0 +1,95 @@
+{
+  "name": "MMBT3906",
+  "category": "トランジスタ",
+  "description": "PNP 汎用トランジスタ (SOT-23, ピン1=B 2=E 3=C)。2N3906 の面実装版で、MMBT3904 と対になる PNP。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "prefix": "Q",
+  "footprint_name": "SOT-23",
+  "pins": [
+    {
+      "number": "1",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "C",
+      "side": "bottom"
+    },
+    {
+      "number": "2",
+      "name": "E",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "Q",
+    "name": "MMBT3906",
+    "text": ".model MMBT3906 PNP(IS=1.397e-14 BF=239.3 NF=1.047 VAF=60 IKF=0.05805 ISE=7.71e-13 NE=1.818 BR=39.67 RB=2.012 RE=0.5302 RC=1.029 CJE=7.17e-12 VJE=0.1 MJE=0.2 CJC=8.151e-12 VJC=0.1 MJC=0.23 TF=6.366e-10)",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "limits": [
+      "データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi MMBT3906L データシート (MMBT3906LT1/D Rev. 15, 2026-09)。データシートとの比べは docs/models/transistors.md。",
+      "直流: 図 13 (hFE の電流による変化)・図 15〜17 (VBE、VBE(sat)、VCE(sat)) に、IS・BF・NF (VBE の傾き)・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。表の hFE は min・max だけ (10 mA で 100〜300) なので、図 13 (VCE = −1 V、25 °C) の値をそのまま使いました。実物の hFE は個体で大きく違います。",
+      "容量: 図 3 の Cibo・Cobo に CJE・CJC を当てはめました。速さ: fT の min 250 MHz から TF を決めました (実物は、ふつうこれより速い)。Early 電圧 VAF 60 V は、hoe (3〜60 µmho、1 mA) の中ほどから。",
+      "扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "onsemi MMBT3906L データシート (MMBT3906LT1/D Rev. 15, 2026-09)"
+    }
+  },
+  "ratings": {
+    "v_max": 40,
+    "i_max": 0.2,
+    "p_max": 0.225,
+    "t_max": 150.0,
+    "theta_ja": 556.0,
+    "rows": [
+      {
+        "name": "電流増幅率 hFE",
+        "value": "100〜300",
+        "condition": "IC = −10mA, VCE = −1V"
+      },
+      {
+        "name": "熱抵抗 θJA",
+        "value": "556 ℃/W",
+        "condition": "FR-5 の基板、最小のパッド"
+      }
+    ]
+  },
+  "datasheet": "https://www.onsemi.com/pdf/datasheet/mmbt3906lt1-d.pdf"
+}

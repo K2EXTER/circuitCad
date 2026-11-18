@@ -1678,6 +1678,157 @@
       }
     ]
   },
+  "BC557": {
+    "fingerprint": "6caf9b1ee7a3e5ab",
+    "source": "onsemi BC556B/BC557A,B,C/BC558B データシート (BC556B/D Rev. 3, 2007-03)。BC557B、25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "hFE (0.5 mA)",
+        "datasheet": "— / 267.3 / —",
+        "target": "267.3",
+        "condition": "VCE = 10 V。typ は図 1の相対値 × 291 (表の typ 290 (BC557B、2 mA、5 V) に合わせた高さ)。min / max は表",
+        "model": "258.8",
+        "diff": "-8.533",
+        "tested": true
+      },
+      {
+        "item": "hFE (2 mA)",
+        "datasheet": "180.0 / 290.4 / 460.0",
+        "target": "290.4",
+        "condition": "VCE = 10 V。typ は図 1の相対値 × 291 (表の typ 290 (BC557B、2 mA、5 V) に合わせた高さ)。min / max は表",
+        "model": "319.1",
+        "diff": "+28.683",
+        "tested": true
+      },
+      {
+        "item": "hFE (10 mA)",
+        "datasheet": "— / 315.6 / —",
+        "target": "315.6",
+        "condition": "VCE = 10 V。typ は図 1の相対値 × 291 (表の typ 290 (BC557B、2 mA、5 V) に合わせた高さ)。min / max は表",
+        "model": "355.9",
+        "diff": "+40.350",
+        "tested": true
+      },
+      {
+        "item": "hFE (50 mA)",
+        "datasheet": "— / 287.8 / —",
+        "target": "287.8",
+        "condition": "VCE = 10 V。typ は図 1の相対値 × 291 (表の typ 290 (BC557B、2 mA、5 V) に合わせた高さ)。min / max は表",
+        "model": "268.0",
+        "diff": "-19.864",
+        "tested": true
+      },
+      {
+        "item": "hFE (100 mA)",
+        "datasheet": "— / 229.3 / —",
+        "target": "229.3",
+        "condition": "VCE = 10 V。typ は図 1の相対値 × 291 (表の typ 290 (BC557B、2 mA、5 V) に合わせた高さ)。min / max は表",
+        "model": "196.8",
+        "diff": "-32.491",
+        "tested": true
+      },
+      {
+        "item": "VBE (1 mA)",
+        "datasheet": "— / 0.6628 / — V",
+        "target": "0.6628 V",
+        "condition": "VCE = 10 V、図 2 (グラフから読んだ)",
+        "model": "0.6638 V",
+        "diff": "+0.0010 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (10 mA)",
+        "datasheet": "— / 0.7433 / — V",
+        "target": "0.7433 V",
+        "condition": "VCE = 10 V、図 2 (グラフから読んだ)",
+        "model": "0.7440 V",
+        "diff": "+0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (50 mA)",
+        "datasheet": "— / 0.8582 / — V",
+        "target": "0.8582 V",
+        "condition": "VCE = 10 V、図 2 (グラフから読んだ)",
+        "model": "0.8555 V",
+        "diff": "-0.0027 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (70 mA)",
+        "datasheet": "— / 0.8924 / — V",
+        "target": "0.8924 V",
+        "condition": "VCE = 10 V、図 2 (グラフから読んだ)",
+        "model": "0.8961 V",
+        "diff": "+0.0037 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (10 mA)",
+        "datasheet": "— / 0.7995 / — V",
+        "target": "0.7995 V",
+        "condition": "IC/IB = 10。typ は図 2、min / max は表",
+        "model": "0.7922 V",
+        "diff": "-0.0073 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (50 mA)",
+        "datasheet": "— / 0.9141 / — V",
+        "target": "0.9141 V",
+        "condition": "IC/IB = 10。typ は図 2、min / max は表",
+        "model": "0.9111 V",
+        "diff": "-0.0030 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (10 mA)",
+        "datasheet": "— / 0.0712 / — V",
+        "target": "0.0712 V",
+        "condition": "IC/IB = 10。typ は図 2、max は表",
+        "model": "0.0768 V",
+        "diff": "+0.0056 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (50 mA)",
+        "datasheet": "— / 0.1766 / — V",
+        "target": "0.1766 V",
+        "condition": "IC/IB = 10。typ は図 2、max は表",
+        "model": "0.1754 V",
+        "diff": "-0.0012 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (70 mA)",
+        "datasheet": "— / 0.2248 / — V",
+        "target": "0.2248 V",
+        "condition": "IC/IB = 10。typ は図 2、max は表",
+        "model": "0.2225 V",
+        "diff": "-0.0023 V",
+        "tested": true
+      },
+      {
+        "item": "Cobo (10 V)",
+        "datasheet": "— / 2.370 / 6.000 pF",
+        "target": "2.370 pF",
+        "condition": "VCB = 10 V、IE = 0。typ は図 5、max は表",
+        "model": "2.428 pF",
+        "diff": "+0.0577 pF",
+        "tested": true
+      },
+      {
+        "item": "Cibo (1 V)",
+        "datasheet": "— / 9.150 / — pF",
+        "target": "9.150 pF",
+        "condition": "VEB = 1 V、IC = 0。typ は図 5、max は表",
+        "model": "9.132 pF",
+        "diff": "-0.0178 pF",
+        "tested": true
+      }
+    ]
+  },
   "BD139": {
     "fingerprint": "251362b97ef346dc",
     "source": "onsemi BD135G/BD137G/BD139G データシート (BD135/D Rev. 18, 2024-06)。25 °C",
@@ -3187,6 +3338,290 @@
         "condition": "AC: eni、f = 1 kHz",
         "model": "28 nV/√Hz",
         "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "MMBT3904": {
+    "fingerprint": "27295b9dbec786c6",
+    "source": "onsemi MMBT3904L データシート (MMBT3904LT1/D Rev. 15, 2026-09)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "hFE (1 mA)",
+        "datasheet": "70.000 / 213.0 / —",
+        "target": "213.0",
+        "condition": "VCE = 1 V。typ は図 15の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "216.8",
+        "diff": "+3.772",
+        "tested": true
+      },
+      {
+        "item": "hFE (10 mA)",
+        "datasheet": "100.0 / 201.2 / 300.0",
+        "target": "201.2",
+        "condition": "VCE = 1 V。typ は図 15の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "200.1",
+        "diff": "-1.114",
+        "tested": true
+      },
+      {
+        "item": "hFE (50 mA)",
+        "datasheet": "60.000 / 175.3 / —",
+        "target": "175.3",
+        "condition": "VCE = 1 V。typ は図 15の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "149.1",
+        "diff": "-26.147",
+        "tested": true
+      },
+      {
+        "item": "hFE (100 mA)",
+        "datasheet": "30.000 / 91.490 / —",
+        "target": "91.490",
+        "condition": "VCE = 1 V。typ は図 15の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "113.1",
+        "diff": "+21.599",
+        "tested": true
+      },
+      {
+        "item": "VBE (5 mA)",
+        "datasheet": "— / 0.7175 / — V",
+        "target": "0.7175 V",
+        "condition": "VCE = 1 V、図 17〜19 (グラフから読んだ)",
+        "model": "0.7223 V",
+        "diff": "+0.0048 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (10 mA)",
+        "datasheet": "— / 0.7406 / — V",
+        "target": "0.7406 V",
+        "condition": "VCE = 1 V、図 17〜19 (グラフから読んだ)",
+        "model": "0.7452 V",
+        "diff": "+0.0046 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (50 mA)",
+        "datasheet": "— / 0.8172 / — V",
+        "target": "0.8172 V",
+        "condition": "VCE = 1 V、図 17〜19 (グラフから読んだ)",
+        "model": "0.8226 V",
+        "diff": "+0.0054 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (100 mA)",
+        "datasheet": "— / 0.8856 / — V",
+        "target": "0.8856 V",
+        "condition": "VCE = 1 V、図 17〜19 (グラフから読んだ)",
+        "model": "0.8823 V",
+        "diff": "-0.0033 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (10 mA)",
+        "datasheet": "0.6500 / 0.7772 / 0.8500 V",
+        "target": "0.7772 V",
+        "condition": "IC/IB = 10。typ は図 17〜19、min / max は表",
+        "model": "0.7747 V",
+        "diff": "-0.0025 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (50 mA)",
+        "datasheet": "— / 0.8571 / 0.9500 V",
+        "target": "0.8571 V",
+        "condition": "IC/IB = 10。typ は図 17〜19、min / max は表",
+        "model": "0.8548 V",
+        "diff": "-0.0023 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (10 mA)",
+        "datasheet": "— / 0.0424 / 0.2000 V",
+        "target": "0.0424 V",
+        "condition": "IC/IB = 10。typ は図 17〜19、max は表",
+        "model": "0.0394 V",
+        "diff": "-0.0030 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (50 mA)",
+        "datasheet": "— / 0.0799 / 0.3000 V",
+        "target": "0.0799 V",
+        "condition": "IC/IB = 10。typ は図 17〜19、max は表",
+        "model": "0.0835 V",
+        "diff": "+0.0036 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (100 mA)",
+        "datasheet": "— / 0.1330 / — V",
+        "target": "0.1330 V",
+        "condition": "IC/IB = 10。typ は図 17〜19、max は表",
+        "model": "0.1355 V",
+        "diff": "+0.0025 V",
+        "tested": true
+      },
+      {
+        "item": "Cobo (5 V)",
+        "datasheet": "— / 1.950 / 4.000 pF",
+        "target": "1.950 pF",
+        "condition": "VCB = 5 V、IE = 0。typ は図 3、max は表",
+        "model": "1.976 pF",
+        "diff": "+0.0258 pF",
+        "tested": true
+      },
+      {
+        "item": "Cibo (0.5 V)",
+        "datasheet": "— / 3.770 / 8.000 pF",
+        "target": "3.770 pF",
+        "condition": "VEB = 0.5 V、IC = 0。typ は図 3、max は表",
+        "model": "3.757 pF",
+        "diff": "-0.0131 pF",
+        "tested": true
+      }
+    ]
+  },
+  "MMBT3906": {
+    "fingerprint": "87b5760bcca55222",
+    "source": "onsemi MMBT3906L データシート (MMBT3906LT1/D Rev. 15, 2026-09)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "hFE (1 mA)",
+        "datasheet": "80.000 / 187.1 / —",
+        "target": "187.1",
+        "condition": "VCE = 1 V。typ は図 13の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "178.2",
+        "diff": "-8.938",
+        "tested": true
+      },
+      {
+        "item": "hFE (10 mA)",
+        "datasheet": "100.0 / 179.5 / 300.0",
+        "target": "179.5",
+        "condition": "VCE = 1 V。typ は図 13の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "183.7",
+        "diff": "+4.238",
+        "tested": true
+      },
+      {
+        "item": "hFE (50 mA)",
+        "datasheet": "60.000 / 152.8 / —",
+        "target": "152.8",
+        "condition": "VCE = 1 V。typ は図 13の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "122.8",
+        "diff": "-30.024",
+        "tested": true
+      },
+      {
+        "item": "hFE (100 mA)",
+        "datasheet": "30.000 / 67.810 / —",
+        "target": "67.810",
+        "condition": "VCE = 1 V。typ は図 13の相対値 × 1 (図の hFE そのもの (25 °C))。min / max は表",
+        "model": "85.154",
+        "diff": "+17.344",
+        "tested": true
+      },
+      {
+        "item": "VBE (5 mA)",
+        "datasheet": "— / 0.7201 / — V",
+        "target": "0.7201 V",
+        "condition": "VCE = 1 V、図 15〜17 (グラフから読んだ)",
+        "model": "0.7253 V",
+        "diff": "+0.0052 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (10 mA)",
+        "datasheet": "— / 0.7440 / — V",
+        "target": "0.7440 V",
+        "condition": "VCE = 1 V、図 15〜17 (グラフから読んだ)",
+        "model": "0.7489 V",
+        "diff": "+0.0049 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (50 mA)",
+        "datasheet": "— / 0.8193 / — V",
+        "target": "0.8193 V",
+        "condition": "VCE = 1 V、図 15〜17 (グラフから読んだ)",
+        "model": "0.8274 V",
+        "diff": "+0.0081 V",
+        "tested": true
+      },
+      {
+        "item": "VBE (100 mA)",
+        "datasheet": "— / 0.8902 / — V",
+        "target": "0.8902 V",
+        "condition": "VCE = 1 V、図 15〜17 (グラフから読んだ)",
+        "model": "0.8850 V",
+        "diff": "-0.0052 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (10 mA)",
+        "datasheet": "0.6500 / 0.7896 / 0.8500 V",
+        "target": "0.7896 V",
+        "condition": "IC/IB = 10。typ は図 15〜17、min / max は表",
+        "model": "0.7895 V",
+        "diff": "-0.0001 V",
+        "tested": true
+      },
+      {
+        "item": "VBE(sat) (50 mA)",
+        "datasheet": "— / 0.8830 / 0.9500 V",
+        "target": "0.8830 V",
+        "condition": "IC/IB = 10。typ は図 15〜17、min / max は表",
+        "model": "0.8706 V",
+        "diff": "-0.0124 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (10 mA)",
+        "datasheet": "— / 0.0646 / 0.2500 V",
+        "target": "0.0646 V",
+        "condition": "IC/IB = 10。typ は図 15〜17、max は表",
+        "model": "0.0623 V",
+        "diff": "-0.0023 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (50 mA)",
+        "datasheet": "— / 0.1469 / 0.4000 V",
+        "target": "0.1469 V",
+        "condition": "IC/IB = 10。typ は図 15〜17、max は表",
+        "model": "0.1365 V",
+        "diff": "-0.0104 V",
+        "tested": true
+      },
+      {
+        "item": "VCE(sat) (100 mA)",
+        "datasheet": "— / 0.2167 / — V",
+        "target": "0.2167 V",
+        "condition": "IC/IB = 10。typ は図 15〜17、max は表",
+        "model": "0.2242 V",
+        "diff": "+0.0075 V",
+        "tested": true
+      },
+      {
+        "item": "Cobo (5 V)",
+        "datasheet": "— / 3.260 / 4.500 pF",
+        "target": "3.260 pF",
+        "condition": "VCB = 5 V、IE = 0。typ は図 3、max は表",
+        "model": "3.300 pF",
+        "diff": "+0.0398 pF",
+        "tested": true
+      },
+      {
+        "item": "Cibo (0.5 V)",
+        "datasheet": "— / 4.910 / 10.000 pF",
+        "target": "4.910 pF",
+        "condition": "VEB = 0.5 V、IC = 0。typ は図 3、max は表",
+        "model": "5.011 pF",
+        "diff": "+0.1007 pF",
         "tested": true
       }
     ]

@@ -1,0 +1,229 @@
+{
+  "kind": "bjt",
+  "part": "BC557_TO-92",
+  "name": "BC557",
+  "pnp": true,
+  "read": "2026-11-18",
+  "source": "onsemi BC556B/BC557A,B,C/BC558B データシート (BC556B/D Rev. 3, 2007-03)",
+  "url": "https://www.onsemi.com/pdf/datasheet/bc556b-d.pdf",
+  "description": "PNP 汎用トランジスタ BC557B (TO-92, ピン1=C 2=B 3=E)。BC547 と対になる PNP。2N3906 とピン配置が違うので注意。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "figs": {
+    "hfe": "図 1",
+    "on": "図 2",
+    "cap": "図 5"
+  },
+  "hfe_peak": 291.0,
+  "hfe_note": "曲線の高さは、表の hFE の typ 290 (BC557B、2 mA、5 V) に、図 1 の 2 mA の値 0.998 を合わせて決めました (曲線の 1 が 291)。実物の hFE は、同じ B ランクでも 180〜460 と大きく違います。",
+  "fit_nf": true,
+  "hfe_vce": 10.0,
+  "hfe_norm": [
+    [
+      0.0002,
+      0.8702
+    ],
+    [
+      0.0003,
+      0.8916
+    ],
+    [
+      0.0005,
+      0.9186
+    ],
+    [
+      0.001,
+      0.9564
+    ],
+    [
+      0.002,
+      0.9981
+    ],
+    [
+      0.005,
+      1.0519
+    ],
+    [
+      0.01,
+      1.0845
+    ],
+    [
+      0.02,
+      1.0862
+    ],
+    [
+      0.03,
+      1.0602
+    ],
+    [
+      0.05,
+      0.9891
+    ],
+    [
+      0.07,
+      0.9039
+    ],
+    [
+      0.1,
+      0.788
+    ]
+  ],
+  "on_vce": 10.0,
+  "vbe_on": [
+    [
+      0.0001,
+      0.5989
+    ],
+    [
+      0.0002,
+      0.616
+    ],
+    [
+      0.0005,
+      0.6413
+    ],
+    [
+      0.001,
+      0.6628
+    ],
+    [
+      0.002,
+      0.6856
+    ],
+    [
+      0.005,
+      0.716
+    ],
+    [
+      0.01,
+      0.7433
+    ],
+    [
+      0.02,
+      0.784
+    ],
+    [
+      0.05,
+      0.8582
+    ],
+    [
+      0.07,
+      0.8924
+    ]
+  ],
+  "vbe_sat": [
+    [
+      0.001,
+      0.6974
+    ],
+    [
+      0.002,
+      0.7251
+    ],
+    [
+      0.005,
+      0.7651
+    ],
+    [
+      0.01,
+      0.7995
+    ],
+    [
+      0.02,
+      0.841
+    ],
+    [
+      0.05,
+      0.9141
+    ],
+    [
+      0.07,
+      0.9497
+    ]
+  ],
+  "vce_sat": [
+    [
+      0.001,
+      0.0521
+    ],
+    [
+      0.005,
+      0.0624
+    ],
+    [
+      0.01,
+      0.0712
+    ],
+    [
+      0.02,
+      0.0983
+    ],
+    [
+      0.05,
+      0.1766
+    ],
+    [
+      0.07,
+      0.2248
+    ]
+  ],
+  "cibo": [
+    [
+      0.6,
+      9.7294e-12
+    ],
+    [
+      1.0,
+      9.1537e-12
+    ],
+    [
+      2.0,
+      8.1783e-12
+    ],
+    [
+      3.9,
+      7.155e-12
+    ]
+  ],
+  "cobo": [
+    [
+      0.6,
+      6.692599999999999e-12
+    ],
+    [
+      1.0,
+      5.5479e-12
+    ],
+    [
+      2.0,
+      4.2909e-12
+    ],
+    [
+      4.0,
+      3.3213e-12
+    ],
+    [
+      6.0,
+      2.8627e-12
+    ],
+    [
+      10.0,
+      2.3666e-12
+    ],
+    [
+      20.0,
+      1.966e-12
+    ]
+  ],
+  "ft_typ": 320000000.0,
+  "vaf": [
+    100.0,
+    "データシートに出力の特性 (hoe や出力特性の図) が無いので、BC547 と同じく仮に 100 V としました (出力抵抗はこの値で決まります)"
+  ],
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace ... strokes` (the curves' vector lines in the PDF; the tick labels with minus signs given by position: `xt=` / `yt=`)",
+    "hfe_norm: Figure 1 (normalized DC current gain, VCE = -10 V, 25 C). The table's hFE typ for BC557B is 290 at 2 mA / 5 V and 180 at 100 mA / 5 V",
+    "vbe_on, vbe_sat, vce_sat: Figure 2 (IC/IB = 10; VBE(on) at VCE = -10 V). The table's VCE(sat) typ 0.075 V (10 mA) and 0.25 V (100 mA) are at IC/IB = 20, so the graph is used",
+    "cibo, cobo: Figure 5 (Cib to 3.9 V, Cob to 28 V). The table's Cob typ 3.0 pF at 10 V; the curve shows 2.4 pF",
+    "ft_typ: the table's fT typ 320 MHz for BC557 (IC = 10 mA, VCE = 5 V)",
+    "fit_nf: VBE(on) of Figure 2 rises 80 mV a decade (1 to 10 mA), more than NF = 1 allows; with NF fitted hFE stays within 15 % (it was off by 28 %) and VCE(sat) within 5 mV (40 mV)"
+  ]
+}
