@@ -179,13 +179,108 @@ pub fn land_pattern(page: usize, words: &[Word], page_height: f32) -> Option<Lan
     Some(LandPattern { page, family, pins, pad_l, pad_w, pitch, row, quad, ep, ep_pin })
 }
 
+/// A size of an LTC (Analog Devices) drawing: "3.55 ±0.05", "0.50" over "BSC", "3.20 – 3.45", "5.10" over "(.201)" over "MIN",
+/// with what is written by it.
+struct LtcSize {
+    mm: f64,
+    bsc: bool,
+    min: bool,
+    /// Marked "(2 SIDES)" or "(4 SIDES)": an exposed pad's size.
+    sides: bool,
+    /// A range "3.20 – 3.45" (its middle).
+    range: bool,
+}
+
+/// The recommended solder pad layout of an LTC (Analog Devices) package page (候補 Q3): the drawing just above its caption
+/// "RECOMMENDED SOLDER PAD PITCH AND DIMENSIONS" / "RECOMMENDED SOLDER PAD LAYOUT", every size "value ±tolerance" (TI's are in
+/// brackets with a count, "14X (1.55)"). The pitch is the BSC size, the pad's width the smallest size below it; the pad's
+/// length L is the size whose double is the difference of two others (the outer and the inner spans: 3.55 − 2.15 = 2 × 0.70,
+/// LT3045's DFN-10), or what the outer span (MIN) less the inner one (a range) halves to (5.10 − 3.32 ≈ 2 × 0.889, its
+/// MSOP-12); the rows' centres are between. The sizes marked "(2 SIDES)" are the exposed pad's, the smaller across the rows.
+/// The pins and the package from the page's title ("10-Lead Plastic DFN").
+pub fn ltc_land(page: usize, words: &[Word], page_height: f32) -> Option<LandPattern> {
+    let caption = words.iter().find(|w| normalize(&w.text) == "recommended" && words.iter().any(|o| (o.baseline() - w.baseline()).abs() < 2.0 && o.rect.x0 > w.rect.x1 && normalize(&o.text) == "solder"))?;
+    let cap_end = words.iter().filter(|o| (o.baseline() - caption.baseline()).abs() < 2.0 && o.rect.x0 >= caption.rect.x0).map(|o| o.rect.x1).fold(caption.rect.x1, f32::max);
+    // the drawing: above the caption, about as wide
+    let inside: Vec<&Word> = words
+        .iter()
+        .filter(|w| w.baseline() < caption.baseline() - 2.0 && w.baseline() > caption.baseline() - 230.0 && w.rect.x0 >= caption.rect.x0 - 60.0 && w.rect.x1 <= cap_end + 60.0)
+        .collect();
+    let num = |t: &str| t.trim().parse::<f64>().ok().filter(|v| *v > 0.0 && *v < 50.0);
+    let near = |w: &Word, below: f32, dx: f32, f: &dyn Fn(&str) -> bool| inside.iter().any(|o| o.baseline() > w.baseline() + 2.0 && o.baseline() < w.baseline() + below && (o.rect.x0 - w.rect.x0).abs() < dx && f(&normalize(&o.text)));
+    let beside = |w: &Word, f: &dyn Fn(&str) -> bool| inside.iter().find(|o| (o.baseline() - w.baseline()).abs() < 2.0 && o.rect.x0 >= w.rect.x1 - 0.5 && o.rect.x0 - w.rect.x1 < 6.0 && f(&o.text));
+    let mut sizes: Vec<LtcSize> = vec![];
+    for w in &inside {
+        let Some(v) = num(&w.text) else { continue };
+        let tol = beside(w, &|t| t.trim_start().starts_with('±'));
+        let dash = beside(w, &|t| matches!(t.trim(), "–" | "-" | "−"));
+        let range_end = dash.and_then(|d| inside.iter().find(|o| (o.baseline() - d.baseline()).abs() < 2.0 && o.rect.x0 > d.rect.x1 && o.rect.x0 - d.rect.x1 < 6.0).and_then(|o| num(&o.text)));
+        // (under it, past the inches: "0.65" over "(.0256)" over "BSC")
+        let bsc = beside(w, &|t| normalize(t) == "bsc").is_some() || near(w, 20.0, 15.0, &|t| t == "bsc");
+        let min = near(w, 24.0, 15.0, &|t| t == "min");
+        let sides = near(w, 12.0, 25.0, &|t| t.starts_with("(2") || t.starts_with("(4"));
+        match (tol, range_end) {
+            (_, Some(hi)) => sizes.push(LtcSize { mm: (v + hi) / 2.0, bsc: false, min: false, sides, range: true }),
+            (Some(_), None) => sizes.push(LtcSize { mm: v, bsc, min, sides, range: false }),
+            (None, None) if bsc || min => sizes.push(LtcSize { mm: v, bsc, min, sides, range: false }),
+            _ => {}
+        }
+    }
+    let pitch = sizes.iter().find(|s| s.bsc).map(|s| s.mm)?;
+    let plain: Vec<f64> = sizes.iter().filter(|s| !s.bsc && !s.sides && !s.min && !s.range).map(|s| s.mm).collect();
+    let pad_w = plain.iter().copied().filter(|v| *v < pitch).fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.min(v))))?;
+    // the pad's length and the rows' centres: an outer and an inner span 2 L apart, or the MIN outer span and a range inside it
+    let mut found: Option<(f64, f64)> = None;
+    'pairs: for &l in plain.iter().filter(|l| **l > pad_w && **l < 3.0) {
+        for &a in plain.iter() {
+            for &b in plain.iter().filter(|b| **b < a) {
+                if (a - b - 2.0 * l).abs() < 0.03 {
+                    found = Some((l, (a + b) / 2.0));
+                    break 'pairs;
+                }
+            }
+        }
+    }
+    if found.is_none()
+        && let (Some(outer), Some(inner)) = (sizes.iter().find(|s| s.min).map(|s| s.mm), sizes.iter().find(|s| s.range).map(|s| s.mm))
+    {
+        found = plain.iter().copied().filter(|l| *l > pad_w && *l < 3.0).map(|l| (l, (outer - inner - 2.0 * l).abs())).filter(|c| c.1 < 0.15).min_by(|a, b| a.1.total_cmp(&b.1)).map(|(l, _)| (l, outer - l));
+    }
+    let (pad_l, row) = found?;
+    // the package and its pins from the title ("10-Lead Plastic DFN (3mm × 3mm)", "12-Lead Plastic MSOP")
+    let title: Vec<&Word> = words.iter().filter(|w| w.rect.y1 < page_height * 0.2).collect();
+    let pins = title.iter().find_map(|w| w.text.trim().strip_suffix("-Lead").or_else(|| w.text.trim().strip_suffix("-lead")).and_then(|n| n.parse::<u32>().ok()))?;
+    let family = title.iter().find_map(|w| package_of(&normalize(&w.text)).map(|p| p.0));
+    let mut ep: Vec<f64> = sizes.iter().filter(|s| s.sides).map(|s| s.mm).collect();
+    ep.sort_by(f64::total_cmp);
+    ep.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+    // no size marked "(2 SIDES)" on a package the title says has an exposed pad (LT3045's MSOP-12 "Exposed Die Pad"): the plain
+    // sizes over the pad's length that fit between the rows' pads
+    if ep.is_empty() && title.iter().any(|w| normalize(&w.text) == "exposed") {
+        ep = plain.iter().copied().filter(|v| *v > pad_l + 0.1 && *v < row - pad_l).collect();
+        ep.sort_by(f64::total_cmp);
+        ep.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+    }
+    let ep = match ep.as_slice() {
+        [a, b] => Some((*a, *b)),
+        [a] => Some((*a, *a)),
+        _ => None,
+    };
+    let quad = family.and_then(no_lead_sides) == Some(4);
+    Some(LandPattern { page, family, pins, pad_l, pad_w, pitch: Some(pitch), row: Some(row), quad, ep, ep_pin: ep.map(|_| (pins + 1).to_string()) })
+}
+
 impl crate::Datasheet {
     /// The land patterns of every page with a land pattern heading that has one.
     pub fn land_patterns(&self) -> Vec<LandPattern> {
         let q = crate::Heading::LandPattern.queries();
         (0..self.page_count())
             .filter(|&p| self.search_page_any(p, &q).iter().any(|h| !h.in_contents))
-            .filter_map(|p| land_pattern(p, self.words(p), self.page_size(p).map_or(842.0, |s| s.1)))
+            .filter_map(|p| {
+                let h = self.page_size(p).map_or(842.0, |s| s.1);
+                // TI's bracketed sizes with counts, else LTC's sizes with tolerances
+                land_pattern(p, self.words(p), h).or_else(|| ltc_land(p, self.words(p), h))
+            })
             .collect()
     }
 }
@@ -196,6 +291,29 @@ mod tests {
 
     fn w(t: &str, x: f32, y: f32) -> Word {
         Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0)
+    }
+
+    /// LTC's (LT3045) DFN-10 recommended solder pads: sizes with tolerances, the outer and inner spans 2 × 0.70 apart, the pitch
+    /// over "BSC", the exposed pad marked "(2 SIDES)"; the bottom view beside it below the caption is not read.
+    #[test]
+    fn an_ltc_recommended_solder_pad_layout() {
+        let words = vec![
+            w("10-Lead", 229.0, 120.0), w("Plastic", 265.0, 120.0), w("DFN", 296.0, 120.0),
+            w("0.70", 252.0, 187.0), w("±0.05", 274.0, 187.0),
+            w("3.55", 85.0, 215.0), w("±0.05", 107.0, 215.0), w("1.65", 137.0, 215.0), w("±0.05", 159.0, 215.0),
+            w("2.15", 104.0, 224.0), w("±0.05", 126.0, 224.0), w("(2", 139.0, 224.0), w("SIDES)", 146.0, 224.0),
+            w("0.25", 137.0, 273.0), w("±0.05", 159.0, 273.0),
+            w("0.50", 224.0, 281.0), w("BSC", 224.0, 289.0),
+            w("2.38", 194.0, 299.0), w("±0.05", 216.0, 299.0), w("(2", 196.0, 307.0), w("SIDES)", 203.0, 307.0),
+            w("RECOMMENDED", 130.0, 322.0), w("SOLDER", 190.0, 322.0), w("PAD", 225.0, 322.0), w("PITCH", 245.0, 322.0),
+            w("1.65", 294.0, 384.0), w("±0.10", 316.0, 384.0), w("(2", 295.0, 392.0), w("SIDES)", 303.0, 392.0),
+        ];
+        let l = ltc_land(28, &words, 792.0).expect("the layout");
+        assert_eq!((l.family, l.pins, l.pad_l, l.pad_w, l.pitch), (Some("dfn"), 10, 0.70, 0.25, Some(0.50)));
+        assert!((l.row.unwrap() - 2.85).abs() < 1e-9, "{l:?}");
+        assert_eq!((l.ep, l.ep_pin.as_deref()), (Some((1.65, 2.38)), Some("11")));
+        // TI's bracketed sizes are not LTC's
+        assert!(ltc_land(0, &[w("14X", 60.0, 100.0), w("(1.55)", 80.0, 100.0)], 792.0).is_none());
     }
 
     /// The SOIC-14 land pattern as TI writes it.

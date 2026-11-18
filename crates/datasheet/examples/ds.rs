@@ -100,6 +100,15 @@ fn main() -> Result<(), String> {
                 None => println!("drawing: none"),
             }
         }
+        "lands" => {
+            // ds lands FILE: the recommended land patterns read (`land::land_patterns`) and the pages with such a heading
+            let q = datasheet::Heading::LandPattern.queries();
+            let pages: Vec<usize> = (0..ds.page_count()).filter(|&p| ds.search_page_any(p, &q).iter().any(|h| !h.in_contents)).map(|p| p + 1).collect();
+            println!("heading pages {pages:?}");
+            for l in ds.land_patterns() {
+                println!("p.{} {:?} pins {} pad {:.2}x{:.2} pitch {:?} row {:?} quad {} ep {:?}", l.page + 1, l.family, l.pins, l.pad_l, l.pad_w, l.pitch, l.row, l.quad, l.ep);
+            }
+        }
         "conds" => {
             // ds conds FILE: the table's conditions each kind of graph's curve is picked by (`curve_conditions`)
             use datasheet::figures::Curve;
