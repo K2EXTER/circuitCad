@@ -207,6 +207,7 @@ fn key(s: &str, case: bool) -> String {
 /// The rows of `symbol` on a page. The case is kept when the page has the symbol in that case (hFE, the DC gain,
 /// and hfe, the small-signal one, are different rows); otherwise it is ignored (VGS(th), VGS(TH)).
 pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
+    let words = &*relative_to_output(words);
     // a symbol as written, then in any case
     let exact = find_case(page, words, symbol, true, false);
     if exact.is_empty() { find_case(page, words, symbol, false, false) } else { exact }
@@ -216,7 +217,47 @@ pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
 /// "Load regulation" under one ΔVOUT). For a data sheet where `find` finds no row of that symbol on any page: a page's
 /// "Output current" is not another page's "Output" symbol (UA78L).
 pub fn find_by_name(page: usize, words: &[Word], name: &str) -> Vec<SpecValue> {
-    find_case(page, words, name, true, true)
+    find_case(page, &relative_to_output(words), name, true, true)
+}
+
+/// The output voltage's limits written as fractions of the nominal (ROHM's fixed-output regulators: "VO×0.99 VO VO×1.01"
+/// over min, typ and max, "V" as the unit) as plain numbers: 0.99, 1 and 1.01, the line's unit "×VO" (the fractions of the
+/// output, for the caller to multiply by the part's voltage).
+fn relative_to_output(words: &[Word]) -> std::borrow::Cow<'_, [Word]> {
+    let factor = |t: &str| {
+        let (name, k) = t.trim().split_once('×')?;
+        matches!(name, "VO" | "VOUT" | "Vo" | "Vout").then_some(())?;
+        k.parse::<f64>().ok().filter(|k| (0.5..2.0).contains(k))
+    };
+    let lines: Vec<f32> = words.iter().filter(|w| factor(&w.text).is_some()).map(|w| w.baseline()).collect();
+    if lines.is_empty() {
+        return std::borrow::Cow::Borrowed(words);
+    }
+    let mut out = words.to_vec();
+    for y in lines {
+        let on: Vec<usize> = (0..out.len()).filter(|&i| (out[i].baseline() - y).abs() < 2.0).collect();
+        let fx: Vec<usize> = on.iter().copied().filter(|&i| factor(&out[i].text).is_some()).collect();
+        let (lo, hi) = (fx.iter().map(|&i| out[i].rect.x0).fold(f32::MAX, f32::min), fx.iter().map(|&i| out[i].rect.x1).fold(f32::MIN, f32::max));
+        let renamed = |w: &Word, t: &str| Word::on_line(t, w.rect, w.baseline());
+        for &i in &on {
+            let w = &out[i];
+            let t = w.text.trim();
+            let new = if let Some(k) = factor(t) {
+                Some(format!("{k}"))
+            } else if matches!(t, "VO" | "VOUT" | "Vo" | "Vout") && w.rect.x0 > lo && w.rect.x1 < hi {
+                // the nominal between the two limits
+                Some("1".to_string())
+            } else if t == "V" && w.rect.x0 >= hi {
+                Some("×VO".to_string())
+            } else {
+                None
+            };
+            if let Some(n) = new {
+                out[i] = renamed(w, &n);
+            }
+        }
+    }
+    std::borrow::Cow::Owned(out)
 }
 
 fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: bool) -> Vec<SpecValue> {
@@ -524,7 +565,7 @@ fn unit_near(words: &[Word], band: &[&&Word], h: &Header, y: f32) -> Option<Stri
     let ux = h.unit?;
     // a unit with a prefix, or a percentage ("%/V", "%VO", "%/W": a regulator's line and load regulation)
     // (and a unit per volt of output: onsemi's 78xx noise "µV/VO", its µ printed apart as "V/VO")
-    let is_unit = |w: &Word| (centre(&w.rect).0 - ux).abs() < 20.0 && (prefix(&w.text).is_some() || w.text.trim().starts_with('%') || w.text.contains("/VO"));
+    let is_unit = |w: &Word| (centre(&w.rect).0 - ux).abs() < 20.0 && (prefix(&w.text).is_some() || w.text.trim().starts_with('%') || w.text.contains("/VO") || w.text.trim() == "×VO");
     let no_values = |c: f32| !words.iter().any(|o| (centre(&o.rect).1 - c).abs() < 3.0 && number(&o.text).is_some() && column(h, centre(&o.rect).0).is_some());
     let above = words.iter().filter(|w| is_unit(w) && centre(&w.rect).1 < y && y - centre(&w.rect).1 < 14.0 && no_values(centre(&w.rect).1));
     let nearest = |c: &mut dyn Iterator<Item = &Word>| c.min_by(|a, b| (centre(&a.rect).1 - y).abs().total_cmp(&(centre(&b.rect).1 - y).abs())).map(|w| w.text.trim().to_string());
@@ -566,6 +607,21 @@ mod tests {
         assert_eq!((line[0].typ, line[0].unit.as_deref()), (Some(0.01), Some("%/V")), "{line:?}");
         let load = find(0, &words, "Load");
         assert!(load[0].conditions.contains("10mA to 1500mA"), "{load:?}");
+    }
+
+    /// ROHM's BDxxHC5WEFJ: the fixed output's limits as fractions of it ("VO×0.99 VO VO×1.01"), the unit "×VO"; the symbol
+    /// "VO" left of them stays the symbol.
+    #[test]
+    fn limits_as_fractions_of_the_output() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let words = vec![
+            w("Parameter", 62.0, 100.0), w("Symbol", 225.0, 100.0), w("Min.", 280.0, 100.0), w("Typ.", 325.0, 100.0), w("Max.", 366.0, 100.0), w("Unit", 410.0, 100.0), w("Conditions", 437.0, 100.0),
+            w("VFB", 230.0, 120.0), w("0.792", 279.0, 120.0), w("0.800", 323.0, 120.0), w("0.808", 366.0, 120.0), w("V", 413.0, 120.0), w("IO=0A", 437.0, 120.0),
+            w("VO", 232.0, 134.0), w("VO×0.99", 262.0, 134.0), w("VO", 329.0, 134.0), w("VO×1.01", 352.0, 134.0), w("V", 413.0, 134.0), w("IO=0A", 437.0, 134.0),
+        ];
+        let vo = find(0, &words, "VO");
+        assert_eq!(vo.iter().map(|v| (v.min, v.typ, v.max, v.unit.as_deref())).collect::<Vec<_>>(), vec![(Some(0.99), Some(1.0), Some(1.01), Some("×VO"))], "{vo:?}");
+        assert_eq!(find(0, &words, "VFB")[0].unit.as_deref(), Some("V"), "the other lines keep their unit");
     }
 
     /// TI's LP5907: the conditions start left of their heading, a frequency on each line of the PSRR, and the noise's

@@ -24,7 +24,8 @@ pub fn looks_like_part_number(t: &str) -> bool {
     if digits_end > 0 && t[digits_end..].starts_with('-') && t[digits_end + 1..].chars().all(|c| c.is_ascii_alphabetic()) {
         return false;
     }
-    if t.len() > 5 && t[t.len() - 5..].starts_with('-') && t[t.len() - 4..].chars().all(|c| c.is_ascii_digit()) && matches!(&t[t.len() - 4..t.len() - 2], "19" | "20") {
+    // (ROHM writes it with dots: "18.Nov.2013")
+    if t.len() > 5 && t[t.len() - 5..].starts_with(['-', '.', '/']) && t[t.len() - 4..].chars().all(|c| c.is_ascii_digit()) && matches!(&t[t.len() - 4..t.len() - 2], "19" | "20") {
         return false;
     }
     // "1.Specific", "2.Unsuitable": a numbered heading
@@ -32,8 +33,8 @@ pub fn looks_like_part_number(t: &str) -> bool {
         return false;
     }
     let up = t.to_ascii_uppercase();
-    // standards and document marks ("MIL-PRF-38535" on TI's first pages, "IATF16949", "Fig.1")
-    if ["AEC", "REV.", "REV-", "ISO", "IEC", "JESD", "JEDEC", "ROHS", "MIL-", "IPC-", "EIA-", "ANSI", "IEEE", "IATF", "CECC", "FIG.", "FIG-"].iter().any(|p| up.starts_with(p)) {
+    // standards and document marks ("MIL-PRF-38535" on TI's first pages, "IATF16949", "Fig.1", ROHM's "Table1")
+    if ["AEC", "REV.", "REV-", "ISO", "IEC", "JESD", "JEDEC", "ROHS", "MIL-", "IPC-", "EIA-", "ANSI", "IEEE", "IATF", "CECC", "FIG.", "FIG-", "TABLE"].iter().any(|p| up.starts_with(p)) {
         return false;
     }
     // UL and a number ("UL94", "UL1577"), not ULN2003
@@ -194,7 +195,7 @@ mod tests {
         for ok in ["LM393B", "2N3904", "AO3400A", "74HC14", "ADS124S08", "1N4148", "MCP6001-E", "ULN2003A", "E3V-L"] {
             assert!(looks_like_part_number(ok), "{ok}");
         }
-        for no in ["30V", "5.7A", "SOT-23", "SOIC-8", "TSSOP14", "0603", "LM", "123", "DO-41", "Dual", "10uF", "8-lead", "3.8-V", "28-May-2026", "AEC-Q200", "Rev.001", "MIL-PRF-38535", "MIL-R-22684", "IATF16949", "UL94", "E24", "E96", "Fig.1", "1.Specific"] {
+        for no in ["30V", "5.7A", "SOT-23", "SOIC-8", "TSSOP14", "0603", "LM", "123", "DO-41", "Dual", "10uF", "8-lead", "3.8-V", "28-May-2026", "AEC-Q200", "Rev.001", "MIL-PRF-38535", "MIL-R-22684", "IATF16949", "UL94", "E24", "E96", "Fig.1", "1.Specific", "18.Nov.2013", "Table1"] {
             assert!(!looks_like_part_number(no), "{no}");
         }
     }

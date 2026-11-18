@@ -67,6 +67,16 @@ pub fn nominal_from_name(name: &str) -> Option<f64> {
             }
         }
     }
+    // ROHM: "BD" or "BA" then the voltage's digits and a letter ("BD33HC5WEFJ" 3.3, "BA033CC0" 3.3; not "BA1117FP")
+    for pre in ["BD", "BA"] {
+        if let Some(rest) = n.strip_prefix(pre) {
+            let d: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            let letter = rest[d.len()..].starts_with(|c: char| c.is_ascii_alphabetic());
+            if letter && (d.len() == 2 || (d.len() == 3 && d.starts_with('0'))) {
+                return d.parse::<f64>().ok().filter(|v| *v > 0.0).map(|v| v / 10.0);
+            }
+        }
+    }
     // a suffix after "-": "-33" 3.3, "-3302" 3.3 (Microchip: the first two digits), "-18" 1.8, "-50" 5.0
     let suffix = n.rsplit('-').next().filter(|_| n.contains('-'))?;
     let d: String = suffix.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -74,6 +84,13 @@ pub fn nominal_from_name(name: &str) -> Option<f64> {
 }
 
 impl RegulatorInput {
+    /// The output's range from a row of fractions of it (`r`: min 0.99, max 1.01, unit "×VO") and the output in the box.
+    fn apply_output_fraction(&mut self, r: &SpecValue) {
+        if let (Ok(vo), Some(lo), Some(hi)) = (self.vout.trim().parse::<f64>(), r.min, r.max) {
+            self.vrange = format!("{} {}", show(vo * lo), show(vo * hi));
+        }
+    }
+
     /// Fills the boxes from the table. `name` picks the output voltage of a sheet for several (MC7800: 5 to 24 V, a
     /// page each), and the other values are taken from that page first. Adjustable when the table has an ADJ current.
     pub fn fill_from_pdf(&mut self, name: &str, values: impl Fn(&str) -> Vec<SpecValue>) {
@@ -95,6 +112,9 @@ impl RegulatorInput {
             None => typed.first(),
         };
         let page = out.map(|v| v.page);
+        // the limits as fractions of the output (ROHM: "VO×0.99 VO VO×1.01"), for the output the name tells or the one in the box
+        let fraction = if self.adjustable { None } else { outs.iter().find(|v| v.unit.as_deref() == Some("×VO")) };
+        let nominal = want.or_else(|| self.vout.trim().parse::<f64>().ok().filter(|v| *v > 0.0));
         match out {
             Some(v) => {
                 self.vout = show(v.typ.unwrap_or_default());
@@ -102,6 +122,12 @@ impl RegulatorInput {
                     self.vrange = format!("{} {}", show(lo), show(hi));
                 }
                 self.found.push((true, format!("{} {} V: {}", if self.adjustable { "基準電圧" } else { "出力電圧" }, self.vout, at(v))));
+            }
+            None if let (Some(r), Some(vo)) = (fraction, nominal) => {
+                self.vout = show(vo);
+                self.apply_output_fraction(r);
+                let from = if want.is_some() { "型番から" } else { "入れてある値" };
+                self.found.push((true, format!("出力電圧 {} V ({from})、範囲 {} V: 表の比 {}〜{} 倍 {}", self.vout, self.vrange, show(r.min.unwrap_or_default()), show(r.max.unwrap_or_default()), at(r))));
             }
             None => self.found.push((false, match want {
                 Some(w) => format!("出力電圧 {w} V の行が表に見つかりません。自分で入れてください"),
@@ -373,6 +399,10 @@ impl super::PartForm {
         if self.reg.vout.trim().is_empty() {
             self.reg.vout = show(v);
             self.reg.found.insert(0, (true, format!("出力電圧 {} V: 型番 {part} から", show(v))));
+            // its range from the table's fractions of the output (ROHM's "VO×0.99 VO VO×1.01")
+            if let Some(r) = ["VO", "VOUT"].iter().flat_map(|s| sheet.spec_values(s)).find(|r| r.unit.as_deref() == Some("×VO")) {
+                self.reg.apply_output_fraction(&r);
+            }
         }
         self.reg.result = None;
     }
@@ -594,9 +624,28 @@ mod tests {
         assert!((span("5.0 mA ≤ IO ≤ 1.0 A", AMPS).unwrap() - 0.995).abs() < 1e-12);
         assert_eq!(span("TJ = 25°C", VOLTS), None);
         assert_eq!(with_units("f = 120Hz", HERTZ), vec![120.0]);
-        for (n, want) in [("MC7805", Some(5.0)), ("UA78L12", Some(12.0)), ("AMS1117-3.3", Some(3.3)), ("MCP1700-3302", Some(3.3)), ("LP5907-18", Some(1.8)), ("LM317", None), ("MC7800", None), ("UA78L33", Some(3.3)), ("UA78L033", Some(3.3)), ("MCP1700T-3302E", Some(3.3)), ("LP5907MFX-2.85", Some(2.85))] {
+        for (n, want) in [("MC7805", Some(5.0)), ("UA78L12", Some(12.0)), ("AMS1117-3.3", Some(3.3)), ("MCP1700-3302", Some(3.3)), ("LP5907-18", Some(1.8)), ("LM317", None), ("MC7800", None), ("UA78L33", Some(3.3)), ("UA78L033", Some(3.3)), ("MCP1700T-3302E", Some(3.3)), ("LP5907MFX-2.85", Some(2.85)), ("BD33HC5WEFJ", Some(3.3)), ("BD50HC5WEFJ", Some(5.0)), ("BA033CC0", Some(3.3)), ("BA1117FP", None), ("BDxxHC5WEFJ", None)] {
             assert_eq!(nominal_from_name(n), want, "{n}");
         }
+    }
+
+    /// ROHM's fixed outputs: the output's limits as fractions of it ("VO×0.99 VO VO×1.01", read as 0.99 1 1.01 "×VO"), the
+    /// output from the part number, or from the box when the name gives none.
+    #[test]
+    fn an_output_range_as_fractions_of_the_output() {
+        let table = [v(4, "VO", "", Some(1.5), 0.0, Some(7.0), Some("V")), v(4, "VO", "IO=0A", Some(0.99), 1.0, Some(1.01), Some("×VO"))];
+        let table = [SpecValue { typ: None, ..table[0].clone() }, table[1].clone()];
+        let values = |s: &str| table.iter().filter(|r| r.symbol == s).cloned().collect::<Vec<_>>();
+        let mut r = RegulatorInput::default();
+        r.fill_from_pdf("BD33HC5WEFJ", values);
+        assert_eq!((r.vout.as_str(), r.vrange.as_str()), ("3.3", "3.267 3.333"), "{:?}", r.found);
+        let mut r = RegulatorInput { vout: "5".into(), ..Default::default() };
+        r.fill_from_pdf("BDxxHC5WEFJ", values);
+        assert_eq!((r.vout.as_str(), r.vrange.as_str()), ("5", "4.95 5.05"), "{:?}", r.found);
+        // nothing to multiply: said so, as before
+        let mut r = RegulatorInput::default();
+        r.fill_from_pdf("BDxxHC5WEFJ", values);
+        assert!(r.vout.is_empty() && r.found.iter().any(|f| !f.0), "{:?}", r.found);
     }
 
     #[test]
