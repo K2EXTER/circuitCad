@@ -74,7 +74,8 @@ pub fn default_theta(footprint: &str) -> Option<f64> {
 /// (`pcb_core::heat_copper`, carried over with the board's wiring); empty when there is no board.
 pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit, copper: &BTreeMap<String, f64>) -> Vec<Heater> {
     let mut out = vec![];
-    for comp in &sch.components {
+    // every sheet: the circuit is built from all of them, and a part on a sheet not being edited heats as much
+    for comp in &sch.flat().components {
         let resistors = matches!(comp.kind, Kind::Resistor | Kind::Custom);
         if !resistors && !matches!(comp.kind, Kind::Diode | Kind::Led | Kind::Npn) {
             continue;
@@ -181,11 +182,12 @@ pub const BOARD_HEATERS_MAX: usize = 24;
 /// their θ (the copper formula).
 pub fn board_heaters(sch: &Schematic, circuit: &Circuit, heaters: &[Heater], on_board: impl Fn(&str) -> bool) -> Result<Vec<BoardHeater>, SimError> {
     let r = dc_op(circuit)?;
+    let flat = sch.flat();
     let mut out: Vec<BoardHeater> = heaters
         .iter()
         .filter(|h| on_board(&h.name))
         .filter_map(|h| {
-            let c = sch.components.iter().find(|c| c.refdes == h.name)?;
+            let c = flat.components.iter().find(|c| c.refdes == h.name)?;
             Some(BoardHeater { name: h.name.clone(), power: part_power(circuit, h, &r), own_theta: own_theta(c), theta_jc: theta_jc(c).0, heatsink: c.heatsink })
         })
         .collect();
@@ -392,6 +394,30 @@ mod tests {
         let dc = dc_op(&c).unwrap();
         let i: f64 = 10.0 / 101.0;
         assert!((part_power(&c, r1, &dc) - i * i * 100.0).abs() < 1e-9, "R1's own heat, not its wiring's");
+    }
+
+    /// A part on a sheet that is not being edited still heats: the circuit is built from every sheet, and so are the heaters and the
+    /// temperature check (a multi-sheet design once lost its hot transistor while another sheet was open).
+    #[test]
+    fn a_part_on_another_sheet_heats() {
+        let mut s = Schematic::default();
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "10".into();
+        let r = s.add(Kind::Resistor, (20, 0), 0);
+        s.components[r].value = "100".into();
+        let (vp, vm) = (s.components[v].pins()[0].1, s.components[v].pins()[1].1);
+        let (r1, r2) = (s.components[r].pins()[0].1, s.components[r].pins()[1].1);
+        s.wires.push(sch_core::Wire { a: vp, b: r1 });
+        s.wires.push(sch_core::Wire { a: r2, b: (r2.0, vm.1) });
+        s.wires.push(sch_core::Wire { a: (r2.0, vm.1), b: vm });
+        s.labels.push(sch_core::Label { pos: vm, text: "GND".into() });
+        let k = s.add_sheet();
+        assert!(s.switch_sheet(k) && s.components.is_empty());
+        let c = crate::from_schematic(&s).unwrap();
+        let h = heaters_from_schematic(&s, &c, &BTreeMap::new());
+        assert!(h.iter().any(|h| h.name == "R1"), "{h:?}");
+        let r = self_heat(&c, &h, 25.0).unwrap();
+        assert_eq!(crate::check_temperatures(&s, &r.parts, 25.0).len(), 1);
     }
 
     /// Two parts on one board (the board's matrix): R2 has no temperature coefficient, so its power stays 0.25 W, and R1 also gets 20 K/W

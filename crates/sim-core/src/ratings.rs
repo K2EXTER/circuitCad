@@ -301,8 +301,9 @@ pub struct TempCheck {
 /// The self-heating result checked against each part's temperature limit and, above the derating temperature, its lowered rated power.
 pub fn check_temperatures(sch: &Schematic, parts: &[crate::HeatedPart], t_amb: f64) -> Vec<TempCheck> {
     let mut out = vec![];
+    let flat = sch.flat();
     for p in parts {
-        let Some(comp) = sch.components.iter().find(|c| c.refdes == p.name) else { continue };
+        let Some(comp) = flat.components.iter().find(|c| c.refdes == p.name) else { continue };
         let limit = temperature_limit(comp, p.junctions);
         let margin_k = limit.t_max - p.temp_c;
         let goal = limit.t_max - 0.2 * (limit.t_max - t_amb);

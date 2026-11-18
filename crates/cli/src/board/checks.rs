@@ -420,7 +420,7 @@ impl Session {
 
     /// `board heatmap [temp=27] [standing] [alt=M] [cell=MM]`: the board's temperature map (H7) from the schematic's self-heating powers.
     pub(super) fn board_heatmap(&mut self, rest: &[String]) -> Res {
-        let usage = "board heatmap [temp=27] [standing] [alt=M] [cell=MM] [case=W,D,TOP,BOTTOM[,WALL][,alu]] [tran=SECONDS [power=circuit [repeat=1]]]   (case = the board in a closed case: inside width and depth, the room above and below the board, the wall (2 mm) in mm, ABS resin or alu (anodised aluminium); the case's air and walls warm by the heat, and the board sits in that; tran = also the board warming up from the moment the parts are switched on: its heat capacity, time constant and each part's temperature at some moments; power=circuit drives it with each part's power over time from the last 'heattran' run (parts it did not run keep their steady power), repeat=1 repeats that run's power with its length as the period (a PWM) instead of holding its last value; the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
+        let usage = "board heatmap [temp=27] [guess=NET=V,...] [standing] [alt=M] [cell=MM] [case=W,D,TOP,BOTTOM[,WALL][,alu]] [tran=SECONDS [power=circuit [repeat=1]]]   (case = the board in a closed case: inside width and depth, the room above and below the board, the wall (2 mm) in mm, ABS resin or alu (anodised aluminium); the case's air and walls warm by the heat, and the board sits in that; tran = also the board warming up from the moment the parts are switched on: its heat capacity, time constant and each part's temperature at some moments; power=circuit drives it with each part's power over time from the last 'heattran' run (parts it did not run keep their steady power), repeat=1 repeats that run's power with its length as the period (a PWM) instead of holding its last value; the board's temperature on a grid from the parts' self-heating power: copper spreads the heat, both faces give it to the air by natural convection and radiation; standing = the board on an edge, alt = height above the sea in metres, cell = grid pitch in mm, 0.5 by default)";
         let (pos, kv) = options(rest);
         let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number
 {usage}")));
@@ -431,7 +431,10 @@ impl Session {
             cell_mm: num("cell", 0.0)?,
             ..Default::default()
         };
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        if let Some(g) = opt(&kv, "guess") {
+            crate::build::apply_guess(&mut c, g)?;
+        }
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &Default::default());
         let r = sim_core::self_heat(&c, &heaters, spec.ambient_c).map_err(|e| e.to_string())?;
         let sources: Vec<pcb_core::thermal::HeatSource> = r

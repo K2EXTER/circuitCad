@@ -30,7 +30,10 @@ impl Session {
         let s = sim_core::PowerOnSettings { tol_r: num("tol_r", 5.0)? / 100.0, tol_v: num("tol_v", 0.0)? / 100.0, ambient: num("temp", 25.0)?, margin: num("margin", 1.5)?, spreads, ..Default::default() };
         let measured = opt(&kv, "measured").map(|m| sim_core::parse_value(m).filter(|x| x.is_finite()).ok_or_else(|| format!("measured={m}: a current in A, for example 12m or 0.012"))).transpose()?;
         let gate = self.erc_gate()?;
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        if let Some(spec) = opt(&kv, "guess") {
+            crate::build::apply_guess(&mut c, spec)?;
+        }
         let g: std::collections::BTreeMap<String, f64> = self.heat_copper().iter().map(|(k, v)| (k.clone(), v.0)).collect();
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
         let p = sim_core::power_on(&c, &heaters, &s).map_err(|e| e.to_string())?;

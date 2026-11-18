@@ -116,7 +116,7 @@ fn apply_ic(c: &mut sim_core::Circuit, spec: &str) -> Result<usize, String> {
 
 /// `guess=NET=V,NET=V`: where the DC solve starts for these nets (SPICE `.nodeset`). A circuit with a latch built from gates has
 /// more than one answer; the guess picks the one near it.
-fn apply_guess(c: &mut sim_core::Circuit, spec: &str) -> Result<(), String> {
+pub(crate) fn apply_guess(c: &mut sim_core::Circuit, spec: &str) -> Result<(), String> {
     for item in spec.split(',').filter(|s| !s.trim().is_empty()) {
         let (net, val) = item.rsplit_once('=').ok_or_else(|| format!("guess: '{item}' should be NET=VOLTS"))?;
         let volts = sim_core::parse_value(val.trim()).ok_or_else(|| format!("guess: '{}' is not a voltage (write 3, -1.8, 500m ...)", val.trim()))?;
@@ -541,12 +541,15 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
     /// `heatsweep FROM TO STEP`: the ambient swept with the self-heating (`sim_core::ambient_sweep`): each part's hottest, the ambient
     /// where it reaches its limit, its rise at both ends, and the nets that move most.
     pub fn heatsweep(&mut self, args: &[String]) -> Res {
-        let usage = "heatsweep FROM TO STEP   (°C: the surrounding temperature swept with the self-heating, e.g. heatsweep -20 85 5; each part's hottest, the ambient where it reaches its temperature limit, its rise above the air at both ends; with 'board postlayout on' the board's grid as in 'heat')";
-        let (pos, _) = options(args);
+        let usage = "heatsweep FROM TO STEP [guess=NET=V,...]   (°C: the surrounding temperature swept with the self-heating, e.g. heatsweep -20 85 5; each part's hottest, the ambient where it reaches its temperature limit, its rise above the air at both ends; with 'board postlayout on' the board's grid as in 'heat')";
+        let (pos, kv) = options(args);
         let nums: Vec<f64> = pos.iter().map(|s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("'{s}' is not a number\n{usage}"))).collect::<Result<_, _>>()?;
         let [t0, t1, step] = nums.as_slice() else { return Err(usage.into()) };
         let gate = self.erc_gate()?;
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        if let Some(spec) = opt(&kv, "guess") {
+            apply_guess(&mut c, spec)?;
+        }
         let copper = self.heat_copper();
         let g: std::collections::BTreeMap<String, f64> = copper.iter().map(|(k, v)| (k.clone(), v.0)).collect();
         let mut heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
@@ -643,7 +646,10 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let (_, kv) = options(args);
         let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number")));
         let (temp, top) = (num("temp", 27.0)?, num("top", 10.0)? as usize);
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        if let Some(spec) = opt(&kv, "guess") {
+            apply_guess(&mut c, spec)?;
+        }
         let copper = self.heat_copper();
         let g: std::collections::BTreeMap<String, f64> = copper.iter().map(|(k, v)| (k.clone(), v.0)).collect();
         let mut heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);

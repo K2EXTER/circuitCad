@@ -106,8 +106,9 @@ impl HeatTran {
 /// the capacity from the part.
 pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[String], copper: &BTreeMap<String, f64>) -> Result<Vec<ThermalNode>, String> {
     let mut out = vec![];
+    let flat = sch.flat();
     for r in refs {
-        let comp = sch.components.iter().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        let comp = flat.components.iter().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
         let name = comp.refdes.as_str();
         let prefix = format!("{name}.");
         let elements: Vec<String> = circuit
