@@ -351,6 +351,10 @@ impl PartForm {
                 done.push(how);
             } else if let Some(sides) = datasheet::draft::no_lead_sides(p.family) {
                 done.push(self.apply_no_lead(p, sides, d.land(), s.as_ref()));
+            } else if let Some(l) = d.land().filter(|l| l.pins == 2)
+                && let Some(how) = self.apply_two_pads(p, l)
+            {
+                done.push(how);
             } else if datasheet::draft::two_terminal(p.family)
                 && let Some((span, foot, w)) = s.as_ref().and_then(|s| Some((s.span.or(s.e)?, s.foot?, s.lead_w?)))
                 && let Some(g) = pcb_core::land::gull_wing(span, foot, w)
@@ -487,6 +491,16 @@ impl PartForm {
     /// the maker's land pattern when it draws one, else from the dimension table by IPC's sums for flat terminals (body E, terminal
     /// L and b, pitch e), the exposed pad from the drawing or from E2 × D2. The pad's pin is the pin table's EP / PAD row, else the
     /// drawing's number in it, else the next number, and a row for it is added. Returns the line for the list of what was done.
+    /// The form's package from a maker's drawing of two pads (Nexperia's soldering footprint of a SOD323 or SOD882): the two-pad
+    /// chip with the drawing's own sizes, before any calculation from the dimension table. `None` when the drawing does not say
+    /// how far the pads' centres are apart.
+    pub(super) fn apply_two_pads(&mut self, p: &PackageName, l: &LandPattern) -> Option<String> {
+        let centres = l.row?;
+        self.fp_preset.clear();
+        (self.pkg, self.pitch, self.len, self.width) = (PkgKind::Chip2, centres, l.pad_l, l.pad_w);
+        Some(format!("パッケージ: {} (2 端子)、パッドは推奨のパッドの図 (p.{}) の {:.2} × {:.2} mm・中心の間 {:.2} mm", p.name, l.page + 1, l.pad_l, l.pad_w, centres))
+    }
+
     pub(super) fn apply_no_lead(&mut self, p: &PackageName, sides: u32, land: Option<&LandPattern>, s: Option<&Sizes>) -> String {
         self.fp_preset.clear();
         self.tht = false;
@@ -654,8 +668,14 @@ impl PartForm {
                 if let Some(l) = d.land() {
                     ui.label("");
                     let ep = l.ep.map_or(String::new(), |(w, h)| i18n::trf!("、放熱パッド {:.2} × {:.2} mm", w, h));
-                    ui.small(i18n::trf!("推奨ランドパターン: パッド {:.2} × {:.2} mm、列の間 {}、ピッチ {} mm{}", l.pad_l, l.pad_w, l.row.map_or("—".into(), |r| format!("{r:.2}")), l.pitch.map_or("—".into(), |e| format!("{e:.2}")), ep))
-                        .on_hover_text(i18n::tr("データシートの推奨ランドパターンの図の「14X (1.55)」のような書き方から読みました (14 個あるのがパッド、ピン数 − 2 個あるのがピッチ、1 つだけの大きな数が列の中心の間)。パッケージを入れると、この寸法でパッドを作ります"));
+                    if l.pins == 2 {
+                        // two pads: no rows and no pitch, the pads' centres
+                        ui.small(i18n::trf!("推奨のパッドの図: パッド {:.2} × {:.2} mm、中心の間 {} mm", l.pad_l, l.pad_w, l.row.map_or("—".into(), |r| format!("{r:.2}"))))
+                            .on_hover_text(i18n::tr("データシートのはんだ付けの図 (Reflow soldering footprint) から読みました。「(2×)」の付いた寸法のうち小さい方から 2 番目をパッド (はんだペースト < パッド < レジスト の順)、枠で囲んだ数をパッドの中心の間としています。パッドの大きさは、2 つのパッドを結ぶ向き × それと直角の向きです。図を開いて見比べてください"));
+                    } else {
+                        ui.small(i18n::trf!("推奨ランドパターン: パッド {:.2} × {:.2} mm、列の間 {}、ピッチ {} mm{}", l.pad_l, l.pad_w, l.row.map_or("—".into(), |r| format!("{r:.2}")), l.pitch.map_or("—".into(), |e| format!("{e:.2}")), ep))
+                            .on_hover_text(i18n::tr("データシートの推奨ランドパターンの図の「14X (1.55)」のような書き方から読みました (14 個あるのがパッド、ピン数 − 2 個あるのがピッチ、1 つだけの大きな数が列の中心の間)。パッケージを入れると、この寸法でパッドを作ります"));
+                    }
                     page_button(ui, Some(l.page), &mut go);
                     ui.end_row();
                 } else if d.packages.get(d.package).is_some_and(|p| is_dual(p.family) || datasheet::draft::no_lead_sides(p.family).is_some() || datasheet::draft::two_terminal(p.family)) {
@@ -832,6 +852,25 @@ mod tests {
         assert!(!f.thermal_on && how.contains("D2・E2"), "{how}");
         assert_eq!(exposed_pad_pin("1 A\n17 EP"), Some("17".into()));
         assert_eq!(exposed_pad_pin("1 A\n2 B"), None);
+    }
+
+    /// Nexperia's soldering footprint of a SOD882 goes into the form as the two-pad chip: the pads 0.4 mm along the line through
+    /// them and 0.7 mm across, their centres 0.7 mm apart.
+    #[test]
+    fn a_two_pad_footprint_drawing_fills_the_form() {
+        let land = LandPattern { page: 8, family: Some("sod-882"), pins: 2, pad_l: 0.4, pad_w: 0.7, pitch: None, row: Some(0.7), quad: false, ep: None, ep_pin: None };
+        let p = PackageName { name: "SOD-882".into(), family: "sod-882", pins: None, count: 1, page: 0 };
+        let mut f = PartForm { fp_preset: "D_SOD-123".into(), pins_text: "1 K
+2 A".into(), ..Default::default() };
+        let how = f.apply_two_pads(&p, &land).unwrap();
+        assert!(f.pkg == PkgKind::Chip2 && f.fp_preset.is_empty() && (f.pitch, f.len, f.width) == (0.7, 0.4, 0.7), "{how}");
+        assert!(how.contains("推奨のパッドの図 (p.9)"), "{how}");
+        let fp = f.to_def().unwrap().package.build("SOD882").unwrap();
+        assert_eq!(fp.pads.len(), 2);
+        assert!((fp.pads[1].pos.x - fp.pads[0].pos.x - 0.7).abs() < 1e-9, "{:?}", fp.pads);
+        // a drawing without the centres' distance fills nothing
+        let mut f = PartForm::default();
+        assert!(f.apply_two_pads(&p, &LandPattern { row: None, ..land }).is_none() && f.pkg != PkgKind::Chip2);
     }
 
     #[test]

@@ -21,7 +21,7 @@ pub struct PackageName {
 /// Families of packages, longest first where one starts another ("sot-223" before "sot-23"; the bare "so" last, after "son",
 /// "sod-123" and the others it starts).
 const FAMILIES: &[&str] = &[
-    "sot-223", "sot-23", "sot-89", "sot-323", "sot-363", "sot-563", "sot-583", "sc-70", "sc-88", "sc-74", "soic", "tssop", "msop", "vssop", "ssop", "sop", "wson", "vson", "uson", "x2son", "son", "pdip", "dip", "to-220", "to-92", "to-252", "to-263", "dpak", "d2pak", "vqfn", "wqfn", "uqfn", "x2qfn", "qfn", "lfcsp", "vdfn", "udfn", "wdfn", "tdfn", "dfn", "lqfp", "tqfp", "qfp", "sod-123", "sod-323", "sod-523",
+    "sot-223", "sot-23", "sot-89", "sot-323", "sot-363", "sot-563", "sot-583", "sc-70", "sc-88", "sc-74", "soic", "tssop", "msop", "vssop", "ssop", "sop", "wson", "vson", "uson", "x2son", "son", "pdip", "dip", "to-220", "to-92", "to-252", "to-263", "dpak", "d2pak", "vqfn", "wqfn", "uqfn", "x2qfn", "qfn", "lfcsp", "vdfn", "udfn", "wdfn", "tdfn", "dfn", "lqfp", "tqfp", "qfp", "sod-123", "sod-323", "sod-523", "sod-882", "sod-923",
     "do-214ac", "do-214aa", "do-214ab", "do-35", "do-41", "sma", "smb", "smc", "so",
 ];
 

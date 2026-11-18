@@ -270,6 +270,89 @@ pub fn ltc_land(page: usize, words: &[Word], page_height: f32) -> Option<LandPat
     Some(LandPattern { page, family, pins, pad_l, pad_w, pitch: Some(pitch), row: Some(row), quad, ep, ep_pin: ep.map(|_| (pins + 1).to_string()) })
 }
 
+/// "(2×)" → 2: how many of a size there are, as Nexperia writes it beside or under the size.
+fn times(t: &str) -> Option<u32> {
+    let inner = t.trim().strip_prefix('(')?.strip_suffix(')')?;
+    let n = inner.strip_suffix(['×', 'x', 'X'])?;
+    n.trim().parse().ok().filter(|n| (1..=400).contains(n))
+}
+
+/// Nexperia's "Reflow soldering footprint" of a package with two pads (候補 Q3; SOD323, SOD882): the drawing above its caption.
+/// The sizes with "(2×)" are the two pads': the solder paste's, the solder land's and (in the newer drawings) the solder
+/// resist's, each one a little bigger than the one before, so the land's is the second smallest of two or of three. Which way
+/// a size runs is told by where the sizes stand: those under one another are of dimension lines that run across (the sizes
+/// along the line through the two pads), those side by side are of lines that run up and down. The distance between the pads'
+/// centres is the size drawn in a frame (`boxed`: the text does not say, so the caller looks at the picture); without one
+/// nothing is read. `pad_l` is the land's size along the line through the pads, `pad_w` across it.
+pub fn nexperia_land(page: usize, words: &[Word], boxed: &dyn Fn(&Word) -> bool) -> Option<LandPattern> {
+    let on_line = |a: &Word, b: &Word| (a.baseline() - b.baseline()).abs() < 2.0;
+    let caption = words.iter().find(|w| normalize(&w.text) == "reflow" && ["soldering", "footprint"].iter().all(|k| words.iter().any(|o| on_line(o, w) && o.rect.x0 > w.rect.x1 && normalize(&o.text) == *k)))?;
+    // the drawing: above its caption, below the heading ("12. Soldering") or the caption of the drawing before it
+    let top = words
+        .iter()
+        .filter(|o| o.baseline() < caption.baseline() - 2.0 && matches!(normalize(&o.text).as_str(), "soldering" | "footprint"))
+        .map(|o| o.baseline())
+        .fold(caption.baseline() - 320.0, f32::max);
+    let inside: Vec<&Word> = words.iter().filter(|w| w.baseline() > top + 2.0 && w.baseline() < caption.baseline() - 2.0).collect();
+    let nums: Vec<(&Word, f64)> = inside.iter().filter_map(|w| w.text.trim().parse::<f64>().ok().filter(|v| *v > 0.0 && *v < 50.0).map(|v| (*w, v))).collect();
+    let mid = |w: &Word| (w.rect.x0 + w.rect.x1) / 2.0;
+    // each "(n×)" belongs to the size it stands right after, else to the nearest one it stands under
+    let mut count: Vec<Option<u32>> = vec![None; nums.len()];
+    for m in inside.iter().filter(|w| times(&w.text).is_some()) {
+        let beside = (0..nums.len()).filter(|&k| on_line(nums[k].0, m) && m.rect.x0 - nums[k].0.rect.x1 > -1.0 && m.rect.x0 - nums[k].0.rect.x1 < 8.0).min_by(|a, b| nums[*b].0.rect.x1.total_cmp(&nums[*a].0.rect.x1));
+        let under = || (0..nums.len()).filter(|&k| m.baseline() > nums[k].0.baseline() + 3.0 && m.baseline() < nums[k].0.baseline() + 14.0 && (mid(m) - mid(nums[k].0)).abs() < 10.0).min_by(|a, b| nums[*b].0.baseline().total_cmp(&nums[*a].0.baseline()));
+        if let Some(k) = beside.or_else(under) {
+            count[k] = times(&m.text);
+        }
+    }
+    // two pads only: three or more stand in ways this does not tell apart
+    let pads: Vec<usize> = (0..nums.len()).filter(|&k| count[k] == Some(2)).collect();
+    if pads.is_empty() || count.iter().flatten().filter(|n| **n != 2).count() > pads.len() {
+        return None;
+    }
+    // the biggest set of sizes under one another, and the biggest set side by side
+    let biggest = |near: &dyn Fn(usize, usize) -> bool| -> Vec<usize> { pads.iter().map(|&a| pads.iter().copied().filter(|&b| near(a, b)).collect::<Vec<_>>()).max_by_key(Vec::len).unwrap_or_default() };
+    let column = biggest(&|a, b| (mid(nums[a].0) - mid(nums[b].0)).abs() < 6.0);
+    let line = biggest(&|a, b| (nums[a].0.baseline() - nums[b].0.baseline()).abs() < 3.0);
+    if column.len() != line.len() || !(2..=3).contains(&column.len()) || column.iter().any(|k| line.contains(k)) {
+        return None;
+    }
+    let land = |set: &[usize]| {
+        let mut v: Vec<f64> = set.iter().map(|&k| nums[k].1).collect();
+        v.sort_by(f64::total_cmp);
+        v[1]
+    };
+    let (along, across) = (land(&column), land(&line));
+    let framed: Vec<f64> = (0..nums.len()).filter(|&k| count[k].is_none() && boxed(nums[k].0)).map(|k| nums[k].1).collect();
+    let [centres] = framed.as_slice() else { return None };
+    if *centres <= along {
+        return None;
+    }
+    let family = words.iter().filter(|w| on_line(w, caption) && w.rect.x0 > caption.rect.x1).find_map(|w| package_of(&normalize(&w.text)).map(|p| p.0));
+    Some(LandPattern { page, family, pins: 2, pad_l: along, pad_w: across, pitch: None, row: Some(*centres), quad: false, ep: None, ep_pin: None })
+}
+
+/// Whether the word at `r` (page points) stands in a drawn frame in the picture `img` of its page (`k` pixels per point): a
+/// dark line just over and just under it that covers its width, and one just left and just right that covers its height. A
+/// dimension line runs into a size from the side, at half its height, so it makes no frame.
+fn framed(img: &crate::PageImage, k: f32, r: &crate::Rect) -> bool {
+    let dark = |x: i64, y: i64| {
+        if x < 0 || y < 0 || x >= img.width as i64 || y >= img.height as i64 {
+            return false;
+        }
+        let i = (y as usize * img.width + x as usize) * 4;
+        img.rgba[i] as u32 + img.rgba[i + 1] as u32 + img.rgba[i + 2] as u32 <= 384
+    };
+    let px = |v: f32| (v * k).round() as i64;
+    // the middle of the word: a frame a little smaller than the font's box still covers it
+    let (w, h) = (r.x1 - r.x0, r.y1 - r.y0);
+    let (xa, xb, ya, yb) = (px(r.x0 + 0.1 * w), px(r.x1 - 0.1 * w), px(r.y0 + 0.25 * h), px(r.y1 - 0.25 * h));
+    let covered = |n: usize, of: i64| n as f32 >= 0.95 * (of + 1) as f32;
+    let across = |from: i64, to: i64| (from..=to).any(|y| covered((xa..=xb).filter(|&x| dark(x, y)).count(), xb - xa));
+    let down = |from: i64, to: i64| (from..=to).any(|x| covered((ya..=yb).filter(|&y| dark(x, y)).count(), yb - ya));
+    across(px(r.y0 - 6.0), px(r.y0 + 1.5)) && across(px(r.y1 - 1.5), px(r.y1 + 6.0)) && down(px(r.x0 - 8.0), px(r.x0) - 1) && down(px(r.x1) + 1, px(r.x1 + 8.0))
+}
+
 impl crate::Datasheet {
     /// The land patterns of every page with a land pattern heading that has one.
     pub fn land_patterns(&self) -> Vec<LandPattern> {
@@ -278,8 +361,14 @@ impl crate::Datasheet {
             .filter(|&p| self.search_page_any(p, &q).iter().any(|h| !h.in_contents))
             .filter_map(|p| {
                 let h = self.page_size(p).map_or(842.0, |s| s.1);
-                // TI's bracketed sizes with counts, else LTC's sizes with tolerances
-                land_pattern(p, self.words(p), h).or_else(|| ltc_land(p, self.words(p), h))
+                // the page's picture, drawn only when a size is asked whether it stands in a frame
+                let img: std::cell::OnceCell<Option<crate::PageImage>> = std::cell::OnceCell::new();
+                let boxed = |w: &Word| {
+                    let Some(img) = img.get_or_init(|| self.render(p, 3.0).ok()) else { return false };
+                    framed(img, img.width as f32 / self.page_size(p).map_or(1.0, |s| s.0), &w.rect)
+                };
+                // TI's bracketed sizes with counts, else LTC's sizes with tolerances, else Nexperia's soldering footprint
+                land_pattern(p, self.words(p), h).or_else(|| ltc_land(p, self.words(p), h)).or_else(|| nexperia_land(p, self.words(p), &boxed))
             })
             .collect()
     }
@@ -314,6 +403,69 @@ mod tests {
         assert_eq!((l.ep, l.ep_pin.as_deref()), (Some((1.65, 2.38)), Some("11")));
         // TI's bracketed sizes are not LTC's
         assert!(ltc_land(0, &[w("14X", 60.0, 100.0), w("(1.55)", 80.0, 100.0)], 792.0).is_none());
+    }
+
+    /// Nexperia's SOD882 (PESD5V0V1BL-Q): paste, land and resist each "(2×)" — the land is the middle one (0.4 along, 0.7
+    /// across); the pads' centres are the framed 0.7, not the occupied area's 1.3 or 0.9; "R0.05 (8×)" is no size of a pad.
+    #[test]
+    fn a_nexperia_sod882() {
+        let words = vec![
+            w("13.", 40.0, 97.0), w("Soldering", 60.0, 97.0),
+            w("1.3", 148.0, 125.0), w("0.7", 148.0, 141.0), w("R0.05", 228.0, 141.0), w("(8×)", 256.0, 141.0),
+            w("solder", 357.0, 168.0), w("lands", 390.0, 168.0),
+            w("0.6", 221.0, 193.0), w("0.7", 241.0, 193.0), w("0.8", 260.0, 193.0), w("0.9", 74.0, 197.0),
+            w("(2×)", 219.0, 201.0), w("(2×)", 239.0, 201.0), w("(2×)", 258.0, 201.0),
+            w("0.3", 116.0, 249.0), w("(2×)", 114.0, 258.0), w("0.4", 116.0, 268.0), w("(2×)", 114.0, 277.0), w("0.5", 116.0, 288.0), w("(2×)", 114.0, 296.0),
+            w("Fig.", 40.0, 313.0), w("11.", 60.0, 313.0), w("Reflow", 80.0, 313.0), w("soldering", 115.0, 313.0), w("footprint", 165.0, 313.0), w("for", 215.0, 313.0), w("DFN1006-2", 232.0, 313.0), w("(SOD882)", 285.0, 313.0),
+        ];
+        let frame = |f: &Word| f.text == "0.7" && f.rect.y0 == 141.0;
+        let l = nexperia_land(8, &words, &frame).expect("the footprint");
+        assert_eq!(l, LandPattern { page: 8, family: Some("sod-882"), pins: 2, pad_l: 0.4, pad_w: 0.7, pitch: None, row: Some(0.7), quad: false, ep: None, ep_pin: None });
+        assert!(l.dual());
+        // without a framed size the centres are not known: nothing is guessed
+        assert!(nexperia_land(8, &words, &|_| false).is_none());
+    }
+
+    /// Nexperia's SOD323 (PESD5V0U1BA): only paste and land are sized, the count beside the size in one place and under it in
+    /// the other — the land is the bigger (0.6 × 0.6); the wave soldering footprint under it is another drawing.
+    #[test]
+    fn a_nexperia_sod323() {
+        let words = vec![
+            w("12.", 40.0, 97.0), w("Soldering", 60.0, 97.0),
+            w("3.05", 160.0, 125.0), w("2.1", 162.0, 141.0),
+            w("1.65", 65.0, 190.0), w("0.95", 84.0, 190.0), w("0.5", 238.0, 190.0), w("(2×)", 254.0, 190.0), w("0.6", 270.0, 190.0), w("(2×)", 286.0, 190.0),
+            w("2.2", 161.0, 239.0), w("0.5", 117.0, 251.0), w("(2×)", 115.0, 259.0), w("0.6", 117.0, 268.0), w("(2×)", 115.0, 276.0),
+            w("Fig.", 40.0, 294.0), w("7.", 60.0, 294.0), w("Reflow", 80.0, 294.0), w("soldering", 115.0, 294.0), w("footprint", 165.0, 294.0), w("for", 215.0, 294.0), w("SOD323", 232.0, 294.0),
+            w("5", 160.0, 310.0), w("2.9", 160.0, 326.0), w("1.5", 150.0, 342.0), w("(2×)", 166.0, 342.0),
+            w("Fig.", 40.0, 492.0), w("8.", 60.0, 492.0), w("Wave", 80.0, 492.0), w("soldering", 115.0, 492.0), w("footprint", 165.0, 492.0), w("for", 215.0, 492.0), w("SOD323", 232.0, 492.0),
+        ];
+        let l = nexperia_land(7, &words, &|f: &Word| f.text == "2.2").expect("the footprint");
+        assert_eq!((l.family, l.pins, l.pad_l, l.pad_w, l.pitch, l.row), (Some("sod-323"), 2, 0.6, 0.6, None, Some(2.2)));
+    }
+
+    /// A size stands in a frame when lines run over, under, left and right of it; a dimension line running into it does not.
+    #[test]
+    fn a_framed_size_in_the_picture() {
+        let (wd, ht) = (60usize, 40usize);
+        let mut img = crate::PageImage { width: wd, height: ht, rgba: vec![255; wd * ht * 4] };
+        fn ink(img: &mut crate::PageImage, x: usize, y: usize) {
+            let i = (y * img.width + x) * 4;
+            img.rgba[i..i + 3].fill(0);
+        }
+        // a dimension line into the word from both sides, at half its height
+        (0..60).filter(|x| !(20..40).contains(x)).for_each(|x| ink(&mut img, x, 20));
+        let r = crate::Rect { x0: 22.0, y0: 15.0, x1: 38.0, y1: 25.0 };
+        assert!(!framed(&img, 1.0, &r));
+        // the frame
+        (17..=43).for_each(|x| {
+            ink(&mut img, x, 12);
+            ink(&mut img, x, 28);
+        });
+        (12..=28).for_each(|y| {
+            ink(&mut img, 17, y);
+            ink(&mut img, 43, y);
+        });
+        assert!(framed(&img, 1.0, &r));
     }
 
     /// The SOIC-14 land pattern as TI writes it.
@@ -416,6 +568,21 @@ mod real_pdf {
             let l = ds.land_patterns();
             let qfn = l.iter().find(|l| l.family == Some("wqfn")).unwrap();
             assert_eq!((qfn.pins, qfn.quad, qfn.pad_l, qfn.pad_w, qfn.pitch, qfn.row, qfn.ep), (16, true, 0.6, 0.24, Some(0.5), Some(2.8), Some((1.68, 1.68))), "{l:?}");
+        }
+    }
+
+    /// Nexperia's reflow soldering footprints (skipped without the files): the framed centre distance is found in the page's
+    /// picture, the land is the second smallest of the sizes with "(2×)".
+    #[test]
+    fn nexperia_soldering_footprints() {
+        let open = |f: &str| crate::Datasheet::open_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter").join(f)).ok();
+        if let Some(ds) = open("PESD5V0U1BA.pdf") {
+            let l = ds.land_patterns();
+            assert_eq!(l.iter().map(|l| (l.page, l.family, l.pins, l.pad_l, l.pad_w, l.row)).collect::<Vec<_>>(), [(7, Some("sod-323"), 2, 0.6, 0.6, Some(2.2))], "{l:?}");
+        }
+        if let Some(ds) = open("PESD5V0V1BL-Q.pdf") {
+            let l = ds.land_patterns();
+            assert_eq!(l.iter().map(|l| (l.page, l.family, l.pins, l.pad_l, l.pad_w, l.row)).collect::<Vec<_>>(), [(8, Some("sod-882"), 2, 0.4, 0.7, Some(0.7))], "{l:?}");
         }
     }
 }
