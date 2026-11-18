@@ -11,7 +11,7 @@
 use crate::learn::{spaced, NOTE};
 use crate::schematic::SchEditor;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
-use sch_core::breadboard::{auto_layout, check, moved, net_at, rotated, with_wire, without_wire, wire_end_moved, Hole, Layout, Look, Problem, Rail};
+use sch_core::breadboard::{auto_layout, board_nets, check, moved, net_at, rotated, with_wire, without_wire, wire_end_moved, BoardNets, Hole, Layout, Look, Problem, Rail};
 use std::collections::BTreeSet;
 
 mod live;
@@ -59,13 +59,26 @@ pub struct BreadboardView {
     pub powered: bool,
     /// The DC point was worked out once for the meter or the power switch (not again every frame when it fails).
     dc_asked: bool,
-    /// The circuit running with the power on (B6 ②), or why it could not start (with the schematic's edit count it was tried at).
+    /// With the power on: the circuit as the board joins it (worked out for the schematic's edit count and the layout in `run_key`),
+    /// its DC point (the parts' currents and the parts past their ratings) or why it has none, and the circuit running in time
+    /// (B6 ②) or why it could not start.
+    run_key: Option<(u64, Layout)>,
+    board: Option<Board>,
     live: Option<Live>,
-    live_failed: Option<(u64, String)>,
+    live_failed: Option<String>,
     /// The mouse went down on a switch (not a drag or a click of the tool).
     switch_down: bool,
     /// Switches to move once the circuit starts running (`--proto-flip SW1,SW2`, for screenshots).
     pub flip_on_start: Vec<String>,
+}
+
+/// The DC point of the board's circuit: the current through each part, and the parts past (or near) their ratings.
+pub type BoardDc = (Vec<(String, f64)>, Vec<sim_core::RatingIssue>);
+
+/// The breadboard's own circuit with the power on.
+struct Board {
+    nets: BoardNets,
+    dc: Result<BoardDc, String>,
 }
 
 const BOARD: Color32 = Color32::from_rgb(236, 234, 226);
@@ -179,15 +192,16 @@ impl BreadboardView {
             }
         });
         let power_label = if self.powered { i18n::tr("電源を切る") } else { i18n::tr("電源を入れる") };
-        if ui.button(power_label).on_hover_text(i18n::tr("電源を入れると、回路が時間とともに動き出します (過渡解析を実時間で進め続けます)。LED は流れる電流で光り、スイッチと押しボタンはクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます (実物なら壊れるところ)")).clicked() {
+        if ui.button(power_label).on_hover_text(i18n::tr("電源を入れると、回路が時間とともに動き出します (過渡解析を実時間で進め続けます)。計算するのはブレッドボードに差したとおりの回路なので、回路図と違う差し方なら、そのとおりに動いたり壊れたりします。LED は流れる電流で光り、スイッチと押しボタンはクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます (実物なら壊れるところ)")).clicked() {
             self.powered = !self.powered;
             self.dc_asked = false;
         }
-        if (self.powered || self.tool == Tool::Meter) && sch.bench_voltages().is_none() && !self.dc_asked && problems.is_empty() {
+        // the meter with the power off reads the schematic's DC point (what the board will read once it is switched on)
+        if !self.powered && self.tool == Tool::Meter && sch.bench_voltages().is_none() && !self.dc_asked && problems.is_empty() {
             self.dc_asked = true;
             sch.analyze_dc();
         }
-        self.live_frame(ui, sch, problems.is_empty());
+        self.live_frame(ui, sch, &l, problems.is_empty());
         match self.tool {
             Tool::Meter => self.meter_ui(ui, sch, &l, problems.is_empty()),
             Tool::Scope => self.scope_ui(ui, sch, &l),
@@ -197,9 +211,9 @@ impl BreadboardView {
             Tool::Move => {}
         }
         if self.powered {
-            let issues = sch.dc_ratings();
-            if !problems.is_empty() {
-                ui.colored_label(crate::theme::WARN, i18n::tr("回路図と違うつなぎ方があるので、電源を入れたときの様子は出せません。先に赤い丸の所を直します"));
+            let issues = self.issues();
+            if let Some(Board { dc: Err(e), .. }) = &self.board {
+                ui.colored_label(crate::theme::WARN, i18n::trf!("電源を入れたときの直流の様子が求まりませんでした: {}", i18n::tr_dyn(e)));
             } else if issues.is_empty() {
                 ui.colored_label(crate::theme::OK, i18n::tr("電源を入れました。定格を超えた部品はありません"));
             } else {
@@ -241,35 +255,52 @@ impl BreadboardView {
         });
     }
 
-    /// With the power on and the board wired as the schematic: the circuit runs (started again when the schematic changes), the
-    /// time goes on each frame, and the panel shows the time, the speed and the switches.
-    fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, matches: bool) {
-        if !(self.powered && matches) {
-            self.live = None;
+    /// The parts past (or near) their ratings on the board's circuit with the power on.
+    fn issues(&self) -> Vec<sim_core::RatingIssue> {
+        match &self.board {
+            Some(Board { dc: Ok((_, r)), .. }) if self.powered => r.clone(),
+            _ => vec![],
+        }
+    }
+
+    /// With the power on: the circuit as the board joins it is worked out (again when the schematic or the layout changes), its DC
+    /// point found, and it runs in time; each frame the time goes on, and the panel shows the time, the speed and the switches.
+    fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
+        if !self.powered {
+            (self.live, self.board, self.run_key, self.live_failed) = (None, None, None, None);
             self.switch_down = false;
             return;
         }
-        let stale = self.live.as_ref().is_none_or(|v| v.rev != sch.rev);
-        if stale && self.live_failed.as_ref().is_none_or(|(r, _)| *r != sch.rev) {
+        if self.run_key.as_ref().is_none_or(|(r, k)| *r != sch.rev || k != l) {
+            self.run_key = Some((sch.rev, l.clone()));
             let speed = self.live.as_ref().map_or(1.0, |v| v.speed);
+            let on: Vec<String> = self.live.as_ref().map(|v| v.switches.iter().filter(|s| s.on && !s.push).map(|s| s.refdes.clone()).collect()).unwrap_or_default();
             self.live = None;
-            match sch.live_circuit() {
+            self.live_failed = None;
+            let nets = board_nets(&sch.sch, l);
+            let dc = sch.board_dc(&nets);
+            match sch.board_circuit(&nets) {
                 Ok(c) => {
                     let leds: Vec<String> = sch.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
-                    let mut lv = Live::start(c, sch.rev, &leds, sch.live_switches());
+                    let mut lv = Live::start(c, &leds, sch.live_switches());
                     lv.speed = speed;
-                    for r in std::mem::take(&mut self.flip_on_start) {
+                    // the slide switches stay where they were when the board is changed
+                    for r in on.into_iter().chain(std::mem::take(&mut self.flip_on_start)) {
                         if let Some(k) = lv.switch_index(&r) {
                             lv.press(k);
                         }
                     }
                     self.live = Some(lv);
-                    self.live_failed = None;
                 }
-                Err(e) => self.live_failed = Some((sch.rev, e)),
+                Err(e) => self.live_failed = Some(e),
             }
+            self.board = Some(Board { nets, dc });
         }
-        if let Some((_, e)) = &self.live_failed {
+        if !matches {
+            ui.label(egui::RichText::new(i18n::tr("回路図と違う差し方のまま動かしています (計算はブレッドボードに差したとおり)")).color(crate::theme::WARN))
+                .on_hover_text(i18n::tr("実物と同じで、違う差し方なら違う動きをします。ショートした所には大きな電流が流れ、外れた所には流れません"));
+        }
+        if let Some(e) = &self.live_failed {
             ui.colored_label(crate::theme::WARN, i18n::trf!("回路を動かせませんでした: {}", i18n::tr_dyn(e)));
             return;
         }
@@ -309,13 +340,13 @@ impl BreadboardView {
             ui.label(egui::RichText::new(if self.red.is_none() { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします (ふつうは GND の青い列)") }).color(NOTE));
             return;
         };
-        if !matches {
-            ui.colored_label(crate::theme::WARN, i18n::tr("回路図と違うつなぎ方があるので、テスターは読めません。先に赤い丸の所を直します"));
+        let live = self.live.as_ref().filter(|v| v.error.is_none());
+        if !matches && live.is_none() {
+            ui.colored_label(crate::theme::WARN, i18n::tr("回路図と違う差し方なので、電源を入れてから読みます (差したとおりの回路を計算します)"));
             return;
         }
         let (na, nb) = (net_at(&sch.sch, l, red), net_at(&sch.sch, l, black));
         let volts = sch.bench_voltages();
-        let live = self.live.as_ref().filter(|v| v.error.is_none());
         let v_of = |n: &Option<String>| -> Option<f64> {
             let n = n.as_ref()?;
             if is_ground(n) {
@@ -601,14 +632,14 @@ impl BreadboardView {
         let focus = focus.map(String::from);
         let mut hovered_part = None;
         // with the power on: the LEDs' currents and the parts past their ratings
-        let on = self.powered && problems.is_empty();
+        let on = self.powered;
         let running = self.live.as_ref().filter(|v| on && v.error.is_none());
-        let currents = match running {
-            Some(lv) => l.parts.iter().filter_map(|p| lv.current(&p.refdes).map(|i| (p.refdes.clone(), i))).collect(),
-            None if on => sch.dc_part_currents(),
-            None => vec![],
+        let currents: Vec<(String, f64)> = match (running, &self.board) {
+            (Some(lv), _) => l.parts.iter().filter_map(|p| lv.current(&p.refdes).map(|i| (p.refdes.clone(), i))).collect(),
+            (None, Some(Board { dc: Ok((c, _)), .. })) if on => c.clone(),
+            _ => vec![],
         };
-        let issues = if on { sch.dc_ratings() } else { vec![] };
+        let issues = self.issues();
         for p in l.parts.iter().filter(|p| sch.sch.components.iter().any(|c| c.refdes == p.refdes && c.kind == sch_core::Kind::Led)) {
             let i = currents.iter().find(|(n, _)| *n == p.refdes).map_or(0.0, |(_, i)| *i);
             // the eye sees an LED bright at a few mA: the glow follows the square root of the current (1 at 20 mA)
@@ -628,8 +659,8 @@ impl BreadboardView {
                 hovered_part = Some((p.refdes.clone(), comp.map(|c| c.value.clone()).unwrap_or_default()));
             }
         }
-        if let Some(lv) = running {
-            draw_running(&painter, sch, &l, lv, to, pitch, &font, ui.input(|i| i.time));
+        if let (Some(lv), Some(b)) = (running, &self.board) {
+            draw_running(&painter, sch, &l, &b.nets, lv, to, pitch, &font, ui.input(|i| i.time));
         }
         for r in &issues {
             let Some(p) = l.parts.iter().find(|p| p.refdes == r.refdes) else { continue };
@@ -697,11 +728,11 @@ impl BreadboardView {
 
 /// The marks of the running circuit over the parts: where each switch is, a motor's speed, a buzzer that sounds.
 #[allow(clippy::too_many_arguments)]
-fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, lv: &Live, to: impl Fn(Hole) -> Pos2 + Copy, pitch: f32, font: &egui::FontId, now: f64) {
+fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &BoardNets, lv: &Live, to: impl Fn(Hole) -> Pos2 + Copy, pitch: f32, font: &egui::FontId, now: f64) {
     let volt = |p: &sch_core::breadboard::Placed, pin: &str| -> Option<f64> {
         let h = p.leads.iter().find(|(q, _)| q.eq_ignore_ascii_case(pin))?.1;
-        let n = net_at(&sch.sch, l, h)?;
-        if is_ground(&n) { Some(0.0) } else { lv.voltage(&n) }
+        let n = nets.at(h)?;
+        if is_ground(n) { Some(0.0) } else { lv.voltage(n) }
     };
     for p in &l.parts {
         let rect = part_rect(p, to, pitch);
@@ -900,23 +931,34 @@ mod tests {
     use super::*;
     use crate::{App, Mode};
 
-    /// The power switch works the DC point out by itself; an LED whose resistor is far too small burns, the meter reads the supply.
-    #[test]
-    fn switching_on_burns_an_led_without_enough_resistance_and_the_meter_reads() {
+    fn power_on_app(sample: &str) -> (App, impl FnMut(&mut App)) {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
         let mut app = App::default();
-        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.sch.load_path(root.join(sample));
         app.mode = Mode::Proto;
         let ctx = egui::Context::default();
         let mut f = eframe::Frame::_new_kittest();
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
-        let mut run = |app: &mut App| {
+        let run = move |app: &mut App| {
             let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
             out.textures_delta.clear();
         };
+        (app, run)
+    }
+
+    fn burnt(app: &App) -> Vec<String> {
+        app.breadboard.issues().iter().filter(|r| r.level == sim_core::RatingLevel::Over).map(|r| r.refdes.clone()).collect()
+    }
+
+    /// The power switch works the board's DC point out by itself and the circuit runs; the meter reads the supply; an LED whose
+    /// resistor is far too small burns.
+    #[test]
+    fn switching_on_burns_an_led_without_enough_resistance_and_the_meter_reads() {
+        let (mut app, mut run) = power_on_app("ne555_blinker.schjson");
         app.breadboard.powered = true;
         run(&mut app);
-        assert!(app.sch.bench_voltages().is_some(), "switching on worked the DC point out");
+        assert!(matches!(&app.breadboard.board, Some(Board { dc: Ok(_), .. })), "switching on worked the DC point out");
+        assert!(app.breadboard.live.as_ref().is_some_and(|v| v.error.is_none()), "and the circuit runs");
         // the meter on the supply rail against ground reads the supply
         let l = auto_layout(&app.sch.sch);
         app.breadboard.tool = Tool::Meter;
@@ -924,14 +966,50 @@ mod tests {
         app.breadboard.black = Some(Hole::Rail { rail: Rail::TopMinus, col: 10 });
         run(&mut app);
         assert_eq!(net_at(&app.sch.sch, &l, app.breadboard.red.unwrap()).as_deref(), Some("VCC"));
+        assert!(app.breadboard.live.as_ref().and_then(|v| v.voltage("VCC")).is_some_and(|v| v > 4.0));
         // the power-on sample's LED resistor (R1, 330 ohm from 5 V) made 1 ohm: the LED is past its rating and shows as burnt
-        app.sch.load_path(root.join("power_on.schjson"));
+        let (mut app, mut run) = power_on_app("power_on.schjson");
         let led_r = app.sch.sch.components.iter().position(|c| c.refdes == "R1").unwrap();
         app.sch.sch.components[led_r].value = "1".into();
-        app.sch.analyze_dc();
+        app.breadboard.powered = true;
         run(&mut app);
-        let over: Vec<String> = app.sch.dc_ratings().iter().filter(|r| r.level == sim_core::RatingLevel::Over).map(|r| r.refdes.clone()).collect();
-        assert!(over.iter().any(|r| r.starts_with('D')), "{over:?}");
+        assert!(burnt(&app).iter().any(|r| r.starts_with('D')), "{:?}", burnt(&app));
+    }
+
+    /// The board is what is simulated: a jumper across the LED's resistor (not in the schematic) burns the LED, though the
+    /// schematic is fine; taking the jumper away again, it lives.
+    #[test]
+    fn a_jumper_across_the_resistor_burns_the_led_the_schematic_does_not() {
+        let (mut app, mut run) = power_on_app("power_on.schjson");
+        app.breadboard.powered = true;
+        run(&mut app);
+        assert!(burnt(&app).is_empty(), "as drawn nothing burns: {:?}", burnt(&app));
+        let l = auto_layout(&app.sch.sch);
+        let r1 = l.parts.iter().find(|p| p.refdes == "R1").unwrap();
+        let (a, b) = (r1.leads[0].1, r1.leads[1].1);
+        // a free hole in the strip (or rail) of each lead
+        let free = |h: Hole| -> Hole {
+            let taken: BTreeSet<Hole> = l.parts.iter().flat_map(|p| p.leads.iter().map(|x| x.1)).chain(l.wires.iter().flat_map(|w| [w.a, w.b])).collect();
+            let cands: Vec<Hole> = match h {
+                Hole::Strip { col, row } => (if row < 5 { 0..5 } else { 5..10 }).map(|r| Hole::Strip { col, row: r }).collect(),
+                Hole::Rail { rail, .. } => (0..l.cols).map(|c| Hole::Rail { rail, col: c }).collect(),
+            };
+            cands.into_iter().find(|x| !taken.contains(x)).expect("a free hole")
+        };
+        app.sch.breadboard = Some(with_wire(&app.sch.sch, &l, free(a), free(b)));
+        run(&mut app);
+        assert!(!check(&app.sch.sch, app.sch.breadboard.as_ref().unwrap()).is_empty(), "the board differs from the schematic");
+        assert!(burnt(&app).iter().any(|r| r.starts_with('D')), "the LED burns: {:?}", burnt(&app));
+        assert!(app.breadboard.live.as_ref().is_some_and(|v| v.error.is_none()), "and the mis-wired board still runs");
+        app.sch.breadboard = Some(l.clone());
+        run(&mut app);
+        assert!(burnt(&app).is_empty(), "{:?}", burnt(&app));
+        // a jumper from the + rail to the − rail: the supply is shorted, and says so
+        let (plus, minus) = (Hole::Rail { rail: Rail::TopPlus, col: l.cols - 1 }, Hole::Rail { rail: Rail::TopMinus, col: l.cols - 1 });
+        app.sch.breadboard = Some(with_wire(&app.sch.sch, &l, plus, minus));
+        run(&mut app);
+        let short: Vec<String> = app.breadboard.issues().iter().filter(|r| r.message.contains("ショート")).map(|r| r.refdes.clone()).collect();
+        assert!(short.iter().any(|r| r.starts_with('V')), "{:?}", app.breadboard.issues());
     }
 
     #[test]

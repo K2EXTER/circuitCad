@@ -27,7 +27,7 @@ fn err(r: &str, m: impl Into<String>) -> ConvertError {
 /// Parts with an explicit failure are reported as errors; parts that simply have nothing to
 /// simulate (headers, parts without a model) become warnings on the circuit.
 pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, None, &[], &[])
+    build(s, None, &[], &[], None)
 }
 
 /// Resistance and inductance of the copper between a net's supply pad and one pin, measured on the board
@@ -60,13 +60,13 @@ pub struct WiringK {
 /// The circuit of `s` with the board's wiring resistance added in series with the listed pins
 /// ("post-layout" simulation). Pins that are not in the schematic are ignored.
 pub fn from_schematic_with_wiring(s: &Schematic, wiring: &[WiringR]) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, None, wiring, &[])
+    build(s, None, wiring, &[], None)
 }
 
 /// Like `from_schematic_with_wiring`, and the wiring inductors that `couplings` name are coupled (`Mutual`).
 /// A coupling whose inductors are not both in the circuit is ignored.
 pub fn from_schematic_with_layout(s: &Schematic, wiring: &[WiringR], couplings: &[WiringK]) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, None, wiring, couplings)
+    build(s, None, wiring, couplings, None)
 }
 
 /// What happens to one pin in a pin fault.
@@ -91,17 +91,34 @@ pub struct PinFaultSpec {
 /// The circuit of `s` with one pin of one part disconnected, grounded or bridged to another net.
 /// The rest of the part keeps its connections, so the fault is faithful for library ICs as well.
 pub fn from_schematic_with_pin_fault(s: &Schematic, f: &PinFaultSpec) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, Some(f), &[], &[])
+    build(s, Some(f), &[], &[], None)
 }
 
-fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], couplings: &[WiringK]) -> Result<Circuit, Vec<ConvertError>> {
+/// The circuit of `s` with its parts joined as `nets` says ((part, pin) → net, the names of the flattened schematic) instead of by
+/// its wires: a breadboard wired differently from the schematic (`sch_core::breadboard::board_nets`). A pin not in `nets` is on a
+/// node of its own. `wiring` adds resistance in series with pins as in `from_schematic_with_wiring` (the supplies' leads).
+pub fn from_schematic_with_nets(s: &Schematic, nets: &std::collections::BTreeMap<(String, String), String>, wiring: &[WiringR]) -> Result<Circuit, Vec<ConvertError>> {
+    build(s, None, wiring, &[], Some(nets))
+}
+
+fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], couplings: &[WiringK], nets: Option<&std::collections::BTreeMap<(String, String), String>>) -> Result<Circuit, Vec<ConvertError>> {
     let s = &*s.flat();
     let mut c = Circuit::new();
     let mut pin_node: HashMap<(String, String), usize> = HashMap::new();
-    for net in extract(s) {
-        let n = c.node(&net.name);
-        for p in net.pins {
-            pin_node.insert((p.refdes, p.pin), n);
+    match nets {
+        Some(given) => {
+            for ((r, p), n) in given {
+                let n = c.node(n);
+                pin_node.insert((r.clone(), p.clone()), n);
+            }
+        }
+        None => {
+            for net in extract(s) {
+                let n = c.node(&net.name);
+                for p in net.pins {
+                    pin_node.insert((p.refdes, p.pin), n);
+                }
+            }
         }
     }
     if let Some(f) = fault {

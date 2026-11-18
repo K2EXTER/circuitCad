@@ -28,8 +28,6 @@ pub struct Switch {
 
 pub struct Live {
     run: Option<TranRun>,
-    /// The schematic's edit count the run was started at: a change of the circuit starts it again.
-    pub rev: u64,
     pub error: Option<String>,
     /// Simulated seconds per second of the screen.
     pub speed: f64,
@@ -50,10 +48,9 @@ pub struct Live {
 impl Live {
     /// Starts the run on `circuit`. `currents`: the elements whose current is read (the LEDs); `switches`: from
     /// `SchEditor::live_switches`.
-    pub fn start(circuit: sim_core::Circuit, rev: u64, currents: &[String], switches: Vec<(String, String, bool)>) -> Live {
+    pub fn start(circuit: sim_core::Circuit, currents: &[String], switches: Vec<(String, String, bool)>) -> Live {
         let mut me = Live {
             run: None,
-            rev,
             error: None,
             speed: 1.0,
             last_frame: None,
@@ -213,6 +210,12 @@ fn is_ground(n: &str) -> bool {
 mod tests {
     use super::*;
 
+    /// The circuit as the sample's own breadboard layout joins it (the schematic's, laid out automatically).
+    fn board(e: &crate::schematic::SchEditor) -> sim_core::Circuit {
+        let l = sch_core::breadboard::auto_layout(&e.sch);
+        e.board_circuit(&sch_core::breadboard::board_nets(&e.sch, &l)).unwrap()
+    }
+
     fn sample(name: &str) -> crate::schematic::SchEditor {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
         let mut e = crate::schematic::SchEditor::default();
@@ -225,7 +228,7 @@ mod tests {
     fn the_blinker_blinks_while_it_runs() {
         let e = sample("ne555_blinker.schjson");
         let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
-        let mut live = Live::start(e.live_circuit().unwrap(), 0, &leds, e.live_switches());
+        let mut live = Live::start(board(&e), &leds, e.live_switches());
         assert!(live.error.is_none(), "{:?}", live.error);
         let (mut lit, mut dark) = (false, false);
         for _ in 0..60 {
@@ -243,7 +246,7 @@ mod tests {
     fn a_push_button_held_down_changes_the_circuit() {
         let e = sample("half_adder.schjson");
         let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
-        let mut live = Live::start(e.live_circuit().unwrap(), 0, &leds, e.live_switches());
+        let mut live = Live::start(board(&e), &leds, e.live_switches());
         assert!(live.error.is_none(), "{:?}", live.error);
         assert!(!live.switches.is_empty());
         let lit = |l: &Live| leds.iter().filter(|d| l.current(d).unwrap_or(0.0) > 1e-3).count();
@@ -264,7 +267,7 @@ mod tests {
     #[test]
     fn the_scope_traces_its_net() {
         let e = sample("ne555_blinker.schjson");
-        let mut live = Live::start(e.live_circuit().unwrap(), 0, &[], vec![]);
+        let mut live = Live::start(board(&e), &[], vec![]);
         let net = live.volts.keys().find(|n| !n.contains('.') && !n.contains('#')).cloned().unwrap();
         live.set_probe(Some(net));
         for _ in 0..10 {

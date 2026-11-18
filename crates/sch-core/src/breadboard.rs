@@ -700,39 +700,103 @@ pub fn check(s: &Schematic, l: &Layout) -> Vec<Problem> {
     problems
 }
 
-/// The net of the schematic that hole `h` is joined to on the board (through its strip or rail, the jumpers and the leads in them);
-/// None when nothing of the circuit is joined to it. With a short (two nets in one group) the first by name.
-pub fn net_at(s: &Schematic, l: &Layout, h: Hole) -> Option<String> {
+/// The nets as the board joins them (which may not be the schematic's): the circuit to simulate when the person wired it their own
+/// way. Every group of joined holes with a lead in it is one net, named after the schematic's net of its leads so that a board
+/// wired as drawn keeps the schematic's names. A group whose leads carry two nets (a short) takes the ground's name if one is ground
+/// (the node stays 0 V), else the first by name; a net split over several groups (an open) keeps its name in the group with the most
+/// leads and the others are `NET~2`, `NET~3` (a second ground group is not ground: it floats, as a ground wire that is not plugged in).
+/// A group of leads with no net in the schematic is `BB.a12`.
+#[derive(Clone, Debug, Default)]
+pub struct BoardNets {
+    /// (part, pin) → net, for every lead on the board and every pin of the parts off the board.
+    pub pins: BTreeMap<(String, String), String>,
+    /// The pins of the parts off the board (the supplies' wires).
+    pub off_pins: Vec<(String, String)>,
+    roots: BTreeMap<Node, Node>,
+    names: BTreeMap<Node, String>,
+}
+
+impl BoardNets {
+    /// The net hole `h` is in (None when no lead is joined to it).
+    pub fn at(&self, h: Hole) -> Option<&str> {
+        let r = self.roots.get(&h.node()).copied().unwrap_or(h.node());
+        self.names.get(&r).map(String::as_str)
+    }
+}
+
+pub fn board_nets(s: &Schematic, l: &Layout) -> BoardNets {
     let c = read(s);
-    let g = groups(l);
-    let root = |x: Hole| g.get(&x.node()).copied().unwrap_or(x.node());
-    let want = root(h);
-    let mut nets: BTreeSet<String> = BTreeSet::new();
+    let roots = groups(l);
+    let root = |h: Hole| roots.get(&h.node()).copied().unwrap_or(h.node());
+    // (part, pin, schematic net, group, the hole), and whether it is off the board
+    let mut leads: Vec<(String, String, String, Node, Hole, bool)> = vec![];
     for (refdes, _, pins) in &c.on {
-        if let Some(p) = l.parts.iter().find(|p| p.refdes == *refdes) {
-            for (pin, net) in pins {
-                if p.leads.iter().any(|(n, lh)| n == pin && root(*lh) == want) && !net.is_empty() {
-                    nets.insert(net.clone());
-                }
+        let Some(p) = l.parts.iter().find(|p| p.refdes == *refdes) else { continue };
+        for (pin, net) in pins {
+            if let Some((_, h)) = p.leads.iter().find(|(n, _)| n == pin) {
+                leads.push((refdes.clone(), pin.clone(), net.clone(), root(*h), *h, false));
             }
         }
     }
     for (refdes, pins) in &c.off {
-        if let Some(o) = l.off_board.iter().find(|o| o.refdes == *refdes) {
-            for (pin, net) in pins {
-                if o.pins.iter().any(|(n, _, oh)| n == pin && root(*oh) == want) && !net.is_empty() {
-                    nets.insert(net.clone());
-                }
+        let Some(o) = l.off_board.iter().find(|o| o.refdes == *refdes) else { continue };
+        for (pin, net) in pins {
+            if let Some((_, _, h)) = o.pins.iter().find(|(n, _, _)| n == pin) {
+                leads.push((refdes.clone(), pin.clone(), net.clone(), root(*h), *h, true));
             }
         }
     }
-    nets.into_iter().next()
+    // each group: the nets of its leads, how many leads, its first hole
+    let mut info: BTreeMap<Node, (BTreeSet<String>, usize, Hole)> = BTreeMap::new();
+    for (_, _, net, g, h, _) in &leads {
+        let e = info.entry(*g).or_insert_with(|| (BTreeSet::new(), 0, *h));
+        if !net.is_empty() {
+            e.0.insert(net.clone());
+        }
+        e.1 += 1;
+        e.2 = e.2.min(*h);
+    }
+    let mut order: Vec<(Node, String, usize)> = info
+        .iter()
+        .map(|(g, (nets, n, h))| {
+            let name = nets.iter().find(|x| is_ground_name(x)).or_else(|| nets.iter().next()).cloned().unwrap_or_else(|| format!("BB.{}", h.name()));
+            (*g, name, *n)
+        })
+        .collect();
+    order.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(&b.0)));
+    let mut used: BTreeMap<String, usize> = BTreeMap::new();
+    let mut names = BTreeMap::new();
+    for (g, name, _) in order {
+        let k = used.entry(name.to_ascii_uppercase()).or_insert(0);
+        *k += 1;
+        names.insert(g, if *k == 1 { name } else { format!("{name}~{k}") });
+    }
+    let mut out = BoardNets { roots: roots.clone(), ..Default::default() };
+    for (refdes, pin, _, g, _, off) in leads {
+        if off {
+            out.off_pins.push((refdes.clone(), pin.clone()));
+        }
+        out.pins.insert((refdes, pin), names[&g].clone());
+    }
+    out.names = names;
+    out
+}
+
+/// The net hole `h` is joined to on the board (through its strip or rail, the jumpers and the leads in them), named as
+/// `board_nets` names it (the schematic's name when the board is wired as drawn); None when nothing of the circuit is joined to it.
+pub fn net_at(s: &Schematic, l: &Layout, h: Hole) -> Option<String> {
+    board_nets(s, l).at(h).map(String::from)
+}
+
+/// The schematic's net a jumper in hole `h` carries, for its colour (a split-off piece `GND~2` is still a ground wire).
+fn wire_net(s: &Schematic, l: &Layout, h: Hole) -> Option<String> {
+    net_at(s, l, h).filter(|n| !n.starts_with("BB.")).map(|n| n.split('~').next().unwrap_or_default().to_string())
 }
 
 /// The layout with a jumper from `a` to `b` (its colour from the net it joins).
 pub fn with_wire(s: &Schematic, l: &Layout, a: Hole, b: Hole) -> Layout {
     let mut out = l.clone();
-    let net = net_at(s, l, a).or_else(|| net_at(s, l, b)).unwrap_or_default();
+    let net = wire_net(s, l, a).or_else(|| wire_net(s, l, b)).unwrap_or_default();
     out.wires.push(Wire { a, b, net });
     out
 }
@@ -753,7 +817,7 @@ pub fn wire_end_moved(s: &Schematic, l: &Layout, k: usize, end: usize, to: Hole)
         if end == 0 { w.a = to } else { w.b = to }
     }
     if let Some(w) = out.wires.get(k).cloned() {
-        let net = net_at(s, &out, w.a).unwrap_or_default();
+        let net = wire_net(s, &out, w.a).unwrap_or_default();
         out.wires[k].net = net;
     }
     out
@@ -890,6 +954,33 @@ mod tests {
         // moving an end of a jumper away opens it too
         let moved_end = wire_end_moved(&s, &l, k, 1, Hole::Strip { col: l.cols - 1, row: 9 });
         assert!(!check(&s, &moved_end).is_empty());
+    }
+
+    /// The board's nets: as drawn they are the schematic's; a jumper taken away splits a net (the smaller part is `NET~2`); a
+    /// jumper from a net to ground makes the whole group ground.
+    #[test]
+    fn the_board_names_its_nets_after_the_schematic_and_splits_or_joins_them_as_wired() {
+        let s: Schematic = serde_json::from_str(include_str!("../../../docs/examples/ne555_blinker.schjson")).unwrap();
+        let l = auto_layout(&s);
+        let drawn = board_nets(&s, &l);
+        let schematic: BTreeMap<(String, String), String> = crate::netlist::extract(&s.flat()).into_iter().flat_map(|n| n.pins.into_iter().map(move |p| ((p.refdes, p.pin), n.name.clone()))).collect();
+        for (k, n) in &drawn.pins {
+            assert_eq!(schematic.get(k), Some(n), "{k:?}");
+        }
+        assert!(drawn.off_pins.iter().any(|(r, _)| r.starts_with('V')), "{:?}", drawn.off_pins);
+        // a jumper that matters taken away: the net is in two groups, one keeps the name
+        let k = (0..l.wires.len()).find(|k| check(&s, &without_wire(&l, *k)).iter().any(|p| matches!(p, Problem::Open { .. }))).unwrap();
+        let open = board_nets(&s, &without_wire(&l, k));
+        let net = &l.wires[k].net;
+        let names: BTreeSet<&String> = open.pins.values().filter(|n| n.starts_with(net.as_str())).collect();
+        assert!(names.contains(net) && names.iter().any(|n| n.contains('~')), "{names:?}");
+        // R1's first lead joined to ground by a jumper: its whole group is ground now
+        let gnd_hole = Hole::Rail { rail: Rail::TopMinus, col: l.cols - 1 };
+        let gnd = board_nets(&s, &l).at(gnd_hole).map(String::from).expect("the ground rail");
+        let (pin, hole) = l.parts.iter().find(|p| p.refdes == "R1").unwrap().leads[0].clone();
+        let shorted = board_nets(&s, &with_wire(&s, &l, hole, gnd_hole));
+        assert_eq!(shorted.pins[&("R1".to_string(), pin)], gnd);
+        assert_eq!(net_at(&s, &l, Hole::Strip { col: l.cols - 1, row: 0 }), None, "an empty strip has no net");
     }
 
     #[test]
