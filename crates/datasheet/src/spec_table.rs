@@ -366,12 +366,28 @@ fn symbol_text(body: &[&Word], s: &Word) -> String {
     let mut end = s.rect.x1;
     let mut next: Vec<&&Word> = body.iter().filter(|w| (centre(&w.rect).1 - centre(&s.rect).1).abs() < 5.0 && w.rect.x0 >= end - 0.5).collect();
     next.sort_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
+    let mut rest = vec![];
     for w in next {
         if w.rect.x0 - end > 1.0 {
+            rest.push(w);
+            continue;
+        }
+        if !rest.is_empty() {
             break;
         }
         t.push_str(&w.text);
         end = w.rect.x1;
+    }
+    // a difference written apart ("VI − VO", onsemi's MC7800 dropout): a minus within 8 points, then a symbol within 8
+    if let [dash, other, ..] = rest[..]
+        && matches!(dash.text.trim(), "−" | "-" | "–")
+        && dash.rect.x0 - end < 8.0
+        && other.rect.x0 - dash.rect.x1 < 8.0
+        && other.text.starts_with(|c: char| c.is_ascii_uppercase())
+        && other.text.chars().count() <= 6
+    {
+        t.push('−');
+        t.push_str(&other.text);
     }
     t
 }
@@ -492,7 +508,9 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f
     });
     // a line of its own words without conditions keeps those with a digit (a grade: "BC547B"; not the parameter's
     // name) before the borrowed conditions
-    let own: String = own.split_whitespace().filter(|w| w.chars().any(|c| c.is_ascii_digit())).collect::<Vec<_>>().join(" ");
+    // (a range written with signs keeps its words: "10 Hz ≤ f ≤ 100 kHz", onsemi's MC7800 noise, not "10 100")
+    let ranged = own.contains(['≤', '≥', '<', '>']) && own.chars().any(|c| c.is_ascii_digit());
+    let own: String = if ranged { own.clone() } else { own.split_whitespace().filter(|w| w.chars().any(|c| c.is_ascii_digit())).collect::<Vec<_>>().join(" ") };
     match ys.first() {
         Some(&c) if own.trim().is_empty() => conditions_only(c),
         Some(&c) => format!("{} · {}", own.trim(), conditions_only(c)),
@@ -505,7 +523,8 @@ fn conditions_near(words: &[Word], h: &Header, left: f32, y: f32, (top, end): (f
 fn unit_near(words: &[Word], band: &[&&Word], h: &Header, y: f32) -> Option<String> {
     let ux = h.unit?;
     // a unit with a prefix, or a percentage ("%/V", "%VO", "%/W": a regulator's line and load regulation)
-    let is_unit = |w: &Word| (centre(&w.rect).0 - ux).abs() < 20.0 && (prefix(&w.text).is_some() || w.text.trim().starts_with('%'));
+    // (and a unit per volt of output: onsemi's 78xx noise "µV/VO", its µ printed apart as "V/VO")
+    let is_unit = |w: &Word| (centre(&w.rect).0 - ux).abs() < 20.0 && (prefix(&w.text).is_some() || w.text.trim().starts_with('%') || w.text.contains("/VO"));
     let no_values = |c: f32| !words.iter().any(|o| (centre(&o.rect).1 - c).abs() < 3.0 && number(&o.text).is_some() && column(h, centre(&o.rect).0).is_some());
     let above = words.iter().filter(|w| is_unit(w) && centre(&w.rect).1 < y && y - centre(&w.rect).1 < 14.0 && no_values(centre(&w.rect).1));
     let nearest = |c: &mut dyn Iterator<Item = &Word>| c.min_by(|a, b| (centre(&a.rect).1 - y).abs().total_cmp(&(centre(&b.rect).1 - y).abs())).map(|w| w.text.trim().to_string());

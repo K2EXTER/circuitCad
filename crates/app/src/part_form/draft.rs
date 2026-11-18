@@ -104,7 +104,7 @@ pub(super) fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Opt
 
 /// Which of the pins found are of the package `k` (by the packages over their column: "SOT-89/TO-92"), when a table has a column per
 /// package.
-fn pins_of_package(sources: &[FoundPins], k: &PackageName) -> Option<usize> {
+pub(super) fn pins_of_package(sources: &[FoundPins], k: &PackageName) -> Option<usize> {
     sources.iter().position(|s| {
         s.package.as_deref().is_some_and(|names| names.split('/').any(|n| datasheet::draft::package_of(n).is_some_and(|(f, _)| f == k.family)))
     })

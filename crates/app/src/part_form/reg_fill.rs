@@ -88,7 +88,8 @@ impl RegulatorInput {
         // the output (or reference) voltage, the one the name tells when there are several
         let want = nominal_from_name(name);
         let outs = all(if self.adjustable { &["VREF", "Vref", "Reference"] } else { &["VO", "VOUT", "Vout", "Output"] });
-        let typed: Vec<&SpecValue> = outs.iter().filter(|v| v.typ.is_some() && v.unit.as_deref().is_none_or(|u| u == "V" || u == "?")).collect();
+        // (volts: "V", onsemi's "Vdc", or no unit read)
+        let typed: Vec<&SpecValue> = outs.iter().filter(|v| v.typ.is_some() && v.unit.as_deref().is_none_or(|u| u == "V" || u == "?" || u.eq_ignore_ascii_case("vdc"))).collect();
         let out = match want.filter(|_| !self.adjustable) {
             Some(w) => typed.iter().find(|v| (v.typ.unwrap_or_default() - w).abs() < 0.02 * w),
             None => typed.first(),
@@ -185,7 +186,8 @@ impl RegulatorInput {
             let c: String = datasheet::normalize(&v.conditions).chars().filter(|c| !c.is_whitespace()).collect();
             let diff = match volts.as_slice() {
                 [d] if c.contains("vin-vout") || c.contains("vi-vo") => Some(*d),
-                [d] if c.contains("vin=") || c.contains("vi=") => self.vout.parse::<f64>().ok().map(|vo| d - vo).filter(|d| *d > 0.0),
+                // (the output voltage from the table, else from the part number: MC7805's table writes "Vdc", a family's name none)
+                [d] if c.contains("vin=") || c.contains("vi=") => self.vout.parse::<f64>().ok().or(want).map(|vo| d - vo).filter(|d| *d > 0.0),
                 // the row's own words with one voltage, the difference's name borrowed from the next row ("≤ 15V · (VIN −
                 // VOUT) = 40V", TI's LM317)
                 _ if c.contains("vin-vout") || c.contains("vi-vo") => v.conditions.split(" · ").next().map(|own| with_units(own, VOLTS)).filter(|o| o.len() == 1 && v.conditions.contains(" · ")).map(|o| o[0]),
@@ -198,6 +200,17 @@ impl RegulatorInput {
             }
         }
         limits.truncate(2);
+        // a short-circuit current with no voltage in its row (TI's LP5907: "TA = 25°C", the input in the table's heading "VIN =
+        // VOUT(NOM) + 1V"): the output shorted to 0 V with the input 1 V over the output, said as an assumption
+        let mut assumed = None;
+        if limits.is_empty()
+            && let Some(vo) = self.vout.parse::<f64>().ok().or(want).filter(|v| *v > 0.0)
+            && let Some(v) = rows(&["ISC", "Isc"]).into_iter().find(|v| v.typ.or(v.min).is_some() && with_units(&v.conditions, VOLTS).is_empty())
+        {
+            let a = v.typ.or(v.min).unwrap_or_default();
+            limits.push((vo + 1.0, si(&v, a, 1.0), at(&v)));
+            assumed = Some(vo + 1.0);
+        }
         if limits.is_empty() {
             self.found.push((false, "電流制限: 入出力の差 (1 つの電圧) が条件にある行が見つかりません。自分で入れてください".into()));
         } else {
@@ -205,6 +218,9 @@ impl RegulatorInput {
             self.ilim = limits.iter().map(|l| format!("{} {}", show(l.0), show(l.1))).collect::<Vec<_>>().join("\n");
             for l in &limits {
                 self.found.push((true, format!("電流制限 {} V で {} A: {}", show(l.0), show(l.1), l.2)));
+            }
+            if let Some(d) = assumed {
+                self.found.push((false, format!("電流制限: 短絡電流の行に電圧が無いので、出力を 0 V に短絡し入力は出力 + 1 V (入出力の差 {} V) として入れました。表の上の共通の条件と見比べてください", show(d))));
             }
             // one row: the limit is taken as the same at every difference
             if limits.len() == 1 {
@@ -367,6 +383,9 @@ impl super::PartForm {
 /// name no package is one version, named as `variants` names it, in the form's package (`None`).
 pub fn versions(variants: &[(f64, String)], parts: &[(f64, String)], packages: &[(String, String)]) -> Vec<(f64, String, Option<String>)> {
     let mut out: Vec<(f64, String, Option<String>)> = vec![];
+    // the family's part numbers name their packages: a voltage only in a package not named (TI's LP5907YKGR-2.825, a DSBGA)
+    // is not made in the form's package; it is left to the caller to say so (an empty package name)
+    let named = parts.iter().any(|(_, p)| packages.iter().any(|(n, _)| n.eq_ignore_ascii_case(p)));
     for (v, first) in variants {
         let mut here: Vec<(String, String)> = vec![];
         for (_, p) in parts.iter().filter(|(pv, _)| (pv - v).abs() < 1e-9) {
@@ -378,7 +397,7 @@ pub fn versions(variants: &[(f64, String)], parts: &[(f64, String)], packages: &
             }
         }
         if here.is_empty() {
-            out.push((*v, first.clone(), None));
+            out.push((*v, first.clone(), named.then(String::new)));
         } else {
             out.extend(here.into_iter().map(|(p, pkg)| (*v, p, Some(pkg))));
         }
@@ -398,7 +417,10 @@ impl super::PartForm {
         let list = versions(&self.reg.variants, &self.reg.parts, &self.reg.packages);
         // what is changed for each version, to put back
         let keep = (self.name.clone(), self.reg.clone(), self.sim, self.sim_name.clone(), self.sim_text.clone(), self.sim_pins.clone(), self.sim_limits.clone(), self.sim_origin.clone(), self.description.clone(), self.fp_preset.clone());
-        let numbers: Vec<String> = self.pins_text.lines().filter_map(|l| l.split_whitespace().next().map(str::to_string)).collect();
+        let keep_pins = self.pins_text.clone();
+        // the pin table's column of each package (TI's LP5907: X2SON 1 OUT … 4 IN, SOT-23 1 IN … 5 OUT): each version takes its
+        // own package's pins, not the form's (the X2SON's five numbers fit a SOT-23-5 too)
+        let columns: Vec<datasheet::draft::FoundPins> = self.sheet.datasheet().map(|ds| ds.find_pin_tables()).unwrap_or_default();
         let mut made: Vec<(part_lib::PartDef, part_lib::variants::Variant)> = vec![];
         let mut left = vec![];
         for (v, part, pkg) in &list {
@@ -425,9 +447,20 @@ impl super::PartForm {
                     self.reg.vin0 = show(vin + v - o);
                 }
             }
+            self.pins_text = keep_pins.clone();
             if let Some(pkg) = pkg {
-                let Some((family, pins)) = datasheet::draft::package_of(pkg) else { continue };
+                // (a voltage whose part numbers name no package the data sheet's names tell: `versions`)
+                let Some((family, pins)) = datasheet::draft::package_of(pkg) else {
+                    left.push(format!("{part}: 注文情報の表のパッケージが読めないので作りませんでした (DSBGA など。形を選んで 1 つずつ作ってください)"));
+                    continue;
+                };
                 let name = datasheet::draft::PackageName { name: pkg.clone(), family, pins, count: 1, page: 0 };
+                if columns.len() > 1
+                    && let Some(i) = super::draft::pins_of_package(&columns, &name)
+                {
+                    self.pins_text = super::pin_import::lines_with_kinds(&columns[i].pins, &columns[i].io);
+                }
+                let numbers: Vec<String> = self.pins_text.lines().filter_map(|l| l.split_whitespace().next().map(str::to_string)).collect();
                 match super::draft::builtin_footprint(&name, Some(&numbers)) {
                     Some(fp) => self.fp_preset = fp,
                     None => {
@@ -462,6 +495,7 @@ impl super::PartForm {
             }
         }
         (self.name, self.reg, self.sim, self.sim_name, self.sim_text, self.sim_pins, self.sim_limits, self.sim_origin, self.description, self.fp_preset) = keep;
+        self.pins_text = keep_pins;
         let Some(base) = made.first().map(|m| m.0.clone()) else { return Err(format!("1 つも作れませんでした: {}", left.join(" / "))) };
         // the base's description is the form's own (each version adds its voltage and package)
         let base = part_lib::PartDef { description: self.description.clone(), ..base };
@@ -628,9 +662,25 @@ mod tests {
         let t3 = [v(4, "Load", "IOUT = 1mA to 250mA", None, 0.001, None, Some("%/mA"))];
         r.fill_from_pdf("LP5907", |s| t3.iter().filter(|x| x.symbol == s).cloned().collect());
         assert_eq!(r.load, "0.249% 249m");
+        // onsemi's MC7805 writes its output in "Vdc"; the short-circuit row's "Vin = 35 Vdc" less it is the difference
+        let t4 = [v(2, "VO", "Output Voltage (TJ = 25°C)", Some(4.8), 5.0, Some(5.2), Some("Vdc")), v(2, "ISC", "Vin = 35 Vdc", None, 0.2, None, Some("A"))];
+        r.fill_from_pdf("MC7805BTG", |s| t4.iter().filter(|x| x.symbol == s).cloned().collect());
+        assert_eq!((r.vout.as_str(), r.ilim.as_str()), ("5", "30 200m"));
+        // without its output in the table, the part number's voltage (MC7812)
+        let t5 = [v(2, "ISC", "Vin = 35 Vdc", None, 0.2, None, Some("A"))];
+        r.vout.clear();
+        r.fill_from_pdf("MC7812BTG", |s| t5.iter().filter(|x| x.symbol == s).cloned().collect());
+        assert_eq!(r.ilim, "23 200m");
+        // TI's LP5907: a short-circuit row with no voltage, taken at the output + 1 V and said to be assumed
+        let t6 = [v(4, "ISC", "TA = 25°C(8)", Some(250.0), 500.0, None, Some("mA"))];
+        r.vout.clear();
+        r.fill_from_pdf("LP5907MFX-3.3", |s| t6.iter().filter(|x| x.symbol == s).cloned().collect());
+        assert_eq!(r.ilim, "4.3 500m");
+        assert!(r.found.iter().any(|(ok, l)| !ok && l.contains("短絡")), "{:?}", r.found);
     }
 
-    /// Per voltage one part number per package (the shortest); a voltage whose part numbers name no package is one version.
+    /// Per voltage one part number per package (the shortest); a voltage whose part numbers name no package is one version,
+    /// in the form's package when no part number names one, else with no package (not made: TI's LP5907YKGR-2.825, a DSBGA).
     #[test]
     fn versions_by_voltage_and_package() {
         let s = |x: &str| x.to_string();
@@ -639,8 +689,10 @@ mod tests {
         let packages = vec![(s("LP5907MFX-1.8"), s("SOT-23")), (s("LP5907SNX-1.8"), s("X2SON")), (s("LP5907MFX-3.3"), s("SOT-23")), (s("LP5907MFXQ-3.3"), s("SOT-23"))];
         assert_eq!(
             versions(&variants, &parts, &packages),
-            vec![(1.8, s("LP5907MFX-1.8"), Some(s("SOT-23"))), (1.8, s("LP5907SNX-1.8"), Some(s("X2SON"))), (3.3, s("LP5907MFX-3.3"), Some(s("SOT-23"))), (5.0, s("LP5907-5"), None)]
+            vec![(1.8, s("LP5907MFX-1.8"), Some(s("SOT-23"))), (1.8, s("LP5907SNX-1.8"), Some(s("X2SON"))), (3.3, s("LP5907MFX-3.3"), Some(s("SOT-23"))), (5.0, s("LP5907-5"), Some(String::new()))]
         );
+        // no part number names its package: every voltage in the form's
+        assert_eq!(versions(&variants, &parts, &[]).iter().map(|v| v.2.clone()).collect::<Vec<_>>(), vec![None, None, None]);
     }
 
     /// Every version made at once (no PDF: the LM7805 example's values): a part per voltage in its package's built-in
