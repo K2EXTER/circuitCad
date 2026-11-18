@@ -658,6 +658,26 @@ mod tests {
     }
 }
 
+/// The IRLML6344's Fig 3 (`microohm-meter/irlml6344.pdf`, on the author's PC; skipped elsewhere): the two transfer
+/// curves are a few Béziers each that run past the frame's bottom. Both come back, flattened into many points.
+#[cfg(test)]
+mod real_pdf_beziers {
+    #[test]
+    fn bezier_curves_clipped_by_the_frame_are_read() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/irlml6344.pdf");
+        let Ok(ds) = crate::Datasheet::open_file(&path) else { return };
+        let c = ds.vector_curves(2, crate::Rect { x0: 95.0, y0: 435.0, x1: 305.0, y1: 628.0 });
+        // the frame (7 points) and the two curves
+        let curves: Vec<_> = c.iter().filter(|c| c.points.len() >= 15).collect();
+        assert_eq!(curves.len(), 2, "{:?}", c.iter().map(|c| c.points.len()).collect::<Vec<_>>());
+        for k in curves {
+            // from the bottom edge (y near 609, ID = 0.1 A) up and to the right
+            let (a, b) = (k.points.first().unwrap(), k.points.last().unwrap());
+            assert!(a.1 > b.1 + 100.0 && b.0 > a.0 + 80.0, "{a:?} {b:?}");
+        }
+    }
+}
+
 /// On a real data sheet (the AO3400A's in `microohm-meter/`, on the author's PC; skipped elsewhere): the axes of
 /// Figure 6 (body diode, log current) set from two labels each put the other labels where they are printed.
 #[cfg(test)]
@@ -769,11 +789,16 @@ pub fn vector_curves(strokes: &[crate::Stroke], fills: &[crate::Fill], area: cra
     let inside = |p: &(f32, f32)| p.0 >= area.x0 && p.0 <= area.x1 && p.1 >= area.y0 && p.1 <= area.y1;
     // strokes that continue one another (Kingbright draws a curve as a chain of short pieces) joined into one line
     let mut chains: Vec<(Vec<(f32, f32)>, bool)> = vec![];
-    for s in strokes.iter().filter(|s| s.points.len() >= 2 && s.points.iter().all(inside)) {
+    // a curve drawn past the frame and clipped by it (Infineon's transfer curves start below the bottom edge) keeps
+    // its runs of points inside the area
+    let pieces = strokes.iter().filter(|s| s.points.len() >= 2).flat_map(|s| {
+        s.points.split(|p| !inside(p)).filter(|run| run.len() >= 2).map(move |run| (run, s.dashed))
+    });
+    for (run, dashed) in pieces {
         let near = |a: (f32, f32), b: (f32, f32)| (a.0 - b.0).abs() < 0.3 && (a.1 - b.1).abs() < 0.3;
         match chains.last_mut() {
-            Some((pts, dashed)) if *dashed == s.dashed && near(*pts.last().unwrap(), s.points[0]) => pts.extend_from_slice(&s.points[1..]),
-            _ => chains.push((s.points.clone(), s.dashed)),
+            Some((pts, d)) if *d == dashed && near(*pts.last().unwrap(), run[0]) => pts.extend_from_slice(&run[1..]),
+            _ => chains.push((run.to_vec(), dashed)),
         }
     }
     let mut out: Vec<VectorCurve> = chains.into_iter().filter(|(p, _)| p.len() >= 3).map(|(points, dashed)| VectorCurve { points, dashed, filled: false }).collect();
@@ -825,5 +850,17 @@ mod vector_tests {
         assert!((c[0].x_at(55.0).unwrap() - 35.0).abs() < 0.2, "{:?}", c[0].x_at(55.0));
         // the dashed line in a gap (y = 85 is between the first two dashes): 30 + 15 * 0.5 = 37.5
         assert!((c[1].x_at(85.0).unwrap() - 37.5).abs() < 0.3, "{:?}", c[1].x_at(85.0));
+    }
+
+    /// A curve drawn past the frame (clipped by it on the page) keeps its points inside the area; the frame's own
+    /// stroke, all inside, is kept whole.
+    #[test]
+    fn a_curve_running_past_the_frame_keeps_its_part_inside() {
+        let s = |points: Vec<(f32, f32)>| crate::Stroke { points, width: 1.0, dashed: false };
+        let curve = s(vec![(10.0, 130.0), (20.0, 110.0), (30.0, 90.0), (40.0, 70.0), (50.0, 50.0)]);
+        let area = crate::Rect { x0: 0.0, y0: 0.0, x1: 100.0, y1: 100.0 };
+        let c = vector_curves(&[curve], &[], area);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].points, vec![(30.0, 90.0), (40.0, 70.0), (50.0, 50.0)]);
     }
 }

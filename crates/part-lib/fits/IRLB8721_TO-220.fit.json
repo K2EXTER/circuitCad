@@ -1,0 +1,119 @@
+{
+  "kind": "mos",
+  "part": "IRLB8721_TO-220",
+  "name": "IRLB8721",
+  "pch": false,
+  "read": "2026-11-18",
+  "source": "International Rectifier IRLB8721PbF データシート (PD-97390, 2009-04)",
+  "url": "https://www.infineon.com/assets/row/public/documents/24/49/infineon-irlb8721-datasheet-en.pdf",
+  "description": "N チャネル パワーMOSFET 30V 62A (TO-220, ピン1=G 2=D 3=S)。ロジックレベル駆動 (4.5V でオン)。データシート (IR) の代表特性から作った等価モデル (レベル1 + 直列抵抗、ボディダイオードつき)",
+  "vth_range": [
+    1.35,
+    2.35,
+    2.5e-05
+  ],
+  "transfer": {
+    "at": "Fig 3 (伝達特性の代表特性、VDS = 15 V) の 25 °C (PDF の曲線の線から読んだ)",
+    "vds": 15.0,
+    "points": [
+      [
+        2.5,
+        0.1612
+      ],
+      [
+        3.0,
+        5.0092
+      ],
+      [
+        3.5,
+        23.4186
+      ],
+      [
+        4.0,
+        49.4157
+      ],
+      [
+        4.5,
+        75.5787
+      ],
+      [
+        5.0,
+        99.5041
+      ]
+    ]
+  },
+  "body_diode": {
+    "at": "Fig 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C (PDF の曲線の線から読んだ)",
+    "points": [
+      [
+        0.1,
+        0.517
+      ],
+      [
+        0.2,
+        0.5389
+      ],
+      [
+        0.5,
+        0.5667
+      ],
+      [
+        1.0,
+        0.5921
+      ],
+      [
+        2.0,
+        0.6186
+      ],
+      [
+        5.0,
+        0.6622
+      ],
+      [
+        10.0,
+        0.7028
+      ],
+      [
+        20.0,
+        0.7521
+      ],
+      [
+        50.0,
+        0.8794
+      ],
+      [
+        100.0,
+        1.0501
+      ]
+    ]
+  },
+  "rds": [
+    [
+      10.0,
+      31.0,
+      0.0065
+    ],
+    [
+      4.5,
+      25.0,
+      0.0131
+    ]
+  ],
+  "caps": {
+    "ciss": 1.077e-09,
+    "coss": 3.6e-10,
+    "crss": 1.1e-10
+  },
+  "gfs": [
+    35.0,
+    15.0,
+    25.0
+  ],
+  "remarks": [
+    "the table: VGS(th) 1.35 / 1.80 / 2.35 V (25 uA), RDS(on) typ 6.5 / 13.1 mohm (10 V 31 A, 4.5 V 25 A), max 8.7 / 16; Ciss 1077, Coss 360, Crss 110 pF (VGS = 0, VDS = 15 V, 1 MHz); gfs 35 S min (15 V, 25 A); VSD max 1.0 V at 25 A",
+    "transfer: Fig 3 (VDS = 15 V), the 25 C curve (the right one at small currents), read from its vector line",
+    "left out Fig 3's points above 120 A (6 V: 145 A, 7 V: 187 A; twice the continuous rating): level 1 cannot follow them and the on resistance together, and with them RDS(on) at 4.5 V came out 31 % high instead of 21 %",
+    "body_diode: Fig 7, the 25 C curve (the right one), 0.1 to 100 A",
+    "i_max is the TC = 25 C rating (62 A) with a heat sink; without one the part is held by theta_ja 62 C/W"
+  ]
+}

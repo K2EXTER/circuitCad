@@ -150,26 +150,40 @@ struct Collector {
 /// The first character of the Private Use Area: a glyph without Unicode is written as this plus its number.
 pub(crate) const BLIND_BASE: u32 = 0xE000;
 
+/// One step of a path in page points, its curves cut into short straight pieces.
+enum Flat {
+    Move((f32, f32)),
+    Line((f32, f32)),
+    Close,
+}
+
+/// The path in page points with its Bézier curves flattened (to 0.05 pt): Infineon draws its graphs' curves as a few
+/// Béziers, and their end points alone would cut the corners by whole volts.
+fn flat(path: &BezPath, props: &DrawProps<'_>, mut f: impl FnMut(Flat)) {
+    use hayro::kurbo::PathEl;
+    let page = props.transform * path.clone();
+    let at = |p: Point| (p.x as f32, p.y as f32);
+    hayro::kurbo::flatten(page.elements().iter().copied(), 0.05, |el| match el {
+        PathEl::MoveTo(p) => f(Flat::Move(at(p))),
+        PathEl::LineTo(p) => f(Flat::Line(at(p))),
+        PathEl::ClosePath => f(Flat::Close),
+        PathEl::QuadTo(..) | PathEl::CurveTo(..) => {}
+    });
+}
+
 impl Device<'_> for Collector {
     fn draw_path(&mut self, path: &BezPath, props: DrawProps<'_>, mode: &DrawMode) {
         if let DrawMode::Fill(_) = mode {
             let mut outlines: Vec<Vec<(f32, f32)>> = vec![];
-            for el in path.elements() {
-                use hayro::kurbo::PathEl;
-                let at = |p: Point| {
-                    let q = props.transform * p;
-                    (q.x as f32, q.y as f32)
-                };
-                match *el {
-                    PathEl::MoveTo(p) => outlines.push(vec![at(p)]),
-                    PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => {
-                        if let Some(o) = outlines.last_mut() {
-                            o.push(at(p));
-                        }
+            flat(path, &props, |el| match el {
+                Flat::Move(q) => outlines.push(vec![q]),
+                Flat::Line(q) => {
+                    if let Some(o) = outlines.last_mut() {
+                        o.push(q);
                     }
-                    PathEl::ClosePath => {}
                 }
-            }
+                Flat::Close => {}
+            });
             outlines.retain(|o| o.len() >= 3);
             // a filled rectangle or a dot is no curve: only shapes with some points are kept
             if outlines.iter().map(Vec::len).sum::<usize>() >= 12 {
@@ -188,25 +202,19 @@ impl Device<'_> for Collector {
             }
             pts.clear();
         };
-        for el in path.elements() {
-            use hayro::kurbo::PathEl;
-            let at = |p: Point| {
-                let q = props.transform * p;
-                (q.x as f32, q.y as f32)
-            };
-            match *el {
-                PathEl::MoveTo(p) => {
-                    flush(&mut points, &mut self.strokes);
-                    points.push(at(p));
-                }
-                PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => points.push(at(p)),
-                PathEl::ClosePath => {
-                    if let Some(&first) = points.first() {
-                        points.push(first);
-                    }
+        let strokes = &mut self.strokes;
+        flat(path, &props, |el| match el {
+            Flat::Move(q) => {
+                flush(&mut points, strokes);
+                points.push(q);
+            }
+            Flat::Line(q) => points.push(q),
+            Flat::Close => {
+                if let Some(&first) = points.first() {
+                    points.push(first);
                 }
             }
-        }
+        });
         flush(&mut points, &mut self.strokes);
     }
     fn push_clip_path(&mut self, _: &ClipPath) {}

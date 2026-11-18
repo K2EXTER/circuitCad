@@ -1,0 +1,109 @@
+{
+  "kind": "mos",
+  "part": "IRLML6344_SOT-23",
+  "name": "IRLML6344",
+  "pch": false,
+  "read": "2026-11-18",
+  "source": "Infineon (IR) IRLML6344TRPbF データシート (2014-12-19 版)",
+  "url": "https://www.infineon.com/assets/row/public/documents/24/49/infineon-irlml6344-datasheet-en.pdf",
+  "description": "N チャネル MOSFET 30V 5A (SOT-23, ピン1=G 2=S 3=D)。ロジックレベル駆動 (2.5V でオン)。データシート (Infineon) の代表特性から作った等価モデル (レベル1 + 直列抵抗、ボディダイオードつき)",
+  "vth_range": [
+    0.5,
+    1.1,
+    1e-05
+  ],
+  "transfer": {
+    "at": "Fig 3 (伝達特性の代表特性、VDS = 15 V) の 25 °C (PDF の曲線の線から読んだ)",
+    "vds": 15.0,
+    "points": [
+      [
+        1.3,
+        0.121
+      ],
+      [
+        1.4,
+        0.5982
+      ],
+      [
+        1.5,
+        1.7082
+      ],
+      [
+        1.6,
+        3.6507
+      ],
+      [
+        1.8,
+        9.7233
+      ],
+      [
+        2.0,
+        17.0897
+      ],
+      [
+        2.2,
+        24.2227
+      ]
+    ]
+  },
+  "body_diode": {
+    "at": "Fig 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C (PDF の曲線の線から読んだ)",
+    "points": [
+      [
+        0.2,
+        0.6046
+      ],
+      [
+        0.5,
+        0.6338
+      ],
+      [
+        1.0,
+        0.6632
+      ],
+      [
+        2.0,
+        0.7123
+      ],
+      [
+        5.0,
+        0.7982
+      ],
+      [
+        10.0,
+        0.8826
+      ],
+      [
+        20.0,
+        0.9914
+      ]
+    ]
+  },
+  "rds": [
+    [
+      4.5,
+      5.0,
+      0.022
+    ],
+    [
+      2.5,
+      4.0,
+      0.027
+    ]
+  ],
+  "caps": {
+    "ciss": 6.5e-10,
+    "coss": 6.5e-11,
+    "crss": 4.6e-11
+  },
+  "gfs": [
+    19.0,
+    10.0,
+    5.0
+  ],
+  "remarks": [
+    "the table: VGS(th) 0.5 / 0.8 / 1.1 V (10 uA), RDS(on) typ 22 / 27 mohm (4.5 V 5 A, 2.5 V 4 A), max 29 / 37; Ciss 650, Coss 65, Crss 46 pF (VGS = 0, VDS = 25 V, 1 MHz); gfs 19 S min (10 V, 5 A); VSD max 1.2 V at 5 A",
+    "transfer: Fig 3 (VDS = 15 V), the 25 C curve, read from its vector line (Infineon draws it as Beziers, flattened by the reader; the curves run past the frame and are clipped)",
+    "body_diode: Fig 7, the 25 C curve (the right one), 0.2 to 20 A"
+  ]
+}

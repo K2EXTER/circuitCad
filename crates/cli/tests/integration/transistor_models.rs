@@ -400,6 +400,9 @@ fn source(part: &str) -> &'static str {
         "IRFZ44N" => "Infineon IRFZ44NPbF データシート (Rev. 2.1, 2026-08-11)。25 °C",
         "IRLZ44N" => "International Rectifier IRLZ44NPbF データシート (PD-94831, 2003-11-11)。25 °C",
         "IRF9540N" => "International Rectifier IRF9540NPbF データシート (PD-94790A)。25 °C",
+        "IRLML6344" => "Infineon (IR) IRLML6344TRPbF データシート (2014-12-19 版)。25 °C",
+        "IRLML6401" => "Infineon (IR) IRLML6401PbF データシート (2014-04-28 版)。25 °C",
+        "IRLB8721" => "International Rectifier IRLB8721PbF データシート (PD-97390, 2009-04)。25 °C",
         "BC547" => "onsemi BC546B/BC547A,B,C/BC548B,C データシート (BC546/D Rev. 8, 2021-08)。BC547B、25 °C",
         "2N7000" => "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
         "BSS138" => "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
@@ -514,8 +517,6 @@ net CO Q1.C RC.1
         });
     }
     // the power MOSFETs whose data sheets give VGS(th) and RDS(on) as min / max only (Infineon, the former IR): RDS(on) and the
-    // body diode at the typical curves' values, the table's limits next to them
-    // the power MOSFETs whose data sheets give VGS(th) and RDS(on) as min / max only (Infineon, the former IR): RDS(on) and the
     // body diode at the typical curves' values, the table's limits next to them. A P channel is measured with its data sheet's
     // signs (negative), as the AO3401A
     struct Power {
@@ -547,6 +548,49 @@ net CO Q1.C RC.1
             v.push(Row { part, item: format!("VSD ({is_lo} A)"), ds: [None, Some(vsd_lo), None], unit: "V", at: "ボディダイオード、図 7 の 25 °C".into(), measure: Box::new(move || vsd(part, s * is_lo)), tol: Some(0.02) });
             v.push(Row { part, item: format!("VSD ({id} A)"), ds: [None, None, Some(vsd_max)], unit: "V", at: "ボディダイオード、表の max".into(), measure: Box::new(move || vsd(part, s * id)), tol: None });
         }
+    }
+    // the logic level MOSFETs of Infineon (the former IR), fitted to Fig 3 (transfer) and the RDS(on) typ, with the body diode
+    // of Fig 7 (all read from the curves' vector lines): VGS(th) next to the table's range (the fit does not aim at it), RDS(on),
+    // ID on the transfer curve, VSD. The IRLML6401's RDS(on) typ is read off Fig 1 (its table gives max only)
+    struct Logic {
+        part: &'static str,
+        sign: f64,
+        vth: (f64, f64, f64, f64),
+        on: &'static [(f64, f64, f64, f64)],
+        transfer: (f64, &'static [(f64, f64)]),
+        diode: ((f64, f64), (f64, f64)),
+    }
+    let logic = [
+        Logic { part: "IRLML6344", sign: 1.0, vth: (0.5, 0.8, 1.1, 10e-6), on: &[(4.5, 5.0, 0.022, 0.029), (2.5, 4.0, 0.027, 0.037)], transfer: (15.0, &[(1.5, 1.7082), (2.0, 17.0897)]), diode: ((1.0, 0.6632), (5.0, 1.2)) },
+        Logic { part: "IRLML6401", sign: -1.0, vth: (0.40, 0.55, 0.95, 250e-6), on: &[(4.5, 4.3, 0.0353, 0.050), (2.5, 2.5, 0.0506, 0.085), (1.8, 2.0, 0.0757, 0.125)], transfer: (12.0, &[(1.4, 5.7693), (2.0, 17.1194)]), diode: ((1.0, 0.6831), (1.3, 1.2)) },
+        Logic { part: "IRLB8721", sign: 1.0, vth: (1.35, 1.80, 2.35, 25e-6), on: &[(10.0, 31.0, 0.0065, 0.0087), (4.5, 25.0, 0.0131, 0.016)], transfer: (15.0, &[(3.5, 23.4186), (5.0, 99.5041)]), diode: ((1.0, 0.5921), (25.0, 1.0)) },
+    ];
+    for Logic { part, sign: s, vth: (lo, typ, hi, it), on, transfer: (vds, points), diode: ((is_lo, vsd_lo), (is_tab, vsd_max)) } in logic {
+        v.push(Row { part, item: "しきい値 VGS(th)".into(), ds: [Some(lo), Some(typ), Some(hi)], unit: "V", at: format!("|VDS| = |VGS|、|ID| = {} µA (表。モデルは伝達特性に合わせたので、ここは比べるだけ)", it * 1e6), measure: Box::new(move || vth(part, s * it).abs()), tol: None });
+        for &(vgs, id, typ, max) in on {
+            v.push(Row {
+                part,
+                item: format!("RDS(on) (|VGS| = {vgs} V)"),
+                ds: [None, Some(typ * 1e3), Some(max * 1e3)],
+                unit: "mΩ",
+                at: format!("|ID| = {id} A。{}", if part == "IRLML6401" { "typ は図 1 (VDS = 0.2 V) から、max は表" } else { "表の typ・max" }),
+                measure: Box::new(move || rds(part, s * vgs, s * id) * 1e3),
+                tol: Some(0.35 * typ * 1e3),
+            });
+        }
+        for &(vgs, id) in points {
+            v.push(Row {
+                part,
+                item: format!("ID (|VGS| = {vgs} V)"),
+                ds: [None, Some(id), None],
+                unit: "A",
+                at: format!("|VDS| = {vds} V、図 3 の 25 °C"),
+                measure: Box::new(move || id_sweep(part, s * vds, s * vgs, s * (vgs + 0.01)).first().map(|p| p.1).unwrap()),
+                tol: Some(0.25 * id),
+            });
+        }
+        v.push(Row { part, item: format!("VSD ({is_lo} A)"), ds: [None, Some(vsd_lo), None], unit: "V", at: "ボディダイオード、図 7 の 25 °C".into(), measure: Box::new(move || vsd(part, s * is_lo)), tol: Some(0.03) });
+        v.push(Row { part, item: format!("VSD ({is_tab} A)"), ds: [None, None, Some(vsd_max)], unit: "V", at: "ボディダイオード、表の max".into(), measure: Box::new(move || vsd(part, s * is_tab)), tol: None });
     }
     // PC817: the LED (Figure 7 and the table), the output current on the flat part (Figure 8; the table's 2.5 to 30 mA at
     // IF = 5 mA is the spread of the ranks), VCE(sat) (the table)
@@ -621,7 +665,9 @@ fn report() -> (String, Vec<(String, String, Vec<part_lib::model_checks::CheckRo
         let target = r.ds[1].or(r.ds[2]);
         let diff = target.map(|t| if v >= t { format!("+{}", show(v - t)) } else { show(v - t) }).unwrap_or_else(|| "—".into());
         let unit = |t: String| if t == "—" || r.unit.is_empty() { t } else { format!("{t} {}", r.unit) };
-        out += &format!("| {} | {} | {} | {} | {} |\n", r.item, unit(ds.clone()), r.at, unit(show(v)), unit(diff.clone()));
+        // a |VGS| in a cell would end the cell: escaped for the markdown table
+        let cell = |t: &str| t.replace('|', "\\|");
+        out += &format!("| {} | {} | {} | {} | {} |\n", cell(&r.item), unit(ds.clone()), cell(&r.at), unit(show(v)), unit(diff.clone()));
         tables.last_mut().unwrap().2.push(part_lib::model_checks::CheckRow {
             item: r.item.clone(),
             datasheet: unit(ds),

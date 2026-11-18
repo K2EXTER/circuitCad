@@ -1,0 +1,115 @@
+{
+  "kind": "mos",
+  "part": "IRLML6401_SOT-23",
+  "name": "IRLML6401",
+  "pch": true,
+  "read": "2026-11-18",
+  "source": "Infineon (IR) IRLML6401PbF データシート (2014-04-28 版)",
+  "url": "https://www.infineon.com/assets/row/public/documents/24/49/infineon-irlml6401-datasheet-en.pdf",
+  "description": "P チャネル MOSFET −12V −4.3A (SOT-23, ピン1=G 2=S 3=D)。ロジックレベル駆動 (−1.8V でオン)。データシート (Infineon) の代表特性から作った等価モデル (レベル1 + 直列抵抗、ボディダイオードつき)",
+  "vth_range": [
+    0.4,
+    0.95,
+    0.00025
+  ],
+  "transfer": {
+    "at": "Fig 3 (伝達特性の代表特性、VDS = −12 V) の 25 °C (PDF の曲線の線から読んだ)",
+    "vds": 12.0,
+    "points": [
+      [
+        1.0,
+        0.6054
+      ],
+      [
+        1.2,
+        2.6033
+      ],
+      [
+        1.4,
+        5.7693
+      ],
+      [
+        1.6,
+        9.1904
+      ],
+      [
+        1.8,
+        13.1683
+      ],
+      [
+        2.0,
+        17.1194
+      ],
+      [
+        2.5,
+        27.0064
+      ]
+    ]
+  },
+  "body_diode": {
+    "at": "Fig 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C (PDF の曲線の線から読んだ)",
+    "points": [
+      [
+        0.2,
+        0.5571
+      ],
+      [
+        0.5,
+        0.6212
+      ],
+      [
+        1.0,
+        0.6831
+      ],
+      [
+        2.0,
+        0.759
+      ],
+      [
+        5.0,
+        0.8918
+      ],
+      [
+        10.0,
+        1.0576
+      ],
+      [
+        20.0,
+        1.3317
+      ]
+    ]
+  },
+  "rds": [
+    [
+      4.5,
+      5.67,
+      0.0353
+    ],
+    [
+      2.5,
+      3.95,
+      0.0506
+    ],
+    [
+      1.8,
+      2.64,
+      0.0757
+    ]
+  ],
+  "caps": {
+    "ciss": 8.3e-10,
+    "coss": 1.8e-10,
+    "crss": 1.25e-10
+  },
+  "gfs": [
+    8.6,
+    10.0,
+    4.3
+  ],
+  "remarks": [
+    "the table: VGS(th) -0.40 / -0.55 / -0.95 V (250 uA), RDS(on) max only: 50 / 85 / 125 mohm (-4.5 V -4.3 A, -2.5 V -2.5 A, -1.8 V -2 A); Ciss 830, Coss 180, Crss 125 pF (VGS = 0, VDS = -10 V, 1 MHz); gfs 8.6 S min; VSD max 1.2 V at 1.3 A",
+    "rds: the typ on resistances are not in the table: Fig 1 (output characteristics, 25 C) at -VDS = 0.2 V, the curves in the legend's order from the top (7, 5, 4.5, 3, 2.5, 1.8, 1.5, 1.0 V): 5.67 A at 4.5 V, 3.95 A at 2.5 V, 2.64 A at 1.8 V (each under the table's max)",
+    "transfer: Fig 3 (VDS = -12 V), the 25 C curve (the upper one above 1.3 V), read from its vector line",
+    "body_diode: Fig 7, the 25 C curve (the right one), 0.2 to 20 A"
+  ]
+}

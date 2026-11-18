@@ -1,0 +1,104 @@
+{
+  "name": "IRLML6344",
+  "category": "MOSFET",
+  "description": "N チャネル MOSFET 30V 5A (SOT-23, ピン1=G 2=S 3=D)。ロジックレベル駆動 (2.5V でオン)。データシート (Infineon) の代表特性から作った等価モデル (レベル1 + 直列抵抗、ボディダイオードつき)",
+  "prefix": "Q",
+  "footprint_name": "SOT-23_MOS",
+  "pins": [
+    {
+      "number": "1",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "D",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "S",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "IRLML6344",
+    "text": ".subckt IRLML6344 d g s\nM1 d g s s MCH\nDbody s d DBODY\n.model MCH NMOS(VTO=1.236 KP=53.99 RD=0.01484 RS=0 CGS=6.04e-10 CGD=4.6e-11)\n.model DBODY D(IS=7.721e-07 N=1.832 RS=0.009445)\n.ends IRLML6344",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "limits": [
+      "データシートの代表特性と typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Infineon (IR) IRLML6344TRPbF データシート (2014-12-19 版)。データシートとの比べは docs/models/transistors.md。",
+      "レベル1 (2乗則) にドレインとソースの直列抵抗 RD・RS を足し、Fig 3 (伝達特性の代表特性、VDS = 15 V) の 25 °C (PDF の曲線の線から読んだ) (7 点) とオン抵抗 RDS(on) (2 点) に合わせました (データシートに VGS(th) の typ が無いので、しきい値も伝達特性から決めました)。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+      "ボディダイオード: Fig 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C (PDF の曲線の線から読んだ) の 7 点に IS・N・RS を当てはめました (逆回復は扱いません)。",
+      "扱わないもの: 出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、温度によるオン抵抗の増加、耐圧・定格電流を超えたときの破壊。しきい値のすぐ上の小さい電流は、2乗則なので実物と違います。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Infineon (IR) IRLML6344TRPbF データシート (2014-12-19 版)"
+    }
+  },
+  "ratings": {
+    "v_max": 30.0,
+    "i_max": 5.0,
+    "p_max": 1.3,
+    "t_max": 150.0,
+    "theta_ja": 100.0,
+    "rows": [
+      {
+        "name": "しきい値電圧",
+        "value": "0.5〜1.1V (typ 0.8V)",
+        "condition": "ID = 10µA"
+      },
+      {
+        "name": "オン抵抗",
+        "value": "22mΩ (typ)・29mΩ (最大)",
+        "condition": "VGS = 4.5V, ID = 5A"
+      },
+      {
+        "name": "オン抵抗",
+        "value": "27mΩ (typ)・37mΩ (最大)",
+        "condition": "VGS = 2.5V, ID = 4A"
+      },
+      {
+        "name": "ゲート電圧の最大",
+        "value": "±12V",
+        "condition": ""
+      }
+    ]
+  },
+  "datasheet": "https://www.infineon.com/assets/row/public/documents/24/49/infineon-irlml6344-datasheet-en.pdf"
+}
