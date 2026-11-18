@@ -191,7 +191,12 @@ impl SchEditor {
     pub fn lineup_in_form(&mut self, parts: &str) {
         if let Some(f) = self.form.as_mut() {
             let parts: Vec<&str> = parts.split(',').map(str::trim).filter(|p| !p.is_empty()).collect();
-            f.lineup_read_and_pick(&parts);
+            // a coil's form reads the inductor table, else the capacitor's
+            if f.pas_kind == part_lib::passive::PassiveKind::Inductor {
+                f.coil_lineup_read_and_pick(&parts);
+            } else {
+                f.lineup_read_and_pick(&parts);
+            }
         }
     }
 

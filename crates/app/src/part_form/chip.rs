@@ -156,6 +156,7 @@ impl PartForm {
             self.pas_chart(ui);
             if kind == PassiveKind::Inductor {
                 self.pas_saturation(ui);
+                self.coil_lineup_ui(ui);
             }
             self.pas_temperature(ui);
             if ui.button(i18n::tr("部品を作る (ピンとモデルを入れる)")).on_hover_text(i18n::tr("ピン、記号、値、モデルを入れます。パッケージは下の「パッケージ」で選びます")).clicked() {

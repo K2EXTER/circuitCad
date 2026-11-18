@@ -214,6 +214,8 @@ pub struct PartForm {
     pub reg: linear::RegulatorInput,
     /// The electrolytic capacitor's lineup picker (`elcap_lineup.rs`).
     pub lineup: elcap_lineup::LineupInput,
+    /// The power inductor's lineup picker (`coil_lineup.rs`).
+    pub coil_lineup: coil_lineup::CoilLineupInput,
     /// The Darlington box (`darlington.rs`), the optocoupler and photodiode boxes (`opto.rs`).
     pub darl: darlington::DarlingtonInput,
     pub opto: opto::OptoInput,
@@ -409,6 +411,7 @@ impl Default for PartForm {
             opamp: Default::default(),
             reg: Default::default(),
             lineup: Default::default(),
+            coil_lineup: Default::default(),
             darl: Default::default(),
             model_box: None,
             opto: Default::default(),
@@ -489,6 +492,7 @@ mod heat_fill;
 mod companion_fill;
 mod reg_fill;
 mod elcap_lineup;
+mod coil_lineup;
 pub mod simple_kinds;
 mod logic;
 mod pdf_check;
