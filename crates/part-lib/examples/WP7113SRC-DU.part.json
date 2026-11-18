@@ -1,0 +1,117 @@
+{
+  "name": "WP7113SRC-DU",
+  "category": "LED",
+  "description": "赤 (高輝度)色 LED 5 mm (T-1 3/4、GaAlAs、透明レンズ) WP7113SRC/DU。VF 1.85 V typ / 2.5 V max (20 mA)、最大電流 30 mA。データシート (Kingbright) の代表特性から作った等価モデル",
+  "datasheet": "https://www.kingbrightusa.com/images/catalog/SPEC/WP7113SRC-DU.pdf",
+  "prefix": "D",
+  "pins": [
+    {
+      "number": "K",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "A",
+      "name": "A",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "K",
+        "x": -1.27,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 0.9
+      },
+      {
+        "pin": "A",
+        "x": 1.27,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 0.9
+      }
+    ]
+  },
+  "footprint_name": "LED_5mm",
+  "height": 8.6,
+  "body": {
+    "shape": "circle",
+    "w": 5.9,
+    "h": 0.0,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "bar",
+    "mark_pin": "K"
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "WP7113SRC_DU",
+    "text": ".model WP7113SRC_DU D(IS=1.385e-18 N=1.891 RS=1.984 BV=5 IBV=1e-05 EG=2.295 XTI=2 CJO=4.5e-11 VJ=0.7 M=0.5)",
+    "pins": [
+      "A",
+      "K"
+    ],
+    "params": {},
+    "limits": [
+      "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: Kingbright WP7113SRC/DU データシート (DSAF2430 Rev V.13A (2020-05-25))。データシートとの比べは docs/models/diodes.md。",
+      "順方向: Forward Current vs. Forward Voltage の図 (Ta = 25 °C) を読んだ 9 点に、IS・N・RS を当てはめました (部品作成フォームのダイオードと同じ計算)。",
+      "接合容量: 表の容量 C の typ 45 pF (曲線が無いので VJ と M は決め打ち)。逆電圧で小さくなります。",
+      "降伏: 降伏はデータシートに無いので、逆電圧の絶対最大定格 5 V に置いた (電流は表の IR の最大 10 µA。実物の LED は逆電圧に弱いので、5 V を超えないようにします)。",
+      "温度: 同じ図の 85 °C の曲線に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 1.7〜2.4 mV 下がります。",
+      "逆回復は扱いません (データシートに trr は無い)。",
+      "扱わないもの: 逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、自己発熱。耐圧や定格電流を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Kingbright WP7113SRC/DU データシート (DSAF2430 Rev V.13A (2020-05-25))"
+    }
+  },
+  "ratings": {
+    "v_max": 5.0,
+    "i_max": 0.03,
+    "p_max": 0.075,
+    "t_max": 115.0,
+    "theta_ja": 580.0,
+    "rows": [
+      {
+        "name": "順方向電圧",
+        "value": "1.85 V (typ)・2.5 V (max)",
+        "condition": "IF = 20 mA"
+      },
+      {
+        "name": "光度",
+        "value": "1000 mcd (min)・1300 mcd (typ)",
+        "condition": "IF = 20 mA"
+      },
+      {
+        "name": "主波長",
+        "value": "640 nm",
+        "condition": "IF = 20 mA"
+      },
+      {
+        "name": "ピーク電流",
+        "value": "155 mA",
+        "condition": "デューティ 1/10・パルス幅 0.1 ms"
+      },
+      {
+        "name": "温度係数 (VF)",
+        "value": "-1.9 mV/℃",
+        "condition": "IF = 20 mA"
+      },
+      {
+        "name": "熱抵抗 θJA",
+        "value": "580 ℃/W",
+        "condition": "FR4 の基板、パッド 16 mm² 以上"
+      }
+    ]
+  },
+  "glyph": "led"
+}

@@ -1,0 +1,107 @@
+{
+  "kind": "diode",
+  "part": "WP7113ID",
+  "name": "WP7113ID",
+  "read": "2026-11-18",
+  "source": "Kingbright WP7113ID データシート (DSAF0012 Rev V.14A (2026-01-08))",
+  "url": "https://www.kingbrightusa.com/images/catalog/SPEC/WP7113ID.pdf",
+  "description": "赤色 LED 5 mm (T-1 3/4、GaAsP/GaP、拡散レンズ) WP7113ID。VF 1.9 V typ / 2.3 V max (10 mA)、最大電流 30 mA。データシート (Kingbright) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "Forward Current vs. Forward Voltage の図 (Ta = 25 °C)",
+    "points": [
+      [
+        0.0005,
+        1.6168
+      ],
+      [
+        0.001,
+        1.6549
+      ],
+      [
+        0.002,
+        1.7063
+      ],
+      [
+        0.005,
+        1.8116
+      ],
+      [
+        0.008,
+        1.8786
+      ],
+      [
+        0.01,
+        1.912
+      ],
+      [
+        0.012,
+        1.9361
+      ],
+      [
+        0.015,
+        1.9609
+      ],
+      [
+        0.018,
+        1.9907
+      ]
+    ]
+  },
+  "hot": {
+    "temp": 85.0,
+    "points": [
+      [
+        0.0005,
+        1.5028
+      ],
+      [
+        0.001,
+        1.5409
+      ],
+      [
+        0.002,
+        1.5923
+      ],
+      [
+        0.005,
+        1.6976
+      ],
+      [
+        0.008,
+        1.7646
+      ],
+      [
+        0.01,
+        1.798
+      ],
+      [
+        0.012,
+        1.8221
+      ],
+      [
+        0.015,
+        1.8469
+      ],
+      [
+        0.018,
+        1.8767
+      ]
+    ]
+  },
+  "breakdown": {
+    "v": 5.0,
+    "i": 9.999999999999999e-06,
+    "note": "降伏はデータシートに無いので、逆電圧の絶対最大定格 5 V に置いた (電流は表の IR の最大 10 µA。実物の LED は逆電圧に弱いので、5 V を超えないようにします)"
+  },
+  "capacitance": {
+    "at": "データシートに容量が無いので入れない",
+    "points": []
+  },
+  "no_recovery": "逆回復は扱いません (データシートに trr は無い)。",
+  "remarks": [
+    "the forward curve read with `cargo run -p datasheet --example ds -- trace ... strokes rows` (the curve's vector line in the PDF)",
+    "the table: VF 1.9 V typ / 2.3 V max at 10 mA, IR max 10 uA at 5 V, no capacitance",
+    "hot: no curve at another temperature; the table's TC of VF (-1.9 mV/C at 10 mA, -10 to 85 C) applied to the whole 25 C curve at 85 C",
+    "N comes out near 3: the GaAsP/GaP curve of the sheet is that soft (1.62 V at 0.5 mA to 1.99 V at 18 mA); the low-current points are read off a linear 0-20 mA axis, so they are the least sure"
+  ]
+}

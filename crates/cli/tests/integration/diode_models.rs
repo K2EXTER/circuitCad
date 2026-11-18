@@ -1,4 +1,4 @@
-//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, SS34, SS36, the LEDs WP7113SGD, SYD, QBC/D, 1N5408, 1N5822, UF4007, BAT54, the zeners 1N4728A,
+//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, SS34, SS36, the LEDs WP7113SGD, SYD, QBC/D, SRC/DU, ID, 1N5408, 1N5822, UF4007, BAT54, the zeners 1N4728A,
 //! 1N4733A, 1N4742A and the photodiode BPW34) measured the way their data sheets measure them, next to the data sheets' numbers
 //! (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`), like `regulator_models.rs`.
 //!
@@ -93,7 +93,7 @@ const ONSEMI_BAT54: &str = "onsemi BAT54L データシート (BAT54LT1/D Rev. 18
 const ZENER_47XX: &str = "onsemi 1N4728A Series (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A (Document Number 85816, Rev. 2.7, 2024-11) のデータシート。25 °C";
 const VISHAY_BPW34: &str = "Vishay BPW34, BPW34S データシート (Document Number 81521, Rev. 2.1, 2011-08)。25 °C、光は 950 nm";
 const VISHAY_SS1X: &str = "Vishay SS12〜SS16 データシート (Document Number 88746, Revision 23-Apr-2020)。25 °C";
-const KINGBRIGHT_WP7113: &str = "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C";
+const KINGBRIGHT_WP7113: &str = "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C";
 const VISHAY_SS3X: &str = "Vishay SS32〜SS36 データシート (Document Number 88751, Revision 23-Apr-2020)。25 °C";
 
 fn source(part: &str) -> &'static str {
@@ -102,7 +102,7 @@ fn source(part: &str) -> &'static str {
         "1N5817" | "1N5819" => ONSEMI_581X,
         "SS14" => VISHAY_SS1X,
         "SS34" | "SS36" => VISHAY_SS3X,
-        "WP7113SGD" | "WP7113SYD" | "WP7113QBC-D" => KINGBRIGHT_WP7113,
+        "WP7113SGD" | "WP7113SYD" | "WP7113QBC-D" | "WP7113SRC-DU" | "WP7113ID" => KINGBRIGHT_WP7113,
         "1N5408" => VISHAY_5400,
         "1N5822" => VISHAY_5820,
         "UF4007" => VISHAY_UF400X,
@@ -203,19 +203,21 @@ fn rows() -> Vec<Row> {
         }
         v.push(Row { part, item: format!("逆電流 ({rated} V)"), ds: [None, None, Some(0.5)], unit: "mA", at: "IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない)".into(), measure: Box::new(move || ir(part, rated) * 1e3), tol: None });
     }
-    // the 5 mm LEDs: the IF-VF figure (read from the curve's vector line), the table's VF typ / max at 20 mA, IR max at 5 V,
-    // the table's capacitance (green, yellow; the blue's sheet gives none)
+    // the 5 mm LEDs: the IF-VF figure (read from the curve's vector line), the table's VF typ / max at 20 mA (the ID: 10 mA), IR max at 5 V,
+    // the table's capacitance (green, yellow, bright red; the blue's and the ID's sheets give none)
     #[allow(clippy::type_complexity)]
-    let leds: [(&'static str, [(f64, f64); 4], (f64, f64), f64, Option<f64>); 3] = [
-        ("WP7113SGD", [(1e-3, 1.8463), (5e-3, 1.9494), (10e-3, 2.0374), (20e-3, 2.2097)], (2.2, 2.5), 10.0, Some(15.0)),
-        ("WP7113SYD", [(1e-3, 1.8039), (5e-3, 1.8977), (10e-3, 1.9508), (20e-3, 2.0114)], (2.0, 2.5), 10.0, Some(25.0)),
-        ("WP7113QBC-D", [(1e-3, 2.5928), (5e-3, 2.8254), (10e-3, 3.0194), (20e-3, 3.3154)], (3.3, 4.0), 50.0, None),
+    let leds: [(&'static str, [(f64, f64); 4], f64, (f64, f64), f64, Option<f64>); 5] = [
+        ("WP7113SGD", [(1e-3, 1.8463), (5e-3, 1.9494), (10e-3, 2.0374), (20e-3, 2.2097)], 20e-3, (2.2, 2.5), 10.0, Some(15.0)),
+        ("WP7113SYD", [(1e-3, 1.8039), (5e-3, 1.8977), (10e-3, 1.9508), (20e-3, 2.0114)], 20e-3, (2.0, 2.5), 10.0, Some(25.0)),
+        ("WP7113QBC-D", [(1e-3, 2.5928), (5e-3, 2.8254), (10e-3, 3.0194), (20e-3, 3.3154)], 20e-3, (3.3, 4.0), 50.0, None),
+        ("WP7113SRC-DU", [(1e-3, 1.6843), (5e-3, 1.7607), (10e-3, 1.8071), (20e-3, 1.8564)], 20e-3, (1.85, 2.5), 10.0, Some(45.0)),
+        ("WP7113ID", [(1e-3, 1.6549), (5e-3, 1.8116), (10e-3, 1.9120), (18e-3, 1.9907)], 10e-3, (1.9, 2.3), 10.0, None),
     ];
-    for (part, fwd, (vtyp, vmax), irmax, c) in leds {
+    for (part, fwd, itab, (vtyp, vmax), irmax, c) in leds {
         for (i, typ) in fwd {
             v.push(Row { part, item: format!("順方向電圧 ({} mA)", i * 1e3), ds: [None, Some(typ), None], unit: "V", at: "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)".into(), measure: Box::new(move || vf(part, i)), tol: Some(0.03) });
         }
-        v.push(Row { part, item: "順方向電圧 (表、20 mA)".into(), ds: [None, Some(vtyp), Some(vmax)], unit: "V", at: "VF: 表の typ と max (±0.1 V の測定の許容差)".into(), measure: Box::new(move || vf(part, 20e-3)), tol: Some(0.1) });
+        v.push(Row { part, item: format!("順方向電圧 (表、{} mA)", itab * 1e3), ds: [None, Some(vtyp), Some(vmax)], unit: "V", at: "VF: 表の typ と max (±0.1 V の測定の許容差)".into(), measure: Box::new(move || vf(part, itab)), tol: Some(0.1) });
         v.push(Row { part, item: "逆電流 (5 V)".into(), ds: [None, None, Some(irmax)], unit: "µA", at: "IR: VR = 5 V (表の max)".into(), measure: Box::new(move || ir(part, 5.0) * 1e6), tol: None });
         if let Some(c) = c {
             v.push(Row { part, item: "容量 (0 V)".into(), ds: [None, Some(c), None], unit: "pF", at: "C: 表の typ".into(), measure: Box::new(move || cap(part, 0.0, c * 1e-12) * 1e12), tol: Some(0.2 * c) });

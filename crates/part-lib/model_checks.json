@@ -4377,9 +4377,70 @@
       }
     ]
   },
+  "WP7113ID": {
+    "fingerprint": "4a9f5a8f76a377f1",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (1 mA)",
+        "datasheet": "— / 1.655 / — V",
+        "target": "1.655 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.662 V",
+        "diff": "+0.0070 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (5 mA)",
+        "datasheet": "— / 1.812 / — V",
+        "target": "1.812 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.814 V",
+        "diff": "+0.0026 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 mA)",
+        "datasheet": "— / 1.912 / — V",
+        "target": "1.912 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.901 V",
+        "diff": "-0.0109 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (18 mA)",
+        "datasheet": "— / 1.991 / — V",
+        "target": "1.991 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.999 V",
+        "diff": "+0.0083 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、10 mA)",
+        "datasheet": "— / 1.900 / 2.300 V",
+        "target": "1.900 V",
+        "condition": "VF: 表の typ と max (±0.1 V の測定の許容差)",
+        "model": "1.901 V",
+        "diff": "+0.0011 V",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (5 V)",
+        "datasheet": "— / — / 10.000 µA",
+        "target": "max 10.000 µA",
+        "condition": "IR: VR = 5 V (表の max)",
+        "model": "9.992 µA",
+        "diff": "-0.0082 µA",
+        "tested": false
+      }
+    ]
+  },
   "WP7113QBC-D": {
     "fingerprint": "d1a83dd4571cff2b",
-    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C",
     "date": "2026-11-14",
     "rows": [
       {
@@ -4440,7 +4501,7 @@
   },
   "WP7113SGD": {
     "fingerprint": "b1c063a1e005753c",
-    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C",
     "date": "2026-11-14",
     "rows": [
       {
@@ -4508,9 +4569,79 @@
       }
     ]
   },
+  "WP7113SRC-DU": {
+    "fingerprint": "223454e20f91892b",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (1 mA)",
+        "datasheet": "— / 1.684 / — V",
+        "target": "1.684 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.675 V",
+        "diff": "-0.0089 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (5 mA)",
+        "datasheet": "— / 1.761 / — V",
+        "target": "1.761 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.762 V",
+        "diff": "+0.0013 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 mA)",
+        "datasheet": "— / 1.807 / — V",
+        "target": "1.807 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.806 V",
+        "diff": "-0.0013 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (20 mA)",
+        "datasheet": "— / 1.856 / — V",
+        "target": "1.856 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.860 V",
+        "diff": "+0.0032 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、20 mA)",
+        "datasheet": "— / 1.850 / 2.500 V",
+        "target": "1.850 V",
+        "condition": "VF: 表の typ と max (±0.1 V の測定の許容差)",
+        "model": "1.860 V",
+        "diff": "+0.0096 V",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (5 V)",
+        "datasheet": "— / — / 10.000 µA",
+        "target": "max 10.000 µA",
+        "condition": "IR: VR = 5 V (表の max)",
+        "model": "9.996 µA",
+        "diff": "-0.0040 µA",
+        "tested": false
+      },
+      {
+        "item": "容量 (0 V)",
+        "datasheet": "— / 45.000 / — pF",
+        "target": "45.000 pF",
+        "condition": "C: 表の typ",
+        "model": "45.001 pF",
+        "diff": "+0.0009 pF",
+        "tested": true
+      }
+    ]
+  },
   "WP7113SYD": {
     "fingerprint": "c8258cb3ab08d1b8",
-    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C",
     "date": "2026-11-14",
     "rows": [
       {

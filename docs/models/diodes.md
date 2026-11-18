@@ -142,7 +142,7 @@
 
 ## WP7113SGD
 
-データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C
 
 | 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
 |---|---|---|---|---|
@@ -156,7 +156,7 @@
 
 ## WP7113SYD
 
-データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C
 
 | 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
 |---|---|---|---|---|
@@ -170,7 +170,7 @@
 
 ## WP7113QBC-D
 
-データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C
 
 | 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
 |---|---|---|---|---|
@@ -180,6 +180,33 @@
 | 順方向電圧 (20 mA) | — / 3.315 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 3.308 V | -0.0078 |
 | 順方向電圧 (表、20 mA) | — / 3.300 / 4.000 V | VF: 表の typ と max (±0.1 V の測定の許容差) | 3.308 V | +0.0076 |
 | 逆電流 (5 V) | — / — / 50.000 µA | IR: VR = 5 V (表の max) | 49.411 µA | -0.5889 |
+
+## WP7113SRC-DU
+
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C
+
+| 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
+|---|---|---|---|---|
+| 順方向電圧 (1 mA) | — / 1.684 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.675 V | -0.0089 |
+| 順方向電圧 (5 mA) | — / 1.761 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.762 V | +0.0013 |
+| 順方向電圧 (10 mA) | — / 1.807 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.806 V | -0.0013 |
+| 順方向電圧 (20 mA) | — / 1.856 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.860 V | +0.0032 |
+| 順方向電圧 (表、20 mA) | — / 1.850 / 2.500 V | VF: 表の typ と max (±0.1 V の測定の許容差) | 1.860 V | +0.0096 |
+| 逆電流 (5 V) | — / — / 10.000 µA | IR: VR = 5 V (表の max) | 9.996 µA | -0.0040 |
+| 容量 (0 V) | — / 45.000 / — pF | C: 表の typ | 45.001 pF | +0.0009 |
+
+## WP7113ID
+
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D・WP7113SRC/DU・WP7113ID データシート。Ta = 25 °C
+
+| 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
+|---|---|---|---|---|
+| 順方向電圧 (1 mA) | — / 1.655 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.662 V | +0.0070 |
+| 順方向電圧 (5 mA) | — / 1.812 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.814 V | +0.0026 |
+| 順方向電圧 (10 mA) | — / 1.912 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.901 V | -0.0109 |
+| 順方向電圧 (18 mA) | — / 1.991 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.999 V | +0.0083 |
+| 順方向電圧 (表、10 mA) | — / 1.900 / 2.300 V | VF: 表の typ と max (±0.1 V の測定の許容差) | 1.901 V | +0.0011 |
+| 逆電流 (5 V) | — / — / 10.000 µA | IR: VR = 5 V (表の max) | 9.992 µA | -0.0082 |
 
 ## 1N5408
 
