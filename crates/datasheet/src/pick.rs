@@ -71,20 +71,36 @@ fn names_a_curve(text: &str) -> bool {
 /// The lines of words inside a box, each as its text and its box.
 fn lines_in(words: &[Word], area: Rect) -> Vec<(String, Rect)> {
     let mut inside: Vec<&Word> = words.iter().filter(|w| w.rect.x0 >= area.x0 && w.rect.x1 <= area.x1 && w.rect.y0 >= area.y0 && w.rect.y1 <= area.y1).collect();
-    inside.sort_by(|a, b| a.baseline().total_cmp(&b.baseline()).then(a.rect.x0.total_cmp(&b.rect.x0)));
-    let mut out: Vec<(String, Rect, f32)> = vec![];
+    inside.sort_by(|a, b| a.baseline().total_cmp(&b.baseline()));
+    // the words of each printed line (baselines within 2 points), then left to right: a legend's label and a box of
+    // conditions beside it at the same height (LT3045: "IL = 300mA" and "VIN = 5V") come apart by their gap
+    let mut rows: Vec<Vec<&Word>> = vec![];
     for w in inside {
-        match out.last_mut() {
-            // the same line, and close (two labels side by side are two labels)
-            Some((t, r, base)) if (*base - w.baseline()).abs() < 2.0 && w.rect.x0 - r.x1 < 2.0 * w.em().max(4.0) => {
-                t.push(' ');
-                t.push_str(&w.text);
-                *r = Rect { x0: r.x0.min(w.rect.x0), y0: r.y0.min(w.rect.y0), x1: r.x1.max(w.rect.x1), y1: r.y1.max(w.rect.y1) };
-            }
-            _ => out.push((w.text.clone(), w.rect, w.baseline())),
+        match rows.last_mut() {
+            Some(r) if (r[0].baseline() - w.baseline()).abs() < 2.0 => r.push(w),
+            _ => rows.push(vec![w]),
         }
     }
-    out.into_iter().map(|(t, r, _)| (t, r)).collect()
+    let mut out: Vec<(String, Rect)> = vec![];
+    for mut row in rows {
+        row.sort_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
+        let mut last: Option<usize> = None;
+        for w in row {
+            match last.map(|i| &mut out[i]) {
+                // close (two labels side by side are two labels)
+                Some((t, r)) if w.rect.x0 - r.x1 < 2.0 * w.em().max(4.0) => {
+                    t.push(' ');
+                    t.push_str(&w.text);
+                    *r = Rect { x0: r.x0.min(w.rect.x0), y0: r.y0.min(w.rect.y0), x1: r.x1.max(w.rect.x1), y1: r.y1.max(w.rect.y1) };
+                }
+                _ => {
+                    out.push((w.text.clone(), w.rect));
+                    last = Some(out.len() - 1);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// The distance from a label to a curve (to its nearest point).
@@ -187,7 +203,60 @@ fn goes_its_way(path: &[(f32, f32)], curve: Curve, axes: &ReadAxes) -> bool {
 /// The curve of the graph whose axes are `axes` that the form's field wants (`curve`, and the names its label may
 /// have: `["cob"]`). `img` is the page drawn at `px_per_pt`.
 pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadAxes, curve: Curve, names: &[&str]) -> Pick {
+    pick_with(img, px_per_pt, words, axes, curve, names, &[])
+}
+
+/// A quantity's name for comparing a label with a table's conditions: the load current written many ways (IL, IO,
+/// IOUT, ILOAD) is one.
+fn quantity(name: &str) -> String {
+    let n: String = normalize(name).chars().filter(|c| c.is_alphanumeric()).collect();
+    match n.as_str() {
+        "il" | "io" | "iout" | "iload" | "ilo" | "iol" => "iload".into(),
+        "vi" | "vin" => "vin".into(),
+        "co" | "cout" | "cl" | "cload" => "cout".into(),
+        _ => n,
+    }
+}
+
+/// A label that names its curve by one condition ("IL = 500mA", "COUT = 10µF"): the quantity and its value.
+fn label_condition(text: &str) -> Option<(String, f64)> {
+    let c = crate::spec_table::conditions_in(text);
+    // one condition only: a label, not a line of the graph's conditions ("VIN = 5V, RSET = 30.1k, COUT = 10µF")
+    (c.len() == 1).then(|| (quantity(&c[0].0), c[0].1))
+}
+
+/// [`pick`] with the conditions of the table's rows for that quantity (`want`: "IL" = 0.5 A for a PSRR measured at
+/// 500 mA, `Datasheet::curve_conditions`): a label in the graph with the same quantity and value ("IL = 500mA") names
+/// the curve wanted (LT3045's PSRR and noise density at several load currents), like a field's own name.
+pub fn pick_with(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadAxes, curve: Curve, names: &[&str], want: &[(String, f64)]) -> Pick {
+    // (only on a graph against frequency, a log axis over two decades or more, for the curves against frequency: a
+    // caption may be matched to the graph beside it, LM358's "CMRR and PSRR vs Frequency" to a graph against temperature)
+    let decades = {
+        let v: Vec<f64> = axes.x.ticks.iter().filter_map(|t| crate::graph::tick_value(&t.1)).filter(|v| *v > 0.0).collect();
+        let (lo, hi) = (v.iter().copied().fold(f64::MAX, f64::min), v.iter().copied().fold(0.0, f64::max));
+        if v.len() >= 2 { (hi / lo).log10() } else { 0.0 }
+    };
+    let by_frequency = matches!(curve, Curve::Ripple | Curve::NoiseDensity);
+    let want: Vec<(String, f64)> = if !by_frequency || (axes.x.log && decades >= 2.0) { want.iter().map(|(n, v)| (quantity(n), *v)).collect() } else { vec![] };
     let Some(b) = plot(axes) else { return Pick::None };
+    let around = Rect { x0: b.x0 - 5.0, y0: b.y0 - 5.0, x1: b.x1 + 5.0, y1: b.y1 + 5.0 };
+    // a quantity the curves differ in: labelled with two values or more in the plot ("IL = 500mA" … "IL = 1mA"); a box of
+    // the graph's conditions has each quantity once ("VIN = 5V" over "IL = 500mA" over "COUT = 10µF") and names no curve
+    let in_plot: Vec<(String, f64)> = lines_in(words, around).iter().filter_map(|(t, _)| label_condition(t)).collect();
+    let varies = |q: &str| {
+        let mut v: Vec<f64> = in_plot.iter().filter(|c| c.0 == q).map(|c| c.1).collect();
+        v.sort_by(f64::total_cmp);
+        v.dedup_by(|a, b| (*a - *b).abs() <= 0.01 * b.abs());
+        v.len() >= 2
+    };
+    // the labels of a quantity the table names: the one of the table's value is wanted, the others name other curves
+    let conditioned = |t: &str| label_condition(t).filter(|(q, _)| varies(q) && want.iter().any(|w| w.0 == *q));
+    let wanted = |t: &str| match conditioned(t) {
+        Some((q, v)) if want.iter().any(|w| w.0 == q && (w.1 - v).abs() <= 0.01 * w.1.abs().max(1e-30)) => Some(0),
+        Some(_) => None,
+        None => wanted(curve, names, t),
+    };
+    let names_a_curve = |t: &str| conditioned(t).is_some() || names_a_curve(t);
     let skip: Vec<Rect> = words.iter().map(|w| w.rect).collect();
     // every curve: crossed by a few vertical lines through the plot, each followed to its ends
     let mut traces: Vec<Vec<(f32, f32)>> = vec![];
@@ -208,8 +277,7 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
     // short marks (an arrow, a bit of a label)
     let mut traces: Vec<Vec<(f32, f32)>> = joined(traces).into_iter().filter(|p| p.last().zip(p.first()).map_or(0.0, |(l, f)| l.0 - f.0) > 0.15 * (b.x1 - b.x0)).collect();
     // the labels in the plot (and a little around it) that name the wanted curve, the most telling kind first
-    let around = Rect { x0: b.x0 - 5.0, y0: b.y0 - 5.0, x1: b.x1 + 5.0, y1: b.y1 + 5.0 };
-    let mut labels: Vec<(u8, String, Rect)> = lines_in(words, around).into_iter().filter_map(|(t, r)| wanted(curve, names, &t).map(|k| (k, t, r))).collect();
+    let mut labels: Vec<(u8, String, Rect)> = lines_in(words, around).into_iter().filter_map(|(t, r)| wanted(&t).map(|k| (k, t, r))).collect();
     labels.sort_by_key(|l| l.0);
     match traces.len() {
         // (no curve: a legend may still give one by its colour)
@@ -243,11 +311,11 @@ pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadA
         return Pick::One { path: traces.swap_remove(i), by };
     }
     // the wanted label away from its curve with an arrow to it (MCP1700's "TJ = +25°C" between two curves): when every
-    // other curve has its own temperature label on it and one curve is left, that one
-    if kind == 1
+    // other curve has its own temperature (or load current) label on it and one curve is left, that one
+    if (kind == 1 || labels.iter().any(|l| l.0 == kind && conditioned(&l.1).is_some()))
         && let Some(by) = labels.iter().find(|l| l.0 == kind).map(|l| l.1.clone())
     {
-        let other: Vec<Rect> = lines_in(words, around).into_iter().filter(|(t, _)| names_a_curve(t) && wanted(curve, names, t) != Some(1)).map(|l| l.1).collect();
+        let other: Vec<Rect> = lines_in(words, around).into_iter().filter(|(t, _)| names_a_curve(t) && wanted(t) != Some(kind)).map(|l| l.1).collect();
         // the curve each other label names: the nearest to it, when it is close
         let claimed: Vec<usize> = other
             .iter()
@@ -481,5 +549,56 @@ mod tests {
         assert_eq!(wanted(Curve::Capacitance, &["cob"], "Cobalt"), None);
         assert_eq!(wanted(Curve::Capacitance, &["cib"], "Cob"), None);
         assert_eq!(wanted(Curve::ThermalImpedance, &[], "SINGLE PULSE"), Some(0));
+    }
+}
+
+#[cfg(test)]
+mod condition_tests {
+    use super::*;
+
+    fn w(t: &str, x: f32, y: f32) -> Word {
+        Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0)
+    }
+
+    /// A legend's label and a box of conditions beside it at the same height are two lines (LT3045: "IL = 300mA" left,
+    /// "VIN = 5V" right), the words of each left to right.
+    #[test]
+    fn labels_side_by_side_are_apart() {
+        let words = vec![w("VIN", 162.0, 247.0), w("=", 178.0, 247.0), w("5V", 184.0, 247.0), w("IL", 96.0, 247.5), w("=", 106.0, 247.5), w("300mA", 113.0, 247.5)];
+        let lines: Vec<String> = lines_in(&words, Rect { x0: 0.0, y0: 0.0, x1: 600.0, y1: 600.0 }).into_iter().map(|l| l.0).collect();
+        assert_eq!(lines, vec!["IL = 300mA".to_string(), "VIN = 5V".to_string()]);
+    }
+
+    /// A label of one condition gives its quantity, the load current under one name; a line of several is no label.
+    #[test]
+    fn a_label_names_one_condition() {
+        assert_eq!(label_condition("IL = 500mA"), Some(("iload".to_string(), 0.5)));
+        assert_eq!(label_condition("IOUT = 500mA").map(|c| c.0), Some("iload".to_string()));
+        assert!(label_condition("VIN = 5V, IL = 500mA").is_none());
+        assert!(label_condition("25°C").is_none());
+        assert_eq!(crate::spec_table::conditions_in("IOUT = 1mA · BW = 10Hz to 100kHz")[0], ("IOUT".to_string(), 0.001));
+    }
+
+    /// The real data sheet (`microohm-meter/`, not in the repository): LT3045's PSRR at five load currents is taken at
+    /// the table's 500 mA by its legend, and its noise density by the table's CSET.
+    #[test]
+    #[ignore]
+    fn curves_named_by_the_tables_conditions() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/lt3045.pdf");
+        let Ok(ds) = crate::Datasheet::open_file(&path) else { return };
+        let want = ds.curve_conditions(Curve::Ripple);
+        assert!(want.iter().any(|w| w.0 == "ILOAD" && (w.1 - 0.5).abs() < 1e-9), "{want:?}");
+        let mut by: Vec<String> = vec![];
+        for f in ds.figures().iter().filter(|f| f.page == 9 && !f.curves.is_empty()) {
+            let Some(a) = ds.figure_axes(f) else { continue };
+            let img = ds.render(f.page, 4.0).unwrap();
+            let k = img.width as f32 / ds.page_size(f.page).unwrap().0;
+            for &c in &f.curves {
+                if let Pick::One { by: b, .. } = pick_with(&img, k, ds.words(f.page), &a, c, &[], &ds.curve_conditions(c)) {
+                    by.push(b);
+                }
+            }
+        }
+        assert!(by.iter().any(|b| b == "IL = 500mA") && by.iter().any(|b| b == "CSET = 0.47µF"), "{by:?}");
     }
 }

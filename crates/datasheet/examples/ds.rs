@@ -100,6 +100,13 @@ fn main() -> Result<(), String> {
                 None => println!("drawing: none"),
             }
         }
+        "conds" => {
+            // ds conds FILE: the table's conditions each kind of graph's curve is picked by (`curve_conditions`)
+            use datasheet::figures::Curve;
+            for c in [Curve::Ripple, Curve::NoiseDensity, Curve::Dropout] {
+                println!("{c:?}: {:?}", ds.curve_conditions(c));
+            }
+        }
         "fet" => {
             // ds fet FILE [FAMILY]: a MOSFET's pins from a sentence or a front view's letters (`fet_pins`)
             match ds.fet_pins(args.get(2).map(String::as_str)) {
@@ -153,7 +160,8 @@ fn main() -> Result<(), String> {
                 let k = img.width as f32 / ds.page_size(f.page).map_or(1.0, |s| s.0);
                 let names: Vec<(&str, &[&str])> = if f.curves.contains(&datasheet::figures::Curve::Capacitance) { vec![("Cob", &["cob", "cobo"]), ("Cib", &["cib", "cibo"]), ("", &[])] } else { vec![("", &[])] };
                 for (&c, (tag, names)) in f.curves.iter().flat_map(|c| names.iter().map(move |n| (c, n))) {
-                    let picked = datasheet::pick::pick(&img, k, ds.words(f.page), &a, c, names);
+                    let want = ds.curve_conditions(c);
+                    let picked = datasheet::pick::pick_with(&img, k, ds.words(f.page), &a, c, names, &want);
                     // `save=DIR`: the page with the curve taken drawn in red, one picture a curve
                     if let (Some(dir), datasheet::pick::Pick::One { path, .. }) = (arg(&args, "save"), &picked) {
                         let mut pic = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.rgba.clone()).ok_or("picture")?;

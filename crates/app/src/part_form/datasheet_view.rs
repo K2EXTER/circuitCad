@@ -1007,8 +1007,10 @@ impl Opened {
             let Some(k) = self.ds.page_size(page).map(|s| img.width as f32 / s.0) else { return datasheet::pick::Pick::None };
             self.snap = Some((page, img, k));
         }
+        // the table's conditions for that quantity name the curve wanted among several ("IL = 500mA", 候補 Q15)
+        let want = self.ds.curve_conditions(dest.curve());
         let Some((_, img, k)) = self.snap.as_ref() else { return datasheet::pick::Pick::None };
-        datasheet::pick::pick(img, *k, self.ds.words(page), a, dest.curve(), dest.label_names())
+        datasheet::pick::pick_with(img, *k, self.ds.words(page), a, dest.curve(), dest.label_names(), &want)
     }
 
     /// The curve under page point (x, y) followed to its ends (`datasheet::graph::trace_curve` on the same picture as

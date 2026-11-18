@@ -194,6 +194,64 @@ impl Datasheet {
         (0..self.page_count()).flat_map(|p| spec_table::find_by_name(p, self.words(p), symbol)).collect()
     }
 
+    /// The conditions the table's rows give for the quantity a graph of `curve` shows (the PSRR's "IL = 500mA", the
+    /// dropout's "IOUT = 250mA"), for picking the graph's curve of the same condition (`pick::pick_with`). The axis's own
+    /// quantity (frequency, the load current of a dropout graph) and the temperature are left out.
+    pub fn curve_conditions(&self, curve: figures::Curve) -> Vec<(String, f64)> {
+        use figures::Curve;
+        let (symbols, skip): (&[&str], &[&str]) = match curve {
+            Curve::Ripple => (&["PSRR", "RR", "SVR", "Ripple"], &["f", "freq", "frequency", "fripple", "vripple"]),
+            Curve::NoiseDensity => (&["eN", "en", "Vn", "Noise"], &["f", "freq", "frequency", "bw"]),
+            Curve::Dropout => (&["VDO", "VDROP", "Vdropout", "VD"], &["il", "io", "iout", "iload", "ic"]),
+            _ => return vec![],
+        };
+        let skip = |n: &str| {
+            let n = normalize(n);
+            skip.contains(&n.as_str()) || matches!(n.as_str(), "ta" | "tj" | "tc" | "t")
+        };
+        let mut out: Vec<(String, f64)> = vec![];
+        for s in symbols {
+            for v in self.spec_values(s) {
+                for (n, x) in spec_table::conditions_in(&v.conditions) {
+                    if !skip(&n) && !out.iter().any(|o| o.0 == n && o.1 == x) {
+                        out.push((n, x));
+                    }
+                }
+            }
+            if !out.is_empty() {
+                return out;
+            }
+        }
+        // no row read (a table without a symbol column, LTC's LT3045): the lines naming the quantity with conditions
+        // ("Ripple Rejection VRIPPLE = 500mVP-P, fRIPPLE = 120Hz, ILOAD = 500mA, COUT = 10µF")
+        let phrases: &[&str] = match curve {
+            Curve::Ripple => &["ripple rejection", "psrr"],
+            Curve::NoiseDensity => &["noise spectral", "noise density"],
+            Curve::Dropout => &["dropout voltage"],
+            _ => &[],
+        };
+        for p in 0..self.page_count() {
+            for line in figures::lines(self.words(p)) {
+                let mut l = line.clone();
+                l.sort_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
+                let text = l.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+                let low = normalize(&text);
+                if !text.contains('=') || !phrases.iter().any(|ph| low.contains(ph)) {
+                    continue;
+                }
+                for (n, x) in spec_table::conditions_in(&text) {
+                    if !skip(&n) && !out.iter().any(|o| o.0 == n && o.1 == x) {
+                        out.push((n, x));
+                    }
+                }
+            }
+            if !out.is_empty() {
+                break;
+            }
+        }
+        out
+    }
+
     pub fn unit_after(&self, page: usize, word: &Word) -> Option<String> {
         text::unit_after(self.words(page), word)
     }

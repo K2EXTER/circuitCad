@@ -45,6 +45,26 @@ impl SpecValue {
     }
 }
 
+/// Every `name = value` of a conditions text or a graph's label ("VIN = 5V, IL = 500mA" → [("VIN", 5), ("IL", 0.5)]), in SI
+/// units: the word before each "=" and its value by [`condition`].
+pub fn conditions_in(text: &str) -> Vec<(String, f64)> {
+    // ("·" joins the conditions borrowed from another line: "IOUT = 1mA · BW = 10Hz to 100kHz")
+    let text = text.replace('·', ",");
+    let text = text.as_str();
+    let mut out: Vec<(String, f64)> = vec![];
+    for (i, _) in text.match_indices('=') {
+        let before = text[..i].trim_end();
+        let name: String = before.rsplit(|c: char| c.is_whitespace() || c == ',' || c == '(' || c == ';').next().unwrap_or("").chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+        if name.is_empty() || !name.starts_with(|c: char| c.is_alphabetic()) || out.iter().any(|o| o.0 == name) {
+            continue;
+        }
+        if let Some(v) = condition(text, &name) {
+            out.push((name, v));
+        }
+    }
+    out
+}
+
 /// The value of `name=…` in a conditions text, in SI units and as a magnitude.
 pub fn condition(text: &str, name: &str) -> Option<f64> {
     let key = normalize(name).replace(' ', "");
