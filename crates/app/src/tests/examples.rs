@@ -3327,3 +3327,34 @@ fn write_battery_life_example() {
     crate::schematic::with_settings(&mut v, &settings);
     std::fs::write(root.join("battery_life.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
 }
+
+/// Generates docs/examples/pot_dimmer.schjson: a potentiometer (VR1 10k, ends on 5 V and GND, knob at 30 %) sets the base of an
+/// emitter follower (Q1) that drives a LED through R1 150 ohm. The wiper only feeds the base current (under 0.1 mA), so the pot
+/// stays a divider; turning it moves the LED's current from 0 to about 16 mA: `cargo test -p app write_pot_dimmer_example -- --ignored`
+#[test]
+#[ignore]
+fn write_pot_dimmer_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let vr = s.add(Kind::Pot, (12, 0), 1);
+    s.components[vr].value = "10k POS=30".into();
+    label(&mut s, vr, "1", "VCC");
+    label(&mut s, vr, "2", "W");
+    label(&mut s, vr, "3", "GND");
+    let q1 = s.add(Kind::Npn, (24, 0), 0);
+    label(&mut s, q1, "B", "W");
+    label(&mut s, q1, "C", "VCC");
+    label(&mut s, q1, "E", "E");
+    let r1 = s.add(Kind::Resistor, (32, 4), 1);
+    s.components[r1].value = "150".into();
+    label(&mut s, r1, "1", "E");
+    label(&mut s, r1, "2", "LED");
+    let d1 = s.add(Kind::Led, (32, 12), 1);
+    label(&mut s, d1, "A", "LED");
+    label(&mut s, d1, "K", "GND");
+    std::fs::write(root.join("pot_dimmer.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}

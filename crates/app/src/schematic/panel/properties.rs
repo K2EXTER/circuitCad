@@ -137,6 +137,23 @@ impl SchEditor {
                         }
                     }
                 }
+                if c.kind == Kind::Pot {
+                    // the knob: how far it is turned, from pin 1 (0 %) to pin 3 (100 %)
+                    let mut pos = sch_core::pot_position(&c.value) * 100.0;
+                    ui.spacing_mut().slider_width = (ui.available_width() - 60.0).max(80.0);
+                    let changed = ui
+                        .add(egui::Slider::new(&mut pos, 0.0..=100.0).suffix(" %").step_by(1.0).text(i18n::tr("つまみ")))
+                        .on_hover_text(i18n::tr("つまみを回す位置です。0 % で真ん中の足 (2 番) が 1 番の足の側に、100 % で 3 番の足の側に来ます。両端を電源と GND につなぐと、真ん中の足から 0 V〜電源の電圧を取り出せます (分圧)。値の欄の POS= と同じです"))
+                        .changed();
+                    if changed {
+                        c.value = sch_core::with_pot_position(&c.value, pos / 100.0);
+                    }
+                    if let Ok((total, _)) = sim_core::parse_part_value(&c.value) {
+                        let (ra, rb) = sch_core::pot_split(total, pos / 100.0);
+                        ui.small(i18n::trf!("1 番〜2 番: {}Ω　2 番〜3 番: {}Ω", format_value(ra), format_value(rb)));
+                    }
+                    ui.checkbox(&mut self.live, i18n::tr("自動で再計算")).on_hover_text(i18n::tr("オンにすると、値を動かすたびに、開いている解析 (DC / 過渡 / AC) をやり直します。重い回路ではオフにしてください"));
+                }
                 if matches!(c.kind, Kind::VSource | Kind::ISource) {
                     // read the form again when the text changed or another source was selected
                     let stale = self.src_form.as_ref().is_none_or(|(k, t, _)| *k != i || *t != c.value);
@@ -333,6 +350,9 @@ fn value_hint(kind: Kind) -> &'static str {
         Kind::Inductor => "インダクタンス。例: 10u / 1m
 10u DCR=0.1 … 巻線抵抗も入れられます",
         Kind::Resistor => "抵抗値。例: 100 / 4.7k / 1Meg (k = 1000、Meg = 100万、m = 1/1000、u = 1/100万、n、p)",
+        Kind::Pot => "ボリュームの全体の抵抗値と、つまみの位置。例:
+10k … 10kΩ、つまみは真ん中
+10k POS=30 … つまみを 30 % の位置に (0 % で 2 番の足が 1 番の側、100 % で 3 番の側)",
         Kind::VSource => "電源の値。例:
 5 … 直流 5V
 SIN(0 1 1k) … 正弦波 (中心 振幅 周波数)

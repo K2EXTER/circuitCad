@@ -282,7 +282,7 @@ impl BreadboardView {
                 for r in &issues {
                     let (col, head) = if r.level == sim_core::RatingLevel::Over { (BAD, i18n::tr("壊れた")) } else { (crate::theme::WARN, i18n::tr("熱い・余裕が少ない")) };
                     ui.label(egui::RichText::new(format!("{} {}: {}", r.refdes, head, i18n::tr_dyn(&r.message))).color(col));
-                    if let Some((_, f)) = self.broken.iter().find(|(b, _)| *b == r.refdes) {
+                    if let Some((_, f)) = self.broken.iter().find(|(b, _)| element_of(b, &r.refdes)) {
                         ui.label(egui::RichText::new(i18n::trf!("　{} は {} になり、回路からはそのように計算しています", r.refdes, i18n::tr_dyn(&f.label()))).color(BAD));
                     }
                     ui.label(egui::RichText::new(format!("　→ {}", i18n::tr_dyn(&r.hint))).color(NOTE));
@@ -364,7 +364,9 @@ impl BreadboardView {
                 Ok(c) => {
                     let leds: Vec<String> = sch.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
                     // the knobs: the DC voltage sources off the board (a bench supply, the light or the signal on a sensor's input)
-                    let knobs: Vec<String> = l.off_board.iter().filter(|o| sch.sch.components.iter().any(|c| c.refdes == o.refdes && c.kind == sch_core::Kind::VSource)).map(|o| o.refdes.clone()).collect();
+                    // and the potentiometers on the board
+                    let mut knobs: Vec<String> = l.off_board.iter().filter(|o| sch.sch.components.iter().any(|c| c.refdes == o.refdes && c.kind == sch_core::Kind::VSource)).map(|o| o.refdes.clone()).collect();
+                    knobs.extend(l.parts.iter().filter(|p| sch.sch.components.iter().any(|c| c.refdes == p.refdes && c.kind == sch_core::Kind::Pot)).map(|p| p.refdes.clone()));
                     let mut lv = Live::start(c, &leds, sch.live_switches(), &knobs);
                     lv.speed = speed;
                     for (r, v) in &self.knob_values {
@@ -406,12 +408,17 @@ impl BreadboardView {
             w.check(sch, lv, false);
             // a part that has just burnt fails in the circuit (an LED or a resistor opens, a transistor shorts): run on without it
             for b in &w.burnt {
-                if self.broken.iter().any(|(r, _)| *r == b.refdes) {
+                if self.broken.iter().any(|(r, _)| element_of(r, &b.refdes)) {
                     continue;
                 }
-                let fault = sch.sch.components.iter().find(|c| c.refdes == b.refdes).and_then(|comp| lv.element(&b.refdes).and_then(|e| sim_core::burn_failure(comp, e)));
-                if let Some(f) = fault {
-                    self.broken.push((b.refdes.clone(), f));
+                // the part's own element, or the hottest one inside it (the piece of a potentiometer's track the current runs through)
+                let el = lv.element(&b.refdes).map(|e| e.name().to_string()).or_else(|| {
+                    let snap = lv.snapshot()?;
+                    snap.elements.iter().filter(|e| element_of(&e.name, &b.refdes)).max_by(|x, y| x.power.total_cmp(&y.power)).map(|e| e.name.clone())
+                });
+                let fault = el.as_ref().and_then(|n| sch.sch.components.iter().find(|c| c.refdes == b.refdes).and_then(|comp| lv.element(n).and_then(|e| sim_core::burn_failure(comp, e))));
+                if let (Some(n), Some(f)) = (el, fault) {
+                    self.broken.push((n, f));
                     self.restart = true;
                 }
             }
@@ -427,14 +434,24 @@ impl BreadboardView {
             });
         });
         if !lv.knobs.is_empty() {
-            ui.label(egui::RichText::new(i18n::tr("つまみ (電源・信号源の電圧)")).strong())
-                .on_hover_text(i18n::tr("ブレッドボードの外の電源や信号源の電圧を、動かしたまま変えます。実験用の電源のつまみを回す・センサーに当てる光を強くする、の代わりです"));
+            ui.label(egui::RichText::new(i18n::tr("つまみ (電源・信号源の電圧、ボリューム)")).strong())
+                .on_hover_text(i18n::tr("ブレッドボードの外の電源や信号源の電圧と、ボリュームのつまみを、動かしたまま変えます。実験用の電源のつまみを回す・センサーに当てる光を強くする・ボリュームを回す、の代わりです"));
             for k in 0..lv.knobs.len() {
                 let (name, mut v, range) = (lv.knobs[k].refdes.clone(), lv.knobs[k].value, lv.knobs[k].range());
-                let nominal = lv.knobs[k].nominal;
+                let (nominal, pot) = (lv.knobs[k].nominal, lv.knobs[k].pot.is_some());
                 ui.horizontal(|ui| {
                     ui.label(&name);
-                    let r = ui.add(egui::Slider::new(&mut v, range).suffix(" V").max_decimals(2)).on_hover_text(i18n::trf!("回路図の値は {} V です", sim_core::format_value(nominal)));
+                    let r = if pot {
+                        // the position as percent of the turn
+                        let mut pct = v * 100.0;
+                        let r = ui
+                            .add(egui::Slider::new(&mut pct, 0.0..=100.0).suffix(" %").max_decimals(0))
+                            .on_hover_text(i18n::trf!("ボリュームのつまみ: 0 % で 2 番の足が 1 番の側、100 % で 3 番の側です。回路図では {} % です", (nominal * 100.0).round()));
+                        v = pct / 100.0;
+                        r
+                    } else {
+                        ui.add(egui::Slider::new(&mut v, range).suffix(" V").max_decimals(2)).on_hover_text(i18n::trf!("回路図の値は {} V です", sim_core::format_value(nominal)))
+                    };
                     if r.changed() {
                         lv.set_knob(k, v);
                         self.knob_values.insert(name.clone(), v);
@@ -799,6 +816,15 @@ impl BreadboardView {
         for p in &l.parts {
             let lit = self.picked.as_deref() == Some(p.refdes.as_str()) || focus.as_deref() == Some(p.refdes.as_str()) || self.drag.as_ref().is_some_and(|d| d.refdes == p.refdes);
             let comp = sch.sch.components.iter().find(|c| c.refdes == p.refdes);
+            // a potentiometer turned while it runs shows its knob where it is now
+            let turned = comp.filter(|c| c.kind == sch_core::Kind::Pot).and_then(|c| {
+                let lv = running?;
+                let v = lv.knobs.get(lv.knob_index(&c.refdes)?)?.value;
+                let mut c = c.clone();
+                c.value = sch_core::with_pot_position(&c.value, v);
+                Some(c)
+            });
+            let comp = turned.as_ref().or(comp);
             let rect = draw_part(&painter, p, comp, to, pitch, &font, lit);
             if response.hover_pos().is_some_and(|h| rect.contains(h)) {
                 hovered_part = Some((p.refdes.clone(), comp.map(|c| c.value.clone()).unwrap_or_default()));
@@ -844,7 +870,14 @@ impl BreadboardView {
         if !dragging {
             if let Some((r, v)) = &hovered_part {
                 let switch = running.is_some_and(|lv| lv.switch_index(r).is_some());
-                response.clone().on_hover_text(if switch { i18n::trf!("{r} {v}\nクリックで切り替え (押しボタンは押している間だけ入る)") } else { i18n::trf!("{r} {v}\nドラッグで差し替え") });
+                let knob = running.is_some_and(|lv| lv.knob_index(r).is_some());
+                response.clone().on_hover_text(if switch {
+                    i18n::trf!("{r} {v}\nクリックで切り替え (押しボタンは押している間だけ入る)")
+                } else if knob {
+                    i18n::trf!("{r} {v}\n左の「つまみ」で回せます")
+                } else {
+                    i18n::trf!("{r} {v}\nドラッグで差し替え")
+                });
             } else if let Some(h) = hover {
                 let here: Vec<String> = l.parts.iter().flat_map(|p| p.leads.iter().filter(|(_, lh)| lh.node() == h.node()).map(move |(pin, _)| format!("{}.{pin}", p.refdes))).collect();
                 let tip = if here.is_empty() { h.name() } else { format!("{}: {}", h.name(), here.join(", ")) };
@@ -990,6 +1023,11 @@ fn part_rect(p: &sch_core::breadboard::Placed, to: impl Fn(Hole) -> Pos2, pitch:
     r
 }
 
+/// Whether circuit element `element` belongs to part `refdes`: the part's own element, or one inside it (`VR1.A`).
+fn element_of(element: &str, refdes: &str) -> bool {
+    element.strip_prefix(refdes).is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+}
+
 /// Draws a part and returns the area it takes (for the pointer).
 fn draw_part(painter: &egui::Painter, p: &sch_core::breadboard::Placed, comp: Option<&sch_core::Component>, to: impl Fn(Hole) -> Pos2 + Copy, pitch: f32, font: &egui::FontId, lit: bool) -> Rect {
     let outline = if lit { Stroke::new(2.5, LIT) } else { Stroke::new(1.0, Color32::from_gray(40)) };
@@ -1015,6 +1053,21 @@ fn draw_part(painter: &egui::Painter, p: &sch_core::breadboard::Placed, comp: Op
             let body = Rect::from_min_max(Pos2::new(r.min.x, r.max.y - pitch * 0.2), Pos2::new(r.max.x, r.max.y + pitch * 1.1));
             for (_, h) in &p.leads {
                 painter.line_segment([to(*h), Pos2::new(to(*h).x, body.top())], lead);
+            }
+            if kind == Some(sch_core::Kind::Pot) {
+                // a small blue trimmer: the square body, the round knob and its slot pointing where it is turned (from 7 to 5 o'clock)
+                let body = Rect::from_min_max(Pos2::new(r.min.x, r.max.y - pitch * 0.2), Pos2::new(r.max.x, r.max.y + pitch * 1.1));
+                painter.rect(body, pitch * 0.2, Color32::from_rgb(40, 90, 170), outline, egui::StrokeKind::Middle);
+                let c = body.center();
+                let rad = body.width().min(body.height()) * 0.42;
+                painter.circle(c, rad, Color32::from_gray(235), Stroke::new(1.0, Color32::from_gray(60)));
+                let pos = sch_core::pot_position(value) as f32;
+                // 0 % at the lower left (pin 1's side), 100 % at the lower right; screen angles run clockwise
+                let a = (135.0 + 270.0 * pos).to_radians();
+                let d = Vec2::new(a.cos(), a.sin()) * rad * 0.85;
+                painter.line_segment([c - d * 0.3, c + d], Stroke::new((pitch * 0.15).max(2.0), Color32::from_gray(40)));
+                painter.text(Pos2::new(c.x, body.bottom() + pitch * 0.35), egui::Align2::CENTER_CENTER, format!("{} {:.0}%", p.refdes, pos * 100.0), font.clone(), Color32::from_gray(30));
+                return r.union(body);
             }
             let fill = if matches!(kind, Some(sch_core::Kind::Header(_))) { Color32::from_rgb(30, 30, 30) } else { Color32::from_rgb(40, 40, 44) };
             painter.rect(body, pitch * 0.25, fill, outline, egui::StrokeKind::Middle);
@@ -1241,6 +1294,55 @@ mod tests {
         assert!(app.breadboard.broken.iter().any(|(r, f)| r == "R1" && *f == sim_core::Fault::Open), "{:?}", app.breadboard.broken);
         assert!(!burnt(&app).contains(&"D1".to_string()), "{:?}", app.breadboard.issues());
         assert!(app.breadboard.live.as_ref().and_then(|v| v.current("D1")).unwrap_or(0.0).abs() < 1e-6, "no current through the open resistor");
+    }
+
+    /// The potentiometer is a knob while it runs: turned towards pin 1 (5 V) the transistor lights the LED, towards pin 3 (GND)
+    /// it goes dark.
+    #[test]
+    fn turning_the_pot_dims_the_led() {
+        let (mut app, mut run) = power_on_app("pot_dimmer.schjson");
+        app.breadboard.powered = true;
+        run(&mut app);
+        let mut led_at = |app: &mut App, pos: f64| {
+            let lv = app.breadboard.live.as_mut().unwrap();
+            let k = lv.knob_index("VR1").expect("the pot is a knob");
+            assert_eq!(lv.knobs[k].range(), 0.0..=1.0);
+            lv.set_knob(k, pos);
+            lv.advance(0.02);
+            run(app);
+            app.breadboard.live.as_ref().and_then(|v| v.current("D1")).unwrap_or(0.0)
+        };
+        let full = led_at(&mut app, 0.0);
+        assert!((0.012..0.02).contains(&full), "about 16 mA with the wiper on 5 V: {full}");
+        let some = led_at(&mut app, 0.3);
+        assert!((0.003..0.01).contains(&some), "dimmer at 30 %: {some}");
+        assert!(led_at(&mut app, 1.0).abs() < 1e-4, "dark with the wiper on GND");
+        assert!(burnt(&app).is_empty(), "{:?}", app.breadboard.issues());
+    }
+
+    /// The LED on the wiper itself (its resistor moved from the emitter to the wiper): turned near pin 1, its current runs through
+    /// a short piece of the track, which burns open, and the LED goes dark.
+    #[test]
+    fn an_led_on_the_wiper_burns_the_pot() {
+        let (mut app, mut run) = power_on_app("pot_dimmer.schjson");
+        // the label on R1's pin 1 sits at the end of the short wire from the pin
+        let r1 = app.sch.sch.components.iter().find(|c| c.refdes == "R1").unwrap().pins().into_iter().find(|(n, _)| n == "1").unwrap().1;
+        let end = app.sch.sch.wires.iter().find_map(|w| (w.a == r1).then_some(w.b)).unwrap();
+        app.sch.sch.labels.iter_mut().find(|l| l.pos == end).unwrap().text = "W".into();
+        app.breadboard.powered = true;
+        run(&mut app);
+        {
+            let lv = app.breadboard.live.as_mut().unwrap();
+            let k = lv.knob_index("VR1").unwrap();
+            lv.set_knob(k, 0.05);
+        }
+        for _ in 0..30 {
+            app.breadboard.live.as_mut().unwrap().advance(0.015);
+            run(&mut app);
+        }
+        assert!(burnt(&app).contains(&"VR1".to_string()), "{:?}", app.breadboard.issues());
+        assert!(app.breadboard.broken.iter().any(|(r, f)| r == "VR1.A" && *f == sim_core::Fault::Open), "the piece from pin 1 to the wiper: {:?}", app.breadboard.broken);
+        assert!(app.breadboard.live.as_ref().and_then(|v| v.current("D1")).unwrap_or(0.0).abs() < 1e-6, "no current past the burnt track");
     }
 
     #[test]

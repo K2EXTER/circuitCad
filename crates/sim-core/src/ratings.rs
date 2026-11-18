@@ -43,6 +43,8 @@ pub fn package_power_limit(footprint: &str) -> Option<f64> {
         ("DO-41", 1.0),
         ("DO-35", 0.4),
         ("DIP", 1.0),
+        // a small potentiometer for a board (9 mm, carbon track): 0.05 W over the whole track
+        ("POT", 0.05),
     ];
     // SOT-23-5 etc. share the SOT-23 prefix; longer keys first so SOT-223 wins over SOT-23
     let mut keys: Vec<_> = table.iter().collect();
@@ -218,6 +220,29 @@ pub fn check_ratings(sch: &Schematic, dc: &DcResult) -> Vec<RatingIssue> {
                     &format!("{hint}。実際の定格はデータシートで確認してください。"),
                 );
             }
+            Kind::Pot => {
+                // the rated power is for the whole track: a piece of it may take only its share, so whatever the knob, the track
+                // carries at most the current that heats the whole of it to the rating, √(P / R) (the wiper's current of a pot used
+                // as a variable resistor). Turned all the way to an end, the wiper sits on the end's metal: no track to heat
+                let limit = package_power_limit(&fp).unwrap_or(0.05);
+                let Ok((total, _)) = crate::value::parse_part_value(&c.value) else { continue };
+                let (ra, rb) = sch_core::pot_split(total, sch_core::pot_position(&c.value));
+                let imax = (limit / total).sqrt();
+                let end = total * sch_core::POT_END_SHARE;
+                let worst = [("A", ra, "1"), ("B", rb, "3")]
+                    .into_iter()
+                    .filter(|(_, r, _)| *r > end * 1.5)
+                    .filter_map(|(half, _, pin)| dc.element(&format!("{}.{half}", c.refdes)).map(|e| (e.current.abs(), pin)))
+                    .max_by(|a, b| a.0.total_cmp(&b.0));
+                let Some((i, pin)) = worst else { continue };
+                let Some(lv) = level_at(i, imax, 0.8) else { continue };
+                let word = if lv == RatingLevel::Over { "超えています" } else { "余裕が少ないです" };
+                push(
+                    lv,
+                    format!("{} (ボリューム) の 2 番ピンと {pin} 番ピンの間の電流 {:.2} mA は、この抵抗体に流せる目安 {:.2} mA (√(定格電力 {} mW ÷ 全体の抵抗)) に対して{word}", c.refdes, i * 1e3, imax * 1e3, fmt_num(limit * 1e3)),
+                    "ボリュームの定格電力 (小さいもので 0.05 W) は抵抗体の全体のもので、電流が流れる部分の長さの分しか使えません。真ん中の足から大きな電流を取り出すと (LED を直接つなぐなど)、電流の通る短い部分が焦げます。ボリュームは分圧 (両端を電源と GND、真ん中から電圧を取り出す) に使い、電流はトランジスタやオペアンプで増やします。可変抵抗として使うときは、直列に固定の抵抗を入れて電流を制限します。実際の定格はデータシートで確認してください。",
+                );
+            }
             Kind::Led => {
                 let Some(e) = dc.element(&c.refdes) else { continue };
                 if e.current > 0.02 {
@@ -280,7 +305,7 @@ pub struct TempLimit {
 pub fn temperature_limit(comp: &Component, junctions: usize) -> TempLimit {
     let rated = comp.custom.as_ref().and_then(|c| c.ratings.as_ref());
     let guess = match comp.kind {
-        Kind::Resistor => (155.0, Some(70.0)),
+        Kind::Resistor | Kind::Pot => (155.0, Some(70.0)),
         Kind::Diode | Kind::Npn => (150.0, Some(25.0)),
         Kind::Led => (100.0, None),
         _ if junctions > 0 => (125.0, None),

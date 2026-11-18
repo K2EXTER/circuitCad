@@ -56,6 +56,44 @@ pub enum Kind {
     /// current out of pin + into the circuit, and it comes back in at pin -, the way a battery's current flows. It is placed as
     /// simulation-only (no part on the board).
     ISource,
+    /// Potentiometer (a variable resistor with a knob): pins 1 and 3 are the ends of the track, 2 the wiper. The value is the
+    /// whole resistance, and `POS=30` how far the knob is turned (percent from pin 1 to pin 3; 50 when left out): see `pot_position`.
+    Pot,
+}
+
+/// How far a potentiometer's knob is turned, 0 (the wiper at pin 1) to 1 (at pin 3), from its value (`10k POS=30`; the middle
+/// when it does not say).
+pub fn pot_position(value: &str) -> f64 {
+    value
+        .split_whitespace()
+        .find_map(|w| {
+            let (k, v) = w.split_once('=')?;
+            k.eq_ignore_ascii_case("POS").then(|| v.trim_end_matches('%').parse::<f64>().ok()).flatten()
+        })
+        .map(|p| (p / 100.0).clamp(0.0, 1.0))
+        .unwrap_or(0.5)
+}
+
+/// What is left of a potentiometer's track between the wiper and an end turned all the way to it (the contact and the end of
+/// the track): a share of the whole resistance, so the wiper never shorts to the end.
+pub const POT_END_SHARE: f64 = 0.005;
+
+/// The two halves of a potentiometer's track for the knob at `pos` (0..1): (pin 1 to the wiper, the wiper to pin 3) in ohms, for
+/// the whole resistance `total`. Neither goes below the end resistance (`POT_END_SHARE`).
+pub fn pot_split(total: f64, pos: f64) -> (f64, f64) {
+    let p = pos.clamp(0.0, 1.0);
+    let end = total * POT_END_SHARE;
+    ((total * p).max(end), (total * (1.0 - p)).max(end))
+}
+
+/// The value of a potentiometer with its knob at `pos` (0..1): `value` with its `POS=` set (written in whole percent).
+pub fn with_pot_position(value: &str, pos: f64) -> String {
+    let mut words: Vec<String> = value.split_whitespace().filter(|w| !w.split_once('=').is_some_and(|(k, _)| k.eq_ignore_ascii_case("POS"))).map(String::from).collect();
+    if words.is_empty() {
+        words.push(Kind::Pot.default_value().into());
+    }
+    words.push(format!("POS={}", (pos.clamp(0.0, 1.0) * 100.0).round() as i64));
+    words.join(" ")
 }
 
 impl Kind {
@@ -67,6 +105,7 @@ impl Kind {
         Kind::Led,
         Kind::VSource,
         Kind::ISource,
+        Kind::Pot,
         Kind::Npn,
         Kind::Header(2),
         Kind::Header(4),
@@ -83,6 +122,7 @@ impl Kind {
             Kind::Led => "LED".into(),
             Kind::VSource => "電源".into(),
             Kind::ISource => "電流源".into(),
+            Kind::Pot => "ボリューム (可変抵抗)".into(),
             Kind::Npn => "NPNトランジスタ".into(),
             Kind::Header(n) => format!("ヘッダ {n}P"),
             Kind::Custom => "ライブラリ部品".into(),
@@ -99,6 +139,7 @@ impl Kind {
             Kind::Diode | Kind::Led => "D",
             Kind::VSource => "V",
             Kind::ISource => "I",
+            Kind::Pot => "VR",
             Kind::Npn => "Q",
             Kind::Header(_) => "J",
             Kind::Custom => "U",
@@ -115,6 +156,7 @@ impl Kind {
             Kind::Led => "LED",
             Kind::VSource => "5",
             Kind::ISource => "1m",
+            Kind::Pot => "10k",
             Kind::Npn => "2N3904",
             Kind::Header(_) => "Conn",
             Kind::Custom => "",
@@ -133,6 +175,7 @@ impl Kind {
             Kind::Led => "LED_0805".into(),
             Kind::VSource => "PinHeader_1x2_PM".into(),
             Kind::Npn => "SOT-23".into(),
+            Kind::Pot => "Pot_1x3_P2.54".into(),
             Kind::Header(n) => format!("PinHeader_1x{n}"),
             Kind::Custom | Kind::Ground | Kind::Power | Kind::ISource => String::new(),
         }
@@ -150,6 +193,8 @@ impl Kind {
             Kind::Diode | Kind::Led => vec![p("A", -2, 0), p("K", 2, 0)],
             Kind::VSource | Kind::ISource => vec![p("+", 0, -2), p("-", 0, 2)],
             Kind::Npn => vec![p("C", 2, -2), p("B", -2, 0), p("E", 2, 2)],
+            // the wiper comes out of the middle of the track, on the side the arrow points from
+            Kind::Pot => vec![p("1", -2, 0), p("2", 0, -2), p("3", 2, 0)],
             Kind::Header(n) => (0..n as i32).map(|i| (format!("{}", i + 1), (2, 2 * i))).collect(),
             Kind::Custom => vec![],
             Kind::Ground | Kind::Power => vec![p("1", 0, 0)],

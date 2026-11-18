@@ -684,6 +684,11 @@ fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, mut warnings: Ve
 }
 
 impl Compiled {
+    /// Drops the kept factorisations of the linear system (an element's value has been changed in place).
+    pub(crate) fn forget_factors(&self) {
+        self.cache.borrow_mut().clear();
+    }
+
     pub(crate) fn zero_junction_state(&self) -> Vec<f64> {
         vec![0.0; self.n_slots]
     }

@@ -151,3 +151,21 @@ fn a_snapshot_is_the_operating_point_now() {
     assert!((snap.element("R1").unwrap().current - 5e-3).abs() < 1e-8, "{}", snap.element("R1").unwrap().current);
     assert!((snap.element("R1").unwrap().power - 25e-3).abs() < 1e-7);
 }
+
+/// A resistor changed while the run goes on (a potentiometer's knob turned) moves the divider at once, also in a linear circuit
+/// whose factorised matrix the run keeps.
+#[test]
+fn a_resistance_changed_while_running_moves_the_divider() {
+    let mut c = Circuit::new();
+    let (a, k) = (c.node("a"), c.node("k"));
+    c.add(Element::vdc("V1", a, 0, 10.0));
+    c.add(Element::Resistor { name: "VR1.A".into(), a, b: k, r: 5e3 });
+    c.add(Element::Resistor { name: "VR1.B".into(), a: k, b: 0, r: 5e3 });
+    let mut run = TranRun::start(&c, &TranSettings { tstop: 1.0, tstep: 1e-3, uic: false }, None).unwrap();
+    run.advance_to(0.01).unwrap();
+    assert!((run.voltage("k").unwrap() - 5.0).abs() < 1e-6);
+    assert!(run.set_resistance("VR1.A", 2e3) && run.set_resistance("VR1.B", 8e3));
+    assert!(!run.set_resistance("nothing", 1e3) && !run.set_resistance("VR1.A", 0.0));
+    run.advance_to(0.02).unwrap();
+    assert!((run.voltage("k").unwrap() - 8.0).abs() < 1e-6, "{:?}", run.voltage("k"));
+}

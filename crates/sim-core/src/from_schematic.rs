@@ -269,6 +269,24 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
                     }
                 }
             }
+            Kind::Pot => {
+                // the track as two resistors meeting at the wiper: `VR1.A` (pin 1 to the wiper) and `VR1.B` (the wiper to pin 3)
+                let total = match parse_part_value(&comp.value) {
+                    Ok((x, _)) if x > 0.0 => x,
+                    Ok(_) => {
+                        errors.push(err(r, "ボリュームの抵抗値は正の値にしてください (例: 10k POS=50)"));
+                        continue;
+                    }
+                    Err(m) => {
+                        errors.push(err(r, m));
+                        continue;
+                    }
+                };
+                let (ra, rb) = sch_core::pot_split(total, sch_core::pot_position(&comp.value));
+                let (a, w, b) = (node_of(&mut c, r, "1"), node_of(&mut c, r, "2"), node_of(&mut c, r, "3"));
+                c.add(Element::Resistor { name: format!("{r}.A"), a, b: w, r: ra });
+                c.add(Element::Resistor { name: format!("{r}.B"), a: w, b, r: rb });
+            }
             Kind::VSource => {
                 let src = match parse_source_full(&comp.value) {
                     Ok(w) => w,

@@ -26,18 +26,24 @@ pub struct Switch {
     pub on: bool,
 }
 
-/// A supply or a source off the board whose voltage is turned while the circuit runs (a bench supply's knob, the light on a
-/// light sensor's input): its part, the value it was drawn with, and the value now.
+/// What is turned while the circuit runs: a supply or a source off the board (a bench supply's knob, the light on a light sensor's
+/// input; volts), or a potentiometer on the board (how far its knob is turned, 0..1). Its part, the value it was drawn with, and
+/// the value now.
 #[derive(Clone, Debug)]
 pub struct Knob {
     pub refdes: String,
     pub nominal: f64,
     pub value: f64,
+    /// A potentiometer: its whole resistance (ohms); its two halves `<refdes>.A` and `.B` are set from the position.
+    pub pot: Option<f64>,
 }
 
 impl Knob {
-    /// The range of the slider: from 0 to twice the drawn value (at least 1 V either way).
+    /// The range of the slider: a potentiometer's whole turn, or from 0 to twice the drawn voltage (at least 1 V either way).
     pub fn range(&self) -> std::ops::RangeInclusive<f64> {
+        if self.pot.is_some() {
+            return 0.0..=1.0;
+        }
         let far = (2.0 * self.nominal.abs()).max(1.0);
         if self.nominal < 0.0 { -far..=0.0 } else { 0.0..=far }
     }
@@ -67,16 +73,28 @@ pub struct Live {
 
 impl Live {
     /// Starts the run on `circuit`. `currents`: the elements whose current is read (the LEDs); `switches`: from
-    /// `SchEditor::live_switches`; `knobs`: the parts whose DC voltage may be turned (the ones that are DC sources in the circuit).
+    /// `SchEditor::live_switches`; `knobs`: the parts whose DC voltage may be turned (the ones that are DC sources in the circuit)
+    /// and the potentiometers (the ones whose two halves `.A` and `.B` are in the circuit).
     pub fn start(circuit: sim_core::Circuit, currents: &[String], switches: Vec<(String, String, bool)>, knobs: &[String]) -> Live {
-        let knobs = circuit
+        let resistance = |name: String| circuit.elements.iter().find_map(|e| match e {
+            sim_core::Element::Resistor { name: n, r, .. } if *n == name => Some(*r),
+            _ => None,
+        });
+        let mut knobs_found: Vec<Knob> = circuit
             .elements
             .iter()
             .filter_map(|e| match e {
-                sim_core::Element::VSource { name, wave: Waveform::Dc(v), .. } if knobs.contains(name) => Some(Knob { refdes: name.clone(), nominal: *v, value: *v }),
+                sim_core::Element::VSource { name, wave: Waveform::Dc(v), .. } if knobs.contains(name) => Some(Knob { refdes: name.clone(), nominal: *v, value: *v, pot: None }),
                 _ => None,
             })
             .collect();
+        for k in knobs {
+            if let (Some(a), Some(b)) = (resistance(format!("{k}.A")), resistance(format!("{k}.B"))) {
+                let pos = a / (a + b);
+                knobs_found.push(Knob { refdes: k.clone(), nominal: pos, value: pos, pot: Some(a + b) });
+            }
+        }
+        let knobs = knobs_found;
         let mut me = Live {
             run: None,
             circuit: circuit.clone(),
@@ -171,16 +189,25 @@ impl Live {
         }
     }
 
-    /// Turns knob `i` to `v` volts from now on.
+    /// Turns knob `i` to `v` from now on: volts for a source, the position (0..1) for a potentiometer.
     pub fn set_knob(&mut self, i: usize, v: f64) {
         let Some(k) = self.knobs.get_mut(i) else { return };
         if k.value == v {
             return;
         }
         k.value = v;
-        let name = k.refdes.clone();
+        let (name, pot) = (k.refdes.clone(), k.pot);
         if let Some(r) = self.run.as_mut() {
-            r.set_source(&name, Waveform::Dc(v));
+            match pot {
+                Some(total) => {
+                    let (a, b) = sch_core::pot_split(total, v);
+                    r.set_resistance(&format!("{name}.A"), a);
+                    r.set_resistance(&format!("{name}.B"), b);
+                }
+                None => {
+                    r.set_source(&name, Waveform::Dc(v));
+                }
+            }
         }
     }
 

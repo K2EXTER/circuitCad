@@ -580,6 +580,31 @@ impl TranRun {
         found
     }
 
+    /// Changes the resistance of resistor `name` from now on (a potentiometer's knob turned by hand: its two halves). A change
+    /// is a corner, as with `set_source`. Returns whether there is such a resistor.
+    pub fn set_resistance(&mut self, name: &str, ohms: f64) -> bool {
+        if !(ohms.is_finite() && ohms > 0.0) {
+            return false;
+        }
+        let mut found = false;
+        for e in &mut self.cm.ce {
+            if let Ce::R { name: n, g, .. } = e
+                && n == name
+            {
+                *g = 1.0 / ohms;
+                found = true;
+            }
+        }
+        if found {
+            // the factorised matrix of a linear circuit holds the old conductance
+            self.cm.forget_factors();
+            self.force_be = true;
+            self.hist.clear();
+            self.h_ctrl = self.h_min;
+        }
+        found
+    }
+
     /// The voltage of node `name` now (digital nets included).
     pub fn voltage(&self, name: &str) -> Option<f64> {
         let i = self.cm.node_names.iter().position(|n| n == name)?;

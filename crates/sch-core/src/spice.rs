@@ -81,6 +81,15 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
                     }
                 }
             }
+            Kind::Pot => {
+                // the track as two resistors meeting at the wiper ("RVR1_A": a name starting with V would be a voltage source)
+                let main = c.value.split_whitespace().next().unwrap_or("10k");
+                let total = crate::ngspice::spice_number(main).unwrap_or(10e3);
+                let (ra, rb) = crate::pot_split(total, crate::pot_position(&c.value));
+                let _ = writeln!(out, "* {r}: potentiometer {main}, knob at {:.0}%", crate::pot_position(&c.value) * 100.0);
+                let _ = writeln!(out, "R{r}_A {} {} {ra:e}", nd(r, "1"), nd(r, "2"));
+                let _ = writeln!(out, "R{r}_B {} {} {rb:e}", nd(r, "2"), nd(r, "3"));
+            }
             Kind::Diode | Kind::Led => {
                 diode_models = true;
                 let m = if c.kind == Kind::Led { "DLED" } else { "DDEF" };

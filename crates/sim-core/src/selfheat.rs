@@ -76,7 +76,7 @@ pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit, copper: &BTree
     let mut out = vec![];
     // every sheet: the circuit is built from all of them, and a part on a sheet not being edited heats as much
     for comp in &sch.flat().components {
-        let resistors = matches!(comp.kind, Kind::Resistor | Kind::Custom);
+        let resistors = matches!(comp.kind, Kind::Resistor | Kind::Custom | Kind::Pot);
         if !resistors && !matches!(comp.kind, Kind::Diode | Kind::Led | Kind::Npn) {
             continue;
         }

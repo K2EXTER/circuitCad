@@ -124,7 +124,7 @@ fn wire_pads_sized(name: &str, pins: &[String], pad_d: f64, drill: f64) -> Footp
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
         "R_0603", "R_0805", "R_0805_Reflow", "R_1206", "R_2512", "C_0402", "C_0603", "C_0805", "C_0805_Reflow", "C_1206", "C_1210", "L_0805", "LED_0805", "D_SOD-123", "CT_3528-21", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
-        "D_DO-35_7.62", "LED_5mm", "TO-92", "TO-92-3", "SOT-23", "SOT-23-3", "SOT-23-5", "SOT-23-6", "SOT-223", "TO-220-3", "PinHeader_1x2_PM",
+        "D_DO-35_7.62", "LED_5mm", "TO-92", "TO-92-3", "SOT-23", "SOT-23-3", "SOT-23-5", "SOT-23-6", "SOT-223", "TO-220-3", "PinHeader_1x2_PM", "Pot_1x3_P2.54",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -244,6 +244,18 @@ pub fn get(name: &str) -> Option<Footprint> {
             }
         }
         "PinHeader_1x2_PM" => header(name, &["+".to_string(), "-".to_string()]),
+        // a small potentiometer for a board or a breadboard: three leads in a row 2.54 apart (1, the wiper 2, 3), pin 1 square
+        "Pot_1x3_P2.54" => {
+            let s = PadShape::Circle { d: 1.8 };
+            Footprint {
+                name: name.into(),
+                holes: vec![],
+                height: Some(7.0),
+                silk: vec![],
+                body: None,
+                pads: vec![pad("1", -2.54, 0.0, PadShape::Rect { w: 1.8, h: 1.8 }, Some(1.0)), pad("2", 0.0, 0.0, s, Some(1.0)), pad("3", 2.54, 0.0, s, Some(1.0))],
+            }
+        }
         // "WirePad_D0.7_P1.6": one pad for a wire, hole 0.7 mm and pad 1.6 mm (the pad is at least 0.4 mm wider than the hole)
         _ if name.starts_with("WirePad_D") => {
             let rest = name.strip_prefix("WirePad_D")?;
@@ -325,6 +337,15 @@ fn outline(name: &str) -> Vec<FpLine> {
             line((-2.75, 1.55), (-2.75, -1.55)),
             line((-3.5, 0.0), (-3.0, 0.0)),
             line((-3.25, 0.25), (-3.25, -0.25)),
+        ],
+        // potentiometer: the square body behind the leads and the knob's slot
+        "Pot_1x3_P2.54" => vec![
+            line((-4.8, 1.6), (4.8, 1.6)),
+            line((4.8, 1.6), (4.8, -8.0)),
+            line((4.8, -8.0), (-4.8, -8.0)),
+            line((-4.8, -8.0), (-4.8, 1.6)),
+            line((-2.0, -3.2), (2.0, -3.2)),
+            line((0.0, -5.2), (0.0, -1.2)),
         ],
         // 5 mm LED: the flat side is the cathode (K, left)
         "LED_5mm" => {
