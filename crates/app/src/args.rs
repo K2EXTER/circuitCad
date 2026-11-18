@@ -592,6 +592,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--proto") {
         app.mode = Mode::Proto;
         app.breadboard.picked = args.get(i + 1).filter(|a| !a.starts_with("--")).cloned();
+        // `--proto-power`: the supply switched on; `--proto-meter`: the meter's probes on the top rails (for screenshots)
+        app.breadboard.powered = args.iter().any(|a| a == "--proto-power");
+        if args.iter().any(|a| a == "--proto-meter") {
+            app.breadboard.tool = crate::breadboard::Tool::Meter;
+            app.breadboard.red = Some(sch_core::breadboard::Hole::Rail { rail: sch_core::breadboard::Rail::TopPlus, col: 12 });
+            app.breadboard.black = Some(sch_core::breadboard::Hole::Rail { rail: sch_core::breadboard::Rail::TopMinus, col: 12 });
+        }
     }
     // `--bench-tab [assemble|power_on|measure|judge|repair]`: the bench tab ("実機"), at that step
     if let Some(i) = args.iter().position(|a| a == "--bench-tab") {

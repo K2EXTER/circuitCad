@@ -700,6 +700,92 @@ pub fn check(s: &Schematic, l: &Layout) -> Vec<Problem> {
     problems
 }
 
+/// The net of the schematic that hole `h` is joined to on the board (through its strip or rail, the jumpers and the leads in them);
+/// None when nothing of the circuit is joined to it. With a short (two nets in one group) the first by name.
+pub fn net_at(s: &Schematic, l: &Layout, h: Hole) -> Option<String> {
+    let c = read(s);
+    let g = groups(l);
+    let root = |x: Hole| g.get(&x.node()).copied().unwrap_or(x.node());
+    let want = root(h);
+    let mut nets: BTreeSet<String> = BTreeSet::new();
+    for (refdes, _, pins) in &c.on {
+        if let Some(p) = l.parts.iter().find(|p| p.refdes == *refdes) {
+            for (pin, net) in pins {
+                if p.leads.iter().any(|(n, lh)| n == pin && root(*lh) == want) && !net.is_empty() {
+                    nets.insert(net.clone());
+                }
+            }
+        }
+    }
+    for (refdes, pins) in &c.off {
+        if let Some(o) = l.off_board.iter().find(|o| o.refdes == *refdes) {
+            for (pin, net) in pins {
+                if o.pins.iter().any(|(n, _, oh)| n == pin && root(*oh) == want) && !net.is_empty() {
+                    nets.insert(net.clone());
+                }
+            }
+        }
+    }
+    nets.into_iter().next()
+}
+
+/// The layout with a jumper from `a` to `b` (its colour from the net it joins).
+pub fn with_wire(s: &Schematic, l: &Layout, a: Hole, b: Hole) -> Layout {
+    let mut out = l.clone();
+    let net = net_at(s, l, a).or_else(|| net_at(s, l, b)).unwrap_or_default();
+    out.wires.push(Wire { a, b, net });
+    out
+}
+
+/// The layout without jumper `k`.
+pub fn without_wire(l: &Layout, k: usize) -> Layout {
+    let mut out = l.clone();
+    if k < out.wires.len() {
+        out.wires.remove(k);
+    }
+    out
+}
+
+/// The layout with end `end` (0 = a, 1 = b) of jumper `k` moved to hole `to`.
+pub fn wire_end_moved(s: &Schematic, l: &Layout, k: usize, end: usize, to: Hole) -> Layout {
+    let mut out = l.clone();
+    if let Some(w) = out.wires.get_mut(k) {
+        if end == 0 { w.a = to } else { w.b = to }
+    }
+    if let Some(w) = out.wires.get(k).cloned() {
+        let net = net_at(s, &out, w.a).unwrap_or_default();
+        out.wires[k].net = net;
+    }
+    out
+}
+
+/// Part `refdes` turned: a two-lead part a quarter turn about its first lead (lying ↔ standing), a part in a row end for end. A chip,
+/// a lead on a rail or a turn off the board gives None.
+pub fn rotated(l: &Layout, refdes: &str) -> Option<Layout> {
+    let mut out = l.clone();
+    let p = out.parts.iter_mut().find(|p| p.refdes == refdes)?;
+    match p.look {
+        Look::Dip => return None,
+        Look::Row => {
+            let holes: Vec<Hole> = p.leads.iter().map(|(_, h)| *h).rev().collect();
+            for ((_, h), n) in p.leads.iter_mut().zip(holes) {
+                *h = n;
+            }
+        }
+        Look::TwoLead => {
+            let (Some((_, Hole::Strip { col: c1, row: r1 })), Some((_, Hole::Strip { col: c2, row: r2 }))) = (p.leads.first().cloned(), p.leads.get(1).cloned()) else { return None };
+            let (dc, dr) = (c2 as i32 - c1 as i32, r2 as i32 - r1 as i32);
+            // a quarter turn: (dc, dr) -> (-dr, dc)
+            let (nc, nr) = (c1 as i32 - dr, r1 as i32 + dc);
+            if nc < 0 || nc >= l.cols as i32 || !(0..ROWS as i32).contains(&nr) {
+                return None;
+            }
+            p.leads[1].1 = Hole::Strip { col: nc as u16, row: nr as u8 };
+        }
+    }
+    Some(out)
+}
+
 /// Moves part `refdes` by whole holes (`dcol` columns, `drow` rows); a chip keeps to its rows across the groove, and a lead on a rail
 /// moves along it. None when a lead would leave the board.
 pub fn moved(l: &Layout, refdes: &str, dcol: i32, drow: i32) -> Option<Layout> {
@@ -783,6 +869,40 @@ mod tests {
         assert!(p.iter().any(|x| matches!(x, Problem::Short { .. } | Problem::Open { .. } | Problem::SameHole { .. })), "{p:?}");
         assert!(!p[0].message().is_empty());
         assert!(moved(&l, &r, -1000, 0).is_none(), "off the board");
+    }
+
+    #[test]
+    fn a_jumper_joins_and_removing_it_opens_again() {
+        let s: Schematic = serde_json::from_str(include_str!("../../../docs/examples/ne555_blinker.schjson")).unwrap();
+        let l = auto_layout(&s);
+        // every jumper the layout needs: taking one away leaves the board open (or it was a spare)
+        let k = (0..l.wires.len()).find(|k| !check(&s, &without_wire(&l, *k)).is_empty()).expect("a jumper that matters");
+        let broken = without_wire(&l, k);
+        assert!(check(&s, &broken).iter().any(|p| matches!(p, Problem::Open { .. })));
+        let w = &l.wires[k];
+        let fixed = with_wire(&s, &broken, w.a, w.b);
+        assert!(check(&s, &fixed).is_empty());
+        assert_eq!(fixed.wires.last().unwrap().net, w.net, "the colour comes from the net it joins");
+        // the net under a hole
+        let (pin, hole) = l.parts.iter().find(|p| p.refdes == "R1").unwrap().leads[1].clone();
+        assert!(net_at(&s, &l, hole).is_some(), "R1.{pin}");
+        assert_eq!(net_at(&s, &l, Hole::Strip { col: l.cols - 1, row: 0 }), None, "an empty strip");
+        // moving an end of a jumper away opens it too
+        let moved_end = wire_end_moved(&s, &l, k, 1, Hole::Strip { col: l.cols - 1, row: 9 });
+        assert!(!check(&s, &moved_end).is_empty());
+    }
+
+    #[test]
+    fn a_two_lead_part_turns_about_its_first_lead() {
+        let mut l = Layout { cols: 30, ..Default::default() };
+        l.parts.push(Placed { refdes: "R1".into(), look: Look::TwoLead, leads: vec![("1".into(), Hole::Strip { col: 5, row: 1 }), ("2".into(), Hole::Strip { col: 8, row: 1 })] });
+        let r = rotated(&l, "R1").unwrap();
+        assert_eq!(r.parts[0].leads[1].1, Hole::Strip { col: 5, row: 4 }, "lying -> standing, three rows down");
+        assert_eq!(rotated(&r, "R1").unwrap().parts[0].leads[1].1, Hole::Strip { col: 2, row: 1 }, "two turns: lying the other way");
+        // a turn that would leave the rows gives none
+        l.parts[0].leads[1].1 = Hole::Strip { col: 2, row: 1 };
+        assert!(rotated(&l, "R1").is_none());
+        assert!(rotated(&l, "R9").is_none());
     }
 
     #[test]

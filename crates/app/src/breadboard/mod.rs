@@ -1,13 +1,16 @@
 //! The prototype tab ("試作", candidate B6 ①): the schematic laid out on a solderless breadboard. The layout itself (which hole each
 //! lead goes in, the jumpers, the supplies off the board) and the check against the schematic are `sch_core::breadboard`; this draws
 //! the board, lights up the strip under the pointer, lets a part be dragged to other holes, and lists what the holes join that the
-//! schematic does not (or the other way round). The layout is the sheet's (saved with it once the person moved something or asked for
+//! schematic does not (or the other way round). Tools: move (parts and jumper ends, R turns a part, Delete removes a jumper), jumper
+//! (two holes), the meter (red and black probes on two holes: the DC voltage between them, B6 ③), the scope (a probe on a hole: the
+//! transient waveform of its net) and the power switch (LEDs light by their current; parts past their ratings show as burnt, with why,
+//! B6 ④). The layout is the sheet's (saved with it once the person moved something or asked for
 //! a layout, `SheetSettings::breadboard`); until then it is laid out afresh from the schematic. Notes: `docs/code-notes/app/breadboard.md`.
 
 use crate::learn::{spaced, NOTE};
 use crate::schematic::SchEditor;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
-use sch_core::breadboard::{auto_layout, check, moved, Hole, Layout, Look, Problem, Rail};
+use sch_core::breadboard::{auto_layout, check, moved, net_at, rotated, with_wire, without_wire, wire_end_moved, Hole, Layout, Look, Problem, Rail};
 use std::collections::BTreeSet;
 
 /// What the person is dragging: the part, and the hole the pointer started on.
@@ -16,13 +19,42 @@ struct Drag {
     from: Hole,
 }
 
+/// What a click on the board does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tool {
+    /// Drag parts and jumper ends; R turns the picked part, Delete removes the picked jumper.
+    #[default]
+    Move,
+    /// Click a hole, then another: a jumper between them.
+    Wire,
+    /// The meter: the red probe on one hole, the black on another; the DC voltage between them.
+    Meter,
+    /// The scope's probe on a hole: the transient waveform of its net.
+    Scope,
+}
+
 #[derive(Default)]
 pub struct BreadboardView {
     /// The layout made from the schematic when none is saved, and the schematic's edit count it was made at.
     auto: Option<(u64, usize, Layout)>,
     drag: Option<Drag>,
+    /// A jumper end being dragged: (jumper, end 0 or 1).
+    wire_drag: Option<(usize, usize)>,
     /// The part picked on the board or in the list.
     pub picked: Option<String>,
+    /// The jumper picked (Delete removes it).
+    picked_wire: Option<usize>,
+    pub tool: Tool,
+    /// The first hole of a jumper being drawn.
+    wire_start: Option<Hole>,
+    /// The meter's probes and the scope's.
+    pub red: Option<Hole>,
+    pub black: Option<Hole>,
+    pub scope: Option<Hole>,
+    /// The supply is switched on: LEDs light, parts past their ratings burn.
+    pub powered: bool,
+    /// The DC point was worked out once for the meter or the power switch (not again every frame when it fails).
+    dc_asked: bool,
 }
 
 const BOARD: Color32 = Color32::from_rgb(236, 234, 226);
@@ -120,6 +152,52 @@ impl BreadboardView {
                 ui.label(egui::RichText::new(format!("・{}", i18n::tr_dyn(&p.message()))).color(BAD));
             }
         }
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            for (t, name, tip) in [
+                (Tool::Move, "動かす", "部品やジャンパー線の端をドラッグして差し替えます。選んだ部品は R で回り、選んだ線は Delete で消えます"),
+                (Tool::Wire, "ジャンパー線", "穴をクリックして、つなぐ先の穴をクリックすると、線を差します。Esc でやめます"),
+                (Tool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます。2 つの穴の間の直流の電圧を読みます (黒い棒はふつう GND に)"),
+                (Tool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化 (過渡解析) が左に出ます"),
+            ] {
+                if ui.selectable_label(self.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+                    self.tool = t;
+                    self.wire_start = None;
+                    self.dc_asked = false;
+                }
+            }
+        });
+        let power_label = if self.powered { i18n::tr("電源を切る") } else { i18n::tr("電源を入れる") };
+        if ui.button(power_label).on_hover_text(i18n::tr("電源を入れると、DC 動作点を計算して、LED が電流に合わせて光り、定格を超えた部品は焦げた印と理由が出ます (実物なら壊れるところ)")).clicked() {
+            self.powered = !self.powered;
+            self.dc_asked = false;
+        }
+        if (self.powered || self.tool == Tool::Meter) && sch.bench_voltages().is_none() && !self.dc_asked && problems.is_empty() {
+            self.dc_asked = true;
+            sch.analyze_dc();
+        }
+        match self.tool {
+            Tool::Meter => self.meter_ui(ui, sch, &l, problems.is_empty()),
+            Tool::Scope => self.scope_ui(ui, sch, &l),
+            Tool::Wire => {
+                ui.label(egui::RichText::new(i18n::tr("穴をクリックして、つなぐ先の穴をクリックします")).color(NOTE));
+            }
+            Tool::Move => {}
+        }
+        if self.powered {
+            let issues = sch.dc_ratings();
+            if !problems.is_empty() {
+                ui.colored_label(crate::theme::WARN, i18n::tr("回路図と違うつなぎ方があるので、電源を入れたときの様子は出せません。先に赤い丸の所を直します"));
+            } else if issues.is_empty() {
+                ui.colored_label(crate::theme::OK, i18n::tr("電源を入れました。定格を超えた部品はありません"));
+            } else {
+                for r in &issues {
+                    let (col, head) = if r.level == sim_core::RatingLevel::Over { (BAD, i18n::tr("壊れた")) } else { (crate::theme::WARN, i18n::tr("熱い・余裕が少ない")) };
+                    ui.label(egui::RichText::new(format!("{} {}: {}", r.refdes, head, i18n::tr_dyn(&r.message))).color(col));
+                    ui.label(egui::RichText::new(format!("　→ {}", i18n::tr_dyn(&r.hint))).color(NOTE));
+                }
+            }
+        }
         ui.horizontal(|ui| {
             if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から、部品の差し方を並べ直します (IC は中央の溝をまたぎ、電源とGNDは上下の列、同じネットの足は同じ縦の列)。手で動かした分は消えます")).clicked() {
                 sch.breadboard = Some(auto_layout(&sch.sch));
@@ -151,6 +229,62 @@ impl BreadboardView {
         });
     }
 
+    /// The meter's reading: the DC voltage of the red probe's net against the black's.
+    fn meter_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
+        let (Some(red), Some(black)) = (self.red, self.black) else {
+            ui.label(egui::RichText::new(if self.red.is_none() { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします (ふつうは GND の青い列)") }).color(NOTE));
+            return;
+        };
+        if !matches {
+            ui.colored_label(crate::theme::WARN, i18n::tr("回路図と違うつなぎ方があるので、テスターは読めません。先に赤い丸の所を直します"));
+            return;
+        }
+        let (na, nb) = (net_at(&sch.sch, l, red), net_at(&sch.sch, l, black));
+        let volts = sch.bench_voltages();
+        let v_of = |n: &Option<String>| -> Option<f64> {
+            let n = n.as_ref()?;
+            if is_ground(n) {
+                return Some(0.0);
+            }
+            volts.as_ref()?.iter().find(|(m, _)| m.eq_ignore_ascii_case(n)).map(|(_, v)| *v)
+        };
+        let name = |h: Hole, n: &Option<String>| format!("{} ({})", h.name(), n.clone().unwrap_or_else(|| i18n::tr("どこにもつながっていない").to_string()));
+        ui.label(i18n::trf!("赤: {}　黒: {}", name(red, &na), name(black, &nb)));
+        match (v_of(&na), v_of(&nb)) {
+            (Some(a), Some(b)) => {
+                ui.label(egui::RichText::new(format!("{} V", sim_core::format_value(a - b))).size(22.0).strong().color(crate::theme::OK));
+            }
+            _ if na.is_none() || nb.is_none() => {
+                ui.colored_label(crate::theme::WARN, i18n::tr("棒の片方が、どこにもつながっていない穴です (表示は定まりません)"));
+            }
+            _ => {
+                ui.label(egui::RichText::new(i18n::tr("DC 動作点が求まっていません (回路図の解析で確かめます)")).color(NOTE));
+            }
+        }
+    }
+
+    /// The scope: the transient waveform of the probe's net.
+    fn scope_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &Layout) {
+        let Some(h) = self.scope else {
+            ui.label(egui::RichText::new(i18n::tr("探り針を当てる穴をクリックします")).color(NOTE));
+            return;
+        };
+        let Some(net) = net_at(&sch.sch, l, h) else {
+            ui.colored_label(crate::theme::WARN, i18n::trf!("{} は、どこにもつながっていない穴です", h.name()));
+            return;
+        };
+        ui.label(i18n::trf!("探り針: {} ({net})", h.name()));
+        let signal = if is_ground(&net) { None } else { sch.tran_signal(&format!("V({net})")) };
+        if ui.button(i18n::tr("過渡解析を実行")).on_hover_text(i18n::tr("回路図の過渡解析の欄の時間で計算し直します")).clicked() {
+            sch.analyze_tran();
+        }
+        let Some((t, v)) = signal else {
+            ui.label(egui::RichText::new(if is_ground(&net) { i18n::tr("GND は 0 V です") } else { i18n::tr("過渡解析の結果がありません。「過渡解析を実行」を押します") }).color(NOTE));
+            return;
+        };
+        scope_plot(ui, &t, &v);
+    }
+
     /// The board. `focus`: the part picked in the schematic, lit here too.
     pub fn canvas(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, focus: Option<&str>) {
         let mut l = self.layout(sch);
@@ -176,14 +310,59 @@ impl BreadboardView {
             let cands = [Hole::Rail { rail: Rail::TopPlus, col }, Hole::Rail { rail: Rail::TopMinus, col }, Hole::Rail { rail: Rail::BottomMinus, col }, Hole::Rail { rail: Rail::BottomPlus, col }];
             cands.into_iter().chain((0..10).map(|row| Hole::Strip { col, row })).find(|h| (at(*h).y - v.y).abs() < 0.5)
         };
-        // dragging: the part follows the pointer by whole holes; let go to keep it there
-        if response.drag_started()
+        // a jumper end near the pointer (they lie over the parts' leads)
+        let wire_end_at = |p: Pos2| -> Option<(usize, usize)> {
+            l.wires.iter().enumerate().flat_map(|(k, w)| [(k, 0, w.a), (k, 1, w.b)]).find(|(_, _, h)| to(*h).distance(p) < pitch * 0.45).map(|(k, e, _)| (k, e))
+        };
+        // dragging (the move tool): a jumper's end, or the part, follows the pointer by whole holes; let go to keep it there
+        if self.tool == Tool::Move
+            && response.drag_started()
             && let Some(p) = response.interact_pointer_pos()
-            && let Some(h) = hole_at(p)
-            && let Some(part) = l.parts.iter().find(|x| part_rect(x, to, pitch).expand(pitch * 0.6).contains(p))
         {
-            self.drag = Some(Drag { refdes: part.refdes.clone(), from: h });
-            self.picked = Some(part.refdes.clone());
+            if let Some(we) = wire_end_at(p) {
+                self.wire_drag = Some(we);
+                self.picked_wire = Some(we.0);
+            } else if let Some(h) = hole_at(p)
+                && let Some(part) = l.parts.iter().find(|x| part_rect(x, to, pitch).expand(pitch * 0.6).contains(p))
+            {
+                self.drag = Some(Drag { refdes: part.refdes.clone(), from: h });
+                self.picked = Some(part.refdes.clone());
+            }
+        }
+        if let Some((k, end)) = self.wire_drag
+            && let Some(p) = response.interact_pointer_pos().or(ui.ctx().pointer_latest_pos())
+            && let Some(h) = hole_at(p)
+        {
+            let m = wire_end_moved(&sch.sch, &l, k, end, h);
+            if response.drag_stopped() {
+                sch.breadboard = Some(m.clone());
+                self.wire_drag = None;
+            }
+            l = m;
+        }
+        // the keys of the move tool: R turns the picked part, Delete removes the picked jumper
+        if self.tool == Tool::Move && response.hovered() {
+            if ui.input(|i| i.key_pressed(egui::Key::R))
+                && let Some(r) = &self.picked
+            {
+                match rotated(&l, r) {
+                    Some(m) => {
+                        sch.breadboard = Some(m.clone());
+                        l = m;
+                    }
+                    None => sch.status = format!("{r} は、ここでは回せません (IC・電源の列に差した足・ブレッドボードからはみ出す向き)"),
+                }
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
+                && let Some(k) = self.picked_wire.take()
+            {
+                let m = without_wire(&l, k);
+                sch.breadboard = Some(m.clone());
+                l = m;
+            }
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.wire_start = None;
         }
         let mut dragging = false;
         if let Some(d) = &self.drag
@@ -207,6 +386,32 @@ impl BreadboardView {
         }
         if response.drag_stopped() {
             self.drag = None;
+            self.wire_drag = None;
+        }
+        // clicks of the other tools
+        if response.clicked()
+            && let Some(h) = response.interact_pointer_pos().and_then(hole_at)
+        {
+            match self.tool {
+                Tool::Wire => match self.wire_start.take() {
+                    None => self.wire_start = Some(h),
+                    Some(a) if a != h => {
+                        let m = with_wire(&sch.sch, &l, a, h);
+                        sch.breadboard = Some(m.clone());
+                        l = m;
+                    }
+                    Some(_) => {}
+                },
+                Tool::Meter => {
+                    if self.red.is_none() || self.black.is_some() {
+                        (self.red, self.black) = (Some(h), None);
+                    } else {
+                        self.black = Some(h);
+                    }
+                }
+                Tool::Scope => self.scope = Some(h),
+                Tool::Move => {}
+            }
         }
         let problems = check(&sch.sch, &l);
         // the leads named in a problem, drawn with a red ring
@@ -264,8 +469,14 @@ impl BreadboardView {
             painter.text(origin + Vec2::new(width - 0.1, y) * pitch, egui::Align2::LEFT_CENTER, net, small.clone(), rail_colour(rail));
         }
         // the wires, then the parts on top
-        for w in &l.wires {
+        for (k, w) in l.wires.iter().enumerate() {
+            if self.picked_wire == Some(k) {
+                draw_wire(&painter, to(w.a), to(w.b), LIT, pitch * 1.8);
+            }
             draw_wire(&painter, to(w.a), to(w.b), wire_colour(&w.net, &l), pitch);
+        }
+        if let (Some(a), Some(p)) = (self.wire_start, response.hover_pos()) {
+            draw_wire(&painter, to(a), p, Color32::from_rgb(40, 140, 60).gamma_multiply(0.6), pitch);
         }
         let font = egui::FontId::proportional((pitch * 0.6).clamp(9.0, 14.0));
         for (k, o) in l.off_board.iter().enumerate() {
@@ -283,6 +494,20 @@ impl BreadboardView {
         }
         let focus = focus.map(String::from);
         let mut hovered_part = None;
+        // with the power on: the LEDs' currents and the parts past their ratings
+        let on = self.powered && problems.is_empty();
+        let currents = if on { sch.dc_part_currents() } else { vec![] };
+        let issues = if on { sch.dc_ratings() } else { vec![] };
+        for p in l.parts.iter().filter(|p| sch.sch.components.iter().any(|c| c.refdes == p.refdes && c.kind == sch_core::Kind::Led)) {
+            let i = currents.iter().find(|(n, _)| *n == p.refdes).map_or(0.0, |(_, i)| *i);
+            let glow = (i / 0.02).clamp(0.0, 1.5) as f32;
+            if glow > 0.02 && !issues.iter().any(|r| r.refdes == p.refdes && r.level == sim_core::RatingLevel::Over) {
+                let c = part_rect(p, to, pitch).center();
+                for k in 0..4 {
+                    painter.circle_filled(c, pitch * (1.0 + 0.6 * k as f32) * glow.max(0.4), Color32::from_rgb(255, 80, 60).gamma_multiply(0.18 * glow.min(1.0)));
+                }
+            }
+        }
         for p in &l.parts {
             let lit = self.picked.as_deref() == Some(p.refdes.as_str()) || focus.as_deref() == Some(p.refdes.as_str()) || self.drag.as_ref().is_some_and(|d| d.refdes == p.refdes);
             let comp = sch.sch.components.iter().find(|c| c.refdes == p.refdes);
@@ -291,8 +516,38 @@ impl BreadboardView {
                 hovered_part = Some((p.refdes.clone(), comp.map(|c| c.value.clone()).unwrap_or_default()));
             }
         }
+        for r in &issues {
+            let Some(p) = l.parts.iter().find(|p| p.refdes == r.refdes) else { continue };
+            let rect = part_rect(p, to, pitch);
+            if r.level == sim_core::RatingLevel::Over {
+                // burnt: soot and a cross
+                for k in 0..3 {
+                    painter.circle_filled(rect.center() + Vec2::new((k as f32 - 1.0) * pitch * 0.4, -pitch * 0.5 - k as f32 * pitch * 0.2), pitch * (0.5 + 0.15 * k as f32), Color32::from_gray(60).gamma_multiply(0.5));
+                }
+                let d = pitch * 0.5;
+                for (a, b) in [(Vec2::new(-d, -d), Vec2::new(d, d)), (Vec2::new(-d, d), Vec2::new(d, -d))] {
+                    painter.line_segment([rect.center() + a, rect.center() + b], Stroke::new(3.0, BAD));
+                }
+            } else {
+                painter.rect_stroke(rect.expand(pitch * 0.2), 3.0, Stroke::new(2.0, crate::theme::WARN), egui::StrokeKind::Middle);
+            }
+        }
         for h in &wrong {
             painter.circle_stroke(to(*h), pitch * 0.55, Stroke::new(2.5, BAD));
+        }
+        // the probes
+        for (h, c, label) in [(self.red, RED, "+"), (self.black, Color32::from_gray(20), "−")] {
+            if let (Some(h), Tool::Meter) = (h, self.tool) {
+                let p = to(h);
+                painter.line_segment([p, p + Vec2::new(pitch * 0.8, -pitch * 1.6)], Stroke::new(pitch * 0.25, c));
+                painter.circle_filled(p, pitch * 0.3, c);
+                painter.text(p + Vec2::new(pitch * 0.9, -pitch * 1.8), egui::Align2::CENTER_CENTER, label, font.clone(), c);
+            }
+        }
+        if let (Some(h), Tool::Scope) = (self.scope, self.tool) {
+            let p = to(h);
+            painter.line_segment([p, p + Vec2::new(-pitch * 0.8, -pitch * 1.6)], Stroke::new(pitch * 0.25, LIT));
+            painter.circle_filled(p, pitch * 0.3, LIT);
         }
         // what is under the pointer
         if !dragging {
@@ -304,10 +559,17 @@ impl BreadboardView {
                 response.clone().on_hover_text(tip);
             }
         }
-        if response.clicked() {
+        if response.clicked() && self.tool == Tool::Move {
             self.picked = hovered_part.map(|(r, _)| r);
+            // a click on a jumper picks it (Delete removes it)
+            self.picked_wire = response.interact_pointer_pos().and_then(|p| l.wires.iter().position(|w| wire_points(to(w.a), to(w.b), pitch).iter().any(|q| q.distance(p) < pitch * 0.35)));
         }
-        let legend = i18n::tr("黄: ポインタの下の穴とつながっている穴　赤い丸: 回路図と違う足　部品はドラッグで差し替え");
+        let legend = match self.tool {
+            Tool::Move => i18n::tr("黄: ポインタの下の穴とつながっている穴　赤い丸: 回路図と違う足　部品・線の端はドラッグで差し替え (R で回す・Delete で線を消す)"),
+            Tool::Wire => i18n::tr("ジャンパー線: 穴をクリックして、つなぐ先の穴をクリック (Esc でやめる)"),
+            Tool::Meter => i18n::tr("テスター: 赤い棒 → 黒い棒の順に穴をクリック。電圧は左に出ます"),
+            Tool::Scope => i18n::tr("オシロ: 探り針を当てる穴をクリック。波形は左に出ます"),
+        };
         painter.text(rect.left_top() + Vec2::new(12.0, 10.0), egui::Align2::LEFT_TOP, legend, egui::FontId::proportional(13.0), Color32::from_gray(210));
     }
 
@@ -317,18 +579,51 @@ impl BreadboardView {
     }
 }
 
+fn is_ground(n: &str) -> bool {
+    matches!(n.to_ascii_uppercase().as_str(), "GND" | "0" | "VSS" | "AGND" | "DGND")
+}
+
+/// A small scope screen: the waveform, its highest and lowest value and the time span.
+fn scope_plot(ui: &mut egui::Ui, t: &[f64], v: &[f64]) {
+    let (resp, painter) = ui.allocate_painter(Vec2::new(ui.available_width().min(380.0), 170.0), egui::Sense::hover());
+    let r = resp.rect;
+    painter.rect_filled(r, 4.0, Color32::from_rgb(16, 26, 20));
+    for k in 1..5 {
+        let y = r.top() + r.height() * k as f32 / 5.0;
+        painter.line_segment([Pos2::new(r.left(), y), Pos2::new(r.right(), y)], Stroke::new(0.5, Color32::from_rgb(40, 70, 50)));
+        let x = r.left() + r.width() * k as f32 / 5.0;
+        painter.line_segment([Pos2::new(x, r.top()), Pos2::new(x, r.bottom())], Stroke::new(0.5, Color32::from_rgb(40, 70, 50)));
+    }
+    let (Some(&t0), Some(&t1)) = (t.first(), t.last()) else { return };
+    let (lo, hi) = v.iter().fold((f64::MAX, f64::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
+    let pad = ((hi - lo) * 0.1).max(1e-3);
+    let (lo, hi) = (lo - pad, hi + pad);
+    let pts: Vec<Pos2> = t.iter().zip(v).map(|(t, v)| Pos2::new(r.left() + ((t - t0) / (t1 - t0).max(1e-30)) as f32 * r.width(), r.bottom() - ((v - lo) / (hi - lo)) as f32 * r.height())).collect();
+    painter.add(egui::Shape::line(pts, Stroke::new(1.8, Color32::from_rgb(120, 240, 140))));
+    let f = egui::FontId::proportional(12.0);
+    painter.text(r.left_top() + Vec2::new(4.0, 2.0), egui::Align2::LEFT_TOP, format!("{}V", sim_core::format_value(hi - pad)), f.clone(), Color32::from_gray(220));
+    painter.text(r.left_bottom() + Vec2::new(4.0, -2.0), egui::Align2::LEFT_BOTTOM, format!("{}V", sim_core::format_value(lo + pad)), f.clone(), Color32::from_gray(220));
+    painter.text(r.right_bottom() + Vec2::new(-4.0, -2.0), egui::Align2::RIGHT_BOTTOM, format!("{}s", sim_core::format_value(t1 - t0)), f, Color32::from_gray(220));
+}
+
 fn short(s: &str, n: usize) -> String {
     if s.chars().count() <= n { s.to_string() } else { format!("{}…", s.chars().take(n).collect::<String>()) }
 }
 
 /// A jumper wire: a gentle arc between two holes, with its ends.
-fn draw_wire(painter: &egui::Painter, a: Pos2, b: Pos2, c: Color32, pitch: f32) {
+fn wire_points(a: Pos2, b: Pos2, pitch: f32) -> Vec<Pos2> {
     let mid = a + (b - a) / 2.0 - Vec2::new(0.0, ((b - a).length() * 0.15).min(pitch * 1.5));
-    let pts: Vec<Pos2> = (0..=12).map(|i| {
-        let t = i as f32 / 12.0;
-        let u = 1.0 - t;
-        Pos2::new(u * u * a.x + 2.0 * u * t * mid.x + t * t * b.x, u * u * a.y + 2.0 * u * t * mid.y + t * t * b.y)
-    }).collect();
+    (0..=12)
+        .map(|i| {
+            let t = i as f32 / 12.0;
+            let u = 1.0 - t;
+            Pos2::new(u * u * a.x + 2.0 * u * t * mid.x + t * t * b.x, u * u * a.y + 2.0 * u * t * mid.y + t * t * b.y)
+        })
+        .collect()
+}
+
+fn draw_wire(painter: &egui::Painter, a: Pos2, b: Pos2, c: Color32, pitch: f32) {
+    let pts = wire_points(a, b, pitch);
     painter.add(egui::Shape::line(pts, Stroke::new((pitch * 0.22).max(2.0), c)));
     for p in [a, b] {
         painter.circle_filled(p, pitch * 0.16, Color32::from_gray(200));
@@ -432,6 +727,40 @@ mod tests {
     use super::*;
     use crate::{App, Mode};
 
+    /// The power switch works the DC point out by itself; an LED whose resistor is far too small burns, the meter reads the supply.
+    #[test]
+    fn switching_on_burns_an_led_without_enough_resistance_and_the_meter_reads() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.mode = Mode::Proto;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        app.breadboard.powered = true;
+        run(&mut app);
+        assert!(app.sch.bench_voltages().is_some(), "switching on worked the DC point out");
+        // the meter on the supply rail against ground reads the supply
+        let l = auto_layout(&app.sch.sch);
+        app.breadboard.tool = Tool::Meter;
+        app.breadboard.red = Some(Hole::Rail { rail: Rail::TopPlus, col: 10 });
+        app.breadboard.black = Some(Hole::Rail { rail: Rail::TopMinus, col: 10 });
+        run(&mut app);
+        assert_eq!(net_at(&app.sch.sch, &l, app.breadboard.red.unwrap()).as_deref(), Some("VCC"));
+        // the power-on sample's LED resistor (R1, 330 ohm from 5 V) made 1 ohm: the LED is past its rating and shows as burnt
+        app.sch.load_path(root.join("power_on.schjson"));
+        let led_r = app.sch.sch.components.iter().position(|c| c.refdes == "R1").unwrap();
+        app.sch.sch.components[led_r].value = "1".into();
+        app.sch.analyze_dc();
+        run(&mut app);
+        let over: Vec<String> = app.sch.dc_ratings().iter().filter(|r| r.level == sim_core::RatingLevel::Over).map(|r| r.refdes.clone()).collect();
+        assert!(over.iter().any(|r| r.starts_with('D')), "{over:?}");
+    }
+
     #[test]
     fn resistor_bands_read_the_value() {
         let b = bands("4.7k").unwrap();
@@ -467,6 +796,11 @@ mod tests {
         let back = crate::schematic::take_settings(&mut v);
         assert_eq!(back.breadboard, app.sch.breadboard);
         run(&mut app, vec![]);
+        // every tool draws
+        for t in [Tool::Wire, Tool::Meter, Tool::Scope, Tool::Move] {
+            app.breadboard.tool = t;
+            run(&mut app, vec![]);
+        }
         // an empty schematic says what to do
         let mut empty = App::default();
         empty.mode = Mode::Proto;
