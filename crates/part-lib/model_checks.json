@@ -4376,5 +4376,206 @@
         "tested": true
       }
     ]
+  },
+  "WP7113QBC-D": {
+    "fingerprint": "d1a83dd4571cff2b",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (1 mA)",
+        "datasheet": "— / 2.593 / — V",
+        "target": "2.593 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "2.594 V",
+        "diff": "+0.0009 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (5 mA)",
+        "datasheet": "— / 2.825 / — V",
+        "target": "2.825 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "2.837 V",
+        "diff": "+0.0111 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 mA)",
+        "datasheet": "— / 3.019 / — V",
+        "target": "3.019 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "3.015 V",
+        "diff": "-0.0040 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (20 mA)",
+        "datasheet": "— / 3.315 / — V",
+        "target": "3.315 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "3.308 V",
+        "diff": "-0.0078 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、20 mA)",
+        "datasheet": "— / 3.300 / 4.000 V",
+        "target": "3.300 V",
+        "condition": "VF: 表の typ と max (±0.1 V の測定の許容差)",
+        "model": "3.308 V",
+        "diff": "+0.0076 V",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (5 V)",
+        "datasheet": "— / — / 50.000 µA",
+        "target": "max 50.000 µA",
+        "condition": "IR: VR = 5 V (表の max)",
+        "model": "49.411 µA",
+        "diff": "-0.5889 µA",
+        "tested": false
+      }
+    ]
+  },
+  "WP7113SGD": {
+    "fingerprint": "b1c063a1e005753c",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (1 mA)",
+        "datasheet": "— / 1.846 / — V",
+        "target": "1.846 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.844 V",
+        "diff": "-0.0024 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (5 mA)",
+        "datasheet": "— / 1.949 / — V",
+        "target": "1.949 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.948 V",
+        "diff": "-0.0011 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 mA)",
+        "datasheet": "— / 2.037 / — V",
+        "target": "2.037 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "2.042 V",
+        "diff": "+0.0042 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (20 mA)",
+        "datasheet": "— / 2.210 / — V",
+        "target": "2.210 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "2.209 V",
+        "diff": "-0.0009 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、20 mA)",
+        "datasheet": "— / 2.200 / 2.500 V",
+        "target": "2.200 V",
+        "condition": "VF: 表の typ と max (±0.1 V の測定の許容差)",
+        "model": "2.209 V",
+        "diff": "+0.0088 V",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (5 V)",
+        "datasheet": "— / — / 10.000 µA",
+        "target": "max 10.000 µA",
+        "condition": "IR: VR = 5 V (表の max)",
+        "model": "9.948 µA",
+        "diff": "-0.0520 µA",
+        "tested": false
+      },
+      {
+        "item": "容量 (0 V)",
+        "datasheet": "— / 15.000 / — pF",
+        "target": "15.000 pF",
+        "condition": "C: 表の typ",
+        "model": "15.002 pF",
+        "diff": "+0.0022 pF",
+        "tested": true
+      }
+    ]
+  },
+  "WP7113SYD": {
+    "fingerprint": "c8258cb3ab08d1b8",
+    "source": "Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (1 mA)",
+        "datasheet": "— / 1.804 / — V",
+        "target": "1.804 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.807 V",
+        "diff": "+0.0032 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (5 mA)",
+        "datasheet": "— / 1.898 / — V",
+        "target": "1.898 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.898 V",
+        "diff": "+0.0004 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (10 mA)",
+        "datasheet": "— / 1.951 / — V",
+        "target": "1.951 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "1.947 V",
+        "diff": "-0.0038 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (20 mA)",
+        "datasheet": "— / 2.011 / — V",
+        "target": "2.011 V",
+        "condition": "Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ)",
+        "model": "2.011 V",
+        "diff": "-0.0009 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、20 mA)",
+        "datasheet": "— / 2.000 / 2.500 V",
+        "target": "2.000 V",
+        "condition": "VF: 表の typ と max (±0.1 V の測定の許容差)",
+        "model": "2.011 V",
+        "diff": "+0.0105 V",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (5 V)",
+        "datasheet": "— / — / 10.000 µA",
+        "target": "max 10.000 µA",
+        "condition": "IR: VR = 5 V (表の max)",
+        "model": "9.994 µA",
+        "diff": "-0.0060 µA",
+        "tested": false
+      },
+      {
+        "item": "容量 (0 V)",
+        "datasheet": "— / 25.000 / — pF",
+        "target": "25.000 pF",
+        "condition": "C: 表の typ",
+        "model": "25.001 pF",
+        "diff": "+0.0007 pF",
+        "tested": true
+      }
+    ]
   }
 }

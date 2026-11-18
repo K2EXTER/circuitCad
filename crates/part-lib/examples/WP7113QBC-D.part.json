@@ -1,0 +1,112 @@
+{
+  "name": "WP7113QBC-D",
+  "category": "LED",
+  "description": "青色 LED 5 mm (T-1 3/4、InGaN、拡散レンズ) WP7113QBC/D。VF 3.3 V typ / 4.0 V max (20 mA)、最大電流 30 mA。データシート (Kingbright) の代表特性から作った等価モデル",
+  "datasheet": "https://www.kingbrightusa.com/images/catalog/SPEC/WP7113QBC-D.pdf",
+  "prefix": "D",
+  "pins": [
+    {
+      "number": "K",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "A",
+      "name": "A",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "K",
+        "x": -1.27,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 0.9
+      },
+      {
+        "pin": "A",
+        "x": 1.27,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 0.9
+      }
+    ]
+  },
+  "footprint_name": "LED_5mm",
+  "height": 8.6,
+  "body": {
+    "shape": "circle",
+    "w": 5.9,
+    "h": 0.0,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "bar",
+    "mark_pin": "K"
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "WP7113QBC_D",
+    "text": ".model WP7113QBC_D D(IS=1.545e-15 N=3.655 RS=22.67 BV=5 IBV=5e-05 EG=3.597 XTI=2)",
+    "pins": [
+      "A",
+      "K"
+    ],
+    "params": {},
+    "limits": [
+      "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: Kingbright WP7113QBC/D データシート (DSAG3481 (2025))。データシートとの比べは docs/models/diodes.md。",
+      "順方向: Forward Current vs. Forward Voltage の図 (Ta = 25 °C) を読んだ 8 点に、IS・N・RS を当てはめました (部品作成フォームのダイオードと同じ計算)。",
+      "接合容量: データシートに容量が無いので入れない。",
+      "降伏: 降伏はデータシートに無いので、逆電圧の絶対最大定格 5 V に置いた (電流は表の IR の最大 50 µA。実物の LED は逆電圧に弱いので、5 V を超えないようにします)。",
+      "温度: 表の VF の温度係数 (-3 mV/°C、IF = 20 mA) を 25 °C の曲線全体にかけた 85 °C の点に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 2.6〜3.8 mV 下がります。",
+      "逆回復は扱いません (データシートに trr は無い)。",
+      "扱わないもの: 逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、自己発熱。耐圧や定格電流を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Kingbright WP7113QBC/D データシート (DSAG3481 (2025))"
+    }
+  },
+  "ratings": {
+    "v_max": 5.0,
+    "i_max": 0.03,
+    "p_max": 0.12,
+    "t_max": 115.0,
+    "theta_ja": 610.0,
+    "rows": [
+      {
+        "name": "順方向電圧",
+        "value": "3.3 V (typ)・4.0 V (max)",
+        "condition": "IF = 20 mA"
+      },
+      {
+        "name": "主波長",
+        "value": "465 nm",
+        "condition": "IF = 20 mA"
+      },
+      {
+        "name": "ピーク電流",
+        "value": "150 mA",
+        "condition": "デューティ 1/10・パルス幅 0.1 ms"
+      },
+      {
+        "name": "温度係数 (VF)",
+        "value": "-3 mV/℃",
+        "condition": "IF = 20 mA"
+      },
+      {
+        "name": "熱抵抗 θJA",
+        "value": "610 ℃/W",
+        "condition": "FR4 の基板、パッド 16 mm² 以上"
+      }
+    ]
+  },
+  "glyph": "led"
+}

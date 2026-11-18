@@ -140,6 +140,47 @@
 | 接合容量 (20 V) | — / 125.4 / — pF | 図 5 (f = 1 MHz)、SS35・SS36 の破線 (PDF の曲線の線から読んだ) | 121.5 pF | -3.872 |
 | 逆電流 (60 V) | — / — / 0.5000 mA | IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない) | 0.4998 mA | -0.0002 |
 
+## WP7113SGD
+
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C
+
+| 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
+|---|---|---|---|---|
+| 順方向電圧 (1 mA) | — / 1.846 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.844 V | -0.0024 |
+| 順方向電圧 (5 mA) | — / 1.949 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.948 V | -0.0011 |
+| 順方向電圧 (10 mA) | — / 2.037 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 2.042 V | +0.0042 |
+| 順方向電圧 (20 mA) | — / 2.210 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 2.209 V | -0.0009 |
+| 順方向電圧 (表、20 mA) | — / 2.200 / 2.500 V | VF: 表の typ と max (±0.1 V の測定の許容差) | 2.209 V | +0.0088 |
+| 逆電流 (5 V) | — / — / 10.000 µA | IR: VR = 5 V (表の max) | 9.948 µA | -0.0520 |
+| 容量 (0 V) | — / 15.000 / — pF | C: 表の typ | 15.002 pF | +0.0022 |
+
+## WP7113SYD
+
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C
+
+| 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
+|---|---|---|---|---|
+| 順方向電圧 (1 mA) | — / 1.804 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.807 V | +0.0032 |
+| 順方向電圧 (5 mA) | — / 1.898 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.898 V | +0.0004 |
+| 順方向電圧 (10 mA) | — / 1.951 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 1.947 V | -0.0038 |
+| 順方向電圧 (20 mA) | — / 2.011 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 2.011 V | -0.0009 |
+| 順方向電圧 (表、20 mA) | — / 2.000 / 2.500 V | VF: 表の typ と max (±0.1 V の測定の許容差) | 2.011 V | +0.0105 |
+| 逆電流 (5 V) | — / — / 10.000 µA | IR: VR = 5 V (表の max) | 9.994 µA | -0.0060 |
+| 容量 (0 V) | — / 25.000 / — pF | C: 表の typ | 25.001 pF | +0.0007 |
+
+## WP7113QBC-D
+
+データシート: Kingbright WP7113SGD・WP7113SYD・WP7113QBC/D データシート。Ta = 25 °C
+
+| 項目 | データシート (min / typ / max) | 条件・図や表 | モデル | 差 |
+|---|---|---|---|---|
+| 順方向電圧 (1 mA) | — / 2.593 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 2.594 V | +0.0009 |
+| 順方向電圧 (5 mA) | — / 2.825 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 2.837 V | +0.0111 |
+| 順方向電圧 (10 mA) | — / 3.019 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 3.015 V | -0.0040 |
+| 順方向電圧 (20 mA) | — / 3.315 / — V | Forward Current vs. Forward Voltage の図 (PDF の曲線の線から読んだ) | 3.308 V | -0.0078 |
+| 順方向電圧 (表、20 mA) | — / 3.300 / 4.000 V | VF: 表の typ と max (±0.1 V の測定の許容差) | 3.308 V | +0.0076 |
+| 逆電流 (5 V) | — / — / 50.000 µA | IR: VR = 5 V (表の max) | 49.411 µA | -0.5889 |
+
 ## 1N5408
 
 データシート: Vishay 1N5400〜1N5408 データシート (Document Number 88516, Revision 19-Dec-2025)。25 °C

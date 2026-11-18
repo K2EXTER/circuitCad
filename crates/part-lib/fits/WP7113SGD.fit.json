@@ -1,0 +1,104 @@
+{
+  "kind": "diode",
+  "part": "WP7113SGD",
+  "name": "WP7113SGD",
+  "read": "2026-11-18",
+  "source": "Kingbright WP7113SGD データシート (DSAF2427 Rev V.11B (2021-01-09))",
+  "url": "https://www.kingbrightusa.com/images/catalog/SPEC/WP7113SGD.pdf",
+  "description": "緑色 LED 5 mm (T-1 3/4、GaP、拡散レンズ) WP7113SGD。VF 2.2 V typ / 2.5 V max (20 mA)、最大電流 25 mA。データシート (Kingbright) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "Forward Current vs. Forward Voltage の図 (Ta = 25 °C)",
+    "points": [
+      [
+        0.0005,
+        1.8131
+      ],
+      [
+        0.001,
+        1.8463
+      ],
+      [
+        0.002,
+        1.8807
+      ],
+      [
+        0.005,
+        1.9494
+      ],
+      [
+        0.01,
+        2.0374
+      ],
+      [
+        0.015,
+        2.1242
+      ],
+      [
+        0.02,
+        2.2097
+      ],
+      [
+        0.024,
+        2.2739
+      ]
+    ]
+  },
+  "hot": {
+    "temp": 85.0,
+    "points": [
+      [
+        0.0005,
+        1.6931
+      ],
+      [
+        0.001,
+        1.7263
+      ],
+      [
+        0.002,
+        1.7607
+      ],
+      [
+        0.005,
+        1.8294
+      ],
+      [
+        0.01,
+        1.9174
+      ],
+      [
+        0.015,
+        2.0042
+      ],
+      [
+        0.02,
+        2.0897
+      ],
+      [
+        0.024,
+        2.1539
+      ]
+    ],
+    "at": "表の VF の温度係数 (-2 mV/°C、IF = 20 mA) を 25 °C の曲線全体にかけた 85 °C の点"
+  },
+  "breakdown": {
+    "v": 5.0,
+    "i": 9.999999999999999e-06,
+    "note": "降伏はデータシートに無いので、逆電圧の絶対最大定格 5 V に置いた (電流は表の IR の最大 10 µA。実物の LED は逆電圧に弱いので、5 V を超えないようにします)"
+  },
+  "capacitance": {
+    "at": "表の容量 C の typ 15 pF (曲線が無いので VJ と M は決め打ち)",
+    "points": [
+      [
+        0.0,
+        1.5e-11
+      ]
+    ]
+  },
+  "no_recovery": "逆回復は扱いません (データシートに trr は無い)。",
+  "remarks": [
+    "the forward curve read with `cargo run -p datasheet --example ds -- trace ... strokes rows` (the curve's vector line in the PDF; Kingbright draws it as a chain of short strokes)",
+    "the table: VF 2.2 V typ / 2.5 V max at 20 mA (the curve: see the 20 mA point), IR max 10 uA at 5 V, C 15 pF typ",
+    "hot: no curve at another temperature; the table's TC of VF (-2 mV/C at 20 mA, -10 to 85 C) applied to the whole 25 C curve at 85 C"
+  ]
+}

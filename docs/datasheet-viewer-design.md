@@ -467,3 +467,4 @@
 - `graph::vector_curves(strokes, fills, area)` (`Datasheet::vector_curves`): 枠の中の線 (3 点以上) と、塗った形 (縦か横に 15 pt 以上) の中心線。塗った形は、行ごとに輪郭の辺と交わる位置を求め、交わりが 2 つ (幅 4 pt 未満) の行の真ん中を中心線の点にする。破線のすき間の行は点が無く、前後の点を結ぶ線で埋める。`VectorCurve::x_at(y)`・`y_at(x)`。
 - `ds trace FILE PAGE box=… x=… y=… [xlog] [ylog] strokes [rows] at=…`: 曲線ごとに、破線か・線か輪郭か・両端と、`at=` の値で横切る所。軸は今までどおり目盛りの数字から。
 - 実物: SS32〜SS36 の図 3 の 6 本を 15 mA〜20 A まで。15 mA では画素で読んだ値と 2 mV 以内。図 5 (接合容量) は普通の線で、そのまま読めた。SS34・SS36 の部品はこの読みから `ccad fit` で作った (`fits/SS34_SMC.fit.json`・`SS36_SMC.fit.json`)。
+- (段階49 の続き) Kingbright の図は、曲線を 3 点ずつの短い線のつながりで描く。`vector_curves` は、端が次の線の始まりと 0.3 pt 以内で続く線 (破線かどうかが同じもの) を 1 本につなぐ。

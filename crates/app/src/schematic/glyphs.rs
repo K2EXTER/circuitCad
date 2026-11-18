@@ -234,6 +234,15 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
             let s = if k.0 >= a.0 { 1.0 } else { -1.0 };
             Some(diode_shapes(a, k, s, glyph))
         }
+        // a library LED: the diode and the two light arrows going out, as the built-in LED draws them
+        "led" => {
+            let (a, k) = (pt(find(l, &["A", "1"])?), pt(find(l, &["K", "2"])?));
+            let s = if k.0 >= a.0 { 1.0 } else { -1.0 };
+            let mut v = diode_shapes(a, k, s, "diode");
+            v.extend([L(0., -0.9, 0.6, -1.5), L(0.6, -0.9, 1.2, -1.5)]);
+            v.extend(led_arrow_heads());
+            Some(v)
+        }
         "photodiode" => {
             let (a, k) = (pt(find(l, &["A"])?), pt(find(l, &["K"])?));
             let s = if k.0 >= a.0 { 1.0 } else { -1.0 };

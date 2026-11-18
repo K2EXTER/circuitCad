@@ -98,6 +98,10 @@ pub struct Hot {
     /// °C
     pub temp: f64,
     pub points: Vec<[f64; 2]>,
+    /// Where the points come from, when not from a curve of the same figure (an LED's: the table's temperature
+    /// coefficient of VF applied to the 25 °C curve).
+    #[serde(default)]
+    pub at: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -141,10 +145,10 @@ fn vf_hot(is: f64, n: f64, rs: f64, temp: f64, eg: f64, xti: f64, i: f64) -> f64
     n * r * K_OVER_Q * 300.15 * (i / is_t + 1.0).ln() + rs * i
 }
 
-/// `EG` to 1 mV (0.3 .. 1.2 eV) that puts the hot points on the model.
+/// `EG` to 1 mV (0.3 .. 5 eV: a Schottky's 0.6, silicon's 1.1, an LED's 2 to 3.5) that puts the hot points on the model.
 fn fit_eg(is: f64, n: f64, rs: f64, hot: &Hot, xti: f64) -> f64 {
     let mut best = (f64::INFINITY, 0.3);
-    for m in 300..1200 {
+    for m in 300..5000 {
         let eg = m as f64 / 1000.0;
         let e: f64 = hot.points.iter().map(|[i, u]| (vf_hot(is, n, rs, hot.temp, eg, xti, *i) - u).powi(2)).sum();
         if e < best.0 {
@@ -264,7 +268,8 @@ pub fn fit(p: &DiodeSpec) -> Result<Out, String> {
         limits.push(format!("ツェナー電圧の温度係数: {}。シミュレーションのツェナー電圧は温度で変わりません。", z.tc));
     }
     if let (Some(h), Some((lo, hi))) = (&p.hot, drift) {
-        limits.push(format!("温度: 同じ図の {} °C の曲線に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 {lo:.1}〜{hi:.1} mV 下がります。", g(h.temp, 6)));
+        let from = h.at.clone().unwrap_or_else(|| format!("同じ図の {} °C の曲線", g(h.temp, 6)));
+        limits.push(format!("温度: {from}に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 {lo:.1}〜{hi:.1} mV 下がります。"));
     }
     if let Some(r) = &p.recovery {
         limits.push(format!("逆回復: {} から、蓄積時間 TT を決めました (max の値なので、実物はふつう、これより速く戻ります)。", r.note));

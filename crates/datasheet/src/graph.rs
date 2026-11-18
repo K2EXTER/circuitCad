@@ -767,11 +767,16 @@ fn outline_crossings(outlines: &[Vec<(f32, f32)>], y: f32) -> Vec<f32> {
 /// rows around it bridges the gap.
 pub fn vector_curves(strokes: &[crate::Stroke], fills: &[crate::Fill], area: crate::Rect) -> Vec<VectorCurve> {
     let inside = |p: &(f32, f32)| p.0 >= area.x0 && p.0 <= area.x1 && p.1 >= area.y0 && p.1 <= area.y1;
-    let mut out: Vec<VectorCurve> = strokes
-        .iter()
-        .filter(|s| s.points.len() >= 3 && s.points.iter().all(inside))
-        .map(|s| VectorCurve { points: s.points.clone(), dashed: s.dashed, filled: false })
-        .collect();
+    // strokes that continue one another (Kingbright draws a curve as a chain of short pieces) joined into one line
+    let mut chains: Vec<(Vec<(f32, f32)>, bool)> = vec![];
+    for s in strokes.iter().filter(|s| s.points.len() >= 2 && s.points.iter().all(inside)) {
+        let near = |a: (f32, f32), b: (f32, f32)| (a.0 - b.0).abs() < 0.3 && (a.1 - b.1).abs() < 0.3;
+        match chains.last_mut() {
+            Some((pts, dashed)) if *dashed == s.dashed && near(*pts.last().unwrap(), s.points[0]) => pts.extend_from_slice(&s.points[1..]),
+            _ => chains.push((s.points.clone(), s.dashed)),
+        }
+    }
+    let mut out: Vec<VectorCurve> = chains.into_iter().filter(|(p, _)| p.len() >= 3).map(|(points, dashed)| VectorCurve { points, dashed, filled: false }).collect();
     for f in fills.iter().filter(|f| f.outlines.iter().flatten().all(inside)) {
         let (y0, y1) = f.outlines.iter().flatten().fold((f32::MAX, f32::MIN), |m, p| (m.0.min(p.1), m.1.max(p.1)));
         let (x0, x1) = f.outlines.iter().flatten().fold((f32::MAX, f32::MIN), |m, p| (m.0.min(p.0), m.1.max(p.0)));
