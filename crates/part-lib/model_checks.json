@@ -3860,6 +3860,200 @@
       }
     ]
   },
+  "SS34": {
+    "fingerprint": "f2ad8a1788885f5b",
+    "source": "Vishay SS32〜SS36 データシート (Document Number 88751, Revision 23-Apr-2020)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.1 A)",
+        "datasheet": "— / 0.2852 / — V",
+        "target": "0.2852 V",
+        "condition": "図 3 の 25 °C、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "0.2871 V",
+        "diff": "+0.0019 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.3 A)",
+        "datasheet": "— / 0.3167 / — V",
+        "target": "0.3167 V",
+        "condition": "図 3 の 25 °C、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "0.3196 V",
+        "diff": "+0.0029 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.3641 / — V",
+        "target": "0.3641 V",
+        "condition": "図 3 の 25 °C、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "0.3619 V",
+        "diff": "-0.0022 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (3 A)",
+        "datasheet": "— / 0.4226 / — V",
+        "target": "0.4226 V",
+        "condition": "図 3 の 25 °C、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "0.4196 V",
+        "diff": "-0.0030 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、3 A)",
+        "datasheet": "— / — / 0.5000 V",
+        "target": "max 0.5000 V",
+        "condition": "VF: 表の max (パルスで測る)",
+        "model": "0.4196 V",
+        "diff": "-0.0804 V",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (1 V)",
+        "datasheet": "— / 907.5 / — pF",
+        "target": "907.5 pF",
+        "condition": "図 5 (f = 1 MHz)、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "844.9 pF",
+        "diff": "-62.601 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (5 V)",
+        "datasheet": "— / 462.3 / — pF",
+        "target": "462.3 pF",
+        "condition": "図 5 (f = 1 MHz)、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "463.1 pF",
+        "diff": "+0.7530 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (10 V)",
+        "datasheet": "— / 327.7 / — pF",
+        "target": "327.7 pF",
+        "condition": "図 5 (f = 1 MHz)、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "328.6 pF",
+        "diff": "+0.8673 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (20 V)",
+        "datasheet": "— / 224.7 / — pF",
+        "target": "224.7 pF",
+        "condition": "図 5 (f = 1 MHz)、SS32〜SS34 の実線 (PDF の曲線の線から読んだ)",
+        "model": "226.9 pF",
+        "diff": "+2.218 pF",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (40 V)",
+        "datasheet": "— / — / 0.5000 mA",
+        "target": "max 0.5000 mA",
+        "condition": "IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない)",
+        "model": "0.5025 mA",
+        "diff": "+0.0025 mA",
+        "tested": false
+      }
+    ]
+  },
+  "SS36": {
+    "fingerprint": "405ca024af33b357",
+    "source": "Vishay SS32〜SS36 データシート (Document Number 88751, Revision 23-Apr-2020)。25 °C",
+    "date": "2026-11-14",
+    "rows": [
+      {
+        "item": "順方向電圧 (0.1 A)",
+        "datasheet": "— / 0.3644 / — V",
+        "target": "0.3644 V",
+        "condition": "図 3 の 25 °C、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "0.3637 V",
+        "diff": "-0.0007 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (0.3 A)",
+        "datasheet": "— / 0.3999 / — V",
+        "target": "0.3999 V",
+        "condition": "図 3 の 25 °C、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "0.3975 V",
+        "diff": "-0.0024 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (1 A)",
+        "datasheet": "— / 0.4446 / — V",
+        "target": "0.4446 V",
+        "condition": "図 3 の 25 °C、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "0.4483 V",
+        "diff": "+0.0037 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (3 A)",
+        "datasheet": "— / 0.5378 / — V",
+        "target": "0.5378 V",
+        "condition": "図 3 の 25 °C、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "0.5336 V",
+        "diff": "-0.0042 V",
+        "tested": true
+      },
+      {
+        "item": "順方向電圧 (表、3 A)",
+        "datasheet": "— / — / 0.7500 V",
+        "target": "max 0.7500 V",
+        "condition": "VF: 表の max (パルスで測る)",
+        "model": "0.5336 V",
+        "diff": "-0.2164 V",
+        "tested": false
+      },
+      {
+        "item": "接合容量 (1 V)",
+        "datasheet": "— / 397.6 / — pF",
+        "target": "397.6 pF",
+        "condition": "図 5 (f = 1 MHz)、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "415.4 pF",
+        "diff": "+17.782 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (5 V)",
+        "datasheet": "— / 229.1 / — pF",
+        "target": "229.1 pF",
+        "condition": "図 5 (f = 1 MHz)、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "225.5 pF",
+        "diff": "-3.555 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (10 V)",
+        "datasheet": "— / 180.7 / — pF",
+        "target": "180.7 pF",
+        "condition": "図 5 (f = 1 MHz)、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "166.4 pF",
+        "diff": "-14.266 pF",
+        "tested": true
+      },
+      {
+        "item": "接合容量 (20 V)",
+        "datasheet": "— / 125.4 / — pF",
+        "target": "125.4 pF",
+        "condition": "図 5 (f = 1 MHz)、SS35・SS36 の破線 (PDF の曲線の線から読んだ)",
+        "model": "121.5 pF",
+        "diff": "-3.872 pF",
+        "tested": true
+      },
+      {
+        "item": "逆電流 (60 V)",
+        "datasheet": "— / — / 0.5000 mA",
+        "target": "max 0.5000 mA",
+        "condition": "IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない)",
+        "model": "0.4998 mA",
+        "diff": "-0.0002 mA",
+        "tested": false
+      }
+    ]
+  },
   "TIP120": {
     "fingerprint": "d894061b1887c85b",
     "source": "onsemi TIP120〜TIP127 データシート (TIP120/D Rev. 10, 2024-06)。25 °C",

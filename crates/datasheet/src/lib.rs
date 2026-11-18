@@ -34,7 +34,7 @@ pub use headings::{HEADINGS, Heading};
 pub use dimensions::{Found, PageLength, find_length};
 pub use pin_table::{PinCompare, PinDiff, PinDiffKind, Table, compare_pins, guess_columns, io_cells, pin_lines, pins_from, read_table};
 pub use suggest::looks_like_part_number;
-pub use text::{Hit, Query, Rect, Word, normalize};
+pub use text::{Fill, Hit, Query, Rect, Stroke, Word, normalize};
 pub use value::{Converted, Quantity, Value, convert, is_unit_word, parse_value};
 
 /// Longest side of a drawn page in pixels. The renderer's canvas is 16 bit, and a bigger picture only costs memory.
@@ -112,7 +112,7 @@ impl Datasheet {
         let cell = self.words.get(page)?;
         Some(cell.get_or_init(|| {
             let pages = self.pdf.pages();
-            let empty = || text::PageText { words: vec![], blind: vec![] };
+            let empty = || text::PageText { words: vec![], blind: vec![], strokes: vec![], fills: vec![] };
             let Some(p) = pages.get(page) else { return empty() };
             catch_unwind(AssertUnwindSafe(|| text::read_words(p))).unwrap_or_else(|_| empty())
         }))
@@ -132,6 +132,23 @@ impl Datasheet {
             let ocr = self.read_page_by_ocr(page);
             glyphs::recover(&t.blind, &ocr)
         })
+    }
+
+    /// The lines a page strokes (`Stroke`): a vector graph's curves can be read from them exactly, without drawing the
+    /// page (`graph::curves_in`).
+    pub fn strokes(&self, page: usize) -> &[Stroke] {
+        self.page_text(page).map_or(&[], |t| &t.strokes)
+    }
+
+    /// The shapes a page fills with many points (`Fill`): curves drawn as their outlines.
+    pub fn fills(&self, page: usize) -> &[Fill] {
+        self.page_text(page).map_or(&[], |t| &t.fills)
+    }
+
+    /// The curves a page draws as vectors inside `area` (`graph::vector_curves`): exact where the pixels of the drawn
+    /// page are ambiguous (crossing curves, labels' arrows on them).
+    pub fn vector_curves(&self, page: usize, area: Rect) -> Vec<graph::VectorCurve> {
+        graph::vector_curves(self.strokes(page), self.fills(page), area)
     }
 
     /// The words of a page for reading its tables: those printed as text and those recovered (`recovered_words`).

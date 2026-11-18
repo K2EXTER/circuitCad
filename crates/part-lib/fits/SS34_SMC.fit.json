@@ -1,0 +1,137 @@
+{
+  "kind": "diode",
+  "part": "SS34_SMC",
+  "name": "SS34",
+  "read": "2026-11-18",
+  "source": "Vishay SS32〜SS36 データシート (Document Number 88751, Revision 23-Apr-2020)",
+  "url": "https://www.vishay.com/docs/88751/ss32.pdf",
+  "description": "SS34 ショットキーバリアダイオード 40V 3A (SMC/DO-214AB、帯の側がカソード K)。データシート (Vishay) の代表特性から作った等価モデル",
+  "forward": {
+    "at": "図 3 (順方向の代表特性。SS32〜SS34 の実線) の 25 °C",
+    "points": [
+      [
+        0.015,
+        0.236
+      ],
+      [
+        0.03,
+        0.254
+      ],
+      [
+        0.1,
+        0.2852
+      ],
+      [
+        0.3,
+        0.3167
+      ],
+      [
+        1.0,
+        0.3641
+      ],
+      [
+        2.0,
+        0.3941
+      ],
+      [
+        3.0,
+        0.4226
+      ],
+      [
+        5.0,
+        0.4595
+      ]
+    ]
+  },
+  "hot": {
+    "temp": 150.0,
+    "points": [
+      [
+        0.015,
+        0.0356
+      ],
+      [
+        0.03,
+        0.0555
+      ],
+      [
+        0.1,
+        0.0902
+      ],
+      [
+        0.3,
+        0.1388
+      ],
+      [
+        1.0,
+        0.199
+      ],
+      [
+        2.0,
+        0.2497
+      ],
+      [
+        3.0,
+        0.2973
+      ],
+      [
+        5.0,
+        0.3592
+      ]
+    ]
+  },
+  "breakdown": {
+    "v": 40.0,
+    "i": 0.0005,
+    "note": "降伏はデータシートに無いので、繰り返しの最大逆電圧 VRRM 40 V に置いた (電流は表の IR の最大 0.5 mA。実物は、ふつうこれより高い電圧で降伏します)"
+  },
+  "capacitance": {
+    "at": "図 5 (接合容量の代表特性。SS32〜SS34 の実線)",
+    "points": [
+      [
+        0.2,
+        9.994e-10
+      ],
+      [
+        0.5,
+        9.836e-10
+      ],
+      [
+        1.0,
+        9.075e-10
+      ],
+      [
+        2.0,
+        7.094e-10
+      ],
+      [
+        5.0,
+        4.623e-10
+      ],
+      [
+        10.0,
+        3.277e-10
+      ],
+      [
+        20.0,
+        2.247e-10
+      ],
+      [
+        30.0,
+        1.802e-10
+      ],
+      [
+        40.0,
+        1.541e-10
+      ]
+    ]
+  },
+  "no_recovery": "逆回復は扱いません (ショットキーは多数キャリアで動き、蓄積する電荷がほとんど無い。データシートにも trr は無い)。",
+  "remarks": [
+    "read with `cargo run -p datasheet --example ds -- trace ... strokes` (the curves' vector outlines in the PDF, not the drawn page): Figure 3's six curves are filled outlines, the dashed ones as many dashes; the reader takes the middle of each outline row by row and bridges the dashes' gaps",
+    "Figure 3, left to right at 15 mA: 150 C solid 0.036, 150 C dashed 0.101, 25 C solid 0.236, 25 C dashed 0.312, -40 C solid 0.337, -40 C dashed 0.411 V (the pixel scan of the drawn page gave 0.034, 0.099, 0.234, 0.310, 0.336, 0.409)",
+    "the table gives VF max 0.5 V (SS32 to SS34) and 0.75 V (SS35, SS36) at 3 A, IR max 0.5 mA at the rated voltage",
+    "the forward points are taken up to 5 A (the rating is 3 A); Figure 3 goes on to 20 A",
+    "capacitance: Figure 5, the solid curve, 0.2 to 40 V (it ends at 41 V)"
+  ]
+}

@@ -717,3 +717,108 @@ mod real_pdf {
         assert_eq!(pts.len(), 12);
     }
 }
+
+/// A curve a page draws as vectors: its centre line in page points, top to bottom of the page or left to right as it was
+/// drawn, and how it was drawn.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VectorCurve {
+    pub points: Vec<(f32, f32)>,
+    pub dashed: bool,
+    /// From a filled outline (else a stroked line).
+    pub filled: bool,
+}
+
+impl VectorCurve {
+    /// Where the curve is across at the page height `y` (between its points), None off its ends.
+    pub fn x_at(&self, y: f32) -> Option<f32> {
+        self.points.windows(2).find_map(|w| {
+            let ((xa, ya), (xb, yb)) = (w[0], w[1]);
+            ((ya - y) * (yb - y) <= 0.0 && ya != yb).then(|| xa + (y - ya) / (yb - ya) * (xb - xa))
+        })
+    }
+
+    /// Where the curve is up and down at the page position `x`.
+    pub fn y_at(&self, x: f32) -> Option<f32> {
+        self.points.windows(2).find_map(|w| {
+            let ((xa, ya), (xb, yb)) = (w[0], w[1]);
+            ((xa - x) * (xb - x) <= 0.0 && xa != xb).then(|| ya + (x - xa) / (xb - xa) * (yb - ya))
+        })
+    }
+}
+
+/// The x positions where the edges of the outlines cross the page height `y`, sorted.
+fn outline_crossings(outlines: &[Vec<(f32, f32)>], y: f32) -> Vec<f32> {
+    let mut xs = vec![];
+    for o in outlines {
+        for i in 0..o.len() {
+            let (a, b) = (o[i], o[(i + 1) % o.len()]);
+            if (a.1 <= y && b.1 > y) || (b.1 <= y && a.1 > y) {
+                xs.push(a.0 + (y - a.1) / (b.1 - a.1) * (b.0 - a.0));
+            }
+        }
+    }
+    xs.sort_by(|a, b| a.total_cmp(b));
+    xs
+}
+
+/// The curves drawn inside `area`: stroked lines with three points or more, and filled shapes with many points (a curve
+/// drawn as its outline, or the dashes of a dashed curve), whose centre line is found row by row as the middle of the
+/// outline's two edges, where the row meets the shape once. Rows in a dash's gap are left out; the line between the
+/// rows around it bridges the gap.
+pub fn vector_curves(strokes: &[crate::Stroke], fills: &[crate::Fill], area: crate::Rect) -> Vec<VectorCurve> {
+    let inside = |p: &(f32, f32)| p.0 >= area.x0 && p.0 <= area.x1 && p.1 >= area.y0 && p.1 <= area.y1;
+    let mut out: Vec<VectorCurve> = strokes
+        .iter()
+        .filter(|s| s.points.len() >= 3 && s.points.iter().all(inside))
+        .map(|s| VectorCurve { points: s.points.clone(), dashed: s.dashed, filled: false })
+        .collect();
+    for f in fills.iter().filter(|f| f.outlines.iter().flatten().all(inside)) {
+        let (y0, y1) = f.outlines.iter().flatten().fold((f32::MAX, f32::MIN), |m, p| (m.0.min(p.1), m.1.max(p.1)));
+        let (x0, x1) = f.outlines.iter().flatten().fold((f32::MAX, f32::MIN), |m, p| (m.0.min(p.0), m.1.max(p.0)));
+        // a curve is long in one way at least: a letter, a box or an arrow head is not
+        if (y1 - y0).max(x1 - x0) < 15.0 {
+            continue;
+        }
+        let steps = ((y1 - y0) * 4.0).ceil().max(2.0) as usize;
+        let mut points = vec![];
+        for k in 0..=steps {
+            let y = y0 + (y1 - y0) * k as f32 / steps as f32;
+            let xs = outline_crossings(&f.outlines, y);
+            if xs.len() == 2 && xs[1] - xs[0] < 4.0 {
+                points.push(((xs[0] + xs[1]) / 2.0, y));
+            }
+        }
+        if points.len() >= 3 {
+            out.push(VectorCurve { points, dashed: f.outlines.len() > 3, filled: true });
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod vector_tests {
+    use super::*;
+
+    /// A thick line from (10, 100) to (60, 10) drawn as its outline, and a dashed one as five dashes: both come back as
+    /// their centre lines.
+    #[test]
+    fn curves_drawn_as_outlines_come_back_as_centre_lines() {
+        let solid = crate::Fill { outlines: vec![vec![(9.0, 100.0), (59.0, 10.0), (61.0, 10.0), (11.0, 100.0)]] };
+        let dashes = (0..5)
+            .map(|k| {
+                let (ya, yb) = (100.0 - 18.0 * k as f32, 100.0 - 18.0 * k as f32 - 10.0);
+                let x = |y: f32| 30.0 + (100.0 - y) * 0.5;
+                vec![(x(ya) - 1.0, ya), (x(yb) - 1.0, yb), (x(yb) + 1.0, yb), (x(ya) + 1.0, ya)]
+            })
+            .collect();
+        let dashed = crate::Fill { outlines: dashes };
+        let area = crate::Rect { x0: 0.0, y0: 0.0, x1: 200.0, y1: 200.0 };
+        let c = vector_curves(&[], &[solid, dashed], area);
+        assert_eq!(c.len(), 2);
+        assert!(!c[0].dashed && c[1].dashed);
+        // the solid line at y = 55: x = 10 + 45 / 90 * 50 = 35
+        assert!((c[0].x_at(55.0).unwrap() - 35.0).abs() < 0.2, "{:?}", c[0].x_at(55.0));
+        // the dashed line in a gap (y = 85 is between the first two dashes): 30 + 15 * 0.5 = 37.5
+        assert!((c[1].x_at(85.0).unwrap() - 37.5).abs() < 0.3, "{:?}", c[1].x_at(85.0));
+    }
+}

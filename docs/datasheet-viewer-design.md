@@ -459,3 +459,11 @@
 - Bourns SRN6045 の電気的特性の表 (型番・L・許容差・Q・測定周波数・SRF・DCR 最大・Irms・Isat) を `lineup::inductor` で読む。列の役は見出しから: 「Tol」→ 許容差、「Isat」「saturation」→ 飽和電流、「Irms」「rated current」「heat」→ 定格電流、「DCR」「resistance」→ DCR (「mΩ」なら 1/1000、「Max」なら最大値)、「SRF」→ 自己共振周波数 (MHz)、「Test」「Freq」「Q」→ 使わない、「Inductance」「µH」「L」→ インダクタンス。`Datasheet::inductor_rows`、`ds inductors FILE`。
 - 読みの直し: 1 つのセルに語が 2 つ入るとき (表の横の寸法図の「2.5」が SRN6045-220M の行の SRF の列にかかった) は、行の型番 (無ければ値の真ん中) の高さに近いほうを取る。今までは左のほうを取っていた。UHE・ZLJ・UVR・UPW・YXF の読みは変わらない。
 - 実物: SRN6045 の 16 行がすべて絵と同じ。
+
+## 段階49: グラフの曲線を PDF の線から読む (2026-11-18)
+
+- Vishay SS32〜SS36 の図 3 (順方向) は、6 本の曲線 (実線と破線 × 3 つの温度) が交差し、温度のラベルの矢印が曲線に乗っている。絵の画素で読む今までのやり方 (`ds trace … rows`・`follow`) では、0.13 A より上で曲線を取り違えた (破線のすき間で拾い損ね、`follow` は隣の曲線へ乗り移る)。
+- 曲線は PDF の中では線 (ベクトル) で描かれているので、それを読む。`text.rs` の読みが、描く線 (`Stroke`: 点・太さ・破線か) と塗る形 (`Fill`: 輪郭。点が 12 以上のもの) をページごとに持つ (`Datasheet::strokes`・`fills`)。Vishay の曲線は線ではなく、線の輪郭を塗った形 (破線は 1 つ 1 つの破片の輪郭) だった。
+- `graph::vector_curves(strokes, fills, area)` (`Datasheet::vector_curves`): 枠の中の線 (3 点以上) と、塗った形 (縦か横に 15 pt 以上) の中心線。塗った形は、行ごとに輪郭の辺と交わる位置を求め、交わりが 2 つ (幅 4 pt 未満) の行の真ん中を中心線の点にする。破線のすき間の行は点が無く、前後の点を結ぶ線で埋める。`VectorCurve::x_at(y)`・`y_at(x)`。
+- `ds trace FILE PAGE box=… x=… y=… [xlog] [ylog] strokes [rows] at=…`: 曲線ごとに、破線か・線か輪郭か・両端と、`at=` の値で横切る所。軸は今までどおり目盛りの数字から。
+- 実物: SS32〜SS36 の図 3 の 6 本を 15 mA〜20 A まで。15 mA では画素で読んだ値と 2 mV 以内。図 5 (接合容量) は普通の線で、そのまま読めた。SS34・SS36 の部品はこの読みから `ccad fit` で作った (`fits/SS34_SMC.fit.json`・`SS36_SMC.fit.json`)。

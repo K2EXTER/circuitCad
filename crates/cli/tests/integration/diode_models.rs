@@ -1,4 +1,4 @@
-//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, 1N5408, 1N5822, UF4007, BAT54, the zeners 1N4728A,
+//! The bundled diode models (1N4148, 1N4001, 1N4007, 1N5817, 1N5819, SS14, SS34, SS36, 1N5408, 1N5822, UF4007, BAT54, the zeners 1N4728A,
 //! 1N4733A, 1N4742A and the photodiode BPW34) measured the way their data sheets measure them, next to the data sheets' numbers
 //! (docs/model-policy.md, section 5). Runs the commands of `ccad` on small test circuits (`common::ccad`), like `regulator_models.rs`.
 //!
@@ -93,12 +93,14 @@ const ONSEMI_BAT54: &str = "onsemi BAT54L データシート (BAT54LT1/D Rev. 18
 const ZENER_47XX: &str = "onsemi 1N4728A Series (1N4728A/D Rev. 2, 2002-01) と Vishay 1N4728A〜1N4761A (Document Number 85816, Rev. 2.7, 2024-11) のデータシート。25 °C";
 const VISHAY_BPW34: &str = "Vishay BPW34, BPW34S データシート (Document Number 81521, Rev. 2.1, 2011-08)。25 °C、光は 950 nm";
 const VISHAY_SS1X: &str = "Vishay SS12〜SS16 データシート (Document Number 88746, Revision 23-Apr-2020)。25 °C";
+const VISHAY_SS3X: &str = "Vishay SS32〜SS36 データシート (Document Number 88751, Revision 23-Apr-2020)。25 °C";
 
 fn source(part: &str) -> &'static str {
     match part {
         "1N4148" => VISHAY_4148,
         "1N5817" | "1N5819" => ONSEMI_581X,
         "SS14" => VISHAY_SS1X,
+        "SS34" | "SS36" => VISHAY_SS3X,
         "1N5408" => VISHAY_5400,
         "1N5822" => VISHAY_5820,
         "UF4007" => VISHAY_UF400X,
@@ -181,6 +183,23 @@ fn rows() -> Vec<Row> {
     v.push(Row { part: "SS14", item: "順方向電圧 (表、1 A)".into(), ds: [None, None, Some(0.5)], unit: "V", at: "VF: 表の max (パルスで測る)".into(), measure: Box::new(|| vf("SS14", 1.0)), tol: None });
     for (vr, typ) in [(1.0, 184.7), (5.0, 109.8), (10.0, 81.0), (20.0, 56.7)] {
         v.push(Row { part: "SS14", item: format!("接合容量 ({vr} V)"), ds: [None, Some(typ), None], unit: "pF", at: "図 5 (f = 1 MHz)、SS12〜SS14 の実線 (グラフから読んだ)".into(), measure: Box::new(move || cap("SS14", vr, typ * 1e-12) * 1e12), tol: Some(0.15 * typ) });
+    }
+    // SS34, SS36: Fig. 3 at 25 C (solid SS32 to SS34, dashed SS35 and SS36, read from the curves' vector outlines), the
+    // table's VF max at 3 A, Fig. 5 (measured through 1 kohm: a large IS drops the bias across 100 kohm), IR max
+    #[allow(clippy::type_complexity)]
+    let ss3x: [(&'static str, [(f64, f64); 4], f64, [(f64, f64); 4], f64, &'static str); 2] = [
+        ("SS34", [(0.1, 0.2852), (0.3, 0.3167), (1.0, 0.3641), (3.0, 0.4226)], 0.5, [(1.0, 907.5), (5.0, 462.3), (10.0, 327.7), (20.0, 224.7)], 40.0, "SS32〜SS34 の実線"),
+        ("SS36", [(0.1, 0.3644), (0.3, 0.3999), (1.0, 0.4446), (3.0, 0.5378)], 0.75, [(1.0, 397.6), (5.0, 229.1), (10.0, 180.7), (20.0, 125.4)], 60.0, "SS35・SS36 の破線"),
+    ];
+    for (part, fwd, vmax, caps, rated, curve) in ss3x {
+        for (i, typ) in fwd {
+            v.push(Row { part, item: format!("順方向電圧 ({i} A)"), ds: [None, Some(typ), None], unit: "V", at: format!("図 3 の 25 °C、{curve} (PDF の曲線の線から読んだ)"), measure: Box::new(move || vf(part, i)), tol: Some(0.02) });
+        }
+        v.push(Row { part, item: "順方向電圧 (表、3 A)".into(), ds: [None, None, Some(vmax)], unit: "V", at: "VF: 表の max (パルスで測る)".into(), measure: Box::new(move || vf(part, 3.0)), tol: None });
+        for (vr, typ) in caps {
+            v.push(Row { part, item: format!("接合容量 ({vr} V)"), ds: [None, Some(typ), None], unit: "pF", at: format!("図 5 (f = 1 MHz)、{curve} (PDF の曲線の線から読んだ)"), measure: Box::new(move || cap_r(part, vr, typ * 1e-12, 1e3) * 1e12), tol: Some(0.15 * typ) });
+        }
+        v.push(Row { part, item: format!("逆電流 ({rated} V)"), ds: [None, None, Some(0.5)], unit: "mA", at: "IR: 定格の直流電圧、TA = 25 °C (表の max。モデルは IS の分しか流れない)".into(), measure: Box::new(move || ir(part, rated) * 1e3), tol: None });
     }
     // 1N5408, 1N5822, UF4007: their figures at 25 C and the tables' max; BAT54: the table's typ and max
     // (part, forward points, the table's max, (VR, the figure's C, the table's typ C), figure, tolerance of VF, the capacitance

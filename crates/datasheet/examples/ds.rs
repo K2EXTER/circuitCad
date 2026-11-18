@@ -341,6 +341,33 @@ fn main() -> Result<(), String> {
             let k = img.width as f32 / ds.page_size(p).map_or(1.0, |s| s.0);
             // `rows`: at= is a value of the vertical axis, and the answer the horizontal values (a forward voltage at a current)
             let rows = args.iter().any(|a| a == "rows");
+            // `strokes`: the curves the page draws inside the box as vectors (stroked lines and filled outlines, exact, no
+            // picture: `Datasheet::vector_curves`): each curve's points in the axes' values; with at= (and `rows`) where
+            // each curve crosses those values
+            if args.iter().any(|a| a == "strokes") {
+                let ats: Vec<f64> = arg(&args, "at").unwrap_or("").split(',').filter_map(datasheet::graph::tick_value).collect();
+                for (n, c) in ds.vector_curves(p, bx).iter().enumerate() {
+                    let vals: Vec<(f64, f64)> = c.points.iter().filter_map(|q| g.value_at(q.0, q.1)).collect();
+                    let (first, last) = (vals.first().copied().unwrap_or_default(), vals.last().copied().unwrap_or_default());
+                    println!("# curve {n}: {} points, {} {}, from {:.4}:{:.4} to {:.4}:{:.4}", vals.len(), if c.dashed { "dashed" } else { "solid" }, if c.filled { "outline" } else { "line" }, first.0, first.1, last.0, last.1);
+                    if ats.is_empty() {
+                        continue;
+                    }
+                    let out: Vec<String> = ats
+                        .iter()
+                        .map(|&v| {
+                            let hit = if rows {
+                                g.y.position(v).and_then(|y| c.x_at(y)).and_then(|x| g.x.value(x))
+                            } else {
+                                g.x.position(v).and_then(|x| c.y_at(x)).and_then(|y| g.y.value(y))
+                            };
+                            format!("{v}:{}", hit.map_or("-".to_string(), |h| format!("{h:.4}")))
+                        })
+                        .collect();
+                    println!("{}", out.join(" "));
+                }
+                return Ok(());
+            }
             if let Some(f) = arg(&args, "follow") {
                 let (fx, fy) = f.split_once(':').ok_or("follow=X:Y (values of the axes)")?;
                 let (fx, fy) = (datasheet::graph::tick_value(fx).ok_or("follow: X")?, datasheet::graph::tick_value(fy).ok_or("follow: Y")?);

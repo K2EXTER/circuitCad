@@ -122,9 +122,26 @@ struct Letter {
 /// and which of its glyphs.
 pub(crate) type GlyphKey = (u128, u32);
 
+/// A line the page strokes (a graph's curve, a grid line, a frame): its points in page points from the top left (a
+/// curve's segments by their ends), its width and whether it is dashed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Stroke {
+    pub points: Vec<(f32, f32)>,
+    pub width: f32,
+    pub dashed: bool,
+}
+
+/// A shape the page fills (a curve drawn as its outline, the dashes of a dashed curve): its outlines in page points.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fill {
+    pub outlines: Vec<Vec<(f32, f32)>>,
+}
+
 #[derive(Default)]
 struct Collector {
     letters: Vec<Letter>,
+    strokes: Vec<Stroke>,
+    fills: Vec<Fill>,
     /// Glyphs without Unicode, each as a letter of the Private Use Area (`U+E000` + its place in `keys`).
     blind: Vec<Letter>,
     keys: Vec<GlyphKey>,
@@ -134,7 +151,64 @@ struct Collector {
 pub(crate) const BLIND_BASE: u32 = 0xE000;
 
 impl Device<'_> for Collector {
-    fn draw_path(&mut self, _: &BezPath, _: DrawProps<'_>, _: &DrawMode) {}
+    fn draw_path(&mut self, path: &BezPath, props: DrawProps<'_>, mode: &DrawMode) {
+        if let DrawMode::Fill(_) = mode {
+            let mut outlines: Vec<Vec<(f32, f32)>> = vec![];
+            for el in path.elements() {
+                use hayro::kurbo::PathEl;
+                let at = |p: Point| {
+                    let q = props.transform * p;
+                    (q.x as f32, q.y as f32)
+                };
+                match *el {
+                    PathEl::MoveTo(p) => outlines.push(vec![at(p)]),
+                    PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => {
+                        if let Some(o) = outlines.last_mut() {
+                            o.push(at(p));
+                        }
+                    }
+                    PathEl::ClosePath => {}
+                }
+            }
+            outlines.retain(|o| o.len() >= 3);
+            // a filled rectangle or a dot is no curve: only shapes with some points are kept
+            if outlines.iter().map(Vec::len).sum::<usize>() >= 12 {
+                self.fills.push(Fill { outlines });
+            }
+            return;
+        }
+        let (DrawMode::Stroke(s) | DrawMode::FillAndStroke(_, s)) = mode else { return };
+        // the width in page points: the transform's scale on a unit length
+        let unit = ((props.transform * Point::new(1.0, 0.0)) - (props.transform * Point::ZERO)).hypot() as f32;
+        let dashed = s.dash_array.iter().any(|d| *d > 0.0);
+        let mut points: Vec<(f32, f32)> = vec![];
+        let flush = |pts: &mut Vec<(f32, f32)>, out: &mut Vec<Stroke>| {
+            if pts.len() >= 2 {
+                out.push(Stroke { points: std::mem::take(pts), width: s.line_width * unit, dashed });
+            }
+            pts.clear();
+        };
+        for el in path.elements() {
+            use hayro::kurbo::PathEl;
+            let at = |p: Point| {
+                let q = props.transform * p;
+                (q.x as f32, q.y as f32)
+            };
+            match *el {
+                PathEl::MoveTo(p) => {
+                    flush(&mut points, &mut self.strokes);
+                    points.push(at(p));
+                }
+                PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => points.push(at(p)),
+                PathEl::ClosePath => {
+                    if let Some(&first) = points.first() {
+                        points.push(first);
+                    }
+                }
+            }
+        }
+        flush(&mut points, &mut self.strokes);
+    }
     fn push_clip_path(&mut self, _: &ClipPath) {}
     fn push_transparency_group(&mut self, _: f32, _: Option<SoftMask<'_>>, _: BlendMode) {}
     fn draw_glyph_run(&mut self, run: &GlyphRun<'_, '_>, props: DrawProps<'_>, _: &DrawMode) {
@@ -181,6 +255,8 @@ impl Device<'_> for Collector {
 pub(crate) struct PageText {
     pub words: Vec<Word>,
     pub blind: Vec<Word>,
+    pub strokes: Vec<Stroke>,
+    pub fills: Vec<Fill>,
 }
 
 /// Reads the words of a page.
@@ -196,7 +272,7 @@ pub(crate) fn read_words(page: &Page<'_>) -> PageText {
     );
     let mut c = Collector::default();
     interpret_page(page, &mut ctx, &mut c);
-    PageText { words: group(&c.letters), blind: group(&c.blind) }
+    PageText { words: group(&c.letters), blind: group(&c.blind), strokes: c.strokes, fills: c.fills }
 }
 
 /// Joins letters that follow each other on one baseline into words.
