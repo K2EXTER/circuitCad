@@ -45,6 +45,8 @@ impl Knob {
 
 pub struct Live {
     run: Option<TranRun>,
+    /// The circuit it runs.
+    circuit: sim_core::Circuit,
     pub error: Option<String>,
     /// Simulated seconds per second of the screen.
     pub speed: f64,
@@ -77,6 +79,7 @@ impl Live {
             .collect();
         let mut me = Live {
             run: None,
+            circuit: circuit.clone(),
             error: None,
             speed: 1.0,
             last_frame: None,
@@ -106,6 +109,11 @@ impl Live {
 
     pub fn voltage(&self, net: &str) -> Option<f64> {
         self.volts.iter().find(|(n, _)| n.eq_ignore_ascii_case(net)).map(|(_, v)| *v)
+    }
+
+    /// The element `name` of the running circuit (how a burnt part fails depends on what it is).
+    pub fn element(&self, name: &str) -> Option<&sim_core::Element> {
+        self.circuit.elements.iter().find(|e| e.name() == name)
     }
 
     /// The operating point now (for the rating check while it runs).

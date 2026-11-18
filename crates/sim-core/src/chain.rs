@@ -183,7 +183,7 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
 }
 
 /// How a part that was pushed past its rating usually dies.
-fn failure_of(comp: &Component, el: &Element) -> Option<Fault> {
+pub fn failure_of(comp: &Component, el: &Element) -> Option<Fault> {
     match el {
         Element::Resistor { .. } => Some(Fault::Open),
         Element::Diode { .. } if comp.kind == Kind::Led => Some(Fault::Open),

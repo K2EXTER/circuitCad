@@ -70,6 +70,11 @@ pub struct BreadboardView {
     switch_down: bool,
     /// The rating check of the circuit while it runs.
     watch: Option<Watch>,
+    /// The parts burnt and how they failed (open or short, as such a part usually dies): the circuit runs on with them broken,
+    /// until the power is switched off or the board is changed. `restart`: start the run again with what is kept (a part has just
+    /// burnt, the temperature was changed).
+    broken: Vec<(String, sim_core::Fault)>,
+    restart: bool,
     /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
     knob_values: std::collections::BTreeMap<String, f64>,
     temp_c: Option<f64>,
@@ -277,6 +282,9 @@ impl BreadboardView {
                 for r in &issues {
                     let (col, head) = if r.level == sim_core::RatingLevel::Over { (BAD, i18n::tr("壊れた")) } else { (crate::theme::WARN, i18n::tr("熱い・余裕が少ない")) };
                     ui.label(egui::RichText::new(format!("{} {}: {}", r.refdes, head, i18n::tr_dyn(&r.message))).color(col));
+                    if let Some((_, f)) = self.broken.iter().find(|(b, _)| *b == r.refdes) {
+                        ui.label(egui::RichText::new(i18n::trf!("　{} は {} になり、回路からはそのように計算しています", r.refdes, i18n::tr_dyn(&f.label()))).color(BAD));
+                    }
                     ui.label(egui::RichText::new(format!("　→ {}", i18n::tr_dyn(&r.hint))).color(NOTE));
                 }
             }
@@ -330,11 +338,19 @@ impl BreadboardView {
         if !self.powered {
             (self.live, self.board, self.run_key, self.live_failed, self.watch) = (None, None, None, None, None);
             self.knob_values.clear();
+            self.broken.clear();
             self.switch_down = false;
             return;
         }
-        if self.run_key.as_ref().is_none_or(|(r, k)| *r != sch.rev || k != l) {
+        let board_changed = self.run_key.as_ref().is_none_or(|(r, k)| *r != sch.rev || k != l);
+        if board_changed || self.restart {
             self.run_key = Some((sch.rev, l.clone()));
+            self.restart = false;
+            // a new board (or schematic) has new parts: nothing on it is burnt yet
+            let kept_burnt = if board_changed { vec![] } else { self.watch.as_ref().map(|w| w.burnt.clone()).unwrap_or_default() };
+            if board_changed {
+                self.broken.clear();
+            }
             let speed = self.live.as_ref().map_or(1.0, |v| v.speed);
             let on: Vec<String> = self.live.as_ref().map(|v| v.switches.iter().filter(|s| s.on && !s.push).map(|s| s.refdes.clone()).collect()).unwrap_or_default();
             self.live = None;
@@ -342,7 +358,9 @@ impl BreadboardView {
             self.watch = None;
             let nets = board_nets(&sch.sch, l);
             let dc = sch.board_dc(&nets, self.temp_c);
-            match sch.board_circuit(&nets, self.temp_c) {
+            // the parts burnt so far, broken in the circuit
+            let built = sch.board_circuit(&nets, self.temp_c).map(|c| self.broken.iter().fold(c, |c, (r, f)| sim_core::with_fault(&c, r, *f).unwrap_or(c)));
+            match built {
                 Ok(c) => {
                     let leds: Vec<String> = sch.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
                     // the knobs: the DC voltage sources off the board (a bench supply, the light or the signal on a sensor's input)
@@ -361,6 +379,7 @@ impl BreadboardView {
                         }
                     }
                     let mut w = Watch::new(sch.rated_schematic());
+                    w.burnt = kept_burnt;
                     w.check(sch, &lv, true);
                     self.watch = Some(w);
                     self.live = Some(lv);
@@ -385,6 +404,17 @@ impl BreadboardView {
         lv.frame(ui.input(|i| i.time));
         if let Some(w) = self.watch.as_mut() {
             w.check(sch, lv, false);
+            // a part that has just burnt fails in the circuit (an LED or a resistor opens, a transistor shorts): run on without it
+            for b in &w.burnt {
+                if self.broken.iter().any(|(r, _)| *r == b.refdes) {
+                    continue;
+                }
+                let fault = sch.sch.components.iter().find(|c| c.refdes == b.refdes).and_then(|comp| lv.element(&b.refdes).and_then(|e| sim_core::burn_failure(comp, e)));
+                if let Some(f) = fault {
+                    self.broken.push((b.refdes.clone(), f));
+                    self.restart = true;
+                }
+            }
         }
         ui.ctx().request_repaint();
         ui.horizontal(|ui| {
@@ -428,7 +458,7 @@ impl BreadboardView {
             }
         });
         if restart {
-            self.run_key = None;
+            self.restart = true;
         }
         if lv.behind {
             ui.label(egui::RichText::new(i18n::tr("計算が画面の時間に追いついていません (この回路は実時間では重すぎます)。速さを遅くします")).color(crate::theme::WARN));
@@ -1153,6 +1183,8 @@ mod tests {
         let (mut app, mut run) = power_on_app("led.schjson");
         let r1 = app.sch.sch.components.iter().position(|c| c.refdes == "R1").unwrap();
         app.sch.sch.components[r1].value = "180".into();
+        // a 1 W resistor: the LED is the part pushed past its rating (an 0805 one would burn open first and save the LED)
+        app.sch.sch.components[r1].footprint = "R_2512".into();
         app.breadboard.powered = true;
         run(&mut app);
         assert!(burnt(&app).is_empty(), "about 16 mA at 5 V: {:?}", app.breadboard.issues());
@@ -1172,6 +1204,12 @@ mod tests {
             step(&mut app, &mut run);
         }
         assert!(burnt(&app).contains(&"D1".to_string()), "{:?}", app.breadboard.issues());
+        // the burnt LED opens: the run starts again with it broken, and no current flows through it any more
+        run(&mut app);
+        assert!(app.breadboard.broken.iter().any(|(r, f)| r == "D1" && *f == sim_core::Fault::Open), "{:?}", app.breadboard.broken);
+        step(&mut app, &mut run);
+        let i = app.breadboard.live.as_ref().and_then(|v| v.current("D1")).unwrap_or(0.0);
+        assert!(i.abs() < 1e-6, "a burnt LED is dark: {i}");
         turn(&mut app, 5.0);
         step(&mut app, &mut run);
         assert!(burnt(&app).contains(&"D1".to_string()), "a burnt LED stays burnt");
@@ -1180,6 +1218,29 @@ mod tests {
         app.breadboard.powered = true;
         run(&mut app);
         assert!(burnt(&app).is_empty(), "switched off and on with the knob back: a new start");
+        assert!(app.breadboard.broken.is_empty());
+    }
+
+    /// With the small (0805) resistor, turning the supply up burns the resistor first: it opens, and the LED behind it survives.
+    #[test]
+    fn a_resistor_that_burns_open_saves_its_led() {
+        let (mut app, mut run) = power_on_app("led.schjson");
+        let r1 = app.sch.sch.components.iter().position(|c| c.refdes == "R1").unwrap();
+        app.sch.sch.components[r1].value = "180".into();
+        app.breadboard.powered = true;
+        run(&mut app);
+        {
+            let lv = app.breadboard.live.as_mut().unwrap();
+            let k = lv.knob_index("V1").unwrap();
+            lv.set_knob(k, 10.0);
+        }
+        for _ in 0..30 {
+            app.breadboard.live.as_mut().unwrap().advance(0.015);
+            run(&mut app);
+        }
+        assert!(app.breadboard.broken.iter().any(|(r, f)| r == "R1" && *f == sim_core::Fault::Open), "{:?}", app.breadboard.broken);
+        assert!(!burnt(&app).contains(&"D1".to_string()), "{:?}", app.breadboard.issues());
+        assert!(app.breadboard.live.as_ref().and_then(|v| v.current("D1")).unwrap_or(0.0).abs() < 1e-6, "no current through the open resistor");
     }
 
     #[test]
