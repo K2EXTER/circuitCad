@@ -143,9 +143,10 @@ impl Session {
     }
 
     pub(super) fn board_move(&mut self, rest: &[String]) -> Res {
-        // board move REF X Y [rot=0..3]: put a part (its origin) at X, Y mm; tracks are not moved
+        // board move REF X Y [rot=0..3] [side=top|bottom]: put a part (its origin) at X, Y mm, on that side; tracks are not moved
         let (words, kv) = options(rest);
-        let [refdes, x, y] = words.as_slice() else { return Err("board move REF X Y [rot=0..3]  (mm; the part's origin; wiring is not moved)".into()) };
+        let usage = "board move REF X Y [rot=0..3] [side=top|bottom]  (mm; the part's origin; wiring is not moved)";
+        let [refdes, x, y] = words.as_slice() else { return Err(usage.into()) };
         let (x, y) = (num(x)?, num(y)?);
         let board = self.board_mut()?;
         let Some(part) = board.parts.iter().find(|p| p.refdes.eq_ignore_ascii_case(refdes)).cloned() else {
@@ -156,7 +157,16 @@ impl Session {
             Some(r) => r.parse::<u8>().map_err(|_| format!("rot={r}: use 0, 1, 2 or 3 (quarter turns)"))? % 4,
             None => part.rot,
         };
+        let side = match opt(&kv, "side").map(|s| s.to_ascii_lowercase()) {
+            None => part.side,
+            Some(s) if s == "top" => pcb_core::model::Side::Top,
+            Some(s) if s == "bottom" => pcb_core::model::Side::Bottom,
+            Some(s) => return Err(format!("side={s}: use top or bottom\n{usage}")),
+        };
+        if side != part.side {
+            board.flip_part(&part.refdes);
+        }
         board.place_part(&part.refdes, pcb_core::model::Point::new(x, y), rot);
-        Ok(obj(json!({"part": part.refdes, "x": x, "y": y, "rot": rot})))
+        Ok(obj(json!({"part": part.refdes, "x": x, "y": y, "rot": rot, "side": if side == pcb_core::model::Side::Top { "top" } else { "bottom" }})))
     }
 }
