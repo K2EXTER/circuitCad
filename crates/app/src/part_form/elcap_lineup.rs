@@ -31,6 +31,7 @@ fn row_of(r: &datasheet::lineup::ElcapRow) -> elcap::Row {
         ripple_temp_c: r.ripple_temp_c,
         leak_ua: r.leak_ua,
         page: Some(r.page),
+        mark: r.mark.clone(),
     }
 }
 
@@ -49,7 +50,7 @@ impl PartForm {
         let mut rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(row_of).collect();
         let l = &mut self.lineup;
         l.picked.clear();
-        l.series = rows.iter().find(|r| !r.part.is_empty()).and_then(|r| elcap::Series::for_part(&r.part));
+        l.series = elcap::Series::for_table(&rows, (0..ds.page_count().min(2)).flat_map(|p| ds.words(p).iter().map(|w| w.text.as_str())));
         // a table without part numbers (Rubycon's): a plain name from the values, to be renamed in the form
         elcap::name_rows(l.series.as_ref(), &mut rows);
         l.message = Some(if rows.is_empty() {

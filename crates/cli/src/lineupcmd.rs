@@ -23,13 +23,14 @@ pub fn elcap_row(r: &datasheet::lineup::ElcapRow) -> elcap::Row {
         ripple_temp_c: r.ripple_temp_c,
         leak_ua: r.leak_ua,
         page: Some(r.page),
+        mark: r.mark.clone(),
     }
 }
 
 impl crate::session::Session {
     pub fn lineup(&mut self, args: &[String]) -> Res {
         let (words, kv) = options(args);
-        let usage = "lineup FILE.pdf [series=FILE.elcap.json] [pick=PN,PN|bundle|all] [write] [dir=DIR]";
+        let usage = "lineup FILE.pdf [series=FILE.elcap.json|NAME] [pick=PN,PN|bundle|all] [write] [dir=DIR]";
         let file = words.iter().find(|w| !w.eq_ignore_ascii_case("write")).ok_or(usage)?;
         let ds = datasheet::Datasheet::open_file(&PathBuf::from(file.as_str()))?;
         let mut rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
@@ -37,8 +38,12 @@ impl crate::session::Session {
             return Err(format!("{file}: 型番ごとの行の表 (容量・大きさ・型番の列) が見つかりませんでした。文字の無い PDF や、列が崩れる PDF は読めません"));
         }
         let series = match opt(&kv, "series") {
-            Some(p) => Some(elcap::Series::load(&PathBuf::from(p))?),
-            None => rows.iter().find(|r| !r.part.is_empty()).and_then(|r| elcap::Series::for_part(&r.part)),
+            // a file, or the name of a bundled series ("ZLJ")
+            Some(p) => match elcap::Series::named(p) {
+                Some(s) => Some(s),
+                None => Some(elcap::Series::load(&PathBuf::from(p))?),
+            },
+            None => elcap::Series::for_table(&rows, (0..ds.page_count().min(2)).flat_map(|p| ds.words(p).iter().map(|w| w.text.as_str()))),
         };
         // a table without part numbers (Rubycon's): named by the series' pattern
         elcap::name_rows(series.as_ref(), &mut rows);
@@ -125,5 +130,27 @@ mod real_pdf {
         assert_eq!((r.ripple_a, r.impedance.clone()), (1.05, vec![(20.0, 100e3, 0.078), (-10.0, 100e3, 0.3)]));
         let r = rows.iter().find(|r| r.part == "50YXF2.2MEFC5X11").expect("50 V 2.2 uF, the right table");
         assert_eq!((r.ripple_a, r.impedance.clone()), (0.043, vec![(20.0, 100e3, 2.5), (-10.0, 100e3, 6.0)]));
+    }
+
+    /// Rubycon ZLJ (ZLJ.pdf; skipped without the file in microohm-meter/): 278 rows on three pages of two tables
+    /// each, the "●" rows (EFU) told apart, every part number once, the series found from the title.
+    #[test]
+    fn rubycon_zlj_with_marked_rows() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/ZLJ.pdf");
+        let Ok(ds) = datasheet::Datasheet::open_file(&path) else { return };
+        let mut rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
+        let s = elcap::Series::for_table(&rows, ds.words(0).iter().map(|w| w.text.as_str())).expect("ZLJ from the title");
+        elcap::name_rows(Some(&s), &mut rows);
+        assert_eq!(rows.len(), 278);
+        assert_eq!(rows.iter().filter(|r| r.part.contains("MEFU")).count(), 14);
+        let mut names: Vec<&str> = rows.iter().map(|r| r.part.as_str()).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), 278, "every part number once");
+        let r = rows.iter().find(|r| r.part == "100ZLJ270MEFU12.5X30").expect("a low mark");
+        assert_eq!((r.ripple_a, r.impedance[0].2), (2.52, 0.033));
+        for b in &s.bundle {
+            assert!(rows.iter().any(|r| &r.part == b), "{b} in the table");
+        }
     }
 }

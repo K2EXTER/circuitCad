@@ -26,6 +26,8 @@ pub struct LineupRow {
     pub cells: Vec<String>,
     /// The number written once beside the row's group of rows (the rated voltage "6.3", "16 (1C)"), "" without.
     pub group: String,
+    /// A mark printed in the row besides its values (Rubycon's "●" for the EFU option), "" without.
+    pub mark: String,
 }
 
 /// A case size "8×11.5" (diameter × length, or width × length).
@@ -72,8 +74,9 @@ fn is_row_part(t: &str) -> bool {
     t.len() >= 6 && looks_like_part_number(t) && case_size(t).is_none() && t.chars().any(|c| c.is_ascii_alphabetic())
 }
 
-/// A row found on a line: the line, its part number word (None in a table without them), its value words.
-type Found<'a> = (usize, Option<&'a Word>, Vec<&'a Word>);
+/// A row found on a line: the line, its part number word (None in a table without them), its value words, the marks
+/// between them.
+type Found<'a> = (usize, Option<&'a Word>, Vec<&'a Word>, String);
 
 /// The lineup table of one page, if it has one (the first of `lineups_on`).
 pub fn lineup_on(page: usize, words: &[Word]) -> Option<Lineup> {
@@ -91,7 +94,7 @@ pub fn lineups_on(page: usize, words: &[Word]) -> Vec<Lineup> {
         let parts: Vec<&&Word> = l.iter().filter(|w| is_row_part(w.text.trim())).collect();
         let values: Vec<&Word> = l.iter().copied().filter(|w| is_cell_value(&w.text)).collect();
         if parts.len() == 1 && values.len() >= 3 {
-            rows.push((i, Some(parts[0]), values));
+            rows.push((i, Some(parts[0]), values, String::new()));
         }
     }
     if rows.len() >= 3 {
@@ -100,12 +103,25 @@ pub fn lineups_on(page: usize, words: &[Word]) -> Vec<Lineup> {
     // segments: from a number right before a case size to the next such number
     let mut segs: Vec<Found> = vec![];
     for (i, l) in ls.iter().enumerate() {
-        let starts: Vec<usize> = (0..l.len().saturating_sub(1)).filter(|&k| number(&l[k].text).is_some() && case_size(&l[k + 1].text).is_some()).collect();
+        // (a mark may stand between the number and the size: Rubycon's "12 ● 5×11")
+        let is_mark = |w: &Word| !is_cell_value(&w.text) && (1..=2).contains(&w.text.trim().chars().count());
+        let size_after = |k: usize| l.get(k + 1).is_some_and(|w| case_size(&w.text).is_some()) || (l.get(k + 1).is_some_and(|w| is_mark(w)) && l.get(k + 2).is_some_and(|w| case_size(&w.text).is_some()));
+        let starts: Vec<usize> = (0..l.len()).filter(|&k| number(&l[k].text).is_some() && size_after(k)).collect();
         for (n, &k) in starts.iter().enumerate() {
             let end = starts.get(n + 1).copied().unwrap_or(l.len());
             let values: Vec<&Word> = l[k..end].iter().copied().filter(|w| is_cell_value(&w.text)).collect();
+            // a mark: a word of one or two characters that is not a value ("●", "*")
+            // marks by where they are, not by line: inside the row's width (not a note's mark further right) and its
+            // height, a little lower too (Rubycon's "●" sits low in the cell and is sometimes no part of the line)
+            let (x0, right) = (values.first().map_or(f32::MAX, |w| w.rect.x0), values.last().map_or(f32::MIN, |w| w.rect.x1));
+            let (y0, y1) = (values.iter().map(|w| w.rect.y0).fold(f32::MAX, f32::min), values.iter().map(|w| w.rect.y1).fold(f32::MIN, f32::max));
+            let marks: Vec<&str> = words
+                .iter()
+                .filter(|w| is_mark(w) && w.rect.x0 >= x0 && w.rect.x1 <= right && center(w).1 >= y0 - 1.0 && center(w).1 <= y1 + 3.0)
+                .map(|w| w.text.trim())
+                .collect();
             if values.len() >= 3 {
-                segs.push((i, None, values));
+                segs.push((i, None, values, marks.join("")));
             }
         }
     }
@@ -188,7 +204,7 @@ fn build<'a>(page: usize, ls: &[Vec<&'a Word>], rows: Vec<Found<'a>>) -> Option<
     }
     let mut rows: Vec<(f32, LineupRow)> = rows
         .iter()
-        .map(|(_, part, values)| {
+        .map(|(_, part, values, mark)| {
             let mut cells = vec![String::new(); cols.len()];
             for w in values.iter().chain(part.iter()) {
                 if let Some(i) = col_of(center(w).0)
@@ -197,7 +213,7 @@ fn build<'a>(page: usize, ls: &[Vec<&'a Word>], rows: Vec<Found<'a>>) -> Option<
                     cells[i] = w.text.trim().to_string();
                 }
             }
-            (center(values[0]).1, LineupRow { part: part.map_or(String::new(), |p| p.text.trim().to_string()), cells, group: String::new() })
+            (center(values[0]).1, LineupRow { part: part.map_or(String::new(), |p| p.text.trim().to_string()), cells, group: String::new(), mark: mark.clone() })
         })
         .collect();
     rows.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -251,6 +267,8 @@ pub fn lineups(pages: &[&[Word]]) -> Vec<Lineup> {
 pub struct ElcapRow {
     pub page: usize,
     pub part: String,
+    /// The mark printed in the row (`LineupRow::mark`): a different part number (an option) of the same values.
+    pub mark: String,
     pub cap_uf: f64,
     /// Rated voltage: from a column, else the number beside the row's group, else from the part number (the EIA code
     /// "1C" = 16 V, or Rubycon's leading "16").
@@ -396,6 +414,7 @@ pub fn electrolytic(tables: &[Lineup]) -> Vec<ElcapRow> {
             let mut row = ElcapRow {
                 page: t.page,
                 part: r.part.clone(),
+                mark: r.mark.clone(),
                 cap_uf,
                 volts: None,
                 d_mm: d,

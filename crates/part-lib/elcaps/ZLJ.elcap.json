@@ -1,0 +1,52 @@
+{
+  "maker": "Rubycon",
+  "series": "ZLJ",
+  "feature": "高リプル・長寿命・低インピーダンス",
+  "datasheet": "https://www.rubycon.co.jp/wp-content/uploads/catalog-aluminum/ZLJ.pdf",
+  "source": "データシート ZLJ.pdf (ZLJ series、カタログ 80〜83 ページ)",
+  "checked": "2026-11-18",
+  "temp": [-40, 105],
+  "tolerance_pct": 20,
+  "leak_k": 0.01,
+  "leak_min_ua": 3,
+  "coeff_freqs": [120, 1000, 10000, 100000],
+  "coeffs": [
+    { "cap_max": 33, "k": [0.42, 0.70, 0.90, 1.00] },
+    { "cap_max": 270, "k": [0.50, 0.73, 0.92, 1.00] },
+    { "cap_max": 680, "k": [0.55, 0.77, 0.94, 1.00] },
+    { "cap_max": 1800, "k": [0.60, 0.80, 0.96, 1.00] },
+    { "cap_max": 8200, "k": [0.70, 0.85, 0.98, 1.00] }
+  ],
+  "life": [
+    { "d_max": 6.3, "v_max": 6.3, "hours": 6000 },
+    { "d_max": 6.3, "v_min": 10, "v_max": 50, "hours": 7000 },
+    { "d_max": 6.3, "v_min": 63, "v_max": 100, "hours": 6000 },
+    { "d_min": 8, "d_max": 8, "l_max": 11.5, "v_max": 6.3, "hours": 8000 },
+    { "d_min": 8, "d_max": 8, "l_max": 11.5, "v_min": 10, "v_max": 50, "hours": 9000 },
+    { "d_min": 8, "d_max": 8, "l_max": 11.5, "v_min": 63, "v_max": 100, "hours": 8000 },
+    { "d_min": 10, "d_max": 10, "l_max": 12.5, "v_max": 100, "hours": 9000 },
+    { "d_min": 8, "d_max": 8, "l_min": 16, "v_max": 6.3, "hours": 9000 },
+    { "d_min": 8, "d_max": 8, "l_min": 16, "v_min": 10, "v_max": 50, "hours": 10000 },
+    { "d_min": 8, "d_max": 8, "l_min": 16, "v_min": 63, "hours": 9000 },
+    { "d_min": 10, "hours": 10000 }
+  ],
+  "leads": [
+    { "d": 5, "pitch": 2.0, "lead": 0.5 },
+    { "d": 6.3, "pitch": 2.5, "lead": 0.5 },
+    { "d": 8, "pitch": 3.5, "lead": 0.6 },
+    { "d": 10, "pitch": 5.0, "lead": 0.6 },
+    { "d": 12.5, "pitch": 5.0, "lead": 0.6 },
+    { "d": 16, "pitch": 7.5, "lead": 0.8 },
+    { "d": 18, "pitch": 7.5, "lead": 0.8 }
+  ],
+  "order_note": "型番は 定格電圧・ZLJ・容量 (µF)・M・副記号・リード加工記号・大きさ (φD × L) の順 (標準品は副記号とリード加工記号が空。表の「●」の品は副記号 EFU の低インピーダンス品)。",
+  "part_pattern": "{V}ZLJ{C}M{O}{D}X{L}",
+  "marks": { "●": "EFU" },
+  "bundle": [
+    "16ZLJ470M8X11.5", "16ZLJ1000M10X16", "16ZLJ2200M12.5X20",
+    "25ZLJ470M10X12.5", "25ZLJ1000M10X20",
+    "35ZLJ100M6.3X11", "35ZLJ330M10X12.5", "35ZLJ1000M12.5X20",
+    "50ZLJ100M8X11.5", "50ZLJ220M10X12.5", "50ZLJ470M10X20", "50ZLJ1000M12.5X25",
+    "63ZLJ100M8X11.5"
+  ]
+}

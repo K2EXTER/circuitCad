@@ -41,9 +41,12 @@ pub struct Series {
     pub leads: Vec<LeadRule>,
     /// How the part number is extended for cut or formed leads and tape (shown in the description).
     pub order_note: String,
-    /// How a part number is made from the values, for a table without them (Rubycon: "{V}YXF{C}MEFC{D}X{L}" makes
-    /// "16YXF1000MEFC10X20"): {V} rated voltage, {C} capacitance in µF, {D} and {L} the case's diameter and length.
+    /// How a part number is made from the values, for a table without them (Rubycon: "{V}ZLJ{C}M{O}{D}X{L}" makes
+    /// "25ZLJ1000M10X20"): {V} rated voltage, {C} capacitance in µF, {D} and {L} the case's diameter and length, {O}
+    /// the option of the row's mark (`marks`).
     pub part_pattern: String,
+    /// The option code of each mark printed in the table (Rubycon ZLJ: "●" → "EFU", the low impedance version).
+    pub marks: std::collections::BTreeMap<String, String>,
     /// The part numbers bundled with the program.
     pub bundle: Vec<String>,
 }
@@ -60,6 +63,9 @@ pub struct CoeffRow {
 pub struct LifeRule {
     pub d_min: Option<f64>,
     pub d_max: Option<f64>,
+    /// Case length (Rubycon gives 8×11.5 and 8×16 different lives).
+    pub l_min: Option<f64>,
+    pub l_max: Option<f64>,
     pub v_min: Option<f64>,
     pub v_max: Option<f64>,
     pub hours: f64,
@@ -93,6 +99,8 @@ pub struct Row {
     pub leak_ua: Option<f64>,
     /// The data sheet's page (from 0), for the description.
     pub page: Option<usize>,
+    /// The mark printed in the row, which picks an option of the part number (`Series::marks`).
+    pub mark: String,
 }
 
 impl Series {
@@ -106,9 +114,29 @@ impl Series {
         BUNDLED.iter().filter_map(|t| serde_json::from_str(t).ok()).collect()
     }
 
-    /// The bundled series whose name the part number starts with.
+    /// The bundled series whose name the part number starts with, after its rated voltage for Rubycon's
+    /// ("UHE1C331MPD", "25ZLJ1000M10X20").
     pub fn for_part(part: &str) -> Option<Series> {
-        Series::bundled().into_iter().find(|s| !s.series.is_empty() && part.to_ascii_uppercase().starts_with(&s.series.to_ascii_uppercase()))
+        let up = part.to_ascii_uppercase();
+        let rest = up.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+        Series::bundled().into_iter().find(|s| !s.series.is_empty() && rest.starts_with(&s.series.to_ascii_uppercase()))
+    }
+
+    /// The bundled series of a table: the one its first part number belongs to, else the one whose name is a word of
+    /// the data sheet (Rubycon's "ZLJ" in the page's title, for a table without part numbers).
+    pub fn for_table<'a>(rows: &[Row], words: impl IntoIterator<Item = &'a str>) -> Option<Series> {
+        if let Some(r) = rows.iter().find(|r| !r.part.is_empty()) {
+            return Series::for_part(&r.part);
+        }
+        // (full width letters as half width: Rubycon prints "ＺＬＪ")
+        let half = |w: &str| -> String { w.trim().chars().map(|c| if ('\u{FF01}'..='\u{FF5E}').contains(&c) { char::from_u32(c as u32 - 0xFEE0).unwrap_or(c) } else { c }).collect() };
+        let words: Vec<String> = words.into_iter().map(|w| half(w).to_ascii_uppercase()).collect();
+        Series::bundled().into_iter().find(|s| !s.series.is_empty() && words.iter().any(|w| *w == s.series.to_ascii_uppercase()))
+    }
+
+    /// A bundled series by its name ("ZLJ").
+    pub fn named(name: &str) -> Option<Series> {
+        Series::bundled().into_iter().find(|s| s.series.eq_ignore_ascii_case(name.trim()))
     }
 
     fn coeffs(&self, cap_uf: f64) -> Vec<(f64, f64)> {
@@ -116,11 +144,9 @@ impl Series {
         self.coeff_freqs.iter().copied().zip(row.k.iter().copied()).collect()
     }
 
-    fn life_hours(&self, d: f64, v: f64) -> Option<f64> {
-        self.life
-            .iter()
-            .find(|r| r.d_min.is_none_or(|x| d >= x) && r.d_max.is_none_or(|x| d <= x) && r.v_min.is_none_or(|x| v >= x) && r.v_max.is_none_or(|x| v <= x))
-            .map(|r| r.hours)
+    fn life_hours(&self, d: f64, l: f64, v: f64) -> Option<f64> {
+        let within = |x: f64, lo: Option<f64>, hi: Option<f64>| lo.is_none_or(|lo| x >= lo - 1e-9) && hi.is_none_or(|hi| x <= hi + 1e-9);
+        self.life.iter().find(|r| within(d, r.d_min, r.d_max) && within(l, r.l_min, r.l_max) && within(v, r.v_min, r.v_max)).map(|r| r.hours)
     }
 
     fn lead(&self, d: f64, l: f64) -> Option<(f64, f64)> {
@@ -135,7 +161,8 @@ impl Series {
     /// The part number the series' pattern makes for a row (None without a pattern).
     pub fn name(&self, r: &Row) -> Option<String> {
         (!self.part_pattern.is_empty()).then(|| {
-            self.part_pattern.replace("{V}", &g(r.volts)).replace("{C}", &g(r.cap_uf)).replace("{D}", &g(r.d_mm)).replace("{L}", &g(r.l_mm))
+            let option = self.marks.get(&r.mark).map_or("", |o| o.as_str());
+            self.part_pattern.replace("{V}", &g(r.volts)).replace("{C}", &g(r.cap_uf)).replace("{D}", &g(r.d_mm)).replace("{L}", &g(r.l_mm)).replace("{O}", option)
         })
     }
 
@@ -173,7 +200,7 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
     let &(_, z_freq, z20) = r.impedance.iter().find(|z| (z.0 - 20.0).abs() < 0.5).or(r.impedance.first()).ok_or_else(|| err("インピーダンスの列がありません"))?;
     let cold = r.impedance.iter().filter(|z| z.0 < 0.0).min_by(|a, b| a.0.total_cmp(&b.0)).copied();
     let (pitch, lead) = s.lead(r.d_mm, r.l_mm).ok_or_else(|| err(&format!("φ{} mm のリードの間隔と径が、シリーズの表 (leads) にありません", g(r.d_mm))))?;
-    let hours = s.life_hours(r.d_mm, r.volts).ok_or_else(|| err("寿命の決まり (life) に合う行がありません"))?;
+    let hours = s.life_hours(r.d_mm, r.l_mm, r.volts).ok_or_else(|| err("寿命の決まり (life) に合う行がありません"))?;
     let drill = up(lead + crate::thru_hole::HOLE_CLEARANCE, 0.1);
     let pad = up(drill + 2.0 * crate::thru_hole::ANNULAR_RING, 0.1);
     let xc = 1.0 / (2.0 * std::f64::consts::PI * z_freq * r.cap_uf * 1e-6);
@@ -294,7 +321,7 @@ pub fn leakage_mismatches<'a>(s: &Series, rows: &'a [Row]) -> Vec<&'a Row> {
     rows.iter().filter(|r| r.leak_ua.is_some_and(|l| (l - s.leakage(r.cap_uf, r.volts)).abs() > 0.06 + 0.001 * l)).collect()
 }
 
-const BUNDLED: &[&str] = &[include_str!("../elcaps/UHE.elcap.json")];
+const BUNDLED: &[&str] = &[include_str!("../elcaps/UHE.elcap.json"), include_str!("../elcaps/ZLJ.elcap.json")];
 
 #[cfg(test)]
 mod tests {
@@ -306,7 +333,7 @@ mod tests {
 
     /// A row of the table: part, µF, V, (φD, L), (Z at 20 °C, Z at −10 °C), ripple mA.
     fn row(part: &str, cap: f64, v: f64, (d, l): (f64, f64), (z, zc): (f64, f64), ripple_ma: f64) -> Row {
-        Row { part: part.into(), cap_uf: cap, volts: v, d_mm: d, l_mm: l, impedance: vec![(20.0, 100e3, z), (-10.0, 100e3, zc)], ripple_a: ripple_ma / 1000.0, ripple_freq_hz: 100e3, ripple_temp_c: 105.0, leak_ua: Some(0.01 * cap * v), page: None }
+        Row { part: part.into(), cap_uf: cap, volts: v, d_mm: d, l_mm: l, impedance: vec![(20.0, 100e3, z), (-10.0, 100e3, zc)], ripple_a: ripple_ma / 1000.0, ripple_freq_hz: 100e3, ripple_temp_c: 105.0, leak_ua: Some(0.01 * cap * v), page: None, mark: String::new() }
     }
 
     /// The bundled UHE parts are what `make` writes from their rows of the data sheet's table.
@@ -327,13 +354,36 @@ mod tests {
         assert!(s.bundle.iter().all(|b| crate::EXAMPLES.iter().any(|e| e.0 == b)), "every bundled UHE part is in EXAMPLES");
     }
 
+    /// Rubycon ZLJ: the part number made by the pattern (the "●" rows are the EFU option), the life by length too, the
+    /// bundled parts what `make` writes.
+    #[test]
+    fn the_bundled_zlj_parts_are_made_from_their_rows() {
+        let s = Series::named("ZLJ").unwrap();
+        let mut rows = vec![row("", 1000.0, 25.0, (10.0, 20.0), (0.028, 0.084), 2500.0), row("", 100.0, 50.0, (8.0, 11.5), (0.12, 0.36), 950.0), row("", 12.0, 80.0, (5.0, 11.0), (0.72, 3.2), 235.0)];
+        rows[2].mark = "●".into();
+        name_rows(Some(&s), &mut rows);
+        assert_eq!(rows.iter().map(|r| r.part.as_str()).collect::<Vec<_>>(), ["25ZLJ1000M10X20", "50ZLJ100M8X11.5", "80ZLJ12MEFU5X11"]);
+        for r in &rows[..2] {
+            let bundled = crate::EXAMPLES.iter().find(|e| e.0 == r.part).unwrap().1;
+            assert_eq!(to_text(&make(&s, r).unwrap()), bundled.replace("
+", "
+"), "{}", r.part);
+        }
+        assert_eq!((s.life_hours(8.0, 11.5, 50.0), s.life_hours(8.0, 20.0, 50.0), s.life_hours(8.0, 20.0, 120.0), s.life_hours(6.3, 11.0, 80.0)), (Some(9000.0), Some(10000.0), Some(9000.0), Some(6000.0)));
+        assert!(s.bundle.iter().all(|b| crate::EXAMPLES.iter().any(|e| e.0 == b)), "every bundled ZLJ part is in EXAMPLES");
+        // the series found from the title of a table without part numbers ("ＺＬＪ" in full width)
+        let nameless = vec![Row { part: String::new(), ..rows[0].clone() }];
+        assert_eq!(Series::for_table(&nameless, ["ＺＬＪ"]).map(|s| s.series), Some("ZLJ".into()));
+        assert_eq!(Series::for_part("25ZLJ1000M10X20").map(|s| s.series), Some("ZLJ".into()));
+    }
+
     #[test]
     fn rules_by_size_and_voltage() {
         let s = uhe();
-        assert_eq!(s.life_hours(8.0, 16.0), Some(7000.0));
-        assert_eq!(s.life_hours(10.0, 6.3), Some(6000.0));
-        assert_eq!(s.life_hours(12.5, 50.0), Some(10000.0));
-        assert_eq!(s.life_hours(18.0, 10.0), Some(8000.0));
+        assert_eq!(s.life_hours(8.0, 11.5, 16.0), Some(7000.0));
+        assert_eq!(s.life_hours(10.0, 20.0, 6.3), Some(6000.0));
+        assert_eq!(s.life_hours(12.5, 25.0, 50.0), Some(10000.0));
+        assert_eq!(s.life_hours(18.0, 40.0, 10.0), Some(8000.0));
         // 12.5 dia.: 0.8 mm leads when longer than 25 mm
         assert_eq!(s.lead(12.5, 25.0), Some((5.0, 0.6)));
         assert_eq!(s.lead(12.5, 30.5), Some((5.0, 0.8)));
