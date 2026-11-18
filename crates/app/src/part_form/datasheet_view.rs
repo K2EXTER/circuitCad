@@ -403,6 +403,11 @@ impl SheetView {
         self.doc.as_ref().map(|d| d.ds.capacitors()).unwrap_or_default()
     }
 
+    /// The ESR the open PDF asks of the capacitors (`Datasheet::esr`; none when no PDF is open).
+    pub fn esr(&self) -> Option<datasheet::companions::FoundEsr> {
+        self.doc.as_ref().and_then(|d| d.ds.esr())
+    }
+
     /// The open PDF's thermal resistances (`Datasheet::thermal`; none when no PDF is open).
     pub fn thermal(&self) -> Vec<datasheet::thermal::ThermalRow> {
         self.doc.as_ref().map(|d| d.ds.thermal()).unwrap_or_default()

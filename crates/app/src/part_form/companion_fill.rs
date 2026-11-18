@@ -75,6 +75,21 @@ impl PartForm {
     /// (put in, or why not).
     pub fn fill_companions_from_pdf(&mut self) {
         let caps = self.sheet.capacitors();
+        // the ESR asked of the output capacitor (and of the input one when the sheet says so): in the line's note
+        let esr = self.sheet.esr();
+        let esr_note = |name: &str| -> Option<String> {
+            let e = esr.as_ref()?;
+            let tail = name.trim_start_matches(['C', 'c']).trim_end_matches(|c: char| c.is_ascii_digit()).to_ascii_uppercase();
+            let fits = matches!(tail.as_str(), "OUT" | "O") || (e.input_too && matches!(tail.as_str(), "IN" | "I"));
+            let ohm = |v: f64| format!("{}Ω", part_lib::passive::eng(v));
+            let range = match (e.lo, e.hi) {
+                (Some(lo), Some(hi)) => format!("{}〜{}", ohm(lo), ohm(hi)),
+                (None, Some(hi)) => format!("{} 以下", ohm(hi)),
+                (Some(lo), None) => format!("{} 以上", ohm(lo)),
+                (None, None) => return None,
+            };
+            fits.then(|| format!("ESR {range} (p.{})", e.page + 1))
+        };
         let pins = self.parse_pins().unwrap_or_default();
         let mut lines: Vec<String> = self.companions_text.lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
         let mut msg = vec![];
@@ -92,7 +107,10 @@ impl PartForm {
                 Some((pin, to)) => {
                     let pin_name = pins.iter().find(|p| p.number == pin).map_or(pin.clone(), |p| p.name.clone());
                     let to_name = if to == "GND" { to.clone() } else { pins.iter().find(|p| p.number == to).map_or(to.clone(), |p| p.name.clone()) };
-                    let note = format!("{}データシートの p.{}", if c.at_least { "以上。" } else { "" }, c.page + 1);
+                    let mut note = format!("{}データシートの p.{}", if c.at_least { "以上。" } else { "" }, c.page + 1);
+                    if let Some(e) = esr_note(&c.name) {
+                        note += &format!("。{e}");
+                    }
                     lines.push(format!("{} | C | {value} | {pin_name} | {to_name} | {note}", c.name));
                     msg.push((true, format!("{} {how}: {pin_name} と {to_name} の間", c.name)));
                 }

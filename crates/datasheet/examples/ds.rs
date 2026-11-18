@@ -133,6 +133,9 @@ fn main() -> Result<(), String> {
         }
         "caps" => {
             // ds caps FILE: the capacitors named with a value
+            if let Some(e) = ds.esr() {
+                println!("ESR {:?}..{:?} ohm p.{} input too {}", e.lo, e.hi, e.page + 1, e.input_too);
+            }
             for c in ds.capacitors() {
                 println!("{} {}{:.3e} F  x{}  p.{}", c.name, if c.at_least { ">= " } else { "" }, c.farads, c.count, c.page + 1);
             }

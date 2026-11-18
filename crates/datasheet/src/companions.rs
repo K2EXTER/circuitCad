@@ -102,6 +102,92 @@ pub fn read(pages: &[&[Word]]) -> Vec<FoundCap> {
     out
 }
 
+/// The ESR a data sheet asks of the capacitors beside the part: a range ("5mΩ to 500mΩ", a table's "ESR … 5 500 mΩ", "0.3Ωから
+/// 5Ωの範囲") or a bound ("ESR below 20mΩ"), in ohms, where it is written, and whether it is said of the input capacitor too
+/// ("Input/output capacitor ESR range").
+#[derive(Clone, Debug, PartialEq)]
+pub struct FoundEsr {
+    pub lo: Option<f64>,
+    pub hi: Option<f64>,
+    pub page: usize,
+    pub input_too: bool,
+}
+
+/// The resistances written in a text, in ohms: "5mΩ", "500 mΩ", "0.3Ω", and the bare numbers just before a unit standing alone
+/// ("5 500 mΩ" of a table's row).
+fn ohms_in(text: &str) -> Vec<f64> {
+    // (lower case after `normalize`: ω; the ohm sign U+2126 too)
+    let t = text.replace("ohms", "Ω").replace("ohm", "Ω").replace(['Ω', 'ω'], "Ω");
+    let chars: Vec<char> = t.chars().collect();
+    let mut out = vec![];
+    let mut bare: Vec<f64> = vec![];
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_digit() && (i == 0 || !(chars[i - 1].is_ascii_alphanumeric() || chars[i - 1] == '.')) {
+            let start = i;
+            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                i += 1;
+            }
+            let v: f64 = chars[start..i].iter().collect::<String>().parse().unwrap_or(f64::NAN);
+            let mut j = i;
+            while j < chars.len() && chars[j] == ' ' {
+                j += 1;
+            }
+            let k = match chars.get(j) {
+                Some('m') if chars.get(j + 1) == Some(&'Ω') => Some((1e-3, j + 2)),
+                Some('k') | Some('K') if chars.get(j + 1) == Some(&'Ω') => Some((1e3, j + 2)),
+                Some('Ω') => Some((1.0, j + 1)),
+                _ => None,
+            };
+            match k {
+                Some((k, end)) if v.is_finite() => {
+                    out.extend(bare.drain(..).map(|b| b * k));
+                    out.push(v * k);
+                    i = end;
+                }
+                _ if v.is_finite() => bare.push(v),
+                _ => {}
+            }
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The ESR asked of the capacitors (`FoundEsr`): the first line naming ESR with two resistances (a range), else with one and
+/// a word of bound before it ("below", "less than", "<", "max", "以下", "未満"; "above", ">", "min", "以上").
+pub fn esr(pages: &[&[Word]]) -> Option<FoundEsr> {
+    let mut bound: Option<FoundEsr> = None;
+    for (page, words) in pages.iter().enumerate() {
+        for line in lines(words) {
+            let mut l = line.clone();
+            l.sort_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0));
+            let text = l.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+            let low = normalize(&text);
+            let Some(at) = low.find("esr") else { continue };
+            let after = &low[at..];
+            let values = ohms_in(after);
+            let input_too = low.contains("input/output") || low.contains("output/input") || low.contains("input and output") || low.contains("入出力");
+            match values.as_slice() {
+                [a, b, ..] if a < b => return Some(FoundEsr { lo: Some(*a), hi: Some(*b), page, input_too }),
+                [v] if bound.is_none() => {
+                    let first = after.find(|c: char| c.is_ascii_digit()).unwrap_or(after.len());
+                    let before = &after[..first];
+                    let below = ["below", "less than", "<", "max", "以下", "未満", "under"].iter().any(|k| before.contains(k));
+                    let above = ["above", "greater than", ">", "min", "以上", "over"].iter().any(|k| before.contains(k));
+                    // (an estimate in a design example is no requirement: TI's "RESR_MAX is approximately 1.5 mΩ")
+                    if below != above && !before.contains("approx") {
+                        bound = Some(FoundEsr { lo: above.then_some(*v), hi: below.then_some(*v), page, input_too });
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    bound
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +213,23 @@ mod tests {
         assert!(!found.iter().any(|c| c.name == "COUT" && c.at_least));
         // not capacitors: "CI" of a resistor value, a part number, a capacitance without F
         assert!(read(&[&line(&["CLK", "=", "1", "MHz", "CIN", "=", "10", "V"], 100.0)]).is_empty());
+    }
+
+    #[test]
+    fn the_esr_asked_of_the_capacitors() {
+        let line = |t: &str, y: f32| -> Vec<Word> {
+            let mut x = 50.0;
+            t.split(' ').map(|p| { let w = Word::for_test(p, x, y, x + 5.0 * p.chars().count() as f32, y + 8.0); x += 5.0 * p.chars().count() as f32 + 4.0; w }).collect()
+        };
+        let one = |t: &str| esr(&[&line(t, 100.0)]);
+        // TI's LP5907: a table row and a sentence
+        assert_eq!(one("ESR Output/input capacitance 5 500 mΩ").map(|e| (e.lo, e.hi, e.input_too)), Some((Some(0.005), Some(0.5), true)));
+        assert_eq!(one("Input/output capacitor ESR range 5mΩ to 500mΩ").map(|e| (e.lo, e.hi)), Some((Some(0.005), Some(0.5))));
+        // LTC's LT3045: a bound; ROHM's BA1117FP in Japanese
+        assert_eq!(one("capacitor with an ESR below 20mΩ and an ESL").map(|e| (e.lo, e.hi, e.input_too)), Some((None, Some(0.02), false)));
+        assert_eq!(one("ESR はタンタルコンデンサを使用の場合、0.3Ωから 5Ωの範囲としてく").map(|e| (e.lo, e.hi)), Some((Some(0.3), Some(5.0))));
+        // a low ESR with no value, or one value with no bound, asks nothing
+        assert!(one("Connect a minimum 1µF low-ESR capacitor").is_none());
+        assert!(one("RESR_MAX is approximately 1.5 mΩ of two").is_none());
     }
 }

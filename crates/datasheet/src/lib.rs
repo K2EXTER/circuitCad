@@ -287,6 +287,12 @@ impl Datasheet {
         companions::read(&pages)
     }
 
+    /// The ESR the data sheet asks of the capacitors beside the part (`companions::esr`).
+    pub fn esr(&self) -> Option<companions::FoundEsr> {
+        let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
+        companions::esr(&pages)
+    }
+
     /// The part numbers of `name`'s family the data sheet names (its ordering information), each with its first page
     /// (`ordering::part_numbers`).
     pub fn part_numbers(&self, name: &str) -> Vec<(String, usize)> {
