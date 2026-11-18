@@ -778,7 +778,40 @@ pub fn board_nets(s: &Schematic, l: &Layout) -> BoardNets {
         }
         out.pins.insert((refdes, pin), names[&g].clone());
     }
+    // the simulation-only pins (a light sensor's light, a motor's speed) are not leads on the board: they keep the schematic's net,
+    // named as the board names it where a lead of the board carries that net
+    let flat = s.flat();
+    let sim_only: BTreeSet<(String, String)> = flat
+        .components
+        .iter()
+        .filter_map(|c| c.custom.as_ref().map(|sym| (c, sym)))
+        .flat_map(|(c, sym)| sym.pins.iter().filter(|p| p.sim_only).map(move |p| (c.refdes.clone(), p.number.clone())))
+        .collect();
+    let board_name: BTreeMap<String, String> = order_names(&names, &info);
+    for n in crate::netlist::extract(&flat) {
+        for p in n.pins {
+            let key = (p.refdes, p.pin);
+            if sim_only.contains(&key) && !out.pins.contains_key(&key) {
+                out.pins.insert(key, board_name.get(&n.name).cloned().unwrap_or_else(|| n.name.clone()));
+            }
+        }
+    }
     out.names = names;
+    out
+}
+
+/// The board's name for each schematic net (the group that kept the net's name, else its first piece).
+fn order_names(names: &BTreeMap<Node, String>, info: &BTreeMap<Node, (BTreeSet<String>, usize, Hole)>) -> BTreeMap<String, String> {
+    let mut out: BTreeMap<String, String> = BTreeMap::new();
+    for (g, (nets, _, _)) in info {
+        let Some(name) = names.get(g) else { continue };
+        for n in nets {
+            // the exact name wins over a `~2` piece
+            if name == n || !out.contains_key(n) {
+                out.insert(n.clone(), name.clone());
+            }
+        }
+    }
     out
 }
 

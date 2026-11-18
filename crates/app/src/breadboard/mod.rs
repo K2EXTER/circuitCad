@@ -68,6 +68,9 @@ pub struct BreadboardView {
     live_failed: Option<String>,
     /// The mouse went down on a switch (not a drag or a click of the tool).
     switch_down: bool,
+    /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
+    knob_values: std::collections::BTreeMap<String, f64>,
+    temp_c: Option<f64>,
     /// Switches to move once the circuit starts running (`--proto-flip SW1,SW2`, for screenshots).
     pub flip_on_start: Vec<String>,
 }
@@ -268,6 +271,7 @@ impl BreadboardView {
     fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
         if !self.powered {
             (self.live, self.board, self.run_key, self.live_failed) = (None, None, None, None);
+            self.knob_values.clear();
             self.switch_down = false;
             return;
         }
@@ -278,12 +282,19 @@ impl BreadboardView {
             self.live = None;
             self.live_failed = None;
             let nets = board_nets(&sch.sch, l);
-            let dc = sch.board_dc(&nets);
-            match sch.board_circuit(&nets) {
+            let dc = sch.board_dc(&nets, self.temp_c);
+            match sch.board_circuit(&nets, self.temp_c) {
                 Ok(c) => {
                     let leds: Vec<String> = sch.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
-                    let mut lv = Live::start(c, &leds, sch.live_switches());
+                    // the knobs: the DC voltage sources off the board (a bench supply, the light or the signal on a sensor's input)
+                    let knobs: Vec<String> = l.off_board.iter().filter(|o| sch.sch.components.iter().any(|c| c.refdes == o.refdes && c.kind == sch_core::Kind::VSource)).map(|o| o.refdes.clone()).collect();
+                    let mut lv = Live::start(c, &leds, sch.live_switches(), &knobs);
                     lv.speed = speed;
+                    for (r, v) in &self.knob_values {
+                        if let Some(k) = lv.knob_index(r) {
+                            lv.set_knob(k, *v);
+                        }
+                    }
                     // the slide switches stay where they were when the board is changed
                     for r in on.into_iter().chain(std::mem::take(&mut self.flip_on_start)) {
                         if let Some(k) = lv.switch_index(&r) {
@@ -320,6 +331,40 @@ impl BreadboardView {
                 }
             });
         });
+        if !lv.knobs.is_empty() {
+            ui.label(egui::RichText::new(i18n::tr("つまみ (電源・信号源の電圧)")).strong())
+                .on_hover_text(i18n::tr("ブレッドボードの外の電源や信号源の電圧を、動かしたまま変えます。実験用の電源のつまみを回す・センサーに当てる光を強くする、の代わりです"));
+            for k in 0..lv.knobs.len() {
+                let (name, mut v, range) = (lv.knobs[k].refdes.clone(), lv.knobs[k].value, lv.knobs[k].range());
+                let nominal = lv.knobs[k].nominal;
+                ui.horizontal(|ui| {
+                    ui.label(&name);
+                    let r = ui.add(egui::Slider::new(&mut v, range).suffix(" V").max_decimals(2)).on_hover_text(i18n::trf!("回路図の値は {} V です", sim_core::format_value(nominal)));
+                    if r.changed() {
+                        lv.set_knob(k, v);
+                        self.knob_values.insert(name.clone(), v);
+                    }
+                    if v != nominal && ui.small_button(i18n::tr("戻す")).on_hover_text(i18n::tr("回路図の値に戻します")).clicked() {
+                        lv.set_knob(k, nominal);
+                        self.knob_values.remove(&name);
+                    }
+                });
+            }
+        }
+        // the room's temperature: thermistors and temperature sensors follow it (the run starts again at the new temperature)
+        let mut t = self.temp_c.unwrap_or_else(|| sch.board_temp());
+        let mut restart = false;
+        ui.horizontal(|ui| {
+            ui.label(i18n::tr("周りの温度"));
+            let r = ui.add(egui::Slider::new(&mut t, -20.0..=100.0).suffix(" ℃").max_decimals(0)).on_hover_text(i18n::tr("サーミスタ・温度センサーなど、温度で値が変わる部品が変わります。放すと、その温度で計算し直します (回路の時間は 0 から)"));
+            if r.changed() {
+                self.temp_c = Some(t);
+                restart = r.drag_stopped() || !r.dragged();
+            }
+        });
+        if restart {
+            self.run_key = None;
+        }
         if lv.behind {
             ui.label(egui::RichText::new(i18n::tr("計算が画面の時間に追いついていません (この回路は実時間では重すぎます)。速さを遅くします")).color(crate::theme::WARN));
         }
@@ -620,7 +665,12 @@ impl BreadboardView {
             let center = origin + Vec2::new(2.0, 3.0 + 4.0 * k as f32) * pitch;
             let r = Rect::from_center_size(center, Vec2::new(3.2, 2.4) * pitch);
             painter.rect(r, 3.0, Color32::from_rgb(60, 64, 72), Stroke::new(1.0, Color32::from_gray(160)), egui::StrokeKind::Middle);
-            let value = sch.sch.components.iter().find(|c| c.refdes == o.refdes).map(|c| c.value.clone()).unwrap_or_default();
+            // a knob turned while it runs shows its value now
+            let knob = self.live.as_ref().filter(|_| self.powered).and_then(|v| v.knob_index(&o.refdes).map(|k| v.knobs[k].value));
+            let value = match knob {
+                Some(v) => format!("{} V", sim_core::format_value(v)),
+                None => sch.sch.components.iter().find(|c| c.refdes == o.refdes).map(|c| c.value.clone()).unwrap_or_default(),
+            };
             painter.text(center - Vec2::new(0.0, 0.4 * pitch), egui::Align2::CENTER_CENTER, &o.refdes, font.clone(), Color32::WHITE);
             painter.text(center + Vec2::new(0.0, 0.5 * pitch), egui::Align2::CENTER_CENTER, short(&value, 10), small.clone(), Color32::from_gray(200));
             for (i, (pin, net, h)) in o.pins.iter().enumerate() {
@@ -730,8 +780,11 @@ impl BreadboardView {
 #[allow(clippy::too_many_arguments)]
 fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &BoardNets, lv: &Live, to: impl Fn(Hole) -> Pos2 + Copy, pitch: f32, font: &egui::FontId, now: f64) {
     let volt = |p: &sch_core::breadboard::Placed, pin: &str| -> Option<f64> {
-        let h = p.leads.iter().find(|(q, _)| q.eq_ignore_ascii_case(pin))?.1;
-        let n = nets.at(h)?;
+        // a lead's hole, or (a simulation-only pin like a motor's speed) the net the board gives the pin
+        let n = match p.leads.iter().find(|(q, _)| q.eq_ignore_ascii_case(pin)) {
+            Some((_, h)) => nets.at(*h)?,
+            None => nets.pins.iter().find(|((r, q), _)| *r == p.refdes && q.eq_ignore_ascii_case(pin))?.1.as_str(),
+        };
         if is_ground(n) { Some(0.0) } else { lv.voltage(n) }
     };
     for p in &l.parts {
@@ -762,7 +815,7 @@ fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &Boa
             painter.circle(c, pitch * 0.9, Color32::from_rgb(70, 74, 82), Stroke::new(1.0, Color32::from_gray(160)));
             let a = (turns * std::f64::consts::TAU) as f32;
             painter.line_segment([c, c + Vec2::angled(a) * pitch * 0.8], Stroke::new(3.0, Color32::from_rgb(240, 200, 60)));
-            painter.text(c + Vec2::new(pitch * 1.1, 0.0), egui::Align2::LEFT_CENTER, format!("{:.0} rpm", rpm), font.clone(), Color32::from_gray(230));
+            painter.text(c + Vec2::new(pitch * 1.1, 0.0), egui::Align2::LEFT_CENTER, format!("{:.0} rpm", rpm), font.clone(), Color32::from_gray(40));
         }
         if model.contains("BUZZER") {
             let v = match (p.leads.first(), p.leads.get(1)) {
@@ -1010,6 +1063,22 @@ mod tests {
         run(&mut app);
         let short: Vec<String> = app.breadboard.issues().iter().filter(|r| r.message.contains("ショート")).map(|r| r.refdes.clone()).collect();
         assert!(short.iter().any(|r| r.starts_with('V')), "{:?}", app.breadboard.issues());
+    }
+
+    /// The room's temperature slider: warmer, the thermistors' dividers move (the run starts again at the new temperature).
+    #[test]
+    fn a_warmer_room_moves_the_thermistor_dividers() {
+        let (mut app, mut run) = power_on_app("thermistor_basics.schjson");
+        app.breadboard.powered = true;
+        run(&mut app);
+        let nets: BTreeSet<String> = board_nets(&app.sch.sch, &auto_layout(&app.sch.sch)).pins.into_values().collect();
+        let read = |app: &App| -> Vec<f64> { nets.iter().map(|n| app.breadboard.live.as_ref().and_then(|v| v.voltage(n)).unwrap_or(0.0)).collect() };
+        let cool = read(&app);
+        app.breadboard.temp_c = Some(80.0);
+        app.breadboard.run_key = None;
+        run(&mut app);
+        let warm = read(&app);
+        assert!(cool.iter().zip(&warm).any(|(a, b)| (a - b).abs() > 0.2), "{cool:?} -> {warm:?}");
     }
 
     #[test]

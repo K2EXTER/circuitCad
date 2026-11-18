@@ -26,6 +26,23 @@ pub struct Switch {
     pub on: bool,
 }
 
+/// A supply or a source off the board whose voltage is turned while the circuit runs (a bench supply's knob, the light on a
+/// light sensor's input): its part, the value it was drawn with, and the value now.
+#[derive(Clone, Debug)]
+pub struct Knob {
+    pub refdes: String,
+    pub nominal: f64,
+    pub value: f64,
+}
+
+impl Knob {
+    /// The range of the slider: from 0 to twice the drawn value (at least 1 V either way).
+    pub fn range(&self) -> std::ops::RangeInclusive<f64> {
+        let far = (2.0 * self.nominal.abs()).max(1.0);
+        if self.nominal < 0.0 { -far..=0.0 } else { 0.0..=far }
+    }
+}
+
 pub struct Live {
     run: Option<TranRun>,
     pub error: Option<String>,
@@ -38,6 +55,7 @@ pub struct Live {
     /// The current of each kept element now (by element name, `D1`).
     currents: BTreeMap<String, f64>,
     pub switches: Vec<Switch>,
+    pub knobs: Vec<Knob>,
     /// The push button held down by the mouse.
     held: Option<usize>,
     /// The scope: its net and the points of the last `SCOPE_SPAN` seconds of the screen (simulated time, volts).
@@ -47,8 +65,16 @@ pub struct Live {
 
 impl Live {
     /// Starts the run on `circuit`. `currents`: the elements whose current is read (the LEDs); `switches`: from
-    /// `SchEditor::live_switches`.
-    pub fn start(circuit: sim_core::Circuit, currents: &[String], switches: Vec<(String, String, bool)>) -> Live {
+    /// `SchEditor::live_switches`; `knobs`: the parts whose DC voltage may be turned (the ones that are DC sources in the circuit).
+    pub fn start(circuit: sim_core::Circuit, currents: &[String], switches: Vec<(String, String, bool)>, knobs: &[String]) -> Live {
+        let knobs = circuit
+            .elements
+            .iter()
+            .filter_map(|e| match e {
+                sim_core::Element::VSource { name, wave: Waveform::Dc(v), .. } if knobs.contains(name) => Some(Knob { refdes: name.clone(), nominal: *v, value: *v }),
+                _ => None,
+            })
+            .collect();
         let mut me = Live {
             run: None,
             error: None,
@@ -58,6 +84,7 @@ impl Live {
             volts: BTreeMap::new(),
             currents: BTreeMap::new(),
             switches: switches.into_iter().map(|(refdes, source, push)| Switch { refdes, source, push, on: false }).collect(),
+            knobs,
             held: None,
             probe: None,
             trace: VecDeque::new(),
@@ -129,6 +156,23 @@ impl Live {
         if let Some(i) = self.held.take() {
             self.set_switch(i, false);
         }
+    }
+
+    /// Turns knob `i` to `v` volts from now on.
+    pub fn set_knob(&mut self, i: usize, v: f64) {
+        let Some(k) = self.knobs.get_mut(i) else { return };
+        if k.value == v {
+            return;
+        }
+        k.value = v;
+        let name = k.refdes.clone();
+        if let Some(r) = self.run.as_mut() {
+            r.set_source(&name, Waveform::Dc(v));
+        }
+    }
+
+    pub fn knob_index(&self, refdes: &str) -> Option<usize> {
+        self.knobs.iter().position(|k| k.refdes == refdes)
     }
 
     pub fn switch_index(&self, refdes: &str) -> Option<usize> {
@@ -213,7 +257,7 @@ mod tests {
     /// The circuit as the sample's own breadboard layout joins it (the schematic's, laid out automatically).
     fn board(e: &crate::schematic::SchEditor) -> sim_core::Circuit {
         let l = sch_core::breadboard::auto_layout(&e.sch);
-        e.board_circuit(&sch_core::breadboard::board_nets(&e.sch, &l)).unwrap()
+        e.board_circuit(&sch_core::breadboard::board_nets(&e.sch, &l), None).unwrap()
     }
 
     fn sample(name: &str) -> crate::schematic::SchEditor {
@@ -228,7 +272,7 @@ mod tests {
     fn the_blinker_blinks_while_it_runs() {
         let e = sample("ne555_blinker.schjson");
         let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
-        let mut live = Live::start(board(&e), &leds, e.live_switches());
+        let mut live = Live::start(board(&e), &leds, e.live_switches(), &[]);
         assert!(live.error.is_none(), "{:?}", live.error);
         let (mut lit, mut dark) = (false, false);
         for _ in 0..60 {
@@ -246,7 +290,7 @@ mod tests {
     fn a_push_button_held_down_changes_the_circuit() {
         let e = sample("half_adder.schjson");
         let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
-        let mut live = Live::start(board(&e), &leds, e.live_switches());
+        let mut live = Live::start(board(&e), &leds, e.live_switches(), &[]);
         assert!(live.error.is_none(), "{:?}", live.error);
         assert!(!live.switches.is_empty());
         let lit = |l: &Live| leds.iter().filter(|d| l.current(d).unwrap_or(0.0) > 1e-3).count();
@@ -263,11 +307,31 @@ mod tests {
         }
     }
 
+    /// The light sensor's light is a source off the board: turned up while it runs, the LDR's divider moves at once.
+    #[test]
+    fn a_knob_turns_a_source_while_it_runs() {
+        let e = sample("light_sensors.schjson");
+        let l = sch_core::breadboard::auto_layout(&e.sch);
+        let knobs: Vec<String> = l.off_board.iter().map(|o| o.refdes.clone()).collect();
+        let mut live = Live::start(board(&e), &[], vec![], &knobs);
+        assert!(live.error.is_none(), "{:?}", live.error);
+        let k = live.knob_index("V2").expect("the light source V2 is a knob");
+        let nets = sch_core::breadboard::board_nets(&e.sch, &l);
+        let out = nets.pins.get(&("R1".to_string(), "2".to_string())).or_else(|| nets.pins.get(&("R1".to_string(), "1".to_string()))).unwrap().clone();
+        live.advance(0.01);
+        let dark = live.voltage(&out).unwrap();
+        let (_, hi) = live.knobs[k].range().into_inner();
+        live.set_knob(k, hi);
+        live.advance(0.01);
+        let bright = live.voltage(&out).unwrap();
+        assert!((bright - dark).abs() > 0.05, "more light moves the divider: {dark} -> {bright}");
+    }
+
     /// The scope keeps the last seconds of its net.
     #[test]
     fn the_scope_traces_its_net() {
         let e = sample("ne555_blinker.schjson");
-        let mut live = Live::start(board(&e), &[], vec![]);
+        let mut live = Live::start(board(&e), &[], vec![], &[]);
         let net = live.volts.keys().find(|n| !n.contains('.') && !n.contains('#')).cloned().unwrap();
         live.set_probe(Some(net));
         for _ in 0..10 {

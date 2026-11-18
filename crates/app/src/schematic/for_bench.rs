@@ -20,16 +20,21 @@ impl SchEditor {
     /// The circuit as the breadboard joins it (B6: wired differently from the schematic, it runs, reads and burns that way), or why
     /// it cannot be built. The supplies' wires have a little resistance, so that a supply plugged straight across itself is a short
     /// circuit with a large current rather than an equation with no answer.
-    pub fn board_circuit(&self, nets: &sch_core::breadboard::BoardNets) -> Result<sim_core::Circuit, String> {
+    pub fn board_circuit(&self, nets: &sch_core::breadboard::BoardNets, temp_c: Option<f64>) -> Result<sim_core::Circuit, String> {
         let wiring: Vec<sim_core::WiringR> = nets.off_pins.iter().map(|(r, p)| sim_core::WiringR { refdes: r.clone(), pin: p.clone(), ohm: BOARD_WIRE_OHM, henry: 0.0, farad: 0.0 }).collect();
-        let temp = self.temp_c.trim().parse::<f64>().ok().filter(|t| *t > -273.0 && *t < 1000.0).unwrap_or(sim_core::T_NOM_C);
+        let temp = temp_c.unwrap_or_else(|| self.board_temp());
         let c = sim_core::from_schematic_with_nets(&self.sch, &nets.pins, &wiring).map_err(|e| e.first().map(|e| e.to_string()).unwrap_or_default())?;
         Ok(c.at_temperature(temp))
     }
 
+    /// The temperature the schematic is simulated at (℃): the breadboard's temperature slider starts there.
+    pub fn board_temp(&self) -> f64 {
+        self.temp_c.trim().parse::<f64>().ok().filter(|t| *t > -273.0 && *t < 1000.0).unwrap_or(sim_core::T_NOM_C)
+    }
+
     /// The DC operating point of the board's circuit: the current through each part and the parts past their ratings.
-    pub fn board_dc(&self, nets: &sch_core::breadboard::BoardNets) -> Result<crate::breadboard::BoardDc, String> {
-        let c = self.board_circuit(nets)?;
+    pub fn board_dc(&self, nets: &sch_core::breadboard::BoardNets, temp_c: Option<f64>) -> Result<crate::breadboard::BoardDc, String> {
+        let c = self.board_circuit(nets, temp_c)?;
         let r = sim_core::dc_op(&c).map_err(|e| e.to_string())?;
         let mut ratings = sim_core::check_ratings(&self.with_library_ratings(), &r);
         // a supply giving amperes on a breadboard: its + and − are joined (a bench supply would trip, a battery heat up)
