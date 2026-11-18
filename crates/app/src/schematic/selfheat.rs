@@ -38,7 +38,7 @@ impl SchEditor {
     /// their power as profiles (a part only pulsed, with no steady power, is added), the other sources of the last map (`sources`, may be
     /// none) keep their steady power.
     pub(crate) fn thermal_profiles(&self, sources: &[pcb_core::thermal::HeatSource]) -> Result<Vec<pcb_core::thermal::HeatSource>, String> {
-        let Some(Ok(v)) = &self.htran else {
+        let Some(Ok(v)) = &self.heat.tran else {
             return Err("先に回路図の解析タブで「温度の時間変化」を計算してください (部品ごとの電力の時間の変化を使います)".into());
         };
         let mut out = sources.to_vec();
@@ -59,7 +59,7 @@ impl SchEditor {
     }
 
     pub(crate) fn run_self_heat(&mut self) -> Result<HeatView, String> {
-        let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
+        let ambient: f64 = self.heat.ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &self.copper_g());
         let (heaters, mutual) = self.heaters_on_board(&c, heaters, ambient)?;
@@ -92,16 +92,16 @@ impl SchEditor {
     pub(super) fn panel_selfheat(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label(i18n::tr("周囲の温度"));
-            ui.add(egui::TextEdit::singleline(&mut self.heat_ambient).desired_width(40.0)).on_hover_text(i18n::tr("部品のまわりの空気の温度 (℃)。部品の温度は、これに「電力 × 熱抵抗」を足したものになります"));
+            ui.add(egui::TextEdit::singleline(&mut self.heat.ambient).desired_width(40.0)).on_hover_text(i18n::tr("部品のまわりの空気の温度 (℃)。部品の温度は、これに「電力 × 熱抵抗」を足したものになります"));
             ui.label("℃");
         });
         if self.lit(crate::widgets::primary_button_wide(ui, true, "自己発熱を計算"), "自己発熱を計算").on_hover_text(i18n::tr("電流が流れる抵抗・ダイオード・LED・トランジスタは、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) や、温まると電圧が下がるダイオード・トランジスタ (1 ℃ で約 2 mV) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)")).clicked() {
-            self.heat_view = Some(self.run_self_heat());
-            if let Some(Err(e)) = &self.heat_view {
+            self.heat.view = Some(self.run_self_heat());
+            if let Some(Err(e)) = &self.heat.view {
                 self.status = format!("自己発熱の計算に失敗: {e}");
             }
         }
-        let Some(view) = self.heat_view.take() else {
+        let Some(view) = self.heat.view.take() else {
             ui.label(egui::RichText::new(i18n::tr("電流が流れる部品 (抵抗・ダイオード・トランジスタ) の温度上昇と、それで値や電圧がどれだけ動くかを見ます")).small());
             return;
         };
@@ -212,7 +212,7 @@ impl SchEditor {
                 ui.label(egui::RichText::new(i18n::tr("熱抵抗を入れていない部品は、パッケージの大きさからの目安 (定格電力から) です。データシートの値 (θJA) に直してください")).small()).on_hover_text(i18n::tr("チップ抵抗は、周囲 70 ℃ で定格の電力をかけると 155 ℃ になるものとして、θ ≈ 85 K ÷ 定格電力 としています"));
             }
         }
-        self.heat_view = Some(view);
+        self.heat.view = Some(view);
     }
 }
 
@@ -311,4 +311,41 @@ pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, cop
 
 fn fmt_power(w: f64) -> String {
     if w >= 1.0 { format!("{w:.2} W") } else if w >= 1e-3 { format!("{:.1} mW", w * 1e3) } else { format!("{:.1} µW", w * 1e6) }
+}
+
+/// The heat sections: self-heating, temperature over time and the sweep of the surrounding temperature.
+pub(crate) struct HeatUi {
+    /// The last self-heating run (the section "自己発熱") and the surrounding temperature typed for it.
+    pub(crate) view: Option<Result<selfheat::HeatView, String>>,
+    pub(crate) ambient: String,
+    /// The temperature-over-time block: its last answer and its inputs (parts, seconds, "A:B:K/W" couplings).
+    pub(crate) tran: Option<Result<selfheat_tran::HeatTranView, String>>,
+    pub(crate) tran_parts: String,
+    pub(crate) tran_stop: String,
+    pub(super) tran_links: String,
+    /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
+    pub(super) tran_links_seen: Vec<(String, String, f64)>,
+    /// "周囲の温度を振る": from, to, step (°C) and the last result.
+    pub(crate) amb_from: String,
+    pub(crate) amb_to: String,
+    pub(crate) amb_step: String,
+    pub(crate) amb_view: Option<Result<sim_core::AmbientSweep, String>>,
+}
+
+impl Default for HeatUi {
+    fn default() -> Self {
+        Self {
+            view: None,
+            ambient: "27".into(),
+            tran: None,
+            tran_parts: String::new(),
+            tran_stop: "0.6".into(),
+            tran_links: String::new(),
+            tran_links_seen: vec![],
+            amb_from: "-20".into(),
+            amb_to: "85".into(),
+            amb_step: "5".into(),
+            amb_view: None,
+        }
+    }
 }

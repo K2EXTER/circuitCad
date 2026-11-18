@@ -92,7 +92,7 @@ fn fault_simulation_on_the_regulator_example() {
     let r = e.sch.components.iter().find(|c| c.kind == sch_core::Kind::Resistor).unwrap().refdes.clone();
     e.set_fault(&r, 0);
     e.analyze_fault();
-    let v = e.fault_view.as_ref().unwrap();
+    let v = e.fault_ui.view.as_ref().unwrap();
     let report = v.report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
     assert!(report.summary().iter().any(|l| l.contains("電流が止まります") || l.contains("→")), "{:?}", report.summary());
     // showing it on the sheet marks the overlay as a what-if and restoring clears the mark
@@ -102,8 +102,8 @@ fn fault_simulation_on_the_regulator_example() {
     assert!(e.dc.as_ref().unwrap().fault.is_none());
     // the scan covers every breakable part and puts the worst case first
     e.analyze_fault_scan();
-    assert!(e.fault_scan.len() >= 4);
-    assert!(e.fault_scan.windows(2).all(|w| w[0].danger > w[1].danger || (w[0].danger == w[1].danger && w[0].severity >= w[1].severity)));
+    assert!(e.fault_ui.scan.len() >= 4);
+    assert!(e.fault_ui.scan.windows(2).all(|w| w[0].danger > w[1].danger || (w[0].danger == w[1].danger && w[0].severity >= w[1].severity)));
 }
 
 /// The op-amp loop-gain sample: a capacitive load adds a pole near the crossover and eats the phase margin.
@@ -230,11 +230,11 @@ fn transient_fault_on_the_rectifier_is_explained_in_the_panel_flow() {
     e.analyze_fault();
     assert!(e.status.contains("過渡"), "{}", e.status);
     assert!(e.has_wave());
-    let Ok(fault::FaultWave::Tran(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected a transient report") };
+    let Ok(fault::FaultWave::Tran(r)) = &e.fault_ui.wave.as_ref().unwrap().report else { panic!("expected a transient report") };
     let text = r.summary().join("\n");
     assert!(text.contains("振幅 (p-p)") && text.contains("周波数: 100Hz → 50Hz"), "{text}");
     // with no node chosen, the likely output net is found; a wrong node is explained
-    e.fault_node.clear();
+    e.fault_ui.node.clear();
     assert_eq!(e.fault_watch_node().as_deref(), Some("VDC"));
     e.set_fault_tran("NOPE");
     e.analyze_fault();
@@ -252,13 +252,13 @@ fn ac_fault_on_the_lowpass_example_moves_the_cutoff() {
     e.set_fault_ac(&node);
     e.analyze_fault();
     assert!(e.status.contains("AC"), "{}", e.status);
-    let Ok(fault::FaultWave::Ac(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected an AC report") };
+    let Ok(fault::FaultWave::Ac(r)) = &e.fault_ui.wave.as_ref().unwrap().report else { panic!("expected an AC report") };
     let text = r.summary().join("\n");
     assert!(text.contains("-3dB点 (カットオフ)"), "{text}");
     // C1 open: the filter stops filtering
     e.set_fault("C1", 0);
     e.analyze_fault();
-    let Ok(fault::FaultWave::Ac(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected an AC report") };
+    let Ok(fault::FaultWave::Ac(r)) = &e.fault_ui.wave.as_ref().unwrap().report else { panic!("expected an AC report") };
     assert!(r.summary().join("\n").contains("なくなりました"), "{:?}", r.summary());
     // a bad frequency setting is explained
     e.set_ac_settings("abc", "1Meg", "20");
@@ -296,36 +296,36 @@ fn a_blank_time_step_is_chosen_from_the_end_time() {
 fn pin_faults_break_one_pin_of_an_ic_and_of_a_transistor() {
     // op-amp amplifier: the gain network hangs on IN-; opening that pin of the LM358 changes the output
     let mut e = editor_with("opamp_amp.schjson");
-    e.fault_part = "U1".into();
-    e.fault_pin = "2".into();
+    e.fault_ui.part = "U1".into();
+    e.fault_ui.pin = "2".into();
     assert!(e.pin_choices("U1").iter().any(|(n, d)| n == "2" && d.contains("IN-")), "{:?}", e.pin_choices("U1"));
     // at DC the input is 0 V so nothing moves; in the time domain the open feedback pin is plain to see
     e.set_tran_settings("3m", "5u");
     e.set_fault_tran("OUT");
     e.analyze_fault();
-    let Ok(fault::FaultWave::Tran(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected a transient report") };
+    let Ok(fault::FaultWave::Tran(r)) = &e.fault_ui.wave.as_ref().unwrap().report else { panic!("expected a transient report") };
     assert!(r.label.contains("ピン 2 IN-") && r.label.contains("断線"), "{}", r.label);
     assert!(r.summary().len() > 1, "{:?}", r.summary());
-    e.fault_domain = fault::FaultDomain::Dc;
+    e.fault_ui.domain = fault::FaultDomain::Dc;
     // bridging a pin to ground, and a missing net name is explained
-    e.fault_pin_how = 2;
+    e.fault_ui.pin_how = 2;
     e.analyze_fault();
     assert!(e.status.contains("失敗"), "{}", e.status);
-    e.fault_bridge = "GND".into();
+    e.fault_ui.bridge = "GND".into();
     e.analyze_fault();
-    assert!(e.fault_view.as_ref().unwrap().report.as_ref().unwrap().label.contains("ブリッジ"));
+    assert!(e.fault_ui.view.as_ref().unwrap().report.as_ref().unwrap().label.contains("ブリッジ"));
     // the scan includes pin rows for the IC
     e.analyze_fault_scan();
-    assert!(e.fault_scan.iter().any(|row| row.part == "U1" && !row.pin.is_empty()), "no pin rows");
+    assert!(e.fault_ui.scan.iter().any(|row| row.part == "U1" && !row.pin.is_empty()), "no pin rows");
     // a library transistor (2N3904: pin 2 = B): the base pin has a readable name, and the scan covers its pins
     let mut q = editor_with("npn_not.schjson");
-    q.fault_part = "Q1".into();
-    q.fault_pin = "2".into();
+    q.fault_ui.part = "Q1".into();
+    q.fault_ui.pin = "2".into();
     q.analyze_fault();
-    let r = q.fault_view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    let r = q.fault_ui.view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
     assert!(r.label.contains("ピン 2 B") && r.element == "Q1", "{}", r.label);
     q.analyze_fault_scan();
-    assert_eq!(q.fault_scan.iter().filter(|row| row.part == "Q1" && !row.pin.is_empty()).count(), 3);
+    assert_eq!(q.fault_ui.scan.iter().filter(|row| row.part == "Q1" && !row.pin.is_empty()).count(), 3);
 }
 
 #[test]
@@ -337,7 +337,7 @@ fn reversed_parts_and_supply_faults_work_in_the_panel() {
     e.set_fault("D1", kind);
     e.set_fault_tran("VDC");
     e.analyze_fault();
-    let Ok(fault::FaultWave::Tran(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected a transient report") };
+    let Ok(fault::FaultWave::Tran(r)) = &e.fault_ui.wave.as_ref().unwrap().report else { panic!("expected a transient report") };
     assert!(r.label.contains("逆向き"), "{}", r.label);
     assert!(!r.summary().is_empty());
     // the supply of a DC circuit: half voltage
@@ -345,7 +345,7 @@ fn reversed_parts_and_supply_faults_work_in_the_panel() {
     s.sch.components.iter_mut().find(|c| c.refdes == "V1").unwrap().value = "5".into();
     s.set_fault("V1", 5); // Scale(0.5)
     s.analyze_fault();
-    let rep = s.fault_view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    let rep = s.fault_ui.view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
     assert!(rep.label.contains("電圧が 0.5 倍"), "{}", rep.label);
 }
 
@@ -1041,13 +1041,13 @@ fn chain_failure_on_the_coil_example_runs_from_the_panel() {
     e.tran_tstep = "5u".into();
     e.set_fault("L1", 9); // ALL_FAULTS[9] = 50% of the turns
     e.analyze_fault_chain();
-    let r = e.fault_chain.as_ref().unwrap().as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    let r = e.fault_ui.chain.as_ref().unwrap().as_ref().unwrap_or_else(|m| panic!("{m:?}"));
     let text = r.summary().join("\n");
     assert!(text.contains("Q1") && text.contains("L1") && text.contains("ヒューズ"), "{text}");
     // a pin fault cannot be chained: the panel says so instead of guessing
-    e.fault_pin = "1".into();
+    e.fault_ui.pin = "1".into();
     e.analyze_fault_chain();
-    assert!(e.fault_chain.as_ref().unwrap().is_err());
+    assert!(e.fault_ui.chain.as_ref().unwrap().is_err());
 }
 
 /// The electrolytic output capacitor of the buck sample: its ripple current and life come out of the run,
@@ -1122,16 +1122,16 @@ fn the_fault_scan_on_its_own_thread_gives_the_same_rows_and_can_be_cancelled() {
     let mut e = SchEditor::default();
     e.sch = sch;
     e.analyze_fault_scan();
-    let rows = |e: &SchEditor| e.fault_scan.iter().map(|r| (r.part.clone(), r.pin.clone(), r.label.clone(), r.severity.to_bits(), r.danger)).collect::<Vec<_>>();
+    let rows = |e: &SchEditor| e.fault_ui.scan.iter().map(|r| (r.part.clone(), r.pin.clone(), r.label.clone(), r.severity.to_bits(), r.danger)).collect::<Vec<_>>();
     let blocking = rows(&e);
     assert!(blocking.len() >= 4);
     // on a thread
-    e.fault_scan.clear();
+    e.fault_ui.scan.clear();
     e.start_fault_scan();
-    assert!(e.scan_run.is_some());
+    assert!(e.fault_ui.scan_run.is_some());
     let ctx = egui::Context::default();
     let t0 = std::time::Instant::now();
-    while e.scan_run.is_some() {
+    while e.fault_ui.scan_run.is_some() {
         e.poll_fault_scan(&ctx);
         assert!(t0.elapsed().as_secs() < 60, "the scan did not finish");
         std::thread::sleep(std::time::Duration::from_millis(5));
@@ -1139,8 +1139,8 @@ fn the_fault_scan_on_its_own_thread_gives_the_same_rows_and_can_be_cancelled() {
     assert_eq!(rows(&e), blocking);
     // cancelled at once: nothing is taken over, and the old rows stay
     e.start_fault_scan();
-    e.scan_run.as_ref().unwrap().cancel.store(true, Ordering::Relaxed);
-    while e.scan_run.is_some() {
+    e.fault_ui.scan_run.as_ref().unwrap().cancel.store(true, Ordering::Relaxed);
+    while e.fault_ui.scan_run.is_some() {
         e.poll_fault_scan(&ctx);
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
@@ -1155,14 +1155,14 @@ fn the_fault_scan_leaves_out_the_rare_faults_unless_asked() {
     let mut e = SchEditor::default();
     e.sch = sch;
     e.analyze_fault_scan();
-    let usual = e.fault_scan.len();
+    let usual = e.fault_ui.scan.len();
     // each row says which node moved most (what the table shows: "VOUT が 5V → 0V")
-    assert!(e.fault_scan.iter().any(|r| r.severity > 0.01 && r.worst.as_ref().is_some_and(|(_, a, b)| (b - a).abs() > 0.01)));
-    assert!(!e.fault_scan.iter().any(|r| r.pin.is_empty() && r.label == "値が 10 倍" && r.part.starts_with('R')), "a resistor ten times larger is rare");
-    assert!(e.fault_scan.iter().any(|r| r.pin.is_empty() && r.part.starts_with('R') && r.label.contains("断線")), "an open resistor is not");
-    e.scan_rare = true;
+    assert!(e.fault_ui.scan.iter().any(|r| r.severity > 0.01 && r.worst.as_ref().is_some_and(|(_, a, b)| (b - a).abs() > 0.01)));
+    assert!(!e.fault_ui.scan.iter().any(|r| r.pin.is_empty() && r.label == "値が 10 倍" && r.part.starts_with('R')), "a resistor ten times larger is rare");
+    assert!(e.fault_ui.scan.iter().any(|r| r.pin.is_empty() && r.part.starts_with('R') && r.label.contains("断線")), "an open resistor is not");
+    e.fault_ui.scan_rare = true;
     e.analyze_fault_scan();
-    assert!(e.fault_scan.len() > usual, "{} vs {usual}", e.fault_scan.len());
+    assert!(e.fault_ui.scan.len() > usual, "{} vs {usual}", e.fault_ui.scan.len());
 }
 
 /// The two-sheet sample is the regulator sample cut in two: every net voltage must come out the same.
@@ -1195,10 +1195,10 @@ fn fault_simulation_reaches_parts_on_the_other_sheets() {
     assert!(e.sch.components.iter().all(|c| c.refdes != "R1"), "R1 is on the sheet that is not open");
     e.set_fault("R1", 0);
     e.analyze_fault();
-    let report = e.fault_view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    let report = e.fault_ui.view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
     assert!(report.summary().iter().any(|l| l.contains("電流が止まります") || l.contains("→")), "{:?}", report.summary());
     e.analyze_fault_scan();
-    assert!(e.fault_scan.iter().any(|f| f.part == "R1"), "the scan includes the other sheet's parts");
+    assert!(e.fault_ui.scan.iter().any(|f| f.part == "R1"), "the scan includes the other sheet's parts");
 }
 
 /// The currents of a DC analysis fill what the table of requirements leaves empty (the "解析から入れる" button of the window).
@@ -1233,7 +1233,7 @@ fn the_self_heating_section_lists_the_warm_resistors() {
     e.sch.components.iter_mut().find(|c| c.refdes == name).unwrap().tc_ppm = 1000.0;
     let w = e.run_self_heat().unwrap();
     assert!(w.parts.iter().find(|p| p.name == name).unwrap().change > 0.0);
-    e.heat_ambient = "abc".into();
+    e.heat.ambient = "abc".into();
     assert!(e.run_self_heat().is_err());
 }
 
@@ -1247,23 +1247,23 @@ fn the_heat_over_time_block_warms_a_part_less_than_the_steady_state() {
         c.theta = 100.0;
         c.cth = 0.05;
     }
-    e.htran_parts = name.clone();
-    e.htran_stop = "1".into();
+    e.heat.tran_parts = name.clone();
+    e.heat.tran_stop = "1".into();
     let v = e.run_heat_tran().expect("a transient run");
     let p = &v.parts[0];
     assert!(p.rise_peak > 0.0 && p.rise_peak < 0.5 * p.power_peak * p.theta, "{} {}", p.rise_peak, p.power_peak * p.theta);
-    e.htran_parts = String::new();
+    e.heat.tran_parts = String::new();
     assert!(e.run_heat_tran().is_err());
-    e.htran_parts = name.clone();
-    e.htran_links = "A:B".into();
+    e.heat.tran_parts = name.clone();
+    e.heat.tran_links = "A:B".into();
     assert!(e.run_heat_tran().is_err());
     assert!(e.sch.thermal_links.is_empty(), "a link that does not read is not kept");
     // a run keeps the links in the schematic, so the file has them
     let other = e.sch.components.iter().map(|c| c.refdes.clone()).find(|r| *r != name && !r.starts_with('#')).unwrap();
-    e.htran_links = format!("{name}:{other}:120");
+    e.heat.tran_links = format!("{name}:{other}:120");
     let _ = e.run_heat_tran();
     assert_eq!(e.sch.thermal_links, vec![(name.clone(), other.clone(), 120.0)]);
-    assert_eq!(e.htran_links_seen, e.sch.thermal_links);
+    assert_eq!(e.heat.tran_links_seen, e.sch.thermal_links);
     let back: sch_core::Schematic = serde_json::from_str(&serde_json::to_string(&e.sch).unwrap()).unwrap();
     assert_eq!(back.thermal_links, e.sch.thermal_links);
 }
@@ -1319,7 +1319,7 @@ fn worst_case_spec_uses_the_variation_tolerances_and_the_cache() {
     e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "VOUT").unwrap();
     assert_eq!(e.worst_spec_cache.len(), 1, "the same question is answered from the cache");
     // tighter parts, narrower range
-    e.mc_tol_r = "1".into();
+    e.mc_in.tol_r = "1".into();
     let b = e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "VOUT").unwrap();
     assert!(b.max - b.min < 0.5 * (a.max - a.min), "{} vs {}", b.max - b.min, a.max - a.min);
     assert!(e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "").is_err());

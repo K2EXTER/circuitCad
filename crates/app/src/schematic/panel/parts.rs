@@ -114,7 +114,7 @@ impl SchEditor {
         if basic_clicked {
             self.basic_open = !self.basic_open;
             if self.basic_open {
-                self.lib_open = false;
+                self.lib.open = false;
             }
         }
         // a series (one part per value) counts as one part and shows as one row: the chosen value's part, else its default value's
@@ -131,11 +131,11 @@ impl SchEditor {
         let below_id = egui::Id::new("lib_list_below");
         let below = ui.data(|d| d.get_temp::<f32>(below_id)).unwrap_or(215.0);
         let mut list_end: Option<f32> = None;
-        let (_, library_clicked) = crate::widgets::band_header(ui, "library", library_title, self.lib_open, true, |ui| {
+        let (_, library_clicked) = crate::widgets::band_header(ui, "library", library_title, self.lib.open, true, |ui| {
             // everything inside the library group sits in one sunken well joined to the band; the indent line is not needed there
             crate::widgets::well(ui, |ui| {
             ui.visuals_mut().indent_has_left_vline = false;
-            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text(i18n::tr("検索 (名前・説明・ピン名・パッケージ)")).desired_width(f32::INFINITY).margin(egui::Margin::symmetric(6, 7)))
+            ui.add(egui::TextEdit::singleline(&mut self.lib.filter).hint_text(i18n::tr("検索 (名前・説明・ピン名・パッケージ)")).desired_width(f32::INFINITY).margin(egui::Margin::symmetric(6, 7)))
                 .on_hover_text(i18n::tr("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます"));
             let cat_of = |i: usize| index.cat[i].as_str();
             let cats = &index.cats;
@@ -145,22 +145,22 @@ impl SchEditor {
                 let combo_width = ui.available_width() - 76.0;
                 egui::ComboBox::from_id_salt("lib_cat")
                     .width(combo_width)
-                    .selected_text(if self.lib_cat.is_empty() { "すべてのカテゴリ".to_string() } else { self.lib_cat.clone() })
+                    .selected_text(if self.lib.cat.is_empty() { "すべてのカテゴリ".to_string() } else { self.lib.cat.clone() })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.lib_cat, String::new(), i18n::tr("すべてのカテゴリ"));
+                        ui.selectable_value(&mut self.lib.cat, String::new(), i18n::tr("すべてのカテゴリ"));
                         for c in cats {
-                            ui.selectable_value(&mut self.lib_cat, c.clone(), c);
+                            ui.selectable_value(&mut self.lib.cat, c.clone(), c);
                         }
                     }).response.on_hover_text(i18n::tr("ライブラリ部品の分類。選んだ分類だけを一覧に出します"));
-                ui.checkbox(&mut self.lib_sim_only, i18n::tr("◎のみ")).on_hover_text(i18n::tr("◎ は、シミュレーションモデルのある部品の印です。入れると、◎ の部品だけを表示します (◎ のない部品は、基板づくり用です)"));
+                ui.checkbox(&mut self.lib.sim_only, i18n::tr("◎のみ")).on_hover_text(i18n::tr("◎ は、シミュレーションモデルのある部品の印です。入れると、◎ の部品だけを表示します (◎ のない部品は、基板づくり用です)"));
             });
-            let f = self.lib_filter.to_lowercase();
-            let filtering = !f.is_empty() || !self.lib_cat.is_empty() || self.lib_sim_only;
+            let f = self.lib.filter.to_lowercase();
+            let filtering = !f.is_empty() || !self.lib.cat.is_empty() || self.lib.sim_only;
             // which parts pass the search / category / simulation filters
             let shown: Vec<usize> = (0..self.library.len())
                 .filter(|&i| {
                     let d = &self.library[i];
-                    if (!self.lib_cat.is_empty() && self.lib_cat != cat_of(i)) || (self.lib_sim_only && d.sim.is_none()) {
+                    if (!self.lib.cat.is_empty() && self.lib.cat != cat_of(i)) || (self.lib.sim_only && d.sim.is_none()) {
                         return false;
                     }
                     // a series' other values only when the search is that part number
@@ -178,8 +178,8 @@ impl SchEditor {
             // the list fills what is left of the window (the part card and "部品を作る" stay below it)
             let list_height = (ui.clip_rect().bottom() - ui.cursor().top() - below - 8.0).clamp(120.0, 900.0);
             let by_name = |n: &String| self.library.iter().position(|d| &d.name == n);
-            let favs: Vec<usize> = self.lib_prefs.fav.iter().filter_map(by_name).collect();
-            let recents: Vec<usize> = self.lib_prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
+            let favs: Vec<usize> = self.lib.prefs.fav.iter().filter_map(by_name).collect();
+            let recents: Vec<usize> = self.lib.prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
             let mut toggle_fav: Option<String> = None;
             let mut edit_part: Option<PartDef> = None;
             let mut delete_part: Option<String> = None;
@@ -219,7 +219,7 @@ impl SchEditor {
                         if !ids.is_empty() {
                             ui.label(egui::RichText::new(title).small().strong()).on_hover_text(tip);
                             for &i in ids {
-                                row(ui, i, sel(i), &self.lib_prefs);
+                                row(ui, i, sel(i), &self.lib.prefs);
                             }
                             ui.add_space(4.0);
                         }
@@ -247,7 +247,7 @@ impl SchEditor {
                     }
                     h.show(ui, |ui| {
                         for &i in &ids {
-                            row(ui, i, sel(i), &self.lib_prefs);
+                            row(ui, i, sel(i), &self.lib.prefs);
                         }
                     });
                 }
@@ -257,8 +257,8 @@ impl SchEditor {
             ui.add_space(2.0);
             ui.separator();
             if let Some(n) = toggle_fav {
-                self.lib_prefs.toggle_fav(&n);
-                self.lib_prefs.save(&self.lib_dir);
+                self.lib.prefs.toggle_fav(&n);
+                self.lib.prefs.save(&self.lib.dir);
             }
             let mut switch_to: Option<f64> = None;
             if let Some(d) = self.place_lib.and_then(|k| self.library.get(k)) {
@@ -274,18 +274,18 @@ impl SchEditor {
                     }
                     if member.is_some() {
                         // a bundled series is not a file in the library folder: there is nothing to delete
-                    } else if self.lib_delete.as_deref() == Some(d.name.as_str()) {
+                    } else if self.lib.delete.as_deref() == Some(d.name.as_str()) {
                         ui.horizontal(|ui| {
                             ui.colored_label(crate::theme::ERROR, i18n::tr("本当に削除しますか?"));
                             if ui.small_button(i18n::tr("削除する")).on_hover_text(i18n::tr("この部品のファイルをライブラリのフォルダから消します。元に戻せません。回路図や基板に置いた部品は、そのまま残ります")).clicked() {
                                 delete_part = Some(d.name.clone());
                             }
                             if ui.small_button(i18n::tr("やめる")).clicked() {
-                                self.lib_delete = None;
+                                self.lib.delete = None;
                             }
                         });
                     } else if ui.small_button(i18n::tr("削除…")).on_hover_text(i18n::tr("この部品を、ライブラリから消します (押したあとに、もう一度確かめます)。同梱の部品も消せて、消したものは、次に起動しても戻りません。回路図や基板に置いた部品は、そのまま残ります")).clicked() {
-                        self.lib_delete = Some(d.name.clone());
+                        self.lib.delete = Some(d.name.clone());
                     }
                     // the first sentence of the description; the rest, where the model comes from and the pins fold under "詳しく", so a long
                     // description (a maker's series runs to ten lines) does not push the list and the buttons out of the panel
@@ -321,7 +321,7 @@ impl SchEditor {
                 self.choose_library_part(k);
             }
             if let Some(n) = delete_part {
-                self.lib_delete = None;
+                self.lib.delete = None;
                 self.delete_library_part(&n);
             }
             if let Some(d) = edit_part {
@@ -329,7 +329,7 @@ impl SchEditor {
                 self.form = Some(PartForm::from_def(&d));
             }
             // the library folder in one row: read it again, or open it (where the parts are saved; the path is in the hover)
-            let folder = self.lib_dir.display().to_string();
+            let folder = self.lib.dir.display().to_string();
             let bar = crate::widgets::segment_row(ui, &[("再読み込み", true), ("フォルダを開く", true)]);
             if self.lit(bar[0].clone(), "再読み込み").on_hover_text(i18n::tr("ライブラリのフォルダを読み直します。ファイルを直接直したときや、部品のファイルをフォルダに置いたときに押します")).clicked() {
                 self.reload_library();
@@ -337,14 +337,14 @@ impl SchEditor {
             if bar[1].clone().on_hover_text(i18n::trf!("部品を保存するフォルダを開きます: {folder}")).clicked() {
                 self.open_library_folder();
             }
-            for e in &self.lib_errors {
+            for e in &self.lib.errors {
                 ui.colored_label(crate::theme::ERROR, e);
             }
             });
         });
         if library_clicked {
-            self.lib_open = !self.lib_open;
-            if self.lib_open {
+            self.lib.open = !self.lib.open;
+            if self.lib.open {
                 self.basic_open = false;
             }
         }
@@ -463,11 +463,11 @@ impl SchEditor {
     /// The library's index, made again when the library was read again or a part was added or removed.
     fn lib_index(&mut self) -> std::sync::Arc<LibIndex> {
         let key = (self.lib_rev, self.library.len());
-        match &self.lib_index {
+        match &self.lib.index {
             Some(x) if x.key == key => x.clone(),
             _ => {
                 let x = std::sync::Arc::new(LibIndex::new(&self.library, key));
-                self.lib_index = Some(x.clone());
+                self.lib.index = Some(x.clone());
                 x
             }
         }
@@ -671,7 +671,7 @@ mod speed_tests {
     #[ignore]
     fn library_panel_frame_time() {
         let mut e = SchEditor::default();
-        e.lib_open = true;
+        e.lib.open = true;
         e.basic_open = false;
         let k = e.library.iter().position(|d| part_lib::series::member(&d.name).is_some()).expect("a series part");
         e.choose_library_part(k);

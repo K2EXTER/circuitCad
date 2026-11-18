@@ -52,22 +52,22 @@ impl SchEditor {
 
     /// For screenshots and tests: the variation analysis of `node` (`ac` = the -3 dB frequency, else the DC voltage).
     pub fn analyze_variation(&mut self, node: &str, ac: bool) {
-        self.mc_out = node.into();
-        self.mc_kind = if ac { McKind::Ac } else { McKind::Dc };
+        self.mc_in.out = node.into();
+        self.mc_in.kind = if ac { McKind::Ac } else { McKind::Dc };
         self.run_mc();
     }
 
     /// Random part values inside their tolerances; the spread of one node voltage.
     pub(super) fn run_mc(&mut self) {
-        let (Some(tol_r), Some(tol_c), Some(tol_l)) = (percent(&self.mc_tol_r), percent(&self.mc_tol_c), percent(&self.mc_tol_l)) else {
+        let (Some(tol_r), Some(tol_c), Some(tol_l)) = (percent(&self.mc_in.tol_r), percent(&self.mc_in.tol_c), percent(&self.mc_in.tol_l)) else {
             self.status = "許容差は % の数値で入力してください (例: 5)".into();
             return;
         };
-        let Ok(runs) = self.mc_runs.trim().parse::<usize>() else {
+        let Ok(runs) = self.mc_in.runs.trim().parse::<usize>() else {
             self.status = "回数を整数で入力してください (例: 300)".into();
             return;
         };
-        self.mc_seed += 1;
+        self.mc_in.seed += 1;
         let measure = match self.mc_measure() {
             Ok(m) => m,
             Err(e) => {
@@ -75,7 +75,7 @@ impl SchEditor {
                 return;
             }
         };
-        let settings = McSettings { runs, seed: self.mc_seed, tol_r, tol_c, tol_l, output: self.mc_out.trim().to_string(), measure };
+        let settings = McSettings { runs, seed: self.mc_in.seed, tol_r, tol_c, tol_l, output: self.mc_in.out.trim().to_string(), measure };
         let outcome = if settings.output.is_empty() {
             Err(vec!["測るノードを選んでください".to_string()])
         } else {
@@ -92,17 +92,17 @@ impl SchEditor {
         let worst = match (&outcome, self.variation_circuit()) {
             (Ok(_), Ok(c)) => {
                 let mut w = sim_core::WcSettings::from(&settings);
-                w.tol_v = percent(&self.mc_tol_v).unwrap_or(0.0);
+                w.tol_v = percent(&self.mc_in.tol_v).unwrap_or(0.0);
                 sim_core::worst_case(&c, &w).ok()
             }
             _ => None,
         };
         // judge the run against the spec table's range on the same node, unless a range is typed already
-        if self.mc_lo.trim().is_empty()
-            && self.mc_hi.trim().is_empty()
-            && let Some((lo, hi)) = self.spec_limits_for(&settings.output, self.mc_kind == McKind::Ac)
+        if self.mc_in.lo.trim().is_empty()
+            && self.mc_in.hi.trim().is_empty()
+            && let Some((lo, hi)) = self.spec_limits_for(&settings.output, self.mc_in.kind == McKind::Ac)
         {
-            (self.mc_lo, self.mc_hi) = (lo, hi);
+            (self.mc_in.lo, self.mc_in.hi) = (lo, hi);
         }
         self.mc = Some(McView { outcome, worst });
         self.wave_mode = WaveMode::Mc;
@@ -111,7 +111,7 @@ impl SchEditor {
     /// The circuit for the variation and worst-case runs: without the models' own min / max when the box is off.
     pub(super) fn variation_circuit(&self) -> Result<sim_core::Circuit, Vec<String>> {
         let mut c = self.sim_circuit()?;
-        if !self.mc_spread {
+        if !self.mc_in.spread {
             c.spreads.clear();
         }
         Ok(c)
@@ -119,7 +119,7 @@ impl SchEditor {
 
     /// What the variation, worst-case and sensitivity runs measure, from the choice in the panel.
     pub(super) fn mc_measure(&self) -> Result<McMeasure, String> {
-        Ok(match self.mc_kind {
+        Ok(match self.mc_in.kind {
             McKind::Dc => McMeasure::DcVoltage,
             McKind::Ac => {
                 let (Some(fstart), Some(fstop), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
@@ -131,7 +131,7 @@ impl SchEditor {
                 let Some((tstop, tstep)) = self.tran_times() else {
                     return Err("過渡解析の欄の終了時間と刻みを数値で入力してください (例: 10m, 10u)".into());
                 };
-                McMeasure::Tran { tstop, tstep, uic: self.tran_uic, metric: self.mc_metric }
+                McMeasure::Tran { tstop, tstep, uic: self.tran_uic, metric: self.mc_in.metric }
             }
         })
     }
@@ -143,7 +143,7 @@ impl SchEditor {
 
     pub(super) fn mc_wave_panel(&mut self, ui: &mut egui::Ui) {
         let from_spec = self.mc.as_ref().and_then(|v| v.outcome.as_ref().ok()).and_then(|r| self.spec_limits_for(&r.output, r.unit == "Hz"));
-        let (mut lo_text, mut hi_text) = (self.mc_lo.clone(), self.mc_hi.clone());
+        let (mut lo_text, mut hi_text) = (self.mc_in.lo.clone(), self.mc_in.hi.clone());
         let (lim_lo, lim_hi) = (parse_value(&lo_text), parse_value(&hi_text));
         let Some(view) = self.mc.as_ref() else { return };
         let worst = view.worst.clone();
@@ -240,7 +240,7 @@ impl SchEditor {
                 });
             }
         }
-        (self.mc_lo, self.mc_hi) = (lo_text, hi_text);
+        (self.mc_in.lo, self.mc_in.hi) = (lo_text, hi_text);
         if close {
             self.mc = None;
         }
@@ -429,4 +429,43 @@ fn percent_reads(nominal: f64, lo: f64, hi: f64) -> bool {
 /// A difference with its sign and unit (+12.3 mV).
 fn signed_unit(d: f64, unit: &str) -> String {
     format!("{}{}", if d >= 0.0 { "+" } else { "−" }, fmt_unit(d.abs(), unit))
+}
+
+/// The inputs of the variation (Monte Carlo) and worst-case runs.
+pub(crate) struct McInputs {
+    pub(super) out: String,
+    pub(super) runs: String,
+    pub(super) tol_r: String,
+    pub(super) tol_c: String,
+    pub(super) tol_l: String,
+    /// DC supply tolerance in %; used by the worst case only (the random run keeps supplies as they are)
+    pub(super) tol_v: String,
+    /// The models' own min / max (`* spread`) take part in the variation and worst-case runs.
+    pub(super) spread: bool,
+    /// The limits the variation result is judged against (yield and Cpk); typed text, empty = no limit.
+    pub(super) lo: String,
+    pub(super) hi: String,
+    pub(super) seed: u64,
+    /// What the Monte Carlo run measures.
+    pub(super) kind: McKind,
+    pub(super) metric: TranMetric,
+}
+
+impl Default for McInputs {
+    fn default() -> Self {
+        Self {
+            out: String::new(),
+            runs: "300".into(),
+            tol_r: "5".into(),
+            tol_c: "10".into(),
+            tol_l: "10".into(),
+            tol_v: "0".into(),
+            spread: true,
+            lo: String::new(),
+            hi: String::new(),
+            seed: 1,
+            kind: McKind::Dc,
+            metric: TranMetric::RiseTime,
+        }
+    }
 }

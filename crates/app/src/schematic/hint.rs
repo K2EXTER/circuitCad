@@ -54,7 +54,7 @@ impl SchEditor {
         if self.param.is_some() && self.wave_mode == WaveMode::Param {
             return "線の色ごとに部品の値が違います (色と値は上の凡例)。値でどこがどう動くかを比べましょう。範囲や本数は、左の「パラメータスイープ」で変えられます".into();
         }
-        if self.fault_wave.is_some() && self.wave_mode == WaveMode::Fault {
+        if self.fault_ui.wave.is_some() && self.wave_mode == WaveMode::Fault {
             return "正常 (白い線) と、壊れたとき (色つきの線) の比較です。実物では、この違いから壊れた場所を当てます。部品や壊れ方を変えて、どれが見分けやすいかを比べましょう".into();
         }
         if self.noise.is_some() && self.wave_mode == WaveMode::Noise {

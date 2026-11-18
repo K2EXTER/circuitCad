@@ -147,14 +147,14 @@ impl App {
     /// out runs the schematic's calculation here.
     fn sync_heat(&mut self) {
         if self.board_ed.take_heat_request() {
-            self.sch.heat_view = Some(self.sch.run_self_heat());
-            if let Some(Err(e)) = &self.sch.heat_view {
+            self.sch.heat.view = Some(self.sch.run_self_heat());
+            if let Some(Err(e)) = &self.sch.heat.view {
                 self.board_ed.status = format!("自己発熱の計算に失敗: {e} (回路図の電源やつながりを確かめてください)");
             }
         }
         if self.board_ed.take_thermal_request() {
-            self.sch.heat_view = Some(self.sch.run_self_heat());
-            let sources = match &self.sch.heat_view {
+            self.sch.heat.view = Some(self.sch.run_self_heat());
+            let sources = match &self.sch.heat.view {
                 Some(Ok(v)) => {
                     self.board_ed.thermal.traces = v.traces.clone();
                     Ok(self.sch.thermal_sources(v))
@@ -171,12 +171,12 @@ impl App {
         if let Some(k) = self.board_ed.take_apart_request() {
             self.board_ed.status = format!("回路図の「設計の要件」に「{}」({} と {} を {} mm 離す) を足しました", k.name, k.a.join(","), k.b.join(","), k.min_dist);
             self.sch.sch.requirements.apart.push(k);
-            self.sch.req_dirty = true;
+            self.sch.req.dirty = true;
         }
         if !self.board_ed.view3d_wants_heat() {
             return;
         }
-        let temps = match &self.sch.heat_view {
+        let temps = match &self.sch.heat.view {
             Some(Ok(v)) => Some(board_editor::PartTemps { ambient: v.ambient, parts: v.parts.iter().map(|p| (p.name.clone(), p.temp_c, p.power)).collect(), ..Default::default() }),
             _ => None,
         };
@@ -263,7 +263,7 @@ impl eframe::App for App {
         self.tick_autosave(ui.ctx());
         self.recovery_window(ui.ctx());
         // the switches of the requirements' frames and of the sheet colours survive a restart
-        let now = (self.sch.req_frames, self.board_ed.show_req_marks, self.board_ed.show_req_lines, self.board_ed.show_sheets);
+        let now = (self.sch.req.frames, self.board_ed.show_req_marks, self.board_ed.show_req_lines, self.board_ed.show_sheets);
         if now != self.req_view {
             self.req_view = now;
             let file = prefs::Prefs::default_file();
@@ -909,7 +909,7 @@ fn main() -> eframe::Result {
             app.apply_prefs(&cc.egui_ctx, &prefs);
             app.smooth_edges_running = smooth_edges;
             app.board_ed.grid = prefs.board_grid;
-            (app.sch.req_frames, app.board_ed.show_req_marks, app.board_ed.show_req_lines, app.board_ed.show_sheets) = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
+            (app.sch.req.frames, app.board_ed.show_req_marks, app.board_ed.show_req_lines, app.board_ed.show_sheets) = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
             app.req_view = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);

@@ -189,7 +189,7 @@ impl SchEditor {
                     k.msg = e;
                     k.done = None;
                 }
-                Ok(def) => match part_lib::save(&self.lib_dir, &def) {
+                Ok(def) => match part_lib::save(&self.lib.dir, &def) {
                     Ok(_) => {
                         self.reload_library();
                         k.msg.clear();

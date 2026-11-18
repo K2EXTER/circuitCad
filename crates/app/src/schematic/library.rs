@@ -48,29 +48,29 @@ impl LibPrefs {
 impl SchEditor {
     /// Opens the library folder in the file manager (made first when it is not there yet).
     pub(super) fn open_library_folder(&mut self) {
-        let _ = std::fs::create_dir_all(&self.lib_dir);
+        let _ = std::fs::create_dir_all(&self.lib.dir);
         let opener = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-        if let Err(e) = std::process::Command::new(opener).arg(&self.lib_dir).spawn() {
-            self.status = format!("フォルダを開けませんでした: {e}。場所は {} です", self.lib_dir.display());
+        if let Err(e) = std::process::Command::new(opener).arg(&self.lib.dir).spawn() {
+            self.status = format!("フォルダを開けませんでした: {e}。場所は {} です", self.lib.dir.display());
         }
     }
 
     pub(super) fn reload_library(&mut self) {
-        let (lib, errs) = part_lib::load_library(&self.lib_dir);
+        let (lib, errs) = part_lib::load_library(&self.lib.dir);
         self.library = std::sync::Arc::new(lib);
         self.lib_rev += 1;
-        self.lib_errors = errs;
+        self.lib.errors = errs;
         self.place_lib = None;
     }
 
     /// Remove the part from the library folder (the files, and its star and place in the recent list).
     pub(super) fn delete_library_part(&mut self, name: &str) {
-        self.status = match part_lib::remove(&self.lib_dir, name) {
+        self.status = match part_lib::remove(&self.lib.dir, name) {
             Ok(0) => format!("{name} のファイルが見つかりませんでした。「再読み込み」を押してから、もう一度ためしてください"),
             Ok(_) => {
-                self.lib_prefs.fav.retain(|n| n != name);
-                self.lib_prefs.recent.retain(|n| n != name);
-                self.lib_prefs.save(&self.lib_dir);
+                self.lib.prefs.fav.retain(|n| n != name);
+                self.lib.prefs.recent.retain(|n| n != name);
+                self.lib.prefs.save(&self.lib.dir);
                 self.reload_library();
                 format!("ライブラリから削除しました: {name} (回路図に置いた部品は、そのまま残ります)")
             }
@@ -86,7 +86,7 @@ impl SchEditor {
             Err(e) => format!("読み込み失敗: {e}"),
             Ok(d) => match d.validate().into_iter().find(|i| i.error) {
                 Some(i) => format!("{} に問題があります: {}", d.name, i.message),
-                None => match part_lib::save(&self.lib_dir, &d) {
+                None => match part_lib::save(&self.lib.dir, &d) {
                     Ok(_) => {
                         self.reload_library();
                         format!("ライブラリに追加しました: {}", d.name)
@@ -109,7 +109,7 @@ impl SchEditor {
             None => name.to_string(),
         };
         if let Some(i) = self.library.iter().position(|d| d.name.eq_ignore_ascii_case(&target)) {
-            self.lib_open = true;
+            self.lib.open = true;
             self.basic_open = false;
             // not choose_library_part: a screenshot run must not add to the user's recent parts
             self.tool = Tool::Place;
@@ -126,9 +126,9 @@ impl SchEditor {
 
     /// Opens the library list with `text` in its search box (`--lib-search`).
     pub fn set_library_search(&mut self, text: &str) {
-        self.lib_open = true;
+        self.lib.open = true;
         self.basic_open = false;
-        self.lib_filter = text.to_string();
+        self.lib.filter = text.to_string();
     }
 
     pub(super) fn choose_library_part(&mut self, i: usize) {
@@ -140,8 +140,42 @@ impl SchEditor {
             if let Some((_, v)) = part_lib::series::member(&name) {
                 self.series_value = part_lib::series::ohms_text(v);
             }
-            self.lib_prefs.touch(&name);
-            self.lib_prefs.save(&self.lib_dir);
+            self.lib.prefs.touch(&name);
+            self.lib.prefs.save(&self.lib.dir);
+        }
+    }
+}
+
+/// The parts library as read from its folder, and the state of the library list.
+pub(crate) struct LibUi {
+    pub(super) errors: Vec<String>,
+    pub(super) dir: PathBuf,
+    pub(super) filter: String,
+    /// Library category shown (empty = all).
+    pub(super) cat: String,
+    /// Only parts that have a simulation model.
+    pub(super) sim_only: bool,
+    /// Favorite and recently placed library parts (saved next to the library).
+    pub(super) prefs: library::LibPrefs,
+    pub(super) open: bool,
+    /// What the part lists need from the whole library, made once per library (`panel/parts.rs`).
+    pub(super) index: Option<std::sync::Arc<panel::parts::LibIndex>>,
+    /// The library part the learner pressed 削除 for and has not yet confirmed.
+    pub(super) delete: Option<String>,
+}
+
+impl LibUi {
+    pub(super) fn new(dir: PathBuf, errors: Vec<String>, prefs: LibPrefs) -> Self {
+        Self {
+            errors,
+            dir,
+            filter: String::new(),
+            cat: String::new(),
+            sim_only: false,
+            prefs,
+            open: false,
+            index: None,
+            delete: None,
         }
     }
 }

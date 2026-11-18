@@ -181,7 +181,7 @@ pub(super) fn fuse_calc_open(e: &SchEditor) -> bool {
 
 /// The layer-short lesson: the chain trace is of a small layer short (a third of the turns or less) that left the driver alone.
 pub(super) fn chain_small_short(e: &SchEditor) -> bool {
-    match &e.fault_chain {
+    match &e.fault_ui.chain {
         Some(Ok(r)) => matches!(r.steps[0].fault, sim_core::Fault::TurnShort(x) if x <= 0.3) && !r.steps.iter().any(|s| s.part == "Q1"),
         _ => false,
     }
@@ -189,7 +189,7 @@ pub(super) fn chain_small_short(e: &SchEditor) -> bool {
 
 /// The layer-short lesson: the chain trace is of a half-turn short and the driver Q1 died on the way.
 pub(super) fn chain_big_short(e: &SchEditor) -> bool {
-    match &e.fault_chain {
+    match &e.fault_ui.chain {
         Some(Ok(r)) => matches!(r.steps[0].fault, sim_core::Fault::TurnShort(x) if x >= 0.5) && r.steps.iter().any(|s| s.part == "Q1"),
         _ => false,
     }
@@ -656,7 +656,7 @@ pub(super) fn c1_changed_and_ac(e: &SchEditor) -> bool {
 }
 
 pub(super) fn mc_cutoff_done(e: &SchEditor) -> bool {
-    e.mc_kind == McKind::Ac && mc_done(e)
+    e.mc_in.kind == McKind::Ac && mc_done(e)
 }
 
 pub(super) fn tran_done(e: &SchEditor) -> bool {
@@ -693,7 +693,7 @@ pub(super) fn r1_changed_and_tran(e: &SchEditor) -> bool {
 }
 
 pub(super) fn mc_overshoot_done(e: &SchEditor) -> bool {
-    e.mc_kind == McKind::Tran && e.mc_metric == TranMetric::Overshoot && mc_done(e)
+    e.mc_in.kind == McKind::Tran && e.mc_in.metric == TranMetric::Overshoot && mc_done(e)
 }
 
 pub(super) fn sweep_done(e: &SchEditor) -> bool {

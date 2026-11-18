@@ -288,7 +288,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             }
         // --selfheat: the schematic's self-heating worked out (the 3D view's heat colours, `--3d-heat`, use it)
         if args.iter().any(|a| a == "--selfheat") {
-            app.sch.heat_view = Some(app.sch.run_self_heat());
+            app.sch.heat.view = Some(app.sch.run_self_heat());
         }
         // --section <key>: the analysis tab with that section open (as for a schematic file)
         if let Some(i) = args.iter().position(|a| a == "--section")
@@ -356,26 +356,26 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         }
         // --ambient C: the surrounding temperature of the heat runs below
         if let Some(t) = args.iter().position(|a| a == "--ambient").and_then(|i| args.get(i + 1)) {
-            app.sch.heat_ambient = t.clone();
+            app.sch.heat.ambient = t.clone();
         }
         // --heattran PARTS TSTOP: the "温度の時間変化" worked out for those parts (with `--section selfheat`, for screenshots)
         if let Some(i) = args.iter().position(|a| a == "--heattran")
             && let (Some(parts), Some(stop)) = (args.get(i + 1), args.get(i + 2))
         {
-            app.sch.htran_parts = parts.clone();
-            app.sch.htran_stop = stop.clone();
-            app.sch.htran = Some(app.sch.run_heat_tran());
+            app.sch.heat.tran_parts = parts.clone();
+            app.sch.heat.tran_stop = stop.clone();
+            app.sch.heat.tran = Some(app.sch.run_heat_tran());
         }
         // --ambient-sweep FROM TO STEP: "周囲の温度を振る" worked out (with `--section selfheat`, for screenshots)
         if let Some(i) = args.iter().position(|a| a == "--ambient-sweep")
             && let (Some(a), Some(b), Some(s)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3))
         {
-            (app.sch.amb_from, app.sch.amb_to, app.sch.amb_step) = (a.clone(), b.clone(), s.clone());
-            app.sch.amb_view = Some(app.sch.run_ambient_sweep());
+            (app.sch.heat.amb_from, app.sch.heat.amb_to, app.sch.heat.amb_step) = (a.clone(), b.clone(), s.clone());
+            app.sch.heat.amb_view = Some(app.sch.run_ambient_sweep());
         }
         // --selfheat: the "自己発熱" result worked out (with `--section selfheat`, for screenshots)
         if args.iter().any(|a| a == "--selfheat") {
-            app.sch.heat_view = Some(app.sch.run_self_heat());
+            app.sch.heat.view = Some(app.sch.run_self_heat());
         }
         if args.iter().any(|a| a == "--requirements") {
             app.sch.open_requirements();
@@ -735,7 +735,7 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         if let Ok(v) = &run {
             app.board_ed.thermal.traces = v.traces.clone();
         }
-        app.sch.heat_view = Some(run);
+        app.sch.heat.view = Some(run);
         app.board_ed.run_thermal_map(sources);
         // --thermal-tran SECONDS [FRAME]: the board warming up, that frame (0..7) on the board
         if let Some(j) = args.iter().position(|a| a == "--thermal-tran")

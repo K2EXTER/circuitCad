@@ -116,10 +116,10 @@ fn the_ringing_lesson_needs_a_fresh_run_after_the_change() {
     e.update_lesson();
     assert_eq!(progress(&e), 2);
     set_value(&mut e, "R1", "20");
-    e.mc_out = net_of(&e, "C1", "1");
-    e.mc_kind = McKind::Tran;
-    e.mc_metric = TranMetric::Overshoot;
-    e.mc_runs = "20".into();
+    e.mc_in.out = net_of(&e, "C1", "1");
+    e.mc_in.kind = McKind::Tran;
+    e.mc_in.metric = TranMetric::Overshoot;
+    e.mc_in.runs = "20".into();
     e.run_mc();
     e.update_lesson();
     assert_eq!(progress(&e), 3, "{}", e.status);

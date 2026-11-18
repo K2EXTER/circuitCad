@@ -38,7 +38,7 @@
   - 測定 `loop`・`match`(`measure_one`): パッド 4 個 = 2 本の道筋(出発,行き先,出発,行き先)。`loop` は 2 本の長さの合計(降圧の入力ループ: IC の電源ピン→コンデンサのプラス、コンデンサのマイナス→IC のグラウンドピン)、`match` は長さの差(対になる経路)。ビアの数やはんだ接合の数の差は見ない(必要なら `vias` の行を足す)。
   - 測定 `ring`(`drc/path.rs` の `ring_cover`): パッドの中心から 72 方向に、パッドの縁から `reach`(既定 1 mm)の範囲を 0.1 mm ごとにたどり、ガードのネットの銅(貫通のパッドは両面)に当たる向きの割合(%)。パッド 1 個とガードのネットを `pads` に書く。
 
-- 取り込みで基板に届かなかった行(`RequirementsImport.unmatched` = ネットのパッドが基板にない役割の行 / `dropped_layers` = 基板にない層)は `warnings()` で文にして、取り込み後の注意(`import_notes`)と CLI `board import` の `warnings` に出す(`netlist::import_hints_report`)。表を直したあとは、`BoardEditor::sync_requirements`(`board_editor/file.rs`)が、表を直したとき・回路図を開いたときに立つ旗(`SchEditor.req_dirty`)を見て、回路図の表と最後に取り込んだ表(`req_synced`)を比べ、違えば `import_requirements` だけを(Undo つきで)やり直す。開いたばかりで最後が分からない基板は、基板が持つ組・距離・バイパス・例外・測定と比べる。
+- 取り込みで基板に届かなかった行(`RequirementsImport.unmatched` = ネットのパッドが基板にない役割の行 / `dropped_layers` = 基板にない層)は `warnings()` で文にして、取り込み後の注意(`import_notes`)と CLI `board import` の `warnings` に出す(`netlist::import_hints_report`)。表を直したあとは、`BoardEditor::sync_requirements`(`board_editor/file.rs`)が、表を直したとき・回路図を開いたときに立つ旗(`SchEditor.req.dirty`)を見て、回路図の表と最後に取り込んだ表(`req_synced`)を比べ、違えば `import_requirements` だけを(Undo つきで)やり直す。開いたばかりで最後が分からない基板は、基板が持つ組・距離・バイパス・例外・測定と比べる。
 
 ## dimension.rs — 基板に残す寸法線(J3、2026-11-08)
 - `Board.dimensions: Vec<Dimension>`(`a`・`b`・`offset`・`dir`(`Aligned` 斜め / `Horizontal` / `Vertical`)・`text_height`・`outline`)。`offset` は a→b の向きの左側へ何 mm(負は右)。`drawing()` が線(寸法線・補助線(点から 0.5 mm あけ、寸法線の 1 mm 先まで)・矢印 4 本。長さ 2.5 mm 未満は矢印を内向き)と文字(「12.70」、寸法線の外側、角度は -90〜90° に直して読める向き)を返す。`strokes()` は文字も線のフォント(`strokefont`)で線にしたもの(SVG 用)。

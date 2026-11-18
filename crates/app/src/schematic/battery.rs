@@ -18,26 +18,26 @@ impl SchEditor {
         let tr = match self.tran.as_ref().map(|t| &t.outcome) {
             Some(Ok(t)) => t.clone(),
             Some(Err(e)) => {
-                self.bat_view = Some(Err(format!("過渡解析に失敗しました: {}", e.first().cloned().unwrap_or_default())));
+                self.bat.view = Some(Err(format!("過渡解析に失敗しました: {}", e.first().cloned().unwrap_or_default())));
                 return;
             }
             None => {
-                self.bat_view = Some(Err("過渡解析の終了時間を数値で入れてください (例: 300m)".into()));
+                self.bat.view = Some(Err("過渡解析の終了時間を数値で入れてください (例: 300m)".into()));
                 return;
             }
         };
         let time = |s: &str| if s.trim().is_empty() { Ok(0.0) } else { parse_value(s).filter(|t| *t >= 0.0).ok_or(format!("区間の時間「{s}」を、0 以上の数 (秒) で入れてください (例: 100m)")) };
         let result = (|| {
-            let (from, to) = (time(&self.bat_from)?, time(&self.bat_to)?);
-            let v_min = if self.bat_node.trim().is_empty() { 0.0 } else { parse_value(&self.bat_vmin).ok_or("止まる条件の電圧を数で入れてください (例: 3.2)")? };
-            let cond = BatteryCondition { node: self.bat_node.trim().to_string(), v_min };
+            let (from, to) = (time(&self.bat.from)?, time(&self.bat.to)?);
+            let v_min = if self.bat.node.trim().is_empty() { 0.0 } else { parse_value(&self.bat.vmin).ok_or("止まる条件の電圧を数で入れてください (例: 3.2)")? };
+            let cond = BatteryCondition { node: self.bat.node.trim().to_string(), v_min };
             battery_life(&self.sch, &tr, from, to, &cond, &|s| self.circuit_like(s))
         })();
         self.status = match &result {
             Ok(v) => format!("電池の持ち時間: {}", v.iter().map(|b| format!("{} {}", b.battery.refdes, hours_text(b.hours))).collect::<Vec<_>>().join("、")),
             Err(e) => format!("電池の持ち時間を出せませんでした: {e}"),
         };
-        self.bat_view = Some(result);
+        self.bat.view = Some(result);
     }
 
     pub(super) fn panel_battery(&mut self, ui: &mut egui::Ui) {
@@ -49,35 +49,35 @@ impl SchEditor {
         ui.label(egui::RichText::new(i18n::trf!("電池: {}", found.iter().map(|b| format!("{} ({}, {} mAh)", b.refdes, b.part, b.capacity_mah)).collect::<Vec<_>>().join("、"))).small());
         ui.horizontal(|ui| {
             ui.label(i18n::tr("平均をとる区間"));
-            ui.add(egui::TextEdit::singleline(&mut self.bat_from).desired_width(50.0).hint_text("0")).on_hover_text(i18n::tr("過渡解析のこの時間から (秒)。空欄なら、後半の半分 (起動のあと) を使います"));
+            ui.add(egui::TextEdit::singleline(&mut self.bat.from).desired_width(50.0).hint_text("0")).on_hover_text(i18n::tr("過渡解析のこの時間から (秒)。空欄なら、後半の半分 (起動のあと) を使います"));
             ui.label("〜");
-            ui.add(egui::TextEdit::singleline(&mut self.bat_to).desired_width(50.0).hint_text(i18n::tr("終わり"))).on_hover_text(i18n::tr("この時間まで (秒)。間欠で動く回路 (眠る・起きる) は、区間を動きの周期のちょうど整数倍にします。半端だと、平均の電流がずれます"));
+            ui.add(egui::TextEdit::singleline(&mut self.bat.to).desired_width(50.0).hint_text(i18n::tr("終わり"))).on_hover_text(i18n::tr("この時間まで (秒)。間欠で動く回路 (眠る・起きる) は、区間を動きの周期のちょうど整数倍にします。半端だと、平均の電流がずれます"));
             ui.label("s");
         });
         let nets: Vec<String> = extract(&self.sch).iter().map(|n| n.name.clone()).filter(|n| n != "GND").collect();
         ui.horizontal(|ui| {
             ui.label(i18n::tr("止まる条件"));
             egui::ComboBox::from_id_salt("bat_node")
-                .selected_text(if self.bat_node.is_empty() { i18n::tr("(なし: 電池の終わりまで)").to_string() } else { self.bat_node.clone() })
+                .selected_text(if self.bat.node.is_empty() { i18n::tr("(なし: 電池の終わりまで)").to_string() } else { self.bat.node.clone() })
                 .width(120.0)
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.bat_node, String::new(), i18n::tr("(なし: 電池の終わりまで)"));
+                    ui.selectable_value(&mut self.bat.node, String::new(), i18n::tr("(なし: 電池の終わりまで)"));
                     for n in &nets {
-                        ui.selectable_value(&mut self.bat_node, n.clone(), n);
+                        ui.selectable_value(&mut self.bat.node, n.clone(), n);
                     }
                 })
                 .response
                 .on_hover_text(i18n::tr("回路が動くために、電圧が下がってはいけないネット (レギュレータの出力など)。電池が減って、この電圧が下限を割ったら「止まった」とします。レギュレータのドロップアウトや、マイコンの動作電圧の下限が、ここで効きます"));
-            if !self.bat_node.is_empty() {
+            if !self.bat.node.is_empty() {
                 ui.label(i18n::tr("が"));
-                ui.add(egui::TextEdit::singleline(&mut self.bat_vmin).desired_width(44.0).hint_text("3.2")).on_hover_text(i18n::tr("この電圧 (V) 以上なら動いている、とします"));
+                ui.add(egui::TextEdit::singleline(&mut self.bat.vmin).desired_width(44.0).hint_text("3.2")).on_hover_text(i18n::tr("この電圧 (V) 以上なら動いている、とします"));
                 ui.label(i18n::tr("V 以上"));
             }
         });
         if ui.button(i18n::tr("過渡解析を実行して、持ち時間を出す")).on_hover_text(i18n::tr("過渡解析の欄の時間で過渡解析を実行し、区間の電池の平均電流から、何時間・何日もつかを出します。止まる条件があれば、電池の残量を減らしながら DC 動作点を解いて、条件を割る残量を探します")).clicked() {
             self.run_battery();
         }
-        let Some(view) = &self.bat_view else { return };
+        let Some(view) = &self.bat.view else { return };
         let list = match view {
             Ok(v) => v,
             Err(e) => {
@@ -118,6 +118,16 @@ impl SchEditor {
     }
 }
 
+/// "電池の持ち時間": the stretch to average and the condition to keep working, as typed (saved with the sheet), and the last answer.
+#[derive(Default)]
+pub(crate) struct BatteryInputs {
+    pub(super) from: String,
+    pub(super) to: String,
+    pub(super) node: String,
+    pub(super) vmin: String,
+    pub(super) view: Option<Result<Vec<sim_core::battery::BatteryLife>, String>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,9 +137,9 @@ mod tests {
     fn the_sample_opens_ready_and_lasts_about_seventeen_days() {
         let mut e = SchEditor::default();
         e.load_path(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/battery_life.schjson"));
-        assert_eq!((e.bat_node.as_str(), e.bat_vmin.as_str(), e.tran_tstop.as_str()), ("3V3", "3.2", "300m"));
+        assert_eq!((e.bat.node.as_str(), e.bat.vmin.as_str(), e.tran_tstop.as_str()), ("3V3", "3.2", "300m"));
         e.run_battery();
-        let list = e.bat_view.as_ref().unwrap().as_ref().unwrap();
+        let list = e.bat.view.as_ref().unwrap().as_ref().unwrap();
         let days = list[0].hours / 24.0;
         assert!(days > 15.0 && days < 20.0, "{days}");
         assert!(e.status.contains("日"), "{}", e.status);
@@ -141,6 +151,6 @@ mod tests {
         // with no battery the panel says so and the run explains why
         let mut none = SchEditor::default();
         none.run_battery();
-        assert!(none.bat_view.as_ref().unwrap().is_err());
+        assert!(none.bat.view.as_ref().unwrap().is_err());
     }
 }

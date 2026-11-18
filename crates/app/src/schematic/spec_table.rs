@@ -222,7 +222,7 @@ impl SchEditor {
     /// the tolerances or the node change (it is a few dozen solutions, not something for every frame).
     pub(super) fn worst_for_spec(&mut self, kind: SpecKind, node: &str) -> Result<sim_core::WorstCase, String> {
         use sim_core::{McMeasure, WcSettings};
-        let key = format!("{}|{:?}|{node}|{}|{}|{}|{}|{}|{}|{}", self.signature_cached(), kind, self.mc_tol_r, self.mc_tol_c, self.mc_tol_l, self.mc_tol_v, self.ac_fstart, self.ac_fstop, self.ac_ppd) + if self.mc_spread { "" } else { "|fixed" };
+        let key = format!("{}|{:?}|{node}|{}|{}|{}|{}|{}|{}|{}", self.signature_cached(), kind, self.mc_in.tol_r, self.mc_in.tol_c, self.mc_in.tol_l, self.mc_in.tol_v, self.ac_fstart, self.ac_fstop, self.ac_ppd) + if self.mc_in.spread { "" } else { "|fixed" };
         if let Some((_, r)) = self.worst_spec_cache.iter().find(|(k, _)| *k == key) {
             return r.clone();
         }
@@ -230,7 +230,7 @@ impl SchEditor {
             if node.trim().is_empty() {
                 return Err("測るノードを選んでください".to_string());
             }
-            let (Some(tol_r), Some(tol_c), Some(tol_l)) = (variation::percent(&self.mc_tol_r), variation::percent(&self.mc_tol_c), variation::percent(&self.mc_tol_l)) else {
+            let (Some(tol_r), Some(tol_c), Some(tol_l)) = (variation::percent(&self.mc_in.tol_r), variation::percent(&self.mc_in.tol_c), variation::percent(&self.mc_in.tol_l)) else {
                 return Err("許容差は「温度とばらつき」の欄に % の数値で入力してください (例: 5)".to_string());
             };
             let measure = if kind == SpecKind::AcCutoffWorst {
@@ -242,7 +242,7 @@ impl SchEditor {
                 McMeasure::DcVoltage
             };
             let c = self.variation_circuit().map_err(|e| e.first().cloned().unwrap_or_default())?;
-            sim_core::worst_case(&c, &WcSettings { tol_r, tol_c, tol_l, tol_v: variation::percent(&self.mc_tol_v).unwrap_or(0.0), output: node.trim().to_string(), measure }).map_err(|e| e.to_string())
+            sim_core::worst_case(&c, &WcSettings { tol_r, tol_c, tol_l, tol_v: variation::percent(&self.mc_in.tol_v).unwrap_or(0.0), output: node.trim().to_string(), measure }).map_err(|e| e.to_string())
         })();
         if self.worst_spec_cache.len() >= 12 {
             let _ = self.worst_spec_cache.remove(0);
@@ -272,7 +272,7 @@ impl SchEditor {
                 None => self.worst_for_spec(k, &n).ok().map(|w| (w.min, w.max)),
             };
         }
-        let tol_label = i18n::trf!("抵抗 ±{}%・コンデンサ ±{}%", self.mc_tol_r.trim(), self.mc_tol_c.trim());
+        let tol_label = i18n::trf!("抵抗 ±{}%・コンデンサ ±{}%", self.mc_in.tol_r.trim(), self.mc_in.tol_c.trim());
         // names to pick from, taken from the results that are on screen
         let dc = self.dc.as_ref().and_then(|v| v.outcome.as_ref().ok());
         let tran = self.tran.as_ref().and_then(|v| v.outcome.as_ref().ok());

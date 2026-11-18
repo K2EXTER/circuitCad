@@ -250,7 +250,7 @@ pub(super) fn view_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
                         // the header spans the width of the rows (remembered for the next frame), so its empty part clicks too
                         let width = ui.scope(|ui| ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 2.0;
-                            icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。表を開かなくても、回路図を見た人に設計の意図が伝わります");
+                            icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut self.req.frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。表を開かなくても、回路図を見た人に設計の意図が伝わります");
                             icon_label(ui, Icon::Frame, "要件の枠");
                             ui.label(i18n::tr("要件の枠"));
                         }))
@@ -267,7 +267,7 @@ pub(super) fn view_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
 /// ("A" and "B") with the distance: the intent of the design, readable on the sheet without opening the table. Only the parts on the
 /// sheet that is shown (a net named in a distance is not framed).
 pub(super) fn draw_requirement_frames(&self, painter: &egui::Painter, rect: Rect) {
-        if !self.req_frames || self.sch.requirements.is_empty() {
+        if !self.req.frames || self.sch.requirements.is_empty() {
             return;
         }
         let tag = |at: Pos2, text: String, col: Color32| {
@@ -303,33 +303,33 @@ pub(super) fn draw_requirement_frames(&self, painter: &egui::Painter, rect: Rect
 }
 
 pub fn open_requirements(&mut self) {
-        self.req_open = true;
-        self.req_buf.clear();
-        self.req_problems = self.sch.requirement_problems();
+        self.req.open = true;
+        self.req.buf.clear();
+        self.req.problems = self.sch.requirement_problems();
 }
 
 /// Run the DC analysis and make the suggestions for the table from the currents of the nets.
 pub fn requirements_from_dc(&mut self) {
         match self.dc_net_currents() {
             Ok(c) => {
-                self.req_suggest = design_spec::suggest_from_currents(&self.sch.requirements, &c).into_iter().map(|s| (true, s)).collect();
-                self.req_suggest_msg = if self.req_suggest.is_empty() { "表に足せる電流は、ありませんでした (入れる電流は、すべて書いてあります)".into() } else { format!("{} 件の提案があります", self.req_suggest.len()) };
-                self.req_currents = c;
+                self.req.suggest = design_spec::suggest_from_currents(&self.sch.requirements, &c).into_iter().map(|s| (true, s)).collect();
+                self.req.suggest_msg = if self.req.suggest.is_empty() { "表に足せる電流は、ありませんでした (入れる電流は、すべて書いてあります)".into() } else { format!("{} 件の提案があります", self.req.suggest.len()) };
+                self.req.currents = c;
             }
             Err(e) => {
-                self.req_suggest.clear();
-                self.req_suggest_msg = format!("調べられませんでした: {e}");
+                self.req.suggest.clear();
+                self.req.suggest_msg = format!("調べられませんでした: {e}");
             }
         }
 }
 
 pub fn requirements_window(&mut self, ctx: &egui::Context) {
-        if !self.req_open {
+        if !self.req.open {
             return;
         }
         // the sentences about names the circuit does not have: made again now and then (the netlist is not cheap), and when the table changes
         if ctx.cumulative_frame_nr() % 30 == 0 {
-            self.req_problems = self.sch.requirement_problems();
+            self.req.problems = self.sch.requirement_problems();
         }
         let mut open = true;
         let mut changed = false;
@@ -339,18 +339,18 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 crate::icons::help_label(ui, "回路の「こう作りたい」を書く表 (全シートで1つ)", "回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。");
                 ui.add_space(12.0);
-                ui.checkbox(&mut self.req_frames, i18n::tr("回路図の上に枠を出す")).on_hover_text(i18n::tr("近くに置く組を色つきの枠で囲み、離す組を A・B の二重の枠で囲んで、名前と距離を書きます。この表を開かなくても、回路図を見た人に設計の意図が伝わります。回路図にある部品だけが囲まれます (ネット名で書いた側は囲みません)"));
+                ui.checkbox(&mut self.req.frames, i18n::tr("回路図の上に枠を出す")).on_hover_text(i18n::tr("近くに置く組を色つきの枠で囲み、離す組を A・B の二重の枠で囲んで、名前と距離を書きます。この表を開かなくても、回路図を見た人に設計の意図が伝わります。回路図にある部品だけが囲まれます (ネット名で書いた側は囲みません)"));
             });
             // what needs looking at, counted by tab: names the circuit does not have, and rows without a reason
             let unexplained = self.sch.requirements.unexplained();
             let mut issues: HashMap<ReqTab, usize> = HashMap::new();
-            for s in self.req_problems.iter().chain(unexplained.iter()) {
+            for s in self.req.problems.iter().chain(unexplained.iter()) {
                 if let Some(tab) = ReqTab::of_sentence(s) {
                     *issues.entry(tab).or_default() += 1;
                 }
             }
-            if !self.req_problems.is_empty() {
-                let lines: Vec<String> = self.req_problems.iter().map(|p| format!("⚠ {p}")).collect();
+            if !self.req.problems.is_empty() {
+                let lines: Vec<String> = self.req.problems.iter().map(|p| format!("⚠ {p}")).collect();
                 crate::widgets::warning_lines(ui, "req_problems", &lines, |_| false);
             }
             if !unexplained.is_empty() {
@@ -358,10 +358,10 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                     ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
                         .on_hover_text(i18n::tr("数字だけでは、あとで読む人に「なぜその値か」が伝わりません。「理由」の欄に、なぜそうするかを一言書いておきましょう (例: ループを小さくしてノイズを減らすため)"));
                     if let Some(tab) = unexplained.iter().find_map(|s| ReqTab::of_sentence(s))
-                        && tab != self.req_tab
+                        && tab != self.req.tab
                         && ui.small_button(i18n::tr("見に行く")).on_hover_text(i18n::tr("理由が空の行のあるタブを開きます")).clicked()
                     {
-                        self.req_tab = tab;
+                        self.req.tab = tab;
                     }
                 });
             }
@@ -390,10 +390,10 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                     })
                     .collect();
                 let tabs: Vec<(ReqTab, &str, &str)> = titles.iter().map(|(t, l, h)| (*t, l.as_str(), *h)).collect();
-                crate::widgets::tab_bar(ui, &mut self.req_tab, &tabs);
+                crate::widgets::tab_bar(ui, &mut self.req.tab, &tabs);
             }
-            let tab = self.req_tab;
-            let buf = &mut self.req_buf;
+            let tab = self.req.tab;
+            let buf = &mut self.req.buf;
             let spec = &mut self.sch.requirements;
             if tab == ReqTab::Nets {
                 ui.scope(|ui| {
@@ -515,7 +515,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                     }
                 });
             }
-            let (suggest, suggest_msg) = (&mut self.req_suggest, &self.req_suggest_msg);
+            let (suggest, suggest_msg) = (&mut self.req.suggest, &self.req.suggest_msg);
             if tab == ReqTab::Nets {
                 egui::CollapsingHeader::new(i18n::tr("解析から入れる (?)")).id_salt("req_from_dc").default_open(!suggest.is_empty()).show(ui, |ui| {
                     ui.label(i18n::tr("DC解析で、各ネットに流れる電流を調べて、表に入れます。")).on_hover_text(i18n::tr("電流が空の行には、その行のネットのうち最大の電流 (2桁に切り上げ) を提案します。どの行にも入っていないネットで 0.1 A 以上流れるものは、行の追加を提案します。表に書いてある電流は、そのままです。チェックを外したものは入れません"));
@@ -533,7 +533,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                     }
                 });
             }
-            let (bp, bp_msg) = (&mut self.req_bp_suggest, &self.req_bp_msg);
+            let (bp, bp_msg) = (&mut self.req.bp_suggest, &self.req.bp_msg);
             if tab == ReqTab::Bypass {
                 ui.scope(|ui| {
                     crate::icons::help_small(ui, "書くと、自動配置がそのコンデンサを、その IC の電源ピンのそばに置きます", "電源のネットが同じだと、回路図のつなぎ方だけでは、コンデンサがどの IC のためのものか分かりません (ラベルでつなぐと、置いた場所も当てになりません)。ここに書くと、基板の自動配置がそのコンデンサを、その IC の電源ピンのそばに置き、点検もその IC のピンからの距離を調べます。書いていないコンデンサは、これまでどおり自動で決めます");
@@ -795,37 +795,76 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
             self.requirements_from_dc();
         }
         if run_bp {
-            self.req_bp_suggest = self.sch.bypass_suggestions().into_iter().map(|s| (true, s)).collect();
-            self.req_bp_msg = if self.req_bp_suggest.is_empty() { "提案できるコンデンサは、ありませんでした (すべて書いてあるか、電源につながる IC が見つかりません)".into() } else { format!("{} 件の提案があります", self.req_bp_suggest.len()) };
+            self.req.bp_suggest = self.sch.bypass_suggestions().into_iter().map(|s| (true, s)).collect();
+            self.req.bp_msg = if self.req.bp_suggest.is_empty() { "提案できるコンデンサは、ありませんでした (すべて書いてあるか、電源につながる IC が見つかりません)".into() } else { format!("{} 件の提案があります", self.req.bp_suggest.len()) };
         }
         if apply_bp {
-            for (on, s) in std::mem::take(&mut self.req_bp_suggest) {
+            for (on, s) in std::mem::take(&mut self.req.bp_suggest) {
                 if on {
                     s.apply(&mut self.sch.requirements);
                 }
             }
-            self.req_buf.clear();
-            self.req_bp_suggest = self.sch.bypass_suggestions().into_iter().map(|s| (true, s)).collect();
-            self.req_bp_msg = "表に入れました".into();
+            self.req.buf.clear();
+            self.req.bp_suggest = self.sch.bypass_suggestions().into_iter().map(|s| (true, s)).collect();
+            self.req.bp_msg = "表に入れました".into();
             changed = true;
         }
         if apply_now {
-            for (on, s) in std::mem::take(&mut self.req_suggest) {
+            for (on, s) in std::mem::take(&mut self.req.suggest) {
                 if on {
                     s.apply(&mut self.sch.requirements);
                 }
             }
-            self.req_buf.clear();
-            self.req_suggest = design_spec::suggest_from_currents(&self.sch.requirements, &self.req_currents).into_iter().map(|s| (true, s)).collect();
-            self.req_suggest_msg = "表に入れました".into();
+            self.req.buf.clear();
+            self.req.suggest = design_spec::suggest_from_currents(&self.sch.requirements, &self.req.currents).into_iter().map(|s| (true, s)).collect();
+            self.req.suggest_msg = "表に入れました".into();
             changed = true;
         }
         if changed {
-            self.req_dirty = true;
-            self.req_problems = self.sch.requirement_problems();
+            self.req.dirty = true;
+            self.req.problems = self.sch.requirement_problems();
         }
-        self.req_open = open;
+        self.req.open = open;
 }
+}
+
+/// The window of the design's requirements and what it suggests.
+pub(crate) struct ReqUi {
+    /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
+    pub(super) open: bool,
+    /// The tab of the requirements window that is shown.
+    pub(super) tab: requirements::ReqTab,
+    /// Frames on the sheet round the parts of the groups and of the distances to keep in the requirements table.
+    pub(crate) frames: bool,
+    /// The suggestions for the bypass section of the requirements table (each with its tick), and the sentence about them.
+    pub(super) bp_suggest: Vec<(bool, design_spec::Suggestion)>,
+    pub(super) bp_msg: String,
+    pub(super) buf: requirements::Buffers,
+    pub(super) problems: Vec<String>,
+    /// The table of requirements was changed, or another circuit was opened, since the board last took it (the board editor clears it).
+    pub(crate) dirty: bool,
+    /// What the last DC analysis suggests for the table (ticked or not), the currents it came from, and a sentence about the run.
+    pub(super) suggest: Vec<(bool, design_spec::Suggestion)>,
+    pub(super) currents: Vec<(String, f64)>,
+    pub(super) suggest_msg: String,
+}
+
+impl Default for ReqUi {
+    fn default() -> Self {
+        Self {
+            open: false,
+            tab: Default::default(),
+            frames: true,
+            bp_suggest: vec![],
+            bp_msg: String::new(),
+            buf: Default::default(),
+            problems: vec![],
+            dirty: false,
+            suggest: vec![],
+            currents: vec![],
+            suggest_msg: String::new(),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -650,8 +650,8 @@ fn heat_copper_project_shows_the_pour_cooling_one_resistor() {
     let j2 = map.parts.iter().find(|p| p.refdes == "R2").unwrap().junction - v.ambient;
     assert!((j2 / r2.rise - 1.0).abs() < 0.05, "map {j2} K, heat run {} K", r2.rise);
     // the temperature over time takes the same board: R2 heated for a long time reaches about its steady rise
-    app.sch.htran_parts = "R1,R2".into();
-    app.sch.htran_stop = "2000".into();
+    app.sch.heat.tran_parts = "R1,R2".into();
+    app.sch.heat.tran_stop = "2000".into();
     let t = app.sch.run_heat_tran().unwrap();
     let r2t = t.parts.iter().find(|p| p.name == "R2").unwrap();
     // its θ to the air alone is a little above the matrix's own (part of its heat leaves through R1), and the long run lands on the
@@ -765,7 +765,7 @@ fn a_hot_pair_on_the_heat_map_becomes_a_keep_apart_requirement() {
     let apart = &app.sch.sch.requirements.apart;
     assert_eq!(apart.len(), 1);
     assert_eq!((apart[0].a.clone(), apart[0].b.clone(), apart[0].min_dist), (vec!["R1".to_string()], vec!["R2".to_string()], pairs[0].suggest_mm));
-    assert!(app.sch.req_dirty, "the board takes it on its next sync");
+    assert!(app.sch.req.dirty, "the board takes it on its next sync");
 }
 
 /// The board's map over time driven by the circuit: V1 of the heat_copper sample made a 5 s pulse. With no steady power the steady map
@@ -781,9 +781,9 @@ fn the_circuits_power_over_time_drives_the_boards_map() {
     app.board_ed.thermal.spec.cell_mm = 1.0;
     // without the run over time of the schematic: what to do first
     assert!(app.sch.thermal_profiles(&[]).unwrap_err().contains("温度の時間変化"));
-    app.sch.htran_parts = "R1,R2".into();
-    app.sch.htran_stop = "10".into();
-    app.sch.htran = Some(app.sch.run_heat_tran());
+    app.sch.heat.tran_parts = "R1,R2".into();
+    app.sch.heat.tran_stop = "10".into();
+    app.sch.heat.tran = Some(app.sch.run_heat_tran());
     let src = app.sch.thermal_profiles(app.board_ed.thermal_sources()).unwrap();
     assert_eq!(src.len(), 2, "both pulsed parts are added with their power over time");
     app.board_ed.thermal.tran_end = 60.0;

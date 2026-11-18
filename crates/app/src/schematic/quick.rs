@@ -193,7 +193,7 @@ impl SchEditor {
     pub(super) fn quick_add_ui(&mut self, ui: &mut egui::Ui) {
         let Some(mut q) = self.quick.take() else { return };
         let ctx = ui.ctx().clone();
-        let hits = quick_matches(&q.query, Kind::PALETTE, &self.library, &self.lib_prefs);
+        let hits = quick_matches(&q.query, Kind::PALETTE, &self.library, &self.lib.prefs);
         let (down, up, enter, esc) = ctx.input_mut(|i| {
             (
                 i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
@@ -329,7 +329,7 @@ mod tests {
         e.open_quick_add_with("lm");
         e.pick_quick(QuickTarget::Lib(i));
         assert!(e.tool == Tool::Place && e.place_lib == Some(i));
-        assert_eq!(e.lib_prefs.recent.first().map(String::as_str), Some("LM358"), "it counts as recently used");
+        assert_eq!(e.lib.prefs.recent.first().map(String::as_str), Some("LM358"), "it counts as recently used");
     }
 
     /// "res" lists resistors (the basic one, then the library ones found through their category), not every chip with a RESET pin;

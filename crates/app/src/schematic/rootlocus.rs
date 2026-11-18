@@ -53,9 +53,9 @@ fn focus_box(points: &[(f64, f64)]) -> Option<((f64, f64), (f64, f64))> {
 
 impl SchEditor {
     pub fn set_locus_settings(&mut self, part: &str, from: &str, to: &str, n: &str, out: &str, input: &str) {
-        self.param_part = part.into();
-        self.param_from = from.into();
-        self.param_to = to.into();
+        self.param_in.part = part.into();
+        self.param_in.from = from.into();
+        self.param_in.to = to.into();
         self.locus_n = n.into();
         self.pz_out = out.into();
         self.pz_in = input.into();
@@ -75,13 +75,13 @@ impl SchEditor {
         ui.horizontal(|ui| {
             ui.label(i18n::tr("部品"));
             let mut pick = None;
-            let shown = if self.param_part.is_empty() { "選ぶ".to_string() } else { self.param_part.clone() };
+            let shown = if self.param_in.part.is_empty() { "選ぶ".to_string() } else { self.param_in.part.clone() };
             egui::ComboBox::from_id_salt("locus_part")
                 .width(70.0)
                 .selected_text(shown)
                 .show_ui(ui, |ui| {
                     for (r, v) in &parts {
-                        if ui.selectable_label(*r == self.param_part, format!("{r} ({v})")).clicked() {
+                        if ui.selectable_label(*r == self.param_in.part, format!("{r} ({v})")).clicked() {
                             pick = Some((r.clone(), v.clone()));
                         }
                     }
@@ -100,12 +100,12 @@ impl SchEditor {
         });
         ui.horizontal(|ui| {
             ui.label(i18n::tr("から"));
-            ui.add(egui::TextEdit::singleline(&mut self.param_from).desired_width(48.0)).on_hover_text(i18n::tr("最初の値。例: 100, 1k, 10n"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_in.from).desired_width(48.0)).on_hover_text(i18n::tr("最初の値。例: 100, 1k, 10n"));
             ui.label(i18n::tr("まで"));
-            ui.add(egui::TextEdit::singleline(&mut self.param_to).desired_width(48.0)).on_hover_text(i18n::tr("最後の値"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_in.to).desired_width(48.0)).on_hover_text(i18n::tr("最後の値"));
             ui.label(i18n::tr("点数"));
             ui.add(egui::TextEdit::singleline(&mut self.locus_n).desired_width(24.0)).on_hover_text(i18n::trf!("値を何通り試すか (2〜{MAX_RUNS})。多いほど軌跡がなめらかで、時間がかかります。15 くらいが目安です"));
-            ui.checkbox(&mut self.param_log, i18n::tr("対数")).on_hover_text(i18n::tr("オンで 10, 31.6, 100 のように倍率が一定の間隔、オフで足し算の等間隔"));
+            ui.checkbox(&mut self.param_in.log, i18n::tr("対数")).on_hover_text(i18n::tr("オンで 10, 31.6, 100 のように倍率が一定の間隔、オフで足し算の等間隔"));
         });
         ui.horizontal(|ui| {
             ui.label(i18n::tr("出力"));
@@ -144,7 +144,7 @@ impl SchEditor {
 
     pub(super) fn run_locus(&mut self) {
         let outcome = self.locus_outcome();
-        let part = self.param_part.trim().to_string();
+        let part = self.param_in.part.trim().to_string();
         let unit = self.sch.components.iter().find(|c| c.refdes.eq_ignore_ascii_case(&part)).map_or("", |c| unit_of(c.kind));
         let label = if self.pz_in.trim().is_empty() { format!("V({})", self.pz_out.trim()) } else { format!("V({}) / V({})", self.pz_out.trim(), self.pz_in.trim()) };
         self.status = match &outcome {
@@ -163,14 +163,14 @@ impl SchEditor {
             "" => T_NOM_C,
             t => t.parse::<f64>().map_err(|_| vec![format!("温度「{t}」を数値(℃)で入力してください (例: 27)")])?,
         };
-        let part = self.param_part.trim();
+        let part = self.param_in.part.trim();
         if part.is_empty() {
             return Err(vec!["値を変える部品を選んでください (抵抗・コンデンサ・コイル)".into()]);
         }
         if self.pz_out.trim().is_empty() {
             return Err(vec!["出力のネットの名前を入力してください".into()]);
         }
-        let (Some(a), Some(b), Some(n)) = (parse_value(&self.param_from), parse_value(&self.param_to), parse_value(&self.locus_n)) else {
+        let (Some(a), Some(b), Some(n)) = (parse_value(&self.param_in.from), parse_value(&self.param_in.to), parse_value(&self.locus_n)) else {
             return Err(vec!["「から」「まで」「点数」を数値で入力してください (例: 10, 200, 15)".into()]);
         };
         if a <= 0.0 || b <= 0.0 {
@@ -179,7 +179,7 @@ impl SchEditor {
         let (Some(f0), Some(f1), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
             return Err(vec!["AC解析の周波数の設定を数値で入力してください (例: 10, 1Meg, 20)".into()]);
         };
-        let values = sweep_values(a, b, n.round().clamp(2.0, MAX_RUNS as f64) as usize, self.param_log);
+        let values = sweep_values(a, b, n.round().clamp(2.0, MAX_RUNS as f64) as usize, self.param_in.log);
         let input = Some(self.pz_in.trim().to_string()).filter(|s| !s.is_empty());
         let s = LocusSettings { refdes: part.into(), values, output: self.pz_out.trim().into(), input, ac: AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) }, temp_c: temp, max_poles: 6, tolerance: 0.02 };
         root_locus(&self.sch, &s).map_err(|e| vec![e.to_string()])
@@ -265,7 +265,7 @@ mod tests {
         e.sch = sample("rlc_poles.schjson");
         e.set_ac_settings("100", "1Meg", "20");
         e.set_locus_settings("R1", "5", "200", "6", "OUT", "IN");
-        e.param_log = true;
+        e.param_in.log = true;
         e.analyze_locus();
         assert!(matches!(e.wave_mode, WaveMode::Locus));
         let r = e.locus.as_ref().unwrap().outcome.as_ref().unwrap();

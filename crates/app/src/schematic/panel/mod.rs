@@ -339,12 +339,12 @@ impl SchEditor {
             // several parts made at once (every voltage of a regulator)
             if !form.batch.is_empty() {
                 let parts = std::mem::take(&mut form.batch);
-                let failed: Vec<String> = parts.iter().filter_map(|d| part_lib::save(&self.lib_dir, d).err().map(|e| format!("{}: {e}", d.name))).collect();
+                let failed: Vec<String> = parts.iter().filter_map(|d| part_lib::save(&self.lib.dir, d).err().map(|e| format!("{}: {e}", d.name))).collect();
                 self.reload_library();
                 self.status = if failed.is_empty() { format!("ライブラリに {} 部品を保存しました", parts.len()) } else { format!("保存できなかった部品があります: {}", failed.join(" / ")) };
             }
             match saved {
-                Some(def) => match part_lib::save(&self.lib_dir, &def) {
+                Some(def) => match part_lib::save(&self.lib.dir, &def) {
                     Ok(p) => {
                         self.reload_library();
                         self.status = format!("ライブラリに保存しました: {}", p.display());
@@ -475,10 +475,10 @@ impl SchEditor {
             "polezero" => self.pz.is_some(),
             "rootlocus" => self.locus.is_some(),
             "variation" => self.mc.is_some() || self.sens.is_some(),
-            "selfheat" => self.heat_view.is_some() || self.htran.is_some(),
+            "selfheat" => self.heat.view.is_some() || self.heat.tran.is_some(),
             "diagnose" => self.diag.result.is_some(),
-            "fault" => self.fault_view.is_some() || !self.fault_scan.is_empty(),
-            "battery" => self.bat_view.is_some(),
+            "fault" => self.fault_ui.view.is_some() || !self.fault_ui.scan.is_empty(),
+            "battery" => self.bat.view.is_some(),
             _ => false,
         }
     }

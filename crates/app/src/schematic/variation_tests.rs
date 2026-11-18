@@ -36,18 +36,18 @@ fn the_panel_temperature_changes_the_dc_result() {
 fn monte_carlo_runs_on_a_chosen_node() {
     let mut e = led_example();
     let node = e.node_names().into_iter().next().expect("the example has a named node");
-    e.mc_out = node;
-    e.mc_runs = "40".into();
+    e.mc_in.out = node;
+    e.mc_in.runs = "40".into();
     e.run_mc();
     let r = e.mc.as_ref().unwrap().outcome.as_ref().expect("runs");
     assert_eq!(r.values.len() + r.failed, 40);
     assert!(matches!(e.wave_mode, WaveMode::Mc));
 
-    e.mc_tol_r = "abc".into();
+    e.mc_in.tol_r = "abc".into();
     e.run_mc();
     assert!(e.status.contains("許容差"), "{}", e.status);
-    e.mc_tol_r = "5".into();
-    e.mc_out = String::new();
+    e.mc_in.tol_r = "5".into();
+    e.mc_in.out = String::new();
     e.run_mc();
     assert!(e.status.contains("失敗"));
 }
@@ -58,7 +58,7 @@ fn the_divider_example_shows_a_spread_around_half_the_supply() {
     let mut e = SchEditor::default();
     e.load_path(path);
     assert!(e.node_names().contains(&"MID".to_string()), "{:?}", e.node_names());
-    e.mc_out = "MID".into();
+    e.mc_in.out = "MID".into();
     e.run_mc();
     let r = e.mc.as_ref().unwrap().outcome.as_ref().unwrap();
     assert!((r.nominal - 2.5).abs() < 1e-3);
@@ -74,17 +74,17 @@ fn a_variation_run_takes_its_limits_from_the_spec_table() {
     // a cut-off row on the node is not a voltage range: only the DC voltage row is taken
     e.add_spec(SpecKindIndex::AC_CUTOFF, "V(MID)", "1k", "2k", "");
     e.add_spec(SpecKindIndex::DC_VOLTAGE, "MID", "2.45", "2.55", "");
-    e.mc_out = "MID".into();
+    e.mc_in.out = "MID".into();
     e.run_mc();
-    assert_eq!((e.mc_lo.as_str(), e.mc_hi.as_str()), ("2.45", "2.55"));
+    assert_eq!((e.mc_in.lo.as_str(), e.mc_in.hi.as_str()), ("2.45", "2.55"));
     let r = e.mc.as_ref().unwrap().outcome.as_ref().unwrap();
-    let y = r.yield_report(parse_value(&e.mc_lo), parse_value(&e.mc_hi)).unwrap();
+    let y = r.yield_report(parse_value(&e.mc_in.lo), parse_value(&e.mc_in.hi)).unwrap();
     assert_eq!(y.runs, 300);
     assert!(y.cpk.is_some());
     // a range typed by hand is kept on the next run
-    e.mc_hi = "2.6".into();
+    e.mc_in.hi = "2.6".into();
     e.run_mc();
-    assert_eq!(e.mc_hi, "2.6");
+    assert_eq!(e.mc_in.hi, "2.6");
 }
 
 /// `SpecKind::ALL` positions, as `add_spec` takes them.
@@ -99,11 +99,11 @@ fn monte_carlo_can_measure_the_cutoff_of_the_rc_filter() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rc_lowpass.schjson");
     let mut e = SchEditor::default();
     e.load_path(path);
-    e.mc_kind = McKind::Ac;
-    e.mc_runs = "30".into();
+    e.mc_in.kind = McKind::Ac;
+    e.mc_in.runs = "30".into();
     let mut found = None;
     for n in e.node_names() {
-        e.mc_out = n.clone();
+        e.mc_in.out = n.clone();
         e.run_mc();
         if let Some(Ok(r)) = e.mc.as_ref().map(|m| &m.outcome) {
             found = Some((n, r.unit, r.nominal));
@@ -151,7 +151,7 @@ fn sensitivity_lists_the_divider_parts_with_the_supply_first() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/divider_tolerance.schjson");
     let mut e = SchEditor::default();
     e.load_path(path);
-    e.mc_out = "MID".into();
+    e.mc_in.out = "MID".into();
     e.run_sens();
     assert!(matches!(e.wave_mode, WaveMode::Sens));
     let r = e.sens.as_ref().unwrap().outcome.as_ref().expect("runs");
@@ -159,7 +159,7 @@ fn sensitivity_lists_the_divider_parts_with_the_supply_first() {
     let first = &r.parts[0];
     assert!((first.elasticity.unwrap() - 1.0).abs() < 1e-6, "{first:?}");
     assert!(r.parts.iter().filter(|p| p.name.starts_with('R')).all(|p| p.elasticity.unwrap().abs() > 0.1), "{:?}", r.parts);
-    e.mc_out = String::new();
+    e.mc_in.out = String::new();
     e.run_sens();
     assert!(e.status.contains("失敗"), "{}", e.status);
 }

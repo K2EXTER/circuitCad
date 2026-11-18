@@ -30,8 +30,8 @@ fn fmt_result(v: f64, unit: &str) -> String {
 
 impl SchEditor {
     pub fn analyze_sensitivity(&mut self, node: &str, ac: bool) {
-        self.mc_out = node.into();
-        self.mc_kind = if ac { McKind::Ac } else { McKind::Dc };
+        self.mc_in.out = node.into();
+        self.mc_in.kind = if ac { McKind::Ac } else { McKind::Dc };
         self.run_sens();
     }
 
@@ -39,7 +39,7 @@ impl SchEditor {
     pub(super) fn run_sens(&mut self) {
         let outcome = (|| {
             let measure = self.mc_measure().map_err(|e| vec![e])?;
-            let output = self.mc_out.trim().to_string();
+            let output = self.mc_in.out.trim().to_string();
             if output.is_empty() {
                 return Err(vec!["測る点を選んでください".to_string()]);
             }

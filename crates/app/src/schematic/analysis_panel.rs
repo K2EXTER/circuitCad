@@ -126,52 +126,52 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         }
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("測る点"));
-            let shown = if self.mc_out.is_empty() { "選ぶ…".to_string() } else { self.mc_out.clone() };
+            let shown = if self.mc_in.out.is_empty() { "選ぶ…".to_string() } else { self.mc_in.out.clone() };
             egui::ComboBox::from_id_salt("mc_node").selected_text(shown).show_ui(ui, |ui| {
                 for n in self.node_names() {
-                    ui.selectable_value(&mut self.mc_out, n.clone(), n);
+                    ui.selectable_value(&mut self.mc_in.out, n.clone(), n);
                 }
             }).response.on_hover_text(i18n::tr("電圧のずれを調べるノード (回路図のラベル名か自動で付いた名前)"));
             ui.label(i18n::tr("回数"));
-            ui.add(egui::TextEdit::singleline(&mut self.mc_runs).desired_width(34.0)).on_hover_text(i18n::tr("ランダムな回路を何個作って計算するか。多いほど分布が滑らかです (300 もあれば十分)"));
+            ui.add(egui::TextEdit::singleline(&mut self.mc_in.runs).desired_width(34.0)).on_hover_text(i18n::tr("ランダムな回路を何個作って計算するか。多いほど分布が滑らかです (300 もあれば十分)"));
         });
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("測るもの"));
-            ui.selectable_value(&mut self.mc_kind, McKind::Dc, i18n::tr("電圧 (DC)")).on_hover_text(i18n::tr("選んだ点の直流電圧が、部品の誤差でどれだけずれるか"));
-            ui.selectable_value(&mut self.mc_kind, McKind::Ac, i18n::tr("カットオフ (AC)"))
+            ui.selectable_value(&mut self.mc_in.kind, McKind::Dc, i18n::tr("電圧 (DC)")).on_hover_text(i18n::tr("選んだ点の直流電圧が、部品の誤差でどれだけずれるか"));
+            ui.selectable_value(&mut self.mc_in.kind, McKind::Ac, i18n::tr("カットオフ (AC)"))
                 .on_hover_text(i18n::tr("フィルタが -3dB になる周波数が、部品の誤差でどれだけずれるか。入力電源の値を「AC 1」にし、周波数の範囲は AC解析の欄を使います"));
-            ui.selectable_value(&mut self.mc_kind, McKind::Tran, i18n::tr("ステップ応答"))
+            ui.selectable_value(&mut self.mc_in.kind, McKind::Tran, i18n::tr("ステップ応答"))
                 .on_hover_text(i18n::tr("電源が 0V→5V に切り替わったときの応答の速さや行き過ぎが、部品の誤差でどれだけずれるか。入力電源は PULSE(0 5 0 1u 1u 1 2) のようにし、時間は過渡解析の欄を使います。落ち着くまで十分長い終了時間が必要です"));
         });
-        if self.mc_kind == McKind::Tran {
+        if self.mc_in.kind == McKind::Tran {
             ui.horizontal_wrapped(|ui| {
                 ui.label(i18n::tr("指標"));
                 egui::ComboBox::from_id_salt("mc_metric")
-                    .selected_text(match self.mc_metric {
+                    .selected_text(match self.mc_in.metric {
                         TranMetric::RiseTime => i18n::tr("立ち上がり時間"),
                         TranMetric::Overshoot => i18n::tr("オーバーシュート"),
                         TranMetric::SettlingTime => i18n::tr("整定時間"),
                         TranMetric::FinalValue => i18n::tr("最終値"),
                     })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.mc_metric, TranMetric::RiseTime, i18n::tr("立ち上がり時間")).on_hover_text(i18n::tr("出力が最終値の 10% から 90% まで変わるのにかかる時間。小さいほど速い"));
-                        ui.selectable_value(&mut self.mc_metric, TranMetric::Overshoot, i18n::tr("オーバーシュート")).on_hover_text(i18n::tr("最終値を行き過ぎる量 (ステップの大きさに対する %)"));
-                        ui.selectable_value(&mut self.mc_metric, TranMetric::SettlingTime, i18n::tr("整定時間")).on_hover_text(i18n::tr("10% に達してから、最終値の ±2% に収まるまでの時間"));
-                        ui.selectable_value(&mut self.mc_metric, TranMetric::FinalValue, i18n::tr("最終値")).on_hover_text(i18n::tr("落ち着いたあとの電圧"));
+                        ui.selectable_value(&mut self.mc_in.metric, TranMetric::RiseTime, i18n::tr("立ち上がり時間")).on_hover_text(i18n::tr("出力が最終値の 10% から 90% まで変わるのにかかる時間。小さいほど速い"));
+                        ui.selectable_value(&mut self.mc_in.metric, TranMetric::Overshoot, i18n::tr("オーバーシュート")).on_hover_text(i18n::tr("最終値を行き過ぎる量 (ステップの大きさに対する %)"));
+                        ui.selectable_value(&mut self.mc_in.metric, TranMetric::SettlingTime, i18n::tr("整定時間")).on_hover_text(i18n::tr("10% に達してから、最終値の ±2% に収まるまでの時間"));
+                        ui.selectable_value(&mut self.mc_in.metric, TranMetric::FinalValue, i18n::tr("最終値")).on_hover_text(i18n::tr("落ち着いたあとの電圧"));
                     });
             });
         }
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("許容差 %  R"));
-            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_r).desired_width(26.0)).on_hover_text(i18n::tr("抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です。許容差の欄は、回路図と一緒に保存されます"));
+            ui.add(egui::TextEdit::singleline(&mut self.mc_in.tol_r).desired_width(26.0)).on_hover_text(i18n::tr("抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です。許容差の欄は、回路図と一緒に保存されます"));
             ui.label("C");
-            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_c).desired_width(26.0)).on_hover_text(i18n::tr("コンデンサの誤差。セラミック (X7R) は 10〜20%、電解は 20% ほどです"));
+            ui.add(egui::TextEdit::singleline(&mut self.mc_in.tol_c).desired_width(26.0)).on_hover_text(i18n::tr("コンデンサの誤差。セラミック (X7R) は 10〜20%、電解は 20% ほどです"));
             ui.label("L");
-            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_l).desired_width(26.0)).on_hover_text(i18n::tr("コイルの誤差。10〜20% が一般的です"));
+            ui.add(egui::TextEdit::singleline(&mut self.mc_in.tol_l).desired_width(26.0)).on_hover_text(i18n::tr("コイルの誤差。10〜20% が一般的です"));
             ui.label(i18n::tr("電源"));
-            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_v).desired_width(26.0)).on_hover_text(i18n::tr("直流電源の電圧の誤差。最悪ケースだけに使います (ランダムのばらつきは電源をそのままにします)。0 なら電源は変えません。例: 5V 電源が ±5% なら 5"));
+            ui.add(egui::TextEdit::singleline(&mut self.mc_in.tol_v).desired_width(26.0)).on_hover_text(i18n::tr("直流電源の電圧の誤差。最悪ケースだけに使います (ランダムのばらつきは電源をそのままにします)。0 なら電源は変えません。例: 5V 電源が ±5% なら 5"));
         });
-        ui.checkbox(&mut self.mc_spread, i18n::tr("データシートの min / max も入れる")).on_hover_text(i18n::tr(
+        ui.checkbox(&mut self.mc_in.spread, i18n::tr("データシートの min / max も入れる")).on_hover_text(i18n::tr(
             "オペアンプのオフセット、レギュレータや基準電圧 IC の出力電圧のように、同じ型番でも 1 個ずつ違う値を、データシートの min〜max の範囲で動かします (モデルに書いてある部品だけ)。ランダムのばらつきでは範囲の中で均等に動かすので、typ の近くに多い実物より、少し広めに出ます。外すと、モデルの値 (typ) のままにします",
         ));
         if self.lit(crate::widgets::primary_button_wide(ui, true, "ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text(i18n::tr("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。

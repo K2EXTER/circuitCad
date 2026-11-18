@@ -134,42 +134,42 @@ pub fn take_settings(sheet: &mut serde_json::Value) -> SheetSettings {
 impl SchEditor {
     pub fn sheet_settings(&self) -> SheetSettings {
         SheetSettings {
-            r: self.mc_tol_r.clone(),
-            c: self.mc_tol_c.clone(),
-            l: self.mc_tol_l.clone(),
-            v: self.mc_tol_v.clone(),
-            spread: self.mc_spread,
+            r: self.mc_in.tol_r.clone(),
+            c: self.mc_in.tol_c.clone(),
+            l: self.mc_in.tol_l.clone(),
+            v: self.mc_in.tol_v.clone(),
+            spread: self.mc_in.spread,
             tran_stop: self.tran_tstop.clone(),
             tran_step: self.tran_tstep.clone(),
             tran_uic: self.tran_uic,
             ac_start: self.ac_fstart.clone(),
             ac_stop: self.ac_fstop.clone(),
             ac_ppd: self.ac_ppd.clone(),
-            bat_from: self.bat_from.clone(),
-            bat_to: self.bat_to.clone(),
-            bat_node: self.bat_node.clone(),
-            bat_vmin: self.bat_vmin.clone(),
+            bat_from: self.bat.from.clone(),
+            bat_to: self.bat.to.clone(),
+            bat_node: self.bat.node.clone(),
+            bat_vmin: self.bat.vmin.clone(),
             breadboard: self.breadboard.clone(),
         }
     }
 
     /// Sets the boxes from a file: they count as saved.
     pub fn set_sheet_settings(&mut self, t: SheetSettings) {
-        self.mc_tol_r = t.r.clone();
-        self.mc_tol_c = t.c.clone();
-        self.mc_tol_l = t.l.clone();
-        self.mc_tol_v = t.v.clone();
-        self.mc_spread = t.spread;
+        self.mc_in.tol_r = t.r.clone();
+        self.mc_in.tol_c = t.c.clone();
+        self.mc_in.tol_l = t.l.clone();
+        self.mc_in.tol_v = t.v.clone();
+        self.mc_in.spread = t.spread;
         self.tran_tstop = t.tran_stop.clone();
         self.tran_tstep = t.tran_step.clone();
         self.tran_uic = t.tran_uic;
         self.ac_fstart = t.ac_start.clone();
         self.ac_fstop = t.ac_stop.clone();
         self.ac_ppd = t.ac_ppd.clone();
-        self.bat_from = t.bat_from.clone();
-        self.bat_to = t.bat_to.clone();
-        self.bat_node = t.bat_node.clone();
-        self.bat_vmin = t.bat_vmin.clone();
+        self.bat.from = t.bat_from.clone();
+        self.bat.to = t.bat_to.clone();
+        self.bat.node = t.bat_node.clone();
+        self.bat.vmin = t.bat_vmin.clone();
         self.breadboard = t.breadboard.clone();
         self.saved_tol = t;
     }
@@ -212,7 +212,7 @@ mod tests {
         let mut e = SchEditor::default();
         e.load_path(path);
         assert!(!e.dirty());
-        e.mc_tol_r = "1".into();
+        e.mc_in.tol_r = "1".into();
         e.tran_tstop = "50m".into();
         assert!(e.dirty(), "new settings must be saved");
         let text = e.sheet_json().unwrap();

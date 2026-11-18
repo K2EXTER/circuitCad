@@ -36,10 +36,10 @@ impl SchEditor {
     /// Solves the faults on this thread and matches the readings (command line, tests).
     pub fn analyze_diagnosis(&mut self) {
         let sig = self.signature();
-        if self.diag.hyps.as_ref().is_none_or(|(s, r, _)| *s != sig || *r != self.scan_rare) {
+        if self.diag.hyps.as_ref().is_none_or(|(s, r, _)| *s != sig || *r != self.fault_ui.scan_rare) {
             let temp = self.fault_temp_value();
-            match fault_hypotheses(&self.sch, temp, self.scan_rare) {
-                Ok(h) => self.diag.hyps = Some((sig, self.scan_rare, Arc::new(h))),
+            match fault_hypotheses(&self.sch, temp, self.fault_ui.scan_rare) {
+                Ok(h) => self.diag.hyps = Some((sig, self.fault_ui.scan_rare, Arc::new(h))),
                 Err(e) => {
                     self.diag.error = Some(format!("回路を計算できないため、故障を試せません: {e}"));
                     return;
@@ -100,7 +100,7 @@ impl SchEditor {
     /// Starts solving the faults on another thread (or matches at once when they are solved for this circuit already).
     fn start_diagnosis(&mut self) {
         let sig = self.signature();
-        let key = (sig.clone(), self.scan_rare);
+        let key = (sig.clone(), self.fault_ui.scan_rare);
         if self.diag.hyps.as_ref().is_some_and(|(s, r, _)| *s == key.0 && *r == key.1) {
             self.match_readings();
             return;
@@ -108,7 +108,7 @@ impl SchEditor {
         if self.diag.job.is_some() {
             return;
         }
-        let (sch, temp, rare) = (self.sch.clone(), self.fault_temp_value(), self.scan_rare);
+        let (sch, temp, rare) = (self.sch.clone(), self.fault_temp_value(), self.fault_ui.scan_rare);
         let (tx, rx) = std::sync::mpsc::channel();
         let options = sim_core::options();
         std::thread::spawn(move || {
@@ -192,7 +192,7 @@ impl SchEditor {
                     }
                 }
             }
-            ui.checkbox(&mut self.scan_rare, i18n::tr("まれな故障も含める")).on_hover_text(i18n::tr("値が 10 倍になる・逆向きにつないだ、など、めったに起きない故障も候補に入れます (小さな重みで)"));
+            ui.checkbox(&mut self.fault_ui.scan_rare, i18n::tr("まれな故障も含める")).on_hover_text(i18n::tr("値が 10 倍になる・逆向きにつないだ、など、めったに起きない故障も候補に入れます (小さな重みで)"));
         });
         let busy = self.diag.job.is_some();
         let label = if busy { "計算中…" } else { "原因の候補を探す" };

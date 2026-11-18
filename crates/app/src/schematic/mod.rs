@@ -142,28 +142,14 @@ pub struct SchEditor {
     pub help_request: Option<crate::help::HelpTab>,
     /// Shared, not copied (every new editor and every test editor had a copy of the ~15 000 parts); replaced as a whole on reload.
     pub library: std::sync::Arc<Vec<PartDef>>,
-    lib_errors: Vec<String>,
-    lib_dir: PathBuf,
-    lib_filter: String,
-    /// Library category shown (empty = all).
-    lib_cat: String,
-    /// Only parts that have a simulation model.
-    lib_sim_only: bool,
-    /// Favorite and recently placed library parts (saved next to the library).
-    lib_prefs: library::LibPrefs,
     /// Which of the two part lists in the panel is open: only one at a time, so the open one gets the height.
     basic_open: bool,
     /// Whether the selected part's settings band in the panel is open.
     props_open: bool,
     /// The same band in the analysis tab (folded at first, so that it does not push the analyses down).
     props_open_analyze: bool,
-    lib_open: bool,
     /// Counts the times the library was read again (the board compares its parts with the library when this changes).
     pub lib_rev: u64,
-    /// What the part lists need from the whole library, made once per library (`panel/parts.rs`).
-    lib_index: Option<std::sync::Arc<panel::parts::LibIndex>>,
-    /// The library part the learner pressed 削除 for and has not yet confirmed.
-    lib_delete: Option<String>,
     /// The quick-add box (key A), when open.
     quick: Option<quick::QuickAdd>,
     place_lib: Option<usize>,
@@ -255,23 +241,7 @@ pub struct SchEditor {
     temp_step: String,
     mc: Option<McView>,
     sens: Option<sensitivity::SensView>,
-    mc_out: String,
-    mc_runs: String,
-    mc_tol_r: String,
-    mc_tol_c: String,
-    mc_tol_l: String,
-    /// DC supply tolerance in %; used by the worst case only (the random run keeps supplies as they are)
-    mc_tol_v: String,
-    /// The models' own min / max (`* spread`) take part in the variation and worst-case runs.
-    mc_spread: bool,
-    /// The limits the variation result is judged against (yield and Cpk); typed text, empty = no limit.
-    mc_lo: String,
-    mc_hi: String,
-    mc_seed: u64,
-    /// What the Monte Carlo run measures.
-    mc_kind: McKind,
     panel_tab: PanelTab,
-    mc_metric: TranMetric,
     /// The running lesson and the circuit it started from.
     lesson: Option<ActiveLesson>,
     /// The "作ってみよう" challenge being worked on.
@@ -293,72 +263,24 @@ pub struct SchEditor {
     pub glossary_request: Option<&'static str>,
     /// "値の決め方" window: open flag, which calculator, its input texts.
     wiz_open: bool,
-    /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
-    req_open: bool,
-    /// The tab of the requirements window that is shown.
-    req_tab: requirements::ReqTab,
     /// The window of the title block (`title_block.rs`).
     title_open: bool,
     /// What an empty title block's "作者" gets when its window opens (the settings' 図枠の作者).
     pub default_author: String,
-    /// Frames on the sheet round the parts of the groups and of the distances to keep in the requirements table.
-    pub req_frames: bool,
-    /// The suggestions for the bypass section of the requirements table (each with its tick), and the sentence about them.
-    req_bp_suggest: Vec<(bool, design_spec::Suggestion)>,
-    req_bp_msg: String,
-    req_buf: requirements::Buffers,
-    req_problems: Vec<String>,
-    /// The table of requirements was changed, or another circuit was opened, since the board last took it (the board editor clears it).
-    pub req_dirty: bool,
-    /// What the last DC analysis suggests for the table (ticked or not), the currents it came from, and a sentence about the run.
-    req_suggest: Vec<(bool, design_spec::Suggestion)>,
-    req_currents: Vec<(String, f64)>,
-    req_suggest_msg: String,
     wiz_kind: usize,
     wiz_in: Vec<String>,
     /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
     sec_gen: u32,
     /// The one analysis section opened by name (command line); None = the usual open / closed.
     focus_section: Option<&'static str>,
-    /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
-    /// The last self-heating run (the section "自己発熱") and the surrounding temperature typed for it.
-    pub(crate) heat_view: Option<Result<selfheat::HeatView, String>>,
-    pub(crate) heat_ambient: String,
-    /// The temperature-over-time block: its last answer and its inputs (parts, seconds, "A:B:K/W" couplings).
-    pub(crate) htran: Option<Result<selfheat_tran::HeatTranView, String>>,
-    pub(crate) htran_parts: String,
-    /// "周囲の温度を振る": from, to, step (°C) and the last result.
-    pub(crate) amb_from: String,
-    pub(crate) amb_to: String,
-    pub(crate) amb_step: String,
-    pub(crate) amb_view: Option<Result<sim_core::AmbientSweep, String>>,
-    pub(crate) htran_stop: String,
-    /// "電池の持ち時間" (`battery.rs`): the stretch to average and the condition to keep working, as typed (saved with the sheet), and
-    /// the last answer with the transient run it was found from.
-    pub(crate) bat_from: String,
-    pub(crate) bat_to: String,
-    pub(crate) bat_node: String,
-    pub(crate) bat_vmin: String,
-    pub(crate) bat_view: Option<Result<Vec<sim_core::battery::BatteryLife>, String>>,
     /// The breadboard view as the person left it (saved with the sheet); None = laid out by itself (`app/src/breadboard/`).
     pub(crate) breadboard: Option<sch_core::breadboard::Layout>,
-    htran_links: String,
-    /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
-    htran_links_seen: Vec<(String, String, f64)>,
+    /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     /// The text typed in the analysis tab's search box (empty: every analysis).
     analysis_filter: String,
     /// Windows with the long result lists (results table, net list)
     tables: result_tables::State,
-    fault_part: String,
-    /// Pin to break ("" = break the whole part), how (0 open, 1 to ground, 2 bridge to `fault_bridge`).
-    fault_pin: String,
-    fault_pin_how: usize,
-    fault_bridge: String,
-    /// Compare in the time domain or AC, or at DC, and the node watched in the time domain.
-    fault_domain: fault::FaultDomain,
-    fault_node: String,
-    fault_wave: Option<fault::FaultWaveView>,
     /// Targets for the design (pass / fail table); kept for the session.
     specs: Vec<spec_table::SpecRow>,
     /// Worst cases computed for the spec table, by what they were computed from (circuit, tolerances, node): at most a few.
@@ -372,31 +294,14 @@ pub struct SchEditor {
     saved_tol: tolerance::SheetSettings,
     /// The "実測を重ねる" box: the pasted text and its settings.
     bench_ui: bench_data::BenchUi,
-    fault_kind: usize,
-    fault_view: Option<fault::FaultView>,
-    /// A fault result just arrived: scroll the panel to it once (it is at the bottom of a long analysis tab).
-    fault_scroll: bool,
-    fault_scan: Vec<fault::ScanRow>,
-    /// The scan of every part also tries the faults that hardly ever happen.
-    scan_rare: bool,
     /// "症状から原因を探す": the readings and the solved faults.
     diag: troubleshoot::DiagState,
     /// Repair practice with the virtual meter (the "修理の道" lessons): the hidden fault and the readings.
     repair: Option<repair_practice::RepairPractice>,
     /// "デジタル回路を動かしながら見る": the learning mode over the canvas while it is on (`live_logic.rs`).
     live_logic: Option<live_logic::LiveLogic>,
-    /// The "break every part" scan while it runs on its own thread.
-    scan_run: Option<fault::ScanRun>,
-    fault_chain: Option<Result<sim_core::ChainReport, Vec<String>>>,
     sweep_src: String,
     param: Option<param::ParamView>,
-    param_part: String,
-    param_from: String,
-    param_to: String,
-    param_n: String,
-    param_node: String,
-    param_log: bool,
-    param_ac: bool,
     sweep_start: String,
     sweep_stop: String,
     sweep_step: String,
@@ -411,6 +316,20 @@ pub struct SchEditor {
     fit_pending: bool,
     /// A running lesson keeps the circuit fitted left of its window while the canvas changes size (the left panel gets wider on the analysis page): the canvas size, zoom and pan of the last fit. Cleared when the learner moves the view.
     lesson_fit: Option<(Vec2, f32, Vec2)>,
+    /// The inputs and results of the fault section ("壊れたら"). (`fault.rs`)
+    fault_ui: fault::FaultUi,
+    /// The inputs of the variation (Monte Carlo) and worst-case runs. (`variation.rs`)
+    mc_in: variation::McInputs,
+    /// The window of the design's requirements and what it suggests. (`requirements.rs`)
+    pub(crate) req: requirements::ReqUi,
+    /// The parts library as read from its folder, and the state of the library list. (`library.rs`)
+    lib: library::LibUi,
+    /// The inputs of the parameter sweep (also the part and range of the root locus). (`param.rs`)
+    param_in: param::ParamInputs,
+    /// The heat sections: self-heating, temperature over time and the sweep of the surrounding temperature. (`selfheat.rs`)
+    pub(crate) heat: selfheat::HeatUi,
+    /// "電池の持ち時間": the stretch to average and the condition to keep working, as typed (saved with the sheet), and the last answer. (`battery.rs`)
+    bat: battery::BatteryInputs,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -740,20 +659,11 @@ impl Default for SchEditor {
         let lib_prefs = library::LibPrefs::load(&lib_dir);
         Self {
             library,
-            lib_prefs,
             basic_open: true,
             props_open: true,
             props_open_analyze: false,
-            lib_open: false,
             lib_rev: 0,
-            lib_index: None,
-            lib_delete: None,
             quick: None,
-            lib_errors,
-            lib_dir,
-            lib_filter: String::new(),
-            lib_cat: String::new(),
-            lib_sim_only: false,
             place_lib: None,
             series_value: String::new(),
             form: None,
@@ -818,19 +728,7 @@ impl Default for SchEditor {
             temp_step: "5".into(),
             mc: None,
             sens: None,
-            mc_out: String::new(),
-            mc_runs: "300".into(),
-            mc_tol_r: "5".into(),
-            mc_tol_c: "10".into(),
-            mc_tol_l: "10".into(),
-            mc_tol_v: "0".into(),
-            mc_spread: true,
-            mc_lo: String::new(),
-            mc_hi: String::new(),
-            mc_seed: 1,
-            mc_kind: McKind::Dc,
             panel_tab: PanelTab::Draw,
-            mc_metric: TranMetric::RiseTime,
             lesson: None,
             challenge: None,
             alt_pan: false,
@@ -843,50 +741,16 @@ impl Default for SchEditor {
             lesson_unmet: Default::default(),
             glossary_request: None,
             wiz_open: false,
-            req_open: false,
-            req_tab: Default::default(),
             title_open: false,
             default_author: String::new(),
-            req_frames: true,
-            req_bp_suggest: vec![],
-            req_bp_msg: String::new(),
-            req_buf: Default::default(),
-            req_problems: vec![],
-            req_dirty: false,
-            req_suggest: vec![],
-            req_currents: vec![],
-            req_suggest_msg: String::new(),
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,
             focus_section: None,
-            heat_view: None,
-            heat_ambient: "27".into(),
-            htran: None,
-            htran_parts: String::new(),
-            amb_from: "-20".into(),
-            amb_to: "85".into(),
-            amb_step: "5".into(),
-            amb_view: None,
-            htran_stop: "0.6".into(),
-            bat_from: String::new(),
-            bat_to: String::new(),
-            bat_node: String::new(),
-            bat_vmin: String::new(),
-            bat_view: None,
             breadboard: None,
-            htran_links_seen: vec![],
-            htran_links: String::new(),
             coverage_cache: None,
             analysis_filter: String::new(),
             tables: Default::default(),
-            fault_part: String::new(),
-            fault_pin: String::new(),
-            fault_pin_how: 0,
-            fault_bridge: String::new(),
-            fault_domain: fault::FaultDomain::Dc,
-            fault_node: String::new(),
-            fault_wave: None,
             specs: vec![],
             worst_spec_cache: vec![],
             saved_specs: vec![],
@@ -894,25 +758,11 @@ impl Default for SchEditor {
             saved_bench: Default::default(),
             saved_tol: Default::default(),
             bench_ui: Default::default(),
-            fault_kind: 0,
-            fault_view: None,
-            fault_scroll: false,
-            fault_scan: vec![],
-            scan_rare: false,
             diag: Default::default(),
             repair: None,
             live_logic: None,
-            scan_run: None,
-            fault_chain: None,
             sweep_src: String::new(),
             param: None,
-            param_part: String::new(),
-            param_from: "1k".into(),
-            param_to: "100k".into(),
-            param_n: "5".into(),
-            param_node: String::new(),
-            param_log: true,
-            param_ac: true,
             sweep_start: "0".into(),
             sweep_stop: "5".into(),
             sweep_step: "0.05".into(),
@@ -965,6 +815,13 @@ impl Default for SchEditor {
             erc_ran: false,
             status: "回路図: 部品を選んで配置し、配線ツールで線をつなぎます".into(),
             help_request: None,
+            fault_ui: Default::default(),
+            mc_in: Default::default(),
+            req: Default::default(),
+            lib: library::LibUi::new(lib_dir, lib_errors, lib_prefs),
+            param_in: Default::default(),
+            heat: Default::default(),
+            bat: Default::default(),
         }
     }
 }

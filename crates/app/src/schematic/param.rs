@@ -15,12 +15,12 @@ pub(super) struct ParamView {
 
 impl SchEditor {
     pub fn set_param_settings(&mut self, part: &str, from: &str, to: &str, n: &str, node: &str, ac: bool) {
-        self.param_part = part.into();
-        self.param_from = from.into();
-        self.param_to = to.into();
-        self.param_n = n.into();
-        self.param_node = node.into();
-        self.param_ac = ac;
+        self.param_in.part = part.into();
+        self.param_in.from = from.into();
+        self.param_in.to = to.into();
+        self.param_in.n = n.into();
+        self.param_in.node = node.into();
+        self.param_in.ac = ac;
     }
 
     pub fn analyze_param(&mut self) {
@@ -40,11 +40,11 @@ impl SchEditor {
 
     /// Picks a part and proposes a range of 1/10 to 10 times its value.
     pub(super) fn param_choose(&mut self, refdes: &str, value: &str) {
-        self.param_part = refdes.into();
+        self.param_in.part = refdes.into();
         if let Some(v) = parse_value(value.split_whitespace().next().unwrap_or("")).filter(|v| *v > 0.0) {
-            self.param_from = format_value(v / 10.0);
-            self.param_to = format_value(v * 10.0);
-            self.param_log = true;
+            self.param_in.from = format_value(v / 10.0);
+            self.param_in.to = format_value(v * 10.0);
+            self.param_in.log = true;
         }
     }
 
@@ -57,13 +57,13 @@ impl SchEditor {
         ui.horizontal(|ui| {
             ui.label(i18n::tr("部品"));
             let mut pick = None;
-            let shown = if self.param_part.is_empty() { "選ぶ".to_string() } else { self.param_part.clone() };
+            let shown = if self.param_in.part.is_empty() { "選ぶ".to_string() } else { self.param_in.part.clone() };
             egui::ComboBox::from_id_salt("param_part")
                 .width(70.0)
                 .selected_text(shown)
                 .show_ui(ui, |ui| {
                     for (r, v) in &parts {
-                        if ui.selectable_label(*r == self.param_part, format!("{r} ({v})")).clicked() {
+                        if ui.selectable_label(*r == self.param_in.part, format!("{r} ({v})")).clicked() {
                             pick = Some((r.clone(), v.clone()));
                         }
                     }
@@ -82,23 +82,23 @@ impl SchEditor {
         });
         ui.horizontal(|ui| {
             ui.label(i18n::tr("から"));
-            ui.add(egui::TextEdit::singleline(&mut self.param_from).desired_width(48.0)).on_hover_text(i18n::tr("最初の値。例: 100, 1k, 10n"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_in.from).desired_width(48.0)).on_hover_text(i18n::tr("最初の値。例: 100, 1k, 10n"));
             ui.label(i18n::tr("まで"));
-            ui.add(egui::TextEdit::singleline(&mut self.param_to).desired_width(48.0)).on_hover_text(i18n::tr("最後の値"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_in.to).desired_width(48.0)).on_hover_text(i18n::tr("最後の値"));
             ui.label(i18n::tr("本数"));
-            ui.add(egui::TextEdit::singleline(&mut self.param_n).desired_width(24.0)).on_hover_text(i18n::trf!("値を何通り試すか (最大 {MAX_RUNS})。5 くらいが見やすいです"));
+            ui.add(egui::TextEdit::singleline(&mut self.param_in.n).desired_width(24.0)).on_hover_text(i18n::trf!("値を何通り試すか (最大 {MAX_RUNS})。5 くらいが見やすいです"));
         });
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.param_log, i18n::tr("対数で等間隔")).on_hover_text(i18n::tr("オンにすると 100, 316, 1k, 3.16k, 10k のように倍率が一定になります。部品の値を振るときは普通こちらが見やすいです。オフだと足し算で等間隔です"));
+            ui.checkbox(&mut self.param_in.log, i18n::tr("対数で等間隔")).on_hover_text(i18n::tr("オンにすると 100, 316, 1k, 3.16k, 10k のように倍率が一定になります。部品の値を振るときは普通こちらが見やすいです。オフだと足し算で等間隔です"));
             ui.label(i18n::tr("見る点"));
             let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
-            let shown = if self.param_node.is_empty() { "選ぶ".to_string() } else { self.param_node.clone() };
+            let shown = if self.param_in.node.is_empty() { "選ぶ".to_string() } else { self.param_in.node.clone() };
             egui::ComboBox::from_id_salt("param_node")
                 .width(70.0)
                 .selected_text(shown)
                 .show_ui(ui, |ui| {
                     for n in &nets {
-                        ui.selectable_value(&mut self.param_node, n.clone(), n);
+                        ui.selectable_value(&mut self.param_in.node, n.clone(), n);
                     }
                 })
                 .response
@@ -106,8 +106,8 @@ impl SchEditor {
         });
         ui.horizontal(|ui| {
             ui.label(i18n::tr("解析"));
-            ui.selectable_value(&mut self.param_ac, false, i18n::tr("過渡")).on_hover_text(i18n::tr("時間変化 (過渡解析の設定を使います)。ステップ応答のなまり方、発振の減り方などを比べられます"));
-            ui.selectable_value(&mut self.param_ac, true, "AC").on_hover_text(i18n::tr("周波数特性 (AC解析の設定を使います)。カットオフ周波数や共振の位置がどう動くかを比べられます"));
+            ui.selectable_value(&mut self.param_in.ac, false, i18n::tr("過渡")).on_hover_text(i18n::tr("時間変化 (過渡解析の設定を使います)。ステップ応答のなまり方、発振の減り方などを比べられます"));
+            ui.selectable_value(&mut self.param_in.ac, true, "AC").on_hover_text(i18n::tr("周波数特性 (AC解析の設定を使います)。カットオフ周波数や共振の位置がどう動くかを比べられます"));
             if ui.button(i18n::tr("スイープを実行")).on_hover_text(i18n::tr("値を1つずつ入れ替えて解析をくり返し、結果を重ねて表示します。回路そのものは変わりません")).clicked() {
                 self.run_param();
             }
@@ -120,13 +120,13 @@ impl SchEditor {
             Ok(r) => format!("パラメータスイープ: 完了 ({} 本{})", r.curves.len(), if r.failed.is_empty() { String::new() } else { format!("、{} 本は計算できず", r.failed.len()) }),
             Err(e) => format!("パラメータスイープに失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        let plot = if self.param_ac {
+        let plot = if self.param_in.ac {
             let (f0, f1) = (parse_value(&self.ac_fstart).unwrap_or(10.0), parse_value(&self.ac_fstop).unwrap_or(1e6));
             PlotState::log(f0.max(1e-30), f1.max(f0 * 1.001))
         } else {
             PlotState::new(parse_value(&self.tran_tstop).unwrap_or(1.0))
         };
-        self.param = Some(ParamView { outcome, ac: self.param_ac, part: self.param_part.clone(), node: self.param_node.clone(), plot });
+        self.param = Some(ParamView { outcome, ac: self.param_in.ac, part: self.param_in.part.clone(), node: self.param_in.node.clone(), plot });
         self.wave_mode = WaveMode::Param;
     }
 
@@ -135,20 +135,20 @@ impl SchEditor {
             "" => T_NOM_C,
             t => t.parse::<f64>().map_err(|_| vec![format!("温度「{t}」を数値(℃)で入力してください (例: 27)")])?,
         };
-        let part = self.param_part.trim();
+        let part = self.param_in.part.trim();
         if part.is_empty() {
             return Err(vec!["値を変える部品を選んでください".into()]);
         }
-        if self.param_node.trim().is_empty() {
+        if self.param_in.node.trim().is_empty() {
             return Err(vec!["波形を見るノードを選んでください (出力にあたる点)".into()]);
         }
-        let (Some(a), Some(b), Some(n)) = (parse_value(&self.param_from), parse_value(&self.param_to), parse_value(&self.param_n)) else {
+        let (Some(a), Some(b), Some(n)) = (parse_value(&self.param_in.from), parse_value(&self.param_in.to), parse_value(&self.param_in.n)) else {
             return Err(vec!["「から」「まで」「本数」を数値で入力してください (例: 1k, 100k, 5)".into()]);
         };
         if a <= 0.0 || b <= 0.0 {
             return Err(vec!["値は 0 より大きい数にしてください".into()]);
         }
-        let analysis = if self.param_ac {
+        let analysis = if self.param_in.ac {
             match (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) {
                 (Some(f0), Some(f1), Some(p)) => ParamAnalysis::Ac { fstart: f0, fstop: f1, points_per_decade: p.max(0.0) as usize },
                 _ => return Err(vec!["AC解析の周波数の設定を数値で入力してください".into()]),
@@ -159,8 +159,8 @@ impl SchEditor {
                 None => return Err(vec!["過渡解析の終了時間を数値で入力してください (刻みは空欄なら自動、入れるなら数値で)".into()]),
             }
         };
-        let values = sweep_values(a, b, n.round().max(1.0) as usize, self.param_log);
-        param_sweep(&self.sch, &ParamSettings { refdes: part.into(), values, node: self.param_node.trim().into(), temp_c: temp, analysis }).map_err(|e| vec![e.to_string()])
+        let values = sweep_values(a, b, n.round().max(1.0) as usize, self.param_in.log);
+        param_sweep(&self.sch, &ParamSettings { refdes: part.into(), values, node: self.param_in.node.trim().into(), temp_c: temp, analysis }).map_err(|e| vec![e.to_string()])
     }
 
     pub(super) fn param_wave_panel(&mut self, ui: &mut egui::Ui) {
@@ -198,6 +198,31 @@ impl SchEditor {
         }
         if close {
             self.param = None;
+        }
+    }
+}
+
+/// The inputs of the parameter sweep (also the part and range of the root locus).
+pub(crate) struct ParamInputs {
+    pub(super) part: String,
+    pub(super) from: String,
+    pub(super) to: String,
+    pub(super) n: String,
+    pub(super) node: String,
+    pub(super) log: bool,
+    pub(super) ac: bool,
+}
+
+impl Default for ParamInputs {
+    fn default() -> Self {
+        Self {
+            part: String::new(),
+            from: "1k".into(),
+            to: "100k".into(),
+            n: "5".into(),
+            node: String::new(),
+            log: true,
+            ac: true,
         }
     }
 }

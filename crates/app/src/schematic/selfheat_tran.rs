@@ -38,17 +38,17 @@ impl SchEditor {
         if self.sch.thermal_links != links {
             self.sch.thermal_links = links.clone();
         }
-        self.htran_links_seen = links;
+        self.heat.tran_links_seen = links;
     }
 
     pub(crate) fn run_heat_tran(&mut self) -> Result<HeatTranView, String> {
-        let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
-        let tstop = sim_core::parse_value(self.htran_stop.trim()).filter(|t| *t > 0.0 && t.is_finite()).ok_or("時間を、0 より大きい数で入力してください (例: 0.6 や 600m。秒)")?;
-        let refs: Vec<String> = self.htran_parts.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
+        let ambient: f64 = self.heat.ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
+        let tstop = sim_core::parse_value(self.heat.tran_stop.trim()).filter(|t| *t > 0.0 && t.is_finite()).ok_or("時間を、0 より大きい数で入力してください (例: 0.6 や 600m。秒)")?;
+        let refs: Vec<String> = self.heat.tran_parts.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
         if refs.is_empty() {
             return Err("温度を見たい部品の名前を入力してください (例: Q1,RS1。コンマで区切る)".into());
         }
-        let parsed = parse_links(&self.htran_links)?;
+        let parsed = parse_links(&self.heat.tran_links)?;
         // what was run is what the file keeps
         self.store_links(parsed.clone());
         let links: Vec<sim_core::ThermalLink> = parsed.into_iter().map(|(a, b, theta)| sim_core::ThermalLink { a, b, theta }).collect();
@@ -63,28 +63,28 @@ impl SchEditor {
 
     pub(super) fn panel_heat_tran(&mut self, ui: &mut egui::Ui) {
         // a file that was opened (or an undo) brings other links than the box shows: the box follows the schematic
-        if self.sch.thermal_links != self.htran_links_seen {
-            self.htran_links = links_text(&self.sch.thermal_links);
-            self.htran_links_seen = self.sch.thermal_links.clone();
+        if self.sch.thermal_links != self.heat.tran_links_seen {
+            self.heat.tran_links = links_text(&self.sch.thermal_links);
+            self.heat.tran_links_seen = self.sch.thermal_links.clone();
         }
         ui.separator();
         ui.label(egui::RichText::new(i18n::tr("温度の時間変化 (短い通電)")).strong())
             .on_hover_text(i18n::tr("過渡解析の電力から、部品の温度が時間とともにどう上がるかを計算します。短い通電では、定常の温度より低くなります (熱容量があるため)。2つの部品が基板の銅を通じてお互いを温める分も入れられます"));
         egui::Grid::new("htran_inputs").num_columns(2).show(ui, |ui| {
             ui.label(i18n::tr("部品"));
-            ui.add(egui::TextEdit::singleline(&mut self.htran_parts).desired_width(150.0).hint_text("Q1,RS1"))
+            ui.add(egui::TextEdit::singleline(&mut self.heat.tran_parts).desired_width(150.0).hint_text("Q1,RS1"))
                 .on_hover_text(i18n::tr("温度を見たい部品の名前 (コンマ区切り)。抵抗・ダイオード・トランジスタが入った部品 (ライブラリ部品も) が対象です"));
             ui.end_row();
             ui.label(i18n::tr("時間"));
-            ui.add(egui::TextEdit::singleline(&mut self.htran_stop).desired_width(60.0)).on_hover_text(i18n::tr("計算する長さ (秒)。電源のパルスや波形は、この間の動きを使います (例: 0.6 や 600m)"));
+            ui.add(egui::TextEdit::singleline(&mut self.heat.tran_stop).desired_width(60.0)).on_hover_text(i18n::tr("計算する長さ (秒)。電源のパルスや波形は、この間の動きを使います (例: 0.6 や 600m)"));
             ui.end_row();
             ui.label(i18n::tr("結合"));
-            let links_box = ui.add(egui::TextEdit::singleline(&mut self.htran_links).desired_width(150.0).hint_text("Q1:RS1:150")).on_hover_text(
+            let links_box = ui.add(egui::TextEdit::singleline(&mut self.heat.tran_links).desired_width(150.0).hint_text("Q1:RS1:150")).on_hover_text(
                 i18n::tr("2つの部品の間の熱抵抗 (K/W)。部品:部品:K/W の形で、コンマで複数。基板の銅を通って熱が行き来します。空欄なら、お互いは温め合いません。値の目安は、距離が遠いほど大きく (数百 K/W)、同じ銅でつながっていれば小さくなります。データシートにはないので、推測で入れてください"),
             );
             // leaving the box with links that read is enough to keep them (a half-typed one is kept as text only)
             if links_box.lost_focus()
-                && let Ok(l) = parse_links(&self.htran_links)
+                && let Ok(l) = parse_links(&self.heat.tran_links)
             {
                 self.store_links(l);
             }
@@ -95,12 +95,12 @@ impl SchEditor {
             .on_hover_text(i18n::tr("過渡解析を実行して、各部品の電力から温度の上がり方を出します。温度係数のある抵抗と半導体は、温まった温度で値・モデルを決め直して計算し直します"))
             .clicked()
         {
-            self.htran = Some(self.run_heat_tran());
-            if let Some(Err(e)) = &self.htran {
+            self.heat.tran = Some(self.run_heat_tran());
+            if let Some(Err(e)) = &self.heat.tran {
                 self.status = format!("温度の変化の計算に失敗: {e}");
             }
         }
-        let Some(view) = self.htran.take() else { return };
+        let Some(view) = self.heat.tran.take() else { return };
         match &view {
             Err(e) => {
                 ui.colored_label(crate::theme::ERROR, e).on_hover_text(i18n::tr("部品の名前・時間・電源を確認してください。過渡解析が通らない回路は計算できません"));
@@ -190,7 +190,7 @@ impl SchEditor {
                     .on_hover_text(i18n::tr("1つの部品を、熱容量と熱抵抗の1段として扱った簡単な近似です。基板の中の熱の広がりまでは計算していません"));
             }
         }
-        self.htran = Some(view);
+        self.heat.tran = Some(view);
     }
 }
 

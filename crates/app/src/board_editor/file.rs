@@ -211,7 +211,7 @@ impl BoardEditor {
     /// edited, or a circuit was opened); with no event it does nothing. Only the table is taken, not the parts. A board whose last taking
     /// is not known (just opened) is compared with the rows it keeps: when they agree the table is taken as already in.
     pub fn sync_requirements(&mut self, sch_ed: &mut SchEditor) {
-        if !std::mem::take(&mut sch_ed.req_dirty) || self.board.parts.is_empty() || sch_ed.sch.components.is_empty() {
+        if !std::mem::take(&mut sch_ed.req.dirty) || self.board.parts.is_empty() || sch_ed.sch.components.is_empty() {
             return;
         }
         let spec = &sch_ed.sch.requirements;

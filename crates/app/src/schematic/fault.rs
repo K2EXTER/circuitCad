@@ -157,8 +157,8 @@ const ALL_FAULTS: [Fault; 10] = [Fault::Open, Fault::Short, Fault::Scale(10.0), 
 
 impl SchEditor {
     pub fn set_fault(&mut self, part: &str, kind: usize) {
-        self.fault_part = part.into();
-        self.fault_kind = kind.min(ALL_FAULTS.len() - 1);
+        self.fault_ui.part = part.into();
+        self.fault_ui.kind = kind.min(ALL_FAULTS.len() - 1);
     }
 
     pub fn analyze_fault(&mut self) {
@@ -175,21 +175,21 @@ impl SchEditor {
 
     /// The node to watch: the one chosen, else a likely output (OUT / VOUT / VDC ...), else the first net.
     pub(super) fn fault_watch_node(&self) -> Option<String> {
-        if !self.fault_node.trim().is_empty() {
-            return Some(self.fault_node.trim().to_string());
+        if !self.fault_ui.node.trim().is_empty() {
+            return Some(self.fault_ui.node.trim().to_string());
         }
         let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.') && !n.eq_ignore_ascii_case("GND")).collect();
         ["OUT", "VOUT", "VDC", "OUTPUT"].iter().find_map(|w| nets.iter().find(|n| n.eq_ignore_ascii_case(w)).cloned()).or_else(|| nets.first().cloned())
     }
 
     pub fn set_fault_tran(&mut self, node: &str) {
-        self.fault_domain = FaultDomain::Tran;
-        self.fault_node = node.into();
+        self.fault_ui.domain = FaultDomain::Tran;
+        self.fault_ui.node = node.into();
     }
 
     pub fn set_fault_ac(&mut self, node: &str) {
-        self.fault_domain = FaultDomain::Ac;
-        self.fault_node = node.into();
+        self.fault_ui.domain = FaultDomain::Ac;
+        self.fault_ui.node = node.into();
     }
 
     /// The temperature to simulate at (the panel's "回路の温度").
@@ -202,27 +202,27 @@ impl SchEditor {
 
     /// The healthy circuit and the broken one for what the panel has selected (a whole part, or one pin).
     pub(super) fn fault_target(&self) -> Result<(Circuit, Broken, Option<Fault>), Vec<String>> {
-        let part = self.fault_part.trim();
+        let part = self.fault_ui.part.trim();
         if part.is_empty() {
             return Err(vec!["壊す部品を選んでください".into()]);
         }
-        if !self.fault_pin.is_empty() {
-            let how = match self.fault_pin_how {
+        if !self.fault_ui.pin.is_empty() {
+            let how = match self.fault_ui.pin_how {
                 0 => PinHow::Open,
                 1 => PinHow::Ground,
                 _ => {
-                    if self.fault_bridge.trim().is_empty() {
+                    if self.fault_ui.bridge.trim().is_empty() {
                         return Err(vec!["ブリッジでつなぐ相手のネットを選んでください".into()]);
                     }
-                    PinHow::Join(self.fault_bridge.trim().to_string())
+                    PinHow::Join(self.fault_ui.bridge.trim().to_string())
                 }
             };
-            let label = self.pin_fault_label(part, &self.fault_pin, &how);
-            let spec = PinFaultSpec { refdes: part.to_string(), pin: self.fault_pin.clone(), how };
+            let label = self.pin_fault_label(part, &self.fault_ui.pin, &how);
+            let spec = PinFaultSpec { refdes: part.to_string(), pin: self.fault_ui.pin.clone(), how };
             let (healthy, b) = break_pin(&self.sch, self.fault_temp()?, &spec, &label).map_err(|e| vec![e.to_string()])?;
             return Ok((healthy, b, None));
         }
-        let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
+        let fault = ALL_FAULTS[self.fault_ui.kind.min(ALL_FAULTS.len() - 1)];
         let c = self.sim_circuit()?;
         let b = break_part(&c, part, fault).ok_or_else(|| vec![format!("{part} には「{}」の故障を設定できません。ほかの壊し方を選ぶか、「ピン」で壊してください", fault.label())])?;
         Ok((c, b, Some(fault)))
@@ -260,7 +260,7 @@ impl SchEditor {
     }
 
     pub(super) fn run_fault_wave(&mut self) {
-        let ac = self.fault_domain == FaultDomain::Ac;
+        let ac = self.fault_ui.domain == FaultDomain::Ac;
         let report = (|| {
             let node = self.fault_watch_node().ok_or_else(|| vec!["見る点 (ノード) がありません。回路に名前のついた点 (ラベルなど) を付けてください".to_string()])?;
             let (c, b, _) = self.fault_target()?;
@@ -288,12 +288,12 @@ impl SchEditor {
         } else {
             PlotState::new(parse_value(&self.tran_tstop).unwrap_or(1.0))
         };
-        self.fault_wave = Some(FaultWaveView { report, plot });
+        self.fault_ui.wave = Some(FaultWaveView { report, plot });
         self.wave_mode = WaveMode::Fault;
     }
 
     pub(super) fn fault_wave_panel(&mut self, ui: &mut egui::Ui) {
-        let Some(view) = self.fault_wave.as_mut() else { return };
+        let Some(view) = self.fault_ui.wave.as_mut() else { return };
         let mut close = false;
         let FaultWaveView { report, plot: st } = view;
         ui.horizontal(|ui| {
@@ -356,12 +356,12 @@ impl SchEditor {
             }
         }
         if close {
-            self.fault_wave = None;
+            self.fault_ui.wave = None;
         }
     }
 
     pub(super) fn run_fault(&mut self) {
-        if self.fault_domain != FaultDomain::Dc {
+        if self.fault_ui.domain != FaultDomain::Dc {
             self.run_fault_wave();
             return;
         }
@@ -375,21 +375,21 @@ impl SchEditor {
             Ok(r) => format!("故障シミュレーション: {} を「{}」", r.element, r.label),
             Err(e) => format!("故障シミュレーションに失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        self.fault_view = Some(FaultView { report });
-        self.fault_scroll = true;
+        self.fault_ui.view = Some(FaultView { report });
+        self.fault_ui.scroll = true;
     }
 
     /// Breaks the chosen part, then lets every part that goes past its rating fail in turn (transient run).
     pub(super) fn run_fault_chain(&mut self) {
         let report = (|| {
-            if !self.fault_pin.is_empty() {
+            if !self.fault_ui.pin.is_empty() {
                 return Err(vec!["連鎖故障は、部品全体の故障で調べます。「壊し方」を「部品全体」にしてください".to_string()]);
             }
-            let part = self.fault_part.trim();
+            let part = self.fault_ui.part.trim();
             if part.is_empty() {
                 return Err(vec!["壊す部品を選んでください".to_string()]);
             }
-            let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
+            let fault = ALL_FAULTS[self.fault_ui.kind.min(ALL_FAULTS.len() - 1)];
             let Some((tstop, tstep)) = self.tran_times() else {
                 return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)".to_string()]);
             };
@@ -400,7 +400,7 @@ impl SchEditor {
             Ok(r) => format!("連鎖故障: {} 個の部品が壊れました", r.steps.len()),
             Err(e) => format!("連鎖故障の解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        self.fault_chain = Some(report);
+        self.fault_ui.chain = Some(report);
     }
 
     /// Everything the "break every part" scan needs, copied out of the editor so that it can run on another thread.
@@ -415,7 +415,7 @@ impl SchEditor {
             for (kind, fault) in ALL_FAULTS.iter().enumerate().filter(|(_, f)| !matches!(f, Fault::Reverse)) {
                 if let Some(b) = break_part(&c, &part, *fault) {
                     // the faults that hardly ever happen are left out unless asked for
-                    if !self.scan_rare && likelihood(&c, &part, *fault) == Likelihood::Rare {
+                    if !self.fault_ui.scan_rare && likelihood(&c, &part, *fault) == Likelihood::Rare {
                         skipped += 1;
                         continue;
                     }
@@ -443,8 +443,8 @@ impl SchEditor {
         };
         let rows = plan.run(&AtomicUsize::new(0), &AtomicBool::new(false)).unwrap_or_default();
         self.status = format!("故障シミュレーション: {} 通りを試しました", rows.len());
-        self.fault_scan = rows;
-        self.fault_scroll = true;
+        self.fault_ui.scan = rows;
+        self.fault_ui.scroll = true;
     }
 
     /// For the command line: the scan on its own thread, and the fault panel open.
@@ -455,7 +455,7 @@ impl SchEditor {
 
     /// The scan on its own thread, with a progress bar and a cancel button (the panel's button).
     pub(super) fn start_fault_scan(&mut self) {
-        if self.scan_run.is_some() {
+        if self.fault_ui.scan_run.is_some() {
             return;
         }
         let Some(plan) = self.scan_plan() else {
@@ -472,35 +472,35 @@ impl SchEditor {
             sim_core::set_options(options);
             let _ = tx.send(plan.run(&d, &c));
         });
-        self.scan_run = Some(ScanRun { done, total, cancel, rx });
+        self.fault_ui.scan_run = Some(ScanRun { done, total, cancel, rx });
         self.status = format!("故障シミュレーション: {total} 通りを試しています…") + &if skipped > 0 { format!(" (まれな {skipped} 通りは省略。「まれな故障も含める」で試せます)") } else { String::new() };
     }
 
     /// Called every frame: takes the finished scan, and keeps the window redrawing while it runs.
     pub(super) fn poll_fault_scan(&mut self, ctx: &egui::Context) {
-        let Some(run) = &self.scan_run else { return };
+        let Some(run) = &self.fault_ui.scan_run else { return };
         match run.rx.try_recv() {
             Ok(Some(rows)) => {
                 self.status = format!("故障シミュレーション: {} 通りを試しました", rows.len());
-                self.fault_scan = rows;
-                self.fault_scroll = true;
-                self.scan_run = None;
+                self.fault_ui.scan = rows;
+                self.fault_ui.scroll = true;
+                self.fault_ui.scan_run = None;
             }
             Ok(None) => {
                 self.status = "故障シミュレーションを中止しました".into();
-                self.scan_run = None;
+                self.fault_ui.scan_run = None;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(100)),
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 self.status = "故障シミュレーションが途中で止まりました".into();
-                self.scan_run = None;
+                self.fault_ui.scan_run = None;
             }
         }
     }
 
     /// Shows the broken circuit's voltages on the sheet.
     pub(super) fn show_fault_on_sheet(&mut self) {
-        let Some(FaultView { report: Ok(r) }) = &self.fault_view else { return };
+        let Some(FaultView { report: Ok(r) }) = &self.fault_ui.view else { return };
         let Ok(f) = &r.faulted else { return };
         let label = format!("{} を「{}」", r.element, r.label);
         let view = self.dc_view(Ok(f.clone()), Some(label));
@@ -513,14 +513,14 @@ impl SchEditor {
         let parts: Vec<String> = self.sch.flat().components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect();
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("部品"));
-            let shown = if self.fault_part.is_empty() { "選ぶ".to_string() } else { self.fault_part.clone() };
-            let before = self.fault_part.clone();
+            let shown = if self.fault_ui.part.is_empty() { "選ぶ".to_string() } else { self.fault_ui.part.clone() };
+            let before = self.fault_ui.part.clone();
             egui::ComboBox::from_id_salt("fault_part")
                 .width(70.0)
                 .selected_text(shown)
                 .show_ui(ui, |ui| {
                     for p in &parts {
-                        ui.selectable_value(&mut self.fault_part, p.clone(), p);
+                        ui.selectable_value(&mut self.fault_ui.part, p.clone(), p);
                     }
                 })
                 .response
@@ -528,30 +528,30 @@ impl SchEditor {
             if let Some(Sel::Comp(i)) = self.selected
                 && let Some(c) = self.sch.components.get(i)
                 && parts.contains(&c.refdes)
-                && c.refdes != self.fault_part
+                && c.refdes != self.fault_ui.part
                 && ui.small_button(i18n::tr("選択中の部品")).on_hover_text(i18n::tr("回路図で選んでいる部品を壊す対象にします")).clicked()
             {
-                self.fault_part = c.refdes.clone();
+                self.fault_ui.part = c.refdes.clone();
             }
-            if self.fault_part != before {
-                self.fault_pin.clear();
+            if self.fault_ui.part != before {
+                self.fault_ui.pin.clear();
             }
         });
         // the faults of this part (a motor's winding and shaft have their own)
-        let whole: Vec<Fault> = circuit.as_ref().map(|c| sim_core::faults_of(c, &self.fault_part)).unwrap_or_default();
+        let whole: Vec<Fault> = circuit.as_ref().map(|c| sim_core::faults_of(c, &self.fault_ui.part)).unwrap_or_default();
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("壊し方"));
-            if ui.selectable_label(self.fault_pin.is_empty(), i18n::tr("部品全体")).on_hover_text(i18n::tr("部品そのものが壊れた/付け間違えた状態にします")).clicked() {
-                self.fault_pin.clear();
+            if ui.selectable_label(self.fault_ui.pin.is_empty(), i18n::tr("部品全体")).on_hover_text(i18n::tr("部品そのものが壊れた/付け間違えた状態にします")).clicked() {
+                self.fault_ui.pin.clear();
             }
-            let pins = self.pin_choices(&self.fault_part);
-            if ui.selectable_label(!self.fault_pin.is_empty(), i18n::tr("ピン単位")).on_hover_text(i18n::tr("1本のピンだけ、はんだ不良 (断線) や、隣とのはんだブリッジ (ショート) にします。ICのピンは、この方法で壊します")).clicked() && self.fault_pin.is_empty()
+            let pins = self.pin_choices(&self.fault_ui.part);
+            if ui.selectable_label(!self.fault_ui.pin.is_empty(), i18n::tr("ピン単位")).on_hover_text(i18n::tr("1本のピンだけ、はんだ不良 (断線) や、隣とのはんだブリッジ (ショート) にします。ICのピンは、この方法で壊します")).clicked() && self.fault_ui.pin.is_empty()
                 && let Some((n, _)) = pins.first() {
-                    self.fault_pin = n.clone();
+                    self.fault_ui.pin = n.clone();
                 }
         });
-        if self.fault_pin.is_empty() {
-            if whole.is_empty() && !self.fault_part.is_empty() {
+        if self.fault_ui.pin.is_empty() {
+            if whole.is_empty() && !self.fault_ui.part.is_empty() {
                 ui.small(i18n::tr("この部品は部品全体としては壊せません (ICなど)。「ピン単位」を選んでください"));
             }
             ui.horizontal_wrapped(|ui| {
@@ -567,38 +567,38 @@ impl SchEditor {
                         Fault::Scale(x) if *x > 1.0 => "値の読み間違い・部品の取り違え・電源電圧の上昇。値を大きくします",
                         _ => "値の読み間違い・部品の取り違え・容量抜け・電源電圧の低下。値を小さくします",
                     };
-                    let label = circuit.as_ref().map_or(f.label(), |c| describe_fault(c, &self.fault_part, *f));
-                    ui.selectable_value(&mut self.fault_kind, k, i18n::tr_dyn(&label)).on_hover_text(i18n::tr_dyn(tip));
+                    let label = circuit.as_ref().map_or(f.label(), |c| describe_fault(c, &self.fault_ui.part, *f));
+                    ui.selectable_value(&mut self.fault_ui.kind, k, i18n::tr_dyn(&label)).on_hover_text(i18n::tr_dyn(tip));
                 }
             });
         } else {
-            let pins = self.pin_choices(&self.fault_part);
+            let pins = self.pin_choices(&self.fault_ui.part);
             ui.horizontal_wrapped(|ui| {
                 ui.label(i18n::tr("ピン"));
-                let shown = pins.iter().find(|(n, _)| *n == self.fault_pin).map_or(self.fault_pin.clone(), |(_, d)| d.clone());
-                let shown = match self.pin_net(&self.fault_part, &self.fault_pin) {
+                let shown = pins.iter().find(|(n, _)| *n == self.fault_ui.pin).map_or(self.fault_ui.pin.clone(), |(_, d)| d.clone());
+                let shown = match self.pin_net(&self.fault_ui.part, &self.fault_ui.pin) {
                     Some(net) => format!("{shown} ({net})"),
                     None => shown,
                 };
                 egui::ComboBox::from_id_salt("fault_pin").width(150.0).selected_text(shown).show_ui(ui, |ui| {
                     for (n, d) in &pins {
-                        let net = self.pin_net(&self.fault_part, n).map_or(String::new(), |x| format!(" ({x})"));
-                        ui.selectable_value(&mut self.fault_pin, n.clone(), format!("{d}{net}"));
+                        let net = self.pin_net(&self.fault_ui.part, n).map_or(String::new(), |x| format!(" ({x})"));
+                        ui.selectable_value(&mut self.fault_ui.pin, n.clone(), format!("{d}{net}"));
                     }
                 }).response.on_hover_text(i18n::tr("壊すピン。カッコの中は、そのピンがつながっているネットの名前です"));
             });
             ui.horizontal_wrapped(|ui| {
-                ui.selectable_value(&mut self.fault_pin_how, 0, i18n::tr("断線 (オープン)")).on_hover_text(i18n::tr("ピンの半田がはがれた・接触不良。そのピンだけ回路から切り離します。電源ピンなら「電源が来ない」、出力ピンなら「出力が出ない」状態です"));
-                ui.selectable_value(&mut self.fault_pin_how, 1, i18n::tr("GND にショート")).on_hover_text(i18n::tr("ピンがGNDにつながってしまった (はんだくず・ブリッジ)"));
-                ui.selectable_value(&mut self.fault_pin_how, 2, i18n::tr("別のネットにブリッジ")).on_hover_text(i18n::tr("隣のピンやパターンとはんだでつながってしまった状態。つなぐ相手のネットを選びます"));
+                ui.selectable_value(&mut self.fault_ui.pin_how, 0, i18n::tr("断線 (オープン)")).on_hover_text(i18n::tr("ピンの半田がはがれた・接触不良。そのピンだけ回路から切り離します。電源ピンなら「電源が来ない」、出力ピンなら「出力が出ない」状態です"));
+                ui.selectable_value(&mut self.fault_ui.pin_how, 1, i18n::tr("GND にショート")).on_hover_text(i18n::tr("ピンがGNDにつながってしまった (はんだくず・ブリッジ)"));
+                ui.selectable_value(&mut self.fault_ui.pin_how, 2, i18n::tr("別のネットにブリッジ")).on_hover_text(i18n::tr("隣のピンやパターンとはんだでつながってしまった状態。つなぐ相手のネットを選びます"));
             });
-            if self.fault_pin_how == 2 {
+            if self.fault_ui.pin_how == 2 {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(i18n::tr("相手のネット"));
                     let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
-                    egui::ComboBox::from_id_salt("fault_bridge").width(100.0).selected_text(if self.fault_bridge.is_empty() { "選ぶ".to_string() } else { self.fault_bridge.clone() }).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("fault_bridge").width(100.0).selected_text(if self.fault_ui.bridge.is_empty() { "選ぶ".to_string() } else { self.fault_ui.bridge.clone() }).show_ui(ui, |ui| {
                         for n in &nets {
-                            ui.selectable_value(&mut self.fault_bridge, n.clone(), n);
+                            ui.selectable_value(&mut self.fault_ui.bridge, n.clone(), n);
                         }
                     }).response.on_hover_text(i18n::tr("ブリッジ (ピンを別のネットとつなぐ故障) の相手のネット"));
                 });
@@ -606,11 +606,11 @@ impl SchEditor {
         }
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("比べる"));
-            ui.selectable_value(&mut self.fault_domain, FaultDomain::Dc, i18n::tr("DC (電圧)")).on_hover_text(i18n::tr("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります"));
-            ui.selectable_value(&mut self.fault_domain, FaultDomain::Tran, i18n::tr("過渡 (波形)")).on_hover_text(i18n::tr("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います"));
-            ui.selectable_value(&mut self.fault_domain, FaultDomain::Ac, i18n::tr("AC (周波数特性)")).on_hover_text(i18n::tr("周波数ごとのゲインを、正常な回路と重ねて比べます。フィルタのカットオフが動く、増幅度が変わる、共振が現れるなどが分かります。AC解析の周波数の設定を使います。入力の電源は「AC 1」にしておきます"));
+            ui.selectable_value(&mut self.fault_ui.domain, FaultDomain::Dc, i18n::tr("DC (電圧)")).on_hover_text(i18n::tr("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります"));
+            ui.selectable_value(&mut self.fault_ui.domain, FaultDomain::Tran, i18n::tr("過渡 (波形)")).on_hover_text(i18n::tr("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います"));
+            ui.selectable_value(&mut self.fault_ui.domain, FaultDomain::Ac, i18n::tr("AC (周波数特性)")).on_hover_text(i18n::tr("周波数ごとのゲインを、正常な回路と重ねて比べます。フィルタのカットオフが動く、増幅度が変わる、共振が現れるなどが分かります。AC解析の周波数の設定を使います。入力の電源は「AC 1」にしておきます"));
         });
-        if self.fault_domain != FaultDomain::Dc {
+        if self.fault_ui.domain != FaultDomain::Dc {
             ui.horizontal_wrapped(|ui| {
                 ui.label(i18n::tr("見る点"));
                 let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
@@ -620,7 +620,7 @@ impl SchEditor {
                     .selected_text(shown)
                     .show_ui(ui, |ui| {
                         for n in &nets {
-                            ui.selectable_value(&mut self.fault_node, n.clone(), n);
+                            ui.selectable_value(&mut self.fault_ui.node, n.clone(), n);
                         }
                     })
                     .response
@@ -634,12 +634,12 @@ impl SchEditor {
             if ui.button(i18n::tr("連鎖故障を追う")).on_hover_text(i18n::tr("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)")).clicked() {
                 self.run_fault_chain();
             }
-            if crate::widgets::unless(ui, (!(self.scan_run.is_none())).then_some("いま試しています。終わるまでお待ちください"), egui::Button::new(i18n::tr("よくある故障を順に試す"))).on_hover_text(i18n::tr("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます")).clicked() {
+            if crate::widgets::unless(ui, (!(self.fault_ui.scan_run.is_none())).then_some("いま試しています。終わるまでお待ちください"), egui::Button::new(i18n::tr("よくある故障を順に試す"))).on_hover_text(i18n::tr("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます")).clicked() {
                 self.start_fault_scan();
             }
-            ui.checkbox(&mut self.scan_rare, i18n::tr("まれな故障も含める")).on_hover_text(i18n::tr("入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります"));
+            ui.checkbox(&mut self.fault_ui.scan_rare, i18n::tr("まれな故障も含める")).on_hover_text(i18n::tr("入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります"));
         });
-        if let Some(run) = &self.scan_run {
+        if let Some(run) = &self.fault_ui.scan_run {
             let done = run.done.load(Ordering::Relaxed);
             ui.horizontal_wrapped(|ui| {
                 let text = if done == 0 { "正常な回路を計算しています…".to_string() } else { format!("故障を試しています: {done} / {}", run.total) };
@@ -649,7 +649,7 @@ impl SchEditor {
                 }
             });
         }
-        match &self.fault_chain {
+        match &self.fault_ui.chain {
             Some(Err(msgs)) => {
                 for m in msgs {
                     ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
@@ -665,14 +665,14 @@ impl SchEditor {
                     }
                 }
                 if ui.button(i18n::tr("閉じる")).on_hover_text(i18n::tr("連鎖故障の説明を消します")).clicked() {
-                    self.fault_chain = None;
+                    self.fault_ui.chain = None;
                 }
             }
             None => {}
         }
         let mut show_sheet = false;
         let mut restore = false;
-        if let Some(view) = &self.fault_view {
+        if let Some(view) = &self.fault_ui.view {
             match &view.report {
                 Err(msgs) => {
                     for m in msgs {
@@ -713,7 +713,7 @@ impl SchEditor {
                         ui.min_rect()
                     });
                     // a new result sits at the bottom of a long tab: bring it into view once
-                    if self.fault_scroll {
+                    if self.fault_ui.scroll {
                         ui.scroll_to_rect(card, Some(egui::Align::Min));
                     }
                 }
@@ -725,13 +725,13 @@ impl SchEditor {
         if restore {
             self.run_dc();
         }
-        if !self.fault_scan.is_empty() {
+        if !self.fault_ui.scan.is_empty() {
             let mut pick = None;
             // a heading, not a fold: the section around it already folds (at most two levels)
             let head = ui.label(egui::RichText::new(i18n::tr("危険な順 (定格超え → 電圧の変化)")).strong());
             {
                 egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
-                    for (k, row) in self.fault_scan.iter().enumerate() {
+                    for (k, row) in self.fault_ui.scan.iter().enumerate() {
                         let effect = if row.severity.is_infinite() {
                             "計算できない (大電流/不定)".to_string()
                         } else if let Some((node, before, after)) = row.worst.as_ref().filter(|_| row.severity >= 0.01) {
@@ -754,19 +754,63 @@ impl SchEditor {
                     }
                 });
             }
-            if self.fault_scroll && self.fault_view.is_none() {
+            if self.fault_ui.scroll && self.fault_ui.view.is_none() {
                 ui.scroll_to_rect(head.rect, Some(egui::Align::Min));
             }
             head.on_hover_text(i18n::tr("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです"));
             if let Some(k) = pick {
-                let row = &self.fault_scan[k];
-                (self.fault_part, self.fault_pin, self.fault_kind, self.fault_pin_how) = (row.part.clone(), row.pin.clone(), row.fault_kind, 0);
+                let row = &self.fault_ui.scan[k];
+                (self.fault_ui.part, self.fault_ui.pin, self.fault_ui.kind, self.fault_ui.pin_how) = (row.part.clone(), row.pin.clone(), row.fault_kind, 0);
                 self.run_fault();
             }
         }
         // scrolled to (if it was shown): once is enough, the learner may scroll away
-        if self.fault_view.is_some() || !self.fault_scan.is_empty() {
-            self.fault_scroll = false;
+        if self.fault_ui.view.is_some() || !self.fault_ui.scan.is_empty() {
+            self.fault_ui.scroll = false;
+        }
+    }
+}
+
+/// The inputs and results of the fault section ("壊れたら").
+pub(crate) struct FaultUi {
+    pub(super) part: String,
+    /// Pin to break ("" = break the whole part), how (0 open, 1 to ground, 2 bridge to `bridge`).
+    pub(super) pin: String,
+    pub(super) pin_how: usize,
+    pub(super) bridge: String,
+    /// Compare in the time domain or AC, or at DC, and the node watched in the time domain.
+    pub(super) domain: fault::FaultDomain,
+    pub(super) node: String,
+    pub(super) wave: Option<fault::FaultWaveView>,
+    pub(super) kind: usize,
+    pub(super) view: Option<fault::FaultView>,
+    /// A fault result just arrived: scroll the panel to it once (it is at the bottom of a long analysis tab).
+    pub(super) scroll: bool,
+    pub(super) scan: Vec<fault::ScanRow>,
+    /// The scan of every part also tries the faults that hardly ever happen.
+    pub(super) scan_rare: bool,
+    /// The "break every part" scan while it runs on its own thread.
+    pub(super) scan_run: Option<fault::ScanRun>,
+    pub(super) chain: Option<Result<sim_core::ChainReport, Vec<String>>>,
+}
+
+impl Default for FaultUi {
+    fn default() -> Self {
+        Self {
+            part: String::new(),
+            pin: String::new(),
+            pin_how: 0,
+            bridge: String::new(),
+            domain: fault::FaultDomain::Dc,
+            node: String::new(),
+            wave: None,
+            kind: 0,
+            view: None,
+            scroll: false,
+            scan: vec![],
+            scan_rare: false,
+            scan_run: None,
+            chain: None,
         }
     }
 }

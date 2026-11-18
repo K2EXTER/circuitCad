@@ -15,7 +15,7 @@ pub(super) const DIVIDER: Lesson = Lesson {
     ],
     real: &[],
     circuit: include_str!("../../../../../docs/examples/divider_tolerance.schjson"),
-    setup: |e| e.mc_out = "MID".into(),
+    setup: |e| e.mc_in.out = "MID".into(),
     steps: &[
         Step {
             tab: PanelTab::Analyze,

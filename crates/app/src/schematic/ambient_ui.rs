@@ -6,7 +6,7 @@ use super::*;
 impl SchEditor {
     pub(crate) fn run_ambient_sweep(&mut self) -> Result<sim_core::AmbientSweep, String> {
         let num = |s: &str, what: &str| s.trim().parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(|| i18n::trf!("{} を数値 (℃) で入力してください", what));
-        let (t0, t1, step) = (num(&self.amb_from, "開始")?, num(&self.amb_to, "終了")?, num(&self.amb_step, "刻み")?);
+        let (t0, t1, step) = (num(&self.heat.amb_from, "開始")?, num(&self.heat.amb_to, "終了")?, num(&self.heat.amb_step, "刻み")?);
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &self.copper_g());
         // with the board carried over, its matrix at the middle of the range (its h hardly moves with the air)
@@ -20,15 +20,15 @@ impl SchEditor {
             "周囲の温度を変えながら、その温度ごとに自己発熱を計算します。部品は「周囲 + 自分の熱の上昇」になるので、周囲が上がるほど上限までの余裕が減ります。温まると電流が増える回路 (エミッタ抵抗の無いトランジスタなど) は、周囲が高いほど上昇も大きくなります。ふつうの温度スイープ (温度とばらつき) は、部品を周囲と同じ温度にします",
         ));
         ui.horizontal(|ui| {
-            for (s, tip) in [(&mut self.amb_from, "開始 (℃)"), (&mut self.amb_to, "終了 (℃)"), (&mut self.amb_step, "刻み (K)")] {
+            for (s, tip) in [(&mut self.heat.amb_from, "開始 (℃)"), (&mut self.heat.amb_to, "終了 (℃)"), (&mut self.heat.amb_step, "刻み (K)")] {
                 ui.add(egui::TextEdit::singleline(s).desired_width(36.0)).on_hover_text(i18n::tr(tip));
             }
             ui.label("℃");
             if ui.button(i18n::tr("周囲の温度を振る")).on_hover_text(i18n::tr("例: −20 〜 85 ℃ を 5 K 刻み。製品の使う温度の範囲 (民生 0〜70 ℃、産業 −40〜85 ℃ など) にします")).clicked() {
-                self.amb_view = Some(self.run_ambient_sweep());
+                self.heat.amb_view = Some(self.run_ambient_sweep());
             }
         });
-        let Some(view) = &self.amb_view else { return };
+        let Some(view) = &self.heat.amb_view else { return };
         let r = match view {
             Ok(r) => r,
             Err(e) => {

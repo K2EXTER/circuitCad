@@ -13,7 +13,7 @@ impl SchEditor {
             WaveMode::Mc => self.mc.is_some(),
             WaveMode::Sens => self.sens.is_some(),
             WaveMode::Param => self.param.is_some(),
-            WaveMode::Fault => self.fault_wave.is_some(),
+            WaveMode::Fault => self.fault_ui.wave.is_some(),
             WaveMode::Locus => self.locus.is_some(),
         }
     }
