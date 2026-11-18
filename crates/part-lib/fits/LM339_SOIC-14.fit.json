@@ -1,0 +1,33 @@
+{
+  "kind": "comparator",
+  "read": "2026-11-18",
+  "avd": 200000.0,
+  "t_od": 1.3e-06,
+  "od": 0.005,
+  "t_ttl": 3e-07,
+  "vpull": 5.0,
+  "rpull": 5100.0,
+  "vth_out": 1.4,
+  "vol_at": 0.004,
+  "isink": 0.016,
+  "ioh": 1e-10,
+  "vicr_head": 1.5,
+  "vos": 0.002,
+  "vos_max": 0.005,
+  "ib": -2.5e-08,
+  "ib_max": 2.5e-07,
+  "part": "LM339_SOIC-14",
+  "name": "LM339",
+  "source": "TI LM139/LM239/LM339/LM2901 データシート (SLCS006Z、2025-05 改訂)",
+  "url": "https://www.ti.com/lit/ds/symlink/lm339.pdf",
+  "cite": "TI LM339 データシート (SLCS006Z、2025-05 改訂) の 6.10 節 (LMx39) と 6.14 節",
+  "description": "4 回路入りコンパレータ (SOIC-14、チャネル 1 を記号に: 1OUT = 1、1IN− = 6、1IN+ = 7)。オープンコレクタ出力なのでプルアップ抵抗が要ります (IN− が IN+ より高いとき Low)。電源 2〜36 V。",
+  "vol": 0.15,
+  "iq": 0.0002,
+  "iq_max": 0.0005,
+  "remarks": [
+    "the table (6.10, LM339 column, VCC = 5 V, 25 C): VIO 2 / 5 mV, IIO 5 / 50 nA, IIB -25 / -250 nA, VICR 0 to VCC - 1.5 V, AVD 50 / 200 V/mV (VCC = 15 V), IOH 0.1 / 50 nA, VOL 150 / 400 mV at 4 mA, IOL 6 / 16 mA at 1.5 V, ICC 0.8 / 2 mA (four comparators)",
+    "6.14: response time 1.3 us (100 mV step, 5 mV overdrive) and 0.3 us (TTL-level step), RL 5.1 kohm to 5 V, CL 15 pF",
+    "iq: a quarter of ICC (one of the four comparators)"
+  ]
+}

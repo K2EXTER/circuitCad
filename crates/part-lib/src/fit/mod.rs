@@ -7,6 +7,7 @@
 //! Details: `docs/code-notes/part-lib.md`.
 
 mod bjt;
+pub mod comparator;
 mod darlington;
 mod diode;
 mod edit;
@@ -18,6 +19,7 @@ pub mod regulator;
 pub mod simple;
 
 pub use bjt::BjtSpec;
+pub use comparator::ComparatorSpec;
 pub use darlington::DarlingtonSpec;
 pub use diode::DiodeSpec;
 pub use edit::write_part;
@@ -30,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt", "mos", "darlington", "photodiode",
-/// "optocoupler", "opamp", "regulator", "shunt", "ntc", "crystal" or "tvs".
+/// "optocoupler", "opamp", "comparator", "regulator", "shunt", "ntc", "crystal" or "tvs".
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Spec {
@@ -41,6 +43,7 @@ pub enum Spec {
     Photodiode(opto::PhotodiodeSpec),
     Optocoupler(opto::OptocouplerSpec),
     Opamp(opamp::OpampSpec),
+    Comparator(comparator::ComparatorSpec),
     Regulator(regulator::RegulatorSpec),
     Shunt(regulator::ShuntSpec),
     Ntc(simple::NtcSpec),
@@ -80,6 +83,7 @@ impl Spec {
             Spec::Photodiode(s) => &s.common,
             Spec::Optocoupler(s) => &s.common,
             Spec::Opamp(s) => &s.common,
+            Spec::Comparator(s) => &s.common,
             Spec::Regulator(s) => &s.common,
             Spec::Shunt(s) => &s.common,
             Spec::Ntc(s) => &s.common,
@@ -90,7 +94,7 @@ impl Spec {
 
     pub fn load(path: &Path) -> Result<Spec, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / regulator / shunt / ntc / crystal / tvs。形は crates/part-lib/fits/ の例を見てください)", path.display()))
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / comparator / regulator / shunt / ntc / crystal / tvs。形は crates/part-lib/fits/ の例を見てください)", path.display()))
     }
 }
 
@@ -163,6 +167,7 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
         Spec::Photodiode(s) => opto::fit_photodiode(s)?,
         Spec::Optocoupler(s) => opto::fit_optocoupler(s)?,
         Spec::Opamp(s) => opamp::fit(s)?,
+        Spec::Comparator(s) => comparator::fit(s)?,
         Spec::Regulator(s) => regulator::fit_regulator(s)?,
         Spec::Shunt(s) => regulator::fit_shunt(s)?,
         Spec::Ntc(s) => simple::fit_ntc(s)?,
@@ -171,6 +176,7 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
     };
     let (description, params) = match spec {
         Spec::Opamp(s) => (opamp::description(s), vec![("gbw".into(), s.gbw), ("gain_dc".into(), 10f64.powf(s.aol_db / 20.0).round())]),
+        Spec::Comparator(s) => (comparator::description(s), vec![]),
         Spec::Regulator(s) => (c.description.clone(), regulator::regulator_params(s)),
         _ => (c.description.clone(), vec![]),
     };

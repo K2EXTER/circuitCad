@@ -1411,8 +1411,9 @@ fn dc_overlay_writes_one_voltage_per_net_and_none_on_a_dead_sheet() {
     }
 }
 
-/// A sheet with a 555 and flip-flops next to its analog part: the usual order finds no operating point, switch widening (as the DC
-/// panel uses) does, so the AC run works and says its answer was taken with the latches set and the oscillator held still.
+/// A sheet with a 555 and flip-flops next to its analog part: the AC run finds an operating point and works. (While the LM393
+/// was a switch model the usual order found none and switch widening, as the DC panel uses, did, with a note that said so; the
+/// data sheet model is smooth and the usual order finds the point.)
 #[test]
 fn ac_runs_on_a_mixed_signal_sheet_and_says_how() {
     let sch = example_schematics().into_iter().find(|(n, _)| n == "mixed_signal.schjson").unwrap().1;
@@ -1420,7 +1421,7 @@ fn ac_runs_on_a_mixed_signal_sheet_and_says_how() {
     e.sch = sch;
     e.run_ac();
     let res = e.ac.as_ref().unwrap().outcome.as_ref().expect("AC works on the mixed-signal sample");
-    assert!(res.warnings.iter().any(|w| w.contains("なだらかにして")), "{:?}", res.warnings);
+    assert!(!res.freq.is_empty() && !res.signals.is_empty(), "{:?}", res.warnings);
 }
 
 /// Cutting a part that is not in the loop (the load resistor) gives a loop gain of almost nothing: the viewer says so on top, the

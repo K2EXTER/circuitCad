@@ -125,6 +125,8 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
             // built from typ values with a template, not fitted: nothing to compare here (the measuring tests in
             // crates/cli/tests/integration/{opamp,regulator}_models.rs compare them with their data sheets)
             Spec::Opamp(_) | Spec::Regulator(_) | Spec::Shunt(_) => 0,
+            // the template's own response times and VOL at the data sheet's conditions (comparator_models.rs measures them)
+            Spec::Comparator(_) => 3,
             Spec::Ntc(n) => n.table.len(),
             Spec::Crystal(c) => 1 + usize::from(c.cl.is_some()),
             Spec::Tvs(_) => 3,

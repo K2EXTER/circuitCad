@@ -118,8 +118,7 @@ impl TranResult {
 /// it by temporary voltage sources while the rest of the circuit settles around them.
 fn start_point(circuit: &Circuit, cm: &crate::dc::Compiled) -> Result<(Vec<f64>, Vec<f64>), SimError> {
     let order = crate::dc::TRAN_START_ORDER;
-    let has_ic = circuit.initial.iter().any(|(n, _)| circuit.elements.iter().any(|e| matches!(e, crate::Element::Capacitor { name, .. } if name == n)));
-    if !has_ic {
+    if !holds_initial_voltages(circuit) {
         return solve_op(cm, &order).map(|(att, _)| (att.x, att.vj));
     }
     // Capacitors have no branch unknown, and the held sources go last, so every index of the
@@ -147,6 +146,20 @@ fn start_point(circuit: &Circuit, cm: &crate::dc::Compiled) -> Result<(Vec<f64>,
         Err(SimError::Singular) => solve_op(cm, &order).map(|(att, _)| (att.x, att.vj)),
         Err(e) => Err(e),
     }
+}
+
+/// Whether a capacitor of the circuit has an initial voltage (`IC=`): the run then starts from it.
+fn holds_initial_voltages(circuit: &Circuit) -> bool {
+    circuit.initial.iter().any(|(n, _)| circuit.elements.iter().any(|e| matches!(e, crate::Element::Capacitor { name, .. } if name == n)))
+}
+
+/// Whether a voltage-controlled switch of the solution `x` sits inside the middle of its threshold band (within 90 % of
+/// `vw` from `vt`): the balance point of a relaxation oscillator made of switches, which a run started there never leaves.
+fn switch_balanced(circuit: &Circuit, x: &[f64]) -> bool {
+    circuit.elements.iter().any(|e| match e {
+        crate::Element::Switch { cp, cn, model, .. } => ((v(x, *cp) - v(x, *cn)) - model.vt).abs() < 0.9 * model.vw,
+        _ => false,
+    })
 }
 
 /// The capacitor voltages and inductor currents of a solution (the integrator's state variables).
@@ -376,6 +389,14 @@ impl TranRun {
             (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
         } else {
             match start_point(circuit, &cm) {
+                // a relaxation oscillator built from switches (the NE555) can have an operating point after all: its timing
+                // capacitor open, a switch balanced in the middle of its threshold band. Started there the run never leaves it
+                // (nothing disturbs it), so it starts from zero charge as when no point is found. Not with initial voltages: they
+                // set the start (a behavioural charger's status switch balances at its precharge level, the cell held at IC=)
+                Ok((x, _)) if !holds_initial_voltages(circuit) && switch_balanced(circuit, &x) => {
+                    warnings.push("DC動作点で、スイッチが切り替わりの途中で釣り合っていたので (発振回路の不安定な釣り合いの点)、すべてゼロの状態から始めました (そこから始めると、発振が始まりません)".into());
+                    (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
+                }
                 Ok((x, vj)) => (x, vj),
                 // an oscillator has no stable operating point (with the capacitors open it sits on
                 // the unstable balance point): start from zero charge instead, like SPICE's UIC

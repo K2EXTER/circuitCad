@@ -4,6 +4,7 @@
 
 mod checks;
 mod common;
+mod comparator_models;
 mod diode_models;
 mod form_models;
 mod mcp;

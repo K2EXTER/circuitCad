@@ -2593,6 +2593,94 @@
       }
     ]
   },
+  "LM339": {
+    "fingerprint": "d3a4c74e8f1f8aec",
+    "source": "TI LM139/LM239/LM339/LM2901 データシート (SLCS006Z、2025-05 改訂) の 6.10 節 (LM339) と 6.14 節。VCC = 5 V、25 °C",
+    "date": "2026-11-18",
+    "rows": [
+      {
+        "item": "応答時間 (出力 High → Low)",
+        "datasheet": "— / 1.300 / — µs",
+        "target": "1.300 µs",
+        "condition": "100 mV の入力のステップ、5 mV のオーバードライブ (切り替わり点から)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "1.325 µs",
+        "diff": "+0.025 µs",
+        "tested": true
+      },
+      {
+        "item": "応答時間 (出力 Low → High)",
+        "datasheet": "— / 1.300 / — µs",
+        "target": "1.300 µs",
+        "condition": "100 mV の入力のステップ、5 mV のオーバードライブ (切り替わり点から)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "1.444 µs",
+        "diff": "+0.144 µs",
+        "tested": true
+      },
+      {
+        "item": "応答時間 TTL (出力 High → Low)",
+        "datasheet": "— / 0.300 / — µs",
+        "target": "0.300 µs",
+        "condition": "TTL の入力 (0 ↔ 3 V、基準 1.4 V)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "0.314 µs",
+        "diff": "+0.014 µs",
+        "tested": true
+      },
+      {
+        "item": "応答時間 TTL (出力 Low → High)",
+        "datasheet": "— / 0.300 / — µs",
+        "target": "0.300 µs",
+        "condition": "TTL の入力 (0 ↔ 3 V、基準 1.4 V)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "0.351 µs",
+        "diff": "+0.051 µs",
+        "tested": true
+      },
+      {
+        "item": "Low の出力電圧 (4 mA)",
+        "datasheet": "— / 0.150 / 0.400 V",
+        "target": "0.150 V",
+        "condition": "VOL: IOL = 4 mA (表)",
+        "model": "0.150 V",
+        "diff": "+0.000 V",
+        "tested": true
+      },
+      {
+        "item": "Low の出力電流 (1.5 V)",
+        "datasheet": "6.000 / 16.0 / — mA",
+        "target": "16.0 mA",
+        "condition": "IOL: VOL = 1.5 V (表)",
+        "model": "15.8 mA",
+        "diff": "-0.192 mA",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット",
+        "datasheet": "— / 2.000 / 5.000 mV",
+        "target": "2.000 mV",
+        "condition": "VIO: 出力が 2.5 V を越える IN+ − IN− (表)",
+        "model": "2.010 mV",
+        "diff": "+0.010 mV",
+        "tested": true
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 25.0 / 250 nA",
+        "target": "25.0 nA",
+        "condition": "IIB: ピンから出る向き (表)",
+        "model": "25.0 nA",
+        "diff": "-0.001 nA",
+        "tested": true
+      },
+      {
+        "item": "電源電流 (1 回路)",
+        "datasheet": "— / 200 / 500 µA",
+        "target": "200 µA",
+        "condition": "ICC: 無負荷、表の全部の回路の値を回路の数で割った",
+        "model": "200 µA",
+        "diff": "+0.000 µA",
+        "tested": true
+      }
+    ]
+  },
   "LM358": {
     "fingerprint": "2fb2969bbadc10ec",
     "source": "TI SLOS068AB(2024-10 改訂)",
@@ -2686,6 +2774,94 @@
         "condition": "5.7 en: f = 1 kHz",
         "model": "40 nV/√Hz",
         "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
+  "LM393": {
+    "fingerprint": "33830aee849e1cf4",
+    "source": "TI LMx93x・LM2903x データシート (JAJSIA8AH、2025-04 改訂) の 5.8 節 (LM393) と 5.11 節。VCC = 5 V、25 °C",
+    "date": "2026-11-18",
+    "rows": [
+      {
+        "item": "応答時間 (出力 High → Low)",
+        "datasheet": "— / 1.300 / — µs",
+        "target": "1.300 µs",
+        "condition": "100 mV の入力のステップ、5 mV のオーバードライブ (切り替わり点から)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "1.325 µs",
+        "diff": "+0.025 µs",
+        "tested": true
+      },
+      {
+        "item": "応答時間 (出力 Low → High)",
+        "datasheet": "— / 1.300 / — µs",
+        "target": "1.300 µs",
+        "condition": "100 mV の入力のステップ、5 mV のオーバードライブ (切り替わり点から)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "1.445 µs",
+        "diff": "+0.145 µs",
+        "tested": true
+      },
+      {
+        "item": "応答時間 TTL (出力 High → Low)",
+        "datasheet": "— / 0.300 / — µs",
+        "target": "0.300 µs",
+        "condition": "TTL の入力 (0 ↔ 3 V、基準 1.4 V)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "0.314 µs",
+        "diff": "+0.014 µs",
+        "tested": true
+      },
+      {
+        "item": "応答時間 TTL (出力 Low → High)",
+        "datasheet": "— / 0.300 / — µs",
+        "target": "0.300 µs",
+        "condition": "TTL の入力 (0 ↔ 3 V、基準 1.4 V)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
+        "model": "0.352 µs",
+        "diff": "+0.052 µs",
+        "tested": true
+      },
+      {
+        "item": "Low の出力電圧 (4 mA)",
+        "datasheet": "— / 0.130 / 0.400 V",
+        "target": "0.130 V",
+        "condition": "VOL: IOL = 4 mA (表)",
+        "model": "0.130 V",
+        "diff": "+0.000 V",
+        "tested": true
+      },
+      {
+        "item": "Low の出力電流 (1.5 V)",
+        "datasheet": "6.000 / — / — mA",
+        "target": "—",
+        "condition": "IOL: VOL = 1.5 V (表は min だけ。モデルは LM339 の typ 16 mA)",
+        "model": "15.9 mA",
+        "diff": "—",
+        "tested": false
+      },
+      {
+        "item": "入力オフセット",
+        "datasheet": "— / 2.000 / 5.000 mV",
+        "target": "2.000 mV",
+        "condition": "VIO: 出力が 2.5 V を越える IN+ − IN− (表)",
+        "model": "2.010 mV",
+        "diff": "+0.010 mV",
+        "tested": true
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 25.0 / 250 nA",
+        "target": "25.0 nA",
+        "condition": "IIB: ピンから出る向き (表)",
+        "model": "25.0 nA",
+        "diff": "-0.001 nA",
+        "tested": true
+      },
+      {
+        "item": "電源電流 (1 回路)",
+        "datasheet": "— / 225 / 500 µA",
+        "target": "225 µA",
+        "condition": "ICC: 無負荷、表の全部の回路の値を回路の数で割った",
+        "model": "225 µA",
+        "diff": "+0.000 µA",
         "tested": true
       }
     ]
