@@ -126,7 +126,7 @@ pub(crate) struct LiveLogic {
 }
 
 /// What kind of switch a part is, from the source its model holds the position in (`SW_PUSH`: `Vpress`, `SW_SLIDE`: `Vpos`).
-fn switch_of(c: &Component) -> Option<(InputKind, String)> {
+pub(super) fn switch_of(c: &Component) -> Option<(InputKind, String)> {
     let text = &c.custom.as_ref()?.sim.as_ref()?.text;
     let has = |name: &str| text.lines().any(|l| l.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case(name)));
     if has("Vpress") {

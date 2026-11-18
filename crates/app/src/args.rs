@@ -594,6 +594,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         app.breadboard.picked = args.get(i + 1).filter(|a| !a.starts_with("--")).cloned();
         // `--proto-power`: the supply switched on; `--proto-meter`: the meter's probes on the top rails (for screenshots)
         app.breadboard.powered = args.iter().any(|a| a == "--proto-power");
+        // `--proto-flip SW1,SW2`: those switches moved (push buttons held) once the circuit runs
+        if let Some(f) = args.iter().position(|a| a == "--proto-flip").and_then(|k| args.get(k + 1)) {
+            app.breadboard.flip_on_start = f.split(',').filter(|r| !r.is_empty()).map(String::from).collect();
+        }
         if args.iter().any(|a| a == "--proto-meter") {
             app.breadboard.tool = crate::breadboard::Tool::Meter;
             app.breadboard.red = Some(sch_core::breadboard::Hole::Rail { rail: sch_core::breadboard::Rail::TopPlus, col: 12 });

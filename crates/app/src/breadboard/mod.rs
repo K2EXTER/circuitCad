@@ -4,7 +4,8 @@
 //! schematic does not (or the other way round). Tools: move (parts and jumper ends, R turns a part, Delete removes a jumper), jumper
 //! (two holes), the meter (red and black probes on two holes: the DC voltage between them, B6 ③), the scope (a probe on a hole: the
 //! transient waveform of its net) and the power switch (LEDs light by their current; parts past their ratings show as burnt, with why,
-//! B6 ④). The layout is the sheet's (saved with it once the person moved something or asked for
+//! B6 ④; with the power on the circuit runs in time, `live.rs`, B6 ②: switches are clicked, the meter and scope read it now).
+//! The layout is the sheet's (saved with it once the person moved something or asked for
 //! a layout, `SheetSettings::breadboard`); until then it is laid out afresh from the schematic. Notes: `docs/code-notes/app/breadboard.md`.
 
 use crate::learn::{spaced, NOTE};
@@ -12,6 +13,9 @@ use crate::schematic::SchEditor;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 use sch_core::breadboard::{auto_layout, check, moved, net_at, rotated, with_wire, without_wire, wire_end_moved, Hole, Layout, Look, Problem, Rail};
 use std::collections::BTreeSet;
+
+mod live;
+use live::Live;
 
 /// What the person is dragging: the part, and the hole the pointer started on.
 struct Drag {
@@ -55,6 +59,13 @@ pub struct BreadboardView {
     pub powered: bool,
     /// The DC point was worked out once for the meter or the power switch (not again every frame when it fails).
     dc_asked: bool,
+    /// The circuit running with the power on (B6 ②), or why it could not start (with the schematic's edit count it was tried at).
+    live: Option<Live>,
+    live_failed: Option<(u64, String)>,
+    /// The mouse went down on a switch (not a drag or a click of the tool).
+    switch_down: bool,
+    /// Switches to move once the circuit starts running (`--proto-flip SW1,SW2`, for screenshots).
+    pub flip_on_start: Vec<String>,
 }
 
 const BOARD: Color32 = Color32::from_rgb(236, 234, 226);
@@ -168,7 +179,7 @@ impl BreadboardView {
             }
         });
         let power_label = if self.powered { i18n::tr("電源を切る") } else { i18n::tr("電源を入れる") };
-        if ui.button(power_label).on_hover_text(i18n::tr("電源を入れると、DC 動作点を計算して、LED が電流に合わせて光り、定格を超えた部品は焦げた印と理由が出ます (実物なら壊れるところ)")).clicked() {
+        if ui.button(power_label).on_hover_text(i18n::tr("電源を入れると、回路が時間とともに動き出します (過渡解析を実時間で進め続けます)。LED は流れる電流で光り、スイッチと押しボタンはクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます (実物なら壊れるところ)")).clicked() {
             self.powered = !self.powered;
             self.dc_asked = false;
         }
@@ -176,6 +187,7 @@ impl BreadboardView {
             self.dc_asked = true;
             sch.analyze_dc();
         }
+        self.live_frame(ui, sch, problems.is_empty());
         match self.tool {
             Tool::Meter => self.meter_ui(ui, sch, &l, problems.is_empty()),
             Tool::Scope => self.scope_ui(ui, sch, &l),
@@ -229,6 +241,68 @@ impl BreadboardView {
         });
     }
 
+    /// With the power on and the board wired as the schematic: the circuit runs (started again when the schematic changes), the
+    /// time goes on each frame, and the panel shows the time, the speed and the switches.
+    fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, matches: bool) {
+        if !(self.powered && matches) {
+            self.live = None;
+            self.switch_down = false;
+            return;
+        }
+        let stale = self.live.as_ref().is_none_or(|v| v.rev != sch.rev);
+        if stale && self.live_failed.as_ref().is_none_or(|(r, _)| *r != sch.rev) {
+            let speed = self.live.as_ref().map_or(1.0, |v| v.speed);
+            self.live = None;
+            match sch.live_circuit() {
+                Ok(c) => {
+                    let leds: Vec<String> = sch.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
+                    let mut lv = Live::start(c, sch.rev, &leds, sch.live_switches());
+                    lv.speed = speed;
+                    for r in std::mem::take(&mut self.flip_on_start) {
+                        if let Some(k) = lv.switch_index(&r) {
+                            lv.press(k);
+                        }
+                    }
+                    self.live = Some(lv);
+                    self.live_failed = None;
+                }
+                Err(e) => self.live_failed = Some((sch.rev, e)),
+            }
+        }
+        if let Some((_, e)) = &self.live_failed {
+            ui.colored_label(crate::theme::WARN, i18n::trf!("回路を動かせませんでした: {}", i18n::tr_dyn(e)));
+            return;
+        }
+        let Some(lv) = self.live.as_mut() else { return };
+        if let Some(e) = &lv.error {
+            ui.colored_label(crate::theme::WARN, i18n::tr_dyn(e));
+            return;
+        }
+        lv.frame(ui.input(|i| i.time));
+        ui.ctx().request_repaint();
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(i18n::trf!("動いています  {} s", format!("{:.2}", lv.time()))).color(crate::theme::OK));
+            ui.label(i18n::tr("速さ")).on_hover_text(i18n::tr("回路の時間の進み方です。速い回路 (kHz の発振など) は、遅くすると目で追えます"));
+            egui::ComboBox::from_id_salt("bb_speed").selected_text(i18n::tr_dyn(live::SPEEDS.iter().find(|(v, _)| *v == lv.speed).map_or("実時間", |(_, n)| *n))).show_ui(ui, |ui| {
+                for (v, name) in live::SPEEDS {
+                    ui.selectable_value(&mut lv.speed, v, i18n::tr_dyn(name));
+                }
+            });
+        });
+        if lv.behind {
+            ui.label(egui::RichText::new(i18n::tr("計算が画面の時間に追いついていません (この回路は実時間では重すぎます)。速さを遅くします")).color(crate::theme::WARN));
+        }
+        if !lv.switches.is_empty() {
+            ui.label(egui::RichText::new(i18n::tr("スイッチ・押しボタンは、ブレッドボードの上でクリックします (押しボタンは押している間だけ入ります)")).color(NOTE));
+            ui.horizontal_wrapped(|ui| {
+                for s in &lv.switches {
+                    let state = if s.on { i18n::tr("入") } else { i18n::tr("切") };
+                    ui.label(egui::RichText::new(format!("{} {state}", s.refdes)).color(if s.on { crate::theme::OK } else { NOTE }));
+                }
+            });
+        }
+    }
+
     /// The meter's reading: the DC voltage of the red probe's net against the black's.
     fn meter_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
         let (Some(red), Some(black)) = (self.red, self.black) else {
@@ -241,10 +315,14 @@ impl BreadboardView {
         }
         let (na, nb) = (net_at(&sch.sch, l, red), net_at(&sch.sch, l, black));
         let volts = sch.bench_voltages();
+        let live = self.live.as_ref().filter(|v| v.error.is_none());
         let v_of = |n: &Option<String>| -> Option<f64> {
             let n = n.as_ref()?;
             if is_ground(n) {
                 return Some(0.0);
+            }
+            if let Some(v) = live.and_then(|lv| lv.voltage(n)) {
+                return Some(v);
             }
             volts.as_ref()?.iter().find(|(m, _)| m.eq_ignore_ascii_case(n)).map(|(_, v)| *v)
         };
@@ -274,6 +352,15 @@ impl BreadboardView {
             return;
         };
         ui.label(i18n::trf!("探り針: {} ({net})", h.name()));
+        if let Some(lv) = self.live.as_mut().filter(|v| v.error.is_none()) {
+            lv.set_probe(Some(net.clone()));
+            let (t, v) = lv.trace();
+            ui.label(egui::RichText::new(i18n::tr("動いている波形 (画面の直近 3 秒)")).color(NOTE));
+            if t.len() > 1 {
+                scope_plot(ui, &t, &v);
+            }
+            return;
+        }
         let signal = if is_ground(&net) { None } else { sch.tran_signal(&format!("V({net})")) };
         if ui.button(i18n::tr("過渡解析を実行")).on_hover_text(i18n::tr("回路図の過渡解析の欄の時間で計算し直します")).clicked() {
             sch.analyze_tran();
@@ -314,8 +401,26 @@ impl BreadboardView {
         let wire_end_at = |p: Pos2| -> Option<(usize, usize)> {
             l.wires.iter().enumerate().flat_map(|(k, w)| [(k, 0, w.a), (k, 1, w.b)]).find(|(_, _, h)| to(*h).distance(p) < pitch * 0.45).map(|(k, e, _)| (k, e))
         };
+        // with the circuit running, a press on a switch moves it (a push button closes while held) instead of the tool's click
+        let mut on_switch = self.switch_down;
+        if let Some(lv) = self.live.as_mut().filter(|v| v.error.is_none()) {
+            if response.hovered()
+                && ui.input(|i| i.pointer.primary_pressed())
+                && let Some(p) = ui.input(|i| i.pointer.interact_pos())
+                && let Some(k) = l.parts.iter().filter(|x| part_rect(x, to, pitch).expand(pitch * 0.4).contains(p)).find_map(|x| lv.switch_index(&x.refdes))
+            {
+                lv.press(k);
+                self.switch_down = true;
+                on_switch = true;
+            }
+            if ui.input(|i| i.pointer.primary_released()) {
+                lv.release();
+                self.switch_down = false;
+            }
+        }
         // dragging (the move tool): a jumper's end, or the part, follows the pointer by whole holes; let go to keep it there
         if self.tool == Tool::Move
+            && !on_switch
             && response.drag_started()
             && let Some(p) = response.interact_pointer_pos()
         {
@@ -390,6 +495,7 @@ impl BreadboardView {
         }
         // clicks of the other tools
         if response.clicked()
+            && !on_switch
             && let Some(h) = response.interact_pointer_pos().and_then(hole_at)
         {
             match self.tool {
@@ -496,15 +602,21 @@ impl BreadboardView {
         let mut hovered_part = None;
         // with the power on: the LEDs' currents and the parts past their ratings
         let on = self.powered && problems.is_empty();
-        let currents = if on { sch.dc_part_currents() } else { vec![] };
+        let running = self.live.as_ref().filter(|v| on && v.error.is_none());
+        let currents = match running {
+            Some(lv) => l.parts.iter().filter_map(|p| lv.current(&p.refdes).map(|i| (p.refdes.clone(), i))).collect(),
+            None if on => sch.dc_part_currents(),
+            None => vec![],
+        };
         let issues = if on { sch.dc_ratings() } else { vec![] };
         for p in l.parts.iter().filter(|p| sch.sch.components.iter().any(|c| c.refdes == p.refdes && c.kind == sch_core::Kind::Led)) {
             let i = currents.iter().find(|(n, _)| *n == p.refdes).map_or(0.0, |(_, i)| *i);
-            let glow = (i / 0.02).clamp(0.0, 1.5) as f32;
-            if glow > 0.02 && !issues.iter().any(|r| r.refdes == p.refdes && r.level == sim_core::RatingLevel::Over) {
+            // the eye sees an LED bright at a few mA: the glow follows the square root of the current (1 at 20 mA)
+            let glow = (i.max(0.0) / 0.02).sqrt().clamp(0.0, 1.3) as f32;
+            if glow > 0.05 && !issues.iter().any(|r| r.refdes == p.refdes && r.level == sim_core::RatingLevel::Over) {
                 let c = part_rect(p, to, pitch).center();
                 for k in 0..4 {
-                    painter.circle_filled(c, pitch * (1.0 + 0.6 * k as f32) * glow.max(0.4), Color32::from_rgb(255, 80, 60).gamma_multiply(0.18 * glow.min(1.0)));
+                    painter.circle_filled(c, pitch * (1.0 + 0.6 * k as f32) * glow.max(0.5), Color32::from_rgb(255, 80, 60).gamma_multiply(0.25 * glow.min(1.0)));
                 }
             }
         }
@@ -515,6 +627,9 @@ impl BreadboardView {
             if response.hover_pos().is_some_and(|h| rect.contains(h)) {
                 hovered_part = Some((p.refdes.clone(), comp.map(|c| c.value.clone()).unwrap_or_default()));
             }
+        }
+        if let Some(lv) = running {
+            draw_running(&painter, sch, &l, lv, to, pitch, &font, ui.input(|i| i.time));
         }
         for r in &issues {
             let Some(p) = l.parts.iter().find(|p| p.refdes == r.refdes) else { continue };
@@ -552,7 +667,8 @@ impl BreadboardView {
         // what is under the pointer
         if !dragging {
             if let Some((r, v)) = &hovered_part {
-                response.clone().on_hover_text(i18n::trf!("{r} {v}\nドラッグで差し替え"));
+                let switch = running.is_some_and(|lv| lv.switch_index(r).is_some());
+                response.clone().on_hover_text(if switch { i18n::trf!("{r} {v}\nクリックで切り替え (押しボタンは押している間だけ入る)") } else { i18n::trf!("{r} {v}\nドラッグで差し替え") });
             } else if let Some(h) = hover {
                 let here: Vec<String> = l.parts.iter().flat_map(|p| p.leads.iter().filter(|(_, lh)| lh.node() == h.node()).map(move |(pin, _)| format!("{}.{pin}", p.refdes))).collect();
                 let tip = if here.is_empty() { h.name() } else { format!("{}: {}", h.name(), here.join(", ")) };
@@ -576,6 +692,63 @@ impl BreadboardView {
     /// The status line's hint.
     pub fn hint(&self) -> String {
         "縦の 5 つの穴は中でつながっています。ポインタを穴に合わせると、つながっている穴が光ります。部品をドラッグすると差し替えられ、回路図と違うつなぎ方は赤い丸と左の一覧で分かります".into()
+    }
+}
+
+/// The marks of the running circuit over the parts: where each switch is, a motor's speed, a buzzer that sounds.
+#[allow(clippy::too_many_arguments)]
+fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, lv: &Live, to: impl Fn(Hole) -> Pos2 + Copy, pitch: f32, font: &egui::FontId, now: f64) {
+    let volt = |p: &sch_core::breadboard::Placed, pin: &str| -> Option<f64> {
+        let h = p.leads.iter().find(|(q, _)| q.eq_ignore_ascii_case(pin))?.1;
+        let n = net_at(&sch.sch, l, h)?;
+        if is_ground(&n) { Some(0.0) } else { lv.voltage(&n) }
+    };
+    for p in &l.parts {
+        let rect = part_rect(p, to, pitch);
+        if let Some(s) = lv.switch_index(&p.refdes).map(|k| &lv.switches[k]) {
+            let (c, text) = match (s.push, s.on) {
+                (true, true) => (crate::theme::OK, i18n::tr("押している")),
+                (true, false) => (Color32::from_gray(90), i18n::tr("押す")),
+                (false, true) => (crate::theme::OK, i18n::tr("入")),
+                (false, false) => (Color32::from_gray(90), i18n::tr("切")),
+            };
+            painter.rect_stroke(rect.expand(pitch * 0.25), 3.0, Stroke::new(2.5, c), egui::StrokeKind::Middle);
+            // the state on a tag above the part (jumpers may run there)
+            let galley = painter.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE);
+            let tag = Rect::from_center_size(rect.center_top() - Vec2::new(0.0, pitch * 0.9), galley.size() + Vec2::new(10.0, 4.0));
+            painter.rect_filled(tag, 4.0, c);
+            painter.galley(tag.center() - galley.size() / 2.0, galley, Color32::WHITE);
+            continue;
+        }
+        let model = sch.sch.components.iter().find(|c| c.refdes == p.refdes).and_then(|c| c.custom.as_ref()).map(|c| c.name.to_ascii_uppercase()).unwrap_or_default();
+        if model.contains("MOTOR")
+            && let Some(krpm) = volt(p, "SPD")
+        {
+            // the speed pin is 1 V per 1000 rpm; the spoke turns at a speed the eye can follow
+            let rpm = krpm * 1000.0;
+            let c = rect.center() - Vec2::new(0.0, pitch * 1.6);
+            let turns = now * (rpm / 600.0).clamp(-3.0, 3.0);
+            painter.circle(c, pitch * 0.9, Color32::from_rgb(70, 74, 82), Stroke::new(1.0, Color32::from_gray(160)));
+            let a = (turns * std::f64::consts::TAU) as f32;
+            painter.line_segment([c, c + Vec2::angled(a) * pitch * 0.8], Stroke::new(3.0, Color32::from_rgb(240, 200, 60)));
+            painter.text(c + Vec2::new(pitch * 1.1, 0.0), egui::Align2::LEFT_CENTER, format!("{:.0} rpm", rpm), font.clone(), Color32::from_gray(230));
+        }
+        if model.contains("BUZZER") {
+            let v = match (p.leads.first(), p.leads.get(1)) {
+                (Some((a, _)), Some((b, _))) => volt(p, a).zip(volt(p, b)).map(|(x, y)| (x - y).abs()),
+                _ => None,
+            };
+            if v.is_some_and(|v| v > 1.0) {
+                // sound waves, pulsing
+                let c = rect.center();
+                let k = (now * 4.0).fract() as f32;
+                for i in 0..3 {
+                    let r = pitch * (0.8 + 0.5 * (i as f32 + k));
+                    painter.circle_stroke(c, r, Stroke::new(1.5, Color32::from_rgb(250, 210, 80).gamma_multiply(1.0 - (i as f32 + k) / 3.0)));
+                }
+                painter.text(c - Vec2::new(0.0, pitch * 1.4), egui::Align2::CENTER_BOTTOM, "♪", font.clone(), Color32::from_rgb(250, 210, 80));
+            }
+        }
     }
 }
 

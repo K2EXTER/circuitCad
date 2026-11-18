@@ -27,6 +27,16 @@ impl SchEditor {
         self.fresh_dc().map(|v| v.ratings.clone()).unwrap_or_default()
     }
 
+    /// The circuit the breadboard runs live (B6 ②), or why it cannot be built.
+    pub fn live_circuit(&self) -> Result<sim_core::Circuit, String> {
+        self.sim_circuit().map_err(|e| e.first().cloned().unwrap_or_default())
+    }
+
+    /// The switches clicked on the breadboard while it runs: (part, the source in its model that holds the position, push button).
+    pub fn live_switches(&self) -> Vec<(String, String, bool)> {
+        self.sch.components.iter().filter_map(|c| super::live_logic::switch_of(c).map(|(k, s)| (c.refdes.clone(), s, k == super::live_logic::InputKind::Push))).collect()
+    }
+
     /// A signal of the last transient run (times, values), with the run's circuit unchanged since.
     pub fn tran_signal(&self, name: &str) -> Option<(Vec<f64>, Vec<f64>)> {
         let r = self.tran.as_ref()?.outcome.as_ref().ok()?;
