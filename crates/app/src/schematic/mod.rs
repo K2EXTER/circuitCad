@@ -1027,6 +1027,7 @@ mod spec_table;
 mod bench_data;
 mod power_ui;
 mod power_on;
+mod for_bench;
 mod requirements;
 mod wizard;
 mod param;

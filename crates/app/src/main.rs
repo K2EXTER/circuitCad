@@ -16,6 +16,7 @@ mod help;
 mod icons;
 mod link;
 mod bench_guide;
+mod bench_tab;
 mod power_on_guide;
 mod measure_guide;
 mod multiboard;
@@ -56,6 +57,8 @@ use tips::TIPS;
 enum Mode {
     Schematic,
     Board,
+    /// The work on the real board: fitting, first power-on, measuring, pass / fail, repair (`bench_tab.rs`).
+    Bench,
 }
 
 struct App {
@@ -82,6 +85,8 @@ struct App {
     measure: measure_guide::MeasureGuide,
     bench: bench_guide::BenchGuide,
     power_on: power_on_guide::PowerOnGuide,
+    /// The bench tab ("実機"): its steps and the parts ticked as fitted.
+    bench_tab: bench_tab::BenchTab,
     /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
     auto_shot: Option<(std::path::PathBuf, u32)>,
     /// The `.ccproj` file the schematic and board were opened from / last saved to.
@@ -173,6 +178,27 @@ impl App {
         self.board_ed.set_part_temps(temps);
     }
 
+    /// Does what a button of the bench tab asked for.
+    fn bench_action(&mut self, a: bench_tab::BenchAction) {
+        use bench_tab::BenchAction as B;
+        match a {
+            B::ToBoard => self.mode = Mode::Board,
+            B::ToSchematic(key) => {
+                self.mode = Mode::Schematic;
+                if !key.is_empty() {
+                    self.sch.open_analysis_section(key);
+                }
+            }
+            B::Lesson(i) => {
+                self.mode = Mode::Schematic;
+                self.sch.start_lesson(i);
+            }
+            B::BoardRepairLesson => self.start_board_lesson(7),
+            B::Guide(id) => self.bench.show_guide(id),
+            B::MeasureGuide => self.measure.open = true,
+        }
+    }
+
     /// Carry the board's copper resistance to the schematic's simulations, or take it away.
     fn apply_post_layout(&mut self, on: bool) {
         if !on {
@@ -204,7 +230,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), power_on: Default::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), power_on: Default::default(), bench_tab: Default::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
     }
 }
 
@@ -366,7 +392,10 @@ impl eframe::App for App {
         if std::mem::take(&mut self.bench.want_power_on) {
             self.power_on.open_for(&self.sch);
         }
-        self.power_on.show(ui.ctx(), &self.sch);
+        // the bench tab draws the guide in its step: not as a window as well
+        if !(self.mode == Mode::Bench && self.bench_tab.step == bench_tab::Step::PowerOn) {
+            self.power_on.show(ui.ctx(), &self.sch);
+        }
         // the bench step: the guide window, and "three readings compared with the simulation" finishes it
         let compared = self.sch.compared_measurements();
         if compared >= 3 {
@@ -392,6 +421,8 @@ impl eframe::App for App {
                 let board_tab = if stale { egui::RichText::new(board_tab).color(crate::theme::WARN) } else { egui::RichText::new(board_tab) };
                 ui.selectable_value(&mut self.mode, Mode::Board, board_tab)
                     .on_hover_text(if stale { i18n::tr("⚠ 回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)") } else { i18n::tr("基板の画面。回路図から部品を取り込んで、配置・配線します。• は保存していない変更があるしるしです") });
+                ui.selectable_value(&mut self.mode, Mode::Bench, i18n::tr("実機"))
+                    .on_hover_text(i18n::tr("届いた基板を組み立てて動かす画面。組み立て → 電源投入 → 測る → 合否 → 修理 の手順が左に、基板の配置図が真ん中に出て、手順ごとに付ける部品や測る点が光ります"));
                 // a project of several boards: which one is in the editors
                 if self.system.names.len() > 1 {
                     let mut k = self.system.active;
@@ -405,7 +436,8 @@ impl eframe::App for App {
                     }
                 }
                 ui.separator();
-                let sch_mode = self.mode == Mode::Schematic;
+                // the bench tab's own data (the spec table's readings) is the schematic's
+                let sch_mode = self.mode != Mode::Board;
                 ui.menu_button(i18n::tr("ファイル"), |ui| {
                     if ui.button(i18n::tr("プロジェクトを開く…")).on_hover_text(i18n::tr("回路図と基板をまとめて保存したファイル (.ccproj) を開きます。いまの回路図と基板は置き換わります")).clicked() {
                         self.open_project();
@@ -726,7 +758,7 @@ impl eframe::App for App {
             // line 1: what just happened (left) and a rotating general tip (right); line 2: what to do next
             ui.spacing_mut().item_spacing.y = 4.0;
             ui.horizontal(|ui| {
-                let status = if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status };
+                let status = if self.mode == Mode::Board { &self.board_ed.status } else { &self.sch.status };
                 let status = &i18n::tr_dyn(status);
                 if self.show_hints {
                     // a long status keeps to two thirds of the line (the rest is the tip) and is read in full by pointing at it
@@ -763,7 +795,11 @@ impl eframe::App for App {
                 }
             });
             if self.show_hints {
-                let hint = i18n::tr_dyn(&if self.mode == Mode::Schematic { self.sch.hint() } else { self.board_ed.hint() });
+                let hint = i18n::tr_dyn(&match self.mode {
+                    Mode::Schematic => self.sch.hint(),
+                    Mode::Board => self.board_ed.hint(),
+                    Mode::Bench => self.bench_tab.hint(),
+                });
                 // the word "ヒント" carries the colour; the sentence is plain text so a long hint stays easy to read
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(i18n::tr("ヒント")).strong().color(crate::theme::OK));
@@ -771,6 +807,14 @@ impl eframe::App for App {
                 });
             }
         });
+        if self.mode == Mode::Bench {
+            let from_panel = egui::Panel::left("bench_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.bench_tab.panel(ui, &mut self.sch, &self.board_ed.board, &mut self.power_on)).inner;
+            let from_canvas = egui::CentralPanel::default().show(ui, |ui| self.bench_tab.canvas(ui, &self.board_ed.board, &self.sch, &self.power_on)).inner;
+            if let Some(a) = from_panel.or(from_canvas) {
+                self.bench_action(a);
+            }
+            return;
+        }
         if self.mode == Mode::Schematic {
             egui::Panel::left("sch_tools").default_size(PANEL_WIDTH).min_size(220.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.sch.side_panel(ui));
             if self.sch.has_wave() {

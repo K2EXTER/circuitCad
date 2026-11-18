@@ -169,6 +169,26 @@ impl SchEditor {
         added
     }
 
+    /// The nets (voltage rows: `V(VOUT)` or `VOUT`) and the parts (current rows) the spec table's rows measure.
+    pub fn spec_points(&self) -> (Vec<String>, Vec<String>) {
+        let (mut nets, mut parts) = (vec![], vec![]);
+        for r in &self.specs {
+            let t = r.spec.target.trim();
+            if t.is_empty() {
+                continue;
+            }
+            if r.spec.kind.target_is_part() {
+                parts.push(t.to_string());
+                continue;
+            }
+            let inner = t.strip_prefix("V(").or_else(|| t.strip_prefix("v(")).and_then(|x| x.strip_suffix(')')).unwrap_or(t);
+            if !inner.is_empty() && !inner.contains(',') && !nets.iter().any(|n: &String| n.eq_ignore_ascii_case(inner)) {
+                nets.push(inner.to_string());
+            }
+        }
+        (nets, parts)
+    }
+
     /// How many rows have a bench measurement that could be compared with a simulated value right now.
     /// How many rows the spec table has (the bench guide's step 3 is done once it has some).
     pub fn spec_rows(&self) -> usize {

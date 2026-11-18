@@ -583,6 +583,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(id) = args.iter().position(|a| a == "--bench").and_then(|i| args.get(i + 1)) {
         app.bench.show_guide(id);
     }
+    // `--bench-tab [assemble|power_on|measure|judge|repair]`: the bench tab ("実機"), at that step
+    if let Some(i) = args.iter().position(|a| a == "--bench-tab") {
+        app.mode = Mode::Bench;
+        if let Some(s) = args.get(i + 1).and_then(|k| crate::bench_tab::Step::from_key(k)) {
+            app.bench_tab.step = s;
+        }
+    }
     // `--power-on [mA]`: the first power-on guide for the opened schematic, with a reading typed in
     if let Some(i) = args.iter().position(|a| a == "--power-on") {
         app.power_on.open_for(&app.sch);

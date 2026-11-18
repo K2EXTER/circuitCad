@@ -83,8 +83,48 @@ impl PowerOnGuide {
             return;
         }
         let mut open = true;
+        egui::Window::new(i18n::tr("最初の電源投入のガイド")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(560.0).default_height(680.0).vscroll(true).show(ctx, |ui| self.contents(ui, sch));
+        if !open {
+            self.open = false;
+        }
+    }
+
+    /// Calculates for the schematic unless an answer is there already (the bench tab's step shows it without a press).
+    pub fn ensure_run(&mut self, sch: &SchEditor) {
+        if self.result.is_none() {
+            self.run(sch);
+        }
+    }
+
+    /// The supplies the answer has (their part names, V1 ...), for the bench tab to light up on the board.
+    pub fn supply_names(&self) -> Vec<String> {
+        match &self.result {
+            Some((Ok(p), _)) => p.supplies.iter().map(|s| s.name.clone()).collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Every supply has a reading typed in, and each is in the range a working board falls in.
+    pub fn all_normal(&self) -> bool {
+        let Some((Ok(p), _)) = &self.result else { return false };
+        !p.supplies.is_empty()
+            && p.supplies.iter().all(|s| {
+                let typed = self.measured.iter().find(|(n, _)| *n == s.name).map(|(_, t)| t.trim()).unwrap_or("");
+                sim_core::parse_value(typed).filter(|x| x.is_finite()).is_some_and(|ma| s.judge(ma * 1e-3) == Reading::Normal)
+            })
+    }
+
+    /// The window's contents, also drawn in the step "電源投入" of the bench tab (`bench_tab.rs`).
+    pub fn contents(&mut self, ui: &mut egui::Ui, sch: &SchEditor) {
+        if self.body(ui, sch) {
+            self.run(sch);
+        }
+    }
+
+    /// Draws the guide; true when "計算する" was pressed.
+    fn body(&mut self, ui: &mut egui::Ui, sch: &SchEditor) -> bool {
         let mut rerun = false;
-        egui::Window::new(i18n::tr("最初の電源投入のガイド")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(560.0).default_height(680.0).vscroll(true).show(ctx, |ui| {
+        {
             ui.label(spaced(INTRO));
             ui.add_space(4.0);
             ui.colored_label(WARN, i18n::tr(SAFETY));
@@ -103,7 +143,7 @@ impl PowerOnGuide {
             });
             let Some((result, sig)) = &self.result else {
                 ui.label(i18n::tr("「計算する」を押すと、いまの回路図から電流を計算します"));
-                return;
+                return rerun;
             };
             if *sig != sch.circuit_signature() {
                 ui.colored_label(WARN, i18n::tr("回路図が変わりました。「計算する」で計算し直してください"));
@@ -112,7 +152,7 @@ impl PowerOnGuide {
                 Ok(p) => p,
                 Err(e) => {
                     ui.colored_label(BAD, i18n::tr_dyn(e));
-                    return;
+                    return rerun;
                 }
             };
             ui.separator();
@@ -182,13 +222,8 @@ impl PowerOnGuide {
             }
             ui.separator();
             ui.label(spaced(LIMITS).color(NOTE));
-        });
-        if rerun {
-            self.run(sch);
         }
-        if !open {
-            self.open = false;
-        }
+        rerun
     }
 }
 

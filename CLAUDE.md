@@ -57,6 +57,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
 | `multiboard.rs` | 複数の基板 (E5): プロジェクトの基板の切り替え・足す・外す、「基板どうしのつなぎ」の窓(`project.rs` の `System`、形式 2) |
 | `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
+| `bench_tab.rs` | 実機のタブ(`Mode::Bench`。組み立て → 電源投入 → 測る → 合否 → 修理 の手順と、光る基板の配置図。`docs/code-notes/app/bench-tab.md`) |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |
 | `canvas_theme.rs` `actions.rs` `app_actions.rs` | 回路図のキャンバスの色の役の表 (暗い地 / 紙・使う人の色) / 操作とキーの表と Ctrl+K のパレット / 窓全体のキーとパレットの中身 |
 | `samples.rs` `source_form.rs` `link.rs` `xcheck*.rs` | サンプル一覧(`docs/examples`)/ 電源値フォーム / 回路図・基板・3D の連動 / ngspice との検算 |

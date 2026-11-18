@@ -138,7 +138,8 @@ impl App {
 
     /// Does one operation of the table, in the editor it belongs to (switching to it when it is the other one).
     pub(super) fn run_act(&mut self, act: Act) {
-        let sch_mode = self.mode == Mode::Schematic;
+        // the bench tab's own data (the spec table's readings) is the schematic's
+        let sch_mode = self.mode != Mode::Board;
         match act {
             Act::Palette => self.open_palette(false),
             Act::Find => self.open_palette(true),
