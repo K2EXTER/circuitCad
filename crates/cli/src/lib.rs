@@ -11,6 +11,7 @@ mod build;
 mod design;
 mod fitcmd;
 mod libcmd;
+mod lineupcmd;
 mod locuscmd;
 pub mod mcp;
 mod models;

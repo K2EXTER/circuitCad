@@ -1,0 +1,39 @@
+{
+  "maker": "Nichicon",
+  "series": "UHE",
+  "feature": "小形・低インピーダンス",
+  "datasheet": "https://www.nichicon.co.jp/english/series_items/catalog_pdf/e-uhe.pdf",
+  "source": "データシート e-uhe.pdf (UHE series、CAT.8100M)",
+  "checked": "2026-11-18",
+  "temp": [-40, 105],
+  "tolerance_pct": 20,
+  "leak_k": 0.01,
+  "leak_min_ua": 0,
+  "coeff_freqs": [50, 120, 300, 1000, 10000],
+  "coeffs": [
+    { "cap_max": 27, "k": [0.45, 0.55, 0.70, 0.90, 1.00] },
+    { "cap_max": 330, "k": [0.60, 0.70, 0.85, 0.95, 1.00] },
+    { "cap_max": 1000, "k": [0.65, 0.75, 0.90, 0.98, 1.00] },
+    { "cap_max": 18000, "k": [0.75, 0.80, 0.95, 1.00, 1.00] }
+  ],
+  "life": [
+    { "d_max": 10, "v_max": 10, "hours": 6000 },
+    { "d_max": 10, "v_min": 16, "hours": 7000 },
+    { "d_min": 12.5, "v_max": 10, "hours": 8000 },
+    { "d_min": 12.5, "v_min": 16, "hours": 10000 }
+  ],
+  "leads": [
+    { "d": 8, "pitch": 3.5, "lead": 0.6 },
+    { "d": 10, "pitch": 5.0, "lead": 0.6 },
+    { "d": 12.5, "pitch": 5.0, "lead": 0.6, "long_over": 25, "long_lead": 0.8 },
+    { "d": 16, "pitch": 7.5, "lead": 0.8 },
+    { "d": 18, "pitch": 7.5, "lead": 0.8 }
+  ],
+  "order_note": "リードの切りそろえ・曲げ・テープ包装は、型番の末尾 (12 桁目の大きさの記号) のあとに記号を足す (大きさの記号の無い型番は「1」を足してから)。",
+  "bundle": [
+    "UHE1C331MPD", "UHE1C471MPD", "UHE1C102MPD", "UHE1C222MHD",
+    "UHE1E221MPD", "UHE1E471MPD", "UHE1E102MPD",
+    "UHE1V101MPD", "UHE1V331MPD",
+    "UHE1H101MPD", "UHE1H221MPD", "UHE1H471MPD", "UHE1H102MHD"
+  ]
+}

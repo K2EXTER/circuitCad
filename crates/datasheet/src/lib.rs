@@ -21,6 +21,7 @@ pub mod spec_table;
 pub mod thermal;
 pub mod companions;
 pub mod ordering;
+pub mod lineup;
 pub mod pin_list;
 pub mod lead_pins;
 mod headings;
@@ -347,6 +348,17 @@ impl Datasheet {
     pub fn voltage_options(&self) -> Vec<f64> {
         let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
         ordering::voltage_options(&pages)
+    }
+
+    /// The lineup tables (one row per part number) of every page (`lineup::lineups`).
+    pub fn lineups(&self) -> Vec<lineup::Lineup> {
+        let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
+        lineup::lineups(&pages)
+    }
+
+    /// The aluminium electrolytic capacitors of the lineup tables (`lineup::electrolytic`).
+    pub fn electrolytic_rows(&self) -> Vec<lineup::ElcapRow> {
+        lineup::electrolytic(&self.lineups())
     }
 
     /// The thermal resistances of every page (`thermal::read`): the thermal table's rows and the power deratings.

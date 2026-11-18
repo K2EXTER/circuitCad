@@ -187,6 +187,14 @@ impl SchEditor {
         Some(ok)
     }
 
+    /// The electrolytic capacitor's lineup table of the form's PDF read, with these part numbers checked (`--form-lineup [PN,PN]`).
+    pub fn lineup_in_form(&mut self, parts: &str) {
+        if let Some(f) = self.form.as_mut() {
+            let parts: Vec<&str> = parts.split(',').map(str::trim).filter(|p| !p.is_empty()).collect();
+            f.lineup_read_and_pick(&parts);
+        }
+    }
+
     pub fn linear_in_form(&mut self, what: &str) {
         if let Some(f) = self.form.as_mut() {
             match what {

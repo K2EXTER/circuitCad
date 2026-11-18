@@ -66,6 +66,10 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         data sheet: answers the .model card, its notes and each reading next to the model's
                                         value (rows, error_pct); 'write' puts it into DIR/<part>.part.json (default: the library).
                                         The file's form: crates/part-lib/fits/*.fit.json (the bundled parts' readings)
+  lineup FILE.pdf [series=F.elcap.json] [pick=PN,..|bundle|all] [write] [dir=DIR]
+                                        an electrolytic capacitor's lineup table (one row per part number): lists the rows;
+                                        'pick' makes those parts with the series' tables (crates/part-lib/elcaps/), 'write' saves
+                                        them into DIR (default: the library)
  Several boards in one project
   project check FILE.ccproj             the links between the boards' connectors checked pin by pin (the same net names on both sides,
                                         power not on ground, pins not crossed, a signal not ending in an open pin)
@@ -375,6 +379,7 @@ impl Session {
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),
             "fit" => self.fit(args),
+            "lineup" => self.lineup(args),
             "shape" => self.shape(args),
             "project" => self.project(args),
             "calc" => self.calc(args),

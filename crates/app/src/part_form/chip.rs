@@ -95,6 +95,9 @@ impl PartForm {
             let kind = self.pas_kind;
             if kind == PassiveKind::Capacitor {
                 self.vendor_ui(ui);
+                if self.pas_polar {
+                    self.lineup_ui(ui);
+                }
             }
             egui::Grid::new("pas_grid").num_columns(2).show(ui, |ui| {
                 let row = |ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str, hint: &str| {

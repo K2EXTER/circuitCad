@@ -426,6 +426,19 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("EEUFR1H100", include_str!("../examples/EEUFR1H100.part.json")),
     ("EEUFR1H470", include_str!("../examples/EEUFR1H470.part.json")),
     ("EEUFR1H101", include_str!("../examples/EEUFR1H101.part.json")),
+    ("UHE1C331MPD", include_str!("../examples/UHE1C331MPD.part.json")),
+    ("UHE1C471MPD", include_str!("../examples/UHE1C471MPD.part.json")),
+    ("UHE1C102MPD", include_str!("../examples/UHE1C102MPD.part.json")),
+    ("UHE1C222MHD", include_str!("../examples/UHE1C222MHD.part.json")),
+    ("UHE1E221MPD", include_str!("../examples/UHE1E221MPD.part.json")),
+    ("UHE1E471MPD", include_str!("../examples/UHE1E471MPD.part.json")),
+    ("UHE1E102MPD", include_str!("../examples/UHE1E102MPD.part.json")),
+    ("UHE1V101MPD", include_str!("../examples/UHE1V101MPD.part.json")),
+    ("UHE1V331MPD", include_str!("../examples/UHE1V331MPD.part.json")),
+    ("UHE1H101MPD", include_str!("../examples/UHE1H101MPD.part.json")),
+    ("UHE1H221MPD", include_str!("../examples/UHE1H221MPD.part.json")),
+    ("UHE1H471MPD", include_str!("../examples/UHE1H471MPD.part.json")),
+    ("UHE1H102MHD", include_str!("../examples/UHE1H102MHD.part.json")),
     ("GRM1882C1H102JA01", include_str!("../examples/GRM1882C1H102JA01.part.json")),
     ("GRM1882C1H103JA01", include_str!("../examples/GRM1882C1H103JA01.part.json")),
     ("GRM188R72A104KA35", include_str!("../examples/GRM188R72A104KA35.part.json")),
@@ -927,6 +940,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
 }
 
 pub mod diode;
+pub mod elcap;
 pub mod fit;
 pub mod kicad;
 pub mod kicad_import;
