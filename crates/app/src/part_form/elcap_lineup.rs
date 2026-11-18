@@ -46,10 +46,12 @@ impl PartForm {
             self.lineup.message = Some((false, "データシート (PDF) を開いてください".into()));
             return;
         };
-        let rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(row_of).collect();
+        let mut rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(row_of).collect();
         let l = &mut self.lineup;
         l.picked.clear();
-        l.series = rows.first().and_then(|r| elcap::Series::for_part(&r.part));
+        l.series = rows.iter().find(|r| !r.part.is_empty()).and_then(|r| elcap::Series::for_part(&r.part));
+        // a table without part numbers (Rubycon's): a plain name from the values, to be renamed in the form
+        elcap::name_rows(l.series.as_ref(), &mut rows);
         l.message = Some(if rows.is_empty() {
             (false, "型番ごとの行の表 (容量・大きさ・型番の列) が見つかりませんでした。文字の無い PDF や、文字を抜き出すと列が崩れる PDF は読めません。値は下の欄に手で入れてください".into())
         } else {

@@ -24,6 +24,7 @@ pub mod ordering;
 pub mod lineup;
 pub mod pin_list;
 pub mod lead_pins;
+mod glyphs;
 mod headings;
 mod pin_table;
 mod suggest;
@@ -44,7 +45,9 @@ pub struct Datasheet {
     pdf: Pdf,
     pages: usize,
     /// The words of each page, read the first time they are asked for.
-    words: Vec<OnceCell<Vec<Word>>>,
+    words: Vec<OnceCell<text::PageText>>,
+    /// The words drawn with glyphs that have no Unicode, their letters learned from the OCR (`glyphs::recover`).
+    recovered: Vec<OnceCell<Vec<Word>>>,
     /// Pages without text (a scanned PDF) are read by the OCR (`set_ocr`).
     ocr: std::cell::Cell<bool>,
     /// The words the OCR read off each page without text.
@@ -71,7 +74,7 @@ impl Datasheet {
         if pages == 0 {
             return Err("このPDFにはページがありません".into());
         }
-        Ok(Self { pdf, pages, words: (0..pages).map(|_| OnceCell::new()).collect(), ocr: std::cell::Cell::new(false), ocr_words: (0..pages).map(|_| OnceCell::new()).collect() })
+        Ok(Self { pdf, pages, words: (0..pages).map(|_| OnceCell::new()).collect(), ocr: std::cell::Cell::new(false), ocr_words: (0..pages).map(|_| OnceCell::new()).collect(), recovered: (0..pages).map(|_| OnceCell::new()).collect() })
     }
 
     /// Reads a PDF file.
@@ -102,12 +105,40 @@ impl Datasheet {
 
     /// The words printed as text on a page (no OCR).
     pub fn text_words(&self, page: usize) -> &[Word] {
-        let Some(cell) = self.words.get(page) else { return &[] };
-        cell.get_or_init(|| {
+        self.page_text(page).map_or(&[], |t| &t.words)
+    }
+
+    fn page_text(&self, page: usize) -> Option<&text::PageText> {
+        let cell = self.words.get(page)?;
+        Some(cell.get_or_init(|| {
             let pages = self.pdf.pages();
-            let Some(p) = pages.get(page) else { return vec![] };
-            catch_unwind(AssertUnwindSafe(|| text::read_words(p))).unwrap_or_default()
+            let empty = || text::PageText { words: vec![], blind: vec![] };
+            let Some(p) = pages.get(page) else { return empty() };
+            catch_unwind(AssertUnwindSafe(|| text::read_words(p))).unwrap_or_else(|_| empty())
+        }))
+    }
+
+    /// Words a page draws with glyphs that have no Unicode (the font has no table for them), their letters learned
+    /// by reading the page with the OCR (`glyphs::recover`): numbers in a table come back exactly. Empty without such
+    /// glyphs or without an OCR. Slow the first time (the OCR of the page).
+    pub fn recovered_words(&self, page: usize) -> &[Word] {
+        let Some(cell) = self.recovered.get(page) else { return &[] };
+        cell.get_or_init(|| {
+            let Some(t) = self.page_text(page) else { return vec![] };
+            // a few glyphs (a logo, a symbol) are not worth the OCR
+            if t.blind.iter().map(|w| w.text.chars().count()).sum::<usize>() < 20 {
+                return vec![];
+            }
+            let ocr = self.read_page_by_ocr(page);
+            glyphs::recover(&t.blind, &ocr)
         })
+    }
+
+    /// The words of a page for reading its tables: those printed as text and those recovered (`recovered_words`).
+    pub fn table_words(&self, page: usize) -> Vec<Word> {
+        let mut w = self.words(page).to_vec();
+        w.extend(self.recovered_words(page).iter().cloned());
+        w
     }
 
     /// Reads the pages that have no text with the OCR (a scanned data sheet): each the first time its words are asked
@@ -352,7 +383,8 @@ impl Datasheet {
 
     /// The lineup tables (one row per part number) of every page (`lineup::lineups`).
     pub fn lineups(&self) -> Vec<lineup::Lineup> {
-        let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
+        let owned: Vec<Vec<Word>> = (0..self.pages).map(|p| self.table_words(p)).collect();
+        let pages: Vec<&[Word]> = owned.iter().map(|w| w.as_slice()).collect();
         lineup::lineups(&pages)
     }
 

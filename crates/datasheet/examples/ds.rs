@@ -55,7 +55,8 @@ fn main() -> Result<(), String> {
     match cmd.as_str() {
         "text" => {
             let p = page()?;
-            let mut w = ds.words(p).to_vec();
+            // `table`: with the words drawn by glyphs without Unicode, recovered by the OCR (`Datasheet::table_words`)
+            let mut w = if args.iter().any(|a| a == "table") { ds.table_words(p) } else { ds.words(p).to_vec() };
             w.sort_by(|a, b| ((a.rect.y0 + a.rect.y1) / 2.0).total_cmp(&((b.rect.y0 + b.rect.y1) / 2.0)).then(a.rect.x0.total_cmp(&b.rect.x0)));
             let mut last = f32::MIN;
             let mut line = String::new();
@@ -241,6 +242,14 @@ fn main() -> Result<(), String> {
             }
             for o in datasheet::ocr::read(&img).ok_or("no OCR (Windows only, or the picture is too big)")? {
                 println!("{:6.1} {:6.1}  {}", b.x0 + o.x0 / k, b.y0 + (o.y0 + o.y1) / 2.0 / k, o.text);
+            }
+        }
+        "ocrpng" => {
+            // ds ocrpng X FILE.png: the words the OCR reads off a picture file (to try how a picture should be cut)
+            let img = image::open(&args[2]).map_err(|e| e.to_string())?.to_rgba8();
+            let img = datasheet::PageImage { width: img.width() as usize, height: img.height() as usize, rgba: img.into_raw() };
+            for o in datasheet::ocr::read(&img).ok_or("no OCR")? {
+                println!("{:7.1} {:7.1}  {}", o.x0, (o.y0 + o.y1) / 2.0, o.text);
             }
         }
         "words" => {

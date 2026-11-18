@@ -32,14 +32,16 @@ impl crate::session::Session {
         let usage = "lineup FILE.pdf [series=FILE.elcap.json] [pick=PN,PN|bundle|all] [write] [dir=DIR]";
         let file = words.iter().find(|w| !w.eq_ignore_ascii_case("write")).ok_or(usage)?;
         let ds = datasheet::Datasheet::open_file(&PathBuf::from(file.as_str()))?;
-        let rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
+        let mut rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
         if rows.is_empty() {
             return Err(format!("{file}: 型番ごとの行の表 (容量・大きさ・型番の列) が見つかりませんでした。文字の無い PDF や、列が崩れる PDF は読めません"));
         }
         let series = match opt(&kv, "series") {
             Some(p) => Some(elcap::Series::load(&PathBuf::from(p))?),
-            None => elcap::Series::for_part(&rows[0].part),
+            None => rows.iter().find(|r| !r.part.is_empty()).and_then(|r| elcap::Series::for_part(&r.part)),
         };
+        // a table without part numbers (Rubycon's): named by the series' pattern
+        elcap::name_rows(series.as_ref(), &mut rows);
         let listed: Vec<_> = rows
             .iter()
             .map(|r| {
@@ -96,5 +98,32 @@ impl crate::session::Session {
             out["errors"] = json!(errors);
         }
         Ok(obj(out))
+    }
+}
+
+#[cfg(test)]
+mod real_pdf {
+    use super::*;
+
+    /// Rubycon YXF (YXF.pdf, obsolete; skipped without the file in microohm-meter/): its table is drawn with glyphs
+    /// that have no Unicode (read back with the OCR, Windows only), it has no part numbers, two tables stand side by
+    /// side and the rated voltage is written once beside each group.
+    #[test]
+    fn rubycon_yxf_without_text_or_part_numbers() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/YXF.pdf");
+        let Ok(ds) = datasheet::Datasheet::open_file(&path) else { return };
+        if datasheet::ocr::max_side().is_none() {
+            return;
+        }
+        let mut rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
+        let s = elcap::Series { series: "YXF".into(), part_pattern: "{V}YXF{C}MEFC{D}X{L}".into(), ..Default::default() };
+        elcap::name_rows(Some(&s), &mut rows);
+        assert_eq!(rows.len(), 64);
+        let count = |v: f64| rows.iter().filter(|r| r.volts == v).count();
+        assert_eq!([6.3, 10.0, 16.0, 25.0, 35.0, 50.0].map(count), [11, 10, 10, 10, 9, 14]);
+        let r = rows.iter().find(|r| r.part == "16YXF1000MEFC10X20").expect("16 V 1000 uF");
+        assert_eq!((r.ripple_a, r.impedance.clone()), (1.05, vec![(20.0, 100e3, 0.078), (-10.0, 100e3, 0.3)]));
+        let r = rows.iter().find(|r| r.part == "50YXF2.2MEFC5X11").expect("50 V 2.2 uF, the right table");
+        assert_eq!((r.ripple_a, r.impedance.clone()), (0.043, vec![(20.0, 100e3, 2.5), (-10.0, 100e3, 6.0)]));
     }
 }

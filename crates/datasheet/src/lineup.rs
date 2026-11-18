@@ -20,20 +20,23 @@ pub struct Lineup {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineupRow {
+    /// The part number, "" for a table without them (Rubycon's: the part number is made from the values).
     pub part: String,
     /// One per header, "" where the row has nothing in that column.
     pub cells: Vec<String>,
+    /// The number written once beside the row's group of rows (the rated voltage "6.3", "16 (1C)"), "" without.
+    pub group: String,
 }
 
 /// A case size "8×11.5" (diameter × length, or width × length).
 pub fn case_size(s: &str) -> Option<(f64, f64)> {
-    let s = s.trim();
+    let s = s.trim().trim_end_matches([',', ';']);
     let (a, b) = s.split_once(['×', 'x', 'X', '*'])?;
     Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
 }
 
 fn number(s: &str) -> Option<f64> {
-    s.trim().trim_end_matches(['*', '※']).replace(',', "").parse::<f64>().ok().filter(|v| v.is_finite())
+    s.trim().trim_end_matches(['*', '※', ',']).replace(',', "").parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 fn is_cell_value(s: &str) -> bool {
@@ -69,25 +72,61 @@ fn is_row_part(t: &str) -> bool {
     t.len() >= 6 && looks_like_part_number(t) && case_size(t).is_none() && t.chars().any(|c| c.is_ascii_alphabetic())
 }
 
-/// The lineup table of one page, if it has one (at least three rows).
+/// A row found on a line: the line, its part number word (None in a table without them), its value words.
+type Found<'a> = (usize, Option<&'a Word>, Vec<&'a Word>);
+
+/// The lineup table of one page, if it has one (the first of `lineups_on`).
 pub fn lineup_on(page: usize, words: &[Word]) -> Option<Lineup> {
+    lineups_on(page, words).into_iter().next()
+}
+
+/// The lineup tables of one page (at least three rows each). Rows are lines with one part number and three or more
+/// numbers; without such lines, a capacitor's table without part numbers: a row starts at a number followed by a case
+/// size ("100  5×11  150  0.90  3.6"), so that two tables side by side (Rubycon's) are two rows on a line, and the
+/// rows are sorted into tables by where they start.
+pub fn lineups_on(page: usize, words: &[Word]) -> Vec<Lineup> {
     let ls = lines(words);
-    // (line index, the part word, the value words)
-    let mut rows: Vec<(usize, &Word, Vec<&Word>)> = vec![];
+    let mut rows: Vec<Found> = vec![];
     for (i, l) in ls.iter().enumerate() {
         let parts: Vec<&&Word> = l.iter().filter(|w| is_row_part(w.text.trim())).collect();
         let values: Vec<&Word> = l.iter().copied().filter(|w| is_cell_value(&w.text)).collect();
         if parts.len() == 1 && values.len() >= 3 {
-            rows.push((i, parts[0], values));
+            rows.push((i, Some(parts[0]), values));
         }
     }
-    if rows.len() < 3 {
-        return None;
+    if rows.len() >= 3 {
+        return build(page, &ls, rows).into_iter().collect();
     }
+    // segments: from a number right before a case size to the next such number
+    let mut segs: Vec<Found> = vec![];
+    for (i, l) in ls.iter().enumerate() {
+        let starts: Vec<usize> = (0..l.len().saturating_sub(1)).filter(|&k| number(&l[k].text).is_some() && case_size(&l[k + 1].text).is_some()).collect();
+        for (n, &k) in starts.iter().enumerate() {
+            let end = starts.get(n + 1).copied().unwrap_or(l.len());
+            let values: Vec<&Word> = l[k..end].iter().copied().filter(|w| is_cell_value(&w.text)).collect();
+            if values.len() >= 3 {
+                segs.push((i, None, values));
+            }
+        }
+    }
+    // tables: segments starting within 25 points of each other
+    let mut tables: Vec<(f32, Vec<Found>)> = vec![];
+    for s in segs {
+        let x = s.2[0].rect.x0;
+        match tables.iter_mut().find(|t| (t.0 - x).abs() < 25.0) {
+            Some(t) => t.1.push(s),
+            None => tables.push((x, vec![s])),
+        }
+    }
+    tables.sort_by(|a, b| a.0.total_cmp(&b.0));
+    tables.into_iter().filter(|t| t.1.len() >= 3).filter_map(|t| build(page, &ls, t.1)).collect()
+}
+
+/// One table from its rows: the columns, the header and the groups.
+fn build<'a>(page: usize, ls: &[Vec<&'a Word>], rows: Vec<Found<'a>>) -> Option<Lineup> {
     // columns: the centres of the cells, grouped where they lie close; a group with cells in fewer than half the rows is
     // no column (the rated voltage written once beside a group of rows)
-    let mut xs: Vec<(f32, f32, f32)> = rows.iter().flat_map(|r| r.2.iter().map(|w| (center(w).0, w.rect.x0, w.rect.x1))).collect();
-    xs.extend(rows.iter().map(|r| (center(r.1).0, r.1.rect.x0, r.1.rect.x1)));
+    let mut xs: Vec<(f32, f32, f32)> = rows.iter().flat_map(|r| r.2.iter().chain(r.1.iter()).map(|w| (center(w).0, w.rect.x0, w.rect.x1))).collect();
     xs.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut groups: Vec<Vec<(f32, f32, f32)>> = vec![];
     for x in xs {
@@ -115,9 +154,10 @@ pub fn lineup_on(page: usize, words: &[Word]) -> Option<Lineup> {
         let half = cols[i].2 - cols[i].1;
         (d <= half / 2.0 + 10.0).then_some(i)
     };
+    let (left, right) = (cols[0].1, cols[cols.len() - 1].2);
     // the header: the lines right above the first row (no gap of more than 20 points between them, 80 points at most),
     // inside the table's width
-    let first = rows[0].0;
+    let first = rows.iter().map(|r| r.0).min()?;
     let top_of = |l: &Vec<&Word>| l.iter().map(|w| w.rect.y0).fold(f32::MAX, f32::min);
     let bottom_of = |l: &Vec<&Word>| l.iter().map(|w| w.rect.y1).fold(f32::MIN, f32::max);
     let top = top_of(&ls[first]);
@@ -132,7 +172,7 @@ pub fn lineup_on(page: usize, words: &[Word]) -> Option<Lineup> {
         let mut on_line: Vec<(usize, &Word)> = vec![];
         for w in l {
             let x = center(w).0;
-            if x < cols[0].1 - 20.0 || x > cols[cols.len() - 1].2 + 20.0 {
+            if x < left - 20.0 || x > right + 20.0 {
                 continue;
             }
             let i = (0..cols.len()).find(|&i| i + 1 == cols.len() || x < (cols[i].0 + cols[i + 1].0) / 2.0).unwrap_or(0);
@@ -146,21 +186,46 @@ pub fn lineup_on(page: usize, words: &[Word]) -> Option<Lineup> {
             }
         }
     }
-    let rows = rows
+    let mut rows: Vec<(f32, LineupRow)> = rows
         .iter()
         .map(|(_, part, values)| {
             let mut cells = vec![String::new(); cols.len()];
-            for w in values.iter().chain(std::iter::once(part)) {
+            for w in values.iter().chain(part.iter()) {
                 if let Some(i) = col_of(center(w).0)
                     && cells[i].is_empty()
                 {
                     cells[i] = w.text.trim().to_string();
                 }
             }
-            LineupRow { part: part.text.trim().to_string(), cells }
+            (center(values[0]).1, LineupRow { part: part.map_or(String::new(), |p| p.text.trim().to_string()), cells, group: String::new() })
         })
         .collect();
-    Some(Lineup { page, headers, rows })
+    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // groups: the first column (the capacitance) goes up within a group and starts again at the next; the number
+    // written left of the table (up to 60 points) within a group's height names it
+    let labels: Vec<(f32, &str)> = ls
+        .iter()
+        .flatten()
+        .filter(|w| {
+            let x = center(w).0;
+            x < left - 3.0 && x > left - 60.0 && number(&w.text).is_some()
+        })
+        .map(|w| (center(w).1, w.text.trim()))
+        .collect();
+    let mut start = 0;
+    for i in 1..=rows.len() {
+        let restart = i == rows.len() || number(&rows[i].1.cells[0]).zip(number(&rows[i - 1].1.cells[0])).is_some_and(|(a, b)| a < b);
+        if restart {
+            let (y0, y1) = (rows[start].0 - 4.0, rows[i - 1].0 + 4.0);
+            if let Some(l) = labels.iter().find(|l| l.0 >= y0 && l.0 <= y1) {
+                for r in &mut rows[start..i] {
+                    r.1.group = l.1.to_string();
+                }
+            }
+            start = i;
+        }
+    }
+    Some(Lineup { page, headers, rows: rows.into_iter().map(|r| r.1).collect() })
 }
 
 /// The lineup tables of all pages. A page without a header (the table runs on) takes the one before it when it has as
@@ -168,14 +233,15 @@ pub fn lineup_on(page: usize, words: &[Word]) -> Option<Lineup> {
 pub fn lineups(pages: &[&[Word]]) -> Vec<Lineup> {
     let mut out: Vec<Lineup> = vec![];
     for (p, words) in pages.iter().enumerate() {
-        let Some(mut l) = lineup_on(p, words) else { continue };
-        if l.headers.iter().all(|h| h.is_empty())
-            && let Some(prev) = out.last()
-            && prev.headers.len() == l.headers.len()
-        {
-            l.headers = prev.headers.clone();
+        for mut l in lineups_on(p, words) {
+            if l.headers.iter().all(|h| h.is_empty())
+                && let Some(prev) = out.last()
+                && prev.headers.len() == l.headers.len()
+            {
+                l.headers = prev.headers.clone();
+            }
+            out.push(l);
         }
-        out.push(l);
     }
     out
 }
@@ -186,7 +252,8 @@ pub struct ElcapRow {
     pub page: usize,
     pub part: String,
     pub cap_uf: f64,
-    /// Rated voltage: from a column, else from the part number (the EIA code "1C" = 16 V, or Rubycon's leading "16").
+    /// Rated voltage: from a column, else the number beside the row's group, else from the part number (the EIA code
+    /// "1C" = 16 V, or Rubycon's leading "16").
     pub volts: Option<f64>,
     /// Case diameter and length (mm).
     pub d_mm: f64,
@@ -226,7 +293,13 @@ pub fn temperature_in(h: &str) -> Option<f64> {
         '˚' | '°' | 'º' => '℃',
         c => c,
     }).collect();
-    let h = h.replace("℃c", "℃").replace("℃C", "℃");
+    let mut h = h.replace("℃c", "℃").replace("℃C", "℃");
+    // the OCR reads the degree sign as an O: "20OC", "105oc"
+    for oc in ["OC", "oc", "Oc", "oC"] {
+        while let Some(i) = h.find(oc).filter(|&i| h[..i].ends_with(|c: char| c.is_ascii_digit())) {
+            h.replace_range(i..i + 2, "℃");
+        }
+    }
     let at = h.find('℃')?;
     let before = &h[..at];
     let start = before.rfind(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+')).map(|i| i + before[i..].chars().next().unwrap().len_utf8()).unwrap_or(0);
@@ -252,7 +325,12 @@ fn role(header: &str, cells: &[&str]) -> Role {
     let h = squash(header);
     let decimals = cells.iter().filter(|c| c.contains('.')).count() * 2 > cells.len();
     if h.contains("ripple") || h.contains("リップル") {
-        let ma = h.contains("ma");
+        // in mA when the header says so, or (its unit lost) when the values are what mA would be: a table's ripple
+        // currents in A are below 20, in mA mostly above
+        let mut vals: Vec<f64> = cells.iter().filter_map(|c| number(c)).collect();
+        vals.sort_by(|a, b| a.total_cmp(b));
+        let big = vals.get(vals.len() / 2).is_some_and(|m| *m >= 20.0);
+        let ma = h.contains("ma") || (!h.contains("arms") && !h.contains("(a") && big);
         return Role::Ripple(ma, frequency_in(header).unwrap_or(100e3), temperature_in(header).unwrap_or(105.0));
     }
     if cells.iter().filter(|c| case_size(c).is_some()).count() * 2 > cells.len() {
@@ -345,7 +423,7 @@ pub fn electrolytic(tables: &[Lineup]) -> Vec<ElcapRow> {
                 }
             }
             if row.volts.is_none() {
-                row.volts = volts_of_part(&row.part);
+                row.volts = number(&r.group).or_else(|| volts_of_part(&row.part));
             }
             out.push(row);
         }

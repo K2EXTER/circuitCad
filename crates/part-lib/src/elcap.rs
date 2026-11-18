@@ -41,6 +41,9 @@ pub struct Series {
     pub leads: Vec<LeadRule>,
     /// How the part number is extended for cut or formed leads and tape (shown in the description).
     pub order_note: String,
+    /// How a part number is made from the values, for a table without them (Rubycon: "{V}YXF{C}MEFC{D}X{L}" makes
+    /// "16YXF1000MEFC10X20"): {V} rated voltage, {C} capacitance in µF, {D} and {L} the case's diameter and length.
+    pub part_pattern: String,
     /// The part numbers bundled with the program.
     pub bundle: Vec<String>,
 }
@@ -127,6 +130,13 @@ impl Series {
             _ => r.lead,
         };
         Some((r.pitch, lead))
+    }
+
+    /// The part number the series' pattern makes for a row (None without a pattern).
+    pub fn name(&self, r: &Row) -> Option<String> {
+        (!self.part_pattern.is_empty()).then(|| {
+            self.part_pattern.replace("{V}", &g(r.volts)).replace("{C}", &g(r.cap_uf)).replace("{D}", &g(r.d_mm)).replace("{L}", &g(r.l_mm))
+        })
     }
 
     /// The leakage current the series' formula gives (µA).
@@ -271,6 +281,14 @@ pub fn write(dir: &Path, p: &PartDef) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Rows read from a table without part numbers given one: the series' pattern (`Series::name`), else a plain name
+/// from the values ("C_1000u_16V_10x20").
+pub fn name_rows(s: Option<&Series>, rows: &mut [Row]) {
+    for r in rows.iter_mut().filter(|r| r.part.is_empty()) {
+        r.part = s.and_then(|s| s.name(r)).unwrap_or_else(|| format!("C_{}u_{}V_{}x{}", g(r.cap_uf), g(r.volts), g(r.d_mm), g(r.l_mm)));
+    }
+}
+
 /// Rows whose leakage current is not what the series' formula gives (the table read wrong, or the formula is wrong).
 pub fn leakage_mismatches<'a>(s: &Series, rows: &'a [Row]) -> Vec<&'a Row> {
     rows.iter().filter(|r| r.leak_ua.is_some_and(|l| (l - s.leakage(r.cap_uf, r.volts)).abs() > 0.06 + 0.001 * l)).collect()
@@ -331,6 +349,17 @@ mod tests {
         r.d_mm = 8.0;
         r.impedance = vec![(20.0, 100e3, 0.001)];
         assert!(make(&s, &r).unwrap_err().contains("リアクタンス"));
+    }
+
+    #[test]
+    fn part_numbers_made_for_a_table_without_them() {
+        let s = Series { series: "YXF".into(), part_pattern: "{V}YXF{C}MEFC{D}X{L}".into(), ..Default::default() };
+        let mut rows = vec![row("", 1000.0, 16.0, (10.0, 20.0), (0.078, 0.3), 1050.0), row("", 4.7, 6.3, (5.0, 11.0), (1.9, 5.0), 88.0), row("UHE1C331MPD", 330.0, 16.0, (8.0, 11.5), (0.13, 0.52), 640.0)];
+        name_rows(Some(&s), &mut rows);
+        assert_eq!(rows.iter().map(|r| r.part.as_str()).collect::<Vec<_>>(), ["16YXF1000MEFC10X20", "6.3YXF4.7MEFC5X11", "UHE1C331MPD"]);
+        let mut plain = vec![row("", 1000.0, 16.0, (10.0, 20.0), (0.078, 0.3), 1050.0)];
+        name_rows(None, &mut plain);
+        assert_eq!(plain[0].part, "C_1000u_16V_10x20");
     }
 
     #[test]

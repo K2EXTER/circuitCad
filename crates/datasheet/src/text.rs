@@ -118,10 +118,20 @@ struct Letter {
     advance: f64,
 }
 
+/// A glyph drawn without a letter it stands for (a font without its Unicode table: Rubycon's tables): which font
+/// and which of its glyphs.
+pub(crate) type GlyphKey = (u128, u32);
+
 #[derive(Default)]
 struct Collector {
     letters: Vec<Letter>,
+    /// Glyphs without Unicode, each as a letter of the Private Use Area (`U+E000` + its place in `keys`).
+    blind: Vec<Letter>,
+    keys: Vec<GlyphKey>,
 }
+
+/// The first character of the Private Use Area: a glyph without Unicode is written as this plus its number.
+pub(crate) const BLIND_BASE: u32 = 0xE000;
 
 impl Device<'_> for Collector {
     fn draw_path(&mut self, _: &BezPath, _: DrawProps<'_>, _: &DrawMode) {}
@@ -144,7 +154,19 @@ impl Device<'_> for Collector {
             let text = match g.as_unicode() {
                 Some(BfString::Char(c)) => c.to_string(),
                 Some(BfString::String(s)) => s,
-                None => continue,
+                None => {
+                    if let Glyph::Outline(o) = &**g {
+                        let key = (o.font_cache_key(), o.glyph_id().to_u32());
+                        let n = self.keys.iter().position(|k| *k == key).unwrap_or_else(|| {
+                            self.keys.push(key);
+                            self.keys.len() - 1
+                        });
+                        if let Some(c) = char::from_u32(BLIND_BASE + n as u32) {
+                            self.blind.push(Letter { text: c.to_string(), x: p.x, baseline: p.y, em: unit, advance });
+                        }
+                    }
+                    continue;
+                }
             };
             self.letters.push(Letter { text, x: p.x, baseline: p.y, em: unit, advance });
         }
@@ -154,8 +176,15 @@ impl Device<'_> for Collector {
     fn draw_image(&mut self, _: Image<'_, '_>, _: ImageDrawProps<'_>) {}
 }
 
+/// The words of a page: those printed as text, and those drawn with glyphs that have no Unicode (their letters are
+/// `BLIND_BASE` + a number for each glyph of the page).
+pub(crate) struct PageText {
+    pub words: Vec<Word>,
+    pub blind: Vec<Word>,
+}
+
 /// Reads the words of a page.
-pub(crate) fn read_words(page: &Page<'_>) -> Vec<Word> {
+pub(crate) fn read_words(page: &Page<'_>) -> PageText {
     let (w, h) = page.render_dimensions();
     let cache = InterpreterCache::new();
     let mut ctx = Context::new(
@@ -167,7 +196,7 @@ pub(crate) fn read_words(page: &Page<'_>) -> Vec<Word> {
     );
     let mut c = Collector::default();
     interpret_page(page, &mut ctx, &mut c);
-    group(&c.letters)
+    PageText { words: group(&c.letters), blind: group(&c.blind) }
 }
 
 /// Joins letters that follow each other on one baseline into words.
