@@ -281,6 +281,24 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: boo
                 return (0..sym_y.len()).filter(|&i| sym_y[i] < y).max_by(|&a, &b| sym_y[a].total_cmp(&sym_y[b]));
             }
             let nearest = |only_bare: bool| (0..sym_y.len()).filter(|&i| !only_bare || bare[i]).min_by(|&a, &b| (sym_y[a] - y).abs().total_cmp(&(sym_y[b] - y).abs()));
+            // a line as near to the symbol above as to the one below (each printed in the middle of its lines, the rows
+            // touching: LM358's rail swing VO and output current IO, 28.9 points either way): the one whose lines reach as
+            // far on its other side, a row being about as tall above its symbol as below
+            let close: Vec<usize> = (0..sym_y.len()).filter(|&i| bare[i] && (sym_y[i] - y).abs() < 30.0).collect();
+            if let [a, b] = close[..]
+                && ((sym_y[a] - y).abs() - (sym_y[b] - y).abs()).abs() < 3.0
+            {
+                // how far the symbol's lines go on the side away from `y`, up to the next symbol
+                let reach = |i: usize| {
+                    let up = y > sym_y[i];
+                    let limit = sym_y.iter().copied().filter(|&s| if up { s < sym_y[i] } else { s > sym_y[i] }).fold(if up { f32::MIN } else { f32::MAX }, |m, s| if up { m.max(s) } else { m.min(s) });
+                    ys.iter().filter(|&&o| if up { o < sym_y[i] - 1.0 && o > limit + 1.0 } else { o > sym_y[i] + 1.0 && o < limit - 1.0 }).map(|o| (o - sym_y[i]).abs()).fold(0.0, f32::max)
+                };
+                let fits: Vec<usize> = [a, b].into_iter().filter(|&i| (sym_y[i] - y).abs() <= reach(i) + 4.0).collect();
+                if let [one] = fits[..] {
+                    return Some(one);
+                }
+            }
             nearest(true).filter(|&i| (sym_y[i] - y).abs() < 30.0).or_else(|| nearest(false))
         };
         for (si, s) in symbols.iter().enumerate().filter(|(_, w)| !by_name && key(&symbol_text(&body, w), case) == want) {
@@ -589,6 +607,26 @@ mod tests {
         let load = find_by_name(0, &words, "Load");
         assert_eq!((load[0].typ, load[0].conditions.as_str()), (Some(0.001), "IOUT = 1mA to 250mA"), "{load:?}");
         assert!(find_by_name(0, &words, "Output").is_empty(), "the line of ISC is ISC's");
+    }
+
+    /// TI's LM358: the rail swing VO and the output current IO each printed in the middle of its lines, the rows touching; the
+    /// source current's line, 28.9 points from either symbol, is IO's (VO's lines reach 17 points above it, so not 29 below).
+    #[test]
+    fn a_line_halfway_between_two_symbols_goes_to_the_row_it_fits() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let mut words = vec![w("PARAMETER", 87.0, 480.0), w("MIN", 440.0, 480.0), w("TYP", 475.0, 480.0), w("MAX", 509.0, 480.0), w("UNIT", 533.0, 480.0)];
+        words.extend([w("2", 479.0, 538.0), w("3", 516.0, 538.0), w("V", 537.0, 538.0)]);
+        words.extend([w("VO", 59.0, 555.0), w("Voltage", 95.0, 555.0)]);
+        words.extend([w("5", 479.0, 572.5), w("20", 516.0, 572.5), w("mV", 535.0, 572.5)]);
+        words.extend([w("–20", 436.0, 584.0), w("–30", 472.0, 584.0)]);
+        words.extend([w("–10", 436.0, 607.0), w("mA", 535.0, 607.0)]);
+        words.extend([w("IO", 59.0, 613.0), w("Output", 95.0, 613.0)]);
+        words.extend([w("10", 440.0, 619.0), w("20", 475.0, 619.0)]);
+        words.extend([w("12", 440.0, 642.0), w("30", 475.0, 642.0), w("µA", 535.0, 642.0)]);
+        let io = find(0, &words, "IO");
+        assert!(io.iter().any(|v| v.min == Some(-20.0)), "the source current is IO's: {io:?}");
+        let vo = find(0, &words, "VO");
+        assert!(!vo.iter().any(|v| v.min == Some(-20.0)) && vo.len() == 2, "{vo:?}");
     }
 
     /// TI's LP5907: the output voltage tolerance under ΔVOUT prints its min with an en dash ("–3") and its unit
