@@ -126,8 +126,11 @@ fn main() -> Result<(), String> {
         "parts" => {
             // the part numbers of a family (`ds parts FILE NAME`) and the voltage options
             let name = args.get(2).ok_or("parts FILE NAME")?;
+            let (pkgs, temps) = (ds.part_packages(name), ds.part_temperatures(name));
             for (p, page) in ds.part_numbers(name) {
-                println!("p.{} {p}", page + 1);
+                let pkg = pkgs.iter().find(|x| x.0 == p).map_or("", |x| x.1.as_str());
+                let t = temps.iter().find(|x| x.0 == p).map_or(String::new(), |x| format!("{}..{} C", x.1.0, x.1.1));
+                println!("p.{} {p} {pkg} {t} {}", page + 1, ds.grade_of(&p).unwrap_or_default());
             }
             println!("options {:?}", ds.voltage_options());
         }
@@ -252,8 +255,14 @@ fn main() -> Result<(), String> {
             println!("{:?} {:?} p_type={:?}", ds.category_hint(), ds.name_candidates(), ds.p_type());
         }
         "table" => {
-            for sym in &args[2..] {
-                for v in ds.spec_values(sym) {
+            // ds table FILE SYM... [part=MC7805CTG]: the rows of a grade's columns (`Datasheet::spec_values_for`)
+            let part = arg(&args, "part");
+            for sym in args[2..].iter().filter(|a| !a.starts_with("part=")) {
+                let rows = match &part {
+                    Some(p) => ds.spec_values_for(sym, p),
+                    None => ds.spec_values(sym),
+                };
+                for v in rows {
                     let f = |x: Option<f64>| x.map_or("-".to_string(), |x| format!("{x}"));
                     println!("p.{} {} | {} | min {} typ {} max {} {}", v.page + 1, v.symbol, v.conditions, f(v.min), f(v.typ), f(v.max), v.unit.as_deref().unwrap_or("?"));
                 }

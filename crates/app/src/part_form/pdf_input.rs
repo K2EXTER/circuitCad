@@ -67,7 +67,7 @@ impl PartForm {
             Some(Dest::RegDropout) => {
                 // a part pasted from a draft has no name in the section: the form's
                 let name = self.name.clone();
-                self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
+                self.reg.fill_from_pdf(&name, |s| sheet.spec_values_for(s, &name));
                 self.reg_find_variants();
             }
             _ => {}

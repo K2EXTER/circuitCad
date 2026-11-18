@@ -68,6 +68,10 @@ pub struct RegulatorInput {
     /// package): for making every version at once (`reg_fill::versions`).
     pub parts: Vec<(f64, String)>,
     pub packages: Vec<(String, String)>,
+    /// The grades the tables print over their columns (onsemi's "MC7805B", "MC7805C", "MC7805AB": each its own version) and
+    /// the temperature range each part number is ordered for (part number, (low, high) °C).
+    pub grades: Vec<String>,
+    pub temps: Vec<(String, (f64, f64))>,
 }
 
 /// A number as typed, with an SI prefix and an optional unit after it ("700kHz", "-20nA", "2Meg").
@@ -584,7 +588,7 @@ impl PartForm {
                 && ui.button(i18n::tr("PDF の表から読む")).on_hover_text(i18n::tr("開いているデータシートの「電気的特性」の表から、出力電圧 (可変なら基準電圧)・ライン / ロード・レギュレーション (条件の範囲と)・ドロップアウト・グラウンド電流 (可変なら ADJ の電流と最小負荷)・電流制限・リップル除去・雑音の typ を探して欄に入れます。25 °C の行を使い、部品名の電圧 (7805 なら 5 V) のページを先に見ます。入れた値は表と見比べて確かめてください")).clicked()
             {
                 let (sheet, name) = (&self.sheet, self.name.clone());
-                self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
+                self.reg.fill_from_pdf(&name, |s| sheet.spec_values_for(s, &name));
                 self.reg.result = None;
                 self.reg_find_variants();
             }
@@ -615,7 +619,7 @@ impl PartForm {
             if let Some((v, part)) = pick {
                 self.reg_choose_variant(v, &part);
             }
-            let n = super::reg_fill::versions(&self.reg.variants, &self.reg.parts, &self.reg.packages).len();
+            let n = super::reg_fill::versions(&self.reg.variants, &self.reg.parts, &self.reg.packages, &self.reg.grades).len();
             if ui.button(i18n::trf!("電圧違いをまとめて作る ({n} 通り)")).on_hover_text(i18n::tr("注文情報の型番の電圧ごと (パッケージ違いがあればそのパッケージごと) に、表をその型番で読み直してモデルを作り、ピンと「④ 部品の形」はこのフォームのまま (パッケージの分かる型番は組み込みの形) で、部品を全部ライブラリに保存します。組み込みの形が無いパッケージは作りません。先にピン表を確かめてください")).clicked() {
                 self.reg_make_all();
             }

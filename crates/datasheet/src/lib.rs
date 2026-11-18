@@ -194,6 +194,36 @@ impl Datasheet {
         (0..self.page_count()).flat_map(|p| spec_table::find_by_name(p, self.words(p), symbol)).collect()
     }
 
+    /// The grade of the part number `part` among those the tables print over their groups of min / typ / max columns (onsemi's
+    /// MC7800: "MC7805C" of "MC7805CTG"; the longest that `part` starts with), if the data sheet has such tables.
+    pub fn grade_of(&self, part: &str) -> Option<String> {
+        spec_table::grade_of(&self.grades(), part)
+    }
+
+    /// Every part number (grade) the tables print over their groups of min / typ / max columns, each once.
+    pub fn grades(&self) -> Vec<String> {
+        let mut out: Vec<String> = vec![];
+        for g in (0..self.page_count()).flat_map(|p| spec_table::grades(self.words(p))) {
+            if !out.contains(&g) {
+                out.push(g);
+            }
+        }
+        out
+    }
+
+    /// `spec_values` for the part number `part`: where the tables print the grades over their columns and `part` is of one of
+    /// them, only that grade's columns and tables (`spec_table::find_for`); otherwise as `spec_values`.
+    pub fn spec_values_for(&self, symbol: &str, part: &str) -> Vec<spec_table::SpecValue> {
+        if self.grade_of(part).is_none() {
+            return self.spec_values(symbol);
+        }
+        let found: Vec<spec_table::SpecValue> = (0..self.page_count()).flat_map(|p| spec_table::find_for(p, self.words(p), symbol, Some(part))).collect();
+        if !found.is_empty() {
+            return found;
+        }
+        (0..self.page_count()).flat_map(|p| spec_table::find_by_name_for(p, self.words(p), symbol, Some(part))).collect()
+    }
+
     /// The conditions the table's rows give for the quantity a graph of `curve` shows (the PSRR's "IL = 500mA", the
     /// dropout's "IOUT = 250mA"), for picking the graph's curve of the same condition (`pick::pick_with`). The axis's own
     /// quantity (frequency, the load current of a dropout graph) and the temperature are left out.
@@ -304,6 +334,13 @@ impl Datasheet {
     pub fn part_packages(&self, name: &str) -> Vec<(String, String)> {
         let pages: Vec<&[Word]> = (0..self.pages).map(|p| self.words(p)).collect();
         ordering::part_packages(&pages, &ordering::family(name))
+    }
+
+    /// The temperature range of each part number of the family of `name`, from its ordering table's line
+    /// (`ordering::part_temperatures`).
+    pub fn part_temperatures(&self, name: &str) -> Vec<(String, (f64, f64))> {
+        let pages: Vec<&[Word]> = (0..self.page_count()).map(|p| self.words(p)).collect();
+        ordering::part_temperatures(&pages, &ordering::family(name))
     }
 
     /// The output voltages the data sheet lists as options (`ordering::voltage_options`).

@@ -434,6 +434,22 @@ impl SheetView {
         self.doc.as_ref().map(|d| d.ds.spec_values(symbol)).unwrap_or_default()
     }
 
+    /// `spec_values` for the part number `part`: its grade's columns where the tables print grades over them
+    /// (`Datasheet::spec_values_for`: onsemi's MC7805B and MC7805C side by side).
+    pub fn spec_values_for(&self, symbol: &str, part: &str) -> Vec<datasheet::spec_table::SpecValue> {
+        self.doc.as_ref().map(|d| d.ds.spec_values_for(symbol, part)).unwrap_or_default()
+    }
+
+    /// The grades the open PDF's tables print over their columns (`Datasheet::grades`).
+    pub fn grades(&self) -> Vec<String> {
+        self.doc.as_ref().map(|d| d.ds.grades()).unwrap_or_default()
+    }
+
+    /// The temperature range of each part number of the family of `name` (`Datasheet::part_temperatures`).
+    pub fn part_temperatures(&self, name: &str) -> Vec<(String, (f64, f64))> {
+        self.doc.as_ref().map(|d| d.ds.part_temperatures(name)).unwrap_or_default()
+    }
+
     /// Reads the field `dest`'s curve without a click (「表とグラフから全部読む」): the graphs with its caption in turn
     /// (at most 3), each with its axes from the tick labels and the curve picked by its label or as the only one; the
     /// first that gives points. Why none did, when none did. The window and the page shown are left as they were.

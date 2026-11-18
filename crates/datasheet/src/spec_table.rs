@@ -123,6 +123,7 @@ pub fn prefix(unit: &str) -> Option<f64> {
 }
 
 /// The table's columns from its header line.
+#[derive(Clone)]
 struct Header {
     y: f32,
     min: f32,
@@ -139,6 +140,64 @@ struct Header {
     /// for each grade side by side (onsemi's MC7800: MC78xxB and MC78xxC) is read in one group; the cells of the
     /// other ("− 0.2 −") are not conditions.
     cond_end: f32,
+    /// Every group of min / typ / max on the header line, left to right, with the part numbers printed over it (onsemi's
+    /// MC7800: "MC7805B, NCV7805B" over the first, "MC7805C" over the second; "MC7805AB/MC7805AC" over a page's only one).
+    /// The columns above (`min`, `typ`, `max`) are one of them, the one read when no part number is asked for.
+    groups: Vec<Group>,
+}
+
+/// One group of min / typ / max columns of a header line, and the part numbers (grades) printed over it.
+#[derive(Clone, Debug)]
+struct Group {
+    min: f32,
+    typ: Option<f32>,
+    max: f32,
+    labels: Vec<String>,
+}
+
+/// A word printed over a group of columns as a part number or grade ("MC7805B,", "NCV7805B", "MC7805AB/MC7805AC" → its
+/// pieces): letters and digits, both, at least four.
+fn grade_labels(t: &str) -> Vec<String> {
+    t.split(['/', ',', ';'])
+        .map(|p| p.trim().trim_matches(|c: char| !c.is_ascii_alphanumeric()).to_ascii_uppercase())
+        .filter(|p| p.len() >= 4 && p.chars().all(|c| c.is_ascii_alphanumeric()) && p.chars().any(|c| c.is_ascii_digit()) && p.chars().any(|c| c.is_ascii_alphabetic()))
+        .collect()
+}
+
+/// The longest of `labels` that `part` starts with (its grade: "MC7805C" of "MC7805CTG"), if any.
+fn grade_in<'a>(labels: impl Iterator<Item = &'a String>, part: &str) -> Option<&'a String> {
+    let part = part.trim().to_ascii_uppercase();
+    labels.filter(|l| part.starts_with(l.as_str())).max_by_key(|l| l.len())
+}
+
+impl Header {
+    /// The header with the columns of the group whose part number `part` is of. `None` when the table names its groups'
+    /// part numbers and `part` is of none of them (another grade's table: MC7805AB's page for MC7805CTG); the header as it
+    /// is when it names none.
+    fn for_part(&self, part: Option<&str>) -> Option<Header> {
+        let Some(part) = part else { return Some(self.clone()) };
+        if self.groups.iter().all(|g| g.labels.is_empty()) {
+            return Some(self.clone());
+        }
+        let g = self.groups.iter().filter_map(|g| grade_in(g.labels.iter(), part).map(|l| (g, l.len()))).max_by_key(|x| x.1)?.0;
+        Some(Header { min: g.min, typ: g.typ, max: g.max, ..self.clone() })
+    }
+}
+
+/// The grade of the part number `part` among `grades` (`grades`): the longest that `part` starts with.
+pub fn grade_of(grades: &[String], part: &str) -> Option<String> {
+    grade_in(grades.iter(), part).cloned()
+}
+
+/// The part numbers (grades) a page's tables print over their groups of min / typ / max columns.
+pub fn grades(words: &[Word]) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for l in headers(words).into_iter().flat_map(|h| h.groups).flat_map(|g| g.labels) {
+        if !out.contains(&l) {
+            out.push(l);
+        }
+    }
+    out
 }
 
 fn centre(r: &Rect) -> (f32, f32) {
@@ -170,12 +229,33 @@ fn headers(words: &[Word]) -> Vec<Header> {
         let conditions = first_x(&on_line).or_else(|| first_x(&above));
         let symbol = words.iter().find(|o| on_line(o) && is(o, &["symbol", "sym", "記号"])).or_else(|| words.iter().find(|o| above(o) && is(o, &["symbol", "sym", "記号"]))).map(|o| (o.rect.x0, o.rect.x1));
         if !out.iter().any(|h: &Header| (h.y - y).abs() < 4.0) {
-            out.push(Header { y, min, typ, max, unit, conditions, symbol, cond_end: min });
+            out.push(Header { y, min, typ, max, unit, conditions, symbol, cond_end: min, groups: vec![] });
         }
     }
     let mins: Vec<(f32, f32)> = words.iter().filter(|w| is(w, &["min", "minimum", "最小"])).map(|w| centre(&w.rect)).collect();
     for h in &mut out {
         h.cond_end = mins.iter().filter(|(_, y)| (y - h.y).abs() < 4.0).map(|&(x, _)| x).fold(h.min, f32::min);
+        // the groups: each max of the line with the nearest min left of it and a typ between
+        let on = |names: &[&str]| -> Vec<f32> {
+            let mut v: Vec<f32> = words.iter().filter(|o| (centre(&o.rect).1 - h.y).abs() < 4.0 && is(o, names)).map(|o| centre(&o.rect).0).collect();
+            v.sort_by(f32::total_cmp);
+            v
+        };
+        let (lo, mid) = (on(&["min", "minimum", "最小"]), on(&["typ", "typical", "標準", "代表値"]));
+        for max in on(&["max", "maximum", "最大"]) {
+            let Some(min) = lo.iter().copied().filter(|m| *m < max).fold(None, |a: Option<f32>, m| Some(a.map_or(m, |a| a.max(m)))) else { continue };
+            let typ = mid.iter().copied().find(|t| min < *t && *t < max);
+            h.groups.push(Group { min, typ, max, labels: vec![] });
+        }
+        // the part numbers printed over them (up to 20 points above the line), each over the group it stands nearest
+        for w in words.iter().filter(|w| (4.0..=20.0).contains(&(h.y - centre(&w.rect).1))) {
+            let labels = grade_labels(&w.text);
+            let x = centre(&w.rect).0;
+            let near = h.groups.iter_mut().filter(|g| x > g.min - 25.0 && x < g.max + 25.0).min_by(|a, b| (x - (a.min + a.max) / 2.0).abs().total_cmp(&(x - (b.min + b.max) / 2.0).abs()));
+            if let Some(g) = near {
+                g.labels.extend(labels);
+            }
+        }
     }
     out.sort_by(|a, b| a.y.total_cmp(&b.y));
     out
@@ -207,17 +287,29 @@ fn key(s: &str, case: bool) -> String {
 /// The rows of `symbol` on a page. The case is kept when the page has the symbol in that case (hFE, the DC gain,
 /// and hfe, the small-signal one, are different rows); otherwise it is ignored (VGS(th), VGS(TH)).
 pub fn find(page: usize, words: &[Word], symbol: &str) -> Vec<SpecValue> {
+    find_for(page, words, symbol, None)
+}
+
+/// `find` for the part number `part`: a table with a group of min / typ / max for each grade side by side (onsemi's MC7800:
+/// MC78xxB and MC78xxC) is read in the group whose part number `part` is of, and a table that names the part numbers of its
+/// groups but none of `part`'s is left out (another grade's page). Tables that name none are read as `find` reads them.
+pub fn find_for(page: usize, words: &[Word], symbol: &str, part: Option<&str>) -> Vec<SpecValue> {
     let words = &*relative_to_output(words);
     // a symbol as written, then in any case
-    let exact = find_case(page, words, symbol, true, false);
-    if exact.is_empty() { find_case(page, words, symbol, false, false) } else { exact }
+    let exact = find_case(page, words, symbol, true, false, part);
+    if exact.is_empty() { find_case(page, words, symbol, false, false, part) } else { exact }
 }
 
 /// The lines whose parameter's name starts with `name` under a symbol shared by several (TI's LP5907: "Line regulation" and
 /// "Load regulation" under one ΔVOUT). For a data sheet where `find` finds no row of that symbol on any page: a page's
 /// "Output current" is not another page's "Output" symbol (UA78L).
 pub fn find_by_name(page: usize, words: &[Word], name: &str) -> Vec<SpecValue> {
-    find_case(page, &relative_to_output(words), name, true, true)
+    find_by_name_for(page, words, name, None)
+}
+
+/// `find_by_name` for the part number `part` (see `find_for`).
+pub fn find_by_name_for(page: usize, words: &[Word], name: &str, part: Option<&str>) -> Vec<SpecValue> {
+    find_case(page, &relative_to_output(words), name, true, true, part)
 }
 
 /// The output voltage's limits written as fractions of the nominal (ROHM's fixed-output regulators: "VO×0.99 VO VO×1.01"
@@ -260,7 +352,7 @@ fn relative_to_output(words: &[Word]) -> std::borrow::Cow<'_, [Word]> {
     std::borrow::Cow::Owned(out)
 }
 
-fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: bool) -> Vec<SpecValue> {
+fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: bool, part: Option<&str>) -> Vec<SpecValue> {
     let want = key(symbol, case);
     if want.is_empty() {
         return vec![];
@@ -270,6 +362,9 @@ fn find_case(page: usize, words: &[Word], symbol: &str, case: bool, by_name: boo
     for h in &heads {
         // the table runs from its header down to the next header (or the page's end)
         let bottom = heads.iter().map(|o| o.y).find(|&y| y > h.y + 1.0).unwrap_or(f32::MAX);
+        // the columns of the part's grade, or none of this table's
+        let Some(h) = h.for_part(part) else { continue };
+        let h = &h;
         let body: Vec<&Word> = words.iter().filter(|w| centre(&w.rect).1 > h.y + 3.0 && centre(&w.rect).1 < bottom).collect();
         let first_x = body.iter().map(|w| w.rect.x0).fold(f32::MAX, f32::min);
         // the conditions: their own column when headed; with a symbol column right of the text, everything left of
@@ -580,6 +675,29 @@ fn unit_near(words: &[Word], band: &[&&Word], h: &Header, y: f32) -> Option<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// onsemi's MC7800 page: a group of min / typ / max for each grade side by side, the grades printed over them. A part
+    /// number reads its grade's group; a part number of no grade on the page reads nothing there; without one, as before.
+    #[test]
+    fn a_grades_group_of_columns() {
+        let w = |t: &str, x: f32, y: f32| Word::for_test(t, x, y - 8.0, x + 5.0 * t.chars().count() as f32, y);
+        let page = vec![
+            w("MC7805B,", 307.0, 77.9), w("NCV7805B", 347.0, 77.9), w("MC7805C", 444.0, 77.9),
+            w("Characteristic", 129.0, 92.3), w("Symbol", 256.0, 92.3), w("Min", 302.0, 92.3), w("Typ", 340.0, 92.3), w("Max", 377.0, 92.3),
+            w("Min", 416.0, 92.3), w("Typ", 455.0, 92.3), w("Max", 492.0, 92.3), w("Unit", 528.0, 92.3),
+            w("Line", 65.0, 161.8), w("Regulation", 82.0, 161.8), w("Regline", 260.0, 161.8),
+            w("−", 306.0, 161.8), w("5.0", 341.0, 161.8), w("100", 378.0, 161.8), w("−", 421.0, 161.8), w("0.5", 456.0, 161.8), w("20", 494.0, 161.8), w("mV", 529.0, 161.8),
+        ];
+        let typ_max = |part: Option<&str>| find_for(2, &page, "Regline", part).iter().map(|v| (v.typ, v.max)).collect::<Vec<_>>();
+        assert_eq!(typ_max(Some("MC7805BTG")), [(Some(5.0), Some(100.0))]);
+        assert_eq!(typ_max(Some("NCV7805BDTRKG")), [(Some(5.0), Some(100.0))]);
+        assert_eq!(typ_max(Some("MC7805CTG")), [(Some(0.5), Some(20.0))]);
+        assert!(typ_max(Some("MC7805ABTG")).is_empty(), "MC7805AB is another page's grade");
+        assert_eq!(typ_max(None).len(), 1, "no part number: one group read, as before");
+        assert_eq!(grades(&page), ["MC7805B", "NCV7805B", "MC7805C"]);
+        assert_eq!(grade_labels("MC7805AB/MC7805AC/NCV7805AB"), ["MC7805AB", "MC7805AC", "NCV7805AB"]);
+        assert!(grade_labels("Characteristic").is_empty() && grade_labels("(Note").is_empty());
+    }
 
     /// A table laid out like a Japanese data sheet's: one symbol over two lines, and a header in Japanese.
     fn table() -> Vec<Word> {

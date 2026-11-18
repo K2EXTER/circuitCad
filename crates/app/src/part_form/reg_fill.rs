@@ -385,6 +385,8 @@ impl super::PartForm {
         // the packages the part numbers are ordered in (for making every version at once)
         self.reg.parts = parts.iter().filter_map(|(p, _)| nominal_from_name(p).map(|v| (v, p.clone()))).collect();
         self.reg.packages = self.sheet.part_packages(&self.name);
+        self.reg.grades = self.sheet.grades();
+        self.reg.temps = self.sheet.part_temperatures(&self.name);
         if !self.reg.variants.is_empty() && self.reg.vout.trim().is_empty() && !self.reg.adjustable {
             self.reg.found.push((true, format!("この 1 冊は出力電圧が {} 通りあります。下の「電圧違い」で型番を選ぶと、出力電圧が入ります", self.reg.variants.len())));
         }
@@ -395,12 +397,12 @@ impl super::PartForm {
     pub(super) fn reg_choose_variant(&mut self, v: f64, part: &str) {
         self.name = part.to_string();
         let (sheet, name) = (&self.sheet, self.name.clone());
-        self.reg.fill_from_pdf(&name, |s| sheet.spec_values(s));
+        self.reg.fill_from_pdf(&name, |s| sheet.spec_values_for(s, &name));
         if self.reg.vout.trim().is_empty() {
             self.reg.vout = show(v);
             self.reg.found.insert(0, (true, format!("出力電圧 {} V: 型番 {part} から", show(v))));
             // its range from the table's fractions of the output (ROHM's "VO×0.99 VO VO×1.01")
-            if let Some(r) = ["VO", "VOUT"].iter().flat_map(|s| sheet.spec_values(s)).find(|r| r.unit.as_deref() == Some("×VO")) {
+            if let Some(r) = ["VO", "VOUT"].iter().flat_map(|s| sheet.spec_values_for(s, &name)).find(|r| r.unit.as_deref() == Some("×VO")) {
                 self.reg.apply_output_fraction(&r);
             }
         }
@@ -408,28 +410,32 @@ impl super::PartForm {
     }
 }
 
-/// The versions to make of a family: per voltage, one part number per package (the shortest), from the part numbers
-/// (`parts`: voltage, part number) and their packages (`packages`: part number, package name). A voltage whose part numbers
-/// name no package is one version, named as `variants` names it, in the form's package (`None`).
-pub fn versions(variants: &[(f64, String)], parts: &[(f64, String)], packages: &[(String, String)]) -> Vec<(f64, String, Option<String>)> {
+/// The versions to make of a family: per voltage, one part number per package and grade (the shortest), from the part
+/// numbers (`parts`: voltage, part number), their packages (`packages`: part number, package name) and the grades the tables
+/// print over their columns (`grades`: onsemi's MC7805B −40 to 125 °C, MC7805C 0 to 125 °C, MC7805AB ±2 %, each read in its
+/// own columns; none: one grade). A voltage whose part numbers name no package is one version, named as `variants` names
+/// it, in the form's package (`None`).
+pub fn versions(variants: &[(f64, String)], parts: &[(f64, String)], packages: &[(String, String)], grades: &[String]) -> Vec<(f64, String, Option<String>)> {
     let mut out: Vec<(f64, String, Option<String>)> = vec![];
     // the family's part numbers name their packages: a voltage only in a package not named (TI's LP5907YKGR-2.825, a DSBGA)
     // is not made in the form's package; it is left to the caller to say so (an empty package name)
     let named = parts.iter().any(|(_, p)| packages.iter().any(|(n, _)| n.eq_ignore_ascii_case(p)));
     for (v, first) in variants {
-        let mut here: Vec<(String, String)> = vec![];
+        // (part number, package, grade)
+        let mut here: Vec<(String, String, Option<String>)> = vec![];
         for (_, p) in parts.iter().filter(|(pv, _)| (pv - v).abs() < 1e-9) {
             let Some(pkg) = packages.iter().find(|(n, _)| n.eq_ignore_ascii_case(p)).map(|x| x.1.clone()) else { continue };
-            match here.iter_mut().find(|h| h.1 == pkg) {
+            let grade = datasheet::spec_table::grade_of(grades, p);
+            match here.iter_mut().find(|h| h.1 == pkg && h.2 == grade) {
                 Some(h) if p.len() < h.0.len() => h.0 = p.clone(),
                 Some(_) => {}
-                None => here.push((p.clone(), pkg)),
+                None => here.push((p.clone(), pkg, grade)),
             }
         }
         if here.is_empty() {
             out.push((*v, first.clone(), named.then(String::new)));
         } else {
-            out.extend(here.into_iter().map(|(p, pkg)| (*v, p, Some(pkg))));
+            out.extend(here.into_iter().map(|(p, pkg, _)| (*v, p, Some(pkg))));
         }
     }
     out
@@ -444,7 +450,7 @@ impl super::PartForm {
         if self.reg.adjustable || self.reg.variants.is_empty() {
             return Err("電圧違いの型番がありません (「PDF の表から読む」で注文情報の型番を探します)".into());
         }
-        let list = versions(&self.reg.variants, &self.reg.parts, &self.reg.packages);
+        let list = versions(&self.reg.variants, &self.reg.parts, &self.reg.packages, &self.reg.grades);
         // what is changed for each version, to put back
         let keep = (self.name.clone(), self.reg.clone(), self.sim, self.sim_name.clone(), self.sim_text.clone(), self.sim_pins.clone(), self.sim_limits.clone(), self.sim_origin.clone(), self.description.clone(), self.fp_preset.clone());
         let keep_pins = self.pins_text.clone();
@@ -514,10 +520,14 @@ impl super::PartForm {
             let def = self.linear_apply(&fitted, self.reg_roles()).and_then(|_| self.to_def());
             match def {
                 Ok(d) => {
-                    let note = match pkg {
+                    let mut note = match pkg {
                         Some(p) => format!("出力 {} V、{p}", show(*v)),
                         None => format!("出力 {} V", show(*v)),
                     };
+                    // the temperature range it is ordered for (onsemi's B and C grades differ in it)
+                    if let Some((_, (lo, hi))) = self.reg.temps.iter().find(|t| t.0.eq_ignore_ascii_case(part)) {
+                        note += &format!("、{}〜{} ℃", show(*lo), show(*hi));
+                    }
                     let variant = part_lib::variants::Variant { name: d.name.clone(), value: format!("{}V", show(*v)), sim: d.sim.clone(), package: Some((d.footprint_name(), d.package.clone())), note };
                     made.push((d, variant));
                 }
@@ -737,11 +747,19 @@ mod tests {
         let parts = vec![(1.8, s("LP5907MFX-1.8")), (1.8, s("LP5907SNX-1.8")), (3.3, s("LP5907MFX-3.3")), (3.3, s("LP5907MFXQ-3.3"))];
         let packages = vec![(s("LP5907MFX-1.8"), s("SOT-23")), (s("LP5907SNX-1.8"), s("X2SON")), (s("LP5907MFX-3.3"), s("SOT-23")), (s("LP5907MFXQ-3.3"), s("SOT-23"))];
         assert_eq!(
-            versions(&variants, &parts, &packages),
+            versions(&variants, &parts, &packages, &[]),
             vec![(1.8, s("LP5907MFX-1.8"), Some(s("SOT-23"))), (1.8, s("LP5907SNX-1.8"), Some(s("X2SON"))), (3.3, s("LP5907MFX-3.3"), Some(s("SOT-23"))), (5.0, s("LP5907-5"), Some(String::new()))]
         );
         // no part number names its package: every voltage in the form's
-        assert_eq!(versions(&variants, &parts, &[]).iter().map(|v| v.2.clone()).collect::<Vec<_>>(), vec![None, None, None]);
+        assert_eq!(versions(&variants, &parts, &[], &[]).iter().map(|v| v.2.clone()).collect::<Vec<_>>(), vec![None, None, None]);
+        // grades printed over the tables' columns (onsemi's MC7800): one version per grade in each package, a part number of
+        // no grade its own (MC7805AEBTG)
+        let variants = vec![(5.0, s("MC7805BTG"))];
+        let parts = vec![(5.0, s("MC7805BTG")), (5.0, s("MC7805CTG")), (5.0, s("MC7805ABTG")), (5.0, s("MC7805CDTG")), (5.0, s("MC7805BDTRKG")), (5.0, s("MC7805BDTG")), (5.0, s("MC7805AEBTG"))];
+        let packages: Vec<(String, String)> = parts.iter().map(|p| (p.1.clone(), s(if p.1.contains("DT") { "DPAK" } else { "TO-220" }))).collect();
+        let grades = vec![s("MC7805B"), s("NCV7805B"), s("MC7805C"), s("MC7805AB")];
+        let names: Vec<String> = versions(&variants, &parts, &packages, &grades).into_iter().map(|v| v.1).collect();
+        assert_eq!(names, ["MC7805BTG", "MC7805CTG", "MC7805ABTG", "MC7805CDTG", "MC7805BDTG", "MC7805AEBTG"]);
     }
 
     /// Every version made at once (no PDF: the LM7805 example's values): a part per voltage in its package's built-in

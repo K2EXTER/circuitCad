@@ -88,6 +88,49 @@ pub fn part_packages(pages: &[&[Word]], family: &str) -> Vec<(String, String)> {
     out
 }
 
+/// A temperature as printed in a cell ("−40°C", "+125°C", "0°C"): the number before "°C".
+fn celsius(t: &str) -> Option<f64> {
+    let t = t.trim();
+    let n = t.strip_suffix("°C").or_else(|| t.strip_suffix('℃'))?;
+    n.trim().replace(['\u{2212}', '\u{2013}'], "-").trim_start_matches('+').parse::<f64>().ok().filter(|v| (-80.0..=200.0).contains(v))
+}
+
+/// The temperature range each part number is ordered for, from the ordering table's line: the first two temperatures right
+/// of the part number on its line, low to high (onsemi's "MC7805BTG 5.0 V TJ = −40°C to +125°C TO−220" → −40, 125; a lone
+/// "°C" after its number counts too). Of a part number written several times, the first line that gives one; the cells end
+/// at the next part number of the family.
+pub fn part_temperatures(pages: &[&[Word]], family: &str) -> Vec<(String, (f64, f64))> {
+    let fam = family.to_ascii_uppercase();
+    let mut out: Vec<(String, (f64, f64))> = vec![];
+    if fam.len() < 3 {
+        return out;
+    }
+    for words in pages {
+        for line in crate::figures::lines(words) {
+            for (k, w) in line.iter().enumerate() {
+                let t = clean(w.text.trim());
+                if !t.to_ascii_uppercase().starts_with(&fam) || t.len() <= fam.len() || out.iter().any(|o| o.0.eq_ignore_ascii_case(&t)) {
+                    continue;
+                }
+                let cells: Vec<String> = line[k + 1..].iter().take_while(|n| !clean(n.text.trim()).to_ascii_uppercase().starts_with(&fam)).map(|n| n.text.trim().to_string()).collect();
+                let mut temps = vec![];
+                for (i, c) in cells.iter().enumerate() {
+                    let lone = cells.get(i + 1).is_some_and(|n| n == "°C" || n == "℃");
+                    if let Some(v) = celsius(c).or_else(|| if lone { celsius(&format!("{c}°C")) } else { None }) {
+                        temps.push(v);
+                    }
+                }
+                if let [lo, hi, ..] = temps[..]
+                    && lo < hi
+                {
+                    out.push((t, (lo, hi)));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The output voltages a data sheet lists as its options: the numbers with "V" after "Output Voltage Options" (or
 /// "fixed output voltages") on its line and the two lines after it ("Standard Output Voltage Options:" / "- 1.2V, 1.8V,
 /// 2.5V, 2.8V, 3.0V, 3.3V, 5.0V", MCP1700). Each once, in the order written.
@@ -168,6 +211,21 @@ mod tests {
         let got = part_packages(&pages, "LP5907");
         assert_eq!(got, vec![("LP5907MFX-1.2".to_string(), "SOT-23".to_string()), ("LP5907SNX-1.2".into(), "X2SON".into())], "DSBGA is no package name the draft knows");
         assert_eq!(part_packages(&pages, "MC78"), vec![("MC7805CTG".to_string(), "TO-220".to_string()), ("MC7805CD2TG".into(), "D2PAK".into())]);
+    }
+
+    /// onsemi's ordering table: the junction temperature range on each part number's line.
+    #[test]
+    fn part_numbers_get_their_temperature_ranges() {
+        let mut p = line("MC7805ABTG 5.0 V TJ = −40°C to +125°C TO−220 50 Units /Rail", 100.0);
+        p.extend(line("MC7805ACTG 5.0 V TJ = 0°C to +125°C TO−220 50 Units /Rail", 112.0));
+        p.extend(line("MC7812CTG 12 V TJ = 0 °C to 125 °C", 124.0));
+        p.extend(line("MC7815CTG 15 V TO−220", 136.0));
+        let pages: Vec<&[Word]> = vec![&p];
+        assert_eq!(
+            part_temperatures(&pages, "MC78"),
+            vec![("MC7805ABTG".to_string(), (-40.0, 125.0)), ("MC7805ACTG".into(), (0.0, 125.0)), ("MC7812CTG".into(), (0.0, 125.0))],
+            "MC7815CTG gives none"
+        );
     }
 
     #[test]

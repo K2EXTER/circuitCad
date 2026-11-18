@@ -443,7 +443,8 @@ impl PartForm {
                 }
                 Some("レギュレータ") => {
                     let name = self.name.clone();
-                    self.reg.fill_from_pdf(&name, values);
+                    // (the columns of the name's grade: MC7805C's, not MC7805B's beside them)
+                    self.reg.fill_from_pdf(&name, |s| sheet.spec_values_for(s, &name));
                     self.reg_find_variants();
                     Some(("reg_box", "レギュレータ"))
                 }
