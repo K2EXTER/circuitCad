@@ -437,12 +437,14 @@ impl Session {
         }
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &Default::default());
         let r = sim_core::self_heat(&c, &heaters, spec.ambient_c).map_err(|e| e.to_string())?;
+        // the parts of every sheet: a heater on a sheet not being edited is looked up there too
+        let flat = self.sch.flat();
         let sources: Vec<pcb_core::thermal::HeatSource> = r
             .parts
             .iter()
             .filter(|p| p.power > 1e-9)
             .filter_map(|p| {
-                let comp = self.sch.components.iter().find(|x| x.refdes == p.name)?;
+                let comp = flat.components.iter().find(|x| x.refdes == p.name)?;
                 let mut s = pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(comp), sim_core::theta_jc(comp).0, comp.heatsink);
                 s.cth = comp.cth;
                 Some(s)
@@ -481,7 +483,7 @@ impl Session {
                         s.repeat = repeat;
                     }
                     None => {
-                        let Some(comp) = self.sch.components.iter().find(|x| x.refdes == name) else { continue };
+                        let Some(comp) = flat.components.iter().find(|x| x.refdes == name) else { continue };
                         let mut s = pcb_core::thermal::HeatSource::new(&name, 0.0, sim_core::own_theta(comp), sim_core::theta_jc(comp).0, comp.heatsink);
                         s.cth = comp.cth;
                         s.profile = profile;

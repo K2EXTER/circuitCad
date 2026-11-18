@@ -902,12 +902,12 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
 
     /// A part's own θ (K/W, smallest pads): what it was given, or the guess from its package.
     fn own_theta(&self, refdes: &str) -> Option<f64> {
-        self.sch.components.iter().find(|c| c.refdes == refdes).map(sim_core::own_theta)
+        self.sch.flat().components.iter().find(|c| c.refdes == refdes).map(sim_core::own_theta)
     }
 
     /// A part's θjc (K/W, given or the guess) and heat sink (K/W, 0 = none).
     fn case_of(&self, refdes: &str) -> Option<(f64, f64)> {
-        self.sch.components.iter().find(|c| c.refdes == refdes).map(|c| (sim_core::theta_jc(c).0, c.heatsink))
+        self.sch.flat().components.iter().find(|c| c.refdes == refdes).map(|c| (sim_core::theta_jc(c).0, c.heatsink))
     }
 
     /// The board copper beside each part's θ, by reference: (W/K, mm² beyond its pads); empty unless `board postlayout on`.
@@ -929,11 +929,12 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
     /// unless the board is carried over and parts are on its grid.
     fn warm_wiring(&self, parts: &[sim_core::HeatedPart], ambient: f64, on_grid: bool, dc: &sim_core::DcResult) -> Option<(Vec<sim_core::WiringR>, Vec<pcb_core::thermal::WarmWiring>)> {
         let (Some(b), true, true) = (&self.board, self.post_layout, on_grid) else { return None };
+        let flat = self.sch.flat();
         let sources: Vec<pcb_core::thermal::HeatSource> = parts
             .iter()
             .filter(|p| p.power > 1e-9)
             .filter_map(|p| {
-                let c = self.sch.components.iter().find(|c| c.refdes == p.name)?;
+                let c = flat.components.iter().find(|c| c.refdes == p.name)?;
                 Some(pcb_core::thermal::HeatSource::new(&p.name, p.power, sim_core::own_theta(c), sim_core::theta_jc(c).0, c.heatsink))
             })
             .collect();

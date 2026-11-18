@@ -2054,6 +2054,22 @@ board heatmap temp=25 cell=1
     assert!((5.0..20.0).contains(&h["h_top_w_m2k"].as_f64().unwrap()), "{h}");
 }
 
+/// `board heatmap` with another sheet open: the heat sources come from every sheet, not only the one being edited (a 7-sheet design
+/// once lost its 1 W transistor from the map while the sheet of its microcontroller wiring was open).
+#[test]
+fn heatmap_takes_the_parts_of_every_sheet() {
+    let sample = format!("{}/../../docs/examples/heat_copper.ccproj", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}
+sheet add Other
+sheet use Other
+board heatmap temp=25 cell=2
+"));
+    assert!(ok, "{a:?}");
+    let h = a.iter().find(|v| v["cmd"] == "board" && v["hottest_c"].is_number()).unwrap_or_else(|| panic!("{a:?}"));
+    let names: Vec<&str> = h["parts"].as_array().unwrap().iter().filter_map(|p| p["part"].as_str()).collect();
+    assert!(names.contains(&"R1") && names.contains(&"R2"), "{h}");
+}
+
 /// `board heatmap tran=`: the sample's 90 × 40 mm board holds about 11.7 J/K of FR-4 (90 × 40 × 1.6 mm³ × 2.0 J/cm³·K) and warms in
 /// minutes; its parts rise moment by moment and, 20 minutes on, stand where the steady map has them.
 #[test]
