@@ -1155,62 +1155,26 @@
     ]
   },
   "2N7000": {
-    "fingerprint": "846ae3ed157ef44b",
+    "fingerprint": "3a9298348795e9c9",
     "source": "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "— / 2.100 / — V",
-        "target": "2.100 V",
-        "condition": "VDS = VGS、ID = 1 mA (表)",
-        "model": "2.100 V",
-        "diff": "-0.0001 V",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.535 / —",
+        "target": "1.535",
+        "condition": "|VGS| = 10 V、|ID| = 0.5 A、Figure 3 (オン抵抗の温度変化)",
+        "model": "1.541",
+        "diff": "+0.0061",
         "tested": true
       },
       {
-        "item": "RDS(on) (VGS = 10 V)",
-        "datasheet": "— / 1.200 / 5.000 Ω",
-        "target": "1.200 Ω",
-        "condition": "ID = 0.5 A (表)",
-        "model": "1.200 Ω",
-        "diff": "-0.0000 Ω",
-        "tested": true
-      },
-      {
-        "item": "RDS(on) (VGS = 4.5 V)",
-        "datasheet": "— / 1.800 / 5.300 Ω",
-        "target": "1.800 Ω",
-        "condition": "ID = 0.075 A (表)",
-        "model": "1.800 Ω",
-        "diff": "-0.0001 Ω",
-        "tested": true
-      },
-      {
-        "item": "gFS",
-        "datasheet": "— / 0.3200 / — S",
-        "target": "0.3200 S",
-        "condition": "VDS = 10 V、ID = 0.2 A (表)。オン抵抗に合わせた 2乗則では、ここは合わない",
-        "model": "0.4355 S",
-        "diff": "+0.1155 S",
-        "tested": false
-      },
-      {
-        "item": "Ciss",
-        "datasheet": "— / 20.000 / — pF",
-        "target": "20.000 pF",
-        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
-        "model": "20.000 pF",
-        "diff": "+0.0000 pF",
-        "tested": true
-      },
-      {
-        "item": "Crss",
-        "datasheet": "— / 4.000 / — pF",
-        "target": "4.000 pF",
-        "condition": "VGS = 0 (表)",
-        "model": "4.000 pF",
-        "diff": "+0.0000 pF",
+        "item": "RDS(on) (125 °C ÷ 25 °C)",
+        "datasheet": "— / 1.735 / —",
+        "target": "1.735",
+        "condition": "|VGS| = 10 V、|ID| = 0.5 A、Figure 3 (オン抵抗の温度変化)",
+        "model": "1.740",
+        "diff": "+0.0053",
         "tested": true
       }
     ]
@@ -1453,141 +1417,51 @@
     ]
   },
   "AO3400A": {
-    "fingerprint": "aafaa89168260ecf",
+    "fingerprint": "62276896b0648153",
     "source": "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "— / 1.050 / — V",
-        "target": "1.050 V",
-        "condition": "VDS = VGS、ID = 0.25 mA (表)",
-        "model": "1.050 V",
-        "diff": "+0.0003 V",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.405 / —",
+        "target": "1.405",
+        "condition": "|VGS| = 10 V、|ID| = 5.7 A、Figure 4 (オン抵抗の温度変化)",
+        "model": "1.403",
+        "diff": "-0.0021",
         "tested": true
       },
       {
-        "item": "RDS(on) (VGS = 10 V)",
-        "datasheet": "— / 18.000 / 26.500 mΩ",
-        "target": "18.000 mΩ",
-        "condition": "ID = 5.7 A (表)",
-        "model": "17.685 mΩ",
-        "diff": "-0.3152 mΩ",
-        "tested": true
-      },
-      {
-        "item": "RDS(on) (VGS = 4.5 V)",
-        "datasheet": "— / 19.000 / 32.000 mΩ",
-        "target": "19.000 mΩ",
-        "condition": "ID = 5 A (表)",
-        "model": "19.546 mΩ",
-        "diff": "+0.5461 mΩ",
-        "tested": true
-      },
-      {
-        "item": "RDS(on) (VGS = 2.5 V)",
-        "datasheet": "— / 24.000 / 48.000 mΩ",
-        "target": "24.000 mΩ",
-        "condition": "ID = 3 A (表)",
-        "model": "23.753 mΩ",
-        "diff": "-0.2475 mΩ",
-        "tested": true
-      },
-      {
-        "item": "gFS",
-        "datasheet": "— / 33.000 / — S",
-        "target": "33.000 S",
-        "condition": "VDS = 5 V、ID = 5.7 A (表)",
-        "model": "33.071 S",
-        "diff": "+0.0714 S",
-        "tested": false
-      },
-      {
-        "item": "Ciss",
-        "datasheet": "— / 630.0 / — pF",
-        "target": "630.0 pF",
-        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
-        "model": "630.0 pF",
-        "diff": "+0.0001 pF",
-        "tested": true
-      },
-      {
-        "item": "Crss",
-        "datasheet": "— / 50.000 / — pF",
-        "target": "50.000 pF",
-        "condition": "VGS = 0 (表)",
-        "model": "50.000 pF",
-        "diff": "+0.0000 pF",
+        "item": "RDS(on) (125 °C ÷ 25 °C)",
+        "datasheet": "— / 1.550 / —",
+        "target": "1.550",
+        "condition": "|VGS| = 10 V、|ID| = 5.7 A、Figure 4 (オン抵抗の温度変化)",
+        "model": "1.549",
+        "diff": "-0.0009",
         "tested": true
       }
     ]
   },
   "AO3401A": {
-    "fingerprint": "0b52c9678213ee69",
+    "fingerprint": "1c1667142ea18522",
     "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "— / -0.9000 / — V",
-        "target": "-0.9000 V",
-        "condition": "VDS = VGS、ID = -0.25 mA (表)",
-        "model": "-0.9000 V",
-        "diff": "+0.0000 V",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.396 / —",
+        "target": "1.396",
+        "condition": "|VGS| = 4.5 V、|ID| = 3.5 A、Figure 4 (オン抵抗の温度変化)",
+        "model": "1.389",
+        "diff": "-0.0065",
         "tested": true
       },
       {
-        "item": "RDS(on) (VGS = -10 V)",
-        "datasheet": "— / 41.000 / 50.000 mΩ",
-        "target": "41.000 mΩ",
-        "condition": "ID = -4 A (表)",
-        "model": "40.960 mΩ",
-        "diff": "-0.0398 mΩ",
-        "tested": true
-      },
-      {
-        "item": "RDS(on) (VGS = -4.5 V)",
-        "datasheet": "— / 47.000 / 60.000 mΩ",
-        "target": "47.000 mΩ",
-        "condition": "ID = -3.5 A (表)",
-        "model": "47.075 mΩ",
-        "diff": "+0.0746 mΩ",
-        "tested": true
-      },
-      {
-        "item": "RDS(on) (VGS = -2.5 V)",
-        "datasheet": "— / 60.000 / 85.000 mΩ",
-        "target": "60.000 mΩ",
-        "condition": "ID = -2.5 A (表)",
-        "model": "59.959 mΩ",
-        "diff": "-0.0407 mΩ",
-        "tested": true
-      },
-      {
-        "item": "gFS",
-        "datasheet": "— / 17.000 / — S",
-        "target": "17.000 S",
-        "condition": "VDS = -5 V、ID = -4 A (表)",
-        "model": "14.865 S",
-        "diff": "-2.135 S",
-        "tested": false
-      },
-      {
-        "item": "Ciss",
-        "datasheet": "— / 645.0 / — pF",
-        "target": "645.0 pF",
-        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
-        "model": "645.0 pF",
-        "diff": "+0.0001 pF",
-        "tested": true
-      },
-      {
-        "item": "Crss",
-        "datasheet": "— / 55.000 / — pF",
-        "target": "55.000 pF",
-        "condition": "VGS = 0 (表)",
-        "model": "55.000 pF",
-        "diff": "+0.0000 pF",
+        "item": "RDS(on) (125 °C ÷ 25 °C)",
+        "datasheet": "— / 1.538 / —",
+        "target": "1.538",
+        "condition": "|VGS| = 4.5 V、|ID| = 3.5 A、Figure 4 (オン抵抗の温度変化)",
+        "model": "1.541",
+        "diff": "+0.0030",
         "tested": true
       }
     ]
@@ -2105,435 +1979,201 @@
     ]
   },
   "BSS138": {
-    "fingerprint": "7ac43a957d2369ed",
+    "fingerprint": "94f9eb9b39d2e1a7",
     "source": "onsemi BSS138 データシート (BSS138/D Rev. 7, 2024-04)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "— / 1.300 / — V",
-        "target": "1.300 V",
-        "condition": "VDS = VGS、ID = 1 mA (表)",
-        "model": "1.300 V",
-        "diff": "+0.0001 V",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.484 / —",
+        "target": "1.484",
+        "condition": "|VGS| = 10 V、|ID| = 0.22 A、Figure 3 (オン抵抗の温度変化)",
+        "model": "1.488",
+        "diff": "+0.0040",
         "tested": true
       },
       {
-        "item": "RDS(on) (VGS = 10 V)",
-        "datasheet": "— / 0.7000 / 3.500 Ω",
-        "target": "0.7000 Ω",
-        "condition": "ID = 0.22 A (表)",
-        "model": "0.7000 Ω",
-        "diff": "-0.0000 Ω",
-        "tested": true
-      },
-      {
-        "item": "RDS(on) (VGS = 4.5 V)",
-        "datasheet": "— / 1.000 / 6.000 Ω",
-        "target": "1.000 Ω",
-        "condition": "ID = 0.22 A (表)",
-        "model": "1.000 Ω",
-        "diff": "+0.0000 Ω",
-        "tested": true
-      },
-      {
-        "item": "gFS",
-        "datasheet": "— / 0.5000 / — S",
-        "target": "0.5000 S",
-        "condition": "VDS = 10 V、ID = 0.22 A (表)",
-        "model": "0.5385 S",
-        "diff": "+0.0385 S",
-        "tested": false
-      },
-      {
-        "item": "Ciss",
-        "datasheet": "— / 27.000 / — pF",
-        "target": "27.000 pF",
-        "condition": "VGS = 0 (表。モデルの容量は電圧によらない)",
-        "model": "27.000 pF",
-        "diff": "+0.0000 pF",
-        "tested": true
-      },
-      {
-        "item": "Crss",
-        "datasheet": "— / 6.000 / — pF",
-        "target": "6.000 pF",
-        "condition": "VGS = 0 (表)",
-        "model": "6.000 pF",
-        "diff": "+0.0000 pF",
+        "item": "RDS(on) (150 °C ÷ 25 °C)",
+        "datasheet": "— / 1.833 / —",
+        "target": "1.833",
+        "condition": "|VGS| = 10 V、|ID| = 0.22 A、Figure 3 (オン抵抗の温度変化)",
+        "model": "1.826",
+        "diff": "-0.0071",
         "tested": true
       }
     ]
   },
   "IRF540N": {
-    "fingerprint": "d3cccc85e4b2a7d0",
+    "fingerprint": "dd9b64d52c726bdf",
     "source": "Infineon IRF540NPbF データシート (Rev. 2.1, 2026-07-24)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "2.000 / — / 4.000 V",
-        "target": "max 4.000 V",
-        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
-        "model": "3.547 V",
-        "diff": "-0.4533 V",
-        "tested": false
-      },
-      {
-        "item": "RDS(on) (|VGS| = 10 V)",
-        "datasheet": "— / 39.500 / 44.000 mΩ",
-        "target": "39.500 mΩ",
-        "condition": "|ID| = 16 A。typ は図 1 の直線部分の傾き、max は表",
-        "model": "39.778 mΩ",
-        "diff": "+0.2781 mΩ",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.766 / —",
+        "target": "1.766",
+        "condition": "|VGS| = 10 V、|ID| = 33 A、Fig. 4 (オン抵抗の温度変化)",
+        "model": "1.785",
+        "diff": "+0.0192",
         "tested": true
       },
       {
-        "item": "VSD (0.5 A)",
-        "datasheet": "— / 0.7116 / — V",
-        "target": "0.7116 V",
-        "condition": "ボディダイオード、図 7 の 25 °C",
-        "model": "0.7110 V",
-        "diff": "-0.0006 V",
+        "item": "RDS(on) (150 °C ÷ 25 °C)",
+        "datasheet": "— / 2.485 / —",
+        "target": "2.485",
+        "condition": "|VGS| = 10 V、|ID| = 33 A、Fig. 4 (オン抵抗の温度変化)",
+        "model": "2.486",
+        "diff": "+0.0015",
         "tested": true
-      },
-      {
-        "item": "VSD (16 A)",
-        "datasheet": "— / — / 1.200 V",
-        "target": "max 1.200 V",
-        "condition": "ボディダイオード、表の max",
-        "model": "0.9143 V",
-        "diff": "-0.2857 V",
-        "tested": false
       }
     ]
   },
   "IRF9540N": {
-    "fingerprint": "cbf23d1c6332fff9",
+    "fingerprint": "62a0855b4ffe7fe2",
     "source": "International Rectifier IRF9540NPbF データシート (PD-94790A)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "2.000 / — / 4.000 V",
-        "target": "max 4.000 V",
-        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
-        "model": "3.612 V",
-        "diff": "-0.3878 V",
-        "tested": false
-      },
-      {
-        "item": "RDS(on) (|VGS| = 10 V)",
-        "datasheet": "— / 112.8 / 117.0 mΩ",
-        "target": "112.8 mΩ",
-        "condition": "|ID| = 11 A。typ は図 1 の直線部分の傾き、max は表",
-        "model": "113.4 mΩ",
-        "diff": "+0.5902 mΩ",
+        "item": "RDS(on) (110 °C ÷ 25 °C)",
+        "datasheet": "— / 1.611 / —",
+        "target": "1.611",
+        "condition": "|VGS| = 10 V、|ID| = 19 A、Fig 4 (スキャンの絵) (オン抵抗の温度変化)",
+        "model": "1.592",
+        "diff": "-0.0185",
         "tested": true
       },
       {
-        "item": "VSD (0.5 A)",
-        "datasheet": "— / 0.7224 / — V",
-        "target": "0.7224 V",
-        "condition": "ボディダイオード、図 7 の 25 °C",
-        "model": "0.7212 V",
-        "diff": "-0.0012 V",
+        "item": "RDS(on) (145 °C ÷ 25 °C)",
+        "datasheet": "— / 1.860 / —",
+        "target": "1.860",
+        "condition": "|VGS| = 10 V、|ID| = 19 A、Fig 4 (スキャンの絵) (オン抵抗の温度変化)",
+        "model": "1.871",
+        "diff": "+0.0107",
         "tested": true
-      },
-      {
-        "item": "VSD (11 A)",
-        "datasheet": "— / — / 1.600 V",
-        "target": "max 1.600 V",
-        "condition": "ボディダイオード、表の max",
-        "model": "0.9003 V",
-        "diff": "-0.6997 V",
-        "tested": false
       }
     ]
   },
   "IRFZ44N": {
-    "fingerprint": "1c28a68aea22b582",
+    "fingerprint": "6768a68cffaa83ac",
     "source": "Infineon IRFZ44NPbF データシート (Rev. 2.1, 2026-08-11)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "2.000 / — / 4.000 V",
-        "target": "max 4.000 V",
-        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
-        "model": "3.461 V",
-        "diff": "-0.5393 V",
-        "tested": false
-      },
-      {
-        "item": "RDS(on) (|VGS| = 10 V)",
-        "datasheet": "— / 14.100 / 17.500 mΩ",
-        "target": "14.100 mΩ",
-        "condition": "|ID| = 25 A。typ は図 1 の直線部分の傾き、max は表",
-        "model": "14.558 mΩ",
-        "diff": "+0.4583 mΩ",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.572 / —",
+        "target": "1.572",
+        "condition": "|VGS| = 10 V、|ID| = 49 A、Fig. 4 (オン抵抗の温度変化)",
+        "model": "1.579",
+        "diff": "+0.0074",
         "tested": true
       },
       {
-        "item": "VSD (0.5 A)",
-        "datasheet": "— / 0.7179 / — V",
-        "target": "0.7179 V",
-        "condition": "ボディダイオード、図 7 の 25 °C",
-        "model": "0.7172 V",
-        "diff": "-0.0007 V",
+        "item": "RDS(on) (150 °C ÷ 25 °C)",
+        "datasheet": "— / 2.095 / —",
+        "target": "2.095",
+        "condition": "|VGS| = 10 V、|ID| = 49 A、Fig. 4 (オン抵抗の温度変化)",
+        "model": "2.094",
+        "diff": "-0.0005",
         "tested": true
-      },
-      {
-        "item": "VSD (25 A)",
-        "datasheet": "— / — / 1.300 V",
-        "target": "max 1.300 V",
-        "condition": "ボディダイオード、表の max",
-        "model": "1.017 V",
-        "diff": "-0.2827 V",
-        "tested": false
       }
     ]
   },
   "IRLB8721": {
-    "fingerprint": "3ffd9d1a22d357bd",
+    "fingerprint": "4005b891b505648c",
     "source": "International Rectifier IRLB8721PbF データシート (PD-97390, 2009-04)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "1.350 / 1.800 / 2.350 V",
-        "target": "1.800 V",
-        "condition": "|VDS| = |VGS|、|ID| = 25 µA (表。モデルは伝達特性に合わせたので、ここは比べるだけ)",
-        "model": "2.414 V",
-        "diff": "+0.6141 V",
-        "tested": false
-      },
-      {
-        "item": "RDS(on) (|VGS| = 10 V)",
-        "datasheet": "— / 6.500 / 8.700 mΩ",
-        "target": "6.500 mΩ",
-        "condition": "|ID| = 31 A。表の typ・max",
-        "model": "6.058 mΩ",
-        "diff": "-0.4418 mΩ",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.398 / —",
+        "target": "1.398",
+        "condition": "|VGS| = 10 V、|ID| = 25 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.401",
+        "diff": "+0.0025",
         "tested": true
       },
       {
-        "item": "RDS(on) (|VGS| = 4.5 V)",
-        "datasheet": "— / 13.100 / 16.000 mΩ",
-        "target": "13.100 mΩ",
-        "condition": "|ID| = 25 A。表の typ・max",
-        "model": "15.816 mΩ",
-        "diff": "+2.716 mΩ",
+        "item": "RDS(on) (150 °C ÷ 25 °C)",
+        "datasheet": "— / 1.720 / —",
+        "target": "1.720",
+        "condition": "|VGS| = 10 V、|ID| = 25 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.720",
+        "diff": "-0.0000",
         "tested": true
-      },
-      {
-        "item": "ID (|VGS| = 3.5 V)",
-        "datasheet": "— / 23.419 / — A",
-        "target": "23.419 A",
-        "condition": "|VDS| = 15 V、図 3 の 25 °C",
-        "model": "21.826 A",
-        "diff": "-1.593 A",
-        "tested": true
-      },
-      {
-        "item": "ID (|VGS| = 5 V)",
-        "datasheet": "— / 99.504 / — A",
-        "target": "99.504 A",
-        "condition": "|VDS| = 15 V、図 3 の 25 °C",
-        "model": "108.1 A",
-        "diff": "+8.574 A",
-        "tested": true
-      },
-      {
-        "item": "VSD (1 A)",
-        "datasheet": "— / 0.5921 / — V",
-        "target": "0.5921 V",
-        "condition": "ボディダイオード、図 7 の 25 °C",
-        "model": "0.5948 V",
-        "diff": "+0.0027 V",
-        "tested": true
-      },
-      {
-        "item": "VSD (25 A)",
-        "datasheet": "— / — / 1.000 V",
-        "target": "max 1.000 V",
-        "condition": "ボディダイオード、表の max",
-        "model": "0.7767 V",
-        "diff": "-0.2233 V",
-        "tested": false
       }
     ]
   },
   "IRLML6344": {
-    "fingerprint": "9e458f3f0142279a",
+    "fingerprint": "9e32aafc12b99058",
     "source": "Infineon (IR) IRLML6344TRPbF データシート (2014-12-19 版)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "0.5000 / 0.8000 / 1.100 V",
-        "target": "0.8000 V",
-        "condition": "|VDS| = |VGS|、|ID| = 10 µA (表。モデルは伝達特性に合わせたので、ここは比べるだけ)",
-        "model": "1.237 V",
-        "diff": "+0.4366 V",
-        "tested": false
-      },
-      {
-        "item": "RDS(on) (|VGS| = 4.5 V)",
-        "datasheet": "— / 22.000 / 29.000 mΩ",
-        "target": "22.000 mΩ",
-        "condition": "|ID| = 5 A。表の typ・max",
-        "model": "20.539 mΩ",
-        "diff": "-1.461 mΩ",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.414 / —",
+        "target": "1.414",
+        "condition": "|VGS| = 4.5 V、|ID| = 5 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.416",
+        "diff": "+0.0017",
         "tested": true
       },
       {
-        "item": "RDS(on) (|VGS| = 2.5 V)",
-        "datasheet": "— / 27.000 / 37.000 mΩ",
-        "target": "27.000 mΩ",
-        "condition": "|ID| = 4 A。表の typ・max",
-        "model": "29.850 mΩ",
-        "diff": "+2.850 mΩ",
+        "item": "RDS(on) (125 °C ÷ 25 °C)",
+        "datasheet": "— / 1.573 / —",
+        "target": "1.573",
+        "condition": "|VGS| = 4.5 V、|ID| = 5 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.573",
+        "diff": "+0.0005",
         "tested": true
-      },
-      {
-        "item": "ID (|VGS| = 1.5 V)",
-        "datasheet": "— / 1.708 / — A",
-        "target": "1.708 A",
-        "condition": "|VDS| = 15 V、図 3 の 25 °C",
-        "model": "1.881 A",
-        "diff": "+0.1732 A",
-        "tested": true
-      },
-      {
-        "item": "ID (|VGS| = 2 V)",
-        "datasheet": "— / 17.090 / — A",
-        "target": "17.090 A",
-        "condition": "|VDS| = 15 V、図 3 の 25 °C",
-        "model": "15.757 A",
-        "diff": "-1.333 A",
-        "tested": true
-      },
-      {
-        "item": "VSD (1 A)",
-        "datasheet": "— / 0.6632 / — V",
-        "target": "0.6632 V",
-        "condition": "ボディダイオード、図 7 の 25 °C",
-        "model": "0.6763 V",
-        "diff": "+0.0131 V",
-        "tested": true
-      },
-      {
-        "item": "VSD (5 A)",
-        "datasheet": "— / — / 1.200 V",
-        "target": "max 1.200 V",
-        "condition": "ボディダイオード、表の max",
-        "model": "0.7904 V",
-        "diff": "-0.4096 V",
-        "tested": false
       }
     ]
   },
   "IRLML6401": {
-    "fingerprint": "ed9bb2065833d432",
+    "fingerprint": "0ca650d981b260f9",
     "source": "Infineon (IR) IRLML6401PbF データシート (2014-04-28 版)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "0.4000 / 0.5500 / 0.9500 V",
-        "target": "0.5500 V",
-        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表。モデルは伝達特性に合わせたので、ここは比べるだけ)",
-        "model": "0.8111 V",
-        "diff": "+0.2611 V",
-        "tested": false
-      },
-      {
-        "item": "RDS(on) (|VGS| = 4.5 V)",
-        "datasheet": "— / 35.300 / 50.000 mΩ",
-        "target": "35.300 mΩ",
-        "condition": "|ID| = 4.3 A。typ は図 1 (VDS = 0.2 V) から、max は表",
-        "model": "40.768 mΩ",
-        "diff": "+5.468 mΩ",
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.197 / —",
+        "target": "1.197",
+        "condition": "|VGS| = 4.5 V、|ID| = 4.3 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.198",
+        "diff": "+0.0013",
         "tested": true
       },
       {
-        "item": "RDS(on) (|VGS| = 2.5 V)",
-        "datasheet": "— / 50.600 / 85.000 mΩ",
-        "target": "50.600 mΩ",
-        "condition": "|ID| = 2.5 A。typ は図 1 (VDS = 0.2 V) から、max は表",
-        "model": "49.472 mΩ",
-        "diff": "-1.128 mΩ",
+        "item": "RDS(on) (125 °C ÷ 25 °C)",
+        "datasheet": "— / 1.267 / —",
+        "target": "1.267",
+        "condition": "|VGS| = 4.5 V、|ID| = 4.3 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.266",
+        "diff": "-0.0008",
         "tested": true
-      },
-      {
-        "item": "RDS(on) (|VGS| = 1.8 V)",
-        "datasheet": "— / 75.700 / 125.0 mΩ",
-        "target": "75.700 mΩ",
-        "condition": "|ID| = 2 A。typ は図 1 (VDS = 0.2 V) から、max は表",
-        "model": "61.382 mΩ",
-        "diff": "-14.318 mΩ",
-        "tested": true
-      },
-      {
-        "item": "ID (|VGS| = 1.4 V)",
-        "datasheet": "— / 5.769 / — A",
-        "target": "5.769 A",
-        "condition": "|VDS| = 12 V、図 3 の 25 °C",
-        "model": "5.172 A",
-        "diff": "-0.5973 A",
-        "tested": true
-      },
-      {
-        "item": "ID (|VGS| = 2 V)",
-        "datasheet": "— / 17.119 / — A",
-        "target": "17.119 A",
-        "condition": "|VDS| = 12 V、図 3 の 25 °C",
-        "model": "17.273 A",
-        "diff": "+0.1538 A",
-        "tested": true
-      },
-      {
-        "item": "VSD (1 A)",
-        "datasheet": "— / 0.6831 / — V",
-        "target": "0.6831 V",
-        "condition": "ボディダイオード、図 7 の 25 °C",
-        "model": "0.6858 V",
-        "diff": "+0.0027 V",
-        "tested": true
-      },
-      {
-        "item": "VSD (1.3 A)",
-        "datasheet": "— / — / 1.200 V",
-        "target": "max 1.200 V",
-        "condition": "ボディダイオード、表の max",
-        "model": "0.7113 V",
-        "diff": "-0.4887 V",
-        "tested": false
       }
     ]
   },
   "IRLZ44N": {
-    "fingerprint": "fce561c867da9b9a",
+    "fingerprint": "a1b40c93f8ec655c",
     "source": "International Rectifier IRLZ44NPbF データシート (PD-94831, 2003-11-11)。25 °C",
     "date": "2026-11-14",
     "rows": [
       {
-        "item": "しきい値 VGS(th)",
-        "datasheet": "1.000 / — / 2.000 V",
-        "target": "max 2.000 V",
-        "condition": "|VDS| = |VGS|、|ID| = 250 µA (表は min・max だけ)",
-        "model": "2.078 V",
-        "diff": "+0.0785 V",
-        "tested": false
+        "item": "RDS(on) (100 °C ÷ 25 °C)",
+        "datasheet": "— / 1.534 / —",
+        "target": "1.534",
+        "condition": "|VGS| = 10 V、|ID| = 41 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.535",
+        "diff": "+0.0006",
+        "tested": true
       },
       {
-        "item": "RDS(on) (|VGS| = 10 V)",
-        "datasheet": "— / 16.500 / 22.000 mΩ",
-        "target": "16.500 mΩ",
-        "condition": "|ID| = 25 A。typ は図 1 の直線部分の傾き、max は表",
-        "model": "16.807 mΩ",
-        "diff": "+0.3069 mΩ",
+        "item": "RDS(on) (150 °C ÷ 25 °C)",
+        "datasheet": "— / 1.981 / —",
+        "target": "1.981",
+        "condition": "|VGS| = 10 V、|ID| = 41 A、Fig 4 (オン抵抗の温度変化)",
+        "model": "1.982",
+        "diff": "+0.0008",
         "tested": true
       }
     ]

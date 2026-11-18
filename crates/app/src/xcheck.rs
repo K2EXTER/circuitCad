@@ -544,7 +544,14 @@ mod tests {
     #[test]
     fn mosfet_cards_are_exported_with_four_nodes() {
         let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/mosfet_switch.schjson");
-        let s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        // the bundled 2N7000 is a .subckt now (its series resistance carries a temperature coefficient): a .model MOSFET
+        // in its place, as a user's own part may be
+        let q1 = s.components.iter_mut().find(|c| c.refdes == "Q1").unwrap();
+        let sim = q1.custom.as_mut().and_then(|c| c.sim.as_mut()).unwrap();
+        sim.kind = sch_core::SimKind::Model;
+        sim.element = "M".into();
+        sim.text = ".model 2N7000 NMOS(VTO=2.1 KP=0.1)".into();
         assert!(to_spice(&s, "t").contains("MQ1 OUT G 0 0 2N7000"));
     }
 }

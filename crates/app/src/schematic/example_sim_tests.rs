@@ -586,7 +586,8 @@ fn mosfet_sample_switches_around_2v_and_the_lesson_numbers_hold() {
         s.components.iter_mut().find(|c| c.refdes == "R2").unwrap().value = r2.into();
         let dc = dc_op(&from_schematic(&s).unwrap()).unwrap();
         let issues = sim_core::check_ratings(&s, &dc);
-        (dc.voltage("OUT").unwrap(), dc.element("Q1").unwrap().current, issues)
+        // the channel inside the part's .subckt
+        (dc.voltage("OUT").unwrap(), dc.element("Q1.M1").unwrap().current, issues)
     };
     assert!((run("1.5", "47").0 - 5.0).abs() < 0.01, "off below the threshold");
     // the data sheet model (threshold 2.1 V typ) is half on at 2.5 V and nearly fully on at 3 V

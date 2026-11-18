@@ -55,10 +55,10 @@
           }
         ],
         "sim": {
-          "kind": "model",
+          "kind": "subckt",
           "element": "M",
           "name": "2N7000",
-          "text": ".model 2N7000 NMOS(VTO=2.035 KP=0.4742 RD=0.933 CGS=1.6e-11 CGD=4e-12)",
+          "text": ".subckt 2N7000 d g s\nRD1 d di 0.933 TC1=0.007106 TC2=8.755e-06\nM1 di g s s MCH\n.model MCH NMOS(VTO=2.035 KP=0.4742 CGS=1.6e-11 CGD=4e-12)\n.ends 2N7000",
           "pins": [
             "3",
             "2",

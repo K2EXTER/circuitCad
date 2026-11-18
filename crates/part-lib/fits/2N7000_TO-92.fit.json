@@ -7,19 +7,62 @@
   "source": "onsemi 2N7000/2N7002/NDS7002A データシート (NDS7002A/D Rev. 11, 2025-03)",
   "url": "https://www.onsemi.com/pdf/datasheet/nds7002a-d.pdf",
   "description": "Nチャネル MOSFET 60V 200mA (TO-92)。データシート (onsemi) の typ から作った等価モデル (レベル1 + 直列抵抗)",
-  "vth": [2.1, 0.001],
+  "vth": [
+    2.1,
+    0.001
+  ],
   "rds": [
-    [10.0, 0.5, 1.2],
-    [4.5, 0.075, 1.8]
+    [
+      10.0,
+      0.5,
+      1.2
+    ],
+    [
+      4.5,
+      0.075,
+      1.8
+    ]
   ],
   "caps": {
     "ciss": 2e-11,
     "coss": 1.1e-11,
     "crss": 4e-12
   },
-  "gfs": [0.32, 10.0, 0.2],
+  "gfs": [
+    0.32,
+    10.0,
+    0.2
+  ],
   "remarks": [
     "vth: VGS(th) typ 2.1 V at ID = 1 mA (VDS = VGS); rds: RDS(on) typ 1.2 ohm (10 V, 500 mA) and 1.8 ohm (4.5 V, 75 mA)",
-    "caps: Ciss 20, Coss 11, Crss 4 pF typ (VDS = 25 V, VGS = 0)"
-  ]
+    "caps: Ciss 20, Coss 11, Crss 4 pF typ (VDS = 25 V, VGS = 0)",
+    "rds_temp: the data sheet's normalized on resistance against the junction temperature (2026-11-18): RD and RS became resistors with TC1 / TC2 fitted to it (without them the model's RDS(on) rose only by the channel's KP ~ T^-1.5)"
+  ],
+  "rds_temp": {
+    "at": "Figure 3 (On-Resistance Variation with Temperature、VGS = 10 V、ID = 500 mA。PDF の曲線の線から読んだ)",
+    "vgs": 10.0,
+    "id": 0.5,
+    "points": [
+      [
+        50.0,
+        1.175
+      ],
+      [
+        75.0,
+        1.354
+      ],
+      [
+        100.0,
+        1.535
+      ],
+      [
+        125.0,
+        1.735
+      ],
+      [
+        145.0,
+        1.913
+      ]
+    ]
+  }
 }

@@ -103,10 +103,10 @@
           }
         ],
         "sim": {
-          "kind": "model",
+          "kind": "subckt",
           "element": "M",
           "name": "BSS138",
-          "text": ".model BSS138 NMOS(VTO=1.245 KP=0.6591 RD=0.5263 CGS=2.1e-11 CGD=6e-12)",
+          "text": ".subckt BSS138 d g s\nRD1 d di 0.5263 TC1=0.006774 TC2=1.773e-06\nM1 di g s s MCH\n.model MCH NMOS(VTO=1.245 KP=0.6591 CGS=2.1e-11 CGD=6e-12)\n.ends BSS138",
           "pins": [
             "3",
             "1",

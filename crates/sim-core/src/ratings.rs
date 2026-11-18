@@ -86,9 +86,21 @@ pub struct Stress {
     pub v_circuit: f64,
 }
 
+/// The names a part's main element may have: the part itself (one element), else the transistor a library part's `.subckt`
+/// is built around (`M1`, `Q1` or `J1` inside it; the bundled MOSFETs keep their series resistances and body diode beside it).
+pub fn main_element_names(refdes: &str) -> [String; 4] {
+    [refdes.to_string(), format!("{refdes}.M1"), format!("{refdes}.Q1"), format!("{refdes}.J1")]
+}
+
+/// The part's main element in `dc` (`main_element_names`): its voltage and current are what a transistor's ratings hold.
+pub fn main_element<'a>(dc: &'a DcResult, refdes: &str) -> Option<&'a crate::dc::ElementResult> {
+    main_element_names(refdes).iter().find_map(|n| dc.element(n))
+}
+
 /// The stress on `refdes` in the DC result `dc`.
 pub fn stress(dc: &DcResult, refdes: &str) -> Stress {
     let own = dc.element(refdes);
+    let main = main_element(dc, refdes);
     let prefix = format!("{refdes}.");
     let inner: Vec<f64> = dc.elements.iter().filter(|e| e.name.starts_with(&prefix)).map(|e| e.power).collect();
     let p = match (own, inner.is_empty()) {
@@ -97,8 +109,8 @@ pub fn stress(dc: &DcResult, refdes: &str) -> Stress {
         (None, true) => None,
     };
     Stress {
-        v: own.map(|e| e.voltage.abs()),
-        i: own.map(|e| e.current.abs()),
+        v: main.map(|e| e.voltage.abs()),
+        i: main.map(|e| e.current.abs()),
         p: p.map(|p| p.max(0.0)),
         v_circuit: dc.voltages.iter().filter(|(n, _)| !n.contains('.')).map(|(_, v)| v.abs()).fold(0.0, f64::max),
     }
@@ -151,8 +163,12 @@ pub fn check_ratings(sch: &Schematic, dc: &DcResult) -> Vec<RatingIssue> {
         };
         // data sheet maximum voltage / current against what this circuit puts on a one-element model
         // (a transistor's Vce / Vds and its current; a diode's voltage is the forward drop, not the reverse stress)
-        if let (Some(rt), Some(e)) = (c.custom.as_ref().and_then(|s| s.ratings.as_ref()), dc.element(&c.refdes)) {
-            let element = c.custom.as_ref().and_then(|s| s.sim.as_ref()).map(|m| m.element.to_ascii_uppercase()).unwrap_or_default();
+        if let (Some(rt), Some(e)) = (c.custom.as_ref().and_then(|s| s.ratings.as_ref()), main_element(dc, &c.refdes)) {
+            // the element letter: the model's, or that of the transistor inside a subcircuit (`Q1.M1` is a MOSFET)
+            let element = match e.name.strip_prefix(&format!("{}.", c.refdes)) {
+                Some(inner) => inner[..1].to_ascii_uppercase(),
+                None => c.custom.as_ref().and_then(|s| s.sim.as_ref()).map(|m| m.element.to_ascii_uppercase()).unwrap_or_default(),
+            };
             if let Some(vmax) = rt.v_max.filter(|_| matches!(element.as_str(), "Q" | "M" | "J")) {
                 let v = e.voltage.abs();
                 if let Some(lv) = level_at(v, vmax, 0.8) {
@@ -478,6 +494,7 @@ mod sheet {
     /// Current against the sheet's maximum: a 2N7000 (0.2 A) asked for 365 mA.
     #[test]
     fn a_mosfet_past_its_maximum_current_is_flagged() {
+        // the bundled 2N7000 is a .subckt (RD1 with its temperature coefficient beside M1): the channel Q1.M1 is what is judged
         let mut m = load(include_str!("../../../docs/examples/mosfet_switch.schjson"));
         m.components.iter_mut().find(|c| c.refdes == "V2").unwrap().value = "5".into();
         m.components.iter_mut().find(|c| c.refdes == "R2").unwrap().value = "10".into();

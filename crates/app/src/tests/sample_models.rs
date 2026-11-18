@@ -103,6 +103,41 @@ fn own_models_are_still_their_own() {
     }
 }
 
+/// `text` (a sample file) with `"kind": "model"` turned into `"subckt"` in every `sim` object that holds the model string
+/// `model` (as written in the file). The object is found by its braces, so the fields may come in any order.
+fn kind_to_subckt(text: &str, model: &str) -> String {
+    let mut out = text.to_string();
+    let mut at = 0;
+    while let Some(p) = out[at..].find(model).map(|p| p + at) {
+        at = p + model.len();
+        let Some(open) = out[..p].rfind("\"sim\"").and_then(|s| out[s..].find('{').map(|b| s + b)) else { continue };
+        let mut depth = 0;
+        let close = out[open..].char_indices().find_map(|(i, c)| {
+            depth += match c {
+                '{' => 1,
+                '}' => -1,
+                _ => 0,
+            };
+            (depth == 0).then_some(open + i)
+        });
+        let Some(close) = close.filter(|c| *c > p) else { continue };
+        for from in ["\"kind\": \"model\"", "\"kind\":\"model\""] {
+            if let Some(k) = out[open..close].find(from).map(|k| k + open) {
+                out.replace_range(k..k + from.len(), &from.replace("model", "subckt"));
+                break;
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn kind_turns_in_the_object_that_holds_the_model() {
+    let f = "{\"a\": {\"sim\": {\"element\": \"M\", \"kind\": \"model\", \"params\": {}, \"text\": \"X\"}}, \"b\": {\"sim\": {\"kind\": \"model\", \"text\": \"Y\"}}}";
+    let t = kind_to_subckt(f, "\"X\"");
+    assert_eq!(t, f.replacen("\"kind\": \"model\"", "\"kind\": \"subckt\"", 1));
+}
+
 #[test]
 #[ignore]
 fn refresh_sample_models() {
@@ -119,7 +154,13 @@ fn refresh_sample_models() {
         let (old, new) = (serde_json::to_string(&s.text).unwrap(), serde_json::to_string(&lib[&s.part].0).unwrap());
         let n = text.matches(&old).count();
         assert!(n > 0, "{}: the model of {} is not found as written", s.file, s.part);
-        std::fs::write(&path, text.replace(&old, &new)).unwrap();
+        let mut text = text.replace(&old, &new);
+        // a `.model` part whose library model became a `.subckt` (the MOSFETs whose series resistances carry temperature
+        // coefficients): the copy's `kind` turns too, in the `sim` object that holds the text (its fields come in either order)
+        if lib[&s.part].0.starts_with(".subckt") {
+            text = kind_to_subckt(&text, &new);
+        }
+        std::fs::write(&path, text).unwrap();
         done.push(format!("{}: {} ({n})", s.file, s.part));
     }
     println!("replaced:\n{}", done.join("\n"));

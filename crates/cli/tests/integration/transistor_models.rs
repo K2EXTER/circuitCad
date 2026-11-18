@@ -27,6 +27,18 @@ fn probes(script: &str, names: &[&str]) -> Vec<f64> {
     names.iter().map(|n| d["probes"][*n].as_f64().unwrap_or_else(|| panic!("no probe {n}: {d}"))).collect()
 }
 
+/// RDS(on) at `temp` °C over that at 25 °C: the drain driven with `id` (signed as the data sheet's), the gate held at `vgs`,
+/// read from `heat temp=` (its cold answer: the circuit at that temperature without the part's own warming; the part's θ is made
+/// tiny so that the data sheet's tens of amperes do not run its self heating away).
+fn rds_ratio(part: &str, vgs: f64, id: f64, temp: f64) -> f64 {
+    let at = |t: f64| {
+        let a = run(&format!("new\nadd {part} as=M1\nadd V {vgs} as=VG\nadd I {id} as=ID\nnet G VG.+ M1.G\nnet D ID.+ M1.D\nnet GND VG.- ID.- M1.S\nthermal M1 theta=0.001\nheat temp={t}\n"));
+        let h = answer(&a, "heat");
+        h["nodes"].as_array().unwrap().iter().find(|n| n["net"] == "D").and_then(|n| n["cold_v"].as_f64()).unwrap_or_else(|| panic!("no D in {h}"))
+    };
+    at(temp) / at(25.0)
+}
+
 /// A capacitance (F) seen at net X: a source with `bias` volts DC and 1 V AC drives X through 100 kohm; the gain at a frequency
 /// near the corner gives C. `circuit` connects the part to X (and to GND / S for the rest).
 fn cap_at(circuit: &str, bias: f64, guess: f64) -> f64 {
@@ -591,6 +603,34 @@ net CO Q1.C RC.1
         }
         v.push(Row { part, item: format!("VSD ({is_lo} A)"), ds: [None, Some(vsd_lo), None], unit: "V", at: "ボディダイオード、図 7 の 25 °C".into(), measure: Box::new(move || vsd(part, s * is_lo)), tol: Some(0.03) });
         v.push(Row { part, item: format!("VSD ({is_tab} A)"), ds: [None, None, Some(vsd_max)], unit: "V", at: "ボディダイオード、表の max".into(), measure: Box::new(move || vsd(part, s * is_tab)), tol: None });
+    }
+    // every MOSFET: the on resistance's rise with the junction temperature (the data sheets' normalized RDS(on) against Tj, at
+    // its own gate voltage and current), the series resistances' TC1 / TC2 fitted to it. A P channel with negative signs
+    let hot: [(&'static str, f64, f64, f64, &'static str, [(f64, f64); 2]); 11] = [
+        ("2N7000", 10.0, 0.5, 1.0, "Figure 3", [(100.0, 1.535), (125.0, 1.735)]),
+        ("BSS138", 10.0, 0.22, 1.0, "Figure 3", [(100.0, 1.484), (150.0, 1.833)]),
+        ("AO3400A", 10.0, 5.7, 1.0, "Figure 4", [(100.0, 1.405), (125.0, 1.550)]),
+        ("AO3401A", 4.5, 3.5, -1.0, "Figure 4", [(100.0, 1.396), (125.0, 1.538)]),
+        ("IRF540N", 10.0, 33.0, 1.0, "Fig. 4", [(100.0, 1.766), (150.0, 2.485)]),
+        ("IRFZ44N", 10.0, 49.0, 1.0, "Fig. 4", [(100.0, 1.572), (150.0, 2.095)]),
+        ("IRLZ44N", 10.0, 41.0, 1.0, "Fig 4", [(100.0, 1.534), (150.0, 1.981)]),
+        ("IRF9540N", 10.0, 19.0, -1.0, "Fig 4 (スキャンの絵)", [(110.0, 1.611), (145.0, 1.86)]),
+        ("IRLML6344", 4.5, 5.0, 1.0, "Fig 4", [(100.0, 1.414), (125.0, 1.573)]),
+        ("IRLML6401", 4.5, 4.3, -1.0, "Fig 4", [(100.0, 1.197), (125.0, 1.267)]),
+        ("IRLB8721", 10.0, 25.0, 1.0, "Fig 4", [(100.0, 1.398), (150.0, 1.720)]),
+    ];
+    for (part, vgs, id, s, fig, points) in hot {
+        for (t, k) in points {
+            v.push(Row {
+                part,
+                item: format!("RDS(on) ({t} °C ÷ 25 °C)"),
+                ds: [None, Some(k), None],
+                unit: "",
+                at: format!("|VGS| = {vgs} V、|ID| = {id} A、{fig} (オン抵抗の温度変化)"),
+                measure: Box::new(move || rds_ratio(part, s * vgs, s * id, t)),
+                tol: Some(0.03 * k),
+            });
+        }
     }
     // PC817: the LED (Figure 7 and the table), the output current on the flat part (Figure 8; the table's 2.5 to 30 mA at
     // IF = 5 mA is the spread of the ranks), VCE(sat) (the table)

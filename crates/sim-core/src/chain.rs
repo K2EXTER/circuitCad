@@ -133,13 +133,17 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
             }
             continue;
         }
-        let Some(el) = c.elements.iter().find(|e| e.name() == r) else { continue };
-        let Some(cur) = tr.signal(&format!("I({r})")) else { continue };
+        // the part itself, or the transistor inside its subcircuit (`crate::ratings::main_element_names`)
+        let Some(el) = crate::ratings::main_element_names(r).into_iter().find_map(|n| c.elements.iter().find(|e| e.name() == n)) else { continue };
+        let main = el.name().to_string();
+        let Some(cur) = tr.signal(&format!("I({main})")) else { continue };
+        // what breaks: the element inside when the part is a subcircuit
+        let inside = (main != r).then(|| failure_of(comp, el).map(|f| (main.clone(), f))).flatten();
         let ratings = comp.custom.as_ref().and_then(|s| s.ratings.as_ref());
         let peak = in_window(&tr.time, w).map(|k| cur.values[k].abs()).fold(0.0, f64::max);
         if let Some(imax) = ratings.and_then(|x| x.i_max)
             && peak > imax {
-                out.push(Over { refdes: r.into(), inside: None, ratio: peak / imax, why: format!("{r} のピーク電流 {} が最大定格 {} を超えた", amps(peak), amps(imax)) });
+                out.push(Over { refdes: r.into(), inside: inside.clone(), ratio: peak / imax, why: format!("{r} のピーク電流 {} が最大定格 {} を超えた", amps(peak), amps(imax)) });
                 continue;
             }
         if comp.kind == Kind::Led && peak > 0.03 {
@@ -172,7 +176,7 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
         let limit = ratings.and_then(|x| x.p_max).or_else(|| package_power_limit(&comp.footprint_name()));
         let (Some(limit), Some(p)) = (limit, time_mean(&tr.time, w, |k| cur.values[k] * volt(k))) else { continue };
         if p > limit {
-            out.push(Over { refdes: r.into(), inside: None, ratio: p / limit, why: format!("{r} の平均消費電力 {} が定格・目安 {} を超えた", watts(p), watts(limit)) });
+            out.push(Over { refdes: r.into(), inside, ratio: p / limit, why: format!("{r} の平均消費電力 {} が定格・目安 {} を超えた", watts(p), watts(limit)) });
         }
     }
     out
@@ -280,7 +284,8 @@ pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, 
         let target = o.inside.as_ref().map_or(o.refdes.clone(), |(e, _)| e.clone());
         let Some(broken) = with_fault(&cur, &target, f) else { break };
         failed.push(o.refdes.clone());
-        let what = if o.inside.is_some() { "巻線が焼けて断線".into() } else if f == Fault::Open { "過熱・過電流で断線".into() } else { "破損してショート".into() };
+        let winding = o.inside.as_ref().is_some_and(|(e, _)| e.ends_with(".LW"));
+        let what = if winding { "巻線が焼けて断線".into() } else if f == Fault::Open { "過熱・過電流で断線".into() } else { "破損してショート".into() };
         rep.steps.push(ChainStep { part: o.refdes, what, why: o.why, fault: f });
         cur = broken;
     }

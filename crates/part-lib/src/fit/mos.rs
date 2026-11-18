@@ -33,6 +33,41 @@ pub struct MosSpec {
     /// gFS typ (S), VDS (V), ID (A): compared only (the square law fitted to the on resistance seldom meets it).
     #[serde(default)]
     pub gfs: Option<[f64; 3]>,
+    /// The on resistance against the junction temperature, normalized to 25 °C (the data sheets' "Normalized
+    /// On-Resistance vs. Temperature"): with it the series resistances RD and RS become resistors of a `.subckt`
+    /// with temperature coefficients, fitted so that the whole RDS(on) rises as the curve does.
+    #[serde(default)]
+    pub rds_temp: Option<RdsTemp>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct RdsTemp {
+    /// Where the points were read ("図 4 (オン抵抗の温度変化、VGS = 10 V、ID = 31 A)").
+    pub at: String,
+    /// The gate voltage and drain current of the curve (magnitudes).
+    pub vgs: f64,
+    pub id: f64,
+    /// (junction temperature °C, RDS(on) / RDS(on) at 25 °C).
+    pub points: Vec<[f64; 2]>,
+}
+
+/// The fitted channel (magnitudes, VTO > 0) with its series resistances, for what is built on it.
+#[derive(Clone, Copy, Debug)]
+struct Chan {
+    kp: f64,
+    vto: f64,
+    rd: f64,
+    rs: f64,
+}
+
+/// RDS(on) at `temp` °C as the simulator makes it (`sim_core::temperature`: KP ∝ T^-1.5, the threshold 2 mV/°C
+/// lower, the resistors scaled by 1 + TC1·ΔT + TC2·ΔT², all from 27 °C).
+fn rds_at(c: Chan, (tc1, tc2): (f64, f64), temp: f64, vgs: f64, i: f64) -> f64 {
+    let d = temp - 27.0;
+    let kp = c.kp * ((temp + 273.15) / 300.15).powf(-1.5);
+    let vto = (c.vto - 0.002 * d).max(0.05);
+    let k = (1.0 + tc1 * d + tc2 * d * d).max(0.01);
+    rds_rs(kp, vto, c.rd * k, c.rs * k, vgs, i)
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -101,9 +136,13 @@ fn rds_rs(kp: f64, vto: f64, rd: f64, rs: f64, vgs: f64, i: f64) -> f64 {
 }
 
 pub fn fit(p: &MosSpec) -> Result<Out, String> {
-    let out = match &p.transfer {
+    let (out, chan) = match &p.transfer {
         Some(tr) => fit_transfer(p, tr)?,
         None => fit_table(p)?,
+    };
+    let out = match &p.rds_temp {
+        Some(rt) => with_tempco(p, rt, chan, out)?,
+        None => out,
     };
     match &p.body_diode {
         Some(bd) => with_body_diode(p, bd, out),
@@ -125,9 +164,19 @@ fn with_body_diode(p: &MosSpec, bd: &BodyDiode, (text, mut limits, mut rows, mut
     }
     let (is, n) = ((-c / a).exp(), a / crate::diode::VT);
     let name = &p.common.name;
-    let channel = text.replacen(&format!(".model {name} "), ".model MCH ", 1);
     let diode = if p.pch { "Dbody d s DBODY" } else { "Dbody s d DBODY" };
-    let text = format!(".subckt {name} d g s\nM1 d g s s MCH\n{diode}\n{channel}\n.model DBODY D(IS={} N={:.3} RS={})\n.ends {name}", g(is, 4), n, g(rs, 4));
+    let dmodel = format!(".model DBODY D(IS={} N={:.3} RS={})", g(is, 4), n, g(rs, 4));
+    let text = match text.find("\n.ends") {
+        // already a subcircuit (the series resistances with their temperature coefficients): the diode joins it
+        Some(end) if text.starts_with(".subckt") => {
+            let at = text[..end].find("\n.model").unwrap_or(end);
+            format!("{}\n{diode}{}\n{dmodel}{}", &text[..at], &text[at..end], &text[end..])
+        }
+        _ => {
+            let channel = text.replacen(&format!(".model {name} "), ".model MCH ", 1);
+            format!(".subckt {name} d g s\nM1 d g s s MCH\n{diode}\n{channel}\n{dmodel}\n.ends {name}")
+        }
+    };
     for [i, vsd] in &bd.points {
         rows.push(row("VSD", format!("IS = {} (ボディダイオード)", amps(*i)), *vsd, n * crate::diode::VT * (i / is + 1.0).ln() + i * rs, "V"));
     }
@@ -141,8 +190,64 @@ fn with_body_diode(p: &MosSpec, bd: &BodyDiode, (text, mut limits, mut rows, mut
     Ok((text, limits, rows, notes))
 }
 
+/// The series resistances as resistors of a `.subckt` with TC1 and TC2 fitted to the on resistance's rise with
+/// temperature (the channel's own rise, KP ∝ T^-1.5, is too slow for a power MOSFET whose RDS(on) is mostly RD and RS).
+fn with_tempco(p: &MosSpec, rt: &RdsTemp, c: Chan, (text, mut limits, mut rows, mut notes): Out) -> Result<Out, String> {
+    if rt.points.is_empty() || rt.points.iter().any(|[t, k]| !(t.is_finite() && *k > 0.0)) || !(rt.vgs > 0.0 && rt.id > 0.0) {
+        return Err("オン抵抗の温度変化 (rds_temp) は、温度と 25 °C に対する比 (正の数) の点、ゲート電圧と電流 (大きさ) で書いてください".into());
+    }
+    if c.rd + c.rs < 1e-9 {
+        return Err("直列抵抗 RD・RS が 0 なので、温度係数を付けられません (オン抵抗を 2 点以上入れてください)".into());
+    }
+    let ratio = |tc: (f64, f64), t: f64| rds_at(c, tc, t, rt.vgs, rt.id) / rds_at(c, tc, 25.0, rt.vgs, rt.id);
+    // TC1 in 1e-3/°C and TC2 in 1e-5/°C² so the solver's steps are alike
+    let tc_of = |x: &[f64]| (x[0] * 1e-3, x.get(1).map_or(0.0, |v| v * 1e-5));
+    let res = |x: &[f64]| -> Vec<f64> { rt.points.iter().map(|[t, k]| (ratio(tc_of(x), *t) / k).ln()).collect() };
+    let x = if rt.points.len() >= 3 { levenberg_marquardt(&res, &[4.0, 0.0]) } else { levenberg_marquardt(&res, &[4.0]) };
+    let tc = tc_of(&x);
+    let name = &p.common.name;
+    let model = text.replacen(&format!(".model {name} "), ".model MCH ", 1);
+    // RD and RS leave the model for the resistors
+    let model = model.split(' ').filter(|w| !w.starts_with("RD=") && !w.starts_with("RS=")).collect::<Vec<_>>().join(" ");
+    let tcs = format!("TC1={} TC2={}", g(tc.0, 4), g(tc.1, 4));
+    let mut lines = vec![format!(".subckt {name} d g s")];
+    let (dn, sn) = (if c.rd > 1e-9 { "di" } else { "d" }, if c.rs > 1e-9 { "si" } else { "s" });
+    if c.rd > 1e-9 {
+        // not "RD": a name ending in ".RD" is the board's wiring to the self heating (`sim_core::selfheat::is_board_wiring`)
+        lines.push(format!("RD1 d di {} {tcs}", g(c.rd, 4)));
+    }
+    if c.rs > 1e-9 {
+        lines.push(format!("RS1 si s {} {tcs}", g(c.rs, 4)));
+    }
+    lines.push(format!("M1 {dn} g {sn} {sn} MCH"));
+    lines.push(model);
+    lines.push(format!(".ends {name}"));
+    for [t, k] in &rt.points {
+        rows.push(row("RDS(on) の温度", format!("Tj = {} °C、VGS = {} V、ID = {} (25 °C との比)", g(*t, 4), g(rt.vgs, 4), amps(rt.id)), *k, ratio(tc, *t), ""));
+    }
+    if let Some(r) = rows.iter().filter(|r| r.item == "RDS(on) の温度").max_by(|a, b| a.error_pct().abs().total_cmp(&b.error_pct().abs()))
+        && r.error_pct().abs() > 5.0
+    {
+        notes.push(format!("オン抵抗の温度変化が {} で {:+.0}% ずれています。点の読みを確かめてください", r.at, r.error_pct()));
+    }
+    for l in limits.iter_mut() {
+        *l = l.replace("温度によるオン抵抗の増加、", "");
+    }
+    limits.insert(
+        2,
+        format!(
+            "温度: {} の {} 点に、直列抵抗 RD・RS の温度係数 (TC1 = {}/°C、TC2 = {}/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+            rt.at,
+            rt.points.len(),
+            g(tc.0, 3),
+            g(tc.1, 3)
+        ),
+    );
+    Ok((lines.join("\n"), limits, rows, notes))
+}
+
 /// KP and RD from the on resistances, VTO from the typ threshold (the data sheets with a typ VGS(th)).
-fn fit_table(p: &MosSpec) -> Result<Out, String> {
+fn fit_table(p: &MosSpec) -> Result<(Out, Chan), String> {
     let [vth, ith] = p.vth.ok_or("しきい値 VGS(th) の typ (vth) か、伝達特性の点 (transfer) を入れてください")?;
     if p.rds.is_empty() {
         return Err("オン抵抗 RDS(on) を 1 点以上 (できればゲート電圧を変えて 2〜3 点) 入れてください".into());
@@ -201,11 +306,11 @@ fn fit_table(p: &MosSpec) -> Result<Out, String> {
     for r in rows.iter().filter(|r| r.item == "RDS(on)" && r.error_pct().abs() > 5.0) {
         notes.push(format!("RDS(on) が {} で {:+.1}% ずれています。レベル1 + RD の形では、ゲート電圧ごとの差を全部は追えません", r.at, r.error_pct()));
     }
-    Ok((text, limits, rows, notes))
+    Ok(((text, limits, rows, notes), Chan { kp, vto, rd, rs: 0.0 }))
 }
 
 /// KP, RD, VTO and RS from the transfer curve and the on resistances (a data sheet with no typ threshold).
-fn fit_transfer(p: &MosSpec, tr: &Transfer) -> Result<Out, String> {
+fn fit_transfer(p: &MosSpec, tr: &Transfer) -> Result<(Out, Chan), String> {
     if tr.points.len() < 3 || p.rds.is_empty() {
         return Err("伝達特性の点を 3 点以上と、オン抵抗 RDS(on) を 1 点以上入れてください".into());
     }
@@ -273,6 +378,6 @@ fn fit_transfer(p: &MosSpec, tr: &Transfer) -> Result<Out, String> {
     {
         notes.push(format!("しきい値が表の範囲 ({}〜{} V) の外の {:.2} V になりました。伝達特性の小さい電流の点を足すと近づきます", g(lo, 4), g(hi, 4), r.model));
     }
-    Ok((text, limits, rows, notes))
+    Ok(((text, limits, rows, notes), Chan { kp, vto, rd: if rd < 1e-9 { 0.0 } else { rd }, rs: if rs < 1e-9 { 0.0 } else { rs } }))
 }
 

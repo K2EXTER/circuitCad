@@ -114,6 +114,38 @@
     "transfer: Fig 3 (VDS = 15 V), the 25 C curve (the right one at small currents), read from its vector line",
     "left out Fig 3's points above 120 A (6 V: 145 A, 7 V: 187 A; twice the continuous rating): level 1 cannot follow them and the on resistance together, and with them RDS(on) at 4.5 V came out 31 % high instead of 21 %",
     "body_diode: Fig 7, the 25 C curve (the right one), 0.1 to 100 A",
-    "i_max is the TC = 25 C rating (62 A) with a heat sink; without one the part is held by theta_ja 62 C/W"
-  ]
+    "i_max is the TC = 25 C rating (62 A) with a heat sink; without one the part is held by theta_ja 62 C/W",
+    "rds_temp: the data sheet's normalized on resistance against the junction temperature (2026-11-18): RD and RS became resistors with TC1 / TC2 fitted to it (without them the model's RDS(on) rose only by the channel's KP ~ T^-1.5)"
+  ],
+  "rds_temp": {
+    "at": "Fig 4 (Normalized On-Resistance vs. Temperature、VGS = 10 V、ID = 25 A。PDF の曲線の線から読んだ)",
+    "vgs": 10.0,
+    "id": 25.0,
+    "points": [
+      [
+        50.0,
+        1.126
+      ],
+      [
+        75.0,
+        1.257
+      ],
+      [
+        100.0,
+        1.398
+      ],
+      [
+        125.0,
+        1.554
+      ],
+      [
+        150.0,
+        1.72
+      ],
+      [
+        170.0,
+        1.861
+      ]
+    ]
+  }
 }

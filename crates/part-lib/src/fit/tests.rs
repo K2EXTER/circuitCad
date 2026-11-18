@@ -120,7 +120,7 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
             Spec::Optocoupler(o) => o.led.len() + usize::from(o.led_typ.is_some()) + o.output.len() + o.ctr_curve.len() + 1,
             Spec::Mos(m) => {
                 let threshold = if m.transfer.is_some() { usize::from(m.vth_range.is_some()) } else { 1 };
-                threshold + m.transfer.as_ref().map_or(0, |t| t.points.len()) + m.rds.len() + 2 + m.gfs.map_or(0, |_| 1) + m.body_diode.as_ref().map_or(0, |b| b.points.len())
+                threshold + m.transfer.as_ref().map_or(0, |t| t.points.len()) + m.rds.len() + 2 + m.gfs.map_or(0, |_| 1) + m.body_diode.as_ref().map_or(0, |b| b.points.len()) + m.rds_temp.as_ref().map_or(0, |t| t.points.len())
             }
             // built from typ values with a template, not fitted: nothing to compare here (the measuring tests in
             // crates/cli/tests/integration/{opamp,regulator}_models.rs compare them with their data sheets)

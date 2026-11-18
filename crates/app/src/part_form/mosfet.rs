@@ -1,13 +1,17 @@
 //! "かんたん作成" for a MOSFET (M10, step 3): the threshold, the on resistances, the capacitances and gFS from the
 //! data sheet's table (typed, or offered from the open PDF by `datasheet::spec_table`), fitted with the same
 //! level 1 + RD model as the bundled MOSFETs (`part_lib::fit`), with a table of how far the model lands from each
-//! number and why a large gap is the model's form, not a typing mistake.
+//! number and why a large gap is the model's form, not a typing mistake. With the on resistance's rise with temperature
+//! (the data sheet's normalized curve, or its 125 °C line) the series resistance gets temperature coefficients and the
+//! model becomes a `.subckt`, as the bundled MOSFETs are.
 
 use super::*;
 use part_lib::fit::{self, Fitted};
 
 /// The AO3400A's typical values (Alpha & Omega Rev. 3.1, the bundled part's readings): the example button.
 const EXAMPLE: (&str, &str, &str, &str, &str, &str) = ("1.05", "250u", "10 5.7 18m\n4.5 5 19m\n2.5 3 24m", "630p", "50p", "33 5 5.7");
+/// Its Figure 4 (the on resistance against the junction temperature, VGS = 10 V, ID = 5.7 A), as the bundled part reads it.
+const EXAMPLE_HOT: &str = "50 1.128\n75 1.261\n100 1.405\n125 1.55\n145 1.669";
 
 /// What the form holds for the MOSFET section, as typed.
 #[derive(Default)]
@@ -20,6 +24,9 @@ pub struct MosInput {
     pub crss: String,
     /// "gFS VDS ID" (optional).
     pub gfs: String,
+    /// "Tj ratio" lines: RDS(on) at that junction temperature over that at 25 °C (optional), at the first on resistance
+    /// line's gate voltage and current.
+    pub hot: String,
     /// Where the numbers taken from the PDF came from (one line each), or what was not found.
     pub found: Vec<(bool, String)>,
     pub result: Option<Result<Fitted, String>>,
@@ -55,6 +62,22 @@ impl MosInput {
             let [g, vds, id] = t.as_slice() else { return Err("gFS は「gFS VDS ID」の 3 つの数で書いてください (例: 33 5 5.7)。空でも作れます".into()) };
             Some([num("gFS", g)?, num("VDS", vds)?, num("ID", id)?])
         };
+        let mut hot = vec![];
+        for (n, line) in self.hot.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+            let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
+            let (Some(t0), Some(k), 2) = (t.first().and_then(|x| sim_core::parse_value(x)), t.get(1).and_then(|x| sim_core::parse_value(x)), t.len()) else {
+                return Err(format!("温度の {}行目: 「温度 [°C] 25 °C との比」の 2 つの数で書いてください (例: 125 1.55)", n + 1));
+            };
+            if k <= 0.0 {
+                return Err(format!("温度の {}行目: 比は 0 より大きい数です (125 °C で 1.5 倍なら 1.5)", n + 1));
+            }
+            hot.push([t0, k]);
+        }
+        let rds_temp = match (hot.is_empty(), rds.first()) {
+            (true, _) => None,
+            (false, None) => return Err("温度の変化には、オン抵抗の行が 1 行以上要ります (その 1 行目の VGS と ID で見ます)".into()),
+            (false, Some([vgs, id, _])) => Some(serde_json::json!({"at": "オン抵抗の温度変化 (25 °C との比)", "vgs": vgs, "id": id, "points": hot})),
+        };
         let json = serde_json::json!({
             "kind": "mos",
             "part": name,
@@ -65,6 +88,7 @@ impl MosInput {
             "rds": rds,
             "caps": {"ciss": num("Ciss", &self.ciss)?, "crss": num("Crss", &self.crss)?},
             "gfs": gfs,
+            "rds_temp": rds_temp,
         });
         serde_json::from_value(json).map_err(|e| e.to_string())
     }
@@ -91,6 +115,14 @@ impl MosInput {
         }
         // on resistances: every line with a gate voltage and a current (the hot lines, TJ = 125 °C, are left out)
         let rds = first(&["RDS(on)", "RDS(ON)", "rDS(on)"]);
+        // the hot line (TJ = 125 °C) over the first one at 25 °C: one point of the on resistance's rise with temperature
+        let hot_line = rds.iter().find(|v| v.conditions.contains("125") && typ(v).is_some());
+        let cold_line = rds.iter().find(|v| !v.conditions.contains("125") && !v.conditions.to_ascii_uppercase().contains("TJ") && typ(v).is_some());
+        if let (Some(h), Some(c)) = (hot_line, cold_line) {
+            let k = typ(h).unwrap_or_default() / typ(c).unwrap_or(1.0);
+            self.hot = format!("125 {}", part_lib::fit::num::g(k, 3));
+            self.found.push((true, format!("125 °C のオン抵抗: 25 °C の {} 倍 ({})", part_lib::fit::num::g(k, 3), at(h))));
+        }
         let lines: Vec<String> = rds
             .iter()
             .filter(|v| !v.conditions.contains("125") && !v.conditions.to_ascii_uppercase().contains("TJ"))
@@ -150,7 +182,8 @@ impl PartForm {
         let (Some(d), Some(g), Some(s)) = (find("D"), find("G"), find("S")) else {
             return Err("ピン表に、D・G・S の名前のピンが要ります (「③ ピン」で直してください)".into());
         };
-        self.sim = SimChoice::Model;
+        // with the temperature the model is a .subckt (the series resistance with its coefficients beside the channel)
+        self.sim = if f.text.starts_with(".subckt") { SimChoice::Subckt } else { SimChoice::Model };
         self.sim_element = "M".into();
         self.sim_name = f.text.split_whitespace().nth(1).unwrap_or("M").to_string();
         self.sim_text = f.text.clone();
@@ -170,6 +203,7 @@ impl PartForm {
                 "Ciss・Crss (容量): ゲートを動かすのに要る電荷の目安。CGS = Ciss − Crss、CGD = Crss にします (電圧による変化は扱いません)。",
                 "gFS は比べるだけです。オン抵抗に合わせた 2乗則のモデルでは、ここまでは合わないことがよくあります。",
                 "使うのは typ (標準) の列です。min・max は個体差の範囲で、回路は max でも動くように設計します。P チャネルは、マイナスの付いた値も大きさで入れます。",
+                "温度 (空でも可): オン抵抗は温まると大きくなります (100 °C で 1.4〜1.8 倍)。データシートの「Normalized On-Resistance vs. Temperature」の図の点か、表の 125 °C の行 ÷ 25 °C の行を入れると、自己発熱の解析で熱くなったときの損失が実物に近づきます。",
             ] {
                 ui.label(egui::RichText::new(i18n::trf!("・{t}")).small());
             }
@@ -185,6 +219,7 @@ impl PartForm {
             if ui.button(i18n::tr("AO3400A の例を入れる")).on_hover_text(i18n::tr("同梱の AO3400A を作ったときの表の typ の値を入れます。自分のデータシートの値に書き換えて使います")).clicked() {
                 let (a, b, c, d, e, f) = EXAMPLE;
                 (self.mos.vth, self.mos.vth_id, self.mos.rds, self.mos.ciss, self.mos.crss, self.mos.gfs) = (a.into(), b.into(), c.into(), d.into(), e.into(), f.into());
+                self.mos.hot = EXAMPLE_HOT.into();
                 self.mos.found.clear();
                 self.mos_fit();
             }
@@ -210,6 +245,9 @@ impl PartForm {
             ui.end_row();
             ui.label(i18n::tr("gFS: gFS VDS ID (空でも可)")).on_hover_text(i18n::tr("順方向伝達コンダクタンスと、その測定条件。比べるだけで、モデルは合わせません"));
             ui.add(egui::TextEdit::singleline(&mut self.mos.gfs).desired_width(200.0).hint_text("33 5 5.7"));
+            ui.end_row();
+            ui.label(i18n::tr("温度: Tj 比 (空でも可)")).on_hover_text(i18n::tr("1 行に「接合温度 [°C] 25 °C のオン抵抗との比」。データシートの Normalized On-Resistance の図の点か、表の 125 °C の行 ÷ 25 °C の行。オン抵抗の 1 行目の VGS・ID の値として扱います"));
+            ui.add(egui::TextEdit::multiline(&mut self.mos.hot).desired_rows(2).desired_width(200.0).font(egui::TextStyle::Monospace).hint_text("100 1.4\n125 1.55"));
             ui.end_row();
         });
         ui.horizontal(|ui| {
@@ -280,6 +318,12 @@ mod tests {
         let f = fit::fit(&m.spec("AO3400A", "s", false).unwrap()).unwrap();
         assert_eq!(f.text, ".model AO3400A NMOS(VTO=1.048 KP=95.94 RD=0.01652 CGS=5.8e-10 CGD=5e-11)");
         assert!(f.rows.iter().any(|r| r.item == "gFS" && r.compare_only));
+        // with Figure 4 the model is the bundled one: RD with its temperature coefficients in a .subckt
+        let m = MosInput { hot: EXAMPLE_HOT.into(), ..m };
+        let f = fit::fit(&m.spec("AO3400A", "s", false).unwrap()).unwrap();
+        let bundled: part_lib::PartDef = serde_json::from_str(include_str!("../../../part-lib/examples/AO3400A_SOT-23.part.json")).unwrap();
+        assert_eq!(f.text, bundled.sim.unwrap().text);
+        assert!(f.rows.iter().any(|r| r.item == "RDS(on) の温度"), "{:?}", f.rows);
     }
 
     #[test]
@@ -288,6 +332,8 @@ mod tests {
         assert!(m.spec("X", "s", false).unwrap_err().contains("1行目"));
         let m = MosInput { rds: "10 1 0.1".into(), vth: String::new(), ..m };
         assert!(m.spec("X", "s", false).unwrap_err().contains("VGS(th)"), "an empty threshold is named");
+        let m = MosInput { vth: "1".into(), hot: "125".into(), ..m };
+        assert!(m.spec("X", "s", false).unwrap_err().contains("温度の 1行目"), "a temperature line without its ratio");
     }
 
     #[test]
@@ -304,6 +350,8 @@ mod tests {
         m.fill_from_pdf(|s| table.iter().filter(|x| x.symbol.eq_ignore_ascii_case(s)).cloned().collect());
         assert_eq!((m.vth.as_str(), m.vth_id.as_str()), ("0.9", "250u"));
         assert_eq!(m.rds, "10 4 41m\n4.5 3.5 47m");
+        // the 125 °C line over the first 25 °C one
+        assert_eq!(m.hot, "125 1.46");
         assert_eq!(m.ciss, "645p");
         assert!(m.found.iter().any(|(ok, l)| !ok && l.contains("Crss")), "{:?}", m.found);
     }

@@ -53,7 +53,7 @@
   "sim": {
     "kind": "subckt",
     "name": "IRLML6344",
-    "text": ".subckt IRLML6344 d g s\nM1 d g s s MCH\nDbody s d DBODY\n.model MCH NMOS(VTO=1.236 KP=53.99 RD=0.01484 RS=0 CGS=6.04e-10 CGD=4.6e-11)\n.model DBODY D(IS=7.721e-07 N=1.832 RS=0.009445)\n.ends IRLML6344",
+    "text": ".subckt IRLML6344 d g s\nRD1 d di 0.01484 TC1=0.005146 TC2=1.018e-05\nM1 di g s s MCH\nDbody s d DBODY\n.model MCH NMOS(VTO=1.236 KP=53.99 CGS=6.04e-10 CGD=4.6e-11)\n.model DBODY D(IS=7.721e-07 N=1.832 RS=0.009445)\n.ends IRLML6344",
     "pins": [
       "3",
       "1",
@@ -63,7 +63,8 @@
       "データシートの代表特性と typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Infineon (IR) IRLML6344TRPbF データシート (2014-12-19 版)。データシートとの比べは docs/models/transistors.md。",
       "レベル1 (2乗則) にドレインとソースの直列抵抗 RD・RS を足し、Fig 3 (伝達特性の代表特性、VDS = 15 V) の 25 °C (PDF の曲線の線から読んだ) (7 点) とオン抵抗 RDS(on) (2 点) に合わせました (データシートに VGS(th) の typ が無いので、しきい値も伝達特性から決めました)。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
       "ボディダイオード: Fig 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C (PDF の曲線の線から読んだ) の 7 点に IS・N・RS を当てはめました (逆回復は扱いません)。",
-      "扱わないもの: 出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、温度によるオン抵抗の増加、耐圧・定格電流を超えたときの破壊。しきい値のすぐ上の小さい電流は、2乗則なので実物と違います。",
+      "温度: Fig 4 (Normalized On-Resistance vs. Temperature、VGS = 4.5 V、ID = 5.0 A。PDF の曲線の線から読んだ) の 5 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.00515/°C、TC2 = 1.02e-05/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+      "扱わないもの: 出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。しきい値のすぐ上の小さい電流は、2乗則なので実物と違います。",
       "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
     ],
     "origin": {

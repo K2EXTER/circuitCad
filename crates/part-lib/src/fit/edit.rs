@@ -23,6 +23,11 @@ pub fn write_part(dir: &Path, f: &Fitted) -> Result<PathBuf, String> {
 pub fn edit_part(text: &str, f: &Fitted) -> Result<String, String> {
     let mut t = text.to_string();
     t = set(&t, &["sim", "text"], &json!(f.text))?;
+    // a `.model` part whose fit became a subcircuit (a MOSFET whose series resistances got temperature coefficients):
+    // it is instantiated as one now (the element letter is left, ignored for a subcircuit)
+    if f.text.starts_with(".subckt") {
+        t = set(&t, &["sim", "kind"], &json!("subckt"))?;
+    }
     t = set(&t, &["sim", "limits"], &json!(f.limits))?;
     t = set(&t, &["sim", "origin"], &json!({"kind": "equivalent", "source": f.source}))?;
     if !f.description.is_empty() {

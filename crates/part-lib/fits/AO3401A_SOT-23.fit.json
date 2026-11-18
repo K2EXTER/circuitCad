@@ -7,21 +7,68 @@
   "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)",
   "url": "https://www.aosmd.com/res/datasheets/AO3401A.pdf",
   "description": "Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。データシート (Alpha & Omega) の typ から作った等価モデル (レベル1 + 直列抵抗)",
-  "vth": [0.9, 0.00025],
+  "vth": [
+    0.9,
+    0.00025
+  ],
   "rds": [
-    [10.0, 4.0, 0.041],
-    [4.5, 3.5, 0.047],
-    [2.5, 2.5, 0.06]
+    [
+      10.0,
+      4.0,
+      0.041
+    ],
+    [
+      4.5,
+      3.5,
+      0.047
+    ],
+    [
+      2.5,
+      2.5,
+      0.06
+    ]
   ],
   "caps": {
     "ciss": 6.45e-10,
     "coss": 8e-11,
     "crss": 5.5e-11
   },
-  "gfs": [17.0, 5.0, 4.0],
+  "gfs": [
+    17.0,
+    5.0,
+    4.0
+  ],
   "remarks": [
     "P channel: the numbers are the magnitudes (the data sheet writes VGS, ID and VDS negative); the model is a PMOS with VTO < 0",
     "vth: VGS(th) typ -0.9 V at ID = -250 uA; rds: RDS(on) typ 41 mohm (-10 V, -4.0 A), 47 (-4.5 V, -3.5 A), 60 (-2.5 V, -2.5 A)",
-    "caps: Ciss 645, Coss 80, Crss 55 pF typ (VDS = -15 V, VGS = 0)"
-  ]
+    "caps: Ciss 645, Coss 80, Crss 55 pF typ (VDS = -15 V, VGS = 0)",
+    "rds_temp: the data sheet's normalized on resistance against the junction temperature (2026-11-18): RD and RS became resistors with TC1 / TC2 fitted to it (without them the model's RDS(on) rose only by the channel's KP ~ T^-1.5)"
+  ],
+  "rds_temp": {
+    "at": "Figure 4 (On-Resistance vs. Junction Temperature) の VGS = −4.5 V、ID = −3.5 A (上の曲線。PDF の曲線の線から読んだ)",
+    "vgs": 4.5,
+    "id": 3.5,
+    "points": [
+      [
+        50.0,
+        1.114
+      ],
+      [
+        75.0,
+        1.249
+      ],
+      [
+        100.0,
+        1.396
+      ],
+      [
+        125.0,
+        1.538
+      ],
+      [
+        145.0,
+        1.669
+      ]
+    ]
+  }
 }

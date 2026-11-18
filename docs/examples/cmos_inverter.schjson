@@ -55,10 +55,10 @@
           }
         ],
         "sim": {
-          "kind": "model",
+          "kind": "subckt",
           "element": "M",
           "name": "AO3401A",
-          "text": ".model AO3401A PMOS(VTO=-0.8957 KP=27.62 RD=0.03698 CGS=5.9e-10 CGD=5.5e-11)",
+          "text": ".subckt AO3401A d g s\nRD1 d di 0.03698 TC1=0.004552 TC2=1.057e-05\nM1 di g s s MCH\n.model MCH PMOS(VTO=-0.8957 KP=27.62 CGS=5.9e-10 CGD=5.5e-11)\n.ends AO3401A",
           "pins": [
             "3",
             "1",
@@ -98,10 +98,10 @@
           }
         ],
         "sim": {
-          "kind": "model",
+          "kind": "subckt",
           "element": "M",
           "name": "AO3400A",
-          "text": ".model AO3400A NMOS(VTO=1.048 KP=95.94 RD=0.01652 CGS=5.8e-10 CGD=5e-11)",
+          "text": ".subckt AO3400A d g s\nRD1 d di 0.01652 TC1=0.004998 TC2=4.851e-06\nM1 di g s s MCH\n.model MCH NMOS(VTO=1.048 KP=95.94 CGS=5.8e-10 CGD=5e-11)\n.ends AO3400A",
           "pins": [
             "3",
             "1",

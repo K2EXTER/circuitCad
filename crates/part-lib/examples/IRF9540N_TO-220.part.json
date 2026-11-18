@@ -31,7 +31,7 @@
   "sim": {
     "kind": "subckt",
     "name": "IRF9540N",
-    "text": ".subckt IRF9540N d g s\nM1 d g s s MCH\nDbody d s DBODY\n.model MCH PMOS(VTO=-3.603 KP=5.929 RD=0.04401 RS=0.04027 CGS=1.06e-09 CGD=2.4e-10)\n.model DBODY D(IS=2.22e-12 N=1.060 RS=0.008987)\n.ends IRF9540N",
+    "text": ".subckt IRF9540N d g s\nRD1 d di 0.04401 TC1=0.006459 TC2=5.229e-06\nRS1 si s 0.04027 TC1=0.006459 TC2=5.229e-06\nM1 di g si si MCH\nDbody d s DBODY\n.model MCH PMOS(VTO=-3.603 KP=5.929 CGS=1.06e-09 CGD=2.4e-10)\n.model DBODY D(IS=2.22e-12 N=1.060 RS=0.008987)\n.ends IRF9540N",
     "pins": [
       "2",
       "1",
@@ -41,7 +41,8 @@
       "データシートの代表特性と typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: International Rectifier (Infineon) IRF9540NPbF データシート (PD-94790A)。データシートとの比べは docs/models/transistors.md。",
       "レベル1 (2乗則) にドレインとソースの直列抵抗 RD・RS を足し、図 3 (伝達特性の代表特性、VDS = −25 V) の 25 °C (9 点) とオン抵抗 RDS(on) (2 点) に合わせました (データシートに VGS(th) の typ が無いので、しきい値も伝達特性から決めました)。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
       "ボディダイオード: 図 7 (ソース・ドレイン間ダイオードの順方向の代表特性) の 25 °C の 8 点に IS・N・RS を当てはめました (逆回復は扱いません)。",
-      "扱わないもの: 出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、温度によるオン抵抗の増加、耐圧・定格電流を超えたときの破壊。しきい値のすぐ上の小さい電流は、2乗則なので実物と違います。",
+      "温度: Fig 4 (Normalized On-Resistance vs. Temperature、VGS = −10 V、ID = −19 A。スキャンの絵から読んだ) の 7 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.00646/°C、TC2 = 5.23e-06/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+      "扱わないもの: 出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。しきい値のすぐ上の小さい電流は、2乗則なので実物と違います。",
       "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
     ],
     "origin": {

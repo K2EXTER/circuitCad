@@ -104,6 +104,34 @@
   "remarks": [
     "the table: VGS(th) 0.5 / 0.8 / 1.1 V (10 uA), RDS(on) typ 22 / 27 mohm (4.5 V 5 A, 2.5 V 4 A), max 29 / 37; Ciss 650, Coss 65, Crss 46 pF (VGS = 0, VDS = 25 V, 1 MHz); gfs 19 S min (10 V, 5 A); VSD max 1.2 V at 5 A",
     "transfer: Fig 3 (VDS = 15 V), the 25 C curve, read from its vector line (Infineon draws it as Beziers, flattened by the reader; the curves run past the frame and are clipped)",
-    "body_diode: Fig 7, the 25 C curve (the right one), 0.2 to 20 A"
-  ]
+    "body_diode: Fig 7, the 25 C curve (the right one), 0.2 to 20 A",
+    "rds_temp: the data sheet's normalized on resistance against the junction temperature (2026-11-18): RD and RS became resistors with TC1 / TC2 fitted to it (without them the model's RDS(on) rose only by the channel's KP ~ T^-1.5)"
+  ],
+  "rds_temp": {
+    "at": "Fig 4 (Normalized On-Resistance vs. Temperature、VGS = 4.5 V、ID = 5.0 A。PDF の曲線の線から読んだ)",
+    "vgs": 4.5,
+    "id": 5.0,
+    "points": [
+      [
+        50.0,
+        1.131
+      ],
+      [
+        75.0,
+        1.267
+      ],
+      [
+        100.0,
+        1.414
+      ],
+      [
+        125.0,
+        1.573
+      ],
+      [
+        145.0,
+        1.708
+      ]
+    ]
+  }
 }
