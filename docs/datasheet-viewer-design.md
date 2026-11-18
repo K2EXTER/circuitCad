@@ -377,3 +377,8 @@
 - `companions::esr` (`Datasheet::esr`): 「ESR」のある行で、その後ろの抵抗の値。2 つなら範囲 (TI の LP5907 の推奨動作条件の表「ESR … 5 500 mΩ」、本文「5mΩ to 500mΩ」、ROHM の BA1117FP「0.3Ωから 5Ωの範囲」、TI の REF5025「between 1 and 1.5 Ω」)、1 つなら前に限りの言葉 (below・less than・<・max・以下・未満 / above・>・min・以上) があるときだけ (LTC の LT3045「ESR below 20mΩ」)。値の無い「low-ESR」と、設計例の見積もり (「RESR_MAX is approximately 1.5 mΩ」) は読まない。「Input/output」「入出力」と書かれていれば入力のコンデンサにも。
 - 部品作成の「推奨の周辺部品」の「PDF から読む」(`companion_fill.rs`): COUT・CO の行 (と入力にもなら CIN・CI) の注に「ESR 5mΩ〜500mΩ (p.6)」。
 - 確かめ: 手元の全 PDF で読めたのは LT3045 (〜20 mΩ)・REF5025 (1〜1.5 Ω)・BA1117FP (0.3〜5 Ω)・LP5907 (5〜500 mΩ、入出力)。LP5907 の下書きと推奨の周辺部品から保存した部品の CIN・COUT の注に入った。
+
+## 段階39: 記号と下付きが別の語の絶対最大定格 (2026-11-18、候補 Q14)
+
+- onsemi (旧 Fairchild) の PN2222A の絶対最大定格の表は、記号の「V」と下付きの「CEO」が別の語 (下付きは 2.8 pt 下で、「V」の終わりから始まる)。記号の形にならず、表が 1 行も読めなかった。`absmax::with_subscripts`: 1 文字の V・I・P・T のすぐ右で 1.5〜5 pt 下にある短い英数字の語を、記号の続きとして 1 語に (「VCEO」「IC」「TSTG」)。
+- 確かめ: 手元の全 PDF で `ds absmax` を前後で比べ、変わったのは PN2222A だけ (VCEO 40 V・VCBO 75 V・VEBO 6 V・IC 1 A・TSTG 150 °C)。部品作成の下書きの「絶対最大定格」に入る。

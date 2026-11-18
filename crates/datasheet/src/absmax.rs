@@ -94,10 +94,42 @@ fn unit_scale(u: &str) -> Option<f64> {
     })
 }
 
+/// The words with a symbol's letter and its subscript, printed as two words, made one (onsemi's PN2222A: "V" with "CEO" a few
+/// points lower right after it, "I" with "C", "T" with "STG"): the subscript sits 1.5 to 5 points under the letter's baseline and
+/// starts where the letter ends.
+fn with_subscripts(words: &[Word]) -> Vec<Word> {
+    let is_sub = |s: &Word, w: &Word| {
+        let drop = s.baseline() - w.baseline();
+        let t = s.text.trim().trim_end_matches(',');
+        (1.5..5.0).contains(&drop)
+            && s.rect.x0 >= w.rect.x1 - 1.0
+            && s.rect.x0 <= w.rect.x1 + 2.0
+            && (1..=6).contains(&t.chars().count())
+            && t.chars().all(|c| c.is_ascii_alphanumeric() || "()".contains(c))
+    };
+    let mut used = vec![false; words.len()];
+    let mut out = vec![];
+    for (i, w) in words.iter().enumerate() {
+        let letter = matches!(w.text.trim(), "V" | "I" | "P" | "T");
+        let sub = letter.then(|| words.iter().enumerate().find(|(j, s)| *j != i && !used[*j] && is_sub(s, w))).flatten();
+        match sub {
+            Some((j, s)) => {
+                used[j] = true;
+                let r = &w.rect;
+                let rect = crate::Rect { x0: r.x0, y0: r.y0.min(s.rect.y0), x1: s.rect.x1, y1: r.y1.max(s.rect.y1) };
+                out.push((i, Word::on_line(&format!("{}{}", w.text.trim(), s.text.trim()), rect, w.baseline())));
+            }
+            None => out.push((i, w.clone())),
+        }
+    }
+    out.into_iter().filter(|(i, _)| !used[*i]).map(|(_, w)| w).collect()
+}
+
 /// The rows of a table on a page, from `top` down to the next table's heading.
 /// `part`: the part number, for a table with a column per part ("TIP120, TIP121, TIP122" over "60 80 100"): its column's
 /// number is taken where a row has one number per column; otherwise (and for temperatures) the largest.
 pub fn ratings(page: usize, words: &[Word], top: f32, bottom: f32, part: Option<&str>) -> Vec<Rating> {
+    let words = with_subscripts(words);
     let inside: Vec<&Word> = words.iter().filter(|w| w.rect.y0 > top && w.rect.y1 < bottom).collect();
     // the table ends at the next table's heading
     let joined = |y: f32| {
@@ -297,6 +329,22 @@ mod tests {
         }
         let words = vec![w("TJ,", 231.0, 359.0), w("–", 263.0, 359.0), w("65", 269.0, 359.0), w("to", 288.0, 359.0), w("+200", 300.0, 359.0), w("°C", 335.0, 359.0)];
         assert_eq!(pick(&ratings(0, &words, 300.0, 400.0, None), &["TJ"]).map(|x| x.value), Some(200.0));
+    }
+
+    /// onsemi's PN2222A: the symbol's letter and its subscript are two words ("V" with "CEO" 2.8 points lower), the current's
+    /// letter on the right of the line ("… 1.0 A I" over "C").
+    #[test]
+    fn a_symbol_with_its_subscript_apart() {
+        use crate::Rect;
+        let sub = |t: &str, x: f32, y: f32| Word::on_line(t, Rect { x0: x, y0: y + 3.0, x1: x + 4.0 * t.chars().count() as f32, y1: y + 9.0 }, y + 10.8);
+        let words = vec![
+            w("V", 93.0, 531.5), sub("CEO", 99.0, 531.5), w("Collector-Emitter", 133.0, 531.5), w("40", 442.0, 531.5), w("V", 515.0, 531.5),
+            w("Collector", 133.0, 575.6), w("Current", 170.0, 575.6), w("1.0", 441.0, 575.6), w("A", 515.0, 575.6), w("I", 99.0, 575.6), sub("C", 104.0, 575.6),
+            w("Operating", 133.0, 590.3), w("-55", 427.0, 590.3), w("to", 443.0, 590.3), w("150", 452.0, 590.3), w("°C", 513.0, 590.3), w("T", 93.0, 590.3), sub("STG", 99.0, 590.3),
+        ];
+        let r = ratings(0, &words, 500.0, 700.0, None);
+        let got: Vec<(&str, f64)> = r.iter().map(|r| (r.symbol.as_str(), r.value)).collect();
+        assert_eq!(got, vec![("VCEO", 40.0), ("IC", 1.0), ("TSTG", 150.0)], "{r:?}");
     }
 
     #[test]
