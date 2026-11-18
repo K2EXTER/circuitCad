@@ -340,6 +340,8 @@ pub struct SchEditor {
     pub(crate) bat_node: String,
     pub(crate) bat_vmin: String,
     pub(crate) bat_view: Option<Result<Vec<sim_core::battery::BatteryLife>, String>>,
+    /// The breadboard view as the person left it (saved with the sheet); None = laid out by itself (`app/src/breadboard/`).
+    pub(crate) breadboard: Option<sch_core::breadboard::Layout>,
     htran_links: String,
     /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
     htran_links_seen: Vec<(String, String, f64)>,
@@ -872,6 +874,7 @@ impl Default for SchEditor {
             bat_node: String::new(),
             bat_vmin: String::new(),
             bat_view: None,
+            breadboard: None,
             htran_links_seen: vec![],
             htran_links: String::new(),
             coverage_cache: None,

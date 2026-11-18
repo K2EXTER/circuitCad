@@ -588,6 +588,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(id) = args.iter().position(|a| a == "--bench").and_then(|i| args.get(i + 1)) {
         app.bench.show_guide(id);
     }
+    // `--proto [R1]`: the prototype tab ("試作", the breadboard), with that part picked
+    if let Some(i) = args.iter().position(|a| a == "--proto") {
+        app.mode = Mode::Proto;
+        app.breadboard.picked = args.get(i + 1).filter(|a| !a.starts_with("--")).cloned();
+    }
     // `--bench-tab [assemble|power_on|measure|judge|repair]`: the bench tab ("実機"), at that step
     if let Some(i) = args.iter().position(|a| a == "--bench-tab") {
         app.mode = Mode::Bench;

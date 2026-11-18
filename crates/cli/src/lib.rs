@@ -17,6 +17,7 @@ pub mod mcp;
 mod models;
 mod poweroncmd;
 mod batterycmd;
+mod breadboardcmd;
 mod reqcmd;
 pub mod runner;
 mod projectcmd;

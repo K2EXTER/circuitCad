@@ -17,6 +17,7 @@ mod icons;
 mod link;
 mod bench_guide;
 mod bench_tab;
+mod breadboard;
 mod power_on_guide;
 mod measure_guide;
 mod multiboard;
@@ -57,6 +58,8 @@ use tips::TIPS;
 enum Mode {
     Schematic,
     Board,
+    /// The prototype on a breadboard (`breadboard/`).
+    Proto,
     /// The work on the real board: fitting, first power-on, measuring, pass / fail, repair (`bench_tab.rs`).
     Bench,
 }
@@ -87,6 +90,8 @@ struct App {
     power_on: power_on_guide::PowerOnGuide,
     /// The bench tab ("実機"): its steps and the parts ticked as fitted.
     bench_tab: bench_tab::BenchTab,
+    /// The prototype tab ("試作"): the breadboard view.
+    breadboard: breadboard::BreadboardView,
     /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
     auto_shot: Option<(std::path::PathBuf, u32)>,
     /// The `.ccproj` file the schematic and board were opened from / last saved to.
@@ -235,7 +240,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), power_on: Default::default(), bench_tab: Default::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), power_on: Default::default(), bench_tab: Default::default(), breadboard: Default::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
     }
 }
 
@@ -421,6 +426,8 @@ impl eframe::App for App {
                 let sch_tab = format!("{}{}", i18n::tr("回路図"), unsaved(self.sch.dirty()));
                 ui.selectable_value(&mut self.mode, Mode::Schematic, sch_tab)
                     .on_hover_text(if self.sch.dirty() { i18n::tr("回路図の画面。• は保存していない変更があるしるしです") } else { i18n::tr("回路図の画面。部品を置いて配線し、シミュレーションします") });
+                ui.selectable_value(&mut self.mode, Mode::Proto, i18n::tr("試作"))
+                    .on_hover_text(i18n::tr("ブレッドボードで組む画面。回路図の部品を、どの穴に差すかを並べます。つながっている穴が光り、差し替えもできます。回路図と違うつなぎ方は知らせます"));
                 let stale = !self.board_ed.schematic_diff(&self.sch).is_empty();
                 let board_tab = format!("{}{}{}", i18n::tr("基板パターン"), unsaved(self.board_ed.dirty()), if stale { " ⚠" } else { "" });
                 let board_tab = if stale { egui::RichText::new(board_tab).color(crate::theme::WARN) } else { egui::RichText::new(board_tab) };
@@ -804,6 +811,7 @@ impl eframe::App for App {
                     Mode::Schematic => self.sch.hint(),
                     Mode::Board => self.board_ed.hint(),
                     Mode::Bench => self.bench_tab.hint(),
+                    Mode::Proto => self.breadboard.hint(),
                 });
                 // the word "ヒント" carries the colour; the sentence is plain text so a long hint stays easy to read
                 ui.horizontal(|ui| {
@@ -812,6 +820,20 @@ impl eframe::App for App {
                 });
             }
         });
+        if self.mode == Mode::Proto {
+            egui::Panel::left("proto_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.breadboard.panel(ui, &mut self.sch));
+            let focus = self.sch.focus().part;
+            egui::CentralPanel::default().show(ui, |ui| self.breadboard.canvas(ui, &mut self.sch, focus.as_deref()));
+            // a part picked on the breadboard is the one the schematic and the board show
+            if let Some(p) = &self.breadboard.picked {
+                let f = link::Focus { part: Some(p.clone()), net: None };
+                if self.sch.linked != f {
+                    self.sch.linked = f.clone();
+                    self.board_ed.linked = f;
+                }
+            }
+            return;
+        }
         if self.mode == Mode::Bench {
             let from_panel = egui::Panel::left("bench_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.bench_tab.panel(ui, &mut self.sch, &self.board_ed.board, &mut self.power_on)).inner;
             let from_canvas = egui::CentralPanel::default().show(ui, |ui| self.bench_tab.canvas(ui, &self.board_ed.board, &self.sch, &self.power_on)).inner;

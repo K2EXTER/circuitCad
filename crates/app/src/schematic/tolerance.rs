@@ -29,6 +29,8 @@ pub struct SheetSettings {
     pub bat_to: String,
     pub bat_node: String,
     pub bat_vmin: String,
+    /// The breadboard view (`app/src/breadboard/`), once the person moved a part or asked for a layout; None = laid out by itself.
+    pub breadboard: Option<sch_core::breadboard::Layout>,
 }
 
 impl Default for SheetSettings {
@@ -49,6 +51,7 @@ impl Default for SheetSettings {
             bat_to: String::new(),
             bat_node: String::new(),
             bat_vmin: String::new(),
+            breadboard: None,
         }
     }
 }
@@ -85,6 +88,11 @@ pub fn with_settings(sheet: &mut serde_json::Value, t: &SheetSettings) {
     if [&t.bat_from, &t.bat_to, &t.bat_node, &t.bat_vmin].iter().any(|s| !s.is_empty()) {
         obj.insert("battery".into(), serde_json::json!({"from": t.bat_from, "to": t.bat_to, "node": t.bat_node, "v_min": t.bat_vmin}));
     }
+    if let Some(l) = &t.breadboard
+        && let Ok(v) = serde_json::to_value(l)
+    {
+        obj.insert("breadboard".into(), v);
+    }
 }
 
 /// Takes the settings out of a sheet's JSON (the defaults for what a file does not have; a box that is missing keeps its default).
@@ -111,6 +119,8 @@ pub fn take_settings(sheet: &mut serde_json::Value) -> SheetSettings {
             t.tran_uic = b;
         }
     }
+    // a layout that does not read (an older or newer form) is laid out again
+    t.breadboard = obj.remove("breadboard").and_then(|v| serde_json::from_value(v).ok());
     if let Some(v) = obj.remove("battery") {
         for (key, slot) in [("from", &mut t.bat_from), ("to", &mut t.bat_to), ("node", &mut t.bat_node), ("v_min", &mut t.bat_vmin)] {
             if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
@@ -139,6 +149,7 @@ impl SchEditor {
             bat_to: self.bat_to.clone(),
             bat_node: self.bat_node.clone(),
             bat_vmin: self.bat_vmin.clone(),
+            breadboard: self.breadboard.clone(),
         }
     }
 
@@ -159,6 +170,7 @@ impl SchEditor {
         self.bat_to = t.bat_to.clone();
         self.bat_node = t.bat_node.clone();
         self.bat_vmin = t.bat_vmin.clone();
+        self.breadboard = t.breadboard.clone();
         self.saved_tol = t;
     }
 }
