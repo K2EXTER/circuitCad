@@ -25,6 +25,18 @@ struct Drag {
 }
 
 /// What a click on the board does.
+/// The range of the meter (B6 ③): how a real tester is set before its probes go on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum MeterRange {
+    /// DC voltage between the probes (across a part, the black probe usually on GND).
+    #[default]
+    Volts,
+    /// Current: the meter goes in series, its probes on the two ends of a gap (`sim_core::meter::current`).
+    Amps,
+    /// Resistance with the power off (`sim_core::meter::resistance`).
+    Ohms,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tool {
     /// Drag parts and jumper ends; R turns the picked part, Delete removes the picked jumper.
@@ -57,6 +69,10 @@ pub struct BreadboardView {
     /// The meter's probes and the scope's.
     pub red: Option<Hole>,
     pub black: Option<Hole>,
+    pub meter_range: MeterRange,
+    /// The last current or resistance reading and what it was read for (the range, the probes' nets, the power, the parts burnt,
+    /// the schematic's edit count): a DC solve, not repeated every frame.
+    meter_cache: Option<(String, Result<String, String>)>,
     pub scope: Option<Hole>,
     /// The supply is switched on: LEDs light, parts past their ratings burn.
     pub powered: bool,
@@ -259,7 +275,7 @@ impl BreadboardView {
             for (t, name, tip) in [
                 (Tool::Move, "動かす", "部品やジャンパー線の端をドラッグして差し替えます。選んだ部品は R で回り、選んだ線は Delete で消えます"),
                 (Tool::Wire, "ジャンパー線", "穴をクリックして、つなぐ先の穴をクリックすると、線を差します。Esc でやめます"),
-                (Tool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます。2 つの穴の間の直流の電圧を読みます (黒い棒はふつう GND に)"),
+                (Tool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます。レンジは 電圧 (並列に当てる)・電流 (線を外して直列に入れる)・抵抗 (電源を切って測る) から選びます"),
                 (Tool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化 (過渡解析) が左に出ます"),
             ] {
                 if ui.selectable_label(self.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
@@ -551,6 +567,21 @@ impl BreadboardView {
 
     /// The meter's reading: the DC voltage of the red probe's net against the black's.
     fn meter_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
+        ui.horizontal(|ui| {
+            for (r, name, tip) in [
+                (MeterRange::Volts, "電圧 V", "2 本の棒の間の直流の電圧を読みます。部品の両端に当てます (並列)。黒い棒はふつう GND に"),
+                (MeterRange::Amps, "電流 A", "テスターに電流を通して読みます。回路の線を 1 か所外し、その両端に棒を当てます (直列)。電源の + と − に当てると、テスターがショートになってヒューズが切れます"),
+                (MeterRange::Ohms, "抵抗 Ω", "電源を切って、2 本の棒の間の抵抗を読みます。テスターが小さな電流を流して測るので、電源が入っていると正しく読めません。部品を回路につないだままだと、まわりの部品も一緒に測ります"),
+            ] {
+                if ui.selectable_label(self.meter_range == r, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+                    self.meter_range = r;
+                }
+            }
+        });
+        if self.meter_range != MeterRange::Volts {
+            self.meter_other_range(ui, sch, l);
+            return;
+        }
         let (Some(red), Some(black)) = (self.red, self.black) else {
             ui.label(egui::RichText::new(if self.red.is_none() { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします (ふつうは GND の青い列)") }).color(NOTE));
             return;
@@ -583,6 +614,74 @@ impl BreadboardView {
             }
             _ => {
                 ui.label(egui::RichText::new(i18n::tr("DC 動作点が求まっていません (回路図の解析で確かめます)")).color(NOTE));
+            }
+        }
+    }
+
+    /// The current and resistance ranges: worked out on the circuit as the board joins it (the parts burnt so far broken in it).
+    fn meter_other_range(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout) {
+        let (Some(red), Some(black)) = (self.red, self.black) else {
+            ui.label(egui::RichText::new(if self.red.is_none() { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします") }).color(NOTE));
+            return;
+        };
+        let (na, nb) = (net_at(&sch.sch, l, red), net_at(&sch.sch, l, black));
+        let name = |h: Hole, n: &Option<String>| format!("{} ({})", h.name(), n.clone().unwrap_or_else(|| i18n::tr("どこにもつながっていない").to_string()));
+        ui.label(i18n::trf!("赤: {}　黒: {}", name(red, &na), name(black, &nb)));
+        let range = self.meter_range;
+        if range == MeterRange::Ohms && self.powered {
+            ui.colored_label(crate::theme::WARN, i18n::tr("電源が入っています。抵抗は電源を切ってから測ります (テスターが自分で流す小さな電流に、回路の電流が混ざって正しく読めません。実物では、テスターを傷めることもあります)"));
+            return;
+        }
+        if range == MeterRange::Amps && !self.powered {
+            ui.label(egui::RichText::new(i18n::tr("電流は、電源を入れてから測ります (切っているあいだは 0 A)")).color(NOTE));
+            return;
+        }
+        let (Some(a), Some(b)) = (na, nb) else {
+            ui.colored_label(crate::theme::WARN, i18n::tr("棒の片方が、どこにもつながっていない穴です"));
+            return;
+        };
+        let key = format!("{range:?}|{a}|{b}|{}|{:?}|{}|{:?}", self.powered, self.broken, sch.rev, self.temp_c);
+        if self.meter_cache.as_ref().is_none_or(|(k, _)| *k != key) {
+            let nets = board_nets(&sch.sch, l);
+            let built = sch.board_circuit(&nets, self.temp_c).map(|c| self.broken.iter().fold(c, |c, (r, f)| sim_core::with_fault(&c, r, *f).unwrap_or(c)));
+            let reading = built.and_then(|c| match range {
+                MeterRange::Ohms => sim_core::meter::resistance(&c, &a, &b).map(|r| match r {
+                    Some(r) => format!("{}Ω", sim_core::format_value(r)),
+                    None => "OL".to_string(),
+                }),
+                _ => sim_core::meter::current(&c, &a, &b).map(|x| match x {
+                    sim_core::meter::Amps::Reading(i) => format!("{}A", sim_core::format_value(i)),
+                    sim_core::meter::Amps::SameNet => "SAME".to_string(),
+                    sim_core::meter::Amps::FuseBlown(i) => format!("FUSE {}", sim_core::format_value(i.abs())),
+                }),
+            });
+            self.meter_cache = Some((key, reading));
+        }
+        let Some((_, reading)) = &self.meter_cache else { return };
+        match reading {
+            Err(e) => {
+                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+            }
+            Ok(r) if r == "SAME" => {
+                ui.label(egui::RichText::new("0 A").size(22.0).strong().color(crate::theme::OK));
+                ui.label(egui::RichText::new(i18n::tr("2 本の棒が同じ線 (ネット) に当たっています。電流計は直列に入れます: 測りたい線を 1 か所外し (ジャンパー線を抜く・部品の足を別の列へ)、空いた 2 つの穴に赤と黒を当てます")).color(NOTE));
+            }
+            Ok(r) if r.starts_with("FUSE") => {
+                ui.label(egui::RichText::new(i18n::tr("ヒューズが切れました")).size(18.0).strong().color(crate::theme::ERROR));
+                ui.label(egui::RichText::new(i18n::trf!("テスターの中を {}A 流れようとしました。電流のレンジのテスターは、中がほとんど 0 Ω の線です。電源の + と − (並列) に当てるとショートになります。電流は、線を外した所に直列に入れて測ります", &r[5..])).color(crate::theme::WARN));
+            }
+            Ok(r) if r == "OL" => {
+                ui.label(egui::RichText::new("OL").size(22.0).strong().color(crate::theme::OK));
+                ui.label(egui::RichText::new(i18n::tr("つながっていない (開いている) か、とても大きな抵抗です。コンデンサは直流を通さないので OL です")).color(NOTE));
+            }
+            Ok(r) => {
+                ui.label(egui::RichText::new(r.as_str()).size(22.0).strong().color(crate::theme::OK));
+                let note = if range == MeterRange::Ohms {
+                    i18n::tr("回路につないだまま測ると、並んだ部品も一緒に測ります (並列なら小さく出ます)。部品だけの値は、片方の足を外して測ります。ダイオード・LED は向きと流す電流で読みが変わります")
+                } else {
+                    i18n::tr("赤い棒から入って黒い棒へ抜ける向きが + です。テスターの 0.1Ω が入るので、ごく小さい抵抗の回路では少し減ります")
+                };
+                ui.label(egui::RichText::new(note).color(NOTE));
             }
         }
     }
@@ -1302,6 +1401,42 @@ mod tests {
         app.breadboard.powered = true;
         run(&mut app);
         assert!(burnt(&app).iter().any(|r| r.starts_with('D')), "{:?}", burnt(&app));
+    }
+
+    /// The meter's other ranges: resistance with the power off (R1's two leads read R1 with what is beside it in the circuit, an
+    /// empty strip reads OL), and refuses with the power on; current with the power on, which blows the fuse across the supply rails
+    /// and reads nothing with both probes on one strip.
+    #[test]
+    fn the_meter_reads_ohms_with_the_power_off_and_amps_in_series() {
+        let (mut app, mut run) = power_on_app("power_on.schjson");
+        let l = auto_layout(&app.sch.sch);
+        let r1 = l.parts.iter().find(|p| p.refdes == "R1").unwrap();
+        let reading = |app: &crate::App| app.breadboard.meter_cache.as_ref().map(|(_, r)| r.clone());
+        app.breadboard.tool = Tool::Meter;
+        app.breadboard.meter_range = MeterRange::Ohms;
+        (app.breadboard.red, app.breadboard.black) = (Some(r1.leads[0].1), Some(r1.leads[1].1));
+        run(&mut app);
+        let r = reading(&app).unwrap().unwrap();
+        let ohms = sim_core::parse_value(r.trim_end_matches('Ω')).unwrap_or_else(|| panic!("{r}"));
+        assert!(ohms > 10.0 && ohms <= 331.0, "R1 is 330 ohm, with the circuit beside it no more: {r}");
+        // the power on: the resistance range refuses (the reading is not worked out)
+        app.breadboard.powered = true;
+        app.breadboard.meter_cache = None;
+        run(&mut app);
+        assert!(reading(&app).is_none());
+        // current across the supply rails: the fuse
+        app.breadboard.meter_range = MeterRange::Amps;
+        let plus = l.parts.iter().flat_map(|p| p.leads.iter().map(|x| x.1)).find(|h| net_at(&app.sch.sch, &l, *h).as_deref() == Some("VIN"));
+        let gnd = Hole::Rail { rail: Rail::TopMinus, col: 3 };
+        let plus = plus.expect("a lead on VIN");
+        (app.breadboard.red, app.breadboard.black) = (Some(plus), Some(gnd));
+        run(&mut app);
+        assert!(reading(&app).unwrap().unwrap().starts_with("FUSE"), "{:?}", reading(&app));
+        // both probes on R1's first strip: nothing flows through the meter
+        let same = r1.leads[0].1;
+        (app.breadboard.red, app.breadboard.black) = (Some(same), Some(same));
+        run(&mut app);
+        assert_eq!(reading(&app).unwrap().unwrap(), "SAME");
     }
 
     /// The board is what is simulated: a jumper across the LED's resistor (not in the schematic) burns the LED, though the

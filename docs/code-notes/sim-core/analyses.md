@@ -128,3 +128,7 @@ DC 動作点から、電源のレールごとの予算を木の順 (親が先) �
 - `large`: ピーク > 1 A かつ steady の 10 倍超。そのとき勧める直列の抵抗 (NTC の冷えたときの値) = V ÷ 目標 − r_source、目標は通り道の定格の最小と 10·steady (1 A 以上) の小さい方 (`target`)。
 - 画面は回路図の解析の「確かめる」の「突入電流 (電源を入れた瞬間)」(`app/src/schematic/inrush.rs`。小さな電流の波形・部品の表・NTC の目安)、CLI は `inrush [r=0.1] [tstop=20m]`。
 - テスト `inrush::tests` (12 V・470 µF・100 Ω: 0.1 Ω でピーク 120 A・I²t = CV²/2R = 0.338 A²s、1 Ω で 1/10、NTC の目安 9.9 Ω)。サンプル `inrush.schjson`。
+
+## meter.rs (テスターの電流・抵抗のレンジ、2026-11-19、候補 B6 ③)
+
+ブレッドボードのテスターが使う。`resistance(circuit, red, black) -> Option<Ω>` は、モデルの外の電圧源を 0 A の電流源 (開放) に、電流源を 0 に替え、100 MΩ の入力抵抗と、黒 → 赤へ 100 µA (`OHM_TEST_A`) の電流源を足して DC を解き、2 V (`OHM_OPEN_V`) 未満なら V ÷ I、以上なら None (OL)。`current(circuit, red, black) -> Amps` は 2 本の棒の間に 0.1 Ω (`AMMETER_OHM`) を足して DC を解いた電流 (赤 → 黒)、同じネットは `SameNet`、10 A (`FUSE_A`) 超は `FuseBlown`。テスト `meter::tests`。

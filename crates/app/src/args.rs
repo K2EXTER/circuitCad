@@ -602,6 +602,12 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             app.breadboard.tool = crate::breadboard::Tool::Meter;
             app.breadboard.red = Some(sch_core::breadboard::Hole::Rail { rail: sch_core::breadboard::Rail::TopPlus, col: 12 });
             app.breadboard.black = Some(sch_core::breadboard::Hole::Rail { rail: sch_core::breadboard::Rail::TopMinus, col: 12 });
+            // `--proto-meter-range amps|ohms`: the meter's range (B6 ③)
+            match args.iter().position(|a| a == "--proto-meter-range").and_then(|k| args.get(k + 1)).map(String::as_str) {
+                Some("amps") => app.breadboard.meter_range = crate::breadboard::MeterRange::Amps,
+                Some("ohms") => app.breadboard.meter_range = crate::breadboard::MeterRange::Ohms,
+                _ => {}
+            }
         }
     }
     // `--bench-tab [assemble|power_on|measure|judge|repair]`: the bench tab ("実機"), at that step
