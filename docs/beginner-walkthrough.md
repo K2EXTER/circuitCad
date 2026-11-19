@@ -92,10 +92,10 @@
 | 発注前のチェックが「U1.4 (VCC) の電源ピンに…」と言う (555 の 4 番は RESET) | 基板はどのパッドが電源ピンかを知らないので、コンデンサが無いときはピンでなく「U1 の電源 VCC に」と言う (`pcb-core/drc/decoupling.rs`) |
 | 実機のタブの「正常な電流」と「測る電圧」が、発振回路では DC 動作点から出た。555 がタイマーの途中で止まった状態 (LED 消灯、6.9 mA) で、正しい基板 (点滅中は平均 7.9 mA) が「少し多い」と判定され、TH が 1.67 V と出た | 過渡解析の後半が DC 動作点と違う (平均が 5 % 超ずれるか、10 % 超振れる) 回路は、電源の電流を後半の平均にして範囲と電流制限を動かし (`sim-core/poweron.rs` の `PowerOn::apply_running`・`steady_stats`)、測る点は「平均 2.55V (1.67V〜3.33V で変わる)」と出す (`schematic/for_bench.rs` の `running_tran`・`running_voltages`、`bench_tab.rs`)。過渡解析は前の結果がその回路のものならそれを、無ければ解析タブの時間で 1 回解く。`ccad poweron tran=3` も同じ。テスト `a_blinking_555_is_judged_by_its_running_current_and_voltages`・`a_running_circuit_moves_the_range_to_its_mean_current` |
 | ERC が、1 つの部品のピンだけでできたネット (ボリュームのワイパーと端だけ) と、コンデンサと入力ピンだけのネット (555 の TRIG/THRES と C1 だけ。充電の抵抗に届いていない) を言わなかった | どちらも ERC の注意にした (`sch-core/netlist.rs`。ラベルの名前の付いたネットは、別のシートへ続くことがあるので除く)。NE555 の部品にピンの種類を入れた (TRIG・THRES・RESET は入力、OUT は出力、DISCH はオープンコレクタ、CONT は中の分圧でバイアスされているので passive)。同梱のサンプル 140 本で、新しい注意が出ないことを確かめた。テスト `a_net_of_one_part_or_of_capacitors_and_inputs_only_is_reported` |
+| 試作はリード部品なのに、基板では R・C・LED が知らせなく 0805 の表面実装になった | 取り込んだ基板に、まだ既定のチップの形の部品があると、「回路図から取り込み」の下に部品名と「リード部品にする」を出す。押すと回路図の部品の形を足を穴に通すものにして取り込み直す (抵抗 R_Axial_10.16・コンデンサ C_Disc_5.08・ダイオード D_DO-35_7.62・LED LED_5mm・トランジスタ TO-92。`sch-core` の `Kind::lead_footprint`・`Schematic::surface_mount_defaults`・`to_lead_parts`、`board_editor/panel.rs`、`main.rs` の `lead_parts_request`)。手で選んだ形とコイルは変えない。下のシート (階層) の部品はまだ対象外。テスト `basic_parts_on_their_chip_default_can_become_leaded_parts`・`the_board_can_take_leaded_parts_like_the_breadboard` |
 
 見つかって、直していないもの:
 
-- 試作はリード部品なのに、基板では R・C・LED が知らせなく 0805 の表面実装になる
 - R キーの回転が、別の種類の部品にも引き継がれる (未確認)
 - 保存・書き出しのダイアログが毎回「ドキュメント」から始まる
 - 購入リストの検索語にフットプリント名が入る (「NE555 DIP-8_W7.62」)。電源 V1 が値「5」のピンヘッダになる

@@ -313,6 +313,11 @@ impl eframe::App for App {
             let answer = self.sch.sch.rename_parts(&plan);
             self.board_ed.renumber_applied(&plan, answer);
         }
+        if std::mem::take(&mut self.board_ed.lead_parts_request) {
+            let changed = self.sch.sch.to_lead_parts();
+            self.board_ed.import_from_schematic(&self.sch);
+            self.board_ed.status = format!("{} 個をリード部品の形にして、取り込み直しました ({})。パッドが大きくなったので、DRC と配線を確かめてください", changed.len(), changed.join("・"));
+        }
         if std::mem::take(&mut self.board_ed.to_schematic_request) {
             let trades = self.board_ed.board.pin_map.clone();
             let answer = self.sch.sch.apply_pin_trades(&trades);

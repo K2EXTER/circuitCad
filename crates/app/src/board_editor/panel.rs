@@ -115,6 +115,20 @@ impl BoardEditor {
                 for n in &self.import_notes {
                     ui.colored_label(crate::theme::WARN, n);
                 }
+                // the breadboard plugs in leaded parts; the basic parts come onto the board as 0805 chips unless the schematic says
+                // otherwise: say so, and offer the leaded footprints (found by a usability test, 2026-11-19)
+                let chips = sch.sch.surface_mount_defaults();
+                if !self.board.parts.is_empty() && !chips.is_empty() {
+                    let names = if chips.len() > 4 { format!("{} ほか {} 個", chips[..3].join("・"), chips.len() - 3) } else { chips.join("・") };
+                    ui.label(egui::RichText::new(i18n::trf!("{} は、表面実装 (0805 などの小さなチップ) の形です。ブレッドボードと同じ、足を穴に通すリード部品で作るなら:", names)).color(crate::learn::NOTE));
+                    if ui
+                        .button(i18n::tr("リード部品にする"))
+                        .on_hover_text(i18n::tr("回路図のこれらの部品の形 (フットプリント) を、リード部品のものにして、取り込み直します: 抵抗は 10.16 mm 間隔、コンデンサはディスク形 (5.08 mm)、ダイオードは DO-35、LED は 5 mm、トランジスタは TO-92。部品の位置は残りますが、パッドが大きくなるので、配置と配線は直しが要ることがあります。形は、回路図で部品を選んだ「基板とモデル」でも 1 個ずつ変えられます"))
+                        .clicked()
+                    {
+                        self.lead_parts_request = true;
+                    }
+                }
             ui.add_space(4.0);
             group_heading(ui, i18n::tr("手順 (上から順に)"), i18n::tr("基板づくりの流れです。①から順に進めると、発注用のデータまで作れます。いつでも途中に戻れます"));
             // one step open at a time: at first the step the board is at (`current_step`), then the one the learner opens

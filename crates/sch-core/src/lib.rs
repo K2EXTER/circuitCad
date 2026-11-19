@@ -182,6 +182,19 @@ impl Kind {
         }
     }
 
+    /// The through-hole footprint of a basic part (leads through holes, as the parts plugged into a breadboard): for a board
+    /// soldered by hand with the same parts. None for kinds that have no such footprint here (a coil, the symbols).
+    pub fn lead_footprint(self) -> Option<&'static str> {
+        match self {
+            Kind::Resistor => Some("R_Axial_10.16"),
+            Kind::Capacitor => Some("C_Disc_5.08"),
+            Kind::Diode => Some("D_DO-35_7.62"),
+            Kind::Led => Some("LED_5mm"),
+            Kind::Npn => Some("TO-92"),
+            _ => None,
+        }
+    }
+
     pub fn is_power_symbol(self) -> bool {
         matches!(self, Kind::Ground | Kind::Power)
     }
@@ -603,6 +616,28 @@ impl Schematic {
             shops: Default::default(),
         });
         self.components.len() - 1
+    }
+
+    /// The basic parts still on their surface-mount default footprint (R_0805 ...) that have a through-hole one (`Kind::lead_footprint`):
+    /// the breadboard plugs in leaded parts, and a board made from the same schematic gets 0805 chips unless they are changed.
+    pub fn surface_mount_defaults(&self) -> Vec<String> {
+        self.components
+            .iter()
+            .filter(|c| !c.sim_only && c.kind.lead_footprint().is_some() && c.footprint_name() == c.kind.default_footprint())
+            .map(|c| c.refdes.clone())
+            .collect()
+    }
+
+    /// Gives those parts (`surface_mount_defaults`) their through-hole footprint; returns their designators. A footprint chosen by
+    /// hand (anything but the default) is left alone.
+    pub fn to_lead_parts(&mut self) -> Vec<String> {
+        let names = self.surface_mount_defaults();
+        for c in self.components.iter_mut().filter(|c| names.contains(&c.refdes)) {
+            if let Some(f) = c.kind.lead_footprint() {
+                c.footprint = f.to_string();
+            }
+        }
+        names
     }
 
     /// Place a library part. `footprint` is the footprint name the part uses on the PCB.

@@ -834,3 +834,25 @@ fn the_heat_map_in_a_case_is_hotter_and_its_warm_up_starts_from_the_room() {
     let r2 = &tr.parts.iter().find(|p| p.0 == "R2").unwrap().1;
     assert!((r2[0] - v.ambient).abs() < 0.5 && tr.ambient_c == v.ambient, "starts from the room: {}", r2[0]);
 }
+
+/// Found by a usability test (2026-11-19): the board from the breadboarded circuit got 0805 chips without a word. "リード部品にする"
+/// on the board's panel gives the schematic's basic parts their through-hole footprints and imports again: the board's pads have holes.
+#[test]
+fn the_board_can_take_leaded_parts_like_the_breadboard() {
+    let mut app = App::default();
+    app.sch.load_path(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/pot_dimmer.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    let drilled = |app: &App, r: &str| app.board_ed.board.pads.iter().filter(|p| p.refdes == r).all(|p| p.drill.is_some());
+    assert!(!drilled(&app, "R1") && !app.sch.sch.surface_mount_defaults().is_empty(), "chips at first");
+    app.board_ed.lead_parts_request = true;
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| eframe::App::ui(&mut app, ui, &mut f));
+    out.textures_delta.clear();
+    assert!(app.sch.sch.surface_mount_defaults().is_empty(), "{:?}", app.sch.sch.surface_mount_defaults());
+    for r in ["R1", "D1", "Q1"] {
+        assert!(drilled(&app, r), "{r} goes through holes now: {}", app.board_ed.status);
+    }
+    assert!(app.board_ed.status.contains("リード部品"), "{}", app.board_ed.status);
+}

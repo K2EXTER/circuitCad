@@ -74,3 +74,7 @@
 
 
 - **「③ 確認する」の並び(2026-11-16)**: DRC と要件の下を、`panel_widths`(電流と電圧降下・ネットの一覧・配線の電圧降下の「計算する」)、`panel_heat`(熱: 「熱の地図…」・サーマルビア)、`panel_reflect`(回路図に反映: 状態の 1 行と「シミュレーションに反映」「外す」) の 3 つの欄に分けた(前は反映のボタンが「配線の電圧降下」の中にあり、熱も運ぶことが見えなかった)。状態は `BoardEditor.post_layout_on`(反映したときの銅の指紋 `copper_fingerprint`。App が `apply_post_layout` で入れる。指紋が変われば「そのあと基板が変わりました」)。回路図の解析タブの上にも「基板を反映中: …」と「外す」(`SchEditor.post_layout_request` → App)。レッスンの文の場所の説明も直した。
+
+## リード部品にする (2026-11-19)
+
+試作のタブ (ブレッドボード) は足を穴に通す部品で動かすのに、基本の部品 (R・C・L・LED・ダイオード・NPN) の既定のフットプリントはチップ (R_0805・SOT-23 など) で、基板にすると知らせなく表面実装になっていた (使いやすさの点検 5 回目)。取り込んだ基板があり、回路図にまだ既定のチップの形の部品があると (`Schematic::surface_mount_defaults`)、左パネルの「回路図から取り込み」の下に部品名と「リード部品にする」を出す。押すと `BoardEditor.lead_parts_request` を立て、`main.rs` が `Schematic::to_lead_parts` (フットプリントを `Kind::lead_footprint` に: R_Axial_10.16・C_Disc_5.08・D_DO-35_7.62・LED_5mm・TO-92) のあと `import_from_schematic` で取り込み直す。回路図が正本なので、形は回路図の部品に書く (Undo は回路図の履歴)。手で選んだフットプリントとコイル (リードの形が無い) は変えない。階層の下のシートの部品は対象外。テスト `basic_parts_on_their_chip_default_can_become_leaded_parts` (sch-core)・`the_board_can_take_leaded_parts_like_the_breadboard` (`tests/flow.rs`)。

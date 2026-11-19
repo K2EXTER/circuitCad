@@ -387,6 +387,8 @@ pub struct BoardEditor {
     pub to_schematic_request: bool,
     /// "部品番号を位置順に" was pressed; the app renumbers the schematic too (`renumber_applied`).
     pub renumber_request: bool,
+    /// "リード部品にする" was pressed: the app gives the schematic's basic parts their through-hole footprints and imports again.
+    pub lead_parts_request: bool,
     /// A word of the lesson window that was clicked: the app opens the glossary on it.
     pub glossary_request: Option<&'static str>,
     /// The reason typed for "承知する" (accept a finding of the requirements check).
@@ -606,6 +608,7 @@ impl Default for BoardEditor {
             currents_request: None,
             to_schematic_request: false,
             renumber_request: false,
+            lead_parts_request: false,
             glossary_request: None,
             waive_reason: String::new(),
             waiver_request: None,

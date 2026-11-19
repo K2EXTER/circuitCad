@@ -834,3 +834,24 @@ fn a_part_numbers_of_its_own_win_over_those_of_its_library_part_and_are_not_writ
     assert_eq!(m.get("lcsc"), None);
     assert_eq!(m["digikey"], "RC0805FR-071KL");
 }
+
+/// Found by a usability test (2026-11-19): the breadboard plugs in leaded parts, and the board from the same schematic got 0805
+/// chips without a word. The basic parts on their default chip footprint can be switched to through-hole ones; a footprint chosen
+/// by hand stays.
+#[test]
+fn basic_parts_on_their_chip_default_can_become_leaded_parts() {
+    let mut s = Schematic::default();
+    let r = s.add(Kind::Resistor, (0, 0), 0);
+    let d = s.add(Kind::Led, (10, 0), 0);
+    let q = s.add(Kind::Npn, (20, 0), 0);
+    let c = s.add(Kind::Capacitor, (30, 0), 0);
+    s.components[c].footprint = "C_1206".into();
+    s.add(Kind::Inductor, (40, 0), 0);
+    s.add(Kind::Ground, (50, 0), 0);
+    let names: Vec<String> = [r, d, q].iter().map(|&i| s.components[i].refdes.clone()).collect();
+    assert_eq!(s.surface_mount_defaults(), names, "the chip resistor, LED and transistor; not the 1206 chosen by hand, the coil or GND");
+    assert_eq!(s.to_lead_parts(), names);
+    assert_eq!((s.components[r].footprint_name(), s.components[d].footprint_name(), s.components[q].footprint_name()), ("R_Axial_10.16".into(), "LED_5mm".into(), "TO-92".into()));
+    assert_eq!(s.components[c].footprint_name(), "C_1206");
+    assert!(s.surface_mount_defaults().is_empty());
+}
