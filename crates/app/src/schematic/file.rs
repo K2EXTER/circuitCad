@@ -54,6 +54,12 @@ impl SchEditor {
     }
 
     /// The sheet and its spec table as the text of a `.schjson` file.
+    /// What `save` writes (for the tests outside the schematic module).
+    #[cfg(test)]
+    pub fn sheet_json_for_test(&self) -> String {
+        self.sheet_json().unwrap()
+    }
+
     pub(super) fn sheet_json(&self) -> Result<String, serde_json::Error> {
         let mut value = serde_json::to_value(&self.sch)?;
         with_specs(&mut value, &self.spec_items());

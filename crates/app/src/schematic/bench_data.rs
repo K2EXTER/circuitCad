@@ -46,16 +46,81 @@ impl BenchCurve {
     }
 }
 
+/// A DC voltage measured on a net with a meter (L2): the reading and how far it may be off (the meter's uncertainty, V; 0 = not
+/// given).
+#[derive(Clone, Debug, PartialEq)]
+pub struct DcReading {
+    pub net: String,
+    pub volts: f64,
+    pub uncert: f64,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BenchData {
     pub tran: Vec<BenchCurve>,
     pub ac: Vec<BenchCurve>,
+    pub dc: Vec<DcReading>,
 }
 
 impl BenchData {
     pub fn is_empty(&self) -> bool {
-        self.tran.is_empty() && self.ac.is_empty()
+        self.tran.is_empty() && self.ac.is_empty() && self.dc.is_empty()
     }
+}
+
+impl SchEditor {
+    /// The DC reading measured on a net (L2), if one was entered.
+    pub fn dc_reading(&self, net: &str) -> Option<&DcReading> {
+        self.bench.dc.iter().find(|r| r.net.eq_ignore_ascii_case(net))
+    }
+
+    /// Enters (or with None clears) the reading of a net: (volts, uncertainty). Saved with the sheet.
+    pub fn set_dc_reading(&mut self, net: &str, reading: Option<(f64, f64)>) {
+        self.bench.dc.retain(|r| !r.net.eq_ignore_ascii_case(net));
+        if let Some((volts, uncert)) = reading {
+            self.bench.dc.push(DcReading { net: net.to_string(), volts, uncert });
+        }
+    }
+}
+
+/// A meter reading as typed: `4.98`, `4.98V`, `4.98 ±0.02`, `4.98+-0.02`, `4.98, 0.02`; the value and its uncertainty (0 when not
+/// given). None when it does not read.
+pub fn parse_reading(text: &str) -> Option<(f64, f64)> {
+    let t = text.trim().replace('±', " ").replace("+-", " ").replace("+/-", " ").replace(',', " ");
+    let mut words = t.split_whitespace();
+    let v = parse_value(words.next()?)?;
+    let u = match words.next() {
+        Some(w) => parse_value(w)?.abs(),
+        None => 0.0,
+    };
+    (v.is_finite() && words.next().is_none()).then_some((v, u))
+}
+
+/// How a reading agrees with what was predicted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Agree {
+    /// Within the allowance.
+    Good,
+    /// Out by up to three times the allowance: worth a second look.
+    Off,
+    /// Further out: something is wrong (a part, a joint, a value).
+    Far,
+}
+
+/// The allowance for a reading of a net predicted at `pred` volts: the meter's uncertainty, 5 % of the prediction or 20 mV, the
+/// largest (the parts' tolerances move a real board's voltages by a few percent).
+pub fn allowance(pred: f64, uncert: f64) -> f64 {
+    uncert.max(0.05 * pred.abs()).max(0.02)
+}
+
+/// A reading against the prediction (or the range a running net moves through): the difference from the prediction and how it
+/// agrees.
+pub fn judge(pred: f64, range: Option<(f64, f64)>, volts: f64, uncert: f64) -> (f64, Agree) {
+    let tol = allowance(pred, uncert);
+    let (lo, hi) = range.unwrap_or((pred, pred));
+    let out = if volts < lo { lo - volts } else if volts > hi { volts - hi } else { 0.0 };
+    let agree = if out <= tol { Agree::Good } else if out <= 3.0 * tol { Agree::Off } else { Agree::Far };
+    (volts - pred, agree)
 }
 
 /// Stores the recordings in a sheet's JSON under `"bench"` (no key when there are none).
@@ -69,6 +134,21 @@ pub fn with_bench(sheet: &mut serde_json::Value, bench: &BenchData) {
         if !bench.ac.is_empty() {
             v["ac"] = list(&bench.ac);
         }
+        if !bench.dc.is_empty() {
+            v["dc"] = serde_json::Value::Array(
+                bench
+                    .dc
+                    .iter()
+                    .map(|r| {
+                        let mut o = serde_json::json!({ "net": r.net, "v": r.volts });
+                        if r.uncert > 0.0 {
+                            o["u"] = r.uncert.into();
+                        }
+                        o
+                    })
+                    .collect(),
+            );
+        }
         obj.insert("bench".into(), v);
     }
 }
@@ -77,19 +157,39 @@ pub fn with_bench(sheet: &mut serde_json::Value, bench: &BenchData) {
 pub fn take_bench(sheet: &mut serde_json::Value) -> BenchData {
     let Some(v) = sheet.as_object_mut().and_then(|o| o.remove("bench")) else { return BenchData::default() };
     let list = |k: &str| v.get(k).and_then(|a| a.as_array()).map(|a| a.iter().filter_map(BenchCurve::from_json).collect()).unwrap_or_default();
-    BenchData { tran: list("tran"), ac: list("ac") }
+    let dc = v
+        .get("dc")
+        .and_then(|a| a.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|o| Some(DcReading { net: o.get("net")?.as_str()?.to_string(), volts: o.get("v")?.as_f64()?, uncert: o.get("u").and_then(|u| u.as_f64()).unwrap_or(0.0) }))
+                .collect()
+        })
+        .unwrap_or_default();
+    BenchData { tran: list("tran"), ac: list("ac"), dc }
 }
 
 /// The numbers of a pasted table or a CSV file, column by column. Lines whose cells are not all numbers (headers, the
 /// scope's settings) are skipped; only rows with the most common count of numbers are kept, so a footer or a settings line
 /// with two numbers does not break the table.
 pub fn read_table(text: &str) -> Result<Vec<Vec<f64>>, String> {
+    // a line whose cells are all numbers (or clock times) is a row; in a meter's log the words (a date, the unit) are left out and
+    // its clock time becomes seconds from the first row
+    let mut first_time: Option<f64> = None;
     let rows: Vec<Vec<f64>> = text
         .lines()
         .filter_map(|line| {
             let cells: Vec<&str> = line.split([',', '\t', ';', ' ']).map(|c| c.trim().trim_matches('"')).filter(|c| !c.is_empty()).collect();
-            let nums: Option<Vec<f64>> = cells.iter().map(|c| c.parse::<f64>().ok().or_else(|| parse_value(c))).collect();
-            nums.filter(|n| n.len() >= 2 && n.iter().all(|v| v.is_finite()))
+            let all_numbers: Option<Vec<f64>> = cells.iter().map(|c| c.parse::<f64>().ok().or_else(|| parse_value(c))).collect();
+            if let Some(n) = all_numbers.filter(|n| n.len() >= 2 && n.iter().all(|v| v.is_finite())) {
+                return Some(n);
+            }
+            // a log line: a clock time and numbers among words
+            let clock = cells.iter().find_map(|c| clock_seconds(c))?;
+            let start = *first_time.get_or_insert(clock);
+            let mut n = vec![clock - start];
+            n.extend(cells.iter().filter(|c| clock_seconds(c).is_none() && !c.contains('-') || c.starts_with('-')).filter_map(|c| c.parse::<f64>().ok()));
+            (n.len() >= 2).then_some(n)
         })
         .collect();
     let mut counts: Vec<(usize, usize)> = vec![];
@@ -104,6 +204,17 @@ pub fn read_table(text: &str) -> Result<Vec<Vec<f64>>, String> {
     };
     let rows: Vec<&Vec<f64>> = rows.iter().filter(|r| r.len() == width).collect();
     Ok((0..width).map(|k| rows.iter().map(|r| r[k]).collect()).collect())
+}
+
+/// A clock time in a cell, as seconds of the day: `10:00:01`, `10:00:01.250`, `2026-11-19T10:00:01` (the time after the T).
+fn clock_seconds(cell: &str) -> Option<f64> {
+    let t = cell.rsplit('T').next()?;
+    let parts: Vec<&str> = t.split(':').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let (h, m, s) = (parts[0].parse::<f64>().ok()?, parts[1].parse::<f64>().ok()?, parts[2].trim_end_matches('Z').parse::<f64>().ok()?);
+    (h < 24.0 && m < 60.0 && s < 61.0).then_some(h * 3600.0 + m * 60.0 + s)
 }
 
 /// How the columns of a measured frequency response are laid out.
@@ -500,6 +611,36 @@ mod tests {
             spiky[k] += 0.4;
         }
         assert!((edge_time(&t, &spiky).unwrap() - 4.394e-4).abs() < 6e-6);
+    }
+
+    #[test]
+    fn readings_parse_and_are_judged_against_the_prediction() {
+        assert_eq!(parse_reading("4.98"), Some((4.98, 0.0)));
+        assert_eq!(parse_reading(" 4.98V ±0.02 "), Some((4.98, 0.02)));
+        assert_eq!(parse_reading("3.3+-0.01"), Some((3.3, 0.01)));
+        let (v, u) = parse_reading("1.2m, 10u").unwrap();
+        assert!((v - 1.2e-3).abs() < 1e-15 && (u - 1e-5).abs() < 1e-15);
+        assert_eq!(parse_reading("abc"), None);
+        // 5 V predicted: 4.9 is within 5 %, 4.6 is off, 3 V is far
+        assert_eq!(judge(5.0, None, 4.9, 0.0).1, Agree::Good);
+        assert_eq!(judge(5.0, None, 4.6, 0.0).1, Agree::Off);
+        assert_eq!(judge(5.0, None, 3.0, 0.0).1, Agree::Far);
+        assert!((judge(5.0, None, 4.9, 0.0).0 + 0.1).abs() < 1e-12);
+        // a running net: anywhere in its range is fine
+        assert_eq!(judge(2.5, Some((1.7, 3.3)), 3.2, 0.0).1, Agree::Good);
+        // a small voltage: 20 mV at least
+        assert_eq!(judge(0.0, None, 0.015, 0.0).1, Agree::Good);
+    }
+
+    #[test]
+    fn a_meter_log_with_dates_and_units_is_read_by_its_clock() {
+        let log = "date,time,value,unit\n2026-11-19,10:00:00.0,4.9871,V\n2026-11-19,10:00:00.5,4.9873,V\n2026-11-19,10:00:01.0,4.9869,V\n";
+        let cols = read_table(log).unwrap();
+        assert_eq!(cols.len(), 2, "{cols:?}");
+        assert_eq!(cols[0], vec![0.0, 0.5, 1.0]);
+        assert!((cols[1][1] - 4.9873).abs() < 1e-12);
+        let iso = "2026-11-19T10:00:00Z,1.5\n2026-11-19T10:00:02Z,1.6\n";
+        assert_eq!(read_table(iso).unwrap()[0], vec![0.0, 2.0]);
     }
 
     #[test]

@@ -111,15 +111,39 @@ impl SchEditor {
                     NodeSort::Name => rows.sort_by(|a, b| a.0.cmp(&b.0)),
                     NodeSort::VoltageHigh => rows.sort_by(|a, b| b.1.total_cmp(&a.1)),
                 }
-                egui::Grid::new("res_nodes").striped(true).num_columns(2).spacing([24.0, 4.0]).show(ui, |ui| {
+                // the readings taken on the board (L2, entered in the bench tab's "測る"): beside the prediction, with the difference
+                let measured = !self.bench.dc.is_empty();
+                egui::Grid::new("res_nodes").striped(true).num_columns(if measured { 4 } else { 2 }).spacing([24.0, 4.0]).show(ui, |ui| {
                     ui.strong(i18n::tr("ノード"));
                     num_head(ui, "電圧");
+                    if measured {
+                        num_head(ui, "実測");
+                        num_head(ui, "差");
+                    }
                     ui.end_row();
                     for (n, v) in rows {
                         if ui.link(n.as_str()).on_hover_text(i18n::tr("クリックで、このネットにつながる部品を回路図で選びます")).clicked() {
                             *goto_net = Some(n.clone());
                         }
                         num(ui, eng(*v, "V"));
+                        if measured {
+                            match self.dc_reading(n) {
+                                Some(r) => {
+                                    num(ui, eng(r.volts, "V"));
+                                    let (diff, agree) = super::judge(*v, None, r.volts, r.uncert);
+                                    let color = match agree {
+                                        super::Agree::Good => crate::theme::OK,
+                                        super::Agree::Off => crate::theme::WARN,
+                                        super::Agree::Far => crate::theme::ERROR,
+                                    };
+                                    ui.label(egui::RichText::new(eng(diff, "V")).monospace().color(color)).on_hover_text(i18n::tr("実測 − 予測。緑は合う、橙は少しずれ、赤は大きくずれ (実機のタブの「測る」と同じ判定)"));
+                                }
+                                None => {
+                                    ui.label("");
+                                    ui.label("");
+                                }
+                            }
+                        }
                         ui.end_row();
                     }
                 });

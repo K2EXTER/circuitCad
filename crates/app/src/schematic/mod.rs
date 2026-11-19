@@ -862,7 +862,7 @@ mod quick;
 #[cfg(test)]
 pub use challenge::challenge_exists;
 pub use spec_table::{take_specs, with_specs, SpecItem};
-pub use bench_data::{take_bench, with_bench, BenchData};
+pub use bench_data::{allowance, judge, parse_reading, take_bench, with_bench, Agree, BenchData};
 pub use tolerance::{take_settings, with_settings, SheetSettings};
 pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};
 pub use lessons::{lesson_ids, lesson_texts, lesson_titles};

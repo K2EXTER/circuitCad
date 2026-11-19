@@ -91,9 +91,15 @@ pub struct BenchTab {
     /// The nets that move while the circuit runs ((net, mean, min, max) V, `SchEditor::running_voltages`) and the circuit they were
     /// found for: worked out once per circuit, as it may run a transient.
     running: Option<(String, Vec<(String, f64, f64, f64)>)>,
+    /// The readings as typed in the step "測る", by net (a half-typed one stays as typed until it reads).
+    typed: std::collections::BTreeMap<String, String>,
 }
 
 const GLOW: Color32 = crate::theme::HIGHLIGHT;
+
+fn sch_judge(pred: f64, range: Option<(f64, f64)>, volts: f64, uncert: f64) -> crate::schematic::Agree {
+    crate::schematic::judge(pred, range, volts, uncert).1
+}
 const GROUND: Color32 = crate::theme::INFO;
 const FITTED: Color32 = crate::theme::OK;
 const PIN1: Color32 = crate::theme::ERROR;
@@ -318,7 +324,24 @@ impl BenchTab {
                 // the rows of the spec table first, then the named nets, then the rest
                 let rank = |n: &str| (if spec_nets.iter().any(|s| s.eq_ignore_ascii_case(n)) { 0 } else if n.starts_with("N$") || n.starts_with("net") { 2 } else { 1 }, n.to_string());
                 v.sort_by_key(|(n, _)| rank(n));
-                egui::Grid::new("bench_points").num_columns(2).striped(true).spacing([16.0, 2.0]).show(ui, |ui| {
+                let readings = v.iter().filter(|(n, _)| sch.dc_reading(n).is_some()).count();
+                ui.label(spaced("測った値を「実測」に入れると、予測との差と、合っているか (✔ 合う・▲ ずれ・✖ 大きくずれ) が出ます。テスターの不確かさは「4.98 ±0.02」のように書けます。入れた値は回路図と一緒に保存されます。").color(NOTE));
+                if readings > 0 {
+                    let good = v.iter().filter(|(n, p)| {
+                        let range = running.iter().find(|(m, ..)| m == n).map(|(_, mean, lo, hi)| (*mean, Some((*lo, *hi))));
+                        let (pred, rng) = range.unwrap_or((*p, None));
+                        sch.dc_reading(n).is_some_and(|r| sch_judge(pred, rng, r.volts, r.uncert) == crate::schematic::Agree::Good)
+                    });
+                    ui.label(egui::RichText::new(i18n::trf!("{} 点を測りました。合っているのは {} 点", readings, good.count())).strong());
+                }
+                let mut set: Vec<(String, Option<(f64, f64)>)> = vec![];
+                egui::Grid::new("bench_points").num_columns(5).striped(true).spacing([12.0, 2.0]).show(ui, |ui| {
+                    ui.label(egui::RichText::new(i18n::tr("ネット")).strong());
+                    ui.label(egui::RichText::new(i18n::tr("予測")).strong());
+                    ui.label(egui::RichText::new(i18n::tr("実測")).strong()).on_hover_text(i18n::tr("テスターで測った電圧 (V)。4.98 や 4.98 ±0.02 のように"));
+                    ui.label(egui::RichText::new(i18n::tr("差")).strong());
+                    ui.label("");
+                    ui.end_row();
                     for (net, volts) in &v {
                         let picked = self.picked_net.as_deref().is_some_and(|p| p.eq_ignore_ascii_case(net));
                         let mut name = egui::RichText::new(net.as_str());
@@ -337,9 +360,48 @@ impl BenchTab {
                                 ui.label(format!("{}V", sim_core::format_value(*volts)));
                             }
                         }
+                        // the reading, the difference and whether it agrees
+                        let (pred, range) = running.iter().find(|(n, ..)| n == net).map_or((*volts, None), |(_, mean, lo, hi)| (*mean, Some((*lo, *hi))));
+                        let reading = sch.dc_reading(net).cloned();
+                        let text = self.typed.entry(net.clone()).or_insert_with(|| reading.as_ref().map_or(String::new(), |r| if r.uncert > 0.0 { format!("{} ±{}", sim_core::format_value(r.volts), sim_core::format_value(r.uncert)) } else { sim_core::format_value(r.volts) }));
+                        let edit = ui.add(egui::TextEdit::singleline(text).desired_width(120.0).hint_text("—"));
+                        if edit.changed() {
+                            match text.trim() {
+                                "" => set.push((net.clone(), None)),
+                                t => {
+                                    if let Some(r) = crate::schematic::parse_reading(t) {
+                                        set.push((net.clone(), Some(r)));
+                                    }
+                                }
+                            }
+                        }
+                        let bad_text = !text.trim().is_empty() && crate::schematic::parse_reading(text).is_none();
+                        match reading.filter(|_| !bad_text) {
+                            Some(r) => {
+                                let (diff, agree) = crate::schematic::judge(pred, range, r.volts, r.uncert);
+                                ui.label(format!("{}{}V", if diff >= 0.0 { "+" } else { "" }, sim_core::format_value(diff)));
+                                let (mark, color, tip) = match agree {
+                                    crate::schematic::Agree::Good => ("✔", crate::theme::OK, "予測と合っています (部品の誤差・テスターの誤差の内)"),
+                                    crate::schematic::Agree::Off => ("▲", crate::theme::WARN, "少しずれています。測る点・テスターのレンジ・部品の値を確かめましょう"),
+                                    crate::schematic::Agree::Far => ("✖", crate::theme::ERROR, "大きくずれています。部品の付け間違い・はんだ付け・向き・電源を確かめます (「5. 修理」で原因を探せます)"),
+                                };
+                                ui.label(egui::RichText::new(mark).color(color)).on_hover_text(i18n::trf!("{} (許す幅 ±{}V)", i18n::tr(tip), sim_core::format_value(crate::schematic::allowance(pred, r.uncert))));
+                            }
+                            None if bad_text => {
+                                ui.colored_label(crate::theme::WARN, i18n::tr("読めません"));
+                                ui.label("");
+                            }
+                            None => {
+                                ui.label("");
+                                ui.label("");
+                            }
+                        }
                         ui.end_row();
                     }
                 });
+                for (net, r) in set {
+                    sch.set_dc_reading(&net, r);
+                }
             }
         }
         ui.separator();
@@ -565,6 +627,38 @@ mod tests {
 
     // Found by a usability test (2026-11-19): a 555 blinker's assembly step offered the ATmega2560's 100-pin soldering and its
     // bootloader.
+    /// The step "測る" with readings entered (L2): they are kept with the schematic (and through a save and a load), judged against
+    /// the prediction, and the step draws with them.
+    #[test]
+    fn readings_are_kept_and_judged() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("power_on.schjson"));
+        app.mode = Mode::Bench;
+        app.bench_tab.step = Step::Measure;
+        let ctx = egui::Context::default();
+        frame(&ctx, &mut app);
+        let five = app.sch.bench_voltages().unwrap().into_iter().find(|(n, _)| n == "5V").unwrap().1;
+        app.sch.set_dc_reading("5V", Some((five - 0.03, 0.01)));
+        app.sch.set_dc_reading("VIN", Some((3.0, 0.0)));
+        frame(&ctx, &mut app);
+        let r = app.sch.dc_reading("5V").unwrap().clone();
+        assert_eq!(crate::schematic::judge(five, None, r.volts, r.uncert).1, crate::schematic::Agree::Good);
+        // 9 V predicted at VIN, 3 V read: far off
+        let vin = app.sch.bench_voltages().unwrap().into_iter().find(|(n, _)| n == "VIN").unwrap().1;
+        assert_eq!(crate::schematic::judge(vin, None, 3.0, 0.0).1, crate::schematic::Agree::Far);
+        // through the file
+        let dir = std::env::temp_dir().join(format!("ccad_dc_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("measured.schjson");
+        std::fs::write(&path, app.sch.sheet_json_for_test()).unwrap();
+        let mut back = SchEditor::default();
+        back.load_path(path.clone());
+        assert_eq!(back.dc_reading("5V").map(|r| r.volts), Some(five - 0.03));
+        assert_eq!(back.dc_reading("VIN").map(|r| r.uncert), Some(0.0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn only_the_guides_for_what_is_on_the_board_are_offered() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
