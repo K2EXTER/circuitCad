@@ -384,7 +384,7 @@ a{color:var(--accent)}
   </div>
   <ul>
     <li><strong>Platforms:</strong> tested mainly on Windows 10 / 11. The Linux zip was only checked on WSL2 (Ubuntu, no GPU). There is no macOS build yet (it builds and passes the tests in CI, but nobody has run the app).</li>
-    <li><strong>No board made with circuitCad has been manufactured yet.</strong> The Gerber, drill and pre-order checks are unproven in practice.</li>
+    <li><strong>Proven only up to a delivered bare board.</strong> A board ordered from circuitCad's Gerber and drill files has been delivered and its copper checked with no defects found; it has not been assembled and tested yet.</li>
     <li><strong>Simplified models.</strong> Results agree with ngspice on the bundled examples, but agreement with real hardware has not been measured yet. Makers' SPICE models load only partly (some syntax, many XSPICE devices are not supported).</li>
     <li><strong>The user interface is still being reworked.</strong> It is the area we are improving most actively, release by release (layout, wording, icons, and the same look and behaviour across the schematic editor, the board editor and the windows), but it is not finished: some panels are still dense, some screens do not look like the others yet, and some operations take more clicks than they should. Feedback on what confused you is especially welcome.</li>
     <li><strong>The English text is new</strong> and was translated with AI help from the Japanese original; some wording may be awkward, and a few messages may still appear in Japanese (the breadboard's hole names, such as <code>上+1</code>, are still Japanese). Most documentation (docs/, the code notes) is in Japanese.</li>

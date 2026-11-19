@@ -14,7 +14,7 @@ circuitCad combines schematic capture, SPICE-style simulation, breadboard protot
 
 Project page (features, analyses, known issues and roadmap): <https://k2exter.github.io/circuitCad/en/>
 
-> **Status: early alpha.** Mainly tested on Windows (Linux: lightly checked on WSL2 only). No board made with this software has been manufactured yet. See [Limitations](#limitations) before relying on it.
+> **Status: early alpha.** Mainly tested on Windows (Linux: lightly checked on WSL2 only). A board made with this software has been manufactured and its copper checked; it has not been assembled and tested yet. See [Limitations](#limitations) before relying on it.
 
 ![A series regulator schematic with node voltages and branch currents overlaid on the wires (English UI)](docs/images/en/schematic-dc.png)
 
@@ -114,9 +114,12 @@ On Linux you also need GTK and related development packages (`libgtk-3-dev`, `li
 
 A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in [docs/code-notes/](docs/code-notes/). These are written in Japanese (code and comments are in English). How the English UI works, and how to add or fix a translation, is in [docs/code-notes/i18n.md](docs/code-notes/i18n.md) (Japanese): the Japanese text stays in the code as the key of the tables in `crates/i18n/en/*.tsv` (one `Japanese<TAB>English` per line).
 
+## Used in
+- **[Ladder Lab](https://github.com/K2EXTER/ladder-lab)**: building measuring instruments, power supplies and electronic loads from simple ones up, and using them to improve each other's accuracy. The first instrument, a DMM, was drawn in circuitCad, checked with ERC and the DC operating point, then built on a breadboard and measured (ADC-only noise 1.2 µV). The build log, mistakes included, is in [an article](https://zenn.dev/k2exter/articles/5ff24daec3b92a) (Japanese).
+
 ## Limitations
 - **Tested mainly on Windows 10 / 11.** On Linux, the author built it, launched it and tried basic operation on WSL2 (Ubuntu 26.04, no GPU) only; other distributions and real hardware are untested, and you may need GTK and related runtime libraries. macOS builds and passes the tests in CI, but nobody has launched the app there yet.
-- **No board has been manufactured from this software yet.** Gerber and drill export and the pre-order checks exist, but they are unproven in practice. For a first order, use a small quantity and check the result in the fabricator's Gerber viewer.
+- **Board output is proven only up to a delivered bare board.** A board ordered from this software's Gerber and drill files has been delivered, and its copper pattern was checked with no defects found. It has not been assembled and tested yet. For a first order, use a small quantity and check the result in the fabricator's Gerber viewer.
 - **The simulator uses simplified models** and can differ noticeably from real hardware. Each lesson explains the differences.
 - **Part data and fabricator rules are approximate.** Always check the datasheet and the fabricator's current page. A part whose land pattern has not been checked against the datasheet is flagged `land_unverified`, and the pre-order check warns about it.
 - **Do not use it as the basis for safety-critical designs** (medical, automotive, high voltage, lithium-cell chargers, and so on).
