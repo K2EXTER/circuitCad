@@ -3,6 +3,7 @@
 //! the supplies off the board; and the list to build it from (the parts' holes, the cuts, the links).
 
 use super::*;
+use sch_core::mount::{shopping, Mount};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout, At, StripLayout};
 
 /// What the person builds on.
@@ -19,6 +20,9 @@ pub enum BoardKind {
 const COPPER: Color32 = Color32::from_rgb(196, 128, 72);
 const BOARD: Color32 = Color32::from_rgb(214, 190, 140);
 const WIRE: Color32 = Color32::from_rgb(190, 196, 204);
+/// An adapter board's green, and a socket's frame.
+const ADAPTER: Color32 = Color32::from_rgb(40, 120, 70);
+const SOCKET: Color32 = Color32::from_gray(85);
 
 /// A colour for a net's links, the supplies red and ground black.
 fn net_colour(net: &str) -> Color32 {
@@ -62,8 +66,25 @@ impl BreadboardView {
             for p in &l.parts {
                 ui.horizontal_top(|ui| {
                     ui.add_sized([44.0, 18.0], egui::Label::new(egui::RichText::new(&p.refdes).strong()));
-                    ui.add(egui::Label::new(p.leads.iter().map(|(pin, at)| format!("{pin}:{}", hole_name(*at))).collect::<Vec<_>>().join("  ")).wrap());
+                    ui.vertical(|ui| {
+                        ui.add(egui::Label::new(p.leads.iter().map(|(pin, at)| format!("{pin}:{}", hole_name(*at))).collect::<Vec<_>>().join("  ")).wrap());
+                        // a socket or an adapter under the part (a leaded twin is in the list below, once for all)
+                        let how = if p.mount == Mount::Leaded { String::new() } else { p.mount.describe() };
+                        if !how.is_empty() {
+                            ui.small(egui::RichText::new(i18n::tr_dyn(&how)).color(NOTE));
+                        }
+                    });
                 });
+            }
+            let list = shopping(&l.parts.iter().map(|p| (p.refdes.clone(), p.mount.clone())).collect::<Vec<_>>());
+            if !list.is_empty() {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(i18n::tr("ソケットと変換基板")).strong()).on_hover_text(i18n::tr(
+                    "IC は基板に直接はんだ付けせず、丸ピンのソケットに差します。こての熱で傷めず、壊れたら差し替えられます。足の細かい表面実装の IC (SOP・QFN・QFP・SOT-23) は、変換基板にはんだ付けしてから、そのピンを丸ピンの連結ソケットに差します。変換基板はチップの 1 番ピンが変換基板の 1 番ピン (DIP の数え方) になるので、上の穴の表は、部品のピンの番号のままで差せます。チップ抵抗・コンデンサは、同じ値のリード部品で組めます",
+                ));
+                for (item, n, refs) in &list {
+                    ui.small(format!("{}  ×{n}  ({})", i18n::tr_dyn(item), refs.join(", ")));
+                }
             }
             if strip && !l.cuts.is_empty() {
                 ui.add_space(6.0);
@@ -154,11 +175,28 @@ impl BreadboardView {
                 continue;
             }
             let bb = Rect::from_points(&pts);
+            // an adapter board (green) or a socket's frame under the chip
+            if p.mount.width().is_some() || p.mount.one_row() {
+                let fill = if matches!(p.mount, Mount::Socket { .. }) { SOCKET } else { ADAPTER };
+                painter.rect_filled(bb.expand2(Vec2::new(pitch * 0.45, pitch * 0.5)), 2.0, fill);
+            }
             match p.look {
                 sch_core::breadboard::Look::Dip | sch_core::breadboard::Look::Row => {
                     let body = bb.expand2(Vec2::new(pitch * 0.35, pitch * 0.45));
-                    painter.rect_filled(if p.look == sch_core::breadboard::Look::Dip { body.shrink2(Vec2::new(pitch * 0.55, 0.0)) } else { body }, 2.0, Color32::from_gray(35));
-                    painter.text(body.center(), egui::Align2::CENTER_CENTER, &p.refdes, font.clone(), Color32::WHITE);
+                    match &p.mount {
+                        // the small chip in the middle of its adapter, the package's name under the reference
+                        Mount::Adapter { package, .. } => {
+                            let side = (body.width().min(body.height()) * 0.5).clamp(pitch * 0.8, pitch * 2.5);
+                            let chip = Rect::from_center_size(body.center(), Vec2::splat(side));
+                            painter.rect_filled(chip, 1.0, Color32::from_gray(30));
+                            painter.text(chip.center(), egui::Align2::CENTER_CENTER, &p.refdes, font.clone(), Color32::WHITE);
+                            painter.text(chip.center_bottom() + Vec2::new(0.0, 2.0), egui::Align2::CENTER_TOP, package, egui::FontId::proportional((pitch * 0.45).clamp(7.0, 11.0)), Color32::from_gray(225));
+                        }
+                        _ => {
+                            painter.rect_filled(if p.look == sch_core::breadboard::Look::Dip { body.shrink2(Vec2::new(pitch * 0.55, 0.0)) } else { body }, 2.0, Color32::from_gray(35));
+                            painter.text(body.center(), egui::Align2::CENTER_CENTER, &p.refdes, font.clone(), Color32::WHITE);
+                        }
+                    }
                 }
                 _ => {
                     for w in pts.windows(2) {

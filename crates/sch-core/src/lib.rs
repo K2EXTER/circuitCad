@@ -21,6 +21,7 @@ pub use pinkind::PinKind;
 pub mod system;
 pub mod breadboard;
 pub mod stripboard;
+pub mod mount;
 pub use backannotate::BackAnnotation;
 pub use bus::{bus_member, bus_members, is_bus_label, parse_bus};
 pub use hierarchy::{Instance, PortDir, SheetPort, SubRef};

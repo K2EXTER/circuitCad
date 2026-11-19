@@ -190,6 +190,8 @@ pub(crate) struct Circuit {
     /// Supply nets, the main one first (the + of the sources and the power symbols), ground apart.
     pub(crate) supplies: Vec<String>,
     pub(crate) ground: Option<String>,
+    /// How each part on the board goes on (a socket, an adapter board), by reference.
+    pub(crate) mounts: BTreeMap<String, crate::mount::Mount>,
 }
 
 pub(crate) fn read(s: &Schematic) -> Circuit {
@@ -202,6 +204,7 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
         }
     }
     let (mut on, mut off) = (vec![], vec![]);
+    let mut mounts = BTreeMap::new();
     let mut supplies: Vec<String> = vec![];
     let mut ground = None;
     let add_supply = |n: &str, supplies: &mut Vec<String>| {
@@ -239,6 +242,7 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
             _ if pins.len().is_multiple_of(2) => Look::Dip,
             _ => Look::Row,
         };
+        mounts.insert(c.refdes.clone(), crate::mount::mount_of(c, pins.len()));
         on.push((c.refdes.clone(), look, pins));
     }
     for n in &nets {
@@ -246,7 +250,7 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
             ground = Some(n.name.clone());
         }
     }
-    Circuit { on, off, supplies, ground }
+    Circuit { on, off, supplies, ground, mounts }
 }
 
 /// Places the parts of `s` on a breadboard.

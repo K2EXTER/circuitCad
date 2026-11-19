@@ -8,6 +8,7 @@
 //! On a perfboard (no strips) the same layout holds with a bare wire along each piece of strip from its first used hole to its last.
 
 use crate::breadboard::{is_ground_name, read, Look};
+use crate::mount::Mount;
 use crate::{extract, Schematic};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,6 +36,9 @@ pub struct StripPart {
     pub look: Look,
     /// Each lead's pin and hole.
     pub leads: Vec<(String, At)>,
+    /// How it goes on: in a socket, on an adapter board (a SOP on a DIP board), or straight in.
+    #[serde(default)]
+    pub mount: Mount,
 }
 
 /// A wire link between two holes (on the parts' side), carrying `net`.
@@ -220,6 +224,18 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
         homes.push(g.clone());
     }
     let row_of = |n: &str| homes.iter().position(|h| h == n).map(|r| r as u16);
+    // a socket or an adapter board decides the shape: two rows its width apart, or one row (a SIP)
+    let mount_of = |refdes: &str| c.mounts.get(refdes).cloned().unwrap_or_default();
+    let look_on = |k: usize| -> Look {
+        let (refdes, look, _) = &c.on[k];
+        let m = mount_of(refdes);
+        match *look {
+            Look::TwoLead => Look::TwoLead,
+            _ if m.width().is_some() => Look::Dip,
+            _ if m.one_row() => Look::Row,
+            other => other,
+        }
+    };
     let mut l = StripLayout { homes: homes.clone(), ..Default::default() };
     let mut taken: BTreeSet<At> = BTreeSet::new();
     // the supplies off the board: a wire into the home strip of each pin, one column each, from the left
@@ -241,20 +257,32 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
     let mut bottom = top;
     let mut piece_of_pin: BTreeMap<(String, String), Piece> = BTreeMap::new();
     let mut placed: BTreeMap<usize, Vec<(String, At)>> = BTreeMap::new();
-    for (refdes, look, pins) in chip_order(&c.on, &carry).into_iter().map(|k| &c.on[k]) {
+    for k in chip_order(&c.on, &carry) {
+        let (refdes, _, pins) = &c.on[k];
+        let look = &look_on(k);
+        let mount = mount_of(refdes);
+        // each lead's place on the socket or the adapter, by its pin number (a pin the symbol leaves out leaves its place empty)
+        let (places, slot) = mount.slots(pins);
         let mut leads = vec![];
-        let (half, two_cols) = if *look == Look::Dip { (pins.len() / 2, true) } else { (pins.len(), false) };
+        let (half, two_cols) = if *look == Look::Dip { (places.div_ceil(2), true) } else { (places, false) };
         // two spare holes at each piece's outer end when a pin is wired to other chip pins (two wire ends may share a piece)
         let spare = if pins.iter().any(|(_, n)| carry.get(n) == Some(&Carry::Pins)) { 2 } else { 0 };
         // each pin's row and side: a chip's first half down the left column, the rest up the right one (pin 1 top left)
-        let side_row = |k: usize| if k < half { (top + k as u16, true) } else { (top + (pins.len() - 1 - k) as u16, false) };
+        let side_row = |k: usize| {
+            let k = slot[k];
+            if k < half {
+                (top + k as u16, true)
+            } else {
+                (top + (places - 1 - k) as u16, false)
+            }
+        };
         // a column for the wire (or the standing part) only for the pins that go up to a home strip, in the order of their rows
         let goes_up = |n: &str| matches!(carry.get(n), Some(Carry::Home | Carry::Via(_)));
         let up_rank = |left: bool, row: u16| -> u16 { pins.iter().enumerate().filter(|(k, (_, n))| side_row(*k).1 == left && side_row(*k).0 < row && goes_up(n)).count() as u16 };
         let ups = |left: bool| pins.iter().enumerate().filter(|(k, (_, n))| side_row(*k).1 == left && goes_up(n)).count() as u16;
         let x = col + spare;
         let left_pin = x + ups(true);
-        let right_pin = left_pin + 3;
+        let right_pin = left_pin + mount.width().unwrap_or(3);
         let end = if two_cols { right_pin + ups(false) + 1 + spare } else { left_pin + 1 };
         for (k, (pin, net)) in pins.iter().enumerate() {
             let (row, left) = side_row(k);
@@ -293,7 +321,7 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
             l.cuts.insert((r, end));
         }
         bottom = bottom.max(top + half as u16);
-        l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads });
+        l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads, mount });
         // the next block starts right after this one's last cut, which also cuts the next block's rows off from this one
         col = end + 1;
     }
@@ -331,8 +359,9 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
     // the other two-lead parts: standing between the home strips of their nets, a column apart
     let mut spare = bottom + 1;
     for (k, (refdes, look, pins)) in c.on.iter().enumerate().filter(|p| p.1 .1 == Look::TwoLead) {
+        let mount = mount_of(refdes);
         if let Some(leads) = placed.remove(&k) {
-            l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads });
+            l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads, mount });
             continue;
         }
         let mut leads = vec![];
@@ -349,7 +378,7 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
             leads[1].1 .1 += 2;
             col += 2;
         }
-        l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads });
+        l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads, mount });
         // a column between two standing parts: a resistor's body is about a hole wide
         col += 2;
     }
@@ -472,6 +501,41 @@ mod tests {
         assert!(strip_check(&s, &short).iter().any(|p| p.starts_with("ショート")), "{:?}", strip_check(&s, &short));
         assert_eq!(hole_name((2, 11)), "C12");
         assert_eq!(hole_name((27, 0)), "AB1");
+    }
+}
+
+#[cfg(test)]
+mod mount_tests {
+    use super::*;
+
+    fn sample(f: &str) -> Schematic {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../docs/examples/{f}.schjson"));
+        serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+    }
+
+    /// A surface-mount chip sits on an adapter board: its pins where the adapter's pins are (by number, also when the symbol leaves
+    /// some out), the rows as far apart as the adapter's.
+    #[test]
+    fn chips_on_adapters_sit_by_pin_number() {
+        let at = |l: &StripLayout, r: &str, pin: &str| l.parts.iter().find(|p| p.refdes == r).unwrap().leads.iter().find(|(p, _)| p == pin).unwrap().1;
+        // QFN-16 with 12 pins drawn (no 3, 4, 5, 16): a DIP-16 adapter, pin 15 across from pin 2, pin 13 a row below the last pin drawn on the left (2)
+        let s = sample("tp5100_charger");
+        let l = strip_layout(&s);
+        let u1 = l.parts.iter().find(|p| p.refdes == "U1").unwrap();
+        assert_eq!(u1.mount, Mount::Adapter { package: "QFN-16".into(), pins: 16, width: 3 });
+        assert_eq!(u1.look, Look::Dip);
+        assert_eq!(at(&l, "U1", "15").0, at(&l, "U1", "2").0);
+        assert_eq!(at(&l, "U1", "13").0, at(&l, "U1", "2").0 + 2);
+        assert_eq!(at(&l, "U1", "15").1 - at(&l, "U1", "2").1, 3);
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        // TQFP-32 on a 0.6 inch adapter
+        let l = strip_layout(&sample("arduino_minimal"));
+        assert_eq!((at(&l, "U1", "1").0, at(&l, "U1", "32").1 - at(&l, "U1", "1").1), (at(&l, "U1", "32").0, 6));
+        // a SOT-223 regulator on a one-row adapter
+        let l = strip_layout(&sample("ldo_compare"));
+        let u1 = l.parts.iter().find(|p| p.refdes == "U1").unwrap();
+        assert_eq!(u1.look, Look::Row);
+        assert!(matches!(u1.mount, Mount::Adapter { width: 0, .. }));
     }
 }
 
