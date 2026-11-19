@@ -274,7 +274,7 @@ pub fn auto_layout(s: &Schematic) -> Layout {
         }
         _ => {}
     }
-    let mut b = Builder { next_col: 2, strips: BTreeMap::new(), home: BTreeMap::new(), wires: vec![], rail_used: BTreeMap::new() };
+    let mut b = Builder { next_col: 2, strips: BTreeMap::new(), home: BTreeMap::new(), wires: vec![], rail_used: BTreeMap::new(), lying: vec![] };
     let mut parts = vec![];
     // chips first, across the groove, each with a free column on both sides
     for (refdes, look, pins) in c.on.iter().filter(|p| p.1 == Look::Dip) {
@@ -352,6 +352,8 @@ struct Builder {
     wires: Vec<Wire>,
     /// Columns taken on each rail.
     rail_used: BTreeMap<Rail, BTreeSet<u16>>,
+    /// The two-lead parts lying along a row: (row, first column, last column). Two bodies on one row must not overlap.
+    lying: Vec<(u8, u16, u16)>,
 }
 
 impl Builder {
@@ -521,7 +523,7 @@ impl Builder {
                         if ua != uz || ca == cz {
                             continue;
                         }
-                        if let Some(r) = self.common_row(*na, *nz) {
+                        if let Some(r) = self.clear_row(*na, *nz) {
                             let d = ca.abs_diff(cz);
                             if best.is_none_or(|b| d < b.0) {
                                 best = Some((d, *na, *nz, r));
@@ -532,24 +534,37 @@ impl Builder {
                 let (na, nz, row) = match best {
                     Some((_, na, nz, r)) => (na, nz, r),
                     None => {
-                        // a new strip for one net beside a strip of the other, in its half
-                        let (na, nz) = match (sa.first(), sz.first()) {
+                        // a new strip for one net beside a strip of the other, in its half, when the part lies there clear of the
+                        // others on its row
+                        let near = match (sa.first(), sz.first()) {
                             (Some(&na), _) => {
                                 let upper = matches!(na, Node::Strip { upper: true, .. });
-                                (na, self.new_strip(z, upper))
+                                let nz = self.new_strip(z, upper);
+                                (na, nz)
                             }
                             (None, Some(&nz)) => {
                                 let upper = matches!(nz, Node::Strip { upper: true, .. });
                                 (self.new_strip(a, upper), nz)
                             }
-                            (None, None) => (self.new_strip(a, true), self.new_strip(z, true)),
+                            (None, None) => (self.new_strip(a, true), self.fresh_strip_after_gap(z, true)),
                         };
-                        let row = self.common_row(na, nz).or_else(|| self.free_row(na)).unwrap_or(0);
-                        (na, nz, row)
+                        match self.clear_row(near.0, near.1) {
+                            Some(r) => (near.0, near.1, r),
+                            None => {
+                                // crowded (a row of resistors from a decoder to a display, all crossing one another): a fresh strip
+                                // for each net, a gap apart, joined to their nets by jumpers, the part lying between them
+                                let upper = matches!(near.0, Node::Strip { upper: true, .. });
+                                let na = self.new_strip(a, upper);
+                                let nz = self.fresh_strip_after_gap(z, upper);
+                                let row = self.clear_row(na, nz).or_else(|| self.free_row(na)).unwrap_or(0);
+                                (na, nz, row)
+                            }
+                        }
                     }
                 };
                 let ha = self.hole_in(na, row);
                 let hz = self.hole_in(nz, row);
+                self.lying.push((row, ha.col().min(hz.col()), ha.col().max(hz.col())));
                 [ha, hz]
             }
         }
@@ -579,13 +594,23 @@ impl Builder {
         Self::rows(n).contains(&row) && !self.strips.get(&n).is_some_and(|e| e.1.contains(&row))
     }
 
-    /// A row free in both strips (of one half), the one farthest from the groove first.
-    fn common_row(&self, a: Node, z: Node) -> Option<u8> {
+    /// A new strip for `net` after a gap of two columns: a part lying from the strip before reaches over the gap, as a resistor's
+    /// body takes a few holes.
+    fn fresh_strip_after_gap(&mut self, net: &str, upper: bool) -> Node {
+        self.next_col += 2;
+        self.new_strip(net, upper)
+    }
+
+    /// A row free in both strips (of one half), the one farthest from the groove first, where a part lying between the two strips
+    /// would not overlap one already lying on that row.
+    fn clear_row(&self, a: Node, z: Node) -> Option<u8> {
+        let (Node::Strip { col: ca, .. }, Node::Strip { col: cz, .. }) = (a, z) else { return None };
+        let (lo, hi) = (ca.min(cz), ca.max(cz));
         let mut rows: Vec<u8> = Self::rows(a).collect();
         if matches!(a, Node::Strip { upper: false, .. }) {
             rows.reverse();
         }
-        rows.into_iter().find(|r| self.row_free(a, *r) && self.row_free(z, *r))
+        rows.into_iter().find(|r| self.row_free(a, *r) && self.row_free(z, *r) && !self.lying.iter().any(|(lr, l, h)| lr == r && lo < *h && *l < hi))
     }
 
     /// A jumper from `from` (in strip `node`) to the latest other strip of `net` that has a free hole (a chain, so no strip fills up
@@ -941,6 +966,34 @@ mod tests {
         }
         assert!(n > 50, "{n} samples");
         assert!(bad.is_empty(), "{} of {n}:\n{}", bad.len(), bad.join("\n"));
+    }
+
+    /// Two-lead parts lying along one row never overlap (their bodies would collide), in any sample: the decoder's seven resistors
+    /// to the display used to lie on top of one another along row a.
+    #[test]
+    fn lying_parts_never_overlap_on_a_row() {
+        let mut bad = vec![];
+        for (name, s) in examples() {
+            let l = auto_layout(&s);
+            let lying: Vec<(&str, u8, u16, u16)> = l
+                .parts
+                .iter()
+                .filter(|p| p.look == Look::TwoLead && p.leads.len() == 2)
+                .filter_map(|p| match (p.leads[0].1, p.leads[1].1) {
+                    (Hole::Strip { col: a, row: ra }, Hole::Strip { col: b, row: rb }) if ra == rb && a != b => Some((p.refdes.as_str(), ra, a.min(b), a.max(b))),
+                    _ => None,
+                })
+                .collect();
+            for (i, x) in lying.iter().enumerate() {
+                for y in &lying[i + 1..] {
+                    if x.1 == y.1 && x.2 < y.3 && y.2 < x.3 {
+                        bad.push(format!("{name}: {} and {} on row {}", x.0, y.0, x.1));
+                    }
+                }
+            }
+        }
+        assert!(bad.is_empty(), "{}", bad.join("
+"));
     }
 
     #[test]
