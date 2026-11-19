@@ -826,6 +826,12 @@ impl eframe::App for App {
         }
         if self.mode == Mode::Proto {
             egui::Panel::left("proto_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.breadboard.panel(ui, &mut self.sch));
+            if std::mem::take(&mut self.breadboard.want_live_logic) {
+                if !self.sch.live_logic_active() {
+                    self.sch.start_live_logic();
+                }
+                self.mode = Mode::Schematic;
+            }
             let focus = self.sch.focus().part;
             egui::CentralPanel::default().show(ui, |ui| self.breadboard.canvas(ui, &mut self.sch, focus.as_deref()));
             // a part picked on the breadboard is the one the schematic and the board show

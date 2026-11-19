@@ -1,0 +1,1311 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "VCK",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 1u 1u 0.5 1)",
+      "pos": [
+        0,
+        30
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "SW1",
+      "kind": "Custom",
+      "value": "SW_SLIDE",
+      "pos": [
+        20,
+        55
+      ],
+      "rot": 0,
+      "footprint": "SW_Slide_SPDT_P2.54",
+      "custom": {
+        "name": "SW_SLIDE",
+        "prefix": "SW",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "COM",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "B",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "SW_SLIDE",
+          "text": ".subckt SW_SLIDE a com b\n* the lever is at B while Vpos is 1 V (0 V = at A): the live logic view of the schematic flips it on a click\nS1 com a pos 0 SWTOA\nS2 com b pos 0 SWTOB\nVpos pos 0 0\n.model SWTOA SW(RON=0.05 ROFF=1G VT=0.5 VW=-0.1)\n.model SWTOB SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends SW_SLIDE",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {},
+          "limits": [
+            "つながっている側は 0.05Ω、もう一方は 1GΩ の理想のスイッチです。実物は、切り替える瞬間に接点が跳ねたり (チャタリング)、どちらにもつながらない一瞬があったりします。このモデルは一度に切り替わります。",
+            "ふつうの解析 (DC・過渡など) では、A 側につないだまま計算します。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "学習用の理想のスイッチ (2.54mm 間隔の 3 ピンのスライドスイッチ)"
+          }
+        },
+        "ratings": {
+          "v_max": 30.0,
+          "i_max": 0.3,
+          "rows": [
+            {
+              "name": "定格",
+              "value": "30V 0.3A",
+              "condition": "DC (小形のスライドスイッチの代表値)"
+            }
+          ]
+        },
+        "glyph": "switch_spdt"
+      }
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "74HC164",
+      "pos": [
+        50,
+        25
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC164",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "QA",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "QB",
+            "side": "right"
+          },
+          {
+            "number": "5",
+            "name": "QC",
+            "side": "right"
+          },
+          {
+            "number": "6",
+            "name": "QD",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "CLK",
+            "side": "left"
+          },
+          {
+            "number": "9",
+            "name": "CLR",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "QE",
+            "side": "right"
+          },
+          {
+            "number": "11",
+            "name": "QF",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "QG",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "QH",
+            "side": "right"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC164",
+          "text": "* 74HC164 behavioural model: an 8-bit serial-in parallel-out shift register. The serial input is A AND B; CLR low clears at once. Delay 23 ns (the data sheet SCLS115, 4.5 V, 25 C typical; CLR to Q 28 ns).\n.subckt 74HC164 a b qa qb qc qd gnd clk clr qe qf qg qh vcc\nYd0 and d0 0 gnd vcc 60 0.5 0 0 0 a b\nYF0 dff qa 0 gnd vcc 60 0.5 0 0 1 td=23n d0 clk 0 clr\nYF1 dff qb 0 gnd vcc 60 0.5 0 0 1 td=23n qa clk 0 clr\nYF2 dff qc 0 gnd vcc 60 0.5 0 0 1 td=23n qb clk 0 clr\nYF3 dff qd 0 gnd vcc 60 0.5 0 0 1 td=23n qc clk 0 clr\nYF4 dff qe 0 gnd vcc 60 0.5 0 0 1 td=23n qd clk 0 clr\nYF5 dff qf 0 gnd vcc 60 0.5 0 0 1 td=23n qe clk 0 clr\nYF6 dff qg 0 gnd vcc 60 0.5 0 0 1 td=23n qf clk 0 clr\nYF7 dff qh 0 gnd vcc 60 0.5 0 0 1 td=23n qg clk 0 clr\n.ends 74HC164",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+            "遅延は、クロック→Q 23ns の代表値です (4.5V・25℃ のデータシートの値。CLR→Q は 28ns ですが、同じ値で近似しています)。",
+            "扱わないもの: 入力容量、電源電流、セットアップ/ホールド時間の点検。",
+            "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力は約 60 Ω、遅れは 5 V・25 °C の代表値)"
+          }
+        },
+        "glyph": "shift_reg"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        2
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        2
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        18
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        18
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        34
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D3",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        34
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        50
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D4",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        50
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R5",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        66
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D5",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        66
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R6",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        82
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D6",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        82
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R7",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        98
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D7",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        98
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R8",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        90,
+        114
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D8",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        104,
+        114
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        28
+      ],
+      "b": [
+        0,
+        25
+      ]
+    },
+    {
+      "a": [
+        0,
+        32
+      ],
+      "b": [
+        0,
+        35
+      ]
+    },
+    {
+      "a": [
+        24,
+        54
+      ],
+      "b": [
+        27,
+        54
+      ]
+    },
+    {
+      "a": [
+        16,
+        55
+      ],
+      "b": [
+        13,
+        55
+      ]
+    },
+    {
+      "a": [
+        24,
+        56
+      ],
+      "b": [
+        27,
+        56
+      ]
+    },
+    {
+      "a": [
+        46,
+        22
+      ],
+      "b": [
+        43,
+        22
+      ]
+    },
+    {
+      "a": [
+        46,
+        24
+      ],
+      "b": [
+        43,
+        24
+      ]
+    },
+    {
+      "a": [
+        54,
+        18
+      ],
+      "b": [
+        57,
+        18
+      ]
+    },
+    {
+      "a": [
+        54,
+        20
+      ],
+      "b": [
+        57,
+        20
+      ]
+    },
+    {
+      "a": [
+        54,
+        22
+      ],
+      "b": [
+        57,
+        22
+      ]
+    },
+    {
+      "a": [
+        54,
+        24
+      ],
+      "b": [
+        57,
+        24
+      ]
+    },
+    {
+      "a": [
+        50,
+        35
+      ],
+      "b": [
+        50,
+        38
+      ]
+    },
+    {
+      "a": [
+        46,
+        26
+      ],
+      "b": [
+        43,
+        26
+      ]
+    },
+    {
+      "a": [
+        46,
+        28
+      ],
+      "b": [
+        43,
+        28
+      ]
+    },
+    {
+      "a": [
+        54,
+        26
+      ],
+      "b": [
+        57,
+        26
+      ]
+    },
+    {
+      "a": [
+        54,
+        28
+      ],
+      "b": [
+        57,
+        28
+      ]
+    },
+    {
+      "a": [
+        54,
+        30
+      ],
+      "b": [
+        57,
+        30
+      ]
+    },
+    {
+      "a": [
+        54,
+        32
+      ],
+      "b": [
+        57,
+        32
+      ]
+    },
+    {
+      "a": [
+        50,
+        15
+      ],
+      "b": [
+        50,
+        12
+      ]
+    },
+    {
+      "a": [
+        90,
+        0
+      ],
+      "b": [
+        90,
+        -3
+      ]
+    },
+    {
+      "a": [
+        90,
+        4
+      ],
+      "b": [
+        90,
+        7
+      ]
+    },
+    {
+      "a": [
+        102,
+        2
+      ],
+      "b": [
+        99,
+        2
+      ]
+    },
+    {
+      "a": [
+        106,
+        2
+      ],
+      "b": [
+        109,
+        2
+      ]
+    },
+    {
+      "a": [
+        90,
+        16
+      ],
+      "b": [
+        90,
+        13
+      ]
+    },
+    {
+      "a": [
+        90,
+        20
+      ],
+      "b": [
+        90,
+        23
+      ]
+    },
+    {
+      "a": [
+        102,
+        18
+      ],
+      "b": [
+        99,
+        18
+      ]
+    },
+    {
+      "a": [
+        106,
+        18
+      ],
+      "b": [
+        109,
+        18
+      ]
+    },
+    {
+      "a": [
+        90,
+        32
+      ],
+      "b": [
+        90,
+        29
+      ]
+    },
+    {
+      "a": [
+        90,
+        36
+      ],
+      "b": [
+        90,
+        39
+      ]
+    },
+    {
+      "a": [
+        102,
+        34
+      ],
+      "b": [
+        99,
+        34
+      ]
+    },
+    {
+      "a": [
+        106,
+        34
+      ],
+      "b": [
+        109,
+        34
+      ]
+    },
+    {
+      "a": [
+        90,
+        48
+      ],
+      "b": [
+        90,
+        45
+      ]
+    },
+    {
+      "a": [
+        90,
+        52
+      ],
+      "b": [
+        90,
+        55
+      ]
+    },
+    {
+      "a": [
+        102,
+        50
+      ],
+      "b": [
+        99,
+        50
+      ]
+    },
+    {
+      "a": [
+        106,
+        50
+      ],
+      "b": [
+        109,
+        50
+      ]
+    },
+    {
+      "a": [
+        90,
+        64
+      ],
+      "b": [
+        90,
+        61
+      ]
+    },
+    {
+      "a": [
+        90,
+        68
+      ],
+      "b": [
+        90,
+        71
+      ]
+    },
+    {
+      "a": [
+        102,
+        66
+      ],
+      "b": [
+        99,
+        66
+      ]
+    },
+    {
+      "a": [
+        106,
+        66
+      ],
+      "b": [
+        109,
+        66
+      ]
+    },
+    {
+      "a": [
+        90,
+        80
+      ],
+      "b": [
+        90,
+        77
+      ]
+    },
+    {
+      "a": [
+        90,
+        84
+      ],
+      "b": [
+        90,
+        87
+      ]
+    },
+    {
+      "a": [
+        102,
+        82
+      ],
+      "b": [
+        99,
+        82
+      ]
+    },
+    {
+      "a": [
+        106,
+        82
+      ],
+      "b": [
+        109,
+        82
+      ]
+    },
+    {
+      "a": [
+        90,
+        96
+      ],
+      "b": [
+        90,
+        93
+      ]
+    },
+    {
+      "a": [
+        90,
+        100
+      ],
+      "b": [
+        90,
+        103
+      ]
+    },
+    {
+      "a": [
+        102,
+        98
+      ],
+      "b": [
+        99,
+        98
+      ]
+    },
+    {
+      "a": [
+        106,
+        98
+      ],
+      "b": [
+        109,
+        98
+      ]
+    },
+    {
+      "a": [
+        90,
+        112
+      ],
+      "b": [
+        90,
+        109
+      ]
+    },
+    {
+      "a": [
+        90,
+        116
+      ],
+      "b": [
+        90,
+        119
+      ]
+    },
+    {
+      "a": [
+        102,
+        114
+      ],
+      "b": [
+        99,
+        114
+      ]
+    },
+    {
+      "a": [
+        106,
+        114
+      ],
+      "b": [
+        109,
+        114
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        25
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        0,
+        35
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        54
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        13,
+        55
+      ],
+      "text": "DATA"
+    },
+    {
+      "pos": [
+        27,
+        56
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        43,
+        22
+      ],
+      "text": "DATA"
+    },
+    {
+      "pos": [
+        43,
+        24
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        57,
+        18
+      ],
+      "text": "QA"
+    },
+    {
+      "pos": [
+        57,
+        20
+      ],
+      "text": "QB"
+    },
+    {
+      "pos": [
+        57,
+        22
+      ],
+      "text": "QC"
+    },
+    {
+      "pos": [
+        57,
+        24
+      ],
+      "text": "QD"
+    },
+    {
+      "pos": [
+        50,
+        38
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        43,
+        26
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        43,
+        28
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        57,
+        26
+      ],
+      "text": "QE"
+    },
+    {
+      "pos": [
+        57,
+        28
+      ],
+      "text": "QF"
+    },
+    {
+      "pos": [
+        57,
+        30
+      ],
+      "text": "QG"
+    },
+    {
+      "pos": [
+        57,
+        32
+      ],
+      "text": "QH"
+    },
+    {
+      "pos": [
+        50,
+        12
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        90,
+        -3
+      ],
+      "text": "QA"
+    },
+    {
+      "pos": [
+        90,
+        7
+      ],
+      "text": "LQA"
+    },
+    {
+      "pos": [
+        99,
+        2
+      ],
+      "text": "LQA"
+    },
+    {
+      "pos": [
+        109,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        13
+      ],
+      "text": "QB"
+    },
+    {
+      "pos": [
+        90,
+        23
+      ],
+      "text": "LQB"
+    },
+    {
+      "pos": [
+        99,
+        18
+      ],
+      "text": "LQB"
+    },
+    {
+      "pos": [
+        109,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        29
+      ],
+      "text": "QC"
+    },
+    {
+      "pos": [
+        90,
+        39
+      ],
+      "text": "LQC"
+    },
+    {
+      "pos": [
+        99,
+        34
+      ],
+      "text": "LQC"
+    },
+    {
+      "pos": [
+        109,
+        34
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        45
+      ],
+      "text": "QD"
+    },
+    {
+      "pos": [
+        90,
+        55
+      ],
+      "text": "LQD"
+    },
+    {
+      "pos": [
+        99,
+        50
+      ],
+      "text": "LQD"
+    },
+    {
+      "pos": [
+        109,
+        50
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        61
+      ],
+      "text": "QE"
+    },
+    {
+      "pos": [
+        90,
+        71
+      ],
+      "text": "LQE"
+    },
+    {
+      "pos": [
+        99,
+        66
+      ],
+      "text": "LQE"
+    },
+    {
+      "pos": [
+        109,
+        66
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        77
+      ],
+      "text": "QF"
+    },
+    {
+      "pos": [
+        90,
+        87
+      ],
+      "text": "LQF"
+    },
+    {
+      "pos": [
+        99,
+        82
+      ],
+      "text": "LQF"
+    },
+    {
+      "pos": [
+        109,
+        82
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        93
+      ],
+      "text": "QG"
+    },
+    {
+      "pos": [
+        90,
+        103
+      ],
+      "text": "LQG"
+    },
+    {
+      "pos": [
+        99,
+        98
+      ],
+      "text": "LQG"
+    },
+    {
+      "pos": [
+        109,
+        98
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        90,
+        109
+      ],
+      "text": "QH"
+    },
+    {
+      "pos": [
+        90,
+        119
+      ],
+      "text": "LQH"
+    },
+    {
+      "pos": [
+        99,
+        114
+      ],
+      "text": "LQH"
+    },
+    {
+      "pos": [
+        109,
+        114
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

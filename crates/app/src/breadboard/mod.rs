@@ -40,6 +40,8 @@ pub enum Tool {
 
 #[derive(Default)]
 pub struct BreadboardView {
+    /// "回路図の上で動かす" was pressed: the app starts the digital live mode on the schematic tab (`schematic/live_logic.rs`).
+    pub want_live_logic: bool,
     /// The layout made from the schematic when none is saved, and the schematic's edit count it was made at.
     auto: Option<(u64, usize, Layout)>,
     drag: Option<Drag>,
@@ -271,6 +273,13 @@ impl BreadboardView {
         if ui.button(power_label).on_hover_text(i18n::tr("電源を入れると、回路が時間とともに動き出します (過渡解析を実時間で進め続けます)。計算するのはブレッドボードに差したとおりの回路なので、回路図と違う差し方なら、そのとおりに動いたり壊れたりします。LED は流れる電流で光り、スイッチと押しボタンはクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます (実物なら壊れるところ)")).clicked() {
             self.powered = !self.powered;
             self.dc_asked = false;
+        }
+        if ui
+            .button(i18n::tr("デジタル回路を回路図の上で動かす"))
+            .on_hover_text(i18n::tr("回路図のタブに移って、デジタル回路を動かしながら見ます。配線が High / Low の色になり、真理値表・ロジックアナライザ・フリップフロップの記憶・7 セグメントの表示・グリッチの印が出ます (ブレッドボードの絵より、信号の流れが追いやすい形)"))
+            .clicked()
+        {
+            self.want_live_logic = true;
         }
         // the meter with the power off reads the schematic's DC point (what the board will read once it is switched on)
         if !self.powered && self.tool == Tool::Meter && sch.bench_voltages().is_none() && !self.dc_asked && problems.is_empty() {

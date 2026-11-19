@@ -133,3 +133,4 @@
 
 - `inrush.schjson`(生成 `write_inrush_example`、2026-11-19): 突入電流 (T3) のサンプル。V1=12V → D1=1N4007 (定格 1 A) → VD (C1=EEUFR1C102 1000µ) → U1=LM7805 (CI 330n・CO 100n) → 5V (I1=100mA)。電源の抵抗 0.1 Ω でピーク 68 A・I²t 0.38 A²s・0.4 ms、D1 が定格を超える、NTC の目安 11.9 Ω。1 Ω で 10.4 A・0.059 A²s。ERC の指摘なし。テスト `the_sample_shows_a_large_inrush`・`inrush_sample_is_what_the_generator_makes`。
 - `seg7_counter.schjson`(生成 `write_seg7_counter_example`、2026-11-19): 7 セグメントで数える (B8)。開くと「デジタル回路を動かす」。74HC161 + 74HC00 (10 でクリア) + CD4511B + 470Ω × 7 + SEG7_CC_0.56。詳細は `docs/code-notes/app/live-logic.md`。
+- `shift_register.schjson`・`traffic_light.schjson`(生成 `write_live_logic_more_examples`、2026-11-19): シフトレジスタ (74HC164) と信号機 (74HC4017 + ダイオード OR)。開くと「デジタル回路を動かす」。詳細は `docs/code-notes/app/live-logic.md`。

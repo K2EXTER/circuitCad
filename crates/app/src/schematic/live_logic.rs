@@ -30,6 +30,24 @@ const HISTORY: f64 = 30.0;
 const TRUTH_INPUTS: usize = 4;
 /// An LED lights when its anode is this much above its cathode.
 const LED_ON_V: f64 = 1.2;
+
+/// A pulse on a logic net shorter than this (simulated seconds) is a glitch: a gate saw its inputs change one after the other.
+const GLITCH_MAX: f64 = 100e-9;
+
+/// How long (screen seconds) a glitch stays marked on its wires.
+const GLITCH_SHOW: f64 = 4.0;
+
+/// How many digital events a frame solves one by one (to see short pulses) before it jumps to the frame's time.
+const EVENTS_PER_FRAME: usize = 400;
+
+/// A short pulse seen on a net: its width (s) and when it was seen (screen seconds).
+#[derive(Clone, Debug)]
+pub(super) struct Glitch {
+    pub net: String,
+    pub width: f64,
+    pub high: bool,
+    pub seen: f64,
+}
 /// The speed of the clock: the range of the knob (Hz).
 pub(super) const HZ_RANGE: (f64, f64) = (0.5, 10.0);
 
@@ -127,11 +145,21 @@ pub(crate) struct LiveLogic {
     pub(super) seg7s: Vec<Seg7>,
     /// The stored states of the flip-flops of each part (refdes, the states in the order of their cells' names).
     pub(super) memory: Vec<(String, Vec<bool>)>,
+    /// Per logic net: its level, when it last changed (simulated s) and the level before that, to find short pulses.
+    edges: BTreeMap<String, (Level, f64, Level)>,
+    /// The nets the clocks drive: their pulses are made short on purpose ("1 クロック"), not glitches.
+    clock_nets: BTreeSet<String>,
+    /// The glitches seen lately, newest last.
+    pub(super) glitches: Vec<Glitch>,
+    /// The flip-flops' timing violations so far (setup, hold, pulse width): one line each.
+    pub(super) races: Vec<String>,
     /// The net of every wire, and of every pin of a logic part off the supply (component, point, net).
     wire_net: Vec<Option<String>>,
     pin_nets: Vec<(usize, Pt, String)>,
     /// The level of every net now, and the High level of the logic.
     levels: BTreeMap<String, Level>,
+    /// The voltage of those nets now, for the ones between Low and High (an RC on its way, a pull-up against a load).
+    volts: BTreeMap<String, f64>,
     vdd: f64,
     pub(super) running: bool,
     pub(super) slow: bool,
@@ -288,9 +316,14 @@ impl LiveLogic {
             leds,
             seg7s,
             memory: vec![],
+            edges: BTreeMap::new(),
+            clock_nets: clock_nets.into_iter().collect(),
+            glitches: vec![],
+            races: vec![],
             wire_net,
             pin_nets,
             levels: BTreeMap::new(),
+            volts: BTreeMap::new(),
             vdd: 5.0,
             running: true,
             slow: false,
@@ -379,13 +412,77 @@ impl LiveLogic {
         if t > run.stop_time() {
             run.extend(t * 2.0);
         }
-        if let Err(e) = run.advance_to(t) {
+        // event by event (a few hundred at most per frame), looking at the logic nets after each: a pulse of a few nanoseconds
+        // falls between two points of an ordinary step and would go unseen
+        let th = logic_plot::thresholds(self.vdd);
+        let watch: Vec<String> = self.wire_net.iter().flatten().chain(self.pin_nets.iter().map(|p| &p.2)).filter(|n| !self.clock_nets.contains(*n)).cloned().collect::<BTreeSet<_>>().into_iter().collect();
+        let mut seen: Vec<(f64, Vec<Level>)> = vec![];
+        let mut result = Ok(());
+        for k in 0..EVENTS_PER_FRAME {
+            // a switch or a clock just changed: nothing is waiting yet until its line has been solved once (1 ns on)
+            let next = match run.next_digital_event() {
+                None if k == 0 && run.time() + 1e-9 < t => Some(run.time() + 1e-9 - EVENT_PAST),
+                e => e,
+            };
+            match next {
+                Some(te) if te + EVENT_PAST < t => {
+                    result = run.advance_to(te + EVENT_PAST);
+                    if result.is_err() {
+                        break;
+                    }
+                    seen.push((run.time(), watch.iter().map(|n| logic_plot::level(run.voltage(n).unwrap_or(0.0), th)).collect()));
+                }
+                _ => break,
+            }
+        }
+        if result.is_ok() {
+            result = run.advance_to(t);
+            seen.push((run.time(), watch.iter().map(|n| logic_plot::level(run.voltage(n).unwrap_or(0.0), th)).collect()));
+        }
+        if let Err(e) = result {
             self.error = Some(format!("計算が止まりました: {e}"));
             self.run = None;
             return;
         }
-        // the voltages are read at the end of the frame; the points solved on the way are not kept
+        // the points solved on the way are not kept
         let _ = run.drain();
+        for (time, levels) in seen {
+            for (net, lv) in watch.iter().zip(levels) {
+                if lv == Level::Mid {
+                    continue;
+                }
+                match self.edges.get_mut(net) {
+                    None => {
+                        self.edges.insert(net.clone(), (lv, time, lv));
+                    }
+                    Some(e) if e.0 != lv => {
+                        // back to the level it had before a change shortly ago: a pulse of that width
+                        if lv == e.2 && time - e.1 < GLITCH_MAX && time > e.1 {
+                            self.glitches.push(Glitch { net: net.clone(), width: time - e.1, high: e.0 == Level::High, seen: self.wall });
+                        }
+                        *e = (lv, time, e.0);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let wall = self.wall;
+        self.glitches.retain(|g| wall - g.seen < GLITCH_SHOW);
+        if self.glitches.len() > 20 {
+            self.glitches.drain(..self.glitches.len() - 20);
+        }
+        self.races = run
+            .timing_violations()
+            .iter()
+            .map(|v| {
+                let what = match v.kind {
+                    sim_core::TimingKind::Setup => tr("セットアップ時間の違反 (クロックの直前にデータが変わった)"),
+                    sim_core::TimingKind::Hold => tr("ホールド時間の違反 (クロックの直後にデータが変わった)"),
+                    sim_core::TimingKind::PulseWidth => tr("パルス幅の違反 (クロックが短すぎる)"),
+                };
+                trf!("{}: {} ({} 回)", v.cell, what, v.count)
+            })
+            .collect();
         self.dirty = false;
     }
 
@@ -464,8 +561,10 @@ impl LiveLogic {
         let v = |n: &str| volts.get(n).copied().unwrap_or(0.0);
         self.levels.clear();
         let names: BTreeSet<&String> = self.wire_net.iter().flatten().chain(self.pin_nets.iter().map(|p| &p.2)).chain(self.watched.iter()).collect();
+        self.volts.clear();
         for n in names {
             self.levels.insert(n.clone(), logic_plot::level(v(n), th));
+            self.volts.insert(n.clone(), v(n));
         }
         for l in &mut self.leds {
             let a = l.anode.as_deref().map_or(0.0, v);
@@ -642,6 +741,17 @@ impl SchEditor {
                 painter.circle_filled(p, 0.8 * z, on);
             }
         }
+        // a glitch: the wires of its net glow for a while, fading
+        for g in &ll.glitches {
+            let fade = (1.0 - (ll.wall - g.seen) / GLITCH_SHOW).clamp(0.0, 1.0) as f32;
+            let colour = crate::canvas_theme::col(crate::canvas_theme::Role::Error).gamma_multiply(0.25 + 0.5 * fade);
+            for (w, net) in self.sch.wires.iter().zip(&ll.wire_net) {
+                if net.as_deref() == Some(g.net.as_str()) {
+                    let (a, b) = (self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32)));
+                    painter.line_segment([a, b], Stroke::new(0.6 * z, colour));
+                }
+            }
+        }
         for s in &ll.seg7s {
             let Some(c) = self.sch.components.iter().find(|c| c.refdes == s.refdes) else { continue };
             let on = crate::canvas_theme::col(crate::canvas_theme::Role::LedOn);
@@ -704,10 +814,11 @@ impl SchEditor {
                 let p = self.to_screen(rect, (pt.0 as f32, pt.1 as f32));
                 // outside the body: away from the centre of the part
                 let away = if pt.0 < c.pos.0 { -1.0 } else { 1.0 };
+                // between Low and High: the voltage itself (an RC charging, a divided level), which is neither 0 nor 1
                 let text = match lv {
-                    Level::High => "1",
-                    Level::Low => "0",
-                    Level::Mid => "X",
+                    Level::High => "1".to_string(),
+                    Level::Low => "0".to_string(),
+                    Level::Mid => ll.volts.get(net).map_or("X".to_string(), |v| format!("{v:.1}V")),
                 };
                 painter.text(p + egui::vec2(0.0, -0.6 * z) + egui::vec2(away * 0.1 * z, 0.0), egui::Align2::CENTER_BOTTOM, text, font.clone(), level_colour(lv));
             }
@@ -774,6 +885,15 @@ impl SchEditor {
                         stop = true;
                     }
                 });
+                if let Some(g) = ll.glitches.last() {
+                    let level = if g.high { "High" } else { "Low" };
+                    ui.label(egui::RichText::new(trf!("グリッチ: {} が {} だけ {} になりました (線が赤く光っています)", g.net, sim_core::format_time(g.width), level)).color(crate::theme::WARN))
+                        .on_hover_text(tr("ゲートの入力が少しずれて変わると、出力に一瞬だけ違う値が出ます (グリッチ)。この線をクロックやクリアにつなぐと、数えたり消えたりしてしまいます。「ゆっくり」で、どの順に変わったかを見られます"));
+                }
+                for r in ll.races.iter().take(3) {
+                    ui.label(egui::RichText::new(trf!("競合: {}", r)).color(crate::theme::ERROR))
+                        .on_hover_text(tr("フリップフロップは、クロックの前後の決まった時間はデータが変わらないことを求めます。破ると、0 と 1 のどちらを覚えるか決まりません (実物では、どちらになるか分かりません)"));
+                }
             });
         });
         // the logic analyser and the truth table
@@ -952,6 +1072,59 @@ mod tests {
         assert_eq!(bits.len(), 4);
         let value: u32 = bits.iter().enumerate().map(|(k, b)| (*b as u32) << k).sum();
         assert_eq!(value, *seen.last().unwrap(), "{bits:?}");
+    }
+
+    /// 9 -> 0 of the decade counter goes through 10 for a moment: the NAND pulls the clear low for a few nanoseconds. That pulse is
+    /// a glitch on CLR_N, and the counter's own flip-flops break no timing rule.
+    #[test]
+    fn the_asynchronous_clear_is_seen_as_a_glitch() {
+        let mut e = editor("seg7_counter");
+        let ll = e.live_logic.as_mut().unwrap();
+        for _ in 0..12 {
+            ll.step_clock();
+        }
+        let nets: Vec<(&str, f64)> = ll.glitches.iter().map(|g| (g.net.as_str(), g.width)).collect();
+        assert!(ll.glitches.iter().any(|g| g.net == "CLR_N" && !g.high && g.width < 50e-9), "{nets:?}");
+        assert!(ll.races.is_empty(), "{:?}", ll.races);
+    }
+
+    /// The shift register: with SW1 on, each clock moves a 1 one place further along QA..QH.
+    #[test]
+    fn the_shift_register_moves_its_pattern_one_place_per_clock() {
+        let mut e = editor("shift_register");
+        let ll = e.live_logic.as_mut().unwrap();
+        let sw = ll.input_index("SW1").unwrap();
+        ll.set_input(sw, true);
+        ll.tick(0.05);
+        for n in 1..=3 {
+            ll.step_clock();
+            let lit: Vec<bool> = ll.leds.iter().map(|l| l.lit).collect();
+            assert_eq!(lit.iter().take_while(|x| **x).count(), n, "after {n} clocks: {lit:?}");
+        }
+        // a 0 in: the ones move on, a gap behind them
+        ll.set_input(sw, false);
+        ll.tick(0.05);
+        ll.step_clock();
+        let lit: Vec<bool> = ll.leds.iter().map(|l| l.lit).collect();
+        assert_eq!(&lit[..5], &[false, true, true, true, false], "{lit:?}");
+    }
+
+    /// The traffic light: green for four clocks, yellow for one, red for five.
+    #[test]
+    fn the_traffic_light_goes_green_yellow_red() {
+        let mut e = editor("traffic_light");
+        let ll = e.live_logic.as_mut().unwrap();
+        let names: Vec<String> = ll.leds.iter().map(|l| l.name.clone()).collect();
+        let colour = |ll: &LiveLogic| ll.leds.iter().filter(|l| l.lit).map(|l| l.name.clone()).collect::<Vec<_>>();
+        let mut seen = vec![colour(ll)];
+        for _ in 0..10 {
+            ll.step_clock();
+            seen.push(colour(ll));
+        }
+        let one = |k: usize| seen[k].join("+");
+        let order: Vec<String> = (0..11).map(one).collect();
+        assert_eq!(&order[..10], &["GREEN", "GREEN", "GREEN", "GREEN", "Q4", "RED", "RED", "RED", "RED", "RED"], "{names:?} {order:?}");
+        assert_eq!(order[10], "GREEN");
     }
 }
 

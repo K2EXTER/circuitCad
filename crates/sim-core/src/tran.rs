@@ -637,6 +637,11 @@ impl TranRun {
         self.cm.dig_next_any_event()
     }
 
+    /// The setup, hold and pulse-width violations of the flip-flops so far (what `finish` reports), for a run that goes on.
+    pub fn timing_violations(&self) -> Vec<TimingViolation> {
+        if self.cm.has_cells() { self.cm.timing_report().violations } else { vec![] }
+    }
+
     /// The largest supply (volts between the two supply pins) of the digital cells now: the High level of the logic.
     pub fn logic_supply(&self) -> Option<f64> {
         self.cm.dig_supply_max()

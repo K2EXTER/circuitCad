@@ -1170,6 +1170,75 @@ fn seg7_counter_schematic() -> sch_core::Schematic {
     s
 }
 
+/// The shift register sample (B8): a slide switch SW1 sets the data DATA, the clock VCK shifts it into a 74HC164, an LED on each of
+/// QA..QH: one clock moves the pattern one place along.
+fn shift_register_schematic() -> sch_core::Schematic {
+    let (mut s, place) = live_base();
+    let vck = s.add(Kind::VSource, (0, 30), 0);
+    s.components[vck].refdes = "VCK".into();
+    s.components[vck].value = "PULSE(0 5 0 1u 1u 0.5 1)".into();
+    side_label(&mut s, vck, "+", "CLK");
+    side_label(&mut s, vck, "-", "GND");
+    let sw = place(&mut s, "SW_SLIDE", (20, 55));
+    side_label(&mut s, sw, "1", "GND");
+    side_label(&mut s, sw, "2", "DATA");
+    side_label(&mut s, sw, "3", "VCC");
+    let u = place(&mut s, "74HC164", (50, 25));
+    for (pin, net) in [("1", "DATA"), ("2", "VCC"), ("3", "QA"), ("4", "QB"), ("5", "QC"), ("6", "QD"), ("7", "GND"), ("8", "CLK"), ("9", "VCC"), ("10", "QE"), ("11", "QF"), ("12", "QG"), ("13", "QH"), ("14", "VCC")] {
+        side_label(&mut s, u, pin, net);
+    }
+    for (k, q) in ["QA", "QB", "QC", "QD", "QE", "QF", "QG", "QH"].iter().enumerate() {
+        live_led(&mut s, q, (90, 2 + 16 * k as i32));
+    }
+    s
+}
+
+/// The traffic light sample (B8): the clock VCK steps a 74HC4017 through 10 states; Q0..Q3 light green (through diodes, an OR of
+/// four outputs), Q4 yellow, Q5..Q9 red (an OR of five).
+fn traffic_light_schematic() -> sch_core::Schematic {
+    let (mut s, place) = live_base();
+    let vck = s.add(Kind::VSource, (0, 30), 0);
+    s.components[vck].refdes = "VCK".into();
+    s.components[vck].value = "PULSE(0 5 0 1u 1u 0.5 1)".into();
+    side_label(&mut s, vck, "+", "CLK");
+    side_label(&mut s, vck, "-", "GND");
+    let u = place(&mut s, "74HC4017", (35, 25));
+    for (pin, net) in [("1", "Q5"), ("2", "Q1"), ("3", "Q0"), ("4", "Q2"), ("5", "Q6"), ("6", "Q7"), ("7", "Q3"), ("8", "GND"), ("9", "Q8"), ("10", "Q4"), ("11", "Q9"), ("12", "CO"), ("13", "GND"), ("14", "CLK"), ("15", "GND"), ("16", "VCC")] {
+        side_label(&mut s, u, pin, net);
+    }
+    let mut row = 0;
+    for (colour, outs) in [("GREEN", &["Q0", "Q1", "Q2", "Q3"][..]), ("RED", &["Q5", "Q6", "Q7", "Q8", "Q9"][..])] {
+        for q in outs {
+            let d = s.add(Kind::Diode, (75, 2 + 7 * row), 0);
+            side_label(&mut s, d, "A", q);
+            side_label(&mut s, d, "K", colour);
+            row += 1;
+        }
+    }
+    live_led(&mut s, "GREEN", (105, 5));
+    live_led(&mut s, "Q4", (105, 25));
+    live_led(&mut s, "RED", (105, 45));
+    s
+}
+
+/// Generates docs/examples/shift_register.schjson and traffic_light.schjson: `cargo test -p app write_live_logic_more_examples -- --ignored`
+#[test]
+#[ignore]
+fn write_live_logic_more_examples() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("shift_register.schjson"), serde_json::to_string_pretty(&shift_register_schematic()).unwrap()).unwrap();
+    std::fs::write(root.join("traffic_light.schjson"), serde_json::to_string_pretty(&traffic_light_schematic()).unwrap()).unwrap();
+}
+
+#[test]
+fn live_logic_more_samples_are_what_the_generator_makes() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    for (file, made) in [("shift_register", shift_register_schematic()), ("traffic_light", traffic_light_schematic())] {
+        let s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join(format!("{file}.schjson"))).unwrap()).unwrap();
+        assert_eq!(s, made, "regenerate with write_live_logic_more_examples");
+    }
+}
+
 /// Generates docs/examples/seg7_counter.schjson: `cargo test -p app write_seg7_counter_example -- --ignored`
 #[test]
 #[ignore]
