@@ -82,6 +82,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 ## ドキュメント・サンプル
 - `docs/code-notes/` コードの詳細メモ。`sim-core.md` `pcb-core.md` `app.md` は目次で、話題ごとのファイル(`sim-core/` `pcb-core/` `app/`)に分けてある。ほかに `samples.md` `cli.md` `part-lib.md` `crates.md`
+- `docs/features.md` 実装済みの機能の一覧(使う人から見た「何ができるか・どこから使うか」、タブの順。候補を選ぶ前に「もうあるか」をここで確かめる)
 - `docs/candidates.md` 機能の候補と優先順位(次に何を作るかの一覧。着手したら該当行を消す)
 - `docs/competitor-comparison.md` 他の電気CADとの機能比較 / `docs/quality-bench.md` 配置・配線の質を前後で比べる道具(配置・自動配線を変えたら、前後で回して `problems` が 0 のままか確かめる) / `tools/sim_compare.py` シミュレータの答え・波形・速さを前後で比べる道具(sim-core を変えたら前後で回す。`.claude/skills/sim-compare`)
 - `docs/routing-guidelines.md` 配線の考え方 / `docs/learning-path.md` 学習パス / `docs/board-editor.md` 基板の使い方 / `docs/library.md` 部品ライブラリ / `docs/part-format.md` 部品JSON形式
@@ -99,4 +100,4 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - ボタン・入力欄には `on_hover_text` で説明を付ける。エラーメッセージは原因と対処が分かる日本語で。
 - 回路図の変更はフレームごとの比較(`schematic/history.rs`)でUndoに入る。`self.sch` を直接変えれば自動で履歴になる。基板は変更前に `checkpoint()` を呼ぶ。
 - 自動配線・自動再計算のように「結果を採用する前に検証する」処理は、失敗時に元の状態を変えないこと。
-- 新しい機能を足したら、詳細を `docs/code-notes/` の該当する話題のファイルに書き(1ファイルが大きくなったら話題で分ける)、CLAUDE.md には地図の1行だけ足す(長い説明をここに戻さない)。
+- 新しい機能を足したら、詳細を `docs/code-notes/` の該当する話題のファイルに書き(1ファイルが大きくなったら話題で分ける)、`docs/features.md` に使う人から見た 1 行を足し(解析と `ccad` の命令は書き忘れるとテスト `every_analysis_and_command_is_in_the_feature_list` が落ちる)、CLAUDE.md には地図の1行だけ足す(長い説明をここに戻さない)。

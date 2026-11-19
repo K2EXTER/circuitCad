@@ -1,3 +1,4 @@
+mod features;
 mod examples;
 mod converge;
 mod flow;
