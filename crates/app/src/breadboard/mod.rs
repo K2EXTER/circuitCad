@@ -59,6 +59,8 @@ pub enum Tool {
 pub struct BreadboardView {
     /// Breadboard, stripboard or perfboard (B5).
     pub kind: BoardKind,
+    /// The stripboard / perfboard view's tools, drag and caches (`strip_view.rs`).
+    pub strip: strip_view::StripState,
     /// "回路図の上で動かす" was pressed: the app starts the digital live mode on the schematic tab (`schematic/live_logic.rs`).
     pub want_live_logic: bool,
     /// The layout made from the schematic when none is saved, and the schematic's edit count it was made at.
@@ -1156,6 +1158,9 @@ impl BreadboardView {
 
     /// The status line's hint.
     pub fn hint(&self) -> String {
+        if self.kind != BoardKind::Breadboard {
+            return "部品・線の端は穴ごとにドラッグで動かせます。何も無い所から四角で囲むと、中をまとめて動かせます。動かすたびに、左で回路図と照らし合わせます".into();
+        }
         "縦の 5 つの穴は中でつながっています。ポインタを穴に合わせると、つながっている穴が光ります。部品をドラッグすると差し替えられ、回路図と違うつなぎ方は赤い丸と左の一覧で分かります".into()
     }
 }
@@ -1697,6 +1702,55 @@ mod tests {
         run(&mut app, vec![egui::Event::PointerMoved(at)]);
         run(&mut app, vec![egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: Vec2::new(0.0, 1.0), phase: egui::TouchPhase::Move, modifiers: Default::default() }]);
         assert!((knob(&app) - 0.65).abs() < 1e-6, "a notch up: {}", knob(&app));
+    }
+
+    /// On the stripboard, a part dragged by the pointer moves by whole holes and the layout is kept with the sheet; the check then
+    /// finds what the move broke; a click of the cut tool cuts a strip; "自動で並べ直す" (None) gives the automatic layout back.
+    #[test]
+    fn a_part_dragged_on_the_stripboard_stays_and_is_checked() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.kind = BoardKind::Stripboard;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        let auto = sch_core::stripboard::strip_layout(&app.sch.sch);
+        let (origin, pitch) = app.breadboard.strip.drawn.expect("the board was drawn");
+        let hole = |a: sch_core::stripboard::At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch;
+        // a standing two-lead part, pressed on its middle (between its leads, away from the links' ends)
+        let part = auto.parts.iter().find(|p| p.leads.len() == 2 && p.leads[0].1 .1 == p.leads[1].1 .1 && p.leads[1].1 .0.abs_diff(p.leads[0].1 .0) >= 2).expect("a standing part");
+        let (a, b) = (hole(part.leads[0].1), hole(part.leads[1].1));
+        let at = a + (b - a) * 0.5;
+        let button = |pos: Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, vec![button(at, true)]);
+        let to = at + Vec2::new(pitch * 2.0, 0.0);
+        run(&mut app, vec![egui::Event::PointerMoved(to)]);
+        run(&mut app, vec![button(to, false)]);
+        let saved = app.sch.stripboard.clone().expect("the moved layout is kept");
+        let moved = saved.parts.iter().find(|p| p.refdes == part.refdes).unwrap();
+        assert_eq!(moved.leads[0].1, (part.leads[0].1 .0, part.leads[0].1 .1 + 2), "two holes right");
+        let saved_text = crate::schematic::SheetSettings { stripboard: Some(saved.clone()), ..Default::default() };
+        let mut v = serde_json::json!({});
+        crate::schematic::with_settings(&mut v, &saved_text);
+        assert_eq!(crate::schematic::take_settings(&mut v).stripboard, Some(saved.clone()), "saved with the sheet");
+        // the cut tool: a click on a free hole of the bottom row cuts it
+        app.breadboard.strip.tool = strip_view::StripTool::Cut;
+        let free = (saved.rows - 1, saved.cols - 1);
+        run(&mut app, vec![egui::Event::PointerMoved(hole(free))]);
+        run(&mut app, vec![button(hole(free), true)]);
+        run(&mut app, vec![button(hole(free), false)]);
+        assert!(app.sch.stripboard.as_ref().unwrap().cuts.contains(&free));
+        app.sch.stripboard = None;
+        run(&mut app, vec![]);
+        assert_eq!(app.breadboard.strip_shown(&app.sch), auto);
     }
 
     #[test]
