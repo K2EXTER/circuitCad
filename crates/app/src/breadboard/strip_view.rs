@@ -6,7 +6,7 @@ use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_link, without_link};
-use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, At, StripLayout, StripOptions};
+use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, At, StripLayout, StripOptions};
 
 /// What the person builds on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -211,6 +211,20 @@ impl BreadboardView {
                 ui.colored_label(BAD, i18n::trf!("・{}", i18n::tr_dyn(p)));
             }
         }
+        let rules = strip_rules(&sch.sch, &l);
+        if !l.sections.is_empty() || !rules.is_empty() {
+            ui.label(egui::RichText::new(i18n::tr("区画とつなぎ方の決まり")).strong()).on_hover_text(i18n::tr(
+                "回路図の「設計の要件」の表から: 「近くに置く組」で「区画」に印を付けた組ごとにまとめて置き、区画の間は帯を切ります。GND は区画ごとに 1 本の線で、表のいちばん上の区画の GND の帯 (1 点) へ戻します。「離す」の行は、基板の上のいちばん近い穴どうしの距離で確かめます",
+            ));
+            if !l.sections.is_empty() {
+                ui.small(l.sections.iter().map(|(n, a, b)| format!("{n} ({} – {})", hole_name(*a), hole_name(*b))).collect::<Vec<_>>().join("、"));
+            }
+            for r in &rules {
+                ui.colored_label(if r.ok { crate::theme::OK } else { crate::theme::WARN }, format!("{} {}", if r.ok { "✔" } else { "▲" }, i18n::tr_dyn(&r.message)));
+            }
+        } else {
+            ui.small(i18n::tr("区画に分けるには、回路図の「設計の要件」→「近くに置く組」で組を作り、「区画」に印を付けます"));
+        }
         ui.small(i18n::trf!("大きさ: {} 列 × {} 行 (2.54mm の間隔で {:.0} × {:.0} mm)", l.cols, l.rows, l.cols as f32 * 2.54, l.rows as f32 * 2.54));
         if ui
             .button(i18n::tr("印刷用の図を保存 (表と裏)"))
@@ -383,6 +397,16 @@ impl BreadboardView {
             for e in [k.a, k.b] {
                 painter.circle_filled(to(e), pitch * 0.17, c);
             }
+        }
+        // the sections: a frame and the name above it, and the strips' names at each section's left end
+        for (name, a, b) in &l.sections {
+            let r = Rect::from_two_pos(to(*a), to(*b)).expand(pitch * 0.45);
+            painter.rect_stroke(r, 2.0, Stroke::new(1.5, Color32::from_rgb(90, 90, 200)), egui::StrokeKind::Outside);
+            painter.text(r.left_top() + Vec2::new(2.0, -2.0), egui::Align2::LEFT_BOTTOM, name, font.clone(), Color32::from_rgb(150, 160, 255));
+        }
+        for (a, n) in &l.names {
+            let named = if net_colour(n) == Color32::from_gray(30) { Color32::from_gray(20) } else { net_colour(n) };
+            painter.text(to(*a) + Vec2::new(-pitch * 0.4, -pitch * 0.32), egui::Align2::LEFT_BOTTOM, n, egui::FontId::proportional((pitch * 0.42).clamp(7.0, 11.0)), named);
         }
         // the picked part and link, the box, the first end of a link being drawn
         if let Some(p) = self.picked.as_ref().and_then(|r| l.parts.iter().find(|p| &p.refdes == r)) {

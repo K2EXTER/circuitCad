@@ -122,6 +122,19 @@ pub fn strip_svg(l: &StripLayout, face: Face, perf: bool, title: &str) -> String
         let (x, y) = xy((0, c));
         let _ = writeln!(s, r#"<text x="{x:.2}" y="{:.2}" font-size="1.8" text-anchor="middle">{}</text>"#, y - 2.4, c + 1);
     }
+    // the sections: a frame and the name above it (both faces), the strips' names at each section's left end (the parts' side)
+    for (name, a, b) in &l.sections {
+        let ((ax, ay), (bx, by)) = (xy(*a), xy(*b));
+        let (lo, hi) = (ax.min(bx), ax.max(bx));
+        let _ = writeln!(s, r##"<rect x="{:.2}" y="{:.2}" width="{:.2}" height="{:.2}" fill="none" stroke="#4455bb" stroke-width="0.35" stroke-dasharray="1.5 0.8"/>"##, lo - 1.4, ay - 1.4, hi - lo + 2.8, by - ay + 2.8);
+        let _ = writeln!(s, r##"<text x="{:.2}" y="{:.2}" font-size="2" fill="#4455bb">{}</text>"##, lo - 1.2, ay - 1.8, esc(name));
+    }
+    if face == Face::Parts {
+        for (a, n) in &l.names {
+            let (x, y) = xy(*a);
+            let _ = writeln!(s, r#"<text x="{:.2}" y="{:.2}" font-size="1.3" fill="{}">{}</text>"#, x - 0.9, y - 0.7, net_colour(n), esc(n));
+        }
+    }
     match face {
         Face::Copper => {
             if !perf {

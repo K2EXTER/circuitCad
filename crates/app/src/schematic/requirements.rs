@@ -476,8 +476,8 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                 ui.scope(|ui| {
                     crate::icons::help_small(ui, "端子のそばの保護、小さくしたいループなど、近くにあるべき部品を組にします。", "基板の自動配置は、組の部品を1つの塊にして並べます。基板の画面では、組が上限より広がっていないかを調べます。上限を 0 にすると、チェックはしません (自動配置では塊にします)");
                     let mut remove = None;
-                    egui::Grid::new("req_group_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                        for h in ["名前", "部品 (, 区切り)", "上限", "理由", ""] {
+                    egui::Grid::new("req_group_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
+                        for h in ["名前", "部品 (, 区切り)", "上限", "区画", "理由", ""] {
                             ui.strong(i18n::tr(h));
                         }
                         ui.end_row();
@@ -493,6 +493,10 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                             let before = g.max_dist;
                             number_cell(ui, &mut g.max_dist, " mm", 0.5, "組の中でいちばん離れた2つの部品の、中心どうしの距離の上限。0 はチェックなし");
                             changed |= before != g.max_dist;
+                            changed |= ui
+                                .checkbox(&mut g.section, "")
+                                .on_hover_text(i18n::tr("ストリップ基板・ユニバーサル基板 (試作のタブ) で、この組を 1 つの区画にします。区画ごとにまとめて置き、区画の間は帯を切り、GND は区画ごとに別の線で、表のいちばん上の区画の GND (1 点) へ戻します。アナログ・リレー・電源と制御のように分けます"))
+                                .changed();
                             if let Some(t) = reason_cell(ui, buf, (1, k, 2), &g.note, 440.0, "なぜ近くに置くかの理由 (例: 電流の輪を小さくしてノイズを減らす)") {
                                 g.note = t;
                                 changed = true;
@@ -880,7 +884,7 @@ fn a_list_is_read_back_without_blanks() {
 #[test]
 fn the_table_survives_a_round_trip_through_the_file() {
         let mut s = Schematic::default();
-        s.requirements.groups.push(PlaceGroup { name: "入口".into(), parts: vec!["J3A".into(), "ZT1".into()], max_dist: 40.0, note: "保護".into() });
+        s.requirements.groups.push(PlaceGroup { name: "入口".into(), parts: vec!["J3A".into(), "ZT1".into()], max_dist: 40.0, note: "保護".into(), ..Default::default() });
         s.requirements.net_rules.push(NetRule { name: "検出".into(), nets: vec!["SA".into()], role: "sense".into(), width: 0.25, ..Default::default() });
         let back: Schematic = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(back.requirements, s.requirements);

@@ -73,6 +73,10 @@ pub struct PlaceGroup {
     /// How far (mm) apart the farthest two parts of the group may be (the centres); 0 = as close as they go.
     pub max_dist: f64,
     pub note: String,
+    /// A section of a board built by hand (stripboard, perfboard): its parts go together, its strips are cut off from the other
+    /// sections', and its ground goes back to the one ground point by a wire of its own.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub section: bool,
 }
 
 /// Two sets that keep their distance (a switching node from the reference and the sensing lines).
@@ -328,7 +332,7 @@ mod tests {
     fn a_waiver_covers_its_row_and_is_checked_against_the_rows() {
         let mut spec = DesignSpec {
             bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into(), "C2".into()], note: "n".into() }],
-            groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["R1".into()], max_dist: 5.0, note: "n".into() }],
+            groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["R1".into()], max_dist: 5.0, note: "n".into(), ..Default::default() }],
             ..Default::default()
         };
         spec.waivers.push(Waiver { kind: "bypass".into(), name: "U1".into(), item: "C2".into(), note: "配線の都合".into() });
@@ -372,7 +376,7 @@ mod tests {
     fn an_empty_table_is_not_written_and_a_full_one_comes_back() {
         let empty = DesignSpec::default();
         assert!(empty.is_empty());
-        let spec = DesignSpec { groups: vec![PlaceGroup { name: "g".into(), parts: vec!["R1".into()], max_dist: 5.0, note: "n".into() }], ..Default::default() };
+        let spec = DesignSpec { groups: vec![PlaceGroup { name: "g".into(), parts: vec!["R1".into()], max_dist: 5.0, note: "n".into(), ..Default::default() }], ..Default::default() };
         let back: DesignSpec = serde_json::from_str(&serde_json::to_string(&spec).unwrap()).unwrap();
         assert_eq!(back, spec);
     }

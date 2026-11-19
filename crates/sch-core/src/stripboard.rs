@@ -64,6 +64,12 @@ pub struct StripLayout {
     pub links: Vec<Link>,
     /// The parts off the board (supplies, sources): each pin, its net and the hole its wire goes to.
     pub off: Vec<(String, Vec<OffWire>)>,
+    /// The sections (the requirements table's groups marked as one): each name and its corners (top left, bottom right).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sections: Vec<(String, At, At)>,
+    /// The strips' names written where a section's strip starts (with sections, `homes` is empty: rows side by side differ).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub names: Vec<(At, String)>,
 }
 
 impl StripLayout {
@@ -194,6 +200,154 @@ struct Block {
 /// The strips of one net in different bands are joined by wires at the left, beside the wires of the supplies off the board.
 pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let c = read(s);
+    let secs = sections(s, &c);
+    if secs.len() < 2 {
+        return lay(&c, opt, &BTreeSet::new());
+    }
+    lay_sections(&c, opt, &secs)
+}
+
+/// The sections of the board: the requirements table's groups marked as sections, in the table's order, with the parts on the board
+/// that are in them (a part in two goes with the first); the parts in none make one more section at the end ("その他").
+fn sections(s: &Schematic, c: &crate::breadboard::Circuit) -> Vec<(String, BTreeSet<String>)> {
+    let on: BTreeSet<&String> = c.on.iter().map(|p| &p.0).collect();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut out: Vec<(String, BTreeSet<String>)> = vec![];
+    for g in s.requirements.groups.iter().filter(|g| g.section) {
+        let parts: BTreeSet<String> = g.parts.iter().filter(|p| on.contains(p) && !seen.contains(*p)).cloned().collect();
+        if parts.is_empty() {
+            continue;
+        }
+        seen.extend(parts.iter().cloned());
+        out.push((g.name.clone(), parts));
+    }
+    if out.is_empty() {
+        return out;
+    }
+    let rest: BTreeSet<String> = c.on.iter().map(|p| p.0.clone()).filter(|r| !seen.contains(r)).collect();
+    if !rest.is_empty() {
+        out.push(("その他".into(), rest));
+    }
+    out
+}
+
+/// Each section laid out by itself, the sections side by side (wrapped past the board's width), every strip cut between two
+/// sections. A net in more than one section has a strip in each, joined by a wire from section to section; ground instead goes
+/// from each section's strip by a wire of its own to the ground strip of the first section that has one (the one ground point: the
+/// return current of one section does not flow through another's ground).
+fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(String, BTreeSet<String>)]) -> StripLayout {
+    let nets_of = |parts: &BTreeSet<String>| -> BTreeSet<String> { c.on.iter().filter(|p| parts.contains(&p.0)).flat_map(|p| p.2.iter().map(|x| x.1.clone())).filter(|n| !n.is_empty()).collect() };
+    let sec_nets: Vec<BTreeSet<String>> = secs.iter().map(|(_, p)| nets_of(p)).collect();
+    // an off-board part goes with the section that has the most of its nets
+    let off_sec: Vec<usize> = c
+        .off
+        .iter()
+        .map(|(_, pins)| (0..secs.len()).max_by_key(|i| (pins.iter().filter(|(_, n)| sec_nets[*i].contains(n)).count(), std::cmp::Reverse(*i))).unwrap_or(0))
+        .collect();
+    let mut nets_in: Vec<BTreeSet<String>> = sec_nets.clone();
+    for (k, (_, pins)) in c.off.iter().enumerate() {
+        nets_in[off_sec[k]].extend(pins.iter().map(|(_, n)| n.clone()).filter(|n| !n.is_empty()));
+    }
+    let shared = |n: &String, i: usize| (0..secs.len()).any(|j| j != i && nets_in[j].contains(n));
+    let mut subs: Vec<StripLayout> = vec![];
+    for (i, (_, parts)) in secs.iter().enumerate() {
+        let sub = crate::breadboard::Circuit {
+            on: c.on.iter().filter(|p| parts.contains(&p.0)).cloned().collect(),
+            off: c.off.iter().enumerate().filter(|(k, _)| off_sec[*k] == i).map(|(_, o)| o.clone()).collect(),
+            supplies: c.supplies.clone(),
+            ground: c.ground.clone(),
+            mounts: c.mounts.clone(),
+        };
+        let external: BTreeSet<String> = nets_in[i].iter().filter(|n| shared(n, i)).cloned().collect();
+        subs.push(lay(&sub, opt, &external));
+    }
+    // the sections side by side, a column between (cut on every row), a new shelf past the board's width
+    let mut out = StripLayout::default();
+    let (mut x, mut y, mut shelf_h) = (0u16, 0u16, 0u16);
+    let mut shelf_gaps: Vec<u16> = vec![];
+    let mut origin: Vec<(u16, u16)> = vec![];
+    let close_shelf = |out: &mut StripLayout, y: u16, h: u16, gaps: &mut Vec<u16>| {
+        for g in gaps.drain(..) {
+            for r in y..y + h {
+                out.cuts.insert((r, g));
+            }
+        }
+    };
+    for (i, l) in subs.iter().enumerate() {
+        if let Some(w) = opt.cols
+            && x > 0
+            && x + l.cols > w
+        {
+            close_shelf(&mut out, y, shelf_h, &mut shelf_gaps);
+            shelf_gaps.clear();
+            y += shelf_h + 1;
+            x = 0;
+            shelf_h = 0;
+        }
+        let at = |a: At| (a.0 + y, a.1 + x);
+        for p in &l.parts {
+            let mut p = p.clone();
+            for (_, a) in &mut p.leads {
+                *a = at(*a);
+            }
+            out.parts.push(p);
+        }
+        for k in &l.links {
+            out.links.push(Link { a: at(k.a), b: at(k.b), net: k.net.clone() });
+        }
+        out.cuts.extend(l.cuts.iter().map(|c| at(*c)));
+        for (r, pins) in &l.off {
+            out.off.push((r.clone(), pins.iter().map(|(p, n, a)| (p.clone(), n.clone(), at(*a))).collect()));
+        }
+        for (r, n) in l.homes.iter().enumerate().filter(|(_, n)| !n.is_empty()) {
+            out.names.push(((r as u16 + y, x), n.clone()));
+        }
+        out.sections.push((secs[i].0.clone(), (y, x), (y + l.rows - 1, x + l.cols - 1)));
+        origin.push((y, x));
+        shelf_h = shelf_h.max(l.rows);
+        x += l.cols;
+        shelf_gaps.push(x);
+        x += 1;
+    }
+    shelf_gaps.pop();
+    close_shelf(&mut out, y, shelf_h, &mut shelf_gaps);
+    // the nets shared by sections: a wire between their strips (ground: each to the first section's)
+    let strip_row = |i: usize, n: &str| subs[i].homes.iter().position(|h| h == n).map(|r| r as u16 + origin[i].0);
+    let mut taken: BTreeSet<At> = out.used().into_iter().map(|(a, _)| a).collect();
+    let free_on = |i: usize, row: u16, toward: u16, taken: &mut BTreeSet<At>, cuts: &BTreeSet<At>| -> Option<At> {
+        let (x0, x1) = (origin[i].1, origin[i].1 + subs[i].cols - 1);
+        let mut cols: Vec<u16> = (x0..=x1).collect();
+        cols.sort_by_key(|c| c.abs_diff(toward));
+        let a = cols.into_iter().map(|c| (row, c)).find(|a| !taken.contains(a) && !cuts.contains(a))?;
+        taken.insert(a);
+        Some(a)
+    };
+    let mut nets: Vec<&String> = nets_in.iter().flatten().collect();
+    nets.sort();
+    nets.dedup();
+    for n in nets {
+        let have: Vec<usize> = (0..secs.len()).filter(|i| strip_row(*i, n).is_some()).collect();
+        if have.len() < 2 {
+            continue;
+        }
+        let pairs: Vec<(usize, usize)> = if is_ground_name(n) { have[1..].iter().map(|j| (have[0], *j)).collect() } else { have.windows(2).map(|w| (w[0], w[1])).collect() };
+        for (i, j) in pairs {
+            let (ri, rj) = (strip_row(i, n).unwrap(), strip_row(j, n).unwrap());
+            let (ci, cj) = (origin[i].1, origin[j].1);
+            if let (Some(a), Some(b)) = (free_on(i, ri, cj, &mut taken, &out.cuts), free_on(j, rj, ci, &mut taken, &out.cuts)) {
+                out.links.push(Link { a, b, net: n.clone() });
+            }
+        }
+    }
+    let far = out.used().into_iter().map(|(a, _)| a).chain(out.cuts.iter().copied()).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
+    out.rows = far.0.max(y + shelf_h.max(1) - 1) + 1;
+    out.cols = far.1 + 1;
+    out
+}
+
+/// Lays out one section (or the whole board): `external` are the nets that also go to other sections (they get a strip in the top
+/// band, as the supplies do).
+fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<String>) -> StripLayout {
     let mut order: Vec<String> = vec![];
     let mut members: BTreeMap<String, Members> = BTreeMap::new();
     let seen = |n: &str, order: &mut Vec<String>| {
@@ -218,6 +372,11 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
         for (_, n) in pins.iter().filter(|(_, n)| !n.is_empty()) {
             seen(n, &mut order);
             members.entry(n.clone()).or_default().off = true;
+        }
+    }
+    for n in external {
+        if let Some(m) = members.get_mut(n) {
+            m.off = true;
         }
     }
     let other_net = |k: usize, n: &str| c.on[k].2.iter().map(|(_, m)| m.clone()).find(|m| m != n && !m.is_empty());
@@ -387,6 +546,10 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
             for (_, n) in pins.iter().filter(|(_, n)| carry.get(n) == Some(&Carry::Home)) {
                 band_nets[0].insert(n.clone());
             }
+        }
+        // a net that goes on to another section: a strip at the top, where the wire from the other section comes in
+        for n in external.iter().filter(|n| carry.get(*n) == Some(&Carry::Home)) {
+            band_nets[0].insert(n.clone());
         }
         // the two-lead parts not standing in a pin's place: into a band that has both their nets (the one with the fewest parts),
         // else one of them, else the top band
@@ -710,6 +873,84 @@ pub fn strip_check(s: &Schematic, l: &StripLayout) -> Vec<String> {
     problems
 }
 
+/// How a rule of the requirements table fares on the board: its line, and whether it holds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RuleCheck {
+    pub ok: bool,
+    pub message: String,
+}
+
+/// The requirements table's rules that a board built by hand can keep: the distances to keep (`KeepApart`: the closest two holes of
+/// the two sets, 2.54 mm a hole) and, with sections, the one ground point (every section's ground goes back to the first section's
+/// ground strip by a wire of its own).
+pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
+    let mut out = vec![];
+    let nets = extract(&s.flat());
+    let net_of = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin)).map(|n| n.name.clone()).unwrap_or_default();
+    // the holes of an item: a part's leads, or everything on a net (leads, the ends of its wires)
+    let holes_of = |items: &[String]| -> Vec<At> {
+        let mut v = vec![];
+        for item in items {
+            if let Some(p) = l.parts.iter().find(|p| &p.refdes == item) {
+                v.extend(p.leads.iter().map(|(_, a)| *a));
+                continue;
+            }
+            for p in &l.parts {
+                v.extend(p.leads.iter().filter(|(pin, _)| design_spec::matches_name(item, &net_of(&p.refdes, pin))).map(|(_, a)| *a));
+            }
+            for k in l.links.iter().filter(|k| design_spec::matches_name(item, &k.net)) {
+                v.push(k.a);
+                v.push(k.b);
+            }
+        }
+        v
+    };
+    for rule in &s.requirements.apart {
+        let (a, b) = (holes_of(&rule.a), holes_of(&rule.b));
+        let closest = a.iter().flat_map(|x| b.iter().map(move |y| (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54)).filter(|d| *d > 0.0).fold(f64::INFINITY, f64::min);
+        if !closest.is_finite() {
+            continue;
+        }
+        let ok = closest >= rule.min_dist;
+        let name = if rule.name.is_empty() { format!("{} と {}", rule.a.join(","), rule.b.join(",")) } else { rule.name.clone() };
+        out.push(RuleCheck {
+            ok,
+            message: if ok {
+                format!("離す「{name}」: いちばん近い所で {closest:.1} mm ({:.1} mm 以上)", rule.min_dist)
+            } else {
+                format!("離す「{name}」: いちばん近い所が {closest:.1} mm で、{:.1} mm に足りません。部品か線を、四角で囲んで離してください", rule.min_dist)
+            },
+        });
+    }
+    if l.sections.len() > 1 {
+        let inside = |k: usize, a: At| {
+            let (_, p, q) = &l.sections[k];
+            a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1
+        };
+        let hub = l.sections.iter().position(|(_, p, q)| l.names.iter().any(|(a, n)| is_ground_name(n) && a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1));
+        if let Some(h) = hub {
+            for k in (0..l.sections.len()).filter(|k| *k != h) {
+                let has_ground = l.names.iter().any(|(a, n)| is_ground_name(n) && inside(k, *a));
+                if !has_ground {
+                    continue;
+                }
+                let back = l.links.iter().filter(|w| is_ground_name(&w.net) && ((inside(h, w.a) && inside(k, w.b)) || (inside(h, w.b) && inside(k, w.a)))).count();
+                let other = l.links.iter().filter(|w| is_ground_name(&w.net) && (inside(k, w.a) != inside(k, w.b)) && !(inside(h, w.a) || inside(h, w.b))).count();
+                let ok = back == 1 && other == 0;
+                out.push(RuleCheck {
+                    ok,
+                    message: if ok {
+                        format!("GND: 「{}」の GND は、1 本の線で「{}」の GND の帯 (1 点) へ戻ります", l.sections[k].0, l.sections[h].0)
+                    } else {
+                        format!("GND: 「{}」の GND から「{}」の GND への線が {back} 本、ほかの区画への線が {other} 本あります。1 点へ 1 本で戻すと、ほかの区画の電流が GND を通りません", l.sections[k].0, l.sections[h].0)
+                    },
+                });
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -833,3 +1074,50 @@ mod size_tests {
     }
 }
 
+
+#[cfg(test)]
+mod section_tests {
+    use super::*;
+
+    /// Two sections from the requirements table: each laid out by itself side by side, every strip cut between them, joined as the
+    /// schematic joins them; ground goes back from the second section to the first's ground strip by a wire of its own.
+    #[test]
+    fn sections_are_cut_apart_and_ground_meets_at_one_point() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/seg7_counter.schjson");
+        let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("カウンタ", &["U1", "U3"]), group("表示", &["U2", "DS1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"])];
+        for cols in [None, Some(40)] {
+            let l = strip_layout_with(&s, StripOptions { cols });
+            assert!(strip_check(&s, &l).is_empty(), "{cols:?}: {:?}", strip_check(&s, &l));
+            assert_eq!(l.sections.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["カウンタ", "表示"]);
+            let inside = |k: usize, a: At| {
+                let (_, p, q) = &l.sections[k];
+                a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1
+            };
+            // every part inside its own section
+            for p in &l.parts {
+                let k = if ["U1", "U3"].contains(&p.refdes.as_str()) { 0 } else { 1 };
+                assert!(p.leads.iter().all(|(_, a)| inside(k, *a)), "{} outside {}", p.refdes, l.sections[k].0);
+            }
+            // the ground wires between sections all end on the first section's ground strip
+            let gnd: Vec<&Link> = l.links.iter().filter(|k| is_ground_name(&k.net) && (inside(0, k.a) != inside(0, k.b))).collect();
+            assert_eq!(gnd.len(), 1, "{cols:?}: one ground wire back to the first section");
+            // side by side: every row cut between them
+            let (_, _, q0) = l.sections[0];
+            let (_, p1, _) = l.sections[1];
+            if p1.0 == l.sections[0].1 .0 {
+                assert!((p1.0..=q0.0).all(|r| l.cuts.contains(&(r, q0.1 + 1))), "the strips cut between the sections");
+            }
+        }
+        // the one ground point holds; a distance to keep between the two sections' chips is measured
+        s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["U1".into()], b: vec!["DS1".into()], min_dist: 500.0, ..Default::default() }];
+        let l = strip_layout(&s);
+        let rules = strip_rules(&s, &l);
+        assert!(rules.iter().any(|r| r.ok && r.message.starts_with("GND")), "{rules:?}");
+        assert!(rules.iter().any(|r| !r.ok && r.message.contains("離す")), "500 mm is not kept: {rules:?}");
+        // without sections marked the board is laid out as one
+        s.requirements.groups.iter_mut().for_each(|g| g.section = false);
+        assert!(strip_layout(&s).sections.is_empty());
+    }
+}
