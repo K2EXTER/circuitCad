@@ -125,7 +125,7 @@ impl App {
 
 fn look_tab(ui: &mut egui::Ui, p: &mut Prefs, restart_note: bool) {
     // written in both languages on purpose, so it can be found whichever one is showing
-    ui.label("Language / 言語");
+    ui.label(i18n::tr("Language / 言語"));
     ui.horizontal(|ui| {
         for (l, name) in [(i18n::Lang::Ja, "日本語"), (i18n::Lang::En, "English")] {
             if ui.selectable_label(p.lang == l.code(), name).on_hover_text(i18n::tr("画面の言語 / The language of the screen (English is partly translated: untranslated text stays in Japanese)")).clicked() {

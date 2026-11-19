@@ -206,12 +206,12 @@ impl PartForm {
                 ui.label(i18n::tr_dyn(label)).on_hover_text(i18n::tr_dyn(tip));
                 ui.add(egui::TextEdit::singleline(f).desired_width(50.0).hint_text(hint));
             };
-            small(ui, "R1 [Ω]", "ベースと中の点の間の抵抗 (データシートの回路の図)", &mut d.r1, "8k");
-            small(ui, "R2 [Ω]", "中の点とエミッタの間の抵抗", &mut d.r2, "120");
-            small(ui, "大きさの比", "出力のトランジスタが駆動の何倍の大きさか (データシートに無い仮定。10 が目安)", &mut d.area, "10");
-            small(ui, "hFE の VCE [V]", "hFE の図の測定条件の VCE", &mut d.hfe_vce, "4");
-            small(ui, "VBE(on) の VCE [V]", "VBE(on) の線の測定条件の VCE", &mut d.on_vce, "4");
-            small(ui, "飽和の IC/IB", "VBE(sat)・VCE(sat) の線の条件 (図に書いてあります)", &mut d.sat_ratio, "250");
+            small(ui, "R1 [Ω]", i18n::tr("ベースと中の点の間の抵抗 (データシートの回路の図)"), &mut d.r1, "8k");
+            small(ui, "R2 [Ω]", i18n::tr("中の点とエミッタの間の抵抗"), &mut d.r2, "120");
+            small(ui, i18n::tr("大きさの比"), i18n::tr("出力のトランジスタが駆動の何倍の大きさか (データシートに無い仮定。10 が目安)"), &mut d.area, "10");
+            small(ui, i18n::tr("hFE の VCE [V]"), i18n::tr("hFE の図の測定条件の VCE"), &mut d.hfe_vce, "4");
+            small(ui, i18n::tr("VBE(on) の VCE [V]"), i18n::tr("VBE(on) の線の測定条件の VCE"), &mut d.on_vce, "4");
+            small(ui, i18n::tr("飽和の IC/IB"), i18n::tr("VBE(sat)・VCE(sat) の線の条件 (図に書いてあります)"), &mut d.sat_ratio, "250");
         });
         egui::Grid::new("darl_inputs").num_columns(6).show(ui, |ui| {
             curve_row(ui, has_doc, "hFE: IC hFE", "1 行に「コレクタ電流 [A] 2 個合わせた hFE」", &mut d.hfe, "0.5 2000\n2 4500\n7 1100", Dest::DarlHfe, &mut start);

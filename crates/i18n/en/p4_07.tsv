@@ -1,0 +1,344 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/part-lib/src/fit/simple.rs
+25 °C の抵抗と B 定数は 0 より大きい値にしてください	The resistance at 25 °C and the B constant must be greater than 0
+B 定数 {} K は NTC サーミスタとしては外れています (ふつう 2000〜5000 K)。単位を確かめてください	B constant {} K is unusual for an NTC thermistor (usually 2000 to 5000 K). Check the unit
+抵抗値はシミュレーションの温度で決まります。温度は解析タブの温度の設定・温度スイープで変わります (回路全体が同じ温度になります)。	The resistance follows the simulation temperature. The temperature is changed by the temperature setting and the temperature sweep in the analysis tab (the whole circuit is at the same temperature).
+自己発熱 (流す電流で温度が上がる。熱放散定数 {} mW/K) と熱の伝わりの遅れは入っていません。電流を流しすぎると実物は測定値がずれます。	Self-heating (the current through it raises its temperature; dissipation constant {} mW/K) and the delay of heat flow are not included. With too much current, a real part reads off.
+自己発熱 (流す電流で温度が上がる) と熱の伝わりの遅れは入っていません。電流を流しすぎると実物は測定値がずれます。	Self-heating (the current through it raises its temperature) and the delay of heat flow are not included. With too much current, a real part reads off.
+B 定数{range}の式で近似しています。B を決めた範囲の外では、データシートの抵抗-温度表とずれます。	Approximated by the B constant{range} formula. Outside the range where B was set, it differs from the resistance-temperature table in the datasheet.
+{} では B の式が表と {:.0} % ずれます (B 定数は 2 つの温度の間で決めた値です)	At {} the B formula differs from the table by {:.0} % (the B constant is set between two temperatures)
+周波数は 1 kHz〜1 GHz で入れてください (12 MHz なら 12M)	Enter a frequency from 1 kHz to 1 GHz (12M for 12 MHz)
+ESR は 0 より大きく、並列容量 C0 は pF の大きさ (例: 3p) で入れてください	ESR must be greater than 0, and the parallel capacitance C0 in pF (e.g. 3p)
+等価直列容量 C1 は fF の大きさ (例: 5f) で入れてください	Enter the motional capacitance C1 in fF (e.g. 5f)
+等価直列容量 C1 がデータシートに無いので、ふつうの値 {} F を使いました。発振の起動や引き込み (負荷容量による周波数のずれ) の大きさが変わります	The datasheet has no motional capacitance C1, so a typical value {} F was used. The oscillator start-up and pulling (frequency shift by load capacitance) may differ
+直列共振	Series resonance
+負荷共振	Load resonance
+等価回路 (Rm = {} Ω、Lm = {}H、Cm = {}F、C0 = {}F、Q ≈ {:.0}) だけで、温度や駆動レベルによる周波数の変化は入っていません。負荷容量による引き込みは等価回路の式のとおりです。	Only the equivalent circuit (Rm = {} Ω, Lm = {}H, Cm = {}F, C0 = {}F, Q ≈ {:.0}); frequency change by temperature or drive level is not included. Pulling by load capacitance follows the equivalent circuit.
+ESR はデータシートの最大値 (実物はふつうそれより小さい) です。	The ESR is the datasheet maximum (a real part is usually lower).
+マイコンの中の発振回路 (反転アンプ) はないので、このモデルだけでは発振しません。AC 解析で共振を見るか、発振回路と組んで使います。	There is no oscillator circuit (inverting amplifier) like the one inside a microcontroller, so this model alone does not oscillate. See the resonance in AC analysis, or use it with an oscillator circuit.
+電圧は VRWM < VBR < VC の順になるはずです (表の値と単位を確かめてください)	The voltages should be in the order VRWM < VBR < VC (check the values and units in the table)
+電流は IR < IT < IPP の順になるはずです (IT は mA、IPP は A の大きさ)	The currents should be in the order IR < IT < IPP (IT in mA, IPP in A)
+VRWM での漏れ電流 {} は表の最大値で、降伏の曲がりから決めるとクランプ電圧に届かないので、曲がりはクランプ電圧から決めました (モデルの漏れ電流はそれより小さくなります)	The leakage {} at VRWM is the table maximum; setting the breakdown knee from it would not reach the clamping voltage, so the knee was set from the clamping voltage (the model's leakage is lower)
+クランプ電圧が降伏の曲がりだけで届くので、直列抵抗は小さく (1 mΩ) しました	The breakdown knee alone reaches the clamping voltage, so the series resistance was made small (1 mΩ)
+降伏 (BV = {} V、IT = {} で VBR) と、ピーク電流でのクランプ (直列抵抗 {} Ω) を合わせたモデルです。	A model combining breakdown (BV = {} V, VBR at IT = {}) and clamping at peak current (series resistance {} Ω).
+ESD・サージのパルスの耐量 (ピーク電力・エネルギー) と、温度による降伏電圧の変化は入っていません。部品が壊れるかどうかはデータシートの定格で確かめます。	Pulse ratings for ESD and surges (peak power, energy) and the change of breakdown voltage with temperature are not included. Check the datasheet ratings to see whether the part survives.
+VBR は表の値 (多くは最小値) で、実物の降伏電圧はそれより少し高いことがあります。	VBR is the table value (often the minimum); the real breakdown voltage can be a little higher.
+# crates/pcb-core/src/assembly_sheet.rs
+1 番ピン	Pin 1
+カソード (K)	Cathode (K)
++ 側	+ side
+基板に部品がないので、組み立て表を作れません。先に回路図から部品を取り込んでください	The board has no parts, so the assembly sheet can't be made. Import the parts from the schematic first
+基板に外形も部品もないので、図にできません	The board has no outline and no parts, so there is nothing to draw
+組み立て表	Assembly sheet
+組み立て表: {}	Assembly sheet: {}
+背の低い部品から順に付けます (基板が平らに置けて、はんだ付けしやすい順)。付けたら □ に印をつけます。	Solder the lowest parts first (the board lies flat and is easier to solder). Mark the □ when done.
+赤い印は向きのある部品の目印です: 1 = 1 番ピン、K = カソード (ダイオード・LED の帯の側)、+ = 電解コンデンサの + 側。	The red marks show the direction of polarized parts: 1 = pin 1, K = cathode (the band side of a diode or LED), + = the + side of an electrolytic capacitor.
+破線の部品は裏面に付けます。付けたあと、電源を入れる前に、ブリッジ・付け忘れ・向きを拡大鏡で見直します。	Dashed parts go on the bottom. After soldering, before power-on, check for bridges, missing joints and direction with a magnifier.
+済	Done
+# crates/pcb-core/src/case.rs
+手前の壁	Front wall
+奥の壁	Back wall
+左の壁	Left wall
+右の壁	Right wall
+左の内側の面から	From the left inner face
+手前の内側の面から	From the front inner face
+ケースの内寸 (幅と奥行) を入れると、ねじ柱と壁の穴の位置を出します	Enter the inner size of the case (width and depth) to get the positions of the standoffs and the wall holes
+基板の下の高さが無いので、ねじ柱の高さを {DEFAULT_POST} mm として計算しました。裏の部品やはんだの足に合わせて決めてください	There is no height under the board, so the standoff height was taken as {DEFAULT_POST} mm. Choose it to fit the bottom parts and solder leads
+基板に取り付け穴がありません。ねじで留めるなら、角から 3.5 mm ほど内側 (例: ({:.1}, {:.1}) と ({:.1}, {:.1}) の対角) に M3 の穴 (3.2 mm) を足しましょう。穴を置く前に、まわりに部品や配線が無いか確かめます	The board has no mounting holes. To fix it with screws, add M3 holes (3.2 mm) about 3.5 mm in from the corners (e.g. diagonal ({:.1}, {:.1}) and ({:.1}, {:.1})). Before placing a hole, check that no parts or tracks are around it
+穴 {:.1} mm に合うねじ (M2〜M4) がありません。柱は自分で決めてください	No screw (M2 to M4) fits the {:.1} mm hole. Choose the standoff yourself
+裏の部品 {name} に当たります	Hits the bottom part {name}
+ねじの頭が表の部品 {name} に当たります。穴か部品を動かしましょう	The screw head hits the top part {name}. Move the hole or the part
+{}.{} のパッド (裏のはんだ) に当たります。柱を細くするか、座金で浮かせます	Hits the pad of {}.{} (solder on the bottom). Use a thinner standoff or raise it with a washer
+柱が壁にかかります	The standoff overlaps the wall
+壁から離れたコネクタがあります: {}。プラグが奥まで届かないことがあるので、基板を壁に寄せる (柱の位置をずらす) か、内寸の小さいケースにするか、コネクタを基板の縁に寄せましょう	Some connectors are away from the wall: {}. The plug may not go all the way in, so move the board toward the wall (shift the standoffs), use a case with a smaller inner size, or move the connector to the board edge
+ケースの内寸 (幅と奥行) を入れてください	Enter the inner size of the case (width and depth)
+# crates/pcb-core/src/case_heat.rs
+ケースの内寸 (幅・奥行) を入れてください	Enter the inner size of the case (width, depth)
+# crates/pcb-core/src/case_model.rs
+この STEP に立体がありません	This STEP file has no solid
+# crates/pcb-core/src/fab.rs
+シルクの印が今の部品の形より少ない部品があります	Some parts have fewer silkscreen marks than their current shape
+上書き	Overwrite
+# crates/pcb-core/src/mesh_io.rs
+OBJ の {} 行目: 頂点 (v) の座標が 3 つありません	OBJ line {}: a vertex (v) does not have 3 coordinates
+OBJ の {} 行目: 面 (f) の「{t}」を番号として読めません	OBJ line {}: can't read "{t}" of a face (f) as a number
+OBJ の {} 行目: 面が無い頂点 {} を指しています	OBJ line {}: a face points to a missing vertex {}
+OBJ に面 (f) がありません	The OBJ has no faces (f)
+# crates/pcb-core/src/shape_script.rs
+本体の長さ (口から後ろの端まで、mm)	Body length (from the opening to the back end, mm)
+ピン 1 から後ろの端まで (mm)	From pin 1 to the back end (mm)
+本体の幅 (mm)	Body width (mm)
+高さ (基板の面から、mm)	Height (from the board surface, mm)
+口の直径 (mm。外径 5.5 のプラグなら 6.4)	Opening diameter (mm; 6.4 for a 5.5 mm OD plug)
+中心ピンの直径 (mm。2.1 か 2.5 のプラグに合わせる)	Center pin diameter (mm; match a 2.1 or 2.5 plug)
+口の深さ (mm)	Opening depth (mm)
+本体の一辺 (mm。6 か 12)	Body side (mm; 6 or 12)
+本体の高さ (金属の板の上まで、mm)	Body height (to the top of the metal plate, mm)
+ボタンの上までの高さ (mm)	Height to the top of the button (mm)
+ボタンの直径 (mm)	Button diameter (mm)
+長さ (x、mm)	Length (x, mm)
+幅 (y、mm)	Width (y, mm)
+高さ (mm)	Height (mm)
+青いケース (1) か黒 (0)	Blue case (1) or black (0)
+奥行き (電線を差す向き、mm)	Depth (direction the wire goes in, mm)
+電線の口の向き (+x なら 1、−x なら −1)	Wire opening direction (1 for +x, −1 for −x)
+DC ジャック (横向き、口は −x)	DC jack (sideways, opening at −x)
+タクトスイッチ (スルーホール)	Tactile switch (through-hole)
+リレー (箱形)	Relay (box)
+ねじ端子台	Screw terminal block
+{} に「{k}」という寸法はありません。使えるのは {} です	{} has no dimension "{k}". Available: {}
+{} の値が数ではありません	The value of {} is not a number
+パッドの無い部品には形を作れません	Can't make a shape for a part without pads
+{k} は 0 より大きくしてください	{k} must be greater than 0
+寸法が合いません: 高さは幅の半分 + 1 mm 以上、口は幅より 1 mm 以上小さく、ピンは口より細く、口の深さは長さより 1 mm 以上短くしてください	The dimensions don't fit: the height must be at least half the width + 1 mm, the opening at least 1 mm smaller than the width, the pin thinner than the opening, and the opening depth at least 1 mm shorter than the length
+寸法が合いません: ボタンの上は本体より高く、ボタンは本体より細くしてください	The dimensions don't fit: the button top must be higher than the body, and the button thinner than the body
+リレーの箱 ({l} × {w} mm) がパッドの範囲 ({:.1} × {:.1} mm) より小さいです	The relay box ({l} × {w} mm) is smaller than the pad area ({:.1} × {:.1} mm)
+端子台の形は、穴のあるパッドに作ります	The terminal block shape is made on pads with holes
+SolidCraft が形を作れませんでした: {}	SolidCraft could not make the shape: {}
+# crates/pcb-core/src/stack.rs
+{} の基板に {} のパッドが無いか、もう一方に {} のパッドがありません。回路図から基板に取り込んでから重ねてください	The {} board has no {} pad, or the other has no {} pad. Import from schematic to the board before stacking
+{ra} と {rb} に同じ名前のピンがありません。ピンの組を書いてください	{ra} and {rb} have no pins with the same name. Write the pin pairs
+重ね方が見つかりません	No way to stack them found
+# crates/pcb-core/src/thermal.rs
+基板の外形に広さがありません	The board outline has no area
+時間は 0 より長くしてください	The time must be greater than 0
+# crates/pcb-core/src/drc/bodies.rs
+{} と {} の本体が重なっています ({:.1} × {:.1} mm)。部品の本体はパッドより大きいことがあります (3D の形・データシートの本体の大きさ)。どちらかを動かして、3D で確かめましょう	The bodies of {} and {} overlap ({:.1} × {:.1} mm). A part body can be bigger than its pads (3D shape, body size in the datasheet). Move one of them and check in 3D
+# crates/sch-core/src/breadboard.rs
+上+	Top +
+上−	Top −
+下+	Bottom +
+下−	Bottom −
+ショート: {} がブレッドボードの中でつながっています ({})。どちらかの足を別の列に差し替えます	Short: {} are connected inside the breadboard ({}). Move one of the leads to another column
+つながっていません: {net} のピン {} が、別々の列にあります。同じ列に差すか、ジャンパー線でつなぎます	Not connected: the pins {} of {net} are in different columns. Put them in the same column or connect them with a jumper wire
+{refdes} がブレッドボードにありません。「自動で並べる」で並べ直せます	{refdes} is not on the breadboard. "Auto arrange" can arrange it again
+{hole} の穴に {} が重なっています。1 つの穴には足を 1 本だけ差します	{} overlap at hole {hole}. Put only one lead in each hole
+# crates/sch-core/src/companions.rs
+部品がありません	No part
+ライブラリ部品ではありません	Not a library part
+{} には推奨の周辺部品が入っていません (部品作成の「推奨の周辺部品」で入れられます)	{} has no recommended companion parts (add them under "Recommended companion parts" in the part editor)
+{} の種類「{k}」は C・R・L のどれかです	The kind "{k}" of {} must be C, R or L
+{} のピン「{}」が部品にありません	Pin "{}" of {} is not on the part
+{} のつなぎ先のピン「{}」が部品にありません	The pin "{}" that {} connects to is not on the part
+# crates/sch-core/src/lib.rs
+ボリューム (可変抵抗)	Potentiometer (variable resistor)
+温度 {}	Temperature {}
+# crates/sch-core/src/netlist.rs
+出力どうしがつながっています: {}	Outputs are connected together: {}
+2 つの出力 (電源の出力も) が同じ線につながると、片方が High、もう片方が Low のとき大きな電流が流れて壊れることがあります。片方を外すか、オープンドレインの出力とプルアップ抵抗にしましょう	When two outputs (supply outputs too) are on the same wire, a large current flows when one is High and the other Low, and parts may break. Remove one, or use open-drain outputs with a pull-up resistor
+入力ピンだけがつながっていて、電圧を決めるものがありません: {}	Only input pins are connected; nothing sets the voltage: {}
+入力ピンは電圧を決めません。何もつながっていないのと同じで、High と Low の間をふらつきます。出力ピン・電源・抵抗 (プルアップかプルダウン) のどれかにつなぎましょう	Input pins don't set a voltage. It is the same as nothing connected, and it floats between High and Low. Connect an output pin, a supply, or a resistor (pull-up or pull-down)
+{} は未接続 (NC) のピンですが、線がつながっています	{} is a not-connected (NC) pin, but a wire is connected
+NC のピンは中で何にもつながっていないか、メーカーが「つながないこと」としているピンです。データシートを確かめて、線を外しましょう	An NC pin is connected to nothing inside, or the maker says "do not connect". Check the datasheet and remove the wire
+# crates/sch-core/src/ngspice.rs
+ngspice が見つかりません。https://ngspice.sourceforge.io/ から入れて (Windows は zip を C:\\ に展開すると C:\\Spice64)、PATH に入れるか、環境変数 NGSPICE に ngspice_con.exe の場所を書くか、--ngspice <exe> で指定してください	ngspice was not found. Install it from https://ngspice.sourceforge.io/ (on Windows, unzip to C:\\ to get C:\\Spice64), then add it to PATH, set the NGSPICE environment variable to the path of ngspice_con.exe, or pass --ngspice <exe>
+# crates/sch-core/src/pinkind.rs
+電源入力	Power input
+電源出力	Power output
+受動	Passive
+未接続 (NC)	Not connected (NC)
+# crates/sch-core/src/system.rs
+基板「{}」か「{}」がプロジェクトにありません	Board "{}" or "{}" is not in the project
+基板の名前を変えたか消したときは、つなぎを作り直してください	If you renamed or removed a board, make the connection again
+{}.{} か {}.{} が回路図にありません	{}.{} or {}.{} is not in the schematic
+部品番号を変えたときは、つなぎの部品番号も合わせてください	If you changed a refdes, change the refdes in the connection too
+{}.{} は {} ピン、{}.{} は {} ピンです	{}.{} has {} pins, {}.{} has {} pins
+ピンの数が違うコネクタどうしは、同じ番号のピンだけをつないで調べます。数が違うのが正しい (一部だけ使う) なら、ピンの組を書いてください	For connectors with different pin counts, only pins with the same number are connected and checked. If the difference is correct (using only some pins), write the pin pairs
+{label}: 片側だけ {n} につながり、もう片側はどこにもつながっていません	{label}: only one side connects to {n}; the other side connects to nothing
+相手の基板で、そのピンにも同じ信号をつなぐか、使わないピンなら両側とも空けます	On the other board, connect the same signal to that pin, or leave both sides open if it is unused
+{label}: 電源 ({}) と GND ({}) がつながります	{label}: supply ({}) and GND ({}) are connected
+このままつなぐと電源がショートします。ピンの並びか、どちらかの基板の配線を直してください	Connecting as is shorts the supply. Fix the pin order or the wiring of one of the boards
+コネクタの向き (1 番ピンの位置) や、ケーブルが入れ替わっていないか確かめます。名前の付け方が違うだけ (例: SDA と I2C_SDA) なら、どちらかの名前を合わせます	Check the connector direction (pin 1 position) and whether the cable is swapped. If only the naming differs (e.g. SDA and I2C_SDA), make one name match the other
+{label}: {m} と {n} が違います ({m} は相手の {q2} 番にあります。入れ替わっていませんか)	{label}: {m} and {n} differ ({m} is on pin {q2} of the other side. Swapped?)
+{label}: {m} と {n} の名前が違います	{label}: the names {m} and {n} differ
+{}.{} ↔ {}.{}: 名前の無いネット (N$…) のピンが {unnamed} 本あり、照合できません	{}.{} ↔ {}.{}: {unnamed} pins are on unnamed nets (N$…) and can't be checked
+両方の基板で、コネクタのピンにラベル (同じ名前) を付けると、信号が合っているかを調べられます	Put labels (the same name) on the connector pins on both boards to check whether the signals match
+基板「{}」か「{}」がありません	Board "{}" or "{}" does not exist
+コネクタのピンの位置がわかりません	The connector pin positions are unknown
+店の型番	Shop part number
+# crates/sim-core/src/ambient.rs
+周囲の温度の開始・終了・刻みを確かめてください (開始 ≦ 終了、刻み > 0)	Check the start, end and step of the ambient temperature (start ≤ end, step > 0)
+点数が多すぎます (200 点まで)。刻みを大きくしてください	Too many points (up to 200). Use a larger step
+# crates/sim-core/src/battery.rs
+回路図に電池の部品がありません。ライブラリの「電池」(単3アルカリ・CR2032・18650 など) を電源に使ってください	The schematic has no battery part. Use a "Battery" from the library (AA alkaline, CR2032, 18650 etc.) as the supply
+過渡解析の結果が空です	The transient analysis result is empty
+平均をとる区間が、過渡解析の時間 (0〜{}s) の外です	The averaging interval is outside the transient analysis time (0 to {}s)
+{} の電流が過渡解析の結果にありません (電池のモデルが古い形です)	The current of {} is not in the transient analysis result (the battery model is an old form)
+平均をとる区間に過渡解析の点がありません	There are no transient analysis points in the averaging interval
+{} から電流が出ていません (平均 {}A)。電池が充電されているか、何もつながっていません	No current flows out of {} (average {}A). The battery is being charged, or nothing is connected
+ネット「{}」がありません	Net "{}" does not exist
+満充電の {} でも、{} が {}V に届きません (いまは {}V)。条件の電圧か、回路を見直してください	Even at full charge {}, {} does not reach {}V (now {}V). Check the condition voltage or the circuit
+電池の残量が {:.0} % になると、{} が {}V を下回って止まります。そこから先の容量は使えません	When the battery charge falls to {:.0} %, {} drops below {}V and stops. The capacity beyond that can't be used
+いちばん大きい電流 ({}A) が流れる瞬間は、内部抵抗で電池の電圧がさらに約 {}V 下がるので、これより少し早く止まることがあります	At the moment of the largest current ({}A), the internal resistance lowers the battery voltage by about {}V more, so it may stop a little earlier
+いちばん大きい電流で、内部抵抗の電圧降下が電池の電圧の {:.0} % になります。内部抵抗の大きい電池 (コイン電池など) には向かない電流です	At the largest current, the drop across the internal resistance is {:.0} % of the battery voltage. This current does not suit batteries with high internal resistance (coin cells etc.)
+容量は小さい電流での値で計算しています。大きい電流・低温・古い電池では、取り出せる量が減ります (目安は 50〜80 %)。自己放電も入っていません	The capacity is the value at a small current. Large currents, low temperature and old batteries give less (roughly 50 to 80 %). Self-discharge is not included
+約 {:.1} 年 ({:.0} 日)	About {:.1} years ({:.0} days)
+約 {days:.0} 日 ({h:.0} 時間)	About {days:.0} days ({h:.0} hours)
+{h:.1} 時間	{h:.1} hours
+{:.0} 分	{:.0} min
+# crates/sim-core/src/cmrr.rs
+{side} 入力の信号源 {name} が見つかりません。入力につながった電圧源 (V3 など) を選んでください	Signal source {name} of the {side} input was not found. Choose the voltage source connected to the input (V3 etc.)
++ 入力と − 入力の信号源 (電圧源) を 1 つずつ選んでください	Choose one signal source (voltage source) each for the + input and the − input
++ 入力と − 入力に同じ信号源が選ばれています。それぞれの入力につながった別の電圧源を選んでください	The same signal source is chosen for the + and − inputs. Choose a different voltage source connected to each input
+抵抗の許容差は 0 より大きく 100 % 未満にしてください	The resistor tolerance must be greater than 0 and less than 100 %
+ばらつかせる抵抗がありません	There are no resistors to vary
+# crates/sim-core/src/designcalc.rs
+損失	Loss
+損失 P	Loss P
+何もしないときの Tj	Tj with nothing added
+{tj_bare:.0} ℃ (上限 {t_jmax:.0} ℃)	{tj_bare:.0} ℃ (limit {t_jmax:.0} ℃)
+目標の Tj	Target Tj
+{tj_goal:.0} ℃ 以下	{tj_goal:.0} ℃ or less
+全体の熱抵抗の上限	Limit of the total thermal resistance
+何もしないとき: Tj = 周囲 {t_amb} ℃ + P × θja = {t_amb} + {p:.2} × {theta_own} = {tj_bare:.0} ℃	With nothing added: Tj = ambient {t_amb} ℃ + P × θja = {t_amb} + {p:.2} × {theta_own} = {tj_bare:.0} ℃
+余裕を見て、Tj を {tj_goal:.0} ℃ (上限の手前 2 割) 以下にしたい。熱抵抗の全体を ({tj_goal:.0} − {t_amb}) ÷ {p:.2} = {theta_total:.1} ℃/W 以下にする	With margin, keep Tj at {tj_goal:.0} ℃ (20 % below the limit) or less. Make the total thermal resistance ({tj_goal:.0} − {t_amb}) ÷ {p:.2} = {theta_total:.1} ℃/W or less
+銅を広げなくても、放熱板なしでも使えます	Works without extra copper and without a heatsink
+銅で冷やす: 銅はケースから先の熱の道 (ケース → 空気 θca = θja − θjc = {theta_own} − {jc} = {theta_ca:.1} ℃/W) と並列 (コンダクタンス G)。θ = θjc + 1 ÷ (1 ÷ θca + G) なので、G = 1 ÷ ({theta_total:.1} − {jc}) − 1 ÷ {theta_ca:.1} = {:.4} W/K が要る	Cooling with copper: the copper is in parallel (conductance G) with the heat path beyond the case (case → air θca = θja − θjc = {theta_own} − {jc} = {theta_ca:.1} ℃/W). Since θ = θjc + 1 ÷ (1 ÷ θca + G), G = 1 ÷ ({theta_total:.1} − {jc}) − 1 ÷ {theta_ca:.1} = {:.4} W/K is needed
+要る銅の面積	Copper area needed
+{COPPER_MAX_MM2:.0} mm² でも足りません (放熱板が要ります)	Not enough even with {COPPER_MAX_MM2:.0} mm² (a heatsink is needed)
+ピンにつながる銅を {COPPER_MAX_MM2:.0} mm² (部品のまわり 20 mm 以内、1 層) まで広げても、熱抵抗は {:.1} ℃/W までしか下がらない	Even with {COPPER_MAX_MM2:.0} mm² of copper on the pins (within 20 mm of the part, 1 layer), the thermal resistance only goes down to {:.1} ℃/W
+{hi:.0} mm² (約 {side:.0} × {side:.0} mm、パッドのほかに)	{hi:.0} mm² (about {side:.0} × {side:.0} mm, besides the pads)
+その G になる銅の面積は {hi:.0} mm² (銅箔 {copper_um} µm。データシートの曲線に合わせた式 G = k·A^n から逆に解いた)。ピンにつながる銅 (ベタや太い配線) をこれだけ広げる	The copper area for that G is {hi:.0} mm² ({copper_um} µm copper; solved back from G = k·A^n fitted to the datasheet curve). Spread the copper on the pins (pour or wide tracks) this much
+要る銅が {COPPER_FITTED_MM2:.0} mm² (1 平方インチ) を超えました。銅の式は 1 平方インチまでのデータシートの点で作ったので、その先は外挿で、実際はこれより効きにくいことがあります	The copper needed is over {COPPER_FITTED_MM2:.0} mm² (1 square inch). The copper formula was made from datasheet points up to 1 square inch, so beyond that it is extrapolated and may work less in reality
+または、放熱板の熱抵抗	Or, a heatsink thermal resistance of
+放熱板で冷やす: 接合部 → ケース (θjc {theta_jc}) → 放熱板 (取り付け 約 {theta_cs}) → 空気。放熱板は {theta_total:.1} − {theta_jc} − {theta_cs} = {theta_sa:.1} ℃/W 以下	Cooling with a heatsink: junction → case (θjc {theta_jc}) → heatsink (mounting about {theta_cs}) → air. The heatsink needs {theta_total:.1} − {theta_jc} − {theta_cs} = {theta_sa:.1} ℃/W or less
+または、放熱板	Or, a heatsink
+放熱板でも足りません	Not enough even with a heatsink
+θjc ({theta_jc} ℃/W) と取り付けだけで、全体の上限 {theta_total:.1} ℃/W を使い切ります。損失を減らす (電圧の差を小さくする、部品を分ける) か、θjc の小さい部品にします	θjc ({theta_jc} ℃/W) and the mounting alone use up the total limit {theta_total:.1} ℃/W. Reduce the loss (smaller voltage difference, split across parts) or use a part with smaller θjc
+{a:.0} mm² → {th:.0} ℃/W・{:.0} ℃	{a:.0} mm² → {th:.0} ℃/W, {:.0} ℃
+銅の面積と熱抵抗・Tj (放熱板なし): {}	Copper area vs thermal resistance and Tj (no heatsink): {}
+銅の効き目は、1 つのデータシート (SOT-223 の曲線) に合わせた目安です。風・まわりの部品・内層で ±数十 % 変わります。大事なときは温度を測って確かめます	The copper effect is a rough guide fitted to one datasheet (an SOT-223 curve). Airflow, nearby parts and inner layers change it by tens of %. When it matters, measure the temperature
+数えるのは、部品のピンにつながった銅で、部品の中心から 20 mm 以内のものです (基板の「シミュレーションに反映」と同じ)。遠くの銅は冷えていて、あまり効きません	Counted is the copper connected to the part's pins within 20 mm of the part center (same as "Apply to simulation" on the board). Far copper is cool and helps little
+TO-220 のように放熱板に付ける部品は、熱がおもに放熱板へ逃げるので、基板の銅はあまり効きません。表面実装の部品 (SOT-223・DPAK など) で銅が効きます	For parts mounted on a heatsink like TO-220, heat escapes mainly into the heatsink, so board copper helps little. Copper works for surface-mount parts (SOT-223, DPAK etc.)
+銅がピンにつながっていない (別のネットのベタ・サーマルリリーフの細い足だけ): 熱の道にならず、温度が下がらない	Copper not connected to the pin (a pour of another net, or only thin thermal-relief spokes): it is not a heat path and does not lower the temperature
+{name}は 0〜{} の番号で選んでください	Choose {name} by a number from 0 to {}
+回路	Circuit
+次数は 1 以上の整数にしてください	The order must be an integer of 1 or more
+抵抗の系列は 24 (E24) か 96 (E96) にしてください	The resistor series must be 24 (E24) or 96 (E96)
+チェビシェフ (リップル {r} dB)	Chebyshev (ripple {r} dB)
+{n_total} 次 {fam} {shape_name} (中心 {}・帯域幅 {})	Order {n_total} {fam} {shape_name} (center {}, bandwidth {})
+{n_total} 次 {fam} {shape_name} ({})	Order {n_total} {fam} {shape_name} ({})
+オペアンプの段	Op-amp stages
+{} 段{}	{} stages{}
+ (出力の向きは逆さ: 位相 180°)	 (output inverted: phase 180°)
+f0 = {}・Q = {:.3}	f0 = {}, Q = {:.3}
+段 {}: {}	Stage {}: {}
+　段 {} の部品	  Parts of stage {}
+{}での利得 (目標 → {series_name} に丸めたあと)	Gain at {} (target → after rounding to {series_name})
+中心	Center
+遮断周波数	Cutoff frequency
+{fam} の {} 次の極 (正規化した値) を、1 次 (実数の極) と 2 次 (複素数の極の対) の段に分けます。Q の低い段から順に並べます (Q の高い段は山ができるので、後ろに置くと途中で振り切れにくい)	The order-{} poles of {fam} (normalized) are split into 1st-order stages (real poles) and 2nd-order stages (complex pole pairs). Stages are ordered from low Q (a high-Q stage has a peak, so placing it later makes clipping midway less likely)
+ローパス: 各段の f0 = 遮断周波数 × 極の大きさ	Low-pass: f0 of each stage = cutoff frequency × pole magnitude
+ハイパス: s → 1/s の置き換えで、各段の f0 = 遮断周波数 ÷ 極の大きさ (Q は同じ)	High-pass: by replacing s → 1/s, f0 of each stage = cutoff frequency ÷ pole magnitude (Q is the same)
+バンドパス: s → (s² + ω0²) ÷ (帯域幅 × s) の置き換えで、極 1 つが 2 つになり、中心の少し上と下にずらした 2 次の段に分かれます	Band-pass: by replacing s → (s² + ω0²) ÷ (bandwidth × s), each pole becomes two, giving 2nd-order stages shifted a little above and below the center
+コンデンサは種類の少ない E12 から先に決め (抵抗が 10 kΩ 前後になる値)、抵抗をちょうどの値で計算してから、系列に丸めます	Capacitors are chosen first from E12, which has fewer values (values that make resistors around 10 kΩ); resistors are calculated exactly, then rounded to the series
+どの段も遠い所の利得は 1 (多重帰還は −1) です。偶数次のチェビシェフは通過域が 0〜+リップルの間で揺れ、遮断周波数で 0 dB に戻ります (奇数次は 0〜−リップル)	Every stage has a gain of 1 far from the edge (−1 for multiple feedback). An even-order Chebyshev ripples between 0 and +ripple in the passband and returns to 0 dB at the cutoff (odd order: 0 to −ripple)
+バンドパスは多重帰還の回路で作ります (サレンキーのバンドパスは、ゲインと Q が一緒に動いて調整しにくいため)	Band-pass is made with the multiple-feedback circuit (a Sallen-Key band-pass is hard to tune because gain and Q move together)
+オペアンプの利得帯域幅積 (GBW) は、100 × Q × f0 の最大 ≒ {} 以上を選びます。足りないと高い Q の段の山がずれます (LM358 は 1 MHz、TL072 は 3 MHz)	Choose an op-amp gain-bandwidth product (GBW) of at least the max of 100 × Q × f0 ≈ {}. If it is too small, the peak of high-Q stages shifts (LM358 is 1 MHz, TL072 is 3 MHz)
+コンデンサは C0G (CH) のセラミックかフィルムにします。高誘電率のセラミック (X7R など) は電圧と温度で容量が変わり、特性がずれます	Use C0G (CH) ceramic or film capacitors. High-k ceramics (X7R etc.) change capacitance with voltage and temperature, and the response shifts
+E24 (±5 %) の抵抗は丸めの誤差が数 % 出ます。Q の高い段 (チェビシェフ・高い次数) は E96 (±1 %) にすると目標に近づきます	E24 (±5 %) resistors give rounding errors of a few %. For high-Q stages (Chebyshev, high order), E96 (±1 %) gets closer to the target
+チェビシェフは通過域に波 (リップル) があり、波形が鳴りやすいです。パルスや波形の形を保ちたいならベッセル、平らさならバターワースにします	Chebyshev has ripple in the passband and the waveform tends to ring. To keep the shape of pulses or waveforms use Bessel; for flatness use Butterworth
+ベッセルは遮断周波数を過ぎてからの落ち方がゆるやかです (波形の形・遅れの揃い方を優先した特性)。切れの良さが要るならバターワースかチェビシェフにします	Bessel falls off gently after the cutoff (it puts waveform shape and even delay first). For a sharp cutoff use Butterworth or Chebyshev
+1 kΩ〜1 MΩ から外れる抵抗があります。オペアンプの出力の負担 (小さい抵抗) やノイズ・バイアス電流 (大きい抵抗) に気をつけます	Some resistors are outside 1 kΩ to 1 MΩ. Watch the load on the op-amp output (small resistors) and noise and bias current (large resistors)
+回路図に置くと、AC 解析の図に目標の特性が点で重なります。ずれていれば、丸めの誤差かオペアンプの帯域です	When placed on the schematic, the target response is overlaid as dots on the AC analysis plot. If it differs, it is the rounding error or the op-amp bandwidth
+Q の高い段のコンデンサが誤差でずれる: 山が大きくなり、発振ぎりぎりのリンギングが出ます	Capacitors of a high-Q stage off by tolerance: the peak grows and ringing near oscillation appears
+帰還のコンデンサ (サレンキーの C1) が断線: その段はただの RC になり、遮断の近くが丸くなります	Feedback capacitor (Sallen-Key C1) open: that stage becomes a plain RC and the response near the cutoff rounds off
+オペアンプの帯域が足りない: 高い周波数で減衰が戻ってきます (サレンキーのローパスは、高い所で入力がそのまま抜けやすい)	Op-amp bandwidth too small: attenuation comes back at high frequency (a Sallen-Key low-pass tends to let the input straight through at high frequency)
+片電源で GND の基準 (VCC/2) を作り忘れる: 出力が電源の端に張り付きます	Forgetting the GND reference (VCC/2) on a single supply: the output sticks to a supply rail
+1 次の段 (RC + ボルテージフォロワ): f0 = 1 ÷ (2π R1 C1)	1st-order stage (RC + voltage follower): f0 = 1 ÷ (2π R1 C1)
+サレンキー ローパス (ゲイン 1): f0 = 1 ÷ (2π √(R1 R2 C1 C2))、Q = √(R1 R2 C1 C2) ÷ (C2 (R1 + R2))。C1 ≥ 4Q² C2 が要ります	Sallen-Key low-pass (gain 1): f0 = 1 ÷ (2π √(R1 R2 C1 C2)), Q = √(R1 R2 C1 C2) ÷ (C2 (R1 + R2)). Needs C1 ≥ 4Q² C2
+サレンキー ハイパス (ゲイン 1、C1 = C2 = C): R1 = 1 ÷ (2Q ω0 C)、R2 = 2Q ÷ (ω0 C)	Sallen-Key high-pass (gain 1, C1 = C2 = C): R1 = 1 ÷ (2Q ω0 C), R2 = 2Q ÷ (ω0 C)
+多重帰還 ローパス (ゲイン −1、R1 = R2): ω0² = 1 ÷ (R2 R3 C1 C2)、ω0/Q = (1/R1 + 1/R2 + 1/R3) ÷ C1。C1 ≥ 8Q² C2 が要ります	Multiple-feedback low-pass (gain −1, R1 = R2): ω0² = 1 ÷ (R2 R3 C1 C2), ω0/Q = (1/R1 + 1/R2 + 1/R3) ÷ C1. Needs C1 ≥ 8Q² C2
+多重帰還 ハイパス (ゲイン −1、C がすべて同じ): R1 = 1 ÷ (3Q ω0 C)、R2 = 3Q ÷ (ω0 C)	Multiple-feedback high-pass (gain −1, all C equal): R1 = 1 ÷ (3Q ω0 C), R2 = 3Q ÷ (ω0 C)
+多重帰還 バンドパス (C1 = C2 = C): R3 = 2Q ÷ (ω0 C)、中心の利得 A = R3 ÷ (2 R1)、R2 = 1 ÷ (ω0 C (2Q − A/Q))	Multiple-feedback band-pass (C1 = C2 = C): R3 = 2Q ÷ (ω0 C), center gain A = R3 ÷ (2 R1), R2 = 1 ÷ (ω0 C (2Q − A/Q))
+# crates/sim-core/src/filterdesign.rs
+RC + ボルテージフォロワ (ローパス 1 次)	RC + voltage follower (1st-order low-pass)
+RC + ボルテージフォロワ (ハイパス 1 次)	RC + voltage follower (1st-order high-pass)
+多重帰還 ローパス	Multiple-feedback low-pass
+多重帰還 ハイパス	Multiple-feedback high-pass
+多重帰還 バンドパス	Multiple-feedback band-pass
+バンドパスの次数は 1〜4 にしてください (できるフィルタは 2〜8 次になります)	The band-pass order must be 1 to 4 (the filter becomes order 2 to 8)
+次数は 1〜8 にしてください	The order must be 1 to 8
+周波数は 0 より大きい数にしてください	The frequency must be a number greater than 0
+チェビシェフのリップルは 0.01〜3 dB にしてください (0.5 か 1 dB がよく使われます)	The Chebyshev ripple must be 0.01 to 3 dB (0.5 or 1 dB is common)
+バンドパスの帯域幅は 0 より大きい数にしてください	The band-pass bandwidth must be a number greater than 0
+# crates/sim-core/src/from_schematic.rs
+ボリュームの抵抗値は正の値にしてください (例: 10k POS=50)	The potentiometer resistance must be a positive value (e.g. 10k POS=50)
+# crates/sim-core/src/loopgain.rs
+部品 {part} がありません	Part {part} does not exist
+{part} は切れません。ループの途中の抵抗・コンデンサ・コイルを選んでください	{part} can't be cut. Choose a resistor, capacitor or inductor in the middle of the loop
+{part} は {} と {} の間にあるので、出力側のネットはそのどちらかにしてください (「{from}」ではなく)	{part} is between {} and {}, so the output-side net must be one of them (not "{from}")
+# crates/sim-core/src/poweron.rs
+制限の余裕は 1 倍以上にしてください	The limit margin must be 1× or more
+回路図に直流の電源 (電圧源) がありません。電源を置いて、電圧を入れてください	The schematic has no DC supply (voltage source). Place a supply and enter its voltage
+電源から電流が流れ出していません。負荷がつながっているか、電源の向きを確かめてください	No current flows out of the supply. Check that a load is connected and the supply direction
+ほとんど流れていない	Almost no current
+ずっと少ない	Much less
+少し少ない	A little less
+正常な範囲	Normal range
+少し多い	A little more
+ずっと多い (すぐ電源を切る)	Much more (turn off the supply now)
+電源の線・スイッチ・ヒューズ・コネクタが切れている (電源の端子と基板の電源のパッドの電圧をテスタで比べる)	A supply wire, switch, fuse or connector is open (compare the voltage at the supply terminal and the board's supply pad with a multimeter)
+電流計のつなぎ方・レンジが違う (電源の表示と比べる)	The ammeter is connected wrong or on the wrong range (compare with the supply display)
+電源の部品 (レギュレータ・ダイオード) が付いていない・向きが逆	A supply part (regulator, diode) is missing or reversed
+電源の出力が OFF のまま	The supply output is still OFF
+部品の付け忘れ (電流をたくさん使う部品: LED・レギュレータ・IC・負荷の抵抗)	A missing part (parts that use much current: LED, regulator, IC, load resistor)
+はんだ不良: 足がパッドから浮いている・つやのない冷たいはんだ (拡大鏡で見て、テスタで導通を確かめる)	Bad solder: a lead lifted off its pad, dull cold solder (look with a magnifier, check continuity with a multimeter)
+IC が動いていない (イネーブル・リセットのピン、水晶)	An IC is not running (enable and reset pins, crystal)
+値の違う部品 (抵抗が 10 倍大きい: 色の帯の読み違い)	A part with the wrong value (resistor 10× too large: color bands misread)
+部品の値の違い (抵抗が大きめ、LED の色違い)	Part value differences (resistor on the large side, LED of another color)
+電源の電圧が設定より低い (電源の端子で測る)	The supply voltage is lower than set (measure at the supply terminals)
+計器の誤差 (小さい電流はレンジを下げて測る)	Meter error (measure small currents on a lower range)
+正常な範囲です。電源の電圧が設定どおりか、熱い部品がないかも確かめてから、次の確認 (各部の電圧) に進みます	In the normal range. Also check that the supply voltage is as set and no part is hot, then go on to the next check (voltages at each point)
+部品の値の違い (抵抗が小さめ: 色の帯の読み違い)	Part value differences (resistor on the small side: color bands misread)
+部品が熱くなっていないか (触る前に、手をかざすか温度計で)	Check whether a part is getting hot (before touching, hold your hand near it or use a thermometer)
+わずかな漏れ: フラックスの残り・湿り (IPA でふき取る)	A slight leak: flux residue or moisture (wipe off with IPA)
+電源の電圧が設定より高い	The supply voltage is higher than set
+ショート: はんだのブリッジ・電源と GND がつながっている (電源を切って、テスタの抵抗レンジで電源と GND の間を測る)	Short: a solder bridge, supply connected to GND (turn off the supply and measure between supply and GND with the multimeter's resistance range)
+部品の向き違い: 電解コンデンサ・ダイオード・LED・IC の 1 番ピン (向きの印を基板の印と見比べる)	A part in the wrong direction: electrolytic capacitor, diode, LED, pin 1 of an IC (compare the direction mark with the mark on the board)
+違う部品が付いている (似た形の IC・トランジスタの型番)	A wrong part is mounted (an IC or transistor of a similar shape with another part number)
+電源の + と − を逆につないだ	The supply + and − are reversed
+熱い部品がその場所 (触らずに、手をかざすか温度計・サーモカメラで探す)	A hot part is the place (without touching, find it by holding your hand near, or with a thermometer or thermal camera)
+# crates/sim-core/src/ratings.rs
+放熱板つきの目安	guide with a heatsink
+電圧差を減らす(入力電圧を下げる / 電流を減らす)か、放熱板つきの形(TO-220 など)にして放熱板を付けます (自己発熱の表の熱抵抗の横の「放熱」に放熱板の熱抵抗を入れると、それで判定します)。LDO やリニアレギュレータは (入力 − 出力) × 電流 が熱になります	Reduce the voltage difference (lower the input voltage / reduce the current), or use a package for a heatsink (TO-220 etc.) and attach one (enter the heatsink's thermal resistance in "Heatsink" next to the thermal resistance in the self-heating table to judge with it). In an LDO or linear regulator, (input − output) × current becomes heat
+超えています	over
+{} (ボリューム) の 2 番ピンと {pin} 番ピンの間の電流 {:.2} mA は、この抵抗体に流せる目安 {:.2} mA (√(定格電力 {} mW ÷ 全体の抵抗)) に対して{word}	{} (potentiometer): the current {:.2} mA between pin 2 and pin {pin} against the guide {:.2} mA for this element (√(rated power {} mW ÷ total resistance)): {word}
+ボリュームの定格電力 (小さいもので 0.05 W) は抵抗体の全体のもので、電流が流れる部分の長さの分しか使えません。真ん中の足から大きな電流を取り出すと (LED を直接つなぐなど)、電流の通る短い部分が焦げます。ボリュームは分圧 (両端を電源と GND、真ん中から電圧を取り出す) に使い、電流はトランジスタやオペアンプで増やします。可変抵抗として使うときは、直列に固定の抵抗を入れて電流を制限します。実際の定格はデータシートで確認してください。	The rated power of a potentiometer (0.05 W for small ones) is for the whole element, and only the length that carries current can use it. Drawing a large current from the middle pin (e.g. driving an LED directly) burns the short part the current passes through. Use a potentiometer as a divider (ends to supply and GND, take the voltage from the middle), and amplify the current with a transistor or op-amp. When used as a variable resistor, put a fixed resistor in series to limit the current. Check the actual rating in the datasheet.
+ (上限は部品の種類からの目安。データシートの値を入れてください)	 (the limit is a guide from the part type. Enter the datasheet value)
+{} は {:.0} ℃ になり、上限 {:.0} ℃ を {:.0} K 超えます{guessed}	{} reaches {:.0} ℃, over the limit {:.0} ℃ by {:.0} K{guessed}
+このままでは壊れるか、寿命が大きく縮みます。熱抵抗を下げる (銅を広げる・放熱板。「値の決め方」の「放熱」で面積が分かります)、損失を減らす、定格の大きい部品にする、のどれかです	As is, it will break or its life will be much shorter. Lower the thermal resistance (wider copper, heatsink; "Heatsink" in "How to choose values" gives the area), reduce the loss, or use a part with a larger rating
+{} の電力 {:.3} W は、周囲 {t_amb:.0} ℃ で下げた定格 {pd:.3} W を超えます (定格は {:.0} ℃ から下がります){guessed}	{}: the power {:.3} W exceeds the rating {pd:.3} W derated at ambient {t_amb:.0} ℃ (the rating falls from {:.0} ℃){guessed}
+まわりが熱いと、部品が出してよい電力は下がります (データシートの低減曲線)。定格の大きい部品にするか、損失を減らします	When the surroundings are hot, the power a part may dissipate goes down (the derating curve in the datasheet). Use a part with a larger rating or reduce the loss
+{} は {:.0} ℃ で、上限 {:.0} ℃ まで {margin_k:.0} K しかありません (目安は {goal:.0} ℃ 以下){guessed}	{} is at {:.0} ℃, only {margin_k:.0} K below the limit {:.0} ℃ (aim for {goal:.0} ℃ or less){guessed}
+動きますが余裕が少なく、箱に入れる・夏の暑さで上限に近づきます。熱抵抗を下げるか、損失を減らすと安心です	It works but with little margin; in a box or in summer heat it gets close to the limit. Lowering the thermal resistance or the loss is safer
+{} は {:.0} ℃ (上限 {:.0} ℃ まで {margin_k:.0} K){guessed}	{} is at {:.0} ℃ ({margin_k:.0} K below the limit {:.0} ℃){guessed}
+{}。いちばん熱いのは {:.3} 秒	{}. Hottest at {:.3} s
+# crates/sim-core/src/ripple.rs
+{} の電流 実効値 {}	RMS current of {}: {}
+ (定格 {} の {:.0}%{})	 (rating {}: {:.0}%{})
+、最大 {}	, max {}
+ (飽和電流 {} の {:.0}%{})	 (saturation current {}: {:.0}%{})
+電流の山が飽和電流 (データシートの Isat、インダクタンスが下がり始める電流) に近いか超えています。インダクタンスが下がるとリップル電流が増え、さらに飽和します。Isat の大きい (大きい形の) コイルにするか、インダクタンスを上げてリップルを減らします。	The current peak is near or over the saturation current (Isat in the datasheet, where the inductance starts to drop). As the inductance drops, the ripple current grows and it saturates further. Use an inductor with larger Isat (a larger size), or raise the inductance to reduce the ripple.
+電流の実効値が定格電流 (発熱で決まる値) に近いか超えています。コイルが熱くなります。DCR の小さい・定格電流の大きいコイルにします。	The RMS current is near or over the rated current (set by heating). The inductor gets hot. Use an inductor with lower DCR and a larger rated current.
+、超えています	, over
+、余裕が少ないです	, little margin
+# crates/sim-core/src/rootlocus.rs
+値の数は 2〜{MAX_RUNS} にしてください	The number of values must be 2 to {MAX_RUNS}
+{} の値「{}」は数値ではないので変えられません。抵抗・コンデンサ・コイルなど、値が数字の部品を選んでください	{}: the value "{}" is not a number, so it can't be changed. Choose a part with a numeric value, such as a resistor, capacitor or inductor
+2 つ以上の値で計算できませんでした: {why}	Could not calculate with 2 or more values: {why}
+{bad} 個の値で、当てはめの誤差が {:.0}% 以上です (その値の極は確かではありません。周波数の範囲を、極が動く所が全部入るように広げてください)	For {bad} values the fit error is {:.0}% or more (the poles at those values are not reliable. Widen the frequency range to include everywhere the poles move)
+# crates/sim-core/src/spice_in.rs
+{inst}: モデルの「* spread {el}」は、値を変えられない素子です (直流の電圧源・電流源、抵抗・コンデンサ・コイルだけ)。ばらつきの解析では使いません	{inst}: "* spread {el}" in the model is an element whose value can't be changed (only DC voltage/current sources, resistors, capacitors, inductors). It is not used in the variation analysis
+{inst}: モデルの「* spread {el}」の素子 {el} がモデルの中にありません。ばらつきの解析では使いません	{inst}: the element {el} of "* spread {el}" in the model is not in the model. It is not used in the variation analysis
+{name}: デジタルセルのパラメータ {other} が分かりません (td・tplh・tphl・tsu・th・tw・ten・tdis・oe・oel・od・outs・table)	{name}: unknown digital cell parameter {other} (td, tplh, tphl, tsu, th, tw, ten, tdis, oe, oel, od, outs, table)
+# crates/sim-core/src/tran.rs
+DC動作点で、スイッチが切り替わりの途中で釣り合っていたので (発振回路の不安定な釣り合いの点)、すべてゼロの状態から始めました (そこから始めると、発振が始まりません)	At the DC operating point a switch was balanced midway through switching (an unstable balance point of an oscillator), so it started from the all-zero state (starting from there, oscillation would not start)
+クロックのパルスの幅が {} しかありません ({} 以上が必要)。クロックを遅くするか、デューティ比を 50 % に近づけてください	The clock pulse width is only {} ({} or more is needed). Slow the clock or bring the duty cycle closer to 50 %
+クロックのパルス幅	Clock pulse width
+この回の出力は実物では不定 (0 にも 1 にもなりうる) で、ここでは 0 か 1 を乱数で選んでいます (毎回同じ選び方)	In a real part this output is undefined (could be 0 or 1); here 0 or 1 is chosen at random (the same choice every time)
+実物では取り込みに失敗することがあります (ここでは普通に取り込みます)	A real part may fail to capture here (it captures normally here)
+# crates/sim-core/src/zth.rs
+時間と Zth は、どちらも 0 より大きい数にしてください	Time and Zth must both be numbers greater than 0
+点が {} 個しかありません。曲線の上の点を 3 個以上 (できれば左の端から平らになる右の端まで 6〜10 個) 読んでください	Only {} points. Read 3 or more points on the curve (ideally 6 to 10, from the left end to the flat right end)
+当てはめられませんでした。点の時間と Zth の単位 (秒・K/W) を確かめてください	Could not fit. Check the units of the time and Zth of the points (seconds, K/W)

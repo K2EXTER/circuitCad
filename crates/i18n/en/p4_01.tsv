@@ -1,0 +1,412 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/actions.rs
+操作を探す	Find an action
+名前や、したいことの言葉で操作を探して実行	Find an action by its name or by words for what you want to do, and run it
+部品・ネットを探す	Find a part or net
+部品番号やネットの名前で探して、そこへ移る	Search by reference designator or net name and jump there
+いまの図を空にして新しく始める	Clear the current drawing and start a new one
+開く	Open
+保存したファイルを開く	Open a saved file
+いまのファイルに上書き	Overwrite the current file
+名前を付けて保存	Save as
+別の名前で保存	Save under another name
+直前の操作を取り消す	Undo the last action
+取り消した操作をやり直す	Redo the undone action
+すべて選ぶ	Select all
+図の上のものを全部選ぶ	Select everything on the drawing
+全体を見る	Fit all
+全体が入るように拡大	Zoom so everything fits
+回す	Rotate
+選んだ部品 (置く前の部品) を 90° 回す	Rotate the selected part (or the part being placed) by 90°
+選んだものを消す	Delete the selection
+描きかけ・選択をやめて、選択ツールに戻る	Stop drawing or selecting and go back to the select tool
+もう一度計算	Recalculate
+最後に動かした解析を、いまの回路で計算し直す	Rerun the last analysis on the current circuit
+部品を足す	Add part
+名前で探して置く (クイック追加)	Find by name and place (quick add)
+ピンとピンを線でつなぐ	Connect pins with a wire
+線に名前を付けて、離れた所とつなぐ	Name a wire to connect it to distant places
+表と裏をつなぐ穴 (配線中は、そこで層を替える)	A hole connecting top and bottom (while routing, it switches the layer there)
+2 点の距離を測る (Enter・X・Y で寸法線に)	Measure the distance between 2 points (Enter, X, Y make a dimension line)
+層を替える	Switch layer
+配線する層を表と裏で切り替える	Switch the routing layer between top and bottom
+裏返す	Flip
+選んだ部品を基板の反対の面へ	Move the selected parts to the other side of the board
+ERC (回路の点検)	ERC (circuit check)
+つなぎ忘れ・ショート・電源のないピンを探す	Find missed connections, shorts and pins without power
+点検	Check
+DRC (基板の点検)	DRC (board check)
+間隔・線幅・つながりを点検	Check clearances, track widths and connections
+キーと操作の一覧	Keys and actions
+電子回路とこのソフトの言葉を引く	Look up words of electronics and of this app
+言語・画面の大きさ・色・ホイール・自動保存	Language, screen size, colors, wheel, autosave
+最初の電源投入のガイド	First power-on guide
+組んだ基板の電流制限の値と、正常なら流れる電流の範囲	Current limit setting for the assembled board and the range of current that flows when it is normal
+値の決め方 (計算ツール)	How to choose values (calculators)
+LED の抵抗・分圧・フィルタなどの値を計算	Calculate values for LED resistors, dividers, filters and more
+最近使った	Recent
+★ ピン留め	★ Pinned
+部品番号・ネットの名前 (例: R1、VCC)	Refdes or net name (e.g. R1, VCC)
+操作を探す… (名前や、したいことの言葉で)	Find an action… (by name or words for what you want to do)
+見つかりません。別の言葉で探してください	Nothing found. Try other words
+↑↓ 選ぶ   Enter 実行   Esc 閉じる   Ctrl+Enter ★に留める・外す	↑↓ select   Enter run   Esc close   Ctrl+Enter pin/unpin ★
+Ctrl+K でいつでも	Ctrl+K anytime
+使えない: {}	Unavailable: {}
+# crates/app/src/app_actions.rs
+もう一度計算 ({})	Recalculate ({})
+# crates/app/src/autosave.rs
+(まだ名前を付けていない新しい回路図)	(new schematic, not named yet)
+(まだ名前を付けていない新しい基板)	(new board, not named yet)
+# crates/app/src/bench_guide.rs
+電源を入れる	Power on
+電流制限の値と、正常な電流の範囲を見る…	See the current limit and the normal current range…
+いまの回路図から、電源に入れる電流制限の値と、正常なら流れる電流の範囲を出す「最初の電源投入のガイド」を開きます	Opens the "First power-on guide", which gives, from the current schematic, the current limit to set on the supply and the range of current that flows when everything is normal
+# crates/app/src/bench_tab.rs
+1. 組み立て	1. Assemble
+2. 電源投入	2. Power on
+3. 測る	3. Measure
+4. 合否	4. Pass/fail
+5. 修理	5. Repair
+部品を背の低い順に付けます。付けた部品に印をつけると、次に付ける部品が基板の絵の上で光ります	Solder the parts from lowest to tallest. When you mark a part as done, the next part to solder lights up on the board picture
+電流を制限できる電源で初めて電源を入れ、流れた電流を、回路図から出した正常な範囲と比べます	Power the board for the first time from a supply that can limit current, and compare the current that flows with the normal range from the schematic
+テスターで電圧を測る点と、正常ならその点に出る電圧 (DC 動作点) を並べます。点を選ぶと、基板の絵の上でそのパッドが光ります	Lists the points to measure with the multimeter and the voltage each point shows when normal (DC operating point). Pick a point and its pad lights up on the board picture
+測った値をスペック表の「実測」欄に書くと、シミュレーションとの差と、合っているかが出ます	Write the measured values in the "Real" column of the spec table to see the difference from the simulation and whether they pass
+動かないときに、症状から原因を探す練習と道具です	Practice and tools for finding the cause from the symptoms when it does not work
+組み立て表を保存しました: {} (ブラウザで開いて印刷できます)	Saved the assembly sheet: {} (open it in a browser to print)
+組み立て表を保存できませんでした: {e} (保存先のフォルダに書き込めるか確かめてください)	Could not save the assembly sheet: {e} (check that you can write to the destination folder)
+部品を背の低い順に付け、付けたら左の一覧に印をつけます。次に付ける部品が黄色く光り、向きのある部品には赤い印が出ます	Solder the parts from lowest to tallest and mark them in the list on the left when done. The next part glows yellow, and parts with a polarity get a red mark
+電流を制限できる電源で、左の「電流制限に入れる値」に合わせてから電源を入れ、落ち着いた電流を入れて比べます	Set a supply that can limit current to "Current limit setting" on the left, then power on, enter the settled current and compare
+左の一覧で点を選ぶと、基板の絵の上でそのネットのパッドが光ります。黒い棒は青い GND へ	Pick a point in the list on the left and the pads of its net light up on the board picture. Black probe to the blue GND
+測った値を表の「実測」欄に書くと、シミュレーションとの差と、合っているかが出ます	Write the measured values in the "Real" column of the table to see the difference from the simulation and whether they pass
+症状の出ている点から測って、正常な電圧と比べます。練習は、故障を仕込んだ回路で何度でもできます	Measure from the point showing the symptom and compare with the normal voltage. You can practice as often as you like on a circuit with a planted fault
+実機の手順	Bench steps
+基板の絵では、電源をつなぐ所 (コネクタ・電源の部品) が光ります。	On the board picture, the places to connect power (connectors, power parts) light up.
+スペック表に行がまだありません。「3. 測る」の「測る項目を表に入れる」で入れるか、回路図の解析タブの「スペック」で足します。	The spec table has no rows yet. Add them with "Put the items to measure in the table" in "3. Measure", or with "Spec" in the analysis tab of the schematic.
+DC 動作点を計算し直す	Recalculate the DC operating point
+表の「シミュレーション」の値は、回路図の解析の結果から読みます。回路図を変えたあとは、計算し直してください	The "Simulation" values in the table are read from the schematic's analysis results. After changing the schematic, recalculate
+基板にまだ部品がありません。基板の画面で「回路図から取り込み」をして、配置すると、ここに付ける順の部品の一覧が出ます。	The board has no parts yet. Use "Import from schematic" in the board view and place the parts; the parts in soldering order then appear here.
+基板の画面へ	To the board
+基板パターンの画面に切り替えます	Switch to the PCB layout view
+付けた部品 {n} / {}	Soldered parts {n} / {}
+組み立て表を印刷用に保存 (SVG)…	Save assembly sheet for printing (SVG)…
+基板の配置図 (向きの印つき) と、付ける順の部品の一覧 (□ に印をつけながら進める) を、A4 の幅の 1 枚の図 (SVG) にします。ブラウザで開いて印刷するか、印刷から PDF にできます。いま印をつけた部品は、印がついた形で入ります	Makes one A4-wide drawing (SVG) with the board layout (with orientation marks) and the parts in soldering order (tick the □ as you go). Open it in a browser and print, or print it to PDF. Parts you have marked now appear marked
+「裏」の部品は、基板を裏返して付けます (絵では薄く描きます)	Parts on the "Bottom" are soldered with the board flipped (drawn faint in the picture)
+付け終えたら印をつけます。次に付ける部品が光ります	Mark it when soldered. The next part lights up
+選ぶと、基板の絵の上でこの部品が光ります	Select it to light this part up on the board picture
+向き: {}	Orientation: {}
+裏	Bottom
+向きのある部品です。基板の絵の赤い印 (1 = 1 番ピン、K = カソード、+ = 電解コンデンサの + 側) に合わせて付けます。データシートと基板のシルクの印でも確かめます	This part has a polarity. Match the red mark on the board picture (1 = pin 1, K = cathode, + = the + side of an electrolytic capacitor). Also check against the datasheet and the silkscreen mark on the board
+はんだ付けの手順とチェック表	Soldering steps and checklist
+テスターを DC 電圧のレンジにして、黒い棒を GND (絵では青) に、赤い棒を測る点に当てます。	Set the multimeter to a DC voltage range, put the black probe on GND (blue in the picture) and the red probe on the point to measure.
+回路図のスペック表に、入力電圧・出力電圧・電流の行を足して、DC 動作点を計算します。回路図に VIN・VOUT という名前があると、自動で選ばれます。測った値は「4. 合否」で書き込みます	Adds rows for input voltage, output voltage and current to the schematic's spec table and calculates the DC operating point. Nets named VIN and VOUT in the schematic are picked automatically. Enter the measured values in "4. Pass/fail"
+DC 動作点を計算する	Calculate the DC operating point
+いまの回路図で、正常ならそれぞれの点に出る電圧を計算します	Calculates the voltage each point shows on the current schematic when normal
+正常なら出る電圧は、DC 動作点から出します。「DC 動作点を計算する」を押してください。	The normal voltages come from the DC operating point. Press "Calculate the DC operating point".
+選ぶと、基板の絵の上で、このネットのパッドが光ります。太字はスペック表で測る点です	Select it to light up the pads of this net on the board picture. Bold ones are the points measured in the spec table
+学習パスの「組み立てて、性能を測る」…	Learning path "Assemble and measure the performance"…
+自分で設計した電源を作って、シミュレーションとの差を調べる、学習パスの手順の窓を開きます	Opens the learning path steps window for building a power supply you designed and checking the difference from the simulation
+オシロの波形を予測に重ねる (回路図の過渡解析)…	Overlay scope waveforms on the prediction (schematic transient analysis)…
+オシロで記録した CSV を、回路図の過渡解析の波形に重ねて比べます。予測の波形がある回路図の画面に移ります	Overlays a CSV recorded with an oscilloscope on the transient analysis waveform of the schematic to compare. Moves to the schematic view with the predicted waveform
+基板がまだありません	No board yet
+基板の画面で、回路図から部品を取り込んで配置すると、ここに基板の配置図が出て、手順ごとに付ける部品や測る点が光ります。	In the board view, import the parts from the schematic and place them; the board layout then appears here and the parts to solder and the points to measure light up at each step.
+電源投入・測る・合否・修理の手順は、回路図だけでも使えます (ブレッドボードで組んだときなど)。	The power-on, measure, pass/fail and repair steps also work with just a schematic (for example when you built it on a breadboard).
+黄: 次に付ける部品・選んだ部品　緑: 付けた部品　赤: 向きの印 (1 = 1 番ピン、K = カソード、+ = 電解コンデンサの + 側)	Yellow: next part, selected part  Green: soldered parts  Red: orientation marks (1 = pin 1, K = cathode, + = the + side of an electrolytic capacitor)
+黄: 電源をつなぐ所 (コネクタ・電源の部品)	Yellow: where to connect power (connectors, power parts)
+黄: 測る点 (赤い棒)　青: GND (黒い棒)	Yellow: point to measure (red probe)  Blue: GND (black probe)
+症状から原因を探すのは、回路図の上で行います	Finding the cause from symptoms is done on the schematic
+ (裏)	 (bottom)
+基板が動かないときは、症状の出ている点から測り、正常な電圧と比べて、原因の部品を絞り込みます。回路図の「症状から原因を探す」は、測った電圧から、怪しい部品の順を出します。	When a board does not work, measure from the point showing the symptom, compare with the normal voltage and narrow down the faulty part. "Find the cause from symptoms" on the schematic ranks the suspect parts from the measured voltages.
+症状から原因を探す (回路図の解析)…	Find the cause from symptoms (schematic analysis)…
+いまの回路図で、測った電圧を入れると、どの部品の故障が一番ありそうかと、次に測るとよい点を出します	Enter the measured voltages for the current schematic to see which part's fault is most likely and which point is best to measure next
+修理の練習	Repair practice
+故障が 1 つ仕込まれた回路を、テスターで測って、原因を見つけます (サンプルの回路が開きます)	Measure a circuit with one planted fault with the multimeter and find the cause (opens a sample circuit)
+ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、点検の道具で確かめ、直します	Plants one fault in a working board. Find the cause from the symptoms, confirm it with the check tools and fix it
+# crates/app/src/canvas_theme.rs
+地	Background
+キャンバスの地	Canvas background
+方眼	Grid
+方眼の点	Grid dots
+部品の記号とピン	Part symbols and pins
+部品の塗り	Part fill
+IC などの箱の中	Inside the boxes of ICs and similar
+ピンの番号	Pin numbers
+電圧の結果がないときの配線と接続点	Wires and junctions when there are no voltage results
+バスの線とバスのラベル	Bus lines and bus labels
+ネットの名前のラベル	Net name labels
+未接続の印	No-connect marks
+つながないピンの × と、つながっていないピンの印	The × on pins left unconnected and the marks on pins not connected yet
+部品番号	Refdes
+R1・U2 などの部品番号	Refdes such as R1, U2
+10k・LM358 などの値	Values such as 10k, LM358
+電圧の数字	Voltage numbers
+解析の結果の電圧	Voltages from analysis results
+電流の数字	Current numbers
+解析の結果の電流	Currents from analysis results
+選んでいるもの	Selection
+ERC のまちがいの印	ERC error marks
+ERC の注意の印・故障の印	ERC warning marks and fault marks
+デジタル回路を動かすときの、High のネット	High nets while running a digital circuit
+デジタル回路を動かすときの、Low のネット	Low nets while running a digital circuit
+不定 (X)	Unknown (X)
+デジタル回路を動かすときの、High とも Low とも言えないネット	Nets that are neither High nor Low while running a digital circuit
+光った LED	Lit LED
+デジタル回路を動かすときの、光っている LED	Lit LEDs while running a digital circuit
+# crates/app/src/files.rs
+プロジェクトを開きました ({} 枚の基板。いまは「{}」): {}	Opened the project ({} boards, now "{}"): {}
+# crates/app/src/glossary.rs
+ループゲインの位相が −180° になる周波数で、ゲインが 1 倍 (0 dB) まであと何 dB 残っているか。6 dB 以上が目安で、0 以下だと発振します。	At the frequency where the loop gain's phase reaches −180°, how many dB the gain still has left before 1× (0 dB). 6 dB or more is a guide; at 0 or below it oscillates.
+ナイキスト線図	Nyquist plot
+ループゲインを、周波数を変えながら複素数の平面に 1 本の線で描いた図。線が −1 の点の右を通り、遠いほど安定です。	A plot of the loop gain drawn as one line on the complex plane while the frequency changes. The line should pass to the right of the −1 point; the farther away, the more stable.
+ニコルス線図	Nichols chart
+横軸を位相、縦軸をゲイン (dB) にして、ループゲインを 1 本の線で描いた図。(−180°, 0 dB) の点から離れているほど安定です。	A plot of the loop gain drawn as one line, with phase on the horizontal axis and gain (dB) on the vertical axis. The farther from the (−180°, 0 dB) point, the more stable.
+根軌跡	Root locus
+部品の値やゲインを変えたとき、極が複素数の平面をどう動くかを描いた線。右半面に入る値から先は発振します。	Lines showing how the poles move on the complex plane when a part value or gain changes. Beyond the value where they enter the right half-plane, it oscillates.
+真理値表	Truth table
+入力の組み合わせ全部と、そのときの出力を並べた表。入力が 2 本なら 4 行、3 本なら 8 行です。	A table of every combination of inputs and the output for each. 2 inputs give 4 rows, 3 inputs give 8 rows.
+半加算器	Half adder
+1 ビットの数 2 つを足す回路。和は XOR、桁上がりは AND で作ります。下の桁からの桁上がりも足すのが全加算器です。	A circuit that adds two 1-bit numbers. The sum is made with XOR and the carry with AND. One that also adds the carry from the lower digit is a full adder.
+出力を入力に返して、1 ビットを覚える回路。セット (1 にする) とリセット (0 にする) の入力があり、両方をやめても最後の値を保ちます。	A circuit that feeds its output back to its input to remember 1 bit. It has set (make it 1) and reset (make it 0) inputs, and keeps the last value when both are released.
+クロックの立ち上がりの瞬間にだけ入力を取り込んで覚える、1 ビットの記憶の素子。カウンタやシフトレジスタの部品です。	A 1-bit memory element that takes in and remembers its input only at the moment of the clock's rising edge. It is a building block of counters and shift registers.
+クロックが来るたびに、持っている数を 1 つずつ増やす (減らす) 回路。4 ビットなら 0〜15 を数えます。	A circuit that increases (or decreases) the number it holds by one on every clock. With 4 bits it counts 0 to 15.
+分周	Frequency division
+クロックの周波数を 1/2、1/4 … に下げること。カウンタの各ビットは、下のビットの半分の周波数になります。	Lowering a clock frequency to 1/2, 1/4 … Each bit of a counter runs at half the frequency of the bit below it.
+伝搬遅延	Propagation delay
+ゲートの入力が変わってから、出力が変わるまでの時間。74HC では 10ns ほどで、ゲートを何段も通ると積み重なります。	The time from a change at a gate's input until its output changes. About 10ns for 74HC, and it adds up when a signal passes many gates.
+# crates/app/src/help.rs
+配線ツール / ネットラベルのツールにします (Esc で選択ツールに戻ります)。基板でも W は配線です	Selects the wire tool / net label tool (Esc returns to the select tool). On the board, W is routing too
+シートのものを全部選びます	Selects everything on the sheet
+最後に動かした解析を、いまの回路でもう一度計算します。回路を変えると、前の結果は薄く残り、図の上に「再計算 (F5)」の帯が出ます	Recalculates the last analysis on the current circuit. When you change the circuit, the old results stay faint and a "Recalculate (F5)" bar appears over the drawing
+右クリック (ネットの上)	Right-click (on a net)
+DC の結果が出ているとき、「このネットを基準にする」で、線の色をそのネットからの電圧の差にします (右下の色の見本で戻せます)	When DC results are shown, "Use this net as reference" colors the wires by their voltage difference from that net (undo it with the color legend at the bottom right)
+学ぶ → 最初の電源投入のガイド (Ctrl+K でも)	Learn → First power-on guide (also from Ctrl+K)
+組み立てた基板に初めて電源を入れる前に開きます。いまの回路図の DC 動作点から、電源ごとに、部品が表示どおりの値のときの電流、正常なら流れる電流の範囲 (抵抗の許容差の端・部品のモデルのデータシートの min / max・自己発熱の分)、電流制限つきの電源に入れる制限の値 (範囲の上の端の 1.5 倍を切り上げ) が出ます。電源を入れて落ち着いた電流を「測った電流」に入れると、正常か、多すぎ (ショート・部品の向き違い) か、少なすぎ (付け忘れ・はんだ不良) かと、疑う所が順に並びます。実機の作業の窓の「電源を入れる」手順のボタンからも開けます。サンプル「最初の電源投入」	Open it before powering an assembled board for the first time. From the DC operating point of the current schematic, it gives for each supply: the current when the parts have their marked values, the range of current that flows when normal (resistor tolerance ends, datasheet min / max in the part models, self-heating), and the limit to set on a current-limited supply (1.5× the top of the range, rounded up). Power on and enter the settled current in "Measured current" to see whether it is normal, too high (short, part the wrong way round) or too low (missing part, bad solder joint), with the places to suspect in order. It also opens from the "Power on" step button in the bench work window. Sample "First power-on"
+学ぶ → デジタル回路を動かしながら見る	Learn → Run and watch a digital circuit
+いまの回路図のデジタル回路 (74HC などのロジック IC) を、手で動かします。スイッチ (SW_SLIDE) と押しボタン (SW_PUSH) の部品をクリックすると 0 と 1 が切り替わり (押しボタンは押している間だけ。Shift + クリックで押したまま)、配線が High は赤・Low は青・どちらとも言えない電圧は黄色 (X) になり、ロジック IC のピンの横に 0 / 1、光っている LED に印が出ます。パルスの電源はクロックになり、上の帯の ▶ / ⏸、「1 クロック」(上がって下がる 1 回)、「1 イベント」(次にゲートの出力が変わる時刻まで)、つまみ (0.5〜10 Hz) で動かします。「ゆっくり」はゲートの遅れ (10ns ほど) を 1 秒ほどに伸ばします。下にロジックアナライザ (名前の付いたネット。D0〜D3 のような名前はバスにまとめて 16 進) と、クロックの無い回路では真理値表 (入力 4 本まで。試した組み合わせの行が埋まる。前の状態で変わる出力は「記憶」) が出ます。動かしている間は編集できず、回路を変えると終わります。「終わる」で編集に戻ります。中身は過渡解析と同じシミュレータを、画面の時刻まで続きから解いたものです。サンプル「半加算器を動かす」「SR ラッチを動かす」「カウンタを動かす」とレッスン 87〜89	Runs the digital circuit (logic ICs such as 74HC) of the current schematic by hand. Clicking a switch (SW_SLIDE) or push button (SW_PUSH) part toggles 0 and 1 (a push button only while held; Shift + click keeps it pressed). Wires turn red for High, blue for Low and yellow (X) for voltages that are neither, logic IC pins show 0 / 1 beside them, and lit LEDs get a mark. A pulse source becomes the clock, driven by ▶ / ⏸ on the bar at the top, "1 clock" (one rise and fall), "1 event" (until the next time a gate output changes) and the knob (0.5 to 10 Hz). "Slow" stretches the gate delay (about 10ns) to about 1 second. Below appear a logic analyzer (named nets; names like D0 to D3 are grouped into a bus in hex) and, for circuits without a clock, a truth table (up to 4 inputs; rows fill in as you try combinations; outputs that depend on the previous state are "memory"). While running you cannot edit, and changing the circuit ends it. "End" returns to editing. Inside, it is the same simulator as the transient analysis, solved onward up to the time on screen. Samples "Run a half adder", "Run an SR latch", "Run a counter" and lessons 87 to 89
+部品作成 → データシートから下書き → QFN・SON のパッケージ	Create part → Draft from datasheet → QFN and SON packages
+下書きのパッケージで QFN・WQFN・SON・WSON・DFN などの足の無い形を選ぶと、QFN は「クアッド」、SON・DFN は「デュアル」にし、裏の放熱パッドも付けます。TI の「EXAMPLE BOARD LAYOUT」の図があればそのパッドと放熱パッド (図の中の番号がピン番号)、無ければ寸法表の E・L・b・e から IPC の式でパッドを、D2・E2 から放熱パッドを作ります。放熱パッドのピンはピン表の EP・PAD の行、無ければ次の番号で「EP」の行を足します。GND につなぐ部品なら名前を直してください。SOD-323 のような 2 端子の形は寸法表から 2 端子のパッドを、SOT-363 のような 6 本足はデュアルで作ります	When you pick a leadless package such as QFN, WQFN, SON, WSON or DFN for the draft package, QFN becomes "Quad" and SON or DFN becomes "Dual", and a thermal pad underneath is added too. If there is a TI "EXAMPLE BOARD LAYOUT" drawing, its pads and thermal pad are used (the numbers in the drawing are pin numbers); otherwise the pads are made with the IPC formulas from E, L, b and e in the dimension table, and the thermal pad from D2 and E2. The thermal pad's pin is the EP or PAD row of the pin table; if there is none, an "EP" row is added with the next number. Rename it if the part connects it to GND. Two-terminal packages such as SOD-323 get 2-terminal pads from the dimension table, and 6-lead ones such as SOT-363 are made as dual
+部品作成 → NTC サーミスタ・水晶・TVS	Create part → NTC thermistor, crystal, TVS
+抵抗の「かんたん作成」の下の「NTC サーミスタ」は、25 ℃ の抵抗と B 定数から、シミュレーションの温度で抵抗が変わるモデルを作ります。記号の形を「水晶」にすると、公称周波数・ESR・並列容量 C0 (と C1・負荷容量 CL) から水晶の等価回路を作ります。ダイオードで記号の形を「TVS」にすると、VRWM・IR・VBR (IT)・VC (IPP) から、降伏とクランプを合わせたモデルを作ります (「PDF の表から読む」もあります。VC が図だけのものは図から 1 点読んで入れます)。どれも表の値とモデルの値を並べて見せ、「② シミュレーション」に入れられます	"NTC thermistor" under "Quick create" for resistors makes a model whose resistance changes with the simulation temperature, from the resistance at 25 ℃ and the B constant. Setting the symbol shape to "Crystal" makes a crystal equivalent circuit from the nominal frequency, ESR and shunt capacitance C0 (and C1, load capacitance CL). For a diode, setting the symbol shape to "TVS" makes a model with breakdown and clamping from VRWM, IR, VBR (IT) and VC (IPP) ("Read from PDF table" works too; when VC is only in a graph, read one point from the graph and enter it). Each shows the table values next to the model values and can be put into "② Simulation"
+部品作成 → データシートの窓 → 画像だけの PDF	Create part → Datasheet window → Image-only PDFs
+スキャンした古いデータシートのように文字の入っていない PDF は、開くと Windows の文字認識でページの絵から文字を読みます (1 ページ 1 秒ほど。窓の上に進み具合と「やめる」)。読めた文字で、検索・ピン表・定格・表の読み取り・グラフの目盛り・下書きがふつうの PDF と同じに使えます。文字認識は読み違えることがある (「IC」が「lc」など、よくあるものは直します) ので、入れた値は絵と見比べてください	A PDF with no text in it, like an old scanned datasheet, is read with Windows text recognition from the page images when you open it (about 1 second per page; the progress and "Stop" are at the top of the window). With the recognized text, search, pin tables, ratings, table reading, graph scales and drafts work the same as for a normal PDF. Text recognition can misread ("IC" as "lc" and so on; common ones are corrected), so compare the values you enter with the image
+部品作成 → データシートの窓 → グラフから点を読む	Create part → Datasheet window → Read points from a graph
+データシート (PDF) のグラフの軸の目盛りの数字を 2 つずつクリックし (対数の軸は「対数」に印)、曲線の上をクリックすると、点の値を読みます。目盛りの数字が文字でない図は、目盛りの線をクリックして値を入れます。「曲線に合わせる」に印があると、クリックした所の近くの曲線の真ん中に点を置きます。読んだ点は写すか、ダイオードの「順方向特性の点」に入れられます (ダイオードの「PDF のグラフから読む」から始めると、電流と電圧の順で入ります)。欄の「グラフから読む」で、図の曲線が何本もあってどれか決められないときは、候補の線に色と番号が付くので、読みたい線をクリックします	Click two of the scale numbers on each axis of a graph in the datasheet (PDF) (tick "Log" for a log axis), then click on a curve to read the value of that point. If the scale numbers in the graph are not text, click the scale lines and enter the values. With "Snap to curve" ticked, the point is placed at the middle of the nearest curve to where you clicked. You can copy the read points or put them into a diode's "Forward characteristic points" (starting from the diode's "Read from PDF graph" puts them in current-then-voltage order). When "Read from graph" for a field finds several curves in the graph and cannot decide, the candidate lines get colors and numbers, so click the line you want to read
+部品作成 → IC → かんたん作成 → 3 端子レギュレータ	Create part → IC → Quick create → 3-terminal regulator
+データシートの表の typ から、同梱のレギュレータ (78xx・LM317・AMS1117) と同じひな形でモデルを作ります。「PDF の表から読む」(か「データシートから下書き」) で、出力電圧 (部品名の電圧のページを先に)・ライン / ロード・レギュレーション (条件の範囲と)・ドロップアウト・グラウンド電流・ADJ の電流・最小負荷・電流制限 (入出力の差と)・リップル除去・雑音を探して入れ、表に ADJ の電流があれば「可変」にします。表の読みは会社ごとにまちまちなので、入れた値は表と見比べて確かめます。「表とグラフから全部読む」は続けて図も読み、ドロップアウトの図 (電流に対する) の点に直線を当ててドロップアウトと電流による増えを入れ、リップル除去と雑音密度の図 (周波数に対する) は表に値が無いときだけその周波数 (120 Hz・1 kHz) の値を入れます。読めない図は「グラフから読む」のボタンで曲線をクリックします。1 冊に出力電圧が何通りもある部品 (LP5907・MC7800・AMS1117) は「電圧違い」のボタンで型番を選ぶと、その電圧とページの値が入ります。「電圧違いをまとめて作る」は、電圧ごと (注文情報にパッケージがあればパッケージごと) に表を読み直してモデルを作り、全部をライブラリに保存します (組み込みの形の無いパッケージは作らず、そう言います)	Makes a model from the typ values in the datasheet tables, with the same template as the bundled regulators (78xx, LM317, AMS1117). "Read from PDF table" (or "Draft from datasheet") finds and enters the output voltage (the page for the voltage in the part name first), line / load regulation (with the condition range), dropout, ground current, ADJ current, minimum load, current limit (with the input-output difference), ripple rejection and noise, and sets "Adjustable" if the table has an ADJ current. Tables differ from maker to maker, so compare the entered values with the table. "Read all from tables and graphs" goes on to read the graphs too: it fits a line to the points of the dropout graph (against current) and enters the dropout and its rise with current, and from the ripple rejection and noise density graphs (against frequency) it enters the value at that frequency (120 Hz, 1 kHz) only when the table has no value. For graphs it cannot read, click the curve with the "Read from graph" button. For parts with several output voltages in one datasheet (LP5907, MC7800, AMS1117), choosing a part number with the "Voltage variants" button enters that voltage and the values of its page. "Make all voltage variants" rereads the tables for each voltage (and for each package, if the ordering information lists packages), makes the models and saves all of them to the library (packages with no built-in shape are skipped, and it says so)
+部品作成 → トランジスタ → NPN / PNP → かんたん作成	Create part → Transistor → NPN / PNP → Quick create
+データシートの代表特性のグラフ (hFE・ベースの電圧・飽和電圧・容量) の点と fT から、同梱のトランジスタと同じ作り方でモデルを作ります。欄ごとの「グラフから読む」でデータシートの窓が開き、図の見出し (DC Current Gain・“On” Voltages など) からその図のページへ移り、軸の目盛り (対数か・mA などの単位) も図の数字から入ります。曲線が 1 本の図や、曲線の名前 (「VBE(sat)」「Cob」「25°C」「Single Pulse」) が図に書いてあるときは、その曲線もたどって点まで取るので、青い線が目盛りの数字に、赤い線が読みたい曲線に合っているかを見て欄に入れます。決められないときは曲線を 1 回クリックします (目盛りの数字が絵の図は Windows の文字認識で読み、それでも読めなければ目盛りも手で入れます)。同じ図が何枚かあれば検索の一覧に並びます。読んだ点がその欄に入ります (同じページの図なら目盛りはそのまま)。「PDF の表から読む」は表の typ (IC つき) を入れます。「モデルを作ってずれを見る」で、点とモデルの値が並びます。ダイオードの「ずれの表を見る」も同じ作り方です。「表とグラフから全部読む」なら、表の値のあと曲線の欄を全部まとめて図から読み、モデルまで作ります (読めなかった欄は理由が出るので、その欄の「グラフから読む」でクリック)。図に測定の VCE が書いてあれば、hFE・VBE(on) の VCE の欄にも入れます。ダーリントン・ダイオード・フォトカプラ・フォトダイオードにも同じボタンがあります	Makes a model from the points of the typical characteristics graphs in the datasheet (hFE, base voltage, saturation voltage, capacitance) and fT, the same way as the bundled transistors. "Read from graph" for each field opens the datasheet window, jumps to the page of that graph from its heading (DC Current Gain, “On” Voltages and so on), and also fills in the axis scales (log or not, units such as mA) from the numbers in the graph. When a graph has one curve, or the curve names ("VBE(sat)", "Cob", "25°C", "Single Pulse") are written in the graph, it also traces that curve and takes the points, so check that the blue lines match the scale numbers and the red line matches the curve you want, then put them in the field. When it cannot decide, click the curve once (scale numbers that are pictures are read with Windows text recognition; if that fails too, enter the scale by hand). If there are several copies of the same graph, they are listed in the search results. The read points go into that field (for a graph on the same page, the scale stays). "Read from PDF table" enters the typ values in the tables (with IC). "Make model and see the differences" lists the points next to the model values. A diode's "See the difference table" works the same way. "Read all from tables and graphs" reads the table values, then reads all the curve fields from the graphs at once and makes the model too (fields it could not read show the reason, so click with that field's "Read from graph"). If the graph states the measuring VCE, it is also entered in the VCE fields of hFE and VBE(on). Darlingtons, diodes, optocouplers and photodiodes have the same button
+部品作成 → IC → 論理式からピンとモデルを作る	Create part → IC → Make pins and model from logic expressions
+入力ピンの名前と、出力ごとの論理式 (例: Y = A & !B) を書くと、真理値表が出て、「ピンとモデルを作る」でピン (入力・出力・VCC・GND) とシミュレーションのモデルができます。! は否定、& はかつ、^ は排他的論理和、| はまたは。行の最後に「@ CLK」を付けると、クロックの立ち上がりで値を覚えるフリップフロップになり、ほかの式でも使えます (カウンタなど)。「@ CLK clear !RST」のように、0 にする (clear)・1 にする (set) 入力も付けられます (! で Low のとき働く)。半加算器・2 ビットカウンタなどの例から始められます	Write the input pin names and a logic expression for each output (e.g. Y = A & !B) to see the truth table, and "Create pins and model" makes the pins (inputs, outputs, VCC, GND) and the simulation model. ! is NOT, & is AND, ^ is XOR, | is OR. Adding "@ CLK" at the end of a line makes it a flip-flop that remembers the value on the clock's rising edge, and other expressions can use it too (for counters and so on). Inputs that make it 0 (clear) or 1 (set) can be added like "@ CLK clear !RST" (! means active when Low). You can start from examples such as a half adder or a 2-bit counter
+部品作成 → トランジスタ → NPN / PNP → ダーリントン	Create part → Transistor → NPN / PNP → Darlington
+TIP120 のような 2 個入りのトランジスタは、トランジスタの欄の下の「ダーリントン」を開きます。回路の図の内蔵の抵抗 R1・R2 と、2 個合わせた hFE・「ON」電圧の図の点から、同梱の TIP120 と同じ作り方でモデルを作ります。「TIP120 の例を入れる」で入れ方が分かります。「PDF の表から読む」で、表にある typ (多くは fT だけ。保証値しか無い表は図から) を入れます。	For a dual transistor such as the TIP120, open "Darlington" under the transistor fields. It makes a model the same way as the bundled TIP120, from the built-in resistors R1 and R2 in the circuit diagram and the points of the combined hFE and "ON" voltage graphs. "Insert the TIP120 example" shows how to fill it in. "Read from PDF table" enters the typ values in the table (usually only fT; for tables with guaranteed values only, use the graphs).
+部品作成 → IC → フォトカプラ	Create part → IC → Optocoupler
+PC817 のようなフォトカプラは、IC の「かんたん作成」の「フォトカプラ」を開きます。LED の順方向の図・出力の図の点と、表の CTR・飽和電圧・カットオフ周波数からモデルを作ります。ピンは A・K・E・C の名前にしておきます。「PDF の表から読む」で、VF・CTR の範囲・VCE(sat)・カットオフ周波数を表から入れます (曲線は図から)。	For an optocoupler such as the PC817, open "Optocoupler" in the IC "Quick create". It makes a model from the points of the LED forward graph and the output graph, and the CTR, saturation voltage and cutoff frequency in the table. Name the pins A, K, E and C. "Read from PDF table" enters VF, the CTR range, VCE(sat) and the cutoff frequency from the table (curves come from the graphs).
+部品作成 → ダイオード → 記号の形をフォトダイオード	Create part → Diode → Symbol shape photodiode
+記号の形を「フォトダイオード」にすると、光電流 (1 mW/cm² あたり)・開放電圧・暗電流・容量からモデルを作る欄に変わります。光の強さはシミュレーション専用のピン IRRAD (1 V = 1 mW/cm²) で与えます。「② シミュレーション」に入れるとき、「③ ピン」に IRRAD が無ければ自動で足します (表の「sim」に印が付いたピンは基板にパッドを出しません)。「PDF の表から読む」で、光電流・開放電圧・暗電流・降伏電圧・容量を表から入れます。	Setting the symbol shape to "Photodiode" changes the fields to make a model from the photocurrent (per 1 mW/cm²), open-circuit voltage, dark current and capacitance. The light intensity is given with the simulation-only pin IRRAD (1 V = 1 mW/cm²). When you put it into "② Simulation", IRRAD is added automatically if "③ Pins" does not have it (pins ticked "sim" in the table get no pad on the board). "Read from PDF table" enters the photocurrent, open-circuit voltage, dark current, breakdown voltage and capacitance from the table.
+部品作成 → トランジスタ → Nch / Pch MOSFET → かんたん作成	Create part → Transistor → N-ch / P-ch MOSFET → Quick create
+データシートの「電気的特性」の表の typ (VGS(th)・RDS(on)・Ciss・Crss・gFS) からモデルを作ります。データシート (PDF) を開いていれば「PDF の表から読む」で欄に入ります (どのページのどの行かも出ます)。「モデルを作ってずれを見る」で、表の値とモデルの値が並び、ずれの大きい所にはモデルの形の限界の説明が出ます	Makes a model from the typ values (VGS(th), RDS(on), Ciss, Crss, gFS) in the datasheet's "Electrical characteristics" table. With the datasheet (PDF) open, "Read from PDF table" fills in the fields (and shows which row of which page). "Make model and see the differences" lists the table values next to the model values, and where they differ a lot, it explains the limits of the model's form
+推奨の周辺部品 (入力・出力のコンデンサ)	Recommended companion parts (input and output capacitors)
+部品作成の定格の欄の下の「推奨の周辺部品」に、データシートが部品のそばに付けるように言う部品を書きます (「PDF から読む」で「CIN = 1µF」のような書き方から入ります)。回路図でその部品を選び、プロパティの「推奨の周辺部品を置く」を押すと、ピンのそばに置いて GND まで線をつなぎます。データシートがコンデンサの ESR の範囲 (「5mΩ to 500mΩ」「ESR below 20mΩ」) を書いていれば、出力 (と、そう書いてあれば入力) の行の注に入ります	In "Recommended companion parts" under the rating fields in Create part, write the parts the datasheet says to place near the part ("Read from PDF" fills them in from text like "CIN = 1µF"). Select the part in the schematic and press "Place recommended companion parts" in the properties to place them near the pins and wire them to GND. If the datasheet gives a capacitor ESR range ("5mΩ to 500mΩ", "ESR below 20mΩ"), it goes into the note of the output row (and the input row, if stated)
+ピンの種類 (入力・出力・電源)	Pin types (input, output, power)
+部品作成の「③ ピン」の表の「種類」で、ピンが入力・出力・電源などのどれかを決められます。データシートのピン表の I/O の列 (I・O・P など) と名前から案が入り、「名前から種類を入れる」でも入ります。種類のあるピンは ERC が、出力どうしのつながり・入力ピンだけで何も駆動しない線・つないだ NC のピン・電源につながらない電源ピンを知らせます。KiCad から取り込んだ部品は、KiCad の種類がそのまま入ります	"Type" in the "③ Pins" table of Create part sets whether a pin is an input, output, power and so on. Suggestions come from the I/O column (I, O, P and so on) of the datasheet pin table and from the names, and "Set types from names" fills them in too. For pins with a type, ERC reports outputs connected together, wires with only input pins and nothing driving them, connected NC pins, and power pins not connected to power. Parts imported from KiCad keep their KiCad types
+部品作成 → データシートから下書き → MOSFET・トランジスタのピン	Create part → Draft from datasheet → MOSFET and transistor pins
+ピンの番号を書いていない MOSFET・トランジスタのデータシート (G・D・S や E・B・C を記号と外形の絵にだけ書いたもの) は、「Pin 1 = Gate」「1 Base 2 Emitter 3 Collector」のような文か、SOT-223・TO-220・TO-92 のように正面から見た外形の絵の端子の文字の並び (左から 1・2・3) から読みます。どちらも無ければ、パッケージのよくある並び (SOT-23 の MOSFET は 1 G・2 S・3 D、トランジスタは 1 B・2 E・3 C) をチェックの無い候補として出すので、外形の絵と見比べてからチェックを入れてください	For MOSFET and transistor datasheets that do not number the pins (G, D, S or E, B, C written only on the symbol and outline pictures), the pins are read from sentences such as "Pin 1 = Gate" or "1 Base 2 Emitter 3 Collector", or from the order of the terminal letters in a front-view outline picture such as SOT-223, TO-220 or TO-92 (1, 2, 3 from the left). If there is neither, the common order for the package (1 G, 2 S, 3 D for a SOT-23 MOSFET; 1 B, 2 E, 3 C for a transistor) is offered as an unticked suggestion, so compare it with the outline picture before ticking it
+ピン表を表計算で直す (CSV)	Edit the pin table in a spreadsheet (CSV)
+部品作成の「③ ピン」の表の下の「CSV に書き出す…」で、番号・名前・向き・種類を CSV にします。Excel などで名前をまとめて直し、「CSV から読む…」で戻せます。KiCad のピン表を書き出した CSV も読めます。Excel で保存するときは「CSV UTF-8 (コンマ区切り)」を選んでください	"Export to CSV…" under the "③ Pins" table in Create part writes the numbers, names, directions and types to a CSV. Fix the names all at once in Excel or similar and bring them back with "Read from CSV…". CSVs exported from KiCad pin tables can be read too. When saving from Excel, choose "CSV UTF-8 (Comma delimited)"
+操作を探す: 名前や、したいことの言葉 (例: 周波数、保存) で、メニュー・解析・ツール・用語を探して Enter で実行します。何も打たないと、最近使ったものと ★ で留めたもの (Ctrl+Enter) が出ます	Find an action: by name or words for what you want to do (e.g. frequency, save), search menus, analyses, tools and terms, and run with Enter. With nothing typed, recently used items and those pinned with ★ (Ctrl+Enter) are shown
+部品番号 (R1) やネットの名前 (VCC) で探して、その場所へ移ります	Search by refdes (R1) or net name (VCC) and jump to that place
+保存 / 名前を付けて保存 / 開く / 新規 (基板の画面では基板のファイル)	Save / Save as / Open / New (in the board view, the board file)
+帰還が安定か (絵で見る)	Is the feedback stable (see it in a picture)
+ループゲイン。結果のグラフの上で「ナイキスト線図」「ニコルス線図」に切り替えると、ループゲインが 1 本の線になり、危ない点 (−1、または −180° と 0 dB) からどれだけ離れているかが見えます。位相余裕・ゲイン余裕・−1 に最も近い所は右下の枠に出ます。サンプル「帰還の安定性 (出力にコンデンサをつけた電源)」	Loop gain. Switching the result graph to "Nyquist plot" or "Nichols chart" draws the loop gain as one line, showing how far it stays from the danger point (−1, or −180° and 0 dB). The phase margin, gain margin and the point closest to −1 appear in the box at the bottom right. Sample "Feedback stability (a supply with a capacitor on its output)"
+部品の値で、どこから振動・発振するか	At which part value does it start to ring or oscillate
+根軌跡。部品 (抵抗・コンデンサ・コイル) と値の範囲、出力と入力のネットを選ぶと、値ごとに極を求めてその動きを線で描きます。極が虚軸に近づくほど長く振動し、右半面 (赤い所) に出ると発振します。点にポインタを当てると、その点の部品の値が出ます。サンプル「根軌跡 (ゲインを上げると発振するフィルタ)」	Root locus. Choose a part (resistor, capacitor, inductor), a value range, and the output and input nets, and the poles are found for each value and their movement is drawn as lines. The closer the poles get to the imaginary axis, the longer it rings, and once they enter the right half-plane (the red area) it oscillates. Hover over a point to see the part value at that point. Sample "Root locus (a filter that oscillates when the gain is raised)"
+差動アンプが共通の揺れを消すか	Does a differential amplifier cancel common noise
+同相除去比 (CMRR)。+ 入力と − 入力の信号源と出力を選んで計算すると、2 つの入力の差 (欲しい信号) を、共通の揺れ (ハム・雑音) より何 dB 大きく増幅するかが周波数ごとに出ます。「抵抗の誤差 %」を入れると、抵抗のずれでどこまで下がるかも出ます。サンプル「差動アンプの同相除去比 (CMRR)」	Common-mode rejection ratio (CMRR). Choose the + input and − input sources and the output and calculate to see, for each frequency, how many dB more the difference of the two inputs (the wanted signal) is amplified than the common swing (hum, noise). Entering "Resistor error %" also shows how far resistor mismatch lowers it. Sample "Common-mode rejection ratio of a differential amplifier (CMRR)"
+何 % が合格するか	What % pass
+ばらつき解析の結果の「合格の範囲」に下限・上限を入れると、ランダムに作った回路のうち範囲に入った割合 (合格率) と、範囲までの余裕 Cpk (1.33 以上が量産の目安) が出ます。外れた回路でどの部品が端に寄っていたかも並べます。スペックの表に同じ点の DC 電圧の行があれば、その範囲が入ります	Entering a lower and upper limit in "Pass range" of the variation analysis results shows the share of randomly made circuits that fall in the range (yield) and the margin to the range, Cpk (1.33 or more is the guide for mass production). It also lists which parts were near their ends in the circuits that failed. If the spec table has a DC voltage row for the same point, its range is filled in
+部品が熱くなるか	Do parts get hot
+自己発熱。電流が流れる抵抗・ダイオード・トランジスタの温度上昇と、それで値や電圧がどれだけ動くかを見ます。表の「上限 ℃」と比べて、熱すぎる部品は ⚠ で知らせます (「?」は部品の種類からの目安)。熱抵抗の横の「放熱」で、θjc (接合部 → ケース) と放熱板を入れられます。基板の銅と放熱板はケースから先にだけ効くので、θjc の分は残ります。部品の熱抵抗は、部品作成で入れたデータシートの θja (最小のパッドの値) を使い、無ければパッケージから推定します。サンプル「トランジスタが自分の熱で電流を増やす」「レギュレータに放熱板を付ける」	Self-heating. Shows the temperature rise of resistors, diodes and transistors carrying current, and how much their values and voltages shift because of it. Parts too hot compared with "Max ℃" in the table are flagged with ⚠ ("?" means a guide from the part type). "Heat sinking" next to the thermal resistance lets you enter θjc (junction → case) and a heat sink. Board copper and heat sinks only act beyond the case, so the θjc part remains. A part's thermal resistance uses the datasheet θja (the minimum-pad value) entered in Create part; without it, it is estimated from the package. Samples "A transistor that raises its current with its own heat", "Put a heat sink on a regulator"
+周囲の温度が高いと部品は何度になるか	How hot do parts get when the ambient temperature is high
+自己発熱の下の「周囲の温度を振る (最悪ケース)」。開始・終了・刻み (例: −20 〜 85 ℃、5 K) を入れると、その温度ごとに自己発熱を計算し、部品ごとのいちばん熱い温度と、上限に届く周囲の温度を表にします。温まると電流が増える回路は、周囲が高いほど上昇も大きくなります (サンプル「トランジスタが自分の熱で電流を増やす」)	"Sweep the ambient temperature (worst case)" under self-heating. Enter a start, end and step (e.g. −20 to 85 ℃, 5 K) to calculate self-heating at each temperature and tabulate the hottest temperature of each part and the ambient temperature at which it reaches its limit. In circuits whose current rises as they warm up, the rise gets larger the higher the ambient (sample "A transistor that raises its current with its own heat")
+自己発熱の下の「温度の時間変化」。部品名・時間・熱容量を入れると、過渡解析の電力から温度の上がり方 (グラフ) を出します。2つの部品が温め合う分も入れられます。部品にデータシートの過渡熱抵抗 (Zth) の段を入れておくと (部品作成の「データシートの数字」の「過渡熱抵抗」)、短いパルスの温度の山が合います	"Temperature over time" under self-heating. Enter the part name, time and heat capacity to get how the temperature rises (graph) from the transient analysis power. You can also include two parts heating each other. If you enter the datasheet's transient thermal resistance (Zth) steps for the part ("Transient thermal resistance" in "Datasheet numbers" of Create part), the temperature peaks of short pulses match
+デジタル表示 (過渡解析)	Digital view (transient analysis)
+「デジタル表示」	"Digital view"
+選んだ電圧を、ロジックアナライザのように High / Low の帯で出します。電源の 30 % より下が 0、70 % より上が 1、その間は不定 (赤、バスでは X) です (74HC と同じしきい値)	Shows the chosen voltages as High / Low bands, like a logic analyzer. Below 30 % of the supply is 0, above 70 % is 1, and in between is unknown (red, X in a bus) (the same thresholds as 74HC)
+D0・D1 … や QA・QB … のように、最後の番号や文字だけが違うネットは 1 本のバスにまとめ、値を数字で出します (いちばん大きい番号・QA の反対側が上の桁)。名前をクリックすると 1 本ずつの線が下に開きます	Nets that differ only in the last number or letter, like D0, D1 … or QA, QB …, are grouped into one bus and their value is shown as a number (the highest number, or the end opposite QA, is the upper digit). Click the name to open the single lines below it
+電源の欄	Supply field
+空欄なら、選んだ信号のいちばん高い電圧を電源とみなします。3.3V の回路で 5V の信号も選んでいるときは、3.3 と入れてください	If empty, the highest voltage among the chosen signals is taken as the supply. If a 3.3V circuit also has 5V signals chosen, enter 3.3
+10進 / 16進 / 2進	Dec / Hex / Bin
+バスの値の書き方。カウンタは 10 進、データは 16 進が読みやすい	How bus values are written. Counters are easier to read in decimal, data in hex
+「バスにまとめる」	"Group into buses"
+外すと、番号つきのネットも 1 本ずつ出します (インバータの列 N1・N2 … のように、バスでないものがまとまったとき)	When unticked, numbered nets are also shown one by one (for when things that are not buses get grouped, like a chain of inverters N1, N2 …)
+タイミング違反の印	Timing violation marks
+フリップフロップやラッチのセットアップ時間・ホールド時間・クロックのパルス幅が足りなかった時刻に、上の行に赤い三角が出ます。ポインタを置くと、どの部品で何が足りないかが出ます	A red triangle appears in the top row at times when a flip-flop or latch did not get enough setup time, hold time or clock pulse width. Hover over it to see which part lacked what
+クリックで置いたカーソル A の時刻の値が、名前の後ろに出ます。A と B を置くと、間の時間と周波数が右上に出ます	The values at the time of cursor A, placed by clicking, are shown after the names. Placing A and B shows the time between them and the frequency at the top right
+フィルタを設計して目標と比べる	Design a filter and compare it with the target
+メニューの「学ぶ」→「値の決め方」(Ctrl+K でも探せます) で「アクティブフィルタ」を選び、種類 (バターワース・ベッセル・チェビシェフ)・形 (ローパス・ハイパス・バンドパス)・次数・周波数を決めると、段ごとの部品の値が出ます。「回路図に置いて AC で確かめる」で、オペアンプの段と入力・電源を空いた所に置き、AC解析の図に目標の特性を点で重ねます。点からずれていれば、抵抗の丸め (E24 / E96) かオペアンプの帯域です。サンプル「アクティブフィルタ」	In the menu "Learn" → "How to choose values" (also found with Ctrl+K), choose "Active filter" and set the type (Butterworth, Bessel, Chebyshev), form (low-pass, high-pass, band-pass), order and frequency to get the part values for each stage. "Place on schematic and check with AC" places the op-amp stages, input and supply in an empty area and overlays the target response as dots on the AC analysis plot. If it misses the dots, it is the resistor rounding (E24 / E96) or the op-amp bandwidth. Sample "Active filter"
+部品の 3D の形を作る (STEP が無いとき)	Make a part's 3D shape (when there is no STEP)
+部品作成の「④ 部品の形」の「STEP が無いとき: SolidCraft で形を作る」。データシートの外形図を切り出し、2 点と長さで縮尺を合わせて「SolidCraft で開く」と、図を下絵にした設計で無料の CAD「SolidCraft」が開きます。形を作って作業フォルダに part.step で保存すると、自動で読み込みます	"No STEP: make the shape in SolidCraft" in "④ Part shape" of Create part. Cut out the outline drawing from the datasheet, set the scale with 2 points and a length, and "Open in SolidCraft" opens the free CAD "SolidCraft" with a design that uses the drawing as an underlay. Make the shape and save it as part.step in the work folder, and it is loaded automatically
+「ファイル → 基板と部品の立体をSTEPで保存…」	"File → Save board and part solids as STEP…"
+基板と、3D で見えている部品の立体を STEP にします。ケースを設計する CAD に読み込んで、ケースに収まるか・ぶつからないかを立体で確かめます。部品は部品番号の名前の立体になります。面は平らなものだけで、円柱は角柱になります	Makes the board and the solids of the parts visible in 3D into a STEP. Load it into the CAD you design the case with to check in 3D that it fits the case and nothing collides. Each part becomes a solid named by its refdes. Only flat faces are used, so cylinders become prisms
+ツールを選びます: W = 配線、V = ビア、M = 距離を測る。Esc で選択ツールに戻ります。ほかのツールは左のボタンか、Ctrl+K で名前を打って選びます (回路図でも W は配線です)	Choose a tool: W = route, V = via, M = measure distance. Esc returns to the select tool. Choose other tools with the buttons on the left, or type their name with Ctrl+K (W is wire on the schematic too)
+距離を測ったあと Enter を押すと、その長さを寸法線として基板に残せます (X は横の長さだけ、Y は縦の長さだけ)。外形の幅と高さは、左パネル「仕上げ (任意)」の「外形の寸法線」で置けます。寸法線は、ケースを設計する人に渡す DXF と SVG の図に出て、ガーバーには出ません	After measuring a distance, press Enter to keep that length on the board as a dimension line (X for the horizontal length only, Y for the vertical length only). The outline width and height can be placed with "Outline dimensions" in "Finishing (optional)" on the left panel. Dimension lines appear in the DXF and SVG drawings you hand to the case designer, and not in the Gerbers
+熱の地図	Thermal map
+左パネル「③ 確認する」の「熱の地図…」で、回路図の自己発熱の電力から、基板のどこが何 ℃ になるかを計算し、サーマルカメラのような色で基板に重ねます。ベタ・配線・ビアが熱を広げ、表と裏の面から空気へ (対流と放射で) 逃げます。置き方 (平ら・立てる) と標高も変えられます。表に部品ごとの温度と、自己発熱 (熱抵抗の式) の温度が並びます。目安で、風やケースで ±20〜30 % ずれます (サンプル heat_copper)。「シミュレーションに反映」すると、回路図の「自己発熱」と「温度の時間変化」も、電力の大きい部品はこの升目の計算の熱抵抗を使い、部品どうしが基板を通って温め合う分も入ります。お互いに温め合う部品が近いときは、窓の「熱い部品どうしが近い」に組と勧める距離が出て、「離す要件に足す」で回路図の「設計の要件」に入ります。「時間の変化を計算」で、電源を入れてから基板が温まっていく様子 (部品は秒、基板は分) を、時刻のスライダーと温度の線で見られます。「回路の過渡解析の電力を使う」に印を付けると、回路図の「温度の時間変化」で計算した電力の変化 (パルスなど) で温めます。「くり返す」で、その電力を周期としてくり返します (PWM など)。「ケースに入れる」で、閉じたケースの中の温度 (中の空気と壁がどれだけ温まるか) と、その中での基板の温度を計算します	"Thermal map…" in "③ Check" on the left panel calculates, from the self-heating power of the schematic, how many ℃ each spot of the board reaches, and overlays it on the board in thermal-camera colors. Copper pours, tracks and vias spread the heat, and it escapes to the air from the top and bottom faces (by convection and radiation). You can also change the mounting (flat, upright) and the altitude. The table lists the temperature of each part next to the self-heating (thermal resistance formula) temperature. It is a guide; wind or a case shifts it by ±20 to 30 % (sample heat_copper). With "Apply to simulation", the schematic's "Self-heating" and "Temperature over time" also use this grid's thermal resistance for high-power parts, and include parts heating each other through the board. When parts that heat each other are close, the window's "Hot parts close together" shows the pairs and a recommended distance, and "Add to keep-apart requirements" adds them to the schematic's "Design requirements". "Calculate over time" shows the board warming up after power-on (parts in seconds, the board in minutes) with a time slider and temperature lines. Ticking "Use power from the circuit's transient analysis" heats it with the power changes (pulses and so on) calculated in the schematic's "Temperature over time". "Repeat" repeats that power as a period (PWM and so on). "Put in a case" calculates the temperature inside a closed case (how much the air and walls inside warm up) and the board temperature inside it
+左パネル「③ 確認する」の下の「回路図に反映」にあります。押すと、配線の抵抗とインダクタンス・容量が回路図の解析 (DC・過渡・AC・ノイズ) に入り、自己発熱と温度の時間変化は基板の熱の地図の熱抵抗と部品どうしの温め合いを使います。反映中は、その欄と回路図の解析タブの上に「反映中」と出ます。「外す」で理想の配線に戻ります	It is under "Apply to schematic" below "③ Check" on the left panel. Pressing it puts the resistance, inductance and capacitance of the tracks into the schematic's analyses (DC, transient, AC, noise), and self-heating and temperature over time use the thermal resistance from the board thermal map and the heating of parts by each other. While applied, "Applied" shows on that section and above the schematic's analysis tab. "Remove" goes back to ideal wiring
+「基板どうしのつなぎ…」(ファイル)	"Board-to-board connections…" (File)
+ひとつのプロジェクトに基板 (回路図と基板の組) を足し、コネクタどうしのつなぎを登録すると、ピンごとに両側の信号の名前が合っているか (電源と GND の入れ替わり、ピンの入れ替わり) を調べます。全体の部品表も出せます。基板はメニューバーの「基板:」で切り替えます。つなぎの「3D で重ねる」で、コネクタのピンを合わせて基板を 3D で重ね、ぶつかりを調べ、全体の STEP を保存できます。「全体をシミュレーション (DC)」で、すべての基板をつないだ回路の、ピンごとの電圧と電流が出ます	Add boards (each a schematic and board pair) to one project and register which connectors connect, and it checks pin by pin whether the signal names on both sides match (swapped power and GND, swapped pins). It can also make a combined BOM. Switch boards with "Board:" on the menu bar. "Stack in 3D" on a connection stacks the boards in 3D with the connector pins lined up, checks for collisions and can save a combined STEP. "Simulate all (DC)" gives the voltage and current of each pin for the circuit with all the boards connected
+「ケースの STEP を読む…」	"Load case STEP…"
+ケースを設計した CAD の STEP を読み、基板のまわりに置きます。ケースは鋭い辺の線 (水色) で描き、ぶつかる部品は赤くなります。x・y・z と「90° 回す」で位置を合わせ、「外す」で取り除きます	Loads a STEP of the case from the CAD you designed it in and places it around the board. The case is drawn with its sharp edges (light blue) and parts that collide turn red. Align it with x, y, z and "Rotate 90°", and take it away with "Remove"
+「内寸 幅・奥行」	"Inner width, depth"
+ケースの内側の大きさを入れると、青い枠のケースに基板が入るかを調べ、取り付け穴の下のねじ柱 (橙) と、縁のコネクタのための壁の穴 (桃色) を出します。「ケースの図面 (DXF) を保存…」で、底と 4 枚の壁の図面になります	Enter the inside size of the case to check whether the board fits the blue case outline, and to show the screw posts (orange) under the mounting holes and the wall holes (pink) for connectors on the edge. "Save case drawing (DXF)…" makes drawings of the bottom and the 4 walls
+回す・動かす・拡大の最中は粗い絵になり、止めると細かい絵に戻ります (大きい基板でも軽く動かすため)。「GPU で描く」のときは、いつも細かい絵のままです	While rotating, moving or zooming, the picture is coarse, and it returns to the fine picture when you stop (so large boards move smoothly too). With "Draw with GPU", it always stays fine
+「温度の色」	"Temperature colors"
+部品を温度の色で塗ります (サーマルカメラのような見え方)。温度は回路図の解析タブの「自己発熱」の結果 (電力 × 熱抵抗の目安) で、青いほど周囲の温度に近く、赤・黄色・白になるほど熱い部品です。右上の目盛りが周囲の温度から一番熱い部品までの範囲です。まだ計算していなければ、窓の「自己発熱を計算」で計算できます。基板の銅を「シミュレーションに反映」してから計算すると、銅で冷える部品の色が変わります (サンプル heat_copper)。基板エディタの「熱の地図…」を計算してあれば、基板の表と裏もその温度で塗り、部品も地図の温度になります (時間の変化の時刻を選んでいれば、その時刻)。白の見た目と合わせると見やすくなります	Paints parts in temperature colors (like a thermal camera). The temperature is the "Self-heating" result in the schematic's analysis tab (a guide of power × thermal resistance); the bluer, the closer to the ambient temperature, and red, yellow and white are hotter parts. The scale at the top right runs from the ambient temperature to the hottest part. If it has not been calculated yet, calculate it with "Calculate self-heating" in the window. If you "Apply to simulation" the board copper before calculating, the colors of parts cooled by the copper change (sample heat_copper). If the board editor's "Thermal map…" has been calculated, the top and bottom of the board are painted with its temperatures too, and the parts take the map's temperatures (at the selected time, if you chose a time in the time change). It is easier to see together with the white look
+「GPU で描く」「色 / 白」「陰 (AO)」	"Draw with GPU", "Color / White", "Shading (AO)"
+グラフィックス (GPU) で描くと、部品の形が細かくても軽く回せます。「白」は基板も部品も白で描き、形と凹凸が見やすくなります。「陰 (AO)」は、部品の根元や面が寄り合う所を暗くして、立体の重なりを分かりやすくします。表示がおかしいときは「GPU で描く」を外すと、これまでの描き方に戻ります	Drawing with the graphics card (GPU) rotates smoothly even with detailed part shapes. "White" draws the board and parts in white, making shapes and bumps easier to see. "Shading (AO)" darkens the bases of parts and where faces meet, so overlapping solids are easier to tell apart. If the display looks wrong, untick "Draw with GPU" to go back to the old way of drawing
+# crates/app/src/logic_plot.rs
+クリックで、このバスの 1 本ずつの線を下に開きます (もう一度で閉じる)	Click to open the single lines of this bus below it (click again to close)
+タイミング違反	Timing violation
+# crates/app/src/main.rs
+自己発熱の計算に失敗: {e} (回路図の電源やつながりを確かめてください)	Self-heating calculation failed: {e} (check the supplies and connections in the schematic)
+自己発熱を計算できませんでした	Could not calculate self-heating
+回路図の「設計の要件」に「{}」({} と {} を {} mm 離す) を足しました	Added "{}" (keep {} and {} {} mm apart) to the schematic's "Design requirements"
+回路図の画面。• は保存していない変更があるしるしです	The schematic view. • means there are unsaved changes
+試作	Prototype
+ブレッドボードで組む画面。回路図の部品を、どの穴に差すかを並べます。つながっている穴が光り、差し替えもできます。回路図と違うつなぎ方は知らせます	The view for building on a breadboard. It lays out which holes the schematic's parts go into. Connected holes light up and you can move parts. Connections that differ from the schematic are reported
+⚠ 回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)	⚠ The schematic and board do not match. Press "Import from schematic" in the board view to apply the changes (details on the board's left panel)
+基板の画面。回路図から部品を取り込んで、配置・配線します。• は保存していない変更があるしるしです	The board view. Import parts from the schematic, then place and route them. • means there are unsaved changes
+実機	Bench
+届いた基板を組み立てて動かす画面。組み立て → 電源投入 → 測る → 合否 → 修理 の手順が左に、基板の配置図が真ん中に出て、手順ごとに付ける部品や測る点が光ります	The view for assembling and running the board you received. The steps assemble → power on → measure → pass/fail → repair are on the left and the board layout is in the middle; the parts to solder and points to measure light up at each step
+基板:	Board:
+このプロジェクトの基板 (回路図と基板の組) を切り替えます。つなぎは「ファイル → 基板どうしのつなぎ…」	Switches between the boards of this project (each a schematic and board pair). Connections are in "File → Board-to-board connections…"
+基板どうしのつなぎ… (複数の基板)	Board-to-board connections… (multiple boards)
+ひとつのプロジェクトに基板を足して、コネクタどうしのつなぎを登録し、ピンごとに信号が合っているかを調べます。全体の部品表も出せます	Add boards to one project, register which connectors connect, and check pin by pin that the signals match. It can also make a combined BOM
+複数の基板のサンプル (メイン基板とセンサー基板を I2C でつなぐ)	Multi-board sample (a main board and a sensor board connected by I2C)
+2 枚の基板 (回路図と基板の組) を 1 つのプロジェクトに入れ、両方のコネクタ J1 をつないだ例です。「基板どうしのつなぎ」の窓で、ピンごとの信号の照合と、全体の部品表 (センサー基板は 3 枚作る) を見られます	An example with 2 boards (each a schematic and board pair) in one project, with connector J1 of each connected. In the "Board-to-board connections" window you can see the pin-by-pin signal check and the combined BOM (3 sensor boards are made)
+開くと、いまの回路図と基板は置き換わります。	Opening it replaces the current schematic and board.
+基板と部品の立体をSTEPで保存…	Save board and part solids as STEP…
+基板 (外形を厚さ 1.6 mm に立ち上げ、取り付け穴とリード部品の穴をあけたもの) と、3D で見えている部品の立体を、STEP (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に読み込んで、ケースに収まるか・ぶつからないかを立体で確かめるのに使います。基板と部品はそれぞれ別の部品 (組み立て) になり、ケースの CAD で部品ごとに選んだり動かしたりできます。部品は部品番号の名前で、色も付きます。円柱・丸い穴・長穴は本当の曲面で書きます (メーカーの 3D の形は三角形のまま)。ビア・銅・シルクは入りません	Makes the board (the outline raised to 1.6 mm thick, with mounting holes and holes for leaded parts) and the solids of the parts visible in 3D into a STEP (mm). Use it to load into the CAD you design the case with (Fusion, FreeCAD, SolidWorks and so on) and check in 3D that it fits the case and nothing collides. The board and each part become separate parts (an assembly), so you can select and move them one by one in the case CAD. Parts are named by refdes and colored. Cylinders, round holes and slots are written as true curved surfaces (makers' 3D shapes stay as triangles). Vias, copper and silkscreen are not included
+最初の電源投入のガイド…	First power-on guide…
+組み立てた基板に初めて電源を入れるときの、電流制限の値と、正常なら流れる電流の範囲を、いまの回路図から出します。測った電流を入れると、多すぎ・少なすぎのときに疑う所を並べます	From the current schematic, gives the current limit setting and the range of current that flows when normal, for powering an assembled board for the first time. Enter the measured current to list the places to suspect when it is too high or too low
+動かすのをやめて、回路図の編集に戻ります (キャンバスの上の帯の「終わる」と同じ)	Stop running and go back to editing the schematic (same as "End" on the bar above the canvas)
+いまの回路図のデジタル回路を、スイッチをクリックして動かします。配線が High / Low の色になり、LED が光り、真理値表とロジックアナライザが出ます。クロック (パルスの電源) は、つまみの速さと「1 クロック」で動きます。動かしている間は編集できません	Runs the digital circuit of the current schematic by clicking its switches. Wires take High / Low colors, LEDs light up, and a truth table and logic analyzer appear. The clock (a pulse source) runs at the knob's speed and with "1 clock". You cannot edit while it runs
+デジタル回路を動かすのをやめる	Stop running the digital circuit
+デジタル回路を動かしながら見る	Run and watch a digital circuit
+操作を探す…	Find an action…
+名前や、したいことの言葉で、メニュー・解析・ツール・用語を探して実行します。キーも書いてあるので、使ううちに覚えられます	Searches menus, analyses, tools and terms by name or by words for what you want to do, and runs them. The keys are shown too, so you learn them as you go
+部品・ネットを探す…	Find a part or net…
+部品番号 (R1) やネットの名前 (VCC) で探して、回路図のその場所へ移ります	Search by refdes (R1) or net name (VCC) and jump to that place in the schematic
+自動保存 たった今	Autosaved just now
+自動保存 {m} 分前	Autosaved {m} min ago
+保存していない作業は、設定の間隔で別の所にコピーしてあります。落ちても、次の起動で戻せます	Unsaved work is copied to another place at the interval in the settings. If the app crashes, you can restore it at the next start
+Ctrl+S で保存します	Ctrl+S saves
+# crates/app/src/multiboard.rs
+ピンの組「{w}」が読めません。「1-1 2-2 3-4」のように、こちらのピン-相手のピンで書きます	Cannot read the pin pairs "{w}". Write them as this pin-other pin, like "1-1 2-2 3-4"
+基板「{}」に切り替えました	Switched to board "{}"
+基板の名前を入れてください	Enter a board name
+「{name}」という基板はもうあります	A board named "{name}" already exists
+ほかの基板と違う名前にしてください	Use a name different from the other boards
+基板「{}」の 3D の形を作れません: {e}	Cannot make the 3D shape of board "{}": {e}
+つなぎの基板がプロジェクトにありません	The boards of this connection are not in the project
+同じ基板のコネクタどうしは重ねられません	Connectors on the same board cannot be stacked
+基板が見つかりません	Board not found
+「{}」を「{}」の {} の上 {gap:.1} mm に重ねました ({} ピン、ずれは最大 {:.2} mm)	Stacked "{}" onto "{}" at {}, {gap:.1} mm above it ({} pins, max offset {:.2} mm)
+{msg}。ピンがそろいません: コネクタの位置かピンの組を確かめてください	{msg}. The pins do not line up: check the connector positions or the pin pairs
+全体の回路図を保存しました: {}。「ファイル → 開く」で開くと、過渡解析や AC 解析も全体でできます (コネクタのピンには 0 V の電源 VLINK… が入っていて、その電流がピンを流れる電流です)	Saved the combined schematic: {}. Open it with "File → Open" to run transient and AC analyses on the whole too (the connector pins have 0 V sources VLINK…, and their current is the current through the pins)
+3D に置いた基板がありません。つなぎの「3D で重ねる」で、まず基板を重ねてください	No boards placed in 3D. Stack the boards first with "Stack in 3D" on a connection
+{n} 枚の基板を 1 つの STEP にしました: {}	Made {n} boards into one STEP: {}
+全体の部品表を保存しました ({} 行): {}	Saved the combined BOM ({} rows): {}
+サンプルを開けませんでした: {e}	Could not open the sample: {e}
+基板どうしのつなぎ	Board-to-board connections
+ひとつのプロジェクトに、いくつかの基板 (回路図と基板の組) を入れて、コネクタどうしのつなぎを調べます。編集できるのは選んでいる 1 枚です (切り替えると、元に戻す履歴はそこから始まります)	Put several boards (each a schematic and board pair) in one project and check the connections between their connectors. Only the selected one can be edited (when you switch, the undo history starts from there)
+この基板を回路図と基板の画面で開きます	Open this board in the schematic and board views
+ 枚	 pcs
+この基板を何枚作るか (全体の部品表の数に掛けます)	How many of this board to make (multiplies the counts in the combined BOM)
+基板の名前 (つなぎにも使います)	Board name (also used for connections)
+基板が 1 つだけなので外せません	Cannot remove it because it is the only board
+この基板をプロジェクトから外します (その基板のつなぎも消えます)	Removes this board from the project (its connections are deleted too)
+新しい基板の名前	New board name
+基板を足す	Add board
+空の回路図と基板を、この名前で足して開きます。いまの基板は、変更ごとプロジェクトの中にとっておきます	Adds an empty schematic and board with this name and opens them. The current board is kept in the project, changes included
+つなぎ (コネクタ ↔ コネクタ)	Connections (connector ↔ connector)
+同じ番号どうし	Same numbers
+3D で重ねる	Stack in 3D
+2 枚目の基板を、コネクタのピンが 1 枚目のピンの真上に来るように回して、下の「すき間」だけ上に重ねます (シールドのような積み重ね)。3D の窓に、ほかの基板も出ます	Rotates the 2nd board so its connector pins sit right above the 1st board's pins and stacks it above by the "Gap" below (stacking like a shield). The other boards also show in the 3D window
+(コネクタなし)	(no connector)
+ピンの組 (空なら同じ番号どうし。例: 1-1 2-2 3-4 4-3)	Pin pairs (empty = same numbers. e.g. 1-1 2-2 3-4 4-3)
+ケーブルが入れ替わっているときや、相手のコネクタの番号の付け方が逆のときに、こちらのピン-相手のピンを並べます	For a crossed cable or a mating connector numbered the other way, list this pin-other pin
+つなぎを足す	Add connection
+上の 2 つのコネクタがつながることを登録して、ピンごとに信号を照合します	Registers that the 2 connectors above are connected and checks the signals pin by pin
+3D で重ねるとき:	When stacking in 3D:
+1 枚目の基板の表の面から、2 枚目の基板までの高さ。0 なら 1 枚目のコネクタの高さ (ピンヘッダにソケットを差す積み重ね)	Height from the top face of the 1st board to the 2nd board. 0 means the height of the 1st board's connector (stacking a socket onto a pin header)
+向かい合わせ	Face to face
+2 枚目を裏返して、表の面どうしを向かい合わせます (両方の表にあるコネクタを差し合わせるとき)。すき間は 2 枚目の表の面まで	Flips the 2nd board so the top faces face each other (for mating connectors that are both on top). The gap is to the 2nd board's top face
+3D で全体を見る	View all in 3D
+いま開いている基板の 3D の窓に、重ねたほかの基板も出します (ほかの基板は選べません)	Also shows the other stacked boards in the 3D window of the open board (the other boards cannot be selected)
+全体の STEP を保存…	Save combined STEP…
+重ねた基板をすべて、それぞれの位置に置いた 1 つの STEP にします (基板ごとに部品が分かれた組み立て)。ケースの CAD で全体を確かめるのに使います	Makes one STEP with all the stacked boards in their positions (an assembly with the parts separated per board). Use it to check the whole thing in the case CAD
+✔ 重ねた基板どうしでぶつかる所はありません	✔ No collisions between the stacked boards
+{b} の基板	board {b}
+ ほか {} 組	 and {} more pairs
+⚠ ぶつかるかもしれません: {}{more}	⚠ May collide: {}{more}
+3D で描く箱どうしで調べています。すき間を広げるか、部品の位置を変えます	Checked using the boxes drawn in 3D. Widen the gap or move the parts
+つなぎを足すと、ここに照合の結果が出ます	Add a connection and the check results appear here
+✔ どのつなぎも、両側の信号の名前が合っています	✔ The signal names on both sides match in every connection
+基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます	There are no board-to-board connections yet. Add one in the table above to enable this
+全体をシミュレーション (DC)	Simulate all (DC)
+すべての基板の回路図をつないで 1 つの回路にし、DC 動作点を計算します。つないだコネクタのピンごとに、両側の電圧と、ピンを流れる電流 (A から B へ) が出ます。電源の基板からほかの基板へ、どれだけ電流が流れるかが分かります	Connects the schematics of all boards into one circuit and calculates the DC operating point. For each connected connector pin, it shows the voltage on both sides and the current through the pin (from A to B). You can see how much current flows from the power board to the other boards
+全体の回路図を保存…	Save combined schematic…
+すべての基板をつないだ 1 枚の回路図 (.schjson) を保存します。開くと、過渡解析・AC 解析も全体でできます。部品番号には基板の名前が付きます (R1_main)	Saves one schematic (.schjson) with all the boards connected. Open it to run transient and AC analyses on the whole too. Refdes get the board name added (R1_main)
+A のネット	Net on A
+B のネット	Net on B
+電流 (A → B)	Current (A → B)
+ ({} ピンの合計)	 (total of {} pins)
+(GND どうし)	(GND to GND)
+つないだピンに、どちらかの基板で何もつながっていません	Nothing is connected to the linked pin on one of the boards
+全体の回路を解けませんでした: {e}	Could not solve the whole circuit: {e}
+全体の部品表 (CSV) を保存…	Save combined BOM (CSV)…
+すべての基板の部品を、種類ごとに数えた表です (基板ごとの部品番号と、作る枚数を掛けた合計)。まとめて買うときに使います	A table of the parts of all boards counted by type (refdes per board, and the total multiplied by the number of boards made). Use it when buying everything at once
+基板「{name}」を足しました。回路図から描き始めます	Added board "{name}". Start by drawing the schematic
+両側のコネクタを選んでください (回路図に J1 などのコネクタが要ります)	Choose the connectors on both sides (the schematic needs connectors such as J1)
+同じコネクタどうしはつなげません	A connector cannot be connected to itself
+つなぎを足しました	Added the connection
+# crates/app/src/power_on_guide.rs
+組み立てた基板に初めて電源を入れるときは、電流を制限できる電源で入れて、流れた電流を、回路図のシミュレーションで出した「正常なら流れる電流」と比べます。ショートや部品の向き違いがあっても、電流が制限されるので、部品を壊さずに気づけます。	When powering an assembled board for the first time, use a supply that can limit current, and compare the current that flows with the "normal current" from the schematic simulation. Even with a short or a part the wrong way round, the current is limited, so you notice without destroying parts.
+安全: 電流が制限の値に張り付いた (電源の CC の表示が消えない) ら、すぐ電源を切ります。熱い部品は、触らずに、手をかざすか温度計で探します。電解コンデンサは逆向きにつなぐと、ふくらんだり破裂したりします。	Safety: if the current sticks at the limit (the supply's CC indicator does not go out), switch off at once. Find hot parts without touching them, by holding your hand over them or with a thermometer. An electrolytic capacitor connected backwards can bulge or burst.
+1. 電源を入れる前に: 拡大鏡で、はんだのブリッジ・部品の向き (電解コンデンサ・ダイオード・IC の 1 番ピン) を見ます。テスタの抵抗レンジで、電源と GND の間がショート (0Ω 付近) していないことを確かめます。	1. Before powering on: check with a magnifier for solder bridges and part orientation (electrolytic capacitors, diodes, IC pin 1). With the multimeter's resistance range, make sure power and GND are not shorted (near 0Ω).
+2. 電源の電圧と、電流制限を、下の値に合わせます。出力を OFF にしたまま、基板につなぎます (+ と − を確かめて)。	2. Set the supply voltage and current limit to the values below. With the output OFF, connect it to the board (check + and −).
+3. 出力を ON にして、電流の表示を見ます。最初の一瞬 CC (電流制限) の表示が出て、すぐ消えるのは、コンデンサの充電で、正常です。	3. Turn the output ON and watch the current reading. A CC (current limit) indicator that shows for an instant at first and goes out right away is the capacitors charging, which is normal.
+4. 落ち着いた電流を、下の「測った電流」に入れて、正常な範囲と比べます。	4. Enter the settled current in "Measured current" below and compare it with the normal range.
+範囲は、抵抗などの許容差の端と、部品のモデルに書かれたデータシートの min / max、自己発熱の分を入れた計算です。モデルの無い部品 (コネクタの先の機器、マイコンのプログラムで変わる電流) は入っていません。マイコンや無線の部品は、動きによって電流が大きく変わるので、データシートの消費電流とも比べてください。	The range is calculated with the tolerance ends of resistors and other parts, the datasheet min / max written in the part models, and self-heating. Parts without a model (devices beyond a connector, currents that depend on a microcontroller's program) are not included. Microcontrollers and radio parts change their current a lot with what they are doing, so also compare with the supply current in their datasheets.
+抵抗の許容差を 0〜100 未満の数 (%) で入れてください (例: 5)	Enter the resistor tolerance as a number (%) from 0 to below 100 (e.g. 5)
+周囲の温度を数値 (℃) で入れてください (例: 25)	Enter the ambient temperature as a number (℃) (e.g. 25)
+抵抗の許容差	Resistor tolerance
+抵抗の値のずれの幅 (%)。ふつうのチップ抵抗は 1 % か 5 %	How far resistor values can be off (%). Ordinary chip resistors are 1 % or 5 %
+部品の自己発熱は、この温度の上に乗ります	Parts' self-heating adds on top of this temperature
+データシートの min / max	Datasheet min / max
+部品のモデルに書かれた、データシートの最小・最大 (レギュレータの消費電流など) も、端に置いて範囲に入れます	Also puts the datasheet minimum and maximum written in the part models (such as a regulator's supply current) at their ends and includes them in the range
+いまの回路図で、電源ごとの電流と範囲を計算し直します	Recalculate the current and range for each supply on the current schematic
+「計算する」を押すと、いまの回路図から電流を計算します	Press "Calculate" to calculate the current from the current schematic
+回路図が変わりました。「計算する」で計算し直してください	The schematic has changed. Recalculate with "Calculate"
+正常なら流れる電流	Normal current
+部品の許容差の端・データシートの min / max・自己発熱を入れた範囲。組んだ基板の電流は、この中に入るはずです	The range with part tolerance ends, datasheet min / max and self-heating. The current of the assembled board should fall in it
+部品が表示どおりの値なら	With parts at their marked values
+部品が温まったあと	After the parts warm up
+部品が自分の電力で温まって、値やしきい値が変わったあとの電流	The current after the parts warm up from their own power and their values and thresholds change
+電流制限に入れる値	Current limit setting
+正常な範囲の上の端の 1.5 倍を、電源のつまみで合わせやすい値に切り上げたもの (10 mA より小さくはしません)	1.5× the top of the normal range, rounded up to a value easy to set with the supply's knob (never below 10 mA)
+電流を動かす部品: {}	Parts that move the current: {}
+その部品だけを許容差の端にしたときの、電流の変わり方	How the current changes when only that part is at its tolerance end
+測った電流	Measured current
+電源の表示か電流計で読んだ、落ち着いたあとの電流 (mA)	The settled current read from the supply's display or an ammeter (mA)
+電流を数で入れてください (例: 12.5)	Enter the current as a number (e.g. 12.5)
+疑う所 (上から順に):	Places to suspect (in order):
+解けなかった部品 (表示どおりの値のまま): {}	Parts that could not be solved (left at their marked values): {}
+# crates/app/src/project.rs
+基板1	
+基板「{name}」の中身がありません	Board "{name}" has no contents
+基板{}	
+基板「{name}」: {e}	Board "{name}": {e}
+プロジェクトに基板がありません	The project has no boards
+基板どうしのつなぎが読めません ({e})	Cannot read the board-to-board connections ({e})
+プロジェクトの形式が読めません	Cannot read the project format

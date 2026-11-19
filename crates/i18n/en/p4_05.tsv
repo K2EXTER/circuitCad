@@ -1,0 +1,440 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/part_form/table_fill.rs
+ (IF が読めないので 20 mA とした)	 (IF unreadable, so 20 mA was assumed)
+VF typ {} V{}{cond}: {}。曲線と比べるだけです	VF typ {} V{}{cond}: {}. Only compared with the curve
+VF の typ が表に見つかりません (比べるだけなので空でも作れます)	The typ VF was not found in the table (only compared, so it can be made without it)
+LED の容量 {}F{}: {}	LED capacitance {}F{}: {}
+{} の IC ÷ IF	IC ÷ IF at {}
+。片方しか無いので、もう片方は自分で入れてください	. Only one of them was found; enter the other yourself
+CTR (電流伝達率) の範囲が表に見つかりません	The CTR (current transfer ratio) range was not found in the table
+max (typ が無いので保証値)	max (no typ, so the guaranteed value)
+VCE(sat) (IF と IC の条件つき) が表に見つかりません	VCE(sat) (with IF and IC conditions) was not found in the table
+カットオフ周波数 {}Hz{}: {}	Cut-off frequency {}Hz{}: {}
+カットオフ周波数 (fc) の typ が表に見つかりません。応答時間 tr しか無ければ 0.35 ÷ tr を入れます	The typ cut-off frequency (fc) was not found in the table. If only the response time tr is given, enter 0.35 ÷ tr
+LED の順方向の点と出力の点は表に無いので、図から「グラフから読む」で入れてください	The LED forward points and output points are not in the table, so enter them from the figures with "Read from graph"
+min (typ が無いので)	min (no typ)
+、{} mW/cm² で割った	, divided by {} mW/cm²
+感度 {}A/(mW/cm²) ({how})	Sensitivity {}A/(mW/cm²) ({how})
+光電流が照度 (lx) でしか書かれていません。mW/cm² あたりの値を、図か別の表から入れてください	The photocurrent is only given in illuminance (lx). Enter the value per mW/cm² from a figure or another table
+光電流 (Ira・IL) の mW/cm² での値が表に見つかりません	The photocurrent (Ira, IL) in mW/cm² was not found in the table
+短絡電流 {}A ({how})。比べるだけです	Short-circuit current {}A ({how}). Only compared
+開放電圧 {} V{}: {}	Open-circuit voltage {} V{}: {}
+開放電圧 (Vo・VOC) の typ が表に見つかりません	The typ open-circuit voltage (Vo, VOC) was not found in the table
+開放電圧の温度係数 −{} mV/K: {}。比べるだけです (マイナスとして扱います)	Temperature coefficient of open-circuit voltage −{} mV/K: {}. Only compared (treated as negative)
+max (typ が無いので保証値。実物はふつうもっと小さい)	max (no typ, so the guaranteed value; a real part is usually much smaller)
+暗電流 {}A ({kind}、VR = {} V){}: {}	Dark current {}A ({kind}, VR = {} V){}: {}
+暗電流 (Iro・ID) が表に見つかりません	Dark current (Iro, ID) was not found in the table
+降伏電圧 {} V (IR = {}A): {}	Breakdown voltage {} V (IR = {}A): {}
+降伏電圧 V(BR) が表に見つかりません。絶対最大定格の逆電圧 VR を入れても構いません	The breakdown voltage V(BR) was not found in the table. You may enter the reverse voltage VR of the absolute maximum ratings instead
+{} V で {}F	At {} V: {}F
+容量 {}: p.{}。図があれば点を足すと、逆電圧による変化が入ります	Capacitance {}: p.{}. If there is a figure, adding points includes the change with reverse voltage
+容量 (CD・Cj) の typ が表に見つかりません	The typ capacitance (CD, Cj) was not found in the table
+{label} が表に見つかりません。図から読んでください	{label} was not found in the table. Read it from the figure
+{label} は表に保証値 (min・max) しか無いか、IC の条件が読めません。図から読んでください	{label} has only guaranteed values (min, max) in the table, or the IC condition can't be read. Read it from the figure
+。点が少ないので図からも読んでください	. Few points, so read the figure too
+{label} {} 点: {}{few}	{label} {} points: {}{few}
+fT の {}: {}	fT {}: {}
+|hfe| の {} {} × {}Hz: {}	|hfe| {} {} × {}Hz: {}
+fT が表に見つかりません (空でも作れます)	fT was not found in the table (it can be made without it)
+内蔵の抵抗 R1・R2 は表に無いので、データシートの回路の図から入れてください	The built-in resistors R1 and R2 are not in the table, so enter them from the circuit drawing in the datasheet
+内蔵の抵抗	Built-in resistors
+内蔵の抵抗 R1 {}Ω・R2 {}Ω: p.{} の回路の図	Built-in resistors R1 {}Ω, R2 {}Ω: circuit drawing on p.{}
+# crates/app/src/part_form/tabs.rs
+かんたん作成: TVS ダイオードを表の値からつくる	Quick create: TVS diode from table values
+TVS ダイオード (サージ・静電気の吸収) のモデルを表の値から作る	Makes a model of a TVS diode (absorbs surges and static) from table values
+ダーリントン (TIP120 など、2 個入り) のモデルをデータシートのグラフから作る	Makes a model of a Darlington (TIP120 etc., two in one) from the datasheet graphs
+NTC サーミスタ (温度で抵抗が変わる) のモデルを R25 と B 定数から作る	Makes a model of an NTC thermistor (resistance changes with temperature) from R25 and the B constant
+かんたん作成: 水晶・セラミック発振子を表の値からつくる	Quick create: crystal or ceramic resonator from table values
+オペアンプのモデルをデータシートの値から作る	Makes an op-amp model from datasheet values
+3 端子レギュレータのモデルをデータシートの値から作る	Makes a 3-terminal regulator model from datasheet values
+フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る	Makes a model of a photocoupler (PC817 etc.) from the datasheet graphs
+水晶・セラミック発振子のモデルを表の値から作る (記号の形を「水晶」に)	Makes a model of a crystal or ceramic resonator from table values (symbol shape set to "Crystal")
+記号を水晶にして始める	Start with the crystal symbol
+記号の形を水晶にし、ピンを X1・GND・X2・GND の 4 つにします (2 端子のものは、③ ピンで 2 つにします)	Sets the symbol shape to crystal and the pins to X1, GND, X2, GND (for 2-terminal parts, make it 2 in ③ Pins)
+最高温度 [℃]	Maximum temperature [℃]
+部品の中が達してよい最高の温度。半導体は接合部の温度 Tj の最大 (多くは 125〜175 ℃)、抵抗は抵抗体の上限 (チップ抵抗は多くが 155 ℃)。自己発熱の計算のあと、この温度と比べて余裕を出します	The highest temperature the inside of the part may reach. For semiconductors, the max junction temperature Tj (often 125 to 175 ℃); for resistors, the element limit (often 155 ℃ for chip resistors). After the self-heating calculation, the margin is shown against this temperature
+例: 150 / 155	e.g. 150 / 155
+電力を下げ始める温度 [℃]	Temperature where power derating starts [℃]
+データシートの「定格電力の低減曲線」で、まわりの温度がこれを超えると最大電力が下がり始め、最高温度で 0 になります (チップ抵抗は多くが 70 ℃、トランジスタは 25 ℃)	In the "power derating curve" of the datasheet, above this ambient temperature the maximum power starts to fall, reaching 0 at the maximum temperature (often 70 ℃ for chip resistors, 25 ℃ for transistors)
+例: 70 / 25	e.g. 70 / 25
+熱抵抗 θjc [K/W]	Thermal resistance θjc [K/W]
+接合部 (部品の中) からケース (パッケージの外側、放熱タブ) までの熱抵抗。データシートの「Thermal Resistance, Junction to Case」(RθJC)。基板の銅や放熱板は、ケースから先の熱の道にしか効かないので、自己発熱の計算はこの分を残して銅と放熱板を足します。空けると θ の 1 割ほどの目安	Thermal resistance from the junction (inside the part) to the case (outside of the package, heat tab). "Thermal Resistance, Junction to Case" (RθJC) in the datasheet. Board copper and heatsinks only act on the heat path beyond the case, so the self-heating calculation keeps this part and adds copper and heatsink. If empty, about 10 % of θ is used as a guide
+例: 12 (SOT-223) / 3 (TO-220)	e.g. 12 (SOT-223) / 3 (TO-220)
+熱抵抗 θja [K/W]	Thermal resistance θja [K/W]
+接合部 (部品の中) から空気までの熱抵抗。データシートの「Thermal Resistance, Junction to Ambient」(RθJA)。最小のパッド (リード部品は空中) で測った値を入れます。自己発熱の計算で、回路図の部品の θ を空にしたとき、この値を使います (基板の銅の効きは、基板から足します)。大きい基板 (JEDEC 2s2p・1 in² の銅) の値は、ここに入れません	Thermal resistance from the junction (inside the part) to the air. "Thermal Resistance, Junction to Ambient" (RθJA) in the datasheet. Enter the value measured on minimum pads (in free air for leaded parts). The self-heating calculation uses it when θ of the schematic part is empty (the board copper effect is added from the board). Don't enter the value on a large board (JEDEC 2s2p, 1 in² copper) here
+例: 200 (TO-92) / 62 (TO-220)	e.g. 200 (TO-92) / 62 (TO-220)
+PDF の熱の表から読む	Read from PDF thermal table
+開いているデータシートの熱特性の表 (Thermal Resistance, Junction to Ambient / Case / Lead) と、絶対最大定格の許容損失の低減 (Derate above 25°C 5.0 mW/°C: 1 ÷ 5.0 mW/°C = 200 K/W) から、θja・θjc・電力を下げ始める温度を入れます	Enters θja, θjc and the derating start temperature from the thermal characteristics table (Thermal Resistance, Junction to Ambient / Case / Lead) of the open datasheet and the power dissipation derating of the absolute maximum ratings (Derate above 25°C 5.0 mW/°C: 1 ÷ 5.0 mW/°C = 200 K/W)
+1行に「番号 名前 [向き] [gap=空き] [sim]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。gap=1 は、記号でそのピンの前にピン1本分の空きを入れます。sim はシミュレーション専用のピン (基板にパッドを出さない) です。データシートや回路図からの貼り付けに使います	One "number name [side] [gap=N] [sim]" per line. Side is left / right / top / bottom; if omitted, the first half goes left and the second half right. gap=1 puts a space of one pin before that pin in the symbol. sim is a simulation-only pin (no pad on the board). Use it to paste from a datasheet or schematic
+過渡熱抵抗 (Zth、短いパルスの温度)	Transient thermal impedance (Zth, temperature of short pulses)
+パワー MOSFET やトランジスタのデータシートにある「Transient Thermal Impedance」の曲線 (横軸がパルスの時間、縦軸が Zth) から点を読み、段 (熱抵抗と時定数の組) に当てはめます。「温度の時間変化」で、短いパルスの温度の山が合うようになります	Reads points from the "Transient Thermal Impedance" curve in power MOSFET and transistor datasheets (horizontal: pulse time, vertical: Zth) and fits stages (pairs of thermal resistance and time constant). Then "Temperature over time" matches the temperature peak of short pulses
+曲線の点: 時間 [s] Zth [K/W]	Curve points: time [s] Zth [K/W]
+1 行に 1 点。単一パルス (Single Pulse) の曲線を、左の立ち上がりから右の平らになる所まで 6〜10 点。デューティ比の付いた曲線ではなく単一パルスのものを読みます。縦軸が「正規化」(r(t)) のときは、θjc を掛けて K/W にします	One point per line. 6 to 10 points of the single-pulse curve, from the rise on the left to the flat part on the right. Read the single-pulse curve, not the ones with a duty cycle. If the vertical axis is "normalized" (r(t)), multiply by θjc to get K/W
+データシートの窓が、図の見出し (Transient Thermal Impedance など) から Zth のグラフのページへ移ります。目盛りと曲線の上をクリックして点を読みます (両軸とも対数)	The datasheet window moves to the page of the Zth graph by the figure heading (Transient Thermal Impedance etc.). Click on the scale and the curve to read points (both axes logarithmic)
+段に当てはめる	Fit to stages
+点に合う段 (最大 4 段) を探して、下の「段」に入れます。合い方 (ずれの大きさ) も出します	Finds stages (up to 4) that fit the points and enters them in "Stages" below. Also shows how well they fit (size of the error)
+{} 段に当てはめました (点とのずれ 平均 {:.1} %、熱抵抗の合計 {:.3} K/W = 長いパルスの Zth)	Fitted to {} stages (mean error from the points {:.1} %, total thermal resistance {:.3} K/W = Zth of a long pulse)
+段: 熱抵抗 [K/W] 時定数 [s]	Stages: thermal resistance [K/W] time constant [s]
+1 行に 1 段。温度の上がり方は、電力 × Σ 熱抵抗 × (1 − e^(−時間 ÷ 時定数))。熱抵抗の合計は接合部からケースまで (θjc) で、部品の熱抵抗 θ の残り (ケースから空気まで) は、熱容量の 1 段として足されます	One stage per line. The temperature rise is power × Σ thermal resistance × (1 − e^(−time ÷ time constant)). The total thermal resistance is from junction to case (θjc); the rest of the part's θ (case to air) is added as one stage with heat capacity
+# crates/app/src/schematic/ac.rs
+同相除去比 (CMRR)	Common-mode rejection ratio (CMRR)
+CMRR = 差動ゲイン Ad ÷ 同相ゲイン Acm。2 つの入力の差 (欲しい信号) を、2 つに共通の揺れ (雑音・電源のハム) より何 dB 大きく増幅するかです。大きいほどよく、抵抗の組の合い方で決まります	CMRR = differential gain Ad ÷ common-mode gain Acm. How many dB more the difference of the two inputs (the wanted signal) is amplified than the swing common to both (noise, supply hum). Bigger is better; it depends on how well the resistor pairs match
+# crates/app/src/schematic/acts.rs
+回路図に部品がありません	The schematic has no parts
+回路図に何もありません	The schematic is empty
+{} 個を選びました	Selected {}
+# crates/app/src/schematic/ambient_ui.rs
+{} を数値 (℃) で入力してください	Enter {} as a number (℃)
+周囲の温度を振る (最悪ケース)	Sweep ambient temperature (worst case)
+周囲の温度を変えながら、その温度ごとに自己発熱を計算します。部品は「周囲 + 自分の熱の上昇」になるので、周囲が上がるほど上限までの余裕が減ります。温まると電流が増える回路 (エミッタ抵抗の無いトランジスタなど) は、周囲が高いほど上昇も大きくなります。ふつうの温度スイープ (温度とばらつき) は、部品を周囲と同じ温度にします	Calculates self-heating at each ambient temperature while changing it. A part is at "ambient + its own heat rise", so the higher the ambient, the less margin to the limit. In circuits whose current rises when warm (a transistor without emitter resistor etc.), the rise is also bigger at high ambient. The ordinary temperature sweep (temperature and variation) puts parts at the same temperature as the ambient
+開始 (℃)	Start (℃)
+終了 (℃)	End (℃)
+刻み (K)	Step (K)
+周囲の温度を振る	Sweep ambient temperature
+例: −20 〜 85 ℃ を 5 K 刻み。製品の使う温度の範囲 (民生 0〜70 ℃、産業 −40〜85 ℃ など) にします	e.g. −20 to 85 ℃ in 5 K steps. Use the temperature range the product is used in (consumer 0 to 70 ℃, industrial −40 to 85 ℃ etc.)
+周囲 {:.0} ℃ で落ち着きませんでした (熱暴走): {}	Did not settle at ambient {:.0} ℃ (thermal runaway): {}
+いちばん熱い	Hottest
+範囲の中で、部品がいちばん熱くなる温度と、そのときの周囲の温度	The temperature where the part gets hottest in the range, and the ambient temperature then
+部品の最高温度 (「?」は種類からの目安)	Maximum temperature of the part ("?" is a guide from the type)
+上限に届く周囲	Ambient at limit
+部品が上限の温度に届く周囲の温度 (点の間は直線で)。これより暑い所では使えません	The ambient temperature where the part reaches its limit temperature (linear between points). It can't be used anywhere hotter
+周囲の温度より、どれだけ熱いか (範囲の低い端 → 高い端)。温まると電力が増える部品は、高い端で大きくなります	How much hotter than ambient (low end → high end of the range). Parts whose power rises when warm grow at the high end
+届かない	Not reached
+⚠ {} は、周囲が高いところで、温度で下げた定格電力を超えます	⚠ At high ambient, {} exceeds the rated power derated by temperature
+周囲の温度で動くところ	What moves with ambient temperature
+範囲の低い端と高い端での電圧。大きく動く順	Voltages at the low and high ends of the range, largest change first
+周囲 {a0:.0} ℃	Ambient {a0:.0} ℃
+# crates/app/src/schematic/battery.rs
+過渡解析に失敗しました: {}	Transient analysis failed: {}
+過渡解析の終了時間を数値で入れてください (例: 300m)	Enter the transient analysis end time as a number (e.g. 300m)
+区間の時間「{s}」を、0 以上の数 (秒) で入れてください (例: 100m)	Enter the interval time "{s}" as a number of 0 or more (seconds) (e.g. 100m)
+止まる条件の電圧を数で入れてください (例: 3.2)	Enter the stop condition voltage as a number (e.g. 3.2)
+電池の持ち時間: {}	Battery life: {}
+電池の持ち時間を出せませんでした: {e}	Could not get the battery life: {e}
+回路図に電池の部品がありません。ライブラリの「電池」(単3アルカリ・CR2032・18650 など) を電源に使うと、持ち時間を出せます。	The schematic has no battery part. Use a "Battery" from the library (AA alkaline, CR2032, 18650 etc.) as the supply to get the battery life.
+電池: {}	Battery: {}
+平均をとる区間	Averaging interval
+過渡解析のこの時間から (秒)。空欄なら、後半の半分 (起動のあと) を使います	From this time of the transient analysis (seconds). If empty, the later half (after start-up) is used
+終わり	End
+この時間まで (秒)。間欠で動く回路 (眠る・起きる) は、区間を動きの周期のちょうど整数倍にします。半端だと、平均の電流がずれます	Up to this time (seconds). For circuits that run intermittently (sleep, wake), make the interval an exact multiple of the cycle. Otherwise the average current is off
+止まる条件	Stop condition
+(なし: 電池の終わりまで)	(none: until the battery is empty)
+回路が動くために、電圧が下がってはいけないネット (レギュレータの出力など)。電池が減って、この電圧が下限を割ったら「止まった」とします。レギュレータのドロップアウトや、マイコンの動作電圧の下限が、ここで効きます	A net whose voltage must not drop for the circuit to work (a regulator output etc.). When the battery runs down and this voltage falls below the limit, it counts as "stopped". The regulator dropout and the minimum operating voltage of a microcontroller matter here
+この電圧 (V) 以上なら動いている、とします	Running while at or above this voltage (V)
+V 以上	V or more
+過渡解析を実行して、持ち時間を出す	Run transient analysis and get the battery life
+過渡解析の欄の時間で過渡解析を実行し、区間の電池の平均電流から、何時間・何日もつかを出します。止まる条件があれば、電池の残量を減らしながら DC 動作点を解いて、条件を割る残量を探します	Runs transient analysis for the time in the transient analysis fields, and from the average battery current over the interval, shows how many hours or days it lasts. With a stop condition, it solves the DC operating point while lowering the battery charge to find the charge that breaks the condition
+平均の電流	Average current
+{}〜{} s の平均	Average over {} to {} s
+いちばん大きい電流	Largest current
+満充電の電池の電圧	Fully charged battery voltage
+新しい電池に、平均の負荷がかかっているときの端子の電圧	Terminal voltage of a new battery under the average load
+止まるとき	When it stops
+電池 {}V・残り {:.0} %	Battery {}V, {:.0} % left
+電池の終わりまで使えます	Usable until the battery is empty
+使える容量	Usable capacity
+容量のうち、止まるまでに使える分	The part of the capacity usable before it stops
+# crates/app/src/schematic/cmrr.rs
+出力のネットを選んでください	Choose the output net
+{plus} (+ 入力) と {minus} (− 入力) を逆向きに揺らした差動ゲイン Ad と、同じ向きに揺らした同相ゲイン Acm の比です (CMRR が大きいほど、共通の揺れを打ち消しています)	The ratio of the differential gain Ad, swinging {plus} (+ input) and {minus} (− input) in opposite directions, to the common-mode gain Acm, swinging them in the same direction (a larger CMRR cancels the common swing better)
+CMRR: {} で {}、いちばん悪いのは {} で {}。差動ゲイン {:.2} 倍	CMRR: {} at {}, worst {} at {}. Differential gain {:.2}×
+。1 本だけずれたときにいちばん効くのは {n} ({})	. When only one is off, the one that matters most is {n} ({})
+抵抗が ±{}% ずれると ({}、300 回): 中央値 {}、悪いもので {}{worst}	With resistors off by ±{}% ({}, 300 runs): median {}, bad case {}{worst}
+抵抗のばらつきは計算できませんでした: {e}	Could not calculate the resistor variation: {e}
+注意: {} のモデルは、IC 自身の CMRR を持っていません。抵抗が完全にそろうと、計算では際限なく高くなります。実物では、データシートの CMRR (オペアンプで 70〜100 dB ほど) が上限です	Note: the model of {} has no CMRR of the IC itself. With perfectly matched resistors, the calculation goes up without limit. In a real circuit, the datasheet CMRR (about 70 to 100 dB for op-amps) is the upper limit
+同相除去比: {p}・{m} → {out}、いちばん悪いのは {} で {}	Common-mode rejection: {p}, {m} → {out}, worst at {}: {}
+同相除去比の計算に失敗: {}	Common-mode rejection calculation failed: {}
++ 入力	+ input
++ 入力 (非反転入力の側) につながった信号源。電圧源から選びます。値を「AC 1」にしておく必要はありません	The signal source connected to the + input (non-inverting side). Choose from voltage sources. Its value does not need to be "AC 1"
+− 入力	− input
+− 入力 (反転入力の側) につながった信号源	The signal source connected to the − input (inverting side)
+アンプの出力のネット	Amplifier output net
+抵抗の誤差 %	Resistor error %
+抵抗を許容差の中でランダムに 300 通りずらして、CMRR がどこまで下がるかも出します (いちばん低い周波数で)。1% の抵抗なら 1、空にすると計算しません	Also shows how far the CMRR drops by shifting resistors randomly within tolerance 300 times (at the lowest frequency). 1 for 1% resistors; empty to skip
+同相除去比を計算	Calculate common-mode rejection
+2 つの入力を逆向きに揺らしたとき (差動) と、同じ向きに揺らしたとき (同相) の出力の比を、周波数ごとに計算します。周波数の範囲と点数は AC解析の欄を使います。結果は AC解析のグラフに出ます	Calculates, for each frequency, the ratio of the outputs when the two inputs swing in opposite directions (differential) and in the same direction (common mode). The frequency range and points come from the AC analysis fields. The result appears in the AC analysis plot
+# crates/app/src/schematic/coverage.rs
+\n・{n}	\n- {n}
+# crates/app/src/schematic/fault.rs
+いま試しています。終わるまでお待ちください	Trying now. Please wait until it finishes
+# crates/app/src/schematic/filter_place.rs
+チェビシェフ {r}dB	Chebyshev {r}dB
+{n}次 {fam} {shape} {}Hz	Order {n} {fam} {shape} {}Hz
+{} に {name} のピンがありません	{} has no {name} pin
+ライブラリにオペアンプ (TL072 か LM358) が見つかりません	No op-amp (TL072 or LM358) was found in the library
+目標 ({})	Target ({})
+{} を置き、AC 解析をしました。点が目標の特性です (部品を選んで値を変え、F5 で比べられます)	Placed {} and ran AC analysis. The dots are the target response (select parts, change values and compare with F5)
+# crates/app/src/schematic/for_bench.rs
+電源がショートしています ({} A 流れています)	The supply is shorted ({} A flowing)
+電源の + と − (GND) が、ジャンパー線か部品の足で直接つながっていないか確かめます。実物なら電源の保護が働くか、電池と線が熱くなります	Check whether the supply + and − (GND) are directly connected by a jumper wire or a part lead. In a real circuit, the supply protection would trip or the battery and wires would get hot
+# crates/app/src/schematic/hint.rs
+右の「つまみ」を動かすと、真ん中の足の電圧が変わります。「自動で再計算」をオンにすると、回しながら電圧や波形が変わるのを見られます。試作のタブでは、電源を入れたまま回せます	Moving the "knob" on the right changes the voltage of the middle pin. Turn on "Auto recalculate" to watch voltages and waveforms change as you turn it. In the prototype tab, you can turn it with the power on
+同相除去比: 曲線 CMRR が高いほど、2 つの入力に共通の揺れを打ち消しています。抵抗の組 (R1:R2 と R3:R4) の比がずれると下がるので、精度の要る所は 0.1% の抵抗や、抵抗が組になった IC (計装アンプ) を使います	Common-mode rejection: the higher the CMRR curve, the better the swing common to both inputs is cancelled. It drops when the resistor pair ratios (R1:R2 and R3:R4) are off, so where precision matters use 0.1% resistors or an IC with matched resistors (instrumentation amplifier)
+故障シミュレーション:	Fault simulation:
+通りを試しました	cases tried
+故障診断:	Fault diagnosis:
+# crates/app/src/schematic/kicad_import.rs
+例: LM358、OPAMP	e.g. LM358, OPAMP
+↑ 取り込む部品を、一覧から1つ選んでください	↑ Choose one part to import from the list
+まだ部品を選んでいません。上の一覧から、取り込む部品を1つ選んでください	No part chosen yet. Choose one part to import from the list above
+# crates/app/src/schematic/live_logic.rs
+デジタル回路を動かしています: スイッチをクリックして 0 と 1 を切り替えます。編集に戻るには、上の帯の「終わる」を押します	Running the digital circuit: click a switch to toggle 0 and 1. To go back to editing, press "End" in the band at the top
+動かせませんでした: {}	Could not run: {}
+回路が変わったので、デジタル回路を動かすのを終えました。もう一度動かすには、学ぶメニューから始めます	The circuit changed, so running the digital circuit has ended. To run it again, start from the Learn menu
+デジタル回路を動かす	Run digital circuit
+一時停止: 時間を止めます。止めている間は「1 クロック」「1 イベント」で少しずつ進めます	Pause: stops time. While paused, step forward with "1 clock" and "1 event"
+動かす: 時間を進めます。クロックはつまみの速さで変わります	Run: advances time. The clock follows the speed knob
+1 クロック	1 clock
+クロックを 1 回 (上がって下がる) だけ進めて、一時停止します。カウンタが 1 つ進むのを確かめられます	Advances the clock once (up and down) and pauses. You can check the counter going up by one
+この回路にはクロック (パルスの電源) がありません	This circuit has no clock (pulse source)
+1 イベント	1 event
+次にゲートの出力が変わる時刻まで進めて、一時停止します。ゲートの遅れ (数 ns) の順に、信号が 1 段ずつ伝わるのを見られます	Advances to the next time a gate output changes and pauses. You can see the signal pass one stage at a time in order of gate delay (a few ns)
+クロックの速さ (1 秒に何回)。目で追える速さにしてあります。実物の回路は MHz で動きます	Clock speed (times per second). Slow enough to follow by eye. Real circuits run at MHz
+ゲートの遅れ (10ns ほど) を 1 秒ほどに引き延ばします。入力を変えると、信号がゲートを 1 段ずつ伝わり、一瞬だけ違う値 (グリッチ) が出るのも見えます	Stretches the gate delay (about 10ns) to about 1 second. When you change an input, you can see the signal pass the gates one stage at a time, and a momentary wrong value (glitch)
+伝わっています (時刻 {})	Propagating (time {})
+時刻 {}	Time {}
+一時停止中 (時刻 {})	Paused (time {})
+終わる	End
+動かすのをやめて、回路図の編集に戻ります	Stops running and goes back to editing the schematic
+真理値表 (全部埋まりました)	Truth table (all filled)
+真理値表 ({}/{} 行)	Truth table ({}/{} rows)
+入力の組み合わせを全部試すと、表が完成します。同じ入力で前と違う出力になった所は「記憶」(前の状態で決まる) と出ます	Try all input combinations to complete the table. Where the same input gives a different output than before, it shows "memory" (decided by the previous state)
+記憶	Memory
+# crates/app/src/schematic/loopgain.rs
+ゲインと位相を、周波数を横軸に 2 段で描きます	Draws gain and phase in two rows with frequency on the horizontal axis
+ループゲイン T を、周波数を変えながら複素数の平面に 1 本の線で描きます。線が -1 の点 (赤い ×) の右を通れば安定で、-1 から離れているほど余裕があります。単位円との交点が位相余裕、負の実軸との交点がゲイン余裕です	Draws the loop gain T as one line on the complex plane while changing frequency. If the line passes to the right of the -1 point (red ×), it is stable; the farther from -1, the more margin. The crossing with the unit circle gives the phase margin, and the crossing with the negative real axis gives the gain margin
+横軸を位相、縦軸をゲイン (dB) にして T を 1 本の線で描きます。(-180°, 0 dB) の点 (赤い ×) の右下を通れば安定です。0 dB の線との交点から -180° までの横の距離が位相余裕、-180° の線との交点から 0 dB までの縦の距離がゲイン余裕です	Draws T as one line with phase on the horizontal axis and gain (dB) on the vertical axis. If it passes to the lower right of the (-180°, 0 dB) point (red ×), it is stable. The horizontal distance from the crossing with the 0 dB line to -180° is the phase margin, and the vertical distance from the crossing with the -180° line to 0 dB is the gain margin
+位相余裕 {pm:.0}° ({})	Phase margin {pm:.0}° ({})
+ゲイン余裕 {gm:.1} dB ({})	Gain margin {gm:.1} dB ({})
+-1 に最も近い所: 距離 {d:.2} ({})	Closest to -1: distance {d:.2} ({})
+単位円 |T| = 1	Unit circle |T| = 1
+T (負の周波数)	T (negative frequency)
+実部 Re T	Real part Re T
+虚部 Im T	Imaginary part Im T
+位相 (°)	Phase (°)
+ゲイン (dB)	Gain (dB)
+大きい所を縮める	Compress large values
+|T| が 1 より大きい所を、1 + log10|T| の距離に縮めて描きます (向きはそのまま)。低い周波数のループゲインは何万倍にもなり、そのままでは -1 の近くが点のようになるためです。単位円の内側と -1 の点、余裕の印の位置は変わりません。オフにすると、ふつうの目盛りで -1 の近くを描きます (ホイールで縮小して全体)	Draws where |T| is over 1 at a compressed distance of 1 + log10|T| (direction unchanged), because the loop gain at low frequency is tens of thousands and the area near -1 would shrink to a dot. The inside of the unit circle, the -1 point and the margin marks don't move. When off, it draws near -1 at the normal scale (zoom out with the wheel for the whole)
+ループゲインが 1 を超えません	The loop gain never exceeds 1
+ループの途中にありません	Not in the loop
+# crates/app/src/schematic/mod.rs
+極と零	Poles and zeros
+電源除去比	Power supply rejection ratio
+同相除去比	Common-mode rejection ratio
+ボリューム (可変抵抗): つまみで抵抗の比が変わります。両端を電源と GND に、真ん中の足から好きな電圧を取り出せます (分圧)	Potentiometer (variable resistor): the knob changes the resistance ratio. With the ends to supply and GND, you can take any voltage from the middle pin (voltage divider)
+# crates/app/src/schematic/quick.rs
+resistor r 抵抗 ohm オーム	
+capacitor c condenser コンデンサ キャパシタ	
+inductor l coil コイル インダクタ	
+diode d ダイオード	
+led light 発光 ダイオード	
+source supply battery power v 電源 電池 信号	
+current source i load 電流源 定電流 負荷 電子負荷	
+potentiometer pot volume trimmer vr variable resistor knob ボリューム 可変抵抗 半固定 つまみ	
+npn transistor bjt q トランジスタ	
+header connector pin コネクタ ヘッダ ピン	
+ground gnd 0v アース グランド	
+vcc vdd 3v3 5v rail 電源ネット	
+# crates/app/src/schematic/repair_practice.rs
+原因だと思う部品を、先に選んでください	Choose the part you think is the cause first
+# crates/app/src/schematic/requirements.rs
+ネットの役割	Net role
+近くに置く組	Groups to place close
+離す組	Groups to keep apart
+承知した例外	Accepted exceptions
+# crates/app/src/schematic/result_tables.rs
+ピン数	Pin count
+つながるピン (部品.ピン)	Connected pins (part.pin)
+# crates/app/src/schematic/rootlocus.rs
+値を変える部品 (抵抗・コンデンサ・コイル)。選ぶと、今の値の 1/10 〜 10倍が範囲に入ります。パラメータスイープと同じ欄です	The part whose value changes (resistor, capacitor, inductor). When chosen, 1/10 to 10× of its current value becomes the range. Same field as the parameter sweep
+回路図で選んでいる部品の値を変えます	Changes the value of the part selected in the schematic
+点数	Points
+値を何通り試すか (2〜{MAX_RUNS})。多いほど軌跡がなめらかで、時間がかかります。15 くらいが目安です	How many values to try (2 to {MAX_RUNS}). More gives a smoother locus and takes longer. About 15 is a guide
+オンで 10, 31.6, 100 のように倍率が一定の間隔、オフで足し算の等間隔	On: steps at a constant ratio like 10, 31.6, 100. Off: equal steps by addition
+伝達関数の出力にするネット (「極と零」と同じ欄)	The net used as the output of the transfer function (same field as "Poles and zeros")
+入力のネット (AC の電源がつながっているネット)。空欄なら出力の電圧そのもの	The input net (the net with the AC source). If empty, the output voltage itself
+根軌跡を描く	Draw root locus
+部品の値を1つずつ入れ替えて、そのたびに AC解析と極・零の当てはめをして、極の位置をつないで描きます。回路そのものは変わりません	Changes the part value one step at a time, runs AC analysis and fits poles and zeros each time, and draws the pole positions connected. The circuit itself does not change
+(回路が変わりました。もう一度実行してください)	(The circuit changed. Run again)
+{} = {} で、極が右半面に出ます (この値から先は発振します)	At {} = {}, a pole moves to the right half-plane (beyond this value it oscillates)
+{} = {} で、もう右半面に極があります (発振します)	At {} = {}, there is already a pole in the right half-plane (it oscillates)
+この範囲では、極はすべて左半面にあります (安定です)	In this range all poles are in the left half-plane (stable)
+最初	First
+最後	Last
+極はすべて実数 (振動しない)	All poles are real (no oscillation)
+いちばん小さい減衰比 {d:.2}{}	Smallest damping ratio {d:.2}{}
+ (負: 振動が大きくなる)	 (negative: oscillation grows)
+ (長く振動する)	 (rings for long)
+{word} ({} = {}): 極 {} 個、{damp}	{word} ({} = {}): {} poles, {damp}
+減衰比は、複素数の極の対が虚軸にどれだけ近いかです。1 で振動せず、0.7 で少し行き過ぎ、0.3 未満でステップ応答が長く振動し、0 で発振します	The damping ratio shows how close a complex pole pair is to the imaginary axis. At 1 there is no oscillation, at 0.7 a little overshoot, below 0.3 the step response rings for long, and at 0 it oscillates
+根軌跡: {part} = {}{unit} で極が右半面に出ます (発振)	Root locus: at {part} = {}{unit} a pole moves to the right half-plane (oscillation)
+根軌跡: {part} を {} 通りに変えて極をたどりました{}	Root locus: followed the poles changing {part} in {} steps{}
+ ({} 通りは計算できず)	 ({} steps could not be calculated)
+根軌跡に失敗: {}	Root locus failed: {}
+値を変える部品を選んでください (抵抗・コンデンサ・コイル)	Choose the part whose value changes (resistor, capacitor, inductor)
+出力のネットの名前を入力してください	Enter the name of the output net
+「から」「まで」「点数」を数値で入力してください (例: 10, 200, 15)	Enter "From", "To" and "Points" as numbers (e.g. 10, 200, 15)
+AC解析の周波数の設定を数値で入力してください (例: 10, 1Meg, 20)	Enter the AC analysis frequency settings as numbers (e.g. 10, 1Meg, 20)
+根軌跡: {part} を変えたときの {label} の極	Root locus: poles of {label} when {part} changes
+極は、回路が自分で持っている「くせ」の周波数です。左半面 (σ < 0) の極は時間とともに収まり、虚軸に近いほど長く振動し、右半面 (赤い所) に出ると振動が大きくなっていく = 発振します。縦軸の値は振動の周波数、横軸は収まる速さです	Poles are the frequencies of the circuit's own "habits". A pole in the left half-plane (σ < 0) dies out with time; the closer to the imaginary axis, the longer it rings; in the right half-plane (red area) the oscillation grows = it oscillates. The vertical axis is the oscillation frequency, the horizontal axis how fast it settles
+根軌跡の表示	Root locus view
+{part} = {}{unit} は計算できませんでした: {why}	{part} = {}{unit} could not be calculated: {why}
+○ = {part} が {}{unit} のときの極、× = {}{unit} のときの極。線は値を変えたときの極の道すじ (点が 1 つの値)	○ = poles when {part} is {}{unit}, × = poles at {}{unit}. Lines are the paths of the poles as the value changes (one dot per value)
+実部 σ/2π (Hz)  ← 早く収まる	Real part σ/2π (Hz)  ← settles faster
+虚部 ω/2π (Hz)	Imaginary part ω/2π (Hz)
+# crates/app/src/schematic/selfheat.rs
+先に回路図の解析タブで「温度の時間変化」を計算してください (部品ごとの電力の時間の変化を使います)	First calculate "Temperature over time" in the schematic analysis tab (it uses the power of each part over time)
+電流が流れる抵抗・ダイオード・LED・トランジスタは、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) や、温まると電圧が下がるダイオード・トランジスタ (1 ℃ で約 2 mV) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)	Resistors, diodes, LEDs and transistors with current through them warm up by their own power. Resistors whose value changes when warm (parts with a temperature coefficient), and diodes and transistors whose voltage drops when warm (about 2 mV per 1 ℃), also change the current, so the calculation repeats until it settles. This is the DC steady state (short pulses give less)
+電流が流れる部品 (抵抗・ダイオード・トランジスタ) の温度上昇と、それで値や電圧がどれだけ動くかを見ます	Shows the temperature rise of parts with current through them (resistors, diodes, transistors) and how much their values and voltages move
+電力が出ている部品はありません	No part dissipates power
+熱抵抗 (K/W)	Thermal resistance (K/W)
+係数	Coefficient
+温度係数 (ppm/K)	Temperature coefficient (ppm/K)
+上限 ℃	Limit ℃
+部品の最高温度 (℃)	Maximum temperature of the part (℃)
+うち {:.1} K は、基板を通ってほかの部品から受けた熱です	{:.1} K of it is heat received from other parts through the board
+温まって、この部品の電圧 (ダイオードは順方向の電圧、トランジスタはコレクタ・エミッタ間) が {cold:.4} V から {warm:.4} V になりました。シリコンの接合は、1 ℃ 温まると約 2 mV 下がります	Warming changed the voltage of this part (forward voltage for a diode, collector-emitter for a transistor) from {cold:.4} V to {warm:.4} V. A silicon junction drops about 2 mV per 1 ℃ of warming
+中のダイオード・トランジスタは、この部品の温度で計算しています (電圧の変化は「温まって動いたところ」を見てください)	The diodes and transistors inside are calculated at this part's temperature (see "What moved when warm" for the voltage change)
+温度係数は抵抗のものです。ダイオード・トランジスタの温度による変化は、モデルの決まり (飽和電流・しきい値の温度の式) で入ります	The temperature coefficient is for resistors. The temperature change of diodes and transistors comes from the model rules (temperature formulas for saturation current and threshold)
+部品の中が達してよい最高の温度 (半導体は接合部の Tj の最大、抵抗は抵抗体の上限)。「?」は部品の種類からの目安です。データシートの値に直してください。変えたら、もう一度計算してください	The highest temperature the inside of the part may reach (max junction Tj for semiconductors, element limit for resistors). "?" is a guide from the part type. Change it to the datasheet value. After changing, calculate again
+配線も温まって抵抗が増えています: {}	Tracks also warm up and their resistance rises: {}
+銅の抵抗は 1 ℃ で約 0.39 % 増えます。基板の熱の地図で、パッドの配線 (電源のパッドからの道すじ) の平均の温度を出し、その抵抗で計算し直しました。いちばん熱いのは {}.{} の配線 ({} ネット)。上の「温まって動いたところ」に、その分も入っています	Copper resistance rises about 0.39 % per 1 ℃. From the board heat map, the average temperature of the pad tracks (the path from the supply pad) was found and the calculation redone with that resistance. Hottest is the track of {}.{} (net {}). "What moved when warm" above includes it
+基板の熱の地図から: {} (基板を「シミュレーションに反映」しています。部品どうしが基板を通って温め合う分も入っています)	From the board heat map: {} (the board is "applied to simulation". Parts heating each other through the board is included)
+電力の出ている部品 (1 mW 以上、最大 24 個) を基板の升目に置き、部品ごとに 1 W を入れて解いた熱抵抗の表 (行列) を使っています。ほかの部品は、熱抵抗の式 (銅の面積から) のままです	Uses a table (matrix) of thermal resistances solved by placing the parts that dissipate power (1 mW or more, up to 24) on the board grid and putting 1 W in each. Other parts keep the thermal resistance formula (from the copper area)
+熱抵抗を入れていない部品は、パッケージの大きさからの目安 (定格電力から) です。データシートの値 (θJA) に直してください	Parts without a thermal resistance use a guide from the package size (from the rated power). Change it to the datasheet value (θJA)
+基板の熱の地図 (升目の計算) から求めた熱抵抗: {:.0} K/W。基板の銅 (ベタ・配線・ビア) と、表と裏の面から空気への対流と放射を解いた値で、θjc {:.1} K/W と放熱板も入っています。ほかの部品から受ける熱は、上昇の欄に足してあります。目安で、風やケースで ±20〜30 % ずれます	Thermal resistance from the board heat map (grid calculation): {:.0} K/W. Solved from the board copper (pour, tracks, vias) and convection and radiation from the top and bottom surfaces to air, including θjc {:.1} K/W and the heatsink. Heat received from other parts is added to the rise. A guide; airflow and the case change it by ±20 to 30 %
+銅と放熱板を入れた熱抵抗: {:.0} K/W = θjc {:.1} + (ケース → 空気 {:.1} と、銅・放熱板の並列)	Thermal resistance with copper and heatsink: {:.0} K/W = θjc {:.1} + (case → air {:.1} in parallel with copper and heatsink)
+ピンにつながった銅 (部品の中心から 20 mm 以内、パッドのほかに {:.0} mm²) が熱を広げます。銅 35 µm (1 oz) として、SOT-223 のデータシートの曲線 (最小のパッド 110 K/W、1 in² で 42 K/W、2 oz、θjc 12 K/W) から見積もった目安です。正確には実物で測ってください	Copper connected to the pins (within 20 mm of the part center, {:.0} mm² besides the pads) spreads the heat. A guide estimated as 35 µm (1 oz) copper from the curve in an SOT-223 datasheet (minimum pad 110 K/W, 42 K/W at 1 in², 2 oz, θjc 12 K/W). For accuracy, measure the real board
+放熱板 {:.1} K/W (ケース → 空気、取り付けを含む)	Heatsink {:.1} K/W (case → air, including mounting)
+放熱✓	Heatsink✓
+放熱	Heatsink
+ケースと放熱板	Case and heatsink
+熱は 接合部 → ケース → 空気 と流れます。基板の銅と放熱板は、ケースから先の道を増やすだけなので、θjc の分は残ります	Heat flows junction → case → air. Board copper and a heatsink only add paths beyond the case, so the θjc part remains
+接合部 (部品の中) からケース (パッケージの外側・放熱タブ) までの熱抵抗。データシートの「Junction to Case」(RθJC)。「?」は θ の 1 割ほどの目安です (銅の式を合わせた SOT-223 の部品の割合)	Thermal resistance from the junction (inside the part) to the case (outside of the package, heat tab). "Junction to Case" (RθJC) in the datasheet. "?" is a guide of about 10 % of θ (the ratio of the SOT-223 part the copper formula was fitted to)
+放熱板 K/W	Heatsink K/W
+放熱板のケースから空気までの熱抵抗 (放熱板のデータシートの値に、取り付け (グリス・シート) の 0.5〜1 K/W を足したもの)。0 で放熱板なし。小さいほどよく冷えます	Thermal resistance from the heatsink case to air (the heatsink datasheet value plus 0.5 to 1 K/W for mounting (grease, pad)). 0 for no heatsink. Smaller cools better
+変えたら、もう一度計算してください	After changing, calculate again
+θjc (接合部 → ケース) と放熱板	θjc (junction → case) and heatsink
+# crates/app/src/schematic/selfheat_tran.rs
+。過渡熱抵抗 (Zth) の {} 段で計算 (部品作成の「データシートの情報」で入れたもの)	. Calculated with {} stages of transient thermal impedance (Zth) (entered in "Datasheet info" of the part editor)
+部品の中が達してよい最高の温度 (半導体は接合部の Tj の最大、抵抗は抵抗体の上限)。いちばん熱い瞬間の温度と比べます。「?」は部品の種類からの目安です。データシートの値に直してください。変えたら、もう一度計算してください	The highest temperature the inside of the part may reach (max junction Tj for semiconductors, element limit for resistors). Compared with the temperature at the hottest moment. "?" is a guide from the part type. Change it to the datasheet value. After changing, calculate again
+各部品の、周囲の温度からの上昇 (K) の時間変化。横軸は時間、縦軸は上昇。上限に近づいた・超えた部品は、上限を同じ色の点線で描きます	Temperature rise from ambient (K) of each part over time. Horizontal: time, vertical: rise. For parts near or over the limit, the limit is drawn as a dotted line in the same color
+# crates/app/src/schematic/settings.rs
+(手で変えた値)	(changed by hand)
+どのまとめ設定とも違う値です。左のボタンで、まとめて変えられます	A value different from every preset. The buttons on the left change them together
+# crates/app/src/schematic/tran.rs
+デジタル表示	Digital view
+選んだ電圧を、ロジックアナライザのように High / Low の帯で表示します。D0・D1 のように番号だけが違うネットは 1 本のバスにまとめて、値を数字で出します。しきい値は 74HC と同じ、電源の 30 % と 70 % (その間は不定 X で赤)	Shows the chosen voltages as High / Low bands like a logic analyzer. Nets that differ only by number like D0, D1 are combined into one bus with the value shown as a number. Thresholds are the same as 74HC: 30 % and 70 % of the supply (in between is undefined X, in red)
+しきい値を決める電源電圧 (V)。空欄なら、選んだ信号のいちばん高い電圧を電源とみなします。3.3V の回路なら 3.3 と入れてください	Supply voltage that sets the thresholds (V). If empty, the highest voltage of the chosen signals is taken as the supply. For a 3.3V circuit, enter 3.3
+D0・D1 … のように番号だけが違うネットを 1 本のバスにまとめます。インバータの列 (N1・N2 …) のように、バスではないものまでまとまるときは外してください	Combines nets that differ only by number like D0, D1 … into one bus. Turn off when things that are not buses get combined, like a chain of inverters (N1, N2 …)
+10進	Dec
+16進	Hex
+2進	Bin
+バスの値の書き方: 10 進数・16 進数 (末尾に h)・2 進数。不定のビットがあるときは X	How bus values are written: decimal, hexadecimal (ending with h), binary. X when a bit is undefined
+リップル電流は、計算の後半の波形の交流分の実効値です。寿命は「温度が 10℃ 下がると 2 倍」の目安で、データシートの条件 (定格電圧・定格リップル電流) での値から見積もります。実際の寿命は、使い方で大きく変わります。定格電流のあるコイル (パワーインダクタ) は、計算の後半の電流の実効値を定格電流 (発熱で決まる) と、電流の最大を飽和電流 (インダクタンスが下がり始める) と比べます	The ripple current is the RMS of the AC part of the waveform in the later half of the calculation. Life is estimated from the value at the datasheet conditions (rated voltage, rated ripple current) using the guide "2× for every 10℃ lower". Actual life varies a lot with use. For inductors with a rated current (power inductors), the RMS current in the later half is compared with the rated current (set by heating), and the max current with the saturation current (where inductance starts to drop)
+左の一覧から電圧の信号を選んでください (デジタル表示は電圧だけ)	Choose a voltage signal from the list on the left (digital view shows voltages only)
+セットアップ時間が足りない	Setup time too short
+ホールド時間が足りない	Hold time too short
+クロックのパルスが短すぎる	Clock pulse too short
+{}: {} (いちばん短くて {}、必要なのは {})	{}: {} (shortest {}, needed {})
+# crates/app/src/schematic/variation.rs
+合格の範囲	Pass range
+作りたい回路の目標の範囲。ランダムに作った回路のうち何 % がこの範囲に入るか (合格率) と、範囲までの余裕 (Cpk) を出します。片方だけでもかまいません。スペック (合否) の表に同じ点の行があれば、実行したときに入ります	The target range of the circuit you want to make. Shows what % of randomly made circuits fall in this range (yield) and the margin to the range (Cpk). One side alone is fine. If the spec (pass/fail) table has a row for the same point, it is filled in when run
+下限。空なら下限なし。3.2 や 1.2k のように書けます	Lower limit. Empty for no lower limit. Can be written like 3.2 or 1.2k
+上限。空なら上限なし	Upper limit. Empty for no upper limit
+スペック (合否) の表で、同じ点に書いた範囲を入れます	Fills in the range written for the same point in the spec (pass/fail) table
+範囲が数値として読めません (例: 4.75、1.1k)	The range can't be read as numbers (e.g. 4.75, 1.1k)
+下限が上限より大きくなっています	The lower limit is greater than the upper limit
+範囲を入れると、合格率と Cpk を出します	Enter a range to get the yield and Cpk
+範囲に入った回路の割合。収束しなかった回は不合格に数えます。{} 回では、本当の合格率は 95% の確からしさで {:.1}〜{:.1} % の間です (回数を増やすと狭くなります)	The share of circuits within the range. Runs that did not converge count as failed. With {} runs, the true yield is between {:.1} and {:.1} % with 95% confidence (more runs make it narrower)
+合格率	Yield
+範囲の外	Out of range
+下に {} 回・上に {} 回	{} below, {} above
+工程能力指数。平均から近いほうの限度までの距離を 3σ で割った値。1.33 以上なら量産でもまず外れない、1.0 なら限度がちょうど 3σ (約 0.3% が外れる)、1 未満なら目に見えて外れます	Process capability index. The distance from the mean to the nearer limit divided by 3σ. 1.33 or more rarely fails even in mass production; 1.0 means the limit is exactly 3σ (about 0.3% fail); below 1 failures are visible
+足りない	Not enough
+範囲の幅を 6σ で割った値。中心のずれを考えない Cpk です。Cp が大きいのに Cpk が小さいなら、ばらつきは小さく、中心がずれています	The range width divided by 6σ. Cpk without the center offset. If Cp is large but Cpk small, the spread is small and the center is off
+平均と σ から正規分布で見積もった、範囲の外に出る割合。回数では数えられない小さな割合の目安です (部品は範囲の中で均等に動かすので、実際の裾はこれより細く、見積もりは安全側です)	The share outside the range estimated with a normal distribution from the mean and σ. A guide for small shares that runs can't count (parts move evenly within their range, so the real tails are thinner and the estimate is on the safe side)
+外れる見込み	Expected out
+ばらつきが無く、出せません	No spread, so it can't be shown
+上限を超えた回路と下限を下回った回路を分けて、その部品が許容差の範囲 (−1 が下端、+1 が上端) のどこにあったかの平均から、合格した回路での平均を引いた値。±1 に近いほど、その部品の誤差が不合格の原因です	For circuits over the upper limit and under the lower limit separately, the average position of the part within its tolerance (−1 is the low end, +1 the high end) minus the average in passing circuits. The closer to ±1, the more that part's error causes the failures
+不合格の回路で寄っていた部品	Parts biased in failed circuits
+上に外れた回	Runs above
+下に外れた回	Runs below
+大きい側	High side
+小さい側	Low side
+ばらつきは範囲に比べて小さいのに、中心が限度に寄っています。設計値を範囲の真ん中に寄せると合格率が上がります	The spread is small compared with the range, but the center is close to a limit. Moving the design value to the middle of the range raises the yield
+{name} の誤差を小さくする (許容差の小さい部品にする) と、合格率が上がります	Making the error of {name} smaller (a part with tighter tolerance) raises the yield
++ 入力のバイアス電流	+ input bias current
+− 入力のバイアス電流	− input bias current
+# crates/app/src/schematic/vscale.rs
+{n} からの差 (V)	Difference from {n} (V)
+電圧 (V)	Voltage (V)
+10 倍ごと (段の下の値)	Per decade (value at bottom of step)
+比例 (段の上の値)	Linear (value at top of step)
+比例	Linear
+10 倍ごと	Per decade
+いちばん高い電圧を 5 段に分けて色を付けます。どのネットがだいたい同じ電圧かが分かります	Divides up to the highest voltage into 5 steps of color. You can see which nets are at about the same voltage
+1 mV・10 mV・100 mV・1 V・10 V の 10 倍ごとに色を変えます。電源が大きく、信号が mV のときに、小さな信号にも色が付きます	Changes color at each decade: 1 mV, 10 mV, 100 mV, 1 V, 10 V. When the supply is large and signals are in mV, small signals get color too
+基準を GND に	Reference to GND
+色を GND からの電圧に戻します	Returns the colors to voltage from GND
+ネットを右クリックで、そこを基準にできます	Right-click a net to make it the reference
+「{net}」を基準にする	Use "{net}" as reference
+線の色を、このネットからの電圧の差で付けます (オシロスコープのグラウンドを付け替えるのと同じです)。小さな電圧降下が見えます	Colors the wires by the voltage difference from this net (like moving the oscilloscope ground clip). Small voltage drops become visible
+基準を GND に戻す	Return reference to GND
+回路を変えたので、薄い数字は変える前の結果です	The circuit changed, so the faded numbers are results from before the change
+再計算 (F5)	Recalculate (F5)
+いまの回路で、最後に動かした解析をもう一度計算します	Recalculates the last analysis run, with the current circuit
+# crates/app/src/schematic/wizard.rs
+抵抗の値	Resistor values
+熱・保護・基板	Heat, protection, board
+放熱 (損失から、銅の面積と放熱板)	Heat dissipation (copper area and heatsink from the loss)
+アクティブフィルタ (バターワース・ベッセル・チェビシェフ)	Active filter (Butterworth, Bessel, Chebyshev)
+部品の損失 (W) から、何もしないときの温度と、目標の温度まで下げるのに要る基板の銅の面積、または放熱板の熱抵抗を見積もります。表面実装の部品 (SOT-223・DPAK など) の放熱の設計に	From the part loss (W), estimates the temperature with nothing added, and the board copper area or heatsink thermal resistance needed to bring it down to the target. For heat design of surface-mount parts (SOT-223, DPAK etc.)
+損失 (W)	Loss (W)
+部品が熱にする電力。線形の電源なら (入力 − 出力) × 電流、MOSFET なら I² × Rds(on)。自己発熱の表の「電力」も使えます	Power the part turns into heat. (input − output) × current for a linear supply, I² × Rds(on) for a MOSFET. The "Power" in the self-heating table can also be used
+最小のパッド (銅を広げないとき) の、部品の中から空気までの熱抵抗。データシートで確認 (SOT-223 は約 110)	Thermal resistance from inside the part to air on minimum pads (no extra copper). Check the datasheet (about 110 for SOT-223)
+部品の中からケース (タブ) まで。放熱板の計算に使う (データシートで確認)	From inside the part to the case (tab). Used for the heatsink calculation (check the datasheet)
+部品の中の温度の上限。データシートで確認 (多くの半導体は 125〜175 ℃)	Upper limit of the temperature inside the part. Check the datasheet (125 to 175 ℃ for many semiconductors)
+基板の銅の厚さ。ふつうは 35 µm (1 oz)、厚銅は 70 µm (2 oz)	Board copper thickness. Usually 35 µm (1 oz); heavy copper is 70 µm (2 oz)
+オペアンプのフィルタの部品を決めます。種類・形・次数・周波数から、1 次の RC・サレンキー・多重帰還の段に分け、コンデンサは E12、抵抗は E24 か E96 に丸めます。「回路図に置いて AC で確かめる」で、AC 解析の図に目標の特性を重ねて見られます	Decides the parts of an op-amp filter. From type, shape, order and frequency, it splits into 1st-order RC, Sallen-Key and multiple-feedback stages, rounding capacitors to E12 and resistors to E24 or E96. "Place on schematic and check with AC" overlays the target response on the AC analysis plot
+種類 (0 = バターワース, 1 = ベッセル, 2 = チェビシェフ)	Type (0 = Butterworth, 1 = Bessel, 2 = Chebyshev)
+バターワースは通過域がいちばん平ら。ベッセルは波形の形を崩さない (落ち方はゆるやか)。チェビシェフは通過域が少し波打つかわりに、遮断の先で急に落ちる	Butterworth has the flattest passband. Bessel keeps the waveform shape (gentle roll-off). Chebyshev has a little ripple in the passband but falls sharply beyond the cutoff
+形 (0 = ローパス, 1 = ハイパス, 2 = バンドパス)	Shape (0 = low-pass, 1 = high-pass, 2 = band-pass)
+ローパスは低い周波数を通し、ハイパスは高い周波数を通し、バンドパスは中心の周波数のまわりだけ通します	Low-pass passes low frequencies, high-pass passes high frequencies, band-pass passes only around the center frequency
+次数	Order
+大きいほど遮断の先で急に落ちます (1 次で 1 桁ごとに 20 dB、4 次で 80 dB)。2 次ごとにオペアンプが 1 つ要ります。1〜8 (バンドパスは 1〜4 で、できるのはその 2 倍の次数)	Higher falls more sharply beyond the cutoff (20 dB per decade at 1st order, 80 dB at 4th). Each 2 orders need one op-amp. 1 to 8 (band-pass 1 to 4, giving twice that order)
+周波数 (Hz)	Frequency (Hz)
+ローパス・ハイパスは遮断周波数 (バターワース・ベッセルは −3 dB、チェビシェフはリップルの端)。バンドパスは中心の周波数	For low-pass and high-pass, the cutoff frequency (−3 dB for Butterworth and Bessel, the ripple edge for Chebyshev). For band-pass, the center frequency
+帯域幅 (Hz, バンドパスだけ)	Bandwidth (Hz, band-pass only)
+バンドパスで通す幅 (上の端 − 下の端)。中心の 1/10 なら、よく切れるが部品の誤差に敏感になります	The width passed by the band-pass (upper edge − lower edge). At 1/10 of the center it cuts well but becomes sensitive to part errors
+リップル (dB, チェビシェフだけ)	Ripple (dB, Chebyshev only)
+通過域の波の大きさ。0.5 か 1 dB がよく使われます。大きいほど遮断の先で急に落ちます	Size of the ripple in the passband. 0.5 or 1 dB is common. Larger falls more sharply beyond the cutoff
+回路 (0 = サレンキー, 1 = 多重帰還)	Circuit (0 = Sallen-Key, 1 = multiple feedback)
+サレンキーは部品が少なく出力の向きが同じ。多重帰還は高い周波数の漏れが少なく、向きが逆になります (バンドパスはいつも多重帰還)	Sallen-Key has fewer parts and keeps the output direction. Multiple feedback leaks less at high frequency and inverts the output (band-pass is always multiple feedback)
+抵抗の系列 (24 = E24, 96 = E96)	Resistor series (24 = E24, 96 = E96)
+E96 (±1 %) は細かい値があり、目標に近づきます。E24 (±5 %) は手に入りやすい値です	E96 (±1 %) has finer values and gets closer to the target. E24 (±5 %) values are easy to get
+計算	Calculation
+何の値を決めるかを選びます (抵抗の値・電源・スイッチ・アナログ・熱と保護と基板に分けてあります)	Choose which value to decide (grouped into resistor values, supply, switching, analog, and heat, protection and board)
+回路図に置いて AC で確かめる	Place on schematic and check with AC
+計算した段をオペアンプ (TL072) で回路図の空いた所に置き、入力 (AC 1) と ±5 V の電源も付けて AC 解析をします。目標の特性は図に点で重なります (Ctrl+Z で戻せます)	Places the calculated stages with op-amps (TL072) in an empty area of the schematic, adds an input (AC 1) and ±5 V supplies, and runs AC analysis. The target response is overlaid as dots (Ctrl+Z undoes it)
+回路図で部品を 1 つ選ぶと、その値を変えられます	Select one part in the schematic to change its value
+フィルタを置けません: {e}	Can't place the filter: {e}
+「{t}」を数値で入力してください	Enter "{t}" as a number
+フィルタの計算を選んでください	Choose a filter calculation
+# crates/app/src/schematic/challenge/judge.rs
+のとき、いちばん	
+# crates/app/src/schematic/challenge/window.rs
+ヒントはこれで全部です	That's all the hints
+# crates/app/src/schematic/lessons/analog.rs
+2N3906 は、データシート (onsemi) の表とグラフから作った等価モデルです。hFE は 10mA で約 170、100mA では約 40 に下がります。実物の hFE は個体差が大きく (10mA で 100〜300)、温度でも変わります。スイッチを確実にオンにするには、データシートの小さめの hFE で、ベース電流を多めに流します。	2N3906 is an equivalent model made from the tables and graphs in the datasheet (onsemi). hFE is about 170 at 10mA and drops to about 40 at 100mA. Real hFE varies a lot between parts (100 to 300 at 10mA) and with temperature. To turn a switch on for sure, use the smaller hFE in the datasheet and give more base current.
+R1 を 4.7k から 47k にして「DC動作点を解析」(DC では IN は 0V の Low)。ベース電流が約 22µA に減り、流せる電流は × hFE (約 190) で約 4mA が上限になるので、OUT は約 0.9V までしか上がりません。トランジスタが「半分だけオン」で、Vce が大きく (熱くも) なります。スイッチには、オンのときにしっかり飽和する、小さいベース抵抗を選びます。	Change R1 from 4.7k to 47k and press "Run DC operating point" (in DC, IN is 0V Low). The base current drops to about 22µA, and the current it can pass is limited to about 4mA by × hFE (about 190), so OUT only rises to about 0.9V. The transistor is "half on", and Vce is large (and it gets hot). For a switch, choose a small base resistor so it saturates firmly when on.
+R1 を 4.7k に戻し、負荷 R3 を 47 にして解析する	Return R1 to 4.7k, set the load R3 to 47 and analyze
+R1 を 4.7k に戻し、R3 (負荷) を 220 から 47 にして「DC動作点を解析」。全部オンなら約 100mA 流れるはずですが、OUT は約 2.7V、電流は約 58mA で止まります。hFE は電流が大きいと下がり (2N3906 は 100mA で約 40。データシートの min は 30)、ベース電流 約 0.9mA では足りません。飽和しないので Q1 に 2V 以上かかり、Q1 が約 130mW で熱くなります。	Return R1 to 4.7k, change R3 (load) from 220 to 47 and press "Run DC operating point". Fully on, about 100mA should flow, but OUT stops at about 2.7V and the current at about 58mA. hFE drops at large current (about 40 at 100mA for the 2N3906; the datasheet min is 30), and the base current of about 0.9mA is not enough. Not saturated, Q1 has over 2V across it and gets hot at about 130mW.
+R1 を 1k にして、もう一度解析する	Set R1 to 1k and analyze again
+R1 を 1k にして「DC動作点を解析」。ベース電流が約 4mA に増え、100mA でも飽和して OUT は約 4.7V、Q1 の損失は約 30mW に下がります。ベース電流は「負荷電流 ÷ 小さめの hFE」より多めに選びます。代わりに解析パネルに ⚠ が出ます: R3 (1206 の抵抗) は 約 470mW で、形の目安 250mW を超えます。トランジスタが十分オンでも、負荷側の部品が定格を超えることがあります。	Set R1 to 1k and press "Run DC operating point". The base current rises to about 4mA, it saturates even at 100mA, OUT is about 4.7V and the loss in Q1 drops to about 30mW. Choose the base current a bit larger than "load current ÷ small hFE". Instead, a ⚠ appears in the analysis panel: R3 (a 1206 resistor) is about 470mW, over the 250mW guide for its shape. Even when the transistor is fully on, a part on the load side can go over its rating.
+ダイオードは、約 0.7V (シリコン) や約 0.2〜0.3V (ショットキー) を超えると急に電流を流し、そのあとは電圧がほとんど増えないことを、グラフで見ます	See on a graph that a diode suddenly passes current above about 0.7V (silicon) or about 0.2 to 0.3V (Schottky), and after that the voltage hardly rises
+ダイオードは、電流を一方向 (アノード → カソード) にだけ流す部品です。順方向の電圧が小さいうちはほとんど流れず、シリコンは約 0.6〜0.7V を超えたあたりから急に流れ始めます。流れ始めると、電流が 10 倍になっても、電圧は 0.1V ほどしか上がりません (電圧は電流の「対数」で増えます)。だから、電流を制限する抵抗がないと、電流が際限なく増えて壊れます (LED に抵抗が必要な理由)。ショットキーダイオードは、流れ始める電圧が約 0.2〜0.3V と低く、電源での損失が小さい部品です。温度が上がると、順方向の電圧は下がります (1℃ あたり約 1.5〜3mV)。	A diode passes current in only one direction (anode → cathode). While the forward voltage is small almost nothing flows; silicon starts to conduct sharply above about 0.6 to 0.7V. Once it conducts, even 10× the current raises the voltage only about 0.1V (the voltage rises with the "logarithm" of the current). So without a resistor to limit the current, the current grows without limit and it breaks (why an LED needs a resistor). A Schottky diode starts to conduct at a low voltage of about 0.2 to 0.3V, with small loss in power supplies. When the temperature rises, the forward voltage drops (about 1.5 to 3mV per 1℃).
+まずデータシートを見よう: 1N4007 と 1N5819 のデータシートを開き、「絶対最大定格」の逆耐圧 (VRRM) と平均順電流 (IF)、「電気的特性」の順方向電圧 (Vf) を探します。この回路のシミュレーション (0.71V と 0.23V) と比べてみましょう。	First look at the datasheets: open the datasheets of 1N4007 and 1N5819 and find the reverse voltage (VRRM) and average forward current (IF) in "Absolute maximum ratings", and the forward voltage (Vf) in "Electrical characteristics". Compare them with this circuit's simulation (0.71V and 0.23V).
+期待される値: 3V で、シリコンは約 0.7V、ショットキーは約 0.2〜0.3V です (シミュレーションは 0.71V と 0.23V。1N5819 のデータシートの代表特性では、20mA で約 0.22V)。個体差と温度で、±0.1V くらいずれます。	Expected values: at 3V, about 0.7V for silicon and about 0.2 to 0.3V for Schottky (the simulation gives 0.71V and 0.23V; the 1N5819 datasheet typical curve gives about 0.22V at 20mA). Part-to-part and temperature differences shift it by about ±0.1V.
+「DCスイープを実行」(電源 V1 を 0〜3V) を押し、V(A1) と V(A2) を選びます。V1 を上げていくと、A1・A2 も最初は上がりますが、ショットキー (A2) は約 0.2V、シリコン (A1) は約 0.7V のあたりで頭打ちになります (3V のとき A1 ≒ 0.71V、A2 ≒ 0.23V)。I(D1) と I(D2) を選ぶと、同じところから電流が急に増えるのが見えます。	Press "Run DC sweep" (supply V1 from 0 to 3V) and choose V(A1) and V(A2). As V1 rises, A1 and A2 also rise at first, but the Schottky (A2) levels off around 0.2V and the silicon (A1) around 0.7V (at 3V, A1 ≈ 0.71V, A2 ≈ 0.23V). Choosing I(D1) and I(D2) shows the current rising sharply from the same points.
+「温度とばらつき」の「温度スイープを実行」を押します。温度が上がると、ダイオードの電圧が下がります (0℃ → 75℃ で、シリコンは約 0.75V → 0.63V、ショットキーは約 0.26V → 0.16V)。どちらも 1℃ あたり約 1.5mV 下がります。ショットキーは、もとの電圧が低いぶん、割合では大きく動きます (40% 近く)。	Press "Run temperature sweep" in "Temperature and variation". As the temperature rises, the diode voltage drops (from 0℃ to 75℃, silicon about 0.75V → 0.63V, Schottky about 0.26V → 0.16V). Both drop about 1.5mV per 1℃. The Schottky starts lower, so it moves more as a ratio (close to 40%).

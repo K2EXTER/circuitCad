@@ -1,0 +1,407 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/part_form/logic.rs
+式に使えない文字「{}」があります。使えるのは 名前・0・1・! (否定)・& (かつ)・| (または)・^ (排他的論理和)・括弧 です	The expression has a character "{}" that can't be used. Allowed: names, 0, 1, ! (not), & (and), | (or), ^ (exclusive or), and parentheses
+括弧が閉じていません	A parenthesis is not closed
+「{}」は入力ピンにありません。入力ピンの欄に足すか、名前を直してください	"{}" is not an input pin. Add it to the input pins or fix the name
+「{}」の前に、名前か 0・1 か「(」が要ります	Before "{}", a name, 0, 1 or "(" is needed
+式が空です	The expression is empty
+「{}」から後ろが読めません (演算子が抜けていませんか)	Can't read from "{}" on (is an operator missing?)
+入力ピンの名前を 1 つ以上入れてください (例: A B)	Enter at least one input pin name (e.g. A B)
+「{}」に「=」がありません。出力は 1 行に 1 つ、「Y = A & B」の形で書きます	"{}" has no "=". Write one output per line, as "Y = A & B"
+出力を 1 行に 1 つ、「Y = A & B」の形で書いてください	Write one output per line, as "Y = A & B"
+ピンの名前「{}」は、英数字と _ だけで、数字だけでない名前にしてください	Pin name "{}" must use only letters, digits and _, and not be digits only
+ピンの名前「{}」が 2 回あります	Pin name "{}" appears twice
+「{}」は電源のピンとして自動で付くので、入力・出力には使えません	"{}" is added automatically as a supply pin, so it can't be an input or output
+{} の式: 出力 {} は式に使えません (使えるのは入力と、「@ クロック」の付いた出力だけ)	Expression of {}: output {} can't be used in an expression (only inputs and outputs with "@ clock" can)
+{} の式: {}	Expression of {}: {}
+{} の「@ {}」: クロックは入力ピンの名前にしてください	"@ {}" of {}: the clock must be an input pin name
+{} の「{}」のあとに入力ピンの名前が要ります (例: clear !RST)	{}: after "{}" an input pin name is needed (e.g. clear !RST)
+{} の「{} {}」: {} は入力ピンにありません	"{} {}" of {}: {} is not an input pin
+{} の「@」のあとの「{}」が分かりません。クロックの名前のあとに書けるのは clear (0 にする) と set (1 にする) です (例: @ CLK clear !RST)	{}: "{}" after "@" is not understood. After the clock name you can write clear (set to 0) and set (set to 1) (e.g. @ CLK clear !RST)
+{} は入力を {} 本読んでいます。1 つの出力が読めるのは {} 本までです	{} reads {} inputs. One output can read up to {}
+先に、上の「部品名」を入れてください (モデルの名前になります)	First enter the "Part name" above (it becomes the model name)
+論理式から作ったロジック IC ({})。電源は VCC と GND で、しきい値は電源の半分です	Logic IC made from logic expressions ({}). Supply is VCC and GND; the threshold is half the supply
+論理式から作った動作モデルです (真理値表のセル、出力抵抗 60Ω、しきい値は電源の半分)。実在の IC の入力電流・消費電流・出力の電流の限界は表しません。	A behavioral model made from logic expressions (truth-table cell, output resistance 60Ω, threshold half the supply). It does not represent the input current, supply current or output current limits of a real IC.
+遅延は {} ns の一定値で、それより短いパルスは出力に出ません。立ち上がり・立ち下がりの違い、電源電圧や負荷による遅延の変化は表しません。	The delay is a constant {} ns, and pulses shorter than that do not reach the output. Differences between rise and fall, and delay changes by supply voltage or load, are not represented.
+ピン {} 本とモデルを作りました。このあと、下の「パッケージ」を選び、ピン番号をデータシートの番号に合わせて保存します	Made {} pins and the model. Next, choose the "Package" below, match the pin numbers to the datasheet and save
+論理式からピンとモデルを作る (ロジック IC)	Make pins and a model from logic expressions (logic IC)
+1 ビットの足し算: S = A と B の排他的論理和、C = 桁上がり	1-bit adder: S = exclusive or of A and B, C = carry
+多数決 (3 入力)	Majority (3 inputs)
+3 つのうち 2 つ以上が 1 なら 1	1 if two or more of the three are 1
+2 → 1 セレクタ	2-to-1 selector
+S が 0 なら A、1 なら B を出す	Outputs A if S is 0, B if 1
+2 ビットカウンタ	2-bit counter
+CLK の立ち上がりごとに 0 → 1 → 2 → 3 → 0 と数える。「@ CLK」の付いた出力は、クロックで値を覚えるフリップフロップ。RST を Low にすると 0 に戻る (clear !RST)	Counts 0 → 1 → 2 → 3 → 0 on each rising edge of CLK. An output with "@ CLK" is a flip-flop that stores its value at the clock. Pulling RST Low returns it to 0 (clear !RST)
+入力ピン	Input pins
+入力ピンの名前を、空白かカンマで区切って並べます (例: A B C)。VCC と GND は自動で付きます	List the input pin names separated by spaces or commas (e.g. A B C). VCC and GND are added automatically
+出力 (1 行に 1 つ)	Outputs (one per line)
+「出力の名前 = 式」を 1 行に 1 つ。式に使えるのは 入力ピンの名前・0・1・! (否定)・& (かつ)・^ (排他的論理和)・| (または)・括弧。not・and・xor・or と書いてもかまいません。強さの順は ! > & > ^ > |。行の最後に「@ CLK」(入力ピンの名前) を付けると、その出力はクロックの立ち上がりで式の値を覚えるフリップフロップになり、ほかの式でも使えます (例: Q = !Q @ CLK)。続けて「clear RST」「set PRE」で、クロックと関係なく 0 / 1 にする入力を付けられます (! を付けると Low で働く: clear !RST)	One "output name = expression" per line. Expressions can use input pin names, 0, 1, ! (not), & (and), ^ (exclusive or), | (or) and parentheses. You may also write not, and, xor, or. Precedence is ! > & > ^ > |. Adding "@ CLK" (an input pin name) at the end of a line makes that output a flip-flop that stores the expression's value at the rising clock edge, and it can be used in other expressions (e.g. Q = !Q @ CLK). After that, "clear RST" and "set PRE" add inputs that force 0 / 1 regardless of the clock (with ! they act on Low: clear !RST)
+入力が変わってから出力が変わるまでの時間。74HC なら 10ns 前後 (データシートの tpd)。これより短いパルスは出力に出ません	Time from an input change to the output change. About 10ns for 74HC (tpd in the datasheet). Shorter pulses do not reach the output
+真理値表 (Q+ はクロックの立ち上がりで Q に入る値。clear・set が働いている間は、それが優先)	Truth table (Q+ is the value Q takes at the rising clock edge. While clear or set is active, it takes priority)
+式が読む入力 (と記憶) が {} 本あるので、真理値表 ({} 行) は出しません	The expressions read {} inputs (and states), so the truth table ({} rows) is not shown
+入力・出力・VCC・GND のピンの一覧と、真理値表のシミュレーションモデルを作って、下の欄に書き込みます (すでにある内容は置き換わります)	Makes the list of input, output, VCC and GND pins and a truth-table simulation model, and writes them into the fields below (existing contents are replaced)
+入力と、出力ごとの論理式を書くだけで、ロジック IC (ゲートの組み合わせ) の部品を作ります。真理値表が自動で出るので、式が合っているか確かめられます	Just write the inputs and a logic expression for each output to make a logic IC part (a combination of gates). The truth table is shown automatically, so you can check the expressions
+# crates/app/src/part_form/mosfet.rs
+{label}「{}」を、0 より大きい数で入れてください (例: 1.05、250u、18m)	Enter {label} "{}" as a number greater than 0 (e.g. 1.05, 250u, 18m)
+オン抵抗の {}行目: 「VGS ID RDS(on)」の 3 つの数で書いてください (例: 4.5 5 19m)	On-resistance line {}: write 3 numbers "VGS ID RDS(on)" (e.g. 4.5 5 19m)
+gFS は「gFS VDS ID」の 3 つの数で書いてください (例: 33 5 5.7)。空でも作れます	Write gFS as 3 numbers "gFS VDS ID" (e.g. 33 5 5.7). It can be empty
+温度の {}行目: 「温度 [°C] 25 °C との比」の 2 つの数で書いてください (例: 125 1.55)	Temperature line {}: write 2 numbers "temperature [°C] ratio to 25 °C" (e.g. 125 1.55)
+温度の {}行目: 比は 0 より大きい数です (125 °C で 1.5 倍なら 1.5)	Temperature line {}: the ratio is a number greater than 0 (1.5 for 1.5× at 125 °C)
+温度の変化には、オン抵抗の行が 1 行以上要ります (その 1 行目の VGS と ID で見ます)	The temperature change needs at least one on-resistance line (it uses the VGS and ID of its first line)
+オン抵抗の温度変化 (25 °C との比)	On-resistance change with temperature (ratio to 25 °C)
+VGS(th) の ID	ID for VGS(th)
+VGS(th) が表に見つかりません	VGS(th) not found in the table
+VGS(th) に typ がありません ({})。min と max の間を自分で入れてください	VGS(th) has no typ ({}). Enter a value between min and max yourself
+125 °C のオン抵抗: 25 °C の {} 倍 ({})	On-resistance at 125 °C: {}× of 25 °C ({})
+RDS(on) が表に見つかりません	RDS(on) not found in the table
+RDS(on) の行に typ・VGS・ID がそろっていません。自分で入れてください	The RDS(on) row lacks typ, VGS or ID. Enter them yourself
+RDS(on) {} 行: p.{}	RDS(on) row {}: p.{}
+{sym} の typ が表に見つかりません	The typ of {sym} was not found in the table
+ピン表に、D・G・S の名前のピンが要ります (「③ ピン」で直してください)	The pin table needs pins named D, G and S (fix them in "③ Pins")
+かんたん作成: MOSFET をデータシートの表からつくる	Quick create: MOSFET from the datasheet table
+データシートの「電気的特性」の表の typ の値 (しきい値・オン抵抗・容量) から、同梱の MOSFET と同じ作り方 (レベル1 + 直列抵抗) でモデルを作り、表の値とのずれを並べます	From the typ values of the "Electrical characteristics" table in the datasheet (threshold, on-resistance, capacitance), makes a model the same way as the bundled MOSFETs (level 1 + series resistance), and lists the differences from the table
+VGS(th) (しきい値): ドレインに小さい電流 (表の ID、たとえば 250µA) が流れ始めるゲート電圧。モデルの VTO はここから決まります。	VGS(th) (threshold): the gate voltage at which a small drain current (the ID in the table, e.g. 250µA) starts to flow. The model's VTO is set from this.
+RDS(on) (オン抵抗): ゲート電圧ごとの抵抗。2〜3 行あると、チャネルの強さ KP と、配線やチップの抵抗 RD を分けて決められます。	RDS(on) (on-resistance): the resistance at each gate voltage. With 2 or 3 rows, the channel strength KP and the wiring/chip resistance RD can be set separately.
+Ciss・Crss (容量): ゲートを動かすのに要る電荷の目安。CGS = Ciss − Crss、CGD = Crss にします (電圧による変化は扱いません)。	Ciss, Crss (capacitance): a guide to the charge needed to drive the gate. CGS = Ciss − Crss and CGD = Crss (change with voltage is not handled).
+gFS は比べるだけです。オン抵抗に合わせた 2乗則のモデルでは、ここまでは合わないことがよくあります。	gFS is only compared. A square-law model fitted to the on-resistance often does not match it.
+使うのは typ (標準) の列です。min・max は個体差の範囲で、回路は max でも動くように設計します。P チャネルは、マイナスの付いた値も大きさで入れます。	The typ (typical) column is used. min and max are the spread between parts; design the circuit to work at max too. For P-channel, enter values with a minus sign by their magnitude.
+温度 (空でも可): オン抵抗は温まると大きくなります (100 °C で 1.4〜1.8 倍)。データシートの「Normalized On-Resistance vs. Temperature」の図の点か、表の 125 °C の行 ÷ 25 °C の行を入れると、自己発熱の解析で熱くなったときの損失が実物に近づきます。	Temperature (may be empty): on-resistance rises when warm (1.4 to 1.8× at 100 °C). Enter points of the "Normalized On-Resistance vs. Temperature" figure in the datasheet, or the 125 °C row ÷ the 25 °C row of the table, and the loss when hot in self-heating analysis gets closer to the real part.
+開いているデータシートの「電気的特性」の表から、VGS(th)・RDS(on)・Ciss・Crss・gFS の typ と、その測定条件を探して欄に入れます。入れた値は表と見比べて確かめてください	Looks for the typ of VGS(th), RDS(on), Ciss, Crss and gFS and their test conditions in the "Electrical characteristics" table of the open datasheet and fills the fields. Compare the values with the table to check them
+AO3400A の例を入れる	Fill in the AO3400A example
+同梱の AO3400A を作ったときの表の typ の値を入れます。自分のデータシートの値に書き換えて使います	Fills in the typ values from the table used to make the bundled AO3400A. Rewrite them with the values of your datasheet
+VGS(th) [V]、その ID [A]	VGS(th) [V], its ID [A]
+しきい値の typ と、表の測定条件の ID	The typ threshold and the ID of the table's test condition
+RDS(on): VGS ID 抵抗	RDS(on): VGS ID resistance
+1 行に「ゲート電圧 [V] ドレイン電流 [A] オン抵抗 [Ω]」。m は 1000 分の 1 (18m = 18 mΩ)	One "gate voltage [V] drain current [A] on-resistance [Ω]" per line. m is one thousandth (18m = 18 mΩ)
+Ciss・Crss [F]	Ciss, Crss [F]
+入力容量と帰還容量の typ。p は 1 兆分の 1 (630p = 630 pF)	The typ input and feedback capacitance. p is one trillionth (630p = 630 pF)
+gFS: gFS VDS ID (空でも可)	gFS: gFS VDS ID (may be empty)
+順方向伝達コンダクタンスと、その測定条件。比べるだけで、モデルは合わせません	Forward transconductance and its test condition. Only compared; the model is not fitted to it
+温度: Tj 比 (空でも可)	Temperature: Tj ratio (may be empty)
+1 行に「接合温度 [°C] 25 °C のオン抵抗との比」。データシートの Normalized On-Resistance の図の点か、表の 125 °C の行 ÷ 25 °C の行。オン抵抗の 1 行目の VGS・ID の値として扱います	One "junction temperature [°C] ratio to the on-resistance at 25 °C" per line. Points of the Normalized On-Resistance figure in the datasheet, or the 125 °C row ÷ the 25 °C row of the table. Treated as the VGS and ID of the first on-resistance line
+入れた値に合わせてモデルを作り、表の値とモデルの値を並べます	Makes the model from the entered values and lists the table values beside the model values
+条件	Condition
+ (比べるだけ)	 (compare only)
+モデルを合わせていない値です。モデルの形 (2乗則) では合わないことが多く、参考に並べています	Values the model is not fitted to. The model's form (square law) often does not match them; they are listed for reference
+ずれが大きい所 (モデルの形の限界。読み違いでなければ、そのままで使えます)	Large differences (a limit of the model's form. Unless misread, it can be used as is)
+# crates/app/src/part_form/opto.rs
+{label}を入れてください。{how}	Enter {label}. {how}
+{label}の {}行目: 3 つの数 (例: 10m 5 12m) で書いてください	{label} line {}: write 3 numbers (e.g. 10m 5 12m)
+LED の順方向	LED forward
+LED の順方向の点を 3 つ以上入れてください (順方向電流と電圧の図の 25 °C の線から)	Enter 3 or more LED forward points (from the 25 °C line of the forward current vs voltage figure)
+出力の点	Output points
+出力の点を 2 つ以上入れてください (コレクタ電流と VCE の図の、平らな所の「IF VCE IC」)	Enter 2 or more output points ("IF VCE IC" in the flat part of the collector current vs VCE figure)
+表の VF typ	VF typ in the table
+CTR の min	CTR min
+表の電流伝達率 (CTR) の範囲 [%] です	The current transfer ratio (CTR) range in the table [%]
+CTR の max	CTR max
+表の「コレクタ・エミッタ間の飽和電圧」の typ です	The typ of "collector-emitter saturation voltage" in the table
+表の「カットオフ周波数 (fc)」です。応答時間しか無ければ 0.35 ÷ 立ち上がり時間	"Cut-off frequency (fc)" in the table. If only the response time is given, 0.35 ÷ rise time
+順方向電流と電圧の図の 25 °C	25 °C in the forward current vs voltage figure
+LED の容量	LED capacitance
+LED の逆電圧	LED reverse voltage
+コレクタ電流と VCE の図の平らな所	Flat part of the collector current vs VCE figure
+CTR の曲線	CTR curve
+CTR と IF の図	CTR vs IF figure
+表の CTR は {}〜{}%	CTR in the table is {} to {}%
+仮の値。外から見えるのは CTR = K × BF だけ	A provisional value. Only CTR = K × BF is visible from outside
+VCE(sat) の IF	IF for VCE(sat)
+VCE(sat) の IC	IC for VCE(sat)
+入力したカットオフ周波数	The cut-off frequency entered
+暗電流、温度による CTR の変化、CTR の IF による変化 (CTR の図の山の形)、入力と出力の間の容量、絶縁耐圧	Dark current, change of CTR with temperature, change of CTR with IF (the hump of the CTR figure), input-output capacitance, isolation voltage
+表の「逆方向の光電流 (Ira)」の typ を、1 mW/cm² あたりにした値です (例: 50u)	The typ of "reverse light current (Ira)" in the table, per 1 mW/cm² (e.g. 50u)
+開放電圧	Open-circuit voltage
+表の「開放電圧 (Vo・VOC)」です (例: 0.35)	"Open-circuit voltage (Vo, VOC)" in the table (e.g. 0.35)
+容量の点を 1 つ以上入れてください (表の CD と、あれば容量と逆電圧の図から「逆電圧 容量」)	Enter 1 or more capacitance points (CD in the table, and if available "reverse voltage capacitance" from the capacitance vs reverse voltage figure)
+データシートに開放電圧が 1 つしか無いので N = 1 と置きました	The datasheet has only one open-circuit voltage, so N = 1 was set
+データシートに順方向の特性が無いので 10 Ω と置きました (光電流の範囲では効きません)	The datasheet has no forward characteristic, so 10 Ω was set (it has no effect in the photocurrent range)
+降伏電圧	Breakdown voltage
+表の「逆方向の降伏電圧 V(BR)」の min です	The min of "reverse breakdown voltage V(BR)" in the table
+入力した光電流 (1 mW/cm² あたり)	The photocurrent entered (per 1 mW/cm²)
+光電流の点	Photocurrent points
+開放電圧の温度係数	Temperature coefficient of open-circuit voltage
+暗電流の逆電圧	Reverse voltage for dark current
+暗電流	Dark current
+表の「暗電流 (Iro・ID)」の typ です (例: 2n)	The typ of "dark current (Iro, ID)" in the table (e.g. 2n)
+降伏の電流	Breakdown current
+入力した降伏電圧	The breakdown voltage entered
+入力した容量の点	The capacitance points entered
+応答の速さ (光で生まれた電荷が動く時間。このモデルは接合容量だけで遅れます)、波長による感度	Response speed (time for the charge made by light to move; this model is delayed only by the junction capacitance), sensitivity by wavelength
+光の強さ (シミュレーション専用)	Light intensity (simulation only)
+光の強さのピン IRRAD (シミュレーション専用、基板には出ません) を「③ ピン」に足しました	Added the light intensity pin IRRAD (simulation only, not on the board) to "③ Pins"
+かんたん作成: フォトカプラをデータシートのグラフからつくる	Quick create: photocoupler from the datasheet graphs
+LED と出力のトランジスタの点からモデルを作ります	Makes a model from points of the LED and the output transistor
+PC817 のような、LED とフォトトランジスタが 1 つに入った部品です。LED の順方向の図・出力の図の点と、表の CTR・飽和電圧・カットオフ周波数から、同梱の PC817 と同じ作り方でモデルを作り、読んだ点とのずれを並べます。ピンは A・K (LED) と C・E (出力) の名前で探します	A part like the PC817 with an LED and a phototransistor in one package. From points of the LED forward figure and the output figure, and the CTR, saturation voltage and cut-off frequency in the table, makes a model the same way as the bundled PC817 and lists the differences from the points read. Pins are found by the names A, K (LED) and C, E (output)
+LED の順方向 (Forward current vs. forward voltage): 25 °C の線を 1〜50 mA で 4〜6 点。「電流 [A] 電圧 [V]」。	LED forward (Forward current vs. forward voltage): 4 to 6 points of the 25 °C line from 1 to 50 mA. "current [A] voltage [V]".
+出力の点 (Collector current vs. collector-emitter voltage): IF ごとの線の、平らな所 (VCE 3〜7 V) を「IF VCE IC」で。IF を 2〜3 通り読むと、CTR と出力の傾き (VAF) が決まります。	Output points (Collector current vs. collector-emitter voltage): the flat part (VCE 3 to 7 V) of the line for each IF, as "IF VCE IC". Reading 2 or 3 IFs sets the CTR and the output slope (VAF).
+CTR (電流伝達率) = IC ÷ IF。実物はランクと個体で何倍も違います (PC817 は 50〜600%)。表の範囲は注記に書くだけで、モデルは出力の点に合わせた 1 つの値です。	CTR (current transfer ratio) = IC ÷ IF. Real parts differ many times by rank and unit (PC817: 50 to 600%). The table range is only written in the notes; the model has one value fitted to the output points.
+CTR と IF の図は、比べるために並べるだけです (別の個体の曲線のことが多い)。空でも作れます。	The CTR vs IF figure is only listed for comparison (often a curve of another unit). It can be empty.
+カットオフ周波数から速さが決まります。表に応答時間 tr しか無ければ 0.35 ÷ tr で入れます。	The cut-off frequency sets the speed. If the table has only the response time tr, enter 0.35 ÷ tr.
+開いているデータシートの「電気的特性」の表から、VF・LED の容量・CTR の範囲 (CTR の行、無ければ IF のときの IC から)・VCE(sat) とその条件・カットオフ周波数を探して欄に入れます。LED と出力の曲線は図から読みます	Looks for VF, LED capacitance, CTR range (the CTR row, or IC at a given IF), VCE(sat) and its conditions, and cut-off frequency in the "Electrical characteristics" table of the open datasheet and fills the fields. The LED and output curves are read from figures
+PC817 の例を入れる	Fill in the PC817 example
+同梱の PC817 を作ったときにグラフと表から読んだ値を入れます。自分のデータシートの値に書き換えて使います	Fills in the values read from the graphs and table to make the bundled PC817. Rewrite them with the values of your datasheet
+LED の順方向: IF VF	LED forward: IF VF
+1 行に「順方向電流 [A] 電圧 [V]」(25 °C)	One "forward current [A] voltage [V]" per line (25 °C)
+出力: IF VCE IC	Output: IF VCE IC
+1 行に「LED の電流 [A] VCE [V] コレクタ電流 [A]」。出力の図の平らな所から	One "LED current [A] VCE [V] collector current [A]" per line, from the flat part of the output figure
+CTR の曲線: IF CTR%	CTR curve: IF CTR%
+比べるだけ。1 行に「IF [A] CTR [%]」。空でも作れます	Compare only. One "IF [A] CTR [%]" per line. It can be empty
+表の VF typ: IF VF	VF typ in the table: IF VF
+比べるだけ。「20m 1.2」のように。空でも可	Compare only. Like "20m 1.2". May be empty
+LED の容量 [F]	LED capacitance [F]
+表の端子間容量 Ct	Terminal capacitance Ct in the table
+LED の逆電圧 [V]	LED reverse voltage [V]
+絶対最大定格の VR	VR of the absolute maximum ratings
+表の電流伝達率の min	The min of the current transfer ratio in the table
+表の電流伝達率の max	The max of the current transfer ratio in the table
+表の飽和電圧の typ	The typ of the saturation voltage in the table
+その IF [A]	Its IF [A]
+VCE(sat) の条件の IF	IF of the VCE(sat) condition
+その IC [A]	Its IC [A]
+VCE(sat) の条件の IC	IC of the VCE(sat) condition
+表のカットオフ周波数。80k = 80 kHz	Cut-off frequency in the table. 80k = 80 kHz
+入れた点に合わせてモデルを作り、点とモデルの値を並べます	Makes the model from the entered points and lists the points beside the model values
+作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (A・K・E・C)	Puts the model and notes into the simulation tab. Pins are found by name (A, K, E, C)
+LED のアノード	LED anode
+LED のカソード	LED cathode
+かんたん作成: フォトダイオードをデータシートの表からつくる	Quick create: photodiode from the datasheet table
+光電流・開放電圧・暗電流・容量からモデルを作ります	Makes a model from the photocurrent, open-circuit voltage, dark current and capacitance
+同梱の BPW34 と同じ作り方です。光の強さはシミュレーション専用のピン IRRAD (1 V = 1 mW/cm²) で与えます。ピンは A・K と IRRAD (か L) の名前で探します。IRRAD のピンが無ければ、「② シミュレーション」に入れるときに「③ ピン」へシミュレーション専用のピンとして足します (基板には出ません)	Made the same way as the bundled BPW34. Light intensity is given by the simulation-only pin IRRAD (1 V = 1 mW/cm²). Pins are found by the names A, K and IRRAD (or L). If there is no IRRAD pin, it is added to "③ Pins" as a simulation-only pin when put into "② Simulation" (not on the board)
+感度: 表の「逆方向の光電流 (Ira・IL)」の typ。測定の光の強さ (Ee) が 1 mW/cm² でなければ、その値で割ります。光の強さに比例するとして扱います。	Sensitivity: the typ of "reverse light current (Ira, IL)" in the table. If the test light intensity (Ee) is not 1 mW/cm², divide by it. Treated as proportional to light intensity.
+光電流の点・短絡電流: 比べるためだけに並べます (空でも可)。光電流と光の強さの図から「Ee [mW/cm²] 電流 [A]」。	Photocurrent points and short-circuit current: listed only for comparison (may be empty). "Ee [mW/cm²] current [A]" from the photocurrent vs light intensity figure.
+開放電圧 (Vo): 光を当てて何もつながないときの電圧。これと感度から、ダイオードの IS が決まります。	Open-circuit voltage (Vo): the voltage under light with nothing connected. With the sensitivity, it sets the diode's IS.
+暗電流: 光が無いときに逆電圧で流れる電流。並列の抵抗が決まります。	Dark current: the current that flows at reverse voltage without light. It sets the parallel resistance.
+容量: 表の CD (0 V など) と、あれば容量と逆電圧の図から。逆電圧を上げると小さくなり、速く応答します。	Capacitance: CD in the table (at 0 V etc.), and if available from the capacitance vs reverse voltage figure. Higher reverse voltage makes it smaller and the response faster.
+開いているデータシートの「電気的特性」の表から、光電流 (mW/cm² あたりに直す)・短絡電流・開放電圧とその温度係数・暗電流・降伏電圧・容量を探して欄に入れます	Looks for the photocurrent (converted per mW/cm²), short-circuit current, open-circuit voltage and its temperature coefficient, dark current, breakdown voltage and capacitance in the "Electrical characteristics" table of the open datasheet and fills the fields
+BPW34 の例を入れる	Fill in the BPW34 example
+同梱の BPW34 を作ったときに表と図から読んだ値を入れます。自分のデータシートの値に書き換えて使います	Fills in the values read from the table and figures to make the bundled BPW34. Rewrite them with the values of your datasheet
+感度 [A/(mW/cm²)]	Sensitivity [A/(mW/cm²)]
+1 mW/cm² あたりの逆方向の光電流。50u = 50 µA	Reverse light current per 1 mW/cm². 50u = 50 µA
+比べるだけ。1 mW/cm² で短絡したときの電流。空でも可	Compare only. The short-circuit current at 1 mW/cm². May be empty
+開放電圧 [V]	Open-circuit voltage [V]
+1 mW/cm² で開放したときの電圧	The open-circuit voltage at 1 mW/cm²
+その温度係数 [mV/K]	Its temperature coefficient [mV/K]
+比べるだけ。ふつうマイナス (-2.6)。空でも可	Compare only. Usually negative (-2.6). May be empty
+暗電流 [A]	Dark current [A]
+光が無いときの逆電流の typ	The typ reverse current without light
+その逆電圧 [V]	Its reverse voltage [V]
+暗電流の測定条件	Test condition of the dark current
+降伏電圧 [V]	Breakdown voltage [V]
+表の V(BR) の min	The min of V(BR) in the table
+その電流 [A]	Its current [A]
+降伏電圧の測定条件の電流	Current of the breakdown voltage test condition
+空なら 1。開放電圧が 2 つ以上の条件で分かるときだけ	1 if empty. Only when the open-circuit voltage is known at 2 or more conditions
+空なら 10 Ω	10 Ω if empty
+光電流: Ee I	Photocurrent: Ee I
+比べるだけ。1 行に「光の強さ [mW/cm²] 電流 [A]」。空でも可	Compare only. One "light intensity [mW/cm²] current [A]" per line. May be empty
+容量: VR C	Capacitance: VR C
+1 行に「逆電圧 [V] 容量 [F]」	One "reverse voltage [V] capacitance [F]" per line
+入れた値からモデルを作り、表・図の値とモデルの値を並べます	Makes the model from the entered values and lists the table and figure values beside the model values
+作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (A・K・IRRAD)	Puts the model and notes into the simulation tab. Pins are found by name (A, K, IRRAD)
+# crates/app/src/part_form/padtable.rs
+横	
+脚	
+穴	
+# crates/app/src/part_form/parse.rs
+{}行目: 種類「kind={k}」は {} のどれかです	Line {}: kind "kind={k}" must be one of {}
+最高温度	Maximum temperature
+電力を下げ始める温度	Temperature where the power starts to be derated
+過渡熱抵抗の段の {} 行目「{}」は、「熱抵抗 [K/W] 時定数 [s]」の 2 つの数にしてください (例: 0.5 1m)	Line {} "{}" of the transient thermal resistance stages must be 2 numbers "thermal resistance [K/W] time constant [s]" (e.g. 0.5 1m)
+Zth の点の {} 行目「{}」を数として読めません	Can't read line {} "{}" of the Zth points as numbers
+Zth の点の {} 行目「{}」は、「時間 [s] Zth [K/W]」の 2 つの数にしてください (例: 1m 0.2)	Line {} "{}" of the Zth points must be 2 numbers "time [s] Zth [K/W]" (e.g. 1m 0.2)
+# crates/app/src/part_form/pdf_input.rs
+知らない欄: {section}	Unknown field: {section}
+表に、図の電流の範囲の hFE の typ も min・max もありません。表の hFE を掛けて入れてください	The table has no typ, min or max hFE in the current range of the figure. Multiply by the table hFE and enter it
+min {}・max {} の幾何平均 {}	min {}, max {}: geometric mean {}
+hFE の図が比 (normalized) なので、表 (p.{}) の hFE {how} (IC = {}A) に合わせました。実物の hFE は、ランクと個体で大きく違います	The hFE figure is a ratio (normalized), so it was fitted to the hFE {how} of the table (p.{}, IC = {}A). Real hFE differs a lot by rank and unit
+p.{} の図は 1 を基準にした比 (normalized) で、{e}	The figure on p.{} is a ratio to 1 (normalized), {e}
+{field}: p.{} の図から {} 点{by}{at}{how}	{field}: from the figure on p.{}, {} points{by}{at}{how}
+{field}: 読めませんでした ({why})。欄の「グラフから読む」で、曲線をクリックしてください	{field}: could not read ({why}). Click the curve with "Read from graph" of the field
+表とグラフから全部読む	Read all from table and graphs
+「PDF の表から読む」のあと、下の曲線の欄を全部、図の見出しから探した図で読みます (目盛りは図の数字から、曲線はラベルか 1 本だけのものを選びます)。読めた欄を入れて、モデルを作ります。読めなかった欄は、欄の「グラフから読む」で曲線をクリックします。図によって数秒かかります	After "Read from PDF table", reads all the curve fields below from figures found by their headings (scales from the numbers in the figure; a curve is chosen by its label or if it is the only one). Fills the fields that could be read and makes the model. For fields that could not be read, click the curve with "Read from graph" of the field. Some figures take a few seconds
+p.{} のグラフの {} 点を入れました。{m}	From the graph on p.{}, entered {} points. {m}
+p.{} のグラフの {} 点を「容量の点」に入れました	From the graph on p.{}, entered {} points into "Capacitance points"
+p.{} のグラフの {} 点を入れました。「段に当てはめる」を押してください	From the graph on p.{}, entered {} points. Press "Fit to stages"
+{l}。「モデルを作る」を押してください	{l}. Press "Make model"
+# crates/app/src/part_form/pin_import.rs
+表として読む	Read as table
+囲んだ所を、行と列の表として読みます	Reads the enclosed area as a table of rows and columns
+ピン配置の図として読む	Read as pin diagram
+囲んだ所を、パッケージの図として読みます。ピン番号のすぐ横 (か上下) にある名前を、その番号の名前にします。番号が 1 から抜けなく並ぶ図だけを読みます	Reads the enclosed area as a package drawing. The name right beside (or above/below) a pin number becomes the name of that number. Only drawings with numbers from 1 without gaps are read
+p.{} のピン配置の図を読みました。番号の横の名前です	Read the pin diagram on p.{}. Names beside the numbers
+図から読んだピンは、あとで読み直して比べることができません。比べるときは表を囲んでください	Pins read from a drawing can't be re-read and compared later. To compare, enclose a table
+# crates/app/src/part_form/pintable.rs
+空き	Gap
+指定なし	Unspecified
+未接続	Not connected
+{} 行目: 向き「{}」が分かりません。left・right・top・bottom (左・右・上・下) か空にしてください	Line {}: side "{}" is unknown. Use left, right, top, bottom, or leave it empty
+{} 行目: 種類「{}」が分かりません。in・out・io・od・pwr・pwrout・pas・nc (入力・出力など) か空にしてください	Line {}: kind "{}" is unknown. Use in, out, io, od, pwr, pwrout, pas, nc (input, output etc.) or leave it empty
+{} 行目: 空き「{}」は 0〜{} の数にしてください	Line {}: gap "{}" must be a number from 0 to {}
+ピンの行がありません。1 行目に number,name (番号,名前) の列の名前、2 行目からピンを書きます	No pin rows. Write the column names number,name on line 1 and the pins from line 2
+番号 {} のピンが 2 つあります。番号は重ならないようにしてください	There are two pins with number {}. Numbers must not repeat
+{} を読めません: {e}	Can't read {}: {e}
+文字コードが UTF-8 ではありません。Excel なら「名前を付けて保存」で「CSV UTF-8 (コンマ区切り)」を選んで保存し直してください	The text encoding is not UTF-8. In Excel, use "Save As" and choose "CSV UTF-8 (Comma delimited)"
+ピンの電気的な種類 (入力・出力・電源など)。回路図の点検 (ERC) が、出力どうしのつながり・何も駆動しない入力・つないだ NC のピンを見つけるのに使います。「自動」は指定なし (名前による点検だけ)	The electrical type of the pin (input, output, power etc.). The schematic check (ERC) uses it to find outputs connected together, inputs that nothing drives, and connected NC pins. "Auto" means unspecified (only checks by name)
+シミュレーション専用のピン (基板にパッドを出しません)	Simulation-only pin (no pad on the board)
+指定なし ({}?)	Unspecified ({}?)
+このピンの電気的な種類。「?」は名前からの推測で、まだ入っていません (表の下の「名前から種類を入れる」で入ります)	The electrical type of this pin. "?" is a guess from the name and is not set yet ("Set types from names" below the table sets it)
+シミュレーション専用のピン: 回路図の記号とモデルにはあり、基板にパッドを出しません (フォトダイオードの光の強さの IRRAD など)	Simulation-only pin: present in the schematic symbol and the model, but no pad on the board (e.g. IRRAD, the light intensity of a photodiode)
+名前から種類を入れる	Set types from names
+種類が「指定なし」のピンに、名前から推測した種類 (VCC・GND は電源入力、NC は未接続、OUT は出力、IN・EN は入力など) を入れます。推測できない名前 (FB・SW など) と、もう種類のあるピンはそのままです。データシートで確かめてください	Sets a type guessed from the name (VCC, GND are power input, NC is not connected, OUT is output, IN, EN are input, etc.) on pins whose type is "Unspecified". Names that can't be guessed (FB, SW etc.) and pins that already have a type stay as is. Check with the datasheet
+CSV に書き出す…	Export to CSV…
+ピン表を CSV にします (番号・名前・向き・種類・sim・空き)。Excel などで名前をまとめて直し、「CSV から読む」で戻せます	Saves the pin table as CSV (number, name, side, type, sim, gap). Fix names together in Excel etc. and bring them back with "Read from CSV"
+{} に書き出しました	Exported to {}
+{} に書けません: {e}	Can't write to {}: {e}
+CSV から読む…	Read from CSV…
+CSV のピン表で、この表を置き換えます。1 行目に列の名前 (number,name,side,kind … か 番号,名前,向き,種類。KiCad のピン表の書き出しも可)、無ければ 番号・名前・向き・種類 の順と見なします。UTF-8 で保存したものを読みます	Replaces this table with a CSV pin table. Line 1 has column names (number,name,side,kind … or the Japanese names; a KiCad pin table export also works); without them, the order number, name, side, type is assumed. Reads files saved in UTF-8
+{} から {} 本のピンを読みました	From {}, read {} pins
+# crates/app/src/part_form/reg_fill.rs
+型番から	From part number
+入れてある値	Entered value
+出力電圧 {} V ({from})、範囲 {} V: 表の比 {}〜{} 倍 {}	Output voltage {} V ({from}), range {} V: table ratio {} to {}× {}
+出力電圧 {w} V の行が表に見つかりません。自分で入れてください	The row for output voltage {w} V was not found in the table. Enter it yourself
+出力電圧の typ が表に見つかりません。自分で入れてください	The typ output voltage was not found in the table. Enter it yourself
+入力の変化	Line regulation
+電流の変化	Load regulation
+{what}: 行はありますが、条件から{hint}が読めません ({})。自分で入れてください	{what}: the row exists, but {hint} can't be read from the conditions ({}). Enter it yourself
+{what}の行が表に見つかりません	The {what} row was not found in the table
+ (単位が読めないので {unit} とした)	 (unit unreadable, so {unit} was assumed)
+{what}の typ が表に見つかりません	The typ of {what} was not found in the table
+ADJ の電流	ADJ current
+電流制限: 入出力の差 (1 つの電圧) が条件にある行が見つかりません。自分で入れてください	Current limit: no row with the input-output difference (one voltage) in its conditions was found. Enter it yourself
+電流制限 {} V で {} A: {}	Current limit at {} V: {} A: {}
+電流制限: 短絡電流の行に電圧が無いので、出力を 0 V に短絡し入力は出力 + 1 V (入出力の差 {} V) として入れました。表の上の共通の条件と見比べてください	Current limit: the short-circuit current row has no voltage, so it was entered with the output shorted to 0 V and the input at output + 1 V (input-output difference {} V). Compare with the common conditions above the table
+電流制限は 1 行だけ読めました。入出力の差で制限が変わる部品 (78xx・LM317) なら、表のもう 1 行 (差の小さい所) を 2 行目に足してください	Only one current limit row was read. For parts whose limit changes with the input-output difference (78xx, LM317), add another table row (where the difference is small) as line 2
+リップル除去 {} dB: {}	Ripple rejection {} dB: {}
+ (周波数が条件に無いので、欄を確かめてください)	 (no frequency in the conditions, so check the field)
+リップル除去の typ が表に見つかりません	The typ ripple rejection was not found in the table
+雑音 {}V/√Hz: {}	Noise {}V/√Hz: {}
+雑音 {} V rms ({}〜{} Hz): {}	Noise {} V rms ({} to {} Hz): {}
+雑音: 帯域が条件から読めません ({})。自分で入れてください	Noise: the band can't be read from the conditions ({}). Enter it yourself
+雑音の typ が表に見つかりません	The typ noise was not found in the table
+表の行の読みは会社ごとにまちまちです。入れた値は表と見比べて確かめてください	How table rows are written differs by maker. Compare the entered values with the table to check them
+p.{p} の図の点が少なすぎます ({} 点)	Too few points in the figure on p.{p} ({} points)
+p.{p} の図の値がドロップアウトらしくありません ({}V + {}Ω × I)。目盛りの単位を確かめてください	The values in the figure on p.{p} don't look like dropout ({}V + {}Ω × I). Check the units of the scale
+ドロップアウト: p.{p} の図の {} 点 (0〜{}A) に直線を当てて {}V + {}Ω × 電流	Dropout: a line fitted to {} points (0 to {}A) of the figure on p.{p}: {}V + {}Ω × current
+リップル除去の周波数「{}」が数として読めません	Ripple rejection frequency "{}" can't be read as a number
+p.{p} の図に {} Hz がありません (図は {})	The figure on p.{p} has no {} Hz (figure: {})
+p.{p} の図の {} Hz の値 {db} dB はリップル除去らしくありません	The value {db} dB at {} Hz in the figure on p.{p} doesn't look like ripple rejection
+リップル除去: 表の {} dB のまま (p.{p} の図では {} Hz で {db} dB)	Ripple rejection: kept the table's {} dB (the figure on p.{p} gives {db} dB at {} Hz)
+リップル除去: p.{p} の図から {} Hz で {db} dB	Ripple rejection: {db} dB at {} Hz from the figure on p.{p}
+p.{p} の図に 1 kHz がありません (図は {})	The figure on p.{p} has no 1 kHz (figure: {})
+p.{p} の図の縦軸の単位 (nV/√Hz か µV/√Hz) が読めません。1 kHz の値を読んで「出力雑音」に密度 (例: 3u) を入れてください	The unit of the vertical axis (nV/√Hz or µV/√Hz) in the figure on p.{p} can't be read. Read the value at 1 kHz and enter the density (e.g. 3u) in "Output noise"
+雑音: 表の「{}」のまま (p.{p} の図では 1 kHz で {d}V/√Hz)	Noise: kept the table's "{}" (the figure on p.{p} gives {d}V/√Hz at 1 kHz)
+雑音: p.{p} の図から 1 kHz の密度 {d}V/√Hz	Noise: density {d}V/√Hz at 1 kHz from the figure on p.{p}
+レギュレータの欄ではありません	Not a regulator field
+この 1 冊は出力電圧が {} 通りあります。下の「電圧違い」で型番を選ぶと、出力電圧が入ります	This datasheet has {} output voltages. Choose a part number under "Voltage variants" below to enter the output voltage
+出力電圧 {} V: 型番 {part} から	Output voltage {} V: from part number {part}
+電圧違いの型番がありません (「PDF の表から読む」で注文情報の型番を探します)	No voltage variant part numbers ("Read from PDF table" looks for part numbers in the ordering information)
+{part}: 注文情報の表のパッケージが読めないので作りませんでした (DSBGA など。形を選んで 1 つずつ作ってください)	{part}: not made because the package in the ordering table can't be read (DSBGA etc. Choose the shape and make them one by one)
+{part} ({pkg}): ピン表の番号 ({}) が組み込みの {fp} のパッドと合わないので作りませんでした (「③ ピン」を直してください)	{part} ({pkg}): not made because the pin table numbers ({}) don't match the pads of the built-in {fp} (fix "③ Pins")
+{part} ({pkg}): 組み込みの形が無いので作りませんでした	{part} ({pkg}): not made because there is no built-in shape
+出力 {} V、{p}	Output {} V, {p}
+出力 {} V	Output {} V
+1 つも作れませんでした: {}	None could be made: {}
+{} 部品を作ってライブラリに保存します: {}	Makes {} parts and saves them to the library: {}
+ (作らなかったもの: {})	 (not made: {})
+点なし	No points
+# crates/app/src/part_form/simple_kinds.rs
+{label}「{}」を数で入れてください (例: 10k、3p、12M)	Enter {label} "{}" as a number (e.g. 10k, 3p, 12M)
+25 °C の抵抗	Resistance at 25 °C
+抵抗-温度表の行「{l}」は「温度 抵抗」の 2 つの数で書きます (例: 100 680)	Row "{l}" of the resistance-temperature table must be 2 numbers "temperature resistance" (e.g. 100 680)
+NTC サーミスタ {}Ω (25 ℃)・B 定数 {} K。温度が上がると抵抗が下がる	NTC thermistor {}Ω (25 ℃), B constant {} K. Resistance falls as temperature rises
+熱放散定数	Dissipation constant
+{} の水晶振動子 (等価回路: 直列の R-L-C と並列容量 C0)	{} crystal (equivalent circuit: series R-L-C and parallel capacitance C0)
+並列容量 C0	Parallel capacitance C0
+等価直列容量 C1	Motional capacitance C1
+負荷容量 CL	Load capacitance CL
+クランプ電圧 VC とそのピーク電流 IPP が要ります。表に無いもの (ESD 保護ダイオードに多い) は、「クランプ電圧 対 ピークパルス電流」の図から 1 点読んで入れてください	The clamping voltage VC and its peak current IPP are needed. If the table lacks them (common for ESD protection diodes), read one point from the "clamping voltage vs peak pulse current" figure and enter it
+TVS ダイオード ({}、VRWM {} V)。サージ・静電気を降伏でクランプする	TVS diode ({}, VRWM {} V). Clamps surges and static by breakdown
+双方向	Bidirectional
+単方向	Unidirectional
+{label} は表に見つかりませんでした	{label} was not found in the table
+端子 1	Terminal 1
+端子 2	Terminal 2
+入れた値からモデルを作り、表の値とモデルの値を並べます	Makes the model from the entered values and lists the table values beside the model values
+作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します	Puts the model and notes into the simulation tab. Pins are found by name
+25 ℃ の抵抗と B 定数から	From the resistance at 25 ℃ and the B constant
+データシートの表の「25 ℃ の抵抗 (R25)」と「B 定数 (B25/50 や B25/85)」を入れると、シミュレーションの温度で抵抗が変わるモデルを作ります (同梱の NTC_10k_B3950 と同じ形)。抵抗-温度表があれば何点か入れると、B の式とのずれが分かります	Enter "resistance at 25 ℃ (R25)" and "B constant (B25/50 or B25/85)" from the datasheet table to make a model whose resistance changes with the simulation temperature (same form as the bundled NTC_10k_B3950). With a few points of the resistance-temperature table, you can see the difference from the B formula
+10kΩ・B3950 の例を入れる	Fill in the 10kΩ, B3950 example
+同梱の NTC_10k_B3950 と同じ値を入れます	Fills in the same values as the bundled NTC_10k_B3950
+25 ℃ の抵抗 [Ω]	Resistance at 25 ℃ [Ω]
+R25。10k、4.7k のように	R25. Like 10k or 4.7k
+B 定数 [K]・その範囲	B constant [K] and its range
+表の B 定数と、どの 2 つの温度で決めたか (B25/50・B25/85)	The B constant in the table and the two temperatures it was set between (B25/50, B25/85)
+熱放散定数 [mW/K]	Dissipation constant [mW/K]
+自己発熱の目安 (省略可。モデルには入らず、注記に書きます)	A guide to self-heating (optional. Not in the model; written in the notes)
+抵抗-温度表 (省略可、1 行に「温度 抵抗」)	Resistance-temperature table (optional, one "temperature resistance" per line)
+周波数・ESR・並列容量から	From frequency, ESR and parallel capacitance
+データシートの表の公称周波数・等価直列抵抗 (ESR)・並列容量 (C0、シャント容量) を入れると、直列の R-L-C と C0 の等価回路を作ります (同梱の水晶と同じ形)。等価直列容量 C1 (モーショナル容量) が表にあれば入れ、無ければふつうの値を使います。負荷容量 CL を入れると、公称周波数は CL を付けたときの周波数として直列共振を少し下げます	Enter the nominal frequency, equivalent series resistance (ESR) and parallel capacitance (C0, shunt capacitance) from the datasheet table to make an equivalent circuit of series R-L-C and C0 (same form as the bundled crystals). Enter the motional capacitance C1 if the table has it; otherwise a typical value is used. With load capacitance CL entered, the nominal frequency is taken as the frequency with CL attached, and the series resonance is lowered a little
+12 MHz の例を入れる	Fill in the 12 MHz example
+同梱の XTAL_12MHz_3225 と同じ値を入れます	Fills in the same values as the bundled XTAL_12MHz_3225
+公称周波数 [Hz]	Nominal frequency [Hz]
+12M (= 12 MHz)、32.768k のように	Like 12M (= 12 MHz) or 32.768k
+等価直列抵抗 (表の最大値)	Equivalent series resistance (table maximum)
+並列容量 C0 [F]	Parallel capacitance C0 [F]
+シャント容量。3p のように	Shunt capacitance. Like 3p
+等価直列容量 C1 [F]	Motional capacitance C1 [F]
+モーショナル容量。表に無ければ空のまま	Motional capacitance. Leave empty if not in the table
+負荷容量 CL [F]	Load capacitance CL [F]
+公称周波数の条件の負荷容量 (省略可)	Load capacitance of the nominal frequency condition (optional)
+表の VRWM・VBR・VC から	From VRWM, VBR and VC in the table
+データシートの電気的特性の表の、逆方向の動作電圧 (VRWM) とそこでの漏れ電流 (IR)、降伏電圧 (VBR) とその試験電流 (IT)、ピークパルス電流 (IPP) でのクランプ電圧 (VC) を入れると、降伏とクランプを合わせたモデルを作ります。双方向のものは 2 つを向かい合わせにします	Enter the reverse working voltage (VRWM) and the leakage current there (IR), the breakdown voltage (VBR) and its test current (IT), and the clamping voltage (VC) at the peak pulse current (IPP) from the electrical characteristics table of the datasheet to make a model combining breakdown and clamping. Bidirectional ones put two face to face
+開いているデータシートの表から VRWM・IR・VBR (と IT)・VC (と IPP)・容量を探して欄に入れます。入れた値は表と見比べてください	Looks for VRWM, IR, VBR (and IT), VC (and IPP) and capacitance in the table of the open datasheet and fills the fields. Compare the values with the table
+SMBJ5.0A の例を入れる	Fill in the SMBJ5.0A example
+SMBJ5.0A (5 V の単方向 TVS) の表の値を入れます	Fills in the table values of SMBJ5.0A (5 V unidirectional TVS)
+型番の末尾が CA のように、どちら向きの電圧もクランプするもの	Clamps voltage in both directions, like part numbers ending in CA
+VRWM [V]・IR [A]	VRWM [V], IR [A]
+逆方向の動作電圧 (この電圧まではほぼ流れない) と、そこでの漏れ電流 (表の最大値)	Reverse working voltage (almost no current up to this voltage) and the leakage current there (table maximum)
+VBR [V]・IT [A]	VBR [V], IT [A]
+降伏電圧 (表の最小値か typ) と、その試験電流	Breakdown voltage (table minimum or typ) and its test current
+VC [V]・IPP [A]	VC [V], IPP [A]
+ピークパルス電流でのクランプ電圧 (表の最大値) と、その電流	Clamping voltage at the peak pulse current (table maximum) and that current
+容量 [F]	Capacitance [F]
+0 V での容量 (省略可)	Capacitance at 0 V (optional)
+# crates/app/src/part_form/solidcraft.rs
+上から見た図	Top view
+横から見た図	Side view
+絵の大きさが合いません	The picture size does not match
+SolidCraft が STEP を読めませんでした: {}	SolidCraft could not read the STEP file: {}
+SolidCraft が見つかりません。無料のオープンソースの CAD で、PowerShell で「winget install bherbruck.SolidCraft」と入れるか、github.com/bherbruck/solidcraft から入れてください。別の場所に入れたときは、環境変数 SOLIDCRAFT_DIR にそのフォルダを書きます。切り出した図 (PNG) は、ほかの CAD の下絵にも使えます	SolidCraft was not found. It is a free, open-source CAD; install it with "winget install bherbruck.SolidCraft" in PowerShell, or from github.com/bherbruck/solidcraft. If installed elsewhere, set the SOLIDCRAFT_DIR environment variable to that folder. The cut-out drawing (PNG) can also be used as an underlay in other CAD
+「{}」を切り出しました。図の中の寸法線の両端を 2 回クリックし、その長さ (mm かインチ) を入れると縮尺が合います。小さくて選びにくいときは「大きく開く」	Cut out "{}". Click both ends of a dimension line in the drawing and enter its length (mm or inch) to set the scale. If it is too small to pick, use "Open large"
+SolidCraft が下絵の設計を作れませんでした: {}	SolidCraft could not make the underlay design: {}
+SolidCraft を開きました。形を作ったら「ファイル → 書き出し → STEP」で、このフォルダに {STEP_NAME} という名前で保存してください。保存すると、ここに自動で読み込みます: {}	Opened SolidCraft. After making the shape, save it with "File → Export → STEP" into this folder as {STEP_NAME}. Once saved, it is loaded here automatically: {}
+SolidCraft の {STEP_NAME} を、3D の形に読み込みました。上から・横から見た図で向きを確かめてください	Loaded {STEP_NAME} from SolidCraft as the 3D shape. Check the direction in the top and side views
+ひな形を選んでください (このフットプリントに合うひな形が見つかりません)	Choose a template (no template matches this footprint)
+ひな形: {}	Template: {}
+「{}」の形を作りました (三角形 {n} 個)。上から・横から見た図で確かめてください。SolidCraft の台本 shape.json は {} にあり、SolidCraft で開いて直せます	Made the shape of "{}" ({n} triangles). Check it in the top and side views. The SolidCraft script shape.json is at {}; open it in SolidCraft to fix it
+ひな形から作る	Make from a template
+DC ジャック・タクトスイッチ・リレー・ねじ端子台は、寸法を入れるだけで形を作れます。足はこの部品のパッドの穴に立ちます。寸法の既定はよくある大きさなので、データシートの値に直してください	A DC jack, tactile switch, relay or screw terminal block can be shaped just by entering dimensions. The legs stand in the pad holes of this part. Default dimensions are common sizes; change them to the datasheet values
+(合うひな形なし)	(no matching template)
+フットプリントから: {}	From the footprint: {}
+フットプリントの名前 (jack・sw_push・relay・terminalblock など) から合うひな形を選びます。違うときは選び直します	Chooses a matching template from the footprint name (jack, sw_push, relay, terminalblock etc.). Choose again if wrong
+既定は {}	Default is {}
+ひな形で形を作る	Make shape from template
+SolidCraft で形を作って、この部品の 3D の形にします (1〜2 秒)。SolidCraft の画面は開きません	Makes the shape in SolidCraft and uses it as this part's 3D shape (1 to 2 seconds). The SolidCraft window does not open
+寸法を既定に戻す	Reset dimensions to default
+STEP が無いとき: SolidCraft で形を作る	Without a STEP file: make the shape in SolidCraft
+データシートから作る	Make from datasheet
+データシートの外形図 (Package Outline・Dimensions) を切り出して、無料の CAD「SolidCraft」に下絵として渡します。SolidCraft で形を作って STEP で保存すると、ここに読み込みます	Cuts out the outline drawing (Package Outline, Dimensions) of the datasheet and passes it to the free CAD "SolidCraft" as an underlay. When you make the shape in SolidCraft and save it as STEP, it is loaded here
+{} を切り出す	Cut out {}
+データシートの窓で、外形図を囲むようにドラッグします。寸法の数字と線が入るように少し広めに	In the datasheet window, drag around the outline drawing. Make it a little wide so the dimension numbers and lines are included
+p.{}  幅 {:.1} mm{}	p.{}  width {:.1} mm{}
+ (縮尺は未設定: 印刷の大きさ)	 (scale not set: print size)
+この図を下絵から外します	Removes this drawing from the underlays
+たたき台に本体の箱を入れる ({:.2} × {:.2} × 高さ {:.2} mm)	Put the body box as a starting point ({:.2} × {:.2} × height {:.2} mm)
+「① 基本」「④ 部品の形」に入れた本体の幅・奥行き・高さで、半透明の箱を置きます。下絵と大きさを見比べたり、そのまま形を作り始めたりできます	Places a translucent box with the body width, depth and height entered in "① Basic" and "④ Part shape". Compare its size with the underlay, or start shaping from it
+SolidCraft で開く	Open in SolidCraft
+下絵とたたき台を入れた設計を作って、SolidCraft を開きます。作った形を STEP で保存すると、自動で読み込みます	Makes a design with the underlay and starting point, and opens SolidCraft. Save the shape as STEP and it is loaded automatically
+SolidCraft が入っていません	SolidCraft is not installed
+作業フォルダを開く	Open work folder
+下絵の PNG・SolidCraft の設計・保存した STEP が入っているフォルダを開きます	Opens the folder with the underlay PNG, the SolidCraft design and the saved STEP
+# crates/app/src/part_form/step3d.rs
+曲面は SolidCraft で細かく三角形にしました	Curved surfaces were finely triangulated in SolidCraft
+SolidCraft が入っているので、ドームや角の丸めも曲面のとおりに三角形にしました。多すぎるときは間引いて保存します	SolidCraft is installed, so domes and rounded corners were triangulated following the curves. If too many, they are thinned when saved
+circuitCad の読み込みで読みました (SolidCraft では読めませんでした)	Read by circuitCad's importer (SolidCraft could not read it)
+circuitCad の読み込みで読みました	Read by circuitCad's importer
+ドーム・角の丸め・自由な曲面は、平らな面になります。無料の CAD「SolidCraft」を入れておくと、曲面のとおりに細かく三角形にします	Domes, rounded corners and free-form surfaces become flat faces. With the free CAD "SolidCraft" installed, they are finely triangulated following the curves

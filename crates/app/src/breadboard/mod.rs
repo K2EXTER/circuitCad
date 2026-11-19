@@ -249,7 +249,7 @@ impl BreadboardView {
         } else {
             ui.colored_label(BAD, i18n::trf!("回路図と違う所が {} 件あります", problems.len()));
             for p in &problems {
-                ui.label(egui::RichText::new(format!("・{}", i18n::tr_dyn(&p.message()))).color(BAD));
+                ui.label(egui::RichText::new(i18n::trf!("・{}", i18n::tr_dyn(&p.message()))).color(BAD));
             }
         }
         ui.separator();

@@ -1,0 +1,455 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/lessons/digital.rs
+動かしている回路は、過渡解析と同じシミュレータで、画面の時刻まで続きを解いています (別の簡単な計算ではありません)。ゲートは、しきい値が電源の半分、出力が約 60Ω の抵抗、遅れが 1 つの代表値の簡単なモデルです。	The running circuit is solved onward up to the time on screen by the same simulator as the transient analysis (not some other simple calculation). The gates use a simple model: the threshold is half the supply, the output is a resistance of about 60Ω, and the delay is one typical value.
+LED は、光っているか消えているかだけを見せます (明るさは表しません)。電流や電圧を数字で見るには、編集に戻って DC 動作点や過渡解析を使います。	LEDs only show whether they are lit or off (not their brightness). To see currents and voltages as numbers, go back to editing and use the DC operating point or transient analysis.
+スイッチは、跳ね (チャタリング) のない理想のスイッチです。実物の押しボタンは、押した瞬間に数 ms のあいだ接点が何度も跳ねます。	The switches are ideal switches with no bounce (chatter). A real push button's contacts bounce many times for a few ms at the moment it is pressed.
+87. 半加算器を動かす (スイッチで 0 と 1、真理値表を埋める)	87. Run a half adder (0 and 1 with switches, fill in the truth table)
+2 つのスライドスイッチで 1 ビットの数 A と B を作り、XOR と AND のゲートで足し算 (半加算器) ができることを、スイッチを切り替えながら確かめます。4 通りを全部試して真理値表を埋め、ゆっくり再生で、信号がゲートを伝わる遅れ (伝搬遅延) を目で見ます	Make the 1-bit numbers A and B with two slide switches and check, while toggling the switches, that XOR and AND gates can add (a half adder). Try all 4 combinations to fill in the truth table, and with slow playback watch the delay of the signal through the gates (propagation delay)
+デジタル回路は、電圧の High (1) と Low (0) で数を表します。1 ビットの数 A と B を足すと、答えは 0、1、2 (2 進数で 10) の 3 通りで、2 ビットが要ります。下の桁 S (Sum、和) は「A と B のどちらか 1 つだけが 1 のとき 1」で、これは XOR (排他的論理和) です。上の桁 C (Carry、桁上がり) は「A と B が両方 1 のとき 1」で、これは AND です。この 2 つのゲートの組を半加算器と呼びます (下の桁からの桁上がりも足すのが全加算器で、全加算器を並べると何ビットでも足せます)。入力と出力の関係を全部書いた表が真理値表で、入力が 2 つなら 2 × 2 = 4 行です。この回路は、スライドスイッチ SW1・SW2 の COM が、A 側 (GND、0) か B 側 (電源、1) のどちらかにつながり、A と B を作ります。プルダウンの抵抗が要らない作り方です。74HC86 (XOR) の出力が S、74HC08 (AND) の出力が C で、それぞれ 330Ω を通して LED を光らせます。動かしている間、配線は High が赤、Low が青、どちらとも言えない電圧が黄色 (不定、X) になり、ゲートのピンの横に 0 と 1 が出ます。実物のゲートは、入力が変わってから出力が変わるまでに 10ns ほどかかります (伝搬遅延)。ゆっくり再生は、この遅れを 1 秒ほどに引き延ばします。	Digital circuits represent numbers with High (1) and Low (0) voltages. Adding the 1-bit numbers A and B gives 3 possible answers, 0, 1 and 2 (10 in binary), so 2 bits are needed. The lower digit S (Sum) is "1 when exactly one of A and B is 1", which is XOR (exclusive OR). The upper digit C (Carry) is "1 when both A and B are 1", which is AND. This pair of gates is called a half adder (one that also adds the carry from the lower digit is a full adder, and a row of full adders can add any number of bits). A table of every input and its output is a truth table; with 2 inputs it has 2 × 2 = 4 rows. In this circuit, the COM of slide switches SW1 and SW2 connects to either the A side (GND, 0) or the B side (supply, 1) to make A and B. This way needs no pull-down resistors. The output of the 74HC86 (XOR) is S and the output of the 74HC08 (AND) is C, and each lights an LED through 330Ω. While running, wires are red for High, blue for Low and yellow for a voltage that is neither (unknown, X), and 0 and 1 appear beside the gate pins. A real gate takes about 10ns from an input change until its output changes (propagation delay). Slow playback stretches this delay to about 1 second.
+用意するもの: 74HC86、74HC08、スライドスイッチ 2 個 (または、ジャンパ線を GND と 5V につなぎ替える)、LED 2 個と 330Ω 2 本、5V の電源 (USB)、ブレッドボード。IC の電源ピンの近くに 0.1µF を入れます。	You need: 74HC86, 74HC08, 2 slide switches (or move jumper wires between GND and 5V), 2 LEDs and 2 330Ω resistors, a 5V supply (USB), a breadboard. Put 0.1µF near each IC's power pins.
+組み方: 回路図のとおりに組み、使わないゲートの入力 (4・5・9・10・12・13 番) は GND につなぎます (浮かせると、勝手に切り替わることがあります)。	How to build: build it as in the schematic, and connect the inputs of the unused gates (pins 4, 5, 9, 10, 12, 13) to GND (left floating, they can switch on their own).
+確かめ方: スイッチを 4 通りに切り替え、LED の光り方を、このソフトで埋めた真理値表と比べます。	How to check: set the switches to all 4 combinations and compare the LEDs with the truth table filled in by this app.
+安全: 5V 以下で行います。LED には必ず抵抗を入れます。	Safety: use 5V or less. Always put a resistor in series with an LED.
+スイッチを切り替えて、4 通りを全部試す	Toggle the switches and try all 4 combinations
+回路図のスライドスイッチ SW1 (A) と SW2 (B) をクリックすると、0 と 1 が切り替わります。押すたびに、右下の真理値表の行が 1 つずつ埋まります。A = 1・B = 1 のとき、S は 0 で C が 1 (1 + 1 = 2 進数の 10) になるのを確かめ、4 行を全部埋めます。	Click the slide switches SW1 (A) and SW2 (B) in the schematic to toggle 0 and 1. Each press fills in one row of the truth table at the bottom right. Check that with A = 1 and B = 1, S is 0 and C is 1 (1 + 1 = 10 in binary), and fill in all 4 rows.
+ゆっくり再生にして、信号が伝わる順を 1 イベントずつ見る	Use slow playback and watch the order in which the signal travels, one event at a time
+上の帯の「ゆっくり」に印を付け、▶ を ⏸ にして止めます。SW1 をクリックしてから、「1 イベント」を何度か押します。最初にスイッチの線 (A) が変わり、次に約 10ns 遅れて XOR の出力 S と AND の出力 C が変わります。ゲートの数だけ遅れが積み重なるのが、速い回路を作るときの限界になります。	Tick "Slow" on the bar at the top and stop with ▶ → ⏸. Click SW1, then press "1 event" several times. First the switch wire (A) changes, then about 10ns later the XOR output S and the AND output C change. The delay adds up with each gate, and that is the limit when making fast circuits.
+88. SR ラッチを動かす (2 つの NAND で 1 ビットを覚える)	88. Run an SR latch (remember 1 bit with 2 NANDs)
+NAND ゲート 2 つを、お互いの出力を入力に返してつなぐと、押しボタンを離したあとも、最後に押した方を覚えていること (ラッチ) を確かめます。同じ入力でも出力が前の状態で決まるので、真理値表に「記憶」の行が出ます	Connect two NAND gates with each one's output fed back to the other's input, and check that it remembers the last button pressed even after release (a latch). The output depends on the previous state even for the same inputs, so a "memory" row appears in the truth table
+これまでのゲートは、出力が今の入力だけで決まりました (組み合わせ回路)。出力を入力に返すと、回路は自分の状態を持ち続けられます (順序回路)。SR ラッチは、その一番簡単な形で、NAND ゲート 2 つでできます。Q = NOT(S_N AND QB)、QB = NOT(R_N AND Q) です。入力 S_N と R_N は、ふだん 10kΩ のプルアップで High で、押しボタンを押すと GND につながって Low になります (Low で働く負論理なので、名前に _N を付けています)。S_N を Low にすると Q が 1 (セット)、R_N を Low にすると Q が 0 (リセット) になります。両方を High に戻しても (ボタンを離しても)、Q は変わらず、最後の操作を覚えています。これが 1 ビットの記憶で、SRAM やフリップフロップの元になっています。両方を同時に押すと Q も QB も 1 になり、「Q と QB は反対」という約束が崩れます。この状態から両方同時に離すと、どちらに落ちるかは、ゲートの遅れの小さな差で決まります (実物では予測できません)。そのため、両方を同時に Low にするのは禁止の入力です。74HC00 の残りの 2 つの NAND は、入力を 2 本ともつないでインバータ (NOT) にして、LED を光らせる役 (LED_Q = Q、LED_QB = QB) にしています。ラッチの線に LED の電流を流さないためです。	Until now, the gates' outputs were set by the present inputs alone (combinational circuits). Feeding an output back to an input lets a circuit keep its own state (sequential circuits). The SR latch is the simplest form and is made of two NAND gates: Q = NOT(S_N AND QB), QB = NOT(R_N AND Q). The inputs S_N and R_N are normally High through 10kΩ pull-ups, and pressing a button connects them to GND, making them Low (they act when Low, negative logic, so the names end in _N). Making S_N Low sets Q to 1 (set); making R_N Low sets Q to 0 (reset). Even when both go back to High (buttons released), Q does not change and remembers the last action. This is 1 bit of memory, the basis of SRAM and flip-flops. Pressing both at once makes both Q and QB 1, breaking the rule "Q and QB are opposite". If both are released at the same time from this state, which way it falls is decided by tiny differences in gate delay (unpredictable on real parts). That is why making both Low at once is a forbidden input. The other 2 NANDs of the 74HC00 have both inputs tied together to act as inverters (NOT) that light the LEDs (LED_Q = Q, LED_QB = QB). This keeps LED current off the latch wires.
+用意するもの: 74HC00、タクトスイッチ 2 個、10kΩ 2 本 (プルアップ)、LED 2 個と 330Ω 2 本、5V の電源 (USB)、ブレッドボード。IC の電源ピンの近くに 0.1µF を入れます。	You need: 74HC00, 2 tactile switches, 2 10kΩ resistors (pull-ups), 2 LEDs and 2 330Ω resistors, a 5V supply (USB), a breadboard. Put 0.1µF near the IC's power pins.
+組み方: 回路図のとおりに組みます。74HC00 の 4 つの NAND を全部使います (2 つがラッチ、2 つが LED を光らせるインバータ)。	How to build: build it as in the schematic. All 4 NANDs of the 74HC00 are used (2 for the latch, 2 as inverters lighting the LEDs).
+確かめ方: SET (SW1) を押して離すと Q の LED が点いたまま、RESET (SW2) を押して離すと消えたままになるのを見ます。電源を入れ直した直後に、どちらの LED が点くかも見ます (決まっていません)。	How to check: press and release SET (SW1) and the Q LED stays on; press and release RESET (SW2) and it stays off. Also see which LED lights right after turning the power back on (it is not fixed).
+セットとリセットを押して、離しても覚えているのを見る	Press set and reset and see that it remembers after release
+押しボタン SW1 (S_N) をクリックして押している間、S_N が Low (青) になり、Q の LED (D1) が点きます。離しても点いたままです。次に SW2 (R_N) を押すと消え、離しても消えたままです。真理値表の S_N = 1・R_N = 1 の行は、LED_Q が 1 のときも 0 のときもあったので「記憶」になります。	While you click and hold push button SW1 (S_N), S_N is Low (blue) and the Q LED (D1) lights. It stays lit after release. Then press SW2 (R_N) and it goes off and stays off after release. The S_N = 1, R_N = 1 row of the truth table had LED_Q both 1 and 0, so it becomes "memory".
+両方を同時に押す (禁止の入力)	Press both at once (forbidden input)
+押しボタンは、Shift を押しながらクリックすると、押したままになります (もう一度クリックすると離れます)。SW1 を Shift + クリックで押したままにして、SW2 もクリックして押します。D1 と D2 の LED が両方点き、「Q と QB は反対」の約束が崩れます。真理値表に S_N = 0・R_N = 0 の行が出ます。最後に SW1 をクリックして離します。	Shift + click on a push button keeps it pressed (click again to release). Keep SW1 pressed with Shift + click, then click SW2 to press it too. Both LEDs D1 and D2 light, breaking the rule "Q and QB are opposite". A row with S_N = 0, R_N = 0 appears in the truth table. Finally click SW1 to release it.
+89. カウンタを動かす (クロックで 1 つずつ数える)	89. Run a counter (count one by one with the clock)
+4 ビットのカウンタ 74HC161 にクロックを 1 回ずつ入れて、4 つの LED が 2 進数で 0 から 15 まで数えるのを見ます。クロックの速さを変えて動かし、ロジックアナライザのように流れる波形で、各ビットの周期が倍ずつ長くなることを確かめます	Feed clocks one at a time to the 4-bit counter 74HC161 and watch 4 LEDs count from 0 to 15 in binary. Run it at different clock speeds and check in the scrolling waveforms, like a logic analyzer, that each bit's period doubles
+カウンタは、クロックの立ち上がり (Low から High に変わる瞬間) のたびに、持っている数を 1 つ増やす回路です。中はフリップフロップ (クロックの立ち上がりでだけ入力を取り込んで覚える記憶の素子) 4 個と、次の数を作るゲートでできています。74HC161 の出力 QA〜QD (この回路のネット Q0〜Q3) は、Q0 が一番下の桁 (1)、Q3 が一番上の桁 (8) の 2 進数で、0000 → 0001 → 0010 → … → 1111 (15) と進み、次は 0000 に戻ります。Q0 はクロック 2 回で 1 周期、Q1 は 4 回、Q2 は 8 回、Q3 は 16 回で、周期が倍ずつ長くなります (周波数が半分ずつになる: 分周)。下のロジックアナライザでは、Q0〜Q3 が 1 本のバス Q にまとまり、値が 16 進数 (0〜F) で出ます。この回路の VCK は、ふつうの解析では 1Hz のパルスの電源ですが、動かしている間は、上の帯のつまみと「1 クロック」のボタンがクロックになります。CLR・LOAD・ENP・ENT は電源につないで、いつも数える設定にしています。	A counter is a circuit that adds 1 to the number it holds at every rising clock edge (the moment it changes from Low to High). Inside are 4 flip-flops (memory elements that take in and remember their input only at the rising clock edge) and gates that make the next number. The outputs QA to QD of the 74HC161 (nets Q0 to Q3 in this circuit) are a binary number with Q0 the lowest digit (1) and Q3 the highest (8); they go 0000 → 0001 → 0010 → … → 1111 (15), then back to 0000. Q0 has a period of 2 clocks, Q1 4, Q2 8 and Q3 16: each period doubles (the frequency halves each time: frequency division). In the logic analyzer below, Q0 to Q3 are grouped into one bus Q, shown in hex (0 to F). VCK in this circuit is a 1Hz pulse source in normal analyses, but while running, the knob and the "1 clock" button on the bar at the top are the clock. CLR, LOAD, ENP and ENT are tied to the supply so it always counts.
+用意するもの: 74HC161、LED 4 個と 330Ω 4 本、5V の電源 (USB)、ブレッドボード。クロックには、555 の発振回路 (1Hz くらい) か、マイコンの出力を使います。IC の電源ピンの近くに 0.1µF を入れます。	You need: 74HC161, 4 LEDs and 4 330Ω resistors, a 5V supply (USB), a breadboard. For the clock, use a 555 oscillator (about 1Hz) or a microcontroller output. Put 0.1µF near the IC's power pins.
+注意: クロックを押しボタンで作ると、接点が跳ねて (チャタリング)、1 回押しただけで何回も数えます。押しボタンで試すなら、RC とシュミットトリガ (74HC14) でチャタリングを取ります (レッスン「チャタリングを取る」)。	Note: if you make the clock with a push button, the contacts bounce (chatter) and one press counts many times. To try it with a push button, remove the chatter with an RC and a Schmitt trigger (74HC14) (lesson "Debounce").
+確かめ方: クロックを 1 回ずつ入れ、LED の並びを 2 進数で読みます。16 回で 0 に戻るのを確かめます。	How to check: feed clocks one at a time and read the LEDs as a binary number. Check that it returns to 0 after 16.
+「1 クロック」を押して、1 つずつ数えるのを見る	Press "1 clock" and watch it count one by one
+上の帯の「1 クロック」を押すと、クロックが 1 回上がって下がり、LED (Q0〜Q3) が 2 進数で 1 つ増えます。3 回押して、0001 → 0010 → 0011 と進むのを確かめます。下の波形では、バス Q の値が 1、2、3 と増えます。	Press "1 clock" on the bar at the top: the clock rises and falls once and the LEDs (Q0 to Q3) go up by 1 in binary. Press it 3 times and check that it goes 0001 → 0010 → 0011. In the waveforms below, the value of bus Q goes up 1, 2, 3.
+クロックを速くして動かし、分周を見る	Run it with a faster clock and watch the frequency division
+▶ で動かし、クロックのつまみを 4Hz 以上にします。下のロジックアナライザで、Q0 は 2 クロック、Q1 は 4 クロックで 1 周期と、周期が倍ずつ長くなるのを見ます (バス Q の 3 角の印を押すと、ビットごとに開きます)。	Run it with ▶ and set the clock knob to 4Hz or more. In the logic analyzer below, see that Q0 has a period of 2 clocks and Q1 of 4, each period doubling (press the triangle of bus Q to open it bit by bit).
+ゆっくり再生で、クロックから出力までの遅れを見る	With slow playback, watch the delay from clock to output
+⏸ で止め、「ゆっくり」に印を付けて、「1 クロック」を押してから「1 イベント」を何度か押します。クロックが上がってから、約 20ns 遅れて Q0〜Q3 が変わります (クロックから出力までの遅れ)。桁上がりのあるとき (0111 → 1000 など) も、4 つのビットはほぼ同時に変わります。74HC161 は全部のフリップフロップに同じクロックが入る同期カウンタだからです。	Stop with ⏸, tick "Slow", press "1 clock", then press "1 event" several times. About 20ns after the clock rises, Q0 to Q3 change (clock-to-output delay). Even with a carry (0111 → 1000 and so on), the 4 bits change almost at once. That is because the 74HC161 is a synchronous counter with the same clock going to all its flip-flops.
+# crates/app/src/schematic/lessons/micro.rs
+BSS138 は、データシート (onsemi) の typ から作った等価モデルです (しきい値 1.3V、オン抵抗 0.7Ω、入力の容量 27pF など)。実物は、個体差があり、基板の配線の容量やスイッチングの速度で、立ち上がりが変わります。I2C の高速モード (400kHz 以上) では、プルアップの値と容量の確認が必要です。	The BSS138 is an equivalent model made from the typ values in the datasheet (onsemi) (threshold 1.3V, on-resistance 0.7Ω, input capacitance 27pF and so on). Real parts vary, and the rise changes with board wiring capacitance and switching speed. In I2C fast mode (400kHz or more), check the pull-up values and capacitance.
+「過渡解析を実行」を押し、H (5V 側)・D33 (分圧の出力)・L (BSS138 の 3.3V 側) を選びます。H は 0〜約 4.85V (R1 に 10kΩ のプルアップが並列なので、少し下がります)、D33 は 0〜約 3.23V、L は 0〜3.30V です。どちらの方法でも、3.3V の部品が読める電圧になりました。D33 は立ち上がりがほぼ瞬時で、L は約 0.30µs かかります (BSS138 の 10kΩ プルアップの遅れ)。	Press "Run transient analysis" and choose H (5V side), D33 (divider output) and L (3.3V side of the BSS138). H is 0 to about 4.85V (slightly lower because a 10kΩ pull-up is in parallel with R1), D33 is 0 to about 3.23V and L is 0 to 3.30V. Either way, the voltage is one a 3.3V part can read. D33 rises almost instantly, while L takes about 0.30µs (the delay of the BSS138's 10kΩ pull-up).
+R3 を 2k に戻し、R5 を 10k から 100k に変えて「過渡解析を実行」。L の立ち上がりが、約 0.30µs から約 2.9µs と、10 倍近くに伸びます (プルアップ × 回路の容量)。逆に R5 を 1k にすると、約 60ns と速くなりますが、Low が約 0.3V まで持ち上がります。速さと、Low の低さ・電流の大きさのバランスで、10kΩ 前後を選びます。	Set R3 back to 2k, change R5 from 10k to 100k and "Run transient analysis". The rise of L stretches from about 0.30µs to about 2.9µs, nearly 10 times (pull-up × circuit capacitance). Conversely, R5 = 1k makes it faster, about 60ns, but Low rises to about 0.3V. Balancing speed against how low Low goes and how much current flows, you pick around 10kΩ.
+# crates/app/src/schematic/lessons/signals.rs
+回路の周波数特性は、分数の式 (伝達関数) で書けます。分母が 0 になる周波数が「極」で、そこで応答が山になったり、ゲインが下がり始めたりします。分子が 0 になるのが「零」です。コイル L=1mH・コンデンサ C=1µF・抵抗 R=10Ω の直列回路には、一対の複素数の極があり、位置は 1 ÷ (2π√LC) ≒ 5.03kHz、鋭さ (Q) は √(L÷C) ÷ R ≒ 3.16 です。Q が 1 より大きいと、山ができ、ステップを加えると、行き過ぎて振動します (リンギング)。抵抗を 100Ω にすると、Q は 0.316 に下がり、極は実数の 2 つに分かれて、山も振動もなくなります (過減衰)。フィルタの設計では、欲しい形 (山のないなだらかな落ち方・少し山のある鋭い落ち方) を、極の位置と Q で決めます。抵抗の値を少しずつ変えながら極の動きを線で描いたものを根軌跡といい、解析タブの「根軌跡」で見られます (R1 を 5〜200Ω にすると、極が円を回って実軸に下り、2 つに分かれます)。	A circuit's frequency response can be written as a fraction (transfer function). The frequencies where the denominator becomes 0 are the "poles", where the response peaks or the gain starts to fall. Where the numerator becomes 0 are the "zeros". A series circuit of an inductor L=1mH, capacitor C=1µF and resistor R=10Ω has a pair of complex poles at 1 ÷ (2π√LC) ≈ 5.03kHz with a sharpness (Q) of √(L÷C) ÷ R ≈ 3.16. With Q above 1 there is a peak, and a step overshoots and rings (ringing). With 100Ω, Q drops to 0.316, the poles split into two real ones, and the peak and ringing disappear (overdamped). In filter design, the shape you want (a smooth fall with no peak, or a sharp fall with a small peak) is set by the pole positions and Q. Drawing the movement of the poles as a resistor value changes gradually is called a root locus, and you can see it with "Root locus" in the analysis tab (with R1 from 5 to 200Ω, the poles go around a circle down to the real axis and split in two).
+オペアンプを帰還で使うと、出力を入力へ戻して、ゲインや安定を決めます。ところが、戻る途中で位相が 180° 遅れて、ゲインがまだ 1 倍 (0dB) 以上あると、戻した信号が元の信号を強めてしまい、発振します。ゲインが 0dB になる周波数で、180° に対して何度の余裕があるかが、位相余裕です。45° 以上あれば安心、30° を切ると、ステップで大きく行き過ぎます。オペアンプの出力に、大きなコンデンサを直接つなぐと、オペアンプの出力抵抗とコンデンサが、新しい極を作り、0dB の周波数のあたりで位相を遅らせて、余裕を食います。ここでは、出力に 10nF を付けた回路の開ループの応答で、位相余裕が小さいことを見ます。コンデンサを 1pF にすると余裕が戻り、100nF にすると、さらに減ります。対策は、出力に小さな抵抗 (数十Ω) を直列に入れて負荷のコンデンサと切り離す、帰還のコンデンサで位相を進める、コンデンサを小さくする、です。同じ余裕は、解析タブの「ループゲイン」の結果をナイキスト線図 (線が −1 の点からどれだけ離れているか) やニコルス線図に切り替えても見られます。	When an op-amp is used with feedback, the output is fed back to the input to set the gain and stability. But if the phase is delayed 180° on the way back while the gain is still 1× (0dB) or more, the returned signal reinforces the original one and it oscillates. How many degrees of margin there are from 180° at the frequency where the gain is 0dB is the phase margin. 45° or more is safe; below 30°, a step overshoots a lot. Connecting a large capacitor directly to an op-amp's output makes a new pole from the op-amp's output resistance and the capacitor, which delays the phase around the 0dB frequency and eats the margin. Here you see in the open-loop response of a circuit with 10nF on the output that the phase margin is small. With 1pF the margin comes back; with 100nF it shrinks further. Fixes: put a small resistor (tens of Ω) in series with the output to isolate the load capacitor, lead the phase with a feedback capacitor, or make the capacitor smaller. You can also see the same margin by switching the result of "Loop gain" in the analysis tab to a Nyquist plot (how far the line stays from the −1 point) or a Nichols chart.
+# crates/app/src/schematic/lessons/supply.rs
+電池やACアダプタは、つなぎ間違えが起こります。(1) 逆接続: そのまま負荷につないでいると、負荷に逆向きの電圧がかかり、IC や電解コンデンサが壊れます (R1)。電源と負荷のあいだに、ダイオードを直列に入れると、逆向きの電流を止められます (R2)。ただし、順方向の電圧 (ショットキーで約 0.2〜0.4V。電流で変わる) と、その電圧 × 電流のぶんの熱を失います。P チャネル MOSFET (R3) は、正しい向きではオン抵抗が小さい (AO3401A で数十 mΩ) ので、損失がほとんどなく、逆向きでは自動でオフになります。(2) ショート: 負荷がショートすると、電源の電圧 ÷ 配線の抵抗の、大きな電流が流れ続けます。配線や部品が焼けて、発煙・発火のもとになります。(3) ヒューズ: 定格を超える電流で切れて、電源を切ります。通常の電流の 7 割以下を定格にし、守りたい部品の最大電流より小さい定格を選びます。定格電圧は電源電圧以上にします。	Batteries and AC adapters get connected wrongly. (1) Reverse connection: connected straight to the load, the load gets a reversed voltage and ICs and electrolytic capacitors break (R1). A diode in series between the supply and the load stops reverse current (R2). But you lose the forward voltage (about 0.2 to 0.4V for a Schottky; it changes with current) and that voltage × current as heat. A P-channel MOSFET (R3) has a small on-resistance in the right direction (tens of mΩ for the AO3401A), so it loses almost nothing, and turns off automatically when reversed. (2) Short: when the load is shorted, a large current of supply voltage ÷ wiring resistance keeps flowing. Wiring and parts burn, which can cause smoke or fire. (3) Fuse: it blows at a current above its rating and cuts the supply. Choose a rating with normal current at 70 % or less of it, and smaller than the maximum current of the parts you want to protect. The voltage rating must be at least the supply voltage.
+測り方 (1): 正しい向きで、各抵抗の両端の電圧を測ります。ダイオードを通したほうが、約 0.2〜0.3V 低く出ます。	How to measure (1): with the correct polarity, measure the voltage across each resistor. The one through the diode reads about 0.2 to 0.3V lower.
+「DC動作点を解析」を押します。電源は 9V です。そのままつないだ R1 には 9V、MOSFET を通した R3 には約 9.0V (OUT_M) かかりますが、ダイオードを通した R2 には約 8.76V (OUT_D) です。ダイオードで約 0.24V を失っています。電流が増えると、この損失は増えます (1A なら、約 0.3W の熱)。MOSFET の損失は、ほぼ 0 です。	Press "Run DC operating point". The supply is 9V. R1, connected straight, gets 9V and R3 through the MOSFET about 9.0V (OUT_M), but R2 through the diode gets about 8.76V (OUT_D). The diode loses about 0.24V. This loss grows with current (about 0.3W of heat at 1A). The MOSFET's loss is almost 0.
+# crates/app/src/schematic/panel/mod.rs
+根軌跡 (値を変えたときの極の動き)	Root locus (movement of the poles as a value changes)
+部品の値を少しずつ変えながら「極と零」をくり返し、極が複素数の平面をどう動くかを線で描きます。帰還の抵抗や負荷のコンデンサを変えると、どこで振動しやすくなり、どの値で右半面に出て発振するかが一目で分かります。部品と範囲はパラメータスイープ、出力と入力は「極と零」、周波数範囲・点数は AC解析の欄を共用	Repeats "Poles and zeros" while changing a part value step by step and draws how the poles move on the complex plane. Changing a feedback resistor or a load capacitor shows at a glance where it starts to ring and at which value it moves into the right half-plane and oscillates. The part and range are shared with the parameter sweep, the output and input with "Poles and zeros", and the frequency range and points with the AC analysis fields
+差動アンプ・計装アンプが、2 つの入力の差 (欲しい信号) を、2 つに共通の揺れ (ハム・雑音) よりどれだけ大きく増幅するかを、周波数ごとに見ます。+ 入力と − 入力の信号源を選ぶだけで、回路図は書き換えません。抵抗の誤差でどこまで悪くなるかも出します	Shows, for each frequency, how much more a differential or instrumentation amplifier amplifies the difference of its two inputs (the wanted signal) than a swing common to both (hum, noise). Just choose the + input and − input sources; the schematic is not rewritten. It also shows how much resistor errors make it worse
+電池で動く回路が、何時間・何日もつかを出します。過渡解析の平均の電流 (眠っている時間と、起きて動く時間を合わせたもの) と電池の容量から求め、電池が減って回路が止まる電圧 (レギュレータのドロップアウトなど) も見ます	Gives how many hours or days a battery-powered circuit lasts. It is found from the average current of the transient analysis (sleep time and awake time together) and the battery capacity, and also checks the voltage at which the circuit stops as the battery runs down (regulator dropout and so on)
+電流が流れる抵抗・ダイオード・トランジスタは、自分の電力で温まります。温度がどれだけ上がるか、温度係数のある抵抗は値が、ダイオード・トランジスタは電圧と電流がどれだけ動くかを、熱抵抗 (K/W) から計算します。シャント抵抗、精度が要る分圧の抵抗、バイアスの決め方の確認に	Resistors, diodes and transistors carrying current warm up from their own power. From the thermal resistance (K/W), it calculates how much the temperature rises, how much the value of resistors with a temperature coefficient moves, and how much the voltages and currents of diodes and transistors move. For checking shunt resistors, precision divider resistors and how a bias is set
+基板を反映中: 配線の抵抗・インダクタンス・容量、基板の熱	Board applied: track resistance, inductance and capacitance, board heat
+基板を反映中: 配線の抵抗・インダクタンス・容量	Board applied: track resistance, inductance and capacitance
+基板エディタの「③ 確認する」の「回路図に反映」で、基板の配線と熱が解析に入っています。DC・過渡・AC・ノイズは配線の抵抗などを、自己発熱と温度の時間変化は基板の熱の地図の熱抵抗を使います	"Apply to schematic" under "③ Check" in the board editor has put the board's tracks and heat into the analyses. DC, transient, AC and noise use the track resistance and so on; self-heating and temperature over time use the thermal resistance from the board's thermal map
+配線の抵抗と基板の熱を外し、理想の配線に戻します	Removes the track resistance and board heat and goes back to ideal wiring
+ライブラリに {} 部品を保存しました	Saved {} parts to the library
+保存できなかった部品があります: {}	Some parts could not be saved: {}
+すべての解析 ({})	All analyses ({})
+全部の解析を、用途ごとに 1 行ずつ出します。名前を押すと上に開き、☆ を押すと、いつも上に出しておけます (★ は 6 個まで)	Lists every analysis, one line per use. Press a name to open it above; press ☆ to always show it at the top (up to 6 ★)
+★ は 6 個までです。どれかの ★ を外すと留められます	Up to 6 ★. Remove a ★ to pin this one
+★ を外して、パネルに出すのをやめます	Remove the ★ to stop showing it in the panel
+★ を付けて、パネルの上にいつも出しておきます	Add a ★ to always show it at the top of the panel
+# crates/app/src/schematic/panel/parts.rs
+硫化	
+# crates/app/src/schematic/panel/properties.rs
+つまみを回す位置です。0 % で真ん中の足 (2 番) が 1 番の足の側に、100 % で 3 番の足の側に来ます。両端を電源と GND につなぐと、真ん中の足から 0 V〜電源の電圧を取り出せます (分圧)。値の欄の POS= と同じです	The position of the knob. At 0 % the middle pin (2) is at the pin 1 side, at 100 % at the pin 3 side. With the ends connected to the supply and GND, the middle pin gives 0 V up to the supply voltage (a divider). Same as POS= in the value field
+1 番〜2 番: {}Ω　2 番〜3 番: {}Ω	Pin 1 to 2: {}Ω  Pin 2 to 3: {}Ω
+推奨の周辺部品を置く ({n})	Place recommended companion parts ({n})
+データシートがこの部品のそばに付けるように言う部品 ({}) を、ピンのそばに置いて線をつなぎます (GND の側は GND の記号)。置いたあと、位置は動かせます。元に戻すは Ctrl+Z	Places the parts the datasheet says to put near this part ({}) near the pins and wires them (the GND side gets a GND symbol). You can move them after placing. Ctrl+Z undoes it
+推奨の周辺部品を置きました: {}	Placed recommended companion parts: {}
+ボリュームの全体の抵抗値と、つまみの位置。例:\n10k … 10kΩ、つまみは真ん中\n10k POS=30 … つまみを 30 % の位置に (0 % で 2 番の足が 1 番の側、100 % で 3 番の側)	The potentiometer's total resistance and the knob position. Examples:\n10k … 10kΩ, knob in the middle\n10k POS=30 … knob at the 30 % position (at 0 % pin 2 is at the pin 1 side, at 100 % at the pin 3 side)
+# crates/cli/src/breadboardcmd.rs
+holes: a-e above the groove and f-j below, joined in fives per column; 上+ 上− 下− 下+ are the rails along the long edges	
+# crates/cli/src/build.rs
+GNDにつながる	
+ | ヒント: {}	 | Hint: {}
+記録は probe= の信号だけです (回路が大きいので、自動で絞りました。全部を記録するには record=all を付けてください)。probe にない信号を使う spec・settle・定格の注意は出ません	Only the probe= signals are recorded (the circuit is large, so it was narrowed automatically; add record=all to record everything). spec, settle and rating warnings that use signals not in probe are not given
+記録は probe= の信号だけです (record=probes)。probe にない信号を使う spec・settle・定格の注意は出ません	Only the probe= signals are recorded (record=probes). spec, settle and rating warnings that use signals not in probe are not given
+{} ({}) の消費電力 (実効値) は {:.0} mW で、この形の目安 {:.0} mW に対して{}	The power (rms) of {} ({}) is {:.0} mW, against a guide of {:.0} mW for this package {}
+抵抗値を大きくして電流を減らすか、大きい形 (1206 / 2512 や 1/2W 品) に変えます。実際の定格はデータシートで確認してください。	Make the resistance larger to reduce the current, or use a larger package (1206 / 2512 or a 1/2W part). Check the actual rating in the datasheet.
+{} の電流が最大 {:.1} mA になっています。一般的な LED は 20 mA 前後が上限です	The current through {} reaches up to {:.1} mA. Ordinary LEDs are limited to about 20 mA
+電流制限抵抗を大きくします。R = (電源電圧 − LED の順電圧) ÷ 目標電流 で決めます。	Make the current-limiting resistor larger. Choose R = (supply voltage − LED forward voltage) ÷ target current.
+# crates/cli/src/libcmd.rs
+{path} is an encrypted (binary) model: only the maker's program can read it. Look on the maker's site for a plain-text SPICE model (often a separate .cir / .lib for ngspice), or build the part from the data sheet. このモデルは暗号化されていて読めません	{path} is an encrypted (binary) model: only the maker's program can read it. Look on the maker's site for a plain-text SPICE model (often a separate .cir / .lib for ngspice), or build the part from the data sheet. This model is encrypted and cannot be read
+{path} is an encrypted model (cannot be read by ccad). このモデルは暗号化されていて読めません	{path} is an encrypted model (cannot be read by ccad). This model is encrypted and cannot be read
+取り込み	
+メーカーのモデル {} (.subckt {sub}) をそのまま使う部品。取り込んだ人の手元の部品で、再配布できないことがあります。ピンの位置・パッケージは取り込み時の仮のもの	A part that uses the maker's model {} (.subckt {sub}) as it is. It is a part on the importer's own machine and may not be redistributable. The pin positions and package are provisional ones from the import
+メーカーのモデルをそのまま使っています。モデルが扱う範囲・温度条件はメーカーの資料で確かめてください。	Uses the maker's model as it is. Check the range and temperature conditions the model covers in the maker's documents.
+# crates/cli/src/lineupcmd.rs
+コイルのシリーズ「{n}」は同梱にありません (crates/part-lib/coils/)	The coil series "{n}" is not bundled (crates/part-lib/coils/)
+コイルのシリーズの表がありません。同梱は crates/part-lib/coils/ を見本に作ってください	There is no coil series table. Make one using crates/part-lib/coils/ as an example
+{n}: 表にありません	{n}: not in the table
+{file}: 型番ごとの行の表 (電解コンデンサは容量・大きさ・型番、コイルはインダクタンスと型番の列) が見つかりませんでした。文字の無い PDF や、列が崩れる PDF は読めません	{file}: no table with a row per part number (capacitance, size and part number for electrolytic capacitors; inductance and part number columns for coils) was found. PDFs without text or with broken columns cannot be read
+シリーズの表 (series=FILE.elcap.json) がありません。同梱は crates/part-lib/elcaps/ を見本に作ってください	There is no series table (series=FILE.elcap.json). Make one using crates/part-lib/elcaps/ as an example
+# crates/cli/src/projectcmd.rs
+no board of this project is placed in 3D (in the app: the link's 3D で重ねる)	no board of this project is placed in 3D (in the app: the link's "Stack in 3D")
+# crates/cli/src/session.rs
+Commands (one per line, '#' starts a comment; every answer is one JSON line)\n\n Schematic\n  new                                   empty schematic\n  open FILE.schjson / save FILE.schjson\n  parts [WORDS]                         search the part library (name, category, description)\n  part NAME                             pins (number + name) of a library part or a basic type (R C L D LED V I NPN)\n  part import FILE [name=NAME] [subckt=SUB] [pins=A,B,..] [map=1,2,..] [package=PART]\n                                        make a library part from a maker's SPICE .subckt (a plain-text file you downloaded):\n                                        pins = the symbol's pin names in the subcircuit's node order, map = their pin numbers,\n                                        package = a library part whose footprint is borrowed (default TL072, SOIC-8). Encrypted models are refused.\n  lib [reload]                          the library folder and the number of parts; 'lib reload' reads it again (after part import or editing a file)\n  add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]\n        TYPE: R C L D LED V I NPN HEADER2 HEADER4 ... or a library part name (see 'parts')\n  value REF VALUE                       change the value (a value with spaces, like PULSE(0 5 1m 1u), needs no quotes)\n  nc REF.PIN [REF.PIN ...] [remove=1]    pins left unconnected on purpose (an unused output, a pin the data sheet says to leave open): ERC does not ask about them; no pins = the list\n  pinnames REF NAME1,NAME2,...          the names of the pins of a pin header (F+,F-,SA,SB,GND): written beside its symbol and, with `board pinlabels`, on the silk (`-` clears)\n  simonly REF [off]                     the part is only for the simulation (a test source, a stand-in for the device under test): it is left off the board and the bill of materials\n  net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name (any case; one part of a dual-use name like REFP1/AIN6 is enough)\n                                        (GND pins of a part that share a name are all connected)\n                                        The net named GND is the 0 V reference: every circuit needs one.\n  remove REF\n  list                                  parts, pins and the net of every pin (of the active sheet)\n  sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all]]\n                                        several sheets: no argument lists them; add makes an empty one (and makes it the active one);\n                                        move sends parts (with the net labels on their pins) to another sheet; tidy packs the parts of the\n                                        active sheet (or 'tidy all') into compact rows, so that the whole sheet fits one screen. Nets join across\n                                        sheets by the same net label or power symbol; add / net / remove / list act on the active sheet\n  erc                                   electrical rule check (message + hint). 'ok' only says the command ran:\n                                        read 'errors' (or run with --strict, which fails the script on an ERC error)\n  spice                                 the SPICE netlist text\n Simulation\n  dc [full] [probe=V(out),I(R1)]        operating point: node voltages, element currents (probe= returns only those)\n                                        (elements inside a library part's macro model are hidden unless 'full')\n                                        'ratings' lists parts over / near their package power limit (like the app);\n                                        'warnings' also flags an op-amp whose IN+ and IN- differ (saturated output)\n                                        'solver' = how it was solved (strategy, iterations, seconds). A circuit with flip-flops lists them in 'memory':\n                                        ic=NAME=1,NAME=0 sets their starting states. A latch built from gates has more than one answer:\n                                        guess=NET=V,NET=V picks the one near those voltages (like .nodeset); 'dc states' also solves\n                                        from other starting points and lists the nets that settle elsewhere ('other_states')\n  tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic] [record=all|probes]\n                                        starts from the DC operating point (a capacitor starts charged);\n                                        add 'uic' to start from zero instead (step responses, oscillators)\n                                        record=probes keeps only the probed signals (saves time and memory in a circuit with thousands of\n                                        nodes; chosen by itself when the record would pass ten million values, record=all keeps everything)\n                                        'ratings' / 'warnings' (second half of the run): resistor rms power, LED peak current,\n                                        electrolytic ripple current, op-amp inputs that stay apart (saturation)\n                                        settle=V(out) [from=20u] [tol=1e-2,1e-3,1e-4]: from the instant `from`, the time until the signal\n                                        stays within each tolerance (a fraction of the step) of its final value; also the overshoot. ic= and guess= as in dc\n Maker SPICE models (the zips are the maker's own download, e.g. Murata 'SPICE netlist'; not shipped with the app)\n  models [WORDS] [zip=PATH] [size=0603] [diel=X7R] [cmin=1u] [cmax=10u] [vmin=16]\n                                        search the models by name; size (inch code), dielectric, capacitance and rating\n                                        work for models a maker reader describes (Murata; Nippon Chemi-Con and Nichicon give capacitance and rating only). zip defaults to the ones added in the app.\n                                        'models model=PN' prints the subcircuit (alias: murata)\n Models from data sheet readings\n  fit FILE.fit.json [write] [dir=DIR]   an equivalent model (diode, BJT, MOSFET) from numbers and graph points read off a\n                                        data sheet: answers the .model card, its notes and each reading next to the model's\n                                        value (rows, error_pct); 'write' puts it into DIR/<part>.part.json (default: the library).\n                                        The file's form: crates/part-lib/fits/*.fit.json (the bundled parts' readings)\n  lineup FILE.pdf [series=F.elcap.json] [pick=PN,..|bundle|all] [write] [dir=DIR]\n                                        an electrolytic capacitor's lineup table (one row per part number): lists the rows;\n                                        'pick' makes those parts with the series' tables (crates/part-lib/elcaps/), 'write' saves\n                                        them into DIR (default: the library)\n Several boards in one project\n  project check FILE.ccproj             the links between the boards' connectors checked pin by pin (the same net names on both sides,\n                                        power not on ground, pins not crossed, a signal not ending in an open pin)\n  project bom FILE.ccproj OUT.csv       the parts of all boards counted together (times the copies of each board), one column per board\n  project step FILE.ccproj OUT.step     the boards placed in 3D (stacked by their connectors in the app) as one STEP, and what collides\n  project dc FILE.ccproj                the whole system's operating point: every linked pin's voltage on each side and the current through it\n  project merge FILE.ccproj OUT.schjson the whole system as one schematic (designators R1_main, nets main.SDA, a 0 V source on every linked pin)\n 3D body of a part\n  shape [TEMPLATE|auto] part=NAME [DIM=mm ...] [dir=DIR] [max=TRIANGLES] [write]\n                                        a body from a template (dc_jack, tact, relay, terminal; 'auto' picks by the footprint) as a\n                                        SolidCraft script on the part's own pads; with SolidCraft installed it builds the body\n                                        ('write' puts it into the part, max= thins it). 'shape' alone lists the templates and their dimensions\n Design help\n  calc [KEY NUMBER ...]                 value calculators (led, divider, rc, regulator, buck, boost, opamp, ...): no\n                                        arguments lists them with their inputs; the answer has the value, steps, cautions\n  ac FSTART FSTOP [ppd=10] [probe=V(out)]\n                                        frequency response (needs a source with an AC magnitude, e.g. value V1 "0 AC 1"):\n                                        gain and phase per decade, -3 dB frequency, phase margin\n  sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)   (or sweep REF list=1,2,5)\n  heat [temp=27] [top=10]               the DC point with every resistor warmed by its own power (a steady state): per part the power, rise, temperature and\n                                        change of its value, and the nets that move because of it. thermal REF theta=K/W tc=ppm cth=J/K sets a part's heat resistance / coefficient / capacity; thermal link=Q1:RS1:150 keeps a heat resistance between two parts\n  heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300 (else the saved links)] [tstep=] [temp=27] [uic] [samples=8]\n                                        a transient run whose power (I^2 R, I Vds) becomes temperatures over time: a pulse warms a part less than the\n                                        steady state by its time constant (theta cth); couple=A:B:K/W lets two parts warm each other; a resistor's value follows its temperature\n  sens probe=V(out) [step=1] [parts=R1,R2 | kinds=R,V,I,C,L] [top=15]\n                                        sensitivity: moves each part's value by step % and says how far the probe moves (per_percent,\n                                        elasticity), the biggest first; names the parts that decide an accuracy\n                                        the DC point for a range of values of one part (a V source, R, C, L): one row per value; the part keeps its value\n  worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]\n                                        worst case: the smallest and largest value of one result with every part at an end of its tolerance (%)\n  breadboard                            the schematic on a solderless breadboard: the hole of each lead (a1..j30, rails 上+ 上− 下− 下+), the jumpers,\n                                        the supplies off the board, and what the holes join that the schematic does not (problems)\n  battery tran=STOP[:STEP] [from=T] [to=T] [node=NET v_min=V]\n                                        how long the battery parts last: the average current over from..to of a transient run (default its second\n                                        half; take whole periods of an intermittent load), the charge at which node falls under v_min, the hours\n  poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1]\n                                        first power-on of a built board: each supply's current at its printed values, the range a working\n                                        board falls in (tolerances, data sheet min / max, self-heating), the current limit to set; measured= judges a reading\n  mc NET [measure=dc|cutoff|rise|...] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=]\n                                        Monte Carlo: parts drawn at random inside their tolerance; mean, std, the 95 % range a few built\n                                        boards should land in, a histogram, the parts that matter; lo=/hi= give the share inside the limits\n  diagnose NET=V [NET=V ...] [rare] [top=8]\n                                        troubleshooting: which single fault explains voltages measured on a circuit that does\n                                        not work (every fault solved, ranked by fit and how often it happens), and where to measure next\n  psrr NET FSTART FSTOP [supply=V1] [ppd=10]\n                                        supply rejection: a 1 V ripple on one DC supply alone (the first one if not named), the share\n                                        that reaches NET per decade (dB) and the rejection at 100 Hz, 1 kHz ...; the worst frequency\n  nyquist PART FSTART FSTOP [ppd=10] [from=NET] [points=0]\n                                        the loop gain (cut at PART, as 'loopgain') as a Nyquist chart: the crossovers as points of T, the point\n                                        nearest to -1 and its distance |1+T| (0.5 or more is good), the sensitivity peak in dB\n  locus PART FROM TO OUT FSTART FSTOP [in=NET] [n=15] [lin] [ppd=20]\n                                        root locus: PART stepped from FROM to TO, the poles of V(OUT)/V(in) at each value (in Hz), the\n                                        smallest damping, and the first value where a pole reaches the right half plane (oscillation)\n  cmrr NET FSTART FSTOP [plus=V3] [minus=V4] [ppd=10] [tol_r=1] [runs=300]\n                                        common-mode rejection of a difference amplifier: the + and - inputs' sources driven apart (Ad) and\n                                        together (Acm), CMRR = |Ad/Acm| per decade; tol_r= draws the resistors and gives the spread (0 = none)\n  noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]\n                                        thermal / shot noise at net OUT (or the difference OUT,REF): rms over the band,\n                                        density per decade, the biggest contributors; input=V1 also refers it to that source\n  spec KIND TARGET LO HI [at=Hz]        pass / fail of the last dc / tran / ac answer against a range ('-' = no limit).\n                                        'spec' alone lists the kinds (dc_voltage, tran_pp, ac_cutoff, ...)\n                                        TARGET: dc_voltage = net name (MID); dc_current = part (D1, amps: 8m 12m);\n                                        tran_* / ac_* = signal name as the answer shows it (V(OUT)); at= takes 1k, 10k ...\n Board\n  board new [W H]                       empty board (mm), default 60 40\n  board import                          parts and nets from the schematic (creates the board if needed)\n  board pour [net=GND]                  the GND pour of the editor (bottom copper + a via per surface pad); do it BEFORE autoplace: the poured net then drops out of the placement and the parts sit closer\n  board stitch [net=GND] [pitch=5] [mode=grid|fence]   stitching vias where the net is poured on two layers (grid over the overlap, or a fence along the edge); do it AFTER route\n  board fiducials [d=1.0] [open=3.0] [remove=1]   three pick-and-place marks near the corners (only for machine assembly)\n  board nets [sort=length|detour|vias|width|current|open|pads|class] [csv=file]   one row per net: class, length (per layer), detour, vias, widths, current + width it needs, pours, open\n  board dim [outline | add X1,Y1 X2,Y2 [dir=aligned|h|v] [offset=2] | remove N | clear]   dimensions kept on the board (DXF and SVG only)\n  board forbid [rect=x0,y0,x1,y1 | poly=x,y;x,y;x,y] [layers=top] [tracks=0] [vias=0] [pours=0] [parts=0] | remove N | clear   keep-out areas\n  board autoplace\n  board move REF X Y [rot=0..3]        put one part at X Y mm (its origin; wiring is not moved)\n  board route [net=NAME] [lead=MM] [bridge=0]   (neighbouring pads of one part and net, e.g. two LX pins, are strapped into one piece first; bridge=0 leaves that out)\n  board drc\n  board status\n  board currents [tran] [from=F] [widen]  take the net currents (DC point, or with tran the RMS of the settled part of the last tran), show the track width each needs, optionally thicken thin tracks\n  board thermal                         thermal vias in the heat pads that lack them (QFN / ESOP exposed pads): a grid of 0.3 mm vias inside the pad;\n                                        pour the back (board pour) first so that they join copper there\n  board postlayout on|off               dc/tran/ac/noise also see the copper resistance of the board (post-layout simulation)\n  board check [fab=jlcpcb|pcbway|oshpark|standard]\n                                        the pre-order check of the app: ready true/false, and every error / warning / note with the reason\n                                        and the place (also: board no longer matches the schematic, copper drop, price tier of the fab)\n  board picture [layer=top|bottom|inner1] [rect=x0,y0,x1,y1] [px=1600] [net=A,B] [part=R1,U2] [names=1] [marks=1] [others=1] [finish=1] [ghost=A,B] [ghostguard=A:GRDA] [out=FILE.png]\n                                        a PNG of one copper layer to LOOK at (over MCP it comes back as an image): grid with mm numbers, nets in colours, net names, numbered DRC findings and open\n                                        connections, shadows of how the router would wire a net; use rect= to zoom (a small rect gives more pixels per mm)\n  board net NAME                        what the board has of a net: its pads (places), tracks per layer (length, widths), vias, pours, open connections\n  board track add x1,y1 x2,y2 ... [layer=top] [width=0.25] [net=NAME]   lay a track through the points; with net= it is taken back unless it ends on that net (a short or a floating track is refused)\n  board track remove net=NAME [layer=top] [vias=1] | rect=x0,y0,x1,y1 | index=N\n  board via add x,y [net=NAME] [dia=0.6] [drill=0.3] / board via remove x,y [r=0.3]\n  board zones [merge|bake]              the pours as lists of shapes that add and shapes that take away; merge joins overlapping pours of a net, bake turns the shapes into final corners\n  board keepout layer=inner1 [net=NET] rect=x0,y0,x1,y1 | circle=x,y,r | pad=J3E,J3F [margin=1.0]   a hole in the pours of a layer (clear: board keepout clear layer=...)\n  board guard net=A guard=GRDA          guard tracks on both sides of a sense net's top tracks; board copper net=DRN rect=... patches of copper; board nudge moves small parts to open a route; board layers 4; board class ...\n  board save FILE.pcbjson / board open FILE.pcbjson\n  board shopping [boards=N] [spare=0] [file=PATH]  what to buy: per value and footprint the quantity (qty), spares of chip R/C/L/LED (spare, 2 or a tenth; spare=0 off), their sum (buy) and, for each shop (akizuki, digikey, lcsc), the part number if the library part has one, else a search link\n  board assembly [F.svg]  the order of hand soldering (lowest body first) with the orientation marks (pin 1, cathode K, + of an electrolytic); with a file, the printable assembly sheet (the drawing and a list with a box to tick)\n  board fab DIR                         Gerber, drill, BOM, placement and the zip\n	
+# crates/cli/src/board/copper.rs
+layer={}: この基板の内層は {} 枚です (`board layers 4` で 4 層にできます)	layer={}: this board has {} inner layers (`board layers 4` makes it 4 layers)
+ガード {guard} ({net} の両側): {e}	Guard {guard} (both sides of {net}): {e}
+影のうち、ガードのネット (GRD…) は、`board guard` で検出線の両側に置くガード配線の案です (検出線の影のあとに置くので、検出線の影が前提)	Among the shadows, the guard nets (GRD…) are proposals for guard tracks placed by `board guard` on both sides of a sense track (they are placed after the sense track's shadow, so they assume it)
+影 {n}: 経路が見つからない接続があります (ビアを許す `ghostvias=1`、または周りの配置を空けてみてください)	Shadow {n}: some connections have no path found (try allowing vias with `ghostvias=1`, or clearing the placement around them)
+{out} に書けません: {e}	Cannot write to {out}: {e}
+# crates/cli/src/board/place.rs
+部品 {r} は基板にありません	Part {r} is not on the board
+# crates/cli/src/board/silk.rs
+side={o}: top か bottom	side={o}: top or bottom
+rot={o}: 0..3 (90° ずつ) か 0/90/180/270	rot={o}: 0..3 (90° steps) or 0/90/180/270
+hide={o}: 1 か 0	hide={o}: 1 or 0
+# crates/datasheet/src/absmax.rs
+推奨動作範囲	
+熱特性	
+熱に関する情報	
+# crates/datasheet/src/companions.rs
+未満	
+# crates/datasheet/src/figures.rs
+過渡熱	
+相対	
+順	
+放射照度	
+順方向	
+# crates/datasheet/src/graph.rs
+目盛りを 2 つ以上入れてください (離れた 2 つの数字。対数の軸は 10 倍ずつ離れたもの)	Enter 2 or more scale marks (two numbers far apart; for a log axis, ones 10× apart)
+同じ位置に目盛りが 2 つあります。どちらかを消してください	Two scale marks are at the same position. Delete one of them
+対数の軸に 0 以下の値があります。対数の軸か、目盛りの値を確かめてください	A log axis has a value of 0 or less. Check the log axis setting or the scale values
+目盛りの値が、位置の順に増えて (または減って) いません。値の入れ違いを確かめてください	The scale values do not increase (or decrease) in order of position. Check whether values were swapped
+# crates/datasheet/src/headings.rs
+端子配列	
+ピン構成	
+端子構成	
+ピン機能	
+端子機能	
+ピン説明	
+端子説明	
+推奨パッド	
+推奨ランド	
+実装パターン	
+パッド寸法	
+推奨はんだ	
+外形図	
+パッケージ寸法	
+パッケージ外形	
+パッケージ情報	
+機械的データ	
+絶対最大	
+電気特性	
+# crates/datasheet/src/lead_pins.rs
+AO3400A・BSS138・2N7002	AO3400A, BSS138, 2N7002
+NDT3055L・IRF540N	NDT3055L, IRF540N
+2N7000・BS170	2N7000, BS170
+MMBT3904・BC847	MMBT3904, BC847
+TIP120・BCP56・MJD31	TIP120, BCP56, MJD31
+2N3904・PN2222A (BC547 は逆の C B E)	2N3904, PN2222A (BC547 is the reverse, C B E)
+# crates/datasheet/src/lineup.rs
+漏れ	
+直流抵抗	
+# crates/datasheet/src/pin_diagram.rs
+上面図	
+図	
+# crates/datasheet/src/spec_table.rs
+代表値	
+単位	
+記号	
+# crates/datasheet/src/suggest.rs
+演算増幅器	
+降圧	
+# crates/datasheet/src/thermal.rs
+軽減	
+低減	
+減じ	
+# crates/i18n/src/lib.rs
+波かっこ { } の対応がとれていません	The braces { } do not pair up
+{{{p}}} の番号が日本語の置き場所の数 ({}) を超えています	The number of {{{p}}} is larger than the number of Japanese placeholders ({})
+英語の {{{p}}} が日本語にありません	The English {{{p}}} is not in the Japanese
+日本語の {{{p}}} が英語にありません	The Japanese {{{p}}} is not in the English
+# crates/part-lib/src/coil.rs
+インダクタンスが読めていません	The inductance has not been read
+シリーズの表に本体の大きさと推奨のランド (pad_w・pad_l・pad_pitch) がありません	The series table has no body size and recommended land (pad_w, pad_l, pad_pitch)
+{} {} パワーインダクタ ({}) {} µH	{} {} power inductor ({}) {} µH
+ 以下	 or less
+、定格電流 {} A (温度上昇 {} ℃)	, rated current {} A (temperature rise {} ℃)
+、飽和電流 {} A (インダクタンスが {:.0} % 下がる電流)	, saturation current {} A (current at which the inductance drops {:.0} %)
+、自己共振周波数 {} MHz	, self-resonant frequency {} MHz
+。本体 {} × {} × 高さ {} mm、パッドはデータシートの推奨ランド ({} × {} mm、中心の間隔 {} mm)。{}{} で確かめた ({})	. Body {} × {} × height {} mm, pads from the datasheet's recommended land ({} × {} mm, center spacing {} mm). Checked with {}{} ({})
+DCR はデータシートの最大値です。実物はこれより少し小さいことが多いです。	DCR is the datasheet maximum. Real parts are often a little lower.
+インダクタンスの許容差、周波数による損失 (コアの損失) は入れていません。定格電流と飽和電流は、過渡解析のあと「部品の定格」で電流と比べます。	The inductance tolerance and frequency-dependent loss (core loss) are not included. Compare the rated and saturation currents with the current in "Part ratings" after a transient analysis.
+定格電流 (Irms)	Rated current (Irms)
+温度上昇 {} ℃	Temperature rise {} ℃
+飽和電流 (Isat)	Saturation current (Isat)
+インダクタンスが {drop_pct:.0} % 下がる	Inductance drops {drop_pct:.0} %
+使える温度	Operating temperature
+自分の温度上昇を含めて	Including its own temperature rise
+{} {} のデータシート ({}) のインダクタンス・DCR・飽和電流・自己共振周波数	Inductance, DCR, saturation current and self-resonant frequency from the {} {} datasheet ({})
+# crates/part-lib/src/elcap.rs
+データシートの表の値	Datasheet table values
+{} CV か {} µA の大きいほう	The larger of {} CV or {} µA
+定格電圧で {} 分後・20 ℃	After {} min at the rated voltage, 20 ℃
+定格電圧・20 ℃ (データシートの表の条件)	Rated voltage, 20 ℃ (the datasheet table conditions)
+容量・定格電圧・大きさが読めていません	The capacitance, rated voltage or size has not been read
+φ{} mm のリードの間隔と径が、シリーズの表 (leads) にありません	The series table (leads) has no lead spacing and diameter for φ{} mm
+寿命の決まり (life) に合う行がありません	No row matches the life rule (life)
+インピーダンス {} Ω が容量のリアクタンス {} Ω より小さく、ESR が出せません (列の読み違い?)	The impedance {} Ω is smaller than the capacitive reactance {} Ω, so the ESR cannot be found (a misread column?)
+、{} ℃では {} Ω 以下	, at {} ℃: {} Ω or less
+({} ℃では {} Ω 以下、約 {:.1} 倍、データシートの表)	(at {} ℃: {} Ω or less, about {:.1}×, datasheet table)
+(低い温度での値はデータシートの表を見てください)	(see the datasheet table for values at low temperature)
+ESR は、データシートの {zf}・20 ℃のインピーダンス {} Ω から容量のリアクタンス ({} mΩ) を除いた値 ({} mΩ) を、全部の周波数で一定にしています。実物は低い周波数と低い温度で大きくなります {cold_limit}。	The ESR is the datasheet impedance {} Ω at {zf}, 20 ℃ minus the capacitive reactance ({} mΩ), giving {} mΩ, held constant at all frequencies. Real parts have more at low frequencies and low temperatures {cold_limit}.
+{} Ω 以下	{} Ω or less
+{zf}・20 ℃	{zf}, 20 ℃
+インピーダンス (低温)	Impedance (low temperature)
+{zf}・{} ℃	{zf}, {} ℃
+インピーダンス {} Ω 以下 ({zf}・20 ℃{cold_text})	Impedance {} Ω or less ({zf}, 20 ℃{cold_text})
+ESR は、データシートの 120 Hz・20 ℃の tanδ の最大 {} から ESR = tanδ ÷ (2π × 120 Hz × C) で求めた値 ({} mΩ) を、全部の周波数で一定にしています。最大値なので実物はこれより小さいことが多く、とくに高い周波数 (数 kHz より上) では実物の ESR はもっと小さくなります。低い温度では大きくなります。	The ESR is found from the datasheet's maximum tanδ {} at 120 Hz, 20 ℃ with ESR = tanδ ÷ (2π × 120 Hz × C), giving {} mΩ, held constant at all frequencies. It is a maximum, so real parts are often lower, and at high frequencies (above a few kHz) the real ESR is much lower. It gets larger at low temperatures.
+120 Hz・20 ℃	120 Hz, 20 ℃
+tanδ {} 以下 (120 Hz・20 ℃)	tanδ {} or less (120 Hz, 20 ℃)
+インピーダンスの列も tanδ の列もありません	There is neither an impedance column nor a tanδ column
+、120 Hz では ×{k:.2}	, ×{k:.2} at 120 Hz
+{maker} {series} アルミ電解コンデンサ {cap} µF ±{tol} % {v} V ({tmax} ℃・{hours} 時間、{feature})。本体 φ{d} × {l} mm、リード φ{lead} mm・間隔 {pitch} mm。{basis}、許容リップル電流 {ripple_ma} mA rms ({rf}・{rt} ℃{k120_text})。極性があります: 1 番ピン (四角いパッド) が +。逆につなぐと壊れます。穴径 {drill:.1} mm・パッド径 {pad:.1} mm はリード径からの目安 (部品作成フォームのリード部品と同じ考え方。メーカーの推奨ランドではない)。{order}{source} で確かめた ({checked})	{maker} {series} aluminum electrolytic capacitor {cap} µF ±{tol} % {v} V ({tmax} ℃, {hours} hours, {feature}). Body φ{d} × {l} mm, leads φ{lead} mm, spacing {pitch} mm. {basis}, allowed ripple current {ripple_ma} mA rms ({rf}, {rt} ℃{k120_text}). Polarized: pin 1 (square pad) is +. It breaks if connected backwards. Hole diameter {drill:.1} mm and pad diameter {pad:.1} mm are a guide from the lead diameter (the same idea as for leaded parts in the Create part form; not the maker's recommended land). {order}Checked with {source} ({checked})
+許容リップル電流	Allowed ripple current
+{rf}・{} ℃	{rf}, {} ℃
+{} 時間	{} hours
+{tmax} ℃・定格電圧とリップル電流をかけて	{tmax} ℃ with rated voltage and ripple current applied
+{} µA 以下 ({leak_text})	{} µA or less ({leak_text})
+ESL (リードと巻き取りのインダクタンス) はデータシートに無いので入れていません。数百 kHz より上では実物と違います。	ESL (inductance of the leads and winding) is not in the datasheet, so it is not included. Above a few hundred kHz it differs from the real part.
+容量の許容差 (±{} %)、温度による容量の変化、漏れ電流 ({leak_text}) は入れていません。	The capacitance tolerance (±{} %), the change of capacitance with temperature and the leakage current ({leak_text}) are not included.
+逆電圧と定格を超える電圧は、シミュレーションでは止まりません。極性と定格電圧を守ってください。過渡解析のあと、波形の「部品の定格 (リップル電流・寿命)」で、リップル電流と推定寿命を確かめられます。	Reverse voltage and voltage above the rating do not stop the simulation. Observe the polarity and rated voltage. After a transient analysis, check the ripple current and estimated life with "Part ratings (ripple current, life)" in the waveforms.
+{} {} series の{}の容量と{from}	Capacitance of the {@3} of the {@1} {@2} series and {from}
+# crates/part-lib/src/ltspice.rs
+{what} ({count} 個) は読みません (バスの扱いは、このソフトにありません)。	{what} ({count}) are not read (this app has no handling for buses).
+# crates/part-lib/src/ltspice_import.rs
+型番「{v}」はライブラリにないので、代わりに {stand_in} にしました (特性は型番と違います)	Part number "{v}" is not in the library, so {stand_in} was used instead (its characteristics differ from the part number)
+KiCad から取り込み	Imported from KiCad
+{refdes}: LTspice の設定 {} は、このソフトにない項目なので入れていません。	{refdes}: the LTspice setting {} is not an item this app has, so it was not included.
+{refdes}: 電源の内部抵抗 (Rser) は入れていません。要るなら、抵抗を直列に足してください。	{refdes}: the supply's internal resistance (Rser) was not included. If you need it, add a resistor in series.
+型番「{v}」はライブラリにないので、標準の値の部品にしました (特性は型番と違います)	Part number "{v}" is not in the library, so a part with the standard value was used (its characteristics differ from the part number)
+「{}」はこのソフトのライブラリにない部品です。記号だけ作りました (シミュレーションのモデルはありません)	"{}" is not a part in this app's library. Only a symbol was made (there is no simulation model)
+{refdes}: ピン {} は対応するピンがなく、つなぎませんでした。	{refdes}: pin {} has no matching pin and was not connected.
+ばらつき (mc) は公称値で取り込みました。「温度とばらつき」で調べられます	Tolerances (mc) were imported at nominal values. You can check them with "Temperature and variation"
+# crates/part-lib/src/series.rs
+{} {} {} {} ±{}%。{} W ({} ℃まで。それより高い周囲温度では直線で下げ、{} ℃で 0)、この値で使える電圧 {} V (√(電力×抵抗値) と素子の最高電圧 {} V の小さいほう)、温度係数 {} ppm/K、使える温度 {}〜{} ℃。{}{}。{}	{} {} {} {} ±{}%. {} W (up to {} ℃; above that ambient it is derated linearly to 0 at {} ℃), usable voltage at this value {} V (the smaller of √(power × resistance) and the element's maximum voltage {} V), temperature coefficient {} ppm/K, operating temperature {} to {} ℃. {}{}. {}
+抵抗値はデータシートの公称値です。1 個ずつの違い (±{} %) は、「温度とばらつき」のばらつき解析と最悪ケースで動きます。	The resistance is the datasheet nominal value. Part-to-part differences (±{} %) move in the variation analysis and worst case of "Temperature and variation".
+温度係数は「{} ppm/K」という保証の範囲で、向きと大きさは 1 個ずつ違うので、モデルでは 0 (温度で値が変わらない) にしています。自己発熱の解析で効かせるときは、部品の設定で温度係数を入れてください。	The temperature coefficient is a guaranteed range of "{} ppm/K"; its sign and size differ from part to part, so the model uses 0 (the value does not change with temperature). To include it in the self-heating analysis, enter a temperature coefficient in the part settings.
+寄生のインダクタンスと容量はデータシートに無いので入れていません。高い周波数 (数百 MHz 以上) では実物と違います。	Parasitic inductance and capacitance are not in the datasheet, so they are not included. At high frequencies (several hundred MHz or more) it differs from the real part.
+定格の判定は {} W のままです。周囲温度が {} ℃を超えるときは、データシートの曲線のとおり下げて考えてください。	The rating check stays at {} W. When the ambient temperature exceeds {} ℃, derate as in the datasheet curve.
+定格電力	Rated power
+{} ℃まで。{} ℃で 0 W へ直線で下げる	Up to {} ℃. Derated linearly to 0 W at {} ℃
+素子の最高電圧	Element maximum voltage
+定格電圧は √(電力×抵抗値) とこの値の小さいほう	The rated voltage is the smaller of √(power × resistance) and this value
+最大の過負荷電圧	Maximum overload voltage
+定格電圧 × 2.5 を 5 秒の試験	Test at rated voltage × 2.5 for 5 seconds
+{} {} のデータシートの公称値と許容差 ({})	Nominal values and tolerances from the {} {} datasheet ({})
+{} の {}〜{}	{@2} to {@3} of {@1}
+# crates/part-lib/src/variants.rs
+{} の {}	{@2} of {@1}
+# crates/part-lib/src/fit/bjt.rs
+Early 電圧の元がありません。hoe (min と max、1 mA) か、vaf (値と、その理由) を書いてください	There is no source for the Early voltage. Write hoe (min and max, 1 mA) or vaf (the value and its reason)
+点が足りません。hFE の曲線は 3 点以上、VBE・VBE(sat)・VCE(sat) は 2 点以上読んでください	Not enough points. Read 3 or more on the hFE curve and 2 or more each for VBE, VBE(sat) and VCE(sat)
+容量の点が足りません。Cibo と Cobo を、逆電圧を変えて 2 点以上ずつ読んでください (データシートに無ければ、両方とも空に)	Not enough capacitance points. Read 2 or more each of Cibo and Cobo at different reverse voltages (if the datasheet has none, leave both empty)
+当てはめが収まりませんでした。点の読み (電流の単位 A、電圧 V) を確かめてください	The fit did not converge. Check the point readings (current in A, voltage in V)
+fT の typ {} MHz から TF を決めました	TF set from the fT typ {} MHz
+fT の min {} MHz から TF を決めました (実物は、ふつうこれより速い)	TF set from the fT min {} MHz (real parts are usually faster)
+データシートに fT が無いので、蓄積の時間 TF は入れていません (速いスイッチングや高い周波数では、実物より速く出ます)	The datasheet has no fT, so the storage time TF is not included (fast switching and high frequencies come out faster than the real part)
+Early 電圧 VAF {} V は、hoe ({}〜{} µmho、1 mA) の中ほどから。	The Early voltage VAF {} V is from the middle of hoe ({} to {} µmho, 1 mA).
+Early 電圧 VAF {} V は、{why}。	The Early voltage VAF {} V is {why}.
+データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。	An equivalent model made from the datasheet tables and typical characteristics (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/transistors.md.
+直流: {} (hFE の電流による変化{})・{} (VBE、VBE(sat)、VCE(sat)) に、IS・BF{}・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。{}	DC: IS, BF{@4}, ISE, NE, IKF, BR, RB, RE and RC were fitted to {@1} (hFE change with current{@2}) and {@3} (VBE, VBE(sat), VCE(sat)). {@5}
+。相対値	. Relative values
+・NF (VBE の傾き)	, NF (VBE slope)
+容量: データシートに容量の値もグラフも無いので、入れていません (速いスイッチングや高い周波数では、実物より速く出ます)。速さ: {speed}。{early}	Capacitance: the datasheet has no capacitance values or graphs, so none is included (fast switching and high frequencies come out faster than the real part). Speed: {speed}. {early}
+容量: {} の Cibo・Cobo に CJE・CJC を当てはめました。速さ: {speed}。{early}	Capacitance: CJE and CJC were fitted to Cibo and Cobo of {}. Speed: {speed}. {early}
+扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。	Not covered: storage time (reverse storage TR is not included; how fast it comes out of saturation differs from the real part), 1/f noise, the change of parameters with temperature (the simulator's standard formulas), and it does not break above its voltage, current or power ratings.
+hFE が {} で {:+.0}% ずれています。Gummel-Poon の形では、hFE の曲線の両端を同時に合わせきれないことがあります	hFE at {} is off by {:+.0}%. The Gummel-Poon form cannot always fit both ends of the hFE curve at once
+小さい電流の飽和電圧は、この形では逆方向の電流増幅率 BR で決まり、hFE や大きい電流の点と同時には合わせきれません (シミュレーションでは実物より低く出ます)	Saturation voltage at low current is set in this form by the reverse current gain BR and cannot be fitted together with hFE and the high-current points (the simulation comes out lower than the real part)
+この形の式では、この電流の電圧まで合わせきれません	The formulas of this form cannot fit the voltage up to this current
+{} が {} で {:+.0} mV ずれています。{why}	{} at {} is off by {:+.0} mV. {why}
+# crates/part-lib/src/fit/comparator.rs
+最大の吸い込み電流 {}	Maximum sink current {}
+最大の吸い込み電流 {} ({})	Maximum sink current {} ({})
+データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/comparators.md。	An equivalent model made from the datasheet typ values (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/comparators.md.
+再現しているもの: 応答時間 ({} のオーバードライブで {}、大きい入力で {}。出力を {} で {} に引き上げ、{} を越えるまで)、入力オフセット {}、入力バイアス電流 {}、利得 {} V/mV、出力の Low 電圧 {} ({} のとき)、{isink}、電源電流 {}/回路。部品ごとの違い (オフセット ±{}、電源電流 〜{}) は、ばらつき・最悪ケースの解析でだけ入ります。	What it reproduces: response time (with {} overdrive {}, with a large input {}; output pulled up through {} to {}, until it crosses {}), input offset {}, input bias current {}, gain {} V/mV, output Low voltage {} (at {}), {isink}, supply current {}/circuit. Part-to-part differences (offset ±{}, supply current up to {}) appear only in variation and worst-case analyses.
+出力はオープンコレクタです。High にするにはプルアップ抵抗が要ります (IN− が IN+ より高いとき Low)。入力の同相範囲は 0 V〜(電源 − {} V) で、超えたときの動きは扱いません。ヒステリシスはありません (要るなら外の抵抗で正帰還をかけます)。温度による変化、電源電圧による応答時間の変化、チャネル 2 以降も扱いません。	The output is open collector. It needs a pull-up resistor to go High (Low when IN− is higher than IN+). The input common-mode range is 0 V to (supply − {} V); behavior beyond it is not covered. There is no hysteresis (add positive feedback with external resistors if needed). The change with temperature, the change of response time with supply voltage, and channel 2 and later are not covered either.
+電源ピンをつながないと、電源電流が流れないだけで、比べる動きは変わりません。	If the supply pins are not connected, only the supply current does not flow; the comparing behavior does not change.
+応答時間	Response time
+{} のオーバードライブ	{} overdrive
+大きい入力 (TTL)	Large input (TTL)
+{}応答時間 {} ({} のオーバードライブ)・{} (大きい入力)、電源電流 {}/回路。データシートから作った等価モデル	{}Response time {} ({} overdrive), {} (large input), supply current {}/circuit. Equivalent model made from the datasheet
+大きい入力の応答時間	Response time with a large input
+利得	Gain
+VOL の電流	VOL current
+吸い込み電流	Sink current
+プルアップ抵抗	Pull-up resistor
+{what}は 0 より大きい数にしてください (データシートの typ)	{what} must be a number greater than 0 (the datasheet typ)
+VOL を測る電流は、最大の吸い込み電流より小さくしてください	The current at which VOL is measured must be smaller than the maximum sink current
+大きい入力の応答時間は、小さいオーバードライブの応答時間より短いはずです	The response time with a large input should be shorter than with a small overdrive
+出力を測る電圧は、プルアップの電圧より低くしてください	The voltage at which the output is measured must be lower than the pull-up voltage
+max が typ より小さくなっています。データシートの max を確かめてください	max is smaller than typ. Check the max in the datasheet
+小さいオーバードライブの応答が、大きい入力より遅くなりません。応答時間を確かめてください	The response with a small overdrive is not slower than with a large input. Check the response times
+# crates/part-lib/src/fit/darlington.rs
+点が足りません。hFE は 3 点以上、VBE・VBE(sat)・VCE(sat) は 2 点以上読んでください	Not enough points. Read 3 or more for hFE and 2 or more each for VBE, VBE(sat) and VCE(sat)
+内蔵の抵抗 r1・r2 (Ω) と、大きさの比 area (1 以上) を入れてください	Enter the built-in resistors r1, r2 (Ω) and the size ratio area (1 or more)
+当てはめが収まりませんでした。点の読み (電流 A、電圧 V) を確かめてください	The fit did not converge. Check the point readings (current in A, voltage in V)
+データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。	An equivalent model made from the datasheet's typical characteristics (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/transistors.md.
+ダーリントン接続 (駆動の Q1、出力の Q2、内蔵の抵抗 R1 = {}Ω・R2 = {}Ω。データシートの図の値) を 1 つの回路として解き、{} (2 個合わせた hFE)・{} (VBE、VBE(sat)、VCE(sat)) に、出力の Q2 の IS・BF・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。駆動の Q1 は同じ作りで {} 分の 1 の大きさと仮定しました (データシートに無い)。	The Darlington connection (driver Q1, output Q2, built-in resistors R1 = {}Ω and R2 = {}Ω from the datasheet drawing) was solved as one circuit, and the output Q2's IS, BF, ISE, NE, IKF, BR, RB, RE and RC were fitted to {} (combined hFE) and {} (VBE, VBE(sat), VCE(sat)). The driver Q1 is assumed to be the same design at 1/{} the size (not in the datasheet).
+容量: {}。速さ: {}。Early 電圧 VAF {} V は、{}。コレクタとエミッタの間のダイオード: {}。	Capacitance: {}. Speed: {}. The Early voltage VAF {} V is {}. Collector-emitter diode: {}.
+データシートに無いので入れていません	Not in the datasheet, so not included
+{} の Cib・Cob に CJE・CJC を当てはめました (Q1 は大きさの比で小さく)	CJE and CJC were fitted to Cib and Cob of {} (Q1 smaller by the size ratio)
+データシートに無いので TF は入れていません	Not in the datasheet, so TF is not included
+fT {} MHz ({why}) から TF を決めました	TF set from fT {} MHz ({why})
+扱わないもの: 蓄積時間 (TR)、温度によるパラメータの変化はシミュレータの標準の式、二次降伏、耐圧・定格電流・許容損失を超えても壊れません。	Not covered: storage time (TR), the change of parameters with temperature (the simulator's standard formulas), secondary breakdown, and it does not break above its voltage, current or power ratings.
+2 個を同じ作りと仮定したダーリントンの形では、ここまでは合わせきれません	The Darlington form, which assumes both transistors are the same design, cannot fit this far
+{} が {} で {:+.0}% ずれています。{why}	{} at {} is off by {:+.0}%. {why}
+# crates/part-lib/src/fit/diode.rs
+順方向の点が足りません。電流の小・中・大で 3 点以上読んでください (IS・N・RS の 3 つを決めるため)	Not enough forward points. Read 3 or more at low, medium and high current (to set the 3 values IS, N and RS)
+順方向の点は、電流 (A) と電圧 (V) を 0 より大きい数で書いてください	Write the forward points as current (A) and voltage (V), both numbers greater than 0
+順方向の点から計算できませんでした。電流の離れた点を読んでください	Could not calculate from the forward points. Read points with currents far apart
+電流を増やしても電圧が増えていません。順方向の点の読みを確かめてください	The voltage does not rise as the current increases. Check the readings of the forward points
+大きい電流で電圧の上がりが小さすぎて、直列抵抗 RS が負になりました。大きい電流の点の読みを確かめてください	The voltage rise at high current is too small, so the series resistance RS came out negative. Check the readings of the high-current points
+ツェナーの動抵抗の点を 2 つ以上、電流 (A) と抵抗 (Ω) を 0 より大きい数で書いてください	Write 2 or more Zener dynamic resistance points as current (A) and resistance (Ω), both numbers greater than 0
+動抵抗の読みから降伏の傾き NBV が求まりませんでした (順方向の直列抵抗 RS が動抵抗より大きい)。読みを確かめてください	The breakdown slope NBV could not be found from the dynamic resistance readings (the forward series resistance RS is larger than the dynamic resistance). Check the readings
+Zz が {} で {:+.0}% ずれています。降伏の傾きが 1 つ (NBV) の形では、小さい電流の柔らかい膝と大きい電流の急な立ち上がりを同時には合わせきれないので、電流を増やしたときの電圧の上がり (ΔVZ) に合わせました	Zz at {} is off by {:+.0}%. A form with one breakdown slope (NBV) cannot fit both the soft knee at low current and the steep rise at high current, so it was fitted to the voltage rise as the current increases (ΔVZ)
+N が {n:.2} になりました。ふつうのダイオードは 1〜2 ほどです。順方向の点の読みを確かめてください	N came out at {n:.2}. Ordinary diodes are about 1 to 2. Check the readings of the forward points
+データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/diodes.md。	An equivalent model made from the datasheet's typical characteristics (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/diodes.md.
+順方向: {} を読んだ {} 点に、IS・N・RS を当てはめました (部品作成フォームのダイオードと同じ計算)。	Forward: IS, N and RS were fitted to the points read from {} ({} points) (the same calculation as for diodes in the Create part form).
+接合容量: {}。	Junction capacitance: {}.
+接合容量: {}。逆電圧で小さくなります。	Junction capacitance: {}. It gets smaller with reverse voltage.
+降伏: {}。	Breakdown: {}.
+ツェナー電圧: 表の公称 {} V ({}) に合わせ、{} の動抵抗から出した電流による電圧の上がり{}に、降伏の傾き NBV を合わせました (動抵抗は NBV·VT / I + RS)。個体差 (表の min〜max) は入っていません。	Zener voltage: fitted to the table's nominal {} V ({}), and the breakdown slope NBV was fitted to the voltage rise with current derived from the dynamic resistance at {}{} (the dynamic resistance is NBV·VT / I + RS). Part-to-part spread (table min to max) is not included.
+と、{} の膝の点	 and the knee point at {}
+ツェナー電圧の温度係数: {}。シミュレーションのツェナー電圧は温度で変わりません。	Temperature coefficient of the Zener voltage: {}. The simulated Zener voltage does not change with temperature.
+同じ図の {} °C の曲線	the {} °C curve in the same graph
+温度: {from}に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 {lo:.1}〜{hi:.1} mV 下がります。	Temperature: the band gap EG was fitted to {from} (XTI = 2). The forward voltage falls about {lo:.1} to {hi:.1} mV per 1 °C.
+逆回復: {} から、蓄積時間 TT を決めました (max の値なので、実物はふつう、これより速く戻ります)。	Reverse recovery: the storage time TT was set from {} (a max value, so real parts usually recover faster than this).
+逆回復時間は扱いません (データシートに trr が無い。標準の整流用で、数 µs ほど逆向きに流れます。逆回復のレッスンのサンプルは、自分で TT を足しています)。	Reverse recovery time is not covered (the datasheet has no trr. A standard rectifier conducts backwards for a few µs. The reverse recovery lesson's sample adds TT itself).
+扱わないもの: 	Not covered: 
+扱わないもの: 温度による順方向電圧の変化はシミュレータの標準の式 (1 °C あたり約 −2 mV)、	Not covered: the change of forward voltage with temperature (the simulator's standard formula, about −2 mV per 1 °C), 
+降伏の手前の漏れ電流 (降伏の式の裾。データシートの代表値と桁で違うことがあります)、	leakage current before breakdown (the tail of the breakdown formula; it can differ by orders of magnitude from the datasheet's typical values), 
+逆方向の漏れ電流 (IS の {}A。順方向の曲線に合わせた N が大きいので、表の逆電流の max {}A より大きく出ます)、	reverse leakage current ({}A from IS; since the N fitted to the forward curve is large, it comes out larger than the table's maximum reverse current {}A), 
+逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、	reverse leakage current (only the IS part; real parts increase with voltage and temperature), 
+自己発熱。耐圧や定格電流を超えても壊れません。	self-heating. It does not break above its voltage or current ratings.
+IS が {}A になり、表の逆電流の max {}A より大きくなりました。逆向きの漏れ電流が実物より大きく出ます (注記に書きます)	IS came out at {}A, larger than the table's maximum reverse current {}A. The reverse leakage comes out larger than the real part (noted in the notes)
+ΔVZ (ツェナー電圧の上がり) が {} で {:+.0} mV ずれています。降伏の傾きが 1 つ (NBV) の形では合わせきれません (交流で測った動抵抗を積分した値は、直流の膝の点と食い違うことがあり、両方の間を取りました)	ΔVZ (Zener voltage rise) at {} is off by {:+.0} mV. A form with one breakdown slope (NBV) cannot fit it (the integral of a dynamic resistance measured with AC can disagree with the DC knee point, so it takes the middle of both)
+VZ が {} で {:+.0} mV ずれています。膝の直流の点と、動抵抗から出した電圧の上がりの間を取りました	VZ at {} is off by {:+.0} mV. It takes the middle between the DC knee point and the voltage rise derived from the dynamic resistance
+この形では直列抵抗 RS が温度で変わらないので、高い温度の大きい電流では合わせきれません	In this form the series resistance RS does not change with temperature, so it cannot fit high currents at high temperature
+IS・N・RS の 3 つの形では、この電流まで合わせきれません	A form with the 3 values IS, N and RS cannot fit up to this current
+# crates/part-lib/src/fit/edit.rs
+{}: {e} (先に部品を作ってから、モデルを書き込みます)	{}: {e} (make the part first, then write the model)
+書き換えた部品が読めません ({e})	Cannot read the rewritten part ({e})
+部品のファイルが読めません ({e})	Cannot read the part file ({e})
+部品のファイルに "{key}" がありません	The part file has no "{key}"
+書き換える場所がありません	There is no place to rewrite
+部品のファイルの JSON が読めません ({i} 文字目のあたり)	Cannot read the JSON of the part file (around character {i})
+# crates/part-lib/src/fit/mod.rs
+{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / comparator / regulator / shunt / ntc / crystal / tvs。形は crates/part-lib/fits/ の例を見てください)	{}: {e} (kind is diode / bjt / mos / darlington / photodiode / optocoupler / opamp / comparator / regulator / shunt / ntc / crystal / tvs. See the examples in crates/part-lib/fits/ for the format)
+最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。	Do the final check with the maker's official model (if published, it can be read with "Import part").
+# crates/part-lib/src/fit/mos.rs
+ボディダイオードの点は 3 点以上読んでください (電流の小・中・大)	Read 3 or more body diode points (low, medium and high current)
+ボディダイオードの点から計算できませんでした	Could not calculate from the body diode points
+ボディダイオードの点で、電流を増やしても電圧が増えていません。読みを確かめてください	In the body diode points, the voltage does not rise as the current increases. Check the readings
+IS = {} (ボディダイオード)	IS = {} (body diode)
+ボディダイオードの N が {n:.2} になりました。点の読みを確かめてください	The body diode's N came out at {n:.2}. Check the point readings
+ボディダイオード (ソースからドレインへの逆向きのダイオード)、	the body diode (the reverse diode from source to drain), 
+ボディダイオード: {} の {} 点に IS・N・RS を当てはめました (逆回復は扱いません)。	Body diode: IS, N and RS were fitted to {} ({} points) (reverse recovery is not covered).
+オン抵抗の温度変化 (rds_temp) は、温度と 25 °C に対する比 (正の数) の点、ゲート電圧と電流 (大きさ) で書いてください	Write the on-resistance temperature change (rds_temp) as points of temperature and ratio to 25 °C (positive numbers), with the gate voltage and current (magnitudes)
+直列抵抗 RD・RS が 0 なので、温度係数を付けられません (オン抵抗を 2 点以上入れてください)	The series resistances RD and RS are 0, so no temperature coefficient can be added (enter 2 or more on-resistance points)
+RDS(on) の温度	RDS(on) temperature
+Tj = {} °C、VGS = {} V、ID = {} (25 °C との比)	Tj = {} °C, VGS = {} V, ID = {} (ratio to 25 °C)
+オン抵抗の温度変化が {} で {:+.0}% ずれています。点の読みを確かめてください	The on-resistance temperature change at {} is off by {:+.0}%. Check the point readings
+温度によるオン抵抗の増加、	the rise of on-resistance with temperature, 
+温度: {} の {} 点に、直列抵抗 RD・RS の温度係数 (TC1 = {}/°C、TC2 = {}/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。	Temperature: the temperature coefficients of the series resistances RD and RS (TC1 = {@3}/°C, TC2 = {@4}/°C²) were fitted to {@1} ({@2} points) (the channel mobility KP ∝ T^-1.5 and the threshold's −2 mV/°C are set by the simulator from the temperature).
+しきい値 VGS(th) の typ (vth) か、伝達特性の点 (transfer) を入れてください	Enter the threshold VGS(th) typ (vth) or transfer characteristic points (transfer)
+オン抵抗 RDS(on) を 1 点以上 (できればゲート電圧を変えて 2〜3 点) 入れてください	Enter 1 or more on-resistance RDS(on) points (2 to 3 at different gate voltages if possible)
+しきい値・オン抵抗は大きさ (正の数) で書き、オン抵抗のゲート電圧はしきい値より大きくしてください (P チャネルは pch: true)	Write the threshold and on-resistance as magnitudes (positive numbers), and make the on-resistance gate voltage larger than the threshold (P-channel is pch: true)
+データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。	An equivalent model made from the datasheet typ values (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/transistors.md.
+レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) ({} 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。	A series resistance RD was added to level 1 (square law), fitted to the threshold VGS(th) and the on-resistance RDS(on) at each gate voltage ({} points). The gate capacitance is constant from the typ Ciss and Crss (CGS = Ciss − Crss, CGD = Crss).
+扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、温度によるオン抵抗の増加、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。	Not covered: the body diode (the reverse diode from source to drain), the drain-source part of the output capacitance Coss, the change of capacitance with voltage, channel length modulation (LAMBDA; the current in saturation does not depend on VDS), the rise of on-resistance with temperature, and destruction above the voltage or current ratings. In the high-current saturation region, the square law gives more current than the real part.
+gFS が表と {:+.0}% 違います。オン抵抗に合わせた 2乗則では、伝達コンダクタンスまでは合わないことがあります (比べるだけ)	gFS differs from the table by {:+.0}%. A square law fitted to the on-resistance may not match the transconductance too (shown for comparison only)
+RDS(on) が {} で {:+.1}% ずれています。レベル1 + RD の形では、ゲート電圧ごとの差を全部は追えません	RDS(on) at {} is off by {:+.1}%. The level 1 + RD form cannot follow all the differences between gate voltages
+伝達特性の点を 3 点以上と、オン抵抗 RDS(on) を 1 点以上入れてください	Enter 3 or more transfer characteristic points and 1 or more on-resistance RDS(on) points
+伝達特性とオン抵抗は大きさ (正の数) で書いてください (P チャネルは pch: true)	Write the transfer characteristic and on-resistance as magnitudes (positive numbers) (P-channel is pch: true)
+データシートの代表特性と typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/transistors.md。	An equivalent model made from the datasheet's typical characteristics and typ values (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/transistors.md.
+レベル1 (2乗則) にドレインとソースの直列抵抗 RD・RS を足し、{} ({} 点) とオン抵抗 RDS(on) ({} 点) に合わせました (データシートに VGS(th) の typ が無いので、しきい値も伝達特性から決めました)。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。	Drain and source series resistances RD and RS were added to level 1 (square law), fitted to {} ({} points) and the on-resistance RDS(on) ({} points) (the datasheet has no VGS(th) typ, so the threshold was also set from the transfer characteristic). The gate capacitance is constant from the typ Ciss and Crss (CGS = Ciss − Crss, CGD = Crss).
+扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、温度によるオン抵抗の増加、耐圧・定格電流を超えたときの破壊。しきい値のすぐ上の小さい電流は、2乗則なので実物と違います。	Not covered: the body diode (the reverse diode from source to drain), the drain-source part of the output capacitance Coss, the change of capacitance with voltage, channel length modulation (LAMBDA; the current in saturation does not depend on VDS), the rise of on-resistance with temperature, and destruction above the voltage or current ratings. Small currents just above the threshold differ from the real part because of the square law.
+ID = {} (VDS = VGS。表は min {}〜max {} V)	ID = {} (VDS = VGS; table min {} to max {} V)
+{} が {} で {:+.0}% ずれています。レベル1 + RD・RS の形では、伝達特性の全体とオン抵抗を同時には追えません	{} at {} is off by {:+.0}%. The level 1 + RD, RS form cannot follow the whole transfer characteristic and the on-resistance at once
+しきい値が表の範囲 ({}〜{} V) の外の {:.2} V になりました。伝達特性の小さい電流の点を足すと近づきます	The threshold, outside the table range ({} to {} V), came out at {:.2} V. Adding transfer characteristic points at low current brings it closer
+# crates/part-lib/src/fit/opamp.rs
+開ループ利得 {:.0} dB、GBW {}	Open-loop gain {:.0} dB, GBW {}
+(位相余裕 {}°)	 (phase margin {}°)
+、スルーレート {} V/µs、電源電流 {}/回路	, slew rate {} V/µs, supply current {}/circuit
+オフセット ±{}	Offset ±{}
+、バイアス電流 {}〜{} (入力ごと)	, bias current {} to {} (per input)
+、電源電流 {}〜{}	, supply current {} to {}
+。データシートの max、min が無いものは typ から	. Datasheet max; where there is no min, from the typ
+。データシートの min〜max	. Datasheet min to max
+入力オフセット {}	Input offset {}
+入力オフセット 0 (データシートに typ が無い)	Input offset 0 (the datasheet has no typ)
+データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/opamps.md。	An equivalent model made from the datasheet typ values (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/opamps.md.
+再現しているもの: {}、{vos}、入力バイアス電流 {}、出力の振れ幅 (電源から {} / {})、出力の短絡電流 {}、1 kHz の入力換算雑音 {}/√Hz。部品ごとの違い ({}) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。	What it reproduces: {}, {vos}, input bias current {}, output swing ({} / {} from the supplies), output short-circuit current {}, input-referred noise at 1 kHz {}/√Hz. Part-to-part differences ({}) appear only in variation and worst-case analyses (normal analyses use typ).
+扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、{}チャネル2。	Not covered: the allowed input voltage range (behavior beyond it), CMRR and PSRR, 1/f noise (the same noise at low frequencies as at 1 kHz), the change with temperature, the change of GBW with supply voltage, {}channel 2.
+バイアス電流のばらつき (データシートに max が無いので typ の値で固定)、	the spread of bias current (fixed at the typ value since the datasheet has no max), 
+電源ピンをつながないと、出力は 0V に張り付きます。	If the supply pins are not connected, the output sticks at 0V.
+{}{}。データシートから作った等価モデル	{}{}. Equivalent model made from the datasheet
+開ループ利得は dB で入れてください (多くは 80〜140 dB。V/mV の表なら 20·log10(値 × 1000))	Enter the open-loop gain in dB (usually 80 to 140 dB; for a V/mV table, 20·log10(value × 1000))
+位相余裕は 1〜89° の間で入れてください (分からなければ空に)	Enter a phase margin between 1 and 89° (leave it empty if unknown)
+出力の振れ幅と雑音は 0 以上にしてください	Output swing and noise must be 0 or more
+# crates/part-lib/src/fit/opto.rs
+感度・開放電圧・N は 0 より大きい数で書いてください	Write the sensitivity, open-circuit voltage and N as numbers greater than 0
+暗電流 {}A が、開放電圧から決めた IS ({}A) より小さいので、並列の抵抗は入れていません	The dark current {}A is smaller than the IS set from the open-circuit voltage ({}A), so no parallel resistance was added
+Ee = 1 mW/cm²、短絡	Ee = 1 mW/cm², short circuit
+Ee = 1 mW/cm²、開放	Ee = 1 mW/cm², open circuit
+VR = {} V、暗い	VR = {} V, dark
+{} が {} で {:+.0}% ずれています。光電流は光の強さに比例し、容量は 1 つの式なので、ここまでは合わせきれません	{} at {} is off by {:+.0}%. The photocurrent is proportional to the light intensity and the capacitance is one formula, so it cannot fit this far
+シミュレーション専用ピン IRRAD (基板には出ません): 電圧源をつなぎ、その電圧で光の強さ [mW/cm²] を与えます (1V = 1mW/cm²)。つながないと 0。光電流は {}A/(mW/cm²) ({})。光の強さに比例し、波長による感度の違いは扱いません。	Simulation-only pin IRRAD (not on the board): connect a voltage source, and its voltage gives the light intensity [mW/cm²] (1V = 1mW/cm²). Unconnected, it is 0. The photocurrent is {}A/(mW/cm²) ({}). It is proportional to the light intensity; the sensitivity's dependence on wavelength is not covered.
+ダイオード: 開放電圧 {} V (1 mW/cm²) から IS を決めました (N = {}: {})。直列抵抗 RS = {} Ω ({})。暗電流 {} nA ({} V) から並列の抵抗 {} GΩ を決めました。	Diode: IS was set from the open-circuit voltage {} V (1 mW/cm²) (N = {}: {}). Series resistance RS = {} Ω ({}). From the dark current {} nA ({} V), a parallel resistance of {} GΩ was set.
+接合容量: {}。逆電圧で小さくなります (0 V で {} pF)。降伏: {}。	Junction capacitance: {}. It gets smaller with reverse voltage ({} pF at 0 V). Breakdown: {}.
+扱わないもの: {}、暗電流の温度による増え方、自己発熱。	Not covered: {}, how the dark current rises with temperature, self-heating.
+使い方: 逆バイアス (カソードを + 側) で電流を読むか、トランスインピーダンスアンプにつなぎます。	How to use: read the current under reverse bias (cathode to the + side), or connect it to a transimpedance amplifier.
+LED の順方向の点を 3 つ以上読んでください	Read 3 or more LED forward points
+LED の点から計算できませんでした	Could not calculate from the LED points
+{} (表の typ)	{} (table typ)
+{} が {} で {:+.1}% ずれています。CTR を電流によらない比 (と Early 効果) とした形では、ここまでは合わせきれません	{} at {} is off by {:+.1}%. A form that takes CTR as a ratio independent of current (plus the Early effect) cannot fit this far
+入力の LED: {} を読んだ {} 点に、IS・N・RS を当てはめました。端子間容量 {}F。	Input LED: IS, N and RS were fitted to the points read from {} ({} points). Terminal capacitance {}F.
+出力: LED の電流の K 倍をトランジスタのベースに流します。{} に K と Early 電圧 VAF ({} V) を合わせ、電流伝達率 CTR は IF = 5mA・VCE = 5V で約 {:.0}% です。内部のトランジスタの hFE は外から見えないので BF = {} と置きました ({})。	Output: K times the LED current flows into the transistor's base. K and the Early voltage VAF ({@2} V) were fitted to {@1}, and the current transfer ratio CTR is about {@3}% at IF = 5mA, VCE = 5V. The internal transistor's hFE cannot be seen from outside, so BF = {@4} was used ({@5}).
+CTR の個体差: {}。実物は表の {:.0}〜{:.0}% のどこかで、このモデルは 1 つの値です。{}	CTR part-to-part spread: {}. A real part is anywhere from {:.0} to {:.0}% in the table; this model is one value. {}
+{} の CTR は別の個体 (高いランク) の曲線で、比べるだけにしました。	The CTR of {} is a curve of another part (a higher rank), so it is only compared.
+飽和: 表の VCE(sat) {} V に、逆方向の電流増幅率 BR を合わせました。応答: {} の {} kHz から、通過時間 TF を決めました (立ち上がり・立ち下がりは数 µs)。	Saturation: the reverse current gain BR was fitted to the table's VCE(sat) {} V. Response: the transit time TF was set from {} of {} kHz (rise and fall of a few µs).
+扱わないもの: {}。入力と出力の絶縁は、回路図では GND を分けることで表します。	Not covered: {}. Isolation between input and output is shown in the schematic by keeping the GNDs separate.
+# crates/part-lib/src/fit/regulator.rs
+基準 {} V (OUT − ADJ)、ADJ の電流 {} µA	Reference {} V (OUT − ADJ), ADJ current {} µA
+、出力 {} V の設定で	, at an output setting of {} V
+データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/regulators.md。	An equivalent model made from the datasheet typ values (not the maker's model). Source: {}. Comparison with the datasheet: docs/models/regulators.md.
+再現しているもの: {out}、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、{}電流制限 (入出力の差で変わる)、リップル除去 {} dB ({} Hz{at10}。どの周波数でも同じとした)、出力雑音 {} nV/√Hz (平ら)。	What it reproduces: {out}, line regulation, load regulation, dropout, {}current limit (changing with the input-output difference), ripple rejection {} dB ({} Hz{at10}; taken as the same at every frequency), output noise {} nV/√Hz (flat).
+グラウンド電流 {} mA (入力が数 V 以上で)、	ground current {} mA (with the input a few V or more above), 
+データシートの表に無い値: {}。	Values not in the datasheet tables: {}.
+部品ごとの違い (基準電圧 {}〜{} V はデータシートの min と max、ADJ の電流 {}〜{} µA は typ〜max。min は無い) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。	Part-to-part differences (reference voltage {} to {} V from the datasheet min and max, ADJ current {} to {} µA from typ to max; there is no min) appear only in variation and worst-case analyses (normal analyses use typ).
+出力電圧の部品ごとの違い ({}〜{} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。	Part-to-part differences in the output voltage ({} to {} V, datasheet min and max) appear only in variation and worst-case analyses (normal analyses use typ).
+扱わないもの: {}温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む){}。	Not covered: {}the change with temperature and thermal shutdown, the response to sudden changes of load or input, stability with output capacitance, current forced into the output (a real part cannot sink it, but this model sinks it through its output resistance){}.
+出力電圧の誤差 (出力はちょうど公称値)、	output voltage error (the output is exactly the nominal value), 
+、最小負荷電流 ({} mA)	, minimum load current ({} mA)
+最終の確認は、メーカーの公式モデルで行ってください。	Do the final check with the maker's official model.
+出力抵抗 (ロード・レギュレーション)	Output resistance (load regulation)
+{what}は 0 より大きい数にしてください	{what} must be a number greater than 0
+電流制限は 0 より大きい電流にしてください (データシートの「ピーク電流」「短絡電流」)	The current limit must be a current greater than 0 (the datasheet's "peak current" or "short-circuit current")
+出力電圧の min・max の間に typ が入っていません。データシートの値を確かめてください	typ is not between the output voltage min and max. Check the datasheet values
+ドロップアウト・グラウンド電流は 0 以上、リップル除去は dB の正の数にしてください	Dropout and ground current must be 0 or more, and ripple rejection a positive number in dB
+雑音の帯域は、上の周波数を下の周波数より大きくしてください	For the noise bandwidth, make the upper frequency larger than the lower
+再現しているもの: 基準電圧 {} V (IKA = 10 mA)、REF の入力電流 {} µA、ΔVref/ΔVKA −{} mV/V、動的インピーダンス {} Ω、停止中のカソード電流 {} µA。	What it reproduces: reference voltage {} V (IKA = 10 mA), REF input current {} µA, ΔVref/ΔVKA −{} mV/V, dynamic impedance {} Ω, cathode current when off {} µA.
+基準電圧の部品ごとの違い ({:.3}〜{:.3} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。	Part-to-part differences in the reference voltage ({:.3} to {:.3} V, datasheet min and max) appear only in variation and worst-case analyses (normal analyses use typ).
+扱わないもの: 温度による変化、最小カソード電流 ({} mA) より下で安定しなくなること (このモデルは小さな電流でも安定します)、周波数特性と容量負荷での発振、耐圧・最大電流を超えたときの破壊。	Not covered: the change with temperature, becoming unstable below the minimum cathode current ({} mA) (this model is stable even at small currents), frequency response and oscillation with capacitive loads, and destruction above the voltage or maximum current ratings.
+基準電圧・REF の電流・動的インピーダンス・停止中の電流は 0 より大きい数にしてください	The reference voltage, REF current, dynamic impedance and off current must be numbers greater than 0
+基準電圧の min・max の間に typ が入っていません	typ is not between the reference voltage min and max

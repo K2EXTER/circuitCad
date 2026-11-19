@@ -1,3 +1,33 @@
 # 手で足した訳 (ひらがなだけの文は、一覧づくりで読みと見分けられず漏れたもの)
 うまくいかないとき	When it does not work
 むずかしさ	Difficulty
+# 2026-11-19: kana-only words shown on screen (crates/app/src)
+オシロ	Scope
+ネットラベル	Net label
+プロジェクト	Project
+まちがい	Mistake
+カーソル	Cursor
+つなぎがありません	No connections
+キャンバス	Canvas
+どこにもつながっていない	Not connected anywhere
+フォームへ	To the form
+ブザー	Buzzer
+そのまま	As is
+ずれ	Difference
+モデルができていません	No model yet
+が	stays at
+バターワース	Butterworth
+ベッセル	Bessel
+ローパス	Low-pass
+ハイパス	High-pass
+バンドパス	Band-pass
+ゆっくり	Slow
+ループゲイン	Loop gain
+パラメータスイープ	Parameter sweep
+ノード	Node
+バスにまとめる	Group into buses
+ぎりぎり	Marginal
+スイッチ	Switch
+つまみ	Knob
+サレンキー ローパス	Sallen-Key low-pass
+サレンキー ハイパス	Sallen-Key high-pass

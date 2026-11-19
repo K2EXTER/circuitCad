@@ -1,0 +1,390 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/part_form/datasheet_view.rs
+「{}」のグラフの見出しは見つかりませんでした。ページをめくってグラフを探してください	No graph heading for "{}" was found. Turn the pages to find the graph
+「{}」のグラフが {n} 枚あります。違う図なら、検索の一覧から選んでください	There are {n} "{}" graphs. If this is the wrong one, choose from the search list
+この図の縦軸は {top} までで、hFE の値でなく 1 つの電流での値を 1 とした比 (normalized) のようです。表の hFE (その電流の値) を掛けて入れるか、ほかの図を使ってください	This graph's vertical axis goes up to {top}, so it seems to be a ratio (normalized) with the value at one current as 1, not hFE values. Multiply by the hFE in the table (the value at that current) before entering, or use another graph
+この図には曲線が {n} 本あり、どれを読むか決められませんでした。色を付けた候補の線から、読みたい曲線を 1 回クリックしてください (候補にない線もクリックでたどれます)	This graph has {n} curves and it could not decide which to read. Click the curve you want once among the colored candidate lines (lines that are not candidates can also be traced by clicking)
+PDF が開いていません	No PDF is open
+図の見出しが見つかりません	Graph heading not found
+p.{} の図の目盛りが読めません	Cannot read the scale of the graph on p.{}
+p.{} の図の横軸が周波数 (対数) ではありません	The horizontal axis of the graph on p.{} is not frequency (log)
+p.{} の図は 1 を基準にした比 (normalized) です	The graph on p.{} is a ratio relative to 1 (normalized)
+「{}」の曲線	"{}" curve
+p.{} の図の曲線から点が取れません	Cannot take points from the curve of the graph on p.{}
+p.{} の図で見つかった線が{}の曲線らしくありません (破線などの別の線をつないだ恐れ)	On p.{}, the line found does not look like the {} curve (it may have joined other lines such as dashed ones)
+p.{} の図に曲線が {} 本あり、どれか決められません。「グラフから読む」で候補の線に色が付きます	The graph on p.{} has {} curves and it cannot decide which. "Read from graph" colors the candidate lines
+p.{} の図に曲線が見つかりません	No curve found in the graph on p.{}
+グラフから点を読む	Read points from a graph
+画像の PDF なので、文字認識で文字を読み取っています… {done}/{pages} ページ	This is an image PDF, so the text is being read with text recognition… page {done}/{pages}
+読み取りをやめます。読み終えたページの文字はそのまま使えます	Stops reading. Text from pages already read can still be used
+このPDFの文字は、Windows の文字認識でページの絵から読みました。読み違いがあるので、入れた値は絵と見比べてください	The text of this PDF was read from the page images with Windows text recognition. It can misread, so compare the values you enter with the image
+このページには文字がありません (画像の PDF)	This page has no text (image PDF)
+文字を読み取る (OCR)	Read text (OCR)
+Windows の文字認識で、文字の無いページの絵から文字を読みます (1 ページ 1 秒ほど)。読めた文字で検索・表の読み取り・下書きが使えます	Reads text from the images of pages with no text using Windows text recognition (about 1 second per page). With the text read, search, table reading and drafts work
+外形図の「{}」を、下のページでドラッグして囲んでください (寸法の数字と線が入るように)	Drag a box around "{}" of the outline drawing on the page below (so the dimension numbers and lines are inside)
+目盛り {t}	Scale {t}
+  曲線に合わせました	  Snapped to the curve
+先に横軸と縦軸の目盛りを 2 つずつ入れてください	First enter two scale marks each for the horizontal and vertical axes
+ここを目盛りにします (値はあとで入れます)	Make this a scale mark (enter the value later)
+いま出ているページのグラフで、軸の目盛りを 2 つずつクリックしてから曲線の上をクリックすると、点の値を読みます。読んだ点は写したり、部品作成フォームの欄に入れたりできます	On the graph on the page shown, click two scale marks on each axis, then click on a curve to read the value of that point. You can copy the read points or put them into fields of the Create part form
+このPDFには検索できる文字がありません (画像のPDFかもしれません)。上の「文字を読み取る (OCR)」で読めます。読めないときは絵を見て探してください	This PDF has no searchable text (it may be an image PDF). "Read text (OCR)" above can read it. If not, look through the pictures to find it
+# crates/app/src/part_form/diode.rs
+ずれの表には、手順3 の逆耐圧と漏れ電流が要ります (表から写します)	The difference table needs the reverse voltage rating and leakage current of step 3 (copy them from the table)
+容量の点の {}行目: 「逆電圧 容量」の形で入力してください (例: 4 15p)	Capacitance point line {}: enter it as "reverse voltage capacitance" (e.g. 4 15p)
+容量と逆電圧のグラフから読んだ点	Points read from the capacitance vs reverse voltage graph
+表の接合容量 1 点 (電圧による変化は VJ・M を仮定)	One junction capacitance point from the table (the change with voltage assumes VJ and M)
+データシートの容量を入れていないので、入れていません	Not included because no datasheet capacitance was entered
+trr の測定条件の電流 IF を入れてください	Enter the current IF of the trr measuring conditions
+trr の測定条件の電流 IR を入れてください	Enter the current IR of the trr measuring conditions
+表の trr {}s (IF = {}A、IR = {}A)	trr {}s from the table (IF = {}A, IR = {}A)
+順方向特性のグラフから読んだ点	Points read from the forward characteristic graph
+表の逆耐圧 {} V と、その漏れ電流 {}A	Reverse voltage rating {} V from the table and its leakage current {}A
+降伏 V(BR) {} V (IR = {}A): {}	Breakdown V(BR) {} V (IR = {}A): {}
+ (VR = {} V を逆耐圧に)	 (VR = {} V used as the reverse voltage rating)
+IR (逆電流) が表に見つかりません。逆耐圧と一緒に、自分で入れてください	IR (reverse current) not found in the table. Enter it yourself together with the reverse voltage rating
+容量 {}F ({} V): {}	Capacitance {}F ({} V): {}
+接合容量が表に見つかりません	Junction capacitance not found in the table
+trr {}s: {}。IF・IR の条件を確かめてください	trr {}s: {}. Check the IF and IR conditions
+trr が表に見つかりません (ショットキーなら無くて構いません)	trr not found in the table (fine for a Schottky)
+ずれの表のモデル (同梱のダイオードと同じ作り方) を「② シミュレーション」に入れました。そちらの「試し読み」で確かめられます	Put the difference table model (made the same way as the bundled diodes) into "② Simulation". You can check it with "Trial read" there
+PDF のグラフから読む	Read from PDF graph
+データシートの窓が、図の見出し (Forward Characteristics など) から順方向特性のグラフのページへ移ります。軸の目盛りと曲線の上をクリックして、点を読みます。読んだ点は、点の窓のボタンでこの欄に入ります	The datasheet window jumps from the graph heading (Forward Characteristics and so on) to the page of the forward characteristic graph. Click the axis scales and on the curve to read points. The points go into this field with a button in the points window
+容量の点 (空でも可): 逆電圧 容量	Capacitance points (can be empty): reverse voltage capacitance
+容量と逆電圧のグラフから読んだ点。1 行に「逆電圧 [V] 容量 [F]」。入れると、上の Cj 1 点の代わりに使い、電圧による変化も合わせます	Points read from the capacitance vs reverse voltage graph. One line per point: "reverse voltage [V] capacitance [F]". When entered, they are used instead of the single Cj above, and the change with voltage is fitted too
+データシートの窓が、図の見出しから容量のグラフのページへ移ります。目盛りと曲線の上をクリックして点を読みます	The datasheet window jumps from the graph heading to the page of the capacitance graph. Click the scales and on the curve to read points
+開いているデータシートの表から、逆電流 IR (とその VR を逆耐圧に)・接合容量・trr を探して欄に入れます。入れた値は表と見比べて確かめてください	Finds the reverse current IR (and uses its VR as the reverse voltage rating), junction capacitance and trr in the tables of the open datasheet and puts them into the fields. Compare the entered values with the table
+ずれの表を見る (同梱と同じ作り方)	See the difference table (made like the bundled ones)
+同梱のダイオードと同じ当てはめで、モデルと、データシートの各値とのずれを並べます。モデルの形の限界の注意も出ます	Lists the model and its differences from each datasheet value, with the same fitting as the bundled diodes. Notes on the limits of the model's form are shown too
+モデルの文 (.model) を作って、② のシミュレーションの欄に入れます。ずれの表を作ったときは、そのモデル (注記つき) を入れます。逆耐圧は ① の定格の最大電圧にも入ります	Makes the model statement (.model) and puts it into the simulation field of ②. If you made the difference table, that model (with notes) goes in. The reverse voltage rating also goes into the max voltage of the ① ratings
+# crates/app/src/part_form/draft.rs
+文	sentence
+図の文字の並び	letter order in the picture
+種類: {cat}{}	Type: {cat}{}
+ (P 形)	 (P type)
+部品名: {n}	Part name: {n}
+外形図の {s} の一覧	{s} list in the outline drawing
+ピン配置の図か一覧	pin diagram or list
+ピン: {pkg} の{what}のよくある並び ({})。データシートの図で確かめてください	Pins: in {pkg}, the common order for {what} ({}). Check it with the datasheet drawing
+ピン: p.{} の{from}から {} 本	Pins: from the {from} on p.{}, {} pins
+パッケージ: {} (組み込みの {fp})	Package: {} (built-in {fp})
+。{t} は 2 番と同じピン (タブ) なので、2 番のパッドにまとめました	. {t} is the same pin as pin 2 (tab), so it was merged into the pad of pin 2
+パッケージ: {} (2 端子)、パッドは寸法表から IPC の式で {:.2} × {:.2} mm・中心の間 {:.2} mm (推奨のパッドの図があれば見比べてください)	Package: {} (2 terminals), pads from the dimension table with the IPC formulas {:.2} × {:.2} mm, center to center {:.2} mm (compare with the recommended pad drawing if there is one)
+パッケージ: {} (デュアル)	Package: {} (dual)
+、パッドは推奨ランドパターン (p.{}) の {:.2} × {:.2} mm・列の間 {:.2} mm・ピッチ {} mm	, pads from the recommended land pattern (p.{}) {:.2} × {:.2} mm, row spacing {:.2} mm, pitch {} mm
+、ピッチ {e:.2} mm	, pitch {e:.2} mm
+、パッドは寸法表から IPC の式で {:.2} × {:.2} mm・列の間 {:.2} mm (推奨ランドパターンがあれば見比べてください)	, pads from the dimension table with the IPC formulas {:.2} × {:.2} mm, row spacing {:.2} mm (compare with the recommended land pattern if there is one)
+パッケージ: {} は組み込みの形が無いので、「④ 部品の形」で寸法を入れてください	Package: {} has no built-in shape, so enter the dimensions in "④ Part shape"
+本体: {w:.2} × {l:.2} mm	Body: {w:.2} × {l:.2} mm
+高さ: {h:.2} mm (寸法表の A の最大)	Height: {h:.2} mm (max of A in the dimension table)
+ (p.{} の推奨動作条件の最大)	 (max of the recommended operating conditions on p.{})
+定格: p.{} の絶対最大定格から {}	Ratings: {@2} from the absolute maximum ratings on p.{@1}
+熱: {}	Heat: {}
+{what}の値: 電気的特性の表から (「かんたん作成」の欄に。曲線は図から足して、「② シミュレーション」で確かめてください)	{what} values: from the electrical characteristics table (into the "Quick create" fields; add the curves from the graphs and check in "② Simulation")
+MOSFET の値: 電気的特性の表から (「② シミュレーション」で確かめてモデルを作ってください)	MOSFET values: from the electrical characteristics table (check in "② Simulation" and make the model)
+トランジスタの値: 電気的特性の表から (「② シミュレーション」で確かめてモデルを作ってください)	Transistor values: from the electrical characteristics table (check in "② Simulation" and make the model)
+ダイオードの値: 電気的特性の表から (「② シミュレーション」で確かめてください)	Diode values: from the electrical characteristics table (check in "② Simulation")
+パッケージ: {} (2 端子)、パッドは推奨のパッドの図 (p.{}) の {:.2} × {:.2} mm・中心の間 {:.2} mm	Package: {} (2 terminals), pads from the recommended pad drawing (p.{}) {:.2} × {:.2} mm, center to center {:.2} mm
+パッケージ: {} ({shape}、足の無い形)	Package: {} ({shape}, leadless)
+、パッドは推奨ランドパターン (p.{}) の {:.2} × {:.2} mm・向かいのパッドの中心の間 {:.2} mm・ピッチ {} mm	, pads from the recommended land pattern (p.{}) {:.2} × {:.2} mm, between centers of opposite pads {:.2} mm, pitch {} mm
+、パッドは寸法表から IPC の式で {:.2} × {:.2} mm・向かいのパッドの中心の間 {:.2} mm・ピッチ {} mm (推奨ランドパターンがあれば見比べてください)	, pads from the dimension table with the IPC formulas {:.2} × {:.2} mm, between centers of opposite pads {:.2} mm, pitch {} mm (compare with the recommended land pattern if there is one)
+。放熱パッド {w:.2} × {h:.2} mm (ピン {pin}。GND などにつなぐなら、ピン表の名前を直してください)	. Thermal pad {w:.2} × {h:.2} mm (pin {pin}; if it connects to GND or similar, fix the name in the pin table)
+。放熱パッドの寸法は見つかりませんでした (寸法表の D2・E2 か推奨ランドパターンを見て「④ 部品の形」で入れてください)	. The thermal pad dimensions were not found (look at D2 and E2 in the dimension table or the recommended land pattern and enter them in "④ Part shape")
+データシートから下書き	Draft from datasheet
+開いたデータシートを丸ごと読んで、部品名・種類・パッケージ・ピン・本体の大きさ・(トランジスタ・ダイオードなら) 特性の値を探し、見つかったものを一覧にします。確かめてから、まとめてフォームに入れます	Reads the whole open datasheet, finds the part name, type, package, pins, body size and (for transistors and diodes) characteristic values, and lists what it found. Check them, then put them into the form all at once
+先に「データシート (PDF) を開く…」でデータシートを開いてください	First open a datasheet with "Open datasheet (PDF)…"
+データシートの文字の並びから見つけたものです。違うものは外し、ページを開いて確かめてください	Found from the text of the datasheet. Untick wrong ones and open the page to check
+このページをデータシートの窓で開きます	Open this page in the datasheet window
+{} ({} 回)	{} ({} times)
+データシートに書かれている回数の多い順です。いくつかのパッケージがあるデータシートでは、使うものを選んでください	Ordered by how often they are written in the datasheet. For datasheets with several packages, choose the one you use
+、放熱パッド {:.2} × {:.2} mm	, thermal pad {:.2} × {:.2} mm
+推奨のパッドの図: パッド {:.2} × {:.2} mm、中心の間 {} mm	Recommended pad drawing: pads {:.2} × {:.2} mm, center to center {} mm
+データシートのはんだ付けの図 (Reflow soldering footprint) から読みました。「(2×)」の付いた寸法のうち小さい方から 2 番目をパッド (はんだペースト < パッド < レジスト の順)、枠で囲んだ数をパッドの中心の間としています。パッドの大きさは、2 つのパッドを結ぶ向き × それと直角の向きです。図を開いて見比べてください	Read from the datasheet's soldering drawing (Reflow soldering footprint). Of the dimensions marked "(2×)", the second smallest is taken as the pad (in the order solder paste < pad < solder mask), and the boxed number as the center-to-center distance of the pads. The pad size is along the line joining the 2 pads × across it. Open the drawing and compare
+推奨ランドパターン: パッド {:.2} × {:.2} mm、列の間 {}、ピッチ {} mm{}	Recommended land pattern: pads {:.2} × {:.2} mm, row spacing {}, pitch {} mm{}
+データシートの推奨ランドパターンの図の「14X (1.55)」のような書き方から読みました (14 個あるのがパッド、ピン数 − 2 個あるのがピッチ、1 つだけの大きな数が列の中心の間)。パッケージを入れると、この寸法でパッドを作ります	Read from notation like "14X (1.55)" in the datasheet's recommended land pattern drawing (the one appearing 14 times is the pad, the one appearing pin count − 2 times is the pitch, and the single large number is the row center spacing). When you enter the package, pads are made with these dimensions
+推奨ランドパターンは読めませんでした (寸法表があれば、IPC の式でパッドを計算します。QFN・SON は D2・E2 が放熱パッド)	Could not read a recommended land pattern (if there is a dimension table, pads are calculated with the IPC formulas; for QFN and SON, D2 and E2 are the thermal pad)
+ピンの表も、番号と名前の書かれたピン配置の図も見つかりませんでした。データシートの窓の「ピン表を囲む」で、表か図を囲んで読めます	Neither a pin table nor a pin diagram with numbers and names was found. You can read a table or drawing by boxing it with "Box the pin table" in the datasheet window
+図から	From drawing
+表から	From table
+パッケージごとの列	Columns per package
+ピンの表にパッケージごとの番号の列がありました。使うパッケージの列を選んでください (上のパッケージを選ぶと、その列に合わせます)	The pin table has a number column for each package. Choose the column of the package you use (choosing a package above matches its column)
+表と図で違います	Table and drawing differ
+ピンの表とピン配置の図で、読めたピンが違いました。両方のページを開いて、正しい方を選んでください (表は、いくつものパッケージの列や「2, 3, 6, 7」のような行を読み違えることがあります)	The pins read from the pin table and from the pin diagram differ. Open both pages and choose the right one (tables with several package columns or rows like "2, 3, 6, 7" can be misread)
+ ほか {} 本	 and {} more
+ピン配置の図の、番号のすぐ横 (か上下) の名前を読みました。図のとおりか、ページで確かめてください	Read the names right next to (or above or below) the numbers in the pin diagram. Check on the page that they match the drawing
+「ピン配置」の見出しの下の表から読みました。番号と名前の組が表のとおりか、ページで確かめてください	Read from the table under the "Pin configuration" heading. Check on the page that the number and name pairs match the table
+✔ 表とピン配置の図が一致しています	✔ The table and the pin diagram agree
+データシートにピンの番号がありません。{pkg} の{}のよくある並びです	The datasheet has no pin numbers. This is the common order in {pkg} for {}
+この PDF は端子 (G・D・S や E・B・C) を記号と外形の絵にしか書いていません。{pkg} ではこの並びが多い ({seen} など) ものの、メーカーによって違います。外形図の絵と見比べて、合っていれば「ピン」にチェックを入れてください。違えば「③ ピン」で直します	This PDF shows the terminals (G, D, S or E, B, C) only on the symbol and outline pictures. This order is common for {pkg} ({seen} and so on), but it differs between makers. Compare with the outline picture and tick "Pins" if it matches. If not, fix it in "③ Pins"
+外形図の {s} のピンの一覧から読みました (1 ページ目にその型と書かれています)	Read from the {s} pin list in the outline drawing (page 1 says it is that type)
+「Pin 1 = Gate」のような文から読みました	Read from a sentence like "Pin 1 = Gate"
+外形の絵の端子の文字 (G・D・S や E・B・C) の並び (正面から見て左から 1・2・3) から読みました。図で確かめてください	Read from the order of the terminal letters (G, D, S or E, B, C) in the outline picture (1, 2, 3 from the left seen from the front). Check with the drawing
+ピン配置の図か、ピンの一覧から読みました (表は見つかりませんでした)	Read from the pin diagram or pin list (no table was found)
+本体の寸法	Body dimensions
+幅 {} × 長さ {} × 高さ {} mm、ピッチ {}{}	Width {} × length {} × height {} mm, pitch {}{}
+ (インチの表から)	 (from the inch table)
+寸法の表 (DIM・MIN・NOM・MAX) が文字で見つかりませんでした。図に寸法が書かれているデータシートは、「④ 部品の形」で入れてください	No dimension table (DIM, MIN, NOM, MAX) was found as text. For datasheets with dimensions written in the drawing, enter them in "④ Part shape"
+特性の値	Characteristic values
+電気的特性の表から読みます (入れたあと「② シミュレーション」で確かめます)	Read from the electrical characteristics table (check in "② Simulation" after entering)
+トランジスタ・MOSFET・ダイオード・オペアンプ・フォトカプラ・フォトダイオード・ダーリントンのとき	For transistors, MOSFETs, diodes, op-amps, optocouplers, photodiodes and Darlingtons
+「絶対最大定格」の表から、部品の種類に合う記号 (MOSFET なら VDS・ID、トランジスタなら VCEO・IC、ダイオードなら VRRM・IF(AV)、IC なら電源電圧) の最大の値を読みました。「⑤ 定格」の最大電圧・電流・電力・最高温度に入ります	Read the maximum values of the symbols that suit the part type (VDS, ID for a MOSFET; VCEO, IC for a transistor; VRRM, IF(AV) for a diode; supply voltage for an IC) from the "Absolute maximum ratings" table. They go into the max voltage, current, power and temperature of "⑤ Ratings"
+「絶対最大定格」の表が文字で見つからないか、部品の種類の記号がありませんでした	The "Absolute maximum ratings" table was not found as text, or it had none of the symbols for the part type
+チェックしたものを入れる	Enter ticked items
+チェックした項目をフォームに入れます。種類を入れると、その種類の例でフォームがいったん初期化されます	Puts the ticked items into the form. Entering a type first resets the form with an example of that type
+入れるものがありませんでした	Nothing to enter
+データシートから入れました: {}	Entered from the datasheet: {}
+# crates/app/src/part_form/drawing_pick.rs
+寸法の分かる線 (寸法線の両端の矢印など) の、片方の端をクリックし、もう片方の端をクリックします。3 回目のクリックでやり直します。小さくて選びにくいときは「大きく開く」	Click one end of a line whose length is known (such as the arrows at both ends of a dimension line), then the other end. A 3rd click starts over. If it is too small to pick, use "Open large"
+2 点の間の長さ	Length between the 2 points
+クリックした 2 点の、本当の長さ (図の寸法の数字)。これで図の縮尺が決まります	The real length between the 2 clicked points (the dimension number in the drawing). This sets the scale of the drawing
+図の寸法の数字がミリメートルのとき	When the dimension numbers in the drawing are millimeters
+図の寸法の数字がインチのとき (1 inch = 25.4 mm。「0.100」のような数字や、mm の横の [ ] の中の数字)。数字はそのまま、単位だけが変わります	When the dimension numbers in the drawing are inches (1 inch = 25.4 mm; numbers like "0.100", or the numbers in [ ] next to mm). The numbers stay; only the unit changes
+大きく開く	Open large
+図を別の窓で大きく表示します。ホイールで拡大、ドラッグで移動、点はドラッグで動かせます。ポインタの下は拡大鏡で見えます	Shows the drawing large in a separate window. Wheel zooms, drag moves, and points can be dragged. The area under the pointer shows in a magnifier
+{} の縮尺を合わせる	Set the scale of {}
+寸法線の両端を 1 回ずつクリック (3 回目でやり直し)。ホイール: 拡大・縮小  ドラッグ: 移動  点の上からドラッグ: 点を動かす	Click each end of the dimension line once (a 3rd click starts over). Wheel: zoom  Drag: move  Drag from a point: move the point
+全体を表示	Show all
+拡大と移動を元に戻して、図の全体を表示します	Undo zoom and move and show the whole drawing
+# crates/app/src/part_form/elcap_lineup.rs
+型番ごとの行の表 (容量・大きさ・型番の列) が見つかりませんでした。文字の無い PDF や、文字を抜き出すと列が崩れる PDF は読めません。値は下の欄に手で入れてください	No table with a row per part number (capacitance, size and part number columns) was found. PDFs without text, or whose columns fall apart when the text is extracted, cannot be read. Enter the values in the fields below by hand
+{} 行を読みました ({} ページ)	Read {} rows ({} pages)
+。{} {} の共通の表 (寿命・リード・周波数補正) があるので、チェックした型番をまとめて作れます	. There is a shared table for {} {} (life, leads, frequency correction), so you can make the ticked part numbers all at once
+。漏れ電流が式と合わない行があります (読み違いかもしれません): {}	. Some rows have a leakage current that does not match the formula (they may be misread): {}
+。このシリーズの共通の表 (寿命・リード・周波数補正) は同梱に無いので、1 行ずつフォームに入れて作ります	. The shared table for this series (life, leads, frequency correction) is not bundled, so put the rows into the form one at a time
+{} をフォームに入れました (容量 {} µF・{} V・φ{} × {} mm)。「ピンとモデルを作る」のあと、パッケージ (リードの間隔) と定格 (耐圧・リップル電流) を入れて保存します	Put {} into the form ({} µF, {} V, φ{} × {} mm). After "Create pins and model", add the package (lead spacing) and ratings (voltage rating, ripple current) and save
+電解コンデンサのデータシートの「1 行 = 1 型番」の表を読みます	Reads the "1 row = 1 part number" table in an electrolytic capacitor datasheet
+電解コンデンサのデータシートには、容量・大きさ・インピーダンス・許容リップル電流・型番を 1 行に並べた表があります (Nichicon の Dimensions など)。表を読むと型番の一覧が出ます。1 行をフォームに入れるか、シリーズの共通の表 (寿命・リードの間隔・リップル電流の周波数補正) が同梱されているシリーズ (いまは Nichicon UHE) なら、チェックした型番をまとめてライブラリに作れます	Electrolytic capacitor datasheets have a table with the capacitance, size, impedance, allowed ripple current and part number in one row (such as Nichicon's Dimensions). Reading the table lists the part numbers. Put one row into the form, or, for series whose shared table (life, lead spacing, ripple current frequency correction) is bundled (currently Nichicon UHE), make the ticked part numbers into the library all at once
+型番・容量・電圧の一部 (例: 1C、470、25) で行を絞ります	Filter rows by part of a part number, capacitance or voltage (e.g. 1C, 470, 25)
+大きさ	Size
+この行の型番・容量・インピーダンス (と ESR)・高さを、上の欄に入れます	Puts this row's part number, capacitance, impedance (and ESR) and height into the fields above
+チェックした型番を、表の値とシリーズの共通の表 (寿命・リードの間隔と径・リップル電流の周波数補正) から部品にして、ライブラリに保存します。モデルは ESR + 容量、穴とパッドはリード径からの目安です	Makes the ticked part numbers into parts from the table values and the series' shared table (life, lead spacing and diameter, ripple current frequency correction) and saves them to the library. The model is ESR + capacitance; holes and pads are a guide from the lead diameter
+# crates/app/src/part_form/glyph_pick.rs
+ピン名 + - (ピンは下)	Pin names + - (pins at the bottom)
+# crates/app/src/part_form/graph_reader.rs
+ダイオードの「順方向特性の点」に入れる	Put into the diode's "Forward characteristic points"
+ダイオードの「容量の点」に入れる	Put into the diode's "Capacitance points"
+トランジスタの「hFE」に入れる	Put into the transistor's "hFE"
+トランジスタの「VBE(on)」に入れる	Put into the transistor's "VBE(on)"
+トランジスタの「VBE(sat)」に入れる	Put into the transistor's "VBE(sat)"
+トランジスタの「VCE(sat)」に入れる	Put into the transistor's "VCE(sat)"
+トランジスタの「Cobo」に入れる	Put into the transistor's "Cobo"
+トランジスタの「Cibo」に入れる	Put into the transistor's "Cibo"
+「過渡熱抵抗 (Zth) の点」に入れる	Put into "Transient thermal resistance (Zth) points"
+ダーリントンの「hFE」に入れる	Put into the Darlington's "hFE"
+ダーリントンの「VBE(on)」に入れる	Put into the Darlington's "VBE(on)"
+ダーリントンの「VBE(sat)」に入れる	Put into the Darlington's "VBE(sat)"
+ダーリントンの「VCE(sat)」に入れる	Put into the Darlington's "VCE(sat)"
+フォトカプラの「LED の順方向」に入れる	Put into the optocoupler's "LED forward"
+フォトカプラの「CTR の曲線」に入れる	Put into the optocoupler's "CTR curve"
+フォトダイオードの「光電流」に入れる	Put into the photodiode's "Photocurrent"
+フォトダイオードの「容量」に入れる	Put into the photodiode's "Capacitance"
+レギュレータの「ドロップアウト」に入れる	Put into the regulator's "Dropout"
+レギュレータの「リップル除去」に入れる	Put into the regulator's "Ripple rejection"
+レギュレータの「出力雑音」に入れる	Put into the regulator's "Output noise"
+順方向特性	Forward characteristic
+過渡熱抵抗	Transient thermal resistance
+光電流	Photocurrent
+雑音密度	Noise density
+µ (1/100万)	µ (1/1,000,000)
+n (1/10億)	n (1/1,000,000,000)
+p (1/1兆)	p (1/1,000,000,000,000)
+k (1000 倍)	k (×1000)
+目盛り {} の値「{text}」が数字として読めません	Cannot read the value "{text}" of scale {} as a number
+横軸: {e}	Horizontal axis: {e}
+縦軸: {e}	Vertical axis: {e}
+点がまだありません。「点を取る」を押して、曲線の上をクリックしてください	No points yet. Press "Take points" and click on the curve
+目盛りを図の数字から読みました ({})。曲線を 1 回クリックしてください。青い線が目盛りの数字に合っていなければ「目盛りから始め直す」	Read the scale from the numbers in the graph ({}). Click the curve once. If the blue lines do not match the scale numbers, use "Start over from the scale"
+ (対数)	 (log)
+横 {}、縦 {}	horizontal {}, vertical {}
+図にただ 1 本の曲線	the only curve in the graph
+目盛り ({}) と{}を図から読み、{} 点を取りました。青い線が目盛りの数字に、赤い線が読みたい曲線に合っているか確かめて、下のボタンで欄に入れてください。曲線が違えば「最後の曲線を消す」を押して、読みたい曲線をクリックします	Read the scale ({}) and {} from the graph and took {} points. Check that the blue lines match the scale numbers and the red line the curve you want, then put them into the field with the button below. If the curve is wrong, press "Delete last curve" and click the curve you want
+前に置いた目盛りをそのまま使います。別の図なら「目盛りから始め直す」を押します	Uses the scale placed before as it is. For a different graph, press "Start over from the scale"
+クリックした所の上下 6 pt に曲線が見つかりません。曲線の線の上をクリックしてください (拡大すると当てやすくなります)	No curve within 6 pt above or below the click. Click on the line of the curve (zooming in makes it easier to hit)
+曲線をたどって {} 点を足しました。ページの赤い線が、読みたい曲線の上を端まで通っているか確かめてください	Traced the curve and added {} points. Check that the red line on the page runs over the curve you want all the way to its ends
+1. 横軸の目盛りの数字を 2 つ以上クリック → 2. 縦軸の目盛りの数字を 2 つ以上クリック → 3. 曲線の上をクリックして点を取る (「曲線をたどる」なら 1 回のクリックで曲線の端から端まで)。数字が文字でない図は、目盛りの線をクリックして値を入れます。拡大すると正確に取れます	1. Click 2 or more scale numbers on the horizontal axis → 2. Click 2 or more scale numbers on the vertical axis → 3. Click on the curve to take points ("Trace curve" goes from end to end of the curve with one click). For graphs whose numbers are not text, click the scale lines and enter the values. Zooming in gives more accurate points
+このグラフは p.{} のものです	This graph is from p.{}
+このページで始め直す	Start over on this page
+目盛りと点を消して、いま出ているページのグラフを読み始めます	Clears the scale and points and starts reading the graph on the page shown
+横軸の目盛りを足す	Add horizontal scale mark
+ページの横軸の目盛りの数字をクリックすると、その位置と値を目盛りにします (数字の真ん中が目盛りの位置)。数字でない所をクリックしたら、下の欄に値を入れます	Click a scale number on the page's horizontal axis to make its position and value a scale mark (the middle of the number is the mark's position). If you clicked somewhere that is not a number, enter the value in the field below
+縦軸の目盛りを足す	Add vertical scale mark
+ページの縦軸の目盛りの数字をクリックすると、その位置と値を目盛りにします。格子が対数どおりでない図は、数字の付いた目盛りを全部足すと、隣の目盛りの間で読みます	Click a scale number on the page's vertical axis to make its position and value a scale mark. For graphs whose grid is not exactly logarithmic, add all numbered marks and it reads between neighboring marks
+対数	Log
+目盛りが 1・10・100 のように 10 倍ずつの軸なら入れます	Tick it for an axis whose scale goes up 10× at a time, like 1, 10, 100
+軸の単位の接頭語。軸が mA なら m を選ぶと、目盛りの「10」を 0.01 (A) として読みます	The unit prefix of the axis. If the axis is in mA, choosing m reads the scale's "10" as 0.01 (A)
+目盛りの値。ページの数字をそのまま (10、0.1、1E-3、10m など)	The scale value. The number on the page as it is (10, 0.1, 1E-3, 10m and so on)
+この目盛りを消します	Delete this scale mark
+点を取る	Take points
+曲線の上をクリックすると点を足します。ポインタの所の値が、そばに出ます	Click on the curve to add a point. The value at the pointer is shown next to it
+{} 点	{} points
+曲線に合わせる	Snap to curve
+クリックした所の上下 6 pt に曲線 (黒か色の線) があれば、その線の真ん中に点を置きます。灰色の格子・枠の線・グラフの中の文字は曲線として扱いません。曲線が重なっている所は、外して自分で置いてください	If there is a curve (a black or colored line) within 6 pt above or below the click, the point is placed at the middle of that line. Gray grid lines, frame lines and text in the graph are not treated as curves. Where curves overlap, untick this and place points yourself
+最後の点を消す	Delete last point
+最後に取った点を消します	Deletes the last point taken
+点を全部消す	Delete all points
+取った点を全部消します (目盛りは残します)	Deletes all points taken (the scale stays)
+曲線をたどる	Trace curve
+曲線の上を 1 回クリックすると、その曲線を左右の端までたどり、長さに沿って同じ間隔で点を足します。曲線の色 (黒・赤・青 …) を見分け、交わる所では向きの続く方をたどります。たどった線はページに赤く出ます。曲線が重なって走る所・破線・途中で折り返す曲線は、途中で止まるか、外れることがあります	One click on a curve traces it to its left and right ends and adds points at equal spacing along its length. It tells curve colors apart (black, red, blue …) and at crossings follows the direction that continues. The traced line is shown red on the page. Where curves run on top of each other, dashed lines and curves that turn back may stop partway or go off
+点の数	Number of points
+1 本の曲線から取る点の数。曲線の長さに沿って同じ間隔で並べます (急な所にも点が入ります)	How many points to take from one curve. They are spaced equally along the curve's length (steep parts get points too)
+最後の曲線を消す	Delete last curve
+最後にたどった曲線と、その点を消します	Deletes the last traced curve and its points
+縦軸の値を先に書く	Vertical axis value first
+ダイオードの順方向特性は横軸が電圧・縦軸が電流ですが、入れる欄は「電流 電圧」の順です。そのときは入れます	A diode's forward characteristic has voltage on the horizontal axis and current on the vertical, but the field takes "current voltage" order. Tick it in that case
+写す (1 行 1 点)	Copy (1 point per line)
+「値 値」の行にして、クリップボードに写します	Copies to the clipboard as "value value" lines
+{} 点を写しました	Copied {} points
+写す (.fit.json の形)	Copy (.fit.json form)
+[[値, 値], ...] の形で写します。データシートの読みのファイル (crates/part-lib/fits/*.fit.json) に貼れます	Copies in the form [[value, value], ...]. You can paste it into a datasheet reading file (crates/part-lib/fits/*.fit.json)
+{} 点を .fit.json の形で写しました	Copied {} points in .fit.json form
+取った点を、部品作成フォームの欄に入れます (前の中身は置き換えます)	Puts the points taken into the field of the Create part form (replacing what was there)
+{} 点をフォームに入れました	Put {} points into the form
+目盛りから始め直す	Start over from the scale
+目盛りと点を消して、いま出ているページの別の図を読み始めます (送り先の欄はそのまま)	Clears the scale and points and starts reading another graph on the page shown (the destination field stays)
+グラフの読み取りを終える	Finish reading the graph
+目盛りと点を消して、この窓を閉じます	Clears the scale and points and closes this window
+# crates/app/src/part_form/heat_fill.rs
+p.{} の許容損失の低減 ({}) の逆数	inverse of the power derating ({@2}) on p.{@1}
+p.{} の熱の表 ({})	thermal table on p.{} ({})
+θJA {} K/W は大きい基板 (銅を広げた基板) で測った値なので、部品だけの θ には入れず「そのほかの情報」に残しました。基板の銅の効きは、基板から計算します: {}	θJA {} K/W was measured on a large board (with widened copper), so it is not used as the part's own θ and was kept in "Other information". The effect of board copper is calculated from the board: {}
+θJA {} K/W (接合部 → 空気): {}。自己発熱の計算で、この部品の θ になります	θJA {} K/W (junction → air): {}. It becomes this part's θ in the self-heating calculation
+θJA の行 (p.{}) は値がパッケージごとに {} 列あり、どれがこの部品か決められません。表の見出しで部品のパッケージの列を見て、手で入れてください: {}	The θJA row (p.{}) has {} columns of values per package, and it cannot decide which is this part. Look at the table header for your part's package column and enter it by hand: {}
+θJA (Thermal Resistance, Junction-to-Ambient・RθJA) も、許容損失の低減 (Derate above … mW/°C) も見つかりません。θ はパッケージから推定します	Neither θJA (Thermal Resistance, Junction-to-Ambient, RθJA) nor a power derating (Derate above … mW/°C) was found. θ is estimated from the package
+θjc {} K/W (接合部 → ケース): {}	θjc {} K/W (junction → case): {}
+θjc の行 (p.{}) は値がパッケージごとに {} 列あり、決められません: {}	The θjc row (p.{}) has {} columns of values per package, and it cannot decide: {}
+θJL {} K/W (接合部 → リード) は「そのほかの情報」に入れました (自己発熱には使いません): {}	θJL {} K/W (junction → lead) was put in "Other information" (not used for self-heating): {}
+電力を下げ始める温度 {} °C: p.{} の「{}」	Temperature where derating starts {} °C: p.{} "{}"
+# crates/app/src/part_form/linear.rs
+{label}が空です。データシートの typ を入れてください	{label} is empty. Enter the typ from the datasheet
+{label}「{}」が数として読めません (例: 700k、20n、2Meg、0.3)	Cannot read {label} "{}" as a number (e.g. 700k, 20n, 2Meg, 0.3)
+開ループ利得「{t}」が読めません。dB の数 (100) か、表の書き方のまま (200 V/mV) で入れてください	Cannot read the open-loop gain "{t}". Enter a dB number (100) or as written in the table (200 V/mV)
+オフセット (typ)	Offset (typ)
+オフセット (max)	Offset (max)
+バイアス電流 (typ)	Bias current (typ)
+バイアス電流 (max)	Bias current (max)
+電源電流 (typ)	Supply current (typ)
+電源電流 (min)	Supply current (min)
+電源電流 (max)	Supply current (max)
+出力の振れ幅 (上)	Output swing (high)
+出力の振れ幅 (下)	Output swing (low)
+短絡電流	Short-circuit current
+出力抵抗	Output resistance
+入力抵抗	Input resistance
+入力抵抗「{}」が読めません (例: 2Meg、1e12)	Cannot read the input resistance "{}" (e.g. 2Meg, 1e12)
+ (単位が読めないので {usual_unit} とした)	 (unit unreadable, so taken as {usual_unit})
+{name} の typ が表に見つかりません。自分で入れてください	typ of {name} not found in the table. Enter it yourself
+バイアス電流	Bias current
+スルーレート {} V/µs: {}	Slew rate {} V/µs: {}
+スルーレートの typ が表に見つかりません	Slew rate typ not found in the table
+雑音 {}V/√Hz: {}{}	Noise {}V/√Hz: {}{}
+ (単位が読めないので nV/√Hz とした)	 (unit unreadable, so taken as nV/√Hz)
+1 kHz の雑音 (nV/√Hz) が表に見つかりません	Noise at 1 kHz (nV/√Hz) not found in the table
+位相余裕 {}°: {}	Phase margin {}°: {}
+開ループ利得 {} dB ({text}): {}	Open-loop gain {} dB ({text}): {}
+開ループ利得の単位「{}」が読めません ({})	Cannot read the open-loop gain unit "{}" ({})
+開ループ利得の typ が表に見つかりません (dB か V/mV)	Open-loop gain typ not found in the table (dB or V/mV)
+出力の振れ幅 (電源からどこまで) は表の書き方がまちまちなので、自分で入れてください	Tables write the output swing (how close to the supply) in many different ways, so enter it yourself
+値が p.{first}〜p.{last} の別々の表から来ています。電源電圧ごとに表が分かれているデータシートでは、使う電源電圧の表の値にそろえてください	The values come from separate tables on p.{first} to p.{last}. For datasheets with a table per supply voltage, use the values from the table of your supply voltage
+「0.5m 12.5」(出力の変化 [V] と 入力の変化 [V]) か「0.01%/V」	"0.5m 12.5" (output change [V] and input change [V]) or "0.01%/V"
+「1.3m 1」(出力の変化 [V] と 電流の変化 [A]) か「0.1% 1.5」	"1.3m 1" (output change [V] and current change [A]) or "0.1% 1.5"
+{label}は {how} で入れてください	Enter {label} as {how}
+出力電圧の min・max	Output voltage min, max
+出力電圧の min・max は「4.8 5.2」の 2 つの数で入れてください (空でも作れます)	Enter the output voltage min and max as 2 numbers like "4.8 5.2" (can be empty)
+電流制限は 1 行に「入出力の差 [V] 電流 [A]」、1 行か 2 行で入れてください (例: 10 2.2)	Enter the current limit as "input-output difference [V] current [A]" per line, 1 or 2 lines (e.g. 10 2.2)
+雑音は「50u 10 100k」(rms [V] と 帯域の下・上 [Hz]) か、密度 1 つ (3u = 3 µV/√Hz) で入れてください	Enter noise as "50u 10 100k" (rms [V] and lower and upper bandwidth [Hz]) or a single density (3u = 3 µV/√Hz)
+試験の入力電圧	Test input voltage
+ドロップアウトの電流による増え	Dropout rise with current
+ADJ の電流 (typ)	ADJ current (typ)
+ADJ の電流 (max)	ADJ current (max)
+最小負荷電流	Minimum load current
+リップル除去の周波数	Ripple rejection frequency
+リップル除去を測った出力電圧	Output voltage at which ripple rejection was measured
+ピン表に「{role}」のピン ({}) が要ります。「③ ピン」でピンの名前を直してください	The pin table needs a "{role}" pin ({}). Fix the pin names in "③ Pins"
+できたモデル (SPICE の文)	Model made (SPICE statements)
+モデルの注記 (何から作り、何を扱わないか)	Model notes (what it was made from and what it does not cover)
+かんたん作成: オペアンプをデータシートの表からつくる	Quick create: make an op-amp from the datasheet tables
+表の typ の値からモデルを作ります	Makes a model from the typ values in the tables
+データシートの「電気的特性」の表の typ の値を、同梱のオペアンプ (LM358・TL072 など) と同じひな形に入れてモデルを作ります。データシートとどれだけ合うかは、同梱の部品で確かめてあります (docs/models/opamps.md)	Puts the typ values from the datasheet's "Electrical characteristics" table into the same template as the bundled op-amps (LM358, TL072 and so on) to make a model. How well it matches the datasheet has been checked with the bundled parts (docs/models/opamps.md)
+考え方: どの値を使う? (はじめての人はここから)	How it works: which values to use? (start here if you are new)
+開ループ利得 (AVO・AOL): 帰還をかけないときの増幅の大きさ。表が V/mV なら「200 V/mV」のまま入れると dB に直します。	Open-loop gain (AVO, AOL): the amount of amplification without feedback. If the table is in V/mV, enter it as "200 V/mV" and it is converted to dB.
+GBW (利得帯域幅積): 増幅が 1 倍に落ちる周波数。10 倍のアンプなら GBW の 1/10 くらいまで使えます。	GBW (gain-bandwidth product): the frequency where the gain falls to 1×. A 10× amplifier can be used up to about 1/10 of the GBW.
+スルーレート (SR): 出力が 1 µs に動ける電圧。大きな振幅の速い信号は、これで形がくずれます。	Slew rate (SR): the voltage the output can move in 1 µs. Large, fast signals get distorted by it.
+オフセット・バイアス電流: 入力に乗る小さな誤差。typ のほかに max を入れると、ばらつきの解析でその幅まで動かします。	Offset, bias current: small errors on the inputs. Entering the max as well as the typ makes variation analysis move them across that range.
+出力の振れ幅: 出力が電源からどこまで近づけるか (V)。レール・ツー・レールなら 10m くらい、LM358 の上側は 1.4 V。	Output swing: how close the output can get to the supplies (V). About 10m for rail-to-rail; 1.4 V on the high side for the LM358.
+電源電流・雑音・短絡電流は、表の「1 回路あたり」の値で。2 回路入りの部品は、表が 2 回路分なら半分にします。	Supply current, noise and short-circuit current use the "per circuit" values in the table. For dual parts, halve them if the table is for both circuits.
+開いているデータシートの「電気的特性」の表から、オフセット・バイアス電流・電源電流・GBW・スルーレート・雑音・位相余裕・開ループ利得の typ (と max) を探して欄に入れます。25 °C の行を使います。入れた値は表と見比べて確かめてください	Finds the typ (and max) of offset, bias current, supply current, GBW, slew rate, noise, phase margin and open-loop gain in the "Electrical characteristics" table of the open datasheet and puts them into the fields. Uses the 25 °C rows. Compare the entered values with the table
+LM358 の例を入れる	Insert the LM358 example
+同梱の LM358 を作ったときの値 (TI のデータシートの typ) を入れます。自分のデータシートの値に書き換えて使います	Inserts the values used to make the bundled LM358 (typ from the TI datasheet). Replace them with the values from your datasheet
+開ループ利得 [dB]	Open-loop gain [dB]
+dB の数、または表の書き方のまま (200 V/mV)	A dB number, or as written in the table (200 V/mV)
+利得帯域幅積。k は 1000 倍、Meg は 100 万倍 (700k = 700 kHz)	Gain-bandwidth product. k is ×1000, Meg is ×1,000,000 (700k = 700 kHz)
+スルーレート [V/µs]	Slew rate [V/µs]
+出力が 1 µs に動ける電圧	The voltage the output can move in 1 µs
+オフセット typ・max [V]	Offset typ, max [V]
+入力オフセット電圧。m は 1000 分の 1 (3m = 3 mV)。typ が無ければ 0	Input offset voltage. m is 1/1000 (3m = 3 mV). 0 if there is no typ
+バイアス電流 typ・max [A]	Bias current typ, max [A]
+入力に流れ込む電流。ピンから出ていく (PNP 入力の LM358 など) ならマイナス。max は空でも可	Current flowing into the input. Negative if it flows out of the pin (PNP inputs such as the LM358). max can be empty
+電源電流 typ・min・max [A]	Supply current typ, min, max [A]
+1 回路あたりの電源電流。min は空でも可	Supply current per circuit. min can be empty
+出力の振れ幅 上・下 [V]	Output swing high, low [V]
+出力が正の電源から・負の電源から、どこまで近づけるか	How close the output can get to the positive and negative supplies
+短絡電流 [A]	Short-circuit current [A]
+出力を短絡したときに流れる電流	Current that flows when the output is shorted
+雑音 (1 kHz) [V/√Hz]	Noise (1 kHz) [V/√Hz]
+入力換算の電圧雑音密度。n は 10 億分の 1 (40n = 40 nV/√Hz)	Input-referred voltage noise density. n is 1/1,000,000,000 (40n = 40 nV/√Hz)
+入力抵抗・出力抵抗 [Ω]	Input resistance, output resistance [Ω]
+空なら 1e12 と 50 Ω。表に無いことが多い値です	If empty, 1e12 and 50 Ω. These are often not in the table
+位相余裕 [°]	Phase margin [°]
+表にあれば。入れると、その位相余裕になる 2 つ目の極を足します (空でも可)	If the table has it. When entered, a second pole is added to give that phase margin (can be empty)
+モデルを作る	Make model
+入れた値をひな形に入れてモデルを作ります。足りない値・おかしな値は、何を直すかを出します	Puts the entered values into the template and makes the model. Missing or odd values are reported with what to fix
+作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (IN+・IN-・OUT・V+・V-)	Puts the model and notes into the simulation tab. Pins are found by name (IN+, IN-, OUT, V+, V-)
++入力	+input
+−入力	−input
+正の電源	Positive supply
+負の電源	Negative supply
+かんたん作成: 3 端子レギュレータをデータシートの表からつくる	Quick create: make a 3-terminal regulator from the datasheet tables
+データシートの表の typ の値を、同梱のレギュレータ (78xx・AMS1117・LM317 など) と同じひな形に入れてモデルを作ります。表の行の名前は会社ごとにまちまちなので、値はデータシートを見ながら入れます (PDF の数字はクリックで拾えます)	Puts the typ values from the datasheet tables into the same template as the bundled regulators (78xx, AMS1117, LM317 and so on) to make a model. Row names in the tables differ from maker to maker, so enter the values while looking at the datasheet (numbers in the PDF can be picked up by clicking)
+ライン・レギュレーション: 入力電圧を変えたときの出力の変化。表が「入力 7〜25 V で 0.5 mV」なら「0.5m 18」、「0.01 %/V」ならそのまま。	Line regulation: the output change when the input voltage changes. If the table says "0.5 mV for input 7 to 25 V", enter "0.5m 18"; for "0.01 %/V" enter it as is.
+ロード・レギュレーション: 出力電流を変えたときの出力の下がり。「5 mA〜1 A で 1.3 mV」なら「1.3m 0.995」、「0.1 %」なら「0.1% 1.5」(電流の変化と)。	Load regulation: the output drop when the output current changes. For "1.3 mV for 5 mA to 1 A" enter "1.3m 0.995"; for "0.1 %" enter "0.1% 1.5" (with the current change).
+ドロップアウト: 入力が出力よりこれだけ高くないと、出力が下がり始める電圧。電流で増えるなら、その傾き [Ω] も (1 A で 0.4 V 増えるなら 0.4)。	Dropout: the voltage by which the input must exceed the output before the output starts to fall. If it rises with current, its slope [Ω] too (0.4 if it rises 0.4 V at 1 A).
+電流制限: 「入出力の差 [V] 電流 [A]」を 1〜2 行。差が大きいと制限が小さくなる部品 (78xx) は 2 行にします。	Current limit: 1 or 2 lines of "input-output difference [V] current [A]". For parts whose limit falls when the difference is large (78xx), use 2 lines.
+可変のもの (LM317 など) は「可変 (ADJ ピン)」に入れ、出力電圧の欄に基準電圧 (1.25 V) を入れます。	For adjustable ones (LM317 and so on), tick "Adjustable (ADJ pin)" and enter the reference voltage (1.25 V) in the output voltage field.
+開いているデータシートの「電気的特性」の表から、出力電圧 (可変なら基準電圧)・ライン / ロード・レギュレーション (条件の範囲と)・ドロップアウト・グラウンド電流 (可変なら ADJ の電流と最小負荷)・電流制限・リップル除去・雑音の typ を探して欄に入れます。25 °C の行を使い、部品名の電圧 (7805 なら 5 V) のページを先に見ます。入れた値は表と見比べて確かめてください	Finds the typ of output voltage (reference voltage if adjustable), line / load regulation (with the condition range), dropout, ground current (ADJ current and minimum load if adjustable), current limit, ripple rejection and noise in the "Electrical characteristics" table of the open datasheet and puts them into the fields. Uses the 25 °C rows and looks first at the page for the voltage in the part name (5 V for a 7805). Compare the entered values with the table
+LM7805 の例を入れる	Insert the LM7805 example
+同梱の LM7805 を作ったときの値 (onsemi のデータシートの typ) を入れます	Inserts the values used to make the bundled LM7805 (typ from the onsemi datasheet)
+LM317 の例を入れる	Insert the LM317 example
+同梱の LM317 (可変) を作ったときの値 (TI のデータシートの typ) を入れます	Inserts the values used to make the bundled LM317 (adjustable) (typ from the TI datasheet)
+可変 (ADJ ピン)	Adjustable (ADJ pin)
+LM317 のように、抵抗 2 本で出力電圧を決める部品。ピンは IN・ADJ・OUT	A part like the LM317 whose output voltage is set with 2 resistors. Pins are IN, ADJ, OUT
+電圧違い (注文情報):	Voltage variants (ordering information):
+データシートの型番から読んだ出力電圧です。選ぶと、その型番を部品名にして表を読み直します (電圧ごとにページの分かれた表は、そのページの値を使います)	Output voltages read from the part numbers in the datasheet. Choosing one rereads the tables with that part number as the part name (for tables split into pages by voltage, the values on that page are used)
+{part} (出力 {} V)	{part} (output {} V)
+電圧違いをまとめて作る ({n} 通り)	Make all voltage variants ({n})
+注文情報の型番の電圧ごと (パッケージ違いがあればそのパッケージごと) に、表をその型番で読み直してモデルを作り、ピンと「④ 部品の形」はこのフォームのまま (パッケージの分かる型番は組み込みの形) で、部品を全部ライブラリに保存します。組み込みの形が無いパッケージは作りません。先にピン表を確かめてください	For each voltage of the part numbers in the ordering information (and each package, if there are package variants), rereads the tables with that part number and makes a model, keeps the pins and "④ Part shape" from this form (part numbers with a known package use the built-in shape), and saves all the parts to the library. Packages with no built-in shape are not made. Check the pin table first
+グラフから読む:	Read from graph:
+「Dropout Voltage vs Load Current」の図で曲線をクリックします。点に直線を当てて、ドロップアウトと電流による増えを入れます	Click the curve in the "Dropout Voltage vs Load Current" graph. A line is fitted to the points to enter the dropout and its rise with current
+「Ripple Rejection vs Frequency」の図で曲線をクリックします。欄の周波数 (空なら 120 Hz) の値を、表に無いときに入れます	Click the curve in the "Ripple Rejection vs Frequency" graph. The value at the field's frequency (120 Hz if empty) is entered when the table has none
+「Noise Spectral Density」の図で曲線をクリックします。1 kHz の密度を、表に無いときに入れます	Click the curve in the "Noise Spectral Density" graph. The density at 1 kHz is entered when the table has none
+基準電圧 typ [V]・min max	Reference voltage typ [V], min max
+OUT と ADJ の間の電圧 (1.25 V)。min・max は部品ごとの違い (空でも可)	Voltage between OUT and ADJ (1.25 V). min and max are the part-to-part spread (can be empty)
+出力電圧 typ [V]・min max	Output voltage typ [V], min max
+min・max は部品ごとの違い (空でも可)	min and max are the part-to-part spread (can be empty)
+表の測定の入力電圧 [V]	Test input voltage of the table [V]
+表の値を測ったときの入力電圧 (空なら 6.25 V)	The input voltage at which the table values were measured (6.25 V if empty)
+「出力の変化 入力の変化」(0.5m 12.5) か「0.01%/V」	"output change input change" (0.5m 12.5) or "0.01%/V"
+「出力の変化 電流の変化」(1.3m 1) か「0.1% 1.5」	"output change current change" (1.3m 1) or "0.1% 1.5"
+ドロップアウト [V]・電流による増え [Ω]	Dropout [V], rise with current [Ω]
+小さい電流でのドロップアウトと、1 A あたりの増え (空なら 0)	Dropout at low current and its rise per 1 A (0 if empty)
+ADJ の電流 typ・max [A]・最小負荷 [A]	ADJ current typ, max [A], minimum load [A]
+ADJ ピンから出る電流と、出力に要る最小の電流	The current out of the ADJ pin and the minimum current the output needs
+グラウンド電流 [A]	Ground current [A]
+GND ピンに流れる電流 (自己消費)	Current into the GND pin (self-consumption)
+電流制限: 差 [V] 電流 [A]	Current limit: difference [V] current [A]
+1 行に「入出力の差 電流」。1 行か 2 行 (差で変わる部品)	One line: "input-output difference current". 1 or 2 lines (for parts that change with the difference)
+リップル除去 [dB]・周波数 [Hz]	Ripple rejection [dB], frequency [Hz]
+入力のリップルが出力でどれだけ小さくなるか	How much smaller the input ripple becomes at the output
+リップル除去を測った出力電圧 [V]	Output voltage at which ripple rejection was measured [V]
+表の条件の出力電圧 (LM317 は 10 V)	The output voltage in the table's conditions (10 V for the LM317)
+「rms [V] 帯域の下 上 [Hz]」(50u 10 100k) か、密度 1 つ (3u = 3 µV/√Hz)	"rms [V] lower upper bandwidth [Hz]" (50u 10 100k) or a single density (3u = 3 µV/√Hz)
+入れた値をひな形に入れてモデルを作ります	Puts the entered values into the template and makes the model
+作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (IN・GND か ADJ・OUT)	Puts the model and notes into the simulation tab. Pins are found by name (IN, GND or ADJ, OUT)

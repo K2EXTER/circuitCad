@@ -196,7 +196,7 @@ impl BoardEditor {
             if let Some(f) = self.selected_fab() {
                 ui.small(i18n::tr(f.summary));
                 for n in f.notes {
-                    ui.small(format!("・{}", i18n::tr(n)));
+                    ui.small(i18n::trf!("・{}", i18n::tr(n)));
                 }
                 ui.horizontal(|ui| {
                     if ui.button(i18n::tr("ルールをこの発注先に合わせる")).on_hover_text(i18n::tr("DRC の最小線幅・最小間隔・最小穴径などを、この発注先の値にします。配線の太さやビアの大きさの初期値も変わります")).clicked() {

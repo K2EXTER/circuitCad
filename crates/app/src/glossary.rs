@@ -472,9 +472,9 @@ impl GlossaryWindow {
                     };
                     if i18n::is_ja() {
                         ui.heading(term.name);
-                        ui.small(format!("読み: {}　{kind}", term.reading));
+                        ui.small(i18n::trf!("読み: {}　{kind}", term.reading));
                         if !term.aliases.is_empty() {
-                            ui.small(format!("別名: {}", term.aliases.join("、")));
+                            ui.small(i18n::trf!("別名: {}", term.aliases.join("、")));
                         }
                     } else {
                         // the Japanese word stays beside the English one: the lessons not yet translated use it

@@ -112,7 +112,7 @@ impl SchEditor {
                 ui.end_row();
             });
             for n in &b.notes {
-                ui.label(egui::RichText::new(format!("・{}", i18n::tr_dyn(n))).small().color(crate::learn::NOTE));
+                ui.label(egui::RichText::new(i18n::trf!("・{}", i18n::tr_dyn(n))).small().color(crate::learn::NOTE));
             }
         }
     }
