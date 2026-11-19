@@ -121,6 +121,26 @@ struct Members {
 /// A chip pin's piece of strip: its row, first and last column, and the column of its wire.
 type Piece = (u16, u16, u16, u16);
 
+/// The chips and row parts in the order they go along the board: each next to the one it shares the most pin-to-pin nets with
+/// (the wires between them stay short), else in the schematic's order.
+fn chip_order(on: &[(String, Look, crate::breadboard::Pins)], carry: &BTreeMap<String, Carry>) -> Vec<usize> {
+    let chips: Vec<usize> = (0..on.len()).filter(|k| on[*k].1 != Look::TwoLead).collect();
+    let shared = |a: usize, b: usize| -> usize {
+        let nets_b: BTreeSet<&String> = on[b].2.iter().map(|(_, n)| n).filter(|n| carry.get(*n) == Some(&Carry::Pins)).collect();
+        on[a].2.iter().map(|(_, n)| n).filter(|n| nets_b.contains(n)).count()
+    };
+    let mut out: Vec<usize> = vec![];
+    let mut left: Vec<usize> = chips;
+    while !left.is_empty() {
+        let next = match out.last() {
+            None => 0,
+            Some(&last) => (0..left.len()).max_by_key(|i| (shared(last, left[*i]), std::cmp::Reverse(*i))).unwrap_or(0),
+        };
+        out.push(left.remove(next));
+    }
+    out
+}
+
 /// Lays the schematic out on a stripboard.
 pub fn strip_layout(s: &Schematic) -> StripLayout {
     let c = read(s);
@@ -221,18 +241,24 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
     let mut bottom = top;
     let mut piece_of_pin: BTreeMap<(String, String), Piece> = BTreeMap::new();
     let mut placed: BTreeMap<usize, Vec<(String, At)>> = BTreeMap::new();
-    for (refdes, look, pins) in c.on.iter().filter(|p| p.1 != Look::TwoLead) {
+    for (refdes, look, pins) in chip_order(&c.on, &carry).into_iter().map(|k| &c.on[k]) {
         let mut leads = vec![];
         let (half, two_cols) = if *look == Look::Dip { (pins.len() / 2, true) } else { (pins.len(), false) };
         // two spare holes at each piece's outer end when a pin is wired to other chip pins (two wire ends may share a piece)
         let spare = if pins.iter().any(|(_, n)| carry.get(n) == Some(&Carry::Pins)) { 2 } else { 0 };
+        // each pin's row and side: a chip's first half down the left column, the rest up the right one (pin 1 top left)
+        let side_row = |k: usize| if k < half { (top + k as u16, true) } else { (top + (pins.len() - 1 - k) as u16, false) };
+        // a column for the wire (or the standing part) only for the pins that go up to a home strip, in the order of their rows
+        let goes_up = |n: &str| matches!(carry.get(n), Some(Carry::Home | Carry::Via(_)));
+        let up_rank = |left: bool, row: u16| -> u16 { pins.iter().enumerate().filter(|(k, (_, n))| side_row(*k).1 == left && side_row(*k).0 < row && goes_up(n)).count() as u16 };
+        let ups = |left: bool| pins.iter().enumerate().filter(|(k, (_, n))| side_row(*k).1 == left && goes_up(n)).count() as u16;
         let x = col + spare;
-        let left_pin = x + half as u16;
+        let left_pin = x + ups(true);
         let right_pin = left_pin + 3;
-        let end = if two_cols { right_pin + half as u16 + 1 + spare } else { left_pin + 1 };
+        let end = if two_cols { right_pin + ups(false) + 1 + spare } else { left_pin + 1 };
         for (k, (pin, net)) in pins.iter().enumerate() {
-            let (row, left) = if k < half { (top + k as u16, true) } else { (top + (pins.len() - 1 - k) as u16, false) };
-            let (at, wire, first, last) = if left { ((row, left_pin), x + (row - top), col, left_pin) } else { ((row, right_pin), right_pin + 1 + (row - top), right_pin, end - 1) };
+            let (row, left) = side_row(k);
+            let (at, wire, first, last) = if left { ((row, left_pin), x + up_rank(true, row), col, left_pin) } else { ((row, right_pin), right_pin + 1 + up_rank(false, row), right_pin, end - 1) };
             leads.push((pin.clone(), at));
             taken.insert(at);
             piece_of_pin.insert((refdes.clone(), pin.clone()), (row, first, last, wire));
@@ -268,7 +294,8 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
         }
         bottom = bottom.max(top + half as u16);
         l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads });
-        col = end + 2;
+        // the next block starts right after this one's last cut, which also cuts the next block's rows off from this one
+        col = end + 1;
     }
     // nets of chip pins only: a wire from each pin's piece to the one before, at free holes of the pieces
     let free_in = |piece: Piece, taken: &BTreeSet<At>, cuts: &BTreeSet<At>| -> Option<At> {
@@ -281,9 +308,20 @@ pub fn strip_layout(s: &Schematic) -> StripLayout {
         if carry[n] != Carry::Pins {
             continue;
         }
-        for w in members[n].pins.windows(2) {
-            let (Some(pa), Some(pb)) = (piece_of_pin.get(&w[0]).copied(), piece_of_pin.get(&w[1]).copied()) else { continue };
-            if let (Some(a), Some(b)) = (free_in(pa, &taken, &l.cuts), free_in(pb, &taken, &l.cuts)) {
+        // the shortest set of wires that joins the pins (each next pin wired to the nearest one already joined)
+        let pieces: Vec<Piece> = members[n].pins.iter().filter_map(|p| piece_of_pin.get(p).copied()).collect();
+        let dist = |a: Piece, b: Piece| (a.0 as f64 - b.0 as f64).hypot(a.3 as f64 - b.3 as f64);
+        let mut joined = vec![0usize];
+        while joined.len() < pieces.len() {
+            let Some((from, to)) = joined
+                .iter()
+                .flat_map(|&j| (0..pieces.len()).filter(|k| !joined.contains(k)).map(move |k| (j, k)))
+                .min_by(|x, y| dist(pieces[x.0], pieces[x.1]).total_cmp(&dist(pieces[y.0], pieces[y.1])))
+            else {
+                break;
+            };
+            joined.push(to);
+            if let (Some(a), Some(b)) = (free_in(pieces[from], &taken, &l.cuts), free_in(pieces[to], &taken, &l.cuts)) {
                 taken.insert(a);
                 taken.insert(b);
                 l.links.push(Link { a, b, net: n.clone() });
@@ -439,8 +477,9 @@ mod tests {
 
 #[cfg(test)]
 mod size_tests {
-    /// The parts' leads stand in for wires (a decoder's resistor from its pin's piece to the display's strip), and nets of chip pins
-    /// only or of one lead get no strip: the 7-segment counter took 100 x 37 holes with a strip for every net, and now far fewer.
+    /// The parts' leads stand in for wires (a decoder's resistor from its pin's piece to the display's strip), nets of chip pins only
+    /// or of one lead get no strip, and only the pins going up to a strip take a column: the 7-segment counter took 100 x 37 holes with
+    /// a strip and a column for everything, and now 82 x 21.
     #[test]
     fn leads_as_wires_keep_the_board_small() {
         let size = |f: &str| {
@@ -450,7 +489,7 @@ mod size_tests {
             (l.cols, l.rows, l.homes.len())
         };
         let (cols, rows, homes) = size("seg7_counter");
-        assert!(rows <= 22 && homes <= 10 && cols <= 100, "{cols} x {rows}, {homes} home strips");
+        assert!(rows <= 22 && homes <= 10 && cols <= 85, "{cols} x {rows}, {homes} home strips");
         let (cols, rows, _) = size("traffic_light");
         assert!((cols as u32) * (rows as u32) < 58 * 30 / 2, "{cols} x {rows}");
     }
