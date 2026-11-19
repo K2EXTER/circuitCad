@@ -70,8 +70,14 @@ def main():
             durs[-2] = int((t - last_t) / SPEED)
         last_t = t
     durs[-1] = 2500
-    pal = [f.convert("P", palette=Image.ADAPTIVE, colors=64) for f in seq]
-    pal[0].save(out, save_all=True, append_images=pal[1:], duration=durs, loop=0, optimize=True)
+    # one palette for the whole film, no dithering: a frame then differs from the one before only where the screen changed,
+    # and the GIF stores just that part (a palette per frame with dithering made every frame differ everywhere: twice the size)
+    sample = Image.new("RGB", (width, (h + BAR) * 8))
+    for k in range(8):
+        sample.paste(seq[k * (len(seq) - 1) // 7], (0, k * (h + BAR)))
+    palette = sample.quantize(colors=96, method=Image.Quantize.MEDIANCUT)
+    pal = [f.quantize(palette=palette, dither=Image.Dither.NONE) for f in seq]
+    pal[0].save(out, save_all=True, append_images=pal[1:], duration=durs, loop=0, optimize=False)
     print("wrote", out, "%d frames, %d KB, %.1f s" % (len(seq), os.path.getsize(out) // 1024, sum(durs) / 1000))
 
 

@@ -80,8 +80,8 @@ pub struct BreadboardView {
     knob_values: std::collections::BTreeMap<String, f64>,
     /// A potentiometer being turned on the board: its knob, where the pointer went down and the knob's position then.
     knob_drag: Option<(usize, Pos2, f64)>,
-    /// Where each part was drawn last (for the tests that click on the board).
-    #[cfg(test)]
+    /// Where each part was drawn last frame: a potentiometer is turned by its drawn knob (in the middle gap, away from its
+    /// leads), and the tests click on the board here.
     drawn: Vec<(String, Rect)>,
     temp_c: Option<f64>,
     /// Switches to move once the circuit starts running (`--proto-flip SW1,SW2`, for screenshots).
@@ -658,7 +658,14 @@ impl BreadboardView {
         // with the circuit running, a potentiometer is turned on the board: dragged right or up turns it towards pin 3, the wheel
         // a notch at a time
         if let Some(lv) = self.live.as_mut().filter(|v| v.error.is_none()) {
-            let pot_at = |lv: &Live, p: Pos2| l.parts.iter().filter(|x| part_rect(x, to, pitch).expand(pitch * 0.4).contains(p)).find_map(|x| lv.knob_index(&x.refdes).filter(|k| lv.knobs[*k].pot.is_some()));
+            // the leads, or the knob as it was drawn (the hover help on the knob says to drag or wheel it)
+            let drawn = &self.drawn;
+            let pot_at = |lv: &Live, p: Pos2| {
+                l.parts
+                    .iter()
+                    .filter(|x| part_rect(x, to, pitch).expand(pitch * 0.4).contains(p) || drawn.iter().any(|(r, d)| *r == x.refdes && d.contains(p)))
+                    .find_map(|x| lv.knob_index(&x.refdes).filter(|k| lv.knobs[*k].pot.is_some()))
+            };
             if !on_switch
                 && response.hovered()
                 && ui.input(|i| i.pointer.primary_pressed())
@@ -914,11 +921,8 @@ impl BreadboardView {
             });
             let comp = turned.as_ref().or(comp);
             let rect = draw_part(&painter, p, comp, to, pitch, &font, lit);
-            #[cfg(test)]
-            {
-                self.drawn.retain(|(r, _)| *r != p.refdes);
-                self.drawn.push((p.refdes.clone(), rect));
-            }
+            self.drawn.retain(|(r, _)| *r != p.refdes);
+            self.drawn.push((p.refdes.clone(), rect));
             if response.hover_pos().is_some_and(|h| rect.contains(h)) {
                 hovered_part = Some((p.refdes.clone(), comp.map(|c| c.value.clone()).unwrap_or_default()));
             }
@@ -1482,7 +1486,9 @@ mod tests {
             out.textures_delta.clear();
         };
         run(&mut app, vec![]);
-        let at = app.breadboard.drawn.iter().find(|(r, _)| r == "VR1").unwrap().1.center();
+        // on the drawn knob (its lower edge, in the middle gap): away from the leads, where the hover help says to turn it
+        let drawn = app.breadboard.drawn.iter().find(|(r, _)| r == "VR1").unwrap().1;
+        let at = Pos2::new(drawn.center().x, drawn.bottom() - 3.0);
         let knob = |app: &App| app.breadboard.live.as_ref().and_then(|v| v.knobs.get(v.knob_index("VR1")?)).unwrap().value;
         assert!((knob(&app) - 0.3).abs() < 1e-9);
         let button = |pos: Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };

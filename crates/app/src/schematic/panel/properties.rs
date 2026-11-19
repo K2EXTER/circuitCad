@@ -140,11 +140,19 @@ impl SchEditor {
                 if c.kind == Kind::Pot {
                     // the knob: how far it is turned, from pin 1 (0 %) to pin 3 (100 %)
                     let mut pos = sch_core::pot_position(&c.value) * 100.0;
-                    ui.spacing_mut().slider_width = (ui.available_width() - 60.0).max(80.0);
-                    let changed = ui
-                        .add(egui::Slider::new(&mut pos, 0.0..=100.0).suffix(" %").step_by(1.0).text(i18n::tr("つまみ")))
-                        .on_hover_text(i18n::tr("つまみを回す位置です。0 % で真ん中の足 (2 番) が 1 番の足の側に、100 % で 3 番の足の側に来ます。両端を電源と GND につなぐと、真ん中の足から 0 V〜電源の電圧を取り出せます (分圧)。値の欄の POS= と同じです"))
-                        .changed();
+                    // label, slider, value in one row; the slider gets what is left after the label and the value
+                    // (a slider with its own value box and text measured wider than the room it was given, so the
+                    // side panel grew a little every frame until it filled the window)
+                    let mut changed = false;
+                    ui.horizontal(|ui| {
+                        ui.label(i18n::tr("つまみ"));
+                        ui.spacing_mut().slider_width = (ui.available_width() - 60.0).max(60.0);
+                        changed = ui
+                            .add(egui::Slider::new(&mut pos, 0.0..=100.0).step_by(1.0).show_value(false))
+                            .on_hover_text(i18n::tr("つまみを回す位置です。0 % で真ん中の足 (2 番) が 1 番の足の側に、100 % で 3 番の足の側に来ます。両端を電源と GND につなぐと、真ん中の足から 0 V〜電源の電圧を取り出せます (分圧)。値の欄の POS= と同じです"))
+                            .changed();
+                        ui.label(format!("{pos:.0} %"));
+                    });
                     if changed {
                         c.value = sch_core::with_pot_position(&c.value, pos / 100.0);
                     }

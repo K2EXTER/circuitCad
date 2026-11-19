@@ -93,20 +93,53 @@ def out(*p):
     return path
 
 
+# The four tabs of the app as small pictures along the bottom of the OGP image: (screenshot in docs/images[/en], crop box on
+# the 1920-wide screenshot, label ja, label en). The screenshots come from tools/gen_screenshots.ps1; run that first.
+# A name under guide/ is the walkthrough's picture (docs/first-board.html), the same for both languages: only the drawing shows.
+OG_TABS = [
+    ("guide/dc.png", (900, 90, 1820, 820), "回路図", "Schematic"),
+    ("prototype.png", (650, 90, 1700, 610), "試作", "Prototype"),
+    ("guide/board.png", (540, 100, 1560, 910), "基板", "PCB"),
+    ("bench.png", (760, 80, 1760, 900), "実機", "Bench"),
+]
+
+
 def og(lang="ja"):
     W, H = 1200, 630
     img = Image.new("RGB", (W, H), (245, 247, 250))
-    img.paste(render(300), (110, 165), render(300))
+    logo = render(170)
+    img.paste(logo, (70, 52), logo)
     d = ImageDraw.Draw(img)
     font = os.path.join(ROOT, "crates", "app", "assets", "fonts", "BIZUDGothic-Regular.ttf")
-    big, mid = ImageFont.truetype(font, 92), ImageFont.truetype(font, 38)
-    d.text((470, 205), "circuitCad", font=big, fill=DARK)
+    big, mid, small = ImageFont.truetype(font, 76), ImageFont.truetype(font, 32), ImageFont.truetype(font, 26)
+    d.text((280, 60), "circuitCad", font=big, fill=DARK)
     if lang == "en":
-        lines = ("From schematic to board order.", "A circuit CAD you learn with.")
+        lines = ("Schematic, breadboard, board order, bench.", "A circuit CAD you learn with.")
     else:
-        lines = ("回路図から、基板の発注データまで。", "学びながら使える、日本語の回路CAD")
-    d.text((474, 330), lines[0], font=mid, fill=(28, 35, 48))
-    d.text((474, 390), lines[1], font=mid, fill=(90, 101, 119))
+        lines = ("回路図からブレッドボード、基板の発注、実機まで。", "学びながら使える、日本語の回路CAD")
+    d.text((284, 158), lines[0], font=mid, fill=(28, 35, 48))
+    d.text((284, 204), lines[1], font=mid, fill=(90, 101, 119))
+    # the tabs: picture, label, arrows between them
+    shots = os.path.join(ROOT, "docs", "images", *(["en"] if lang == "en" else []))
+    tw, th, gap, top = 252, 200, 44, 300
+    left = (W - (4 * tw + 3 * gap)) // 2
+    for k, (name, box, ja, en) in enumerate(OG_TABS):
+        x = left + k * (tw + gap)
+        folder = os.path.join(ROOT, "docs", "images") if name.startswith("guide/") else shots
+        pic = Image.open(os.path.join(folder, *name.split("/"))).convert("RGB").crop(box)
+        scale = max(tw / pic.width, th / pic.height)
+        pic = pic.resize((round(pic.width * scale), round(pic.height * scale)), Image.LANCZOS)
+        pic = pic.crop(((pic.width - tw) // 2, (pic.height - th) // 2, (pic.width - tw) // 2 + tw, (pic.height - th) // 2 + th))
+        mask = Image.new("L", (tw, th), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, tw - 1, th - 1], radius=14, fill=255)
+        img.paste(pic, (x, top), mask)
+        d.rounded_rectangle([x, top, x + tw - 1, top + th - 1], radius=14, outline=LINE, width=2)
+        label = en if lang == "en" else ja
+        lw = d.textlength(label, font=small)
+        d.text((x + (tw - lw) / 2, top + th + 18), label, font=small, fill=DARK)
+        if k < 3:
+            ax, ay = x + tw + gap / 2, top + th / 2
+            d.polygon([(ax - 9, ay - 13), (ax + 11, ay), (ax - 9, ay + 13)], fill=LIGHT)
     return img
 
 
