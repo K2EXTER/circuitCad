@@ -69,6 +69,50 @@ pub struct Live {
     /// The scope: its net and the points of the last `SCOPE_SPAN` seconds of the screen (simulated time, volts).
     probe: Option<String>,
     trace: VecDeque<(f64, f64)>,
+    /// The microcontroller boards running their sketches (B6 ⑤).
+    pub mcus: Vec<Mcu>,
+}
+
+/// A microcontroller board on the breadboard and its sketch: the machine running it (None when the sketch does not compile: the
+/// sketch box says why), and the net of each of its pins D0..D13, A0..A7 on the board.
+pub struct Mcu {
+    pub refdes: String,
+    pub machine: Option<sim_core::sketch::Machine>,
+    nets: Vec<Option<String>>,
+}
+
+/// The circuit as a running sketch sees it: a pin's voltage is its net's now, a pin's drive sets the source and the resistance
+/// behind it inside the board's model (`ARDUINO_NANO`: `VpD13` and `RpD13`).
+struct RunIo<'a> {
+    run: &'a mut TranRun,
+    refdes: &'a str,
+    nets: &'a [Option<String>],
+}
+
+/// The resistance behind a pin: an output, the pull-up, an input.
+const PIN_OUT_OHM: f64 = 25.0;
+const PIN_PULLUP_OHM: f64 = 35e3;
+const PIN_INPUT_OHM: f64 = 1e9;
+
+impl sim_core::sketch::Io for RunIo<'_> {
+    fn volts(&self, pin: u8) -> f64 {
+        match self.nets.get(pin as usize).and_then(|n| n.as_deref()) {
+            Some(n) if is_ground(n) => 0.0,
+            Some(n) => self.run.voltage(n).unwrap_or(0.0),
+            None => 0.0,
+        }
+    }
+    fn drive(&mut self, pin: u8, d: sim_core::sketch::Drive) {
+        use sim_core::sketch::{pin_name, Drive, VCC};
+        let name = pin_name(pin);
+        let (v, r) = match d {
+            Drive::Input => (0.0, PIN_INPUT_OHM),
+            Drive::Pullup => (VCC, PIN_PULLUP_OHM),
+            Drive::Out(x) => (x.clamp(0.0, 1.0) * VCC, PIN_OUT_OHM),
+        };
+        self.run.set_source(&format!("{}.Vp{name}", self.refdes), Waveform::Dc(v));
+        self.run.set_resistance(&format!("{}.Rp{name}", self.refdes), r);
+    }
 }
 
 impl Live {
@@ -109,6 +153,7 @@ impl Live {
             held: None,
             probe: None,
             trace: VecDeque::new(),
+            mcus: vec![],
         };
         let wanted: Vec<String> = currents.iter().map(|n| format!("I({n})")).collect();
         let keep = |n: &str| n.starts_with("V(") || wanted.iter().any(|w| w.eq_ignore_ascii_case(n));
@@ -119,6 +164,31 @@ impl Live {
         }
         me.read_now();
         me
+    }
+
+    /// A microcontroller board with its sketch (or why it does not compile) and its pins' nets (D0..D13, A0..A7); its `setup` runs
+    /// at once.
+    pub fn add_mcu(&mut self, refdes: String, sketch: Result<sim_core::sketch::Sketch, sim_core::sketch::SketchError>, nets: Vec<Option<String>>) {
+        let machine = sketch.ok().map(sim_core::sketch::Machine::new);
+        self.mcus.push(Mcu { refdes, machine, nets });
+        self.run_mcus();
+        self.read_now();
+    }
+
+    /// The sketches whose time has come run on (at the run's time now).
+    fn run_mcus(&mut self) {
+        let Some(run) = self.run.as_mut() else { return };
+        let now = run.time();
+        for m in &mut self.mcus {
+            if let Some(machine) = m.machine.as_mut() {
+                machine.run(now, &mut RunIo { run, refdes: &m.refdes, nets: &m.nets });
+            }
+        }
+    }
+
+    /// When the next sketch wakes from its `delay` (None with no sketch running).
+    fn next_wake(&self) -> Option<f64> {
+        self.mcus.iter().filter_map(|m| m.machine.as_ref().filter(|x| x.error.is_none()).map(|x| x.waiting_until())).reduce(f64::min)
     }
 
     pub fn time(&self) -> f64 {
@@ -238,6 +308,28 @@ impl Live {
             run.extend(target * 2.0);
         }
         self.behind = false;
+        // with sketches: solved from one wake to the next, the sketches run at each (at most a millisecond apart, so a sketch
+        // without delay still sees the circuit move)
+        if self.next_wake().is_some() {
+            while self.run.as_ref().is_some_and(|r| r.time() < target - 1e-12) {
+                let now = self.run.as_ref().unwrap().time();
+                let wake = self.next_wake().unwrap_or(target);
+                let next = if wake > now + 1e-9 { wake.min(target) } else { (now + 1e-3).min(target) };
+                if let Err(e) = self.run.as_mut().unwrap().advance_to(next) {
+                    self.error = Some(format!("計算が止まりました: {e}"));
+                    self.run = None;
+                    return;
+                }
+                self.run_mcus();
+                if started.elapsed().as_secs_f64() > FRAME_BUDGET {
+                    self.behind = true;
+                    break;
+                }
+            }
+            self.read_now();
+            return;
+        }
+        let Some(run) = self.run.as_mut() else { return };
         let pieces = 4;
         for k in 1..=pieces {
             let t = run.time() + (target - run.time()) / (pieces - k + 1) as f64;
@@ -381,4 +473,54 @@ mod tests {
         assert!(t.len() > 10 && t.len() == v.len());
         assert!(t.windows(2).all(|w| w[1] >= w[0]));
     }
+
+    /// The board running with its microcontroller and sketch (as the proto tab starts it).
+    fn with_sketch(e: &crate::schematic::SchEditor) -> Live {
+        let l = sch_core::breadboard::auto_layout(&e.sch);
+        let nets = sch_core::breadboard::board_nets(&e.sch, &l);
+        let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
+        let pots: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Pot).map(|c| c.refdes.clone()).collect();
+        let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, vec![], &pots);
+        for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
+            let pins = crate::breadboard::sketch_ui::pin_nets(&e.sch, &refdes, &nets);
+            live.add_mcu(refdes.clone(), sim_core::sketch::compile(&crate::breadboard::sketch_ui::sketch_of(e, &refdes)), pins);
+        }
+        live
+    }
+
+    /// The Arduino blink sample: the sketch turns D13 on and off every half second, and the LED behind it follows.
+    #[test]
+    fn the_arduino_sketch_blinks_the_led() {
+        let e = sample("arduino_blink.schjson");
+        let mut live = with_sketch(&e);
+        assert!(live.error.is_none(), "{:?}", live.error);
+        assert_eq!(live.mcus.len(), 1);
+        let mut seen = vec![];
+        for _ in 0..8 {
+            live.advance(0.25);
+            seen.push(live.current("D1").unwrap_or(0.0) > 2e-3);
+        }
+        assert!(live.mcus[0].machine.as_ref().unwrap().error.is_none());
+        // read every 0.25 s: on for 0.5 s, off for 0.5 s (a reading at the very moment of a change shows the state up to it)
+        assert_eq!(seen, [true, true, false, false, true, true, false, false], "lit every other half second");
+    }
+
+    /// The Arduino pot sample: turning the knob up brightens the LED on D9, and the readings go to the serial monitor.
+    #[test]
+    fn the_arduino_reads_the_knob_and_sets_the_led() {
+        let e = sample("arduino_pot.schjson");
+        let mut live = with_sketch(&e);
+        let k = live.knob_index("VR1").unwrap();
+        let at = |live: &mut Live, pos: f64| {
+            live.set_knob(k, pos);
+            live.advance(0.5);
+            live.current("D1").unwrap_or(0.0)
+        };
+        let (low, high) = (at(&mut live, 0.9), at(&mut live, 0.1));
+        // the wiper nearer pin 1 (5 V) reads more
+        assert!(high > low + 2e-3, "low {low} high {high}");
+        let serial = &live.mcus[0].machine.as_ref().unwrap().serial;
+        assert!(serial.lines().count() >= 4, "{serial}");
+    }
 }
+

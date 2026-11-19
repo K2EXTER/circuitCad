@@ -15,6 +15,9 @@ use sch_core::breadboard::{auto_layout, board_nets, check, moved, net_at, rotate
 use std::collections::BTreeSet;
 
 mod live;
+pub(crate) mod sketch_ui;
+#[cfg(test)]
+pub use sketch_ui::BLINK;
 mod sound;
 use live::Live;
 
@@ -94,6 +97,8 @@ pub struct BreadboardView {
     /// burnt, the temperature was changed).
     broken: Vec<(String, sim_core::Fault)>,
     restart: bool,
+    /// The sketches the run was started with (`sketch_ui::sketches_key`): a change of one starts it again.
+    sketch_key: u64,
     /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
     knob_values: std::collections::BTreeMap<String, f64>,
     /// A potentiometer being turned on the board: its knob, where the pointer went down and the knob's position then.
@@ -297,6 +302,7 @@ impl BreadboardView {
         {
             self.want_live_logic = true;
         }
+        self.sketch_ui(ui, sch);
         // the meter with the power off reads the schematic's DC point (what the board will read once it is switched on)
         if !self.powered && self.tool == Tool::Meter && sch.bench_voltages().is_none() && !self.dc_asked && problems.is_empty() {
             self.dc_asked = true;
@@ -338,17 +344,28 @@ impl BreadboardView {
         });
         ui.separator();
         ui.label(egui::RichText::new(i18n::tr("部品と差す穴")).strong());
+        // one part a row, its holes wrapped within the panel (a 30-pin board on one line widened the panel past the breadboard)
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            egui::Grid::new("bb_parts").num_columns(2).striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
-                for p in &l.parts {
-                    let picked = self.picked.as_deref() == Some(p.refdes.as_str());
-                    if ui.selectable_label(picked, egui::RichText::new(&p.refdes).strong()).on_hover_text(i18n::tr("選ぶと、ブレッドボードの上でこの部品が光ります")).clicked() {
-                        self.picked = if picked { None } else { Some(p.refdes.clone()) };
-                    }
-                    ui.label(p.leads.iter().map(|(pin, h)| format!("{pin}:{}", h.name())).collect::<Vec<_>>().join("  "));
-                    ui.end_row();
+            for (k, p) in l.parts.iter().enumerate() {
+                let picked = self.picked.as_deref() == Some(p.refdes.as_str());
+                let row = |ui: &mut egui::Ui, picked: bool| {
+                    ui.horizontal_top(|ui| {
+                        let clicked = ui.add_sized([44.0, 18.0], egui::Button::selectable(picked, egui::RichText::new(&p.refdes).strong())).on_hover_text(i18n::tr("選ぶと、ブレッドボードの上でこの部品が光ります")).clicked();
+                        let text = p.leads.iter().map(|(pin, h)| format!("{pin}:{}", h.name())).collect::<Vec<_>>().join("  ");
+                        ui.add(egui::Label::new(text).wrap());
+                        clicked
+                    })
+                    .inner
+                };
+                let clicked = if k % 2 == 1 {
+                    egui::Frame::NONE.fill(ui.visuals().faint_bg_color).show(ui, |ui| row(ui, picked)).inner
+                } else {
+                    row(ui, picked)
+                };
+                if clicked {
+                    self.picked = if picked { None } else { Some(p.refdes.clone()) };
                 }
-            });
+            }
             if !l.off_board.is_empty() {
                 ui.add_space(6.0);
                 ui.label(egui::RichText::new(i18n::tr("ブレッドボードの外 (電源・電池・信号源)")).strong()).on_hover_text(i18n::tr("実験用の電源・電池・発振器などは、ブレッドボードの外に置いて、線でつなぎます"));
@@ -407,7 +424,9 @@ impl BreadboardView {
             return;
         }
         let board_changed = self.run_key.as_ref().is_none_or(|(r, k)| *r != sch.rev || k != l);
-        if board_changed || self.restart {
+        let sketches = sketch_ui::sketches_key(sch);
+        if board_changed || self.restart || sketches != self.sketch_key {
+            self.sketch_key = sketches;
             self.run_key = Some((sch.rev, l.clone()));
             self.restart = false;
             // a new board (or schematic) has new parts: nothing on it is burnt yet
@@ -433,6 +452,11 @@ impl BreadboardView {
                     knobs.extend(l.parts.iter().filter(|p| sch.sch.components.iter().any(|c| c.refdes == p.refdes && c.kind == sch_core::Kind::Pot)).map(|p| p.refdes.clone()));
                     let mut lv = Live::start(c, &leds, sch.live_switches(), &knobs);
                     lv.speed = speed;
+                    // the microcontroller boards with their sketches (B6 ⑤)
+                    for refdes in sketch_ui::boards(&sch.sch) {
+                        let pins = sketch_ui::pin_nets(&sch.sch, &refdes, &nets);
+                        lv.add_mcu(refdes.clone(), sim_core::sketch::compile(&sketch_ui::sketch_of(sch, &refdes)), pins);
+                    }
                     for (r, v) in &self.knob_values {
                         if let Some(k) = lv.knob_index(r) {
                             lv.set_knob(k, *v);

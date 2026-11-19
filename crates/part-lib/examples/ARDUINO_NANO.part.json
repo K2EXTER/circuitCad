@@ -1,0 +1,243 @@
+{
+  "name": "ARDUINO_NANO",
+  "category": "マイコン",
+  "description": "Arduino Nano 互換のマイコンボード (ATmega328P、5 V、USB 給電)。ブレッドボードの中央の溝をまたいで差す。試作のタブでスケッチ (Arduino の C の小さな部分) を書くと、電源を入れたときに回路と一緒に動く: D0〜D13・A0〜A7 は出力 (25Ω で 0 / 5 V)・入力・INPUT_PULLUP (35 kΩ)、analogRead は 0〜1023、analogWrite は平均の電圧。5V のピンは USB から 5 V を出す。命令の時間・PWM のパルス・割り込み・ライブラリは扱わない",
+  "prefix": "U",
+  "value": "ARDUINO_NANO",
+  "footprint_name": "ARDUINO_NANO_DIP30",
+  "height": 8.0,
+  "pins": [
+    {
+      "number": "1",
+      "name": "D1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "2",
+      "name": "D0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "3",
+      "name": "RST",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "GND",
+      "side": "left",
+      "kind": "power_in"
+    },
+    {
+      "number": "5",
+      "name": "D2",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "6",
+      "name": "D3",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "7",
+      "name": "D4",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "8",
+      "name": "D5",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "9",
+      "name": "D6",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "10",
+      "name": "D7",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "11",
+      "name": "D8",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "12",
+      "name": "D9",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "13",
+      "name": "D10",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "14",
+      "name": "D11",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "15",
+      "name": "D12",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "16",
+      "name": "D13",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "17",
+      "name": "3V3",
+      "side": "right",
+      "kind": "power_out"
+    },
+    {
+      "number": "18",
+      "name": "AREF",
+      "side": "right"
+    },
+    {
+      "number": "19",
+      "name": "A0",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "20",
+      "name": "A1",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "21",
+      "name": "A2",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "22",
+      "name": "A3",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "23",
+      "name": "A4",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "24",
+      "name": "A5",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "25",
+      "name": "A6",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "26",
+      "name": "A7",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "27",
+      "name": "5V",
+      "side": "right",
+      "kind": "power_out"
+    },
+    {
+      "number": "28",
+      "name": "RST",
+      "side": "right"
+    },
+    {
+      "number": "29",
+      "name": "GND",
+      "side": "right",
+      "kind": "power_in"
+    },
+    {
+      "number": "30",
+      "name": "VIN",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 30,
+    "pitch": 2.54,
+    "row_spacing": 15.24,
+    "pad_len": 1.7,
+    "pad_width": 1.7,
+    "drill": 1.0
+  },
+  "body": {
+    "shape": "rect",
+    "w": 18.0,
+    "h": 43.2,
+    "mark": "dot",
+    "mark_pin": "1"
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "ARDUINO_NANO",
+    "text": ".subckt ARDUINO_NANO d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 d11 d12 d13 a0 a1 a2 a3 a4 a5 a6 a7 v5 gnd gnd2\n* Arduino Nano for the sketch beside the circuit: each of D0..D13 and A0..A7 is a source behind a resistor. The sketch sets them\n* (TranRun::set_source / set_resistance): an output 0 or 5 V behind 25 ohm, an input 1 Gohm, INPUT_PULLUP 5 V behind 35 kohm.\n* 5V is the USB supply behind 0.2 ohm; the chip itself takes about 20 mA.\nVpD0 sd0 gnd DC 0\nRpD0 sd0 d0 1G\nVpD1 sd1 gnd DC 0\nRpD1 sd1 d1 1G\nVpD2 sd2 gnd DC 0\nRpD2 sd2 d2 1G\nVpD3 sd3 gnd DC 0\nRpD3 sd3 d3 1G\nVpD4 sd4 gnd DC 0\nRpD4 sd4 d4 1G\nVpD5 sd5 gnd DC 0\nRpD5 sd5 d5 1G\nVpD6 sd6 gnd DC 0\nRpD6 sd6 d6 1G\nVpD7 sd7 gnd DC 0\nRpD7 sd7 d7 1G\nVpD8 sd8 gnd DC 0\nRpD8 sd8 d8 1G\nVpD9 sd9 gnd DC 0\nRpD9 sd9 d9 1G\nVpD10 sd10 gnd DC 0\nRpD10 sd10 d10 1G\nVpD11 sd11 gnd DC 0\nRpD11 sd11 d11 1G\nVpD12 sd12 gnd DC 0\nRpD12 sd12 d12 1G\nVpD13 sd13 gnd DC 0\nRpD13 sd13 d13 1G\nVpA0 sa0 gnd DC 0\nRpA0 sa0 a0 1G\nVpA1 sa1 gnd DC 0\nRpA1 sa1 a1 1G\nVpA2 sa2 gnd DC 0\nRpA2 sa2 a2 1G\nVpA3 sa3 gnd DC 0\nRpA3 sa3 a3 1G\nVpA4 sa4 gnd DC 0\nRpA4 sa4 a4 1G\nVpA5 sa5 gnd DC 0\nRpA5 sa5 a5 1G\nVpA6 sa6 gnd DC 0\nRpA6 sa6 a6 1G\nVpA7 sa7 gnd DC 0\nRpA7 sa7 a7 1G\nVusb usb gnd DC 5\nRusb usb v5 0.2\nRq v5 gnd 250\nRg gnd gnd2 0.01\n.ends ARDUINO_NANO",
+    "pins": [
+      "2",
+      "1",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "4",
+      "29"
+    ],
+    "limits": [
+      "ピンごとに、スケッチが決める電源と抵抗を入れただけのモデルです。出力は 25Ω の向こうの 0 V か 5 V、入力は 1 GΩ、INPUT_PULLUP は 35 kΩ で 5 V に引きます。",
+      "扱わないもの: 命令にかかる時間 (delay の間以外は時間が進みません)、analogWrite の 490 Hz のパルス (平均の電圧を出します)、割り込み・タイマー・ライブラリ・3V3・AREF・VIN・RST のピン。ピンの電流の上限 (40 mA) の点検もしません。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "Arduino Nano のピン配置と、ATmega328P の出力抵抗・プルアップの代表値"
+    }
+  }
+}

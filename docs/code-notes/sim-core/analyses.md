@@ -132,3 +132,7 @@ DC 動作点から、電源のレールごとの予算を木の順 (親が先) �
 ## meter.rs (テスターの電流・抵抗のレンジ、2026-11-19、候補 B6 ③)
 
 ブレッドボードのテスターが使う。`resistance(circuit, red, black) -> Option<Ω>` は、モデルの外の電圧源を 0 A の電流源 (開放) に、電流源を 0 に替え、100 MΩ の入力抵抗と、黒 → 赤へ 100 µA (`OHM_TEST_A`) の電流源を足して DC を解き、2 V (`OHM_OPEN_V`) 未満なら V ÷ I、以上なら None (OL)。`current(circuit, red, black) -> Amps` は 2 本の棒の間に 0.1 Ω (`AMMETER_OHM`) を足して DC を解いた電流 (赤 → 黒)、同じネットは `SameNet`、10 A (`FUSE_A`) 超は `FuseBlown`。テスト `meter::tests`。
+
+## sketch/ (Arduino のスケッチ、2026-11-19、候補 B6 ⑤)
+
+`lex.rs` (字句: 数・名前・文字列・演算子、`//` `/* */` と `#include` を飛ばし、`#define` は名前を値に置き換える) → `parse.rs` (木: `int`・`long`・`float`・`bool` 系の変数と配列、関数、`if`・`while`・`do`・`for`・`break`・`continue`・`return`、算術・比較・論理・ビット・`?:`・キャスト。`switch`・`String`・`struct` は理由を出して断る) → `vm.rs` (スタック機械の命令に。変数は大域と局所の番号、型 int / float で代入のときにそろえる。整数の割り算は切り捨て) → `mod.rs` の `Machine`。`run(now, io)` は `delay` まで (または 1 回 20 万命令まで) 進めて止まり、`waiting_until` まで待つ。組み込み: `pinMode`・`digitalWrite` (入力に書くとプルアップ)・`digitalRead` (2.5 V で分ける)・`analogRead` (0〜1023、`analogRead(0)` は A0)・`analogWrite` (PWM のピン 3・5・6・9・10・11 は平均の電圧、ほかは 128 以上で High)・`delay`・`delayMicroseconds`・`millis`・`micros`・`Serial.begin/print/println` (小数は 2 桁、`HEX`・`BIN`・桁数)・`map`・`constrain`・`abs`・`min`・`max`・`random`。ピンは `Io` (`volts`・`drive`) で回路とやりとりする。誤りは行と日本語の理由 (`SketchError`)。命令の時間は 0 (delay の間だけ時間が進む)。テスト `sketch::tests`。

@@ -281,6 +281,8 @@ pub struct SchEditor {
     focus_section: Option<&'static str>,
     /// The breadboard view as the person left it (saved with the sheet); None = laid out by itself (`app/src/breadboard/`).
     pub(crate) breadboard: Option<sch_core::breadboard::Layout>,
+    /// The Arduino sketches of the microcontroller boards (refdes → text), saved with the sheet (`tolerance.rs`; B6 ⑤).
+    pub(crate) sketches: std::collections::BTreeMap<String, String>,
     /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     /// The text typed in the analysis tab's search box (empty: every analysis).
@@ -759,6 +761,7 @@ impl Default for SchEditor {
             sec_gen: 0,
             focus_section: None,
             breadboard: None,
+            sketches: Default::default(),
             coverage_cache: None,
             analysis_filter: String::new(),
             tables: Default::default(),

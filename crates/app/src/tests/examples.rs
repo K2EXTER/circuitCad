@@ -3552,6 +3552,62 @@ fn write_battery_life_example() {
     std::fs::write(root.join("battery_life.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
 }
 
+/// The sketch of the Arduino pot sample: the knob on A0 sets the LED on D9 (analogWrite), and the reading goes to the serial monitor.
+pub const ARDUINO_POT_SKETCH: &str = "// A0 につないだボリュームを読んで、D9 の LED の明るさにします
+void setup() {
+  Serial.begin(9600);
+  pinMode(9, OUTPUT);
+}
+
+void loop() {
+  int v = analogRead(A0);   // 0〜1023
+  analogWrite(9, v / 4);    // 0〜255
+  Serial.println(v);
+  delay(200);
+}
+";
+
+/// The Arduino samples (B6 ⑤): an Arduino Nano blinking an LED on D13 (through 330 ohm), and one reading a potentiometer on A0 to
+/// set an LED on D9. The Nano gives the 5 V from USB. `cargo test -p app write_arduino_examples -- --ignored`
+#[test]
+#[ignore]
+fn write_arduino_examples() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    for (file, pot) in [("arduino_blink", false), ("arduino_pot", true)] {
+        let nano = library_part("ARDUINO_NANO");
+        let mut s = sch_core::Schematic::default();
+        let u = s.add_custom(nano.symbol(), &nano.default_value(), &nano.footprint_name(), (20, 0), 0);
+        // pins: 16 D13, 12 D9, 19 A0, 27 5V, 4 and 29 GND
+        let out = if pot { "12" } else { "16" };
+        label_pin(&mut s, u, out, "OUT");
+        label_pin(&mut s, u, "4", "GND");
+        label_pin(&mut s, u, "29", "GND");
+        label_pin(&mut s, u, "27", "5V");
+        let r = s.add(Kind::Resistor, (60, -10), 1);
+        s.components[r].value = "330".into();
+        label_pin(&mut s, r, "1", "OUT");
+        label_pin(&mut s, r, "2", "LEDA");
+        let d = s.add(Kind::Led, (60, 10), 1);
+        label_pin(&mut s, d, "A", "LEDA");
+        label_pin(&mut s, d, "K", "GND");
+        let sketch = if pot {
+            let vr = s.add(Kind::Pot, (-20, 0), 1);
+            s.components[vr].value = "10k POS=30".into();
+            label_pin(&mut s, vr, "1", "5V");
+            label_pin(&mut s, vr, "2", "KNOB");
+            label_pin(&mut s, vr, "3", "GND");
+            label_pin(&mut s, u, "19", "KNOB");
+            ARDUINO_POT_SKETCH
+        } else {
+            crate::breadboard::BLINK
+        };
+        let mut v = serde_json::to_value(&s).unwrap();
+        let settings = crate::schematic::SheetSettings { sketches: [(s.components[u].refdes.clone(), sketch.to_string())].into_iter().collect(), ..Default::default() };
+        crate::schematic::with_settings(&mut v, &settings);
+        std::fs::write(root.join(format!("{file}.schjson")), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+    }
+}
+
 /// Generates docs/examples/pot_dimmer.schjson: a potentiometer (VR1 10k, ends on 5 V and GND, knob at 30 %) sets the base of an
 /// emitter follower (Q1) that drives a LED through R1 150 ohm. The wiper only feeds the base current (under 0.1 mA), so the pot
 /// stays a divider; turning it moves the LED's current from 0 to about 16 mA: `cargo test -p app write_pot_dimmer_example -- --ignored`
