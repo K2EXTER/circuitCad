@@ -3608,6 +3608,42 @@ fn write_arduino_examples() {
     }
 }
 
+/// The listening sample (B4): a 440 Hz tone with a 4 kHz whistle on it into an RC low-pass (1.5 kohm, 100 nF: fc about 1.06 kHz).
+/// Heard in the transient viewer's "音で聴く", the input whistles and the output does not. `cargo test -p app write_audio_filter_example -- --ignored`
+fn audio_filter_schematic() -> serde_json::Value {
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "SIN(0 1 440) + SIN(0 0.5 4k)".into();
+    label(&mut s, v1, "+", "IN");
+    label(&mut s, v1, "-", "GND");
+    let r = s.add(Kind::Resistor, (16, -6), 0);
+    s.components[r].value = "1.5k".into();
+    label(&mut s, r, "1", "IN");
+    label(&mut s, r, "2", "OUT");
+    let c = s.add(Kind::Capacitor, (30, 4), 1);
+    s.components[c].value = "100n".into();
+    label(&mut s, c, "1", "OUT");
+    label(&mut s, c, "2", "GND");
+    let mut v = serde_json::to_value(&s).unwrap();
+    let settings = crate::schematic::SheetSettings { tran_stop: "50m".into(), tran_step: "5u".into(), ..Default::default() };
+    crate::schematic::with_settings(&mut v, &settings);
+    v
+}
+
+#[test]
+#[ignore]
+fn write_audio_filter_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("audio_filter.schjson"), serde_json::to_string_pretty(&audio_filter_schematic()).unwrap()).unwrap();
+}
+
+#[test]
+fn audio_filter_sample_is_what_the_generator_makes() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let file: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(root.join("audio_filter.schjson")).unwrap()).unwrap();
+    assert_eq!(file, audio_filter_schematic(), "regenerate with write_audio_filter_example");
+}
+
 /// Generates docs/examples/pot_dimmer.schjson: a potentiometer (VR1 10k, ends on 5 V and GND, knob at 30 %) sets the base of an
 /// emitter follower (Q1) that drives a LED through R1 150 ohm. The wiper only feeds the base current (under 0.1 mA), so the pot
 /// stays a divider; turning it moves the LED's current from 0 to about 16 mA: `cargo test -p app write_pot_dimmer_example -- --ignored`

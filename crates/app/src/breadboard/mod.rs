@@ -18,7 +18,7 @@ mod live;
 pub(crate) mod sketch_ui;
 #[cfg(test)]
 pub use sketch_ui::BLINK;
-mod sound;
+pub(crate) mod sound;
 use live::Live;
 
 /// What the person is dragging: the part, and the hole the pointer started on.

@@ -555,6 +555,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                     && let Some(n) = args.get(j + 1) {
                         app.sch.set_tran_signals(n);
                     }
+                // `--tran-tab N`: the transient viewer opens on table N (0 basic … 4 power, 5 "音で聴く")
+                if let Some(t) = args.iter().position(|a| a == "--tran-tab").and_then(|k| args.get(k + 1)).and_then(|n| n.parse::<usize>().ok()) {
+                    app.sch.tran_tab_request = Some(t);
+                }
                 if args.iter().any(|a| a == "--spectrum") {
                     app.sch.show_spectrum();
                 }

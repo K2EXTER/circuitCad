@@ -111,12 +111,37 @@ mod sys {
             PlaySoundW(core::ptr::null(), core::ptr::null_mut(), 0);
         }
     }
+
+    pub fn play_once(wav: &[u8]) {
+        // SAFETY: the WAV stays alive in `CLIP` until the next clip replaces it, and that first stops this one
+        unsafe {
+            PlaySoundW(wav.as_ptr() as *const u16, core::ptr::null_mut(), SND_ASYNC | SND_NODEFAULT | SND_MEMORY);
+        }
+    }
 }
 
 #[cfg(not(all(windows, not(test))))]
 mod sys {
     pub fn play_loop(_: &[u8]) {}
     pub fn stop() {}
+    pub fn play_once(_: &[u8]) {}
+}
+
+/// The clip playing once (a waveform heard, B4): kept here while Windows reads it.
+static CLIP: std::sync::Mutex<Vec<u8>> = std::sync::Mutex::new(Vec::new());
+
+/// Plays a WAV once (what was playing stops: the buzzer too).
+pub fn play_clip(wav: Vec<u8>) {
+    stop();
+    if let Ok(mut c) = CLIP.lock() {
+        *c = wav;
+        sys::play_once(&c);
+    }
+}
+
+/// Stops the clip (and anything else this program plays).
+pub fn stop_clip() {
+    stop();
 }
 
 use sys::{play_loop, stop};

@@ -286,6 +286,8 @@ pub struct SchEditor {
     /// The roles of the part picked, as the bubble shows them, and the part whose bubble was closed (`roles_ui.rs`, B11).
     roles_cache: roles_ui::RolesCache,
     roles_hidden: Option<String>,
+    /// The transient viewer's table to open on (the command line's `--tran-tab`).
+    pub(crate) tran_tab_request: Option<usize>,
     /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     /// The text typed in the analysis tab's search box (empty: every analysis).
@@ -767,6 +769,7 @@ impl Default for SchEditor {
             sketches: Default::default(),
             roles_cache: Default::default(),
             roles_hidden: None,
+            tran_tab_request: None,
             coverage_cache: None,
             analysis_filter: String::new(),
             tables: Default::default(),
@@ -921,6 +924,7 @@ mod fault;
 mod spec_table;
 mod bench_data;
 mod power_ui;
+mod audio_ui;
 mod power_on;
 mod battery;
 mod budget;

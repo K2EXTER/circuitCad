@@ -41,6 +41,7 @@ pub mod battery;
 pub mod budget;
 pub mod inrush;
 pub mod meter;
+pub mod audio;
 pub mod sketch;
 pub use ambient::{ambient_sweep, AmbientPoint, AmbientSweep, NetDrift, PartWorst};
 mod spec;

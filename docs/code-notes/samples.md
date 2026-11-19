@@ -135,3 +135,4 @@
 - `seg7_counter.schjson`(生成 `write_seg7_counter_example`、2026-11-19): 7 セグメントで数える (B8)。開くと「デジタル回路を動かす」。74HC161 + 74HC00 (10 でクリア) + CD4511B + 470Ω × 7 + SEG7_CC_0.56。詳細は `docs/code-notes/app/live-logic.md`。
 - `shift_register.schjson`・`traffic_light.schjson`(生成 `write_live_logic_more_examples`、2026-11-19): シフトレジスタ (74HC164) と信号機 (74HC4017 + ダイオード OR)。開くと「デジタル回路を動かす」。詳細は `docs/code-notes/app/live-logic.md`。
 - `arduino_blink.schjson`・`arduino_pot.schjson`(生成 `write_arduino_examples`、2026-11-19): Arduino Nano とスケッチ (B6 ⑤)。スケッチはシートの設定 `sketches` に入る。詳細は `docs/code-notes/app/breadboard.md`。
+- `audio_filter.schjson`(生成 `write_audio_filter_example`、2026-11-19): 音で聴く (B4)。440 Hz + 4 kHz を RC ローパスに通す。過渡 50m/5u。詳細は `docs/code-notes/sim-core/analyses.md` の audio.rs。

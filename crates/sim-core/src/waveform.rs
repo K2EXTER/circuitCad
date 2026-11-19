@@ -360,6 +360,21 @@ fn parse_single(s: &str) -> Result<Waveform, String> {
             }
             Ok(Waveform::Exp { v1: n[0], v2: n[1], td1, tau1, td2, tau2 })
         }
+        // WAV(file [volts at full scale] [seconds]): a sound file as the waveform (B4); a path with spaces goes in quotes
+        "wav" => {
+            let inner = rest.trim().trim_start_matches('(').trim_end_matches(')').trim();
+            let (path, after) = match inner.strip_prefix('"') {
+                Some(q) => q.split_once('"').ok_or("WAV のファイル名の \" が閉じていません")?,
+                None => inner.split_once(char::is_whitespace).unwrap_or((inner, "")),
+            };
+            if path.is_empty() {
+                return Err("WAV(ファイル名 [全振幅の電圧] [秒]) のように、ファイル名を書きます".into());
+            }
+            let n = nums(after)?;
+            let amp = n.first().copied().unwrap_or(1.0);
+            let secs = n.get(1).copied().unwrap_or(1.0).clamp(1e-3, 30.0);
+            Ok(Waveform::Pwl(crate::audio::wav_points(path, amp, secs)?))
+        }
         "pwl" => {
             let mut n = nums(rest)?;
             // LTspice: a time written with a leading `+` that would not come after the previous one is relative to it (`pwl(0 0 1m 0 +1u 5)`)

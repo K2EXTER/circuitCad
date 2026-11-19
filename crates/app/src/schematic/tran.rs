@@ -119,6 +119,7 @@ impl SchEditor {
     pub(super) fn tran_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.tran.as_mut() else { return };
         let (bench, bench_ui) = (&mut self.bench.tran, &mut self.bench_ui);
+        let tab_request = &mut self.tran_tab_request;
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
@@ -266,14 +267,18 @@ impl SchEditor {
                         // and four folds stacked under it, which pushed everything below off the panel)
                         let metric_id = egui::Id::new("tran_metric");
                         let mut metric: usize = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(metric_id, || if power.iter().any(|p| !p.is_empty()) { 4 } else { 0 }));
+                        if let Some(t) = tab_request.take() {
+                            metric = t.min(5);
+                        }
                         ui.add_space(crate::theme::SPACE_S);
-                        let tabs = crate::widgets::segment_bar(ui, &[("基本", true), ("ひずみ率", true), ("ステップ応答", true), ("負荷の急変", true), ("電力と効率", true)], Some(metric));
+                        let tabs = crate::widgets::segment_bar(ui, &[("基本", true), ("ひずみ率", true), ("ステップ応答", true), ("負荷の急変", true), ("電力と効率", true), ("音で聴く", true)], Some(metric));
                         let tips = [
                             "平均・実効値・最小・最大・周波数など、表示している範囲の基本の値",
                             "ひずみ率 (THD): 正弦波がどれだけゆがんだか",
                             "ステップ応答の指標: 0 から一定の値に落ち着く波形の、立ち上がり・行き過ぎ・整定の時間",
                             "負荷の急変 (落ち込みと戻り): 負荷を急に変えたときの電圧の落ち込みと、戻るまでの時間",
                             "電力と効率: 入力と出力の平均電力と効率、損失",
+                            "音で聴く: 選んだ信号を音にして鳴らす・WAV で保存する",
                         ];
                         for (k, (tab, tip)) in tabs.into_iter().zip(tips).enumerate() {
                             if tab.clicked() {
@@ -514,6 +519,9 @@ impl SchEditor {
                         }
                         if metric == 4 {
                             power_ui::power_ui(ui, res, &order, st.x, power);
+                        }
+                        if metric == 5 {
+                            audio_ui::audio_ui(ui, res, &order, st.x);
                         }
                         // measured readings on top: used less often than the figures, so it comes last
                         {

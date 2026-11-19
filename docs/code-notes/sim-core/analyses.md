@@ -136,3 +136,11 @@ DC 動作点から、電源のレールごとの予算を木の順 (親が先) �
 ## sketch/ (Arduino のスケッチ、2026-11-19、候補 B6 ⑤)
 
 `lex.rs` (字句: 数・名前・文字列・演算子、`//` `/* */` と `#include` を飛ばし、`#define` は名前を値に置き換える) → `parse.rs` (木: `int`・`long`・`float`・`bool` 系の変数と配列、関数、`if`・`while`・`do`・`for`・`break`・`continue`・`return`、算術・比較・論理・ビット・`?:`・キャスト。`switch`・`String`・`struct` は理由を出して断る) → `vm.rs` (スタック機械の命令に。変数は大域と局所の番号、型 int / float で代入のときにそろえる。整数の割り算は切り捨て) → `mod.rs` の `Machine`。`run(now, io)` は `delay` まで (または 1 回 20 万命令まで) 進めて止まり、`waiting_until` まで待つ。組み込み: `pinMode`・`digitalWrite` (入力に書くとプルアップ)・`digitalRead` (2.5 V で分ける)・`analogRead` (0〜1023、`analogRead(0)` は A0)・`analogWrite` (PWM のピン 3・5・6・9・10・11 は平均の電圧、ほかは 128 以上で High)・`delay`・`delayMicroseconds`・`millis`・`micros`・`Serial.begin/print/println` (小数は 2 桁、`HEX`・`BIN`・桁数)・`map`・`constrain`・`abs`・`min`・`max`・`random`。ピンは `Io` (`volts`・`drive`) で回路とやりとりする。誤りは行と日本語の理由 (`SketchError`)。命令の時間は 0 (delay の間だけ時間が進む)。テスト `sketch::tests`。
+
+## audio.rs (音で聴く、2026-11-19、候補 B4)
+
+- `to_wav(t, v, t0, t1, min_seconds)`: 過渡解析の信号の `[t0, t1]` を 44.1 kHz (`RATE`) に直線補間で並べ直し、平均 (直流) を引き、いちばん大きい振れが 0.5 (`PEAK`) になるように拡大し、`min_seconds` に届くまでくり返す (数 ms の範囲は短すぎて聞こえない)。両端に 5 ms のフェード (プツッと鳴らない)。返す `Sound` に WAV・秒・くり返しの回数・引いた中心・全振幅の電圧。変化しない信号・2 サンプル未満・30 秒超は理由を返す。シミュレーションの時間が音の時間 (1 kHz は 1 kHz)。
+- `read_wav`: 8・16・24・32 ビットの PCM と 32 ビットの浮動小数点 (WAVE_FORMAT_EXTENSIBLE も)、ステレオは平均。`wav_points(path, amp, seconds)` は PWL の点。
+- 電源の値 `WAV(ファイル [全振幅の電圧 1] [秒 1])` (`waveform.rs` の `parse_single`、空白のあるパスは "…" で囲む) で、音のファイルを入力の波形にする。PWL の角ごとに過渡解析が止まるので、44.1 kHz の 1 秒は 44100 の点。
+- 画面は過渡解析の波形の表のタブ「音で聴く」(`app/src/schematic/audio_ui.rs`): 信号を選び、▶ 聴く (一度だけ鳴らす `breadboard::sound::play_clip`。WAV は鳴っている間 `CLIP` に持つ)・■ 止める・WAV で保存。撮影用 `--tran-tab 5`。
+- サンプル `audio_filter.schjson` (`SIN(0 1 440) + SIN(0 0.5 4k)` → 1.5 kΩ・100 nF、fc ≈ 1.06 kHz)。テスト `the_filter_takes_the_whistle_out_of_the_sound` (出力の 4 kHz は入力の 35 % 未満、440 Hz は 80 % 以上)、`audio::tests`。

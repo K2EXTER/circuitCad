@@ -1,0 +1,155 @@
+{
+  "analysis": {
+    "ac_ppd": "20",
+    "ac_start": "10",
+    "ac_stop": "1Meg",
+    "tran_step": "5u",
+    "tran_stop": "50m",
+    "tran_uic": false
+  },
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        0,
+        0
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "SIN(0 1 440) + SIN(0 0.5 4k)"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        16,
+        -6
+      ],
+      "refdes": "R1",
+      "rot": 0,
+      "value": "1.5k"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        30,
+        4
+      ],
+      "refdes": "C1",
+      "rot": 1,
+      "value": "100n"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        11,
+        -6
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        21,
+        -6
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        30,
+        -1
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        30,
+        9
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        14,
+        -6
+      ],
+      "b": [
+        11,
+        -6
+      ]
+    },
+    {
+      "a": [
+        18,
+        -6
+      ],
+      "b": [
+        21,
+        -6
+      ]
+    },
+    {
+      "a": [
+        30,
+        2
+      ],
+      "b": [
+        30,
+        -1
+      ]
+    },
+    {
+      "a": [
+        30,
+        6
+      ],
+      "b": [
+        30,
+        9
+      ]
+    }
+  ]
+}
