@@ -176,23 +176,23 @@ fn looks_like_supply(n: &str) -> bool {
     ["VCC", "VDD", "VIN", "VBAT", "VS", "V+"].iter().any(|p| u.starts_with(p)) || u.starts_with('+') || (u.starts_with(|c: char| c.is_ascii_digit()) && u.contains('V'))
 }
 
-fn is_ground_name(n: &str) -> bool {
+pub(crate) fn is_ground_name(n: &str) -> bool {
     matches!(n.to_ascii_uppercase().as_str(), "GND" | "0" | "VSS" | "AGND" | "DGND")
 }
 
 /// A part's pins and their nets.
-type Pins = Vec<(String, String)>;
+pub(crate) type Pins = Vec<(String, String)>;
 
 /// The parts that go on the board and their pins' nets, and the off-board ones.
-struct Circuit {
-    on: Vec<(String, Look, Pins)>,
-    off: Vec<(String, Pins)>,
+pub(crate) struct Circuit {
+    pub(crate) on: Vec<(String, Look, Pins)>,
+    pub(crate) off: Vec<(String, Pins)>,
     /// Supply nets, the main one first (the + of the sources and the power symbols), ground apart.
-    supplies: Vec<String>,
-    ground: Option<String>,
+    pub(crate) supplies: Vec<String>,
+    pub(crate) ground: Option<String>,
 }
 
-fn read(s: &Schematic) -> Circuit {
+pub(crate) fn read(s: &Schematic) -> Circuit {
     let flat = s.flat();
     let nets = extract(&flat);
     let mut net_of: BTreeMap<(String, String), String> = BTreeMap::new();

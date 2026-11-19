@@ -598,6 +598,12 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         app.breadboard.picked = args.get(i + 1).filter(|a| !a.starts_with("--")).cloned();
         // `--proto-power`: the supply switched on; `--proto-meter`: the meter's probes on the top rails (for screenshots)
         app.breadboard.powered = args.iter().any(|a| a == "--proto-power");
+        // `--proto-kind strip|perf`: the stripboard or perfboard view (B5)
+        match args.iter().position(|a| a == "--proto-kind").and_then(|k| args.get(k + 1)).map(String::as_str) {
+            Some("strip") => app.breadboard.kind = crate::breadboard::BoardKind::Stripboard,
+            Some("perf") => app.breadboard.kind = crate::breadboard::BoardKind::Perfboard,
+            _ => {}
+        }
         // `--proto-flip SW1,SW2`: those switches moved (push buttons held) once the circuit runs
         if let Some(f) = args.iter().position(|a| a == "--proto-flip").and_then(|k| args.get(k + 1)) {
             app.breadboard.flip_on_start = f.split(',').filter(|r| !r.is_empty()).map(String::from).collect();

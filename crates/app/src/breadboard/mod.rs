@@ -16,6 +16,8 @@ use std::collections::BTreeSet;
 
 mod live;
 pub(crate) mod sketch_ui;
+mod strip_view;
+pub use strip_view::BoardKind;
 #[cfg(test)]
 pub use sketch_ui::BLINK;
 pub(crate) mod sound;
@@ -55,6 +57,8 @@ pub enum Tool {
 
 #[derive(Default)]
 pub struct BreadboardView {
+    /// Breadboard, stripboard or perfboard (B5).
+    pub kind: BoardKind,
     /// "回路図の上で動かす" was pressed: the app starts the digital live mode on the schematic tab (`schematic/live_logic.rs`).
     pub want_live_logic: bool,
     /// The layout made from the schematic when none is saved, and the schematic's edit count it was made at.
@@ -262,6 +266,24 @@ impl BreadboardView {
 
     /// The left panel: what this is, the differences from the schematic, the parts and where their leads go.
     pub fn panel(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
+        ui.horizontal(|ui| {
+            for (k, name, tip) in [
+                (BoardKind::Breadboard, "ブレッドボード", "はんだ不要の差し込み式の板。試しに組んで、電源を入れて動かせます"),
+                (BoardKind::Stripboard, "ストリップ基板", "銅の帯が並んだ穴あき基板。帯を切る所と、表を通す線の並べ方を出します"),
+                (BoardKind::Perfboard, "ユニバーサル基板", "穴だけの基板。裏で穴をつなぐすずめっき線と、表を通す線の並べ方を出します"),
+            ] {
+                if ui.selectable_label(self.kind == k, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+                    self.kind = k;
+                    if k != BoardKind::Breadboard {
+                        self.powered = false;
+                    }
+                }
+            }
+        });
+        if self.kind != BoardKind::Breadboard {
+            self.strip_panel(ui, sch);
+            return;
+        }
         let l = self.layout(sch);
         crate::widgets::section_heading(ui, i18n::tr("ブレッドボード"));
         ui.label(spaced("回路図の部品を、ブレッドボードのどの穴に差すかを並べました。縦に並んだ 5 つの穴 (a〜e、f〜j) は中でつながっていて、上下の赤と青の列は電源とGNDです。部品をドラッグすると差し替えられます。").color(NOTE));
@@ -743,6 +765,10 @@ impl BreadboardView {
 
     /// The board. `focus`: the part picked in the schematic, lit here too.
     pub fn canvas(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, focus: Option<&str>) {
+        if self.kind != BoardKind::Breadboard {
+            self.strip_canvas(ui, sch);
+            return;
+        }
         let mut l = self.layout(sch);
         let (response, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::click_and_drag());
         let rect = response.rect;
