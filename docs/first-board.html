@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>はじめての1枚 — circuitCad</title>
+<meta name="description" content="circuitCad で、回路図を開いてシミュレーションし、ブレッドボードで試し、基板にして発注データを出し、届いた基板に電源を入れるまでを、1つの回路で通して歩く解説。">
+<meta property="og:title" content="はじめての1枚 — circuitCad">
+<meta property="og:description" content="回路図 → シミュレーション → ブレッドボード → 基板 → 発注 → 実機 を、ボリュームで LED の明るさを変える回路で通して歩きます。">
+<meta property="og:image" content="https://k2exter.github.io/circuitCad/images/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:type" content="article">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+:root{--bg:#fff;--fg:#1c2330;--sub:#5a6577;--line:#dde2ea;--card:#f5f7fa;--accent:#0b6e4f;--accent-fg:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#10151c;--fg:#e6ebf2;--sub:#98a3b5;--line:#27303d;--card:#18202a;--accent:#3ecf9a;--accent-fg:#06281d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.8 "Hiragino Sans","BIZ UDPGothic","Yu Gothic UI","Meiryo",system-ui,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px}
+.top{display:flex;justify-content:space-between;font-size:14px;padding-top:12px;gap:12px;flex-wrap:wrap}
+header{padding:32px 0 24px}
+h1{font-size:clamp(26px,5vw,38px);line-height:1.3;margin:0 0 12px}
+.lead{color:var(--sub);margin:0 0 20px}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:700;font-size:15px}
+.flow a{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 14px;text-decoration:none;color:var(--fg)}
+.flow i{color:var(--sub);font-style:normal}
+section{padding:36px 0;border-top:1px solid var(--line)}
+h2{font-size:23px;margin:0 0 6px;display:flex;align-items:baseline;gap:10px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);font-size:17px;flex:none}
+.tab{color:var(--sub);font-size:15px;margin:0 0 16px}
+ol,ul{padding-left:1.4em}
+li{margin:4px 0}
+kbd,.ui{font:inherit;font-size:15px;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
+figure{margin:18px 0 0}
+img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;display:block}
+figcaption{font-size:14px;color:var(--sub);margin-top:6px}
+.tip{background:var(--card);border-left:4px solid var(--accent);padding:12px 16px;border-radius:6px;margin:16px 0 0;font-size:15px}
+.tip strong{color:var(--accent)}
+.warn{border-left-color:#d97706}
+.warn strong{color:#d97706}
+code{font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+footer{padding:32px 0 56px;text-align:center;color:var(--sub);font-size:14px;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top"><a href="./">← circuitCad の紹介ページ</a><span>alpha.12 の画面で書いています</span></div>
+
+<header>
+  <h1>はじめての1枚</h1>
+  <p class="lead">「ボリュームを回すと LED の明るさが変わる」小さな回路を例に、circuitCad で <strong>回路図を開く → シミュレーションで確かめる → ブレッドボードで試す → 基板にする → 発注データを出す → 届いた基板に電源を入れる</strong> までを、通して歩きます。部品は 5 個、だいたい 20 分です。</p>
+  <div class="flow">
+    <a href="#s1">1 回路図</a><i>→</i><a href="#s2">2 シミュレーション</a><i>→</i><a href="#s3">3 試作</a><i>→</i><a href="#s4">4 基板</a><i>→</i><a href="#s5">5 3D</a><i>→</i><a href="#s6">6 発注</a><i>→</i><a href="#s7">7 組み立て</a><i>→</i><a href="#s8">8 電源投入</a>
+  </div>
+  <p class="tip"><strong>準備:</strong> <a href="https://github.com/K2EXTER/circuitCad/releases/latest">リリースページ</a>から zip をダウンロードして展開し、<code>circuitCad.exe</code> を起動します。インストールは要りません。画面の上に <span class="ui">回路図</span> <span class="ui">試作</span> <span class="ui">基板パターン</span> <span class="ui">実機</span> の 4 つのタブが、作る順に並んでいます。このページも、この順に進みます。</p>
+</header>
+
+<section id="s1">
+  <h2><span class="n">1</span>回路図を開く</h2>
+  <p class="tab">タブ: 回路図</p>
+  <ol>
+    <li>メニュー <span class="ui">ファイル</span> → <span class="ui">サンプル回路を開く</span> から、<strong>「ボリュームで LED の明るさを変える」</strong>を選びます (ファイルは <code>docs/examples/pot_dimmer.schjson</code>)。</li>
+    <li>部品は 5 個です。電源 <strong>V1</strong> (5 V)、ボリューム <strong>VR1</strong> (10 kΩ)、トランジスタ <strong>Q1</strong> (2N3904)、抵抗 <strong>R1</strong> (150 Ω)、<strong>LED D1</strong>。</li>
+    <li>ボリュームの真ん中の足 (W) の電圧でトランジスタを動かし、トランジスタが LED に流す電流を変えます。VCC・GND・W・E は「ラベル」です。同じ名前のラベルどうしは、線を引かなくてもつながっています。</li>
+  </ol>
+  <figure><img src="images/guide/schematic.png" alt="回路図のタブ。電源 V1、ボリューム VR1、トランジスタ Q1、抵抗 R1、LED D1 が並んだ回路図" loading="lazy" width="1920" height="947"><figcaption>開いたところ。左のパネルに部品の一覧、下に「ERC (電気ルールチェック)」のボタン</figcaption></figure>
+  <p class="tip"><strong>自分で描くときは:</strong> 左のパネルの部品をクリックして、回路図の上でクリックすると置けます (<kbd>R</kbd> で回転)。<span class="ui">配線</span> のツールで、ピンからピンへクリックすると線が引けます。描き終えたら <span class="ui">ERC (電気ルールチェック)</span> で、つなぎ忘れなどを点検します。指摘には、原因と直し方が付いています。ボタンや入力欄にポインタを置くと、説明が出ます。</p>
+</section>
+
+<section id="s2">
+  <h2><span class="n">2</span>シミュレーションで確かめる</h2>
+  <p class="tab">タブ: 回路図 → 左のパネルの「解析」</p>
+  <ol>
+    <li>左のパネルの <span class="ui">解析</span> タブで、<span class="ui">DC動作点を解析</span> を押します。</li>
+    <li>電圧は線の色と数字で、電流は矢印と数字で、回路図の上にそのまま出ます。この例では、ボリュームの真ん中 W が約 3.4 V、トランジスタの E が約 2.6 V、LED に約 4.9 mA 流れています。</li>
+    <li><span class="ui">自動で再計算</span> にチェックを入れてから、<span class="ui">作図</span> タブで VR1 をクリックし、部品の設定の <span class="ui">つまみ</span> を動かしてみましょう。動かしながら、電圧と LED の電流が変わります。</li>
+  </ol>
+  <figure><img src="images/guide/dc.png" alt="DC 動作点の結果。配線が電圧で色分けされ、W 3.449 V、E 2.633 V、LED に 4.929 mA と出ている" loading="lazy" width="1920" height="947"><figcaption>DC 動作点の結果。右下の凡例が、線の色と電圧の対応</figcaption></figure>
+  <p class="tip"><strong>ほかの解析:</strong> 時間で変わる波形は「過渡解析」、周波数の特性は「AC 解析」です。部品が熱くなりすぎていないか (定格) も、解析のあとで自動で点検されます。</p>
+</section>
+
+<section id="s3">
+  <h2><span class="n">3</span>ブレッドボードで試す</h2>
+  <p class="tab">タブ: 試作</p>
+  <ol>
+    <li>画面の上の <span class="ui">試作</span> タブを開きます。回路図の部品が、ブレッドボードのどの穴に差さるか、自動で並んでいます。左の「部品と差す穴」の一覧は、実物のブレッドボードに差すときの手順書になります。</li>
+    <li>ポインタを穴に合わせると、つながっている穴が黄色く光ります。部品やジャンパー線はドラッグで差し替えられます。回路図と違う差し方をすると、赤い丸と一覧で知らせます。</li>
+    <li><span class="ui">電源を入れる</span> を押すと、差したとおりの回路が動きます。LED が光ります。</li>
+    <li>左の「つまみ」の <strong>VR1</strong> を動かすか、絵の上のボリュームをドラッグやホイールで回すと、LED の明るさが変わります。電源の電圧 (V1) や周りの温度も、動かしたまま変えられます。</li>
+  </ol>
+  <figure><img src="images/guide/proto.png" alt="試作のタブ。ブレッドボードに部品が差してあり、電源を入れて LED が光っている。左に電源・ボリューム・温度のつまみ" loading="lazy" width="1920" height="947"><figcaption>電源を入れたところ。「回路図どおりにつながっています」と、定格を超えた部品がないことが出ている</figcaption></figure>
+  <p class="tip warn"><strong>壊してみる:</strong> 定格を超えた部品は焦げて、回路の中でも壊れます。たとえば回路図で R1 の 1 番の足をボリュームの真ん中の足 (W) に付け替え、LED をボリュームに直接つなぐと、ボリュームを回したときに細い抵抗の膜に電流が集まって焦げ、LED が消えます。実物で試す前に、何が起きるかを安全に見られます。</p>
+</section>
+
+<section id="s4">
+  <h2><span class="n">4</span>基板にする</h2>
+  <p class="tab">タブ: 基板パターン</p>
+  <ol>
+    <li><span class="ui">基板パターン</span> タブを開き、左の「手順 (上から順に)」の <span class="ui">回路図から取り込み</span> を押します。部品が基板の上に入り、つなぐ相手が細い線 (ラッツネスト) で出ます。</li>
+    <li><span class="ui">① 部品を並べる</span> で自動で配置します。そのあと、部品をドラッグして、線が交わらないように並べ直します (<kbd>R</kbd> で回転)。下の絵は、手で並べ直したものです。</li>
+    <li><span class="ui">② 自動配線</span> で、線 (パターン) を引きます。手で引くこともできます。</li>
+    <li><span class="ui">③ 確認する</span> の <span class="ui">DRC を実行</span> で、線どうしの間隔や太さが決まりを守っているかを点検します。この例は「DRC: 違反 0 件」です。</li>
+  </ol>
+  <figure><img src="images/guide/board.png" alt="基板パターンのタブ。38 × 24 mm の基板に 5 個の部品が並び、赤い線で配線されている。左に手順の一覧" loading="lazy" width="1920" height="947"><figcaption>配線まで終えた基板 (38 × 24 mm、2 層。裏面は GND のベタ)。左の手順に ✓ が付いていく</figcaption></figure>
+  <p class="tip"><strong>表と裏:</strong> 画面の左上に、いま作業している面 (赤は表) が出ます。<kbd>L</kbd> キーで作業する面を切り替え、もう一方の面は薄く表示されます。右上の「表示とロック」で、層ごとの表示を切り替えられます。</p>
+</section>
+
+<section id="s5">
+  <h2><span class="n">5</span>3D で見る</h2>
+  <p class="tab">タブ: 基板パターン → ④ 発注する → 3Dで見る</p>
+  <ol>
+    <li><span class="ui">④ 発注する</span> の <span class="ui">3Dで見る…</span> で、出来上がりを立体で見ます。ドラッグで回し、ホイールで拡大します。</li>
+    <li>部品の高さが分かります。ケースに入れるなら、上の <span class="ui">ケース高さ</span> を入れると、入らない部品が赤くなります。</li>
+  </ol>
+  <figure><img src="images/guide/3d.png" alt="3D で見る窓。緑の基板に、ボリューム・ヘッダ・トランジスタ・抵抗・LED が載っている" loading="lazy" width="1920" height="947"><figcaption>3D の窓。STEP にも書き出せるので、ほかの CAD でケースを作るときに使えます</figcaption></figure>
+</section>
+
+<section id="s6">
+  <h2><span class="n">6</span>発注データを出す</h2>
+  <p class="tab">タブ: 基板パターン → ④ 発注する → 発注の準備</p>
+  <ol>
+    <li><span class="ui">発注の準備…</span> を開きます。上から順に進む窓です。</li>
+    <li><strong>1. 発注先を選ぶ</strong>: JLCPCB・PCBWay・OSH Park から選び、<span class="ui">ルールをこの発注先に合わせる</span> を押します。決まっていなければ「標準 (安全側)」のままで構いません。</li>
+    <li><strong>2. 発注前のチェック</strong>: 基板の大きさ、部品が基板の上にあるか、未配線、DRC、線の太さと電流などを確かめます。✓ が並び、「直すところはありません。次に進めます」と出れば OK です。</li>
+    <li><strong>3. 出来上がりを見る</strong>: <span class="ui">プレビューを作る</span> で、届く基板の姿を見ます。</li>
+    <li><strong>4. 製造ファイルを書き出す</strong>: フォルダを選ぶと、Gerber (銅・シルク・外形)、ドリル、部品表 (BOM)、部品の位置のファイルと、それをまとめた zip ができます。この zip を発注先のページにアップロードします。</li>
+  </ol>
+  <figure><img src="images/guide/order.png" alt="発注の準備の窓。発注先の選択、発注前のチェックの ✓ の一覧、プレビューと書き出しのボタン" loading="lazy" width="1920" height="947"><figcaption>発注の準備。いちばん下の「部品の購入リスト」から、買う部品の一覧も作れます</figcaption></figure>
+  <p class="tip warn"><strong>注意:</strong> circuitCad はアルファ版で、このソフトで作ったデータで基板を発注した実績はまだありません。初めての発注は少ない枚数で試し、発注先のサイトのプレビュー (ガーバービューア) でも必ず確かめてください。</p>
+</section>
+
+<section id="s7">
+  <h2><span class="n">7</span>届いた基板を組み立てる</h2>
+  <p class="tab">タブ: 実機 → 1. 組み立て</p>
+  <ol>
+    <li>基板が届いたら、<span class="ui">実機</span> タブを開きます。左に <strong>組み立て → 電源投入 → 測る → 合否 → 修理</strong> の手順が並んでいます。</li>
+    <li><span class="ui">1. 組み立て</span> では、部品が<strong>背の低い順</strong> (R1 0.6 mm → D1 → Q1 → VR1 → V1 のヘッダ) に並びます。付けた部品に印をつけると、次に付ける部品が基板の絵の上で光ります。LED のような向きのある部品には、向き (カソード) の印が出ます。</li>
+    <li><span class="ui">組み立て表を印刷用に保存 (SVG)</span> で、はんだ付けの順と向きの印を、紙に印刷できます。</li>
+  </ol>
+  <figure><img src="images/guide/assemble.png" alt="実機のタブの組み立て。左に背の低い順の部品の一覧、右に基板の配置図で次に付ける部品が光っている" loading="lazy" width="1920" height="947"><figcaption>組み立て。次に付ける R1 と D1 が黄色く光っている</figcaption></figure>
+</section>
+
+<section id="s8">
+  <h2><span class="n">8</span>はじめて電源を入れる</h2>
+  <p class="tab">タブ: 実機 → 2. 電源投入</p>
+  <ol>
+    <li><span class="ui">2. 電源投入</span> を開くと、回路図のシミュレーションから、<strong>正常なら流れる電流</strong>の範囲 (この例は約 5.2〜5.6 mA) と、電源の<strong>電流制限に入れる値</strong> (10 mA) が出ます。範囲は、抵抗の許容差や部品のばらつきを入れて計算したものです。</li>
+    <li>電源を入れる前に、はんだのブリッジや部品の向きを見て、テスターで電源と GND の間がショートしていないか確かめます。</li>
+    <li>電流を制限できる電源を 10 mA に合わせてからつなぎ、出力を入れます。落ち着いた電流を「測った電流」に入れると、正常な範囲と比べて、多すぎる・少なすぎるときに疑う所を並べます。</li>
+    <li>そのあとは <span class="ui">3. 測る</span>、<span class="ui">4. 合否</span>、<span class="ui">5. 修理</span> と進みます。どの手順でも、基板の絵で、その手順に関わる所が光ります。</li>
+  </ol>
+  <figure><img src="images/guide/poweron.png" alt="実機のタブの電源投入。正常なら流れる電流 5.19〜5.63 mA、電流制限に入れる値 10 mA、手順と安全の注意が並び、基板の絵で電源をつなぐ所が光っている" loading="lazy" width="1920" height="947"><figcaption>電源投入。基板の絵では、電源をつなぐ所 (V1) が光る</figcaption></figure>
+  <p class="tip warn"><strong>安全:</strong> 電流が制限の値に張り付いたら (電源の CC の表示が消えない)、すぐに電源を切ってください。熱い部品は触らずに、手をかざすか温度計で探します。</p>
+</section>
+
+<section>
+  <h2>この先へ</h2>
+  <ul>
+    <li><strong>基礎から学ぶ:</strong> メニュー <span class="ui">学ぶ</span> → <span class="ui">学習パス</span>。オームの法則から、安定化電源・Arduino 互換ボード・修理まで、9 本の道があります。</li>
+    <li><strong>ほかのサンプル:</strong> <span class="ui">ファイル</span> → <span class="ui">サンプル回路を開く</span> に、130 本以上の回路があります。部品 41 個の総合デモには、手で配線した基板も付いています。</li>
+    <li><strong>操作で迷ったら:</strong> <kbd>F1</kbd> で操作ガイドが開きます。<kbd>Ctrl</kbd>+<kbd>K</kbd> で、操作を名前で探せます。</li>
+    <li><strong>機能の一覧:</strong> <a href="./#features">紹介ページの「機能の一覧」</a>と、<a href="https://github.com/K2EXTER/circuitCad#readme">README</a>。</li>
+    <li>分かりにくかった所は、<a href="https://github.com/K2EXTER/circuitCad/issues">Issues</a> で教えてください。</li>
+  </ul>
+</section>
+
+<footer>
+  circuitCad — AGPL-3.0-or-later ・ 無料でソースが読めます<br>
+  <a href="./">紹介ページ</a> ・ <a href="https://github.com/K2EXTER/circuitCad">GitHub</a> ・ <a href="https://github.com/K2EXTER/circuitCad/releases">リリース</a>
+</footer>
+
+</div>
+</body>
+</html>
