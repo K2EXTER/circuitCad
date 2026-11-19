@@ -4,6 +4,7 @@
 
 use super::*;
 use sch_core::mount::{shopping, Mount};
+use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_link, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, At, StripLayout, StripOptions};
 
@@ -211,6 +212,13 @@ impl BreadboardView {
             }
         }
         ui.small(i18n::trf!("大きさ: {} 列 × {} 行 (2.54mm の間隔で {:.0} × {:.0} mm)", l.cols, l.rows, l.cols as f32 * 2.54, l.rows as f32 * 2.54));
+        if ui
+            .button(i18n::tr("印刷用の図を保存 (表と裏)"))
+            .on_hover_text(i18n::tr("穴の格子に部品・線・切る穴を実寸で描いた図を、表 (部品の面) と裏 (銅の面。左右が逆) の 2 つの SVG に保存します。ブラウザで開いて 100 % (実寸) で印刷すると、図の穴が基板の穴に重なります。右下の 10 mm の線で大きさを確かめられます"))
+            .clicked()
+        {
+            self.save_strip_print(sch, &l);
+        }
         ui.separator();
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.label(egui::RichText::new(i18n::tr("部品と差す穴")).strong());
@@ -406,6 +414,26 @@ impl BreadboardView {
 }
 
 impl BreadboardView {
+    /// Asks where to save, and writes the parts' side and the copper side as two SVG files beside each other (`…_表.svg`, `…_裏.svg`).
+    fn save_strip_print(&mut self, sch: &mut SchEditor, l: &StripLayout) {
+        let perf = self.kind == BoardKind::Perfboard;
+        let stem = sch.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "board".into());
+        let name = format!("{stem}_{}", if perf { "perfboard" } else { "stripboard" });
+        let Some(path) = rfd::FileDialog::new().add_filter("SVG画像", &["svg"]).set_file_name(format!("{name}.svg")).save_file() else { return };
+        let base = path.with_extension("");
+        let title = format!("{stem} — {}", if perf { "ユニバーサル基板" } else { "ストリップ基板" });
+        let mut written = vec![];
+        for (face, tag) in [(Face::Parts, "表"), (Face::Copper, "裏")] {
+            let file = base.with_file_name(format!("{}_{tag}.svg", base.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default()));
+            if let Err(e) = std::fs::write(&file, strip_svg(l, face, perf, &title)) {
+                sch.status = format!("印刷用の図を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください");
+                return;
+            }
+            written.push(file.display().to_string());
+        }
+        sch.status = format!("印刷用の図を保存しました: {}", written.join("、"));
+    }
+
     /// The presses and drags on the board: a change is drawn while dragging (`l` becomes it) and kept with the sheet when let go.
     fn strip_interact(&mut self, ui: &egui::Ui, response: &egui::Response, sch: &mut SchEditor, l: &mut StripLayout, origin: Pos2, pitch: f32) {
         let to = |a: At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch;
@@ -553,17 +581,4 @@ fn holes_of(w: f32, h: f32) -> (u16, u16) {
 /// The layout's options for a board of this size (None: one row of chips).
 fn strip_options(size: Option<(f32, f32)>) -> StripOptions {
     StripOptions { cols: size.map(|(w, h)| holes_of(w, h).0) }
-}
-
-/// The bare wires of a perfboard: along each piece of strip, from its first used hole to its last.
-pub fn perf_wires(l: &StripLayout) -> Vec<(At, At)> {
-    let used: Vec<At> = l.used().into_iter().map(|(a, _)| a).collect();
-    l.pieces()
-        .into_iter()
-        .filter_map(|(r, a, b)| {
-            let cols: Vec<u16> = used.iter().filter(|u| u.0 == r && u.1 >= a && u.1 <= b).map(|u| u.1).collect();
-            let (lo, hi) = (cols.iter().min()?, cols.iter().max()?);
-            (lo < hi).then_some(((r, *lo), (r, *hi)))
-        })
-        .collect()
 }
