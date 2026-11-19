@@ -62,6 +62,10 @@
 - **部品ライブラリ**: 140 部品以上 (記号・パッケージ・シミュレーションモデル。電源 IC、センサ、電池、ADC、低リークのアナログスイッチなども)。ランドパターンをデータシートで確かめていない部品 (`land_unverified`) は、発注前チェックが注意します。JSON で追加できるほか、KiCad のシンボルとフットプリントも取り込めます (`docs/part-format.md`)
 - **精度の確認 (開発用)**: シミュレーションは、オープンソースの ngspice と比べて確かめています。`circuitCad --xcheck docs/examples` で、同梱サンプルの動作点 (電圧と電流) が ngspice と一致するか調べられます (`--tran` で過渡波形。ngspice が別に必要です)。結果と既知の差は [docs/code-notes/app/basics.md](docs/code-notes/app/basics.md) にあります
 
+| 試作 (ブレッドボードで動かす) | 実機 (届いた基板の電源投入) |
+|---|---|
+| ![回路図の部品をブレッドボードに差して電源を入れ、LED が光っている試作のタブ](docs/images/prototype.png) | ![最初の電源投入の手順と、正常なら流れる電流の範囲を出した実機のタブ](docs/images/bench.png) |
+
 | 波形 (過渡解析) | ボード線図 (AC 解析) |
 |---|---|
 | ![NE555 の発振回路の過渡解析の波形](docs/images/waveform.png) | ![AC 解析のボード線図](docs/images/bode.png) |

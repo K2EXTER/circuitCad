@@ -45,6 +45,10 @@ A screen recording (about 75 s, Japanese UI): drawing a schematic, simulating it
 - **Multi-sheet schematics,** reusable snippets, copy and paste, and wires that follow a part you drag.
 - **Free and open source,** under `AGPL-3.0-or-later` (if you distribute a modified version, or let others use it as a network service, publish its source under the same license).
 
+| Prototype (run it on a breadboard) | Bench (first power-on of the board you received) |
+|---|---|
+| ![The Prototype tab: the schematic's parts plugged into a breadboard with the power on and the LED lit](docs/images/en/prototype.png) | ![The Bench tab: the first power-on steps and the normal current range from the schematic](docs/images/en/bench.png) |
+
 | Transient waveform | Bode plot (AC analysis) |
 |---|---|
 | ![Transient waveform of a 555 oscillator](docs/images/en/waveform.png) | ![AC analysis Bode plot](docs/images/en/bode.png) |
