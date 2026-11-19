@@ -55,6 +55,45 @@ pub struct SupplyCurrent {
     pub limit: f64,
     /// The parts that move this current most, alone at their low / high end: (name, change at low end, change at high end) in A.
     pub parts: Vec<(String, f64, f64)>,
+    /// The circuit does not sit at its DC point (it oscillates or keeps changing): the current of a transient run's steady part.
+    /// The range and the limit are then moved to it (`PowerOn::apply_running`).
+    pub running: Option<Running>,
+}
+
+/// A supply's current while the circuit runs (A): a transient run's steady part, and the DC point's current it replaced.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Running {
+    pub mean: f64,
+    pub min: f64,
+    pub max: f64,
+    pub dc: f64,
+}
+
+/// The steady part of a transient signal: its second half (the start-up left out), as (time-weighted mean, min, max).
+pub fn steady_stats(t: &[f64], v: &[f64]) -> Option<(f64, f64, f64)> {
+    if t.len() < 3 || t.len() != v.len() {
+        return None;
+    }
+    let half = t[0] + (t[t.len() - 1] - t[0]) / 2.0;
+    let (mut area, mut span, mut lo, mut hi) = (0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY);
+    for i in 1..t.len() {
+        if t[i] < half {
+            continue;
+        }
+        let dt = t[i] - t[i - 1].max(half);
+        area += (v[i] + v[i - 1]) / 2.0 * dt;
+        span += dt;
+        lo = lo.min(v[i]);
+        hi = hi.max(v[i]);
+    }
+    (span > 0.0).then(|| (area / span, lo, hi))
+}
+
+/// Whether a running signal (its steady part: mean, min, max) is not the DC value `dc`: the mean is off by more than 5 % (and
+/// `floor`, for values near zero), or it swings by more than 10 % of its size (and `floor`).
+pub fn runs_away_from_dc(dc: f64, mean: f64, lo: f64, hi: f64, floor: f64) -> bool {
+    let size = dc.abs().max(mean.abs());
+    (mean - dc).abs() > (0.05 * size).max(floor) || (hi - lo) > (0.1 * size).max(floor)
 }
 
 #[derive(Clone, Debug)]
@@ -176,10 +215,36 @@ pub fn power_on(circuit: &Circuit, heaters: &[Heater], s: &PowerOnSettings) -> R
         parts.retain(|p| p.1.abs().max(p.2.abs()) > 1e-12);
         parts.sort_by(|a, b| (b.1 - b.2).abs().total_cmp(&(a.1 - a.2).abs()));
         let limit = nice_up(max * s.margin).max(LIMIT_FLOOR);
-        out.push(SupplyCurrent { name: name.clone(), volts: *v, nominal: *nominal, warm: warm_i, min, max, limit, parts });
+        out.push(SupplyCurrent { name: name.clone(), volts: *v, nominal: *nominal, warm: warm_i, min, max, limit, parts, running: None });
     }
     out.sort_by(|a, b| (b.volts.abs() * b.nominal).total_cmp(&(a.volts.abs() * a.nominal)));
     Ok(PowerOn { supplies: out, unsolved, heated })
+}
+
+impl PowerOn {
+    /// A supply's current from a transient run (the source's current signal `t`, `i`, in the simulator's sign: negative while it
+    /// delivers). When the steady part is not the DC current (a 555 that blinks: its DC point is the timer stopped half way, with
+    /// the LED off), the supply's numbers move to the running circuit: the mean replaces the DC current, the range keeps its width
+    /// relative to it (the tolerances move the running current about as they move the DC one), and the limit also covers the
+    /// highest current of the run. True when they moved. A bench supply shows about the mean.
+    pub fn apply_running(&mut self, name: &str, t: &[f64], i: &[f64], margin: f64) -> bool {
+        let Some(s) = self.supplies.iter_mut().find(|s| s.name == name) else { return false };
+        let delivered: Vec<f64> = i.iter().map(|x| -x).collect();
+        let Some((mean, lo, hi)) = steady_stats(t, &delivered) else { return false };
+        if !(mean > 0.0) || !runs_away_from_dc(s.nominal, mean, lo, hi, 1e-6) {
+            return false;
+        }
+        let scale = if s.nominal > 0.0 { mean / s.nominal } else { 1.0 };
+        let (min, max) = if s.nominal > 0.0 { (s.min * scale, s.max * scale) } else { (lo.max(0.0), hi) };
+        let dc = s.nominal;
+        s.min = min.min(mean);
+        s.max = max.max(mean);
+        s.nominal = mean;
+        s.warm = s.warm.map(|w| w * scale);
+        s.limit = nice_up(s.max.max(hi) * margin).max(LIMIT_FLOOR);
+        s.running = Some(Running { mean, min: lo.max(0.0), max: hi, dc });
+        true
+    }
 }
 
 /// Where a measured current sits against the expected range.

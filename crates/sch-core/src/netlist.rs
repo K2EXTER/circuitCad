@@ -554,6 +554,30 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
                 "入力ピンは電圧を決めません。何もつながっていないのと同じで、High と Low の間をふらつきます。出力ピン・電源・抵抗 (プルアップかプルダウン) のどれかにつなぎましょう",
             ));
         }
+        // a net of one part's own pins only (its unnamed: a label may lead on to another sheet): it reaches nothing else, so it is a
+        // wire that stops short (a gap of one grid step left a pot's wiper and end joined to each other and to nothing)
+        let auto_named = n.name.starts_with("N$");
+        if auto_named && n.pins.iter().all(|p| p.refdes == n.pins[0].refdes) && comp(&n.pins[0].refdes).is_some_and(|c| !c.kind.is_power_symbol()) {
+            out.push(Problem::new(
+                Warning,
+                format!("{} のピンどうしだけがつながっていて、ほかの部品に届いていません: {}", n.pins[0].refdes, n.pins.iter().map(said).collect::<Vec<_>>().join("・")),
+                pin_at(&n.pins[0].refdes, &n.pins[0].pin),
+                "同じ部品の足どうしをつないだだけの線は、回路のどこにも続いていません。線の端が、つなぎたい部品のピンにちゃんと届いているか (1 マスの隙間が無いか) 確かめましょう",
+            ));
+        }
+        // a net with only capacitors and inputs on it: nothing sets its voltage for direct current (a 555's timing capacitor and
+        // its TRIG / THRES with the charging resistor left off); the simulation then finds no DC path to ground
+        let is_cap = |r: &str| comp(r).is_some_and(|c| c.kind == Kind::Capacitor || (c.kind == Kind::Custom && r.starts_with('C') && r[1..].starts_with(|ch: char| ch.is_ascii_digit())));
+        let caps = n.pins.iter().filter(|p| is_cap(&p.refdes)).count();
+        if auto_named && caps > 0 && caps < n.pins.len() && n.pins.iter().zip(&kinds).all(|(p, k)| is_cap(&p.refdes) || *k == Some(PinKind::Input)) {
+            let inputs: Vec<String> = n.pins.iter().filter(|p| !is_cap(&p.refdes)).map(said).collect();
+            out.push(Problem::new(
+                Warning,
+                format!("コンデンサと入力ピン ({}) だけがつながっていて、直流で電圧を決めるものがありません", inputs.join("・")),
+                pin_at(&n.pins[0].refdes, &n.pins[0].pin),
+                "コンデンサは直流を通さず、入力ピンは電圧を決めないので、この線の電圧は決まりません (シミュレーションでは「GND への DC 経路がありません」になります)。充電する抵抗やバイアスの抵抗がつながっているか、線が途中で切れていないか確かめましょう",
+            ));
+        }
         for (p, _) in n.pins.iter().zip(&kinds).filter(|(_, k)| **k == Some(PinKind::Nc)) {
             out.push(Problem::new(
                 Warning,

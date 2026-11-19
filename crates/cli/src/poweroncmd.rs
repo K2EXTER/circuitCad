@@ -18,7 +18,9 @@ fn verdict_key(r: Reading) -> &'static str {
 }
 
 impl Session {
-    /// `poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1]`.
+    /// `poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1] [tran=STOP[:STEP]]`.
+    /// With `tran=`, a circuit that keeps moving (an oscillator) is judged by its running current (the run's second half), as the
+    /// app's bench tab does: its DC point can be a state the board never sits in (a 555 stopped half way).
     pub fn poweron(&mut self, args: &[String]) -> Res {
         let (_, kv) = options(args);
         let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number")));
@@ -36,13 +38,26 @@ impl Session {
         }
         let g: std::collections::BTreeMap<String, f64> = self.heat_copper().iter().map(|(k, v)| (k.clone(), v.0)).collect();
         let heaters = sim_core::heaters_from_schematic(&self.sch, &c, &g);
-        let p = sim_core::power_on(&c, &heaters, &s).map_err(|e| e.to_string())?;
+        let mut p = sim_core::power_on(&c, &heaters, &s).map_err(|e| e.to_string())?;
+        if let Some(tran) = opt(&kv, "tran") {
+            let (stop, step) = tran.split_once(':').unwrap_or((tran, ""));
+            let tstop = sim_core::parse_value(stop).filter(|t| *t > 0.0).ok_or_else(|| format!("tran={tran}: the end time in s, for example 3 (a few periods of the slowest thing that moves)"))?;
+            let tstep = if step.is_empty() { sim_core::auto_tstep(tstop) } else { sim_core::parse_value(step).filter(|t| *t > 0.0).ok_or_else(|| format!("tran={tran}: the step after ':' in s, for example 1m"))? };
+            let run = sim_core::transient(&c, &sim_core::TranSettings { tstop, tstep, uic: false }).map_err(|e| e.to_string())?;
+            let names: Vec<String> = p.supplies.iter().map(|x| x.name.clone()).collect();
+            for n in names {
+                if let Some(sig) = run.signal(&format!("I({n})")) {
+                    p.apply_running(&n, &run.time, &sig.values, s.margin);
+                }
+            }
+        }
         let supplies: Vec<Value> = p
             .supplies
             .iter()
             .map(|x| {
                 let parts: Vec<Value> = x.parts.iter().take(5).map(|(n, lo, hi)| json!({"part": n, "at_low_end_a": lo, "at_high_end_a": hi})).collect();
-                json!({"supply": x.name, "volts": x.volts, "nominal_a": x.nominal, "warm_a": x.warm, "min_a": x.min, "max_a": x.max, "limit_a": x.limit, "parts": parts})
+                let running = x.running.map(|r| json!({"mean_a": r.mean, "min_a": r.min, "max_a": r.max, "dc_point_a": r.dc}));
+                json!({"supply": x.name, "volts": x.volts, "nominal_a": x.nominal, "warm_a": x.warm, "min_a": x.min, "max_a": x.max, "limit_a": x.limit, "parts": parts, "running": running})
             })
             .collect();
         let reading = match measured {
@@ -62,6 +77,9 @@ impl Session {
             "limit_a: max_a times margin, rounded up to 1-1.2-1.5-2-2.5-3-4-5-6-8, never under 10 mA; a moment at the limit when the output turns on is the capacitors charging".to_string(),
             "parts without a model (a microcontroller's firmware, what is plugged into a connector) are not in the range: compare with their data sheet's supply current too".to_string(),
         ];
+        if p.supplies.iter().any(|x| x.running.is_some()) {
+            notes.push("running: the circuit keeps moving, so nominal_a is the mean current of the transient run's second half (min_a..max_a moved with it, limit_a also covers its highest current); dc_point_a is the DC operating point, a state the board does not sit in".to_string());
+        }
         if !p.heated {
             notes.push("no part warms itself here (or the warm point did not solve): the range has no self-heating".to_string());
         }

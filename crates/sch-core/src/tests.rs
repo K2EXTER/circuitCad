@@ -560,6 +560,46 @@ fn pins_with_a_kind_are_checked_for_fights_and_floating_inputs() {
     assert!(!has(&erc(&s), "出力どうし"));
 }
 
+/// Found by a usability test (2026-11-19): a gap of one grid step left a 555's timing capacitor on its TRIG / THRES with no charging
+/// resistor, and a pot's wiper joined only to its own end. The ERC said nothing; only the transient run's "no DC path" told.
+#[test]
+fn a_net_of_one_part_or_of_capacitors_and_inputs_only_is_reported() {
+    let typed = || {
+        let mut sym = opamp();
+        for p in &mut sym.pins {
+            p.kind = PinKind::guess_from_name(&p.name);
+        }
+        sym
+    };
+    let mut s = Schematic::default();
+    let u = s.add_custom(typed(), "LM358", "SOIC-8", (10, 10), 0);
+    let c = s.add(Kind::Capacitor, (40, 10), 1);
+    let pin = |s: &Schematic, i: usize, name: &str| s.components[i].pins().into_iter().find(|p| p.0 == name).unwrap().1;
+    let join = |s: &mut Schematic, x: (i32, i32), y: (i32, i32)| {
+        wire(s, x, (x.0, y.1));
+        wire(s, (x.0, y.1), y);
+    };
+    // IN+ and a capacitor only: no DC path
+    let (inp, c1) = (pin(&s, u, "3"), pin(&s, c, "1"));
+    join(&mut s, inp, c1);
+    assert!(has(&erc(&s), "コンデンサと入力ピン"), "{:?}", erc(&s));
+    // a resistor on it sets its voltage
+    let r = s.add(Kind::Resistor, (60, 30), 1);
+    let r1 = pin(&s, r, "1");
+    join(&mut s, c1, r1);
+    assert!(!has(&erc(&s), "コンデンサと入力ピン"), "{:?}", erc(&s));
+    // a resistor whose two ends are joined to each other and to nothing else
+    s.wires.clear();
+    let r2 = s.add(Kind::Resistor, (80, 10), 0);
+    let (a, b) = (pin(&s, r2, "1"), pin(&s, r2, "2"));
+    join(&mut s, a, b);
+    assert!(has(&erc(&s), "ピンどうしだけ"), "{:?}", erc(&s));
+    // joined to another part as well: an ordinary net
+    let other = pin(&s, r, "2");
+    join(&mut s, b, other);
+    assert!(!has(&erc(&s), "ピンどうしだけ"), "{:?}", erc(&s));
+}
+
 #[test]
 fn old_two_lead_glyph_sheet_gets_short_leads() {
     // a version-0 sheet: electrolytic cap at (10,10) whose pins used to sit at +-4, wires on them

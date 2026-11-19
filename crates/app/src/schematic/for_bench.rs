@@ -69,6 +69,32 @@ impl SchEditor {
         self.sch.components.iter().filter_map(|c| super::live_logic::switch_of(c).map(|(k, s)| (c.refdes.clone(), s, k == super::live_logic::InputKind::Push))).collect()
     }
 
+    /// A transient run of the circuit as it is now, for the bench tab: a circuit that keeps moving (an oscillator, a pulse source)
+    /// does not sit at its DC point, and the board shows what it does while it runs. The last run when it was of this circuit,
+    /// else one run with the sheet's times (not kept: the waveform panel is left as it was). None when it cannot run.
+    pub fn running_tran(&self) -> Option<std::borrow::Cow<'_, sim_core::TranResult>> {
+        if let Some(v) = self.tran.as_ref().filter(|v| v.signature == self.signature()) {
+            return v.outcome.as_ref().ok().map(std::borrow::Cow::Borrowed);
+        }
+        let (tstop, tstep) = self.tran_times()?;
+        let c = self.sim_circuit().ok()?;
+        sim_core::transient(&c, &sim_core::TranSettings { tstop, tstep, uic: self.tran_uic }).ok().map(std::borrow::Cow::Owned)
+    }
+
+    /// The nets that move while the circuit runs (`running_tran`'s steady part is not their DC voltage): (net, mean, min, max) in
+    /// volts. A tester shows about the mean, and its reading may wander.
+    pub fn running_voltages(&self) -> Vec<(String, f64, f64, f64)> {
+        let Some(dc) = self.bench_voltages() else { return vec![] };
+        let Some(r) = self.running_tran() else { return vec![] };
+        dc.iter()
+            .filter_map(|(net, v)| {
+                let sig = r.signal(&format!("V({net})"))?;
+                let (mean, lo, hi) = sim_core::steady_stats(&r.time, &sig.values)?;
+                sim_core::runs_away_from_dc(*v, mean, lo, hi, 0.05).then(|| (net.clone(), mean, lo, hi))
+            })
+            .collect()
+    }
+
     /// A signal of the last transient run (times, values), with the run's circuit unchanged since.
     pub fn tran_signal(&self, name: &str) -> Option<(Vec<f64>, Vec<f64>)> {
         let r = self.tran.as_ref()?.outcome.as_ref().ok()?;
@@ -79,5 +105,33 @@ impl SchEditor {
     /// The spec table with its "実測" column, as the analysis tab shows it.
     pub fn spec_table_ui(&mut self, ui: &mut egui::Ui) {
         self.panel_spec(ui);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Found by a usability test (2026-11-19): for a 555 blinker the bench tab gave the DC point (the timer stopped half way, LED
+    // off) as what a working board draws and reads, so a correct board was "a little high" and its timing capacitor "1.67 V".
+    #[test]
+    fn a_blinking_555_is_judged_by_its_running_current_and_voltages() {
+        let mut e = SchEditor::default();
+        e.load_path(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ne555_blinker.schjson"));
+        e.tran_tstop = "3".into();
+        e.analyze_dc();
+        let mut g = crate::power_on_guide::PowerOnGuide::default();
+        g.open_for(&e);
+        let s = g.result_for_test().unwrap().as_ref().unwrap().supplies[0].clone();
+        let run = s.running.unwrap_or_else(|| panic!("the blinker keeps moving: {s:?}"));
+        assert!(run.max > run.min && (s.nominal - run.mean).abs() < 1e-12, "{s:?}");
+        assert_eq!(s.judge(run.mean), sim_core::PowerOnReading::Normal, "the mean current of a working board is normal: {s:?}");
+        let moving = e.running_voltages();
+        assert!(!moving.is_empty(), "some nets swing while it blinks");
+        for (net, mean, lo, hi) in &moving {
+            assert!(lo < mean && mean < hi, "{net}: {lo} {mean} {hi}");
+        }
+        // the supply itself does not move
+        assert!(moving.iter().all(|(n, ..)| !n.eq_ignore_ascii_case("VCC")), "{moving:?}");
     }
 }

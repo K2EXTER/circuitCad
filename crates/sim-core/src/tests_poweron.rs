@@ -1,7 +1,7 @@
 //! The first power-on guide (`poweron.rs`): the expected supply current, its range and the limit, and the verdict on a reading.
 
 use crate::circuit::{Circuit, DiodeModel, Element};
-use crate::poweron::{nice_up, power_on, PowerOnSettings, Reading, SupplyCurrent, LIMIT_FLOOR};
+use crate::poweron::{nice_up, power_on, runs_away_from_dc, steady_stats, PowerOn, PowerOnSettings, Reading, SupplyCurrent, LIMIT_FLOOR};
 use crate::selfheat::Heater;
 
 fn settings(tol_r: f64) -> PowerOnSettings {
@@ -85,7 +85,7 @@ fn nice_values_round_up() {
 
 #[test]
 fn readings_are_judged_against_the_range_and_the_limit() {
-    let s = SupplyCurrent { name: "V1".into(), volts: 5.0, nominal: 0.010, warm: None, min: 0.009, max: 0.011, limit: 0.02, parts: vec![] };
+    let s = SupplyCurrent { name: "V1".into(), volts: 5.0, nominal: 0.010, warm: None, min: 0.009, max: 0.011, limit: 0.02, parts: vec![], running: None };
     for (ma, want) in [(10.0, Reading::Normal), (9.0, Reading::Normal), (8.0, Reading::Low), (4.0, Reading::MuchLow), (0.5, Reading::Nothing), (12.0, Reading::High), (19.5, Reading::MuchHigh), (25.0, Reading::MuchHigh)] {
         assert_eq!(s.judge(ma * 1e-3), want, "{ma} mA");
     }
@@ -96,4 +96,36 @@ fn readings_are_judged_against_the_range_and_the_limit() {
         assert!(!r.causes().is_empty() && !r.title().is_empty());
     }
     assert!(Reading::MuchHigh.cut_now() && !Reading::High.cut_now());
+}
+
+// Found by a usability test (2026-11-19): a 555 blinker's DC point is the timer stopped half way (LED off, 6.9 mA), but the
+// board draws 7.5–8.4 mA (7.9 mA on average) while it blinks, so a correct board was called "a little high".
+#[test]
+fn a_running_circuit_moves_the_range_to_its_mean_current() {
+    let s = SupplyCurrent { name: "V1".into(), volts: 5.0, nominal: 0.0069, warm: None, min: 0.0068, max: 0.0071, limit: 0.012, parts: vec![], running: None };
+    let mut p = PowerOn { supplies: vec![s.clone()], unsolved: vec![], heated: false };
+    // the source's current while it blinks: -7.5 mA and -8.4 mA, half the time each, after a start-up at -9 mA
+    let t: Vec<f64> = (0..=4000).map(|k| k as f64 * 1e-3).collect();
+    let i: Vec<f64> = t.iter().map(|x| if *x < 0.5 { -0.009 } else if (x * 2.0).fract() < 0.5 { -0.0075 } else { -0.0084 }).collect();
+    assert!(p.apply_running("V1", &t, &i, 1.5));
+    let r = &p.supplies[0];
+    let run = r.running.unwrap();
+    let mean = run.mean;
+    assert!((mean - 0.00795).abs() < 0.0001 && (run.min - 0.0075).abs() < 1e-9 && (run.max - 0.0084).abs() < 1e-9 && run.dc == 0.0069, "{run:?}");
+    assert!(r.judge(0.008) == Reading::Normal, "8 mA on the bench is normal now: {r:?}");
+    assert!(r.min < mean && mean < r.max && r.limit >= 0.0084 * 1.5, "{r:?}");
+    // a circuit that sits at its DC point keeps its numbers
+    let mut still = PowerOn { supplies: vec![s.clone()], unsolved: vec![], heated: false };
+    assert!(!still.apply_running("V1", &t, &vec![-0.0069; t.len()], 1.5));
+    assert_eq!(still.supplies[0], s);
+}
+
+#[test]
+fn the_steady_part_is_the_second_half() {
+    let t = [0.0, 1.0, 2.0, 3.0, 4.0];
+    let (mean, lo, hi) = steady_stats(&t, &[9.0, 9.0, 1.0, 3.0, 1.0]).unwrap();
+    assert!((mean - 2.0).abs() < 1e-9 && lo == 1.0 && hi == 3.0, "{mean} {lo} {hi}");
+    assert!(!runs_away_from_dc(5.0, 5.1, 5.0, 5.2, 0.01), "within 5 % and a small ripple");
+    assert!(runs_away_from_dc(5.0, 5.0, 3.0, 7.0, 0.01), "a big swing");
+    assert!(runs_away_from_dc(1.67, 2.36, 1.67, 3.33, 0.01), "a 555's timing capacitor");
 }

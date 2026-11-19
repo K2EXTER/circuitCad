@@ -88,6 +88,9 @@ pub struct BenchTab {
     order_key: String,
     /// The DC point was worked out once on opening the step "測る" (not again every frame when it fails).
     dc_asked: bool,
+    /// The nets that move while the circuit runs ((net, mean, min, max) V, `SchEditor::running_voltages`) and the circuit they were
+    /// found for: worked out once per circuit, as it may run a transient.
+    running: Option<(String, Vec<(String, f64, f64, f64)>)>,
 }
 
 const GLOW: Color32 = crate::theme::HIGHLIGHT;
@@ -283,6 +286,16 @@ impl BenchTab {
                 ui.label(spaced("正常なら出る電圧は、DC 動作点から出します。「DC 動作点を計算する」を押してください。").color(NOTE));
             }
             Some(mut v) => {
+                // the nets that move while it runs: their DC voltage is not what the board shows (a 555's timing capacitor
+                // swings between 1/3 and 2/3 of the supply; its DC point sits at 1/3 with the output low)
+                let sig = sch.circuit_signature();
+                if self.running.as_ref().is_none_or(|(s, _)| *s != sig) {
+                    self.running = Some((sig, sch.running_voltages()));
+                }
+                let running = self.running.as_ref().map(|(_, r)| r.as_slice()).unwrap_or_default();
+                if !running.is_empty() {
+                    ui.label(spaced("この回路は動き続けるので、時間とともに変わる点は、過渡解析の後半の平均と、変わる幅を出しています。テスターは平均に近い値を示し、数字が揺れることがあります。").color(NOTE));
+                }
                 // ground is where the black probe goes, not a reading
                 v.retain(|(n, _)| !is_ground(n));
                 // the rows of the spec table first, then the named nets, then the rest
@@ -298,7 +311,15 @@ impl BenchTab {
                         if ui.selectable_label(picked, name).on_hover_text(i18n::tr("選ぶと、基板の絵の上で、このネットのパッドが光ります。太字はスペック表で測る点です")).clicked() {
                             self.picked_net = if picked { None } else { Some(net.clone()) };
                         }
-                        ui.label(format!("{}V", sim_core::format_value(*volts)));
+                        match running.iter().find(|(n, ..)| n == net) {
+                            Some((_, mean, lo, hi)) => {
+                                ui.label(i18n::trf!("平均 {}V ({}V 〜 {}V で変わる)", sim_core::format_value(*mean), sim_core::format_value(*lo), sim_core::format_value(*hi)))
+                                    .on_hover_text(i18n::trf!("過渡解析の後半から出した値です。DC 動作点の {}V は、動きが止まった状態の値で、実物では出ません", sim_core::format_value(*volts)));
+                            }
+                            None => {
+                                ui.label(format!("{}V", sim_core::format_value(*volts)));
+                            }
+                        }
                         ui.end_row();
                     }
                 });

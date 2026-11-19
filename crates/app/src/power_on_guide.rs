@@ -60,7 +60,17 @@ impl PowerOnGuide {
         let sig = sch.circuit_signature();
         let r = self.settings().and_then(|s| {
             let (c, heaters) = sch.power_on_inputs()?;
-            sim_core::power_on(&c, &heaters, &s).map_err(|e| e.to_string())
+            let mut p = sim_core::power_on(&c, &heaters, &s).map_err(|e| e.to_string())?;
+            // a circuit that keeps moving (a 555 that blinks) draws its running current, not its DC point's
+            if let Some(run) = sch.running_tran() {
+                let names: Vec<String> = p.supplies.iter().map(|x| x.name.clone()).collect();
+                for n in names {
+                    if let Some(sig) = run.signal(&format!("I({n})")) {
+                        p.apply_running(&n, &run.time, &sig.values, s.margin);
+                    }
+                }
+            }
+            Ok(p)
         });
         self.result = Some((r, sig));
     }
@@ -178,6 +188,19 @@ impl PowerOnGuide {
                     ui.colored_label(OK, egui::RichText::new(amps(s.limit)).strong()).on_hover_text(i18n::tr("正常な範囲の上の端の 1.5 倍を、電源のつまみで合わせやすい値に切り上げたもの (10 mA より小さくはしません)"));
                     ui.end_row();
                 });
+                if let Some(run) = s.running {
+                    ui.label(
+                        spaced(&i18n::trf!(
+                            "この回路は動き続けます (発振・パルスなど)。過渡解析の後半では、電流が {} 〜 {} の間で変わり、平均は {} です。電源の電流の表示は平均に近い値になるので、範囲は平均を中心にしています。DC 動作点の {} は、動きが止まった状態の値で、実物では流れません。",
+                            amps(run.min),
+                            amps(run.max),
+                            amps(run.mean),
+                            amps(run.dc)
+                        ))
+                        .color(WARN),
+                    )
+                    .on_hover_text(i18n::tr("過渡解析は、回路図の解析タブの過渡解析の時間で計算します (前に実行した結果があれば、それを使います)。ゆっくり動く回路は、その時間を数周期ぶんにしてから計算し直してください"));
+                }
                 if !s.parts.is_empty() {
                     let top: Vec<String> = s.parts.iter().take(3).map(|(n, lo, hi)| format!("{n} (±{})", amps(lo.abs().max(hi.abs())))).collect();
                     ui.label(egui::RichText::new(i18n::trf!("電流を動かす部品: {}", top.join("、"))).color(NOTE)).on_hover_text(i18n::tr("その部品だけを許容差の端にしたときの、電流の変わり方"));
@@ -245,6 +268,7 @@ mod tests {
         g.open_for(&sch);
         let s = g.result_for_test().unwrap().as_ref().unwrap().supplies[0].clone();
         assert!(s.min < s.nominal && s.nominal < s.max && s.max < s.limit, "{s:?}");
+        assert!(s.running.is_none(), "an LED on a resistor sits at its DC point: {s:?}");
         g.set_measured_main(&format!("{}", s.nominal * 1e3));
         let ctx = egui::Context::default();
         frame(&ctx, &mut g, &sch);

@@ -90,11 +90,11 @@
 | 部品が重なる所をクリックすると、黙って置かれない | 理由の文は出ていたが、ポインタの座標が毎フレーム上書きして 1 フレームしか見えなかった。ほかの文は 4 秒残してから座標に戻す (`schematic/canvas.rs StatusHold`)。置けない所では、置く前の影を赤くする (`draw.rs draw_tool_ghost`) |
 | 結果の表の周波数が、555 で約 10 % 低い (1.07 Hz の点滅が 0.95 Hz) | 全部ゼロから始めた過渡解析では、最初の周期だけ長い (コンデンサが 0 V から充電する)。立ち上がりが 3 回以上あれば最初の周期を外す (`sim-core/measure.rs wave_measure`)。`ccad` の tran は別の数え方の写しを持っていて同じずれがあったので、`wave_measure` を使うようにした (`cli/src/build.rs periodicity`) |
 | 発注前のチェックが「U1.4 (VCC) の電源ピンに…」と言う (555 の 4 番は RESET) | 基板はどのパッドが電源ピンかを知らないので、コンデンサが無いときはピンでなく「U1 の電源 VCC に」と言う (`pcb-core/drc/decoupling.rs`) |
+| 実機のタブの「正常な電流」と「測る電圧」が、発振回路では DC 動作点から出た。555 がタイマーの途中で止まった状態 (LED 消灯、6.9 mA) で、正しい基板 (点滅中は平均 7.9 mA) が「少し多い」と判定され、TH が 1.67 V と出た | 過渡解析の後半が DC 動作点と違う (平均が 5 % 超ずれるか、10 % 超振れる) 回路は、電源の電流を後半の平均にして範囲と電流制限を動かし (`sim-core/poweron.rs` の `PowerOn::apply_running`・`steady_stats`)、測る点は「平均 2.55V (1.67V〜3.33V で変わる)」と出す (`schematic/for_bench.rs` の `running_tran`・`running_voltages`、`bench_tab.rs`)。過渡解析は前の結果がその回路のものならそれを、無ければ解析タブの時間で 1 回解く。`ccad poweron tran=3` も同じ。テスト `a_blinking_555_is_judged_by_its_running_current_and_voltages`・`a_running_circuit_moves_the_range_to_its_mean_current` |
+| ERC が、1 つの部品のピンだけでできたネット (ボリュームのワイパーと端だけ) と、コンデンサと入力ピンだけのネット (555 の TRIG/THRES と C1 だけ。充電の抵抗に届いていない) を言わなかった | どちらも ERC の注意にした (`sch-core/netlist.rs`。ラベルの名前の付いたネットは、別のシートへ続くことがあるので除く)。NE555 の部品にピンの種類を入れた (TRIG・THRES・RESET は入力、OUT は出力、DISCH はオープンコレクタ、CONT は中の分圧でバイアスされているので passive)。同梱のサンプル 140 本で、新しい注意が出ないことを確かめた。テスト `a_net_of_one_part_or_of_capacitors_and_inputs_only_is_reported` |
 
 見つかって、直していないもの:
 
-- **実機のタブの「正常な電流」と「測る電圧」が、発振回路では DC 動作点から出る** (`sim-core/poweron.rs` は `dc_op` だけ)。555 が 1/3 Vcc で止まった状態 (OUT ≒ 0 V) になり、正しい基板が「少し多い」と判定される。過渡解析の平均と振れ幅を使う必要がある (大きめなので別に)
-- ERC が、1 つの部品のピンだけでできたネットや、直流でどこにもつながらないネットを言わない (過渡解析の「GND への DC 経路がありません」で初めて分かった)
 - 試作はリード部品なのに、基板では R・C・LED が知らせなく 0805 の表面実装になる
 - R キーの回転が、別の種類の部品にも引き継がれる (未確認)
 - 保存・書き出しのダイアログが毎回「ドキュメント」から始まる

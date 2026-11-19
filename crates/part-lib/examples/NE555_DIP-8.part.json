@@ -9,42 +9,50 @@
     {
       "number": "2",
       "name": "TRIG",
-      "side": "left"
+      "side": "left",
+      "kind": "input"
     },
     {
       "number": "6",
       "name": "THRES",
-      "side": "left"
+      "side": "left",
+      "kind": "input"
     },
     {
       "number": "5",
       "name": "CONT",
-      "side": "left"
+      "side": "left",
+      "kind": "passive"
     },
     {
       "number": "4",
       "name": "RESET",
-      "side": "left"
+      "side": "left",
+      "kind": "input"
     },
     {
       "number": "3",
       "name": "OUT",
-      "side": "right"
+      "side": "right",
+      "kind": "output"
     },
     {
       "number": "7",
       "name": "DISCH",
-      "side": "right"
+      "side": "right",
+      "kind": "open_drain"
     },
     {
       "number": "8",
       "name": "VCC",
-      "side": "top"
+      "side": "top",
+      "kind": "power_in"
     },
     {
       "number": "1",
       "name": "GND",
-      "side": "bottom"
+      "side": "bottom",
+      "kind": "power_in"
     }
   ],
   "package": {
