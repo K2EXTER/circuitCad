@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>circuitCad — learn electronics, all the way to a board order</title>
-<meta name="description" content="A free, open-source circuit CAD for learners: schematic, SPICE-style simulation (DC to loop gain, noise and Monte Carlo), PCB layout and Gerber export in one app, with lessons. English and Japanese UI. AGPL-3.0.">
+<meta name="description" content="A free, open-source circuit CAD for learners: schematic, SPICE-style simulation (DC to loop gain, noise and Monte Carlo), a breadboard that runs, PCB layout, Gerber export and first power-on in one app, with lessons. English and Japanese UI. AGPL-3.0.">
 <meta property="og:title" content="circuitCad — learn electronics, all the way to a board order">
-<meta property="og:description" content="Schematic → simulation → PCB → fabrication files in one app, with lessons that ask you to predict before you simulate. Free and open source.">
+<meta property="og:description" content="Schematic → simulation → breadboard → PCB → fabrication files → bench in one app, with lessons that ask you to predict before you simulate. Free and open source.">
 <meta property="og:image" content="https://k2exter.github.io/circuitCad/images/en/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/svg+xml" href="../logo.svg">
@@ -63,6 +63,7 @@ details li{margin:2px 0}
 .two ul{margin:0;padding-left:1.2em;font-size:15px}
 .two li{margin:4px 0}
 figure{margin:0}
+.tag{display:inline-block;font-size:12px;border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:0 8px;margin-left:6px;vertical-align:2px}
 figcaption{font-size:14px;color:var(--sub);margin-top:8px}
 .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
 ol{padding-left:1.4em}
@@ -79,7 +80,7 @@ a{color:var(--accent)}
 
 <header>
   <h1>Draw a circuit, run it,<br>turn it into a board, and order it.</h1>
-  <p class="lead">circuitCad puts schematic capture, SPICE-style simulation, PCB layout and Gerber export into <strong>one free app for people learning electronics</strong>. Go from "learning a circuit" to "trying it out" to "ordering a real board" without switching tools.</p>
+  <p class="lead">circuitCad puts schematic capture, SPICE-style simulation, breadboard prototyping, PCB layout, Gerber export and bringing up the board you received into <strong>one free app for people learning electronics</strong>. Go from "learning a circuit" to "trying it out" to "ordering a real board" and "getting it running" without switching tools.</p>
   <div class="btns">
     <a class="btn main" href="https://github.com/K2EXTER/circuitCad/releases/latest">⬇ Download (Windows / Linux)</a>
     <a class="btn sub" href="https://github.com/K2EXTER/circuitCad">Source code (GitHub)</a>
@@ -100,18 +101,21 @@ a{color:var(--accent)}
 
 <section>
   <h2>One app, end to end</h2>
-  <div class="flow"><span>Schematic</span><i>→</i><span>Simulation</span><i>→</i><span>PCB</span><i>→</i><span>Gerber · BOM</span></div>
+  <div class="flow"><span>Schematic</span><i>→</i><span>Simulation</span><i>→</i><span>Prototype (breadboard)</span><i>→</i><span>PCB</span><i>→</i><span>Gerber · BOM</span><i>→</i><span>Bench</span></div>
+  <p class="note" style="text-align:center">The screen follows the same order, in four tabs: Schematic, Prototype, PCB layout and Bench.</p>
 </section>
 
 <section>
   <h2>Made for learners</h2>
   <div class="grid">
     <div class="card"><h3>Explains itself</h3><p>Every button and field has hover help. Wiring mistakes and rating problems come with the cause and how to fix it. F1 opens the operation guide.</p></div>
-    <div class="card"><h3>Learn as you go</h3><p>7 learning paths, 51 step-by-step lessons, 8 board lessons and 10 "Build it yourself" challenges that check your circuit. Lessons ask you to predict first.</p></div>
+    <div class="card"><h3>Learn as you go</h3><p>9 learning paths, more than 90 step-by-step lessons, 8 board lessons and 10 "Build it yourself" challenges that check your circuit. Lessons ask you to predict first.</p></div>
+    <div class="card"><h3>Try it on a breadboard</h3><p>The schematic's parts are laid out on a breadboard; switch the power on and it runs as plugged in. LEDs light, a buzzer sounds, and parts over their rating get scorched.</p></div>
     <div class="card"><h3>Learn by breaking things</h3><p>Open, short or reverse parts and pins and compare the results. Repair a board with a fault put in on purpose.</p></div>
     <div class="card"><h3>See it, then understand it</h3><p>Voltages as wire colours and currents as arrows, right on the schematic. Analyses from DC to loop gain, noise and Monte Carlo.</p></div>
     <div class="card"><h3>All the way to an order</h3><p>Autoroute, DRC and a 3D view, then a pre-order check against JLCPCB / PCBWay / OSH Park rules and Gerber export.</p></div>
-    <div class="card"><h3>Parts and samples included</h3><p>More than 140 parts and 100 sample circuits. KiCad symbols, footprints and schematics can be imported.</p></div>
+    <div class="card"><h3>Bring up your board</h3><p>Assembly, first power-on, measuring, pass / fail and repair, step by step. The first power-on gets the normal current range and the current limit to set.</p></div>
+    <div class="card"><h3>Parts and samples included</h3><p>More than 260 parts (including real resistors, capacitors, LEDs and MOSFETs from their makers) and 130 sample circuits. KiCad and LTspice schematics can be imported.</p></div>
   </div>
 </section>
 
@@ -127,6 +131,20 @@ a{color:var(--accent)}
         <li>Drag a part's value slider with "Auto recalculate" on and the result follows at once</li>
         <li>Warnings when a resistor or IC runs too hot, or an LED gets too much current</li>
         <li>Results are cross-checked against ngspice (<a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/accuracy.md">accuracy page</a>, Japanese)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="../images/en/spot/prototype.png" alt="The Prototype tab: a resistor, LED, potentiometer and transistor on a breadboard, powered on with the LED lit" loading="lazy"></div>
+    <div>
+      <h3>Plug it into a breadboard and switch it on<span class="tag">from alpha.12</span></h3>
+      <p>The Prototype tab lays out which breadboard holes the schematic's parts go into. Switch the power on and the circuit runs exactly as it is plugged in.</p>
+      <ul>
+        <li>Connected holes light up; drag parts and jumper wires to move them, and leads that differ from the schematic get a red circle</li>
+        <li>Turn the supply voltage, the ambient temperature and potentiometers while it runs; click switches and buttons</li>
+        <li>A buzzer sounds through your speakers, and parts over their rating get scorched and fail in the circuit too</li>
+        <li>A meter (DC voltage) and a scope (voltage over time)</li>
       </ul>
     </div>
   </div>
@@ -149,7 +167,8 @@ a{color:var(--accent)}
       <h3>Predict first, then check</h3>
       <p>Before showing a step, a lesson asks what you think will happen. Whether you guess right or wrong, simulating right after your guess makes the reason stick.</p>
       <ul>
-        <li>7 learning paths: from Ohm's law to a regulated power supply, an Arduino-compatible board, switching loads, battery-powered devices and signals</li>
+        <li>9 learning paths: from Ohm's law to a regulated power supply, an Arduino-compatible board, switching loads, battery-powered devices, signals, parts and repair</li>
+        <li>Digital circuits run live: click the switches and check High / Low colours and the truth table</li>
         <li>Every lesson says how the model differs from real parts, and suggests a bench experiment at 12 V or less</li>
         <li>"Build it yourself" gives only the goal and judges your own circuit by simulation</li>
         <li>A glossary, opened from the words used in each lesson</li>
@@ -171,13 +190,27 @@ a{color:var(--accent)}
   </div>
 
   <div class="spot">
+    <div class="pic"><img src="../images/en/spot/bench.png" alt="The Bench tab: power-on steps, the normal current range and the current limit to set, with the supply connection lit on the board layout" loading="lazy"></div>
+    <div>
+      <h3>Power up the board you received, safely<span class="tag">from alpha.12</span></h3>
+      <p>The Bench tab walks through the board you received: <strong>assembly → first power-on → measure → pass / fail → repair</strong>. At each step the parts to fit or the points to probe light up on the board layout.</p>
+      <ul>
+        <li>The normal current range from the schematic, and the current limit to set on your supply</li>
+        <li>If the measured current is too high or too low, where to look first</li>
+        <li>A printable assembly sheet: soldering order from the lowest parts, and polarity marks</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
     <div class="pic"><img src="../images/en/spot/view3d.png" alt="3D view of an assembled board" loading="lazy"></div>
     <div>
       <h3>See it in 3D, and check it fits the case</h3>
       <p>Check part heights and the finished look in 3D. Enter the case height and parts that do not fit turn red.</p>
       <ul>
-        <li>Board outline, holes and part boxes as DXF, and outline and holes read back from the case's DXF</li>
-        <li>Makers' STEP files as part shapes</li>
+        <li>Drawn on the GPU with smooth surfaces and shading; <strong>STEP export</strong> with curved surfaces and one solid per part</li>
+        <li>Overlay the case's STEP to find parts that collide; DXF out and in</li>
+        <li>Makers' STEP files as part shapes; several boards of one project stacked in 3D</li>
         <li>A part or net picked in the schematic, the board or the 3D view lights up in the other two</li>
       </ul>
     </div>
@@ -195,18 +228,24 @@ a{color:var(--accent)}
     <tr><td>AC (Bode plot)</td><td>Gain and phase against frequency, with the −3 dB point.</td></tr>
     <tr><td>DC sweep</td><td>Output against a swept input voltage (transfer curves, thresholds).</td></tr>
     <tr><td>Parameter sweep</td><td>Steps one part value and overlays the results, to compare cut-offs or waveforms.</td></tr>
-    <tr><td>Loop gain</td><td>Feedback stability: phase margin and gain margin.</td></tr>
+    <tr><td>Loop gain</td><td>Feedback stability: phase margin and gain margin, with Nyquist and Nichols plots.</td></tr>
     <tr><td>Poles and zeros</td><td>The transfer function's poles and zeros, for filters and control loops.</td></tr>
+    <tr><td>Root locus</td><td>How the poles move as one part value changes.</td></tr>
+    <tr><td>CMRR / PSRR</td><td>How well an amplifier rejects a common-mode signal, or ripple on one supply.</td></tr>
+    <tr><td>Sensitivity</td><td>Moves each part by ±1 % in turn and ranks how much the result changes.</td></tr>
+    <tr><td>Battery life</td><td>Hours or days on a battery, from the average current of a transient run and the charge left when the circuit stops working.</td></tr>
+    <tr><td>Fault diagnosis</td><td>Enter voltages measured on a circuit that does not work, and get the likely causes.</td></tr>
     <tr><td>Noise</td><td>Output and input-referred noise, and which parts contribute most.</td></tr>
     <tr><td>Impedance</td><td>The impedance seen from a net against frequency (a supply rail, an input).</td></tr>
-    <tr><td>Temperature and variation</td><td>Temperature effects, Monte Carlo spread from part tolerances, worst case, and the parts that matter most.</td></tr>
+    <tr><td>Temperature and variation</td><td>Temperature effects, Monte Carlo spread from part tolerances (with yield and Cpk), worst case, and the parts that matter most.</td></tr>
     <tr><td>Spec table</td><td>Targets with pass / fail, and a column for values measured on the bench.</td></tr>
-    <tr><td>Self-heating</td><td>How hot each part gets, and how its temperature rises over time.</td></tr>
+    <tr><td>Self-heating</td><td>How hot each part gets (θjc and heatsink, an ambient sweep for the worst case, short pulses), and how its temperature rises over time.</td></tr>
+    <tr><td>Board heat map</td><td>The board's temperature solved from copper, vias, convection and radiation, fed back into self-heating; also over time and inside a closed case.</td></tr>
     <tr><td>Fault simulation</td><td>Open, short, reverse or change a part or pin, and follow how far the damage spreads.</td></tr>
-    <tr><td>Digital</td><td>Gates, flip-flops, counters and shift registers with propagation delay and setup / hold checks, alongside the analog circuit.</td></tr>
+    <tr><td>Digital</td><td>Gates, flip-flops, counters and shift registers with propagation delay and setup / hold checks, alongside the analog circuit. Transient waveforms have a logic-analyser style digital view (High / Low bands and buses).</td></tr>
     <tr><td>Rating check</td><td>After an analysis: power, current and voltage against each part's ratings.</td></tr>
   </table>
-  <p class="note">Also: capacitor DC bias (capacitance lost at the working voltage), ESR / ESL, battery internal resistance and discharge, a part-value calculator that shows its steps and caveats, and SPICE netlist export for ngspice.</p>
+  <p class="note">Also: capacitor DC bias (capacitance lost at the working voltage), ESR / ESL, battery internal resistance and discharge, a part-value calculator that shows its steps and caveats (including the copper area or heatsink a loss needs), active filter design (Butterworth, Bessel, Chebyshev) placed on the schematic and checked by AC analysis, and SPICE netlist export for ngspice.</p>
 </section>
 
 <section>
@@ -225,10 +264,22 @@ a{color:var(--accent)}
   </details>
 
   <details>
+    <summary>Prototype and bench<small>breadboard, the board you received</small></summary>
+    <ul>
+      <li><strong>Prototype</strong>: the schematic's parts laid out on a breadboard, connected holes lit, drag to move, leads that differ from the schematic marked in red and listed<span class="tag">from alpha.12</span></li>
+      <li>Switch the power on and it runs as plugged in: LEDs, switches, push buttons, potentiometers, a buzzer you can hear, a DC motor; parts over their rating get scorched and fail</li>
+      <li>Change the supply voltage, ambient temperature and potentiometers while it runs; a meter and a scope</li>
+      <li><strong>Bench</strong>: assembly → first power-on → measure → pass / fail → repair, with the parts and probe points lit on the board layout at each step</li>
+      <li>A first power-on guide (normal current range, current limit, where to look when it is off) and a printable assembly sheet (soldering order, polarity marks)</li>
+    </ul>
+  </details>
+
+  <details>
     <summary>Learning<small>lessons, challenges, glossary</small></summary>
     <ul>
-      <li>7 learning paths (regulated supply, Arduino-compatible board, Mega-compatible board, board craft, switching loads, battery-powered devices, signals); your progress is kept</li>
-      <li>51 step-by-step lessons, including an "up close" lesson for each kind of part; prediction questions</li>
+      <li>9 learning paths (regulated supply, Arduino-compatible board, Mega-compatible board, board craft, switching loads, battery-powered devices, signals, parts, repair); your progress is kept</li>
+      <li>More than 90 step-by-step lessons, including an "up close" lesson for each kind of part and repair lessons; prediction questions</li>
+      <li>Run digital circuits live: click switches, High / Low colours, a truth table, step one clock at a time, slow the gate delays down to see a glitch</li>
       <li>8 board lessons (voltage drop in tracks, fixing a board before ordering, differential pairs, finding and repairing a fault)</li>
       <li>10 "Build it yourself" challenges with hints and an answer circuit</li>
       <li>A value calculator: LED resistor, divider, filters, regulators, transistor and MOSFET switches, buck / boost, op-amp gain, with steps, caveats and failure modes</li>
@@ -244,6 +295,7 @@ a{color:var(--accent)}
       <li><strong>Autoroute</strong>, push-and-shove routing, 45° / 90° / free bends, straight entry into pads</li>
       <li>Differential pairs, length matching (meanders), nudging nearby parts to make room after routing</li>
       <li>2 / 4 / 6 / 8 copper layers, net classes (width, clearance, vias, layers)</li>
+      <li><strong>Several boards</strong> in one project: connections between them checked, one BOM for all, simulated together</li>
       <li>Board snippets (copy parts with their tracks and vias to another board)</li>
     </ul>
   </details>
@@ -265,8 +317,9 @@ a{color:var(--accent)}
     <ul>
       <li>DRC (clearance, width, holes, board edge, shorts, unrouted, pour slivers, acute angles, silkscreen) and a <strong>live check while you work</strong></li>
       <li>Track width from the current, voltage drop along tracks (fed back into the simulation)</li>
-      <li>Bypass capacitors at IC supply pins, thermal vias, trace impedance estimates</li>
-      <li>Net table (class, length per layer, detour, vias, widths) and a design-requirements table checked row by row</li>
+      <li>Bypass capacitors at IC supply pins, thermal vias, trace impedance (a cross-section field solver)</li>
+      <li>Net table (class, length per layer, detour, vias, widths, current and recommended width) and a design-requirements table checked row by row</li>
+      <li><strong>A heat map of the board</strong>, fed back into self-heating; over time, as colours in 3D, and inside a closed case</li>
       <li>Repair practice: a working board gets one fault; find it from the symptoms and fix it</li>
     </ul>
   </details>
@@ -276,9 +329,20 @@ a{color:var(--accent)}
     <ul>
       <li>Fab rules (JLCPCB / PCBWay / OSH Park), pre-order check, preview, Gerber, Excellon drill, BOM and placement (CPL)</li>
       <li>Shop part numbers per part (DigiKey, Akizuki, LCSC) and a shopping list</li>
-      <li>KiCad symbols (<code>.kicad_sym</code>, legacy <code>.lib</code>), footprints (<code>.kicad_mod</code>) and <strong>schematics (<code>.kicad_sch</code>)</strong></li>
-      <li>Ultra Librarian / SnapEDA zips; a datasheet (PDF) window in the part form: search, headings, pins from a table, dimensions by clicking the drawing</li>
-      <li>DXF out and in (for the case), board SVG, schematic SVG / PDF, SPICE netlist; autosave and crash recovery</li>
+      <li>KiCad symbols (<code>.kicad_sym</code>, legacy <code>.lib</code>), footprints (<code>.kicad_mod</code>) and <strong>schematics (<code>.kicad_sch</code>)</strong>; <strong>LTspice schematics (<code>.asc</code>)</strong> with symbols, <code>.param</code> and analysis settings</li>
+      <li>Ultra Librarian / SnapEDA zips</li>
+      <li>DXF out and in (for the case), <strong>STEP export</strong>, board SVG, schematic SVG / PDF, SPICE netlist; autosave and crash recovery</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>Parts and data sheets<small>make parts, fit models</small></summary>
+    <ul>
+      <li>More than 260 parts, including chip resistors from KOA, ROHM, Vishay, Yageo and Panasonic, Murata MLCCs, electrolytics from Panasonic, Nichicon and Rubycon, Bourns power inductors, Kingbright LEDs and Infineon MOSFETs; series of values are grouped and picked on a drum</li>
+      <li>Bundled models are fitted to their data sheets' tables and graphs; the app shows which data sheet each came from and how far it is from the table values</li>
+      <li><strong>Draft from a data sheet</strong>: package, pin table, dimensions, recommended pads, absolute maximum ratings and thermal values read from the PDF; curves traced from its graphs; scanned pages read with Windows OCR</li>
+      <li>Quick forms for MOSFETs, transistors, Darlingtons, optocouplers, op-amps, 3-terminal regulators, NTCs, crystals, TVS diodes and logic ICs from a Boolean expression; voltage variants of one part number in one go</li>
+      <li>Pin types (input, output, power, NC) let ERC find outputs tied together and inputs nothing drives; recommended companion parts (input capacitors and so on) can be placed</li>
     </ul>
   </details>
 
@@ -295,6 +359,8 @@ a{color:var(--accent)}
 <section>
   <h2>Screenshots</h2>
   <div class="shots">
+    <figure><img src="../images/en/prototype.png" alt="The Prototype tab: parts on a breadboard, powered on with the LED lit" loading="lazy"><figcaption>Prototype: run it on a breadboard</figcaption></figure>
+    <figure><img src="../images/en/bench.png" alt="The Bench tab: first power-on steps and the normal current range" loading="lazy"><figcaption>Bench: first power-on of the board you received</figcaption></figure>
     <figure><img src="../images/en/waveform.png" alt="Transient waveform of a 555 oscillator with measurements" loading="lazy"><figcaption>Transient waveforms and measurements</figcaption></figure>
     <figure><img src="../images/en/bode.png" alt="AC analysis Bode plot" loading="lazy"><figcaption>AC analysis (Bode plot)</figcaption></figure>
     <figure><img src="../images/en/board.png" alt="PCB editor with a 41-part hand-routed board" loading="lazy"><figcaption>PCB editor: a 41-part board, routed by hand</figcaption></figure>
@@ -321,8 +387,9 @@ a{color:var(--accent)}
     <li><strong>No board made with circuitCad has been manufactured yet.</strong> The Gerber, drill and pre-order checks are unproven in practice.</li>
     <li><strong>Simplified models.</strong> Results agree with ngspice on the bundled examples, but agreement with real hardware has not been measured yet. Makers' SPICE models load only partly (some syntax, many XSPICE devices are not supported).</li>
     <li><strong>The user interface is still being reworked.</strong> It is the area we are improving most actively, release by release (layout, wording, icons, and the same look and behaviour across the schematic editor, the board editor and the windows), but it is not finished: some panels are still dense, some screens do not look like the others yet, and some operations take more clicks than they should. Feedback on what confused you is especially welcome.</li>
-    <li><strong>The English text is new</strong> and was translated with AI help from the Japanese original; some wording may be awkward, and a few messages may still appear in Japanese. Most documentation (docs/, the code notes) is in Japanese.</li>
-    <li><strong>Gaps compared with mature tools:</strong> symbols are drawn as boxes (no graphical symbol or footprint editor), no STEP export, no KiCad board (<code>.kicad_pcb</code>), EAGLE or LTspice import, no panelization, dark theme only, shortcuts cannot be changed.</li>
+    <li><strong>The English text is new</strong> and was translated with AI help from the Japanese original; some wording may be awkward, and a few messages may still appear in Japanese (the breadboard's hole names, such as <code>上+1</code>, are still Japanese). Most documentation (docs/, the code notes) is in Japanese.</li>
+    <li><strong>OCR of scanned data sheets works on Windows only.</strong> Makers' SPICE models cannot be redistributed, so they are not bundled; download them yourself.</li>
+    <li><strong>Gaps compared with mature tools:</strong> symbols are drawn as boxes (no graphical symbol or footprint editor), no KiCad board (<code>.kicad_pcb</code>) or EAGLE import, no panelization, dark theme only, shortcuts cannot be changed.</li>
     <li>It is developed by one person with an AI assistant, so replies and fixes can be slow.</li>
   </ul>
 </section>
@@ -336,6 +403,7 @@ a{color:var(--accent)}
       <ul>
         <li><strong>The user interface:</strong> fewer words on screen, clearer panels, one consistent look and behaviour everywhere, guided by what confuses learners</li>
         <li><strong>An evaluation board:</strong> build and measure a small board (LDO, RC filter, diodes) and compare the readings with the simulation, to show where the models hold</li>
+        <li>More for the Prototype tab: more parts that run on the breadboard, a more finished drawing and handling</li>
         <li>3D parts closer to the real ones; case design: screw posts and connector cut-outs</li>
         <li>More shop part numbers, checked on the shops' pages</li>
         <li>Fixes from real use: anything you report</li>
@@ -344,9 +412,8 @@ a{color:var(--accent)}
     <div>
       <h3>Later</h3>
       <ul>
-        <li>STEP export of the board, then multi-board designs</li>
-        <li>A digital waveform view (buses), more timing checks</li>
-        <li>LTspice <code>.asc</code> import, a graphical symbol editor</li>
+        <li>More timing checks</li>
+        <li>A graphical symbol editor</li>
         <li>Part MPN / DNP fields, manufacturing drawings, stock and prices in the BOM</li>
         <li>A light theme and custom shortcuts</li>
       </ul>
