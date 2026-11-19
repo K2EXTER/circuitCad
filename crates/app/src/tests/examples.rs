@@ -3315,6 +3315,53 @@ fn power_budget_sample_is_what_the_generator_makes() {
     assert_eq!(s, power_budget_schematic(), "regenerate with write_power_budget_example");
 }
 
+/// The inrush sample: 12 V → 1N4007 (reverse-polarity protection, rated 1 A) → 1000 µF → LM7805 (its 330 nF and 100 nF) → 5 V with
+/// 100 mA of load. Switched on, the empty 1000 µF draws tens of amperes through the diode for a fraction of a millisecond.
+fn inrush_schematic() -> sch_core::Schematic {
+    let (diode, bulk, reg) = (library_part("1N4007"), library_part("EEUFR1C102"), library_part("LM7805"));
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label_pin(&mut s, v1, "+", "VIN");
+    label_pin(&mut s, v1, "-", "GND");
+    let d = s.add_custom(diode.symbol(), &diode.default_value(), &diode.footprint_name(), (16, -4), 0);
+    label_pin(&mut s, d, "A", "VIN");
+    label_pin(&mut s, d, "K", "VD");
+    let c = s.add_custom(bulk.symbol(), &bulk.default_value(), &bulk.footprint_name(), (30, 8), 1);
+    label_pin(&mut s, c, "1", "VD");
+    label_pin(&mut s, c, "2", "GND");
+    let u = s.add_custom(reg.symbol(), &reg.default_value(), &reg.footprint_name(), (50, -4), 0);
+    label_pin(&mut s, u, "1", "VD");
+    label_pin(&mut s, u, "2", "GND");
+    label_pin(&mut s, u, "3", "5V");
+    for (k, comp) in reg.companions.iter().enumerate() {
+        let cap = s.add(Kind::Capacitor, (44 + 16 * k as i32, 14), 1);
+        s.components[cap].value = comp.value.clone();
+        label_pin(&mut s, cap, "1", if comp.pin == "1" { "VD" } else { "5V" });
+        label_pin(&mut s, cap, "2", "GND");
+    }
+    let l = s.add(Kind::ISource, (76, 14), 1);
+    s.components[l].value = "100m".into();
+    label_pin(&mut s, l, "-", "5V");
+    label_pin(&mut s, l, "+", "GND");
+    s
+}
+
+/// Generates docs/examples/inrush.schjson: `cargo test -p app write_inrush_example -- --ignored`
+#[test]
+#[ignore]
+fn write_inrush_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("inrush.schjson"), serde_json::to_string_pretty(&inrush_schematic()).unwrap()).unwrap();
+}
+
+#[test]
+fn inrush_sample_is_what_the_generator_makes() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/inrush.schjson");
+    let s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(s, inrush_schematic(), "regenerate with write_inrush_example");
+}
+
 /// Generates docs/examples/regulator_heatsink.schjson: `cargo test -p app write_heatsink_example -- --ignored`
 #[test]
 #[ignore]

@@ -130,3 +130,5 @@
 - `buzzer_button.schjson`(生成 `write_buzzer_button_example`、2026-11-19): ブザーの音 (B6 ②) のサンプル。V1=5V、押しボタン SW1 (`SW_PUSH`、VCC→S)、電子ブザー BZ1 (`BUZZER_5V`、+=S、−=GND)。試作のタブで電源を入れて SW1 を押している間だけ鳴る。V1 のつまみを 2.7 V に下げると小さく、2 V で鳴らない (`the_buzzer_sounds_while_its_button_is_held`)。
 
 - `power_budget.schjson`(生成 `write_power_budget_example`、2026-11-19): 電源の予算表 (N2) のサンプル。V1=9V → U1=LM7805 (θ 50 K/W、CI 330n・CO 100n) → 5V (負荷 I1=150mA) → U2=MCP1700-3302 (CIN 1µ・COUT 1µ) → 3V3 (負荷 I2=120mA)。データシートのコンデンサがあるので ERC の指摘は無い。予算 (25 ℃): 5V は 270 mA・U1 の熱 1.11 W・80 ℃・効率 55 %・あと 223 mA (発熱が決める)、3V3 は 120 mA・U2 0.20 W・94 ℃ (SOT-23 の目安の θ)・あと 53 mA (発熱)。テスト `the_sample_makes_a_tree_of_three_rails`(木の順と親)、`power_budget_sample_is_what_the_generator_makes`。
+
+- `inrush.schjson`(生成 `write_inrush_example`、2026-11-19): 突入電流 (T3) のサンプル。V1=12V → D1=1N4007 (定格 1 A) → VD (C1=EEUFR1C102 1000µ) → U1=LM7805 (CI 330n・CO 100n) → 5V (I1=100mA)。電源の抵抗 0.1 Ω でピーク 68 A・I²t 0.38 A²s・0.4 ms、D1 が定格を超える、NTC の目安 11.9 Ω。1 Ω で 10.4 A・0.059 A²s。ERC の指摘なし。テスト `the_sample_shows_a_large_inrush`・`inrush_sample_is_what_the_generator_makes`。

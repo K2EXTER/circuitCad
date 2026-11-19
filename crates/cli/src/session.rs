@@ -108,6 +108,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   budget [temp=25]                      the power budget of the supply rails at the DC point, as a tree (battery -> 5V -> 3V3): per rail its source,
                                         current, loads, rated current, headroom (what more it can give, and whether the rating, the heat or the rail
                                         above stops it), and a regulator's input, heat, temperature and efficiency
+  inrush [r=0.1] [tstop=20m]            the current at power-on (the capacitors empty, each supply behind r ohms): per supply the peak, I^2t,
+                                        how long it lasts, the DC current, the parts on the way against their rated current, an NTC value
   poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1]
                                         first power-on of a built board: each supply's current at its printed values, the range a working
                                         board falls in (tolerances, data sheet min / max, self-heating), the current limit to set; measured= judges a reading
@@ -386,6 +388,7 @@ impl Session {
             "poweron" => self.poweron(args),
             "battery" => self.battery(args),
             "budget" => self.budget(args),
+            "inrush" => self.inrush(args),
             "breadboard" => self.breadboard(args),
             "mc" => self.mc(args),
             "thd" => self.thd(args),

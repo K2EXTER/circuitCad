@@ -1,0 +1,586 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N4007",
+      "pos": [
+        16,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N4007",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N4007",
+          "text": ".model 1N4007 D(IS=8.774e-10 N=1.641 RS=0.03226 BV=1200 IBV=1e-05 CJO=3.788e-11 VJ=0.1 M=0.39)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi 1N4001〜1N4007 データシート (1N4001/D Rev. 18, 2024-06)。データシートとの比べは docs/models/diodes.md。",
+            "順方向: 図 1 (順方向電圧の代表特性) の 25 °C を読んだ 7 点に、IS・N・RS を当てはめました (部品作成フォームのダイオードと同じ計算)。",
+            "接合容量: 図 3 (容量の代表特性)。逆電圧で小さくなります。",
+            "降伏: 降伏はデータシートに無いので、非繰り返しの最大逆電圧 VRSM 1200 V に置いた (電流は表の IR の最大 10 µA)。",
+            "逆回復時間は扱いません (データシートに trr が無い。標準の整流用で、数 µs ほど逆向きに流れます。逆回復のレッスンのサンプルは、自分で TT を足しています)。",
+            "扱わないもの: 温度による順方向電圧の変化はシミュレータの標準の式 (1 °C あたり約 −2 mV)、逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、自己発熱。耐圧や定格電流を超えても壊れません。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "onsemi 1N4001〜1N4007 データシート (1N4001/D Rev. 18, 2024-06)"
+          }
+        },
+        "ratings": {
+          "v_max": 1000.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "順方向電圧",
+              "value": "1.1V (最大)",
+              "condition": "IF = 1A"
+            },
+            {
+              "name": "非繰り返しサージ電流",
+              "value": "30A",
+              "condition": "8.3ms"
+            }
+          ]
+        },
+        "glyph": "diode"
+      }
+    },
+    {
+      "refdes": "C1",
+      "kind": "Custom",
+      "value": "1000u",
+      "pos": [
+        30,
+        8
+      ],
+      "rot": 1,
+      "footprint": "CP_Radial_D10_P5_Panasonic",
+      "custom": {
+        "name": "EEUFR1C102",
+        "prefix": "C",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "EEUFR1C102",
+          "text": ".subckt EEUFR1C102 1 2\nResr 1 n_c 27.95m\nC1 n_c 2 1000u\n.ends",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "ESR は、データシートの 100 kHz・20 ℃のインピーダンス 0.028 Ω から容量のリアクタンス (1.59 mΩ) を除いた値 (28 mΩ) を、全部の周波数で一定にしています。実物は低い周波数と低い温度で大きくなります (-10 ℃では約 3 倍、データシートの表)。",
+            "ESL (リードと巻き取りのインダクタンス) はデータシートに無いので入れていません。数百 kHz より上では実物と違います。",
+            "容量の許容差 (±20 %)、温度による容量の変化、漏れ電流 (0.01 CV か 3 µA の大きいほう) は入れていません。",
+            "逆電圧と定格を超える電圧は、シミュレーションでは止まりません。極性と定格電圧を守ってください。過渡解析のあと、波形の「部品の定格 (リップル電流・寿命)」で、リップル電流と推定寿命を確かめられます。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Panasonic FR-A series のデータシート (ABA0000C1259、01-Sep-25) の容量とインピーダンス"
+          }
+        },
+        "ratings": {
+          "v_max": 16.0,
+          "rows": [
+            {
+              "name": "インピーダンス",
+              "value": "0.028 Ω 以下",
+              "condition": "100 kHz・20 ℃"
+            },
+            {
+              "name": "許容リップル電流",
+              "value": "1790 mA rms",
+              "condition": "100 kHz・105 ℃"
+            },
+            {
+              "name": "寿命",
+              "value": "8000 時間",
+              "condition": "105 ℃・定格電圧とリップル電流をかけて"
+            },
+            {
+              "name": "漏れ電流",
+              "value": "0.01 CV (µA) か 3 µA の大きいほう",
+              "condition": "定格電圧で 2 分後"
+            },
+            {
+              "name": "使える温度",
+              "value": "−40〜105 ℃"
+            }
+          ],
+          "ripple": {
+            "i_rms": 1.79,
+            "freq_hz": 100000.0,
+            "coeffs": [
+              [
+                60.0,
+                0.65
+              ],
+              [
+                120.0,
+                0.75
+              ],
+              [
+                1000.0,
+                0.9
+              ],
+              [
+                10000.0,
+                0.98
+              ],
+              [
+                100000.0,
+                1.0
+              ]
+            ]
+          },
+          "life": {
+            "hours": 8000.0,
+            "temp_c": 105.0
+          }
+        },
+        "glyph": "electrolytic"
+      }
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM7805",
+      "pos": [
+        50,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "TO-220-3",
+      "custom": {
+        "name": "LM7805",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM7805",
+          "text": ".subckt LM7805 in gnd out\n* line regulation through a slow path (the data sheet's DC figure) and the ripple from the input (flat, the ripple rejection)\nElf lfa gnd in gnd 1\nRlf lfa lf 1.59Meg\nClf lf gnd 100n\n* output noise (taken as flat over the data sheet's band): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\n* the output's difference from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVtol vt gnd DC 0\n* spread Vtol -0.2 0.2 vout (data sheet: 4.8 to 5.2 V)\nBtgt t0 gnd V=5+-3.07946e-05*(V(lf,gnd)-10)+7.07946e-05*(V(in,gnd)-10)+V(vt,gnd)\nEn tgt t0 nz gnd 38.8375\n* the ceiling the input leaves (the dropout)\nBdo ind gnd V=V(in,gnd)-1.6-0.398693*I(Vs)\n* the target, no higher than the dropout's ceiling\nEx1 xh1 gnd tgt ind 1000\nD1 xh1 yh1 DREG\nRy1 yh1 gnd 1k\nEy1 y1 gnd yh1 gnd 0.001\nEc1 c1 gnd tgt y1 1\n* the current limit: the current the target asks for (amps as volts), no more than the limit\nBu u gnd V=(V(c1,gnd)-V(out,gnd))/0.00130653\nBlim cl gnd V=limit(2.2+-0.064*(V(in,gnd)-V(out,gnd)-10),0.6,2.2)\nEx2 xh2 gnd u cl 1000\nD2 xh2 yh2 DREG\nRy2 yh2 gnd 1k\nEy2 y2 gnd yh2 gnd 0.001\nEc2 uc gnd u y2 1\nBc2 c2 gnd V=V(out,gnd)+0.00130653*V(uc,gnd)\n* output through the load regulation's resistance; the output current comes from the input (both ways, as the earlier\n* bundled models did: a dead or reversed input then leaves the output near 0 V)\nEo o gnd c2 gnd 1\nVs o os DC 0\nRo os out 0.00130653\nBin in gnd I=I(Vs)\n* ground (quiescent) current: flat above a few volts, like a resistor near 0 V\nBq in gnd I=0.0032*tanh(V(in,gnd)/2)\n.model DREG D(IS=1e-12 N=1)\n.ends LM7805",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {
+            "dropout": 2.0,
+            "vout": 5.0
+          },
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi MC7800 シリーズ データシート (MC7800/D Rev. 29) の MC78xxC の表 (MC7805C)。データシートとの比べは docs/models/regulators.md。",
+            "再現しているもの: 出力 5.0 V、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、グラウンド電流 3.2 mA (入力が数 V 以上で)、電流制限 (入出力の差で変わる)、リップル除去 83 dB (120 Hz。どの周波数でも同じとした)、出力雑音 158.122 nV/√Hz (平ら)。",
+            "データシートの表に無い値: ドロップアウトは、表の 2.0 V (1 A) と図 14 (25 °C、負荷電流ごとの曲線) から 1.6 V + 0.4 Ω × 電流 とした。電流制限は、表の「ピーク電流 2.2 A」と「入力 35 V の短絡電流 0.6 A」を、入出力の差 10 V と 35 V で直線につないだ (図の曲線は直線ではない)。",
+            "出力電圧の部品ごとの違い (4.8〜5.2 V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+            "扱わないもの: 温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む)。",
+            "最終の確認は、メーカーの公式モデルで行ってください。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C"
+          }
+        },
+        "ratings": {
+          "v_max": 35.0,
+          "i_max": 1.5,
+          "rows": [
+            {
+              "name": "出力電圧",
+              "value": "5V ±4%"
+            },
+            {
+              "name": "ドロップアウト電圧",
+              "value": "2V (代表)",
+              "condition": "IO = 1A"
+            },
+            {
+              "name": "熱抵抗 (接合部-周囲)",
+              "value": "50℃/W",
+              "condition": "TO-220"
+            }
+          ]
+        },
+        "glyph": "regulator",
+        "companions": [
+          {
+            "name": "CI",
+            "kind": "C",
+            "value": "330n",
+            "pin": "1",
+            "to": "GND",
+            "note": "レギュレータが電源のフィルタから離れているとき"
+          },
+          {
+            "name": "CO",
+            "kind": "C",
+            "value": "100n",
+            "pin": "3",
+            "to": "GND"
+          }
+        ]
+      }
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "330n",
+      "pos": [
+        44,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C3",
+      "kind": "Capacitor",
+      "value": "100n",
+      "pos": [
+        60,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "I1",
+      "kind": "ISource",
+      "value": "100m",
+      "pos": [
+        76,
+        14
+      ],
+      "rot": 1,
+      "footprint": "",
+      "custom": null,
+      "sim_only": true
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        14,
+        -4
+      ],
+      "b": [
+        11,
+        -4
+      ]
+    },
+    {
+      "a": [
+        18,
+        -4
+      ],
+      "b": [
+        21,
+        -4
+      ]
+    },
+    {
+      "a": [
+        30,
+        6
+      ],
+      "b": [
+        30,
+        3
+      ]
+    },
+    {
+      "a": [
+        30,
+        10
+      ],
+      "b": [
+        30,
+        13
+      ]
+    },
+    {
+      "a": [
+        46,
+        -4
+      ],
+      "b": [
+        43,
+        -4
+      ]
+    },
+    {
+      "a": [
+        50,
+        0
+      ],
+      "b": [
+        50,
+        3
+      ]
+    },
+    {
+      "a": [
+        54,
+        -4
+      ],
+      "b": [
+        57,
+        -4
+      ]
+    },
+    {
+      "a": [
+        44,
+        12
+      ],
+      "b": [
+        44,
+        9
+      ]
+    },
+    {
+      "a": [
+        44,
+        16
+      ],
+      "b": [
+        44,
+        19
+      ]
+    },
+    {
+      "a": [
+        60,
+        12
+      ],
+      "b": [
+        60,
+        9
+      ]
+    },
+    {
+      "a": [
+        60,
+        16
+      ],
+      "b": [
+        60,
+        19
+      ]
+    },
+    {
+      "a": [
+        74,
+        14
+      ],
+      "b": [
+        71,
+        14
+      ]
+    },
+    {
+      "a": [
+        78,
+        14
+      ],
+      "b": [
+        81,
+        14
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        11,
+        -4
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        21,
+        -4
+      ],
+      "text": "VD"
+    },
+    {
+      "pos": [
+        30,
+        3
+      ],
+      "text": "VD"
+    },
+    {
+      "pos": [
+        30,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        43,
+        -4
+      ],
+      "text": "VD"
+    },
+    {
+      "pos": [
+        50,
+        3
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        57,
+        -4
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        44,
+        9
+      ],
+      "text": "VD"
+    },
+    {
+      "pos": [
+        44,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        9
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        60,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        71,
+        14
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        81,
+        14
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

@@ -116,3 +116,14 @@ DC 動作点から、電源のレールごとの予算を木の順 (親が先) �
 - `Rail::tight`: 余裕が、出せる最大 (今の電流 + 余裕) の 2 割未満、または温度が上限の 20 ℃ 手前を超える。
 - 画面は回路図の解析の「確かめる」の「電源の予算表 (あと何 mA)」(`app/src/schematic/budget.rs`。表の行はレールを深さで字下げ、名前にマウスで負荷の一覧)、CLI は `budget [temp=25]`。
 - テスト `budget::tests` (L78L05 の 9 V → 5 V で 50 mA と 80 mA、θ 600 K/W で発熱が決める)。サンプル `power_budget.schjson`。
+
+## inrush.rs (突入電流、2026-11-19、候補 T3)
+
+電源を入れた瞬間、空のコンデンサへ流れる電流を過渡解析で見る `inrush(sch, circuit, settings) -> Vec<Inrush>`。
+
+- 電源: − が GND で値が直流の電圧源。それぞれに電源と配線の抵抗 `r_source` (既定 0.1 Ω) を直列に入れ (`{V}.src` の節点と `{V}.Rsrc`)、値を 0 V から `T_RISE` (1 µs) で上がる PWL にして、`uic` (全部 0 から) で `tstop` (既定 20 ms) まで解く。
+- 結果: ピーク `peak` とその時刻、I²t (∫i² dt、ヒューズ・接点を温める量)、DC 動作点の電流 `steady`、続く時間 `surge_s` (|i| が 2·steady と 0.1·peak の大きい方を超えている最後の時刻)、終わりの電流 `end` (steady の半分未満なら `did_not_recover`: ヒューズが切れた・ラッチ)、通り道の部品 (ピンの電流の最大がピークの 5 % 以上) のピークと定格 `ratings.i_max` (`PartPeak::over`)、波形。
+- 部品の電流は、素子の `I(...)` を部品ごと・節点ごとに足した (`netcurrent::terminals_of`) ものの、GND 以外の節点での最大の絶対値。
+- `large`: ピーク > 1 A かつ steady の 10 倍超。そのとき勧める直列の抵抗 (NTC の冷えたときの値) = V ÷ 目標 − r_source、目標は通り道の定格の最小と 10·steady (1 A 以上) の小さい方 (`target`)。
+- 画面は回路図の解析の「確かめる」の「突入電流 (電源を入れた瞬間)」(`app/src/schematic/inrush.rs`。小さな電流の波形・部品の表・NTC の目安)、CLI は `inrush [r=0.1] [tstop=20m]`。
+- テスト `inrush::tests` (12 V・470 µF・100 Ω: 0.1 Ω でピーク 120 A・I²t = CV²/2R = 0.338 A²s、1 Ω で 1/10、NTC の目安 9.9 Ω)。サンプル `inrush.schjson`。

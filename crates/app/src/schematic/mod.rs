@@ -332,6 +332,8 @@ pub struct SchEditor {
     bat: battery::BatteryInputs,
     /// "電源の予算表": the rails of the last run, as a tree. (`budget.rs`)
     budget: Option<Result<Vec<sim_core::budget::Rail>, String>>,
+    /// "突入電流": the boxes and the last answer. (`inrush.rs`)
+    inrush: inrush::InrushUi,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -826,6 +828,7 @@ impl Default for SchEditor {
             heat: Default::default(),
             bat: Default::default(),
             budget: None,
+            inrush: Default::default(),
         }
     }
 }
@@ -905,6 +908,7 @@ mod power_ui;
 mod power_on;
 mod battery;
 mod budget;
+mod inrush;
 mod for_bench;
 mod requirements;
 mod wizard;

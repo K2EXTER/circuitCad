@@ -18,6 +18,7 @@ mod models;
 mod poweroncmd;
 mod batterycmd;
 mod budgetcmd;
+mod inrushcmd;
 mod breadboardcmd;
 mod reqcmd;
 pub mod runner;

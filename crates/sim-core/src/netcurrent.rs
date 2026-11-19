@@ -48,6 +48,11 @@ fn terminals(e: &Element, main: f64, ib: Option<f64>, ie: Option<f64>, mut add: 
     }
 }
 
+/// The terminals of `e` and the current INTO the net at each, for a main current alone (no base / emitter figures).
+pub(crate) fn terminals_of(e: &Element, main: f64, add: impl FnMut(usize, f64)) {
+    terminals(e, main, None, None, add)
+}
+
 /// The part an element belongs to: the elements of a library part's model are named `U1.Rin`, `U1.Ex`, ..., and
 /// what a part takes from a net is the signed sum over all of them (a model's inner loops, a current that goes in
 /// through one element and out through another, are not current through the net).
