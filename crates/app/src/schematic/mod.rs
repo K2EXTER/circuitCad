@@ -864,6 +864,7 @@ impl Default for SchEditor {
 use lessons::ActiveLesson;
 mod hierarchy_ui;
 mod linked;
+mod preview;
 mod quick;
 #[cfg(test)]
 pub use challenge::challenge_exists;

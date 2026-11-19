@@ -6,7 +6,7 @@ use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_link, without_link};
-use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, At, StripLayout, StripOptions};
+use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
 
 /// What the person builds on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -407,6 +407,10 @@ impl BreadboardView {
         for (a, n) in &l.names {
             let named = if net_colour(n) == Color32::from_gray(30) { Color32::from_gray(20) } else { net_colour(n) };
             painter.text(to(*a) + Vec2::new(-pitch * 0.4, -pitch * 0.32), egui::Align2::LEFT_BOTTOM, n, egui::FontId::proportional((pitch * 0.42).clamp(7.0, 11.0)), named);
+        }
+        // what is still to be joined (as a board's ratsnest)
+        for (_, a, b) in strip_unjoined(&sch.sch, &l) {
+            super::rats_line(&painter, to(a), to(b), pitch);
         }
         // the picked part and link, the box, the first end of a link being drawn
         if let Some(p) = self.picked.as_ref().and_then(|r| l.parts.iter().find(|p| &p.refdes == r)) {

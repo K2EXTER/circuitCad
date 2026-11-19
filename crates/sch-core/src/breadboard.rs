@@ -729,6 +729,57 @@ pub fn check(s: &Schematic, l: &Layout) -> Vec<Problem> {
     problems
 }
 
+/// Where the board leaves a net of the schematic apart: for each net in more than one group of joined holes, the lines that would
+/// join its groups (the nearest two leads of each pair, the shortest set), as on a board's ratsnest.
+pub fn unjoined(s: &Schematic, l: &Layout) -> Vec<(String, Hole, Hole)> {
+    let c = read(s);
+    let g = groups(l);
+    let root = |h: Hole| g.get(&h.node()).copied().unwrap_or(h.node());
+    let mut groups_of: BTreeMap<String, BTreeMap<Node, Vec<Hole>>> = BTreeMap::new();
+    for (refdes, _, pins) in &c.on {
+        let Some(p) = l.parts.iter().find(|p| p.refdes == *refdes) else { continue };
+        for (pin, net) in pins.iter().filter(|(_, n)| !n.is_empty()) {
+            if let Some((_, h)) = p.leads.iter().find(|(n, _)| n == pin) {
+                groups_of.entry(net.clone()).or_default().entry(root(*h)).or_default().push(*h);
+            }
+        }
+    }
+    for (refdes, pins) in &c.off {
+        let Some(o) = l.off_board.iter().find(|o| o.refdes == *refdes) else { continue };
+        for (pin, net) in pins.iter().filter(|(_, n)| !n.is_empty()) {
+            if let Some((_, _, h)) = o.pins.iter().find(|(n, _, _)| n == pin) {
+                groups_of.entry(net.clone()).or_default().entry(root(*h)).or_default().push(*h);
+            }
+        }
+    }
+    // a hole's place: its column across, its row down (the rails above and below the strips, the groove between the halves)
+    let place = |h: Hole| -> (f64, f64) {
+        match h {
+            Hole::Strip { col, row } => (col as f64, 2.0 + row as f64 + if row >= 5 { 1.0 } else { 0.0 }),
+            Hole::Rail { rail, col } => (
+                col as f64,
+                match rail {
+                    Rail::TopPlus => 0.0,
+                    Rail::TopMinus => 1.0,
+                    Rail::BottomMinus => 13.0,
+                    Rail::BottomPlus => 14.0,
+                },
+            ),
+        }
+    };
+    let mut out = vec![];
+    for (net, gs) in groups_of.into_iter().filter(|(_, gs)| gs.len() > 1) {
+        let gs: Vec<Vec<Hole>> = gs.into_values().collect();
+        for (a, b) in crate::stripboard::nearest_joins(&gs, |a, b| {
+            let (p, q) = (place(a), place(b));
+            (p.0 - q.0).hypot(p.1 - q.1)
+        }) {
+            out.push((net.clone(), a, b));
+        }
+    }
+    out
+}
+
 /// The nets as the board joins them (which may not be the schematic's): the circuit to simulate when the person wired it their own
 /// way. Every group of joined holes with a lead in it is one net, named after the schematic's net of its leads so that a board
 /// wired as drawn keeps the schematic's names. A group whose leads carry two nets (a short) takes the ground's name if one is ground
@@ -942,6 +993,18 @@ pub fn moved(l: &Layout, refdes: &str, dcol: i32, drow: i32) -> Option<Layout> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A part moved off its column leaves its nets apart: the ratsnest has a line for each, and none when it is back.
+    #[test]
+    fn a_moved_part_shows_its_unjoined_nets() {
+        let s: Schematic = serde_json::from_str(include_str!("../../../docs/examples/ne555_blinker.schjson")).unwrap();
+        let l = auto_layout(&s);
+        assert!(unjoined(&s, &l).is_empty(), "{:?}", unjoined(&s, &l));
+        let r = l.parts.iter().find(|p| p.look == Look::TwoLead && p.leads.iter().all(|(_, h)| matches!(h, Hole::Strip { .. }))).expect("a resistor in the strips");
+        let moved = moved(&l, &r.refdes, 3, 0).unwrap();
+        let rats = unjoined(&s, &moved);
+        assert!(!rats.is_empty() && rats.iter().all(|(n, a, b)| !n.is_empty() && a != b), "{rats:?}");
+    }
 
     fn examples() -> Vec<(String, Schematic)> {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");

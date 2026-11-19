@@ -839,6 +839,24 @@ impl eframe::App for App {
             }
             let focus = self.sch.focus().part;
             egui::CentralPanel::default().show(ui, |ui| self.breadboard.canvas(ui, &mut self.sch, focus.as_deref()));
+            // the schematic in a small window to check the wiring against (a click on a part picks it on the board too)
+            if self.breadboard.show_schematic {
+                let mut open = true;
+                let picked = egui::Window::new(i18n::tr("回路図"))
+                    .id(egui::Id::new("proto_schematic"))
+                    .open(&mut open)
+                    .default_size([520.0, 360.0])
+                    // at the bottom right, clear of the left panel's checks and the board's top left where it starts
+                    .default_pos(ui.ctx().content_rect().right_bottom() - egui::vec2(540.0, 420.0))
+                    .resizable(true)
+                    .show(ui.ctx(), |ui| self.sch.preview(ui))
+                    .and_then(|r| r.inner)
+                    .flatten();
+                if let Some(r) = picked {
+                    self.breadboard.picked = Some(r);
+                }
+                self.breadboard.show_schematic = open;
+            }
             // a part picked on the breadboard is the one the schematic and the board show
             if let Some(p) = &self.breadboard.picked {
                 let f = link::Focus { part: Some(p.clone()), net: None };

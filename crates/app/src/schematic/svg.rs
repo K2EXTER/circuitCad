@@ -34,25 +34,7 @@ impl SchEditor {
 
     /// What egui draws for the shown sheet (at the export zoom, without the selection), for the pictures made from it.
     fn sheet_shapes(&mut self) -> Option<Vec<ClippedShape>> {
-        let mut pts: Vec<(f32, f32)> = vec![];
-        for c in &self.sch.components {
-            let (x0, x1, y0, y1) = comp_extents(c);
-            for corner in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
-                let r = rot_f(corner, c.rot);
-                pts.push((c.pos.0 as f32 + r.0, c.pos.1 as f32 + r.1));
-            }
-        }
-        pts.extend(self.sch.wires.iter().flat_map(|w| [w.a, w.b]).map(|p| (p.0 as f32, p.1 as f32)));
-        pts.extend(self.sch.buses.iter().flat_map(|w| [w.a, w.b]).map(|p| (p.0 as f32, p.1 as f32)));
-        pts.extend(self.sch.labels.iter().map(|l| (l.pos.0 as f32, l.pos.1 as f32)));
-        pts.extend(self.sch.ports.iter().map(|p| (p.pos.0 as f32, p.pos.1 as f32)));
-        if pts.is_empty() {
-            return None;
-        }
-        let x0 = pts.iter().map(|p| p.0).fold(f32::MAX, f32::min);
-        let x1 = pts.iter().map(|p| p.0).fold(f32::MIN, f32::max);
-        let y0 = pts.iter().map(|p| p.1).fold(f32::MAX, f32::min);
-        let y1 = pts.iter().map(|p| p.1).fold(f32::MIN, f32::max);
+        let (x0, x1, y0, y1) = self.sheet_extent()?;
         let size = egui::Vec2::new((x1 - x0 + 2.0 * MARGIN) * EXPORT_ZOOM, (y1 - y0 + 2.0 * MARGIN) * EXPORT_ZOOM);
         let rect = Rect::from_min_size(Pos2::ZERO, size);
 

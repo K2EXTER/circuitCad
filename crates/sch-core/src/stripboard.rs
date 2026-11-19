@@ -813,6 +813,76 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
     }
 }
 
+/// The shortest set of joins between groups of points (each next group joined to the nearest one already joined, by its nearest
+/// pair of points): the lines of a ratsnest.
+pub(crate) fn nearest_joins<P: Copy>(groups: &[Vec<P>], dist: impl Fn(P, P) -> f64) -> Vec<(P, P)> {
+    let groups: Vec<&Vec<P>> = groups.iter().filter(|g| !g.is_empty()).collect();
+    let mut out = vec![];
+    let mut joined = vec![0usize];
+    while joined.len() < groups.len() {
+        let mut best: Option<(f64, usize, P, P)> = None;
+        for &j in &joined {
+            for k in (0..groups.len()).filter(|k| !joined.contains(k)) {
+                for &a in groups[j].iter() {
+                    for &b in groups[k].iter() {
+                        let d = dist(a, b);
+                        if best.as_ref().is_none_or(|x| d < x.0) {
+                            best = Some((d, k, a, b));
+                        }
+                    }
+                }
+            }
+        }
+        let Some((_, k, a, b)) = best else { break };
+        joined.push(k);
+        out.push((a, b));
+    }
+    out
+}
+
+/// Where the layout leaves a net of the schematic apart: for each net on more than one group of joined holes (pieces of strip and
+/// the wires between them), the lines that would join its groups, nearest leads first, as on a board's ratsnest.
+pub fn strip_unjoined(s: &Schematic, l: &StripLayout) -> Vec<(String, At, At)> {
+    let pieces = l.pieces();
+    let piece_of = |at: At| pieces.iter().position(|(r, a, b)| *r == at.0 && at.1 >= *a && at.1 <= *b);
+    let mut parent: Vec<usize> = (0..pieces.len()).collect();
+    fn find(p: &mut [usize], i: usize) -> usize {
+        let mut i = i;
+        while p[i] != i {
+            p[i] = p[p[i]];
+            i = p[i];
+        }
+        i
+    }
+    for link in &l.links {
+        if let (Some(a), Some(b)) = (piece_of(link.a), piece_of(link.b)) {
+            let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
+            parent[ra] = rb;
+        }
+    }
+    let nets = extract(&s.flat());
+    let net_of = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin)).map(|n| n.name.clone()).unwrap_or_default();
+    let mut groups_of: BTreeMap<String, BTreeMap<usize, Vec<At>>> = BTreeMap::new();
+    let leads = l.parts.iter().flat_map(|p| p.leads.iter().map(move |(pin, at)| (p.refdes.clone(), pin.clone(), *at))).chain(l.off.iter().flat_map(|(r, v)| v.iter().map(move |(pin, _, at)| (r.clone(), pin.clone(), *at))));
+    for (r, pin, at) in leads {
+        let net = net_of(&r, &pin);
+        if net.is_empty() {
+            continue;
+        }
+        let Some(p) = piece_of(at) else { continue };
+        let g = find(&mut parent, p);
+        groups_of.entry(net).or_default().entry(g).or_default().push(at);
+    }
+    let mut out = vec![];
+    for (net, gs) in groups_of.into_iter().filter(|(_, gs)| gs.len() > 1) {
+        let gs: Vec<Vec<At>> = gs.into_values().collect();
+        for (a, b) in nearest_joins(&gs, |a: At, b: At| (a.0 as f64 - b.0 as f64).hypot(a.1 as f64 - b.1 as f64)) {
+            out.push((net.clone(), a, b));
+        }
+    }
+    out
+}
+
 /// What the layout joins that the schematic does not, or keeps apart that it joins: one sentence each (empty when it matches).
 pub fn strip_check(s: &Schematic, l: &StripLayout) -> Vec<String> {
     let mut problems = vec![];
@@ -1001,8 +1071,13 @@ mod tests {
         assert!(strip_check(&s, &l).is_empty());
         // the check finds a link left out (a pin cut off from its net) and a link between two home strips (a short)
         let mut open = l.clone();
-        open.links.remove(0);
+        let gone = open.links.remove(0);
         assert!(strip_check(&s, &open).iter().any(|p| p.contains("分かれています")), "{:?}", strip_check(&s, &open));
+        // the ratsnest: one line for that net, none on the board as laid out
+        assert!(strip_unjoined(&s, &l).is_empty());
+        let rats = strip_unjoined(&s, &open);
+        assert_eq!(rats.len(), 1, "{rats:?}");
+        assert_eq!(rats[0].0, gone.net);
         let mut short = l.clone();
         short.links.push(Link { a: (0, l.cols - 1), b: (1, l.cols - 1), net: String::new() });
         assert!(strip_check(&s, &short).iter().any(|p| p.starts_with("ショート")), "{:?}", strip_check(&s, &short));

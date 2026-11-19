@@ -11,7 +11,7 @@
 use crate::learn::{spaced, NOTE};
 use crate::schematic::SchEditor;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
-use sch_core::breadboard::{auto_layout, board_nets, check, moved, net_at, rotated, with_wire, without_wire, wire_end_moved, BoardNets, Hole, Layout, Look, Problem, Rail};
+use sch_core::breadboard::{auto_layout, board_nets, check, moved, unjoined, net_at, rotated, with_wire, without_wire, wire_end_moved, BoardNets, Hole, Layout, Look, Problem, Rail};
 use std::collections::BTreeSet;
 
 mod live;
@@ -59,6 +59,8 @@ pub enum Tool {
 pub struct BreadboardView {
     /// Breadboard, stripboard or perfboard (B5).
     pub kind: BoardKind,
+    /// The schematic in a small window beside the board (`SchEditor::preview`).
+    pub show_schematic: bool,
     /// The stripboard / perfboard view's tools, drag and caches (`strip_view.rs`).
     pub strip: strip_view::StripState,
     /// "回路図の上で動かす" was pressed: the app starts the digital live mode on the schematic tab (`schematic/live_logic.rs`).
@@ -282,6 +284,9 @@ impl BreadboardView {
                 }
             }
         });
+        ui.checkbox(&mut self.show_schematic, i18n::tr("回路図を小窓で見る")).on_hover_text(i18n::tr(
+            "回路図を小さな窓に出します (動かせる・大きさを変えられる)。窓の中の部品をクリックすると、基板の上でその部品が光り、基板で選んだ部品は窓の中で囲まれます。差し方を回路図と見比べながら組めます",
+        ));
         if self.kind != BoardKind::Breadboard {
             self.strip_panel(ui, sch);
             return;
@@ -1110,6 +1115,10 @@ impl BreadboardView {
         for h in &wrong {
             painter.circle_stroke(to(*h), pitch * 0.55, Stroke::new(2.5, BAD));
         }
+        // what is still to be joined: a dashed line between the nearest leads of a net's separate groups (as a board's ratsnest)
+        for (_, a, b) in unjoined(&sch.sch, &l) {
+            rats_line(&painter, to(a), to(b), pitch);
+        }
         // the probes
         for (h, c, label) in [(self.red, RED, "+"), (self.black, Color32::from_gray(20), "−")] {
             if let (Some(h), Tool::Meter) = (h, self.tool) {
@@ -1162,6 +1171,15 @@ impl BreadboardView {
             return "部品・線の端は穴ごとにドラッグで動かせます。何も無い所から四角で囲むと、中をまとめて動かせます。動かすたびに、左で回路図と照らし合わせます".into();
         }
         "縦の 5 つの穴は中でつながっています。ポインタを穴に合わせると、つながっている穴が光ります。部品をドラッグすると差し替えられ、回路図と違うつなぎ方は赤い丸と左の一覧で分かります".into()
+    }
+}
+
+/// A ratsnest line: a net's two leads that the board leaves apart, joined by a dashed line with a ring at each end.
+pub(super) fn rats_line(painter: &egui::Painter, a: Pos2, b: Pos2, pitch: f32) {
+    let c = Color32::from_rgb(255, 214, 60);
+    painter.extend(egui::Shape::dashed_line(&[a, b], Stroke::new((pitch * 0.12).max(1.2), c), pitch * 0.5, pitch * 0.3));
+    for p in [a, b] {
+        painter.circle_stroke(p, pitch * 0.32, Stroke::new(1.5, c));
     }
 }
 
@@ -1751,6 +1769,47 @@ mod tests {
         app.sch.stripboard = None;
         run(&mut app, vec![]);
         assert_eq!(app.breadboard.strip_shown(&app.sch), auto);
+    }
+
+    /// The schematic's small window on the proto tab: a click on a part in it picks that part on the board (and the board's pick is
+    /// what the window rings); a part moved off its column on the breadboard leaves lines still to join.
+    #[test]
+    fn the_schematic_window_picks_parts_on_the_board() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.show_schematic = true;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        run(&mut app, vec![]);
+        // the window's place on the screen
+        let area = ctx.memory(|m| m.area_rect(egui::Id::new("proto_schematic"))).expect("the window is shown");
+        assert!(app.breadboard.show_schematic);
+        // click on each part's place until one is picked: the window maps the click back to a part of the schematic
+        let mut picked = None;
+        'scan: for fy in [0.3f32, 0.4, 0.5, 0.6, 0.7] {
+            for fx in [0.2f32, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] {
+                let p = area.min + egui::vec2(area.width() * fx, area.height() * fy);
+                let button = |pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+                run(&mut app, vec![egui::Event::PointerMoved(p)]);
+                run(&mut app, vec![button(true)]);
+                run(&mut app, vec![button(false)]);
+                if let Some(r) = app.breadboard.picked.clone() {
+                    picked = Some(r);
+                    break 'scan;
+                }
+            }
+        }
+        let r = picked.expect("a click on a part of the schematic picks it");
+        assert!(app.sch.sch.components.iter().any(|c| c.refdes == r));
+        assert_eq!(app.sch.linked.part.as_deref(), Some(r.as_str()), "the schematic rings the part picked");
     }
 
     #[test]
