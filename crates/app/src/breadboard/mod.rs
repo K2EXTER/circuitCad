@@ -78,6 +78,11 @@ pub struct BreadboardView {
     restart: bool,
     /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
     knob_values: std::collections::BTreeMap<String, f64>,
+    /// A potentiometer being turned on the board: its knob, where the pointer went down and the knob's position then.
+    knob_drag: Option<(usize, Pos2, f64)>,
+    /// Where each part was drawn last (for the tests that click on the board).
+    #[cfg(test)]
+    drawn: Vec<(String, Rect)>,
     temp_c: Option<f64>,
     /// Switches to move once the circuit starts running (`--proto-flip SW1,SW2`, for screenshots).
     pub flip_on_start: Vec<String>,
@@ -88,6 +93,11 @@ pub struct BreadboardView {
 
 /// The DC point of the board's circuit: the current through each part, and the parts past (or near) their ratings.
 pub type BoardDc = (Vec<(String, f64)>, Vec<sim_core::RatingIssue>);
+
+/// Points of pointer travel (right or up) that turn a potentiometer on the board from one end to the other.
+const KNOB_DRAG: f64 = 200.0;
+/// How far one notch of the wheel turns it.
+const KNOB_NOTCH: f64 = 0.05;
 
 /// How long (seconds of the circuit's time) a part must stay past its rating to burn: a moment's inrush does not burn it.
 const BURN_HOLD: f64 = 0.02;
@@ -645,6 +655,45 @@ impl BreadboardView {
                 self.switch_down = false;
             }
         }
+        // with the circuit running, a potentiometer is turned on the board: dragged right or up turns it towards pin 3, the wheel
+        // a notch at a time
+        if let Some(lv) = self.live.as_mut().filter(|v| v.error.is_none()) {
+            let pot_at = |lv: &Live, p: Pos2| l.parts.iter().filter(|x| part_rect(x, to, pitch).expand(pitch * 0.4).contains(p)).find_map(|x| lv.knob_index(&x.refdes).filter(|k| lv.knobs[*k].pot.is_some()));
+            if !on_switch
+                && response.hovered()
+                && ui.input(|i| i.pointer.primary_pressed())
+                && let Some(p) = ui.input(|i| i.pointer.interact_pos())
+                && let Some(k) = pot_at(lv, p)
+            {
+                self.knob_drag = Some((k, p, lv.knobs[k].value));
+            }
+            let mut turn = None;
+            if let Some((k, from, v0)) = self.knob_drag {
+                on_switch = true;
+                if let Some(p) = ui.ctx().pointer_latest_pos() {
+                    turn = Some((k, knob_dragged(v0, from, p)));
+                }
+                if ui.input(|i| i.pointer.primary_released()) {
+                    self.knob_drag = None;
+                }
+            } else if let Some(p) = response.hover_pos()
+                && let Some(k) = pot_at(lv, p)
+            {
+                // one step for each wheel event (a notch of a mouse wheel)
+                let notches: f32 = ui.input(|i| i.events.iter().filter_map(|e| if let egui::Event::MouseWheel { delta, .. } = e { Some(delta.y.signum()) } else { None }).sum());
+                if notches != 0.0 {
+                    turn = Some((k, (lv.knobs[k].value + KNOB_NOTCH * notches as f64).clamp(0.0, 1.0)));
+                }
+            }
+            if let Some((k, v)) = turn
+                && (v - lv.knobs[k].value).abs() > 1e-9
+            {
+                lv.set_knob(k, v);
+                self.knob_values.insert(lv.knobs[k].refdes.clone(), v);
+            }
+        } else {
+            self.knob_drag = None;
+        }
         // dragging (the move tool): a jumper's end, or the part, follows the pointer by whole holes; let go to keep it there
         if self.tool == Tool::Move
             && !on_switch
@@ -865,6 +914,11 @@ impl BreadboardView {
             });
             let comp = turned.as_ref().or(comp);
             let rect = draw_part(&painter, p, comp, to, pitch, &font, lit);
+            #[cfg(test)]
+            {
+                self.drawn.retain(|(r, _)| *r != p.refdes);
+                self.drawn.push((p.refdes.clone(), rect));
+            }
             if response.hover_pos().is_some_and(|h| rect.contains(h)) {
                 hovered_part = Some((p.refdes.clone(), comp.map(|c| c.value.clone()).unwrap_or_default()));
             }
@@ -914,7 +968,7 @@ impl BreadboardView {
                 response.clone().on_hover_text(if switch {
                     i18n::trf!("{r} {v}\nクリックで切り替え (押しボタンは押している間だけ入る)")
                 } else if knob {
-                    i18n::trf!("{r} {v}\n左の「つまみ」で回せます")
+                    i18n::trf!("{r} {v}\n右か上へドラッグ・ホイールで回します (左の「つまみ」でも)")
                 } else {
                     i18n::trf!("{r} {v}\nドラッグで差し替え")
                 });
@@ -978,19 +1032,24 @@ fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout, nets: &Boa
             painter.line_segment([c, c + Vec2::angled(a) * pitch * 0.8], Stroke::new(3.0, Color32::from_rgb(240, 200, 60)));
             painter.text(c + Vec2::new(pitch * 1.1, 0.0), egui::Align2::LEFT_CENTER, format!("{:.0} rpm", rpm), font.clone(), Color32::from_gray(40));
         }
-        if model.contains("BUZZER") {
-            if sounding.iter().any(|(r, v)| *r == p.refdes && sound::loudness(*v).is_some()) {
-                // sound waves, pulsing
-                let c = rect.center();
-                let k = (now * 4.0).fract() as f32;
-                for i in 0..3 {
-                    let r = pitch * (0.8 + 0.5 * (i as f32 + k));
-                    painter.circle_stroke(c, r, Stroke::new(1.5, Color32::from_rgb(250, 210, 80).gamma_multiply(1.0 - (i as f32 + k) / 3.0)));
-                }
-                painter.text(c - Vec2::new(0.0, pitch * 1.4), egui::Align2::CENTER_BOTTOM, "♪", font.clone(), Color32::from_rgb(250, 210, 80));
+        if model.contains("BUZZER") && sounding.iter().any(|(r, v)| *r == p.refdes && sound::loudness(*v).is_some()) {
+            // sound waves, pulsing
+            let c = rect.center();
+            let k = (now * 4.0).fract() as f32;
+            for i in 0..3 {
+                let r = pitch * (0.8 + 0.5 * (i as f32 + k));
+                painter.circle_stroke(c, r, Stroke::new(1.5, Color32::from_rgb(250, 210, 80).gamma_multiply(1.0 - (i as f32 + k) / 3.0)));
             }
+            painter.text(c - Vec2::new(0.0, pitch * 1.4), egui::Align2::CENTER_BOTTOM, "♪", font.clone(), Color32::from_rgb(250, 210, 80));
         }
     }
+}
+
+/// A potentiometer's position after the pointer moved from `from` to `to` while it was held (started at `v0`): right or up turns it
+/// towards pin 3 (clockwise, as the knob is drawn), a full turn over `KNOB_DRAG` points.
+fn knob_dragged(v0: f64, from: Pos2, to: Pos2) -> f64 {
+    let d = (to.x - from.x) as f64 + (from.y - to.y) as f64;
+    (v0 + d / KNOB_DRAG).clamp(0.0, 1.0)
 }
 
 /// The voltage at a part's pin: its lead's hole, or (a simulation-only pin like a motor's speed) the net the board gives the pin.
@@ -1401,6 +1460,43 @@ mod tests {
         app.mode = Mode::Schematic;
         run(&mut app);
         assert!(!app.breadboard.beeper.is_playing());
+    }
+
+    /// The pot is turned on the board itself: a drag to the right or up turns it on, a wheel notch by 5 %.
+    #[test]
+    fn the_pot_turns_by_a_drag_on_the_board() {
+        assert!((knob_dragged(0.3, Pos2::new(100.0, 100.0), Pos2::new(140.0, 100.0)) - 0.5).abs() < 1e-9, "40 points right: a fifth of a turn");
+        assert!((knob_dragged(0.3, Pos2::new(100.0, 100.0), Pos2::new(100.0, 160.0)) - 0.0).abs() < 1e-9, "down past the end stops at 0");
+        assert_eq!(knob_dragged(0.9, Pos2::new(0.0, 0.0), Pos2::new(0.0, -100.0)), 1.0);
+        // on the running sample, with the pointer: press on VR1 (at 30 %), drag 60 points right, let go, then a wheel notch up
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("pot_dimmer.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.powered = true;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        let at = app.breadboard.drawn.iter().find(|(r, _)| r == "VR1").unwrap().1.center();
+        let knob = |app: &App| app.breadboard.live.as_ref().and_then(|v| v.knobs.get(v.knob_index("VR1")?)).unwrap().value;
+        assert!((knob(&app) - 0.3).abs() < 1e-9);
+        let button = |pos: Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, vec![button(at, true)]);
+        let to = at + Vec2::new(60.0, 0.0);
+        run(&mut app, vec![egui::Event::PointerMoved(to)]);
+        run(&mut app, vec![button(to, false)]);
+        assert!((knob(&app) - 0.6).abs() < 1e-6, "dragged to {}", knob(&app));
+        assert_eq!(app.sch.sch.components.iter().find(|c| c.refdes == "VR1").unwrap().value, "10k POS=30", "the schematic keeps its value");
+        assert!(app.sch.breadboard.is_none(), "turning the knob does not move the part");
+        run(&mut app, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, vec![egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: Vec2::new(0.0, 1.0), phase: egui::TouchPhase::Move, modifiers: Default::default() }]);
+        assert!((knob(&app) - 0.65).abs() < 1e-6, "a notch up: {}", knob(&app));
     }
 
     #[test]
