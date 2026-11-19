@@ -70,6 +70,37 @@ pub(super) struct Led {
     pub lit: bool,
 }
 
+/// A 7-segment display (a library part with the glyph `seg7`): the nets of its segments a..g and dp, of its common pin, and which
+/// segments carry current now (either way round, so a common-anode display lights as well).
+#[derive(Clone, Debug)]
+pub(super) struct Seg7 {
+    pub refdes: String,
+    pub segs: [Option<String>; 8],
+    pub com: Option<String>,
+    pub lit: [bool; 8],
+}
+
+impl Seg7 {
+    /// The digit (or letter) the lit segments make, if they make one of 0-9 / A-F.
+    #[cfg(test)]
+    pub fn shown(&self) -> Option<char> {
+        let bits: u8 = self.lit[..7].iter().enumerate().map(|(k, on)| (*on as u8) << k).sum();
+        // the digits also as some decoders draw them (the CD4511B: 6 without its top, 9 without its tail; 7 with f), before the letters
+        if let Some(&(_, d)) = SEG7_PLAIN.iter().find(|(b, _)| *b == bits) {
+            return Some(d);
+        }
+        SEG7_DIGITS.iter().position(|d| *d == bits).map(|k| std::char::from_digit(k as u32, 16).unwrap().to_ascii_uppercase())
+    }
+}
+
+/// The segments (bit 0 = a ... bit 6 = g) of 0-9 and A-F.
+/// Other ways of drawing 6, 9 and 7.
+#[cfg(test)]
+const SEG7_PLAIN: [(u8, char); 3] = [(0x7C, '6'), (0x67, '9'), (0x27, '7')];
+
+#[cfg(test)]
+const SEG7_DIGITS: [u8; 16] = [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71];
+
 /// The truth table: one row per combination of the inputs (the first input is the highest bit), each output 0 / 1 as seen,
 /// or `None` when the same inputs have shown both (a circuit with a memory).
 #[derive(Clone, Debug, Default)]
@@ -93,6 +124,9 @@ pub(crate) struct LiveLogic {
     pub(super) inputs: Vec<Input>,
     pub(super) clocks: Vec<Clock>,
     pub(super) leds: Vec<Led>,
+    pub(super) seg7s: Vec<Seg7>,
+    /// The stored states of the flip-flops of each part (refdes, the states in the order of their cells' names).
+    pub(super) memory: Vec<(String, Vec<bool>)>,
     /// The net of every wire, and of every pin of a logic part off the supply (component, point, net).
     wire_net: Vec<Option<String>>,
     pin_nets: Vec<(usize, Pt, String)>,
@@ -199,6 +233,13 @@ impl LiveLogic {
             leds.push(Led { refdes: c.refdes.clone(), anode, cathode, name, lit: false });
         }
         leds.sort_by(|a, b| natural(&a.refdes, &b.refdes));
+        let mut seg7s = vec![];
+        for c in sch.components.iter() {
+            let Some(sym) = c.custom.as_ref().filter(|s| s.glyph == "seg7") else { continue };
+            let net = |name: &str| sym.pins.iter().find(|p| p.name.eq_ignore_ascii_case(name)).and_then(|p| net_of(&c.refdes, &p.number));
+            let segs = ["a", "b", "c", "d", "e", "f", "g", "dp"].map(net);
+            seg7s.push(Seg7 { refdes: c.refdes.clone(), segs, com: net("COM"), lit: [false; 8] });
+        }
         let mut pin_nets = vec![];
         for (i, c) in sch.components.iter().enumerate().filter(|(_, c)| is_logic_part(c)) {
             for (pin, pt) in c.pins() {
@@ -245,6 +286,8 @@ impl LiveLogic {
             inputs,
             clocks,
             leds,
+            seg7s,
+            memory: vec![],
             wire_net,
             pin_nets,
             levels: BTreeMap::new(),
@@ -429,6 +472,26 @@ impl LiveLogic {
             let k = l.cathode.as_deref().map_or(0.0, v);
             l.lit = a - k > LED_ON_V;
         }
+        for s in &mut self.seg7s {
+            let com = s.com.as_deref().map_or(0.0, v);
+            for (k, seg) in s.segs.iter().enumerate() {
+                s.lit[k] = seg.as_deref().is_some_and(|n| (v(n) - com).abs() > LED_ON_V);
+            }
+        }
+        // the flip-flops' stored states, per part (cells are named `U1.YFa`: the part, then the cell)
+        let mut memory: BTreeMap<String, Vec<(String, bool)>> = BTreeMap::new();
+        for (name, st) in run.cell_states() {
+            if let Some((part, cell)) = name.split_once('.') {
+                memory.entry(part.to_string()).or_default().push((cell.to_string(), st));
+            }
+        }
+        self.memory = memory
+            .into_iter()
+            .map(|(part, mut cells)| {
+                cells.sort_by(|a, b| natural(&a.0, &b.0));
+                (part, cells.into_iter().map(|(_, s)| s).collect())
+            })
+            .collect();
         if let Some(t) = self.truth.as_mut()
             && !self.dirty
             && run.next_digital_event().is_none()
@@ -578,6 +641,36 @@ impl SchEditor {
                 painter.circle_filled(p, 1.6 * z, on.gamma_multiply(0.35));
                 painter.circle_filled(p, 0.8 * z, on);
             }
+        }
+        for s in &ll.seg7s {
+            let Some(c) = self.sch.components.iter().find(|c| c.refdes == s.refdes) else { continue };
+            let on = crate::canvas_theme::col(crate::canvas_theme::Role::LedOn);
+            let at = |p: (f32, f32)| {
+                let r = super::symbols::rot_f(p, c.rot);
+                self.to_screen(rect, (c.pos.0 as f32 + r.0, c.pos.1 as f32 + r.1))
+            };
+            for (k, (a, b)) in super::glyphs::seg7_segments().into_iter().enumerate() {
+                if s.lit[k] {
+                    painter.line_segment([at(a), at(b)], Stroke::new(0.35 * z, on.gamma_multiply(0.35)));
+                    painter.line_segment([at(a), at(b)], Stroke::new(0.18 * z, on));
+                }
+            }
+        }
+        // what the flip-flops of each part hold: the bits (the first cell rightmost), and their number for three or more
+        let small = egui::FontId::proportional((0.8 * z).clamp(9.0, 14.0));
+        for (part, bits) in &ll.memory {
+            let Some(c) = self.sch.components.iter().find(|c| c.refdes == *part) else { continue };
+            let Some(sym) = c.custom.as_ref() else { continue };
+            let top = sym.layout().hh as f32 + 0.4;
+            let text: String = bits.iter().rev().map(|b| if *b { '1' } else { '0' }).collect();
+            let value: u32 = bits.iter().enumerate().map(|(k, b)| (*b as u32) << k).sum();
+            let label = if bits.len() >= 3 { trf!("記憶 {text} (= {value})") } else { trf!("記憶 {text}") };
+            // above the box, right of its middle (clear of a supply lead at the top), on a patch of the canvas's own colour
+            let p = self.to_screen(rect, (c.pos.0 as f32 + 0.5, c.pos.1 as f32 - top));
+            let galley = painter.layout_no_wrap(label, small.clone(), crate::canvas_theme::col(crate::canvas_theme::Role::LedOn));
+            let at = p - egui::vec2(0.0, galley.size().y);
+            painter.rect_filled(egui::Rect::from_min_size(at, galley.size()).expand(2.0), 2.0, crate::canvas_theme::col(crate::canvas_theme::Role::Bg));
+            painter.galley(at, galley, Color32::PLACEHOLDER);
         }
         for inp in &ll.inputs {
             let Some(c) = self.sch.components.iter().find(|c| c.refdes == inp.refdes) else { continue };
@@ -836,4 +929,29 @@ mod tests {
         assert!(steps >= 2, "the clock edge went through at once");
         assert!(ll.settled());
     }
+
+    /// The 7-segment counter: each clock shows the next digit on the display, 9 is followed by 0 (the NAND clears the 74HC161 at
+    /// 10), and the counter's four flip-flops are shown as its memory.
+    #[test]
+    fn the_seven_segment_counter_shows_0_to_9_and_its_memory() {
+        let mut e = editor("seg7_counter");
+        let ll = e.live_logic.as_mut().unwrap();
+        assert_eq!(ll.seg7s.len(), 1);
+        let digit = |ll: &LiveLogic| ll.seg7s[0].shown();
+        let first = digit(ll).and_then(|c| c.to_digit(10)).expect("a digit at the start");
+        let mut seen = vec![first];
+        for _ in 0..11 {
+            ll.step_clock();
+            seen.push(digit(ll).and_then(|c| c.to_digit(10)).unwrap_or_else(|| panic!("no digit after {seen:?}: {:?}", ll.seg7s[0].lit)));
+        }
+        for w in seen.windows(2) {
+            assert_eq!(w[1], (w[0] + 1) % 10, "{seen:?}");
+        }
+        // the 74HC161's four flip-flops hold the count shown
+        let (_, bits) = ll.memory.iter().find(|(p, _)| p == "U1").expect("the counter's memory");
+        assert_eq!(bits.len(), 4);
+        let value: u32 = bits.iter().enumerate().map(|(k, b)| (*b as u32) << k).sum();
+        assert_eq!(value, *seen.last().unwrap(), "{bits:?}");
+    }
 }
+

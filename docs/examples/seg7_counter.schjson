@@ -1,0 +1,1872 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "VCK",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 1u 1u 0.5 1)",
+      "pos": [
+        0,
+        30
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "74HC161",
+      "pos": [
+        30,
+        20
+      ],
+      "rot": 0,
+      "footprint": "DIP-16_W7.62",
+      "custom": {
+        "name": "74HC161",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "CLR",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "CLK",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "C",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "D",
+            "side": "left"
+          },
+          {
+            "number": "7",
+            "name": "ENP",
+            "side": "left"
+          },
+          {
+            "number": "8",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "9",
+            "name": "LOAD",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "ENT",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "QD",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "QC",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "QB",
+            "side": "right"
+          },
+          {
+            "number": "14",
+            "name": "QA",
+            "side": "right"
+          },
+          {
+            "number": "15",
+            "name": "RCO",
+            "side": "right"
+          },
+          {
+            "number": "16",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC161",
+          "text": "* 74HC161 behavioural model: four D flip-flop cells (Y lines) with the count / load logic in front of them (the synchronous counter of the data sheet SCLS297); clear is asynchronous and active low, load is synchronous and active low and wins over the enables. Delays: clock to Q 25 ns, to RCO about 37 ns.\n.subckt 74HC161 clr clk a b c d enp gnd load ent qd qc qb qa rco vcc\nYnl inv nload 0 gnd vcc 60 0.5 0 0 0 load\nYen and en 0 gnd vcc 60 0.5 0 0 0 enp ent\nYt1 and t1 0 gnd vcc 60 0.5 0 0 0 en qa\nYt2 and t2 0 gnd vcc 60 0.5 0 0 0 en qa qb\nYt3 and t3 0 gnd vcc 60 0.5 0 0 0 en qa qb qc\nYxa xor xa 0 gnd vcc 60 0.5 0 0 0 qa en\nYla and la 0 gnd vcc 60 0.5 0 0 0 nload a\nYca and ca 0 gnd vcc 60 0.5 0 0 0 load xa\nYda or da 0 gnd vcc 60 0.5 0 0 0 la ca\nYFa dff qa 0 gnd vcc 60 0.5 0 0 1 td=25n da clk 0 clr\nYxb xor xb 0 gnd vcc 60 0.5 0 0 0 qb t1\nYlb and lb 0 gnd vcc 60 0.5 0 0 0 nload b\nYcb and cb 0 gnd vcc 60 0.5 0 0 0 load xb\nYdb or db 0 gnd vcc 60 0.5 0 0 0 lb cb\nYFb dff qb 0 gnd vcc 60 0.5 0 0 1 td=25n db clk 0 clr\nYxc xor xc 0 gnd vcc 60 0.5 0 0 0 qc t2\nYlc and lc 0 gnd vcc 60 0.5 0 0 0 nload c\nYcc and cc 0 gnd vcc 60 0.5 0 0 0 load xc\nYdc or dc 0 gnd vcc 60 0.5 0 0 0 lc cc\nYFc dff qc 0 gnd vcc 60 0.5 0 0 1 td=25n dc clk 0 clr\nYxd xor xd 0 gnd vcc 60 0.5 0 0 0 qd t3\nYld and ld 0 gnd vcc 60 0.5 0 0 0 nload d\nYcd and cd 0 gnd vcc 60 0.5 0 0 0 load xd\nYdd or dd 0 gnd vcc 60 0.5 0 0 0 ld cd\nYFd dff qd 0 gnd vcc 60 0.5 0 0 1 td=25n dd clk 0 clr\nYrco and rco 0 gnd vcc 60 0.5 0 0 0 td=12n ent qa qb qc qd\n.ends 74HC161",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "params": {},
+          "limits": [
+            "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+            "遅延は、クロック→Q を 25ns、クロック→RCO を約 37ns (ENT→RCO は 12ns) の代表値にしてあります (4.5V・25℃ のデータシートの値: クロック→Q 25ns、クロック→RCO 24ns、ENT→RCO 17ns)。",
+            "扱わないもの: 入力容量、電源電流、セットアップ/ホールド時間の点検 (データシートでは、データ 30ns、LOAD 27ns、ENP・ENT 34ns、CLR を戻すのが 25ns、ホールドは 0)。",
+            "使わない入力は、GND か電源につないでください (つながないと Low として扱い、CLR と LOAD は働いた状態になります)。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力は約 60 Ω、遅れは 5 V・25 °C の代表値)"
+          }
+        },
+        "glyph": "counter"
+      }
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "74HC00",
+      "pos": [
+        30,
+        60
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC00",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "1B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "1Y",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "2A",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "2B",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "2Y",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "3Y",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "3A",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "3B",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "4Y",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "4A",
+            "side": "left"
+          },
+          {
+            "number": "13",
+            "name": "4B",
+            "side": "left"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC00",
+          "text": "* 74HC00 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. Propagation delay 8 ns.\n.subckt 74HC00 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nY1 nand y1 0 gnd vcc 60 0.5 0 0 0 td=8n a1 b1\nY2 nand y2 0 gnd vcc 60 0.5 0 0 0 td=8n a2 b2\nY3 nand y3 0 gnd vcc 60 0.5 0 0 0 td=8n a3 b3\nY4 nand y4 0 gnd vcc 60 0.5 0 0 0 td=8n a4 b4\n.ends 74HC00",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "ゲートを「デジタルセル」(行列の外で評価する素子) で表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。ゲートどうしだけをつなぐ配線は、回路の方程式に入りません (波形には電圧が出ます)。",
+            "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。伝搬遅延は、5V・25℃ での代表値を 1 つ決めたもの (立ち上がりと立ち下がりの差、電源電圧や温度による変化は含みません)。数値は必ずデータシートで確かめてください。",
+            "使わない入力は、GND か電源につないでください (つながないと、Low として扱います)。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力は約 60 Ω、遅れは 5 V・25 °C の代表値)"
+          }
+        },
+        "glyph": "gate_nand"
+      }
+    },
+    {
+      "refdes": "U3",
+      "kind": "Custom",
+      "value": "CD4511B",
+      "pos": [
+        75,
+        20
+      ],
+      "rot": 0,
+      "footprint": "DIP-16_W7.62",
+      "custom": {
+        "name": "CD4511B",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "C",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "LT",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "BL",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "LE",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "D",
+            "side": "left"
+          },
+          {
+            "number": "7",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "8",
+            "name": "VSS",
+            "side": "bottom"
+          },
+          {
+            "number": "9",
+            "name": "SEG_E",
+            "side": "right"
+          },
+          {
+            "number": "10",
+            "name": "SEG_D",
+            "side": "right"
+          },
+          {
+            "number": "11",
+            "name": "SEG_C",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "SEG_B",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "SEG_A",
+            "side": "right"
+          },
+          {
+            "number": "14",
+            "name": "SEG_G",
+            "side": "right"
+          },
+          {
+            "number": "15",
+            "name": "SEG_F",
+            "side": "right"
+          },
+          {
+            "number": "16",
+            "name": "VDD",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "CD4511B",
+          "text": "* CD4511B behavioural model: a BCD to 7-segment latch / decoder / driver. LE high holds the code; LT low lights every segment (lamp test, before anything else); BL low blanks (when LT is high); codes above 9 are blank. The levels follow the supply pins (3 to 18 V). The outputs source current: 120 ohm is an estimate at 5 V. Delays at 5 V (the data sheet SCHS072): data to output 520 ns falling, 660 ns rising; the speed grows with the supply.\n.subckt CD4511B b c lt bl le d a gnd seg_e seg_d seg_c seg_b seg_a seg_g seg_f vcc\nYnle inv nle 0 gnd vcc 60 0.5 0 0 0 le\nYnlt inv nlt 0 gnd vcc 60 0.5 0 0 0 lt\nYLa dlatch la nla gnd vcc 60 0.5 0 0 0 a nle 0 0\nYLb dlatch lb nlb gnd vcc 60 0.5 0 0 0 b nle 0 0\nYLc dlatch lc nlc gnd vcc 60 0.5 0 0 0 c nle 0 0\nYLd dlatch ld nld gnd vcc 60 0.5 0 0 0 d nle 0 0\nYm0 and m0 0 gnd vcc 60 0.5 0 0 0 nld nlc nlb nla\nYm1 and m1 0 gnd vcc 60 0.5 0 0 0 nld nlc nlb la\nYm2 and m2 0 gnd vcc 60 0.5 0 0 0 nld nlc lb nla\nYm3 and m3 0 gnd vcc 60 0.5 0 0 0 nld nlc lb la\nYm4 and m4 0 gnd vcc 60 0.5 0 0 0 nld lc nlb nla\nYm5 and m5 0 gnd vcc 60 0.5 0 0 0 nld lc nlb la\nYm6 and m6 0 gnd vcc 60 0.5 0 0 0 nld lc lb nla\nYm7 and m7 0 gnd vcc 60 0.5 0 0 0 nld lc lb la\nYm8 and m8 0 gnd vcc 60 0.5 0 0 0 ld nlc nlb nla\nYm9 and m9 0 gnd vcc 60 0.5 0 0 0 ld nlc nlb la\nYga or ga 0 gnd vcc 60 0.5 0 0 0 m0 m2 m3 m5 m7 m8 m9\nYba and ka 0 gnd vcc 60 0.5 0 0 0 bl ga\nYoa or seg_a 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt ka\nYgb or gb 0 gnd vcc 60 0.5 0 0 0 m0 m1 m2 m3 m4 m7 m8 m9\nYbb and kb 0 gnd vcc 60 0.5 0 0 0 bl gb\nYob or seg_b 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kb\nYgc or gc 0 gnd vcc 60 0.5 0 0 0 m0 m1 m3 m4 m5 m6 m7 m8 m9\nYbc and kc 0 gnd vcc 60 0.5 0 0 0 bl gc\nYoc or seg_c 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kc\nYgd or gd 0 gnd vcc 60 0.5 0 0 0 m0 m2 m3 m5 m6 m8\nYbd and kd 0 gnd vcc 60 0.5 0 0 0 bl gd\nYod or seg_d 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kd\nYge or ge 0 gnd vcc 60 0.5 0 0 0 m0 m2 m6 m8\nYbe and ke 0 gnd vcc 60 0.5 0 0 0 bl ge\nYoe or seg_e 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt ke\nYgf or gf 0 gnd vcc 60 0.5 0 0 0 m0 m4 m5 m6 m8 m9\nYbf and kf 0 gnd vcc 60 0.5 0 0 0 bl gf\nYof or seg_f 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kf\nYgg or gg 0 gnd vcc 60 0.5 0 0 0 m2 m3 m4 m5 m6 m8 m9\nYbg and kg 0 gnd vcc 60 0.5 0 0 0 bl gg\nYog or seg_g 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kg\n.ends CD4511B",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "params": {},
+          "limits": [
+            "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピン (VDD と VSS) の間の電圧まで振れます。",
+            "出力は約 120Ω の抵抗を通してつながります (5V での見積もり。データシートの出力電圧の表からの概算)。電源が高いほど小さくなりますが、ここでは一定です。",
+            "遅延は、5V の代表値 (入力→出力 立ち上がり 660ns、立ち下がり 520ns) 1 組です。電源が 10V なら約 1/2.5 (260/210ns) と速くなりますが、ここでは電源によらず一定です。LT・BL からの経路 (250〜400ns) も同じ値で近似しています。",
+            "扱わないもの: 入力容量、電源電流、セットアップ時間 (5V で 150ns)・ホールド時間・ストローブのパルス幅の点検。",
+            "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "ロジックの動作モデル (しきい値は電源の半分、出力は約 60 Ω、遅れは 5 V・25 °C の代表値)"
+          }
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "470",
+      "pos": [
+        110,
+        2
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "470",
+      "pos": [
+        110,
+        9
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "470",
+      "pos": [
+        110,
+        16
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "470",
+      "pos": [
+        110,
+        23
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R5",
+      "kind": "Resistor",
+      "value": "470",
+      "pos": [
+        110,
+        30
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R6",
+      "kind": "Resistor",
+      "value": "470",
+      "pos": [
+        110,
+        37
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R7",
+      "kind": "Resistor",
+      "value": "470",
+      "pos": [
+        110,
+        44
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "DS1",
+      "kind": "Custom",
+      "value": "SEG7_CC",
+      "pos": [
+        140,
+        22
+      ],
+      "rot": 0,
+      "footprint": "SEG7_0.56_DIP10",
+      "custom": {
+        "name": "SEG7_CC_0.56",
+        "prefix": "DS",
+        "pins": [
+          {
+            "number": "7",
+            "name": "a",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "b",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "c",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "d",
+            "side": "left"
+          },
+          {
+            "number": "1",
+            "name": "e",
+            "side": "left"
+          },
+          {
+            "number": "9",
+            "name": "f",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "g",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "dp",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "COM",
+            "side": "right"
+          },
+          {
+            "number": "8",
+            "name": "COM",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "SEG7CC",
+          "text": ".subckt SEG7CC a b c d e f g dp com1 com2\n* one red LED per segment, from its pin to the common cathode\nDa a com1 DSEG\nDb b com1 DSEG\nDc c com1 DSEG\nDd d com1 DSEG\nDe e com1 DSEG\nDf f com1 DSEG\nDg g com1 DSEG\nDdp dp com1 DSEG\n* the two COM pins are joined inside\nRcom com1 com2 0.01\n.model DSEG D(IS=7.041e-13 N=3.037 RS=6.477 BV=5 IBV=1e-05 EG=2.312 XTI=2)\n.ends SEG7CC",
+          "pins": [
+            "7",
+            "6",
+            "4",
+            "2",
+            "1",
+            "9",
+            "10",
+            "5",
+            "3",
+            "8"
+          ],
+          "params": {},
+          "limits": [
+            "セグメントごとに赤色 LED (WP7113ID と同じ値) の等価モデルを入れただけの、一般的なモデルです。明るさのばらつき・セグメントどうしの漏れは扱いません。",
+            "扱わないもの: 光の明るさ (電流で決まる明るさは出さず、光っているかだけ)、温度による順方向電圧の変化、セグメントを多重化 (ダイナミック点灯) したときの残像。ピンの並びは品によって違います。"
+          ],
+          "origin": {
+            "kind": "generic",
+            "source": "赤色 LED の等価モデル (WP7113ID の値) を 8 つ"
+          }
+        },
+        "ratings": {
+          "v_max": 5.0,
+          "i_max": 0.025,
+          "rows": [
+            {
+              "name": "順方向電圧 (1 セグメント)",
+              "value": "1.9 V (typ)",
+              "condition": "IF = 10 mA"
+            },
+            {
+              "name": "最大電流 (1 セグメント)",
+              "value": "25 mA",
+              "condition": "連続"
+            }
+          ]
+        },
+        "glyph": "seg7"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        28
+      ],
+      "b": [
+        0,
+        25
+      ]
+    },
+    {
+      "a": [
+        0,
+        32
+      ],
+      "b": [
+        0,
+        35
+      ]
+    },
+    {
+      "a": [
+        26,
+        12
+      ],
+      "b": [
+        23,
+        12
+      ]
+    },
+    {
+      "a": [
+        26,
+        14
+      ],
+      "b": [
+        23,
+        14
+      ]
+    },
+    {
+      "a": [
+        26,
+        16
+      ],
+      "b": [
+        23,
+        16
+      ]
+    },
+    {
+      "a": [
+        26,
+        18
+      ],
+      "b": [
+        23,
+        18
+      ]
+    },
+    {
+      "a": [
+        26,
+        20
+      ],
+      "b": [
+        23,
+        20
+      ]
+    },
+    {
+      "a": [
+        26,
+        22
+      ],
+      "b": [
+        23,
+        22
+      ]
+    },
+    {
+      "a": [
+        26,
+        24
+      ],
+      "b": [
+        23,
+        24
+      ]
+    },
+    {
+      "a": [
+        30,
+        31
+      ],
+      "b": [
+        30,
+        34
+      ]
+    },
+    {
+      "a": [
+        26,
+        26
+      ],
+      "b": [
+        23,
+        26
+      ]
+    },
+    {
+      "a": [
+        26,
+        28
+      ],
+      "b": [
+        23,
+        28
+      ]
+    },
+    {
+      "a": [
+        34,
+        16
+      ],
+      "b": [
+        37,
+        16
+      ]
+    },
+    {
+      "a": [
+        34,
+        18
+      ],
+      "b": [
+        37,
+        18
+      ]
+    },
+    {
+      "a": [
+        34,
+        20
+      ],
+      "b": [
+        37,
+        20
+      ]
+    },
+    {
+      "a": [
+        34,
+        22
+      ],
+      "b": [
+        37,
+        22
+      ]
+    },
+    {
+      "a": [
+        34,
+        24
+      ],
+      "b": [
+        37,
+        24
+      ]
+    },
+    {
+      "a": [
+        30,
+        9
+      ],
+      "b": [
+        30,
+        6
+      ]
+    },
+    {
+      "a": [
+        26,
+        53
+      ],
+      "b": [
+        23,
+        53
+      ]
+    },
+    {
+      "a": [
+        26,
+        55
+      ],
+      "b": [
+        23,
+        55
+      ]
+    },
+    {
+      "a": [
+        34,
+        57
+      ],
+      "b": [
+        37,
+        57
+      ]
+    },
+    {
+      "a": [
+        26,
+        57
+      ],
+      "b": [
+        23,
+        57
+      ]
+    },
+    {
+      "a": [
+        26,
+        59
+      ],
+      "b": [
+        23,
+        59
+      ]
+    },
+    {
+      "a": [
+        34,
+        59
+      ],
+      "b": [
+        37,
+        59
+      ]
+    },
+    {
+      "a": [
+        30,
+        70
+      ],
+      "b": [
+        30,
+        73
+      ]
+    },
+    {
+      "a": [
+        34,
+        61
+      ],
+      "b": [
+        37,
+        61
+      ]
+    },
+    {
+      "a": [
+        26,
+        61
+      ],
+      "b": [
+        23,
+        61
+      ]
+    },
+    {
+      "a": [
+        26,
+        63
+      ],
+      "b": [
+        23,
+        63
+      ]
+    },
+    {
+      "a": [
+        34,
+        63
+      ],
+      "b": [
+        37,
+        63
+      ]
+    },
+    {
+      "a": [
+        26,
+        65
+      ],
+      "b": [
+        23,
+        65
+      ]
+    },
+    {
+      "a": [
+        26,
+        67
+      ],
+      "b": [
+        23,
+        67
+      ]
+    },
+    {
+      "a": [
+        30,
+        50
+      ],
+      "b": [
+        30,
+        47
+      ]
+    },
+    {
+      "a": [
+        71,
+        14
+      ],
+      "b": [
+        68,
+        14
+      ]
+    },
+    {
+      "a": [
+        71,
+        16
+      ],
+      "b": [
+        68,
+        16
+      ]
+    },
+    {
+      "a": [
+        71,
+        18
+      ],
+      "b": [
+        68,
+        18
+      ]
+    },
+    {
+      "a": [
+        71,
+        20
+      ],
+      "b": [
+        68,
+        20
+      ]
+    },
+    {
+      "a": [
+        71,
+        22
+      ],
+      "b": [
+        68,
+        22
+      ]
+    },
+    {
+      "a": [
+        71,
+        24
+      ],
+      "b": [
+        68,
+        24
+      ]
+    },
+    {
+      "a": [
+        71,
+        26
+      ],
+      "b": [
+        68,
+        26
+      ]
+    },
+    {
+      "a": [
+        75,
+        29
+      ],
+      "b": [
+        75,
+        32
+      ]
+    },
+    {
+      "a": [
+        79,
+        14
+      ],
+      "b": [
+        82,
+        14
+      ]
+    },
+    {
+      "a": [
+        79,
+        16
+      ],
+      "b": [
+        82,
+        16
+      ]
+    },
+    {
+      "a": [
+        79,
+        18
+      ],
+      "b": [
+        82,
+        18
+      ]
+    },
+    {
+      "a": [
+        79,
+        20
+      ],
+      "b": [
+        82,
+        20
+      ]
+    },
+    {
+      "a": [
+        79,
+        22
+      ],
+      "b": [
+        82,
+        22
+      ]
+    },
+    {
+      "a": [
+        79,
+        24
+      ],
+      "b": [
+        82,
+        24
+      ]
+    },
+    {
+      "a": [
+        79,
+        26
+      ],
+      "b": [
+        82,
+        26
+      ]
+    },
+    {
+      "a": [
+        75,
+        11
+      ],
+      "b": [
+        75,
+        8
+      ]
+    },
+    {
+      "a": [
+        108,
+        2
+      ],
+      "b": [
+        105,
+        2
+      ]
+    },
+    {
+      "a": [
+        112,
+        2
+      ],
+      "b": [
+        115,
+        2
+      ]
+    },
+    {
+      "a": [
+        108,
+        9
+      ],
+      "b": [
+        105,
+        9
+      ]
+    },
+    {
+      "a": [
+        112,
+        9
+      ],
+      "b": [
+        115,
+        9
+      ]
+    },
+    {
+      "a": [
+        108,
+        16
+      ],
+      "b": [
+        105,
+        16
+      ]
+    },
+    {
+      "a": [
+        112,
+        16
+      ],
+      "b": [
+        115,
+        16
+      ]
+    },
+    {
+      "a": [
+        108,
+        23
+      ],
+      "b": [
+        105,
+        23
+      ]
+    },
+    {
+      "a": [
+        112,
+        23
+      ],
+      "b": [
+        115,
+        23
+      ]
+    },
+    {
+      "a": [
+        108,
+        30
+      ],
+      "b": [
+        105,
+        30
+      ]
+    },
+    {
+      "a": [
+        112,
+        30
+      ],
+      "b": [
+        115,
+        30
+      ]
+    },
+    {
+      "a": [
+        108,
+        37
+      ],
+      "b": [
+        105,
+        37
+      ]
+    },
+    {
+      "a": [
+        112,
+        37
+      ],
+      "b": [
+        115,
+        37
+      ]
+    },
+    {
+      "a": [
+        108,
+        44
+      ],
+      "b": [
+        105,
+        44
+      ]
+    },
+    {
+      "a": [
+        112,
+        44
+      ],
+      "b": [
+        115,
+        44
+      ]
+    },
+    {
+      "a": [
+        136,
+        15
+      ],
+      "b": [
+        133,
+        15
+      ]
+    },
+    {
+      "a": [
+        136,
+        17
+      ],
+      "b": [
+        133,
+        17
+      ]
+    },
+    {
+      "a": [
+        136,
+        19
+      ],
+      "b": [
+        133,
+        19
+      ]
+    },
+    {
+      "a": [
+        136,
+        21
+      ],
+      "b": [
+        133,
+        21
+      ]
+    },
+    {
+      "a": [
+        136,
+        23
+      ],
+      "b": [
+        133,
+        23
+      ]
+    },
+    {
+      "a": [
+        136,
+        25
+      ],
+      "b": [
+        133,
+        25
+      ]
+    },
+    {
+      "a": [
+        136,
+        27
+      ],
+      "b": [
+        133,
+        27
+      ]
+    },
+    {
+      "a": [
+        136,
+        29
+      ],
+      "b": [
+        133,
+        29
+      ]
+    },
+    {
+      "a": [
+        144,
+        21
+      ],
+      "b": [
+        147,
+        21
+      ]
+    },
+    {
+      "a": [
+        144,
+        23
+      ],
+      "b": [
+        147,
+        23
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        25
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        0,
+        35
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        12
+      ],
+      "text": "CLR_N"
+    },
+    {
+      "pos": [
+        23,
+        14
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        23,
+        16
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        20
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        22
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        24
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        30,
+        34
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        26
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        23,
+        28
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        37,
+        16
+      ],
+      "text": "Q3"
+    },
+    {
+      "pos": [
+        37,
+        18
+      ],
+      "text": "Q2"
+    },
+    {
+      "pos": [
+        37,
+        20
+      ],
+      "text": "Q1"
+    },
+    {
+      "pos": [
+        37,
+        22
+      ],
+      "text": "Q0"
+    },
+    {
+      "pos": [
+        37,
+        24
+      ],
+      "text": "RCO"
+    },
+    {
+      "pos": [
+        30,
+        6
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        23,
+        53
+      ],
+      "text": "Q1"
+    },
+    {
+      "pos": [
+        23,
+        55
+      ],
+      "text": "Q3"
+    },
+    {
+      "pos": [
+        37,
+        57
+      ],
+      "text": "CLR_N"
+    },
+    {
+      "pos": [
+        23,
+        57
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        59
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        59
+      ],
+      "text": "U2_2Y"
+    },
+    {
+      "pos": [
+        30,
+        73
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        61
+      ],
+      "text": "U2_3Y"
+    },
+    {
+      "pos": [
+        23,
+        61
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        63
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        63
+      ],
+      "text": "U2_4Y"
+    },
+    {
+      "pos": [
+        23,
+        65
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        67
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        30,
+        47
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        68,
+        14
+      ],
+      "text": "Q1"
+    },
+    {
+      "pos": [
+        68,
+        16
+      ],
+      "text": "Q2"
+    },
+    {
+      "pos": [
+        68,
+        18
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        68,
+        20
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        68,
+        22
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        68,
+        24
+      ],
+      "text": "Q3"
+    },
+    {
+      "pos": [
+        68,
+        26
+      ],
+      "text": "Q0"
+    },
+    {
+      "pos": [
+        75,
+        32
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        82,
+        14
+      ],
+      "text": "SE"
+    },
+    {
+      "pos": [
+        82,
+        16
+      ],
+      "text": "SD"
+    },
+    {
+      "pos": [
+        82,
+        18
+      ],
+      "text": "SC"
+    },
+    {
+      "pos": [
+        82,
+        20
+      ],
+      "text": "SB"
+    },
+    {
+      "pos": [
+        82,
+        22
+      ],
+      "text": "SA"
+    },
+    {
+      "pos": [
+        82,
+        24
+      ],
+      "text": "SG"
+    },
+    {
+      "pos": [
+        82,
+        26
+      ],
+      "text": "SF"
+    },
+    {
+      "pos": [
+        75,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        105,
+        2
+      ],
+      "text": "SA"
+    },
+    {
+      "pos": [
+        115,
+        2
+      ],
+      "text": "DA"
+    },
+    {
+      "pos": [
+        105,
+        9
+      ],
+      "text": "SB"
+    },
+    {
+      "pos": [
+        115,
+        9
+      ],
+      "text": "DB"
+    },
+    {
+      "pos": [
+        105,
+        16
+      ],
+      "text": "SC"
+    },
+    {
+      "pos": [
+        115,
+        16
+      ],
+      "text": "DC"
+    },
+    {
+      "pos": [
+        105,
+        23
+      ],
+      "text": "SD"
+    },
+    {
+      "pos": [
+        115,
+        23
+      ],
+      "text": "DD"
+    },
+    {
+      "pos": [
+        105,
+        30
+      ],
+      "text": "SE"
+    },
+    {
+      "pos": [
+        115,
+        30
+      ],
+      "text": "DE"
+    },
+    {
+      "pos": [
+        105,
+        37
+      ],
+      "text": "SF"
+    },
+    {
+      "pos": [
+        115,
+        37
+      ],
+      "text": "DF"
+    },
+    {
+      "pos": [
+        105,
+        44
+      ],
+      "text": "SG"
+    },
+    {
+      "pos": [
+        115,
+        44
+      ],
+      "text": "DG"
+    },
+    {
+      "pos": [
+        133,
+        15
+      ],
+      "text": "DA"
+    },
+    {
+      "pos": [
+        133,
+        17
+      ],
+      "text": "DB"
+    },
+    {
+      "pos": [
+        133,
+        19
+      ],
+      "text": "DC"
+    },
+    {
+      "pos": [
+        133,
+        21
+      ],
+      "text": "DD"
+    },
+    {
+      "pos": [
+        133,
+        23
+      ],
+      "text": "DE"
+    },
+    {
+      "pos": [
+        133,
+        25
+      ],
+      "text": "DF"
+    },
+    {
+      "pos": [
+        133,
+        27
+      ],
+      "text": "DG"
+    },
+    {
+      "pos": [
+        133,
+        29
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        147,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        147,
+        23
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

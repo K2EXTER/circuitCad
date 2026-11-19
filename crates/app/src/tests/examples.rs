@@ -1134,6 +1134,57 @@ fn live_base() -> (sch_core::Schematic, impl Fn(&mut sch_core::Schematic, &str, 
     (s, place)
 }
 
+/// The 7-segment counter sample (B8): the clock VCK into a 74HC161, a NAND of the 74HC00 clears it when it reaches 10 (Q1 and Q3
+/// high: a decade counter, 0..9), a CD4511B turns the count into segments, 470 ohm into each segment of a common-cathode display.
+fn seg7_counter_schematic() -> sch_core::Schematic {
+    let (mut s, place) = live_base();
+    let vck = s.add(Kind::VSource, (0, 30), 0);
+    s.components[vck].refdes = "VCK".into();
+    s.components[vck].value = "PULSE(0 5 0 1u 1u 0.5 1)".into();
+    side_label(&mut s, vck, "+", "CLK");
+    side_label(&mut s, vck, "-", "GND");
+    let u1 = place(&mut s, "74HC161", (30, 20));
+    for (pin, net) in [("1", "CLR_N"), ("2", "CLK"), ("3", "GND"), ("4", "GND"), ("5", "GND"), ("6", "GND"), ("7", "VCC"), ("8", "GND"), ("9", "VCC"), ("10", "VCC"), ("11", "Q3"), ("12", "Q2"), ("13", "Q1"), ("14", "Q0"), ("15", "RCO"), ("16", "VCC")] {
+        side_label(&mut s, u1, pin, net);
+    }
+    // the clear: NAND(Q1, Q3) goes low at 10 (the other three gates unused, their inputs on GND)
+    let u2 = place(&mut s, "74HC00", (30, 60));
+    for (pin, net) in [("1", "Q1"), ("2", "Q3"), ("3", "CLR_N"), ("4", "GND"), ("5", "GND"), ("6", "U2_2Y"), ("7", "GND"), ("8", "U2_3Y"), ("9", "GND"), ("10", "GND"), ("11", "U2_4Y"), ("12", "GND"), ("13", "GND"), ("14", "VCC")] {
+        side_label(&mut s, u2, pin, net);
+    }
+    // the decoder: always showing (LT and BL high, LE low: no latching)
+    let u3 = place(&mut s, "CD4511B", (75, 20));
+    for (pin, net) in [("1", "Q1"), ("2", "Q2"), ("3", "VCC"), ("4", "VCC"), ("5", "GND"), ("6", "Q3"), ("7", "Q0"), ("8", "GND"), ("9", "SE"), ("10", "SD"), ("11", "SC"), ("12", "SB"), ("13", "SA"), ("14", "SG"), ("15", "SF"), ("16", "VCC")] {
+        side_label(&mut s, u3, pin, net);
+    }
+    for (k, seg) in ["A", "B", "C", "D", "E", "F", "G"].iter().enumerate() {
+        let r = s.add(Kind::Resistor, (110, 2 + 7 * k as i32), 0);
+        s.components[r].value = "470".into();
+        side_label(&mut s, r, "1", &format!("S{seg}"));
+        side_label(&mut s, r, "2", &format!("D{seg}"));
+    }
+    let ds = place(&mut s, "SEG7_CC_0.56", (140, 22));
+    for (pin, net) in [("7", "DA"), ("6", "DB"), ("4", "DC"), ("2", "DD"), ("1", "DE"), ("9", "DF"), ("10", "DG"), ("5", "GND"), ("3", "GND"), ("8", "GND")] {
+        side_label(&mut s, ds, pin, net);
+    }
+    s
+}
+
+/// Generates docs/examples/seg7_counter.schjson: `cargo test -p app write_seg7_counter_example -- --ignored`
+#[test]
+#[ignore]
+fn write_seg7_counter_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("seg7_counter.schjson"), serde_json::to_string_pretty(&seg7_counter_schematic()).unwrap()).unwrap();
+}
+
+#[test]
+fn seg7_counter_sample_is_what_the_generator_makes() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/seg7_counter.schjson");
+    let s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(s, seg7_counter_schematic(), "regenerate with write_seg7_counter_example");
+}
+
 /// An LED with its 330 ohm resistor from net `from` to ground, at `at`.
 fn live_led(s: &mut sch_core::Schematic, from: &str, at: (i32, i32)) {
     let r = s.add(Kind::Resistor, at, 1);

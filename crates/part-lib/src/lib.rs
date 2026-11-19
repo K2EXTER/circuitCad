@@ -103,10 +103,10 @@ pub struct Issue {
 }
 
 /// Glyphs that draw a standard body (diode, transistor ...) inside the box; the pins keep their box positions.
-pub const BODY_GLYPHS: [&str; 35] = [
+pub const BODY_GLYPHS: [&str; 36] = [
     "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "ac3p", "crystal", "comparator", "motor", "buzzer", "regulator",
     "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg",
-    "switch_push", "switch_spdt",
+    "switch_push", "switch_spdt", "seg7",
     // "box" = the plain box with the pin names, whatever the name and pins suggest
     "box",
 ];
@@ -613,6 +613,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("WP7113QBC-D", include_str!("../examples/WP7113QBC-D.part.json")),
     ("WP7113SRC-DU", include_str!("../examples/WP7113SRC-DU.part.json")),
     ("WP7113ID", include_str!("../examples/WP7113ID.part.json")),
+    ("SEG7_CC_0.56", include_str!("../examples/SEG7_CC_0.56.part.json")),
     ("BUCK_DEMO", include_str!("../examples/BUCK_DEMO.part.json")),
     ("AC3P_10V_50Hz", include_str!("../examples/AC3P_10V_50Hz.part.json")),
     ("CR2032", include_str!("../examples/CR2032.part.json")),

@@ -30,7 +30,7 @@ pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
 /// A mark drawn inside the ordinary box (the box, the leads and the pin names stay): a logic gate in the middle of
 /// a gate IC, the DC mark of a regulator. The glyph of the part when it names one, else a guess like `body_glyph`.
 pub(super) fn overlay_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 12] = ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg"];
+    const KNOWN: [&str; 13] = ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg", "seg7"];
     let g = if sym.glyph.is_empty() { sym.inferred_glyph() } else { sym.glyph.as_str() };
     KNOWN.iter().find(|k| **k == g).copied()
 }
@@ -40,7 +40,7 @@ pub(crate) fn glyph_fits(glyph: &str, sym: &CustomSymbol) -> bool {
     let mut sym = sym.clone();
     sym.glyph = glyph.to_string();
     match glyph {
-        "" | "box" | "regulator" | "gate_and" | "gate_or" | "gate_not" | "gate_nand" | "gate_nor" | "gate_xor" | "gate_schmitt" | "gate_buffer" | "ff_d" | "counter" | "shift_reg" => true,
+        "" | "box" | "regulator" | "gate_and" | "gate_or" | "gate_not" | "gate_nand" | "gate_nor" | "gate_xor" | "gate_schmitt" | "gate_buffer" | "ff_d" | "counter" | "shift_reg" | "seg7" => true,
         "capacitor" | "electrolytic" | "resistor" | "inductor" => sym.is_two_lead_glyph(),
         g => body(g, &sym.layout()).is_some(),
     }
@@ -109,6 +109,11 @@ pub(super) fn overlay(glyph: &str, l: &SymLayout) -> Vec<Sh> {
     }
     // flip-flop, counter, shift register: a small block with the clock wedge (a triangle on the left edge), and what the
     // part does inside it: nothing more for a flip-flop, a rising staircase for a counter, an arrow for a shift register
+    if glyph == "seg7" {
+        for (a, b) in seg7_segments() {
+            v.push(L(a.0, a.1, b.0, b.1));
+        }
+    }
     if matches!(glyph, "ff_d" | "counter" | "shift_reg") {
         let (x, y) = (0.7f32, 0.8f32);
         v.extend([L(-x, -y, x, -y), L(x, -y, x, y), L(x, y, -x, y), L(-x, y, -x, -y)]);
@@ -130,6 +135,24 @@ pub(super) fn overlay(glyph: &str, l: &SymLayout) -> Vec<Sh> {
         }
     }
     v
+}
+
+/// The segments a, b, c, d, e, f, g and the point dp of a 7-segment display, as line ends around the middle of the box (y down):
+/// a figure eight 1.1 wide and 2.4 high, leaning a little as the displays do, and the point at the bottom right.
+pub(crate) fn seg7_segments() -> [((f32, f32), (f32, f32)); 8] {
+    let (w, h, lean) = (0.55f32, 1.2f32, 0.16f32);
+    // x of a point at height y, leant to the right towards the top
+    let p = |x: f32, y: f32| (x - lean * y / h, y);
+    [
+        (p(-w, -h), p(w, -h)),
+        (p(w, -h), p(w, 0.0)),
+        (p(w, 0.0), p(w, h)),
+        (p(-w, h), p(w, h)),
+        (p(-w, 0.0), p(-w, h)),
+        (p(-w, -h), p(-w, 0.0)),
+        (p(-w, 0.0), p(w, 0.0)),
+        (p(w + 0.25, h), p(w + 0.3, h)),
+    ]
 }
 
 /// Does a chip resistor from the library stand for a thermistor / RTD (a slash is added to the resistor)?
@@ -697,7 +720,7 @@ mod gate_tests {
         assert_eq!(body_glyph(&sym("LM393")), Some("comparator"));
         assert_eq!(body_glyph(&sym("LM358")), Some("opamp"));
         // a mark never sticks out of the box
-        for g in ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg"] {
+        for g in ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg", "seg7"] {
             let l = sym("74HC00").layout();
             for s in overlay(g, &l) {
                 let pts = match s {

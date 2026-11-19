@@ -1,0 +1,119 @@
+{
+  "name": "SEG7_CC_0.56",
+  "category": "LED",
+  "description": "7 セグメント LED 表示器 1 桁 (0.56 インチ、赤、カソードコモン)。a〜g と dp の 8 つの LED のカソードが COM (ピン 3 と 8、中でつながる) にまとまる。光らせるセグメントのピンに、1 本ずつ抵抗 (5V なら 330Ω〜1kΩ) を通して High を出す。ピンの並びは 5161AS 形の一般的なもの (1=e 2=d 3=COM 4=c 5=dp 6=b 7=a 8=COM 9=f 10=g)。各セグメントは赤色 LED (VF 約 1.9V) の等価モデル。ピンの並びは必ず使う品のデータシートで確かめる",
+  "prefix": "DS",
+  "value": "SEG7_CC",
+  "footprint_name": "SEG7_0.56_DIP10",
+  "glyph": "seg7",
+  "height": 8.0,
+  "pins": [
+    {
+      "number": "7",
+      "name": "a",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "b",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "c",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "d",
+      "side": "left"
+    },
+    {
+      "number": "1",
+      "name": "e",
+      "side": "left"
+    },
+    {
+      "number": "9",
+      "name": "f",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "g",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "dp",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "COM",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "COM",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 10,
+    "pitch": 2.54,
+    "row_spacing": 15.24,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "body": {
+    "shape": "rect",
+    "w": 12.5,
+    "h": 19.0,
+    "mark": "dot",
+    "mark_pin": "1"
+  },
+  "ratings": {
+    "v_max": 5.0,
+    "i_max": 0.025,
+    "rows": [
+      {
+        "name": "順方向電圧 (1 セグメント)",
+        "value": "1.9 V (typ)",
+        "condition": "IF = 10 mA"
+      },
+      {
+        "name": "最大電流 (1 セグメント)",
+        "value": "25 mA",
+        "condition": "連続"
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "SEG7CC",
+    "text": ".subckt SEG7CC a b c d e f g dp com1 com2\n* one red LED per segment, from its pin to the common cathode\nDa a com1 DSEG\nDb b com1 DSEG\nDc c com1 DSEG\nDd d com1 DSEG\nDe e com1 DSEG\nDf f com1 DSEG\nDg g com1 DSEG\nDdp dp com1 DSEG\n* the two COM pins are joined inside\nRcom com1 com2 0.01\n.model DSEG D(IS=7.041e-13 N=3.037 RS=6.477 BV=5 IBV=1e-05 EG=2.312 XTI=2)\n.ends SEG7CC",
+    "pins": [
+      "7",
+      "6",
+      "4",
+      "2",
+      "1",
+      "9",
+      "10",
+      "5",
+      "3",
+      "8"
+    ],
+    "limits": [
+      "セグメントごとに赤色 LED (WP7113ID と同じ値) の等価モデルを入れただけの、一般的なモデルです。明るさのばらつき・セグメントどうしの漏れは扱いません。",
+      "扱わないもの: 光の明るさ (電流で決まる明るさは出さず、光っているかだけ)、温度による順方向電圧の変化、セグメントを多重化 (ダイナミック点灯) したときの残像。ピンの並びは品によって違います。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "赤色 LED の等価モデル (WP7113ID の値) を 8 つ"
+    }
+  }
+}
