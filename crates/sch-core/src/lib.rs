@@ -16,6 +16,7 @@ mod spice;
 mod pinkind;
 mod companions;
 mod review;
+pub mod roles;
 pub use pinkind::PinKind;
 pub mod system;
 pub mod breadboard;

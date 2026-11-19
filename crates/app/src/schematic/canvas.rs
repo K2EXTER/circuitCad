@@ -97,6 +97,7 @@ impl SchEditor {
         self.volt_legend(ui, rect);
         self.stale_band(ui, rect);
         self.net_menu_ui(ui);
+        self.roles_bubble(ui, rect);
         if self.live_logic.is_some() {
             // the learning mode: the canvas only pans, zooms and clicks the switches (no editing)
             self.live_logic_input(ui, &resp, rect);

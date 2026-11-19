@@ -283,6 +283,9 @@ pub struct SchEditor {
     pub(crate) breadboard: Option<sch_core::breadboard::Layout>,
     /// The Arduino sketches of the microcontroller boards (refdes → text), saved with the sheet (`tolerance.rs`; B6 ⑤).
     pub(crate) sketches: std::collections::BTreeMap<String, String>,
+    /// The roles of the part picked, as the bubble shows them, and the part whose bubble was closed (`roles_ui.rs`, B11).
+    roles_cache: roles_ui::RolesCache,
+    roles_hidden: Option<String>,
     /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     /// The text typed in the analysis tab's search box (empty: every analysis).
@@ -762,6 +765,8 @@ impl Default for SchEditor {
             focus_section: None,
             breadboard: None,
             sketches: Default::default(),
+            roles_cache: Default::default(),
+            roles_hidden: None,
             coverage_cache: None,
             analysis_filter: String::new(),
             tables: Default::default(),
@@ -919,6 +924,7 @@ mod power_ui;
 mod power_on;
 mod battery;
 mod budget;
+mod roles_ui;
 mod inrush;
 mod for_bench;
 mod requirements;
