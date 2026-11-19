@@ -61,6 +61,12 @@ pub fn wave_measure(t: &[f64], v: &[f64], t0: f64, t1: f64) -> Option<WaveMeasur
             falls.push(cross(last_opposite, last_opposite + 1));
         }
     }
+    // The first period is often not a steady one: an oscillator started from rest (a 555 whose timing capacitor charges from
+    // 0 V instead of 1/3 Vcc) makes it longer, and counting it read a 555 about 10 % slow over three periods. With three
+    // or more rises it is left out, so the frequency and the duty are those of the steady cycles.
+    if rises.len() >= 3 {
+        rises.remove(0);
+    }
     if rises.len() >= 2 {
         let period = (rises[rises.len() - 1] - rises[0]) / (rises.len() - 1) as f64;
         if period > 0.0 {
@@ -155,6 +161,20 @@ mod tests {
         assert!((m.duty.unwrap() - 0.5).abs() < 0.02);
         let flat = wave_measure(&t, &vec![3.0; t.len()], 0.0, 0.05).unwrap();
         assert_eq!((flat.pp, flat.freq), (0.0, None));
+    }
+
+    // Found by a usability test (2026-11-19): a 555 started from rest has a long first cycle, and the table read 0.95 Hz for
+    // a 1.07 Hz blinker.
+    #[test]
+    fn a_long_first_cycle_does_not_slow_the_frequency() {
+        // starts low (the run starts from all zeros) and rises at once, then the first high lasts 1.6 s instead of 0.6 s; after
+        // it, a steady 1 Hz with 60 % high
+        let edges = [(0.0, false), (0.01, true), (1.6, false), (2.0, true), (2.6, false), (3.0, true), (3.6, false), (4.0, true), (4.6, false)];
+        let t: Vec<f64> = (0..=4800).map(|i| i as f64 * 1e-3).collect();
+        let v: Vec<f64> = t.iter().map(|x| if edges.iter().rev().find(|(e, _)| e <= x).is_some_and(|(_, hi)| *hi) { 5.0 } else { 0.0 }).collect();
+        let m = wave_measure(&t, &v, 0.0, 4.8).unwrap();
+        assert!((m.freq.unwrap() - 1.0).abs() < 0.01, "{:?}", m.freq);
+        assert!((m.duty.unwrap() - 0.6).abs() < 0.01, "{:?}", m.duty);
     }
 
     #[test]

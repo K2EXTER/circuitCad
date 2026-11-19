@@ -413,7 +413,7 @@ STEPの立体から三角形を作れませんでした	Could not make triangles
 # crates/pcb-core/src/drc/acute.rs
 配線が {deg:.0}° の鋭角で曲がっています。鋭角の隙間には、基板をつくる薬品がたまって銅が余計に削れる (酸のたまり)・高速な信号が反射する、といった問題が出ます。曲がり角は 135° (45° の折れ) か 90° にしましょう	The track bends at a sharp {deg:.0}° angle. In a sharp gap, fab chemicals pool and eat away extra copper (acid traps), and fast signals reflect. Make bends 135° (45° turns) or 90°
 # crates/pcb-core/src/drc/decoupling.rs
-{pin} の電源ピンに、GND との間のバイパスコンデンサ (0.1µF 前後) が見当たりません。ICは切り替えの瞬間に大きな電流を引くため、近くにコンデンサがないと電源が揺れて誤動作します。電源ピンのすぐそばに 0.1µF を足しましょう	No bypass capacitor (about 0.1µF) to GND was found at the power pin of {pin}. An IC draws large currents the moment it switches, so without a capacitor nearby the supply wobbles and it misbehaves. Add a 0.1µF right next to the power pin
+{ic} の電源 {net} に、GND との間のバイパスコンデンサ (0.1µF 前後) が見当たりません。ICは切り替えの瞬間に大きな電流を引くため、近くにコンデンサがないと電源が揺れて誤動作します。IC の電源ピン (データシートのピン配置で VCC・VDD の足) のすぐそばに 0.1µF を足しましょう	No bypass capacitor (about 0.1µF) to GND was found on the {net} supply of {ic}. An IC draws large currents the moment it switches, so without a capacitor nearby the supply wobbles and it misbehaves. Add a 0.1µF right next to the IC's power pin (the VCC or VDD pin in the data sheet's pinout)
 {pin} から一番近いバイパスコンデンサまで {d:.1} mm あります。電源ピンから離れるほど配線のインダクタンスが増えて効きが悪くなります。{:.0} mm 以内、できれば数 mm の距離に置きましょう	The nearest bypass capacitor is {d:.1} mm from {pin}. The farther from the power pin, the more track inductance and the less it helps. Place it within {:.0} mm, ideally a few mm away
 # crates/pcb-core/src/drc/mod.rs
 内層1	Inner 1

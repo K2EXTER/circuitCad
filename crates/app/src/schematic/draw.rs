@@ -384,8 +384,15 @@ impl SchEditor {
         match self.tool {
             _ if self.noise_pick => {}
             Tool::Place => {
-                let ghost = (crate::canvas_theme::col(crate::canvas_theme::Role::Part)).gamma_multiply(0.5);
-                match self.place_lib.and_then(|k| self.library.get(k)) {
+                let lib = self.place_lib.and_then(|k| self.library.get(k));
+                // red where a click would not place it (it would overlap a part): the click then only says why on the status line
+                let (kind, ext) = match lib {
+                    Some(d) => (Kind::Custom, sym_extents(&d.symbol())),
+                    None => (self.place, extents(self.place)),
+                };
+                let role = if self.would_overlap(kind, ext, snapped, self.rot, &[]) { crate::canvas_theme::Role::Error } else { crate::canvas_theme::Role::Part };
+                let ghost = crate::canvas_theme::col(role).gamma_multiply(0.5);
+                match lib {
                     Some(d) => self.draw_custom(painter, rect, &d.symbol(), snapped, self.rot, ghost),
                     None => self.draw_symbol(painter, rect, self.place, snapped, self.rot, ghost),
                 }

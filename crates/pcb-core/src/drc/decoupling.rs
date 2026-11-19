@@ -45,8 +45,10 @@ pub fn decoupling_checks(board: &Board) -> Vec<Violation> {
             let at = sp.pos;
             let pin = format!("{}.{} ({})", part.refdes, sp.pin, sp.net);
             match nearest.map(|(d, _)| d) {
+                // with no capacitor the IC is named, not a pin: the board does not know which pad on the net is the supply pin,
+                // and its first one may be an input tied high (a 555's RESET, pin 4, was called "the supply pin" before)
                 None => out.push(v(
-                    format!("{pin} の電源ピンに、GND との間のバイパスコンデンサ (0.1µF 前後) が見当たりません。ICは切り替えの瞬間に大きな電流を引くため、近くにコンデンサがないと電源が揺れて誤動作します。電源ピンのすぐそばに 0.1µF を足しましょう"),
+                    format!("{ic} の電源 {net} に、GND との間のバイパスコンデンサ (0.1µF 前後) が見当たりません。ICは切り替えの瞬間に大きな電流を引くため、近くにコンデンサがないと電源が揺れて誤動作します。IC の電源ピン (データシートのピン配置で VCC・VDD の足) のすぐそばに 0.1µF を足しましょう", ic = part.refdes, net = sp.net),
                     at,
                 )),
                 Some(d) if d > MAX_DECOUPLING_DISTANCE => out.push(v(

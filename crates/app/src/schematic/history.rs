@@ -80,7 +80,30 @@ impl SchEditor {
         self.gdrag = None;
         self.drag = None;
         self.pending = None;
+        // the findings were for the circuit before; with them gone the ERC has to be run again, not shown as "no problems"
         self.problems.clear();
+        self.erc_ran = false;
         self.status = msg.into();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Found by a usability test (2026-11-19): after Undo the ERC box said "no problems found" although the sheet had errors.
+    #[test]
+    fn undo_does_not_leave_a_stale_no_problems() {
+        let mut e = SchEditor::default();
+        e.sch = Schematic::default();
+        e.commit_history_for_test();
+        e.sch.add(Kind::Resistor, (20, 20), 0);
+        e.commit_history_for_test();
+        e.sch.add(Kind::Resistor, (40, 20), 0);
+        e.run_erc();
+        assert!(e.erc_ran && !e.problems.is_empty(), "two lone resistors have dangling pins");
+        e.undo();
+        assert!(!e.sch.components.is_empty(), "one resistor is still there");
+        assert!(!(e.erc_ran && e.problems.is_empty()), "the panel must not say the sheet has no problems");
     }
 }

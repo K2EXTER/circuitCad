@@ -138,6 +138,9 @@ pub struct SchEditor {
     /// An ERC check has been run since the last change of the list.
     erc_ran: bool,
     pub status: String,
+    /// Keeps a message on the status line for a while: the pointer position written over it every frame hid it at once
+    /// (a click that could not place a part said why for one frame only).
+    status_hold: canvas::StatusHold,
     /// Set by the small "操作" buttons; the app opens the guide on that page.
     pub help_request: Option<crate::help::HelpTab>,
     /// Shared, not copied (every new editor and every test editor had a copy of the ~15 000 parts); replaced as a whole on reload.
@@ -819,6 +822,7 @@ impl Default for SchEditor {
             erc_focus: None,
             erc_ran: false,
             status: "回路図: 部品を選んで配置し、配線ツールで線をつなぎます".into(),
+            status_hold: canvas::StatusHold::default(),
             help_request: None,
             fault_ui: Default::default(),
             mc_in: Default::default(),

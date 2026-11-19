@@ -365,7 +365,10 @@ mod drc_tests {
         // no capacitor at all
         let none = decoupling_checks(&ic_board(None));
         assert_eq!(none.len(), 1, "{none:?}");
-        assert!(none[0].message.contains("U1.1") && none[0].message.contains("見当たりません"));
+        // the IC and its supply are named, not a pin: the first pad on VCC may be an input tied high (a 555's RESET), which the
+        // message once called "the supply pin" (found by a usability test, 2026-11-19)
+        assert!(none[0].message.contains("U1 の電源 VCC") && none[0].message.contains("見当たりません"), "{}", none[0].message);
+        assert!(!none[0].message.contains("U1.1"), "{}", none[0].message);
         // a capacitor 2 mm away is fine
         assert!(decoupling_checks(&ic_board(Some(12.0))).is_empty());
         // 20 mm away is too far
@@ -381,7 +384,7 @@ mod drc_tests {
         b.pads[4].net = "VNEG".into();
         let v = decoupling_checks(&b);
         assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].message.contains("U1.5") && v[0].message.contains("VNEG"), "{}", v[0].message);
+        assert!(v[0].message.contains("U1 の電源 VNEG"), "{}", v[0].message);
         // a VNEG–GND capacitor next to it settles it
         b.parts.push(Part { refdes: "C2".into(), value: "100n".into(), footprint: "C_0805".into(), pos: Point::new(12.0, 10.0), rot: 0, side: Side::Top });
         for (pin, net, dx) in [("1", "VNEG", 0.0), ("2", "GND", 2.0)] {

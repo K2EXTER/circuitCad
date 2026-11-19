@@ -43,35 +43,13 @@ pub(crate) fn pins_named(c: &Component, want: &str) -> Vec<String> {
     names.iter().filter(|(_, name)| name.contains('/') && name.split('/').any(|part| part.trim().eq_ignore_ascii_case(want))).map(|(n, _)| n.clone()).collect()
 }
 
-/// Period and duty of a repeating wave: rising crossings of the mid level (at least two periods), and the share of
-/// time spent above it between the first and the last crossing. None for a wave that does not repeat.
-fn periodicity(t: &[f64], v: &[f64], mn: f64, mx: f64) -> Option<(f64, f64)> {
-    let span = mx - mn;
-    if span.is_nan() || span <= 1e-9 * (1.0 + mx.abs().max(mn.abs())) {
-        return None;
-    }
-    let mid = (mn + mx) / 2.0;
-    let mut rises: Vec<(usize, f64)> = vec![];
-    for i in 1..v.len() {
-        if v[i - 1] < mid && v[i] >= mid {
-            let f = (mid - v[i - 1]) / (v[i] - v[i - 1]);
-            rises.push((i, t[i - 1] + f * (t[i] - t[i - 1])));
-        }
-    }
-    if rises.len() < 3 {
-        return None;
-    }
-    let (first, last) = (rises[0], rises[rises.len() - 1]);
-    let period = (last.1 - first.1) / (rises.len() - 1) as f64;
-    let (mut high, mut total) = (0.0, 0.0);
-    for i in first.0..=last.0.min(v.len() - 1) {
-        let dt = t[i] - t[i - 1];
-        total += dt;
-        if v[i] >= mid {
-            high += dt;
-        }
-    }
-    Some((period, if total > 0.0 { high / total } else { 0.0 }))
+/// Period and duty of a repeating wave, measured as the app's result table does (`sim_core::wave_measure`: crossings of
+/// the mid level with a little hysteresis, the first period left out when it is not a steady one). None for a wave that
+/// does not repeat. (ccad had a copy of its own that counted the long first cycle of a 555 started from rest.)
+fn periodicity(t: &[f64], v: &[f64]) -> Option<(f64, f64)> {
+    let m = sim_core::wave_measure(t, v, *t.first()?, *t.last()?)?;
+    let f = m.freq.filter(|f| f.is_finite() && *f > 0.0)?;
+    Some((1.0 / f, m.duty.unwrap_or(0.0)))
 }
 
 /// The simulator's errors are written for the GUI; where the fix differs in ccad, say it.
@@ -1129,7 +1107,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
                 let (mn, mx) = s.values.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), v| (a.min(*v), b.max(*v)));
                 let mean = s.values.iter().sum::<f64>() / s.values.len() as f64;
                 let mut o = json!({"unit": s.unit, "min": mn, "max": mx, "mean": mean, "final": s.values[n - 1], "samples": pick(&s.values)});
-                if let Some((period, duty)) = periodicity(&r.time, &s.values, mn, mx) {
+                if let Some((period, duty)) = periodicity(&r.time, &s.values) {
                     o["period"] = json!(period);
                     o["frequency"] = json!(1.0 / period);
                     o["duty"] = json!(duty);

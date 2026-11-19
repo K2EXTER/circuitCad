@@ -2,6 +2,34 @@
 
 use super::*;
 
+/// How long a message stays on the status line before the pointer position takes the line again (seconds).
+const STATUS_HOLD_S: f64 = 4.0;
+
+/// The status line under the canvas shows the pointer's grid position while it moves over the sheet. A message set by
+/// anything else (a click that could not place a part, a copy, an ERC count) stays for `STATUS_HOLD_S` first.
+#[derive(Default)]
+pub(super) struct StatusHold {
+    /// The position readout written last: the line may always be replaced while it shows this.
+    pub(super) readout: String,
+    /// The message seen last and when it first appeared.
+    seen: String,
+    since: f64,
+}
+
+impl StatusHold {
+    /// May the position readout replace `status` at time `now`?
+    pub(super) fn may_replace(&mut self, status: &str, now: f64) -> bool {
+        if status == self.readout {
+            return true;
+        }
+        if status != self.seen {
+            self.seen = status.to_string();
+            self.since = now;
+        }
+        now - self.since >= STATUS_HOLD_S
+    }
+}
+
 impl SchEditor {
     /// Fits the view when a file or sheet was just opened, and keeps a running lesson's (or challenge's) circuit fitted left of its window while the
     /// canvas changes size; a view the learner has moved is left alone.
@@ -78,7 +106,12 @@ impl SchEditor {
         self.draw_noise_hover(&painter, snapped, sp);
         self.draw_tool_ghost(&painter, rect, snapped, sp);
         if !self.noise_pick {
-            self.status = format!("({}, {})  部品 {}  配線 {}", snapped.0, snapped.1, self.sch.components.len(), self.sch.wires.len());
+            let readout = format!("({}, {})  部品 {}  配線 {}", snapped.0, snapped.1, self.sch.components.len(), self.sch.wires.len());
+            let now = ui.input(|i| i.time);
+            if self.status_hold.may_replace(&self.status, now) {
+                self.status_hold.readout.clone_from(&readout);
+                self.status = readout;
+            }
         }
         self.handle_drags(&resp, g, snapped);
         self.handle_clicks(ui, &resp, g, snapped);
@@ -198,6 +231,18 @@ impl SchEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Found by a usability test (2026-11-19): a click that could not place a part said why for one frame only, the pointer
+    // position took the line back at once.
+    #[test]
+    fn a_message_stays_on_the_status_line_before_the_position_returns() {
+        let mut h = StatusHold::default();
+        h.readout = "(1, 2)  部品 0  配線 0".into();
+        assert!(h.may_replace("(1, 2)  部品 0  配線 0", 0.0), "the readout replaces itself freely");
+        assert!(!h.may_replace(OVERLAP_MSG, 10.0), "a new message is kept");
+        assert!(!h.may_replace(OVERLAP_MSG, 13.9));
+        assert!(h.may_replace(OVERLAP_MSG, 14.0), "after the hold the position comes back");
+    }
 
     fn press(e: &mut SchEditor, key: egui::Key) {
         let ctx = egui::Context::default();
