@@ -15,6 +15,7 @@ mod sheets;
 mod spice;
 mod pinkind;
 mod companions;
+mod review;
 pub use pinkind::PinKind;
 pub mod system;
 pub mod breadboard;
@@ -766,6 +767,9 @@ pub struct PartRatings {
     /// measured on a large board (JEDEC 2s2p, 1 in² of copper) is not this one: the copper is counted from the board instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theta_ja: Option<f64>,
+    /// A crystal's load capacitance (CL, pF) from its data sheet: the design review checks the two capacitors beside it against it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load_pf: Option<f64>,
     /// Rated / typical figures from the data sheet, free form.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rows: Vec<SpecRow>,
@@ -847,7 +851,7 @@ impl LifeRating {
 
 impl PartRatings {
     pub fn is_empty(&self) -> bool {
-        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.theta_jc.is_none() && self.theta_ja.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none() && self.coil.is_none()
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.t_max.is_none() && self.derate_from.is_none() && self.zth.is_empty() && self.theta_jc.is_none() && self.theta_ja.is_none() && self.load_pf.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none() && self.coil.is_none()
     }
 
     /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.
@@ -881,6 +885,12 @@ impl PartRatings {
                 t.push('\n');
             }
             t.push_str(&format!("寿命: {} 時間 ({}℃)", trim_float(l.hours), trim_float(l.temp_c)));
+        }
+        if let Some(cl) = self.load_pf {
+            if !t.is_empty() {
+                t.push('\n');
+            }
+            t.push_str(&format!("負荷容量 CL: {}pF", trim_float(cl)));
         }
         for r in &self.rows {
             if !t.is_empty() {

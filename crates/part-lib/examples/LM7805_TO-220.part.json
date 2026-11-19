@@ -73,5 +73,9 @@
         "condition": "TO-220"
       }
     ]
-  }
+  },
+  "companions": [
+    {"name": "CI", "kind": "C", "value": "330n", "pin": "1", "to": "GND", "note": "レギュレータが電源のフィルタから離れているとき"},
+    {"name": "CO", "kind": "C", "value": "100n", "pin": "3", "to": "GND"}
+  ]
 }

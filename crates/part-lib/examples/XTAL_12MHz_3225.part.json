@@ -89,5 +89,6 @@
       "kind": "generic",
       "source": "水晶の等価回路の代表値"
     }
-  }
+  },
+  "ratings": {"load_pf": 18}
 }

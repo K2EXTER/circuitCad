@@ -90,5 +90,9 @@
         "condition": "IO = 250mA"
       }
     ]
-  }
+  },
+  "companions": [
+    {"name": "CIN", "kind": "C", "value": "1u", "pin": "3", "to": "GND"},
+    {"name": "COUT", "kind": "C", "value": "1u", "pin": "2", "to": "GND", "note": "セラミック 1µF 以上"}
+  ]
 }

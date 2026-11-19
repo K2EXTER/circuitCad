@@ -19,7 +19,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 | クレート | 役割 |
 |---|---|
-| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`)、ピンの電気的な種類 `pinkind.rs`(ERC が使う)、推奨の周辺部品を置く `companions.rs`、複数の基板のつなぎの照合と全体の部品表 `system.rs`、ブレッドボードの穴と自動の並べ方と照合 `breadboard.rs` |
+| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`)、ピンの電気的な種類 `pinkind.rs`(ERC が使う)、推奨の周辺部品を置く `companions.rs`、設計レビューの点検 (推奨の部品の付け忘れ・水晶の負荷容量・出力に直接の LED・電源の入口) `review.rs`、複数の基板のつなぎの照合と全体の部品表 `system.rs`、ブレッドボードの穴と自動の並べ方と照合 `breadboard.rs` |
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が共有 |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
@@ -32,7 +32,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`(目次。ファイル一覧は `sim-core/files.md`)
 - 動作点 `dc/`(build・devices・mna・newton・linalg・digital)/ 過渡 `tran.rs`(`TranRun` で続きから解く・途中で電源を変える)/ `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs`(FFT・THD)/ `temperature.rs`
 - 回路図→素子 `from_schematic.rs`(新しい部品種別はここ)/ `spice_in.rs` ライブラリ読込 / `spice_flat.rs` ベンダー形式のSPICE文の展開 / `expr.rs` 式の評価 / `netcurrent.rs` ネットごとの電流 / `dc/seq.rs` 記憶つき素子 / `waveform.rs` / `value.rs` / `options.rs` / `par.rs` 並列 / `diagnose.rs` 失敗時の原因
-- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `cmrr` `troubleshoot` `loopgain`(ナイキスト・ニコルスの印も) `polezero` `rootlocus`(根軌跡) `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage` `battery`(電池の持ち時間: 過渡解析の平均の電流と、残量を減らして DC で探す止まる残量。画面は `schematic/battery.rs`)`poweron`(最初の電源投入: 電流制限の値と正常な電流の範囲。画面 `power_on_guide.rs`、CLI `poweron`)
+- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `cmrr` `troubleshoot` `loopgain`(ナイキスト・ニコルスの印も) `polezero` `rootlocus`(根軌跡) `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage` `battery`(電池の持ち時間: 過渡解析の平均の電流と、残量を減らして DC で探す止まる残量。画面は `schematic/battery.rs`)`budget`(電源の予算表: レールの木・あと何 mA・レギュレータの発熱。画面 `schematic/budget.rs`、CLI `budget`)`poweron`(最初の電源投入: 電流制限の値と正常な電流の範囲。画面 `power_on_guide.rs`、CLI `poweron`)
 - 熱: `selfheat.rs` 自己発熱 / `ambient.rs` 周囲の温度を振る(自己発熱込みの最悪ケース)/ `heat_tran.rs` 温度の時間変化 / `zth.rs` 過渡熱抵抗の段(データシートの曲線に当てはめ)
 - `designcalc.rs` 値の計算(足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)/ `filterdesign.rs` アクティブフィルタの段と部品(回路図に置くのは `schematic/filter_place.rs`)
 - `tests_*.rs` は機能別

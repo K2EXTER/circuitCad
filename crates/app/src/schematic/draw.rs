@@ -333,6 +333,7 @@ impl SchEditor {
                 let color = match pr.severity {
                     Severity::Error => crate::canvas_theme::col(crate::canvas_theme::Role::Error),
                     Severity::Warning => crate::canvas_theme::col(crate::canvas_theme::Role::Warning),
+                    Severity::Info => crate::theme::INFO,
                 };
                 let focus = self.erc_focus == Some(k);
                 painter.circle_stroke(self.to_screen(rect, (a.0 as f32, a.1 as f32)), if focus { 16.0 } else { 11.0 }, Stroke::new(if focus { 3.5 } else { 2.0 }, color));

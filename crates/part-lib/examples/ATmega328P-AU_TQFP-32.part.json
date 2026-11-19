@@ -177,5 +177,9 @@
   "shops": {
     "lcsc": "C14877"
   },
-  "programming": [{"name": "ISP (SPI)", "pins": ["PC6/RESET", "PB3", "PB4", "PB5", "VCC", "GND"]}, {"name": "UART ブートローダ", "pins": ["PD0", "PD1", "VCC", "GND"]}]
+  "programming": [{"name": "ISP (SPI)", "pins": ["PC6/RESET", "PB3", "PB4", "PB5", "VCC", "GND"]}, {"name": "UART ブートローダ", "pins": ["PD0", "PD1", "VCC", "GND"]}],
+  "companions": [
+    {"name": "RRST", "kind": "R", "value": "10k", "pin": "29", "to": "4", "note": "RESET のプルアップ"},
+    {"name": "CVCC", "kind": "C", "value": "100n", "pin": "4", "to": "GND", "note": "VCC のバイパス。VCC のピンごとに 1 個"}
+  ]
 }

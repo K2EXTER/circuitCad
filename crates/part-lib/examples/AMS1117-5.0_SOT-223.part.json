@@ -100,5 +100,9 @@
   },
   "shops": {
     "lcsc": "C6187"
-  }
+  },
+  "companions": [
+    {"name": "CIN", "kind": "C", "value": "10u", "pin": "3", "to": "GND"},
+    {"name": "COUT", "kind": "C", "value": "22u", "pin": "2", "to": "GND", "note": "出力はタンタル 22µF 以上 (安定のため)"}
+  ]
 }

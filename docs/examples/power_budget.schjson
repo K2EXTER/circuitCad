@@ -1,0 +1,625 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "9",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM7805",
+      "pos": [
+        30,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "TO-220-3",
+      "custom": {
+        "name": "LM7805",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM7805",
+          "text": ".subckt LM7805 in gnd out\n* line regulation through a slow path (the data sheet's DC figure) and the ripple from the input (flat, the ripple rejection)\nElf lfa gnd in gnd 1\nRlf lfa lf 1.59Meg\nClf lf gnd 100n\n* output noise (taken as flat over the data sheet's band): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\n* the output's difference from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVtol vt gnd DC 0\n* spread Vtol -0.2 0.2 vout (data sheet: 4.8 to 5.2 V)\nBtgt t0 gnd V=5+-3.07946e-05*(V(lf,gnd)-10)+7.07946e-05*(V(in,gnd)-10)+V(vt,gnd)\nEn tgt t0 nz gnd 38.8375\n* the ceiling the input leaves (the dropout)\nBdo ind gnd V=V(in,gnd)-1.6-0.398693*I(Vs)\n* the target, no higher than the dropout's ceiling\nEx1 xh1 gnd tgt ind 1000\nD1 xh1 yh1 DREG\nRy1 yh1 gnd 1k\nEy1 y1 gnd yh1 gnd 0.001\nEc1 c1 gnd tgt y1 1\n* the current limit: the current the target asks for (amps as volts), no more than the limit\nBu u gnd V=(V(c1,gnd)-V(out,gnd))/0.00130653\nBlim cl gnd V=limit(2.2+-0.064*(V(in,gnd)-V(out,gnd)-10),0.6,2.2)\nEx2 xh2 gnd u cl 1000\nD2 xh2 yh2 DREG\nRy2 yh2 gnd 1k\nEy2 y2 gnd yh2 gnd 0.001\nEc2 uc gnd u y2 1\nBc2 c2 gnd V=V(out,gnd)+0.00130653*V(uc,gnd)\n* output through the load regulation's resistance; the output current comes from the input (both ways, as the earlier\n* bundled models did: a dead or reversed input then leaves the output near 0 V)\nEo o gnd c2 gnd 1\nVs o os DC 0\nRo os out 0.00130653\nBin in gnd I=I(Vs)\n* ground (quiescent) current: flat above a few volts, like a resistor near 0 V\nBq in gnd I=0.0032*tanh(V(in,gnd)/2)\n.model DREG D(IS=1e-12 N=1)\n.ends LM7805",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {
+            "dropout": 2.0,
+            "vout": 5.0
+          },
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi MC7800 シリーズ データシート (MC7800/D Rev. 29) の MC78xxC の表 (MC7805C)。データシートとの比べは docs/models/regulators.md。",
+            "再現しているもの: 出力 5.0 V、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、グラウンド電流 3.2 mA (入力が数 V 以上で)、電流制限 (入出力の差で変わる)、リップル除去 83 dB (120 Hz。どの周波数でも同じとした)、出力雑音 158.122 nV/√Hz (平ら)。",
+            "データシートの表に無い値: ドロップアウトは、表の 2.0 V (1 A) と図 14 (25 °C、負荷電流ごとの曲線) から 1.6 V + 0.4 Ω × 電流 とした。電流制限は、表の「ピーク電流 2.2 A」と「入力 35 V の短絡電流 0.6 A」を、入出力の差 10 V と 35 V で直線につないだ (図の曲線は直線ではない)。",
+            "出力電圧の部品ごとの違い (4.8〜5.2 V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+            "扱わないもの: 温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む)。",
+            "最終の確認は、メーカーの公式モデルで行ってください。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C"
+          }
+        },
+        "ratings": {
+          "v_max": 35.0,
+          "i_max": 1.5,
+          "rows": [
+            {
+              "name": "出力電圧",
+              "value": "5V ±4%"
+            },
+            {
+              "name": "ドロップアウト電圧",
+              "value": "2V (代表)",
+              "condition": "IO = 1A"
+            },
+            {
+              "name": "熱抵抗 (接合部-周囲)",
+              "value": "50℃/W",
+              "condition": "TO-220"
+            }
+          ]
+        },
+        "glyph": "regulator",
+        "companions": [
+          {
+            "name": "CI",
+            "kind": "C",
+            "value": "330n",
+            "pin": "1",
+            "to": "GND",
+            "note": "レギュレータが電源のフィルタから離れているとき"
+          },
+          {
+            "name": "CO",
+            "kind": "C",
+            "value": "100n",
+            "pin": "3",
+            "to": "GND"
+          }
+        ]
+      },
+      "theta": 50.0
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "330n",
+      "pos": [
+        22,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "100n",
+      "pos": [
+        38,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "I1",
+      "kind": "ISource",
+      "value": "150m",
+      "pos": [
+        46,
+        14
+      ],
+      "rot": 1,
+      "footprint": "",
+      "custom": null,
+      "sim_only": true
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "MCP1700-3302",
+      "pos": [
+        80,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "SOT-23",
+      "custom": {
+        "name": "MCP1700-3302",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "3",
+            "name": "VIN",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "VOUT",
+            "side": "right"
+          },
+          {
+            "number": "1",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "MCP1700-3302",
+          "text": ".subckt MCP1700-3302 in gnd out\n* line regulation through a slow path (the data sheet's DC figure) and the ripple from the input (flat, the ripple rejection)\nElf lfa gnd in gnd 1\nRlf lfa lf 1.59Meg\nClf lf gnd 100n\n* output noise (taken as flat over the data sheet's band): a 1 k resistor's noise, scaled\nRnz nz gnd 1k\n* the output's difference from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVtol vt gnd DC 0\n* spread Vtol -0.066 0.066 vout (data sheet: 3.234 to 3.366 V)\nBtgt t0 gnd V=3.3+0.0184404*(V(lf,gnd)-4.3)+0.00630957*(V(in,gnd)-4.3)+V(vt,gnd)\nEn tgt t0 nz gnd 736.852\n* the ceiling the input leaves (the dropout)\nBdo ind gnd V=V(in,gnd)-0-0.579947*I(Vs)\n* the target, no higher than the dropout's ceiling\nEx1 xh1 gnd tgt ind 1000\nD1 xh1 yh1 DREG\nRy1 yh1 gnd 1k\nEy1 y1 gnd yh1 gnd 0.001\nEc1 c1 gnd tgt y1 1\n* the current limit: the current the target asks for (amps as volts), no more than the limit\nBu u gnd V=(V(c1,gnd)-V(out,gnd))/0.132053\nBlim cl gnd V=limit(0.408+0*(V(in,gnd)-V(out,gnd)-1),0.408,0.408)\nEx2 xh2 gnd u cl 1000\nD2 xh2 yh2 DREG\nRy2 yh2 gnd 1k\nEy2 y2 gnd yh2 gnd 0.001\nEc2 uc gnd u y2 1\nBc2 c2 gnd V=V(out,gnd)+0.132053*V(uc,gnd)\n* output through the load regulation's resistance; the output current comes from the input (both ways, as the earlier\n* bundled models did: a dead or reversed input then leaves the output near 0 V)\nEo o gnd c2 gnd 1\nVs o os DC 0\nRo os out 0.132053\nBin in gnd I=I(Vs)\n* ground (quiescent) current: flat above a few volts, like a resistor near 0 V\nBq in gnd I=1.6e-06*tanh(V(in,gnd)/2)\n.model DREG D(IS=1e-12 N=1)\n.ends MCP1700-3302",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {
+            "dropout": 0.712,
+            "vout": 3.3
+          },
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS (VIN = 4.3 V、ILOAD = 100 µA)。データシートとの比べは docs/models/regulators.md。",
+            "再現しているもの: 出力 3.3 V、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、グラウンド電流 0.0016 mA (入力が数 V 以上で)、電流制限 (入出力の差で変わる)、リップル除去 44 dB (100 Hz。どの周波数でも同じとした)、出力雑音 3000 nV/√Hz (平ら)。",
+            "データシートの表に無い値: ライン・レギュレーションは表の typ「±0.75 %/V」をそのまま使った (表の値。代表特性の図は見ていない)。出力電圧の min と max (±2.0 %) は、新しい版の DS20001826E (2018) の表から写した。",
+            "出力電圧の部品ごとの違い (3.234〜3.366 V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+            "扱わないもの: 温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む)。",
+            "最終の確認は、メーカーの公式モデルで行ってください。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA"
+          }
+        },
+        "ratings": {
+          "v_max": 6.0,
+          "i_max": 0.25,
+          "rows": [
+            {
+              "name": "出力電圧",
+              "value": "3.3V ±2%"
+            },
+            {
+              "name": "ドロップアウト電圧",
+              "value": "0.18V (代表)",
+              "condition": "IO = 250mA"
+            }
+          ]
+        },
+        "glyph": "regulator",
+        "companions": [
+          {
+            "name": "CIN",
+            "kind": "C",
+            "value": "1u",
+            "pin": "3",
+            "to": "GND"
+          },
+          {
+            "name": "COUT",
+            "kind": "C",
+            "value": "1u",
+            "pin": "2",
+            "to": "GND",
+            "note": "セラミック 1µF 以上"
+          }
+        ]
+      }
+    },
+    {
+      "refdes": "C3",
+      "kind": "Capacitor",
+      "value": "1u",
+      "pos": [
+        72,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C4",
+      "kind": "Capacitor",
+      "value": "1u",
+      "pos": [
+        88,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "I2",
+      "kind": "ISource",
+      "value": "120m",
+      "pos": [
+        96,
+        14
+      ],
+      "rot": 1,
+      "footprint": "",
+      "custom": null,
+      "sim_only": true
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        26,
+        -4
+      ],
+      "b": [
+        23,
+        -4
+      ]
+    },
+    {
+      "a": [
+        34,
+        -4
+      ],
+      "b": [
+        37,
+        -4
+      ]
+    },
+    {
+      "a": [
+        30,
+        0
+      ],
+      "b": [
+        30,
+        3
+      ]
+    },
+    {
+      "a": [
+        22,
+        12
+      ],
+      "b": [
+        22,
+        9
+      ]
+    },
+    {
+      "a": [
+        22,
+        16
+      ],
+      "b": [
+        22,
+        19
+      ]
+    },
+    {
+      "a": [
+        38,
+        12
+      ],
+      "b": [
+        38,
+        9
+      ]
+    },
+    {
+      "a": [
+        38,
+        16
+      ],
+      "b": [
+        38,
+        19
+      ]
+    },
+    {
+      "a": [
+        44,
+        14
+      ],
+      "b": [
+        41,
+        14
+      ]
+    },
+    {
+      "a": [
+        48,
+        14
+      ],
+      "b": [
+        51,
+        14
+      ]
+    },
+    {
+      "a": [
+        76,
+        -4
+      ],
+      "b": [
+        73,
+        -4
+      ]
+    },
+    {
+      "a": [
+        84,
+        -4
+      ],
+      "b": [
+        87,
+        -4
+      ]
+    },
+    {
+      "a": [
+        80,
+        0
+      ],
+      "b": [
+        80,
+        3
+      ]
+    },
+    {
+      "a": [
+        72,
+        12
+      ],
+      "b": [
+        72,
+        9
+      ]
+    },
+    {
+      "a": [
+        72,
+        16
+      ],
+      "b": [
+        72,
+        19
+      ]
+    },
+    {
+      "a": [
+        88,
+        12
+      ],
+      "b": [
+        88,
+        9
+      ]
+    },
+    {
+      "a": [
+        88,
+        16
+      ],
+      "b": [
+        88,
+        19
+      ]
+    },
+    {
+      "a": [
+        94,
+        14
+      ],
+      "b": [
+        91,
+        14
+      ]
+    },
+    {
+      "a": [
+        98,
+        14
+      ],
+      "b": [
+        101,
+        14
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        -4
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        37,
+        -4
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        30,
+        3
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        22,
+        9
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        22,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        38,
+        9
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        38,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        41,
+        14
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        51,
+        14
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        73,
+        -4
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        87,
+        -4
+      ],
+      "text": "3V3"
+    },
+    {
+      "pos": [
+        80,
+        3
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        72,
+        9
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        72,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        88,
+        9
+      ],
+      "text": "3V3"
+    },
+    {
+      "pos": [
+        88,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        91,
+        14
+      ],
+      "text": "3V3"
+    },
+    {
+      "pos": [
+        101,
+        14
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

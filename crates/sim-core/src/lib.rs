@@ -38,6 +38,7 @@ mod heat_tran;
 mod selfheat;
 mod ambient;
 pub mod battery;
+pub mod budget;
 pub use ambient::{ambient_sweep, AmbientPoint, AmbientSweep, NetDrift, PartWorst};
 mod spec;
 mod spectrum;
@@ -83,7 +84,7 @@ pub use fault::{faults_of, motor_inside, likelihood, Likelihood, TURN_SHORTS, as
 pub use diagnose::diagnose;
 pub use ratings::{check_peak_temperatures, check_ratings, check_temperatures, meets, package_power_limit, requirement, stress, temperature_limit, LimitSource, RatingIssue, RatingLevel, Requirement, Stress, TempCheck, TempLimit};
 pub use ripple::{ripple_reports, RippleReport, MAX_LIFE_HOURS, RIPPLE_HEATING_AT_RATED_C};
-pub use netcurrent::{net_currents, net_currents_tran, NetStat, HEAT_WINDOW};
+pub use netcurrent::{net_currents, net_currents_tran, part_currents, NetStat, HEAT_WINDOW};
 pub use dc::{dc_op, dc_op_from, last_convergence_trouble, DcResult, ElementResult, SimError};
 pub use measure::{stability_margins, wave_measure, Margins, WaveMeasure};
 pub use montecarlo::{minus_3db, monte_carlo, McMeasure, McResult, McSettings, McStats, TranMetric};

@@ -59,17 +59,24 @@ fn visible(name: &str) -> bool {
     !name.contains('.')
 }
 
+/// Per part (`R1`, `U1`: the elements of a library part's model together), the current it puts INTO each node (A, indexed like
+/// `Circuit::names`; negative where it takes current from the node), at the operating point `dc`.
+pub fn part_currents(c: &Circuit, dc: &DcResult) -> std::collections::BTreeMap<String, Vec<f64>> {
+    let mut parts: std::collections::BTreeMap<String, Vec<f64>> = Default::default();
+    for e in &c.elements {
+        let Some(r) = dc.element(e.name()) else { continue };
+        let extra = |k: &str| r.extra.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        let into = parts.entry(group_of(e.name()).to_string()).or_insert_with(|| vec![0.0; c.names.len()]);
+        terminals(e, r.current, extra("Ib"), extra("Ie"), |node, i| into[node] += i);
+    }
+    parts
+}
+
 /// `(net name, amps)` for every net with a current above 1 uA, largest first. Nodes inside a library
 /// part (names with a `.`) are left out.
 pub fn net_currents(c: &Circuit, dc: &DcResult) -> Vec<(String, f64)> {
     // per part: what it puts into each node (signed); the current through a node is half the sum of those, in absolute value
-    let mut parts: std::collections::BTreeMap<&str, Vec<f64>> = Default::default();
-    for e in &c.elements {
-        let Some(r) = dc.element(e.name()) else { continue };
-        let extra = |k: &str| r.extra.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
-        let into = parts.entry(group_of(e.name())).or_insert_with(|| vec![0.0; c.names.len()]);
-        terminals(e, r.current, extra("Ib"), extra("Ie"), |node, i| into[node] += i);
-    }
+    let parts = part_currents(c, dc);
     let mut sum = vec![0.0f64; c.names.len()];
     for into in parts.values() {
         for (node, i) in into.iter().enumerate() {

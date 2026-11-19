@@ -527,5 +527,9 @@
     "mark": "dot",
     "mark_pin": "1"
   },
-  "programming": [{"name": "ISP (SPI)", "pins": ["RESET", "PB2", "PB3", "PB1", "VCC", "GND"]}, {"name": "UART0 ブートローダ", "pins": ["PE0", "PE1", "VCC", "GND"]}]
+  "programming": [{"name": "ISP (SPI)", "pins": ["RESET", "PB2", "PB3", "PB1", "VCC", "GND"]}, {"name": "UART0 ブートローダ", "pins": ["PE0", "PE1", "VCC", "GND"]}],
+  "companions": [
+    {"name": "RRST", "kind": "R", "value": "10k", "pin": "30", "to": "10", "note": "RESET のプルアップ"},
+    {"name": "CVCC", "kind": "C", "value": "100n", "pin": "10", "to": "GND", "note": "VCC のバイパス。VCC のピンごとに 1 個"}
+  ]
 }

@@ -105,6 +105,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   battery tran=STOP[:STEP] [from=T] [to=T] [node=NET v_min=V]
                                         how long the battery parts last: the average current over from..to of a transient run (default its second
                                         half; take whole periods of an intermittent load), the charge at which node falls under v_min, the hours
+  budget [temp=25]                      the power budget of the supply rails at the DC point, as a tree (battery -> 5V -> 3V3): per rail its source,
+                                        current, loads, rated current, headroom (what more it can give, and whether the rating, the heat or the rail
+                                        above stops it), and a regulator's input, heat, temperature and efficiency
   poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1]
                                         first power-on of a built board: each supply's current at its printed values, the range a working
                                         board falls in (tolerances, data sheet min / max, self-heating), the current limit to set; measured= judges a reading
@@ -382,6 +385,7 @@ impl Session {
             "worst" => self.worst(args),
             "poweron" => self.poweron(args),
             "battery" => self.battery(args),
+            "budget" => self.budget(args),
             "breadboard" => self.breadboard(args),
             "mc" => self.mc(args),
             "thd" => self.thd(args),

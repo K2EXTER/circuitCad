@@ -216,6 +216,9 @@ impl PartForm {
                 ui.label(i18n::tr("熱抵抗 θja [K/W]")).on_hover_text(i18n::tr("接合部 (部品の中) から空気までの熱抵抗。データシートの「Thermal Resistance, Junction to Ambient」(RθJA)。最小のパッド (リード部品は空中) で測った値を入れます。自己発熱の計算で、回路図の部品の θ を空にしたとき、この値を使います (基板の銅の効きは、基板から足します)。大きい基板 (JEDEC 2s2p・1 in² の銅) の値は、ここに入れません"));
                 ui.add(egui::TextEdit::singleline(&mut self.rt_ja).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 200 (TO-92) / 62 (TO-220)"));
                 ui.end_row();
+                ui.label(i18n::tr("負荷容量 CL [pF] (水晶)")).on_hover_text(i18n::tr("水晶のデータシートの「Load Capacitance」(CL)。水晶の部品だけに入れます。ERC が、水晶の両端から GND へのコンデンサ 2 個 (と浮遊容量 約 5pF) がこの値になっているかを見ます"));
+                ui.add(egui::TextEdit::singleline(&mut self.rt_load).desired_width(80.0).min_size(egui::vec2(80.0, 0.0))).on_hover_text(i18n::tr("例: 18 / 12 / 8"));
+                ui.end_row();
             });
             if self.sheet.has_doc() {
                 if ui

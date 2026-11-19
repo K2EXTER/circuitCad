@@ -5,7 +5,7 @@ CLAUDE.md の表の元の文。各クレートの機能の幅が分かる。
 
 | クレート | 役割 |
 |---|---|
-| `sch-core` | 回路図モデル (`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、推奨の周辺部品を置く `companions.rs` (`Schematic::place_companions`: 部品の `CustomSymbol::companions` をピンの外側に縦に置き、ピンからの線と GND の記号か相手のピンへの線。同じピンの 2 つ目からは 3 升ずつ外へ)、ピンの電気的な種類 `pinkind.rs` (`PinKind`: 入力・出力・入出力・オープンドレイン・電源入力・電源出力・受動・NC、`guess` はデータシートの I/O の欄 → 名前。ERC は種類のあるピンで 出力どうし・入力だけのネット・つないだ NC を指摘し、電源ピンの点検にも使う)、ネット抽出 `netlist.rs` (`extract`, `net_at`, `erc` — 指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方を書く)、SPICE出力 `spice.rs`、ngspice方言 `ngspice.rs`、基板で入れ替えたピンを回路図へ戻す `backannotate.rs`、バス(`D[0..7]` のラベルと太い線。ネットの名前にはならず、点検だけ)`bus.rs`、書き込み用ピンがヘッダに出ているかの点検 `programming.rs`、階層(シートの記号と子シート。`flat()` の中で展開する。設計 `docs/hierarchy-design.md`)`hierarchy.rs`、複数の基板(E5)のつなぎの照合と全体の部品表 `system.rs`(下の「複数の基板」) |
+| `sch-core` | 回路図モデル (`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、推奨の周辺部品を置く `companions.rs` (`Schematic::place_companions`: 部品の `CustomSymbol::companions` をピンの外側に縦に置き、ピンからの線と GND の記号か相手のピンへの線。同じピンの 2 つ目からは 3 升ずつ外へ)、ピンの電気的な種類 `pinkind.rs` (`PinKind`: 入力・出力・入出力・オープンドレイン・電源入力・電源出力・受動・NC、`guess` はデータシートの I/O の欄 → 名前。ERC は種類のあるピンで 出力どうし・入力だけのネット・つないだ NC を指摘し、電源ピンの点検にも使う)、ネット抽出 `netlist.rs` (`extract`, `net_at`, `erc` — 指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方を書く)、SPICE出力 `spice.rs`、ngspice方言 `ngspice.rs`、基板で入れ替えたピンを回路図へ戻す `backannotate.rs`、バス(`D[0..7]` のラベルと太い線。ネットの名前にはならず、点検だけ)`bus.rs`、書き込み用ピンがヘッダに出ているかの点検 `programming.rs`、設計レビューの点検 `review.rs`(下の「設計レビューの点検」)、階層(シートの記号と子シート。`flat()` の中で展開する。設計 `docs/hierarchy-design.md`)`hierarchy.rs`、複数の基板(E5)のつなぎの照合と全体の部品表 `system.rs`(下の「複数の基板」) |
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`: ネットの役割・近くに置く組・離す組・バイパスの対応・道筋の測定 `Measure`・承知した例外 `Waiver`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が同じ型を使う |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
@@ -25,3 +25,14 @@ CLAUDE.md の表の元の文。各クレートの機能の幅が分かる。
 - **作っていて分かったこと**: 段 ① のサンプルは、ヘッダの 3 番のラベルの線が 4 番のピンを通っていて、両方の基板で SDA と SCL がつながっていた(試験用のラベルの付け方の、ピンの向きの決め方のせい)。照合は両側の名前を比べるので、同じ間違いが両方の基板にあると通ってしまう。全体のシミュレーションで、2 つの 0 V の電源が並んで解けなくなって見つかった。サンプルのヘッダのラベルを右に出すようにし、テストはヘッダの 4 本のピンが別々のネットにあることも見る。
 - 残り: ネットの名前の対応表。ヘッダとソケットで番号が鏡になる場合の既定。基板ごとの元に戻す履歴を切り替えで残す。ケーブルでつなぐ基板の置き方(今は重ねるだけ)。ネットの名前の対応表(SDA と I2C_SDA を同じとみなす)。コネクタの「相手の向き」(ヘッダとソケットで番号が鏡になる)の既定。基板ごとの元に戻す履歴を切り替えで残す。
 
+## 設計レビューの点検 (N1、2026-11-19)
+
+`sch-core/src/review.rs` の `review_problems` を `erc_all` が呼ぶ。つながりは正しいが「付けるべき部品が無い」失敗を、今の ERC と同じ `Problem` で出す。部品が何かは部品のデータ(`companions`・glyph・`ratings`・ピンの種類)で決め、名前で推し量らない。
+
+- **推奨の周辺部品** (`CustomSymbol::companions`): 同じ (ピン, つなぎ先, 種類) の行をまとめ、ピンのネットとつなぎ先 (GND か部品のピンのネット) の間に、その種類 (R・C・L。基本素子か、ライブラリ部品の glyph) の 2 端子の部品があるかを見る。無ければ注意「U1 の推奨のコンデンサがありません: CIN (330n、ピン1 (IN) と GND の間)」。コンデンサは合計が推奨の合計の 0.5 倍 (`TOO_SMALL`) 未満で「小さすぎます」。ピンがつなぎ先に直接つながっている (リセットを VCC に直結) なら何も言わない。ピンが未接続なら言わない (未接続の指摘がある)。リセットのプルアップは `R` の companion (`RRST 10k RESET → VCC のピン`) で表す。
+- **水晶の負荷容量**: glyph `crystal` で `ratings.load_pf` のある部品。両端 (GND でないピン 2 本) のどちらかに IC (glyph の無いライブラリ部品) がつながるときだけ見る (水晶だけの AC 解析の練習は除く)。両端から GND へのコンデンサ C1・C2 で CL = C1·C2/(C1+C2) + 浮遊容量 5 pF (`STRAY_PF`)、水晶の CL から 25 % (`LOAD_TOLERANCE`) 外れたら注意。目安の値は E12 に丸めた 2·(CL − 5 pF)(CL 18 pF → 27 pF)。片側だけ・両方無しも注意。
+- **IC の出力に直接の LED**: LED の片端が `PinKind::Output`/`Bidir` のピンのネット、もう片端が GND か電源 (電源記号・電源入力のピン・電圧源・レギュレータの出力)。電源から直接の LED は前からの ERC (`netlist.rs`) が言う。
+- **電源の入口の保護** (`Severity::Info`、新設): コネクタ (`Header` か、J・P・CN の部品番号のライブラリ部品) のピンが電源のネット (電源記号の名前か、IC の電源入力がつながる) にあり、ほかに電圧源・レギュレータの出力が無く、ネットにダイオード (glyph diode・zener・schottky・tvs、または SPICE の D) も MOSFET も無いとき、コネクタごとに 1 回。情報は一覧の最後 (`erc` で並べ替え)、画面は青の ℹ。
+- 同梱部品のデータ (2026-11-19 に足した): レギュレータ AMS1117 (10µ / 22µ タンタル)・78xx (0.33µ / 0.1µ)・L78L05 (同)・LM317 (0.1µ / 1µ)・MCP1700 (1µ / 1µ)、マイコン ATmega328P・ATmega2560・ATtiny85 のリセットのプルアップ 10k と VCC のバイパス 100n、水晶 XTAL_12MHz・16MHz の CL 18 pF。部品作成のフォームの定格の欄に「負荷容量 CL [pF] (水晶)」(`rt_load`)。
+- サンプルは、ライブラリ部品を回路図に埋め込んだ時の形で持つので、上のデータを足す前に作ったサンプルの部品には companions が無い (点検も出ない)。`regulator_heatsink.schjson` は作り直した。
+- テスト `review::tests` (レギュレータ・リセット・水晶・LED と入口)。

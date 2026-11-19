@@ -3258,6 +3258,63 @@ fn heatsink_schematic() -> sch_core::Schematic {
     s
 }
 
+/// The power budget sample: 9 V → LM7805 → 5 V (150 mA of load) → MCP1700 → 3.3 V (120 mA of load), each regulator with the
+/// capacitors its data sheet asks for. The loads are test current sources (a motor driver and LEDs on 5 V, a microcontroller and a
+/// radio on 3.3 V), as an electronic load would be.
+fn power_budget_schematic() -> sch_core::Schematic {
+    let (big, small) = (library_part("LM7805"), library_part("MCP1700-3302"));
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "9".into();
+    label_pin(&mut s, v1, "+", "VIN");
+    label_pin(&mut s, v1, "-", "GND");
+    // (part, input net, output net, x, load on the output)
+    for (k, (part, input, output, load)) in [(&big, "VIN", "5V", "150m"), (&small, "5V", "3V3", "120m")].into_iter().enumerate() {
+        let x = 30 + 50 * k as i32;
+        let u = s.add_custom(part.symbol(), &part.default_value(), &part.footprint_name(), (x, -4), 0);
+        if k == 0 {
+            // the data sheet's θ from the junction to the air (TO-220 standing in the air)
+            s.components[u].theta = 50.0;
+        }
+        let (i, o, g) = (big_or_small_pin(part, "IN"), big_or_small_pin(part, "OUT"), big_or_small_pin(part, "GND"));
+        label_pin(&mut s, u, &i, input);
+        label_pin(&mut s, u, &o, output);
+        label_pin(&mut s, u, &g, "GND");
+        // the data sheet's capacitors (the part's companions): on the input and on the output
+        for (n, comp) in part.companions.iter().enumerate() {
+            let c = s.add(Kind::Capacitor, (x - 8 + 16 * n as i32, 14), 1);
+            s.components[c].value = comp.value.clone();
+            label_pin(&mut s, c, "1", if comp.pin == i { input } else { output });
+            label_pin(&mut s, c, "2", "GND");
+        }
+        let l = s.add(Kind::ISource, (x + 16, 14), 1);
+        s.components[l].value = load.into();
+        label_pin(&mut s, l, "-", output);
+        label_pin(&mut s, l, "+", "GND");
+    }
+    s
+}
+
+/// The number of a library part's pin by its name (`IN` also finds `VIN`).
+fn big_or_small_pin(part: &part_lib::PartDef, name: &str) -> String {
+    part.pins.iter().find(|p| p.name == name || p.name == format!("V{name}")).map(|p| p.number.clone()).unwrap_or_else(|| panic!("no pin {name}"))
+}
+
+/// Generates docs/examples/power_budget.schjson: `cargo test -p app write_power_budget_example -- --ignored`
+#[test]
+#[ignore]
+fn write_power_budget_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("power_budget.schjson"), serde_json::to_string_pretty(&power_budget_schematic()).unwrap()).unwrap();
+}
+
+#[test]
+fn power_budget_sample_is_what_the_generator_makes() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/power_budget.schjson");
+    let s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(s, power_budget_schematic(), "regenerate with write_power_budget_example");
+}
+
 /// Generates docs/examples/regulator_heatsink.schjson: `cargo test -p app write_heatsink_example -- --ignored`
 #[test]
 #[ignore]

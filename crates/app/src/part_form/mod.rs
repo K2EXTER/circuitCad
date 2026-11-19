@@ -251,6 +251,8 @@ pub struct PartForm {
     pub rt_jc: String,
     /// θJA (K/W), junction to air on the smallest pads, and what 「PDF の熱の表から読む」 said.
     pub rt_ja: String,
+    /// A crystal's load capacitance CL (pF): the design review checks the capacitors beside it against it.
+    pub rt_load: String,
     pub rt_heat_msg: Vec<(bool, String)>,
     /// 「推奨の周辺部品」: one per line (`companion_fill.rs`), and what 「PDF から読む」 said.
     pub companions_text: String,
@@ -436,6 +438,7 @@ impl Default for PartForm {
             rt_derate: String::new(),
             rt_jc: String::new(),
             rt_ja: String::new(),
+            rt_load: String::new(),
             rt_heat_msg: vec![],
             companions_text: String::new(),
             companions_msg: vec![],

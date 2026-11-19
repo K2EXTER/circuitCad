@@ -330,6 +330,8 @@ pub struct SchEditor {
     pub(crate) heat: selfheat::HeatUi,
     /// "電池の持ち時間": the stretch to average and the condition to keep working, as typed (saved with the sheet), and the last answer. (`battery.rs`)
     bat: battery::BatteryInputs,
+    /// "電源の予算表": the rails of the last run, as a tree. (`budget.rs`)
+    budget: Option<Result<Vec<sim_core::budget::Rail>, String>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -823,6 +825,7 @@ impl Default for SchEditor {
             param_in: Default::default(),
             heat: Default::default(),
             bat: Default::default(),
+            budget: None,
         }
     }
 }
@@ -901,6 +904,7 @@ mod bench_data;
 mod power_ui;
 mod power_on;
 mod battery;
+mod budget;
 mod for_bench;
 mod requirements;
 mod wizard;

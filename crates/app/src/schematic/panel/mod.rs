@@ -17,6 +17,7 @@ const ANALYSIS_SECTIONS: &[(&str, &str, &str)] = &[
     ("noise", "ノイズ解析", "熱雑音・ショット雑音が出力にどれだけ出るかを見ます。周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示"),
     ("impedance", "インピーダンス (ネットから見た値)", "あるネットから回路の中を見たインピーダンスを、周波数ごとに求めます。電源ラインの出力インピーダンスとバイパスコンデンサの効き (山と谷)、アンプの出力・入力インピーダンスが分かります。周波数範囲・点数は AC解析の欄を共用"),
     ("variation", "温度とばらつき", "温度を変える、部品の値を許容差の範囲でランダムに変えて何度も計算する、などで、ずれる範囲を調べます。縦棒が高いところほど、よく出る値です。「感度」は、どの部品が結果を決めているかを効く順に並べます"),
+    ("budget", "電源の予算表 (あと何 mA)", "電源のレールごとに、流れている電流と定格、あと何 mA つなげるか、レギュレータの発熱と効率を、つながりの順 (電池 → 5V → 3.3V) の表で見ます。電源の容量不足を、動かす前に見つけます"),
     ("battery", "電池の持ち時間", "電池で動く回路が、何時間・何日もつかを出します。過渡解析の平均の電流 (眠っている時間と、起きて動く時間を合わせたもの) と電池の容量から求め、電池が減って回路が止まる電圧 (レギュレータのドロップアウトなど) も見ます"),
     ("spec", "スペック (合否の表)", "作りたい回路の目標値 (出力電圧は 4.75〜5.25V、カットオフは 1kHz 前後など) を書いておくと、解析の結果が合格かどうかを ✓/× で表示します。値を変えるたびに判定がやり直されます"),
     ("selfheat", "自己発熱 (部品の温度上昇)", "電流が流れる抵抗・ダイオード・トランジスタは、自分の電力で温まります。温度がどれだけ上がるか、温度係数のある抵抗は値が、ダイオード・トランジスタは電圧と電流がどれだけ動くかを、熱抵抗 (K/W) から計算します。シャント抵抗、精度が要る分圧の抵抗、バイアスの決め方の確認に"),
@@ -38,7 +39,7 @@ const ANALYSIS_GROUPS: &[(&str, &str, &[&str])] = &[
     ("基本", "まずここから。電圧・電流 (DC)、時間の変化 (過渡)、周波数の特性 (AC) を見ます", &["dc", "tran", "ac"]),
     ("値を振って調べる", "入力・部品の値・温度・ばらつきを変えて、結果がどれだけ動くかを見ます", &["sweep", "param", "variation"]),
     ("周波数と安定性", "帰還が安定か、電源の揺れや雑音がどれだけ出るか、ネットのインピーダンスを、周波数ごとに見ます", &["loopgain", "polezero", "rootlocus", "psrr", "cmrr", "noise", "impedance"]),
-    ("確かめる", "目標の値に合っているか、部品が熱くならないか、計算が何を前提にしているかを確かめます", &["spec", "battery", "selfheat", "coverage"]),
+    ("確かめる", "目標の値に合っているか、部品が熱くならないか、計算が何を前提にしているかを確かめます", &["spec", "budget", "battery", "selfheat", "coverage"]),
     ("壊れたとき", "実物が動かないときの原因探しと、部品が壊れたら回路がどうなるかの練習です", &["diagnose", "fault"]),
 ];
 
@@ -253,7 +254,7 @@ impl SchEditor {
         // it sits in the bottom panel, whose edge is the line above it (a line of its own here made the line double)
         ui.add_space(crate::theme::SPACE_S);
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text(i18n::tr("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text(i18n::tr("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意、青 = 情報)。データシートが言う部品 (レギュレータのコンデンサ・リセットのプルアップ) の付け忘れ、水晶のコンデンサの値、LED の抵抗の付け忘れも見ます。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です")).clicked() {
             self.run_erc();
         }
         // the other two checks of the design: its requirements table, and areas left out of the ERC while drawing
@@ -279,6 +280,7 @@ impl SchEditor {
             let (mark, color) = match p.severity {
                 Severity::Error => ("✖", crate::theme::ERROR),
                 Severity::Warning => ("▲", crate::theme::WARN),
+                Severity::Info => ("ℹ", crate::theme::INFO),
             };
             let sheet = if self.sch.sheet_count() > 1 && p.at.is_some() { format!("[{}] ", self.sch.sheet_name(p.sheet)) } else { String::new() };
             let label = egui::RichText::new(format!("{mark} {sheet}{}", i18n::tr_dyn(&p.message))).color(color);
@@ -394,6 +396,7 @@ impl SchEditor {
                 "spec" => self.panel_spec(ui),
                 "coverage" => self.panel_coverage(ui),
                 "battery" => self.panel_battery(ui),
+                "budget" => self.panel_budget(ui),
                 "selfheat" => {
                     self.panel_selfheat(ui);
                     self.panel_heat_tran(ui);
@@ -479,6 +482,7 @@ impl SchEditor {
             "diagnose" => self.diag.result.is_some(),
             "fault" => self.fault_ui.view.is_some() || !self.fault_ui.scan.is_empty(),
             "battery" => self.bat.view.is_some(),
+            "budget" => self.budget.is_some(),
             _ => false,
         }
     }

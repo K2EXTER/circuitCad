@@ -271,7 +271,7 @@ impl PartForm {
         };
         // a power inductor's rated currents have no fields of their own: kept from the part being edited
         let coil = self.orig.as_ref().and_then(|d| d.ratings.as_ref()).and_then(|r| r.coil.clone());
-        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, t_max: num("最高温度", &self.rt_t)?, derate_from: num("電力を下げ始める温度", &self.rt_derate)?, theta_jc: num("熱抵抗 θjc", &self.rt_jc)?, theta_ja: num("熱抵抗 θja", &self.rt_ja)?, zth: zth_stages(&self.rt_zth)?, rows, ripple, life, coil };
+        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, t_max: num("最高温度", &self.rt_t)?, derate_from: num("電力を下げ始める温度", &self.rt_derate)?, theta_jc: num("熱抵抗 θjc", &self.rt_jc)?, theta_ja: num("熱抵抗 θja", &self.rt_ja)?, load_pf: num("負荷容量", &self.rt_load)?, zth: zth_stages(&self.rt_zth)?, rows, ripple, life, coil };
         Ok(Some(r).filter(|r| !r.is_empty()))
     }
 

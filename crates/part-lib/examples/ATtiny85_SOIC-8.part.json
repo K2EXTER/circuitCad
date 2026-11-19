@@ -54,5 +54,9 @@
     "pad_len": 1.85,
     "pad_width": 0.6
   },
-  "programming": [{"name": "ISP (SPI)", "pins": ["PB5/RESET", "PB0", "PB1", "PB2", "VCC", "GND"]}]
+  "programming": [{"name": "ISP (SPI)", "pins": ["PB5/RESET", "PB0", "PB1", "PB2", "VCC", "GND"]}],
+  "companions": [
+    {"name": "RRST", "kind": "R", "value": "10k", "pin": "1", "to": "8", "note": "RESET のプルアップ (RESET を入出力に使うなら不要)"},
+    {"name": "CVCC", "kind": "C", "value": "100n", "pin": "8", "to": "GND", "note": "VCC のバイパス"}
+  ]
 }

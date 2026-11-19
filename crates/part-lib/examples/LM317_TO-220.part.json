@@ -67,5 +67,9 @@
         "value": "2V (代表)"
       }
     ]
-  }
+  },
+  "companions": [
+    {"name": "CIN", "kind": "C", "value": "100n", "pin": "3", "to": "GND"},
+    {"name": "COUT", "kind": "C", "value": "1u", "pin": "2", "to": "GND", "note": "タンタル 1µF (過渡応答の改善)"}
+  ]
 }
