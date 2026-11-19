@@ -104,6 +104,18 @@ fn is_connector(refdes: &str) -> bool {
     matches!(letters.to_ascii_uppercase().as_str(), "J" | "CN" | "P" | "X" | "BT")
 }
 
+/// Whether the bench guide `id` is about something on this board: surface-mount soldering when a part has pads without holes, the
+/// bootloader when an ATmega is there, the 100-pin soldering when a part has 100 pads or more.
+fn guide_fits(id: &str, board: &Board) -> bool {
+    let pads_of = |r: &str| board.pads.iter().filter(|p| p.refdes == r).count();
+    match id {
+        "solder" => board.pads.iter().any(|p| !p.refdes.is_empty() && p.drill.is_none()),
+        "bootload" => board.parts.iter().any(|p| p.value.to_ascii_uppercase().starts_with("ATMEGA")),
+        "solder_tqfp100" => board.parts.iter().any(|p| pads_of(&p.refdes) >= 100),
+        _ => true,
+    }
+}
+
 fn is_ground(net: &str) -> bool {
     let n = net.to_ascii_uppercase();
     n == "GND" || n == "0" || n == "AGND" || n == "DGND" || n == "VSS"
@@ -259,7 +271,12 @@ impl BenchTab {
         }
         ui.separator();
         ui.label(egui::RichText::new(i18n::tr("はんだ付けの手順とチェック表")).strong());
-        for g in crate::bench_guide::GUIDES {
+        // only the guides for what is on this board (a 555 blinker was offered the ATmega2560's 100 pins and its bootloader)
+        let fits: Vec<_> = crate::bench_guide::GUIDES.iter().filter(|g| guide_fits(g.id, board)).collect();
+        if fits.is_empty() {
+            ui.label(spaced("この基板に合う手順書はまだありません。リード部品は、背の低い順に足を穴に通し、裏からはんだ付けして、余った足を切ります。向きのある部品は、付ける前に向きの印を確かめます。").color(NOTE));
+        }
+        for g in fits {
             if ui.button(i18n::tr(g.title)).on_hover_text(i18n::tr(g.intro)).clicked() {
                 *action = Some(BenchAction::Guide(g.id));
             }
@@ -544,6 +561,26 @@ mod tests {
         assert!(app.mode == Mode::Bench, "drawing the steps does not switch the tab");
         assert!(app.power_on.result_for_test().is_some(), "the power-on step works the currents out by itself");
         assert!(!app.power_on.open, "and does not open the window as well");
+    }
+
+    // Found by a usability test (2026-11-19): a 555 blinker's assembly step offered the ATmega2560's 100-pin soldering and its
+    // bootloader.
+    #[test]
+    fn only_the_guides_for_what_is_on_the_board_are_offered() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let board_of = |name: &str| {
+            let mut sch = SchEditor::default();
+            sch.load_path(root.join(name));
+            let mut ed = crate::board_editor::BoardEditor::default();
+            ed.import_from_schematic(&sch);
+            ed.board
+        };
+        let fits = |b: &Board| crate::bench_guide::GUIDES.iter().filter(|g| guide_fits(g.id, b)).map(|g| g.id).collect::<Vec<_>>();
+        // the 555 blinker: chip parts (0805) and a DIP-8, no ATmega
+        assert_eq!(fits(&board_of("ne555_blinker.schjson")), vec!["solder"]);
+        // the minimal Arduino: an ATmega328P (32 pins)
+        let arduino = fits(&board_of("arduino_minimal.schjson"));
+        assert!(arduino.contains(&"bootload") && !arduino.contains(&"solder_tqfp100"), "{arduino:?}");
     }
 
     #[test]

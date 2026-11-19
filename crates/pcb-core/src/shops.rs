@@ -52,10 +52,25 @@ fn encode(text: &str) -> String {
     out
 }
 
-/// What to type in a shop's search box: the value and the chip size ("10k R_0805" -> "10k 0805").
+/// The package families whose short name a shop knows ("DIP-8", "SOT-23", "TO-92"): the footprint's name up to its first `_`.
+const PACKAGES: &[&str] = &["DIP", "SOIC", "SOP", "SSOP", "TSSOP", "MSOP", "SOT", "TO-", "QFP", "TQFP", "LQFP", "QFN", "DFN", "SOD", "SMA", "SMB"];
+
+/// What to type in a shop's search box: the value and what a shop knows of the footprint: the chip size ("10k R_0805" -> "10k 0805"),
+/// a package's short name ("NE555 DIP-8_W7.62" -> "NE555 DIP-8"), a pin header as such ("ピンヘッダ 1x2"); a footprint name of this
+/// program alone (R_Axial_10.16, CP_Elec_6.3x5.4) is left out, a shop would find nothing with it (2026-11-19).
 pub fn search_keyword(value: &str, footprint: &str) -> String {
-    let size = footprint.split(['_', '-']).find(|t| t.len() == 4 && t.chars().all(|c| c.is_ascii_digit())).unwrap_or(footprint);
-    format!("{} {}", crate::assembly::bom_value(value), size)
+    if let Some(rest) = footprint.strip_prefix("PinHeader_") {
+        return format!("ピンヘッダ {}", rest.split('_').next().unwrap_or(rest));
+    }
+    let v = crate::assembly::bom_value_of(value, footprint);
+    if let Some(size) = footprint.split(['_', '-']).find(|t| t.len() == 4 && t.chars().all(|c| c.is_ascii_digit())) {
+        return format!("{v} {size}");
+    }
+    let head = footprint.split('_').next().unwrap_or("");
+    if PACKAGES.iter().any(|p| head.starts_with(p)) && !v.to_ascii_uppercase().contains(&head.to_ascii_uppercase()) {
+        return format!("{v} {head}");
+    }
+    v
 }
 
 /// How a shop is reached for one line of the list.
@@ -114,7 +129,7 @@ pub fn lines(board: &Board) -> Vec<Line> {
     let mut groups: BTreeMap<Key, Vec<String>> = BTreeMap::new();
     for p in board.parts.iter().filter(|p| !crate::assembly::is_bare_copper(&p.footprint)) {
         let codes = board.part_shops.get(&p.refdes).cloned().unwrap_or_default();
-        groups.entry((crate::assembly::bom_value(&p.value), p.footprint.clone(), codes)).or_default().push(p.refdes.clone());
+        groups.entry((crate::assembly::bom_value_of(&p.value, &p.footprint), p.footprint.clone(), codes)).or_default().push(p.refdes.clone());
     }
     let mut out: Vec<Line> = groups
         .into_iter()
@@ -174,7 +189,16 @@ mod tests {
     #[test]
     fn keyword_uses_the_chip_size() {
         assert_eq!(search_keyword("10k", "R_0805"), "10k 0805");
-        assert_eq!(search_keyword("100u ESR=0.05", "CP_Elec_6.3x5.4"), "100u CP_Elec_6.3x5.4");
+        // a footprint name only this program knows is left out (found by a usability test, 2026-11-19: "NE555 DIP-8_W7.62")
+        assert_eq!(search_keyword("100u ESR=0.05", "CP_Elec_6.3x5.4"), "100u");
+        assert_eq!(search_keyword("NE555", "DIP-8_W7.62"), "NE555 DIP-8");
+        assert_eq!(search_keyword("2N3904", "TO-92"), "2N3904 TO-92");
+        assert_eq!(search_keyword("10k", "R_Axial_10.16"), "10k");
+        assert_eq!(search_keyword("5", "PinHeader_1x2_PM"), "ピンヘッダ 1x2");
+        assert_eq!(crate::assembly::bom_value_of("5", "PinHeader_1x2_PM"), "ピンヘッダ 1x2 (電源 5V)");
+        assert_eq!(crate::assembly::bom_value_of("3.3V", "PinHeader_1x2_PM"), "ピンヘッダ 1x2 (電源 3.3V)");
+        assert_eq!(crate::assembly::bom_value_of("CONN", "PinHeader_1x4"), "CONN", "a header that is not a supply keeps its value");
+        assert_eq!(crate::assembly::bom_value_of("50k POS=100", "Pot_1x3_P2.54"), "50k");
     }
 
     #[test]

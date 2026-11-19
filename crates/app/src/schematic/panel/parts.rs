@@ -157,24 +157,29 @@ impl SchEditor {
             let f = self.lib.filter.to_lowercase();
             let filtering = !f.is_empty() || !self.lib.cat.is_empty() || self.lib.sim_only;
             // which parts pass the search / category / simulation filters
-            let shown: Vec<usize> = (0..self.library.len())
-                .filter(|&i| {
+            // each hit with how well it matched: the name first, then the series, category, pins and footprint, and the description last
+            // (a search for "555" listed three electrolytics whose descriptions give a ripple current of 555 mA among the timer)
+            let mut ranked: Vec<(u8, usize)> = (0..self.library.len())
+                .filter_map(|i| {
                     let d = &self.library[i];
                     if (!self.lib.cat.is_empty() && self.lib.cat != cat_of(i)) || (self.lib.sim_only && d.sim.is_none()) {
-                        return false;
+                        return None;
                     }
                     // a series' other values only when the search is that part number
                     if index.in_series[i] && !reps.contains(&i) {
-                        return !f.is_empty() && d.name.to_lowercase() == f;
+                        return (!f.is_empty() && d.name.to_lowercase() == f).then_some((0, i));
                     }
                     if f.is_empty() {
-                        return true;
+                        return Some((0, i));
                     }
                     let pins = d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ");
                     let series = part_lib::series::member(&d.name).map(|(s, _)| format!("{} {} {}", s.series, s.maker, s.quality.join(" "))).unwrap_or_default();
-                    [d.name.as_str(), d.description.as_str(), cat_of(i), pins.as_str(), d.footprint_name().as_str(), series.as_str()].iter().any(|t| t.to_lowercase().contains(&f))
+                    match_rank(&f, &d.name, &[cat_of(i), pins.as_str(), d.footprint_name().as_str(), series.as_str()], &d.description).map(|r| (r, i))
                 })
                 .collect();
+            ranked.sort_by_key(|(rank, _)| *rank);
+            let rank_of: std::collections::HashMap<usize, u8> = ranked.iter().map(|&(r, i)| (i, r)).collect();
+            let shown: Vec<usize> = ranked.into_iter().map(|(_, i)| i).collect();
             // the list fills what is left of the window (the part card and "部品を作る" stay below it)
             let list_height = (ui.clip_rect().bottom() - ui.cursor().top() - below - 8.0).clamp(120.0, 900.0);
             let by_name = |n: &String| self.library.iter().position(|d| &d.name == n);
@@ -226,8 +231,10 @@ impl SchEditor {
                     }
                 }
                 // grouped by category (folded unless searching), then by name
+                // within a category the better matches first; the categories holding a name match before the others
+                let rank = |i: usize| rank_of.get(&i).copied().unwrap_or(0);
                 let mut order = shown.clone();
-                order.sort_by_key(|&i| (cat_of(i), self.library[i].name.to_lowercase()));
+                order.sort_by_key(|&i| (cat_of(i), rank(i), self.library[i].name.to_lowercase()));
                 let mut groups: Vec<(String, Vec<usize>)> = vec![];
                 for i in order {
                     let c = cat_of(i).to_string();
@@ -236,6 +243,7 @@ impl SchEditor {
                         _ => groups.push((c, vec![i])),
                     }
                 }
+                groups.sort_by_key(|(_, ids)| ids.iter().map(|&i| rank(i)).min().unwrap_or(0));
                 if groups.is_empty() {
                     ui.small(i18n::tr("条件に合う部品がありません。検索の文字やカテゴリを変えてみてください"));
                 }
@@ -403,6 +411,19 @@ pub(super) fn lib_hover(d: &part_lib::PartDef) -> String {
             }
         }
     t
+}
+
+/// How well the search `f` (lower case) matches a library part: 0 in its name, 1 in its category, pins, footprint or series (`others`),
+/// 2 only in its description, None not at all. The list puts the better matches first.
+fn match_rank(f: &str, name: &str, others: &[&str], description: &str) -> Option<u8> {
+    let has = |t: &str| t.to_lowercase().contains(f);
+    if has(name) {
+        Some(0)
+    } else if others.iter().any(|t| has(t)) {
+        Some(1)
+    } else {
+        has(description).then_some(2)
+    }
 }
 
 /// Is the part one value of a bundled series (shown as the series' one row)?
@@ -658,6 +679,16 @@ mod drum_tests {
         assert_eq!(super::trim_figure(100), "1.0");
         assert_eq!(super::trim_figure(102), "1.02");
         assert_eq!(super::trim_figure(976), "9.76");
+    }
+
+    // Found by a usability test (2026-11-19): "555" listed three electrolytics (a ripple current of 555 mA in their descriptions)
+    // among the timer. They still match, after it.
+    #[test]
+    fn a_name_match_comes_before_a_description_match() {
+        assert_eq!(super::match_rank("555", "NE555", &["タイマー"], "タイマー IC"), Some(0));
+        assert_eq!(super::match_rank("555", "UPW1C221MPD", &["電解コンデンサ"], "許容リップル電流 555 mA rms"), Some(2));
+        assert_eq!(super::match_rank("dip-8", "LM358", &["オペアンプ", "DIP-8_W7.62"], ""), Some(1));
+        assert_eq!(super::match_rank("555", "LM358", &[], "op amp"), None);
     }
 }
 

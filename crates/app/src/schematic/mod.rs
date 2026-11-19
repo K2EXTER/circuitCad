@@ -102,6 +102,9 @@ pub struct SchEditor {
     tool: Tool,
     place: Kind,
     rot: u8,
+    /// The part the placing rotation was set for: choosing another part starts it upright again (a resistor turned with R left the
+    /// next GND symbol on its side, and a part put down turned the wrong way joins the wrong pins).
+    rot_for: Option<(Kind, Option<usize>)>,
     label_text: String,
     /// The label tool puts a port of the sheet (a pin of the sheet symbol) of this direction, not a net label.
     label_port: Option<sch_core::PortDir>,
@@ -798,6 +801,7 @@ impl Default for SchEditor {
             tool: Tool::Place,
             place: Kind::Resistor,
             rot: 0,
+            rot_for: None,
             label_text: "SIG".into(),
             label_port: None,
             sheet_trail: vec![],

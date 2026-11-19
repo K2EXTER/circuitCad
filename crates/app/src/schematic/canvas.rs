@@ -31,6 +31,16 @@ impl StatusHold {
 }
 
 impl SchEditor {
+    /// The placing rotation (R) belongs to the part being placed: another part chosen starts upright. Several of the same part keep
+    /// the turn (a row of resistors on their side).
+    pub(super) fn rotation_follows_the_part(&mut self) {
+        let now = (self.place, self.place_lib);
+        if self.rot_for.is_some_and(|was| was != now) {
+            self.rot = 0;
+        }
+        self.rot_for = Some(now);
+    }
+
     /// Fits the view when a file or sheet was just opened, and keeps a running lesson's (or challenge's) circuit fitted left of its window while the
     /// canvas changes size; a view the learner has moved is left alone.
     pub(super) fn fit_if_needed(&mut self, rect: Rect) {
@@ -104,6 +114,7 @@ impl SchEditor {
         let snapped: Pt = (g.0.round() as i32, g.1.round() as i32);
         let sp = self.to_screen(rect, (snapped.0 as f32, snapped.1 as f32));
         self.draw_noise_hover(&painter, snapped, sp);
+        self.rotation_follows_the_part();
         self.draw_tool_ghost(&painter, rect, snapped, sp);
         if !self.noise_pick {
             let readout = format!("({}, {})  部品 {}  配線 {}", snapped.0, snapped.1, self.sch.components.len(), self.sch.wires.len());
@@ -311,5 +322,28 @@ mod tests {
         press(&mut e, egui::Key::R);
         assert_eq!(e.sch.components[r].rot, 1, "the part on the sheet stays");
         assert_eq!(e.rot, (before + 1) % 4);
+    }
+}
+
+#[cfg(test)]
+mod rotation_tests {
+    use super::*;
+
+    // Found by a usability test (2026-11-19): a resistor turned with R left the next GND symbol on its side.
+    #[test]
+    fn another_part_chosen_starts_upright_and_the_same_part_keeps_its_turn() {
+        let mut e = SchEditor::default();
+        e.place = Kind::Resistor;
+        e.rotation_follows_the_part();
+        e.rot = 1;
+        e.rotation_follows_the_part();
+        assert_eq!(e.rot, 1, "the next resistor keeps the turn");
+        e.place = Kind::Ground;
+        e.rotation_follows_the_part();
+        assert_eq!(e.rot, 0, "GND starts upright");
+        e.rot = 2;
+        e.place_lib = Some(0);
+        e.rotation_follows_the_part();
+        assert_eq!(e.rot, 0, "a library part is another part");
     }
 }

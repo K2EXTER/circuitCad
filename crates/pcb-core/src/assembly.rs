@@ -24,6 +24,21 @@ pub(crate) fn bom_value(value: &str) -> String {
     }
 }
 
+/// The value in the bill of materials and the purchase list for a part with `footprint`: `bom_value`, and for a pin header that
+/// stands for a supply on the schematic (its value is the voltage: "5") what is bought, "ピンヘッダ 1x2 (電源 5V)" (a usability
+/// test found "5" as the part to buy, 2026-11-19).
+pub(crate) fn bom_value_of(value: &str, footprint: &str) -> String {
+    let v = bom_value(value);
+    if let Some(rest) = footprint.strip_prefix("PinHeader_") {
+        let volts = v.trim_end_matches(['V', 'v']);
+        if !volts.is_empty() && volts.parse::<f64>().is_ok() {
+            let size = rest.split('_').next().unwrap_or(rest);
+            return format!("ピンヘッダ {size} (電源 {volts}V)");
+        }
+    }
+    v
+}
+
 /// A footprint that is only copper on the board (a test point pad): nothing is bought or mounted for it, so it stays out of the
 /// bill of materials, the placement list, the purchase list and the 3D view.
 pub fn is_bare_copper(footprint: &str) -> bool {
@@ -36,7 +51,7 @@ pub fn bom_csv(board: &Board) -> String {
     let mut groups: BTreeMap<(String, String, String), Vec<String>> = BTreeMap::new();
     for p in board.parts.iter().filter(|p| !is_bare_copper(&p.footprint)) {
         let lcsc = board.part_shops.get(&p.refdes).and_then(|s| s.get("lcsc")).map(|c| c.trim().to_string()).unwrap_or_default();
-        groups.entry((bom_value(&p.value), p.footprint.clone(), lcsc)).or_default().push(p.refdes.clone());
+        groups.entry((bom_value_of(&p.value, &p.footprint), p.footprint.clone(), lcsc)).or_default().push(p.refdes.clone());
     }
     let mut rows: Vec<(String, String, String, Vec<String>)> = groups.into_iter().map(|((v, f, l), mut r)| {
         r.sort_by_key(|x| natural_key(x));
