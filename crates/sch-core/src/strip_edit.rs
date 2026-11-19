@@ -4,7 +4,7 @@
 //!
 //! Every change gives a new layout; whether it still joins what the schematic joins is `strip_check`'s to say, run again after each.
 
-use crate::stripboard::{strip_layout, At, Link, StripLayout};
+use crate::stripboard::{strip_layout_with, At, Link, StripLayout, StripOptions};
 use crate::{extract, Schematic};
 use std::collections::BTreeMap;
 
@@ -161,8 +161,8 @@ pub fn cut_toggled(l: &StripLayout, at: At) -> StripLayout {
 /// A saved layout in step with the schematic: the parts no longer in it (or whose pins changed) go, the parts new to it are laid out
 /// as the automatic layout would and put to the right of the board, and every other part, link and cut stays where it was. The
 /// links the new parts need are not drawn: the check names the nets left apart.
-pub fn synced(s: &Schematic, saved: &StripLayout) -> StripLayout {
-    let auto = strip_layout(s);
+pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLayout {
+    let auto = strip_layout_with(s, opt);
     let mut out = saved.clone();
     let pins = |leads: &[(String, At)]| {
         let mut v: Vec<&String> = leads.iter().map(|(p, _)| p).collect();
@@ -203,7 +203,7 @@ pub fn synced(s: &Schematic, saved: &StripLayout) -> StripLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stripboard::strip_check;
+    use crate::stripboard::{strip_check, strip_layout};
 
     fn blinker() -> Schematic {
         serde_json::from_str(include_str!("../../../docs/examples/ne555_blinker.schjson")).unwrap()
@@ -254,16 +254,16 @@ mod tests {
         let auto = strip_layout(&s);
         let first = auto.parts.iter().find(|p| p.leads.len() == 2).unwrap().refdes.clone();
         let saved = part_moved(&auto, &first, 0, 1).unwrap();
-        assert_eq!(synced(&s, &saved), saved, "nothing changed: nothing to do");
+        assert_eq!(synced(&s, &saved, StripOptions::default()), saved, "nothing changed: nothing to do");
         let mut more = s.clone();
         let k = more.add(crate::Kind::Resistor, (100, 100), 0);
         let added = more.components[k].refdes.clone();
-        let l = synced(&more, &saved);
+        let l = synced(&more, &saved, StripOptions::default());
         let r = l.parts.iter().find(|p| p.refdes == added).expect("the new resistor");
         assert!(r.leads.iter().all(|(_, a)| a.1 > saved.cols), "{:?} right of {} columns", r.leads, saved.cols);
         assert_eq!(l.parts.iter().find(|p| p.refdes == first), saved.parts.iter().find(|p| p.refdes == first), "a moved part stays");
         let mut fewer = s.clone();
         fewer.components.retain(|c| c.refdes != first);
-        assert!(synced(&fewer, &saved).parts.iter().all(|p| p.refdes != first));
+        assert!(synced(&fewer, &saved, StripOptions::default()).parts.iter().all(|p| p.refdes != first));
     }
 }

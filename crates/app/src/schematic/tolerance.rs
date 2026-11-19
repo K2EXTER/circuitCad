@@ -33,6 +33,8 @@ pub struct SheetSettings {
     pub breadboard: Option<sch_core::breadboard::Layout>,
     /// The stripboard / perfboard layout (`breadboard/strip_view.rs`, B5) once the person changed it by hand; None = laid out by itself.
     pub stripboard: Option<sch_core::stripboard::StripLayout>,
+    /// The stripboard / perfboard's size, width × height in mm (None: as big as the layout takes).
+    pub strip_size: Option<(f32, f32)>,
     /// The Arduino sketch of each microcontroller board on the sheet (refdes → its text), run beside the circuit (B6 ⑤).
     pub sketches: std::collections::BTreeMap<String, String>,
 }
@@ -57,6 +59,7 @@ impl Default for SheetSettings {
             bat_vmin: String::new(),
             breadboard: None,
             stripboard: None,
+            strip_size: None,
             sketches: Default::default(),
         }
     }
@@ -104,6 +107,9 @@ pub fn with_settings(sheet: &mut serde_json::Value, t: &SheetSettings) {
     {
         obj.insert("stripboard".into(), v);
     }
+    if let Some((w, h)) = t.strip_size {
+        obj.insert("strip_size".into(), serde_json::json!([w, h]));
+    }
     if !t.sketches.is_empty() {
         obj.insert("sketches".into(), serde_json::json!(t.sketches));
     }
@@ -136,6 +142,7 @@ pub fn take_settings(sheet: &mut serde_json::Value) -> SheetSettings {
     // a layout that does not read (an older or newer form) is laid out again
     t.breadboard = obj.remove("breadboard").and_then(|v| serde_json::from_value(v).ok());
     t.stripboard = obj.remove("stripboard").and_then(|v| serde_json::from_value(v).ok());
+    t.strip_size = obj.remove("strip_size").and_then(|v| serde_json::from_value(v).ok());
     t.sketches = obj.remove("sketches").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     if let Some(v) = obj.remove("battery") {
         for (key, slot) in [("from", &mut t.bat_from), ("to", &mut t.bat_to), ("node", &mut t.bat_node), ("v_min", &mut t.bat_vmin)] {
@@ -167,6 +174,7 @@ impl SchEditor {
             bat_vmin: self.bat.vmin.clone(),
             breadboard: self.breadboard.clone(),
             stripboard: self.stripboard.clone(),
+            strip_size: self.strip_size,
             sketches: self.sketches.clone(),
         }
     }
@@ -190,6 +198,7 @@ impl SchEditor {
         self.bat.vmin = t.bat_vmin.clone();
         self.breadboard = t.breadboard.clone();
         self.stripboard = t.stripboard.clone();
+        self.strip_size = t.strip_size;
         self.sketches = t.sketches.clone();
         self.saved_tol = t;
     }

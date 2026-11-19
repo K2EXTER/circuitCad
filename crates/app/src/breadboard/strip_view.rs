@@ -5,7 +5,7 @@
 use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::strip_edit::{area_moved, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_link, without_link};
-use sch_core::stripboard::{hole_name, strip_check, strip_layout, At, StripLayout};
+use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, At, StripLayout, StripOptions};
 
 /// What the person builds on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -45,8 +45,8 @@ enum StripDrag {
 #[derive(Default)]
 pub struct StripState {
     pub tool: StripTool,
-    /// The layout made from the schematic, by the schematic's edit count and part count it was made at.
-    auto: Option<(u64, usize, StripLayout)>,
+    /// The layout made from the schematic, by the schematic's edit count, part count and the options it was made with.
+    auto: Option<(u64, usize, StripOptions, StripLayout)>,
     /// The saved layout kept in step with the schematic: the key, the saved layout it came from, and the result.
     synced: Option<(u64, usize, StripLayout, StripLayout)>,
     drag: Option<StripDrag>,
@@ -86,18 +86,60 @@ impl BreadboardView {
     /// The layout shown: the one saved with the sheet (in step with the schematic), else one made from the schematic.
     pub(super) fn strip_shown(&mut self, sch: &SchEditor) -> StripLayout {
         let key = (sch.rev, sch.sch.components.len());
+        let opt = strip_options(sch.strip_size);
         match &sch.stripboard {
             Some(saved) => {
                 if !self.strip.synced.as_ref().is_some_and(|(r, n, from, _)| (*r, *n) == key && from == saved) {
-                    self.strip.synced = Some((key.0, key.1, saved.clone(), synced(&sch.sch, saved)));
+                    self.strip.synced = Some((key.0, key.1, saved.clone(), synced(&sch.sch, saved, opt)));
                 }
                 self.strip.synced.as_ref().map(|c| c.3.clone()).unwrap_or_default()
             }
             None => {
-                if !self.strip.auto.as_ref().is_some_and(|(r, n, _)| (*r, *n) == key) {
-                    self.strip.auto = Some((key.0, key.1, strip_layout(&sch.sch)));
+                if !self.strip.auto.as_ref().is_some_and(|(r, n, o, _)| (*r, *n, *o) == (key.0, key.1, opt)) {
+                    self.strip.auto = Some((key.0, key.1, opt, strip_layout_with(&sch.sch, opt)));
                 }
-                self.strip.auto.as_ref().map(|c| c.2.clone()).unwrap_or_default()
+                self.strip.auto.as_ref().map(|c| c.3.clone()).unwrap_or_default()
+            }
+        }
+    }
+
+    /// The board's size: a few common ones, or typed; and whether the layout fits it.
+    fn strip_size_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &StripLayout) {
+        const SIZES: [(f32, f32); 5] = [(72.0, 47.0), (95.0, 72.0), (115.0, 95.0), (150.0, 100.0), (160.0, 100.0)];
+        let label = |s: Option<(f32, f32)>| match s {
+            None => i18n::tr("決めない").to_string(),
+            Some((w, h)) => format!("{w:.0} × {h:.0} mm"),
+        };
+        ui.horizontal(|ui| {
+            ui.label(i18n::tr("基板の大きさ")).on_hover_text(i18n::tr(
+                "使う基板の横 × 縦 (mm) を選ぶと、IC を横の幅に収まるだけ並べ、はみ出す分は下の段に折り返します。決めないときは IC を横一列に並べます。横長の基板は横に長く置いた向きで選びます",
+            ));
+            let before = sch.strip_size;
+            egui::ComboBox::from_id_salt("strip_size").selected_text(label(sch.strip_size)).show_ui(ui, |ui| {
+                ui.selectable_value(&mut sch.strip_size, None, label(None));
+                for s in SIZES {
+                    ui.selectable_value(&mut sch.strip_size, Some(s), label(Some(s)));
+                }
+            });
+            if let Some((w, h)) = &mut sch.strip_size {
+                ui.add(egui::DragValue::new(w).range(20.0..=400.0).suffix(" mm")).on_hover_text(i18n::tr("横 (mm)"));
+                ui.label("×");
+                ui.add(egui::DragValue::new(h).range(20.0..=400.0).suffix(" mm")).on_hover_text(i18n::tr("縦 (mm)"));
+            }
+            if sch.strip_size != before && sch.stripboard.is_some() {
+                sch.status = i18n::tr("手で動かした並べ方はそのままです。新しい大きさで並べるには「自動で並べ直す」を押します").to_string();
+            }
+        });
+        if let Some((w, h)) = sch.strip_size {
+            let (cols, rows) = holes_of(w, h);
+            let (over_c, over_r) = (l.cols.saturating_sub(cols), l.rows.saturating_sub(rows));
+            if over_c == 0 && over_r == 0 {
+                ui.colored_label(crate::theme::OK, i18n::trf!("✔ {} × {} 穴の基板に収まります", cols, rows));
+            } else {
+                ui.colored_label(
+                    crate::theme::WARN,
+                    i18n::trf!("{} × {} 穴の基板に収まりません: 横が {} 穴・縦が {} 穴 ({:.0} × {:.0} mm) はみ出します", cols, rows, over_c, over_r, over_c as f32 * 2.54, over_r as f32 * 2.54),
+                );
             }
         }
     }
@@ -150,13 +192,14 @@ impl BreadboardView {
         let strip = self.kind == BoardKind::Stripboard;
         ui.label(
             spaced(if strip {
-                "銅の帯が横に並んだ基板 (ストリップ基板) に組む並べ方です。上の帯は 1 本ずつ 1 つのネット (左に名前)。2 本足の部品は、つなぐ 2 つの帯をまたいで縦に差します。IC とトランジスタは下の段に置き、× の穴で帯を切って足ごとに分け、色の線で自分のネットの帯につなぎます。帯を切るのは、裏から穴の銅を削ります (ドリルの刃を手で回す・専用のカッター)"
+                "銅の帯が横に並んだ基板 (ストリップ基板) に組む並べ方です。IC の段の上と下に帯の組があり、1 本ずつ 1 つのネットです (左に名前)。2 本足の部品は、つなぐ 2 つの帯をまたいで縦に差します。IC は × の穴で帯を切って足ごとに分け、上半分の足は上の帯へ、下半分の足は下の帯へ色の線でつなぎます。同じネットの帯どうしは左の線でつなぎます。帯を切るのは、裏から穴の銅を削ります (ドリルの刃を手で回す・専用のカッター)"
             } else {
-                "穴だけの基板 (ユニバーサル基板) に組む並べ方です。ストリップ基板と同じ置き方で、銅の帯の代わりに、灰色の線 (すずめっき線) を裏で穴から穴へはんだ付けします。上の線は 1 本ずつ 1 つのネット (左に名前)。色の線は表を通すビニール線です"
+                "穴だけの基板 (ユニバーサル基板) に組む並べ方です。ストリップ基板と同じ置き方で、銅の帯の代わりに、灰色の線 (すずめっき線) を裏で穴から穴へはんだ付けします。IC の段の上と下の線は 1 本ずつ 1 つのネット (左に名前)。色の線は表を通すビニール線です"
             })
             .color(NOTE),
         );
         ui.add_space(4.0);
+        self.strip_size_ui(ui, sch, &l);
         self.strip_tools(ui, sch);
         let problems = strip_check(&sch.sch, &l);
         ui.add_space(4.0);
@@ -350,7 +393,7 @@ impl BreadboardView {
             painter.circle_stroke(to(a), pitch * 0.35, Stroke::new(2.0, PICK));
         }
         for (k, (r, pins)) in l.off.iter().enumerate() {
-            let box_at = origin + Vec2::new(-left * pitch + pitch * 0.5, (l.homes.len() as f32 + 1.5 + k as f32 * 2.2) * pitch);
+            let box_at = origin + Vec2::new(-left * pitch + pitch * 0.5, (k as f32 * 2.2 - 0.8) * pitch);
             let body = Rect::from_min_size(box_at, Vec2::new(pitch * 3.0, pitch * 1.6));
             painter.rect_filled(body, 3.0, Color32::from_gray(60));
             painter.text(body.center(), egui::Align2::CENTER_CENTER, r, font.clone(), Color32::WHITE);
@@ -500,6 +543,16 @@ impl BreadboardView {
             self.strip.sel = None;
         }
     }
+}
+
+/// The holes across and down a board of `w` × `h` mm (2.54 mm apart).
+fn holes_of(w: f32, h: f32) -> (u16, u16) {
+    ((w / 2.54).floor().max(1.0) as u16, (h / 2.54).floor().max(1.0) as u16)
+}
+
+/// The layout's options for a board of this size (None: one row of chips).
+fn strip_options(size: Option<(f32, f32)>) -> StripOptions {
+    StripOptions { cols: size.map(|(w, h)| holes_of(w, h).0) }
 }
 
 /// The bare wires of a perfboard: along each piece of strip, from its first used hole to its last.

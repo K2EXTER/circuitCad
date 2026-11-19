@@ -604,6 +604,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             Some("perf") => app.breadboard.kind = crate::breadboard::BoardKind::Perfboard,
             _ => {}
         }
+        // `--proto-size 100x75`: the stripboard's size in mm (the chips wrap to its width)
+        if let Some((w, h)) = args.iter().position(|a| a == "--proto-size").and_then(|k| args.get(k + 1)).and_then(|s| s.split_once('x')).and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))) {
+            app.sch.strip_size = Some((w, h));
+        }
         // `--proto-flip SW1,SW2`: those switches moved (push buttons held) once the circuit runs
         if let Some(f) = args.iter().position(|a| a == "--proto-flip").and_then(|k| args.get(k + 1)) {
             app.breadboard.flip_on_start = f.split(',').filter(|r| !r.is_empty()).map(String::from).collect();
