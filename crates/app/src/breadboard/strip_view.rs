@@ -5,7 +5,7 @@
 use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
-use sch_core::strip_edit::{area_moved, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
+use sch_core::strip_edit::{area_moved, area_turned, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
 
 /// What the person builds on.
@@ -199,7 +199,7 @@ impl BreadboardView {
         }
         ui.horizontal_wrapped(|ui| {
             for (t, name, tip) in [
-                (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かします。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC は向きを逆に)、選んだ線は Delete で消えます"),
+                (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で半回転します (帯は横のままなので、中のつながりは変わりません)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC は向きを逆に)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
                 (StripTool::Cut, "線を切る", "穴をクリックすると、自動で引いたすずめっき線をそこで分けます (その穴にははんだを盛らない)。もう一度クリックすると、元に戻します"),
@@ -239,7 +239,7 @@ impl BreadboardView {
             }
         });
         let hint = match self.strip.tool {
-            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす / R で回す / Delete で線を消す / Ctrl+Z で戻す",
+            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut if strip => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Cut => "すずめっき線を分ける穴をクリックします (もう一度で戻ります)",
@@ -667,9 +667,16 @@ impl BreadboardView {
             self.strip_set(sch, Some(m.clone()));
             *l = m;
         }
-        // keys: R turns the picked part, Delete takes the picked link away, Esc lets go
+        // keys: R turns the box (half a turn) or else the picked part, Delete takes the picked link away, Esc lets go
         if response.hovered() {
             if tool == StripTool::Move
+                && ui.input(|i| i.key_pressed(egui::Key::R))
+                && let Some((a, b)) = self.strip.sel
+            {
+                let m = area_turned(l, a, b);
+                self.strip_set(sch, Some(m.clone()));
+                *l = m;
+            } else if tool == StripTool::Move
                 && ui.input(|i| i.key_pressed(egui::Key::R))
                 && let Some(r) = self.picked.clone()
             {

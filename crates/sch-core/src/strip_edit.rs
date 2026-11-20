@@ -75,6 +75,42 @@ pub fn area_moved(l: &StripLayout, a: At, b: At, dr: i32, dc: i32) -> Option<Str
     Some(grown(out))
 }
 
+/// Everything within the rows and columns from `a` to `b` (both corners in) turned half a turn about the box's middle: the parts
+/// whose leads are all inside, the link ends (a link with one end outside stretches), the wires from off the board, the cuts, and
+/// the bare wires (one with an end outside stays where it was unless it stays straight). Half a turn keeps the strips along the rows,
+/// so what was joined along a strip stays joined; a quarter turn would stand a chip's pins across them.
+pub fn area_turned(l: &StripLayout, a: At, b: At) -> StripLayout {
+    let (r0, r1, c0, c1) = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
+    let inside = |at: At| at.0 >= r0 && at.0 <= r1 && at.1 >= c0 && at.1 <= c1;
+    let turn = |at: At| if inside(at) { (r0 + r1 - at.0, c0 + c1 - at.1) } else { at };
+    let mut out = l.clone();
+    for p in &mut out.parts {
+        if p.leads.iter().all(|(_, at)| inside(*at)) {
+            for (_, at) in &mut p.leads {
+                *at = turn(*at);
+            }
+        }
+    }
+    for k in &mut out.links {
+        k.a = turn(k.a);
+        k.b = turn(k.b);
+    }
+    for (_, pins) in &mut out.off {
+        for (_, _, at) in pins {
+            *at = turn(*at);
+        }
+    }
+    out.cuts = l.cuts.iter().map(|c| turn(*c)).collect();
+    for w in &mut out.bare {
+        let ends = (turn(w.0), turn(w.1));
+        if ends.0 .0 == ends.1 .0 || ends.0 .1 == ends.1 .1 {
+            *w = ends;
+        }
+    }
+    out.names = l.names.iter().map(|(at, n)| (turn(*at), n.clone())).collect();
+    grown(out)
+}
+
 /// Part `refdes` turned: a two-lead part a quarter turn about its first lead (standing ↔ lying), a chip or a row of leads half a
 /// turn about its middle (pin 1 to the other end). None when it is not there or would leave the board.
 pub fn part_turned(l: &StripLayout, refdes: &str) -> Option<StripLayout> {
@@ -299,6 +335,29 @@ mod tests {
         // turning a chip twice puts it back
         let back = part_turned(&part_turned(&l, &chip).unwrap(), &chip).unwrap();
         assert_eq!(back.parts, l.parts);
+    }
+
+    /// A box turned half a turn: the whole board of every sample stays joined as drawn (the strips stay along the rows), turned twice
+    /// it is as it was, and an empty box changes nothing. A box that cuts through a part leaves it where it was.
+    #[test]
+    fn a_box_turns_half_a_turn() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        for name in ["ne555_blinker", "seg7_counter", "traffic_light", "current_sensors"] {
+            let s: Schematic = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}.schjson"))).unwrap()).unwrap();
+            let l = strip_layout(&s);
+            let (a, b) = ((0, 0), (l.rows - 1, l.cols - 1));
+            let once = area_turned(&l, a, b);
+            assert!(strip_check(&s, &once).is_empty(), "{name}: {:?}", strip_check(&s, &once));
+            assert_ne!(once.parts, l.parts, "{name}: turned");
+            assert_eq!(area_turned(&once, a, b), l, "{name}: twice is as it was");
+        }
+        let s = blinker();
+        let l = strip_layout(&s);
+        assert_eq!(area_turned(&l, (l.rows + 5, 0), (l.rows + 6, 3)), l, "nothing in the box");
+        let chip = l.parts.iter().find(|p| p.leads.len() == 8).unwrap();
+        let top = chip.leads.iter().map(|x| x.1 .0).min().unwrap();
+        let half = area_turned(&l, (0, 0), (top, l.cols - 1));
+        assert_eq!(half.parts.iter().find(|p| p.refdes == chip.refdes), Some(chip), "a part half in the box stays");
     }
 
     #[test]
