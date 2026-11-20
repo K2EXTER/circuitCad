@@ -263,7 +263,7 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
 
 /// The sections of the board: the requirements table's groups marked as sections, in the table's order, with the parts on the board
 /// that are in them (a part in two goes with the first); the parts in none make one more section at the end ("その他").
-fn sections(s: &Schematic, c: &crate::breadboard::Circuit) -> Vec<(String, BTreeSet<String>)> {
+pub(crate) fn sections(s: &Schematic, c: &crate::breadboard::Circuit) -> Vec<(String, BTreeSet<String>)> {
     let on: BTreeSet<&String> = c.on.iter().map(|p| &p.0).collect();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut out: Vec<(String, BTreeSet<String>)> = vec![];
@@ -1484,10 +1484,13 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
             let (_, p, q) = &l.sections[k];
             a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1
         };
-        let hub = l.sections.iter().position(|(_, p, q)| l.names.iter().any(|(a, n)| is_ground_name(n) && a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1));
+        // a section's ground: its ground strip (named where it starts), or on a perfboard (no strips) a lead on ground
+        let ground_leads: Vec<At> = l.parts.iter().flat_map(|p| p.leads.iter().filter(|(pin, _)| is_ground_name(&net_of(&p.refdes, pin))).map(|(_, a)| *a)).chain(l.off.iter().flat_map(|(_, v)| v.iter().filter(|w| is_ground_name(&w.1)).map(|w| w.2))).collect();
+        let ground_in = |k: usize| l.names.iter().any(|(a, n)| is_ground_name(n) && inside(k, *a)) || (l.perf && ground_leads.iter().any(|a| inside(k, *a)));
+        let hub = (0..l.sections.len()).find(|k| ground_in(*k));
         if let Some(h) = hub {
             for k in (0..l.sections.len()).filter(|k| *k != h) {
-                let has_ground = l.names.iter().any(|(a, n)| is_ground_name(n) && inside(k, *a));
+                let has_ground = ground_in(k);
                 if !has_ground {
                     continue;
                 }

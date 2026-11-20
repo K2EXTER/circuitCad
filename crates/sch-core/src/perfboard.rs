@@ -70,6 +70,7 @@ fn shape(c: &Circuit, k: usize) -> Shape {
 /// every net wired.
 pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let c = read(s);
+    let wants = Wants::read(s, &c);
     let net_of_lead = |refdes: &str, pin: &str| lead_net(&c, refdes, pin);
     // the rails first and the small nets first, without and then with a way out kept by each lead, each again with the nets left
     // apart wired first (a few rounds), until one joins every net: else the one with the fewest nets left apart, then the fewest
@@ -81,7 +82,7 @@ pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
         if done(&best) {
             break;
         }
-        let l = place(&c, opt, gap);
+        let l = place(&c, opt, gap, &wants);
         for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
             if done(&best) {
                 break;
@@ -117,128 +118,211 @@ fn lead_net(c: &Circuit, refdes: &str, pin: &str) -> String {
     c.on.iter().find(|x| x.0 == refdes).and_then(|x| x.2.iter().find(|(p, _)| p == pin)).map(|x| x.1.clone()).unwrap_or_default()
 }
 
-/// The parts placed (`gap` free holes between chips), not yet wired.
-fn place(c: &Circuit, opt: StripOptions, gap: u16) -> StripLayout {
-    let off_pins: Vec<(usize, usize)> = c.off.iter().enumerate().flat_map(|(i, (_, p))| p.iter().enumerate().filter(|(_, (_, n))| !n.is_empty()).map(move |(j, _)| (i, j))).collect();
-    let margin: u16 = if off_pins.is_empty() { 1 } else { 2 };
-    let mut shapes: Vec<Shape> = (0..c.on.len()).filter(|k| look_on(c, *k) != Look::TwoLead).map(|k| shape(c, k)).collect();
-    let twos: Vec<usize> = (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead).collect();
-    // the board's width: as asked, else about square for what goes on it
-    let area: u32 = shapes.iter().map(|s| (s.h + gap) as u32 * (s.w + gap) as u32).sum::<u32>() + twos.len() as u32 * 12;
-    let widest = shapes.iter().map(|s| s.w).max().unwrap_or(0) + 2 * margin;
-    let width = opt.cols.unwrap_or_else(|| ((area as f64 * 1.3).sqrt().ceil() as u16).max(widest)).max(widest).max(8);
-    // the order: the headers first (the top edge), then each chip next to the ones it shares the most nets with
-    let nets_of = |s: &Shape| -> BTreeSet<String> { s.leads.iter().map(|x| x.1.clone()).filter(|n| !n.is_empty() && !is_ground_name(n) && !c.supplies.contains(n)).collect() };
-    let (mut heads, mut rest): (Vec<Shape>, Vec<Shape>) = shapes.drain(..).partition(|s| s.look != Look::Dip && s.leads.len() >= LONG_ROW);
-    heads.sort_by_key(|s| Reverse(s.w));
-    let mut order: Vec<Shape> = heads;
-    let mut seen: BTreeSet<String> = order.iter().flat_map(&nets_of).collect();
-    rest.sort_by_key(|s| Reverse(s.leads.len()));
-    while !rest.is_empty() {
-        let i = (0..rest.len()).max_by_key(|i| (nets_of(&rest[*i]).intersection(&seen).count(), rest[*i].leads.len(), Reverse(*i))).unwrap();
-        let s = rest.remove(i);
-        seen.extend(nets_of(&s));
-        order.push(s);
-    }
-    // the chips in rows (shelves), left to right
-    let mut parts: Vec<StripPart> = vec![];
-    let mut blocked: BTreeSet<At> = BTreeSet::new();
-    let (mut x, mut y, mut shelf) = (margin, 1u16, 0u16);
-    for s in &order {
-        if x > margin && x + s.w > width.saturating_sub(1) {
-            y += shelf + gap;
-            x = margin;
-            shelf = 0;
-        }
-        let (refdes, _, _) = &c.on[s.k];
-        for r in y..y + s.h {
-            for cc in x..x + s.w {
-                blocked.insert((r, cc));
+/// What the requirements table asks of the placement: the parts kept apart (each rule's two sets of parts and the distance in
+/// holes), the groups each part is in (placed together), and the sections (each placed in a band of rows of its own).
+#[derive(Default)]
+struct Wants {
+    apart: Vec<(BTreeSet<String>, BTreeSet<String>, f64)>,
+    groups: BTreeMap<String, Vec<usize>>,
+    sections: Vec<(String, BTreeSet<String>)>,
+}
+
+impl Wants {
+    fn read(s: &Schematic, c: &Circuit) -> Wants {
+        // a rule's item: a part by its name, else every part with a lead on that net
+        let parts_of = |items: &[String]| -> BTreeSet<String> {
+            c.on.iter()
+                .filter(|(r, _, pins)| items.iter().any(|it| design_spec::matches_name(it, r) || pins.iter().any(|(_, n)| !n.is_empty() && design_spec::matches_name(it, n))))
+                .map(|(r, _, _)| r.clone())
+                .collect()
+        };
+        let apart = s.requirements.apart.iter().map(|k| (parts_of(&k.a), parts_of(&k.b), k.min_dist / 2.54)).collect();
+        let mut groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, g) in s.requirements.groups.iter().enumerate() {
+            for p in &g.parts {
+                groups.entry(p.clone()).or_default().push(i);
             }
         }
-        parts.push(StripPart { refdes: refdes.clone(), look: s.look, leads: s.leads.iter().map(|(p, _, a)| (p.clone(), (y + a.0, x + a.1))).collect(), mount: c.mounts.get(refdes).cloned().unwrap_or_default() });
-        x += s.w + gap;
-        shelf = shelf.max(s.h);
+        Wants { apart, groups, sections: crate::stripboard::sections(s, c) }
     }
-    let mut bottom = if parts.is_empty() { 1 } else { y + shelf };
-    // where each net's leads are so far
+
+    /// Whether a part with these leads keeps its distance from the parts already placed.
+    fn far_enough(&self, refdes: &str, leads: &[At], placed: &[StripPart]) -> bool {
+        let gap = |p: &StripPart| leads.iter().flat_map(|a| p.leads.iter().map(move |(_, b)| (a.0 as f64 - b.0 as f64).hypot(a.1 as f64 - b.1 as f64))).fold(f64::INFINITY, f64::min);
+        self.apart.iter().all(|(a, b, d)| {
+            placed.iter().filter(|p| p.refdes != refdes).all(|p| {
+                let pair = (a.contains(refdes) && b.contains(&p.refdes)) || (b.contains(refdes) && a.contains(&p.refdes));
+                !pair || gap(p) >= *d
+            })
+        })
+    }
+
+    /// Whether two parts are in a group together.
+    fn together(&self, x: &str, y: &str) -> bool {
+        self.groups.get(x).is_some_and(|gx| self.groups.get(y).is_some_and(|gy| gx.iter().any(|g| gy.contains(g))))
+    }
+}
+
+/// The parts placed (`gap` free holes between chips), not yet wired: section by section (one band of rows each, a gap between), in
+/// each the headers along its top, then the chips in rows (shelves) left to right, then the two-lead parts.
+fn place(c: &Circuit, opt: StripOptions, gap: u16, wants: &Wants) -> StripLayout {
+    let off_pins: Vec<(usize, usize)> = c.off.iter().enumerate().flat_map(|(i, (_, p))| p.iter().enumerate().filter(|(_, (_, n))| !n.is_empty()).map(move |(j, _)| (i, j))).collect();
+    let margin: u16 = if off_pins.is_empty() { 1 } else { 2 };
+    let all_shapes: Vec<Shape> = (0..c.on.len()).filter(|k| look_on(c, *k) != Look::TwoLead).map(|k| shape(c, k)).collect();
+    let all_twos: Vec<usize> = (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead).collect();
+    // the board's width: as asked, else about square for what goes on it
+    let area: u32 = all_shapes.iter().map(|s| (s.h + gap) as u32 * (s.w + gap) as u32).sum::<u32>() + all_twos.len() as u32 * 12;
+    let widest = all_shapes.iter().map(|s| s.w).max().unwrap_or(0) + 2 * margin;
+    let width = opt.cols.unwrap_or_else(|| ((area as f64 * 1.3).sqrt().ceil() as u16).max(widest)).max(widest).max(8);
     let net_of_lead = |refdes: &str, pin: &str| lead_net(c, refdes, pin);
+    // the sections, or the whole board as one; an off-board part goes with the section that has the most of its nets
+    let slices: Vec<(String, BTreeSet<String>)> = if wants.sections.is_empty() { vec![(String::new(), c.on.iter().map(|p| p.0.clone()).collect())] } else { wants.sections.clone() };
+    let nets_in = |parts: &BTreeSet<String>| -> BTreeSet<String> { c.on.iter().filter(|p| parts.contains(&p.0)).flat_map(|p| p.2.iter().map(|x| x.1.clone())).collect() };
+    let off_slice = |i: usize| -> usize { (0..slices.len()).max_by_key(|k| (c.off[i].1.iter().filter(|(_, n)| nets_in(&slices[*k].1).contains(n)).count(), Reverse(*k))).unwrap_or(0) };
+    let mut parts: Vec<StripPart> = vec![];
+    let mut blocked: BTreeSet<At> = BTreeSet::new();
     let mut at_net: BTreeMap<String, Vec<At>> = BTreeMap::new();
-    for p in &parts {
-        for (pin, a) in &p.leads {
-            at_net.entry(net_of_lead(&p.refdes, pin)).or_default().push(*a);
-        }
-    }
-    // the wires from off the board come in at the left edge
     let mut off: Vec<(String, Vec<crate::stripboard::OffWire>)> = c.off.iter().map(|(r, _)| (r.clone(), vec![])).collect();
-    for (row, (i, j)) in off_pins.iter().enumerate() {
-        let (pin, net) = &c.off[*i].1[*j];
-        // every other row: each has a free hole of its own beside it, for its wire
-        let a = (1 + 2 * row as u16, 0);
-        off[*i].1.push((pin.clone(), net.clone(), a));
-        at_net.entry(net.clone()).or_default().push(a);
-        blocked.insert(a);
-    }
-    // the two-lead parts: the most joined to what is placed first, each where its leads are nearest their nets' leads
-    let mut twos = twos;
-    twos.sort_by_key(|k| Reverse(c.on[*k].2.iter().filter(|(_, n)| at_net.contains_key(n)).count()));
-    for k in twos {
-        let (refdes, look, pins) = &c.on[k];
-        if pins.len() != 2 {
-            continue;
+    let mut boxes: Vec<(String, At, At)> = vec![];
+    let mut top = 1u16;
+    for (si, (name, members)) in slices.iter().enumerate() {
+        let mut bottom = top;
+        // the wires from off the board come in at the left edge, every other row (each has a free hole of its own beside it)
+        let mut off_row = top;
+        for (i, j) in off_pins.iter().copied().filter(|(i, _)| off_slice(*i) == si) {
+            let (pin, net) = &c.off[i].1[j];
+            let a = (off_row, 0);
+            off[i].1.push((pin.clone(), net.clone(), a));
+            at_net.entry(net.clone()).or_default().push(a);
+            blocked.insert(a);
+            bottom = bottom.max(off_row + 1);
+            off_row += 2;
         }
-        let near = |n: &str, a: At, at_net: &BTreeMap<String, Vec<At>>| -> u32 { at_net.get(n).map(|v| v.iter().map(|b| a.0.abs_diff(b.0) as u32 + a.1.abs_diff(b.1) as u32).min().unwrap_or(0)).unwrap_or(0) };
-        let mut best: Option<(u32, At, At)> = None;
-        for r in 0..bottom + 4 {
-            for cc in 0..width {
-                for (dr, dc) in [(0, SPAN), (SPAN, 0)] {
-                    let (a, b) = ((r, cc), (r + dr, cc + dc));
-                    if b.1 >= width {
-                        continue;
-                    }
-                    let holes: Vec<At> = (0..=SPAN).map(|i| (r + dr / SPAN * i, cc + dc / SPAN * i)).collect();
-                    if cc < margin || holes.iter().any(|h| blocked.contains(h)) {
-                        continue;
-                    }
-                    // each lead keeps two free holes beside it, for its wire
-                    let room = |h: At| {
-                        [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)]
-                            .iter()
-                            .filter(|(dr, dc)| {
-                                let (y, x) = (h.0 as i32 + dr, h.1 as i32 + dc);
-                                y >= 0 && x >= 0 && x < width as i32 && !blocked.contains(&(y as u16, x as u16)) && !holes.contains(&(y as u16, x as u16))
-                            })
-                            .count()
-                    };
-                    if room(a) < 2 || room(b) < 2 {
-                        continue;
-                    }
-                    for (p, q) in [(a, b), (b, a)] {
-                        // a lead next to another lead of another net crowds the wires
-                        let crowd = |h: At, n: &str| -> u32 { at_net.iter().filter(|(m, _)| m.as_str() != n).flat_map(|(_, v)| v.iter()).filter(|x| x.0.abs_diff(h.0) + x.1.abs_diff(h.1) == 1).count() as u32 };
-                        let cost = 4 * (near(&pins[0].1, p, &at_net) + near(&pins[1].1, q, &at_net)) + crowd(p, &pins[0].1) + crowd(q, &pins[1].1);
-                        if best.is_none_or(|x| cost < x.0) {
-                            best = Some((cost, p, q));
+        // the order: the headers first (the top edge), then each chip next to the ones it shares a group or the most nets with
+        let nets_of = |s: &Shape| -> BTreeSet<String> { s.leads.iter().map(|x| x.1.clone()).filter(|n| !n.is_empty() && !is_ground_name(n) && !c.supplies.contains(n)).collect() };
+        let shapes: Vec<&Shape> = all_shapes.iter().filter(|s| members.contains(&c.on[s.k].0)).collect();
+        let (mut heads, mut rest): (Vec<&Shape>, Vec<&Shape>) = shapes.into_iter().partition(|s| s.look != Look::Dip && s.leads.len() >= LONG_ROW);
+        heads.sort_by_key(|s| Reverse(s.w));
+        let mut order: Vec<&Shape> = heads;
+        let mut seen: BTreeSet<String> = order.iter().flat_map(|s| nets_of(s)).collect();
+        rest.sort_by_key(|s| Reverse(s.leads.len()));
+        while !rest.is_empty() {
+            let last = order.last().map(|s| c.on[s.k].0.clone());
+            let i = (0..rest.len())
+                .max_by_key(|i| {
+                    let mate = last.as_ref().is_some_and(|l| wants.together(l, &c.on[rest[*i].k].0));
+                    (mate, nets_of(rest[*i]).intersection(&seen).count(), rest[*i].leads.len(), Reverse(*i))
+                })
+                .unwrap();
+            let s = rest.remove(i);
+            seen.extend(nets_of(s));
+            order.push(s);
+        }
+        // the chips in rows (shelves), left to right; one kept apart from a part placed moves on along the row (or to the next)
+        let (mut x, mut y, mut shelf) = (margin, top, 0u16);
+        for s in order {
+            let refdes = &c.on[s.k].0;
+            let leads_at = |y: u16, x: u16| -> Vec<At> { s.leads.iter().map(|(_, _, a)| (y + a.0, x + a.1)).collect() };
+            for _ in 0..400 {
+                if x > margin && x + s.w > width.saturating_sub(1) {
+                    y += shelf + gap;
+                    x = margin;
+                    shelf = 0;
+                }
+                if wants.far_enough(refdes, &leads_at(y, x), &parts) {
+                    break;
+                }
+                x += 1;
+            }
+            for r in y..y + s.h {
+                for cc in x..x + s.w {
+                    blocked.insert((r, cc));
+                }
+            }
+            let leads: Vec<(String, At)> = s.leads.iter().map(|(p, _, a)| (p.clone(), (y + a.0, x + a.1))).collect();
+            for (p, a) in &leads {
+                at_net.entry(net_of_lead(refdes, p)).or_default().push(*a);
+            }
+            parts.push(StripPart { refdes: refdes.clone(), look: s.look, leads, mount: c.mounts.get(refdes).cloned().unwrap_or_default() });
+            x += s.w + gap;
+            shelf = shelf.max(s.h);
+            bottom = bottom.max(y + shelf);
+        }
+        // the two-lead parts: the most joined to what is placed first, each where its leads are nearest their nets' leads (and its
+        // group's parts), kept apart as the table says, in the section's rows
+        let mut twos: Vec<usize> = all_twos.iter().copied().filter(|k| members.contains(&c.on[*k].0)).collect();
+        twos.sort_by_key(|k| Reverse(c.on[*k].2.iter().filter(|(_, n)| at_net.contains_key(n)).count()));
+        for k in twos {
+            let (refdes, look, pins) = &c.on[k];
+            if pins.len() != 2 {
+                continue;
+            }
+            let near = |n: &str, a: At, at_net: &BTreeMap<String, Vec<At>>| -> u32 { at_net.get(n).map(|v| v.iter().map(|b| a.0.abs_diff(b.0) as u32 + a.1.abs_diff(b.1) as u32).min().unwrap_or(0)).unwrap_or(0) };
+            let mates: Vec<At> = parts.iter().filter(|p| wants.together(refdes, &p.refdes)).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+            let mut best: Option<(u32, At, At)> = None;
+            for r in top..bottom + 4 {
+                for cc in 0..width {
+                    for (dr, dc) in [(0, SPAN), (SPAN, 0)] {
+                        let (a, b) = ((r, cc), (r + dr, cc + dc));
+                        if b.1 >= width {
+                            continue;
+                        }
+                        let holes: Vec<At> = (0..=SPAN).map(|i| (r + dr / SPAN * i, cc + dc / SPAN * i)).collect();
+                        if cc < margin || holes.iter().any(|h| blocked.contains(h)) {
+                            continue;
+                        }
+                        // each lead keeps two free holes beside it, for its wire
+                        let room = |h: At| {
+                            [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)]
+                                .iter()
+                                .filter(|(dr, dc)| {
+                                    let (y, x) = (h.0 as i32 + dr, h.1 as i32 + dc);
+                                    y >= top as i32 - 1 && x >= 0 && x < width as i32 && !blocked.contains(&(y as u16, x as u16)) && !holes.contains(&(y as u16, x as u16))
+                                })
+                                .count()
+                        };
+                        if room(a) < 2 || room(b) < 2 || !wants.far_enough(refdes, &[a, b], &parts) {
+                            continue;
+                        }
+                        let group = mates.iter().map(|m| a.0.abs_diff(m.0) as u32 + a.1.abs_diff(m.1) as u32).min().unwrap_or(0);
+                        for (p, q) in [(a, b), (b, a)] {
+                            // a lead next to another lead of another net crowds the wires
+                            let crowd = |h: At, n: &str| -> u32 { at_net.iter().filter(|(m, _)| m.as_str() != n).flat_map(|(_, v)| v.iter()).filter(|x| x.0.abs_diff(h.0) + x.1.abs_diff(h.1) == 1).count() as u32 };
+                            let cost = 4 * (near(&pins[0].1, p, &at_net) + near(&pins[1].1, q, &at_net)) + group + crowd(p, &pins[0].1) + crowd(q, &pins[1].1);
+                            if best.is_none_or(|x| cost < x.0) {
+                                best = Some((cost, p, q));
+                            }
                         }
                     }
                 }
             }
+            let Some((_, p, q)) = best else { continue };
+            let holes: Vec<At> = if p.0 == q.0 { (p.1.min(q.1)..=p.1.max(q.1)).map(|cc| (p.0, cc)).collect() } else { (p.0.min(q.0)..=p.0.max(q.0)).map(|r| (r, p.1)).collect() };
+            blocked.extend(holes);
+            bottom = bottom.max(p.0.max(q.0) + 1);
+            at_net.entry(pins[0].1.clone()).or_default().push(p);
+            at_net.entry(pins[1].1.clone()).or_default().push(q);
+            parts.push(StripPart { refdes: refdes.clone(), look: *look, leads: vec![(pins[0].0.clone(), p), (pins[1].0.clone(), q)], mount: c.mounts.get(refdes).cloned().unwrap_or_default() });
         }
-        let Some((_, p, q)) = best else { continue };
-        let holes: Vec<At> = if p.0 == q.0 { (p.1.min(q.1)..=p.1.max(q.1)).map(|cc| (p.0, cc)).collect() } else { (p.0.min(q.0)..=p.0.max(q.0)).map(|r| (r, p.1)).collect() };
-        blocked.extend(holes);
-        bottom = bottom.max(p.0.max(q.0) + 1);
-        at_net.entry(pins[0].1.clone()).or_default().push(p);
-        at_net.entry(pins[1].1.clone()).or_default().push(q);
-        parts.push(StripPart { refdes: refdes.clone(), look: *look, leads: vec![(pins[0].0.clone(), p), (pins[1].0.clone(), q)], mount: c.mounts.get(refdes).cloned().unwrap_or_default() });
+        if !wants.sections.is_empty() {
+            boxes.push((name.clone(), (top, 0), (bottom, width - 1)));
+        }
+        top = bottom + gap;
     }
     // the parts in their schematic's order
     let pos = |r: &str| c.on.iter().position(|x| x.0 == r).unwrap_or(usize::MAX);
     parts.sort_by_key(|p| (p.look == Look::TwoLead, pos(&p.refdes)));
-    let mut l = StripLayout { perf: true, parts, off, ..Default::default() };
+    let mut l = StripLayout { perf: true, parts, off, sections: boxes, ..Default::default() };
     let far = l.used().iter().map(|(a, _)| *a).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
     l.rows = far.0 + 2;
     l.cols = (far.1 + 2).max(width.min(far.1 + 2));
+    // the sections' bands reach the board's edges and each other: from the top (or the band above) to the band below (or the bottom)
+    let (rows, cols) = (l.rows, l.cols);
+    let tops: Vec<u16> = l.sections.iter().map(|s| s.1 .0).collect();
+    for (i, s) in l.sections.iter_mut().enumerate() {
+        s.1 = (if i == 0 { 0 } else { tops[i] }, 0);
+        s.2 = (tops.get(i + 1).map(|t| t - 1).unwrap_or(rows - 1), cols - 1);
+    }
     l
 }
 
@@ -323,16 +407,40 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             escape.insert(h, net);
         }
     }
-    let mut nets: Vec<(u32, Vec<At>)> = vec![];
+    let mut nets: Vec<(u32, Vec<At>, Option<usize>)> = vec![];
     for (a, i) in &leads {
         match nets.iter_mut().find(|x| x.0 == *i) {
             Some(x) => x.1.push(*a),
-            None => nets.push((*i, vec![*a])),
+            None => nets.push((*i, vec![*a], None)),
         }
     }
-    nets.retain(|(_, v)| v.len() > 1);
+    // with sections, ground is wired within each section, and each section's ground goes back to the first's by a wire of its own
+    // (the one ground point: one section's return current does not flow through another's ground)
+    let sections = l.sections.clone();
+    let inside = |k: usize, a: At| {
+        let (_, p, q) = &sections[k];
+        a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1
+    };
+    if !l.sections.is_empty() {
+        let mut split = vec![];
+        for (i, v, _) in std::mem::take(&mut nets) {
+            if is_ground_name(&names[i as usize]) {
+                for k in 0..l.sections.len() {
+                    let part: Vec<At> = v.iter().copied().filter(|a| inside(k, *a)).collect();
+                    if !part.is_empty() {
+                        split.push((i, part, Some(k)));
+                    }
+                }
+            } else {
+                split.push((i, v, None));
+            }
+        }
+        nets = split;
+    }
+    let grounds: Vec<(u32, Vec<At>, Option<usize>)> = nets.iter().filter(|x| x.2.is_some()).cloned().collect();
+    nets.retain(|(_, v, _)| v.len() > 1);
     let rail = |i: u32| is_ground_name(&names[i as usize]) || c.supplies.contains(&names[i as usize]);
-    nets.sort_by_key(|(i, v)| {
+    nets.sort_by_key(|(i, v, _)| {
         let (r0, r1) = (v.iter().map(|a| a.0).min().unwrap(), v.iter().map(|a| a.0).max().unwrap());
         let (c0, c1) = (v.iter().map(|a| a.1).min().unwrap(), v.iter().map(|a| a.1).max().unwrap());
         let ahead = first.iter().position(|n| *n == names[*i as usize]).unwrap_or(usize::MAX);
@@ -341,12 +449,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
     let mut link_ends: BTreeSet<At> = BTreeSet::new();
     // a state is a hole and how the way came in: 0..4 a step that way, 4 the start, 5 landed from a jump
     const WAYS: usize = 6;
-    let all_nets: Vec<(u32, Vec<At>)> = nets.clone();
-    for (n_at, (net, terms)) in nets.into_iter().enumerate() {
+    let all_nets: Vec<(u32, Vec<At>, Option<usize>)> = nets.clone();
+    let mut ground_trees: BTreeMap<usize, Vec<At>> = BTreeMap::new();
+    for (n_at, (net, terms, bx)) in nets.into_iter().enumerate() {
         // the free holes beside the leads of the nets still to wire, when a lead has two or fewer: kept for that net (another net's
         // wire there would shut the lead in)
         let mut kept: BTreeMap<At, u32> = BTreeMap::new();
-        for (other, ts) in all_nets.iter().skip(n_at + 1) {
+        for (other, ts, _) in all_nets.iter().skip(n_at + 1) {
             for t in ts {
                 let free: Vec<At> = DIRS
                     .iter()
@@ -377,7 +486,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 heap.push(Reverse((0u32, s as u32)));
             }
             let free_for = |h: At, owner: &[Option<u32>], link_ends: &BTreeSet<At>| {
-                owner[idx(h)].is_none_or(|o| o == net) && !link_ends.contains(&h) && !avoid.contains(&h) && kept.get(&h).is_none_or(|o| *o == net) && escape.get(&h).is_none_or(|o| *o == net)
+                owner[idx(h)].is_none_or(|o| o == net) && !link_ends.contains(&h) && !avoid.contains(&h) && kept.get(&h).is_none_or(|o| *o == net) && escape.get(&h).is_none_or(|o| *o == net) && bx.is_none_or(|k| inside(k, h))
             };
             let mut found = None;
             while let Some(Reverse((d, s))) = heap.pop() {
@@ -484,6 +593,39 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             left.remove(path.last().unwrap());
             tree.extend(path);
         }
+        if let Some(k) = bx {
+            ground_trees.insert(k, tree);
+        }
+    }
+    // each section's ground to the first section's: one wire on top between the nearest two holes of their copper (a hole beside a
+    // lead when a section's ground is one lead)
+    for (_, v, k) in &grounds {
+        if let Some(k) = k {
+            ground_trees.entry(*k).or_insert_with(|| vec![v[0]]);
+        }
+    }
+    let Some((&hub, _)) = ground_trees.iter().next() else { return };
+    let gnd = grounds.first().map(|g| g.0);
+    let end_on = |tree: &[At], k: usize, owner: &mut Vec<Option<u32>>, link_ends: &BTreeSet<At>, l: &mut StripLayout, toward: At| -> Option<At> {
+        let ok = |h: &At| !lead_holes.contains(h) && !link_ends.contains(h) && inside(k, *h);
+        let dist = |h: &At| h.0.abs_diff(toward.0) as u32 + h.1.abs_diff(toward.1) as u32;
+        if let Some(h) = tree.iter().filter(|h| ok(h)).min_by_key(|h| dist(h)) {
+            return Some(*h);
+        }
+        // a lead only: a free hole beside it, joined by a bare wire
+        let (lead, h) = tree.iter().flat_map(|a| beside(*a).into_iter().map(move |h| (*a, h))).filter(|(_, h)| ok(h) && owner[idx(*h)].is_none()).min_by_key(|(_, h)| dist(h))?;
+        owner[idx(h)] = gnd;
+        l.bare.push((lead, h));
+        Some(h)
+    };
+    let hub_tree = ground_trees[&hub].clone();
+    for (&k, tree) in ground_trees.iter().filter(|(k, _)| **k != hub) {
+        let toward = hub_tree[0];
+        let Some(a) = end_on(tree, k, &mut owner, &link_ends, l, toward) else { continue };
+        let Some(b) = end_on(&hub_tree, hub, &mut owner, &link_ends, l, a) else { continue };
+        link_ends.insert(a);
+        link_ends.insert(b);
+        l.links.push(Link { a, b, net: gnd.map(|g| names[g as usize].clone()).unwrap_or_default() });
     }
 }
 
@@ -519,6 +661,29 @@ mod tests {
         let narrow = perf_layout_with(&s, StripOptions { cols: Some(16) });
         assert!(narrow.cols <= 16 && strip_check(&s, &narrow).is_empty(), "{} wide: {:?}", narrow.cols, strip_check(&s, &narrow));
         assert!(!strip_layout_with(&s, StripOptions::default()).perf, "the stripboard keeps its strips");
+    }
+
+    /// The requirements table on a perfboard: two sections, each in a band of rows of its own with all its parts in it, ground
+    /// wired within each and back to the first section's by one wire on top; and a pair of chips kept apart by a distance placed
+    /// that far apart. The check and the rules both pass.
+    #[test]
+    fn sections_and_distances_from_the_table() {
+        let mut s = load("seg7_counter.schjson");
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("カウンタ", &["U1", "U3"]), group("表示", &["U2", "DS1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"])];
+        s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["U1".into()], b: vec!["U2".into()], min_dist: 25.0, ..Default::default() }];
+        let l = perf_layout_with(&s, StripOptions::default());
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        assert_eq!(l.sections.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["カウンタ", "表示"]);
+        for (k, (name, p, q)) in l.sections.iter().enumerate() {
+            let members = &s.requirements.groups[k].parts;
+            for part in l.parts.iter().filter(|x| members.contains(&x.refdes)) {
+                assert!(part.leads.iter().all(|(_, a)| a.0 >= p.0 && a.0 <= q.0), "{} in {name}", part.refdes);
+            }
+        }
+        let rules = crate::stripboard::strip_rules(&s, &l);
+        assert!(!rules.is_empty() && rules.iter().all(|r| r.ok), "{rules:?}");
+        assert!(rules.iter().any(|r| r.message.starts_with("GND:")), "the one ground point is checked: {rules:?}");
     }
 
     /// With no strips every hole is a piece of its own: two leads side by side are apart until a bare wire joins them; a wire that
