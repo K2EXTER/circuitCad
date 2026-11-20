@@ -410,6 +410,14 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
     }
 }
 
+/// The holes beside `h` (up, down, left, right) on a board `width` holes wide.
+fn beside4(h: At, width: u16) -> impl Iterator<Item = At> {
+    [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)].into_iter().filter_map(move |(dr, dc)| {
+        let (y, x) = (h.0 as i32 + dr, h.1 as i32 + dc);
+        (y >= 0 && x >= 0 && x < width as i32).then_some((y as u16, x as u16))
+    })
+}
+
 /// The parts placed (`gap` free holes between chips, the chips `turned` a quarter turn, made better by annealing when `sa`), not yet
 /// wired: section by section (one band of rows each, a gap between), in
 /// each the headers along its top, then the chips in rows (shelves) left to right, then the two-lead parts.
@@ -533,7 +541,11 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
                                 })
                                 .count()
                         };
-                        if room(a) < 2 || room(b) < 2 || !wants.far_enough(refdes, &[a, b], &parts) {
+                        // and no lead already placed beside it is walled in (left without a free hole beside it)
+                        let walls = holes.iter().flat_map(|h| beside4(*h, width)).any(|n| {
+                            !holes.contains(&n) && lead_net_at.contains_key(&n) && beside4(n, width).all(|m| blocked.contains(&m) || holes.contains(&m))
+                        });
+                        if walls || room(a) < 2 || room(b) < 2 || !wants.far_enough(refdes, &[a, b], &parts) {
                             continue;
                         }
                         let group = mates.iter().map(|m| a.0.abs_diff(m.0) as u32 + a.1.abs_diff(m.1) as u32).min().unwrap_or(0);
@@ -1194,6 +1206,31 @@ mod tests {
         let narrow = perf_layout_with(&s, StripOptions { cols: Some(16) });
         assert!(narrow.cols <= 16 && strip_check(&s, &narrow).is_empty(), "{} wide: {:?}", narrow.cols, strip_check(&s, &narrow));
         assert!(!strip_layout_with(&s, StripOptions::default()).perf, "the stripboard keeps its strips");
+    }
+
+    /// The shelves as placed wall no lead in: every lead keeps a free hole beside it for its wire (arduino_mega_usb's USB connector,
+    /// a row of five pins, had two-lead parts put right above and right below its middle pin, and its net could not be wired). The
+    /// annealing may still do it (keeping it from that made the samples' wires on top 265 → 276); a placing that leaves a net apart
+    /// loses to the others.
+    #[test]
+    fn no_lead_is_walled_in() {
+        let s = load("arduino_mega_usb.schjson");
+        let c = read(&s);
+        let wants = Wants::read(&s, &c);
+        for turned in [false, true] {
+            let l = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants);
+            let mut taken: BTreeSet<At> = l.off.iter().flat_map(|(_, v)| v.iter().map(|w| w.2)).collect();
+            for p in &l.parts {
+                let (r0, r1) = (p.leads.iter().map(|x| x.1 .0).min().unwrap(), p.leads.iter().map(|x| x.1 .0).max().unwrap());
+                let (c0, c1) = (p.leads.iter().map(|x| x.1 .1).min().unwrap(), p.leads.iter().map(|x| x.1 .1).max().unwrap());
+                taken.extend((r0..=r1).flat_map(|r| (c0..=c1).map(move |cc| (r, cc))));
+            }
+            for p in &l.parts {
+                for (pin, a) in &p.leads {
+                    assert!(beside4(*a, l.cols).any(|n| !taken.contains(&n)), "turned {turned}: {}.{pin} at {a:?} walled in", p.refdes);
+                }
+            }
+        }
     }
 
     /// The requirements table on a perfboard: two sections, each in a band of rows of its own with all its parts in it, ground
