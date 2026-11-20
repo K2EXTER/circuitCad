@@ -50,6 +50,8 @@ enum StripDrag {
 #[derive(Default)]
 pub struct StripState {
     pub tool: StripTool,
+    /// The sections proposed ("区画の案を出す"), shown until kept or let go.
+    plan: Option<Vec<sch_core::section_plan::SectionPlan>>,
     /// The layout made from the schematic, by the schematic's edit count, part count and the options it was made with.
     auto: Option<(u64, usize, StripOptions, bool, StripLayout)>,
     /// The saved layout kept in step with the schematic: the key, the saved layout it came from, and the result.
@@ -233,6 +235,48 @@ impl BreadboardView {
             let _ = tx.send(perf_layout_around(&s, opt, &from));
         });
         self.strip.around = Some(rx);
+    }
+
+    /// The sections proposed for the schematic, shown in the panel.
+    pub(crate) fn strip_propose(&mut self, sch: &SchEditor) {
+        self.strip.plan = Some(sch_core::section_plan::propose_sections(&sch.sch));
+    }
+
+    /// "区画の案を出す": the parts cut into groups with few nets between them (`sch_core::section_plan`), listed; "この案で区画にする"
+    /// puts them in the requirements table as sections (the layout then follows them).
+    fn strip_plan_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
+        if ui
+            .button(i18n::tr("区画の案を出す"))
+            .on_hover_text(i18n::tr("部品を、間をつなぐネットが少ない組に分けた案を出します (電源と GND のネットは数えません)。つながりだけで分けるので、アナログとデジタルのような役割の分け方とは違うことがあります。案を見てから区画にします"))
+            .clicked()
+        {
+            self.strip_propose(sch);
+        }
+        let Some(plan) = self.strip.plan.clone() else { return };
+        if plan.is_empty() {
+            ui.small(egui::RichText::new(i18n::tr("分けられる所が見つかりませんでした (部品が少ないか、部品どうしのつながりが多い回路です)")).color(NOTE));
+            return;
+        }
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            for g in &plan {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new(&g.name).strong());
+                    ui.small(g.parts.join(", "));
+                });
+            }
+            ui.horizontal(|ui| {
+                if ui.button(i18n::tr("この案で区画にする")).on_hover_text(i18n::tr("この組を、設計の要件の「近くに置く組」に「区画」の印を付けて入れます。あとで設計の要件の窓で直したり消したりできます")).clicked() {
+                    for g in &plan {
+                        sch.sch.requirements.groups.push(design_spec::PlaceGroup { name: g.name.clone(), parts: g.parts.clone(), section: true, note: i18n::tr("区画の案から").to_string(), ..Default::default() });
+                    }
+                    self.strip.plan = None;
+                    sch.status = i18n::trf!("{} 個の区画を設計の要件に入れました。並べ方は区画ごとに作り直されます", plan.len());
+                }
+                if ui.button(i18n::tr("やめる")).clicked() {
+                    self.strip.plan = None;
+                }
+            });
+        });
     }
 
     /// The picked part locked where it is, or let go (perfboard): a hand edit.
@@ -425,6 +469,7 @@ impl BreadboardView {
             }
         } else {
             ui.small(i18n::tr("区画に分けるには、回路図の「設計の要件」→「近くに置く組」で組を作り、「区画」に印を付けます"));
+            self.strip_plan_ui(ui, sch);
         }
         ui.small(i18n::trf!("大きさ: {} 列 × {} 行 (2.54mm の間隔で {:.0} × {:.0} mm)", l.cols, l.rows, l.cols as f32 * 2.54, l.rows as f32 * 2.54));
         if ui

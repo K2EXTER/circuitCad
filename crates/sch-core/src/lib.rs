@@ -22,6 +22,7 @@ pub mod system;
 pub mod breadboard;
 pub mod stripboard;
 pub mod perfboard;
+pub mod section_plan;
 pub mod mount;
 pub mod strip_edit;
 pub mod strip_print;
