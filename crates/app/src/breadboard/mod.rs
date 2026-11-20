@@ -1782,6 +1782,43 @@ mod tests {
         assert_eq!(app.breadboard.strip_shown(&app.sch), auto);
     }
 
+    /// On the perfboard, the bare wire tool: a click on a hole and another on its row draws a wire on the copper side, one off its row
+    /// and column draws nothing, and a right click on the wire takes it away.
+    #[test]
+    fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.kind = BoardKind::Perfboard;
+        app.breadboard.strip.tool = strip_view::StripTool::Bare;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        let (origin, pitch) = app.breadboard.strip.drawn.expect("the board was drawn");
+        let hole = |a: sch_core::stripboard::At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch;
+        let click = |app: &mut App, run: &mut dyn FnMut(&mut App, Vec<egui::Event>), at: sch_core::stripboard::At, button: egui::PointerButton| {
+            let p = hole(at);
+            run(app, vec![egui::Event::PointerMoved(p)]);
+            run(app, vec![egui::Event::PointerButton { pos: p, button, pressed: true, modifiers: Default::default() }]);
+            run(app, vec![egui::Event::PointerButton { pos: p, button, pressed: false, modifiers: Default::default() }]);
+        };
+        let rows = sch_core::stripboard::strip_layout(&app.sch.sch).rows;
+        let (a, b, off) = ((rows - 1, 1), (rows - 1, 4), (rows - 2, 6));
+        click(&mut app, &mut run, a, egui::PointerButton::Primary);
+        click(&mut app, &mut run, off, egui::PointerButton::Primary);
+        assert!(app.sch.stripboard.is_none(), "not on the start's row or column: nothing drawn");
+        click(&mut app, &mut run, b, egui::PointerButton::Primary);
+        assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.clone()), Some(vec![(a, b)]));
+        click(&mut app, &mut run, (rows - 1, 2), egui::PointerButton::Secondary);
+        assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(0), "a right click on it takes it away");
+    }
+
     /// The schematic's small window on the proto tab: a click on a part in it picks that part on the board (and the board's pick is
     /// what the window rings); a part moved off its column on the breadboard leaves lines still to join.
     #[test]

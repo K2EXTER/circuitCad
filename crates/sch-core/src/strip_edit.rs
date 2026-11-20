@@ -16,7 +16,7 @@ fn shift(at: At, dr: i32, dc: i32) -> Option<At> {
 
 /// The board made big enough for every hole in use (and the cuts), never smaller than it was.
 fn grown(mut l: StripLayout) -> StripLayout {
-    let mut far = l.used().into_iter().map(|(a, _)| a).chain(l.cuts.iter().copied()).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
+    let mut far = l.used().into_iter().map(|(a, _)| a).chain(l.cuts.iter().copied()).chain(l.bare.iter().flat_map(|(a, b)| [*a, *b])).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
     far = (far.0 + 1, far.1 + 1);
     l.rows = l.rows.max(far.0);
     l.cols = l.cols.max(far.1);
@@ -58,6 +58,13 @@ pub fn area_moved(l: &StripLayout, a: At, b: At, dr: i32, dc: i32) -> Option<Str
             if inside(*at) {
                 *at = shift(*at, dr, dc)?;
             }
+        }
+    }
+    for w in &mut out.bare {
+        let ends = (if inside(w.0) { shift(w.0, dr, dc)? } else { w.0 }, if inside(w.1) { shift(w.1, dr, dc)? } else { w.1 });
+        // a bare wire stays straight: with one end inside and the move off its row or column, it stays where it was
+        if ends.0 .0 == ends.1 .0 || ends.0 .1 == ends.1 .1 {
+            *w = ends;
         }
     }
     let mut cuts = std::collections::BTreeSet::new();
@@ -124,6 +131,25 @@ pub fn with_link(s: &Schematic, l: &StripLayout, a: At, b: At) -> StripLayout {
     let net = Some(net_at(s, l, a)).filter(|n| !n.is_empty()).unwrap_or_else(|| net_at(s, l, b));
     out.links.push(Link { a, b, net });
     grown(out)
+}
+
+/// The layout with a bare wire drawn by hand on the copper side from `a` to `b` (a perfboard); None unless the two are apart on
+/// one row or one column.
+pub fn with_bare(l: &StripLayout, a: At, b: At) -> Option<StripLayout> {
+    if a == b || (a.0 != b.0 && a.1 != b.1) {
+        return None;
+    }
+    let mut out = l.clone();
+    out.bare.push((a, b));
+    Some(grown(out))
+}
+
+/// The layout without the bare wires drawn by hand that run over hole `at` (ends included); None when there is none.
+pub fn without_bare_at(l: &StripLayout, at: At) -> Option<StripLayout> {
+    let on = |(a, b): &(At, At)| (a.0 == b.0 && at.0 == a.0 && at.1 >= a.1.min(b.1) && at.1 <= a.1.max(b.1)) || (a.1 == b.1 && at.1 == a.1 && at.0 >= a.0.min(b.0) && at.0 <= a.0.max(b.0));
+    let mut out = l.clone();
+    out.bare.retain(|w| !on(w));
+    (out.bare.len() < l.bare.len()).then_some(out)
 }
 
 /// The layout without link `k`.
@@ -245,6 +271,39 @@ mod tests {
         // an end moved to another hole and back
         let moved = link_end_moved(&s, &l, 0, 1, (k.b.0, k.b.1 + 1));
         assert_eq!(link_end_moved(&s, &moved, 0, 1, k.b).links, l.links);
+    }
+
+    /// Bare wires drawn by hand on a perfboard's copper side: one in place of a link joins the net again; one whose way runs over
+    /// another net's wire touches it (a short, as on the board). A wire is straight along a row or a column, a right click on it
+    /// takes it away, it is kept with the layout, and it is drawn among the perfboard's wires.
+    #[test]
+    fn bare_wires_by_hand() {
+        let s = blinker();
+        let l = strip_layout(&s);
+        let straight: Vec<usize> = (0..l.links.len()).filter(|k| l.links[*k].a.1 == l.links[*k].b.1).collect();
+        let bare_for = |k: usize| with_bare(&without_link(&l, k), l.links[k].a, l.links[k].b).unwrap();
+        let clean = straight.iter().copied().find(|k| strip_check(&s, &bare_for(*k)).is_empty()).expect("a link a bare wire can take the place of");
+        assert!(!strip_check(&s, &without_link(&l, clean)).is_empty(), "the link alone joined the net");
+        let crossing = straight.iter().copied().find(|k| strip_check(&s, &bare_for(*k)).iter().any(|p| p.starts_with("ショート"))).expect("a bare wire over another net's wire");
+        let spans = l.perf_spans();
+        let k = &l.links[crossing];
+        assert!((k.a.0.min(k.b.0) + 1..k.a.0.max(k.b.0)).any(|r| spans.iter().any(|(p, q)| p.0 == r && k.a.1 >= p.1 && k.a.1 <= q.1)), "it runs over a wire");
+        // straight only; taken away by a hole on it; saved; drawn
+        assert!(with_bare(&l, (0, 0), (1, 1)).is_none() && with_bare(&l, (0, 0), (0, 0)).is_none());
+        let m = bare_for(clean);
+        let mid = l.links[clean].a;
+        assert_eq!(without_bare_at(&m, mid).unwrap().bare, vec![]);
+        assert!(without_bare_at(&l, mid).is_none());
+        let back: StripLayout = serde_json::from_str(&serde_json::to_string(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
+        assert!(!serde_json::to_string(&l).unwrap().contains("bare"), "nothing written without them");
+        assert!(crate::strip_print::perf_wires(&m).contains(&m.bare[0]));
+        // a block moved with both ends inside moves the wire; one end inside and a sideways move leaves it straight where it was
+        let (a, b) = m.bare[0];
+        let all = area_moved(&m, (0, 0), (m.rows, m.cols), 0, 1).unwrap();
+        assert_eq!(all.bare[0], ((a.0, a.1 + 1), (b.0, b.1 + 1)));
+        let one = area_moved(&m, a, a, 0, 1).unwrap();
+        assert_eq!(one.bare[0], (a, b));
     }
 
     /// A part added to the schematic lands right of the saved board, the moved parts stay where they were, a part taken out goes.

@@ -53,17 +53,9 @@ fn esc(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-/// The bare wires of a perfboard: along each piece of strip, from its first used hole to its last.
+/// The bare wires of a perfboard: along each piece of strip, from its first used hole to its last, and those drawn by hand.
 pub fn perf_wires(l: &StripLayout) -> Vec<(At, At)> {
-    let used: Vec<At> = l.used().into_iter().map(|(a, _)| a).collect();
-    l.pieces()
-        .into_iter()
-        .filter_map(|(r, a, b)| {
-            let cols: Vec<u16> = used.iter().filter(|u| u.0 == r && u.1 >= a && u.1 <= b).map(|u| u.1).collect();
-            let (lo, hi) = (cols.iter().min()?, cols.iter().max()?);
-            (lo < hi).then_some(((r, *lo), (r, *hi)))
-        })
-        .collect()
+    l.perf_spans().into_iter().chain(l.bare.iter().copied()).collect()
 }
 
 /// The drawing of one face as an SVG text; `perf` for a perfboard (bare wires instead of strips), `title` on top.

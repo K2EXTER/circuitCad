@@ -70,9 +70,49 @@ pub struct StripLayout {
     /// The strips' names written where a section's strip starts (with sections, `homes` is empty: rows side by side differ).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub names: Vec<(At, String)>,
+    /// Bare wires drawn by hand on the copper side of a perfboard, each straight along a row or a column (`StripLayout::bare_joins`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bare: Vec<(At, At)>,
 }
 
 impl StripLayout {
+    /// The automatic bare wires of a perfboard: along each piece of strip from its first hole in use to its last (a lead, a link's or
+    /// an off-board wire's end, or the end of a bare wire drawn by hand), where there are two.
+    pub fn perf_spans(&self) -> Vec<(At, At)> {
+        let used: Vec<At> = self.used().into_iter().map(|(a, _)| a).chain(self.bare.iter().flat_map(|(a, b)| [*a, *b])).collect();
+        self.pieces()
+            .into_iter()
+            .filter_map(|(r, a, b)| {
+                let cols: Vec<u16> = used.iter().filter(|u| u.0 == r && u.1 >= a && u.1 <= b).map(|u| u.1).collect();
+                let (lo, hi) = (cols.iter().min()?, cols.iter().max()?);
+                (lo < hi).then_some(((r, *lo), (r, *hi)))
+            })
+            .collect()
+    }
+
+    /// What the bare wires drawn by hand join: each wire's first hole to every hole along it that it touches (its two ends, a hole
+    /// in use, or a hole an automatic bare wire runs through: two bare wires that cross on the copper side touch).
+    pub fn bare_joins(&self) -> Vec<(At, At)> {
+        let spans = self.perf_spans();
+        let used: BTreeSet<At> = self.used().into_iter().map(|(a, _)| a).collect();
+        let on_span = |h: At| spans.iter().any(|(a, b)| a.0 == h.0 && h.1 >= a.1 && h.1 <= b.1);
+        let mut out = vec![];
+        for (a, b) in &self.bare {
+            let along: Vec<At> = if a.0 == b.0 { (a.1.min(b.1)..=a.1.max(b.1)).map(|c| (a.0, c)).collect() } else { (a.0.min(b.0)..=a.0.max(b.0)).map(|r| (r, a.1)).collect() };
+            for h in along {
+                if h != *a && (h == *b || used.contains(&h) || on_span(h)) {
+                    out.push((*a, h));
+                }
+            }
+        }
+        out
+    }
+
+    /// Everything that joins two holes besides the strips: the links, and the bare wires drawn by hand.
+    pub fn joins(&self) -> Vec<(At, At)> {
+        self.links.iter().map(|k| (k.a, k.b)).chain(self.bare_joins()).collect()
+    }
+
     /// The pieces of strip: (row, first column, last column), each between two cuts (or the board's ends).
     pub fn pieces(&self) -> Vec<(u16, u16, u16)> {
         let mut out = vec![];
@@ -1096,10 +1136,10 @@ pub fn strip_fork(l: &StripLayout, s: At, a: At, b: At) -> Option<f64> {
     let pieces = l.pieces();
     let piece_of = |at: At| pieces.iter().position(|(r, x, y)| *r == at.0 && at.1 >= *x && at.1 <= *y);
     let mut wires: BTreeMap<At, Vec<(At, u64)>> = BTreeMap::new();
-    for k in &l.links {
-        let d = ((k.a.0 as f64 - k.b.0 as f64).hypot(k.a.1 as f64 - k.b.1 as f64) * 2540.0) as u64;
-        wires.entry(k.a).or_default().push((k.b, d));
-        wires.entry(k.b).or_default().push((k.a, d));
+    for (ka, kb) in l.joins() {
+        let d = ((ka.0 as f64 - kb.0 as f64).hypot(ka.1 as f64 - kb.1 as f64) * 2540.0) as u64;
+        wires.entry(ka).or_default().push((kb, d));
+        wires.entry(kb).or_default().push((ka, d));
     }
     // distances in µm, and each hole's hole before it on the way from `s`
     let mut dist: BTreeMap<At, u64> = BTreeMap::new();
@@ -1269,8 +1309,8 @@ pub fn strip_unjoined(s: &Schematic, l: &StripLayout) -> Vec<(String, At, At)> {
         }
         i
     }
-    for link in &l.links {
-        if let (Some(a), Some(b)) = (piece_of(link.a), piece_of(link.b)) {
+    for (ja, jb) in l.joins() {
+        if let (Some(a), Some(b)) = (piece_of(ja), piece_of(jb)) {
             let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
             parent[ra] = rb;
         }
@@ -1325,8 +1365,8 @@ pub fn strip_check(s: &Schematic, l: &StripLayout) -> Vec<String> {
         }
         i
     }
-    for link in &l.links {
-        if let (Some(a), Some(b)) = (piece_of(link.a), piece_of(link.b)) {
+    for (ja, jb) in l.joins() {
+        if let (Some(a), Some(b)) = (piece_of(ja), piece_of(jb)) {
             let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
             parent[ra] = rb;
         }

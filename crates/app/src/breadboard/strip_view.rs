@@ -5,7 +5,7 @@
 use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
-use sch_core::strip_edit::{area_moved, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_link, without_link};
+use sch_core::strip_edit::{area_moved, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
 
 /// What the person builds on.
@@ -27,8 +27,11 @@ pub enum StripTool {
     Move,
     /// Click a hole, then another: a wire link between them.
     Link,
-    /// Click a hole: the strip is cut there, or joined again (stripboard only).
+    /// Click a hole: the strip is cut there, or joined again (on a perfboard: the automatic bare wire parts there).
     Cut,
+    /// Click a hole, then another on its row or column: a bare wire drawn on the copper side (perfboard only); a right click on one
+    /// takes it away.
+    Bare,
 }
 
 /// What is being dragged.
@@ -191,7 +194,7 @@ impl BreadboardView {
     /// The tools and the automatic layout's button.
     fn strip_tools(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
         let strip = self.kind == BoardKind::Stripboard;
-        if self.strip.tool == StripTool::Cut && !strip {
+        if self.strip.tool == StripTool::Bare && strip {
             self.strip.tool = StripTool::Move;
         }
         ui.horizontal_wrapped(|ui| {
@@ -199,8 +202,12 @@ impl BreadboardView {
                 (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かします。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC は向きを逆に)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
+                (StripTool::Cut, "線を切る", "穴をクリックすると、自動で引いたすずめっき線をそこで分けます (その穴にははんだを盛らない)。もう一度クリックすると、元に戻します"),
+                (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行か列の穴をクリックします。右クリックした穴を通る手の線は消えます。線の両端と、途中で部品の足や別の線に重なる穴がつながります"),
             ] {
-                if t == StripTool::Cut && !strip {
+                // the stripboard cuts its strips; the perfboard parts its wires and has bare wires drawn by hand
+                let (perf_only, strip_only) = (t == StripTool::Bare || name == "線を切る", name == "帯を切る");
+                if (perf_only && strip) || (strip_only && !strip) {
                     continue;
                 }
                 if ui.selectable_label(self.strip.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
@@ -234,7 +241,9 @@ impl BreadboardView {
         let hint = match self.strip.tool {
             StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす / R で回す / Delete で線を消す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
-            StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
+            StripTool::Cut if strip => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
+            StripTool::Cut => "すずめっき線を分ける穴をクリックします (もう一度で戻ります)",
+            StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
         };
         ui.label(egui::RichText::new(i18n::tr(hint)).color(NOTE).small());
     }
@@ -479,6 +488,16 @@ impl BreadboardView {
         }
         if let Some(a) = self.strip.link_start {
             painter.circle_stroke(to(a), pitch * 0.35, Stroke::new(2.0, PICK));
+            // the bare wire it would draw, while the pointer is on the start's row or column
+            if self.strip.tool == StripTool::Bare
+                && let Some(p) = response.hover_pos()
+            {
+                let v = (p - origin) / pitch;
+                let h = (v.y.round().max(0.0) as u16, v.x.round().max(0.0) as u16);
+                if h != a && (h.0 == a.0 || h.1 == a.1) {
+                    painter.line_segment([to(a), to(h)], Stroke::new(pitch * 0.18, PICK.gamma_multiply(0.7)));
+                }
+            }
         }
         for (k, (r, pins)) in l.off.iter().enumerate() {
             let box_at = origin + Vec2::new(-left * pitch + pitch * 0.5, (k as f32 * 2.2 - 0.8) * pitch);
@@ -622,7 +641,31 @@ impl BreadboardView {
                     self.strip_set(sch, Some(m.clone()));
                     *l = m;
                 }
+                StripTool::Bare => match self.strip.link_start.take() {
+                    None => self.strip.link_start = Some(h),
+                    Some(a) if a == h => {}
+                    Some(a) => match with_bare(l, a, h) {
+                        Some(m) => {
+                            self.strip_set(sch, Some(m.clone()));
+                            *l = m;
+                        }
+                        None => {
+                            self.strip.link_start = Some(a);
+                            sch.status = i18n::tr("すずめっき線は、同じ行か同じ列の穴へまっすぐ引きます (曲げるときは 2 本に分けます)").to_string();
+                        }
+                    },
+                },
             }
+        }
+        // a right click on a bare wire drawn by hand takes it away
+        if tool == StripTool::Bare
+            && response.secondary_clicked()
+            && let Some(h) = response.interact_pointer_pos().and_then(hole_at)
+            && let Some(m) = without_bare_at(l, h)
+        {
+            self.strip.link_start = None;
+            self.strip_set(sch, Some(m.clone()));
+            *l = m;
         }
         // keys: R turns the picked part, Delete takes the picked link away, Esc lets go
         if response.hovered() {
