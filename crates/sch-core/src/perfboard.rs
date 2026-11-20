@@ -11,6 +11,8 @@ use crate::breadboard::{is_ground_name, read, Circuit, Look};
 use crate::stripboard::{At, Link, StripLayout, StripOptions, StripPart};
 use crate::Schematic;
 use std::cmp::Reverse;
+
+mod simpl;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 
 /// Free holes left between two chips (and two rows of chips) for the wires: the fewest first, more when the nets do not all find a
@@ -91,17 +93,27 @@ pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let done = |_: &Option<(usize, usize, StripLayout)>| start.elapsed() > BUDGET;
     // the shelves as placed, then the same made better by annealing (it helps small boards; on a crowded one the estimate it goes by
     // packs the parts too tight for the wires, and the shelves as placed win)
-    let placings: Vec<(u16, bool, bool)> = [false, true].iter().flat_map(|s| GAPS.iter().flat_map(move |g| [(*g, false, *s), (*g, true, *s)])).collect();
-    let mut placed: Vec<Option<StripLayout>> = vec![None; placings.len()];
+    // and each again with the chips where the springs and the spreading put them (`simpl`)
+    let placings: Vec<(u16, bool, bool, bool)> =
+        [false, true].iter().flat_map(|q| [false, true].iter().flat_map(move |s| GAPS.iter().flat_map(move |g| [(*g, false, *s, *q), (*g, true, *s, *q)]))).collect();
+    let mut placed: Vec<Option<Option<StripLayout>>> = vec![None; placings.len()];
     for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
-        for (pi, (gap, turned, sa)) in placings.iter().copied().enumerate() {
+        for (pi, (gap, turned, sa, springs)) in placings.iter().copied().enumerate() {
             if done(&best) {
                 break;
             }
-            let l = placed[pi].get_or_insert_with(|| place(&c, opt, gap, turned, sa, &wants)).clone();
+            let l = placed[pi]
+                .get_or_insert_with(|| {
+                    if !springs {
+                        return Some(place(&c, opt, gap, turned, sa, &wants, None));
+                    }
+                    simpl::targets(&c, opt, gap, turned, &wants).map(|t| place(&c, opt, gap, turned, sa, &wants, Some(&t)))
+                })
+                .clone();
+            let Some(l) = l else { continue };
             let mut first: Vec<String> = vec![];
             let mut extra = 0;
-            for _ in 0..ROUNDS + MORE_ROUNDS {
+            for round in 0..ROUNDS + MORE_ROUNDS {
                 if best.is_some() && start.elapsed() > BUDGET {
                     break;
                 }
@@ -109,6 +121,10 @@ pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
                 route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
                 let key = (apart.len(), m.links.len(), m.rows as usize * m.cols as usize);
+                // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
+                if round == 0 && best.as_ref().is_some_and(|b| key.0 > b.0 + 1 || (key.0 >= b.0 && key.1 > b.1 + b.1 / 2 + 2)) {
+                    break;
+                }
                 let on_top: Vec<String> = m.links.iter().map(|k| k.net.clone()).collect();
                 if best.as_ref().is_none_or(|b| key < (b.0, b.1, b.2.rows as usize * b.2.cols as usize)) {
                     best = Some((key.0, key.1, m));
@@ -410,6 +426,57 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
     }
 }
 
+/// The chips and rows of leads (not the two-lead parts), each turned a quarter turn when `turned`.
+fn shapes_of(c: &Circuit, turned: bool) -> Vec<Shape> {
+    (0..c.on.len()).filter(|k| look_on(c, *k) != Look::TwoLead).map(|k| shape(c, k)).map(|s| if turned { turn(s) } else { s }).collect()
+}
+
+/// What a chip takes on the board with the free holes round it for the wires (`gap` holes between chips).
+fn room_of(s: &Shape, gap: u16) -> u32 {
+    (s.h + gap) as u32 * (s.w + gap) as u32
+}
+
+/// What a two-lead part takes on the board with room round it, in holes.
+const TWO_ROOM: u32 = 12;
+
+/// The board's width: as asked, else about square for what goes on it (and never narrower than the widest part).
+fn board_width(shapes: &[Shape], twos: usize, opt: StripOptions, gap: u16, margin: u16) -> u16 {
+    let area: u32 = shapes.iter().map(|s| room_of(s, gap)).sum::<u32>() + twos as u32 * TWO_ROOM;
+    let widest = shapes.iter().map(|s| s.w).max().unwrap_or(0) + 2 * margin;
+    opt.cols.unwrap_or_else(|| ((area as f64 * 1.3).sqrt().ceil() as u16).max(widest)).max(widest).max(8)
+}
+
+/// Whether a part is a header (a long row of leads: along the top edge).
+fn is_head(s: &Shape) -> bool {
+    s.look != Look::Dip && s.leads.len() >= LONG_ROW
+}
+
+/// The free place (top-left corner) nearest a chip's target centre `t` (row, column): on or below row `y0`, within the board's
+/// width, its outline and `gap` holes round it clear of what is placed (`blocked`), and `ok` there (the table's distances).
+fn target_place(s: &Shape, t: (f64, f64), y0: u16, gap: u16, margin: u16, width: u16, blocked: &BTreeSet<At>, ok: impl Fn(u16, u16) -> bool) -> Option<At> {
+    let want = ((t.0 - (s.h as f64 - 1.0) / 2.0).round() as i32, (t.1 - (s.w as f64 - 1.0) / 2.0).round() as i32);
+    let fits = |yy: u16, xx: u16| -> bool {
+        xx >= margin
+            && xx + s.w < width
+            && yy >= y0
+            && (yy.saturating_sub(gap)..yy + s.h + gap).all(|r| (xx.saturating_sub(gap)..xx + s.w + gap).all(|cc| !blocked.contains(&(r, cc))))
+            && ok(yy, xx)
+    };
+    for d in 0..400i32 {
+        for dy in -d..=d {
+            let dx = d - dy.abs();
+            let xs = if dx == 0 { vec![want.1] } else { vec![want.1 - dx, want.1 + dx] };
+            for xx in xs {
+                let yy = want.0 + dy;
+                if yy >= 0 && xx >= 0 && fits(yy as u16, xx as u16) {
+                    return Some((yy as u16, xx as u16));
+                }
+            }
+        }
+    }
+    None
+}
+
 /// The holes beside `h` (up, down, left, right) on a board `width` holes wide.
 fn beside4(h: At, width: u16) -> impl Iterator<Item = At> {
     [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)].into_iter().filter_map(move |(dr, dc)| {
@@ -420,16 +487,15 @@ fn beside4(h: At, width: u16) -> impl Iterator<Item = At> {
 
 /// The parts placed (`gap` free holes between chips, the chips `turned` a quarter turn, made better by annealing when `sa`), not yet
 /// wired: section by section (one band of rows each, a gap between), in
-/// each the headers along its top, then the chips in rows (shelves) left to right, then the two-lead parts.
-fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants: &Wants) -> StripLayout {
+/// each the headers along its top, then the chips in rows (shelves) left to right, then the two-lead parts. With `targets` (each
+/// part's centre, row and column, from `simpl::targets`), a chip other than a header goes to the free place nearest its target
+/// instead of the next on the shelf, and a two-lead part weighs its distance from its target too.
+fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants: &Wants, targets: Option<&BTreeMap<String, (f64, f64)>>) -> StripLayout {
     let off_pins: Vec<(usize, usize)> = c.off.iter().enumerate().flat_map(|(i, (_, p))| p.iter().enumerate().filter(|(_, (_, n))| !n.is_empty()).map(move |(j, _)| (i, j))).collect();
     let margin: u16 = if off_pins.is_empty() { 1 } else { 2 };
-    let all_shapes: Vec<Shape> = (0..c.on.len()).filter(|k| look_on(c, *k) != Look::TwoLead).map(|k| shape(c, k)).map(|s| if turned { turn(s) } else { s }).collect();
+    let all_shapes = shapes_of(c, turned);
     let all_twos: Vec<usize> = (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead).collect();
-    // the board's width: as asked, else about square for what goes on it
-    let area: u32 = all_shapes.iter().map(|s| (s.h + gap) as u32 * (s.w + gap) as u32).sum::<u32>() + all_twos.len() as u32 * 12;
-    let widest = all_shapes.iter().map(|s| s.w).max().unwrap_or(0) + 2 * margin;
-    let width = opt.cols.unwrap_or_else(|| ((area as f64 * 1.3).sqrt().ceil() as u16).max(widest)).max(widest).max(8);
+    let width = board_width(&all_shapes, all_twos.len(), opt, gap, margin);
     let net_of_lead = |refdes: &str, pin: &str| lead_net(c, refdes, pin);
     // the sections, or the whole board as one; an off-board part goes with the section that has the most of its nets
     let slices: Vec<(String, BTreeSet<String>)> = if wants.sections.is_empty() { vec![(String::new(), c.on.iter().map(|p| p.0.clone()).collect())] } else { wants.sections.clone() };
@@ -460,7 +526,7 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
         // the order: the headers first (the top edge), then each chip next to the ones it shares a group or the most nets with
         let nets_of = |s: &Shape| -> BTreeSet<String> { s.leads.iter().map(|x| x.1.clone()).filter(|n| !n.is_empty() && !is_ground_name(n) && !c.supplies.contains(n)).collect() };
         let shapes: Vec<&Shape> = all_shapes.iter().filter(|s| members.contains(&c.on[s.k].0)).collect();
-        let (mut heads, mut rest): (Vec<&Shape>, Vec<&Shape>) = shapes.into_iter().partition(|s| s.look != Look::Dip && s.leads.len() >= LONG_ROW);
+        let (mut heads, mut rest): (Vec<&Shape>, Vec<&Shape>) = shapes.into_iter().partition(|s| is_head(s));
         heads.sort_by_key(|s| Reverse(s.w));
         let mut order: Vec<&Shape> = heads;
         let mut seen: BTreeSet<String> = order.iter().flat_map(|s| nets_of(s)).collect();
@@ -479,9 +545,28 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
         }
         // the chips in rows (shelves), left to right; one kept apart from a part placed moves on along the row (or to the next)
         let (mut x, mut y, mut shelf) = (margin, top, 0u16);
+        // with targets: the first row below the headers, where the other chips may go
+        let mut below: Option<u16> = None;
         for s in order {
             let refdes = &c.on[s.k].0;
             let leads_at = |y: u16, x: u16| -> Vec<At> { s.leads.iter().map(|(_, _, a)| (y + a.0, x + a.1)).collect() };
+            if let Some(t) = targets.and_then(|t| t.get(refdes)).filter(|_| !is_head(s)) {
+                let y0 = *below.get_or_insert(if shelf > 0 { y + shelf + gap } else { top });
+                let (ty, tx) = target_place(s, *t, y0, gap, margin, width, &blocked, |yy, xx| wants.far_enough(refdes, &leads_at(yy, xx), &parts)).unwrap_or((bottom + gap, margin));
+                for r in ty..ty + s.h {
+                    for cc in tx..tx + s.w {
+                        blocked.insert((r, cc));
+                    }
+                }
+                let leads: Vec<(String, At)> = s.leads.iter().map(|(p, _, a)| (p.clone(), (ty + a.0, tx + a.1))).collect();
+                for (p, a) in &leads {
+                    at_net.entry(net_of_lead(refdes, p)).or_default().push(*a);
+                    lead_net_at.insert(*a, net_of_lead(refdes, p));
+                }
+                parts.push(StripPart { refdes: refdes.clone(), look: s.look, leads, mount: c.mounts.get(refdes).cloned().unwrap_or_default() });
+                bottom = bottom.max(ty + s.h);
+                continue;
+            }
             for _ in 0..400 {
                 if x > margin && x + s.w > width.saturating_sub(1) {
                     y += shelf + gap;
@@ -560,7 +645,8 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
                                     })
                                     .count() as u32
                             };
-                            let cost = 4 * (near(&pins[0].1, p, &at_net) + near(&pins[1].1, q, &at_net)) + group + crowd(p, &pins[0].1) + crowd(q, &pins[1].1);
+                            let aim = targets.and_then(|t| t.get(refdes)).map_or(0, |t| (3.0 * (((p.0 + q.0) as f64 / 2.0 - t.0).abs() + ((p.1 + q.1) as f64 / 2.0 - t.1).abs())) as u32);
+                            let cost = 4 * (near(&pins[0].1, p, &at_net) + near(&pins[1].1, q, &at_net)) + group + crowd(p, &pins[0].1) + crowd(q, &pins[1].1) + aim;
                             if best.is_none_or(|x| cost < x.0) {
                                 best = Some((cost, p, q));
                             }
@@ -1041,14 +1127,18 @@ fn wire_try(l: &mut StripLayout, hole_nets: &BTreeMap<At, String>, pairs: &[(Str
         }
         let roots: Vec<usize> = (0..rows * cols).map(|h| find(&mut parent, h)).collect();
         let own = |h: usize| taken[h] && net_of.get(&roots[h]) == Some(net);
-        // the free holes beside a lead of another net's pair still to come, when it has two or fewer: kept for it
+        // the free holes beside the copper a lead of another net's pair still to come is on (the lead and what is joined to it), when
+        // it has two or fewer: kept for it (a lead with no free hole of its own but copper going on elsewhere keeps nothing)
         let mut kept = vec![false; rows * cols];
         for (m, x, y) in &pairs[n_at + 1..] {
             if m == net {
                 continue;
             }
             for e in [*x, *y].into_iter().filter(|e| fits(*e) && lead[idx(*e)]) {
-                let free: Vec<usize> = (0..4).filter_map(|d| step(idx(e), d, 1)).filter(|h| !taken[*h]).collect();
+                let piece = roots[idx(e)];
+                let mut free: Vec<usize> = (0..rows * cols).filter(|h| roots[*h] == piece).flat_map(|h| (0..4).filter_map(move |d| step(h, d, 1))).filter(|h| !taken[*h]).collect();
+                free.sort_unstable();
+                free.dedup();
                 if free.len() <= 2 {
                     for h in free {
                         kept[h] = true;
@@ -1180,32 +1270,54 @@ mod tests {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
 
-    /// Samples laid out on a perfboard join what their schematics join and nothing more; every bare wire runs straight along a row
-    /// or a column; no lead or wire's end shares a hole; and the boards are far smaller than the stripboard's (the seven-segment
-    /// counter 60 × 22 holes on strips, 21 × 18 here), with few wires on top. A width to keep to is kept.
+    /// A sample laid out on a perfboard (`opt`): it joins what its schematic joins and nothing more; every bare wire runs straight
+    /// along a row or a column; no lead or wire's end shares a hole; all on the board. With the layout, the stripboard's holes.
+    fn laid_out(name: &str, opt: StripOptions) -> (StripLayout, u32) {
+        let s = load(name);
+        let l = perf_layout_with(&s, opt);
+        assert!(l.perf);
+        assert!(strip_check(&s, &l).is_empty(), "{name}: {:?}", strip_check(&s, &l));
+        assert!(l.bare.iter().all(|(a, b)| a.0 == b.0 || a.1 == b.1), "{name}: straight wires");
+        assert!(l.used().iter().all(|(a, _)| a.0 < l.rows && a.1 < l.cols), "{name}: on the board");
+        let st = strip_layout(&s);
+        (l, st.rows as u32 * st.cols as u32)
+    }
+
+    /// Samples laid out on a perfboard as drawn (`laid_out`), on boards far smaller than the stripboard's, with few wires on top.
     #[test]
     fn samples_lay_out_on_a_perfboard_as_drawn_and_small() {
         let (mut perf, mut strip, mut on_top) = (0u32, 0u32, 0usize);
-        for name in ["ne555_blinker.schjson", "seg7_counter.schjson", "active_filter.schjson", "current_sensors.schjson"] {
-            let s = load(name);
-            let l = perf_layout_with(&s, StripOptions::default());
-            assert!(l.perf);
-            assert!(strip_check(&s, &l).is_empty(), "{name}: {:?}", strip_check(&s, &l));
-            assert!(l.bare.iter().all(|(a, b)| a.0 == b.0 || a.1 == b.1), "{name}: straight wires");
-            assert!(l.used().iter().all(|(a, _)| a.0 < l.rows && a.1 < l.cols), "{name}: on the board");
-            let st = strip_layout(&s);
+        for name in ["ne555_blinker.schjson", "active_filter.schjson", "current_sensors.schjson"] {
+            let (l, st) = laid_out(name, StripOptions::default());
             on_top += l.links.len();
             perf += l.rows as u32 * l.cols as u32;
-            strip += st.rows as u32 * st.cols as u32;
+            strip += st;
         }
-        assert!(perf * 2 < strip, "{perf} holes on perfboards, {strip} on stripboards");
-        // the wires on top: 41 before a way's jumps were one wire and the nets that needed them were wired first (2026-11-20), 32 since,
-        // 30 with the chips also tried turned a quarter turn, 27 with the placement also made better by annealing
-        assert!(on_top <= 28, "{on_top} wires on top");
+        // the holes: 369 with the shelves alone, 442 since `simpl` (its boards are bigger, about ten holes for each wire on top fewer)
+        assert!(perf * 3 < strip * 2 && perf <= 460, "{perf} holes on perfboards, {strip} on stripboards");
+        // the wires on top (these three with the seven-segment counter): 41 before a way's jumps were one wire and the nets that needed
+        // them were wired first (2026-11-20), 32 since, 30 with the chips also tried turned a quarter turn, 27 with the placement also
+        // made better by annealing, 19 with the chips also placed by the springs and the spreading (`simpl`, 2026-11-21): these three
+        // 8 → 2
+        assert!(on_top <= 3, "{on_top} wires on top");
+    }
+
+    /// The seven-segment counter (on its own: it takes the most time) as drawn, on a board far smaller than the stripboard's (60 × 22
+    /// holes on strips, 21 × 18 here), with few wires on top (19 → 17 with `simpl`); and a width to keep to kept.
+    #[test]
+    fn the_seven_segment_counter_on_a_perfboard() {
+        let (l, strip) = laid_out("seg7_counter.schjson", StripOptions::default());
+        assert!(l.rows as u32 * l.cols as u32 * 2 < strip, "{} × {} holes", l.cols, l.rows);
+        assert!(l.links.len() <= 18, "{} wires on top", l.links.len());
         let s = load("seg7_counter.schjson");
-        let narrow = perf_layout_with(&s, StripOptions { cols: Some(16) });
-        assert!(narrow.cols <= 16 && strip_check(&s, &narrow).is_empty(), "{} wide: {:?}", narrow.cols, strip_check(&s, &narrow));
         assert!(!strip_layout_with(&s, StripOptions::default()).perf, "the stripboard keeps its strips");
+    }
+
+    /// The seven-segment counter on a board 16 holes wide: kept to.
+    #[test]
+    fn a_width_to_keep_to_is_kept() {
+        let (l, _) = laid_out("seg7_counter.schjson", StripOptions { cols: Some(16) });
+        assert!(l.cols <= 16, "{} wide", l.cols);
     }
 
     /// The shelves as placed wall no lead in: every lead keeps a free hole beside it for its wire (arduino_mega_usb's USB connector,
@@ -1218,7 +1330,7 @@ mod tests {
         let c = read(&s);
         let wants = Wants::read(&s, &c);
         for turned in [false, true] {
-            let l = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants);
+            let l = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants, None);
             let mut taken: BTreeSet<At> = l.off.iter().flat_map(|(_, v)| v.iter().map(|w| w.2)).collect();
             for p in &l.parts {
                 let (r0, r1) = (p.leads.iter().map(|x| x.1 .0).min().unwrap(), p.leads.iter().map(|x| x.1 .0).max().unwrap());

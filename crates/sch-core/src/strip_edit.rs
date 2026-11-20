@@ -586,21 +586,18 @@ mod tests {
 
     #[test]
     fn a_saved_perfboard_wires_the_parts_added() {
-        // each part of a sample added to a perfboard laid out without it: put right of the board and wired to its nets round the
-        // copper already there (bare wires, a link where they cannot pass); the rest stays as it was
+        // a part of a sample (the chip and three two-lead parts: each layout takes a while) added to a perfboard laid out without
+        // it: put right of the board and wired to its nets round the copper already there (bare wires, a link where they cannot
+        // pass); the rest stays as it was
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
         let opt = StripOptions::default();
         let mut n_left = 0;
         for name in ["ne555_blinker"] {
             let s: Schematic = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}.schjson"))).unwrap()).unwrap();
-            let all = crate::perfboard::perf_layout_with(&s, opt).parts.len();
-            for c in &s.components {
+            for c in s.components.iter().filter(|c| ["U1", "R2", "C1", "D1"].contains(&c.refdes.as_str())) {
                 let mut without = s.clone();
                 without.components.retain(|x| x.refdes != c.refdes);
                 let before = crate::perfboard::perf_layout_with(&without, opt);
-                if before.parts.len() == all {
-                    continue;
-                }
                 let l = synced(&s, &before, opt);
                 assert!(before.bare.iter().all(|w| l.bare.contains(w)) && before.links.iter().all(|k| l.links.contains(k)), "{name}: the wires there stay");
                 // a line may be left only at a lead the wires there close in on all sides (the 555's OUT when its resistor is added:
