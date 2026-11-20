@@ -32,14 +32,20 @@ pub(super) fn targets(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, wa
     let shapes = shapes_of(c, turned);
     let n_twos = (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead).count();
     let margin: u16 = if pre.off.iter().any(|(_, v)| !v.is_empty()) { 2 } else { 1 };
-    let width = board_width(&shapes, n_twos, opt, gap, margin);
-    let heads: BTreeSet<String> = shapes.iter().filter(|s| is_head(s)).map(|s| c.on[s.k].0.clone()).collect();
+    let width = board_width(&shapes, n_twos, opt, gap, margin).max(wants.kept_width());
+    let heads: BTreeSet<String> = shapes.iter().filter(|s| is_head(s) && !wants.kept(&c.on[s.k].0)).map(|s| c.on[s.k].0.clone()).collect();
     let mut fixed: BTreeMap<String, Vec<(f64, f64)>> = BTreeMap::new();
     let mut y0 = 1u16;
     for p in pre.parts.iter().filter(|p| heads.contains(&p.refdes)) {
         for (pin, a) in &p.leads {
             fixed.entry(lead_net(c, &p.refdes, pin)).or_default().push((a.0 as f64, a.1 as f64));
             y0 = y0.max(a.0 + 1 + gap);
+        }
+    }
+    // the locked parts pull as fixed pins too
+    for p in &wants.keep {
+        for (pin, a) in &p.leads {
+            fixed.entry(lead_net(c, &p.refdes, pin)).or_default().push((a.0 as f64, a.1 as f64));
         }
     }
     for (_, v) in &pre.off {
@@ -51,13 +57,13 @@ pub(super) fn targets(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, wa
     // way they lie is chosen later)
     let mut movers: Vec<Mover> = shapes
         .iter()
-        .filter(|s| !is_head(s))
+        .filter(|s| !is_head(s) && !wants.kept(&c.on[s.k].0))
         .map(|s| {
             let (cy, cx) = ((s.h as f64 - 1.0) / 2.0, (s.w as f64 - 1.0) / 2.0);
             Mover { refdes: c.on[s.k].0.clone(), room: room_of(s, gap) as f64, pins: s.leads.iter().map(|(_, n, a)| (n.clone(), a.0 as f64 - cy, a.1 as f64 - cx)).collect() }
         })
         .collect();
-    for k in (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead) {
+    for k in (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead && !wants.kept(&c.on[*k].0)) {
         let (refdes, _, pins) = &c.on[k];
         movers.push(Mover { refdes: refdes.clone(), room: TWO_ROOM as f64, pins: pins.iter().map(|(_, n)| (n.clone(), 0.0, 0.0)).collect() });
     }

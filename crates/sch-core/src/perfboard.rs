@@ -81,8 +81,38 @@ fn turn(s: Shape) -> Shape {
 /// else about square) with room between for the wires, each two-lead part where its leads are nearest the leads of their nets, then
 /// every net wired.
 pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
+    perf_layout_keeping(s, opt, vec![])
+}
+
+/// Lays the schematic out on a perfboard round the parts `from` has locked (`StripLayout::locked`): those stay in their holes as they
+/// are, the others are placed round them (the shelves and the springs leave the locked parts' holes and room round them free) and
+/// every net is wired again. A locked part no longer on the schematic, or with other pins now, is placed afresh.
+pub fn perf_layout_around(s: &Schematic, opt: StripOptions, from: &StripLayout) -> StripLayout {
     let c = read(s);
-    let wants = Wants::read(s, &c);
+    let keep: Vec<StripPart> = from
+        .parts
+        .iter()
+        .filter(|p| from.locked.contains(&p.refdes))
+        .filter(|p| {
+            c.on.iter().find(|x| x.0 == p.refdes).is_some_and(|x| {
+                let mut a: Vec<&str> = x.2.iter().map(|y| y.0.as_str()).collect();
+                let mut b: Vec<&str> = p.leads.iter().map(|y| y.0.as_str()).collect();
+                a.sort_unstable();
+                b.sort_unstable();
+                a == b
+            })
+        })
+        .cloned()
+        .collect();
+    let mut l = perf_layout_keeping(s, opt, keep.clone());
+    l.locked = keep.into_iter().map(|p| p.refdes).collect();
+    l
+}
+
+fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>) -> StripLayout {
+    let c = read(s);
+    let mut wants = Wants::read(s, &c);
+    wants.keep = keep;
     let net_of_lead = |refdes: &str, pin: &str| lead_net(&c, refdes, pin);
     // each placement (the gaps between chips, the chips upright and turned a quarter turn, without and with annealing) wired the rails first and the small nets
     // first, without and then with a way out kept by each lead, every placement with one order before the next order (so each has its
@@ -170,6 +200,8 @@ struct Wants {
     apart: Vec<(BTreeSet<String>, BTreeSet<String>, f64)>,
     groups: BTreeMap<String, Vec<usize>>,
     sections: Vec<(String, BTreeSet<String>)>,
+    /// The parts locked where they are (`perf_layout_around`): placed first as they are, never moved.
+    keep: Vec<StripPart>,
 }
 
 impl Wants {
@@ -188,7 +220,22 @@ impl Wants {
                 groups.entry(p.clone()).or_default().push(i);
             }
         }
-        Wants { apart, groups, sections: crate::stripboard::sections(s, c) }
+        Wants { apart, groups, sections: crate::stripboard::sections(s, c), keep: vec![] }
+    }
+
+    /// Whether a part is locked where it is.
+    fn kept(&self, refdes: &str) -> bool {
+        self.keep.iter().any(|p| p.refdes == refdes)
+    }
+
+    /// The holes the locked parts take (a chip its outline, a two-lead part its leads and the hole between).
+    fn kept_holes(&self) -> BTreeSet<At> {
+        self.keep.iter().flat_map(outline).collect()
+    }
+
+    /// The narrowest board the locked parts fit on (their rightmost hole and a free column).
+    fn kept_width(&self) -> u16 {
+        self.keep.iter().flat_map(|p| p.leads.iter().map(|x| x.1 .1 + 2)).max().unwrap_or(0)
     }
 
     /// Whether a part with these leads keeps its distance from the parts already placed.
@@ -295,8 +342,8 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
         }
     }
     let band_of = |a: At| bands.iter().copied().find(|(t, b)| a.0 >= *t && a.0 <= *b).unwrap_or((1, u16::MAX));
-    let twos: Vec<usize> = (0..parts.len()).filter(|i| parts[*i].look == Look::TwoLead && parts[*i].leads.len() == 2).collect();
-    let chips: Vec<usize> = (0..parts.len()).filter(|i| parts[*i].look != Look::TwoLead).collect();
+    let twos: Vec<usize> = (0..parts.len()).filter(|i| parts[*i].look == Look::TwoLead && parts[*i].leads.len() == 2 && !wants.kept(&parts[*i].refdes)).collect();
+    let chips: Vec<usize> = (0..parts.len()).filter(|i| parts[*i].look != Look::TwoLead && !wants.kept(&parts[*i].refdes)).collect();
     let size = |p: &StripPart| {
         let (r0, r1) = (p.leads.iter().map(|x| x.1 .0).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .0).max().unwrap_or(0));
         let (c0, c1) = (p.leads.iter().map(|x| x.1 .1).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .1).max().unwrap_or(0));
@@ -478,6 +525,13 @@ fn target_place(s: &Shape, t: (f64, f64), y0: u16, gap: u16, margin: u16, width:
     None
 }
 
+/// The holes a part takes on the board: a chip its outline, a two-lead part its leads and the hole between.
+fn outline(p: &StripPart) -> Vec<At> {
+    let (r0, r1) = (p.leads.iter().map(|x| x.1 .0).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .0).max().unwrap_or(0));
+    let (c0, c1) = (p.leads.iter().map(|x| x.1 .1).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .1).max().unwrap_or(0));
+    (r0..=r1).flat_map(|r| (c0..=c1).map(move |cc| (r, cc))).collect()
+}
+
 /// The holes beside `h` (up, down, left, right) on a board `width` holes wide.
 fn beside4(h: At, width: u16) -> impl Iterator<Item = At> {
     [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)].into_iter().filter_map(move |(dr, dc)| {
@@ -496,7 +550,7 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
     let margin: u16 = if off_pins.is_empty() { 1 } else { 2 };
     let all_shapes = shapes_of(c, turned);
     let all_twos: Vec<usize> = (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead).collect();
-    let width = board_width(&all_shapes, all_twos.len(), opt, gap, margin);
+    let width = board_width(&all_shapes, all_twos.len(), opt, gap, margin).max(wants.kept_width());
     let net_of_lead = |refdes: &str, pin: &str| lead_net(c, refdes, pin);
     // the sections, or the whole board as one; an off-board part goes with the section that has the most of its nets
     let slices: Vec<(String, BTreeSet<String>)> = if wants.sections.is_empty() { vec![(String::new(), c.on.iter().map(|p| p.0.clone()).collect())] } else { wants.sections.clone() };
@@ -510,12 +564,26 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
     let mut off: Vec<(String, Vec<crate::stripboard::OffWire>)> = c.off.iter().map(|(r, _)| (r.clone(), vec![])).collect();
     let mut boxes: Vec<(String, At, At)> = vec![];
     let mut top = 1u16;
+    // the locked parts first, where they are; the others keep `gap` holes off them
+    let kept_holes = wants.kept_holes();
+    for p in &wants.keep {
+        blocked.extend(outline(p));
+        for (pin, a) in &p.leads {
+            at_net.entry(net_of_lead(&p.refdes, pin)).or_default().push(*a);
+            lead_net_at.insert(*a, net_of_lead(&p.refdes, pin));
+        }
+        parts.push(p.clone());
+    }
+    let clear = |y: u16, x: u16, h: u16, w: u16| (y.saturating_sub(gap)..y + h + gap).all(|r| (x.saturating_sub(gap)..x + w + gap).all(|cc| !kept_holes.contains(&(r, cc))));
     for (si, (name, members)) in slices.iter().enumerate() {
         let mut bottom = top;
         // the wires from off the board come in at the left edge, every other row (each has a free hole of its own beside it)
         let mut off_row = top;
         for (i, j) in off_pins.iter().copied().filter(|(i, _)| off_slice(*i) == si) {
             let (pin, net) = &c.off[i].1[j];
+            while blocked.contains(&(off_row, 0)) || blocked.contains(&(off_row, 1)) {
+                off_row += 1;
+            }
             let a = (off_row, 0);
             off[i].1.push((pin.clone(), net.clone(), a));
             at_net.entry(net.clone()).or_default().push(a);
@@ -526,7 +594,7 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
         }
         // the order: the headers first (the top edge), then each chip next to the ones it shares a group or the most nets with
         let nets_of = |s: &Shape| -> BTreeSet<String> { s.leads.iter().map(|x| x.1.clone()).filter(|n| !n.is_empty() && !is_ground_name(n) && !c.supplies.contains(n)).collect() };
-        let shapes: Vec<&Shape> = all_shapes.iter().filter(|s| members.contains(&c.on[s.k].0)).collect();
+        let shapes: Vec<&Shape> = all_shapes.iter().filter(|s| members.contains(&c.on[s.k].0) && !wants.kept(&c.on[s.k].0)).collect();
         let (mut heads, mut rest): (Vec<&Shape>, Vec<&Shape>) = shapes.into_iter().partition(|s| is_head(s));
         heads.sort_by_key(|s| Reverse(s.w));
         let mut order: Vec<&Shape> = heads;
@@ -568,13 +636,13 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
                 bottom = bottom.max(ty + s.h);
                 continue;
             }
-            for _ in 0..400 {
+            for _ in 0..4000 {
                 if x > margin && x + s.w > width.saturating_sub(1) {
                     y += shelf + gap;
                     x = margin;
                     shelf = 0;
                 }
-                if wants.far_enough(refdes, &leads_at(y, x), &parts) {
+                if clear(y, x, s.h, s.w) && wants.far_enough(refdes, &leads_at(y, x), &parts) {
                     break;
                 }
                 x += 1;
@@ -596,7 +664,7 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
         }
         // the two-lead parts: the most joined to what is placed first, each where its leads are nearest their nets' leads (and its
         // group's parts), kept apart as the table says, in the section's rows
-        let mut twos: Vec<usize> = all_twos.iter().copied().filter(|k| members.contains(&c.on[*k].0)).collect();
+        let mut twos: Vec<usize> = all_twos.iter().copied().filter(|k| members.contains(&c.on[*k].0) && !wants.kept(&c.on[*k].0)).collect();
         twos.sort_by_key(|k| Reverse(c.on[*k].2.iter().filter(|(_, n)| at_net.contains_key(n)).count()));
         for k in twos {
             let (refdes, look, pins) = &c.on[k];
@@ -606,7 +674,8 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
             let near = |n: &str, a: At, at_net: &BTreeMap<String, Vec<At>>| -> u32 { at_net.get(n).map(|v| v.iter().map(|b| a.0.abs_diff(b.0) as u32 + a.1.abs_diff(b.1) as u32).min().unwrap_or(0)).unwrap_or(0) };
             let mates: Vec<At> = parts.iter().filter(|p| wants.together(refdes, &p.refdes)).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
             let mut best: Option<(u32, At, At)> = None;
-            for r in top..bottom + 4 {
+            let reach = bottom.max(wants.keep.iter().flat_map(|p| p.leads.iter().map(|x| x.1 .0 + 1)).max().unwrap_or(0));
+            for r in top..reach + 4 {
                 for cc in 0..width {
                     for (dr, dc) in [(0, SPAN), (SPAN, 0)] {
                         let (a, b) = ((r, cc), (r + dr, cc + dc));
@@ -1320,6 +1389,29 @@ mod tests {
     fn a_width_to_keep_to_is_kept() {
         let (l, _) = laid_out("seg7_counter.schjson", StripOptions { cols: Some(16) });
         assert!(l.cols <= 16, "{} wide", l.cols);
+    }
+
+    /// A locked part stays where it is and the others are laid out round it: the 555 moved down and right of where the layout put it
+    /// and locked; laid out again, it is in the same holes, no other part takes a hole of its outline, the board joins what the
+    /// schematic joins, and the lock is kept on the layout.
+    #[test]
+    fn a_locked_part_stays_and_the_rest_goes_round_it() {
+        let s = load("ne555_blinker.schjson");
+        let mut l = perf_layout_with(&s, StripOptions::default());
+        let u = l.parts.iter_mut().find(|p| p.refdes == "U1").unwrap();
+        for (_, a) in u.leads.iter_mut() {
+            *a = (a.0 + 6, a.1 + 8);
+        }
+        let held = u.leads.clone();
+        l.locked.insert("U1".into());
+        let m = perf_layout_around(&s, StripOptions::default(), &l);
+        assert_eq!(m.parts.iter().find(|p| p.refdes == "U1").unwrap().leads, held, "U1 stays");
+        let taken: BTreeSet<At> = outline(m.parts.iter().find(|p| p.refdes == "U1").unwrap()).into_iter().collect();
+        for p in m.parts.iter().filter(|p| p.refdes != "U1") {
+            assert!(outline(p).iter().all(|h| !taken.contains(h)), "{} on U1", p.refdes);
+        }
+        assert!(strip_check(&s, &m).is_empty(), "{:?}", strip_check(&s, &m));
+        assert!(m.locked.contains("U1"));
     }
 
     /// The shelves as placed wall no lead in: every lead keeps a free hole beside it for its wire (arduino_mega_usb's USB connector,

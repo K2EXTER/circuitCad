@@ -4,7 +4,7 @@
 
 use super::*;
 use sch_core::mount::{shopping, Mount};
-use sch_core::perfboard::perf_layout_with;
+use sch_core::perfboard::{perf_layout_around, perf_layout_with};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
@@ -56,6 +56,8 @@ pub struct StripState {
     synced: Option<(u64, usize, StripLayout, StripLayout)>,
     /// A layout being made on another thread (a perfboard's tries take up to 1.5 s: the window does not stop meanwhile).
     job: Option<StripJob>,
+    /// "固定した部品のまわりを並べ直す" on another thread: the layout round the locked parts comes back here.
+    around: Option<std::sync::mpsc::Receiver<StripLayout>>,
     drag: Option<StripDrag>,
     /// The size and place of the board when the drag began: it stays put while the board grows under the pointer.
     frozen: Option<(Pos2, f32)>,
@@ -88,6 +90,8 @@ const WIRE: Color32 = Color32::from_rgb(190, 196, 204);
 /// An adapter board's green, and a socket's frame.
 const ADAPTER: Color32 = Color32::from_rgb(40, 120, 70);
 const SOCKET: Color32 = Color32::from_gray(85);
+/// A locked part's padlock (perfboard).
+const LOCK: Color32 = Color32::from_rgb(235, 190, 60);
 
 /// A colour for a net's links, the supplies red and ground black.
 fn net_colour(net: &str) -> Color32 {
@@ -199,8 +203,46 @@ impl BreadboardView {
     pub(crate) fn strip_busy(&self) -> (bool, bool) {
         match &self.strip.job {
             Some(j) => (true, j.saved.is_none()),
-            None => (false, false),
+            None => (self.strip.around.is_some(), false),
         }
+    }
+
+    /// The layout round the locked parts, once made on its thread: kept with the sheet (one step to undo).
+    fn strip_around_done(&mut self, sch: &mut SchEditor) {
+        use std::sync::mpsc::TryRecvError;
+        let Some(rx) = &self.strip.around else { return };
+        let got = if cfg!(test) { rx.recv().map_err(|_| TryRecvError::Disconnected) } else { rx.try_recv() };
+        match got {
+            Ok(m) => {
+                self.strip.around = None;
+                self.strip.sel = None;
+                self.strip.picked_link = None;
+                self.strip_set(sch, Some(m));
+                sch.status = i18n::tr("固定した部品はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
+            }
+            Err(TryRecvError::Disconnected) => self.strip.around = None,
+            Err(TryRecvError::Empty) => {}
+        }
+    }
+
+    /// "固定した部品のまわりを並べ直す": the layout round `l`'s locked parts, made on another thread (`strip_around_done` keeps it).
+    pub(super) fn strip_relayout(&mut self, sch: &SchEditor, l: &StripLayout) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (s, from, opt) = (sch.sch.clone(), l.clone(), strip_options(sch.strip_size));
+        std::thread::spawn(move || {
+            let _ = tx.send(perf_layout_around(&s, opt, &from));
+        });
+        self.strip.around = Some(rx);
+    }
+
+    /// The picked part locked where it is, or let go (perfboard): a hand edit.
+    fn strip_lock_toggle(&mut self, sch: &mut SchEditor, l: &mut StripLayout, refdes: &str) {
+        let mut m = l.clone();
+        if !m.locked.remove(refdes) {
+            m.locked.insert(refdes.to_string());
+        }
+        self.strip_set(sch, Some(m.clone()));
+        *l = m;
     }
 
     /// The board's size: a few common ones, or typed; and whether the layout fits it.
@@ -245,7 +287,7 @@ impl BreadboardView {
     }
 
     /// The tools and the automatic layout's button.
-    fn strip_tools(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
+    fn strip_tools(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &StripLayout) {
         let strip = self.kind == BoardKind::Stripboard;
         if (self.strip.tool == StripTool::Bare && strip) || (self.strip.tool == StripTool::Cut && !strip) {
             self.strip.tool = StripTool::Move;
@@ -289,9 +331,33 @@ impl BreadboardView {
                 ));
             }
         });
+        // the perfboard: lock the parts the person placed, and lay the rest out round them
+        if !strip {
+            ui.horizontal_wrapped(|ui| {
+                if let Some(r) = self.picked.clone().filter(|r| l.parts.iter().any(|p| &p.refdes == r)) {
+                    let locked = l.locked.contains(&r);
+                    let label = if locked { i18n::trf!("{} の固定を外す", r) } else { i18n::trf!("{} を固定する", r) };
+                    if ui.button(label).on_hover_text(i18n::tr("選んだ部品を今の穴に固定します (L)。「固定した部品のまわりを並べ直す」で、固定した部品は動かさず、ほかの部品を並べ直します。コネクタやつまみのようにケースの穴に合わせる部品、大きい IC など、置き場所を自分で決めたい部品に使います")).clicked() {
+                        let mut m = l.clone();
+                        self.strip_lock_toggle(sch, &mut m, &r);
+                    }
+                }
+                let n = l.locked.len();
+                if n > 0 {
+                    let busy = self.strip.around.is_some();
+                    if ui
+                        .add_enabled(!busy, egui::Button::new(i18n::trf!("固定した部品 ({} 個) のまわりを並べ直す", n)))
+                        .on_hover_text(i18n::tr("固定した部品はその穴のまま、ほかの部品を自動で置き直し、線を全部引き直します。固定した部品のまわりは、線の通り道に少し空けます (元に戻すで戻せます)"))
+                        .clicked()
+                    {
+                        self.strip_relayout(sch, l);
+                    }
+                }
+            });
+        }
         let hint = match self.strip.tool {
             StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / Ctrl+Z で戻す",
-            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / Delete で線を消す / Ctrl+Z で戻す",
+            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / L で部品を固定 / Delete で線を消す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
@@ -325,8 +391,9 @@ impl BreadboardView {
                 return;
             }
         }
+        self.strip_around_done(sch);
         self.strip_size_ui(ui, sch, &l);
-        self.strip_tools(ui, sch);
+        self.strip_tools(ui, sch, &l);
         let problems = strip_check(&sch.sch, &l);
         ui.add_space(4.0);
         if problems.is_empty() {
@@ -364,6 +431,9 @@ impl BreadboardView {
             for p in &l.parts {
                 ui.horizontal_top(|ui| {
                     ui.add_sized([44.0, 18.0], egui::Label::new(egui::RichText::new(&p.refdes).strong()));
+                    if l.locked.contains(&p.refdes) {
+                        ui.label(egui::RichText::new(i18n::tr("固定")).color(LOCK).small()).on_hover_text(i18n::tr("この部品は固定してあります。「固定した部品のまわりを並べ直す」で動きません"));
+                    }
                     ui.vertical(|ui| {
                         ui.add(egui::Label::new(p.leads.iter().map(|(pin, at)| format!("{pin}:{}", hole_name(*at))).collect::<Vec<_>>().join("  ")).wrap());
                         // a socket or an adapter under the part (a leaded twin is in the list below, once for all)
@@ -525,6 +595,14 @@ impl BreadboardView {
             }
             for q in &pts {
                 painter.circle_filled(*q, pitch * 0.18, Color32::from_gray(150));
+            }
+            // a locked part: a small padlock at its top-left corner
+            if l.locked.contains(&p.refdes) {
+                // (outside the picked part's frame, which is 0.6 of a hole out)
+                let at = bb.left_top() + Vec2::new(-pitch * 1.0, -pitch * 1.05);
+                let s = (pitch * 0.62).clamp(7.0, 16.0);
+                painter.circle_stroke(at + Vec2::new(0.0, -s * 0.15), s * 0.42, Stroke::new((s * 0.22).max(1.2), LOCK));
+                painter.rect_filled(Rect::from_center_size(at + Vec2::new(0.0, s * 0.35), Vec2::new(s * 1.1, s * 0.8)), 1.5, LOCK);
             }
         }
         // the links over the parts, and the supplies off the board
@@ -764,6 +842,13 @@ impl BreadboardView {
                     }
                     None => sch.status = format!("{r} は、ここでは回せません (基板の上か左にはみ出す向き)"),
                 }
+            }
+            if tool == StripTool::Move
+                && self.kind == BoardKind::Perfboard
+                && ui.input(|i| i.key_pressed(egui::Key::L))
+                && let Some(r) = self.picked.clone().filter(|r| l.parts.iter().any(|p| &p.refdes == r))
+            {
+                self.strip_lock_toggle(sch, l, &r);
             }
             if ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
                 && let Some(k) = self.strip.picked_link.take()

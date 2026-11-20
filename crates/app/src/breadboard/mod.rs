@@ -1782,6 +1782,44 @@ mod tests {
         assert_eq!(app.breadboard.strip_shown(&app.sch), auto);
     }
 
+    /// On the perfboard, L locks the picked part (kept with the sheet, the padlock's mark in the list); "固定した部品のまわりを並べ直す"
+    /// then lays the others out again round it: the locked part in the same holes, the lock kept, the board as the schematic joins it.
+    #[test]
+    fn a_part_locked_on_the_perfboard_stays_when_the_rest_is_laid_out_again() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.kind = BoardKind::Perfboard;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        let auto = app.breadboard.strip_shown(&app.sch);
+        let (origin, pitch) = app.breadboard.strip.drawn.expect("the board was drawn");
+        let u1 = auto.parts.iter().find(|p| p.refdes == "U1").unwrap().clone();
+        let pts: Vec<Pos2> = u1.leads.iter().map(|(_, a)| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch).collect();
+        let at = egui::Rect::from_points(&pts).center();
+        let button = |pos: Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, vec![button(at, true)]);
+        run(&mut app, vec![button(at, false)]);
+        assert_eq!(app.breadboard.picked.as_deref(), Some("U1"));
+        run(&mut app, vec![egui::Event::Key { key: egui::Key::L, physical_key: Some(egui::Key::L), pressed: true, repeat: false, modifiers: Default::default() }]);
+        let locked = app.sch.stripboard.clone().expect("the lock is kept with the sheet");
+        assert!(locked.locked.contains("U1"));
+        app.breadboard.strip_relayout(&app.sch, &locked);
+        run(&mut app, vec![]);
+        let again = app.sch.stripboard.clone().unwrap();
+        assert_eq!(again.parts.iter().find(|p| p.refdes == "U1").unwrap().leads, u1.leads, "U1 stays");
+        assert!(again.locked.contains("U1"), "still locked");
+        assert!(sch_core::stripboard::strip_check(&app.sch.sch, &again).is_empty(), "{:?}", sch_core::stripboard::strip_check(&app.sch.sch, &again));
+    }
+
     /// On the perfboard, the bare wire tool: a click on a hole and another on its row draws a wire on the copper side, one off its row
     /// and column draws nothing, and a right click on the wire takes it away.
     #[test]

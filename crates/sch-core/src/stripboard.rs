@@ -77,6 +77,10 @@ pub struct StripLayout {
     /// links.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub perf: bool,
+    /// The parts the person fixed where they are (perfboard): "固定した部品のまわりを並べ直す" (`perfboard::perf_layout_around`)
+    /// lays the others out round them.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub locked: BTreeSet<String>,
 }
 
 impl StripLayout {
