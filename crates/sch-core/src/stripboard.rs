@@ -1138,7 +1138,7 @@ pub(crate) fn nearest_joins<P: Copy>(groups: &[Vec<P>], dist: impl Fn(P, P) -> f
 }
 
 /// The hole of a pad named "PART.PIN" (a part's lead, or an off-board part's wire).
-fn pad_at(l: &StripLayout, pad: &str) -> Option<At> {
+pub(crate) fn pad_at(l: &StripLayout, pad: &str) -> Option<At> {
     let (r, pin) = pad.rsplit_once('.')?;
     l.parts.iter().filter(|p| p.refdes == r).flat_map(|p| p.leads.iter()).find(|(p, _)| p == pin).map(|(_, a)| *a).or_else(|| {
         l.off.iter().filter(|(x, _)| x == r).flat_map(|(_, v)| v.iter()).find(|(p, _, _)| p == pin).map(|(_, _, a)| *a)

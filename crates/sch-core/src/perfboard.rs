@@ -146,6 +146,14 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>) -
                 })
                 .clone();
             let Some(l) = l else { continue };
+            // the table's Kelvin forks where this placing put their leads
+            let fork_at: Vec<[At; 3]> = s
+                .requirements
+                .measures
+                .iter()
+                .filter(|m| m.what == "fork" && m.pads.len() == 3 && m.op != "min")
+                .filter_map(|m| Some([crate::stripboard::pad_at(&l, &m.pads[0])?, crate::stripboard::pad_at(&l, &m.pads[1])?, crate::stripboard::pad_at(&l, &m.pads[2])?]))
+                .collect();
             let mut first: Vec<String> = vec![];
             let mut extra = 0;
             for round in 0..ROUNDS + MORE_ROUNDS {
@@ -153,7 +161,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>) -
                     break;
                 }
                 let mut m = l.clone();
-                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first });
+                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
                 let key = (apart.len(), m.links.len(), m.rows as usize * m.cols as usize);
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
@@ -818,10 +826,12 @@ struct Order<'a> {
     escapes: bool,
     /// Nets wired before all the others, in this order (the ones a try before left apart).
     first: &'a [String],
+    /// The requirements table's Kelvin forks (its lead, and the two leads its ways go to): the two ways part at the lead.
+    forks: &'a [[At; 3]],
 }
 
 fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> String, order: Order) {
-    let Order { rails_first, escapes, first } = order;
+    let Order { rails_first, escapes, first, forks } = order;
     let (rows, cols) = (l.rows as usize, l.cols as usize);
     let idx = |a: At| a.0 as usize * cols + a.1 as usize;
     let hole = |h: usize| ((h / cols) as u16, (h % cols) as u16);
@@ -945,6 +955,16 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         }
         let mut tree: Vec<At> = vec![terms[0]];
         let mut left: BTreeSet<At> = terms[1..].iter().copied().collect();
+        // a Kelvin fork on this net: its two ways drawn first, each from the fork's lead itself, the second keeping off the first's
+        // copper (so they part at the lead: the current's way and the sense's share no copper); then the other leads as usual
+        let fork = forks.iter().find(|f| f.iter().all(|a| terms.contains(a))).copied();
+        let mut forced: Vec<At> = vec![];
+        let mut first_way: BTreeSet<At> = BTreeSet::new();
+        if let Some([st, a, b]) = fork {
+            tree = vec![st];
+            left = terms.iter().copied().filter(|t| *t != st).collect();
+            forced = vec![a, b];
+        }
         // holes this net's ways keep off: where a way would end two wires on top in one hole
         let mut avoid: BTreeSet<At> = BTreeSet::new();
         let mut tries = 0;
@@ -952,7 +972,12 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             let mut dist: Vec<u32> = vec![u32::MAX; rows * cols * WAYS];
             let mut prev: Vec<u32> = vec![u32::MAX; rows * cols * WAYS];
             let mut heap = BinaryHeap::new();
-            for t in &tree {
+            let target = forced.first().copied().filter(|t| left.contains(t));
+            let starts: Vec<At> = match (target, fork) {
+                (Some(_), Some([st, _, _])) => vec![st],
+                _ => tree.clone(),
+            };
+            for t in &starts {
                 let s = idx(*t) * WAYS + 4;
                 dist[s] = 0;
                 heap.push(Reverse((0u32, s as u32)));
@@ -965,6 +990,10 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             for (h, o) in open.iter_mut().enumerate() {
                 let a = hole(h);
                 *o = owner[h].is_none_or(|o| o == net) && !link_ends.contains(&a) && !avoid.contains(&a) && kept.get(&a).is_none_or(|o| *o == net) && escape.get(&a).is_none_or(|o| *o == net) && bx.is_none_or(|k| inside(k, a));
+                // the fork's second way keeps off the first's copper
+                if target.is_some() && first_way.contains(&a) {
+                    *o = false;
+                }
             }
             for a in &lead_holes {
                 is_lead[idx(*a)] = true;
@@ -972,8 +1001,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             for a in &link_ends {
                 is_end[idx(*a)] = true;
             }
-            for a in &left {
-                is_left[idx(*a)] = true;
+            match target {
+                Some(t) => is_left[idx(t)] = true,
+                None => {
+                    for a in &left {
+                        is_left[idx(*a)] = true;
+                    }
+                }
             }
             let mut found = None;
             while let Some(Reverse((d, s))) = heap.pop() {
@@ -1033,6 +1067,12 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 }
             }
             let Some(mut s) = found else {
+                // a fork's way not found: the net is wired as any other (the rules then say how far its ways run together)
+                if target.is_some() {
+                    forced.clear();
+                    first_way.clear();
+                    continue;
+                }
                 // shut in on every side: the check names the net left apart
                 break;
             };
@@ -1091,6 +1131,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 }
             }
             left.remove(path.last().unwrap());
+            if target.is_some() {
+                // the fork's first way: its copper (but the lead) kept off by the second
+                if forced.len() == 2 {
+                    first_way = path.iter().copied().filter(|a| Some(*a) != fork.map(|f| f[0])).collect();
+                }
+                forced.remove(0);
+            }
             tree.extend(path);
         }
         if let Some(k) = bx {
@@ -1470,6 +1517,18 @@ mod tests {
         let found = links_along_pins(&l);
         assert_eq!(found.len(), before + 1, "{found:?}");
         assert!(found.contains(&(k, "U1".to_string())));
+    }
+
+    /// A Kelvin fork from the requirements table is kept on a perfboard: on the active filter, the ways from R4.1 to R3.2 and to C3.1
+    /// (on a stripboard both go off the same side of the lead and run together) are drawn each from the lead, and part there.
+    #[test]
+    fn a_kelvin_fork_parts_at_the_lead_on_a_perfboard() {
+        let mut s = load("active_filter.schjson");
+        s.requirements.measures.push(design_spec::Measure { name: "検出".into(), what: "fork".into(), pads: ["R4.1", "R3.2", "C3.1"].map(String::from).to_vec(), op: "max".into(), limit: 0.5, ..Default::default() });
+        let l = perf_layout_with(&s, StripOptions::default());
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        let rules = crate::stripboard::strip_rules(&s, &l);
+        assert!(rules.iter().any(|r| r.ok && r.message.starts_with("ケルビン「検出」")), "{rules:?}");
     }
 
     /// The shelves as placed wall no lead in: every lead keeps a free hole beside it for its wire (arduino_mega_usb's USB connector,
