@@ -102,6 +102,10 @@ fn current_sensors() -> Schematic {
     label_pin(&mut s, c1, "2", "GND");
     resistor(&mut s, (24, 30), 1, "2", "LOAD", "GND");
     s.components.last_mut().unwrap().footprint = "R_2512".into();
+    // the shunt's Kelvin connection: the amplifier's inputs leave the shunt's leads by wires of their own, apart from the current's
+    // way (checked on the board and on a stripboard or a perfboard)
+    let kelvin = |name: &str, pads: [&str; 3]| design_spec::Measure { name: name.into(), what: "fork".into(), pads: pads.iter().map(|p| p.to_string()).collect(), op: "max".into(), limit: 0.5, note: "ケルビン接続".into(), ..Default::default() };
+    s.requirements.measures = vec![kelvin("シャントの上の検出", ["R1.1", "V2.+", "U1.3"]), kelvin("シャントの下の検出", ["R1.2", "U2.1", "U1.4"])];
     s
 }
 

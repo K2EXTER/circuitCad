@@ -201,10 +201,9 @@ struct Block {
 pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let c = read(s);
     let secs = sections(s, &c);
-    if secs.len() < 2 {
-        return lay(&c, opt, &BTreeSet::new());
-    }
-    lay_sections(&c, opt, &secs)
+    let mut l = if secs.len() < 2 { lay(&c, opt, &BTreeSet::new()) } else { lay_sections(&c, opt, &secs) };
+    keep_forks(s, &mut l);
+    l
 }
 
 /// The sections of the board: the requirements table's groups marked as sections, in the table's order, with the parts on the board
@@ -302,6 +301,7 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
         for (r, n) in l.homes.iter().enumerate().filter(|(_, n)| !n.is_empty()) {
             out.names.push(((r as u16 + y, x), n.clone()));
         }
+        out.names.extend(l.names.iter().map(|(a, n)| (at(*a), n.clone())));
         out.sections.push((secs[i].0.clone(), (y, x), (y + l.rows - 1, x + l.cols - 1)));
         origin.push((y, x));
         shelf_h = shelf_h.max(l.rows);
@@ -312,10 +312,10 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
     shelf_gaps.pop();
     close_shelf(&mut out, y, shelf_h, &mut shelf_gaps);
     // the nets shared by sections: a wire between their strips (ground: each to the first section's)
-    let strip_row = |i: usize, n: &str| subs[i].homes.iter().position(|h| h == n).map(|r| r as u16 + origin[i].0);
+    // a net's strip in a section: its row and the stretch of it the net has (a row may carry more than one net, cut between)
+    let strip_row = |i: usize, n: &str| strip_of(&subs[i], n).map(|(r, a, b)| (r + origin[i].0, a + origin[i].1, b + origin[i].1));
     let mut taken: BTreeSet<At> = out.used().into_iter().map(|(a, _)| a).collect();
-    let free_on = |i: usize, row: u16, toward: u16, taken: &mut BTreeSet<At>, cuts: &BTreeSet<At>| -> Option<At> {
-        let (x0, x1) = (origin[i].1, origin[i].1 + subs[i].cols - 1);
+    let free_on = |(row, x0, x1): (u16, u16, u16), toward: u16, taken: &mut BTreeSet<At>, cuts: &BTreeSet<At>| -> Option<At> {
         let mut cols: Vec<u16> = (x0..=x1).collect();
         cols.sort_by_key(|c| c.abs_diff(toward));
         let a = cols.into_iter().map(|c| (row, c)).find(|a| !taken.contains(a) && !cuts.contains(a))?;
@@ -332,9 +332,9 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
         }
         let pairs: Vec<(usize, usize)> = if is_ground_name(n) { have[1..].iter().map(|j| (have[0], *j)).collect() } else { have.windows(2).map(|w| (w[0], w[1])).collect() };
         for (i, j) in pairs {
-            let (ri, rj) = (strip_row(i, n).unwrap(), strip_row(j, n).unwrap());
+            let (si, sj) = (strip_row(i, n).unwrap(), strip_row(j, n).unwrap());
             let (ci, cj) = (origin[i].1, origin[j].1);
-            if let (Some(a), Some(b)) = (free_on(i, ri, cj, &mut taken, &out.cuts), free_on(j, rj, ci, &mut taken, &out.cuts)) {
+            if let (Some(a), Some(b)) = (free_on(si, cj, &mut taken, &out.cuts), free_on(sj, ci, &mut taken, &out.cuts)) {
                 out.links.push(Link { a, b, net: n.clone() });
             }
         }
@@ -343,6 +343,16 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
     out.rows = far.0.max(y + shelf_h.max(1) - 1) + 1;
     out.cols = far.1 + 1;
     out
+}
+
+/// A net's strip in a layout of one section: its row and the stretch of the row it has (first and last column; a row shared by nets
+/// is cut between them, its first net named in `homes`, the others in `names` where theirs starts).
+fn strip_of(l: &StripLayout, n: &str) -> Option<(u16, u16, u16)> {
+    let pieces = l.pieces();
+    let piece = |at: At| pieces.iter().find(|(r, a, b)| *r == at.0 && at.1 >= *a && at.1 <= *b).copied();
+    let first = l.homes.iter().position(|h| h == n).and_then(|r| piece((r as u16, 0)));
+    let other = l.names.iter().filter(|(_, m)| m == n).filter_map(|(a, _)| piece(*a)).min();
+    [first, other].into_iter().flatten().min()
 }
 
 /// Lays out one section (or the whole board): `external` are the nets that also go to other sections (they get a strip in the top
@@ -752,9 +762,24 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                     })
                 })
             };
+            // near the wires already on its nets' strips (not the supplies' or ground's: they run the whole board), so the strips
+            // stay short and can share a row (`share_rows`); else from the left
+            let near: Vec<u16> = pins
+                .iter()
+                .filter(|(_, n)| !is_ground_name(n) && !c.supplies.contains(n))
+                .filter_map(|(_, n)| strip_row[band].get(n))
+                .flat_map(|r| taken.iter().filter(move |a| a.0 == *r).map(|a| a.1))
+                .collect();
+            let from = |want: &dyn Fn(u16) -> bool| -> u16 {
+                if near.is_empty() {
+                    return (margin..).find(|cc| want(*cc)).unwrap();
+                }
+                let mid = (near.iter().map(|x| *x as u32).sum::<u32>() / near.len() as u32) as u16;
+                (0..400u16).flat_map(|d| [mid.checked_sub(d), mid.checked_add(d)]).flatten().filter(|cc| *cc >= margin).find(|cc| want(*cc)).unwrap_or_else(|| (margin..).find(|cc| want(*cc)).unwrap())
+            };
             let leads: Vec<(String, At)> = match rows.as_slice() {
                 [Some(a), Some(b)] if a != b => {
-                    let cc = (margin..).find(|cc| fits(&[*cc], *a, *b)).unwrap();
+                    let cc = from(&|cc| fits(&[cc], *a, *b));
                     for r in *a.min(b)..=*a.max(b) {
                         bodies.insert((r, cc));
                     }
@@ -763,7 +788,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                 }
                 // both leads on one net: lying along its strip, two holes apart
                 [Some(a), Some(_)] => {
-                    let cc = (margin..).find(|cc| fits(&[*cc, cc + 1, cc + 2], *a, *a)).unwrap();
+                    let cc = from(&|cc| fits(&[cc, cc + 1, cc + 2], *a, *a));
                     for x in cc..=cc + 2 {
                         bodies.insert((*a, x));
                     }
@@ -806,10 +831,223 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         });
         l.parts = parts;
         l.homes = homes;
+        let gone = share_rows(&mut l);
         let used = l.used().into_iter().map(|(a, _)| a).chain(l.cuts.iter().copied()).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
-        l.rows = used.0.max(spare_row) + 1;
+        l.rows = used.0.max(spare_row.saturating_sub(gone)) + 1;
         l.cols = used.1 + 1;
         return l;
+    }
+}
+
+/// An end of something on the board: a part's lead, a link's end (`true`: its `a`), an off-board wire's end.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum End {
+    Lead(usize, usize),
+    Link(usize, bool),
+    Off(usize, usize),
+}
+
+fn end_at(l: &StripLayout, e: End) -> At {
+    match e {
+        End::Lead(p, k) => l.parts[p].leads[k].1,
+        End::Link(k, true) => l.links[k].a,
+        End::Link(k, false) => l.links[k].b,
+        End::Off(o, k) => l.off[o].1[k].2,
+    }
+}
+
+fn set_end(l: &mut StripLayout, e: End, at: At) {
+    match e {
+        End::Lead(p, k) => l.parts[p].leads[k].1 = at,
+        End::Link(k, true) => l.links[k].a = at,
+        End::Link(k, false) => l.links[k].b = at,
+        End::Off(o, k) => l.off[o].1[k].2 = at,
+    }
+}
+
+/// Every end on the board.
+fn all_ends(l: &StripLayout) -> Vec<End> {
+    let mut v = vec![];
+    for (p, part) in l.parts.iter().enumerate() {
+        v.extend((0..part.leads.len()).map(|k| End::Lead(p, k)));
+    }
+    for k in 0..l.links.len() {
+        v.push(End::Link(k, true));
+        v.push(End::Link(k, false));
+    }
+    for (o, (_, pins)) in l.off.iter().enumerate() {
+        v.extend((0..pins.len()).map(|k| End::Off(o, k)));
+    }
+    v
+}
+
+/// The other end of a two-lead part or a link (what lies between the two).
+fn other_end(l: &StripLayout, e: End) -> Option<End> {
+    match e {
+        End::Lead(p, k) if l.parts[p].leads.len() == 2 => Some(End::Lead(p, 1 - k)),
+        End::Link(k, a) => Some(End::Link(k, !a)),
+        _ => None,
+    }
+}
+
+/// The holes strictly between two ends in one row or one column (a part's body or a wire lies over them).
+fn between(a: At, b: At) -> Vec<At> {
+    if a.1 == b.1 {
+        (a.0.min(b.0) + 1..a.0.max(b.0)).map(|r| (r, a.1)).collect()
+    } else if a.0 == b.0 {
+        (a.1.min(b.1) + 1..a.1.max(b.1)).map(|c| (a.0, c)).collect()
+    } else {
+        vec![]
+    }
+}
+
+/// The bands of strips: (first row, row past the last).
+fn bands_of(homes: &[String]) -> Vec<(u16, u16)> {
+    let rows = homes.len() as u16;
+    let mut bands = vec![];
+    let mut r = 0u16;
+    while r < rows {
+        if homes[r as usize].is_empty() {
+            r += 1;
+            continue;
+        }
+        let st = r;
+        while r < rows && !homes[r as usize].is_empty() {
+            r += 1;
+        }
+        bands.push((st, r));
+    }
+    bands
+}
+
+/// Packs each band's strips: a strip whose ends all lie apart (a hole between, to cut) from the ends on a strip above it in the same
+/// band moves onto that strip's row, the row cut between the two, when every end can go straight up or down (the hole there free and
+/// nothing lying over it, and nothing in the way of a wire or part made longer). The rows left empty go. A band carries the supplies
+/// and ground for every chip along the board, but most other nets are used along a short stretch of it: the DMM's B stage had 44 rows
+/// of strips in 87. Returns how many rows went.
+fn share_rows(l: &mut StripLayout) -> u16 {
+    // each shared row's stretches of strip: (first used column, last used column, net)
+    let mut segs: BTreeMap<u16, Vec<(u16, u16, String)>> = BTreeMap::new();
+    let mut empty: Vec<u16> = vec![];
+    let cols_on = |l: &StripLayout, r: u16| -> Vec<(End, u16)> { all_ends(l).into_iter().map(|e| (e, end_at(l, e))).filter(|(_, a)| a.0 == r).map(|(e, a)| (e, a.1)).collect() };
+    for (st, en) in bands_of(&l.homes) {
+        for m in st + 1..en {
+            let ends = cols_on(l, m);
+            if ends.is_empty() {
+                continue;
+            }
+            let (lo, hi) = ends.iter().fold((u16::MAX, 0), |a, (_, c)| (a.0.min(*c), a.1.max(*c)));
+            for n in (st..m).filter(|n| !empty.contains(n)) {
+                let here: Vec<(u16, u16, String)> = segs.get(&n).cloned().unwrap_or_else(|| {
+                    let cols: Vec<u16> = cols_on(l, n).into_iter().map(|x| x.1).collect();
+                    match (cols.iter().min(), cols.iter().max()) {
+                        (Some(a), Some(b)) => vec![(*a, *b, l.homes[n as usize].clone())],
+                        _ => vec![],
+                    }
+                });
+                if here.is_empty() || !here.iter().all(|(a, b, _)| *b + 1 < lo || hi + 1 < *a) {
+                    continue;
+                }
+                let ends: Vec<End> = ends.iter().map(|x| x.0).collect();
+                if !can_move(l, &ends, n) {
+                    continue;
+                }
+                for e in &ends {
+                    let at = end_at(l, *e);
+                    set_end(l, *e, (n, at.1));
+                }
+                let mut v = here;
+                v.push((lo, hi, l.homes[m as usize].clone()));
+                v.sort();
+                segs.insert(n, v);
+                empty.push(m);
+                break;
+            }
+        }
+    }
+    // the cuts between the stretches, and each stretch's name where it starts (the leftmost one's at the board's edge)
+    for (n, v) in &segs {
+        l.homes[*n as usize] = v[0].2.clone();
+        for w in v.windows(2) {
+            let cut = (w[0].1 + w[1].0) / 2;
+            l.cuts.insert((*n, cut));
+            l.names.push(((*n, cut + 1), w[1].2.clone()));
+        }
+    }
+    empty.sort();
+    for &m in empty.iter().rev() {
+        drop_row(l, m);
+    }
+    empty.len() as u16
+}
+
+/// Whether the ends (all on one row) can move straight up or down to row `n`.
+fn can_move(l: &StripLayout, ends: &[End], n: u16) -> bool {
+    let all = all_ends(l);
+    let used: BTreeSet<At> = all.iter().map(|e| end_at(l, *e)).collect();
+    // what lies over each hole: the holes between a part's or a link's two ends, by the end that names it
+    let key = |e: End| -> End {
+        match other_end(l, e) {
+            Some(o) if o < e => o,
+            _ => e,
+        }
+    };
+    let mut over: BTreeMap<At, Vec<End>> = BTreeMap::new();
+    for e in &all {
+        if let Some(o) = other_end(l, *e).filter(|o| e < o) {
+            for h in between(end_at(l, *e), end_at(l, o)) {
+                over.entry(h).or_default().push(*e);
+            }
+        }
+    }
+    for e in ends {
+        // a chip's or a row part's lead stays
+        if matches!(e, End::Lead(p, _) if l.parts[*p].leads.len() != 2) {
+            return false;
+        }
+        let at = end_at(l, *e);
+        let to = (n, at.1);
+        if used.contains(&to) || over.get(&to).is_some_and(|v| v.iter().any(|x| *x != key(*e))) {
+            return false;
+        }
+        // a part or a wire made longer: nothing ends under it
+        if let Some(o) = other_end(l, *e) {
+            let far = if ends.contains(&o) { (n, end_at(l, o).1) } else { end_at(l, o) };
+            if far == to || between(to, far).iter().any(|h| used.contains(h) && *h != at) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Takes the (empty) row `m` off the board, the rows below it up by one.
+fn drop_row(l: &mut StripLayout, m: u16) {
+    let up = |a: &mut At| {
+        if a.0 > m {
+            a.0 -= 1;
+        }
+    };
+    for p in &mut l.parts {
+        for (_, a) in &mut p.leads {
+            up(a);
+        }
+    }
+    for k in &mut l.links {
+        up(&mut k.a);
+        up(&mut k.b);
+    }
+    for (_, pins) in &mut l.off {
+        for (_, _, a) in pins {
+            up(a);
+        }
+    }
+    l.cuts = l.cuts.iter().filter(|a| a.0 != m).map(|a| if a.0 > m { (a.0 - 1, a.1) } else { *a }).collect();
+    for (a, _) in &mut l.names {
+        up(a);
+    }
+    if (m as usize) < l.homes.len() {
+        l.homes.remove(m as usize);
     }
 }
 
@@ -838,6 +1076,183 @@ pub(crate) fn nearest_joins<P: Copy>(groups: &[Vec<P>], dist: impl Fn(P, P) -> f
         out.push((a, b));
     }
     out
+}
+
+/// The hole of a pad named "PART.PIN" (a part's lead, or an off-board part's wire).
+fn pad_at(l: &StripLayout, pad: &str) -> Option<At> {
+    let (r, pin) = pad.rsplit_once('.')?;
+    l.parts.iter().filter(|p| p.refdes == r).flat_map(|p| p.leads.iter()).find(|(p, _)| p == pin).map(|(_, a)| *a).or_else(|| {
+        l.off.iter().filter(|(x, _)| x == r).flat_map(|(_, v)| v.iter()).find(|(p, _, _)| p == pin).map(|(_, _, a)| *a)
+    })
+}
+
+/// How far (mm) the ways along the copper from hole `s` to holes `a` and `b` run together before they part: the shortest ways along the
+/// strips (2.54 mm a hole) and the wires. `None` when `a` or `b` is not joined to `s`. A strip's current flows only between where it
+/// comes in and where it goes out, so a sense wire taken off the strip on the far side of the lead from the current's wire sees the
+/// lead's own voltage (0 mm together), and one taken off between them sees the drop along the strip as well.
+pub fn strip_fork(l: &StripLayout, s: At, a: At, b: At) -> Option<f64> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let pieces = l.pieces();
+    let piece_of = |at: At| pieces.iter().position(|(r, x, y)| *r == at.0 && at.1 >= *x && at.1 <= *y);
+    let mut wires: BTreeMap<At, Vec<(At, u64)>> = BTreeMap::new();
+    for k in &l.links {
+        let d = ((k.a.0 as f64 - k.b.0 as f64).hypot(k.a.1 as f64 - k.b.1 as f64) * 2540.0) as u64;
+        wires.entry(k.a).or_default().push((k.b, d));
+        wires.entry(k.b).or_default().push((k.a, d));
+    }
+    // distances in µm, and each hole's hole before it on the way from `s`
+    let mut dist: BTreeMap<At, u64> = BTreeMap::new();
+    let mut prev: BTreeMap<At, At> = BTreeMap::new();
+    let mut heap = BinaryHeap::new();
+    dist.insert(s, 0);
+    heap.push(Reverse((0u64, s)));
+    while let Some(Reverse((d, at))) = heap.pop() {
+        if dist.get(&at).is_some_and(|x| *x < d) {
+            continue;
+        }
+        let mut next: Vec<(At, u64)> = wires.get(&at).cloned().unwrap_or_default();
+        if let Some(p) = piece_of(at) {
+            let (_, x, y) = pieces[p];
+            if at.1 > x {
+                next.push(((at.0, at.1 - 1), 2540));
+            }
+            if at.1 < y {
+                next.push(((at.0, at.1 + 1), 2540));
+            }
+        }
+        for (to, w) in next {
+            if dist.get(&to).is_none_or(|x| d + w < *x) {
+                dist.insert(to, d + w);
+                prev.insert(to, at);
+                heap.push(Reverse((d + w, to)));
+            }
+        }
+    }
+    if !dist.contains_key(&a) || !dist.contains_key(&b) {
+        return None;
+    }
+    // where the two ways part: the first hole on the way back from `b` that is on the way back from `a`
+    let mut on_a: BTreeSet<At> = BTreeSet::new();
+    let mut h = a;
+    loop {
+        on_a.insert(h);
+        match prev.get(&h) {
+            Some(p) => h = *p,
+            None => break,
+        }
+    }
+    let mut h = b;
+    while !on_a.contains(&h) {
+        h = prev[&h];
+    }
+    Some(dist[&h] as f64 / 1000.0)
+}
+
+/// The requirements table's forks (Kelvin connections) on the board: (the measure, its three holes, how far the ways run together).
+fn forks(s: &Schematic, l: &StripLayout) -> Vec<(design_spec::Measure, [At; 3], Option<f64>)> {
+    let mut out = vec![];
+    for m in s.requirements.measures.iter().filter(|m| m.what == "fork" && m.pads.len() == 3) {
+        let at: Vec<Option<At>> = m.pads.iter().map(|p| pad_at(l, p)).collect();
+        let (Some(a), Some(b), Some(c)) = (at[0], at[1], at[2]) else { continue };
+        out.push((m.clone(), [a, b, c], strip_fork(l, a, b, c)));
+    }
+    out
+}
+
+/// Keeps the table's forks: when the ways from a fork's first pad run together along a strip (a current and a sense wire both taken
+/// off on one side of a resistor's lead), the part with that lead moves along its strips to where they part at the lead (the lead
+/// between the two), each lead staying on its piece of strip, on a free hole that nothing lies over, nothing ending under its body.
+fn keep_forks(s: &Schematic, l: &mut StripLayout) {
+    for (m, [st, _, _], now) in forks(s, l) {
+        let Some(now) = now else { continue };
+        if m.op == "min" || now <= m.limit + 1e-9 {
+            continue;
+        }
+        let Some(p) = l.parts.iter().position(|p| p.leads.len() == 2 && p.leads.iter().any(|(_, a)| *a == st)) else { continue };
+        let old: Vec<At> = l.parts[p].leads.iter().map(|x| x.1).collect();
+        let pieces = l.pieces();
+        let piece_of = |at: At| pieces.iter().position(|(r, x, y)| *r == at.0 && at.1 >= *x && at.1 <= *y);
+        // what else is on the board: the other ends, and the holes their parts and wires lie over
+        let mine: BTreeSet<End> = (0..2).map(|k| End::Lead(p, k)).collect();
+        let others: Vec<End> = all_ends(l).into_iter().filter(|e| !mine.contains(e)).collect();
+        let used: BTreeSet<At> = others.iter().map(|e| end_at(l, *e)).collect();
+        let over: BTreeSet<At> = others.iter().filter_map(|e| other_end(l, *e).filter(|o| e < o).map(|o| between(end_at(l, *e), end_at(l, o)))).flatten().collect();
+        let mut best: Option<(f64, u16, Vec<At>)> = None;
+        for c in 0..l.cols {
+            let new: Vec<At> = old.iter().map(|a| (a.0, c)).collect();
+            if new == old || new.iter().zip(&old).any(|(n, o)| piece_of(*n).is_none() || piece_of(*n) != piece_of(*o)) {
+                continue;
+            }
+            let body = between(new[0], new[1]);
+            if new.iter().any(|a| used.contains(a) || over.contains(a)) || body.iter().any(|a| used.contains(a)) {
+                continue;
+            }
+            let mut trial = l.clone();
+            for (k, a) in new.iter().enumerate() {
+                trial.parts[p].leads[k].1 = *a;
+            }
+            let st2 = new[old.iter().position(|a| *a == st).unwrap()];
+            let [_, fa, fb] = forks(s, &trial).into_iter().find(|f| f.0 == m).map(|f| f.1).unwrap_or([st2; 3]);
+            let Some(v) = strip_fork(&trial, st2, fa, fb) else { continue };
+            let key = (v, c.abs_diff(old[0].1));
+            if best.as_ref().is_none_or(|b| key < (b.0, b.1)) {
+                best = Some((v, key.1, new));
+            }
+        }
+        if let Some((_, _, new)) = best.filter(|b| b.0 < now) {
+            for (k, a) in new.into_iter().enumerate() {
+                l.parts[p].leads[k].1 = a;
+            }
+        }
+        move_wire_ends(s, l, &m);
+    }
+}
+
+/// The second way to keep a fork: a wire's end on the strip of the fork's first pad moves along that piece of strip to a free hole
+/// (one at a time, the best first), so the wires of the two ways come in on either side of the lead.
+fn move_wire_ends(s: &Schematic, l: &mut StripLayout, m: &design_spec::Measure) {
+    let value = |l: &StripLayout| forks(s, l).into_iter().find(|f| f.0 == *m).and_then(|f| f.2);
+    for _ in 0..2 {
+        let Some(now) = value(l) else { return };
+        if now <= m.limit + 1e-9 {
+            return;
+        }
+        let Some(st) = pad_at(l, &m.pads[0]) else { return };
+        let pieces = l.pieces();
+        let Some(&(row, x0, x1)) = pieces.iter().find(|(r, x, y)| *r == st.0 && st.1 >= *x && st.1 <= *y) else { return };
+        let all = all_ends(l);
+        let used: BTreeSet<At> = all.iter().map(|e| end_at(l, *e)).collect();
+        let over: BTreeSet<At> = all.iter().filter_map(|e| other_end(l, *e).filter(|o| e < o).map(|o| between(end_at(l, *e), end_at(l, o)))).flatten().collect();
+        let mut best: Option<(f64, u16, End, At)> = None;
+        for e in all.iter().filter(|e| matches!(e, End::Link(..))) {
+            let at = end_at(l, *e);
+            if at.0 != row || at.1 < x0 || at.1 > x1 {
+                continue;
+            }
+            for c in x0..=x1 {
+                let to = (row, c);
+                if used.contains(&to) || over.contains(&to) {
+                    continue;
+                }
+                let far = end_at(l, other_end(l, *e).unwrap());
+                if between(to, far).iter().any(|h| used.contains(h)) {
+                    continue;
+                }
+                let mut trial = l.clone();
+                set_end(&mut trial, *e, to);
+                let Some(v) = value(&trial) else { continue };
+                let key = (v, c.abs_diff(at.1));
+                if best.as_ref().is_none_or(|b| key < (b.0, b.1)) {
+                    best = Some((v, key.1, *e, to));
+                }
+            }
+        }
+        match best.filter(|b| b.0 < now) {
+            Some((_, _, e, to)) => set_end(l, e, to),
+            None => return,
+        }
+    }
 }
 
 /// Where the layout leaves a net of the schematic apart: for each net on more than one group of joined holes (pieces of strip and
@@ -992,6 +1407,23 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
             },
         });
     }
+    for (m, _, v) in forks(s, l) {
+        let name = if m.name.is_empty() { m.pads.join(",") } else { m.name.clone() };
+        let (start, a, b) = (&m.pads[0], &m.pads[1], &m.pads[2]);
+        let Some(v) = v else {
+            out.push(RuleCheck { ok: false, message: format!("ケルビン「{name}」: {start} から {a} か {b} へ、帯と線でつながっていません") });
+            continue;
+        };
+        let ok = if m.op == "min" { v >= m.limit } else { v <= m.limit + 1e-9 };
+        out.push(RuleCheck {
+            ok,
+            message: if ok {
+                format!("ケルビン「{name}」: {a} と {b} への道は {start} の足から {v:.1} mm で分かれます ({:.1} mm 以下)", m.limit)
+            } else {
+                format!("ケルビン「{name}」: {a} と {b} への道が {start} の足から {v:.1} mm 一緒に走り、{:.1} mm を超えます。{start} の足を、帯の上で 2 本の線の間に置いてください (片方の電流が流れる帯から、もう片方の線を取らない)", m.limit)
+            },
+        });
+    }
     if l.sections.len() > 1 {
         let inside = |k: usize, a: At| {
             let (_, p, q) = &l.sections[k];
@@ -1128,7 +1560,8 @@ mod size_tests {
     /// a strip and a column for everything, then 78 x 21. With bands of strips above and below the chips (a pin's wire up or down,
     /// a wire up and a wire down sharing a column), the two-lead parts standing in the bands' free columns and the wires between bands
     /// in free columns: 60 x 24; the traffic light 36 x 19 → 19 x 20, the 555 blinker 25 x 12 → 13 x 13; wrapped to 40 holes 35 x 34
-    /// (2026-11-19).
+    /// (2026-11-19). The two-lead parts standing near their nets' wires and the strips sharing rows (`share_rows`): 60 x 22, 19 x 19,
+    /// 13 x 11, wrapped to 40 holes 35 x 30; the DMM's B stage at 59 holes 60 x 87 → 60 x 78 (2026-11-20).
     #[test]
     fn leads_as_wires_keep_the_board_small() {
         let size = |f: &str, cols: Option<u16>| {
@@ -1138,14 +1571,14 @@ mod size_tests {
             (l.cols, l.rows)
         };
         let (cols, rows) = size("seg7_counter", None);
-        assert!(rows <= 26 && cols <= 63, "{cols} x {rows}");
+        assert!(rows <= 22 && cols <= 60, "{cols} x {rows}");
         let (cols, rows) = size("traffic_light", None);
-        assert!(cols <= 20 && rows <= 21, "{cols} x {rows}");
+        assert!(cols <= 19 && rows <= 19, "{cols} x {rows}");
         let (cols, rows) = size("ne555_blinker", None);
-        assert!(cols <= 14 && rows <= 14, "{cols} x {rows}");
+        assert!(cols <= 13 && rows <= 11, "{cols} x {rows}");
         // wrapped to 40 holes: the chips go in rows, the board as wide as asked
         let (cols, rows) = size("seg7_counter", Some(40));
-        assert!(cols <= 40 && rows <= 36, "{cols} x {rows}");
+        assert!(cols <= 40 && rows <= 30, "{cols} x {rows}");
     }
 }
 
@@ -1194,5 +1627,83 @@ mod section_tests {
         // without sections marked the board is laid out as one
         s.requirements.groups.iter_mut().for_each(|g| g.section = false);
         assert!(strip_layout(&s).sections.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod share_tests {
+    use super::*;
+
+    /// Two nets used along different stretches of a band share one row, cut between them and named where the second starts; the
+    /// sections find a net on its stretch of a shared row.
+    #[test]
+    fn nets_apart_along_a_band_share_a_row() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/seg7_counter.schjson");
+        let s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let l = strip_layout(&s);
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        let ((row, col), name) = l.names.first().cloned().expect("a shared row");
+        assert!(l.cuts.contains(&(row, col - 1)), "cut where the second net starts");
+        assert_ne!(l.homes[row as usize], name);
+        let (r, a, _) = strip_of(&l, &name).unwrap();
+        assert_eq!((r, a), (row, col));
+        let (r, a, _) = strip_of(&l, &l.homes[row as usize]).unwrap();
+        assert_eq!((r, a), (row, 0));
+        // every end on that row lies on the stretch of its own net
+        let nets = extract(&s.flat());
+        let net_of = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin)).map(|n| n.name.clone()).unwrap_or_default();
+        for p in &l.parts {
+            for (pin, at) in p.leads.iter().filter(|x| x.1 .0 == row) {
+                assert_eq!(at.1 >= col, net_of(&p.refdes, pin) == name, "{}.{pin}", p.refdes);
+            }
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod fork_tests {
+    use super::*;
+
+    fn load(name: &str) -> Schematic {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples").join(name);
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    /// A Kelvin connection from the requirements table (a fork: the pad, and the two pads its ways go to): on the active filter's
+    /// strips, the ways from R3.2 to R4.1 and to C3.1 share 15 mm of strip; told to keep them apart, the layout moves the part or a
+    /// wire's end so the two part at the lead, still joined as the schematic joins them, and the rules say so. One it cannot keep
+    /// (R4.1's, both ways going off the same side) is told with how far they run together.
+    #[test]
+    fn a_fork_in_the_table_parts_at_the_lead() {
+        let mut s = load("active_filter.schjson");
+        let pads = ["R3.2", "R4.1", "C3.1"];
+        let at = |l: &StripLayout| pads.map(|p| pad_at(l, p).unwrap());
+        let l = strip_layout(&s);
+        let [a, b, c] = at(&l);
+        assert!(strip_fork(&l, a, b, c).unwrap() > 10.0, "without the rule the ways share the strip");
+        s.requirements.measures.push(design_spec::Measure { name: "検出".into(), what: "fork".into(), pads: pads.map(String::from).to_vec(), op: "max".into(), limit: 0.5, ..Default::default() });
+        let l = strip_layout(&s);
+        let [a, b, c] = at(&l);
+        assert_eq!(strip_fork(&l, a, b, c), Some(0.0));
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        let rules = strip_rules(&s, &l);
+        assert!(rules.iter().any(|r| r.ok && r.message.starts_with("ケルビン「検出」")), "{rules:?}");
+        s.requirements.measures[0].pads = ["R4.1", "R3.2", "C3.1"].map(String::from).to_vec();
+        let l = strip_layout(&s);
+        let rules = strip_rules(&s, &l);
+        assert!(rules.iter().any(|r| !r.ok && r.message.contains("一緒に走り")), "{rules:?}");
+        assert!(strip_check(&s, &l).is_empty());
+    }
+
+    /// The current sensors' sample keeps both of its shunt's Kelvin connections on a stripboard and on a perfboard.
+    #[test]
+    fn the_shunt_sample_keeps_its_kelvin_connections() {
+        let s = load("current_sensors.schjson");
+        for l in [strip_layout(&s), strip_layout_with(&s, StripOptions { cols: Some(20), ..Default::default() })] {
+            let kelvin: Vec<RuleCheck> = strip_rules(&s, &l).into_iter().filter(|r| r.message.starts_with("ケルビン")).collect();
+            assert_eq!(kelvin.len(), 2);
+            assert!(kelvin.iter().all(|r| r.ok), "{kelvin:?}");
+        }
     }
 }
