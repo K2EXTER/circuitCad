@@ -444,7 +444,7 @@ mod tests {
         assert_eq!(half.parts.iter().find(|p| p.refdes == chip.refdes), Some(chip), "a part half in the box stays");
     }
 
-    /// On a perfboard (no strips) a chip and a box turn a quarter turn: the chip's two rows of pins then lie along the rows, the box
+    /// On a perfboard (no strips) a chip and a box turn a quarter turn: the chip's two rows of pins go from columns to rows, the box
     /// is as tall as it was wide, and four turns bring each back as it was.
     #[test]
     fn a_perfboard_turns_a_quarter_turn() {
@@ -452,9 +452,11 @@ mod tests {
         let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
         let chip = l.parts.iter().find(|p| p.leads.len() == 8).unwrap().refdes.clone();
         let cols = |l: &StripLayout| l.parts.iter().find(|p| p.refdes == chip).unwrap().leads.iter().map(|x| x.1 .1).collect::<std::collections::BTreeSet<u16>>().len();
-        assert_eq!(cols(&l), 2, "upright: two columns of pins");
+        // upright two columns of pins, turned four (the layout may have it either way)
         let once = part_turned(&l, &chip).unwrap();
-        assert_eq!(cols(&once), 4, "turned: the pins along a row");
+        let mut both = [cols(&l), cols(&once)];
+        both.sort();
+        assert_eq!(both, [2, 4], "a quarter turn lays the two rows of pins along the rows or the columns");
         let mut back = once;
         for _ in 0..3 {
             back = part_turned(&back, &chip).unwrap();

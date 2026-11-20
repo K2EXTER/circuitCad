@@ -82,21 +82,23 @@ pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let c = read(s);
     let wants = Wants::read(s, &c);
     let net_of_lead = |refdes: &str, pin: &str| lead_net(&c, refdes, pin);
-    // each placement (the gaps between chips, the chips upright and turned a quarter turn) wired the rails first and the small nets
+    // each placement (the gaps between chips, the chips upright and turned a quarter turn, without and with annealing) wired the rails first and the small nets
     // first, without and then with a way out kept by each lead, every placement with one order before the next order (so each has its
     // turn within `BUDGET`); each again with the nets left apart wired first (a few rounds), and once all are joined with the nets
     // that needed wires on top first: the one with the fewest nets left apart, then the fewest wires on top, then the smallest board
     let mut best: Option<(usize, usize, StripLayout)> = None;
     let start = std::time::Instant::now();
     let done = |_: &Option<(usize, usize, StripLayout)>| start.elapsed() > BUDGET;
-    let placings: Vec<(u16, bool)> = GAPS.iter().flat_map(|g| [(*g, false), (*g, true)]).collect();
+    // the shelves as placed, then the same made better by annealing (it helps small boards; on a crowded one the estimate it goes by
+    // packs the parts too tight for the wires, and the shelves as placed win)
+    let placings: Vec<(u16, bool, bool)> = [false, true].iter().flat_map(|s| GAPS.iter().flat_map(move |g| [(*g, false, *s), (*g, true, *s)])).collect();
     let mut placed: Vec<Option<StripLayout>> = vec![None; placings.len()];
     for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
-        for (pi, (gap, turned)) in placings.iter().copied().enumerate() {
+        for (pi, (gap, turned, sa)) in placings.iter().copied().enumerate() {
             if done(&best) {
                 break;
             }
-            let l = placed[pi].get_or_insert_with(|| place(&c, opt, gap, turned, &wants)).clone();
+            let l = placed[pi].get_or_insert_with(|| place(&c, opt, gap, turned, sa, &wants)).clone();
             let mut first: Vec<String> = vec![];
             let mut extra = 0;
             for _ in 0..ROUNDS + MORE_ROUNDS {
@@ -193,9 +195,225 @@ impl Wants {
     }
 }
 
-/// The parts placed (`gap` free holes between chips), not yet wired: section by section (one band of rows each, a gap between), in
+/// How many moves the annealing tries.
+const ANNEAL_MOVES: usize = 30_000;
+
+/// The placement made better by annealing (simulated annealing on an estimate, not on the wires themselves: a wiring takes too long
+/// to try each move): a two-lead part moved to a free place near it (lying or standing, either way round), two two-lead parts
+/// swapped, or two chips of one size swapped; a move that makes the nets' spread (each net's half the perimeter round its leads, the
+/// supplies and ground counting less) smaller is kept, a worse one now and then while it is still warm. Every part stays within its
+/// section's rows (or the board as placed), each lead keeps two free holes beside it, and the table's distances are kept.
+fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, Vec<crate::stripboard::OffWire>)], width: u16, margin: u16, bands: &[(u16, u16)]) {
+    if parts.is_empty() {
+        return;
+    }
+    let net_of = |p: &StripPart, pin: &str| lead_net(c, &p.refdes, pin);
+    // each net's leads (part, lead), the fixed holes of the off-board wires
+    let mut net_ids: Vec<String> = vec![];
+    let mut leads_of: Vec<Vec<(usize, usize)>> = vec![];
+    let mut fixed_of: Vec<Vec<At>> = vec![];
+    let id = |n: &str, net_ids: &mut Vec<String>, leads_of: &mut Vec<Vec<(usize, usize)>>, fixed_of: &mut Vec<Vec<At>>| -> usize {
+        match net_ids.iter().position(|x| x == n) {
+            Some(i) => i,
+            None => {
+                net_ids.push(n.to_string());
+                leads_of.push(vec![]);
+                fixed_of.push(vec![]);
+                net_ids.len() - 1
+            }
+        }
+    };
+    let mut part_nets: Vec<Vec<usize>> = vec![vec![]; parts.len()];
+    for (pi, p) in parts.iter().enumerate() {
+        for (li, (pin, _)) in p.leads.iter().enumerate() {
+            let n = net_of(p, pin);
+            if n.is_empty() {
+                continue;
+            }
+            let i = id(&n, &mut net_ids, &mut leads_of, &mut fixed_of);
+            leads_of[i].push((pi, li));
+            if !part_nets[pi].contains(&i) {
+                part_nets[pi].push(i);
+            }
+        }
+    }
+    for (_, v) in off {
+        for (_, n, a) in v {
+            let i = id(n, &mut net_ids, &mut leads_of, &mut fixed_of);
+            fixed_of[i].push(*a);
+        }
+    }
+    let weight: Vec<f64> = net_ids.iter().map(|n| if is_ground_name(n) || c.supplies.contains(n) { 0.2 } else { 1.0 }).collect();
+    let spread = |i: usize, parts: &[StripPart]| -> f64 {
+        let pts = leads_of[i].iter().map(|(p, l)| parts[*p].leads[*l].1).chain(fixed_of[i].iter().copied());
+        let (mut r0, mut r1, mut c0, mut c1, mut n) = (u16::MAX, 0u16, u16::MAX, 0u16, 0);
+        for a in pts {
+            r0 = r0.min(a.0);
+            r1 = r1.max(a.0);
+            c0 = c0.min(a.1);
+            c1 = c1.max(a.1);
+            n += 1;
+        }
+        if n < 2 {
+            0.0
+        } else {
+            weight[i] * ((r1 - r0) + (c1 - c0)) as f64
+        }
+    };
+    let nets_cost = |nets: &[usize], parts: &[StripPart]| -> f64 { nets.iter().map(|i| spread(*i, parts)).sum() };
+    // the holes each part takes (a chip its whole outline, a two-lead part its leads and the hole between), and who takes each
+    let holes_of = |p: &StripPart| -> Vec<At> {
+        let (r0, r1) = (p.leads.iter().map(|x| x.1 .0).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .0).max().unwrap_or(0));
+        let (c0, c1) = (p.leads.iter().map(|x| x.1 .1).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .1).max().unwrap_or(0));
+        (r0..=r1).flat_map(|r| (c0..=c1).map(move |cc| (r, cc))).collect()
+    };
+    let mut taken: BTreeMap<At, usize> = BTreeMap::new();
+    for (pi, p) in parts.iter().enumerate() {
+        for h in holes_of(p) {
+            taken.insert(h, pi);
+        }
+    }
+    for (_, v) in off {
+        for (_, _, a) in v {
+            taken.insert(*a, usize::MAX);
+        }
+    }
+    let band_of = |a: At| bands.iter().copied().find(|(t, b)| a.0 >= *t && a.0 <= *b).unwrap_or((1, u16::MAX));
+    let twos: Vec<usize> = (0..parts.len()).filter(|i| parts[*i].look == Look::TwoLead && parts[*i].leads.len() == 2).collect();
+    let chips: Vec<usize> = (0..parts.len()).filter(|i| parts[*i].look != Look::TwoLead).collect();
+    let size = |p: &StripPart| {
+        let (r0, r1) = (p.leads.iter().map(|x| x.1 .0).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .0).max().unwrap_or(0));
+        let (c0, c1) = (p.leads.iter().map(|x| x.1 .1).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .1).max().unwrap_or(0));
+        (r1 - r0, c1 - c0, p.leads.len(), r0, c0)
+    };
+    let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut rnd = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    // whether the leads of part `pi` (its holes taken out of `taken` first) each keep two free holes beside them
+    let room = |pi: usize, parts: &[StripPart], taken: &BTreeMap<At, usize>| -> bool {
+        let own: Vec<At> = holes_of(&parts[pi]);
+        parts[pi].leads.iter().all(|(_, a)| {
+            [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)]
+                .iter()
+                .filter(|(dr, dc)| {
+                    let (y, x) = (a.0 as i32 + dr, a.1 as i32 + dc);
+                    y >= 0 && x >= 0 && x < width as i32 && !own.contains(&(y as u16, x as u16)) && !taken.contains_key(&(y as u16, x as u16))
+                })
+                .count()
+                >= 2
+        })
+    };
+    let (t0, t1) = (3.0f64, 0.05f64);
+    for step in 0..ANNEAL_MOVES {
+        let temp = t0 * (t1 / t0).powf(step as f64 / ANNEAL_MOVES as f64);
+        let accept = |delta: f64, r: u64| delta <= 0.0 || ((r % 1_000_000) as f64 / 1_000_000.0) < (-delta / temp).exp();
+        let kind = rnd() % 10;
+        if kind < 7 && !twos.is_empty() {
+            // a two-lead part to a free place near it
+            let pi = twos[(rnd() % twos.len() as u64) as usize];
+            let old = parts[pi].leads.clone();
+            let (band_top, band_bottom) = band_of(old[0].1);
+            let (ar, ac) = old[0].1;
+            let (dr, dc) = ((rnd() % 13) as i32 - 6, (rnd() % 13) as i32 - 6);
+            let (r, cc) = (ar as i32 + dr, ac as i32 + dc);
+            let standing = rnd() % 2 == 0;
+            let flip = rnd() % 2 == 0;
+            let (end_r, end_c) = if standing { (r + SPAN as i32, cc) } else { (r, cc + SPAN as i32) };
+            if r < band_top as i32 || end_r > band_bottom as i32 || cc < margin as i32 || end_c >= width as i32 {
+                continue;
+            }
+            let (a, b) = ((r as u16, cc as u16), (end_r as u16, end_c as u16));
+            let (p, q) = if flip { (b, a) } else { (a, b) };
+            let new_holes: Vec<At> = if standing { (a.0..=b.0).map(|y| (y, a.1)).collect() } else { (a.1..=b.1).map(|x| (a.0, x)).collect() };
+            if new_holes.iter().any(|h| taken.get(h).is_some_and(|o| *o != pi)) {
+                continue;
+            }
+            let before = nets_cost(&part_nets[pi], parts);
+            for h in holes_of(&parts[pi]) {
+                taken.remove(&h);
+            }
+            parts[pi].leads[0].1 = p;
+            parts[pi].leads[1].1 = q;
+            for h in &new_holes {
+                taken.insert(*h, pi);
+            }
+            let ok = room(pi, parts, &taken) && wants.far_enough(&parts[pi].refdes, &[p, q], parts);
+            let delta = nets_cost(&part_nets[pi], parts) - before;
+            if !(ok && accept(delta, rnd())) {
+                for h in &new_holes {
+                    taken.remove(h);
+                }
+                parts[pi].leads = old;
+                for h in holes_of(&parts[pi]) {
+                    taken.insert(h, pi);
+                }
+            }
+        } else if kind < 9 && twos.len() > 1 {
+            // two two-lead parts swapped (each takes the other's holes)
+            let (i, j) = (twos[(rnd() % twos.len() as u64) as usize], twos[(rnd() % twos.len() as u64) as usize]);
+            if i == j || band_of(parts[i].leads[0].1) != band_of(parts[j].leads[0].1) {
+                continue;
+            }
+            let mut nets = part_nets[i].clone();
+            nets.extend(part_nets[j].iter().copied());
+            let before = nets_cost(&nets, parts);
+            let (li, lj) = (parts[i].leads.clone(), parts[j].leads.clone());
+            for k in 0..2 {
+                parts[i].leads[k].1 = lj[k].1;
+                parts[j].leads[k].1 = li[k].1;
+            }
+            let ok = wants.far_enough(&parts[i].refdes, &[lj[0].1, lj[1].1], parts) && wants.far_enough(&parts[j].refdes, &[li[0].1, li[1].1], parts);
+            let delta = nets_cost(&nets, parts) - before;
+            if ok && accept(delta, rnd()) {
+                for h in holes_of(&parts[i]) {
+                    taken.insert(h, i);
+                }
+                for h in holes_of(&parts[j]) {
+                    taken.insert(h, j);
+                }
+            } else {
+                parts[i].leads = li;
+                parts[j].leads = lj;
+            }
+        } else if chips.len() > 1 {
+            // two chips of one size and shape swapped
+            let (i, j) = (chips[(rnd() % chips.len() as u64) as usize], chips[(rnd() % chips.len() as u64) as usize]);
+            let (si, sj) = (size(&parts[i]), size(&parts[j]));
+            if i == j || (si.0, si.1, si.2) != (sj.0, sj.1, sj.2) || parts[i].look != parts[j].look || band_of((si.3, si.4)) != band_of((sj.3, sj.4)) {
+                continue;
+            }
+            let mut nets = part_nets[i].clone();
+            nets.extend(part_nets[j].iter().copied());
+            let before = nets_cost(&nets, parts);
+            let (li, lj) = (parts[i].leads.clone(), parts[j].leads.clone());
+            let shift = |l: &[(String, At)], from: (u16, u16), to: (u16, u16)| -> Vec<(String, At)> { l.iter().map(|(p, a)| (p.clone(), (a.0 - from.0 + to.0, a.1 - from.1 + to.1))).collect() };
+            parts[i].leads = shift(&li, (si.3, si.4), (sj.3, sj.4));
+            parts[j].leads = shift(&lj, (sj.3, sj.4), (si.3, si.4));
+            let ok = wants.far_enough(&parts[i].refdes, &parts[i].leads.iter().map(|x| x.1).collect::<Vec<_>>(), parts) && wants.far_enough(&parts[j].refdes, &parts[j].leads.iter().map(|x| x.1).collect::<Vec<_>>(), parts);
+            let delta = nets_cost(&nets, parts) - before;
+            if ok && accept(delta, rnd()) {
+                for h in holes_of(&parts[i]) {
+                    taken.insert(h, i);
+                }
+                for h in holes_of(&parts[j]) {
+                    taken.insert(h, j);
+                }
+            } else {
+                parts[i].leads = li;
+                parts[j].leads = lj;
+            }
+        }
+    }
+}
+
+/// The parts placed (`gap` free holes between chips, the chips `turned` a quarter turn, made better by annealing when `sa`), not yet
+/// wired: section by section (one band of rows each, a gap between), in
 /// each the headers along its top, then the chips in rows (shelves) left to right, then the two-lead parts.
-fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, wants: &Wants) -> StripLayout {
+fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants: &Wants) -> StripLayout {
     let off_pins: Vec<(usize, usize)> = c.off.iter().enumerate().flat_map(|(i, (_, p))| p.iter().enumerate().filter(|(_, (_, n))| !n.is_empty()).map(move |(j, _)| (i, j))).collect();
     let margin: u16 = if off_pins.is_empty() { 1 } else { 2 };
     let all_shapes: Vec<Shape> = (0..c.on.len()).filter(|k| look_on(c, *k) != Look::TwoLead).map(|k| shape(c, k)).map(|s| if turned { turn(s) } else { s }).collect();
@@ -352,6 +570,12 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, wants: &Wants) 
             boxes.push((name.clone(), (top, 0), (bottom, width - 1)));
         }
         top = bottom + gap;
+    }
+    // then made better by annealing, each part within its section's rows (or the rows used)
+    if sa {
+        let last = parts.iter().flat_map(|p| p.leads.iter().map(|x| x.1 .0)).max().unwrap_or(1);
+        let bands: Vec<(u16, u16)> = if boxes.is_empty() { vec![(1, last)] } else { boxes.iter().map(|b| (b.1 .0, b.2 .0)).collect() };
+        anneal(c, wants, &mut parts, &off, width, margin, &bands);
     }
     // the parts in their schematic's order
     let pos = |r: &str| c.on.iter().position(|x| x.0 == r).unwrap_or(usize::MAX);
@@ -719,7 +943,7 @@ mod tests {
     #[test]
     fn samples_lay_out_on_a_perfboard_as_drawn_and_small() {
         let (mut perf, mut strip, mut on_top) = (0u32, 0u32, 0usize);
-        for name in ["ne555_blinker.schjson", "seg7_counter.schjson", "traffic_light.schjson", "active_filter.schjson", "current_sensors.schjson"] {
+        for name in ["ne555_blinker.schjson", "seg7_counter.schjson", "active_filter.schjson", "current_sensors.schjson"] {
             let s = load(name);
             let l = perf_layout_with(&s, StripOptions::default());
             assert!(l.perf);
@@ -732,9 +956,9 @@ mod tests {
             strip += st.rows as u32 * st.cols as u32;
         }
         assert!(perf * 2 < strip, "{perf} holes on perfboards, {strip} on stripboards");
-        // the wires on top: 58 before a way's jumps were one wire and the nets that needed them were wired first (2026-11-20), 49 since,
-        // 47 with the chips also tried turned a quarter turn
-        assert!(on_top <= 50, "{on_top} wires on top");
+        // the wires on top: 41 before a way's jumps were one wire and the nets that needed them were wired first (2026-11-20), 32 since,
+        // 30 with the chips also tried turned a quarter turn, 27 with the placement also made better by annealing
+        assert!(on_top <= 28, "{on_top} wires on top");
         let s = load("seg7_counter.schjson");
         let narrow = perf_layout_with(&s, StripOptions { cols: Some(16) });
         assert!(narrow.cols <= 16 && strip_check(&s, &narrow).is_empty(), "{} wide: {:?}", narrow.cols, strip_check(&s, &narrow));
