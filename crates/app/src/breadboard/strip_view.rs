@@ -54,6 +54,8 @@ pub struct StripState {
     auto: Option<(u64, usize, StripOptions, bool, StripLayout)>,
     /// The saved layout kept in step with the schematic: the key, the saved layout it came from, and the result.
     synced: Option<(u64, usize, StripLayout, StripLayout)>,
+    /// A layout being made on another thread (a perfboard's tries take up to 1.5 s: the window does not stop meanwhile).
+    job: Option<StripJob>,
     drag: Option<StripDrag>,
     /// The size and place of the board when the drag began: it stays put while the board grows under the pointer.
     frozen: Option<(Pos2, f32)>,
@@ -70,7 +72,15 @@ pub struct StripState {
     last: Option<Option<StripLayout>>,
 }
 
-const COPPER: Color32 = Color32::from_rgb(196, 128, 72);
+/// What a layout on another thread is for (the schematic's edit count and part count, the options, perfboard or not, and the saved
+/// layout it keeps in step: None for the automatic one), and where it comes back.
+struct StripJob {
+    key: (u64, usize, StripOptions, bool),
+    saved: Option<StripLayout>,
+    rx: std::sync::mpsc::Receiver<StripLayout>,
+}
+
+const COPPER: Color32 =Color32::from_rgb(196, 128, 72);
 /// The picked part, link and box.
 const PICK: Color32 = Color32::from_rgb(70, 160, 255);
 const BOARD: Color32 = Color32::from_rgb(214, 190, 140);
@@ -132,25 +142,64 @@ impl BreadboardView {
     }
 
     /// The layout shown: the one saved with the sheet (in step with the schematic), else one made from the schematic.
+    /// The layout is made on another thread: while it is, the one shown is the saved layout itself (without the parts added to the
+    /// schematic since), or the last automatic one for this kind of board (the old schematic's: not to be edited), or none.
     pub(super) fn strip_shown(&mut self, sch: &SchEditor) -> StripLayout {
         let key = (sch.rev, sch.sch.components.len());
         let opt = strip_options(sch.strip_size);
         // a perfboard has a layout of its own (no strips); a layout saved for the other kind of board is not shown on this one
         let perf = self.kind == BoardKind::Perfboard;
-        match sch.stripboard.as_ref().filter(|s| s.perf == perf) {
-            Some(saved) => {
-                if !self.strip.synced.as_ref().is_some_and(|(r, n, from, _)| (*r, *n) == key && from == saved) {
-                    self.strip.synced = Some((key.0, key.1, saved.clone(), synced(&sch.sch, saved, opt)));
-                }
-                self.strip.synced.as_ref().map(|c| c.3.clone()).unwrap_or_default()
+        let want = (key.0, key.1, opt, perf);
+        let saved = sch.stripboard.as_ref().filter(|s| s.perf == perf).cloned();
+        let ready = match &saved {
+            Some(s) => self.strip.synced.as_ref().is_some_and(|(r, n, from, _)| (*r, *n) == key && from == s),
+            None => self.strip.auto.as_ref().is_some_and(|(r, n, o, p, _)| (*r, *n, *o, *p) == want),
+        };
+        if ready {
+            self.strip.job = None;
+        } else {
+            let fresh = !self.strip.job.as_ref().is_some_and(|j| j.key == want && j.saved == saved);
+            if fresh {
+                let (tx, rx) = std::sync::mpsc::channel();
+                let (s, from) = (sch.sch.clone(), saved.clone());
+                std::thread::spawn(move || {
+                    let l = match &from {
+                        Some(f) => synced(&s, f, opt),
+                        None if perf => perf_layout_with(&s, opt),
+                        None => strip_layout_with(&s, opt),
+                    };
+                    let _ = tx.send(l);
+                });
+                self.strip.job = Some(StripJob { key: want, saved: saved.clone(), rx });
             }
-            None => {
-                if !self.strip.auto.as_ref().is_some_and(|(r, n, o, p, _)| (*r, *n, *o, *p) == (key.0, key.1, opt, perf)) {
-                    let l = if perf { perf_layout_with(&sch.sch, opt) } else { strip_layout_with(&sch.sch, opt) };
-                    self.strip.auto = Some((key.0, key.1, opt, perf, l));
+            // a quick layout (most stripboards) is waited for a moment, not shown a frame late; the tests always wait
+            use std::sync::mpsc::RecvTimeoutError;
+            let wait = if cfg!(test) { std::time::Duration::from_secs(60) } else if fresh { std::time::Duration::from_millis(40) } else { std::time::Duration::ZERO };
+            let got = match self.strip.job.as_ref().map(|j| j.rx.recv_timeout(wait)) {
+                Some(Ok(l)) => Some(l),
+                // the thread failed: the saved layout as it is (or none), not a wait for ever
+                Some(Err(RecvTimeoutError::Disconnected)) => Some(saved.clone().unwrap_or_default()),
+                _ => None,
+            };
+            if let Some(l) = got {
+                self.strip.job = None;
+                match &saved {
+                    Some(from) => self.strip.synced = Some((key.0, key.1, from.clone(), l)),
+                    None => self.strip.auto = Some((key.0, key.1, opt, perf, l)),
                 }
-                self.strip.auto.as_ref().map(|c| c.4.clone()).unwrap_or_default()
             }
+        }
+        match &saved {
+            Some(s) => self.strip.synced.as_ref().filter(|c| &c.2 == s).map(|c| c.3.clone()).unwrap_or_else(|| s.clone()),
+            None => self.strip.auto.as_ref().filter(|c| c.3 == perf).map(|c| c.4.clone()).unwrap_or_default(),
+        }
+    }
+
+    /// Whether a layout is being made on another thread, and whether the one shown meanwhile is an old automatic one (not to be edited).
+    pub(crate) fn strip_busy(&self) -> (bool, bool) {
+        match &self.strip.job {
+            Some(j) => (true, j.saved.is_none()),
+            None => (false, false),
         }
     }
 
@@ -263,6 +312,19 @@ impl BreadboardView {
             .color(NOTE),
         );
         ui.add_space(4.0);
+        if self.strip_busy().0 {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(i18n::tr("並べています…")).on_hover_text(i18n::tr(
+                    "部品の置き方と線の引き方をいくつも試して、表の線がいちばん少ない形を選んでいます (ユニバーサル基板で最長 1.5 秒)。終わるまでは前の並べ方を見せ、自動の並べ方は動かせません",
+                ));
+            });
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+            // nothing to show yet: no check, size or list of an empty board
+            if l.parts.is_empty() {
+                return;
+            }
+        }
         self.strip_size_ui(ui, sch, &l);
         self.strip_tools(ui, sch);
         let problems = strip_check(&sch.sch, &l);
@@ -357,8 +419,13 @@ impl BreadboardView {
         let (response, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::click_and_drag());
         let rect = response.rect;
         painter.rect_filled(rect, 0.0, crate::canvas_theme::col(crate::canvas_theme::Role::Bg));
+        let (busy, stale) = self.strip_busy();
+        if busy {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+        }
         if l.parts.is_empty() {
-            painter.text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("回路図に部品がありません"), egui::FontId::proportional(16.0), Color32::from_gray(200));
+            let msg = if busy { "並べています…" } else { "回路図に部品がありません" };
+            painter.text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr(msg), egui::FontId::proportional(16.0), Color32::from_gray(200));
             return;
         }
         // a margin on the left for the strips' names and the supplies off the board
@@ -371,7 +438,10 @@ impl BreadboardView {
         let (origin, pitch) = self.strip.frozen.unwrap_or((origin, pitch));
         let to = |a: At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch;
         self.strip.drawn = Some((origin, pitch));
-        self.strip_interact(ui, &response, sch, &mut l, origin, pitch);
+        // an old automatic layout shown while the new one is made is not edited (its parts are the old schematic's)
+        if !stale {
+            self.strip_interact(ui, &response, sch, &mut l, origin, pitch);
+        }
         let board = Rect::from_min_max(to((0, 0)) - Vec2::splat(pitch * 0.8), to((l.rows - 1, l.cols - 1)) + Vec2::splat(pitch * 0.8));
         painter.rect_filled(board, 3.0, BOARD);
         let font = egui::FontId::monospace((pitch * 0.55).clamp(8.0, 13.0));
