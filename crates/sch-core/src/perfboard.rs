@@ -72,12 +72,12 @@ pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let c = read(s);
     let wants = Wants::read(s, &c);
     let net_of_lead = |refdes: &str, pin: &str| lead_net(&c, refdes, pin);
-    // the rails first and the small nets first, without and then with a way out kept by each lead, each again with the nets left
-    // apart wired first (a few rounds), until one joins every net: else the one with the fewest nets left apart, then the fewest
-    // wires on top
+    // the rails first and the small nets first, without and then with a way out kept by each lead, at each gap between chips; each
+    // again with the nets left apart wired first (a few rounds), and once all are joined with the nets that needed wires on top first:
+    // the one with the fewest nets left apart, then the fewest wires on top, then the smallest board (as many as `BUDGET` allows)
     let mut best: Option<(usize, usize, StripLayout)> = None;
     let start = std::time::Instant::now();
-    let done = |best: &Option<(usize, usize, StripLayout)>| best.as_ref().is_some_and(|b| b.0 == 0) || start.elapsed() > BUDGET;
+    let done = |_: &Option<(usize, usize, StripLayout)>| start.elapsed() > BUDGET;
     for gap in GAPS {
         if done(&best) {
             break;
@@ -88,19 +88,36 @@ pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
                 break;
             }
             let mut first: Vec<String> = vec![];
-            for _ in 0..ROUNDS {
+            let mut extra = 0;
+            for _ in 0..ROUNDS + MORE_ROUNDS {
                 if best.is_some() && start.elapsed() > BUDGET {
                     break;
                 }
                 let mut m = l.clone();
                 route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
-                let key = (apart.len(), m.links.len());
-                if best.as_ref().is_none_or(|b| key < (b.0, b.1)) {
+                let key = (apart.len(), m.links.len(), m.rows as usize * m.cols as usize);
+                let on_top: Vec<String> = m.links.iter().map(|k| k.net.clone()).collect();
+                if best.as_ref().is_none_or(|b| key < (b.0, b.1, b.2.rows as usize * b.2.cols as usize)) {
                     best = Some((key.0, key.1, m));
                 }
                 if apart.is_empty() {
-                    break;
+                    if extra >= MORE_ROUNDS {
+                        break;
+                    }
+                    extra += 1;
+                    // the nets that needed wires on top, the most first, wired before the others
+                    let mut count: BTreeMap<String, usize> = BTreeMap::new();
+                    for n in on_top {
+                        *count.entry(n).or_default() += 1;
+                    }
+                    let mut v: Vec<(String, usize)> = count.into_iter().collect();
+                    v.sort_by_key(|x| Reverse(x.1));
+                    for (n, _) in v.into_iter().rev() {
+                        first.retain(|x| *x != n);
+                        first.insert(0, n);
+                    }
+                    continue;
                 }
                 for (n, _, _) in apart {
                     if !first.contains(&n) {
@@ -326,8 +343,10 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, wants: &Wants) -> StripLayout
     l
 }
 
-/// How long the tries go on when no try joins every net (the best so far is kept): a big board does not hold the screen up.
-const BUDGET: std::time::Duration = std::time::Duration::from_secs(3);
+/// How long the tries go on (the best so far is kept): a big board does not hold the screen up long.
+const BUDGET: std::time::Duration = std::time::Duration::from_millis(1500);
+/// Once every net is joined, how many times more the nets are wired with the ones that needed wires on top first (fewer of them).
+const MORE_ROUNDS: usize = 3;
 
 /// How many times the nets are wired again with the ones left apart first.
 const ROUNDS: usize = 4;
@@ -485,9 +504,24 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 dist[s] = 0;
                 heap.push(Reverse((0u32, s as u32)));
             }
-            let free_for = |h: At, owner: &[Option<u32>], link_ends: &BTreeSet<At>| {
-                owner[idx(h)].is_none_or(|o| o == net) && !link_ends.contains(&h) && !avoid.contains(&h) && kept.get(&h).is_none_or(|o| *o == net) && escape.get(&h).is_none_or(|o| *o == net) && bx.is_none_or(|k| inside(k, h))
-            };
+            // where this net may go, the leads, the wires' ends and the leads left, hole by hole (looked up for every way tried)
+            let mut open = vec![false; rows * cols];
+            let mut is_lead = vec![false; rows * cols];
+            let mut is_end = vec![false; rows * cols];
+            let mut is_left = vec![false; rows * cols];
+            for (h, o) in open.iter_mut().enumerate() {
+                let a = hole(h);
+                *o = owner[h].is_none_or(|o| o == net) && !link_ends.contains(&a) && !avoid.contains(&a) && kept.get(&a).is_none_or(|o| *o == net) && escape.get(&a).is_none_or(|o| *o == net) && bx.is_none_or(|k| inside(k, a));
+            }
+            for a in &lead_holes {
+                is_lead[idx(*a)] = true;
+            }
+            for a in &link_ends {
+                is_end[idx(*a)] = true;
+            }
+            for a in &left {
+                is_left[idx(*a)] = true;
+            }
             let mut found = None;
             while let Some(Reverse((d, s))) = heap.pop() {
                 let s = s as usize;
@@ -496,12 +530,12 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 }
                 let (h, way) = (s / WAYS, s % WAYS);
                 let at = hole(h);
-                if left.contains(&at) {
+                if is_left[h] {
                     found = Some(s);
                     break;
                 }
                 // a lead is an end, not a hole to pass through on the way to another (its wire would run under the part)
-                if way != 4 && lead_holes.contains(&at) {
+                if way != 4 && is_lead[h] {
                     continue;
                 }
                 let mut push = |to: At, w: usize, nd: u32, heap: &mut BinaryHeap<Reverse<(u32, u32)>>| {
@@ -513,13 +547,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                     }
                 };
                 // the jumps: from a free hole (not a lead, not a wire's end), along the row or the column, to a free hole
-                let can_jump = way != 5 && !lead_holes.contains(&at) && !link_ends.contains(&at);
+                let can_jump = way != 5 && !is_lead[h] && !is_end[h];
                 for (w, (dr, dc)) in DIRS.iter().enumerate() {
                     let (r, cc) = (at.0 as i32 + dr, at.1 as i32 + dc);
                     if r >= 0 && cc >= 0 && r < rows as i32 && cc < cols as i32 {
                         let to = (r as u16, cc as u16);
                         // no going straight back (a way back to where it jumped from could jump again from the same hole)
-                        if free_for(to, &owner, &link_ends) && !(way < 4 && (way + 2) % 4 == w) {
+                        if open[idx(to)] && !(way < 4 && (way + 2) % 4 == w) {
                             let turn = way < 4 && way != w;
                             push(to, w, d + 2 + if turn { 3 } else { 0 }, &mut heap);
                         }
@@ -527,15 +561,21 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                     if !can_jump {
                         continue;
                     }
-                    for k in 2..=JUMP {
+                    // over something in the way, to the first free hole past it (a jump over free holes is no better than steps, and
+                    // past the first free hole the steps cost what a longer jump would)
+                    let mut over = false;
+                    for k in 1..=JUMP {
                         let (r, cc) = (at.0 as i32 + dr * k, at.1 as i32 + dc * k);
                         if r < 0 || cc < 0 || r >= rows as i32 || cc >= cols as i32 {
                             break;
                         }
-                        let to = (r as u16, cc as u16);
-                        if free_for(to, &owner, &link_ends) && !lead_holes.contains(&to) {
-                            push(to, 5, d + JUMP_COST + 2 * k as u32, &mut heap);
+                        let to = idx((r as u16, cc as u16));
+                        let free = open[to] && !is_lead[to];
+                        if k >= 2 && over && free {
+                            push((r as u16, cc as u16), 5, d + JUMP_COST + 2 * k as u32, &mut heap);
+                            break;
                         }
+                        over |= !free;
                     }
                 }
             }
@@ -562,6 +602,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 }
                 avoid.insert(w[0]);
                 continue;
+            }
+            // the jumps of one way made one wire on top, from where the first starts to where the last lands (a wire on top goes
+            // straight, slanting if need be; the holes between are left free)
+            let jumps: Vec<usize> = (1..path.len()).filter(|i| path[i - 1].0.abs_diff(path[*i].0) + path[i - 1].1.abs_diff(path[*i].1) > 1).collect();
+            if jumps.len() > 1 {
+                let (i0, i1) = (jumps[0], *jumps.last().unwrap());
+                path.drain(i0..i1);
             }
             for a in &path {
                 owner[idx(*a)] = Some(net);
@@ -641,10 +688,10 @@ mod tests {
 
     /// Samples laid out on a perfboard join what their schematics join and nothing more; every bare wire runs straight along a row
     /// or a column; no lead or wire's end shares a hole; and the boards are far smaller than the stripboard's (the seven-segment
-    /// counter 60 × 22 holes on strips, 21 × 18 here). A width to keep to is kept.
+    /// counter 60 × 22 holes on strips, 21 × 18 here), with few wires on top. A width to keep to is kept.
     #[test]
     fn samples_lay_out_on_a_perfboard_as_drawn_and_small() {
-        let (mut perf, mut strip) = (0u32, 0u32);
+        let (mut perf, mut strip, mut on_top) = (0u32, 0u32, 0usize);
         for name in ["ne555_blinker.schjson", "seg7_counter.schjson", "traffic_light.schjson", "active_filter.schjson", "current_sensors.schjson"] {
             let s = load(name);
             let l = perf_layout_with(&s, StripOptions::default());
@@ -653,10 +700,13 @@ mod tests {
             assert!(l.bare.iter().all(|(a, b)| a.0 == b.0 || a.1 == b.1), "{name}: straight wires");
             assert!(l.used().iter().all(|(a, _)| a.0 < l.rows && a.1 < l.cols), "{name}: on the board");
             let st = strip_layout(&s);
+            on_top += l.links.len();
             perf += l.rows as u32 * l.cols as u32;
             strip += st.rows as u32 * st.cols as u32;
         }
         assert!(perf * 2 < strip, "{perf} holes on perfboards, {strip} on stripboards");
+        // the wires on top: 58 before a way's jumps were one wire and the nets that needed them were wired first (2026-11-20), 49 since
+        assert!(on_top <= 52, "{on_top} wires on top");
         let s = load("seg7_counter.schjson");
         let narrow = perf_layout_with(&s, StripOptions { cols: Some(16) });
         assert!(narrow.cols <= 16 && strip_check(&s, &narrow).is_empty(), "{} wide: {:?}", narrow.cols, strip_check(&s, &narrow));
