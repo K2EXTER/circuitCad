@@ -1723,7 +1723,8 @@ mod tests {
     }
 
     /// On the stripboard, a part dragged by the pointer moves by whole holes and the layout is kept with the sheet; the check then
-    /// finds what the move broke; a click of the cut tool cuts a strip; "自動で並べ直す" (None) gives the automatic layout back.
+    /// finds what the move broke; a click of the cut tool cuts a strip; Ctrl+Z and Ctrl+Y undo and redo them; "自動で並べ直す" (None)
+    /// gives the automatic layout back.
     #[test]
     fn a_part_dragged_on_the_stripboard_stays_and_is_checked() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
@@ -1766,6 +1767,16 @@ mod tests {
         run(&mut app, vec![button(hole(free), true)]);
         run(&mut app, vec![button(hole(free), false)]);
         assert!(app.sch.stripboard.as_ref().unwrap().cuts.contains(&free));
+        // Ctrl+Z takes the cut back, then the move (the automatic layout again); Ctrl+Y does the move again
+        let key = |key: egui::Key| vec![egui::Event::ModifiersChanged(egui::Modifiers::COMMAND), egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND }];
+        run(&mut app, key(egui::Key::Z));
+        assert_eq!(app.sch.stripboard.as_ref(), Some(&saved), "the cut is undone");
+        run(&mut app, key(egui::Key::Z));
+        assert_eq!(app.sch.stripboard, None, "the move is undone");
+        run(&mut app, key(egui::Key::Z));
+        assert_eq!(app.sch.stripboard, None, "nothing more to undo");
+        run(&mut app, key(egui::Key::Y));
+        assert_eq!(app.sch.stripboard.as_ref(), Some(&saved), "the move is done again");
         app.sch.stripboard = None;
         run(&mut app, vec![]);
         assert_eq!(app.breadboard.strip_shown(&app.sch), auto);

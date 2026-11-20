@@ -59,6 +59,11 @@ pub struct StripState {
     picked_link: Option<usize>,
     /// Where hole (0, 0) was drawn and the pitch, last frame (for the tests' pointer).
     pub(super) drawn: Option<(Pos2, f32)>,
+    /// The layouts before each hand edit (None: the automatic one), the latest last, and those undone (to redo).
+    undo: Vec<Option<StripLayout>>,
+    redo: Vec<Option<StripLayout>>,
+    /// The layout the last edit, undo or redo left: when the sheet's differs (another file opened), the history is dropped.
+    last: Option<Option<StripLayout>>,
 }
 
 const COPPER: Color32 = Color32::from_rgb(196, 128, 72);
@@ -83,7 +88,45 @@ fn net_colour(net: &str) -> Color32 {
     PALETTE[net.bytes().fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize)) % PALETTE.len()]
 }
 
+/// How many hand edits are kept to undo.
+const UNDO_STEPS: usize = 100;
+
 impl BreadboardView {
+    /// A hand edit (or "自動で並べ直す"): the layout before it goes on the undo list.
+    fn strip_set(&mut self, sch: &mut SchEditor, m: Option<StripLayout>) {
+        if sch.stripboard == m {
+            return;
+        }
+        self.strip_history_check(sch);
+        self.strip.undo.push(std::mem::replace(&mut sch.stripboard, m));
+        if self.strip.undo.len() > UNDO_STEPS {
+            self.strip.undo.remove(0);
+        }
+        self.strip.redo.clear();
+        self.strip.last = Some(sch.stripboard.clone());
+    }
+
+    /// Drops the history when the sheet's layout was changed elsewhere (another file opened, the schematic's undo).
+    fn strip_history_check(&mut self, sch: &SchEditor) {
+        if self.strip.last.as_ref().is_some_and(|l| *l != sch.stripboard) {
+            self.strip.undo.clear();
+            self.strip.redo.clear();
+            self.strip.last = None;
+        }
+    }
+
+    /// Undo (`back`) or redo the last hand edit of the stripboard / perfboard.
+    pub(super) fn strip_undo(&mut self, sch: &mut SchEditor, back: bool) {
+        self.strip_history_check(sch);
+        let (from, to) = if back { (&mut self.strip.undo, &mut self.strip.redo) } else { (&mut self.strip.redo, &mut self.strip.undo) };
+        let Some(m) = from.pop() else { return };
+        to.push(std::mem::replace(&mut sch.stripboard, m));
+        self.strip.last = Some(sch.stripboard.clone());
+        self.strip.sel = None;
+        self.strip.picked_link = None;
+        self.strip.drag = None;
+    }
+
     /// The layout shown: the one saved with the sheet (in step with the schematic), else one made from the schematic.
     pub(super) fn strip_shown(&mut self, sch: &SchEditor) -> StripLayout {
         let key = (sch.rev, sch.sch.components.len());
@@ -166,10 +209,19 @@ impl BreadboardView {
                 }
             }
         });
+        self.strip_history_check(sch);
+        ui.horizontal(|ui| {
+            if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.strip.undo.is_empty(), "手で動かした・線を引いた・帯を切った・並べ直した操作を 1 つ取り消します (Ctrl+Z)").clicked() {
+                self.strip_undo(sch, true);
+            }
+            if crate::icons::icon_button_key(ui, crate::icons::Icon::Redo, "やり直し", "Ctrl+Y", false, !self.strip.redo.is_empty(), "取り消した操作をもう一度します (Ctrl+Y)").clicked() {
+                self.strip_undo(sch, false);
+            }
+        });
         ui.horizontal(|ui| {
             if sch.stripboard.is_some() {
-                if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から並べ方を作り直します。手で動かした分は消えます")).clicked() {
-                    sch.stripboard = None;
+                if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から並べ方を作り直します。手で動かした分は消えます (元に戻すで戻せます)")).clicked() {
+                    self.strip_set(sch, None);
                     self.strip.sel = None;
                     self.strip.picked_link = None;
                 }
@@ -180,7 +232,7 @@ impl BreadboardView {
             }
         });
         let hint = match self.strip.tool {
-            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす / R で回す / Delete で線を消す",
+            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす / R で回す / Delete で線を消す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
         };
@@ -529,7 +581,7 @@ impl BreadboardView {
                         let shift = |a: At| ((a.0 as i32 + dr).max(0) as u16, (a.1 as i32 + dc).max(0) as u16);
                         self.strip.sel = self.strip.sel.map(|(a, b)| (shift(a), shift(b)));
                     }
-                    sch.stripboard = Some(m.clone());
+                    self.strip_set(sch, Some(m.clone()));
                 }
                 *l = m;
             }
@@ -560,14 +612,14 @@ impl BreadboardView {
                     None => self.strip.link_start = Some(h),
                     Some(a) if a != h => {
                         let m = with_link(&sch.sch, l, a, h);
-                        sch.stripboard = Some(m.clone());
+                        self.strip_set(sch, Some(m.clone()));
                         *l = m;
                     }
                     Some(_) => {}
                 },
                 StripTool::Cut => {
                     let m = cut_toggled(l, h);
-                    sch.stripboard = Some(m.clone());
+                    self.strip_set(sch, Some(m.clone()));
                     *l = m;
                 }
             }
@@ -580,7 +632,7 @@ impl BreadboardView {
             {
                 match part_turned(l, &r) {
                     Some(m) => {
-                        sch.stripboard = Some(m.clone());
+                        self.strip_set(sch, Some(m.clone()));
                         *l = m;
                     }
                     None => sch.status = format!("{r} は、ここでは回せません (基板の上か左にはみ出す向き)"),
@@ -590,13 +642,21 @@ impl BreadboardView {
                 && let Some(k) = self.strip.picked_link.take()
             {
                 let m = without_link(l, k);
-                sch.stripboard = Some(m.clone());
+                self.strip_set(sch, Some(m.clone()));
                 *l = m;
             }
         }
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.strip.link_start = None;
             self.strip.sel = None;
+        }
+        // Ctrl+Z undoes a hand edit, Ctrl+Y (or Ctrl+Shift+Z) redoes it; the layout shown follows next frame
+        if !ui.ctx().egui_wants_keyboard_input() && self.strip.drag.is_none() {
+            let (cmd, shift, z, y) = ui.input(|i| (i.modifiers.command, i.modifiers.shift, i.key_pressed(egui::Key::Z), i.key_pressed(egui::Key::Y)));
+            if cmd && (z || y) {
+                self.strip_undo(sch, z && !shift);
+                ui.ctx().request_repaint();
+            }
         }
     }
 }
