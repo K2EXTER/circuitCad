@@ -185,8 +185,10 @@ pub fn cut_toggled(l: &StripLayout, at: At) -> StripLayout {
 }
 
 /// A saved layout in step with the schematic: the parts no longer in it (or whose pins changed) go, the parts new to it are laid out
-/// as the automatic layout would and put to the right of the board, and every other part, link and cut stays where it was. The
-/// links the new parts need are not drawn: the check names the nets left apart.
+/// as the automatic layout would and put to the right of the board (a column between, cut on every row, and three spare holes
+/// either side), with the automatic layout's cuts among them, and every other part, link and cut stays where it was. The wires the
+/// new parts need are drawn: each line of the ratsnest that ends at a new part, between the free holes nearest its ends on their
+/// pieces of strip; a piece with no free hole leaves its net apart, which the check names.
 pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLayout {
     let auto = strip_layout_with(s, opt);
     let mut out = saved.clone();
@@ -210,20 +212,66 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
     }
     // the new ones keep their places among themselves, moved right of everything on the board
     let left = new_parts.iter().flat_map(|p| p.leads.iter().map(|(_, a)| a.1)).chain(new_off.iter().flat_map(|(_, v)| v.iter().map(|(_, _, a)| a.1))).min().unwrap_or(0);
-    let dc = out.cols as i32 + 1 - left as i32;
+    // a column between the board and the new parts (cut on every row), then three spare holes: the pieces of the new parts' strips
+    // need free holes for the ends of their wires
+    const SPARE: i32 = 3;
+    let dc = out.cols as i32 + 1 + SPARE - left as i32;
+    let gap = out.cols;
+    let span = new_parts.iter().flat_map(|p| p.leads.iter().map(|(_, a)| a.1)).fold((u16::MAX, 0u16), |m, c| (m.0.min(c), m.1.max(c)));
+    let mut new_holes: Vec<At> = vec![];
     for mut p in new_parts {
         for (_, at) in &mut p.leads {
             at.1 = (at.1 as i32 + dc) as u16;
+            new_holes.push(*at);
         }
         out.parts.push(p);
     }
     for (r, mut v) in new_off {
         for (_, _, at) in &mut v {
             at.1 = (at.1 as i32 + dc) as u16;
+            new_holes.push(*at);
         }
         out.off.push((r, v));
     }
-    grown(out)
+    // the new parts' strips cut off from the board's (a column between), and cut as the automatic layout cuts them (a chip's pins
+    // each on a piece of their own)
+    let rows = out.rows.max(auto.rows);
+    for r in 0..rows {
+        out.cuts.insert((r, gap));
+    }
+    if span.0 <= span.1 {
+        for c in auto.cuts.iter().filter(|c| c.1 as i32 + dc > gap as i32 && c.1 <= span.1 + 1) {
+            if let Some(at) = shift(*c, 0, dc) {
+                out.cuts.insert(at);
+            }
+        }
+        out.cols = out.cols.max((span.1 as i32 + dc + 1 + SPARE) as u16);
+    }
+    let mut out = grown(out);
+    // the wires the new parts need: each line of the ratsnest that ends at a new part, between the free holes nearest its two ends
+    // on their pieces of strip
+    let mut taken: std::collections::BTreeSet<At> = out.used().into_iter().map(|(a, _)| a).collect();
+    let pieces = out.pieces();
+    for (net, a, b) in crate::stripboard::strip_unjoined(s, &out) {
+        if !new_holes.contains(&a) && !new_holes.contains(&b) {
+            continue;
+        }
+        let free_near = |at: At, taken: &std::collections::BTreeSet<At>| -> Option<At> {
+            let (r, x, y) = *pieces.iter().find(|(r, x, y)| *r == at.0 && at.1 >= *x && at.1 <= *y)?;
+            let mut cols: Vec<u16> = (x..=y).collect();
+            cols.sort_by_key(|c| c.abs_diff(at.1));
+            cols.into_iter().map(|c| (r, c)).find(|h| !taken.contains(h))
+        };
+        let Some(ha) = free_near(a, &taken) else { continue };
+        taken.insert(ha);
+        let Some(hb) = free_near(b, &taken) else {
+            taken.remove(&ha);
+            continue;
+        };
+        taken.insert(hb);
+        out.links.push(Link { a: ha, b: hb, net });
+    }
+    out
 }
 
 #[cfg(test)]
@@ -306,7 +354,8 @@ mod tests {
         assert_eq!(one.bare[0], (a, b));
     }
 
-    /// A part added to the schematic lands right of the saved board, the moved parts stay where they were, a part taken out goes.
+    /// A part added to the schematic lands right of the saved board (its strips cut off from the board's, and the wires its nets need
+    /// drawn), the moved parts stay where they were, a part taken out goes.
     #[test]
     fn a_saved_layout_follows_the_schematic() {
         let s = blinker();
@@ -324,5 +373,15 @@ mod tests {
         let mut fewer = s.clone();
         fewer.components.retain(|c| c.refdes != first);
         assert!(synced(&fewer, &saved, StripOptions::default()).parts.iter().all(|p| p.refdes != first));
+        // each part of the sample added to a board laid out without it: cut off from the board's strips, and wired to its nets
+        for c in &s.components {
+            let mut without = s.clone();
+            without.components.retain(|x| x.refdes != c.refdes);
+            let before = strip_layout(&without);
+            let l = synced(&s, &before, StripOptions::default());
+            assert!(strip_check(&s, &l).is_empty(), "{} added: {:?}", c.refdes, strip_check(&s, &l));
+            assert!(l.links.len() > before.links.len(), "{} added: wires drawn", c.refdes);
+            assert!((0..l.rows).all(|r| l.cuts.contains(&(r, before.cols))), "a column cut between");
+        }
     }
 }
