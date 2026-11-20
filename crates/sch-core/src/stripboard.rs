@@ -73,6 +73,10 @@ pub struct StripLayout {
     /// Bare wires drawn by hand on the copper side of a perfboard, each straight along a row or a column (`StripLayout::bare_joins`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bare: Vec<(At, At)>,
+    /// Laid out for a perfboard (`perfboard::perf_layout_with`): no strips, every hole apart, joined only by the bare wires and the
+    /// links.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub perf: bool,
 }
 
 impl StripLayout {
@@ -91,16 +95,24 @@ impl StripLayout {
     }
 
     /// What the bare wires drawn by hand join: each wire's first hole to every hole along it that it touches (its two ends, a hole
-    /// in use, or a hole an automatic bare wire runs through: two bare wires that cross on the copper side touch).
+    /// in use, a hole an automatic bare wire runs through, or a hole on another bare wire: two bare wires that cross on the copper
+    /// side touch).
     pub fn bare_joins(&self) -> Vec<(At, At)> {
         let spans = self.perf_spans();
         let used: BTreeSet<At> = self.used().into_iter().map(|(a, _)| a).collect();
         let on_span = |h: At| spans.iter().any(|(a, b)| a.0 == h.0 && h.1 >= a.1 && h.1 <= b.1);
+        let along = |a: At, b: At| -> Vec<At> { if a.0 == b.0 { (a.1.min(b.1)..=a.1.max(b.1)).map(|c| (a.0, c)).collect() } else { (a.0.min(b.0)..=a.0.max(b.0)).map(|r| (r, a.1)).collect() } };
+        // how many bare wires run over each hole
+        let mut wires: BTreeMap<At, usize> = BTreeMap::new();
+        for (a, b) in &self.bare {
+            for h in along(*a, *b) {
+                *wires.entry(h).or_default() += 1;
+            }
+        }
         let mut out = vec![];
         for (a, b) in &self.bare {
-            let along: Vec<At> = if a.0 == b.0 { (a.1.min(b.1)..=a.1.max(b.1)).map(|c| (a.0, c)).collect() } else { (a.0.min(b.0)..=a.0.max(b.0)).map(|r| (r, a.1)).collect() };
-            for h in along {
-                if h != *a && (h == *b || used.contains(&h) || on_span(h)) {
+            for h in along(*a, *b) {
+                if h != *a && (h == *b || used.contains(&h) || on_span(h) || wires[&h] > 1) {
                     out.push((*a, h));
                 }
             }
@@ -115,6 +127,9 @@ impl StripLayout {
 
     /// The pieces of strip: (row, first column, last column), each between two cuts (or the board's ends).
     pub fn pieces(&self) -> Vec<(u16, u16, u16)> {
+        if self.perf {
+            return (0..self.rows).flat_map(|r| (0..self.cols).map(move |c| (r, c, c))).collect();
+        }
         let mut out = vec![];
         for r in 0..self.rows {
             let mut start = 0u16;

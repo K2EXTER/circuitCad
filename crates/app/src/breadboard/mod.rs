@@ -1788,7 +1788,7 @@ mod tests {
     fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
         let mut app = App::default();
-        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.sch.load_path(root.join("seg7_counter.schjson"));
         app.mode = Mode::Proto;
         app.breadboard.kind = BoardKind::Perfboard;
         app.breadboard.strip.tool = strip_view::StripTool::Bare;
@@ -1808,15 +1808,25 @@ mod tests {
             run(app, vec![egui::Event::PointerButton { pos: p, button, pressed: true, modifiers: Default::default() }]);
             run(app, vec![egui::Event::PointerButton { pos: p, button, pressed: false, modifiers: Default::default() }]);
         };
-        let rows = sch_core::stripboard::strip_layout(&app.sch.sch).rows;
-        let (a, b, off) = ((rows - 1, 1), (rows - 1, 4), (rows - 2, 6));
+        // the perfboard's own layout (no strips, its wires already drawn); three free holes in a row that no wire runs over
+        let auto = app.breadboard.strip_shown(&app.sch);
+        assert!(auto.perf, "the perfboard has a layout of its own");
+        let used: Vec<sch_core::stripboard::At> = auto.used().into_iter().map(|(a, _)| a).collect();
+        let on_wire = |h: sch_core::stripboard::At| auto.bare.iter().any(|(p, q)| (p.0 == q.0 && h.0 == p.0 && h.1 >= p.1.min(q.1) && h.1 <= p.1.max(q.1)) || (p.1 == q.1 && h.1 == p.1 && h.0 >= p.0.min(q.0) && h.0 <= p.0.max(q.0)));
+        let free = |h: sch_core::stripboard::At| !used.contains(&h) && !on_wire(h);
+        let (r, c0) = (1..auto.rows).flat_map(|r| (0..auto.cols.saturating_sub(2)).map(move |c| (r, c))).find(|(r, c)| (0..3).all(|i| free((*r, c + i)))).expect("a free run");
+        let (a, b, off) = ((r, c0), (r, c0 + 2), (r - 1, c0 + 1));
         click(&mut app, &mut run, a, egui::PointerButton::Primary);
         click(&mut app, &mut run, off, egui::PointerButton::Primary);
         assert!(app.sch.stripboard.is_none(), "not on the start's row or column: nothing drawn");
         click(&mut app, &mut run, b, egui::PointerButton::Primary);
-        assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.clone()), Some(vec![(a, b)]));
-        click(&mut app, &mut run, (rows - 1, 2), egui::PointerButton::Secondary);
-        assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(0), "a right click on it takes it away");
+        let drawn = app.sch.stripboard.clone().expect("kept with the sheet");
+        assert!(drawn.perf && drawn.bare.len() == auto.bare.len() + 1 && drawn.bare.last() == Some(&(a, b)), "{:?}", drawn.bare.last());
+        click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Secondary);
+        assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len()), "a right click on it takes it away");
+        // the stripboard does not show a layout kept for the perfboard
+        app.breadboard.kind = BoardKind::Stripboard;
+        assert!(!app.breadboard.strip_shown(&app.sch).perf);
     }
 
     /// The schematic's small window on the proto tab: a click on a part in it picks that part on the board (and the board's pick is

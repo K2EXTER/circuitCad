@@ -226,7 +226,7 @@ pub fn cut_toggled(l: &StripLayout, at: At) -> StripLayout {
 /// new parts need are drawn: each line of the ratsnest that ends at a new part, between the free holes nearest its ends on their
 /// pieces of strip; a piece with no free hole leaves its net apart, which the check names.
 pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLayout {
-    let auto = strip_layout_with(s, opt);
+    let auto = if saved.perf { crate::perfboard::perf_layout_with(s, opt) } else { strip_layout_with(s, opt) };
     let mut out = saved.clone();
     let pins = |leads: &[(String, At)]| {
         let mut v: Vec<&String> = leads.iter().map(|(p, _)| p).collect();
@@ -268,6 +268,10 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
             new_holes.push(*at);
         }
         out.off.push((r, v));
+    }
+    // a perfboard has no strips to cut, and its wires are its own: the check names the nets the new parts leave apart
+    if out.perf {
+        return grown(out);
     }
     // the new parts' strips cut off from the board's (a column between), and cut as the automatic layout cuts them (a chip's pins
     // each on a piece of their own)

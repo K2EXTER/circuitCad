@@ -4,6 +4,7 @@
 
 use super::*;
 use sch_core::mount::{shopping, Mount};
+use sch_core::perfboard::perf_layout_with;
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, area_turned, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
@@ -50,7 +51,7 @@ enum StripDrag {
 pub struct StripState {
     pub tool: StripTool,
     /// The layout made from the schematic, by the schematic's edit count, part count and the options it was made with.
-    auto: Option<(u64, usize, StripOptions, StripLayout)>,
+    auto: Option<(u64, usize, StripOptions, bool, StripLayout)>,
     /// The saved layout kept in step with the schematic: the key, the saved layout it came from, and the result.
     synced: Option<(u64, usize, StripLayout, StripLayout)>,
     drag: Option<StripDrag>,
@@ -134,7 +135,9 @@ impl BreadboardView {
     pub(super) fn strip_shown(&mut self, sch: &SchEditor) -> StripLayout {
         let key = (sch.rev, sch.sch.components.len());
         let opt = strip_options(sch.strip_size);
-        match &sch.stripboard {
+        // a perfboard has a layout of its own (no strips); a layout saved for the other kind of board is not shown on this one
+        let perf = self.kind == BoardKind::Perfboard;
+        match sch.stripboard.as_ref().filter(|s| s.perf == perf) {
             Some(saved) => {
                 if !self.strip.synced.as_ref().is_some_and(|(r, n, from, _)| (*r, *n) == key && from == saved) {
                     self.strip.synced = Some((key.0, key.1, saved.clone(), synced(&sch.sch, saved, opt)));
@@ -142,10 +145,11 @@ impl BreadboardView {
                 self.strip.synced.as_ref().map(|c| c.3.clone()).unwrap_or_default()
             }
             None => {
-                if !self.strip.auto.as_ref().is_some_and(|(r, n, o, _)| (*r, *n, *o) == (key.0, key.1, opt)) {
-                    self.strip.auto = Some((key.0, key.1, opt, strip_layout_with(&sch.sch, opt)));
+                if !self.strip.auto.as_ref().is_some_and(|(r, n, o, p, _)| (*r, *n, *o, *p) == (key.0, key.1, opt, perf)) {
+                    let l = if perf { perf_layout_with(&sch.sch, opt) } else { strip_layout_with(&sch.sch, opt) };
+                    self.strip.auto = Some((key.0, key.1, opt, perf, l));
                 }
-                self.strip.auto.as_ref().map(|c| c.3.clone()).unwrap_or_default()
+                self.strip.auto.as_ref().map(|c| c.4.clone()).unwrap_or_default()
             }
         }
     }
@@ -194,7 +198,7 @@ impl BreadboardView {
     /// The tools and the automatic layout's button.
     fn strip_tools(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
         let strip = self.kind == BoardKind::Stripboard;
-        if self.strip.tool == StripTool::Bare && strip {
+        if (self.strip.tool == StripTool::Bare && strip) || (self.strip.tool == StripTool::Cut && !strip) {
             self.strip.tool = StripTool::Move;
         }
         ui.horizontal_wrapped(|ui| {
@@ -202,12 +206,10 @@ impl BreadboardView {
                 (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で半回転します (帯は横のままなので、中のつながりは変わりません)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC は向きを逆に)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
-                (StripTool::Cut, "線を切る", "穴をクリックすると、自動で引いたすずめっき線をそこで分けます (その穴にははんだを盛らない)。もう一度クリックすると、元に戻します"),
                 (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行か列の穴をクリックします。右クリックした穴を通る手の線は消えます。線の両端と、途中で部品の足や別の線に重なる穴がつながります"),
             ] {
-                // the stripboard cuts its strips; the perfboard parts its wires and has bare wires drawn by hand
-                let (perf_only, strip_only) = (t == StripTool::Bare || name == "線を切る", name == "帯を切る");
-                if (perf_only && strip) || (strip_only && !strip) {
+                // the stripboard cuts its strips; the perfboard (no strips) has bare wires drawn by hand
+                if (t == StripTool::Bare && strip) || (t == StripTool::Cut && !strip) {
                     continue;
                 }
                 if ui.selectable_label(self.strip.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
@@ -241,8 +243,7 @@ impl BreadboardView {
         let hint = match self.strip.tool {
             StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
-            StripTool::Cut if strip => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
-            StripTool::Cut => "すずめっき線を分ける穴をクリックします (もう一度で戻ります)",
+            StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
         };
         ui.label(egui::RichText::new(i18n::tr(hint)).color(NOTE).small());
@@ -256,7 +257,7 @@ impl BreadboardView {
             spaced(if strip {
                 "銅の帯が横に並んだ基板 (ストリップ基板) に組む並べ方です。IC の段の上と下に帯の組があり、1 本ずつ 1 つのネットです (左に名前)。2 本足の部品は、つなぐ 2 つの帯をまたいで縦に差します。IC は × の穴で帯を切って足ごとに分け、上半分の足は上の帯へ、下半分の足は下の帯へ色の線でつなぎます。同じネットの帯どうしは左の線でつなぎます。帯を切るのは、裏から穴の銅を削ります (ドリルの刃を手で回す・専用のカッター)"
             } else {
-                "穴だけの基板 (ユニバーサル基板) に組む並べ方です。ストリップ基板と同じ置き方で、銅の帯の代わりに、灰色の線 (すずめっき線) を裏で穴から穴へはんだ付けします。IC の段の上と下の線は 1 本ずつ 1 つのネット (左に名前)。色の線は表を通すビニール線です"
+                "穴だけの基板 (ユニバーサル基板) に組む並べ方です。帯が無いので、部品はつなぐ相手の近くに置き (長いヘッダは上の縁に寝かせて)、ネットごとに灰色の線 (すずめっき線) を裏で縦・横にまっすぐはんだ付けします。ほかのネットの線とは触れません。裏で通れない所は、色の線 (表を通すビニール線) で飛び越えます"
             })
             .color(NOTE),
         );

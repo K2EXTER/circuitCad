@@ -21,6 +21,7 @@ pub use pinkind::PinKind;
 pub mod system;
 pub mod breadboard;
 pub mod stripboard;
+pub mod perfboard;
 pub mod mount;
 pub mod strip_edit;
 pub mod strip_print;
