@@ -287,8 +287,25 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
         }
         out.off.push((r, v));
     }
-    // a perfboard has no strips to cut, and its wires are its own: the check names the nets the new parts leave apart
+    // a perfboard has no strips to cut: the new parts' lines are wired round what the person made (`wire_added`)
     if out.perf {
+        let mut out = grown(out);
+        let nets = pin_nets(s);
+        let mut hole_nets: BTreeMap<At, String> = BTreeMap::new();
+        for p in &out.parts {
+            for (pin, a) in &p.leads {
+                if let Some(n) = nets.get(&(p.refdes.clone(), pin.clone())) {
+                    hole_nets.insert(*a, n.clone());
+                }
+            }
+        }
+        for (_, v) in &out.off {
+            for (_, n, a) in v {
+                hole_nets.insert(*a, n.clone());
+            }
+        }
+        let pairs: Vec<(String, At, At)> = crate::stripboard::strip_unjoined(s, &out).into_iter().filter(|(_, a, b)| new_holes.contains(a) || new_holes.contains(b)).collect();
+        crate::perfboard::wire_added(&mut out, &hole_nets, &pairs);
         return grown(out);
     }
     // the new parts' strips cut off from the board's (a column between), and cut as the automatic layout cuts them (a chip's pins
@@ -565,5 +582,50 @@ mod tests {
                 assert!((0..before.rows).all(|r| l.cuts.contains(&(r, before.cols))), "{name}: a column cut between");
             }
         }
+    }
+
+    #[test]
+    fn a_saved_perfboard_wires_the_parts_added() {
+        // each part of a sample added to a perfboard laid out without it: put right of the board and wired to its nets round the
+        // copper already there (bare wires, a link where they cannot pass); the rest stays as it was
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let opt = StripOptions::default();
+        let mut n_left = 0;
+        for name in ["ne555_blinker"] {
+            let s: Schematic = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}.schjson"))).unwrap()).unwrap();
+            let all = crate::perfboard::perf_layout_with(&s, opt).parts.len();
+            for c in &s.components {
+                let mut without = s.clone();
+                without.components.retain(|x| x.refdes != c.refdes);
+                let before = crate::perfboard::perf_layout_with(&without, opt);
+                if before.parts.len() == all {
+                    continue;
+                }
+                let l = synced(&s, &before, opt);
+                assert!(before.bare.iter().all(|w| l.bare.contains(w)) && before.links.iter().all(|k| l.links.contains(k)), "{name}: the wires there stay");
+                // a line may be left only at a lead the wires there close in on all sides (the 555's OUT when its resistor is added:
+                // alone on its net, the automatic layout wired other nets round it): the check names it
+                let mut closed: std::collections::BTreeSet<At> = before.used().into_iter().map(|(a, _)| a).collect();
+                for (a, b) in &before.bare {
+                    for r in a.0.min(b.0)..=a.0.max(b.0) {
+                        for cc in a.1.min(b.1)..=a.1.max(b.1) {
+                            closed.insert((r, cc));
+                        }
+                    }
+                }
+                let shut = |h: At| [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)].iter().all(|(dr, dc)| {
+                    let (y, x) = (h.0 as i32 + dr, h.1 as i32 + dc);
+                    y < 0 || x < 0 || closed.contains(&(y as u16, x as u16))
+                });
+                let left = crate::stripboard::strip_unjoined(&s, &l);
+                assert!(left.iter().all(|(_, a, b)| shut(*a) || shut(*b)), "{name}: {} added: {:?}", c.refdes, strip_check(&s, &l));
+                if left.is_empty() {
+                    assert!(strip_check(&s, &l).is_empty(), "{name}: {} added: {:?}", c.refdes, strip_check(&s, &l));
+                    assert!(l.bare.len() > before.bare.len(), "{name}: {} wired", c.refdes);
+                }
+                n_left += left.len();
+            }
+        }
+        assert!(n_left <= 1, "{n_left} lines left");
     }
 }
