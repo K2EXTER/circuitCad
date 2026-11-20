@@ -339,7 +339,8 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
             let standing = rnd() % 2 == 0;
             let flip = rnd() % 2 == 0;
             let (end_r, end_c) = if standing { (r + SPAN as i32, cc) } else { (r, cc + SPAN as i32) };
-            if r < band_top as i32 || end_r > band_bottom as i32 || cc < margin as i32 || end_c >= width as i32 {
+            // (the last column is left free, as the chips leave it: else the board is a hole wider than asked)
+            if r < band_top as i32 || end_r > band_bottom as i32 || cc < margin as i32 || end_c + 1 >= width as i32 {
                 continue;
             }
             let (a, b) = ((r as u16, cc as u16), (end_r as u16, end_c as u16));
@@ -609,7 +610,8 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants
                 for cc in 0..width {
                     for (dr, dc) in [(0, SPAN), (SPAN, 0)] {
                         let (a, b) = ((r, cc), (r + dr, cc + dc));
-                        if b.1 >= width {
+                        // the last column left free, as the chips leave it (else the board is a hole wider than asked)
+                        if b.1 + 1 >= width {
                             continue;
                         }
                         let holes: Vec<At> = (0..=SPAN).map(|i| (r + dr / SPAN * i, cc + dc / SPAN * i)).collect();
