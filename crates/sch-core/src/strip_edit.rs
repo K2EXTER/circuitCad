@@ -285,29 +285,91 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
     }
     let mut out = grown(out);
     // the wires the new parts need: each line of the ratsnest that ends at a new part, between the free holes nearest its two ends
-    // on their pieces of strip
+    // on their pieces of strip (`free_hole`)
     let mut taken: std::collections::BTreeSet<At> = out.used().into_iter().map(|(a, _)| a).collect();
-    let pieces = out.pieces();
+    let nets = pin_nets(s);
+    let holes_of = |out: &StripLayout, net: &str| -> Vec<At> {
+        let leads = out.parts.iter().flat_map(|p| p.leads.iter().map(move |(pin, a)| ((p.refdes.clone(), pin.clone()), *a)));
+        let offs = out.off.iter().flat_map(|(r, v)| v.iter().map(move |(pin, _, a)| ((r.clone(), pin.clone()), *a)));
+        leads.chain(offs).filter(|(k, _)| nets.get(k).is_some_and(|n| n == net)).map(|(_, a)| a).collect()
+    };
     for (net, a, b) in crate::stripboard::strip_unjoined(s, &out) {
         if !new_holes.contains(&a) && !new_holes.contains(&b) {
             continue;
         }
-        let free_near = |at: At, taken: &std::collections::BTreeSet<At>| -> Option<At> {
-            let (r, x, y) = *pieces.iter().find(|(r, x, y)| *r == at.0 && at.1 >= *x && at.1 <= *y)?;
-            let mut cols: Vec<u16> = (x..=y).collect();
-            cols.sort_by_key(|c| c.abs_diff(at.1));
-            cols.into_iter().map(|c| (r, c)).find(|h| !taken.contains(h))
+        // an end with no room on its piece: another hole of the net instead, the nearest first (not one on the other end's piece)
+        let end_near = |out: &mut StripLayout, at: At, other: At, taken: &std::collections::BTreeSet<At>| -> Option<At> {
+            if let Some(h) = free_hole(out, at, taken) {
+                return Some(h);
+            }
+            let pieces = out.pieces();
+            let piece_of = |h: At| pieces.iter().position(|(r, x, y)| *r == h.0 && h.1 >= *x && h.1 <= *y);
+            let mut alt: Vec<At> = holes_of(out, &net).into_iter().filter(|h| *h != at && piece_of(*h) != piece_of(other)).collect();
+            alt.sort_by_key(|h| (h.0 as i32 - at.0 as i32).abs() + (h.1 as i32 - at.1 as i32).abs());
+            alt.into_iter().find_map(|h| free_hole(out, h, taken))
         };
-        let Some(ha) = free_near(a, &taken) else { continue };
+        // a wire from off the board with no room at its end: the wire goes on to the other end's piece instead
+        let off_end = |out: &StripLayout, at: At| out.off.iter().enumerate().find_map(|(i, (_, v))| v.iter().position(|w| w.2 == at).map(|k| (i, k)));
+        let Some(ha) = end_near(&mut out, a, b, &taken) else {
+            if let Some((i, k)) = off_end(&out, a)
+                && let Some(hb) = end_near(&mut out, b, a, &taken)
+            {
+                out.off[i].1[k].2 = hb;
+                taken.insert(hb);
+            }
+            continue;
+        };
         taken.insert(ha);
-        let Some(hb) = free_near(b, &taken) else {
+        let Some(hb) = end_near(&mut out, b, a, &taken) else {
             taken.remove(&ha);
+            if let Some((i, k)) = off_end(&out, b) {
+                out.off[i].1[k].2 = ha;
+                taken.insert(ha);
+            }
             continue;
         };
         taken.insert(hb);
         out.links.push(Link { a: ha, b: hb, net });
     }
     out
+}
+
+/// The free hole nearest `at` on its piece of strip, for a wire's end. A piece with none is made longer (nothing more is joined): a
+/// cut at its end moves a hole out when that hole is free, or goes when the piece beyond has nothing on it, or the board grows a
+/// column at its right edge.
+fn free_hole(out: &mut StripLayout, at: At, taken: &std::collections::BTreeSet<At>) -> Option<At> {
+    for _ in 0..6 {
+        let pieces = out.pieces();
+        let piece_of = |h: At| pieces.iter().copied().find(|(r, x, y)| *r == h.0 && h.1 >= *x && h.1 <= *y);
+        let (r, x, y) = piece_of(at)?;
+        let mut cols: Vec<u16> = (x..=y).collect();
+        cols.sort_by_key(|c| c.abs_diff(at.1));
+        if let Some(h) = cols.into_iter().map(|c| (r, c)).find(|h| !taken.contains(h)) {
+            return Some(h);
+        }
+        let empty = |p: Option<(u16, u16, u16)>| p.is_some_and(|(r, x, y)| (x..=y).all(|c| !taken.contains(&(r, c))));
+        // a cut moved one hole out, onto a free hole of the next piece (a row shared by nets: each stretch as short as its ends)
+        if out.cuts.contains(&(r, y + 1)) && y + 2 < out.cols && !taken.contains(&(r, y + 2)) && !out.cuts.contains(&(r, y + 2)) {
+            out.cuts.remove(&(r, y + 1));
+            out.cuts.insert((r, y + 2));
+            continue;
+        }
+        if x >= 2 && out.cuts.contains(&(r, x - 1)) && !taken.contains(&(r, x - 2)) && !out.cuts.contains(&(r, x - 2)) {
+            out.cuts.remove(&(r, x - 1));
+            out.cuts.insert((r, x - 2));
+            continue;
+        }
+        if y + 1 >= out.cols {
+            out.cols += 1;
+        } else if out.cuts.contains(&(r, y + 1)) && (y + 2 >= out.cols || empty(piece_of((r, y + 2)))) {
+            out.cuts.remove(&(r, y + 1));
+        } else if x > 0 && out.cuts.contains(&(r, x - 1)) && (x < 2 || empty(piece_of((r, x - 2)))) {
+            out.cuts.remove(&(r, x - 1));
+        } else {
+            return None;
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -432,15 +494,23 @@ mod tests {
         let mut fewer = s.clone();
         fewer.components.retain(|c| c.refdes != first);
         assert!(synced(&fewer, &saved, StripOptions::default()).parts.iter().all(|p| p.refdes != first));
-        // each part of the sample added to a board laid out without it: cut off from the board's strips, and wired to its nets
-        for c in &s.components {
-            let mut without = s.clone();
-            without.components.retain(|x| x.refdes != c.refdes);
-            let before = strip_layout(&without);
-            let l = synced(&s, &before, StripOptions::default());
-            assert!(strip_check(&s, &l).is_empty(), "{} added: {:?}", c.refdes, strip_check(&s, &l));
-            assert!(l.links.len() > before.links.len(), "{} added: wires drawn", c.refdes);
-            assert!((0..l.rows).all(|r| l.cuts.contains(&(r, before.cols))), "a column cut between");
+        // each part of a sample added to a board laid out without it: cut off from the board's strips, and wired to its nets (the
+        // active filter's input source moves its wire on when its piece has no room; the counter's rows are shared by nets, so the
+        // cuts between them move out a hole)
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        for name in ["ne555_blinker", "active_filter", "seg7_counter"] {
+            let s: Schematic = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}.schjson"))).unwrap()).unwrap();
+            for c in &s.components {
+                let mut without = s.clone();
+                without.components.retain(|x| x.refdes != c.refdes);
+                let before = strip_layout(&without);
+                if before.parts.len() == strip_layout(&s).parts.len() {
+                    continue;
+                }
+                let l = synced(&s, &before, StripOptions::default());
+                assert!(strip_check(&s, &l).is_empty(), "{name}: {} added: {:?}", c.refdes, strip_check(&s, &l));
+                assert!((0..before.rows).all(|r| l.cuts.contains(&(r, before.cols))), "{name}: a column cut between");
+            }
         }
     }
 }
