@@ -78,11 +78,17 @@ pub fn area_moved(l: &StripLayout, a: At, b: At, dr: i32, dc: i32) -> Option<Str
 /// Everything within the rows and columns from `a` to `b` (both corners in) turned half a turn about the box's middle: the parts
 /// whose leads are all inside, the link ends (a link with one end outside stretches), the wires from off the board, the cuts, and
 /// the bare wires (one with an end outside stays where it was unless it stays straight). Half a turn keeps the strips along the rows,
-/// so what was joined along a strip stays joined; a quarter turn would stand a chip's pins across them.
+/// so what was joined along a strip stays joined; a quarter turn would stand a chip's pins across them. On a perfboard (no strips)
+/// a quarter turn clockwise (`turned_box` is where the box then is).
 pub fn area_turned(l: &StripLayout, a: At, b: At) -> StripLayout {
     let (r0, r1, c0, c1) = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
     let inside = |at: At| at.0 >= r0 && at.0 <= r1 && at.1 >= c0 && at.1 <= c1;
-    let turn = |at: At| if inside(at) { (r0 + r1 - at.0, c0 + c1 - at.1) } else { at };
+    // a perfboard turns a quarter turn clockwise about the box's top-left corner (the box then is as tall as it was wide)
+    let turn = |at: At| match (inside(at), l.perf) {
+        (false, _) => at,
+        (true, false) => (r0 + r1 - at.0, c0 + c1 - at.1),
+        (true, true) => (r0 + (at.1 - c0), c0 + (r1 - at.0)),
+    };
     let mut out = l.clone();
     for p in &mut out.parts {
         if p.leads.iter().all(|(_, at)| inside(*at)) {
@@ -111,8 +117,19 @@ pub fn area_turned(l: &StripLayout, a: At, b: At) -> StripLayout {
     grown(out)
 }
 
+/// Where a box is after `area_turned`: the same on a stripboard, as tall as it was wide on a perfboard.
+pub fn turned_box(l: &StripLayout, a: At, b: At) -> (At, At) {
+    let (r0, r1, c0, c1) = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
+    if l.perf {
+        ((r0, c0), (r0 + (c1 - c0), c0 + (r1 - r0)))
+    } else {
+        (a, b)
+    }
+}
+
 /// Part `refdes` turned: a two-lead part a quarter turn about its first lead (standing ↔ lying), a chip or a row of leads half a
-/// turn about its middle (pin 1 to the other end). None when it is not there or would leave the board.
+/// turn about its middle (pin 1 to the other end), or on a perfboard (no strips) a quarter turn clockwise. None when it is not there
+/// or would leave the board.
 pub fn part_turned(l: &StripLayout, refdes: &str) -> Option<StripLayout> {
     let mut out = l.clone();
     let p = out.parts.iter_mut().find(|p| p.refdes == refdes)?;
@@ -125,7 +142,8 @@ pub fn part_turned(l: &StripLayout, refdes: &str) -> Option<StripLayout> {
         let (r0, r1) = (p.leads.iter().map(|(_, a)| a.0).min()?, p.leads.iter().map(|(_, a)| a.0).max()?);
         let (c0, c1) = (p.leads.iter().map(|(_, a)| a.1).min()?, p.leads.iter().map(|(_, a)| a.1).max()?);
         for (_, at) in &mut p.leads {
-            *at = (r0 + r1 - at.0, c0 + c1 - at.1);
+            // a perfboard has no strips to keep along: a quarter turn clockwise about the top-left corner
+            *at = if l.perf { (r0 + (at.1 - c0), c0 + (r1 - at.0)) } else { (r0 + r1 - at.0, c0 + c1 - at.1) };
         }
     }
     Some(grown(out))
@@ -424,6 +442,35 @@ mod tests {
         let top = chip.leads.iter().map(|x| x.1 .0).min().unwrap();
         let half = area_turned(&l, (0, 0), (top, l.cols - 1));
         assert_eq!(half.parts.iter().find(|p| p.refdes == chip.refdes), Some(chip), "a part half in the box stays");
+    }
+
+    /// On a perfboard (no strips) a chip and a box turn a quarter turn: the chip's two rows of pins then lie along the rows, the box
+    /// is as tall as it was wide, and four turns bring each back as it was.
+    #[test]
+    fn a_perfboard_turns_a_quarter_turn() {
+        let s = blinker();
+        let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+        let chip = l.parts.iter().find(|p| p.leads.len() == 8).unwrap().refdes.clone();
+        let cols = |l: &StripLayout| l.parts.iter().find(|p| p.refdes == chip).unwrap().leads.iter().map(|x| x.1 .1).collect::<std::collections::BTreeSet<u16>>().len();
+        assert_eq!(cols(&l), 2, "upright: two columns of pins");
+        let once = part_turned(&l, &chip).unwrap();
+        assert_eq!(cols(&once), 4, "turned: the pins along a row");
+        let mut back = once;
+        for _ in 0..3 {
+            back = part_turned(&back, &chip).unwrap();
+        }
+        assert_eq!(back.parts, l.parts);
+        let (a, b) = ((0, 0), (l.rows - 1, l.cols - 1));
+        assert_eq!(turned_box(&l, a, b), ((0, 0), (l.cols - 1, l.rows - 1)));
+        let mut m = l.clone();
+        let mut bx = (a, b);
+        for _ in 0..4 {
+            let next = turned_box(&m, bx.0, bx.1);
+            m = area_turned(&m, bx.0, bx.1);
+            bx = next;
+            assert!(strip_check(&s, &m).is_empty(), "{:?}", strip_check(&s, &m));
+        }
+        assert_eq!((m.parts, m.bare, m.links), (l.parts.clone(), l.bare.clone(), l.links.clone()), "four turns: as it was");
     }
 
     #[test]

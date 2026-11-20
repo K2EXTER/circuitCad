@@ -6,7 +6,7 @@ use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::perfboard::perf_layout_with;
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
-use sch_core::strip_edit::{area_moved, area_turned, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
+use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
 
 /// What the person builds on.
@@ -203,7 +203,7 @@ impl BreadboardView {
         }
         ui.horizontal_wrapped(|ui| {
             for (t, name, tip) in [
-                (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で半回転します (帯は横のままなので、中のつながりは変わりません)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC は向きを逆に)、選んだ線は Delete で消えます"),
+                (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
                 (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行か列の穴をクリックします。右クリックした穴を通る手の線は消えます。線の両端と、途中で部品の足や別の線に重なる穴がつながります"),
@@ -241,7 +241,8 @@ impl BreadboardView {
             }
         });
         let hint = match self.strip.tool {
-            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / Ctrl+Z で戻す",
+            StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / Ctrl+Z で戻す",
+            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / Delete で線を消す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
@@ -432,7 +433,11 @@ impl BreadboardView {
                             painter.text(chip.center_bottom() + Vec2::new(0.0, 2.0), egui::Align2::CENTER_TOP, package, egui::FontId::proportional((pitch * 0.45).clamp(7.0, 11.0)), Color32::from_gray(225));
                         }
                         _ => {
-                            painter.rect_filled(if p.look == sch_core::breadboard::Look::Dip { body.shrink2(Vec2::new(pitch * 0.55, 0.0)) } else { body }, 2.0, Color32::from_gray(35));
+                            // a DIP's body between its two rows of pins (side by side, or above and below when turned on a perfboard)
+                            let distinct = |f: &dyn Fn(&At) -> u16| p.leads.iter().map(|(_, a)| f(a)).collect::<std::collections::BTreeSet<u16>>().len();
+                            let turned = distinct(&|a| a.1) != 2 && distinct(&|a| a.0) == 2;
+                            let across = if turned { Vec2::new(0.0, pitch * 0.55) } else { Vec2::new(pitch * 0.55, 0.0) };
+                            painter.rect_filled(if p.look == sch_core::breadboard::Look::Dip { body.shrink2(across) } else { body }, 2.0, Color32::from_gray(35));
                             painter.text(body.center(), egui::Align2::CENTER_CENTER, &p.refdes, font.clone(), Color32::WHITE);
                         }
                     }
@@ -675,6 +680,7 @@ impl BreadboardView {
                 && let Some((a, b)) = self.strip.sel
             {
                 let m = area_turned(l, a, b);
+                self.strip.sel = Some(turned_box(l, a, b));
                 self.strip_set(sch, Some(m.clone()));
                 *l = m;
             } else if tool == StripTool::Move
