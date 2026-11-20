@@ -124,8 +124,13 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>) -
     // the shelves as placed, then the same made better by annealing (it helps small boards; on a crowded one the estimate it goes by
     // packs the parts too tight for the wires, and the shelves as placed win)
     // and each again with the chips where the springs and the spreading put them (`simpl`)
-    let placings: Vec<(u16, bool, bool, bool)> =
+    let mut placings: Vec<(u16, bool, bool, bool)> =
         [false, true].iter().flat_map(|q| [false, true].iter().flat_map(move |s| GAPS.iter().flat_map(move |g| [(*g, false, *s, *q), (*g, true, *s, *q)]))).collect();
+    // round locked parts the springs go first: they pull the other parts toward the locked parts' leads (the shelves fill the rows
+    // after the locked parts in order, far from what they join)
+    if !wants.keep.is_empty() {
+        placings.sort_by_key(|p| !p.3);
+    }
     let mut placed: Vec<Option<Option<StripLayout>>> = vec![None; placings.len()];
     for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
         for (pi, (gap, turned, sa, springs)) in placings.iter().copied().enumerate() {
@@ -771,6 +776,9 @@ const MORE_ROUNDS: usize = 3;
 /// How many times the nets are wired again with the ones left apart first.
 const ROUNDS: usize = 4;
 
+/// A net of two leads this many holes apart or nearer (along the rows and columns) is wired before the other nets.
+const SHORT: usize = 10;
+
 /// The longest insulated wire on top that a way may jump with (holes).
 const JUMP: i32 = 16;
 /// What a jump costs on top of its length: a way along the copper is taken unless it is much longer.
@@ -879,11 +887,14 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
     let grounds: Vec<(u32, Vec<At>, Option<usize>)> = nets.iter().filter(|x| x.2.is_some()).cloned().collect();
     nets.retain(|(_, v, _)| v.len() > 1);
     let rail = |i: u32| is_ground_name(&names[i as usize]) || c.supplies.contains(&names[i as usize]);
+    // a net of two leads near each other (a short bare wire), wired before the others cut across it (a header's pin to the chip
+    // under it would else be jumped by a wire on top)
+    let short = |v: &[At]| v.len() == 2 && (v[0].0.abs_diff(v[1].0) + v[0].1.abs_diff(v[1].1)) as usize <= SHORT;
     nets.sort_by_key(|(i, v, _)| {
         let (r0, r1) = (v.iter().map(|a| a.0).min().unwrap(), v.iter().map(|a| a.0).max().unwrap());
         let (c0, c1) = (v.iter().map(|a| a.1).min().unwrap(), v.iter().map(|a| a.1).max().unwrap());
         let ahead = first.iter().position(|n| *n == names[*i as usize]).unwrap_or(usize::MAX);
-        (ahead, rail(*i) != rails_first, v.len(), (r1 - r0) + (c1 - c0))
+        (ahead, !short(v), rail(*i) != rails_first, v.len(), (r1 - r0) + (c1 - c0))
     });
     let mut link_ends: BTreeSet<At> = BTreeSet::new();
     // a state is a hole and how the way came in: 0..4 a step that way, 4 the start, 5 landed from a jump
