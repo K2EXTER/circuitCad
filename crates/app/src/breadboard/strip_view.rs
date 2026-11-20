@@ -4,7 +4,7 @@
 
 use super::*;
 use sch_core::mount::{shopping, Mount};
-use sch_core::perfboard::{perf_layout_around, perf_layout_with};
+use sch_core::perfboard::{links_along_pins, perf_layout_around, perf_layout_with};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
@@ -403,6 +403,15 @@ impl BreadboardView {
                 ui.colored_label(BAD, i18n::trf!("・{}", i18n::tr_dyn(p)));
             }
         }
+        // a perfboard's wires on top that lie along a chip's row of pins (the automatic layout lays one so where nothing else gets through)
+        if !strip {
+            for (k, part) in links_along_pins(&l) {
+                let w = &l.links[k];
+                ui.colored_label(crate::theme::WARN, i18n::trf!("▲ 表の線 {}–{} が {} の足の列の上を通ります", hole_name(w.a), hole_name(w.b), part)).on_hover_text(i18n::tr(
+                    "表の線が IC やヘッダの足の上に沿って走っていて、ソケットの上をまたぐ形になります。電気的には被覆があるのでつながりませんが、組みにくく、絵では足とつながって見えます。線の端をドラッグして足の列を避けるか、そのままにします (自動の並べ方は、ほかに通れる所が無いときにこう引きます)",
+                ));
+            }
+        }
         let rules = strip_rules(&sch.sch, &l);
         if !l.sections.is_empty() || !rules.is_empty() {
             ui.label(egui::RichText::new(i18n::tr("区画とつなぎ方の決まり")).strong()).on_hover_text(i18n::tr(
@@ -605,7 +614,13 @@ impl BreadboardView {
                 painter.rect_filled(Rect::from_center_size(at + Vec2::new(0.0, s * 0.35), Vec2::new(s * 1.1, s * 0.8)), 1.5, LOCK);
             }
         }
-        // the links over the parts, and the supplies off the board
+        // the links over the parts (one along a chip's pins marked orange beneath), and the supplies off the board
+        if !strip {
+            for (k, _) in links_along_pins(&l) {
+                let w = &l.links[k];
+                painter.line_segment([to(w.a), to(w.b)], Stroke::new(pitch * 0.42, crate::theme::WARN.gamma_multiply(0.7)));
+            }
+        }
         for k in &l.links {
             let c = net_colour(&k.net);
             painter.line_segment([to(k.a), to(k.b)], Stroke::new(pitch * 0.16, c));

@@ -537,6 +537,28 @@ fn outline(p: &StripPart) -> Vec<At> {
     (r0..=r1).flat_map(|r| (c0..=c1).map(move |cc| (r, cc))).collect()
 }
 
+/// The wires on top that run along a chip's (or a row of leads') pins: over two of its pins one after the other, lying on the chip's
+/// or the socket's row of pins (the automatic layout may lay one so where nothing else gets through; the person may move its ends).
+/// Each wire's index and the part. A wire across a row of pins, under a chip (between its rows) or over a two-lead part is not one.
+pub fn links_along_pins(l: &StripLayout) -> Vec<(usize, String)> {
+    let pin_at: BTreeMap<At, &str> = l.parts.iter().filter(|p| p.look != Look::TwoLead).flat_map(|p| p.leads.iter().map(move |x| (x.1, p.refdes.as_str()))).collect();
+    l.links
+        .iter()
+        .enumerate()
+        .filter_map(|(k, w)| {
+            let n = w.a.0.abs_diff(w.b.0).max(w.a.1.abs_diff(w.b.1)) as usize;
+            let at = |i: usize| {
+                let f = i as f64 / n.max(1) as f64;
+                ((w.a.0 as f64 + (w.b.0 as f64 - w.a.0 as f64) * f).round() as u16, (w.a.1 as f64 + (w.b.1 as f64 - w.a.1 as f64) * f).round() as u16)
+            };
+            (1..n.saturating_sub(1)).find_map(|i| match (pin_at.get(&at(i)), pin_at.get(&at(i + 1))) {
+                (Some(x), Some(y)) if x == y => Some((k, x.to_string())),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
 /// The holes beside `h` (up, down, left, right) on a board `width` holes wide.
 fn beside4(h: At, width: u16) -> impl Iterator<Item = At> {
     [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)].into_iter().filter_map(move |(dr, dc)| {
@@ -1423,6 +1445,31 @@ mod tests {
         }
         assert!(strip_check(&s, &m).is_empty(), "{:?}", strip_check(&s, &m));
         assert!(m.locked.contains("U1"));
+    }
+
+    /// A wire on top along a chip's row of pins is found (and named by the chip); one across the row, or under the chip, is not.
+    #[test]
+    fn a_wire_along_a_chips_pins_is_found() {
+        let s = load("ne555_blinker.schjson");
+        let mut l = perf_layout_with(&s, StripOptions::default());
+        let u = l.parts.iter().find(|p| p.refdes == "U1").unwrap().clone();
+        let (r0, r1) = (u.leads.iter().map(|x| x.1 .0).min().unwrap(), u.leads.iter().map(|x| x.1 .0).max().unwrap());
+        let (c0, c1) = (u.leads.iter().map(|x| x.1 .1).min().unwrap(), u.leads.iter().map(|x| x.1 .1).max().unwrap());
+        // its pins in two columns (upright) or two rows (turned): a wire past both ends of one of them runs along four pins; one
+        // across the two, over a pin of each, does not
+        let upright = u.leads.iter().map(|x| x.1 .1).collect::<BTreeSet<u16>>().len() == 2;
+        let before = links_along_pins(&l).len();
+        let k = l.links.len();
+        let (along, across) = if upright {
+            (Link { a: (r0.saturating_sub(1), c0), b: (r1 + 1, c0), net: "X".into() }, Link { a: (r0, c0.saturating_sub(1)), b: (r0, c1 + 1), net: "Y".into() })
+        } else {
+            (Link { a: (r0, c0.saturating_sub(1)), b: (r0, c1 + 1), net: "X".into() }, Link { a: (r0.saturating_sub(1), c0), b: (r1 + 1, c0), net: "Y".into() })
+        };
+        l.links.push(along);
+        l.links.push(across);
+        let found = links_along_pins(&l);
+        assert_eq!(found.len(), before + 1, "{found:?}");
+        assert!(found.contains(&(k, "U1".to_string())));
     }
 
     /// The shelves as placed wall no lead in: every lead keeps a free hole beside it for its wire (arduino_mega_usb's USB connector,
