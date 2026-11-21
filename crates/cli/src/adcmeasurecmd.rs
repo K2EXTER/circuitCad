@@ -3,11 +3,11 @@
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
-use sch_core::adc_measure::{parse_conditions, AdcMeasure, Measured};
+use sch_core::adc_measure::{parse_conditions, AdcMeasure, Measured, DEFAULT_DTEMP, DEFAULT_TC_PPM, DEFAULT_TOL_PCT};
 use serde_json::{json, Value};
 use sim_core::adcmeasure::{read_measure, MeasureReading};
 
-const USAGE: &str = "adcmeasure [NAME volts|ohms|amps plus=NET minus=NET | NAME part part=R7] at=VALUE adc=U1 pos=AIN neg=AIN [gain=1] [rate=20] [filter=sinc|low_latency] [chop=0|1] [when=K1,SW2,R5=10k] [refpos=AIN refneg=AIN] | adcmeasure remove NAME";
+const USAGE: &str = "adcmeasure [NAME volts|ohms|amps plus=NET minus=NET | NAME part part=R7 | NAME temp part=RT1 [r0=10k b=3950 | r0=100 alpha=0.00385]] at=VALUE adc=U1 pos=AIN neg=AIN [gain=1] [rate=20] [filter=sinc|low_latency] [chop=0|1] [when=K1,SW2,R5=10k] [refpos=AIN refneg=AIN] [tol=1] [tc=100] [dtemp=10] | adcmeasure remove NAME";
 
 impl Session {
     /// `adcmeasure` (read every way), `adcmeasure NAME KIND ...` (add or replace one, then read it), `adcmeasure remove NAME`.
@@ -22,12 +22,21 @@ impl Session {
         if let Some(name) = pos.first() {
             let need = |k: &str| opt(&kv, k).map(str::to_string).ok_or_else(|| format!("{k}= がありません\n{USAGE}"));
             let kind = pos.get(1).map(String::as_str).ok_or(USAGE)?;
+            let num = |k: &str, d: f64| -> Result<f64, String> { opt(&kv, k).map(|v| sim_core::parse_value(v).ok_or_else(|| format!("{k}={v}: 数ではありません"))).unwrap_or(Ok(d)) };
             let measured = match kind {
                 "volts" | "v" => Measured::Volts { plus: need("plus")?, minus: need("minus")? },
                 "ohms" | "r" => Measured::Ohms { plus: need("plus")?, minus: need("minus")? },
                 "amps" | "a" => Measured::Amps { plus: need("plus")?, minus: need("minus")? },
                 "part" => Measured::Part { part: need("part")? },
-                _ => return Err(format!("{kind}: volts・ohms・amps・part のどれか\n{USAGE}")),
+                "temp" | "t" => {
+                    let part = need("part")?;
+                    // an NTC's law from its model, unless given
+                    let (r0, b) = sim_core::adcmeasure::sensor_law(&self.sch, &part).unwrap_or((0.0, 0.0));
+                    let alpha = num("alpha", 0.0)?;
+                    let b = if alpha != 0.0 { 0.0 } else { num("b", b)? };
+                    Measured::Temp { part, r0: num("r0", r0)?, b, alpha }
+                }
+                _ => return Err(format!("{kind}: volts・ohms・amps・part・temp のどれか\n{USAGE}")),
             };
             let adc = need("adc")?;
             let parts = sim_core::adcread::adc_parts(&self.sch);
@@ -35,7 +44,6 @@ impl Session {
             let pin = |v: &str| -> Result<String, String> {
                 pins.iter().find(|(n, nm)| n == v || nm.eq_ignore_ascii_case(v) || nm.split('/').any(|x| x.eq_ignore_ascii_case(v))).map(|(n, _)| n.clone()).ok_or_else(|| format!("{adc} にピン {v} がありません"))
             };
-            let num = |k: &str, d: f64| -> Result<f64, String> { opt(&kv, k).map(|v| sim_core::parse_value(v).ok_or_else(|| format!("{k}={v}: 数ではありません"))).unwrap_or(Ok(d)) };
             let m = AdcMeasure {
                 name: name.clone(),
                 measured,
@@ -50,6 +58,9 @@ impl Session {
                 rate: num("rate", 20.0)?,
                 low_latency: matches!(opt(&kv, "filter"), Some("low_latency" | "lowlatency")),
                 chop: matches!(opt(&kv, "chop"), Some("1" | "on" | "true")),
+                tol_pct: num("tol", DEFAULT_TOL_PCT)?,
+                tc_ppm: num("tc", DEFAULT_TC_PPM)?,
+                dtemp: num("dtemp", DEFAULT_DTEMP)?,
             };
             let reading = read_measure(&self.sch, &m)?;
             let out = row(&m, &reading);
@@ -81,5 +92,10 @@ fn row(m: &AdcMeasure, x: &MeasureReading) -> Value {
         "vin": x.main.vin, "code": x.main.code, "clipped": x.main.clipped || x.reference.as_ref().is_some_and(|q| q.clipped),
         "ref_vin": x.reference.as_ref().map(|q| q.vin), "value": x.value, "slope": x.slope,
         "noise_rms": x.noise_rms, "noise_pp": x.noise_pp, "digits": x.digits, "done": x.done,
+        "errors": x.errors.as_ref().map(|e| json!({
+            "tol_sum": e.tol_sum, "tol_rss": e.tol_rss, "temp_sum": e.temp_sum, "temp_rss": e.temp_rss, "dtemp": m.dtemp,
+            "parts": e.parts.iter().map(|p| json!({"part": p.part, "tol": p.tol, "tc_ppm": p.tc_ppm, "own": p.own, "tol_err": p.tol_err, "temp_err": p.temp_err})).collect::<Vec<_>>(),
+            "leaks": e.leaks.iter().map(|l| json!({"part": l.part, "err": l.err})).collect::<Vec<_>>(), "leak_sum": e.leak_sum,
+        })),
     })
 }

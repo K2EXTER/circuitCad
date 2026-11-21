@@ -14,6 +14,7 @@
 | 状態を保つ | SR ラッチ | コイルの電圧の 1/5 をラッチ (`Y` の `srlatch`、1 V の論理で 0.75 で切り替え) に入れ、Q と Q̄ で接点のスイッチを動かす。電流を切っても状態はそのまま。始めはリセット |
 | 閉じた接点 | 50 mΩ | Specifications の Contact resistance (Initial) の最大 50 mΩ |
 | 開いた接点 | 1000 MΩ | Specifications の Insulation resistance (Initial) の最小 1,000 MΩ |
+| 動くまでの時間 | 3 ms (2026-11-22) | Specifications の Time characteristics の Operate [Set] time・Release [Reset] time「Max. 3 ms at rated coil voltage (at 20 °C, without bounce)」。ラッチ (`Y` の `srlatch`) の遅れ `td=3m` で、コイルの電圧が切り替わる電圧に届いてから 3 ms あとに接点が動く。表に typ は無いので最大の値 |
 
 | 項目 | データシート | モデル |
 |---|---|---|
@@ -21,6 +22,6 @@
 | セットのパルスのあと (電流を切っても) | COM–SET | COM–SET |
 | リセットのパルスのあと | COM–RST | COM–RST |
 
-テストは `sim-core/src/tests_parts_power.rs` の `the_tq2_l2_5v_latches_on_a_pulse_and_stays` (セット 1〜3 ms、リセット 5〜7 ms のパルスで、2・4・6・8.5 ms の接点を見る)。初めの版 (コイルの抵抗だけ) は `part-lib/legacy_models.json` にあり、利用者の写しがその版のままなら、次の起動で 1 回だけこの版に置き換わる。
+テストは `sim-core/src/tests_parts_power.rs` の `the_tq2_l2_5v_latches_on_a_pulse_and_stays` (セット 1〜3 ms、リセット 5〜7 ms のパルスで、0.5・3.5 (まだ動かない)・4.5・7.5・9.5 ms の接点を見る)。初めの版 (コイルの抵抗だけ) と、動くまでの時間の無い 2 番目の版は `part-lib/legacy_models.json` にあり、利用者の写しがその版のままなら、次の起動で 1 回だけこの版に置き換わる。
 
-扱わないもの: 動くまでの時間 (最大 3 ms) と接点のはね、実物が動き出す電圧 (75 % より低いことが多い)、コイルのインダクタンス (表に無い。切るときの逆起電力は出ない)、抵抗の ±10 % と温度による変化、接点の熱起電力。両方のコイルに同時に電圧をかけたときの状態は決まらない。
+扱わないもの: 接点のはねと、動く時間のばらつき (表は最大だけ)、実物が動き出す電圧 (75 % より低いことが多い)、コイルのインダクタンス (ASCTB14E 202507 の Coil data と Specifications の表に無い (2026-11-22 に見直した)。切るときの逆起電力は出ない。ドライバの逆起電力の保護のダイオードは、この値が無くても付ける)、抵抗の ±10 % と温度による変化、接点の熱起電力。両方のコイルに同時に電圧をかけたときの状態は決まらない。

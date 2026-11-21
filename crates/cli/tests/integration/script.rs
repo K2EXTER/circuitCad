@@ -1722,6 +1722,53 @@ adcmeasure
 }
 
 #[test]
+fn an_adc_measurement_gives_its_errors_its_leaks_and_a_sensor_in_degrees() {
+    let (a, ok) = run("new
+add ADS124S08 as=U1
+add R 900k as=R1
+add R 100k as=R2
+add R 10k as=R4
+add NTC_10k_B3950 as=TH
+add BAV199 as=D1
+add V 3.3 as=VA
+add V 2.5 as=VR
+net AVDD VA.+ U1.AVDD U1.DVDD U1.IOVDD R4.1 D1.K
+net REF VR.+ U1.REFP0
+net HI R1.1
+net MID R1.2 R2.1 U1.AIN0 D1.MID
+net TS R4.2 TH.1 U1.AIN9
+net GND VA.- VR.- U1.AVSS U1.DGND U1.REFN0 U1.AIN1 U1.AIN8 R2.2 TH.2 D1.A
+adcmeasure 10V volts plus=HI minus=GND at=10 adc=U1 pos=AIN0 neg=AIN1 tol=0.1 tc=25 dtemp=20
+adcmeasure t temp part=TH at=25 adc=U1 pos=AIN9 neg=AIN8
+");
+    assert!(ok, "{a:?}");
+    let rows: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "adcmeasure").collect();
+    let (v10, t) = (rows[0], rows[1]);
+    let e = &v10["errors"];
+    // 1/10 divider: 0.1 % on either resistor moves the gain by 0.09 %, 9 mV at 10 V, the two in opposite directions
+    let parts = e["parts"].as_array().unwrap();
+    assert_eq!(parts.iter().map(|p| p["part"].as_str().unwrap()).collect::<std::collections::BTreeSet<_>>(), ["R1", "R2"].into(), "{e}");
+    let err = |r: &str| parts.iter().find(|p| p["part"] == r).unwrap()["tol_err"].as_f64().unwrap();
+    assert!((err("R2") - 0.009).abs() < 1e-4 && (err("R1") + 0.009).abs() < 1e-4, "{e}");
+    assert!((e["tol_sum"].as_f64().unwrap() - 0.018).abs() < 2e-4 && (e["tol_rss"].as_f64().unwrap() - 0.0127).abs() < 2e-4, "{e}");
+    // 25 ppm/K over 20 K on each: 0.05 % moves 4.5 mV each
+    assert!((e["temp_sum"].as_f64().unwrap() - 0.009).abs() < 2e-4, "{e}");
+    // the leaks into the divider: the ADC's input current and the clamp diode's reverse current, both far below the noise of 48 uV
+    let leaks = e["leaks"].as_array().unwrap();
+    let leak = |r: &str| leaks.iter().find(|l| l["part"] == r).map(|l| l["err"].as_f64().unwrap());
+    let d1 = leak("D1").expect("the clamp leaks");
+    assert!(d1.abs() > 1e-8 && d1.abs() < 1e-5, "{e}");
+    assert!(leak("U1").is_some(), "{e}");
+    // the NTC (10k, B 3950, read from its model) under 10k from 3.3 V: 1.65 V at 25 C, the noise and the error in C
+    assert_eq!(t["unit"], "°C");
+    assert!((t["vin"].as_f64().unwrap() - 1.65).abs() < 1e-3, "{t}");
+    // dV/dT = 3.3 x 10k x R' / (20k)^2 with R' = -B / T^2 x 10k: -36.6 mV/C
+    assert!((t["slope"].as_f64().unwrap() + 0.0366).abs() < 5e-4, "{t}");
+    let r4 = t["errors"]["parts"].as_array().unwrap().iter().find(|p| p["part"] == "R4").unwrap()["tol_err"].as_f64().unwrap().abs();
+    assert!((0.2..0.25).contains(&r4), "1 % on the upper resistor is about a quarter of a degree: {t}");
+}
+
+#[test]
 fn the_pins_of_a_cable_header_are_written_and_a_firmware_is_checked() {
     let dir = std::env::temp_dir().join(format!("ccad_pins_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

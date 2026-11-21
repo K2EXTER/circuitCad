@@ -3,6 +3,8 @@
 #  - 10k: 基準抵抗 R3 との比で読む抵抗 (RX-GND)
 #  - センサー: AVDD から RT (サーミスタの代わりの 10k) と RB の分圧。RT の値を動かす
 #  - シャント: RS (1 ohm) に流れる電流を利得 16 で読む
+#  - 温度: AVDD から R4 と NTC サーミスタ TH (10k・B 3950) の分圧を °C で読む
+#  - 10V の入力 MID には、クランプのダイオード D1 (BAV199) を AVDD と GND へ。その漏れが誤差の表に出る
 new
 add ADS124S08 as=U1
 add TQ2-L2-5V as=K1
@@ -12,24 +14,29 @@ add R 10k as=R3
 add R 10k as=RT
 add R 10k as=RB
 add R 1 as=RS
+add R 10k as=R4
+add NTC_10k_B3950 as=TH
+add BAV199 as=D1
 add V 3.3 as=VA
 add V 2.5 as=VR
 add V 5 as=V5
-net AVDD VA.+ U1.AVDD U1.DVDD U1.IOVDD R3.1 U1.AIN4 RT.1
+net AVDD VA.+ U1.AVDD U1.DVDD U1.IOVDD R3.1 U1.AIN4 RT.1 R4.1 D1.K
 net REF VR.+ U1.REFP0
 net 5V V5.+ K1.SET+ K1.RST+
 net K1S K1.SET-
 net K1R K1.RST-
 net HI K1.COM1
 net TOP K1.SET1 R1.1
-net MID R1.2 R2.1 U1.AIN0
+net MID R1.2 R2.1 U1.AIN0 D1.MID
 net RX R3.2 U1.AIN2 U1.AIN5
 net SENS RT.2 RB.1 U1.AIN6
 net SH RS.1 U1.AIN7
-net GND VA.- VR.- V5.- U1.AVSS U1.DGND U1.REFN0 U1.AIN1 U1.AIN3 R2.2 RS.2 RB.2 U1.AIN8
+net TS R4.2 TH.1 U1.AIN9
+net GND VA.- VR.- V5.- U1.AVSS U1.DGND U1.REFN0 U1.AIN1 U1.AIN3 R2.2 RS.2 RB.2 U1.AIN8 TH.2 D1.A
 adcmeasure 10V volts plus=HI minus=GND at=10 adc=U1 pos=AIN0 neg=AIN1 when=K1
 adcmeasure 10k ohms plus=RX minus=GND at=10k adc=U1 pos=AIN2 neg=AIN3 refpos=AIN4 refneg=AIN5
 adcmeasure センサー part part=RT at=10k adc=U1 pos=AIN6 neg=AIN8
 adcmeasure シャント amps plus=SH minus=GND at=100m adc=U1 pos=AIN7 neg=AIN8 gain=16
+adcmeasure 温度 temp part=TH at=25 adc=U1 pos=AIN9 neg=AIN8
 adcmeasure
 save docs/examples/adc_measure.schjson

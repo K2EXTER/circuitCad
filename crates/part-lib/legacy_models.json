@@ -431,7 +431,8 @@
  },
  "TQ2-L2-5V": {
   "texts": [
-   "* TQ2-L2-5V: the two coils only (set: pins 1+ 5-, reset: pins 10+ 6-); the contacts are not modelled\n.subckt TQ2_L2_5V setp setn rstp rstn\n* 125 ohm each (5 V, 40 mA, 200 mW; +-10 % at 20 C)\nRset setp setn 125\nRrst rstp rstn 125\n.ends TQ2_L2_5V"
+   "* TQ2-L2-5V: the two coils only (set: pins 1+ 5-, reset: pins 10+ 6-); the contacts are not modelled\n.subckt TQ2_L2_5V setp setn rstp rstn\n* 125 ohm each (5 V, 40 mA, 200 mW; +-10 % at 20 C)\nRset setp setn 125\nRrst rstp rstn 125\n.ends TQ2_L2_5V",
+   "* TQ2-L2-5V: the two coils, and the two changeover contacts held by a latch (set: pins 1+ 5-, reset: pins 10+ 6-)\n.subckt TQ2_L2_5V setp setn rstp rstn com1 set1 rst1 com2 set2 rst2\n* 125 ohm each (5 V, 40 mA, 200 mW; +-10 % at 20 C)\nRset setp setn 125\nRrst rstp rstn 125\n* the coils' voltages, one fifth: the latch (1 V levels) switches at 0.75, so at 3.75 V on a coil (set / reset voltage: max 75 %)\nEs s 0 setp setn 0.2\nEr r 0 rstp rstn 0.2\nVh hi 0 1\nYlat srlatch q qb 0 hi 60 0.75 0 0 0 s r hi 0 0\n* the contacts: closed 50 mohm (initial contact resistance max), open 1000 Mohm (insulation resistance min)\nS1s com1 set1 q 0 SWC\nS1r com1 rst1 qb 0 SWC\nS2s com2 set2 q 0 SWC\nS2r com2 rst2 qb 0 SWC\n.model SWC SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends TQ2_L2_5V"
   ],
   "descriptions": [
    "Panasonic TQ2-L2-5V 信号用リレー、2 コイルラッチ、2 回路 (2 Form C)。コイル 5 V・40 mA (125 Ω、200 mW)。接点 Ag + Au クラッド、接触抵抗 50 mΩ 以下、最小開閉 10 µA 10 mV、絶縁抵抗 1000 MΩ 以上。ピンはデータシート ASCTB14E の図 (裏から見た図、リセットの状態) から: セットのコイル 1(+)・5(-)、リセットのコイル 10(+)・6(-)。1 回路目は COM1=3 がリセットで 2 (RST1)、セットで 4 (SET1) につながる。2 回路目は COM2=8 がリセットで 9 (RST2)、セットで 7 (SET2)。コイルにパルスを流すと状態を保つ (電力がいらず、発熱で熱起電力が出にくい)。どちらのコイルが白・黒かは図の決まりから読んだので、初めて使うときにテスターで確かめる。シミュレーションはコイルの抵抗だけの等価モデル (接点は扱わない。docs/models/relays.md)"

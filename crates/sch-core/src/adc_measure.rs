@@ -18,6 +18,21 @@ pub enum Measured {
     Amps { plus: String, minus: String },
     /// The value of a part already on the schematic (a resistor, a voltage or current source): a sensor, a bridge's arm.
     Part { part: String },
+    /// A temperature sensor on the schematic (two pins), in °C: an NTC thermistor (`b` > 0: `r0` at 25 °C and its B constant) or
+    /// a platinum or other resistance thermometer (`alpha` > 0: `r0` at 0 °C, linear). The part is put in as the resistor it is
+    /// at the temperature.
+    Temp {
+        part: String,
+        r0: f64,
+        #[serde(default, skip_serializing_if = "is_zero")]
+        b: f64,
+        #[serde(default, skip_serializing_if = "is_zero")]
+        alpha: f64,
+    },
+}
+
+fn is_zero(x: &f64) -> bool {
+    *x == 0.0
 }
 
 impl Measured {
@@ -28,7 +43,25 @@ impl Measured {
             Measured::Ohms { .. } => "Ω",
             Measured::Amps { .. } => "A",
             Measured::Part { .. } => "",
+            Measured::Temp { .. } => "°C",
         }
+    }
+
+    /// The part on the schematic that is measured (a part's value, a temperature sensor).
+    pub fn part(&self) -> Option<&str> {
+        match self {
+            Measured::Part { part } | Measured::Temp { part, .. } => Some(part),
+            _ => None,
+        }
+    }
+}
+
+/// The resistance of a temperature sensor at `t` °C: an NTC (`b` > 0, `r0` at 25 °C) or a linear one (`alpha`, `r0` at 0 °C).
+pub fn sensor_ohms(r0: f64, b: f64, alpha: f64, t: f64) -> f64 {
+    if b > 0.0 {
+        r0 * (b * (1.0 / (t + 273.15) - 1.0 / 298.15)).exp()
+    } else {
+        r0 * (1.0 + alpha * t)
     }
 }
 
@@ -59,6 +92,30 @@ pub struct AdcMeasure {
     pub low_latency: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub chop: bool,
+    /// For the error estimate, the parts that carry no figure of their own: a resistor's tolerance (%) and temperature
+    /// coefficient (ppm/K). And the temperature span the board sees beyond the one it was calibrated at (K).
+    #[serde(default = "default_tol")]
+    pub tol_pct: f64,
+    #[serde(default = "default_tc")]
+    pub tc_ppm: f64,
+    #[serde(default = "default_dtemp")]
+    pub dtemp: f64,
+}
+
+pub const DEFAULT_TOL_PCT: f64 = 1.0;
+pub const DEFAULT_TC_PPM: f64 = 100.0;
+pub const DEFAULT_DTEMP: f64 = 10.0;
+
+fn default_tol() -> f64 {
+    DEFAULT_TOL_PCT
+}
+
+fn default_tc() -> f64 {
+    DEFAULT_TC_PPM
+}
+
+fn default_dtemp() -> f64 {
+    DEFAULT_DTEMP
 }
 
 impl AdcMeasure {
@@ -90,5 +147,12 @@ mod tests {
         assert_eq!(parse_conditions("K1, SW2 R5=10k、V3=1.2"), ["K1", "SW2", "R5=10k", "V3=1.2"]);
         assert_eq!(condition("R5=10k"), ("R5".into(), Some("10k".into())));
         assert_eq!(condition("K1"), ("K1".into(), None));
+    }
+
+    #[test]
+    fn a_sensor_follows_its_law() {
+        assert!((sensor_ohms(10e3, 3950.0, 0.0, 25.0) - 10e3).abs() < 1e-6);
+        assert!((sensor_ohms(10e3, 3950.0, 0.0, 100.0) - 680.0).abs() < 20.0, "the NTC's own description: about 680 ohm at 100 C");
+        assert!((sensor_ohms(100.0, 0.0, 0.00385, 100.0) - 138.5).abs() < 1e-9, "Pt100");
     }
 }

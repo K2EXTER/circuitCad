@@ -230,17 +230,18 @@ fn the_tq2_l2_5v_latches_on_a_pulse_and_stays() {
     c.add(Element::VSource { name: "Vs".into(), p: s, n: 0, wave: pulse(1e-3), ac: None });
     c.add(Element::VSource { name: "Vr".into(), p: r, n: 0, wave: pulse(5e-3), ac: None });
     wire(&mut c);
-    let t = transient(&c, &TranSettings { tstop: 9e-3, tstep: 1e-5, uic: false }).unwrap();
+    let t = transient(&c, &TranSettings { tstop: 10e-3, tstep: 1e-5, uic: false }).unwrap();
     let at = |node: &str, when: f64| {
         let sig = t.signal(&format!("V({node})")).unwrap();
         let k = t.time.iter().position(|x| *x >= when).unwrap();
         sig.values[k]
     };
-    for (when, set) in [(0.5e-3, false), (2e-3, true), (4e-3, true), (6e-3, false), (8.5e-3, false)] {
+    // the contacts move 3 ms after the coil reaches its set / reset voltage (set / reset time: max 3 ms)
+    for (when, set) in [(0.5e-3, false), (3.5e-3, false), (4.5e-3, true), (7.5e-3, true), (9.5e-3, false)] {
         let (on, off) = if set { ("set1", "rst1") } else { ("rst1", "set1") };
         assert!(at(on, when) > 0.99 && at(off, when) < 1e-3, "{} ms: {on} {} V, {off} {} V", when * 1e3, at(on, when), at(off, when));
     }
-    assert!(at("set2", 4e-3) > 0.99 && at("rst2", 4e-3) < 1e-3, "the second contact moves with the first");
+    assert!(at("set2", 4.5e-3) > 0.99 && at("rst2", 4.5e-3) < 1e-3, "the second contact moves with the first");
 }
 
 #[test]
