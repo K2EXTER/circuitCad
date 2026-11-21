@@ -1,1 +1,3 @@
 target/
+# the Claude desktop app's preview servers (local to each machine)
+.claude/launch.json
