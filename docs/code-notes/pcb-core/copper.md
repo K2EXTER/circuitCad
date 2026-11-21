@@ -45,7 +45,7 @@
 - 島(そのネットのパッド・ビア・配線に触れない銅)は、いつも銅から外す(`remove_islands` は、ファイルの互換のためだけに残した)。外した島は `zonefill::dropped_islands` で調べ、画面がうすい灰色の破線で描く。
 - ベタは図形のリスト(2026-10-26): `Zone.shapes: Vec<ZoneShape{shape: Shape, op: Add|Sub}>`(`model.rs`)。`Shape`(`shape.rs`)は頂点と、頂点から次の頂点への円弧の通る点(`Vertex.arc_mid`)を持ち、`flatten` で短い直線の多角形にする(`outline::arc_through`)。ベタの面は `zonefill::zone_region`(足す図形の和 − 引く図形の和。`Zone::region`)で、塗り(`raw_fill_uncached`)・DRC の接続(`drc::connectivity`)・ガーバーのサーマル・抵抗(`irdrop`)が使う。古いファイルの `polygon`・`holes` は、読み込みで足す図形・引く図形になる(`ZoneFile`)。`merge_zone_outline`・`bake_zone`・`tidy_zones` が「頂点に確定」、`add_zone_cut`・`clear_zone_holes` が引く図形の追加・削除。CLI は `board zones [merge|bake]`・`board keepout`。画面は、ゾーンのツールの「足す/引く」と、選んだベタの図形の一覧。まだ穴を見ないもの: `board_editor/select.rs` のベタの選択(`Zone::covers` で図形だけを見る)。
 - 確認: `board picture` と同じ向きになることと、ベタの切り抜きが出ることを、同梱の `rlc_board` で目で見た。単体テストは、要素・ミラー・マスクの順序。
-- 読み込み(ケースの図面から外形・穴を取る)は未実装(候補 C5)。
+- 読み込み(ケースの図面から外形・穴を取る)は `dxf_in.rs`(`output.md`)。
 
 - 単位は `$INSUNITS`(1=インチ、2=フィート、5=cm、6=m、なし・4=mm)。円弧の曲がりは `outline.rs` の許容(`ARC_TOLERANCE`)で折れ線にする。
 - `apply` は外形を置き換え、部品に属さない穴を図面の円に置き換える(部品の穴は残す)。`to_origin` で外形の左下を (0,0) に。部品の位置は動かさない。
