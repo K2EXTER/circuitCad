@@ -613,6 +613,8 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             app.breadboard.build.open = true;
             app.breadboard.build.step = k.checked_sub(1);
         }
+        // `--proto-chips-back`: a perfboard's 0805 / 1206 chips on the copper side
+        app.sch.strip_chips_back = args.iter().any(|a| a == "--proto-chips-back");
         // `--proto-back`: the stripboard or perfboard seen from below (the copper side)
         app.breadboard.strip.back = args.iter().any(|a| a == "--proto-back");
         // `--proto-schematic`: the schematic in its small window beside the board

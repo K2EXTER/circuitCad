@@ -23,6 +23,20 @@ pub enum Mount {
     /// A module (an Arduino Nano, a Raspberry Pi Pico) with pins of its own in two rows `width` holes apart: it goes into female pin
     /// headers soldered to the board (1×`pins / 2` each), so it comes out again and is not heated.
     Module { name: String, pins: u16, width: u16 },
+    /// A surface-mount chip resistor or capacitor (1206, 0805) soldered on the copper side across two holes side by side, its ends
+    /// on their pads (one may be a chip's pin's: the pull-up or the bypass capacitor right at the pin). For those used to it
+    /// (`StripOptions::chips_back`); a leaded part is never put there.
+    Back { size: String },
+}
+
+/// The chip size of a resistor or capacitor that can go on the copper side across two holes (2.54 mm apart): 1206 or 0805 (a
+/// smaller one does not reach both pads).
+pub fn back_size(c: &Component) -> Option<&'static str> {
+    if !matches!(c.kind, Kind::Resistor | Kind::Capacitor) {
+        return None;
+    }
+    let up = c.footprint.to_ascii_uppercase();
+    ["1206", "0805"].into_iter().find(|s| up.contains(s))
 }
 
 /// The surface-mount sizes of two-lead parts.
@@ -167,6 +181,7 @@ impl Mount {
             Mount::Adapter { package, pins, width: 0 } => format!("{package} を {pins} ピンの SIP 変換基板に載せ、丸ピンの連結ソケット 1×{pins} に差す"),
             Mount::Adapter { package, pins, width } => format!("{package} を DIP {pins} ピン ({}) の変換基板に載せ、丸ピンの連結ソケット 1×{} を 2 本に差す", inches(*width), pins / 2),
             Mount::Module { name, pins, width } => format!("{name} を、基板にはんだ付けしたメスのピンヘッダ 1×{} 2 本 ({}) に差す", pins / 2, inches(*width)),
+            Mount::Back { size } => format!("{size} のチップ部品を、裏 (はんだの面) で隣り合う 2 つの穴にまたがせてはんだ付けする"),
         }
     }
 }
@@ -190,7 +205,7 @@ pub fn shopping(parts: &[(String, Mount)]) -> Vec<(String, usize, Vec<String>)> 
     };
     for (r, m) in parts {
         match m {
-            Mount::Direct => {}
+            Mount::Direct | Mount::Back { .. } => {}
             Mount::Socket { pins, width } => add(format!("丸ピン IC ソケット {pins} ピン ({})", inches(*width)), 1, r),
             Mount::Leaded => add("リード部品に替える (チップ部品の代わり)".into(), 1, r),
             Mount::Module { pins, .. } => add(format!("メスのピンヘッダ 1×{}", pins / 2), 2, r),

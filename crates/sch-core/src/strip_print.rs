@@ -136,6 +136,14 @@ pub fn strip_svg(l: &StripLayout, face: Face, perf: bool, title: &str) -> String
                     let _ = writeln!(s, r##"<path d="M{:.2} {:.2}L{:.2} {:.2}M{:.2} {:.2}L{:.2} {:.2}" stroke="#d01010" stroke-width="0.45"/>"##, x - d, y - d, x + d, y + d, x - d, y + d, x + d, y - d);
                 }
             }
+            // the chips on this side: a body across their two pads, the name beside it
+            for p in l.parts.iter().filter(|p| matches!(p.mount, crate::mount::Mount::Back { .. })) {
+                let [(_, a), (_, b)] = p.leads.as_slice() else { continue };
+                let ((ax, ay), (bx, by)) = (xy(*a), xy(*b));
+                let (x0, y0, w, h) = if (ay - by).abs() < 0.01 { (ax.min(bx) - 0.9, ay - 0.7, (ax - bx).abs() + 1.8, 1.4) } else { (ax - 0.7, ay.min(by) - 0.9, 1.4, (ay - by).abs() + 1.8) };
+                let _ = writeln!(s, r##"<rect x="{x0:.2}" y="{y0:.2}" width="{w:.2}" height="{h:.2}" rx="0.2" fill="#555" stroke="#111" stroke-width="0.2"/>"##);
+                let _ = writeln!(s, r#"<text x="{:.2}" y="{:.2}" font-size="1.3">{}</text>"#, x0 + w + 0.3, y0 + 1.0, esc(&p.refdes));
+            }
             // every hole with a lead or a wire's end in it: a ring to solder
             let mut used: Vec<At> = l.used().into_iter().map(|(a, _)| a).collect();
             used.sort();
@@ -146,7 +154,8 @@ pub fn strip_svg(l: &StripLayout, face: Face, perf: bool, title: &str) -> String
             }
         }
         Face::Parts => {
-            for p in &l.parts {
+            // (a chip on the copper side is drawn on that side's sheet)
+            for p in l.parts.iter().filter(|p| !matches!(p.mount, crate::mount::Mount::Back { .. })) {
                 let pts: Vec<(f64, f64)> = p.leads.iter().map(|(_, a)| xy(*a)).collect();
                 if pts.is_empty() {
                     continue;

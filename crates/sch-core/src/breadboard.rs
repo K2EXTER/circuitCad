@@ -184,6 +184,7 @@ pub(crate) fn is_ground_name(n: &str) -> bool {
 pub(crate) type Pins = Vec<(String, String)>;
 
 /// The parts that go on the board and their pins' nets, and the off-board ones.
+#[derive(Clone)]
 pub(crate) struct Circuit {
     pub(crate) on: Vec<(String, Look, Pins)>,
     pub(crate) off: Vec<(String, Pins)>,
@@ -797,6 +798,12 @@ pub struct BoardNets {
 }
 
 impl BoardNets {
+    /// The nets of a board that joins its leads otherwise (a stripboard's strips and wires: `stripboard::strip_board_nets`): no
+    /// breadboard holes to look up by.
+    pub fn from_pins(pins: BTreeMap<(String, String), String>, off_pins: Vec<(String, String)>) -> BoardNets {
+        BoardNets { pins, off_pins, ..Default::default() }
+    }
+
     /// The net hole `h` is in (None when no lead is joined to it).
     pub fn at(&self, h: Hole) -> Option<&str> {
         let r = self.roots.get(&h.node()).copied().unwrap_or(h.node());

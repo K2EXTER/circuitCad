@@ -98,7 +98,7 @@ pub struct BreadboardView {
     /// With the power on: the circuit as the board joins it (worked out for the schematic's edit count and the layout in `run_key`),
     /// its DC point (the parts' currents and the parts past their ratings) or why it has none, and the circuit running in time
     /// (B6 ②) or why it could not start.
-    run_key: Option<(u64, Layout)>,
+    run_key: Option<(u64, RunBoard)>,
     board: Option<Board>,
     live: Option<Live>,
     live_failed: Option<String>,
@@ -283,10 +283,11 @@ impl BreadboardView {
                 (BoardKind::Perfboard, "ユニバーサル基板", "穴だけの基板。裏で穴をつなぐすずめっき線と、表を通す線の並べ方を出します"),
             ] {
                 if ui.selectable_label(self.kind == k, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
-                    self.kind = k;
-                    if k != BoardKind::Breadboard {
+                    // another board is another circuit: the power goes off
+                    if self.kind != k {
                         self.powered = false;
                     }
+                    self.kind = k;
                 }
             }
         });
@@ -343,7 +344,7 @@ impl BreadboardView {
             self.dc_asked = true;
             sch.analyze_dc();
         }
-        self.live_frame(ui, sch, &l, problems.is_empty());
+        self.live_frame(ui, sch, &RunBoard::Bread(l.clone()), problems.is_empty());
         match self.tool {
             Tool::Meter => self.meter_ui(ui, sch, &l, problems.is_empty()),
             Tool::Scope => self.scope_ui(ui, sch, &l),
@@ -352,23 +353,7 @@ impl BreadboardView {
             }
             Tool::Move => {}
         }
-        if self.powered {
-            let issues = self.issues();
-            if let Some(Board { dc: Err(e), .. }) = &self.board {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("電源を入れたときの直流の様子が求まりませんでした: {}", i18n::tr_dyn(e)));
-            } else if issues.is_empty() {
-                ui.colored_label(crate::theme::OK, i18n::tr("電源を入れました。定格を超えた部品はありません"));
-            } else {
-                for r in &issues {
-                    let (col, head) = if r.level == sim_core::RatingLevel::Over { (BAD, i18n::tr("壊れた")) } else { (crate::theme::WARN, i18n::tr("熱い・余裕が少ない")) };
-                    ui.label(egui::RichText::new(format!("{} {}: {}", r.refdes, head, i18n::tr_dyn(&r.message))).color(col));
-                    if let Some((_, f)) = self.broken.iter().find(|(b, _)| element_of(b, &r.refdes)) {
-                        ui.label(egui::RichText::new(i18n::trf!("　{} は {} になり、回路からはそのように計算しています", r.refdes, i18n::tr_dyn(&f.label()))).color(BAD));
-                    }
-                    ui.label(egui::RichText::new(format!("　→ {}", i18n::tr_dyn(&r.hint))).color(NOTE));
-                }
-            }
-        }
+        self.power_issues_ui(ui);
         ui.horizontal(|ui| {
             if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から、部品の差し方を並べ直します (IC は中央の溝をまたぎ、電源とGNDは上下の列、同じネットの足は同じ縦の列)。手で動かした分は消えます")).clicked() {
                 sch.breadboard = Some(auto_layout(&sch.sch));
@@ -411,6 +396,30 @@ impl BreadboardView {
         });
     }
 
+    /// With the power on: the parts burnt or near their ratings (or why the circuit has no DC point).
+    pub(super) fn power_issues_ui(&self, ui: &mut egui::Ui) {
+        if !self.powered {
+            return;
+        }
+        {
+            let issues = self.issues();
+            if let Some(Board { dc: Err(e), .. }) = &self.board {
+                ui.colored_label(crate::theme::WARN, i18n::trf!("電源を入れたときの直流の様子が求まりませんでした: {}", i18n::tr_dyn(e)));
+            } else if issues.is_empty() {
+                ui.colored_label(crate::theme::OK, i18n::tr("電源を入れました。定格を超えた部品はありません"));
+            } else {
+                for r in &issues {
+                    let (col, head) = if r.level == sim_core::RatingLevel::Over { (BAD, i18n::tr("壊れた")) } else { (crate::theme::WARN, i18n::tr("熱い・余裕が少ない")) };
+                    ui.label(egui::RichText::new(format!("{} {}: {}", r.refdes, head, i18n::tr_dyn(&r.message))).color(col));
+                    if let Some((_, f)) = self.broken.iter().find(|(b, _)| element_of(b, &r.refdes)) {
+                        ui.label(egui::RichText::new(i18n::trf!("　{} は {} になり、回路からはそのように計算しています", r.refdes, i18n::tr_dyn(&f.label()))).color(BAD));
+                    }
+                    ui.label(egui::RichText::new(format!("　→ {}", i18n::tr_dyn(&r.hint))).color(NOTE));
+                }
+            }
+        }
+    }
+
     /// The parts past (or near) their ratings on the board's circuit with the power on: while it runs, the parts burnt so far and
     /// the ones near their ratings now; else at its DC point.
     fn issues(&self) -> Vec<sim_core::RatingIssue> {
@@ -425,7 +434,7 @@ impl BreadboardView {
 
     /// With the power on: the circuit as the board joins it is worked out (again when the schematic or the layout changes), its DC
     /// point found, and it runs in time; each frame the time goes on, and the panel shows the time, the speed and the switches.
-    fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
+    pub(super) fn live_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &RunBoard, matches: bool) {
         self.run_frame(ui, sch, l, matches);
         let step = self.buzz_step(sch, l);
         self.beeper.set(step);
@@ -437,7 +446,7 @@ impl BreadboardView {
     }
 
     /// The buzzers on the board with the voltage from their + to their − now (not the burnt ones).
-    fn buzzers(&self, sch: &SchEditor, l: &Layout) -> Vec<(String, f64)> {
+    fn buzzers(&self, sch: &SchEditor, l: &RunBoard) -> Vec<(String, f64)> {
         let (Some(lv), Some(b)) = (self.live.as_ref().filter(|v| self.powered && v.error.is_none()), self.board.as_ref()) else { return vec![] };
         buzzer_volts(sch, l, &b.nets, lv).into_iter().filter(|(r, _)| !self.broken.iter().any(|(e, _)| element_of(e, r))).collect()
     }
@@ -457,14 +466,14 @@ impl BreadboardView {
         p
     }
 
-    fn buzz_step(&self, sch: &SchEditor, l: &Layout) -> Option<u8> {
+    fn buzz_step(&self, sch: &SchEditor, l: &RunBoard) -> Option<u8> {
         if self.sound_off {
             return None;
         }
         self.buzzers(sch, l).into_iter().filter_map(|(_, v)| sound::loudness(v)).max()
     }
 
-    fn run_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
+    fn run_frame(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &RunBoard, matches: bool) {
         if !self.powered {
             (self.live, self.board, self.run_key, self.live_failed, self.watch) = (None, None, None, None, None);
             self.knob_values.clear();
@@ -488,7 +497,7 @@ impl BreadboardView {
             self.live = None;
             self.live_failed = None;
             self.watch = None;
-            let nets = board_nets(&sch.sch, l);
+            let nets = l.nets(&sch.sch);
             let dc = sch.board_dc(&nets, self.temp_c);
             // the parts burnt so far, broken in the circuit
             let built = sch.board_circuit(&nets, self.temp_c).map(|c| self.broken.iter().fold(c, |c, (r, f)| sim_core::with_fault(&c, r, *f).unwrap_or(c)));
@@ -497,8 +506,9 @@ impl BreadboardView {
                     let leds: Vec<String> = sch.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
                     // the knobs: the DC voltage sources off the board (a bench supply, the light or the signal on a sensor's input)
                     // and the potentiometers on the board
-                    let mut knobs: Vec<String> = l.off_board.iter().filter(|o| sch.sch.components.iter().any(|c| c.refdes == o.refdes && c.kind == sch_core::Kind::VSource)).map(|o| o.refdes.clone()).collect();
-                    knobs.extend(l.parts.iter().filter(|p| sch.sch.components.iter().any(|c| c.refdes == p.refdes && c.kind == sch_core::Kind::Pot)).map(|p| p.refdes.clone()));
+                    let kind_of = |r: &str| sch.sch.components.iter().find(|c| c.refdes == r).map(|c| c.kind);
+                    let mut knobs: Vec<String> = l.off().into_iter().filter(|r| kind_of(r) == Some(sch_core::Kind::VSource)).collect();
+                    knobs.extend(l.on().into_iter().map(|(r, _)| r).filter(|r| kind_of(r) == Some(sch_core::Kind::Pot)));
                     let mut lv = Live::start(c, &leds, sch.live_switches(), &knobs);
                     lv.speed = speed;
                     // the microcontroller boards with their sketches (B6 ⑤)
@@ -570,7 +580,7 @@ impl BreadboardView {
                 }
             });
         });
-        if l.parts.iter().any(|p| is_buzzer(sch, &p.refdes)) {
+        if l.on().iter().any(|(r, _)| is_buzzer(sch, r)) {
             let mut on = !self.sound_off;
             if ui
                 .checkbox(&mut on, i18n::tr("ブザーの音を鳴らす"))
@@ -1113,7 +1123,7 @@ impl BreadboardView {
             }
         }
         if let (Some(lv), Some(b)) = (running, &self.board) {
-            let sounding = self.buzzers(sch, &l);
+            let sounding = self.buzzers(sch, &RunBoard::Bread(l.clone()));
             draw_running(&painter, sch, &l, &b.nets, lv, &sounding, to, pitch, &font, ui.input(|i| i.time));
         }
         for r in &issues {
@@ -1272,15 +1282,52 @@ fn is_buzzer(sch: &SchEditor, refdes: &str) -> bool {
 }
 
 /// Each buzzer on the board and the voltage of its first lead (+) above its second (−) now.
-fn buzzer_volts(sch: &SchEditor, l: &Layout, nets: &BoardNets, lv: &Live) -> Vec<(String, f64)> {
-    l.parts
-        .iter()
-        .filter(|p| is_buzzer(sch, &p.refdes))
-        .filter_map(|p| {
-            let (a, b) = (&p.leads.first()?.0, &p.leads.get(1)?.0);
-            Some((p.refdes.clone(), pin_volts(p, a, nets, lv)? - pin_volts(p, b, nets, lv)?))
+fn buzzer_volts(sch: &SchEditor, l: &RunBoard, nets: &BoardNets, lv: &Live) -> Vec<(String, f64)> {
+    let volts = |r: &str, pin: &str| {
+        let n = nets.pins.get(&(r.to_string(), pin.to_string()))?;
+        if is_ground(n) { Some(0.0) } else { lv.voltage(n) }
+    };
+    l.on()
+        .into_iter()
+        .filter(|(r, _)| is_buzzer(sch, r))
+        .filter_map(|(r, pins)| {
+            let v = volts(&r, pins.first()?)? - volts(&r, pins.get(1)?)?;
+            Some((r, v))
         })
         .collect()
+}
+
+/// The board a circuit runs on with the power on: a breadboard, or a stripboard or perfboard (B5d).
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum RunBoard {
+    Bread(Layout),
+    Strip(sch_core::stripboard::StripLayout),
+}
+
+impl RunBoard {
+    /// The circuit's nets as the board joins its leads.
+    fn nets(&self, s: &sch_core::Schematic) -> BoardNets {
+        match self {
+            RunBoard::Bread(l) => board_nets(s, l),
+            RunBoard::Strip(l) => sch_core::stripboard::strip_board_nets(s, l),
+        }
+    }
+
+    /// The parts off the board (the supplies, the sources).
+    fn off(&self) -> Vec<String> {
+        match self {
+            RunBoard::Bread(l) => l.off_board.iter().map(|o| o.refdes.clone()).collect(),
+            RunBoard::Strip(l) => l.off.iter().map(|(r, _)| r.clone()).collect(),
+        }
+    }
+
+    /// The parts on the board and their leads' pins.
+    fn on(&self) -> Vec<(String, Vec<String>)> {
+        match self {
+            RunBoard::Bread(l) => l.parts.iter().map(|p| (p.refdes.clone(), p.leads.iter().map(|(pin, _)| pin.clone()).collect())).collect(),
+            RunBoard::Strip(l) => l.parts.iter().map(|p| (p.refdes.clone(), p.leads.iter().map(|(pin, _)| pin.clone()).collect())).collect(),
+        }
+    }
 }
 
 fn is_ground(n: &str) -> bool {
@@ -1524,6 +1571,31 @@ mod tests {
         (app, run)
     }
 
+    /// A stripboard or perfboard runs powered as its copper joins it: the LED lights on the board as laid out; with a wire across
+    /// its leads (a solder bridge) it is dark.
+    #[test]
+    fn a_stripboard_runs_as_its_copper_joins_it() {
+        for kind in [BoardKind::Perfboard, BoardKind::Stripboard] {
+            let (mut app, mut run) = power_on_app("led.schjson");
+            app.breadboard.kind = kind;
+            app.breadboard.powered = true;
+            run(&mut app);
+            run(&mut app);
+            let led = |app: &App| app.breadboard.live.as_ref().expect("running").current("D1").unwrap_or(0.0);
+            let lit = led(&app);
+            assert!(lit > 5e-3, "{kind:?}: the LED lights: {lit} A");
+            assert!(burnt(&app).is_empty());
+            // a wire across the LED's two leads (a solder bridge): it goes out
+            let mut l = app.breadboard.strip_shown(&app.sch);
+            let d1 = l.parts.iter().find(|p| p.refdes == "D1").unwrap().leads.clone();
+            l.links.push(sch_core::stripboard::Link { a: d1[0].1, b: d1[1].1, net: String::new() });
+            app.sch.stripboard = Some(l);
+            run(&mut app);
+            run(&mut app);
+            assert!(led(&app) < 1e-4, "{kind:?}: shorted, the LED is dark: {} A", led(&app));
+        }
+    }
+
     fn burnt(app: &App) -> Vec<String> {
         app.breadboard.issues().iter().filter(|r| r.level == sim_core::RatingLevel::Over).map(|r| r.refdes.clone()).collect()
     }
@@ -1719,7 +1791,7 @@ mod tests {
         run(&mut app);
         let step = |app: &App| {
             let l = auto_layout(&app.sch.sch);
-            app.breadboard.buzz_step(&app.sch, &l)
+            app.breadboard.buzz_step(&app.sch, &RunBoard::Bread(l))
         };
         assert_eq!(step(&app), None, "silent until the button is pressed");
         let lv = app.breadboard.live.as_mut().unwrap();
@@ -1728,7 +1800,7 @@ mod tests {
         lv.advance(0.01);
         run(&mut app);
         let l = auto_layout(&app.sch.sch);
-        let v = app.breadboard.buzzers(&app.sch, &l);
+        let v = app.breadboard.buzzers(&app.sch, &RunBoard::Bread(l.clone()));
         assert!(v.iter().any(|(r, v)| r == "BZ1" && *v > 4.5), "{v:?}");
         assert_eq!(step(&app), Some(4), "loud at 5 V");
         assert!(app.breadboard.beeper.is_playing());

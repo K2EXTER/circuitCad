@@ -285,6 +285,8 @@ pub struct SchEditor {
     pub(crate) stripboard: Option<sch_core::stripboard::StripLayout>,
     /// The stripboard / perfboard's size chosen, width × height in mm (saved with the sheet); None = as big as the layout takes.
     pub(crate) strip_size: Option<(f32, f32)>,
+    /// A perfboard's 0805 / 1206 chips go on the copper side (`StripOptions::chips_back`).
+    pub(crate) strip_chips_back: bool,
     /// The Arduino sketches of the microcontroller boards (refdes → text), saved with the sheet (`tolerance.rs`; B6 ⑤).
     pub(crate) sketches: std::collections::BTreeMap<String, String>,
     /// The roles of the part picked, as the bubble shows them, and the part whose bubble was closed (`roles_ui.rs`, B11).
@@ -772,6 +774,7 @@ impl Default for SchEditor {
             breadboard: None,
             stripboard: None,
             strip_size: None,
+            strip_chips_back: false,
             sketches: Default::default(),
             roles_cache: Default::default(),
             roles_hidden: None,

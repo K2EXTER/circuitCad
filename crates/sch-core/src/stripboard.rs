@@ -169,14 +169,11 @@ impl StripLayout {
         v
     }
 
-    /// The holes joined to `at` as the board is built: along its piece of strip, by the bare wires and by the links (what a meter's
-    /// probes would find joined). A hole off the board is joined to itself alone.
-    pub fn joined_to(&self, at: At) -> BTreeSet<At> {
+    /// Each hole on the board and the group of holes it is joined to as the board is built: along its piece of strip, by the bare
+    /// wires and by the links (what a meter's probes would find joined). The group is a number, the same for joined holes.
+    pub fn hole_groups(&self) -> BTreeMap<At, usize> {
         let (rows, cols) = (self.rows as usize, self.cols as usize);
         let inside = |a: At| (a.0 as usize) < rows && (a.1 as usize) < cols;
-        if !inside(at) {
-            return BTreeSet::from([at]);
-        }
         let idx = |a: At| a.0 as usize * cols + a.1 as usize;
         let mut parent: Vec<usize> = (0..rows * cols).collect();
         fn find(p: &mut [usize], mut i: usize) -> usize {
@@ -200,9 +197,84 @@ impl StripLayout {
         for (a, b) in self.joins() {
             join(a, b);
         }
-        let root = find(&mut parent, idx(at));
-        (0..rows * cols).filter(|i| find(&mut parent, *i) == root).map(|i| ((i / cols) as u16, (i % cols) as u16)).collect()
+        (0..rows * cols).map(|i| (((i / cols) as u16, (i % cols) as u16), find(&mut parent, i))).collect()
     }
+
+    /// The holes joined to `at` (`hole_groups`). A hole off the board is joined to itself alone.
+    pub fn joined_to(&self, at: At) -> BTreeSet<At> {
+        let groups = self.hole_groups();
+        let Some(g) = groups.get(&at) else { return BTreeSet::from([at]) };
+        groups.iter().filter(|(_, x)| *x == g).map(|(a, _)| *a).collect()
+    }
+}
+
+/// The circuit as the stripboard or perfboard joins it (its strips, bare wires and links), for running it powered: each lead's
+/// net, named as `breadboard::board_nets` names a breadboard's: a group of joined holes takes ground if a lead of it is on ground,
+/// else the first schematic net among its leads; a net split over several groups (an open) keeps its name in the group with the
+/// most leads and the others are `NET~2`...; a group with no schematic net is `SB.<hole>`. A short joins two nets into one group
+/// (one name), as on the real board.
+pub fn strip_board_nets(s: &Schematic, l: &StripLayout) -> crate::breadboard::BoardNets {
+    let flat = s.flat();
+    let nets = extract(&flat);
+    let net_of: BTreeMap<(&str, &str), &str> = nets.iter().flat_map(|n| n.pins.iter().map(move |p| ((p.refdes.as_str(), p.pin.as_str()), n.name.as_str()))).collect();
+    let groups = l.hole_groups();
+    let group = |a: At| groups.get(&a).copied().unwrap_or(usize::MAX - (a.0 as usize * 4096 + a.1 as usize));
+    // (part, pin, schematic net, group, hole, off the board)
+    let mut leads: Vec<(String, String, String, usize, At, bool)> = vec![];
+    for p in &l.parts {
+        for (pin, a) in &p.leads {
+            leads.push((p.refdes.clone(), pin.clone(), net_of.get(&(p.refdes.as_str(), pin.as_str())).map(|n| n.to_string()).unwrap_or_default(), group(*a), *a, false));
+        }
+    }
+    for (r, pins) in &l.off {
+        for (pin, _, a) in pins {
+            leads.push((r.clone(), pin.clone(), net_of.get(&(r.as_str(), pin.as_str())).map(|n| n.to_string()).unwrap_or_default(), group(*a), *a, true));
+        }
+    }
+    let mut info: BTreeMap<usize, (BTreeSet<String>, usize, At)> = BTreeMap::new();
+    for (_, _, net, g, a, _) in &leads {
+        let e = info.entry(*g).or_insert_with(|| (BTreeSet::new(), 0, *a));
+        if !net.is_empty() {
+            e.0.insert(net.clone());
+        }
+        e.1 += 1;
+        e.2 = e.2.min(*a);
+    }
+    let mut order: Vec<(usize, String, usize)> = info
+        .iter()
+        .map(|(g, (ns, n, a))| (*g, ns.iter().find(|x| crate::breadboard::is_ground_name(x)).or_else(|| ns.iter().next()).cloned().unwrap_or_else(|| format!("SB.{}", hole_name(*a))), *n))
+        .collect();
+    order.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(&b.0)));
+    let mut used: BTreeMap<String, usize> = BTreeMap::new();
+    let mut names: BTreeMap<usize, String> = BTreeMap::new();
+    for (g, name, _) in order {
+        let k = used.entry(name.to_ascii_uppercase()).or_insert(0);
+        *k += 1;
+        names.insert(g, if *k == 1 { name } else { format!("{name}~{k}") });
+    }
+    let mut pins = BTreeMap::new();
+    let mut off_pins = vec![];
+    for (r, pin, _, g, _, off) in leads {
+        if off {
+            off_pins.push((r.clone(), pin.clone()));
+        }
+        pins.insert((r, pin), names[&g].clone());
+    }
+    // the simulation-only pins (a light sensor's light) are not leads: they keep the schematic's net, as the board names it
+    let board_name: BTreeMap<&str, &str> = names.iter().filter_map(|(g, n)| info.get(g).map(|(ns, _, _)| (ns, n))).flat_map(|(ns, n)| ns.iter().map(move |x| (x.as_str(), n.as_str()))).filter(|(x, n)| n.split('~').next() == Some(*x)).collect();
+    for c in &flat.components {
+        let Some(sym) = c.custom.as_ref() else { continue };
+        for sp in sym.pins.iter().filter(|p| p.sim_only) {
+            let key = (c.refdes.clone(), sp.number.clone());
+            if pins.contains_key(&key) {
+                continue;
+            }
+            if let Some(n) = net_of.get(&(c.refdes.as_str(), sp.number.as_str())) {
+                pins.insert(key, board_name.get(n).map(|x| x.to_string()).unwrap_or_else(|| n.to_string()));
+            }
+        }
+    }
+    crate::breadboard::BoardNets::from_pins(pins, off_pins)
 }
 
 /// The net of the holes joined to `at`: the schematic's net of a lead among them (None: no lead there).
@@ -263,6 +335,10 @@ fn chip_order(on: &[(String, Look, crate::breadboard::Pins)], carry: &BTreeMap<S
 pub struct StripOptions {
     /// The board's width in holes: the chips wrap to a new row of chips past it. None: one row of chips, as wide as it takes.
     pub cols: Option<u16>,
+    /// A perfboard's 1206 and 0805 chip resistors and capacitors go on the copper side across two holes (`Mount::Back`), next to
+    /// what they join, instead of the leaded part on top. For those used to it: off by default.
+    #[serde(default)]
+    pub chips_back: bool,
 }
 
 /// Lays the schematic out on a stripboard, one row of chips.
@@ -1416,12 +1492,17 @@ pub fn strip_check(s: &Schematic, l: &StripLayout) -> Vec<String> {
     let mut problems = vec![];
     // two things in one hole, or a lead in a cut
     let mut seen: BTreeMap<At, String> = BTreeMap::new();
+    // a chip on the copper side shares its pad with a lead of its net (soldered on it): not two things in one hole (a lead of another
+    // net there shows as the nets joined, below)
+    let backs: BTreeSet<&str> = l.parts.iter().filter(|p| matches!(p.mount, Mount::Back { .. })).map(|p| p.refdes.as_str()).collect();
+    let on_back = |who: &str| who.split_once('.').is_some_and(|(r, _)| backs.contains(r));
     for (at, who) in l.used() {
         if l.cuts.contains(&at) {
             problems.push(format!("{who} が切った穴 {} にあります", hole_name(at)));
         }
         if let Some(other) = seen.insert(at, who.clone())
             && !(other.starts_with("link") && who.starts_with("link") && other == who)
+            && !(on_back(&other) != on_back(&who))
         {
             problems.push(format!("{} に {other} と {who} の 2 つが入っています", hole_name(at)));
         }
@@ -1573,6 +1654,36 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
 mod tests {
     use super::*;
 
+    /// A board built as laid out carries the schematic's nets; a cut left out shorts two nets into one.
+    #[test]
+    fn the_board_nets_are_the_schematics_until_a_cut_is_left_out() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ne555_blinker.schjson");
+        let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let l = strip_layout(&s);
+        let b = strip_board_nets(&s, &l);
+        let nets = extract(&s.flat());
+        for p in &l.parts {
+            for (pin, _) in &p.leads {
+                let want = nets.iter().find(|n| n.pins.iter().any(|q| q.refdes == p.refdes && q.pin == *pin)).map(|n| n.name.clone()).unwrap();
+                assert_eq!(b.pins[&(p.refdes.clone(), pin.clone())], want, "{}.{pin}", p.refdes);
+            }
+        }
+        assert!(!b.off_pins.is_empty(), "the supply off the board");
+        let distinct = |b: &crate::breadboard::BoardNets| b.pins.values().collect::<BTreeSet<_>>().len();
+        // some cut left out joins two strips of different nets (each cut separates something; no cut adds a net)
+        let joined: Vec<usize> = l
+            .cuts
+            .iter()
+            .map(|c| {
+                let mut shorted = l.clone();
+                shorted.cuts.remove(c);
+                distinct(&strip_board_nets(&s, &shorted))
+            })
+            .collect();
+        assert!(joined.iter().all(|n| *n <= distinct(&b)), "{joined:?}");
+        assert!(joined.contains(&(distinct(&b) - 1)), "a cut left out shorts two nets: {joined:?}");
+    }
+
     /// The holes joined to a lead are its net's leads and no other net's (the board as laid out checks clean).
     #[test]
     fn the_holes_joined_to_a_lead_are_its_net() {
@@ -1613,7 +1724,7 @@ mod tests {
             n += 1;
             // one row of chips, and wrapped to a board 40 holes wide (about 10 cm)
             for cols in [None, Some(40)] {
-                let l = strip_layout_with(&s, StripOptions { cols });
+                let l = strip_layout_with(&s, StripOptions { cols, ..Default::default() });
                 let p = strip_check(&s, &l);
                 if !p.is_empty() {
                     bad.push(format!("{name} ({cols:?}): {}", p.iter().take(3).cloned().collect::<Vec<_>>().join(" | ")));
@@ -1702,7 +1813,7 @@ mod size_tests {
         let size = |f: &str, cols: Option<u16>| {
             let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../docs/examples/{f}.schjson"));
             let s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
-            let l = super::strip_layout_with(&s, super::StripOptions { cols });
+            let l = super::strip_layout_with(&s, super::StripOptions { cols, ..Default::default() });
             (l.cols, l.rows)
         };
         let (cols, rows) = size("seg7_counter", None);
@@ -1731,7 +1842,7 @@ mod section_tests {
         let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
         s.requirements.groups = vec![group("カウンタ", &["U1", "U3"]), group("表示", &["U2", "DS1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"])];
         for cols in [None, Some(40)] {
-            let l = strip_layout_with(&s, StripOptions { cols });
+            let l = strip_layout_with(&s, StripOptions { cols, ..Default::default() });
             assert!(strip_check(&s, &l).is_empty(), "{cols:?}: {:?}", strip_check(&s, &l));
             assert_eq!(l.sections.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["カウンタ", "表示"]);
             let inside = |k: usize, a: At| {

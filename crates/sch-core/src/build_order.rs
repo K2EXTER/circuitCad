@@ -70,6 +70,10 @@ fn fit_rank(refdes: &str, kind: Option<&Kind>, mount: &Mount) -> u8 {
     if matches!(mount, Mount::Module { .. }) {
         return 7;
     }
+    // a chip on the copper side: first, while the board lies flat on its parts' side with nothing on top yet
+    if matches!(mount, Mount::Back { .. }) {
+        return 0;
+    }
     if connector(refdes, kind) {
         return 7;
     }

@@ -116,10 +116,15 @@ pub fn perf_layout_around(s: &Schematic, opt: StripOptions, from: &StripLayout) 
 
 fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, boxes: BTreeMap<String, (At, u16)>) -> StripLayout {
     let c = read(s);
+    // the chips going on the copper side are placed after the others (`with_back`): the placing sees the rest only
+    let backs = if opt.chips_back { back_chips(s, &c) } else { BTreeMap::new() };
+    let full = c.clone();
+    let mut c = c;
+    c.on.retain(|(r, _, _)| !backs.contains_key(r));
     let mut wants = Wants::read(s, &c);
     wants.keep = keep;
     wants.boxes = boxes;
-    let net_of_lead = |refdes: &str, pin: &str| lead_net(&c, refdes, pin);
+    let net_of_lead = |refdes: &str, pin: &str| lead_net(&full, refdes, pin);
     // each placement (the gaps between chips, the chips upright and turned a quarter turn, without and with annealing) wired the rails first and the small nets
     // first, without and then with a way out kept by each lead, every placement with one order before the next order (so each has its
     // turn within `BUDGET`); each again with the nets left apart wired first (a few rounds), and once all are joined with the nets
@@ -161,6 +166,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                 })
                 .clone();
             let Some(l) = l else { continue };
+            let l = if backs.is_empty() { l } else { with_back(&full, l, &backs) };
             // the table's Kelvin forks where this placing put their leads
             let fork_at: Vec<[At; 3]> = s
                 .requirements
@@ -176,7 +182,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                     break;
                 }
                 let mut m = l.clone();
-                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at });
+                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
                 let key = (apart.len(), m.links.len(), m.rows as usize * m.cols as usize);
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
@@ -214,6 +220,80 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
         }
     }
     best.map(|b| b.2).unwrap_or_default()
+}
+
+/// The chips that go on the copper side (`StripOptions::chips_back`): the 1206 and 0805 resistors and capacitors built with the
+/// leaded part otherwise, by reference, with their size.
+fn back_chips(s: &Schematic, c: &Circuit) -> BTreeMap<String, String> {
+    let flat = s.flat();
+    c.on.iter()
+        .filter(|(r, _, pins)| pins.len() == 2 && matches!(c.mounts.get(r), Some(crate::mount::Mount::Leaded)))
+        .filter_map(|(r, _, _)| Some((r.clone(), crate::mount::back_size(flat.components.iter().find(|x| &x.refdes == r)?)?.to_string())))
+        .collect()
+}
+
+/// The chips put on the copper side of a layout made without them: each across two holes side by side, an end on a hole that
+/// already carries its net (a chip's pin: soldered on that pad) where it can, else on a free hole as near as can be to its net. A
+/// hole is a back chip's alone (two chips' ends never share one); a lead of another net is never under an end. The wiring after
+/// joins the free ends.
+fn with_back(c: &Circuit, mut l: StripLayout, backs: &BTreeMap<String, String>) -> StripLayout {
+    let mut nets: BTreeMap<At, String> = BTreeMap::new();
+    for p in &l.parts {
+        for (pin, a) in &p.leads {
+            nets.insert(*a, lead_net(c, &p.refdes, pin));
+        }
+    }
+    for (_, pins) in &l.off {
+        for (_, n, a) in pins {
+            nets.insert(*a, n.clone());
+        }
+    }
+    let mut taken: BTreeSet<At> = BTreeSet::new();
+    let dist = |a: At, b: At| a.0.abs_diff(b.0) as u32 + a.1.abs_diff(b.1) as u32;
+    let far = (l.rows + l.cols) as u32;
+    for (r, size) in backs {
+        let Some((_, look, pins)) = c.on.iter().find(|x| &x.0 == r) else { continue };
+        let ((p1, n1), (p2, n2)) = (&pins[0], &pins[1]);
+        // how far an end on hole `h` is from its net: 0 on a hole of the net, else to the nearest one (none yet: as far as the board)
+        let cost = |h: At, n: &str, nets: &BTreeMap<At, String>| -> Option<u32> {
+            match nets.get(&h) {
+                Some(x) if x == n && !n.is_empty() => Some(0),
+                Some(_) => None,
+                None => Some(nets.iter().filter(|(_, x)| *x == n).map(|(a, _)| dist(h, *a)).min().unwrap_or(far)),
+            }
+        };
+        let mut best: Option<(u32, At, At)> = None;
+        for row in 0..l.rows {
+            for col in 0..l.cols {
+                let a = (row, col);
+                for b in [(row, col + 1), (row + 1, col)] {
+                    if b.0 >= l.rows || b.1 >= l.cols || taken.contains(&a) || taken.contains(&b) {
+                        continue;
+                    }
+                    for (x, y) in [(a, b), (b, a)] {
+                        let (Some(cx), Some(cy)) = (cost(x, n1, &nets), cost(y, n2, &nets)) else { continue };
+                        // a free end next to a lead of another net is harder to solder: a little worse
+                        let crowd = [x, y]
+                            .iter()
+                            .filter(|h| !nets.contains_key(h))
+                            .flat_map(|h| [(h.0.wrapping_sub(1), h.1), (h.0 + 1, h.1), (h.0, h.1.wrapping_sub(1)), (h.0, h.1 + 1)])
+                            .filter(|q| nets.get(q).is_some_and(|m| m != n1 && m != n2))
+                            .count() as u32;
+                        let k = cx + cy + crowd;
+                        if best.is_none_or(|b| k < b.0) {
+                            best = Some((k, x, y));
+                        }
+                    }
+                }
+            }
+        }
+        let Some((_, x, y)) = best else { continue };
+        taken.extend([x, y]);
+        nets.entry(x).or_insert_with(|| n1.clone());
+        nets.entry(y).or_insert_with(|| n2.clone());
+        l.parts.push(StripPart { refdes: r.clone(), look: *look, leads: vec![(p1.clone(), x), (p2.clone(), y)], mount: crate::mount::Mount::Back { size: size.clone() } });
+    }
+    l
 }
 
 /// The net of a part's lead ("" when none).
@@ -571,7 +651,7 @@ fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool
         widths.sort_unstable();
         widths.dedup();
         let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), ..Default::default() };
-        let mut ls: Vec<StripLayout> = widths.into_iter().map(|w| place(&sub, StripOptions { cols: Some(w) }, gap, turned, sa, &alone, None)).collect();
+        let mut ls: Vec<StripLayout> = widths.into_iter().map(|w| place(&sub, StripOptions { cols: Some(w), ..opt }, gap, turned, sa, &alone, None)).collect();
         ls.dedup_by_key(|l| (l.cols, l.rows));
         choices.push((i, ls));
     }
@@ -1626,6 +1706,28 @@ mod tests {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
 
+    /// With `chips_back`, the 0805 / 1206 resistors and capacitors go on the copper side across two holes side by side, one end on a
+    /// hole of its net where it can (on a chip's pin); the board checks clean, every net is joined, and it is smaller.
+    #[test]
+    fn chips_on_the_copper_side_sit_across_two_holes_and_the_board_shrinks() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/attiny_blinker.schjson");
+        let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let front = perf_layout_with(&s, StripOptions::default());
+        let l = perf_layout_with(&s, StripOptions { chips_back: true, ..Default::default() });
+        assert!(crate::stripboard::strip_check(&s, &l).is_empty(), "{:?}", crate::stripboard::strip_check(&s, &l));
+        assert!(crate::stripboard::strip_unjoined(&s, &l).is_empty());
+        let backs: Vec<&StripPart> = l.parts.iter().filter(|p| matches!(p.mount, crate::mount::Mount::Back { .. })).collect();
+        assert!(!backs.is_empty(), "{:?}", l.parts);
+        assert!(front.parts.iter().all(|p| !matches!(p.mount, crate::mount::Mount::Back { .. })), "off by default");
+        for p in &backs {
+            let (a, b) = (p.leads[0].1, p.leads[1].1);
+            assert_eq!(a.0.abs_diff(b.0) + a.1.abs_diff(b.1), 1, "{} across two holes side by side", p.refdes);
+        }
+        let shared = backs.iter().any(|p| p.leads.iter().any(|(_, h)| l.parts.iter().any(|q| q.refdes != p.refdes && q.leads.iter().any(|(_, g)| g == h))));
+        assert!(shared, "an end on a pin's hole");
+        assert!((l.rows as u32) * (l.cols as u32) < (front.rows as u32) * (front.cols as u32), "{}x{} < {}x{}", l.cols, l.rows, front.cols, front.rows);
+    }
+
     /// A sample laid out on a perfboard (`opt`): it joins what its schematic joins and nothing more; every bare wire runs straight
     /// along a row or a column; no lead or wire's end shares a hole; all on the board. With the layout, the stripboard's holes.
     fn laid_out(name: &str, opt: StripOptions) -> (StripLayout, u32) {
@@ -1672,7 +1774,7 @@ mod tests {
     /// The seven-segment counter on a board 16 holes wide: kept to.
     #[test]
     fn a_width_to_keep_to_is_kept() {
-        let (l, _) = laid_out("seg7_counter.schjson", StripOptions { cols: Some(16) });
+        let (l, _) = laid_out("seg7_counter.schjson", StripOptions { cols: Some(16), ..Default::default() });
         assert!(l.cols <= 16, "{} wide", l.cols);
     }
 

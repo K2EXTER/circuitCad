@@ -176,7 +176,7 @@ impl BreadboardView {
     /// schematic since), or the last automatic one for this kind of board (the old schematic's: not to be edited), or none.
     pub(super) fn strip_shown(&mut self, sch: &SchEditor) -> StripLayout {
         let key = (sch.rev, sch.sch.components.len());
-        let opt = strip_options(sch.strip_size);
+        let opt = strip_options(sch.strip_size, sch.strip_chips_back);
         // a perfboard has a layout of its own (no strips); a layout saved for the other kind of board is not shown on this one
         let perf = self.kind == BoardKind::Perfboard;
         let want = (key.0, key.1, opt, perf);
@@ -258,7 +258,7 @@ impl BreadboardView {
     /// "固定した部品のまわりを並べ直す": the layout round `l`'s locked parts, made on another thread (`strip_around_done` keeps it).
     pub(super) fn strip_relayout(&mut self, sch: &SchEditor, l: &StripLayout) {
         let (tx, rx) = std::sync::mpsc::channel();
-        let (s, from, opt) = (sch.sch.clone(), l.clone(), strip_options(sch.strip_size));
+        let (s, from, opt) = (sch.sch.clone(), l.clone(), strip_options(sch.strip_size, sch.strip_chips_back));
         std::thread::spawn(move || {
             let _ = tx.send(perf_layout_around(&s, opt, &from));
         });
@@ -390,6 +390,15 @@ impl BreadboardView {
                 sch.status = i18n::tr("手で動かした並べ方はそのままです。新しい大きさで並べるには「自動で並べ直す」を押します").to_string();
             }
         });
+        if self.kind == BoardKind::Perfboard {
+            let before = sch.strip_chips_back;
+            ui.checkbox(&mut sch.strip_chips_back, i18n::tr("チップ部品を裏に付ける (慣れた人向け)")).on_hover_text(i18n::tr(
+                "0805・1206 のチップ抵抗・チップコンデンサを、裏 (はんだの面) で隣り合う 2 つの穴にまたがせてはんだ付けする並べ方にします。片方の端は、つなぐ IC の足の穴に一緒にはんだ付けできるので、プルアップやパスコンを足のすぐそばに置けて、表の部品と線が減り、基板が小さくなります。小さいチップを手ではんだ付けするのに慣れた人向けです (初めてなら、同じ値のリード部品を表に付ける今の形で)。リード部品は裏に付けません",
+            ));
+            if sch.strip_chips_back != before && sch.stripboard.is_some() {
+                sch.status = i18n::tr("手で動かした並べ方はそのままです。チップ部品を裏に付けて並べるには「自動で並べ直す」を押します").to_string();
+            }
+        }
         if let Some((w, h)) = sch.strip_size {
             let (cols, rows) = holes_of(w, h);
             let (over_c, over_r) = (l.cols.saturating_sub(cols), l.rows.saturating_sub(rows));
@@ -554,6 +563,7 @@ impl BreadboardView {
         self.strip_tools(ui, sch, &l);
         self.build_ui(ui, sch, &l);
         let StripChecks { problems, rules, .. } = self.strip_checks(sch, &l);
+        self.strip_power_ui(ui, sch, &l, problems.is_empty());
         ui.add_space(4.0);
         if problems.is_empty() {
             ui.colored_label(crate::theme::OK, i18n::tr("✔ 回路図どおりにつながっています"));
@@ -689,7 +699,8 @@ impl BreadboardView {
         let to = |a: At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch;
         self.strip.drawn = Some((origin, pitch));
         // an old automatic layout shown while the new one is made is not edited (its parts are the old schematic's)
-        if !stale {
+        let held = self.strip_switch_press(ui, &response, &l, |a: At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch, pitch);
+        if !stale && !held {
             self.strip_interact(ui, &response, sch, &mut l, origin, pitch);
         }
         let board = Rect::from_min_max(to((0, 0)) - Vec2::splat(pitch * 0.8), to((l.rows - 1, l.cols - 1)) + Vec2::splat(pitch * 0.8));
@@ -732,6 +743,14 @@ impl BreadboardView {
         for p in &l.parts {
             let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
             if pts.is_empty() {
+                continue;
+            }
+            // a chip on the copper side: seen through the board, dashed, with its name
+            if matches!(p.mount, Mount::Back { .. }) {
+                let r = Rect::from_points(&pts).expand(pitch * 0.3);
+                let c = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+                painter.extend(egui::Shape::dashed_line(&c, Stroke::new(1.2, Color32::from_gray(70)), pitch * 0.25, pitch * 0.18));
+                painter.text(r.right_top() + Vec2::new(1.0, 0.0), egui::Align2::LEFT_BOTTOM, format!("{} ({})", p.refdes, i18n::tr("裏")), egui::FontId::proportional((pitch * 0.4).clamp(7.0, 11.0)), Color32::from_gray(50));
                 continue;
             }
             let bb = Rect::from_points(&pts);
@@ -805,6 +824,7 @@ impl BreadboardView {
                 painter.circle_filled(to(e), pitch * 0.17, c);
             }
         }
+        self.strip_draw_running(&painter, sch, &l, to, pitch, &font);
         // the sections: a frame and the name above it, and the strips' names at each section's left end
         for (name, a, b) in &l.sections {
             let r = Rect::from_two_pos(to(*a), to(*b)).expand(pitch * 0.45);
@@ -883,6 +903,112 @@ impl BreadboardView {
             }
         }
     }
+}
+
+impl BreadboardView {
+    /// The power switch of a stripboard or perfboard, and the running circuit's panel (the time, the speed, the knobs, the parts
+    /// burnt): the circuit is the board's own (`strip_board_nets`), so a cut left out or a wire in the wrong hole runs as built.
+    pub(super) fn strip_power_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &StripLayout, matches: bool) {
+        let label = if self.powered { i18n::tr("電源を切る") } else { i18n::tr("電源を入れる") };
+        if ui
+            .selectable_label(self.powered, label)
+            .on_hover_text(i18n::tr("並べたとおりに組んだ基板に電源を入れて、時間とともに動かします (ブレッドボードと同じ)。計算するのは銅の帯・すずめっき線・表の線でつながったとおりの回路なので、帯の切り忘れや線の付け違いがあれば、そのとおりに動いたり壊れたりします。LED は流れる電流で光り、スイッチと押しボタンは基板の上でクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます"))
+            .clicked()
+        {
+            self.powered = !self.powered;
+        }
+        self.live_frame(ui, sch, &RunBoard::Strip(l.clone()), matches);
+        self.power_issues_ui(ui);
+    }
+
+    /// With the circuit running, a press on a switch's part moves it (a push button closes while held) instead of the tool's
+    /// press. True while a switch is held (the board is not edited then).
+    fn strip_switch_press(&mut self, ui: &egui::Ui, response: &egui::Response, l: &StripLayout, to: impl Fn(At) -> Pos2, pitch: f32) -> bool {
+        let Some(lv) = self.live.as_mut().filter(|v| v.error.is_none()) else { return false };
+        if !self.powered {
+            return false;
+        }
+        if response.hovered()
+            && ui.input(|i| i.pointer.primary_pressed())
+            && let Some(p) = ui.input(|i| i.pointer.interact_pos())
+            && let Some(k) = l.parts.iter().filter(|x| strip_part_rect(x, &to, pitch).contains(p)).find_map(|x| lv.switch_index(&x.refdes))
+        {
+            lv.press(k);
+            self.switch_down = true;
+        }
+        let held = self.switch_down;
+        if ui.input(|i| i.pointer.primary_released()) {
+            lv.release();
+            self.switch_down = false;
+        }
+        held
+    }
+
+    /// The running circuit over the parts: the LEDs' glow, each switch's state, the parts burnt (soot and a cross) or near their
+    /// ratings (an orange frame).
+    fn strip_draw_running(&self, painter: &egui::Painter, sch: &SchEditor, l: &StripLayout, to: impl Fn(At) -> Pos2, pitch: f32, font: &egui::FontId) {
+        if !self.powered {
+            return;
+        }
+        let running = self.live.as_ref().filter(|v| v.error.is_none());
+        let issues = self.issues();
+        let burnt = |r: &str| issues.iter().any(|x| x.refdes == r && x.level == sim_core::RatingLevel::Over);
+        for p in &l.parts {
+            let rect = strip_part_rect(p, &to, pitch);
+            let led = sch.sch.components.iter().any(|c| c.refdes == p.refdes && c.kind == sch_core::Kind::Led);
+            let current = match (running, &self.board) {
+                (Some(lv), _) => lv.current(&p.refdes),
+                (None, Some(Board { dc: Ok((c, _)), .. })) => c.iter().find(|(n, _)| *n == p.refdes).map(|(_, i)| *i),
+                _ => None,
+            };
+            if led && !burnt(&p.refdes) {
+                // the eye sees an LED bright at a few mA: the glow follows the square root of the current (1 at 20 mA)
+                let glow = (current.unwrap_or(0.0).max(0.0) / 0.02).sqrt().clamp(0.0, 1.3) as f32;
+                if glow > 0.05 {
+                    for k in 0..4 {
+                        painter.circle_filled(rect.center(), pitch * (0.8 + 0.5 * k as f32) * glow.max(0.5), Color32::from_rgb(255, 80, 60).gamma_multiply(0.25 * glow.min(1.0)));
+                    }
+                }
+            }
+            if let Some(s) = running.and_then(|lv| lv.switch_index(&p.refdes).map(|k| &lv.switches[k])) {
+                let (c, text) = match (s.push, s.on) {
+                    (true, true) => (crate::theme::OK, i18n::tr("押している")),
+                    (true, false) => (Color32::from_gray(90), i18n::tr("押す")),
+                    (false, true) => (crate::theme::OK, i18n::tr("入")),
+                    (false, false) => (Color32::from_gray(90), i18n::tr("切")),
+                };
+                painter.rect_stroke(rect.expand(pitch * 0.15), 3.0, Stroke::new(2.5, c), egui::StrokeKind::Middle);
+                let galley = painter.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE);
+                let tag = Rect::from_center_size(rect.center_top() - Vec2::new(0.0, pitch * 0.7), galley.size() + Vec2::new(10.0, 4.0));
+                painter.rect_filled(tag, 4.0, c);
+                painter.galley(tag.center() - galley.size() / 2.0, galley, Color32::WHITE);
+            }
+        }
+        for r in &issues {
+            let Some(p) = l.parts.iter().find(|p| p.refdes == r.refdes) else { continue };
+            let rect = strip_part_rect(p, &to, pitch);
+            if r.level == sim_core::RatingLevel::Over {
+                for k in 0..3 {
+                    painter.circle_filled(rect.center() + Vec2::new((k as f32 - 1.0) * pitch * 0.4, -pitch * 0.5 - k as f32 * pitch * 0.2), pitch * (0.5 + 0.15 * k as f32), Color32::from_gray(60).gamma_multiply(0.5));
+                }
+                let d = pitch * 0.5;
+                for (a, b) in [(Vec2::new(-d, -d), Vec2::new(d, d)), (Vec2::new(-d, d), Vec2::new(d, -d))] {
+                    painter.line_segment([rect.center() + a, rect.center() + b], Stroke::new(3.0, BAD));
+                }
+            } else {
+                painter.rect_stroke(rect.expand(pitch * 0.2), 3.0, Stroke::new(2.0, crate::theme::WARN), egui::StrokeKind::Middle);
+            }
+        }
+    }
+}
+
+/// Where a part is on the stripboard's drawing: round its leads.
+fn strip_part_rect(p: &sch_core::stripboard::StripPart, to: &impl Fn(At) -> Pos2, pitch: f32) -> Rect {
+    let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
+    if pts.is_empty() {
+        return Rect::NOTHING;
+    }
+    Rect::from_points(&pts).expand(pitch * 0.5)
 }
 
 impl BreadboardView {
@@ -980,6 +1106,24 @@ impl BreadboardView {
             for e in [k.a, k.b] {
                 painter.circle_filled(to(e), pitch * 0.1, net_colour(&k.net));
             }
+        }
+        // the chips on this side: a body across their two pads, the metal ends on the pads
+        for p in l.parts.iter().filter(|p| matches!(p.mount, Mount::Back { .. })) {
+            let ends: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
+            if ends.len() != 2 {
+                continue;
+            }
+            let along = (ends[1] - ends[0]).normalized();
+            let across = Vec2::new(-along.y, along.x) * pitch * 0.28;
+            let (a, b) = (ends[0] - along * pitch * 0.32, ends[1] + along * pitch * 0.32);
+            let resistor = p.refdes.to_ascii_uppercase().starts_with('R');
+            let body = if resistor { Color32::from_gray(30) } else { Color32::from_rgb(190, 150, 100) };
+            painter.add(egui::Shape::convex_polygon(vec![a + across, b + across, b - across, a - across], body, Stroke::new(1.0, Color32::from_gray(20))));
+            for (e, d) in [(a, along), (b, -along)] {
+                let cap = [e + across, e + d * pitch * 0.25 + across, e + d * pitch * 0.25 - across, e - across];
+                painter.add(egui::Shape::convex_polygon(cap.to_vec(), Color32::from_gray(205), Stroke::NONE));
+            }
+            painter.text((ends[0] + ends[1].to_vec2()) / 2.0 + across * 1.9, egui::Align2::CENTER_CENTER, &p.refdes, egui::FontId::proportional((pitch * 0.4).clamp(7.0, 11.0)), Color32::from_gray(20));
         }
         // a chip's pin 1: a square round it (the mark to find the chip's way round from below)
         for p in l.parts.iter().filter(|p| p.leads.len() > 2) {
@@ -1287,6 +1431,6 @@ fn holes_of(w: f32, h: f32) -> (u16, u16) {
 }
 
 /// The layout's options for a board of this size (None: one row of chips).
-fn strip_options(size: Option<(f32, f32)>) -> StripOptions {
-    StripOptions { cols: size.map(|(w, h)| holes_of(w, h).0) }
+fn strip_options(size: Option<(f32, f32)>, chips_back: bool) -> StripOptions {
+    StripOptions { cols: size.map(|(w, h)| holes_of(w, h).0), chips_back }
 }
