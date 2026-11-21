@@ -94,3 +94,12 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 - 部品の表示(`Visible.parts`、2026-10-26): 表示とロックの「部品」の目。隠すと、部品のパッド・シルクの外形・部品番号が描かれず、選べない(部品に属さないパッド・シルク・配線・ビアは、そのまま)。
 
 - ゲートの入れ替え: 左パネルの「ゲートを入れ替え」(`actions.rs` の `swap_gates`。`Board.swap_specs` があるときだけ出る)。詳しくは `pcb-core.md` の `swap.rs`
+
+## ピン定義の書き出しと照合 (2026-11-21、W1・W2 の最初)
+
+- `sch_core::pindefs`: マイコンボードのピンは名前で見つける (`pin_value`: D13 → 13、A0 → A0、GPIO2・GP2・IO2 → 2。5V・GND・RST・AREF は外す)。部品のピンの名前 (Arduino Nano・Pico のようなモジュールの部品) と、ピンヘッダの `pin_names` (ケーブルの先の Arduino Mega: DMM の B 段の J3) の両方。ほかの部品につながらないピンは外す。定数の名前は `PIN_` + ネットの名前。ネットの名前がピンの名前そのもの (D22) や自動の名前 (`N$…`) のときは、つながる先の最初の部品のピン (`PIN_U5_1`)。同じ名前が 2 つなら 2 つ目にピンの名前を付ける。並びは D の番号順、A は後
+- `header_text`: `#pragma once` と、`#define 名前 番号 // ピン (部品.ピン): つながる先` の行。先頭に「回路図から書き出した。直すのは回路図」と書く
+- `read_firmware`: `#define 名前 値` と、`const`・`constexpr` の付いた `= 値;` の行 (`//` の後は読まない)。値が数か A0〜 のものだけ
+- `check_firmware`: ファームの名前を、`PIN_` と後ろの `_PIN` を外して大文字にしてから、定数の名前かネットの名前と突き合わせる。番号が違えば `wrong` (行と、直す番号)。回路図に無い名前でも、その番号のピンが回路図にあれば「回路図の名前に無い定数」、回路図の信号でファームが名前で使っていないものは「名前で使っていない」(どちらも `wrong` ではない)
+- 画面は回路図の左パネル (解析) の書き出しの列の「ピン定義…」(`schematic/pindefs_ui.rs`、窓は `result_tables.rs` の `State::pins`、撮影用に `--pins`)。CLI は `pins [export=] [check=]` (`cli/src/pinscmd.rs`)。DMM の B 段では、J3 の D2〜D53 の 25 本 (DRDY・START・RESET・SDA・SCL・MISO・MOSI・SCLK・CS と、ULN2803 の入力の `PIN_U5_1`〜`PIN_U6_8`)
+- 残り (候補の W1・W2): Zephyr の devicetree・FPGA の制約ファイル、Arduino 以外の番号 (AVR の PB5 など)、ULN2803 のようなバッファの先 (リレーの名前) で名前を付ける、基板でピンを入れ替えたら書き出し直すよう知らせる

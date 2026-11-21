@@ -1610,6 +1610,39 @@ net MID R1.2 R2.1
 }
 
 #[test]
+fn the_pins_of_a_cable_header_are_written_and_a_firmware_is_checked() {
+    let dir = std::env::temp_dir().join(format!("ccad_pins_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (h, fw) = (dir.join("pins.h"), dir.join("sketch.ino"));
+    std::fs::write(&fw, "#define LED 12  // the LED
+const int BUTTON = 2;
+").unwrap();
+    let script = format!("new
+add HEADER4 as=J1
+pinnames J1 D13,D2,5V,GND
+add R 330 as=R1
+add LED as=D1
+add R 10k as=R2
+net LED J1.1 R1.1
+net LEDA R1.2 D1.A
+net BUTTON J1.2 R2.1
+net GND J1.4 D1.K R2.2
+pins export={} check={}
+", h.display(), fw.display());
+    let (a, ok) = run(&script);
+    assert!(ok, "{a:?}");
+    let r = last(&a, "pins");
+    let pins = r["pins"].as_array().unwrap();
+    assert_eq!(pins.iter().map(|p| (p["name"].as_str().unwrap(), p["value"].as_str().unwrap())).collect::<Vec<_>>(), [("PIN_BUTTON", "2"), ("PIN_LED", "13")], "{r}");
+    let text = std::fs::read_to_string(&h).unwrap();
+    assert!(text.contains("#define PIN_LED") && text.contains(" 13 "), "{text}");
+    // the sketch has the LED on 12: one real difference, on line 1
+    assert_eq!(r["wrong"], 1, "{r}");
+    assert!(r["findings"].as_array().unwrap().iter().any(|f| f["wrong"] == true && f["line"] == 1), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_rows_of_the_requirements_table_without_a_reason_are_listed() {
     let (a, ok) = run("new
 add R 10k as=R1

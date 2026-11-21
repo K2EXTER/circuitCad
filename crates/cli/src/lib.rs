@@ -20,6 +20,7 @@ mod batterycmd;
 mod budgetcmd;
 mod inrushcmd;
 mod breadboardcmd;
+mod pinscmd;
 mod reqcmd;
 pub mod runner;
 mod projectcmd;

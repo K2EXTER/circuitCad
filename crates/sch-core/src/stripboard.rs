@@ -1746,6 +1746,16 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
             let (_, p, q) = &l.sections[k];
             a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1
         };
+        // a wire's end belongs to a section when it is in the section's box, or (a stripboard) on a piece of strip that runs into
+        // it: a strip often goes on a hole or two past the section's last part, and the wire back to the ground point starts there
+        let pieces = l.pieces();
+        let in_sec = |k: usize, a: At| {
+            inside(k, a)
+                || (!l.perf && {
+                    let (_, p, q) = &l.sections[k];
+                    pieces.iter().any(|(r, c0, c1)| *r == a.0 && a.1 >= *c0 && a.1 <= *c1 && *r >= p.0 && *r <= q.0 && *c0 <= q.1 && *c1 >= p.1)
+                })
+        };
         // a section's ground: its ground strip (named where it starts), or on a perfboard (no strips) a lead on ground
         let ground_leads: Vec<At> = l.parts.iter().flat_map(|p| p.leads.iter().filter(|(pin, _)| is_ground_name(&net_of(&p.refdes, pin))).map(|(_, a)| *a)).chain(l.off.iter().flat_map(|(_, v)| v.iter().filter(|w| is_ground_name(&w.1)).map(|w| w.2))).collect();
         let ground_in = |k: usize| l.names.iter().any(|(a, n)| is_ground_name(n) && inside(k, *a)) || (l.perf && ground_leads.iter().any(|a| inside(k, *a)));
@@ -1758,8 +1768,8 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
                 if !has_ground {
                     continue;
                 }
-                let back = l.links.iter().filter(|w| is_ground_name(&w.net) && ((inside(h, w.a) && inside(k, w.b)) || (inside(h, w.b) && inside(k, w.a)))).count();
-                let other = l.links.iter().filter(|w| is_ground_name(&w.net) && (inside(k, w.a) != inside(k, w.b)) && !(inside(h, w.a) || inside(h, w.b))).count();
+                let back = l.links.iter().filter(|w| is_ground_name(&w.net) && ((in_sec(h, w.a) && in_sec(k, w.b)) || (in_sec(h, w.b) && in_sec(k, w.a)))).count();
+                let other = l.links.iter().filter(|w| is_ground_name(&w.net) && (in_sec(k, w.a) != in_sec(k, w.b)) && !(in_sec(h, w.a) || in_sec(h, w.b))).count();
                 let ok = back == 1 && other == 0;
                 out.push(RuleCheck {
                     ok,
@@ -1806,6 +1816,21 @@ mod tests {
         assert!(score(&l) < score(&front), "{} < {}", score(&l), score(&front));
         let s = load("active_filter.schjson");
         assert_eq!(strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() }), strip_layout(&s), "no place for its chips: all on top");
+    }
+
+    /// A section's ground wire that starts on its ground strip just past the section's box (the strip runs on a hole past the last
+    /// part) still counts as the wire back to the one ground point (the 555 in two sections on a stripboard).
+    #[test]
+    fn a_ground_wire_from_the_strip_past_a_sections_box_is_counted() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ne555_blinker.schjson");
+        let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("タイマ", &["U1", "R1", "R2", "C1", "C2"]), group("表示", &["R3", "D1"])];
+        for l in [strip_layout(&s), crate::perfboard::perf_layout_with(&s, Default::default())] {
+            assert!(strip_check(&s, &l).is_empty());
+            let rule = strip_rules(&s, &l).into_iter().find(|r| r.message.starts_with("GND:")).expect("the ground rule");
+            assert!(rule.ok, "perf {}: {}", l.perf, rule.message);
+        }
     }
 
     /// The section marked as the one ground point in the table is the one every other section's ground goes back to (not the

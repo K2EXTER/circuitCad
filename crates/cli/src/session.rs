@@ -102,6 +102,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         worst case: the smallest and largest value of one result with every part at an end of its tolerance (%)
   breadboard                            the schematic on a solderless breadboard: the hole of each lead (a1..j30, rails 上+ 上− 下− 下+), the jumpers,
                                         the supplies off the board, and what the holes join that the schematic does not (problems)
+  pins [export=FILE.h] [check=FILE.ino]   the signals on the microcontroller board's pins (a part's pins or a header's pin names D13, A0,
+                                        GPIO2): listed, written as a C header for Arduino (#define PIN_X 13), or a firmware's pin constants
+                                        checked against the schematic (findings: a constant on another pin than the schematic has)
   battery tran=STOP[:STEP] [from=T] [to=T] [node=NET v_min=V]
                                         how long the battery parts last: the average current over from..to of a transient run (default its second
                                         half; take whole periods of an intermittent load), the charge at which node falls under v_min, the hours
@@ -390,6 +393,7 @@ impl Session {
             "budget" => self.budget(args),
             "inrush" => self.inrush(args),
             "breadboard" => self.breadboard(args),
+            "pins" => self.pins(args),
             "mc" => self.mc(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),

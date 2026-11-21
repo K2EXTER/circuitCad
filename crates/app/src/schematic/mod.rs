@@ -883,6 +883,7 @@ pub(crate) use glyphs::{glyph_fits, symbol_lines, symbol_pin_labels};
 mod wave;
 mod ac;
 mod analysis_panel;
+mod pindefs_ui;
 mod result_tables;
 mod sweep;
 mod challenge;

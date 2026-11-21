@@ -27,6 +27,7 @@ pub mod mount;
 pub mod strip_edit;
 pub mod strip_print;
 pub mod build_order;
+pub mod pindefs;
 pub use backannotate::BackAnnotation;
 pub use bus::{bus_member, bus_members, is_bus_label, parse_bus};
 pub use hierarchy::{Instance, PortDir, SheetPort, SubRef};

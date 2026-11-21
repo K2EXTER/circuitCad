@@ -335,6 +335,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--results") {
             app.sch.open_result_table();
         }
+        // `--pins`: the "ピン定義" window open (screenshots)
+        if args.iter().any(|a| a == "--pins") {
+            app.sch.open_pins();
+        }
         if args.iter().any(|a| a == "--netlist") {
             app.sch.open_netlist();
         }

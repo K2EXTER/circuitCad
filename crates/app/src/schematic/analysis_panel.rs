@@ -230,10 +230,14 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         }
         // the lists and the export are one bar: two windows (search, sort, click to jump) and the file for other simulators
         let has_result = self.dc.as_ref().is_some_and(|d| d.outcome.is_ok());
-        let bar = crate::widgets::segment_row(ui, &[("結果の表…", has_result), ("ネットリスト…", true), ("SPICE書き出し…", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("結果の表…", has_result), ("ネットリスト…", true), ("SPICE書き出し…", true), ("ピン定義…", true)]);
         bar[0].clone().on_hover_text(if has_result { i18n::tr("ノードの電圧と、素子ごとの電流・電圧・電力を、検索と並べ替えのできる窓で開きます。行を押すと、回路図でその部品を選びます") } else { i18n::tr("先に「DC動作点を解析」を押すと、結果の表が開けます") });
         bar[1].clone().on_hover_text(i18n::tr("どのピンとどのピンがつながっているか (ネット) の一覧を、検索のできる窓で開きます。回路図の配線ミスや、基板に渡るつながりの確認に使います"));
         self.lit(bar[2].clone(), "SPICEネットリストを書き出し…").on_hover_text(i18n::tr("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います"));
+        bar[3].clone().on_hover_text(i18n::tr("マイコンボード (Arduino など) のピンにつながる信号と番号の一覧です。Arduino 用のヘッダ (.h) に書き出したり、ファームのファイルのピン番号と照合したりします"));
+        if bar[3].clicked() {
+            self.tables.pins = true;
+        }
         if bar[0].clicked() {
             self.tables.results = true;
         }

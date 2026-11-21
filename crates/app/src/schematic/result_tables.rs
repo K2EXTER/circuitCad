@@ -31,6 +31,9 @@ enum ElemSort {
 pub(super) struct State {
     pub results: bool,
     pub netlist: bool,
+    /// The "ピン定義" window, and its last check of a firmware file (the file and the findings).
+    pub pins: bool,
+    pin_check: Option<(String, Vec<sch_core::pindefs::PinFinding>)>,
     tab: Tab,
     node_sort: NodeSort,
     elem_sort: ElemSort,
@@ -42,6 +45,11 @@ impl SchEditor {
     /// Opens the "解析結果の表" window (the start arguments use it for screenshots).
     pub fn open_result_table(&mut self) {
         self.tables.results = true;
+    }
+
+    /// Opens the "ピン定義" window (`--pins`, for screenshots).
+    pub fn open_pins(&mut self) {
+        self.tables.pins = true;
     }
 
     /// Opens the "ネットリスト" window (`--netlist`, for screenshots).
@@ -67,6 +75,15 @@ impl SchEditor {
                 self.netlist_table(ui, &mut st, &mut goto_net);
             });
             st.netlist = open;
+        }
+        if st.pins {
+            let mut open = true;
+            let mut check = st.pin_check.take();
+            egui::Window::new(i18n::tr("ピン定義 (ファームのピン番号)")).open(&mut open).default_pos(crate::widgets::beside_panel() + egui::vec2(48.0, 48.0)).default_size([520.0, 420.0]).show(ctx, |ui| {
+                self.pins_contents(ui, &mut check);
+            });
+            st.pin_check = check;
+            st.pins = open;
         }
         self.tables = st;
         if let Some(name) = goto_net {
