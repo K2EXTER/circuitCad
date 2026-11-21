@@ -84,6 +84,9 @@ pub struct BreadboardView {
     /// The last current or resistance reading and what it was read for (the range, the probes' nets, the power, the parts burnt,
     /// the schematic's edit count): a DC solve, not repeated every frame.
     meter_cache: Option<(String, Result<String, String>)>,
+    /// The board checked against the schematic, by the schematic's edit count and the layout (`board_check`): the panel and the
+    /// board both show it, so it was worked out twice a frame.
+    checked: Option<(u64, Layout, Vec<Problem>)>,
     pub scope: Option<Hole>,
     /// The supply is switched on: LEDs light, parts past their ratings burn.
     pub powered: bool,
@@ -294,7 +297,7 @@ impl BreadboardView {
         let l = self.layout(sch);
         crate::widgets::section_heading(ui, i18n::tr("ブレッドボード"));
         ui.label(spaced("回路図の部品を、ブレッドボードのどの穴に差すかを並べました。縦に並んだ 5 つの穴 (a〜e、f〜j) は中でつながっていて、上下の赤と青の列は電源とGNDです。部品をドラッグすると差し替えられます。").color(NOTE));
-        let problems = check(&sch.sch, &l);
+        let problems = self.board_check(sch, &l);
         ui.add_space(4.0);
         if problems.is_empty() {
             ui.colored_label(crate::theme::OK, i18n::tr("✔ 回路図どおりにつながっています"));
@@ -437,6 +440,20 @@ impl BreadboardView {
     }
 
     /// How loud the tone is: the loudest buzzer sounding, or None (none sounds, or the sound is off).
+    /// The board's differences from the schematic (`check`), kept while the schematic and the layout stay the same.
+    fn board_check(&mut self, sch: &SchEditor, l: &Layout) -> Vec<Problem> {
+        if let Some((r, k, p)) = &self.checked
+            && *r == sch.rev
+            && k == l
+            && sch.settled()
+        {
+            return p.clone();
+        }
+        let p = check(&sch.sch, l);
+        self.checked = Some((sch.rev, l.clone(), p.clone()));
+        p
+    }
+
     fn buzz_step(&self, sch: &SchEditor, l: &Layout) -> Option<u8> {
         if self.sound_off {
             return None;
@@ -967,7 +984,7 @@ impl BreadboardView {
                 Tool::Move => {}
             }
         }
-        let problems = check(&sch.sch, &l);
+        let problems = self.board_check(sch, &l);
         // the leads named in a problem, drawn with a red ring
         let mut wrong: BTreeSet<Hole> = BTreeSet::new();
         for p in &problems {
@@ -1430,6 +1447,27 @@ fn draw_part(painter: &egui::Painter, p: &sch_core::breadboard::Placed, comp: Op
 mod tests {
     use super::*;
     use crate::{App, Mode};
+
+    #[test]
+    fn the_checks_kept_between_frames_follow_an_edit_to_the_schematic() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        let (l, strip) = (auto_layout(&app.sch.sch), sch_core::stripboard::strip_layout(&app.sch.sch));
+        let bb = |app: &mut App| app.breadboard.board_check(&app.sch, &l).len();
+        let rules = |app: &mut App| app.breadboard.strip_checks(&app.sch, &strip).rules.len();
+        let (bb0, rules0) = (bb(&mut app), rules(&mut app));
+        assert_eq!(bb0, 0, "the breadboard as laid out matches");
+        // edits not yet an undo step (the schematic tab commits them later): the edit count is the same, the kept checks are not used
+        app.sch.sch.components.iter_mut().find(|c| c.refdes == "R1").unwrap().refdes = "R9".into();
+        app.sch.sch.requirements.apart.push(design_spec::KeepApart { name: "test".into(), a: vec!["R2".into()], b: vec!["D1".into()], min_dist: 1000.0, note: String::new() });
+        assert!(bb(&mut app) > 0, "R9 is not on the breadboard");
+        assert_eq!(rules(&mut app), rules0 + 1, "the rule added is checked");
+        app.sch.commit_history_for_test();
+        assert!(bb(&mut app) > 0 && rules(&mut app) == rules0 + 1, "the same once it is an undo step");
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        assert!(bb(&mut app) == 0 && rules(&mut app) == rules0, "checked again for the sheet opened");
+    }
 
     fn power_on_app(sample: &str) -> (App, impl FnMut(&mut App)) {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");

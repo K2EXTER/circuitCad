@@ -15,6 +15,11 @@ impl SchEditor {
         self.commit_history();
     }
 
+    /// No edit since the last undo step: `rev` names the sheet as it is (a cache keyed by `rev` may be used).
+    pub(crate) fn settled(&self) -> bool {
+        self.sch == self.committed
+    }
+
     pub(super) fn commit_history(&mut self) {
         if self.sch == self.committed {
             return;

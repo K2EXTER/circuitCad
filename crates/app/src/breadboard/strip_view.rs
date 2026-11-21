@@ -79,6 +79,17 @@ pub struct StripState {
     redo: Vec<Option<StripLayout>>,
     /// The layout the last edit, undo or redo left: when the sheet's differs (another file opened), the history is dropped.
     last: Option<Option<StripLayout>>,
+    /// The checks of the layout shown, by the schematic's edit count and the layout (`strip_checks`).
+    checks: Option<(u64, StripLayout, StripChecks)>,
+}
+
+/// The checks of a layout against the schematic: worked out again only when either changes (on a big perfboard they took about
+/// 6 ms a frame in a debug build: half the frame).
+#[derive(Clone, Default)]
+pub(super) struct StripChecks {
+    pub problems: Vec<String>,
+    pub rules: Vec<sch_core::stripboard::RuleCheck>,
+    pub unjoined: Vec<(String, At, At)>,
 }
 
 /// What a layout on another thread is for (the schematic's edit count and part count, the options, perfboard or not, and the saved
@@ -482,6 +493,20 @@ impl BreadboardView {
     }
 
     /// The left panel of the stripboard / perfboard views.
+    /// The checks of `l` (`strip_check`, `strip_rules`, `strip_unjoined`), kept while the schematic and the layout stay the same.
+    pub(super) fn strip_checks(&mut self, sch: &SchEditor, l: &StripLayout) -> StripChecks {
+        if let Some((r, k, c)) = &self.strip.checks
+            && *r == sch.rev
+            && k == l
+            && sch.settled()
+        {
+            return c.clone();
+        }
+        let c = StripChecks { problems: strip_check(&sch.sch, l), rules: strip_rules(&sch.sch, l), unjoined: strip_unjoined(&sch.sch, l) };
+        self.strip.checks = Some((sch.rev, l.clone(), c.clone()));
+        c
+    }
+
     pub(super) fn strip_panel(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
         let l = self.strip_shown(sch);
         let strip = self.kind == BoardKind::Stripboard;
@@ -510,7 +535,7 @@ impl BreadboardView {
         self.strip_around_done(sch);
         self.strip_size_ui(ui, sch, &l);
         self.strip_tools(ui, sch, &l);
-        let problems = strip_check(&sch.sch, &l);
+        let StripChecks { problems, rules, .. } = self.strip_checks(sch, &l);
         ui.add_space(4.0);
         if problems.is_empty() {
             ui.colored_label(crate::theme::OK, i18n::tr("✔ 回路図どおりにつながっています"));
@@ -528,7 +553,6 @@ impl BreadboardView {
                 ));
             }
         }
-        let rules = strip_rules(&sch.sch, &l);
         if !l.sections.is_empty() || !rules.is_empty() {
             ui.label(egui::RichText::new(i18n::tr("区画とつなぎ方の決まり")).strong()).on_hover_text(i18n::tr(
                 "回路図の「設計の要件」の表から: 「近くに置く組」で「区画」に印を付けた組ごとにまとめて置き、区画の間は帯を切ります。GND は区画ごとに 1 本の線で、表のいちばん上の区画の GND の帯 (1 点) へ戻します。「離す」の行は、基板の上のいちばん近い穴どうしの距離で確かめます。「ケルビン」の行は、測定の「分かれ目」: 抵抗の足から電流の線とセンスの線への道が、帯の上を一緒に走る長さです (自動の並べ方は、足が 2 本の線の間に来るように部品や線の端をずらします)",
@@ -779,7 +803,7 @@ impl BreadboardView {
             painter.text(to(*a) + Vec2::new(-pitch * 0.4, -pitch * 0.32), egui::Align2::LEFT_BOTTOM, n, egui::FontId::proportional((pitch * 0.42).clamp(7.0, 11.0)), named);
         }
         // what is still to be joined (as a board's ratsnest)
-        for (_, a, b) in strip_unjoined(&sch.sch, &l) {
+        for (_, a, b) in self.strip_checks(sch, &l).unjoined {
             super::rats_line(&painter, to(a), to(b), pitch);
         }
         // the parts worth placing by hand first (perfboard): a dashed frame
