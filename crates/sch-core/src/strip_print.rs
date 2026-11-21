@@ -157,6 +157,7 @@ pub fn strip_svg(l: &StripLayout, face: Face, perf: bool, title: &str) -> String
                     // a chip: its outline (the adapter board's or the socket's), pin 1 marked, the name in the middle
                     let fill = match p.mount {
                         crate::mount::Mount::Adapter { .. } => "#d8eedd",
+                        crate::mount::Mount::Module { .. } => "#d8e4f4",
                         _ => "#eeeeee",
                     };
                     let _ = writeln!(s, r##"<rect x="{:.2}" y="{:.2}" width="{:.2}" height="{:.2}" rx="0.4" fill="{fill}" stroke="#222" stroke-width="0.3"/>"##, lo_x - 1.2, lo_y - 1.4, hi_x - lo_x + 2.4, hi_y - lo_y + 2.8);

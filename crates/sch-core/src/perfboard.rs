@@ -1531,6 +1531,21 @@ mod tests {
         assert!(rules.iter().any(|r| r.ok && r.message.starts_with("ケルビン「検出」")), "{rules:?}");
     }
 
+    /// An Arduino Nano goes in two female headers 0.6 inch apart (six holes between its rows), on a perfboard and a stripboard, and
+    /// the boards join what the schematic joins.
+    #[test]
+    fn an_arduino_nano_sits_in_female_headers() {
+        let s = load("arduino_blink.schjson");
+        for l in [perf_layout_with(&s, StripOptions::default()), strip_layout(&s)] {
+            let u = l.parts.iter().find(|p| p.refdes == "U1").unwrap();
+            assert!(matches!(u.mount, crate::mount::Mount::Module { width: 6, pins: 30, .. }), "{:?}", u.mount);
+            let at = |pin: &str| u.leads.iter().find(|x| x.0 == pin).unwrap().1;
+            let (a, b) = (at("1"), at("30"));
+            assert_eq!(a.0.abs_diff(b.0) + a.1.abs_diff(b.1), 6, "pin 1 and pin 30 across the module: {a:?} {b:?}");
+            assert!(strip_check(&s, &l).is_empty(), "{} {:?}", l.perf, strip_check(&s, &l));
+        }
+    }
+
     /// The shelves as placed wall no lead in: every lead keeps a free hole beside it for its wire (arduino_mega_usb's USB connector,
     /// a row of five pins, had two-lead parts put right above and right below its middle pin, and its net could not be wired). The
     /// annealing may still do it (keeping it from that made the samples' wires on top 265 → 276); a placing that leaves a net apart

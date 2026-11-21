@@ -20,6 +20,9 @@ pub enum Mount {
     /// A surface-mount part soldered on an adapter board of `pins` pins: two rows `width` holes apart like a DIP, or one row (a SIP)
     /// when `width` is 0. Its pins go into turned-pin socket strips.
     Adapter { package: String, pins: u16, width: u16 },
+    /// A module (an Arduino Nano, a Raspberry Pi Pico) with pins of its own in two rows `width` holes apart: it goes into female pin
+    /// headers soldered to the board (1×`pins / 2` each), so it comes out again and is not heated.
+    Module { name: String, pins: u16, width: u16 },
 }
 
 /// The surface-mount sizes of two-lead parts.
@@ -28,6 +31,33 @@ const CHIP_SIZES: [&str; 14] = ["0201", "0402", "0603", "0805", "1206", "1210", 
 const TWO_ROW: [&str; 15] = ["SOIC", "SOP", "ESOP", "SSOP", "TSSOP", "MSOP", "QSOP", "HSOP", "SO-", "QFN", "DFN", "QFP", "TQFP", "LQFP", "LGA"];
 /// Small packages put on a one-row adapter.
 const ONE_ROW: [&str; 5] = ["SOT-", "SC-70", "SC70", "XTAL", "SOT"];
+
+/// Words in a footprint's name that make it a module's (a small board of its own with pins).
+const MODULES: [&str; 11] = ["ARDUINO", "NANO", "PICO", "ESP", "MODULE", "DEVKIT", "WEMOS", "TEENSY", "XIAO", "STM32", "BLUEPILL"];
+
+/// A module's rows apart in holes when its footprint does not say: a Raspberry Pi Pico 0.7 inch, an ESP32 board 1.0 inch, an
+/// Arduino Nano (and most others) 0.6 inch.
+fn module_width(up: &str) -> u16 {
+    if up.contains("PICO") {
+        7
+    } else if up.contains("ESP32") {
+        10
+    } else {
+        6
+    }
+}
+
+/// A module's name as people call it (ARDUINO NANO → Arduino Nano).
+fn module_name(name: &str) -> String {
+    name.split(' ')
+        .map(|w| {
+            let lower = w.to_ascii_lowercase();
+            let mut cs = lower.chars();
+            cs.next().map(|f| f.to_ascii_uppercase().to_string() + cs.as_str()).unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
 /// The first number in `s` after its first `-` (`SOIC-8_P1.27` → 8, `SOT-23-5` → 23).
 fn count_after_dash(s: &str) -> Option<u16> {
@@ -60,6 +90,12 @@ pub fn mount_of(c: &Component, leads: usize) -> Mount {
         }
         let leaded_twin = matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor | Kind::Diode | Kind::Led) || matches!(name.as_str(), "R" | "C" | "L" | "LED" | "D" | "CP");
         return if leaded_twin { Mount::Leaded } else { Mount::Adapter { package: fp.split('_').take(2).collect::<Vec<_>>().join("_"), pins: 2, width: 0 } };
+    }
+    // a module: its footprint names a module and its pins as DIP<n> (ARDUINO_NANO_DIP30; a display's SEG7_0.56_DIP10 is not one)
+    if let Some(pins) = up.split('_').skip(1).find_map(|t| t.strip_prefix("DIP")?.parse::<u16>().ok()).filter(|_| MODULES.iter().any(|m| up.contains(m))) {
+        let width = up.split('_').find_map(|t| t.strip_prefix('W')?.parse::<f32>().ok()).map(|w| (w / 2.54).round() as u16).unwrap_or_else(|| module_width(&up));
+        let name = fp.split('_').take_while(|t| !t.to_ascii_uppercase().starts_with("DIP")).collect::<Vec<_>>().join(" ");
+        return Mount::Module { name: module_name(&name), pins: pins.max(leads as u16) + pins % 2, width };
     }
     if name.starts_with("DIP-") {
         let pins = count_after_dash(&name).unwrap_or(leads as u16).max(leads as u16);
@@ -95,7 +131,7 @@ impl Mount {
     /// The holes between the two rows of a socket or a two-row adapter (3 = 0.3 inch); None for one row or two leads.
     pub fn width(&self) -> Option<u16> {
         match self {
-            Mount::Socket { width, .. } => Some(*width),
+            Mount::Socket { width, .. } | Mount::Module { width, .. } => Some(*width),
             Mount::Adapter { width, .. } if *width > 0 => Some(*width),
             _ => None,
         }
@@ -111,7 +147,7 @@ impl Mount {
     /// takes its leads in their order.
     pub fn slots(&self, leads: &[(String, String)]) -> (usize, Vec<usize>) {
         let places = match self {
-            Mount::Socket { pins, .. } | Mount::Adapter { pins, .. } => *pins as usize,
+            Mount::Socket { pins, .. } | Mount::Adapter { pins, .. } | Mount::Module { pins, .. } => *pins as usize,
             _ => 0,
         };
         let numbers: Option<Vec<usize>> = leads.iter().map(|(p, _)| p.parse::<usize>().ok().filter(|n| *n >= 1 && *n <= places)).collect();
@@ -130,6 +166,7 @@ impl Mount {
             Mount::Adapter { package, pins, width: 0 } if *pins <= 2 => format!("{package} を 2 ピンの変換基板に載せる"),
             Mount::Adapter { package, pins, width: 0 } => format!("{package} を {pins} ピンの SIP 変換基板に載せ、丸ピンの連結ソケット 1×{pins} に差す"),
             Mount::Adapter { package, pins, width } => format!("{package} を DIP {pins} ピン ({}) の変換基板に載せ、丸ピンの連結ソケット 1×{} を 2 本に差す", inches(*width), pins / 2),
+            Mount::Module { name, pins, width } => format!("{name} を、基板にはんだ付けしたメスのピンヘッダ 1×{} 2 本 ({}) に差す", pins / 2, inches(*width)),
         }
     }
 }
@@ -156,6 +193,7 @@ pub fn shopping(parts: &[(String, Mount)]) -> Vec<(String, usize, Vec<String>)> 
             Mount::Direct => {}
             Mount::Socket { pins, width } => add(format!("丸ピン IC ソケット {pins} ピン ({})", inches(*width)), 1, r),
             Mount::Leaded => add("リード部品に替える (チップ部品の代わり)".into(), 1, r),
+            Mount::Module { pins, .. } => add(format!("メスのピンヘッダ 1×{}", pins / 2), 2, r),
             Mount::Adapter { package, pins, width } => {
                 if *pins <= 2 {
                     add(format!("{package} の 2 ピン変換基板"), 1, r);
@@ -187,7 +225,7 @@ mod tests {
     /// One row per footprint: how it goes on and where its leads sit.
     #[test]
     fn mounts_from_footprints() {
-        let cases: [(Kind, &str, usize, Mount); 12] = [
+        let cases: [(Kind, &str, usize, Mount); 16] = [
             (Kind::Resistor, "R_0805", 2, Mount::Leaded),
             (Kind::Resistor, "R_Axial_10.16", 2, Mount::Direct),
             (Kind::Custom, "XTAL_3225", 2, Mount::Adapter { package: "XTAL_3225".into(), pins: 2, width: 0 }),
@@ -200,6 +238,11 @@ mod tests {
             (Kind::Custom, "SOT-23-5_P0.95", 5, Mount::Adapter { package: "SOT-23-5".into(), pins: 5, width: 0 }),
             (Kind::Custom, "SOT-223", 3, Mount::Adapter { package: "SOT-223".into(), pins: 3, width: 0 }),
             (Kind::Custom, "TO-220-3", 3, Mount::Direct),
+            // modules in female headers: the rows from the footprint, else by the module
+            (Kind::Custom, "ARDUINO_NANO_DIP30", 30, Mount::Module { name: "Arduino Nano".into(), pins: 30, width: 6 }),
+            (Kind::Custom, "RPI_PICO_DIP40", 40, Mount::Module { name: "Rpi Pico".into(), pins: 40, width: 7 }),
+            (Kind::Custom, "MY_MODULE_DIP16_W10.16", 16, Mount::Module { name: "My Module".into(), pins: 16, width: 4 }),
+            (Kind::Custom, "SEG7_0.56_DIP10", 10, Mount::Direct),
         ];
         for (kind, fp, leads, want) in cases {
             assert_eq!(mount_of(&part(kind, fp), leads), want, "{fp}");
@@ -219,5 +262,8 @@ mod tests {
         let list = shopping(&[("U1".into(), qfn.clone()), ("U2".into(), qfn), ("R1".into(), Mount::Leaded)]);
         assert_eq!(list[0], ("QFN-16 → DIP 16 ピン (0.3 インチ幅) の変換基板".into(), 2, vec!["U1".into(), "U2".into()]));
         assert_eq!(list[1].1, 4, "two socket strips for each two-row adapter");
+        let nano = Mount::Module { name: "Arduino Nano".into(), pins: 30, width: 6 };
+        assert_eq!(shopping(&[("U1".into(), nano.clone())]), [("メスのピンヘッダ 1×15".to_string(), 2, vec!["U1".to_string()])]);
+        assert!(nano.describe().contains("メスのピンヘッダ 1×15 2 本 (0.6 インチ幅)"), "{}", nano.describe());
     }
 }

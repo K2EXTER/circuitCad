@@ -92,6 +92,8 @@ const WIRE: Color32 = Color32::from_rgb(190, 196, 204);
 /// An adapter board's green, and a socket's frame.
 const ADAPTER: Color32 = Color32::from_rgb(40, 120, 70);
 const SOCKET: Color32 = Color32::from_gray(85);
+/// A module's board (an Arduino Nano) in its female headers.
+const MODULE: Color32 = Color32::from_rgb(30, 85, 150);
 /// A locked part's padlock (perfboard).
 const LOCK: Color32 = Color32::from_rgb(235, 190, 60);
 
@@ -614,7 +616,11 @@ impl BreadboardView {
             let bb = Rect::from_points(&pts);
             // an adapter board (green) or a socket's frame under the chip
             if p.mount.width().is_some() || p.mount.one_row() {
-                let fill = if matches!(p.mount, Mount::Socket { .. }) { SOCKET } else { ADAPTER };
+                let fill = match p.mount {
+                    Mount::Socket { .. } => SOCKET,
+                    Mount::Module { .. } => MODULE,
+                    _ => ADAPTER,
+                };
                 painter.rect_filled(bb.expand2(Vec2::new(pitch * 0.45, pitch * 0.5)), 2.0, fill);
             }
             match p.look {
@@ -622,6 +628,11 @@ impl BreadboardView {
                     let body = bb.expand2(Vec2::new(pitch * 0.35, pitch * 0.45));
                     match &p.mount {
                         // the small chip in the middle of its adapter, the package's name under the reference
+                        // a module: its name under the reference, on its own board (no chip body: the module is the board)
+                        Mount::Module { name, .. } => {
+                            painter.text(body.center(), egui::Align2::CENTER_BOTTOM, &p.refdes, font.clone(), Color32::WHITE);
+                            painter.text(body.center() + Vec2::new(0.0, 2.0), egui::Align2::CENTER_TOP, name, egui::FontId::proportional((pitch * 0.5).clamp(8.0, 13.0)), Color32::from_gray(225));
+                        }
                         Mount::Adapter { package, .. } => {
                             let side = (body.width().min(body.height()) * 0.5).clamp(pitch * 0.8, pitch * 2.5);
                             let chip = Rect::from_center_size(body.center(), Vec2::splat(side));
