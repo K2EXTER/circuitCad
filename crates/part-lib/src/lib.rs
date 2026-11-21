@@ -657,6 +657,9 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("INA180A2_SOT-23-5", include_str!("../examples/INA180A2_SOT-23-5.part.json")),
     ("INA180A3_SOT-23-5", include_str!("../examples/INA180A3_SOT-23-5.part.json")),
     ("ADS124S08_VQFN-32", include_str!("../examples/ADS124S08_VQFN-32.part.json")),
+    ("ADS124S08_TQFP-32", include_str!("../examples/ADS124S08_TQFP-32.part.json")),
+    ("BAV199_SOT-23", include_str!("../examples/BAV199_SOT-23.part.json")),
+    ("TQ2-L2-5V", include_str!("../examples/TQ2-L2-5V.part.json")),
     ("ADG2712_LGA-16", include_str!("../examples/ADG2712_LGA-16.part.json")),
     ("TMUX1101_SOT-23-5", include_str!("../examples/TMUX1101_SOT-23-5.part.json")),
     ("ADR4525_SOIC-8", include_str!("../examples/ADR4525_SOIC-8.part.json")),
@@ -731,8 +734,9 @@ fn is_unmodified_legacy(file: &Path, example: &str, bundled: &str) -> bool {
 /// that is still the model-less original (same pins and package, no `sim`) is replaced once;
 /// the key is recorded in `.bundled` so that a later edit or deletion is respected.
 /// ADR4525 and LP5907-4.5 were made in users' libraries for the bench DMM (2026-11-10) before they were bundled with a model;
-/// the ADS124S08 got its model (supplies and inputs) on 2026-11-21.
-const MODEL_UPGRADES: &[&str] = &["NE555_DIP-8", "ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5", "ADS124S08_VQFN-32"];
+/// the ADS124S08 (supplies and inputs), and the DMM's ADS124S08 in TQFP, BAV199 and TQ2-L2-5V (made in a user's library first)
+/// got their models on 2026-11-21.
+const MODEL_UPGRADES: &[&str] = &["NE555_DIP-8", "ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5", "ADS124S08_VQFN-32", "ADS124S08_TQFP-32", "BAV199_SOT-23", "TQ2-L2-5V"];
 
 fn upgrade_key(name: &str) -> String {
     format!("{name}+model")

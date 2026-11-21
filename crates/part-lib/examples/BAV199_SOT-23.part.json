@@ -1,0 +1,81 @@
+{
+ "name": "BAV199",
+ "category": "ダイオード",
+ "description": "低リーク電流のダイオード 2 個の直列 (SOT-23)。逆電流が pA〜nA と小さく、測定器の入力のクランプ (AVSS と AVDD へ逃がす) に使う。ピンは BAV99 と同じ並び: 1 = 下のダイオードのアノード (AVSS へ)、3 = 中点 (信号)、2 = 上のダイオードのカソード (AVDD へ)。ピンの並びはデータシートの表 2 (1 = ダイオード 1 のアノード、3 = ダイオード 1 のカソードとダイオード 2 のアノード、2 = ダイオード 2 のカソード) で確かめた。シミュレーションはデータシートから作った等価モデル (docs/models/diodes.md)。",
+ "datasheet": "",
+ "prefix": "D",
+ "value": "BAV199",
+ "footprint_name": "SOT-23",
+ "height": 1.1,
+ "land_unverified": true,
+ "pins": [
+  {
+   "number": "1",
+   "name": "A",
+   "side": "bottom"
+  },
+  {
+   "number": "3",
+   "name": "MID",
+   "side": "left"
+  },
+  {
+   "number": "2",
+   "name": "K",
+   "side": "top"
+  }
+ ],
+ "package": {
+  "type": "explicit",
+  "pads": [
+   {
+    "pin": "1",
+    "x": -0.95,
+    "y": -1.0,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.8
+   },
+   {
+    "pin": "2",
+    "x": 0.95,
+    "y": -1.0,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.8
+   },
+   {
+    "pin": "3",
+    "x": 0,
+    "y": 1.0,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.8
+   }
+  ]
+ },
+ "sim": {
+  "kind": "subckt",
+  "name": "BAV199",
+  "text": "* BAV199: two low-leakage diodes in series (pin 1 anode of diode 1, pin 3 the middle, pin 2 cathode of diode 2)\n.subckt BAV199 a1 mid k2\nD1 a1 mid DBAV199\nD2 mid k2 DBAV199\n* IS = the typical reverse current (3 pA at 75 V); N and RS fitted to the 25 C typical curve of fig. 2 with IS held there\n.model DBAV199 D(IS=3e-12 N=1.495 RS=0.58 CJO=2e-12 VJ=0.7 M=0.5 TT=1.15e-06)\n.ends BAV199",
+  "pins": [
+   "1",
+   "3",
+   "2"
+  ],
+  "limits": [
+   "データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: Nexperia BAV199 データシート (Product data sheet v.4、2023-04-01)、表 7 (Characteristics) と図 2 (順方向の電流と電圧、25 °C の typ の曲線)。値の決め方は docs/models/diodes.md。",
+   "漏れ電流: 表 7 の IR の typ 3 pA (VR = 75 V、25 °C) を IS にした。この部品の大事な所なので、順方向の当てはめより先に決めた。",
+   "シミュレータの注意: 計算を収めるための小さな導電 (GMIN、1e-12 S) が、接合の両端と各ノードと GND の間に入ります。逆電圧 V のとき 1 か所あたり V × 1 pA/V の電流が足され、75 V では数百 pA に見えます。測定器の入力のクランプのように、ふだんの逆電圧が 0 V に近い使い方なら、足される分は 1 pA くらいです。",
+   "順方向: 図 2 の 25 °C の typ の曲線 (2) を 0.75〜1.1 V で 8 点読み、IS を 3 pA に止めて N = 1.495・RS = 0.58 Ω を当てはめた (曲線との差 14 mV rms、最大 19 mV)。表 7 の最大 (1 mA で 0.9 V、10 mA で 1 V、50 mA で 1.1 V、150 mA で 1.25 V) より、どれも低い。",
+   "容量: 表 7 の Cd 2 pF (VR = 0 V)。逆電圧で小さくなる形は VJ = 0.7 V・M = 0.5 と仮定 (図 5 の曲線には合わせていない)。",
+   "逆回復: 表 7 の trr typ 0.8 µs (IF = IR = 10 mA、1 mA まで) から TT = 0.8 µs / ln 2 = 1.15 µs。",
+   "扱わないもの: 降伏 (逆電圧の定格 75 V・85 V を超えても電流は増えません)、漏れ電流の温度による増加 (150 °C で typ 3 nA)、順方向の回復電圧、自己発熱。",
+   "最終の確認は、メーカーの公式モデルで行ってください。"
+  ],
+  "origin": {
+   "kind": "equivalent",
+   "source": "Nexperia BAV199 データシート (Product data sheet v.4、2023-04-01)、表 7 (Characteristics) と図 2 (順方向の電流と電圧、25 °C の typ の曲線)"
+  }
+ }
+}

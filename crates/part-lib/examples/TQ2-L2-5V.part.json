@@ -1,0 +1,93 @@
+{
+ "name": "TQ2-L2-5V",
+ "category": "リレー",
+ "description": "Panasonic TQ2-L2-5V 信号用リレー、2 コイルラッチ、2 回路 (2 Form C)。コイル 5 V・40 mA (125 Ω、200 mW)。接点 Ag + Au クラッド、接触抵抗 50 mΩ 以下、最小開閉 10 µA 10 mV、絶縁抵抗 1000 MΩ 以上。ピンはデータシート ASCTB14E の図 (裏から見た図、リセットの状態) から: セットのコイル 1(+)・5(-)、リセットのコイル 10(+)・6(-)。1 回路目は COM1=3 がリセットで 2 (RST1)、セットで 4 (SET1) につながる。2 回路目は COM2=8 がリセットで 9 (RST2)、セットで 7 (SET2)。コイルにパルスを流すと状態を保つ (電力がいらず、発熱で熱起電力が出にくい)。どちらのコイルが白・黒かは図の決まりから読んだので、初めて使うときにテスターで確かめる。シミュレーションはコイルの抵抗だけの等価モデル (接点は扱わない。docs/models/relays.md)",
+ "datasheet": "https://industrial.panasonic.com/ac/e/",
+ "prefix": "K",
+ "value": "TQ2-L2-5V",
+ "footprint_name": "Relay_TQ2_THT",
+ "height": 5.0,
+ "pins": [
+  {
+   "number": "1",
+   "name": "SET+",
+   "side": "left"
+  },
+  {
+   "number": "5",
+   "name": "SET-",
+   "side": "left"
+  },
+  {
+   "number": "10",
+   "name": "RST+",
+   "side": "left"
+  },
+  {
+   "number": "6",
+   "name": "RST-",
+   "side": "left"
+  },
+  {
+   "number": "3",
+   "name": "COM1",
+   "side": "right"
+  },
+  {
+   "number": "4",
+   "name": "SET1",
+   "side": "right"
+  },
+  {
+   "number": "2",
+   "name": "RST1",
+   "side": "right"
+  },
+  {
+   "number": "8",
+   "name": "COM2",
+   "side": "right",
+   "gap": 1
+  },
+  {
+   "number": "7",
+   "name": "SET2",
+   "side": "right"
+  },
+  {
+   "number": "9",
+   "name": "RST2",
+   "side": "right"
+  }
+ ],
+ "package": {
+  "type": "dual",
+  "pins": 10,
+  "pitch": 2.54,
+  "row_spacing": 7.62,
+  "pad_len": 1.6,
+  "pad_width": 1.6,
+  "drill": 1.0
+ },
+ "sim": {
+  "kind": "subckt",
+  "name": "TQ2_L2_5V",
+  "text": "* TQ2-L2-5V: the two coils only (set: pins 1+ 5-, reset: pins 10+ 6-); the contacts are not modelled\n.subckt TQ2_L2_5V setp setn rstp rstn\n* 125 ohm each (5 V, 40 mA, 200 mW; +-10 % at 20 C)\nRset setp setn 125\nRrst rstp rstn 125\n.ends TQ2_L2_5V",
+  "pins": [
+   "1",
+   "5",
+   "10",
+   "6"
+  ],
+  "limits": [
+   "データシートの表から作った、コイルの抵抗だけの等価モデルです (メーカーのモデルではありません)。出典: Panasonic TQ relays データシート ASCTB14E 202507、Coil data の Standard contact: 2 coil latching の表 (5 V の行、20 °C)。値の決め方は docs/models/relays.md。",
+   "再現しているもの: セットとリセットのコイルの抵抗 125 Ω (それぞれ 5 V で 40 mA、200 mW)。抵抗の ±10 % と温度による変化は入れていない。",
+   "扱わないもの: 接点 (ラッチの状態で COM がどちらにつながるか。シミュレーションでは接点のピンはどこにもつながらない)、セット・リセットの電圧 (定格の 75 % 以下で動く) と、動くまでの時間、コイルのインダクタンス (データシートに無い。切るときの逆起電力は出ない)、接触抵抗 (50 mΩ 以下)。",
+   "最終の確認は、メーカーの公式モデルで行ってください。"
+  ],
+  "origin": {
+   "kind": "equivalent",
+   "source": "Panasonic TQ relays データシート ASCTB14E 202507、Coil data の Standard contact: 2 coil latching の表 (5 V の行、20 °C)"
+  }
+ }
+}

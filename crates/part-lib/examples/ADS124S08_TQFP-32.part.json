@@ -1,0 +1,220 @@
+{
+ "name": "ADS124S08_TQFP",
+ "category": "ADC",
+ "description": "TI ADS124S08 24 bit ΔΣ ADC (12 入力、PGA、IDAC、2.5 V 基準内蔵)。TQFP-32 (PBS、本体 5x5、0.5 mm ピッチ)。手はんだで変換基板に載せられる版。ピン番号は VQFN 版と同じ (SBAS660C のピン表は両方共通、TQFP には裏のパッドなし)。型番は ADS124S08IPBS (トレイ) / ADS124S08IPBSR (リール)。ランドパターンは一般的な TQFP-32 5x5 の概算 (パッド中心間 6.3 mm、1.5 x 0.3 mm) なので、プリント基板にする前にデータシートの PBS の図面で確認すること。シミュレーションは、電源と入力の電流だけの等価モデル (データシートの typ から。変換はしない。docs/models/adcs.md)。",
+ "datasheet": "https://www.ti.com/lit/ds/symlink/ads124s08.pdf",
+ "prefix": "U",
+ "value": "ADS124S08",
+ "footprint_name": "TQFP-32_5x5_P0.5",
+ "land_unverified": true,
+ "height": 1.2,
+ "pins": [
+  {
+   "number": "7",
+   "name": "AIN0",
+   "side": "left"
+  },
+  {
+   "number": "6",
+   "name": "AIN1",
+   "side": "left"
+  },
+  {
+   "number": "5",
+   "name": "AIN2",
+   "side": "left"
+  },
+  {
+   "number": "4",
+   "name": "AIN3",
+   "side": "left"
+  },
+  {
+   "number": "3",
+   "name": "AIN4",
+   "side": "left"
+  },
+  {
+   "number": "2",
+   "name": "AIN5",
+   "side": "left"
+  },
+  {
+   "number": "1",
+   "name": "AINCOM",
+   "side": "left"
+  },
+  {
+   "number": "32",
+   "name": "REFP1/AIN6",
+   "side": "left"
+  },
+  {
+   "number": "31",
+   "name": "REFN1/AIN7",
+   "side": "left"
+  },
+  {
+   "number": "30",
+   "name": "REFP0",
+   "side": "left"
+  },
+  {
+   "number": "29",
+   "name": "REFN0",
+   "side": "left"
+  },
+  {
+   "number": "9",
+   "name": "CS",
+   "side": "right"
+  },
+  {
+   "number": "11",
+   "name": "SCLK",
+   "side": "right"
+  },
+  {
+   "number": "10",
+   "name": "DIN",
+   "side": "right"
+  },
+  {
+   "number": "12",
+   "name": "DOUT/DRDY",
+   "side": "right"
+  },
+  {
+   "number": "13",
+   "name": "DRDY",
+   "side": "right"
+  },
+  {
+   "number": "8",
+   "name": "START/SYNC",
+   "side": "right"
+  },
+  {
+   "number": "18",
+   "name": "RESET",
+   "side": "right"
+  },
+  {
+   "number": "17",
+   "name": "CLK",
+   "side": "right"
+  },
+  {
+   "number": "22",
+   "name": "GPIO0/AIN8",
+   "side": "right"
+  },
+  {
+   "number": "21",
+   "name": "GPIO1/AIN9",
+   "side": "right"
+  },
+  {
+   "number": "20",
+   "name": "GPIO2/AIN10",
+   "side": "right"
+  },
+  {
+   "number": "19",
+   "name": "GPIO3/AIN11",
+   "side": "right"
+  },
+  {
+   "number": "26",
+   "name": "AVDD",
+   "side": "top"
+  },
+  {
+   "number": "16",
+   "name": "DVDD",
+   "side": "top"
+  },
+  {
+   "number": "15",
+   "name": "IOVDD",
+   "side": "top"
+  },
+  {
+   "number": "27",
+   "name": "AVSS",
+   "side": "bottom"
+  },
+  {
+   "number": "28",
+   "name": "AVSS-SW",
+   "side": "bottom"
+  },
+  {
+   "number": "14",
+   "name": "DGND",
+   "side": "bottom"
+  },
+  {
+   "number": "24",
+   "name": "REFCOM",
+   "side": "bottom"
+  },
+  {
+   "number": "23",
+   "name": "REFOUT",
+   "side": "bottom"
+  },
+  {
+   "number": "25",
+   "name": "NC",
+   "side": "bottom"
+  }
+ ],
+ "package": {
+  "type": "quad",
+  "pins": 32,
+  "pitch": 0.5,
+  "span": 6.3,
+  "pad_len": 1.5,
+  "pad_width": 0.3
+ },
+ "sim": {
+  "kind": "subckt",
+  "name": "ADS124S08",
+  "text": "* ADS124S08: a DC equivalent of the supplies and the inputs only (no conversion, no SPI)\n* Ports: AVDD AVSS DVDD IOVDD DGND AIN0..AIN5 AINCOM REFP1/AIN6 REFN1/AIN7 REFP0 REFN0 GPIO0..3/AIN8..11 REFOUT\n.subckt ADS124S08 avdd avss dvdd iovdd dgnd ain0 ain1 ain2 ain3 ain4 ain5 aincom refp1 refn1 refp0 refn0 gpio0 gpio1 gpio2 gpio3 refout\n* analog supply: conversion mode, PGA on (gain 1-2) 120 uA + the positive reference buffer (on after reset) 35 uA = 155 uA,\n* fading out below about 2 V (the data sheet gives no figure below its 2.7 V supply range)\nBa avdd avss I=155u*step(V(avdd,avss)-2,0.5)\n* digital supply: DVDD and IOVDD together 225 uA in conversion mode with the internal oscillator (the table gives the sum)\nBd dvdd dgnd I=225u*step(V(dvdd,dgnd)-1.5,0.5)\nRio iovdd dgnd 1G\n* each analog input: 0.1 nA (typ, PGA on) at mid-supply, as 20 Gohm to AVSS (the sign of the real current is not known)\nR0 ain0 avss 20G\nR1 ain1 avss 20G\nR2 ain2 avss 20G\nR3 ain3 avss 20G\nR4 ain4 avss 20G\nR5 ain5 avss 20G\nRc aincom avss 20G\nR6 refp1 avss 20G\nR7 refn1 avss 20G\nR8 gpio0 avss 20G\nR9 gpio1 avss 20G\nR10 gpio2 avss 20G\nR11 gpio3 avss 20G\n* REFP0 through its buffer (on after reset): 5 nA at 2.5 V; REFN0 without its buffer (off after reset): 4 uA/V of the reference\n* voltage, taken from REFP0's side through the buffer, so REFN0 sinks it as 250 kohm per volt: modelled as 250 kohm to AVSS\nRp refp0 avss 500Meg\nRn refn0 avss 250k\n* REFOUT: the internal reference is off after reset (high impedance)\nRout refout avss 1G\n.ends ADS124S08",
+  "pins": [
+   "26",
+   "27",
+   "16",
+   "15",
+   "14",
+   "7",
+   "6",
+   "5",
+   "4",
+   "3",
+   "2",
+   "1",
+   "32",
+   "31",
+   "30",
+   "29",
+   "22",
+   "21",
+   "20",
+   "19",
+   "23"
+  ],
+  "limits": [
+   "データシートの typ の値から作った、電源の電流と入力の電流だけの等価モデルです (メーカーのモデルではありません)。出典: TI SBAS660C の 7.5 節の表と 9.6.1.6 節。値の決め方は docs/models/adcs.md。",
+   "再現しているもの: AVDD の電流 155 µA (変換中・PGA 有効・利得 1〜2 の 120 µA と、リセット時に有効な正の基準バッファの 35 µA)、DVDD と IOVDD の電流 225 µA (変換中・内部発振。表は 2 つの合計で、DVDD 側にまとめた)、アナログ入力の電流 0.1 nA (PGA 有効、20 GΩ として)、REFP0 の入力電流 5 nA (バッファ有効)、REFN0 の入力電流 4 µA/V (バッファ無効、250 kΩ として)。",
+   "設定が違えば電流も違います: 利得 4〜8 は 140 µA、16〜32 は 165 µA、64 は 200 µA、128 は 250 µA、PGA を使わないと 85 µA、待機 70 µA、停止 0.1 µA。内部の 2.5 V 基準をオンにすると +185 µA、IDAC は +20〜65 µA。",
+   "扱わないもの: 変換 (入力の電圧をコードに変えること)、SPI、内部の 2.5 V 基準 (リセット時はオフ)、IDAC と VBIAS、入力電流の向きと温度による変化 (最大 ±2 nA)、AVDD が 2 V より下の振る舞い。",
+   "最終の確認は、メーカーの公式モデルで行ってください。"
+  ],
+  "origin": {
+   "kind": "equivalent",
+   "source": "TI ADS124S0x データシート SBAS660C (2016-08、2017-06 改訂)、7.5 節 Electrical Characteristics (アナログ入力・基準電圧入力・電源電流の表) と 9.6.1.6 節 (REF レジスタのリセット値 10h)。AVDD = 3.3 V、DVDD = IOVDD = 3.3 V、25 °C"
+  }
+ }
+}

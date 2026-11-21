@@ -166,7 +166,7 @@ fn the_bench_reference_and_ldo_made_without_a_model_get_the_bundled_model() {
     let dir = std::env::temp_dir().join(format!("circuitcad_lib_bench_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    for name in ["ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5"] {
+    for name in ["ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5", "ADS124S08_TQFP-32", "BAV199_SOT-23", "TQ2-L2-5V"] {
         let mut mine: PartDef = example(name);
         mine.sim = None;
         mine.description = "made for the bench, no model yet".into();
@@ -181,7 +181,7 @@ fn the_bench_reference_and_ldo_made_without_a_model_get_the_bundled_model() {
     std::fs::write(other.join(format!("ADR4525_SOIC-8{FILE_SUFFIX}")), serde_json::to_string_pretty(&edited).unwrap()).unwrap();
     install_examples(&dir).unwrap();
     install_examples(&other).unwrap();
-    for name in ["ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5"] {
+    for name in ["ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5", "ADS124S08_TQFP-32", "BAV199_SOT-23", "TQ2-L2-5V"] {
         let now: PartDef = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}{FILE_SUFFIX}"))).unwrap()).unwrap();
         assert!(now.sim.is_some(), "{name} got its model");
     }

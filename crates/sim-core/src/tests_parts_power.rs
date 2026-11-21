@@ -175,6 +175,49 @@ fn the_ads124s08_draws_its_supply_currents() {
     assert!(v(&r, "avdd").abs() < 0.01, "an unpowered AVDD stays near 0 V: {}", v(&r, "avdd"));
 }
 
+/// The BAV199's diodes: below the forward voltages' maxima of the data sheet's table 7 and near the fig. 2 typical curve, and a
+/// reverse current at 75 V under the table's maximum (the model's own 3 pA plus the simulator's gmin).
+#[test]
+fn the_bav199_keeps_its_leakage_in_picoamps_and_its_forward_drops() {
+    let def = part("BAV199");
+    let drop = |amps: f64| {
+        let mut c = Circuit::new();
+        let n = c.node("a");
+        c.add(Element::ISource { name: "If".into(), from: 0, to: n, wave: Waveform::Dc(amps), ac: None });
+        place(&mut c, &def, "D1", &[("1", "a"), ("3", "k"), ("2", "x")]);
+        res(&mut c, "Rx", "x", "0", 1e15);
+        res(&mut c, "Rk", "k", "0", 1e-3);
+        v(&dc_op(&c).unwrap(), "a")
+    };
+    for (amps, max, curve) in [(1e-3, 0.9, 0.745), (10e-3, 1.0, 0.85), (50e-3, 1.1, 0.96), (150e-3, 1.25, 1.05)] {
+        let vf = drop(amps);
+        assert!(vf < max && (vf - curve).abs() < 0.03, "{amps} A: {vf} V (max {max}, curve about {curve})");
+    }
+    let mut c = Circuit::new();
+    vs(&mut c, "Vr", "k", "0", 75.0);
+    place(&mut c, &def, "D1", &[("1", "0"), ("3", "k"), ("2", "x")]);
+    res(&mut c, "Rx", "x", "k", 1e-3);
+    // the model's own leakage is IS = 3 pA; the simulator's gmin (1e-12 S across the junction and from each node to ground) adds
+    // about 75 pA for each place at 75 V, so the reverse current read here is a few hundred pA: under the data sheet's 5 nA
+    let leak = dc_op(&c).unwrap().element("Vr").unwrap().current.abs();
+    assert!(leak < 5e-9 && leak > 3e-12, "reverse current {leak} A (typ 3 pA, max 5 nA)");
+}
+
+/// The TQ2-L2-5V's coils: 40 mA from 5 V each (125 Ω, the 2 coil latching table).
+#[test]
+fn the_tq2_l2_5v_coils_draw_forty_milliamps() {
+    let def = part("TQ2-L2-5V");
+    let mut c = Circuit::new();
+    vs(&mut c, "Vs", "s", "0", 5.0);
+    vs(&mut c, "Vr", "r", "0", 5.0);
+    place(&mut c, &def, "K1", &[("1", "s"), ("5", "0"), ("10", "r"), ("6", "0")]);
+    let r = dc_op(&c).unwrap();
+    for name in ["Vs", "Vr"] {
+        let i = -r.element(name).unwrap().current;
+        assert!((i - 0.040).abs() < 1e-4, "{name}: {i} A");
+    }
+}
+
 #[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");
