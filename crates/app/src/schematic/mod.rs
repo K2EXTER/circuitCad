@@ -304,6 +304,10 @@ pub struct SchEditor {
     lib_sync: lib_sync::LibSync,
     /// The inputs, reference and gain chosen for each ADC in "ADC の読み" (`adc_ui.rs`).
     adc_setups: adc_ui::AdcSetups,
+    /// The window of what the ADCs measure (`adc_measure_ui.rs`).
+    adc_measure_ui: adc_measure_ui::AdcMeasureUi,
+    /// The window of a meter's log over time (`time_log.rs`).
+    time_log_ui: time_log::TimeLogUi,
     /// Targets for the design (pass / fail table); kept for the session.
     specs: Vec<spec_table::SpecRow>,
     /// Worst cases computed for the spec table, by what they were computed from (circuit, tolerances, node): at most a few.
@@ -788,6 +792,8 @@ impl Default for SchEditor {
             tables: Default::default(),
             lib_sync: Default::default(),
             adc_setups: Default::default(),
+            adc_measure_ui: Default::default(),
+            time_log_ui: Default::default(),
             specs: vec![],
             worst_spec_cache: vec![],
             saved_specs: vec![],
@@ -891,6 +897,8 @@ mod ac;
 mod analysis_panel;
 mod adc_ui;
 mod lib_sync;
+mod adc_measure_ui;
+mod time_log;
 mod pindefs_ui;
 mod result_tables;
 mod sweep;

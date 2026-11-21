@@ -23,6 +23,8 @@ mod breadboardcmd;
 mod pinscmd;
 mod libsynccmd;
 mod adccmd;
+mod adcmeasurecmd;
+mod timelogcmd;
 mod reqcmd;
 pub mod runner;
 mod projectcmd;

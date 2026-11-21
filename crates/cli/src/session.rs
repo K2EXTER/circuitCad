@@ -112,6 +112,16 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         ideal transfer function, the size of one step (lsb_v) and the code back as a voltage (reads_v); for a
                                         part with the data sheet's noise tables (ADS124S06/08), the noise at that data rate, filter and gain
                                         (rms and p-p, in volts and codes) and the effective and noise-free resolution in bits
+  adcmeasure [NAME volts|ohms|amps plus=NET minus=NET | NAME part part=R7] at=V adc=U1 pos=AIN neg=AIN [gain=] [rate=] [filter=] [chop=]
+             [when=K1,SW2,R5=10k] [refpos= refneg=]
+                                        what the ADCs measure, one way per row, kept with the schematic: under its conditions (a latching relay
+                                        set, a switch thrown, REF=VALUE a part's value), with a voltage, resistance or current of value at
+                                        between plus and minus (or a part's own value: a sensor), the ADC's reading (a ratio with
+                                        refpos/refneg); answers the input, the code, the slope, the noise in the measured unit (rms, p-p) and
+                                        the digits that stay still. Without NAME every way is read; adcmeasure remove NAME
+  timelog FILE.csv [temp=COLUMN]        a meter's log over time (a clock 10:00:01 or seconds, then readings; columns named by the header):
+                                        per column the mean, min, max, p-p, standard deviation, drift per hour (a line fitted against
+                                        time) and, against the temperature column, the temperature coefficient (per degree and ppm/degree)
   battery tran=STOP[:STEP] [from=T] [to=T] [node=NET v_min=V]
                                         how long the battery parts last: the average current over from..to of a transient run (default its second
                                         half; take whole periods of an intermittent load), the charge at which node falls under v_min, the hours
@@ -404,6 +414,8 @@ impl Session {
             "pins" => self.pins(args),
             "libsync" => self.libsync(args),
             "adc" => self.adc(args),
+            "adcmeasure" => self.adc_measure(args),
+            "timelog" => self.time_log(args),
             "mc" => self.mc(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),

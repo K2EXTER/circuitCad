@@ -38,6 +38,8 @@ mod heat_tran;
 mod selfheat;
 mod ambient;
 pub mod adcread;
+pub mod adcmeasure;
+pub mod timelog;
 pub mod battery;
 pub mod budget;
 pub mod inrush;

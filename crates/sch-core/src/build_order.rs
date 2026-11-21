@@ -41,6 +41,18 @@ pub fn rail_volts(name: &str) -> Option<f64> {
     (v > 0.0).then_some(sign * v)
 }
 
+/// The supply-named nets that reach a connector, with the volts their names say (5V, 3V3): what feeds a board that has no supply
+/// of its own on the schematic (it is fed through its header).
+pub fn connector_rails(s: &Schematic) -> Vec<(String, f64)> {
+    let flat = s.flat();
+    let kinds: BTreeMap<&str, &Kind> = flat.components.iter().map(|c| (c.refdes.as_str(), &c.kind)).collect();
+    extract(&flat)
+        .into_iter()
+        .filter(|n| !crate::breadboard::is_ground_name(&n.name) && n.pins.iter().any(|p| connector(&p.refdes, kinds.get(p.refdes.as_str()).copied())))
+        .filter_map(|n| rail_volts(&n.name).map(|v| (n.name, v)))
+        .collect()
+}
+
 /// Whether a part is a connector the board is fed through (a header, a terminal block, a jack).
 fn connector(refdes: &str, kind: Option<&Kind>) -> bool {
     let head: String = refdes.chars().take_while(|c| c.is_ascii_alphabetic()).collect::<String>().to_ascii_uppercase();

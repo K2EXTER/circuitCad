@@ -85,6 +85,9 @@ impl SchEditor {
                 }
             }
         });
+        if ui.button(i18n::trf!("測る量の表… ({} 行)", self.sch.adc_measures.len())).on_hover_text(i18n::tr("この ADC で何をどう測るか (メーターのレンジ・センサー・シャントの電流など) を 1 行ずつ書き、それぞれの読み・測る量での揺れ・止まって見える桁を出す表を開きます")).clicked() {
+            self.adc_measure_ui.open = true;
+        }
         if self.adc_setups.get(&refdes) != Some(&setup) {
             self.adc_setups.insert(refdes, setup);
         }

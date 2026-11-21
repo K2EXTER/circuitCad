@@ -303,6 +303,9 @@ impl BenchTab {
             if ui.button(i18n::tr("DC 動作点を計算する")).on_hover_text(i18n::tr("いまの回路図で、正常ならそれぞれの点に出る電圧を計算します")).clicked() {
                 sch.analyze_dc();
             }
+            if ui.button(i18n::tr("時間の記録…")).on_hover_text(i18n::tr("テスターや自作の DMM の長い時間の記録 (CSV) を時刻の軸で見て、ドリフト (1 時間あたり) と温度係数を出し、予測と比べます")).clicked() {
+                sch.open_time_log();
+            }
         });
         let (spec_nets, _) = sch.spec_points();
         if sch.bench_voltages().is_none() && !self.dc_asked {

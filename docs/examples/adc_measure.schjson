@@ -1,0 +1,793 @@
+{
+  "adc_measures": [
+    {
+      "adc": "U1",
+      "at": 10.0,
+      "conditions": [
+        "K1"
+      ],
+      "gain": 1.0,
+      "measured": {
+        "volts": {
+          "minus": "GND",
+          "plus": "HI"
+        }
+      },
+      "name": "10V",
+      "neg": "6",
+      "pos": "7",
+      "rate": 20.0
+    },
+    {
+      "adc": "U1",
+      "at": 10000.0,
+      "gain": 1.0,
+      "measured": {
+        "ohms": {
+          "minus": "GND",
+          "plus": "RX"
+        }
+      },
+      "name": "10k",
+      "neg": "4",
+      "pos": "5",
+      "rate": 20.0,
+      "ref_neg": "2",
+      "ref_pos": "3"
+    },
+    {
+      "adc": "U1",
+      "at": 10000.0,
+      "gain": 1.0,
+      "measured": {
+        "part": {
+          "part": "RT"
+        }
+      },
+      "name": "センサー",
+      "neg": "22",
+      "pos": "32",
+      "rate": 20.0
+    },
+    {
+      "adc": "U1",
+      "at": 0.1,
+      "gain": 16.0,
+      "measured": {
+        "amps": {
+          "minus": "GND",
+          "plus": "SH"
+        }
+      },
+      "name": "シャント",
+      "neg": "22",
+      "pos": "31",
+      "rate": 20.0
+    }
+  ],
+  "components": [
+    {
+      "custom": {
+        "name": "ADS124S08",
+        "pins": [
+          {
+            "name": "AIN0",
+            "number": "7",
+            "side": "left"
+          },
+          {
+            "name": "AIN1",
+            "number": "6",
+            "side": "left"
+          },
+          {
+            "name": "AIN2",
+            "number": "5",
+            "side": "left"
+          },
+          {
+            "name": "AIN3",
+            "number": "4",
+            "side": "left"
+          },
+          {
+            "name": "AIN4",
+            "number": "3",
+            "side": "left"
+          },
+          {
+            "name": "AIN5",
+            "number": "2",
+            "side": "left"
+          },
+          {
+            "name": "AINCOM",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "REFP1/AIN6",
+            "number": "32",
+            "side": "left"
+          },
+          {
+            "name": "REFN1/AIN7",
+            "number": "31",
+            "side": "left"
+          },
+          {
+            "name": "REFP0",
+            "number": "30",
+            "side": "left"
+          },
+          {
+            "name": "REFN0",
+            "number": "29",
+            "side": "left"
+          },
+          {
+            "name": "CS",
+            "number": "9",
+            "side": "right"
+          },
+          {
+            "name": "SCLK",
+            "number": "11",
+            "side": "right"
+          },
+          {
+            "name": "DIN",
+            "number": "10",
+            "side": "right"
+          },
+          {
+            "name": "DOUT/DRDY",
+            "number": "12",
+            "side": "right"
+          },
+          {
+            "name": "DRDY",
+            "number": "13",
+            "side": "right"
+          },
+          {
+            "name": "START/SYNC",
+            "number": "8",
+            "side": "right"
+          },
+          {
+            "name": "RESET",
+            "number": "18",
+            "side": "right"
+          },
+          {
+            "name": "CLK",
+            "number": "17",
+            "side": "right"
+          },
+          {
+            "name": "GPIO0/AIN8",
+            "number": "22",
+            "side": "right"
+          },
+          {
+            "name": "GPIO1/AIN9",
+            "number": "21",
+            "side": "right"
+          },
+          {
+            "name": "GPIO2/AIN10",
+            "number": "20",
+            "side": "right"
+          },
+          {
+            "name": "GPIO3/AIN11",
+            "number": "19",
+            "side": "right"
+          },
+          {
+            "name": "AVDD",
+            "number": "26",
+            "side": "top"
+          },
+          {
+            "name": "DVDD",
+            "number": "16",
+            "side": "top"
+          },
+          {
+            "name": "IOVDD",
+            "number": "15",
+            "side": "top"
+          },
+          {
+            "name": "AVSS",
+            "number": "27",
+            "side": "bottom"
+          },
+          {
+            "name": "AVSS-SW",
+            "number": "28",
+            "side": "bottom"
+          },
+          {
+            "name": "DGND",
+            "number": "14",
+            "side": "bottom"
+          },
+          {
+            "name": "REFCOM",
+            "number": "24",
+            "side": "bottom"
+          },
+          {
+            "name": "REFOUT",
+            "number": "23",
+            "side": "bottom"
+          },
+          {
+            "name": "NC",
+            "number": "25",
+            "side": "bottom"
+          }
+        ],
+        "prefix": "U",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "データシートの typ の値から作った、電源の電流と入力の電流だけの等価モデルです (メーカーのモデルではありません)。出典: TI SBAS660C の 7.5 節の表と 9.6.1.6 節。値の決め方は docs/models/adcs.md。",
+            "再現しているもの: AVDD の電流 155 µA (変換中・PGA 有効・利得 1〜2 の 120 µA と、リセット時に有効な正の基準バッファの 35 µA)、DVDD と IOVDD の電流 225 µA (変換中・内部発振。表は 2 つの合計で、DVDD 側にまとめた)、アナログ入力の電流 0.1 nA (PGA 有効、20 GΩ として)、REFP0 の入力電流 5 nA (バッファ有効)、REFN0 から出る電流 4 µA/V × 基準電圧 (バッファ無効。サンプリングのコンデンサの電荷が、REFP0 のバッファを通って AVDD から来て REFN0 から出る)。",
+            "変換の読み: 回路図の部品の設定の「ADC の読み」(と ccad adc) が、DC の結果から、データシート 9.5.2 節 (Data Format) の理想の式 (コード = 2^23 × 入力の電圧 × 利得 / 基準電圧) でコードを出します。どの入力・基準・利得を使うかはレジスタの設定なので、そこで選びます。",
+            "設定が違えば電流も違います: 利得 4〜8 は 140 µA、16〜32 は 165 µA、64 は 200 µA、128 は 250 µA、PGA を使わないと 85 µA、待機 70 µA、停止 0.1 µA。内部の 2.5 V 基準をオンにすると +185 µA、IDAC は +20〜65 µA。",
+            "扱わないもの: 変換 (入力の電圧をコードに変えること)、SPI、内部の 2.5 V 基準 (リセット時はオフ)、IDAC と VBIAS、入力電流の向きと温度による変化 (最大 ±2 nA)、AVDD が 2 V より下の振る舞い。",
+            "最終の確認は、メーカーの公式モデルで行ってください。"
+          ],
+          "name": "ADS124S08",
+          "origin": {
+            "kind": "equivalent",
+            "source": "TI ADS124S0x データシート SBAS660C (2016-08、2017-06 改訂)、7.5 節 Electrical Characteristics (アナログ入力・基準電圧入力・電源電流の表) と 9.6.1.6 節 (REF レジスタのリセット値 10h)。AVDD = 3.3 V、DVDD = IOVDD = 3.3 V、25 °C"
+          },
+          "params": {
+            "adc_bits": 24.0
+          },
+          "pins": [
+            "26",
+            "27",
+            "16",
+            "15",
+            "14",
+            "7",
+            "6",
+            "5",
+            "4",
+            "3",
+            "2",
+            "1",
+            "32",
+            "31",
+            "30",
+            "29",
+            "22",
+            "21",
+            "20",
+            "19",
+            "23"
+          ],
+          "text": "* ADS124S08: a DC equivalent of the supplies and the inputs only (no conversion, no SPI)\n* Ports: AVDD AVSS DVDD IOVDD DGND AIN0..AIN5 AINCOM REFP1/AIN6 REFN1/AIN7 REFP0 REFN0 GPIO0..3/AIN8..11 REFOUT\n.subckt ADS124S08 avdd avss dvdd iovdd dgnd ain0 ain1 ain2 ain3 ain4 ain5 aincom refp1 refn1 refp0 refn0 gpio0 gpio1 gpio2 gpio3 refout\n* analog supply: conversion mode, PGA on (gain 1-2) 120 uA + the positive reference buffer (on after reset) 35 uA = 155 uA,\n* fading out below about 2 V (the data sheet gives no figure below its 2.7 V supply range)\nBa avdd avss I=155u*step(V(avdd,avss)-2,0.5)\n* digital supply: DVDD and IOVDD together 225 uA in conversion mode with the internal oscillator (the table gives the sum)\nBd dvdd dgnd I=225u*step(V(dvdd,dgnd)-1.5,0.5)\nRio iovdd dgnd 1G\n* each analog input: 0.1 nA (typ, PGA on) at mid-supply, as 20 Gohm to AVSS (the sign of the real current is not known)\nR0 ain0 avss 20G\nR1 ain1 avss 20G\nR2 ain2 avss 20G\nR3 ain3 avss 20G\nR4 ain4 avss 20G\nR5 ain5 avss 20G\nRc aincom avss 20G\nR6 refp1 avss 20G\nR7 refn1 avss 20G\nR8 gpio0 avss 20G\nR9 gpio1 avss 20G\nR10 gpio2 avss 20G\nR11 gpio3 avss 20G\n* REFP0 through its buffer (on after reset): 5 nA at 2.5 V; REFN0 without its buffer (off after reset): the sampling capacitor\n* across the reference gives back 4 uA per volt of the reference voltage out of REFN0 (its charge comes through REFP0's buffer,\n* from AVDD)\nRp refp0 avss 500Meg\nBn avdd refn0 I=4u*max(V(refp0,refn0),0)\n* REFOUT: the internal reference is off after reset (high impedance)\nRout refout avss 1G\n.ends ADS124S08"
+        }
+      },
+      "footprint": "VQFN-32_5x5_P0.5_EP",
+      "kind": "Custom",
+      "pos": [
+        16,
+        22
+      ],
+      "refdes": "U1",
+      "rot": 0,
+      "value": "ADS124S08"
+    },
+    {
+      "custom": {
+        "name": "TQ2-L2-5V",
+        "pins": [
+          {
+            "name": "SET+",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "SET-",
+            "number": "5",
+            "side": "left"
+          },
+          {
+            "name": "RST+",
+            "number": "10",
+            "side": "left"
+          },
+          {
+            "name": "RST-",
+            "number": "6",
+            "side": "left"
+          },
+          {
+            "name": "COM1",
+            "number": "3",
+            "side": "right"
+          },
+          {
+            "name": "SET1",
+            "number": "4",
+            "side": "right"
+          },
+          {
+            "name": "RST1",
+            "number": "2",
+            "side": "right"
+          },
+          {
+            "gap": 1,
+            "name": "COM2",
+            "number": "8",
+            "side": "right"
+          },
+          {
+            "name": "SET2",
+            "number": "7",
+            "side": "right"
+          },
+          {
+            "name": "RST2",
+            "number": "9",
+            "side": "right"
+          }
+        ],
+        "prefix": "K",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "データシートの表から作った等価モデルです (メーカーのモデルではありません)。出典: Panasonic TQ relays データシート ASCTB14E 202507、Coil data の Standard contact: 2 coil latching の表 (5 V の行、20 °C) と Specifications の表 (接触抵抗・絶縁抵抗・動作時間)。値の決め方は docs/models/relays.md。",
+            "再現しているもの: セットとリセットのコイルの抵抗 125 Ω (それぞれ 5 V で 40 mA、200 mW)。コイルの電圧が 3.75 V (定格の 75 %。データシートのセット・リセットの電圧の最大) を超えると切り替わり、電流を切ってもその状態を保つ接点 (セット: COM1–SET1・COM2–SET2、リセット: COM1–RST1・COM2–RST2)。閉じた接点は 50 mΩ (接触抵抗の最大)、開いた接点は 1000 MΩ (絶縁抵抗の最小)。",
+            "始めの状態はリセット (COM が RST 側)。両方のコイルに同時に電圧をかけたときの状態は決まりません (実物でもしない使い方です)。",
+            "扱わないもの: 動くまでの時間 (最大 3 ms) と接点のはね、実物が動き出す電圧 (75 % より低いことが多い)、コイルのインダクタンス (データシートに無い。切るときの逆起電力は出ない)、抵抗の ±10 % と温度による変化、接点の熱起電力。",
+            "最終の確認は、メーカーの公式モデルで行ってください。"
+          ],
+          "name": "TQ2_L2_5V",
+          "origin": {
+            "kind": "equivalent",
+            "source": "Panasonic TQ relays データシート ASCTB14E 202507、Coil data の Standard contact: 2 coil latching の表 (5 V の行、20 °C) と Specifications の表 (接触抵抗・絶縁抵抗・動作時間)"
+          },
+          "params": {},
+          "pins": [
+            "1",
+            "5",
+            "10",
+            "6",
+            "3",
+            "4",
+            "2",
+            "8",
+            "7",
+            "9"
+          ],
+          "text": "* TQ2-L2-5V: the two coils, and the two changeover contacts held by a latch (set: pins 1+ 5-, reset: pins 10+ 6-)\n.subckt TQ2_L2_5V setp setn rstp rstn com1 set1 rst1 com2 set2 rst2\n* 125 ohm each (5 V, 40 mA, 200 mW; +-10 % at 20 C)\nRset setp setn 125\nRrst rstp rstn 125\n* the coils' voltages, one fifth: the latch (1 V levels) switches at 0.75, so at 3.75 V on a coil (set / reset voltage: max 75 %)\nEs s 0 setp setn 0.2\nEr r 0 rstp rstn 0.2\nVh hi 0 1\nYlat srlatch q qb 0 hi 60 0.75 0 0 0 s r hi 0 0\n* the contacts: closed 50 mohm (initial contact resistance max), open 1000 Mohm (insulation resistance min)\nS1s com1 set1 q 0 SWC\nS1r com1 rst1 qb 0 SWC\nS2s com2 set2 q 0 SWC\nS2r com2 rst2 qb 0 SWC\n.model SWC SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends TQ2_L2_5V"
+        }
+      },
+      "footprint": "Relay_TQ2_THT",
+      "kind": "Custom",
+      "pos": [
+        38,
+        15
+      ],
+      "refdes": "K1",
+      "rot": 0,
+      "value": "TQ2-L2-5V"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        54,
+        8
+      ],
+      "refdes": "R1",
+      "rot": 0,
+      "value": "900k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        68,
+        8
+      ],
+      "refdes": "R2",
+      "rot": 0,
+      "value": "100k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        82,
+        8
+      ],
+      "refdes": "R3",
+      "rot": 0,
+      "value": "10k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        96,
+        8
+      ],
+      "refdes": "RT",
+      "rot": 0,
+      "value": "10k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        10,
+        46
+      ],
+      "refdes": "RB",
+      "rot": 0,
+      "value": "10k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        24,
+        46
+      ],
+      "refdes": "RS",
+      "rot": 0,
+      "value": "1"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        36,
+        48
+      ],
+      "refdes": "VA",
+      "rot": 0,
+      "value": "3.3"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        46,
+        48
+      ],
+      "refdes": "VR",
+      "rot": 0,
+      "value": "2.5"
+    },
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        56,
+        48
+      ],
+      "refdes": "V5",
+      "rot": 0,
+      "value": "5"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "Ground",
+      "pos": [
+        36,
+        50
+      ],
+      "refdes": "#PWR01",
+      "rot": 0,
+      "value": "GND"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        36,
+        46
+      ],
+      "text": "AVDD"
+    },
+    {
+      "pos": [
+        14,
+        8
+      ],
+      "text": "AVDD"
+    },
+    {
+      "pos": [
+        16,
+        8
+      ],
+      "text": "AVDD"
+    },
+    {
+      "pos": [
+        18,
+        8
+      ],
+      "text": "AVDD"
+    },
+    {
+      "pos": [
+        80,
+        8
+      ],
+      "text": "AVDD"
+    },
+    {
+      "pos": [
+        8,
+        20
+      ],
+      "text": "AVDD"
+    },
+    {
+      "pos": [
+        94,
+        8
+      ],
+      "text": "AVDD"
+    },
+    {
+      "pos": [
+        46,
+        46
+      ],
+      "text": "REF"
+    },
+    {
+      "pos": [
+        8,
+        30
+      ],
+      "text": "REF"
+    },
+    {
+      "pos": [
+        56,
+        46
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        34,
+        12
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        34,
+        16
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        34,
+        14
+      ],
+      "text": "K1S"
+    },
+    {
+      "pos": [
+        34,
+        18
+      ],
+      "text": "K1R"
+    },
+    {
+      "pos": [
+        42,
+        9
+      ],
+      "text": "HI"
+    },
+    {
+      "pos": [
+        42,
+        11
+      ],
+      "text": "TOP"
+    },
+    {
+      "pos": [
+        52,
+        8
+      ],
+      "text": "TOP"
+    },
+    {
+      "pos": [
+        56,
+        8
+      ],
+      "text": "MID"
+    },
+    {
+      "pos": [
+        66,
+        8
+      ],
+      "text": "MID"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "MID"
+    },
+    {
+      "pos": [
+        84,
+        8
+      ],
+      "text": "RX"
+    },
+    {
+      "pos": [
+        8,
+        16
+      ],
+      "text": "RX"
+    },
+    {
+      "pos": [
+        8,
+        22
+      ],
+      "text": "RX"
+    },
+    {
+      "pos": [
+        98,
+        8
+      ],
+      "text": "SENS"
+    },
+    {
+      "pos": [
+        8,
+        46
+      ],
+      "text": "SENS"
+    },
+    {
+      "pos": [
+        8,
+        26
+      ],
+      "text": "SENS"
+    },
+    {
+      "pos": [
+        22,
+        46
+      ],
+      "text": "SH"
+    },
+    {
+      "pos": [
+        8,
+        28
+      ],
+      "text": "SH"
+    },
+    {
+      "pos": [
+        36,
+        50
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        46,
+        50
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        56,
+        50
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        11,
+        36
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        15,
+        36
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        8,
+        32
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        8,
+        14
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        8,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        70,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        26,
+        46
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        12,
+        46
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        24,
+        27
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": []
+}

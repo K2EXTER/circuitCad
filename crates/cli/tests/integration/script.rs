@@ -1641,6 +1641,86 @@ adc U1 rate=4000 filter=low_latency
     assert!((reads[2]["noise"]["effective_bits"].as_f64().unwrap() - 15.6).abs() < 0.05, "{}", reads[2]);
 }
 
+/// A meter's log over time: the reading's drift per hour and its temperature coefficient against the temperature column.
+#[test]
+fn a_meters_log_gives_its_drift_and_temperature_coefficient() {
+    let f = std::env::temp_dir().join(format!("ccad_timelog_{}.csv", std::process::id()));
+    std::fs::write(&f, "time,reading,temp
+10:00:00,2.000000,20
+10:30:00,2.000010,21
+11:00:00,2.000020,22
+").unwrap();
+    let (a, ok) = run(&format!("timelog {} temp=temp
+", f.display()));
+    let _ = std::fs::remove_file(&f);
+    assert!(ok, "{a:?}");
+    let r = a.iter().find(|v| v["cmd"] == "timelog").unwrap();
+    let c = &r["columns"][0];
+    assert_eq!(c["name"], "reading");
+    assert!((c["drift_per_hour"].as_f64().unwrap() - 20e-6).abs() < 1e-9, "{r}");
+    assert!((c["tempco_ppm"].as_f64().unwrap() - 5.0).abs() < 0.01, "10 uV per degree of 2 V: {r}");
+}
+
+/// What an ADC measures, way by way: a 10 V range that sets a latching relay onto a 1/10 divider reads 1 V at the ADC (and nothing
+/// with the relay left reset); a resistance read as the ratio to a reference resistor; a sensor already drawn (a part's value) and a
+/// current through a shunt. The ADC's noise (20 SPS, sinc, gain 1: 4.8 uV p-p) comes back in the measured unit, and the table is kept
+/// with the schematic.
+#[test]
+fn an_adcs_ways_of_measuring_set_their_conditions_and_give_their_noise_in_the_measured_unit() {
+    let (a, ok) = run("new
+add ADS124S08 as=U1
+add TQ2-L2-5V as=K1
+add R 900k as=R1
+add R 100k as=R2
+add R 10k as=R3
+add R 10k as=RT
+add R 10k as=RB
+add R 1 as=RS
+add V 3.3 as=VA
+add V 2.5 as=VR
+add V 5 as=V5
+net AVDD VA.+ U1.AVDD U1.DVDD U1.IOVDD R3.1 U1.AIN4 RT.1
+net REF VR.+ U1.REFP0
+net 5V V5.+ K1.SET+ K1.RST+
+net K1S K1.SET-
+net K1R K1.RST-
+net HI K1.COM1
+net TOP K1.SET1 R1.1
+net MID R1.2 R2.1 U1.AIN0
+net RX R3.2 U1.AIN2 U1.AIN5
+net SENS RT.2 RB.1 U1.AIN6
+net SH RS.1 U1.AIN7
+net GND VA.- VR.- V5.- U1.AVSS U1.DGND U1.REFN0 U1.AIN1 U1.AIN3 R2.2 RS.2 RB.2 U1.AIN8
+adcmeasure 10V volts plus=HI minus=GND at=10 adc=U1 pos=AIN0 neg=AIN1 when=K1
+adcmeasure off volts plus=HI minus=GND at=10 adc=U1 pos=AIN0 neg=AIN1
+adcmeasure 10k ohms plus=RX minus=GND at=10k adc=U1 pos=AIN2 neg=AIN3 refpos=AIN4 refneg=AIN5
+adcmeasure sensor part part=RT at=10k adc=U1 pos=AIN6 neg=AIN8 when=R3=20k
+adcmeasure shunt amps plus=SH minus=GND at=100m adc=U1 pos=AIN7 neg=AIN8 gain=16
+adcmeasure remove off
+adcmeasure
+");
+    assert!(ok, "{a:?}");
+    let rows: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "adcmeasure").collect();
+    let (v10, off, ohm, sensor, shunt) = (rows[0], rows[1], rows[2], rows[3], rows[4]);
+    assert!((v10["vin"].as_f64().unwrap() - 1.0).abs() < 1e-3 && (v10["slope"].as_f64().unwrap() - 0.1).abs() < 1e-4, "{v10}");
+    assert!(v10["done"].as_array().unwrap().iter().any(|d| d == "K1 セット"), "{v10}");
+    // 4.8 uV p-p at the ADC is 48 uV at the input: 10 V / 48 uV, 5.3 digits
+    assert!((v10["noise_pp"].as_f64().unwrap() - 48e-6).abs() < 1e-7, "{v10}");
+    assert!((v10["digits"].as_f64().unwrap() - 5.32).abs() < 0.01, "{v10}");
+    assert!(off["vin"].as_f64().unwrap().abs() < 1e-3, "the relay reset, the divider is off: {off}");
+    // 10k against 10k: the ratio 1, 1e-4 per ohm
+    assert!((ohm["value"].as_f64().unwrap() - 1.0).abs() < 1e-3 && (ohm["slope"].as_f64().unwrap() - 1e-4).abs() < 1e-6, "{ohm}");
+    // the sensor RT (10k) over RB (10k) from 3.3 V: 1.65 V, falling 3.3 V x 10k / (20k)^2 = 82.5 uV per ohm
+    assert_eq!(sensor["unit"], "Ω");
+    assert!((sensor["vin"].as_f64().unwrap() - 1.65).abs() < 1e-3 && (sensor["slope"].as_f64().unwrap() + 82.5e-6).abs() < 1e-7, "{sensor}");
+    assert!(sensor["done"].as_array().unwrap().iter().any(|d| d == "R3 = 20k"), "{sensor}");
+    // 100 mA through the 1 ohm shunt: 100 mV at gain 16, 1 V per A
+    assert_eq!(shunt["unit"], "A");
+    assert!((shunt["vin"].as_f64().unwrap() - 0.1).abs() < 1e-6 && (shunt["slope"].as_f64().unwrap() - 1.0).abs() < 1e-6, "{shunt}");
+    let all = rows.last().unwrap()["measures"].as_array().unwrap();
+    assert_eq!(all.iter().map(|r| r["name"].as_str().unwrap()).collect::<Vec<_>>(), ["10V", "10k", "sensor", "shunt"]);
+}
+
 #[test]
 fn the_pins_of_a_cable_header_are_written_and_a_firmware_is_checked() {
     let dir = std::env::temp_dir().join(format!("ccad_pins_{}", std::process::id()));

@@ -87,6 +87,8 @@ impl SchEditor {
         }
         self.tables = st;
         self.lib_sync_window(ctx);
+        self.adc_measure_window(ctx);
+        self.time_log_window(ctx);
         if let Some(name) = goto_net {
             self.goto_net(&name);
         }

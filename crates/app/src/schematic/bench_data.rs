@@ -55,16 +55,52 @@ pub struct DcReading {
     pub uncert: f64,
 }
 
+/// A meter's log over time (L2): drift and temperature, on its own time axis (`time_log.rs`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LogEntry {
+    pub name: String,
+    pub log: sim_core::timelog::TimeLog,
+    /// The column drawn, the temperature column (if any), and the net whose predicted voltage it is compared with (if any).
+    pub show: usize,
+    pub temp: Option<usize>,
+    pub net: Option<String>,
+}
+
+impl LogEntry {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({ "name": self.name, "names": self.log.names, "t": self.log.t, "cols": self.log.cols, "show": self.show, "temp": self.temp, "net": self.net })
+    }
+
+    fn from_json(v: &serde_json::Value) -> Option<LogEntry> {
+        let nums = |a: &serde_json::Value| -> Option<Vec<f64>> { a.as_array()?.iter().map(|x| x.as_f64()).collect() };
+        let names: Vec<String> = v.get("names")?.as_array()?.iter().map(|x| x.as_str().map(str::to_string)).collect::<Option<_>>()?;
+        let t = nums(v.get("t")?)?;
+        let cols: Vec<Vec<f64>> = v.get("cols")?.as_array()?.iter().map(nums).collect::<Option<_>>()?;
+        if cols.len() != names.len() || cols.iter().any(|c| c.len() != t.len()) {
+            return None;
+        }
+        let n = names.len();
+        Some(LogEntry {
+            name: v.get("name").and_then(|x| x.as_str()).unwrap_or_default().to_string(),
+            log: sim_core::timelog::TimeLog { names, t, cols },
+            show: v.get("show").and_then(|x| x.as_u64()).map(|x| x as usize).filter(|k| *k < n).unwrap_or(0),
+            temp: v.get("temp").and_then(|x| x.as_u64()).map(|x| x as usize).filter(|k| *k < n),
+            net: v.get("net").and_then(|x| x.as_str()).map(str::to_string),
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BenchData {
     pub tran: Vec<BenchCurve>,
     pub ac: Vec<BenchCurve>,
     pub dc: Vec<DcReading>,
+    pub logs: Vec<LogEntry>,
 }
 
 impl BenchData {
     pub fn is_empty(&self) -> bool {
-        self.tran.is_empty() && self.ac.is_empty() && self.dc.is_empty()
+        self.tran.is_empty() && self.ac.is_empty() && self.dc.is_empty() && self.logs.is_empty()
     }
 }
 
@@ -149,6 +185,9 @@ pub fn with_bench(sheet: &mut serde_json::Value, bench: &BenchData) {
                     .collect(),
             );
         }
+        if !bench.logs.is_empty() {
+            v["logs"] = serde_json::Value::Array(bench.logs.iter().map(LogEntry::to_json).collect());
+        }
         obj.insert("bench".into(), v);
     }
 }
@@ -166,7 +205,8 @@ pub fn take_bench(sheet: &mut serde_json::Value) -> BenchData {
                 .collect()
         })
         .unwrap_or_default();
-    BenchData { tran: list("tran"), ac: list("ac"), dc }
+    let logs = v.get("logs").and_then(|a| a.as_array()).map(|a| a.iter().filter_map(LogEntry::from_json).collect()).unwrap_or_default();
+    BenchData { tran: list("tran"), ac: list("ac"), dc, logs }
 }
 
 /// The numbers of a pasted table or a CSV file, column by column. Lines whose cells are not all numbers (headers, the
