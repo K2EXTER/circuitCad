@@ -52,12 +52,22 @@ impl SchEditor {
         Ok(msg)
     }
 
+    /// Adds the log in `text` on to log `k` (the same columns; at its own time when both have clock times); returns the message.
+    pub fn append_time_log(&mut self, k: usize, text: &str) -> Result<String, String> {
+        let more = read_log(text)?;
+        let e = self.bench.logs.get_mut(k).ok_or("足す先の記録がありません")?;
+        e.log = sim_core::timelog::append(&e.log, &more)?;
+        self.time_log_ui.plot_for = None;
+        Ok(i18n::trf!("「{}」に {} 行を足しました (全部で {} 行)", e.name, more.t.len(), e.log.t.len()).to_string())
+    }
+
     pub(super) fn time_log_window(&mut self, ctx: &egui::Context) {
         if !self.time_log_ui.open {
             return;
         }
         let mut open = true;
         let mut load: Option<(String, String)> = None;
+        let mut more: Option<String> = None;
         let mut remove = false;
         let predicted: Vec<(String, f64)> = self.bench_voltages().unwrap_or_default();
         egui::Window::new(i18n::tr("時間の記録 (ドリフト・温度)")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([760.0, 560.0]).show(ctx, |ui| {
@@ -79,6 +89,17 @@ impl SchEditor {
                             ui.selectable_value(&mut self.time_log_ui.pick, i, n);
                         }
                     });
+                    if ui
+                        .button(i18n::tr("続けて足す…"))
+                        .on_hover_text(i18n::tr("同じ測り方の次の記録 (次の日・次の回の CSV) を、選んでいる記録の後ろに足します。時刻のある記録どうしは、その時刻の所に置きます (間があいた分も時刻の軸に残るので、日をまたいだドリフトが分かります)。秒の記録は、前の最後の行のすぐ後ろに続けます"))
+                        .clicked()
+                        && let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv", "txt", "log"]).pick_file()
+                    {
+                        match std::fs::read_to_string(&p) {
+                            Ok(t) => more = Some(t),
+                            Err(e) => self.status = i18n::trf!("記録を読めませんでした: {}", e).to_string(),
+                        }
+                    }
                     if ui.small_button("🗑").on_hover_text(i18n::tr("この記録を消します")).clicked() {
                         remove = true;
                     }
@@ -86,9 +107,14 @@ impl SchEditor {
             });
             egui::CollapsingHeader::new(i18n::tr("貼り付けて読み込む")).id_salt("time_log_paste").show(ui, |ui| {
                 ui.add(egui::TextEdit::multiline(&mut self.time_log_ui.paste).desired_rows(4).hint_text("time,reading,temp\n10:00:00,1.000012,23.1"));
-                if ui.button(i18n::tr("読み込む")).clicked() {
-                    load = Some((i18n::trf!("記録 {}", self.bench.logs.len() + 1).to_string(), self.time_log_ui.paste.clone()));
-                }
+                ui.horizontal(|ui| {
+                    if ui.button(i18n::tr("読み込む")).on_hover_text(i18n::tr("新しい記録として読み込みます")).clicked() {
+                        load = Some((i18n::trf!("記録 {}", self.bench.logs.len() + 1).to_string(), self.time_log_ui.paste.clone()));
+                    }
+                    if !self.bench.logs.is_empty() && ui.button(i18n::tr("選んだ記録に続けて足す")).on_hover_text(i18n::tr("貼り付けた行を、選んでいる記録の後ろに足します")).clicked() {
+                        more = Some(self.time_log_ui.paste.clone());
+                    }
+                });
             });
             if self.bench.logs.is_empty() {
                 return;
@@ -196,6 +222,13 @@ impl SchEditor {
             self.time_log_ui.pick = 0;
             self.time_log_ui.plot_for = None;
         }
+        if let Some(text) = more {
+            let k = self.time_log_ui.pick.min(self.bench.logs.len().saturating_sub(1));
+            self.status = match self.append_time_log(k, &text) {
+                Ok(m) => m,
+                Err(e) => i18n::trf!("記録を足せませんでした: {}", e).to_string(),
+            };
+        }
         if let Some((name, text)) = load {
             self.status = match self.add_time_log(&name, &text) {
                 Ok(m) => m,
@@ -221,5 +254,19 @@ mod tests {
         assert_eq!(take_bench(&mut sheet).logs, e.bench.logs);
         assert_eq!(time_unit(7200.5), ("h", 3600.0));
         assert_eq!(time_unit(600.0), ("min", 60.0));
+    }
+
+    /// A second session's log is added on to the first at its own time and kept with the sheet.
+    #[test]
+    fn a_log_is_added_on_and_kept() {
+        let mut e = SchEditor::default();
+        e.add_time_log("R1", "time,reading\n10:00:00,1.000\n10:10:00,1.001\n").unwrap();
+        e.append_time_log(0, "time,reading\n11:00:00,1.002\n11:10:00,1.003\n").unwrap();
+        assert_eq!(e.bench.logs[0].log.t, [0.0, 600.0, 3600.0, 4200.0]);
+        assert!(e.append_time_log(0, "time,other\n12:00:00,1\n12:10:00,2\n").is_err(), "another column");
+        let mut sheet = serde_json::json!({});
+        bench_data::with_bench(&mut sheet, &e.bench);
+        let back = bench_data::take_bench(&mut sheet);
+        assert_eq!(back.logs[0].log.start, Some(36000.0), "the first row's clock time is kept for the next one");
     }
 }

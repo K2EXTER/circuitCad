@@ -953,6 +953,7 @@ mod selfheat_tran;
 mod fault;
 mod spec_table;
 mod bench_data;
+mod bench_marks;
 mod power_ui;
 mod audio_ui;
 mod power_on;

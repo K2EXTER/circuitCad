@@ -60,6 +60,8 @@ impl SchEditor {
     pub(super) fn run_erc(&mut self) {
         self.problems = erc(&self.sch);
         self.problems.extend(self.conversion_problems());
+        // the pin file written and the firmware checked, against the schematic's pins now
+        self.problems.extend(sch_core::pindefs::firmware_problems(&self.sch, self.path.as_ref().and_then(|p| p.parent())));
         self.erc_focus = None;
         self.erc_ran = true;
         let errors = self.problems.iter().filter(|p| p.severity == Severity::Error).count();

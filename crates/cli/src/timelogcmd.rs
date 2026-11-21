@@ -1,17 +1,21 @@
-//! `timelog FILE [temp=COLUMN]`: a meter's log over time summed up per column (`sim_core::timelog`): the mean, the spread, the
+//! `timelog FILE [FILE ...] [temp=COLUMN]`: a meter's log over time (several files: added on one after another at their own times,
+//! `sim_core::timelog::append`) summed up per column (`sim_core::timelog`): the mean, the spread, the
 //! drift per hour and, against a temperature column, the temperature coefficient.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
 use serde_json::json;
-use sim_core::timelog::{column, read_log, stats};
+use sim_core::timelog::{append, column, read_log, stats};
 
 impl Session {
     pub fn time_log(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
-        let f = pos.first().ok_or("timelog FILE.csv [temp=COLUMN]   (a log with a time (10:00:01 or seconds) and readings per row; columns by the header's names)")?;
-        let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
-        let log = read_log(&text)?;
+        let f = pos.first().ok_or("timelog FILE.csv [FILE2.csv ...] [temp=COLUMN]   (a log with a time (10:00:01 or seconds) and readings per row; columns by the header's names; more files are added on at their own times)")?;
+        let read = |f: &str| -> Result<sim_core::timelog::TimeLog, String> { read_log(&std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?).map_err(|e| format!("{f}: {e}")) };
+        let mut log = read(f)?;
+        for g in &pos[1..] {
+            log = append(&log, &read(g)?).map_err(|e| format!("{g}: {e}"))?;
+        }
         let temp = match opt(&kv, "temp") {
             Some(name) => Some(column(&log, name).ok_or_else(|| format!("列 {name} がありません (列: {})", log.names.join(", ")))?),
             None => None,
@@ -20,6 +24,6 @@ impl Session {
             .iter()
             .map(|s| json!({"name": s.name, "n": s.n, "mean": s.mean, "min": s.min, "max": s.max, "pp": s.max - s.min, "std": s.std, "drift_per_hour": s.drift_per_hour, "tempco": s.tempco, "tempco_ppm": s.tempco_ppm}))
             .collect();
-        Ok(obj(json!({"file": f, "rows": log.t.len(), "hours": log.t.last().copied().unwrap_or(0.0) / 3600.0, "temp": temp.map(|k| log.names[k].clone()), "columns": cols})))
+        Ok(obj(json!({"file": f, "files": pos.len(), "rows": log.t.len(), "hours": log.t.last().copied().unwrap_or(0.0) / 3600.0, "temp": temp.map(|k| log.names[k].clone()), "columns": cols})))
     }
 }

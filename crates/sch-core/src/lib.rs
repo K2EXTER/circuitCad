@@ -411,6 +411,9 @@ pub struct Schematic {
     /// What the ADCs measure, one way per row (`adc_measure.rs`): the table of readings, noise and stable digits.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub adc_measures: Vec<adc_measure::AdcMeasure>,
+    /// The pin file written last and the firmware file checked last (`pindefs.rs`): the ERC says when they no longer match.
+    #[serde(default, skip_serializing_if = "pindefs::FirmwareLink::is_empty")]
+    pub firmware_link: pindefs::FirmwareLink,
 }
 
 fn is_zero(n: &usize) -> bool {
@@ -419,7 +422,7 @@ fn is_zero(n: &usize) -> bool {
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], ports: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], title_block: TitleBlock::default(), active_sheet: 0, adc_measures: vec![] }
+        Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], ports: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], title_block: TitleBlock::default(), active_sheet: 0, adc_measures: vec![], firmware_link: Default::default() }
     }
 }
 
@@ -454,11 +457,13 @@ struct RawSchematic {
     active_sheet: usize,
     #[serde(default)]
     adc_measures: Vec<adc_measure::AdcMeasure>,
+    #[serde(default)]
+    firmware_link: pindefs::FirmwareLink,
 }
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, buses: r.buses, ports: r.ports, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, title_block: r.title_block, active_sheet: r.active_sheet, adc_measures: r.adc_measures };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, buses: r.buses, ports: r.ports, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, title_block: r.title_block, active_sheet: r.active_sheet, adc_measures: r.adc_measures, firmware_link: r.firmware_link };
         s.migrate();
         s
     }

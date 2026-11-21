@@ -34,6 +34,9 @@ pub(super) struct State {
     /// The "ピン定義" window, and its last check of a firmware file (the file and the findings).
     pub pins: bool,
     pin_check: Option<(String, Vec<sch_core::pindefs::PinFinding>)>,
+    /// The format to write (0: Arduino header, 1: Zephyr overlay, 2..: an FPGA's constraints) and the FPGA part.
+    pin_format: usize,
+    pin_part: String,
     tab: Tab,
     node_sort: NodeSort,
     elem_sort: ElemSort,
@@ -80,7 +83,7 @@ impl SchEditor {
             let mut open = true;
             let mut check = st.pin_check.take();
             egui::Window::new(i18n::tr("ピン定義 (ファームのピン番号)")).open(&mut open).default_pos(crate::widgets::beside_panel() + egui::vec2(48.0, 48.0)).default_size([520.0, 420.0]).show(ctx, |ui| {
-                self.pins_contents(ui, &mut check);
+                self.pins_contents(ui, &mut check, &mut st.pin_format, &mut st.pin_part);
             });
             st.pin_check = check;
             st.pins = open;

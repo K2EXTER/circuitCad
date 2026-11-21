@@ -91,6 +91,7 @@ impl SchEditor {
         self.draw_labels(&painter, rect);
         self.draw_ports(&painter, rect);
         self.draw_voltages(&painter, rect);
+        self.draw_readings(&painter, rect);
         self.draw_currents(&painter, rect);
         self.draw_problems(&painter, rect);
         self.draw_noise_overlay(&painter, rect);

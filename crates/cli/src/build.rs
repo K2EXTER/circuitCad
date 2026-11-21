@@ -853,7 +853,8 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
     }
 
     pub fn erc(&self) -> Res {
-        let probs = sch_core::erc(&self.sch);
+        let mut probs = sch_core::erc(&self.sch);
+        probs.extend(sch_core::pindefs::firmware_problems(&self.sch, None));
         let errors = probs.iter().filter(|p| p.severity == sch_core::Severity::Error).count();
         if self.strict && errors > 0 {
             let first = probs.iter().find(|p| p.severity == sch_core::Severity::Error).map(|p| p.message.clone()).unwrap_or_default();

@@ -68,7 +68,7 @@ pub struct LogEntry {
 
 impl LogEntry {
     fn to_json(&self) -> serde_json::Value {
-        serde_json::json!({ "name": self.name, "names": self.log.names, "t": self.log.t, "cols": self.log.cols, "show": self.show, "temp": self.temp, "net": self.net })
+        serde_json::json!({ "name": self.name, "names": self.log.names, "t": self.log.t, "cols": self.log.cols, "start": self.log.start, "show": self.show, "temp": self.temp, "net": self.net })
     }
 
     fn from_json(v: &serde_json::Value) -> Option<LogEntry> {
@@ -82,7 +82,7 @@ impl LogEntry {
         let n = names.len();
         Some(LogEntry {
             name: v.get("name").and_then(|x| x.as_str()).unwrap_or_default().to_string(),
-            log: sim_core::timelog::TimeLog { names, t, cols },
+            log: sim_core::timelog::TimeLog { names, t, cols, start: v.get("start").and_then(|x| x.as_f64()) },
             show: v.get("show").and_then(|x| x.as_u64()).map(|x| x as usize).filter(|k| *k < n).unwrap_or(0),
             temp: v.get("temp").and_then(|x| x.as_u64()).map(|x| x as usize).filter(|k| *k < n),
             net: v.get("net").and_then(|x| x.as_str()).map(str::to_string),

@@ -1801,6 +1801,44 @@ pins export={} check={}
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The same pins as a Zephyr overlay and a chip's pins as FPGA constraints; the firmware checked and the file written are kept, and
+/// the ERC says when the firmware drives another pin and when the pins change after writing.
+#[test]
+fn pin_files_in_other_formats_and_the_erc_follows_them() {
+    let dir = std::env::temp_dir().join(format!("ccad_pinfiles_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (dts, pcf, fw) = (dir.join("board.overlay"), dir.join("top.pcf"), dir.join("sketch.ino"));
+    std::fs::write(&fw, "#define LED 12
+").unwrap();
+    let script = format!("new
+add HEADER4 as=J1
+pinnames J1 D13,D2,5V,GND
+add R 330 as=R1
+add LED as=D1
+net LED J1.1 R1.1
+net LEDA R1.2 D1.A
+net GND J1.4 D1.K
+pins export={} check={}
+erc
+pins export={} part=J1
+net LED J1.2
+erc
+", dts.display(), fw.display(), pcf.display());
+    let (a, ok) = run(&script);
+    assert!(ok, "{a:?}");
+    let o = std::fs::read_to_string(&dts).unwrap();
+    assert!(o.contains("led-gpios = <&arduino_header 19 GPIO_ACTIVE_HIGH>"), "{o}");
+    let erc: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "erc").collect();
+    let msgs = |v: &Value| v["problems"].as_array().unwrap().iter().map(|p| p["message"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    assert!(msgs(erc[0]).iter().any(|m| m.contains("ファームのピン")), "{:?}", msgs(erc[0]));
+    assert!(!msgs(erc[0]).iter().any(|m| m.contains("書き出したあと")), "just written: {:?}", msgs(erc[0]));
+    let p = std::fs::read_to_string(&pcf).unwrap();
+    assert!(p.contains("set_io led 1"), "{p}");
+    // J1.2 joins the LED net too: the constraints written before are out of date
+    assert!(msgs(erc[1]).iter().any(|m| m.contains("書き出したあと")), "{:?}", msgs(erc[1]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_rows_of_the_requirements_table_without_a_reason_are_listed() {
     let (a, ok) = run("new
