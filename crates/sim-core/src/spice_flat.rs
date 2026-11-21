@@ -301,50 +301,63 @@ fn subst_braces(line: &str, env: &Env) -> Result<String, String> {
     Ok(out)
 }
 
-fn rename_node(n: &str, ports: &HashMap<String, String>, prefix: &str) -> String {
-    if n == "0" {
-        return "0".into();
-    }
-    match ports.get(&n.to_ascii_lowercase()) {
-        Some(p) => p.clone(),
-        None => format!("{prefix}{n}"),
-    }
+/// Where a subcircuit body is being expanded: the instance path (`X2.X1`, empty at the top level) and the outer node each
+/// port is tied to. The names inside get the path: internal nodes as a prefix (`X2.X1.n3`), elements as a suffix
+/// (`R1.X2.X1`, so that the letter that says what the element is stays first).
+struct Scope<'a> {
+    ports: &'a HashMap<String, String>,
+    /// `path.` (empty at the top level).
+    prefix: String,
+    /// `.path` (empty at the top level).
+    suffix: String,
 }
 
-/// Rewrite `V(a)`, `V(a,b)` and `I(name)` inside a behavioural-source expression.
-fn rename_expr(expr: &str, ports: &HashMap<String, String>, prefix: &str, path: &str) -> String {
-    let b: Vec<char> = expr.chars().collect();
-    let mut out = String::new();
-    let mut i = 0;
-    while i < b.len() {
-        let prev_ident = i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == '_');
-        let is_call = matches!(b[i], 'v' | 'V' | 'i' | 'I') && !prev_ident && b.get(i + 1) == Some(&'(');
-        if is_call && let Some(close) = b[i..].iter().position(|&c| c == ')') {
-            let inner: String = b[i + 2..i + close].iter().collect();
-            let args: Vec<String> = inner
-                .split(',')
-                .map(|a| {
-                    let a = a.trim();
-                    if b[i].eq_ignore_ascii_case(&'v') {
-                        rename_node(a, ports, prefix)
-                    } else if path.is_empty() {
-                        a.to_string()
-                    } else {
-                        format!("{a}.{path}")
-                    }
-                })
-                .collect();
-            out.push(b[i]);
-            out.push('(');
-            out.push_str(&args.join(","));
-            out.push(')');
-            i += close + 1;
-        } else {
-            out.push(b[i]);
-            i += 1;
+impl<'a> Scope<'a> {
+    fn new(path: &'a str, ports: &'a HashMap<String, String>) -> Self {
+        let (prefix, suffix) = if path.is_empty() { (String::new(), String::new()) } else { (format!("{path}."), format!(".{path}")) };
+        Scope { ports, prefix, suffix }
+    }
+
+    /// A node of the body: a port becomes the outer node, `0` stays ground, the others get the instance prefix.
+    fn node(&self, n: &str) -> String {
+        if n == "0" {
+            return "0".into();
+        }
+        match self.ports.get(&n.to_ascii_lowercase()) {
+            Some(p) => p.clone(),
+            None => format!("{}{n}", self.prefix),
         }
     }
-    out
+
+    /// An element of the body (also the name inside `I(name)`): with the instance suffix.
+    fn name(&self, n: &str) -> String {
+        format!("{n}{}", self.suffix)
+    }
+
+    /// Rewrite `V(a)`, `V(a,b)` and `I(name)` inside a behavioural-source expression.
+    fn expr(&self, expr: &str) -> String {
+        let b: Vec<char> = expr.chars().collect();
+        let mut out = String::new();
+        let mut i = 0;
+        while i < b.len() {
+            let prev_ident = i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == '_');
+            let is_call = matches!(b[i], 'v' | 'V' | 'i' | 'I') && !prev_ident && b.get(i + 1) == Some(&'(');
+            if is_call && let Some(close) = b[i..].iter().position(|&c| c == ')') {
+                let inner: String = b[i + 2..i + close].iter().collect();
+                let voltage = b[i].eq_ignore_ascii_case(&'v');
+                let args: Vec<String> = inner.split(',').map(|a| if voltage { self.node(a.trim()) } else { self.name(a.trim()) }).collect();
+                out.push(b[i]);
+                out.push('(');
+                out.push_str(&args.join(","));
+                out.push(')');
+                i += close + 1;
+            } else {
+                out.push(b[i]);
+                i += 1;
+            }
+        }
+        out
+    }
 }
 
 /// A piecewise-linear curve of the expression `x` through `pts` (flat beyond the ends), as nested `if(...)`.
@@ -393,74 +406,76 @@ fn kind_to_model(kind: &str) -> &'static str {
     }
 }
 
+/// The parameters inside one instance of `def`: the outer ones, the call's arguments (worked out with the outer values), then
+/// the header defaults and the subcircuit's own `.param` lines, in any order (a name may be used before the line that defines
+/// it, and vendors write `vcc1={vcc}` in the header with `.param vcc=5` in the body). The call's arguments win over both.
+fn bind_params(def: &Def, mut env: Env, call_args: &[(String, String)]) -> Result<Env, String> {
+    let outer = env.clone();
+    for (k, v) in call_args {
+        let val = eval_expr(v, &outer)?;
+        env.insert(k.clone(), val);
+    }
+    let mut pending: Vec<(String, String)> = def.defaults.iter().filter(|(k, _)| !call_args.iter().any(|(a, _)| a == k)).cloned().collect();
+    for raw in def.body.iter().filter(|l| l.to_ascii_lowercase().starts_with(".param")) {
+        for (k, v) in assignments(&split_top(&raw[6..]))? {
+            if !call_args.iter().any(|(a, _)| *a == k) {
+                pending.push((k, v));
+            }
+        }
+    }
+    loop {
+        let before = pending.len();
+        pending.retain(|(k, v)| match eval_expr(v, &env) {
+            Ok(x) => {
+                env.insert(k.clone(), x);
+                false
+            }
+            Err(_) => true,
+        });
+        if pending.is_empty() || pending.len() == before {
+            break;
+        }
+    }
+    if let Some((_, v)) = pending.first() {
+        return Err(eval_expr(v, &env).unwrap_err());
+    }
+    Ok(env)
+}
+
+/// A body line as words, after the values in braces are put in (`line` is the words joined again).
+fn body_words(raw: &str, env: &Env) -> Result<(String, Vec<String>), String> {
+    let opened;
+    let raw = if raw.trim_start().starts_with(['X', 'x']) && raw.contains("{") {
+        // `X1 a b SUB {P=1 Q=2}`: the parameters of the call in one brace group
+        opened = unbrace(split_top(raw)).join(" ");
+        opened.as_str()
+    } else {
+        raw
+    };
+    let line = subst_braces(raw, env)?;
+    let mut t = split_top(&line);
+    // the control nodes as one word, `(cp,cn)` or `cp,cn` (E / G / S): split into two
+    if t.len() >= 5 && matches!(t[0].chars().next().map(|c| c.to_ascii_uppercase()), Some('E' | 'G' | 'S')) {
+        let w = t[3].trim_matches(|c| c == '(' || c == ')').to_string();
+        if let Some((a, b)) = w.split_once(',').filter(|(a, b)| !a.is_empty() && !b.is_empty() && !b.contains(',')) {
+            let (a, b) = (a.trim().to_string(), b.trim().to_string());
+            t.splice(3..4, [a, b]);
+        }
+    }
+    let line = if !t.is_empty() { t.join(" ") } else { line };
+    Ok((line, t))
+}
+
 impl Ctx<'_> {
     /// Body lines of `def` with parameters resolved and nested calls inlined.
-    fn expand(&self, def: &Def, path: &str, ports: &HashMap<String, String>, mut env: Env, call_args: &[(String, String)], depth: usize) -> Result<Vec<String>, String> {
+    fn expand(&self, def: &Def, path: &str, ports: &HashMap<String, String>, env: Env, call_args: &[(String, String)], depth: usize) -> Result<Vec<String>, String> {
         if depth > MAX_DEPTH {
             return Err("サブサーキットの入れ子が深すぎます (自分自身を呼んでいませんか)".into());
         }
-        let outer = env.clone();
-        for (k, v) in call_args {
-            let val = eval_expr(v, &outer)?;
-            env.insert(k.clone(), val);
-        }
-        // the header defaults and the subcircuit's own .param lines, in any order (a name may be used before the line that
-        // defines it, and vendors write `vcc1={vcc}` in the header with `.param vcc=5` in the body)
-        let mut pending: Vec<(String, String)> = def.defaults.iter().filter(|(k, _)| !call_args.iter().any(|(a, _)| a == k)).cloned().collect();
-        for raw in def.body.iter().filter(|l| l.to_ascii_lowercase().starts_with(".param")) {
-            for (k, v) in assignments(&split_top(&raw[6..]))? {
-                if !call_args.iter().any(|(a, _)| *a == k) {
-                    pending.push((k, v));
-                }
-            }
-        }
-        loop {
-            let before = pending.len();
-            pending.retain(|(k, v)| match eval_expr(v, &env) {
-                Ok(x) => {
-                    env.insert(k.clone(), x);
-                    false
-                }
-                Err(_) => true,
-            });
-            if pending.is_empty() || pending.len() == before {
-                break;
-            }
-        }
-        if let Some((_, v)) = pending.first() {
-            return Err(eval_expr(v, &env).unwrap_err());
-        }
-        let prefix = if path.is_empty() { String::new() } else { format!("{path}.") };
+        let env = bind_params(def, env, call_args)?;
+        let sc = Scope::new(path, ports);
+        let renamed_body = self.instance_models(def, path, &env);
         let mut out = vec![];
-        // A `.model` card with parameters is this instance's own: two instances of one subcircuit with different values
-        // (`VSW_BASIC_GEN` with RON=2 and with RON=0.857) must not share a model name, so the name gets the instance path.
-        let mut renamed_body: Option<Vec<String>> = None;
-        // (the first instance keeps the original names, so that a nested subcircuit that uses the model still finds it)
-        let first_instance = self.seen.borrow_mut().insert(def.body.as_ptr() as usize);
-        if !path.is_empty() && !first_instance {
-            let local: Vec<String> = def
-                .body
-                .iter()
-                .filter(|l| l.to_ascii_lowercase().starts_with(".model") && l.contains(['{', '\'']))
-                // (a card that cannot be worked out here is left out below, and a same-named model elsewhere stays in use)
-                .filter(|l| subst_braces(l, &env).is_ok())
-                .filter_map(|l| l.split_whitespace().nth(1).map(str::to_string))
-                .collect();
-            if !local.is_empty() {
-                let tag: String = path.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-                renamed_body = Some(
-                    def.body
-                        .iter()
-                        .map(|l| {
-                            if l.trim_start().starts_with(['*', ';']) || l.to_ascii_lowercase().starts_with(".param") {
-                                return l.clone();
-                            }
-                            local.iter().fold(l.clone(), |acc, m| find_replace_word(&acc, m, &format!("{m}__{tag}")))
-                        })
-                        .collect(),
-                );
-            }
-        }
         for raw in renamed_body.as_ref().unwrap_or(&def.body) {
             let low = raw.to_ascii_lowercase();
             if low.starts_with(".param") {
@@ -476,177 +491,194 @@ impl Ctx<'_> {
             if raw.starts_with('.') {
                 continue;
             }
-            let opened;
-            let raw = if raw.trim_start().starts_with(['X', 'x']) && raw.contains("{") {
-                // `X1 a b SUB {P=1 Q=2}`: the parameters of the call in one brace group
-                opened = unbrace(split_top(raw)).join(" ");
-                opened.as_str()
-            } else {
-                raw
-            };
-            let line = subst_braces(raw, &env)?;
-            let mut t = split_top(&line);
-            // the control nodes as one word, `(cp,cn)` or `cp,cn` (E / G / S): split into two
-            if t.len() >= 5 && matches!(t[0].chars().next().map(|c| c.to_ascii_uppercase()), Some('E' | 'G' | 'S')) {
-                let w = t[3].trim_matches(|c| c == '(' || c == ')').to_string();
-                if let Some((a, b)) = w.split_once(',').filter(|(a, b)| !a.is_empty() && !b.is_empty() && !b.contains(',')) {
-                    let (a, b) = (a.trim().to_string(), b.trim().to_string());
-                    t.splice(3..4, [a, b]);
-                }
-            }
-            let line = if !t.is_empty() { t.join(" ") } else { line };
-            let head = t[0].as_str();
-            let letter = head.chars().next().unwrap().to_ascii_uppercase();
-            if letter == 'X' {
-                let split = t.iter().skip(1).position(|w| w.contains('=') || w.eq_ignore_ascii_case("params:")).map_or(t.len(), |p| p + 1);
-                if split < 3 {
-                    return Err(format!("{head}: 「X名前 ノード… サブサーキット名」の形で書いてください"));
-                }
-                let sub = &t[split - 1];
-                let def2 = self.defs.get(&sub.to_ascii_lowercase()).ok_or_else(|| {
-                    format!("{head} が呼ぶ .subckt {sub} が見つかりません。メーカーのファイルでは別の .subckt として入っているので、その中身も貼ってください")
-                })?;
-                let nodes: Vec<String> = t[1..split - 1].iter().map(|n| rename_node(n, ports, &prefix)).collect();
-                if nodes.len() != def2.ports.len() {
-                    return Err(format!("{head}: .subckt {sub} の端子は {} 本ですが、{} 本つながっています", def2.ports.len(), nodes.len()));
-                }
-                let port_map = def2.ports.iter().map(|p| p.to_ascii_lowercase()).zip(nodes).collect();
-                let args = assignments(&t[split..])?;
-                let sub_path = if path.is_empty() { head.to_string() } else { format!("{head}.{path}") };
-                out.extend(self.expand(def2, &sub_path, &port_map, env.clone(), &args, depth + 1)?);
-                continue;
-            }
-            if letter == 'A' {
-                out.extend(self.a_device(&line, &t, path, ports, &prefix)?);
-                continue;
-            }
-            if letter == 'U' {
-                out.extend(self.u_device(&t, path, ports, &prefix)?);
-                continue;
-            }
-            if letter == 'R' && t.len() >= 4 && t[3].get(..2).is_some_and(|p| p.eq_ignore_ascii_case("r=")) {
-                // `R1 a b R = {expr}`: a resistance given by an expression (may read V() / I(); `Freq` is 0 outside an AC run)
-                let rest = t[3..].join(" ");
-                let e = rest.split_once('=').map_or("", |(_, e)| e);
-                let e = substitute_params(e, &env);
-                let e = rename_expr(&e, ports, &prefix, path);
-                let e = find_replace_word(&e, "freq", "0");
-                let (a, b) = (rename_node(&t[1], ports, &prefix), rename_node(&t[2], ports, &prefix));
-                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-                out.push(format!("B_{head}{suffix} {a} {b} I=V({a},{b})/({e})"));
-                continue;
-            }
-            if letter == 'I' && t.len() >= 4 && line.to_ascii_lowercase().contains("tbl(") {
-                // `I1 p n TBL(v0 i0 v1 i1 ...)`: a current that depends on the voltage across the source (a supply-current curve)
-                let low = line.to_ascii_lowercase();
-                let at = low.find("tbl(").unwrap_or(0) + 4;
-                let list = &line[at..];
-                let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split(|c: char| c == ',' || c.is_whitespace()).filter(|w| !w.is_empty()).filter_map(parse_value).collect();
-                if nums.len() < 4 || !nums.len().is_multiple_of(2) {
-                    return Err(format!("{head}: TBL(電圧 電流 電圧 電流 …) は、点 (電圧, 電流) を 2 つ以上並べます"));
-                }
-                let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
-                let (a, b) = (rename_node(&t[1], ports, &prefix), rename_node(&t[2], ports, &prefix));
-                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-                out.push(format!("B_{head}{suffix} {a} {b} I={}", pwl_expr(&format!("V({a},{b})"), &mut pts)));
-                continue;
-            }
-            if letter == 'W' && t.len() == 5 && self.model_kinds.get(&t[4].to_ascii_lowercase()).is_some_and(|(ty, _)| ty == "csw") {
-                // `W1 n+ n- Vctl MODEL` with `.model MODEL CSW(Ron= Roff= It= Ih=)`: a switch closed by the current through Vctl
-                let rest = &self.model_kinds[&t[4].to_ascii_lowercase()].1;
-                let (ron, roff) = (model_scalar(rest, "ron", 1.0), model_scalar(rest, "roff", 1e6));
-                let (it, ih) = (model_scalar(rest, "it", 0.0), model_scalar(rest, "ih", 0.0));
-                let width = ih.abs().max(it.abs() * 0.02).max(1e-12);
-                let (a, b) = (rename_node(&t[1], ports, &prefix), rename_node(&t[2], ports, &prefix));
-                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-                let ctl = if path.is_empty() { t[3].clone() } else { format!("{}.{path}", t[3]) };
-                let (gon, goff) = (1.0 / ron.max(1e-9), 1.0 / roff.max(1e-9));
-                out.push(format!("B_{head}{suffix} {a} {b} I=V({a},{b})*(({goff:e})+(({gon:e})-({goff:e}))*(0.5+0.5*tanh((I({ctl})-({it:e}))/({width:e}))))"));
-                continue;
-            }
-            if letter == 'O' {
-                out.extend(self.lossy_line(&t, path, ports, &prefix, &env)?);
-                continue;
-            }
-            if letter == 'T' && t.len() == 6 && self.model_kinds.get(&t[5].to_ascii_lowercase()).is_some_and(|(ty, _)| ty == "trn" || ty == "ltra") {
-                // `T1 a1 b1 a2 b2 MODEL` with `.model MODEL TRN(len= r= l= c=)` (PSpice): the lossy line
-                out.extend(self.lossy_line(&t, path, ports, &prefix, &env)?);
-                continue;
-            }
-            if letter == 'T' {
-                out.extend(Self::transmission_line(&t, path, ports, &prefix)?);
-                continue;
-            }
-            // a source whose value follows the circuit temperature (`V1 a b {temp*0.01}`): kept as an expression, so
-            // that a temperature sweep moves it (`temp` is in degrees C)
-            if matches!(letter, 'V' | 'I') {
-                let rt = split_top(raw);
-                if rt.len() == 4 && rt[3].starts_with('{') && rt[3].to_ascii_lowercase().contains("temp") {
-                    let expr = substitute_params(rt[3].trim_start_matches('{').trim_end_matches('}'), &env);
-                    let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-                    out.push(format!("B_{head}{suffix} {} {} {}={expr}", rename_node(&rt[1], ports, &prefix), rename_node(&rt[2], ports, &prefix), letter));
-                    continue;
-                }
-            }
-            if letter == 'K' && t.len() >= 4 {
-                // the inductors it couples get the same instance path as the inductors themselves
-                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-                let rest: Vec<String> = t[1..].iter().map(|w| if parse_value(w).is_none() && !w.contains('=') { format!("{w}{suffix}") } else { w.clone() }).collect();
-                out.push(format!("{head}{suffix} {}", rest.join(" ")));
-                continue;
-            }
-            if matches!(letter, 'E' | 'G' | 'F' | 'H') {
-                out.push(self.controlled(raw, &env, &line, &t, letter, path, ports, &prefix)?);
-                continue;
-            }
-            let Some(mut n) = node_count(letter) else {
-                out.push(line);
-                continue;
-            };
-            let four_node_q = letter == 'Q' && t.len() >= 6 && self.models.contains(&t[5].to_ascii_lowercase()) && !self.models.contains(&t[4].to_ascii_lowercase());
-            if four_node_q {
-                n = 4;
-            }
-            if t.len() < n + 1 {
-                out.push(line);
-                continue;
-            }
-            let mut u = t.clone();
-            if four_node_q {
-                // the substrate node is not modelled: drop it
-                u.remove(4);
-            }
-            if !path.is_empty() {
-                u[0] = format!("{head}.{path}");
-            }
-            let kept = if four_node_q { 3 } else { n };
-            for w in u.iter_mut().skip(1).take(kept) {
-                *w = rename_node(w, ports, &prefix);
-            }
-            if letter == 'C' && t.get(3).is_some_and(|w| w.len() > 2 && w.get(..2).is_some_and(|p| p.eq_ignore_ascii_case("q="))) {
-                // charge-type capacitor: the expression after Q= names nodes of this subcircuit
-                let rest = t[3..].join(" ");
-                u.truncate(3);
-                let e = rest.split_once('=').map_or("", |(_, e)| e);
-                u.push(format!("Q={}", rename_expr(&substitute_params(e, &env), ports, &prefix, path)));
-            }
-            if letter == 'B' {
-                // options after the expression (`Rpar=1 Cpar=5n tripdt=5n NoJacob`, `ymax=1e300`) stay as they are: a parameter
-                // that happens to have the name of an option must not be put into it
-                let mut toks: Vec<String> = t[n + 1..].to_vec();
-                let mut opts: Vec<String> = vec![];
-                while toks.len() > 1 && toks.last().is_some_and(|w| is_b_option(w)) {
-                    opts.insert(0, toks.pop().unwrap());
-                }
-                let rest = toks.join(" ");
-                u.truncate(n + 1);
-                u.push(rename_expr(&substitute_params(&rest, &env), ports, &prefix, path));
-                u.extend(opts);
-            }
-            out.push(u.join(" "));
+            self.body_line(raw, &env, &sc, depth, &mut out)?;
         }
         Ok(extract_integrals(out))
     }
+
+    /// The body of `def` with its own `.model` names when this is not the first instance of it. A `.model` card with
+    /// parameters belongs to its instance: two instances of one subcircuit with different values (`VSW_BASIC_GEN` with
+    /// RON=2 and with RON=0.857) must not share a model name, so the name gets the instance path. The first instance keeps the
+    /// original names, so that a nested subcircuit that uses the model still finds it. `None`: the body as it is.
+    fn instance_models(&self, def: &Def, path: &str, env: &Env) -> Option<Vec<String>> {
+        let first_instance = self.seen.borrow_mut().insert(def.body.as_ptr() as usize);
+        if path.is_empty() || first_instance {
+            return None;
+        }
+        let local: Vec<String> = def
+            .body
+            .iter()
+            .filter(|l| l.to_ascii_lowercase().starts_with(".model") && l.contains(['{', '\'']))
+            // (a card that cannot be worked out here is left out by `expand`, and a same-named model elsewhere stays in use)
+            .filter(|l| subst_braces(l, env).is_ok())
+            .filter_map(|l| l.split_whitespace().nth(1).map(str::to_string))
+            .collect();
+        if local.is_empty() {
+            return None;
+        }
+        let tag: String = path.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+        Some(
+            def.body
+                .iter()
+                .map(|l| {
+                    if l.trim_start().starts_with(['*', ';']) || l.to_ascii_lowercase().starts_with(".param") {
+                        return l.clone();
+                    }
+                    local.iter().fold(l.clone(), |acc, m| find_replace_word(&acc, m, &format!("{m}__{tag}")))
+                })
+                .collect(),
+        )
+    }
+
+    /// One element line of a body (not a `.` line), as the plain lines it becomes.
+    fn body_line(&self, raw: &str, env: &Env, sc: &Scope, depth: usize, out: &mut Vec<String>) -> Result<(), String> {
+        let (line, t) = body_words(raw, env)?;
+        let letter = t[0].chars().next().unwrap().to_ascii_uppercase();
+        let model_is = |at: usize, kinds: &[&str]| t.get(at).and_then(|m| self.model_kinds.get(&m.to_ascii_lowercase())).is_some_and(|(ty, _)| kinds.contains(&ty.as_str()));
+        match letter {
+            'X' => out.extend(self.subckt_call(&t, env, sc, depth)?),
+            'A' => out.extend(self.a_device(&line, &t, sc)?),
+            'U' => out.extend(self.u_device(&t, sc)?),
+            'R' if t.len() >= 4 && t[3].get(..2).is_some_and(|p| p.eq_ignore_ascii_case("r=")) => out.push(expr_resistor(&t, env, sc)),
+            'I' if t.len() >= 4 && line.to_ascii_lowercase().contains("tbl(") => out.push(table_current(&line, &t, sc)?),
+            'W' if t.len() == 5 && model_is(4, &["csw"]) => out.push(self.current_switch(&t, sc)),
+            'O' => out.extend(self.lossy_line(&t, sc, env)?),
+            'T' if t.len() == 6 && model_is(5, &["trn", "ltra"]) => out.extend(self.lossy_line(&t, sc, env)?),
+            'T' => out.extend(Self::transmission_line(&t, sc)?),
+            'K' if t.len() >= 4 => out.push(coupling(&t, sc)),
+            'E' | 'G' | 'F' | 'H' => out.push(self.controlled(raw, env, &line, &t, letter, sc)?),
+            _ => match temperature_source(raw, &t[0], env, sc) {
+                Some(l) => out.push(l),
+                None => out.push(self.plain_device(line, &t, letter, env, sc)),
+            },
+        }
+        Ok(())
+    }
+
+    /// `X name nodes... SUB params...`: the body of `SUB`, inlined.
+    fn subckt_call(&self, t: &[String], env: &Env, sc: &Scope, depth: usize) -> Result<Vec<String>, String> {
+        let head = t[0].as_str();
+        let split = t.iter().skip(1).position(|w| w.contains('=') || w.eq_ignore_ascii_case("params:")).map_or(t.len(), |p| p + 1);
+        if split < 3 {
+            return Err(format!("{head}: 「X名前 ノード… サブサーキット名」の形で書いてください"));
+        }
+        let sub = &t[split - 1];
+        let def = self.defs.get(&sub.to_ascii_lowercase()).ok_or_else(|| {
+            format!("{head} が呼ぶ .subckt {sub} が見つかりません。メーカーのファイルでは別の .subckt として入っているので、その中身も貼ってください")
+        })?;
+        let nodes: Vec<String> = t[1..split - 1].iter().map(|n| sc.node(n)).collect();
+        if nodes.len() != def.ports.len() {
+            return Err(format!("{head}: .subckt {sub} の端子は {} 本ですが、{} 本つながっています", def.ports.len(), nodes.len()));
+        }
+        let port_map = def.ports.iter().map(|p| p.to_ascii_lowercase()).zip(nodes).collect();
+        let args = assignments(&t[split..])?;
+        self.expand(def, &sc.name(head), &port_map, env.clone(), &args, depth + 1)
+    }
+
+    /// `W1 n+ n- Vctl MODEL` with `.model MODEL CSW(Ron= Roff= It= Ih=)`: a switch closed by the current through Vctl.
+    fn current_switch(&self, t: &[String], sc: &Scope) -> String {
+        let head = t[0].as_str();
+        let rest = &self.model_kinds[&t[4].to_ascii_lowercase()].1;
+        let (ron, roff) = (model_scalar(rest, "ron", 1.0), model_scalar(rest, "roff", 1e6));
+        let (it, ih) = (model_scalar(rest, "it", 0.0), model_scalar(rest, "ih", 0.0));
+        let width = ih.abs().max(it.abs() * 0.02).max(1e-12);
+        let (a, b) = (sc.node(&t[1]), sc.node(&t[2]));
+        let ctl = sc.name(&t[3]);
+        let (gon, goff) = (1.0 / ron.max(1e-9), 1.0 / roff.max(1e-9));
+        format!("{} {a} {b} I=V({a},{b})*(({goff:e})+(({gon:e})-({goff:e}))*(0.5+0.5*tanh((I({ctl})-({it:e}))/({width:e}))))", sc.name(&format!("B_{head}")))
+    }
+
+    /// An element read as it is (R, C, L, D, Q, J, M, S, B, and anything else): renamed into this instance. A transistor's
+    /// substrate node (a fourth node before the model name) is dropped; the expressions of a charge-type capacitor (`Q=`) and
+    /// of a B source are rewritten for this instance.
+    fn plain_device(&self, line: String, t: &[String], letter: char, env: &Env, sc: &Scope) -> String {
+        let Some(mut n) = node_count(letter) else {
+            return line;
+        };
+        let four_node_q = letter == 'Q' && t.len() >= 6 && self.models.contains(&t[5].to_ascii_lowercase()) && !self.models.contains(&t[4].to_ascii_lowercase());
+        if four_node_q {
+            n = 4;
+        }
+        if t.len() < n + 1 {
+            return line;
+        }
+        let mut u = t.to_vec();
+        if four_node_q {
+            // the substrate node is not modelled: drop it
+            u.remove(4);
+        }
+        u[0] = sc.name(&t[0]);
+        let kept = if four_node_q { 3 } else { n };
+        for w in u.iter_mut().skip(1).take(kept) {
+            *w = sc.node(w);
+        }
+        if letter == 'C' && t.get(3).is_some_and(|w| w.len() > 2 && w.get(..2).is_some_and(|p| p.eq_ignore_ascii_case("q="))) {
+            // charge-type capacitor: the expression after Q= names nodes of this subcircuit
+            let rest = t[3..].join(" ");
+            u.truncate(3);
+            let e = rest.split_once('=').map_or("", |(_, e)| e);
+            u.push(format!("Q={}", sc.expr(&substitute_params(e, env))));
+        }
+        if letter == 'B' {
+            // options after the expression (`Rpar=1 Cpar=5n tripdt=5n NoJacob`, `ymax=1e300`) stay as they are: a parameter
+            // that happens to have the name of an option must not be put into it
+            let mut toks: Vec<String> = t[n + 1..].to_vec();
+            let mut opts: Vec<String> = vec![];
+            while toks.len() > 1 && toks.last().is_some_and(|w| is_b_option(w)) {
+                opts.insert(0, toks.pop().unwrap());
+            }
+            let rest = toks.join(" ");
+            u.truncate(n + 1);
+            u.push(sc.expr(&substitute_params(&rest, env)));
+            u.extend(opts);
+        }
+        u.join(" ")
+    }
+}
+
+/// `R1 a b R = {expr}`: a resistance given by an expression (may read V() / I(); `Freq` is 0 outside an AC run).
+fn expr_resistor(t: &[String], env: &Env, sc: &Scope) -> String {
+    let head = t[0].as_str();
+    let rest = t[3..].join(" ");
+    let e = rest.split_once('=').map_or("", |(_, e)| e);
+    let e = find_replace_word(&sc.expr(&substitute_params(e, env)), "freq", "0");
+    let (a, b) = (sc.node(&t[1]), sc.node(&t[2]));
+    format!("{} {a} {b} I=V({a},{b})/({e})", sc.name(&format!("B_{head}")))
+}
+
+/// `I1 p n TBL(v0 i0 v1 i1 ...)`: a current that depends on the voltage across the source (a supply-current curve).
+fn table_current(line: &str, t: &[String], sc: &Scope) -> Result<String, String> {
+    let head = t[0].as_str();
+    let at = line.to_ascii_lowercase().find("tbl(").unwrap_or(0) + 4;
+    let list = &line[at..];
+    let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split(|c: char| c == ',' || c.is_whitespace()).filter(|w| !w.is_empty()).filter_map(parse_value).collect();
+    if nums.len() < 4 || !nums.len().is_multiple_of(2) {
+        return Err(format!("{head}: TBL(電圧 電流 電圧 電流 …) は、点 (電圧, 電流) を 2 つ以上並べます"));
+    }
+    let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
+    let (a, b) = (sc.node(&t[1]), sc.node(&t[2]));
+    Ok(format!("{} {a} {b} I={}", sc.name(&format!("B_{head}")), pwl_expr(&format!("V({a},{b})"), &mut pts)))
+}
+
+/// A source whose value follows the circuit temperature (`V1 a b {temp*0.01}`): kept as an expression, so that a temperature
+/// sweep moves it (`temp` is in degrees C). `None` for any other source. Read from the line before the braces are put in.
+fn temperature_source(raw: &str, head: &str, env: &Env, sc: &Scope) -> Option<String> {
+    let letter = head.chars().next()?.to_ascii_uppercase();
+    if !matches!(letter, 'V' | 'I') {
+        return None;
+    }
+    let rt = split_top(raw);
+    if !(rt.len() == 4 && rt[3].starts_with('{') && rt[3].to_ascii_lowercase().contains("temp")) {
+        return None;
+    }
+    let expr = substitute_params(rt[3].trim_start_matches('{').trim_end_matches('}'), env);
+    Some(format!("{} {} {} {}={expr}", sc.name(&format!("B_{head}")), sc.node(&rt[1]), sc.node(&rt[2]), letter))
+}
+
+/// `K1 L1 L2 k`: the inductors it couples get the same instance path as the inductors themselves.
+fn coupling(t: &[String], sc: &Scope) -> String {
+    let rest: Vec<String> = t[1..].iter().map(|w| if parse_value(w).is_none() && !w.contains('=') { sc.name(w) } else { w.clone() }).collect();
+    format!("{} {}", sc.name(&t[0]), rest.join(" "))
 }
 
 impl Ctx<'_> {
@@ -655,7 +687,7 @@ impl Ctx<'_> {
     /// voltage source: logic levels are `vlow`..`vhigh` (default 0 and 1 V, like LTspice), true above `vt` (their middle),
     /// with a smooth transition so that Newton's iteration has a slope to follow. Delays are not modelled; inputs tied to
     /// ground are ignored (an unused pin). `None` when the device is not a gate of these kinds.
-    fn gate_device(&self, line: &str, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str, levels: Option<(f64, f64)>) -> Result<Option<Vec<String>>, String> {
+    fn gate_device(&self, line: &str, t: &[String], sc: &Scope, levels: Option<(f64, f64)>) -> Result<Option<Vec<String>>, String> {
         let head = t[0].as_str();
         let gate_of = |w: &str| match w.to_ascii_lowercase().as_str() {
             "and" | "d_and" => Some("and"),
@@ -706,7 +738,7 @@ impl Ctx<'_> {
         // LTspice names the switching level `Ref` (gates) or `Vt`
         let vt = param("vt").or_else(|| param("ref")).unwrap_or((vlow + vhigh) / 2.0);
         let w = ((vhigh - vlow).abs() * 0.05).max(1e-6);
-        let ins: Vec<String> = inputs.iter().filter(|n| n.as_str() != "0").map(|n| rename_node(n, ports, prefix)).collect();
+        let ins: Vec<String> = inputs.iter().filter(|n| n.as_str() != "0").map(|n| sc.node(n)).collect();
         let s = |n: &str| format!("(0.5+0.5*tanh((V({n})-({vt:e}))/({w:e})))");
         let terms: Vec<String> = ins.iter().map(|n| s(n)).collect();
         let and = || if terms.is_empty() { "0".to_string() } else { terms.join("*") };
@@ -723,10 +755,10 @@ impl Ctx<'_> {
             "inv" => format!("(1-{})", terms.first().cloned().unwrap_or_else(|| "0".into())),
             _ => String::new(),
         };
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let suffix = &sc.suffix;
         let mut lines = vec![];
         for (k, (out, inverted)) in outs.iter().filter(|(o, _)| o != "0").enumerate() {
-            let outn = rename_node(out, ports, prefix);
+            let outn = sc.node(out);
             let nm = if k == 0 { format!("B_{head}{suffix}") } else { format!("B_{head}_{k}{suffix}") };
             // open collector: pulls the output to the low level (through 100 ohm) when the input is false, floats when true
             if kind == "openc" {
@@ -749,10 +781,10 @@ impl Ctx<'_> {
     /// A flip-flop, latch or Schmitt trigger written as an `A` device (LTspice `DFLOP` / `SRFLOP` / `JKFLOP` / `SCHMITT` with
     /// pins `in1 in2 clk set reset qbar q`, ngspice `d_dff` / `d_tff` / `d_jkff` / `d_srff` / `d_dlatch` / `d_srlatch`). It becomes
     /// a `Z` line (see `Element::Seq`): the stored state is updated between time steps, set / reset are active high.
-    fn seq_device(&self, line: &str, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Option<Vec<String>>, String> {
+    fn seq_device(&self, line: &str, t: &[String], sc: &Scope) -> Result<Option<Vec<String>>, String> {
         let head = t[0].as_str();
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-        let nd = |n: &str| if n.eq_ignore_ascii_case("null") { "0".to_string() } else { rename_node(n, ports, prefix) };
+        let suffix = &sc.suffix;
+        let nd = |n: &str| if n.eq_ignore_ascii_case("null") { "0".to_string() } else { sc.node(n) };
         // (kind, input nodes in the order of SeqKind, q, qb, level parameters)
         let (kind, ins, q, qb, params): (&str, Vec<String>, String, String, String) = if t.len() >= 10 {
             let ty = t[9].to_ascii_uppercase();
@@ -792,7 +824,7 @@ impl Ctx<'_> {
     /// A lossless transmission line `Tname a1 b1 a2 b2 Z0=50 TD=1n` (or `F=` and `NL=`, default 0.25 wavelength: `TD = NL / F`),
     /// as a ladder of `LINE_SECTIONS` L-C sections. It works in every analysis, but only below about `N / (pi * TD)` (the
     /// ladder rings and delays slightly differently from a true line); the return nodes `b1` and `b2` are joined.
-    fn transmission_line(t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+    fn transmission_line(t: &[String], sc: &Scope) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
         if t.len() < 5 {
             return Err(format!("{head}: 伝送線路は「T名前 入力+ 入力- 出力+ 出力- Z0=特性インピーダンス TD=遅れ時間」の形で書きます"));
@@ -807,14 +839,13 @@ impl Ctx<'_> {
         if z0 <= 0.0 || td <= 0.0 {
             return Err(format!("{head}: 伝送線路の Z0 と TD は正の値にしてください"));
         }
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-        let nodes = [rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix)];
-        Ok(Self::ladder(head, &nodes, &suffix, prefix, z0 * td, td / z0, 0.0, 0.0))
+        let nodes = [sc.node(&t[1]), sc.node(&t[2]), sc.node(&t[3]), sc.node(&t[4])];
+        Ok(Self::ladder(head, &nodes, sc, z0 * td, td / z0, 0.0, 0.0))
     }
 
     /// A transmission line as `LINE_SECTIONS` sections of series `r` + `l` and shunt `c` + `g` (the totals over the line).
-    #[allow(clippy::too_many_arguments)]
-    fn ladder(head: &str, nodes: &[String; 4], suffix: &str, prefix: &str, l: f64, c: f64, r: f64, g: f64) -> Vec<String> {
+    fn ladder(head: &str, nodes: &[String; 4], sc: &Scope, l: f64, c: f64, r: f64, g: f64) -> Vec<String> {
+        let (prefix, suffix) = (&sc.prefix, &sc.suffix);
         const LINE_SECTIONS: usize = 40;
         let [a1, b1, a2, b2] = nodes;
         let n = LINE_SECTIONS;
@@ -849,7 +880,7 @@ impl Ctx<'_> {
     }
 
     /// A lossy line `O name a1 b1 a2 b2 MODEL` with `.model MODEL LTRA(R= L= C= G= LEN=)` (per unit length), as the same ladder.
-    fn lossy_line(&self, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str, env: &Env) -> Result<Vec<String>, String> {
+    fn lossy_line(&self, t: &[String], sc: &Scope, env: &Env) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
         if t.len() < 6 {
             return Err(format!("{head}: 損失のある線路は「O名前 入力+ 入力- 出力+ 出力- モデル名」の形で書きます"));
@@ -870,17 +901,16 @@ impl Ctx<'_> {
         if l <= 0.0 || c <= 0.0 || len <= 0.0 {
             return Err(format!("{head}: 線路のモデルには L と C と LEN (正の値) が必要です"));
         }
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-        let nodes = [rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix)];
-        Ok(Self::ladder(head, &nodes, &suffix, prefix, l * len, c * len, r * len, g * len))
+        let nodes = [sc.node(&t[1]), sc.node(&t[2]), sc.node(&t[3]), sc.node(&t[4])];
+        Ok(Self::ladder(head, &nodes, sc, l * len, c * len, r * len, g * len))
     }
 
     /// A PSpice flip-flop or latch: `U dff(n) dpwr dgnd preb clrb clk d q qb ...` (`jkff`: `... clk j k q qb`, `dltch`: `... gate d q qb`,
     /// `srff`: `... gate s r q qb`, a gated SR latch). Preset / clear are active low; the pins are repeated once per bit.
     /// `$D_HI` (inactive) and `$D_LO` (active) are the digital constants. Delays are ignored.
-    fn u_seq_device(&self, t: &[String], name: &str, count: usize, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+    fn u_seq_device(&self, t: &[String], name: &str, count: usize, sc: &Scope) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let suffix = &sc.suffix;
         // (kind, data pins before q / qb, SeqKind input order as indices into [preb clrb clk a b])
         let (kind, n_dat) = match name {
             "dff" => ("dff", 1),
@@ -904,7 +934,7 @@ impl Ctx<'_> {
                     hi.clone()
                 }
                 "$d_lo" => "0".to_string(),
-                _ => rename_node(n, ports, prefix),
+                _ => sc.node(n),
             }
         };
         let p = &t[4..4 + total];
@@ -912,8 +942,8 @@ impl Ctx<'_> {
         for b in 0..bits {
             let d = |k: usize| node(&p[3 + k * bits + b]);
             let ins_data: Vec<String> = (0..n_dat).map(d).collect();
-            let q = rename_node(&p[3 + n_dat * bits + b], ports, prefix);
-            let qb = rename_node(&p[3 + n_dat * bits + bits + b], ports, prefix);
+            let q = sc.node(&p[3 + n_dat * bits + b]);
+            let qb = sc.node(&p[3 + n_dat * bits + bits + b]);
             let ins = match kind {
                 "dff" | "dlatch" => vec![ins_data[0].clone(), clk.clone(), preb.clone(), clrb.clone()],
                 _ => vec![ins_data[0].clone(), ins_data[1].clone(), clk.clone(), preb.clone(), clrb.clone()],
@@ -930,7 +960,7 @@ impl Ctx<'_> {
     /// A PSpice digital gate: `Uname type(n) dpwr dgnd in1 .. inN out delay-model io-model ...` (`nand(2)`, `inv`, `buf` ...). The
     /// supply pins are ignored: the levels are 0 and 5 V (true above 2.5 V), like `gate_device` otherwise. Anything with a
     /// memory (flip-flops, latches, counters) is reported.
-    fn u_device(&self, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+    fn u_device(&self, t: &[String], sc: &Scope) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
         let ty = t.get(1).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
         let (name, count) = match ty.split_once('(') {
@@ -942,14 +972,14 @@ impl Ctx<'_> {
             "nxor" => "xnor",
             "bufa" => "buf",
             "inva" => "inv",
-            "dff" | "jkff" | "dltch" | "srff" => return self.u_seq_device(t, &name, count, path, ports, prefix),
+            "dff" | "jkff" | "dltch" | "srff" => return self.u_seq_device(t, &name, count, sc),
             "pullup" | "pulldn" => {
                 // `U pulldn(n) dpwr dgnd pin1 .. pinN`: a 1 k resistor from every pin to 0 V (or to 5 V for a pull-up)
-                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                let suffix = &sc.suffix;
                 let pins = t.get(4..).unwrap_or(&[]);
                 let mut lines: Vec<String> = pins.iter().take(count.max(1)).enumerate().map(|(i, p)| {
                     let rail = if name == "pullup" { format!("__hi{suffix}_{head}") } else { "0".to_string() };
-                    format!("R{head}_{i}{suffix} {} {rail} 1k", rename_node(p, ports, prefix))
+                    format!("R{head}_{i}{suffix} {} {rail} 1k", sc.node(p))
                 }).collect();
                 if name == "pullup" && !lines.is_empty() {
                     lines.push(format!("V__hi{suffix}_{head} __hi{suffix}_{head} 0 DC 5"));
@@ -967,18 +997,18 @@ impl Ctx<'_> {
         let mut tmp: HashMap<String, (String, String)> = HashMap::new();
         tmp.insert("__gate".into(), (kind_to_model(kind).into(), String::new()));
         let helper = Ctx { seen: Default::default(), defs: self.defs, model_kinds: &tmp, models: self.models };
-        helper.gate_device(&line, &[head.to_string()], path, ports, prefix, Some((0.0, 5.0)))?.ok_or_else(|| format!("{head}: ゲートを読めません"))
+        helper.gate_device(&line, &[head.to_string()], sc, Some((0.0, 5.0)))?.ok_or_else(|| format!("{head}: ゲートを読めません"))
     }
 
     /// An LTspice `A` (XSPICE) device. Only the OTA of the "universal op-amp" is read: a transconductance with a
     /// current limit and an output capacitance. The others (SCHMITT, SRFLOP, DFLOP, AND ... have a memory or a
     /// time delay) are reported.
-    fn a_device(&self, line: &str, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+    fn a_device(&self, line: &str, t: &[String], sc: &Scope) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
-        if let Some(lines) = self.gate_device(line, t, path, ports, prefix, None)? {
+        if let Some(lines) = self.gate_device(line, t, sc, None)? {
             return Ok(lines);
         }
-        if let Some(lines) = self.seq_device(line, t, path, ports, prefix)? {
+        if let Some(lines) = self.seq_device(line, t, sc)? {
             return Ok(lines);
         }
         // `A in out MODEL` with `.model MODEL s_xfer(num_coeff=[..] den_coeff=[..])`: a Laplace transfer function
@@ -986,7 +1016,7 @@ impl Ctx<'_> {
             && let Some((ty, rest)) = self.model_kinds.get(&t[3].to_ascii_lowercase())
             && ty == "s_xfer"
         {
-            return Self::s_xfer(t, rest, path, ports, prefix);
+            return Self::s_xfer(t, rest, sc);
         }
         // `A in out MODEL` with `.model MODEL PWL2 xy_array=[x0 y0 x1 y1 ...]` (the XSPICE piecewise-linear block): V(out) = f(V(in))
         if t.len() == 4
@@ -997,17 +1027,17 @@ impl Ctx<'_> {
             let nums: Vec<f64> = arr.split(']').next().unwrap_or("").split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
             if nums.len() >= 4 && nums.len().is_multiple_of(2) {
                 let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
-                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-                let x = format!("V({})", rename_node(&t[1], ports, prefix));
-                return Ok(vec![format!("B_{head}{suffix} {} 0 V={}", rename_node(&t[2], ports, prefix), pwl_expr(&x, &mut pts))]);
+                let suffix = &sc.suffix;
+                let x = format!("V({})", sc.node(&t[1]));
+                return Ok(vec![format!("B_{head}{suffix} {} 0 V={}", sc.node(&t[2]), pwl_expr(&x, &mut pts))]);
             }
         }
         // `A a b cp cn VSWITCHMODEL`: an ngspice-style switch written with an A name (it is an S switch)
         if t.len() == 6
             && self.model_kinds.get(&t[5].to_ascii_lowercase()).is_some_and(|(ty, _)| ty == "vswitch" || ty == "sw")
         {
-            let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-            let n = |i: usize| rename_node(&t[i], ports, prefix);
+            let suffix = &sc.suffix;
+            let n = |i: usize| sc.node(&t[i]);
             return Ok(vec![format!("S_{head}{suffix} {} {} {} {} {}", n(1), n(2), n(3), n(4), t[5])]);
         }
         // A name n1 ... n8 MODEL key=value ...
@@ -1016,7 +1046,7 @@ impl Ctx<'_> {
             return Err(format!("{head}: A 素子は「A名前 ノード × 8 種類 パラメータ…」の形で書きます"));
         }
         if kind == "MODULATOR" {
-            return Self::modulator(t, path, ports, prefix);
+            return Self::modulator(t, sc);
         }
         if kind != "OTA" {
             return Err(format!("{head}: XSPICE の部品「{kind}」は未対応です (SCHMITT・SRFLOP・DFLOP・AND・OR のように、記憶や遅れを持つ部品は、1 つの式にできません)。回路図用の別のモデルを探すか、部品作成フォームの「かんたん作成」を使ってください"));
@@ -1024,8 +1054,8 @@ impl Ctx<'_> {
         let param = |key: &str| t[10..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
         let (g, vref, iout, cout) = (param("G").unwrap_or(1.0), param("REF").unwrap_or(0.0), param("IOUT").unwrap_or(1e30), param("COUT").unwrap_or(0.0));
         // the first node is the one that pulls the output down (LTspice's universal op-amps list the inverting input first)
-        let (inp, inn, out) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[7], ports, prefix));
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let (inp, inn, out) = (sc.node(&t[1]), sc.node(&t[2]), sc.node(&t[7]));
+        let suffix = &sc.suffix;
         let mut lines = vec![format!("B_{head}{suffix} 0 {out} I=limit(({g:e})*(V({inn},{inp})-({vref:e})),{:e},{iout:e})", -iout)];
         if cout > 0.0 {
             lines.push(format!("C_{head}{suffix} {out} 0 {cout:e}"));
@@ -1038,16 +1068,16 @@ impl Ctx<'_> {
     /// frequency, kept as the voltage of a 1 F capacitor (so the frequency may change over time without a phase jump); that
     /// capacitor starts at 0 (`IC=0`), so only a transient analysis gives a meaningful output. Steps are not shortened to follow the
     /// sine: use a time step well below the period.
-    fn modulator(t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+    fn modulator(t: &[String], sc: &Scope) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
         let param = |key: &str| t[10..].iter().find_map(|w| w.to_ascii_lowercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
         let (Some(mark), space) = (param("mark"), param("space").unwrap_or(0.0)) else {
             return Err(format!("{head}: MODULATOR には mark=周波数 (と space=周波数) が必要です"));
         };
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-        let node = |i: usize| rename_node(&t[i], ports, prefix);
+        let suffix = &sc.suffix;
+        let node = |i: usize| sc.node(&t[i]);
         let (fm, am, out, common) = (node(1), node(2), node(7), node(8));
-        let ph = format!("{prefix}{head}_ph");
+        let ph = format!("{}{head}_ph", sc.prefix);
         let amp = if am == "0" { "1".to_string() } else { format!("V({am})") };
         Ok(vec![
             format!("B_{head}_f{suffix} 0 {ph} I={space:e}+({:e})*V({fm})", mark - space),
@@ -1061,7 +1091,7 @@ impl Ctx<'_> {
     /// Built as a chain of integrators (controllable canonical form): the nodes X0..X(n-1) are 1 F capacitors charged by the
     /// next one (X(k)' = X(k+1)), X(n) is solved from den(s) X = u, and the output is the weighted sum of the X(k) (so the
     /// transfer function is exact). A 1 GΩ leak keeps a DC analysis well defined (a pure integrator has no DC solution).
-    fn s_xfer(t: &[String], rest: &str, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+    fn s_xfer(t: &[String], rest: &str, sc: &Scope) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
         let low = rest.to_ascii_lowercase();
         let array = |key: &str| -> Option<Vec<f64>> {
@@ -1084,9 +1114,9 @@ impl Ctx<'_> {
         // coefficients by power of s (ascending), with s -> s / denorm
         let asc = |c: &[f64]| -> Vec<f64> { c.iter().rev().enumerate().map(|(k, v)| v / denorm.powi(k as i32)).collect() };
         let (d, nu) = (asc(&den), asc(&num));
-        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-        let (inp, out) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix));
-        let x = |k: usize| format!("{prefix}{head}_x{k}");
+        let suffix = &sc.suffix;
+        let (inp, out) = (sc.node(&t[1]), sc.node(&t[2]));
+        let x = |k: usize| format!("{}{head}_x{k}", sc.prefix);
         let mut lines = vec![];
         for k in 0..n {
             lines.push(format!("B_{head}_i{k}{suffix} 0 {} I=V({})", x(k), x(k + 1)));
@@ -1101,194 +1131,205 @@ impl Ctx<'_> {
         Ok(lines)
     }
 
-    /// An E / G / F / H line as a behavioural (B) source: `VALUE={expr}`, `POLY(n)` (linear terms, or any degree
+    /// An E / G / F / H line as a behavioural (B) source: a table, `VALUE={expr}`, `POLY(n)` (linear terms, or any degree
     /// with one control) and the current-controlled F / H sources.
-    #[allow(clippy::too_many_arguments)]
-    fn controlled(&self, raw: &str, env: &Env, line: &str, t: &[String], letter: char, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<String, String> {
+    fn controlled(&self, raw: &str, env: &Env, line: &str, t: &[String], letter: char, sc: &Scope) -> Result<String, String> {
         let head = t[0].as_str();
-        let low = line.to_ascii_lowercase();
-        let name = format!("B_{head}{}", if path.is_empty() { String::new() } else { format!(".{path}") });
-        let out_is_voltage = matches!(letter, 'E' | 'H');
         if t.len() < 4 {
             return Err(format!("{head}: 引数が足りません"));
         }
-        let (p, n) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix));
-        let rename_ctl = |s: &str| if path.is_empty() { s.to_string() } else { format!("{s}.{path}") };
-        // TABLE {expr} = (x1,y1) (x2,y2) ...: a piecewise-linear curve of an expression
-        let raw_low = raw.to_ascii_lowercase();
-        // `G n+ n- cp cn table(x0 y0 x1 y1 ...)`: the curve of the control voltage
-        if matches!(letter, 'E' | 'G')
+        let (p, n) = (sc.node(&t[1]), sc.node(&t[2]));
+        let out = if matches!(letter, 'E' | 'H') { "V" } else { "I" };
+        let by_voltage = matches!(letter, 'E' | 'G');
+        let low = line.to_ascii_lowercase();
+        let value = if by_voltage
             && let Some((pos, skip)) = [("table(", 6), ("table=(", 7)].iter().find_map(|(k, n)| find_word(&low, head.len(), k).map(|p| (p, *n)))
             && t.len() >= 6
         {
-            let list = &line[pos + skip..];
-            let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
-            if nums.len() < 4 || !nums.len().is_multiple_of(2) {
-                return Err(format!("{head}: table(x0 y0 x1 y1 ...) は、点 (x y) を 2 つ以上並べます"));
-            }
-            let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
-            let x = format!("V({},{})", rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix));
-            return Ok(format!("{name} {p} {n} {}={}", if out_is_voltage { "V" } else { "I" }, pwl_expr(&x, &mut pts)));
-        }
-        if matches!(letter, 'E' | 'G')
-            && let Some(pos) = find_word(&raw_low, head.len(), "table")
-        {
-            // `TABLE {expr} = (x,y) ...`, `TABLE {expr} ((x,y)(x,y))` or `TABLE expr = ...`
-            let after = raw[pos + 5..].trim_start();
-            // `TABLE = {expr} (…)`: a stray = before the braces
-            let after = match after.strip_prefix('=') {
-                Some(r) if r.trim_start().starts_with('{') => r.trim_start(),
-                _ => after,
-            };
-            let (expr_raw, rest) = if let Some(inner) = after.strip_prefix('{') {
-                let (mut depth, mut end) = (1, None);
-                for (i, c) in inner.char_indices() {
-                    match c {
-                        '{' => depth += 1,
-                        '}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                end = Some(i);
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                let end = end.ok_or_else(|| format!("{head}: TABLE の {{ が閉じていません"))?;
-                (&inner[..end], &inner[end + 1..])
-            } else {
-                let eq = after.find('=').ok_or_else(|| format!("{head}: TABLE の式と点 (x,y) の区切りの = がありません"))?;
-                (&after[..eq], &after[eq + 1..])
-            };
-            let x = rename_expr(&substitute_params(expr_raw.trim(), env), ports, prefix, path);
-            let rest = subst_braces(rest, env)?;
-            let mut pts: Vec<(f64, f64)> = vec![];
-            for chunk in rest.split(')') {
-                if let Some(open) = chunk.rfind('(') {
-                    let nums: Vec<f64> = chunk[open + 1..].split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
-                    if nums.len() == 2 {
-                        pts.push((nums[0], nums[1]));
-                    }
-                }
-            }
-            if pts.is_empty() && !rest.contains('(') {
-                // the points without parentheses: `x y x y ...` (one pair per continuation line)
-                let nums: Vec<f64> = rest.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
-                pts = nums.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
-            }
-            if pts.len() < 2 {
-                // unbalanced or odd brackets (`(0 0 (1 10)`): take the numbers in order, two by two
-                let nums: Vec<f64> = rest.split(|c: char| c == ',' || c == '(' || c == ')' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
-                pts = nums.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
-            }
-            if pts.len() < 2 {
-                return Err(format!("{head}: TABLE の点 (x,y) が 2 つ以上ありません"));
-            }
-            let expr = pwl_expr(&x, &mut pts);
-            return Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }));
-        }
-        // VALUE=expr
-        if matches!(letter, 'E' | 'G')
+            control_table(&line[pos + skip..], t, sc)?
+        } else if by_voltage && let Some(pos) = find_word(&raw.to_ascii_lowercase(), head.len(), "table") {
+            expr_table(head, raw[pos + 5..].trim_start(), env, sc)?
+        } else if by_voltage
             && let Some(pos) = low.find("value")
             && !low[pos + 5..].trim().is_empty()
         {
-            // `VALUE={expr}` and `VALUE { expr }` (the braces are gone by now)
-            let after = line[pos + 5..].trim_start();
-            let after = after.strip_prefix('=').unwrap_or(after).trim();
-            // options after the expression (`Rpar=1 Cpar=5n NoJacob`) are handed on untouched
-            let mut words: Vec<&str> = after.split_whitespace().collect();
-            let mut opts: Vec<&str> = vec![];
-            while words.len() > 1 && words.last().is_some_and(|w| is_b_option(w)) {
-                opts.insert(0, words.pop().unwrap());
+            value_expr(line[pos + 5..].trim_start(), env, sc)
+        } else {
+            poly(t, letter, sc)?
+        };
+        Ok(format!("{} {p} {n} {out}={value}", sc.name(&format!("B_{head}"))))
+    }
+}
+
+/// `G n+ n- cp cn table(x0 y0 x1 y1 ...)`: the curve of the control voltage. `list` is the text after `table(`.
+fn control_table(list: &str, t: &[String], sc: &Scope) -> Result<String, String> {
+    let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+    if nums.len() < 4 || !nums.len().is_multiple_of(2) {
+        return Err(format!("{}: table(x0 y0 x1 y1 ...) は、点 (x y) を 2 つ以上並べます", t[0]));
+    }
+    let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
+    let x = format!("V({},{})", sc.node(&t[3]), sc.node(&t[4]));
+    Ok(pwl_expr(&x, &mut pts))
+}
+
+/// `TABLE {expr} = (x,y) ...`, `TABLE {expr} ((x,y)(x,y))` or `TABLE expr = ...`: a piecewise-linear curve of an expression.
+/// `after` is the text after the word TABLE, read from the line before the braces are put in (the expression stays one).
+fn expr_table(head: &str, after: &str, env: &Env, sc: &Scope) -> Result<String, String> {
+    // `TABLE = {expr} (…)`: a stray = before the braces
+    let after = match after.strip_prefix('=') {
+        Some(r) if r.trim_start().starts_with('{') => r.trim_start(),
+        _ => after,
+    };
+    let (expr_raw, rest) = if let Some(inner) = after.strip_prefix('{') {
+        let (mut depth, mut end) = (1, None);
+        for (i, c) in inner.char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(i);
+                        break;
+                    }
+                }
+                _ => {}
             }
-            let cut = words.last().map_or(after.len(), |w| w.as_ptr() as usize + w.len() - after.as_ptr() as usize);
-            let expr = rename_expr(&substitute_params(after[..cut].trim(), env), ports, prefix, path);
-            let tail = if opts.is_empty() { String::new() } else { format!(" {}", opts.join(" ")) };
-            return Ok(format!("{name} {p} {n} {}={expr}{tail}", if out_is_voltage { "V" } else { "I" }));
         }
-        // the controls: voltage pairs for E / G, source names for F / H
-        let mut idx = 3;
-        let mut poly_n: Option<usize> = None;
-        if t[idx].to_ascii_lowercase().starts_with("poly") {
-            let digits: String = t[idx].chars().filter(|c| c.is_ascii_digit()).collect();
-            poly_n = Some(digits.parse().map_err(|_| format!("{head}: POLY(n) の n を読めません"))?);
+        let end = end.ok_or_else(|| format!("{head}: TABLE の {{ が閉じていません"))?;
+        (&inner[..end], &inner[end + 1..])
+    } else {
+        let eq = after.find('=').ok_or_else(|| format!("{head}: TABLE の式と点 (x,y) の区切りの = がありません"))?;
+        (&after[..eq], &after[eq + 1..])
+    };
+    let x = sc.expr(&substitute_params(expr_raw.trim(), env));
+    let rest = subst_braces(rest, env)?;
+    let mut pts: Vec<(f64, f64)> = vec![];
+    for chunk in rest.split(')') {
+        if let Some(open) = chunk.rfind('(') {
+            let nums: Vec<f64> = chunk[open + 1..].split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+            if nums.len() == 2 {
+                pts.push((nums[0], nums[1]));
+            }
+        }
+    }
+    if pts.is_empty() && !rest.contains('(') {
+        // the points without parentheses: `x y x y ...` (one pair per continuation line)
+        let nums: Vec<f64> = rest.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+        pts = nums.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
+    }
+    if pts.len() < 2 {
+        // unbalanced or odd brackets (`(0 0 (1 10)`): take the numbers in order, two by two
+        let nums: Vec<f64> = rest.split(|c: char| c == ',' || c == '(' || c == ')' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+        pts = nums.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
+    }
+    if pts.len() < 2 {
+        return Err(format!("{head}: TABLE の点 (x,y) が 2 つ以上ありません"));
+    }
+    Ok(pwl_expr(&x, &mut pts))
+}
+
+/// `VALUE={expr}` and `VALUE { expr }` (the braces are gone by now): the expression, with the options after it (`Rpar=1
+/// Cpar=5n NoJacob`) handed on untouched. `after` is the text after the word VALUE.
+fn value_expr(after: &str, env: &Env, sc: &Scope) -> String {
+    let after = after.strip_prefix('=').unwrap_or(after).trim();
+    let mut words: Vec<&str> = after.split_whitespace().collect();
+    let mut opts: Vec<&str> = vec![];
+    while words.len() > 1 && words.last().is_some_and(|w| is_b_option(w)) {
+        opts.insert(0, words.pop().unwrap());
+    }
+    let cut = words.last().map_or(after.len(), |w| w.as_ptr() as usize + w.len() - after.as_ptr() as usize);
+    let expr = sc.expr(&substitute_params(after[..cut].trim(), env));
+    let tail = if opts.is_empty() { String::new() } else { format!(" {}", opts.join(" ")) };
+    format!("{expr}{tail}")
+}
+
+/// A plain gain or a `POLY(n)` polynomial of the controls (voltage pairs for E / G, source names for F / H), from word 3 on.
+fn poly(t: &[String], letter: char, sc: &Scope) -> Result<String, String> {
+    let head = t[0].as_str();
+    let mut idx = 3;
+    let mut poly_n: Option<usize> = None;
+    if t[idx].to_ascii_lowercase().starts_with("poly") {
+        let digits: String = t[idx].chars().filter(|c| c.is_ascii_digit()).collect();
+        poly_n = Some(digits.parse().map_err(|_| format!("{head}: POLY(n) の n を読めません"))?);
+        idx += 1;
+    }
+    let count = poly_n.unwrap_or(1);
+    let mut xs: Vec<String> = vec![];
+    for _ in 0..count {
+        if matches!(letter, 'E' | 'G') {
+            let first = t.get(idx).ok_or_else(|| format!("{head}: 制御するノードが足りません"))?;
+            if first.starts_with('(') {
+                let inner = first.trim_matches(|c| c == '(' || c == ')');
+                let mut it = inner.split(',');
+                let (a, b) = (it.next().unwrap_or("0").trim(), it.next().unwrap_or("0").trim());
+                xs.push(format!("V({},{})", sc.node(a), sc.node(b)));
+                idx += 1;
+            } else {
+                let b = t.get(idx + 1).ok_or_else(|| format!("{head}: 制御するノードが足りません"))?;
+                xs.push(format!("V({},{})", sc.node(first), sc.node(b)));
+                idx += 2;
+            }
+        } else {
+            let ctl = t.get(idx).ok_or_else(|| format!("{head}: 制御する電源の名前がありません"))?;
+            xs.push(format!("I({})", sc.name(ctl)));
             idx += 1;
         }
-        let count = poly_n.unwrap_or(1);
-        let mut xs: Vec<String> = vec![];
-        for _ in 0..count {
-            if matches!(letter, 'E' | 'G') {
-                let first = t.get(idx).ok_or_else(|| format!("{head}: 制御するノードが足りません"))?;
-                if first.starts_with('(') {
-                    let inner = first.trim_matches(|c| c == '(' || c == ')');
-                    let mut it = inner.split(',');
-                    let (a, b) = (it.next().unwrap_or("0").trim(), it.next().unwrap_or("0").trim());
-                    xs.push(format!("V({},{})", rename_node(a, ports, prefix), rename_node(b, ports, prefix)));
-                    idx += 1;
-                } else {
-                    let b = t.get(idx + 1).ok_or_else(|| format!("{head}: 制御するノードが足りません"))?;
-                    xs.push(format!("V({},{})", rename_node(first, ports, prefix), rename_node(b, ports, prefix)));
-                    idx += 2;
-                }
-            } else {
-                let ctl = t.get(idx).ok_or_else(|| format!("{head}: 制御する電源の名前がありません"))?;
-                xs.push(format!("I({})", rename_ctl(ctl)));
-                idx += 1;
-            }
-        }
-        // the coefficients may be in brackets and separated by commas (`POLY(2) V1 V2 (0,7E-5,7E-5)`)
-        let coeffs: Vec<f64> = t[idx..]
-            .iter()
-            .flat_map(|w| w.split([',', '(', ')']).filter(|p| !p.is_empty()))
-            .map(|w| parse_value(w).ok_or_else(|| format!("{head}: 係数「{w}」を数値にできません")))
-            .collect::<Result<_, _>>()?;
-        // several coefficients without the word POLY: the old SPICE2 form, a polynomial in the one control (p0 + p1 x + ...)
-        if poly_n.is_none() && coeffs.len() > 1 {
-            poly_n = Some(1);
-        }
-        let expr = if poly_n.is_none() {
-            // plain gain
-            let g = coeffs.first().ok_or_else(|| format!("{head}: 利得がありません"))?;
-            format!("({g:e})*{}", xs[0])
-        } else if count == 1 {
-            // p0 + p1 x + p2 x^2 + ...
-            let x = &xs[0];
-            let terms: Vec<String> = coeffs.iter().enumerate().map(|(k, c)| format!("({c:e})*{}", if k == 0 { "1".to_string() } else { vec![x.as_str(); k].join("*") })).collect();
-            terms.join("+")
-        } else {
-            // c0 + c1 x1 + .. + cn xn + the second-order terms x1x1, x1x2, .. x2x2 ... (monomials of one degree in
-            // non-decreasing order of the variable numbers), then the third order, and so on
-            let mut terms = vec![format!("({:e})", coeffs[0])];
-            let mut k = 1;
-            let mut degree = 1;
-            while k < coeffs.len() && degree <= 6 {
-                let mut tuple = vec![0usize; degree];
-                loop {
-                    if k >= coeffs.len() {
-                        break;
-                    }
-                    terms.push(format!("({:e})*{}", coeffs[k], tuple.iter().map(|i| xs[*i].as_str()).collect::<Vec<_>>().join("*")));
-                    k += 1;
-                    // next non-decreasing tuple
-                    let mut pos = degree;
-                    while pos > 0 && tuple[pos - 1] == count - 1 {
-                        pos -= 1;
-                    }
-                    if pos == 0 {
-                        break;
-                    }
-                    let v = tuple[pos - 1] + 1;
-                    for t in tuple.iter_mut().skip(pos - 1) {
-                        *t = v;
-                    }
-                }
-                degree += 1;
-            }
-            terms.join("+")
-        };
-        Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }))
     }
+    // the coefficients may be in brackets and separated by commas (`POLY(2) V1 V2 (0,7E-5,7E-5)`)
+    let coeffs: Vec<f64> = t[idx..]
+        .iter()
+        .flat_map(|w| w.split([',', '(', ')']).filter(|p| !p.is_empty()))
+        .map(|w| parse_value(w).ok_or_else(|| format!("{head}: 係数「{w}」を数値にできません")))
+        .collect::<Result<_, _>>()?;
+    // several coefficients without the word POLY: the old SPICE2 form, a polynomial in the one control (p0 + p1 x + ...)
+    if poly_n.is_none() && coeffs.len() > 1 {
+        poly_n = Some(1);
+    }
+    if poly_n.is_none() {
+        // plain gain
+        let g = coeffs.first().ok_or_else(|| format!("{head}: 利得がありません"))?;
+        Ok(format!("({g:e})*{}", xs[0]))
+    } else if count == 1 {
+        // p0 + p1 x + p2 x^2 + ...
+        let x = &xs[0];
+        let terms: Vec<String> = coeffs.iter().enumerate().map(|(k, c)| format!("({c:e})*{}", if k == 0 { "1".to_string() } else { vec![x.as_str(); k].join("*") })).collect();
+        Ok(terms.join("+"))
+    } else {
+        Ok(poly_terms(&coeffs, &xs))
+    }
+}
+
+/// `POLY(n)` with several controls: c0 + c1 x1 + .. + cn xn + the second-order terms x1x1, x1x2, .. x2x2 ... (monomials of
+/// one degree in non-decreasing order of the variable numbers), then the third order, and so on (up to the sixth).
+fn poly_terms(coeffs: &[f64], xs: &[String]) -> String {
+    let count = xs.len();
+    let mut terms = vec![format!("({:e})", coeffs[0])];
+    let mut k = 1;
+    let mut degree = 1;
+    while k < coeffs.len() && degree <= 6 {
+        let mut tuple = vec![0usize; degree];
+        loop {
+            if k >= coeffs.len() {
+                break;
+            }
+            terms.push(format!("({:e})*{}", coeffs[k], tuple.iter().map(|i| xs[*i].as_str()).collect::<Vec<_>>().join("*")));
+            k += 1;
+            // next non-decreasing tuple
+            let mut pos = degree;
+            while pos > 0 && tuple[pos - 1] == count - 1 {
+                pos -= 1;
+            }
+            if pos == 0 {
+                break;
+            }
+            let v = tuple[pos - 1] + 1;
+            for t in tuple.iter_mut().skip(pos - 1) {
+                *t = v;
+            }
+        }
+        degree += 1;
+    }
+    terms.join("+")
 }
 
 /// A flat text for `.subckt sub_name`, or `None` when the text needs no flattening.
