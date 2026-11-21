@@ -476,8 +476,9 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                 ui.scope(|ui| {
                     crate::icons::help_small(ui, "端子のそばの保護、小さくしたいループなど、近くにあるべき部品を組にします。", "基板の自動配置は、組の部品を1つの塊にして並べます。基板の画面では、組が上限より広がっていないかを調べます。上限を 0 にすると、チェックはしません (自動配置では塊にします)");
                     let mut remove = None;
-                    egui::Grid::new("req_group_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                        for h in ["名前", "部品 (, 区切り)", "上限", "区画", "理由", ""] {
+                    let mut ground_point = None;
+                    egui::Grid::new("req_group_grid").num_columns(7).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
+                        for h in ["名前", "部品 (, 区切り)", "上限", "区画", "GND の 1 点", "理由", ""] {
                             ui.strong(i18n::tr(h));
                         }
                         ui.end_row();
@@ -495,8 +496,16 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                             changed |= before != g.max_dist;
                             changed |= ui
                                 .checkbox(&mut g.section, "")
-                                .on_hover_text(i18n::tr("ストリップ基板・ユニバーサル基板 (試作のタブ) で、この組を 1 つの区画にします。区画ごとにまとめて置き、区画の間は帯を切り、GND は区画ごとに別の線で、表のいちばん上の区画の GND (1 点) へ戻します。アナログ・リレー・電源と制御のように分けます"))
+                                .on_hover_text(i18n::tr("ストリップ基板・ユニバーサル基板 (試作のタブ) で、この組を 1 つの区画にします。区画ごとにまとめて置き、区画の間は帯を切り、GND は区画ごとに別の線で、1 点 (右の「GND の 1 点」に印を付けた区画、無ければ表のいちばん上の区画の GND) へ戻します。アナログ・リレー・電源と制御のように分けます"))
                                 .changed();
+                            let mut point = g.ground_point;
+                            if ui
+                                .add_enabled(g.section, egui::Checkbox::without_text(&mut point))
+                                .on_hover_text(i18n::tr("この区画の GND の帯を、ほかの区画の GND が 1 本ずつ戻る 1 点にします (1 つの区画だけ。印が無ければ、表のいちばん上の区画)。大きな電流が流れる電源やリレーの区画ではなく、測定の基準になるアナログの区画や、電源の入口の区画を選ぶのがふつうです"))
+                                .changed()
+                            {
+                                ground_point = Some((k, point));
+                            }
                             if let Some(t) = reason_cell(ui, buf, (1, k, 2), &g.note, 440.0, "なぜ近くに置くかの理由 (例: 電流の輪を小さくしてノイズを減らす)") {
                                 g.note = t;
                                 changed = true;
@@ -507,6 +516,13 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                             ui.end_row();
                         }
                     });
+                    // one section at most is the ground point
+                    if let Some((k, on)) = ground_point {
+                        for (j, g) in spec.groups.iter_mut().enumerate() {
+                            g.ground_point = on && j == k;
+                        }
+                        changed = true;
+                    }
                     if let Some(k) = remove {
                         spec.groups.remove(k);
                         buf.clear();

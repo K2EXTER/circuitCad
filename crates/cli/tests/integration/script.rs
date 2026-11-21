@@ -1626,6 +1626,37 @@ net MID R1.2 R2.1
 }
 
 #[test]
+fn a_group_is_made_a_section_and_the_one_ground_point_from_the_command() {
+    let (a, ok) = run("new
+add R 10k as=R1
+add R 4.7k as=R2
+add R 1k as=R3
+add R 1k as=R4
+req group アナログ parts=R1,R2 section=1
+req group 電源 parts=R3,R4 gnd=1
+req
+req group アナログ gnd=1
+req
+req group アナログ gnd=0
+req
+");
+    assert!(ok, "{a:?}");
+    let tables: Vec<&Value> = a.iter().filter(|v| v.get("groups").is_some() && v.get("net_rules").is_some()).collect();
+    let marks = |t: &Value| t["groups"].as_array().unwrap().iter().map(|g| (g["name"].as_str().unwrap().to_string(), g["section"].as_bool().unwrap(), g["ground_point"].as_bool().unwrap())).collect::<Vec<_>>();
+    let row = |n: &str, sec: bool, gnd: bool| (n.to_string(), sec, gnd);
+    assert_eq!(tables.len(), 7, "each req group answers with the table too");
+    assert_eq!(marks(tables[2]), [row("アナログ", true, false), row("電源", true, true)], "gnd=1 makes it a section too");
+    assert_eq!(marks(tables[4]), [row("アナログ", true, true), row("電源", true, false)], "one ground point at most");
+    assert_eq!(marks(tables[6]), [row("アナログ", true, false), row("電源", true, false)]);
+    let (a, ok) = run("new
+add R 1k as=R1
+add R 1k as=R2
+req group A parts=R1,R2 gnd=2
+");
+    assert!(!ok && format!("{a:?}").contains("gnd=2"), "{a:?}");
+}
+
+#[test]
 fn the_requirements_table_reaches_the_board_and_is_checked() {
     let (a, ok) = run("new\nadd V 12 as=V1\nadd R 10k as=R1\nadd R 4.7k as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\n\
         req net 電源 nets=VIN role=power width=0.8 current=0.5 太く\n\

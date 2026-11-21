@@ -919,7 +919,7 @@ impl BreadboardView {
                 painter.extend(egui::Shape::dashed_line(&c, Stroke::new(2.0, HINT), pitch * 0.4, pitch * 0.3));
             }
         }
-        if let Some(m) = self.build_marks() {
+        if let Some(m) = self.build_marks(&l) {
             super::build_steps::draw_build_marks(&painter, &l, &m, to, pitch);
         }
         // the picked part and link, the box, the first end of a link being drawn
@@ -1226,7 +1226,7 @@ impl BreadboardView {
         for (_, a, b) in self.strip_checks(sch, l).unjoined {
             super::rats_line(painter, to(a), to(b), pitch);
         }
-        if let Some(m) = self.build_marks() {
+        if let Some(m) = self.build_marks(l) {
             super::build_steps::draw_build_marks(painter, l, &m, to, pitch);
         }
         // the picked part (in the list, or by a click on one of its leads here)

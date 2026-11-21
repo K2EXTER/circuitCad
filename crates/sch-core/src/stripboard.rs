@@ -524,11 +524,21 @@ pub(crate) fn sections(s: &Schematic, c: &crate::breadboard::Circuit) -> Vec<(St
     if out.is_empty() {
         return out;
     }
+    // the section chosen as the one ground point goes first: the layouts take the first section's ground as the point
+    if let Some(k) = ground_point(s).and_then(|g| out.iter().position(|(n, _)| *n == g)) {
+        let sec = out.remove(k);
+        out.insert(0, sec);
+    }
     let rest: BTreeSet<String> = c.on.iter().map(|p| p.0.clone()).filter(|r| !seen.contains(r)).collect();
     if !rest.is_empty() {
         out.push(("その他".into(), rest));
     }
     out
+}
+
+/// The section the requirements table chose as the one ground point (`PlaceGroup::ground_point`), by name.
+pub fn ground_point(s: &Schematic) -> Option<String> {
+    s.requirements.groups.iter().find(|g| g.section && g.ground_point).map(|g| g.name.clone())
 }
 
 /// Each section laid out by itself, the sections side by side (wrapped past the board's width), every strip cut between two
@@ -1738,7 +1748,9 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
         // a section's ground: its ground strip (named where it starts), or on a perfboard (no strips) a lead on ground
         let ground_leads: Vec<At> = l.parts.iter().flat_map(|p| p.leads.iter().filter(|(pin, _)| is_ground_name(&net_of(&p.refdes, pin))).map(|(_, a)| *a)).chain(l.off.iter().flat_map(|(_, v)| v.iter().filter(|w| is_ground_name(&w.1)).map(|w| w.2))).collect();
         let ground_in = |k: usize| l.names.iter().any(|(a, n)| is_ground_name(n) && inside(k, *a)) || (l.perf && ground_leads.iter().any(|a| inside(k, *a)));
-        let hub = (0..l.sections.len()).find(|k| ground_in(*k));
+        // the section chosen in the table, else the first with a ground
+        let chosen = ground_point(s).and_then(|g| l.sections.iter().position(|x| x.0 == g)).filter(|k| ground_in(*k));
+        let hub = chosen.or_else(|| (0..l.sections.len()).find(|k| ground_in(*k)));
         if let Some(h) = hub {
             for k in (0..l.sections.len()).filter(|k| *k != h) {
                 let has_ground = ground_in(k);
@@ -1793,6 +1805,28 @@ mod tests {
         assert!(score(&l) < score(&front), "{} < {}", score(&l), score(&front));
         let s = load("active_filter.schjson");
         assert_eq!(strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() }), strip_layout(&s), "no place for its chips: all on top");
+    }
+
+    /// The section marked as the one ground point in the table is the one every other section's ground goes back to (not the
+    /// first in the table), and it is laid out first.
+    #[test]
+    fn the_ground_point_is_the_section_chosen_in_the_table() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/seg7_counter.schjson");
+        let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("カウンタ", &["U1", "U3"]), group("表示", &["U2", "DS1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"])];
+        let gnd_rule = |s: &Schematic| {
+            let l = strip_layout(s);
+            assert!(strip_check(s, &l).is_empty(), "{:?}", strip_check(s, &l));
+            (l.sections[0].0.clone(), strip_rules(s, &l).into_iter().find(|r| r.message.starts_with("GND:")).expect("the ground rule"))
+        };
+        let (first, rule) = gnd_rule(&s);
+        assert_eq!(first, "カウンタ");
+        assert!(rule.ok && rule.message.contains("「表示」の GND は") && rule.message.contains("「カウンタ」の GND の帯"), "{}", rule.message);
+        s.requirements.groups[1].ground_point = true;
+        let (first, rule) = gnd_rule(&s);
+        assert_eq!(first, "表示", "the ground point's section first");
+        assert!(rule.ok && rule.message.contains("「カウンタ」の GND は") && rule.message.contains("「表示」の GND の帯"), "{}", rule.message);
     }
 
     /// A board built as laid out carries the schematic's nets; a cut left out shorts two nets into one.

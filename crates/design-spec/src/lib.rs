@@ -77,6 +77,10 @@ pub struct PlaceGroup {
     /// sections', and its ground goes back to the one ground point by a wire of its own.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub section: bool,
+    /// This section's ground strip is the one ground point every other section's ground goes back to (one section at most; none
+    /// marked: the first section in the table that has a ground).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ground_point: bool,
 }
 
 /// Two sets that keep their distance (a switching node from the reference and the sensing lines).

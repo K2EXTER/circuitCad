@@ -141,7 +141,7 @@ impl BreadboardView {
     }
 
     /// The button for "組む順と通電" and its window (the panel has no room left for a list this long).
-    pub(super) fn build_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &StripLayout) {
+    pub(super) fn build_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &StripLayout) {
         if ui
             .selectable_label(self.build.open, i18n::tr("組む順と通電 (区画ごと)"))
             .on_hover_text(i18n::tr("区画を 1 つずつ組んで、そのたびに電源を入れて確かめる順と、各段で正常なら流れる電流・電流制限・測る電圧を、窓に出します"))
@@ -168,7 +168,7 @@ impl BreadboardView {
     }
 
     /// The steps, each with its parts in the order to solder them and what to read once it is powered.
-    fn build_contents(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &StripLayout) {
+    fn build_contents(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &StripLayout) {
         {
             ui.label(spaced("区画を 1 つずつ組んで、そのたびに電源を入れて確かめます。おかしな所があっても、いま付けた区画の数個の部品を見れば済みます。電源の入口の区画から順に並べ、区画の中は背の低い部品から (コネクタ・リレーは最後)。電源を入れる前に、テスターの抵抗レンジで電源の線と GND がショートしていないことを確かめ、電流を制限できる電源で入れます。").color(NOTE));
             let Some(steps) = self.build_result(sch, l).cloned() else {
@@ -179,6 +179,19 @@ impl BreadboardView {
                 ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
                 return;
             };
+            if ui
+                .button(i18n::tr("印刷用の組み立て表を保存 (SVG)"))
+                .on_hover_text(i18n::tr("基板の表の絵 (実寸) と、段ごとに付ける線と部品の順に □ (付けたら印)、電流制限・正常な電流・測る電圧と、測った値を書く欄を並べた表を、SVG で保存します。ブラウザで開いて印刷し、組みながら印を付けます"))
+                .clicked()
+            {
+                let stem = sch.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "board".into());
+                if let Some(path) = rfd::FileDialog::new().add_filter("SVG画像", &["svg"]).set_file_name(format!("{stem}_組む順.svg")).save_file() {
+                    sch.status = match std::fs::write(&path, build_sheet_svg(&stem, &sch.sch, l, &steps)) {
+                        Ok(()) => i18n::trf!("組み立て表を保存しました: {}", path.display()),
+                        Err(e) => i18n::trf!("組み立て表を保存できませんでした: {}。保存先のフォルダに書き込めるか確認してください", e),
+                    };
+                }
+            }
             for (k, (st, check)) in steps.iter().enumerate() {
                 ui.add_space(4.0);
                 let picked = self.build.step == Some(k);
@@ -228,30 +241,132 @@ impl BreadboardView {
         }
     }
 
-    /// The step picked: (its parts, the parts of the later steps), for the board to light and dim.
-    pub(super) fn build_marks(&self) -> Option<(BTreeSet<String>, BTreeSet<String>)> {
+    /// The step picked, for the board to light and dim (none when the steps are for another layout than `l`).
+    pub(super) fn build_marks(&self, l: &StripLayout) -> Option<BuildMarks> {
         let k = self.build.step?;
-        let (_, _, steps) = self.build.result.as_ref()?;
-        let now = steps.get(k)?.0.parts.iter().cloned().collect();
-        let later = steps.iter().skip(k + 1).flat_map(|(st, _)| st.parts.iter().cloned()).collect();
-        Some((now, later))
+        let (_, made_for, steps) = self.build.result.as_ref().filter(|(_, m, _)| m == l)?;
+        let _ = made_for;
+        let now = steps.get(k)?;
+        Some(BuildMarks {
+            parts: now.0.parts.iter().cloned().collect(),
+            later: steps.iter().skip(k + 1).flat_map(|(st, _)| st.parts.iter().cloned()).collect(),
+            links: now.0.links.iter().copied().collect(),
+            later_links: steps.iter().skip(k + 1).flat_map(|(st, _)| st.links.iter().copied()).collect(),
+        })
     }
 }
 
-/// Lights the picked step's parts and dims the later steps' ones (`to`: a hole's place on screen, front or back).
-pub(super) fn draw_build_marks(painter: &egui::Painter, l: &StripLayout, marks: &(BTreeSet<String>, BTreeSet<String>), to: impl Fn(sch_core::stripboard::At) -> Pos2, pitch: f32) {
+/// The step picked on the board: its parts and wires, and the later steps' (not on yet).
+pub(super) struct BuildMarks {
+    parts: BTreeSet<String>,
+    later: BTreeSet<String>,
+    links: BTreeSet<usize>,
+    later_links: BTreeSet<usize>,
+}
+
+/// Lights the picked step's parts and wires and dims the later steps' ones (`to`: a hole's place on screen, front or back).
+pub(super) fn draw_build_marks(painter: &egui::Painter, l: &StripLayout, marks: &BuildMarks, to: impl Fn(sch_core::stripboard::At) -> Pos2, pitch: f32) {
+    let dim = super::strip_view::BOARD.gamma_multiply(0.8);
     for p in &l.parts {
         let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
         if pts.is_empty() {
             continue;
         }
         let r = Rect::from_points(&pts).expand(pitch * 0.5);
-        if marks.1.contains(&p.refdes) {
-            painter.rect_filled(r, 2.0, super::strip_view::BOARD.gamma_multiply(0.8));
-        } else if marks.0.contains(&p.refdes) {
+        if marks.later.contains(&p.refdes) {
+            painter.rect_filled(r, 2.0, dim);
+        } else if marks.parts.contains(&p.refdes) {
             painter.rect_stroke(r, 3.0, Stroke::new(2.5, crate::theme::OK), egui::StrokeKind::Outside);
         }
     }
+    for (k, w) in l.links.iter().enumerate() {
+        let (a, b) = (to(w.a), to(w.b));
+        if marks.later_links.contains(&k) {
+            painter.line_segment([a, b], Stroke::new(pitch * 0.3, dim));
+            for e in [a, b] {
+                painter.circle_filled(e, pitch * 0.24, dim);
+            }
+        } else if marks.links.contains(&k) {
+            for e in [a, b] {
+                painter.circle_stroke(e, pitch * 0.32, Stroke::new(2.0, crate::theme::OK));
+            }
+        }
+    }
+}
+
+/// The page to print for building the board step by step (A4 wide, as long as the list): the parts' side drawn to scale at the
+/// top, then each step with a box to tick for each wire and part in the order to fit them, and what to set and read once it is
+/// powered (the current limit, the current a working board draws, the voltages), with a blank to write the reading in.
+pub fn build_sheet_svg(title: &str, s: &sch_core::Schematic, l: &StripLayout, steps: &Steps) -> String {
+    use std::fmt::Write;
+    const W: f64 = 210.0;
+    const M: f64 = 12.0;
+    const ROW: f64 = 5.6;
+    let esc = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let flat = s.flat();
+    let value = |r: &str| flat.components.iter().find(|c| c.refdes == r).map(|c| c.value.clone()).unwrap_or_default();
+    // the drawing of the parts' side, scaled to the page's width (never larger than its real size)
+    let drawing = sch_core::strip_print::strip_svg(l, sch_core::strip_print::Face::Parts, l.perf, title);
+    let open_end = drawing.find('>').unwrap_or(0);
+    let view = drawing[..open_end].split("viewBox=\"").nth(1).and_then(|v| v.split('"').next()).unwrap_or("0 0 100 100").to_string();
+    let dims: Vec<f64> = view.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+    let (dw, dh) = (dims.get(2).copied().unwrap_or(100.0), dims.get(3).copied().unwrap_or(100.0));
+    let scale = ((W - 2.0 * M) / dw).min(1.0);
+    let inner = drawing[open_end + 1..].trim_end().trim_end_matches("</svg>");
+    let mut body = String::new();
+    let mut y = M + 12.0 + dh * scale + 8.0;
+    let line = |body: &mut String, y: &mut f64, x: f64, size: f64, text: &str, boxed: bool| {
+        if boxed {
+            let _ = writeln!(body, r##"<rect x="{:.1}" y="{:.1}" width="3.2" height="3.2" fill="none" stroke="#222" stroke-width="0.3"/>"##, x, *y - 3.0);
+        }
+        let _ = writeln!(body, r#"<text x="{:.1}" y="{:.1}" font-size="{size}">{}</text>"#, x + if boxed { 5.0 } else { 0.0 }, *y, esc(text));
+        *y += ROW;
+    };
+    for (k, (st, check)) in steps.iter().enumerate() {
+        y += 2.0;
+        line(&mut body, &mut y, M, 3.6, &format!("{} {} (部品 {} 個・表の線 {} 本)", circled(k), st.name, st.parts.len(), st.links.len()), false);
+        for i in &st.links {
+            if let Some(w) = l.links.get(*i) {
+                line(&mut body, &mut y, M + 4.0, 2.8, &format!("表の線 {} – {} ({})", sch_core::stripboard::hole_name(w.a), sch_core::stripboard::hole_name(w.b), w.net), true);
+            }
+        }
+        for r in &st.parts {
+            let Some(p) = l.parts.iter().find(|p| &p.refdes == r) else { continue };
+            let holes: Vec<String> = p.leads.iter().map(|(pin, a)| format!("{pin}:{}", sch_core::stripboard::hole_name(*a))).collect();
+            let how = p.mount.describe();
+            let text = format!("{r} {}  [{}]{}", value(r), holes.join(" "), if how.is_empty() { String::new() } else { format!("  {how}") });
+            line(&mut body, &mut y, M + 4.0, 2.8, &text, true);
+        }
+        match check {
+            Ok(c) => {
+                for (name, volts, nominal, min, max, limit, fed) in &c.supplies {
+                    let from = if *fed { format!("{} (コネクタから)", name.trim_start_matches("V_")) } else { name.clone() };
+                    let text = if nominal.abs() < 1e-6 {
+                        format!("通電: {from} {}V、電流制限 {}。正常ならほぼ 0 A　測った電流: ________", sim_core::format_value(*volts), amps(*limit))
+                    } else {
+                        format!("通電: {from} {}V、電流制限 {}。正常なら {} ({}〜{})　測った電流: ________", sim_core::format_value(*volts), amps(*limit), amps(*nominal), amps(*min), amps(*max))
+                    };
+                    line(&mut body, &mut y, M + 4.0, 2.8, &text, true);
+                }
+                for (n, v) in &c.volts {
+                    line(&mut body, &mut y, M + 4.0, 2.8, &format!("{n} を GND から測る: 正常なら {}V　測った値: ________", sim_core::format_value(*v)), true);
+                }
+            }
+            Err(e) => line(&mut body, &mut y, M + 4.0, 2.8, &format!("この段の通電は計算できませんでした: {e}"), false),
+        }
+    }
+    let h = y + M;
+    let mut out = String::new();
+    let _ = writeln!(out, r#"<svg xmlns="http://www.w3.org/2000/svg" width="{W}mm" height="{h:.1}mm" viewBox="0 0 {W} {h:.1}" font-family="sans-serif">"#);
+    let _ = writeln!(out, r#"<rect x="0" y="0" width="{W}" height="{h:.1}" fill="white"/>"#);
+    let _ = writeln!(out, r#"<text x="{M}" y="{:.1}" font-size="4.5">{} — 組む順と通電</text>"#, M + 2.0, esc(title));
+    for (i, t) in ["区画を 1 つずつ組み、そのたびに電源を入れて確かめます。付けたら □ に印を付けます。", "電源を入れる前に、テスターの抵抗レンジで電源の線と GND がショートしていないことを確かめ、電流を制限できる電源で入れます。"].iter().enumerate() {
+        let _ = writeln!(out, r##"<text x="{M}" y="{:.1}" font-size="2.6" fill="#555">{t}</text>"##, M + 6.5 + 3.4 * i as f64);
+    }
+    let _ = writeln!(out, r#"<svg x="{M}" y="{:.1}" width="{:.1}" height="{:.1}" viewBox="{view}">{inner}</svg>"#, M + 12.0, dw * scale, dh * scale);
+    out.push_str(&body);
+    out.push_str("</svg>\n");
+    out
 }
 
 #[cfg(test)]
@@ -284,6 +399,24 @@ mod tests {
         let first = steps[0].1.as_ref().unwrap();
         assert!(first.volts.iter().any(|(n, v)| n == "VCC" && (*v - 5.0).abs() < 0.01), "{:?}", first.volts);
         assert!(!first.supplies[0].6, "the sheet's own supply, not one put in");
+    }
+
+    /// The sheet lists every wire and part once with a box to tick, and each step's supply with a blank for the reading.
+    #[test]
+    fn the_build_sheet_has_a_box_for_each_wire_and_part() {
+        let mut s = load("ne555_blinker.schjson");
+        sections(&mut s, &[("表示", &["R3", "D1"]), ("タイマ", &["U1", "R1", "R2", "C1", "C2"])]);
+        let l = sch_core::stripboard::strip_layout(&s);
+        let steps = work_out(&s, &l);
+        let svg = build_sheet_svg("ne555", &s, &l, &steps);
+        let boxes = svg.matches(r#"width="3.2" height="3.2""#).count();
+        let supplies: usize = steps.iter().map(|(_, c)| c.as_ref().map_or(0, |c| c.supplies.len() + c.volts.len())).sum();
+        assert_eq!(boxes, l.parts.len() + l.links.len() + supplies, "{svg}");
+        for p in &l.parts {
+            assert_eq!(svg.matches(&format!(">{} ", p.refdes)).count(), 1, "{} once", p.refdes);
+        }
+        assert!(svg.contains("測った電流: ________") && svg.contains("① タイマ"), "{svg}");
+        assert!(svg.starts_with("<svg") && svg.trim_end().ends_with("</svg>"));
     }
 
     #[test]

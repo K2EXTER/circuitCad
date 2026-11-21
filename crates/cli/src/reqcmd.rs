@@ -74,7 +74,7 @@ impl Session {
         let r = &self.sch.requirements;
         Ok(obj(json!({
             "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "order": n.order, "vias": n.vias, "layers": n.layers, "max_length": n.max_length, "max_vias": n.max_vias, "max_neck": n.max_neck, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
-            "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
+            "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "section": g.section, "ground_point": g.ground_point, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
             "measures": r.measures.iter().map(|m| json!({"name": m.name, "what": m.what, "pads": m.pads, "op": if m.is_min() { "min" } else { "max" }, "limit": m.limit, "reach": m.reach, "except": m.except, "note": m.note})).collect::<Vec<Value>>(),
@@ -85,7 +85,8 @@ impl Session {
     }
 
     /// `req suggest [apply=1]` (what the DC analysis says about the currents); `req` (list); `req net NAME [nets=A,B,GN*] [role=] [width=mm] [clearance=mm] [current=A] [links=A-B:mm,..] [reason=TEXT]`;
-    /// `req group NAME [parts=R1,R2] [max=mm] [reason=TEXT]`; `req apart NAME [a=..] [b=..] [min=mm] [reason=TEXT]`; add `remove=1` to delete a row.
+    /// `req group NAME [parts=R1,R2] [max=mm] [section=1] [gnd=1] [reason=TEXT]` (section: a section of a stripboard or perfboard;
+    /// gnd: its ground strip is the one ground point); `req apart NAME [a=..] [b=..] [min=mm] [reason=TEXT]`; add `remove=1` to delete a row.
     /// A row that exists is changed only in what is given; a new row needs its names.
     pub fn req(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
@@ -196,9 +197,33 @@ impl Session {
                         req.groups.len() - 1
                     }
                 };
+                // section=1: a section of a board built by hand; gnd=1: its ground is the one ground point (one section at most)
+                let flag = |key: &str| -> Result<Option<bool>, String> {
+                    match opt(&kv, key) {
+                        None => Ok(None),
+                        Some("1" | "yes" | "true" | "on") => Ok(Some(true)),
+                        Some("0" | "no" | "false" | "off") => Ok(Some(false)),
+                        Some(v) => Err(format!("{key}={v}: 1 か 0 で書きます (例: {key}=1)")),
+                    }
+                };
+                let (section, gnd) = (flag("section")?, flag("gnd")?);
+                if gnd == Some(true) {
+                    for (j, g) in req.groups.iter_mut().enumerate() {
+                        g.ground_point = j == k;
+                    }
+                }
                 let g = &mut req.groups[k];
                 if let Some(v) = opt(&kv, "parts") {
                     g.parts = names(v);
+                }
+                if let Some(v) = section {
+                    g.section = v;
+                }
+                if gnd == Some(false) {
+                    g.ground_point = false;
+                }
+                if g.ground_point {
+                    g.section = true;
                 }
                 g.max_dist = max.unwrap_or(g.max_dist);
                 if let Some(t) = text {
