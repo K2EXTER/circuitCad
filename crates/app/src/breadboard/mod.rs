@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 mod live;
 pub(crate) mod sketch_ui;
 mod build_steps;
+mod looks;
 mod strip_view;
 pub use strip_view::BoardKind;
 #[cfg(test)]
@@ -1441,52 +1442,10 @@ fn draw_part(painter: &egui::Painter, p: &sch_core::breadboard::Placed, comp: Op
             r.union(body)
         }
         Look::TwoLead => {
-            let (Some((_, a)), Some((_, b))) = (p.leads.first(), p.leads.get(1)) else { return Rect::NOTHING };
-            let (pa, pb) = (to(*a), to(*b));
-            painter.line_segment([pa, pb], lead);
-            let mid = pa + (pb - pa) / 2.0;
-            let dir = (pb - pa).normalized();
-            let len = ((pb - pa).length() * 0.55).clamp(pitch * 0.8, pitch * 2.2);
-            let body = Rect::from_center_size(mid, if dir.x.abs() >= dir.y.abs() { Vec2::new(len, pitch * 0.55) } else { Vec2::new(pitch * 0.55, len) });
-            match kind {
-                Some(sch_core::Kind::Resistor) => {
-                    painter.rect(body, pitch * 0.25, Color32::from_rgb(222, 196, 150), outline, egui::StrokeKind::Middle);
-                    if let Some(bs) = bands(value) {
-                        for (i, c) in bs.iter().enumerate() {
-                            let t = 0.25 + 0.17 * i as f32 - 0.5;
-                            let at = body.center() + if dir.x.abs() >= dir.y.abs() { Vec2::new(t * body.width() * dir.x.signum(), 0.0) } else { Vec2::new(0.0, t * body.height() * dir.y.signum()) };
-                            let size = if dir.x.abs() >= dir.y.abs() { Vec2::new(pitch * 0.12, body.height()) } else { Vec2::new(body.width(), pitch * 0.12) };
-                            painter.rect_filled(Rect::from_center_size(at, size), 0.0, *c);
-                        }
-                    }
-                }
-                Some(sch_core::Kind::Led) => {
-                    painter.circle(mid, pitch * 0.55, Color32::from_rgb(230, 60, 60).gamma_multiply(0.85), outline);
-                    // the cathode's flat side
-                    let k = to(*b);
-                    let n = (k - mid).normalized() * pitch * 0.45;
-                    painter.line_segment([mid + n + n.rot90() * 0.9, mid + n - n.rot90() * 0.9], Stroke::new(2.0, Color32::from_gray(40)));
-                    painter.text(mid, egui::Align2::CENTER_CENTER, &p.refdes, font.clone(), Color32::WHITE);
-                    return body.union(Rect::from_center_size(mid, Vec2::splat(pitch * 1.2)));
-                }
-                Some(sch_core::Kind::Diode) => {
-                    painter.rect(body, pitch * 0.15, Color32::from_rgb(30, 30, 30), outline, egui::StrokeKind::Middle);
-                    // the band at the cathode
-                    let k = body.center() + (to(*b) - mid).normalized() * (len * 0.35);
-                    let size = if dir.x.abs() >= dir.y.abs() { Vec2::new(pitch * 0.14, body.height()) } else { Vec2::new(body.width(), pitch * 0.14) };
-                    painter.rect_filled(Rect::from_center_size(k, size), 0.0, Color32::from_gray(210));
-                }
-                Some(sch_core::Kind::Capacitor) => {
-                    painter.rect(body, pitch * 0.25, Color32::from_rgb(90, 140, 210), outline, egui::StrokeKind::Middle);
-                }
-                Some(sch_core::Kind::Inductor) => {
-                    painter.rect(body, pitch * 0.25, Color32::from_rgb(80, 150, 90), outline, egui::StrokeKind::Middle);
-                }
-                _ => {
-                    painter.rect(body, pitch * 0.2, Color32::from_rgb(60, 60, 70), outline, egui::StrokeKind::Middle);
-                }
-            }
-            let label_at = body.center() + if dir.x.abs() >= dir.y.abs() { Vec2::new(0.0, -pitch * 0.75) } else { Vec2::new(pitch * 0.9, 0.0) };
+            let Some((a, b)) = looks::ends(&p.leads) else { return Rect::NOTHING };
+            let body = looks::draw_two_lead(painter, to(a), to(b), comp, pitch, outline);
+            let dir = to(b) - to(a);
+            let label_at = body.center() + if dir.x.abs() >= dir.y.abs() { Vec2::new(0.0, -(body.height() / 2.0 + pitch * 0.35)) } else { Vec2::new(body.width() / 2.0 + pitch * 0.45, 0.0) };
             painter.text(label_at, egui::Align2::CENTER_CENTER, &p.refdes, font.clone(), Color32::from_gray(30));
             body.expand(pitch * 0.2)
         }

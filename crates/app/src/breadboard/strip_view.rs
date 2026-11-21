@@ -790,6 +790,13 @@ impl BreadboardView {
                         }
                     }
                 }
+                _ if p.leads.len() == 2 => {
+                    // a two-lead part as the real one (bands, the cathode's mark, an LED's dome, a capacitor's disc or can)
+                    let comp = sch.sch.components.iter().find(|c| c.refdes == p.refdes);
+                    let (a, b) = super::looks::ends(&p.leads).unwrap_or((p.leads[0].1, p.leads[1].1));
+                    let body = super::looks::draw_two_lead(&painter, to(a), to(b), comp, pitch, Stroke::new(1.0, Color32::from_gray(60)));
+                    painter.text(body.right_center() + Vec2::new(3.0, 0.0), egui::Align2::LEFT_CENTER, &p.refdes, font.clone(), Color32::from_gray(20));
+                }
                 _ => {
                     for w in pts.windows(2) {
                         painter.line_segment([w[0], w[1]], Stroke::new(1.5, Color32::from_gray(110)));
