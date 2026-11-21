@@ -160,7 +160,8 @@ fn the_ads124s08_draws_its_supply_currents() {
     place(&mut c, &def, "U1", &nets);
     let r = dc_op(&c).unwrap();
     let amps = |name: &str| -r.element(name).unwrap().current;
-    assert!((amps("Va") - 155e-6).abs() < 2e-6, "AVDD {} A", amps("Va"));
+    // 155 µA of its own, and 10 µA (4 µA/V of the 2.5 V reference) out of REFN0 through the REFP0 buffer
+    assert!((amps("Va") - 165e-6).abs() < 2e-6, "AVDD {} A", amps("Va"));
     assert!((amps("Vd") - 225e-6).abs() < 3e-6, "DVDD + IOVDD {} A", amps("Vd"));
     assert!((amps("Vref") - 5e-9).abs() < 1e-9, "REFP0 {} A", amps("Vref"));
     assert!(amps("Vin").abs() < 13.0 * 0.2e-9, "the 13 inputs about 0.1 nA each: {} A", amps("Vin"));
@@ -203,19 +204,43 @@ fn the_bav199_keeps_its_leakage_in_picoamps_and_its_forward_drops() {
     assert!(leak < 5e-9 && leak > 3e-12, "reverse current {leak} A (typ 3 pA, max 5 nA)");
 }
 
-/// The TQ2-L2-5V's coils: 40 mA from 5 V each (125 Ω, the 2 coil latching table).
+/// The TQ2-L2-5V: 40 mA in each coil from 5 V (125 Ω), and contacts held by a latch: a pulse on the set coil moves COM to SET and
+/// it stays there when the pulse ends; a pulse on the reset coil moves it back. It starts reset.
 #[test]
-fn the_tq2_l2_5v_coils_draw_forty_milliamps() {
+fn the_tq2_l2_5v_latches_on_a_pulse_and_stays() {
     let def = part("TQ2-L2-5V");
+    let wire = |c: &mut Circuit| {
+        place(c, &def, "K1", &[("1", "s"), ("5", "0"), ("10", "r"), ("6", "0"), ("3", "com"), ("4", "set1"), ("2", "rst1"), ("8", "com"), ("7", "set2"), ("9", "rst2")]);
+        vs(c, "Vc", "com", "0", 1.0);
+        for n in ["set1", "rst1", "set2", "rst2"] {
+            res(c, &format!("R{n}"), n, "0", 1000.0);
+        }
+    };
+    // the coils at 5 V
     let mut c = Circuit::new();
     vs(&mut c, "Vs", "s", "0", 5.0);
-    vs(&mut c, "Vr", "r", "0", 5.0);
-    place(&mut c, &def, "K1", &[("1", "s"), ("5", "0"), ("10", "r"), ("6", "0")]);
+    vs(&mut c, "Vr", "r", "0", 0.0);
+    wire(&mut c);
     let r = dc_op(&c).unwrap();
-    for name in ["Vs", "Vr"] {
-        let i = -r.element(name).unwrap().current;
-        assert!((i - 0.040).abs() < 1e-4, "{name}: {i} A");
+    assert!((-r.element("Vs").unwrap().current - 0.040).abs() < 1e-4, "set coil {} A", -r.element("Vs").unwrap().current);
+    // pulses: set at 1 ms for 2 ms, reset at 5 ms for 2 ms
+    let pulse = |td: f64| Waveform::Pulse { v1: 0.0, v2: 5.0, td, tr: 1e-5, tf: 1e-5, pw: 2e-3, per: 1.0 };
+    let mut c = Circuit::new();
+    let (s, r) = (c.node("s"), c.node("r"));
+    c.add(Element::VSource { name: "Vs".into(), p: s, n: 0, wave: pulse(1e-3), ac: None });
+    c.add(Element::VSource { name: "Vr".into(), p: r, n: 0, wave: pulse(5e-3), ac: None });
+    wire(&mut c);
+    let t = transient(&c, &TranSettings { tstop: 9e-3, tstep: 1e-5, uic: false }).unwrap();
+    let at = |node: &str, when: f64| {
+        let sig = t.signal(&format!("V({node})")).unwrap();
+        let k = t.time.iter().position(|x| *x >= when).unwrap();
+        sig.values[k]
+    };
+    for (when, set) in [(0.5e-3, false), (2e-3, true), (4e-3, true), (6e-3, false), (8.5e-3, false)] {
+        let (on, off) = if set { ("set1", "rst1") } else { ("rst1", "set1") };
+        assert!(at(on, when) > 0.99 && at(off, when) < 1e-3, "{} ms: {on} {} V, {off} {} V", when * 1e3, at(on, when), at(off, when));
     }
+    assert!(at("set2", 4e-3) > 0.99 && at("rst2", 4e-3) < 1e-3, "the second contact moves with the first");
 }
 
 #[test]

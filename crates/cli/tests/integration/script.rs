@@ -1610,6 +1610,31 @@ net MID R1.2 R2.1
 }
 
 #[test]
+fn an_adc_reads_its_input_with_the_data_sheets_transfer_function() {
+    let (a, ok) = run("new
+add ADS124S08 as=U1
+add V 3.3 as=V1
+add V 2.5 as=V2
+add V 0.1 as=V3
+net AVDD V1.+ U1.AVDD U1.DVDD U1.IOVDD
+net REF V2.+ U1.REFP0
+net IN V3.+ U1.AIN0
+net GND V1.- V2.- V3.- U1.AVSS U1.DGND U1.REFN0 U1.AIN1
+adc U1
+adc U1 gain=64
+");
+    assert!(ok, "{a:?}");
+    let reads: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "adc").collect();
+    // 2^23 x 0.1 V / 2.5 V = 335544.32
+    assert_eq!(reads[0]["code"], 335544, "{}", reads[0]);
+    assert_eq!(reads[0]["clipped"], false);
+    assert!((reads[0]["lsb_v"].as_f64().unwrap() - 2.5 / 8388608.0).abs() < 1e-12);
+    // gain 64: 6.4 V of a 2.5 V full scale, so it clips at the top
+    assert_eq!(reads[1]["code"], 8388607, "{}", reads[1]);
+    assert_eq!(reads[1]["clipped"], true);
+}
+
+#[test]
 fn the_pins_of_a_cable_header_are_written_and_a_firmware_is_checked() {
     let dir = std::env::temp_dir().join(format!("ccad_pins_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

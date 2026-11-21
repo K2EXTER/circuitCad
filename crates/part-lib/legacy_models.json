@@ -428,5 +428,29 @@
   "descriptions": [
    "フォトカプラ PC817 相当 (DIP-4。1=アノード 2=カソード 3=エミッタ 4=コレクタ)。入力の LED の電流に比例した電流を、出力のトランジスタに流す (電流伝達率 CTR、ここでは 100%)。入力と出力は電気的に絶縁される。簡易モデルで、応答の遅さ (数 µs〜数十 µs) と CTR の個体差・温度変化は含まない"
   ]
+ },
+ "TQ2-L2-5V": {
+  "texts": [
+   "* TQ2-L2-5V: the two coils only (set: pins 1+ 5-, reset: pins 10+ 6-); the contacts are not modelled\n.subckt TQ2_L2_5V setp setn rstp rstn\n* 125 ohm each (5 V, 40 mA, 200 mW; +-10 % at 20 C)\nRset setp setn 125\nRrst rstp rstn 125\n.ends TQ2_L2_5V"
+  ],
+  "descriptions": [
+   "Panasonic TQ2-L2-5V 信号用リレー、2 コイルラッチ、2 回路 (2 Form C)。コイル 5 V・40 mA (125 Ω、200 mW)。接点 Ag + Au クラッド、接触抵抗 50 mΩ 以下、最小開閉 10 µA 10 mV、絶縁抵抗 1000 MΩ 以上。ピンはデータシート ASCTB14E の図 (裏から見た図、リセットの状態) から: セットのコイル 1(+)・5(-)、リセットのコイル 10(+)・6(-)。1 回路目は COM1=3 がリセットで 2 (RST1)、セットで 4 (SET1) につながる。2 回路目は COM2=8 がリセットで 9 (RST2)、セットで 7 (SET2)。コイルにパルスを流すと状態を保つ (電力がいらず、発熱で熱起電力が出にくい)。どちらのコイルが白・黒かは図の決まりから読んだので、初めて使うときにテスターで確かめる。シミュレーションはコイルの抵抗だけの等価モデル (接点は扱わない。docs/models/relays.md)"
+  ]
+ },
+ "ADS124S08_VQFN-32": {
+  "texts": [
+   "* ADS124S08: a DC equivalent of the supplies and the inputs only (no conversion, no SPI)\n* Ports: AVDD AVSS DVDD IOVDD DGND AIN0..AIN5 AINCOM REFP1/AIN6 REFN1/AIN7 REFP0 REFN0 GPIO0..3/AIN8..11 REFOUT\n.subckt ADS124S08 avdd avss dvdd iovdd dgnd ain0 ain1 ain2 ain3 ain4 ain5 aincom refp1 refn1 refp0 refn0 gpio0 gpio1 gpio2 gpio3 refout\n* analog supply: conversion mode, PGA on (gain 1-2) 120 uA + the positive reference buffer (on after reset) 35 uA = 155 uA,\n* fading out below about 2 V (the data sheet gives no figure below its 2.7 V supply range)\nBa avdd avss I=155u*step(V(avdd,avss)-2,0.5)\n* digital supply: DVDD and IOVDD together 225 uA in conversion mode with the internal oscillator (the table gives the sum)\nBd dvdd dgnd I=225u*step(V(dvdd,dgnd)-1.5,0.5)\nRio iovdd dgnd 1G\n* each analog input: 0.1 nA (typ, PGA on) at mid-supply, as 20 Gohm to AVSS (the sign of the real current is not known)\nR0 ain0 avss 20G\nR1 ain1 avss 20G\nR2 ain2 avss 20G\nR3 ain3 avss 20G\nR4 ain4 avss 20G\nR5 ain5 avss 20G\nRc aincom avss 20G\nR6 refp1 avss 20G\nR7 refn1 avss 20G\nR8 gpio0 avss 20G\nR9 gpio1 avss 20G\nR10 gpio2 avss 20G\nR11 gpio3 avss 20G\n* REFP0 through its buffer (on after reset): 5 nA at 2.5 V; REFN0 without its buffer (off after reset): 4 uA/V of the reference\n* voltage, taken from REFP0's side through the buffer, so REFN0 sinks it as 250 kohm per volt: modelled as 250 kohm to AVSS\nRp refp0 avss 500Meg\nRn refn0 avss 250k\n* REFOUT: the internal reference is off after reset (high impedance)\nRout refout avss 1G\n.ends ADS124S08"
+  ],
+  "descriptions": [
+   "TI ADS124S08 24 bit ΔΣ ADC (12 入力、PGA、2.5 V 基準内蔵、4 kSPS)。VQFN-32 (RHB、5x5、0.5 mm ピッチ)。AVDD〜AVSS 2.7〜5.25 V、AVSS は DGND に対して -2.625〜0 V にできる。ピン表は SBAS660C (Rev. C) から。パッドの寸法は RHB0032M の例の概算なので、基板にする前にデータシートの推奨ランドパターンで確認してください。裏のサーマルパッドは AVSS につなぐ (ピン27と同じネット)。シミュレーションは、電源と入力の電流だけの等価モデル (データシートの typ から。変換はしない。docs/models/adcs.md)。 ランドパターンは、データシート SBAS660C の RHB0032M の推奨ランドに合わせた: リードのパッド 0.6 × 0.25 mm、ピッチ 0.5 mm、2 列の中心間 4.8 mm、露出パッド 2.1 mm 角 (AVSS)。"
+  ]
+ },
+ "ADS124S08_TQFP-32": {
+  "texts": [
+   "* ADS124S08: a DC equivalent of the supplies and the inputs only (no conversion, no SPI)\n* Ports: AVDD AVSS DVDD IOVDD DGND AIN0..AIN5 AINCOM REFP1/AIN6 REFN1/AIN7 REFP0 REFN0 GPIO0..3/AIN8..11 REFOUT\n.subckt ADS124S08 avdd avss dvdd iovdd dgnd ain0 ain1 ain2 ain3 ain4 ain5 aincom refp1 refn1 refp0 refn0 gpio0 gpio1 gpio2 gpio3 refout\n* analog supply: conversion mode, PGA on (gain 1-2) 120 uA + the positive reference buffer (on after reset) 35 uA = 155 uA,\n* fading out below about 2 V (the data sheet gives no figure below its 2.7 V supply range)\nBa avdd avss I=155u*step(V(avdd,avss)-2,0.5)\n* digital supply: DVDD and IOVDD together 225 uA in conversion mode with the internal oscillator (the table gives the sum)\nBd dvdd dgnd I=225u*step(V(dvdd,dgnd)-1.5,0.5)\nRio iovdd dgnd 1G\n* each analog input: 0.1 nA (typ, PGA on) at mid-supply, as 20 Gohm to AVSS (the sign of the real current is not known)\nR0 ain0 avss 20G\nR1 ain1 avss 20G\nR2 ain2 avss 20G\nR3 ain3 avss 20G\nR4 ain4 avss 20G\nR5 ain5 avss 20G\nRc aincom avss 20G\nR6 refp1 avss 20G\nR7 refn1 avss 20G\nR8 gpio0 avss 20G\nR9 gpio1 avss 20G\nR10 gpio2 avss 20G\nR11 gpio3 avss 20G\n* REFP0 through its buffer (on after reset): 5 nA at 2.5 V; REFN0 without its buffer (off after reset): 4 uA/V of the reference\n* voltage, taken from REFP0's side through the buffer, so REFN0 sinks it as 250 kohm per volt: modelled as 250 kohm to AVSS\nRp refp0 avss 500Meg\nRn refn0 avss 250k\n* REFOUT: the internal reference is off after reset (high impedance)\nRout refout avss 1G\n.ends ADS124S08"
+  ],
+  "descriptions": [
+   "TI ADS124S08 24 bit ΔΣ ADC (12 入力、PGA、IDAC、2.5 V 基準内蔵)。TQFP-32 (PBS、本体 5x5、0.5 mm ピッチ)。手はんだで変換基板に載せられる版。ピン番号は VQFN 版と同じ (SBAS660C のピン表は両方共通、TQFP には裏のパッドなし)。型番は ADS124S08IPBS (トレイ) / ADS124S08IPBSR (リール)。ランドパターンは一般的な TQFP-32 5x5 の概算 (パッド中心間 6.3 mm、1.5 x 0.3 mm) なので、プリント基板にする前にデータシートの PBS の図面で確認すること。シミュレーションは、電源と入力の電流だけの等価モデル (データシートの typ から。変換はしない。docs/models/adcs.md)。"
+  ]
  }
 }

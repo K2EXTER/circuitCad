@@ -37,6 +37,7 @@ mod ripple;
 mod heat_tran;
 mod selfheat;
 mod ambient;
+pub mod adcread;
 pub mod battery;
 pub mod budget;
 pub mod inrush;

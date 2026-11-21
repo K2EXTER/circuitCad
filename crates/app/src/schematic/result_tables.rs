@@ -86,6 +86,7 @@ impl SchEditor {
             st.pins = open;
         }
         self.tables = st;
+        self.lib_sync_window(ctx);
         if let Some(name) = goto_net {
             self.goto_net(&name);
         }

@@ -1022,6 +1022,7 @@ pub mod ltspice_import;
 pub mod vendorzip;
 pub mod model_checks;
 pub mod passive;
+pub mod placed;
 pub mod series;
 pub mod templates;
 pub mod thru_hole;

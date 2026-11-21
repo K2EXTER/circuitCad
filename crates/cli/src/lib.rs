@@ -21,6 +21,8 @@ mod budgetcmd;
 mod inrushcmd;
 mod breadboardcmd;
 mod pinscmd;
+mod libsynccmd;
+mod adccmd;
 mod reqcmd;
 pub mod runner;
 mod projectcmd;

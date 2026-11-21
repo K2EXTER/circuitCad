@@ -268,6 +268,7 @@ impl SchEditor {
             self.skip_selection();
         }
         self.erc_skip_ui(ui);
+        self.lib_sync_button(ui);
         if self.erc_ran && self.problems.is_empty() {
             ui.colored_label(crate::theme::OK, i18n::tr("✔ 問題は見つかりませんでした"));
         }

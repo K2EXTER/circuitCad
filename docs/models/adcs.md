@@ -16,7 +16,7 @@
 | DVDD と IOVDD の電流 | 225 µA | 7.5 節「DIGITAL SUPPLY CURRENT」の Conversion mode, internal oscillator が typ 225 µA (IDVDD と IIOVDD をまとめた行)。DVDD 側に置き、IOVDD は 1 GΩ |
 | アナログ入力 (AIN0〜11・AINCOM) | 20 GΩ を AVSS へ | 7.5 節「ANALOG INPUTS」の Absolute input current, PGA enabled が typ 0.1 nA (最大 ±2 nA)。中点 (3.3 V の半分くらい) で 0.1 nA になる抵抗。電流の向きは表に無い |
 | REFP0 | 500 MΩ を AVSS へ | 7.5 節「VOLTAGE REFERENCE INPUTS」の Reference buffers enabled, VREF = 2.5 V が typ 5 nA。2.5 V で 5 nA |
-| REFN0 | 250 kΩ を AVSS へ | 同じ表の Reference buffers disabled が typ 4 µA/V。REFN0 はふつう AVSS のそばにあるので、この抵抗にはほとんど電流が流れない |
+| REFN0 | REFN0 から 4 µA/V × V(REFP0 − REFN0) を出す電流源 (AVDD から) | 同じ表の Reference buffers disabled が typ 4 µA/V (基準電圧 1 V あたり)。基準電圧のピンの間のサンプリングのコンデンサが、REFP から電荷を取って REFN へ返す。リセット時は REFP にバッファがあるので、電荷は REFP0 のバッファ (AVDD) から来て REFN0 から出る。初めの版 (2026-11-21 の朝) は 250 kΩ を AVSS へとしていたが、REFN0 を GND から浮かせる比の測り方 (抵抗の測定) では REFN0 を引っぱって、DMM の B 段で基準電圧が 0.35 V と出た |
 | REFOUT | 1 GΩ | 9.6.1.6 節で REFCON のリセット値が 00 (内部基準オフ) |
 
 ### 誤差の表

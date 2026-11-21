@@ -440,7 +440,7 @@
  "sim": {
   "kind": "subckt",
   "name": "ADS124S08",
-  "text": "* ADS124S08: a DC equivalent of the supplies and the inputs only (no conversion, no SPI)\n* Ports: AVDD AVSS DVDD IOVDD DGND AIN0..AIN5 AINCOM REFP1/AIN6 REFN1/AIN7 REFP0 REFN0 GPIO0..3/AIN8..11 REFOUT\n.subckt ADS124S08 avdd avss dvdd iovdd dgnd ain0 ain1 ain2 ain3 ain4 ain5 aincom refp1 refn1 refp0 refn0 gpio0 gpio1 gpio2 gpio3 refout\n* analog supply: conversion mode, PGA on (gain 1-2) 120 uA + the positive reference buffer (on after reset) 35 uA = 155 uA,\n* fading out below about 2 V (the data sheet gives no figure below its 2.7 V supply range)\nBa avdd avss I=155u*step(V(avdd,avss)-2,0.5)\n* digital supply: DVDD and IOVDD together 225 uA in conversion mode with the internal oscillator (the table gives the sum)\nBd dvdd dgnd I=225u*step(V(dvdd,dgnd)-1.5,0.5)\nRio iovdd dgnd 1G\n* each analog input: 0.1 nA (typ, PGA on) at mid-supply, as 20 Gohm to AVSS (the sign of the real current is not known)\nR0 ain0 avss 20G\nR1 ain1 avss 20G\nR2 ain2 avss 20G\nR3 ain3 avss 20G\nR4 ain4 avss 20G\nR5 ain5 avss 20G\nRc aincom avss 20G\nR6 refp1 avss 20G\nR7 refn1 avss 20G\nR8 gpio0 avss 20G\nR9 gpio1 avss 20G\nR10 gpio2 avss 20G\nR11 gpio3 avss 20G\n* REFP0 through its buffer (on after reset): 5 nA at 2.5 V; REFN0 without its buffer (off after reset): 4 uA/V of the reference\n* voltage, taken from REFP0's side through the buffer, so REFN0 sinks it as 250 kohm per volt: modelled as 250 kohm to AVSS\nRp refp0 avss 500Meg\nRn refn0 avss 250k\n* REFOUT: the internal reference is off after reset (high impedance)\nRout refout avss 1G\n.ends ADS124S08",
+  "text": "* ADS124S08: a DC equivalent of the supplies and the inputs only (no conversion, no SPI)\n* Ports: AVDD AVSS DVDD IOVDD DGND AIN0..AIN5 AINCOM REFP1/AIN6 REFN1/AIN7 REFP0 REFN0 GPIO0..3/AIN8..11 REFOUT\n.subckt ADS124S08 avdd avss dvdd iovdd dgnd ain0 ain1 ain2 ain3 ain4 ain5 aincom refp1 refn1 refp0 refn0 gpio0 gpio1 gpio2 gpio3 refout\n* analog supply: conversion mode, PGA on (gain 1-2) 120 uA + the positive reference buffer (on after reset) 35 uA = 155 uA,\n* fading out below about 2 V (the data sheet gives no figure below its 2.7 V supply range)\nBa avdd avss I=155u*step(V(avdd,avss)-2,0.5)\n* digital supply: DVDD and IOVDD together 225 uA in conversion mode with the internal oscillator (the table gives the sum)\nBd dvdd dgnd I=225u*step(V(dvdd,dgnd)-1.5,0.5)\nRio iovdd dgnd 1G\n* each analog input: 0.1 nA (typ, PGA on) at mid-supply, as 20 Gohm to AVSS (the sign of the real current is not known)\nR0 ain0 avss 20G\nR1 ain1 avss 20G\nR2 ain2 avss 20G\nR3 ain3 avss 20G\nR4 ain4 avss 20G\nR5 ain5 avss 20G\nRc aincom avss 20G\nR6 refp1 avss 20G\nR7 refn1 avss 20G\nR8 gpio0 avss 20G\nR9 gpio1 avss 20G\nR10 gpio2 avss 20G\nR11 gpio3 avss 20G\n* REFP0 through its buffer (on after reset): 5 nA at 2.5 V; REFN0 without its buffer (off after reset): the sampling capacitor\n* across the reference gives back 4 uA per volt of the reference voltage out of REFN0 (its charge comes through REFP0's buffer,\n* from AVDD)\nRp refp0 avss 500Meg\nBn avdd refn0 I=4u*max(V(refp0,refn0),0)\n* REFOUT: the internal reference is off after reset (high impedance)\nRout refout avss 1G\n.ends ADS124S08",
   "pins": [
    "26",
    "27",
@@ -466,7 +466,8 @@
   ],
   "limits": [
    "データシートの typ の値から作った、電源の電流と入力の電流だけの等価モデルです (メーカーのモデルではありません)。出典: TI SBAS660C の 7.5 節の表と 9.6.1.6 節。値の決め方は docs/models/adcs.md。",
-   "再現しているもの: AVDD の電流 155 µA (変換中・PGA 有効・利得 1〜2 の 120 µA と、リセット時に有効な正の基準バッファの 35 µA)、DVDD と IOVDD の電流 225 µA (変換中・内部発振。表は 2 つの合計で、DVDD 側にまとめた)、アナログ入力の電流 0.1 nA (PGA 有効、20 GΩ として)、REFP0 の入力電流 5 nA (バッファ有効)、REFN0 の入力電流 4 µA/V (バッファ無効、250 kΩ として)。",
+   "再現しているもの: AVDD の電流 155 µA (変換中・PGA 有効・利得 1〜2 の 120 µA と、リセット時に有効な正の基準バッファの 35 µA)、DVDD と IOVDD の電流 225 µA (変換中・内部発振。表は 2 つの合計で、DVDD 側にまとめた)、アナログ入力の電流 0.1 nA (PGA 有効、20 GΩ として)、REFP0 の入力電流 5 nA (バッファ有効)、REFN0 から出る電流 4 µA/V × 基準電圧 (バッファ無効。サンプリングのコンデンサの電荷が、REFP0 のバッファを通って AVDD から来て REFN0 から出る)。",
+   "変換の読み: 回路図の部品の設定の「ADC の読み」(と ccad adc) が、DC の結果から、データシート 9.5.2 節 (Data Format) の理想の式 (コード = 2^23 × 入力の電圧 × 利得 / 基準電圧) でコードを出します。どの入力・基準・利得を使うかはレジスタの設定なので、そこで選びます。",
    "設定が違えば電流も違います: 利得 4〜8 は 140 µA、16〜32 は 165 µA、64 は 200 µA、128 は 250 µA、PGA を使わないと 85 µA、待機 70 µA、停止 0.1 µA。内部の 2.5 V 基準をオンにすると +185 µA、IDAC は +20〜65 µA。",
    "扱わないもの: 変換 (入力の電圧をコードに変えること)、SPI、内部の 2.5 V 基準 (リセット時はオフ)、IDAC と VBIAS、入力電流の向きと温度による変化 (最大 ±2 nA)、AVDD が 2 V より下の振る舞い。",
    "最終の確認は、メーカーの公式モデルで行ってください。"
@@ -474,6 +475,9 @@
   "origin": {
    "kind": "equivalent",
    "source": "TI ADS124S0x データシート SBAS660C (2016-08、2017-06 改訂)、7.5 節 Electrical Characteristics (アナログ入力・基準電圧入力・電源電流の表) と 9.6.1.6 節 (REF レジスタのリセット値 10h)。AVDD = 3.3 V、DVDD = IOVDD = 3.3 V、25 °C"
+  },
+  "params": {
+   "adc_bits": 24.0
   }
  }
 }

@@ -19,6 +19,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         pins = the symbol's pin names in the subcircuit's node order, map = their pin numbers,
                                         package = a library part whose footprint is borrowed (default TL072, SOIC-8). Encrypted models are refused.
   lib [reload]                          the library folder and the number of parts; 'lib reload' reads it again (after part import or editing a file)
+  libsync [apply=1] [parts=K1,U1]       the placed parts whose copy is older than the library (a model added or corrected since): listed, and
+                                        brought up to date with apply=1 (place, reference and value kept; the copy's pins kept if the library's differ)
   add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]
         TYPE: R C L D LED V I NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
   value REF VALUE                       change the value (a value with spaces, like PULSE(0 5 1m 1u), needs no quotes)
@@ -105,6 +107,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   pins [export=FILE.h] [check=FILE.ino]   the signals on the microcontroller board's pins (a part's pins or a header's pin names D13, A0,
                                         GPIO2): listed, written as a C header for Arduino (#define PIN_X 13), or a firmware's pin constants
                                         checked against the schematic (findings: a constant on another pin than the schematic has)
+  adc REF [pos=AIN0] [neg=AIN1] [refp=REFP0] [refn=REFN0] [gain=1]
+                                        what an ADC (a part whose model has adc_bits) reads at the DC point: the code from the data sheet's
+                                        ideal transfer function, the size of one step (lsb_v) and the code back as a voltage (reads_v)
   battery tran=STOP[:STEP] [from=T] [to=T] [node=NET v_min=V]
                                         how long the battery parts last: the average current over from..to of a transient run (default its second
                                         half; take whole periods of an intermittent load), the charge at which node falls under v_min, the hours
@@ -394,6 +399,8 @@ impl Session {
             "inrush" => self.inrush(args),
             "breadboard" => self.breadboard(args),
             "pins" => self.pins(args),
+            "libsync" => self.libsync(args),
+            "adc" => self.adc(args),
             "mc" => self.mc(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),

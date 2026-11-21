@@ -176,7 +176,7 @@ fn looks_like_supply(n: &str) -> bool {
     ["VCC", "VDD", "VIN", "VBAT", "VS", "V+"].iter().any(|p| u.starts_with(p)) || u.starts_with('+') || (u.starts_with(|c: char| c.is_ascii_digit()) && u.contains('V'))
 }
 
-pub(crate) fn is_ground_name(n: &str) -> bool {
+pub fn is_ground_name(n: &str) -> bool {
     matches!(n.to_ascii_uppercase().as_str(), "GND" | "0" | "VSS" | "AGND" | "DGND")
 }
 

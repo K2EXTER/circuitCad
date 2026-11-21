@@ -256,6 +256,11 @@ impl SchEditor {
                     advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
                 }
             }
+        if let Some(Sel::Comp(i)) = self.selected
+            && i < self.sch.components.len()
+        {
+            self.adc_read_ui(ui, i);
+        }
         if let Some(k) = open_sheet {
             self.enter_sheet(k);
         }

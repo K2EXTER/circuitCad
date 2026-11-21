@@ -300,6 +300,10 @@ pub struct SchEditor {
     analysis_filter: String,
     /// Windows with the long result lists (results table, net list)
     tables: result_tables::State,
+    /// The placed parts older than the library and the window to update them (`lib_sync.rs`).
+    lib_sync: lib_sync::LibSync,
+    /// The inputs, reference and gain chosen for each ADC in "ADC の読み" (`adc_ui.rs`).
+    adc_setups: adc_ui::AdcSetups,
     /// Targets for the design (pass / fail table); kept for the session.
     specs: Vec<spec_table::SpecRow>,
     /// Worst cases computed for the spec table, by what they were computed from (circuit, tolerances, node): at most a few.
@@ -782,6 +786,8 @@ impl Default for SchEditor {
             coverage_cache: None,
             analysis_filter: String::new(),
             tables: Default::default(),
+            lib_sync: Default::default(),
+            adc_setups: Default::default(),
             specs: vec![],
             worst_spec_cache: vec![],
             saved_specs: vec![],
@@ -883,6 +889,8 @@ pub(crate) use glyphs::{glyph_fits, symbol_lines, symbol_pin_labels};
 mod wave;
 mod ac;
 mod analysis_panel;
+mod adc_ui;
+mod lib_sync;
 mod pindefs_ui;
 mod result_tables;
 mod sweep;
