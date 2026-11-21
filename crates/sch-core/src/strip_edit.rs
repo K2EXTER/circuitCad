@@ -351,7 +351,18 @@ pub(crate) fn join_lines(s: &Schematic, out: &mut StripLayout, lines: Vec<(Strin
             let piece_of = |h: At| pieces.iter().position(|(r, x, y)| *r == h.0 && h.1 >= *x && h.1 <= *y);
             let mut alt: Vec<At> = holes_of(out, &net).into_iter().filter(|h| *h != at && piece_of(*h) != piece_of(other)).collect();
             alt.sort_by_key(|h| (h.0 as i32 - at.0 as i32).abs() + (h.1 as i32 - at.1 as i32).abs());
-            alt.into_iter().find_map(|h| free_hole(out, h, taken))
+            if let Some(h) = alt.into_iter().find_map(|h| free_hole(out, h, taken)) {
+                return Some(h);
+            }
+            // last: any free hole already joined to the end (through a wire to a strip with room), the nearest
+            let groups = out.hole_groups();
+            let g = groups.get(&at)?;
+            let og = groups.get(&other);
+            groups
+                .iter()
+                .filter(|(h, x)| *x == g && Some(*x) != og && !taken.contains(*h) && !out.cuts.contains(*h))
+                .map(|(h, _)| *h)
+                .min_by_key(|h| (h.0 as i32 - at.0 as i32).abs() + (h.1 as i32 - at.1 as i32).abs())
         };
         // a wire from off the board with no room at its end: the wire goes on to the other end's piece instead
         let off_end = |out: &StripLayout, at: At| out.off.iter().enumerate().find_map(|(i, (_, v))| v.iter().position(|w| w.2 == at).map(|k| (i, k)));

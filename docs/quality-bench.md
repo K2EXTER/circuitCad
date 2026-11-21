@@ -70,3 +70,12 @@ python tools/freerouting_compare.py --pcb out.pcbjson --jar freerouting-2.5.0.ja
 - 配置を変える変更は、必ず配線までして測ります(配置だけの指標だと、配線が通らなくなる悪化を見逃す)。
 - 数値は**合計**で見ます。1つのサンプルの増減は、配置の小さな違いで簡単にひっくり返ります。
 - `--compare` の相手は、同じ引数(`--no-pour` や `--route-args`)で取ったものにします(違うと表示に出ます)。
+
+## ストリップ基板・ユニバーサル基板の並べ方 (`crates/sch-core/examples/strip_bench.rs`)
+
+試作のタブの並べ方 (`stripboard`・`perfboard`) を変えたら、前後で回して、穴の数・表の線 (ジャンパー)・照合の指摘の合計を比べる。ユニバーサル基板は 1.5 秒で打ち切るので、release で回す (debug は試せる置き方が減り、数が変わる)。
+
+```bash
+cargo run --release -p sch-core --example strip_bench -- --cols 40             # サンプル全部の合計 (幅なしと幅 40)
+cargo run --release -p sch-core --example strip_bench -- --strip --cols 59 F.schjson   # 1 つずつ、ストリップ基板だけ
+```

@@ -492,11 +492,29 @@ fn with_back_strips(c: &crate::breadboard::Circuit, mut l: StripLayout, backs: &
     (l, missed)
 }
 
-/// The board laid out for the circuit `c` (all of the schematic's parts, or those that go on top).
+/// The board laid out for the circuit `c` (all of the schematic's parts, or those that go on top), within the board's width: the
+/// wires joining sections can take it a column or two past, and then it is laid out again that much narrower.
 fn strip_lay(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -> StripLayout {
+    let mut l = strip_lay_once(s, c, opt);
+    let Some(w) = opt.cols else { return l };
+    let mut try_w = w;
+    for _ in 0..3 {
+        if l.cols <= w || try_w <= 8 {
+            break;
+        }
+        try_w -= l.cols - w;
+        let n = strip_lay_once(s, c, StripOptions { cols: Some(try_w), ..opt });
+        if n.cols < l.cols {
+            l = n;
+        }
+    }
+    l
+}
+
+fn strip_lay_once(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -> StripLayout {
     let c = c.clone();
     let secs = sections(s, &c);
-    let mut l = if secs.len() < 2 { lay(&c, opt, &BTreeSet::new()) } else { lay_sections(&c, opt, &secs) };
+    let mut l = if secs.len() < 2 { lay_within(&c, opt, &BTreeSet::new()) } else { lay_sections(&c, opt, &secs) };
     // with sections, a net between sections that has no strip in one of them (a chip's pin to another section's chip) is left
     // apart: joined by a wire as a line of the ratsnest is (the parts added to a board edited by hand are joined so)
     if secs.len() >= 2 {
@@ -570,7 +588,7 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
             facing: c.facing.clone(),
         };
         let external: BTreeSet<String> = nets_in[i].iter().filter(|n| shared(n, i)).cloned().collect();
-        subs.push(lay(&sub, opt, &external));
+        subs.push(lay_within(&sub, opt, &external));
     }
     // the sections side by side, a column between (cut on every row), a new shelf past the board's width
     let mut out = StripLayout::default();
@@ -655,6 +673,29 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
     out.rows = far.0.max(y + shelf_h.max(1) - 1) + 1;
     out.cols = far.1 + 1;
     out
+}
+
+/// One section laid out within the board's width: the rows of chips wrap at the width, but the wires at the left and the parts beside
+/// the chips can take a section past it, so a section that comes out wider is laid out again with the width less what it went over.
+fn lay_within(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<String>) -> StripLayout {
+    let first = lay(c, opt, external);
+    let Some(w) = opt.cols else { return first };
+    let mut best = first;
+    let mut try_w = w;
+    for _ in 0..6 {
+        if best.cols <= w {
+            break;
+        }
+        try_w = try_w.saturating_sub(best.cols - w).max(4);
+        let l = lay(c, StripOptions { cols: Some(try_w), ..opt }, external);
+        if l.cols < best.cols {
+            best = l;
+        }
+        if try_w == 4 {
+            break;
+        }
+    }
+    best
 }
 
 /// A net's strip in a layout of one section: its row and the stretch of the row it has (first and last column; a row shared by nets
@@ -1143,7 +1184,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         });
         l.parts = parts;
         l.homes = homes;
-        let gone = share_rows(&mut l);
+        let gone = share_rows(&mut l, external);
         let used = l.used().into_iter().map(|(a, _)| a).chain(l.cuts.iter().copied()).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
         l.rows = used.0.max(spare_row.saturating_sub(gone)) + 1;
         l.cols = used.1 + 1;
@@ -1237,7 +1278,7 @@ fn bands_of(homes: &[String]) -> Vec<(u16, u16)> {
 /// nothing lying over it, and nothing in the way of a wire or part made longer). The rows left empty go. A band carries the supplies
 /// and ground for every chip along the board, but most other nets are used along a short stretch of it: the DMM's B stage had 44 rows
 /// of strips in 87. Returns how many rows went.
-fn share_rows(l: &mut StripLayout) -> u16 {
+fn share_rows(l: &mut StripLayout, keep: &BTreeSet<String>) -> u16 {
     // each shared row's stretches of strip: (first used column, last used column, net)
     let mut segs: BTreeMap<u16, Vec<(u16, u16, String)>> = BTreeMap::new();
     let mut empty: Vec<u16> = vec![];
@@ -1257,7 +1298,10 @@ fn share_rows(l: &mut StripLayout) -> u16 {
                         _ => vec![],
                     }
                 });
-                if here.is_empty() || !here.iter().all(|(a, b, _)| *b + 1 < lo || hi + 1 < *a) {
+                // a net that goes on to another section keeps a free hole beside its stretch, for the wire from there
+                let mine = &l.homes[m as usize];
+                let gap = |other: &String| 1 + keep.contains(mine) as u16 + keep.contains(other) as u16;
+                if here.is_empty() || !here.iter().all(|(a, b, o)| *b + gap(o) < lo || hi + gap(o) < *a) {
                     continue;
                 }
                 let ends: Vec<End> = ends.iter().map(|x| x.0).collect();
@@ -1281,7 +1325,12 @@ fn share_rows(l: &mut StripLayout) -> u16 {
     for (n, v) in &segs {
         l.homes[*n as usize] = v[0].2.clone();
         for w in v.windows(2) {
-            let cut = (w[0].1 + w[1].0) / 2;
+            // the free holes between go to a stretch that must keep one
+            let cut = match (keep.contains(&w[0].2), keep.contains(&w[1].2)) {
+                (true, false) => w[1].0 - 1,
+                (false, true) => w[0].1 + 1,
+                _ => (w[0].1 + w[1].0) / 2,
+            };
             l.cuts.insert((*n, cut));
             l.names.push(((*n, cut + 1), w[1].2.clone()));
         }
@@ -2074,6 +2123,22 @@ mod section_tests {
         // without sections marked the board is laid out as one
         s.requirements.groups.iter_mut().for_each(|g| g.section = false);
         assert!(strip_layout(&s).sections.is_empty());
+    }
+
+    /// With sections and a narrow board, each section wraps its chips within the width and the sections stack down the board: the
+    /// board keeps to the width and every net between sections is joined (a strip shared along a row keeps a free hole for the wire
+    /// from the other section).
+    #[test]
+    fn sections_keep_to_a_narrow_board() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/seg7_counter.schjson");
+        let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("カウンタ", &["U1", "U3"]), group("表示", &["U2", "DS1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"])];
+        for w in [30u16, 34, 40] {
+            let l = strip_layout_with(&s, StripOptions { cols: Some(w), ..Default::default() });
+            assert!(l.cols <= w, "{w}: {} columns", l.cols);
+            assert!(strip_check(&s, &l).is_empty(), "{w}: {:?}", strip_check(&s, &l));
+        }
     }
 }
 
