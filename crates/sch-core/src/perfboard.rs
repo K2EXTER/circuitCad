@@ -135,8 +135,17 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
     // the shelves as placed, then the same made better by annealing (it helps small boards; on a crowded one the estimate it goes by
     // packs the parts too tight for the wires, and the shelves as placed win)
     // and each again with the chips where the springs and the spreading put them (`simpl`)
-    let mut placings: Vec<(u16, bool, bool, bool)> =
-        [false, true].iter().flat_map(|q| [false, true].iter().flat_map(move |s| GAPS.iter().flat_map(move |g| [(*g, false, *s, *q), (*g, true, *s, *q)]))).collect();
+    // (the chips facing a header turned, the others upright: tried first, when there are such chips)
+    c.facing = facing_headers(&c);
+    let turns: Vec<Turn> = if c.facing.is_empty() { vec![Turn::Up, Turn::All] } else { vec![Turn::Facing, Turn::Up, Turn::All] };
+    let mut placings: Vec<(u16, Turn, bool, bool)> = vec![];
+    for q in [false, true] {
+        for sa in [false, true] {
+            for g in GAPS {
+                placings.extend(turns.iter().map(|t| (g, *t, sa, q)));
+            }
+        }
+    }
     // round locked parts the springs go first: they pull the other parts toward the locked parts' leads (the shelves fill the rows
     // after the locked parts in order, far from what they join)
     // (and with sections, the boxes packed across the board go first: the bands stacked down a crowded board run past the budget)
@@ -294,6 +303,88 @@ fn with_back(c: &Circuit, mut l: StripLayout, backs: &BTreeMap<String, String>) 
         l.parts.push(StripPart { refdes: r.clone(), look: *look, leads: vec![(p1.clone(), x), (p2.clone(), y)], mount: crate::mount::Mount::Back { size: size.clone() } });
     }
     l
+}
+
+/// The holes from `a` to `b` along a row or a column, both ends in.
+fn along(a: At, b: At) -> Vec<At> {
+    if a.0 == b.0 {
+        (a.1.min(b.1)..=a.1.max(b.1)).map(|c| (a.0, c)).collect()
+    } else {
+        (a.0.min(b.0)..=a.0.max(b.0)).map(|r| (r, a.1)).collect()
+    }
+}
+
+/// The river: the nets of two leads each, one on a long header lying along a row (6 leads and more) and one on the top row of a
+/// chip's pins below it, wired as Ls (down from the header, along a row of their own, down to the chip) that do not cross: in the
+/// order along the header (a net out of order with the others is left to the router), each Ls's turn on its own row, the net
+/// whose way along crosses over the start of the next one turning below it. Only through free holes (not a lead's, not one kept
+/// as another net's way out). Returns each net and its straight wires.
+fn river(l: &StripLayout, leads: &[(At, u32)], owner: &[Option<u32>], escape: &BTreeMap<At, u32>) -> Vec<(u32, Vec<(At, At)>)> {
+    let cols = l.cols as usize;
+    let idx = |a: At| a.0 as usize * cols + a.1 as usize;
+    let mut by_net: BTreeMap<u32, Vec<At>> = BTreeMap::new();
+    for (a, n) in leads {
+        by_net.entry(*n).or_default().push(*a);
+    }
+    let part_of = |a: At| l.parts.iter().position(|p| p.leads.iter().any(|(_, h)| *h == a));
+    let mut out = vec![];
+    let mut used: BTreeSet<At> = BTreeSet::new();
+    for (hi, h) in l.parts.iter().enumerate() {
+        let rows: BTreeSet<u16> = h.leads.iter().map(|(_, a)| a.0).collect();
+        if h.look != Look::Row || h.leads.len() < 6 || rows.len() != 1 {
+            continue;
+        }
+        let yh = *rows.iter().next().unwrap();
+        // the header's two-lead nets, grouped by the chip at their other end (on that chip's top row, below the header)
+        let mut to_chip: BTreeMap<usize, Vec<(u32, u16, u16)>> = BTreeMap::new();
+        for (net, holes) in &by_net {
+            let [a, b] = holes.as_slice() else { continue };
+            let (top, other) = if a.0 == yh && part_of(*a) == Some(hi) { (*a, *b) } else if b.0 == yh && part_of(*b) == Some(hi) { (*b, *a) } else { continue };
+            let Some(ci) = part_of(other) else { continue };
+            let chip = &l.parts[ci];
+            if chip.look != Look::Dip || chip.leads.iter().map(|(_, x)| x.0).min() != Some(other.0) || other.0 <= yh + 1 {
+                continue;
+            }
+            to_chip.entry(ci).or_default().push((*net, top.1, other.1));
+        }
+        for (ci, mut v) in to_chip {
+            let yc = l.parts[ci].leads.iter().map(|(_, x)| x.0).min().unwrap();
+            // in the order along the header, keeping those whose chip pins come in the same order
+            v.sort_by_key(|x| x.1);
+            let mut kept: Vec<(u32, u16, u16)> = vec![];
+            for x in v {
+                if kept.last().is_none_or(|k| k.2 < x.2) {
+                    kept.push(x);
+                }
+            }
+            let tracks: Vec<u16> = (yh + 1..yc).rev().collect();
+            // the nets going right turn deepest from the left, the nets going left deepest from the right
+            let right: Vec<&(u32, u16, u16)> = kept.iter().filter(|x| x.2 > x.1).collect();
+            let left: Vec<&(u32, u16, u16)> = kept.iter().filter(|x| x.2 < x.1).rev().collect();
+            let straight: Vec<&(u32, u16, u16)> = kept.iter().filter(|x| x.2 == x.1).collect();
+            let mut plan: Vec<(u32, Vec<(At, At)>)> = vec![];
+            for group in [right, left] {
+                for (k, (net, xh, xc)) in group.into_iter().enumerate() {
+                    let Some(&t) = tracks.get(k) else { break };
+                    plan.push((*net, vec![((yh, *xh), (t, *xh)), ((t, *xh), (t, *xc)), ((t, *xc), (yc, *xc))]));
+                }
+            }
+            for (net, _, x) in straight {
+                plan.push((*net, vec![((yh, *x), (yc, *x))]));
+            }
+            for (net, segs) in plan {
+                let holes: Vec<At> = segs.iter().flat_map(|(a, b)| along(*a, *b)).collect();
+                let (start, end) = (segs[0].0, segs.last().unwrap().1);
+                let free = holes.iter().all(|x| *x == start || *x == end || (owner[idx(*x)].is_none() && escape.get(x).is_none_or(|e| *e == net) && !used.contains(x)));
+                if !free {
+                    continue;
+                }
+                used.extend(holes.iter().copied());
+                out.push((net, segs.into_iter().filter(|(a, b)| a != b).collect()));
+            }
+        }
+    }
+    out
 }
 
 /// The net of a part's lead ("" when none).
@@ -584,9 +675,37 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
     }
 }
 
-/// The chips and rows of leads (not the two-lead parts), each turned a quarter turn when `turned`.
-fn shapes_of(c: &Circuit, turned: bool) -> Vec<Shape> {
-    (0..c.on.len()).filter(|k| look_on(c, *k) != Look::TwoLead).map(|k| shape(c, k)).map(|s| if turned { turn(s) } else { s }).collect()
+/// Which chips a placing turns a quarter turn: none, all, or those facing a long header (`Circuit::facing`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Turn {
+    Up,
+    All,
+    Facing,
+}
+
+/// The chips and rows of leads (not the two-lead parts), each turned a quarter turn as `turned` says.
+fn shapes_of(c: &Circuit, turned: Turn) -> Vec<Shape> {
+    (0..c.on.len())
+        .filter(|k| look_on(c, *k) != Look::TwoLead)
+        .map(|k| (k, shape(c, k)))
+        .map(|(k, s)| if turned == Turn::All || (turned == Turn::Facing && c.facing.contains(&c.on[k].0)) { turn(s) } else { s })
+        .collect()
+}
+
+/// The chips with several nets (3 and more, not the supplies or ground) to a long header (a row of 6 leads and more, laid along
+/// the top edge): turned a quarter turn, their rows of pins lie along the header's, and the wires from one row to the other need
+/// not cross (an upright chip's column of pins under a header's row is crossed by every wire to it).
+pub(crate) fn facing_headers(c: &Circuit) -> BTreeSet<String> {
+    let plain = |n: &str| !n.is_empty() && !crate::breadboard::is_ground_name(n) && !crate::section_plan::supply_name(n) && !c.supplies.iter().any(|x| x == n);
+    let headers: Vec<BTreeSet<&str>> = (0..c.on.len()).filter(|k| look_on(c, *k) == Look::Row && c.on[*k].2.len() >= 6).map(|k| c.on[k].2.iter().map(|(_, n)| n.as_str()).filter(|n| plain(n)).collect()).collect();
+    (0..c.on.len())
+        .filter(|k| look_on(c, *k) == Look::Dip)
+        .filter(|k| {
+            let nets: BTreeSet<&str> = c.on[*k].2.iter().map(|(_, n)| n.as_str()).filter(|n| plain(n)).collect();
+            headers.iter().any(|h| h.intersection(&nets).count() >= 3)
+        })
+        .map(|k| c.on[k].0.clone())
+        .collect()
 }
 
 /// What a chip takes on the board with the free holes round it for the wires (`gap` holes between chips).
@@ -612,7 +731,7 @@ fn is_head(s: &Shape) -> bool {
 /// The sections each in a box of its own, packed across the board instead of one band of rows each (small sections side by side):
 /// each section's parts placed alone (`place`, its off-board wires with it) about square, then the boxes in shelves across the
 /// board's width, the tallest first, `gap` holes between. None without two sections, or with locked parts (they keep their holes).
-fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants: &Wants) -> Option<StripLayout> {
+fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants: &Wants) -> Option<StripLayout> {
     if wants.sections.len() < 2 || !wants.keep.is_empty() {
         return None;
     }
@@ -633,6 +752,7 @@ fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool
             supplies: c.supplies.clone(),
             ground: c.ground.clone(),
             mounts: c.mounts.clone(),
+            facing: c.facing.clone(),
         };
         if sub.on.is_empty() {
             continue;
@@ -865,7 +985,7 @@ fn beside4(h: At, width: u16) -> impl Iterator<Item = At> {
 /// each the headers along its top, then the chips in rows (shelves) left to right, then the two-lead parts. With `targets` (each
 /// part's centre, row and column, from `simpl::targets`), a chip other than a header goes to the free place nearest its target
 /// instead of the next on the shelf, and a two-lead part weighs its distance from its target too.
-fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants: &Wants, targets: Option<&BTreeMap<String, (f64, f64)>>) -> StripLayout {
+fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants: &Wants, targets: Option<&BTreeMap<String, (f64, f64)>>) -> StripLayout {
     let off_pins: Vec<(usize, usize)> = c.off.iter().enumerate().flat_map(|(i, (_, p))| p.iter().enumerate().filter(|(_, (_, n))| !n.is_empty()).map(move |(j, _)| (i, j))).collect();
     let margin: u16 = if off_pins.is_empty() { 1 } else { 2 };
     let all_shapes = shapes_of(c, turned);
@@ -1203,6 +1323,16 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
     }
     let grounds: Vec<(u32, Vec<At>, Option<usize>)> = nets.iter().filter(|x| x.2.is_some()).cloned().collect();
     nets.retain(|(_, v, _)| v.len() > 1);
+    // the river: a long header's two-lead nets to the row of a chip's pins under it, wired first as nested Ls that do not cross
+    for (net, segs) in river(l, &leads, &owner, &escape) {
+        for (a, b) in &segs {
+            for h in along(*a, *b) {
+                owner[idx(h)] = Some(net);
+            }
+            l.bare.push((*a, *b));
+        }
+        nets.retain(|x| x.0 != net);
+    }
     let rail = |i: u32| is_ground_name(&names[i as usize]) || c.supplies.contains(&names[i as usize]);
     // a net of two leads near each other (a short bare wire), wired before the others cut across it (a header's pin to the chip
     // under it would else be jumped by a wire on top)
@@ -1728,6 +1858,57 @@ mod tests {
         assert!((l.rows as u32) * (l.cols as u32) < (front.rows as u32) * (front.cols as u32), "{}x{} < {}x{}", l.cols, l.rows, front.cols, front.rows);
     }
 
+    /// The river: six nets from a header's row to a chip's top row below it, two holes to the right, are wired as Ls on rows of
+    /// their own, no hole used by two nets, and each net's wires join its two leads; with too few rows between, the rest are left.
+    #[test]
+    fn a_header_and_the_chip_row_under_it_are_wired_as_nested_ls() {
+        let part = |r: &str, look, leads: Vec<(String, At)>| StripPart { refdes: r.into(), look, leads, mount: Default::default() };
+        let l = StripLayout {
+            rows: 10,
+            cols: 10,
+            perf: true,
+            parts: vec![
+                part("J1", Look::Row, (0..6).map(|k| (format!("{}", k + 1), (0, k))).collect()),
+                part("U1", Look::Dip, (0..6).map(|k| (format!("{}", k + 1), (7, k + 2))).chain((0..6).map(|k| (format!("{}", 12 - k), (9, k + 2)))).collect()),
+            ],
+            ..Default::default()
+        };
+        // nets 0..5: J1.k to U1's top row pin k; U1's bottom row on nets of their own
+        let mut leads: Vec<(At, u32)> = (0..6).map(|k| ((0, k), k as u32)).collect();
+        leads.extend((0..6).map(|k| ((7, k + 2), k as u32)));
+        leads.extend((0..6).map(|k| ((9, k + 2), 10 + k as u32)));
+        let mut owner = vec![None; 100];
+        for (a, n) in &leads {
+            owner[a.0 as usize * 10 + a.1 as usize] = Some(*n);
+        }
+        let wired = river(&l, &leads, &owner, &BTreeMap::new());
+        assert_eq!(wired.len(), 6, "{wired:?}");
+        // with a row fewer between them (5 rows, 6 nets all overlapping), the last one is left to the router
+        let mut tight = l.clone();
+        for (_, a) in &mut tight.parts[1].leads {
+            if a.0 == 7 {
+                a.0 = 6;
+            }
+        }
+        let tl: Vec<(At, u32)> = leads.iter().map(|(a, n)| (if a.0 == 7 { (6, a.1) } else { *a }, *n)).collect();
+        let mut to = vec![None; 100];
+        for (a, n) in &tl {
+            to[a.0 as usize * 10 + a.1 as usize] = Some(*n);
+        }
+        assert_eq!(river(&tight, &tl, &to, &BTreeMap::new()).len(), 5);
+        let mut seen: BTreeMap<At, u32> = BTreeMap::new();
+        for (net, segs) in &wired {
+            for (a, b) in segs {
+                assert!(a.0 == b.0 || a.1 == b.1, "straight");
+                for h in along(*a, *b) {
+                    assert!(seen.insert(h, *net).is_none_or(|n| n == *net), "{h:?} used by two nets");
+                }
+            }
+            let ends: BTreeSet<At> = segs.iter().flat_map(|(a, b)| [*a, *b]).collect();
+            assert!(ends.contains(&(0, *net as u16)) && ends.contains(&(7, *net as u16 + 2)), "net {net} joins its leads: {segs:?}");
+        }
+    }
+
     /// A sample laid out on a perfboard (`opt`): it joins what its schematic joins and nothing more; every bare wire runs straight
     /// along a row or a column; no lead or wire's end shares a hole; all on the board. With the layout, the stripboard's holes.
     fn laid_out(name: &str, opt: StripOptions) -> (StripLayout, u32) {
@@ -1862,7 +2043,7 @@ mod tests {
         let s = load("arduino_mega_usb.schjson");
         let c = read(&s);
         let wants = Wants::read(&s, &c);
-        for turned in [false, true] {
+        for turned in [Turn::Up, Turn::All] {
             let l = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants, None);
             let mut taken: BTreeSet<At> = l.off.iter().flat_map(|(_, v)| v.iter().map(|w| w.2)).collect();
             for p in &l.parts {
@@ -1872,7 +2053,7 @@ mod tests {
             }
             for p in &l.parts {
                 for (pin, a) in &p.leads {
-                    assert!(beside4(*a, l.cols).any(|n| !taken.contains(&n)), "turned {turned}: {}.{pin} at {a:?} walled in", p.refdes);
+                    assert!(beside4(*a, l.cols).any(|n| !taken.contains(&n)), "turned {turned:?}: {}.{pin} at {a:?} walled in", p.refdes);
                 }
             }
         }

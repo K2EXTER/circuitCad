@@ -567,6 +567,7 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
             supplies: c.supplies.clone(),
             ground: c.ground.clone(),
             mounts: c.mounts.clone(),
+            facing: c.facing.clone(),
         };
         let external: BTreeSet<String> = nets_in[i].iter().filter(|n| shared(n, i)).cloned().collect();
         subs.push(lay(&sub, opt, &external));

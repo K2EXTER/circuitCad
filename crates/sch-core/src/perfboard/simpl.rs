@@ -23,7 +23,7 @@ struct Mover {
 
 /// Each part's target centre (row, column) other than the headers', or None when the table asks for sections (each a band of
 /// rows of its own; not done here).
-pub(super) fn targets(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, wants: &Wants) -> Option<BTreeMap<String, (f64, f64)>> {
+pub(super) fn targets(c: &Circuit, opt: StripOptions, gap: u16, turned: super::Turn, wants: &Wants) -> Option<BTreeMap<String, (f64, f64)>> {
     if !wants.sections.is_empty() {
         return None;
     }

@@ -193,6 +193,9 @@ pub(crate) struct Circuit {
     pub(crate) ground: Option<String>,
     /// How each part on the board goes on (a socket, an adapter board), by reference.
     pub(crate) mounts: BTreeMap<String, crate::mount::Mount>,
+    /// The chips a perfboard's layout turns a quarter turn in its "facing" placings: those with several nets to a long header, so
+    /// their row of pins lies along the header's (`perfboard::facing_headers`).
+    pub(crate) facing: BTreeSet<String>,
 }
 
 pub(crate) fn read(s: &Schematic) -> Circuit {
@@ -251,7 +254,7 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
             ground = Some(n.name.clone());
         }
     }
-    Circuit { on, off, supplies, ground, mounts }
+    Circuit { on, off, supplies, ground, mounts, facing: BTreeSet::new() }
 }
 
 /// Places the parts of `s` on a breadboard.
