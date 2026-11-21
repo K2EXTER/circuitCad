@@ -32,7 +32,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`(目次。ファイル一覧は `sim-core/files.md`)
 - 動作点 `dc/`(build・devices・mna・newton・linalg・digital)/ 過渡 `tran.rs`(`TranRun` で続きから解く・途中で電源を変える)/ `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs`(FFT・THD)/ `temperature.rs`
 - 回路図→素子 `from_schematic.rs`(新しい部品種別はここ)/ `spice_in.rs` ライブラリ読込 / `spice_flat.rs` ベンダー形式のSPICE文の展開 / `expr.rs` 式の評価 / `netcurrent.rs` ネットごとの電流 / `dc/seq.rs` 記憶つき素子 / `waveform.rs` / `value.rs` / `options.rs` / `par.rs` 並列 / `diagnose.rs` 失敗時の原因
-- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `cmrr` `troubleshoot` `loopgain`(ナイキスト・ニコルスの印も) `polezero` `rootlocus`(根軌跡) `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage` `battery`(電池の持ち時間: 過渡解析の平均の電流と、残量を減らして DC で探す止まる残量。画面は `schematic/battery.rs`)`inrush`(突入電流: 電源を入れた瞬間のピーク・I²t と通り道の部品の定格。画面 `schematic/inrush.rs`、CLI `inrush`)`budget`(電源の予算表: レールの木・あと何 mA・レギュレータの発熱。画面 `schematic/budget.rs`、CLI `budget`)`adcread`(ADC が DC の動作点で読むコード。画面 `schematic/adc_ui.rs`、CLI `adc`)`poweron`(最初の電源投入: 電流制限の値と正常な電流の範囲。画面 `power_on_guide.rs`、CLI `poweron`)
+- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `cmrr` `troubleshoot` `loopgain`(ナイキスト・ニコルスの印も) `polezero` `rootlocus`(根軌跡) `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage` `battery`(電池の持ち時間: 過渡解析の平均の電流と、残量を減らして DC で探す止まる残量。画面は `schematic/battery.rs`)`inrush`(突入電流: 電源を入れた瞬間のピーク・I²t と通り道の部品の定格。画面 `schematic/inrush.rs`、CLI `inrush`)`budget`(電源の予算表: レールの木・あと何 mA・レギュレータの発熱。画面 `schematic/budget.rs`、CLI `budget`)`adcread`(ADC が DC の動作点で読むコードと、データシートの雑音の表からの揺れ・実効の分解能。表は `adcnoise_*.txt`。画面 `schematic/adc_ui.rs`、CLI `adc`)`poweron`(最初の電源投入: 電流制限の値と正常な電流の範囲。画面 `power_on_guide.rs`、CLI `poweron`)
 - 熱: `selfheat.rs` 自己発熱 / `ambient.rs` 周囲の温度を振る(自己発熱込みの最悪ケース)/ `heat_tran.rs` 温度の時間変化 / `zth.rs` 過渡熱抵抗の段(データシートの曲線に当てはめ)
 - 音: `audio.rs`(波形を WAV に・WAV を電源の波形 `WAV(…)` に。画面は過渡解析の表のタブ「音で聴く」`schematic/audio_ui.rs`)
 - `designcalc.rs` 値の計算(足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)/ `filterdesign.rs` アクティブフィルタの段と部品(回路図に置くのは `schematic/filter_place.rs`)
@@ -46,7 +46,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - 銅・形: `zonefill.rs`(ベタの銅)`copper.rs`(配線後に足す銅)`groundpour.rs`(GNDベタ)`stitch.rs`(ビアの縫い付け)`fiducial.rs`(フィデューシャル)`outline.rs` `shape.rs` `geom.rs` `pinlabels.rs`
 - 配線: `autoroute.rs` `shove.rs` `ratsnest.rs` `reroute.rs` `merge.rs` `breakout.rs` `bridge.rs` `trunk.rs` `slot.rs` `padentry.rs` `meander.rs` `smooth.rs` `quality.rs`
 - 3D・ケース: `shape_script.rs`(本体のひな形を SolidCraft の台本に。`ccad shape`)`stack.rs`(複数の基板を 3D で重ねる・ぶつかり・置き方)`body.rs` `model3d.rs` `step.rs` `step_out.rs`(STEP の書き出し)`mesh_io.rs`(OBJ の読み書き) `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` `case_model.rs`(ケースの STEP を重ねてぶつかりを見る) `dimension.rs`(寸法線) / 絵と図: `svg.rs` `picture.rs`
-- 出力: `fab.rs`(発注前チェック)`assembly_sheet.rs`(はんだ付けの順・向きの印・印刷用の組み立て表 SVG。B3)`export.rs` `gerber.rs` `excellon.rs` `assembly.rs` `shops.rs` `gerber_view.rs`
+- 出力: `fab.rs`(発注前チェック)`assembly_sheet.rs`(はんだ付けの順・向きの印・印刷用の組み立て表 SVG。B3)`print_check.rs`(原寸の確かめの図: パッドと穴を 1:1 で白地に・50 mm の目盛り。X4)`export.rs` `gerber.rs` `excellon.rs` `assembly.rs` `shops.rs` `gerber_view.rs`
 - 修理の練習 `breakage.rs`、文字 `labels.rs`(部品番号をよける。7 か所+力)`strokefont.rs` `silkedit.rs`(シルクの文字・部品番号・線を手で直す。発注先の下限を守る)
 
 ## app (`crates/app/src`) — 詳細: `docs/code-notes/app.md`(目次。ファイル一覧は `app/files.md`)

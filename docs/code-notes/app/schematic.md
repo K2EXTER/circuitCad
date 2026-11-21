@@ -113,7 +113,7 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 
 ## ADC の読み (2026-11-21、L1)
 
-- `sim_core::adcread`: モデルの `params` に `adc_bits` のある部品を ADC として、入力 (+・−)・基準 (+・−)・利得を選び、DC の結果からコード = 2^(bits−1) × 入力 × 利得 / 基準 (ADS124S08 のデータシート SBAS660C の 9.5.2 節 Data Format: 1 LSB = (2·VREF / Gain) / 2^24)、範囲を超えたら端の値と `clipped`。始めの設定は最初の 2 つの AIN と REFP0・REFN0・利得 1 (`default_setup`)
-- 画面は `schematic/adc_ui.rs`: 部品の設定の「ADC の読み」(選んだ設定は開いている間だけ覚え、保存しない)。CLI は `adc 部品 [pos=] [neg=] [refp=] [refn=] [gain=]` (ピンは名前か番号)
+- `sim_core::adcread`: モデルの `params` に `adc_bits` のある部品を ADC として、入力 (+・−)・基準 (+・−)・利得を選び、DC の結果からコード = 2^(bits−1) × 入力 × 利得 / 基準 (ADS124S08 のデータシート SBAS660C の 9.5.2 節 Data Format: 1 LSB = (2·VREF / Gain) / 2^24)、範囲を超えたら端の値と `clipped`。始めの設定は最初の 2 つの AIN と REFP0・REFN0・利得 1・20 SPS・sinc・チョップなし (`default_setup`)。雑音 (2026-11-21): 部品の名前の頭で `NOISE_TABLES` からデータシートの表 (`adcnoise_ads124s0x.txt`、`table 名前` の行のあとに「レート rms pp × 8 利得」) を選び、`noise(part, setup, vref, bits)` が rms・p-p (V とコード)・実効とちらつかない分解能・止まって見える桁を返す (`AdcReading.noise`)。表に無いレート・利得は None。値の出どころと確かめは `docs/models/adcs.md`
+- 画面は `schematic/adc_ui.rs`: 部品の設定の「ADC の読み」(選んだ設定は開いている間だけ覚え、保存しない)。CLI は `adc 部品 [pos=] [neg=] [refp=] [refn=] [gain=] [rate=] [filter=sinc|low_latency] [chop=0|1]` (ピンは名前か番号)。画面ではデータレートの選択・フィルタ・グローバルチョップは、雑音の表のある部品だけに出る
 - DMM の B 段は回路図に電源が無い (コネクタから入れる) ので、そのままの `dc` では基準電圧が 0.35 V のような意味の無い値になる。5 V・3.3 V の電源を足すと、基準 2.49999 V、AIN2−AIN3 の 138 µV がコード 463 (1 段 298 nV)
 

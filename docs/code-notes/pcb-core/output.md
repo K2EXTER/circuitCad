@@ -61,6 +61,13 @@
 - Gerber の「消す」(clear)は、そこまでの絵を `<mask>` で包んで抜く(消したあとに描いたものは抜かれない)。
 - 基板の y は上向き、SVG は下向きなので、全体を `scale(1,-1)` の組で包む。裏面は `scale(-1,-1)` で、下から見た向き(左右反転)。大きさは mm(`width`/`height` が mm)。
 - 色は表面=金、裏面=青、内層=紫、基板=緑、シルク=白。入口は画面の「ファイル → 基板の表面/裏面をSVGで保存…」(`board_editor/file.rs` の `export_svg`)と CLI の `board svg FILE [side=] [silk=0]`。
+## print_check.rs — 原寸の確かめの図(X4。2026-11-21)
+- `print_check::print_check_svg(&Board, Side) -> Result<String,String>`。白地に、その面のパッド (貫通穴のパッドは両面とも) を黒・穴を白、取り付け穴は輪、外形は灰の線、部品番号は赤でパッドの上に。大きさは mm で `viewBox` も mm なので、100 % で印刷すると原寸。裏は下から見た向き (左右反転)。
+- 下に 50 mm の目盛り (`RULER_MM`、1 mm ごと、5・10 mm で長く、10 mm ごとに数) と「この目盛りが定規で 50 mm なら原寸です」。上に見出しと手順 3 行 (`STEPS`。ページの幅で折り返す `wrap`: 全角 1 字 = 字の大きさ、ASCII は 0.55)。ページの幅は 150 mm 以上 (手順が入るように)。
+- Gerber を通さずパッドの形を直に描く (ベタや配線は描かない: 部品を当てる紙なので)。
+- 入口: **発注の準備** (`fab::preflight`) の Info「原寸で印刷して、実物の部品を当ててみましょう」(`PRINT_CHECK_TITLE`。部品がある基板だけ) の下のボタン (表・裏、`board_editor/order.rs`)、ファイルメニュー「原寸の確かめ用の図をSVGで保存…」、実機のタブの「組み立て」のボタン (`BenchAction::SavePrintCheck`)、CLI `board printcheck F.svg [side=]`。保存は `board_editor/file.rs` の `export_print_check`。
+- 確かめ: テスト (mm の大きさとパッドの大きさ、面ごとのパッド、裏の反転、目盛りの数、折り返し、**発注の準備**の項目)。`mixed_signal.ccproj` の基板を Edge で開いて見た (手順が折り返され、目盛りが基板の下に出る)。紙に印刷しての確かめはまだ。
+
 ## dxf_in.rs — ケースの図面から外形と穴を取る(2026-11-08)
 - `dxf_in::read(text, layer) -> Result<DxfShape{outline, holes, notes}>`、`apply(&mut Board, &shape, to_origin)`。ASCII の DXF の LINE・ARC・CIRCLE・LWPOLYLINE・POLYLINE(VERTEX のふくらみ `42` も)だけを読む。それ以外(TEXT・SPLINE・INSERT など)は読まずに、種類と数を案内に出す。
 - 端が 0.01 mm 以内で合う線・円弧・ポリラインをつないで輪にする(向きが逆でもよい)。閉じた輪のうち面積がいちばん大きいものが外形。ほかの輪(切り欠き・長穴)は案内に数だけ出す。外形の中にある円が穴(外にある円は穴にしない)。閉じた輪がなければ、層の名前を挙げて断る。
@@ -93,6 +100,7 @@
 - `requirements.rs` 回路図の「設計の要件」の表を基板に取り込み(ネットクラス・電流・組・距離)、組の広がりと離す距離を点検する。自動配置は組を1つの塊にする(`ccad board req`)
 - `step.rs`・`mesh.rs` メーカーの STEP を三角形のメッシュ(`Mesh3d`)にして、部品の3Dの形にする(`PartDef.model3d` → `Board.models3d` → `model3d.rs` の `part_meshes`)
 - `svg.rs` 基板の1つの面の SVG(Gerber を読み戻して描く。画面のファイルメニューと `ccad board svg`)
+- `print_check.rs` 原寸の確かめの図 (パッドと穴を 1:1 で白地に・50 mm の目盛り。X4。**発注の準備**・ファイルメニュー・実機のタブ・`ccad board printcheck`)
 - `assembly_sheet.rs` はんだ付けの順 (背の低い順)・向きの印 (1 番ピン・カソード・+ 側)・印刷用の組み立て表の SVG (B3。実機のタブと `ccad board assembly`。詳細は `app/bench-tab.md`)
 - `link.rs`(app)回路図・基板・3D で選んだ部品とネットの連動(`App::sync_focus`。設定でオフにできる。詳細 `docs/code-notes/app.md`)
 - `case.rs` 箱のケースの内寸に、基板が入るか・背の高い部品がないか(3D 表示の「内寸」と `ccad board case`)

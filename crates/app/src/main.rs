@@ -206,6 +206,10 @@ impl App {
                     self.sch.status = msg;
                 }
             }
+            B::SavePrintCheck => {
+                self.board_ed.export_print_check(pcb_core::Side::Top);
+                self.sch.status = self.board_ed.status.clone();
+            }
         }
     }
 
@@ -557,6 +561,10 @@ impl eframe::App for App {
                                 self.board_ed.export_svg(side);
                                 ui.close();
                             }
+                        }
+                        if ui.button(i18n::tr("原寸の確かめ用の図をSVGで保存…")).on_hover_text(i18n::tr("表の面のパッドと穴を原寸 (1:1) で、50 mm の目盛りをつけて白い紙に描きます。「実際のサイズ」(100 %) で印刷し、実物の部品を当てて、足とパッドが合うかを発注の前に確かめます")).clicked() {
+                            self.board_ed.export_print_check(pcb_core::Side::Top);
+                            ui.close();
                         }
                         ui.separator();
                         if ui.button(i18n::tr("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…")).on_hover_text(i18n::tr("発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます")).clicked() {

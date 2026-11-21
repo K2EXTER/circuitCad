@@ -79,6 +79,7 @@ pub mod mesh_io;
 pub mod stitch;
 pub mod swap;
 pub mod strokefont;
+pub mod print_check;
 pub mod svg;
 pub mod zonefill;
 

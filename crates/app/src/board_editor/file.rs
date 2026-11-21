@@ -99,6 +99,16 @@ impl BoardEditor {
         };
     }
 
+    /// Write the full-size print of one side to try the real parts on (`pcb_core::print_check`, X4).
+    pub fn export_print_check(&mut self, side: pcb_core::Side) {
+        let name = format!("{}-fullsize-{}.svg", if self.board.name.is_empty() { "board" } else { &self.board.name }, if side == pcb_core::Side::Bottom { "bottom" } else { "top" });
+        let Some(p) = rfd::FileDialog::new().add_filter("SVG", &["svg"]).set_file_name(name).save_file() else { return };
+        self.status = match pcb_core::print_check::print_check_svg(&self.board, side).and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string())) {
+            Ok(()) => format!("原寸の図を保存しました: {} (ブラウザで開き、「実際のサイズ」で印刷します)", p.display()),
+            Err(e) => format!("原寸の図を保存できませんでした: {e}"),
+        };
+    }
+
     pub fn open(&mut self) {
         if let Some(p) = rfd::FileDialog::new().add_filter("circuitCad 基板", &["pcbjson"]).pick_file() {
             self.load_path(p);

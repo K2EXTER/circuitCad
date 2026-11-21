@@ -73,6 +73,8 @@ pub enum BenchAction {
     MeasureGuide,
     /// Save the printable assembly sheet (`BenchTab::save_sheet`).
     SaveSheet,
+    /// Save the full-size print to try the parts on (`pcb_core::print_check`, X4).
+    SavePrintCheck,
 }
 
 #[derive(Default)]
@@ -232,6 +234,9 @@ impl BenchTab {
             ui.add(egui::ProgressBar::new(n as f32 / self.order.len() as f32).text(i18n::trf!("付けた部品 {n} / {}", self.order.len())));
             if ui.button(i18n::tr("組み立て表を印刷用に保存 (SVG)…")).on_hover_text(i18n::tr("基板の配置図 (向きの印つき) と、付ける順の部品の一覧 (□ に印をつけながら進める) を、A4 の幅の 1 枚の図 (SVG) にします。ブラウザで開いて印刷するか、印刷から PDF にできます。いま印をつけた部品は、印がついた形で入ります")).clicked() {
                 *action = Some(BenchAction::SaveSheet);
+            }
+            if ui.button(i18n::tr("原寸の確かめ用の図を保存 (SVG)…")).on_hover_text(i18n::tr("パッドと穴を原寸で描いた図 (50 mm の目盛りつき) を保存します。「実際のサイズ」(100 %) で印刷し、実物の部品を当てて足とパッドが合うかを見ます。発注の前に、届いた部品で確かめるのがいちばんです")).clicked() {
+                *action = Some(BenchAction::SavePrintCheck);
             }
             if board.parts.iter().any(|p| p.side == Side::Bottom) {
                 ui.label(egui::RichText::new(i18n::tr("「裏」の部品は、基板を裏返して付けます (絵では薄く描きます)")).color(NOTE));

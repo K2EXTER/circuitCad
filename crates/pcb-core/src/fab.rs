@@ -216,6 +216,9 @@ pub fn schematic_sync_check(summary: &str, blocking: bool) -> Check {
 /// The start of the title of the check for part silk drawn by an older version (the app shows its fix button under it).
 pub const STALE_SILK_TITLE: &str = "シルクの印が今の部品の形より少ない部品があります";
 
+/// The title of the note to print the board at full size and try the real parts on it (the app shows its save button under it).
+pub const PRINT_CHECK_TITLE: &str = "原寸で印刷して、実物の部品を当ててみましょう";
+
 /// Everything a beginner should look at before sending the files.
 pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     let mut out = vec![];
@@ -491,6 +494,16 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     }
     if board.holes.is_empty() {
         out.push(check(Level::Info, "取付穴はありません", "ケースにネジ止めするなら、取付穴 (ツール「取付穴」) を付けておきましょう", None));
+    }
+
+    // the full-size print (X4): a footprint that does not fit the part is found with a sheet of paper
+    if !board.parts.is_empty() {
+        out.push(check(
+            Level::Info,
+            PRINT_CHECK_TITLE,
+            "初めての基板でいちばん多い失敗は、フットプリントが実物の部品と合わないこと (足の間隔・ピンの並び・穴の太さ) です。表の面のパッドと穴を原寸の図 (目盛りつき) にして、「実際のサイズ」(100 %) で印刷し、目盛りの 50 mm を定規で確かめてから、実物の部品を紙の上に置いて足とパッドが合うか見ます。足のある部品は、紙を発泡スチロールに載せて穴に差します",
+            None,
+        ));
     }
     out
 }

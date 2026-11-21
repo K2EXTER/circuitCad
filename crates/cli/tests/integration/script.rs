@@ -1622,6 +1622,7 @@ net IN V3.+ U1.AIN0
 net GND V1.- V2.- V3.- U1.AVSS U1.DGND U1.REFN0 U1.AIN1
 adc U1
 adc U1 gain=64
+adc U1 rate=4000 filter=low_latency
 ");
     assert!(ok, "{a:?}");
     let reads: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "adc").collect();
@@ -1632,6 +1633,12 @@ adc U1 gain=64
     // gain 64: 6.4 V of a 2.5 V full scale, so it clips at the top
     assert_eq!(reads[1]["code"], 8388607, "{}", reads[1]);
     assert_eq!(reads[1]["clipped"], true);
+    // the noise (SBAS660C Table 1, 20 SPS sinc, gain 1: 0.81 uV rms, 4.8 uV p-p), with this 2.5 V reference: 22.6 bits (Table 2)
+    let n = &reads[0]["noise"];
+    assert!((n["rms_v"].as_f64().unwrap() - 0.81e-6).abs() < 1e-12, "{n}");
+    assert!((n["effective_bits"].as_f64().unwrap() - 22.6).abs() < 0.05, "{n}");
+    // 4000 SPS with the low-latency filter (Table 3: 103 uV rms): about 15.6 bits (Table 4)
+    assert!((reads[2]["noise"]["effective_bits"].as_f64().unwrap() - 15.6).abs() < 0.05, "{}", reads[2]);
 }
 
 #[test]

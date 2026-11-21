@@ -177,6 +177,7 @@ impl BoardEditor {
         let mut make_preview = false;
         let mut repaint = false;
         let mut redraw_silk = false;
+        let mut print_check: Option<Side> = None;
         // as tall as the screen allows (640 hid step 4, the export button, below the window's edge on a 1080-line screen)
         let tall = (ctx.content_rect().height() - crate::widgets::beside_panel().y - 60.0).max(640.0);
         egui::Window::new(i18n::tr("発注の準備")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(tall).vscroll(true).show(ctx, |ui| {
@@ -248,6 +249,15 @@ impl BoardEditor {
                             && ui.button(i18n::tr("部品のシルクを作り直す")).on_hover_text(i18n::tr("印の欠けた部品のシルク (外形と向きの印) を、いまのフットプリントの形で描き直します。部品の位置と配線は変わりません")).clicked()
                         {
                             redraw_silk = true;
+                        }
+                        if c.title == fab::PRINT_CHECK_TITLE {
+                            ui.horizontal(|ui| {
+                                for (label, side) in [("原寸の図を保存 (表)…", Side::Top), ("裏…", Side::Bottom)] {
+                                    if ui.button(i18n::tr(label)).on_hover_text(i18n::tr("パッドと穴を原寸で描いた図 (SVG、50 mm の目盛りつき) を保存します。ブラウザで開き、印刷の倍率を「実際のサイズ」(100 %) にして印刷します。裏は、裏に付ける部品のため (下から見た図)")).clicked() {
+                                        print_check = Some(side);
+                                    }
+                                }
+                            });
                         }
                     });
                 }
@@ -327,6 +337,9 @@ impl BoardEditor {
             ui.separator();
             self.shopping_list(ui);
         });
+        if let Some(side) = print_check {
+            self.export_print_check(side);
+        }
         if redraw_silk {
             self.checkpoint();
             let stale = self.board.stale_part_silk();

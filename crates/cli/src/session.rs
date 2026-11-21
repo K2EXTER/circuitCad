@@ -107,9 +107,11 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   pins [export=FILE.h] [check=FILE.ino]   the signals on the microcontroller board's pins (a part's pins or a header's pin names D13, A0,
                                         GPIO2): listed, written as a C header for Arduino (#define PIN_X 13), or a firmware's pin constants
                                         checked against the schematic (findings: a constant on another pin than the schematic has)
-  adc REF [pos=AIN0] [neg=AIN1] [refp=REFP0] [refn=REFN0] [gain=1]
+  adc REF [pos=AIN0] [neg=AIN1] [refp=REFP0] [refn=REFN0] [gain=1] [rate=20] [filter=sinc|low_latency] [chop=0|1]
                                         what an ADC (a part whose model has adc_bits) reads at the DC point: the code from the data sheet's
-                                        ideal transfer function, the size of one step (lsb_v) and the code back as a voltage (reads_v)
+                                        ideal transfer function, the size of one step (lsb_v) and the code back as a voltage (reads_v); for a
+                                        part with the data sheet's noise tables (ADS124S06/08), the noise at that data rate, filter and gain
+                                        (rms and p-p, in volts and codes) and the effective and noise-free resolution in bits
   battery tran=STOP[:STEP] [from=T] [to=T] [node=NET v_min=V]
                                         how long the battery parts last: the average current over from..to of a transient run (default its second
                                         half; take whole periods of an intermittent load), the charge at which node falls under v_min, the hours
@@ -180,6 +182,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board save FILE.pcbjson / board open FILE.pcbjson
   board shopping [boards=N] [spare=0] [file=PATH]  what to buy: per value and footprint the quantity (qty), spares of chip R/C/L/LED (spare, 2 or a tenth; spare=0 off), their sum (buy) and, for each shop (akizuki, digikey, lcsc), the part number if the library part has one, else a search link
   board assembly [F.svg]  the order of hand soldering (lowest body first) with the orientation marks (pin 1, cathode K, + of an electrolytic); with a file, the printable assembly sheet (the drawing and a list with a box to tick)
+  board printcheck F.svg [side=top|bottom]  the pads and holes at full size on white with a 50 mm scale, to print at 100 % and lay the real parts on (does each footprint fit its part?)
   board fab DIR                         Gerber, drill, BOM, placement and the zip
 ";
 

@@ -68,6 +68,21 @@ impl Session {
         Ok(obj(json!({"file": f, "side": format!("{side:?}"), "bytes": svg.len()})))
     }
 
+    /// `board printcheck FILE.svg [side=top|bottom]`: the full-size print to try the real parts on (X4).
+    pub(super) fn board_print_check(&mut self, rest: &[String]) -> Res {
+        let (pos, kv) = options(rest);
+        let f = pos.first().ok_or("board printcheck FILE.svg [side=top|bottom]   (the pads and holes at full size with a 50 mm scale, to print at 100 % and try the parts on)")?;
+        let side = match opt(&kv, "side").unwrap_or("top") {
+            "top" => pcb_core::Side::Top,
+            "bottom" => pcb_core::Side::Bottom,
+            s => return Err(format!("side={s}: top か bottom")),
+        };
+        let board = self.board_mut()?;
+        let svg = pcb_core::print_check::print_check_svg(board, side)?;
+        std::fs::write(f, &svg).map_err(|e| format!("{f}: {e}"))?;
+        Ok(obj(json!({"file": f, "side": format!("{side:?}"), "bytes": svg.len(), "ruler_mm": pcb_core::print_check::RULER_MM})))
+    }
+
     /// The order of hand soldering (lowest first) with the orientation marks, and with a file the printable sheet (B3).
     pub(super) fn board_assembly(&mut self, rest: &[String]) -> Res {
         let (pos, _) = options(rest);
