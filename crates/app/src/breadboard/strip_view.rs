@@ -247,7 +247,7 @@ impl BreadboardView {
     fn strip_plan_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
         if ui
             .button(i18n::tr("区画の案を出す"))
-            .on_hover_text(i18n::tr("部品を、間をつなぐネットが少ない組に分けた案を出します (電源と GND のネットは数えません)。つながりだけで分けるので、アナログとデジタルのような役割の分け方とは違うことがあります。案を見てから区画にします"))
+            .on_hover_text(i18n::tr("部品を役割で分けた案を出します: デジタル (信号の半分以上が SPI・I²C・D22 のようなデジタルの線の IC とヘッダ)・リレー (K1 …)・アナログ・電源 (レギュレータ)。抵抗やコンデンサは、いちばんつながっている組へ、電源だけにつながるものは回路図で近くに描いた IC の組へ入れます。役割が 1 つしか無い回路は、間をつなぐネットが少ない所で分けます (電源と GND のネットは数えません)。ネットの名前で役割を決めるので、案を見てから区画にします"))
             .clicked()
         {
             self.strip_propose(sch);
@@ -469,6 +469,9 @@ impl BreadboardView {
             }
         } else {
             ui.small(i18n::tr("区画に分けるには、回路図の「設計の要件」→「近くに置く組」で組を作り、「区画」に印を付けます"));
+        }
+        // no sections yet: the proposal (also when the table has other rules)
+        if l.sections.is_empty() {
             self.strip_plan_ui(ui, sch);
         }
         ui.small(i18n::trf!("大きさ: {} 列 × {} 行 (2.54mm の間隔で {:.0} × {:.0} mm)", l.cols, l.rows, l.cols as f32 * 2.54, l.rows as f32 * 2.54));
