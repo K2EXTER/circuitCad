@@ -730,8 +730,9 @@ fn is_unmodified_legacy(file: &Path, example: &str, bundled: &str) -> bool {
 /// Bundled parts that gained a simulation model after their first release. An installed copy
 /// that is still the model-less original (same pins and package, no `sim`) is replaced once;
 /// the key is recorded in `.bundled` so that a later edit or deletion is respected.
-/// ADR4525 and LP5907-4.5 were made in users' libraries for the bench DMM (2026-11-10) before they were bundled with a model.
-const MODEL_UPGRADES: &[&str] = &["NE555_DIP-8", "ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5"];
+/// ADR4525 and LP5907-4.5 were made in users' libraries for the bench DMM (2026-11-10) before they were bundled with a model;
+/// the ADS124S08 got its model (supplies and inputs) on 2026-11-21.
+const MODEL_UPGRADES: &[&str] = &["NE555_DIP-8", "ADR4525_SOIC-8", "LP5907-4.5_SOT-23-5", "ADS124S08_VQFN-32"];
 
 fn upgrade_key(name: &str) -> String {
     format!("{name}+model")

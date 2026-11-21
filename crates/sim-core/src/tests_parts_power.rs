@@ -144,6 +144,37 @@ fn the_tl431_converges_from_zero_at_any_supply_and_holds_the_reference_within_a_
     }
 }
 
+/// The ADS124S08's equivalent model draws the data sheet's supply currents (SBAS660C 7.5: AVDD 120 µA with the PGA at gain 1-2
+/// plus the positive reference buffer's 35 µA, DVDD and IOVDD together 225 µA), the reference input 5 nA at 2.5 V through its
+/// buffer, and nothing from an unpowered supply.
+#[test]
+fn the_ads124s08_draws_its_supply_currents() {
+    let def = part("ADS124S08");
+    let mut c = Circuit::new();
+    vs(&mut c, "Va", "avdd", "0", 3.3);
+    vs(&mut c, "Vd", "dvdd", "0", 3.3);
+    vs(&mut c, "Vref", "refp", "0", 2.5);
+    vs(&mut c, "Vin", "in", "0", 1.65);
+    let mut nets: Vec<(&str, &str)> = vec![("26", "avdd"), ("27", "0"), ("16", "dvdd"), ("15", "dvdd"), ("14", "0"), ("30", "refp"), ("29", "0"), ("23", "refout")];
+    nets.extend(["7", "6", "5", "4", "3", "2", "1", "32", "31", "22", "21", "20", "19"].iter().map(|p| (*p, "in")));
+    place(&mut c, &def, "U1", &nets);
+    let r = dc_op(&c).unwrap();
+    let amps = |name: &str| -r.element(name).unwrap().current;
+    assert!((amps("Va") - 155e-6).abs() < 2e-6, "AVDD {} A", amps("Va"));
+    assert!((amps("Vd") - 225e-6).abs() < 3e-6, "DVDD + IOVDD {} A", amps("Vd"));
+    assert!((amps("Vref") - 5e-9).abs() < 1e-9, "REFP0 {} A", amps("Vref"));
+    assert!(amps("Vin").abs() < 13.0 * 0.2e-9, "the 13 inputs about 0.1 nA each: {} A", amps("Vin"));
+    // no supply: no current, and the supply does not go below 0 V
+    let mut c = Circuit::new();
+    vs(&mut c, "Vd", "dvdd", "0", 3.3);
+    nets[0] = ("26", "avdd");
+    place(&mut c, &def, "U1", &nets);
+    let ra = c.node("avdd");
+    c.add(Element::Resistor { name: "Rleak".into(), a: ra, b: 0, r: 1e6 });
+    let r = dc_op(&c).unwrap();
+    assert!(v(&r, "avdd").abs() < 0.01, "an unpowered AVDD stays near 0 V: {}", v(&r, "avdd"));
+}
+
 #[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");
