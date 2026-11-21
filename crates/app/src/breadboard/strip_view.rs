@@ -33,6 +33,10 @@ pub enum StripTool {
     /// Click a hole, then another on its row or column: a bare wire drawn on the copper side (perfboard only); a right click on one
     /// takes it away.
     Bare,
+    /// The meter's red probe on the hole clicked first, the black one on the next (on either side of the board).
+    Meter,
+    /// The scope's probe on the hole clicked.
+    Scope,
 }
 
 /// What is being dragged.
@@ -83,6 +87,14 @@ pub struct StripState {
     pub back: bool,
     /// The net of the hole under the pointer on the copper side, by the schematic's edit count and the hole.
     back_net: Option<(u64, At, Option<String>)>,
+    /// The meter's probes go on the first supply's wires once the board is laid out (the start argument `--proto-meter`).
+    pub probe_supply: bool,
+    /// The meter's probes and the scope's (holes of the layout shown).
+    red: Option<At>,
+    black: Option<At>,
+    scope: Option<At>,
+    /// The net of each hole joined to a lead, for the probes (`strip_hole_nets`), by the schematic's edit count and the layout.
+    hole_nets: Option<(u64, StripLayout, std::collections::BTreeMap<At, String>)>,
     /// The checks of the layout shown, by the schematic's edit count and the layout (`strip_checks`).
     checks: Option<(u64, StripLayout, StripChecks)>,
 }
@@ -449,6 +461,18 @@ impl BreadboardView {
                 }
             }
         }));
+        // the meter and the scope: on the parts' side or from below (as the solder side is probed on a real board)
+        ui.horizontal(|ui| {
+            for (t, name, tip) in [
+                (StripTool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます (裏から見た絵でも)。レンジは 電圧・電流・抵抗 から選びます。銅の帯・すずめっき線・表の線でつながったとおりの回路を測るので、帯の切り忘れやはんだのブリッジも、そのとおりに読めます"),
+                (StripTool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化が左に出ます (電源を入れて動かしているときは、動いている波形)"),
+            ] {
+                if ui.selectable_label(self.strip.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+                    self.strip.tool = if self.strip.tool == t { StripTool::Move } else { t };
+                    self.strip.link_start = None;
+                }
+            }
+        });
         self.strip_history_check(sch);
         ui.horizontal(|ui| {
             if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.strip.undo.is_empty(), "手で動かした・線を引いた・帯を切った・並べ直した操作を 1 つ取り消します (Ctrl+Z)").clicked() {
@@ -514,6 +538,8 @@ impl BreadboardView {
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
+            StripTool::Meter => "穴をクリックして赤い棒、もう一度で黒い棒 (裏からも当てられます)",
+            StripTool::Scope => "探り針を当てる穴をクリックします (裏からも当てられます)",
         };
         ui.label(egui::RichText::new(i18n::tr(hint)).color(NOTE).small());
     }
@@ -564,6 +590,28 @@ impl BreadboardView {
         self.build_ui(ui, sch, &l);
         let StripChecks { problems, rules, .. } = self.strip_checks(sch, &l);
         self.strip_power_ui(ui, sch, &l, problems.is_empty());
+        // the meter with the power off reads the schematic's DC point (what the board will read once it is switched on)
+        if !self.powered && self.strip.tool == StripTool::Meter && sch.bench_voltages().is_none() && !self.dc_asked && problems.is_empty() {
+            self.dc_asked = true;
+            sch.analyze_dc();
+        }
+        match self.strip.tool {
+            StripTool::Meter => {
+                if std::mem::take(&mut self.strip.probe_supply)
+                    && let Some((_, pins)) = l.off.first()
+                    && pins.len() >= 2
+                {
+                    (self.strip.red, self.strip.black) = (Some(pins[0].2), Some(pins[1].2));
+                }
+                let (red, black) = (self.strip.red.map(|h| self.strip_probe(sch, &l, h)), self.strip.black.map(|h| self.strip_probe(sch, &l, h)));
+                self.meter_panel(ui, sch, &RunBoard::Strip(l.clone()), red, black, problems.is_empty());
+            }
+            StripTool::Scope => {
+                let probe = self.strip.scope.map(|h| self.strip_probe(sch, &l, h));
+                self.scope_panel(ui, sch, probe);
+            }
+            _ => {}
+        }
         ui.add_space(4.0);
         if problems.is_empty() {
             ui.colored_label(crate::theme::OK, i18n::tr("✔ 回路図どおりにつながっています"));
@@ -832,6 +880,7 @@ impl BreadboardView {
             }
         }
         self.strip_draw_running(&painter, sch, &l, to, pitch, &font);
+        self.strip_draw_probes(&painter, to, pitch, &font);
         // the sections: a frame and the name above it, and the strips' names at each section's left end
         for (name, a, b) in &l.sections {
             let r = Rect::from_two_pos(to(*a), to(*b)).expand(pitch * 0.45);
@@ -1019,6 +1068,42 @@ fn strip_part_rect(p: &sch_core::stripboard::StripPart, to: &impl Fn(At) -> Pos2
 }
 
 impl BreadboardView {
+    /// A probe of the tool in hand put on hole `h`: the meter's red, then its black (a third click starts over with the red), or the
+    /// scope's.
+    fn strip_put_probe(&mut self, h: At) {
+        match self.strip.tool {
+            StripTool::Scope => self.strip.scope = Some(h),
+            _ if self.strip.red.is_none() || self.strip.black.is_some() => (self.strip.red, self.strip.black) = (Some(h), None),
+            _ => self.strip.black = Some(h),
+        }
+    }
+
+    /// A probe on hole `h`: its name and the net the board joins it to (the running circuit's name).
+    fn strip_probe(&mut self, sch: &SchEditor, l: &StripLayout, h: At) -> super::Probe {
+        if !self.strip.hole_nets.as_ref().is_some_and(|(r, k, _)| *r == sch.rev && k == l && sch.settled()) {
+            self.strip.hole_nets = Some((sch.rev, l.clone(), sch_core::stripboard::strip_hole_nets(&sch.sch, l)));
+        }
+        (hole_name(h), self.strip.hole_nets.as_ref().and_then(|(_, _, m)| m.get(&h).cloned()))
+    }
+
+    /// The meter's two probes (with the meter in hand) and the scope's (with the scope), where `to` puts the holes.
+    fn strip_draw_probes(&self, painter: &egui::Painter, to: impl Fn(At) -> Pos2, pitch: f32, font: &egui::FontId) {
+        let probes: Vec<(At, Color32, &str)> = match self.strip.tool {
+            StripTool::Meter => [(self.strip.red, Color32::from_rgb(214, 56, 50), "+"), (self.strip.black, Color32::from_gray(20), "−")].into_iter().filter_map(|(h, c, t)| Some((h?, c, t))).collect(),
+            StripTool::Scope => self.strip.scope.map(|h| (h, crate::theme::HIGHLIGHT, "")).into_iter().collect(),
+            _ => vec![],
+        };
+        for (h, c, label) in probes {
+            let p = to(h);
+            let tip = p + Vec2::new(pitch * 0.8, -pitch * 1.6);
+            painter.line_segment([p, tip], Stroke::new(pitch * 0.25, c));
+            painter.circle_filled(p, pitch * 0.3, c);
+            if !label.is_empty() {
+                painter.text(tip + Vec2::new(pitch * 0.1, -pitch * 0.2), egui::Align2::CENTER_CENTER, label, font.clone(), c);
+            }
+        }
+    }
+
     /// Turns the board over (`back`: the copper side): what was being dragged or drawn is let go.
     fn strip_flip(&mut self, back: bool) {
         self.strip.back = back;
@@ -1149,6 +1234,7 @@ impl BreadboardView {
             let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
             painter.rect_stroke(Rect::from_points(&pts).expand(pitch * 0.6), 3.0, Stroke::new(2.0, PICK), egui::StrokeKind::Outside);
         }
+        self.strip_draw_probes(painter, to, pitch, &font);
         let Some(h) = response.hover_pos().and_then(hole_at) else { return };
         // the hole under the pointer: what it is joined to, lit, and its net named
         let joined = l.joined_to(h);
@@ -1185,7 +1271,9 @@ impl BreadboardView {
             tip = format!("{tip}\n{}", i18n::trf!("ネット {} (つながる穴 {} 個)", n, joined.len()));
         }
         response.clone().on_hover_text_at_pointer(tip);
-        if response.clicked()
+        if response.clicked() && matches!(self.strip.tool, StripTool::Meter | StripTool::Scope) {
+            self.strip_put_probe(h);
+        } else if response.clicked()
             && let Some(p) = l.parts.iter().find(|p| p.leads.iter().any(|(_, a)| *a == h))
         {
             self.picked = if self.picked.as_deref() == Some(p.refdes.as_str()) { None } else { Some(p.refdes.clone()) };
@@ -1341,6 +1429,7 @@ impl BreadboardView {
                     self.strip_set(sch, Some(m.clone()));
                     *l = m;
                 }
+                StripTool::Meter | StripTool::Scope => self.strip_put_probe(h),
                 StripTool::Bare => match self.strip.link_start.take() {
                     None => self.strip.link_start = Some(h),
                     Some(a) if a == h => {}

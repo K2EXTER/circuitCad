@@ -19,7 +19,7 @@ pub(crate) mod sketch_ui;
 mod build_steps;
 mod looks;
 mod strip_view;
-pub use strip_view::BoardKind;
+pub use strip_view::{BoardKind, StripTool};
 #[cfg(test)]
 pub use sketch_ui::BLINK;
 pub(crate) mod sound;
@@ -651,6 +651,13 @@ impl BreadboardView {
 
     /// The meter's reading: the DC voltage of the red probe's net against the black's.
     fn meter_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
+        let probe = |h: Option<Hole>| h.map(|h| (h.name(), net_at(&sch.sch, l, h)));
+        let (red, black) = (probe(self.red), probe(self.black));
+        self.meter_panel(ui, sch, &RunBoard::Bread(l.clone()), red, black, matches);
+    }
+
+    /// The meter's ranges and its reading for the probes on the board (`board`: the breadboard, or a stripboard or perfboard).
+    pub(super) fn meter_panel(&mut self, ui: &mut egui::Ui, sch: &SchEditor, board: &RunBoard, red: Option<Probe>, black: Option<Probe>, matches: bool) {
         ui.horizontal(|ui| {
             for (r, name, tip) in [
                 (MeterRange::Volts, "電圧 V", "2 本の棒の間の直流の電圧を読みます。部品の両端に当てます (並列)。黒い棒はふつう GND に"),
@@ -663,11 +670,12 @@ impl BreadboardView {
             }
         });
         if self.meter_range != MeterRange::Volts {
-            self.meter_other_range(ui, sch, l);
+            self.meter_other_range(ui, sch, board, red, black);
             return;
         }
-        let (Some(red), Some(black)) = (self.red, self.black) else {
-            ui.label(egui::RichText::new(if self.red.is_none() { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします (ふつうは GND の青い列)") }).color(NOTE));
+        let have_red = red.is_some();
+        let (Some((red, na)), Some((black, nb))) = (red, black) else {
+            ui.label(egui::RichText::new(if !have_red { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします (ふつうは GND の青い列)") }).color(NOTE));
             return;
         };
         let live = self.live.as_ref().filter(|v| v.error.is_none());
@@ -675,7 +683,6 @@ impl BreadboardView {
             ui.colored_label(crate::theme::WARN, i18n::tr("回路図と違う差し方なので、電源を入れてから読みます (差したとおりの回路を計算します)"));
             return;
         }
-        let (na, nb) = (net_at(&sch.sch, l, red), net_at(&sch.sch, l, black));
         let volts = sch.bench_voltages();
         let v_of = |n: &Option<String>| -> Option<f64> {
             let n = n.as_ref()?;
@@ -687,8 +694,8 @@ impl BreadboardView {
             }
             volts.as_ref()?.iter().find(|(m, _)| m.eq_ignore_ascii_case(n)).map(|(_, v)| *v)
         };
-        let name = |h: Hole, n: &Option<String>| format!("{} ({})", h.name(), n.clone().unwrap_or_else(|| i18n::tr("どこにもつながっていない").to_string()));
-        ui.label(i18n::trf!("赤: {}　黒: {}", name(red, &na), name(black, &nb)));
+        let name = |h: &str, n: &Option<String>| format!("{} ({})", h, n.clone().unwrap_or_else(|| i18n::tr("どこにもつながっていない").to_string()));
+        ui.label(i18n::trf!("赤: {}　黒: {}", name(&red, &na), name(&black, &nb)));
         match (v_of(&na), v_of(&nb)) {
             (Some(a), Some(b)) => {
                 ui.label(egui::RichText::new(format!("{} V", sim_core::format_value(a - b))).size(22.0).strong().color(crate::theme::OK));
@@ -703,14 +710,14 @@ impl BreadboardView {
     }
 
     /// The current and resistance ranges: worked out on the circuit as the board joins it (the parts burnt so far broken in it).
-    fn meter_other_range(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout) {
-        let (Some(red), Some(black)) = (self.red, self.black) else {
-            ui.label(egui::RichText::new(if self.red.is_none() { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします") }).color(NOTE));
+    fn meter_other_range(&mut self, ui: &mut egui::Ui, sch: &SchEditor, board: &RunBoard, red: Option<Probe>, black: Option<Probe>) {
+        let have_red = red.is_some();
+        let (Some((red, na)), Some((black, nb))) = (red, black) else {
+            ui.label(egui::RichText::new(if !have_red { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします") }).color(NOTE));
             return;
         };
-        let (na, nb) = (net_at(&sch.sch, l, red), net_at(&sch.sch, l, black));
-        let name = |h: Hole, n: &Option<String>| format!("{} ({})", h.name(), n.clone().unwrap_or_else(|| i18n::tr("どこにもつながっていない").to_string()));
-        ui.label(i18n::trf!("赤: {}　黒: {}", name(red, &na), name(black, &nb)));
+        let name = |h: &str, n: &Option<String>| format!("{} ({})", h, n.clone().unwrap_or_else(|| i18n::tr("どこにもつながっていない").to_string()));
+        ui.label(i18n::trf!("赤: {}　黒: {}", name(&red, &na), name(&black, &nb)));
         let range = self.meter_range;
         if range == MeterRange::Ohms && self.powered {
             ui.colored_label(crate::theme::WARN, i18n::tr("電源が入っています。抵抗は電源を切ってから測ります (テスターが自分で流す小さな電流に、回路の電流が混ざって正しく読めません。実物では、テスターを傷めることもあります)"));
@@ -724,9 +731,9 @@ impl BreadboardView {
             ui.colored_label(crate::theme::WARN, i18n::tr("棒の片方が、どこにもつながっていない穴です"));
             return;
         };
-        let key = format!("{range:?}|{a}|{b}|{}|{:?}|{}|{:?}", self.powered, self.broken, sch.rev, self.temp_c);
+        let key = format!("{range:?}|{a}|{b}|{}|{:?}|{}|{:?}|{:?}", self.powered, self.broken, sch.rev, self.temp_c, self.kind);
         if self.meter_cache.as_ref().is_none_or(|(k, _)| *k != key) {
-            let nets = board_nets(&sch.sch, l);
+            let nets = board.nets(&sch.sch);
             let built = sch.board_circuit(&nets, self.temp_c).map(|c| self.broken.iter().fold(c, |c, (r, f)| sim_core::with_fault(&c, r, *f).unwrap_or(c)));
             let reading = built.and_then(|c| match range {
                 MeterRange::Ohms => sim_core::meter::resistance(&c, &a, &b).map(|r| match r {
@@ -772,15 +779,21 @@ impl BreadboardView {
 
     /// The scope: the transient waveform of the probe's net.
     fn scope_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &Layout) {
-        let Some(h) = self.scope else {
+        let probe = self.scope.map(|h| (h.name(), net_at(&sch.sch, l, h)));
+        self.scope_panel(ui, sch, probe);
+    }
+
+    /// The scope's screen for the probe on the board: the running circuit's trace, else the schematic's transient run.
+    pub(super) fn scope_panel(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, probe: Option<Probe>) {
+        let Some((hole, net)) = probe else {
             ui.label(egui::RichText::new(i18n::tr("探り針を当てる穴をクリックします")).color(NOTE));
             return;
         };
-        let Some(net) = net_at(&sch.sch, l, h) else {
-            ui.colored_label(crate::theme::WARN, i18n::trf!("{} は、どこにもつながっていない穴です", h.name()));
+        let Some(net) = net else {
+            ui.colored_label(crate::theme::WARN, i18n::trf!("{} は、どこにもつながっていない穴です", hole));
             return;
         };
-        ui.label(i18n::trf!("探り針: {} ({net})", h.name()));
+        ui.label(i18n::trf!("探り針: {} ({net})", hole));
         if let Some(lv) = self.live.as_mut().filter(|v| v.error.is_none()) {
             lv.set_probe(Some(net.clone()));
             let (t, v) = lv.trace();
@@ -1298,6 +1311,9 @@ fn buzzer_volts(sch: &SchEditor, l: &RunBoard, nets: &BoardNets, lv: &Live) -> V
         .collect()
 }
 
+/// A probe on a hole: the hole's name and the net there (None: joined to nothing).
+pub(super) type Probe = (String, Option<String>);
+
 /// The board a circuit runs on with the power on: a breadboard, or a stripboard or perfboard (B5d).
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum RunBoard {
@@ -1555,7 +1571,53 @@ mod tests {
         }
     }
 
+    /// On a perfboard the meter's probes go on the holes clicked (red, then black) and read the board's circuit: across a resistor
+    /// with the power off, its resistance; the probes are also put on from the copper side.
+    #[test]
+    fn the_meter_probes_a_perfboard_from_either_side() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("led.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.kind = BoardKind::Perfboard;
+        app.breadboard.strip.tool = strip_view::StripTool::Meter;
+        app.breadboard.meter_range = MeterRange::Ohms;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        let l = app.breadboard.strip_shown(&app.sch);
+        let r1 = l.parts.iter().find(|p| p.refdes == "R1").unwrap().leads.clone();
+        let mut click = |app: &mut App, at: sch_core::stripboard::At, back: bool| {
+            let (origin, pitch) = app.breadboard.strip.drawn.unwrap();
+            let col = if back { l.cols - 1 - at.1 } else { at.1 };
+            let pos = origin + Vec2::new(col as f32, at.0 as f32) * pitch;
+            let button = |pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            run(app, vec![egui::Event::PointerMoved(pos)]);
+            run(app, vec![button(true)]);
+            run(app, vec![button(false)]);
+            run(app, vec![]);
+        };
+        click(&mut app, r1[0].1, false);
+        click(&mut app, r1[1].1, false);
+        let reading = |app: &App| app.breadboard.meter_cache.as_ref().and_then(|(_, r)| r.clone().ok()).unwrap_or_default();
+        let ohms = |r: &str| sim_core::parse_value(r.trim_end_matches('Ω')).unwrap_or(0.0);
+        let front = reading(&app);
+        assert!(front.ends_with('Ω') && ohms(&front) > 100.0, "across R1: {front}");
+        // the same two holes from below
+        app.breadboard.strip.back = true;
+        app.breadboard.meter_cache = None;
+        click(&mut app, r1[1].1, true);
+        click(&mut app, r1[0].1, true);
+        assert_eq!(ohms(&reading(&app)), ohms(&front), "from the copper side: {}", reading(&app));
+    }
+
     fn burnt(app: &App) -> Vec<String> {
+
         app.breadboard.issues().iter().filter(|r| r.level == sim_core::RatingLevel::Over).map(|r| r.refdes.clone()).collect()
     }
 

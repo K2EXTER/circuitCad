@@ -627,7 +627,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if let Some(f) = args.iter().position(|a| a == "--proto-flip").and_then(|k| args.get(k + 1)) {
             app.breadboard.flip_on_start = f.split(',').filter(|r| !r.is_empty()).map(String::from).collect();
         }
+        // (on a stripboard or perfboard: the probes on the supply's two wires once the board is laid out)
         if args.iter().any(|a| a == "--proto-meter") {
+            app.breadboard.strip.tool = crate::breadboard::StripTool::Meter;
+            app.breadboard.strip.probe_supply = true;
             app.breadboard.tool = crate::breadboard::Tool::Meter;
             app.breadboard.red = Some(sch_core::breadboard::Hole::Rail { rail: sch_core::breadboard::Rail::TopPlus, col: 12 });
             app.breadboard.black = Some(sch_core::breadboard::Hole::Rail { rail: sch_core::breadboard::Rail::TopMinus, col: 12 });

@@ -277,6 +277,21 @@ pub fn strip_board_nets(s: &Schematic, l: &StripLayout) -> crate::breadboard::Bo
     crate::breadboard::BoardNets::from_pins(pins, off_pins)
 }
 
+/// The net (as `strip_board_nets` names it: the circuit that runs powered) of every hole joined to a lead: where a meter's probe
+/// reads something. A hole joined to no lead is not in it.
+pub fn strip_hole_nets(s: &Schematic, l: &StripLayout) -> BTreeMap<At, String> {
+    let b = strip_board_nets(s, l);
+    let groups = l.hole_groups();
+    let mut of_group: BTreeMap<usize, String> = BTreeMap::new();
+    let leads = l.parts.iter().flat_map(|p| p.leads.iter().map(move |(pin, a)| (p.refdes.clone(), pin.clone(), *a))).chain(l.off.iter().flat_map(|(r, v)| v.iter().map(move |(pin, _, a)| (r.clone(), pin.clone(), *a))));
+    for (r, pin, a) in leads {
+        if let (Some(g), Some(n)) = (groups.get(&a), b.pins.get(&(r, pin))) {
+            of_group.entry(*g).or_insert_with(|| n.clone());
+        }
+    }
+    groups.into_iter().filter_map(|(a, g)| of_group.get(&g).map(|n| (a, n.clone()))).collect()
+}
+
 /// The net of the holes joined to `at`: the schematic's net of a lead among them (None: no lead there).
 pub fn net_at(s: &Schematic, l: &StripLayout, at: At) -> Option<String> {
     let joined = l.joined_to(at);
