@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 
 mod live;
 pub(crate) mod sketch_ui;
+mod build_steps;
 mod strip_view;
 pub use strip_view::BoardKind;
 #[cfg(test)]
@@ -63,6 +64,8 @@ pub struct BreadboardView {
     pub show_schematic: bool,
     /// The stripboard / perfboard view's tools, drag and caches (`strip_view.rs`).
     pub strip: strip_view::StripState,
+    /// "組む順と通電": the build one section at a time and the check after each (`build_steps.rs`).
+    pub build: build_steps::BuildState,
     /// "回路図の上で動かす" was pressed: the app starts the digital live mode on the schematic tab (`schematic/live_logic.rs`).
     pub want_live_logic: bool,
     /// The layout made from the schematic when none is saved, and the schematic's edit count it was made at.

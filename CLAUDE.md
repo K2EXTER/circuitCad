@@ -19,7 +19,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 | クレート | 役割 |
 |---|---|
-| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`)、ピンの電気的な種類 `pinkind.rs`(ERC が使う)、推奨の周辺部品を置く `companions.rs`、設計レビューの点検 (推奨の部品の付け忘れ・水晶の負荷容量・出力に直接の LED・電源の入口) `review.rs`、選んだ部品の役割 (分圧・RC・LED の抵抗・プルアップ・パスコン・帰還。画面は `schematic/roles_ui.rs`) `roles.rs`、複数の基板のつなぎの照合と全体の部品表 `system.rs`、ブレッドボードの穴と自動の並べ方と照合 `breadboard.rs`、手で組むときの部品の付け方 (IC ソケット・変換基板・リード部品に替える) `mount.rs`、区画の案 (つながりの少ない所で分ける) `section_plan.rs`、ストリップ基板の並べ方を手で直す `strip_edit.rs`、印刷用の図 `strip_print.rs`、ユニバーサル基板専用の並べ方 (部品を近くに・裏の線を縦横に・表の線で飛ぶ) `perfboard.rs`(二次配置法 + SimPL の広げ方 `perfboard/simpl.rs`) |
+| `sch-core` | 回路図モデル(`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出と ERC `netlist.rs`(指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方)、SPICE出力 `spice.rs`・`ngspice.rs`(デジタルセルは `ngspice_digital.rs` で XSPICE に)、`backannotate.rs`、`bus.rs`、`programming.rs`、階層 `hierarchy.rs`(`docs/hierarchy-design.md`)、ピンの電気的な種類 `pinkind.rs`(ERC が使う)、推奨の周辺部品を置く `companions.rs`、設計レビューの点検 (推奨の部品の付け忘れ・水晶の負荷容量・出力に直接の LED・電源の入口) `review.rs`、選んだ部品の役割 (分圧・RC・LED の抵抗・プルアップ・パスコン・帰還。画面は `schematic/roles_ui.rs`) `roles.rs`、複数の基板のつなぎの照合と全体の部品表 `system.rs`、ブレッドボードの穴と自動の並べ方と照合 `breadboard.rs`、手で組むときの部品の付け方 (IC ソケット・変換基板・リード部品に替える) `mount.rs`、区画の案 (つながりの少ない所で分ける) `section_plan.rs`、ストリップ基板の並べ方を手で直す `strip_edit.rs`、印刷用の図 `strip_print.rs`、区画ごとに組む順 `build_order.rs`、ユニバーサル基板専用の並べ方 (部品を近くに・裏の線を縦横に・表の線で飛ぶ) `perfboard.rs`(二次配置法 + SimPL の広げ方 `perfboard/simpl.rs`) |
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
 | `design-spec` | 設計の要件の表の型(`DesignSpec`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が共有 |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
@@ -58,7 +58,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
 | `multiboard.rs` | 複数の基板 (E5): プロジェクトの基板の切り替え・足す・外す、「基板どうしのつなぎ」の窓(`project.rs` の `System`、形式 2) |
 | `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
-| `breadboard/` | 試作のタブ(`Mode::Proto`。回路図をブレッドボードに差す穴の絵・ドラッグで差し替え・回路図との照合・電源を入れて動かす `live.rs`・Arduino のスケッチ `sketch_ui.rs`(実行は `sim-core/sketch/`)・ストリップ基板とユニバーサル基板の並べ方 `strip_view.rs`(並べ方と照合は `sch-core/stripboard.rs`)。データと自動の並べ方は `sch-core/breadboard.rs`。`docs/code-notes/app/breadboard.md` が目次、話題ごとに `app/proto/`) |
+| `breadboard/` | 試作のタブ(`Mode::Proto`。回路図をブレッドボードに差す穴の絵・ドラッグで差し替え・回路図との照合・電源を入れて動かす `live.rs`・Arduino のスケッチ `sketch_ui.rs`(実行は `sim-core/sketch/`)・ストリップ基板とユニバーサル基板の並べ方 `strip_view.rs`・組む順と各段の通電の窓 `build_steps.rs`(並べ方と照合は `sch-core/stripboard.rs`)。データと自動の並べ方は `sch-core/breadboard.rs`。`docs/code-notes/app/breadboard.md` が目次、話題ごとに `app/proto/`) |
 | `bench_tab.rs` | 実機のタブ(`Mode::Bench`。組み立て → 電源投入 → 測る → 合否 → 修理 の手順と、光る基板の配置図。`docs/code-notes/app/bench-tab.md`) |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |
 | `canvas_theme.rs` `actions.rs` `app_actions.rs` | 回路図のキャンバスの色の役の表 (暗い地 / 紙・使う人の色) / 操作とキーの表と Ctrl+K のパレット / 窓全体のキーとパレットの中身 |

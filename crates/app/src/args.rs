@@ -608,6 +608,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--proto-plan") {
             app.breadboard.strip_propose(&app.sch);
         }
+        // `--proto-build 2`: "組む順と通電" open with step 2 (from 1) picked
+        if let Some(k) = args.iter().position(|a| a == "--proto-build").and_then(|k| args.get(k + 1)).and_then(|v| v.parse::<usize>().ok()) {
+            app.breadboard.build.open = true;
+            app.breadboard.build.step = k.checked_sub(1);
+        }
         // `--proto-back`: the stripboard or perfboard seen from below (the copper side)
         app.breadboard.strip.back = args.iter().any(|a| a == "--proto-back");
         // `--proto-schematic`: the schematic in its small window beside the board

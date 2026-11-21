@@ -6,7 +6,7 @@ impl App {
         let Some((path, left)) = self.auto_shot.as_mut() else { return };
         ui.ctx().request_repaint();
         // a stripboard / perfboard layout still being made on another thread: wait for it
-        if self.breadboard.strip_busy().0 {
+        if self.breadboard.strip_busy().0 || self.breadboard.build_busy() {
             return;
         }
         if *left > 0 {

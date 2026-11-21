@@ -107,7 +107,7 @@ struct StripJob {
 const COPPER: Color32 =Color32::from_rgb(196, 128, 72);
 /// The picked part, link and box.
 const PICK: Color32 = Color32::from_rgb(70, 160, 255);
-const BOARD: Color32 = Color32::from_rgb(214, 190, 140);
+pub(super) const BOARD: Color32 = Color32::from_rgb(214, 190, 140);
 const WIRE: Color32 = Color32::from_rgb(190, 196, 204);
 /// An adapter board's green, and a socket's frame.
 const ADAPTER: Color32 = Color32::from_rgb(40, 120, 70);
@@ -552,6 +552,7 @@ impl BreadboardView {
         self.strip_around_done(sch);
         self.strip_size_ui(ui, sch, &l);
         self.strip_tools(ui, sch, &l);
+        self.build_ui(ui, sch, &l);
         let StripChecks { problems, rules, .. } = self.strip_checks(sch, &l);
         ui.add_space(4.0);
         if problems.is_empty() {
@@ -842,6 +843,9 @@ impl BreadboardView {
                 painter.extend(egui::Shape::dashed_line(&c, Stroke::new(2.0, HINT), pitch * 0.4, pitch * 0.3));
             }
         }
+        if let Some(m) = self.build_marks() {
+            super::build_steps::draw_build_marks(&painter, &l, &m, to, pitch);
+        }
         // the picked part and link, the box, the first end of a link being drawn
         if let Some(p) = self.picked.as_ref().and_then(|r| l.parts.iter().find(|p| &p.refdes == r)) {
             let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
@@ -985,6 +989,9 @@ impl BreadboardView {
         }
         for (_, a, b) in self.strip_checks(sch, l).unjoined {
             super::rats_line(painter, to(a), to(b), pitch);
+        }
+        if let Some(m) = self.build_marks() {
+            super::build_steps::draw_build_marks(painter, l, &m, to, pitch);
         }
         // the picked part (in the list, or by a click on one of its leads here)
         if let Some(p) = self.picked.as_ref().and_then(|r| l.parts.iter().find(|p| &p.refdes == r)) {
