@@ -319,6 +319,21 @@ mod tests {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
 
+    /// The sections proposed, kept in the table: the stripboard (each section laid out on its own) still joins what the schematic
+    /// joins, the nets between sections that have no strip in one of them (a chip's pin to another section's chip) by a wire.
+    #[test]
+    fn a_stripboard_in_the_proposed_sections_joins_every_net() {
+        for name in ["active_filter.schjson", "arduino_mega_usb.schjson"] {
+            let mut s = load(name);
+            for g in propose_sections(&s) {
+                s.requirements.groups.push(design_spec::PlaceGroup { name: g.name.clone(), parts: g.parts.clone(), section: true, ..Default::default() });
+            }
+            let l = crate::stripboard::strip_layout(&s);
+            assert!(l.sections.len() >= 2, "{name}");
+            assert!(crate::stripboard::strip_check(&s, &l).is_empty(), "{name}: {:?}", crate::stripboard::strip_check(&s, &l));
+        }
+    }
+
     /// Which nets' names are a digital signal's and which a supply's (the sections by role go by them).
     #[test]
     fn digital_signals_and_supplies_by_name() {

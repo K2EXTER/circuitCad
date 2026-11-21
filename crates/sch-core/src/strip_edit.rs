@@ -325,6 +325,15 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
     let mut out = grown(out);
     // the wires the new parts need: each line of the ratsnest that ends at a new part, between the free holes nearest its two ends
     // on their pieces of strip (`free_hole`)
+    let lines: Vec<(String, At, At)> = crate::stripboard::strip_unjoined(s, &out).into_iter().filter(|(_, a, b)| new_holes.contains(a) || new_holes.contains(b)).collect();
+    join_lines(s, &mut out, lines);
+    out
+}
+
+/// Joins each of `lines` (net, one end, the other: lines of the ratsnest) on a stripboard by a wire between the free holes nearest its
+/// two ends on their pieces of strip (`free_hole`; an end with no room: another hole of the net, the nearest first; a wire from off the
+/// board with no room at its end goes on to the other end's piece instead). A line with no room at either end is left (the check says).
+pub(crate) fn join_lines(s: &Schematic, out: &mut StripLayout, lines: Vec<(String, At, At)>) {
     let mut taken: std::collections::BTreeSet<At> = out.used().into_iter().map(|(a, _)| a).collect();
     let nets = pin_nets(s);
     let holes_of = |out: &StripLayout, net: &str| -> Vec<At> {
@@ -332,10 +341,7 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
         let offs = out.off.iter().flat_map(|(r, v)| v.iter().map(move |(pin, _, a)| ((r.clone(), pin.clone()), *a)));
         leads.chain(offs).filter(|(k, _)| nets.get(k).is_some_and(|n| n == net)).map(|(_, a)| a).collect()
     };
-    for (net, a, b) in crate::stripboard::strip_unjoined(s, &out) {
-        if !new_holes.contains(&a) && !new_holes.contains(&b) {
-            continue;
-        }
+    for (net, a, b) in lines {
         // an end with no room on its piece: another hole of the net instead, the nearest first (not one on the other end's piece)
         let end_near = |out: &mut StripLayout, at: At, other: At, taken: &std::collections::BTreeSet<At>| -> Option<At> {
             if let Some(h) = free_hole(out, at, taken) {
@@ -349,9 +355,9 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
         };
         // a wire from off the board with no room at its end: the wire goes on to the other end's piece instead
         let off_end = |out: &StripLayout, at: At| out.off.iter().enumerate().find_map(|(i, (_, v))| v.iter().position(|w| w.2 == at).map(|k| (i, k)));
-        let Some(ha) = end_near(&mut out, a, b, &taken) else {
-            if let Some((i, k)) = off_end(&out, a)
-                && let Some(hb) = end_near(&mut out, b, a, &taken)
+        let Some(ha) = end_near(out, a, b, &taken) else {
+            if let Some((i, k)) = off_end(out, a)
+                && let Some(hb) = end_near(out, b, a, &taken)
             {
                 out.off[i].1[k].2 = hb;
                 taken.insert(hb);
@@ -359,9 +365,9 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
             continue;
         };
         taken.insert(ha);
-        let Some(hb) = end_near(&mut out, b, a, &taken) else {
+        let Some(hb) = end_near(out, b, a, &taken) else {
             taken.remove(&ha);
-            if let Some((i, k)) = off_end(&out, b) {
+            if let Some((i, k)) = off_end(out, b) {
                 out.off[i].1[k].2 = ha;
                 taken.insert(ha);
             }
@@ -370,7 +376,6 @@ pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLay
         taken.insert(hb);
         out.links.push(Link { a: ha, b: hb, net });
     }
-    out
 }
 
 /// The free hole nearest `at` on its piece of strip, for a wire's end. A piece with none is made longer (nothing more is joined): a

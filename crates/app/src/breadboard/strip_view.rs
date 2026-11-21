@@ -4,7 +4,7 @@
 
 use super::*;
 use sch_core::mount::{shopping, Mount};
-use sch_core::perfboard::{links_along_pins, perf_layout_around, perf_layout_with};
+use sch_core::perfboard::{links_along_pins, lock_first, perf_layout_around, perf_layout_with, LockWhy};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
 use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
@@ -44,6 +44,9 @@ enum StripDrag {
     Block { from: At },
     /// A box being drawn from this hole.
     Select { from: At },
+    /// A section's box (perfboard) by its name, from the hole the press was on to the one the pointer is on: let go, the box stays
+    /// there and the others are packed round it (`perf_layout_around`).
+    Section { k: usize, from: At, now: At },
 }
 
 /// The stripboard / perfboard view's own state.
@@ -60,6 +63,8 @@ pub struct StripState {
     job: Option<StripJob>,
     /// "固定した部品のまわりを並べ直す" on another thread: the layout round the locked parts comes back here.
     around: Option<std::sync::mpsc::Receiver<StripLayout>>,
+    /// A section's box let go where it was dragged, drawn there until the layout round it comes back.
+    put_box: Option<(At, At)>,
     drag: Option<StripDrag>,
     /// The size and place of the board when the drag began: it stays put while the board grows under the pointer.
     frozen: Option<(Pos2, f32)>,
@@ -96,6 +101,8 @@ const SOCKET: Color32 = Color32::from_gray(85);
 const MODULE: Color32 = Color32::from_rgb(30, 85, 150);
 /// A locked part's padlock (perfboard).
 const LOCK: Color32 = Color32::from_rgb(235, 190, 60);
+/// The dashed frame round a part worth placing by hand first (darker than the padlock: it is drawn on the board's tan).
+const HINT: Color32 = Color32::from_rgb(190, 110, 0);
 
 /// A colour for a net's links, the supplies red and ground black.
 fn net_colour(net: &str) -> Color32 {
@@ -219,12 +226,16 @@ impl BreadboardView {
         match got {
             Ok(m) => {
                 self.strip.around = None;
+                self.strip.put_box = None;
                 self.strip.sel = None;
                 self.strip.picked_link = None;
                 self.strip_set(sch, Some(m));
-                sch.status = i18n::tr("固定した部品はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
+                sch.status = i18n::tr("固定した部品・置いた区画の箱はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
             }
-            Err(TryRecvError::Disconnected) => self.strip.around = None,
+            Err(TryRecvError::Disconnected) => {
+                self.strip.around = None;
+                self.strip.put_box = None;
+            }
             Err(TryRecvError::Empty) => {}
         }
     }
@@ -237,6 +248,26 @@ impl BreadboardView {
             let _ = tx.send(perf_layout_around(&s, opt, &from));
         });
         self.strip.around = Some(rx);
+    }
+
+    /// A section's box let go at `now` (dragged from `from`): it stays there (`StripLayout::pinned`), its parts are placed afresh
+    /// inside and the other boxes are packed round it, on another thread. Not with parts locked (the boxes are not packed round them).
+    fn strip_put_box(&mut self, sch: &mut SchEditor, l: &StripLayout, k: usize, from: At, now: At) {
+        if !l.locked.is_empty() {
+            sch.status = i18n::tr("固定した部品があるときは、区画の箱は置けません (部品の固定を外してから置きます)").to_string();
+            return;
+        }
+        if self.strip.around.is_some() {
+            return;
+        }
+        let mut m = l.clone();
+        let (name, a, b) = m.sections[k].clone();
+        let (a, b) = box_moved(a, b, from, now);
+        m.sections[k] = (name.clone(), a, b);
+        m.pinned.insert(name.clone());
+        self.strip.put_box = Some((a, b));
+        sch.status = i18n::trf!("区画「{}」の箱を {} に置いて、ほかを並べ直しています…", name, hole_name(a));
+        self.strip_relayout(sch, &m);
     }
 
     /// The sections proposed for the schematic, shown in the panel.
@@ -289,6 +320,32 @@ impl BreadboardView {
         }
         self.strip_set(sch, Some(m.clone()));
         *l = m;
+    }
+
+    /// "まず手で置くとよい部品": the connectors, knobs, relays and big chips not locked yet (`lock_first`), each a button that picks
+    /// it (then drag it, L locks it); the reason on hover. Drawn on the board with a dashed frame.
+    fn strip_lock_hints_ui(&mut self, ui: &mut egui::Ui, l: &StripLayout) {
+        let hints = lock_first(l);
+        if hints.is_empty() {
+            return;
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.small(egui::RichText::new(i18n::tr("まず手で置くとよい部品:")).color(LOCK)).on_hover_text(i18n::tr(
+                "全体の形を決める部品です。この部品を自分で置いて固定 (L) し、「固定した部品のまわりを並べ直す」で残りを自動に任せると、全部自動より表の線が少なくなることが多いです (DMM の B 段: 81 本 → 72〜75 本)。ほかの部品は近くに寄せて線をまっすぐ引く自動の方が得意です",
+            ));
+            for (r, why) in &hints {
+                let tip = match why {
+                    LockWhy::Connector => "コネクタ・ヘッダ・モジュール: 基板の縁や、ケースの穴に合う所に置きます",
+                    LockWhy::Control => "つまみ・スイッチ: ケースの穴に合う所に置きます",
+                    LockWhy::Relay => "リレー: 大きくて重い部品です。並べてまとめ、小さい信号の部品から離します",
+                    LockWhy::BigChip => "足の多い IC: まわりの部品の置き場所が、この IC の場所で決まります",
+                };
+                if ui.small_button(r).on_hover_text(i18n::tr(tip)).clicked() {
+                    self.picked = Some(r.clone());
+                    self.strip.picked_link = None;
+                }
+            }
+        });
     }
 
     /// The board's size: a few common ones, or typed; and whether the layout fits it.
@@ -388,6 +445,18 @@ impl BreadboardView {
                         self.strip_lock_toggle(sch, &mut m, &r);
                     }
                 }
+                if !l.pinned.is_empty() {
+                    let busy = self.strip.around.is_some();
+                    if ui
+                        .add_enabled(!busy, egui::Button::new(i18n::trf!("置いた区画の箱 ({} 個) を自動に戻す", l.pinned.len())))
+                        .on_hover_text(i18n::tr("区画の名前をドラッグして置いた箱の場所を自動に任せ、箱を詰め直して線を引き直します (元に戻すで戻せます)"))
+                        .clicked()
+                    {
+                        let mut m = l.clone();
+                        m.pinned.clear();
+                        self.strip_relayout(sch, &m);
+                    }
+                }
                 let n = l.locked.len();
                 if n > 0 {
                     let busy = self.strip.around.is_some();
@@ -400,10 +469,11 @@ impl BreadboardView {
                     }
                 }
             });
+            self.strip_lock_hints_ui(ui, l);
         }
         let hint = match self.strip.tool {
             StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / Ctrl+Z で戻す",
-            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / L で部品を固定 / Delete で線を消す / Ctrl+Z で戻す",
+            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / Delete で線を消す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
@@ -667,10 +737,7 @@ impl BreadboardView {
             // a locked part: a small padlock at its top-left corner
             if l.locked.contains(&p.refdes) {
                 // (outside the picked part's frame, which is 0.6 of a hole out)
-                let at = bb.left_top() + Vec2::new(-pitch * 1.0, -pitch * 1.05);
-                let s = (pitch * 0.62).clamp(7.0, 16.0);
-                painter.circle_stroke(at + Vec2::new(0.0, -s * 0.15), s * 0.42, Stroke::new((s * 0.22).max(1.2), LOCK));
-                painter.rect_filled(Rect::from_center_size(at + Vec2::new(0.0, s * 0.35), Vec2::new(s * 1.1, s * 0.8)), 1.5, LOCK);
+                padlock(&painter, bb.left_top() + Vec2::new(-pitch * 1.0, -pitch * 1.05), pitch * 0.62);
             }
         }
         // the links over the parts (one along a chip's pins marked orange beneath), and the supplies off the board
@@ -691,7 +758,21 @@ impl BreadboardView {
         for (name, a, b) in &l.sections {
             let r = Rect::from_two_pos(to(*a), to(*b)).expand(pitch * 0.45);
             painter.rect_stroke(r, 2.0, Stroke::new(1.5, Color32::from_rgb(90, 90, 200)), egui::StrokeKind::Outside);
-            painter.text(r.left_top() + Vec2::new(2.0, -2.0), egui::Align2::LEFT_BOTTOM, name, font.clone(), Color32::from_rgb(150, 160, 255));
+            let tag = painter.text(r.left_top() + Vec2::new(2.0, -2.0), egui::Align2::LEFT_BOTTOM, name, font.clone(), Color32::from_rgb(150, 160, 255));
+            // a box put by hand: a padlock after its name
+            if l.pinned.contains(name) {
+                padlock(&painter, Pos2::new(tag.right() + pitch * 0.35, tag.center().y), pitch * 0.5);
+            }
+        }
+        // a section's box being dragged, or let go and waiting for the layout round it
+        let ghost = match &self.strip.drag {
+            Some(StripDrag::Section { k, from, now }) => l.sections.get(*k).map(|(_, a, b)| box_moved(*a, *b, *from, *now)),
+            _ => self.strip.put_box,
+        };
+        if let Some((a, b)) = ghost {
+            let r = Rect::from_two_pos(to(a), to(b)).expand(pitch * 0.45);
+            painter.rect_filled(r, 2.0, PICK.gamma_multiply(0.1));
+            painter.rect_stroke(r, 2.0, Stroke::new(2.0, PICK), egui::StrokeKind::Outside);
         }
         for (a, n) in &l.names {
             let named = if net_colour(n) == Color32::from_gray(30) { Color32::from_gray(20) } else { net_colour(n) };
@@ -700,6 +781,16 @@ impl BreadboardView {
         // what is still to be joined (as a board's ratsnest)
         for (_, a, b) in strip_unjoined(&sch.sch, &l) {
             super::rats_line(&painter, to(a), to(b), pitch);
+        }
+        // the parts worth placing by hand first (perfboard): a dashed frame
+        if !strip && self.strip.tool == StripTool::Move {
+            let hinted: BTreeSet<String> = lock_first(&l).into_iter().map(|x| x.0).collect();
+            for p in l.parts.iter().filter(|p| hinted.contains(&p.refdes)) {
+                let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
+                let r = Rect::from_points(&pts).expand(pitch * 0.75);
+                let c = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+                painter.extend(egui::Shape::dashed_line(&c, Stroke::new(2.0, HINT), pitch * 0.4, pitch * 0.3));
+            }
         }
         // the picked part and link, the box, the first end of a link being drawn
         if let Some(p) = self.picked.as_ref().and_then(|r| l.parts.iter().find(|p| &p.refdes == r)) {
@@ -780,6 +871,15 @@ impl BreadboardView {
                 })
                 .map(|x| x.refdes.clone())
         };
+        // a section's name above its frame (perfboard): dragged, the box goes there
+        let perf = self.kind == BoardKind::Perfboard;
+        let section_at = |l: &StripLayout, p: Pos2| {
+            l.sections.iter().position(|(name, a, b)| {
+                let r = Rect::from_two_pos(to(*a), to(*b)).expand(pitch * 0.45);
+                let w = (name.chars().count() as f32 * pitch * 0.6 + pitch * 1.5).min(r.width());
+                perf && Rect::from_min_max(r.left_top() - Vec2::new(0.0, pitch * 0.9), r.left_top() + Vec2::new(w, pitch * 0.2)).contains(p)
+            })
+        };
         let tool = self.strip.tool;
         if tool == StripTool::Move
             && response.drag_started()
@@ -793,6 +893,9 @@ impl BreadboardView {
                 StripDrag::LinkEnd { k, end }
             } else if self.strip.sel.is_some_and(|b| in_box(h, b)) {
                 StripDrag::Block { from: h }
+            } else if let Some(k) = section_at(l, p) {
+                self.strip.sel = None;
+                StripDrag::Section { k, from: h, now: h }
             } else if let Some(r) = part_at(l, p) {
                 self.picked = Some(r.clone());
                 self.strip.sel = None;
@@ -818,6 +921,13 @@ impl BreadboardView {
                 }
                 StripDrag::Select { from } => {
                     self.strip.sel = Some((*from, h));
+                    None
+                }
+                StripDrag::Section { k, from, .. } => {
+                    self.strip.drag = Some(StripDrag::Section { k: *k, from: *from, now: h });
+                    if response.drag_stopped() && h != *from {
+                        self.strip_put_box(sch, l, *k, *from, h);
+                    }
                     None
                 }
             };
@@ -945,6 +1055,19 @@ impl BreadboardView {
             }
         }
     }
+}
+
+/// A padlock (a locked part, a section's box put by hand) centred at `at`, about `size` high.
+fn padlock(painter: &egui::Painter, at: Pos2, size: f32) {
+    let s = size.clamp(7.0, 16.0);
+    painter.circle_stroke(at + Vec2::new(0.0, -s * 0.15), s * 0.42, Stroke::new((s * 0.22).max(1.2), LOCK));
+    painter.rect_filled(Rect::from_center_size(at + Vec2::new(0.0, s * 0.35), Vec2::new(s * 1.1, s * 0.8)), 1.5, LOCK);
+}
+
+/// A section's box (corners `a`, `b`) dragged from hole `from` to `now`: its corners there, the top-left kept on the board.
+fn box_moved(a: At, b: At, from: At, now: At) -> (At, At) {
+    let top = ((a.0 as i32 + now.0 as i32 - from.0 as i32).max(0) as u16, (a.1 as i32 + now.1 as i32 - from.1 as i32).max(0) as u16);
+    (top, (b.0 - a.0 + top.0, b.1 - a.1 + top.1))
 }
 
 /// The holes across and down a board of `w` × `h` mm (2.54 mm apart).

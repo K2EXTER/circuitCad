@@ -81,12 +81,14 @@ fn turn(s: Shape) -> Shape {
 /// else about square) with room between for the wires, each two-lead part where its leads are nearest the leads of their nets, then
 /// every net wired.
 pub fn perf_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
-    perf_layout_keeping(s, opt, vec![])
+    perf_layout_keeping(s, opt, vec![], BTreeMap::new())
 }
 
 /// Lays the schematic out on a perfboard round the parts `from` has locked (`StripLayout::locked`): those stay in their holes as they
 /// are, the others are placed round them (the shelves and the springs leave the locked parts' holes and room round them free) and
-/// every net is wired again. A locked part no longer on the schematic, or with other pins now, is placed afresh.
+/// every net is wired again. A locked part no longer on the schematic, or with other pins now, is placed afresh. The sections' boxes
+/// the person put by hand (`StripLayout::pinned`) keep their top-left hole and width (the parts inside placed afresh), the other boxes
+/// packed round them; a box pinned for a section no longer in the table is let go.
 pub fn perf_layout_around(s: &Schematic, opt: StripOptions, from: &StripLayout) -> StripLayout {
     let c = read(s);
     let keep: Vec<StripPart> = from
@@ -104,15 +106,19 @@ pub fn perf_layout_around(s: &Schematic, opt: StripOptions, from: &StripLayout) 
         })
         .cloned()
         .collect();
-    let mut l = perf_layout_keeping(s, opt, keep.clone());
+    let boxes: BTreeMap<String, (At, u16)> =
+        from.sections.iter().filter(|(n, _, _)| from.pinned.contains(n)).map(|(n, a, b)| (n.clone(), (*a, b.1.saturating_sub(a.1) + 1))).collect();
+    let mut l = perf_layout_keeping(s, opt, keep.clone(), boxes);
     l.locked = keep.into_iter().map(|p| p.refdes).collect();
+    l.pinned = from.pinned.iter().filter(|n| l.sections.iter().any(|x| &x.0 == *n)).cloned().collect();
     l
 }
 
-fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>) -> StripLayout {
+fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, boxes: BTreeMap<String, (At, u16)>) -> StripLayout {
     let c = read(s);
     let mut wants = Wants::read(s, &c);
     wants.keep = keep;
+    wants.boxes = boxes;
     let net_of_lead = |refdes: &str, pin: &str| lead_net(&c, refdes, pin);
     // each placement (the gaps between chips, the chips upright and turned a quarter turn, without and with annealing) wired the rails first and the small nets
     // first, without and then with a way out kept by each lead, every placement with one order before the next order (so each has its
@@ -128,8 +134,13 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>) -
         [false, true].iter().flat_map(|q| [false, true].iter().flat_map(move |s| GAPS.iter().flat_map(move |g| [(*g, false, *s, *q), (*g, true, *s, *q)]))).collect();
     // round locked parts the springs go first: they pull the other parts toward the locked parts' leads (the shelves fill the rows
     // after the locked parts in order, far from what they join)
-    if !wants.keep.is_empty() {
+    // (and with sections, the boxes packed across the board go first: the bands stacked down a crowded board run past the budget)
+    if !wants.keep.is_empty() || !wants.sections.is_empty() {
         placings.sort_by_key(|p| !p.3);
+    }
+    // a section's box put by hand: only the boxes packed round it (the bands stacked down the board would not keep it)
+    if !wants.boxes.is_empty() && wants.sections.len() >= 2 && wants.keep.is_empty() {
+        placings.retain(|p| p.3);
     }
     let mut placed: Vec<Option<Option<StripLayout>>> = vec![None; placings.len()];
     for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
@@ -141,6 +152,10 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>) -
                 .get_or_insert_with(|| {
                     if !springs {
                         return Some(place(&c, opt, gap, turned, sa, &wants, None));
+                    }
+                    // with sections, this placing packs each section's box across the board (the springs leave sections alone)
+                    if !wants.sections.is_empty() {
+                        return place_packed(&c, opt, gap, turned, sa, &wants);
                     }
                     simpl::targets(&c, opt, gap, turned, &wants).map(|t| place(&c, opt, gap, turned, sa, &wants, Some(&t)))
                 })
@@ -215,6 +230,8 @@ struct Wants {
     sections: Vec<(String, BTreeSet<String>)>,
     /// The parts locked where they are (`perf_layout_around`): placed first as they are, never moved.
     keep: Vec<StripPart>,
+    /// The sections' boxes put by hand (`StripLayout::pinned`): each section's name, its top-left hole and its width.
+    boxes: BTreeMap<String, (At, u16)>,
 }
 
 impl Wants {
@@ -233,7 +250,7 @@ impl Wants {
                 groups.entry(p.clone()).or_default().push(i);
             }
         }
-        Wants { apart, groups, sections: crate::stripboard::sections(s, c), keep: vec![] }
+        Wants { apart, groups, sections: crate::stripboard::sections(s, c), keep: vec![], boxes: BTreeMap::new() }
     }
 
     /// Whether a part is locked where it is.
@@ -512,6 +529,154 @@ fn is_head(s: &Shape) -> bool {
     s.look != Look::Dip && s.leads.len() >= LONG_ROW
 }
 
+/// The sections each in a box of its own, packed across the board instead of one band of rows each (small sections side by side):
+/// each section's parts placed alone (`place`, its off-board wires with it) about square, then the boxes in shelves across the
+/// board's width, the tallest first, `gap` holes between. None without two sections, or with locked parts (they keep their holes).
+fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: bool, sa: bool, wants: &Wants) -> Option<StripLayout> {
+    if wants.sections.len() < 2 || !wants.keep.is_empty() {
+        return None;
+    }
+    let has_off = c.off.iter().any(|(_, p)| p.iter().any(|(_, n)| !n.is_empty()));
+    let margin: u16 = if has_off { 2 } else { 1 };
+    let n_twos = (0..c.on.len()).filter(|k| look_on(c, *k) == Look::TwoLead).count();
+    let board = board_width(&shapes_of(c, turned), n_twos, opt, gap, margin);
+    // an off-board part goes with the section that has the most of its nets
+    let nets_in = |parts: &BTreeSet<String>| -> BTreeSet<String> { c.on.iter().filter(|p| parts.contains(&p.0)).flat_map(|p| p.2.iter().map(|x| x.1.clone())).collect() };
+    let sec_nets: Vec<BTreeSet<String>> = wants.sections.iter().map(|(_, m)| nets_in(m)).collect();
+    let off_sec: Vec<usize> = c.off.iter().map(|(_, pins)| (0..sec_nets.len()).max_by_key(|k| (pins.iter().filter(|(_, n)| sec_nets[*k].contains(n)).count(), Reverse(*k))).unwrap_or(0)).collect();
+    // each section's box in a few widths (about square, narrower, wider, the board's width)
+    let mut choices: Vec<(usize, Vec<StripLayout>)> = vec![];
+    for (i, (_, members)) in wants.sections.iter().enumerate() {
+        let sub = Circuit {
+            on: c.on.iter().filter(|p| members.contains(&p.0)).cloned().collect(),
+            off: c.off.iter().enumerate().filter(|(k, _)| off_sec[*k] == i).map(|(_, o)| o.clone()).collect(),
+            supplies: c.supplies.clone(),
+            ground: c.ground.clone(),
+            mounts: c.mounts.clone(),
+        };
+        if sub.on.is_empty() {
+            continue;
+        }
+        let shapes = shapes_of(&sub, turned);
+        let twos = (0..sub.on.len()).filter(|k| look_on(&sub, *k) == Look::TwoLead).count();
+        let area: u32 = shapes.iter().map(|s| room_of(s, gap)).sum::<u32>() + twos as u32 * TWO_ROOM;
+        let m = if sub.off.iter().any(|(_, p)| p.iter().any(|(_, n)| !n.is_empty())) { 2 } else { 1 };
+        let widest = shapes.iter().map(|s| s.w).max().unwrap_or(0) + 2 * m;
+        let square = (area as f64 * 1.5).sqrt();
+        let mut widths: Vec<u16> = match wants.boxes.get(&wants.sections[i].0) {
+            // a box put by hand keeps its width
+            Some((_, w)) => vec![(*w).max(widest)],
+            None => [0.7, 1.0, 1.4].iter().map(|f| (square * f).ceil() as u16).chain([board]).map(|w| w.max(widest).max(8).min(board.max(widest))).collect(),
+        };
+        widths.sort_unstable();
+        widths.dedup();
+        let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), ..Default::default() };
+        let mut ls: Vec<StripLayout> = widths.into_iter().map(|w| place(&sub, StripOptions { cols: Some(w) }, gap, turned, sa, &alone, None)).collect();
+        ls.dedup_by_key(|l| (l.cols, l.rows));
+        choices.push((i, ls));
+    }
+    // every mix of the widths packed; the one with the fewest rows (then the smallest board)
+    let mut pick: Vec<usize> = vec![0; choices.len()];
+    let mut best: Option<((u16, u32), StripLayout)> = None;
+    loop {
+        let blocks: Vec<(usize, &StripLayout)> = choices.iter().zip(&pick).map(|((i, ls), k)| (*i, &ls[*k])).collect();
+        let l = pack(c, wants, &blocks, board, gap);
+        let key = (l.rows, l.rows as u32 * l.cols as u32);
+        if best.as_ref().is_none_or(|b| key < b.0) {
+            best = Some((key, l));
+        }
+        // the next mix
+        let mut k = 0;
+        while k < pick.len() {
+            pick[k] += 1;
+            if pick[k] < choices[k].1.len() {
+                break;
+            }
+            pick[k] = 0;
+            k += 1;
+        }
+        if k == pick.len() {
+            break;
+        }
+    }
+    best.map(|b| b.1)
+}
+
+/// The sections' boxes (`blocks`: the section's index and its parts placed alone) packed across a board `board` holes wide: the boxes
+/// put by hand (`Wants::boxes`) first where they are, then the others the tallest first, each at the lowest place it fits (then the
+/// leftmost), `gap` holes from every box placed, keeping the table's distances from the boxes placed (further down where none across
+/// does).
+fn pack(c: &Circuit, wants: &Wants, blocks: &[(usize, &StripLayout)], board: u16, gap: u16) -> StripLayout {
+    let mut blocks: Vec<(usize, &StripLayout)> = blocks.to_vec();
+    let pin_of = |i: usize| wants.boxes.get(&wants.sections[i].0).map(|b| b.0);
+    blocks.sort_by_key(|(i, l)| (pin_of(*i).is_none(), Reverse(l.rows), *i));
+    let mut out = StripLayout { perf: true, ..Default::default() };
+    let span = gap.saturating_sub(1);
+    let board = board.max(blocks.iter().map(|b| b.1.cols).max().unwrap_or(0));
+    // the boxes placed: top-left and bottom-right (inclusive)
+    let mut taken: Vec<(At, At)> = vec![];
+    let mut boxes: Vec<(usize, String, At, At)> = vec![];
+    for (i, l) in blocks {
+        let moved = |dy: u16, dx: u16| -> Vec<StripPart> {
+            l.parts.iter().map(|p| StripPart { leads: p.leads.iter().map(|(n, a)| (n.clone(), (a.0 + dy, a.1 + dx))).collect(), ..p.clone() }).collect()
+        };
+        let fits_far = |dy: u16, dx: u16, placed: &[StripPart]| moved(dy, dx).iter().all(|p| wants.far_enough(&p.refdes, &p.leads.iter().map(|q| q.1).collect::<Vec<_>>(), placed));
+        // clear of every box placed by `span` free holes on each side
+        let clear = |y: u16, x: u16| {
+            taken.iter().all(|(a, b)| y + l.rows + span <= a.0 || b.0 + 1 + span <= y || x + l.cols + span <= a.1 || b.1 + 1 + span <= x)
+        };
+        let (y, x) = match pin_of(i) {
+            Some(at) => at,
+            None => {
+                // the places to try: the top and the left edge, and just past each box placed (below it, right of it)
+                let mut ys: Vec<u16> = std::iter::once(0).chain(taken.iter().map(|(_, b)| b.0 + 1 + span)).collect();
+                let mut xs: Vec<u16> = std::iter::once(0).chain(taken.iter().map(|(_, b)| b.1 + 1 + span)).collect();
+                ys.sort_unstable();
+                ys.dedup();
+                xs.sort_unstable();
+                xs.dedup();
+                let found = ys.iter().find_map(|&y| xs.iter().copied().filter(|&x| x + l.cols <= board).find(|&x| clear(y, x) && fits_far(y, x, &out.parts)).map(|x| (y, x)));
+                // none keeps the distances: further down, below everything, until one does
+                found.unwrap_or_else(|| {
+                    let low = taken.iter().map(|(_, b)| b.0 + 1 + span).max().unwrap_or(0);
+                    (low..low + 200).find_map(|y| (0..=board.saturating_sub(l.cols)).find(|x| fits_far(y, *x, &out.parts)).map(|x| (y, x))).unwrap_or((low, 0))
+                })
+            }
+        };
+        taken.push(((y, x), (y + l.rows - 1, x + l.cols - 1)));
+        let at = |a: At| (a.0 + y, a.1 + x);
+        for p in &l.parts {
+            let mut p = p.clone();
+            for (_, a) in &mut p.leads {
+                *a = at(*a);
+            }
+            out.parts.push(p);
+        }
+        for (r, pins) in &l.off {
+            if let Some(e) = out.off.iter_mut().find(|(x, _)| x == r) {
+                e.1.extend(pins.iter().map(|(p, n, a)| (p.clone(), n.clone(), at(*a))));
+            } else {
+                out.off.push((r.clone(), pins.iter().map(|(p, n, a)| (p.clone(), n.clone(), at(*a))).collect()));
+            }
+        }
+        boxes.push((i, wants.sections[i].0.clone(), (y, x), (y + l.rows - 1, x + l.cols - 1)));
+    }
+    // every off-board part listed (in the schematic's order), the sections in the table's order
+    for (r, _) in &c.off {
+        if !out.off.iter().any(|(x, _)| x == r) {
+            out.off.push((r.clone(), vec![]));
+        }
+    }
+    out.off.sort_by_key(|(r, _)| c.off.iter().position(|o| &o.0 == r));
+    boxes.sort_by_key(|b| b.0);
+    out.sections = boxes.into_iter().map(|(_, n, a, b)| (n, a, b)).collect();
+    let pos = |r: &str| c.on.iter().position(|x| x.0 == r).unwrap_or(usize::MAX);
+    out.parts.sort_by_key(|p| (p.look == Look::TwoLead, pos(&p.refdes)));
+    out.rows = out.sections.iter().map(|s| s.2 .0 + 1).max().unwrap_or(1);
+    out.cols = out.sections.iter().map(|s| s.2 .1 + 1).max().unwrap_or(1);
+    out
+}
+
 /// The free place (top-left corner) nearest a chip's target centre `t` (row, column): on or below row `y0`, within the board's
 /// width, its outline and `gap` holes round it clear of what is placed (`blocked`), and `ok` there (the table's distances).
 fn target_place(s: &Shape, t: (f64, f64), y0: u16, gap: u16, margin: u16, width: u16, blocked: &BTreeSet<At>, ok: impl Fn(u16, u16) -> bool) -> Option<At> {
@@ -536,6 +701,46 @@ fn target_place(s: &Shape, t: (f64, f64), y0: u16, gap: u16, margin: u16, width:
         }
     }
     None
+}
+
+/// Why a part is worth placing by hand before the rest is laid out round it (`lock_first`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LockWhy {
+    /// A connector, a header or a module: at the board's edge, or where the case has its hole.
+    Connector,
+    /// A knob or a switch: where the case has its hole.
+    Control,
+    /// A relay: big and heavy, its coils and contacts kept together away from the small signals.
+    Relay,
+    /// A big chip (14 leads or more): the parts round it go where it is.
+    BigChip,
+}
+
+/// The parts worth placing by hand first on a perfboard (then locked, and the rest laid out round them): the connectors and modules,
+/// the knobs and switches, the relays and the big chips, in that order (the most leads first within each), not those locked already.
+/// By the part's name (J, CN, SW, VR, K …) and its leads.
+pub fn lock_first(l: &StripLayout) -> Vec<(String, LockWhy)> {
+    let prefix = |r: &str| r.chars().take_while(|c| c.is_ascii_alphabetic()).collect::<String>().to_ascii_uppercase();
+    let mut v: Vec<(LockWhy, Reverse<usize>, String)> = l
+        .parts
+        .iter()
+        .filter(|p| !l.locked.contains(&p.refdes))
+        .filter_map(|p| {
+            let n = p.leads.len();
+            let why = match prefix(&p.refdes).as_str() {
+                "J" | "P" | "CN" | "CON" => LockWhy::Connector,
+                "SW" | "S" | "VR" | "RV" | "POT" | "ENC" => LockWhy::Control,
+                "K" | "RL" | "RY" => LockWhy::Relay,
+                _ if matches!(p.mount, crate::mount::Mount::Module { .. }) => LockWhy::Connector,
+                _ if p.look == Look::Row && n >= LONG_ROW => LockWhy::Connector,
+                _ if p.look == Look::Dip && n >= 14 => LockWhy::BigChip,
+                _ => return None,
+            };
+            Some((why, Reverse(n), p.refdes.clone()))
+        })
+        .collect();
+    v.sort();
+    v.into_iter().map(|(w, _, r)| (r, w)).collect()
 }
 
 /// The holes a part takes on the board: a chip its outline, a two-lead part its leads and the hole between.
@@ -1586,12 +1791,55 @@ mod tests {
         for (k, (name, p, q)) in l.sections.iter().enumerate() {
             let members = &s.requirements.groups[k].parts;
             for part in l.parts.iter().filter(|x| members.contains(&x.refdes)) {
-                assert!(part.leads.iter().all(|(_, a)| a.0 >= p.0 && a.0 <= q.0), "{} in {name}", part.refdes);
+                assert!(part.leads.iter().all(|(_, a)| a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1), "{} in {name}", part.refdes);
+            }
+            // the sections' boxes (bands, or boxes packed side by side) do not overlap
+            for (other, r, s) in l.sections.iter().skip(k + 1) {
+                assert!(q.0 < r.0 || s.0 < p.0 || q.1 < r.1 || s.1 < p.1, "{name} and {other} overlap");
             }
         }
         let rules = crate::stripboard::strip_rules(&s, &l);
         assert!(!rules.is_empty() && rules.iter().all(|r| r.ok), "{rules:?}");
         assert!(rules.iter().any(|r| r.message.starts_with("GND:")), "the one ground point is checked: {rules:?}");
+    }
+
+    /// A section's box put by hand: laid out again round it, the box keeps its top-left hole (and is no wider than it was), its parts
+    /// inside it, the other box beside or below it (not over it), still marked as put, and the board joins what the schematic joins.
+    #[test]
+    fn a_section_box_put_by_hand_stays_and_the_others_go_round_it() {
+        let mut s = load("seg7_counter.schjson");
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("カウンタ", &["U1", "U3"]), group("表示", &["U2", "DS1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"])];
+        let from = StripLayout { perf: true, sections: vec![("表示".into(), (0, 20), (11, 35))], pinned: ["表示".to_string()].into(), ..Default::default() };
+        let l = perf_layout_around(&s, StripOptions::default(), &from);
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        assert!(l.pinned.contains("表示"), "still put by hand");
+        let (_, p, q) = l.sections.iter().find(|x| x.0 == "表示").unwrap();
+        assert_eq!(*p, (0, 20), "the box keeps its top-left hole");
+        assert!(q.1 - p.1 < 16, "no wider than it was: {p:?}–{q:?}");
+        for part in l.parts.iter().filter(|x| s.requirements.groups[1].parts.contains(&x.refdes)) {
+            assert!(part.leads.iter().all(|(_, a)| a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1), "{} in its box", part.refdes);
+        }
+        let (_, r, t) = l.sections.iter().find(|x| x.0 == "カウンタ").unwrap();
+        assert!(q.0 < r.0 || t.0 < p.0 || q.1 < r.1 || t.1 < p.1, "the boxes do not overlap: {p:?}–{q:?}, {r:?}–{t:?}");
+    }
+
+    /// The parts to place by hand first: the connector, the switch, the relay and the big chip (in that order), not the small chip,
+    /// the resistor or a part already locked.
+    #[test]
+    fn the_parts_to_place_by_hand_first() {
+        let part = |r: &str, look: Look, n: u16| StripPart { refdes: r.into(), look, leads: (0..n).map(|k| (format!("{}", k + 1), (k, 0))).collect(), mount: Default::default() };
+        let mut l = StripLayout {
+            perf: true,
+            parts: vec![part("R1", Look::TwoLead, 2), part("U1", Look::Dip, 16), part("U2", Look::Dip, 8), part("K1", Look::Dip, 8), part("SW1", Look::Row, 3), part("J1", Look::Row, 4), part("U3", Look::Dip, 14)],
+            ..Default::default()
+        };
+        assert_eq!(
+            lock_first(&l),
+            [("J1".into(), LockWhy::Connector), ("SW1".into(), LockWhy::Control), ("K1".into(), LockWhy::Relay), ("U1".into(), LockWhy::BigChip), ("U3".into(), LockWhy::BigChip)]
+        );
+        l.locked.insert("J1".into());
+        assert!(lock_first(&l).iter().all(|x| x.0 != "J1"), "a locked part is not listed");
     }
 
     /// With no strips every hole is a piece of its own: two leads side by side are apart until a bare wire joins them; a wire that

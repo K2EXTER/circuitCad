@@ -81,6 +81,11 @@ pub struct StripLayout {
     /// lays the others out round them.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub locked: BTreeSet<String>,
+    /// The sections whose box the person put where it is (perfboard, the boxes packed across the board): laid out again
+    /// (`perfboard::perf_layout_around`), each box keeps its top-left hole and its width, its parts placed afresh inside, and the other
+    /// boxes go round it.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub pinned: BTreeSet<String>,
 }
 
 impl StripLayout {
@@ -261,6 +266,12 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let c = read(s);
     let secs = sections(s, &c);
     let mut l = if secs.len() < 2 { lay(&c, opt, &BTreeSet::new()) } else { lay_sections(&c, opt, &secs) };
+    // with sections, a net between sections that has no strip in one of them (a chip's pin to another section's chip) is left
+    // apart: joined by a wire as a line of the ratsnest is (the parts added to a board edited by hand are joined so)
+    if secs.len() >= 2 {
+        let lines = strip_unjoined(s, &l);
+        crate::strip_edit::join_lines(s, &mut l, lines);
+    }
     keep_forks(s, &mut l);
     l
 }
