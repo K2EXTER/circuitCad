@@ -21,7 +21,7 @@
 5. B6・B8 の残り(Arduino をブロックで書く形・ジャンパー線の見やすさ・デジタルの表示の残り。使って困った順に)。解析の側では V1(部品の値を自動で合わせる)
 6. E5 の残り(マルチボード。ケーブルでつなぐ基板の置き方・全体の過渡と AC を窓に)、E3b → E4(STEP の続き)。E2 の小さな残り(基板を壁に寄せる・ケースの箱を SolidCraft で)、E7・E8 の残りは使って困ったら
 7. 確認だけの作業: DXF・STEP をケースの CAD で開く(基板の DXF の書き出し・読み込み、`board step`)、KiCad の回路図の回転 90〜270° を実物で確かめる(I1)
-8. X1(電流の動く点。小さく初学者に効く)、Y1・Y2(ライブラリの更新を置いた部品へ・取り込む前の変更の一覧)、A2(秋月・DigiKey の型番。店のページで確かめながら少しずつ)、J の残り(J5〜J24 から、使って困った順に。小さいのは J23)
+8. X1(電流の動く点。小さく初学者に効く)、Y1・Y2(ライブラリの更新を置いた部品へ・取り込む前の変更の一覧)、A2(秋月・DigiKey の型番。店のページで確かめながら少しずつ)、J の残り(J5〜J24 から、使って困った順に。小さいのから)
 9. D(デジタルの残り。D1 遅延の値・D2 タイミングの点検の続き・D6 トランジスタで組む論理回路の教材)
 10. M(部品のモデル)。おすすめは M2 の残り。次は評価基板で実物と比べる。作り直したあとの手順は `docs/model-policy.md` の進み具合。データシートからの部品作成は Q(Q3 → Q17 → Q1、残りは使いながら)
 11. S1(伝送線路として扱う長さの点検。小さく、初学者の基板にも効く)→ R1・R2(S パラメータとスミスチャート)→ S2(反射と終端)。残りの R・S は長期
@@ -114,7 +114,6 @@ KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の�
 | J18 | IPC-D-356(電気テスト用のネットリスト)、Gerber X2 の部品ごとの情報(`%TO`) | 今の X2 はファイルの情報(`%TF`)だけ。ODB++・IPC-2581 は対象外のまま |
 | J19 | 沿面距離(高電圧の点検)、ネットタイ、キャスタレーション | Altium に沿面距離のルール(確認)。KiCad 10 に、部品の中でつながっているピンを決める「ジャンパー」(確認。ネットタイに近い) |
 | J20 | パネルの明るいテーマ、ショートカットの変更 | キャンバスの紙の色のテーマはある(`schematic/canvas_theme.rs`)。残り: パネルの明るいテーマ(意味の色 `ERROR` などが暗い地向けの定数なので関数にする。`docs/code-notes/app/ui-rules.md`)、キーを使う人が変えられる機能(操作の表 `actions.rs` の `ACTIONS` の上に作れる)。KiCad 10 はツールバーの並べ替えとシステムに合わせた明暗(確認) |
-| J23 | 回路図で、つながっていない線の交差を半円の飛び越しで描く(設定で切り替え。接続点の黒丸と見分けやすくする) | 小。KiCad 10 の hop-over(確認)。初学者が「交差 = 接続?」と迷う所なので、J-3 の中では先にやってよい |
 | J21 | プラグインの仕組み | 今は CLI と MCP で足りている |
 
 出典は `docs/competitor-comparison.md` の出典の節と、次のページ: KiCad 9.0 のリリース https://www.kicad.org/blog/2025/02/Version-9.0.0-Released/ ・KiCad 10.0 のリリース https://www.kicad.org/blog/2026/03/Version-10.0.0-Released/ ・EasyEDA の Standard と Pro の比較 https://prodocs.easyeda.com/en/introduction/std-vs-pro/ ・EasyEDA の面付け https://prodocs.easyeda.com/en/pcb/tools-panelize-advanced/ ・EasyEDA の部品表(価格と在庫) https://prodocs.easyeda.com/en/pcb/export-bill-of-materials-bom/ ・Altium の Draftsman https://www.altium.com/documentation/altium-designer/streamlining-board-design-documentation-with-draftsman?version=21 ・Fusion Electronics https://www.autodesk.com/products/fusion-360/blog/18-things-need-to-know-fusion-360-electronics/ ・Quadcept の製品 https://www.quadcept.com/ja/product/cad/ ・Quadcept の Gerber の重ね比べ https://www.quadcept.com/ja/manual/pcb/post-752

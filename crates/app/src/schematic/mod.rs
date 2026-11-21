@@ -273,6 +273,8 @@ pub struct SchEditor {
     title_open: bool,
     /// What an empty title block's "作者" gets when its window opens (the settings' 図枠の作者).
     pub default_author: String,
+    /// Wires that cross without joining are drawn with a half-circle hop (the settings' 交差を飛び越しで描く).
+    pub wire_hops: bool,
     wiz_kind: usize,
     wiz_in: Vec<String>,
     /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
@@ -775,6 +777,7 @@ impl Default for SchEditor {
             wiz_open: false,
             title_open: false,
             default_author: String::new(),
+            wire_hops: true,
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,

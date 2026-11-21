@@ -21,6 +21,56 @@ const SUB_MIN: f32 = 9.0;
 /// Below this height (px) the strokes of a pin number run together: it is left out.
 const PIN_NUMBER_MIN: f32 = 4.0;
 
+/// The radius of a hop where wires cross without joining, in grid steps.
+const HOP_RADIUS: f32 = 0.35;
+
+/// Where each wire hops over another: for every wire, the distances along it (grid steps from its end `a`) of the crossings it
+/// jumps. A level wire hops over an upright one when they cross away from both their ends; a crossing where a third wire ends or
+/// a pin sits is a joint (it has a dot), not a hop.
+pub(super) fn wire_hops(s: &Schematic) -> Vec<Vec<f32>> {
+    let level = |w: &sch_core::Wire| w.a.1 == w.b.1 && w.a.0 != w.b.0;
+    let upright = |w: &sch_core::Wire| w.a.0 == w.b.0 && w.a.1 != w.b.1;
+    let between = |x: i32, a: i32, b: i32| a.min(b) < x && x < a.max(b);
+    let ends: std::collections::HashSet<Pt> = s.wires.iter().flat_map(|w| [w.a, w.b]).chain(s.components.iter().flat_map(|c| c.pins().into_iter().map(|p| p.1))).collect();
+    s.wires
+        .iter()
+        .map(|w| {
+            if !level(w) {
+                return vec![];
+            }
+            let mut at: Vec<f32> = s
+                .wires
+                .iter()
+                .filter(|v| upright(v) && between(v.a.0, w.a.0, w.b.0) && between(w.a.1, v.a.1, v.b.1))
+                .map(|v| (v.a.0, w.a.1))
+                .filter(|p| !ends.contains(p))
+                .map(|p| (p.0 - w.a.0).abs() as f32)
+                .collect();
+            at.sort_by(f32::total_cmp);
+            at.dedup();
+            at
+        })
+        .collect()
+}
+
+/// The points of a level wire from `a` to `b` (on screen) with a half circle of radius `r` rising over each crossing (`at`: grid
+/// steps from `a`, sorted; `step`: the screen length of one).
+fn hop_line(a: Pos2, b: Pos2, at: &[f32], step: f32, r: f32) -> Vec<Pos2> {
+    const SIDES: usize = 10;
+    let dir = if b.x >= a.x { 1.0 } else { -1.0 };
+    let mut pts = vec![a];
+    for d in at {
+        let cx = a.x + dir * d * step;
+        for k in 0..=SIDES {
+            // from the side nearer `a` over the top (screen up) to the far side
+            let t = std::f32::consts::PI * k as f32 / SIDES as f32;
+            pts.push(Pos2::new(cx - dir * r * t.cos(), a.y - r * t.sin()));
+        }
+    }
+    pts.push(b);
+    pts
+}
+
 impl SchEditor {
     /// The font of a tier at this zoom, `ratio` times the grid step; `None` when a sub text would be too small to read.
     pub(super) fn tier_font(&self, painter: &egui::Painter, tier: Tier, ratio: f32) -> Option<FontId> {
@@ -75,16 +125,23 @@ impl SchEditor {
         let scale = live_dc.filter(|_| self.show_v).map(|d| self.volt_scale_of(d));
         // a result from before the last change keeps its colours, faint
         let faint = self.dc_stale();
+        let hops = if self.wire_hops { wire_hops(&self.sch) } else { vec![] };
         for (i, w) in self.sch.wires.iter().enumerate() {
             let sel = self.is_sel(Sel::Wire(i));
             let tint = live_dc.zip(scale).and_then(|(d, (r, range))| {
                 let c = step_colour(volt_step(self.wire_voltage(d, i)? - r, range, self.vscale.decades));
                 Some(if faint { c.gamma_multiply(0.45) } else { c })
             });
-            painter.line_segment(
-                [self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32))],
-                Stroke::new(if sel { 3.0 } else { 2.2 }, if sel { crate::canvas_theme::col(crate::canvas_theme::Role::Selection) } else { self.live_wire_colour(i).or(tint).unwrap_or(crate::canvas_theme::col(crate::canvas_theme::Role::Wire)) }),
-            );
+            let stroke = Stroke::new(if sel { 3.0 } else { 2.2 }, if sel { crate::canvas_theme::col(crate::canvas_theme::Role::Selection) } else { self.live_wire_colour(i).or(tint).unwrap_or(crate::canvas_theme::col(crate::canvas_theme::Role::Wire)) });
+            let (a, b) = (self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32)));
+            match hops.get(i).filter(|h| !h.is_empty()) {
+                None => {
+                    painter.line_segment([a, b], stroke);
+                }
+                Some(h) => {
+                    painter.add(egui::Shape::line(hop_line(a, b, h, self.zoom, (HOP_RADIUS * self.zoom).clamp(2.5, 9.0)), stroke));
+                }
+            };
         }
     }
 
@@ -500,5 +557,27 @@ mod tests {
         let (x0, x1, y0, y1) = comp_extents(&s.components[u]);
         let b = sheet_box(s.components[u].kind, (x0, x1, y0, y1), (40, 10), 0).unwrap();
         assert!(side_pinned(&s.components[u], b.0, b.1), "ULN2803A: eight pins on each side");
+    }
+
+    #[test]
+    fn a_level_wire_hops_over_an_upright_one_only_where_they_do_not_join() {
+        use sch_core::Wire;
+        let mut s = Schematic::default();
+        // a level wire crossed by two upright wires: one just crosses, one ends on it (a T: joined, no hop)
+        s.wires.push(Wire { a: (10, 5), b: (0, 5) });
+        s.wires.push(Wire { a: (3, 0), b: (3, 10) });
+        s.wires.push(Wire { a: (7, 0), b: (7, 5) });
+        // a crossing where a third wire ends is a joint too
+        s.wires.push(Wire { a: (0, 8), b: (10, 8) });
+        s.wires.push(Wire { a: (3, 8), b: (1, 8) });
+        let h = wire_hops(&s);
+        assert_eq!(h[0], [7.0], "from the end a at x = 10: the crossing at x = 3 is 7 steps along; x = 7 is a T");
+        assert!(h[1].is_empty() && h[2].is_empty(), "an upright wire is not the one that hops");
+        assert!(h[3].is_empty(), "x = 3 on y = 8 has another wire's end: joined");
+        let pts = hop_line(Pos2::new(100.0, 50.0), Pos2::new(0.0, 50.0), &h[0], 10.0, 3.0);
+        let top = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+        assert_eq!(top, 47.0, "the hop rises its radius above the wire");
+        let peak = pts.iter().find(|p| p.y == top).unwrap();
+        assert!((peak.x - 30.0).abs() < 0.01, "over the crossing at x = 3 ({})", peak.x);
     }
 }

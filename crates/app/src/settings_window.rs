@@ -37,6 +37,7 @@ impl App {
         crate::canvas_theme::set_palette(crate::canvas_theme::build(crate::canvas_theme::Theme::parse(&p.canvas_theme).unwrap_or_default(), &p.canvas_colors));
         self.sch.default_author = p.default_author.clone();
         self.sch.analysis_pins = p.analysis_pins.clone();
+        self.sch.wire_hops = p.wire_hops;
         self.prefs = p.clone();
     }
 
@@ -114,6 +115,7 @@ impl App {
             board_grid: p.board_grid,
             canvas_theme: p.canvas_theme.clone(),
             canvas_colors: p.canvas_colors.clone(),
+            wire_hops: p.wire_hops,
             ..Prefs::load(&file)
         }
         .save(&file);
@@ -154,7 +156,10 @@ fn look_tab(ui: &mut egui::Ui, p: &mut Prefs, restart_note: bool) {
     ui.end_row();
     ui.label(i18n::tr("描き方"));
     let note = if restart_note { i18n::tr(" (次の起動から)") } else { "" };
+    ui.vertical(|ui| {
+    ui.checkbox(&mut p.wire_hops, i18n::tr("回路図で、つながっていない線の交差を飛び越しで描く")).on_hover_text(i18n::tr("横の線が縦の線をまたぐ所を、小さな半円の山で描きます。つながっている所 (黒い丸) と見分けやすくなります。オフにすると、ただの十字で描きます (つながっていないのは同じです)"));
     ui.checkbox(&mut p.smooth_edges, i18n::trf!("線の縁をなめらかにする{note}")).on_hover_text(i18n::tr("画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)"));
+    });
     ui.end_row();
 }
 

@@ -37,6 +37,9 @@
 - モデルの出どころ(`panel/mod.rs` の `origin_ui` `model_origin`): 部品一覧・ホバー・配置した部品の「基板とモデル」に、モデルの種類(等価 / メーカー / 一般 / 記録なし)・出典と、同梱の表 `part_lib::model_checks` があれば「データシートとの比べ」を出す。左のパネルの幅 (400 px) に収まるよう 3 列 (項目・比べた相手の typ か max・モデル)。テストで確かめている行はモデルの値が緑。min / typ / max と条件、差はホバー。表は横スクロールの枠に入れて、パネルを押し広げない。`origin` の無い写しは、表の指紋が合えば等価モデルとみなす。テスト `a_model_shows_where_it_comes_from_and_its_data_sheet_table`。
 - `bench_guide.rs` は「実機の作業」(`learn::Kind::Hands`)のチェックリスト窓。アプリが判定できない作業(はんだ付け `solder`、ブートローダ `bootload`)を、安全の注意・道具と手順・自分で付けるチェック・「うまくいかないとき」の表で見せる。チェックを全部付けると、その項目の id が進み具合に入る(チェックの状態は、アプリを閉じると消える)。項目を足すときは `GUIDES` に `Guide` を足し、学習パスの `Item` を `kind: Kind::Hands`・同じ id にする(`every_lesson_of_a_path_exists_and_ids_are_unique` が確かめる)。内容は一般的な手順なので、`limits` に「最新の資料で確かめる」を必ず書く。
 - `power_on_guide.rs` は「最初の電源投入のガイド」の窓(B1、2026-11-18)。`sim_core::power_on` を、回路図の `SchEditor::power_on_inputs`(`schematic/power_on.rs`: 解析と同じ `sim_circuit` と、基板の銅を入れた `heaters_from_schematic`)で呼ぶ。開いたとき・「計算する」で解き、毎フレームは解かない。答えには回路図の署名を持たせ、違えば「計算し直して」と出す。電源ごとに範囲・表示どおりの値・温まったあと・制限の値・効く部品 3 つ、「測った電流」(mA、`parse_value`)の判定と疑う所。入口: 学ぶのメニュー、Ctrl+K の「最初の電源投入のガイド」(`Act::PowerOn`、部品が無ければ押せない)、実機の作業の窓で題に「電源を入れる」を含む手順のボタン(`BenchGuide::want_power_on` を main が見て開く)、起動引数 `--power-on`。試験はサンプル `power_on.schjson` で範囲・制限・判定の描画、電源の無い回路図でエラー。
+### 線の交差の飛び越し (2026-11-22、J23) — `schematic/draw.rs` の `wire_hops`・`hop_line`
+横の線が縦の線をまたぐ所 (両方の端でない所) を、横の線の側に半径 0.35 マス (画面で 2.5〜9 px) の半円の山で描く。そこに 3 本目の線の端か部品のピンがあれば、つながった所 (黒丸) なので山にしない。斜めの線は対象外。設定 `Prefs.wire_hops` (初めからオン、「設定」の「表示」の「描き方」) を `SchEditor.wire_hops` に写す。SVG・PDF の書き出しも同じ描き方を通るので山が出る。サンプルには交差が無い (確かめは手で作った図とテスト `a_level_wire_hops_over_an_upright_one_only_where_they_do_not_join`)。
+
 ### schematic/stretch.rs — 配線が部品に付いてくる
 部品をドラッグ(1個・複数選択)または回転すると、ピンの上に端がある配線は、その端がピンに付いてくる。斜めになる場合は1箇所だけ折れ曲がる(折れた先の線は配線の末尾に足す)。ドラッグ中は開始時の配線から毎フレーム計算し直す(`begin_stretch`/`apply_stretch`)ので、元の位置に戻せば配線も元に戻る。一緒に選んだ配線は平行移動するので対象外。ピンの途中に重なるだけの配線(T字)は付いてこない。
 
