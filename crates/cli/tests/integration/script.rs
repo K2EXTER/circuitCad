@@ -1839,6 +1839,38 @@ erc
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `tidy` lays a sheet built by commands out again, its nets unchanged; with references only those parts move.
+#[test]
+fn a_sheet_built_by_commands_is_tidied_with_its_nets_unchanged() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 10k as=R1
+add R 10k as=R2
+add C 100n as=C1
+net VIN V1.+ R1.1
+net MID R1.2 R2.1 C1.1
+net GND V1.- R2.2 C1.2
+list
+tidy
+list
+tidy C1
+list
+");
+    assert!(ok, "{a:?}");
+    let lists: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "list").collect();
+    let nets = |v: &Value| {
+        let mut n: Vec<(String, Vec<String>)> = v["nets"].as_array().unwrap().iter().map(|n| (n["net"].as_str().unwrap().to_string(), { let mut p: Vec<String> = n["pins"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).filter(|x| !x.starts_with('#')).collect(); p.sort(); p })).collect();
+        n.retain(|x| !x.1.is_empty());
+        n.sort();
+        n
+    };
+    assert_eq!(nets(lists[1]), nets(lists[0]));
+    assert_eq!(nets(lists[2]), nets(lists[0]));
+    let t: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "tidy").collect();
+    assert_eq!(t[0]["moved"], 4);
+    assert_eq!(t[1]["moved"], 1);
+}
+
 #[test]
 fn the_rows_of_the_requirements_table_without_a_reason_are_listed() {
     let (a, ok) = run("new

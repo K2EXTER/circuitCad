@@ -27,6 +27,7 @@ impl SchEditor {
             Act::Wire => self.tool = Tool::Wire,
             Act::NetLabel => self.tool = Tool::Label,
             Act::Erc => self.run_erc(),
+            Act::Tidy => self.tidy_sheet(),
             Act::Rerun => self.rerun_last(),
             _ => return false,
         }
@@ -37,7 +38,7 @@ impl SchEditor {
     pub fn why_not(&self, act: Act) -> Option<&'static str> {
         let empty = self.sch.components.is_empty();
         match act {
-            Act::Rerun | Act::Erc | Act::PowerOn if empty => Some("回路図に部品がありません"),
+            Act::Rerun | Act::Erc | Act::PowerOn | Act::Tidy if empty => Some("回路図に部品がありません"),
             Act::SelectAll if empty && self.sch.wires.is_empty() && self.sch.labels.is_empty() => Some("回路図に何もありません"),
             Act::Rotate | Act::Delete if self.selected.is_none() && self.multi.is_empty() && act == Act::Delete => Some("先に、消すものを選んでください"),
             _ => None,
@@ -55,6 +56,26 @@ impl SchEditor {
         self.selected = None;
         self.tool = Tool::Select;
         self.status = format!("{} 個を選びました", self.multi.len());
+    }
+
+    /// Lays the sheet's parts out again (`sch_core::tidy`): all of them, or the parts chosen (they go below the others). The nets do
+    /// not change (a tidy that would change them is not made); Ctrl+Z puts the sheet back.
+    pub(super) fn tidy_sheet(&mut self) {
+        let mut chosen: std::collections::BTreeSet<String> = self.multi.iter().chain(self.selected.iter()).filter_map(|s| if let Sel::Comp(i) = s { self.sch.components.get(*i) } else { None }).filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect();
+        if chosen.len() == self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).count() {
+            chosen.clear();
+        }
+        let only = (!chosen.is_empty()).then_some(&chosen);
+        match sch_core::tidy::tidy(&self.sch, only) {
+            Ok((s, r)) => {
+                self.sch = s;
+                self.selected = None;
+                self.multi.clear();
+                self.fit_pending = true;
+                self.status = i18n::trf!("回路図を整えました: 部品 {} 個を {} 列に (つながりは同じ。元に戻すは Ctrl+Z)", r.moved, r.columns).to_string();
+            }
+            Err(e) => self.status = i18n::tr_dyn(&e).to_string(),
+        }
     }
 
     pub(super) fn run_erc(&mut self) {

@@ -852,6 +852,14 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         json!({"ignored": c.ignored.iter().map(|p| p.refdes.clone()).collect::<Vec<_>>(), "generic": c.generic.len(), "caveats": c.caveats.len(), "see": "coverage"})
     }
 
+    /// `tidy [REF ...]`: the sheet laid out again (`sch_core::tidy`): every part, or the parts named (below the others).
+    pub fn tidy(&mut self, args: &[String]) -> Res {
+        let only: std::collections::BTreeSet<String> = args.iter().map(|a| a.to_string()).collect();
+        let (s, r) = sch_core::tidy::tidy(&self.sch, (!only.is_empty()).then_some(&only))?;
+        self.sch = s;
+        Ok(obj(json!({"moved": r.moved, "columns": r.columns})))
+    }
+
     pub fn erc(&self) -> Res {
         let mut probs = sch_core::erc(&self.sch);
         probs.extend(sch_core::pindefs::firmware_problems(&self.sch, None));

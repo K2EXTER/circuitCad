@@ -725,6 +725,11 @@ impl eframe::App for App {
                         if sch_mode { self.sch.redo() } else { self.board_ed.redo() }
                     }
                     ui.separator();
+                    if ui.button(i18n::tr("回路図を整える")).on_hover_text(i18n::tr(crate::actions::action(crate::actions::Act::Tidy).desc)).clicked() {
+                        self.mode = Mode::Schematic;
+                        self.run_act(crate::actions::Act::Tidy);
+                        ui.close();
+                    }
                     if ui.button(i18n::tr("設計の要件 (表)…")).on_hover_text(i18n::tr("ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます。回路図・基板のどちらからでも開けます")).clicked() {
                         self.mode = Mode::Schematic;
                         self.sch.open_requirements();

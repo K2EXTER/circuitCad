@@ -45,6 +45,7 @@ pub enum Act {
     PowerOn,
     Settings,
     Calc,
+    Tidy,
 }
 
 pub struct Action {
@@ -89,6 +90,7 @@ pub const ACTIONS: &[Action] = &[
     a(Act::Measure, "measure", "距離を測る", "2 点の距離を測る (Enter・X・Y で寸法線に)", "ツール", "M", B),
     a(Act::Layer, "layer", "層を替える", "配線する層を表と裏で切り替える", "ツール", "L", B),
     a(Act::Flip, "flip", "裏返す", "選んだ部品を基板の反対の面へ", "編集", "B", B),
+    a(Act::Tidy, "tidy", "回路図を整える", "部品を、信号は左から右・電源は上・GND は下に並べ直す (つながりは変えない。部品を選んでいるときは、選んだ部品だけを下に並べる)", "編集", "", S),
     a(Act::Erc, "erc", "ERC (回路の点検)", "つなぎ忘れ・ショート・電源のないピンを探す", "点検", "", S),
     a(Act::Drc, "drc", "DRC (基板の点検)", "間隔・線幅・つながりを点検", "点検", "", B),
     a(Act::Help, "help", "操作ガイド", "キーと操作の一覧", "ヘルプ", "F1", Both),

@@ -37,6 +37,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         move sends parts (with the net labels on their pins) to another sheet; tidy packs the parts of the
                                         active sheet (or 'tidy all') into compact rows, so that the whole sheet fits one screen. Nets join across
                                         sheets by the same net label or power symbol; add / net / remove / list act on the active sheet
+  tidy [REF ...]                        lay the sheet out again: signal left to right, supplies up, ground down (nets unchanged; with REFs only those parts, below the others)
   erc                                   electrical rule check (message + hint). 'ok' only says the command ran:
                                         read 'errors' (or run with --strict, which fails the script on an ERC error)
   spice                                 the SPICE netlist text
@@ -387,6 +388,7 @@ impl Session {
             "remove" => self.remove(args),
             "list" => Ok(self.list()),
             "erc" => self.erc(),
+            "tidy" => self.tidy(&args),
             "coverage" => self.coverage(),
             "heat" => self.heat(args),
             "heattran" => self.heattran(args),
