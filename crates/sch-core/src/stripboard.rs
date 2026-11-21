@@ -168,6 +168,49 @@ impl StripLayout {
         }
         v
     }
+
+    /// The holes joined to `at` as the board is built: along its piece of strip, by the bare wires and by the links (what a meter's
+    /// probes would find joined). A hole off the board is joined to itself alone.
+    pub fn joined_to(&self, at: At) -> BTreeSet<At> {
+        let (rows, cols) = (self.rows as usize, self.cols as usize);
+        let inside = |a: At| (a.0 as usize) < rows && (a.1 as usize) < cols;
+        if !inside(at) {
+            return BTreeSet::from([at]);
+        }
+        let idx = |a: At| a.0 as usize * cols + a.1 as usize;
+        let mut parent: Vec<usize> = (0..rows * cols).collect();
+        fn find(p: &mut [usize], mut i: usize) -> usize {
+            while p[i] != i {
+                p[i] = p[p[i]];
+                i = p[i];
+            }
+            i
+        }
+        let mut join = |a: At, b: At| {
+            if inside(a) && inside(b) {
+                let (ra, rb) = (find(&mut parent, idx(a)), find(&mut parent, idx(b)));
+                parent[ra] = rb;
+            }
+        };
+        for (r, a, b) in self.pieces() {
+            for c in a..b {
+                join((r, c), (r, c + 1));
+            }
+        }
+        for (a, b) in self.joins() {
+            join(a, b);
+        }
+        let root = find(&mut parent, idx(at));
+        (0..rows * cols).filter(|i| find(&mut parent, *i) == root).map(|i| ((i / cols) as u16, (i % cols) as u16)).collect()
+    }
+}
+
+/// The net of the holes joined to `at`: the schematic's net of a lead among them (None: no lead there).
+pub fn net_at(s: &Schematic, l: &StripLayout, at: At) -> Option<String> {
+    let joined = l.joined_to(at);
+    let nets = extract(&s.flat());
+    let leads = l.parts.iter().flat_map(|p| p.leads.iter().map(move |(pin, a)| (p.refdes.as_str(), pin.as_str(), *a))).chain(l.off.iter().flat_map(|(r, v)| v.iter().map(move |(pin, _, a)| (r.as_str(), pin.as_str(), *a))));
+    leads.filter(|x| joined.contains(&x.2)).find_map(|(r, pin, _)| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin)).map(|n| n.name.clone()))
 }
 
 /// How a net is carried on the board.
@@ -1529,6 +1572,25 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The holes joined to a lead are its net's leads and no other net's (the board as laid out checks clean).
+    #[test]
+    fn the_holes_joined_to_a_lead_are_its_net() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ne555_blinker.schjson");
+        let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for perf in [false, true] {
+            let l = if perf { crate::perfboard::perf_layout_with(&s, StripOptions::default()) } else { strip_layout(&s) };
+            assert!(strip_check(&s, &l).is_empty());
+            let leads: Vec<(At, String)> = l.parts.iter().flat_map(|p| p.leads.iter().map(|(_, a)| (*a, net_at(&s, &l, *a).unwrap()))).collect();
+            for (a, net) in &leads {
+                let joined = l.joined_to(*a);
+                for (b, other) in &leads {
+                    assert_eq!(joined.contains(b), net == other, "perf {perf}: {a:?} ({net}) and {b:?} ({other})");
+                }
+            }
+            assert_eq!(l.joined_to((l.rows + 3, 0)), BTreeSet::from([(l.rows + 3, 0)]), "off the board");
+        }
+    }
 
     fn examples() -> Vec<(String, Schematic)> {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");

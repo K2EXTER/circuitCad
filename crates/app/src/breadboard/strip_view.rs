@@ -7,7 +7,7 @@ use sch_core::mount::{shopping, Mount};
 use sch_core::perfboard::{links_along_pins, lock_first, perf_layout_around, perf_layout_with, LockWhy};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
-use sch_core::stripboard::{hole_name, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
+use sch_core::stripboard::{hole_name, net_at, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
 
 /// What the person builds on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -79,6 +79,10 @@ pub struct StripState {
     redo: Vec<Option<StripLayout>>,
     /// The layout the last edit, undo or redo left: when the sheet's differs (another file opened), the history is dropped.
     last: Option<Option<StripLayout>>,
+    /// The board seen from below (the copper side, left and right swapped: where to solder), only to look at.
+    pub back: bool,
+    /// The net of the hole under the pointer on the copper side, by the schematic's edit count and the hole.
+    back_net: Option<(u64, At, Option<String>)>,
     /// The checks of the layout shown, by the schematic's edit count and the layout (`strip_checks`).
     checks: Option<(u64, StripLayout, StripChecks)>,
 }
@@ -406,7 +410,20 @@ impl BreadboardView {
         if (self.strip.tool == StripTool::Bare && strip) || (self.strip.tool == StripTool::Cut && !strip) {
             self.strip.tool = StripTool::Move;
         }
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
+            for (back, name, tip) in [
+                (false, "表 (部品の面)", "部品を差す面から見た絵です。部品と線を動かして並べ方を直せます (F で裏と切り替え)"),
+                (true, "裏 (はんだの面)", "基板を裏返して見た絵です (左右が逆)。はんだ付けする穴・すずめっき線・銅の帯と切る穴を、実物を裏返したときと同じ向きで見ます。穴にカーソルを置くと、そこにつながる穴と線が光ります。見るだけで、直すときは表に戻します (F で切り替え)"),
+            ] {
+                if ui.selectable_label(self.strip.back == back, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+                    self.strip_flip(back);
+                }
+            }
+        });
+        if self.strip.back {
+            ui.label(egui::RichText::new(i18n::tr("裏は見るだけです。並べ方を直すときは表に戻します")).color(NOTE));
+        }
+        ui.add_enabled_ui(!self.strip.back, |ui| ui.horizontal_wrapped(|ui| {
             for (t, name, tip) in [
                 (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
@@ -422,7 +439,7 @@ impl BreadboardView {
                     self.strip.link_start = None;
                 }
             }
-        });
+        }));
         self.strip_history_check(sch);
         ui.horizontal(|ui| {
             if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.strip.undo.is_empty(), "手で動かした・線を引いた・帯を切った・並べ直した操作を 1 つ取り消します (Ctrl+Z)").clicked() {
@@ -656,7 +673,16 @@ impl BreadboardView {
         let w = left + l.cols as f32 + 1.0;
         let h = l.rows as f32 + 1.5;
         let pitch = ((rect.width() - 40.0) / w).min((rect.height() - 40.0) / h).clamp(5.0, 30.0);
-        let origin = Pos2::new(rect.left() + (rect.width() - w * pitch) / 2.0 + left * pitch, rect.top() + 30.0 + pitch);
+        // (the copper side has the margin at the right: the board's left edge is there now)
+        let back = self.strip.back;
+        let origin = Pos2::new(rect.left() + (rect.width() - w * pitch) / 2.0 + if back { 1.0 } else { left } * pitch, rect.top() + 30.0 + pitch);
+        if response.hovered() && self.strip.drag.is_none() && !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.is_none()) {
+            self.strip_flip(!back);
+        }
+        if self.strip.back {
+            self.strip_back(sch, &l, &response, &painter, origin, pitch);
+            return;
+        }
         // while dragging, the board keeps the size and place it had when the drag began (it may grow under the pointer)
         let (origin, pitch) = self.strip.frozen.unwrap_or((origin, pitch));
         let to = |a: At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch;
@@ -851,6 +877,160 @@ impl BreadboardView {
                 let _ = pin;
                 painter.line_segment([body.right_center(), to(*at)], Stroke::new(pitch * 0.12, net_colour(net)));
             }
+        }
+    }
+}
+
+impl BreadboardView {
+    /// Turns the board over (`back`: the copper side): what was being dragged or drawn is let go.
+    fn strip_flip(&mut self, back: bool) {
+        self.strip.back = back;
+        self.strip.drag = None;
+        self.strip.frozen = None;
+        self.strip.link_start = None;
+        self.strip.sel = None;
+    }
+
+    /// The copper side, seen from below with left and right swapped (as the board is held to solder): the copper (the strips and
+    /// their cuts, or the bare wires), a ring of solder at every hole with a lead or a wire's end (a square one at a chip's pin 1),
+    /// the parts above as faint outlines. The hole under the pointer lights what it is joined to and names its net; a click on a
+    /// lead picks its part. Only to look at: nothing is edited here.
+    fn strip_back(&mut self, sch: &SchEditor, l: &StripLayout, response: &egui::Response, painter: &egui::Painter, origin: Pos2, pitch: f32) {
+        let last = l.cols.saturating_sub(1);
+        let to = |a: At| origin + Vec2::new((last - a.1.min(last)) as f32, a.0 as f32) * pitch;
+        let hole_at = |p: Pos2| -> Option<At> {
+            let v = (p - origin) / pitch;
+            let (r, c) = (v.y.round(), v.x.round());
+            (r >= 0.0 && c >= 0.0 && r < l.rows as f32 && c < l.cols as f32).then(|| (r as u16, last - c as u16))
+        };
+        self.strip.drawn = Some((origin, pitch));
+        let strip = self.kind == BoardKind::Stripboard;
+        let font = egui::FontId::monospace((pitch * 0.55).clamp(8.0, 13.0));
+        let board = Rect::from_two_pos(to((0, 0)), to((l.rows.saturating_sub(1), last))).expand(pitch * 0.8);
+        painter.rect_filled(board, 3.0, BOARD);
+        painter.text(response.rect.left_top() + Vec2::new(12.0, 6.0), egui::Align2::LEFT_TOP, i18n::tr("裏 (はんだの面): 左右が逆です。表の左の端が、ここでは右の端"), egui::FontId::proportional((pitch * 0.6).clamp(10.0, 14.0)), Color32::from_gray(200));
+        // the copper: the strips and their cuts, or a perfboard's pads round every hole and its bare wires
+        if strip {
+            for (r, a, b) in l.pieces() {
+                painter.rect_filled(Rect::from_two_pos(to((r, a)), to((r, b))).expand2(Vec2::new(pitch * 0.45, pitch * 0.32)), 1.0, COPPER);
+            }
+        }
+        for r in 0..l.rows {
+            for c in 0..l.cols {
+                if !strip {
+                    painter.circle_filled(to((r, c)), pitch * 0.3, COPPER.gamma_multiply(0.55));
+                }
+                painter.circle_filled(to((r, c)), pitch * 0.13, Color32::from_gray(70));
+            }
+        }
+        let wires = if strip { vec![] } else { perf_wires(l) };
+        for (a, b) in &wires {
+            painter.line_segment([to(*a), to(*b)], Stroke::new(pitch * 0.22, WIRE));
+        }
+        if strip {
+            for cut in &l.cuts {
+                let (p, d) = (to(*cut), pitch * 0.3);
+                let s = Stroke::new(2.0, Color32::from_rgb(200, 30, 30));
+                painter.line_segment([p - Vec2::splat(d), p + Vec2::splat(d)], s);
+                painter.line_segment([p + Vec2::new(-d, d), p + Vec2::new(d, -d)], s);
+            }
+        }
+        // the rows' home strips named at the right (the board's left edge), the columns numbered every five
+        for (r, net) in l.homes.iter().enumerate() {
+            let named = if net_colour(net) == Color32::from_gray(30) { Color32::from_gray(170) } else { net_colour(net) };
+            painter.text(to((r as u16, 0)) + Vec2::new(pitch * 1.0, 0.0), egui::Align2::LEFT_CENTER, net, font.clone(), named);
+        }
+        for c in (0..l.cols).step_by(5) {
+            painter.text(to((0, c)) - Vec2::new(0.0, pitch * 1.0), egui::Align2::CENTER_BOTTOM, format!("{}", c + 1), font.clone(), Color32::from_gray(150));
+        }
+        // the parts above, faint: a frame round a chip's pins (a line between a two-lead part's), the name in the middle
+        let faint = Color32::from_black_alpha(120);
+        for p in &l.parts {
+            let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
+            if pts.is_empty() {
+                continue;
+            }
+            let bb = Rect::from_points(&pts);
+            if p.leads.len() > 2 {
+                painter.rect_stroke(bb.expand(pitch * 0.45), 2.0, Stroke::new(1.0, faint), egui::StrokeKind::Outside);
+            } else {
+                for w in pts.windows(2) {
+                    painter.line_segment([w[0], w[1]], Stroke::new(1.0, faint));
+                }
+            }
+            painter.text(bb.center(), egui::Align2::CENTER_CENTER, &p.refdes, font.clone(), Color32::from_black_alpha(190));
+        }
+        for (name, a, b) in &l.sections {
+            let r = Rect::from_two_pos(to(*a), to(*b)).expand(pitch * 0.45);
+            painter.rect_stroke(r, 2.0, Stroke::new(1.0, Color32::from_rgb(90, 90, 200).gamma_multiply(0.6)), egui::StrokeKind::Outside);
+            painter.text(r.left_top() + Vec2::new(2.0, -2.0), egui::Align2::LEFT_BOTTOM, name, font.clone(), Color32::from_rgb(150, 160, 255));
+        }
+        // the holes to solder: a lead, a link's end or a supply's wire in it
+        let used = l.used();
+        let solder = Color32::from_gray(205);
+        for (a, _) in &used {
+            painter.circle_filled(to(*a), pitch * 0.24, solder);
+            painter.circle_stroke(to(*a), pitch * 0.24, Stroke::new(1.0, Color32::from_gray(90)));
+        }
+        for k in &l.links {
+            for e in [k.a, k.b] {
+                painter.circle_filled(to(e), pitch * 0.1, net_colour(&k.net));
+            }
+        }
+        // a chip's pin 1: a square round it (the mark to find the chip's way round from below)
+        for p in l.parts.iter().filter(|p| p.leads.len() > 2) {
+            if let Some((_, a)) = p.leads.iter().find(|(pin, _)| pin == "1") {
+                painter.rect_stroke(Rect::from_center_size(to(*a), Vec2::splat(pitch * 0.66)), 0.0, Stroke::new(1.5, Color32::from_gray(40)), egui::StrokeKind::Middle);
+            }
+        }
+        for (_, a, b) in self.strip_checks(sch, l).unjoined {
+            super::rats_line(painter, to(a), to(b), pitch);
+        }
+        // the picked part (in the list, or by a click on one of its leads here)
+        if let Some(p) = self.picked.as_ref().and_then(|r| l.parts.iter().find(|p| &p.refdes == r)) {
+            let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
+            painter.rect_stroke(Rect::from_points(&pts).expand(pitch * 0.6), 3.0, Stroke::new(2.0, PICK), egui::StrokeKind::Outside);
+        }
+        let Some(h) = response.hover_pos().and_then(hole_at) else { return };
+        // the hole under the pointer: what it is joined to, lit, and its net named
+        let joined = l.joined_to(h);
+        let lit = Stroke::new(pitch * 0.3, PICK.gamma_multiply(0.8));
+        for (a, b) in wires.iter().filter(|(a, b)| joined.contains(a) && joined.contains(b)) {
+            painter.line_segment([to(*a), to(*b)], lit);
+        }
+        if strip {
+            for (r, a, b) in l.pieces().into_iter().filter(|(r, a, _)| joined.contains(&(*r, *a))) {
+                painter.rect_stroke(Rect::from_two_pos(to((r, a)), to((r, b))).expand2(Vec2::new(pitch * 0.45, pitch * 0.32)), 1.0, Stroke::new(2.0, PICK), egui::StrokeKind::Outside);
+            }
+        }
+        for (a, _) in used.iter().filter(|(a, _)| joined.contains(a)) {
+            painter.circle_stroke(to(*a), pitch * 0.34, Stroke::new(2.0, PICK));
+        }
+        painter.circle_stroke(to(h), pitch * 0.42, Stroke::new(1.5, Color32::WHITE));
+        if !self.strip.back_net.as_ref().is_some_and(|(r, a, _)| *r == sch.rev && *a == h && sch.settled()) {
+            self.strip.back_net = Some((sch.rev, h, net_at(&sch.sch, l, h)));
+        }
+        let net = self.strip.back_net.as_ref().and_then(|x| x.2.clone());
+        let here: Vec<String> = used
+            .iter()
+            .filter(|(a, _)| *a == h)
+            .map(|(_, who)| match who.split_once('.') {
+                Some((r, pin)) => i18n::trf!("{} の {} 番ピン", r, pin),
+                None => i18n::tr("表の線の端").to_string(),
+            })
+            .collect();
+        let mut tip = hole_name(h);
+        if !here.is_empty() {
+            tip = format!("{tip}: {}", here.join("、"));
+        }
+        if let Some(n) = &net {
+            tip = format!("{tip}\n{}", i18n::trf!("ネット {} (つながる穴 {} 個)", n, joined.len()));
+        }
+        response.clone().on_hover_text_at_pointer(tip);
+        if response.clicked()
+            && let Some(p) = l.parts.iter().find(|p| p.leads.iter().any(|(_, a)| *a == h))
+        {
+            self.picked = if self.picked.as_deref() == Some(p.refdes.as_str()) { None } else { Some(p.refdes.clone()) };
         }
     }
 }

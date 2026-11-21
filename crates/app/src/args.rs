@@ -608,6 +608,8 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--proto-plan") {
             app.breadboard.strip_propose(&app.sch);
         }
+        // `--proto-back`: the stripboard or perfboard seen from below (the copper side)
+        app.breadboard.strip.back = args.iter().any(|a| a == "--proto-back");
         // `--proto-schematic`: the schematic in its small window beside the board
         app.breadboard.show_schematic = args.iter().any(|a| a == "--proto-schematic");
         // `--proto-size 100x75`: the stripboard's size in mm (the chips wrap to its width)

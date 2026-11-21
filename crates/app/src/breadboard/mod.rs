@@ -1449,6 +1449,43 @@ mod tests {
     use crate::{App, Mode};
 
     #[test]
+    fn the_copper_side_is_the_board_mirrored_and_a_lead_clicked_there_picks_its_part() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.kind = BoardKind::Stripboard;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        let l = app.breadboard.strip_shown(&app.sch);
+        let (front, pitch) = app.breadboard.strip.drawn.expect("the board was drawn");
+        // F over the board turns it over
+        let middle = front + Vec2::new(l.cols as f32 / 2.0, l.rows as f32 / 2.0) * pitch;
+        let key = egui::Event::Key { key: egui::Key::F, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(middle)]);
+        run(&mut app, vec![key]);
+        assert!(app.breadboard.strip.back, "F turned the board over");
+        run(&mut app, vec![]);
+        let (origin, _) = app.breadboard.strip.drawn.unwrap();
+        // U1's pin 1, seen from below: its column counted from the right
+        let pin1 = l.parts.iter().find(|p| p.refdes == "U1").unwrap().leads.iter().find(|(p, _)| p == "1").unwrap().1;
+        let at = origin + Vec2::new((l.cols - 1 - pin1.1) as f32, pin1.0 as f32) * pitch;
+        let button = |pressed: bool| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let before = app.sch.stripboard.clone();
+        run(&mut app, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, vec![button(true)]);
+        run(&mut app, vec![button(false)]);
+        assert_eq!(app.breadboard.picked.as_deref(), Some("U1"), "the lead clicked is U1's pin 1");
+        assert_eq!(app.sch.stripboard, before, "nothing is edited on the copper side");
+    }
+
+    #[test]
     fn the_checks_kept_between_frames_follow_an_edit_to_the_schematic() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
         let mut app = App::default();
