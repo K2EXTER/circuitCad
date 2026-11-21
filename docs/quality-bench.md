@@ -78,4 +78,5 @@ python tools/freerouting_compare.py --pcb out.pcbjson --jar freerouting-2.5.0.ja
 ```bash
 cargo run --release -p sch-core --example strip_bench -- --cols 40             # サンプル全部の合計 (幅なしと幅 40)
 cargo run --release -p sch-core --example strip_bench -- --strip --cols 59 F.schjson   # 1 つずつ、ストリップ基板だけ
+cargo run --release -p sch-core --example strip_bench -- --strip --back --cols 40       # チップ部品を裏に (裏に置けた数も)
 ```

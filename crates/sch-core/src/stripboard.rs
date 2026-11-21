@@ -401,28 +401,52 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     if !opt.chips_back {
         return strip_lay(s, &full, opt);
     }
-    // the chips on the copper side (`StripOptions::chips_back`): the board laid out without them, then each across two strips
-    // side by side that carry its two nets (`with_back_strips`); one that finds no such place goes back on top and the board is laid
-    // out again
-    // (the layout does not bring a chip's two strips together, so many chips find no place; and with them off the board, the
-    // board is sometimes larger: it is kept only when it beats the board with every part on top, by holes + 10 per wire on top)
-    let front = strip_lay(s, &full, opt);
-    let score = |l: &StripLayout| l.rows as usize * l.cols as usize + 10 * l.links.len();
-    let mut backs = crate::perfboard::back_chips(s, &full);
-    for _ in 0..3 {
-        if backs.is_empty() {
-            break;
-        }
+    // the chips on the copper side (`StripOptions::chips_back`), two ways, against the board with every part on top: (a) laid out with
+    // the rest, each chip's two nets on strips side by side in its band (`pair_up`) and the chip across them on the copper side (no
+    // room on top; a chip whose strips are not side by side stands on top as the leaded part); (b) the board laid out without them,
+    // then each across two strips that happen to carry its two nets (`with_back_strips`), one that finds no place back on top and
+    // the board laid out again. The best by holes + 10 per wire on top - 5 per chip on the back (one leaded part fewer to fit on top)
+    // that joins everything as drawn.
+    let on_back = |l: &StripLayout| l.parts.iter().filter(|p| matches!(p.mount, crate::mount::Mount::Back { .. })).count();
+    let score = |l: &StripLayout| (l.rows as usize * l.cols as usize + 10 * l.links.len()) as i64 - 5 * on_back(l) as i64;
+    let mut found: Vec<StripLayout> = vec![strip_lay(s, &full, opt)];
+    let backs = crate::perfboard::back_chips(s, &full);
+    if !backs.is_empty() {
         let mut c = full.clone();
-        c.on.retain(|(r, _, _)| !backs.contains_key(r));
-        let l = strip_lay(s, &c, opt);
-        let (l, missed) = with_back_strips(&full, l, &backs);
-        if missed.is_empty() {
-            return if score(&l) < score(&front) { l } else { front };
+        for (r, size) in &backs {
+            c.mounts.insert(r.clone(), crate::mount::Mount::Back { size: size.clone() });
         }
-        backs.retain(|r, _| !missed.contains(r));
+        let mut l = strip_lay(s, &c, opt);
+        // (the rows' sharing can move one of a chip's strips away from the other: that chip goes on top)
+        for p in l.parts.iter_mut().filter(|p| matches!(p.mount, crate::mount::Mount::Back { .. })) {
+            let side_by_side = p.leads.len() == 2 && p.leads[0].1 .1 == p.leads[1].1 .1 && p.leads[0].1 .0.abs_diff(p.leads[1].1 .0) == 1;
+            if !side_by_side {
+                p.mount = crate::mount::Mount::Leaded;
+            }
+        }
+        found.push(l);
+        let mut backs = backs;
+        for _ in 0..3 {
+            if backs.is_empty() {
+                break;
+            }
+            let mut c = full.clone();
+            c.on.retain(|(r, _, _)| !backs.contains_key(r));
+            let (l, missed) = with_back_strips(&full, strip_lay(s, &c, opt), &backs);
+            if missed.is_empty() {
+                found.push(l);
+                break;
+            }
+            backs.retain(|r, _| !missed.contains(r));
+        }
     }
-    front
+    let mut best = found.remove(0);
+    for l in found {
+        if score(&l) < score(&best) && strip_check(s, &l).is_empty() {
+            best = l;
+        }
+    }
+    best
 }
 
 /// The chips put on the copper side of a stripboard laid out without them: each across two holes one above the other, on two
@@ -675,6 +699,61 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
     out
 }
 
+/// A band's strips in their order (`nets`), changed so that the nets of each pair (a chip on the copper side across two strips) sit
+/// next to each other where they can: the pairs make chains (each strip has two neighbours at most, no rings), each chain in the
+/// place of its first net, ground kept at the bottom (a chain with ground ends with it and goes last).
+fn pair_up<'a>(nets: Vec<&'a String>, pairs: &[(String, String)], ground: &dyn Fn(&str) -> bool) -> Vec<&'a String> {
+    let pos = |n: &str| nets.iter().position(|x| x.as_str() == n);
+    let mut next: Vec<Vec<usize>> = vec![vec![]; nets.len()];
+    let mut root: Vec<usize> = (0..nets.len()).collect();
+    fn find(r: &mut [usize], mut i: usize) -> usize {
+        while r[i] != i {
+            r[i] = r[r[i]];
+            i = r[i];
+        }
+        i
+    }
+    for (a, b) in pairs {
+        let (Some(i), Some(j)) = (pos(a), pos(b)) else { continue };
+        if next[i].len() >= 2 || next[j].len() >= 2 || next[i].contains(&j) {
+            continue;
+        }
+        let (ri, rj) = (find(&mut root, i), find(&mut root, j));
+        if ri == rj {
+            continue;
+        }
+        root[ri] = rj;
+        next[i].push(j);
+        next[j].push(i);
+    }
+    if next.iter().all(|v| v.is_empty()) {
+        return nets;
+    }
+    // each chain from an end (ground at the far end), in the order of its first net
+    let mut seen = vec![false; nets.len()];
+    let mut chains: Vec<Vec<usize>> = vec![];
+    for i in 0..nets.len() {
+        if seen[i] || next[i].len() > 1 {
+            continue;
+        }
+        let mut chain = vec![i];
+        seen[i] = true;
+        let mut at = i;
+        while let Some(&n) = next[at].iter().find(|n| !seen[**n]) {
+            seen[n] = true;
+            chain.push(n);
+            at = n;
+        }
+        if ground(nets[chain[0]]) {
+            chain.reverse();
+        }
+        chains.push(chain);
+    }
+    let has_ground = |c: &Vec<usize>| c.iter().any(|i| ground(nets[*i]));
+    chains.sort_by_key(|c| (has_ground(c), *c.iter().min().unwrap()));
+    chains.into_iter().flatten().map(|i| nets[i]).collect()
+}
+
 /// One section laid out within the board's width: the rows of chips wrap at the width, but the wires at the left and the parts beside
 /// the chips can take a section past it, so a section that comes out wider is laid out again with the width less what it went over.
 fn lay_within(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<String>) -> StripLayout {
@@ -743,6 +822,14 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         }
     }
     let other_net = |k: usize, n: &str| c.on[k].2.iter().map(|(_, m)| m.clone()).find(|m| m != n && !m.is_empty());
+    // the chips going on the copper side (`StripOptions::chips_back`): across two strips side by side, so their two nets' strips are
+    // put next to each other in their band
+    let on_back = |k: usize| matches!(c.mounts.get(&c.on[k].0), Some(crate::mount::Mount::Back { .. }));
+    let back_pairs: Vec<(String, String)> = (0..c.on.len())
+        .filter(|k| on_back(*k) && c.on[*k].2.len() == 2)
+        .map(|k| (c.on[k].2[0].1.clone(), c.on[k].2[1].1.clone()))
+        .filter(|(a, b)| !a.is_empty() && !b.is_empty() && a != b)
+        .collect();
     // how each net is carried: a strip unless it can do without
     let mut carry: BTreeMap<String, Carry> = BTreeMap::new();
     for n in &order {
@@ -754,7 +841,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
             Carry::Alone
         } else if m.twos.is_empty() {
             Carry::Pins
-        } else if m.pins.len() == 1 && m.twos.len() == 1 && other_net(m.twos[0], n).is_some() {
+        } else if m.pins.len() == 1 && m.twos.len() == 1 && other_net(m.twos[0], n).is_some() && !on_back(m.twos[0]) {
             Carry::Via(m.twos[0])
         } else {
             Carry::Home
@@ -940,6 +1027,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         for b in 0..bands {
             let mut nets: Vec<&String> = band_nets[b].iter().collect();
             nets.sort_by_key(|n| rank(n));
+            let nets = pair_up(nets, &back_pairs, &|n: &str| is_ground_name(n));
             for n in nets {
                 strip_row[b].insert(n.clone(), r);
                 homes.resize(r as usize + 1, String::new());
@@ -1097,7 +1185,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         let mut spare_row = chips_end;
         let mut loose: Vec<(usize, Vec<(String, At)>)> = vec![];
         for (k, (refdes, look, pins)) in c.on.iter().enumerate().filter(|p| p.1 .1 == Look::TwoLead) {
-            let mount = mount_of(refdes);
+            let mut mount = mount_of(refdes);
             if let Some(leads) = placed.remove(&k) {
                 l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads, mount });
                 continue;
@@ -1131,7 +1219,17 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                 (0..400u16).flat_map(|d| [mid.checked_sub(d), mid.checked_add(d)]).flatten().filter(|cc| *cc >= margin).find(|cc| want(*cc)).unwrap_or_else(|| (margin..).find(|cc| want(*cc)).unwrap())
             };
             let leads: Vec<(String, At)> = match rows.as_slice() {
+                // a chip on the copper side across its two strips side by side: two holes, nothing on top
+                [Some(a), Some(b)] if on_back(k) && a.abs_diff(*b) == 1 => {
+                    let free = |cc: u16| [*a, *b].iter().all(|r| !taken.contains(&(*r, cc)) && !over.contains(&(*r, cc)));
+                    let cc = from(&|cc| free(cc));
+                    vec![(pins[0].0.clone(), (*a, cc)), (pins[1].0.clone(), (*b, cc))]
+                }
                 [Some(a), Some(b)] if a != b => {
+                    // a chip for the copper side whose strips are apart stands on top as the leaded part
+                    if on_back(k) {
+                        mount = crate::mount::Mount::Leaded;
+                    }
                     let cc = from(&|cc| fits(&[cc], *a, *b));
                     for r in *a.min(b)..=*a.max(b) {
                         bodies.insert((r, cc));
@@ -1141,6 +1239,9 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                 }
                 // both leads on one net: lying along its strip, two holes apart
                 [Some(a), Some(_)] => {
+                    if on_back(k) {
+                        mount = crate::mount::Mount::Leaded;
+                    }
                     let cc = from(&|cc| fits(&[cc, cc + 1, cc + 2], *a, *a));
                     for x in cc..=cc + 2 {
                         bodies.insert((*a, x));
@@ -1839,32 +1940,44 @@ mod tests {
     use super::*;
 
     /// With `chips_back` on a stripboard, a chip goes across two strips one above the other that carry its two nets; the board
-    /// checks clean and beats the one with every part on top. A board where no chip finds such a place is the one with all on top.
+    /// checks clean and beats the one with every part on top. The active filter's chips find their places too since the layout puts
+    /// each chip's two strips side by side (before, none did and it was laid out all on top).
     #[test]
     fn a_stripboard_chip_on_the_copper_side_sits_across_two_strips() {
         let load = |name: &str| -> Schematic {
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples").join(name);
             serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
         };
-        let s = load("attiny_blinker.schjson");
-        let front = strip_layout(&s);
-        let l = strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() });
-        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
-        assert!(strip_unjoined(&s, &l).is_empty());
-        let backs: Vec<&StripPart> = l.parts.iter().filter(|p| matches!(p.mount, Mount::Back { .. })).collect();
-        assert!(!backs.is_empty());
-        let nets = extract(&s.flat());
-        let net = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|q| q.refdes == r && q.pin == pin)).map(|n| n.name.clone()).unwrap();
-        for p in &backs {
-            let (a, b) = (p.leads[0].1, p.leads[1].1);
-            assert!(a.1 == b.1 && a.0.abs_diff(b.0) == 1, "{}: one above the other", p.refdes);
-            assert_ne!(net(&p.refdes, &p.leads[0].0), net(&p.refdes, &p.leads[1].0));
-            assert!(!l.cuts.contains(&a) && !l.cuts.contains(&b));
+        for name in ["attiny_blinker.schjson", "active_filter.schjson"] {
+            let s = load(name);
+            let front = strip_layout(&s);
+            let l = strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() });
+            assert!(strip_check(&s, &l).is_empty(), "{name}: {:?}", strip_check(&s, &l));
+            assert!(strip_unjoined(&s, &l).is_empty());
+            let backs: Vec<&StripPart> = l.parts.iter().filter(|p| matches!(p.mount, Mount::Back { .. })).collect();
+            assert!(!backs.is_empty(), "{name}");
+            let nets = extract(&s.flat());
+            let net = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|q| q.refdes == r && q.pin == pin)).map(|n| n.name.clone()).unwrap();
+            for p in &backs {
+                let (a, b) = (p.leads[0].1, p.leads[1].1);
+                assert!(a.1 == b.1 && a.0.abs_diff(b.0) == 1, "{name} {}: one above the other", p.refdes);
+                assert_ne!(net(&p.refdes, &p.leads[0].0), net(&p.refdes, &p.leads[1].0));
+                assert!(!l.cuts.contains(&a) && !l.cuts.contains(&b));
+            }
+            // holes + 10 per wire on top - 5 per chip on the back
+            let score = |l: &StripLayout| (l.rows as usize * l.cols as usize + 10 * l.links.len()) as i64 - 5 * l.parts.iter().filter(|p| matches!(p.mount, Mount::Back { .. })).count() as i64;
+            assert!(score(&l) < score(&front), "{name}: {} < {}", score(&l), score(&front));
         }
-        let score = |l: &StripLayout| l.rows as usize * l.cols as usize + 10 * l.links.len();
-        assert!(score(&l) < score(&front), "{} < {}", score(&l), score(&front));
-        let s = load("active_filter.schjson");
-        assert_eq!(strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() }), strip_layout(&s), "no place for its chips: all on top");
+    }
+
+    /// A band's strips are reordered so that each pair (a chip on the copper side) sits side by side, in chains, ground kept last.
+    #[test]
+    fn the_pairs_of_a_band_sit_side_by_side() {
+        let names: Vec<String> = ["VCC", "A", "B", "C", "GND"].iter().map(|s| s.to_string()).collect();
+        let nets: Vec<&String> = names.iter().collect();
+        let pairs = vec![("C".to_string(), "VCC".to_string()), ("A".to_string(), "GND".to_string())];
+        let out: Vec<&str> = pair_up(nets, &pairs, &|n: &str| n == "GND").into_iter().map(|s| s.as_str()).collect();
+        assert_eq!(out, ["VCC", "C", "B", "A", "GND"]);
     }
 
     /// A section's ground wire that starts on its ground strip just past the section's box (the strip runs on a hole past the last
