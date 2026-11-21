@@ -224,7 +224,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
 
 /// The chips that go on the copper side (`StripOptions::chips_back`): the 1206 and 0805 resistors and capacitors built with the
 /// leaded part otherwise, by reference, with their size.
-fn back_chips(s: &Schematic, c: &Circuit) -> BTreeMap<String, String> {
+pub(crate) fn back_chips(s: &Schematic, c: &Circuit) -> BTreeMap<String, String> {
     let flat = s.flat();
     c.on.iter()
         .filter(|(r, _, pins)| pins.len() == 2 && matches!(c.mounts.get(r), Some(crate::mount::Mount::Leaded)))

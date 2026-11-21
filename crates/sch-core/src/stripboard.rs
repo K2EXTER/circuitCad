@@ -397,7 +397,104 @@ struct Block {
 /// new row past the board's width (`StripOptions::cols`). A two-lead part stands across two strips of a band, in a column free there.
 /// The strips of one net in different bands are joined by wires at the left, beside the wires of the supplies off the board.
 pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
-    let c = read(s);
+    let full = read(s);
+    if !opt.chips_back {
+        return strip_lay(s, &full, opt);
+    }
+    // the chips on the copper side (`StripOptions::chips_back`): the board laid out without them, then each across two strips
+    // side by side that carry its two nets (`with_back_strips`); one that finds no such place goes back on top and the board is laid
+    // out again
+    // (the layout does not bring a chip's two strips together, so many chips find no place; and with them off the board, the
+    // board is sometimes larger: it is kept only when it beats the board with every part on top, by holes + 10 per wire on top)
+    let front = strip_lay(s, &full, opt);
+    let score = |l: &StripLayout| l.rows as usize * l.cols as usize + 10 * l.links.len();
+    let mut backs = crate::perfboard::back_chips(s, &full);
+    for _ in 0..3 {
+        if backs.is_empty() {
+            break;
+        }
+        let mut c = full.clone();
+        c.on.retain(|(r, _, _)| !backs.contains_key(r));
+        let l = strip_lay(s, &c, opt);
+        let (l, missed) = with_back_strips(&full, l, &backs);
+        if missed.is_empty() {
+            return if score(&l) < score(&front) { l } else { front };
+        }
+        backs.retain(|r, _| !missed.contains(r));
+    }
+    front
+}
+
+/// The chips put on the copper side of a stripboard laid out without them: each across two holes one above the other, on two
+/// strips that carry its two nets (a strip is one net all along, so any column of them will do), nearest a lead of its nets and on
+/// free holes where it can; never on a cut. Returns the board and the chips that found no place.
+fn with_back_strips(c: &crate::breadboard::Circuit, mut l: StripLayout, backs: &BTreeMap<String, String>) -> (StripLayout, Vec<String>) {
+    let net_of = |r: &str, pin: &str| c.on.iter().find(|x| x.0 == r).and_then(|x| x.2.iter().find(|(p, _)| p == pin)).map(|x| x.1.clone()).unwrap_or_default();
+    let groups = l.hole_groups();
+    // each group of joined holes and its net (from a lead in it), and where the leads are
+    let mut group_net: BTreeMap<usize, String> = BTreeMap::new();
+    let mut lead_holes: Vec<(At, String)> = vec![];
+    for p in &l.parts {
+        for (pin, a) in &p.leads {
+            let n = net_of(&p.refdes, pin);
+            if let Some(g) = groups.get(a) {
+                group_net.entry(*g).or_insert_with(|| n.clone());
+            }
+            lead_holes.push((*a, n));
+        }
+    }
+    for (_, pins) in &l.off {
+        for (_, n, a) in pins {
+            if let Some(g) = groups.get(a) {
+                group_net.entry(*g).or_insert_with(|| n.clone());
+            }
+            lead_holes.push((*a, n.clone()));
+        }
+    }
+    let used: BTreeSet<At> = l.used().into_iter().map(|(a, _)| a).collect();
+    let hole_net = |a: At| groups.get(&a).and_then(|g| group_net.get(g)).cloned();
+    let mut taken: BTreeSet<At> = BTreeSet::new();
+    let mut missed = vec![];
+    for (r, size) in backs {
+        let Some((_, look, pins)) = c.on.iter().find(|x| &x.0 == r) else { continue };
+        let ((p1, n1), (p2, n2)) = (&pins[0], &pins[1]);
+        let near = |a: At, n: &str| lead_holes.iter().filter(|(_, m)| m == n).map(|(h, _)| h.0.abs_diff(a.0) as u32 + h.1.abs_diff(a.1) as u32).min().unwrap_or(u32::from(l.cols));
+        let mut best: Option<(u32, At, At)> = None;
+        for row in 0..l.rows.saturating_sub(1) {
+            for col in 0..l.cols {
+                let (a, b) = ((row, col), (row + 1, col));
+                if l.cuts.contains(&a) || l.cuts.contains(&b) || taken.contains(&a) || taken.contains(&b) {
+                    continue;
+                }
+                let (na, nb) = (hole_net(a), hole_net(b));
+                let (x, y) = if na.as_deref() == Some(n1.as_str()) && nb.as_deref() == Some(n2.as_str()) {
+                    (a, b)
+                } else if na.as_deref() == Some(n2.as_str()) && nb.as_deref() == Some(n1.as_str()) {
+                    (b, a)
+                } else {
+                    continue;
+                };
+                // on a free hole rather than over a lead's joint, near a lead of its nets
+                let k = 10 * (used.contains(&x) as u32 + used.contains(&y) as u32) + near(x, n1).min(near(y, n2));
+                if best.is_none_or(|bst| k < bst.0) {
+                    best = Some((k, x, y));
+                }
+            }
+        }
+        match best {
+            Some((_, x, y)) => {
+                taken.extend([x, y]);
+                l.parts.push(StripPart { refdes: r.clone(), look: *look, leads: vec![(p1.clone(), x), (p2.clone(), y)], mount: Mount::Back { size: size.clone() } });
+            }
+            None => missed.push(r.clone()),
+        }
+    }
+    (l, missed)
+}
+
+/// The board laid out for the circuit `c` (all of the schematic's parts, or those that go on top).
+fn strip_lay(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -> StripLayout {
+    let c = c.clone();
     let secs = sections(s, &c);
     let mut l = if secs.len() < 2 { lay(&c, opt, &BTreeSet::new()) } else { lay_sections(&c, opt, &secs) };
     // with sections, a net between sections that has no strip in one of them (a chip's pin to another section's chip) is left
@@ -1668,6 +1765,35 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// With `chips_back` on a stripboard, a chip goes across two strips one above the other that carry its two nets; the board
+    /// checks clean and beats the one with every part on top. A board where no chip finds such a place is the one with all on top.
+    #[test]
+    fn a_stripboard_chip_on_the_copper_side_sits_across_two_strips() {
+        let load = |name: &str| -> Schematic {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples").join(name);
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+        };
+        let s = load("attiny_blinker.schjson");
+        let front = strip_layout(&s);
+        let l = strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() });
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        assert!(strip_unjoined(&s, &l).is_empty());
+        let backs: Vec<&StripPart> = l.parts.iter().filter(|p| matches!(p.mount, Mount::Back { .. })).collect();
+        assert!(!backs.is_empty());
+        let nets = extract(&s.flat());
+        let net = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|q| q.refdes == r && q.pin == pin)).map(|n| n.name.clone()).unwrap();
+        for p in &backs {
+            let (a, b) = (p.leads[0].1, p.leads[1].1);
+            assert!(a.1 == b.1 && a.0.abs_diff(b.0) == 1, "{}: one above the other", p.refdes);
+            assert_ne!(net(&p.refdes, &p.leads[0].0), net(&p.refdes, &p.leads[1].0));
+            assert!(!l.cuts.contains(&a) && !l.cuts.contains(&b));
+        }
+        let score = |l: &StripLayout| l.rows as usize * l.cols as usize + 10 * l.links.len();
+        assert!(score(&l) < score(&front), "{} < {}", score(&l), score(&front));
+        let s = load("active_filter.schjson");
+        assert_eq!(strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() }), strip_layout(&s), "no place for its chips: all on top");
+    }
 
     /// A board built as laid out carries the schematic's nets; a cut left out shorts two nets into one.
     #[test]
