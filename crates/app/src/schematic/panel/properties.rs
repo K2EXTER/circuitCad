@@ -42,61 +42,6 @@ impl SchEditor {
                 {
                     self.wiz_open = true;
                 }
-                if let Kind::Header(n) = c.kind {
-                    egui::CollapsingHeader::new(i18n::tr("ピンの名前 (信号名)")).id_salt(("pin_names", i)).default_open(true).show(ui, |ui| {
-                        ui.small(i18n::tr("ピンごとの名前を、記号のそばと基板のシルクに書きます (配線やネットは変わりません)")).on_hover_text(i18n::tr("コネクタや端子台の各ピンが何の信号かを書いておくと、配線の間違いが減ります。空にすると、そのピンには名前を書きません"));
-                        c.pin_names.resize(n as usize, String::new());
-                        for k in 0..n as usize {
-                            ui.horizontal(|ui| {
-                                ui.label(format!("{}", k + 1));
-                                ui.add(egui::TextEdit::singleline(&mut c.pin_names[k]).desired_width(110.0)).on_hover_text(i18n::tr("このピンの名前 (F+、SA、GND など)"));
-                            });
-                        }
-                        if c.pin_names.iter().all(|s| s.is_empty()) {
-                            c.pin_names.clear();
-                        }
-                    });
-                }
-                // where to buy this very part: reaches the shopping list and the BOM of the board
-                if !c.kind.is_power_symbol() && c.sub.is_none() && !c.sim_only && c.kind != Kind::Ground {
-                    egui::CollapsingHeader::new(i18n::tr("買える店の型番")).id_salt(("shops", i)).default_open(!c.shops.is_empty()).show(ui, |ui| {
-                        ui.small(i18n::tr("店のページで確かめた型番だけ入れます。購入リストと部品表に出ます (空欄なら、検索リンクになります)")).on_hover_text(i18n::tr("抵抗やコンデンサのように、ライブラリ部品ではない部品に、買う型番を付けられます。ライブラリ部品が型番を持っているときは、ここに書いた型番が優先されます。間違った型番より、空欄のほうがよいです"));
-                        for (id, label, hint) in [("akizuki", "秋月", "秋月電子通商の商品コード (例: 100941)"), ("digikey", "DigiKey", "DigiKey で検索できる型番 (例: RC0805FR-071KL)"), ("lcsc", "LCSC", "LCSC の部品番号 (C + 数字。例: C25804)")] {
-                            let mut v = c.shops.get(id).cloned().unwrap_or_default();
-                            ui.horizontal(|ui| {
-                                ui.label(label);
-                                ui.add(egui::TextEdit::singleline(&mut v).desired_width(f32::INFINITY)).on_hover_text(hint);
-                            });
-                            if v.is_empty() {
-                                c.shops.remove(id);
-                            } else {
-                                c.shops.insert(id.to_string(), v);
-                            }
-                        }
-                    });
-                }
-                // the pins this part does not use: marked, ERC stops asking about them
-                if !c.kind.is_power_symbol() && c.sub.is_none() && (c.custom.is_some() || c.kind.pins().len() >= 3) {
-                    let pins: Vec<(String, String)> = match &c.custom {
-                        Some(s) => s.pins.iter().map(|p| (p.number.clone(), p.name.clone())).collect(),
-                        None => c.kind.pins().into_iter().map(|(n, _)| (n.clone(), n)).collect(),
-                    };
-                    let marked = self.sch.no_connects.iter().filter(|(r, _)| *r == c.refdes).count();
-                    egui::CollapsingHeader::new(i18n::trf!("使わないピン (NC) ({marked})")).id_salt(("nc_pins", i)).default_open(marked > 0).show(ui, |ui| {
-                        ui.small(i18n::tr("つながないピンに印を付けます。回路図に × が出て、ERC は「未接続」と言わなくなります")).on_hover_text(i18n::tr("データシートが「開放のまま」と言うピンや、使わない出力などに付けます。つなぎ忘れとの区別が付くので、本当のミスだけが ERC に残ります。あとから線やラベルでつなぐと、ERC が印との食い違いを知らせます"));
-                        for (num, name) in &pins {
-                            let mut on = self.sch.no_connects.iter().any(|(r, p)| *r == c.refdes && p == num);
-                            let text = if name.is_empty() || name == num { num.clone() } else { format!("{num}  {name}") };
-                            if ui.checkbox(&mut on, text).on_hover_text(i18n::tr("チェックを付けると、このピンは使わない (つながない) ピンになります")).changed() {
-                                if on {
-                                    self.sch.no_connects.push((c.refdes.clone(), num.clone()));
-                                } else {
-                                    self.sch.no_connects.retain(|(r, p)| !(*r == c.refdes && p == num));
-                                }
-                            }
-                        }
-                    });
-                }
                 if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor) {
                     let (first, rest) = match c.value.trim().split_once(char::is_whitespace) {
                         Some((f, r)) => (f.to_string(), format!(" {}", r.trim())),
@@ -185,9 +130,65 @@ impl SchEditor {
                         }
                     }
                 }
-                // the board and model side of the part: rarely changed, so folded
+                if let Kind::Header(n) = c.kind {
+                    // headings, not folds, in this band: the band folds already (at most two levels, ui-rules.md)
+                    part_heading(ui, "ピンの名前 (信号名)", "ピンごとの名前を、記号のそばと基板のシルクに書きます (配線やネットは変わりません)。コネクタや端子台の各ピンが何の信号かを書いておくと、配線の間違いが減ります。空にすると、そのピンには名前を書きません");
+                    c.pin_names.resize(n as usize, String::new());
+                    egui::Grid::new(("pin_names", i)).num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
+                        for k in 0..n as usize {
+                            ui.label(format!("{}", k + 1));
+                            ui.add(egui::TextEdit::singleline(&mut c.pin_names[k]).desired_width(f32::INFINITY)).on_hover_text(i18n::tr("このピンの名前 (F+、SA、GND など)"));
+                            ui.end_row();
+                        }
+                    });
+                    if c.pin_names.iter().all(|s| s.is_empty()) {
+                        c.pin_names.clear();
+                    }
+                }
+                // where to buy this very part: reaches the shopping list and the BOM of the board
+                if !c.kind.is_power_symbol() && c.sub.is_none() && !c.sim_only && c.kind != Kind::Ground {
+                    part_heading(ui, "買える店の型番", "店のページで確かめた型番だけ入れます。購入リストと部品表に出ます (空欄なら、検索リンクになります)。抵抗やコンデンサのように、ライブラリ部品ではない部品に、買う型番を付けられます。ライブラリ部品が型番を持っているときは、ここに書いた型番が優先されます。間違った型番より、空欄のほうがよいです");
+                    egui::Grid::new(("shops", i)).num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
+                        for (id, label, hint) in [("akizuki", "秋月", "秋月電子通商の商品コード (例: 100941)"), ("digikey", "DigiKey", "DigiKey で検索できる型番 (例: RC0805FR-071KL)"), ("lcsc", "LCSC", "LCSC の部品番号 (C + 数字。例: C25804)")] {
+                            let mut v = c.shops.get(id).cloned().unwrap_or_default();
+                            ui.label(label);
+                            ui.add(egui::TextEdit::singleline(&mut v).hint_text(i18n::tr("空欄 = 検索リンク")).desired_width(f32::INFINITY)).on_hover_text(hint);
+                            ui.end_row();
+                            if v.is_empty() {
+                                c.shops.remove(id);
+                            } else {
+                                c.shops.insert(id.to_string(), v);
+                            }
+                        }
+                    });
+                }
+                // the pins this part does not use: marked, ERC stops asking about them
+                if !c.kind.is_power_symbol() && c.sub.is_none() && (c.custom.is_some() || c.kind.pins().len() >= 3) {
+                    let pins: Vec<(String, String)> = match &c.custom {
+                        Some(s) => s.pins.iter().map(|p| (p.number.clone(), p.name.clone())).collect(),
+                        None => c.kind.pins().into_iter().map(|(n, _)| (n.clone(), n)).collect(),
+                    };
+                    let marked = self.sch.no_connects.iter().filter(|(r, _)| *r == c.refdes).count();
+                    part_heading(ui, &i18n::trf!("使わないピン (NC) ({marked})"), "つながないピンに印を付けます。回路図に × が出て、ERC は「未接続」と言わなくなります。データシートが「開放のまま」と言うピンや、使わない出力などに付けます。つなぎ忘れとの区別が付くので、本当のミスだけが ERC に残ります。あとから線やラベルでつなぐと、ERC が印との食い違いを知らせます");
+                    // the pins side by side, and a scroll for a part with many: the band stays short
+                    egui::ScrollArea::vertical().id_salt(("nc_pins", i)).max_height(110.0).show(ui, |ui| ui.horizontal_wrapped(|ui| {
+                        for (num, name) in &pins {
+                            let mut on = self.sch.no_connects.iter().any(|(r, p)| *r == c.refdes && p == num);
+                            let text = if name.is_empty() || name == num { num.clone() } else { format!("{num}  {name}") };
+                            if ui.checkbox(&mut on, text).on_hover_text(i18n::tr("チェックを付けると、このピンは使わない (つながない) ピンになります")).changed() {
+                                if on {
+                                    self.sch.no_connects.push((c.refdes.clone(), num.clone()));
+                                } else {
+                                    self.sch.no_connects.retain(|(r, p)| !(*r == c.refdes && p == num));
+                                }
+                            }
+                        }
+                    }));
+                }
+                // the board and model side of the part
                 if !c.kind.is_power_symbol() && c.sub.is_none() {
-                    egui::CollapsingHeader::new(i18n::tr("基板とモデル")).id_salt(("part_board", i)).default_open(false).show(ui, |ui| {
+                    part_heading(ui, "基板とモデル", "基板に載せる部品の形 (フットプリント) と、シミュレーションに使うモデル");
+                    {
                         if let Some(sym) = &c.custom {
                             ui.label(i18n::trf!("フットプリント: {}", c.footprint));
                             match &sym.sim {
@@ -214,7 +215,7 @@ impl SchEditor {
                         }
                         ui.checkbox(&mut c.sim_only, i18n::tr("シミュレーション専用 (基板に載せない)"))
                             .on_hover_text(i18n::tr("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)"));
-                    });
+                    }
                 }
                 // the parts its data sheet recommends beside it (a regulator's capacitors)
                 if let Some(n) = c.custom.as_ref().map(|s| s.companions.len()).filter(|n| *n > 0) {
@@ -232,9 +233,8 @@ impl SchEditor {
                         open_sheet = Some(sub.sheet);
                     }
                     if !sub_rows.is_empty() {
-                        let title = format!("このコピーだけの値 ({})", sub.values.len());
-                        egui::CollapsingHeader::new(title).id_salt(("sub_values", i)).default_open(!sub.values.is_empty()).show(ui, |ui| {
-                            ui.small(i18n::tr("書いた部品だけ別の値 (空欄=シートのまま)")).on_hover_text(i18n::tr("同じシートを何回も使うとき、チャンネルごとに抵抗値などを変えたい部品だけ、ここに書きます。シートの中の部品は、そのままです。コピーの部品は R1_CH1 のように別の番号になり、シミュレーションにも基板にも、ここの値が使われます"));
+                        part_heading(ui, &i18n::trf!("このコピーだけの値 ({})", sub.values.len()), "書いた部品だけ別の値 (空欄 = シートのまま)。同じシートを何回も使うとき、チャンネルごとに抵抗値などを変えたい部品だけ、ここに書きます。シートの中の部品は、そのままです。コピーの部品は R1_CH1 のように別の番号になり、シミュレーションにも基板にも、ここの値が使われます");
+                        {
                             egui::Grid::new(("sub_values_grid", i)).num_columns(3).spacing([8.0, 4.0]).show(ui, |ui| {
                                 for (refdes, base) in &sub_rows {
                                     let mut text = sub.values.get(refdes).cloned().unwrap_or_default();
@@ -250,7 +250,7 @@ impl SchEditor {
                                     ui.end_row();
                                 }
                             });
-                        });
+                        }
                     }
                 } else {
                     advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
@@ -408,7 +408,9 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
     if c.kind != Kind::Resistor && c.custom.is_none() {
         return;
     }
-    egui::CollapsingHeader::new(i18n::tr("部品選びのヒント (この回路で必要な定格)")).id_salt(("advice", &c.refdes)).default_open(false).show(ui, |ui| {
+    // a heading with the whole advice in its hover and the verdict on one line under it (not a fold inside the part's band)
+    let body = |ui: &mut egui::Ui| {
+        ui.set_max_width(380.0);
         if let Some(r) = ratings.filter(|r| !r.is_empty()) {
             crate::widgets::section_heading(ui, "データシートの情報");
             for l in r.summary().lines() {
@@ -473,5 +475,46 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
                 });
             }
         }
+    };
+    ui.add_space(crate::theme::SPACE_S);
+    ui.horizontal(|ui| {
+        crate::widgets::heading_inline(ui, "部品選びのヒント");
+        ui.add(egui::Label::new(egui::RichText::new("(?)").weak()).sense(egui::Sense::hover())).on_hover_cursor(egui::CursorIcon::Help).on_hover_ui(body);
+    });
+    let (text, color) = advice_verdict(c, ratings, dc, fresh);
+    ui.small(egui::RichText::new(text).color(color.unwrap_or(ui.visuals().weak_text_color())));
+}
+
+/// The one line under "部品選びのヒント": whether the part has twice the voltage, current and power this circuit puts on it.
+fn advice_verdict(c: &Component, ratings: Option<&sch_core::PartRatings>, dc: Option<&DcView>, fresh: bool) -> (String, Option<egui::Color32>) {
+    let Some(Ok(res)) = dc.map(|v| &v.outcome) else {
+        return (i18n::tr("DC動作点を解析すると、必要な定格が出ます").to_string(), None);
+    };
+    let st = sim_core::stress(res, &c.refdes);
+    if st.i.is_none() || st.p.is_none() {
+        return (i18n::tr("この部品は、解析結果に個別の値がありません").to_string(), None);
+    }
+    let req = sim_core::requirement(&st, 2.0);
+    let stale = if fresh { String::new() } else { i18n::tr(" (前の解析の結果)").to_string() };
+    if c.kind == Kind::Resistor {
+        return match RESISTOR_WATTS.iter().copied().find(|w| *w >= req.p_min) {
+            Some(w) => (i18n::trf!("{} の抵抗が使えます (2 倍の余裕){stale}", watt_label(w)), None),
+            None => (i18n::trf!("5W を超えます。電流を減らすか、抵抗を分けてください{stale}"), Some(crate::theme::ERROR)),
+        };
+    }
+    match ratings.filter(|r| !r.is_empty()) {
+        Some(r) if sim_core::meets(&req, r, true) => (i18n::trf!("✔ 2 倍の余裕を満たしています{stale}"), Some(crate::theme::OK)),
+        Some(_) => (i18n::trf!("✖ 2 倍の余裕を満たしていません{stale}"), Some(crate::theme::ERROR)),
+        None => (i18n::trf!("定格が分からないので判定できません{stale}"), None),
+    }
+}
+
+/// A heading inside the selected part's band, with its explanation behind "(?)": the band folds already, so its topics are
+/// headings, not folds (at most two levels, ui-rules.md).
+fn part_heading(ui: &mut egui::Ui, title: &str, tip: &str) {
+    ui.add_space(crate::theme::SPACE_S);
+    ui.horizontal(|ui| {
+        crate::widgets::heading_inline(ui, title);
+        crate::icons::help(ui, tip);
     });
 }

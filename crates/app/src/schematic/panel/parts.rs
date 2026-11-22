@@ -83,9 +83,10 @@ impl SchEditor {
                                     click = true;
                                 }
                                 ui.separator();
-                                for (fam, parts) in kinds.iter() {
-                                    ui.menu_button(i18n::tr_dyn(fam), |ui| {
-                                        ui.small(i18n::tr_dyn(family_tip(fam)));
+                                // the families as headings in one list, not submenus (at most two levels: choose the cell, then the part)
+                                egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                                    for (fam, parts) in kinds.iter() {
+                                        crate::widgets::heading_inline(ui, fam.to_string()).on_hover_text(i18n::tr_dyn(family_tip(fam)));
                                         for &i in parts {
                                             let sel = self.tool == Tool::Place && self.place_lib == Some(i);
                                             if ui.selectable_label(sel, &self.library[i].name).on_hover_text(i18n::tr_dyn(&lib_hover(&self.library[i]))).clicked() {
@@ -93,8 +94,9 @@ impl SchEditor {
                                                 ui.close();
                                             }
                                         }
-                                    });
-                                }
+                                        ui.add_space(crate::theme::SPACE_S);
+                                    }
+                                });
                             });
                         } else {
                             click = resp.on_hover_text(i18n::tr_dyn(kind_tip(*k))).clicked();
@@ -309,7 +311,9 @@ impl SchEditor {
                             super::origin_ui(ui, &d.name, m, "lib_origin");
                             limits_ui(ui, &m.limits, "lib_limits");
                         }
-                        egui::CollapsingHeader::new(i18n::tr("ピン表")).id_salt("lib_pins").show(ui, |ui| {
+                        // a heading, not a fold inside "詳しく" (at most two levels); a long pin list scrolls
+                        crate::widgets::section_heading(ui, i18n::trf!("ピン表 ({})", d.pins.len()));
+                        egui::ScrollArea::vertical().id_salt("lib_pins").max_height(160.0).show(ui, |ui| {
                             egui::Grid::new("lib_pin_grid").num_columns(2).show(ui, |ui| {
                                 for p in &d.pins {
                                     ui.small(&p.number);
