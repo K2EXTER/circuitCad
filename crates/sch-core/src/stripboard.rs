@@ -527,21 +527,29 @@ fn strip_lay(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -
         let failed = strip_rules(s, l).iter().filter(|r| !r.ok).count();
         (strip_check(s, l).len(), failed, l.rows as usize * l.cols as usize + 10 * l.links.len(), len)
     };
-    let mut c = c.clone();
-    let mut best = strip_lay_fit(s, &c, opt);
-    let mut best_score = score(&best);
+    // and the same with the short chips stacked two in the same columns (`Circuit::stack`), the better of the two
     let dips: Vec<String> = c.on.iter().filter(|(r, look, _)| *look == Look::Dip || c.mounts.get(r).is_some_and(|m| m.width().is_some())).map(|p| p.0.clone()).collect();
-    for r in dips {
-        c.flipped.insert(r.clone());
-        let l = strip_lay_fit(s, &c, opt);
-        let sc = score(&l);
-        if sc < best_score {
-            (best, best_score) = (l, sc);
-        } else {
-            c.flipped.remove(&r);
+    let mut found: Option<(StripLayout, (usize, usize, usize, u32))> = None;
+    for stack in [false, true] {
+        let mut c = c.clone();
+        c.stack = stack;
+        let mut best = strip_lay_fit(s, &c, opt);
+        let mut best_score = score(&best);
+        for r in &dips {
+            c.flipped.insert(r.clone());
+            let l = strip_lay_fit(s, &c, opt);
+            let sc = score(&l);
+            if sc < best_score {
+                (best, best_score) = (l, sc);
+            } else {
+                c.flipped.remove(r);
+            }
+        }
+        if found.as_ref().is_none_or(|f| best_score < f.1) {
+            found = Some((best, best_score));
         }
     }
-    best
+    found.unwrap().0
 }
 
 /// The board laid out for `c` within the board's width: the wires joining sections can take it a column or two past, and then it
@@ -639,6 +647,8 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
             mounts: c.mounts.clone(),
             facing: c.facing.clone(),
             flipped: c.flipped.clone(),
+            stack: c.stack,
+            apart: c.apart.clone(),
         };
         let external: BTreeSet<String> = nets_in[i].iter().filter(|n| shared(n, i)).cloned().collect();
         subs.push(lay_within(&sub, opt, &external));
@@ -911,8 +921,9 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
     };
     // each chip by itself: its pins' rows and sides, the way of each wire and its column
     let to_strip = |n: &str| matches!(carry.get(n), Some(Carry::Home | Carry::Via(_)));
-    let mut blocks: Vec<Block> = vec![];
-    for k in chip_order(&c.on, &carry) {
+    // (`force`: every wire one way, for a chip in a stack of two: the upper one's all up, the lower one's all down, so neither's
+    // wires pass the other)
+    let build = |k: usize, force: Option<Dir>| -> Block {
         let (refdes, _, pins) = &c.on[k];
         let look = look_on(k);
         let mount = mount_of(refdes);
@@ -931,7 +942,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                 // a chip's first half down the left column, the rest up the right one (pin 1 top left)
                 let (row, left) = if p < half { (p as u16, true) } else { ((places - 1 - p) as u16, false) };
                 // the upper half of the rows up, the lower half down (a single row: up)
-                let dir = if half <= 1 || (row as usize) * 2 < half { Dir::Up } else { Dir::Down };
+                let dir = force.unwrap_or(if half <= 1 || (row as usize) * 2 < half { Dir::Up } else { Dir::Down });
                 PinPlace { row, left, wire: to_strip(n).then_some((dir, 0)) }
             })
             .collect();
@@ -958,8 +969,9 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                 p.wire = Some((d, if p.left { x + n } else { right_pin + 1 + n }));
             }
         }
-        blocks.push(Block { k, look, mount, half: half as u16, pins: placed, left_pin, right_pin, end });
-    }
+        Block { k, look, mount, half: half as u16, pins: placed, left_pin, right_pin, end }
+    };
+    let mut blocks: Vec<Block> = chip_order(&c.on, &carry).into_iter().map(|k| build(k, None)).collect();
     // the off-board parts' wires: one column each at the far left, into the top band
     let off_pins: usize = c.off.iter().map(|(_, p)| p.iter().filter(|(_, n)| carry.get(n) == Some(&Carry::Home)).count()).sum();
     let two_nets = |k: usize| -> Vec<String> {
@@ -983,25 +995,73 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
     #[allow(clippy::never_loop)]
     loop {
         // the rows of chips: each block from the margin on, a new row past the board's width
-        let mut tiers: Vec<Vec<(usize, u16)>> = vec![vec![]];
-        let mut col = margin;
+        let mut tiers: Vec<Vec<(usize, u16)>> = vec![];
         // with a width to keep to, the tall chips go together (a short chip beside a tall one leaves the rows under it empty), the
         // order among equal heights kept (the chips that share wires stay side by side)
         let mut seq: Vec<usize> = (0..blocks.len()).collect();
         if opt.cols.is_some() {
             seq.sort_by_key(|b| std::cmp::Reverse(blocks[*b].half));
         }
+        // stacking (`Circuit::stack`): a short chip goes under another short one in the same columns when the two together are no
+        // taller than the row's tallest chip (the rows under a short chip are left empty otherwise), the upper one's wires all up,
+        // the lower one's all down; the pair as wide as the wider of the two
+        let tallest_all = blocks.iter().map(|b| b.half).max().unwrap_or(0);
+        let mut slots: Vec<Vec<Vec<usize>>> = vec![vec![]];
+        let slot_w = |s: &[usize], blocks: &[Block]| s.iter().map(|b| blocks[*b].end).max().unwrap_or(0) + 1;
         for b in seq {
-            let blk = &blocks[b];
-            if let Some(w) = opt.cols
-                && !tiers.last().unwrap().is_empty()
-                && col + blk.end >= w
-            {
-                tiers.push(vec![]);
-                col = margin;
+            if c.stack {
+                let tier = slots.last().unwrap();
+                let tallest = if opt.cols.is_some() { tier.first().and_then(|s| s.first()).map(|a| blocks[*a].half).unwrap_or(0) } else { tallest_all };
+                let width: u16 = margin + tier.iter().map(|s| slot_w(s, &blocks)).sum::<u16>();
+                let fits = |i: usize| -> Option<(u16, Block, Block)> {
+                    let s = &tier[i];
+                    let a = *s.first()?;
+                    let (ra, rb) = (&c.on[blocks[a].k].0, &c.on[blocks[b].k].0);
+                    let kept_apart = c.apart.iter().any(|(x, y)| (x == ra && y == rb) || (x == rb && y == ra));
+                    if s.len() != 1 || blocks[a].half + blocks[b].half > tallest || kept_apart {
+                        return None;
+                    }
+                    let (up, down) = (build(blocks[a].k, Some(Dir::Up)), build(blocks[b].k, Some(Dir::Down)));
+                    let grown = width - slot_w(s, &blocks) + up.end.max(down.end) + 1;
+                    opt.cols.is_none_or(|w| grown <= w).then_some((blocks[a].half, up, down))
+                };
+                if let Some((i, (_, up, down))) = (0..tier.len()).filter_map(|i| fits(i).map(|f| (i, f))).max_by_key(|(i, f)| (f.0, std::cmp::Reverse(*i))) {
+                    let a = tier[i][0];
+                    blocks[a] = up;
+                    blocks[b] = down;
+                    slots.last_mut().unwrap()[i].push(b);
+                    continue;
+                }
             }
-            tiers.last_mut().unwrap().push((b, col));
-            col += blk.end + 1;
+            let tier = slots.last().unwrap();
+            let width: u16 = margin + tier.iter().map(|s| slot_w(s, &blocks)).sum::<u16>();
+            if let Some(w) = opt.cols
+                && !tier.is_empty()
+                && width + blocks[b].end >= w
+            {
+                slots.push(vec![]);
+            }
+            slots.last_mut().unwrap().push(vec![b]);
+        }
+        // each block's column and its rows down from the top of its row of chips
+        let mut drop: Vec<u16> = vec![0; blocks.len()];
+        for tier in &slots {
+            let mut col = margin;
+            let mut row: Vec<(usize, u16)> = vec![];
+            for s in tier {
+                let mut d = 0;
+                for b in s {
+                    row.push((*b, col));
+                    drop[*b] = d;
+                    d += blocks[*b].half;
+                }
+                col += slot_w(s, &blocks);
+            }
+            tiers.push(row);
+        }
+        tiers.retain(|v| !v.is_empty());
+        if tiers.is_empty() {
+            tiers.push(vec![]);
         }
         let tier_of: BTreeMap<usize, usize> = tiers.iter().enumerate().flat_map(|(t, v)| v.iter().map(move |(b, _)| (*b, t))).collect();
         // the nets each band needs: the chip pins' wires, the parts standing in their place, the off-board wires
@@ -1067,7 +1127,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
             }
             if b < tiers.len() {
                 tier_top.push(r);
-                r += tiers[b].iter().map(|(blk, _)| blocks[*blk].half).max().unwrap_or(0);
+                r += tiers[b].iter().map(|(blk, _)| drop[*blk] + blocks[*blk].half).max().unwrap_or(0);
             }
         }
         let chips_end = r;
@@ -1105,8 +1165,8 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         let mut piece_of_pin: BTreeMap<(String, String), Piece> = BTreeMap::new();
         let mut placed: BTreeMap<usize, Vec<(String, At)>> = BTreeMap::new();
         for (t, tier) in tiers.iter().enumerate() {
-            let top = tier_top[t];
             for &(b, start) in tier {
+                let top = tier_top[t] + drop[b];
                 let blk = &blocks[b];
                 let (refdes, _, pins) = &c.on[blk.k];
                 let mut leads = vec![];
@@ -2238,6 +2298,29 @@ mod size_tests {
             matches!((at("1"), at(&half)), (Some(a), Some(b)) if a.0 > b.0 && a.1 == b.1)
         });
         assert!(turned, "{:?}", l.parts.iter().map(|p| (&p.refdes, p.leads.first())).collect::<Vec<_>>());
+    }
+
+    /// Two short parts of the row of chips (chips, transistors) stacked in the same columns (the upper one's wires all up, the lower
+    /// one's all down) when the row is as tall as the two: the half adder's board 41 x 13 → 37 x 13 (2026-11-22), still joined as drawn.
+    #[test]
+    fn short_chips_stack_in_the_same_columns() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/half_adder.schjson");
+        let s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let l = super::strip_layout(&s);
+        assert!(l.cols <= 37 && l.rows <= 13, "{} x {}", l.cols, l.rows);
+        assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
+        let span = |p: &super::StripPart, f: fn(&super::At) -> u16| {
+            let v: Vec<u16> = p.leads.iter().map(|x| f(&x.1)).collect();
+            (*v.iter().min().unwrap(), *v.iter().max().unwrap())
+        };
+        let chips: Vec<&super::StripPart> = l.parts.iter().filter(|p| p.leads.len() > 2).collect();
+        let stacked = chips.iter().any(|a| {
+            chips.iter().any(|b| {
+                let (ac, bc, ar, br) = (span(a, |x| x.1), span(b, |x| x.1), span(a, |x| x.0), span(b, |x| x.0));
+                a.refdes != b.refdes && ac.0 <= bc.1 && bc.0 <= ac.1 && ar.1 < br.0
+            })
+        });
+        assert!(stacked, "{:?}", chips.iter().map(|p| (&p.refdes, span(p, |x| x.1), span(p, |x| x.0))).collect::<Vec<_>>());
     }
 }
 
