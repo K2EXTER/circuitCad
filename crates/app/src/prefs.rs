@@ -47,11 +47,14 @@ pub struct Prefs {
     pub analysis_pins: Vec<String>,
     /// Wires that cross without joining are drawn with a half-circle hop on the schematic (`schematic/draw.rs` `wire_hops`).
     pub wire_hops: bool,
+    /// The dots that move along the wires with the current, and how fast they go (`flow_dots.rs`).
+    pub flow_dots: bool,
+    pub flow_speed: f32,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Self { icon_only: false, show_hints: true, model_zips: vec![], req_frames: true, req_groups: true, req_lines: true, sheet_colors: true, smooth_edges: true, link_selection: true, lang: "ja".into(), ui_scale: 1.0, show_tips: true, autosave_secs: 60, wheel_speed: 1.0, wheel_invert: false, default_author: String::new(), board_grid: 0.5, canvas_theme: "dark".into(), canvas_colors: vec![], palette_pins: vec!["save".into(), "erc".into(), "fit".into()], analysis_pins: vec!["dc".into(), "tran".into(), "ac".into()], wire_hops: true }
+        Self { icon_only: false, show_hints: true, model_zips: vec![], req_frames: true, req_groups: true, req_lines: true, sheet_colors: true, smooth_edges: true, link_selection: true, lang: "ja".into(), ui_scale: 1.0, show_tips: true, autosave_secs: 60, wheel_speed: 1.0, wheel_invert: false, default_author: String::new(), board_grid: 0.5, canvas_theme: "dark".into(), canvas_colors: vec![], palette_pins: vec!["save".into(), "erc".into(), "fit".into()], analysis_pins: vec!["dc".into(), "tran".into(), "ac".into()], wire_hops: true, flow_dots: true, flow_speed: 1.0 }
     }
 }
 
@@ -115,6 +118,8 @@ impl Prefs {
                 .map(|a| a.iter().filter_map(|s| s.as_str()).map(String::from).collect())
                 .unwrap_or(d.analysis_pins),
             wire_hops: get("wire_hops", d.wire_hops),
+            flow_dots: get("flow_dots", d.flow_dots),
+            flow_speed: num("flow_speed", d.flow_speed as f64, 0.1, 10.0) as f32,
         }
     }
 
@@ -123,7 +128,7 @@ impl Prefs {
         let json = serde_json::json!({ "version": 1, "icon_only": self.icon_only, "show_hints": self.show_hints, "model_zips": self.model_zips, "req_frames": self.req_frames, "req_groups": self.req_groups, "req_lines": self.req_lines, "sheet_colors": self.sheet_colors, "smooth_edges": self.smooth_edges, "link_selection": self.link_selection, "lang": self.lang,
             "ui_scale": self.ui_scale, "show_tips": self.show_tips, "autosave_secs": self.autosave_secs, "wheel_speed": self.wheel_speed, "wheel_invert": self.wheel_invert, "default_author": self.default_author, "board_grid": self.board_grid,
             "canvas_theme": self.canvas_theme, "canvas_colors": self.canvas_colors.iter().map(|(k, c)| (k.clone(), serde_json::json!(c))).collect::<serde_json::Map<_, _>>(),
-            "palette_pins": self.palette_pins, "analysis_pins": self.analysis_pins, "wire_hops": self.wire_hops });
+            "palette_pins": self.palette_pins, "analysis_pins": self.analysis_pins, "wire_hops": self.wire_hops, "flow_dots": self.flow_dots, "flow_speed": self.flow_speed });
         file.parent()
             .map_or(Ok(()), std::fs::create_dir_all)
             .and_then(|_| std::fs::write(file, serde_json::to_string_pretty(&json).unwrap_or_default()))
@@ -152,7 +157,7 @@ mod tests {
         let d = std::env::temp_dir().join(format!("cc_prefs_{}", std::process::id()));
         let f = d.join("settings.json");
         assert_eq!(Prefs::load(&f), Prefs::default(), "no file: defaults");
-        let p = Prefs { icon_only: true, show_hints: false, model_zips: vec!["C:/m/grm.zip".into()], req_frames: false, req_groups: true, req_lines: false, sheet_colors: false, smooth_edges: false, link_selection: false, lang: "en".into(), ui_scale: 1.25, show_tips: false, autosave_secs: 0, wheel_speed: 2.0, wheel_invert: true, default_author: "山田".into(), board_grid: 1.27, canvas_theme: "paper".into(), canvas_colors: vec![("wire".into(), [1, 2, 3])], palette_pins: vec!["analysis:ac".into()], analysis_pins: vec!["noise".into()], wire_hops: false };
+        let p = Prefs { icon_only: true, show_hints: false, model_zips: vec!["C:/m/grm.zip".into()], req_frames: false, req_groups: true, req_lines: false, sheet_colors: false, smooth_edges: false, link_selection: false, lang: "en".into(), ui_scale: 1.25, show_tips: false, autosave_secs: 0, wheel_speed: 2.0, wheel_invert: true, default_author: "山田".into(), board_grid: 1.27, canvas_theme: "paper".into(), canvas_colors: vec![("wire".into(), [1, 2, 3])], palette_pins: vec!["analysis:ac".into()], analysis_pins: vec!["noise".into()], wire_hops: false, flow_dots: false, flow_speed: 2.0 };
         p.save(&f).unwrap();
         assert_eq!(Prefs::load(&f), p);
         std::fs::write(&f, r#"{"icon_only": true}"#).unwrap();

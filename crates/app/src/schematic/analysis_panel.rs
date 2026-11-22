@@ -7,6 +7,10 @@ impl SchEditor {
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.show_v, i18n::tr("電圧表示")).on_hover_text(i18n::tr("DC解析の結果を回路図に重ねて表示します。配線は電圧が低いほど青、高いほど赤に色分けされます"));
             ui.checkbox(&mut self.show_i, i18n::tr("電流表示")).on_hover_text(i18n::tr("各部品を流れる電流を数値と矢印 (電流の向き) で表示します。「どこに電流が流れているか」の理解に役立ちます。数値の符号は向きの約束です: 素子の第1端子→第2端子の向きに流れるとプラス、逆向きならマイナス (例: -9.2 mA は、9.2 mA が逆向きに流れている)。電源は、電力を供給しているとマイナスになります。1 nA 未満 (直流でのコンデンサなど、ほぼ 0 のもの) は表示しません"));
+            let mut dots = crate::flow_dots::on();
+            if ui.checkbox(&mut dots, i18n::tr("動く点")).on_hover_text(i18n::tr("電線の上を、電流の向きに点が動きます。速いほど電流が大きい (1 µA でゆっくり、1 A で速く)。点の速さは「設定」の「表示」で変えられます")).changed() {
+                crate::flow_dots::set_on(dots);
+            }
         });
         ui.checkbox(&mut self.live, i18n::tr("自動で再計算")).on_hover_text(
             i18n::tr("回路を変えるたびに、開いている解析 (DC / 過渡 / AC) をやり直します。

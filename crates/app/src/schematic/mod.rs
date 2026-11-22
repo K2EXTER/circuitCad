@@ -511,6 +511,8 @@ struct DcView {
     fault: Option<String>,
     /// Parts running past what their package / type usually allows.
     ratings: Vec<sim_core::RatingIssue>,
+    /// The current along each piece of wire, for the moving dots (`flow_dots.rs`).
+    flows: Vec<sch_core::flow::WireFlow>,
 }
 
 /// The analyses F5 can run again (the ones that need nothing picked first).
@@ -881,6 +883,7 @@ impl Default for SchEditor {
 // The editor is one type spread over several files; the child modules see its private fields.
 use lessons::ActiveLesson;
 mod hierarchy_ui;
+mod flow_dots;
 mod linked;
 mod preview;
 mod quick;

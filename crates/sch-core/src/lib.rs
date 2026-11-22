@@ -2,6 +2,7 @@
 //! Coordinates are integer grid steps, so connectivity is exact.
 
 mod netlist;
+pub mod flow;
 mod ngspice;
 mod ngspice_digital;
 mod backannotate;

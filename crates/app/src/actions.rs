@@ -46,6 +46,7 @@ pub enum Act {
     Settings,
     Calc,
     Tidy,
+    FlowDots,
 }
 
 pub struct Action {
@@ -95,6 +96,7 @@ pub const ACTIONS: &[Action] = &[
     a(Act::Drc, "drc", "DRC (基板の点検)", "間隔・線幅・つながりを点検", "点検", "", B),
     a(Act::Help, "help", "操作ガイド", "キーと操作の一覧", "ヘルプ", "F1", Both),
     a(Act::Glossary, "glossary", "用語集", "電子回路とこのソフトの言葉を引く", "ヘルプ", "", Both),
+    a(Act::FlowDots, "flow_dots", "電流の動く点を出す・消す", "DC の結果と試作のタブで、電線の上を電流の向きに動く点 (速さは電流の大きさ)", "表示", "", Both),
     a(Act::Settings, "settings", "設定", "言語・画面の大きさ・色・ホイール・自動保存", "設定", "", Both),
     a(Act::PowerOn, "power_on", "最初の電源投入のガイド", "組んだ基板の電流制限の値と、正常なら流れる電流の範囲", "学ぶ", "", S),
     a(Act::Calc, "calc", "値の決め方 (計算ツール)", "LED の抵抗・分圧・フィルタなどの値を計算", "学ぶ", "", S),

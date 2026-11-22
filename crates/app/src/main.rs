@@ -11,6 +11,7 @@ mod args;
 mod autosave;
 mod board_editor;
 mod files;
+mod flow_dots;
 mod glossary;
 mod help;
 mod icons;
@@ -282,6 +283,7 @@ impl eframe::App for App {
         self.global_keys(ui.ctx());
         self.palette_ui(ui.ctx());
         self.save_analysis_pins();
+        self.save_flow_dots();
         // F1, and the small "操作" buttons of the panels, open the guide
         if ui.input(|i| i.key_pressed(egui::Key::F1)) {
             self.help.show(if self.mode == Mode::Schematic { help::HelpTab::Schematic } else { help::HelpTab::Board });

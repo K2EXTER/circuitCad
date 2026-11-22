@@ -209,6 +209,16 @@ impl Live {
         self.run.as_ref().map(|r| r.snapshot())
     }
 
+    /// What each part puts into each node now (`sim_core::part_currents`), for the moving dots.
+    pub fn part_currents(&self) -> Option<std::collections::BTreeMap<String, Vec<f64>>> {
+        Some(sim_core::part_currents(&self.circuit, &self.snapshot()?))
+    }
+
+    /// The node of a net (or of a pin's wire, `R1.1.wire`) in the running circuit.
+    pub fn node_of(&self, name: &str) -> Option<usize> {
+        self.circuit.find_node(name)
+    }
+
     pub fn current(&self, element: &str) -> Option<f64> {
         self.currents.get(element).copied()
     }

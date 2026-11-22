@@ -158,7 +158,8 @@ impl SchEditor {
         }
         let ratings = outcome.as_ref().map(|r| sim_core::check_ratings(&self.with_library_ratings(), r)).unwrap_or_default();
         let wire_ends = self.sch.wires.iter().map(|w| (w.a, w.b)).collect();
-        DcView { outcome, signature: self.signature(), pin_v, marks, wire_v, wire_ends, v_range, fault, ratings }
+        let flows = outcome.as_ref().map(|r| self.flows_of(r)).unwrap_or_default();
+        DcView { outcome, signature: self.signature(), pin_v, marks, wire_v, wire_ends, v_range, fault, ratings, flows }
     }
 
     /// Where the voltages are written on the sheet: one per net, not one per pin, so a wire does not carry the same "5.000 V" at

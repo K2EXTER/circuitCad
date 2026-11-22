@@ -15,6 +15,7 @@ use sch_core::breadboard::{auto_layout, board_nets, check, moved, unjoined, net_
 use std::collections::BTreeSet;
 
 mod live;
+mod flow_dots;
 pub(crate) mod sketch_ui;
 mod build_steps;
 mod looks;
@@ -1095,6 +1096,30 @@ impl BreadboardView {
                 painter.text(from + Vec2::new(-0.2 * pitch, 0.0), egui::Align2::RIGHT_CENTER, pin, small.clone(), Color32::WHITE);
             }
         }
+        // with the power on: dots along the wires and strips with the current (under the parts)
+        if let (true, Some(lv), Some(b)) = (crate::flow_dots::on() && self.powered, self.live.as_ref().filter(|v| v.error.is_none()), self.board.as_ref()) {
+            let off_pin = |k: usize, i: usize| {
+                let r = Rect::from_center_size(origin + Vec2::new(2.0, 3.0 + 4.0 * k as f32) * pitch, Vec2::new(3.2, 2.4) * pitch);
+                r.right_center() + Vec2::new(0.0, (i as f32 - 0.5) * 0.8 * pitch)
+            };
+            let at_end = |e: flow_dots::End| match e {
+                flow_dots::End::Hole(h) => to(h),
+                flow_dots::End::Off(k, i) => off_pin(k, i),
+            };
+            let t = ui.input(|i| i.time);
+            let col = Color32::from_rgb(255, 225, 90);
+            let mut any = false;
+            for f in flow_dots::board_flows(&l, &b.nets, lv) {
+                // a wire follows its drawn curve; the strip inside the board is straight
+                let line = if f.inside { vec![at_end(f.a), at_end(f.b)] } else { wire_points(at_end(f.a), at_end(f.b), pitch) };
+                let dots = crate::flow_dots::dots_along(&line, f.amps, t, pitch);
+                any |= !dots.is_empty();
+                crate::flow_dots::paint(&painter, &dots, (pitch * 0.14).clamp(1.5, 3.5), if f.inside { col.gamma_multiply(0.55) } else { col });
+            }
+            if any {
+                crate::flow_dots::keep_moving(ui.ctx());
+            }
+        }
         let focus = focus.map(String::from);
         let mut hovered_part = None;
         // with the power on: the LEDs' currents and the parts past their ratings
@@ -1529,6 +1554,27 @@ mod tests {
         assert!(bb(&mut app) > 0 && rules(&mut app) == rules0 + 1, "the same once it is an undo step");
         app.sch.load_path(root.join("ne555_blinker.schjson"));
         assert!(bb(&mut app) == 0 && rules(&mut app) == rules0, "checked again for the sheet opened");
+    }
+
+    /// The LED sample powered on the breadboard: the wires and strips round the loop carry the LED's current (the dots, X1).
+    #[test]
+    fn the_breadboard_wires_carry_the_led_current_while_it_runs() {
+        let (mut app, mut run) = power_on_app("led.schjson");
+        app.breadboard.powered = true;
+        run(&mut app);
+        run(&mut app);
+        let l = app.breadboard.layout(&app.sch);
+        let (lv, b) = (app.breadboard.live.as_ref().expect("running"), app.breadboard.board.as_ref().unwrap());
+        let i = lv.current("D1").unwrap_or(0.0);
+        assert!(i > 5e-3, "{i}");
+        let pieces = flow_dots::board_flows(&l, &b.nets, lv);
+        // the supply's two wires off the board carry the whole current, one out and one back
+        let off: Vec<f64> = pieces.iter().filter(|p| matches!(p.a, flow_dots::End::Off(..))).map(|p| p.amps).collect();
+        assert_eq!(off.len(), 2, "{off:?}");
+        assert!(off.iter().all(|a| (a.abs() - i).abs() < 1e-3 * i), "{off:?} vs {i}");
+        assert!(off[0] * off[1] < 0.0, "one goes onto the board, the other comes back: {off:?}");
+        // nothing on the board carries more than the loop's current
+        assert!(pieces.iter().all(|p| p.amps.abs() < i * 1.001), "{:?}", pieces.iter().map(|p| p.amps).collect::<Vec<_>>());
     }
 
     fn power_on_app(sample: &str) -> (App, impl FnMut(&mut App)) {

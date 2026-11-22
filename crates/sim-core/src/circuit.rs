@@ -423,6 +423,14 @@ impl Circuit {
         Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![], nodesets: vec![], spreads: vec![] }
     }
 
+    /// The index of an existing node (`0` and `GND` are ground), without adding one.
+    pub fn find_node(&self, name: &str) -> Option<usize> {
+        if name == "0" || name.eq_ignore_ascii_case("gnd") {
+            return Some(0);
+        }
+        self.index.get(&name.to_ascii_lowercase()).copied()
+    }
+
     /// Node index for a name; `0` and `GND` (any case) are ground.
     pub fn node(&mut self, name: &str) -> usize {
         if name == "0" || name.eq_ignore_ascii_case("gnd") {

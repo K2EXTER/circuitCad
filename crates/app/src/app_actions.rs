@@ -76,6 +76,19 @@ impl App {
         out
     }
 
+    /// The moving dots were turned on or off beside 「電流表示」 (or on the prototype tab): keep it in the settings file (only that key).
+    pub(super) fn save_flow_dots(&mut self) {
+        let on = crate::flow_dots::on();
+        if on == self.prefs.flow_dots {
+            return;
+        }
+        self.prefs.flow_dots = on;
+        let file = prefs::Prefs::default_file();
+        if let Err(e) = (prefs::Prefs { flow_dots: on, ..prefs::Prefs::load(&file) }).save(&file) {
+            self.sch.status = e;
+        }
+    }
+
     /// The ★ of the analysis tab changed: keep it in the settings file (only that key).
     pub(super) fn save_analysis_pins(&mut self) {
         if !std::mem::take(&mut self.sch.analysis_pins_changed) {
@@ -161,6 +174,10 @@ impl App {
             Act::Glossary => self.glossary.open_at(""),
             Act::PowerOn => self.power_on.open_for(&self.sch),
             Act::Settings => self.open_settings(),
+            Act::FlowDots => {
+                crate::flow_dots::set_on(!crate::flow_dots::on());
+                self.sch.status = if crate::flow_dots::on() { "電流の動く点を出します".into() } else { "電流の動く点を消しました".into() };
+            }
             Act::Calc => {
                 self.mode = Mode::Schematic;
                 self.sch.open_wizard(0);

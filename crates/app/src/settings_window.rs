@@ -22,7 +22,7 @@ const AUTOSAVES: &[(u32, &str)] = &[(30, "30 秒"), (60, "1 分"), (120, "2 分"
 impl App {
     /// The settings as the app has them now (some live in the editors or in globals, not in `self.prefs`).
     fn current_prefs(&self) -> Prefs {
-        Prefs { icon_only: icons::icon_only(), show_hints: self.show_hints, smooth_edges: self.smooth_edges, link_selection: self.link_selection, lang: i18n::lang().code().to_string(), ..self.prefs.clone() }
+        Prefs { icon_only: icons::icon_only(), show_hints: self.show_hints, smooth_edges: self.smooth_edges, link_selection: self.link_selection, lang: i18n::lang().code().to_string(), flow_dots: crate::flow_dots::on(), flow_speed: crate::flow_dots::speed(), ..self.prefs.clone() }
     }
 
     /// Puts the settings into effect (at start-up and after a change in the window). The language is not set here: at start-up the
@@ -38,6 +38,8 @@ impl App {
         self.sch.default_author = p.default_author.clone();
         self.sch.analysis_pins = p.analysis_pins.clone();
         self.sch.wire_hops = p.wire_hops;
+        crate::flow_dots::set_on(p.flow_dots);
+        crate::flow_dots::set_speed(p.flow_speed);
         self.prefs = p.clone();
     }
 
@@ -116,6 +118,8 @@ impl App {
             canvas_theme: p.canvas_theme.clone(),
             canvas_colors: p.canvas_colors.clone(),
             wire_hops: p.wire_hops,
+            flow_dots: p.flow_dots,
+            flow_speed: p.flow_speed,
             ..Prefs::load(&file)
         }
         .save(&file);
@@ -158,6 +162,7 @@ fn look_tab(ui: &mut egui::Ui, p: &mut Prefs, restart_note: bool) {
     let note = if restart_note { i18n::tr(" (次の起動から)") } else { "" };
     ui.vertical(|ui| {
     ui.checkbox(&mut p.wire_hops, i18n::tr("回路図で、つながっていない線の交差を飛び越しで描く")).on_hover_text(i18n::tr("横の線が縦の線をまたぐ所を、小さな半円の山で描きます。つながっている所 (黒い丸) と見分けやすくなります。オフにすると、ただの十字で描きます (つながっていないのは同じです)"));
+    crate::flow_dots::settings_rows(ui, &mut p.flow_dots, &mut p.flow_speed);
     ui.checkbox(&mut p.smooth_edges, i18n::trf!("線の縁をなめらかにする{note}")).on_hover_text(i18n::tr("画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)"));
     });
     ui.end_row();
