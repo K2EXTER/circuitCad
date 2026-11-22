@@ -1017,7 +1017,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                     let s = &tier[i];
                     let a = *s.first()?;
                     let (ra, rb) = (&c.on[blocks[a].k].0, &c.on[blocks[b].k].0);
-                    let kept_apart = c.apart.iter().any(|(x, y)| (x == ra && y == rb) || (x == rb && y == ra));
+                    let kept_apart = c.apart.iter().any(|(x, y, _)| (x == ra && y == rb) || (x == rb && y == ra));
                     if s.len() != 1 || blocks[a].half + blocks[b].half > tallest || kept_apart {
                         return None;
                     }
@@ -1302,18 +1302,30 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                 .filter_map(|(_, n)| strip_row[band].get(n))
                 .flat_map(|r| taken.iter().filter(move |a| a.0 == *r).map(|a| a.1))
                 .collect();
-            let from = |want: &dyn Fn(u16) -> bool| -> u16 {
-                if near.is_empty() {
-                    return (margin..).find(|cc| want(*cc)).unwrap();
-                }
-                let mid = (near.iter().map(|x| *x as u32).sum::<u32>() / near.len() as u32) as u16;
-                (0..400u16).flat_map(|d| [mid.checked_sub(d), mid.checked_add(d)]).flatten().filter(|cc| *cc >= margin).find(|cc| want(*cc)).unwrap_or_else(|| (margin..).find(|cc| want(*cc)).unwrap())
+            // the leads already on the board of the parts the requirements table keeps apart from this one, and how far (in holes)
+            let others: Vec<(At, f64)> = c
+                .apart
+                .iter()
+                .filter_map(|(x, y, d)| if x == refdes { Some((y, d)) } else if y == refdes { Some((x, d)) } else { None })
+                .flat_map(|(o, d)| l.parts.iter().filter(move |p| &p.refdes == o).flat_map(move |p| p.leads.iter().map(move |(_, a)| (*a, d / 2.54))))
+                .collect();
+            let far = |holes: &[At]| holes.iter().all(|h| others.iter().all(|(o, d)| (h.0 as f64 - o.0 as f64).hypot(h.1 as f64 - o.1 as f64) >= *d));
+            // (`holes`: where the leads go in a column; a column far enough from the parts kept apart first, then any)
+            let from = |want: &dyn Fn(u16) -> bool, holes: &dyn Fn(u16) -> Vec<At>| -> u16 {
+                let pick = |want: &dyn Fn(u16) -> bool| -> Option<u16> {
+                    if near.is_empty() {
+                        return (margin..margin + 400).find(|cc| want(*cc));
+                    }
+                    let mid = (near.iter().map(|x| *x as u32).sum::<u32>() / near.len() as u32) as u16;
+                    (0..400u16).flat_map(|d| [mid.checked_sub(d), mid.checked_add(d)]).flatten().filter(|cc| *cc >= margin).find(|cc| want(*cc))
+                };
+                (!others.is_empty()).then(|| pick(&|cc| want(cc) && far(&holes(cc)))).flatten().or_else(|| pick(want)).unwrap_or_else(|| (margin..).find(|cc| want(*cc)).unwrap())
             };
             let leads: Vec<(String, At)> = match rows.as_slice() {
                 // a chip on the copper side across its two strips side by side: two holes, nothing on top
                 [Some(a), Some(b)] if on_back(k) && a.abs_diff(*b) == 1 => {
                     let free = |cc: u16| [*a, *b].iter().all(|r| !taken.contains(&(*r, cc)) && !over.contains(&(*r, cc)));
-                    let cc = from(&|cc| free(cc));
+                    let cc = from(&|cc| free(cc), &|cc| vec![(*a, cc), (*b, cc)]);
                     vec![(pins[0].0.clone(), (*a, cc)), (pins[1].0.clone(), (*b, cc))]
                 }
                 [Some(a), Some(b)] if a != b => {
@@ -1321,7 +1333,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                     if on_back(k) {
                         mount = crate::mount::Mount::Leaded;
                     }
-                    let cc = from(&|cc| fits(&[cc], *a, *b));
+                    let cc = from(&|cc| fits(&[cc], *a, *b), &|cc| vec![(*a, cc), (*b, cc)]);
                     for r in *a.min(b)..=*a.max(b) {
                         bodies.insert((r, cc));
                     }
@@ -1333,7 +1345,7 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                     if on_back(k) {
                         mount = crate::mount::Mount::Leaded;
                     }
-                    let cc = from(&|cc| fits(&[cc, cc + 1, cc + 2], *a, *a));
+                    let cc = from(&|cc| fits(&[cc, cc + 1, cc + 2], *a, *a), &|cc| vec![(*a, cc), (*a, cc + 2)]);
                     for x in cc..=cc + 2 {
                         bodies.insert((*a, x));
                     }
@@ -2298,6 +2310,26 @@ mod size_tests {
             matches!((at("1"), at(&half)), (Some(a), Some(b)) if a.0 > b.0 && a.1 == b.1)
         });
         assert!(turned, "{:?}", l.parts.iter().map(|p| (&p.refdes, p.leads.first())).collect::<Vec<_>>());
+    }
+
+    /// A two-lead part the requirements table keeps apart from a chip stands in a column that far from it, where its band has one:
+    /// the blinker's R1 next to the 555 laid out as usual, 15 mm from it when told to.
+    #[test]
+    fn a_two_lead_part_stands_away_from_a_chip_kept_apart() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ne555_blinker.schjson");
+        let mut s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let closest = |l: &super::StripLayout| {
+            let leads = |r: &str| l.parts.iter().filter(|p| p.refdes == r).flat_map(|p| p.leads.iter().map(|x| x.1)).collect::<Vec<_>>();
+            let (a, b) = (leads("R1"), leads("U1"));
+            a.iter().flat_map(|x| b.iter().map(move |y| (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54)).fold(f64::INFINITY, f64::min)
+        };
+        let l = super::strip_layout(&s);
+        assert!(closest(&l) < 15.0, "{}", closest(&l));
+        s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["U1".into()], min_dist: 15.0, ..Default::default() }];
+        let l = super::strip_layout(&s);
+        assert!(closest(&l) >= 15.0, "{}", closest(&l));
+        assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
+        assert!(super::strip_rules(&s, &l).iter().all(|r| r.ok), "{:?}", super::strip_rules(&s, &l));
     }
 
     /// Two short parts of the row of chips (chips, transistors) stacked in the same columns (the upper one's wires all up, the lower

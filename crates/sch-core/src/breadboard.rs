@@ -201,14 +201,14 @@ pub(crate) struct Circuit {
     pub(crate) flipped: BTreeSet<String>,
     /// A stripboard's layout stacks a short chip under another short one in the same columns (`stripboard::lay`; tried both ways).
     pub(crate) stack: bool,
-    /// The pairs of parts the requirements table keeps apart (by reference: each rule's `a` against its `b`), which a stripboard's
-    /// layout does not stack together.
-    pub(crate) apart: Vec<(String, String)>,
+    /// The pairs of parts the requirements table keeps apart (by reference: each rule's `a` against its `b`) and the least distance
+    /// (mm): a stripboard's layout does not stack them together, and stands a two-lead part where it is that far from the other.
+    pub(crate) apart: Vec<(String, String, f64)>,
 }
 
 /// The pairs of parts in the requirements table's "離す" rules, each part of `a` with each of `b`.
-fn apart_pairs(s: &Schematic) -> Vec<(String, String)> {
-    s.requirements.apart.iter().flat_map(|r| r.a.iter().flat_map(move |a| r.b.iter().map(move |b| (a.clone(), b.clone())))).collect()
+fn apart_pairs(s: &Schematic) -> Vec<(String, String, f64)> {
+    s.requirements.apart.iter().flat_map(|r| r.a.iter().flat_map(move |a| r.b.iter().map(move |b| (a.clone(), b.clone(), r.min_dist)))).collect()
 }
 
 pub(crate) fn read(s: &Schematic) -> Circuit {
