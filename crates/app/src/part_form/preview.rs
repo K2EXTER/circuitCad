@@ -6,7 +6,7 @@ impl PartForm {
         let def = match built {
             Ok(d) => d,
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
                 return None;
             }
         };
@@ -24,10 +24,10 @@ impl PartForm {
         // means "cannot be saved yet" (a blank form starts with some), so it is worded as a to-do
         ui.add_space(4.0);
         if issues.is_empty() {
-            ui.colored_label(crate::theme::OK, i18n::tr("✔ 問題は見つかりません"));
+            ui.colored_label(crate::theme::ok(), i18n::tr("✔ 問題は見つかりません"));
         }
         egui::ScrollArea::vertical().id_salt("part_form_issues").max_height(130.0).auto_shrink([false, true]).show(ui, |ui| {
-            for (error, head, color) in [(true, "保存の前に直すこと", crate::theme::ERROR), (false, "注意", crate::theme::WARN)] {
+            for (error, head, color) in [(true, "保存の前に直すこと", crate::theme::error()), (false, "注意", crate::theme::warn())] {
                 let lines: Vec<&Issue> = issues.iter().filter(|i| i.error == error).collect();
                 if lines.is_empty() {
                     continue;
@@ -51,7 +51,7 @@ impl PartForm {
         if let Some(n) = self.editing().filter(|_| !replaces) {
             ui.small(i18n::trf!("「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)"));
         }
-        if crate::widgets::primary_button_wide(ui, ok, label).on_hover_text(i18n::tr(tip).replace("{}", &def.name)).clicked() {
+        if crate::widgets::primary_button_wide(ui, (!ok).then_some("エラーが残っています。上の赤い行を直すと押せます"), label).on_hover_text(i18n::tr(tip).replace("{}", &def.name)).clicked() {
             return Some(def.clone());
         }
         None
@@ -131,7 +131,7 @@ pub(super) fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Fo
         let (w, h) = p.shape.size();
         let ctr = to(p.pos.x, p.pos.y);
         let size = Vec2::new(w as f32 * scale, h as f32 * scale);
-        let col = if p.pin == "1" { Color32::from_rgb(240, 120, 60) } else { crate::theme::ERROR };
+        let col = if p.pin == "1" { Color32::from_rgb(240, 120, 60) } else { crate::theme::error() };
         match p.shape {
             pcb_core::PadShape::Circle { .. } => {
                 painter.circle_filled(ctr, size.x / 2.0, col);

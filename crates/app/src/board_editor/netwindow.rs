@@ -31,10 +31,9 @@ fn finish_kind(ui: &mut egui::Ui, label: &str, value: &mut Option<bool>, board: 
 
 /// "整え方": what the finish does on the nets of a class when it differs from the board's settings (left panel "配線を整える").
 fn finish_override_ui(ui: &mut egui::Ui, o: &mut pcb_core::smooth::FinishOverride, board: &pcb_core::smooth::Finish) {
-    egui::CollapsingHeader::new(if o.is_default() { i18n::tr("整え方 (基板全体の設定に従う)") } else { i18n::tr("整え方 (このクラスだけ変えている)") })
-        .id_salt("net_window_finish")
-        .default_open(!o.is_default())
-        .show(ui, |ui| {
+    // a heading, not a fold inside the window's tab (at most two levels: pick the tab, then use it)
+    crate::widgets::heading_inline(ui, if o.is_default() { "整え方 (基板全体の設定に従う)" } else { "整え方 (このクラスだけ変えている)" });
+    {
             ui.small(i18n::tr("配線を整える形 (角の丸み・太さの段差・分かれ目の丸み) を、このクラスのネットだけ変えます。形が特性を決める線 (USB・高周波・インピーダンスを決めた線) は、3つとも「切る」にします"));
             finish_kind(ui, i18n::tr("角を丸める"), &mut o.corners, board.corners, i18n::tr("同じ太さの配線がつながる角を、円弧にします"));
             finish_kind(ui, i18n::tr("太さの段差をなだらかに"), &mut o.tapers, board.tapers, i18n::tr("太さが変わる所と、パッド・ビアに入る根元に、中間の太さを挟みます"));
@@ -52,7 +51,7 @@ fn finish_override_ui(ui: &mut egui::Ui, o: &mut pcb_core::smooth::FinishOverrid
             if !o.is_default() && ui.button(i18n::tr("基板全体の設定に戻す")).on_hover_text(i18n::tr("このクラスの整え方の変更をすべてやめます")).clicked() {
                 *o = Default::default();
             }
-        });
+    }
 }
 
 impl BoardEditor {
@@ -75,7 +74,9 @@ impl BoardEditor {
         let mut remove: Option<usize> = None;
         let mut apply: Vec<(Vec<usize>, f64)> = vec![];
         let mut add = false;
-        egui::CollapsingHeader::new(i18n::trf!("線幅の例外 ({count} か所)")).id_salt("net_window_width_exceptions").default_open(count > 0).show(ui, |ui| {
+        // a heading, not a fold inside the window's tab (at most two levels)
+        crate::widgets::heading_inline(ui, i18n::trf!("線幅の例外 ({count} か所)"));
+        {
             ui.small(i18n::tr("クラスの線幅とは別の太さにしたい区間 (ピッチの細い IC のピンに入る所だけ細くする、など) を登録します。登録した区間は、上のスライダー・「配線を推奨幅にする」・電流とインピーダンスのチェックの対象になりません。区間は基板上の位置で決まるので、その配線を動かすと例外から外れます"));
             for (k, e) in c.width_exceptions.iter_mut().enumerate().filter(|(_, e)| e.net == net) {
                 let covered: Vec<usize> = self.board.tracks.iter().enumerate().filter(|(_, t)| e.covers(t)).map(|(i, _)| i).collect();
@@ -96,10 +97,10 @@ impl BoardEditor {
                     }
                 });
             }
-            if crate::widgets::unless(ui, (!(!picks.is_empty())).then_some("基板で、このネットの配線を選ぶと押せます"), egui::Button::new(i18n::trf!("選んだ配線を例外にする ({} 本)", picks.len()))).on_hover_text(i18n::tr("基板で選んだ、このネットの配線を、いまの太さのまま例外にします。選択ツールで配線をクリック (Shift で複数) してから押します")).clicked() {
+            if crate::widgets::unless(ui, picks.is_empty().then_some("基板で、このネットの配線を選ぶと押せます"), egui::Button::new(i18n::trf!("選んだ配線を例外にする ({} 本)", picks.len()))).on_hover_text(i18n::tr("基板で選んだ、このネットの配線を、いまの太さのまま例外にします。選択ツールで配線をクリック (Shift で複数) してから押します")).clicked() {
                 add = true;
             }
-        });
+        }
         if let Some(k) = remove {
             c.width_exceptions.remove(k);
         }
@@ -259,7 +260,7 @@ impl BoardEditor {
                                 ui.small(i18n::tr("このネットの配線は、まだありません。配線するときの線幅に使えます"));
                             }
                             Some(t) if t + 1e-9 < rec => {
-                                ui.colored_label(crate::theme::ERROR, i18n::trf!("今の最も細い配線は {t:.2} mm で、足りません"));
+                                ui.colored_label(crate::theme::error(), i18n::trf!("今の最も細い配線は {t:.2} mm で、足りません"));
                             }
                             Some(t) => {
                                 ui.colored_label(Color32::from_rgb(90, 190, 110), i18n::trf!("今の最も細い配線は {t:.2} mm で、足ります ✔"));
@@ -315,7 +316,7 @@ impl BoardEditor {
                                     ui.colored_label(Color32::from_rgb(90, 190, 110), i18n::trf!("推奨 {r:.2} mm 以上で、足ります ✔"));
                                 } else {
                                     ui.horizontal(|ui| {
-                                        ui.colored_label(crate::theme::ERROR, i18n::trf!("推奨 {r:.2} mm に足りません"));
+                                        ui.colored_label(crate::theme::error(), i18n::trf!("推奨 {r:.2} mm に足りません"));
                                         if ui.small_button(i18n::tr("推奨まで上げる")).on_hover_text(i18n::tr("スライダーを、推奨の線幅にします")).clicked() {
                                             new_width = Some(r);
                                         }
@@ -366,7 +367,7 @@ impl BoardEditor {
                                 && let Some(zt) = classes[k].impedance
                                 && (z - zt).abs() / zt > 0.1
                             {
-                                ui.colored_label(crate::theme::WARN, i18n::trf!("クラスの目標 {zt:.0} Ω から {:.0}% ずれています", (z - zt).abs() / zt * 100.0));
+                                ui.colored_label(crate::theme::warn(), i18n::trf!("クラスの目標 {zt:.0} Ω から {:.0}% ずれています", (z - zt).abs() / zt * 100.0));
                             }
                         }
                     }

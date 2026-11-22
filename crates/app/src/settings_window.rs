@@ -22,7 +22,7 @@ const AUTOSAVES: &[(u32, &str)] = &[(30, "30 秒"), (60, "1 分"), (120, "2 分"
 impl App {
     /// The settings as the app has them now (some live in the editors or in globals, not in `self.prefs`).
     fn current_prefs(&self) -> Prefs {
-        Prefs { icon_only: icons::icon_only(), show_hints: self.show_hints, smooth_edges: self.smooth_edges, link_selection: self.link_selection, lang: i18n::lang().code().to_string(), flow_dots: crate::flow_dots::on(), flow_speed: crate::flow_dots::speed(), ..self.prefs.clone() }
+        Prefs { icon_only: icons::icon_only(), show_hints: self.show_hints, smooth_edges: self.smooth_edges, link_selection: self.link_selection, lang: i18n::lang().code().to_string(), flow_dots: crate::flow_dots::on(), flow_speed: crate::flow_dots::speed(), panel_light: crate::theme::is_light(), ..self.prefs.clone() }
     }
 
     /// Puts the settings into effect (at start-up and after a change in the window). The language is not set here: at start-up the
@@ -40,6 +40,10 @@ impl App {
         self.sch.wire_hops = p.wire_hops;
         crate::flow_dots::set_on(p.flow_dots);
         crate::flow_dots::set_speed(p.flow_speed);
+        if crate::theme::is_light() != p.panel_light {
+            crate::theme::set_light(p.panel_light);
+            crate::startup::apply_panel_theme(ctx);
+        }
         self.prefs = p.clone();
     }
 
@@ -120,6 +124,7 @@ impl App {
             wire_hops: p.wire_hops,
             flow_dots: p.flow_dots,
             flow_speed: p.flow_speed,
+            panel_light: p.panel_light,
             ..Prefs::load(&file)
         }
         .save(&file);
@@ -150,7 +155,7 @@ fn look_tab(ui: &mut egui::Ui, p: &mut Prefs, restart_note: bool) {
     ui.label(i18n::tr("画面の下"));
     ui.vertical(|ui| {
         ui.checkbox(&mut p.show_hints, i18n::tr("ヒントを出す")).on_hover_text(i18n::tr("画面下に、いま何をするとよいかのヒントを表示します"));
-        ui.add_enabled_ui(p.show_hints, |ui| {
+        crate::widgets::unless_ui(ui, (!p.show_hints).then_some("「ヒントを出す」を入れると選べます"), |ui| {
             ui.checkbox(&mut p.show_tips, i18n::tr("豆知識を出す")).on_hover_text(i18n::tr("画面下の右に、12 秒ごとに入れ替わる豆知識を表示します。慣れてきて気が散るときは切ります"));
         });
     });
@@ -172,6 +177,15 @@ fn look_tab(ui: &mut egui::Ui, p: &mut Prefs, restart_note: bool) {
 /// changed colour has a button that puts the theme's back. The pictures written out (SVG, PDF) are always on paper.
 fn colors_tab(ui: &mut egui::Ui, p: &mut Prefs) {
     use crate::canvas_theme::{build, contrast, hard_to_see, Role, Theme, ROLES};
+    ui.label(i18n::tr("パネルと窓")).on_hover_text(i18n::tr("左右のパネル・窓・メニューの地の明るさです。回路図や基板を描く所 (キャンバス) の色は、下で別に選びます"));
+    ui.horizontal(|ui| {
+        for (light, name, hint) in [(false, "暗い", "暗い灰色の地に明るい文字。長い時間でも目が疲れにくい"), (true, "明るい", "白い地に黒い文字。明るい部屋や、プロジェクターで見せるとき")] {
+            if ui.selectable_label(p.panel_light == light, i18n::tr(name)).on_hover_text(i18n::tr(hint)).clicked() {
+                p.panel_light = light;
+            }
+        }
+    });
+    ui.end_row();
     let theme = Theme::parse(&p.canvas_theme).unwrap_or_default();
     ui.label(i18n::tr("キャンバス")).on_hover_text(i18n::tr("回路図を描く所の色です。書き出す絵 (SVG・PDF) は、どちらでもいつも紙の色です"));
     ui.horizontal(|ui| {
@@ -193,7 +207,7 @@ fn colors_tab(ui: &mut egui::Ui, p: &mut Prefs) {
                 p.canvas_colors.push((key.to_string(), [r, g, b]));
             }
             if hard_to_see(&pal, *role) {
-                ui.colored_label(crate::theme::WARN, "▲").on_hover_text(i18n::trf!("地との差が小さく、見えにくい色です (コントラスト {:.1} : 1。線や印は 3 : 1 以上が目安)", contrast(c, pal.get(Role::Bg))));
+                ui.colored_label(crate::theme::warn(), "▲").on_hover_text(i18n::trf!("地との差が小さく、見えにくい色です (コントラスト {:.1} : 1。線や印は 3 : 1 以上が目安)", contrast(c, pal.get(Role::Bg))));
             }
             if p.canvas_colors.iter().any(|(k, _)| k == key) && ui.small_button(i18n::tr("戻す")).on_hover_text(i18n::tr("このテーマの色に戻します")).clicked() {
                 p.canvas_colors.retain(|(k, _)| k != key);
@@ -202,7 +216,7 @@ fn colors_tab(ui: &mut egui::Ui, p: &mut Prefs) {
         ui.end_row();
     }
     ui.label("");
-    if ui.add_enabled(!p.canvas_colors.is_empty(), egui::Button::new(i18n::tr("すべての色をテーマに戻す"))).on_hover_text(i18n::tr("変えた色をすべて、選んでいるテーマの色に戻します")).on_disabled_hover_text(i18n::tr("色はまだ変えていません")).clicked() {
+    if crate::widgets::unless(ui, p.canvas_colors.is_empty().then_some("テーマから変えた色はありません"), egui::Button::new(i18n::tr("すべての色をテーマに戻す"))).on_hover_text(i18n::tr("変えた色をすべて、選んでいるテーマの色に戻します")).on_disabled_hover_text(i18n::tr("色はまだ変えていません")).clicked() {
         p.canvas_colors.clear();
     }
     ui.end_row();

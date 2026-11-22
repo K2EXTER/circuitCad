@@ -331,7 +331,7 @@ impl PartForm {
             }
         });
         for (ok, line) in &self.dio_found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         match &self.dio_result {
             Some(Ok(f)) => {
@@ -339,7 +339,7 @@ impl PartForm {
                 super::mosfet::fit_table(ui, "dio_rows", f);
             }
             Some(Err(e)) => {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
             }
             None => {}
         }
@@ -348,10 +348,10 @@ impl PartForm {
         }
         match &self.dio_message {
             Some(Ok(m)) => {
-                ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
+                ui.colored_label(crate::theme::ok(), i18n::tr_dyn(m));
             }
             Some(Err(e)) => {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
             }
             None => {}
         }
@@ -397,7 +397,7 @@ impl PartForm {
         }).filter(|p| plot.expand(2.0).contains(*p)).collect();
         painter.add(egui::Shape::line(curve, Stroke::new(2.0, Color32::from_rgb(70, 140, 230))));
         for (i, v) in &pts {
-            painter.circle_filled(to(*v, *i), 4.0, crate::theme::ERROR);
+            painter.circle_filled(to(*v, *i), 4.0, crate::theme::error());
         }
         ui.label(egui::RichText::new(i18n::tr("● 赤い点: データシートの点    ─ 青い線: モデルの曲線")).size(13.5));
         if !pts.is_empty() {

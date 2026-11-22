@@ -98,7 +98,7 @@ impl SchEditor {
                 }
             }).response.on_hover_text(i18n::tr("揺れがどれだけ届くかを見るネット。レギュレータやアンプの出力を選びます"));
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "電源除去比を計算"), "電源除去比を計算").on_hover_text(i18n::tr("電源の揺れが、選んだ点にどれだけ届くかを周波数ごとに計算します。周波数の範囲と点数は AC解析の欄を使います。結果は AC解析のグラフに出ます")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "電源除去比を計算"), "電源除去比を計算").on_hover_text(i18n::tr("電源の揺れが、選んだ点にどれだけ届くかを周波数ごとに計算します。周波数の範囲と点数は AC解析の欄を使います。結果は AC解析のグラフに出ます")).clicked() {
             self.run_psrr();
         }
     }

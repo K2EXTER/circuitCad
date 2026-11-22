@@ -166,7 +166,7 @@ impl BoardEditor {
                 i18n::tr("配線を引いたり部品を動かしたりするたびに、線どうしの間隔・穴・基板の端などの規則を裏で調べ直して、違反の所に赤い × を出します (ポインタを合わせると内容が出ます)。\n「DRC を実行」は、仕上げの形・ベタの分断・未配線も含めて一覧にします。発注の前には、そちらも実行してください"),
             );
             if self.live_drc.on && n > 0 {
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("いま {n} 件"));
+                ui.colored_label(crate::theme::error(), i18n::trf!("いま {n} 件"));
             }
         });
     }

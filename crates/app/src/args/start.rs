@@ -34,12 +34,13 @@ pub(super) fn lessons(app: &mut App, a: &Args) {
             app.sch.run_judge();
         }
     }
-    // --settings [look | input | files | board]: the settings window open at that tab
+    // --settings [look | input | files | board | colors]: the settings window open at that tab
     if a.has("--settings") {
         app.settings_tab = match a.val("--settings") {
             Some("input") => settings_window::SettingsTab::Input,
             Some("files") => settings_window::SettingsTab::Files,
             Some("board") => settings_window::SettingsTab::Board,
+            Some("colors") => settings_window::SettingsTab::Colors,
             _ => settings_window::SettingsTab::Look,
         };
         app.open_settings();
@@ -115,6 +116,10 @@ pub(super) fn windows(app: &mut App, a: &Args) {
         app.palette.query = a.after("--palette").unwrap_or("").to_string();
     }
     // the pictures for the README are on paper, whatever theme the user has (`--paper`)
+    // `--light-panel`: the panels and windows on a light ground for this launch (screenshots), whatever the setting
+    if a.has("--light-panel") {
+        crate::theme::set_light(true);
+    }
     if a.has("--paper") {
         crate::canvas_theme::set_palette(crate::canvas_theme::PAPER);
     }

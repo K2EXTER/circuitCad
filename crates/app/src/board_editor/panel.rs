@@ -24,7 +24,7 @@ fn step_header(ui: &mut egui::Ui, step: Step, open: Step, round: u32, done: bool
 
 fn group_heading(ui: &mut egui::Ui, text: &str, tip: &str) {
     ui.add_space(2.0);
-    ui.label(egui::RichText::new(text).strong().color(crate::theme::INFO)).on_hover_text(tip);
+    ui.label(egui::RichText::new(text).strong().color(crate::theme::info())).on_hover_text(tip);
     ui.separator();
 }
 
@@ -104,16 +104,16 @@ impl BoardEditor {
             }
             if self.panel_tab == PanelTab::Steps {
             // the first thing to press, so it is not inside a fold
-            if crate::widgets::primary_button_wide(ui, true, "回路図から取り込み").on_hover_text(i18n::tr("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します")).clicked() {
+            if crate::widgets::primary_button_wide(ui, None, "回路図から取り込み").on_hover_text(i18n::tr("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します")).clicked() {
                 self.import_from_schematic(sch);
             }
                 let diff = self.schematic_diff(sch).clone();
                 if !diff.is_empty() {
-                    ui.colored_label(crate::theme::WARN, i18n::trf!("回路図と違います: {}", diff.summary()))
+                    ui.colored_label(crate::theme::warn(), i18n::trf!("回路図と違います: {}", diff.summary()))
                         .on_hover_text(i18n::tr("取り込んだあとに、回路図が変わったか、基板が変わりました。「回路図から取り込み」を押すと、基板の部品の位置と配線は残したまま、値・形・つながりが回路図に合わせて更新されます"));
                 }
                 for n in &self.import_notes {
-                    ui.colored_label(crate::theme::WARN, n);
+                    ui.colored_label(crate::theme::warn(), n);
                 }
                 // the breadboard plugs in leaded parts; the basic parts come onto the board as 0805 chips unless the schematic says
                 // otherwise: say so, and offer the leaded footprints (found by a usability test, 2026-11-19)
@@ -141,7 +141,7 @@ impl BoardEditor {
             if step_header(ui, Step::Place, open_step, round, placed, "① 部品を並べる", "部品を基板の上に並べて、基板の外形 (大きさ・形) を決めます (部品の取り込みは、パネルの一番上のボタン)。ここまでが「何をどこに置くか」です", |ui| {
                 self.sheet_legend(ui);
                 ui.label(i18n::trf!("未配線: {} 本 (黄色の線)", self.cached_airwires().len())).on_hover_text(i18n::tr("まだ銅の線でつながっていない部分です。黄色の線 (ラッツネスト) が、つなぐべき相手を結んで示します。配線すると減って、0 になれば全部つながっています"));
-                if crate::widgets::primary_button_wide(ui, true, "部品を並べて外形を決める").on_hover_text(i18n::tr("すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。コネクタなど置き場所の決まった部品は、先に置いて「固定する」と、動かさずにそのまわりへ残りを並べます。先に「銅箔ゾーン」で GND のベタを塗っておくと、ベタでつながる GND は配線が要らないので、それを除いて部品を近づけ、小さくまとまります (ベタも新しい外形に合わせます)。「GND ベタ」を置いたあとでも使えます (そのビアと短い線は、並べたあとに置き直します)。ほかの配線がある基板では使えません (部品を動かすと配線が合わなくなるため)")).clicked() {
+                if crate::widgets::primary_button_wide(ui, None, "部品を並べて外形を決める").on_hover_text(i18n::tr("すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。コネクタなど置き場所の決まった部品は、先に置いて「固定する」と、動かさずにそのまわりへ残りを並べます。先に「銅箔ゾーン」で GND のベタを塗っておくと、ベタでつながる GND は配線が要らないので、それを除いて部品を近づけ、小さくまとまります (ベタも新しい外形に合わせます)。「GND ベタ」を置いたあとでも使えます (そのビアと短い線は、並べたあとに置き直します)。ほかの配線がある基板では使えません (部品を動かすと配線が合わなくなるため)")).clicked() {
                     self.autoplace();
                 }
                 if self.sheet_colors().len() >= 2 {
@@ -156,7 +156,7 @@ impl BoardEditor {
                             ui.label(i18n::trf!("外形 {:.1} × {:.1} mm", hi.x - lo.x, hi.y - lo.y)).on_hover_text(i18n::tr("基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります"));
                         }
                         None => {
-                            ui.colored_label(crate::theme::WARN, i18n::tr("外形がまだありません")).on_hover_text(i18n::tr("発注には基板の外形が要ります。上の「部品を並べて外形を決める」で作るか、「変える…」で大きさを数字で決めるか、描きます"));
+                            ui.colored_label(crate::theme::warn(), i18n::tr("外形がまだありません")).on_hover_text(i18n::tr("発注には基板の外形が要ります。上の「部品を並べて外形を決める」で作るか、「変える…」で大きさを数字で決めるか、描きます"));
                         }
                     }
                     if ui.small_button(i18n::tr("変える…")).on_hover_text(i18n::tr("「手で描く」タブの外形ツールを選びます。幅・高さ・角R を数字で入れて矩形や円・長円にしたり、角を丸めたり、ドラッグや多角形で描いたりできます。決まった大きさのケースに入れるときに")).clicked() {
@@ -165,18 +165,18 @@ impl BoardEditor {
                 });
                 ui.separator();
                 crate::widgets::section_heading(ui, "整える");
-                let bar = crate::widgets::segment_row(ui, &[("ピン名をシルクへ", true)]);
+                let bar = crate::widgets::segment_row(ui, &[("ピン名をシルクへ", None)]);
                 bar[0].clone().on_hover_text(i18n::tr("回路図でヘッダ(コネクタ)に付けた「ピンの名前」(F+、SA、GND など)を、基板のシルク(白い文字)として、パッドのそばに書きます。もう一度押すと書き直します。位置は、あとで「文字」ツールで動かせます"));
                 if bar[0].clicked() {
                     self.write_pin_names(sch);
                 }
                 let (has_swap, has_map) = (!self.board.swap_specs.is_empty(), !self.board.pin_map.is_empty());
-                let mut items = vec![("向きを最適化", true)];
+                let mut items = vec![("向きを最適化", None)];
                 if has_swap {
-                    items.push(("ゲートを入れ替え", true));
+                    items.push(("ゲートを入れ替え", None));
                 }
                 if has_map {
-                    items.push(("回路図に反映", true));
+                    items.push(("回路図に反映", None));
                 }
                 let bar = crate::widgets::segment_row(ui, &items);
                 bar[0].clone().on_hover_text(i18n::tr("配線がまだ付いていない部品を、0°・90°・180°・270° のうち、未配線の線が短く、交差が少なくなる向きに回します。回してもピンのつなぎは変わりません (回路は同じ)。ほかの部品や配線、基板の外にぶつかる向きは選びません。ロックした部品は回しません。配線を引く前の仕上げに使います。元に戻すで取り消せます"));
@@ -202,7 +202,7 @@ impl BoardEditor {
                     self.to_schematic_request = true;
                 }
                 {
-                    let bar = crate::widgets::segment_row(ui, &[("選択を保存…", true), ("スニペットを置く…", true)]);
+                    let bar = crate::widgets::segment_row(ui, &[("選択を保存…", None), ("スニペットを置く…", None)]);
                     bar[0].clone().on_hover_text(i18n::tr("選んだ部品と、その間の配線・ビアを、ファイル (.ccbsnip) に保存します。よく使う電源まわりの配置と配線などを、別の基板で使えます。部品の位置と向きは、選んだ範囲の真ん中からの相対で残ります"));
                     bar[1].clone().on_hover_text(i18n::tr("保存したスニペットを、いま見えている画面の真ん中に置きます。同じ部品番号・同じフットプリントの部品を、保存した並べ方に動かし、保存した配線とビアを足します。動かした部品につながっていた古い配線は消えます。この基板にない部品や、固定した部品は動かさず、結果の文に出します。「元に戻す」で戻せます"));
                     if bar[0].clicked() {
@@ -224,7 +224,7 @@ impl BoardEditor {
                     self.status = format!("{n} 個のパッドの角を丸めました");
                 }
                 if !self.board.parts.is_empty() {
-                    let bar = crate::widgets::segment_row(ui, &[("部品番号を位置順に", true)]);
+                    let bar = crate::widgets::segment_row(ui, &[("部品番号を位置順に", None)]);
                     bar[0].clone().on_hover_text(i18n::tr("部品番号 (R1・C2 など) を、基板の上の位置の順に振り直します。上の段から下の段へ、各段は左から右です。回路図の部品番号、要件の表、「接続しない」の印も同じに変わります。固定した部品の番号は変えません。「元に戻す」で戻せます (回路図の側も、回路図で元に戻してください)"));
                     if bar[0].clicked() {
                         self.renumber_request = true;
@@ -238,20 +238,17 @@ impl BoardEditor {
                     Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
                     _ => None,
                 };
-                let only_tip = if sel_net.is_some() { "" } else { "
-
-(いまは使えません: 先に基板の上のパッドを1つクリックして選んでください)" };
                 crate::widgets::section_heading(ui, "自動で引く");
                 ui.label(egui::RichText::new(i18n::tr("上から順に押します")).weak());
                 let short_only = sel_net.as_ref().map_or("選んだネットだけ".to_string(), |n| format!("{n} だけ"));
-                let bar = crate::widgets::segment_row(ui, &[("GND ベタ", true), ("全部つなぐ", true), (short_only.as_str(), sel_net.is_some())]);
+                let bar = crate::widgets::segment_row(ui, &[("GND ベタ", None), ("全部つなぐ", None), (short_only.as_str(), sel_net.is_none().then_some("先に基板の上のパッドを 1 つクリックして、ネットを選んでください"))]);
                 bar[0].clone().on_hover_text(i18n::tr("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
     部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます"));
                 bar[1].clone().on_hover_text(i18n::tr("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
     線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。
     電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「③ 確認する」の「電流と電圧降下」で見直せます)。
     2層・45°配線で、ルール違反になる配線は自動的にやめます"));
-                bar[2].clone().on_hover_text(i18n::trf!("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます{only_tip}"));
+                bar[2].clone().on_hover_text(i18n::trf!("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます"));
                 if bar[0].clicked() {
                     self.ground_pour();
                 }
@@ -266,10 +263,10 @@ impl BoardEditor {
                 self.panel_stitch(ui);
                 ui.separator();
                 crate::widgets::section_heading(ui, "引いた配線の手直し");
-                let bar = crate::widgets::segment_row(ui, &[("配線を短くする", true), ("通らない接続", true), (short_only.as_str(), sel_net.is_some())]);
+                let bar = crate::widgets::segment_row(ui, &[("配線を短くする", None), ("通らない接続", None), (short_only.as_str(), sel_net.is_none().then_some("先に基板の上のパッドを 1 つクリックして、ネットを選んでください"))]);
                 bar[0].clone().on_hover_text(i18n::tr("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます"));
                 bar[1].clone().on_hover_text(i18n::tr("自動配線で通らなかった(黄色の線が残った)接続のそばの小さい部品 (3 ピンまで) を 1〜4 mm 動かして、配線を引き直してみます。通らない接続が減り、ルール違反が増えないものだけを採用します。最長 40 秒かかります。気に入らなければ「元に戻す」で取り消せます"));
-                bar[2].clone().on_hover_text(i18n::trf!("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります){only_tip}"));
+                bar[2].clone().on_hover_text(i18n::trf!("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります)"));
                 if bar[0].clicked() {
                     self.shorten_routes(None);
                 }
@@ -289,7 +286,7 @@ impl BoardEditor {
                 self.panel_fiducials(ui);
             });
             if step_header(ui, Step::Check, open_step, round, checked, "③ 確認する", "「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。その下で、電気 (電流と電圧降下)・熱 (熱の地図) を確かめ、「回路図に反映」で基板の配線と熱を回路図の解析に入れます", |ui| {
-                if crate::widgets::primary_button_wide(ui, true, "DRC を実行").on_hover_text(i18n::tr("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう")).clicked() {
+                if crate::widgets::primary_button_wide(ui, None, "DRC を実行").on_hover_text(i18n::tr("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう")).clicked() {
                     self.run_drc();
                 }
                 self.live_drc_toggle(ui);
@@ -315,7 +312,7 @@ impl BoardEditor {
                 opened = Some(Step::Check);
             }
             if step_header(ui, Step::Order, open_step, round, false, "④ 発注する", "出来上がりを 3D で見て、「発注の準備」で発注先を選び、工場に渡すデータ (ガーバー) を作ります", |ui| {
-                let bar = crate::widgets::segment_row(ui, &[("3Dで見る…", true), ("発注の準備…", true)]);
+                let bar = crate::widgets::segment_row(ui, &[("3Dで見る…", None), ("発注の準備…", None)]);
                 bar[0].clone().on_hover_text(i18n::tr("基板を立体で見ます。出来上がりの色 (緑のレジスト・金色のパッド・白いシルク) と、部品の高さの目安が分かります。ドラッグで回せます"));
                 bar[1].clone().on_hover_text(i18n::tr("発注先を選び、チェックと出来上がりの確認をして、製造ファイルを書き出します。発注までの手順も表示します"));
                 if bar[0].clicked() {
@@ -430,7 +427,7 @@ impl BoardEditor {
                 .on_hover_text(i18n::tr("角の丸み (半径)。0 なら角ばった形です。ケースに入れる基板や、手で持つ基板は、角を丸めると角が欠けにくく、安全です。大きすぎる値は、入る大きさまで自動で小さくなります"));
         });
         // the three ways to turn the numbers above into an outline: one bar
-        let bar = crate::widgets::segment_row(ui, &[("矩形にする", true), ("円・長円にする", true), ("角を丸める", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("矩形にする", None), ("円・長円にする", None), ("角を丸める", None)]);
         bar[0].clone().on_hover_text(i18n::tr("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります"));
         bar[1].clone().on_hover_text(i18n::tr("上の幅と高さに収まる円 (幅=高さ) や長円の外形にします。丸い基板やボタン電池サイズの基板に"));
         bar[2].clone().on_hover_text(i18n::tr("いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)"));
@@ -553,15 +550,14 @@ impl BoardEditor {
         });
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.pad_lead, i18n::tr("パッドに垂直に出入り")).on_hover_text(i18n::tr("配線をパッドから出すとき・パッドへ入れるときに、パッドの辺に垂直な短い区間を必ず付けます (そのあとは、いつもの 45° などで行き先へ向かいます)。斜めに入る根元がなくなり、きれいにそろいます。距離が近すぎるときと、丸いパッド、「自由」の配線では何もしません。長いパッドでは、パッドの両端にも吸い付くので、2本を並べて出せます"));
-            ui.add_enabled(self.pad_lead, egui::DragValue::new(&mut self.pad_lead_len).speed(0.05).range(0.1..=3.0).suffix(" mm")).on_hover_text(i18n::tr("パッドの縁から、垂直に出す区間の長さ"));
+            crate::widgets::unless(ui, (!self.pad_lead).then_some("「パッドに垂直に出入り」を入れると変えられます"), egui::DragValue::new(&mut self.pad_lead_len).speed(0.05).range(0.1..=3.0).suffix(" mm")).on_hover_text(i18n::tr("パッドの縁から、垂直に出す区間の長さ"));
         });
         ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix(i18n::tr("線幅 ")).suffix(" mm"))
             .on_hover_text(i18n::tr("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように"));
-        egui::CollapsingHeader::new(i18n::tr("高度な配線 (中級者向け)")).default_open(false).show(ui, |ui| {
-                self.panel_net_classes(ui);
-                self.panel_pairs(ui);
-                self.panel_lengths(ui);
-        }).header_response.on_hover_text(i18n::tr("中級者向け: ネットクラス・差動ペア・長さ合わせ"));
+        // the three topics fold on their own in the tool's card: no "advanced" fold around them (at most two levels, ui-rules.md)
+        self.panel_net_classes(ui);
+        self.panel_pairs(ui);
+        self.panel_lengths(ui);
             }
             Tool::Via => {
                 let nets = self.board_nets();
@@ -604,7 +600,7 @@ impl BoardEditor {
                         std::mem::swap(&mut self.smd_w, &mut self.smd_h);
                     }
                 });
-                let bar = crate::widgets::segment_bar(ui, &[("四角", true), ("長円", true)], Some(usize::from(self.smd_oval)));
+                let bar = crate::widgets::segment_bar(ui, &[("四角", None), ("長円", None)], Some(usize::from(self.smd_oval)));
                 bar[0].clone().on_hover_text(i18n::tr("四角いパッド。チップ部品や IC の足のパッドの、ふつうの形です"));
                 bar[1].clone().on_hover_text(i18n::tr("両端が丸い長円のパッド。幅と高さが同じなら円になります"));
                 if bar[0].clicked() {
@@ -652,7 +648,7 @@ impl BoardEditor {
                         ui.label(i18n::tr("選んでいるベタがないので、描いた範囲のベタから引きます"));
                     }
                     let nets = self.nets();
-                    ui.add_enabled_ui(target.is_none(), |ui| egui::ComboBox::from_label(i18n::tr("引く相手のネット")).selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
+                    crate::widgets::unless_ui(ui, (!target.is_none()).then_some("選んでいるベタのネットから引きます"), |ui| egui::ComboBox::from_label(i18n::tr("引く相手のネット")).selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.hole_net, String::new(), i18n::tr("すべて"));
                         for n in &nets {
                             ui.selectable_value(&mut self.hole_net, n.clone(), n);
@@ -894,7 +890,7 @@ impl BoardEditor {
                 ui.horizontal(|ui| {
                     hide = ui.button(i18n::tr("印刷しない")).on_hover_text(i18n::tr("この部品番号をシルクに印刷しません (部品が密集して置き場がないとき)。部品を選ぶと「部品番号を印刷する」で戻せます")).clicked();
                     let moved = self.board.label_offsets.contains_key(&r);
-                    if crate::widgets::unless(ui, (!(moved)).then_some("部品はまだ動かしていません"), egui::Button::new(i18n::tr("元の位置に戻す (Delete)"))).on_hover_text(i18n::tr("動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません")).clicked() {
+                    if crate::widgets::unless(ui, (!moved).then_some("部品はまだ動かしていません"), egui::Button::new(i18n::tr("元の位置に戻す (Delete)"))).on_hover_text(i18n::tr("動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません")).clicked() {
                         self.delete(sel);
                     }
                 });
@@ -940,7 +936,7 @@ impl BoardEditor {
                     err = pcb_core::silkedit::set_text(&mut self.board, i, &c).err();
                 }
                 if let Some(e) = &err {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::error(), e);
                 }
                 self.text_edit = Some((i, buf, err));
                 let min = self.board.rules.min_silk_text;

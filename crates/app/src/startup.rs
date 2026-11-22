@@ -16,6 +16,11 @@ pub(super) fn install_crash_log() {
 /// Japanese and half-width alphanumerics for everything; egui's own fonts stay as a fallback.
 pub(super) const BUNDLED_FONT: &[u8] = include_bytes!("../assets/fonts/BIZUDGothic-Regular.ttf");
 
+/// Spacing and colours of every style again, after the panels changed between dark and light (`theme::set_light`).
+pub(crate) fn apply_panel_theme(ctx: &egui::Context) {
+    ctx.all_styles_mut(crate::theme::apply);
+}
+
 pub(super) fn install_japanese_font(ctx: &egui::Context) {
     pub(super) const CANDIDATES: &[&str] = &[
         r"C:\Windows\Fonts\BIZ-UDGothicR.ttc",

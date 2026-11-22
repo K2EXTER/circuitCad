@@ -112,7 +112,7 @@ impl BoardEditor {
                 if ui.button(i18n::tr("更新")).on_hover_text(i18n::tr("基板エディタで変更した内容を反映します")).clicked() {
                     stale = true;
                 }
-                if crate::widgets::unless(ui, (!(selected.is_some())).then_some("部品を選ぶと、そこへ寄れます"), egui::Button::new(i18n::tr("選択部品へ寄る"))).on_hover_text(i18n::tr("基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます")).clicked() {
+                if crate::widgets::unless(ui, (!selected.is_some()).then_some("部品を選ぶと、そこへ寄れます"), egui::Button::new(i18n::tr("選択部品へ寄る"))).on_hover_text(i18n::tr("基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます")).clicked() {
                     v.focus = selected;
                 }
                 if ui.button(i18n::tr("PNG保存")).on_hover_text(i18n::tr("いま見えている向きの絵を画像ファイルに保存します (発注前の確認や、人に見せるときに)")).clicked() {
@@ -137,7 +137,7 @@ impl BoardEditor {
             });
             // (the rotate / pan / zoom operations are in the guide)
             if let Some(e) = &v.error {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
                 return;
             }
             let Some(scene) = &v.scene else { return };
@@ -154,7 +154,7 @@ impl BoardEditor {
                 match &v.temps {
                     None => {
                         ui.horizontal(|ui| {
-                            ui.colored_label(crate::theme::WARN, i18n::tr("温度がまだありません。回路図の自己発熱を計算すると、部品が温度の色になります"));
+                            ui.colored_label(crate::theme::warn(), i18n::tr("温度がまだありません。回路図の自己発熱を計算すると、部品が温度の色になります"));
                             if ui.button(i18n::tr("自己発熱を計算")).on_hover_text(i18n::tr("回路図の直流の動作点から、部品ごとの電力と温度を計算します (回路図の解析タブの「自己発熱」と同じ。周囲の温度もそこで変えられます)")).clicked() {
                                 v.heat_request = true;
                             }
@@ -181,9 +181,9 @@ impl BoardEditor {
                 let r = pcb_core::case::check(&self.board, &pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, clearance: 0.5, ..Default::default() });
                 if r.fits {
                     let how = if r.turned { " (基板を 90° 回すと)" } else { "" };
-                    ui.colored_label(crate::theme::OK, i18n::trf!("✔ 基板 {:.1} × {:.1} mm はケースの底に入ります{how}。余り: {:.1} × {:.1} mm", r.board_w, r.board_d, r.spare_w, r.spare_d));
+                    ui.colored_label(crate::theme::ok(), i18n::trf!("✔ 基板 {:.1} × {:.1} mm はケースの底に入ります{how}。余り: {:.1} × {:.1} mm", r.board_w, r.board_d, r.spare_w, r.spare_d));
                 } else {
-                    ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ 基板 {:.1} × {:.1} mm はケースの底 ({:.1} × {:.1} mm、縁の隙間込み) に入りません (足りない分: 幅 {:.1} / 奥行 {:.1} mm)", r.board_w, r.board_d, v.case_w - 1.0, v.case_d - 1.0, (-r.spare_w).max(0.0), (-r.spare_d).max(0.0)));
+                    ui.colored_label(crate::theme::error(), i18n::trf!("⚠ 基板 {:.1} × {:.1} mm はケースの底 ({:.1} × {:.1} mm、縁の隙間込み) に入りません (足りない分: 幅 {:.1} / 奥行 {:.1} mm)", r.board_w, r.board_d, v.case_w - 1.0, v.case_d - 1.0, (-r.spare_w).max(0.0), (-r.spare_d).max(0.0)));
                 }
                 // the screw posts (orange, red when they run into something) and the openings in the walls (pink)
                 if let Some(ins) = scene.case.as_ref().map(|w| &w.inside) {
@@ -208,21 +208,21 @@ impl BoardEditor {
                         }
                     });
                     for p in ins.posts.iter().filter(|p| p.problem.is_some()) {
-                        ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ 穴 ({:.1}, {:.1}) の柱: {}", p.hole.x, p.hole.y, i18n::tr_dyn(p.problem.as_deref().unwrap_or(""))));
+                        ui.colored_label(crate::theme::warn(), i18n::trf!("⚠ 穴 ({:.1}, {:.1}) の柱: {}", p.hole.x, p.hole.y, i18n::tr_dyn(p.problem.as_deref().unwrap_or(""))));
                     }
                     for n in &ins.notes {
-                        ui.colored_label(crate::theme::WARN, i18n::tr_dyn(n));
+                        ui.colored_label(crate::theme::warn(), i18n::tr_dyn(n));
                     }
                 }
             }
             if v.check_height {
                 let over = scene.over_list();
                 if over.is_empty() {
-                    ui.colored_label(crate::theme::OK, i18n::tr("✔ どの部品もケースの高さに収まっています"));
+                    ui.colored_label(crate::theme::ok(), i18n::tr("✔ どの部品もケースの高さに収まっています"));
                 } else {
                     let names: Vec<String> = over.iter().take(6).map(|(r, o)| format!("{r} (+{o:.1} mm)")).collect();
                     let more = if over.len() > 6 { format!(" ほか {} 個", over.len() - 6) } else { String::new() };
-                    ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
+                    ui.colored_label(crate::theme::error(), i18n::trf!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
                 }
             }
             // the case read from its STEP: read / move / turn / take away, and what it runs into
@@ -257,13 +257,13 @@ impl BoardEditor {
             if self.board.case3d.is_some() {
                 let names: Vec<&str> = scene.case_hits.iter().enumerate().filter(|(_, h)| **h).filter_map(|(i, _)| self.board.parts.get(i).map(|p| p.refdes.as_str())).collect();
                 if names.is_empty() && !scene.case_board_hit {
-                    ui.colored_label(crate::theme::OK, i18n::tr("✔ ケースにぶつかる部品はありません"));
+                    ui.colored_label(crate::theme::ok(), i18n::tr("✔ ケースにぶつかる部品はありません"));
                 } else {
                     let mut what = names.join(", ");
                     if scene.case_board_hit {
                         what = if what.is_empty() { i18n::tr("基板").to_string() } else { format!("{} {what}", i18n::tr("基板,")) };
                     }
-                    ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ ケースにぶつかるかもしれません (赤): {what}"))
+                    ui.colored_label(crate::theme::error(), i18n::trf!("⚠ ケースにぶつかるかもしれません (赤): {what}"))
                         .on_hover_text(i18n::tr("部品は 3D で描く箱で調べるので、壁のすぐそばの丸い部品は、実際には当たらなくても出ることがあります。足が床に当たるときは、柱を高くするかケースを下げます"));
                 }
             }
@@ -414,7 +414,7 @@ impl BoardEditor {
                                 };
                             }
                             if let Some(o) = scene.over.get(i).filter(|o| **o > 1e-6) {
-                                ui.colored_label(crate::theme::ERROR, i18n::trf!("ケースの高さを {o:.1} mm 超えています"));
+                                ui.colored_label(crate::theme::error(), i18n::trf!("ケースの高さを {o:.1} mm 超えています"));
                             }
                         });
                     });

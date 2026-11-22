@@ -391,7 +391,7 @@ impl App {
         let Some(w) = &self.boards.wave else { return };
         let w = match w {
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("全体の回路を解けませんでした: {e}"));
+                ui.colored_label(crate::theme::error(), i18n::trf!("全体の回路を解けませんでした: {e}"));
                 return;
             }
             Ok(w) => w,
@@ -422,7 +422,7 @@ impl App {
             SystemWave::Ac(a) => &a.warnings,
         };
         for m in warnings.iter().take(3) {
-            ui.colored_label(crate::theme::WARN, i18n::tr_dyn(m));
+            ui.colored_label(crate::theme::warn(), i18n::tr_dyn(m));
         }
         let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width().max(300.0), 260.0), egui::Sense::hover());
         let h = rect.height() / 2.0;
@@ -627,12 +627,12 @@ impl App {
             });
             if let Some(c) = &self.boards.clashes {
                 if c.is_empty() {
-                    ui.colored_label(crate::theme::OK, i18n::tr("✔ 重ねた基板どうしでぶつかる所はありません"));
+                    ui.colored_label(crate::theme::ok(), i18n::tr("✔ 重ねた基板どうしでぶつかる所はありません"));
                 } else {
                     let what = |b: &str, p: &str| if p.is_empty() { i18n::trf!("{b} の基板") } else { format!("{b}.{p}") };
                     let list: Vec<String> = c.iter().take(6).map(|(a, pa, b, pb)| format!("{} ↔ {}", what(a, pa), what(b, pb))).collect();
                     let more = if c.len() > 6 { i18n::trf!(" ほか {} 組", c.len() - 6) } else { String::new() };
-                    ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ ぶつかるかもしれません: {}{more}", list.join(", ")))
+                    ui.colored_label(crate::theme::error(), i18n::trf!("⚠ ぶつかるかもしれません: {}{more}", list.join(", ")))
                         .on_hover_text(i18n::tr("3D で描く箱どうしで調べています。すき間を広げるか、部品の位置を変えます"));
                 }
             }
@@ -643,10 +643,10 @@ impl App {
             if self.system.links.is_empty() {
                 ui.label(egui::RichText::new(i18n::tr("つなぎを足すと、ここに照合の結果が出ます")).weak());
             } else if findings.is_empty() {
-                ui.colored_label(crate::theme::OK, i18n::tr("✔ どのつなぎも、両側の信号の名前が合っています"));
+                ui.colored_label(crate::theme::ok(), i18n::tr("✔ どのつなぎも、両側の信号の名前が合っています"));
             } else {
                 for f in &findings {
-                    let col = if f.severity == sch_core::Severity::Error { crate::theme::ERROR } else { crate::theme::WARN };
+                    let col = if f.severity == sch_core::Severity::Error { crate::theme::error() } else { crate::theme::warn() };
                     ui.horizontal_wrapped(|ui| {
                         ui.colored_label(col, i18n::tr_dyn(&f.message)).on_hover_text(i18n::tr_dyn(&f.hint));
                         let Some(x) = &f.fix else { return };
@@ -662,10 +662,10 @@ impl App {
             }
             // the whole system simulated as one circuit
             ui.horizontal(|ui| {
-                if crate::widgets::unless(ui, (!(!self.system.links.is_empty())).then_some("基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます"), egui::Button::new(i18n::tr("全体をシミュレーション (DC)"))).on_hover_text(i18n::tr("すべての基板の回路図をつないで 1 つの回路にし、DC 動作点を計算します。つないだコネクタのピンごとに、両側の電圧と、ピンを流れる電流 (A から B へ) が出ます。電源の基板からほかの基板へ、どれだけ電流が流れるかが分かります")).clicked() {
+                if crate::widgets::unless(ui, self.system.links.is_empty().then_some("基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます"), egui::Button::new(i18n::tr("全体をシミュレーション (DC)"))).on_hover_text(i18n::tr("すべての基板の回路図をつないで 1 つの回路にし、DC 動作点を計算します。つないだコネクタのピンごとに、両側の電圧と、ピンを流れる電流 (A から B へ) が出ます。電源の基板からほかの基板へ、どれだけ電流が流れるかが分かります")).clicked() {
                     run = true;
                 }
-                if crate::widgets::unless(ui, (!(!self.system.links.is_empty())).then_some("基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます"), egui::Button::new(i18n::tr("全体の回路図を保存…"))).on_hover_text(i18n::tr("すべての基板をつないだ 1 枚の回路図 (.schjson) を保存します。開くと、過渡解析・AC 解析も全体でできます。部品番号には基板の名前が付きます (R1_main)")).clicked() {
+                if crate::widgets::unless(ui, self.system.links.is_empty().then_some("基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます"), egui::Button::new(i18n::tr("全体の回路図を保存…"))).on_hover_text(i18n::tr("すべての基板をつないだ 1 枚の回路図 (.schjson) を保存します。開くと、過渡解析・AC 解析も全体でできます。部品番号には基板の名前が付きます (R1_main)")).clicked() {
                     merged = true;
                 }
             });
@@ -696,7 +696,7 @@ impl App {
                     ui.label(egui::RichText::new(i18n::tr("つないだピンに、どちらかの基板で何もつながっていません")).weak());
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, i18n::trf!("全体の回路を解けませんでした: {e}"));
+                    ui.colored_label(crate::theme::error(), i18n::trf!("全体の回路を解けませんでした: {e}"));
                 }
                 None => {}
             }
@@ -725,10 +725,10 @@ impl App {
             });
             match &self.boards.message {
                 Some(Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, m);
+                    ui.colored_label(crate::theme::ok(), m);
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::error(), e);
                 }
                 None => {}
             }

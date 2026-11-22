@@ -201,7 +201,7 @@ impl BoardEditor {
             }
         }
         ui.separator();
-        if crate::widgets::unless(ui, (!(!self.poly_verts.is_empty())).then_some("まだ点を置いていません"), egui::Button::new(i18n::tr("最後の点を戻す (Backspace)"))).clicked() {
+        if crate::widgets::unless(ui, self.poly_verts.is_empty().then_some("まだ点を置いていません"), egui::Button::new(i18n::tr("最後の点を戻す (Backspace)"))).clicked() {
             self.poly_back();
             ui.close();
         }

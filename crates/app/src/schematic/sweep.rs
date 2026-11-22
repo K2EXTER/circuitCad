@@ -69,7 +69,7 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, m);
+                    ui.colored_label(crate::theme::error(), m);
                 }
             }
             Ok(res) => {
@@ -81,7 +81,7 @@ impl SchEditor {
                     ui.vertical(|ui| {
                         ui.set_width(260.0);
                         if let Some((name, m)) = &metrics {
-                            ui.colored_label(crate::theme::WARN, i18n::trf!("{name} は反転する特性です"));
+                            ui.colored_label(crate::theme::warn(), i18n::trf!("{name} は反転する特性です"));
                             egui::Grid::new("inv_metrics").num_columns(2).show(ui, |ui| {
                                 let row = |ui: &mut egui::Ui, label: &str, val: String, tip: &str| {
                                     ui.label(label).on_hover_text(tip);

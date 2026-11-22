@@ -448,7 +448,7 @@ C = A & B".into();
                         }
                         for o in &g.outputs {
                             let head = if o.clock.is_some() { format!("{}+", o.name) } else { o.name.clone() };
-                            ui.label(egui::RichText::new(head).monospace().strong().color(crate::theme::INFO));
+                            ui.label(egui::RichText::new(head).monospace().strong().color(crate::theme::info()));
                         }
                         ui.end_row();
                         for (ins, outs) in g.table() {
@@ -456,7 +456,7 @@ C = A & B".into();
                                 ui.label(egui::RichText::new(if b { "1" } else { "0" }).monospace());
                             }
                             for b in outs {
-                                ui.label(egui::RichText::new(if b { "1" } else { "0" }).monospace().color(crate::theme::INFO));
+                                ui.label(egui::RichText::new(if b { "1" } else { "0" }).monospace().color(crate::theme::info()));
                             }
                             ui.end_row();
                         }
@@ -466,7 +466,7 @@ C = A & B".into();
                     ui.small(i18n::trf!("式が読む入力 (と記憶) が {} 本あるので、真理値表 ({} 行) は出しません", g.used().len(), 1usize << g.used().len()));
                 }
                 Err(e) => {
-                    ui.colored_label(crate::theme::WARN, e);
+                    ui.colored_label(crate::theme::warn(), e);
                 }
             }
             ui.horizontal(|ui| {

@@ -92,7 +92,7 @@ impl MeasureGuide {
             });
             ui.separator();
             if done {
-                ui.colored_label(crate::theme::OK, i18n::tr("✔ 完了しました。実測が 3 項目以上、シミュレーションと比べられています"));
+                ui.colored_label(crate::theme::ok(), i18n::tr("✔ 完了しました。実測が 3 項目以上、シミュレーションと比べられています"));
             } else {
                 ui.label(spaced(&format!("完了の条件: 実測を 3 項目以上、シミュレーションと比べる (いま {compared} / 3)")).color(NOTE));
             }

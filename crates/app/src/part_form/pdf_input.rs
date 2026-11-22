@@ -297,7 +297,7 @@ impl PartForm {
             self.read_all_graphs(dests);
         }
         for (_, ok, line) in self.graph_all.iter().filter(|l| dests.contains(&l.0)) {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
     }
 

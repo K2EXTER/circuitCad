@@ -103,7 +103,7 @@ impl SchEditor {
         let Some(view) = self.heat.tran.take() else { return };
         match &view {
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, e).on_hover_text(i18n::tr("部品の名前・時間・電源を確認してください。過渡解析が通らない回路は計算できません"));
+                ui.colored_label(crate::theme::error(), e).on_hover_text(i18n::tr("部品の名前・時間・電源を確認してください。過渡解析が通らない回路は計算できません"));
             }
             Ok(v) => {
                 let mut edits: Vec<(String, f64, f64)> = vec![];
@@ -125,8 +125,8 @@ impl SchEditor {
                         ui.label(fmt_power(p.power_peak));
                         let check = v.checks.iter().find(|c| c.name == p.name);
                         let rise_col = match check.and_then(|c| c.level) {
-                            Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
-                            Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
+                            Some(sim_core::RatingLevel::Over) => crate::theme::error(),
+                            Some(sim_core::RatingLevel::Caution) => crate::theme::warn(),
                             None => ui.visuals().text_color(),
                         };
                         let neighbours = i18n::trf!(
@@ -176,7 +176,7 @@ impl SchEditor {
                     }
                 }
                 for c in v.checks.iter().filter(|c| c.level.is_some()) {
-                    let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::ERROR } else { crate::theme::WARN };
+                    let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::error() } else { crate::theme::warn() };
                     ui.colored_label(col, format!("⚠ {}", i18n::tr_dyn(&c.message))).on_hover_text(i18n::tr_dyn(&c.hint));
                 }
                 draw_rise_chart(ui, v);

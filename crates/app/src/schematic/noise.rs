@@ -155,7 +155,7 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Ok(res) => {
@@ -175,7 +175,7 @@ impl SchEditor {
                         }
                         if let Some((top, share)) = res.dominant() {
                             let info = describe_source(&top.name);
-                            ui.colored_label(crate::theme::WARN, i18n::trf!("最大の原因: {} ({}) — 全体の約 {:.0}%", top.name, info.title, share * 100.0));
+                            ui.colored_label(crate::theme::warn(), i18n::trf!("最大の原因: {} ({}) — 全体の約 {:.0}%", top.name, info.title, share * 100.0));
                             if !info.remedy.is_empty() {
                                 ui.small(i18n::trf!("対策: {}", info.remedy));
                             }

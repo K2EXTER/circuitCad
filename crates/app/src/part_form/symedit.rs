@@ -157,7 +157,7 @@ impl PartForm {
                     gap_change = Some((p.number.clone(), 1));
                     ui.close();
                 }
-                if ui.add_enabled(gap > 0, egui::Button::new(i18n::tr("この前の空きを1つ減らす"))).on_hover_text(i18n::tr("このピンの前に入れた空きを、1つ減らします")).clicked() {
+                if crate::widgets::unless(ui, (!(gap > 0)).then_some("この前に空きはありません"), egui::Button::new(i18n::tr("この前の空きを1つ減らす"))).on_hover_text(i18n::tr("このピンの前に入れた空きを、1つ減らします")).clicked() {
                     gap_change = Some((p.number.clone(), -1));
                     ui.close();
                 }
@@ -178,7 +178,7 @@ impl PartForm {
         ui.horizontal_wrapped(|ui| {
             ui.small(i18n::tr("ピンをドラッグで動かす・右クリックで空き"));
             let custom = rows.iter().any(|r| !r.side.is_empty() || r.gap > 0);
-            if ui.add_enabled(custom, egui::Button::new(i18n::tr("自動の配置に戻す")).small()).on_hover_text(i18n::tr("向きと空きを全部消して、自動の配置 (前半が左、後半が右) に戻します。ピンの行の順番はそのままです")).clicked() {
+            if crate::widgets::unless(ui, (!custom).then_some("いまは自動の配置です"), egui::Button::new(i18n::tr("自動の配置に戻す")).small()).on_hover_text(i18n::tr("向きと空きを全部消して、自動の配置 (前半が左、後半が右) に戻します。ピンの行の順番はそのままです")).clicked() {
                 for r in rows.iter_mut() {
                     r.side.clear();
                     r.gap = 0;
@@ -208,5 +208,5 @@ fn draw_drop_mark(painter: &egui::Painter, lay: &SymLayout, dragged: &str, side:
         PinSide::Top => ((at, -hh - 2.0), (at, -hh)),
         PinSide::Bottom => ((at, hh), (at, hh + 2.0)),
     };
-    painter.line_segment([to(a), to(b)], Stroke::new(3.0, crate::theme::WARN));
+    painter.line_segment([to(a), to(b)], Stroke::new(3.0, crate::theme::warn()));
 }

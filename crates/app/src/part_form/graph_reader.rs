@@ -491,7 +491,7 @@ impl GraphReader {
         }
         if shown != self.page {
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("このグラフは p.{} のものです", self.page + 1));
+                ui.colored_label(crate::theme::warn(), i18n::trf!("このグラフは p.{} のものです", self.page + 1));
                 if ui.button(i18n::tr("このページで始め直す")).on_hover_text(i18n::tr("目盛りと点を消して、いま出ているページのグラフを読み始めます")).clicked() {
                     *self = GraphReader::new(shown, self.dest);
                 }
@@ -534,7 +534,7 @@ impl GraphReader {
             if !axis.ticks.is_empty()
                 && let Err(e) = axis.axis()
             {
-                ui.colored_label(crate::theme::WARN, e);
+                ui.colored_label(crate::theme::warn(), e);
             }
         }
         ui.separator();
@@ -584,11 +584,11 @@ impl GraphReader {
                 });
             }
             Err(e) => {
-                ui.colored_label(crate::theme::INFO, e);
+                ui.colored_label(crate::theme::info(), e);
             }
         }
         if let Some((ok, m)) = &self.msg {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::ERROR }, m);
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::error() }, m);
         }
         ui.horizontal_wrapped(|ui| {
             if ui.button(i18n::tr("目盛りから始め直す")).on_hover_text(i18n::tr("目盛りと点を消して、いま出ているページの別の図を読み始めます (送り先の欄はそのまま)")).clicked() {

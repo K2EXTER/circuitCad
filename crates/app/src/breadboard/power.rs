@@ -109,16 +109,16 @@ impl BreadboardView {
             self.board = Some(Board { nets, dc });
         }
         if !matches {
-            ui.label(egui::RichText::new(i18n::tr("回路図と違う差し方のまま動かしています (計算はブレッドボードに差したとおり)")).color(crate::theme::WARN))
+            ui.label(egui::RichText::new(i18n::tr("回路図と違う差し方のまま動かしています (計算はブレッドボードに差したとおり)")).color(crate::theme::warn()))
                 .on_hover_text(i18n::tr("実物と同じで、違う差し方なら違う動きをします。ショートした所には大きな電流が流れ、外れた所には流れません"));
         }
         if let Some(e) = &self.live_failed {
-            ui.colored_label(crate::theme::WARN, i18n::trf!("回路を動かせませんでした: {}", i18n::tr_dyn(e)));
+            ui.colored_label(crate::theme::warn(), i18n::trf!("回路を動かせませんでした: {}", i18n::tr_dyn(e)));
             return;
         }
         let Some(lv) = self.live.as_mut() else { return };
         if let Some(e) = &lv.error {
-            ui.colored_label(crate::theme::WARN, i18n::tr_dyn(e));
+            ui.colored_label(crate::theme::warn(), i18n::tr_dyn(e));
             return;
         }
         lv.frame(ui.input(|i| i.time));
@@ -143,7 +143,7 @@ impl BreadboardView {
         }
         ui.ctx().request_repaint();
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(i18n::trf!("動いています  {} s", format!("{:.2}", lv.time()))).color(crate::theme::OK));
+            ui.label(egui::RichText::new(i18n::trf!("動いています  {} s", format!("{:.2}", lv.time()))).color(crate::theme::ok()));
             ui.label(i18n::tr("速さ")).on_hover_text(i18n::tr("回路の時間の進み方です。速い回路 (kHz の発振など) は、遅くすると目で追えます"));
             egui::ComboBox::from_id_salt("bb_speed").selected_text(i18n::tr_dyn(live::SPEEDS.iter().find(|(v, _)| *v == lv.speed).map_or("実時間", |(_, n)| *n))).show_ui(ui, |ui| {
                 for (v, name) in live::SPEEDS {
@@ -206,14 +206,14 @@ impl BreadboardView {
             self.restart = true;
         }
         if lv.behind {
-            ui.label(egui::RichText::new(i18n::tr("計算が画面の時間に追いついていません (この回路は実時間では重すぎます)。速さを遅くします")).color(crate::theme::WARN));
+            ui.label(egui::RichText::new(i18n::tr("計算が画面の時間に追いついていません (この回路は実時間では重すぎます)。速さを遅くします")).color(crate::theme::warn()));
         }
         if !lv.switches.is_empty() {
             ui.label(egui::RichText::new(i18n::tr("スイッチ・押しボタンは、ブレッドボードの上でクリックします (押しボタンは押している間だけ入ります)")).color(NOTE));
             ui.horizontal_wrapped(|ui| {
                 for s in &lv.switches {
                     let state = if s.on { i18n::tr("入") } else { i18n::tr("切") };
-                    ui.label(egui::RichText::new(format!("{} {state}", s.refdes)).color(if s.on { crate::theme::OK } else { NOTE }));
+                    ui.label(egui::RichText::new(format!("{} {state}", s.refdes)).color(if s.on { crate::theme::ok() } else { NOTE }));
                 }
             });
         }
@@ -228,9 +228,9 @@ pub(super) fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout,
         let rect = part_rect(p, to, pitch);
         if let Some(s) = lv.switch_index(&p.refdes).map(|k| &lv.switches[k]) {
             let (c, text) = match (s.push, s.on) {
-                (true, true) => (crate::theme::OK, i18n::tr("押している")),
+                (true, true) => (crate::theme::ok(), i18n::tr("押している")),
                 (true, false) => (Color32::from_gray(90), i18n::tr("押す")),
-                (false, true) => (crate::theme::OK, i18n::tr("入")),
+                (false, true) => (crate::theme::ok(), i18n::tr("入")),
                 (false, false) => (Color32::from_gray(90), i18n::tr("切")),
             };
             painter.rect_stroke(rect.expand(pitch * 0.25), 3.0, Stroke::new(2.5, c), egui::StrokeKind::Middle);

@@ -38,7 +38,7 @@ impl PartForm {
         let open = self.ptype == Some(PartType::Diode) || self.ptype == Some(PartType::Resistor);
         egui::CollapsingHeader::new(i18n::tr("リード付き部品: 外形寸法から穴とピッチを決める (推奨ランドパターンが無いとき)")).id_salt("thru_help").default_open(open).show(ui, |ui| {
             crate::icons::help_small(ui, "外形寸法から穴とパッドを決めます", "ダイオードや抵抗のデータシートには、推奨ランドパターンが無く、外形寸法 (本体の大きさとリードの太さ) だけが載っていることがよくあります。その数字から、穴径・パッド径・穴の間隔を決めます");
-            let bar = crate::widgets::segment_bar(ui, &[("軸方向 (ダイオード・抵抗)", true), ("ラジアル (LED・電解)", true)], Some(usize::from(self.thru_radial)));
+            let bar = crate::widgets::segment_bar(ui, &[("軸方向 (ダイオード・抵抗)", None), ("ラジアル (LED・電解)", None)], Some(usize::from(self.thru_radial)));
             bar[0].clone().on_hover_text(i18n::tr("本体の両端からリードが出ている形。基板に寝かせて、リードを折り曲げて挿します"));
             bar[1].clone().on_hover_text(i18n::tr("リードが本体の同じ側から出ている形 (LED・電解コンデンサ)。リードの間隔は、データシートにあります"));
             if bar[0].clicked() {
@@ -81,14 +81,14 @@ impl PartForm {
                     }
                 }
                 Err(e) => {
-                    ui.colored_label(crate::theme::WARN, i18n::tr_dyn(&e));
+                    ui.colored_label(crate::theme::warn(), i18n::tr_dyn(&e));
                 }
             }
         });
         // a hole that is too tight for the lead typed above
         let tight = self.thru_number("", &self.thru_lead).ok().filter(|lead| self.pkg == PkgKind::Row && self.fp_preset.is_empty() && self.drill < lead + 0.15);
         if let Some(lead) = tight {
-            ui.colored_label(crate::theme::WARN, i18n::trf!("穴径 {:.2}mm は、リード径 {lead:.3}mm に対して余裕が {:.2}mm しかありません。リードが入らなかったり、はんだが流れなかったりします (目安は リード径 + 0.25mm)", self.drill, self.drill - lead));
+            ui.colored_label(crate::theme::warn(), i18n::trf!("穴径 {:.2}mm は、リード径 {lead:.3}mm に対して余裕が {:.2}mm しかありません。リードが入らなかったり、はんだが流れなかったりします (目安は リード径 + 0.25mm)", self.drill, self.drill - lead));
         }
     }
 }

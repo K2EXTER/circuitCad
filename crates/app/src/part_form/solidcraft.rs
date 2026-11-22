@@ -296,7 +296,7 @@ impl PartForm {
             }
         });
         ui.horizontal(|ui| {
-            if ui.add_enabled(found, egui::Button::new(i18n::tr("ひな形で形を作る"))).on_hover_text(i18n::tr("SolidCraft で形を作って、この部品の 3D の形にします (1〜2 秒)。SolidCraft の画面は開きません")).on_disabled_hover_text(i18n::tr(SOLIDCRAFT_MISSING)).clicked() {
+            if crate::widgets::unless(ui, (!found).then_some("SolidCraft が見つかりません"), egui::Button::new(i18n::tr("ひな形で形を作る"))).on_hover_text(i18n::tr("SolidCraft で形を作って、この部品の 3D の形にします (1〜2 秒)。SolidCraft の画面は開きません")).on_disabled_hover_text(i18n::tr(SOLIDCRAFT_MISSING)).clicked() {
                 self.sc_msg = Some(self.shape_from_template());
             }
             if !self.sc_dims.is_empty() && ui.small_button(i18n::tr("寸法を既定に戻す")).clicked() {
@@ -316,7 +316,7 @@ impl PartForm {
             let has_doc = self.sheet.has_doc();
             ui.horizontal_wrapped(|ui| {
                 for view in [View::Top, View::Side] {
-                    if ui.add_enabled(has_doc, egui::Button::new(i18n::trf!("{} を切り出す", i18n::tr(view.label())))).on_hover_text(i18n::tr("データシートの窓で、外形図を囲むようにドラッグします。寸法の数字と線が入るように少し広めに")).on_disabled_hover_text(i18n::tr("先に「データシート (PDF) を開く…」でデータシートを開いてください")).clicked() {
+                    if crate::widgets::unless(ui, (!has_doc).then_some("先にデータシートを開いてください"), egui::Button::new(i18n::trf!("{} を切り出す", i18n::tr(view.label())))).on_hover_text(i18n::tr("データシートの窓で、外形図を囲むようにドラッグします。寸法の数字と線が入るように少し広めに")).on_disabled_hover_text(i18n::tr("先に「データシート (PDF) を開く…」でデータシートを開いてください")).clicked() {
                         self.sheet.start_drawing_cut(view);
                     }
                 }
@@ -343,11 +343,11 @@ impl PartForm {
                 .on_hover_text(i18n::tr("「① 基本」「④ 部品の形」に入れた本体の幅・奥行き・高さで、半透明の箱を置きます。下絵と大きさを見比べたり、そのまま形を作り始めたりできます"));
             let found = find_solidcraft().is_some();
             ui.horizontal(|ui| {
-                if ui.add_enabled(!self.sc_drawings.is_empty() || self.sc_starter, egui::Button::new(i18n::tr("SolidCraft で開く"))).on_hover_text(i18n::tr("下絵とたたき台を入れた設計を作って、SolidCraft を開きます。作った形を STEP で保存すると、自動で読み込みます")).clicked() {
+                if crate::widgets::unless(ui, (!(!self.sc_drawings.is_empty() || self.sc_starter)).then_some("下絵を切り出すか、「たたき台に本体の箱を入れる」を入れてください"), egui::Button::new(i18n::tr("SolidCraft で開く"))).on_hover_text(i18n::tr("下絵とたたき台を入れた設計を作って、SolidCraft を開きます。作った形を STEP で保存すると、自動で読み込みます")).clicked() {
                     self.sc_msg = Some(self.solidcraft_open());
                 }
                 if !found {
-                    ui.colored_label(crate::theme::WARN, i18n::tr("SolidCraft が入っていません")).on_hover_text(i18n::tr(SOLIDCRAFT_MISSING));
+                    ui.colored_label(crate::theme::warn(), i18n::tr("SolidCraft が入っていません")).on_hover_text(i18n::tr(SOLIDCRAFT_MISSING));
                 }
                 if let Some(dir) = self.sc_dir.clone()
                     && ui.small_button(i18n::tr("作業フォルダを開く")).on_hover_text(i18n::tr("下絵の PNG・SolidCraft の設計・保存した STEP が入っているフォルダを開きます")).clicked()
@@ -357,10 +357,10 @@ impl PartForm {
             });
             match &self.sc_msg {
                 Some(Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, m);
+                    ui.colored_label(crate::theme::ok(), m);
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::error(), e);
                 }
                 None => {}
             }

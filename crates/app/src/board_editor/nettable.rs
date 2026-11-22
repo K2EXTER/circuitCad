@@ -152,7 +152,7 @@ impl BoardEditor {
                             ui.label(r.by_layer.get(l).map_or("—".to_string(), |v| format!("{v:.1}")));
                         }
                         match r.detour() {
-                            Some(d) if d >= 2.0 => ui.colored_label(crate::theme::WARN, format!("{d:.2}")).on_hover_text(i18n::tr("最短の 2 倍以上です。遠回りしていないか、「配線を短くする」で引き直せないか見てみましょう")),
+                            Some(d) if d >= 2.0 => ui.colored_label(crate::theme::warn(), format!("{d:.2}")).on_hover_text(i18n::tr("最短の 2 倍以上です。遠回りしていないか、「配線を短くする」で引き直せないか見てみましょう")),
                             Some(d) => ui.label(format!("{d:.2}")),
                             None => ui.label("—"),
                         };
@@ -175,7 +175,7 @@ impl BoardEditor {
                                 let need = format!("{:.2}", round_up_width(w.needed));
                                 match w.thinnest {
                                     None => ui.label(need).on_hover_text(i18n::tr("まだ配線がありません")),
-                                    Some(t) if w.too_thin() => ui.colored_label(crate::theme::ERROR, format!("{need} ✖")).on_hover_text(i18n::trf!("今のいちばん細い配線は {t:.2} mm で、足りません")),
+                                    Some(t) if w.too_thin() => ui.colored_label(crate::theme::error(), format!("{need} ✖")).on_hover_text(i18n::trf!("今のいちばん細い配線は {t:.2} mm で、足りません")),
                                     Some(t) => ui.colored_label(Color32::from_rgb(90, 190, 110), format!("{need} ✔")).on_hover_text(i18n::trf!("今のいちばん細い配線は {t:.2} mm で、足りています")),
                                 };
                             }
@@ -190,7 +190,7 @@ impl BoardEditor {
                                     ui.label(format!("{:.3} A", s.burst_rms));
                                     let txt = format!("{:.3} A{}", s.peak, if s.spiky() { " ⚠" } else { "" });
                                     if s.spiky() {
-                                        ui.colored_label(crate::theme::WARN, txt).on_hover_text(i18n::tr("ピークが実効値の10倍以上です。起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります"));
+                                        ui.colored_label(crate::theme::warn(), txt).on_hover_text(i18n::tr("ピークが実効値の10倍以上です。起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります"));
                                     } else {
                                         ui.label(txt);
                                     }
@@ -204,7 +204,7 @@ impl BoardEditor {
                         }
                         ui.label(if r.pours.is_empty() { "—".to_string() } else { r.pours.join("・") });
                         if r.open > 0 {
-                            ui.colored_label(crate::theme::ERROR, r.open.to_string());
+                            ui.colored_label(crate::theme::error(), r.open.to_string());
                         } else {
                             ui.label("0");
                         }

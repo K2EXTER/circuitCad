@@ -355,7 +355,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
             }
             if !unexplained.is_empty() {
                 ui.horizontal(|ui| {
-                    ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
+                    ui.colored_label(crate::theme::warn(), i18n::trf!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
                         .on_hover_text(i18n::tr("数字だけでは、あとで読む人に「なぜその値か」が伝わりません。「理由」の欄に、なぜそうするかを一言書いておきましょう (例: ループを小さくしてノイズを減らすため)"));
                     if let Some(tab) = unexplained.iter().find_map(|s| ReqTab::of_sentence(s))
                         && tab != self.req.tab
@@ -499,8 +499,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                                 .on_hover_text(i18n::tr("ストリップ基板・ユニバーサル基板 (試作のタブ) で、この組を 1 つの区画にします。区画ごとにまとめて置き、区画の間は帯を切り、GND は区画ごとに別の線で、1 点 (右の「GND の 1 点」に印を付けた区画、無ければ表のいちばん上の区画の GND) へ戻します。アナログ・リレー・電源と制御のように分けます"))
                                 .changed();
                             let mut point = g.ground_point;
-                            if ui
-                                .add_enabled(g.section, egui::Checkbox::without_text(&mut point))
+                            if crate::widgets::unless(ui, (!g.section).then_some("左の「区画」を入れると選べます"), egui::Checkbox::without_text(&mut point))
                                 .on_hover_text(i18n::tr("この区画の GND の帯を、ほかの区画の GND が 1 本ずつ戻る 1 点にします (1 つの区画だけ。印が無ければ、表のいちばん上の区画)。大きな電流が流れる電源やリレーの区画ではなく、測定の基準になるアナログの区画や、電源の入口の区画を選ぶのがふつうです"))
                                 .changed()
                             {

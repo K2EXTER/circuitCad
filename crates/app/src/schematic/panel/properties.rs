@@ -122,11 +122,11 @@ impl SchEditor {
                                     *text = t;
                                 }
                                 Err(msg) => {
-                                    ui.colored_label(crate::theme::ERROR, msg);
+                                    ui.colored_label(crate::theme::error(), msg);
                                 }
                             }
                         } else if let Err(msg) = form.to_text() {
-                            ui.colored_label(crate::theme::ERROR, msg);
+                            ui.colored_label(crate::theme::error(), msg);
                         }
                     }
                 }
@@ -202,7 +202,7 @@ impl SchEditor {
                                     limits_ui(ui, from_library.map_or(&m.limits[..], |l| l.as_slice()), "placed_limits");
                                 }
                                 None => {
-                                    ui.colored_label(crate::theme::WARN, i18n::tr("シミュレーションモデルなし"));
+                                    ui.colored_label(crate::theme::warn(), i18n::tr("シミュレーションモデルなし"));
                                 }
                             }
                         } else {
@@ -428,7 +428,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
             return;
         };
         if !fresh {
-            ui.colored_label(crate::theme::WARN, i18n::tr("回路を変えたので、いまは前の解析結果です。DC動作点をもう一度解析してください"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("回路を変えたので、いまは前の解析結果です。DC動作点をもう一度解析してください"));
         }
         let st = sim_core::stress(res, &c.refdes);
         let (Some(i), Some(p)) = (st.i, st.p) else {
@@ -454,7 +454,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
         match ratings.filter(|r| !r.is_empty()) {
             Some(r) => {
                 let ok = sim_core::meets(&req, r, true);
-                let (text, color) = if ok { ("✔ この部品は、2 倍の余裕を満たしています", crate::theme::OK) } else { ("✖ この部品は、2 倍の余裕を満たしていません (いずれかの最大定格が足りない、または不明です)", crate::theme::ERROR) };
+                let (text, color) = if ok { ("✔ この部品は、2 倍の余裕を満たしています", crate::theme::ok()) } else { ("✖ この部品は、2 倍の余裕を満たしていません (いずれかの最大定格が足りない、または不明です)", crate::theme::error()) };
                 ui.colored_label(color, text);
             }
             None => {
@@ -499,12 +499,12 @@ fn advice_verdict(c: &Component, ratings: Option<&sch_core::PartRatings>, dc: Op
     if c.kind == Kind::Resistor {
         return match RESISTOR_WATTS.iter().copied().find(|w| *w >= req.p_min) {
             Some(w) => (i18n::trf!("{} の抵抗が使えます (2 倍の余裕){stale}", watt_label(w)), None),
-            None => (i18n::trf!("5W を超えます。電流を減らすか、抵抗を分けてください{stale}"), Some(crate::theme::ERROR)),
+            None => (i18n::trf!("5W を超えます。電流を減らすか、抵抗を分けてください{stale}"), Some(crate::theme::error())),
         };
     }
     match ratings.filter(|r| !r.is_empty()) {
-        Some(r) if sim_core::meets(&req, r, true) => (i18n::trf!("✔ 2 倍の余裕を満たしています{stale}"), Some(crate::theme::OK)),
-        Some(_) => (i18n::trf!("✖ 2 倍の余裕を満たしていません{stale}"), Some(crate::theme::ERROR)),
+        Some(r) if sim_core::meets(&req, r, true) => (i18n::trf!("✔ 2 倍の余裕を満たしています{stale}"), Some(crate::theme::ok())),
+        Some(_) => (i18n::trf!("✖ 2 倍の余裕を満たしていません{stale}"), Some(crate::theme::error())),
         None => (i18n::trf!("定格が分からないので判定できません{stale}"), None),
     }
 }

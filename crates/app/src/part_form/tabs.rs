@@ -187,7 +187,7 @@ impl PartForm {
                     }).response.on_hover_text(i18n::tr("選ぶと、その種類で調べるとよい項目が出ます"));
                 }
             });
-            if crate::widgets::primary_button_wide(ui, true, "調べる項目のチェックリストを入れる").on_hover_text(i18n::tr("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)")).clicked() {
+            if crate::widgets::primary_button_wide(ui, None, "調べる項目のチェックリストを入れる").on_hover_text(i18n::tr("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)")).clicked() {
                 self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
             }
             ui.label(egui::RichText::new(i18n::tr(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1)).weak());
@@ -229,7 +229,7 @@ impl PartForm {
                     self.fill_heat_from_pdf();
                 }
                 for (ok, line) in &self.rt_heat_msg {
-                    ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::OK } else { crate::theme::WARN }));
+                    ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::ok() } else { crate::theme::warn() }));
                 }
             }
             self.companions_ui(ui);
@@ -268,12 +268,12 @@ impl PartForm {
             let (max_given, rows_given, rows_open) = self.ratings_progress();
             let summary = format!("入力済み: 最大定格 {max_given} / 3 項目、そのほかの情報 {rows_given} 行{}", if rows_open > 0 { format!(" (まだ調べていない項目 {rows_open} 行)") } else { String::new() });
             if max_given == 0 && rows_given == 0 {
-                ui.colored_label(crate::theme::WARN, i18n::tr("データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう"));
             } else {
                 ui.label(i18n::tr_dyn(&summary));
             }
             if self.datasheet.trim().is_empty() && (max_given > 0 || rows_given > 0) {
-                ui.colored_label(crate::theme::WARN, i18n::tr("データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)"));
             }
     }
 
@@ -304,7 +304,7 @@ impl PartForm {
             crate::icons::help_small(ui, "SPICE モデルを貼ると自動入力", "メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
             {
                 let choices = [SimChoice::None, SimChoice::Model, SimChoice::Subckt];
-                let bar = crate::widgets::segment_bar(ui, &[("なし", true), (".model (素子1つ)", true), (".subckt (ICマクロ)", true)], choices.iter().position(|c| *c == self.sim));
+                let bar = crate::widgets::segment_bar(ui, &[("なし", None), (".model (素子1つ)", None), (".subckt (ICマクロ)", None)], choices.iter().position(|c| *c == self.sim));
                 bar[0].clone().on_hover_text(i18n::tr("シミュレーションしない部品にします (基板づくりだけに使う部品)"));
                 bar[1].clone().on_hover_text(i18n::tr("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル"));
                 bar[2].clone().on_hover_text(i18n::tr("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル"));
@@ -331,7 +331,7 @@ impl PartForm {
             if pasted.changed() && self.sim == SimChoice::None && !self.sim_text.trim().is_empty() {
                 autofill = true;
             }
-            let bar = crate::widgets::segment_row(ui, &[("自動入力", true), ("試し読み", true), ("ファイルを読む…", true)]);
+            let bar = crate::widgets::segment_row(ui, &[("自動入力", None), ("試し読み", None), ("ファイルを読む…", None)]);
             bar[0].clone().on_hover_text(i18n::tr("貼ったモデルから自動入力: 上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です"));
             bar[1].clone().on_hover_text(i18n::tr("このモデルをシミュレータに読ませて、動くかを保存の前に確かめます。読めない書き方があれば、直し方を出します"));
             bar[2].clone().on_hover_text(i18n::tr("SPICEファイルを読む: メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します"));
@@ -358,22 +358,22 @@ impl PartForm {
             }
             match &self.trial_message {
                 Some(super::trial::Trial::Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::ok(), i18n::tr_dyn(m));
                 }
                 Some(super::trial::Trial::Warn(m)) => {
-                    ui.colored_label(crate::theme::WARN, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::warn(), i18n::tr_dyn(m));
                 }
                 Some(super::trial::Trial::Err(m)) => {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
                 None => {}
             }
             match &self.spice_message {
                 Some(Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::ok(), i18n::tr_dyn(m));
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
                 }
                 None => {}
             }
@@ -404,7 +404,7 @@ impl PartForm {
     /// The tab of the pins.
     pub(super) fn tab_pins(&mut self, ui: &mut egui::Ui) {
             if self.sheet.has_doc() {
-                if crate::widgets::primary_button_wide(ui, true, "PDFのピン表を囲んで取り込む・比べる").on_hover_text(i18n::tr("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します")).clicked() {
+                if crate::widgets::primary_button_wide(ui, None, "PDFのピン表を囲んで取り込む・比べる").on_hover_text(i18n::tr("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します")).clicked() {
                     self.pick_msg = None;
                     self.sheet.start_pin_select();
                 }
@@ -448,7 +448,7 @@ impl PartForm {
                 }
             });
             if let Some(err) = self.pad_edit_error.take() {
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("絵で直すのを始められません: {}", i18n::tr_dyn(&err)));
+                ui.colored_label(crate::theme::error(), i18n::trf!("絵で直すのを始められません: {}", i18n::tr_dyn(&err)));
             }
             if self.pad_edit.is_some() {
                 self.pad_edit_ui(ui);
@@ -456,7 +456,7 @@ impl PartForm {
             }
             if self.keep_package {
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(crate::theme::WARN, i18n::tr("この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。"));
+                    ui.colored_label(crate::theme::warn(), i18n::tr("この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。"));
                     if ui.button(i18n::tr("寸法で作り直す")).on_hover_text(i18n::tr("いまのパッドを捨てて、下の寸法 (ピッチ・列間隔など) からパッドを作り直します。ピンの数と並びが合うか、右の絵で確かめてください。標準のフットプリントを選んでも置き換えられます")).clicked() {
                         self.keep_package = false;
                     }
@@ -494,7 +494,7 @@ impl PartForm {
             if preset {
                 ui.small(i18n::tr("標準の形を使っているので、下の寸法は使われません (「寸法で指定」を選ぶと、また効きます)"));
             }
-            ui.add_enabled_ui(!preset, |ui| {
+            crate::widgets::unless_ui(ui, preset.then_some("標準の形を使っているので、寸法は使いません (「寸法で指定」を選ぶと効きます)"), |ui| {
                 self.pad_dimensions(ui);
                 let targets = self.package_targets();
                 self.pick_row(ui, &targets);
@@ -586,7 +586,7 @@ impl PartForm {
             });
             ui.checkbox(&mut self.body_on, i18n::tr("シルクに本体の外形 (上面図の幅×長さ) を描く")).on_hover_text(i18n::tr("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります"));
             if self.body_on {
-                let bar = crate::widgets::segment_bar(ui, &[("四角", true), ("円", true)], Some(usize::from(self.body_circle)));
+                let bar = crate::widgets::segment_bar(ui, &[("四角", None), ("円", None)], Some(usize::from(self.body_circle)));
                 bar[0].clone().on_hover_text(i18n::tr("四角い本体 (IC、チップ部品)"));
                 bar[1].clone().on_hover_text(i18n::tr("丸い本体 (ラジアルの電解コンデンサ、LED)"));
                 if bar[0].clicked() {
@@ -613,7 +613,7 @@ impl PartForm {
                     (BodyMark::Bar, "棒", "本体の端の近くに線を引きます。ダイオードのカソードや、LEDの平らな側の印です"),
                     (BodyMark::Plus, "＋", "極性のあるコンデンサの ＋ 側の印です"),
                 ];
-                let items: Vec<(&str, bool)> = marks.iter().map(|m| (m.1, true)).collect();
+                let items: Vec<(&str, Option<&str>)> = marks.iter().map(|m| (m.1, None)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, marks.iter().position(|m| m.0 == self.body_mark));
                 for (n, (m, _, tip)) in marks.iter().enumerate() {
                     bar[n].clone().on_hover_text(i18n::tr(tip));
@@ -719,10 +719,10 @@ impl PartForm {
             }
             match &self.rt_zth_msg {
                 Some(Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, m);
+                    ui.colored_label(crate::theme::ok(), m);
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::error(), e);
                 }
                 None => {}
             }

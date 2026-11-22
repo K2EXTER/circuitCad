@@ -129,7 +129,7 @@ impl LearnWindow {
         } else if available == 0 {
             ui.label(spaced("このパスのレッスンは準備中です。道すじ (地図) だけ先に見られます").color(NOTE));
         } else {
-            ui.colored_label(crate::theme::OK, i18n::tr("いま学べるレッスンは、すべて完了しました。残りは準備中です"));
+            ui.colored_label(crate::theme::ok(), i18n::tr("いま学べるレッスンは、すべて完了しました。残りは準備中です"));
         }
         ui.add_space(6.0);
         // the map or the list (one of the two: they hold the same lessons)
@@ -141,11 +141,11 @@ impl LearnWindow {
                 if !self.as_list {
                     ui.add_space(12.0);
                     ui.spacing_mut().item_spacing.x = 14.0;
-                    ui.colored_label(crate::theme::HIGHLIGHT, i18n::tr("★ 次はこれ"));
-                    ui.colored_label(crate::theme::WARN, i18n::tr("橙の枠 = いま学べる"));
-                    ui.colored_label(crate::theme::OK, i18n::tr("緑 = 完了"));
-                    ui.colored_label(Color32::from_gray(190), i18n::tr("灰色の枠 = 先に済ませるレッスンがある"));
-                    ui.colored_label(Color32::from_gray(130), i18n::tr("暗い灰色 = 準備中"));
+                    ui.colored_label(crate::theme::highlight(), i18n::tr("★ 次はこれ"));
+                    ui.colored_label(crate::theme::warn(), i18n::tr("橙の枠 = いま学べる"));
+                    ui.colored_label(crate::theme::ok(), i18n::tr("緑 = 完了"));
+                    ui.label(i18n::tr("灰色の枠 = 先に済ませるレッスンがある"));
+                    ui.weak(i18n::tr("暗い灰色 = 準備中"));
                 }
             });
             ui.add_space(4.0);
@@ -174,7 +174,7 @@ impl LearnWindow {
         }).header_response.on_hover_text(i18n::tr("基板の仕上げ・発注・故障の試験・ほかのソフトとの連携など、レッスンのあとに使える機能の一覧と、その場所です"));
         ui.label(spaced("[実験あり] = 実機で確かめられる実験があります (ポインタを置くと内容が出ます)。実験は、安全のため低い電圧 (12V 以下) だけで行い、商用電源 (100V) の配線は行いません").color(NOTE));
         if let Some(e) = &progress.error {
-            ui.colored_label(crate::theme::ERROR, e);
+            ui.colored_label(crate::theme::error(), e);
         }
         // a reset takes two presses: one press must not lose every finished mark
         ui.horizontal(|ui| {
@@ -183,7 +183,7 @@ impl LearnWindow {
                     self.reset_armed = true;
                 }
             } else {
-                if ui.button(egui::RichText::new(i18n::tr("完了の印を全部消す")).color(crate::theme::ERROR)).on_hover_text(i18n::tr("すべての学習パスの完了の印を消します。元には戻せません")).clicked() {
+                if ui.button(egui::RichText::new(i18n::tr("完了の印を全部消す")).color(crate::theme::error())).on_hover_text(i18n::tr("すべての学習パスの完了の印を消します。元には戻せません")).clicked() {
                     progress.reset();
                     self.reset_armed = false;
                 }
@@ -216,7 +216,7 @@ fn path_row(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, selecte
         ui.painter().rect_filled(bar, 2, Color32::from_gray(70));
         if available > 0 {
             let done = egui::Rect::from_min_max(bar.min, egui::pos2(bar.left() + bar.width() * finished as f32 / available as f32, bar.bottom()));
-            ui.painter().rect_filled(done, 2, crate::theme::OK);
+            ui.painter().rect_filled(done, 2, crate::theme::ok());
         }
         ui.painter().text(egui::pos2(rect.right() - 6.0, y), egui::Align2::RIGHT_CENTER, format!("{finished}/{available}"), egui::FontId::proportional(11.0), text.gamma_multiply(0.8));
     }
@@ -234,14 +234,14 @@ fn lesson_list(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next
             let done = item_done(progress, item);
             let (mark, color) = match item.kind {
                 Kind::Planned => ("…", Color32::from_gray(120)),
-                _ if done => ("✔", crate::theme::OK),
-                _ if next_ids.contains(&item.id) => ("▶", crate::theme::WARN),
+                _ if done => ("✔", crate::theme::ok()),
+                _ if next_ids.contains(&item.id) => ("▶", crate::theme::warn()),
                 _ => ("○", Color32::from_gray(150)),
             };
             ui.horizontal_wrapped(|ui| {
                 ui.colored_label(color, mark);
                 let title = egui::RichText::new(i18n::tr(item.title)).strong();
-                ui.label(if item.kind == Kind::Planned { title.color(Color32::from_gray(130)) } else { title });
+                ui.label(if item.kind == Kind::Planned { title.weak() } else { title });
                 if item.kind == Kind::Planned {
                     ui.label(egui::RichText::new(i18n::tr("(準備中)")).weak());
                 } else if item.kind != Kind::Build && ui.small_button(if done { i18n::tr("もう一度") } else { i18n::tr("始める") }).on_hover_text(i18n::tr("この内容のレッスンを開きます")).clicked() {
@@ -260,7 +260,7 @@ fn lesson_list(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next
                     }
                 }
                 if item.real.is_some() {
-                    ui.colored_label(crate::theme::INFO, i18n::tr("[実験あり]")).on_hover_text(i18n::tr(item.real.unwrap_or_default()));
+                    ui.colored_label(crate::theme::info(), i18n::tr("[実験あり]")).on_hover_text(i18n::tr(item.real.unwrap_or_default()));
                 }
             });
             ui.indent(("path_item", path.id, item.id), |ui| {
@@ -342,7 +342,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
             [from, from + egui::vec2(0.0, bend), to - egui::vec2(0.0, bend), to],
             false,
             Color32::TRANSPARENT,
-            egui::Stroke::new(if lit { 2.5 } else { 1.0 }, if lit { crate::theme::HIGHLIGHT } else { line }),
+            egui::Stroke::new(if lit { 2.5 } else { 1.0 }, if lit { crate::theme::highlight() } else { line }),
         );
         ui.painter().add(curve);
     }
@@ -354,9 +354,9 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         let (fill, stroke, text) = if item.kind == Kind::Planned {
             (Color32::from_gray(60), Color32::from_gray(90), Color32::from_gray(150))
         } else if item_done(progress, item) {
-            (Color32::from_rgb(40, 100, 60), crate::theme::OK, Color32::WHITE)
+            (Color32::from_rgb(40, 100, 60), crate::theme::ok(), Color32::WHITE)
         } else if next_ids.contains(&item.id) {
-            (Color32::from_gray(45), crate::theme::WARN, Color32::WHITE)
+            (Color32::from_gray(45), crate::theme::warn(), Color32::WHITE)
         } else {
             (Color32::from_gray(45), Color32::from_gray(120), Color32::from_gray(210))
         };
@@ -364,7 +364,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         let painter = ui.painter().with_clip_rect(boxes[k]);
         painter.rect_filled(boxes[k], 4.0, fill);
         let width = if is_recommended { 3.5 } else if next_ids.contains(&item.id) { 2.0 } else { 1.0 };
-        painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(width, if is_recommended { crate::theme::HIGHLIGHT } else { stroke }), egui::StrokeKind::Inside);
+        painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(width, if is_recommended { crate::theme::highlight() } else { stroke }), egui::StrokeKind::Inside);
         let galley = painter.layout(i18n::tr(item.title).to_string(), egui::FontId::proportional(14.0), text, W - 10.0);
         // the title in the middle of its box
         let at = boxes[k].center() - galley.size() / 2.0;
@@ -372,7 +372,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         if is_recommended {
             // a badge on the top edge: this is the one to take next
             let badge = egui::Rect::from_min_size(boxes[k].right_top() + egui::vec2(-80.0, -19.0), egui::vec2(78.0, 18.0));
-            ui.painter().rect_filled(badge, 9.0, crate::theme::HIGHLIGHT);
+            ui.painter().rect_filled(badge, 9.0, crate::theme::highlight());
             ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, i18n::tr("★ 次はこれ"), egui::FontId::proportional(12.0), Color32::BLACK);
         }
         let response = response.on_hover_text(if item.kind == Kind::Planned { format!("{}\n{}", i18n::tr(item.about), i18n::tr("(準備中)")) } else { i18n::tr(item.about).to_string() });

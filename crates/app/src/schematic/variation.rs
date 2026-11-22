@@ -161,12 +161,12 @@ impl SchEditor {
         match &view.outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Ok(res) => {
                 let Some(st) = res.stats() else {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr("どの回も収束しませんでした"));
+                    ui.colored_label(crate::theme::error(), i18n::tr("どの回も収束しませんでした"));
                     return;
                 };
                 ui.horizontal_top(|ui| {
@@ -195,7 +195,7 @@ impl SchEditor {
                                 .on_hover_text(i18n::tr("設計値が 0 に近く、ずれのほうが大きいので、% ではなく差で表しています"));
                         }
                         if res.failed > 0 {
-                            ui.colored_label(crate::theme::WARN, i18n::trf!("{} 回は計算が収束しませんでした", res.failed));
+                            ui.colored_label(crate::theme::warn(), i18n::trf!("{} 回は計算が収束しませんでした", res.failed));
                         }
                         ui.separator();
                         yield_section(ui, res, &mut lo_text, &mut hi_text, from_spec.as_ref(), lim_lo, lim_hi);
@@ -266,19 +266,19 @@ fn yield_section(ui: &mut egui::Ui, res: &McResult, lo_text: &mut String, hi_tex
     });
     let unreadable = [(&*lo_text, lo), (&*hi_text, hi)].iter().any(|(t, v)| !t.trim().is_empty() && v.is_none());
     if unreadable {
-        ui.colored_label(crate::theme::WARN, i18n::tr("範囲が数値として読めません (例: 4.75、1.1k)"));
+        ui.colored_label(crate::theme::warn(), i18n::tr("範囲が数値として読めません (例: 4.75、1.1k)"));
         return;
     }
     let Some(y) = res.yield_report(lo, hi) else {
         if lo.zip(hi).is_some_and(|(l, h)| l > h) {
-            ui.colored_label(crate::theme::WARN, i18n::tr("下限が上限より大きくなっています"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("下限が上限より大きくなっています"));
         } else {
             ui.small(i18n::tr("範囲を入れると、合格率と Cpk を出します"));
         }
         return;
     };
     let pct = y.yield_frac * 100.0;
-    let color = if y.passed == y.runs { crate::theme::OK } else if pct >= 95.0 { crate::theme::WARN } else { crate::theme::ERROR };
+    let color = if y.passed == y.runs { crate::theme::ok() } else if pct >= 95.0 { crate::theme::warn() } else { crate::theme::error() };
     egui::Grid::new("mc_yield").num_columns(2).show(ui, |ui| {
         let tip_text = i18n::trf!(
             "範囲に入った回路の割合。収束しなかった回は不合格に数えます。{} 回では、本当の合格率は 95% の確からしさで {:.1}〜{:.1} % の間です (回数を増やすと狭くなります)",
@@ -299,11 +299,11 @@ fn yield_section(ui: &mut egui::Ui, res: &McResult, lo_text: &mut String, hi_tex
             Some(cpk) => {
                 let tip = i18n::tr("工程能力指数。平均から近いほうの限度までの距離を 3σ で割った値。1.33 以上なら量産でもまず外れない、1.0 なら限度がちょうど 3σ (約 0.3% が外れる)、1 未満なら目に見えて外れます");
                 let (word, c) = if cpk >= 1.33 {
-                    (i18n::tr("十分"), crate::theme::OK)
+                    (i18n::tr("十分"), crate::theme::ok())
                 } else if cpk >= 1.0 {
-                    (i18n::tr("ぎりぎり"), crate::theme::WARN)
+                    (i18n::tr("ぎりぎり"), crate::theme::warn())
                 } else {
-                    (i18n::tr("足りない"), crate::theme::ERROR)
+                    (i18n::tr("足りない"), crate::theme::error())
                 };
                 ui.label("Cpk").on_hover_text(tip);
                 ui.colored_label(c, format!("{cpk:.2} ({word})")).on_hover_text(tip);
@@ -379,14 +379,14 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     // the limits of the yield check, when they fall on the axis (a far one would squeeze the bars)
     for (v, label) in [(limits.0, "下限"), (limits.1, "上限")] {
         if let Some(v) = v.filter(|v| (a..=b).contains(v)) {
-            mark(v, crate::theme::WARN, label, false);
+            mark(v, crate::theme::warn(), label, false);
         }
     }
     mark(res.nominal, Color32::WHITE, "設計値", true);
     mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
     if let Some(w) = worst {
-        mark(w.min, crate::theme::ERROR, "最悪(小)", true);
-        mark(w.max, crate::theme::ERROR, "最悪(大)", true);
+        mark(w.min, crate::theme::error(), "最悪(小)", true);
+        mark(w.max, crate::theme::error(), "最悪(大)", true);
     }
     let f = FontId::proportional(11.0);
     p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, fmt_unit(a, res.unit), f.clone(), Color32::from_gray(190));

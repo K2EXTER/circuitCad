@@ -55,7 +55,7 @@ impl SchEditor {
                 for r in &self.roles_cache.roles {
                     ui.separator();
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(i18n::tr_dyn(&r.name)).strong().color(crate::theme::INFO));
+                        ui.label(egui::RichText::new(i18n::tr_dyn(&r.name)).strong().color(crate::theme::info()));
                         if let Some(v) = &r.value {
                             ui.label(egui::RichText::new(v).strong());
                         }

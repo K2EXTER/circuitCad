@@ -355,9 +355,34 @@ pub struct TranRun {
     wiring_l: Vec<usize>,
     abs_i: Vec<f64>,
     crawl: bool,
+    /// Read and set by another thread while the run is solved: the time reached, and a request to stop (`watch`).
+    watch: Option<std::sync::Arc<TranWatch>>,
 }
 
+/// How far a run on another thread has got, and the request to stop it (a screen's "止める"): checked once per step, so a run with
+/// a watch takes exactly the steps of one without.
+#[derive(Default)]
+pub struct TranWatch {
+    /// The time reached, as `f64::to_bits`.
+    pub t: std::sync::atomic::AtomicU64,
+    pub stop: std::sync::atomic::AtomicBool,
+}
+
+impl TranWatch {
+    pub fn time(&self) -> f64 {
+        f64::from_bits(self.t.load(std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
+/// The error of a run stopped through its `TranWatch`.
+pub const STOPPED: &str = "途中で止めました";
+
 impl TranRun {
+    /// Lets another thread follow the run and stop it (`TranWatch`).
+    pub fn watch(&mut self, w: std::sync::Arc<TranWatch>) {
+        self.watch = Some(w);
+    }
+
     /// Checks the settings, finds the starting point (the DC operating point, or zero with `uic`) and records it at time 0.
     /// `s.tstop` is the end the run may be solved to (`extend` moves it on).
     pub fn start(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(&str) -> bool>) -> Result<TranRun, SimError> {
@@ -501,6 +526,7 @@ impl TranRun {
             abs_i,
             // the circuit is in a transition the largest step cannot cross but small steps can follow (see `CRAWL`)
             crawl: false,
+            watch: None,
             cm,
         };
         run.find_corners();
@@ -695,6 +721,12 @@ impl TranRun {
         let cm = &self.cm;
         let bps = &self.bps;
         while *t < t_end - eps {
+            if let Some(w) = &self.watch {
+                w.t.store(t.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                if w.stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err(SimError::Invalid(STOPPED.into()));
+                }
+            }
             while *bp_idx < bps.len() && bps[*bp_idx] <= *t + eps {
                 *bp_idx += 1;
             }

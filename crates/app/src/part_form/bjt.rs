@@ -343,7 +343,7 @@ impl PartForm {
             }
         });
         for (ok, line) in &self.bjt.found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         self.read_all_button(ui, &[Dest::BjtHfe, Dest::BjtVbeOn, Dest::BjtVbeSat, Dest::BjtVceSat, Dest::BjtCobo, Dest::BjtCibo]);
         let has_doc = self.sheet.has_doc();
@@ -401,12 +401,12 @@ impl PartForm {
                 super::mosfet::fit_table(ui, "bjt_rows", f);
             }
             Some(Err(e)) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
             }
             None => {}
         }
         if let Some((ok, m)) = &self.bjt.message {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::ERROR }, m);
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::error() }, m);
         }
     }
 }

@@ -179,7 +179,7 @@ impl PartForm {
         let Some(mut e) = self.pad_edit.take() else { return };
         let mut stop = false;
         ui.horizontal_wrapped(|ui| {
-            ui.colored_label(crate::theme::WARN, i18n::tr("パッドを絵で直しています (下の寸法・標準の形・追加のパッドの欄は使われません)。"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("パッドを絵で直しています (下の寸法・標準の形・追加のパッドの欄は使われません)。"));
             if ui.button(i18n::tr("寸法に戻す")).on_hover_text(i18n::tr("絵で直したパッドを捨てて、寸法の欄 (または標準の形) から作るのに戻します")).clicked() {
                 stop = true;
             }
@@ -216,7 +216,7 @@ fn canvas(ui: &mut egui::Ui, e: &mut PadEdit) {
         let (w, h) = shape.size();
         let ctr = to(p.x, p.y);
         let size = Vec2::new(w as f32 * view.scale, h as f32 * view.scale);
-        let col = if p.pin == "1" { Color32::from_rgb(240, 120, 60) } else { crate::theme::ERROR };
+        let col = if p.pin == "1" { Color32::from_rgb(240, 120, 60) } else { crate::theme::error() };
         let rect = Rect::from_center_size(ctr, size);
         match shape {
             pcb_core::PadShape::Circle { .. } => {
@@ -299,10 +299,10 @@ fn fields(ui: &mut egui::Ui, e: &mut PadEdit) {
         if ui.button(i18n::tr("パッドを足す")).on_hover_text(i18n::tr("選んだパッドを写して、となりに置きます (並んだパッドなら同じ間隔で次へ)。ピン番号は次の番号になります。何も選んでいなければ最後のパッドを写します")).clicked() {
             e.add();
         }
-        if ui.add_enabled(e.sel.is_some(), egui::Button::new(i18n::tr("消す"))).on_hover_text(i18n::tr("選んだパッドを消します")).clicked() {
+        if crate::widgets::unless(ui, (!e.sel.is_some()).then_some("先にパッドを選んでください"), egui::Button::new(i18n::tr("消す"))).on_hover_text(i18n::tr("選んだパッドを消します")).clicked() {
             e.remove();
         }
-        if ui.add_enabled(e.can_undo(), egui::Button::new(i18n::tr("元に戻す"))).on_hover_text(i18n::tr("ひとつ前に戻します (Ctrl+Z)")).clicked() {
+        if crate::widgets::unless(ui, (!e.can_undo()).then_some("戻す操作がありません"), egui::Button::new(i18n::tr("元に戻す"))).on_hover_text(i18n::tr("ひとつ前に戻します (Ctrl+Z)")).clicked() {
             e.undo();
         }
         ui.separator();

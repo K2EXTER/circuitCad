@@ -126,10 +126,10 @@ impl SchEditor {
         let fmt = |x: f64| format!("{}{}", format_value(x), v.unit);
         match r.first_unstable() {
             Some(at) => {
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("{} = {} で、極が右半面に出ます (この値から先は発振します)", v.part, fmt(at)));
+                ui.colored_label(crate::theme::error(), i18n::trf!("{} = {} で、極が右半面に出ます (この値から先は発振します)", v.part, fmt(at)));
             }
             None if first.unstable() => {
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("{} = {} で、もう右半面に極があります (発振します)", v.part, fmt(first.value)));
+                ui.colored_label(crate::theme::error(), i18n::trf!("{} = {} で、もう右半面に極があります (発振します)", v.part, fmt(first.value)));
             }
             None => {
                 ui.label(i18n::tr("この範囲では、極はすべて左半面にあります (安定です)"));
@@ -199,13 +199,13 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Ok(r) => {
                 crate::widgets::warning_lines(ui, "locus_warn", &r.warnings, |_| false);
                 for (val, why) in &r.failed {
-                    ui.colored_label(crate::theme::WARN, i18n::trf!("{part} = {}{unit} は計算できませんでした: {why}", format_value(*val)));
+                    ui.colored_label(crate::theme::warn(), i18n::trf!("{part} = {}{unit} は計算できませんでした: {why}", format_value(*val)));
                 }
                 let (first, last) = (r.steps[0].value, r.steps[r.steps.len() - 1].value);
                 ui.small(i18n::trf!("○ = {part} が {}{unit} のときの極、× = {}{unit} のときの極。線は値を変えたときの極の道すじ (点が 1 つの値)", format_value(first), format_value(last)));

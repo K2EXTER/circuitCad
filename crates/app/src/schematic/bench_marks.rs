@@ -41,9 +41,9 @@ impl SchEditor {
         let f = self.main_font(painter);
         for (pt, net, volts, uncert) in spots {
             let colour = match res.and_then(|r| r.voltage(&net)).map(|p| judge(p, None, volts, uncert).1) {
-                Some(Agree::Good) => crate::theme::OK,
-                Some(Agree::Off) => crate::theme::WARN,
-                Some(Agree::Far) => crate::theme::ERROR,
+                Some(Agree::Good) => crate::theme::ok(),
+                Some(Agree::Off) => crate::theme::warn(),
+                Some(Agree::Far) => crate::theme::error(),
                 None => crate::canvas_theme::col(crate::canvas_theme::Role::Value),
             };
             let text = i18n::trf!("実測 {}", eng(volts, "V")).to_string();

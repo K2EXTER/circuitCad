@@ -16,6 +16,7 @@ pub(super) struct DiagState {
     /// Solving on another thread.
     job: Option<std::sync::mpsc::Receiver<Result<Vec<Hypothesis>, String>>>,
     job_key: Option<(String, bool)>,
+    started: Option<std::time::Instant>,
     pub(super) result: Option<Diagnosis>,
     error: Option<String>,
 }
@@ -116,11 +117,29 @@ impl SchEditor {
             let _ = tx.send(fault_hypotheses(&sch, temp, rare).map_err(|e| e.to_string()));
         });
         self.diag.job = Some(rx);
+        self.diag.started = Some(std::time::Instant::now());
         self.diag.job_key = Some(key);
         self.status = "故障診断: 起こりうる故障を全部計算しています…".into();
     }
 
-    fn poll_diagnosis(&mut self, ctx: &egui::Context) {
+    /// Whether the faults are being solved on another thread.
+    pub(super) fn diagnosis_running(&self) -> bool {
+        self.diag.job.is_some()
+    }
+
+    pub(super) fn diagnosis_seconds(&self) -> f64 {
+        self.diag.started.map_or(0.0, |t| t.elapsed().as_secs_f64())
+    }
+
+    /// Stops waiting for the faults being solved (the thread finishes on its own; its answer is dropped).
+    pub(super) fn stop_diagnosis(&mut self) {
+        if self.diag.job.take().is_some() {
+            self.diag.job_key = None;
+            self.status = i18n::tr("故障の計算を止めました").to_string();
+        }
+    }
+
+    pub(super) fn poll_diagnosis(&mut self, ctx: &egui::Context) {
         let Some(rx) = &self.diag.job else { return };
         match rx.try_recv() {
             Ok(Ok(h)) => {
@@ -167,7 +186,7 @@ impl SchEditor {
                 let bad = !v.trim().is_empty() && parse_value(v.trim()).is_none();
                 let mut edit = egui::TextEdit::singleline(v).desired_width(56.0).hint_text("V");
                 if bad {
-                    edit = edit.text_color(crate::theme::ERROR);
+                    edit = edit.text_color(crate::theme::error());
                 }
                 ui.add(edit).on_hover_text(i18n::tr("その点の電圧 (V)。4.93 や 50m のように書きます"));
                 if ui.small_button("×").on_hover_text(i18n::tr("この行を消します")).clicked() {
@@ -196,11 +215,11 @@ impl SchEditor {
         });
         let busy = self.diag.job.is_some();
         let label = if busy { "計算中…" } else { "原因の候補を探す" };
-        if self.lit(crate::widgets::primary_button_wide(ui, !busy, label), "原因の候補を探す").on_hover_text(i18n::tr("はじめは、起こりうる故障を全部計算します (大きな回路では時間がかかります)。2 回目からは、測った値を変えてもすぐ答えが出ます")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, busy.then_some("いま計算しています。終わるまでお待ちください"), label), "原因の候補を探す").on_hover_text(i18n::tr("はじめは、起こりうる故障を全部計算します (大きな回路では時間がかかります)。2 回目からは、測った値を変えてもすぐ答えが出ます")).clicked() {
             self.start_diagnosis();
         }
         if let Some(e) = &self.diag.error {
-            ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+            ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
         }
         let (Some(d), Some((_, _, hyps))) = (&self.diag.result, &self.diag.hyps) else { return };
         let hyps = hyps.clone();
@@ -214,11 +233,11 @@ impl SchEditor {
         };
         let all_ways = |i: usize| hyps[i].label.split(" / ").map(i18n::tr_dyn).collect::<Vec<_>>().join("\n");
         for n in &d.unknown_nodes {
-            ui.colored_label(crate::theme::WARN, i18n::trf!("{n} という点は回路にありません"));
+            ui.colored_label(crate::theme::warn(), i18n::trf!("{n} という点は回路にありません"));
         }
         if d.unexplained {
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(crate::theme::WARN, i18n::tr("▲ どの故障 1 つでも説明できません"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("▲ どの故障 1 つでも説明できません"));
                 crate::icons::help(ui, "どの故障 1 つでも、測った値をうまく説明できません。故障が 2 つ以上ある・測り間違い (テスターの GND の当て先)・モデルが実物と違う、を疑います");
             });
         }
@@ -252,7 +271,7 @@ impl SchEditor {
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(60.0, 10.0), Sense::hover());
                 ui.painter().rect_filled(rect, 2.0, ui.visuals().extreme_bg_color);
                 if !unexplained {
-                    ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(60.0 * s.probability as f32, 10.0)), 2.0, crate::theme::INFO);
+                    ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(60.0 * s.probability as f32, 10.0)), 2.0, crate::theme::info());
                 }
                 let share = if unexplained { "—".to_string() } else { format!("{:.0}%", s.probability * 100.0) };
                 ui.add_sized([36.0, 16.0], egui::Label::new(egui::RichText::new(share).small()));

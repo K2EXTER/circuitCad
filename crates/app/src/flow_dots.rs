@@ -86,7 +86,7 @@ pub fn keep_moving(ctx: &egui::Context) {
 /// The settings' rows: on / off and the speed (the settings window's 表示 tab).
 pub fn settings_rows(ui: &mut egui::Ui, on: &mut bool, speed: &mut f32) {
     ui.checkbox(on, i18n::tr("電流の流れを動く点で見せる")).on_hover_text(i18n::tr("DC動作点の結果と、試作のタブで電源を入れて動かしている間、電線の上を点が電流の向きに動きます。速さは電流の大きさ (1 µA でゆっくり、1 A で速く)。0.1 µA より小さい所は動きません。慣れて邪魔に感じたら切ります (回路図の「電流表示」のとなりでも切れます)"));
-    ui.add_enabled_ui(*on, |ui| {
+    crate::widgets::unless_ui(ui, (!*on).then_some("「電流の流れを動く点で見せる」を入れると変えられます"), |ui| {
         ui.horizontal(|ui| {
             ui.label(i18n::tr("点の速さ"));
             for (v, label, tip) in SPEEDS {

@@ -70,13 +70,13 @@ impl BoardEditor {
         }
         let conn = drc::connectivity(&self.board);
         let thin = net_widths(&self.board, &conn, &CopperSpec::default()).iter().filter(|w| w.too_thin()).count();
-        let bar = crate::widgets::segment_row(ui, &[("ネットの一覧", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("ネットの一覧", None)]);
         if bar[0].clicked() {
             self.net_table.open = true;
         }
         bar[0].clone().on_hover_text(i18n::tr("全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・電流と推奨の線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます。見出しのクリックで並べ替え、CSV でコピーもできます"));
         if thin > 0 {
-            ui.colored_label(crate::theme::ERROR, i18n::trf!("電流に対して細いネット {thin} 本"));
+            ui.colored_label(crate::theme::error(), i18n::trf!("電流に対して細いネット {thin} 本"));
         }
         self.ir_drop_ui(ui);
     }
@@ -110,7 +110,7 @@ impl BoardEditor {
             crate::widgets::section_heading(ui, "熱");
             crate::icons::help(ui, "部品の熱が基板のどこをどれだけ温めるかを調べます。熱の地図は回路図の「自己発熱」の電力から、銅 (ベタ・配線・ビア) が熱を広げ、表と裏の面から空気へ逃げる様子を計算します。部品どうしが近すぎるときの「離す」候補、電源を入れてからの時間の変化も出ます");
         });
-        let bar = crate::widgets::segment_row(ui, &[("熱の地図…", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("熱の地図…", None)]);
         if bar[0].clicked() {
             self.open_thermal_view();
         }
@@ -137,12 +137,12 @@ impl BoardEditor {
         });
         let state = match self.post_layout_on {
             None => egui::RichText::new(i18n::tr("いまは反映していません (回路図は理想の配線)")).weak(),
-            Some(fp) if (fp - copper_fingerprint(&self.board)).abs() > 1e-9 => egui::RichText::new(i18n::tr("反映中。そのあと基板が変わりました (もう一度押すと新しい配線で)")).color(crate::theme::WARN),
-            Some(_) => egui::RichText::new(i18n::tr("反映中: 配線の抵抗・インダクタンス・容量、基板の熱")).color(crate::theme::OK),
+            Some(fp) if (fp - copper_fingerprint(&self.board)).abs() > 1e-9 => egui::RichText::new(i18n::tr("反映中。そのあと基板が変わりました (もう一度押すと新しい配線で)")).color(crate::theme::warn()),
+            Some(_) => egui::RichText::new(i18n::tr("反映中: 配線の抵抗・インダクタンス・容量、基板の熱")).color(crate::theme::ok()),
         };
         ui.label(state.small());
         let on = self.post_layout_on.is_some();
-        let bar = crate::widgets::segment_row(ui, &[("シミュレーションに反映", true), ("外す", on)]);
+        let bar = crate::widgets::segment_row(ui, &[("シミュレーションに反映", None), ("外す", (!on).then_some("いまは反映していません"))]);
         if bar[0].clicked() {
             self.post_layout_request = Some(true);
         }
@@ -168,7 +168,7 @@ impl BoardEditor {
             crate::widgets::section_heading(ui, "配線の電圧降下");
             crate::icons::help(ui, "電流を入れたネットについて、配線の抵抗による電圧降下を調べます (電源とGNDの両方を調べると、部品に届く電圧が分かります)");
         });
-        let bar = crate::widgets::segment_row(ui, &[("計算する", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("計算する", None)]);
         if bar[0].clicked() {
             let fp = copper_fingerprint(&self.board);
             self.ir_drop = Some((fp, pcb_core::irdrop::net_drops(&self.board, &pcb_core::irdrop::IrSpec::default())));
@@ -179,7 +179,7 @@ impl BoardEditor {
             return;
         };
         if (made_for - fp).abs() > 1e-9 {
-            ui.colored_label(crate::theme::WARN, i18n::tr("配線か電流が変わりました。「計算する」で更新してください"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("配線か電流が変わりました。「計算する」で更新してください"));
         }
         if nets.is_empty() {
             ui.small(i18n::tr("電流が入っているネットがありません (上の欄に A を入れてください)"));
@@ -193,7 +193,7 @@ impl BoardEditor {
             match nd.worst() {
                 Some(w) => {
                     let v = w.drop_v.unwrap_or(0.0);
-                    let col = if v >= 0.1 { crate::theme::ERROR } else if v >= 0.03 { crate::theme::WARN } else { egui::Color32::from_rgb(90, 190, 110) };
+                    let col = if v >= 0.1 { crate::theme::error() } else if v >= 0.03 { crate::theme::warn() } else { egui::Color32::from_rgb(90, 190, 110) };
                     let line = i18n::trf!("{}: 最大 {:.0} mV ({} まで, {:.0} mΩ, {:.0} nH)", nd.net, v * 1000.0, format_args!("{}.{}", w.refdes, w.pin), w.ohm.unwrap_or(0.0) * 1000.0, w.henry.unwrap_or(0.0) * 1e9);
                     let r = ui.colored_label(col, line);
                     r.on_hover_text(self.ir_detail(nd, &src));
@@ -204,7 +204,7 @@ impl BoardEditor {
             }
             if nd.pads.iter().any(|p| p.ohm.is_none()) {
                 let names: Vec<String> = nd.pads.iter().filter(|p| p.ohm.is_none()).map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("  つながっていない: {}", names.join(", ")));
+                ui.colored_label(crate::theme::error(), i18n::trf!("  つながっていない: {}", names.join(", ")));
             }
         }
         if !nets.is_empty() {

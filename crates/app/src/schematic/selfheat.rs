@@ -95,7 +95,7 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.heat.ambient).desired_width(40.0)).on_hover_text(i18n::tr("部品のまわりの空気の温度 (℃)。部品の温度は、これに「電力 × 熱抵抗」を足したものになります"));
             ui.label("℃");
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "自己発熱を計算"), "自己発熱を計算").on_hover_text(i18n::tr("電流が流れる抵抗・ダイオード・LED・トランジスタは、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) や、温まると電圧が下がるダイオード・トランジスタ (1 ℃ で約 2 mV) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "自己発熱を計算"), "自己発熱を計算").on_hover_text(i18n::tr("電流が流れる抵抗・ダイオード・LED・トランジスタは、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) や、温まると電圧が下がるダイオード・トランジスタ (1 ℃ で約 2 mV) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)")).clicked() {
             self.heat.view = Some(self.run_self_heat());
             if let Some(Err(e)) = &self.heat.view {
                 self.status = format!("自己発熱の計算に失敗: {e}");
@@ -107,7 +107,7 @@ impl SchEditor {
         };
         match &view {
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, e).on_hover_text(i18n::tr("電源や電流の流れ方を確認してください。DC解析が収束しない回路は計算できません"));
+                ui.colored_label(crate::theme::error(), e).on_hover_text(i18n::tr("電源や電流の流れ方を確認してください。DC解析が収束しない回路は計算できません"));
             }
             Ok(v) => {
                 if v.parts.is_empty() {
@@ -130,8 +130,8 @@ impl SchEditor {
                         ui.label(fmt_power(p.power));
                         let check = v.checks.iter().find(|c| c.name == p.name);
                         let rise_col = match check.and_then(|c| c.level) {
-                            Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
-                            Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
+                            Some(sim_core::RatingLevel::Over) => crate::theme::error(),
+                            Some(sim_core::RatingLevel::Caution) => crate::theme::warn(),
                             None => ui.visuals().text_color(),
                         };
                         let mut tip = check.map_or_else(|| i18n::tr("周囲の温度より、これだけ高くなります").to_string(), |c| i18n::tr_dyn(&c.message));
@@ -184,7 +184,7 @@ impl SchEditor {
                 self.apply_case_heat(case_edits);
                 // the parts near or past their limit, with what to do
                 for c in v.checks.iter().filter(|c| c.level.is_some()) {
-                    let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::ERROR } else { crate::theme::WARN };
+                    let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::error() } else { crate::theme::warn() };
                     ui.colored_label(col, format!("⚠ {}", i18n::tr_dyn(&c.message))).on_hover_text(i18n::tr_dyn(&c.hint));
                 }
                 for (name, theta, tc) in edits {
@@ -206,7 +206,7 @@ impl SchEditor {
                         .on_hover_text(i18n::trf!("銅の抵抗は 1 ℃ で約 0.39 % 増えます。基板の熱の地図で、パッドの配線 (電源のパッドからの道すじ) の平均の温度を出し、その抵抗で計算し直しました。いちばん熱いのは {}.{} の配線 ({} ネット)。上の「温まって動いたところ」に、その分も入っています", w.refdes, w.pin, w.net));
                 }
                 if !self.board_heat_parts.is_empty() {
-                    ui.label(egui::RichText::new(i18n::trf!("基板の熱の地図から: {} (基板を「シミュレーションに反映」しています。部品どうしが基板を通って温め合う分も入っています)", self.board_heat_parts.join(", "))).small().color(crate::theme::OK))
+                    ui.label(egui::RichText::new(i18n::trf!("基板の熱の地図から: {} (基板を「シミュレーションに反映」しています。部品どうしが基板を通って温め合う分も入っています)", self.board_heat_parts.join(", "))).small().color(crate::theme::ok()))
                         .on_hover_text(i18n::tr("電力の出ている部品 (1 mW 以上、最大 24 個) を基板の升目に置き、部品ごとに 1 W を入れて解いた熱抵抗の表 (行列) を使っています。ほかの部品は、熱抵抗の式 (銅の面積から) のままです"));
                 }
                 ui.label(egui::RichText::new(i18n::tr("熱抵抗を入れていない部品は、パッケージの大きさからの目安 (定格電力から) です。データシートの値 (θJA) に直してください")).small()).on_hover_text(i18n::tr("チップ抵抗は、周囲 70 ℃ で定格の電力をかけると 155 ℃ になるものとして、θ ≈ 85 K ÷ 定格電力 としています"));
@@ -269,7 +269,7 @@ pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, cop
                 with_copper,
                 case.jc
             );
-            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::OK)).on_hover_text(tip);
+            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::ok())).on_hover_text(tip);
         } else if copper.is_some() || case.sink > 0.0 {
             let mut tip = vec![i18n::trf!("銅と放熱板を入れた熱抵抗: {:.0} K/W = θjc {:.1} + (ケース → 空気 {:.1} と、銅・放熱板の並列)", with_copper, case.jc, *own - case.jc)];
             if let Some((_, mm2)) = copper {
@@ -281,7 +281,7 @@ pub(super) fn theta_cell(ui: &mut egui::Ui, own: &mut f64, with_copper: f64, cop
             if case.sink > 0.0 {
                 tip.push(i18n::trf!("放熱板 {:.1} K/W (ケース → 空気、取り付けを含む)", case.sink));
             }
-            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::OK)).on_hover_text(tip.join("\n"));
+            ui.label(egui::RichText::new(format!("→ {with_copper:.0}")).small().color(crate::theme::ok())).on_hover_text(tip.join("\n"));
         }
         ui.menu_button(if case.sink > 0.0 { i18n::tr("放熱✓") } else { i18n::tr("放熱") }, |ui| {
             ui.label(egui::RichText::new(i18n::tr("ケースと放熱板")).strong());

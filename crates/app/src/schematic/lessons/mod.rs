@@ -394,9 +394,9 @@ impl SchEditor {
             ui.separator();
             for (k, step) in lesson.steps.iter().enumerate() {
                 let (mark, color) = if done[k] {
-                    ("✔", crate::theme::OK)
+                    ("✔", crate::theme::ok())
                 } else if Some(k) == cur {
-                    ("▶", crate::theme::WARN)
+                    ("▶", crate::theme::warn())
                 } else {
                     ("○", Color32::from_gray(140))
                 };
@@ -410,7 +410,7 @@ impl SchEditor {
                         // the guess comes before the doing: the question first; the step's text (which tells the answer) after it
                         if let Some(p) = prediction.filter(|_| predicted[k].is_none()) {
                             egui::Frame::group(ui.style()).show(ui, |ui| {
-                                ui.label(egui::RichText::new(i18n::tr("予測してみよう")).strong().color(crate::theme::WARN));
+                                ui.label(egui::RichText::new(i18n::tr("予測してみよう")).strong().color(crate::theme::warn()));
                                 ui.label(i18n::tr(p.question));
                                 for (o, (label, _)) in p.options.iter().enumerate() {
                                     if ui.button(i18n::tr(label)).on_hover_text(i18n::tr("やる前に、結果を予測します。当たっても外れても、やったあとに、理由が出ます")).clicked() {
@@ -432,9 +432,9 @@ impl SchEditor {
                 if let (Some(p), Some(v)) = (prediction, verdicts[k].as_ref()) {
                     ui.indent(("lesson_verdict", k), |ui| {
                         if v.right {
-                            ui.colored_label(crate::theme::OK, i18n::trf!("✔ 予測が当たりました。実際は {} でした", p.show(v.actual)));
+                            ui.colored_label(crate::theme::ok(), i18n::trf!("✔ 予測が当たりました。実際は {} でした", p.show(v.actual)));
                         } else {
-                            ui.colored_label(crate::theme::WARN, i18n::trf!("✘ 予測とは違いました (あなたの予測: 「{}」)。実際は {} でした", i18n::tr(p.options[v.chosen].0), p.show(v.actual)));
+                            ui.colored_label(crate::theme::warn(), i18n::trf!("✘ 予測とは違いました (あなたの予測: 「{}」)。実際は {} でした", i18n::tr(p.options[v.chosen].0), p.show(v.actual)));
                         }
                         ui.small(i18n::tr(p.explain));
                     });
@@ -461,14 +461,14 @@ impl SchEditor {
             if let Some(text) = hint.as_ref() {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(crate::theme::WARN, i18n::tr("ヒント"));
+                    ui.colored_label(crate::theme::warn(), i18n::tr("ヒント"));
                     ui.label(i18n::tr_dyn(text));
                 });
             }
             if let Some(cause) = cause {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(crate::theme::OK, i18n::tr("仕込まれていた故障"));
+                    ui.colored_label(crate::theme::ok(), i18n::tr("仕込まれていた故障"));
                     ui.label(i18n::tr_dyn(&cause));
                 });
             }
@@ -507,7 +507,7 @@ impl SchEditor {
             }
             if cur.is_none() {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, i18n::tr("レッスン完了! (上の「くわしい説明」を、もう一度読んでみましょう)"));
+                ui.colored_label(crate::theme::ok(), i18n::tr("レッスン完了! (上の「くわしい説明」を、もう一度読んでみましょう)"));
                 if idx + 1 < LESSONS.len() && ui.button(i18n::trf!("次のレッスンへ: {}", LESSONS[idx + 1].title)).on_hover_text(i18n::tr("このレッスンを終えて、次のレッスンのサンプル回路を開きます")).clicked() {
                     next = Some(idx + 1);
                 }

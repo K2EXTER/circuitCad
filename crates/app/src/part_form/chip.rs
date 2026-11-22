@@ -164,10 +164,10 @@ impl PartForm {
             }
             match &self.pas_message {
                 Some(Ok(m)) => {
-                    ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::ok(), i18n::tr_dyn(m));
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
                 }
                 None => {}
             }

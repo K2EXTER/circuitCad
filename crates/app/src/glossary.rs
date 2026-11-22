@@ -440,7 +440,7 @@ impl GlossaryWindow {
                         if r != row {
                             row = r;
                             ui.add_space(4.0);
-                            let head = ui.label(egui::RichText::new(format!("【{row}】")).strong().color(crate::theme::WARN));
+                            let head = ui.label(egui::RichText::new(format!("【{row}】")).strong().color(crate::theme::warn()));
                             if self.jump == Some(row) {
                                 head.scroll_to_me(Some(egui::Align::TOP));
                                 self.jump = None;

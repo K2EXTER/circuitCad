@@ -6,6 +6,44 @@
 //! so the same meaning looks the same in every window.
 
 use eframe::egui::{self, Color32};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// The panels and windows on a light ground (settings: 表示 → パネルの明るさ). The canvases keep their own theme (`canvas_theme`).
+static LIGHT: AtomicBool = AtomicBool::new(false);
+
+/// Switch the panels between dark and light; call `apply` on the style afterwards (`startup::apply_panel_theme` does both).
+pub fn set_light(on: bool) {
+    LIGHT.store(on, Ordering::Relaxed);
+}
+
+/// Whether the panels are light.
+pub fn is_light() -> bool {
+    LIGHT.load(Ordering::Relaxed)
+}
+
+/// The meaning colours for text and marks on the panels: the constants below on the dark panels, darker ones (the same hues, OKLCH
+/// L about 0.50) on the light panels, so they keep their contrast. Use these for panel text; the canvases use the constants.
+pub fn error() -> Color32 {
+    if is_light() { Color32::from_rgb(190, 45, 45) } else { ERROR }
+}
+pub fn warn() -> Color32 {
+    if is_light() { Color32::from_rgb(165, 95, 0) } else { WARN }
+}
+pub fn ok() -> Color32 {
+    if is_light() { Color32::from_rgb(25, 125, 55) } else { OK }
+}
+pub fn info() -> Color32 {
+    if is_light() { Color32::from_rgb(25, 100, 165) } else { INFO }
+}
+pub fn highlight() -> Color32 {
+    if is_light() { Color32::from_rgb(140, 105, 0) } else { HIGHLIGHT }
+}
+
+/// A grey of the panel ground at the dark-theme level `g` (26 = the panel, 38 = a band, 75 = a border), mirrored on the light panels,
+/// so bands and borders keep their steps from the ground in both.
+pub fn gray(g: u8) -> Color32 {
+    if is_light() { Color32::from_gray((268 - g as i32).clamp(0, 255) as u8) } else { Color32::from_gray(g) }
+}
 
 /// The accent (selected tab or tool, focus, the main action).
 pub const ACCENT: Color32 = Color32::from_rgb(26, 90, 130);
@@ -29,8 +67,9 @@ pub const SPACE_L: f32 = 12.0;
 pub const INDENT: f32 = 20.0;
 pub const ROW_GAP: f32 = 5.0;
 
-/// Spacing, corners and widget colours for every window (called once from `startup.rs`, dark panels).
+/// Spacing, corners and widget colours for every window (from `startup.rs`, again when the panel brightness changes).
 pub fn apply(style: &mut egui::Style) {
+    style.visuals = if is_light() { egui::Visuals::light() } else { egui::Visuals::dark() };
     let sp = &mut style.spacing;
     sp.item_spacing = egui::vec2(8.0, ROW_GAP);
     sp.button_padding = egui::vec2(8.0, 3.0);
@@ -46,10 +85,10 @@ pub fn apply(style: &mut egui::Style) {
         w.corner_radius = r;
     }
     v.indent_has_left_vline = true;
-    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, Color32::from_gray(58));
-    v.widgets.inactive.weak_bg_fill = Color32::from_gray(48);
-    v.widgets.inactive.bg_fill = Color32::from_gray(48);
-    v.widgets.hovered.weak_bg_fill = Color32::from_gray(62);
+    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, gray(58));
+    v.widgets.inactive.weak_bg_fill = gray(48);
+    v.widgets.inactive.bg_fill = gray(48);
+    v.widgets.hovered.weak_bg_fill = gray(62);
     v.widgets.active.weak_bg_fill = ACCENT;
     v.widgets.active.bg_fill = ACCENT;
     v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, ACCENT_HOVER);
@@ -57,13 +96,14 @@ pub fn apply(style: &mut egui::Style) {
     v.selection.bg_fill = SELECTED_BG;
     v.selection.stroke = egui::Stroke::new(1.0, Color32::WHITE);
     // three levels of ground: the panels, the windows raised above them, and the wells (text fields, the plot) sunk below
-    v.panel_fill = Color32::from_gray(26);
-    v.window_fill = Color32::from_gray(34);
-    v.extreme_bg_color = Color32::from_gray(15);
-    v.faint_bg_color = Color32::from_gray(38);
-    v.window_stroke = egui::Stroke::new(1.0, Color32::from_gray(70));
-    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, Color32::from_gray(58));
-    v.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, Color32::from_gray(205));
+    // (on the light panels the windows are the lightest and the wells sit a step darker than the panel)
+    v.panel_fill = gray(26);
+    v.window_fill = if is_light() { Color32::from_gray(250) } else { gray(34) };
+    v.extreme_bg_color = if is_light() { Color32::WHITE } else { gray(15) };
+    v.faint_bg_color = gray(38);
+    v.window_stroke = egui::Stroke::new(1.0, gray(70));
+    v.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, if is_light() { Color32::from_gray(35) } else { Color32::from_gray(205) });
+    v.hyperlink_color = info();
     v.window_corner_radius = egui::CornerRadius::same(8);
     v.menu_corner_radius = egui::CornerRadius::same(6);
 }

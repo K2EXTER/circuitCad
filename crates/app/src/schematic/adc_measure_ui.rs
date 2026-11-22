@@ -136,7 +136,7 @@ impl SchEditor {
         egui::Window::new(i18n::tr("ADC で測る量の表")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(1350.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(i18n::tr("ADC で何をどう測るかを 1 行ずつ書きます (メーターのレンジ、センサーの読み、シャントで測る電流、マルチプレクサのチャンネルなど)。測る物 (2 つのネットの間につなぐ電圧・抵抗・電流か、回路図にある部品の値)・試す値・条件・ADC の入力と利得を入れ、「計算する」で、DC 動作点から ADC の読みと、データシートの雑音を測る量に換算した揺れ・止まって見える桁、部品の公差・温度係数・漏れによる誤差を出します。表は回路図と一緒に保存されます")).small());
             if parts.is_empty() {
-                ui.colored_label(crate::theme::WARN, i18n::tr("回路図に ADC (モデルに adc_bits のある部品。ADS124S08 など) がありません"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("回路図に ADC (モデルに adc_bits のある部品。ADS124S08 など) がありません"));
                 return;
             }
             let mut remove: Option<usize> = None;
@@ -200,15 +200,15 @@ impl SchEditor {
                                 let clipped = x.main.clipped || x.reference.as_ref().is_some_and(|q| q.clipped);
                                 let text = format!("{}V ({})", sim_core::format_value(x.main.vin), x.main.code);
                                 if clipped {
-                                    ui.colored_label(crate::theme::WARN, text).on_hover_text(i18n::tr("入力が ±基準電圧 / 利得 を超えて、コードが端に張り付いています"));
+                                    ui.colored_label(crate::theme::warn(), text).on_hover_text(i18n::tr("入力が ±基準電圧 / 利得 を超えて、コードが端に張り付いています"));
                                 } else if x.slope == 0.0 {
-                                    ui.colored_label(crate::theme::WARN, text).on_hover_text(i18n::tr("測る物を変えても読みが変わりません。つなぐ所・条件・ADC の入力を確かめます"));
+                                    ui.colored_label(crate::theme::warn(), text).on_hover_text(i18n::tr("測る物を変えても読みが変わりません。つなぐ所・条件・ADC の入力を確かめます"));
                                 } else {
                                     ui.label(text);
                                 }
                             }
                             Some(Err(e)) => {
-                                ui.colored_label(crate::theme::ERROR, "✖").on_hover_text(i18n::tr_dyn(e));
+                                ui.colored_label(crate::theme::error(), "✖").on_hover_text(i18n::tr_dyn(e));
                                 ui.label("");
                                 ui.label("");
                                 ui.label("");
@@ -318,7 +318,7 @@ impl SchEditor {
                     run = true;
                 }
                 if !fresh && !self.adc_measure_ui.results.is_empty() {
-                    ui.colored_label(crate::theme::WARN, i18n::tr("回路図が変わりました。もう一度計算します"));
+                    ui.colored_label(crate::theme::warn(), i18n::tr("回路図が変わりました。もう一度計算します"));
                 }
             });
             // the figures of the resistors that carry none of their own, and the temperature span, for every row

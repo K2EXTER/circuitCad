@@ -355,7 +355,7 @@ impl SchEditor {
             ui.separator();
             match self.wizard_result() {
                 Err(msg) => {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(&msg));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(&msg));
                 }
                 Ok(out) => {
                     egui::Grid::new("wiz_rows").num_columns(2).spacing([14.0, 4.0]).show(ui, |ui| {
@@ -375,7 +375,7 @@ impl SchEditor {
                     }
                     if let Some(p) = &out.primary {
                         ui.horizontal(|ui| {
-                            let b = crate::widgets::unless(ui, (!(selected_value.is_some())).then_some("回路図で部品を 1 つ選ぶと、その値を変えられます"), egui::Button::new(i18n::trf!("選択中の部品の値を {p} にする")));
+                            let b = crate::widgets::unless(ui, (!selected_value.is_some()).then_some("回路図で部品を 1 つ選ぶと、その値を変えられます"), egui::Button::new(i18n::trf!("選択中の部品の値を {p} にする")));
                             if b.on_hover_text(i18n::tr("回路図で抵抗・コンデンサ・コイルを選ぶと押せます。選んだ部品の値を、この結果で置き換えます (Ctrl+Z で戻せます)")).clicked() {
                                 apply = selected_value.map(|i| (i, p.clone()));
                             }

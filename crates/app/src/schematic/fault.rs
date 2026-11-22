@@ -35,6 +35,7 @@ pub(super) struct ScanRun {
     pub(super) total: usize,
     pub(super) cancel: Arc<AtomicBool>,
     rx: std::sync::mpsc::Receiver<Option<Vec<ScanRow>>>,
+    pub(super) started: std::time::Instant,
 }
 
 /// The work of a scan, as owned data: the healthy circuit, the broken ones, and the pin faults to build and solve.
@@ -309,7 +310,7 @@ impl SchEditor {
         match report {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Ok(r) => {
@@ -472,7 +473,7 @@ impl SchEditor {
             sim_core::set_options(options);
             let _ = tx.send(plan.run(&d, &c));
         });
-        self.fault_ui.scan_run = Some(ScanRun { done, total, cancel, rx });
+        self.fault_ui.scan_run = Some(ScanRun { done, total, cancel, rx, started: std::time::Instant::now() });
         self.status = format!("故障シミュレーション: {total} 通りを試しています…") + &if skipped > 0 { format!(" (まれな {skipped} 通りは省略。「まれな故障も含める」で試せます)") } else { String::new() };
     }
 
@@ -634,7 +635,7 @@ impl SchEditor {
             if ui.button(i18n::tr("連鎖故障を追う")).on_hover_text(i18n::tr("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)")).clicked() {
                 self.run_fault_chain();
             }
-            if crate::widgets::unless(ui, (!(self.fault_ui.scan_run.is_none())).then_some("いま試しています。終わるまでお待ちください"), egui::Button::new(i18n::tr("よくある故障を順に試す"))).on_hover_text(i18n::tr("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます")).clicked() {
+            if crate::widgets::unless(ui, (!self.fault_ui.scan_run.is_none()).then_some("いま試しています。終わるまでお待ちください"), egui::Button::new(i18n::tr("よくある故障を順に試す"))).on_hover_text(i18n::tr("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます")).clicked() {
                 self.start_fault_scan();
             }
             ui.checkbox(&mut self.fault_ui.scan_rare, i18n::tr("まれな故障も含める")).on_hover_text(i18n::tr("入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります"));
@@ -652,7 +653,7 @@ impl SchEditor {
         match &self.fault_ui.chain {
             Some(Err(msgs)) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Some(Ok(r)) => {
@@ -676,7 +677,7 @@ impl SchEditor {
             match &view.report {
                 Err(msgs) => {
                     for m in msgs {
-                        ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                        ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                     }
                 }
                 Ok(r) => {
@@ -692,16 +693,16 @@ impl SchEditor {
                         }
                         let safety = assess_safety(&self.sch, r);
                         let col = match safety.level {
-                            Danger::Danger => crate::theme::ERROR,
-                            Danger::Caution => crate::theme::WARN,
-                            Danger::Safe => crate::theme::OK,
+                            Danger::Danger => crate::theme::error(),
+                            Danger::Caution => crate::theme::warn(),
+                            Danger::Safe => crate::theme::ok(),
                         };
                         ui.separator();
                         for (k, l) in safety.summary().iter().enumerate() {
                             let t = egui::RichText::new(i18n::tr_dyn(l));
                             ui.label(if k == 0 { t.strong().color(col) } else { t });
                         }
-                        let bar = crate::widgets::segment_row(ui, &[("故障時の電圧を回路図に表示", r.faulted.is_ok()), ("元に戻す (DC解析)", true)]);
+                        let bar = crate::widgets::segment_row(ui, &[("故障時の電圧を回路図に表示", r.faulted.is_err().then_some("この故障では DC 動作点が解けませんでした")), ("元に戻す (DC解析)", None)]);
                         if bar[0].clicked() {
                             show_sheet = true;
                         }
@@ -747,7 +748,7 @@ impl SchEditor {
                             Danger::Safe => String::new(),
                         };
                         let text = format!("{} {}: {}{}", row.part, row.label, effect, mark);
-                        let col = if row.severity.is_infinite() || row.danger == Danger::Danger { crate::theme::ERROR } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
+                        let col = if row.severity.is_infinite() || row.danger == Danger::Danger { crate::theme::error() } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
                         if ui.selectable_label(false, egui::RichText::new(text).color(col)).on_hover_text(i18n::tr("クリックで、この故障の詳しい結果を表示します")).clicked() {
                             pick = Some(k);
                         }

@@ -303,7 +303,7 @@ impl BoardEditor {
             });
             self.case_heat_ui(ui);
             ui.horizontal(|ui| {
-                if crate::widgets::primary_button_wide(ui, true, "熱の地図を計算").on_hover_text(i18n::tr("回路図の自己発熱を計算し、その電力を部品のパッドから基板に入れて、温度の分布を出します。周囲の温度は回路図の「自己発熱」の値です")).clicked() {
+                if crate::widgets::primary_button_wide(ui, None, "熱の地図を計算").on_hover_text(i18n::tr("回路図の自己発熱を計算し、その電力を部品のパッドから基板に入れて、温度の分布を出します。周囲の温度は回路図の「自己発熱」の値です")).clicked() {
                     self.thermal.request = true;
                 }
             });
@@ -312,7 +312,7 @@ impl BoardEditor {
                     ui.label(egui::RichText::new(i18n::tr("まだ計算していません")).weak());
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::error(), e);
                     // a circuit that only pulses has no steady power: its run over time still works
                     ui.checkbox(&mut self.thermal.overlay, i18n::tr("基板に色を重ねる"));
                     self.thermal_transient_ui(ui);
@@ -470,7 +470,7 @@ impl BoardEditor {
         let tr = match tr {
             Ok(tr) => tr,
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
                 return;
             }
         };
@@ -480,7 +480,7 @@ impl BoardEditor {
         let mut steady = self.thermal.show_frame.is_none();
         ui.horizontal(|ui| {
             ui.checkbox(&mut steady, i18n::tr("落ち着いた温度を表示")).on_hover_text(i18n::tr("基板の色を、時間の変化でなく、上の落ち着いた (定常の) 地図にします"));
-            ui.add_enabled(!steady && tr.frames.len() > 1, egui::Slider::new(&mut k, 0..=tr.frames.len().saturating_sub(1)).show_value(false))
+            crate::widgets::unless(ui, (!(!steady && tr.frames.len() > 1)).then_some("「落ち着いた温度を表示」を外すと、時間を動かせます"), egui::Slider::new(&mut k, 0..=tr.frames.len().saturating_sub(1)).show_value(false))
                 .on_hover_text(i18n::tr("基板に重ねる時刻を選びます"));
             if let Some((t, _)) = tr.frames.get(k) {
                 ui.label(fmt_time(*t));

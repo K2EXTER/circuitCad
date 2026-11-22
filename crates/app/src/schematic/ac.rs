@@ -81,14 +81,14 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Ok(res) => {
                 for n in notes.iter() {
                     // a note that says the result cannot be used is in the warning colour
                     if n.starts_with('▲') {
-                        ui.colored_label(crate::theme::WARN, i18n::tr_dyn(n));
+                        ui.colored_label(crate::theme::warn(), i18n::tr_dyn(n));
                     } else {
                         ui.label(i18n::tr_dyn(n));
                     }
@@ -101,7 +101,7 @@ impl SchEditor {
                         // tables; the column scrolls as one so nothing is cut off at the panel's bottom
                         ui.set_width(360.0);
                         egui::ScrollArea::vertical().id_salt("ac_left").auto_shrink([false, false]).show(ui, |ui| {
-                        let bar = crate::widgets::segment_row(ui, &[("回路図で選ぶ", true), ("選択をクリア", !selected.is_empty()), (if ghost.is_some() { "前の特性を消す" } else { "いまの特性を残す" }, true)]);
+                        let bar = crate::widgets::segment_row(ui, &[("回路図で選ぶ", None), ("選択をクリア", selected.is_empty().then_some("選んだ点がありません")), (if ghost.is_some() { "前の特性を消す" } else { "いまの特性を残す" }, None)]);
                         if bar[0].clicked() {
                             start_probe = true;
                         }
@@ -174,8 +174,8 @@ impl SchEditor {
                             if !margins.is_empty() {
                                 // one column per signal; the colour says whether the margin is enough
                                 let green = Color32::from_rgb(90, 190, 110);
-                                let amber = crate::theme::WARN;
-                                let red = crate::theme::ERROR;
+                                let amber = crate::theme::warn();
+                                let red = crate::theme::error();
                                 egui::Grid::new("ac_margin_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                     ui.label("");
                                     for (name, _) in &margins {
@@ -186,7 +186,7 @@ impl SchEditor {
                                     for (_, m) in &margins {
                                         match m.phase_margin.filter(|_| m.gain_crossover.is_some()) {
                                             Some(pm) => {
-                                                let (word, col) = if pm >= 45.0 { ("十分", green) } else if pm >= 30.0 { ("やや不足", amber) } else if pm > 0.0 { ("不足", crate::theme::ERROR) } else { ("不安定", red) };
+                                                let (word, col) = if pm >= 45.0 { ("十分", green) } else if pm >= 30.0 { ("やや不足", amber) } else if pm > 0.0 { ("不足", crate::theme::error()) } else { ("不安定", red) };
                                                 let cell = ui.label(egui::RichText::new(format!("{pm:.1}° ({word})")).color(col));
                                                 if word == "不足" {
                                                     cell.on_hover_text(i18n::tr("不足: 振動しやすい状態です"));
@@ -207,7 +207,7 @@ impl SchEditor {
                                     for (_, m) in &margins {
                                         match (m.gain_margin, m.phase_crossover) {
                                             (Some(gm), Some(_)) => {
-                                                let col = if gm >= 6.0 { green } else if gm > 0.0 { crate::theme::ERROR } else { red };
+                                                let col = if gm >= 6.0 { green } else if gm > 0.0 { crate::theme::error() } else { red };
                                                 ui.label(egui::RichText::new(format!("{gm:.1} dB")).color(col));
                                             }
                                             _ => {

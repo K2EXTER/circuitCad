@@ -593,7 +593,7 @@ impl PartForm {
 
     /// The button beside the data sheet's.
     pub(super) fn draft_button(&mut self, ui: &mut egui::Ui) {
-        if ui.add_enabled(self.sheet.has_doc(), egui::Button::new(i18n::tr("データシートから下書き"))).on_hover_text(i18n::tr("開いたデータシートを丸ごと読んで、部品名・種類・パッケージ・ピン・本体の大きさ・(トランジスタ・ダイオードなら) 特性の値を探し、見つかったものを一覧にします。確かめてから、まとめてフォームに入れます")).on_disabled_hover_text(i18n::tr("先に「データシート (PDF) を開く…」でデータシートを開いてください")).clicked() {
+        if crate::widgets::unless(ui, (!self.sheet.has_doc()).then_some("先にデータシートを開いてください"), egui::Button::new(i18n::tr("データシートから下書き"))).on_hover_text(i18n::tr("開いたデータシートを丸ごと読んで、部品名・種類・パッケージ・ピン・本体の大きさ・(トランジスタ・ダイオードなら) 特性の値を探し、見つかったものを一覧にします。確かめてから、まとめてフォームに入れます")).on_disabled_hover_text(i18n::tr("先に「データシート (PDF) を開く…」でデータシートを開いてください")).clicked() {
             self.draft = self.make_draft();
         }
     }
@@ -624,7 +624,7 @@ impl PartForm {
                 };
                 let none = || egui::RichText::new(i18n::tr("見つかりません")).weak();
                 // name
-                ui.add_enabled(d.name.is_some(), egui::Checkbox::new(&mut d.use_[0], i18n::tr("部品名")));
+                crate::widgets::unless(ui, (!d.name.is_some()).then_some("部品名を読めませんでした"), egui::Checkbox::new(&mut d.use_[0], i18n::tr("部品名")));
                 match &mut d.name {
                     Some(n) => {
                         ui.text_edit_singleline(n);
@@ -636,7 +636,7 @@ impl PartForm {
                 ui.label("");
                 ui.end_row();
                 // kind
-                ui.add_enabled(d.kind.is_some(), egui::Checkbox::new(&mut d.use_[1], i18n::tr("種類")));
+                crate::widgets::unless(ui, (!d.kind.is_some()).then_some("種類を読めませんでした"), egui::Checkbox::new(&mut d.use_[1], i18n::tr("種類")));
                 match d.kind {
                     Some((_, cat)) => ui.label(cat),
                     None => ui.label(none()),
@@ -644,7 +644,7 @@ impl PartForm {
                 ui.label("");
                 ui.end_row();
                 // package
-                ui.add_enabled(!d.packages.is_empty(), egui::Checkbox::new(&mut d.use_[2], i18n::tr("パッケージ")));
+                crate::widgets::unless(ui, d.packages.is_empty().then_some("パッケージを読めませんでした"), egui::Checkbox::new(&mut d.use_[2], i18n::tr("パッケージ")));
                 if d.packages.is_empty() {
                     ui.label(none());
                     ui.label("");
@@ -686,7 +686,7 @@ impl PartForm {
                     ui.end_row();
                 }
                 // pins
-                ui.add_enabled(!d.pin_sources.is_empty(), egui::Checkbox::new(&mut d.use_[3], i18n::tr("ピン")));
+                crate::widgets::unless(ui, d.pin_sources.is_empty().then_some("ピン表を読めませんでした"), egui::Checkbox::new(&mut d.use_[3], i18n::tr("ピン")));
                 if d.pin_sources.is_empty() {
                     ui.label(none()).on_hover_text(i18n::tr("ピンの表も、番号と名前の書かれたピン配置の図も見つかりませんでした。データシートの窓の「ピン表を囲む」で、表か図を囲んで読めます"));
                     ui.label("");
@@ -705,7 +705,7 @@ impl PartForm {
                                 if d.pin_sources.iter().any(|p| p.package.is_some()) {
                                     ui.small(i18n::tr("パッケージごとの列")).on_hover_text(i18n::tr("ピンの表にパッケージごとの番号の列がありました。使うパッケージの列を選んでください (上のパッケージを選ぶと、その列に合わせます)"));
                                 } else {
-                                    ui.colored_label(crate::theme::WARN, i18n::tr("表と図で違います")).on_hover_text(i18n::tr("ピンの表とピン配置の図で、読めたピンが違いました。両方のページを開いて、正しい方を選んでください (表は、いくつものパッケージの列や「2, 3, 6, 7」のような行を読み違えることがあります)"));
+                                    ui.colored_label(crate::theme::warn(), i18n::tr("表と図で違います")).on_hover_text(i18n::tr("ピンの表とピン配置の図で、読めたピンが違いました。両方のページを開いて、正しい方を選んでください (表は、いくつものパッケージの列や「2, 3, 6, 7」のような行を読み違えることがあります)"));
                                 }
                             });
                         }
@@ -714,10 +714,10 @@ impl PartForm {
                         let more = if p.pins.len() > 10 { i18n::trf!(" ほか {} 本", p.pins.len() - 10) } else { String::new() };
                         ui.label(format!("{}{more}", list.join(", "))).on_hover_text(if p.from_drawing { i18n::tr("ピン配置の図の、番号のすぐ横 (か上下) の名前を読みました。図のとおりか、ページで確かめてください") } else { i18n::tr("「ピン配置」の見出しの下の表から読みました。番号と名前の組が表のとおりか、ページで確かめてください") });
                         if d.pins_agree {
-                            ui.small(egui::RichText::new(i18n::tr("✔ 表とピン配置の図が一致しています")).color(crate::theme::OK));
+                            ui.small(egui::RichText::new(i18n::tr("✔ 表とピン配置の図が一致しています")).color(crate::theme::ok()));
                         }
                         if let Some((pkg, seen, what)) = &d.pins_usual {
-                            ui.colored_label(crate::theme::WARN, i18n::trf!("データシートにピンの番号がありません。{pkg} の{}のよくある並びです", i18n::tr(what)))
+                            ui.colored_label(crate::theme::warn(), i18n::trf!("データシートにピンの番号がありません。{pkg} の{}のよくある並びです", i18n::tr(what)))
                                 .on_hover_text(i18n::trf!("この PDF は端子 (G・D・S や E・B・C) を記号と外形の絵にしか書いていません。{pkg} ではこの並びが多い ({seen} など) ものの、メーカーによって違います。外形図の絵と見比べて、合っていれば「ピン」にチェックを入れてください。違えば「③ ピン」で直します"));
                         } else if d.pin_sources.len() == 1 && p.from_drawing {
                             match p.package.as_deref() {
@@ -734,7 +734,7 @@ impl PartForm {
                 }
                 ui.end_row();
                 // body
-                ui.add_enabled(d.dims.is_some(), egui::Checkbox::new(&mut d.use_[4], i18n::tr("本体の寸法")));
+                crate::widgets::unless(ui, (!d.dims.is_some()).then_some("本体の寸法を読めませんでした"), egui::Checkbox::new(&mut d.use_[4], i18n::tr("本体の寸法")));
                 match &d.dims {
                     Some(t) => {
                         let s = sizes(t);
@@ -751,14 +751,14 @@ impl PartForm {
                 ui.end_row();
                 // model
                 let model_kind = has_model(d.kind);
-                ui.add_enabled(model_kind, egui::Checkbox::new(&mut d.use_[5], i18n::tr("特性の値")));
+                crate::widgets::unless(ui, (!model_kind).then_some("この種類の部品には、特性の値から作るモデルがありません"), egui::Checkbox::new(&mut d.use_[5], i18n::tr("特性の値")));
                 ui.label(if model_kind { egui::RichText::new(i18n::tr("電気的特性の表から読みます (入れたあと「② シミュレーション」で確かめます)")) } else { egui::RichText::new(i18n::tr("トランジスタ・MOSFET・ダイオード・オペアンプ・フォトカプラ・フォトダイオード・ダーリントンのとき")).weak() });
                 ui.label("");
                 ui.end_row();
                 // ratings
                 let m: Vec<Option<Rating>> = d.max_ratings().iter().map(|r| r.cloned()).collect();
                 let any = m.iter().any(Option::is_some);
-                ui.add_enabled(any, egui::Checkbox::new(&mut d.use_[6], i18n::tr("定格")));
+                crate::widgets::unless(ui, (!any).then_some("定格を読めませんでした"), egui::Checkbox::new(&mut d.use_[6], i18n::tr("定格")));
                 if any {
                     let units = ["V", "A", "W", "℃"];
                     let parts: Vec<String> = m.iter().zip(units).filter_map(|(r, u)| r.as_ref().map(|r| format!("{} {}{}", r.symbol, if u == "℃" { format!("{} ", r.value) } else { passive::eng(r.value) }, u))).collect();
@@ -772,7 +772,7 @@ impl PartForm {
             });
             ui.separator();
             ui.horizontal(|ui| {
-                if crate::widgets::primary_button(ui, true, "チェックしたものを入れる").on_hover_text(i18n::tr("チェックした項目をフォームに入れます。種類を入れると、その種類の例でフォームがいったん初期化されます")).clicked() {
+                if crate::widgets::primary_button(ui, None, "チェックしたものを入れる").on_hover_text(i18n::tr("チェックした項目をフォームに入れます。種類を入れると、その種類の例でフォームがいったん初期化されます")).clicked() {
                     apply = true;
                 }
                 if ui.button(i18n::tr("閉じる")).clicked() {

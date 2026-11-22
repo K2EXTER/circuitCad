@@ -25,7 +25,7 @@ impl SchEditor {
 抵抗・コンデンサ・コイルは、ライブラリ部品の温度係数 (TC1・TC2) を入れたものだけ、温度で値が変わります (基本部品は変わりません)"));
             ui.label("℃");
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "DC動作点を解析"), "DC動作点を解析").on_hover_text(i18n::tr("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "DC動作点を解析"), "DC動作点を解析").on_hover_text(i18n::tr("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います")).clicked() {
             self.run_dc();
         }
         if !self.wiring.is_empty() {
@@ -52,8 +52,8 @@ impl SchEditor {
             ui.checkbox(&mut self.tran_uic, i18n::tr("ゼロ状態から")).on_hover_text(i18n::tr("コンデンサの電圧などを 0 の状態から始めます。電源を入れた直後の立ち上がりを見たいときに使います"));
         });
 
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "過渡解析を実行"), "過渡解析を実行").on_hover_text(i18n::tr("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います")).clicked() {
-            self.run_tran();
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "過渡解析を実行"), "過渡解析を実行").on_hover_text(i18n::tr("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います")).clicked() {
+            self.start_tran();
         }
     }
 
@@ -66,7 +66,7 @@ impl SchEditor {
             ui.label(i18n::tr("点/dec"));
             ui.add(egui::TextEdit::singleline(&mut self.ac_ppd).desired_width(30.0)).on_hover_text(i18n::tr("周波数が10倍になる間に何点測るか。多いほど滑らかですが、20 もあれば十分です"));
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "AC解析を実行"), "AC解析を実行").on_hover_text(i18n::tr("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "AC解析を実行"), "AC解析を実行").on_hover_text(i18n::tr("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます")).clicked() {
             self.run_ac();
         }
     }
@@ -83,7 +83,7 @@ impl SchEditor {
             ui.label(i18n::tr("刻み"));
             ui.add(egui::TextEdit::singleline(&mut self.sweep_step).desired_width(40.0)).on_hover_text(i18n::tr("電圧を変える間隔 (V)。切り替わりをなめらかに見るには、電源電圧の 1/100 くらい"));
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "DCスイープを実行"), "DCスイープを実行").on_hover_text(i18n::tr("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "DCスイープを実行"), "DCスイープを実行").on_hover_text(i18n::tr("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します")).clicked() {
             self.run_sweep();
         }
     }
@@ -124,7 +124,7 @@ impl SchEditor {
             ui.label(i18n::tr("刻み"));
             ui.add(egui::TextEdit::singleline(&mut self.temp_step).desired_width(30.0)).on_hover_text(i18n::tr("温度の間隔 (℃)"));
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "温度スイープを実行"), "温度スイープを実行").on_hover_text(i18n::tr("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "温度スイープを実行"), "温度スイープを実行").on_hover_text(i18n::tr("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
 LED の電流や、トランジスタ回路のバイアスが温度でずれる様子が分かります")).clicked() {
             self.run_temp_sweep();
         }
@@ -178,7 +178,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         ui.checkbox(&mut self.mc_in.spread, i18n::tr("データシートの min / max も入れる")).on_hover_text(i18n::tr(
             "オペアンプのオフセット、レギュレータや基準電圧 IC の出力電圧のように、同じ型番でも 1 個ずつ違う値を、データシートの min〜max の範囲で動かします (モデルに書いてある部品だけ)。ランダムのばらつきでは範囲の中で均等に動かすので、typ の近くに多い実物より、少し広めに出ます。外すと、モデルの値 (typ) のままにします",
         ));
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text(i18n::tr("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text(i18n::tr("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
 「同じ回路を作っても、実物ごとに電圧が違う」理由と、どの部品を高精度にすべきかが分かります")).clicked() {
             self.run_mc();
         }
@@ -193,15 +193,15 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         let mut go_tran = false;
         if let Some(dc) = &self.dc {
             if stale {
-                ui.colored_label(crate::theme::WARN, i18n::tr("回路が変更されました。再度解析してください"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("回路が変更されました。再度解析してください"));
             }
             if let Some(f) = &dc.fault {
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("⚠ これは「{f}」と仮定した結果です (実際の回路ではありません)"));
+                ui.colored_label(crate::theme::error(), i18n::trf!("⚠ これは「{f}」と仮定した結果です (実際の回路ではありません)"));
             }
             match &dc.outcome {
                 Err(msgs) => {
                     for m in msgs {
-                        ui.colored_label(crate::theme::ERROR, m);
+                        ui.colored_label(crate::theme::error(), m);
                     }
                     // an oscillator or latch has no single operating point: its waveform is the answer
                     if msgs.iter().any(|m| m.contains("過渡解析")) && self.lit(ui.button(i18n::tr("過渡解析を実行")), "過渡解析を実行").on_hover_text(i18n::tr("DCの1点ではなく、時間を追った波形を計算します。発振回路や2つの状態を持つ回路は、ここで動きが見えます (終了時間と刻みは「過渡解析」の設定が使われます)")).clicked() {
@@ -212,9 +212,9 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                     crate::widgets::warning_lines(ui, "dc_warn", &res.warnings, |_| false);
                     for r in &dc.ratings {
                         let (mark, col) = if r.level == sim_core::RatingLevel::Over {
-                            ("⚠ 定格超え", crate::theme::ERROR)
+                            ("⚠ 定格超え", crate::theme::error())
                         } else {
-                            ("⚠ 余裕が少ない", crate::theme::WARN)
+                            ("⚠ 余裕が少ない", crate::theme::warn())
                         };
                         ui.colored_label(col, format!("{mark}: {}", i18n::tr_dyn(&r.message))).on_hover_text(i18n::tr_dyn(&r.hint));
                     }
@@ -230,11 +230,11 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
             }
         }
         if go_tran {
-            self.run_tran();
+            self.start_tran();
         }
         // the lists and the export are one bar: two windows (search, sort, click to jump) and the file for other simulators
         let has_result = self.dc.as_ref().is_some_and(|d| d.outcome.is_ok());
-        let bar = crate::widgets::segment_row(ui, &[("結果の表…", has_result), ("ネットリスト…", true), ("SPICE書き出し…", true), ("ピン定義…", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("結果の表…", (!has_result).then_some("先に DC 動作点を解析してください")), ("ネットリスト…", None), ("SPICE書き出し…", None), ("ピン定義…", None)]);
         bar[0].clone().on_hover_text(if has_result { i18n::tr("ノードの電圧と、素子ごとの電流・電圧・電力を、検索と並べ替えのできる窓で開きます。行を押すと、回路図でその部品を選びます") } else { i18n::tr("先に「DC動作点を解析」を押すと、結果の表が開けます") });
         bar[1].clone().on_hover_text(i18n::tr("どのピンとどのピンがつながっているか (ネット) の一覧を、検索のできる窓で開きます。回路図の配線ミスや、基板に渡るつながりの確認に使います"));
         self.lit(bar[2].clone(), "SPICEネットリストを書き出し…").on_hover_text(i18n::tr("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います"));

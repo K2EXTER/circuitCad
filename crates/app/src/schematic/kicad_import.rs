@@ -112,7 +112,7 @@ impl SchEditor {
             }
             if k.sel.is_none() {
                 // the list reads as plain text: say that a part is to be picked from it
-                ui.colored_label(crate::theme::INFO, i18n::tr("↑ 取り込む部品を、一覧から1つ選んでください"));
+                ui.colored_label(crate::theme::info(), i18n::tr("↑ 取り込む部品を、一覧から1つ選んでください"));
             }
             if let Some(s) = k.sel.and_then(|i| k.syms.get(i)) {
                 ui.separator();
@@ -168,8 +168,7 @@ impl SchEditor {
                     crate::part_form::glyph_combo(ui, "kicad_glyph", &mut k.glyph, sym.as_ref());
                 });
             }
-            if ui
-                .add_enabled(k.sel.is_some(), egui::Button::new(i18n::tr("ライブラリに追加")))
+            if crate::widgets::unless(ui, (!k.sel.is_some()).then_some("先に一覧から部品を選んでください"), egui::Button::new(i18n::tr("ライブラリに追加")))
                 .on_hover_text(i18n::tr("選んだ部品を、ライブラリに保存します"))
                 .on_disabled_hover_text(i18n::tr("まだ部品を選んでいません。上の一覧から、取り込む部品を1つ選んでください"))
                 .clicked()
@@ -177,10 +176,10 @@ impl SchEditor {
                 add = true;
             }
             if let Some(d) = &k.done {
-                ui.colored_label(crate::theme::OK, d);
+                ui.colored_label(crate::theme::ok(), d);
             }
             if !k.msg.is_empty() {
-                ui.colored_label(crate::theme::ERROR, &k.msg);
+                ui.colored_label(crate::theme::error(), &k.msg);
             }
         });
         if add && let Some(s) = k.sel.and_then(|i| k.syms.get(i)) {

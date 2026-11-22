@@ -142,7 +142,7 @@ fn pick_area(ui: &mut egui::Ui, d: &mut Drawing, size: Vec2, big: bool) {
 fn length_row(ui: &mut egui::Ui, d: &mut Drawing) {
     ui.horizontal(|ui| {
         ui.label(i18n::tr("2 点の間の長さ"));
-        ui.add_enabled(d.b.is_some(), egui::DragValue::new(&mut d.dist).range(0.0..=500.0).speed(if d.inch { 0.001 } else { 0.05 }).max_decimals(4).suffix(if d.inch { " in" } else { " mm" }))
+        crate::widgets::unless(ui, (!d.b.is_some()).then_some("先に図の上で 2 点目をクリックしてください"), egui::DragValue::new(&mut d.dist).range(0.0..=500.0).speed(if d.inch { 0.001 } else { 0.05 }).max_decimals(4).suffix(if d.inch { " in" } else { " mm" }))
             .on_hover_text(i18n::tr("クリックした 2 点の、本当の長さ (図の寸法の数字)。これで図の縮尺が決まります"));
         ui.selectable_value(&mut d.inch, false, "mm").on_hover_text(i18n::tr("図の寸法の数字がミリメートルのとき"));
         ui.selectable_value(&mut d.inch, true, "inch").on_hover_text(i18n::tr("図の寸法の数字がインチのとき (1 inch = 25.4 mm。「0.100」のような数字や、mm の横の [ ] の中の数字)。数字はそのまま、単位だけが変わります"));

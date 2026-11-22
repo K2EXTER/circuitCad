@@ -308,7 +308,7 @@ fn row(ui: &mut egui::Ui, e: &Entry, q: &str, sel: bool, pinned: bool) -> egui::
     // the description in its own column, cut with … when the row is narrow (the name, group and key never are)
     let dx = x + name_w.max(NAME_W) + 12.0;
     let (desc, col) = match &e.why_not {
-        Some(why) => (i18n::trf!("使えない: {}", i18n::tr_dyn(why)), crate::theme::WARN),
+        Some(why) => (i18n::trf!("使えない: {}", i18n::tr_dyn(why)), crate::theme::warn()),
         None => (i18n::tr_dyn(&e.desc).to_string(), weak),
     };
     let mut job = marked(&desc, q, egui::FontId::proportional(12.0), col);
@@ -332,7 +332,7 @@ fn marked(s: &str, q: &str, font: egui::FontId, col: egui::Color32) -> egui::tex
             continue;
         }
         job.append(&s[at..a], 0.0, fmt(col, false));
-        job.append(&s[a..b], 0.0, fmt(crate::theme::HIGHLIGHT, true));
+        job.append(&s[a..b], 0.0, fmt(crate::theme::highlight(), true));
         at = b;
     }
     job.append(&s[at..], 0.0, fmt(col, false));

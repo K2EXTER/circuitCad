@@ -135,7 +135,7 @@ impl PartForm {
                 self.fill_companions_from_pdf();
             }
             for (ok, line) in &self.companions_msg {
-                ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::OK } else { crate::theme::WARN }));
+                ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::ok() } else { crate::theme::warn() }));
             }
         });
     }

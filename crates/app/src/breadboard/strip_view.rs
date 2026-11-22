@@ -488,10 +488,10 @@ impl BreadboardView {
             let (cols, rows) = holes_of(w, h);
             let (over_c, over_r) = (l.cols.saturating_sub(cols), l.rows.saturating_sub(rows));
             if over_c == 0 && over_r == 0 {
-                ui.colored_label(crate::theme::OK, i18n::trf!("✔ {} × {} 穴の基板に収まります", cols, rows));
+                ui.colored_label(crate::theme::ok(), i18n::trf!("✔ {} × {} 穴の基板に収まります", cols, rows));
             } else {
                 ui.colored_label(
-                    crate::theme::WARN,
+                    crate::theme::warn(),
                     i18n::trf!("{} × {} 穴の基板に収まりません: 横が {} 穴・縦が {} 穴 ({:.0} × {:.0} mm) はみ出します", cols, rows, over_c, over_r, over_c as f32 * 2.54, over_r as f32 * 2.54),
                 );
             }
@@ -517,7 +517,7 @@ impl BreadboardView {
         if self.strip.back {
             ui.label(egui::RichText::new(i18n::tr("裏は見るだけです。並べ方を直すときは表に戻します")).color(NOTE));
         }
-        ui.add_enabled_ui(!self.strip.back, |ui| ui.horizontal_wrapped(|ui| {
+        crate::widgets::unless_ui(ui, self.strip.back.then_some("裏は見るだけです。表に戻すと直せます"), |ui| ui.horizontal_wrapped(|ui| {
             for (t, name, tip) in [
                 (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
@@ -610,8 +610,7 @@ impl BreadboardView {
                 }
                 if !l.pinned.is_empty() {
                     let busy = self.strip.around.is_some();
-                    if ui
-                        .add_enabled(!busy, egui::Button::new(i18n::trf!("置いた区画の箱 ({} 個) を自動に戻す", l.pinned.len())))
+                    if crate::widgets::unless(ui, busy.then_some("いま並べています。終わるまでお待ちください"), egui::Button::new(i18n::trf!("置いた区画の箱 ({} 個) を自動に戻す", l.pinned.len())))
                         .on_hover_text(i18n::tr("区画の名前をドラッグして置いた箱の場所を自動に任せ、箱を詰め直して線を引き直します (元に戻すで戻せます)"))
                         .clicked()
                     {
@@ -623,8 +622,7 @@ impl BreadboardView {
                 let n = l.locked.len();
                 if n > 0 {
                     let busy = self.strip.around.is_some();
-                    if ui
-                        .add_enabled(!busy, egui::Button::new(i18n::trf!("固定した部品 ({} 個) のまわりを並べ直す", n)))
+                    if crate::widgets::unless(ui, busy.then_some("いま並べています。終わるまでお待ちください"), egui::Button::new(i18n::trf!("固定した部品 ({} 個) のまわりを並べ直す", n)))
                         .on_hover_text(i18n::tr("固定した部品はその穴のまま、ほかの部品を自動で置き直し、線を全部引き直します。固定した部品のまわりは、線の通り道に少し空けます (元に戻すで戻せます)"))
                         .clicked()
                     {
@@ -716,7 +714,7 @@ impl BreadboardView {
         }
         ui.add_space(4.0);
         if problems.is_empty() {
-            ui.colored_label(crate::theme::OK, i18n::tr("✔ 回路図どおりにつながっています"));
+            ui.colored_label(crate::theme::ok(), i18n::tr("✔ 回路図どおりにつながっています"));
         } else {
             for p in &problems {
                 ui.colored_label(BAD, i18n::trf!("・{}", i18n::tr_dyn(p)));
@@ -726,7 +724,7 @@ impl BreadboardView {
         if !strip {
             for (k, part) in links_along_pins(&l) {
                 let w = &l.links[k];
-                ui.colored_label(crate::theme::WARN, i18n::trf!("▲ 表の線 {}–{} が {} の足の列の上を通ります", hole_name(w.a), hole_name(w.b), part)).on_hover_text(i18n::tr(
+                ui.colored_label(crate::theme::warn(), i18n::trf!("▲ 表の線 {}–{} が {} の足の列の上を通ります", hole_name(w.a), hole_name(w.b), part)).on_hover_text(i18n::tr(
                     "表の線が IC やヘッダの足の上に沿って走っていて、ソケットの上をまたぐ形になります。電気的には被覆があるのでつながりませんが、組みにくく、絵では足とつながって見えます。線の端をドラッグして足の列を避けるか、そのままにします (自動の並べ方は、ほかに通れる所が無いときにこう引きます)",
                 ));
             }
@@ -739,7 +737,7 @@ impl BreadboardView {
                 ui.small(l.sections.iter().map(|(n, a, b)| format!("{n} ({} – {})", hole_name(*a), hole_name(*b))).collect::<Vec<_>>().join("、"));
             }
             for r in &rules {
-                ui.colored_label(if r.ok { crate::theme::OK } else { crate::theme::WARN }, format!("{} {}", if r.ok { "✔" } else { "▲" }, i18n::tr_dyn(&r.message)));
+                ui.colored_label(if r.ok { crate::theme::ok() } else { crate::theme::warn() }, format!("{} {}", if r.ok { "✔" } else { "▲" }, i18n::tr_dyn(&r.message)));
             }
         } else {
             ui.small(i18n::tr("区画に分けるには、回路図の「設計の要件」→「近くに置く組」で組を作り、「区画」に印を付けます"));
@@ -971,7 +969,7 @@ impl BreadboardView {
         if !strip {
             for (k, _) in links_along_pins(&l) {
                 let w = &l.links[k];
-                painter.line_segment([to(w.a), to(w.b)], Stroke::new(pitch * 0.42, crate::theme::WARN.gamma_multiply(0.7)));
+                painter.line_segment([to(w.a), to(w.b)], Stroke::new(pitch * 0.42, crate::theme::warn().gamma_multiply(0.7)));
             }
         }
         for k in &l.links {
@@ -1130,9 +1128,9 @@ impl BreadboardView {
             }
             if let Some(s) = running.and_then(|lv| lv.switch_index(&p.refdes).map(|k| &lv.switches[k])) {
                 let (c, text) = match (s.push, s.on) {
-                    (true, true) => (crate::theme::OK, i18n::tr("押している")),
+                    (true, true) => (crate::theme::ok(), i18n::tr("押している")),
                     (true, false) => (Color32::from_gray(90), i18n::tr("押す")),
-                    (false, true) => (crate::theme::OK, i18n::tr("入")),
+                    (false, true) => (crate::theme::ok(), i18n::tr("入")),
                     (false, false) => (Color32::from_gray(90), i18n::tr("切")),
                 };
                 painter.rect_stroke(rect.expand(pitch * 0.15), 3.0, Stroke::new(2.5, c), egui::StrokeKind::Middle);
@@ -1154,7 +1152,7 @@ impl BreadboardView {
                     painter.line_segment([rect.center() + a, rect.center() + b], Stroke::new(3.0, BAD));
                 }
             } else {
-                painter.rect_stroke(rect.expand(pitch * 0.2), 3.0, Stroke::new(2.0, crate::theme::WARN), egui::StrokeKind::Middle);
+                painter.rect_stroke(rect.expand(pitch * 0.2), 3.0, Stroke::new(2.0, crate::theme::warn()), egui::StrokeKind::Middle);
             }
         }
     }
@@ -1192,7 +1190,7 @@ impl BreadboardView {
     fn strip_draw_probes(&self, painter: &egui::Painter, to: impl Fn(At) -> Pos2, pitch: f32, font: &egui::FontId) {
         let probes: Vec<(At, Color32, &str)> = match self.strip.tool {
             StripTool::Meter => [(self.strip.red, Color32::from_rgb(214, 56, 50), "+"), (self.strip.black, Color32::from_gray(20), "−")].into_iter().filter_map(|(h, c, t)| Some((h?, c, t))).collect(),
-            StripTool::Scope => self.strip.scope.map(|h| (h, crate::theme::HIGHLIGHT, "")).into_iter().collect(),
+            StripTool::Scope => self.strip.scope.map(|h| (h, crate::theme::highlight(), "")).into_iter().collect(),
             _ => vec![],
         };
         for (h, c, label) in probes {

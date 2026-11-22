@@ -177,10 +177,10 @@ impl PartForm {
             }
             self.vendor_load();
             for e in &self.mu.errors {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
             }
             if let Some(Err(e)) = &self.mu.message {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
             }
             if self.mu.indexes.is_empty() {
                 if zips.is_empty() {
@@ -230,7 +230,7 @@ impl PartForm {
             let filter = match self.vendor_filter() {
                 Ok(f) => f,
                 Err(e) => {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(&e));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(&e));
                     return;
                 }
             };
@@ -246,7 +246,7 @@ impl PartForm {
                     };
                     let usable = e.nodes == 2;
                     let tip = if usable { "クリックすると、この部品の記号・モデルをフォームに入れます" } else { "端子が2個のモデルだけ選べます (ここはコンデンサ・抵抗・コイルなどの2端子部品の作成です)" };
-                    if ui.add_enabled(usable, egui::Button::selectable(self.name == e.part_number, label)).on_hover_text(i18n::tr(tip)).clicked() {
+                    if crate::widgets::unless(ui, (!usable).then_some("端子が 2 個のモデルだけ選べます"), egui::Button::selectable(self.name == e.part_number, label)).on_hover_text(i18n::tr(tip)).clicked() {
                         picked = Some((*n, e.clone()));
                     }
                 }
@@ -255,7 +255,7 @@ impl PartForm {
                 self.mu.message = Some(self.apply_vendor(n, &e));
             }
             if let Some(Ok(m)) = &self.mu.message {
-                ui.colored_label(crate::theme::OK, i18n::tr_dyn(m));
+                ui.colored_label(crate::theme::ok(), i18n::tr_dyn(m));
             }
         });
     }

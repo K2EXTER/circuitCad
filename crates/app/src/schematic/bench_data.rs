@@ -492,7 +492,7 @@ pub fn bench_controls(ui: &mut egui::Ui, curves: &mut Vec<BenchCurve>, st: &mut 
             }
         });
         if let Some((ok, m)) = &st.msg {
-            ui.small(egui::RichText::new(m).color(if *ok { crate::theme::OK } else { crate::theme::ERROR }));
+            ui.small(egui::RichText::new(m).color(if *ok { crate::theme::ok() } else { crate::theme::error() }));
         }
         let mut remove = None;
         for (i, c) in curves.iter_mut().enumerate() {
@@ -546,7 +546,7 @@ fn ac_comparison(ui: &mut egui::Ui, c: &BenchCurve, sf: &[f64], sdb: &[f64], i: 
                 Some(s) => {
                     ui.small(format!("{s:.2} dB"));
                     let d = m - s;
-                    let col = if d.abs() <= 1.0 { crate::theme::OK } else if d.abs() <= 3.0 { crate::theme::WARN } else { crate::theme::ERROR };
+                    let col = if d.abs() <= 1.0 { crate::theme::ok() } else if d.abs() <= 3.0 { crate::theme::warn() } else { crate::theme::error() };
                     ui.small(egui::RichText::new(format!("{d:+.2}")).color(col)).on_hover_text(i18n::tr("実測 − シミュレーション (dB)。±1 dB 以内は緑、±3 dB 以内は黄"));
                 }
                 None => {

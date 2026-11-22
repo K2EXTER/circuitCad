@@ -48,14 +48,14 @@ impl SchEditor {
         let (list, r_source) = match view {
             Ok((v, r)) => (v, *r),
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
                 return;
             }
         };
         let amps = |a: f64| format!("{}A", sim_core::format_value(a));
         for x in list {
             ui.separator();
-            let color = if x.large() || x.parts.iter().any(|p| p.over()) { crate::theme::WARN } else { crate::theme::OK };
+            let color = if x.large() || x.parts.iter().any(|p| p.over()) { crate::theme::warn() } else { crate::theme::ok() };
             ui.label(egui::RichText::new(i18n::trf!("{} ({}V): ピーク {}", x.source, sim_core::format_value(x.volts), amps(x.peak))).strong().color(color));
             egui::Grid::new(("inrush_grid", &x.source)).num_columns(2).spacing([16.0, 3.0]).show(ui, |ui| {
                 ui.label(i18n::tr("落ち着いたときの電流"));
@@ -74,14 +74,14 @@ impl SchEditor {
                     Some(r) => i18n::trf!("  {}: ピーク {} (定格 {})", p.part, amps(p.peak), amps(r)),
                     None => i18n::trf!("  {}: ピーク {}", p.part, amps(p.peak)),
                 };
-                let c = if p.over() { crate::theme::WARN } else { ui.visuals().text_color() };
+                let c = if p.over() { crate::theme::warn() } else { ui.visuals().text_color() };
                 ui.label(egui::RichText::new(text).small().color(c));
             }
             if x.did_not_recover() {
-                ui.label(egui::RichText::new(i18n::trf!("・電源を入れたあと、電流が落ち着いたときの値 ({}) に戻りません (終わりで {})。ヒューズが切れたか、何かがラッチした可能性があります", amps(x.steady), amps(x.end))).small().color(crate::theme::ERROR));
+                ui.label(egui::RichText::new(i18n::trf!("・電源を入れたあと、電流が落ち着いたときの値 ({}) に戻りません (終わりで {})。ヒューズが切れたか、何かがラッチした可能性があります", amps(x.steady), amps(x.end))).small().color(crate::theme::error()));
             }
             for p in x.parts.iter().filter(|p| p.over()) {
-                ui.label(egui::RichText::new(i18n::trf!("・{} の電流が定格を超えます。ヒューズならスローブロー (タイムラグ) にするか、突入を抑えます。ダイオードはデータシートのサージ電流 (IFSM) と比べます", p.part)).small().color(crate::theme::WARN));
+                ui.label(egui::RichText::new(i18n::trf!("・{} の電流が定格を超えます。ヒューズならスローブロー (タイムラグ) にするか、突入を抑えます。ダイオードはデータシートのサージ電流 (IFSM) と比べます", p.part)).small().color(crate::theme::warn()));
             }
             if x.large() {
                 let ohms = x.limit_ohms(x.target(), r_source);
@@ -116,7 +116,7 @@ fn wave_plot(ui: &mut egui::Ui, x: &Inrush) {
         .filter(|(tt, _)| **tt <= span)
         .map(|(tt, ii)| egui::pos2(rect.left() + (*tt / span) as f32 * rect.width(), rect.bottom() - 4.0 - (ii.abs() / x.peak) as f32 * (rect.height() - 8.0)))
         .collect();
-    p.add(egui::Shape::line(pts, egui::Stroke::new(1.5, crate::theme::WARN)));
+    p.add(egui::Shape::line(pts, egui::Stroke::new(1.5, crate::theme::warn())));
     let small = egui::FontId::proportional(10.0);
     p.text(rect.left_top() + egui::vec2(4.0, 2.0), egui::Align2::LEFT_TOP, format!("{}A", sim_core::format_value(x.peak)), small.clone(), ui.visuals().weak_text_color());
     p.text(rect.right_bottom() - egui::vec2(4.0, 2.0), egui::Align2::RIGHT_BOTTOM, format!("{}s", sim_core::format_value(span)), small, ui.visuals().weak_text_color());

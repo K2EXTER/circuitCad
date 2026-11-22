@@ -177,12 +177,12 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Ok(res) => {
                 for (v, why) in &res.failed {
-                    ui.colored_label(crate::theme::WARN, i18n::trf!("{part} = {} は計算できませんでした: {why}", format_value(*v)));
+                    ui.colored_label(crate::theme::warn(), i18n::trf!("{part} = {} は計算できませんでした: {why}", format_value(*v)));
                 }
                 let names: Vec<String> = res.curves.iter().map(|c| format!("{part}={}", format_value(c.value))).collect();
                 ui.horizontal_wrapped(|ui| {

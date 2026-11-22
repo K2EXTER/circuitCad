@@ -129,7 +129,7 @@ impl PartForm {
                 self.coil_lineup_read();
             }
             if let Some((ok, m)) = &self.coil_lineup.message {
-                ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(m).small());
+                ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(m).small());
             }
             if self.coil_lineup.rows.is_empty() {
                 return;
@@ -154,7 +154,7 @@ impl PartForm {
                             continue;
                         }
                         let mut on = l.picked.contains(&r.part);
-                        if ui.add_enabled(has_series, egui::Checkbox::without_text(&mut on)).on_hover_text(i18n::tr("まとめて作る型番に入れます")).changed() {
+                        if crate::widgets::unless(ui, (!has_series).then_some("先にシリーズの共通の表を読んでください"), egui::Checkbox::without_text(&mut on)).on_hover_text(i18n::tr("まとめて作る型番に入れます")).changed() {
                             if on {
                                 l.picked.insert(r.part.clone());
                             } else {
@@ -179,7 +179,7 @@ impl PartForm {
             }
             if has_series {
                 let n = self.coil_lineup.picked.len();
-                let button = ui.add_enabled(n > 0, egui::Button::new(i18n::trf!("チェックした型番をまとめて作る ({n} 個)")));
+                let button = crate::widgets::unless(ui, (!(n > 0)).then_some("まとめて作る型番にチェックを入れてください"), egui::Button::new(i18n::trf!("チェックした型番をまとめて作る ({n} 個)")));
                 if button
                     .on_hover_text(i18n::tr("チェックした型番を、表の値とシリーズの共通の表 (本体の大きさ・推奨ランド・飽和の定義) から部品にして、ライブラリに保存します。モデルは DCR + インダクタンス (飽和つき) + 巻線の容量です"))
                     .clicked()

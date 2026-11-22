@@ -120,7 +120,7 @@ impl SchEditor {
         });
         let taken = self.sch.ports.iter().enumerate().any(|(k, p)| k != i && p.name == name);
         if taken {
-            ui.colored_label(crate::theme::WARN, i18n::tr("同じ名前のポートが、このシートにあります"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("同じ名前のポートが、このシートにあります"));
         }
         if name != port.name || dir != port.dir {
             self.sch.ports[i].name = name;

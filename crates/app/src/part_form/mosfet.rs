@@ -225,7 +225,7 @@ impl PartForm {
             }
         });
         for (ok, line) in &self.mos.found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         egui::Grid::new("mos_inputs").num_columns(2).show(ui, |ui| {
             ui.label(i18n::tr("VGS(th) [V]、その ID [A]")).on_hover_text(i18n::tr("しきい値の typ と、表の測定条件の ID"));
@@ -267,12 +267,12 @@ impl PartForm {
                 fit_table(ui, "mos_rows", f);
             }
             Some(Err(e)) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
             }
             None => {}
         }
         if let Some((ok, m)) = &self.mos.message {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::ERROR }, m);
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::error() }, m);
         }
     }
 }
@@ -286,7 +286,7 @@ pub(super) fn fit_table(ui: &mut egui::Ui, id: &str, f: &Fitted) {
         ui.end_row();
         for r in &f.rows {
             let e = r.error_pct();
-            let color = if r.compare_only { ui.visuals().weak_text_color() } else if e.abs() > 5.0 { crate::theme::WARN } else { ui.visuals().text_color() };
+            let color = if r.compare_only { ui.visuals().weak_text_color() } else if e.abs() > 5.0 { crate::theme::warn() } else { ui.visuals().text_color() };
             ui.label(&r.item);
             ui.label(egui::RichText::new(&r.at).small());
             ui.label(format!("{}{}", part_lib::passive::eng(r.datasheet), r.unit));
@@ -301,7 +301,7 @@ pub(super) fn fit_table(ui: &mut egui::Ui, id: &str, f: &Fitted) {
     if !f.notes.is_empty() {
         ui.label(egui::RichText::new(i18n::tr("ずれが大きい所 (モデルの形の限界。読み違いでなければ、そのままで使えます)")).strong());
         for n in &f.notes {
-            ui.colored_label(crate::theme::WARN, egui::RichText::new(i18n::trf!("・{n}")).small());
+            ui.colored_label(crate::theme::warn(), egui::RichText::new(i18n::trf!("・{n}")).small());
         }
     }
 }

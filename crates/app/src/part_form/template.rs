@@ -53,7 +53,7 @@ impl PartForm {
             });
             let t = &mut self.tpl;
             ui.label(i18n::tr("方式"));
-            let bar = crate::widgets::segment_bar(ui, &[("リニア", true), ("降圧スイッチング", true)], Some(usize::from(t.topology == Topology::Buck)));
+            let bar = crate::widgets::segment_bar(ui, &[("リニア", None), ("降圧スイッチング", None)], Some(usize::from(t.topology == Topology::Buck)));
             bar[0].clone().on_hover_text(i18n::tr("入力から電池へ、電流をそのまま通します。回路は簡単ですが、入力と電池の電圧差が熱になります (TP4056 など)"));
             bar[1].clone().on_hover_text(i18n::tr("コイルを使って電圧を下げながら充電します。効率が良く、大きな電流向き。LX 端子に外付けのコイルをつなぎます (TP5100・IP2332 など)"));
             if bar[0].clicked() {
@@ -76,7 +76,7 @@ impl PartForm {
                 }
             });
             ui.label(i18n::tr("充電電流の決め方"));
-            let bar = crate::widgets::segment_bar(ui, &[("決まった値", true), ("抵抗で設定 (PROG 端子)", true)], Some(usize::from(t.setting == CurrentSetting::Resistor)));
+            let bar = crate::widgets::segment_bar(ui, &[("決まった値", None), ("抵抗で設定 (PROG 端子)", None)], Some(usize::from(t.setting == CurrentSetting::Resistor)));
             bar[0].clone().on_hover_text(i18n::tr("データシートに電流が1つだけ書かれている場合"));
             bar[1].clone().on_hover_text(i18n::tr("端子につなぐ抵抗で電流を決める場合。データシートの式 I = 定数 + k ÷ R に合わせます"));
             if bar[0].clicked() {

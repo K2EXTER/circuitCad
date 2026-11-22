@@ -131,7 +131,7 @@ impl PartForm {
                         let has_size = k != ExtraKind::Hole;
                         let has_drill = k != ExtraKind::Pad;
                         let field = |ui: &mut egui::Ui, v: &mut String, on: bool, w: f32, tip: &str| {
-                            ui.add_enabled(on, egui::TextEdit::singleline(v).desired_width(w).min_size(egui::vec2(w, 0.0)).font(egui::TextStyle::Monospace)).on_hover_text(i18n::tr(tip));
+                            crate::widgets::unless(ui, (!on).then_some("この種類の行では使いません"), egui::TextEdit::singleline(v).desired_width(w).min_size(egui::vec2(w, 0.0)).font(egui::TextStyle::Monospace)).on_hover_text(i18n::tr(tip));
                         };
                         field(ui, &mut rows[i].pin, has_pin, 44.0, i18n::tr("ピン名 (「③ ピン」の番号と同じ。例: SH)"));
                         field(ui, &mut rows[i].x, true, 46.0, i18n::tr("X (mm)。部品の中心から右が +"));
@@ -140,13 +140,13 @@ impl PartForm {
                         field(ui, &mut rows[i].h, has_size, 46.0, i18n::tr("パッドの高さ (mm)"));
                         field(ui, &mut rows[i].drill, has_drill, 46.0, i18n::tr("穴径 (mm)"));
                         field(ui, &mut rows[i].slot, has_drill, 46.0, i18n::tr("長穴にするときの長さ (mm)。丸い穴なら空"));
-                        ui.add_enabled(has_drill, egui::Checkbox::without_text(&mut rows[i].vertical)).on_hover_text(i18n::tr("長穴を縦向きにします (オフなら横向き)"));
+                        crate::widgets::unless(ui, (!has_drill).then_some("穴のある行で使えます"), egui::Checkbox::without_text(&mut rows[i].vertical)).on_hover_text(i18n::tr("長穴を縦向きにします (オフなら横向き)"));
                     }
                     ui.horizontal(|ui| {
-                        if ui.add_enabled(i > 0, egui::Button::new("↑").small()).on_hover_text(i18n::tr("1つ上へ")).clicked() {
+                        if crate::widgets::unless(ui, (!(i > 0)).then_some("いちばん上です"), egui::Button::new("↑").small()).on_hover_text(i18n::tr("1つ上へ")).clicked() {
                             swap = Some((i, i - 1));
                         }
-                        if ui.add_enabled(i + 1 < n, egui::Button::new("↓").small()).on_hover_text(i18n::tr("1つ下へ")).clicked() {
+                        if crate::widgets::unless(ui, (!(i + 1 < n)).then_some("いちばん下です"), egui::Button::new("↓").small()).on_hover_text(i18n::tr("1つ下へ")).clicked() {
                             swap = Some((i, i + 1));
                         }
                         if ui.add(egui::Button::new(i18n::tr("消す")).small()).on_hover_text(i18n::tr("この行を消します")).clicked() {

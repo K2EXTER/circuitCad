@@ -20,12 +20,12 @@ impl SchEditor {
         let defs = pin_defs(&self.sch);
         // what the ERC would say: the file written last is out of date, the firmware drives another pin
         for p in firmware_problems(&self.sch, self.path.as_ref().and_then(|p| p.parent())) {
-            ui.colored_label(crate::theme::WARN, format!("▲ {}", i18n::tr_dyn(&p.message))).on_hover_text(i18n::tr_dyn(&p.hint));
+            ui.colored_label(crate::theme::warn(), format!("▲ {}", i18n::tr_dyn(&p.message))).on_hover_text(i18n::tr_dyn(&p.hint));
         }
         ui.label(egui::RichText::new(i18n::tr("マイコンボードのピン (D13・A0・GPIO2 の名前のピン) につながる信号です。部品のピンの名前か、ピンヘッダの「ピンの名前」から読みます。ファーム (Arduino のスケッチ) で使うピン番号を、回路図から書き出して、手で写す間違いをなくします")).small());
         let fpga = *format >= 2;
         if defs.is_empty() && !fpga {
-            ui.colored_label(crate::theme::WARN, i18n::tr("マイコンボードのピンが見つかりません。Arduino などのモジュールの部品を置くか、ケーブルでつなぐピンヘッダの各ピンに、ボードのピンの名前 (D22・A0 など) を付けます (部品の設定の「ピンの名前」)。FPGA のピンは、下の形式で FPGA を選びます"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("マイコンボードのピンが見つかりません。Arduino などのモジュールの部品を置くか、ケーブルでつなぐピンヘッダの各ピンに、ボードのピンの名前 (D22・A0 など) を付けます (部品の設定の「ピンの名前」)。FPGA のピンは、下の形式で FPGA を選びます"));
         }
         ui.horizontal(|ui| {
             ui.label(i18n::tr("書き出す形式"));
@@ -71,7 +71,7 @@ impl SchEditor {
                     });
                 }
                 Err(e) => {
-                    ui.colored_label(crate::theme::WARN, i18n::tr_dyn(&e));
+                    ui.colored_label(crate::theme::warn(), i18n::tr_dyn(&e));
                 }
             }
         }
@@ -141,10 +141,10 @@ impl SchEditor {
             ui.separator();
             ui.label(i18n::trf!("照合: {}", file));
             if findings.iter().all(|f| !f.wrong) {
-                ui.colored_label(crate::theme::OK, i18n::tr("✔ 回路図とずれているピンはありません"));
+                ui.colored_label(crate::theme::ok(), i18n::tr("✔ 回路図とずれているピンはありません"));
             }
             for f in findings {
-                let colour = if f.wrong { crate::theme::ERROR } else { ui.visuals().weak_text_color() };
+                let colour = if f.wrong { crate::theme::error() } else { ui.visuals().weak_text_color() };
                 ui.label(egui::RichText::new(format!("{} {}", if f.wrong { "✖" } else { "・" }, i18n::tr_dyn(&f.message))).color(colour)).on_hover_text(i18n::tr_dyn(&f.hint));
             }
         }

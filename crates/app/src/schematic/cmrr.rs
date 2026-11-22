@@ -124,7 +124,7 @@ impl SchEditor {
             ui.label(i18n::tr("抵抗の誤差 %"));
             ui.add(egui::TextEdit::singleline(&mut self.cmrr_tol).desired_width(30.0)).on_hover_text(i18n::tr("抵抗を許容差の中でランダムに 300 通りずらして、CMRR がどこまで下がるかも出します (いちばん低い周波数で)。1% の抵抗なら 1、空にすると計算しません"));
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "同相除去比を計算"), "同相除去比を計算").on_hover_text(i18n::tr("2 つの入力を逆向きに揺らしたとき (差動) と、同じ向きに揺らしたとき (同相) の出力の比を、周波数ごとに計算します。周波数の範囲と点数は AC解析の欄を使います。結果は AC解析のグラフに出ます")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "同相除去比を計算"), "同相除去比を計算").on_hover_text(i18n::tr("2 つの入力を逆向きに揺らしたとき (差動) と、同じ向きに揺らしたとき (同相) の出力の比を、周波数ごとに計算します。周波数の範囲と点数は AC解析の欄を使います。結果は AC解析のグラフに出ます")).clicked() {
             self.run_cmrr();
         }
     }

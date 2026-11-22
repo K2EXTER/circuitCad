@@ -32,12 +32,12 @@ impl SchEditor {
         let r = match view {
             Ok(r) => r,
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
                 return;
             }
         };
         if let Some((t, why)) = &r.runaway {
-            ui.colored_label(crate::theme::ERROR, i18n::trf!("周囲 {:.0} ℃ で落ち着きませんでした (熱暴走): {}", t, why));
+            ui.colored_label(crate::theme::error(), i18n::trf!("周囲 {:.0} ℃ で落ち着きませんでした (熱暴走): {}", t, why));
         }
         egui::Grid::new("ambient_worst").striped(true).num_columns(5).show(ui, |ui| {
             for (h, tip) in [("部品", ""), ("いちばん熱い", "範囲の中で、部品がいちばん熱くなる温度と、そのときの周囲の温度"), ("上限", "部品の最高温度 (「?」は種類からの目安)"), ("上限に届く周囲", "部品が上限の温度に届く周囲の温度 (点の間は直線で)。これより暑い所では使えません"), ("上昇", "周囲の温度より、どれだけ熱いか (範囲の低い端 → 高い端)。温まると電力が増える部品は、高い端で大きくなります")] {
@@ -50,16 +50,16 @@ impl SchEditor {
             for w in &r.worst {
                 ui.label(&w.name);
                 let col = if w.over_from.is_some() {
-                    crate::theme::ERROR
+                    crate::theme::error()
                 } else if w.caution_from.is_some() {
-                    crate::theme::WARN
+                    crate::theme::warn()
                 } else {
                     ui.visuals().text_color()
                 };
                 ui.label(egui::RichText::new(format!("{:.0} ℃ ({:.0})", w.hottest_c, w.at_ambient)).color(col));
                 ui.label(format!("{:.0}{}", w.t_max, if w.guessed_limit { "?" } else { "" }));
                 ui.label(match w.over_from {
-                    Some(t) => egui::RichText::new(format!("{t:.0} ℃")).color(crate::theme::ERROR),
+                    Some(t) => egui::RichText::new(format!("{t:.0} ℃")).color(crate::theme::error()),
                     None => egui::RichText::new(i18n::tr("届かない")).weak(),
                 });
                 ui.label(format!("{:.1} → {:.1} K", w.rise_low, w.rise_high));
@@ -67,7 +67,7 @@ impl SchEditor {
             }
         });
         for w in r.worst.iter().filter(|w| w.derated_over) {
-            ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ {} は、周囲が高いところで、温度で下げた定格電力を超えます", w.name));
+            ui.colored_label(crate::theme::warn(), i18n::trf!("⚠ {} は、周囲が高いところで、温度で下げた定格電力を超えます", w.name));
         }
         if !r.nets.is_empty() {
             ui.label(egui::RichText::new(i18n::tr("周囲の温度で動くところ")).small().strong()).on_hover_text(i18n::tr("範囲の低い端と高い端での電圧。大きく動く順"));

@@ -20,7 +20,7 @@ impl SchEditor {
         let cov = self.model_coverage();
         ui.label(egui::RichText::new(i18n::trf!("計算に入る部品 {} 個 (記号・ピンヘッダを除く)", cov.total)).small());
         if cov.is_clean() {
-            ui.colored_label(crate::theme::OK, i18n::tr("モデルのない部品も、汎用の値で計算している部品も、注意書きのあるモデルもありません"))
+            ui.colored_label(crate::theme::ok(), i18n::tr("モデルのない部品も、汎用の値で計算している部品も、注意書きのあるモデルもありません"))
                 .on_hover_text(i18n::tr("抵抗・コンデンサ・コイルは理想の素子 (ESR などは値の欄に書いたぶんだけ) で計算します"));
         }
         // where each library model comes from (docs/model-policy.md): by part number, from the placed copy or the bundled part
@@ -42,7 +42,7 @@ impl SchEditor {
             ui.label(egui::RichText::new(i18n::trf!("ライブラリのモデル {} 個: データシートと比べたもの {} 個、出どころの記録なし {} 個", origins.len(), checked, unknown)).small())
                 .on_hover_text(i18n::tr("「データシートと比べた」モデルは、部品の欄の「データシートとの比べ」に、データシートの値とモデルの値が並んでいます。「記録なし」のモデルは、どの資料から作ったか分からないので、結果は目安として見て、大事な値はデータシートで確かめてください"));
         }
-        let orange = crate::theme::WARN;
+        let orange = crate::theme::warn();
         // headings, not folds: the section around them already folds (at most two levels). `open` lists every note;
         // otherwise the notes are in the hover of each part's name.
         let section = |ui: &mut egui::Ui, _id: &str, title: String, tip: &str, open: bool, color: Option<egui::Color32>, list: &[sim_core::PartNote]| {

@@ -325,6 +325,8 @@ pub struct SchEditor {
     bench_ui: bench_data::BenchUi,
     /// "症状から原因を探す": the readings and the solved faults.
     diag: troubleshoot::DiagState,
+    /// The transient analysis running on another thread (`start_tran`).
+    tran_job: Option<TranJob>,
     /// Repair practice with the virtual meter (the "修理の道" lessons): the hidden fault and the readings.
     repair: Option<repair_practice::RepairPractice>,
     /// "デジタル回路を動かしながら見る": the learning mode over the canvas while it is on (`live_logic.rs`).
@@ -464,6 +466,14 @@ struct AcView {
 }
 
 /// A finished transient run with the waveform viewer state.
+/// A transient analysis solving on another thread: how far it is, the request to stop it, and where its result comes.
+struct TranJob {
+    watch: std::sync::Arc<sim_core::TranWatch>,
+    rx: std::sync::mpsc::Receiver<Result<sim_core::TranResult, Vec<String>>>,
+    started: std::time::Instant,
+    tstop: f64,
+}
+
 struct TranView {
     outcome: Result<TranResult, Vec<String>>,
     selected: BTreeSet<String>,
@@ -537,7 +547,7 @@ impl SchEditor {
     pub fn rerun_last(&mut self) {
         match self.last_run {
             LastRun::Dc => self.analyze_dc(),
-            LastRun::Tran => self.analyze_tran(),
+            LastRun::Tran => self.start_tran(),
             LastRun::Ac => self.analyze_ac(),
             LastRun::Noise => self.analyze_noise(),
             LastRun::Sweep => self.analyze_sweep(),
@@ -807,6 +817,7 @@ impl Default for SchEditor {
             saved_tol: Default::default(),
             bench_ui: Default::default(),
             diag: Default::default(),
+            tran_job: None,
             repair: None,
             live_logic: None,
             sweep_src: String::new(),
@@ -924,6 +935,7 @@ mod troubleshoot;
 mod repair_practice;
 mod live_logic;
 mod tran;
+pub mod running;
 mod dc;
 mod library;
 mod kicad_import;

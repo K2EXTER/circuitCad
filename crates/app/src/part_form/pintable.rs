@@ -340,10 +340,10 @@ impl PartForm {
                     }
                 }
                 ui.horizontal(|ui| {
-                    if ui.add_enabled(i > 0, egui::Button::new("↑").small()).on_hover_text(i18n::tr("1つ上へ")).clicked() {
+                    if crate::widgets::unless(ui, (!(i > 0)).then_some("いちばん上です"), egui::Button::new("↑").small()).on_hover_text(i18n::tr("1つ上へ")).clicked() {
                         swap = Some((i, i - 1));
                     }
-                    if ui.add_enabled(i + 1 < n, egui::Button::new("↓").small()).on_hover_text(i18n::tr("1つ下へ")).clicked() {
+                    if crate::widgets::unless(ui, (!(i + 1 < n)).then_some("いちばん下です"), egui::Button::new("↓").small()).on_hover_text(i18n::tr("1つ下へ")).clicked() {
                         swap = Some((i, i + 1));
                     }
                     if ui.add(egui::Button::new(i18n::tr("消す")).small()).on_hover_text(i18n::tr("このピンを消します")).clicked() {
@@ -375,14 +375,13 @@ impl PartForm {
                 rows.push(PinRow { number: next.to_string(), side, ..PinRow::default() });
             }
             let guessable = rows.iter().any(|r| r.kind.is_none() && sch_core::PinKind::guess_from_name(&r.name).is_some());
-            if ui
-                .add_enabled(guessable, egui::Button::new(i18n::tr("名前から種類を入れる")))
+            if crate::widgets::unless(ui, (!guessable).then_some("名前から種類が分かるピン (種類が空のもの) がありません"), egui::Button::new(i18n::tr("名前から種類を入れる")))
                 .on_hover_text(i18n::tr("種類が「指定なし」のピンに、名前から推測した種類 (VCC・GND は電源入力、NC は未接続、OUT は出力、IN・EN は入力など) を入れます。推測できない名前 (FB・SW など) と、もう種類のあるピンはそのままです。データシートで確かめてください"))
                 .clicked()
             {
                 guess_kinds(&mut rows);
             }
-            if ui.add_enabled(!rows.is_empty(), egui::Button::new(i18n::tr("CSV に書き出す…"))).on_hover_text(i18n::tr("ピン表を CSV にします (番号・名前・向き・種類・sim・空き)。Excel などで名前をまとめて直し、「CSV から読む」で戻せます")).clicked()
+            if crate::widgets::unless(ui, rows.is_empty().then_some("ピン表が空です"), egui::Button::new(i18n::tr("CSV に書き出す…"))).on_hover_text(i18n::tr("ピン表を CSV にします (番号・名前・向き・種類・sim・空き)。Excel などで名前をまとめて直し、「CSV から読む」で戻せます")).clicked()
                 && let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(format!("{}_pins.csv", if self.name.is_empty() { "part" } else { self.name.as_str() })).save_file()
             {
                 // with a byte order mark, so that Excel reads the Japanese as UTF-8
@@ -410,7 +409,7 @@ impl PartForm {
                 ui.small(m);
             }
             Some(Err(e)) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
             }
             None => {}
         }

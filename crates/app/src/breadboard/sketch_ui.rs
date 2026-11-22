@@ -55,10 +55,10 @@ impl BreadboardView {
             }
             match sim_core::sketch::compile(&text) {
                 Ok(_) => {
-                    ui.colored_label(crate::theme::OK, i18n::tr("✔ 読めました。電源を入れると動きます"));
+                    ui.colored_label(crate::theme::ok(), i18n::tr("✔ 読めました。電源を入れると動きます"));
                 }
                 Err(e) => {
-                    ui.colored_label(crate::theme::ERROR, i18n::trf!("{} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
+                    ui.colored_label(crate::theme::error(), i18n::trf!("{} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
                 }
             }
             if sch.sketches.contains_key(&refdes) && ui.small_button(i18n::tr("点滅の見本に戻す")).on_hover_text(i18n::tr("スケッチを、LED (D13) を点滅させる見本に戻します")).clicked() {
@@ -66,7 +66,7 @@ impl BreadboardView {
             }
             let Some(m) = self.live.as_ref().and_then(|lv| lv.mcus.iter().find(|m| m.refdes == refdes)) else { continue };
             if let Some(e) = m.machine.as_ref().and_then(|x| x.error.as_ref()) {
-                ui.colored_label(crate::theme::ERROR, i18n::trf!("止まりました: {} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
+                ui.colored_label(crate::theme::error(), i18n::trf!("止まりました: {} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
             }
             if let Some(x) = &m.machine {
                 ui.label(egui::RichText::new(i18n::tr("シリアルモニタ (Serial.print の出力)")).small().color(NOTE));

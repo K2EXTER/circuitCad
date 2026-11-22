@@ -349,7 +349,7 @@ impl PartForm {
             ui.checkbox(&mut self.tvs.bidirectional, i18n::tr("双方向")).on_hover_text(i18n::tr("型番の末尾が CA のように、どちら向きの電圧もクランプするもの"));
         });
         for (ok, line) in &self.tvs.found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         let t = &mut self.tvs;
         egui::Grid::new("tvs_inputs").num_columns(2).show(ui, |ui| {

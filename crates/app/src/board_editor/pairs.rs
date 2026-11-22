@@ -29,7 +29,7 @@ impl BoardEditor {
                     });
                 }
                 let ok = !self.pair_new.0.is_empty() && !self.pair_new.1.is_empty() && self.pair_new.0 != self.pair_new.1;
-                if crate::widgets::unless(ui, (!(ok)).then_some("違う 2 つのネットを選ぶと押せます"), egui::Button::new(i18n::tr("ペアに追加"))).on_hover_text(i18n::tr("選んだ2つのネットを、差動ペアにします")).clicked() {
+                if crate::widgets::unless(ui, (!ok).then_some("違う 2 つのネットを選ぶと押せます"), egui::Button::new(i18n::tr("ペアに追加"))).on_hover_text(i18n::tr("選んだ2つのネットを、差動ペアにします")).clicked() {
                     self.checkpoint();
                     let name = format!("{}/{}", self.pair_new.0, self.pair_new.1);
                     self.board.diff_pairs.push(DiffPair::new(&name, &self.pair_new.0, &self.pair_new.1));

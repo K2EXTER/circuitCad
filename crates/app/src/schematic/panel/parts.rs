@@ -214,7 +214,7 @@ impl SchEditor {
                     }
                     if let Some((s, _)) = part_lib::series::member(&d.name) {
                         for q in &s.quality {
-                            ui.small(egui::RichText::new(q).color(crate::theme::INFO)).on_hover_text(i18n::tr_dyn(quality_tip(q)));
+                            ui.small(egui::RichText::new(q).color(crate::theme::info())).on_hover_text(i18n::tr_dyn(quality_tip(q)));
                         }
                     }
                 });
@@ -286,7 +286,7 @@ impl SchEditor {
                         // a bundled series is not a file in the library folder: there is nothing to delete
                     } else if self.lib.delete.as_deref() == Some(d.name.as_str()) {
                         ui.horizontal(|ui| {
-                            ui.colored_label(crate::theme::ERROR, i18n::tr("本当に削除しますか?"));
+                            ui.colored_label(crate::theme::error(), i18n::tr("本当に削除しますか?"));
                             if ui.small_button(i18n::tr("削除する")).on_hover_text(i18n::tr("この部品のファイルをライブラリのフォルダから消します。元に戻せません。回路図や基板に置いた部品は、そのまま残ります")).clicked() {
                                 delete_part = Some(d.name.clone());
                             }
@@ -342,7 +342,7 @@ impl SchEditor {
             }
             // the library folder in one row: read it again, or open it (where the parts are saved; the path is in the hover)
             let folder = self.lib.dir.display().to_string();
-            let bar = crate::widgets::segment_row(ui, &[("再読み込み", true), ("フォルダを開く", true)]);
+            let bar = crate::widgets::segment_row(ui, &[("再読み込み", None), ("フォルダを開く", None)]);
             if self.lit(bar[0].clone(), "再読み込み").on_hover_text(i18n::tr("ライブラリのフォルダを読み直します。ファイルを直接直したときや、部品のファイルをフォルダに置いたときに押します")).clicked() {
                 self.reload_library();
             }
@@ -350,7 +350,7 @@ impl SchEditor {
                 self.open_library_folder();
             }
             for e in &self.lib.errors {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
             }
             });
         });
@@ -363,7 +363,7 @@ impl SchEditor {
         // below the (closed by default) library list, outside it, so a newcomer can find them without opening anything
         // make or reuse a part: one bar (the parts library's own buttons, then the snippet pair that works on the selection)
         let has = self.has_selection();
-        let bar = crate::widgets::segment_row(ui, &[("部品を作る…", true), ("選択を保存…", has), ("スニペット…", true)]);
+        let bar = crate::widgets::segment_row(ui, &[("部品を作る…", None), ("選択を保存…", (!has).then_some("先に回路図で部品を選んでください")), ("スニペット…", None)]);
         let make = self.lit(bar[0].clone(), "＋ 部品を作る…").on_hover_text(i18n::tr("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「読み込む…」からできます"));
         if make.clicked() {
             self.form = Some(PartForm::default());
@@ -557,7 +557,7 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
                     color_code_ui(ui, &bands);
                 }
             } else {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("{} にはありません ({})", s.series, s.range_text()));
+                ui.colored_label(crate::theme::warn(), i18n::trf!("{} にはありません ({})", s.series, s.range_text()));
             }
             if has_e96 && ui.checkbox(&mut fine, i18n::tr("細かい値 (E96)")).on_hover_text(i18n::tr("有効数字の輪に E96 (1 桁に 96 個、±1 % の抵抗によくある並び) も入れます。外すと E24 (1 桁に 24 個) だけ")).changed() {
                 ui.data_mut(|d| d.insert_temp(fine_id, fine));
@@ -590,7 +590,7 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
     match part_lib::series::parse_ohms(text) {
         None => {
             if !text.trim().is_empty() {
-                ui.colored_label(crate::theme::WARN, i18n::tr("値を読めません。4.7k・4k7・220・1M のように書いてください"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("値を読めません。4.7k・4k7・220・1M のように書いてください"));
             }
         }
         Some(v) => match s.nearest(v) {
@@ -600,7 +600,7 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
                 }
             }
             _ => {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("{} は {} にありません。近い値:", ohms_text(v), s.series));
+                ui.colored_label(crate::theme::warn(), i18n::trf!("{} は {} にありません。近い値:", ohms_text(v), s.series));
                 let (lo, hi) = s.neighbours(v);
                 ui.horizontal(|ui| {
                     for x in [lo, hi].into_iter().flatten() {
@@ -614,7 +614,7 @@ fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64,
         },
     }
     for q in &s.quality {
-        ui.small(egui::RichText::new(i18n::trf!("品質: {}", q)).color(crate::theme::INFO)).on_hover_text(i18n::tr_dyn(quality_tip(q)));
+        ui.small(egui::RichText::new(i18n::trf!("品質: {}", q)).color(crate::theme::info())).on_hover_text(i18n::tr_dyn(quality_tip(q)));
     }
     switch
 }

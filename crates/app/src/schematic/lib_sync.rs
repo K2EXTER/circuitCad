@@ -30,7 +30,7 @@ impl SchEditor {
             return;
         }
         if ui
-            .add_sized([ui.available_width(), 22.0], egui::Button::new(egui::RichText::new(i18n::trf!("ライブラリの部品が新しくなっています ({} 個)…", n)).color(crate::theme::WARN)))
+            .add_sized([ui.available_width(), 22.0], egui::Button::new(egui::RichText::new(i18n::trf!("ライブラリの部品が新しくなっています ({} 個)…", n)).color(crate::theme::warn())))
             .on_hover_text(i18n::tr("回路図に置いた部品は、置いたときのライブラリの部品の写し (ピン・モデル・定格・店の型番) を持っています。そのあとライブラリの部品にモデルが付いたり直ったりした部品を並べ、置いた部品を新しくできます"))
             .clicked()
         {
@@ -48,7 +48,7 @@ impl SchEditor {
         let mut update: Option<Vec<String>> = None;
         egui::Window::new(i18n::tr("ライブラリの部品の更新")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(480.0).show(ctx, |ui| {
             if found.is_empty() {
-                ui.colored_label(crate::theme::OK, i18n::tr("✔ 置いた部品は、どれもライブラリと同じです"));
+                ui.colored_label(crate::theme::ok(), i18n::tr("✔ 置いた部品は、どれもライブラリと同じです"));
                 return;
             }
             ui.label(egui::RichText::new(i18n::tr("置いたあとでライブラリの部品が変わった部品です。新しくすると、部品の場所・向き・部品番号・値はそのままで、モデル・定格・店の型番などがライブラリの今のものになります (元に戻すで戻せます)。ピンの並びが違う部品は、配線が外れないよう、ピンだけ前のままにします")).small());

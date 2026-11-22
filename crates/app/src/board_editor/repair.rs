@@ -95,13 +95,13 @@ impl BoardEditor {
             for (name, now, was) in [("DRC の違反", last.drc, base.drc), ("未配線", last.unrouted, base.unrouted), ("基板の外の部品", last.outside, base.outside), ("バイパスが遠い IC", last.bypass, base.bypass)] {
                 ui.small(name);
                 let text = egui::RichText::new(now.to_string()).small();
-                ui.label(if now > was { text.color(crate::theme::WARN) } else { text });
+                ui.label(if now > was { text.color(crate::theme::warn()) } else { text });
                 ui.small(was.to_string());
                 ui.end_row();
             }
         });
         if fixed {
-            ui.colored_label(crate::theme::OK, i18n::tr("直りました! 点検の結果は、故障の前と同じです"));
+            ui.colored_label(crate::theme::ok(), i18n::tr("直りました! 点検の結果は、故障の前と同じです"));
         }
         if revealed || fixed {
             crate::widgets::section_heading(ui, "原因と直し方");

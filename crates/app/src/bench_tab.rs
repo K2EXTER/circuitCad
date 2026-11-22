@@ -389,14 +389,14 @@ impl BenchTab {
                                 let (diff, agree) = crate::schematic::judge(pred, range, r.volts, r.uncert);
                                 ui.label(format!("{}{}V", if diff >= 0.0 { "+" } else { "" }, sim_core::format_value(diff)));
                                 let (mark, color, tip) = match agree {
-                                    crate::schematic::Agree::Good => ("✔", crate::theme::OK, "予測と合っています (部品の誤差・テスターの誤差の内)"),
-                                    crate::schematic::Agree::Off => ("▲", crate::theme::WARN, "少しずれています。測る点・テスターのレンジ・部品の値を確かめましょう"),
-                                    crate::schematic::Agree::Far => ("✖", crate::theme::ERROR, "大きくずれています。部品の付け間違い・はんだ付け・向き・電源を確かめます (「5. 修理」で原因を探せます)"),
+                                    crate::schematic::Agree::Good => ("✔", crate::theme::ok(), "予測と合っています (部品の誤差・テスターの誤差の内)"),
+                                    crate::schematic::Agree::Off => ("▲", crate::theme::warn(), "少しずれています。測る点・テスターのレンジ・部品の値を確かめましょう"),
+                                    crate::schematic::Agree::Far => ("✖", crate::theme::error(), "大きくずれています。部品の付け間違い・はんだ付け・向き・電源を確かめます (「5. 修理」で原因を探せます)"),
                                 };
                                 ui.label(egui::RichText::new(mark).color(color)).on_hover_text(i18n::trf!("{} (許す幅 ±{}V)", i18n::tr(tip), sim_core::format_value(crate::schematic::allowance(pred, r.uncert))));
                             }
                             None if bad_text => {
-                                ui.colored_label(crate::theme::WARN, i18n::tr("読めません"));
+                                ui.colored_label(crate::theme::warn(), i18n::tr("読めません"));
                                 ui.label("");
                             }
                             None => {

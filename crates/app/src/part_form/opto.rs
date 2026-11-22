@@ -374,7 +374,7 @@ impl PartForm {
             }
         });
         for (ok, line) in &self.opto.found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         self.read_all_button(ui, &[Dest::OptoLed, Dest::OptoCtr]);
         let has_doc = self.sheet.has_doc();
@@ -457,7 +457,7 @@ impl PartForm {
             }
         });
         for (ok, line) in &self.pd.found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         self.read_all_button(ui, &[Dest::PdLight, Dest::PdCap]);
         let has_doc = self.sheet.has_doc();

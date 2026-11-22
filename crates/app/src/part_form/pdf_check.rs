@@ -78,13 +78,13 @@ impl PartForm {
         });
         match self.pin_check.as_ref().and_then(|c| c.result.as_ref()) {
             None => {
-                ui.colored_label(crate::theme::WARN, i18n::tr("比べる表を読み直せませんでした (データシートを閉じましたか?)。確認できていません"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("比べる表を読み直せませんでした (データシートを閉じましたか?)。確認できていません"));
             }
             Some(c) if c.diffs.is_empty() => {
                 ui.colored_label(OK, i18n::trf!("✓ 表の {} 本すべてが、ピン表と一致しています", c.same));
             }
             Some(c) => {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("食い違いが {} 件あります (一致 {} 本)", c.diffs.len(), c.same));
+                ui.colored_label(crate::theme::warn(), i18n::trf!("食い違いが {} 件あります (一致 {} 本)", c.diffs.len(), c.same));
                 for d in c.diffs.iter().take(12) {
                     let (text, tip) = match d.kind {
                         datasheet::PinDiffKind::Differs => (
@@ -196,7 +196,7 @@ impl PartForm {
                     let how = if f.as_inch { " (インチの数字として)" } else { "" };
                     ui.colored_label(OK, i18n::trf!("✓ {} {} mm: p.{} の「{}」{how}にあります", t.label(), super::pdf_input::number_text(*v), page + 1, f.text))
                 }
-                None => ui.colored_label(crate::theme::WARN, i18n::trf!("✗ {} {} mm: データシートの図面のページに見つかりません", t.label(), super::pdf_input::number_text(*v))),
+                None => ui.colored_label(crate::theme::warn(), i18n::trf!("✗ {} {} mm: データシートの図面のページに見つかりません", t.label(), super::pdf_input::number_text(*v))),
             }
             .on_hover_text(if found.as_ref().is_some_and(|f| f.1.as_inch) { i18n::tr("単位のない小さな数字を、インチとして mm に直すと一致しました。偶然の一致もあるので、図面でインチの寸法かを確かめてください") } else if found.is_some() { i18n::tr("その数字が書かれていることの確認です。同じ数字が別の寸法のこともあるので、図面で確かめてください") } else { i18n::tr("写し間違いか、インチ・mil で書かれているか、図面に書かれていない計算値かもしれません。データシートの図面を見て、確かめてください") });
         }
@@ -204,7 +204,7 @@ impl PartForm {
         if rows.is_empty() {
             ui.small(i18n::tr("照らす寸法がまだ入っていません"));
         } else if missing > 0 {
-            ui.colored_label(crate::theme::WARN, i18n::trf!("{missing} 件が見つかっていません。「ランドパターンは概算」の印は、そのままにしておきます"));
+            ui.colored_label(crate::theme::warn(), i18n::trf!("{missing} 件が見つかっていません。「ランドパターンは概算」の印は、そのままにしておきます"));
         } else if self.land_unverified {
             ui.colored_label(OK, i18n::tr("入れた寸法は、すべて図面のページにありました"));
             if ui.button(i18n::tr("図面と見比べて確認した: 「概算」の印を外す")).on_hover_text(i18n::tr("数字があることまでは確かめました。ピッチやパッドの寸法が、図面のどの数字かを人が見比べて、合っていると確認したときに押してください")).clicked() {

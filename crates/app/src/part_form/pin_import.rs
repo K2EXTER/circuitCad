@@ -197,13 +197,14 @@ impl TablePanel {
         // wrapped: the window sits over the left panel and is about as narrow
         ui.horizontal_wrapped(|ui| {
             let ok = self.lines() > 0;
-            if ui.add_enabled(ok, egui::Button::new(i18n::tr("ピン表に置き換える"))).on_hover_text(i18n::tr("「③ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます")).clicked() {
+            if crate::widgets::unless(ui, (!ok).then_some("取り込むピンがありません。上に表を貼るか、データシートから囲んでください"), egui::Button::new(i18n::tr("ピン表に置き換える"))).on_hover_text(i18n::tr("「③ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます")).clicked() {
                 action = Action::Apply(PinMode::Replace);
             }
-            if ui.add_enabled(ok, egui::Button::new(i18n::tr("ピン表のあとに足す"))).on_hover_text(i18n::tr("いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします")).clicked() {
+            if crate::widgets::unless(ui, (!ok).then_some("取り込むピンがありません。上に表を貼るか、データシートから囲んでください"), egui::Button::new(i18n::tr("ピン表のあとに足す"))).on_hover_text(i18n::tr("いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします")).clicked() {
                 action = Action::Apply(PinMode::Append);
             }
-            if ui.add_enabled(ok && !self.as_drawing, egui::Button::new(i18n::tr("この表と比べるだけ"))).on_disabled_hover_text(i18n::tr("図から読んだピンは、あとで読み直して比べることができません。比べるときは表を囲んでください")).on_hover_text(i18n::tr("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します")).clicked() {
+            let why_not = if !ok { Some("取り込むピンがありません。上に表を貼るか、データシートから囲んでください") } else if self.as_drawing { Some("図から読んだピンは、あとで読み直して比べることができません。比べるときは表を囲んでください") } else { None };
+            if crate::widgets::unless(ui, why_not, egui::Button::new(i18n::tr("この表と比べるだけ"))).on_hover_text(i18n::tr("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します")).clicked() {
                 action = Action::Apply(PinMode::CheckOnly);
             }
             if ui.button(i18n::tr("やめる")).clicked() {

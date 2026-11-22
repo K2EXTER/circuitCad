@@ -11,7 +11,7 @@ impl PartForm {
             self.type_base = Some(if self.ptype.is_some() { self.fingerprint() } else { PartForm::default().fingerprint() });
         }
         crate::widgets::section_heading(ui, "部品の種類");
-        let items: Vec<(&str, bool)> = PART_TYPES.iter().map(|(_, label, _)| (*label, true)).collect();
+        let items: Vec<(&str, Option<&str>)> = PART_TYPES.iter().map(|(_, label, _)| (*label, None)).collect();
         let bar = crate::widgets::segment_bar(ui, &items, PART_TYPES.iter().position(|(t, _, _)| self.ptype == Some(*t)));
         for (n, r) in bar.iter().enumerate() {
             r.clone().on_hover_text(i18n::tr(PART_TYPES[n].2));
@@ -28,7 +28,7 @@ impl PartForm {
         if let Some(t) = self.pending_type {
             let name = PART_TYPES.iter().find(|(k, _, _)| *k == t).map_or("", |(_, l, _)| *l);
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("「{name}」にすると、入力したピン表・パッケージ・本体などが、{name}の初期値に置き換わります。"));
+                ui.colored_label(crate::theme::warn(), i18n::trf!("「{name}」にすると、入力したピン表・パッケージ・本体などが、{name}の初期値に置き換わります。"));
                 if ui.button(i18n::tr("置き換える")).on_hover_text(i18n::tr("入力した内容を捨てて、選んだ種類の初期値にします")).clicked() {
                     self.apply_type(t);
                     self.type_base = Some(self.fingerprint());
@@ -48,7 +48,7 @@ impl PartForm {
                         ("nmos", "Nch MOSFET", "ゲート電圧で制御。大電流のスイッチに向く"),
                         ("pmos", "Pch MOSFET", "N チャネルと極性が逆。電源側で切り替える"),
                     ];
-                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let items: Vec<(&str, Option<&str>)> = options.iter().map(|(_, label, _)| (*label, None)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.glyph == *k));
                 for (n, r) in bar.iter().enumerate() {
                     r.clone().on_hover_text(i18n::tr(options[n].2));
@@ -65,7 +65,7 @@ impl PartForm {
                         ("schottky", "ショットキー", "順方向の電圧降下が小さい。棒の両端が S 形の記号"),
                         ("zener", "ツェナー", "逆向きで電圧を一定に保つ。棒の両端が Z 形の記号"),
                     ];
-                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let items: Vec<(&str, Option<&str>)> = options.iter().map(|(_, label, _)| (*label, None)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.glyph == *k));
                 for (n, r) in bar.iter().enumerate() {
                     r.clone().on_hover_text(i18n::tr(options[n].2));
@@ -83,7 +83,7 @@ impl PartForm {
                         ("tantalum", "タンタル", "小さくて容量が大きい。極性があり、耐圧に余裕を見ないと壊れます"),
                         ("film", "フィルム", "リード付きの箱形。極性なし。ESR・ESL が小さく、容量が安定します"),
                     ];
-                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let items: Vec<(&str, Option<&str>)> = options.iter().map(|(_, label, _)| (*label, None)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.ptype_sub == *k));
                 for (n, r) in bar.iter().enumerate() {
                     r.clone().on_hover_text(i18n::tr(options[n].2));
@@ -96,7 +96,7 @@ impl PartForm {
             Some(t @ (PartType::Resistor | PartType::Inductor)) => {
                 ui.label(i18n::tr("どの形?"));
                 let options = [("chip", "チップ", "面実装の小さい部品 (0603・0805 など)"), ("leaded", "リード付き", "足を基板の穴に通す部品")];
-                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let items: Vec<(&str, Option<&str>)> = options.iter().map(|(_, label, _)| (*label, None)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.ptype_sub == *k));
                 for (n, r) in bar.iter().enumerate() {
                     r.clone().on_hover_text(i18n::tr(options[n].2));
@@ -112,7 +112,7 @@ impl PartForm {
                     (PkgKind::Row, "1列 (ピンヘッダ)", "ピンが1列に並ぶヘッダ・端子台。番号は端から 1, 2, 3 …"),
                     (PkgKind::Row2, "2列 (2×N ヘッダ)", "ピンが2列に並ぶヘッダ・ボックスヘッダ (書き込み用の 2×3・2×5、Raspberry Pi の 2×20 など)。番号は 1 2 / 3 4 / … と、2つの列をまたいで振ります"),
                 ];
-                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let items: Vec<(&str, Option<&str>)> = options.iter().map(|(_, label, _)| (*label, None)).collect();
                 let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.pkg == *k));
                 for (n, r) in bar.iter().enumerate() {
                     r.clone().on_hover_text(i18n::tr(options[n].2));

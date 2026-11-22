@@ -157,7 +157,7 @@ impl SchEditor {
             let pred_line: Vec<f64> = pred.map(|p| vec![p; t.len()]).unwrap_or_default();
             let mut traces = vec![plot::Trace { name: &names[e.show], color: egui::Color32::from_rgb(110, 180, 255), t: &t, v: &e.log.cols[e.show], dots: t.len() < 60 }];
             if pred.is_some() {
-                traces.push(plot::Trace { name: "予測", color: crate::theme::OK, t: &t, v: &pred_line, dots: false });
+                traces.push(plot::Trace { name: "予測", color: crate::theme::ok(), t: &t, v: &pred_line, dots: false });
             }
             let h = if e.temp.is_some() { 300.0 } else { 220.0 };
             let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::hover());
@@ -166,7 +166,7 @@ impl SchEditor {
                 Some(tc) => {
                     let top = egui::Rect::from_min_max(rect.min, egui::pos2(rect.max.x, rect.min.y + h * 0.6));
                     let bottom = egui::Rect::from_min_max(egui::pos2(rect.min.x, top.max.y), rect.max);
-                    let temp = [plot::Trace { name: &names[tc], color: crate::theme::WARN, t: &t, v: &e.log.cols[tc], dots: t.len() < 60 }];
+                    let temp = [plot::Trace { name: &names[tc], color: crate::theme::warn(), t: &t, v: &e.log.cols[tc], dots: t.len() < 60 }];
                     plot::draw_group(ui, top, egui::Id::new("time_log_v"), &traces, st, 0, &style("t"), false);
                     plot::draw_group(ui, bottom, egui::Id::new("time_log_t"), &temp, st, 1, &style("t"), true);
                 }
@@ -177,9 +177,9 @@ impl SchEditor {
                 let mean = e.log.cols[e.show].iter().sum::<f64>() / e.log.t.len().max(1) as f64;
                 let (diff, agree) = judge(p, None, mean, 0.0);
                 let color = match agree {
-                    Agree::Good => crate::theme::OK,
-                    Agree::Off => crate::theme::WARN,
-                    Agree::Far => crate::theme::ERROR,
+                    Agree::Good => crate::theme::ok(),
+                    Agree::Off => crate::theme::warn(),
+                    Agree::Far => crate::theme::error(),
                 };
                 ui.colored_label(color, i18n::trf!("{} の予測 {}V、記録の平均 {}V、差 {}V", n, sim_core::format_value(p), sim_core::format_value(mean), sim_core::format_value(diff)));
             }

@@ -70,7 +70,7 @@ impl SchEditor {
         match &view.outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, m);
+                    ui.colored_label(crate::theme::error(), m);
                 }
             }
             Ok(res) => {
@@ -97,7 +97,7 @@ impl SchEditor {
                     ui.small(i18n::trf!("{quiet} 個の部品は、ほとんど効きません (1% 動かして結果が 0.01% 未満)。安い部品でかまいません"));
                 }
                 if !res.unsolved.is_empty() {
-                    ui.colored_label(crate::theme::WARN, i18n::trf!("動かすと計算できなかった部品: {}", res.unsolved.join(", ")));
+                    ui.colored_label(crate::theme::warn(), i18n::trf!("動かすと計算できなかった部品: {}", res.unsolved.join(", ")));
                 }
                 let biggest = res.parts.iter().filter_map(|p| p.elasticity).fold(0.0f64, |m, e| m.max(e.abs())).max(1.0);
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
@@ -129,7 +129,7 @@ impl SchEditor {
                             if let Some(e) = p.elasticity {
                                 let w = (e / biggest).clamp(-1.0, 1.0) as f32 * rect.width() / 2.0;
                                 let bar = egui::Rect::from_min_max(egui::pos2(mid.min(mid + w), rect.top() + 2.0), egui::pos2(mid.max(mid + w), rect.bottom() - 2.0));
-                                ui.painter().rect_filled(bar, 1.0, if e >= 0.0 { crate::theme::INFO } else { crate::theme::HIGHLIGHT });
+                                ui.painter().rect_filled(bar, 1.0, if e >= 0.0 { crate::theme::info() } else { crate::theme::highlight() });
                             }
                             ui.end_row();
                         }

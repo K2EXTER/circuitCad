@@ -249,7 +249,7 @@ impl SchEditor {
                     if ui.button(icon).on_hover_text(tip).clicked() {
                         ll.running = !ll.running;
                     }
-                    if ui.add_enabled(!ll.clocks.is_empty(), egui::Button::new(tr("1 クロック"))).on_hover_text(tr("クロックを 1 回 (上がって下がる) だけ進めて、一時停止します。カウンタが 1 つ進むのを確かめられます")).on_disabled_hover_text(tr("この回路にはクロック (パルスの電源) がありません")).clicked() {
+                    if crate::widgets::unless(ui, ll.clocks.is_empty().then_some("この回路にはクロックがありません"), egui::Button::new(tr("1 クロック"))).on_hover_text(tr("クロックを 1 回 (上がって下がる) だけ進めて、一時停止します。カウンタが 1 つ進むのを確かめられます")).on_disabled_hover_text(tr("この回路にはクロック (パルスの電源) がありません")).clicked() {
                         ll.step_clock();
                     }
                     if ui.button(tr("1 イベント")).on_hover_text(tr("次にゲートの出力が変わる時刻まで進めて、一時停止します。ゲートの遅れ (数 ns) の順に、信号が 1 段ずつ伝わるのを見られます")).clicked() {
@@ -258,7 +258,7 @@ impl SchEditor {
                     }
                     ui.separator();
                     ui.label(tr("クロック"));
-                    ui.add_enabled(!ll.clocks.is_empty(), egui::Slider::new(&mut ll.hz, HZ_RANGE.0..=HZ_RANGE.1).logarithmic(true).suffix(" Hz").max_decimals(1))
+                    crate::widgets::unless(ui, ll.clocks.is_empty().then_some("この回路にはクロックがありません"), egui::Slider::new(&mut ll.hz, HZ_RANGE.0..=HZ_RANGE.1).logarithmic(true).suffix(" Hz").max_decimals(1))
                         .on_hover_text(tr("クロックの速さ (1 秒に何回)。目で追える速さにしてあります。実物の回路は MHz で動きます"));
                     ui.checkbox(&mut ll.slow, tr("ゆっくり")).on_hover_text(tr("ゲートの遅れ (10ns ほど) を 1 秒ほどに引き延ばします。入力を変えると、信号がゲートを 1 段ずつ伝わり、一瞬だけ違う値 (グリッチ) が出るのも見えます"));
                     ui.separator();
@@ -279,11 +279,11 @@ impl SchEditor {
                 });
                 if let Some(g) = ll.glitches.last() {
                     let level = if g.high { "High" } else { "Low" };
-                    ui.label(egui::RichText::new(trf!("グリッチ: {} が {} だけ {} になりました (線が赤く光っています)", g.net, sim_core::format_time(g.width), level)).color(crate::theme::WARN))
+                    ui.label(egui::RichText::new(trf!("グリッチ: {} が {} だけ {} になりました (線が赤く光っています)", g.net, sim_core::format_time(g.width), level)).color(crate::theme::warn()))
                         .on_hover_text(tr("ゲートの入力が少しずれて変わると、出力に一瞬だけ違う値が出ます (グリッチ)。この線をクロックやクリアにつなぐと、数えたり消えたりしてしまいます。「ゆっくり」で、どの順に変わったかを見られます"));
                 }
                 for r in ll.races.iter().take(3) {
-                    ui.label(egui::RichText::new(trf!("競合: {}", race_text(r))).color(crate::theme::ERROR))
+                    ui.label(egui::RichText::new(trf!("競合: {}", race_text(r))).color(crate::theme::error()))
                         .on_hover_text(tr("フリップフロップは、クロックの前後の決まった時間はデータが変わらないことを求めます。破ると、0 と 1 のどちらを覚えるか決まりません (実物では、どちらになるか分かりません)"));
                 }
             });

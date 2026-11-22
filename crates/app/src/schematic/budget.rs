@@ -41,7 +41,7 @@ impl SchEditor {
         let rails = match view {
             Ok(r) => r,
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
                 return;
             }
         };
@@ -66,7 +66,7 @@ impl SchEditor {
                 };
                 match r.headroom {
                     Some((h, why)) => {
-                        let color = if h < 0.0 { crate::theme::ERROR } else if r.tight() { crate::theme::WARN } else { crate::theme::OK };
+                        let color = if h < 0.0 { crate::theme::error() } else if r.tight() { crate::theme::warn() } else { crate::theme::ok() };
                         let text = if h < 0.0 { i18n::trf!("{} 超過", amps(-h)) } else { amps(h) };
                         ui.label(egui::RichText::new(text).color(color)).on_hover_text(i18n::trf!("このレールに、あと何 A つなげるか。決めているのは「{}」です", i18n::tr(why.label())));
                     }
@@ -79,7 +79,7 @@ impl SchEditor {
                         let hot = r.t_max.is_some_and(|m| t > m - 20.0);
                         let eff = r.efficiency.map_or(String::new(), |e| format!("・効率 {:.0} %", e * 100.0));
                         let text = format!("{}W・{:.0}℃{eff}", sim_core::format_value(p), t);
-                        ui.label(egui::RichText::new(text).color(if hot { crate::theme::WARN } else { ui.visuals().text_color() })).on_hover_text(i18n::trf!(
+                        ui.label(egui::RichText::new(text).color(if hot { crate::theme::warn() } else { ui.visuals().text_color() })).on_hover_text(i18n::trf!(
                             "レギュレータが熱にする電力と、そのときの部品の温度の目安 (上限 {}℃)。リニアレギュレータは (入力 − 出力) × 電流 が熱になります。温度は部品の θ (データシートの θJA か、パッケージの目安) から出し、基板の銅で下がります (「自己発熱」の解析で詳しく)",
                             r.t_max.map_or("?".to_string(), |m| format!("{m:.0}"))
                         ));
@@ -93,7 +93,7 @@ impl SchEditor {
         });
         for r in rails.iter().filter(|r| r.headroom.is_some_and(|(h, _)| h < 0.0) || r.tight()) {
             let why = r.headroom.map_or("", |(_, w)| w.label());
-            ui.label(egui::RichText::new(i18n::trf!("・{} は余裕が少ないです (決めているのは「{}」)。負荷を減らすか、電流の大きいレギュレータ・放熱・入力の電圧を下げる、を考えましょう", r.net, i18n::tr(why))).small().color(crate::theme::WARN));
+            ui.label(egui::RichText::new(i18n::trf!("・{} は余裕が少ないです (決めているのは「{}」)。負荷を減らすか、電流の大きいレギュレータ・放熱・入力の電圧を下げる、を考えましょう", r.net, i18n::tr(why))).small().color(crate::theme::warn()));
         }
         ui.label(egui::RichText::new(i18n::tr("・レールの名前にマウスを乗せると、そのレールから電流をとっている部品が出ます。DC の値なので、パルスで流れる電流 (モーターの起動・無線の送信) は入りません")).small().color(crate::learn::NOTE));
     }

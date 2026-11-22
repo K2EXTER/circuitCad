@@ -76,7 +76,7 @@ impl SchEditor {
                     p.text(Pos2::new(x + cw / 2.0, r.top() + ch + 2.0), Align2::CENTER_TOP, text, FontId::proportional(12.0), ui.visuals().text_color());
                 }
                 ui.horizontal(|ui| {
-                    let bar = crate::widgets::segment_bar(ui, &[("比例", true), ("10 倍ごと", true)], Some(decades as usize));
+                    let bar = crate::widgets::segment_bar(ui, &[("比例", None), ("10 倍ごと", None)], Some(decades as usize));
                     if bar[0].clone().on_hover_text(i18n::tr("いちばん高い電圧を 5 段に分けて色を付けます。どのネットがだいたい同じ電圧かが分かります")).clicked() {
                         vscale.decades = false;
                     }

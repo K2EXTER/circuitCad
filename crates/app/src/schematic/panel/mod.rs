@@ -123,7 +123,7 @@ impl SchEditor {
                 if !self.wiring.is_empty() {
                     ui.horizontal(|ui| {
                         let what = if self.board_heat.is_some() { i18n::tr("基板を反映中: 配線の抵抗・インダクタンス・容量、基板の熱") } else { i18n::tr("基板を反映中: 配線の抵抗・インダクタンス・容量") };
-                        ui.label(egui::RichText::new(what).small().color(crate::theme::OK)).on_hover_text(i18n::tr(
+                        ui.label(egui::RichText::new(what).small().color(crate::theme::ok())).on_hover_text(i18n::tr(
                             "基板エディタの「③ 確認する」の「回路図に反映」で、基板の配線と熱が解析に入っています。DC・過渡・AC・ノイズは配線の抵抗などを、自己発熱と温度の時間変化は基板の熱の地図の熱抵抗を使います",
                         ));
                         if ui.small_button(i18n::tr("外す")).on_hover_text(i18n::tr("配線の抵抗と基板の熱を外し、理想の配線に戻します")).clicked() {
@@ -139,7 +139,7 @@ impl SchEditor {
                 let cov = self.model_coverage();
                 if !cov.ignored.is_empty() {
                     let names: Vec<&str> = cov.ignored.iter().map(|p| p.refdes.as_str()).collect();
-                    ui.colored_label(crate::theme::WARN, i18n::trf!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
+                    ui.colored_label(crate::theme::warn(), i18n::trf!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
                         .on_hover_text(i18n::tr("この部品は、回路にないものとして計算されます。動作や電流に関わる部品なら、結果は実物と違います。下の「モデルの前提」で、ほかの注意もまとめて見られます"));
                 }
                 // during a lesson every section is open, so the lesson's steps can be found; otherwise one at a time
@@ -241,7 +241,7 @@ impl SchEditor {
                 self.redo();
             }
         });
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "クイック追加 (A)"), "クイック追加 (A)").on_hover_text(i18n::tr("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "クイック追加 (A)"), "クイック追加 (A)").on_hover_text(i18n::tr("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます")).clicked() {
             self.open_quick_add();
         }
         if self.tool == Tool::Label {
@@ -255,12 +255,12 @@ impl SchEditor {
         // it sits in the bottom panel, whose edge is the line above it (a line of its own here made the line double)
         ui.add_space(crate::theme::SPACE_S);
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
-        if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text(i18n::tr("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意、青 = 情報)。データシートが言う部品 (レギュレータのコンデンサ・リセットのプルアップ) の付け忘れ、水晶のコンデンサの値、LED の抵抗の付け忘れも見ます。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です")).clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, None, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text(i18n::tr("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意、青 = 情報)。データシートが言う部品 (レギュレータのコンデンサ・リセットのプルアップ) の付け忘れ、水晶のコンデンサの値、LED の抵抗の付け忘れも見ます。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です")).clicked() {
             self.run_erc();
         }
         // the other two checks of the design: its requirements table, and areas left out of the ERC while drawing
         let skip_enabled = self.selection_box_exists();
-        let bar = crate::widgets::segment_row(ui, &[("設計の要件の表…", true), ("選択を描きかけにする", skip_enabled)]);
+        let bar = crate::widgets::segment_row(ui, &[("設計の要件の表…", None), ("選択を描きかけにする", (!skip_enabled).then_some("先に回路図で部品や線を選んでください"))]);
         if bar[0].clone().on_hover_text(i18n::tr("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)")).clicked() {
             self.open_requirements();
         }
@@ -270,7 +270,7 @@ impl SchEditor {
         self.erc_skip_ui(ui);
         self.lib_sync_button(ui);
         if self.erc_ran && self.problems.is_empty() {
-            ui.colored_label(crate::theme::OK, i18n::tr("✔ 問題は見つかりませんでした"));
+            ui.colored_label(crate::theme::ok(), i18n::tr("✔ 問題は見つかりませんでした"));
         }
         let mut jump = None;
         let mut jump_sheet = 0;
@@ -280,9 +280,9 @@ impl SchEditor {
         egui::ScrollArea::vertical().id_salt("erc_findings").max_height(tall).auto_shrink([false, true]).show(ui, |ui| {
         for (k, p) in self.problems.iter().enumerate() {
             let (mark, color) = match p.severity {
-                Severity::Error => ("✖", crate::theme::ERROR),
-                Severity::Warning => ("▲", crate::theme::WARN),
-                Severity::Info => ("ℹ", crate::theme::INFO),
+                Severity::Error => ("✖", crate::theme::error()),
+                Severity::Warning => ("▲", crate::theme::warn()),
+                Severity::Info => ("ℹ", crate::theme::info()),
             };
             let sheet = if self.sch.sheet_count() > 1 && p.at.is_some() { format!("[{}] ", self.sch.sheet_name(p.sheet)) } else { String::new() };
             let label = egui::RichText::new(format!("{mark} {sheet}{}", i18n::tr_dyn(&p.message))).color(color);
@@ -574,7 +574,7 @@ pub(super) fn origin_ui(ui: &mut egui::Ui, part: &str, m: &sch_core::SimModel, i
                     ui.small(i18n::tr_dyn(&r.item));
                     ui.small(if r.target.is_empty() { &r.datasheet } else { &r.target });
                     let model = egui::RichText::new(&r.model);
-                    ui.small(if r.tested { model.color(crate::theme::OK) } else { model });
+                    ui.small(if r.tested { model.color(crate::theme::ok()) } else { model });
                     ui.small(&r.diff);
                     ui.end_row();
                 }

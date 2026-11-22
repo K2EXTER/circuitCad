@@ -234,7 +234,7 @@ impl BreadboardView {
                         }
                     }
                     Err(e) => {
-                        ui.colored_label(crate::theme::WARN, i18n::trf!("この段の通電は計算できませんでした: {}", i18n::tr_dyn(e)));
+                        ui.colored_label(crate::theme::warn(), i18n::trf!("この段の通電は計算できませんでした: {}", i18n::tr_dyn(e)));
                     }
                 }
             }
@@ -276,7 +276,7 @@ pub(super) fn draw_build_marks(painter: &egui::Painter, l: &StripLayout, marks: 
         if marks.later.contains(&p.refdes) {
             painter.rect_filled(r, 2.0, dim);
         } else if marks.parts.contains(&p.refdes) {
-            painter.rect_stroke(r, 3.0, Stroke::new(2.5, crate::theme::OK), egui::StrokeKind::Outside);
+            painter.rect_stroke(r, 3.0, Stroke::new(2.5, crate::theme::ok()), egui::StrokeKind::Outside);
         }
     }
     for (k, w) in l.links.iter().enumerate() {
@@ -288,7 +288,7 @@ pub(super) fn draw_build_marks(painter: &egui::Painter, l: &StripLayout, marks: 
             }
         } else if marks.links.contains(&k) {
             for e in [a, b] {
-                painter.circle_stroke(e, pitch * 0.32, Stroke::new(2.0, crate::theme::OK));
+                painter.circle_stroke(e, pitch * 0.32, Stroke::new(2.0, crate::theme::ok()));
             }
         }
     }

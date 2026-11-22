@@ -114,7 +114,7 @@ impl BoardEditor {
         let mut changed = false;
         ui.horizontal(|ui| {
             changed |= ui.checkbox(&mut f.corners, i18n::tr("角を丸める")).on_hover_text(i18n::tr("同じ太さの配線がつながる角を、円弧にします。角が丸いと電流が流れやすく、高周波でも反射が減ります。直線に近い角や、短くて入らない角は小さくなるか、そのままです")).changed();
-            changed |= ui.add_enabled(f.corners, egui::DragValue::new(&mut f.radius).speed(0.05).range(0.1..=5.0).prefix(i18n::tr("半径 ")).suffix(" mm"))
+            changed |= crate::widgets::unless(ui, (!f.corners).then_some("「角を丸める」を入れると変えられます"), egui::DragValue::new(&mut f.radius).speed(0.05).range(0.1..=5.0).prefix(i18n::tr("半径 ")).suffix(" mm"))
                 .on_hover_text(i18n::tr("角の丸みの半径。配線が短いと、入る大きさまで自動で小さくなります"))
                 .changed();
         });

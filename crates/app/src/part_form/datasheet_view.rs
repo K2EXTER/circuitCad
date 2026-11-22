@@ -631,7 +631,7 @@ impl SheetView {
     /// Why the last PDF did not open (nothing when it did).
     pub fn message(&self, ui: &mut egui::Ui) {
         if !self.msg.is_empty() {
-            ui.colored_label(crate::theme::ERROR, &self.msg);
+            ui.colored_label(crate::theme::error(), &self.msg);
         }
     }
 
@@ -738,7 +738,7 @@ impl Opened {
             }
             let done = (0..pages).filter(|&q| self.ds.ocr_done(q)).count();
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(crate::theme::INFO, i18n::trf!("画像の PDF なので、文字認識で文字を読み取っています… {done}/{pages} ページ"));
+                ui.colored_label(crate::theme::info(), i18n::trf!("画像の PDF なので、文字認識で文字を読み取っています… {done}/{pages} ページ"));
                 if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("読み取りをやめます。読み終えたページの文字はそのまま使えます")).clicked() {
                     self.ocr_next = None;
                     self.ds.set_ocr(false);
@@ -746,7 +746,7 @@ impl Opened {
             });
             ui.ctx().request_repaint();
         } else if self.ds.ocr_on() {
-            ui.label(egui::RichText::new(i18n::tr("このPDFの文字は、Windows の文字認識でページの絵から読みました。読み違いがあるので、入れた値は絵と見比べてください")).small().color(crate::theme::WARN));
+            ui.label(egui::RichText::new(i18n::tr("このPDFの文字は、Windows の文字認識でページの絵から読みました。読み違いがあるので、入れた値は絵と見比べてください")).small().color(crate::theme::warn()));
         } else if !self.ds.has_text(self.page) && datasheet::ocr::max_side().is_some() {
             ui.horizontal_wrapped(|ui| {
                 ui.label(egui::RichText::new(i18n::tr("このページには文字がありません (画像の PDF)")).small());
@@ -774,14 +774,14 @@ impl Opened {
         }
         self.ocr_ui(ui);
         ui.horizontal_wrapped(|ui| {
-            if ui.add_enabled(self.page > 0, egui::Button::new("◀")).on_hover_text(i18n::tr("前のページ")).clicked() {
+            if crate::widgets::unless(ui, (!(self.page > 0)).then_some("最初のページです"), egui::Button::new("◀")).on_hover_text(i18n::tr("前のページ")).clicked() {
                 self.page -= 1;
             }
             let mut shown = self.page + 1;
             if ui.add(egui::DragValue::new(&mut shown).range(1..=pages).suffix(i18n::trf!(" / {pages} ページ"))).on_hover_text(i18n::tr("ページ番号。ドラッグか、数字を入れて切り替えます")).changed() {
                 self.page = shown - 1;
             }
-            if ui.add_enabled(self.page + 1 < pages, egui::Button::new("▶")).on_hover_text(i18n::tr("次のページ")).clicked() {
+            if crate::widgets::unless(ui, (!(self.page + 1 < pages)).then_some("最後のページです"), egui::Button::new("▶")).on_hover_text(i18n::tr("次のページ")).clicked() {
                 self.page += 1;
             }
             ui.separator();
@@ -799,7 +799,7 @@ impl Opened {
         });
         if let Some(t) = self.target {
             ui.horizontal(|ui| {
-                ui.colored_label(crate::theme::INFO, t.ask());
+                ui.colored_label(crate::theme::info(), t.ask());
                 if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("選ぶのをやめます (Esc キーでも)")).clicked() {
                     self.target = None;
                 }
@@ -807,7 +807,7 @@ impl Opened {
         }
         if let Some(view) = self.cut_view {
             ui.horizontal(|ui| {
-                ui.colored_label(crate::theme::INFO, i18n::trf!("外形図の「{}」を、下のページでドラッグして囲んでください (寸法の数字と線が入るように)", i18n::tr(view.label())));
+                ui.colored_label(crate::theme::info(), i18n::trf!("外形図の「{}」を、下のページでドラッグして囲んでください (寸法の数字と線が入るように)", i18n::tr(view.label())));
                 if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("囲むのをやめます (Esc キーでも)")).clicked() {
                     self.cut_view = None;
                 }
@@ -815,7 +815,7 @@ impl Opened {
         }
         if self.selecting {
             ui.horizontal(|ui| {
-                ui.colored_label(crate::theme::INFO, i18n::tr("ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)"));
+                ui.colored_label(crate::theme::info(), i18n::tr("ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)"));
                 if ui.button(i18n::tr("やめる")).on_hover_text(i18n::tr("囲むのをやめます (Esc キーでも)")).clicked() {
                     self.selecting = false;
                 }
@@ -858,7 +858,7 @@ impl Opened {
                 }
                 Err(e) => {
                     self.texture = None;
-                    ui.colored_label(crate::theme::ERROR, e);
+                    ui.colored_label(crate::theme::error(), e);
                     return;
                 }
             }
@@ -891,7 +891,7 @@ impl Opened {
             if let (Some(from), Some(to)) = (self.drag_from, resp.interact_pointer_pos()) {
                 let r = egui::Rect::from_two_pos(from, to);
                 ui.painter().rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(70, 150, 255, 50));
-                ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, crate::theme::INFO), egui::StrokeKind::Inside);
+                ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, crate::theme::info()), egui::StrokeKind::Inside);
                 if resp.drag_stopped() {
                     let (a, b) = ((r.min - origin) / zoom, (r.max - origin) / zoom);
                     // a click or a speck is not a table
@@ -961,7 +961,7 @@ impl Opened {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
                 let tip = match (&label, mode) {
                     (Some((t, _, r)), _) => {
-                        ui.painter().rect_stroke(on_screen(r).expand(1.0), 2.0, egui::Stroke::new(1.5, crate::theme::INFO), egui::StrokeKind::Outside);
+                        ui.painter().rect_stroke(on_screen(r).expand(1.0), 2.0, egui::Stroke::new(1.5, crate::theme::info()), egui::StrokeKind::Outside);
                         format!("目盛り {t}")
                     }
                     (None, Mode::Points | Mode::Trace) => match g.value_at((p.x, p.y)) {
@@ -987,7 +987,7 @@ impl Opened {
             if let Some(word) = under
                 && let Some(token) = word.token_at(p.x)
             {
-                ui.painter().rect_stroke(on_screen(&word.rect).expand(1.0), 2.0, egui::Stroke::new(1.5, crate::theme::INFO), egui::StrokeKind::Outside);
+                ui.painter().rect_stroke(on_screen(&word.rect).expand(1.0), 2.0, egui::Stroke::new(1.5, crate::theme::info()), egui::StrokeKind::Outside);
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 resp.clone().on_hover_text(format!("→ {token}"));
                 if resp.clicked() {

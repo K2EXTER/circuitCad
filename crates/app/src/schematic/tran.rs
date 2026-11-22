@@ -24,6 +24,67 @@ impl SchEditor {
         self.run_tran();
     }
 
+    /// The transient analysis from the screen (its button, F5, "10 倍の長さで"): solved on another thread, so the window keeps
+    /// drawing; the status line shows the time, how far it is and "止める (Esc)" (`running`). In the tests it is solved at once.
+    pub(super) fn start_tran(&mut self) {
+        self.last_run = LastRun::Tran;
+        if cfg!(test) {
+            self.run_tran();
+            return;
+        }
+        let Some((tstop, tstep)) = self.tran_times() else {
+            self.run_tran();
+            return;
+        };
+        let circuit = match self.sim_circuit() {
+            Ok(c) => c,
+            Err(errs) => {
+                self.finish_tran(tstop, Err(errs));
+                return;
+            }
+        };
+        // a run already going is stopped: the new one is for the circuit as it is now
+        self.stop_tran_job();
+        let watch = std::sync::Arc::new(sim_core::TranWatch::default());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (w, settings, options) = (watch.clone(), TranSettings { tstop, tstep, uic: self.tran_uic }, sim_core::options());
+        std::thread::spawn(move || {
+            sim_core::set_options(options);
+            let out = sim_core::TranRun::start(&circuit, &settings, None).and_then(|mut run| {
+                run.watch(w);
+                run.advance_to(settings.tstop)?;
+                Ok(run.finish())
+            });
+            let _ = tx.send(out.map_err(|e| vec![e.to_string()]));
+        });
+        self.tran_job = Some(TranJob { watch, rx, started: std::time::Instant::now(), tstop });
+        // the status line's left shows the run itself ("〈what〉を計算中…", `running`)
+        self.status.clear();
+    }
+
+    /// Takes the result of the transient run on another thread when it has come (every frame, `poll_jobs`).
+    pub(super) fn poll_tran_job(&mut self, ctx: &egui::Context) {
+        let Some(job) = &self.tran_job else { return };
+        match job.rx.try_recv() {
+            Ok(outcome) => {
+                let tstop = job.tstop;
+                self.tran_job = None;
+                self.finish_tran(tstop, outcome);
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(100)),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.tran_job = None,
+        }
+    }
+
+    /// Stops the transient run on another thread (it ends at its next step; what it sends then is not waited for). The result
+    /// shown before stays.
+    pub(super) fn stop_tran_job(&mut self) {
+        if let Some(job) = self.tran_job.take() {
+            job.watch.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            self.status = i18n::tr("過渡解析を途中で止めました。前の結果はそのままです").to_string();
+        }
+    }
+
     /// Picks the signals of the power box (command line `--power <in V> <in I> <out V> <out I>`).
     pub fn set_power_signals(&mut self, names: [String; 4]) {
         if let Some(v) = self.tran.as_mut() {
@@ -73,6 +134,11 @@ impl SchEditor {
             Err(errs) => Err(errs),
             Ok(c) => transient(&c, &TranSettings { tstop, tstep, uic: self.tran_uic }).map_err(|e| vec![e.to_string()]),
         };
+        self.finish_tran(tstop, outcome);
+    }
+
+    /// Shows a transient result: the traces picked, the status, the capacitors' ripple, the viewer.
+    fn finish_tran(&mut self, tstop: f64, outcome: Result<sim_core::TranResult, Vec<String>>) {
         let mut selected = BTreeSet::new();
         if let Ok(r) = &outcome {
             for sg in r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).take(4) {
@@ -126,7 +192,7 @@ impl SchEditor {
         let mut longer = false;
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, logic, logic_vcc, logic_radix, .. } = view;
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(i18n::tr("過渡解析の波形")).strong().color(crate::theme::INFO));
+            ui.label(egui::RichText::new(i18n::tr("過渡解析の波形")).strong().color(crate::theme::info()));
             if crate::widgets::close_x(ui, "波形") {
                 close = true;
             }
@@ -180,7 +246,7 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(m));
+                    ui.colored_label(crate::theme::error(), i18n::tr_dyn(m));
                 }
             }
             Ok(res) => {
@@ -201,7 +267,7 @@ impl SchEditor {
                 if flat {
                     // one short line; the reasoning sits behind the (?)
                     ui.horizontal_wrapped(|ui| {
-                        ui.colored_label(crate::theme::WARN, i18n::tr("▲ 後半ほとんど動いていません"));
+                        ui.colored_label(crate::theme::warn(), i18n::tr("▲ 後半ほとんど動いていません"));
                         crate::icons::help(ui, "回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。");
                         if ui.button(i18n::tr("終了時間を10倍にして計算し直す")).on_hover_text(i18n::tr("終了時間の欄を10倍にして、もう一度過渡解析を実行します")).clicked() {
                             longer = true;
@@ -213,9 +279,9 @@ impl SchEditor {
                     egui::CollapsingHeader::new(i18n::tr("部品の定格 (リップル電流・寿命)")).default_open(parts.iter().any(|r| r.level.is_some())).show(ui, |ui| {
                         for r in parts.iter() {
                             let color = match r.level {
-                                Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
-                                Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
-                                None => crate::theme::OK,
+                                Some(sim_core::RatingLevel::Over) => crate::theme::error(),
+                                Some(sim_core::RatingLevel::Caution) => crate::theme::warn(),
+                                None => crate::theme::ok(),
                             };
                             ui.colored_label(color, i18n::tr_dyn(&r.message()));
                             if !r.hint().is_empty() {
@@ -237,7 +303,7 @@ impl SchEditor {
                         ui.set_width((100.0 + 80.0 * columns as f32).clamp(440.0, 580.0));
                         // the column scrolls as one, so the signal list is never cut off below the panel
                         egui::ScrollArea::vertical().id_salt("tran_left").auto_shrink([false, false]).show(ui, |ui| {
-                        let bar = crate::widgets::segment_row(ui, &[("回路図で選ぶ", true), ("選択をクリア", !selected.is_empty()), (if ghost.is_some() { "前の波形を消す" } else { "いまの波形を残す" }, true)]);
+                        let bar = crate::widgets::segment_row(ui, &[("回路図で選ぶ", None), ("選択をクリア", selected.is_empty().then_some("選んだ点がありません")), (if ghost.is_some() { "前の波形を消す" } else { "いまの波形を残す" }, None)]);
                         if bar[0].clicked() {
                             start_probe = true;
                         }
@@ -271,7 +337,7 @@ impl SchEditor {
                             metric = t.min(5);
                         }
                         ui.add_space(crate::theme::SPACE_S);
-                        let tabs = crate::widgets::segment_bar(ui, &[("基本", true), ("ひずみ率", true), ("ステップ応答", true), ("負荷の急変", true), ("電力と効率", true), ("音で聴く", true)], Some(metric));
+                        let tabs = crate::widgets::segment_bar(ui, &[("基本", None), ("ひずみ率", None), ("ステップ応答", None), ("負荷の急変", None), ("電力と効率", None), ("音で聴く", None)], Some(metric));
                         let tips = [
                             "平均・実効値・最小・最大・周波数など、表示している範囲の基本の値",
                             "ひずみ率 (THD): 正弦波がどれだけゆがんだか",
@@ -357,7 +423,7 @@ impl SchEditor {
                             ui.small(if *spectrum { i18n::tr("スペクトルの「解析範囲」の時間で計算します") } else { i18n::tr("いま表示している時間の範囲で計算します。立ち上がりを除いて、数周期〜数十周期が入るようにします") });
                             let f0 = if thd_f0.trim().is_empty() { None } else { parse_value(thd_f0) };
                             if f0.is_none() && !thd_f0.trim().is_empty() {
-                                ui.colored_label(crate::theme::ERROR, i18n::tr("基本周波数を数値で入力してください (例: 1k)"));
+                                ui.colored_label(crate::theme::error(), i18n::tr("基本周波数を数値で入力してください (例: 1k)"));
                             } else {
                                 let mut results = vec![];
                                 let mut failed = vec![];
@@ -392,7 +458,7 @@ impl SchEditor {
                                         }
                                     });
                                     if results.iter().any(|(_, t)| t.points_per_period < 40.0) {
-                                        ui.colored_label(crate::theme::WARN, i18n::tr("1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください"));
+                                        ui.colored_label(crate::theme::warn(), i18n::tr("1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください"));
                                     }
                                 }
                                 for f in &failed {
@@ -535,7 +601,7 @@ impl SchEditor {
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
                     if *spectrum {
                         let (Some(t0), Some(t1)) = (parse_value(spec_t0), parse_value(spec_t1)) else {
-                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("解析範囲を数値で入力してください"), FontId::proportional(14.0), crate::theme::ERROR);
+                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("解析範囲を数値で入力してください"), FontId::proportional(14.0), crate::theme::error());
                             return;
                         };
                         let key = format!("{t0:e}|{t1:e}|{selected:?}");
@@ -643,7 +709,7 @@ impl SchEditor {
         }
         if longer && let Some((tstop, _)) = self.tran_times() {
             self.tran_tstop = sim_core::format_value(tstop * 10.0);
-            self.run_tran();
+            self.start_tran();
         }
         if close {
             self.tran = None;

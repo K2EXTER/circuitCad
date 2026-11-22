@@ -63,7 +63,7 @@ impl SchEditor {
             match self.dc.as_ref().filter(|_| fresh).map(|d| d.outcome.as_ref()) {
                 Some(Ok(dc)) => match read(&self.sch, dc, &refdes, &setup) {
                     Ok(r) => {
-                        ui.label(egui::RichText::new(i18n::trf!("コード {} ({} ビット)", r.code, bits)).strong().color(if r.clipped { crate::theme::WARN } else { crate::theme::OK }));
+                        ui.label(egui::RichText::new(i18n::trf!("コード {} ({} ビット)", r.code, bits)).strong().color(if r.clipped { crate::theme::warn() } else { crate::theme::ok() }));
                         ui.label(i18n::trf!("入力 {}V・基準 {}V・1 段 {}V", sim_core::format_value(r.vin), sim_core::format_value(r.vref), sim_core::format_value(r.lsb)));
                         ui.label(i18n::trf!("コードを電圧に戻すと {}V", sim_core::format_value(r.volts)));
                         if let Some(n) = &r.noise {
@@ -73,11 +73,11 @@ impl SchEditor {
                                 .on_hover_text(i18n::tr("実効の分解能は rms の雑音から、ちらつかない分解能は p-p の雑音から、データシートの式 (1)・(2) で今の基準電圧を使って出したもの。桁は、範囲全体を p-p の揺れで割った数の 10 の何乗か (表示が止まって見える桁数の目安)"));
                         }
                         if r.clipped {
-                            ui.colored_label(crate::theme::WARN, i18n::tr("入力が ±基準電圧 / 利得 の範囲を超えて、コードが端に張り付いています。利得を下げるか、入力を分圧します"));
+                            ui.colored_label(crate::theme::warn(), i18n::tr("入力が ±基準電圧 / 利得 の範囲を超えて、コードが端に張り付いています。利得を下げるか、入力を分圧します"));
                         }
                     }
                     Err(e) => {
-                        ui.colored_label(crate::theme::WARN, i18n::tr_dyn(&e));
+                        ui.colored_label(crate::theme::warn(), i18n::tr_dyn(&e));
                     }
                 },
                 _ => {

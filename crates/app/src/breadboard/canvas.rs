@@ -366,7 +366,7 @@ impl BreadboardView {
                     painter.line_segment([rect.center() + a, rect.center() + b], Stroke::new(3.0, BAD));
                 }
             } else {
-                painter.rect_stroke(rect.expand(pitch * 0.2), 3.0, Stroke::new(2.0, crate::theme::WARN), egui::StrokeKind::Middle);
+                painter.rect_stroke(rect.expand(pitch * 0.2), 3.0, Stroke::new(2.0, crate::theme::warn()), egui::StrokeKind::Middle);
             }
         }
         for h in &wrong {

@@ -220,10 +220,10 @@ impl BoardEditor {
             let mut number = 0;
             for (idx, c) in self.order.checks.iter().enumerate() {
                 let (mark, color) = match c.level {
-                    Level::Ok => ("✔", crate::theme::OK),
+                    Level::Ok => ("✔", crate::theme::ok()),
                     Level::Info => ("ℹ", Color32::from_gray(150)),
-                    Level::Warn => ("▲", crate::theme::WARN),
-                    Level::Error => ("✖", crate::theme::ERROR),
+                    Level::Warn => ("▲", crate::theme::warn()),
+                    Level::Error => ("✖", crate::theme::error()),
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, mark);
@@ -265,9 +265,9 @@ impl BoardEditor {
             let ready = fab::ready(&self.order.checks);
             if self.order.ran {
                 if ready {
-                    ui.colored_label(crate::theme::OK, i18n::tr("直すところはありません。次に進めます"));
+                    ui.colored_label(crate::theme::ok(), i18n::tr("直すところはありません。次に進めます"));
                 } else {
-                    ui.colored_label(crate::theme::ERROR, i18n::tr("赤い ✖ の項目を直してから、もう一度チェックしてください"));
+                    ui.colored_label(crate::theme::error(), i18n::tr("赤い ✖ の項目を直してから、もう一度チェックしてください"));
                 }
             }
 
@@ -311,7 +311,7 @@ impl BoardEditor {
             ui.separator();
             crate::widgets::section_heading(ui, "4. 製造ファイルを書き出す");
             ui.small(i18n::tr("ガーバーは、基板の工場に渡す設計図のデータです (銅の層・シルク・外形・穴が、層ごとのファイルになります)。まとめて zip にします"));
-            ui.add_enabled_ui(ready, |ui| {
+            crate::widgets::unless_ui(ui, (!ready).then_some("上の発注前チェックのエラーを直すと書き出せます"), |ui| {
                 if ui.button(i18n::tr("書き出し先のフォルダを選んで書き出す")).on_hover_text(i18n::tr("ガーバー・ドリル・部品表・部品位置・zip をまとめて作ります")).clicked() {
                     export_now = true;
                 }
@@ -320,8 +320,8 @@ impl BoardEditor {
                 ui.small(i18n::tr("チェックの ✖ を直すと押せます"));
             }
             if let Some(dir) = &self.order.exported_to {
-                ui.colored_label(crate::theme::OK, i18n::trf!("書き出しました: {}", dir.display()));
-                ui.colored_label(crate::theme::OK, i18n::trf!("発注先に渡すのは「{}_gerber.zip」の1つです (部品の実装も頼むときは、BOM と CPL の csv も)", self.board.name));
+                ui.colored_label(crate::theme::ok(), i18n::trf!("書き出しました: {}", dir.display()));
+                ui.colored_label(crate::theme::ok(), i18n::trf!("発注先に渡すのは「{}_gerber.zip」の1つです (部品の実装も頼むときは、BOM と CPL の csv も)", self.board.name));
                 egui::CollapsingHeader::new(i18n::tr("ファイルの中身")).show(ui, |ui| {
                     for (suffix, what) in FILE_KINDS {
                         ui.small(format!("{}{suffix}  …  {what}", self.board.name));

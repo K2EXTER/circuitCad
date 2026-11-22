@@ -255,6 +255,8 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // the panel text sizes, off the sizes at which the font drops the minus on this screen (UI scale, monitor DPI)
         theme::keep_minus_signs(ui.ctx());
+        // results computed on other threads (the transient analysis, the fault scan), whatever tab is shown
+        self.sch.poll_jobs(ui.ctx());
         // closing the window with unsaved changes: ask first
         if ui.ctx().input(|i| i.viewport().close_requested()) && !self.closing_ok && self.dirty() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -443,7 +445,7 @@ impl eframe::App for App {
                     .on_hover_text(i18n::tr("ブレッドボードで組む画面。回路図の部品を、どの穴に差すかを並べます。つながっている穴が光り、差し替えもできます。回路図と違うつなぎ方は知らせます"));
                 let stale = !self.board_ed.schematic_diff(&self.sch).is_empty();
                 let board_tab = format!("{}{}{}", i18n::tr("基板パターン"), unsaved(self.board_ed.dirty()), if stale { " ⚠" } else { "" });
-                let board_tab = if stale { egui::RichText::new(board_tab).color(crate::theme::WARN) } else { egui::RichText::new(board_tab) };
+                let board_tab = if stale { egui::RichText::new(board_tab).color(crate::theme::warn()) } else { egui::RichText::new(board_tab) };
                 ui.selectable_value(&mut self.mode, Mode::Board, board_tab)
                     .on_hover_text(if stale { i18n::tr("⚠ 回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)") } else { i18n::tr("基板の画面。回路図から部品を取り込んで、配置・配線します。• は保存していない変更があるしるしです") });
                 ui.selectable_value(&mut self.mode, Mode::Bench, i18n::tr("実機"))
@@ -792,6 +794,12 @@ impl eframe::App for App {
             // line 1: what just happened (left) and a rotating general tip (right); line 2: what to do next
             ui.spacing_mut().item_spacing.y = 4.0;
             ui.horizontal(|ui| {
+                // something computing on another thread: a spinner, the seconds, how far, and "止める (Esc)" on the left
+                if let Some(r) = self.sch.running()
+                    && schematic::running::running_line(ui, &r)
+                {
+                    self.sch.stop_running();
+                }
                 let status = if self.mode == Mode::Board { &self.board_ed.status } else { &self.sch.status };
                 let status = &i18n::tr_dyn(status);
                 if self.show_hints {
@@ -837,7 +845,7 @@ impl eframe::App for App {
                 });
                 // the word "ヒント" carries the colour; the sentence is plain text so a long hint stays easy to read
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(i18n::tr("ヒント")).strong().color(crate::theme::OK));
+                    ui.label(egui::RichText::new(i18n::tr("ヒント")).strong().color(crate::theme::ok()));
                     ui.add(egui::Label::new(hint.as_str()).truncate()).on_hover_text(hint.as_str());
                 });
             }
@@ -963,8 +971,9 @@ fn main() -> eframe::Result {
             app.req_view = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);
+            startup::apply_panel_theme(&cc.egui_ctx);
             // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)
-            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && a != "--lang" && a != "--paper" && !(i > 0 && (args[i - 1] == "--screenshot" || args[i - 1] == "--lang")));
+            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && a != "--lang" && a != "--paper" && a != "--light-panel" && !(i > 0 && (args[i - 1] == "--screenshot" || args[i - 1] == "--lang")));
             if !opens_something {
                 app.look_for_recovery();
             }

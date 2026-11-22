@@ -81,13 +81,13 @@ impl SchEditor {
         let list = match view {
             Ok(v) => v,
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
                 return;
             }
         };
         for b in list {
             ui.separator();
-            ui.label(egui::RichText::new(i18n::trf!("{} ({}): {}", b.battery.refdes, b.battery.part, hours_text(b.hours))).strong().size(16.0).color(crate::theme::OK));
+            ui.label(egui::RichText::new(i18n::trf!("{} ({}): {}", b.battery.refdes, b.battery.part, hours_text(b.hours))).strong().size(16.0).color(crate::theme::ok()));
             egui::Grid::new(("bat_grid", &b.battery.refdes)).num_columns(2).spacing([16.0, 3.0]).show(ui, |ui| {
                 ui.label(i18n::tr("平均の電流"));
                 ui.label(format!("{}A", sim_core::format_value(b.i_avg))).on_hover_text(i18n::trf!("{}〜{} s の平均", sim_core::format_value(b.from), sim_core::format_value(b.to)));

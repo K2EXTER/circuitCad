@@ -34,7 +34,7 @@ impl BreadboardView {
         };
         let live = self.live.as_ref().filter(|v| v.error.is_none());
         if !matches && live.is_none() {
-            ui.colored_label(crate::theme::WARN, i18n::tr("回路図と違う差し方なので、電源を入れてから読みます (差したとおりの回路を計算します)"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("回路図と違う差し方なので、電源を入れてから読みます (差したとおりの回路を計算します)"));
             return;
         }
         let volts = sch.bench_voltages();
@@ -52,10 +52,10 @@ impl BreadboardView {
         ui.label(i18n::trf!("赤: {}　黒: {}", name(&red, &na), name(&black, &nb)));
         match (v_of(&na), v_of(&nb)) {
             (Some(a), Some(b)) => {
-                ui.label(egui::RichText::new(format!("{} V", sim_core::format_value(a - b))).size(22.0).strong().color(crate::theme::OK));
+                ui.label(egui::RichText::new(format!("{} V", sim_core::format_value(a - b))).size(22.0).strong().color(crate::theme::ok()));
             }
             _ if na.is_none() || nb.is_none() => {
-                ui.colored_label(crate::theme::WARN, i18n::tr("棒の片方が、どこにもつながっていない穴です (表示は定まりません)"));
+                ui.colored_label(crate::theme::warn(), i18n::tr("棒の片方が、どこにもつながっていない穴です (表示は定まりません)"));
             }
             _ => {
                 ui.label(egui::RichText::new(i18n::tr("DC 動作点が求まっていません (回路図の解析で確かめます)")).color(NOTE));
@@ -74,7 +74,7 @@ impl BreadboardView {
         ui.label(i18n::trf!("赤: {}　黒: {}", name(&red, &na), name(&black, &nb)));
         let range = self.meter_range;
         if range == MeterRange::Ohms && self.powered {
-            ui.colored_label(crate::theme::WARN, i18n::tr("電源が入っています。抵抗は電源を切ってから測ります (テスターが自分で流す小さな電流に、回路の電流が混ざって正しく読めません。実物では、テスターを傷めることもあります)"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("電源が入っています。抵抗は電源を切ってから測ります (テスターが自分で流す小さな電流に、回路の電流が混ざって正しく読めません。実物では、テスターを傷めることもあります)"));
             return;
         }
         if range == MeterRange::Amps && !self.powered {
@@ -82,7 +82,7 @@ impl BreadboardView {
             return;
         }
         let (Some(a), Some(b)) = (na, nb) else {
-            ui.colored_label(crate::theme::WARN, i18n::tr("棒の片方が、どこにもつながっていない穴です"));
+            ui.colored_label(crate::theme::warn(), i18n::tr("棒の片方が、どこにもつながっていない穴です"));
             return;
         };
         let key = format!("{range:?}|{a}|{b}|{}|{:?}|{}|{:?}|{:?}", self.powered, self.broken, sch.rev, self.temp_c, self.kind);
@@ -105,22 +105,22 @@ impl BreadboardView {
         let Some((_, reading)) = &self.meter_cache else { return };
         match reading {
             Err(e) => {
-                ui.colored_label(crate::theme::ERROR, i18n::tr_dyn(e));
+                ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
             }
             Ok(r) if r == "SAME" => {
-                ui.label(egui::RichText::new("0 A").size(22.0).strong().color(crate::theme::OK));
+                ui.label(egui::RichText::new("0 A").size(22.0).strong().color(crate::theme::ok()));
                 ui.label(egui::RichText::new(i18n::tr("2 本の棒が同じ線 (ネット) に当たっています。電流計は直列に入れます: 測りたい線を 1 か所外し (ジャンパー線を抜く・部品の足を別の列へ)、空いた 2 つの穴に赤と黒を当てます")).color(NOTE));
             }
             Ok(r) if r.starts_with("FUSE") => {
-                ui.label(egui::RichText::new(i18n::tr("ヒューズが切れました")).size(18.0).strong().color(crate::theme::ERROR));
-                ui.label(egui::RichText::new(i18n::trf!("テスターの中を {}A 流れようとしました。電流のレンジのテスターは、中がほとんど 0 Ω の線です。電源の + と − (並列) に当てるとショートになります。電流は、線を外した所に直列に入れて測ります", &r[5..])).color(crate::theme::WARN));
+                ui.label(egui::RichText::new(i18n::tr("ヒューズが切れました")).size(18.0).strong().color(crate::theme::error()));
+                ui.label(egui::RichText::new(i18n::trf!("テスターの中を {}A 流れようとしました。電流のレンジのテスターは、中がほとんど 0 Ω の線です。電源の + と − (並列) に当てるとショートになります。電流は、線を外した所に直列に入れて測ります", &r[5..])).color(crate::theme::warn()));
             }
             Ok(r) if r == "OL" => {
-                ui.label(egui::RichText::new("OL").size(22.0).strong().color(crate::theme::OK));
+                ui.label(egui::RichText::new("OL").size(22.0).strong().color(crate::theme::ok()));
                 ui.label(egui::RichText::new(i18n::tr("つながっていない (開いている) か、とても大きな抵抗です。コンデンサは直流を通さないので OL です")).color(NOTE));
             }
             Ok(r) => {
-                ui.label(egui::RichText::new(r.as_str()).size(22.0).strong().color(crate::theme::OK));
+                ui.label(egui::RichText::new(r.as_str()).size(22.0).strong().color(crate::theme::ok()));
                 let note = if range == MeterRange::Ohms {
                     i18n::tr("回路につないだまま測ると、並んだ部品も一緒に測ります (並列なら小さく出ます)。部品だけの値は、片方の足を外して測ります。ダイオード・LED は向きと流す電流で読みが変わります")
                 } else {
@@ -144,7 +144,7 @@ impl BreadboardView {
             return;
         };
         let Some(net) = net else {
-            ui.colored_label(crate::theme::WARN, i18n::trf!("{} は、どこにもつながっていない穴です", hole));
+            ui.colored_label(crate::theme::warn(), i18n::trf!("{} は、どこにもつながっていない穴です", hole));
             return;
         };
         ui.label(i18n::trf!("探り針: {} ({net})", hole));

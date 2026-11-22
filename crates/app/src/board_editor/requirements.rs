@@ -29,9 +29,9 @@ impl BoardEditor {
         }
         let marks = self.cached_marks();
         let boxes = self.part_boxes();
-        let (good, bad) = (crate::theme::OK, Color32::from_rgb(255, 60, 200));
+        let (good, bad) = (crate::theme::ok(), Color32::from_rgb(255, 60, 200));
         // not kept, but the table accepts it (a waiver with its reason)
-        let accepted = crate::theme::WARN;
+        let accepted = crate::theme::warn();
         // the frames and lines go into one mesh and are handed over before each tag, so that the tags lie over them
         let mut mesh = egui::Mesh::default();
         // a dark halo under every line and frame: the top copper is red and the inner layers green, so the colour alone is not enough
@@ -166,13 +166,16 @@ impl BoardEditor {
         let lost = rows.iter().filter(|r| !r.3).count();
         let title = if lost == 0 { format!("設計の要件の表 ({} 行)", rows.len()) } else { format!("設計の要件の表 ({} 行、基板に届かない {lost} 行)", rows.len()) };
         let mut open_sch = false;
-        egui::CollapsingHeader::new(title).id_salt("req_table").default_open(lost > 0).show(ui, |ui| {
-            for (kind, name, what, got, why) in &rows {
+        // a heading, not a fold inside the "③ 確認する" step (at most two levels): only the rows that do not reach the board are
+        // listed under it; the whole table is on the schematic side ("回路図で表を開く")
+        crate::widgets::section_heading(ui, title).on_hover_text(i18n::tr("回路図の「設計の要件」の表の行が、基板に取り込まれているか。届いていない行だけ下に出します"));
+        {
+            for (kind, name, what, got, why) in rows.iter().filter(|r| !r.3) {
                 ui.horizontal_wrapped(|ui| {
                     if *got {
-                        ui.colored_label(crate::theme::OK, "✔").on_hover_text(i18n::tr("基板に取り込まれています"));
+                        ui.colored_label(crate::theme::ok(), "✔").on_hover_text(i18n::tr("基板に取り込まれています"));
                     } else {
-                        ui.colored_label(crate::theme::ERROR, "✖").on_hover_text(i18n::tr("基板に届いていません。ネットのパッドが基板にない、部品を取り込んでいない、などが考えられます。名前を確かめて、回路図から取り込み直してください"));
+                        ui.colored_label(crate::theme::error(), "✖").on_hover_text(i18n::tr("基板に届いていません。ネットのパッドが基板にない、部品を取り込んでいない、などが考えられます。名前を確かめて、回路図から取り込み直してください"));
                     }
                     ui.label(format!("{kind}「{name}」")).on_hover_text(if why.trim().is_empty() { i18n::tr("(理由が書かれていません)") } else { why });
                     ui.label(egui::RichText::new(what).small().color(Color32::GRAY));
@@ -181,7 +184,7 @@ impl BoardEditor {
             if ui.button(i18n::tr("回路図で表を開く")).on_hover_text(i18n::tr("表は回路図の側で直します (基板と回路図で食い違わないように、ここは見るだけです)。直すと基板に自動で取り込まれます")).clicked() {
                 open_sch = true;
             }
-        });
+        }
         if open_sch {
             self.open_sch_requirements = true;
         }
@@ -197,7 +200,7 @@ impl BoardEditor {
         }
         let answer = self.cached_requirements();
         let rep = &answer.0;
-        let orange = crate::theme::WARN;
+        let orange = crate::theme::warn();
         if rep.findings.is_empty() {
             ui.label(i18n::trf!("✔ 設計の要件を満たしています ({} 件を確認)", rep.checked)).on_hover_text(i18n::tr("回路図の「設計の要件」の表にある、近くに置く組と、離す組を調べました。上限や下限の0のものは調べません"));
         } else {
@@ -211,7 +214,7 @@ impl BoardEditor {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(orange, i18n::tr_dyn(&f.message));
                     let can = !self.waive_reason.trim().is_empty();
-                    if crate::widgets::unless(ui, (!(can)).then_some("上の欄に理由を書くと押せます"), egui::Button::new(i18n::tr("承知する")).small()).on_hover_text(i18n::tr("この指摘を、理由つきで「承知した例外」にします。点検の件数に数えず、基板の上では黄土色で出ます。理由を上の欄に書いてから押します。回路図の側の表にも書き込まれます")).clicked() {
+                    if crate::widgets::unless(ui, (!can).then_some("上の欄に理由を書くと押せます"), egui::Button::new(i18n::tr("承知する")).small()).on_hover_text(i18n::tr("この指摘を、理由つきで「承知した例外」にします。点検の件数に数えず、基板の上では黄土色で出ます。理由を上の欄に書いてから押します。回路図の側の表にも書き込まれます")).clicked() {
                         let w = design_spec::Waiver { kind: f.kind.key().into(), name: f.name.clone(), item: f.item.clone(), note: self.waive_reason.trim().to_string() };
                         self.checkpoint();
                         self.board.waivers.push(w.clone());
@@ -229,10 +232,12 @@ impl BoardEditor {
             }
         }
         if !rep.waived.is_empty() {
-            egui::CollapsingHeader::new(i18n::trf!("承知した例外 ({})", rep.waived.len())).id_salt("req_waived").default_open(false).show(ui, |ui| {
+            // a heading and a short scrolling list, not a fold inside the step (at most two levels)
+            crate::widgets::section_heading(ui, i18n::trf!("承知した例外 ({})", rep.waived.len()));
+            egui::ScrollArea::vertical().id_salt("req_waived").max_height(140.0).show(ui, |ui| {
                 for (f, why) in &rep.waived {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(i18n::tr_dyn(&f.message)).color(crate::theme::WARN));
+                        ui.label(egui::RichText::new(i18n::tr_dyn(&f.message)).color(crate::theme::warn()));
                         ui.label(egui::RichText::new(i18n::trf!("理由: {}", if why.trim().is_empty() { "(書かれていません)" } else { why })).small());
                         if ui.small_button(i18n::tr("承知をやめる")).on_hover_text(i18n::tr("この例外を取り消して、また指摘に戻します。回路図の表からも消えます")).clicked() {
                             let w = design_spec::Waiver { kind: f.kind.key().into(), name: f.name.clone(), item: f.item.clone(), note: String::new() };

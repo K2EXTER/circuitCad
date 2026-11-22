@@ -155,9 +155,9 @@ impl SchEditor {
                                     num(ui, eng(r.volts, "V"));
                                     let (diff, agree) = super::judge(*v, None, r.volts, r.uncert);
                                     let color = match agree {
-                                        super::Agree::Good => crate::theme::OK,
-                                        super::Agree::Off => crate::theme::WARN,
-                                        super::Agree::Far => crate::theme::ERROR,
+                                        super::Agree::Good => crate::theme::ok(),
+                                        super::Agree::Off => crate::theme::warn(),
+                                        super::Agree::Far => crate::theme::error(),
                                     };
                                     ui.label(egui::RichText::new(eng(diff, "V")).monospace().color(color)).on_hover_text(i18n::tr("実測 − 予測。緑は合う、橙は少しずれ、赤は大きくずれ (実機のタブの「測る」と同じ判定)"));
                                 }

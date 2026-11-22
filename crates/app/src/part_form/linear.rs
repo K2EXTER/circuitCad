@@ -490,12 +490,12 @@ impl PartForm {
                 }
             }
             Some(Err(e)) => {
-                ui.colored_label(crate::theme::ERROR, e);
+                ui.colored_label(crate::theme::error(), e);
             }
             None => {}
         }
         if let Some((ok, m)) = message {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::ERROR }, m);
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::error() }, m);
         }
     }
 
@@ -527,7 +527,7 @@ impl PartForm {
             }
         });
         for (ok, line) in &self.opamp.found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         let o = &mut self.opamp;
         egui::Grid::new("opamp_inputs").num_columns(2).show(ui, |ui| {
@@ -601,7 +601,7 @@ impl PartForm {
             ui.checkbox(&mut self.reg.adjustable, i18n::tr("可変 (ADJ ピン)")).on_hover_text(i18n::tr("LM317 のように、抵抗 2 本で出力電圧を決める部品。ピンは IN・ADJ・OUT"));
         });
         for (ok, line) in &self.reg.found {
-            ui.colored_label(if *ok { crate::theme::OK } else { crate::theme::WARN }, egui::RichText::new(line).small());
+            ui.colored_label(if *ok { crate::theme::ok() } else { crate::theme::warn() }, egui::RichText::new(line).small());
         }
         // one data sheet for several output voltages (LP5907, MC7800, AMS1117): the person picks one
         if !self.reg.adjustable && !self.reg.variants.is_empty() {

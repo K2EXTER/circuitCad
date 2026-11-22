@@ -45,14 +45,28 @@ pub fn unless(ui: &mut egui::Ui, why_not: Option<&str>, w: impl egui::Widget) ->
     }
 }
 
-pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
-    ui.add_enabled(enabled, egui::Button::new(i18n::tr_dyn(label)))
+pub fn primary_button(ui: &mut egui::Ui, why_not: Option<&str>, label: &str) -> egui::Response {
+    unless(ui, why_not, egui::Button::new(i18n::tr_dyn(label)))
 }
 
 /// `primary_button` as wide as the space left in its row (the main action of a side panel, under bars of the same width).
-pub fn primary_button_wide(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
+pub fn primary_button_wide(ui: &mut egui::Ui, why_not: Option<&str>, label: &str) -> egui::Response {
     let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-    ui.add_enabled_ui(enabled, |ui| ui.add_sized(size, egui::Button::new(i18n::tr_dyn(label)))).inner
+    let r = ui.add_enabled_ui(why_not.is_none(), |ui| ui.add_sized(size, egui::Button::new(i18n::tr_dyn(label)))).inner;
+    match why_not {
+        Some(m) => r.on_disabled_hover_text(i18n::tr_dyn(m)),
+        None => r,
+    }
+}
+
+/// `ui.add_enabled_ui` with the reason: a block of controls that cannot be used while `why_not` is `Some` is greyed out, and the reason
+/// shows when the pointer rests anywhere on it.
+pub fn unless_ui<R>(ui: &mut egui::Ui, why_not: Option<&str>, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let r = ui.add_enabled_ui(why_not.is_none(), body);
+    if let Some(m) = why_not {
+        ui.interact(r.response.rect, r.response.id.with("why_not"), egui::Sense::hover()).on_hover_text(i18n::tr_dyn(m));
+    }
+    r.inner
 }
 
 /// The title of a block inside a panel or window ("回路図の記号"): a step stronger than the body, in the light accent, with a little air above.
@@ -63,7 +77,7 @@ pub fn section_heading(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Resp
 
 /// The same title without the air above, for a title that shares a row with a button (the top row of a result window).
 pub fn heading_inline(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
-    ui.label(egui::RichText::new(i18n::tr_dyn(&text.into())).strong().color(crate::theme::INFO))
+    ui.label(egui::RichText::new(i18n::tr_dyn(&text.into())).strong().color(crate::theme::info()))
 }
 
 /// The gap between two groups of controls in a side panel: close controls sit 4 px apart, groups 12 px, with a faint line between.
@@ -113,7 +127,7 @@ pub fn band_header<R>(
     let band = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), rows).expand2(egui::vec2(0.0, 1.0));
     let band = if joined { egui::Rect::from_min_max(band.min, egui::pos2(band.max.x, rows.max)) } else { band };
     let hit = ui.interact(egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), rows), ui.id().with(("band_header", id)), egui::Sense::click());
-    let fill = egui::Color32::from_gray(match (open, hit.hovered()) {
+    let fill = crate::theme::gray(match (open, hit.hovered()) {
         (true, false) => 48,
         (true, true) => 54,
         (false, false) => 38,
@@ -126,7 +140,7 @@ pub fn band_header<R>(
     // a border round the band and the contents under it (they read as one card)
     if let (true, Some(body)) = (joined, &r.body_response) {
         let card = egui::Rect::from_min_max(band.min, egui::pos2(band.max.x, body.rect.bottom()));
-        ui.painter().rect_stroke(card, 4, egui::Stroke::new(1.0, egui::Color32::from_gray(75)), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(card, 4, egui::Stroke::new(1.0, crate::theme::gray(75)), egui::StrokeKind::Inside);
     }
     (r, hit.clicked())
 }
@@ -154,7 +168,7 @@ pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: b
     // an open section's band joins the box under it: square at the bottom, no air below
     let low = if open { 0 } else { 4 };
     let band = if open { row.expand2(egui::vec2(0.0, 0.0)) } else { row.expand2(egui::vec2(0.0, 1.0)) };
-    ui.painter().rect_filled(band, egui::CornerRadius { nw: 4, ne: 4, sw: low, se: low }, egui::Color32::from_gray(gray));
+    ui.painter().rect_filled(band, egui::CornerRadius { nw: 4, ne: 4, sw: low, se: low }, crate::theme::gray(gray));
     // the fold arrow turns from pointing right to pointing down as the section opens
     let colour = if open { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
     let spin = egui::emath::Rot2::from_angle(state.openness(ui.ctx()) * std::f32::consts::FRAC_PI_2);
@@ -181,7 +195,7 @@ pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: b
     ui.painter().galley(pos, galley, colour);
     if done {
         let font = egui::TextStyle::Button.resolve(ui.style());
-        ui.painter().text(egui::pos2(row.max.x - 8.0, row.center().y), egui::Align2::RIGHT_CENTER, "✓", font, crate::theme::OK);
+        ui.painter().text(egui::pos2(row.max.x - 8.0, row.center().y), egui::Align2::RIGHT_CENTER, "✓", font, crate::theme::ok());
     }
     let hit = hit.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(i18n::tr_dyn(hint));
     // the band already shows what belongs to the section: no guide line, and a narrow indent (the panel is only so wide)
@@ -212,7 +226,7 @@ pub fn section_header_marked<R>(ui: &mut egui::Ui, id: egui::Id, default_open: b
         .inner;
     if out.is_some() {
         let frame = egui::Rect::from_min_max(row.min, egui::pos2(row.max.x, bottom));
-        ui.painter().rect_stroke(frame, 4, egui::Stroke::new(1.0, egui::Color32::from_gray(75)), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(frame, 4, egui::Stroke::new(1.0, crate::theme::gray(75)), egui::StrokeKind::Inside);
     }
     if hit.clicked() {
         state.toggle(ui);
@@ -234,7 +248,7 @@ pub fn round_card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -
 
 fn card_with_corners<R>(ui: &mut egui::Ui, corners: egui::CornerRadius, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let framed = egui::Frame::new()
-        .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(75)))
+        .stroke(egui::Stroke::new(1.0, crate::theme::gray(75)))
         .corner_radius(corners)
         .inner_margin(egui::Margin::symmetric(6, 6))
         .show(ui, |ui| {
@@ -246,20 +260,22 @@ fn card_with_corners<R>(ui: &mut egui::Ui, corners: egui::CornerRadius, body: im
 }
 
 /// A row of text buttons joined into one bar (equal widths, square where they meet, a faint line between): the buttons of one purpose
-/// ("make or reuse a part"). `items` is `(label, enabled)`; the responses come back in the same order, for the caller's hover text and clicks.
-pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, bool)]) -> Vec<egui::Response> {
+/// ("make or reuse a part"). `items` is `(label, why_not)`: `None` for a usable button, else why it cannot be pressed now (shown on hover,
+/// like `unless`). The responses come back in the same order, for the caller's hover text and clicks.
+pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, Option<&str>)]) -> Vec<egui::Response> {
     segment_bar(ui, items, None)
 }
 
 /// The same bar for choosing one of several: `selected` is the one in effect (filled with the selection colour, bold). The responses come
 /// back in order; a click on one is the choice.
-pub fn segment_bar(ui: &mut egui::Ui, items: &[(&str, bool)], selected: Option<usize>) -> Vec<egui::Response> {
+pub fn segment_bar(ui: &mut egui::Ui, items: &[(&str, Option<&str>)], selected: Option<usize>) -> Vec<egui::Response> {
     let mut out = Vec::new();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         let width = ui.available_width() / items.len() as f32;
         let height = ui.spacing().interact_size.y;
-        for (n, (label, enabled)) in items.iter().enumerate() {
+        for (n, (label, why_not)) in items.iter().enumerate() {
+            let enabled = &why_not.is_none();
             let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), if *enabled { egui::Sense::click() } else { egui::Sense::hover() });
             let widgets = &ui.visuals().widgets;
             let chosen = selected == Some(n);
@@ -298,7 +314,10 @@ pub fn segment_bar(ui: &mut egui::Ui, items: &[(&str, bool)], selected: Option<u
                 galley = ui.painter().layout_job(job);
             }
             ui.painter().galley(rect.center() - galley.size() / 2.0, galley, colour);
-            out.push(resp);
+            out.push(match why_not {
+                Some(m) => resp.on_hover_text(egui::RichText::new(i18n::tr_dyn(m)).color(crate::theme::warn())),
+                None => resp,
+            });
         }
     });
     out
@@ -327,7 +346,7 @@ pub fn beside_panel() -> egui::Pos2 {
 /// A row of tabs: each tab is a button, the chosen one is filled and underlined, and a line runs under the row, so it reads as tabs and
 /// not as a few words. `tabs` is `(value, label, hover text)`; an empty hover text shows none. The row wraps when the window is narrow.
 pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[(T, &str, &str)]) {
-    let accent = crate::theme::INFO;
+    let accent = crate::theme::info();
     let row = ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
         for &(value, label, hover) in tabs {
@@ -360,20 +379,20 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[
 pub fn warning_lines(ui: &mut egui::Ui, id: &str, lines: &[String], calm: impl Fn(&str) -> bool) {
     let (notes, warns): (Vec<&String>, Vec<&String>) = lines.iter().partition(|w| calm(w));
     for w in notes {
-        ui.colored_label(egui::Color32::from_rgb(130, 170, 210), format!("ⓘ {}", i18n::tr_dyn(w)));
+        ui.colored_label(crate::theme::info(), format!("ⓘ {}", i18n::tr_dyn(w)));
     }
     match warns.len() {
         0 => {}
         1 => {
-            ui.colored_label(crate::theme::WARN, i18n::tr_dyn(warns[0]));
+            ui.colored_label(crate::theme::warn(), i18n::tr_dyn(warns[0]));
         }
         n => {
-            egui::CollapsingHeader::new(egui::RichText::new(i18n::trf!("⚠ 警告 {n} 件")).color(crate::theme::WARN))
+            egui::CollapsingHeader::new(egui::RichText::new(i18n::trf!("⚠ 警告 {n} 件")).color(crate::theme::warn()))
                 .id_salt(id)
                 .default_open(false)
                 .show(ui, |ui| {
                     for w in warns {
-                        ui.colored_label(crate::theme::WARN, i18n::tr_dyn(w));
+                        ui.colored_label(crate::theme::warn(), i18n::tr_dyn(w));
                     }
                 })
                 .header_response
@@ -473,4 +492,31 @@ pub fn drum(ui: &mut egui::Ui, id: egui::Id, items: &[String], usable: &[bool], 
         resp.mark_changed();
     }
     resp
+}
+
+#[cfg(test)]
+mod why_not_tests {
+    /// Every greyed-out control says why (ui-rules.md, 2026-11-17): `ui.add_enabled` / `add_enabled_ui` only inside this file's helpers
+    /// (`unless`, `unless_ui`, `primary_button_wide`); everywhere else they take the reason.
+    #[test]
+    fn no_greyed_out_control_without_a_reason() {
+        fn walk(dir: &std::path::Path, out: &mut Vec<String>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") && p.file_name().is_some_and(|n| n != "widgets.rs") {
+                    let text = std::fs::read_to_string(&p).unwrap();
+                    for (k, line) in text.lines().enumerate() {
+                        if line.contains(".add_enabled(") || line.contains(".add_enabled_ui(") {
+                            out.push(format!("{}:{}", p.display(), k + 1));
+                        }
+                    }
+                }
+            }
+        }
+        let mut found = vec![];
+        walk(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut found);
+        assert!(found.is_empty(), "use crate::widgets::unless / unless_ui with the reason instead of add_enabled: {found:?}");
+    }
 }

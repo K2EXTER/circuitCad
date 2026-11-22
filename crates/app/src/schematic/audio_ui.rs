@@ -51,7 +51,7 @@ pub(super) fn audio_ui(ui: &mut egui::Ui, res: &TranResult, order: &[&str], w: (
             ui.small(i18n::trf!("{:.2} 秒{repeat}。中心 {}{unit} を 0 に、振れ ±{}{unit} を音量 {:.0} % に", s.seconds, eng(s.offset, ""), eng(s.volts_full_scale * sim_core::audio::PEAK, ""), sim_core::audio::PEAK * 100.0));
         }
         Err(e) => {
-            ui.colored_label(crate::theme::WARN, i18n::tr_dyn(e));
+            ui.colored_label(crate::theme::warn(), i18n::tr_dyn(e));
         }
     }
 }

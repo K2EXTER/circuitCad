@@ -33,7 +33,7 @@ impl BreadboardView {
         let problems = self.board_check(sch, &l);
         ui.add_space(4.0);
         if problems.is_empty() {
-            ui.colored_label(crate::theme::OK, i18n::tr("✔ 回路図どおりにつながっています"));
+            ui.colored_label(crate::theme::ok(), i18n::tr("✔ 回路図どおりにつながっています"));
         } else {
             ui.colored_label(BAD, i18n::trf!("回路図と違う所が {} 件あります", problems.len()));
             for p in &problems {
@@ -133,12 +133,12 @@ impl BreadboardView {
         {
             let issues = self.issues();
             if let Some(Board { dc: Err(e), .. }) = &self.board {
-                ui.colored_label(crate::theme::WARN, i18n::trf!("電源を入れたときの直流の様子が求まりませんでした: {}", i18n::tr_dyn(e)));
+                ui.colored_label(crate::theme::warn(), i18n::trf!("電源を入れたときの直流の様子が求まりませんでした: {}", i18n::tr_dyn(e)));
             } else if issues.is_empty() {
-                ui.colored_label(crate::theme::OK, i18n::tr("電源を入れました。定格を超えた部品はありません"));
+                ui.colored_label(crate::theme::ok(), i18n::tr("電源を入れました。定格を超えた部品はありません"));
             } else {
                 for r in &issues {
-                    let (col, head) = if r.level == sim_core::RatingLevel::Over { (BAD, i18n::tr("壊れた")) } else { (crate::theme::WARN, i18n::tr("熱い・余裕が少ない")) };
+                    let (col, head) = if r.level == sim_core::RatingLevel::Over { (BAD, i18n::tr("壊れた")) } else { (crate::theme::warn(), i18n::tr("熱い・余裕が少ない")) };
                     ui.label(egui::RichText::new(format!("{} {}: {}", r.refdes, head, i18n::tr_dyn(&r.message))).color(col));
                     if let Some((_, f)) = self.broken.iter().find(|(b, _)| element_of(b, &r.refdes)) {
                         ui.label(egui::RichText::new(i18n::trf!("　{} は {} になり、回路からはそのように計算しています", r.refdes, i18n::tr_dyn(&f.label()))).color(BAD));

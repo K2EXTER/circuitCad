@@ -192,7 +192,7 @@ impl SchEditor {
         ui.horizontal_wrapped(|ui| {
             let ways: Vec<usize> = (1..r.hyps.len()).filter(|&i| r.hyps[i].element == r.answer_part).collect();
             let chosen = ways.get(r.answer_way).copied();
-            if crate::widgets::unless(ui, (!(chosen.is_some())).then_some("原因だと思う部品を、先に選んでください"), egui::Button::new(i18n::tr("これが原因"))).on_hover_text(i18n::tr("選んだ部品と壊れ方を答えます。外れても、続けて測れます")).clicked()
+            if crate::widgets::unless(ui, (!chosen.is_some()).then_some("原因だと思う部品を、先に選んでください"), egui::Button::new(i18n::tr("これが原因"))).on_hover_text(i18n::tr("選んだ部品と壊れ方を答えます。外れても、続けて測れます")).clicked()
                 && let Some(i) = chosen
             {
                 r.answer(i);
@@ -212,7 +212,7 @@ impl SchEditor {
             }
         });
         if let Some((good, m)) = &r.message {
-            ui.colored_label(if *good { crate::theme::OK } else { crate::theme::WARN }, i18n::tr_dyn(m));
+            ui.colored_label(if *good { crate::theme::ok() } else { crate::theme::warn() }, i18n::tr_dyn(m));
         }
     }
 
