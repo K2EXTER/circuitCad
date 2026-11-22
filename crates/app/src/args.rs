@@ -278,6 +278,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     }
     if let Some(p) = args.iter().find(|a| a.ends_with(".ccproj")) {
         app.load_project(p.into());
+        // `--boards`: the window of the boards and their links (the check and its fixes)
+        if args.iter().any(|a| a == "--boards") {
+            app.boards.open = true;
+        }
         // `--select R1` also picks the part of a project's schematic (the board and the 3D view show it: the linked pick)
         if let Some(i) = args.iter().position(|a| a == "--select")
             && let Some(r) = args.get(i + 1) {

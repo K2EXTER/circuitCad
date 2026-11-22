@@ -8,7 +8,20 @@ use sch_core::Schematic;
 use sch_core::system::BoardLink;
 use serde_json::{Value, json};
 
-const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic)";
+const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson | project alias FILE.ccproj LINK NET_A NET_B | project mirror FILE.ccproj LINK   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic; alias and mirror change link LINK (from 1) in the file: two names as one signal, the pins paired the other way round)";
+
+/// Changes link `k` (from 1) of a project file in place with `edit`, keeping the rest of the file as it is.
+fn edit_link(file: &str, k: &str, edit: impl FnOnce(&mut BoardLink) -> Result<(), String>) -> Result<BoardLink, String> {
+    let text = std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?;
+    let mut v: Value = serde_json::from_str(&text).map_err(|e| format!("{file}: not a project ({e})"))?;
+    let i = k.parse::<usize>().ok().filter(|&i| i >= 1).ok_or_else(|| format!("LINK {k}: the link's number, from 1"))? - 1;
+    let slot = v.get_mut("links").and_then(Value::as_array_mut).and_then(|a| a.get_mut(i)).ok_or_else(|| format!("{file}: no link {k}"))?;
+    let mut link: BoardLink = serde_json::from_value(slot.clone()).map_err(|e| format!("link {k}: {e}"))?;
+    edit(&mut link)?;
+    *slot = serde_json::to_value(&link).map_err(|e| e.to_string())?;
+    std::fs::write(file, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?).map_err(|e| format!("{file}: {e}"))?;
+    Ok(link)
+}
 
 /// A `key=value` option as a number, or `default` without it.
 fn number(kv: &[(String, String)], key: &str, default: f64) -> Result<f64, String> {
@@ -67,7 +80,14 @@ impl crate::session::Session {
                 let findings = sch_core::system::check(&designs, &links);
                 let list: Vec<Value> = findings
                     .iter()
-                    .map(|f| json!({"severity": if f.severity == sch_core::Severity::Error { "error" } else { "warning" }, "link": f.link, "pins": f.pins, "message": f.message, "hint": f.hint}))
+                    .map(|f| {
+                        let fix = match &f.fix {
+                            Some(sch_core::system::Fix::Alias(a, b)) => json!({"alias": [a, b], "command": format!("project alias {file} {} {a} {b}", f.link + 1)}),
+                            Some(sch_core::system::Fix::Pairs(p)) => json!({"pairs": p, "command": format!("project mirror {file} {}", f.link + 1)}),
+                            None => Value::Null,
+                        };
+                        json!({"severity": if f.severity == sch_core::Severity::Error { "error" } else { "warning" }, "link": f.link, "pins": f.pins, "message": f.message, "hint": f.hint, "fix": fix})
+                    })
                     .collect();
                 let errors = findings.iter().filter(|f| f.severity == sch_core::Severity::Error).count();
                 Ok(obj(json!({
@@ -127,6 +147,28 @@ impl crate::session::Session {
                     })
                     .collect();
                 Ok(obj(json!({"fstart": r.freq.first(), "fstop": r.freq.last(), "pins": list, "warnings": r.warnings})))
+            }
+            "alias" => {
+                let (Some(k), Some(a), Some(b)) = (pos.get(2), pos.get(3), pos.get(4)) else { return Err(USAGE.into()) };
+                let link = edit_link(file, k, |l| {
+                    l.aliases.push((a.clone(), b.clone()));
+                    Ok(())
+                })?;
+                let (boards, links) = read(file)?;
+                let designs: Vec<(&str, &Schematic)> = boards.iter().map(|(n, _, s)| (n.as_str(), s)).collect();
+                let left = sch_core::system::check(&designs, &links).len();
+                Ok(obj(json!({"file": file, "aliases": link.aliases, "findings_left": left})))
+            }
+            "mirror" => {
+                let k = pos.get(2).ok_or(USAGE)?;
+                let link = edit_link(file, k, |l| {
+                    let pins = |d: &str, r: &str| designs.iter().find(|x| x.0 == d).and_then(|x| sch_core::system::pins_of(x.1, r));
+                    let (Some(pa), Some(pb)) = (pins(&l.a.design, &l.a.refdes), pins(&l.b.design, &l.b.refdes)) else { return Err("the link's connectors are not in the schematics".into()) };
+                    let m = sch_core::system::mirrored_pairs(&pa, &pb);
+                    l.pairs = if l.pairs == m { vec![] } else { m };
+                    Ok(())
+                })?;
+                Ok(obj(json!({"file": file, "pairs": link.pairs})))
             }
             "step" => {
                 let out = pos.get(2).ok_or(USAGE)?;

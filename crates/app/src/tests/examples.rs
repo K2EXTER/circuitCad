@@ -3307,7 +3307,7 @@ fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
 
 fn multiboard_link() -> sch_core::system::BoardLink {
     use sch_core::system::{BoardLink, LinkEnd};
-    BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![] }
+    BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![], aliases: vec![] }
 }
 
 /// Generates docs/examples/multiboard_i2c.ccproj, the multi-board sample (two boards and the link of their headers; three sensor boards

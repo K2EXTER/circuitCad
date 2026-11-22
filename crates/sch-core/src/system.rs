@@ -4,7 +4,8 @@
 //!
 //! A link pairs the pins of two connectors: by default pin 1 with pin 1, 2 with 2 ... (a cable or a board-to-board header), or as listed
 //! (a cable that crosses, a socket numbered the other way). The check compares the nets on the two sides by name: the same name is the same
-//! signal. A net without a name (`N$...`) cannot be compared and is only noted: naming the nets on both boards is what makes the check work.
+//! signal, and so are the names a link lists as one (`aliases`: `SDA` on one board is `I2C_DATA` on the other). A net without a name (`N$...`)
+//! cannot be compared and is only noted: naming the nets on both boards is what makes the check work.
 
 use crate::netlist::{extract, Severity};
 use crate::Schematic;
@@ -26,6 +27,18 @@ pub struct BoardLink {
     /// Pin of `a` to pin of `b`; empty: the same numbers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pairs: Vec<(String, String)>,
+    /// Net names of `a` and `b` that are the same signal although named differently (`SDA` and `I2C_DATA`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<(String, String)>,
+}
+
+/// What the person can do about a finding with one click.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Fix {
+    /// Register the two names (side A, side B) as one signal on the link.
+    Alias(String, String),
+    /// Use these pin pairs for the link (the numbers mirrored, say).
+    Pairs(Vec<(String, String)>),
 }
 
 /// What the check found on a link.
@@ -39,6 +52,8 @@ pub struct Finding {
     pub message: String,
     /// Why it matters and what to do.
     pub hint: String,
+    /// The change that settles it, when there is one to offer.
+    pub fix: Option<Fix>,
 }
 
 /// What a net carries, as far as its name tells.
@@ -101,8 +116,19 @@ pub fn pin_pairs(link: &BoardLink, a_pins: &[String], b_pins: &[String]) -> Vec<
     a_pins.iter().filter(|p| b_pins.contains(p)).map(|p| (p.clone(), p.clone())).collect()
 }
 
+/// The pins of two connectors paired the other way round: the first of `a` with the last of `b` ... (a header and a socket facing each
+/// other, or a ribbon cable folded over). The shorter connector sets how many.
+pub fn mirrored_pairs(a_pins: &[String], b_pins: &[String]) -> Vec<(String, String)> {
+    a_pins.iter().cloned().zip(b_pins.iter().rev().cloned()).collect()
+}
+
 fn same(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
+}
+
+/// Whether net `m` of side A and net `n` of side B are the same signal on `link`: the same name, or two names the link lists as one.
+pub fn same_signal(link: &BoardLink, m: &str, n: &str) -> bool {
+    same(m, n) || link.aliases.iter().any(|(x, y)| same(x, m) && same(y, n))
 }
 
 /// Checks every link: that both connectors exist and have as many pins, and pin by pin that the two sides carry the same net (by name),
@@ -116,7 +142,7 @@ pub fn check(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Vec<Finding
     }
     let find = |n: &str| designs.iter().find(|(d, _)| *d == n).map(|(_, s)| *s);
     for (k, link) in links.iter().enumerate() {
-        let f = |severity, pins: Option<(String, String)>, message: String, hint: &str| Finding { severity, link: k, pins, message, hint: hint.to_string() };
+        let f = |severity, pins: Option<(String, String)>, message: String, hint: &str| Finding { severity, link: k, pins, message, hint: hint.to_string(), fix: None };
         let (Some(sa), Some(sb)) = (find(&link.a.design), find(&link.b.design)) else {
             out.push(f(Severity::Error, None, format!("基板「{}」か「{}」がプロジェクトにありません", link.a.design, link.b.design), "基板の名前を変えたか消したときは、つなぎを作り直してください"));
             continue;
@@ -137,6 +163,31 @@ pub fn check(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Vec<Finding
         let pairs = pin_pairs(link, &pa, &pb);
         let net_a = |p: &str| na.get(&(link.a.refdes.clone(), p.to_string())).cloned();
         let net_b = |p: &str| nb.get(&(link.b.refdes.clone(), p.to_string())).cloned();
+        // how many pairs have a name on both sides, and how many of those agree
+        let score = |pairs: &[(String, String)]| {
+            pairs.iter().fold((0, 0), |(ok, named), (p, q)| match (net_a(p), net_b(q)) {
+                (Some(m), Some(n)) if role(&m) != Role::Unnamed && role(&n) != Role::Unnamed => (ok + usize::from(same_signal(link, &m, &n)), named + 1),
+                _ => (ok, named),
+            })
+        };
+        // the numbers mirrored (a socket facing the header, a folded cable): nothing agrees as it is, everything does the other way round
+        if link.pairs.is_empty() && pa.len() == pb.len() {
+            let mirrored = mirrored_pairs(&pa, &pb);
+            let ((ok, named), (ok_m, named_m)) = (score(&pairs), score(&mirrored));
+            if ok < named && named_m >= 2 && ok_m == named_m && named_m >= named {
+                let n = pa.len();
+                out.push(Finding {
+                    fix: Some(Fix::Pairs(mirrored)),
+                    ..f(
+                        Severity::Error,
+                        None,
+                        format!("{}.{} ↔ {}.{}: ピンの番号が逆に並んでいませんか (1 番 ↔ {n} 番にすると、すべての信号が合います)", link.a.design, link.a.refdes, link.b.design, link.b.refdes),
+                        "ソケットをピンヘッダに向かい合わせに差すときや、フラットケーブルを折り返すときは、番号が逆になります。そのつなぎ方なら「直す」でピンの組を逆順にします。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください",
+                    )
+                });
+                continue;
+            }
+        }
         let mut unnamed = 0;
         for (p, q) in &pairs {
             let (x, y) = (net_a(p), net_b(q));
@@ -155,7 +206,7 @@ pub fn check(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Vec<Finding
                         unnamed += 1;
                         continue;
                     }
-                    if same(m, n) {
+                    if same_signal(link, m, n) {
                         continue;
                     }
                     let swapped = matches!((rm, rn), (Role::Ground, Role::Power) | (Role::Power, Role::Ground));
@@ -164,11 +215,11 @@ pub fn check(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Vec<Finding
                         continue;
                     }
                     // the other side's net on another pin of this link: two pins crossed
-                    let crossed = pairs.iter().find(|(p2, q2)| (p2, q2) != (p, q) && net_b(q2).is_some_and(|z| same(&z, m)));
-                    let hint = "コネクタの向き (1 番ピンの位置) や、ケーブルが入れ替わっていないか確かめます。名前の付け方が違うだけ (例: SDA と I2C_SDA) なら、どちらかの名前を合わせます";
+                    let crossed = pairs.iter().find(|(p2, q2)| (p2, q2) != (p, q) && net_b(q2).is_some_and(|z| same_signal(link, m, &z)));
+                    let hint = "コネクタの向き (1 番ピンの位置) や、ケーブルが入れ替わっていないか確かめます。名前の付け方が違うだけ (例: SDA と I2C_SDA) なら、どちらかの名前を合わせるか、「同じ信号にする」で名前の対応をつなぎに登録します";
                     match crossed {
                         Some((_, q2)) => out.push(f(Severity::Error, pins, format!("{label}: {m} と {n} が違います ({m} は相手の {q2} 番にあります。入れ替わっていませんか)"), hint)),
-                        None => out.push(f(Severity::Warning, pins, format!("{label}: {m} と {n} の名前が違います"), hint)),
+                        None => out.push(Finding { fix: Some(Fix::Alias(m.clone(), n.clone())), ..f(Severity::Warning, pins, format!("{label}: {m} と {n} の名前が違います"), hint) }),
                     }
                 }
             }
@@ -402,7 +453,7 @@ mod tests {
     }
 
     fn link(pairs: &[(&str, &str)]) -> BoardLink {
-        BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect() }
+        BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), aliases: vec![] }
     }
 
     #[test]
@@ -435,9 +486,36 @@ mod tests {
         let f = check(&[("main", &main), ("sensor", &renamed)], &[link(&[])]);
         assert_eq!(f.len(), 1);
         assert_eq!(f[0].severity, Severity::Warning);
+        // the offered fix: the two names as one signal on the link, and then nothing to say
+        assert_eq!(f[0].fix, Some(Fix::Alias("SDA".into(), "I2C_SDA".into())));
+        let mut named = link(&[]);
+        named.aliases.push(("sda".into(), "i2c_sda".into()));
+        assert!(check(&[("main", &main), ("sensor", &renamed)], std::slice::from_ref(&named)).is_empty());
+        // the alias also counts when telling crossed pins: I2C_SDA on pin 4 is the SDA of pin 3
+        let renamed_crossed = board("J1", &["+5V", "GND", "SCL", "I2C_SDA"]);
+        let f = check(&[("main", &main), ("sensor", &renamed_crossed)], &[named]);
+        assert!(f.iter().any(|x| x.message.contains("入れ替わって") && x.message.contains("4 番")), "{f:?}");
         let open = board("J1", &["+5V", "GND", "SDA", ""]);
         let f = check(&[("main", &main), ("sensor", &open)], &[link(&[])]);
         assert!(f.len() == 1 && f[0].message.contains("片側だけ"), "{f:?}");
+    }
+
+    /// A socket facing the header numbers its pins the other way round: one error offering the mirrored pairs instead of four, and with
+    /// those pairs nothing to say. A mix-up that the mirror does not settle stays pin by pin.
+    #[test]
+    fn mirrored_numbers_are_told_as_one() {
+        let main = board("J1", &["+5V", "GND", "SDA", "SCL"]);
+        let facing = board("J1", &["SCL", "SDA", "GND", "+5V"]);
+        let f = check(&[("main", &main), ("sensor", &facing)], &[link(&[])]);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert!(f[0].severity == Severity::Error && f[0].message.contains("逆に"), "{f:?}");
+        let Some(Fix::Pairs(pairs)) = &f[0].fix else { panic!("{f:?}") };
+        assert_eq!(pairs[0], ("1".to_string(), "4".to_string()));
+        let fixed = BoardLink { pairs: pairs.clone(), ..link(&[]) };
+        assert!(check(&[("main", &main), ("sensor", &facing)], &[fixed]).is_empty());
+        let jumbled = board("J1", &["SDA", "GND", "+5V", "SCL"]);
+        let f = check(&[("main", &main), ("sensor", &jumbled)], &[link(&[])]);
+        assert!(f.iter().all(|x| !x.message.contains("逆に")) && f.len() > 1, "{f:?}");
     }
 
     /// A connector or a board that is not there, and connectors of different sizes, are told.

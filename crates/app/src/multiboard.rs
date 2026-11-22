@@ -231,6 +231,20 @@ impl App {
         }
     }
 
+    /// Pairs link `k`'s pins the other way round (1 with the last ...), or back to the same numbers when they already are.
+    fn mirror_link(&mut self, k: usize) -> Result<String, String> {
+        let l = &self.system.links[k];
+        let pins = |d: &str, r: &str| self.system.names.iter().position(|n| n == d).and_then(|i| self.design_schematic(i)).and_then(|s| sch_core::system::pins_of(s, r));
+        let (Some(pa), Some(pb)) = (pins(&l.a.design, &l.a.refdes), pins(&l.b.design, &l.b.refdes)) else {
+            return Err(i18n::tr("つなぎのコネクタが回路図に見つかりません").into());
+        };
+        let mirrored = sch_core::system::mirrored_pairs(&pa, &pb);
+        let back = self.system.links[k].pairs == mirrored;
+        self.system.links[k].pairs = if back { vec![] } else { mirrored };
+        self.system_dirty = true;
+        Ok(if back { i18n::tr("ピンの組を同じ番号どうしに戻しました").into() } else { i18n::trf!("ピンの組を逆順にしました (1 番 ↔ {} 番)", pb.len().min(pa.len())) })
+    }
+
     /// The whole system as one schematic, saved to a file (asks for it): to run any analysis on it in the schematic editor.
     fn save_merged(&mut self) {
         let designs = self.designs();
@@ -415,6 +429,9 @@ impl App {
         let mut run = false;
         let mut merged = false;
         let mut wave_run = None;
+        let mut apply_fix: Option<(usize, sch_core::system::Fix)> = None;
+        let mut mirror = None;
+        let mut drop_aliases = None;
         egui::Window::new(i18n::tr("基板どうしのつなぎ")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(560.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(i18n::tr("ひとつのプロジェクトに、いくつかの基板 (回路図と基板の組) を入れて、コネクタどうしのつなぎを調べます。編集できるのは選んでいる 1 枚です (切り替えると、元に戻す履歴はそこから始まります)")).weak());
             ui.separator();
@@ -452,6 +469,9 @@ impl App {
                 ui.horizontal(|ui| {
                     let pairs = if l.pairs.is_empty() { i18n::tr("同じ番号どうし").to_string() } else { l.pairs.iter().map(|(a, b)| format!("{a}-{b}")).collect::<Vec<_>>().join(" ") };
                     ui.label(format!("{}.{} ↔ {}.{}  ({pairs})", l.a.design, l.a.refdes, l.b.design, l.b.refdes));
+                    if ui.small_button(i18n::tr("番号を逆に")).on_hover_text(i18n::tr("ピンの組を 1 番 ↔ 最後の番号の逆順にします (ソケットを向かい合わせに差す、フラットケーブルを折り返すとき)。もう一度押すと同じ番号どうしに戻ります")).clicked() {
+                        mirror = Some(k);
+                    }
                     if ui.small_button(i18n::tr("3D で重ねる")).on_hover_text(i18n::tr("2 枚目の基板を、コネクタのピンが 1 枚目のピンの真上に来るように回して、下の「すき間」だけ上に重ねます (シールドのような積み重ね)。3D の窓に、ほかの基板も出ます")).clicked() {
                         stack = Some(k);
                     }
@@ -459,6 +479,16 @@ impl App {
                         drop_link = Some(k);
                     }
                 });
+                if !l.aliases.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.add_space(16.0);
+                        let list = l.aliases.iter().map(|(a, b)| format!("{}.{a} = {}.{b}", l.a.design, l.b.design)).collect::<Vec<_>>().join("、");
+                        ui.label(egui::RichText::new(i18n::trf!("同じ信号: {list}")).weak()).on_hover_text(i18n::tr("名前は違っても同じ信号として照合する組です (照合の注意の「同じ信号にする」で足します)"));
+                        if ui.small_button(i18n::tr("対応を消す")).on_hover_text(i18n::tr("このつなぎの名前の対応をすべて消し、名前どうしで照合し直します")).clicked() {
+                            drop_aliases = Some(k);
+                        }
+                    });
+                }
             }
             // a new link: the board and the connector of each end (the second end starts on another board)
             let names = self.system.names.clone();
@@ -534,7 +564,17 @@ impl App {
             } else {
                 for f in &findings {
                     let col = if f.severity == sch_core::Severity::Error { crate::theme::ERROR } else { crate::theme::WARN };
-                    ui.colored_label(col, i18n::tr_dyn(&f.message)).on_hover_text(i18n::tr_dyn(&f.hint));
+                    ui.horizontal_wrapped(|ui| {
+                        ui.colored_label(col, i18n::tr_dyn(&f.message)).on_hover_text(i18n::tr_dyn(&f.hint));
+                        let Some(x) = &f.fix else { return };
+                        let (label, tip) = match x {
+                            sch_core::system::Fix::Alias(a, b) => (i18n::tr("同じ信号にする").to_string(), i18n::trf!("「{a}」と「{b}」は名前が違うだけで同じ信号、とこのつなぎに登録します (回路図の名前は変えません)")),
+                            sch_core::system::Fix::Pairs(_) => (i18n::tr("直す").to_string(), i18n::tr("このつなぎのピンの組を逆順 (1 番 ↔ 最後の番号) にします").to_string()),
+                        };
+                        if ui.small_button(label).on_hover_text(tip).clicked() {
+                            apply_fix = Some((f.link, x.clone()));
+                        }
+                    });
                 }
             }
             // the whole system simulated as one circuit
@@ -635,7 +675,7 @@ impl App {
                 Ok(_) if da == db && ra == rb => Err(i18n::tr("同じコネクタどうしはつなげません").into()),
                 Ok(pairs) => {
                     let end = |d: usize, r: String| LinkEnd { design: self.system.names[d].clone(), refdes: r };
-                    self.system.links.push(BoardLink { a: end(da, ra), b: end(db, rb), pairs });
+                    self.system.links.push(BoardLink { a: end(da, ra), b: end(db, rb), pairs, aliases: vec![] });
                     self.system_dirty = true;
                     self.boards.draft_pairs.clear();
                     Ok(i18n::tr("つなぎを足しました").into())
@@ -666,6 +706,22 @@ impl App {
         }
         if let Some(tran) = wave_run {
             self.run_system_wave(tran);
+        }
+        if let Some((k, fix)) = apply_fix
+            && let Some(l) = self.system.links.get_mut(k)
+        {
+            match fix {
+                sch_core::system::Fix::Alias(a, b) => l.aliases.push((a, b)),
+                sch_core::system::Fix::Pairs(p) => l.pairs = p,
+            }
+            self.system_dirty = true;
+        }
+        if let Some(k) = drop_aliases {
+            self.system.links[k].aliases.clear();
+            self.system_dirty = true;
+        }
+        if let Some(k) = mirror {
+            self.boards.message = Some(self.mirror_link(k));
         }
         if !open {
             self.boards.open = false;
