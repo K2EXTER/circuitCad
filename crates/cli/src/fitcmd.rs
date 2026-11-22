@@ -33,9 +33,10 @@ impl crate::session::Session {
             if dir == self.lib_dir
                 && let Ok(def) = std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str::<part_lib::PartDef>(&t).map_err(|e| e.to_string()))
             {
-                match self.lib.iter_mut().find(|p| p.name == def.name) {
+                let lib = std::sync::Arc::make_mut(&mut self.lib);
+                match lib.iter_mut().find(|p| p.name == def.name) {
                     Some(p) => *p = def,
-                    None => self.lib.push(def),
+                    None => lib.push(def),
                 }
             }
             out["written"] = json!(path.display().to_string());

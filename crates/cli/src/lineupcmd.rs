@@ -67,9 +67,10 @@ impl crate::session::Session {
                         let path = elcap::write(&dir, &p)?;
                         m["written"] = json!(path.display().to_string());
                         if dir == self.lib_dir {
-                            match self.lib.iter_mut().find(|x| x.name == p.name) {
+                            let lib = std::sync::Arc::make_mut(&mut self.lib);
+                            match lib.iter_mut().find(|x| x.name == p.name) {
                                 Some(x) => *x = p,
-                                None => self.lib.push(p),
+                                None => lib.push(p),
                             }
                         }
                     }
@@ -148,9 +149,10 @@ impl crate::session::Session {
                         let path = elcap::write(&dir, &p)?;
                         m["written"] = json!(path.display().to_string());
                         if dir == self.lib_dir {
-                            match self.lib.iter_mut().find(|x| x.name == p.name) {
+                            let lib = std::sync::Arc::make_mut(&mut self.lib);
+                            match lib.iter_mut().find(|x| x.name == p.name) {
                                 Some(x) => *x = p,
-                                None => self.lib.push(p),
+                                None => lib.push(p),
                             }
                         }
                     }

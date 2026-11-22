@@ -62,7 +62,7 @@ impl crate::session::Session {
             p.model3d = Some(mesh);
             let path = part_lib::save(&self.lib_dir, &p).map_err(|e| format!("cannot write the part file: {e}"))?;
             let (lib, errors) = part_lib::load_library(&self.lib_dir);
-            self.lib = lib;
+            self.lib = lib.into();
             self.lib_errors = errors;
             out["saved"] = json!(path.display().to_string());
         } else {

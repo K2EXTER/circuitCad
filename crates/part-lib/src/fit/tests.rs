@@ -6,24 +6,25 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Every `fits/*.fit.json` with its fit and the bundled part file's text.
-fn bundled() -> Vec<(Spec, Fitted, String)> {
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(root().join("fits"))
-        .unwrap()
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.to_string_lossy().ends_with(".fit.json"))
-        .collect();
-    paths.sort();
-    assert!(paths.len() >= 11, "{paths:?}");
-    paths
-        .iter()
-        .map(|p| {
+/// Every `fits/*.fit.json` with its fit and the bundled part file's text. The fits are worked out once for all the tests below and
+/// on all the cores (one after another they took 17 s, and each of four tests did them all again).
+fn bundled() -> &'static [(Spec, Fitted, String)] {
+    static FITS: std::sync::OnceLock<Vec<(Spec, Fitted, String)>> = std::sync::OnceLock::new();
+    FITS.get_or_init(|| {
+        let mut paths: Vec<PathBuf> = std::fs::read_dir(root().join("fits"))
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.to_string_lossy().ends_with(".fit.json"))
+            .collect();
+        paths.sort();
+        assert!(paths.len() >= 11, "{paths:?}");
+        pcb_core::par::par_map(&paths, |p| {
             let s = Spec::load(p).unwrap();
             let f = fit(&s).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
             let part = std::fs::read_to_string(root().join("examples").join(format!("{}.part.json", f.part))).unwrap();
             (s, f, part)
         })
-        .collect()
+    })
 }
 
 /// `NAME=value` pairs of a `.model` card.
@@ -87,7 +88,7 @@ fn the_templates_give_the_bundled_op_amps_and_regulators_exactly() {
         if matches!(spec, Spec::Opamp(_)) {
             assert_eq!(d.description, f.description, "{}", f.part);
         }
-        assert_eq!(edit::edit_part(&part, &f).unwrap(), part, "{}: writing the model back changes the file", f.part);
+        assert_eq!(&edit::edit_part(part, f).unwrap(), part, "{}: writing the model back changes the file", f.part);
     }
     assert_eq!(n, 15, "6 op amps, 8 regulators and the TL431");
 }

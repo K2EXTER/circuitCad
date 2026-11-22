@@ -205,7 +205,9 @@ const EXTRA_KEYS: [&str; 4] = ["specs", "bench", "tolerances", "analysis"];
 
 pub struct Session {
     pub sch: Schematic,
-    pub lib: Vec<PartDef>,
+    /// The parts, shared with the sessions made from the same library (`with_library`) until a command changes them
+    /// (`Arc::make_mut`: copied then).
+    pub lib: std::sync::Arc<Vec<PartDef>>,
     /// The folder the library was read from (`lib reload` reads it again).
     pub lib_dir: std::path::PathBuf,
     pub board: Option<Board>,
@@ -291,7 +293,8 @@ impl Session {
     }
 
     /// A session on a library already read from `dir` (the tests read it once for all the scripts that do not write parts).
-    pub fn with_library(lib_dir: std::path::PathBuf, lib: Vec<part_lib::PartDef>, lib_errors: Vec<String>) -> Self {
+    pub fn with_library(lib_dir: std::path::PathBuf, lib: impl Into<std::sync::Arc<Vec<part_lib::PartDef>>>, lib_errors: Vec<String>) -> Self {
+        let lib = lib.into();
         Session { sch: Schematic::default(), lib, lib_dir, board: None, broken: None, cursor: (8, 8, 0), extras: serde_json::Map::new(), lib_errors, strict: false, last_dc: None, last_tran: None, last_heat_power: None, last_ac: None, post_layout: false, first_sheet_name: None }
     }
 

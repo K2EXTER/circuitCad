@@ -63,8 +63,9 @@ fn models(session: &mut crate::session::Session, args: &[String]) -> Res {
                 let name = made.part.name.clone();
                 let pins: Vec<_> = made.part.pins.iter().map(|p| json!({"pin": p.number, "name": p.name})).collect();
                 let out = json!({"part": name, "value": made.part.default_value(), "pins": pins, "footprint": made.footprint, "todo": made.todo, "simulates": true, "hint": format!("add {name} [VALUE] as=C1")});
-                session.lib.retain(|d| !d.name.eq_ignore_ascii_case(&name));
-                session.lib.push(made.part);
+                let lib = std::sync::Arc::make_mut(&mut session.lib);
+                lib.retain(|d| !d.name.eq_ignore_ascii_case(&name));
+                lib.push(made.part);
                 return Ok(obj(out));
             }
         }

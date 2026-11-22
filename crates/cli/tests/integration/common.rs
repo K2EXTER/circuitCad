@@ -11,9 +11,12 @@ pub struct Flags {
 }
 
 /// The library read once for every script that does not write parts: the bundled parts in a folder shared by the test runs
-/// (installing them and reading them again took about 0.13 s per script, more than many of the scripts themselves).
-fn shared_library() -> &'static (std::path::PathBuf, Vec<part_lib::PartDef>, Vec<String>) {
-    static LIB: std::sync::OnceLock<(std::path::PathBuf, Vec<part_lib::PartDef>, Vec<String>)> = std::sync::OnceLock::new();
+/// (installing them and reading them again took about 0.13 s per script, more than many of the scripts themselves). Shared, not copied:
+/// a copy of the 15 000 parts for each script took 0.07 s, 70 times the script itself (a session copies them only to change them).
+type Shared = (std::path::PathBuf, std::sync::Arc<Vec<part_lib::PartDef>>, Vec<String>);
+
+fn shared_library() -> &'static Shared {
+    static LIB: std::sync::OnceLock<Shared> = std::sync::OnceLock::new();
     LIB.get_or_init(|| {
         // emptied first: the folder outlives the run, and a bundled part already installed there is never written again, so a
         // part changed since the last run would be read in its old version
@@ -21,7 +24,7 @@ fn shared_library() -> &'static (std::path::PathBuf, Vec<part_lib::PartDef>, Vec
         let _ = std::fs::remove_dir_all(&dir);
         let _ = part_lib::install_examples(&dir);
         let (lib, errors) = part_lib::load_library(&dir);
-        (dir, lib, errors)
+        (dir, std::sync::Arc::new(lib), errors)
     })
 }
 

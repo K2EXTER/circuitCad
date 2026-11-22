@@ -166,7 +166,7 @@ impl Session {
         let before = self.lib.len();
         if reload {
             let (lib, errors) = part_lib::load_library(&self.lib_dir);
-            self.lib = lib;
+            self.lib = lib.into();
             self.lib_errors = errors;
         }
         Ok(obj(json!({"dir": self.lib_dir.display().to_string(), "parts": self.lib.len(), "before": before, "reloaded": reload, "errors": self.lib_errors})))
@@ -227,7 +227,7 @@ impl Session {
         };
         let path = part_lib::save(&self.lib_dir, &part).map_err(|e| format!("cannot write the part file: {e}"))?;
         let (lib, errors) = part_lib::load_library(&self.lib_dir);
-        self.lib = lib;
+        self.lib = lib.into();
         self.lib_errors = errors;
         let todo = vec![
             format!("footprint: borrowed from {} ({}): check the pads against the data sheet", donor.name, donor_footprint),
