@@ -595,7 +595,19 @@ mod tests {
                 }
                 let l = synced(&s, &before, StripOptions::default());
                 assert!(strip_check(&s, &l).is_empty(), "{name}: {} added: {:?}", c.refdes, strip_check(&s, &l));
-                assert!((0..before.rows).all(|r| l.cuts.contains(&(r, before.cols))), "{name}: a column cut between");
+                // on every row a cut between the board's last hole in use and the new parts, unless the new part's piece was grown
+                // onto the board's strip of its own net (a piece with no room for a wire's end: the blinker's D1 onto R3's LEDA strip,
+                // on a board with the 555 turned half a turn)
+                let used = before.used();
+                let cut = |r: u16| {
+                    let last = used.iter().filter(|(a, _)| a.0 == r).map(|(a, _)| a.1).max();
+                    let same = last.is_some_and(|x| {
+                        let n = crate::stripboard::net_at(&s, &l, (r, x));
+                        n.is_some() && n == crate::stripboard::net_at(&s, &l, (r, before.cols))
+                    });
+                    same || l.cuts.iter().any(|c| c.0 == r && last.is_none_or(|x| c.1 > x) && c.1 <= before.cols)
+                };
+                assert!((0..before.rows).all(cut), "{name}: a column cut between ({} added)", c.refdes);
             }
         }
     }

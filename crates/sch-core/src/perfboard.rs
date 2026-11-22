@@ -753,6 +753,7 @@ fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool
             ground: c.ground.clone(),
             mounts: c.mounts.clone(),
             facing: c.facing.clone(),
+            flipped: c.flipped.clone(),
         };
         if sub.on.is_empty() {
             continue;

@@ -516,9 +516,37 @@ fn with_back_strips(c: &crate::breadboard::Circuit, mut l: StripLayout, backs: &
     (l, missed)
 }
 
-/// The board laid out for the circuit `c` (all of the schematic's parts, or those that go on top), within the board's width: the
-/// wires joining sections can take it a column or two past, and then it is laid out again that much narrower.
+/// The board laid out for the circuit `c` (all of the schematic's parts, or those that go on top).
 fn strip_lay(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -> StripLayout {
+    // each chip in two rows (a DIP) turned half a turn, one at a time, kept when the board comes out better: joined as drawn and the
+    // checks kept (`strip_rules`: the Kelvin connections), then fewer holes, fewer wires, shorter ones. The pins in a chip's upper
+    // half send their wires to the band above, so turning it moves a net's wire to the other band, where the net may already have a
+    // strip (one strip and one joining wire fewer).
+    let score = |l: &StripLayout| {
+        let len: u32 = l.links.iter().map(|k| k.a.0.abs_diff(k.b.0) as u32 + k.a.1.abs_diff(k.b.1) as u32).sum();
+        let failed = strip_rules(s, l).iter().filter(|r| !r.ok).count();
+        (strip_check(s, l).len(), failed, l.rows as usize * l.cols as usize + 10 * l.links.len(), len)
+    };
+    let mut c = c.clone();
+    let mut best = strip_lay_fit(s, &c, opt);
+    let mut best_score = score(&best);
+    let dips: Vec<String> = c.on.iter().filter(|(r, look, _)| *look == Look::Dip || c.mounts.get(r).is_some_and(|m| m.width().is_some())).map(|p| p.0.clone()).collect();
+    for r in dips {
+        c.flipped.insert(r.clone());
+        let l = strip_lay_fit(s, &c, opt);
+        let sc = score(&l);
+        if sc < best_score {
+            (best, best_score) = (l, sc);
+        } else {
+            c.flipped.remove(&r);
+        }
+    }
+    best
+}
+
+/// The board laid out for `c` within the board's width: the wires joining sections can take it a column or two past, and then it
+/// is laid out again that much narrower.
+fn strip_lay_fit(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -> StripLayout {
     let mut l = strip_lay_once(s, c, opt);
     let Some(w) = opt.cols else { return l };
     let mut try_w = w;
@@ -610,6 +638,7 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
             ground: c.ground.clone(),
             mounts: c.mounts.clone(),
             facing: c.facing.clone(),
+            flipped: c.flipped.clone(),
         };
         let external: BTreeSet<String> = nets_in[i].iter().filter(|n| shared(n, i)).cloned().collect();
         subs.push(lay_within(&sub, opt, &external));
@@ -890,13 +919,15 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         // each lead's place on the socket or the adapter, by its pin number (a pin the symbol leaves out leaves its place empty)
         let (places, slot) = mount.slots(pins);
         let (half, two_cols) = if look == Look::Dip { (places.div_ceil(2), true) } else { (places, false) };
+        // turned half a turn: each place goes where the place half the chip on was (pin 1 at the bottom right)
+        let flip = two_cols && places % 2 == 0 && c.flipped.contains(refdes);
         // two spare holes at each piece's outer end when a pin is wired to other chip pins (two wire ends may share a piece)
         let spare = if pins.iter().any(|(_, n)| carry.get(n) == Some(&Carry::Pins)) { 2 } else { 0 };
         let mut placed: Vec<PinPlace> = pins
             .iter()
             .enumerate()
             .map(|(i, (_, n))| {
-                let p = slot[i];
+                let p = if flip { (slot[i] + half) % places } else { slot[i] };
                 // a chip's first half down the left column, the rest up the right one (pin 1 top left)
                 let (row, left) = if p < half { (p as u16, true) } else { ((places - 1 - p) as u16, false) };
                 // the upper half of the rows up, the lower half down (a single row: up)
@@ -2148,12 +2179,13 @@ mod mount_tests {
         assert_eq!(u1.mount, Mount::Adapter { package: "QFN-16".into(), pins: 16, width: 3 });
         assert_eq!(u1.look, Look::Dip);
         assert_eq!(at(&l, "U1", "15").0, at(&l, "U1", "2").0);
-        assert_eq!(at(&l, "U1", "13").0, at(&l, "U1", "2").0 + 2);
-        assert_eq!(at(&l, "U1", "15").1 - at(&l, "U1", "2").1, 3);
+        // (either way round: the layout may turn a chip half a turn)
+        assert_eq!(at(&l, "U1", "13").0.abs_diff(at(&l, "U1", "2").0), 2);
+        assert_eq!(at(&l, "U1", "15").1.abs_diff(at(&l, "U1", "2").1), 3);
         assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
         // TQFP-32 on a 0.6 inch adapter
         let l = strip_layout(&sample("arduino_minimal"));
-        assert_eq!((at(&l, "U1", "1").0, at(&l, "U1", "32").1 - at(&l, "U1", "1").1), (at(&l, "U1", "32").0, 6));
+        assert_eq!((at(&l, "U1", "1").0, at(&l, "U1", "32").1.abs_diff(at(&l, "U1", "1").1)), (at(&l, "U1", "32").0, 6));
         // a SOT-223 regulator on a one-row adapter
         let l = strip_layout(&sample("ldo_compare"));
         let u1 = l.parts.iter().find(|p| p.refdes == "U1").unwrap();
@@ -2188,6 +2220,24 @@ mod size_tests {
         // wrapped to 40 holes: the chips go in rows, the board as wide as asked
         let (cols, rows) = size("seg7_counter", Some(40));
         assert!(cols <= 40 && rows <= 30, "{cols} x {rows}");
+    }
+
+    /// A chip turned half a turn (pin 1 at the bottom right) when that sends its wires to bands that already carry their nets: the
+    /// shift register's board 29 x 22 → 24 x 19 (2026-11-22), still joined as drawn.
+    #[test]
+    fn a_chip_turned_half_a_turn_makes_the_board_smaller() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/shift_register_leds.schjson");
+        let s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let l = super::strip_layout(&s);
+        assert!(l.cols <= 24 && l.rows <= 19, "{} x {}", l.cols, l.rows);
+        assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
+        // a turned chip: pin 1 at the bottom of its row, below the last pin of that row (pin 8 of 16)
+        let turned = l.parts.iter().filter(|p| p.leads.len() > 4).any(|p| {
+            let at = |pin: &str| p.leads.iter().find(|x| x.0 == pin).map(|x| x.1);
+            let half = (p.leads.len() / 2).to_string();
+            matches!((at("1"), at(&half)), (Some(a), Some(b)) if a.0 > b.0 && a.1 == b.1)
+        });
+        assert!(turned, "{:?}", l.parts.iter().map(|p| (&p.refdes, p.leads.first())).collect::<Vec<_>>());
     }
 }
 
@@ -2277,9 +2327,11 @@ mod share_tests {
         // every end on that row lies on the stretch of its own net
         let nets = extract(&s.flat());
         let net_of = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin)).map(|n| n.name.clone()).unwrap_or_default();
+        // (a row can be shared by more than two nets: the stretch an end is on is named at the last name before it)
+        let stretch = |c: u16| l.names.iter().filter(|(a, _)| a.0 == row && a.1 <= c).max_by_key(|(a, _)| a.1).map(|x| x.1.clone()).unwrap_or_else(|| l.homes[row as usize].clone());
         for p in &l.parts {
             for (pin, at) in p.leads.iter().filter(|x| x.1 .0 == row) {
-                assert_eq!(at.1 >= col, net_of(&p.refdes, pin) == name, "{}.{pin}", p.refdes);
+                assert_eq!(stretch(at.1), net_of(&p.refdes, pin), "{}.{pin}", p.refdes);
             }
         }
     }
@@ -2314,11 +2366,14 @@ mod fork_tests {
         assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
         let rules = strip_rules(&s, &l);
         assert!(rules.iter().any(|r| r.ok && r.message.starts_with("ケルビン「検出」")), "{rules:?}");
+        // the ways from the other lead run together on the board laid out for this one (laid out for it, a chip is turned half a turn and they part at the lead)
         s.requirements.measures[0].pads = ["R4.1", "R3.2", "C3.1"].map(String::from).to_vec();
-        let l = strip_layout(&s);
         let rules = strip_rules(&s, &l);
         assert!(rules.iter().any(|r| !r.ok && r.message.contains("一緒に走り")), "{rules:?}");
+        let l = strip_layout(&s);
         assert!(strip_check(&s, &l).is_empty());
+        let rules = strip_rules(&s, &l);
+        assert!(rules.iter().any(|r| r.ok && r.message.starts_with("ケルビン「検出」")), "{rules:?}");
     }
 
     /// The current sensors' sample keeps both of its shunt's Kelvin connections on a stripboard and on a perfboard.
