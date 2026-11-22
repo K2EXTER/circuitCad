@@ -138,6 +138,7 @@ fn aperture(shape: PadShape) -> Aperture {
         PadShape::Circle { d } => Aperture::Circle(d),
         PadShape::Rect { w, h } => Aperture::Rect(w, h),
         PadShape::Oval { w, h } => Aperture::Oval(w, h),
+        s @ PadShape::RoundRect { w, h, .. } => Aperture::RoundRect(w, h, s.corner_radius()),
     }
 }
 

@@ -4,9 +4,9 @@ use super::*;
 fn segments(g: &Geo) -> (Vec<(Point, Point)>, f64) {
     match *g {
         Geo::Cap { a, b, r } => (vec![(a, b)], r),
-        Geo::Rect { c, hw, hh } => {
+        Geo::Rect { c, hw, hh, r } => {
             let (p0, p1, p2, p3) = (Point::new(c.x - hw, c.y - hh), Point::new(c.x + hw, c.y - hh), Point::new(c.x + hw, c.y + hh), Point::new(c.x - hw, c.y + hh));
-            (vec![(p0, p1), (p1, p2), (p2, p3), (p3, p0)], 0.0)
+            (vec![(p0, p1), (p1, p2), (p2, p3), (p3, p0)], r)
         }
     }
 }

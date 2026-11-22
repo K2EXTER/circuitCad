@@ -46,7 +46,7 @@ pub(super) fn find(parent: &mut [usize], i: usize) -> usize {
 pub(super) fn bbox(g: &Geo) -> (f64, f64, f64, f64) {
     match *g {
         Geo::Cap { a, b, r } => (a.x.min(b.x) - r, a.x.max(b.x) + r, a.y.min(b.y) - r, a.y.max(b.y) + r),
-        Geo::Rect { c, hw, hh } => (c.x - hw, c.x + hw, c.y - hh, c.y + hh),
+        Geo::Rect { c, hw, hh, r } => (c.x - hw - r, c.x + hw + r, c.y - hh - r, c.y + hh + r),
     }
 }
 
@@ -133,7 +133,7 @@ pub(super) fn poly_bbox(poly: &[Point]) -> (f64, f64, f64, f64) {
 fn geo_box(g: &Geo) -> (f64, f64, f64, f64) {
     match g {
         Geo::Cap { a, b, r } => (a.x.min(b.x) - r, a.y.min(b.y) - r, a.x.max(b.x) + r, a.y.max(b.y) + r),
-        Geo::Rect { c, hw, hh } => (c.x - hw, c.y - hh, c.x + hw, c.y + hh),
+        Geo::Rect { c, hw, hh, r } => (c.x - hw - r, c.y - hh - r, c.x + hw + r, c.y + hh + r),
     }
 }
 

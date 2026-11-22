@@ -77,14 +77,87 @@ pub enum PadShape {
     Circle { d: f64 },
     Rect { w: f64, h: f64 },
     Oval { w: f64, h: f64 },
+    /// A rectangle with rounded corners; `r` is the corner radius as a fraction of the shorter side (0..=0.5, KiCad's default 0.25).
+    RoundRect { w: f64, h: f64, r: f64 },
 }
+
+/// The corner ratio KiCad and IPC-7351 use by default for rounded-rectangle pads.
+pub const ROUNDRECT_DEFAULT: f64 = 0.25;
 
 impl PadShape {
     /// Bounding box size (w, h).
     pub fn size(&self) -> (f64, f64) {
         match *self {
             PadShape::Circle { d } => (d, d),
-            PadShape::Rect { w, h } | PadShape::Oval { w, h } => (w, h),
+            PadShape::Rect { w, h } | PadShape::Oval { w, h } | PadShape::RoundRect { w, h, .. } => (w, h),
+        }
+    }
+
+    /// The corner radius in mm: half the shorter side for a circle or an oval, 0 for a rectangle.
+    pub fn corner_radius(&self) -> f64 {
+        match *self {
+            PadShape::Circle { d } => d / 2.0,
+            PadShape::Rect { .. } => 0.0,
+            PadShape::Oval { w, h } => w.min(h) / 2.0,
+            PadShape::RoundRect { w, h, r } => r.clamp(0.0, 0.5) * w.min(h),
+        }
+    }
+
+    /// The copper area in mm².
+    pub fn area(&self) -> f64 {
+        let (w, h) = self.size();
+        let r = self.corner_radius();
+        w * h - (4.0 - std::f64::consts::PI) * r * r
+    }
+
+    /// Whether the point `(dx, dy)` from the pad's centre is inside the pad shrunk by `margin` on every side.
+    pub fn contains(&self, dx: f64, dy: f64, margin: f64) -> bool {
+        let (w, h) = self.size();
+        // the shrunk shape: corners of radius r - margin (sharp once that is used up) round a smaller core
+        let r = (self.corner_radius() - margin).max(0.0);
+        let (hw, hh) = (w / 2.0 - margin - r, h / 2.0 - margin - r);
+        if hw < -1e-12 || hh < -1e-12 {
+            return false;
+        }
+        (dx.abs() - hw).max(0.0).hypot((dy.abs() - hh).max(0.0)) <= r + 1e-12
+    }
+
+    /// A rectangle, sharp or with rounded corners (its sides are straight, so a track can run into it square).
+    pub fn is_rectangular(&self) -> bool {
+        matches!(self, PadShape::Rect { .. } | PadShape::RoundRect { .. })
+    }
+
+    /// A surface-mount pad as the built-in footprints make it: a sharp rectangle gets corners of the default ratio (KiCad's
+    /// and IPC-7351's); other shapes, and every pad with a hole (whose square pad marks pin 1), are kept.
+    pub fn smd_default(self, drill: Option<f64>) -> PadShape {
+        match self {
+            PadShape::Rect { w, h } if drill.is_none() => PadShape::RoundRect { w, h, r: ROUNDRECT_DEFAULT },
+            s => s,
+        }
+    }
+
+    /// The same shape turned 90°.
+    pub fn rotated90(&self) -> PadShape {
+        match *self {
+            PadShape::Circle { d } => PadShape::Circle { d },
+            PadShape::Rect { w, h } => PadShape::Rect { w: h, h: w },
+            PadShape::Oval { w, h } => PadShape::Oval { w: h, h: w },
+            PadShape::RoundRect { w, h, r } => PadShape::RoundRect { w: h, h: w, r },
+        }
+    }
+
+    /// The same shape `d` larger on every side (a mask opening, a clearance), keeping the corners concentric.
+    pub fn grown(&self, d: f64) -> PadShape {
+        match *self {
+            PadShape::Circle { d: dd } => PadShape::Circle { d: dd + 2.0 * d },
+            PadShape::Rect { w, h } => PadShape::Rect { w: w + 2.0 * d, h: h + 2.0 * d },
+            PadShape::Oval { w, h } => PadShape::Oval { w: w + 2.0 * d, h: h + 2.0 * d },
+            PadShape::RoundRect { w, h, .. } => {
+                let (nw, nh) = ((w + 2.0 * d).max(0.0), (h + 2.0 * d).max(0.0));
+                let rad = (self.corner_radius() + d).max(0.0);
+                let short = nw.min(nh);
+                PadShape::RoundRect { w: nw, h: nh, r: if short > 0.0 { (rad / short).min(0.5) } else { 0.0 } }
+            }
         }
     }
 }
@@ -738,6 +811,20 @@ pub struct Board {
 }
 
 impl Board {
+    /// Gives the sharp rectangular surface-mount pads corners of radius `ratio` x the shorter side (0..=0.5; KiCad's default
+    /// 0.25), and returns how many changed. Pads with a hole (the square one marks pin 1) and fiducials are kept.
+    pub fn round_smd_pads(&mut self, ratio: f64) -> usize {
+        let r = ratio.clamp(0.0, 0.5);
+        let mut n = 0;
+        for p in self.pads.iter_mut().filter(|p| p.drill.is_none() && p.mask_open == 0.0) {
+            if let PadShape::Rect { w, h } = p.shape {
+                p.shape = PadShape::RoundRect { w, h, r };
+                n += 1;
+            }
+        }
+        n
+    }
+
     /// All copper layers from the top face to the bottom face.
     pub fn copper_layers(&self) -> Vec<Side> {
         let mut v = vec![Side::Top];

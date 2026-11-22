@@ -388,14 +388,14 @@ impl Grid {
 fn geo_dist(p: Point, g: &Geo) -> f64 {
     match *g {
         Geo::Cap { a, b, r } => (point_seg(p, a, b) - r).max(0.0),
-        Geo::Rect { c, hw, hh } => point_rect(p, c, hw, hh),
+        Geo::Rect { c, hw, hh, r } => (point_rect(p, c, hw, hh) - r).max(0.0),
     }
 }
 
 fn geo_bbox(g: &Geo) -> (f64, f64, f64, f64) {
     match *g {
         Geo::Cap { a, b, r } => (a.x.min(b.x) - r, a.y.min(b.y) - r, a.x.max(b.x) + r, a.y.max(b.y) + r),
-        Geo::Rect { c, hw, hh } => (c.x - hw, c.y - hh, c.x + hw, c.y + hh),
+        Geo::Rect { c, hw, hh, r } => (c.x - hw - r, c.y - hh - r, c.x + hw + r, c.y + hh + r),
     }
 }
 

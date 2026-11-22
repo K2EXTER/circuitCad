@@ -137,7 +137,7 @@ pub(super) fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Fo
                 painter.circle_filled(ctr, size.x / 2.0, col);
             }
             _ => {
-                painter.rect_filled(Rect::from_center_size(ctr, size), 0.0, col);
+                painter.rect_filled(Rect::from_center_size(ctr, size), p.shape.corner_radius() as f32 * scale, col);
             }
         }
         if let Some(d) = p.drill {

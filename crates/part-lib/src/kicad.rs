@@ -440,7 +440,8 @@ pub fn parse_footprint(text: &str) -> Result<KicadFootprint, String> {
             continue; // paste / mask apertures and the like
         }
         let (shape_name, ww, hh) = match shape {
-            "rect" | "roundrect" | "trapezoid" => ("rect", w, h),
+            "rect" | "trapezoid" => ("rect", w, h),
+            "roundrect" => ("roundrect", w, h),
             "oval" => ("oval", w, h),
             "circle" => ("circle", w, w),
             _ => {
@@ -448,10 +449,12 @@ pub fn parse_footprint(text: &str) -> Result<KicadFootprint, String> {
                 ("rect", w, h)
             }
         };
+        // KiCad's `(roundrect_rratio 0.25)`; absent means its default
+        let r = if shape == "roundrect" { pad.find("roundrect_rratio").and_then(|n| n.num(0)).unwrap_or(pcb_core::model::ROUNDRECT_DEFAULT) } else { 0.0 };
         if matches!(shape, "trapezoid" | "custom") {
             odd_shape = true;
         }
-        fp.pads.push(PadSpec { pin: number, x, y, shape: shape_name.into(), w: ww, h: hh, drill, slot, slot_v });
+        fp.pads.push(PadSpec { pin: number, x, y, shape: shape_name.into(), w: ww, h: hh, r, drill, slot, slot_v });
     }
     if fp.pads.is_empty() {
         return Err("パッドが 1 つもありません。ファイルを確かめてください".into());
@@ -517,6 +520,7 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
                     shape: if i == 0 { "rect" } else { "circle" }.into(),
                     w: 1.7,
                     h: 1.7,
+                    r: 0.0,
                     drill: Some(1.0),
                     slot: 0.0,
                     slot_v: false,

@@ -333,7 +333,8 @@ impl Covers {
                 let (w, h) = q.shape.size();
                 let shape = match q.shape {
                     pcb_core::PadShape::Circle { .. } => CoverShape::Circle(w / 2.0),
-                    pcb_core::PadShape::Rect { .. } => CoverShape::Rect(w / 2.0, h / 2.0),
+                    // (the rounded corners are left out of the cover: a strip under a corner is hidden a little early)
+                    pcb_core::PadShape::Rect { .. } | pcb_core::PadShape::RoundRect { .. } => CoverShape::Rect(w / 2.0, h / 2.0),
                     pcb_core::PadShape::Oval { .. } => {
                         let r = w.min(h) / 2.0;
                         let d = (w.max(h) / 2.0 - r).max(0.0);
@@ -791,6 +792,30 @@ pub(super) fn add_disc(mesh: &mut Mesh, c: Pos2, r: f32, col: Color32) {
     }
     for i in 0..n as u32 {
         mesh.add_triangle(centre, centre + 1 + i, centre + 1 + (i + 1) % n as u32);
+    }
+}
+
+/// A filled rectangle with corners of radius `rad` (pixels): a fan from the centre over the four quarter circles, so it stays in
+/// the one mesh (egui's rounded box would end the mesh). An oval pad is the same with `rad` half its shorter side.
+pub(super) fn add_rounded_rect(mesh: &mut Mesh, r: Rect, rad: f32, col: Color32) {
+    let rad = rad.clamp(0.0, r.width().min(r.height()) / 2.0);
+    if rad < 0.5 {
+        return add_rect(mesh, r, col);
+    }
+    let quarter = ((std::f32::consts::FRAC_PI_2 / (1.0 - 0.17 / rad).clamp(-1.0, 0.999).acos()).ceil() as usize).clamp(2, 12);
+    let inner = r.shrink(rad);
+    let centre = mesh.vertices.len() as u32;
+    mesh.colored_vertex(r.center(), col);
+    let corners = [inner.right_bottom(), inner.left_bottom(), inner.left_top(), inner.right_top()];
+    for (q, k) in corners.iter().enumerate() {
+        for i in 0..=quarter {
+            let t = std::f32::consts::FRAC_PI_2 * (q as f32 + i as f32 / quarter as f32);
+            mesh.colored_vertex(*k + Vec2::angled(t) * rad, col);
+        }
+    }
+    let n = (4 * (quarter + 1)) as u32;
+    for i in 0..n {
+        mesh.add_triangle(centre, centre + 1 + i, centre + 1 + (i + 1) % n);
     }
 }
 

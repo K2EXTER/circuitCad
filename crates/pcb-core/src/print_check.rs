@@ -93,8 +93,8 @@ pub fn print_check_svg(board: &Board, side: Side) -> Result<String, String> {
             PadShape::Rect { w: pw, h: ph } => {
                 let _ = write!(s, "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#000\"/>", n(cx - pw / 2.0), n(cy - ph / 2.0), n(pw), n(ph));
             }
-            PadShape::Oval { w: pw, h: ph } => {
-                let r = pw.min(ph) / 2.0;
+            PadShape::Oval { w: pw, h: ph } | PadShape::RoundRect { w: pw, h: ph, .. } => {
+                let r = pad.shape.corner_radius();
                 let _ = write!(s, "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" fill=\"#000\"/>", n(cx - pw / 2.0), n(cy - ph / 2.0), n(pw), n(ph), n(r));
             }
         }

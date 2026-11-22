@@ -2,7 +2,7 @@
 //! few dimensions printed in a datasheet's "recommended land pattern" drawing.
 
 use crate::footprints::{Footprint, FpHole, FpPad};
-use crate::model::{PadShape, Point};
+use crate::model::{PadShape, Point, ROUNDRECT_DEFAULT};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -45,19 +45,36 @@ fn default_shape() -> String {
     "rect".into()
 }
 
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+/// A pad shape as the words of a [`PadSpec`]: (shape, w, h, r).
+pub fn shape_words(s: PadShape) -> (&'static str, f64, f64, f64) {
+    match s {
+        PadShape::Circle { d } => ("circle", d, 0.0, 0.0),
+        PadShape::Rect { w, h } => ("rect", w, h, 0.0),
+        PadShape::Oval { w, h } => ("oval", w, h, 0.0),
+        PadShape::RoundRect { w, h, r } => ("roundrect", w, h, r),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PadSpec {
     pub pin: String,
     pub x: f64,
     /// Up is positive.
     pub y: f64,
-    /// "rect" | "circle" | "oval"
+    /// "rect" | "roundrect" | "circle" | "oval"
     #[serde(default = "default_shape")]
     pub shape: String,
     pub w: f64,
     /// Ignored for circles.
     #[serde(default)]
     pub h: f64,
+    /// "roundrect": the corner radius as a fraction of the shorter side (0 = the default 0.25).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub r: f64,
     #[serde(default)]
     pub drill: Option<f64>,
     /// Slot length of a plated slot (`drill` wide); 0 = round hole.
@@ -81,7 +98,7 @@ pub struct HoleSpec {
 }
 
 fn fp_pad(pin: String, x: f64, y: f64, shape: PadShape, drill: Option<f64>) -> FpPad {
-    FpPad { pin, pos: Point::new(x, y), shape, drill, slot: 0.0, slot_v: false }
+    FpPad { pin, pos: Point::new(x, y), shape: shape.smd_default(drill), drill, slot: 0.0, slot_v: false }
 }
 
 fn positive(name: &str, v: f64) -> Result<(), String> {
@@ -211,10 +228,13 @@ impl PackageSpec {
                     let shape = match p.shape.as_str() {
                         "rect" => PadShape::Rect { w: p.w, h: if p.h > 0.0 { p.h } else { p.w } },
                         "oval" => PadShape::Oval { w: p.w, h: if p.h > 0.0 { p.h } else { p.w } },
+                        "roundrect" => PadShape::RoundRect { w: p.w, h: if p.h > 0.0 { p.h } else { p.w }, r: if p.r > 0.0 { p.r.min(0.5) } else { ROUNDRECT_DEFAULT } },
                         "circle" => PadShape::Circle { d: p.w },
                         other => return Err(format!("未知のパッド形状: {other}")),
                     };
+                    // an explicit pad keeps the shape it names ("rect" stays sharp)
                     let mut pad = fp_pad(p.pin.clone(), p.x, p.y, shape, p.drill);
+                    pad.shape = shape;
                     check_slot(&p.pin, p.drill, p.slot)?;
                     pad.slot = p.slot;
                     pad.slot_v = p.slot_v;

@@ -9,7 +9,13 @@ enum Ap {
     Circle(i64),
     Rect(i64, i64),
     Oval(i64, i64),
+    /// Width, height and corner radius: the `RoundRect` macro.
+    RoundRect(i64, i64, i64),
 }
+
+/// A rectangle with rounded corners as a macro aperture ($1 width, $2 height, $3 corner radius): two crossed rectangles and
+/// a circle at each corner (the same build KiCad writes), on one line so a line-based reader sees it whole.
+const ROUNDRECT_MACRO: &str = "%AMRoundRect*21,1,$1,$2-$3-$3,0,0,0*21,1,$1-$3-$3,$2,0,0,0*1,1,$3+$3,$1/2-$3,$2/2-$3*1,1,$3+$3,$3-$1/2,$2/2-$3*1,1,$3+$3,$1/2-$3,$3-$2/2*1,1,$3+$3,$3-$1/2,$3-$2/2*%";
 
 fn nm(v: f64) -> i64 {
     (v * 1e6).round() as i64
@@ -86,10 +92,14 @@ impl GerberLayer {
 
     /// Flash a pad shape, optionally grown by `expand` on every side.
     pub fn flash(&mut self, p: Point, shape: PadShape, expand: f64) {
-        let ap = match shape {
-            PadShape::Circle { d } => Ap::Circle(nm(d + 2.0 * expand)),
-            PadShape::Rect { w, h } => Ap::Rect(nm(w + 2.0 * expand), nm(h + 2.0 * expand)),
-            PadShape::Oval { w, h } => Ap::Oval(nm(w + 2.0 * expand), nm(h + 2.0 * expand)),
+        let ap = match shape.grown(expand) {
+            PadShape::Circle { d } => Ap::Circle(nm(d)),
+            PadShape::Rect { w, h } => Ap::Rect(nm(w), nm(h)),
+            PadShape::Oval { w, h } => Ap::Oval(nm(w), nm(h)),
+            s @ PadShape::RoundRect { w, h, .. } => match nm(s.corner_radius()) {
+                0 => Ap::Rect(nm(w), nm(h)),
+                r => Ap::RoundRect(nm(w), nm(h), r),
+            },
         };
         self.select(ap);
         let _ = writeln!(self.body, "{}D03*", Self::xy(p));
@@ -106,6 +116,9 @@ impl GerberLayer {
         if self.polarity_dark_only {
             let _ = writeln!(s, "%LPD*%");
         }
+        if self.apertures.iter().any(|a| matches!(a, Ap::RoundRect(..))) {
+            let _ = writeln!(s, "{ROUNDRECT_MACRO}");
+        }
         for (i, ap) in self.apertures.iter().enumerate() {
             let n = i + 10;
             match *ap {
@@ -117,6 +130,9 @@ impl GerberLayer {
                 }
                 Ap::Oval(w, h) => {
                     let _ = writeln!(s, "%ADD{n}O,{}X{}*%", fmt_len(w), fmt_len(h));
+                }
+                Ap::RoundRect(w, h, r) => {
+                    let _ = writeln!(s, "%ADD{n}RoundRect,{}X{}X{}*%", fmt_len(w), fmt_len(h), fmt_len(r));
                 }
             }
         }

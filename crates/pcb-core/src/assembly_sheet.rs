@@ -204,7 +204,8 @@ pub fn assembly_svg(board: &Board, fitted: &[String]) -> Result<String, String> 
                 let _ = write!(body, "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"#b5b5b5\"/>", n(cx), n(cy), n(w / 2.0));
             }
             _ => {
-                let _ = write!(body, "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#b5b5b5\"/>", n(cx - w / 2.0), n(cy - h / 2.0), n(w), n(h));
+                let rx = pad.shape.corner_radius() * scale;
+                let _ = write!(body, "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" fill=\"#b5b5b5\"/>", n(cx - w / 2.0), n(cy - h / 2.0), n(w), n(h), n(rx));
             }
         }
     }

@@ -233,7 +233,7 @@ impl CopperGraph {
         let pad_box = |p: &Pad| -> Box4 {
             let e = match p.shape {
                 PadShape::Circle { d } => d / 2.0,
-                PadShape::Rect { w, h } | PadShape::Oval { w, h } => w.max(h) / 2.0,
+                PadShape::Rect { w, h } | PadShape::Oval { w, h } | PadShape::RoundRect { w, h, .. } => w.max(h) / 2.0,
             };
             (p.pos.x - e, p.pos.y - e, p.pos.x + e, p.pos.y + e)
         };

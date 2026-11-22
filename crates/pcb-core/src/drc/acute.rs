@@ -13,7 +13,7 @@ pub fn acute_angle_checks(board: &Board) -> Vec<Violation> {
             (pd.drill.is_some() || pd.side == side)
                 && match pd.shape {
                     PadShape::Circle { d } => p.dist(pd.pos) <= d / 2.0 + 1e-6,
-                    PadShape::Rect { w, h } | PadShape::Oval { w, h } => (p.x - pd.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - pd.pos.y).abs() <= h / 2.0 + 1e-6,
+                    PadShape::Rect { w, h } | PadShape::Oval { w, h } | PadShape::RoundRect { w, h, .. } => (p.x - pd.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - pd.pos.y).abs() <= h / 2.0 + 1e-6,
                 }
         }) || board.vias.iter().any(|via| p.dist(via.pos) <= via.diameter / 2.0 + 1e-6)
     };

@@ -53,7 +53,7 @@ pub struct Footprint {
 }
 
 fn pad(pin: &str, x: f64, y: f64, shape: PadShape, drill: Option<f64>) -> FpPad {
-    FpPad { pin: pin.to_string(), pos: Point::new(x, y), shape, drill, slot: 0.0, slot_v: false }
+    FpPad { pin: pin.to_string(), pos: Point::new(x, y), shape: shape.smd_default(drill), drill, slot: 0.0, slot_v: false }
 }
 
 fn smd2(name: &str, half_pitch: f64, w: f64, h: f64, pins: [&str; 2]) -> Footprint {

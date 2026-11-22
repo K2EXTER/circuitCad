@@ -61,6 +61,16 @@
 - Gerber の「消す」(clear)は、そこまでの絵を `<mask>` で包んで抜く(消したあとに描いたものは抜かれない)。
 - 基板の y は上向き、SVG は下向きなので、全体を `scale(1,-1)` の組で包む。裏面は `scale(-1,-1)` で、下から見た向き(左右反転)。大きさは mm(`width`/`height` が mm)。
 - 色は表面=金、裏面=青、内層=紫、基板=緑、シルク=白。入口は画面の「ファイル → 基板の表面/裏面をSVGで保存…」(`board_editor/file.rs` の `export_svg`)と CLI の `board svg FILE [side=] [silk=0]`。
+## 角を丸めたパッド(C5。2026-11-22)
+- 形のデータ: `PadShape::RoundRect { w, h, r }`(`model.rs`。`r` は短い辺に対する割合、0〜0.5、既定 `ROUNDRECT_DEFAULT` = 0.25)。**仕上げ(`Board.finish`)ではなく形として持つ**: 角丸の効き目(角のすき間が広がる)を使うのは配線と DRC なので、表示とガーバーだけ丸めると効き目が出ない。手伝いの関数は `corner_radius`(mm。円・長円は短い辺の半分、四角は 0)・`area`・`contains(dx, dy, margin)`・`grown(d)`(角は同心のまま。マスクの開口)・`rotated90`・`is_rectangular`(涙型・パッドの首は四角と同じに扱う)・`smd_default`。
+- 同梱の部品: `footprints.rs` の `pad` と `package.rs` の `fp_pad`(`chip2`・`dual`・`quad`)で、穴の無い四角は `smd_default` で角丸になる。穴のあるパッド(1 番ピンの四角)はそのまま。`explicit` は書いた形のまま(`"rect"` はとがったまま、`"roundrect"` と `"r"`)。`package::shape_words` が形を PadSpec の語に戻す。前からある基板の四角は `Board::round_smd_pads`(穴・フィデューシャルは変えない)。入口: 基板の「① 部品の配置」の「整える」の「パッドの角を丸める (N 個)」(四角が残っているときだけ)、CLI `board roundpads [r=]`。
+- DRC: `drc/geo.rs` の `Geo::Rect` に丸めの半径 `r` を足した(「r だけ縮めた四角」を r の円でなぞった形)。距離は四角の式から r を引くだけで点は増えない。箱(`bbox`・`geo_box`・`geo_bbox`)は r だけ広い。
+- ベタの逃げ: `zonefill.rs` の `pad_path` は、四角と角丸を `rounded_rect`(四隅に 1/4 円、点の数は `circle_steps` に合わせる)で作る。**とがった四角の逃げも角を丸めた**(前は四角のままで、角ではすき間が √2 倍に広がっていた)。逃げの無い形そのもの(c = 0)の四角は 4 点のまま。
+- ガーバー: マクロ `RoundRect`(2 つの十字の四角と四隅の円。KiCad と同じ作り。行で読む `gerber_view` のために 1 行に書く)と `%ADDnnRoundRect,WXHXR*%`(R は mm の半径)。角丸の無いガーバーにはマクロを書かない。`gerber_view` はこの形を読み戻して描く(`Aperture::RoundRect`)ので、SVG の書き出し・出来上がりのプレビューも丸い。
+- 画面: `board_editor/ribbon.rs` の `add_rounded_rect`(中心からの扇で四隅の 1/4 円。マルチサンプリングのとき 1 つのメッシュに入れたまま。長円もこれで描くので、前のようにパッドごとにメッシュが切れない)、そうでないときは egui の角丸の四角。部品フォームのプレビュー・組み立て表・原寸の図・光る 3D(`view3d/glow.rs`)も丸い。3D の銅は絵を貼るので三角は増えない。
+- KiCad の取り込み(`part-lib/src/kicad.rs`): `roundrect` は `(roundrect_rratio x)` ごと(無ければ 0.25)。前は四角にしていた。
+- 試験: `tests_roundrect.rs`(角の面積と内側・斜めの DRC・逃げの輪郭がどこもクリアランスの距離・ガーバーのマクロと読み戻しの絵・同梱と explicit の形・基板の一括の変換)、`part-lib` の KiCad の取り込み。
+
 ## print_check.rs — 原寸の確かめの図(X4。2026-11-21)
 - `print_check::print_check_svg(&Board, Side) -> Result<String,String>`。白地に、その面のパッド (貫通穴のパッドは両面とも) を黒・穴を白、取り付け穴は輪、外形は灰の線、部品番号は赤でパッドの上に。大きさは mm で `viewBox` も mm なので、100 % で印刷すると原寸。裏は下から見た向き (左右反転)。
 - 下に 50 mm の目盛り (`RULER_MM`、1 mm ごと、5・10 mm で長く、10 mm ごとに数) と「この目盛りが定規で 50 mm なら原寸です」。上に見出しと手順 3 行 (`STEPS`。ページの幅で折り返す `wrap`: 全角 1 字 = 字の大きさ、ASCII は 0.55)。ページの幅は 150 mm 以上 (手順が入るように)。

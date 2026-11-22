@@ -212,6 +212,17 @@ impl BoardEditor {
                         self.load_snippet_dialog();
                     }
                 }
+                let sharp = self.board.pads.iter().filter(|p| p.drill.is_none() && p.mask_open == 0.0 && matches!(p.shape, pcb_core::PadShape::Rect { .. })).count();
+                if sharp > 0
+                    && ui
+                        .button(i18n::trf!("パッドの角を丸める ({sharp} 個)"))
+                        .on_hover_text(i18n::tr("四角い面実装のパッドの角を、短い辺の 25% の半径で丸めます (KiCad と IPC-7351 の既定)。細かいピッチの IC (0.5 mm 以下) や 45° に置いた部品では、四角の角どうしがいちばん近く、発注先の最小間隔を割ることがあります。丸めると角のすき間が広がり、DRC・ベタの逃げ・ガーバーもその形で作ります。穴のあるパッド (1 番ピンの四角) は変えません。「元に戻す」で戻せます"))
+                        .clicked()
+                {
+                    self.checkpoint();
+                    let n = self.board.round_smd_pads(pcb_core::ROUNDRECT_DEFAULT);
+                    self.status = format!("{n} 個のパッドの角を丸めました");
+                }
                 if !self.board.parts.is_empty() {
                     let bar = crate::widgets::segment_row(ui, &[("部品番号を位置順に", true)]);
                     bar[0].clone().on_hover_text(i18n::tr("部品番号 (R1・C2 など) を、基板の上の位置の順に振り直します。上の段から下の段へ、各段は左から右です。回路図の部品番号、要件の表、「接続しない」の印も同じに変わります。固定した部品の番号は変えません。「元に戻す」で戻せます (回路図の側も、回路図で元に戻してください)"));

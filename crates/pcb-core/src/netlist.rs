@@ -314,7 +314,7 @@ mod tests {
         b.place_part("R1", Point::new(10.0, 10.0), 1);
         let p: Vec<_> = b.pads.iter().filter(|p| p.refdes == "R1").collect();
         assert!((p[0].pos.x - 10.0).abs() < 1e-9 && (p[0].pos.y - 10.0 + 0.9125).abs() < 1e-9);
-        assert_eq!(p[0].shape, PadShape::Rect { w: 1.4, h: 1.025 });
+        assert_eq!(p[0].shape, PadShape::RoundRect { w: 1.4, h: 1.025, r: ROUNDRECT_DEFAULT });
     }
 
     #[test]

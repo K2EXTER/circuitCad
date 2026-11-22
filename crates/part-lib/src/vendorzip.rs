@@ -391,13 +391,8 @@ pub struct MadePart {
 }
 
 fn pad_spec(p: &pcb_core::footprints::FpPad) -> pcb_core::package::PadSpec {
-    use pcb_core::PadShape;
-    let (shape, w, h) = match p.shape {
-        PadShape::Circle { d } => ("circle", d, 0.0),
-        PadShape::Rect { w, h } => ("rect", w, h),
-        PadShape::Oval { w, h } => ("oval", w, h),
-    };
-    pcb_core::package::PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: shape.into(), w, h, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
+    let (shape, w, h, r) = pcb_core::package::shape_words(p.shape);
+    pcb_core::package::PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: shape.into(), w, h, r, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
 }
 
 impl VendorIndex {

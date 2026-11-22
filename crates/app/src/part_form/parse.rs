@@ -2,12 +2,8 @@ use super::*;
 
 /// A built footprint pad written back as an explicit pad.
 pub(super) fn pad_spec(_fp: &Footprint, p: &pcb_core::footprints::FpPad) -> PadSpec {
-    let (shape, w, h) = match p.shape {
-        PadShape::Circle { d } => ("circle", d, 0.0),
-        PadShape::Rect { w, h } => ("rect", w, h),
-        PadShape::Oval { w, h } => ("oval", w, h),
-    };
-    PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: shape.into(), w, h, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
+    let (shape, w, h, r) = pcb_core::package::shape_words(p.shape);
+    PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: shape.into(), w, h, r, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
 }
 
 pub(super) const EXTRAS_HELP: &str = "1行に1つ。座標は部品の中心からの mm (右が +X、上が +Y)。
@@ -310,11 +306,11 @@ impl PartForm {
                 "脚" | "leg" | "pth" | "th" => {
                     let (x, y, w, h, drill, sl) = (num(2, "X")?, num(3, "Y")?, num(4, "パッドの幅")?, num(5, "パッドの高さ")?, num(6, "穴径")?, slot(7)?);
                     let shape = if sl > 0.0 || (w - h).abs() > 1e-9 { "oval" } else { "circle" };
-                    pads.push(PadSpec { pin: t.get(1).ok_or_else(|| at("ピン名がありません".into()))?.to_string(), x, y, shape: shape.into(), w, h, drill: Some(drill), slot: sl, slot_v });
+                    pads.push(PadSpec { pin: t.get(1).ok_or_else(|| at("ピン名がありません".into()))?.to_string(), x, y, shape: shape.into(), w, h, r: 0.0, drill: Some(drill), slot: sl, slot_v });
                 }
                 "パッド" | "pad" | "smd" => {
                     let (x, y, w, h) = (num(2, "X")?, num(3, "Y")?, num(4, "パッドの幅")?, num(5, "パッドの高さ")?);
-                    pads.push(PadSpec { pin: t.get(1).ok_or_else(|| at("ピン名がありません".into()))?.to_string(), x, y, shape: "rect".into(), w, h, drill: None, slot: 0.0, slot_v: false });
+                    pads.push(PadSpec { pin: t.get(1).ok_or_else(|| at("ピン名がありません".into()))?.to_string(), x, y, shape: "rect".into(), w, h, r: 0.0, drill: None, slot: 0.0, slot_v: false });
                 }
                 "穴" | "hole" | "npth" => holes.push(HoleSpec { x: num(1, "X")?, y: num(2, "Y")?, drill: num(3, "穴径")?, slot: slot(4)?, slot_v }),
                 other => return Err(at(format!("先頭の言葉「{other}」が分かりません。脚 / 穴 / パッド のどれかで始めてください (書き方は下の説明)"))),
@@ -337,7 +333,7 @@ impl PartForm {
             if self.thermal_w <= 0.0 || self.thermal_h <= 0.0 {
                 return Err("放熱パッドの幅と長さは 0 より大きい値にしてください".into());
             }
-            extra_pads.push(PadSpec { pin: pin.to_string(), x: 0.0, y: 0.0, shape: "rect".into(), w: self.thermal_w, h: self.thermal_h, drill: None, slot: 0.0, slot_v: false });
+            extra_pads.push(PadSpec { pin: pin.to_string(), x: 0.0, y: 0.0, shape: "rect".into(), w: self.thermal_w, h: self.thermal_h, r: 0.0, drill: None, slot: 0.0, slot_v: false });
         }
         // pins that only exist as extra pads (the shell, say) are not part of the package's row of pads
         let n = self.orig_pad_count(&pins).unwrap_or_else(|| pins.iter().filter(|p| !p.sim_only && !extra_pads.iter().any(|e| e.pin == p.number)).count());

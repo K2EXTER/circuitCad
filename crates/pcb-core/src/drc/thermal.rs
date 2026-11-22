@@ -7,13 +7,7 @@ pub const HEAT_PAD_AREA: f64 = 4.0;
 /// The heat pads of the board: (index into `board.pads`, area in mm²). A pad counts when it is surface-mount,
 /// at least `HEAT_PAD_AREA`, on a part with three or more pads, and more than twice as big as any other pad of it.
 pub fn heat_pads(board: &Board) -> Vec<(usize, f64)> {
-    let area = |p: &Pad| {
-        let (w, h) = p.shape.size();
-        match p.shape {
-            PadShape::Circle { d } => std::f64::consts::PI * d * d / 4.0,
-            _ => w * h,
-        }
-    };
+    let area = |p: &Pad| p.shape.area();
     let mut out = vec![];
     for (i, p) in board.pads.iter().enumerate() {
         if p.drill.is_some() || p.refdes.is_empty() || area(p) < HEAT_PAD_AREA {
@@ -87,11 +81,7 @@ pub fn thermal_via_checks(board: &Board) -> Vec<Violation> {
     let pours = PourFills::new(board);
     for (i, area) in heat {
         let p = &board.pads[i];
-        let (w, h) = p.shape.size();
-        let inside = |c: Point| match p.shape {
-            PadShape::Circle { d } => c.dist(p.pos) <= d / 2.0,
-            _ => (c.x - p.pos.x).abs() <= w / 2.0 && (c.y - p.pos.y).abs() <= h / 2.0,
-        };
+        let inside = |c: Point| p.shape.contains(c.x - p.pos.x, c.y - p.pos.y, 0.0);
         let have = board.vias.iter().filter(|v| inside(v.pos)).count();
         let pour = pours.area_at(p);
         let need = thermal_via_need(area, pour);
@@ -132,10 +122,7 @@ pub fn add_thermal_vias(board: &mut Board) -> usize {
     for (i, area) in heat_pads(board) {
         let p = board.pads[i].clone();
         let (w, h) = p.shape.size();
-        let inside = |c: Point, m: f64| match p.shape {
-            PadShape::Circle { d } => c.dist(p.pos) <= d / 2.0 - m,
-            _ => (c.x - p.pos.x).abs() <= w / 2.0 - m && (c.y - p.pos.y).abs() <= h / 2.0 - m,
-        };
+        let inside = |c: Point, m: f64| p.shape.contains(c.x - p.pos.x, c.y - p.pos.y, m);
         let have = board.vias.iter().filter(|v| inside(v.pos, 0.0)).count();
         let need = thermal_via_need(area, pours.area_at(&p));
         if have >= need {

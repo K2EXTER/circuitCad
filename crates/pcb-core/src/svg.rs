@@ -40,6 +40,7 @@ fn element(p: &Prim, c: &str) -> String {
             Aperture::Circle(d) => format!("<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{c}\"/>", n(at.x), n(at.y), n(d / 2.0)),
             Aperture::Rect(w, h) => format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{c}\"/>", n(at.x - w / 2.0), n(at.y - h / 2.0), n(w), n(h)),
             Aperture::Oval(w, h) => format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" fill=\"{c}\"/>", n(at.x - w / 2.0), n(at.y - h / 2.0), n(w), n(h), n(w.min(h) / 2.0)),
+            Aperture::RoundRect(w, h, r) => format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" fill=\"{c}\"/>", n(at.x - w / 2.0), n(at.y - h / 2.0), n(w), n(h), n(r)),
         },
         Prim::Line { a, b, width, .. } => format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{c}\" stroke-width=\"{}\" stroke-linecap=\"round\"/>", n(a.x), n(a.y), n(b.x), n(b.y), n(*width)),
         Prim::Region { pts, .. } => {

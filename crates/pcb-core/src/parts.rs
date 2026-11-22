@@ -59,11 +59,7 @@ impl Board {
             let local = if bottom { Point::new(-fpad.pos.x, fpad.pos.y) } else { fpad.pos };
             let r = rotate(local, part.rot);
             let pos = Point::new(part.pos.x + r.x, part.pos.y + r.y);
-            let shape = match (fpad.shape, part.rot % 2) {
-                (PadShape::Rect { w, h }, 1) => PadShape::Rect { w: h, h: w },
-                (PadShape::Oval { w, h }, 1) => PadShape::Oval { w: h, h: w },
-                (s, _) => s,
-            };
+            let shape = if part.rot % 2 == 1 { fpad.shape.rotated90() } else { fpad.shape };
             let (w, h) = shape.size();
             x0 = x0.min(pos.x - w / 2.0);
             x1 = x1.max(pos.x + w / 2.0);

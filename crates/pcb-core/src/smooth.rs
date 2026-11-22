@@ -590,7 +590,7 @@ fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(
     for q in &board.pads {
         let (w, h) = q.shape.size();
         if (q.drill.is_some() || q.side == side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6 {
-            if !matches!(q.shape, PadShape::Rect { .. }) {
+            if !q.shape.is_rectangular() {
                 // a round end has no flat edge to match: the teardrop starts at the centre, as wide as the pad is
                 return (p.dist(q.pos) < 0.05).then_some((w.min(h), 0.0, true, 0.0));
             }
@@ -686,7 +686,7 @@ fn pad_clip(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     }
     let pad = board.pads.iter().find(|q| {
         let (w, h) = q.shape.size();
-        matches!(q.shape, PadShape::Rect { .. }) && (q.drill.is_some() || q.side == t.side) && (v.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (v.y - q.pos.y).abs() <= h / 2.0 + 1e-6
+        q.shape.is_rectangular() && (q.drill.is_some() || q.side == t.side) && (v.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (v.y - q.pos.y).abs() <= h / 2.0 + 1e-6
     })?;
     let (w, h) = pad.shape.size();
     // along the track (depth) and across it
@@ -733,7 +733,7 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     // a track that comes straight into a face of a rectangular pad: the neck is as wide as that face (across the track), so it
     // meets the pad's edge with no step. The round end may then reach past the far face: the neck starts further in (`shift`).
     let axis_x = ux.abs() > 0.9999;
-    let straight = matches!(pad.shape, PadShape::Rect { .. }) && (axis_x || uy.abs() > 0.9999);
+    let straight = pad.shape.is_rectangular() && (axis_x || uy.abs() > 0.9999);
     let short = match pad.shape {
         PadShape::Circle { d } => d - 2.0 * v.dist(pad.pos),
         _ if straight => 2.0 * if axis_x { h / 2.0 - dy } else { w / 2.0 - dx },
@@ -865,7 +865,7 @@ fn flat_face(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Optio
     for (n, q) in board.pads.iter().enumerate() {
         let (w, h) = q.shape.size();
         if (q.drill.is_some() || q.side == side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6 {
-            if !matches!(q.shape, PadShape::Rect { .. }) {
+            if !q.shape.is_rectangular() {
                 return None;
             }
             let exit = |half: f64, off: f64, u: f64| if u.abs() > 1e-9 { (half * u.signum() - off) / u } else { f64::INFINITY };

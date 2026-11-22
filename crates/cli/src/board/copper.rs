@@ -427,6 +427,20 @@ impl Session {
         Ok(obj(json!({"moved": r.moved, "still_touching": r.still_touching, "before": score(before), "after": score(after)})))
     }
 
+    pub(super) fn board_roundpads(&mut self, rest: &[String]) -> Res {
+        // board roundpads [r=0.25]: the app's 「パッドの角を丸める」: the sharp rectangular surface-mount pads get corners of r x the
+        // shorter side (0 to 0.5; KiCad's and IPC-7351's default 0.25), which the DRC, the pours and the Gerber files then use
+        let (_, kv) = options(rest);
+        let r = match opt(&kv, "r") {
+            None => pcb_core::model::ROUNDRECT_DEFAULT,
+            Some(s) => s.parse::<f64>().ok().filter(|v| (0.0..=0.5).contains(v)).ok_or_else(|| format!("r={s}: the corner radius as a share of the shorter side, 0 to 0.5 (0.25 is usual)"))?,
+        };
+        let board = self.board_mut()?;
+        let before = pcb_core::drc::check_final(board).len();
+        let rounded = board.round_smd_pads(r);
+        Ok(obj(json!({"rounded": rounded, "r": r, "drc_before": before, "drc_after": pcb_core::drc::check_final(board).len()})))
+    }
+
     pub(super) fn board_thermal(&mut self, _rest: &[String]) -> Res {
         // the app's 「サーマルビアを置く」: a grid of 0.3 mm vias inside every heat pad (QFN / ESOP exposed pads) that has fewer than the
         // check asks for; nothing is added when that would make the DRC worse. Joining them to the back copper is up to the pour.

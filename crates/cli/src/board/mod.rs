@@ -65,6 +65,7 @@ impl Session {
             "label" => self.board_label(rest),
             "silkline" => self.board_silkline(rest),
             "thermal" => self.board_thermal(rest),
+            "roundpads" => self.board_roundpads(rest),
             "improve" => self.board_improve(rest),
             "route" => self.board_route(rest),
             "drc" => self.board_drc(rest),

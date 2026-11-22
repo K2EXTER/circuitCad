@@ -369,11 +369,7 @@ impl BoardEditor {
                 Item::Pad(i) => {
                     let Some(t) = self.board.pads.get_mut(i).filter(|t| t.refdes.is_empty()) else { continue };
                     t.pos = turn(t.pos);
-                    t.shape = match t.shape {
-                        pcb_core::PadShape::Rect { w, h } => pcb_core::PadShape::Rect { w: h, h: w },
-                        pcb_core::PadShape::Oval { w, h } => pcb_core::PadShape::Oval { w: h, h: w },
-                        s => s,
-                    };
+                    t.shape = t.shape.rotated90();
                     t.slot_v = !t.slot_v;
                 }
                 Item::Via(i) => {

@@ -11,6 +11,7 @@ fn usb_like() -> PackageSpec {
         shape: "oval".into(),
         w: 1.6,
         h: 1.6_f64.max(slot),
+        r: 0.0,
         drill: Some(drill),
         slot,
         slot_v,
@@ -65,13 +66,13 @@ fn slots_are_written_with_g85_and_read_back() {
 #[test]
 fn bad_slots_and_holes_are_explained() {
     let bad = |slot: f64, drill: Option<f64>| PackageSpec::Explicit {
-        pads: vec![PadSpec { pin: "1".into(), x: 0.0, y: 0.0, shape: "oval".into(), w: 1.6, h: 2.0, drill, slot, slot_v: false }],
+        pads: vec![PadSpec { pin: "1".into(), x: 0.0, y: 0.0, shape: "oval".into(), w: 1.6, h: 2.0, r: 0.0, drill, slot, slot_v: false }],
         holes: vec![],
     };
     assert!(bad(0.5, Some(0.8)).build("x").unwrap_err().contains("slot"));
     assert!(bad(2.0, None).build("x").unwrap_err().contains("drill"));
     let hole = PackageSpec::Explicit {
-        pads: vec![PadSpec { pin: "1".into(), x: 0.0, y: 0.0, shape: "circle".into(), w: 1.6, h: 0.0, drill: Some(0.8), slot: 0.0, slot_v: false }],
+        pads: vec![PadSpec { pin: "1".into(), x: 0.0, y: 0.0, shape: "circle".into(), w: 1.6, h: 0.0, r: 0.0, drill: Some(0.8), slot: 0.0, slot_v: false }],
         holes: vec![HoleSpec { x: 0.0, y: 0.0, drill: 0.0, slot: 0.0, slot_v: false }],
     };
     assert!(hole.build("x").is_err());

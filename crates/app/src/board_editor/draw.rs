@@ -403,10 +403,13 @@ impl BoardEditor {
                 PadShape::Rect { .. } => {
                     painter.rect_filled(Rect::from_center_size(c, sz), 0.0, col);
                 }
-                PadShape::Oval { .. } => {
+                PadShape::Oval { .. } | PadShape::RoundRect { .. } if plain => {
+                    ribbon::add_rounded_rect(&mut shapes, Rect::from_center_size(c, sz), p.shape.corner_radius() as f32 * z, col)
+                }
+                PadShape::Oval { .. } | PadShape::RoundRect { .. } => {
                     // (a rounded box: egui's, so the mesh so far goes first to keep the order)
                     ribbon::flush(painter, &mut shapes);
-                    painter.rect_filled(Rect::from_center_size(c, sz), sz.min_elem() / 2.0, col);
+                    painter.rect_filled(Rect::from_center_size(c, sz), p.shape.corner_radius() as f32 * z, col);
                 }
             }
             if p.mask_open > 0.0 {

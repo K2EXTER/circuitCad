@@ -48,6 +48,19 @@ pub(super) fn net_glow(board: &Board, conn: &drc::Connectivity, net: &str, patch
                 let d = (h - w) / 2.0;
                 capsule(Point::new(p.pos.x, p.pos.y - d), Point::new(p.pos.x, p.pos.y + d), w / 2.0)
             }
+            s @ PadShape::RoundRect { w, h, .. } => {
+                // a quarter circle of 6 steps at each corner
+                let r = s.corner_radius();
+                let (hw, hh) = (w / 2.0 - r, h / 2.0 - r);
+                let mut out = vec![];
+                for (q, (sx, sy)) in [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)].into_iter().enumerate() {
+                    for k in 0..=6 {
+                        let t = std::f64::consts::FRAC_PI_2 * (q as f64 + k as f64 / 6.0);
+                        out.push(Point::new(p.pos.x + sx * hw + r * t.cos(), p.pos.y + sy * hh + r * t.sin()));
+                    }
+                }
+                out
+            }
         };
         let faces: &[bool] = match (p.drill.is_some(), p.side) {
             (true, _) => &[false, true],

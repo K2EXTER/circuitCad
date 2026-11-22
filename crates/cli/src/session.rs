@@ -176,6 +176,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board currents [tran] [from=F] [widen]  take the net currents (DC point, or with tran the RMS of the settled part of the last tran), show the track width each needs, optionally thicken thin tracks
   board thermal                         thermal vias in the heat pads that lack them (QFN / ESOP exposed pads): a grid of 0.3 mm vias inside the pad;
                                         pour the back (board pour) first so that they join copper there
+  board roundpads [r=0.25]              round the corners of the sharp rectangular SMD pads (r x the shorter side): more room between
+                                        fine-pitch pads for the DRC, the pours and the Gerber files
   board postlayout on|off               dc/tran/ac/noise also see the copper resistance of the board (post-layout simulation)
   board check [fab=jlcpcb|pcbway|oshpark|standard]
                                         the pre-order check of the app: ready true/false, and every error / warning / note with the reason

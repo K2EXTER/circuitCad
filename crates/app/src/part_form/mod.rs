@@ -7,7 +7,6 @@ use part_lib::{Issue, PartDef, PinDef};
 use pcb_core::footprints::Footprint;
 use pcb_core::body::{BodyMark, BodySpec};
 use pcb_core::package::{HoleSpec, PackageSpec, PadSpec};
-use pcb_core::PadShape;
 use sch_core::{LifeRating, PartRatings, PinSide, RippleRating, SimKind, SimModel, SpecRow};
 
 /// What the form asks the editor to do, because the editor owns the library: add a part from a file.

@@ -86,6 +86,8 @@ pub mod zonefill;
 #[cfg(test)]
 mod tests_autoroute;
 #[cfg(test)]
+mod tests_roundrect;
+#[cfg(test)]
 mod tests_layers;
 #[cfg(test)]
 mod tests_meander;

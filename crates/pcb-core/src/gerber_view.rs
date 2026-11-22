@@ -12,6 +12,8 @@ pub enum Aperture {
     Circle(f64),
     Rect(f64, f64),
     Oval(f64, f64),
+    /// Width, height and corner radius (the writer's `RoundRect` macro).
+    RoundRect(f64, f64, f64),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -51,12 +53,13 @@ pub fn parse_gerber(text: &str) -> Result<Vec<Prim>, String> {
             } else if let Some(ad) = body.strip_prefix("ADD") {
                 let (num, rest) = ad.split_at(ad.find(|c: char| !c.is_ascii_digit()).ok_or("ADD の書式が不正です")?);
                 let code: u32 = num.parse().map_err(|_| "アパーチャ番号が不正です")?;
-                let (kind, params) = rest.split_at(1);
+                let (kind, params) = if rest.starts_with("RoundRect,") { rest.split_at(9) } else { rest.split_at(1) };
                 let nums: Vec<f64> = params.trim_start_matches(',').split('X').map(|s| s.parse::<f64>().map_err(|_| format!("アパーチャの寸法が不正です: {s}"))).collect::<Result<_, _>>()?;
                 let ap = match (kind, nums.as_slice()) {
                     ("C", [d, ..]) => Aperture::Circle(*d),
                     ("R", [w, h, ..]) => Aperture::Rect(*w, *h),
                     ("O", [w, h, ..]) => Aperture::Oval(*w, *h),
+                    ("RoundRect", [w, h, r, ..]) => Aperture::RoundRect(*w, *h, *r),
                     _ => return Err(format!("未対応のアパーチャです: {rest}")),
                 };
                 aps.push((code, ap));
@@ -251,6 +254,12 @@ pub fn rasterize(prims: &[Prim], f: &Frame) -> Vec<u8> {
                         let off = w.max(h) / 2.0 - r;
                         let (a, b) = if w >= h { (Point::new(c.x - off, c.y), Point::new(c.x + off, c.y)) } else { (Point::new(c.x, c.y - off), Point::new(c.x, c.y + off)) };
                         fill(&mut buf, f, Point::new(c.x - w / 2.0, c.y - h / 2.0), Point::new(c.x + w / 2.0, c.y + h / 2.0), *clear, &move |p| seg_dist(p, a, b) <= r);
+                    }
+                    Aperture::RoundRect(w, h, r) => {
+                        let (hw, hh) = (w / 2.0 - r, h / 2.0 - r);
+                        fill(&mut buf, f, Point::new(c.x - w / 2.0, c.y - h / 2.0), Point::new(c.x + w / 2.0, c.y + h / 2.0), *clear, &move |p| {
+                            ((p.x - c.x).abs() - hw).max(0.0).hypot(((p.y - c.y).abs() - hh).max(0.0)) <= r
+                        });
                     }
                 }
             }

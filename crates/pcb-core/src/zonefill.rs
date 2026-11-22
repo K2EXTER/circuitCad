@@ -80,13 +80,33 @@ pub(crate) fn capsule(a: Point, b: Point, r: f64) -> Path {
     out
 }
 
+/// A rectangle of half sizes `hw` x `hh` swept by a disc of radius `r` (counter-clockwise; 4 points when `r` is 0).
+pub(crate) fn rounded_rect(c: Point, hw: f64, hh: f64, r: f64) -> Path {
+    if r <= 1e-9 {
+        return vec![[c.x - hw, c.y - hh], [c.x + hw, c.y - hh], [c.x + hw, c.y + hh], [c.x - hw, c.y + hh]];
+    }
+    let quarter = (circle_steps(r) / 4).max(2);
+    let mut out = Vec::with_capacity(4 * (quarter + 1));
+    for (q, (sx, sy)) in [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)].into_iter().enumerate() {
+        let (cx, cy) = (c.x + sx * hw, c.y + sy * hh);
+        for k in 0..=quarter {
+            let t = PI / 2.0 * (q as f64 + k as f64 / quarter as f64);
+            out.push([cx + r * t.cos(), cy + r * t.sin()]);
+        }
+    }
+    out
+}
+
 /// A pad grown by `c` on every side.
 pub(crate) fn pad_path(pos: Point, shape: PadShape, c: f64) -> Path {
     match shape {
         PadShape::Circle { d } => circle(pos, d / 2.0 + c),
-        PadShape::Rect { w, h } => {
-            let (hw, hh) = (w / 2.0 + c, h / 2.0 + c);
-            vec![[pos.x - hw, pos.y - hh], [pos.x + hw, pos.y - hh], [pos.x + hw, pos.y + hh], [pos.x - hw, pos.y + hh]]
+        // the clearance round a rectangle is the rectangle swept by a disc: its corners are rounded too (a sharp corner would
+        // keep √2 times the clearance there)
+        PadShape::Rect { .. } | PadShape::RoundRect { .. } => {
+            let (w, h) = shape.size();
+            let r = shape.corner_radius();
+            rounded_rect(pos, w / 2.0 - r, h / 2.0 - r, r + c)
         }
         PadShape::Oval { w, h } => {
             let r = w.min(h) / 2.0;

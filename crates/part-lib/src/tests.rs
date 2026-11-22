@@ -492,13 +492,8 @@ fn write_chip_examples() {
         let built = pcb_core::footprints::get(fp).unwrap();
         // keep the footprint's pad shape and hole (a leaded part must stay through-hole)
         let shape = |p: &pcb_core::footprints::FpPad| {
-            let (w, h) = p.shape.size();
-            let kind = match p.shape {
-                pcb_core::model::PadShape::Circle { .. } => "circle",
-                pcb_core::model::PadShape::Oval { .. } => "oval",
-                pcb_core::model::PadShape::Rect { .. } => "rect",
-            };
-            PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: kind.into(), w, h, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
+            let (kind, w, h, r) = pcb_core::package::shape_words(p.shape);
+            PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: kind.into(), w, h, r, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
         };
         let def = PartDef {
             name: name.clone(),
@@ -565,7 +560,7 @@ const KICAD_SYM: &str = r##"(kicad_symbol_lib (version 20231120) (generator "kic
 
 const KICAD_MOD: &str = r#"(footprint "SOIC-8_3.9x4.9mm_P1.27mm" (version 20221018) (descr "SOIC, 8 Pin")
   (pad "1" smd roundrect (at -2.475 -1.905) (size 1.95 0.6) (layers "F.Cu" "F.Paste" "F.Mask"))
-  (pad "2" smd roundrect (at -2.475 -0.635) (size 1.95 0.6) (layers "F.Cu"))
+  (pad "2" smd roundrect (at -2.475 -0.635) (size 1.95 0.6) (layers "F.Cu") (roundrect_rratio 0.1))
   (pad "3" smd roundrect (at -2.475 0.635) (size 1.95 0.6) (layers "F.Cu"))
   (pad "4" smd roundrect (at -2.475 1.905) (size 1.95 0.6) (layers "F.Cu"))
   (pad "8" smd roundrect (at 2.475 -1.905) (size 1.95 0.6) (layers "F.Cu"))
@@ -604,6 +599,10 @@ fn kicad_footprint_pads_and_holes() {
     let slot = fp.pads.iter().find(|p| p.pin == "9").unwrap();
     assert_eq!((slot.w, slot.h), (3.0, 1.5), "rotated 90 degrees swaps the size");
     assert_eq!((slot.drill, slot.slot, slot.slot_v), (Some(1.0), 2.0, false), "slot turned with the pad");
+    // rounded rectangles keep their corners: KiCad's ratio, or its default 0.25 when the file gives none
+    let p = |n: &str| fp.pads.iter().find(|p| p.pin == n).unwrap();
+    assert_eq!((p("1").shape.as_str(), p("1").r), ("roundrect", 0.25));
+    assert_eq!((p("2").shape.as_str(), p("2").r), ("roundrect", 0.1));
 }
 
 #[test]

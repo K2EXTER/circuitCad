@@ -4,8 +4,9 @@ use super::*;
 pub(crate) enum Geo {
     /// Segment `a`-`b` swept by a disc of radius `r` (r > 0: track, round pad, oval pad, via).
     Cap { a: Point, b: Point, r: f64 },
-    /// Axis-aligned rectangle.
-    Rect { c: Point, hw: f64, hh: f64 },
+    /// Axis-aligned rectangle (`hw`, `hh` its half sizes) swept by a disc of radius `r` (r > 0: a pad with rounded corners;
+    /// the copper reaches `hw + r` from the centre).
+    Rect { c: Point, hw: f64, hh: f64, r: f64 },
 }
 
 pub(super) fn cross(o: Point, a: Point, b: Point) -> f64 {
@@ -66,13 +67,13 @@ pub(crate) fn seg_rect(a: Point, b: Point, c: Point, hw: f64, hh: f64) -> f64 {
 pub(super) fn dist(x: &Geo, y: &Geo) -> f64 {
     match (*x, *y) {
         (Geo::Cap { a, b, r }, Geo::Cap { a: c, b: d, r: s }) => (seg_seg(a, b, c, d) - r - s).max(0.0),
-        (Geo::Cap { a, b, r }, Geo::Rect { c, hw, hh }) | (Geo::Rect { c, hw, hh }, Geo::Cap { a, b, r }) => {
-            (seg_rect(a, b, c, hw, hh) - r).max(0.0)
+        (Geo::Cap { a, b, r }, Geo::Rect { c, hw, hh, r: s }) | (Geo::Rect { c, hw, hh, r: s }, Geo::Cap { a, b, r }) => {
+            (seg_rect(a, b, c, hw, hh) - r - s).max(0.0)
         }
-        (Geo::Rect { c: c1, hw: w1, hh: h1 }, Geo::Rect { c: c2, hw: w2, hh: h2 }) => {
+        (Geo::Rect { c: c1, hw: w1, hh: h1, r: r1 }, Geo::Rect { c: c2, hw: w2, hh: h2, r: r2 }) => {
             let dx = ((c1.x - c2.x).abs() - w1 - w2).max(0.0);
             let dy = ((c1.y - c2.y).abs() - h1 - h2).max(0.0);
-            dx.hypot(dy)
+            (dx.hypot(dy) - r1 - r2).max(0.0)
         }
     }
 }
@@ -80,7 +81,12 @@ pub(super) fn dist(x: &Geo, y: &Geo) -> f64 {
 pub(crate) fn shape_geo(pos: Point, shape: PadShape) -> Geo {
     match shape {
         PadShape::Circle { d } => Geo::Cap { a: pos, b: pos, r: d / 2.0 },
-        PadShape::Rect { w, h } => Geo::Rect { c: pos, hw: w / 2.0, hh: h / 2.0 },
+        PadShape::Rect { w, h } => Geo::Rect { c: pos, hw: w / 2.0, hh: h / 2.0, r: 0.0 },
+        // the rectangle shrunk by the corner radius and swept by it: the distance stays a formula (no more points)
+        PadShape::RoundRect { w, h, .. } => {
+            let r = shape.corner_radius();
+            Geo::Rect { c: pos, hw: w / 2.0 - r, hh: h / 2.0 - r, r }
+        }
         PadShape::Oval { w, h } => {
             let r = w.min(h) / 2.0;
             let off = (w.max(h) / 2.0) - r;
@@ -121,14 +127,14 @@ fn nearest_cores(x: &Geo, y: &Geo) -> (Point, Point) {
             }
             best([a, b].into_iter().map(|e| (e, nearest_on_seg(e, c, d))).chain([c, d].into_iter().map(|e| (nearest_on_seg(e, a, b), e))))
         }
-        (Geo::Cap { a, b, .. }, Geo::Rect { c, hw, hh }) => {
+        (Geo::Cap { a, b, .. }, Geo::Rect { c, hw, hh, .. }) => {
             best([a, b].into_iter().map(|e| (e, nearest_in_rect(e, c, hw, hh))).chain(corners(c, hw, hh).into_iter().map(|k| (nearest_on_seg(k, a, b), k))))
         }
         (Geo::Rect { .. }, Geo::Cap { .. }) => {
             let (p, q) = nearest_cores(y, x);
             (q, p)
         }
-        (Geo::Rect { c: c1, hw: w1, hh: h1 }, Geo::Rect { c: c2, hw: w2, hh: h2 }) => {
+        (Geo::Rect { c: c1, hw: w1, hh: h1, .. }, Geo::Rect { c: c2, hw: w2, hh: h2, .. }) => {
             // along each axis: the middle of the overlap, or the two facing sides
             let axis = |c1: f64, w1: f64, c2: f64, w2: f64| {
                 let (lo, hi) = ((c1 - w1).max(c2 - w2), (c1 + w1).min(c2 + w2));
@@ -151,7 +157,9 @@ fn nearest_cores(x: &Geo, y: &Geo) -> (Point, Point) {
 /// narrow spot and not between the shapes' centres, which for a long track can be far from it).
 pub(super) fn gap_point(x: &Geo, y: &Geo) -> Point {
     let (p, q) = nearest_cores(x, y);
-    let r = |g: &Geo| if let Geo::Cap { r, .. } = *g { r } else { 0.0 };
+    let r = |g: &Geo| match *g {
+        Geo::Cap { r, .. } | Geo::Rect { r, .. } => r,
+    };
     let d = p.dist(q);
     if d < 1e-12 {
         return p;
@@ -185,15 +193,15 @@ mod gap_tests {
     fn a_finding_is_marked_in_the_gap_not_between_the_centres() {
         // a long track along y = 0 from x = 0 to 40, and a pad near its far end: the gap is at x ≈ 40, not at the centres' middle
         let track = Geo::Cap { a: p(0.0, 0.0), b: p(40.0, 0.0), r: 0.125 };
-        let pad = Geo::Rect { c: p(40.0, 0.9), hw: 0.5, hh: 0.6 };
+        let pad = Geo::Rect { c: p(40.0, 0.9), hw: 0.5, hh: 0.6, r: 0.0 };
         let at = gap_point(&track, &pad);
         assert!((at.x - 40.0).abs() < 1e-9 && (at.y - 0.2125).abs() < 1e-9, "{at:?}");
         // the other way round gives the same point
         let back = gap_point(&pad, &track);
         assert!(back.dist(at) < 1e-9, "{back:?}");
         // two rectangles side by side: the middle of the facing sides, at the height they share
-        let a = Geo::Rect { c: p(0.0, 0.0), hw: 1.0, hh: 1.0 };
-        let b = Geo::Rect { c: p(2.2, 0.5), hw: 1.0, hh: 1.0 };
+        let a = Geo::Rect { c: p(0.0, 0.0), hw: 1.0, hh: 1.0, r: 0.0 };
+        let b = Geo::Rect { c: p(2.2, 0.5), hw: 1.0, hh: 1.0, r: 0.0 };
         let at = gap_point(&a, &b);
         assert!((at.x - 1.1).abs() < 1e-9 && (at.y - 0.25).abs() < 1e-9, "{at:?}");
         // two round pads: on the line between them, in the middle of the gap
