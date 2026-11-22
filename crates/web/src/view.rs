@@ -1,8 +1,8 @@
-//! The schematic as the browser draws it: wires coloured by their DC voltage, parts as simple outlines (the app's symbols come later,
-//! shared through a crate of their own), dragged with a finger or the mouse and zoomed with a pinch or the wheel.
+//! The schematic as the browser draws it: wires coloured by their DC voltage, parts with the app's symbols (`sch_core::symbol_shapes`), dragged with a finger or the mouse and zoomed with a pinch or the wheel.
 
-use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
-use sch_core::{net_at, Kind, Pt, Schematic};
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2};
+use sch_core::symbol_shapes::{comp_extents, component_shapes, rot_f, sheet_box, Sh};
+use sch_core::{net_at, Component, Kind, Pt, Schematic};
 
 /// The circuit on screen and what the DC solve said about it.
 pub struct Sheet {
@@ -41,15 +41,21 @@ impl Sheet {
         match result {
             Ok(r) => {
                 self.volts = r.voltages.clone();
-                let mut seen: Vec<String> = vec![];
+                // the voltage is written once per net, beside its longest wire (a short one ends at a label or a pin, whose text it would cover)
+                let mut longest: Vec<(String, i32, usize)> = vec![];
                 for (k, w) in self.sch.wires.iter().enumerate() {
                     let Some(net) = net_at(&self.sch, w.a) else { continue };
-                    let v = r.voltage(&net);
-                    self.wire_v[k] = v;
-                    if let Some(v) = v
-                        && !seen.contains(&net)
-                    {
-                        seen.push(net);
+                    self.wire_v[k] = r.voltage(&net);
+                    let len = (w.a.0 - w.b.0).abs() + (w.a.1 - w.b.1).abs();
+                    match longest.iter_mut().find(|(n, _, _)| *n == net) {
+                        Some(best) if best.1 < len => *best = (net, len, k),
+                        Some(_) => {}
+                        None => longest.push((net, len, k)),
+                    }
+                }
+                for (_, _, k) in longest {
+                    if let Some(v) = self.wire_v[k] {
+                        let w = &self.sch.wires[k];
                         self.net_marks.push((w.a, w.b, v));
                     }
                 }
@@ -139,10 +145,8 @@ impl Sheet {
         }
         let text = FontId::proportional((s * 0.9).clamp(10.0, 18.0));
         for (k, c) in self.sch.components.iter().enumerate() {
-            let pins: Vec<Pos2> = c.pins().into_iter().map(|(_, p)| to_screen(p)).collect();
             let body = if self.selected == Some(k) { Color32::from_rgb(255, 210, 90) } else { Color32::from_gray(190) };
-            let stroke = Stroke::new((s * 0.12).max(1.5), body);
-            let label_at = draw_part(&painter, c.kind, &pins, to_screen(c.pos), s, stroke);
+            let label_at = draw_part(&painter, c, s, origin, Stroke::new((s * 0.12).max(1.5), body));
             let name = if c.kind.is_power_symbol() { c.value.clone() } else { format!("{} {}", c.refdes, c.value) };
             painter.text(label_at, Align2::LEFT_CENTER, name, text.clone(), Color32::from_gray(220));
         }
@@ -151,8 +155,10 @@ impl Sheet {
         }
         if self.ok {
             for (a, b, v) in &self.net_marks {
-                let at = to_screen(*a).lerp(to_screen(*b), 0.5) + Vec2::new(s * 0.3, s * 0.3);
-                painter.text(at, Align2::LEFT_TOP, sim_volts(*v), text.clone(), self.color_of(Some(*v)));
+                // left of an upright wire, below a lying one: the names of labels and parts are written to the right and above
+                let mid = to_screen(*a).lerp(to_screen(*b), 0.5);
+                let (at, anchor) = if a.0 == b.0 { (mid - Vec2::new(s * 0.4, 0.0), Align2::RIGHT_CENTER) } else { (mid + Vec2::new(0.0, s * 0.4), Align2::CENTER_TOP) };
+                painter.text(at, anchor, sim_volts(*v), text.clone(), self.color_of(Some(*v)));
             }
         }
 
@@ -173,45 +179,30 @@ impl Sheet {
     }
 }
 
-/// A part as a plain outline (two leads: a lead to each pin and a box between them; one pin: a power or ground mark; more: a box
-/// around the pins). Returns where its name is written.
-fn draw_part(painter: &egui::Painter, kind: Kind, pins: &[Pos2], pos: Pos2, s: f32, stroke: Stroke) -> Pos2 {
-    match pins {
-        [p] => {
-            if kind == Kind::Ground {
-                // the bars go on the side of the part's position (away from the wire)
-                let d = if pos.y >= p.y { 1.0 } else { -1.0 };
-                for (i, half) in [0.9, 0.55, 0.2].iter().enumerate() {
-                    let y = p.y + d * (0.3 + i as f32 * 0.3) * s;
-                    painter.line_segment([Pos2::new(p.x - half * s, y), Pos2::new(p.x + half * s, y)], stroke);
-                }
-                painter.line_segment([*p, Pos2::new(p.x, p.y + d * 0.3 * s)], stroke);
-                *p + Vec2::new(s * 1.2, d * s * 0.6)
-            } else {
-                painter.line_segment([Pos2::new(p.x - 0.8 * s, p.y), Pos2::new(p.x + 0.8 * s, p.y)], stroke);
-                *p + Vec2::new(s * 1.0, -s * 0.5)
+/// A part with its symbol (`sch_core::symbol_shapes`, the same lines the app draws). Returns where its name is written: to the
+/// right of the part when it stands upright, above it when it lies.
+fn draw_part(painter: &egui::Painter, c: &Component, s: f32, origin: Vec2, stroke: Stroke) -> Pos2 {
+    let at = |x: f32, y: f32| {
+        let (rx, ry) = rot_f((x, y), c.rot);
+        Pos2::new((c.pos.0 as f32 + rx) * s, (c.pos.1 as f32 + ry) * s) + origin
+    };
+    for shape in component_shapes(c) {
+        match shape {
+            Sh::L(a, b, x, y) => {
+                painter.line_segment([at(a, b), at(x, y)], stroke);
+            }
+            Sh::C(x, y, r) => {
+                painter.circle_stroke(at(x, y), r * s, stroke);
             }
         }
-        [a, b] => {
-            let (mid, along) = (a.lerp(*b, 0.5), (*b - *a));
-            let len = along.length().max(1.0);
-            let dir = along / len;
-            let normal = Vec2::new(-dir.y, dir.x);
-            let half = (len * 0.25).min(1.5 * s);
-            let (p, q) = (mid - dir * half, mid + dir * half);
-            painter.line_segment([*a, p], stroke);
-            painter.line_segment([q, *b], stroke);
-            let w = 0.5 * s;
-            let corners = vec![p + normal * w, q + normal * w, q - normal * w, p - normal * w];
-            let fill = if matches!(kind, Kind::VSource | Kind::ISource) { Color32::from_rgb(60, 50, 30) } else { Color32::from_rgb(40, 44, 52) };
-            painter.add(egui::Shape::convex_polygon(corners, fill, stroke));
-            // the name beside the box, on the side away from the leads
-            mid + if dir.x.abs() > dir.y.abs() { Vec2::new(-half, -s * 1.2) } else { Vec2::new(s * 0.9, 0.0) }
-        }
-        _ => {
-            let r = pins.iter().fold(Rect::from_center_size(pos, Vec2::splat(s)), |r, p| r.union(Rect::from_center_size(*p, Vec2::ZERO))).shrink(s * 0.5);
-            painter.rect(r, 2.0, Color32::from_rgb(40, 44, 52), stroke, egui::StrokeKind::Middle);
-            Pos2::new(r.left(), r.top() - s * 0.6)
+    }
+    match sheet_box(c.kind, comp_extents(c), c.pos, c.rot) {
+        Some((x0, x1, y0, y1)) if x1 - x0 < y1 - y0 => Pos2::new(x1 * s + s * 0.3, (y0 + y1) / 2.0 * s) + origin,
+        Some((x0, _, y0, _)) => Pos2::new(x0 * s, y0 * s - s * 0.5) + origin,
+        // a ground or power mark: beside its pin
+        None => {
+            let (_, pin) = c.pins()[0];
+            Pos2::new(pin.0 as f32 * s + s * 1.1, pin.1 as f32 * s + if c.kind == Kind::Ground { s * 0.8 } else { -s * 0.5 }) + origin
         }
     }
 }
