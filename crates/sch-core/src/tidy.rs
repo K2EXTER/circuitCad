@@ -258,14 +258,16 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     let before = grouping(s);
     let nets = extract(s);
     // a source's net without a name is a signal (a symbol would give it the made-up name)
-    let mut supplies: BTreeSet<String> = crate::breadboard::read(s).supplies.into_iter().filter(|n| !n.starts_with("N$")).collect();
+    // a name another program made up (LTspice's N001, KiCad's Net-(R1-Pad1)) is no supply's name either
+    let made_up = |n: &str| n.starts_with("N$") || n.starts_with("Net-(") || n.starts_with("unconnected-") || (n.len() == 4 && n.starts_with('N') && n[1..].chars().all(|c| c.is_ascii_digit()));
+    let mut supplies: BTreeSet<String> = crate::breadboard::read(s).supplies.into_iter().filter(|n| !made_up(n)).collect();
     let is_ground = |n: &str| crate::breadboard::is_ground_name(n);
     let net_of: BTreeMap<(String, String), String> = nets.iter().flat_map(|n| n.pins.iter().map(move |p| ((p.refdes.clone(), p.pin.clone()), n.name.clone()))).collect();
     // a named net of a DC source is a supply too (VEE on the minus side of a source whose plus is ground)
     for c in s.components.iter().filter(|c| c.kind == Kind::VSource && !c.value.contains('(') && !c.value.to_ascii_uppercase().starts_with("AC")) {
         for (p, _) in c.pins() {
             if let Some(n) = net_of.get(&(c.refdes.clone(), p))
-                && !n.starts_with("N$")
+                && !made_up(n)
                 && !is_ground(n)
             {
                 supplies.insert(n.clone());
@@ -339,8 +341,10 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
             }
         }
     }
-    let main: Vec<usize> = parts.iter().copied().filter(|i| !shunt.contains_key(i) && !feedback.contains_key(i)).collect();
-    let is_main = |i: usize| !shunt.contains_key(&i) && !feedback.contains_key(&i);
+    // a source of supplies only (VCC, VEE) is no part of the signal's flow: it goes to the bottom left, by itself
+    let rail: BTreeSet<usize> = if only.is_none() { parts.iter().copied().filter(|i| source(*i) && pins_of(&s.components[*i]).iter().all(|(_, n)| !signal(n))).collect() } else { BTreeSet::new() };
+    let main: Vec<usize> = parts.iter().copied().filter(|i| !shunt.contains_key(i) && !feedback.contains_key(i) && !rail.contains(i)).collect();
+    let is_main = |i: usize| !shunt.contains_key(&i) && !feedback.contains_key(&i) && !rail.contains(&i);
     // columns by distance from an input over the signal nets. The supplies come after: a part a signal reaches takes its place
     // in the signal's flow (an op amp after the resistors before it, not next to its supply), one fed only by a supply goes
     // after that supply's source, and a group of parts nothing reaches starts from its first part
@@ -393,6 +397,9 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
         col.insert(*i, renumber[&col[i]]);
     }
     let columns = col.values().max().map_or(0, |m| m + 1);
+    for i in &rail {
+        col.insert(*i, 0);
+    }
     // a feedback part takes its part's column; a shunt the gap after the first column of the line parts on its net
     for (i, u) in &feedback {
         col.insert(*i, col[u]);
@@ -411,14 +418,26 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     }
     let adj: BTreeMap<usize, Vec<usize>> = main.iter().map(|&i| (i, neighbours(i).into_iter().filter(|j| is_main(*j)).collect())).collect();
     let rows = |order: &Vec<Vec<usize>>| -> BTreeMap<usize, usize> { order.iter().flat_map(|c| c.iter().enumerate().map(|(r, i)| (*i, r))).collect() };
+    // the crossings between each two neighbouring columns, a line across several columns counted in each gap it passes (at the
+    // share of the column's height between its ends)
     let crossings = |order: &Vec<Vec<usize>>| -> usize {
         let row = rows(order);
+        let share = |i: usize| (row[&i] as f64 + 0.5) / order[col[&i]].len().max(1) as f64;
+        let mut lines: Vec<(usize, usize, f64, f64)> = vec![];
+        for (i, v) in &adj {
+            for j in v {
+                if col[i] < col[j] {
+                    lines.push((col[i], col[j], share(*i), share(*j)));
+                }
+            }
+        }
+        let at = |l: &(usize, usize, f64, f64), c: usize| l.2 + (l.3 - l.2) * (c - l.0) as f64 / (l.1 - l.0) as f64;
         let mut n = 0;
-        for (k, column) in order.iter().enumerate().take(order.len().saturating_sub(1)) {
-            let e: Vec<(usize, usize)> = column.iter().flat_map(|i| adj[i].iter().filter(|j| col[j] == k + 1).map(|j| (row[i], row[j])).collect::<Vec<_>>()).collect();
+        for c in 0..order.len().saturating_sub(1) {
+            let e: Vec<(f64, f64)> = lines.iter().filter(|l| l.0 <= c && l.1 > c).map(|l| (at(l, c), at(l, c + 1))).collect();
             for a in 0..e.len() {
                 for b in a + 1..e.len() {
-                    if (e[a].0 < e[b].0 && e[a].1 > e[b].1) || (e[a].0 > e[b].0 && e[a].1 < e[b].1) {
+                    if (e[a].0 - e[b].0) * (e[a].1 - e[b].1) < -1e-9 {
                         n += 1;
                     }
                 }
@@ -666,9 +685,14 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
         .collect();
     let anchor = |i: usize| anchors[&i];
     for (k, list) in &by_gap {
+        // the gap has a place more than it has shunts: the one left out is chosen so each shunt is nearest its pin (a shunt off the
+        // minus input of an op amp at the right of the gap, close to it)
         let mut list = list.clone();
-        list.sort_by_key(|i| anchor(*i).1);
-        for (slot, &i) in list.iter().enumerate() {
+        list.sort_by_key(|i| (anchor(*i).0, anchor(*i).1));
+        let spot = |s: usize| right_of[*k] + 3 + SHUNT_SLOT * s as i32;
+        let skip = (0..=list.len()).min_by_key(|skip| list.iter().enumerate().map(|(r, i)| (spot(if r < *skip { r } else { r + 1 }) - anchor(*i).0).abs()).sum::<i32>()).unwrap_or(list.len());
+        for (r, &i) in list.iter().enumerate() {
+            let slot = if r < skip { r } else { r + 1 };
             let (_, ay) = anchor(i);
             let mut c = out.components[i].clone();
             c.rot = turns[&i];
@@ -677,7 +701,7 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
             let pins = c.pins();
             let sig = pins.iter().find(|q| net_of.get(&(c.refdes.clone(), q.0.clone())) == Some(n)).map(|q| q.1).unwrap_or((0, 0));
             let other = pins.iter().map(|q| q.1).find(|q| *q != sig).unwrap_or((0, 0));
-            let px = right_of[*k] + 3 + SHUNT_SLOT * slot as i32;
+            let px = spot(slot);
             let py = if sig.1 <= other.1 { ay + 3 } else { ay - 3 };
             c.pos = (px - sig.0, py - sig.1);
             out.components[i] = c;
@@ -740,6 +764,18 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
             out.components[i].pos.1 += dir;
         }
         settled.push(abs_box(&out.components[i]));
+    }
+    // the sources of supplies in a row below everything else, from the left
+    if !rail.is_empty() {
+        let bottom = settled.iter().map(|b| b.3).max().unwrap_or(origin.1);
+        let mut x = origin.0;
+        for &i in &rail {
+            let c = &mut out.components[i];
+            c.rot = turns[&i];
+            let b = part_box(c, c.rot);
+            c.pos = (x - b.0, bottom + 7 - b.1);
+            x += b.2 - b.0 + COLUMN_GAP;
+        }
     }
     // the joints drawn again: what touched the moved parts' old pins goes, then a label, ground or power symbol on each pin
     let old_pins: BTreeSet<Pt> = parts.iter().flat_map(|i| s.components[*i].pins().into_iter().map(|p| p.1)).collect();

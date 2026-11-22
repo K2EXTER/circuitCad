@@ -1873,6 +1873,30 @@ list
     assert_eq!(t[1]["moved"], 1);
 }
 
+/// The sheets read from KiCad and LTspice tidy with their nets unchanged: the source on the left, the parts after it (a net name
+/// the other program made up, N001, is no supply).
+#[test]
+fn imported_sheets_are_tidied_from_left_to_right() {
+    for (cmd, file) in [("import_kicad", "kicad-divider.kicad_sch"), ("import_ltspice", "ltspice-rc.asc")] {
+        let path = format!("{}/../../docs/examples/{file}", env!("CARGO_MANIFEST_DIR"));
+        let (a, ok) = run(&format!("{cmd} {path}
+list
+tidy
+list
+"));
+        assert!(ok, "{file}: {a:?}");
+        let lists: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "list").collect();
+        let nets = |v: &Value| {
+            let mut n: Vec<Vec<String>> = v["nets"].as_array().unwrap().iter().map(|n| { let mut p: Vec<String> = n["pins"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).filter(|x| !x.starts_with('#')).collect(); p.sort(); p }).filter(|p| !p.is_empty()).collect();
+            n.sort();
+            n
+        };
+        assert_eq!(nets(lists[1]), nets(lists[0]), "{file}");
+        let t = a.iter().find(|v| v["cmd"] == "tidy").unwrap();
+        assert!(t["columns"].as_u64().unwrap() >= 2, "{file}: {t}");
+    }
+}
+
 #[test]
 fn the_rows_of_the_requirements_table_without_a_reason_are_listed() {
     let (a, ok) = run("new

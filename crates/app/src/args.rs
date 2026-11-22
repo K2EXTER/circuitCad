@@ -304,6 +304,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     }
     if let Some(p) = args.iter().find(|a| a.to_ascii_lowercase().ends_with(".asc")) {
         app.sch.load_ltspice(p.into(), false);
+        // --tidy: the imported sheet tidied
+        if args.iter().any(|a| a == "--tidy") {
+            app.sch.run_act(crate::actions::Act::Tidy);
+        }
         // the analysis the sheet asked for (`.tran` / `.ac` filled the boxes)
         if args.iter().any(|a| a == "--dc") {
             app.sch.analyze_dc();
@@ -324,6 +328,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     }
     if let Some(p) = args.iter().find(|a| a.ends_with(".kicad_sch")) {
         app.sch.load_kicad_sch(p.into(), false);
+        // --tidy: the imported sheet tidied
+        if args.iter().any(|a| a == "--tidy") {
+            app.sch.run_act(crate::actions::Act::Tidy);
+        }
     }
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
         app.sch.load_path(p.into());
