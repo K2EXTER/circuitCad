@@ -107,6 +107,12 @@ fn ways(a: Pt, b: Pt) -> Vec<Vec<Pt>> {
 
 /// The most pins of a net drawn as a tree of wires (more: by its name on each pin).
 const TREE_PINS: usize = 5;
+/// The room between two columns (for the names written to the right of the pins), between two parts of a column, the width of a
+/// shunt's place in the gap between columns, and how far above its part a feedback part goes.
+const COLUMN_GAP: i32 = 9;
+const ROW_GAP: i32 = 2;
+const SHUNT_SLOT: i32 = 5;
+const FEEDBACK_STEP: i32 = 4;
 
 fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Result<(Schematic, Tidied), String> {
     if !s.ports.is_empty() || !s.buses.is_empty() {
@@ -159,25 +165,64 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     let neighbours = |i: usize| neighbours_by(i, true);
     // the inputs: the sources and the connectors (a source of a supply too: it goes first, on top)
     let input = |c: &Component| matches!(c.kind, Kind::VSource | Kind::ISource | Kind::Header(_)) || c.refdes.starts_with('J') || c.refdes.starts_with('P') && c.kind == Kind::Custom && c.custom.as_ref().is_some_and(|x| x.prefix == "P");
+    // the parts hung off the line of the signal: a two-lead part from a signal net to the ground or a supply is a shunt, drawn
+    // below the net (above it, to a supply) between the columns; a two-lead part between two signal nets that one part of three
+    // pins or more is also on (an op amp, a transistor) is that part's feedback, drawn above it. Only when the whole sheet is tidied
+    let two_lead = |i: usize| turnable(&s.components[i]) && !source(i) && !input(&s.components[i]) && pins_of(&s.components[i]).len() == 2;
+    let mut feedback: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut shunt: BTreeMap<usize, String> = BTreeMap::new();
+    if only.is_none() {
+        for &i in &parts {
+            if !two_lead(i) {
+                continue;
+            }
+            let ps = pins_of(&s.components[i]);
+            let (a, b) = (&ps[0].1, &ps[1].1);
+            if a == b {
+                continue;
+            }
+            if signal(a) && signal(b) {
+                let on_both = |u: usize| {
+                    let n = pins_of(&s.components[u]);
+                    n.len() >= 3 && n.iter().any(|p| &p.1 == a) && n.iter().any(|p| &p.1 == b)
+                };
+                if let Some(&u) = parts.iter().find(|u| **u != i && !two_lead(**u) && on_both(**u)) {
+                    feedback.insert(i, u);
+                }
+            } else if signal(a) != signal(b) {
+                shunt.insert(i, if signal(a) { a.clone() } else { b.clone() });
+            }
+        }
+        // a shunt hangs off a part of the line on its net (with none, it is the line)
+        let hung: Vec<usize> = shunt.keys().copied().collect();
+        for i in hung {
+            let n = shunt[&i].clone();
+            if !on_net.get(&n).is_some_and(|v| v.iter().any(|j| *j != i && !shunt.contains_key(j) && !feedback.contains_key(j))) {
+                shunt.remove(&i);
+            }
+        }
+    }
+    let main: Vec<usize> = parts.iter().copied().filter(|i| !shunt.contains_key(i) && !feedback.contains_key(i)).collect();
+    let is_main = |i: usize| !shunt.contains_key(&i) && !feedback.contains_key(&i);
     // columns by distance from an input over the signal nets. The supplies come after: a part a signal reaches takes its place
     // in the signal's flow (an op amp after the resistors before it, not next to its supply), one fed only by a supply goes
     // after that supply's source, and a group of parts nothing reaches starts from its first part
     let mut col: BTreeMap<usize, usize> = BTreeMap::new();
-    let mut queue: std::collections::VecDeque<usize> = parts.iter().copied().filter(|i| input(&s.components[*i])).collect();
+    let mut queue: std::collections::VecDeque<usize> = main.iter().copied().filter(|i| input(&s.components[*i])).collect();
     for &i in &queue {
         col.insert(i, 0);
     }
     loop {
         while let Some(i) = queue.pop_front() {
             for j in neighbours_by(i, false) {
-                if !col.contains_key(&j) {
+                if !col.contains_key(&j) && is_main(j) {
                     col.insert(j, col[&i] + 1);
                     queue.push_back(j);
                 }
             }
         }
-        let fed = parts.iter().filter(|i| source(**i) && col.contains_key(i)).find_map(|&i| neighbours_by(i, true).into_iter().find(|j| !col.contains_key(j)).map(|j| (j, col[&i] + 1)));
-        match fed.or_else(|| parts.iter().find(|i| !col.contains_key(i)).map(|&i| (i, 0))) {
+        let fed = main.iter().filter(|i| source(**i) && col.contains_key(i)).find_map(|&i| neighbours_by(i, true).into_iter().find(|j| !col.contains_key(j) && is_main(*j)).map(|j| (j, col[&i] + 1)));
+        match fed.or_else(|| main.iter().find(|i| !col.contains_key(i)).map(|&i| (i, 0))) {
             Some((i, c)) => {
                 col.insert(i, c);
                 queue.push_back(i);
@@ -186,9 +231,18 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
         }
     }
     let columns = col.values().max().map_or(0, |m| m + 1);
+    // a feedback part takes its part's column; a shunt the gap after the first column of the line parts on its net
+    for (i, u) in &feedback {
+        col.insert(*i, col[u]);
+    }
+    // a shunt counts as in the first column of the line parts on its net
+    for (i, n) in &shunt {
+        let k = on_net.get(n).map(|v| v.iter().filter(|j| is_main(**j)).map(|j| col[j]).min().unwrap_or(0)).unwrap_or(0);
+        col.insert(*i, k);
+    }
     // each column ordered after its neighbours in the column before (two sweeps)
     let mut order: Vec<Vec<usize>> = vec![vec![]; columns];
-    for &i in &parts {
+    for &i in &main {
         order[col[&i]].push(i);
     }
     let mut row_of: BTreeMap<usize, f64> = BTreeMap::new();
@@ -256,8 +310,35 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     let turns: BTreeMap<usize, u8> = parts.iter().map(|i| (*i, turn_of(*i))).collect();
     let power_refs: BTreeSet<&str> = s.components.iter().filter(|c| c.kind.is_power_symbol()).map(|c| c.refdes.as_str()).collect();
     let pin_count: BTreeMap<&String, usize> = nets.iter().map(|n| (&n.name, n.pins.iter().filter(|p| !power_refs.contains(p.refdes.as_str())).count())).collect();
+    // the gap a shunt hangs in: after the first column of the line parts on its net, or, on a net within one column, on the side of
+    // the pin (a base on the left of its transistor: the gap before)
+    let mut gap_of: BTreeMap<usize, usize> = BTreeMap::new();
+    for (i, n) in &shunt {
+        let line: Vec<usize> = on_net.get(n).map(|v| v.iter().copied().filter(|j| is_main(*j)).collect()).unwrap_or_default();
+        let k = col[i];
+        let left_side = !line.iter().any(|j| col[j] > k)
+            && line.iter().filter(|j| col[*j] == k).any(|j| {
+                let c = &s.components[*j];
+                let mut t = c.clone();
+                t.rot = turns[j];
+                t.pos = (0, 0);
+                let b = part_box(c, t.rot);
+                t.pins().into_iter().any(|q| net_of.get(&(c.refdes.clone(), q.0.clone())) == Some(n) && 2 * q.1 .0 < b.0 + b.2)
+            });
+        gap_of.insert(*i, if left_side && k > 0 { k - 1 } else { k });
+    }
+    let mut by_gap: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (i, k) in &gap_of {
+        by_gap.entry(*k).or_default().push(*i);
+    }
+    let mut fb_of: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (i, u) in &feedback {
+        fb_of.entry(*u).or_default().push(*i);
+    }
+    let mut placed: BTreeSet<usize> = BTreeSet::new();
+    let mut right_of: Vec<i32> = vec![];
     let mut x = origin.0;
-    for column in &order {
+    for (k, column) in order.iter().enumerate() {
         let width = column.iter().map(|i| {
             let b = part_box(&s.components[*i], turns[i]);
             b.2 - b.0
@@ -265,6 +346,8 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
         let width = width.max().unwrap_or(0);
         let mut y = origin.1;
         for &i in column {
+            // room above for the part's feedback parts
+            y += fb_of.get(&i).map_or(0, |f| FEEDBACK_STEP * f.len() as i32 + 2);
             let b = part_box(&s.components[i], turns[&i]);
             let mut c = out.components[i].clone();
             c.rot = turns[&i];
@@ -278,7 +361,7 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
                     if !signal(n) || !pin_count.get(n).is_some_and(|c| *c <= TREE_PINS) {
                         return None;
                     }
-                    let j = on_net.get(n)?.iter().copied().find(|j| *j != i && signal(n) && col[j] < col[&i])?;
+                    let j = on_net.get(n)?.iter().copied().find(|j| *j != i && placed.contains(j) && col[j] < col[&i])?;
                     let there = out.components[j].pins().into_iter().find(|q| net_of.get(&(out.components[j].refdes.clone(), q.0.clone())) == Some(n))?.1;
                     Some(there.1 - at.1)
                 });
@@ -286,11 +369,108 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
                     c.pos.1 += dy;
                 }
             }
-            y = c.pos.1 + b.3 + 4;
+            y = c.pos.1 + b.3 + ROW_GAP;
             out.components[i] = c;
+            placed.insert(i);
         }
-        // room for the labels on the pins (written to the right of a pin)
-        x += width + 14;
+        right_of.push(x + width);
+        // room for the labels on the pins (written to the right of a pin) and for the shunts hung in the gap
+        x += width + COLUMN_GAP + SHUNT_SLOT * by_gap.get(&k).map_or(0, |v| v.len() as i32);
+    }
+    // a shunt below its net (above it, to a supply), in its own slot of the gap: its signal pin a few steps from the pin of the line
+    // nearest the gap
+    let anchors: BTreeMap<usize, Pt> = gap_of
+        .iter()
+        .map(|(i, k)| {
+            let n = &shunt[i];
+            let edge = right_of[*k];
+            let at = out
+                .components
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| is_main(*j) && placed.contains(j))
+                .flat_map(|(_, c)| c.pins().into_iter().filter(|q| net_of.get(&(c.refdes.clone(), q.0.clone())) == Some(n)).map(|q| q.1).collect::<Vec<_>>())
+                .min_by_key(|p| ((p.0 - edge).abs(), p.1))
+                .unwrap_or((edge, origin.1));
+            (*i, at)
+        })
+        .collect();
+    let anchor = |i: usize| anchors[&i];
+    for (k, list) in &by_gap {
+        let mut list = list.clone();
+        list.sort_by_key(|i| anchor(*i).1);
+        for (slot, &i) in list.iter().enumerate() {
+            let (_, ay) = anchor(i);
+            let mut c = out.components[i].clone();
+            c.rot = turns[&i];
+            c.pos = (0, 0);
+            let n = &shunt[&i];
+            let pins = c.pins();
+            let sig = pins.iter().find(|q| net_of.get(&(c.refdes.clone(), q.0.clone())) == Some(n)).map(|q| q.1).unwrap_or((0, 0));
+            let other = pins.iter().map(|q| q.1).find(|q| *q != sig).unwrap_or((0, 0));
+            let px = right_of[*k] + 3 + SHUNT_SLOT * slot as i32;
+            let py = if sig.1 <= other.1 { ay + 3 } else { ay - 3 };
+            c.pos = (px - sig.0, py - sig.1);
+            out.components[i] = c;
+            placed.insert(i);
+        }
+    }
+    // a feedback part above its part, level, the end on the net of the part's left pin on the left; several, one above another
+    for (u, list) in &fb_of {
+        let chip = out.components[*u].clone();
+        let at = chip.pins();
+        let top = at.iter().map(|q| q.1 .1).min().unwrap_or(chip.pos.1);
+        let b = part_box(&chip, chip.rot);
+        let mid = chip.pos.0 + (b.0 + b.2) / 2;
+        let x_on = |n: &String| at.iter().filter(|q| net_of.get(&(chip.refdes.clone(), q.0.clone())) == Some(n)).map(|q| q.1 .0).min().unwrap_or(mid);
+        for (step, &i) in list.iter().enumerate() {
+            let mut c = out.components[i].clone();
+            let nets_of: Vec<(String, String)> = pins_of(&s.components[i]);
+            let left_net = nets_of.iter().min_by_key(|(_, n)| x_on(n)).map(|(p, _)| p.clone()).unwrap_or_default();
+            let rot = [0u8, 2].into_iter().find(|r| {
+                let mut t = c.clone();
+                t.rot = *r;
+                t.pos = (0, 0);
+                let ps = t.pins();
+                let lx = ps.iter().find(|q| q.0 == left_net).map(|q| q.1 .0).unwrap_or(0);
+                ps.iter().all(|q| q.1 .0 >= lx)
+            });
+            c.rot = rot.unwrap_or(0);
+            // clear of the supply symbol and its name on the part's top pin
+            let y = top - 5 - FEEDBACK_STEP * step as i32;
+            c.pos = (mid, y);
+            out.components[i] = c;
+            placed.insert(i);
+        }
+    }
+    // a hung part that lands on another moves on away from its net (a shunt further down, or up to a supply; a feedback part up)
+    // until it is clear
+    let abs_box = |c: &Component| {
+        let b = part_box(c, c.rot);
+        (c.pos.0 + b.0, c.pos.1 + b.1, c.pos.0 + b.2, c.pos.1 + b.3)
+    };
+    let apart = |a: (i32, i32, i32, i32), b: (i32, i32, i32, i32)| a.2 < b.0 || b.2 < a.0 || a.3 < b.1 || b.3 < a.1;
+    let mut settled: Vec<(i32, i32, i32, i32)> = main.iter().map(|i| abs_box(&out.components[*i])).collect();
+    let hung: Vec<(usize, i32)> = shunt
+        .keys()
+        .map(|i| {
+            let c = &out.components[*i];
+            let ps = c.pins();
+            let n = &shunt[i];
+            let sig = ps.iter().find(|q| net_of.get(&(c.refdes.clone(), q.0.clone())) == Some(n)).map_or(0, |q| q.1 .1);
+            (*i, if ps.iter().any(|q| q.1 .1 > sig) { 1 } else { -1 })
+        })
+        .chain(feedback.keys().map(|i| (*i, -1)))
+        .collect();
+    for (i, dir) in hung {
+        for _ in 0..200 {
+            let b = abs_box(&out.components[i]);
+            if settled.iter().all(|o| apart(b, *o)) {
+                break;
+            }
+            out.components[i].pos.1 += dir;
+        }
+        settled.push(abs_box(&out.components[i]));
     }
     // the joints drawn again: what touched the moved parts' old pins goes, then a label, ground or power symbol on each pin
     let old_pins: BTreeSet<Pt> = parts.iter().flat_map(|i| s.components[*i].pins().into_iter().map(|p| p.1)).collect();
@@ -606,6 +786,34 @@ mod tests {
         let (u, r) = tidy(&t, Some(&only)).unwrap();
         assert_eq!(r.moved, 1);
         assert_eq!(grouping(&u), grouping(&s));
+    }
+
+    /// A non-inverting amplifier drawn as in a textbook: the feedback resistor level above the op amp, the resistor from its minus
+    /// input to the ground and the load hung below their nets (upright, the ground at the bottom); the divider's lower resistor hangs
+    /// below the joint, to the right of the upper one.
+    #[test]
+    fn shunts_hang_below_and_feedback_goes_above() {
+        let s = load("opamp_amp.schjson");
+        let (t, _) = tidy(&s, None).unwrap();
+        let part = |r: &str| t.components.iter().find(|c| c.refdes == r).unwrap();
+        let abs = |c: &Component| {
+            let b = part_box(c, c.rot);
+            (c.pos.0 + b.0, c.pos.1 + b.1, c.pos.0 + b.2, c.pos.1 + b.3)
+        };
+        let (u1, r1, r2, r3) = (abs(part("U1")), part("R1"), part("R2"), part("R3"));
+        let level = |c: &Component| c.pins()[0].1 .1 == c.pins()[1].1 .1;
+        assert!(level(r1) && abs(r1).3 < u1.1, "R1 level above U1: {:?} {u1:?}", abs(r1));
+        assert!(abs(r1).0 >= u1.0 - 4 && abs(r1).2 <= u1.2 + 4, "R1 over U1");
+        for r in [r2, r3] {
+            assert!(!level(r), "{} upright", r.refdes);
+        }
+        let minus = part("U1").pins().into_iter().map(|p| p.1).filter(|p| p.0 < u1.0 + 1).max_by_key(|p| p.1).unwrap();
+        assert!(abs(r2).1 > minus.1 && abs(r2).2 < u1.0, "R2 below and before the minus input");
+        let d = load("divider_tolerance.schjson");
+        let (t, _) = tidy(&d, None).unwrap();
+        let part = |r: &str| t.components.iter().find(|c| c.refdes == r).unwrap();
+        let (r1, r2) = (part("R1"), part("R2"));
+        assert!(r2.pos.0 > r1.pos.0 && r2.pos.1 > r1.pos.1 && r2.pins()[0].1 .0 == r2.pins()[1].1 .0, "R2 hangs below the joint");
     }
 
     /// Supplies of different names on neighbouring pins of a chip: every other symbol raised on a short wire, so the names (written
