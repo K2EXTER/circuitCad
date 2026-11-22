@@ -6,7 +6,7 @@
 - 学ぶメニュー「デジタル回路を動かしながら見る」(`main.rs`。動かしている間は「やめる」に変わる)。
 - レッスン 87〜89(`lessons/digital.rs` の `HALF_ADDER`・`SR_LATCH`・`COUNTER_LIVE`。`setup` が `start_live_logic` を呼ぶ)。学習パス「部品の素顔」の段階 7「デジタル回路を動かす」(`learn/paths.rs`)。
 - サンプル一覧の 3 つ(`samples.rs` の `sample!(live …)`。`Sample::live` が真だと開いたあとにモードに入る)。
-- 起動引数 `--live-logic [SW1,SW2]`(名前の部品のスイッチを切り替えた状態で始める)、`--live-slow`(ゆっくり再生)。撮影用(`args.rs`)。
+- 起動引数 `--live-logic [SW1,SW2]`(名前の部品のスイッチを切り替えた状態で始める)、`--live-slow`(ゆっくり再生)。撮影用(`args/sheet.rs`)。
 - 設計の画面のパネルにはボタンを置かない。「試作」のタブの左の「デジタル回路を回路図の上で動かす」(`BreadboardView::want_live_logic` を `main.rs` が見て、回路図のタブに移って始める)。
 
 ## 仕組み

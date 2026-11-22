@@ -3,7 +3,7 @@
 #   powershell -File tools/gen_screenshots.ps1 -Only waveform  # one (name without .png)
 #   powershell -File tools/gen_screenshots.ps1 -Lang en        # the English screen, into docs/images/en (README.en.md)
 # Needs a built app: cargo build -p app   (or -Exe path\to\circuitCad.exe, e.g. a release build).
-# Add a picture by adding a line to $shots: name, then the app's arguments (see crates/app/src/args.rs).
+# Add a picture by adding a line to $shots: name, then the app's arguments (see crates/app/src/args/).
 param(
     [string]$Exe = "",
     [string]$Only = "",

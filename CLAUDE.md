@@ -12,7 +12,7 @@ python tools/test_times.py    # 1件ずつの時間と 2 秒を超えたテス�
 python tools/clean_target.py  # target/ にたまった古いビルドを消す (--dry-run で見るだけ、--extra で別の置き場所も)
 cargo clippy --workspace --all-targets   # CIはエラーを禁止 (警告は可)
 cargo run -p cli -- script.ccad   # 画面なしで実行 (docs/cli.md)
-cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj を開ける: args.rs apply_args)
+cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj を開ける: args/mod.rs apply_args)
 ```
 
 ## クレート (依存: app → pcb-core, sch-core, sim-core, part-lib, datasheet / web → sch-core, sim-core, i18n) — 詳細: `docs/code-notes/crates.md`
@@ -55,7 +55,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | ファイル | 内容 |
 |---|---|
 | `main.rs` / `prefs.rs` / `settings_window.rs` / `icons.rs` | `App`・メニュー / 設定の保存 / 設定の窓 / ツールのアイコン |
-| `args.rs` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
+| `args/` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
 | `plot.rs` `logic_plot.rs` / `part_form/` | 波形描画・デジタル表示 (High/Low の帯とバス) / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `symedit` 記号のピン配置をドラッグで / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `graph_reader` グラフから点を読む / `mosfet` MOSFET を表の値から / `bjt` トランジスタをグラフの点から / `darlington` ダーリントン / `opto` フォトカプラ・フォトダイオード / `table_fill` その 3 つを電気的特性の表から / `reg_fill` レギュレータを表から / `elcap_lineup` 電解コンデンサを型番の一覧の表から / `coil_lineup` パワーインダクタを同じく / `linear` オペアンプ・レギュレータを表の typ から / `logic` ロジック IC を論理式から / `draft` データシートから下書き / `drawing_pick` 切り出した図の縮尺合わせ / `checklist` `trial` `vendor` `zchart` `preview`) |
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
 | `multiboard.rs` | 複数の基板 (E5): プロジェクトの基板の切り替え・足す・外す、「基板どうしのつなぎ」の窓(`project.rs` の `System`、形式 2) |
