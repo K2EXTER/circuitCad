@@ -54,6 +54,9 @@ impl SchEditor {
             let fraction = (run.total > 0).then(|| run.done.load(Ordering::Relaxed) as f64 / run.total as f64);
             return Some(Running { what: "よくある故障を順に試す", seconds: run.started.elapsed().as_secs_f64(), fraction });
         }
+        if let Some(r) = self.fw_run.as_ref().filter(|_| self.firmware_running()) {
+            return Some(Running { what: r.what, seconds: r.started.elapsed().as_secs_f64(), fraction: None });
+        }
         if self.diagnosis_running() {
             return Some(Running { what: "故障の候補の計算", seconds: self.diagnosis_seconds(), fraction: None });
         }
@@ -71,6 +74,11 @@ impl SchEditor {
             run.cancel.store(true, Ordering::Relaxed);
         }
         self.stop_diagnosis();
+        if self.firmware_running()
+            && let Some(r) = &self.fw_run
+        {
+            r.run.stop();
+        }
     }
 }
 

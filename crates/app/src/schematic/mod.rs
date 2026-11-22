@@ -330,6 +330,8 @@ pub struct SchEditor {
     diag: troubleshoot::DiagState,
     /// The transient analysis running on another thread (`start_tran`).
     tran_job: Option<TranJob>,
+    /// The firmware's build or load running, or the last one (`firmware_ui`).
+    fw_run: Option<firmware_ui::FirmwareRun>,
     /// Another analysis running on another thread (`run_job`).
     job: Option<running::Job>,
     /// Repair practice with the virtual meter (the "修理の道" lessons): the hidden fault and the readings.
@@ -824,6 +826,7 @@ impl Default for SchEditor {
             bench_ui: Default::default(),
             diag: Default::default(),
             tran_job: None,
+            fw_run: None,
             job: None,
             repair: None,
             live_logic: None,
@@ -943,6 +946,7 @@ mod repair_practice;
 mod live_logic;
 mod tran;
 pub mod running;
+mod firmware_ui;
 mod dc;
 mod library;
 mod kicad_import;

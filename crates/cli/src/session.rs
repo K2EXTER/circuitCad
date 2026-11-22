@@ -108,6 +108,12 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   pins [export=FILE.h] [check=FILE.ino]   the signals on the microcontroller board's pins (a part's pins or a header's pin names D13, A0,
                                         GPIO2): listed, written as a C header for Arduino (#define PIN_X 13), or a firmware's pin constants
                                         checked against the schematic (findings: a constant on another pin than the schematic has)
+  firmware [set toolchain=arduino|pico|ice40|custom folder=DIR board= port= top= pcf= build=CMD flash=CMD]
+                                        how the board's firmware is built and loaded (kept with the schematic): the commands of the outside
+                                        tools (arduino-cli; cmake + picotool; yosys, nextpnr-ice40, icepack, iceprog; or your own) and the
+                                        tools missing on this computer with where to get them
+  firmware build|flash|all [dir=BASE]   runs them (the folder is relative to BASE, the current folder by default): the log, and where it
+                                        stopped with hints for the errors met most
   adc REF [pos=AIN0] [neg=AIN1] [refp=REFP0] [refn=REFN0] [gain=1] [rate=20] [filter=sinc|low_latency] [chop=0|1]
                                         what an ADC (a part whose model has adc_bits) reads at the DC point: the code from the data sheet's
                                         ideal transfer function, the size of one step (lsb_v) and the code back as a voltage (reads_v); for a
@@ -419,6 +425,7 @@ impl Session {
             "inrush" => self.inrush(args),
             "breadboard" => self.breadboard(args),
             "pins" => self.pins(args),
+            "firmware" => self.firmware(args),
             "libsync" => self.libsync(args),
             "adc" => self.adc(args),
             "adcmeasure" => self.adc_measure(args),

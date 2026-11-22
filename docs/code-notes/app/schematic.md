@@ -155,3 +155,10 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 - 線がつながりを変えたら (確かめで違えば)、線を使わずラベルだけで描き直す (`tidy_with(.., false)`)。サンプル 142 で、線は 702 本のネット、ラベルだけに戻ったものは 0 (テスト `every_sample_tidies_without_changing_its_nets`)
 - 前後の比べ (2026-11-22、サンプル 142 の合計。ef9db56b → 列の中の順・高さ・最短経路を入れたあと): ラベル 1211 → 1072、線にしたネット 595 → 702、線にしたネット 1 つあたりの線の長さ 35.7 → 32.5 マス・交わり 1.47 → 1.39。テストの時間は 0.36 → 0.68 秒
 - 残り: 吊るす部品を、列をまたぐ線の真下に置く (今は隙間の場所なので線が 1 回曲がる)、交わりの数え方に吊るす部品と帰還の部品の線を入れる、階層の記号・ポート・バスのあるシート。KiCad (`kicad-divider`) と LTspice (`ltspice-rc`) の取り込みは整えて画面で確かめた (撮影の `--tidy` は取り込みのあとにも効く)。テスト `imported_sheets_are_tidied_from_left_to_right`
+
+## ファームのビルドと書き込み (2026-11-23、W4)
+
+- `sch_core::firmware`: 設定 `FirmwareBuild` (種類 `toolchain`・フォルダ・`board` (Arduino は FQBN、iCE40 は `up5k:sg48`、Pico は PICO_BOARD)・`port`・`top`・`pcf`・自分のコマンド `build_cmd`・`flash_cmd`) を `Schematic.firmware` に (空なら鍵なし。マルチボードでは基板ごと)。`build_steps`・`flash_steps` が設定から `Step` (何をするか・プログラム・引数・フォルダ) の列を作り、足りない設定は誤りの文で言う。フォルダは回路図のフォルダからの相対か絶対 (`folder_of`)。iCE40 はフォルダの .v / .sv を全部合成し、`build/<top>.json`・`.asc`・`.bin`。Pico の書き込みは build の最初の .uf2 なので、「ビルドして書き込む」は `start_then` でビルドのあとに作る。
+- ツールは同梱しない。`find_tool` が PATH (Windows は .exe・.cmd・.bat) から探し、`missing` が無いものと `install_hint` (arduino-cli の場所と core install、Pico setup for Windows、OSS CAD Suite) を返す。`start` が別スレッドで順に動かし (Windows はコンソールの窓を出さない)、標準出力と標準エラーを行ごとに `Run.lines` へ、失敗した段で止まり終了コードと `explain` のヒント (ボードの種類が入っていない・ライブラリが無い・ポートが開けない・PICO_SDK_PATH・FTDI・.pcf にない信号) を足す。`Run::stop` は今のプロセスを kill。CLI は `run_now`。
+- 画面: 「ピン定義…」の窓を「ピンとファーム…」(窓の名前「ピン定義とファーム」) にして、下に「ビルドと書き込み」(`schematic/firmware_ui.rs`)。種類で入力欄が変わり、無いツールは ▲ とホバーに入れ方、ボタンは「ビルド」「ビルドして書き込む」「書き込みだけ」(押せない理由つき、ホバーに実際のコマンド)、下に出力 (下に付いてスクロール)。動いている間は状態の行に「ファームの…を計算中」と「止める (Esc)」(`running.rs`)。サンプル `arduino_blink` に設定 (Nano、`firmware/blink/blink.ino`、ポートは空) を `write_arduino_examples` で入れた。
+- 試験: 種類ごとのコマンド (足りない設定・無いフォルダ・Verilog の集め方)、自分のコマンドを本当にシェルで動かす (出力の行・終了コード 3 で止まる・無いツールは動かす前に止まる)、設定の読み書き (空なら `{}`)。arduino-cli などは CI に無いので、本物のビルドは試していない。

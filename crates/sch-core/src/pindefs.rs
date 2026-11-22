@@ -320,7 +320,7 @@ pub fn firmware_problems(s: &Schematic, dir: Option<&std::path::Path>) -> Vec<cr
             crate::Severity::Warning,
             format!("ピン定義を書き出したあとで、回路図のピンが変わりました ({})", link.written),
             None,
-            "基板でピンを入れ替えた・配線を直したなどで、信号のピンが書き出したときと違います。「ピン定義…」から書き出し直し、ファームをビルドし直します",
+            "基板でピンを入れ替えた・配線を直したなどで、信号のピンが書き出したときと違います。「ピンとファーム…」から書き出し直し、ファームをビルドし直します",
         ));
     }
     if !link.firmware.is_empty() {
@@ -337,7 +337,7 @@ pub fn firmware_problems(s: &Schematic, dir: Option<&std::path::Path>) -> Vec<cr
                 crate::Severity::Info,
                 format!("照合するファームのファイルが見つかりません ({})", link.firmware),
                 None,
-                "ファイルを動かしたか消したときは、「ピン定義…」の「ファームのファイルと照合…」で選び直します",
+                "ファイルを動かしたか消したときは、「ピンとファーム…」の「ファームのファイルと照合…」で選び直します",
             )),
         }
     }

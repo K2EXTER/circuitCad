@@ -3624,6 +3624,11 @@ fn write_arduino_examples() {
             label_pin(&mut s, u, "19", "KNOB");
             ARDUINO_POT_SKETCH
         } else {
+            // the same sketch as a folder arduino-cli builds (W4, "ピンとファーム…" → "ビルドと書き込み"); the port is the user's
+            let dir = root.join("firmware/blink");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("blink.ino"), crate::breadboard::BLINK).unwrap();
+            s.firmware = sch_core::firmware::FirmwareBuild { toolchain: "arduino".into(), folder: "firmware/blink".into(), board: "arduino:avr:nano".into(), ..Default::default() };
             crate::breadboard::BLINK
         };
         let mut v = serde_json::to_value(&s).unwrap();

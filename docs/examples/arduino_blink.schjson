@@ -260,6 +260,11 @@
       "value": "LED"
     }
   ],
+  "firmware": {
+    "board": "arduino:avr:nano",
+    "folder": "firmware/blink",
+    "toolchain": "arduino"
+  },
   "labels": [
     {
       "pos": [

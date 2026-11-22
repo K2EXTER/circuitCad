@@ -82,8 +82,9 @@ impl SchEditor {
         if st.pins {
             let mut open = true;
             let mut check = st.pin_check.take();
-            egui::Window::new(i18n::tr("ピン定義 (ファームのピン番号)")).open(&mut open).default_pos(crate::widgets::beside_panel() + egui::vec2(48.0, 48.0)).default_size([520.0, 420.0]).show(ctx, |ui| {
+            egui::Window::new(i18n::tr("ピン定義とファーム")).open(&mut open).default_pos(crate::widgets::beside_panel() + egui::vec2(48.0, 48.0)).default_size([520.0, 420.0]).show(ctx, |ui| {
                 self.pins_contents(ui, &mut check, &mut st.pin_format, &mut st.pin_part);
+                self.firmware_contents(ui);
             });
             st.pin_check = check;
             st.pins = open;

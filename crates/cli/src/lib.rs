@@ -21,6 +21,7 @@ mod budgetcmd;
 mod inrushcmd;
 mod breadboardcmd;
 mod pinscmd;
+mod firmwarecmd;
 mod libsynccmd;
 mod adccmd;
 mod adcmeasurecmd;

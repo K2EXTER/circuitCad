@@ -44,6 +44,7 @@
 | 基板の製造 | ファイルを書く(Gerber・Excellon・BOM・部品の位置) | `pcb-core/src/gerber.rs` ほか |
 | ケースの CAD | ファイルを読み書きする(DXF、STEP の書き出し) | `pcb-core/src/dxf*.rs`・`step.rs`・`step_out.rs` |
 | SolidCraft(Rust 製のパラメトリック CAD、MIT / Apache-2.0、0.42 で確かめた) | STEP でつなぐ。部品の 3D の形を作る道具として使う(下の「部品の 3D の形」) | `solidcraft-cli` を呼ぶ: 部品作成フォームの下絵(E7)、STEP の三角形(E8)、ひな形(`pcb_core::shape_script`、`ccad shape`)。入っていなければ今の推測の形のまま。`docs/library.md` の「3D の形を自分で作る」 |
+| ファームのビルドと書き込み (W4) | 呼ぶ (無ければ、そのツールと入れ方を出して止まる) | `sch-core/src/firmware.rs`、`ccad firmware`、画面は `app/src/schematic/firmware_ui.rs`。arduino-cli・cmake と picotool (Pico SDK)・yosys・nextpnr-ice40・icepack・iceprog (OSS CAD Suite)・自分のコマンド |
 | データシート(PDF) | 自前で読む(`hayro`) | `crates/datasheet` |
 | AI のエージェント | MCP サーバー(`ccad mcp`) | `crates/cli` |
 
