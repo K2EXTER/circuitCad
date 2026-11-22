@@ -315,6 +315,10 @@ pub struct PartForm {
     pub orig: Option<PartDef>,
     /// Keep the package of `orig` as it is (a pad list written by hand): the dimensions of the package tab do not describe it.
     pub keep_package: bool,
+    /// "絵で直す": the pads edited one by one on the picture (None = made from the package tab), see `padedit.rs`.
+    pub pad_edit: Option<padedit::PadEdit>,
+    /// Why the pads could not be taken into the picture editor.
+    pub pad_edit_error: Option<String>,
 }
 
 impl Default for PartForm {
@@ -477,6 +481,8 @@ impl Default for PartForm {
             tvs: Default::default(),
             orig: None,
             keep_package: false,
+            pad_edit: None,
+            pad_edit_error: None,
         }
     }
 }
@@ -510,6 +516,7 @@ mod edit;
 mod pintable;
 mod symedit;
 mod padtable;
+mod padedit;
 mod glyph_pick;
 pub use glyph_pick::glyph_combo;
 mod zchart;

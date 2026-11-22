@@ -3668,7 +3668,7 @@ fn hover_glow_in_select_and_track_tools() {
     let ctx = egui::Context::default();
     let pad = e.board.pads.iter().find(|p| !p.net.is_empty()).unwrap().clone();
     let p = e.to_screen(screen, pad.pos);
-    let mut hover = |e: &mut BoardEditor| {
+    let hover = |e: &mut BoardEditor| {
         for _ in 0..2 {
             let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events: vec![egui::Event::PointerMoved(p)], ..Default::default() }, |ui| e.canvas(ui));
             out.textures_delta.clear();

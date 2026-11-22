@@ -492,6 +492,7 @@ impl SchEditor {
     }
 
     /// Whether the analysis tab is shown with section `key` asked for (tests of `--section`).
+    #[cfg(test)]
     pub fn analysis_section_open(&self, key: &str) -> bool {
         self.panel_tab == PanelTab::Analyze && self.focus_section == Some(key)
     }

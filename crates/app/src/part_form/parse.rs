@@ -365,7 +365,10 @@ impl PartForm {
                 (PackageSpec::Explicit { pads, holes }, Some(name.to_string()))
             }
         };
-        let package = if extra_pads.is_empty() && extra_holes.is_empty() {
+        let package = if let Some(e) = &self.pad_edit {
+            // the pads edited on the picture are the package (the dimensions, the preset and the extras made them at the start)
+            e.package()
+        } else if extra_pads.is_empty() && extra_holes.is_empty() {
             package
         } else {
             // the package's own pads and the extras become one explicit list

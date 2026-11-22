@@ -85,6 +85,20 @@ pub struct PadSpec {
     pub slot_v: bool,
 }
 
+impl PadSpec {
+    /// The copper shape the words name (`h` 0 = as tall as wide, `r` 0 = the default corners).
+    pub fn pad_shape(&self) -> Result<PadShape, String> {
+        let h = if self.h > 0.0 { self.h } else { self.w };
+        Ok(match self.shape.as_str() {
+            "rect" => PadShape::Rect { w: self.w, h },
+            "oval" => PadShape::Oval { w: self.w, h },
+            "roundrect" => PadShape::RoundRect { w: self.w, h, r: if self.r > 0.0 { self.r.min(0.5) } else { ROUNDRECT_DEFAULT } },
+            "circle" => PadShape::Circle { d: self.w },
+            other => return Err(format!("未知のパッド形状: {other}")),
+        })
+    }
+}
+
 /// A non-plated hole of a part (position relative to the part origin, y up).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HoleSpec {
@@ -225,13 +239,7 @@ impl PackageSpec {
                 let mut v = vec![];
                 for p in pads {
                     positive("w", p.w)?;
-                    let shape = match p.shape.as_str() {
-                        "rect" => PadShape::Rect { w: p.w, h: if p.h > 0.0 { p.h } else { p.w } },
-                        "oval" => PadShape::Oval { w: p.w, h: if p.h > 0.0 { p.h } else { p.w } },
-                        "roundrect" => PadShape::RoundRect { w: p.w, h: if p.h > 0.0 { p.h } else { p.w }, r: if p.r > 0.0 { p.r.min(0.5) } else { ROUNDRECT_DEFAULT } },
-                        "circle" => PadShape::Circle { d: p.w },
-                        other => return Err(format!("未知のパッド形状: {other}")),
-                    };
+                    let shape = p.pad_shape()?;
                     // an explicit pad keeps the shape it names ("rect" stays sharp)
                     let mut pad = fp_pad(p.pin.clone(), p.x, p.y, shape, p.drill);
                     pad.shape = shape;

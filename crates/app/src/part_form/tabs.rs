@@ -436,7 +436,24 @@ impl PartForm {
     fn pads_section(&mut self, ui: &mut egui::Ui) {
         ui.group(|ui| {
             ui.set_width(ui.available_width());
-            ui.label(egui::RichText::new(i18n::tr("パッド (ランドパターン)")).strong());
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(i18n::tr("パッド (ランドパターン)")).strong());
+                if self.pad_edit.is_none()
+                    && ui
+                        .button(i18n::tr("絵で直す…"))
+                        .on_hover_text(i18n::tr("いまのパッドを絵の上で 1 つずつ直します。クリックで選び、ドラッグで動かし、形 (角丸・四角・長円・円)・大きさ・穴を数字で直し、パッドを足す・消すことができます。データシートの推奨ランドが、寸法の欄で作れない並びのときに"))
+                        .clicked()
+                {
+                    self.start_pad_edit();
+                }
+            });
+            if let Some(err) = self.pad_edit_error.take() {
+                ui.colored_label(crate::theme::ERROR, i18n::trf!("絵で直すのを始められません: {}", i18n::tr_dyn(&err)));
+            }
+            if self.pad_edit.is_some() {
+                self.pad_edit_ui(ui);
+                return;
+            }
             if self.keep_package {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(crate::theme::WARN, i18n::tr("この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。"));

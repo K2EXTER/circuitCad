@@ -37,6 +37,13 @@ impl SchEditor {
         }
     }
 
+    /// `--form-pad-edit [pin]`: the open form's pads on the picture editor, that pin picked.
+    pub fn form_pad_edit(&mut self, pin: Option<&str>) {
+        if let Some(f) = self.form.as_mut() {
+            f.pad_edit_from_args(pin);
+        }
+    }
+
     /// Reads a STEP file into the open new-part form (`--form-step <file>`).
     pub fn load_step_into_form(&mut self, path: &std::path::Path) {
         if let Some(f) = self.form.as_mut() {
