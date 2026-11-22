@@ -136,9 +136,14 @@ impl BoardEditor {
         }
     }
 
-    /// A ring round the part picked in the schematic or the 3D view (the box round its pads).
+    /// A ring round each part picked in the schematic or the 3D view (the box round its pads).
     fn draw_linked_part(&self, painter: &egui::Painter, rect: Rect) {
-        let Some(r) = self.linked.part.as_deref() else { return };
+        for r in self.linked.parts() {
+            self.ring_part(painter, rect, r);
+        }
+    }
+
+    fn ring_part(&self, painter: &egui::Painter, rect: Rect, r: &str) {
         let mut bb: Option<(Point, Point)> = None;
         for p in self.board.pads.iter().filter(|p| p.refdes == r) {
             let (w, h) = p.shape.size();

@@ -737,6 +737,40 @@ fn a_pick_in_one_editor_is_linked_to_the_others() {
     assert!(app.sch.linked.is_empty() && app.board_ed.linked.is_empty());
 }
 
+/// E6: several parts picked on the board are all linked to the sheet; a part of a child sheet's copy picked on the board opens that
+/// sheet (in that copy) in the schematic, and a part picked there is named as the board knows it.
+#[test]
+fn several_parts_and_parts_of_child_sheets_are_linked() {
+    let mut app = App::default();
+    let s = &mut app.sch.sch;
+    s.add_sheet(); // sheet 1, the child: R1
+    s.add(Kind::Resistor, (10, 10), 0);
+    s.switch_sheet(0);
+    s.add(Kind::Resistor, (10, 30), 0); // R2 of the top sheet (the numbers run over every sheet)
+    s.add_sheet_symbol(1, (10, 10)).unwrap();
+    s.add_sheet_symbol(1, (40, 10)).unwrap();
+    app.board_ed.import_from_schematic(&app.sch);
+    let mut refs: Vec<String> = app.board_ed.board.parts.iter().map(|p| p.refdes.clone()).collect();
+    refs.sort();
+    assert_eq!(refs, ["R1_CH1", "R1_CH2", "R2"]);
+
+    // two parts picked on the board: both reach the sheet
+    app.board_ed.select_named("R2,R1_CH1");
+    app.sync_focus();
+    assert_eq!(app.sch.linked.parts().collect::<Vec<_>>(), ["R2", "R1_CH1"]);
+
+    // the copy of CH2 picked on the board: the schematic opens the child sheet as that copy
+    app.board_ed.select_named("R1_CH2,");
+    app.sync_focus();
+    assert_eq!(app.sch.sch.active_sheet, 1);
+    assert_eq!(app.sch.linked.part.as_deref(), Some("R1_CH2"));
+    assert_eq!(app.board_ed.linked.part, None, "opening the sheet is not a pick there");
+    // a pick on that sheet is the board's R1_CH2
+    assert!(app.sch.select_part("R1"));
+    app.sync_focus();
+    assert_eq!(app.board_ed.linked.part.as_deref(), Some("R1_CH2"));
+}
+
 /// `--section <key>` opens the analysis tab at that section (screenshots of one analysis).
 #[test]
 fn command_line_opens_an_analysis_section() {

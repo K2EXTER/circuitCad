@@ -1252,6 +1252,13 @@ fn the_heat_over_time_block_warms_a_part_less_than_the_steady_state() {
     let v = e.run_heat_tran().expect("a transient run");
     let p = &v.parts[0];
     assert!(p.rise_peak > 0.0 && p.rise_peak < 0.5 * p.power_peak * p.theta, "{} {}", p.rise_peak, p.power_peak * p.theta);
+    // the 3D view's colours (E9): the peak, and moments of the run read between its points: cold at the start, warmer half way, the
+    // end below or at the peak
+    let at = |t: Option<f64>| v.temps(t)[0].1;
+    assert!((at(None) - (v.ambient + p.rise_peak)).abs() < 1e-9);
+    assert!((at(Some(0.0)) - v.ambient).abs() < 0.05 * p.rise_peak, "{}", at(Some(0.0)));
+    assert!(at(Some(0.5)) > at(Some(0.0)) && at(Some(1.0)) >= at(Some(0.5)) && at(Some(1.0)) <= at(None) + 1e-9);
+    assert!(v.temps(Some(0.5))[0].2 > 0.0, "the power at that moment");
     e.heat.tran_parts = String::new();
     assert!(e.run_heat_tran().is_err());
     e.heat.tran_parts = name.clone();

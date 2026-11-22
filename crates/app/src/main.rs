@@ -144,6 +144,11 @@ impl App {
             self.sch.linked = b.clone();
             self.board_ed.linked = Default::default();
             self.last_focus.1 = b;
+            // a part on another sheet (a copy of a child sheet): the schematic opens it; opening it puts the sheet's own pick away,
+            // which is not a new pick
+            if self.sch.reveal_linked() {
+                self.last_focus.0 = self.sch.focus();
+            }
         }
     }
 
@@ -177,11 +182,23 @@ impl App {
             self.sch.sch.requirements.apart.push(k);
             self.sch.req.dirty = true;
         }
+        // "3D で見る" under the temperature over time: the board's 3D view with the heat colours
+        if std::mem::take(&mut self.sch.heat.show_3d) {
+            self.mode = Mode::Board;
+            self.board_ed.open_view3d();
+            self.board_ed.view3d_heat(true);
+        }
         if !self.board_ed.view3d_wants_heat() {
             return;
         }
-        let temps = match &self.sch.heat.view {
-            Some(Ok(v)) => Some(board_editor::PartTemps { ambient: v.ambient, parts: v.parts.iter().map(|p| (p.name.clone(), p.temp_c, p.power)).collect(), ..Default::default() }),
+        use schematic::selfheat_tran::TranPaint;
+        let paint = self.sch.heat.paint;
+        let temps = match (&self.sch.heat.tran, &self.sch.heat.view) {
+            (Some(Ok(v)), _) if paint != TranPaint::Steady => {
+                let at = if let TranPaint::At(t) = paint { Some(t) } else { None };
+                Some(board_editor::PartTemps { ambient: v.ambient, parts: v.temps(at), source: schematic::selfheat_tran::HeatTranView::paint_source(paint), ..Default::default() })
+            }
+            (_, Some(Ok(v))) => Some(board_editor::PartTemps { ambient: v.ambient, parts: v.parts.iter().map(|p| (p.name.clone(), p.temp_c, p.power)).collect(), ..Default::default() }),
             _ => None,
         };
         self.board_ed.set_part_temps(temps);
@@ -519,6 +536,12 @@ impl eframe::App for App {
                         if ui.button(i18n::tr("複数の基板のサンプル (メイン基板とセンサー基板を I2C でつなぐ)")).on_hover_text(i18n::tr("2 枚の基板 (回路図と基板の組) を 1 つのプロジェクトに入れ、両方のコネクタ J1 をつないだ例です。「基板どうしのつなぎ」の窓で、ピンごとの信号の照合と、全体の部品表 (センサー基板は 3 枚作る) を見られます")).clicked() {
                             if self.confirm_unsaved("開くと、いまの回路図と基板は置き換わります。") {
                                 self.open_multiboard_sample();
+                            }
+                            ui.close();
+                        }
+                        if ui.button(i18n::tr("ケーブルでつなぐサンプル (同じ 2 枚をケーブルで)")).on_hover_text(i18n::tr("上と同じ 2 枚の基板を横に並べ、4 本の線のケーブルでつないだ例です。「基板どうしのつなぎ」の窓で、線の表 (色・両端のピン・相手のハウジング) と、ケーブルの図 (SVG) と線の表 (CSV) の保存を試せます")).clicked() {
+                            if self.confirm_unsaved("開くと、いまの回路図と基板は置き換わります。") {
+                                self.open_cable_sample();
                             }
                             ui.close();
                         }
@@ -885,7 +908,7 @@ impl eframe::App for App {
             }
             // a part picked on the breadboard is the one the schematic and the board show
             if let Some(p) = &self.breadboard.picked {
-                let f = link::Focus { part: Some(p.clone()), net: None };
+                let f = link::Focus::of_parts(vec![p.clone()]);
                 if self.sch.linked != f {
                     self.sch.linked = f.clone();
                     self.board_ed.linked = f;

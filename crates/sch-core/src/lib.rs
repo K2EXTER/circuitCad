@@ -20,6 +20,7 @@ mod review;
 pub mod roles;
 pub use pinkind::PinKind;
 pub mod system;
+pub mod harness;
 pub mod breadboard;
 pub mod stripboard;
 pub mod perfboard;
@@ -36,7 +37,7 @@ pub mod symbol_shapes;
 pub mod glyphs;
 pub use backannotate::BackAnnotation;
 pub use bus::{bus_member, bus_members, is_bus_label, parse_bus};
-pub use hierarchy::{Instance, PortDir, SheetPort, SubRef};
+pub use hierarchy::{flat_refdes, Instance, PartPlace, PortDir, SheetPort, SubRef};
 pub use sheets::{sheet_of, Sheet, SHEET_STRIDE};
 pub use design_spec::{matches_name, DesignSpec, KeepApart, NetRule, PlaceGroup, ROLES};
 

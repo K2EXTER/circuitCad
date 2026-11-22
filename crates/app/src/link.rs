@@ -7,10 +7,27 @@
 pub struct Focus {
     pub part: Option<String>,
     pub net: Option<String>,
+    /// The other parts picked together with `part` (a box or Shift pick of several, E6).
+    pub others: Vec<String>,
 }
 
 impl Focus {
     pub fn is_empty(&self) -> bool {
         self.part.is_none() && self.net.is_none()
+    }
+
+    /// Several parts (the first is `part`); empty: none.
+    pub fn of_parts(mut list: Vec<String>) -> Focus {
+        list.dedup();
+        if list.is_empty() {
+            return Focus::default();
+        }
+        let part = list.remove(0);
+        Focus { part: Some(part), net: None, others: list }
+    }
+
+    /// Every part picked: `part` and the `others`.
+    pub fn parts(&self) -> impl Iterator<Item = &str> {
+        self.part.iter().chain(self.others.iter()).map(String::as_str)
     }
 }

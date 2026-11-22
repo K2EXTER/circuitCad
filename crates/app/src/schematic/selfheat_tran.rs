@@ -16,6 +16,51 @@ pub(crate) struct HeatTranView {
     pub checks: Vec<sim_core::TempCheck>,
 }
 
+/// What the 3D view's heat colours show (E9): the steady self-heating run ("自己発熱"), or from the temperature-over-time run each
+/// part's highest temperature, or the temperatures at one moment (seconds).
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub(crate) enum TranPaint {
+    #[default]
+    Steady,
+    Peak,
+    At(f64),
+}
+
+impl HeatTranView {
+    /// Each part's (name, temperature °C, power W): at its peak (`at` = `None`: the highest rise and the peak power, each at its own
+    /// moment), or at the moment `at` (seconds; the rise and the power read off the run between its two nearest points).
+    pub(crate) fn temps(&self, at: Option<f64>) -> Vec<(String, f64, f64)> {
+        let read = |w: &[f64], t: f64| -> f64 {
+            let k = self.time.partition_point(|&x| x < t);
+            if k == 0 {
+                return w.first().copied().unwrap_or(0.0);
+            }
+            if k >= self.time.len() {
+                return w.last().copied().unwrap_or(0.0);
+            }
+            let (t0, t1) = (self.time[k - 1], self.time[k]);
+            let f = if t1 > t0 { (t - t0) / (t1 - t0) } else { 1.0 };
+            w[k - 1] + (w[k] - w[k - 1]) * f
+        };
+        self.parts
+            .iter()
+            .map(|p| match at {
+                None => (p.name.clone(), self.ambient + p.rise_peak, p.power_peak),
+                Some(t) => (p.name.clone(), self.ambient + read(&p.rise, t), read(&p.power, t)),
+            })
+            .collect()
+    }
+
+    /// The words under the 3D view's colour bar for `paint`.
+    pub(crate) fn paint_source(paint: TranPaint) -> String {
+        match paint {
+            TranPaint::Steady => String::new(),
+            TranPaint::Peak => i18n::tr("時間変化\n最高").to_string(),
+            TranPaint::At(t) => i18n::trf!("時間変化\n{t:.3} 秒"),
+        }
+    }
+}
+
 /// "Q1:RS1:150, ..." -> (part, part, K/W) per link.
 fn parse_links(text: &str) -> Result<Vec<(String, String, f64)>, String> {
     let mut links = vec![];
@@ -179,7 +224,11 @@ impl SchEditor {
                     let col = if c.level == Some(sim_core::RatingLevel::Over) { crate::theme::error() } else { crate::theme::warn() };
                     ui.colored_label(col, format!("⚠ {}", i18n::tr_dyn(&c.message))).on_hover_text(i18n::tr_dyn(&c.hint));
                 }
-                draw_rise_chart(ui, v);
+                draw_rise_chart(ui, v, match self.heat.paint {
+                    TranPaint::At(t) => Some(t),
+                    _ => None,
+                });
+                self.paint_row(ui, v);
                 if !v.moved.is_empty() {
                     ui.label(egui::RichText::new(i18n::trf!("温まって動いた電圧 ({:.3} 秒のとき)", v.moved_at)).small().strong()).on_hover_text(i18n::tr("冷えているときの電圧と、温まったあとの電圧の差。大きい順"));
                     for (n, a, b) in &v.moved {
@@ -194,6 +243,39 @@ impl SchEditor {
     }
 }
 
+impl SchEditor {
+    /// The row choosing what the 3D view's heat colours show (the steady run, the peaks of this run, or a moment of it on a slider) and
+    /// the button that opens the 3D view with them.
+    fn paint_row(&mut self, ui: &mut egui::Ui, v: &HeatTranView) {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(i18n::tr("3D の温度の色:")).on_hover_text(i18n::tr("基板の 3D の窓で「温度の色」にしたとき、部品をどの温度で塗るか"));
+            let p = &mut self.heat.paint;
+            if ui.radio(*p == TranPaint::Steady, i18n::tr("定常")).on_hover_text(i18n::tr("上の「自己発熱」の、電力を流し続けたときの温度で塗ります")).clicked() {
+                *p = TranPaint::Steady;
+            }
+            if ui.radio(*p == TranPaint::Peak, i18n::tr("最高")).on_hover_text(i18n::tr("この計算の中で、部品ごとにいちばん熱くなった温度で塗ります (部品ごとに時刻は違います)")).clicked() {
+                *p = TranPaint::Peak;
+            }
+            let at = matches!(p, TranPaint::At(_));
+            if ui.radio(at, i18n::tr("時刻")).on_hover_text(i18n::tr("選んだ時刻の温度で塗ります。スライダーを動かすと、部品が温まっていく (冷えていく) 様子が 3D で見えます")).clicked() && !at {
+                *p = TranPaint::At(v.tstop);
+            }
+            if let TranPaint::At(t) = p {
+                let mut x = t.clamp(0.0, v.tstop);
+                if ui.add(egui::Slider::new(&mut x, 0.0..=v.tstop).suffix(" s").max_decimals(4)).on_hover_text(i18n::tr("塗る時刻 (秒)。グラフの縦の線がその時刻です")).changed() {
+                    *t = x;
+                }
+            }
+            if ui.button(i18n::tr("3D で見る")).on_hover_text(i18n::tr("基板の画面の 3D の窓を開いて、部品をこの温度の色で塗ります (回路図の部品番号と同じ部品を塗ります。基板に無い部品は描けません)")).clicked() {
+                if self.heat.paint == TranPaint::Steady {
+                    self.heat.paint = TranPaint::Peak;
+                }
+                self.heat.show_3d = true;
+            }
+        });
+    }
+}
+
 fn fmt_power(w: f64) -> String {
     if w >= 1.0 { format!("{w:.2} W") } else if w >= 1e-3 { format!("{:.1} mW", w * 1e3) } else { format!("{:.1} µW", w * 1e6) }
 }
@@ -203,7 +285,7 @@ fn curve_color(k: usize) -> egui::Color32 {
 }
 
 /// The temperature rise of each part over time, as lines.
-fn draw_rise_chart(ui: &mut egui::Ui, v: &HeatTranView) {
+fn draw_rise_chart(ui: &mut egui::Ui, v: &HeatTranView, at: Option<f64>) {
     // the limit (as a rise over the surroundings) of each part that comes near it or past it is drawn too, so the scale takes it in
     let limits: Vec<(usize, f64)> = v
         .parts
@@ -228,6 +310,11 @@ fn draw_rise_chart(ui: &mut egui::Ui, v: &HeatTranView) {
         let pts: Vec<egui::Pos2> =
             v.time.iter().zip(&p.rise).map(|(t, u)| egui::pos2(plot.left() + (t / v.tstop) as f32 * plot.width(), plot.bottom() - (u / top) as f32 * plot.height())).collect();
         painter.add(egui::Shape::line(pts, egui::Stroke::new(1.5, curve_color(k))));
+    }
+    // the moment the 3D view is painted at
+    if let Some(t) = at {
+        let x = plot.left() + (t / v.tstop).clamp(0.0, 1.0) as f32 * plot.width();
+        painter.line_segment([egui::pos2(x, plot.top()), egui::pos2(x, plot.bottom())], egui::Stroke::new(1.0, ui.visuals().text_color()));
     }
     for (k, lim) in limits {
         let y = plot.bottom() - (lim / top) as f32 * plot.height();

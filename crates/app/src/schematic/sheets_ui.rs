@@ -119,6 +119,8 @@ impl SchEditor {
         if let Some(k) = go {
             self.show_sheet(k);
             self.sheet_trail.clear();
+            self.path_trail.clear();
+            self.sheet_path.clear();
             self.refresh_erc();
         }
     }

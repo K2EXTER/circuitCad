@@ -31,12 +31,16 @@ impl SchEditor {
         }
     }
 
-    /// Open the sheet a symbol stands for (double click on it); "親へ戻る" goes back.
-    pub(super) fn enter_sheet(&mut self, k: usize) {
+    /// Open the sheet a symbol stands for (double click on it; `via`: the symbol's designator, the copy opened); "親へ戻る" goes back.
+    pub(super) fn enter_sheet(&mut self, k: usize, via: Option<&str>) {
         let from = self.sch.active_sheet;
         if k != from && k < self.sch.sheet_count() {
+            let path = self.current_path();
             self.show_sheet(k);
             self.sheet_trail.push(from);
+            self.path_trail.push(path.clone());
+            self.sheet_path = path;
+            self.sheet_path.extend(via.map(str::to_string));
             self.status = format!("{} を開きました。上の「親へ戻る」で、もとのシートに戻れます", self.sch.sheet_name(k));
         }
     }
@@ -45,6 +49,7 @@ impl SchEditor {
     pub(super) fn leave_sheet(&mut self) {
         if let Some(k) = self.sheet_trail.pop() {
             self.show_sheet(k);
+            self.sheet_path = self.path_trail.pop().unwrap_or_default();
         }
     }
 
@@ -185,9 +190,10 @@ mod tests {
     fn opening_a_symbol_and_going_back_returns_to_the_parent() {
         let mut e = editor();
         e.place_sheet_symbol(1);
-        e.enter_sheet(1);
+        e.enter_sheet(1, Some("CH1"));
         assert_eq!(e.sch.active_sheet, 1);
         assert_eq!(e.sheet_trail, [0]);
+        assert_eq!(e.sheet_path, ["CH1"]);
         e.leave_sheet();
         assert_eq!(e.sch.active_sheet, 0);
         assert!(e.sheet_trail.is_empty());

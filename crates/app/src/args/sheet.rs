@@ -153,7 +153,7 @@ fn windows(app: &mut App, a: &Args) {
 }
 
 /// The heat runs (with `--section selfheat`): `--ambient C`, `--heattran PARTS TSTOP`, `--ambient-sweep FROM TO STEP`, `--selfheat`.
-fn heat(app: &mut App, a: &Args) {
+pub(super) fn heat(app: &mut App, a: &Args) {
     // --ambient C: the surrounding temperature of the heat runs below
     if let Some(t) = a.val("--ambient") {
         app.sch.heat.ambient = t.to_string();
@@ -163,6 +163,11 @@ fn heat(app: &mut App, a: &Args) {
         app.sch.heat.tran_parts = parts.to_string();
         app.sch.heat.tran_stop = stop.to_string();
         app.sch.heat.tran = Some(app.sch.run_heat_tran());
+    }
+    // --heat-paint peak|SECONDS: the 3D view's heat colours from that run (its peaks, or the moment), with `--3d-heat`
+    if let Some(p) = a.val("--heat-paint") {
+        use crate::schematic::selfheat_tran::TranPaint;
+        app.sch.heat.paint = if p == "peak" { TranPaint::Peak } else { sim_core::parse_value(p).map_or(TranPaint::Peak, TranPaint::At) };
     }
     // --ambient-sweep FROM TO STEP: "周囲の温度を振る" worked out
     if let Some([from, to, step]) = a.vals("--ambient-sweep") {

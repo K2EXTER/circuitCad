@@ -33,6 +33,9 @@ pub struct BoardLink {
     /// The two boards joined by a cable of this length (mm), not plugged into each other (`None`: plugged, or not said).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cable: Option<f64>,
+    /// The cable's wire colours chosen by hand (pin of `a`, colour key of `harness::COLORS`); the others by what they carry.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub colors: Vec<(String, String)>,
 }
 
 /// What the person can do about a finding with one click.
@@ -435,6 +438,8 @@ pub struct BomRow {
     /// (board, designators) in the project's order.
     pub per_board: Vec<(String, Vec<String>)>,
     pub total: usize,
+    /// A remark for the buyer (the cables' wire: the length to cut).
+    pub note: String,
 }
 
 /// The parts of every board counted together: the real parts (not power symbols, not the simulation-only sources and probes), by part
@@ -447,7 +452,7 @@ pub fn system_bom(designs: &[(&str, &Schematic)], copies: &[usize]) -> Vec<BomRo
         for c in flat.components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only) {
             let part = c.custom.as_ref().map_or_else(|| c.kind.label(), |s| s.name.clone());
             let key = (part.clone(), c.value.clone(), c.footprint.clone());
-            let row = rows.entry(key).or_insert_with(|| BomRow { part, value: c.value.clone(), footprint: c.footprint.clone(), shops: c.custom.as_ref().map(|s| s.shops.clone()).unwrap_or_default(), per_board: vec![], total: 0 });
+            let row = rows.entry(key).or_insert_with(|| BomRow { part, value: c.value.clone(), footprint: c.footprint.clone(), shops: c.custom.as_ref().map(|s| s.shops.clone()).unwrap_or_default(), per_board: vec![], total: 0, note: String::new() });
             match row.per_board.iter_mut().find(|(b, _)| b == name) {
                 Some((_, r)) => r.push(c.refdes.clone()),
                 None => row.per_board.push((name.to_string(), vec![c.refdes.clone()])),
@@ -471,6 +476,7 @@ pub fn bom_csv(rows: &[BomRow], boards: &[&str]) -> String {
     let mut head = vec!["部品".to_string(), "値".into(), "フットプリント".into(), "合計".into()];
     head.extend(boards.iter().map(|b| q(b)));
     head.push("店の型番".into());
+    head.push("メモ".into());
     out.push_str(&head.join(","));
     out.push('\n');
     for r in rows {
@@ -479,6 +485,7 @@ pub fn bom_csv(rows: &[BomRow], boards: &[&str]) -> String {
             cols.push(q(&r.per_board.iter().find(|(n, _)| n == b).map(|(_, refs)| refs.join(" ")).unwrap_or_default()));
         }
         cols.push(q(&r.shops.iter().map(|(s, n)| format!("{s}:{n}")).collect::<Vec<_>>().join(" ")));
+        cols.push(q(&r.note));
         out.push_str(&cols.join(","));
         out.push('\n');
     }
@@ -508,7 +515,7 @@ mod tests {
     }
 
     fn link(pairs: &[(&str, &str)]) -> BoardLink {
-        BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), aliases: vec![], cable: None }
+        BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), aliases: vec![], cable: None, colors: vec![] }
     }
 
     #[test]

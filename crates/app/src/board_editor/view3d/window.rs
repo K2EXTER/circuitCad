@@ -67,6 +67,8 @@ impl BoardEditor {
             // the part picked in the schematic is shown as the selected one
             self.linked.part.as_deref().and_then(|r| self.board.parts.iter().position(|p| p.refdes == r))
         };
+        // the other parts picked (several on the board, or in the schematic): ringed over the picture (E6)
+        let ringed = self.ringed_parts();
         let v = &mut self.view3d;
         // beside the left panel, like the other windows (with no position it opened over the panel)
         egui::Window::new(i18n::tr("3Dで見る")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([900.0, 680.0]).show(ctx, |ui| {
@@ -395,6 +397,25 @@ impl BoardEditor {
                         let (pos, _) = cam.project([(b.lo[0] + b.hi[0]) / 2.0, (b.lo[1] + b.hi[1]) / 2.0, z]);
                         painter.text(pos, egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(11.0), Color32::WHITE);
                     }
+                }
+            }
+            for (i, (name, ..)) in scene.parts.iter().enumerate() {
+                if Some(i) == selected || !ringed.iter().any(|r| r == name) {
+                    continue;
+                }
+                let (mut lo, mut hi) = (Pos2::new(f32::MAX, f32::MAX), Pos2::new(f32::MIN, f32::MIN));
+                for b in scene.boxes.iter().filter(|b| b.part == i) {
+                    for x in [b.lo[0], b.hi[0]] {
+                        for y in [b.lo[1], b.hi[1]] {
+                            for z in [b.lo[2], b.hi[2]] {
+                                let (p, _) = cam.project([x, y, z]);
+                                (lo, hi) = (lo.min(p), hi.max(p));
+                            }
+                        }
+                    }
+                }
+                if lo.x <= hi.x {
+                    painter.rect_stroke(Rect::from_min_max(lo, hi).expand(4.0), 4.0, egui::Stroke::new(2.0, Color32::from_rgb(0, 170, 190)), egui::StrokeKind::Outside);
                 }
             }
             if let Some(i) = hover {

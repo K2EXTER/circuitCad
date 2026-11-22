@@ -110,6 +110,10 @@ pub struct SchEditor {
     label_port: Option<sch_core::PortDir>,
     /// The sheets entered through a sheet symbol, outermost first: "back to the parent" goes up one.
     sheet_trail: Vec<usize>,
+    /// The copy of the sheet being edited, when it is a child sheet opened through a symbol (the symbols' designators: `["CH1"]`), and
+    /// the copies of the sheets in `sheet_trail` (E6: a part picked here is named as the board knows it, `R1_CH1`).
+    sheet_path: Vec<String>,
+    path_trail: Vec<Vec<String>>,
     /// Count the number at the end of the label text up after each label placed (D0, D1, ...).
     label_step: bool,
     /// With a bus label as the text (D[0..7]): the member the next label stands for, and the text it was counted for.
@@ -863,6 +867,8 @@ impl Default for SchEditor {
             label_text: "SIG".into(),
             label_port: None,
             sheet_trail: vec![],
+            sheet_path: vec![],
+            path_trail: vec![],
             label_step: false,
             label_k: 0,
             label_k_text: String::new(),
@@ -975,7 +981,7 @@ mod selfheat;
 mod board_heat;
 mod ambient_ui;
 pub(crate) use board_heat::BoardHeat;
-mod selfheat_tran;
+pub(crate) mod selfheat_tran;
 mod fault;
 mod spec_table;
 mod bench_data;

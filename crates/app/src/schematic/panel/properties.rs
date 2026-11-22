@@ -262,7 +262,11 @@ impl SchEditor {
             self.adc_read_ui(ui, i);
         }
         if let Some(k) = open_sheet {
-            self.enter_sheet(k);
+            let via = match self.selected {
+                Some(Sel::Comp(i)) => self.sch.components.get(i).map(|c| c.refdes.clone()),
+                _ => None,
+            };
+            self.enter_sheet(k, via.as_deref());
         }
         if let Some(k) = place_companions {
             self.status = match self.sch.place_companions(k) {

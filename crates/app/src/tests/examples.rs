@@ -3307,7 +3307,7 @@ fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
 
 fn multiboard_link() -> sch_core::system::BoardLink {
     use sch_core::system::{BoardLink, LinkEnd};
-    BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![], aliases: vec![], cable: None }
+    BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![], aliases: vec![], cable: None, colors: vec![] }
 }
 
 /// Generates docs/examples/multiboard_i2c.ccproj, the multi-board sample (two boards and the link of their headers; three sensor boards
@@ -3325,6 +3325,46 @@ fn write_multiboard_example() {
     assert!(up.worst < 1e-6, "{up:?}");
     let system = crate::project::System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 3], active: 0, parked: vec![None, Some(sensor)], links: vec![multiboard_link()], places: vec![Some(Default::default()), Some(up.place)] };
     crate::project::save_system(&root.join("multiboard_i2c.ccproj"), &main, &system).unwrap();
+}
+
+/// Generates docs/examples/multiboard_cable.ccproj, the cable sample (E11): the boards of the multi-board sample laid side by side 30 mm
+/// apart and joined by a cable from header to header (its length from `stack::beside`): `cargo test -p app write_multiboard_cable_example
+/// -- --ignored`
+#[test]
+#[ignore]
+fn write_multiboard_cable_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut d = multiboard_designs();
+    let (_, main) = d.remove(0);
+    let (_, sensor) = d.remove(0);
+    let s = pcb_core::stack::beside(&main.board, "J1", &sensor.board, "J1", 30.0).unwrap();
+    let mut link = multiboard_link();
+    link.cable = Some(s.cable);
+    let system = crate::project::System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 1], active: 0, parked: vec![None, Some(sensor)], links: vec![link], places: vec![Some(Default::default()), Some(s.place)] };
+    crate::project::save_system(&root.join("multiboard_cable.ccproj"), &main, &system).unwrap();
+}
+
+/// The cable sample checks clean and makes one 4-wire cable: red +5V, black GND, yellow SDA, green SCL, Dupont housings at both ends,
+/// and the parts list carries its housings, contacts and wire.
+#[test]
+fn the_cable_sample_makes_its_harness() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let p = crate::project::load(&root.join("multiboard_cable.ccproj")).unwrap();
+    let sensor = p.system.parked[1].as_ref().unwrap();
+    let designs = [("main", &p.schematic), ("sensor", &sensor.schematic)];
+    assert!(sch_core::system::check(&designs, &p.system.links).is_empty());
+    let hs = sch_core::harness::harnesses(&designs, &p.system.links, &p.system.copies);
+    assert_eq!(hs.len(), 1);
+    let h = &hs[0];
+    assert!(h.length_mm >= 50.0 && h.length_mm % 10.0 == 0.0, "{}", h.length_mm);
+    let wires: Vec<(String, &str)> = h.wires.iter().map(|w| (w.signal(), w.color.as_str())).collect();
+    assert_eq!(wires, [("+5V".to_string(), "red"), ("GND".into(), "black"), ("SDA".into(), "yellow"), ("SCL".into(), "green")]);
+    assert!(h.mate_a.known && h.mate_b.known && h.mate_a.housing.contains("1×4"), "{:?}", h.mate_a);
+    let bom = sch_core::harness::harness_bom(&hs);
+    assert_eq!(bom.iter().find(|r| r.part == "コンタクト").map(|r| r.total), Some(8), "{bom:?}");
+    // laid side by side: nothing runs into anything
+    let places: Vec<pcb_core::stack::Place> = p.system.places.iter().map(|x| x.unwrap()).collect();
+    assert!(pcb_core::stack::clashes(&[("main", &p.board, places[0]), ("sensor", &sensor.board, places[1])]).is_empty());
 }
 
 /// The multi-board sample opens with its two boards and link, the link checks clean (the same names pin for pin), and the whole parts

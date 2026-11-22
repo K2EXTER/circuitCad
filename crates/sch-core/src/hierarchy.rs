@@ -63,6 +63,21 @@ struct Parts<'a> {
     ports: &'a [SheetPort],
 }
 
+/// The designator a part of the copy at `path` (the symbols it was reached through: `["CH1"]`) has in the flat sheet: `R1_CH1`;
+/// on a sheet that is not a copy (empty path), its own.
+pub fn flat_refdes(refdes: &str, path: &[String]) -> String {
+    if path.is_empty() { refdes.to_string() } else { format!("{refdes}_{}", path.join("_")) }
+}
+
+/// Where a part of the flat sheet is drawn: the sheet, its index among that sheet's components, and the copy (the symbols it is
+/// reached through; empty on a sheet that is not a copy).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PartPlace {
+    pub sheet: usize,
+    pub index: usize,
+    pub path: Vec<String>,
+}
+
 /// The name a net of the copy at `path` gets: the same text on both sides of a port makes them one net.
 fn generated(path: &[String], name: &str) -> String {
     format!("{GENERATED}{}.{name}", path.join("."))
@@ -147,6 +162,24 @@ impl Schematic {
             ch.push(sub.sheet);
             self.collect_copies(sub.sheet, &p, &ch, next, out);
         }
+    }
+
+    /// The sheet, the part and the copy behind a designator of the flat sheet (`R1_CH1`: R1 of the child sheet, in the copy made for
+    /// symbol CH1). `None` when no part has that name.
+    pub fn locate_part(&self, flat: &str) -> Option<PartPlace> {
+        for inst in self.instances() {
+            for (index, c) in self.parts(inst.sheet).comps.iter().enumerate() {
+                if c.sub.is_none() && !c.kind.is_power_symbol() && flat_refdes(&c.refdes, &inst.path) == flat {
+                    return Some(PartPlace { sheet: inst.sheet, index, path: inst.path });
+                }
+            }
+        }
+        None
+    }
+
+    /// The copies of sheet `k` (the symbols each is reached through), in the order they are laid out.
+    pub fn copies_of(&self, k: usize) -> Vec<Vec<String>> {
+        self.instances().into_iter().filter(|i| i.sheet == k).map(|i| i.path).collect()
     }
 
     /// The sheet (number) of a place in the flat sheet: for a copy of a child sheet, the child sheet itself.
@@ -313,6 +346,21 @@ mod tests {
         refs.sort();
         assert_eq!(refs, ["C1_CH1", "C1_CH2", "R1_CH1", "R1_CH2"], "the symbols themselves are gone, the child's parts are copied");
         assert_eq!(s.instances().len(), 3, "the top sheet and two copies");
+    }
+
+    /// A part of a copy is found on the child sheet through its symbol; a part of the top sheet on the top sheet; a name that is not
+    /// there, nowhere.
+    #[test]
+    fn a_part_of_the_flat_sheet_is_found_where_it_is_drawn() {
+        let mut s = two_channels();
+        s.add(Kind::Resistor, (60, 30), 0); // R2 on the top sheet (the numbers run over every sheet)
+        let p = s.locate_part("C1_CH2").unwrap();
+        assert_eq!((p.sheet, p.index, p.path), (1, 1, vec!["CH2".to_string()]));
+        let top = s.locate_part("R2").unwrap();
+        assert!(top.sheet == 0 && top.path.is_empty() && s.components[top.index].refdes == "R2");
+        assert!(s.locate_part("R9_CH1").is_none() && s.locate_part("CH1").is_none(), "a symbol is not a part");
+        assert_eq!(s.copies_of(1), vec![vec!["CH1".to_string()], vec!["CH2".to_string()]]);
+        assert_eq!(flat_refdes("R1", &["CH1".into(), "A2".into()]), "R1_CH1_A2");
     }
 
     #[test]

@@ -8,7 +8,7 @@ use sch_core::Schematic;
 use sch_core::system::BoardLink;
 use serde_json::{Value, json};
 
-const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson | project alias FILE.ccproj LINK NET_A NET_B | project mirror FILE.ccproj LINK | project cable FILE.ccproj LINK [gap=20]   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic; alias, mirror and cable change link LINK (from 1) in the file: two names as one signal, the pins paired the other way round, the second board laid beside the first for a cable)";
+const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson | project alias FILE.ccproj LINK NET_A NET_B | project mirror FILE.ccproj LINK | project cable FILE.ccproj LINK [gap=20] | project harness FILE.ccproj OUT.svg|OUT.csv | project color FILE.ccproj LINK PIN COLOR   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic; alias, mirror and cable change link LINK (from 1) in the file: two names as one signal, the pins paired the other way round, the second board laid beside the first for a cable; harness draws every cable (the wires pin to pin, their colours, the mating housings and contacts) as SVG or lists its wires as CSV; color sets the wire on pin PIN of link LINK's first connector to black red orange yellow green blue violet grey white brown, or auto)";
 
 /// Lays the second board of link `k` (from 1) beside the first for a cable, in the file: the second board's `place` (the first's kept, or
 /// set at the origin) and the link's `cable` length.
@@ -124,7 +124,9 @@ impl crate::session::Session {
             "bom" => {
                 let out = pos.get(2).ok_or(USAGE)?;
                 let copies: Vec<usize> = boards.iter().map(|b| b.1).collect();
-                let rows = sch_core::system::system_bom(&designs, &copies);
+                let mut rows = sch_core::system::system_bom(&designs, &copies);
+                // the cables' housings, contacts and wire
+                rows.extend(sch_core::harness::harness_bom(&sch_core::harness::harnesses(&designs, &links, &copies)));
                 let names: Vec<&str> = designs.iter().map(|d| d.0).collect();
                 std::fs::write(out, sch_core::system::bom_csv(&rows, &names)).map_err(|e| format!("{out}: {e}"))?;
                 Ok(obj(json!({"file": out, "rows": rows.len(), "parts": rows.iter().map(|r| r.total).sum::<usize>()})))
@@ -194,6 +196,39 @@ impl crate::session::Session {
                     Ok(())
                 })?;
                 Ok(obj(json!({"file": file, "pairs": link.pairs})))
+            }
+            "harness" => {
+                let out = pos.get(2).ok_or(USAGE)?;
+                let copies: Vec<usize> = boards.iter().map(|b| b.1).collect();
+                let hs = sch_core::harness::harnesses(&designs, &links, &copies);
+                if hs.is_empty() {
+                    return Err("no link of this project is joined by a cable (project cable FILE LINK first)".into());
+                }
+                let text = if out.to_ascii_lowercase().ends_with(".csv") { sch_core::harness::harness_csv(&hs) } else { sch_core::harness::harness_svg(&hs) };
+                std::fs::write(out, text).map_err(|e| format!("{out}: {e}"))?;
+                let list: Vec<Value> = hs
+                    .iter()
+                    .map(|h| {
+                        json!({"name": h.name, "from": h.end_a, "to": h.end_b, "length_mm": h.length_mm, "copies": h.copies, "awg": h.awg(), "ribbon": h.ribbon,
+                            "housing_a": h.mate_a.housing, "housing_b": h.mate_b.housing, "contact_a": h.mate_a.contact, "contact_b": h.mate_b.contact,
+                            "wires": h.wires.iter().map(|w| json!({"n": w.n, "pin_a": w.pin_a, "pin_b": w.pin_b, "signal": w.signal(), "color": w.color})).collect::<Vec<_>>()})
+                    })
+                    .collect();
+                Ok(obj(json!({"file": out, "cables": list})))
+            }
+            "color" => {
+                let (Some(k), Some(pin), Some(color)) = (pos.get(2), pos.get(3), pos.get(4)) else { return Err(USAGE.into()) };
+                let keys: Vec<&str> = sch_core::harness::COLORS.iter().map(|c| c.0).collect();
+                // `auto`: back to the colour by what the wire carries
+                let key = if color == "auto" { "auto" } else { sch_core::harness::COLORS.iter().find(|c| c.0 == color.as_str() || c.1 == color.as_str()).map(|c| c.0).ok_or_else(|| format!("{color}: not a colour ({} auto)", keys.join(" ")))? };
+                let link = edit_link(file, k, |l| {
+                    l.colors.retain(|(p, _)| p != pin);
+                    if key != "auto" {
+                        l.colors.push((pin.clone(), key.to_string()));
+                    }
+                    Ok(())
+                })?;
+                Ok(obj(json!({"file": file, "colors": link.colors})))
             }
             "cable" => {
                 let k = pos.get(2).ok_or(USAGE)?;

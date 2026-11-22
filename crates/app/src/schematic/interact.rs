@@ -198,8 +198,8 @@ impl SchEditor {
         }
         // a double click on a sheet symbol opens the sheet it stands for
         if resp.double_clicked() && self.tool == Tool::Select {
-            if let Some(sub) = self.comp_at(g).and_then(|i| self.sch.components[i].sub.as_ref().map(|s| s.sheet)) {
-                self.enter_sheet(sub);
+            if let Some((sub, via)) = self.comp_at(g).and_then(|i| self.sch.components[i].sub.as_ref().map(|s| (s.sheet, self.sch.components[i].refdes.clone()))) {
+                self.enter_sheet(sub, Some(&via));
             }
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {

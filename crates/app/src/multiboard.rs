@@ -32,6 +32,8 @@ pub struct BoardsWindow {
     tstop: String,
     fstart: String,
     fstop: String,
+    /// The link whose cable's wire list is shown (E11).
+    wires_of: Option<usize>,
 }
 
 /// The undo and redo steps of a parked board's schematic and board.
@@ -351,11 +353,22 @@ impl App {
     /// The parts of the whole system as CSV (asks for the file).
     fn save_system_bom(&mut self) {
         let designs = self.designs();
-        let rows = sch_core::system::system_bom(&designs, &self.system.copies);
+        let mut rows = sch_core::system::system_bom(&designs, &self.system.copies);
+        rows.extend(sch_core::harness::harness_bom(&sch_core::harness::harnesses(&designs, &self.system.links, &self.system.copies)));
         let names: Vec<&str> = designs.iter().map(|d| d.0).collect();
         let csv = sch_core::system::bom_csv(&rows, &names);
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("system_bom.csv").save_file() {
             self.boards.message = Some(std::fs::write(&p, csv).map(|_| i18n::trf!("全体の部品表を保存しました ({} 行): {}", rows.len(), p.display())).map_err(|e| e.to_string()));
+        }
+    }
+
+    /// The cables' drawing (`svg`) or wire list (CSV), saved to a file (asks for it).
+    fn save_harness(&mut self, svg: bool) {
+        let hs = sch_core::harness::harnesses(&self.designs(), &self.system.links, &self.system.copies);
+        let (text, ext, name) = if svg { (sch_core::harness::harness_svg(&hs), "svg", "harness.svg") } else { (sch_core::harness::harness_csv(&hs), "csv", "harness.csv") };
+        if let Some(p) = rfd::FileDialog::new().add_filter(ext.to_uppercase(), &[ext]).set_file_name(name).save_file() {
+            let n = hs.len();
+            self.boards.message = Some(std::fs::write(&p, text).map(|_| i18n::trf!("{n} 本のケーブルを保存しました: {}", p.display())).map_err(|e| e.to_string()));
         }
     }
 
@@ -455,7 +468,17 @@ impl App {
 
     /// Opens the multi-board sample (two boards linked by their headers) with its window.
     pub(crate) fn open_multiboard_sample(&mut self) {
-        match crate::project::parse(include_str!("../../../docs/examples/multiboard_i2c.ccproj")) {
+        self.open_system_sample(include_str!("../../../docs/examples/multiboard_i2c.ccproj"), None);
+    }
+
+    /// Opens the cable sample (the same two boards side by side, joined by a cable) with its window and the cable's wire list.
+    pub(crate) fn open_cable_sample(&mut self) {
+        self.open_system_sample(include_str!("../../../docs/examples/multiboard_cable.ccproj"), Some(0));
+    }
+
+    /// Opens a multi-board sample project with its window (`wires_of`: the link whose wire list is shown).
+    fn open_system_sample(&mut self, text: &str, wires_of: Option<usize>) {
+        match crate::project::parse(text) {
             Ok(p) => {
                 self.sch.adopt(p.schematic, None);
                 self.sch.set_spec_items(&p.specs);
@@ -467,6 +490,7 @@ impl App {
                 self.histories.clear();
                 self.project = None;
                 self.boards.open = true;
+                self.boards.wires_of = wires_of;
                 // the sample's I2C clock is 100 kHz: two periods to see the bus rise
                 self.boards.tstop = "20u".into();
                 self.mode = crate::Mode::Schematic;
@@ -489,6 +513,10 @@ impl App {
         let mut add_link = false;
         let mut drop_link = None;
         let mut bom = false;
+        let mut harness_save: Option<bool> = None;
+        let mut set_color: Option<(usize, String, Option<String>)> = None;
+        // the cables (links joined by a cable) as harnesses: their wires and colours, for the lists under the links
+        let harnesses = sch_core::harness::harnesses(&self.designs(), &self.system.links, &self.system.copies);
         let mut stack = None;
         let mut cable = None;
         if self.boards.spacing <= 0.0 {
@@ -556,7 +584,16 @@ impl App {
                     ui.horizontal(|ui| {
                         ui.add_space(16.0);
                         ui.label(egui::RichText::new(i18n::trf!("ケーブル {mm:.0} mm でつなぐ")).weak()).on_hover_text(i18n::tr("「ケーブルでつなぐ」で置いたときの長さの目安です。「3D で重ねる」にすると、ケーブルなし (直接差す) に戻ります"));
+                        let shown = self.boards.wires_of == Some(k);
+                        if ui.selectable_label(shown, i18n::tr("線の表")).on_hover_text(i18n::tr("このケーブルの線ごとに、両端のピン・信号・線の色・太さを表にします。色は信号で決まります (GND は黒、電源は赤、信号は順に黄・緑・青 …)。表の色を選ぶと変えられます")).clicked() {
+                            self.boards.wires_of = if shown { None } else { Some(k) };
+                        }
                     });
+                    if self.boards.wires_of == Some(k)
+                        && let Some(h) = harnesses.iter().find(|h| h.link == k)
+                    {
+                        wire_table(ui, h, &mut set_color);
+                    }
                 }
                 if !l.aliases.is_empty() {
                     ui.horizontal_wrapped(|ui| {
@@ -719,8 +756,15 @@ impl App {
             });
             self.system_wave_ui(ui);
             ui.horizontal(|ui| {
-                if ui.button(i18n::tr("全体の部品表 (CSV) を保存…")).on_hover_text(i18n::tr("すべての基板の部品を、種類ごとに数えた表です (基板ごとの部品番号と、作る枚数を掛けた合計)。まとめて買うときに使います")).clicked() {
+                if ui.button(i18n::tr("全体の部品表 (CSV) を保存…")).on_hover_text(i18n::tr("すべての基板の部品を、種類ごとに数えた表です (基板ごとの部品番号と、作る枚数を掛けた合計)。ケーブルでつなぐつなぎがあれば、ケーブルのハウジング・コンタクト・電線 (色ごとの長さ) も入ります。まとめて買うときに使います")).clicked() {
                     bom = true;
+                }
+                let no_cable = harnesses.is_empty().then_some("ケーブルでつなぐつなぎがありません。つなぎの「ケーブルでつなぐ」で長さを決めると押せます");
+                if crate::widgets::unless(ui, no_cable, egui::Button::new(i18n::tr("ケーブルの図 (SVG) を保存…"))).on_hover_text(i18n::tr("ケーブルごとに、両端のコネクタとピン・信号、線の色と長さ、相手のハウジングとコンタクトを描いた配線図です。印刷して、ケーブルを作るときと確かめるときに使います")).clicked() {
+                    harness_save = Some(true);
+                }
+                if crate::widgets::unless(ui, no_cable, egui::Button::new(i18n::tr("線の表 (CSV) を保存…"))).on_hover_text(i18n::tr("ケーブルの線ごとに 1 行 (色・AWG・長さ・両端のピンと信号) の表です。切る・圧着する・テスターで確かめるときの一覧に")).clicked() {
+                    harness_save = Some(false);
                 }
             });
             match &self.boards.message {
@@ -758,7 +802,7 @@ impl App {
                 Ok(_) if da == db && ra == rb => Err(i18n::tr("同じコネクタどうしはつなげません").into()),
                 Ok(pairs) => {
                     let end = |d: usize, r: String| LinkEnd { design: self.system.names[d].clone(), refdes: r };
-                    self.system.links.push(BoardLink { a: end(da, ra), b: end(db, rb), pairs, aliases: vec![], cable: None });
+                    self.system.links.push(BoardLink { a: end(da, ra), b: end(db, rb), pairs, aliases: vec![], cable: None, colors: vec![] });
                     self.system_dirty = true;
                     self.boards.draft_pairs.clear();
                     Ok(i18n::tr("つなぎを足しました").into())
@@ -767,6 +811,18 @@ impl App {
         }
         if bom {
             self.save_system_bom();
+        }
+        if let Some(svg) = harness_save {
+            self.save_harness(svg);
+        }
+        if let Some((k, pin, color)) = set_color
+            && let Some(l) = self.system.links.get_mut(k)
+        {
+            l.colors.retain(|(p, _)| *p != pin);
+            if let Some(c) = color {
+                l.colors.push((pin, c));
+            }
+            self.system_dirty = true;
         }
         if let Some(k) = stack {
             self.boards.message = Some(self.stack_link(k));
@@ -815,6 +871,57 @@ impl App {
             self.boards.open = false;
         }
     }
+}
+
+/// A cable's wires as a table under its link: the wire, the pins at both ends, the signal, the colour (a menu to change it; `set`
+/// gets (link, pin of A, the colour or `None` for the one by the signal)) and the wire size; then the mating parts of both ends.
+fn wire_table(ui: &mut egui::Ui, h: &sch_core::harness::Harness, set: &mut Option<(usize, String, Option<String>)>) {
+    use sch_core::harness::{color_hex, color_name, COLORS};
+    let swatch = |ui: &mut egui::Ui, key: &str| {
+        let c = egui::Color32::from_hex(color_hex(key)).unwrap_or(egui::Color32::GRAY);
+        let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 10.0), egui::Sense::hover());
+        ui.painter().rect_filled(r, 2.0, c);
+        ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(150)), egui::StrokeKind::Inside);
+    };
+    ui.indent(("wires", h.link), |ui| {
+        egui::Grid::new(("harness_wires", h.link)).striped(true).num_columns(5).show(ui, |ui| {
+            for t in ["線", "A のピン", "B のピン", "信号", "色"] {
+                ui.label(egui::RichText::new(i18n::tr(t)).strong());
+            }
+            ui.end_row();
+            for w in &h.wires {
+                ui.label(w.n.to_string());
+                ui.label(format!("{}-{}", h.end_a, w.pin_a));
+                ui.label(format!("{}-{}", h.end_b, w.pin_b));
+                ui.label(if w.signal().is_empty() { i18n::tr("(空き)").to_string() } else { w.signal() });
+                ui.horizontal(|ui| {
+                    swatch(ui, &w.color);
+                    let label = if w.chosen { i18n::tr_dyn(color_name(&w.color)).to_string() } else { i18n::trf!("{} (信号で)", i18n::tr_dyn(color_name(&w.color))) };
+                    egui::ComboBox::from_id_salt(("wire_color", h.link, w.n)).selected_text(label).show_ui(ui, |ui| {
+                        if ui.selectable_label(!w.chosen, i18n::tr("信号で決める")).on_hover_text(i18n::tr("GND は黒、電源は赤・橙、信号は順に黄・緑・青 … (フラットケーブルは 1 番が赤、ほかは灰)")).clicked() {
+                            *set = Some((h.link, w.pin_a.clone(), None));
+                        }
+                        for (key, name, _) in COLORS {
+                            if ui.selectable_label(w.chosen && w.color == *key, i18n::tr_dyn(name)).clicked() {
+                                *set = Some((h.link, w.pin_a.clone(), Some(key.to_string())));
+                            }
+                        }
+                    });
+                });
+                ui.end_row();
+            }
+        });
+        let kind = if h.ribbon { i18n::trf!("フラットケーブル {} 芯", h.wires.len()) } else { i18n::trf!("電線 {} 本", h.wires.len()) };
+        ui.label(egui::RichText::new(i18n::trf!("{kind}・AWG{}・{:.0} mm・× {} 本 (作る枚数の多いほうの基板に合わせる)", h.awg(), h.length_mm, h.copies)).weak());
+        for (end, m) in [(&h.end_a, &h.mate_a), (&h.end_b, &h.mate_b)] {
+            let contact = m.contact.as_ref().map_or_else(String::new, |c| format!(" + {} × {}", i18n::tr_dyn(c), h.wires.len()));
+            if m.known {
+                ui.label(egui::RichText::new(format!("{end}: {}{contact}", i18n::tr_dyn(&m.housing))).weak()).on_hover_text(i18n::trf!("基板のコネクタ ({}) から決めた、ケーブル側の相手です", i18n::tr_dyn(&m.family)));
+            } else {
+                ui.colored_label(crate::theme::warn(), format!("{end}: {}", i18n::tr_dyn(&m.housing))).on_hover_text(i18n::tr("フットプリントから相手が分かりませんでした。基板のコネクタのデータシートで、相手のハウジングとコンタクトの型番を選んでください"));
+            }
+        }
+    });
 }
 
 #[cfg(test)]

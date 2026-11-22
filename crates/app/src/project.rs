@@ -186,7 +186,7 @@ mod tests {
             s.add(sch_core::Kind::Resistor, (4, 4), 0);
             Design { schematic: s, board: Board::new(n, 30.0, 20.0), specs: vec![], bench: BenchData::default(), settings: SheetSettings::default() }
         };
-        let link = sch_core::system::BoardLink { a: sch_core::system::LinkEnd { design: "main".into(), refdes: "J1".into() }, b: sch_core::system::LinkEnd { design: "sensor".into(), refdes: "J2".into() }, pairs: vec![], aliases: vec![], cable: None };
+        let link = sch_core::system::BoardLink { a: sch_core::system::LinkEnd { design: "main".into(), refdes: "J1".into() }, b: sch_core::system::LinkEnd { design: "sensor".into(), refdes: "J2".into() }, pairs: vec![], aliases: vec![], cable: None, colors: vec![] };
         let up = pcb_core::stack::Place::new(1, false, [3.0, 4.0, 11.0]);
         let system = System { names: vec!["main".into(), "sensor".into()], copies: vec![1, 3], active: 1, parked: vec![Some(mk("main")), None], links: vec![link.clone()], places: vec![Some(Default::default()), Some(up)] };
         save_system(&f, &mk("sensor"), &system).unwrap();

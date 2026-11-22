@@ -330,6 +330,10 @@ pub(crate) struct HeatUi {
     pub(crate) amb_to: String,
     pub(crate) amb_step: String,
     pub(crate) amb_view: Option<Result<sim_core::AmbientSweep, String>>,
+    /// What the 3D view's heat colours show: the steady self-heating run, or the temperature-over-time run's peak or a moment (E9).
+    pub(crate) paint: selfheat_tran::TranPaint,
+    /// "3D で見る" was pressed: the App opens the board's 3D view with the heat colours on.
+    pub(crate) show_3d: bool,
 }
 
 impl Default for HeatUi {
@@ -346,6 +350,8 @@ impl Default for HeatUi {
             amb_to: "85".into(),
             amb_step: "5".into(),
             amb_view: None,
+            paint: Default::default(),
+            show_3d: false,
         }
     }
 }

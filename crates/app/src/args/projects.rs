@@ -4,10 +4,14 @@ use super::*;
 
 /// `--multiboard-sample`: the multi-board sample with its window of boards and links.
 pub(super) fn multiboard_sample(app: &mut App, a: &Args) {
-    if !a.has("--multiboard-sample") {
+    // --cable-sample: the boards joined by a cable, with the cable's wire list open
+    if a.has("--cable-sample") {
+        app.open_cable_sample();
+    } else if a.has("--multiboard-sample") {
+        app.open_multiboard_sample();
+    } else {
         return;
     }
-    app.open_multiboard_sample();
     if a.has("--system-dc") {
         app.run_system_dc();
     }
@@ -43,10 +47,8 @@ pub(super) fn apply(app: &mut App, a: &Args) {
         app.apply_post_layout(true);
     }
     sheet::tran(app, a);
-    // --selfheat: the schematic's self-heating worked out (the 3D view's heat colours, `--3d-heat`, use it)
-    if a.has("--selfheat") {
-        app.sch.heat.view = Some(app.sch.run_self_heat());
-    }
+    // the heat runs (`--selfheat`, `--heattran PARTS TSTOP`, `--heat-paint` ...): the 3D view's heat colours (`--3d-heat`) use them
+    sheet::heat(app, a);
     sheet::section(app, a);
     if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets", "--field", "--thermal-map"].iter().any(|f| a.has(f)) {
         app.mode = Mode::Board;
