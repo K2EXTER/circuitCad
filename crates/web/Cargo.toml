@@ -12,12 +12,21 @@ name = "circuitCad-web"
 path = "src/main.rs"
 
 [dependencies]
-eframe = "0.36.2"
 i18n = { version = "0.1.0", path = "../i18n" }
 sch-core = { version = "0.1.0", path = "../sch-core" }
 serde_json = "1.0.151"
 sim-core = { version = "0.1.0", path = "../sim-core" }
 
+# in a window (`cargo run -p web`): eframe as the app has it
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+eframe = "0.36.2"
+
+# in the browser: drawn with WebGL (glow) instead of wgpu, which made the wasm file several MB larger
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+eframe = { version = "0.36.2", default-features = false, features = ["glow", "default_fonts"] }
 wasm-bindgen-futures = "0.4.79"
 web-sys = { version = "0.3.106", features = ["Window", "Document", "Element", "HtmlCanvasElement"] }
+
+[dev-dependencies]
+# reads the cut-down font in a test (already a dependency of the app)
+ttf-parser = "0.25.1"

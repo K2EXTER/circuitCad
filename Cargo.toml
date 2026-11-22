@@ -14,3 +14,11 @@ opt-level = 3
 # no debug info for dependencies: the PDB shrank 137 -> 69 MB and relinks got faster;
 # backtraces still have line numbers in our own crates
 debug = false
+
+# The browser version's release build (`trunk build --release --cargo-profile web-release`, crates/web): the wasm file is downloaded
+# by every visitor, so size first (opt-level "s", whole-program LTO, one codegen unit). Nothing else builds with it.
+[profile.web-release]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1

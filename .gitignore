@@ -4,3 +4,4 @@ target/
 
 # the browser version as trunk builds it (crates/web)
 /crates/web/dist/
+/crates/web/dist-release/

@@ -997,6 +997,7 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_glow",
+ "glow",
  "glutin",
  "glutin-winit",
  "image",
@@ -4152,6 +4153,7 @@ dependencies = [
  "sch-core",
  "serde_json",
  "sim-core",
+ "ttf-parser",
  "wasm-bindgen-futures",
  "web-sys",
 ]

@@ -9,9 +9,10 @@ use i18n::tr;
 /// Below this width (points) the screen is laid out for a phone.
 const NARROW: f32 = 700.0;
 
-/// The Japanese font bundled with the app (BIZ UD Gothic, SIL OFL 1.1: `crates/app/assets/fonts/OFL.txt`); the browser has no
-/// system fonts to read.
-const FONT: &[u8] = include_bytes!("../../app/assets/fonts/BIZUDGothic-Regular.ttf");
+/// The Japanese font of the app (BIZ UD Gothic, SIL OFL 1.1: `crates/app/assets/fonts/OFL.txt`, served next to the page) cut down
+/// to the characters the browser version shows (`tools/web_font_subset.py`: 1.4 MB instead of 4.7): the browser has no system
+/// fonts to read, so it travels inside the wasm file.
+const FONT: &[u8] = include_bytes!("../assets/BIZUDGothic-web.ttf");
 
 pub struct WebApp {
     sample: usize,
@@ -141,5 +142,31 @@ impl eframe::App for WebApp {
                 s.show(ui);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every character the browser version writes (its own text, the sample circuits it opens) is in the cut-down font or in egui's; when this
+    /// fails, run `python tools/web_font_subset.py` again.
+    #[test]
+    fn the_cut_down_font_has_every_character_shown() {
+        // the fonts egui carries come after ours: a symbol neither Japanese font has (⏸) is drawn from them
+        let defaults = egui::FontDefinitions::default();
+        let mut fonts: Vec<&[u8]> = vec![FONT];
+        fonts.extend(defaults.font_data.values().map(|f| &f.font[..]));
+        let faces: Vec<ttf_parser::Face> = fonts.iter().map(|f| ttf_parser::Face::parse(f, 0).unwrap()).collect();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut text = String::new();
+        for f in ["app.rs", "live_ui.rs", "samples.rs", "view.rs", "main.rs"] {
+            text += &std::fs::read_to_string(root.join("src").join(f)).unwrap();
+        }
+        for s in SAMPLES {
+            text += &format!("{:?}", s.schematic().unwrap());
+        }
+        let missing: std::collections::BTreeSet<char> = text.chars().filter(|c| !c.is_control() && faces.iter().all(|f| f.glyph_index(*c).is_none())).collect();
+        assert!(missing.is_empty(), "not in the font: {missing:?}");
     }
 }
