@@ -756,6 +756,7 @@ fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool
             flipped: c.flipped.clone(),
             stack: c.stack,
             apart: c.apart.clone(),
+            swaps: c.swaps.clone(),
         };
         if sub.on.is_empty() {
             continue;

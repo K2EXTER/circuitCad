@@ -387,6 +387,54 @@ struct Block {
     left_pin: u16,
     right_pin: u16,
     end: u16,
+    /// Each pin's way and its wire's place among its side's wires (from the outside in), before the columns are set (`place`).
+    raw: Vec<Option<(Dir, u16)>>,
+    /// The wires on each side (left, right), the spare holes at the pieces' outer ends, the columns between the two rows of leads.
+    count: [u16; 2],
+    spare: u16,
+    width: u16,
+    two_cols: bool,
+}
+
+impl Block {
+    /// Sets the block's columns: `spare` holes at the outer ends, `total` columns of wires on each side with this block's wires
+    /// from `from` on (a stack's chips share the columns: `stack_columns`), its left row of leads after them, the right row its
+    /// width on, and the right side's wires past `widest` (the widest chip in the stack: none passes over a chip's body).
+    fn place(&mut self, from: [u16; 2], total: [u16; 2], spare: u16, widest: u16) {
+        let x = spare;
+        self.left_pin = x + total[0];
+        self.right_pin = self.left_pin + self.width;
+        let right_wires = self.left_pin + widest + 1;
+        self.end = if self.two_cols { right_wires + total[1] + spare } else { self.left_pin + 1 };
+        for (p, raw) in self.pins.iter_mut().zip(&self.raw) {
+            p.wire = raw.map(|(d, n)| (d, if p.left { x + from[0] + n } else { right_wires + from[1] + n }));
+        }
+    }
+}
+
+/// Lays a stack of chips (top first) out in the same columns: each one's wires all up but the bottom one's, all down. The chips with
+/// their wires up each take columns of their own on each side (a chip's wires up pass the chips above it), their rows of leads lined
+/// up and the right side's wires past the widest of them (none passes over a chip's body). The bottom one keeps its own columns: its
+/// wires go down from it, past nothing, and none passes it.
+fn stack_columns(stack: &mut [&mut Block]) {
+    let n = stack.len();
+    let up = n.saturating_sub(1);
+    let mut from = vec![[0u16; 2]; n];
+    let mut sum = [0u16; 2];
+    for (i, b) in stack.iter().enumerate().take(up) {
+        from[i] = sum;
+        sum = [sum[0] + b.count[0], sum[1] + b.count[1]];
+    }
+    let spare = stack.iter().take(up).map(|b| b.spare).max().unwrap_or(0);
+    let widest = stack.iter().take(up).map(|b| b.width).max().unwrap_or(3);
+    for (i, b) in stack.iter_mut().enumerate() {
+        if i < up {
+            b.place(from[i], sum, spare, widest);
+        } else {
+            let (count, spare, width) = (b.count, b.spare, b.width);
+            b.place([0, 0], count, spare, width);
+        }
+    }
 }
 
 /// Lays the schematic out on a stripboard (and the same on a perfboard).
@@ -527,10 +575,10 @@ fn strip_lay(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -
         let failed = strip_rules(s, l).iter().filter(|r| !r.ok).count();
         (strip_check(s, l).len(), failed, l.rows as usize * l.cols as usize + 10 * l.links.len(), len)
     };
-    // and the same with the short chips stacked two in the same columns (`Circuit::stack`), the better of the two
+    // and the same with the short chips stacked in the same columns (`Circuit::stack`: two at most, or any number), the best
     let dips: Vec<String> = c.on.iter().filter(|(r, look, _)| *look == Look::Dip || c.mounts.get(r).is_some_and(|m| m.width().is_some())).map(|p| p.0.clone()).collect();
-    let mut found: Option<(StripLayout, (usize, usize, usize, u32))> = None;
-    for stack in [false, true] {
+    let mut found: Vec<(StripLayout, Score, crate::breadboard::Circuit)> = vec![];
+    for stack in [1, 2, usize::MAX] {
         let mut c = c.clone();
         c.stack = stack;
         let mut best = strip_lay_fit(s, &c, opt);
@@ -545,11 +593,68 @@ fn strip_lay(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptions) -
                 c.flipped.remove(r);
             }
         }
-        if found.as_ref().is_none_or(|f| best_score < f.1) {
-            found = Some((best, best_score));
-        }
+        found.push((best, best_score, c));
     }
-    found.unwrap().0
+    // two chips the requirements table keeps apart and too near: one of them swapped along the board with another chip as tall,
+    // each such chip tried (the closest pair first, twice at most), kept when the board comes out better. Tried on each way of
+    // stacking whose board failed a check but came out smaller than the best one that passes
+    let chips: BTreeMap<String, u16> = c.on.iter().filter(|p| p.1 != Look::TwoLead).map(|p| (p.0.clone(), chip_rows(c, &p.0))).collect();
+    let passing = found.iter().filter(|f| f.1 .1 == 0).map(|f| f.1 .2).min().unwrap_or(usize::MAX);
+    for f in found.iter_mut().filter(|f| f.1 .1 > 0 && f.1 .2 < passing) {
+        let (best, best_score, c) = (&mut f.0, &mut f.1, &mut f.2);
+        swap_apart(s, opt, &chips, &score, best, best_score, c);
+    }
+    found.into_iter().min_by_key(|f| f.1).unwrap().0
+}
+
+type Score = (usize, usize, usize, u32);
+
+/// Swaps chips along the board to part two the requirements table keeps apart (`strip_lay`).
+fn swap_apart(s: &Schematic, opt: StripOptions, chips: &BTreeMap<String, u16>, score: &dyn Fn(&StripLayout) -> Score, best: &mut StripLayout, best_score: &mut Score, c: &mut crate::breadboard::Circuit) {
+    for _ in 0..2 {
+        if best_score.1 == 0 {
+            break;
+        }
+        let leads = |l: &StripLayout, r: &str| l.parts.iter().filter(|p| p.refdes == r).flat_map(|p| p.leads.iter().map(|x| x.1)).collect::<Vec<At>>();
+        let near = |l: &StripLayout, a: &str, b: &str| {
+            let (x, y) = (leads(l, a), leads(l, b));
+            x.iter().flat_map(|p| y.iter().map(move |q| (p.0 as f64 - q.0 as f64).hypot(p.1 as f64 - q.1 as f64) * 2.54)).fold(f64::INFINITY, f64::min)
+        };
+        let Some((a, b)) = c
+            .apart
+            .iter()
+            .filter(|(a, b, d)| chips.contains_key(a) && chips.contains_key(b) && near(best, a, b) < *d)
+            .min_by(|x, y| near(best, &x.0, &x.1).total_cmp(&near(best, &y.0, &y.1)))
+            .map(|(a, b, _)| (a.clone(), b.clone()))
+        else {
+            break;
+        };
+        let mut better: Option<(StripLayout, Score, crate::breadboard::Circuit)> = None;
+        for moved in [&a, &b] {
+            for (other, rows) in chips {
+                if other == moved || *rows != chips[moved] || other == &a || other == &b {
+                    continue;
+                }
+                let mut t = c.clone();
+                t.swaps.push((moved.clone(), other.clone()));
+                let l = strip_lay_fit(s, &t, opt);
+                let sc = score(&l);
+                if sc < better.as_ref().map_or(*best_score, |x| x.1) {
+                    better = Some((l, sc, t));
+                }
+            }
+        }
+        let Some(x) = better else { break };
+        (*best, *best_score, *c) = x;
+    }
+}
+
+/// How many rows a chip of the circuit takes on a stripboard (a DIP: half its places; a row of leads: all of them).
+fn chip_rows(c: &crate::breadboard::Circuit, r: &str) -> u16 {
+    let Some((_, look, pins)) = c.on.iter().find(|p| p.0 == r) else { return 0 };
+    let m = c.mounts.get(r).cloned().unwrap_or_default();
+    let places = m.slots(pins).0;
+    if *look == Look::Dip || m.width().is_some() { places.div_ceil(2) as u16 } else { places as u16 }
 }
 
 /// The board laid out for `c` within the board's width: the wires joining sections can take it a column or two past, and then it
@@ -575,10 +680,12 @@ fn strip_lay_once(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptio
     let c = c.clone();
     let secs = sections(s, &c);
     let mut l = if secs.len() < 2 { lay_within(&c, opt, &BTreeSet::new()) } else { lay_sections(&c, opt, &secs) };
-    // with sections, a net between sections that has no strip in one of them (a chip's pin to another section's chip) is left
-    // apart: joined by a wire as a line of the ratsnest is (the parts added to a board edited by hand are joined so)
-    if secs.len() >= 2 {
-        let lines = strip_unjoined(s, &l);
+    // a net left apart is joined by a wire as a line of the ratsnest is (the parts added to a board edited by hand are joined so):
+    // with sections, a net between sections that has no strip in one of them (a chip's pin to another section's chip); and a wire
+    // between two chip pins (`Carry::Pins`) that found no free hole on a pin's piece of strip (`join_lines` takes another hole of
+    // the net, or grows the piece)
+    let lines = strip_unjoined(s, &l);
+    if !lines.is_empty() {
         crate::strip_edit::join_lines(s, &mut l, lines);
     }
     keep_forks(s, &mut l);
@@ -649,6 +756,7 @@ fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, secs: &[(Stri
             flipped: c.flipped.clone(),
             stack: c.stack,
             apart: c.apart.clone(),
+            swaps: c.swaps.clone(),
         };
         let external: BTreeSet<String> = nets_in[i].iter().filter(|n| shared(n, i)).cloned().collect();
         subs.push(lay_within(&sub, opt, &external));
@@ -960,16 +1068,11 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
                 count[side] = count[side].max(idx.len() as u16);
             }
         }
-        let x = spare;
-        let left_pin = x + count[0];
-        let right_pin = left_pin + mount.width().unwrap_or(3);
-        let end = if two_cols { right_pin + count[1] + 1 + spare } else { left_pin + 1 };
-        for p in &mut placed {
-            if let Some((d, n)) = p.wire {
-                p.wire = Some((d, if p.left { x + n } else { right_pin + 1 + n }));
-            }
-        }
-        Block { k, look, mount, half: half as u16, pins: placed, left_pin, right_pin, end }
+        let raw: Vec<Option<(Dir, u16)>> = placed.iter().map(|p| p.wire).collect();
+        let width = mount.width().unwrap_or(3);
+        let mut b = Block { k, look, mount, half: half as u16, pins: placed, left_pin: 0, right_pin: 0, end: 0, raw, count, spare, width, two_cols };
+        b.place([0, 0], count, spare, width);
+        b
     };
     let mut blocks: Vec<Block> = chip_order(&c.on, &carry).into_iter().map(|k| build(k, None)).collect();
     // the off-board parts' wires: one column each at the far left, into the top band
@@ -1002,33 +1105,47 @@ fn lay(c: &crate::breadboard::Circuit, opt: StripOptions, external: &BTreeSet<St
         if opt.cols.is_some() {
             seq.sort_by_key(|b| std::cmp::Reverse(blocks[*b].half));
         }
-        // stacking (`Circuit::stack`): a short chip goes under another short one in the same columns when the two together are no
-        // taller than the row's tallest chip (the rows under a short chip are left empty otherwise), the upper one's wires all up,
-        // the lower one's all down; the pair as wide as the wider of the two
+        // two chips' places swapped (`Circuit::swaps`: to keep two chips apart)
+        for (x, y) in &c.swaps {
+            let at = |r: &String| seq.iter().position(|b| &c.on[blocks[*b].k].0 == r);
+            if let (Some(i), Some(j)) = (at(x), at(y)) {
+                seq.swap(i, j);
+            }
+        }
+        // stacking (`Circuit::stack`): a short chip goes under the chips of a column of the row when they all together are no
+        // taller than the row's tallest chip (the rows under a short chip are left empty otherwise): the chips above with their
+        // wires all up, the bottom one's all down, in the same columns (`stack_columns`); not two the requirements table keeps
+        // apart. Into the tallest stack it fits under.
         let tallest_all = blocks.iter().map(|b| b.half).max().unwrap_or(0);
         let mut slots: Vec<Vec<Vec<usize>>> = vec![vec![]];
         let slot_w = |s: &[usize], blocks: &[Block]| s.iter().map(|b| blocks[*b].end).max().unwrap_or(0) + 1;
         for b in seq {
-            if c.stack {
+            if c.stack > 1 {
                 let tier = slots.last().unwrap();
                 let tallest = if opt.cols.is_some() { tier.first().and_then(|s| s.first()).map(|a| blocks[*a].half).unwrap_or(0) } else { tallest_all };
                 let width: u16 = margin + tier.iter().map(|s| slot_w(s, &blocks)).sum::<u16>();
-                let fits = |i: usize| -> Option<(u16, Block, Block)> {
+                let rb = &c.on[blocks[b].k].0;
+                let fits = |i: usize| -> Option<(u16, Vec<Block>)> {
                     let s = &tier[i];
-                    let a = *s.first()?;
-                    let (ra, rb) = (&c.on[blocks[a].k].0, &c.on[blocks[b].k].0);
-                    let kept_apart = c.apart.iter().any(|(x, y, _)| (x == ra && y == rb) || (x == rb && y == ra));
-                    if s.len() != 1 || blocks[a].half + blocks[b].half > tallest || kept_apart {
+                    let high: u16 = s.iter().map(|a| blocks[*a].half).sum();
+                    let kept_apart = s.iter().any(|a| {
+                        let ra = &c.on[blocks[*a].k].0;
+                        c.apart.iter().any(|(x, y, _)| (x == ra && y == rb) || (x == rb && y == ra))
+                    });
+                    if s.is_empty() || s.len() >= c.stack || high + blocks[b].half > tallest || kept_apart {
                         return None;
                     }
-                    let (up, down) = (build(blocks[a].k, Some(Dir::Up)), build(blocks[b].k, Some(Dir::Down)));
-                    let grown = width - slot_w(s, &blocks) + up.end.max(down.end) + 1;
-                    opt.cols.is_none_or(|w| grown <= w).then_some((blocks[a].half, up, down))
+                    let mut new: Vec<Block> = s.iter().map(|a| build(blocks[*a].k, Some(Dir::Up))).collect();
+                    new.push(build(blocks[b].k, Some(Dir::Down)));
+                    stack_columns(&mut new.iter_mut().collect::<Vec<_>>());
+                    let grown = width - slot_w(s, &blocks) + new.iter().map(|x| x.end).max().unwrap_or(0) + 1;
+                    opt.cols.is_none_or(|w| grown <= w).then_some((high, new))
                 };
-                if let Some((i, (_, up, down))) = (0..tier.len()).filter_map(|i| fits(i).map(|f| (i, f))).max_by_key(|(i, f)| (f.0, std::cmp::Reverse(*i))) {
-                    let a = tier[i][0];
-                    blocks[a] = up;
-                    blocks[b] = down;
+                if let Some((i, (_, new))) = (0..tier.len()).filter_map(|i| fits(i).map(|f| (i, f))).max_by_key(|(i, f)| (f.0, std::cmp::Reverse(*i))) {
+                    let ids: Vec<usize> = tier[i].iter().copied().chain([b]).collect();
+                    for (id, blk) in ids.iter().zip(new) {
+                        blocks[*id] = blk;
+                    }
                     slots.last_mut().unwrap()[i].push(b);
                     continue;
                 }
@@ -2310,6 +2427,48 @@ mod size_tests {
             matches!((at("1"), at(&half)), (Some(a), Some(b)) if a.0 > b.0 && a.1 == b.1)
         });
         assert!(turned, "{:?}", l.parts.iter().map(|p| (&p.refdes, p.leads.first())).collect::<Vec<_>>());
+    }
+
+    /// More than two short parts stacked in the same columns (the ones above with their wires all up, each in columns of its own):
+    /// the Arduino Mega's board 83 x 62 → 65 x 61 (2026-11-22), headers and crystals under the USB chip, still joined as drawn.
+    #[test]
+    fn several_short_parts_stack_in_the_same_columns() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/arduino_mega_usb.schjson");
+        let s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let l = super::strip_layout(&s);
+        assert!(l.cols <= 65 && l.rows <= 61, "{} x {}", l.cols, l.rows);
+        assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
+        let span = |p: &super::StripPart, f: fn(&super::At) -> u16| {
+            let v: Vec<u16> = p.leads.iter().map(|x| f(&x.1)).collect();
+            (*v.iter().min().unwrap(), *v.iter().max().unwrap())
+        };
+        let chips: Vec<&super::StripPart> = l.parts.iter().filter(|p| p.leads.len() > 2).collect();
+        let under = |a: &super::StripPart| {
+            let (ac, ar) = (span(a, |x| x.1), span(a, |x| x.0));
+            chips.iter().filter(|b| b.refdes != a.refdes && span(b, |x| x.1).0 <= ac.1 && ac.0 <= span(b, |x| x.1).1 && span(b, |x| x.0).0 > ar.1).count()
+        };
+        assert!(chips.iter().any(|a| under(a) >= 2), "no stack of three");
+    }
+
+    /// Two chips the requirements table keeps apart and laid side by side: one swapped along the board with another chip as tall,
+    /// the board as big (the bus transceiver's U1 and U2, 22.9 mm → 71.1 mm, 68 x 17 holes).
+    #[test]
+    fn chips_kept_apart_swap_places() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/bus_transceiver.schjson");
+        let mut s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let near = |l: &super::StripLayout| {
+            let leads = |r: &str| l.parts.iter().filter(|p| p.refdes == r).flat_map(|p| p.leads.iter().map(|x| x.1)).collect::<Vec<_>>();
+            let (a, b) = (leads("U1"), leads("U2"));
+            a.iter().flat_map(|x| b.iter().map(move |y| (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54)).fold(f64::INFINITY, f64::min)
+        };
+        let before = super::strip_layout(&s);
+        assert!(near(&before) < 33.0, "{}", near(&before));
+        s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["U1".into()], b: vec!["U2".into()], min_dist: 33.0, ..Default::default() }];
+        let l = super::strip_layout(&s);
+        assert!(near(&l) >= 33.0, "{}", near(&l));
+        assert!(l.cols as usize * l.rows as usize <= before.cols as usize * before.rows as usize, "{} x {}", l.cols, l.rows);
+        assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
+        assert!(super::strip_rules(&s, &l).iter().all(|r| r.ok), "{:?}", super::strip_rules(&s, &l));
     }
 
     /// A two-lead part the requirements table keeps apart from a chip stands in a column that far from it, where its band has one:

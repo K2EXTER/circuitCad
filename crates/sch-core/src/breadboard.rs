@@ -199,11 +199,13 @@ pub(crate) struct Circuit {
     /// The chips a stripboard's layout turns half a turn (pin 1 at the bottom right): the upper and lower halves of their pins swap
     /// the band their wires go to (`stripboard::lay_within` tries each).
     pub(crate) flipped: BTreeSet<String>,
-    /// A stripboard's layout stacks a short chip under another short one in the same columns (`stripboard::lay`; tried both ways).
-    pub(crate) stack: bool,
+    /// How many short chips a stripboard's layout stacks in the same columns at most (`stripboard::lay`; 1: none; tried several).
+    pub(crate) stack: usize,
     /// The pairs of parts the requirements table keeps apart (by reference: each rule's `a` against its `b`) and the least distance
     /// (mm): a stripboard's layout does not stack them together, and stands a two-lead part where it is that far from the other.
     pub(crate) apart: Vec<(String, String, f64)>,
+    /// Pairs of chips whose places along the board a stripboard's layout swaps (to keep two chips apart: `stripboard::strip_lay`).
+    pub(crate) swaps: Vec<(String, String)>,
 }
 
 /// The pairs of parts in the requirements table's "離す" rules, each part of `a` with each of `b`.
@@ -267,7 +269,7 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
             ground = Some(n.name.clone());
         }
     }
-    Circuit { on, off, supplies, ground, mounts, facing: BTreeSet::new(), flipped: BTreeSet::new(), stack: false, apart: apart_pairs(s) }
+    Circuit { on, off, supplies, ground, mounts, facing: BTreeSet::new(), flipped: BTreeSet::new(), stack: 1, apart: apart_pairs(s), swaps: vec![] }
 }
 
 /// Places the parts of `s` on a breadboard.
