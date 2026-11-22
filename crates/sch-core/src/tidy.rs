@@ -105,6 +105,9 @@ fn ways(a: Pt, b: Pt) -> Vec<Vec<Pt>> {
     v
 }
 
+/// The most pins of a net drawn as a tree of wires (more: by its name on each pin).
+const TREE_PINS: usize = 5;
+
 fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Result<(Schematic, Tidied), String> {
     if !s.ports.is_empty() || !s.buses.is_empty() {
         return Err("ポートかバスのあるシートは、まだ整えられません (位置でつながっているので)".into());
@@ -112,9 +115,20 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     let before = grouping(s);
     let nets = extract(s);
     // a source's net without a name is a signal (a symbol would give it the made-up name)
-    let supplies: BTreeSet<String> = crate::breadboard::read(s).supplies.into_iter().filter(|n| !n.starts_with("N$")).collect();
+    let mut supplies: BTreeSet<String> = crate::breadboard::read(s).supplies.into_iter().filter(|n| !n.starts_with("N$")).collect();
     let is_ground = |n: &str| crate::breadboard::is_ground_name(n);
     let net_of: BTreeMap<(String, String), String> = nets.iter().flat_map(|n| n.pins.iter().map(move |p| ((p.refdes.clone(), p.pin.clone()), n.name.clone()))).collect();
+    // a named net of a DC source is a supply too (VEE on the minus side of a source whose plus is ground)
+    for c in s.components.iter().filter(|c| c.kind == Kind::VSource && !c.value.contains('(') && !c.value.to_ascii_uppercase().starts_with("AC")) {
+        for (p, _) in c.pins() {
+            if let Some(n) = net_of.get(&(c.refdes.clone(), p))
+                && !n.starts_with("N$")
+                && !is_ground(n)
+            {
+                supplies.insert(n.clone());
+            }
+        }
+    }
     let chosen = |c: &Component| !c.kind.is_power_symbol() && only.is_none_or(|o| o.contains(&c.refdes));
     let parts: Vec<usize> = (0..s.components.len()).filter(|i| chosen(&s.components[*i])).collect();
     if parts.is_empty() {
@@ -134,17 +148,20 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
             }
         }
     }
-    // the parts a part joins by its signal nets (a source also by the supply it gives: the parts it feeds come after it)
+    // the parts a part joins by its signal nets (with `supply`, a source also by the supply it gives: the parts it feeds come after it)
     let source = |i: usize| matches!(s.components[i].kind, Kind::VSource | Kind::ISource);
-    let neighbours = |i: usize| -> Vec<usize> {
-        let mut v: Vec<usize> = pins_of(&s.components[i]).iter().filter(|(_, n)| signal(n) || (source(i) && !is_ground(n))).flat_map(|(_, n)| on_net.get(n).cloned().unwrap_or_default()).filter(|j| *j != i && (!source(*j) || !source(i))).collect();
+    let neighbours_by = |i: usize, supply: bool| -> Vec<usize> {
+        let mut v: Vec<usize> = pins_of(&s.components[i]).iter().filter(|(_, n)| signal(n) || (supply && source(i) && !is_ground(n))).flat_map(|(_, n)| on_net.get(n).cloned().unwrap_or_default()).filter(|j| *j != i && (!source(*j) || !source(i))).collect();
         v.sort();
         v.dedup();
         v
     };
+    let neighbours = |i: usize| neighbours_by(i, true);
     // the inputs: the sources and the connectors (a source of a supply too: it goes first, on top)
     let input = |c: &Component| matches!(c.kind, Kind::VSource | Kind::ISource | Kind::Header(_)) || c.refdes.starts_with('J') || c.refdes.starts_with('P') && c.kind == Kind::Custom && c.custom.as_ref().is_some_and(|x| x.prefix == "P");
-    // columns by distance from an input over the signal nets; a group of parts no input reaches starts from its first part
+    // columns by distance from an input over the signal nets. The supplies come after: a part a signal reaches takes its place
+    // in the signal's flow (an op amp after the resistors before it, not next to its supply), one fed only by a supply goes
+    // after that supply's source, and a group of parts nothing reaches starts from its first part
     let mut col: BTreeMap<usize, usize> = BTreeMap::new();
     let mut queue: std::collections::VecDeque<usize> = parts.iter().copied().filter(|i| input(&s.components[*i])).collect();
     for &i in &queue {
@@ -152,16 +169,17 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     }
     loop {
         while let Some(i) = queue.pop_front() {
-            for j in neighbours(i) {
+            for j in neighbours_by(i, false) {
                 if !col.contains_key(&j) {
                     col.insert(j, col[&i] + 1);
                     queue.push_back(j);
                 }
             }
         }
-        match parts.iter().find(|i| !col.contains_key(i)) {
-            Some(&i) => {
-                col.insert(i, 0);
+        let fed = parts.iter().filter(|i| source(**i) && col.contains_key(i)).find_map(|&i| neighbours_by(i, true).into_iter().find(|j| !col.contains_key(j)).map(|j| (j, col[&i] + 1)));
+        match fed.or_else(|| parts.iter().find(|i| !col.contains_key(i)).map(|&i| (i, 0))) {
+            Some((i, c)) => {
+                col.insert(i, c);
                 queue.push_back(i);
             }
             None => break,
@@ -256,8 +274,8 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
                 // lowered so a signal pin is level with the pin it joins in a column before (a straight wire), when there is room
                 let level = c.pins().into_iter().filter_map(|(p, at)| {
                     let n = net_of.get(&(c.refdes.clone(), p))?;
-                    // a net of two pins only: it is drawn as a wire
-                    if pin_count.get(n) != Some(&2) {
+                    // a net drawn as a wire: two pins, or a signal on a few
+                    if !signal(n) || !pin_count.get(n).is_some_and(|c| *c <= TREE_PINS) {
                         return None;
                     }
                     let j = on_net.get(n)?.iter().copied().find(|j| *j != i && signal(n) && col[j] < col[&i])?;
@@ -328,6 +346,22 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
                     added.push(Wire { a: (r[0], y), b: (*r.last().expect("run"), y) });
                 }
             }
+            // supply symbols of different nets close side by side: every other one raised on a short wire, so their names (written
+            // above them) do not overlap
+            let mut tops: Vec<usize> = (0..mine.len()).filter(|k| mine[*k].2 == Some(Kind::Power)).collect();
+            tops.sort_by_key(|k| mine[*k].0);
+            let mut placed: Vec<(i32, i32, usize)> = vec![];
+            for k in tops {
+                let (x, y) = mine[k].0;
+                let len = mine[k].1.chars().count();
+                let clash = |lift: i32| placed.iter().any(|(px, pl, plen)| *pl == lift && ((x - px).abs() as f32) < 0.375 * (len + plen) as f32 + 0.5);
+                let lift = [0, 2, 4].into_iter().find(|l| !clash(*l)).unwrap_or(0);
+                if lift > 0 {
+                    added.push(Wire { a: (x, y), b: (x, y - lift) });
+                    mine[k].0 = (x, y - lift);
+                }
+                placed.push((x, lift, len));
+            }
         }
         joints.extend(mine);
     }
@@ -357,43 +391,114 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
                 by_net.entry(&j.1).or_default().push(j.0);
             }
         }
-        let mut two: Vec<(String, Pt, Pt)> = by_net.iter().filter(|(n, v)| v.len() == 2 && !stay_nets.contains(*n)).map(|(n, v)| ((*n).clone(), v[0], v[1])).collect();
-        // the short ones first: they take the plain ways
-        two.sort_by_key(|t| (t.1 .0 - t.2 .0).abs() + (t.1 .1 - t.2 .1).abs());
+        // the column of each pin
+        let col_of: BTreeMap<&str, usize> = parts.iter().map(|i| (s.components[*i].refdes.as_str(), col[i])).collect();
+        let col_at: BTreeMap<Pt, usize> = out.components.iter().filter_map(|c| col_of.get(c.refdes.as_str()).map(|k| (c, *k))).flat_map(|(c, k)| c.pins().into_iter().map(move |p| (p.1, k))).collect();
+        // the nets for a wire: a signal on two pins, or on a few pins within two neighbouring columns (a longer one reads better by
+        // its name than by a wire across the sheet; a supply and the ground by their symbols and names)
+        let mut nets_to_wire: Vec<(String, Vec<Pt>)> = by_net
+            .iter()
+            .filter(|(n, v)| {
+                let cols: BTreeSet<usize> = v.iter().filter_map(|p| col_at.get(p).copied()).collect();
+                let span = cols.iter().max().unwrap_or(&0) - cols.iter().min().unwrap_or(&0);
+                v.len() >= 2 && !stay_nets.contains(*n) && signal(n) && (v.len() == 2 || (v.len() <= TREE_PINS && span <= 1))
+            })
+            .map(|(n, v)| {
+                let mut v = v.clone();
+                v.sort();
+                ((*n).clone(), v)
+            })
+            .collect();
+        // the small ones first: they take the plain ways
+        let spread = |v: &Vec<Pt>| {
+            let (x0, x1) = (v.iter().map(|p| p.0).min().unwrap_or(0), v.iter().map(|p| p.0).max().unwrap_or(0));
+            let (y0, y1) = (v.iter().map(|p| p.1).min().unwrap_or(0), v.iter().map(|p| p.1).max().unwrap_or(0));
+            x1 - x0 + y1 - y0
+        };
+        nets_to_wire.sort_by_key(|t| (t.1.len(), spread(&t.1)));
         let mut drop: BTreeSet<Pt> = BTreeSet::new();
         let mut labels: Vec<Label> = vec![];
-        for (n, a, b) in two {
-            let fits = |w: &Vec<Pt>| -> bool {
-                w.windows(2).all(|s| points.iter().all(|p| *p == a || *p == b || !on_segment(*p, s[0], s[1])) && boxes.iter().all(|r| !crosses_box(s[0], s[1], *r)))
-                    && w.iter().all(|p| segs.iter().all(|s| !on_segment(*p, s.0, s.1)))
-            };
-            let Some(mut w) = ways(a, b).into_iter().find(|w| fits(w)) else { continue };
+        for (n, pins) in nets_to_wire {
+            // the tree grows from the leftmost pin: each time, the pin nearest to it by the shortest way that fits (the plainest
+            // of equal ones), to a pin of the tree, a corner, or a point along one of its pieces
+            let mut tree: Vec<Pt> = vec![pins[0]];
+            let mut tree_segs: Vec<(Pt, Pt)> = vec![];
+            let mut left: Vec<Pt> = pins[1..].to_vec();
+            let own: BTreeSet<Pt> = pins.iter().copied().collect();
+            while !left.is_empty() {
+                let fits = |w: &Vec<Pt>, mine: &BTreeSet<Pt>| -> bool {
+                    w.windows(2).all(|s| points.iter().all(|p| mine.contains(p) || !on_segment(*p, s[0], s[1])) && boxes.iter().all(|r| !crosses_box(s[0], s[1], *r)))
+                        && w.iter().all(|p| segs.iter().all(|s| !on_segment(*p, s.0, s.1)))
+                };
+                let mine: BTreeSet<Pt> = own.iter().chain(tree.iter()).copied().collect();
+                let mut best: Option<(i32, usize, Pt, Vec<Pt>)> = None;
+                for &p in &left {
+                    let mut targets: Vec<Pt> = tree.clone();
+                    for s in &tree_segs {
+                        let (x0, x1, y0, y1) = (s.0 .0.min(s.1 .0), s.0 .0.max(s.1 .0), s.0 .1.min(s.1 .1), s.0 .1.max(s.1 .1));
+                        if y0 == y1 && p.0 > x0 && p.0 < x1 {
+                            targets.push((p.0, y0));
+                        }
+                        if x0 == x1 && p.1 > y0 && p.1 < y1 {
+                            targets.push((x0, p.1));
+                        }
+                    }
+                    for t in targets {
+                        let len = (p.0 - t.0).abs() + (p.1 - t.1).abs();
+                        if best.as_ref().is_some_and(|b| len >= b.0) {
+                            continue;
+                        }
+                        if let Some(w) = ways(p, t).into_iter().find(|w| fits(w, &mine)) {
+                            best = Some((len, 0, p, w));
+                        }
+                    }
+                }
+                let Some((_, _, p, w)) = best else { break };
+                // a way ending on a piece of the tree splits it there
+                let (first, last) = (w[0], w[w.len() - 1]);
+                for end in [first, last] {
+                    if let Some(k) = tree_segs.iter().position(|s| end != s.0 && end != s.1 && on_segment(end, s.0, s.1)) {
+                        let s = tree_segs.remove(k);
+                        tree_segs.extend([(s.0, end), (end, s.1)]);
+                    }
+                }
+                tree_segs.extend(w.windows(2).map(|s| (s[0], s[1])));
+                tree.extend(w.iter().copied());
+                left.retain(|q| *q != p);
+            }
+            if !left.is_empty() {
+                // a pin the tree cannot reach: the net keeps its labels
+                continue;
+            }
             wired += 1;
-            drop.extend([a, b]);
+            drop.extend(pins.iter().copied());
             // a net with a name (or a symbol elsewhere) keeps it by a label on the wire: one step into its longest level piece, so
             // the name is written along the wire, clear of the parts' bodies (the piece is split there, a label names a point)
             let named = !n.starts_with("N$") || joints.iter().any(|j| j.1 == n && j.2.is_some());
             if named {
-                let level = (0..w.len() - 1).filter(|k| w[*k].1 == w[k + 1].1).max_by_key(|k| (w[k + 1].0 - w[*k].0).abs());
-                // a point inside the piece, on no other wire (a label there would join it)
+                let level = (0..tree_segs.len()).filter(|k| tree_segs[*k].0 .1 == tree_segs[*k].1 .1).max_by_key(|k| (tree_segs[*k].1 .0 - tree_segs[*k].0 .0).abs());
+                // a point inside the piece, on no other wire and no corner of this one (a label there would join it)
                 let spot = level.and_then(|k| {
-                    let (x0, x1) = (w[k].0.min(w[k + 1].0), w[k].0.max(w[k + 1].0));
-                    (x0 + 1..x1).map(|x| (x, w[k].1)).find(|p| segs.iter().all(|s| !on_segment(*p, s.0, s.1))).map(|p| (k, p))
+                    let (a, b) = tree_segs[k];
+                    let (x0, x1) = (a.0.min(b.0), a.0.max(b.0));
+                    (x0 + 1..x1).map(|x| (x, a.1)).find(|p| !tree.contains(p) && segs.iter().chain(tree_segs.iter()).filter(|s| **s != (a, b)).all(|s| !on_segment(*p, s.0, s.1))).map(|p| (k, p))
                 });
                 match spot {
                     Some((k, at)) => {
-                        w.insert(k + 1, at);
+                        let (a, b) = tree_segs.remove(k);
+                        tree_segs.extend([(a, at), (at, b)]);
+                        tree.push(at);
                         labels.push(Label { pos: at, text: n.clone() });
                     }
-                    // no room along the wire: on the end it does not leave to the right
-                    None => labels.push(Label { pos: if w[1].0 > w[0].0 { w[w.len() - 1] } else { w[0] }, text: n.clone() }),
+                    // no room along the wire: on a pin
+                    None => labels.push(Label { pos: pins[pins.len() - 1], text: n.clone() }),
                 }
             }
-            for s in w.windows(2) {
-                added.push(Wire { a: s[0], b: s[1] });
-                segs.push((s[0], s[1]));
+            for s in &tree_segs {
+                added.push(Wire { a: s.0, b: s.1 });
             }
-            points.extend(w.iter().copied());
+            segs.extend(tree_segs.iter().copied());
+            points.extend(tree.iter().copied());
         }
         joints.retain(|j| !(j.2.is_none() && drop.contains(&j.0)));
         out.labels.extend(labels);
@@ -463,6 +568,14 @@ mod tests {
                         let b = part_box(c, c.rot);
                         (c.pos.0 + b.0, c.pos.1 + b.1, c.pos.0 + b.2, c.pos.1 + b.3)
                     }).collect();
+                    // the names of the supply symbols do not overlap
+                    let tops: Vec<&Component> = t.components.iter().filter(|c| c.kind == Kind::Power).collect();
+                    for (i, a) in tops.iter().enumerate() {
+                        for b in &tops[i + 1..] {
+                            let room = 0.375 * (a.value.chars().count() + b.value.chars().count()) as f32 + 0.5;
+                            assert!(a.pos.1 != b.pos.1 || ((a.pos.0 - b.pos.0).abs() as f32) >= room, "{}: {} and {} side by side", p.display(), a.value, b.value);
+                        }
+                    }
                     for (i, a) in boxes.iter().enumerate() {
                         for b in &boxes[i + 1..] {
                             assert!(a.2 < b.0 || b.2 < a.0 || a.3 < b.1 || b.3 < a.1, "{}: parts overlap {a:?} {b:?}", p.display());
@@ -493,6 +606,34 @@ mod tests {
         let (u, r) = tidy(&t, Some(&only)).unwrap();
         assert_eq!(r.moved, 1);
         assert_eq!(grouping(&u), grouping(&s));
+    }
+
+    /// Supplies of different names on neighbouring pins of a chip: every other symbol raised on a short wire, so the names (written
+    /// above the symbols) do not overlap.
+    #[test]
+    fn neighbouring_supplies_keep_their_names_apart() {
+        let mut s = load("adc_measure.schjson");
+        // the ADC's middle AVDD pin on a supply of its own
+        s.labels.iter_mut().find(|l| l.pos == (16, 8)).unwrap().text = "DVDD".into();
+        let mut v = s.components.iter().find(|c| c.refdes == "VA").unwrap().clone();
+        v.refdes = "VD".into();
+        v.pos = (110, 48);
+        s.components.push(v);
+        s.labels.push(Label { pos: (110, 46), text: "DVDD".into() });
+        s.labels.push(Label { pos: (110, 50), text: "GND".into() });
+        let (t, _) = tidy(&s, None).unwrap();
+        assert_eq!(grouping(&t), grouping(&s));
+        let u1 = t.components.iter().find(|c| c.refdes == "U1").unwrap();
+        let top = u1.pins().iter().map(|p| p.1 .1).min().unwrap();
+        let on_u1: Vec<&Component> = t.components.iter().filter(|c| c.kind == Kind::Power && (c.pos.0 - u1.pos.0).abs() < 8 && c.pos.1 < top + 1).collect();
+        let names: BTreeSet<&str> = on_u1.iter().map(|c| c.value.as_str()).collect();
+        assert!(names.contains("AVDD") && names.contains("DVDD"), "{names:?}");
+        assert!(on_u1.iter().any(|c| c.pos.1 < top), "one raised");
+        for a in &on_u1 {
+            for b in &on_u1 {
+                assert!(a.pos == b.pos || a.pos.1 != b.pos.1 || (a.pos.0 - b.pos.0).abs() >= 4, "{} and {} side by side", a.value, b.value);
+            }
+        }
     }
 
     /// The nets keep their names (the ADC measure table finds its nets by name), a pin left open on a named net included.
