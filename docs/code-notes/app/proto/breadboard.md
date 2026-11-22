@@ -1,4 +1,4 @@
-# ブレッドボード (B6 ①〜④、`app/src/breadboard/mod.rs`・`live.rs`・`sound.rs`、`sch-core/breadboard.rs`)
+# ブレッドボード (B6 ①〜④、`app/src/breadboard/` の `mod.rs`・`panel.rs`・`canvas.rs`・`draw.rs`・`power.rs`・`instruments.rs`・`live.rs`・`sound.rs`、`sch-core/breadboard.rs`)
 
 一番上のタブの 2 つ目「試作」(`main.rs` の `Mode::Proto`)。回路図 → 試作 → 基板パターン → 実機 の順。回路図の部品を、はんだ不要のブレッドボードのどの穴に差すかを並べて描く。
 
@@ -27,7 +27,7 @@
 
 穴・ジャンパー・外の部品の線でつながる穴をまとめ (union-find)、回路図のネットと比べる: 2 つのネットが 1 つにまとまる → `Short`、1 つのネットが分かれる → `Open`、1 つの穴に 2 本 → `SameHole`、部品か足が無い → `Missing`。メッセージは原因と直し方。テスト `every_sample_lays_out_without_a_short_or_an_open` は `docs/examples` の全部の回路図 (133 件) を自動で並べて問題 0 を確かめる (最初は 4 件が開いていた: 列が埋まる・PWL の電源)。
 
-## 画面 (`app/src/breadboard/mod.rs`)
+## 画面 (`app/src/breadboard/`: 状態は `mod.rs`、左のパネル `panel.rs`、基板の絵と操作 `canvas.rs`・`draw.rs`、電源を入れたとき `power.rs`、テスターとオシロ `instruments.rs`)
 
 - 左: 説明、照合の結果 (✔ か、違う所の一覧)、「自動で並べ直す」、部品ごとの足の穴、外の部品。
 - 真ん中: 板 (ベージュ)、穴、上下のレールの赤と青の線とネットの名前、溝。ポインタの下の穴とつながっている穴 (その列かレール) を黄色に。抵抗は色の帯 (`bands`、2 桁・乗数・金)、LED は赤い丸とカソードの平らな側、ダイオードは黒い本体とカソードの帯、コンデンサは青、コイルは緑、IC は黒い箱と 1 番ピンの丸。ジャンパー線は電源が赤、GND が黒、ほかはネットの名前で 5 色。
