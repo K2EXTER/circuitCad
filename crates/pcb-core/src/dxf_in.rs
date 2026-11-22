@@ -1,7 +1,8 @@
 //! Read the outline and the holes of a board from a DXF (the case's drawing), the other way of [`crate::dxf`].
 //!
 //! ASCII DXF: LINE, ARC, CIRCLE, LWPOLYLINE and POLYLINE (with bulges) are read; anything else is named in the notes. Lines, arcs
-//! and polylines that meet end to end make loops; the loop with the largest area is the outline, circles inside it are holes.
+//! and polylines that meet end to end make loops; the loop with the largest area is the outline, circles inside it are holes, and so are
+//! the loops inside it shaped as a slot along x or y (two half circles joined by straight sides) or as a circle drawn in arcs.
 //! The drawing's unit comes from `$INSUNITS` (inch, foot, cm, m; none or mm: millimetres).
 
 use crate::model::*;
@@ -12,6 +13,8 @@ pub struct DxfShape {
     pub outline: Vec<Point>,
     /// (centre, diameter) in mm.
     pub holes: Vec<(Point, f64)>,
+    /// Slots: (centre, width, length end to end, along y) in mm.
+    pub slots: Vec<(Point, f64, f64, bool)>,
     /// What was found but left out, in Japanese.
     pub notes: Vec<String>,
 }
@@ -275,8 +278,18 @@ pub fn read(text: &str, layer: Option<&str>) -> Result<DxfShape, String> {
     if area(&out.outline) < 0.0 {
         out.outline.reverse();
     }
-    if loops.len() > 1 {
-        out.notes.push(format!("ほかに閉じた輪が {} 個あります (切り欠きや長穴など)。外形には、いちばん大きい輪だけを使いました。", loops.len() - 1));
+    // the other loops inside the outline: a slot or a round hole drawn in arcs is a hole; anything else is told
+    let mut other = 0;
+    for l in &loops[1..] {
+        let inside = l.iter().all(|p| crate::geom::inside_polygon(&out.outline, *p));
+        match (inside, slot_of(l)) {
+            (true, Some((c, w, len, _))) if len - w < 0.02 * len => out.holes.push((c, len)),
+            (true, Some(slot)) => out.slots.push(slot),
+            _ => other += 1,
+        }
+    }
+    if other > 0 {
+        out.notes.push(format!("ほかに閉じた輪が {other} 個あります (切り欠きや斜めの長穴など)。外形には、いちばん大きい輪だけを使い、これらは取り込んでいません。"));
     }
     let before = out.holes.len();
     let outline = out.outline.clone();
@@ -306,12 +319,120 @@ pub fn apply(board: &mut Board, shape: &DxfShape, to_origin: bool) {
     for (c, d) in &shape.holes {
         board.holes.push(Hole::new(Point::new(c.x + dx, c.y + dy), *d));
     }
+    for (c, w, len, along_y) in &shape.slots {
+        let mut h = Hole::new(Point::new(c.x + dx, c.y + dy), *w);
+        (h.slot, h.slot_v) = (*len, *along_y);
+        board.holes.push(h);
+    }
+}
+
+/// How far `p` is from the segment `a`..`b`.
+fn seg_dist(p: Point, a: Point, b: Point) -> f64 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 < 1e-18 { 0.0 } else { (((p.x - a.x) * dx + (p.y - a.y) * dy) / len2).clamp(0.0, 1.0) };
+    p.dist(Point::new(a.x + t * dx, a.y + t * dy))
+}
+
+/// A loop shaped as a slot along x or y (or a circle, a slot as long as it is wide): its centre, width, length and whether along y.
+/// Every point of the loop must lie half the width from the slot's middle line (within 2 % of the width), and the loop must enclose the
+/// slot's area.
+fn slot_of(l: &[Point]) -> Option<(Point, f64, f64, bool)> {
+    let (lo, hi) = l.iter().fold((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)), |(a, b), p| (Point::new(a.x.min(p.x), a.y.min(p.y)), Point::new(b.x.max(p.x), b.y.max(p.y))));
+    let (w, h) = (hi.x - lo.x, hi.y - lo.y);
+    let (d, len, along_y) = if h > w { (w, h, true) } else { (h, w, false) };
+    if d <= 1e-6 {
+        return None;
+    }
+    let c = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+    let half = (len - d) / 2.0;
+    let (a, b) = if along_y { (Point::new(c.x, c.y - half), Point::new(c.x, c.y + half)) } else { (Point::new(c.x - half, c.y), Point::new(c.x + half, c.y)) };
+    let tol = 0.02 * d + 1e-3;
+    let on = l.iter().all(|p| (seg_dist(*p, a, b) - d / 2.0).abs() < tol);
+    let want = std::f64::consts::PI * d * d / 4.0 + d * (len - d);
+    (on && (area(l).abs() - want).abs() < 0.03 * want).then_some((c, d, len, along_y))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::dxf::mechanical;
+
+    /// A slot drawn as two lines and two arcs (as a case's CAD writes it) and a round hole of two arcs are holes; a square cut-out is
+    /// told and left out. Our own DXF's slots read back as slots.
+    #[test]
+    fn slots_and_round_holes_drawn_in_arcs_are_holes() {
+        let line = |a: (f64, f64), b: (f64, f64)| format!("0
+LINE
+8
+0
+10
+{}
+20
+{}
+11
+{}
+21
+{}
+", a.0, a.1, b.0, b.1);
+        let arc = |c: (f64, f64), r: f64, a0: f64, a1: f64| format!("0
+ARC
+8
+0
+10
+{}
+20
+{}
+40
+{r}
+50
+{a0}
+51
+{a1}
+", c.0, c.1);
+        let mut e = String::new();
+        for (a, b) in [((0.0, 0.0), (80.0, 0.0)), ((80.0, 0.0), (80.0, 50.0)), ((80.0, 50.0), (0.0, 50.0)), ((0.0, 50.0), (0.0, 0.0))] {
+            e += &line(a, b);
+        }
+        // a slot 2 wide and 6 long along x round (40, 25)
+        e += &line((38.0, 24.0), (42.0, 24.0));
+        e += &line((42.0, 26.0), (38.0, 26.0));
+        e += &arc((42.0, 25.0), 1.0, 270.0, 90.0);
+        e += &arc((38.0, 25.0), 1.0, 90.0, 270.0);
+        // a round hole 3 wide of two arcs, and a square cut-out
+        e += &arc((10.0, 10.0), 1.5, 0.0, 180.0);
+        e += &arc((10.0, 10.0), 1.5, 180.0, 360.0);
+        for (a, b) in [((60.0, 30.0), (66.0, 30.0)), ((66.0, 30.0), (66.0, 36.0)), ((66.0, 36.0), (60.0, 36.0)), ((60.0, 36.0), (60.0, 30.0))] {
+            e += &line(a, b);
+        }
+        let text = format!("0
+SECTION
+2
+ENTITIES
+{e}0
+ENDSEC
+0
+EOF
+");
+        let s = read(&text, None).unwrap();
+        assert_eq!(s.slots.len(), 1, "{s:?}");
+        let (c, w, len, along_y) = s.slots[0];
+        assert!((c.x - 40.0).abs() < 1e-3 && (c.y - 25.0).abs() < 1e-3 && (w - 2.0).abs() < 1e-3 && (len - 6.0).abs() < 1e-3 && !along_y, "{:?}", s.slots[0]);
+        assert!(s.holes.iter().any(|(c, d)| (c.x - 10.0).abs() < 1e-3 && (d - 3.0).abs() < 0.01), "{:?}", s.holes);
+        assert!(s.notes.iter().any(|n| n.contains("1 個")), "the square is told: {:?}", s.notes);
+        // our own drawing's slots come back as slots
+        let mut b = Board::new("t", 30.0, 20.0);
+        b.holes.push(Hole { pos: Point::new(15.0, 4.0), drill: 1.2, slot: 4.0, slot_v: false, refdes: String::new() });
+        b.holes.push(Hole { pos: Point::new(26.0, 12.0), drill: 1.0, slot: 3.0, slot_v: true, refdes: String::new() });
+        let back = read(&mechanical(&b), None).unwrap();
+        let mut got: Vec<(bool, f64)> = back.slots.iter().map(|s| (s.3, s.2)).collect();
+        got.sort_by(|a, b| a.1.total_cmp(&b.1));
+        assert_eq!(got.len(), 2, "{back:?}");
+        assert!(got[0].0 && (got[0].1 - 3.0).abs() < 1e-3 && !got[1].0 && (got[1].1 - 4.0).abs() < 1e-3, "{got:?}");
+        let mut c = Board::new("c", 1.0, 1.0);
+        apply(&mut c, &back, false);
+        assert_eq!(c.holes.iter().filter(|h| h.slot > 0.0).count(), 2);
+    }
 
     #[test]
     fn a_dxf_we_wrote_reads_back_as_the_same_outline_and_holes() {
@@ -381,7 +502,7 @@ mod tests {
         mine.refdes = "J1".into();
         b.holes.push(mine);
         b.holes.push(Hole::new(Point::new(2.0, 2.0), 1.0));
-        let shape = DxfShape { outline: vec![Point::new(100.0, 50.0), Point::new(130.0, 50.0), Point::new(130.0, 70.0), Point::new(100.0, 70.0)], holes: vec![(Point::new(103.0, 53.0), 3.2)], notes: vec![] };
+        let shape = DxfShape { slots: vec![], outline: vec![Point::new(100.0, 50.0), Point::new(130.0, 50.0), Point::new(130.0, 70.0), Point::new(100.0, 70.0)], holes: vec![(Point::new(103.0, 53.0), 3.2)], notes: vec![] };
         apply(&mut b, &shape, true);
         assert_eq!(b.outline[0], Point::new(0.0, 0.0));
         assert_eq!(b.holes.len(), 2, "the part's hole stays, the loose one is replaced by the drawing's");

@@ -165,13 +165,13 @@ impl Session {
 
     pub(super) fn board_dxf_import(&mut self, rest: &[String]) -> Res {
         let (pos, kv) = options(rest);
-        let f = pos.first().ok_or("board dxf_import FILE.dxf [layer=NAME] [origin=0]   (the outline = the biggest closed loop of lines, arcs and polylines; circles inside it become holes; origin=0 keeps the drawing's coordinates instead of moving the lower left corner to 0,0)")?;
+        let f = pos.first().ok_or("board dxf_import FILE.dxf [layer=NAME] [origin=0]   (the outline = the biggest closed loop of lines, arcs and polylines; circles inside it become holes, and so do loops shaped as a slot along x or y; origin=0 keeps the drawing's coordinates instead of moving the lower left corner to 0,0)")?;
         let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
         let shape = pcb_core::dxf_in::read(&text, opt(&kv, "layer"))?;
         let board = self.board_mut()?;
         pcb_core::dxf_in::apply(board, &shape, opt(&kv, "origin") != Some("0"));
         let (lo, hi) = board.bounds().unwrap_or_default();
-        Ok(obj(json!({"outline_points": board.outline.len(), "holes": shape.holes.len(), "width_mm": hi.x - lo.x, "height_mm": hi.y - lo.y, "notes": shape.notes})))
+        Ok(obj(json!({"outline_points": board.outline.len(), "holes": shape.holes.len(), "slots": shape.slots.len(), "width_mm": hi.x - lo.x, "height_mm": hi.y - lo.y, "notes": shape.notes})))
     }
 
     pub(super) fn board_dxf(&mut self, rest: &[String]) -> Res {

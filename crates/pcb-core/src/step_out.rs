@@ -910,6 +910,57 @@ mod tests {
         assert!((hi[0] - lo[0] - 30.0).abs() < 1e-3 && (hi[2] - lo[2] - BOARD_THICKNESS).abs() < 1e-3);
     }
 
+    /// A board for trying the STEP in another CAD by hand (`CCAD_STEP_OUT=<folder>`, `--ignored`): round holes and slots, parts turned
+    /// and on the bottom, a round can, and a maker's model with fillets and B-spline corners copied with its own faces
+    /// (`testdata/dome_and_rounded_block.step`). Writes `check.step` and, beside it, `check.json` with what to expect: each product's
+    /// box in the board's frame and the solids' volume as our own reader has them.
+    #[test]
+    #[ignore]
+    fn write_a_board_to_check_in_another_cad() {
+        let Ok(dir) = std::env::var("CCAD_STEP_OUT") else { return };
+        let dir = std::path::Path::new(&dir);
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/dome_and_rounded_block.step");
+        let mut b = Board::new("check", 60.0, 40.0);
+        b.holes.push(Hole { pos: Point::new(4.0, 4.0), drill: 3.2, slot: 0.0, slot_v: false, refdes: String::new() });
+        b.holes.push(Hole { pos: Point::new(56.0, 4.0), drill: 1.2, slot: 4.0, slot_v: false, refdes: String::new() });
+        b.holes.push(Hole { pos: Point::new(56.0, 36.0), drill: 1.0, slot: 3.0, slot_v: true, refdes: String::new() });
+        for (r, fp, x, y, rot, side) in [("R1", "R_0805", 15.0, 10.0, 0, Side::Top), ("R2", "R_0805", 15.0, 16.0, 1, Side::Top), ("C1", "C_1206", 25.0, 10.0, 3, Side::Bottom), ("J1", "PinHeader_1x4", 8.0, 30.0, 1, Side::Top)] {
+            b.set_part(Part { refdes: r.into(), value: String::new(), footprint: fp.into(), pos: Point::new(x, y), rot, side }).unwrap();
+        }
+        // the maker's model: read, turned a quarter about x and set down on the board, as the part form would
+        let model = crate::mesh::ModelSource::new(&src.to_string_lossy()).turned(2, 1).shifted([0.0, 0.0, 0.0]);
+        let mesh = crate::step::read_step(&std::fs::read(&src).unwrap()).unwrap().turned(2, 1);
+        let lift = -mesh.bounds().unwrap().0[2];
+        b.models3d.insert("MAKER".into(), mesh.shifted([0.0, 0.0, lift]));
+        b.models3d_src.insert("MAKER".into(), model.shifted([0.0, 0.0, lift]));
+        b.parts.push(Part { refdes: "U1".into(), value: String::new(), footprint: "MAKER".into(), pos: Point::new(40.0, 22.0), rot: 1, side: Side::Top });
+        let text = write(&b);
+        assert!(text.contains("B_SPLINE_SURFACE"), "the maker's own faces");
+        std::fs::write(dir.join("check.step"), &text).unwrap();
+        // what to expect, product by product: the box in the board's frame (the 3D view's solids) and the volume
+        let mut want = serde_json::Map::new();
+        let mut add = |name: &str, lo: [f64; 3], hi: [f64; 3], vol: f64| {
+            let e = want.entry(name.to_string()).or_insert_with(|| serde_json::json!({"lo": lo, "hi": hi, "volume": 0.0}));
+            let (l, h) = (e["lo"].clone(), e["hi"].clone());
+            let f = |v: &serde_json::Value, k: usize| v[k].as_f64().unwrap();
+            e["lo"] = serde_json::json!([f(&l, 0).min(lo[0]), f(&l, 1).min(lo[1]), f(&l, 2).min(lo[2])]);
+            e["hi"] = serde_json::json!([f(&h, 0).max(hi[0]), f(&h, 1).max(hi[1]), f(&h, 2).max(hi[2])]);
+            e["volume"] = serde_json::json!(e["volume"].as_f64().unwrap() + vol);
+        };
+        for s in solids(&b) {
+            let (lo, hi) = s.vertices.iter().fold(([f64::MAX; 3], [f64::MIN; 3]), |(lo, hi), v| (std::array::from_fn(|k| lo[k].min(v[k])), std::array::from_fn(|k| hi[k].max(v[k]))));
+            add(&s.name, lo, hi, volume(&s));
+        }
+        for (g, ss, _) in crate::step_layers::layers(&b) {
+            for s in ss {
+                let (lo, hi) = s.vertices.iter().fold(([f64::MAX; 3], [f64::MIN; 3]), |(lo, hi), v| (std::array::from_fn(|k| lo[k].min(v[k])), std::array::from_fn(|k| hi[k].max(v[k]))));
+                add(&g, lo, hi, volume(&s));
+            }
+        }
+        std::fs::write(dir.join("check.json"), serde_json::to_string_pretty(&want).unwrap()).unwrap();
+        std::fs::write(dir.join("check_dxf.dxf"), crate::dxf::mechanical(&b)).unwrap();
+    }
+
     /// SolidCraft (its SMLib kernel) reads the file as closed solids of the exact volume: the board less a round hole and two slots,
     /// a cylinder of π r² h (`--ignored`: needs SolidCraft).
     #[test]
