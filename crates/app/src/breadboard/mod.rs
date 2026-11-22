@@ -1616,6 +1616,47 @@ mod tests {
         assert_eq!(ohms(&reading(&app)), ohms(&front), "from the copper side: {}", reading(&app));
     }
 
+    /// "つながる順に並べる" on the perfboard: the blinker's two resistors lined up and locked, the rest laid out again round them on
+    /// its thread, the board joined as drawn.
+    #[test]
+    fn picked_parts_line_up_and_the_rest_is_laid_out_round_them() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.kind = BoardKind::Perfboard;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app);
+        let mut l = app.breadboard.strip_shown(&app.sch);
+        for _ in 0..200 {
+            if !l.parts.is_empty() && !app.breadboard.strip_busy().0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            run(&mut app);
+            l = app.breadboard.strip_shown(&app.sch);
+        }
+        let rs: Vec<String> = vec!["R1".into(), "R2".into()];
+        app.breadboard.strip_align(&mut app.sch, &l, &rs, sch_core::strip_edit::StripAlign::NetOrder);
+        assert!(app.breadboard.strip_busy().0, "laying the rest out: {}", app.sch.status);
+        for _ in 0..300 {
+            if !app.breadboard.strip_busy().0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            run(&mut app);
+        }
+        let m = app.sch.stripboard.clone().expect("kept with the sheet");
+        assert!(rs.iter().all(|r| m.locked.contains(r)), "{:?}", m.locked);
+        assert!(sch_core::stripboard::strip_check(&app.sch.sch, &m).is_empty(), "{:?}", sch_core::stripboard::strip_check(&app.sch.sch, &m));
+    }
+
     fn burnt(app: &App) -> Vec<String> {
 
         app.breadboard.issues().iter().filter(|r| r.level == sim_core::RatingLevel::Over).map(|r| r.refdes.clone()).collect()

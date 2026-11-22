@@ -6,7 +6,7 @@ use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::perfboard::{links_along_pins, lock_first, perf_layout_around, perf_layout_with, LockWhy};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
-use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, synced, with_bare, with_link, without_bare_at, without_link};
+use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, parts_aligned, parts_in_box, synced, with_bare, with_link, without_bare_at, without_link, StripAlign};
 use sch_core::stripboard::{hole_name, net_at, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
 
 /// What the person builds on.
@@ -146,6 +146,23 @@ fn net_colour(net: &str) -> Color32 {
 
 /// How many hand edits are kept to undo.
 const UNDO_STEPS: usize = 100;
+
+/// The holes left between parts lined up in a row or a column (room for the wires).
+const ALIGN_GAP: u16 = 2;
+
+/// The ways to line up the parts in the picked box: each with its button and what it does.
+const ALIGNS: [(StripAlign, &str, &str); 7] = [
+    (StripAlign::Top, "上揃え", "いちばん上の部品に、上の端をそろえます"),
+    (StripAlign::Bottom, "下揃え", "いちばん下の部品に、下の端をそろえます"),
+    (StripAlign::Left, "左揃え", "いちばん左の部品に、左の端をそろえます"),
+    (StripAlign::Right, "右揃え", "いちばん右の部品に、右の端をそろえます"),
+    (StripAlign::Row, "横に並べる", "今の左からの順で、横一列に 2 穴ずつ空けて並べます (上の端をそろえます)"),
+    (StripAlign::Column, "縦に並べる", "今の上からの順で、縦一列に 2 穴ずつ空けて並べます (左の端をそろえます)"),
+    (StripAlign::NetOrder, "つながる順に並べる", "つながる相手の IC やヘッダの足の並びの順に、一列に並べます。ドライバ IC の出力の順にリレーを、ヘッダのピンの順に抵抗を、のように使います (相手の足が横に並んでいれば横一列、縦なら縦一列)"),
+];
+
+/// What lining up does, on the label before the buttons.
+const ALIGN_HELP: &str = "四角で囲んだ部品を揃えて並べます。ユニバーサル基板では、揃えた部品はその穴に固定され、ほかの部品と線は自動で置き直されます。ストリップ基板では部品だけが動くので、帯の上のつながりが変わります (照合とラッツネストで確かめます)。元に戻すで戻せます";
 
 impl BreadboardView {
     /// A hand edit (or "自動で並べ直す"): the layout before it goes on the undo list.
@@ -349,6 +366,40 @@ impl BreadboardView {
         *l = m;
     }
 
+    /// A box picked by the names of the holes at two corners ("A1", "AB12": `hole_name`); nothing when a name does not read.
+    pub(crate) fn strip_pick_box(&mut self, a: &str, b: &str) {
+        let read = |s: &str| -> Option<At> {
+            let letters: String = s.chars().take_while(|c| c.is_ascii_uppercase()).collect();
+            let col: u16 = s[letters.len()..].parse().ok()?;
+            let row = letters.bytes().fold(0usize, |r, c| r * 26 + (c - b'A' + 1) as usize).checked_sub(1)?;
+            Some((row as u16, col.checked_sub(1)?))
+        };
+        if let (Some(a), Some(b)) = (read(a), read(b)) {
+            self.strip.sel = Some((a, b));
+        }
+    }
+
+    /// The parts `picked` lined up as `how` says: on a perfboard they are locked where they go and the rest is laid out again round
+    /// them (on another thread); on a stripboard the strips under them change, and the checks say what is joined. The box follows
+    /// the parts. When something is in the way nothing moves, and the status line says what.
+    pub(super) fn strip_align(&mut self, sch: &mut SchEditor, l: &StripLayout, picked: &[String], how: StripAlign) {
+        match parts_aligned(&sch.sch, l, picked, how, ALIGN_GAP) {
+            Ok(m) => {
+                let holes: Vec<At> = m.parts.iter().filter(|p| picked.contains(&p.refdes)).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+                let corner = |f: fn(u16, u16) -> u16, start: u16| holes.iter().fold((start, start), |c, a| (f(c.0, a.0), f(c.1, a.1)));
+                self.strip.sel = Some((corner(u16::min, u16::MAX), corner(u16::max, 0)));
+                self.strip_set(sch, Some(m.clone()));
+                if m.perf {
+                    sch.status = i18n::trf!("{} 個を揃えて固定し、ほかの部品を並べ直しています…", picked.len());
+                    self.strip_relayout(sch, &m);
+                } else {
+                    sch.status = i18n::trf!("{} 個を揃えました。線は動かしていないので、つながりは照合とラッツネスト (黄色の破線) で確かめてください", picked.len());
+                }
+            }
+            Err(e) => sch.status = i18n::tr_dyn(&e).to_string(),
+        }
+    }
+
     /// "まず手で置くとよい部品": the connectors, knobs, relays and big chips not locked yet (`lock_first`), each a button that picks
     /// it (then drag it, L locks it); the reason on hover. Drawn on the board with a dashed frame.
     fn strip_lock_hints_ui(&mut self, ui: &mut egui::Ui, l: &StripLayout) {
@@ -495,6 +546,25 @@ impl BreadboardView {
                 ));
             }
         });
+        // the parts in the picked box lined up (`strip_edit::parts_aligned`)
+        if let Some((a, b)) = self.strip.sel {
+            let picked = parts_in_box(l, a, b);
+            if picked.len() >= 2 {
+                let busy = self.strip.around.is_some();
+                let mut chosen: Option<StripAlign> = None;
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(i18n::trf!("囲んだ {} 個を:", picked.len())).on_hover_text(i18n::tr(ALIGN_HELP));
+                    for (how, name, tip) in ALIGNS {
+                        if ui.add_enabled(!busy, egui::Button::new(i18n::tr(name)).small()).on_hover_text(i18n::tr(tip)).clicked() {
+                            chosen = Some(how);
+                        }
+                    }
+                });
+                if let Some(how) = chosen {
+                    self.strip_align(sch, l, &picked, how);
+                }
+            }
+        }
         // the perfboard: lock the parts the person placed, and lay the rest out round them
         if !strip {
             ui.horizontal_wrapped(|ui| {

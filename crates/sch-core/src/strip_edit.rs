@@ -4,7 +4,7 @@
 //!
 //! Every change gives a new layout; whether it still joins what the schematic joins is `strip_check`'s to say, run again after each.
 
-use crate::stripboard::{strip_layout_with, At, Link, StripLayout, StripOptions};
+use crate::stripboard::{strip_layout_with, At, Link, StripLayout, StripOptions, StripPart};
 use crate::{extract, Schematic};
 use std::collections::BTreeMap;
 
@@ -147,6 +147,156 @@ pub fn part_turned(l: &StripLayout, refdes: &str) -> Option<StripLayout> {
         }
     }
     Some(grown(out))
+}
+
+/// How `parts_aligned` lines the parts up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StripAlign {
+    /// Left ends on the leftmost one's.
+    Left,
+    /// Right ends on the rightmost one's.
+    Right,
+    /// Top ends on the uppermost one's.
+    Top,
+    /// Bottom ends on the lowest one's.
+    Bottom,
+    /// In one row from the leftmost one's place, in the order they stand, `gap` holes between, tops lined up.
+    Row,
+    /// In one column from the uppermost one's place, in the order they stand, `gap` holes between, left ends lined up.
+    Column,
+    /// In one row (or column) in the order of the leads they are wired to on the other parts, its middle across from theirs: under a
+    /// driver chip, its relays in the order of its outputs. A row (at the uppermost one's row) when those leads lie along a row, else
+    /// a column (at the leftmost one's column).
+    NetOrder,
+}
+
+/// The parts whose leads all lie within the rows and columns from `a` to `b` (both corners in), as `area_moved` takes them.
+pub fn parts_in_box(l: &StripLayout, a: At, b: At) -> Vec<String> {
+    let inside = |at: At| at.0 >= a.0.min(b.0) && at.0 <= a.0.max(b.0) && at.1 >= a.1.min(b.1) && at.1 <= a.1.max(b.1);
+    l.parts.iter().filter(|p| !p.leads.is_empty() && p.leads.iter().all(|(_, at)| inside(*at))).map(|p| p.refdes.clone()).collect()
+}
+
+/// A part's corners: (first row, last row, first column, last column) of its leads.
+fn part_box(p: &StripPart) -> (u16, u16, u16, u16) {
+    let rows = p.leads.iter().map(|(_, a)| a.0);
+    let cols = p.leads.iter().map(|(_, a)| a.1);
+    (rows.clone().min().unwrap_or(0), rows.max().unwrap_or(0), cols.clone().min().unwrap_or(0), cols.max().unwrap_or(0))
+}
+
+/// The parts `refdes` moved as `how` says (whole parts, by whole holes; the wires stay where they are, for "固定した部品のまわりを
+/// 並べ直す" to draw again). On a perfboard the parts moved are locked where they go, and only the locked parts are in the way (the
+/// rest is laid out again round them). An error that says what is in the way, or what to pick, when nothing can move: fewer than two
+/// parts, a lead onto another part's or an off-board wire's hole, a chip onto another part.
+pub fn parts_aligned(s: &Schematic, l: &StripLayout, refdes: &[String], how: StripAlign, gap: u16) -> Result<StripLayout, String> {
+    let picked: Vec<&StripPart> = l.parts.iter().filter(|p| refdes.contains(&p.refdes) && !p.leads.is_empty()).collect();
+    if picked.len() < 2 {
+        return Err("揃える部品を 2 つ以上、四角で囲んで選んでください".to_string());
+    }
+    let boxes: Vec<(u16, u16, u16, u16)> = picked.iter().map(|p| part_box(p)).collect();
+    let (top, bottom) = (boxes.iter().map(|b| b.0).min().unwrap_or(0), boxes.iter().map(|b| b.1).max().unwrap_or(0));
+    let (left, right) = (boxes.iter().map(|b| b.2).min().unwrap_or(0), boxes.iter().map(|b| b.3).max().unwrap_or(0));
+    // one after another along a row or down a column, in the order given, from `from` (else the first part's place)
+    let line = |order: Vec<usize>, across: bool, from: Option<i32>| -> Vec<(i32, i32)> {
+        let mut moves = vec![(0, 0); picked.len()];
+        let mut at = from.unwrap_or(if across { left } else { top } as i32).max(0);
+        for i in order {
+            let b = boxes[i];
+            if across {
+                moves[i] = (top as i32 - b.0 as i32, at - b.2 as i32);
+                at += (b.3 - b.2) as i32 + 1 + gap as i32;
+            } else {
+                moves[i] = (at - b.0 as i32, left as i32 - b.2 as i32);
+                at += (b.1 - b.0) as i32 + 1 + gap as i32;
+            }
+        }
+        moves
+    };
+    let by = |key: &dyn Fn(usize) -> (f64, f64)| -> Vec<usize> {
+        let mut v: Vec<usize> = (0..picked.len()).collect();
+        v.sort_by(|a, b| key(*a).partial_cmp(&key(*b)).unwrap_or(std::cmp::Ordering::Equal));
+        v
+    };
+    let moves: Vec<(i32, i32)> = match how {
+        StripAlign::Left => boxes.iter().map(|b| (0, left as i32 - b.2 as i32)).collect(),
+        StripAlign::Right => boxes.iter().map(|b| (0, right as i32 - b.3 as i32)).collect(),
+        StripAlign::Top => boxes.iter().map(|b| (top as i32 - b.0 as i32, 0)).collect(),
+        StripAlign::Bottom => boxes.iter().map(|b| (bottom as i32 - b.1 as i32, 0)).collect(),
+        StripAlign::Row => line(by(&|i| (boxes[i].2 as f64, boxes[i].0 as f64)), true, None),
+        StripAlign::Column => line(by(&|i| (boxes[i].0 as f64, boxes[i].2 as f64)), false, None),
+        StripAlign::NetOrder => {
+            // each part's place: the middle of the leads it is wired to on the chips and headers not picked (else on any part not
+            // picked: a resistor's other lead goes to its LED, which says nothing of the order), by nets of few leads only (a supply
+            // or ground runs everywhere and tells nothing); its own middle when there are none
+            let nets = pin_nets(s);
+            let mut at_net: [BTreeMap<&String, Vec<At>>; 2] = [BTreeMap::new(), BTreeMap::new()];
+            for p in l.parts.iter().filter(|p| !refdes.contains(&p.refdes)) {
+                for (pin, a) in &p.leads {
+                    if let Some(n) = nets.get(&(p.refdes.clone(), pin.clone())) {
+                        at_net[0].entry(n).or_default().push(*a);
+                        if p.leads.len() > 2 {
+                            at_net[1].entry(n).or_default().push(*a);
+                        }
+                    }
+                }
+            }
+            let few = |n: &String| !crate::breadboard::is_ground_name(n) && nets.values().filter(|m| *m == n).count() <= 4;
+            let key: Vec<(f64, f64)> = picked
+                .iter()
+                .zip(&boxes)
+                .map(|(p, b)| {
+                    let mine: Vec<&String> = p.leads.iter().filter_map(|(pin, _)| nets.get(&(p.refdes.clone(), pin.clone()))).filter(|n| few(n)).collect();
+                    let leads_on = |m: &BTreeMap<&String, Vec<At>>| mine.iter().filter_map(|n| m.get(n)).flatten().copied().collect::<Vec<At>>();
+                    let chips = leads_on(&at_net[1]);
+                    let to = if chips.is_empty() { leads_on(&at_net[0]) } else { chips };
+                    if to.is_empty() {
+                        ((b.0 + b.1) as f64 / 2.0, (b.2 + b.3) as f64 / 2.0)
+                    } else {
+                        (to.iter().map(|a| a.0 as f64).sum::<f64>() / to.len() as f64, to.iter().map(|a| a.1 as f64).sum::<f64>() / to.len() as f64)
+                    }
+                })
+                .collect();
+            let spread = |f: fn(&(f64, f64)) -> f64| key.iter().map(f).fold(f64::MIN, f64::max) - key.iter().map(f).fold(f64::MAX, f64::min);
+            let across = spread(|k| k.1) >= spread(|k| k.0);
+            // the line's middle under (or beside) the middle of the leads they are wired to
+            let long: i32 = boxes.iter().map(|b| if across { (b.3 - b.2) as i32 + 1 } else { (b.1 - b.0) as i32 + 1 }).sum::<i32>() + gap as i32 * (picked.len() as i32 - 1);
+            let mid = key.iter().map(|k| if across { k.1 } else { k.0 }).sum::<f64>() / key.len() as f64;
+            // (kept within the board where it fits: the line pushed back from the right or bottom edge)
+            let room = if across { l.cols } else { l.rows } as i32;
+            let start = ((mid - long as f64 / 2.0).round() as i32).min(room - long).max(0);
+            line(by(&|i| if across { (key[i].1, key[i].0) } else { (key[i].0, key[i].1) }), across, Some(start))
+        }
+    };
+    let mut out = l.clone();
+    for (p, (dr, dc)) in picked.iter().zip(&moves) {
+        out = part_moved(&out, &p.refdes, *dr, *dc).ok_or_else(|| format!("{} が基板の上か左の端の外に出ます", p.refdes))?;
+    }
+    // nothing in the way: a lead on a hole another part's lead or an off-board wire has, a chip over another part. On a perfboard
+    // only the locked parts count: the others are laid out again round the parts lined up (`perfboard::perf_layout_around`)
+    let others: Vec<&StripPart> = out.parts.iter().filter(|p| !refdes.contains(&p.refdes) && (!out.perf || out.locked.contains(&p.refdes))).collect();
+    let moved: Vec<&StripPart> = out.parts.iter().filter(|p| refdes.contains(&p.refdes)).collect();
+    let within = |a: At, b: (u16, u16, u16, u16)| a.0 >= b.0 && a.0 <= b.1 && a.1 >= b.2 && a.1 <= b.3;
+    let overlap = |a: (u16, u16, u16, u16), b: (u16, u16, u16, u16)| a.0 <= b.1 && b.0 <= a.1 && a.2 <= b.3 && b.2 <= a.3;
+    let off_holes: Vec<At> = out.off.iter().flat_map(|(_, w)| w.iter().map(|x| x.2)).collect();
+    for (i, p) in moved.iter().enumerate() {
+        let pb = part_box(p);
+        for q in others.iter().copied().chain(moved.iter().copied().skip(i + 1)) {
+            let qb = part_box(q);
+            let lead_on = p.leads.iter().any(|(_, a)| q.leads.iter().any(|(_, b)| a == b));
+            let body_on = (p.leads.len() > 2 && q.leads.iter().any(|(_, b)| within(*b, pb)))
+                || (q.leads.len() > 2 && p.leads.iter().any(|(_, a)| within(*a, qb)))
+                || (p.leads.len() > 2 && q.leads.len() > 2 && overlap(pb, qb));
+            if lead_on || body_on {
+                return Err(format!("{} を動かす先に {} があります。先に {} をどけるか、揃える部品を選び直してください", p.refdes, q.refdes, q.refdes));
+            }
+        }
+        if p.leads.iter().any(|(_, a)| off_holes.contains(a)) {
+            return Err(format!("{} を動かす先に、基板の外からの線の穴があります", p.refdes));
+        }
+    }
+    if out.perf {
+        out.locked.extend(picked.iter().map(|p| p.refdes.clone()));
+    }
+    Ok(out)
 }
 
 /// The schematic net of each part's pin: (refdes, pin) → net.
@@ -431,6 +581,44 @@ fn free_hole(out: &mut StripLayout, at: At, taken: &std::collections::BTreeSet<A
 mod tests {
     use super::*;
     use crate::stripboard::{strip_check, strip_layout};
+
+    /// Picked parts lined up: the shift register's eight resistors in the order of the outputs they are wired to (on the
+    /// perfboard: locked where they go); three in one row; fewer than two parts,
+    /// or two onto the same holes, is an error that says so.
+    #[test]
+    fn picked_parts_line_up() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/shift_register_leds.schjson");
+        let s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+        let rs: Vec<String> = (1..=8).map(|i| format!("R{i}")).collect();
+        let nets = pin_nets(&s);
+        let at = |l: &StripLayout, r: &str| l.parts.iter().find(|p| p.refdes == r).map(part_box).unwrap();
+        // the hole of the U1 pin each resistor is wired to
+        let u1_pin = |l: &StripLayout, r: &str| -> At {
+            let mine: Vec<&String> = nets.iter().filter(|(k, _)| k.0 == r).map(|(_, n)| n).collect();
+            let u1 = l.parts.iter().find(|p| p.refdes == "U1").unwrap();
+            u1.leads.iter().find(|(pin, _)| nets.get(&("U1".to_string(), pin.clone())).is_some_and(|n| mine.contains(&n))).unwrap().1
+        };
+        let m = parts_aligned(&s, &l, &rs, StripAlign::NetOrder, 1).unwrap();
+        let mut order = rs.clone();
+        let across = rs.iter().map(|r| at(&m, r).0).collect::<std::collections::BTreeSet<_>>().len() == 1;
+        let along = |b: (u16, u16, u16, u16)| if across { b.2 } else { b.0 };
+        order.sort_by_key(|r| along(at(&m, r)));
+        let pins: Vec<At> = order.iter().map(|r| u1_pin(&m, r)).collect();
+        let key = |a: &At| if across { a.1 } else { a.0 };
+        assert!(pins.windows(2).all(|w| key(&w[0]) <= key(&w[1])) || pins.windows(2).all(|w| key(&w[0]) >= key(&w[1])), "{order:?} {pins:?}");
+        assert!(rs.iter().all(|r| m.locked.contains(r)));
+        // (the board laid out round them: the app's test `picked_parts_line_up_and_the_rest_is_laid_out_round_them`)
+        // tops on one row
+        let m = parts_aligned(&s, &l, &rs[..3], StripAlign::Row, 1).unwrap();
+        assert_eq!(rs[..3].iter().map(|r| at(&m, r).0).collect::<std::collections::BTreeSet<_>>().len(), 1, "one row");
+        assert!(parts_aligned(&s, &l, &rs[..1], StripAlign::Row, 1).unwrap_err().contains("2 つ以上"));
+        // two parts lined up onto the same holes: in the way, nothing moved
+        let (a, b) = (at(&l, "R1"), at(&l, "R2"));
+        let side = part_moved(&l, "R2", a.0 as i32 - b.0 as i32, a.2 as i32 + 9 - b.2 as i32).unwrap();
+        let err = parts_aligned(&s, &side, &["R1".to_string(), "R2".to_string()], StripAlign::Left, 1).unwrap_err();
+        assert!(err.contains("R2 があります") || err.contains("R1 があります"), "{err}");
+    }
 
     fn blinker() -> Schematic {
         serde_json::from_str(include_str!("../../../docs/examples/ne555_blinker.schjson")).unwrap()

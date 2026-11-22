@@ -642,6 +642,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         }
         // `--proto-chips-back`: a perfboard's 0805 / 1206 chips on the copper side
         app.sch.strip_chips_back = args.iter().any(|a| a == "--proto-chips-back");
+        // `--proto-sel A1:Z30`: a box picked on the stripboard or perfboard, by the holes at two corners (for screenshots of what
+        // the box offers: "揃える")
+        if let Some((a, b)) = args.iter().position(|a| a == "--proto-sel").and_then(|k| args.get(k + 1)).and_then(|s| s.split_once(':')) {
+            app.breadboard.strip_pick_box(a, b);
+        }
         // `--proto-back`: the stripboard or perfboard seen from below (the copper side)
         app.breadboard.strip.back = args.iter().any(|a| a == "--proto-back");
         // `--proto-schematic`: the schematic in its small window beside the board
