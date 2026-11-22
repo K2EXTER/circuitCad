@@ -13,21 +13,33 @@ pub(super) fn percent(s: &str) -> Option<f64> {
 }
 
 impl SchEditor {
-    /// DC operating point at a range of temperatures, shown in the sweep viewer.
+    /// DC operating point at a range of temperatures, shown in the sweep viewer (at once: the tests).
+    #[cfg(test)]
     pub(super) fn run_temp_sweep(&mut self) {
+        self.temp_sweep_job(false);
+    }
+
+    /// The temperature sweep from its button: on another thread (`run_job`).
+    pub(super) fn start_temp_sweep(&mut self) {
+        self.temp_sweep_job(true);
+    }
+
+    fn temp_sweep_job(&mut self, background: bool) {
         let nums: Vec<Option<f64>> = [&self.temp_from, &self.temp_to, &self.temp_step].iter().map(|s| s.trim().parse::<f64>().ok()).collect();
         let (Some(a), Some(b), Some(st)) = (nums[0], nums[1], nums[2]) else {
             self.status = "開始・終了・刻みを数値で入力してください (例: -20, 80, 5)".into();
             return;
         };
-        let outcome = match self.sim_circuit() {
+        let circuit = match self.sim_circuit() {
             Err(errs) => Err(errs),
             // the sweep sets the temperature itself: start from the 27 °C circuit
-            Ok(_) => match sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings) {
-                Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
-                Ok(c) => temp_sweep(&c, a, b, st).map_err(|e| vec![e.to_string()]),
-            },
+            Ok(_) => sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>()),
         };
+        let compute = move || circuit.and_then(|c| temp_sweep(&c, a, b, st).map_err(|e| vec![e.to_string()]));
+        self.run_job(background, "温度スイープ", compute, move |s, outcome| s.finish_temp_sweep(a, b, outcome));
+    }
+
+    fn finish_temp_sweep(&mut self, a: f64, b: f64, outcome: Result<sim_core::DcSweepResult, Vec<String>>) {
         let mut selected = BTreeSet::new();
         if let Ok(r) = &outcome {
             for sg in r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).take(3) {
@@ -59,6 +71,15 @@ impl SchEditor {
 
     /// Random part values inside their tolerances; the spread of one node voltage.
     pub(super) fn run_mc(&mut self) {
+        self.mc_job(false);
+    }
+
+    /// The variation analysis from its button: on another thread (`run_job`).
+    pub(super) fn start_mc(&mut self) {
+        self.mc_job(true);
+    }
+
+    fn mc_job(&mut self, background: bool) {
         let (Some(tol_r), Some(tol_c), Some(tol_l)) = (percent(&self.mc_in.tol_r), percent(&self.mc_in.tol_c), percent(&self.mc_in.tol_l)) else {
             self.status = "許容差は % の数値で入力してください (例: 5)".into();
             return;
@@ -76,31 +97,31 @@ impl SchEditor {
             }
         };
         let settings = McSettings { runs, seed: self.mc_in.seed, tol_r, tol_c, tol_l, output: self.mc_in.out.trim().to_string(), measure };
-        let outcome = if settings.output.is_empty() {
-            Err(vec!["測るノードを選んでください".to_string()])
-        } else {
-            match self.variation_circuit() {
-                Err(errs) => Err(errs),
-                Ok(c) => monte_carlo(&c, &settings).map_err(|e| vec![e.to_string()]),
+        let circuit = if settings.output.is_empty() { Err(vec!["測るノードを選んでください".to_string()]) } else { self.variation_circuit() };
+        let mut wc = sim_core::WcSettings::from(&settings);
+        wc.tol_v = percent(&self.mc_in.tol_v).unwrap_or(0.0);
+        let output = settings.output.clone();
+        // the limits for the same parts and tolerances: not a chance, a guarantee
+        let compute = move || match circuit {
+            Err(errs) => (Err(errs), None),
+            Ok(c) => {
+                let outcome = monte_carlo(&c, &settings).map_err(|e| vec![e.to_string()]);
+                let worst = if outcome.is_ok() { sim_core::worst_case(&c, &wc).ok() } else { None };
+                (outcome, worst)
             }
         };
+        self.run_job(background, "ばらつき解析", compute, move |s, (outcome, worst)| s.finish_mc(&output, outcome, worst));
+    }
+
+    fn finish_mc(&mut self, output: &str, outcome: Result<sim_core::McResult, Vec<String>>, worst: Option<sim_core::WorstCase>) {
         self.status = match &outcome {
             Ok(r) => format!("ばらつき解析: {} 回完了{}", r.values.len(), if r.failed > 0 { format!(" ({} 回は収束せず)", r.failed) } else { String::new() }),
             Err(e) => format!("ばらつき解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        // the limits for the same parts and tolerances: not a chance, a guarantee
-        let worst = match (&outcome, self.variation_circuit()) {
-            (Ok(_), Ok(c)) => {
-                let mut w = sim_core::WcSettings::from(&settings);
-                w.tol_v = percent(&self.mc_in.tol_v).unwrap_or(0.0);
-                sim_core::worst_case(&c, &w).ok()
-            }
-            _ => None,
-        };
         // judge the run against the spec table's range on the same node, unless a range is typed already
         if self.mc_in.lo.trim().is_empty()
             && self.mc_in.hi.trim().is_empty()
-            && let Some((lo, hi)) = self.spec_limits_for(&settings.output, self.mc_in.kind == McKind::Ac)
+            && let Some((lo, hi)) = self.spec_limits_for(output, self.mc_in.kind == McKind::Ac)
         {
             (self.mc_in.lo, self.mc_in.hi) = (lo, hi);
         }

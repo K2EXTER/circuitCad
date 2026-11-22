@@ -29,13 +29,17 @@ pub(super) fn scale(t: &PartTemps) -> (f64, f64) {
 }
 
 /// A thermal camera's palette ("ironbow"): dark blue at `f` = 0 through purple, red and orange to pale yellow at 1.
+/// Under the colour-vision theme, the viridis scale instead (dark blue, teal, green, yellow): its lightness rises all the way, so the
+/// order of temperatures reads in grey too.
 pub(crate) fn heat_color(f: f64) -> [u8; 3] {
-    const STOPS: [[f64; 3]; 6] = [[20.0, 24.0, 90.0], [110.0, 20.0, 150.0], [200.0, 30.0, 90.0], [240.0, 100.0, 20.0], [255.0, 190.0, 40.0], [255.0, 250.0, 200.0]];
+    const IRONBOW: [[f64; 3]; 6] = [[20.0, 24.0, 90.0], [110.0, 20.0, 150.0], [200.0, 30.0, 90.0], [240.0, 100.0, 20.0], [255.0, 190.0, 40.0], [255.0, 250.0, 200.0]];
+    const VIRIDIS: [[f64; 3]; 6] = [[68.0, 1.0, 84.0], [65.0, 68.0, 135.0], [42.0, 120.0, 142.0], [34.0, 168.0, 132.0], [122.0, 209.0, 81.0], [253.0, 231.0, 37.0]];
+    let stops = if crate::canvas_theme::palette().cvd { VIRIDIS } else { IRONBOW };
     let f = if f.is_finite() { f.clamp(0.0, 1.0) } else { 0.0 };
-    let x = f * (STOPS.len() - 1) as f64;
-    let i = (x.floor() as usize).min(STOPS.len() - 2);
+    let x = f * (stops.len() - 1) as f64;
+    let i = (x.floor() as usize).min(stops.len() - 2);
     let t = x - i as f64;
-    let (a, b) = (STOPS[i], STOPS[i + 1]);
+    let (a, b) = (stops[i], stops[i + 1]);
     [0, 1, 2].map(|k| (a[k] + (b[k] - a[k]) * t).round() as u8)
 }
 

@@ -109,13 +109,27 @@ impl SchEditor {
             ui.selectable_value(&mut self.param_in.ac, false, i18n::tr("過渡")).on_hover_text(i18n::tr("時間変化 (過渡解析の設定を使います)。ステップ応答のなまり方、発振の減り方などを比べられます"));
             ui.selectable_value(&mut self.param_in.ac, true, "AC").on_hover_text(i18n::tr("周波数特性 (AC解析の設定を使います)。カットオフ周波数や共振の位置がどう動くかを比べられます"));
             if ui.button(i18n::tr("スイープを実行")).on_hover_text(i18n::tr("値を1つずつ入れ替えて解析をくり返し、結果を重ねて表示します。回路そのものは変わりません")).clicked() {
-                self.run_param();
+                self.start_param();
             }
         });
     }
 
     pub(super) fn run_param(&mut self) {
-        let outcome = self.param_outcome();
+        self.param_job(false);
+    }
+
+    /// The parameter sweep from its button: on another thread (`run_job`).
+    pub(super) fn start_param(&mut self) {
+        self.param_job(true);
+    }
+
+    fn param_job(&mut self, background: bool) {
+        let input = self.param_input();
+        let compute = move || input.and_then(|(sch, settings)| param_sweep(&sch, &settings).map_err(|e| vec![e.to_string()]));
+        self.run_job(background, "パラメータスイープ", compute, |s, outcome| s.finish_param(outcome));
+    }
+
+    fn finish_param(&mut self, outcome: Result<ParamResult, Vec<String>>) {
         self.status = match &outcome {
             Ok(r) => format!("パラメータスイープ: 完了 ({} 本{})", r.curves.len(), if r.failed.is_empty() { String::new() } else { format!("、{} 本は計算できず", r.failed.len()) }),
             Err(e) => format!("パラメータスイープに失敗: {}", e.first().cloned().unwrap_or_default()),
@@ -130,7 +144,8 @@ impl SchEditor {
         self.wave_mode = WaveMode::Param;
     }
 
-    fn param_outcome(&self) -> Result<ParamResult, Vec<String>> {
+    /// The circuit and the settings of the parameter sweep, from the boxes (an error text says which box to fix).
+    fn param_input(&self) -> Result<(Schematic, ParamSettings), Vec<String>> {
         let temp = match self.temp_c.trim() {
             "" => T_NOM_C,
             t => t.parse::<f64>().map_err(|_| vec![format!("温度「{t}」を数値(℃)で入力してください (例: 27)")])?,
@@ -160,7 +175,7 @@ impl SchEditor {
             }
         };
         let values = sweep_values(a, b, n.round().max(1.0) as usize, self.param_in.log);
-        param_sweep(&self.sch, &ParamSettings { refdes: part.into(), values, node: self.param_in.node.trim().into(), temp_c: temp, analysis }).map_err(|e| vec![e.to_string()])
+        Ok((self.sch.clone(), ParamSettings { refdes: part.into(), values, node: self.param_in.node.trim().into(), temp_c: temp, analysis }))
     }
 
     pub(super) fn param_wave_panel(&mut self, ui: &mut egui::Ui) {
@@ -187,11 +202,11 @@ impl SchEditor {
                 let names: Vec<String> = res.curves.iter().map(|c| format!("{part}={}", format_value(c.value))).collect();
                 ui.horizontal_wrapped(|ui| {
                     for (k, n) in names.iter().enumerate() {
-                        ui.label(egui::RichText::new(n).color(PALETTE[k % PALETTE.len()]));
+                        ui.label(egui::RichText::new(n).color(crate::plot::series(k)));
                     }
                 });
                 let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
-                let traces: Vec<Trace> = res.curves.iter().zip(&names).enumerate().map(|(k, (c, n))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &c.x, v: &c.y, dots: false }).collect();
+                let traces: Vec<Trace> = res.curves.iter().zip(&names).enumerate().map(|(k, (c, n))| Trace { name: n, color: crate::plot::series(k), t: &c.x, v: &c.y, dots: false }).collect();
                 let style = if *ac { Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None } } else { Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false, db_ref: None } };
                 plot::draw_group(ui, rect, egui::Id::new("param_plot"), &traces, st, 0, &style, true);
             }

@@ -403,7 +403,7 @@ impl SchEditor {
 
 /// The colour of a recording: the colour of the simulated signal it is compared with, or grey when that one is not shown.
 pub fn bench_color(selected_order: &[&str], signal: &str) -> Color32 {
-    selected_order.iter().position(|n| *n == signal).map_or(Color32::from_gray(225), |k| PALETTE[k % PALETTE.len()])
+    selected_order.iter().position(|n| *n == signal).map_or(Color32::from_gray(225), |k| crate::plot::series(k))
 }
 
 /// Builds a recording from a table's text. `ac`: frequency response, otherwise a transient recording.

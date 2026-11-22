@@ -533,8 +533,15 @@ impl BoardEditor {
             if self.airwires_pending() {
                 painter.ctx().request_repaint_after(std::time::Duration::from_millis(15));
             }
+            // the colour-vision theme: light dashes, apart from the red and blue copper by lightness and pattern, not hue
+            let cvd = crate::canvas_theme::palette().cvd;
             for w in wires.iter() {
-                painter.line_segment([self.to_screen(rect, w.a), self.to_screen(rect, w.b)], Stroke::new(1.0, Color32::from_rgb(240, 220, 90)));
+                let (a, b) = (self.to_screen(rect, w.a), self.to_screen(rect, w.b));
+                if cvd {
+                    painter.extend(egui::Shape::dashed_line(&[a, b], Stroke::new(1.2, Color32::from_gray(240)), 5.0, 3.0));
+                } else {
+                    painter.line_segment([a, b], Stroke::new(1.0, Color32::from_rgb(240, 220, 90)));
+                }
             }
         }
         if self.vis.nets && self.zoom >= 14.0 {

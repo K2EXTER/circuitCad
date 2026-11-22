@@ -175,7 +175,7 @@ pub(super) fn signal_list(ui: &mut egui::Ui, id: &str, order: &[&str], selected:
         ui.data_mut(|d| d.insert_temp(filter_id, filter.clone()));
     }
     let needle = filter.trim().to_lowercase();
-    let colour_of = |name: &str, selected: &BTreeSet<String>| order.iter().filter(|n| selected.contains(**n)).position(|n| *n == name).map(|i| PALETTE[i % PALETTE.len()]);
+    let colour_of = |name: &str, selected: &BTreeSet<String>| order.iter().filter(|n| selected.contains(**n)).position(|n| *n == name).map(|i| crate::plot::series(i));
     let mut shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
     shown.extend(order.iter().copied().filter(|n| !selected.contains(*n) && (needle.is_empty() || n.to_lowercase().contains(&needle))));
     // currents ("I(R1)") on a line of their own under the voltages, each with a small heading, when there are both

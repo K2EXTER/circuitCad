@@ -8,6 +8,7 @@ use eframe::egui;
 use schematic::SchEditor;
 
 mod args;
+mod notes_ui;
 mod autosave;
 mod board_editor;
 mod files;
@@ -973,7 +974,7 @@ fn main() -> eframe::Result {
             apply_args(&mut app, &args);
             startup::apply_panel_theme(&cc.egui_ctx);
             // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)
-            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && a != "--lang" && a != "--paper" && a != "--light-panel" && !(i > 0 && (args[i - 1] == "--screenshot" || args[i - 1] == "--lang")));
+            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && a != "--lang" && a != "--paper" && a != "--light-panel" && a != "--cvd" && !(i > 0 && (args[i - 1] == "--screenshot" || args[i - 1] == "--lang")));
             if !opens_something {
                 app.look_for_recovery();
             }

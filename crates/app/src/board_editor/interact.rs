@@ -203,6 +203,7 @@ impl BoardEditor {
             // on a corner or an edge of a shape of the selected pour: a menu (a corner, a line or an arc, add or take away)
             if resp.secondary_clicked() && self.tool == Tool::Select {
                 let at = resp.hover_pos().map(|pos| self.to_world(rect, pos));
+                self.note_at = at;
                 self.vmenu = at.and_then(|w| self.zone_edit_target(w));
                 self.net_menu = if self.vmenu.is_none() { at.and_then(|w| self.net_under(w)) } else { None };
             }
@@ -210,6 +211,17 @@ impl BoardEditor {
                 resp.context_menu(|ui| self.zone_edit_menu(ui));
             } else if self.tool == Tool::Select && self.net_menu.is_some() {
                 resp.context_menu(|ui| self.net_menu_ui(ui));
+            } else if self.tool == Tool::Select && self.note_at.is_some() {
+                // an empty spot: a review note there
+                resp.context_menu(|ui| {
+                    if ui.button(i18n::tr("ここに付箋を置く")).on_hover_text(i18n::tr("この場所にコメント (付箋) を置きます。返事を付けたり、解決済みにしたりできます。ファイルに保存されます")).clicked()
+                        && let Some(p) = self.note_at
+                    {
+                        self.checkpoint();
+                        crate::notes_ui::add(&mut self.board.notes, &mut self.notes_ui, p.x, p.y, 0);
+                        ui.close();
+                    }
+                });
             } else if resp.clicked_by(egui::PointerButton::Secondary) {
                 self.leave_tool();
             }

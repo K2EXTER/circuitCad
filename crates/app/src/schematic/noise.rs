@@ -52,7 +52,7 @@ impl SchEditor {
             self.noise_marks.push((pt, false));
         }
         self.noise_pick = false;
-        self.run_noise();
+        self.start_noise();
     }
 
     /// Starts choosing points on the sheet to add to the waveform viewer.
@@ -103,6 +103,16 @@ impl SchEditor {
     }
 
     pub(super) fn run_noise(&mut self) {
+        self.noise_job(false);
+    }
+
+    /// The noise analysis from the screen (its button, F5): on another thread (`run_job`).
+    pub(super) fn start_noise(&mut self) {
+        self.last_run = LastRun::Noise;
+        self.noise_job(true);
+    }
+
+    fn noise_job(&mut self, background: bool) {
         let (Some(f0), Some(f1), Some(ppd), Some(temp)) =
             (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd), self.noise_temp.trim().parse::<f64>().ok())
         else {
@@ -110,11 +120,14 @@ impl SchEditor {
             return;
         };
         let (out, inp) = (self.noise_out.trim().to_string(), self.noise_in.trim().to_string());
-        let outcome = if out.is_empty() {
+        let circuit = if out.is_empty() {
             Err(vec!["出力ノードの名前を入力してください (ネットラベル名など。差動は A,B)".to_string()])
         } else {
-            match sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings) {
-                Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+            sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())
+        };
+        let compute = move || {
+            match circuit {
+                Err(errs) => Err(errs),
                 Ok(c) => {
                     let (out_p, out_n) = match out.split_once(',') {
                         Some((a, b)) => (a.trim().to_string(), Some(b.trim().to_string())),
@@ -131,6 +144,10 @@ impl SchEditor {
                 }
             }
         };
+        self.run_job(background, "ノイズ解析", compute, move |s, outcome| s.finish_noise(f0, f1, outcome));
+    }
+
+    fn finish_noise(&mut self, f0: f64, f1: f64, outcome: Result<sim_core::NoiseResult, Vec<String>>) {
         let mut selected = BTreeSet::new();
         selected.insert("合計".to_string());
         self.status = match &outcome {
@@ -192,7 +209,7 @@ impl SchEditor {
                             ui.end_row();
                             for (name, rms) in &order {
                                 let mut on = selected.contains(name);
-                                let color = order.iter().filter(|(n, _)| selected.contains(n)).position(|(n, _)| n == name).map(|i| PALETTE[i % PALETTE.len()]);
+                                let color = order.iter().filter(|(n, _)| selected.contains(n)).position(|(n, _)| n == name).map(|i| crate::plot::series(i));
                                 let share = if name == "合計" || name == "入力換算" { None } else { Some(res.share(name)) };
                                 let label = i18n::tr_dyn(name);
                                 let text = match color {
@@ -238,7 +255,7 @@ impl SchEditor {
                         ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から項目を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
-                    let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v, dots: false }).collect();
+                    let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: crate::plot::series(k), t: &res.freq, v, dots: false }).collect();
                     // the density itself (V/√Hz) on a log scale: the curve is dB with 0 dB = 1 nV/√Hz, which a bare "51 dB" did not say
                     let sty = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1e-9, "V/√Hz")) };
                     plot::draw_group(ui, rect, egui::Id::new("noise_density"), &traces, st, 0, &sty, true);

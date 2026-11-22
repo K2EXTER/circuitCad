@@ -4,6 +4,16 @@
 use super::*;
 use std::sync::atomic::Ordering;
 
+/// What a background analysis hands back to the window: the step that shows its result.
+type Apply = Box<dyn FnOnce(&mut SchEditor) + Send>;
+
+/// An analysis solving on another thread (`run_job`): what it is, since when, and where its result comes.
+pub(super) struct Job {
+    what: &'static str,
+    started: std::time::Instant,
+    rx: std::sync::mpsc::Receiver<Apply>,
+}
+
 /// One computation on another thread, for the status line.
 pub struct Running {
     /// What is computed ("過渡解析").
@@ -16,6 +26,16 @@ pub struct Running {
 impl SchEditor {
     /// Takes the results that have come from other threads (every frame, from the window, whatever tab is shown).
     pub fn poll_jobs(&mut self, ctx: &egui::Context) {
+        if let Some(job) = &self.job {
+            match job.rx.try_recv() {
+                Ok(apply) => {
+                    self.job = None;
+                    apply(self);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(100)),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.job = None,
+            }
+        }
         self.poll_tran_job(ctx);
         self.poll_fault_scan(ctx);
         self.poll_diagnosis(ctx);
@@ -23,6 +43,9 @@ impl SchEditor {
 
     /// The computation running on another thread, if any (the first of them when there are several).
     pub fn running(&self) -> Option<Running> {
+        if let Some(job) = &self.job {
+            return Some(Running { what: job.what, seconds: job.started.elapsed().as_secs_f64(), fraction: None });
+        }
         if let Some(job) = &self.tran_job {
             let fraction = (job.tstop > 0.0).then(|| (job.watch.time() / job.tstop).clamp(0.0, 1.0));
             return Some(Running { what: "過渡解析", seconds: job.started.elapsed().as_secs_f64(), fraction });
@@ -39,11 +62,44 @@ impl SchEditor {
 
     /// Stops what is running on other threads ("止める" and Esc in the status line).
     pub fn stop_running(&mut self) {
+        // the thread finishes on its own; its answer is dropped and the result shown before stays
+        if let Some(job) = self.job.take() {
+            self.status = i18n::trf!("{}を途中で止めました。前の結果はそのままです", i18n::tr(job.what));
+        }
         self.stop_tran_job();
         if let Some(run) = &self.fault_ui.scan_run {
             run.cancel.store(true, Ordering::Relaxed);
         }
         self.stop_diagnosis();
+    }
+}
+
+impl SchEditor {
+    /// Solves `compute` and shows its answer with `apply`: on another thread when `background` (the buttons and F5; the status line
+    /// shows it and "止める" drops it), else at once (the command line, the tests, the runs whose result the caller reads right away).
+    /// One background analysis at a time: a new one replaces the one running.
+    pub(super) fn run_job<T: Send + 'static>(
+        &mut self,
+        background: bool,
+        what: &'static str,
+        compute: impl FnOnce() -> T + Send + 'static,
+        apply: impl FnOnce(&mut SchEditor, T) + Send + 'static,
+    ) {
+        if !background || cfg!(test) {
+            let v = compute();
+            apply(self, v);
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel::<Apply>();
+        let options = sim_core::options();
+        std::thread::spawn(move || {
+            // the simulation options are a per-thread setting
+            sim_core::set_options(options);
+            let v = compute();
+            let _ = tx.send(Box::new(move |s: &mut SchEditor| apply(s, v)));
+        });
+        self.job = Some(Job { what, started: std::time::Instant::now(), rx });
+        self.status.clear();
     }
 }
 

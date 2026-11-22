@@ -625,7 +625,7 @@ impl SchEditor {
                             .iter()
                             .zip(&dbs)
                             .enumerate()
-                            .map(|(k, ((n, sp), db))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &sp.freq, v: db, dots: false })
+                            .map(|(k, ((n, sp), db))| Trace { name: n, color: crate::plot::series(k), t: &sp.freq, v: db, dots: false })
                             .collect();
                         // the amplitude itself (peak volts) on a log scale: the curve is dB with 0 dB = 1 V
                         let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: Some((1.0, "V")) };
@@ -668,7 +668,7 @@ impl SchEditor {
                         }
                         if let Some(sg) = res.signal(name) {
                             let g = if sg.unit == "V" { 0 } else { 1 };
-                            groups[g].push(Trace { name: &sg.name, color: PALETTE[k % PALETTE.len()], t: &res.time, v: &sg.values, dots: false });
+                            groups[g].push(Trace { name: &sg.name, color: crate::plot::series(k), t: &res.time, v: &sg.values, dots: false });
                             k += 1;
                         }
                     }
@@ -677,7 +677,7 @@ impl SchEditor {
                         for gs in gh.sigs.iter().rev() {
                             let Some(k) = order.iter().filter(|n| selected.contains(**n)).position(|n| *n == gs.base) else { continue };
                             if !groups[gs.group].is_empty() {
-                                groups[gs.group].insert(0, Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v, dots: false });
+                                groups[gs.group].insert(0, Trace { name: &gs.name, color: plot::ghost_color(crate::plot::series(k)), t: &gh.x, v: &gs.v, dots: false });
                             }
                         }
                     }

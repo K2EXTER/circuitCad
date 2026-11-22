@@ -16,19 +16,28 @@ impl SchEditor {
     }
 
     pub(super) fn run_sweep(&mut self) {
+        self.sweep_job(false);
+    }
+
+    /// The DC sweep from the screen (its button, F5): on another thread (`run_job`).
+    pub(super) fn start_sweep(&mut self) {
+        self.last_run = LastRun::Sweep;
+        self.sweep_job(true);
+    }
+
+    fn sweep_job(&mut self, background: bool) {
         let (Some(a), Some(b), Some(st)) = (parse_value(&self.sweep_start), parse_value(&self.sweep_stop), parse_value(&self.sweep_step)) else {
             self.status = "開始・終了・刻みを数値で入力してください (例: 0, 5, 0.05)".into();
             return;
         };
         let src = self.sweep_src.trim().to_string();
-        let outcome = if src.is_empty() {
-            Err(vec!["スイープする電源の番号を入力してください (例: V2)。入力にあたる電源です".to_string()])
-        } else {
-            match self.sim_circuit() {
-                Err(errs) => Err(errs),
-                Ok(c) => dc_sweep(&c, &DcSweepSettings { source: src.clone(), start: a, stop: b, step: st }).map_err(|e| vec![e.to_string()]),
-            }
-        };
+        let circuit = if src.is_empty() { Err(vec!["スイープする電源の番号を入力してください (例: V2)。入力にあたる電源です".to_string()]) } else { self.sim_circuit() };
+        let settings = DcSweepSettings { source: src.clone(), start: a, stop: b, step: st };
+        let compute = move || circuit.and_then(|c| dc_sweep(&c, &settings).map_err(|e| vec![e.to_string()]));
+        self.run_job(background, "DCスイープ", compute, move |s, outcome| s.finish_sweep(&src, a, b, outcome));
+    }
+
+    fn finish_sweep(&mut self, src: &str, a: f64, b: f64, outcome: Result<sim_core::DcSweepResult, Vec<String>>) {
         let mut selected = BTreeSet::new();
         if let Ok(r) = &outcome {
             // the output of an inverter is the most interesting signal: prefer a falling curve
@@ -116,7 +125,7 @@ impl SchEditor {
                             let sel_order: Vec<&str> = names.iter().filter(|s| selected.contains(&s.name)).map(|s| s.name.as_str()).collect();
                             for sg in &names {
                                 let mut on = selected.contains(&sg.name);
-                                let color = sel_order.iter().position(|n| *n == sg.name).map(|i| PALETTE[i % PALETTE.len()]);
+                                let color = sel_order.iter().position(|n| *n == sg.name).map(|i| crate::plot::series(i));
                                 let text = match color {
                                     Some(c) if on => egui::RichText::new(&sg.name).color(c),
                                     _ => egui::RichText::new(&sg.name),
@@ -138,11 +147,11 @@ impl SchEditor {
                         ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から信号を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
-                    let mut volts: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "V").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values, dots: false }).collect();
+                    let mut volts: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "V").map(|(k, s)| Trace { name: &s.name, color: crate::plot::series(*k), t: &res.x, v: &s.values, dots: false }).collect();
                     if *show_diag && !temp && !volts.is_empty() {
                         volts.push(Trace { name: "出力=入力", color: Color32::from_gray(120), t: &res.x, v: &res.x, dots: false });
                     }
-                    let amps: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "A").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values, dots: false }).collect();
+                    let amps: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "A").map(|(k, s)| Trace { name: &s.name, color: crate::plot::series(*k), t: &res.x, v: &s.values, dots: false }).collect();
                     let x_unit = if temp { "℃" } else { "V" };
                     let vs = Style { unit: "V", x_unit, x_name: &res.source, plain_y: false, db_ref: None };
                     let is = Style { unit: "A", x_unit, x_name: &res.source, plain_y: false, db_ref: None };

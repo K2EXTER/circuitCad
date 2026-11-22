@@ -36,6 +36,7 @@ impl BoardEditor {
         self.draw_live_drc(&painter, rect, ui.input(|i| i.pointer.hover_pos()));
         self.draw_measure(&painter, rect);
         self.layer_overlay(ui, rect);
+        self.notes_on_canvas(ui, rect);
 
         if !self.alt_pan {
             self.box_selection(ui, &resp, rect, &painter);

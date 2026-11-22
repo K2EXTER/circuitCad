@@ -290,6 +290,14 @@ impl BoardEditor {
                     self.run_drc();
                 }
                 self.live_drc_toggle(ui);
+                let open_notes = self.board.notes.iter().filter(|n| !n.resolved).count();
+                if crate::widgets::segment_row(ui, &[("付箋…", None)])[0]
+                    .clone()
+                    .on_hover_text(i18n::trf!("基板の上のコメント (付箋) の一覧を開きます。まだの付箋 {open_notes} 枚。置くのは、選択ツールで基板の空いた所を右クリックして「ここに付箋を置く」"))
+                    .clicked()
+                {
+                    self.notes_ui.open = true;
+                }
                 self.requirements_check(ui);
                 self.requirements_table(ui, &sch.sch.requirements);
                 let mut jump = None;

@@ -387,7 +387,7 @@ impl App {
     /// The curves of the whole system's last transient or AC run: a coloured name per pin, then voltage over current (transient) or gain
     /// over phase (AC), x axis shared.
     fn system_wave_ui(&mut self, ui: &mut egui::Ui) {
-        use crate::plot::{self, Style, Trace, PALETTE};
+        use crate::plot::{self, Style, Trace};
         let Some(w) = &self.boards.wave else { return };
         let w = match w {
             Err(e) => {
@@ -411,7 +411,7 @@ impl App {
             ui.label(egui::RichText::new(i18n::tr("つないだピンに、どちらかの基板で何もつながっていません")).weak());
             return;
         }
-        let color = |k: usize| PALETTE[k % PALETTE.len()];
+        let color = |k: usize| crate::plot::series(k);
         ui.horizontal_wrapped(|ui| {
             for (k, n) in names.iter().enumerate() {
                 ui.colored_label(color(k), format!("━ {n}"));

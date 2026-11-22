@@ -15,14 +15,30 @@ impl SchEditor {
     }
 
     pub(super) fn run_ac(&mut self) {
+        self.ac_job(false);
+    }
+
+    /// The AC analysis from the screen (its button, F5): on another thread, shown in the status line (`run_job`).
+    pub(super) fn start_ac(&mut self) {
+        self.last_run = LastRun::Ac;
+        self.ac_job(true);
+    }
+
+    fn ac_job(&mut self, background: bool) {
         let (Some(f0), Some(f1), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
             self.status = "開始・終了周波数と点数/デケードを数値で入力してください (例: 10, 1Meg, 20)".into();
             return;
         };
-        let outcome = match self.sim_circuit() {
+        let circuit = self.sim_circuit();
+        let settings = AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) };
+        let compute = move || match circuit {
             Err(errs) => Err(errs),
-            Ok(c) => ac_analysis(&c, &AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) }).map_err(|e| dc::small_signal_error(&c, e)),
+            Ok(c) => ac_analysis(&c, &settings).map_err(|e| dc::small_signal_error(&c, e)),
         };
+        self.run_job(background, "AC解析", compute, move |s, outcome| s.finish_ac(f0, f1, outcome));
+    }
+
+    fn finish_ac(&mut self, f0: f64, f1: f64, outcome: Result<sim_core::AcResult, Vec<String>>) {
         let mut selected = BTreeSet::new();
         if let Ok(r) = &outcome {
             // the first three voltages that answer to the AC source: a node nothing AC reaches (the supply, a node behind a DC-only
@@ -255,13 +271,13 @@ impl SchEditor {
                         ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から信号を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
-                    let mut mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: db, dots: false }).collect();
-                    let mut phase: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, _, ph))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: ph, dots: false }).collect();
+                    let mut mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: crate::plot::series(k), t: &res.freq, v: db, dots: false }).collect();
+                    let mut phase: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, _, ph))| Trace { name: n, color: crate::plot::series(k), t: &res.freq, v: ph, dots: false }).collect();
                     // kept "before" curves go first, so they are painted behind the live ones
                     if let Some(gh) = ghost.as_ref() {
                         for gs in gh.sigs.iter().rev() {
                             let Some(k) = chosen.iter().position(|(n, _, _)| *n == gs.base) else { continue };
-                            let tr = Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v, dots: false };
+                            let tr = Trace { name: &gs.name, color: plot::ghost_color(crate::plot::series(k)), t: &gh.x, v: &gs.v, dots: false };
                             if gs.group == 0 { mag.insert(0, tr) } else { phase.insert(0, tr) }
                         }
                     }

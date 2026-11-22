@@ -486,6 +486,9 @@ pub struct BoardEditor {
     net_tab: u8,
     /// The net under the pointer when the right-click menu was opened (Select tool, not on a pour's corner or edge).
     net_menu: Option<String>,
+    /// The review notes' window (`notes_ui`), and where on the board the last right click was (for "ここに付箋を置く").
+    pub(super) notes_ui: crate::notes_ui::NotesUi,
+    note_at: Option<Point>,
     /// Tint the parts by the schematic sheet they come from.
     pub show_sheets: bool,
     /// Frames round the groups of the design's requirements, and lines between the parts that must keep apart, drawn on the board.
@@ -663,6 +666,8 @@ impl Default for BoardEditor {
             net_win: None,
             net_tab: 0,
             net_menu: None,
+            notes_ui: Default::default(),
+            note_at: None,
             show_sheets: true,
             show_req_marks: true,
             group_notes: vec![],

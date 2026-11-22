@@ -69,8 +69,8 @@ pub(super) fn draw_loop_chart(ui: &mut egui::Ui, rect: Rect, freq: &[f64], t: &[
             let circle: Vec<(f64, f64)> = (0..=96).map(|k| k as f64 / 96.0 * std::f64::consts::TAU).map(|a| (a.cos(), a.sin())).collect();
             let curves = [
                 XyCurve { name: "単位円 |T| = 1", color: Color32::from_gray(110), pts: &circle, tags: &[], line: Line::Dashed },
-                XyCurve { name: "T (負の周波数)", color: plot::ghost_color(PALETTE[0]), pts: &mirror, tags: &[], line: Line::Dashed },
-                XyCurve { name: "T", color: PALETTE[0], pts: &pts, tags, line: Line::Solid },
+                XyCurve { name: "T (負の周波数)", color: plot::ghost_color(crate::plot::series(0)), pts: &mirror, tags: &[], line: Line::Dashed },
+                XyCurve { name: "T", color: crate::plot::series(0), pts: &pts, tags, line: Line::Solid },
             ];
             let mut marks = vec![XyMark { at: (-1.0, 0.0), color: RED, shape: xy::Shape::Cross, text: "-1".into(), inline: true }];
             marks.extend(margin_marks(freq, t, &|_, z| { let z = map(z); (z.re, z.im) }, true));
@@ -90,7 +90,7 @@ pub(super) fn draw_loop_chart(ui: &mut egui::Ui, rect: Rect, freq: &[f64], t: &[
             let curves = [
                 XyCurve { name: "-180°", color: Color32::from_gray(110), pts: &vline, tags: &[], line: Line::Dashed },
                 XyCurve { name: "0 dB", color: Color32::from_gray(110), pts: &hline, tags: &[], line: Line::Dashed },
-                XyCurve { name: "T", color: PALETTE[0], pts: &pts, tags, line: Line::Solid },
+                XyCurve { name: "T", color: crate::plot::series(0), pts: &pts, tags, line: Line::Solid },
             ];
             let mut marks = vec![XyMark { at: (-180.0, 0.0), color: RED, shape: xy::Shape::Cross, text: "(-180°, 0 dB)".into(), inline: true }];
             // the phase on this chart is the continuous one, so a crossover point is put at the phase of the curve there

@@ -257,3 +257,24 @@ impl BoardEditor {
         }
     }
 }
+
+impl BoardEditor {
+    /// The review notes as marks on the board, and their window (a note chosen in the list brings the view to it). A change to the
+    /// notes is one undo step per edit (`checkpoint_once`).
+    pub(super) fn notes_on_canvas(&mut self, ui: &mut egui::Ui, rect: Rect) {
+        let (zoom, pan, c) = (self.zoom, self.pan, rect.center());
+        let to_screen = |x: f64, y: f64| Pos2::new(c.x + (x as f32 - pan.x) * zoom, c.y - (y as f32 - pan.y) * zoom);
+        crate::notes_ui::marks(ui, "board", &self.board.notes, &mut self.notes_ui, |_| true, to_screen);
+        let mut notes = self.board.notes.clone();
+        let jump = crate::notes_ui::window(ui.ctx(), "基板", &mut notes, &mut self.notes_ui, |_| None);
+        if notes != self.board.notes {
+            self.checkpoint_once();
+            self.board.notes = notes;
+        }
+        if let Some(crate::notes_ui::NoteAction::Jump(k)) = jump
+            && let Some(n) = self.board.notes.get(k)
+        {
+            self.pan = Vec2::new(n.x as f32, n.y as f32);
+        }
+    }
+}

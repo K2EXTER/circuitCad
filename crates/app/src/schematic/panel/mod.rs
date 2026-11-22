@@ -260,7 +260,11 @@ impl SchEditor {
         }
         // the other two checks of the design: its requirements table, and areas left out of the ERC while drawing
         let skip_enabled = self.selection_box_exists();
-        let bar = crate::widgets::segment_row(ui, &[("設計の要件の表…", None), ("選択を描きかけにする", (!skip_enabled).then_some("先に回路図で部品や線を選んでください"))]);
+        let bar = crate::widgets::segment_row(ui, &[("設計の要件の表…", None), ("選択を描きかけにする", (!skip_enabled).then_some("先に回路図で部品や線を選んでください")), ("付箋…", None)]);
+        let open_notes = self.sch.notes.iter().filter(|n| !n.resolved).count();
+        if bar[2].clone().on_hover_text(i18n::trf!("回路図の上のコメント (付箋) の一覧を開きます。まだの付箋 {open_notes} 枚。置くのは、図の空いた所を右クリックして「ここに付箋を置く」")).clicked() {
+            self.notes_ui.open = true;
+        }
         if bar[0].clone().on_hover_text(i18n::tr("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)")).clicked() {
             self.open_requirements();
         }

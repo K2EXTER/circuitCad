@@ -99,20 +99,24 @@ impl SchEditor {
 
     /// Choosing the reference net from the right-click on a wire, pin or label (in the Select tool, with a DC result).
     /// Measuring from a net also switches to steps of ten: the differences left are small.
+    /// The menu also puts a review note there (always; the net choices only with a DC result shown).
     pub(super) fn open_net_menu(&mut self, at: Pt, pos: Pos2) -> bool {
-        if !self.show_v || self.dc.as_ref().is_none_or(|d| d.outcome.is_err()) {
-            return false;
-        }
-        let Some(net) = net_at(&self.sch, at) else { return false };
-        self.net_menu = Some((net, pos));
+        let with_dc = self.show_v && self.dc.as_ref().is_some_and(|d| d.outcome.is_ok());
+        let net = if with_dc { net_at(&self.sch, at) } else { None };
+        self.net_menu = Some((net, pos, at));
         true
     }
 
     pub(super) fn net_menu_ui(&mut self, ui: &egui::Ui) {
-        let Some((net, pos)) = self.net_menu.clone() else { return };
+        let Some((net, pos, at)) = self.net_menu.clone() else { return };
         let mut keep = true;
         egui::Area::new(egui::Id::new("sch_net_menu")).order(egui::Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
+                if ui.button(i18n::tr("ここに付箋を置く")).on_hover_text(i18n::tr("この場所にコメント (付箋) を置きます。返事を付けたり、解決済みにしたりできます。ファイルに保存されます")).clicked() {
+                    crate::notes_ui::add(&mut self.sch.notes, &mut self.notes_ui, at.0 as f64, at.1 as f64, self.sch.active_sheet);
+                    keep = false;
+                }
+                let Some(net) = &net else { return };
                 let here = self.vscale.reference.as_deref() == Some(net.as_str());
                 if !here
                     && ui
@@ -218,5 +222,26 @@ mod tests {
         assert_eq!(short_volts(0.24), "240m");
         assert_eq!(short_volts(1.8), "1.8");
         assert_eq!(short_volts(-3.3333), "-3.33");
+    }
+}
+
+impl SchEditor {
+    /// The review notes of this sheet as marks on the canvas, and their window (a note chosen in the list brings the view to it).
+    pub(super) fn notes_on_canvas(&mut self, ui: &mut egui::Ui, rect: Rect) {
+        let (zoom, pan, c, sheet) = (self.zoom, self.pan, rect.center(), self.sch.active_sheet);
+        let to_screen = |x: f64, y: f64| Pos2::new(c.x + (x as f32 - pan.x) * zoom, c.y + (y as f32 - pan.y) * zoom);
+        crate::notes_ui::marks(ui, "sch", &self.sch.notes, &mut self.notes_ui, |n| n.sheet == sheet, to_screen);
+        let many = self.sch.sheet_count() > 1;
+        let names: Vec<String> = (0..self.sch.sheet_count()).map(|k| self.sch.sheet_name(k)).collect();
+        let jump = crate::notes_ui::window(ui.ctx(), "回路図", &mut self.sch.notes, &mut self.notes_ui, |s| many.then(|| names.get(s).cloned().unwrap_or_default()));
+        if let Some(crate::notes_ui::NoteAction::Jump(k)) = jump
+            && let Some(n) = self.sch.notes.get(k)
+        {
+            let (x, y, s) = (n.x as f32, n.y as f32, n.sheet);
+            if s != self.sch.active_sheet && s < self.sch.sheet_count() {
+                self.show_sheet(s);
+            }
+            self.pan = Vec2::new(x, y);
+        }
     }
 }

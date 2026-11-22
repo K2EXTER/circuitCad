@@ -3,7 +3,7 @@
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use crate::part_form::PartForm;
 use part_lib::PartDef;
-use crate::plot::{self, PlotState, Style, Trace, PALETTE};
+use crate::plot::{self, PlotState, Style, Trace};
 use sim_core::{diagnose, stability_margins, minus_3db, wave_measure, 
     ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, monte_carlo, temp_sweep, Circuit, step_metrics, settling_times, McMeasure, McResult, McSettings, TranMetric, T_NOM_C, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
@@ -169,7 +169,10 @@ pub struct SchEditor {
     show_i: bool,
     /// How the wires are coloured by voltage (the legend's switches) and the menu of a right-clicked net.
     vscale: VoltScale,
-    net_menu: Option<(String, Pos2)>,
+    /// The right-click menu on the canvas: the net under the pointer (with a DC result shown), where it opened, the sheet point.
+    net_menu: Option<(Option<String>, Pos2, Pt)>,
+    /// The review notes' window (`notes_ui`).
+    pub(crate) notes_ui: crate::notes_ui::NotesUi,
     /// The analysis run last, which F5 and the band over an out-of-date result run again.
     last_run: LastRun,
     /// The analyses pinned (★) to the top of the analysis tab (kept in `settings.json`), and whether that changed this frame.
@@ -327,6 +330,8 @@ pub struct SchEditor {
     diag: troubleshoot::DiagState,
     /// The transient analysis running on another thread (`start_tran`).
     tran_job: Option<TranJob>,
+    /// Another analysis running on another thread (`run_job`).
+    job: Option<running::Job>,
     /// Repair practice with the virtual meter (the "修理の道" lessons): the hidden fault and the readings.
     repair: Option<repair_practice::RepairPractice>,
     /// "デジタル回路を動かしながら見る": the learning mode over the canvas while it is on (`live_logic.rs`).
@@ -548,15 +553,15 @@ impl SchEditor {
         match self.last_run {
             LastRun::Dc => self.analyze_dc(),
             LastRun::Tran => self.start_tran(),
-            LastRun::Ac => self.analyze_ac(),
-            LastRun::Noise => self.analyze_noise(),
-            LastRun::Sweep => self.analyze_sweep(),
+            LastRun::Ac => self.start_ac(),
+            LastRun::Noise => self.start_noise(),
+            LastRun::Sweep => self.start_sweep(),
             LastRun::Impedance => self.analyze_impedance(),
             LastRun::Loop => self.analyze_loop(),
             LastRun::PoleZero => self.analyze_pz(),
             LastRun::Psrr => self.analyze_psrr(),
             LastRun::Cmrr => self.analyze_cmrr(),
-            LastRun::Param => self.analyze_param(),
+            LastRun::Param => self.start_param(),
             LastRun::Locus => self.analyze_locus(),
         }
     }
@@ -719,6 +724,7 @@ impl Default for SchEditor {
             show_v: true,
             vscale: VoltScale::default(),
             net_menu: None,
+            notes_ui: Default::default(),
             last_run: LastRun::Dc,
             analysis_pins: crate::prefs::Prefs::default().analysis_pins,
             analysis_pins_changed: false,
@@ -818,6 +824,7 @@ impl Default for SchEditor {
             bench_ui: Default::default(),
             diag: Default::default(),
             tran_job: None,
+            job: None,
             repair: None,
             live_logic: None,
             sweep_src: String::new(),

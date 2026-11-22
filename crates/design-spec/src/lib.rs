@@ -166,6 +166,27 @@ pub struct Waiver {
     pub note: String,
 }
 
+/// A review note (付箋) on the schematic or the board: where it sits, what it says, the replies under it and whether it is settled.
+/// For a teacher marking a student's circuit, or a colleague looking over a design. The schematic keeps all its sheets' notes in one
+/// list (`sheet` says which sheet; 0 on the board).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Note {
+    /// The place: grid units on the schematic, mm on the board.
+    pub x: f64,
+    pub y: f64,
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub sheet: usize,
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replies: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub resolved: bool,
+}
+
+fn is_zero_usize(v: &usize) -> bool {
+    *v == 0
+}
+
 fn is_zero_u32(v: &u32) -> bool {
     *v == 0
 }

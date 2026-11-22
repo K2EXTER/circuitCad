@@ -216,7 +216,7 @@ impl SchEditor {
                     .iter()
                     .zip(&tags)
                     .enumerate()
-                    .map(|(k, (p, t))| XyCurve { name: "極", color: PALETTE[k % (PALETTE.len() - 1)], pts: p, tags: t, line: Line::WithDots })
+                    .map(|(k, (p, t))| XyCurve { name: "極", color: crate::plot::series(k % 7), pts: p, tags: t, line: Line::WithDots })
                     .collect();
                 let mut marks = vec![];
                 let n = r.steps.len() - 1;

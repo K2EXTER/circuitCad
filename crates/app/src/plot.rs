@@ -165,6 +165,34 @@ pub const PALETTE: [Color32; 8] = [
     Color32::from_rgb(225, 225, 225),
 ];
 
+/// The same number of colours for the colour-vision theme: the Okabe–Ito set, lightened for the dark plot ground (orange, sky blue,
+/// bluish green, yellow, blue, vermillion, reddish purple, grey).
+const CVD_PALETTE: [Color32; 8] = [
+    Color32::from_rgb(240, 170, 40),
+    Color32::from_rgb(86, 180, 233),
+    Color32::from_rgb(40, 190, 140),
+    Color32::from_rgb(240, 228, 66),
+    Color32::from_rgb(70, 140, 230),
+    Color32::from_rgb(240, 110, 40),
+    Color32::from_rgb(214, 140, 180),
+    Color32::from_rgb(225, 225, 225),
+];
+
+/// The colour of the `k`-th line of a plot (from `PALETTE`, or from the colour-vision set when that theme is chosen).
+pub fn series(k: usize) -> Color32 {
+    let p = if crate::canvas_theme::palette().cvd { &CVD_PALETTE } else { &PALETTE };
+    p[k % p.len()]
+}
+
+/// The dash of the `k`-th line of a plot under the colour-vision theme, so lines are told apart without their colour: solid, long
+/// dashes, dots, short dashes (`None` = solid; always solid in the other themes).
+pub fn dash(k: usize) -> Option<(f32, f32)> {
+    if !crate::canvas_theme::palette().cvd {
+        return None;
+    }
+    [None, Some((9.0, 4.0)), Some((2.0, 3.0)), Some((5.0, 3.0))][k % 4]
+}
+
 /// The dimmed colour of a kept ("before") trace drawn behind the live one of the same colour.
 pub fn ghost_color(c: Color32) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 100)
@@ -459,7 +487,19 @@ pub fn draw_group(
 
     // traces (min/max envelope per pixel column when zoomed out)
     let clip = painter.with_clip_rect(pa);
-    for tr in traces {
+    // a line's dash (colour-vision theme): by its place among the traces of the same colour order
+    let line = |pts: Vec<Pos2>, stroke: Stroke, k: usize| match dash(k) {
+        Some((d, g)) => {
+            clip.extend(egui::Shape::dashed_line(&pts, stroke, d, g));
+        }
+        None => {
+            clip.add(egui::Shape::line(pts, stroke));
+        }
+    };
+    let cvd = crate::canvas_theme::palette().cvd;
+    // the heights of the names put at the line ends so far: a name that would sit on another moves up a line
+    let mut named: Vec<f32> = vec![];
+    for (k, tr) in traces.iter().enumerate() {
         let a = tr.t.partition_point(|&t| t < x0).saturating_sub(1);
         let b = (tr.t.partition_point(|&t| t <= x1) + 1).min(tr.t.len());
         if b <= a + usize::from(!tr.dots) {
@@ -475,10 +515,21 @@ pub fn draw_group(
             }
             continue;
         }
+        // the colour-vision theme names each line at its right end, so it is read without the legend's colours
+        if cvd && !tr.name.is_empty() {
+            let (t, v) = (tr.t[b - 1].min(x1), tr.v[b - 1]);
+            let mut y = sy(v).clamp(pa.top() + 14.0, pa.bottom() - 2.0);
+            while named.iter().any(|n| (n - y).abs() < 13.0) && y > pa.top() + 14.0 {
+                y -= 13.0;
+            }
+            named.push(y);
+            let at = Pos2::new(sx(t).min(pa.right() - 4.0), y);
+            clip.text(at, egui::Align2::RIGHT_BOTTOM, tr.name, egui::FontId::proportional(12.0), tr.color);
+        }
         let n = b - a;
         if n as f32 <= pa.width() * 2.0 {
             let pts: Vec<Pos2> = (a..b).map(|i| Pos2::new(sx(tr.t[i]), sy(tr.v[i]))).collect();
-            clip.add(egui::Shape::line(pts, stroke));
+            line(pts, stroke, k);
         } else {
             // too many points: keep first / min / max / last of every pixel column
             // (grouped by screen position, so this is also right on a logarithmic axis)
@@ -510,7 +561,7 @@ pub fn draw_group(
             if let Some(done) = cur {
                 flush(&mut pts, done);
             }
-            clip.add(egui::Shape::line(pts, stroke));
+            line(pts, stroke, k);
         }
     }
 
@@ -667,5 +718,23 @@ mod db_ref_tests {
         assert_eq!(z.y_text(-20.0, 10.0), "100mΩ");
         let plain = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
         assert_eq!(plain.y_text(-20.0, 10.0), "-20 dB");
+    }
+}
+
+#[cfg(test)]
+mod cvd_tests {
+    use super::*;
+
+    /// Under the colour-vision theme the lines of a plot differ by dash as well as colour; in the other themes they stay solid.
+    #[test]
+    fn the_colour_vision_theme_tells_lines_apart_by_dash() {
+        crate::canvas_theme::set_palette(crate::canvas_theme::CVD);
+        let dashes: Vec<_> = (0..4).map(dash).collect();
+        assert!(dashes[0].is_none() && dashes[1..].iter().all(|d| d.is_some()));
+        assert_ne!(dashes[1], dashes[2]);
+        assert_ne!(series(0), series(1));
+        crate::canvas_theme::set_palette(crate::canvas_theme::DARK);
+        assert!((0..4).all(|k| dash(k).is_none()));
+        assert_eq!(series(0), PALETTE[0]);
     }
 }

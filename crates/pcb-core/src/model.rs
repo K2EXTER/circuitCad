@@ -759,6 +759,9 @@ pub struct Board {
     /// The findings of the table's check that the designer accepted, each with the reason (`requirements::check` lists them apart).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub waivers: Vec<design_spec::Waiver>,
+    /// Review notes (付箋) on the board, in mm (`design_spec::Note`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<design_spec::Note>,
     /// Limits on the copper of a connection from the table of requirements (`requirements::check` measures them).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub measures: Vec<design_spec::Measure>,
@@ -900,6 +903,7 @@ impl Board {
             keep_apart: vec![],
             bypass: vec![],
             waivers: vec![],
+            notes: vec![],
             measures: vec![],
             stackup: Default::default(),
             locked_parts: vec![],

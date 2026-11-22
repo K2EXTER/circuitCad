@@ -120,6 +120,15 @@ pub(super) fn windows(app: &mut App, a: &Args) {
     if a.has("--light-panel") {
         crate::theme::set_light(true);
     }
+    // `--cvd`: the colour-vision theme on the canvases for this launch (screenshots)
+    if a.has("--cvd") {
+        crate::canvas_theme::set_palette(crate::canvas_theme::CVD);
+    }
+    // `--notes`: the review notes' window open, the first note chosen
+    if a.has("--notes") {
+        app.sch.notes_ui.open = true;
+        app.sch.notes_ui.sel = Some(0);
+    }
     if a.has("--paper") {
         crate::canvas_theme::set_palette(crate::canvas_theme::PAPER);
     }

@@ -189,7 +189,7 @@ fn colors_tab(ui: &mut egui::Ui, p: &mut Prefs) {
     let theme = Theme::parse(&p.canvas_theme).unwrap_or_default();
     ui.label(i18n::tr("キャンバス")).on_hover_text(i18n::tr("回路図を描く所の色です。書き出す絵 (SVG・PDF) は、どちらでもいつも紙の色です"));
     ui.horizontal(|ui| {
-        for (t, name, hint) in [(Theme::Dark, "暗い地", "暗い地に明るい灰色の部品。色は解析の結果 (電圧・電流・まちがい) にだけ使います"), (Theme::Paper, "紙", "印刷した回路図と同じ、白い紙の色")] {
+        for (t, name, hint) in [(Theme::Dark, "暗い地", "暗い地に明るい灰色の部品。色は解析の結果 (電圧・電流・まちがい) にだけ使います"), (Theme::Paper, "紙", "印刷した回路図と同じ、白い紙の色"), (Theme::Cvd, "色覚に配慮", "どの色覚の型でも見分けやすい色の組 (暗い地)。電圧は 0 V より下が青・上が橙。波形は線の形 (実線・破線・点線) と線の端の名前でも、熱の地図は明るさの順でも見分けられます")] {
             if ui.selectable_label(theme == t, i18n::tr(name)).on_hover_text(i18n::tr(hint)).clicked() && theme != t {
                 p.canvas_theme = t.key().to_string();
             }

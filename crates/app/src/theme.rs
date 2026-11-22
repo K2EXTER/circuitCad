@@ -160,6 +160,9 @@ pub fn series_color(k: usize) -> egui::Color32 {
         egui::Color32::from_rgb(220, 110, 200),
         egui::Color32::from_rgb(220, 210, 90),
     ];
+    if crate::canvas_theme::palette().cvd {
+        return crate::plot::series(k);
+    }
     COLORS[k % COLORS.len()]
 }
 

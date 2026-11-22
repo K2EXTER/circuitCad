@@ -67,7 +67,7 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.ac_ppd).desired_width(30.0)).on_hover_text(i18n::tr("周波数が10倍になる間に何点測るか。多いほど滑らかですが、20 もあれば十分です"));
         });
         if self.lit(crate::widgets::primary_button_wide(ui, None, "AC解析を実行"), "AC解析を実行").on_hover_text(i18n::tr("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます")).clicked() {
-            self.run_ac();
+            self.start_ac();
         }
     }
 
@@ -84,7 +84,7 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.sweep_step).desired_width(40.0)).on_hover_text(i18n::tr("電圧を変える間隔 (V)。切り替わりをなめらかに見るには、電源電圧の 1/100 くらい"));
         });
         if self.lit(crate::widgets::primary_button_wide(ui, None, "DCスイープを実行"), "DCスイープを実行").on_hover_text(i18n::tr("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します")).clicked() {
-            self.run_sweep();
+            self.start_sweep();
         }
     }
 
@@ -110,7 +110,7 @@ impl SchEditor {
                 }
             }
             if self.lit(ui.button(i18n::tr("ノイズ解析を実行")), "ノイズ解析を実行").on_hover_text(i18n::tr("抵抗の熱雑音や、ダイオード・トランジスタのショット雑音が出力にどれだけ現れるかを周波数ごとに計算します。")).clicked() {
-                self.run_noise();
+                self.start_noise();
             }
         });
     }
@@ -126,7 +126,7 @@ impl SchEditor {
         });
         if self.lit(crate::widgets::primary_button_wide(ui, None, "温度スイープを実行"), "温度スイープを実行").on_hover_text(i18n::tr("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
 LED の電流や、トランジスタ回路のバイアスが温度でずれる様子が分かります")).clicked() {
-            self.run_temp_sweep();
+            self.start_temp_sweep();
         }
         ui.horizontal_wrapped(|ui| {
             ui.label(i18n::tr("測る点"));
@@ -180,7 +180,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         ));
         if self.lit(crate::widgets::primary_button_wide(ui, None, "ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text(i18n::tr("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
 「同じ回路を作っても、実物ごとに電圧が違う」理由と、どの部品を高精度にすべきかが分かります")).clicked() {
-            self.run_mc();
+            self.start_mc();
         }
         if self.lit(ui.button(i18n::tr("感度を計算 (効く部品の順)")), "感度を計算 (効く部品の順)").on_hover_text(i18n::tr("部品を 1 つずつ 1% 大きく・小さくして、上で選んだ点の結果がどれだけ動くかを、効く順に並べます。許容差は使いません。どの部品を精度のいいものにすべきか、どれは安い部品でいいかが分かります")).clicked() {
             self.run_sens();

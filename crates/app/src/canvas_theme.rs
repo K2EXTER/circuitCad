@@ -69,6 +69,9 @@ pub enum Theme {
     #[default]
     Dark,
     Paper,
+    /// Dark ground with colours told apart whatever the colour vision (the Okabe–Ito set; voltages blue below 0 V and orange above),
+    /// and the plots that also tell their lines apart by dash and name (`Palette::cvd`).
+    Cvd,
 }
 
 impl Theme {
@@ -76,12 +79,14 @@ impl Theme {
         match self {
             Theme::Dark => "dark",
             Theme::Paper => "paper",
+            Theme::Cvd => "cvd",
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "dark" => Some(Theme::Dark),
             "paper" => Some(Theme::Paper),
+            "cvd" => Some(Theme::Cvd),
             _ => None,
         }
     }
@@ -89,6 +94,7 @@ impl Theme {
         match self {
             Theme::Dark => DARK,
             Theme::Paper => PAPER,
+            Theme::Cvd => CVD,
         }
     }
 }
@@ -100,6 +106,9 @@ pub struct Palette {
     pub zero: Color32,
     pub above: [Color32; 5],
     pub below: [Color32; 5],
+    /// Colours told apart whatever the colour vision, and the plots that do not lean on colour alone: dashes, names at the line ends,
+    /// a heat scale that runs in lightness (`plot::series`, `plot::dash`, `view3d::heat_color`).
+    pub cvd: bool,
 }
 
 impl Palette {
@@ -116,7 +125,7 @@ const fn rgb(r: u8, g: u8, b: u8) -> Color32 {
 }
 
 const fn pal(roles: [Color32; N], zero: Color32, above: [Color32; 5], below: [Color32; 5]) -> Palette {
-    Palette { c: roles, zero, above, below }
+    Palette { c: roles, zero, above, below, cvd: false }
 }
 
 /// Dark ground, light gray parts: colour is kept for results (the voltage steps, currents, errors).
@@ -178,6 +187,31 @@ pub const PAPER: Palette = pal(
     [rgb(140, 125, 0), rgb(200, 115, 0), rgb(220, 90, 20), rgb(200, 40, 40), rgb(170, 20, 110)],
     [rgb(0, 150, 180), rgb(0, 110, 200), rgb(40, 80, 210), rgb(90, 60, 200), rgb(120, 40, 170)],
 );
+
+/// The dark theme with colours that stay apart for every kind of colour vision: the Okabe–Ito set (orange, sky blue, bluish green,
+/// yellow, blue, vermillion, reddish purple) made light enough for the dark ground; voltages run blue below 0 V and orange above
+/// (the one pair every type tells apart), errors are vermillion and warnings yellow.
+pub const CVD: Palette = {
+    let mut p = DARK;
+    let mut c = p.c;
+    c[Role::Wire as usize] = rgb(60, 190, 150);
+    c[Role::Bus as usize] = rgb(86, 180, 233);
+    c[Role::NetLabel as usize] = rgb(150, 210, 240);
+    c[Role::Voltage as usize] = rgb(86, 180, 233);
+    c[Role::Current as usize] = rgb(240, 170, 40);
+    c[Role::Selection as usize] = rgb(240, 240, 240);
+    c[Role::Error as usize] = rgb(240, 110, 40);
+    c[Role::Warning as usize] = rgb(240, 228, 66);
+    c[Role::LogicHigh as usize] = rgb(240, 170, 40);
+    c[Role::LogicLow as usize] = rgb(86, 160, 233);
+    c[Role::LogicX as usize] = rgb(214, 140, 180);
+    c[Role::LedOn as usize] = rgb(255, 220, 80);
+    p.c = c;
+    p.above = [rgb(240, 225, 150), rgb(240, 200, 100), rgb(235, 170, 40), rgb(220, 135, 20), rgb(205, 105, 10)];
+    p.below = [rgb(170, 215, 240), rgb(120, 190, 240), rgb(86, 160, 233), rgb(70, 135, 220), rgb(80, 115, 215)];
+    p.cvd = true;
+    p
+};
 
 thread_local! {
     static CURRENT: Cell<Palette> = const { Cell::new(DARK) };
@@ -246,7 +280,7 @@ mod tests {
 
     #[test]
     fn every_role_of_both_themes_stands_out_from_the_ground() {
-        for t in [Theme::Dark, Theme::Paper] {
+        for t in [Theme::Dark, Theme::Paper, Theme::Cvd] {
             let p = t.base();
             for (r, k, ..) in ROLES {
                 assert!(!hard_to_see(&p, *r), "{t:?} {k}: {:.2}", contrast(p.get(*r), p.get(Role::Bg)));
