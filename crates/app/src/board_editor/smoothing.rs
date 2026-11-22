@@ -137,6 +137,11 @@ impl BoardEditor {
 
     /// Pick a silkscreen text (for screenshots): `text:N` a free text, `label:R1` a part's designator, `silk:N` a silk line, `R1` a part.
     pub fn select_named(&mut self, what: &str) {
+        // "R1,R2,R3": several parts picked (the align buttons)
+        if what.contains(',') {
+            self.multi = what.split(',').filter_map(|r| self.board.parts.iter().position(|p| p.refdes == r)).map(Item::Part).collect();
+            return;
+        }
         let index = |n: &str| n.parse::<usize>().ok();
         self.selected = match what.split_once(':') {
             Some(("text", n)) => index(n).filter(|&i| pcb_core::silkedit::is_free_text(&self.board, i)).map(Item::Text),

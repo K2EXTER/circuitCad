@@ -98,6 +98,23 @@ pub enum Icon {
     Cut,
     /// A clipboard (paste).
     Paste,
+    // The align buttons (the board's and the prototype boards'): a line the parts meet on, and two bars.
+    AlignLeft,
+    AlignRight,
+    AlignTop,
+    AlignBottom,
+    /// Centres on one vertical line.
+    AlignCenterX,
+    /// Centres on one horizontal line.
+    AlignCenterY,
+    /// Equal gaps across, the outer two kept (two edge lines and three bars).
+    SpaceX,
+    SpaceY,
+    /// Packed side by side (three bars pushed to one end by an arrow).
+    PackX,
+    PackY,
+    /// In the order of the pins they are wired to: a chip with lines down to three parts.
+    NetOrder,
 }
 
 /// Draw `icon` inside `r` (a square) with `c`.
@@ -460,6 +477,46 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
                 p.line_segment([arc[5], q(0.3, 0.3)], s);
             }
         }
+        Icon::AlignLeft | Icon::AlignRight | Icon::AlignTop | Icon::AlignBottom | Icon::AlignCenterX | Icon::AlignCenterY => {
+            // drawn as the vertical kinds (left, right, centre on a vertical line); the horizontal ones swap x and y
+            let swap = matches!(icon, Icon::AlignTop | Icon::AlignBottom | Icon::AlignCenterY);
+            let at = |x: f32, y: f32| if swap { q(y, x) } else { q(x, y) };
+            let (line, bars): (f32, [(f32, f32); 2]) = match icon {
+                Icon::AlignLeft | Icon::AlignTop => (0.14, [(0.14, 0.86), (0.14, 0.6)]),
+                Icon::AlignRight | Icon::AlignBottom => (0.86, [(0.14, 0.86), (0.4, 0.86)]),
+                _ => (0.5, [(0.18, 0.82), (0.32, 0.68)]),
+            };
+            for ((a, b), (y0, y1)) in bars.iter().zip([(0.2, 0.42), (0.58, 0.8)]) {
+                p.rect(Rect::from_two_pos(at(*a, y0), at(*b, y1)), 1.0, c.gamma_multiply(0.45), Stroke::new(1.0, c), egui::StrokeKind::Inside);
+            }
+            p.line_segment([at(line, 0.06), at(line, 0.94)], s);
+        }
+        Icon::SpaceX | Icon::SpaceY | Icon::PackX | Icon::PackY => {
+            let swap = matches!(icon, Icon::SpaceY | Icon::PackY);
+            let at = |x: f32, y: f32| if swap { q(y, x) } else { q(x, y) };
+            let bars: [(f32, f32); 3] = if matches!(icon, Icon::SpaceX | Icon::SpaceY) { [(0.2, 0.32), (0.44, 0.56), (0.68, 0.8)] } else { [(0.08, 0.24), (0.3, 0.46), (0.52, 0.68)] };
+            for (a, b) in bars {
+                p.rect(Rect::from_two_pos(at(a, 0.28), at(b, 0.72)), 1.0, c.gamma_multiply(0.45), Stroke::new(1.0, c), egui::StrokeKind::Inside);
+            }
+            if matches!(icon, Icon::SpaceX | Icon::SpaceY) {
+                // the outer two edges that stay
+                for x in [0.08, 0.92] {
+                    p.line_segment([at(x, 0.1), at(x, 0.9)], s);
+                }
+            } else {
+                // an arrow pushing them together
+                p.line_segment([at(0.94, 0.5), at(0.76, 0.5)], s);
+                p.add(egui::Shape::convex_polygon(vec![at(0.72, 0.5), at(0.82, 0.38), at(0.82, 0.62)], c, Stroke::NONE));
+            }
+        }
+        Icon::NetOrder => {
+            // a chip with three pins, a line from each down to a part, in the same order
+            p.rect(Rect::from_min_max(q(0.15, 0.08), q(0.85, 0.32)), 1.5, c.gamma_multiply(0.45), Stroke::new(1.0, c), egui::StrokeKind::Inside);
+            for x in [0.28, 0.5, 0.72] {
+                p.line_segment([q(x, 0.32), q(x, 0.62)], Stroke::new(1.0, c));
+                p.rect(Rect::from_min_max(q(x - 0.08, 0.62), q(x + 0.08, 0.92)), 1.0, c.gamma_multiply(0.45), Stroke::new(1.0, c), egui::StrokeKind::Inside);
+            }
+        }
         Icon::Undo | Icon::Redo => {
             let f = if icon == Icon::Undo { 1.0 } else { -1.0 };
             let x = |v: f32| if f > 0.0 { v } else { 1.0 - v };
@@ -543,6 +600,23 @@ fn icon_button_shaped(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, sel
     let tip = if icon_only() { format!("{label}\n{tip}") } else { tip.to_owned() };
     let tip = if key.is_empty() { tip } else { i18n::trf!("{tip}\nショートカット: {key}") };
     resp.on_hover_text(tip)
+}
+
+/// A square button with the icon only, whatever the toolbar setting: the tooltip starts with `label` (for rows of small buttons of
+/// one kind, the align buttons).
+pub fn icon_square(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool, tip: &str) -> egui::Response {
+    let side = ui.spacing().interact_size.y.max(22.0);
+    let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
+    let (rect, resp) = ui.allocate_exact_size(vec2(side, side), sense);
+    if ui.is_rect_visible(rect) {
+        let vis = ui.style().interact_selectable(&resp, false);
+        let widgets = &ui.visuals().widgets;
+        let (fill, stroke) = if resp.hovered() || resp.has_focus() { (vis.weak_bg_fill, vis.bg_stroke) } else { (widgets.inactive.weak_bg_fill, widgets.inactive.bg_stroke) };
+        ui.painter().rect(rect, vis.corner_radius, fill, stroke, egui::StrokeKind::Inside);
+        let col = if enabled { vis.text_color() } else { ui.visuals().widgets.noninteractive.text_color().gamma_multiply(0.5) };
+        paint(ui.painter(), rect.shrink(3.0), icon, col);
+    }
+    resp.on_hover_text(format!("{}\n{}", i18n::tr_dyn(label), i18n::tr_dyn(tip)))
 }
 
 /// An on/off icon whose picture changes with the state (eye / crossed eye, closed / open lock). `on` is lit.

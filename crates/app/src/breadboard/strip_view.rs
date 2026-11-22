@@ -150,16 +150,32 @@ const UNDO_STEPS: usize = 100;
 /// The holes left between parts lined up in a row or a column (room for the wires).
 const ALIGN_GAP: u16 = 2;
 
-/// The ways to line up the parts in the picked box: each with its button and what it does.
-const ALIGNS: [(StripAlign, &str, &str); 7] = [
-    (StripAlign::Top, "上揃え", "いちばん上の部品に、上の端をそろえます"),
-    (StripAlign::Bottom, "下揃え", "いちばん下の部品に、下の端をそろえます"),
-    (StripAlign::Left, "左揃え", "いちばん左の部品に、左の端をそろえます"),
-    (StripAlign::Right, "右揃え", "いちばん右の部品に、右の端をそろえます"),
-    (StripAlign::Row, "横に並べる", "今の左からの順で、横一列に 2 穴ずつ空けて並べます (上の端をそろえます)"),
-    (StripAlign::Column, "縦に並べる", "今の上からの順で、縦一列に 2 穴ずつ空けて並べます (左の端をそろえます)"),
-    (StripAlign::NetOrder, "つながる順に並べる", "つながる相手の IC やヘッダの足の並びの順に、一列に並べます。ドライバ IC の出力の順にリレーを、ヘッダのピンの順に抵抗を、のように使います (相手の足が横に並んでいれば横一列、縦なら縦一列)"),
+/// The ways to line up the parts in the picked box: each with its icon, its name and what it does (on hover); in two rows, as the
+/// board's align buttons. The order of the pins they are wired to has its name on the button too.
+const ALIGNS: [(&str, &[AlignButton]); 2] = [
+    (
+        "揃える",
+        &[
+            (StripAlign::Left, crate::icons::Icon::AlignLeft, "左揃え", "いちばん左の部品に、左の端をそろえます"),
+            (StripAlign::Right, crate::icons::Icon::AlignRight, "右揃え", "いちばん右の部品に、右の端をそろえます"),
+            (StripAlign::Top, crate::icons::Icon::AlignTop, "上揃え", "いちばん上の部品に、上の端をそろえます"),
+            (StripAlign::Bottom, crate::icons::Icon::AlignBottom, "下揃え", "いちばん下の部品に、下の端をそろえます"),
+        ],
+    ),
+    (
+        "並べる",
+        &[
+            (StripAlign::Row, crate::icons::Icon::PackX, "横に並べる", "今の左からの順で、横一列に 2 穴ずつ空けて並べます (上の端をそろえます)"),
+            (StripAlign::Column, crate::icons::Icon::PackY, "縦に並べる", "今の上からの順で、縦一列に 2 穴ずつ空けて並べます (左の端をそろえます)"),
+        ],
+    ),
 ];
+
+/// An align button: what it does, its icon, its name and its hover text.
+type AlignButton = (StripAlign, crate::icons::Icon, &'static str, &'static str);
+
+/// "つながる順に並べる": its button's name and what it does.
+const NET_ORDER: (&str, &str) = ("つながる順に並べる", "つながる相手の IC やヘッダの足の並びの順に、一列に並べます。ドライバ IC の出力の順にリレーを、ヘッダのピンの順に抵抗を、のように使います (相手の足が横に並んでいれば横一列、縦なら縦一列。列の真ん中は相手の足の真ん中の向かい)");
 
 /// What lining up does, on the label before the buttons.
 const ALIGN_HELP: &str = "四角で囲んだ部品を揃えて並べます。ユニバーサル基板では、揃えた部品はその穴に固定され、ほかの部品と線は自動で置き直されます。ストリップ基板では部品だけが動くので、帯の上のつながりが変わります (照合とラッツネストで確かめます)。元に戻すで戻せます";
@@ -552,14 +568,24 @@ impl BreadboardView {
             if picked.len() >= 2 {
                 let busy = self.strip.around.is_some();
                 let mut chosen: Option<StripAlign> = None;
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(i18n::trf!("囲んだ {} 個を:", picked.len())).on_hover_text(i18n::tr(ALIGN_HELP));
-                    for (how, name, tip) in ALIGNS {
-                        if ui.add_enabled(!busy, egui::Button::new(i18n::tr(name)).small()).on_hover_text(i18n::tr(tip)).clicked() {
-                            chosen = Some(how);
+                ui.label(i18n::trf!("囲んだ {} 個を (?)", picked.len())).on_hover_text(i18n::tr(ALIGN_HELP));
+                for (i, (name, buttons)) in ALIGNS.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.label(i18n::tr(name));
+                        for (k, (how, icon, label, tip)) in buttons.iter().enumerate() {
+                            // a little room between left / right and top / bottom
+                            if i == 0 && k == 2 {
+                                ui.add_space(6.0);
+                            }
+                            if crate::icons::icon_square(ui, *icon, label, !busy, tip).clicked() {
+                                chosen = Some(*how);
+                            }
                         }
-                    }
-                });
+                        if i == 1 && crate::icons::icon_button_key(ui, crate::icons::Icon::NetOrder, NET_ORDER.0, "", false, !busy, NET_ORDER.1).clicked() {
+                            chosen = Some(StripAlign::NetOrder);
+                        }
+                    });
+                }
                 if let Some(how) = chosen {
                     self.strip_align(sch, l, &picked, how);
                 }

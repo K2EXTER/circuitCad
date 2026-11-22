@@ -762,7 +762,8 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     if args.iter().any(|a| a == "--board-view-open") {
         app.board_ed.open_view_box = true;
     }
-    // --select-board text:N | label:R1 | silk:N | R1: something on the board picked (its settings in the panel)
+    // --select-board text:N | label:R1 | silk:N | R1 | R1,R2,R3: something on the board picked (its settings in the panel), or several
+    // parts (the align buttons)
     if let Some(i) = args.iter().position(|a| a == "--select-board")
         && let Some(w) = args.get(i + 1) {
             app.board_ed.select_named(w);
