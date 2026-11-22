@@ -20,6 +20,12 @@ pub enum Template {
     Tact,
     Relay,
     Terminal,
+    Elcap,
+    Header,
+    UsbA,
+    UsbC,
+    BatteryAa,
+    Fuse5x20,
 }
 
 /// One dimension of a template: its key (`length=14.5` on the command line), what it is, the usual value.
@@ -61,8 +67,46 @@ const TERMINAL: &[Param] = &[
     p("open", "電線の口の向き (+x なら 1、−x なら −1)", 1.0),
 ];
 
+// The usual dimensions below are those of common parts' data sheets: Panasonic FR 6.3 x 11 (electrolytic), a 2.54 mm header (2.5 mm
+// plastic, pins 6 mm above it and 3 mm below the board), Molex 67643 (USB-A, 14 x 13.1 x 5.12) and GCT USB4105 (USB-C, 7.35 x 8.94 x
+// 3.26), Keystone 2460 (one AA cell, 57.2 x 16.3 x 15.0) and a pair of Littelfuse 5 x 20 mm clips on a 22.5 mm pitch.
+const ELCAP: &[Param] = &[
+    p("diameter", "直径 (mm。6.3 × 11 なら 6.3)", 6.3),
+    p("height", "高さ (基板の面から、mm)", 11.0),
+];
+const HEADER: &[Param] = &[
+    p("body", "黒い樹脂の高さ (mm)", 2.5),
+    p("above", "樹脂から上に出るピンの長さ (mm)", 6.0),
+    p("below", "基板の裏から下に出るピンの長さ (mm)", 3.0),
+    p("pin", "ピンの太さ (角、mm)", 0.64),
+];
+const USB_A: &[Param] = &[
+    p("length", "奥行き (口から後ろの端まで、mm)", 14.0),
+    p("width", "幅 (mm)", 13.1),
+    p("height", "高さ (基板の面から、mm)", 5.12),
+    p("open", "口の向き (+x なら 1、−x なら −1、+y なら 2、−y なら −2)", -1.0),
+];
+const USB_C: &[Param] = &[
+    p("length", "奥行き (口から後ろの端まで、mm)", 7.35),
+    p("width", "幅 (mm)", 8.94),
+    p("height", "高さ (基板の面から、mm)", 3.26),
+    p("open", "口の向き (+x なら 1、−x なら −1、+y なら 2、−y なら −2)", -1.0),
+];
+const BATTERY_AA: &[Param] = &[
+    p("length", "ホルダの長さ (電池の向き、mm)", 57.2),
+    p("width", "ホルダの幅 (mm)", 16.3),
+    p("height", "ホルダの高さ (mm)", 15.0),
+    p("cell", "電池の直径 (mm。単 3 は 14.5)", 14.5),
+    p("cell_length", "電池の長さ (mm。単 3 は 50.5)", 50.5),
+];
+const FUSE_5X20: &[Param] = &[
+    p("clip_height", "クリップの高さ (基板の面から、mm)", 9.0),
+    p("clip_width", "クリップの幅 (mm)", 6.5),
+    p("fuse", "ヒューズの長さ (mm)", 20.0),
+];
+
 impl Template {
-    pub const ALL: [Template; 4] = [Template::DcJack, Template::Tact, Template::Relay, Template::Terminal];
+    pub const ALL: [Template; 10] = [Template::DcJack, Template::Tact, Template::Relay, Template::Terminal, Template::Elcap, Template::Header, Template::UsbA, Template::UsbC, Template::BatteryAa, Template::Fuse5x20];
 
     /// The name on the command line (`ccad shape dc_jack`).
     pub fn key(self) -> &'static str {
@@ -71,6 +115,12 @@ impl Template {
             Template::Tact => "tact",
             Template::Relay => "relay",
             Template::Terminal => "terminal",
+            Template::Elcap => "elcap",
+            Template::Header => "header",
+            Template::UsbA => "usb_a",
+            Template::UsbC => "usb_c",
+            Template::BatteryAa => "battery_aa",
+            Template::Fuse5x20 => "fuse_5x20",
         }
     }
 
@@ -80,6 +130,12 @@ impl Template {
             Template::Tact => "タクトスイッチ (スルーホール)",
             Template::Relay => "リレー (箱形)",
             Template::Terminal => "ねじ端子台",
+            Template::Elcap => "電解コンデンサ (縦置き)",
+            Template::Header => "ピンヘッダ (2.54 mm)",
+            Template::UsbA => "USB-A のメス (横向き)",
+            Template::UsbC => "USB-C のメス (横向き)",
+            Template::BatteryAa => "単 3 電池のホルダ (1 本)",
+            Template::Fuse5x20 => "5 × 20 mm ヒューズのクリップ",
         }
     }
 
@@ -93,6 +149,12 @@ impl Template {
             Template::Tact => TACT,
             Template::Relay => RELAY,
             Template::Terminal => TERMINAL,
+            Template::Elcap => ELCAP,
+            Template::Header => HEADER,
+            Template::UsbA => USB_A,
+            Template::UsbC => USB_C,
+            Template::BatteryAa => BATTERY_AA,
+            Template::Fuse5x20 => FUSE_5X20,
         }
     }
 
@@ -102,9 +164,15 @@ impl Template {
         let fp = footprint.to_ascii_lowercase();
         match part_kind(refdes, footprint) {
             Kind::Shell if fp.contains("jack") || fp.contains("barrel") => Some(Template::DcJack),
+            Kind::Shell if fp.contains("usb_c") || fp.contains("type_c") || fp.contains("typec") => Some(Template::UsbC),
+            Kind::Shell if fp.contains("usb") && !fp.contains("micro") && !fp.contains("mini") => Some(Template::UsbA),
             Kind::Tact => Some(Template::Tact),
             Kind::Relay => Some(Template::Relay),
             Kind::Terminal => Some(Template::Terminal),
+            Kind::Header => Some(Template::Header),
+            Kind::Can if fp.contains("cp_") || fp.contains("elec") || fp.contains("radial") => Some(Template::Elcap),
+            Kind::BatteryTray if !fp.contains("aaa") && !fp.contains("18650") => Some(Template::BatteryAa),
+            Kind::FuseHolder => Some(Template::Fuse5x20),
             _ => None,
         }
     }
@@ -129,20 +197,20 @@ pub fn values(t: Template, given: &BTreeMap<String, f64>) -> Result<BTreeMap<&'s
 }
 
 /// The commands as they are built up.
-struct Script {
-    cmds: Vec<Value>,
+pub(crate) struct Script {
+    pub(crate) cmds: Vec<Value>,
 }
 
 const BLACK: &str = "#262628";
 const METAL: &str = "#c4c6cc";
 
 impl Script {
-    fn push(&mut self, command: &str, params: Value) {
+    pub(crate) fn push(&mut self, command: &str, params: Value) {
         self.cmds.push(json!({"command": command, "params": params}));
     }
 
     /// A box from `lo` to `hi`: a new body `body`, or joined to / cut from it.
-    fn block(&mut self, name: &str, body: &str, op: &str, lo: [f64; 3], hi: [f64; 3]) {
+    pub(crate) fn block(&mut self, name: &str, body: &str, op: &str, lo: [f64; 3], hi: [f64; 3]) {
         let size = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
         let center = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0];
         let mut p = json!({"length": size[0], "width": size[1], "height": size[2], "center": center, "operation": op, "name": name});
@@ -151,7 +219,8 @@ impl Script {
     }
 
     /// A cylinder of radius `r` from `base` along `axis` ("X", "Y" or "Z") for `len`.
-    fn cylinder(&mut self, name: &str, body: &str, op: &str, base: [f64; 3], axis: &str, r: f64, len: f64) {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn cylinder(&mut self, name: &str, body: &str, op: &str, base: [f64; 3], axis: &str, r: f64, len: f64) {
         let mut p = json!({"radius": r, "height": len, "base": base, "axis": axis, "operation": op, "name": name});
         self.target(&mut p, body, op);
         self.push("solid.cylinder", p);
@@ -165,7 +234,7 @@ impl Script {
         }
     }
 
-    fn color(&mut self, bodies: &[&str], hex: &str, metal: bool) {
+    pub(crate) fn color(&mut self, bodies: &[&str], hex: &str, metal: bool) {
         let pbr = if metal { json!({"metallic": 1.0, "roughness": 0.3, "dielectric_ior": 1.5}) } else { json!({"metallic": 0.0, "roughness": 0.6, "dielectric_ior": 1.5}) };
         self.push("appearance.assign", json!({"bodies": bodies, "color": hex, "pbr": pbr}));
     }
@@ -330,8 +399,183 @@ pub fn script(t: Template, given: &BTreeMap<String, f64>, pads: &[Pad]) -> Resul
             s.color(&slots.iter().map(String::as_str).collect::<Vec<_>>(), "#141416", false);
             s.legs(pads, 0.5);
         }
+        Template::Elcap => {
+            positive(&["diameter", "height"])?;
+            let (d, h) = (v["diameter"], v["height"]);
+            let (lo, hi) = pad_box(pads);
+            let c = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
+            if d < (hi[0] - lo[0]).max(hi[1] - lo[1]) || h < 2.0 {
+                return Err("寸法が合いません: 直径は足の間隔より大きく、高さは 2 mm 以上にしてください".into());
+            }
+            let r = d / 2.0;
+            // the can standing a little off the board (the rubber seal), its top edge rounded, the vent cross pressed in the top
+            s.cylinder("Can", "Can", "new", [c[0], c[1], 0.3], "Z", r, h - 0.3);
+            s.push("solid.fillet", json!({"edges": [[c[0] + r, c[1], h]], "radius": (d * 0.06).min(0.5), "body": "Can", "name": "TopEdge"}));
+            s.block("VentX", "Can", "cut", [c[0] - r * 0.6, c[1] - 0.15, h - 0.25], [c[0] + r * 0.6, c[1] + 0.15, h + 0.1]);
+            s.block("VentY", "Can", "cut", [c[0] - 0.15, c[1] - r * 0.6, h - 0.25], [c[0] + 0.15, c[1] + r * 0.6, h + 0.1]);
+            s.color(&["Can"], "#1f2f6e", false);
+            // the minus stripe on the side of pin 2 (the minus pin of a radial electrolytic)
+            let minus = pads.iter().find(|p| p.pin == "2").unwrap_or(&pads[pads.len() - 1]);
+            let (dx, dy) = (minus.pos.x - c[0], minus.pos.y - c[1]);
+            let (a, b) = if dx.abs() >= dy.abs() {
+                let x = c[0] + dx.signum() * r;
+                ([x - 0.05, c[1] - r * 0.35, 1.0], [x + 0.05, c[1] + r * 0.35, h - 0.8])
+            } else {
+                let y = c[1] + dy.signum() * r;
+                ([c[0] - r * 0.35, y - 0.05, 1.0], [c[0] + r * 0.35, y + 0.05, h - 0.8])
+            };
+            s.block("Stripe", "Stripe", "new", a, b);
+            s.color(&["Stripe"], "#c8ccd6", false);
+            s.legs(pads, 0.5);
+        }
+        Template::Header => {
+            positive(&["body", "above", "below", "pin"])?;
+            let (body, above, below, pin) = (v["body"], v["above"], v["below"], v["pin"]);
+            let holes: Vec<&Pad> = pads.iter().filter(|p| p.drill.is_some()).collect();
+            if holes.is_empty() {
+                return Err("ピンヘッダの形は、穴のあるパッドに作ります".into());
+            }
+            // the pitch: the nearest two holes (2.54 when there is one)
+            let mut pitch = f64::MAX;
+            for (i, a) in holes.iter().enumerate() {
+                for b in &holes[i + 1..] {
+                    pitch = pitch.min(a.pos.dist(b.pos));
+                }
+            }
+            let pitch = if pitch == f64::MAX { 2.54 } else { pitch };
+            let q = pitch / 2.0;
+            for (i, h) in holes.iter().enumerate() {
+                let (x, y) = (h.pos.x, h.pos.y);
+                s.block(&format!("Plastic{}", i + 1), "Plastic", if i == 0 { "new" } else { "join" }, [x - q, y - q, 0.0], [x + q, y + q, body]);
+                s.block(&format!("Pin{}", i + 1), "Pins", if i == 0 { "new" } else { "join" }, [x - pin / 2.0, y - pin / 2.0, -below], [x + pin / 2.0, y + pin / 2.0, body + above]);
+            }
+            s.color(&["Plastic"], BLACK, false);
+            s.color(&["Pins"], "#d4af37", true);
+        }
+        Template::UsbA | Template::UsbC => {
+            positive(&["length", "width", "height"])?;
+            let (len, w, h) = (v["length"], v["width"], v["height"]);
+            let (o, across) = mouth_axes(v["open"])?;
+            let (lo, hi) = pad_box(pads);
+            let c = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
+            // the back of the shell over the far end of the pads, the mouth `len` towards `o`
+            let back_u = pads.iter().map(|p| (p.pos.x - c[0]) * o[0] + (p.pos.y - c[1]) * o[1]).fold(f64::MAX, f64::min) - 1.0;
+            let at = |u: f64, v: f64| [c[0] + u * o[0] + v * across[0], c[1] + u * o[1] + v * across[1]];
+            let span = |u0: f64, u1: f64, v0: f64, v1: f64, z0: f64, z1: f64| {
+                let (a, b) = (at(u0, v0), at(u1, v1));
+                ([a[0].min(b[0]), a[1].min(b[1]), z0], [a[0].max(b[0]), a[1].max(b[1]), z1])
+            };
+            let front = back_u + len;
+            let wall = if t == Template::UsbA { 0.3 } else { 0.25 };
+            let (a, b) = span(back_u, front, -w / 2.0, w / 2.0, 0.0, h);
+            s.block("Shell", "Shell", "new", a, b);
+            if t == Template::UsbC {
+                // the C plug's rounded sides: the shell's four edges along the mouth
+                let e = |v: f64, z: f64| { let p = at((back_u + front) / 2.0, v); json!([p[0], p[1], z]) };
+                s.push("solid.fillet", json!({"edges": [e(-w / 2.0, 0.0), e(w / 2.0, 0.0), e(-w / 2.0, h), e(w / 2.0, h)], "radius": h / 2.0 - 0.05, "body": "Shell", "name": "Round"}));
+            }
+            let (a, b) = span(back_u + wall + 0.5, front + 0.1, -w / 2.0 + wall, w / 2.0 - wall, wall, h - wall);
+            s.block("Mouth", "Shell", "cut", a, b);
+            s.color(&["Shell"], METAL, true);
+            // the tongue inside, with the contacts on it
+            let (tw, tt) = if t == Template::UsbA { (w * 0.8, 1.8) } else { (w * 0.62, 0.7) };
+            let zt = if t == Template::UsbA { h * 0.62 } else { h / 2.0 };
+            let (a, b) = span(back_u + wall + 0.4, front - 0.6, -tw / 2.0, tw / 2.0, zt - tt / 2.0, zt + tt / 2.0);
+            s.block("Tongue", "Tongue", "new", a, b);
+            s.color(&["Tongue"], if t == Template::UsbA { "#f2f2f2" } else { BLACK }, false);
+            s.legs(pads, 0.5);
+        }
+        Template::BatteryAa => {
+            positive(&["length", "width", "height", "cell", "cell_length"])?;
+            let (len, w, h, d, cl) = (v["length"], v["width"], v["height"], v["cell"], v["cell_length"]);
+            if d >= w || cl >= len || h < d * 0.6 {
+                return Err("寸法が合いません: 電池はホルダより細く短く、ホルダの高さは電池の直径の 6 割以上にしてください".into());
+            }
+            // the cell lies along the line through the two contacts (the farthest two pads)
+            let (mut a, mut b, mut far) = (&pads[0], &pads[0], 0.0);
+            for (i, p) in pads.iter().enumerate() {
+                for q in &pads[i + 1..] {
+                    if p.pos.dist(q.pos) > far {
+                        (a, b, far) = (p, q, p.pos.dist(q.pos));
+                    }
+                }
+            }
+            let along_x = (b.pos.x - a.pos.x).abs() >= (b.pos.y - a.pos.y).abs();
+            let c = [(a.pos.x + b.pos.x) / 2.0, (a.pos.y + b.pos.y) / 2.0];
+            let bx = |u0: f64, u1: f64, v0: f64, v1: f64, z0: f64, z1: f64| if along_x { ([c[0] + u0, c[1] + v0, z0], [c[0] + u1, c[1] + v1, z1]) } else { ([c[0] + v0, c[1] + u0, z0], [c[0] + v1, c[1] + u1, z1]) };
+            let axis = if along_x { "X" } else { "Y" };
+            let base = |u: f64, z: f64| if along_x { [c[0] + u, c[1], z] } else { [c[0], c[1] + u, z] };
+            // the cell rests 1.5 mm above the board on the tray's floor
+            let zc = 1.5 + d / 2.0;
+            let (p0, p1) = bx(-len / 2.0, len / 2.0, -w / 2.0, w / 2.0, 0.0, h);
+            s.block("Tray", "Tray", "new", p0, p1);
+            // the cell's bed and the open top over it
+            s.cylinder("Bed", "Tray", "cut", base(-cl / 2.0 - 0.5, zc), axis, d / 2.0 + 0.3, cl + 1.0);
+            let (p0, p1) = bx(-cl / 2.0 - 0.5, cl / 2.0 + 0.5, -d * 0.42, d * 0.42, zc, h + 0.1);
+            s.block("Open", "Tray", "cut", p0, p1);
+            s.color(&["Tray"], BLACK, false);
+            // the cell: its can, and the plus nub at the end towards the first contact
+            s.cylinder("Cell", "Cell", "new", base(-cl / 2.0 + 1.0, zc), axis, d / 2.0, cl - 1.0);
+            s.color(&["Cell"], "#2d7d46", false);
+            s.cylinder("Nub", "Nub", "new", base(-cl / 2.0, zc), axis, d * 0.19, 1.0);
+            s.color(&["Nub"], METAL, true);
+            s.legs(pads, 1.0);
+        }
+        Template::Fuse5x20 => {
+            positive(&["clip_height", "clip_width", "fuse"])?;
+            let (ch, cw, fl) = (v["clip_height"], v["clip_width"], v["fuse"]);
+            if ch < 6.5 {
+                return Err("クリップの高さは 6.5 mm 以上にしてください (5 mm のヒューズが浮く高さ)".into());
+            }
+            let (lo, hi) = pad_box(pads);
+            let along_x = hi[0] - lo[0] >= hi[1] - lo[1];
+            let c = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
+            let span = if along_x { hi[0] - lo[0] } else { hi[1] - lo[1] };
+            let bx = |u0: f64, u1: f64, v0: f64, v1: f64, z0: f64, z1: f64| if along_x { ([c[0] + u0, c[1] + v0, z0], [c[0] + u1, c[1] + v1, z1]) } else { ([c[0] + v0, c[1] + u0, z0], [c[0] + v1, c[1] + u1, z1]) };
+            let base = |u: f64, z: f64| if along_x { [c[0] + u, c[1], z] } else { [c[0], c[1] + u, z] };
+            let axis = if along_x { "X" } else { "Y" };
+            // a clip over each end of the pads: a base and two springy sides
+            let zf = ch - 2.8;
+            for (k, sign) in [(1, -1.0), (2, 1.0)] {
+                let u = sign * span / 2.0;
+                let body = format!("Clip{k}");
+                let (p0, p1) = bx(u - 2.0, u + 2.0, -cw / 2.0, cw / 2.0, 0.0, 0.5);
+                s.block(&format!("ClipBase{k}"), &body, "new", p0, p1);
+                for (side, v0) in [("A", -cw / 2.0), ("B", cw / 2.0 - 0.4)] {
+                    let (p0, p1) = bx(u - 2.0, u + 2.0, v0, v0 + 0.4, 0.0, ch);
+                    s.block(&format!("ClipSide{k}{side}"), &body, "join", p0, p1);
+                }
+            }
+            s.color(&["Clip1", "Clip2"], METAL, true);
+            // the glass fuse with its metal caps, lying in the clips
+            s.cylinder("Glass", "Glass", "new", base(-fl / 2.0 + 5.0, zf), axis, 2.4, fl - 10.0);
+            s.color(&["Glass"], "#c8dce8", false);
+            s.cylinder("CapA", "Caps", "new", base(-fl / 2.0, zf), axis, 2.5, 5.0);
+            s.cylinder("CapB", "Caps", "join", base(fl / 2.0 - 5.0, zf), axis, 2.5, 5.0);
+            s.color(&["Caps"], METAL, true);
+            s.legs(pads, 0.5);
+        }
     }
     Ok(Value::Array(s.cmds))
+}
+
+/// The mouth's direction from the `open` dimension (±1 along x, ±2 along y) and the direction across it.
+fn mouth_axes(open: f64) -> Result<([f64; 2], [f64; 2]), String> {
+    match open.round() as i64 {
+        1 => Ok(([1.0, 0.0], [0.0, 1.0])),
+        -1 => Ok(([-1.0, 0.0], [0.0, 1.0])),
+        2 => Ok(([0.0, 1.0], [1.0, 0.0])),
+        -2 => Ok(([0.0, -1.0], [1.0, 0.0])),
+        _ => Err("open は 1 (+x)・−1 (−x)・2 (+y)・−2 (−y) のどれかにしてください".into()),
+    }
+}
+
+/// The legs at the footprint's through-holes as SolidCraft commands (a body `Legs` from `top` above the board down through it), for a
+/// shape drawn by hand from the data sheet's drawing (E7 ②: the legs need not be drawn).
+pub fn legs_commands(pads: &[Pad], top: f64) -> Vec<Value> {
+    let mut s = Script { cmds: vec![] };
+    s.legs(pads, top);
+    s.cmds
 }
 
 /// The SolidCraft programs: (command line, app). `SOLIDCRAFT_DIR` names the folder; else the PATH; else the usual install folder.
@@ -356,6 +600,58 @@ pub fn find_solidcraft() -> Option<(PathBuf, PathBuf)> {
 /// jack is about 430 triangles, 20 kB in the part file, where SolidCraft's own fine cut is 8 500 and 280 kB: the 3D view's
 /// smooth shading hides the difference). SolidCraft's triangles (thinned to `KEEP_TRIANGLES`) are the fallback when our reader
 /// cannot read the STEP. The script, the STEP and the OBJ stay in `dir` (`shape.json` can be opened in SolidCraft and changed).
+/// The board's STEP (`step_out::write`: the board, the parts with a maker's own faces when there, the copper and the silkscreen) written
+/// into `dir` as `<name>.step` and opened in the SolidCraft app (E8): to measure, cut a section, go on with the case's design or make a
+/// picture there. The app is started and left running.
+pub fn open_board_in_app(board: &crate::model::Board, dir: &Path) -> Result<PathBuf, String> {
+    let (_, app) = find_solidcraft().ok_or("SolidCraft が見つかりません (SOLIDCRAFT_DIR か PATH に solidcraft.exe のあるフォルダを)")?;
+    let step = write_board_step(board, dir)?;
+    std::process::Command::new(&app).arg(&step).spawn().map_err(|e| format!("{}: {e}", app.display()))?;
+    Ok(step)
+}
+
+/// The board's STEP written into `dir`, named after the board.
+fn write_board_step(board: &crate::model::Board, dir: &Path) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let name: String = board.name.chars().map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
+    let step = dir.join(format!("{}.step", if name.is_empty() { "board".into() } else { name }));
+    std::fs::write(&step, crate::step_out::write(board)).map_err(|e| format!("{}: {e}", step.display()))?;
+    Ok(step)
+}
+
+/// A picture of the board made by SolidCraft (E8): `snapshot` (the app's own shading, quick) or `render` (path traced, a few seconds
+/// to a minute), from the view `view` (iso, top, front, ...; the snapshot only), `w` x `h` pixels. The board's STEP goes into `dir`.
+pub fn board_picture(board: &crate::model::Board, dir: &Path, out: &Path, view: &str, size: (u32, u32), render: bool) -> Result<(), String> {
+    let (cli, _) = find_solidcraft().ok_or("SolidCraft が見つかりません (SOLIDCRAFT_DIR か PATH に solidcraft-cli.exe のあるフォルダを)")?;
+    let step = write_board_step(board, dir)?;
+    let mut c = std::process::Command::new(&cli);
+    if render {
+        c.arg("render").arg(&step).arg("--out").arg(out).arg("--overwrite").arg("--timeout").arg("300");
+    } else {
+        c.arg("snapshot").arg("--in").arg(&step).arg("--out").arg(out).arg("--view").arg(view).arg("--no-grid").arg("--no-axes").arg("--quality").arg("fine");
+    }
+    let r = c.arg("--width").arg(size.0.to_string()).arg("--height").arg(size.1.to_string()).output().map_err(|e| format!("{}: {e}", cli.display()))?;
+    if !r.status.success() || !out.is_file() {
+        let err = String::from_utf8_lossy(&r.stderr);
+        return Err(format!("SolidCraft が絵を作れませんでした: {}", err.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("")));
+    }
+    Ok(())
+}
+
+/// Runs a script and writes its STEP (`name.step`) and the script (`name.json`) into `dir`: the STEP's path.
+pub fn run_to_step(cli: &Path, script: &Value, dir: &Path, name: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let (file, step) = (dir.join(format!("{name}.json")), dir.join(format!("{name}.step")));
+    std::fs::write(&file, serde_json::to_string_pretty(script).unwrap_or_default()).map_err(|e| format!("{}: {e}", file.display()))?;
+    let _ = std::fs::remove_file(&step);
+    let out = std::process::Command::new(cli).arg("run").arg(&file).arg("--out").arg(&step).arg("--quiet").output().map_err(|e| format!("{}: {e}", cli.display()))?;
+    if !out.status.success() || !step.is_file() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("SolidCraft が形を作れませんでした: {}", err.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("")));
+    }
+    Ok(step)
+}
+
 pub fn build(cli: &Path, script: &Value, dir: &Path) -> Result<Mesh3d, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let (file, step, obj) = (dir.join("shape.json"), dir.join("shape.step"), dir.join("shape.obj"));
@@ -388,6 +684,19 @@ mod tests {
 
     fn commands(v: &Value) -> Vec<&str> {
         v.as_array().unwrap().iter().map(|c| c["command"].as_str().unwrap()).collect()
+    }
+
+    /// SolidCraft makes a picture of a board from its STEP (`--ignored`: needs SolidCraft): a PNG of the size asked.
+    #[test]
+    #[ignore]
+    fn solidcraft_makes_a_picture_of_the_board() {
+        let b: crate::model::Board = serde_json::from_str(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/examples/rlc_board.pcbjson")).unwrap()).unwrap();
+        let dir = std::env::temp_dir().join("circuitcad_board_picture");
+        let out = dir.join("board.png");
+        let _ = std::fs::remove_file(&out);
+        board_picture(&b, &dir, &out, "iso", (640, 400), false).unwrap();
+        let png = std::fs::read(&out).unwrap();
+        assert!(png.starts_with(&[0x89, b'P', b'N', b'G']), "a PNG");
     }
 
     /// Every template writes a script with its body, its colours and a leg in each hole; the jack's opening is on −x of pin 1.
@@ -427,7 +736,14 @@ mod tests {
         let relay = [hole("1", 0.0, 0.0, 1.3), hole("2", 12.0, 0.0, 1.3)];
         assert!(script(Template::Relay, &tiny, &relay).unwrap_err().contains("パッド"));
         assert_eq!(Template::for_footprint("J1", "DCJack_DEMO_TH"), Some(Template::DcJack));
-        assert_eq!(Template::for_footprint("J1", "USB_DEMO_TH"), None, "no template for a USB socket");
+        assert_eq!(Template::for_footprint("J1", "USB_DEMO_TH"), Some(Template::UsbA));
+        assert_eq!(Template::for_footprint("J1", "USB_C_Receptacle_GCT_USB4105"), Some(Template::UsbC));
+        assert_eq!(Template::for_footprint("J1", "PinHeader_1x4"), Some(Template::Header));
+        assert_eq!(Template::for_footprint("C1", "CP_Radial_D6.3mm_P2.50mm"), Some(Template::Elcap));
+        assert_eq!(Template::for_footprint("BT1", "BatteryHolder_AA"), Some(Template::BatteryAa));
+        assert_eq!(Template::for_footprint("F1", "Fuse_5x20_P22.5"), Some(Template::Fuse5x20));
+        assert!(script(Template::UsbA, &[("open".to_string(), 3.0)].into(), &relay).unwrap_err().contains("open"));
+        assert!(script(Template::Header, &BTreeMap::new(), &[Pad { drill: None, ..hole("1", 0.0, 0.0, 1.0) }]).is_err(), "a header needs holes");
         assert_eq!(Template::for_footprint("V1", "TerminalBlock_4P_5.08"), Some(Template::Terminal));
     }
 
@@ -441,7 +757,23 @@ mod tests {
         let tact = [hole("1", 0.0, 0.0, 1.0), hole("2", 6.5, 0.0, 1.0), hole("3", 0.0, 4.5, 1.0), hole("4", 6.5, 4.5, 1.0)];
         let relay = [hole("1", 0.0, 0.0, 1.3), hole("2", 12.0, 0.0, 1.3), hole("3", 0.0, 12.0, 1.3), hole("4", 12.0, 12.0, 1.3), hole("5", 2.0, 6.0, 1.3)];
         let term: Vec<Pad> = (0..4).map(|i| hole(&(i + 1).to_string(), 0.0, -5.08 * i as f64, 1.4)).collect();
-        for (t, pads, top) in [(Template::DcJack, &jack[..], 11.0), (Template::Tact, &tact[..], 4.3), (Template::Relay, &relay[..], 15.35), (Template::Terminal, &term[..], 10.0)] {
+        let cap = [hole("1", 0.0, 0.0, 0.8), hole("2", 2.5, 0.0, 0.8)];
+        let header: Vec<Pad> = (0..4).map(|i| hole(&(i + 1).to_string(), 0.0, 2.54 * i as f64, 1.0)).collect();
+        let usb = [hole("1", 0.0, 0.0, 0.9), hole("2", 0.0, 2.5, 0.9), hole("3", 0.0, 4.5, 0.9), hole("4", 0.0, 7.0, 0.9)];
+        let aa = [hole("1", 0.0, 0.0, 1.2), hole("2", 50.0, 0.0, 1.2)];
+        let fuse = [hole("1", 0.0, 0.0, 1.3), hole("2", 22.5, 0.0, 1.3)];
+        for (t, pads, top) in [
+            (Template::DcJack, &jack[..], 11.0),
+            (Template::Tact, &tact[..], 4.3),
+            (Template::Relay, &relay[..], 15.35),
+            (Template::Terminal, &term[..], 10.0),
+            (Template::Elcap, &cap[..], 11.0),
+            (Template::Header, &header[..], 8.5),
+            (Template::UsbA, &usb[..], 5.12),
+            (Template::UsbC, &usb[..], 3.26),
+            (Template::BatteryAa, &aa[..], 16.0),
+            (Template::Fuse5x20, &fuse[..], 9.0),
+        ] {
             let dir = std::env::temp_dir().join("circuitcad_shape_test").join(t.key());
             let m = build(&cli, &script(t, &BTreeMap::new(), pads).unwrap(), &dir).unwrap_or_else(|e| panic!("{t:?}: {e}"));
             let zmax = m.vertices.iter().map(|v| v[2]).fold(f32::MIN, f32::max);
@@ -450,7 +782,8 @@ mod tests {
             assert!(!m.triangles.is_empty() && m.triangles.len() <= 2_000, "{t:?}: {} triangles (our STEP reader, not SolidCraft's fine cut)", m.triangles.len());
             assert!(dir.join("shape.step").is_file(), "{t:?}: the STEP is kept");
             assert!(m.palette.len() >= 2, "{t:?}: body and legs in their colours");
-            assert!((f64::from(zmax) - top).abs() < 0.05 && (f64::from(zmin) + LEG_BELOW).abs() < 0.05, "{t:?}: z {zmin}..{zmax}");
+            let below = if t == Template::Header { 3.0 } else { LEG_BELOW };
+            assert!((f64::from(zmax) - top).abs() < 0.05 && (f64::from(zmin) + below).abs() < 0.05, "{t:?}: z {zmin}..{zmax}");
         }
     }
 }

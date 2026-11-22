@@ -104,9 +104,9 @@ impl Session {
     pub(super) fn board_case(&mut self, rest: &[String]) -> Res {
         let (_, kv) = options(rest);
         let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(|| format!("{k}={s} is not a size in mm (zero or more)"))).transpose();
-        let spec = pcb_core::case::CaseSpec { inner_w: num("w")?.unwrap_or(0.0), inner_d: num("d")?.unwrap_or(0.0), top: num("top")?.unwrap_or(0.0), bottom: num("bottom")?.unwrap_or(0.0), clearance: num("clear")?.unwrap_or(0.5) };
+        let spec = pcb_core::case::CaseSpec { inner_w: num("w")?.unwrap_or(0.0), inner_d: num("d")?.unwrap_or(0.0), top: num("top")?.unwrap_or(0.0), bottom: num("bottom")?.unwrap_or(0.0), clearance: num("clear")?.unwrap_or(0.5), toward: pcb_core::case::Toward::parse(opt(&kv, "toward").unwrap_or("middle"))? };
         if spec.inner_w == 0.0 && spec.inner_d == 0.0 && spec.top == 0.0 && spec.bottom == 0.0 {
-            return Err("board case [w=MM d=MM] [top=MM] [bottom=MM] [clear=0.5] [dxf=FILE]   (the inside of the case: width and depth for the floor, the room above and below the board for the parts' heights. With w and d it also answers the screw posts under the mounting holes (bottom = their height, else 5 mm) and the openings in the walls for the connectors at the edge; dxf= writes the case's drawing: the floor with the posts and the walls folded out with the openings)".into());
+            return Err("board case [w=MM d=MM] [top=MM] [bottom=MM] [clear=0.5] [toward=middle|auto|left,front...] [dxf=FILE] [step=FILE [wall=2] [floor=2] [lid=2] [corner=3]]   (the inside of the case: width and depth for the floor, the room above and below the board for the parts' heights. With w and d it also answers the screw posts under the mounting holes (bottom = their height, else 5 mm) and the openings in the walls for the connectors at the edge (a maker's mesh tells which way its mouth faces), the lid's posts onto the board (with top), free places for M3 holes when the board has none; toward= puts the board against walls (auto: the walls its connectors go through); dxf= writes the case's drawing: the floor with the posts and the walls folded out with the openings, and the lid; step= builds the case itself (box and lid, posts with pilot holes, openings, rounded corners) with SolidCraft, writes its STEP and keeps it round the board as board case_step does)".into());
         }
         let board = self.board_mut()?;
         let r = pcb_core::case::check(board, &spec);
@@ -119,10 +119,26 @@ impl Session {
             let r1 = |v: f64| (v * 100.0).round() / 100.0;
             out["posts"] = json!(ins.posts.iter().map(|p| json!({"hole": [r1(p.hole.x), r1(p.hole.y)], "at": [r1(p.at.x), r1(p.at.y)], "height_mm": p.height, "screw": p.screw, "outer_d": p.outer_d, "pilot_d": p.pilot_d, "problem": p.problem})).collect::<Vec<_>>());
             out["openings"] = json!(ins.openings.iter().map(|o| json!({"part": o.refdes, "wall": o.wall.label(), "along_mm": [r1(o.along.0), r1(o.along.1)], "along_from": o.wall.along_from(), "up_mm": [r1(o.up.0), r1(o.up.1)], "to_wall_mm": r1(o.to_wall)})).collect::<Vec<_>>());
+            out["lid_posts"] = json!(ins.lid_posts.iter().map(|p| json!({"hole": [r1(p.hole.x), r1(p.hole.y)], "at": [r1(p.at.x), r1(p.at.y)], "height_mm": p.height, "outer_d": p.outer_d, "problem": p.problem})).collect::<Vec<_>>());
+            out["suggested_holes"] = json!(ins.suggested_holes.iter().map(|p| [r1(p.x), r1(p.y)]).collect::<Vec<_>>());
+            out["pushed"] = json!([ins.pushed.0, ins.pushed.1]);
             out["case_notes"] = json!(ins.notes);
             if let Some(f) = opt(&kv, "dxf") {
                 std::fs::write(f, pcb_core::case::drawing(board, &spec)?).map_err(|e| format!("{f}: {e}"))?;
                 out["dxf"] = json!(f);
+            }
+            // the case itself, built by SolidCraft: the STEP written, and kept round the board (as board case_step)
+            if let Some(f) = opt(&kv, "step") {
+                let d = pcb_core::case_shape::CaseBody::default();
+                let body = pcb_core::case_shape::CaseBody { wall: num("wall")?.unwrap_or(d.wall), floor: num("floor")?.unwrap_or(d.floor), lid: num("lid")?.unwrap_or(d.lid), corner: num("corner")?.unwrap_or(d.corner) };
+                let dir = std::env::temp_dir().join("ccad_case_shape");
+                let (step, model) = pcb_core::case_shape::build(board, &spec, &body, &dir).ok_or("SolidCraft is not installed (it builds the case; set SOLIDCRAFT_DIR or put solidcraft-cli on the PATH)")??;
+                std::fs::copy(&step, f).map_err(|e| format!("{f}: {e}"))?;
+                let hits = pcb_core::case_model::collisions(board, &model);
+                out["step"] = json!(f);
+                out["case_collides"] = json!(hits.parts.iter().map(|i| board.parts[*i].refdes.clone()).collect::<Vec<_>>());
+                out["board_collides"] = json!(hits.board);
+                board.case3d = Some(model);
             }
         }
         Ok(obj(out))
@@ -160,7 +176,7 @@ impl Session {
         let r1 = |v: f64| (v * 100.0).round() / 100.0;
         Ok(obj(json!({"file": case.file, "triangles": case.mesh.triangles.len(), "size_mm": case.size().map(r1), "offset_mm": case.offset.map(r1), "rot": case.rot,
             "collides": names, "board_collides": hits.board, "ok": names.is_empty() && !hits.board,
-            "note": "parts are checked by the boxes the 3D view draws, so a round part next to a wall can be reported though it just clears it"})))
+            "note": "parts are checked by the shapes the 3D view draws: a box as a box, a round body as its 24-sided prism, a maker's model by its triangles; contact under 0.05 mm does not count"})))
     }
 
     pub(super) fn board_dxf_import(&mut self, rest: &[String]) -> Res {
@@ -179,6 +195,30 @@ impl Session {
         let board = self.board_mut()?;
         std::fs::write(f, pcb_core::dxf::mechanical(board)).map_err(|e| format!("{f}: {e}"))?;
         Ok(obj(json!({"file": f, "outline_points": board.outline.len(), "holes": board.holes.len(), "parts": board.parts.len()})))
+    }
+
+    /// `board solidcraft open` / `board solidcraft picture OUT.png [view=iso] [w=1280] [h=800] [render=1]` (E8): the board's STEP opened
+    /// in the SolidCraft app, or a picture of it made by SolidCraft (the app's shading from a view, or path traced with render=1).
+    pub(super) fn board_solidcraft(&mut self, rest: &[String]) -> Res {
+        let (pos, kv) = options(rest);
+        let usage = "board solidcraft open | board solidcraft picture OUT.png [view=iso|top|front|back|left|right|bottom] [w=1280] [h=800] [render=1]   (the board's STEP, with the parts, the copper and the silkscreen, opened in the SolidCraft app; or a picture of it made by SolidCraft: its shading from the view, or path traced with render=1)";
+        let board = self.board_mut()?.clone();
+        let dir = std::env::temp_dir().join("ccad_solidcraft");
+        match pos.first().map(String::as_str) {
+            Some("open") => {
+                let step = pcb_core::shape_script::open_board_in_app(&board, &dir)?;
+                Ok(obj(json!({"opened": step.display().to_string()})))
+            }
+            Some("picture") => {
+                let out = pos.get(1).ok_or(usage)?;
+                let n = |k: &str, d: u32| opt(&kv, k).map_or(Ok(d), |v| v.parse::<u32>().map_err(|_| format!("{k}={v}: pixels")));
+                let (w, h) = (n("w", 1280)?, n("h", 800)?);
+                let render = opt(&kv, "render").is_some_and(|v| v != "0");
+                pcb_core::shape_script::board_picture(&board, &dir, std::path::Path::new(out), opt(&kv, "view").unwrap_or("iso"), (w, h), render)?;
+                Ok(obj(json!({"file": out, "size": [w, h], "render": render})))
+            }
+            _ => Err(usage.into()),
+        }
     }
 
     pub(super) fn board_step(&mut self, rest: &[String]) -> Res {

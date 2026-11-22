@@ -73,6 +73,14 @@ pub enum Kind {
     Slide,
     /// A DIP switch: a body between the two rows of pins with a little lever for every switch.
     DipSwitch,
+    /// A toggle switch: a body under the board's face, the threaded bushing and the lever standing up (E1).
+    Toggle,
+    /// A rotary switch or encoder: a body, a bushing and the round shaft (E1).
+    Rotary,
+    /// A potentiometer (a volume): a body with its shaft standing up; a trimmer: a low body with a slotted rotor (E1).
+    Pot,
+    /// A 7-segment LED display: a block with the seven segments and the dot on its face (E1).
+    SevenSeg,
     /// Anything else: one box.
     Other,
 }
@@ -153,6 +161,18 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
     if fp.contains("sw_slide") {
         return Kind::Slide;
     }
+    if fp.contains("toggle") {
+        return Kind::Toggle;
+    }
+    if fp.contains("rotaryencoder") || fp.contains("rotary_encoder") || fp.contains("sw_rotary") || fp.contains("rotary_switch") {
+        return Kind::Rotary;
+    }
+    if fp.contains("potentiometer") || fp.contains("trimpot") || fp.contains("trimmer") {
+        return Kind::Pot;
+    }
+    if fp.contains("7segment") || fp.contains("7seg") || fp.contains("sevenseg") || fp.contains("7-segment") {
+        return Kind::SevenSeg;
+    }
     // a connector is told by its footprint (and not by a letter alone: a USB protection IC is not a connector)
     if matches!(prefix(refdes), 'J' | 'P' | 'X') && ["usb", "jack", "barrel", "rj45"].iter().any(|k| fp.contains(k)) {
         return Kind::Shell;
@@ -207,6 +227,18 @@ const TALL_FOOTPRINTS: &[(&str, f64, [u8; 3])] = &[
     ("sw_push", 4.3, [30, 30, 34]),
     ("tact", 4.3, [30, 30, 34]),
     ("sw_slide", 7.0, [196, 198, 204]),
+    // E1: a toggle switch (body, bushing and lever: a mini toggle of 13 x 8 mm stands about 22 mm), a rotary encoder or switch (EC11:
+    // a 12 mm body and a 6 mm shaft up to 20 mm), a potentiometer (a 9 mm pot with its shaft, 15 mm; a trimmer, 5 mm), a 7-segment
+    // display (8 mm). A trimmer first: its name may also say "potentiometer"
+    ("toggle", 22.0, [40, 40, 44]),
+    ("rotaryencoder", 20.0, [196, 198, 204]),
+    ("rotary", 20.0, [196, 198, 204]),
+    ("trimmer", 5.0, [40, 80, 170]),
+    ("trimpot", 5.0, [40, 80, 170]),
+    ("potentiometer", 15.0, [30, 30, 34]),
+    ("7segment", 8.0, [44, 44, 48]),
+    ("7seg", 8.0, [44, 44, 48]),
+    ("7-segment", 8.0, [44, 44, 48]),
 ];
 
 /// How far a TO-220's metal tab stands above its plastic body (mm).
@@ -697,6 +729,78 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             }
             v
         }
+        Kind::Toggle => {
+            // the body round the pins, the threaded bushing on it and the lever, thinner, to the top
+            let f = Frame { c: [cx, cy], along_x };
+            let (len, wid) = ((if along_x { sx } else { sy } + 3.0).max(8.0), (if along_x { sy } else { sx } + 3.0).max(6.0));
+            let (body, bush) = (h * 0.4, h * 0.62);
+            vec![
+                f.at([-len / 2.0, len / 2.0], [-wid / 2.0, wid / 2.0], [0.0, body], color, b),
+                solid([cx - 3.0, cy - 3.0, body], [cx + 3.0, cy + 3.0, bush], SILVER, BodyShape::Cylinder(2)),
+                solid([cx - 1.0, cy - 1.0, bush], [cx + 1.0, cy + 1.0, h], SILVER, BodyShape::Cylinder(2)),
+            ]
+        }
+        Kind::Rotary => {
+            // a square body over the pins, the bushing and the shaft (a 6 mm knurled one)
+            let side = (sx.max(sy) + 2.0).clamp(8.0, 14.0);
+            let q = side / 2.0;
+            let (body, bush) = (h * 0.33, h * 0.5);
+            vec![
+                solid([cx - q, cy - q, 0.0], [cx + q, cy + q, body], [40, 40, 44], b),
+                solid([cx - 3.5, cy - 3.5, body], [cx + 3.5, cy + 3.5, bush], color, BodyShape::Cylinder(2)),
+                solid([cx - 3.0, cy - 3.0, bush], [cx + 3.0, cy + 3.0, h], color, BodyShape::Cylinder(2)),
+            ]
+        }
+        Kind::Pot => {
+            let side = (sx.max(sy) + 2.0).clamp(5.0, 12.0);
+            let q = side / 2.0;
+            if h <= 6.0 {
+                // a trimmer: the low body and the rotor with its slot on top
+                let r = q * 0.7;
+                vec![
+                    solid([cx - q, cy - q, 0.0], [cx + q, cy + q, h * 0.75], color, b),
+                    solid([cx - r, cy - r, h * 0.75], [cx + r, cy + r, h], [230, 230, 232], BodyShape::Cylinder(2)),
+                    solid([cx - r * 0.8, cy - 0.25, h - 0.05], [cx + r * 0.8, cy + 0.25, h + 0.02], [30, 30, 34], b),
+                ]
+            } else {
+                // a panel pot: the body, the bushing and the shaft
+                let body = (h * 0.42).min(6.5);
+                vec![
+                    solid([cx - q, cy - q, 0.0], [cx + q, cy + q, body], color, b),
+                    solid([cx - 3.5, cy - 3.5, body], [cx + 3.5, cy + 3.5, body + 3.0], SILVER, BodyShape::Cylinder(2)),
+                    solid([cx - 3.0, cy - 3.0, body + 3.0], [cx + 3.0, cy + 3.0, h], [230, 230, 232], BodyShape::Cylinder(2)),
+                ]
+            }
+        }
+        Kind::SevenSeg => {
+            // the block over its two rows of pins, and on its face the seven segments and the dot of one digit
+            let (blo, bhi) = ([lo.x - 0.8, lo.y - 0.8], [hi.x + 0.8, hi.y + 0.8]);
+            let mut v = vec![solid([blo[0], blo[1], 0.0], [bhi[0], bhi[1], h], color, b)];
+            // the digit stands with its height across the rows of pins (along y when the pins run along x)
+            let (w, ht) = (bhi[0] - blo[0], bhi[1] - blo[1]);
+            let (dw, dh) = if along_x { (w * 0.45, ht * 0.7) } else { (ht * 0.45, w * 0.7) };
+            let t = (dh * 0.09).max(0.4);
+            let seg = |a: [f64; 2], c: [f64; 2]| -> Solid {
+                // a and c in the digit's frame (x across it, y up it), mapped onto the face
+                let m = |p: [f64; 2]| if along_x { [cx + p[0], cy + p[1]] } else { [cx - p[1], cy + p[0]] };
+                let (p, q) = (m(a), m(c));
+                solid([p[0].min(q[0]), p[1].min(q[1]), h], [p[0].max(q[0]), p[1].max(q[1]), h + 0.05], [230, 40, 40], b)
+            };
+            let (x0, x1, y0, ym, y1) = (-dw / 2.0, dw / 2.0, -dh / 2.0, 0.0, dh / 2.0);
+            for (a, c) in [
+                ([x0 + t, y1 - t], [x1 - t, y1]),
+                ([x0 + t, ym - t / 2.0], [x1 - t, ym + t / 2.0]),
+                ([x0 + t, y0], [x1 - t, y0 + t]),
+                ([x0, ym + t / 2.0], [x0 + t, y1 - t]),
+                ([x1 - t, ym + t / 2.0], [x1, y1 - t]),
+                ([x0, y0 + t], [x0 + t, ym - t / 2.0]),
+                ([x1 - t, y0 + t], [x1, ym - t / 2.0]),
+                ([x1 + t, y0], [x1 + 2.0 * t, y0 + t]),
+            ] {
+                v.push(seg(a, c));
+            }
+            v
+        }
         Kind::Other => vec![solid([lo.x - 0.1, lo.y - 0.1, 0.0], [hi.x + 0.1, hi.y + 0.1, h], color, b)],
     }
 }
@@ -871,6 +975,76 @@ pub fn body_extent(board: &Board, part: &Part) -> Option<(Point, Point)> {
         hi = Point::new(hi.x.max(px), hi.y.max(py));
     }
     Some((lo, hi))
+}
+
+/// Which way a connector's mouth faces, read from its mesh (in the footprint's frame): rays shot in from each of the four sides of its
+/// box, over the part above the board, go deepest into the side that is open (a USB socket's or a DC jack's bore). `(dx, dy)` with one
+/// of them ±1, or `None` when no side stands out (a solid block, or a mesh too thin to tell).
+pub fn mouth(mesh: &crate::mesh::Mesh3d) -> Option<(i8, i8)> {
+    let (lo, hi) = mesh.bounds()?;
+    let tris: Vec<[[f64; 3]; 3]> = mesh.triangles.iter().map(|t| t.map(|i| mesh.vertices[i as usize].map(f64::from))).collect();
+    let (z0, z1) = (lo[2].max(0.2), hi[2]);
+    if z1 - z0 < 0.3 || tris.is_empty() {
+        return None;
+    }
+    // the first hit of a ray from `o` along `d` (Möller–Trumbore), as a distance
+    let hit = |o: [f64; 3], d: [f64; 3]| -> f64 {
+        let sub = |a: [f64; 3], b: [f64; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+        let cross = |a: [f64; 3], b: [f64; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+        let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        let mut best = f64::MAX;
+        for t in &tris {
+            let (e1, e2) = (sub(t[1], t[0]), sub(t[2], t[0]));
+            let h = cross(d, e2);
+            let a = dot(e1, h);
+            if a.abs() < 1e-12 {
+                continue;
+            }
+            let s = sub(o, t[0]);
+            let u = dot(s, h) / a;
+            if !(0.0..=1.0).contains(&u) {
+                continue;
+            }
+            let q = cross(s, e1);
+            let v = dot(d, q) / a;
+            if v < 0.0 || u + v > 1.0 {
+                continue;
+            }
+            let dist = dot(e2, q) / a;
+            if dist > 1e-6 && dist < best {
+                best = dist;
+            }
+        }
+        best
+    };
+    const N: usize = 7;
+    let dirs: [(i8, i8); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+    let mut depth = [0.0f64; 4];
+    for (k, &(dx, dy)) in dirs.iter().enumerate() {
+        let (axis, other) = if dx != 0 { (0, 1) } else { (1, 0) };
+        let extent = hi[axis] - lo[axis];
+        if extent < 0.3 {
+            return None;
+        }
+        let start = if dx + dy > 0 { hi[axis] + 0.01 } else { lo[axis] - 0.01 };
+        let inward = [-f64::from(dx), -f64::from(dy), 0.0];
+        let mut sum = 0.0;
+        for i in 0..N {
+            for j in 0..N {
+                let f = |n: usize| 0.1 + 0.8 * n as f64 / (N - 1) as f64;
+                let mut o = [0.0; 3];
+                o[axis] = start;
+                o[other] = lo[other] + (hi[other] - lo[other]) * f(i);
+                o[2] = z0 + (z1 - z0) * f(j);
+                sum += (hit(o, inward) - 0.01).min(extent) / extent;
+            }
+        }
+        depth[k] = sum / (N * N) as f64;
+    }
+    let mut order: Vec<usize> = (0..4).collect();
+    order.sort_by(|a, b| depth[*b].total_cmp(&depth[*a]));
+    let (first, second) = (depth[order[0]], depth[order[1]]);
+    (first > 0.2 && first > 1.6 * second.max(0.02)).then_some(dirs[order[0]])
 }
 
 /// The box round everything the 3D view draws for each part (its mesh, else its guessed solids), by index into `Board::parts`:
@@ -1302,6 +1476,14 @@ mod tests {
     #[test]
     fn holders_show_the_cell_coin_or_fuse_in_them() {
         assert_eq!(part_kind("BT1", "BatteryHolder_AA"), Kind::BatteryTray);
+        // E1: the switches, the pots and the display
+        assert_eq!(part_kind("SW1", "SW_Toggle_SPDT_Mini"), Kind::Toggle);
+        assert_eq!(part_kind("SW2", "RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm"), Kind::Rotary);
+        assert_eq!(part_kind("RV1", "Potentiometer_Bourns_PTV09A-1_Single_Vertical"), Kind::Pot);
+        assert_eq!(part_kind("RV2", "Potentiometer_Bourns_3296W_Vertical_Trimmer"), Kind::Pot);
+        assert_eq!(part_kind("U1", "7SegmentLED_LTS6760_LTS6780"), Kind::SevenSeg);
+        assert_eq!(part_style("SW1", "SW_Toggle_SPDT_Mini").0, 22.0);
+        assert_eq!(part_style("RV2", "Potentiometer_Bourns_3296W_Vertical_Trimmer").0, 5.0, "a trimmer is low");
         assert_eq!(part_kind("BT1", "BatteryHolder_Keystone_3034_1x20mm"), Kind::CoinHolder);
         assert_eq!(part_kind("F1", "Fuse_5x20_P22.5"), Kind::FuseHolder);
         assert_eq!(part_style("BT1", "BatteryHolder_Keystone_3034_1x20mm").0, 5.0, "a coin holder is low whatever it is called");
@@ -1440,3 +1622,4 @@ mod tests {
         assert!(s[1].lo[0] > 15.0 + 3.15 - 0.5 && s[1].hi[0] > 15.0 + 3.15, "{:?}", (s[1].lo, s[1].hi));
     }
 }
+

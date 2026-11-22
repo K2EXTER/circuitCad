@@ -73,6 +73,10 @@ pub(super) struct View3d {
     /// The inside size of the case (width, depth in mm; 0 = not given).
     case_w: f64,
     case_d: f64,
+    /// Where the board sits in the case (E2): the middle, against the connectors' walls, or against walls picked.
+    case_toward: pcb_core::case::Toward,
+    /// A picture SolidCraft is making in the background (E8): the file it goes to, when done.
+    sc_picture: Option<std::thread::JoinHandle<Result<std::path::PathBuf, String>>>,
     /// Draw on the GPU when it is there (the switch in the window; off = the software picture).
     use_gpu: bool,
     /// How the GPU paints the faces, and whether it darkens creases and corners (ambient occlusion).
@@ -112,7 +116,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true, heat_on: false, temps: None, board_heat: None, heat_request: false, others: vec![] }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0, case_toward: Default::default(), sc_picture: None, use_gpu: true, gpu_geometry: None, look: gpu::Look::Color, ao: true, heat_on: false, temps: None, board_heat: None, heat_request: false, others: vec![] }
     }
 }
 

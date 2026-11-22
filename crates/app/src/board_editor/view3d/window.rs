@@ -42,7 +42,7 @@ impl BoardEditor {
             if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_limits(on, top, bottom)) {
                 self.view3d.generation += 1;
             }
-            let spec = on.then(|| pcb_core::case::CaseSpec { inner_w: self.view3d.case_w, inner_d: self.view3d.case_d, top, bottom, clearance: 0.5 });
+            let spec = on.then(|| pcb_core::case::CaseSpec { inner_w: self.view3d.case_w, inner_d: self.view3d.case_d, top, bottom, clearance: 0.5, toward: self.view3d.case_toward });
             if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_case(spec, &self.board)) {
                 self.view3d.generation += 1;
             }
@@ -57,6 +57,8 @@ impl BoardEditor {
         let mut stale = false;
         // a change to the case read from its STEP (`Some(None)`: taken away), made after the window so it can be undone
         let mut case_change: Option<Option<pcb_core::case_model::CaseModel>> = None;
+        let mut add_holes: Vec<pcb_core::model::Point> = vec![];
+        let mut sc_action: Option<bool> = None;
         let mut want_help = false;
         let mut save_png = false;
         let mut note: Option<String> = None;
@@ -100,6 +102,9 @@ impl BoardEditor {
                     ui.add(egui::DragValue::new(&mut v.limit_bottom).range(0.0..=200.0).speed(0.1).prefix(i18n::tr("裏 ")).suffix(" mm")).on_hover_text(i18n::tr("裏側の、基板の面からケースまでの高さ"));
                     ui.add(egui::DragValue::new(&mut v.case_w).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("内寸 幅 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の幅。基板が入るかを調べます (縁との隙間は 0.5 mm を見込みます)。0 にすると調べません。青い枠がケースの内側です"));
                     ui.add(egui::DragValue::new(&mut v.case_d).range(0.0..=500.0).speed(0.5).prefix(i18n::tr("奥行 ")).suffix(" mm")).on_hover_text(i18n::tr("ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)"));
+                    if v.case_w > 0.0 && v.case_d > 0.0 {
+                        toward_ui(ui, &mut v.case_toward);
+                    }
                 }
                 ui.checkbox(&mut v.heat_on, i18n::tr("温度の色")).on_hover_text(i18n::tr("部品を温度の色で塗ります (サーマルカメラのような見え方)。温度は回路図の「自己発熱」の計算の結果で、電力 × 熱抵抗から出した目安です。基板の「熱の地図」を計算してあれば、基板の表と裏もその温度で塗り、部品はその地図の温度になります (時間の変化の時刻を選んでいれば、その時刻)。青いほど周囲の温度に近く、黄色・白いほど熱い所です。白の見た目 (GPU) と合わせると見やすくなります"));
                 ui.checkbox(&mut v.spin, i18n::tr("自動回転")).on_hover_text(i18n::tr("ゆっくり回して、いろいろな向きから見せます"));
@@ -120,6 +125,16 @@ impl BoardEditor {
                 if ui.button(i18n::tr("PNG保存")).on_hover_text(i18n::tr("いま見えている向きの絵を画像ファイルに保存します (発注前の確認や、人に見せるときに)")).clicked() {
                     save_png = true;
                 }
+                ui.menu_button(i18n::tr("SolidCraft"), |ui| {
+                    if ui.button(i18n::tr("SolidCraft で開く")).on_hover_text(i18n::tr("基板・部品・銅・シルクを STEP にして、SolidCraft のアプリで開きます。寸法を測る・断面を見る・ケースの設計を続ける、などができます")).clicked() {
+                        sc_action = Some(false);
+                        ui.close();
+                    }
+                    if crate::widgets::unless(ui, v.sc_picture.is_some().then_some("いま絵を作っています"), egui::Button::new(i18n::tr("きれいな絵を保存 (レンダリング)…"))).on_hover_text(i18n::tr("SolidCraft が光の当たり方を計算した写真のような絵を作り、PNG に保存します (数秒〜1 分。作っている間も操作できます)")).clicked() {
+                        sc_action = Some(true);
+                        ui.close();
+                    }
+                }).response.on_hover_text(i18n::tr("SolidCraft (別のアプリ) が入っていれば使えます"));
                 if let Some(sc) = &v.scene {
                     let shown = v.net.clone().unwrap_or_else(|| "なし".into());
                     egui::ComboBox::from_id_salt("view3d_net").selected_text(i18n::trf!("ネット強調: {shown}")).show_ui(ui, |ui| {
@@ -199,7 +214,7 @@ impl BoardEditor {
                             ui.small(i18n::trf!("壁の穴: {}", names.join(", "))).on_hover_text(i18n::tr("基板の縁のコネクタ (USB・DC ジャック・端子台) と、縁からはみ出す部品のために、壁にあける穴です (桃色の四角)。まわりに 0.5 mm の余裕を足しています"));
                         }
                         if ui.small_button(i18n::tr("ケースの図面 (DXF) を保存…")).on_hover_text(i18n::tr("ケースの底 (柱の位置・外径・下穴) と、まわりに開いた 4 枚の壁 (内側から見た穴の位置と大きさ) の図面です。ケースの CAD や、市販のケースに穴をあける型紙に使えます")).clicked() {
-                            let spec = pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, top: v.limit_top, bottom: v.limit_bottom, clearance: 0.5 };
+                            let spec = pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, top: v.limit_top, bottom: v.limit_bottom, clearance: 0.5, toward: v.case_toward };
                             let name = format!("{}_case.dxf", if self.board.name.is_empty() { "board" } else { &self.board.name });
                             if let Some(path) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).set_file_name(name).save_file() {
                                 self.status = match pcb_core::case::drawing(&self.board, &spec).and_then(|t| std::fs::write(&path, t).map_err(|e| e.to_string())) {
@@ -208,8 +223,34 @@ impl BoardEditor {
                                 };
                             }
                         }
+                        if ui.small_button(i18n::tr("ケースを作る (SolidCraft)…")).on_hover_text(i18n::tr("この内寸・柱・壁の穴・ふたの柱から、箱とふたの立体を SolidCraft で作り、STEP に保存します (壁・底・ふた 2 mm、外の角を 3 mm で丸める)。作ったケースは基板のまわりに置き、部品とぶつからないかを調べます。3D プリンタやケースの CAD に渡せます")).clicked() {
+                            let spec = pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, top: v.limit_top, bottom: v.limit_bottom, clearance: 0.5, toward: v.case_toward };
+                            let name = format!("{}_case.step", if self.board.name.is_empty() { "board" } else { &self.board.name });
+                            match pcb_core::shape_script::find_solidcraft() {
+                                None => self.status = i18n::tr("SolidCraft が見つかりません。入れてから (または SOLIDCRAFT_DIR を設定して) もう一度押してください").into(),
+                                Some(_) => {
+                                    if let Some(path) = rfd::FileDialog::new().add_filter("STEP", &["step", "stp"]).set_file_name(name).save_file() {
+                                        let dir = std::env::temp_dir().join("circuitcad_case_shape");
+                                        match pcb_core::case_shape::build(&self.board, &spec, &Default::default(), &dir).unwrap_or_else(|| Err("SolidCraft".into())).and_then(|(step, model)| std::fs::copy(&step, &path).map(|_| model).map_err(|e| e.to_string())) {
+                                            Ok(model) => {
+                                                self.status = i18n::trf!("ケースを作って保存しました: {}。基板のまわりに置きました", path.display());
+                                                case_change = Some(Some(model));
+                                            }
+                                            Err(e) => self.status = i18n::trf!("ケースを作れませんでした: {e}"),
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     });
-                    for p in ins.posts.iter().filter(|p| p.problem.is_some()) {
+                    if !ins.lid_posts.is_empty() {
+                        ui.small(i18n::trf!("ふたの柱 {} 本 (高さ {:.1} mm、基板を上から押さえる)", ins.lid_posts.len(), ins.lid_posts[0].height))
+                            .on_hover_text(i18n::tr("取り付け穴のまわりを、ふたから基板の表の面まで押さえる柱です (橙の破線)。高さは「表」の高さ。図面ではふたを内側から見た形で描きます"));
+                    }
+                    if !ins.suggested_holes.is_empty() && ui.small_button(i18n::trf!("提案の穴 {} つを基板に足す", ins.suggested_holes.len())).on_hover_text(i18n::tr("角の近くで、部品・パッド・配線から離れた所に M3 の取り付け穴 (3.2 mm) を足します (灰色の円)。足すと、その下にねじ柱が立ちます。元に戻せます")).clicked() {
+                        add_holes = ins.suggested_holes.clone();
+                    }
+                    for p in ins.posts.iter().chain(&ins.lid_posts).filter(|p| p.problem.is_some()) {
                         ui.colored_label(crate::theme::warn(), i18n::trf!("⚠ 穴 ({:.1}, {:.1}) の柱: {}", p.hole.x, p.hole.y, i18n::tr_dyn(p.problem.as_deref().unwrap_or(""))));
                     }
                     for n in &ins.notes {
@@ -478,12 +519,76 @@ impl BoardEditor {
                 self.view3d.generation += 1;
             }
         }
+        // SolidCraft: open the board there, or make a picture in the background and tell when it is done
+        match sc_action {
+            Some(false) => {
+                self.status = match pcb_core::shape_script::open_board_in_app(&self.board, &std::env::temp_dir().join("circuitcad_solidcraft")) {
+                    Ok(p) => i18n::trf!("SolidCraft で開きました: {}", p.display()),
+                    Err(e) => i18n::trf!("SolidCraft で開けません: {e}"),
+                };
+            }
+            Some(true) => {
+                let name = format!("{}_render.png", if self.board.name.is_empty() { "board" } else { &self.board.name });
+                if let Some(out) = rfd::FileDialog::new().add_filter("PNG", &["png"]).set_file_name(name).save_file() {
+                    let board = self.board.clone();
+                    self.view3d.sc_picture = Some(std::thread::spawn(move || {
+                        pcb_core::shape_script::board_picture(&board, &std::env::temp_dir().join("circuitcad_solidcraft"), &out, "iso", (1600, 1000), true).map(|_| out)
+                    }));
+                    self.status = i18n::tr("SolidCraft が絵を作っています…").into();
+                }
+            }
+            None => {}
+        }
+        if self.view3d.sc_picture.as_ref().is_some_and(|h| h.is_finished())
+            && let Some(h) = self.view3d.sc_picture.take()
+        {
+            self.status = match h.join().unwrap_or_else(|_| Err("止まりました".into())) {
+                Ok(p) => i18n::trf!("きれいな絵を保存しました: {}", p.display()),
+                Err(e) => i18n::trf!("絵を作れませんでした: {e}"),
+            };
+        } else if self.view3d.sc_picture.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        }
+        if !add_holes.is_empty() {
+            self.checkpoint();
+            for p in add_holes {
+                self.board.holes.push(pcb_core::model::Hole::new(p, 3.2));
+            }
+            self.status = i18n::tr("取り付け穴 (M3、3.2 mm) を足しました。その下にねじ柱が立ちます").into();
+            stale = true;
+        }
         if stale {
             self.view3d.stale = true;
         }
         if !open {
             self.view3d.open = false;
             self.view3d.scene = None;
+        }
+    }
+}
+
+/// Where the board sits in the case: the middle, against the walls its connectors go through, or against walls picked (one per axis).
+fn toward_ui(ui: &mut egui::Ui, t: &mut pcb_core::case::Toward) {
+    use pcb_core::case::Toward;
+    let label = match *t {
+        Toward::Middle => i18n::tr("真ん中").to_string(),
+        Toward::Auto => i18n::tr("コネクタの壁へ").to_string(),
+        Toward::Walls(..) => i18n::tr("壁を選ぶ").to_string(),
+    };
+    egui::ComboBox::from_id_salt("case_toward").selected_text(i18n::trf!("置き方: {label}")).show_ui(ui, |ui| {
+        ui.selectable_value(t, Toward::Middle, i18n::tr("真ん中")).on_hover_text(i18n::tr("基板をケースの底の真ん中に置きます"));
+        ui.selectable_value(t, Toward::Auto, i18n::tr("コネクタの壁へ")).on_hover_text(i18n::tr("縁のコネクタ (USB・DC ジャック・端子台) が出る壁に、縁の隙間 0.5 mm まで寄せます。プラグが奥まで届くように。両側の壁にコネクタがある向きは真ん中のまま"));
+        if ui.selectable_label(matches!(t, Toward::Walls(..)), i18n::tr("壁を選ぶ")).clicked() && !matches!(t, Toward::Walls(..)) {
+            *t = Toward::Walls(-1, -1);
+        }
+    });
+    if let Toward::Walls(x, y) = t {
+        for (v, names, id) in [(x, ["左", "真ん中", "右"], "toward_x"), (y, ["手前", "真ん中", "奥"], "toward_y")] {
+            egui::ComboBox::from_id_salt(id).selected_text(i18n::tr_dyn(names[(*v + 1) as usize])).width(60.0).show_ui(ui, |ui| {
+                for (k, n) in names.iter().enumerate() {
+                    ui.selectable_value(v, k as i8 - 1, i18n::tr_dyn(n));
+                }
+            });
         }
     }
 }

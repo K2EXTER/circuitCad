@@ -132,8 +132,9 @@ pub struct Starter {
 }
 
 /// The SolidCraft command script: the drawings as canvases (the top view on the board's plane, the side view standing behind the part,
-/// its picture's up along +z) and the starting body.
-pub fn script(drawings: &[(View, PathBuf, f64)], starter: Option<Starter>) -> serde_json::Value {
+/// its picture's up along +z), the starting body, and a leg in each through-hole of the footprint (`pads`: the legs need not be drawn,
+/// E7 ②; through the board and 0.5 mm up into the body).
+pub fn script(drawings: &[(View, PathBuf, f64)], starter: Option<Starter>, pads: &[pcb_core::footprints::FpPad]) -> serde_json::Value {
     let mut cmds = vec![];
     // how far behind the part the side view stands: clear of the part and of the top view
     let behind = drawings.iter().filter(|d| d.0 == View::Top).map(|d| d.2 / 2.0).fold(starter.map_or(10.0, |s| s.h / 2.0 + 5.0), f64::max);
@@ -152,6 +153,7 @@ pub fn script(drawings: &[(View, PathBuf, f64)], starter: Option<Starter>) -> se
                 "width": width, "opacity": 0.6, "name": "横から見た図"}}),
         });
     }
+    cmds.extend(pcb_core::shape_script::legs_commands(pads, 0.5));
     serde_json::Value::Array(cmds)
 }
 
@@ -202,7 +204,8 @@ impl PartForm {
         }
         let starter = (self.sc_starter && self.body_w > 0.0 && self.body_h > 0.0).then(|| Starter { w: self.body_w, h: self.body_h, height: if self.height > 0.0 { self.height } else { 1.0 } });
         let script_path = dir.join("script.json");
-        std::fs::write(&script_path, serde_json::to_string_pretty(&script(&drawn, starter)).unwrap_or_default()).map_err(|e| e.to_string())?;
+        let pads = self.to_def().ok().and_then(|d| d.footprint().ok()).map(|f| f.pads).unwrap_or_default();
+        std::fs::write(&script_path, serde_json::to_string_pretty(&script(&drawn, starter, &pads)).unwrap_or_default()).map_err(|e| e.to_string())?;
         let design = dir.join("part.sc");
         let out = std::process::Command::new(&cli).arg("run").arg(&script_path).arg("--save").arg(&design).arg("--quiet").output().map_err(|e| format!("{}: {e}", cli.display()))?;
         if !out.status.success() {
@@ -375,7 +378,10 @@ mod tests {
 
     #[test]
     fn the_script_puts_the_top_view_flat_and_the_side_view_standing_behind_the_part() {
-        let s = script(&[(View::Top, PathBuf::from("top.png"), 12.0), (View::Side, PathBuf::from("side.png"), 12.0)], Some(Starter { w: 6.0, h: 4.0, height: 3.0 }));
+        let hole = |pin: &str, x: f64| pcb_core::footprints::FpPad { pin: pin.into(), pos: pcb_core::model::Point::new(x, 0.0), shape: pcb_core::model::PadShape::Circle { d: 1.6 }, drill: Some(0.8), slot: 0.0, slot_v: false };
+        let s = script(&[(View::Top, PathBuf::from("top.png"), 12.0), (View::Side, PathBuf::from("side.png"), 12.0)], Some(Starter { w: 6.0, h: 4.0, height: 3.0 }), &[hole("1", -1.27), hole("2", 1.27)]);
+        // a leg in each of the two holes (E7 ②)
+        assert_eq!(s.as_array().unwrap().iter().filter(|c| c["params"]["name"].as_str().is_some_and(|n| n.starts_with("Leg"))).count(), 2);
         let cmds = s.as_array().unwrap();
         assert_eq!(cmds[0]["command"], "solid.box");
         assert_eq!(cmds[0]["params"]["corner"], serde_json::json!([-3.0, -2.0, 0.0]));
@@ -398,7 +404,7 @@ mod tests {
         let (top, side) = (dir.join("top.png"), dir.join("side.png"));
         std::fs::write(&top, d.png().unwrap()).unwrap();
         std::fs::write(&side, d.png().unwrap()).unwrap();
-        let s = script(&[(View::Top, top, 20.0), (View::Side, side, 20.0)], Some(Starter { w: 6.0, h: 4.0, height: 3.0 }));
+        let s = script(&[(View::Top, top, 20.0), (View::Side, side, 20.0)], Some(Starter { w: 6.0, h: 4.0, height: 3.0 }), &[]);
         let (sp, design) = (dir.join("script.json"), dir.join("part.sc"));
         std::fs::write(&sp, serde_json::to_string(&s).unwrap()).unwrap();
         let _ = std::fs::remove_file(&design);

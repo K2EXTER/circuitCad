@@ -15,11 +15,48 @@ pub struct CaseSpec {
     pub bottom: f64,
     /// Gap to keep between the board's edge and the wall in mm.
     pub clearance: f64,
+    /// Where the board sits on the floor: in the middle, against walls, or against the walls its connectors go through.
+    pub toward: Toward,
 }
 
 impl Default for CaseSpec {
     fn default() -> Self {
-        CaseSpec { inner_w: 0.0, inner_d: 0.0, top: 0.0, bottom: 0.0, clearance: 0.5 }
+        CaseSpec { inner_w: 0.0, inner_d: 0.0, top: 0.0, bottom: 0.0, clearance: 0.5, toward: Toward::Middle }
+    }
+}
+
+/// Where the board sits on the case's floor (E2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Toward {
+    /// In the middle of the floor.
+    #[default]
+    Middle,
+    /// Against the walls the connectors at its edges go through (on the side that has them; in the middle along an axis with
+    /// connectors on both walls or none), so that the plugs reach in.
+    Auto,
+    /// Against these walls, `clearance` from them: x (−1 left, 0 middle, +1 right) and y (−1 front, 0 middle, +1 back).
+    Walls(i8, i8),
+}
+
+impl Toward {
+    /// From a word: `middle`, `auto`, or walls `left`, `right`, `front`, `back` joined by `,` (one per axis).
+    pub fn parse(s: &str) -> Result<Toward, String> {
+        match s.trim() {
+            "" | "middle" => return Ok(Toward::Middle),
+            "auto" => return Ok(Toward::Auto),
+            _ => {}
+        }
+        let (mut x, mut y) = (0, 0);
+        for w in s.split(',').map(str::trim) {
+            match w {
+                "left" => x = -1,
+                "right" => x = 1,
+                "front" => y = -1,
+                "back" => y = 1,
+                _ => return Err(format!("{w}: middle, auto, or left / right / front / back (two joined by a comma)")),
+            }
+        }
+        Ok(Toward::Walls(x, y))
     }
 }
 
@@ -150,6 +187,16 @@ impl Seat {
         Point::new(self.board_mid.x + dx, self.board_mid.y + dy)
     }
 
+    /// How a shape in the case's frame (x along the width, y along the depth from the inner left front corner, z up from the floor)
+    /// stands in the board's frame (`Mesh3d::placed`): quarter turns about z, then the move. The inverse of `place`, with z down by the
+    /// posts' height (the board's bottom face is z = 0).
+    pub fn case_to_board(&self) -> (u8, [f64; 3]) {
+        // turned: a case point goes to the board by (x, y) -> (y, -x), three quarter turns
+        let rot = if self.turned { 3 } else { 0 };
+        let f = if self.turned { Point::new(self.floor_mid.y, -self.floor_mid.x) } else { self.floor_mid };
+        (rot, [self.board_mid.x - f.x, self.board_mid.y - f.y, -self.raise])
+    }
+
     /// A direction on the board (±x, ±y) as the wall it points at.
     fn wall(&self, dir: (i8, i8)) -> Wall {
         let (x, y) = if self.turned { (-dir.1, dir.0) } else { dir };
@@ -194,7 +241,15 @@ pub struct Opening {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Inside {
     pub posts: Vec<Post>,
+    /// Posts hanging from the lid onto the board's top face round the same holes (pressing the board down; `height` from the lid to
+    /// the board's top face). Only when the room above the board is given.
+    pub lid_posts: Vec<Post>,
     pub openings: Vec<Opening>,
+    /// When the board has no round mounting hole: free places for M3 holes near its corners (board coordinates), clear of the parts,
+    /// pads and tracks and 3.5 mm or more inside the outline.
+    pub suggested_holes: Vec<Point>,
+    /// The walls the board was pushed against (`Toward::Auto` and `Walls`): x and y as in `Toward::Walls`.
+    pub pushed: (i8, i8),
     pub notes: Vec<String>,
 }
 
@@ -209,17 +264,49 @@ fn screw_for(drill: f64) -> (&'static str, f64, f64) {
     }
 }
 
-/// Where the board sits in this case (`None` when the floor is not given).
+/// Where the board sits in this case (`None` when the floor is not given): in the middle, or pushed against walls (`spec.toward`).
 pub fn seat(board: &Board, spec: &CaseSpec) -> Option<Seat> {
+    seat_pushed(board, spec).map(|s| s.0)
+}
+
+/// The seat and the walls it was pushed against.
+fn seat_pushed(board: &Board, spec: &CaseSpec) -> Option<(Seat, (i8, i8))> {
+    let push = match spec.toward {
+        Toward::Middle => (0, 0),
+        Toward::Walls(x, y) => (x.signum(), y.signum()),
+        Toward::Auto => {
+            // the walls the connectors go through with the board in the middle
+            let mid = seat_at(board, spec, (0, 0))?;
+            let walls: Vec<Wall> = openings(board, spec, &mid).iter().map(|o| o.wall).collect();
+            let side = |neg: Wall, pos: Wall| match (walls.contains(&neg), walls.contains(&pos)) {
+                (true, false) => -1,
+                (false, true) => 1,
+                _ => 0,
+            };
+            (side(Wall::Left, Wall::Right), side(Wall::Front, Wall::Back))
+        }
+    };
+    Some((seat_at(board, spec, push)?, push))
+}
+
+/// The seat with the board in the middle along an axis (0) or `clearance` from the wall on that side (−1 left / front, +1 right / back).
+fn seat_at(board: &Board, spec: &CaseSpec, push: (i8, i8)) -> Option<Seat> {
     let r = check(board, spec);
     if !r.floor_checked {
         return None;
     }
     let (lo, hi) = board.bounds()?;
+    // the board's size on the floor, turned as it goes in
+    let (pw, pd) = if r.turned { (hi.y - lo.y, hi.x - lo.x) } else { (hi.x - lo.x, hi.y - lo.y) };
+    let at = |k: i8, inner: f64, size: f64| match k {
+        k if k < 0 => spec.clearance + size / 2.0,
+        k if k > 0 => inner - spec.clearance - size / 2.0,
+        _ => inner / 2.0,
+    };
     Some(Seat {
         turned: r.turned,
         board_mid: Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0),
-        floor_mid: Point::new(spec.inner_w / 2.0, spec.inner_d / 2.0),
+        floor_mid: Point::new(at(push.0, spec.inner_w, pw), at(push.1, spec.inner_d, pd)),
         raise: if spec.bottom > 0.0 { spec.bottom } else { DEFAULT_POST },
     })
 }
@@ -227,24 +314,27 @@ pub fn seat(board: &Board, spec: &CaseSpec) -> Option<Seat> {
 /// The screw posts under the board's mounting holes and the openings in the walls for the parts reached from outside.
 pub fn inside(board: &Board, spec: &CaseSpec) -> Inside {
     let mut out = Inside::default();
-    let Some(seat) = seat(board, spec) else {
+    let Some((seat, pushed)) = seat_pushed(board, spec) else {
         out.notes.push("ケースの内寸 (幅と奥行) を入れると、ねじ柱と壁の穴の位置を出します".into());
         return out;
     };
+    out.pushed = pushed;
     if spec.bottom <= 0.0 {
         out.notes.push(format!("基板の下の高さが無いので、ねじ柱の高さを {DEFAULT_POST} mm として計算しました。裏の部品やはんだの足に合わせて決めてください"));
     }
     // posts
     let round: Vec<&Hole> = board.holes.iter().filter(|h| h.slot <= h.drill).collect();
     if round.is_empty() {
-        let (lo, hi) = board.bounds().unwrap_or_default();
-        out.notes.push(format!(
-            "基板に取り付け穴がありません。ねじで留めるなら、角から 3.5 mm ほど内側 (例: ({:.1}, {:.1}) と ({:.1}, {:.1}) の対角) に M3 の穴 (3.2 mm) を足しましょう。穴を置く前に、まわりに部品や配線が無いか確かめます",
-            lo.x + 3.5,
-            lo.y + 3.5,
-            hi.x - 3.5,
-            hi.y - 3.5
-        ));
+        out.suggested_holes = suggest_holes(board);
+        if out.suggested_holes.is_empty() {
+            out.notes.push("基板に取り付け穴がありません。角の近くに M3 の穴 (3.2 mm) を置ける空いた所も見つかりませんでした。部品を内側に寄せるか、ケースに溝を付けて基板を差し込む形にしましょう".into());
+        } else {
+            let list: Vec<String> = out.suggested_holes.iter().map(|p| format!("({:.1}, {:.1})", p.x, p.y)).collect();
+            out.notes.push(format!(
+                "基板に取り付け穴がありません。ねじで留めるなら、部品・パッド・配線から離れた角の近くに M3 の穴 (3.2 mm) を置けます: {}。穴を足すと、その下にねじ柱が立ちます",
+                list.join("、")
+            ));
+        }
     }
     let room = |bottom: bool| -> Vec<(String, Point, Point)> { board.parts.iter().filter(|p| (p.side == Side::Bottom) == bottom).filter_map(|p| crate::autoplace::extent(board, &p.refdes).map(|(lo, hi)| (p.refdes.clone(), lo, hi))).collect() };
     let underneath = room(true);
@@ -289,16 +379,85 @@ pub fn inside(board: &Board, spec: &CaseSpec) -> Inside {
             problem = Some("柱が壁にかかります".into());
         }
         out.posts.push(Post { hole: h.pos, at, height: seat.raise, screw, outer_d, pilot_d, problem });
+        // the lid's post: from the lid onto the board's top face round the hole, clear of the parts on top
+        if spec.top > 0.0 {
+            let problem = above
+                .iter()
+                .find(|(_, lo, hi)| h.pos.x + r > lo.x && h.pos.x - r < hi.x && h.pos.y + r > lo.y && h.pos.y - r < hi.y)
+                .map(|(name, ..)| format!("ふたの柱が表の部品 {name} に当たります。柱を細くするか、穴か部品を動かしましょう"));
+            out.lid_posts.push(Post { hole: h.pos, at, height: spec.top, screw, outer_d, pilot_d, problem });
+        }
     }
-    // openings
+    out.openings = openings(board, spec, &seat);
+    let far: Vec<String> = out.openings.iter().filter(|o| o.to_wall > FAR_FROM_WALL).map(|o| format!("{} ({:.1} mm)", o.refdes, o.to_wall)).collect();
+    if !far.is_empty() {
+        let how = if spec.toward == Toward::Middle { "基板を壁に寄せる (寄せ方「コネクタの壁へ」)" } else { "基板を寄せる壁を変える" };
+        out.notes.push(format!("壁から離れたコネクタがあります: {}。プラグが奥まで届かないことがあるので、{how}か、内寸の小さいケースにするか、コネクタを基板の縁に寄せましょう", far.join(", ")));
+    }
+    out
+}
+
+/// Free places for M3 mounting holes near the board's corners: from 3.5 mm inside each corner, the nearest to it (in 0.5 mm steps up
+/// to 15 mm along each edge) where a post of 6 mm and a screw head as wide keep clear of the parts on both faces (their 3D bodies),
+/// the pads and the tracks, and stay 3.5 mm inside the outline.
+pub fn suggest_holes(board: &Board) -> Vec<Point> {
+    let Some((lo, hi)) = board.bounds() else { return vec![] };
+    let r = 3.0;
+    let solids = crate::model3d::part_solid_extents(board);
+    let mut boxes: Vec<(Point, Point)> = board.parts.iter().filter_map(|p| crate::autoplace::extent(board, &p.refdes)).collect();
+    boxes.extend(solids.iter().flatten().map(|(a, b)| (Point::new(a[0], a[1]), Point::new(b[0], b[1]))));
+    let seg = |p: Point, a: Point, b: Point| {
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let l2 = dx * dx + dy * dy;
+        let t = if l2 < 1e-12 { 0.0 } else { (((p.x - a.x) * dx + (p.y - a.y) * dy) / l2).clamp(0.0, 1.0) };
+        p.dist(Point::new(a.x + t * dx, a.y + t * dy))
+    };
+    let n = board.outline.len();
+    let free = |c: Point| {
+        n >= 3
+            && crate::geom::inside_polygon(&board.outline, c)
+            && (0..n).all(|i| seg(c, board.outline[i], board.outline[(i + 1) % n]) >= 3.5)
+            && boxes.iter().all(|(a, b)| c.x + r <= a.x || c.x - r >= b.x || c.y + r <= a.y || c.y - r >= b.y)
+            && board.pads.iter().all(|p| { let (w, h) = p.shape.size(); (p.pos.x - c.x).abs() >= r + w / 2.0 || (p.pos.y - c.y).abs() >= r + h / 2.0 })
+            && board.tracks.iter().all(|t| seg(c, t.a, t.b) >= r + t.width / 2.0)
+            && board.holes.iter().all(|h| h.pos.dist(c) >= r + h.drill / 2.0 + 1.0)
+    };
+    let mut out = vec![];
+    for (cx, cy, sx, sy) in [(lo.x, lo.y, 1.0, 1.0), (hi.x, lo.y, -1.0, 1.0), (hi.x, hi.y, -1.0, -1.0), (lo.x, hi.y, 1.0, -1.0)] {
+        let mut best: Option<(f64, Point)> = None;
+        for i in 0..=23 {
+            for j in 0..=23 {
+                let (a, b) = (3.5 + 0.5 * i as f64, 3.5 + 0.5 * j as f64);
+                let c = Point::new(cx + sx * a, cy + sy * b);
+                if best.is_none_or(|(d, _)| a + b < d) && free(c) && out.iter().all(|q: &Point| q.dist(c) > 2.0 * r) {
+                    best = Some((a + b, c));
+                }
+            }
+        }
+        out.extend(best.map(|b| b.1));
+    }
+    out
+}
+
+/// The openings in the walls for the parts reached from outside, with the board where `seat` puts it.
+fn openings(board: &Board, spec: &CaseSpec, seat: &Seat) -> Vec<Opening> {
+    let mut out = vec![];
+    let solids = crate::model3d::part_solid_extents(board);
     let Some((blo, bhi)) = board.bounds() else { return out };
     for (i, part) in board.parts.iter().enumerate() {
         let Some((lo, hi)) = solids[i] else { continue };
         let kind = crate::model3d::part_kind(&part.refdes, &part.footprint);
         let reached = matches!(kind, crate::model3d::Kind::Shell | crate::model3d::Kind::Terminal);
-        // the board edge the part is nearest: (gap, direction)
         let gaps = [(lo[0] - blo.x, (-1, 0)), (bhi.x - hi[0], (1, 0)), (lo[1] - blo.y, (0, -1)), (bhi.y - hi[1], (0, 1))];
-        let (gap, dir) = gaps.iter().copied().min_by(|a, b| a.0.total_cmp(&b.0)).unwrap();
+        // the way its mouth faces, read from a maker's mesh (turned and mirrored with the part); else the board edge it is nearest
+        let mouth = board.models3d.get(&part.footprint).and_then(crate::model3d::mouth).map(|(dx, dy)| {
+            let d = crate::parts::rotate(Point::new(if part.side == Side::Bottom { -f64::from(dx) } else { f64::from(dx) }, f64::from(dy)), part.rot);
+            (d.x.round() as i8, d.y.round() as i8)
+        });
+        let (gap, dir) = match mouth {
+            Some(m) => gaps.iter().copied().find(|g| g.1 == m).unwrap_or(gaps[0]),
+            None => gaps.iter().copied().min_by(|a, b| a.0.total_cmp(&b.0)).unwrap(),
+        };
         // a connector near the edge, or anything that sticks out past it
         if !(reached && gap <= NEAR_EDGE || gap < -0.05) {
             continue;
@@ -318,20 +477,13 @@ pub fn inside(board: &Board, spec: &CaseSpec) -> Inside {
         // the body only: the legs through the board (a mesh's, below the top face) need no opening
         let t = crate::model3d::BOARD_THICKNESS;
         let (z0, z1) = if part.side == Side::Bottom { (lo[2], hi[2].min(0.0)) } else { (lo[2].max(t), hi[2]) };
-        out.openings.push(Opening {
+        out.push(Opening {
             refdes: part.refdes.clone(),
             wall,
             along: (along.0 - m, along.1 + m),
             up: ((seat.raise + z0 - m).max(0.0), seat.raise + z1 + m),
             to_wall,
         });
-    }
-    let far: Vec<String> = out.openings.iter().filter(|o| o.to_wall > FAR_FROM_WALL).map(|o| format!("{} ({:.1} mm)", o.refdes, o.to_wall)).collect();
-    if !far.is_empty() {
-        out.notes.push(format!(
-            "壁から離れたコネクタがあります: {}。プラグが奥まで届かないことがあるので、基板を壁に寄せる (柱の位置をずらす) か、内寸の小さいケースにするか、コネクタを基板の縁に寄せましょう",
-            far.join(", ")
-        ));
     }
     out
 }
@@ -382,8 +534,26 @@ pub fn drawing(board: &Board, spec: &CaseSpec) -> Result<String, String> {
         rect(&mut x, "OPENINGS", on_paper(o.wall, o.along.0, o.up.0), on_paper(o.wall, o.along.1, o.up.1));
         x.text("NOTES", on_paper(o.wall, o.along.0, o.up.1 + 1.0), 1.5, &o.refdes);
     }
+    // the holes the board could have (no mounting hole yet): where the posts would stand
+    for p in &ins.suggested_holes {
+        let at = seat.place(*p);
+        x.circle("SUGGESTED", at, 6.0);
+        x.circle("SUGGESTED", at, 3.2);
+        x.text("NOTES", Point::new(at.x + 3.5, at.y), 1.5, "M3 hole?");
+    }
+    // the lid, seen from inside (from below: mirrored left to right), right of the right wall, with its posts
+    if !ins.lid_posts.is_empty() {
+        let x0 = w + wall_h + 10.0;
+        let lid = |p: Point| Point::new(x0 + (w - p.x), p.y);
+        rect(&mut x, "CASE", lid(Point::new(w, 0.0)), lid(Point::new(0.0, d)));
+        x.text("NOTES", Point::new(x0, d + 3.0), 2.0, "LID (seen from inside)");
+        for p in &ins.lid_posts {
+            x.circle("POSTS", lid(p.at), p.outer_d);
+            x.text("NOTES", Point::new(lid(p.at).x + p.outer_d / 2.0 + 0.5, p.at.y), 1.5, &format!("h{:.1}", p.height));
+        }
+    }
     x.text("NOTES", Point::new(0.0, -wall_h - 8.0), 2.0, &format!("inside {w:.1} x {d:.1} mm, walls {wall_h:.1} mm high (seen from inside, folded out). posts h{:.1} mm", seat.raise));
-    Ok(x.finish(&[("CASE", 7), ("BOARD", 3), ("POSTS", 1), ("OPENINGS", 6), ("NOTES", 2)]))
+    Ok(x.finish(&[("CASE", 7), ("BOARD", 3), ("POSTS", 1), ("OPENINGS", 6), ("SUGGESTED", 8), ("NOTES", 2)]))
 }
 
 #[cfg(test)]
@@ -515,5 +685,103 @@ mod tests {
         assert_eq!(circles, 8, "outside and pilot circle of four posts");
         assert!(drawing(&b, &CaseSpec::default()).is_err());
         assert!(dxf.is_ascii(), "an R12 DXF in ASCII only");
+    }
+
+    /// The USB board of the test above: the board pushed to the connector's wall (auto) brings the socket within the clearance of the
+    /// right wall and says nothing more; pushed against the left and front walls by hand, it sits 0.5 mm from them.
+    #[test]
+    fn the_board_is_pushed_against_walls() {
+        let mut b = board_with_holes();
+        for (i, (x, y)) in [(57.5, 18.0), (57.5, 25.0)].iter().enumerate() {
+            let mut p = Pad::new(Point::new(*x, *y), PadShape::Circle { d: 1.7 }, Some(1.0), Side::Top);
+            p.refdes = "J1".into();
+            p.pin = (i + 1).to_string();
+            b.pads.push(p);
+        }
+        b.parts.push(Part { refdes: "J1".into(), value: String::new(), footprint: "USB_DEMO_TH".into(), pos: Point::new(57.5, 21.5), rot: 0, side: Side::Top });
+        let base = CaseSpec { inner_w: 80.0, inner_d: 50.0, bottom: 5.0, ..Default::default() };
+        let mid = inside(&b, &base);
+        let auto = inside(&b, &CaseSpec { toward: Toward::Auto, ..base });
+        assert_eq!(auto.pushed, (1, 0), "{auto:?}");
+        assert!(auto.openings[0].to_wall < mid.openings[0].to_wall - 9.0, "{} vs {}", auto.openings[0].to_wall, mid.openings[0].to_wall);
+        assert!(!auto.notes.iter().any(|n| n.contains("壁から離れた")), "{:?}", auto.notes);
+        let corner = seat(&b, &CaseSpec { toward: Toward::Walls(-1, -1), ..base }).unwrap();
+        let lo = b.bounds().unwrap().0;
+        let p = corner.place(lo);
+        assert!((p.x - 0.5).abs() < 1e-9 && (p.y - 0.5).abs() < 1e-9, "{p:?}");
+        assert_eq!(Toward::parse("auto"), Ok(Toward::Auto));
+        assert_eq!(Toward::parse("right,back"), Ok(Toward::Walls(1, 1)));
+        assert!(Toward::parse("up").is_err());
+    }
+
+    /// A board without holes gets free places near its corners (clear of a part in one corner); the lid's posts stand on the board's
+    /// top round the holes when the room above is given, and one that lands on a part says so; the drawing has the lid.
+    #[test]
+    fn holes_are_suggested_and_the_lid_has_posts() {
+        let mut bare = Board::new("x", 60.0, 40.0);
+        let mut pad = Pad::new(Point::new(5.0, 5.0), PadShape::Rect { w: 3.0, h: 3.0 }, None, Side::Top);
+        pad.refdes = "U1".into();
+        bare.pads.push(pad);
+        bare.parts.push(Part { refdes: "U1".into(), value: String::new(), footprint: "x".into(), pos: Point::new(5.0, 5.0), rot: 0, side: Side::Top });
+        let ins = inside(&bare, &CaseSpec { inner_w: 70.0, inner_d: 50.0, bottom: 5.0, ..Default::default() });
+        assert_eq!(ins.suggested_holes.len(), 4, "{ins:?}");
+        let near = ins.suggested_holes.iter().find(|p| p.x < 30.0 && p.y < 20.0).unwrap();
+        assert!(near.x.max(near.y) > 6.0 + 3.0, "clear of the part in that corner: {near:?}");
+        let far = ins.suggested_holes.iter().find(|p| p.x > 30.0 && p.y > 20.0).unwrap();
+        assert!((far.x - 56.5).abs() < 1e-9 && (far.y - 36.5).abs() < 1e-9, "3.5 mm in from a free corner: {far:?}");
+        assert!(ins.notes.iter().any(|n| n.contains("M3")), "{:?}", ins.notes);
+        // the lid
+        let mut b = board_with_holes();
+        b.parts.push(Part { refdes: "C1".into(), value: String::new(), footprint: "x".into(), pos: Point::new(56.0, 36.0), rot: 0, side: Side::Top });
+        let mut q = Pad::new(Point::new(56.0, 36.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        q.refdes = "C1".into();
+        b.pads.push(q);
+        let none = inside(&b, &CaseSpec { inner_w: 70.0, inner_d: 50.0, bottom: 5.0, ..Default::default() });
+        assert!(none.lid_posts.is_empty(), "no room above given");
+        let spec = CaseSpec { inner_w: 70.0, inner_d: 50.0, bottom: 5.0, top: 12.0, ..Default::default() };
+        let ins = inside(&b, &spec);
+        assert_eq!(ins.lid_posts.len(), 4);
+        assert!(ins.lid_posts.iter().all(|p| p.height == 12.0));
+        assert_eq!(ins.lid_posts.iter().filter(|p| p.problem.as_deref().is_some_and(|m| m.contains("C1"))).count(), 1, "{:?}", ins.lid_posts);
+        let dxf = drawing(&b, &spec).unwrap();
+        assert!(dxf.contains("LID (seen from inside)") && dxf.is_ascii());
+    }
+
+    /// A connector's mouth read from its mesh: a block with a bore open on +x faces +x, whichever edge of the board it is nearest; a
+    /// solid block faces nowhere.
+    #[test]
+    fn a_meshs_mouth_is_read() {
+        use crate::mesh::Mesh3d;
+        // a box 0..8 x 0..6 x 0..5 with a square bore 4 x 3 from x = 8 to x = 2 (open on +x): its faces as quads
+        let mut m = Mesh3d { palette: vec![[0, 0, 0]], ..Default::default() };
+        let mut quad = |a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3]| {
+            let k = m.vertices.len() as u32;
+            m.vertices.extend([a, b, c, d]);
+            m.triangles.extend([[k, k + 1, k + 2], [k, k + 2, k + 3]]);
+            m.tri_color.extend([0, 0]);
+        };
+        let (w, d, h) = (8.0f32, 6.0f32, 5.0f32);
+        quad([0.0, 0.0, 0.0], [w, 0.0, 0.0], [w, d, 0.0], [0.0, d, 0.0]);
+        quad([0.0, 0.0, h], [w, 0.0, h], [w, d, h], [0.0, d, h]);
+        quad([0.0, 0.0, 0.0], [w, 0.0, 0.0], [w, 0.0, h], [0.0, 0.0, h]);
+        quad([0.0, d, 0.0], [w, d, 0.0], [w, d, h], [0.0, d, h]);
+        quad([0.0, 0.0, 0.0], [0.0, d, 0.0], [0.0, d, h], [0.0, 0.0, h]);
+        // the +x face with the bore's opening (y 1.5..4.5, z 1..4) cut out, and the bore's walls and bottom
+        let (y0, y1, z0, z1) = (1.5f32, 4.5f32, 1.0f32, 4.0f32);
+        quad([w, 0.0, 0.0], [w, y0, 0.0], [w, y0, h], [w, 0.0, h]);
+        quad([w, y1, 0.0], [w, d, 0.0], [w, d, h], [w, y1, h]);
+        quad([w, y0, 0.0], [w, y1, 0.0], [w, y1, z0], [w, y0, z0]);
+        quad([w, y0, z1], [w, y1, z1], [w, y1, h], [w, y0, h]);
+        quad([2.0, y0, z0], [2.0, y1, z0], [2.0, y1, z1], [2.0, y0, z1]);
+        // the same box with its +x face whole (no bore)
+        let mut solid = m.clone();
+        solid.triangles.truncate(10);
+        solid.tri_color.truncate(10);
+        let k = solid.vertices.len() as u32;
+        solid.vertices.extend([[w, 0.0, 0.0], [w, d, 0.0], [w, d, h], [w, 0.0, h]]);
+        solid.triangles.extend([[k, k + 1, k + 2], [k, k + 2, k + 3]]);
+        solid.tri_color.extend([0, 0]);
+        assert_eq!(crate::model3d::mouth(&m), Some((1, 0)));
+        assert_eq!(crate::model3d::mouth(&solid), None);
     }
 }

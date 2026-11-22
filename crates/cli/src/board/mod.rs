@@ -86,6 +86,7 @@ impl Session {
             "dxf_import" => self.board_dxf_import(rest),
             "dxf" => self.board_dxf(rest),
             "step" => self.board_step(rest),
+            "solidcraft" => self.board_solidcraft(rest),
             "fab" => self.board_fab(rest),
             other => Err(format!("unknown board command '{other}'")),
         }

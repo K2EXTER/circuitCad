@@ -14,6 +14,7 @@ mod connectors;
 pub mod bridge;
 pub mod case;
 pub mod case_model;
+pub mod case_shape;
 pub mod trunk;
 pub mod copper;
 pub mod current;

@@ -47,7 +47,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - 熱: `heat_copper.rs`(ピンにつながった銅から部品の θ を見積もる。回路図に反映で自己発熱へ)`thermal.rs`(基板の熱の地図: 升目の熱伝導と自然対流・放射。画面は `board_editor/thermalmap.rs`)`case_heat.rs`(閉じたケースに入れたときの中の温度)
 - 銅・形: `zonefill.rs`(ベタの銅)`copper.rs`(配線後に足す銅)`groundpour.rs`(GNDベタ)`stitch.rs`(ビアの縫い付け)`fiducial.rs`(フィデューシャル)`outline.rs` `shape.rs` `geom.rs` `pinlabels.rs`
 - 配線: `autoroute.rs` `shove.rs` `ratsnest.rs` `reroute.rs` `merge.rs` `breakout.rs` `bridge.rs` `trunk.rs` `slot.rs` `padentry.rs` `meander.rs` `smooth.rs` `quality.rs`
-- 3D・ケース: `shape_script.rs`(本体のひな形を SolidCraft の台本に。`ccad shape`)`stack.rs`(複数の基板を 3D で重ねる・ぶつかり・置き方)`body.rs` `model3d.rs` `step.rs` `step_out.rs`(STEP の書き出し。銅とシルクの薄い立体は `step_layers.rs`)`mesh_io.rs`(OBJ の読み書き) `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` `case_model.rs`(ケースの STEP を重ねてぶつかりを見る) `dimension.rs`(寸法線) / 絵と図: `svg.rs` `picture.rs`
+- 3D・ケース: `shape_script.rs`(本体のひな形を SolidCraft の台本に。`ccad shape`。基板を SolidCraft で開く・絵)`case_shape.rs`(ケースそのものを SolidCraft で)`stack.rs`(複数の基板を 3D で重ねる・ぶつかり・置き方)`body.rs` `model3d.rs` `step.rs` `step_out.rs`(STEP の書き出し。銅とシルクの薄い立体は `step_layers.rs`)`mesh_io.rs`(OBJ の読み書き) `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` `case_model.rs`(ケースの STEP を重ねてぶつかりを見る) `dimension.rs`(寸法線) / 絵と図: `svg.rs` `picture.rs`
 - 出力: `fab.rs`(発注前チェック)`assembly_sheet.rs`(はんだ付けの順・向きの印・印刷用の組み立て表 SVG。B3)`print_check.rs`(原寸の確かめの図: パッドと穴を 1:1 で白地に・50 mm の目盛り。X4)`export.rs` `gerber.rs` `excellon.rs` `assembly.rs` `shops.rs` `gerber_view.rs`
 - 修理の練習 `breakage.rs`、文字 `labels.rs`(部品番号をよける。7 か所+力)`strokefont.rs` `silkedit.rs`(シルクの文字・部品番号・線を手で直す。発注先の下限を守る)
 

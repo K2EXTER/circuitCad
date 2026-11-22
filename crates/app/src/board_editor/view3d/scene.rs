@@ -105,6 +105,7 @@ pub(super) struct CaseWire {
 const POST: [u8; 3] = [240, 160, 60];
 const POST_BAD: [u8; 3] = [240, 70, 60];
 const OPENING: [u8; 3] = [230, 90, 220];
+const SUGGESTED: [u8; 3] = [170, 170, 170];
 
 /// The case's frame, posts and openings for the 3D view, in the board's frame (`None`: no floor given).
 pub(super) fn case_wire(board: &pcb_core::model::Board, spec: &pcb_core::case::CaseSpec) -> Option<CaseWire> {
@@ -132,6 +133,38 @@ pub(super) fn case_wire(board: &pcb_core::model::Board, spec: &pcb_core::case::C
             if k % 4 == 0 {
                 lines.push(([q0.0, q0.1, z0], [q0.0, q0.1, 0.0], col));
             }
+        }
+    }
+    // the lid's posts: from the lid down onto the board's top face, dashed (every other piece of the circles and three uprights)
+    let top = z1;
+    for p in &ins.lid_posts {
+        let col = if p.problem.is_some() { POST_BAD } else { POST };
+        let (r, n) = (p.outer_d / 2.0, 16);
+        let at = |k: usize| {
+            let t = std::f64::consts::TAU * k as f64 / n as f64;
+            (p.hole.x + r * t.cos(), p.hole.y + r * t.sin())
+        };
+        for k in (0..n).step_by(2) {
+            let (q0, q1) = (at(k), at(k + 1));
+            for z in [BOARD_THICKNESS, top] {
+                lines.push(([q0.0, q0.1, z], [q1.0, q1.1, z], col));
+            }
+        }
+        for k in [0, 5, 10] {
+            let q = at(k);
+            let steps = 6;
+            for s in (0..steps).step_by(2) {
+                let z = |i: usize| BOARD_THICKNESS + (top - BOARD_THICKNESS) * i as f64 / steps as f64;
+                lines.push(([q.0, q.1, z(s)], [q.0, q.1, z(s + 1)], col));
+            }
+        }
+    }
+    // the mounting holes the board could have: grey circles on its top face
+    for c in &ins.suggested_holes {
+        let n = 16;
+        for k in 0..n {
+            let a = |k: usize| { let t = std::f64::consts::TAU * k as f64 / n as f64; [c.x + 3.0 * t.cos(), c.y + 3.0 * t.sin(), BOARD_THICKNESS + 0.05] };
+            lines.push((a(k), a(k + 1), SUGGESTED));
         }
     }
     // an opening: its four corners on the wall's inside face, from the case's frame (z up from the floor) to the board's

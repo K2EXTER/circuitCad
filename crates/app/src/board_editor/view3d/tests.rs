@@ -277,7 +277,7 @@ mod view3d_tests {
         let b = tall_and_short();
         let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
         let (bw, bd) = (s.hi.x - s.lo.x, s.hi.y - s.lo.y);
-        let spec = |w, d| pcb_core::case::CaseSpec { inner_w: w, inner_d: d, top: 10.0, bottom: 2.0, clearance: 0.5 };
+        let spec = |w, d| pcb_core::case::CaseSpec { inner_w: w, inner_d: d, top: 10.0, bottom: 2.0, clearance: 0.5, ..Default::default() };
         assert!(s.set_case(Some(spec(bw + 10.0, bd + 10.0)), &b));
         let w = s.case.clone().unwrap();
         assert!(((w.hi.x - w.lo.x) - (bw + 10.0)).abs() < 1e-9, "the box has the inside size given");
