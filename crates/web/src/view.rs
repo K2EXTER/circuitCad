@@ -44,7 +44,9 @@ pub struct Sheet {
     scale: f32,
     offset: Vec2,
     fitted: bool,
-    /// The canvas size the last fit was for: a new size (the page loaded, a phone turned) frames the circuit again.
+    /// The size of the whole screen at the last fit: a new size (the page loaded, a phone turned) frames the circuit again. Not the
+    /// canvas's own size: that changes when the bands above and below it grow (a part picked, the truth table filling), and the
+    /// learner's zoom must not jump back then.
     fitted_for: Vec2,
     pub selected: Option<usize>,
 }
@@ -182,7 +184,6 @@ impl Sheet {
         let center = Vec2::new((x0 + x1) as f32 / 2.0, (y0 + y1) as f32 / 2.0);
         self.offset = area / 2.0 - center * self.scale;
         self.fitted = true;
-        self.fitted_for = area;
     }
 
     /// The running circuit's time follows the screen's; it asks for the next frame while something is moving.
@@ -201,7 +202,9 @@ impl Sheet {
         self.tick(ui);
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let rect = resp.rect;
-        if !self.fitted || (rect.size() - self.fitted_for).length() > 1.0 {
+        let screen = ui.ctx().content_rect().size();
+        if !self.fitted || (screen - self.fitted_for).length() > 1.0 {
+            self.fitted_for = screen;
             self.fit(rect.size());
         }
         // pan with a drag, zoom with a pinch / ctrl + wheel / plain wheel, around the pointer
