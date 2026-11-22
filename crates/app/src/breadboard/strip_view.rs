@@ -382,6 +382,12 @@ impl BreadboardView {
         *l = m;
     }
 
+    /// Whether a box is picked (the tests).
+    #[cfg(test)]
+    pub(crate) fn strip_has_box(&self) -> bool {
+        self.strip.sel.is_some()
+    }
+
     /// A box picked by the names of the holes at two corners ("A1", "AB12": `hole_name`); nothing when a name does not read.
     pub(crate) fn strip_pick_box(&mut self, a: &str, b: &str) {
         let read = |s: &str| -> Option<At> {
@@ -629,8 +635,8 @@ impl BreadboardView {
             self.strip_lock_hints_ui(ui, l);
         }
         let hint = match self.strip.tool {
-            StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / Ctrl+Z で戻す",
-            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / Delete で線を消す / Ctrl+Z で戻す",
+            StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
+            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
@@ -1551,6 +1557,14 @@ impl BreadboardView {
             self.strip.link_start = None;
             self.strip_set(sch, Some(m.clone()));
             *l = m;
+        }
+        // a right click lets go of what is picked (the part, the link, the box, a link begun), as Esc; the bare wire tool takes the
+        // wire under it away instead (above)
+        if tool != StripTool::Bare && response.secondary_clicked() {
+            self.strip.link_start = None;
+            self.strip.sel = None;
+            self.strip.picked_link = None;
+            self.picked = None;
         }
         // keys: R turns the box (half a turn) or else the picked part, Delete takes the picked link away, Esc lets go
         if response.hovered() {

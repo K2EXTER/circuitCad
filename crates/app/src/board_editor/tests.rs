@@ -793,6 +793,11 @@ fn right_click_in_the_board_editor_confirms_the_drawing_then_returns_to_select()
     assert!(e.leave_tool() && e.poly.is_empty() && e.board.outline.len() == 3);
     assert!(e.leave_tool() && matches!(e.tool, Tool::Select));
     assert!(!e.leave_tool());
+    // in the Select tool with nothing drawn, it lets the selection go (one part, or several)
+    e.selected = Some(Item::Part(0));
+    e.multi = vec![Item::Part(0), Item::Part(1)];
+    assert!(e.leave_tool() && e.selected.is_none() && e.multi.is_empty());
+    assert!(!e.leave_tool());
 }
 
 #[test]

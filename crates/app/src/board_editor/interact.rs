@@ -219,7 +219,7 @@ impl BoardEditor {
 
     /// The right click, AutoCAD style: it confirms what is being drawn (ends the track; closes a
     /// polygon of three or more points, drops a shorter one) and the tool stays; with nothing in
-    /// progress it returns to the Select tool. Returns whether anything happened.
+    /// progress it returns to the Select tool, and in the Select tool it lets the selection go. Returns whether anything happened.
     pub(super) fn leave_tool(&mut self) -> bool {
         if !self.trunk_pads.is_empty() {
             self.trunk_pads.clear();
@@ -250,6 +250,13 @@ impl BoardEditor {
             return true;
         }
         if self.tool == Tool::Select {
+            // with nothing drawn: the selection let go (as Esc)
+            if self.selected.is_some() || !self.multi.is_empty() {
+                self.selected = None;
+                self.multi.clear();
+                self.status = i18n::tr("選択を解除しました").to_string();
+                return true;
+            }
             return false;
         }
         self.tool = Tool::Select;

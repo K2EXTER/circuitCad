@@ -699,7 +699,7 @@ impl BoardEditor {
         if self.multi.len() > 1 {
             ui.separator();
             ui.label(i18n::trf!("{} 個を選択中", self.multi.len()));
-            if ui.button(i18n::tr("選択を解除 (Esc)")).on_hover_text(i18n::tr("選択をやめます (Esc キーでも同じです)")).clicked() {
+            if ui.button(i18n::tr("選択を解除 (Esc)")).on_hover_text(i18n::tr("選択をやめます (Esc キーか、何も無い所の右クリックでも同じです)")).clicked() {
                 self.multi.clear();
             }
             self.panel_align(ui);

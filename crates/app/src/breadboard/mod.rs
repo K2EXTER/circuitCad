@@ -2116,6 +2116,33 @@ mod tests {
         assert!(!app.breadboard.strip_shown(&app.sch).perf);
     }
 
+    /// With the move tool on the perfboard, a right click lets go of the box picked (as Esc).
+    #[test]
+    fn a_right_click_lets_the_box_go() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("led.schjson"));
+        app.mode = Mode::Proto;
+        app.breadboard.kind = BoardKind::Perfboard;
+        let ctx = egui::Context::default();
+        let mut f = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let mut run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        let (origin, _) = app.breadboard.strip.drawn.expect("the board was drawn");
+        app.breadboard.strip_pick_box("A1", "C3");
+        assert!(app.breadboard.strip_has_box());
+        let p = origin;
+        run(&mut app, vec![egui::Event::PointerMoved(p)]);
+        for pressed in [true, false] {
+            run(&mut app, vec![egui::Event::PointerButton { pos: p, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() }]);
+        }
+        assert!(!app.breadboard.strip_has_box(), "a right click lets the box go");
+    }
+
     /// The schematic's small window on the proto tab: a click on a part in it picks that part on the board (and the board's pick is
     /// what the window rings); a part moved off its column on the breadboard leaves lines still to join.
     #[test]
