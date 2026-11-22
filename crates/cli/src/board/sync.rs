@@ -35,6 +35,9 @@ impl Session {
                 board.add_footprint(fp);
                 if let Some(m) = &def.model3d {
                     board.models3d.insert(def.footprint_name(), m.clone());
+                    if let Some(src) = &def.model3d_src {
+                        board.models3d_src.insert(def.footprint_name(), src.clone());
+                    }
                 }
                 if def.land_unverified {
                     board.land_unverified.insert(def.footprint_name(), def.name.clone());

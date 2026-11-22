@@ -266,7 +266,7 @@ impl BoardEditor {
                         what = if what.is_empty() { i18n::tr("基板").to_string() } else { format!("{} {what}", i18n::tr("基板,")) };
                     }
                     ui.colored_label(crate::theme::error(), i18n::trf!("⚠ ケースにぶつかるかもしれません (赤): {what}"))
-                        .on_hover_text(i18n::tr("部品は 3D で描く箱で調べるので、壁のすぐそばの丸い部品は、実際には当たらなくても出ることがあります。足が床に当たるときは、柱を高くするかケースを下げます"));
+                        .on_hover_text(i18n::tr("部品は 3D で描く形 (箱・丸い部品は 24 角柱・メーカーの形はその三角形) で調べます。0.05 mm より浅い接触は数えません。足が床に当たるときは、柱を高くするかケースを下げます"));
                 }
             }
             let size = ui.available_size().max(Vec2::new(300.0, 240.0));

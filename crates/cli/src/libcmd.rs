@@ -221,6 +221,7 @@ impl Session {
             shops: Default::default(),
             land_unverified: true,
             model3d: None,
+            model3d_src: None,
             swap: None,
             programming: vec![],
             companions: vec![],

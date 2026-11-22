@@ -448,6 +448,7 @@ impl VendorIndex {
             glyph: if polar { "electrolytic" } else { "capacitor" }.into(),
             body: None,
             model3d: None,
+            model3d_src: None,
             swap: None,
             programming: vec![],
             companions: vec![],

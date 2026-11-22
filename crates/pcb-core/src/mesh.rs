@@ -42,6 +42,71 @@ pub fn thin_out(mesh: Mesh3d, keep: usize) -> Mesh3d {
     }
 }
 
+/// Where a part's mesh came from (E3b): the maker's STEP file on this computer (the path only: the file is often not ours to pass on)
+/// and how it was turned (`rot`, a rotation by quarter turns, rows) and moved (`shift`, mm) to stand over the pads: a point p of the
+/// file is `rot · p + shift` in the mesh. The board's STEP takes the original curved faces from it when the file is there, else the
+/// mesh's triangles.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ModelSource {
+    pub path: String,
+    #[serde(default = "identity")]
+    pub rot: [[f64; 3]; 3],
+    #[serde(default)]
+    pub shift: [f64; 3],
+}
+
+fn identity() -> [[f64; 3]; 3] {
+    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+}
+
+impl Default for ModelSource {
+    fn default() -> Self {
+        ModelSource { path: String::new(), rot: identity(), shift: [0.0; 3] }
+    }
+}
+
+impl ModelSource {
+    /// The file at `path` as read, not turned or moved.
+    pub fn new(path: &str) -> ModelSource {
+        ModelSource { path: path.to_string(), ..Default::default() }
+    }
+
+    /// A point of the file (millimetres) where the mesh has it.
+    pub fn place(&self, p: [f64; 3]) -> [f64; 3] {
+        let v = self.turn(p);
+        [v[0] + self.shift[0], v[1] + self.shift[1], v[2] + self.shift[2]]
+    }
+
+    /// A direction of the file, turned as the mesh was.
+    pub fn turn(&self, p: [f64; 3]) -> [f64; 3] {
+        std::array::from_fn(|i| self.rot[i][0] * p[0] + self.rot[i][1] * p[1] + self.rot[i][2] * p[2])
+    }
+
+    /// Then turned as `Mesh3d::turned(axis, quarter)` turns a mesh.
+    pub fn turned(&self, axis: usize, quarter: u8) -> ModelSource {
+        let (i, j) = ((axis + 1) % 3, (axis + 2) % 3);
+        let q = |v: [f64; 3]| -> [f64; 3] {
+            let mut w = v;
+            let (a, b) = (v[i], v[j]);
+            (w[i], w[j]) = match quarter % 4 {
+                0 => (a, b),
+                1 => (-b, a),
+                2 => (-a, -b),
+                _ => (b, -a),
+            };
+            w
+        };
+        // the columns of the rotation and the shift turn alike
+        let cols: [[f64; 3]; 3] = std::array::from_fn(|c| q([self.rot[0][c], self.rot[1][c], self.rot[2][c]]));
+        ModelSource { path: self.path.clone(), rot: std::array::from_fn(|r| std::array::from_fn(|c| cols[c][r])), shift: q(self.shift) }
+    }
+
+    /// Then moved by `d` (mm).
+    pub fn shifted(&self, d: [f64; 3]) -> ModelSource {
+        ModelSource { shift: [self.shift[0] + d[0], self.shift[1] + d[1], self.shift[2] + d[2]], ..self.clone() }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Mesh3d {
     pub vertices: Vec<[f32; 3]>,
@@ -206,6 +271,21 @@ fn unit(n: [f64; 3]) -> Option<[f32; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A model source turned and moved puts a point where the mesh turned and moved the same way has it.
+    #[test]
+    fn a_model_source_follows_its_mesh() {
+        let m = Mesh3d { vertices: vec![[1.0, 2.0, 3.0]], triangles: vec![], palette: vec![], tri_color: vec![] };
+        let (mut mm, mut src) = (m.clone(), ModelSource::new("x.step"));
+        for (axis, q) in [(0, 1), (2, 3), (1, 2), (2, 1)] {
+            mm = mm.turned(axis, q);
+            src = src.turned(axis, q);
+        }
+        mm = mm.shifted([5.0, -1.0, 0.5]);
+        src = src.shifted([5.0, -1.0, 0.5]);
+        let p = src.place([1.0, 2.0, 3.0]);
+        assert!((0..3).all(|k| (p[k] - f64::from(mm.vertices[0][k])).abs() < 1e-6), "{p:?} {:?}", mm.vertices[0]);
+    }
 
     /// A cylinder of radius 1 along z, `seg` sides, each side face a separate quad (its own corners, as a STEP gives them), with caps.
     fn cylinder(seg: usize) -> Mesh3d {

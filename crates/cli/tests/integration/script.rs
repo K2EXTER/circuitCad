@@ -642,7 +642,9 @@ fn board_step_writes_the_board_and_the_parts_as_solids() {
     let names: Vec<&str> = s["names"].as_array().unwrap().iter().map(|n| n.as_str().unwrap()).collect();
     assert!(s["solids"].as_u64().unwrap() > 4 && names[0] == "rlc" && names.contains(&"R1") && names.contains(&"C1"), "{s}");
     let m = pcb_core::step::read_step(&std::fs::read(&file).unwrap()).unwrap();
-    assert!(m.volume() > 0.0 && m.bounds().unwrap().0[2].abs() < 1e-3, "the board's bottom at z = 0");
+    // the board's bottom at z = 0, the bottom copper and silkscreen (thin solids, E3b) just under it
+    let lo = m.bounds().unwrap().0[2];
+    assert!(m.volume() > 0.0 && lo <= 1e-3 && lo >= -(pcb_core::step_layers::COPPER + pcb_core::step_layers::SILK) - 1e-3, "the board's bottom at z = 0: {lo}");
     let _ = std::fs::remove_file(&file);
     let (a, ok) = run(&format!("board new 40 30\nboard step {}\n", file.display()));
     assert!(ok && last(&a, "board")["solids"] == 1, "a bare board is one solid: {a:?}");

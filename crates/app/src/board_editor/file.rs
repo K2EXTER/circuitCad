@@ -310,10 +310,15 @@ impl BoardEditor {
                     match &def.model3d {
                         Some(m) => {
                             self.board.models3d.insert(def.footprint_name(), m.clone());
+                            match &def.model3d_src {
+                                Some(src) => self.board.models3d_src.insert(def.footprint_name(), src.clone()),
+                                None => self.board.models3d_src.remove(&def.footprint_name()),
+                            };
                         }
                         // the shape was taken away from the part: the board must not keep the old one
                         None => {
                             self.board.models3d.remove(&def.footprint_name());
+                            self.board.models3d_src.remove(&def.footprint_name());
                         }
                     }
                     if def.land_unverified {

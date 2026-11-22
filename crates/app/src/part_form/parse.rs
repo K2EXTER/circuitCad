@@ -419,6 +419,7 @@ impl PartForm {
             shops: Default::default(),
             land_unverified: self.land_unverified,
             model3d: self.model3d.clone(),
+            model3d_src: self.model3d.as_ref().and(self.model3d_src.clone()),
             swap: None,
             programming: vec![],
             companions,

@@ -84,6 +84,9 @@ pub struct PartDef {
     /// In the footprint's frame, millimetres, z = 0 on the face the part sits on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model3d: Option<pcb_core::mesh::Mesh3d>,
+    /// Where `model3d` came from (the maker's STEP on this computer and how it was placed), for the board's STEP to keep its curved faces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model3d_src: Option<pcb_core::mesh::ModelSource>,
     /// Gates and inputs that are alike, so their nets may trade places on the board (`ccad board swap`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub swap: Option<pcb_core::swap::SwapSpec>,

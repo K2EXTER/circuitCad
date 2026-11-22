@@ -733,6 +733,9 @@ pub struct Board {
     /// The 3D body of footprints that have one (from the maker's STEP file), by footprint name.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub models3d: std::collections::BTreeMap<String, crate::mesh::Mesh3d>,
+    /// Where those meshes came from (the maker's STEP on this computer), by footprint name: the board's STEP keeps their curved faces.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub models3d_src: std::collections::BTreeMap<String, crate::mesh::ModelSource>,
     /// The case read from its STEP file and where it stands round the board (the 3D view draws it, `case_model::collisions` checks it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub case3d: Option<crate::case_model::CaseModel>,
@@ -894,6 +897,7 @@ impl Board {
             zones: vec![],
             footprints: vec![],
             models3d: Default::default(),
+            models3d_src: Default::default(),
             case3d: None,
             land_unverified: Default::default(),
             net_currents: Default::default(),

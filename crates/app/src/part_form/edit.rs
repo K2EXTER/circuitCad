@@ -32,6 +32,8 @@ impl PartForm {
             height: def.height.unwrap_or(0.0),
             land_unverified: def.land_unverified,
             model3d: def.model3d.clone(),
+            model3d_src: def.model3d_src.clone(),
+            step_src_base: def.model3d_src.clone(),
             orig: Some(def.clone()),
             ..PartForm::default()
         };

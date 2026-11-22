@@ -19,11 +19,14 @@ impl PartForm {
     pub(super) fn step_apply(&mut self) {
         let Some(base) = &self.step_base else {
             self.model3d = None;
+            self.model3d_src = None;
             return;
         };
         let mut m = base.clone();
+        let mut src = self.step_src_base.clone();
         for (axis, q) in self.step_rot.iter().enumerate() {
             m = m.turned(axis, *q);
+            src = src.map(|s| s.turned(axis, *q));
         }
         let pads = self.pad_boxes();
         if let Some((lo, hi)) = m.bounds() {
@@ -40,8 +43,10 @@ impl PartForm {
                 if self.step_drop { -lo[2] } else { 0.0 },
             ];
             m = m.shifted(d);
+            src = src.map(|s| s.shifted(d));
         }
         self.model3d = Some(m);
+        self.model3d_src = src;
     }
 
     /// For the command line and the tests.
@@ -65,6 +70,7 @@ impl PartForm {
                 self.step_file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 self.step_msg = String::new();
                 self.step_base = Some(mesh);
+                self.step_src_base = std::path::absolute(path).ok().map(|p| pcb_core::mesh::ModelSource::new(&p.to_string_lossy()));
                 self.step_rot = [0; 3];
                 self.step_apply();
                 if let Some((lo, hi)) = self.model3d.as_ref().and_then(|m| m.bounds())

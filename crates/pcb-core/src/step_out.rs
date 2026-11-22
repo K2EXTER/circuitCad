@@ -1,14 +1,17 @@
 //! The board and its parts as a STEP file (ISO 10303-21, AP214), for the case's CAD (Fusion, FreeCAD, SolidWorks ...), as an assembly: the
-//! board (`<name>_PCB`) and every part a product of its own (`NEXT_ASSEMBLY_USAGE_OCCURRENCE`, placed where it is: the shapes keep the
-//! board's coordinates and the placements are the identity), so the CAD can pick a part and move it. One solid for the
+//! board (`<name>_PCB`) and every part a product of its own (`NEXT_ASSEMBLY_USAGE_OCCURRENCE`), so the CAD can pick a part and move it.
+//! A part's shape is in its own frame (the footprint's x and y, z up from the face it sits on) and its placement puts it where it stands:
+//! turned with it, and turned over for a part on the bottom (E3b). One solid for the
 //! board (its outline raised to `model3d::BOARD_THICKNESS`, with the mounting holes and the through-hole drills cut through) and one per part
 //! solid that the 3D view draws (`model3d::part_boxes`: boxes and cylinders, and `model3d::part_meshes`: the maker's STEP read into
 //! triangles). Every solid is named (the board's name, or the part's designator) and coloured as in the 3D view.
 //!
 //! Round things are written round (E3b, 2026-11-16): a part's cylinder as two half `CYLINDRICAL_SURFACE` faces and two flat caps bounded by
 //! `CIRCLE` arcs, the board's round holes and slots with walls of `CYLINDRICAL_SURFACE` and `PLANE` faces (`Exact`). Everything else is flat:
-//! `ADVANCED_FACE`s on `PLANE`s bounded by `LINE` edges, a closed shell per solid (`MANIFOLD_SOLID_BREP`). A maker's model goes out as the
-//! triangles it was read into (the curved faces of the original are not kept). Vias, copper and silkscreen are not written. `solids` keeps
+//! `ADVANCED_FACE`s on `PLANE`s bounded by `LINE` edges, a closed shell per solid (`MANIFOLD_SOLID_BREP`). A maker's model goes out with
+//! the faces of its own STEP file when that file is on this computer (`Board::models3d_src`, `step::copy_solids`: curved faces stay
+//! curved), else as the triangles it was read into. The copper and the silkscreen go out as thin solids on the board's faces (`layers`).
+//! Vias are not written. `solids` keeps
 //! the flat-faced version of every solid (a cylinder a 24-sided prism, a hole a 16-sided one) for the volume and the names.
 
 use crate::geom::{inside_polygon, signed_area};
@@ -27,6 +30,15 @@ pub struct Solid {
     pub faces: Vec<(Vec<usize>, Vec<Vec<usize>>)>,
     /// The solid as it really is, when it is round somewhere: the file is written from this, the flat faces above stay for the volume.
     pub exact: Option<Exact>,
+    /// A maker's model written from its own STEP file (the faces above are its triangles, written when the file cannot be copied).
+    pub raw: Option<Raw>,
+}
+
+/// A maker's STEP file and how its solids stand in the part's frame.
+#[derive(Clone, Debug)]
+pub struct Raw {
+    pub bytes: std::sync::Arc<Vec<u8>>,
+    pub src: crate::mesh::ModelSource,
 }
 
 /// A solid with round faces, written with its curved surfaces.
@@ -64,7 +76,7 @@ fn hole_loop(pos: Point, drill: f64, slot: f64, along_y: bool) -> Vec<Point> {
 }
 
 /// A prism between `z0` and `z1` over `outer` (any winding) with `holes` cut through it.
-fn prism(name: &str, color: [u8; 3], outer: &[Point], holes: &[Vec<Point>], z0: f64, z1: f64) -> Solid {
+pub(crate) fn prism(name: &str, color: [u8; 3], outer: &[Point], holes: &[Vec<Point>], z0: f64, z1: f64) -> Solid {
     let ccw = |p: &[Point], want: bool| -> Vec<Point> {
         let mut v = p.to_vec();
         if (signed_area(&v) > 0.0) != want {
@@ -527,18 +539,53 @@ fn write_exact(o: &mut Out, name: &str, e: &Exact) -> usize {
     o.add(format!("MANIFOLD_SOLID_BREP('{}',#{shell})", text(name)))
 }
 
+/// Where a part stands, as the axes of its frame in the board's: the origin on the face it sits on, z away from the board, x the
+/// footprint's x turned with the part (and pointing the other way on the bottom: turned over about y).
+pub fn part_axes(part: &Part) -> Axes {
+    let bottom = part.side == Side::Bottom;
+    let x = crate::parts::rotate(Point::new(if bottom { -1.0 } else { 1.0 }, 0.0), part.rot);
+    [[part.pos.x, part.pos.y, if bottom { 0.0 } else { BOARD_THICKNESS }], [0.0, 0.0, if bottom { -1.0 } else { 1.0 }], [x.x, x.y, 0.0]]
+}
+
+/// The solid moved from the board's frame into the frame `at` (its points and its exact shape).
+fn to_local(mut s: Solid, at: &Axes) -> Solid {
+    let [o, z, x] = *at;
+    let y = cross(z, x);
+    let local = |p: [f64; 3]| { let d = sub(p, o); [d[0] * x[0] + d[1] * x[1] + d[2] * x[2], d[0] * y[0] + d[1] * y[1] + d[2] * y[2], d[0] * z[0] + d[1] * z[1] + d[2] * z[2]] };
+    let turn = |v: [f64; 3]| [v[0] * x[0] + v[1] * x[1] + v[2] * x[2], v[0] * y[0] + v[1] * y[1] + v[2] * y[2], v[0] * z[0] + v[1] * z[1] + v[2] * z[2]];
+    for v in &mut s.vertices {
+        *v = local(*v);
+    }
+    if let Some(Exact::Cylinder { base, axis, .. }) = &mut s.exact {
+        (*base, *axis) = (local(*base), turn(*axis));
+    }
+    s
+}
+
 /// The board and its parts as a STEP file (AP214), lengths in millimetres, the board's bottom face at z = 0.
 pub fn write(board: &Board) -> String {
     let name = if board.name.is_empty() { "board".to_string() } else { board.name.clone() };
     let mut groups: Vec<(String, Vec<Solid>, Axes)> = vec![];
     for (k, s) in solids(board).into_iter().enumerate() {
-        // the board's solid first, then the parts by designator (a part's several solids stay together)
-        let key = if k == 0 && s.exact.as_ref().is_some_and(|e| matches!(e, Exact::Plate { .. })) { format!("{name}_PCB") } else { s.name.clone() };
+        // the board's solid first, then the parts by designator (a part's several solids stay together, in the part's frame)
+        let pcb = k == 0 && s.exact.as_ref().is_some_and(|e| matches!(e, Exact::Plate { .. }));
+        let key = if pcb { format!("{name}_PCB") } else { s.name.clone() };
+        let at = if pcb { IDENTITY } else { board.parts.iter().find(|p| p.refdes == s.name).map_or(IDENTITY, part_axes) };
+        let s = if pcb { s } else { to_local(s, &at) };
         match groups.iter_mut().find(|g| g.0 == key) {
             Some(g) => g.1.push(s),
-            None => groups.push((key, vec![s], IDENTITY)),
+            None => groups.push((key, vec![s], at)),
         }
     }
+    // a maker's model whose STEP file is here: its own faces instead of the triangles
+    for g in &mut groups {
+        let Some(part) = board.parts.iter().find(|p| p.refdes == g.0) else { continue };
+        let (Some(src), true) = (board.models3d_src.get(&part.footprint), board.models3d.contains_key(&part.footprint)) else { continue };
+        if let (Ok(bytes), [one]) = (std::fs::read(&src.path), g.1.as_mut_slice()) {
+            one.raw = Some(Raw { bytes: std::sync::Arc::new(bytes), src: src.clone() });
+        }
+    }
+    groups.extend(crate::step_layers::layers(board));
     write_assembly(&name, groups)
 }
 
@@ -556,7 +603,7 @@ pub fn write_system(name: &str, boards: &[(&str, &Board, crate::stack::Place)]) 
 }
 
 /// Where a product stands in the assembly: its origin, z axis and x axis.
-type Axes = [[f64; 3]; 3];
+pub type Axes = [[f64; 3]; 3];
 const IDENTITY: Axes = [[0.0; 3], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]];
 
 /// The STEP file of an assembly: under the root product named `name`, one product per group (its solids in one representation) placed
@@ -597,7 +644,33 @@ fn write_assembly(name: &str, groups: Vec<(String, Vec<Solid>, Axes)>) -> String
     for (gname, group, at) in &groups {
         let axes = origin_axes(&mut o);
         let mut items = vec![format!("#{axes}")];
+        let style = |o: &mut Out, id: usize, c: [u8; 3]| -> String {
+            let [r, g, b] = c.map(|c| f64::from(c) / 255.0);
+            let colour = o.add(format!("COLOUR_RGB('',{},{},{})", real(r), real(g), real(b)));
+            let fill = o.add(format!("FILL_AREA_STYLE_COLOUR('',#{colour})"));
+            let area = o.add(format!("FILL_AREA_STYLE('',(#{fill}))"));
+            let surf = o.add(format!("SURFACE_STYLE_FILL_AREA(#{area})"));
+            let side = o.add(format!("SURFACE_SIDE_STYLE('',(#{surf}))"));
+            let usage = o.add(format!("SURFACE_STYLE_USAGE(.BOTH.,#{side})"));
+            let assign = o.add(format!("PRESENTATION_STYLE_ASSIGNMENT((#{usage}))"));
+            format!("#{}", o.add(format!("STYLED_ITEM('color',(#{assign}),#{id})")))
+        };
         for s in group {
+            // a maker's own faces: copied in, each solid and face with the colour the file gave it
+            if let Some(raw) = &s.raw
+                && let Ok(c) = crate::step::copy_solids(&raw.bytes, o.next, &|p| raw.src.place(p), &|d| raw.src.turn(d))
+            {
+                o.body.push_str(&c.text);
+                o.next += c.count;
+                for (id, col) in &c.solids {
+                    items.push(format!("#{id}"));
+                    styled.push(style(&mut o, *id, col.unwrap_or(s.color)));
+                }
+                for (id, col) in &c.faces {
+                    styled.push(style(&mut o, *id, *col));
+                }
+                continue;
+            }
             let id = match &s.exact {
                 Some(e) => write_exact(&mut o, &s.name, e),
                 None => match write_solid(&mut o, s) {
@@ -606,15 +679,7 @@ fn write_assembly(name: &str, groups: Vec<(String, Vec<Solid>, Axes)>) -> String
                 },
             };
             items.push(format!("#{id}"));
-            let [r, g, b] = s.color.map(|c| f64::from(c) / 255.0);
-            let colour = o.add(format!("COLOUR_RGB('',{},{},{})", real(r), real(g), real(b)));
-            let fill = o.add(format!("FILL_AREA_STYLE_COLOUR('',#{colour})"));
-            let area = o.add(format!("FILL_AREA_STYLE('',(#{fill}))"));
-            let surf = o.add(format!("SURFACE_STYLE_FILL_AREA(#{area})"));
-            let side = o.add(format!("SURFACE_SIDE_STYLE('',(#{surf}))"));
-            let usage = o.add(format!("SURFACE_STYLE_USAGE(.BOTH.,#{side})"));
-            let assign = o.add(format!("PRESENTATION_STYLE_ASSIGNMENT((#{usage}))"));
-            styled.push(format!("#{}", o.add(format!("STYLED_ITEM('color',(#{assign}),#{id})"))));
+            styled.push(style(&mut o, id, s.color));
         }
         if items.len() == 1 {
             continue;
@@ -730,20 +795,79 @@ mod tests {
         assert!(text.starts_with("ISO-10303-21;"));
         assert!(text.contains("MANIFOLD_SOLID_BREP('R1'"), "named after the part");
         assert!(text.contains("PRODUCT('\\X2\\30C630B930C857FA677F\\X0\\'"), "the Japanese name is escaped as one run");
-        // an assembly: the board and the resistor each a product of their own, under the board's
-        assert_eq!(text.matches("NEXT_ASSEMBLY_USAGE_OCCURRENCE(").count(), 2, "the board and R1");
+        // an assembly: the board, the resistor, and the top copper and silkscreen each a product of their own, under the board's
+        assert_eq!(text.matches("NEXT_ASSEMBLY_USAGE_OCCURRENCE(").count(), 4, "the board, R1, the copper and the silkscreen");
+        assert!(text.contains("_COPPER_TOP'") && text.contains("_SILK_TOP'") && !text.contains("_COPPER_BOTTOM'"), "nothing on the bottom");
         assert!(text.contains("PRODUCT('R1','R1'") && text.contains("_PCB','"), "products named after the part and the board");
         assert!(edges_pair_up(&text));
         let m = crate::step::read_step(text.as_bytes()).unwrap();
         let (lo, hi) = m.bounds().unwrap();
         assert!(lo[0].abs() < 1e-3 && lo[1].abs() < 1e-3 && lo[2].abs() < 1e-3 && (hi[0] - 40.0).abs() < 1e-3 && (hi[1] - 30.0).abs() < 1e-3, "{lo:?} {hi:?}");
-        let want: f64 = solids(&b).iter().map(volume).sum();
+        let layers = |b: &Board| -> f64 { crate::step_layers::layers(b).iter().flat_map(|g| g.1.iter()).map(volume).sum() };
+        let want: f64 = solids(&b).iter().map(volume).sum::<f64>() + layers(&b);
         assert!((m.volume() - want).abs() < 1e-3 * want, "{} vs {want}", m.volume());
         // with a hole through the board: the face with an inner loop reads back too
         b.holes.push(Hole { pos: Point::new(5.0, 5.0), drill: 3.2, slot: 0.0, slot_v: false, refdes: String::new() });
         let m = crate::step::read_step(write(&b).as_bytes()).unwrap();
-        let want: f64 = solids(&b).iter().map(volume).sum();
+        let want: f64 = solids(&b).iter().map(volume).sum::<f64>() + layers(&b);
         assert!((m.volume() - want).abs() < 1e-3 * want, "with a hole: {} vs {want}", m.volume());
+    }
+
+    /// A part turned and on the bottom is written in its own frame and placed where it stands: read back, it fills the same box as the
+    /// shapes in the board's frame; its placement is not the identity.
+    #[test]
+    fn parts_are_written_in_their_own_frame_and_placed() {
+        let mut b = Board::new("t", 40.0, 30.0);
+        b.set_part(Part { refdes: "C1".into(), value: String::new(), footprint: "C_1206".into(), pos: Point::new(12.0, 9.0), rot: 1, side: Side::Bottom }).unwrap();
+        let boxes = part_boxes(&b);
+        let (lo, hi) = boxes.iter().fold(([f64::MAX; 3], [f64::MIN; 3]), |(lo, hi), x| (std::array::from_fn(|k| lo[k].min(x.lo[k])), std::array::from_fn(|k| hi[k].max(x.hi[k]))));
+        let text = write(&b);
+        // the part's own frame: its placement at its position, its z axis down
+        assert!(text.contains("CARTESIAN_POINT('',(12.0,9.0,0.0))") && text.contains("DIRECTION('',(0.0,0.0,-1.0))"), "placed where it stands");
+        let m = crate::step::read_step(text.as_bytes()).unwrap();
+        let (mlo, _) = m.bounds().unwrap();
+        assert!((mlo[2] - lo[2]).abs() < 1e-3, "below the board as before: {mlo:?} {lo:?}");
+        // the part's own triangles (not the board's, the copper's or the silkscreen's colours), read back: the same box
+        let skip = [BOARD_COLOR, [70, 150, 90], [212, 175, 55], [240, 240, 240]];
+        let (mut plo, mut phi) = ([f64::MAX; 3], [f64::MIN; 3]);
+        for (t, c) in m.triangles.iter().zip(&m.tri_color) {
+            if skip.contains(&m.palette[*c as usize]) {
+                continue;
+            }
+            for v in t.map(|i| m.vertices[i as usize].map(f64::from)) {
+                (plo, phi) = (std::array::from_fn(|k| plo[k].min(v[k])), std::array::from_fn(|k| phi[k].max(v[k])));
+            }
+        }
+        let near = |a: [f64; 3], c: [f64; 3]| (0..2).all(|k| (a[k] - c[k]).abs() < 1e-3);
+        assert!(near(plo, lo) && near(phi, hi), "{plo:?} {phi:?} vs {lo:?} {hi:?}");
+    }
+
+    /// A maker's model whose STEP file is on this computer goes out with that file's curved faces, turned and moved as the mesh was;
+    /// read back, it stands where the mesh does. Without the file, the triangles.
+    #[test]
+    fn a_makers_model_keeps_its_own_faces() {
+        let src_text = crate::step::tests_src::cylinder();
+        let dir = std::env::temp_dir().join("circuitcad_step_src");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("can.step");
+        std::fs::write(&path, &src_text).unwrap();
+        let src = crate::mesh::ModelSource::new(&path.to_string_lossy()).turned(0, 1).shifted([0.0, 0.0, 2.0]);
+        let mesh = crate::step::read_step(src_text.as_bytes()).unwrap().turned(0, 1).shifted([0.0, 0.0, 2.0]);
+        let mut b = Board::new("t", 40.0, 30.0);
+        b.outline.clear();
+        b.parts.push(Part { refdes: "U1".into(), value: String::new(), footprint: "CAN".into(), pos: Point::new(20.0, 10.0), rot: 0, side: Side::Top });
+        b.models3d.insert("CAN".into(), mesh);
+        let triangles = write(&b);
+        assert!(!triangles.contains("CYLINDRICAL_SURFACE("), "no file named: the triangles");
+        b.models3d_src.insert("CAN".into(), src);
+        let text = write(&b);
+        assert!(text.contains("CYLINDRICAL_SURFACE("), "the file's round face");
+        let (a, c) = (crate::step::read_step(triangles.as_bytes()).unwrap(), crate::step::read_step(text.as_bytes()).unwrap());
+        let ((alo, ahi), (clo, chi)) = (a.bounds().unwrap(), c.bounds().unwrap());
+        assert!((0..3).all(|k| (alo[k] - clo[k]).abs() < 0.05 && (ahi[k] - chi[k]).abs() < 0.05), "{alo:?} {ahi:?} vs {clo:?} {chi:?}");
+        // the file gone: the triangles again
+        std::fs::remove_file(&path).unwrap();
+        assert!(!write(&b).contains("CYLINDRICAL_SURFACE("));
     }
 
     /// Every `EDGE_CURVE` of the file used by exactly two oriented edges, once along it and once against it (each solid closed).

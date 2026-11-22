@@ -525,6 +525,7 @@ fn write_chip_examples() {
             glyph: if name.starts_with("CE_") || name.starts_with("CT_") { "electrolytic".into() } else { t.kind.glyph().into() },
             body: None,
             model3d: None,
+            model3d_src: None,
             swap: None,
             programming: vec![],
             companions: vec![],
