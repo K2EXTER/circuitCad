@@ -17,6 +17,8 @@ pub struct WebApp {
     sample: usize,
     sheet: Option<Sheet>,
     error: Option<String>,
+    /// On a narrow screen: the list of samples is open (under the title bar, over the circuit).
+    list_open: bool,
 }
 
 impl WebApp {
@@ -28,7 +30,7 @@ impl WebApp {
         }
         cc.egui_ctx.set_fonts(fonts);
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
-        let mut app = WebApp { sample: 0, sheet: None, error: None };
+        let mut app = WebApp { sample: 0, sheet: None, error: None, list_open: false };
         app.open(0);
         app
     }
@@ -37,7 +39,7 @@ impl WebApp {
         self.sample = k;
         match SAMPLES[k].schematic() {
             Ok(sch) => {
-                self.sheet = Some(Sheet::new(sch));
+                self.sheet = Some(Sheet::new(sch, SAMPLES[k].live));
                 self.error = None;
             }
             Err(e) => {
@@ -50,12 +52,18 @@ impl WebApp {
     fn sample_list(&mut self, ui: &mut egui::Ui) {
         let mut pick = None;
         for (k, s) in SAMPLES.iter().enumerate() {
+            // the digital circuits that run come after the ones solved for DC, under a heading of their own
+            if s.live && !SAMPLES[k.saturating_sub(1)].live {
+                ui.separator();
+                ui.weak(tr("動かして見る (デジタル)"));
+            }
             if ui.selectable_label(k == self.sample, tr(s.title)).on_hover_text(tr(s.about)).clicked() {
                 pick = Some(k);
             }
         }
         if let Some(k) = pick {
             self.open(k);
+            self.list_open = false;
         }
     }
 
@@ -85,8 +93,9 @@ impl eframe::App for WebApp {
             ui.horizontal_wrapped(|ui| {
                 ui.heading("circuitCad");
                 ui.weak(tr("ブラウザ版 (試作)"));
-                if narrow {
-                    egui::ComboBox::from_id_salt("sample").selected_text(tr(SAMPLES[self.sample].title)).show_ui(ui, |ui| self.sample_list(ui));
+                // a button that opens the list under the title bar (big rows for a finger), not a small combo box popup
+                if narrow && ui.button(format!("{} ▼", tr(SAMPLES[self.sample].title))).on_hover_text(tr("サンプルを選びます")).clicked() {
+                    self.list_open = !self.list_open;
                 }
                 if ui.button(tr("全体を表示")).on_hover_text(tr("回路図が画面に収まるように拡大・縮小します")).clicked()
                     && let Some(s) = &mut self.sheet
@@ -94,6 +103,9 @@ impl eframe::App for WebApp {
                     s.refit();
                 }
             });
+            if let Some(ll) = self.sheet.as_mut().and_then(|s| s.live.as_mut()) {
+                crate::live_ui::controls(ui, ll);
+            }
         });
         egui::Panel::bottom("status").show(ui, |ui| {
             if let Some(e) = &self.error {
@@ -101,9 +113,22 @@ impl eframe::App for WebApp {
             } else if let Some(s) = &self.sheet {
                 ui.label(tr(SAMPLES[self.sample].about));
                 ui.small(&s.status);
+                if let Some(ll) = &s.live {
+                    crate::live_ui::findings(ui, ll);
+                    if let Some(t) = &ll.truth {
+                        // a phone keeps most of the screen for the circuit: the table scrolls
+                        let most = ui.ctx().content_rect().height() * 0.3;
+                        egui::ScrollArea::vertical().max_height(most).show(ui, |ui| crate::live_ui::truth_table(ui, t));
+                    }
+                }
             }
             self.part_info(ui);
         });
+        if narrow && self.list_open {
+            egui::Panel::top("sample_list").show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(ui.ctx().content_rect().height() * 0.6).show(ui, |ui| self.sample_list(ui));
+            });
+        }
         if !narrow {
             egui::Panel::left("samples").resizable(false).show(ui, |ui| {
                 ui.strong(tr("サンプル"));

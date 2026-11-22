@@ -46,6 +46,8 @@ pub mod inrush;
 pub mod meter;
 pub mod audio;
 pub mod sketch;
+pub mod logic_level;
+pub mod live_logic;
 pub use ambient::{ambient_sweep, AmbientPoint, AmbientSweep, NetDrift, PartWorst};
 mod spec;
 mod spectrum;

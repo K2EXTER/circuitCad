@@ -6,28 +6,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke};
 
 use crate::plot::PlotState;
 
-/// A level read with the CMOS thresholds: below VIL, above VIH, or between them (undefined).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Level {
-    Low,
-    High,
-    Mid,
-}
-
-/// The input thresholds of a CMOS logic family (74HC): 30 % and 70 % of the supply.
-pub fn thresholds(vcc: f64) -> (f64, f64) {
-    (0.3 * vcc, 0.7 * vcc)
-}
-
-pub fn level(v: f64, (vil, vih): (f64, f64)) -> Level {
-    if v <= vil {
-        Level::Low
-    } else if v >= vih {
-        Level::High
-    } else {
-        Level::Mid
-    }
-}
+pub use sim_core::logic_level::{level, thresholds, Level};
 
 /// One row of the view: a single net, or a bus (bit names with the most significant first).
 #[derive(Clone, Debug, PartialEq)]

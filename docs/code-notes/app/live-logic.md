@@ -10,6 +10,7 @@
 - 設計の画面のパネルにはボタンを置かない。「試作」のタブの左の「デジタル回路を回路図の上で動かす」(`BreadboardView::want_live_logic` を `main.rs` が見て、回路図のタブに移って始める)。
 
 ## 仕組み
+- **動かす部分は `sim-core/src/live_logic.rs`**(2026-11-22 に app から移した。ブラウザ版 `crates/web` と共有)。入力・クロック・解く・LED・7 セグメント・記憶・真理値表・グリッチと競合(`races` は `TimingViolation` のまま。文は画面が作る: app の `race_text`)。High / Low の判定は `sim-core/src/logic_level.rs`(`app/logic_plot.rs` は `pub use`)。時間は呼ぶ側が測って `tick(dt)` で渡す。app の `schematic/live_logic.rs` は表示の状態(ロジックアナライザの `PlotState`・開いたバス・前のフレームの時刻)だけを持つ包みで、中身へは `Deref` で届く(レッスン・試作のタブ・`for_bench.rs` の書き方は前のまま)。回路の正しさの試験(半加算器・SR ラッチ・カウンタ・7 セグメント・非同期クリアのグリッチ・シフトレジスタ・信号機)は sim-core に移し、app には編集画面から始めてスイッチが LED に届く 1 本だけを残した。
 - **エンジンは過渡解析と同じ**。`sim_core::TranRun`(`tran.rs`。`transient` はこれを 1 回 `advance_to(tstop)` したもの)を開いたままにし、毎フレーム「表示の時刻」まで続きを解く(`LiveLogic::tick`)。学習用の別の計算は無い。
 - 始めるとき(`LiveLogic::new`): `sim_circuit()` の回路で、**PULSE の電源はクロック**として `Dc(v1)` に置き換え、帯のつまみ・ボタンが `set_source` で `v1`/`v2` を切り替える。**スイッチの部品**は、モデルの中の電源 `Vpress`(`SW_PUSH`)・`Vpos`(`SW_SLIDE`)を持つ部品(`switch_of`)。クリックで `set_source("SW1.Vpos", Dc(0/1))`。押しボタンは押している間だけ(Shift + クリックで押したまま)。
 - 時間: 普通は画面の 1 秒 = シミュレーションの 1 秒(刻みの上限 20 ms。コンデンサの無い回路なので刻みは答えに効かない、デジタルの出来事は刻みと関係なく正確)。**ゆっくり**は画面の 1 秒 = 10 ns(`SLOW_RATE`)。ゆっくりの間は、クロックは前の変化が伝わりきってから次を出す(`settled`)。

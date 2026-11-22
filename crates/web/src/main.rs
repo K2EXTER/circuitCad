@@ -1,8 +1,10 @@
-//! circuitCad in the browser (B9): the learning part only, nothing saved, no board / 3D / external tools.
+//! circuitCad in the browser (B9): the learning part only (DC voltages, digital circuits that run), nothing saved, no board /
+//! 3D / external tools.
 //! `trunk serve` (in this folder) builds it for wasm32 and opens it; `cargo run -p web` runs the same screens in a window,
 //! to try a change without the browser.
 
 mod app;
+mod live_ui;
 mod samples;
 mod view;
 
