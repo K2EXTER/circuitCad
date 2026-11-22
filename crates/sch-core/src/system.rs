@@ -20,7 +20,7 @@ pub struct LinkEnd {
 }
 
 /// Two connectors joined (a cable, or one board plugged into the other).
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct BoardLink {
     pub a: LinkEnd,
     pub b: LinkEnd,
@@ -30,6 +30,9 @@ pub struct BoardLink {
     /// Net names of `a` and `b` that are the same signal although named differently (`SDA` and `I2C_DATA`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aliases: Vec<(String, String)>,
+    /// The two boards joined by a cable of this length (mm), not plugged into each other (`None`: plugged, or not said).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cable: Option<f64>,
 }
 
 /// What the person can do about a finding with one click.
@@ -119,7 +122,52 @@ pub fn pin_pairs(link: &BoardLink, a_pins: &[String], b_pins: &[String]) -> Vec<
 /// The pins of two connectors paired the other way round: the first of `a` with the last of `b` ... (a header and a socket facing each
 /// other, or a ribbon cable folded over). The shorter connector sets how many.
 pub fn mirrored_pairs(a_pins: &[String], b_pins: &[String]) -> Vec<(String, String)> {
-    a_pins.iter().cloned().zip(b_pins.iter().rev().cloned()).collect()
+    let n = a_pins.len().min(b_pins.len());
+    mirror_pairs(Mirror::Reversed, &a_pins[..n], &b_pins[..n]).unwrap_or_default()
+}
+
+/// The ways two connectors of the same size can be paired other than number to number, each with its pairs: the numbers the other way
+/// round (`Reversed`: a single row facing, or a 2-row connector turned 180°), and for 2-row connectors numbered zigzag (1 and 2 side by
+/// side, 3 and 4 next ...) the two flips: across the rows (`RowsSwapped`: 1 ↔ 2, 3 ↔ 4 ...) and end to end (`EndToEnd`: 1 ↔ 2n−1,
+/// 2 ↔ 2n ...).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mirror {
+    Reversed,
+    RowsSwapped,
+    EndToEnd,
+}
+
+/// The pairs of `a_pins` with `b_pins` (same length) for one way of mirroring; `None` when it does not apply (the 2-row ways on an odd
+/// count).
+pub fn mirror_pairs(m: Mirror, a_pins: &[String], b_pins: &[String]) -> Option<Vec<(String, String)>> {
+    let n = a_pins.len().min(b_pins.len());
+    let to = |i: usize| -> usize {
+        match m {
+            Mirror::Reversed => n - 1 - i,
+            Mirror::RowsSwapped => i ^ 1,
+            Mirror::EndToEnd => (n - 2 - (i & !1)) | (i & 1),
+        }
+    };
+    if m != Mirror::Reversed && (n < 4 || !n.is_multiple_of(2)) {
+        return None;
+    }
+    Some((0..n).map(|i| (a_pins[i].clone(), b_pins[to(i)].clone())).collect())
+}
+
+/// The next way round for a link (`a`, `b`: its two connectors' pins; `rows`: both 2-row): number to number, then each mirror that fits
+/// in turn (`Reversed`, and on 2-row connectors `RowsSwapped`, `EndToEnd`), then number to number again. Returns the way (`None`: number
+/// to number) and the pairs to store (empty for number to number).
+pub fn next_mirror(current: &[(String, String)], a: &[String], b: &[String], rows: bool) -> (Option<Mirror>, Vec<(String, String)>) {
+    let ways: &[Mirror] = if rows { &[Mirror::Reversed, Mirror::RowsSwapped, Mirror::EndToEnd] } else { &[Mirror::Reversed] };
+    let now = ways.iter().position(|&m| mirror_pairs(m, a, b).is_some_and(|p| p == current));
+    let from = now.map_or(0, |i| i + 1);
+    ways[from.min(ways.len())..].iter().find_map(|&m| Some((Some(m), mirror_pairs(m, a, b)?))).unwrap_or((None, vec![]))
+}
+
+/// Whether a part is a 2-row connector numbered zigzag (a `…2x…` footprint: `PinHeader_2x5`, `AVR_ISP_2x3`).
+pub fn two_rows(sch: &Schematic, refdes: &str) -> bool {
+    let flat = sch.flat();
+    flat.components.iter().find(|c| c.refdes == refdes).is_some_and(|c| c.footprint.to_ascii_lowercase().contains("2x"))
 }
 
 fn same(a: &str, b: &str) -> bool {
@@ -170,21 +218,28 @@ pub fn check(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Vec<Finding
                 _ => (ok, named),
             })
         };
-        // the numbers mirrored (a socket facing the header, a folded cable): nothing agrees as it is, everything does the other way round
+        // the numbers mirrored (a socket facing the header, a folded cable, a 2-row connector turned or flipped): nothing agrees as it is,
+        // everything does one of the other ways round
         if link.pairs.is_empty() && pa.len() == pb.len() {
-            let mirrored = mirrored_pairs(&pa, &pb);
-            let ((ok, named), (ok_m, named_m)) = (score(&pairs), score(&mirrored));
-            if ok < named && named_m >= 2 && ok_m == named_m && named_m >= named {
-                let n = pa.len();
-                out.push(Finding {
-                    fix: Some(Fix::Pairs(mirrored)),
-                    ..f(
-                        Severity::Error,
-                        None,
-                        format!("{}.{} ↔ {}.{}: ピンの番号が逆に並んでいませんか (1 番 ↔ {n} 番にすると、すべての信号が合います)", link.a.design, link.a.refdes, link.b.design, link.b.refdes),
-                        "ソケットをピンヘッダに向かい合わせに差すときや、フラットケーブルを折り返すときは、番号が逆になります。そのつなぎ方なら「直す」でピンの組を逆順にします。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください",
-                    )
-                });
+            let (ok, named) = score(&pairs);
+            let rows = two_rows(sa, &link.a.refdes) && two_rows(sb, &link.b.refdes);
+            let ways: &[Mirror] = if rows { &[Mirror::Reversed, Mirror::RowsSwapped, Mirror::EndToEnd] } else { &[Mirror::Reversed] };
+            let found = ok < named
+                && ways.iter().find_map(|&m| {
+                    let pm = mirror_pairs(m, &pa, &pb)?;
+                    let (ok_m, named_m) = score(&pm);
+                    (named_m >= 2 && ok_m == named_m && named_m >= named).then_some((m, pm))
+                }).map(|found| {
+                    let n = pa.len();
+                    let (what, hint) = match (found.0, rows) {
+                        (Mirror::Reversed, false) => (format!("ピンの番号が逆に並んでいませんか (1 番 ↔ {n} 番にすると、すべての信号が合います)"), "ソケットをピンヘッダに向かい合わせに差すときや、フラットケーブルを折り返すときは、番号が逆になります。そのつなぎ方なら「直す」でピンの組を逆順にします。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください"),
+                        (Mirror::Reversed, true) => (format!("コネクタが 180° 回っていませんか (1 番 ↔ {n} 番、2 番 ↔ {} 番 … にすると、すべての信号が合います)", n - 1), "2 列のコネクタは、向きの印 (切り欠き・1 番の印) を逆にして差すと 1 番が最後の番号に来ます。そのつなぎ方なら「直す」でピンの組を合わせます。向きを合わせて差すつもりなら、どちらかの基板のピンの並びを直してください"),
+                        (Mirror::RowsSwapped, _) => ("2 列のコネクタの列が入れ替わっていませんか (1 番 ↔ 2 番、3 番 ↔ 4 番 … にすると、すべての信号が合います)".to_string(), "2 列のソケットを向かい合わせに差すと、列が入れ替わって奇数と偶数の番号が逆になります。そのつなぎ方なら「直す」でピンの組を合わせます。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください"),
+                        (Mirror::EndToEnd, _) => (format!("2 列のコネクタの並びが前後逆になっていませんか (1 番 ↔ {} 番、2 番 ↔ {n} 番 … にすると、すべての信号が合います)", n - 1), "2 列のコネクタを、列の向きに裏返して差すと (向かい合わせに差す、ケーブルを縦に折り返す)、並びが前後逆になります。そのつなぎ方なら「直す」でピンの組を合わせます。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください"),
+                    };
+                    out.push(Finding { fix: Some(Fix::Pairs(found.1)), ..f(Severity::Error, None, format!("{}.{} ↔ {}.{}: {what}", link.a.design, link.a.refdes, link.b.design, link.b.refdes), hint) });
+                }).is_some();
+            if found {
                 continue;
             }
         }
@@ -453,7 +508,7 @@ mod tests {
     }
 
     fn link(pairs: &[(&str, &str)]) -> BoardLink {
-        BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), aliases: vec![] }
+        BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), aliases: vec![], cable: None }
     }
 
     #[test]
@@ -516,6 +571,46 @@ mod tests {
         let jumbled = board("J1", &["SDA", "GND", "+5V", "SCL"]);
         let f = check(&[("main", &main), ("sensor", &jumbled)], &[link(&[])]);
         assert!(f.iter().all(|x| !x.message.contains("逆に")) && f.len() > 1, "{f:?}");
+    }
+
+    /// 2-row connectors (zigzag numbering, a `2x` footprint): flipped across the rows, flipped end to end and turned 180° are each told
+    /// with their own pairs; the same wrong order on single-row headers is not called a mirror (it is not one there).
+    #[test]
+    fn two_row_connectors_are_told_how_they_are_flipped() {
+        let names = ["+5V", "GND", "SDA", "SCL", "MOSI", "MISO"];
+        let rows = |order: [usize; 6], fp: &str| {
+            let mut s = board("J1", &order.map(|i| names[i]));
+            s.components[0].footprint = fp.into();
+            s
+        };
+        let main = rows([0, 1, 2, 3, 4, 5], "PinHeader_2x3");
+        for (order, want, first) in [
+            ([1, 0, 3, 2, 5, 4], "列が入れ替わって", ("1", "2")),
+            ([4, 5, 2, 3, 0, 1], "前後逆", ("1", "5")),
+            ([5, 4, 3, 2, 1, 0], "180°", ("1", "6")),
+        ] {
+            let other = rows(order, "PinHeader_2x3");
+            let f = check(&[("main", &main), ("sensor", &other)], &[link(&[])]);
+            assert!(f.len() == 1 && f[0].message.contains(want), "{order:?}: {f:?}");
+            let Some(Fix::Pairs(pairs)) = &f[0].fix else { panic!("{f:?}") };
+            assert_eq!((pairs[0].0.as_str(), pairs[0].1.as_str()), first);
+            assert!(check(&[("main", &main), ("sensor", &other)], &[BoardLink { pairs: pairs.clone(), ..link(&[]) }]).is_empty());
+        }
+        // the button's turn: number to number → reversed → rows swapped → end to end → number to number
+        let pins: Vec<String> = (1..=6).map(|i| i.to_string()).collect();
+        let mut pairs = vec![];
+        let mut seen = vec![];
+        for _ in 0..4 {
+            let (m, p) = next_mirror(&pairs, &pins, &pins, true);
+            seen.push(m);
+            pairs = p;
+        }
+        assert_eq!(seen, vec![Some(Mirror::Reversed), Some(Mirror::RowsSwapped), Some(Mirror::EndToEnd), None]);
+        assert_eq!(next_mirror(&mirrored_pairs(&pins, &pins), &pins, &pins, false), (None, vec![]));
+        // single-row: swapping neighbours is not a mirror
+        let (main1, other1) = (rows([0, 1, 2, 3, 4, 5], "PinHeader_1x6"), rows([1, 0, 3, 2, 5, 4], "PinHeader_1x6"));
+        let f = check(&[("main", &main1), ("sensor", &other1)], &[link(&[])]);
+        assert!(f.iter().all(|x| x.fix.as_ref().is_none_or(|fx| !matches!(fx, Fix::Pairs(_)))), "{f:?}");
     }
 
     /// A connector or a board that is not there, and connectors of different sizes, are told.

@@ -117,6 +117,7 @@ impl App {
                 self.board_ed.adopt(pr.board, None);
                 self.system = pr.system;
                 self.system_dirty = false;
+                self.histories.clear();
                 self.refresh_stack();
                 self.project = Some(p.clone());
                 if self.system.names.len() > 1 {

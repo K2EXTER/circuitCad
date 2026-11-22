@@ -149,6 +149,88 @@ pub fn mate(a: &Board, ra: &str, b: &Board, rb: &str, pairs: &[(String, String)]
     best.ok_or_else(|| "重ね方が見つかりません".into())
 }
 
+/// Board B beside board A, joined by a cable: where B stands, the straight distance between the two connectors and a cable length to buy.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Beside {
+    pub place: Place,
+    /// Between the middles of the two connectors, mm.
+    pub distance: f64,
+    /// The cable's length: the distance with 20 % to spare and 20 mm for the bends into the connectors, rounded up to 10 mm.
+    pub cable: f64,
+}
+
+/// The middle of a part's pads on its board, at the top of the part (the board's own frame: z = 0 at the bottom face).
+pub fn connector_point(board: &Board, refdes: &str) -> Option<[f64; 3]> {
+    let pins = pins_of(board, refdes);
+    if pins.is_empty() {
+        return None;
+    }
+    let n = pins.len() as f64;
+    let (x, y) = pins.iter().fold((0.0, 0.0), |s, (_, p)| (s.0 + p.x / n, s.1 + p.y / n));
+    Some([x, y, BOARD_THICKNESS + connector_height(board, refdes).unwrap_or(0.0)])
+}
+
+/// Board B laid beside board A, the two joined by a cable from connector `ra` on A to `rb` on B (E5): B in A's plane, `gap` mm past the
+/// edge of A nearest A's connector, turned so that B's connector is on B's side facing A, and moved across so the two connectors are
+/// in line. Every quarter turn is tried; the one that brings B's connector closest to its facing edge wins.
+pub fn beside(a: &Board, ra: &str, b: &Board, rb: &str, gap: f64) -> Result<Beside, String> {
+    let (Some(ca), Some(cb)) = (connector_point(a, ra), connector_point(b, rb)) else {
+        return Err(format!("{} の基板に {} のパッドが無いか、もう一方に {} のパッドがありません。回路図から基板に取り込んでから置いてください", a.name, ra, rb));
+    };
+    let (Some((alo, ahi)), Some((blo, bhi))) = (a.bounds(), b.bounds()) else { return Err("基板の外形がありません".into()) };
+    // the edge of A nearest its connector: the axis (0 = x, 1 = y) and the way out (+1 / −1)
+    let edges = [(ca[0] - alo.x, 0, -1.0), (ahi.x - ca[0], 0, 1.0), (ca[1] - alo.y, 1, -1.0), (ahi.y - ca[1], 1, 1.0)];
+    let &(_, axis, s) = edges.iter().min_by(|x, y| x.0.total_cmp(&y.0)).unwrap();
+    let edge = if s > 0.0 { [ahi.x, ahi.y][axis] } else { [alo.x, alo.y][axis] };
+    let across = 1 - axis;
+    let mut best: Option<(f64, Place)> = None;
+    for q in 0..4u8 {
+        let turn = Place::new(q, false, [0.0; 3]);
+        let (lo, hi) = turn.apply_box([blo.x, blo.y, 0.0], [bhi.x, bhi.y, BOARD_THICKNESS]);
+        let t = turn.apply(cb);
+        // B's edge that faces A, and how far B's connector is from it
+        let near = if s > 0.0 { lo[axis] } else { hi[axis] };
+        let off = (t[axis] - near).abs();
+        let mut offset = [0.0; 3];
+        offset[axis] = edge + s * gap - near;
+        offset[across] = ca[across] - t[across];
+        let place = Place { m: turn.m, offset };
+        if best.is_none_or(|(o, _)| off < o - 1e-9) {
+            best = Some((off, place));
+        }
+    }
+    let (_, place) = best.ok_or("置き方が見つかりません")?;
+    let w = place.apply(cb);
+    let distance = ((w[0] - ca[0]).powi(2) + (w[1] - ca[1]).powi(2) + (w[2] - ca[2]).powi(2)).sqrt();
+    let cable = ((distance * 1.2 + 20.0) / 10.0).ceil() * 10.0;
+    Ok(Beside { place, distance, cable })
+}
+
+/// A cable drawn between two connector tops `p` and `q` (one frame): up 5 mm over the higher one, along x, along y, and down, as a
+/// bundle 2 mm square, grey. Only to be seen in the 3D view.
+pub fn cable_mesh(p: [f64; 3], q: [f64; 3]) -> Mesh3d {
+    let top = p[2].max(q[2]) + 5.0;
+    let corner = [q[0], p[1], top];
+    let legs = [(p, [p[0], p[1], top]), ([p[0], p[1], top], corner), (corner, [q[0], q[1], top]), ([q[0], q[1], top], q)];
+    let mut m = Mesh3d { palette: vec![[150, 150, 155]], ..Default::default() };
+    let r = 1.0;
+    for (a, b) in legs {
+        let lo = [a[0].min(b[0]) - r, a[1].min(b[1]) - r, a[2].min(b[2]) - r];
+        let hi = [a[0].max(b[0]) + r, a[1].max(b[1]) + r, a[2].max(b[2]) + r];
+        let base = m.vertices.len() as u32;
+        for k in 0..8 {
+            m.vertices.push([if k & 1 == 0 { lo[0] } else { hi[0] }, if k & 2 == 0 { lo[1] } else { hi[1] }, if k & 4 == 0 { lo[2] } else { hi[2] }].map(|v| v as f32));
+        }
+        // the six faces, counter-clockwise from outside
+        for [a, b, c, d] in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
+            m.triangles.push([base + a, base + b, base + c]);
+            m.triangles.push([base + a, base + c, base + d]);
+            m.tri_color.extend([0, 0]);
+        }
+    }
+    m
+}
+
 /// The height a stacking connector stands above its board (its 3D height): the usual gap to stack the next board on it.
 pub fn connector_height(board: &Board, refdes: &str) -> Option<f64> {
     board.parts.iter().find(|p| p.refdes == refdes).map(|p| crate::model3d::part_height_on(board, p))
@@ -232,6 +314,36 @@ mod tests {
         }
         b.parts.push(Part { refdes: "J1".into(), value: String::new(), footprint: "PinHeader_1x4".into(), pos: Point::new(at.0, at.1), rot: 0, side: Side::Top });
         b
+    }
+
+    /// Two boards side by side by a cable: B past A's edge nearest A's header, turned so its own header faces A, the headers in line; the
+    /// cable's length is the distance with room to spare. The cable's mesh is closed (every edge in two triangles).
+    #[test]
+    fn a_board_is_laid_beside_the_other_for_a_cable() {
+        // A's header near its right edge (x = 36 of 40), B's header near its left edge, running along y
+        let a = header_board("main", (36.0, 10.0), true);
+        let b = header_board("sensor", (3.0, 10.0), true);
+        let s = beside(&a, "J1", &b, "J1", 20.0).unwrap();
+        let (lo, hi) = s.place.apply_box([0.0, 0.0, 0.0], [40.0, 30.0, BOARD_THICKNESS]);
+        assert!((lo[0] - 60.0).abs() < 1e-9 && hi[0] > lo[0], "B 20 mm right of A's edge at 40: {lo:?} {hi:?}");
+        let (pa, pb) = (connector_point(&a, "J1").unwrap(), s.place.apply(connector_point(&b, "J1").unwrap()));
+        assert!((pa[1] - pb[1]).abs() < 1e-9, "the headers in line: {pa:?} {pb:?}");
+        assert!(pb[0] - 60.0 < 4.0, "B's header on its side facing A: {pb:?}");
+        assert!((s.distance - (pb[0] - pa[0])).abs() < 1e-9 && s.cable >= s.distance * 1.2 && s.cable % 10.0 == 0.0, "{s:?}");
+        // B's header on its far side: B is turned half round so the header faces A
+        let far = header_board("sensor", (37.0, 10.0), true);
+        let s = beside(&a, "J1", &far, "J1", 20.0).unwrap();
+        assert!(s.distance < 30.0, "turned to face A: {s:?}");
+        let m = cable_mesh([0.0, 0.0, 10.0], [30.0, 20.0, 10.0]);
+        let mut edges = std::collections::HashMap::new();
+        for t in &m.triangles {
+            for k in 0..3 {
+                let (u, v) = (t[k], t[(k + 1) % 3]);
+                *edges.entry((u.min(v), u.max(v))).or_insert(0) += 1;
+            }
+        }
+        assert!(edges.values().all(|&n| n == 2) && m.tri_color.len() == m.triangles.len());
+        assert!(m.volume() > 0.0, "faces outwards");
     }
 
     /// A turn and its inverse undo each other; turning over twice is no turn.

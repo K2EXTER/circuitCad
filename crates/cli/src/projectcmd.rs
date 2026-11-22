@@ -8,7 +8,32 @@ use sch_core::Schematic;
 use sch_core::system::BoardLink;
 use serde_json::{Value, json};
 
-const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson | project alias FILE.ccproj LINK NET_A NET_B | project mirror FILE.ccproj LINK   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic; alias and mirror change link LINK (from 1) in the file: two names as one signal, the pins paired the other way round)";
+const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson | project alias FILE.ccproj LINK NET_A NET_B | project mirror FILE.ccproj LINK | project cable FILE.ccproj LINK [gap=20]   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic; alias, mirror and cable change link LINK (from 1) in the file: two names as one signal, the pins paired the other way round, the second board laid beside the first for a cable)";
+
+/// Lays the second board of link `k` (from 1) beside the first for a cable, in the file: the second board's `place` (the first's kept, or
+/// set at the origin) and the link's `cable` length.
+fn cable(file: &str, k: &str, gap: f64) -> Result<Value, String> {
+    let text = std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?;
+    let mut v: Value = serde_json::from_str(&text).map_err(|e| format!("{file}: not a project ({e})"))?;
+    let i = k.parse::<usize>().ok().filter(|&i| i >= 1).ok_or_else(|| format!("LINK {k}: the link's number, from 1"))? - 1;
+    let link: BoardLink = serde_json::from_value(v.get("links").and_then(|l| l.get(i)).cloned().ok_or_else(|| format!("{file}: no link {k}"))?).map_err(|e| e.to_string())?;
+    let designs = v.get("designs").and_then(Value::as_array).ok_or("not a project of several boards (format 2)")?;
+    let find = |n: &str| designs.iter().position(|d| d.get("name").and_then(Value::as_str) == Some(n)).ok_or_else(|| format!("no board {n}"));
+    let (ia, ib) = (find(&link.a.design)?, find(&link.b.design)?);
+    if ia == ib {
+        return Err("both ends on the same board".into());
+    }
+    let board = |i: usize| -> Result<pcb_core::Board, String> { serde_json::from_value(designs[i].get("board").cloned().ok_or("a board without its board")?).map_err(|e| e.to_string()) };
+    let base: pcb_core::stack::Place = designs[ia].get("place").cloned().and_then(|p| serde_json::from_value(p).ok()).unwrap_or_default();
+    let s = pcb_core::stack::beside(&board(ia)?, &link.a.refdes, &board(ib)?, &link.b.refdes, gap)?;
+    let place_b = base.then(&s.place);
+    let ds = v.get_mut("designs").and_then(Value::as_array_mut).ok_or("no designs")?;
+    ds[ia]["place"] = serde_json::to_value(base).map_err(|e| e.to_string())?;
+    ds[ib]["place"] = serde_json::to_value(place_b).map_err(|e| e.to_string())?;
+    v["links"][i]["cable"] = json!(s.cable);
+    std::fs::write(file, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?).map_err(|e| format!("{file}: {e}"))?;
+    Ok(json!({"file": file, "distance_mm": s.distance, "cable_mm": s.cable, "offset": place_b.offset}))
+}
 
 /// Changes link `k` (from 1) of a project file in place with `edit`, keeping the rest of the file as it is.
 fn edit_link(file: &str, k: &str, edit: impl FnOnce(&mut BoardLink) -> Result<(), String>) -> Result<BoardLink, String> {
@@ -164,11 +189,15 @@ impl crate::session::Session {
                 let link = edit_link(file, k, |l| {
                     let pins = |d: &str, r: &str| designs.iter().find(|x| x.0 == d).and_then(|x| sch_core::system::pins_of(x.1, r));
                     let (Some(pa), Some(pb)) = (pins(&l.a.design, &l.a.refdes), pins(&l.b.design, &l.b.refdes)) else { return Err("the link's connectors are not in the schematics".into()) };
-                    let m = sch_core::system::mirrored_pairs(&pa, &pb);
-                    l.pairs = if l.pairs == m { vec![] } else { m };
+                    let rows = |d: &str, r: &str| designs.iter().find(|x| x.0 == d).is_some_and(|x| sch_core::system::two_rows(x.1, r));
+                    l.pairs = sch_core::system::next_mirror(&l.pairs, &pa, &pb, rows(&l.a.design, &l.a.refdes) && rows(&l.b.design, &l.b.refdes)).1;
                     Ok(())
                 })?;
                 Ok(obj(json!({"file": file, "pairs": link.pairs})))
+            }
+            "cable" => {
+                let k = pos.get(2).ok_or(USAGE)?;
+                Ok(obj(cable(file, k, number(&kv, "gap", 20.0)?)?))
             }
             "step" => {
                 let out = pos.get(2).ok_or(USAGE)?;

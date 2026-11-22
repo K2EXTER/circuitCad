@@ -152,7 +152,7 @@ mod tests {
         sensor.components[r].value = "1k".into();
         label(&mut sensor, r, "1", "+5V");
         label(&mut sensor, r, "2", "GND");
-        let link = BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![], aliases: vec![] };
+        let link = BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![], aliases: vec![], cable: None };
         let readings = system_dc(&[("main", &main), ("sensor", &sensor)], std::slice::from_ref(&link)).unwrap();
         let pin1 = readings.iter().find(|r| r.probe.pins.0 == "1").unwrap();
         assert!((pin1.v_a - 5.0).abs() < 1e-6 && (pin1.v_b - 5.0).abs() < 1e-6, "{pin1:?}");
@@ -188,7 +188,7 @@ mod tests {
             s
         };
         let (m2, s2) = (twice(&main), twice(&sensor));
-        let both = BoardLink { a: LinkEnd { design: "main".into(), refdes: "J2".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J2".into() }, pairs: vec![], aliases: vec![] };
+        let both = BoardLink { a: LinkEnd { design: "main".into(), refdes: "J2".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J2".into() }, pairs: vec![], aliases: vec![], cable: None };
         let readings = system_dc(&[("main", &m2), ("sensor", &s2)], &[both]).unwrap();
         assert_eq!(readings.len(), 2);
         assert!(readings.iter().all(|r| r.probe.shared == 2 && (r.current.unwrap() - 5e-3).abs() < 1e-6), "{readings:?}");
@@ -221,7 +221,7 @@ mod tests {
         sensor.components[c].value = "1u".into();
         label(&mut sensor, c, "1", "VIN");
         label(&mut sensor, c, "2", "GND");
-        let link = BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![], aliases: vec![] };
+        let link = BoardLink { a: LinkEnd { design: "main".into(), refdes: "J1".into() }, b: LinkEnd { design: "sensor".into(), refdes: "J1".into() }, pairs: vec![], aliases: vec![], cable: None };
         (main, sensor, link)
     }
 

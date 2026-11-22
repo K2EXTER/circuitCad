@@ -21,6 +21,8 @@ pub struct BoardsWindow {
     /// turned over (connectors facing each other); what runs into what between the boards placed (as of the last stacking or look).
     gap: f64,
     over: bool,
+    /// Laying a board beside another for a cable: the space between their edges (mm; 0 is taken as 20 on the first frame).
+    spacing: f64,
     clashes: Option<Vec<(String, String, String, String)>>,
     /// The whole system's operating point, pin by pin (as of the last run).
     readings: Option<Result<Vec<sim_core::system::PinReading>, String>>,
@@ -31,6 +33,9 @@ pub struct BoardsWindow {
     fstart: String,
     fstop: String,
 }
+
+/// The undo and redo steps of a parked board's schematic and board.
+pub type Histories = ((Vec<Schematic>, Vec<Schematic>), (Vec<pcb_core::Board>, Vec<pcb_core::Board>));
 
 /// A run of the whole system shown as curves in the boards window.
 pub enum SystemWave {
@@ -94,7 +99,8 @@ impl App {
         if k == self.system.active { Some(&self.sch.sch) } else { self.system.parked.get(k)?.as_ref().map(|d| &d.schematic) }
     }
 
-    /// Changes the board in the editors (the one there is parked with its changes; undo starts afresh).
+    /// Changes the board in the editors: the one there is parked with its changes and its undo steps, and the next one comes back with
+    /// its own (undo goes on where it was left on that board).
     pub(crate) fn switch_board(&mut self, k: usize) {
         if k == self.system.active || k >= self.system.names.len() {
             return;
@@ -104,13 +110,26 @@ impl App {
             self.system_dirty = true;
         }
         let here = self.current_design();
+        self.park_history();
         self.system.parked[self.system.active] = Some(here);
         self.system.active = k;
         self.adopt_design(next);
+        if let Some((s, b)) = self.histories.remove(&self.system.names[k]) {
+            self.sch.put_history(s);
+            self.board_ed.put_history(b);
+        }
         self.refresh_stack();
         let msg = i18n::trf!("基板「{}」に切り替えました", self.system.names[k]);
         self.sch.status = msg.clone();
         self.board_ed.status = msg;
+    }
+
+    /// Keeps the undo steps of the board in the editors under its name (it is being parked).
+    fn park_history(&mut self) {
+        let h = (self.sch.take_history(), self.board_ed.take_history());
+        if !(h.0.0.is_empty() && h.0.1.is_empty() && h.1.0.is_empty() && h.1.1.is_empty()) {
+            self.histories.insert(self.system.names[self.system.active].clone(), h);
+        }
     }
 
     /// Adds an empty board (schematic and board) to the project and opens it.
@@ -127,6 +146,7 @@ impl App {
         }
         // the first board gets a name of its own (its board's, else 基板1) the first time a second one is added
         let here = self.current_design();
+        self.park_history();
         self.system.parked[self.system.active] = Some(here);
         self.system.names.push(name.to_string());
         self.system.copies.push(1);
@@ -147,6 +167,7 @@ impl App {
             self.switch_board(if k == 0 { 1 } else { 0 });
         }
         let name = self.system.names.remove(k);
+        self.histories.remove(&name);
         self.system.copies.remove(k);
         self.system.parked.remove(k);
         self.system.places.remove(k);
@@ -164,6 +185,9 @@ impl App {
             return Err(i18n::tr("ほかの基板と違う名前にしてください").into());
         }
         let old = std::mem::replace(&mut self.system.names[k], new.to_string());
+        if let Some(h) = self.histories.remove(&old) {
+            self.histories.insert(new.to_string(), h);
+        }
         for l in &mut self.system.links {
             for e in [&mut l.a, &mut l.b] {
                 if e.design == old {
@@ -201,6 +225,17 @@ impl App {
                     Err(e) => self.boards.message = Some(Err(i18n::trf!("基板「{}」の 3D の形を作れません: {e}", self.system.names[k]))),
                 }
             }
+            // the cables between boards laid side by side, from connector top to connector top
+            for l in self.system.links.iter().filter(|l| l.cable.is_some()) {
+                let end = |d: &str, r: &str| {
+                    let k = self.system.names.iter().position(|n| n == d)?;
+                    let p = pcb_core::stack::connector_point(self.design_board(k)?, r)?;
+                    Some(back.then(&self.system.places.get(k).copied().flatten()?).apply(p))
+                };
+                if let (Some(p), Some(q)) = (end(&l.a.design, &l.a.refdes), end(&l.b.design, &l.b.refdes)) {
+                    others.push(pcb_core::stack::cable_mesh(p, q));
+                }
+            }
         }
         self.board_ed.set_view3d_others(others);
         let placed = self.placed_boards();
@@ -221,6 +256,7 @@ impl App {
         let base = self.system.places[ia].unwrap_or_default();
         self.system.places[ia] = Some(base);
         self.system.places[ib] = Some(base.then(&mated.place));
+        self.system.links[k].cable = None;
         self.system_dirty = true;
         self.refresh_stack();
         let msg = i18n::trf!("「{}」を「{}」の {} の上 {gap:.1} mm に重ねました ({} ピン、ずれは最大 {:.2} mm)", l.b.design, l.a.design, l.a.refdes, mated.pins, mated.worst);
@@ -231,18 +267,47 @@ impl App {
         }
     }
 
+    /// Lays the second board of link `k` beside the first for a cable (the first stays where it is, or at the origin) and keeps the cable's
+    /// length on the link.
+    fn cable_link(&mut self, k: usize) -> Result<String, String> {
+        let l = self.system.links.get(k).ok_or("つなぎがありません")?.clone();
+        let find = |n: &str| self.system.names.iter().position(|x| x == n);
+        let (Some(ia), Some(ib)) = (find(&l.a.design), find(&l.b.design)) else { return Err(i18n::tr("つなぎの基板がプロジェクトにありません").into()) };
+        if ia == ib {
+            return Err(i18n::tr("同じ基板のコネクタどうしは、ケーブルで並べられません").into());
+        }
+        let (Some(a), Some(b)) = (self.design_board(ia), self.design_board(ib)) else { return Err(i18n::tr("基板が見つかりません").into()) };
+        let gap = self.boards.spacing;
+        let s = pcb_core::stack::beside(a, &l.a.refdes, b, &l.b.refdes, gap)?;
+        let base = self.system.places[ia].unwrap_or_default();
+        self.system.places[ia] = Some(base);
+        self.system.places[ib] = Some(base.then(&s.place));
+        self.system.links[k].cable = Some(s.cable);
+        self.system_dirty = true;
+        self.refresh_stack();
+        Ok(i18n::trf!("「{}」を「{}」の横 {gap:.0} mm に並べました。コネクタの間は {:.0} mm、ケーブルの長さの目安は {:.0} mm です", l.b.design, l.a.design, s.distance, s.cable))
+    }
+
     /// Pairs link `k`'s pins the other way round (1 with the last ...), or back to the same numbers when they already are.
     fn mirror_link(&mut self, k: usize) -> Result<String, String> {
+        use sch_core::system::Mirror;
         let l = &self.system.links[k];
-        let pins = |d: &str, r: &str| self.system.names.iter().position(|n| n == d).and_then(|i| self.design_schematic(i)).and_then(|s| sch_core::system::pins_of(s, r));
-        let (Some(pa), Some(pb)) = (pins(&l.a.design, &l.a.refdes), pins(&l.b.design, &l.b.refdes)) else {
+        let sheet = |d: &str| self.system.names.iter().position(|n| n == d).and_then(|i| self.design_schematic(i));
+        let (Some(sa), Some(sb)) = (sheet(&l.a.design), sheet(&l.b.design)) else { return Err(i18n::tr("つなぎの基板が見つかりません").into()) };
+        let (Some(pa), Some(pb)) = (sch_core::system::pins_of(sa, &l.a.refdes), sch_core::system::pins_of(sb, &l.b.refdes)) else {
             return Err(i18n::tr("つなぎのコネクタが回路図に見つかりません").into());
         };
-        let mirrored = sch_core::system::mirrored_pairs(&pa, &pb);
-        let back = self.system.links[k].pairs == mirrored;
-        self.system.links[k].pairs = if back { vec![] } else { mirrored };
+        let rows = sch_core::system::two_rows(sa, &l.a.refdes) && sch_core::system::two_rows(sb, &l.b.refdes);
+        let (way, pairs) = sch_core::system::next_mirror(&l.pairs, &pa, &pb, rows);
+        self.system.links[k].pairs = pairs;
         self.system_dirty = true;
-        Ok(if back { i18n::tr("ピンの組を同じ番号どうしに戻しました").into() } else { i18n::trf!("ピンの組を逆順にしました (1 番 ↔ {} 番)", pb.len().min(pa.len())) })
+        let n = pa.len().min(pb.len());
+        Ok(match way {
+            None => i18n::tr("ピンの組を同じ番号どうしに戻しました").into(),
+            Some(Mirror::Reversed) => i18n::trf!("ピンの組を逆順にしました (1 番 ↔ {n} 番)"),
+            Some(Mirror::RowsSwapped) => i18n::tr("2 列の列を入れ替えた組にしました (1 番 ↔ 2 番、3 番 ↔ 4 番 …)").into(),
+            Some(Mirror::EndToEnd) => i18n::trf!("2 列の並びを前後逆にした組にしました (1 番 ↔ {} 番、2 番 ↔ {n} 番 …)", n.saturating_sub(1)),
+        })
     }
 
     /// The whole system as one schematic, saved to a file (asks for it): to run any analysis on it in the schematic editor.
@@ -399,6 +464,7 @@ impl App {
                 self.board_ed.adopt(p.board, None);
                 self.system = p.system;
                 self.system_dirty = false;
+                self.histories.clear();
                 self.project = None;
                 self.boards.open = true;
                 // the sample's I2C clock is 100 kHz: two periods to see the bus rise
@@ -424,6 +490,10 @@ impl App {
         let mut drop_link = None;
         let mut bom = false;
         let mut stack = None;
+        let mut cable = None;
+        if self.boards.spacing <= 0.0 {
+            self.boards.spacing = 20.0;
+        }
         let mut look = false;
         let mut step = false;
         let mut run = false;
@@ -433,7 +503,7 @@ impl App {
         let mut mirror = None;
         let mut drop_aliases = None;
         egui::Window::new(i18n::tr("基板どうしのつなぎ")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(560.0).show(ctx, |ui| {
-            ui.label(egui::RichText::new(i18n::tr("ひとつのプロジェクトに、いくつかの基板 (回路図と基板の組) を入れて、コネクタどうしのつなぎを調べます。編集できるのは選んでいる 1 枚です (切り替えると、元に戻す履歴はそこから始まります)")).weak());
+            ui.label(egui::RichText::new(i18n::tr("ひとつのプロジェクトに、いくつかの基板 (回路図と基板の組) を入れて、コネクタどうしのつなぎを調べます。編集できるのは選んでいる 1 枚です (切り替えても、元に戻す履歴は基板ごとに残ります)")).weak());
             ui.separator();
             ui.label(egui::RichText::new(i18n::tr("基板")).strong());
             egui::Grid::new("boards_list").num_columns(4).show(ui, |ui| {
@@ -469,16 +539,25 @@ impl App {
                 ui.horizontal(|ui| {
                     let pairs = if l.pairs.is_empty() { i18n::tr("同じ番号どうし").to_string() } else { l.pairs.iter().map(|(a, b)| format!("{a}-{b}")).collect::<Vec<_>>().join(" ") };
                     ui.label(format!("{}.{} ↔ {}.{}  ({pairs})", l.a.design, l.a.refdes, l.b.design, l.b.refdes));
-                    if ui.small_button(i18n::tr("番号を逆に")).on_hover_text(i18n::tr("ピンの組を 1 番 ↔ 最後の番号の逆順にします (ソケットを向かい合わせに差す、フラットケーブルを折り返すとき)。もう一度押すと同じ番号どうしに戻ります")).clicked() {
+                    if ui.small_button(i18n::tr("番号を逆に")).on_hover_text(i18n::tr("ピンの組を 1 番 ↔ 最後の番号の逆順にします (ソケットを向かい合わせに差す、フラットケーブルを折り返すとき)。2 列のコネクタは、押すたびに 180° 回す → 列を入れ替える → 前後逆、の順。最後に同じ番号どうしに戻ります")).clicked() {
                         mirror = Some(k);
                     }
                     if ui.small_button(i18n::tr("3D で重ねる")).on_hover_text(i18n::tr("2 枚目の基板を、コネクタのピンが 1 枚目のピンの真上に来るように回して、下の「すき間」だけ上に重ねます (シールドのような積み重ね)。3D の窓に、ほかの基板も出ます")).clicked() {
                         stack = Some(k);
                     }
+                    if ui.small_button(i18n::tr("ケーブルでつなぐ")).on_hover_text(i18n::tr("2 枚目の基板を、1 枚目のコネクタに近い辺の外に、下の「間隔」だけ離して同じ高さに並べ、コネクタどうしが向かい合うように回します。コネクタの間の距離から、ケーブルの長さの目安 (2 割の余裕と、差し込む曲がりの 20 mm を足して 10 mm 単位に切り上げ) を出し、3D の窓にケーブルを描きます")).clicked() {
+                        cable = Some(k);
+                    }
                     if ui.small_button(i18n::tr("消す")).clicked() {
                         drop_link = Some(k);
                     }
                 });
+                if let Some(mm) = l.cable {
+                    ui.horizontal(|ui| {
+                        ui.add_space(16.0);
+                        ui.label(egui::RichText::new(i18n::trf!("ケーブル {mm:.0} mm でつなぐ")).weak()).on_hover_text(i18n::tr("「ケーブルでつなぐ」で置いたときの長さの目安です。「3D で重ねる」にすると、ケーブルなし (直接差す) に戻ります"));
+                    });
+                }
                 if !l.aliases.is_empty() {
                     ui.horizontal_wrapped(|ui| {
                         ui.add_space(16.0);
@@ -533,6 +612,10 @@ impl App {
                 ui.add(egui::DragValue::new(&mut self.boards.gap).range(0.0..=100.0).speed(0.1).prefix(i18n::tr("すき間 ")).suffix(" mm"))
                     .on_hover_text(i18n::tr("1 枚目の基板の表の面から、2 枚目の基板までの高さ。0 なら 1 枚目のコネクタの高さ (ピンヘッダにソケットを差す積み重ね)"));
                 ui.checkbox(&mut self.boards.over, i18n::tr("向かい合わせ")).on_hover_text(i18n::tr("2 枚目を裏返して、表の面どうしを向かい合わせます (両方の表にあるコネクタを差し合わせるとき)。すき間は 2 枚目の表の面まで"));
+                ui.separator();
+                ui.label(i18n::tr("ケーブルのとき:"));
+                ui.add(egui::DragValue::new(&mut self.boards.spacing).range(1.0..=1000.0).speed(0.5).prefix(i18n::tr("間隔 ")).suffix(" mm"))
+                    .on_hover_text(i18n::tr("「ケーブルでつなぐ」で、1 枚目の基板の辺から 2 枚目の基板の辺までをどれだけ離すか (ケースの中で置く距離)"));
             });
             ui.horizontal(|ui| {
                 if ui.button(i18n::tr("3D で全体を見る")).on_hover_text(i18n::tr("いま開いている基板の 3D の窓に、重ねたほかの基板も出します (ほかの基板は選べません)")).clicked() {
@@ -675,7 +758,7 @@ impl App {
                 Ok(_) if da == db && ra == rb => Err(i18n::tr("同じコネクタどうしはつなげません").into()),
                 Ok(pairs) => {
                     let end = |d: usize, r: String| LinkEnd { design: self.system.names[d].clone(), refdes: r };
-                    self.system.links.push(BoardLink { a: end(da, ra), b: end(db, rb), pairs, aliases: vec![] });
+                    self.system.links.push(BoardLink { a: end(da, ra), b: end(db, rb), pairs, aliases: vec![], cable: None });
                     self.system_dirty = true;
                     self.boards.draft_pairs.clear();
                     Ok(i18n::tr("つなぎを足しました").into())
@@ -687,6 +770,11 @@ impl App {
         }
         if let Some(k) = stack {
             self.boards.message = Some(self.stack_link(k));
+            self.board_ed.open_view3d();
+            self.mode = crate::Mode::Board;
+        }
+        if let Some(k) = cable {
+            self.boards.message = Some(self.cable_link(k));
             self.board_ed.open_view3d();
             self.mode = crate::Mode::Board;
         }
@@ -738,5 +826,28 @@ mod tests {
         assert_eq!(parse_pairs("").unwrap(), vec![]);
         assert_eq!(parse_pairs("1-1 2:3, 4=4").unwrap(), vec![("1".into(), "1".into()), ("2".into(), "3".into()), ("4".into(), "4".into())]);
         assert!(parse_pairs("1-").is_err());
+    }
+
+    /// An edit on a board, a switch to another and back: the edit can still be undone there. A renamed board keeps its steps; a project
+    /// opened afresh starts without them.
+    #[test]
+    fn undo_steps_stay_with_their_board() {
+        let mut app = App::default();
+        app.add_board("sensor").unwrap();
+        app.sch.sch.add(sch_core::Kind::Resistor, (0, 0), 0);
+        app.sch.commit_history_for_test();
+        app.switch_board(0);
+        assert!(app.sch.sch.components.is_empty(), "the first board is empty");
+        app.rename_board(1, "probe").unwrap();
+        app.switch_board(1);
+        assert_eq!(app.sch.sch.components.len(), 1);
+        app.sch.undo();
+        assert!(app.sch.sch.components.is_empty(), "the resistor's step came back with the board");
+        app.sch.redo();
+        assert_eq!(app.sch.sch.components.len(), 1);
+        app.switch_board(0);
+        assert!(app.histories.contains_key("probe"));
+        app.remove_board(1);
+        assert!(app.histories.is_empty());
     }
 }

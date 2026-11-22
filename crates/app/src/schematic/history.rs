@@ -41,6 +41,18 @@ impl SchEditor {
         self.saved_rev = self.rev;
     }
 
+    /// Takes the undo and redo steps out (the board is being parked: they come back with it, `put_history`).
+    pub(crate) fn take_history(&mut self) -> (Vec<Schematic>, Vec<Schematic>) {
+        self.commit_history();
+        (std::mem::take(&mut self.undo), std::mem::take(&mut self.redo))
+    }
+
+    /// Gives back the undo and redo steps of a sheet just adopted again (`take_history`).
+    pub(crate) fn put_history(&mut self, (undo, redo): (Vec<Schematic>, Vec<Schematic>)) {
+        self.undo = undo;
+        self.redo = redo;
+    }
+
     #[cfg(test)]
     pub fn commit_history_for_test(&mut self) {
         self.commit_history();

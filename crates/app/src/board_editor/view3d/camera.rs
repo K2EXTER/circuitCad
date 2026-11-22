@@ -31,14 +31,19 @@ impl Cam {
 
 /// The camera for a window of `rect`: the longest side of the board fills most of it at zoom 1.
 pub(super) fn camera(scene: &Scene, rect: Rect, yaw: f32, pitch: f32, zoom: f32, pan: Vec2) -> Cam {
-    let longest = (scene.hi.x - scene.lo.x).max(scene.hi.y - scene.lo.y) as f32;
-    // the camera stands back three times the board's diagonal
-    let extent = ((scene.hi.x - scene.lo.x).hypot(scene.hi.y - scene.lo.y)) as f32;
+    // the board, and the other boards of a multi-board project with their cables (laid beside it, they would be out of sight)
+    let (mut lo, mut hi) = (scene.lo, scene.hi);
+    for (b0, b1) in scene.others.iter().filter_map(|(m, _)| m.bounds()) {
+        (lo.x, lo.y, hi.x, hi.y) = (lo.x.min(b0[0]), lo.y.min(b0[1]), hi.x.max(b1[0]), hi.y.max(b1[1]));
+    }
+    let longest = (hi.x - lo.x).max(hi.y - lo.y) as f32;
+    // the camera stands back three times the diagonal
+    let extent = ((hi.x - lo.x).hypot(hi.y - lo.y)) as f32;
     Cam {
         yaw,
         pitch,
         scale: 0.95 * rect.width().min(rect.height()) / (longest * 1.15).max(1.0) * zoom,
-        center: [((scene.lo.x + scene.hi.x) / 2.0) as f32, ((scene.lo.y + scene.hi.y) / 2.0) as f32, (BOARD_THICKNESS / 2.0) as f32],
+        center: [((lo.x + hi.x) / 2.0) as f32, ((lo.y + hi.y) / 2.0) as f32, (BOARD_THICKNESS / 2.0) as f32],
         dist: extent * 3.0,
         origin: rect.center() + pan,
     }

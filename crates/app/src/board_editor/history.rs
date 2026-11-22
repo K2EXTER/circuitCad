@@ -33,6 +33,17 @@ impl BoardEditor {
         self.saved_rev = self.rev;
     }
 
+    /// Takes the undo and redo steps out (the board is being parked: they come back with it, `put_history`).
+    pub(crate) fn take_history(&mut self) -> (Vec<Board>, Vec<Board>) {
+        (std::mem::take(&mut self.undo), std::mem::take(&mut self.redo))
+    }
+
+    /// Gives back the undo and redo steps of a board just adopted again (`take_history`).
+    pub(crate) fn put_history(&mut self, (undo, redo): (Vec<Board>, Vec<Board>)) {
+        self.undo = undo;
+        self.redo = redo;
+    }
+
     pub fn undo(&mut self) {
         if let Some(prev) = self.undo.pop() {
             self.redo.push(std::mem::replace(&mut self.board, prev));
