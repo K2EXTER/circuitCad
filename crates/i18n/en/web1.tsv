@@ -1,0 +1,45 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/web/src/app.rs
+動かして見る (デジタル)	Run it (digital)
+部品をタップすると、その部品の説明が出ます	Tap a part to see what it is
+ブラウザ版 (試作)	browser version (preview)
+サンプルを選びます	Pick a sample
+回路図が画面に収まるように拡大・縮小します	Zoom so the whole schematic fits the screen
+サンプル	Samples
+English に切り替えます	Switch to English
+日本語に切り替えます	Switch to Japanese
+# crates/web/src/live_ui.rs
+グリッチ: {} が {} だけ {} になりました (線が赤く光っています)	Glitch: {} went {@3} for {@2} (the wire glows red)
+ゲートの入力が少しずれて変わると、出力に一瞬だけ違う値が出ます (グリッチ)。この線をクロックやクリアにつなぐと、数えたり消えたりしてしまいます。「ゆっくり」で、どの順に変わったかを見られます	When a gate's inputs change slightly apart, its output shows a wrong value for a moment (a glitch). Wired to a clock or a clear, it counts or clears by mistake. Slow motion shows the order the signals changed in
+セットアップ時間の違反 (クロックの直前にデータが変わった)	setup time violation (the data changed just before the clock)
+ホールド時間の違反 (クロックの直後にデータが変わった)	hold time violation (the data changed just after the clock)
+パルス幅の違反 (クロックが短すぎる)	pulse width violation (the clock pulse is too short)
+競合: {}	Race: {}
+{}: {} ({} 回)	{}: {} ({} times)
+# crates/web/src/samples.rs
+電源と抵抗 1 本。電圧 ÷ 抵抗 = 電流	A supply and one resistor. Voltage ÷ resistance = current
+LED を光らせる	Light an LED
+LED と電流を決める抵抗	An LED and the resistor that sets its current
+順方向に流すと約 0.6 V 下がる	About 0.6 V is lost across it in the forward direction
+決まった電圧で止める	Holds a set voltage
+小さいベース電流で大きいコレクタ電流	A small base current controls a large collector current
+抵抗 2 本で電圧を分ける	Two resistors divide a voltage
+半加算器 (スイッチで 0 と 1)	Half adder (switches for 0 and 1)
+SW1・SW2 をタップして A と B を切り替えると、XOR (S) と AND (C) の LED が変わり、真理値表が埋まっていきます	Tap SW1 and SW2 to switch A and B: the XOR (S) and AND (C) LEDs change and the truth table fills in
+SR ラッチ (押しボタンで覚える)	SR latch (push buttons that remember)
+SW1 (セット) か SW2 (リセット) を押すと、指を離しても LED がそのまま。NAND 2 つで 1 ビットを覚えます	Press SW1 (set) or SW2 (reset): the LED stays as it is after you let go. Two NANDs remember one bit
+カウンタ (クロックで数える)	Counter (counts the clock)
+「1 クロック」を押すたびに 74HC161 が 1 つ数え、4 つの LED が 2 進数で 0〜15 を表します	Each press of "1 clock" makes the 74HC161 count one up; the four LEDs show 0-15 in binary
+7 セグメントで数える	Count on a 7-segment display
+クロックで 0〜9 を数えて 7 セグメントに出します。10 になった瞬間にクリアするので、一瞬だけのグリッチも見えます	Counts 0-9 on the clock and shows it on a 7-segment display. It clears itself the moment it reaches 10, so a brief glitch shows too
+シフトレジスタ	Shift register
+SW1 で入れる 0 か 1 を決め、「1 クロック」を押すたびに LED の並びが 1 つ隣へ動きます	SW1 sets the 0 or 1 that goes in; each press of "1 clock" moves the row of LEDs one place along
+信号機	Traffic light
+クロックごとに 74HC4017 の出力が 1 つずつ進み、青 4 回・黄 1 回・赤 5 回をくり返します	The 74HC4017 moves one output along per clock: green for 4, yellow for 1, red for 5, over and over
+# crates/web/src/view.rs
+スイッチをタップすると 0 と 1 が切り替わります。線の色が High (赤) と Low (青) です	Tap a switch to flip it between 0 and 1. The wires show High (red) and Low (blue)
+動かせませんでした:	Could not run it:
+DC動作点を計算しました。電線の色が電圧です (青 = 低い、赤 = 高い)	DC operating point solved. The wire colour is the voltage (blue = low, red = high)
+計算できませんでした:	Could not solve it:
+記憶 {text} (= {value})	Stored {text} (= {value})
+記憶 {text}	Stored {text}

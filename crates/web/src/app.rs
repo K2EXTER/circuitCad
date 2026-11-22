@@ -30,6 +30,10 @@ impl WebApp {
             fonts.families.entry(fam).or_default().insert(0, "jp".into());
         }
         cc.egui_ctx.set_fonts(fonts);
+        // the language: `?lang=en` in the address (the English pages link there), else Japanese
+        if let Some(l) = lang_from_address() {
+            i18n::set_lang(l);
+        }
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
         let mut app = WebApp { sample: 0, sheet: None, error: None, list_open: false };
         app.open(0);
@@ -77,7 +81,7 @@ impl WebApp {
         };
         ui.horizontal_wrapped(|ui| {
             ui.strong(format!("{} {}", c.refdes, c.value));
-            ui.label(c.kind.label());
+            ui.label(i18n::tr_dyn(&c.kind.label()));
             for (pin, at) in c.pins() {
                 if let Some(v) = sheet.pin_voltage(at) {
                     ui.label(format!("{} {pin}: {}", tr("ピン"), sim_volts(v)));
@@ -94,6 +98,10 @@ impl eframe::App for WebApp {
             ui.horizontal_wrapped(|ui| {
                 ui.heading("circuitCad");
                 ui.weak(tr("ブラウザ版 (試作)"));
+                let (label, tip, to) = if i18n::is_ja() { ("English", tr("English に切り替えます"), i18n::Lang::En) } else { ("日本語", tr("日本語に切り替えます"), i18n::Lang::Ja) };
+                if ui.small_button(label).on_hover_text(tip).clicked() {
+                    i18n::set_lang(to);
+                }
                 // a button that opens the list under the title bar (big rows for a finger), not a small combo box popup
                 if narrow && ui.button(format!("{} ▼", tr(SAMPLES[self.sample].title))).on_hover_text(tr("サンプルを選びます")).clicked() {
                     self.list_open = !self.list_open;
@@ -143,6 +151,19 @@ impl eframe::App for WebApp {
             }
         });
     }
+}
+
+/// `?lang=en` (or `ja`) in the page's address.
+#[cfg(target_arch = "wasm32")]
+fn lang_from_address() -> Option<i18n::Lang> {
+    let search = web_sys::window()?.location().search().ok()?;
+    search.trim_start_matches('?').split('&').find_map(|kv| kv.strip_prefix("lang=")).and_then(i18n::Lang::parse)
+}
+
+/// In a window: the `CCAD_LANG` the app also reads.
+#[cfg(not(target_arch = "wasm32"))]
+fn lang_from_address() -> Option<i18n::Lang> {
+    i18n::lang_from_env()
 }
 
 #[cfg(test)]

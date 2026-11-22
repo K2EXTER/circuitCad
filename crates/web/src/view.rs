@@ -90,12 +90,12 @@ impl Sheet {
                 let ll = LiveLogic::new(&self.sch, c, String::new());
                 self.ok = ll.error.is_none();
                 self.status = match &ll.error {
-                    Some(e) => e.clone(),
+                    Some(e) => i18n::tr_dyn(e),
                     None => i18n::tr("スイッチをタップすると 0 と 1 が切り替わります。線の色が High (赤) と Low (青) です").to_string(),
                 };
                 self.live = Some(ll);
             }
-            Err(e) => self.status = format!("{} {}", i18n::tr("動かせませんでした:"), e.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(" / ")),
+            Err(e) => self.status = format!("{} {}", i18n::tr("動かせませんでした:"), i18n::tr_dyn(&e.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(" / "))),
         }
     }
 
@@ -133,7 +133,7 @@ impl Sheet {
             }
             Err(e) => {
                 self.ok = false;
-                self.status = format!("{} {e}", i18n::tr("計算できませんでした:"));
+                self.status = format!("{} {}", i18n::tr("計算できませんでした:"), i18n::tr_dyn(&e));
             }
         }
     }

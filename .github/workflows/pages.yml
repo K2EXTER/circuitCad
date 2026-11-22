@@ -1,0 +1,59 @@
+name: Pages
+# The site at https://k2exter.github.io/circuitCad/: the pages in docs/ as they are (they used to be served straight from the
+# branch), and the browser version (crates/web) built into try/. Needs Settings → Pages → Source: "GitHub Actions".
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "crates/web/**"
+      - "crates/sch-core/**"
+      - "crates/sim-core/**"
+      - "crates/i18n/**"
+      - "crates/app/assets/fonts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+# one deployment at a time; a newer push waits for the running one instead of cutting it off half way
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: web
+      # trunk's own release build (the version the browser version was made with); it fetches wasm-bindgen and wasm-opt itself
+      - name: Install trunk
+        run: |
+          curl -sSL https://github.com/trunk-rs/trunk/releases/download/v0.22.2/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C "$HOME/.cargo/bin"
+          trunk --version
+      - name: Build the browser version
+        working-directory: crates/web
+        run: trunk build --release --cargo-profile web-release --public-url /circuitCad/try/ --dist ../../_site/try
+      - name: Add the pages of docs/
+        run: cp -r docs/. _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

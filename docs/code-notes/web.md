@@ -50,6 +50,14 @@ app の BIZ UD ゴシック (4.67 MB) を、ブラウザ版が出す字だけに
 - `sim-core/src/par.rs` はそのままで良い: wasm では `available_parallelism` が Err なので 1 本で順に回す。
 - 残る `Instant`: `sch-core/src/perfboard.rs` (ユニバーサル基板の並べ方の時間の予算)。ブラウザ版が使うようになったら同じように直す。
 
+## 公開 (GitHub Pages、2026-11-22)
+
+`.github/workflows/pages.yml`: main に push すると (docs・web・sch-core・sim-core・i18n・フォント・Cargo の変更で。手でも動かせる)、Linux で trunk 0.22.2 を入れて `trunk build --release --cargo-profile web-release --public-url /circuitCad/try/` し、`docs/` の中身と一緒に Pages に出す。ブラウザ版は https://k2exter.github.io/circuitCad/try/ (英語は `?lang=en`)。wasm は git に入れない。それまでの Pages は main の `docs/` をそのまま出していた (`.nojekyll` で Jekyll なし) ので、見た目は変わらない。**Pages の設定の Source を「GitHub Actions」に替えるまで、このワークフローの deploy は通らない**。
+
+- 紹介ページ `docs/index.html` と `docs/en/index.html` の先頭のボタンの列に「ブラウザで試す (試作・約 3 MB)」(`try/`、英語は `../try/?lang=en`)。
+- 言語: `?lang=en` か `?lang=ja` (`app.rs` の `lang_from_address`)。上の帯の「English / 日本語」で切り替え。訳は `crates/i18n/en/web1.tsv` (web だけの文)。部品の種類の名前とシミュレータの文は `tr_dyn`。
+- 手元で同じ形を作るとき: `MSYS_NO_PATHCONV=1 trunk build ... --public-url /circuitCad/try/ --dist ../../target/pages-root/circuitCad/try` のあと `docs/` を `target/pages-root/circuitCad/` に写し、`.claude/launch.json` の `pages-local` (ポート 8082) で `/circuitCad/` を開く。Git Bash では `MSYS_NO_PATHCONV=1` が無いと `/circuitCad/try/` が `F:/Program Files/Git/circuitCad/try/` に書き換えられ、js と wasm が読めない。
+
 ## 試しに載せる (自分だけが見られるページ)
 
 `trunk build --release --cargo-profile web-release --public-url ./ --dist ../../target/web-artifact` で相対パスのビルドを作り、外側のタグを外したページ (`target/web-artifact/circuitcad-web.html`。trunk が出力のフォルダを空にするので、ビルドのあとに書き直す。js と wasm の名前はビルドごとに変わる) と js・wasm・`OFL.txt` を Artifact として載せる。非公開で、claude.ai にログインしたスマホから開ける。wasm の実行も通った。
