@@ -3255,6 +3255,18 @@ fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
         label(&mut main, r, "1", "+5V");
         label(&mut main, r, "2", net);
     }
+    // the I2C controller's clock, for the simulation only: 100 kHz pulling SCL low through a diode (an open-drain output only pulls
+    // down; the pull-up R2 lifts the line again, as slowly as the bus capacitance on the sensor board lets it)
+    let clk = main.add(Kind::VSource, (70, 40), 0);
+    main.components[clk].value = "PULSE(5 0 2u 10n 10n 5u 10u)".into();
+    main.components[clk].sim_only = true;
+    label(&mut main, clk, "+", "SCLK");
+    label(&mut main, clk, "-", "GND");
+    let d = main.add(Kind::Diode, (70, 10), 1);
+    main.components[d].value = "1N4148".into();
+    main.components[d].sim_only = true;
+    label(&mut main, d, "A", "SCL");
+    label(&mut main, d, "K", "SCLK");
     let mut sensor = sch_core::Schematic::default();
     header(&mut sensor);
     let c = sensor.add(Kind::Capacitor, (40, 0), 1);
@@ -3268,6 +3280,12 @@ fn multiboard_designs() -> Vec<(String, crate::project::Design)> {
     sensor.components[r].footprint = "R_0805".into();
     label(&mut sensor, r, "1", "+5V");
     label(&mut sensor, r, "2", "GND");
+    // the capacitance of the cable and the sensor's input on SCL, for the simulation only (200 pF: τ = 4.7 kΩ × 200 pF ≈ 0.94 µs)
+    let cb = sensor.add(Kind::Capacitor, (60, 0), 1);
+    sensor.components[cb].value = "200p".into();
+    sensor.components[cb].sim_only = true;
+    label(&mut sensor, cb, "1", "SCL");
+    label(&mut sensor, cb, "2", "GND");
     // each board: the parts taken from its schematic and placed by hand (the headers at the left edge)
     let design = |s: sch_core::Schematic, n: &str, size: (f64, f64), places: &[(&str, f64, f64)]| {
         let mut app = App::default();
@@ -3338,6 +3356,13 @@ fn the_multiboard_sample_checks_clean() {
     let readings = sim_core::system::system_dc(&designs, &p.system.links).unwrap();
     let pin1 = readings.iter().find(|r| r.probe.pins.0 == "1").unwrap();
     assert!((pin1.v_b - 5.0).abs() < 1e-6 && (pin1.current.unwrap() - 5e-3).abs() < 1e-6, "{pin1:?}");
+    // the whole system in time: the clock pulls SCL low (a diode drop), and the pull-up lifts it slowly through the sensor's 200 pF
+    let t = sim_core::system::system_tran(&designs, &p.system.links, 20e-6).unwrap();
+    let scl = t.pins.iter().find(|w| w.probe.pins.0 == "4").unwrap();
+    let at = |x: f64| scl.v[t.time.iter().position(|&tt| tt >= x).unwrap()];
+    assert!(at(6e-6) < 1.0, "low while the clock pulls: {}", at(6e-6));
+    assert!((2.5..4.2).contains(&at(8e-6)), "1 µs into the rise, about 3.5 V: {}", at(8e-6));
+    assert!(at(11.9e-6) > 4.8, "high again before the next pull: {}", at(11.9e-6));
     // stacked in 3D: the sensor board above the main board's header, nothing running into anything
     let places: Vec<pcb_core::stack::Place> = p.system.places.iter().map(|x| x.unwrap()).collect();
     let boards = [("main", &p.board, places[0]), ("sensor", &sensor.board, places[1])];

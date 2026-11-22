@@ -3,12 +3,23 @@
 //! file is read as it is (format 2: `designs`, `links`; format 1: one board), without changing the session's schematic or board.
 
 use crate::Res;
-use crate::session::{obj, options};
+use crate::session::{obj, opt, options};
 use sch_core::Schematic;
 use sch_core::system::BoardLink;
 use serde_json::{Value, json};
 
-const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project merge FILE.ccproj OUT.schjson   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, the whole system as one schematic)";
+const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic)";
+
+/// A `key=value` option as a number, or `default` without it.
+fn number(kv: &[(String, String)], key: &str, default: f64) -> Result<f64, String> {
+    opt(kv, key).map_or(Ok(default), |v| sim_core::parse_value(v).ok_or_else(|| format!("{key}={v}: not a number")))
+}
+
+/// The name of a linked pin in the output: `main.J1-3 <-> sensor.J1-3`.
+fn pin_name(links: &[BoardLink], p: &sch_core::system::LinkProbe) -> String {
+    let l = &links[p.link];
+    format!("{}.{}-{} <-> {}.{}-{}", l.a.design, l.a.refdes, p.pins.0, l.b.design, l.b.refdes, p.pins.1)
+}
 
 /// The boards of a project file that are placed in 3D: (name, board, where it stands).
 fn placed(file: &str) -> Result<Vec<(String, pcb_core::Board, pcb_core::stack::Place)>, String> {
@@ -47,7 +58,7 @@ fn read(file: &str) -> Result<Boards, String> {
 
 impl crate::session::Session {
     pub fn project(&mut self, args: &[String]) -> Res {
-        let (pos, _) = options(args);
+        let (pos, kv) = options(args);
         let (Some(what), Some(file)) = (pos.first(), pos.get(1)) else { return Err(USAGE.into()) };
         let (boards, links) = read(file)?;
         let designs: Vec<(&str, &Schematic)> = boards.iter().map(|(n, _, s)| (n.as_str(), s)).collect();
@@ -89,6 +100,33 @@ impl crate::session::Session {
                     })
                     .collect();
                 Ok(obj(json!({"pins": list})))
+            }
+            "tran" => {
+                let r = sim_core::system::system_tran(&designs, &links, number(&kv, "tstop", 10e-3)?)?;
+                let span = |w: &[f64]| w.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+                let list: Vec<Value> = r
+                    .pins
+                    .iter()
+                    .map(|p| {
+                        let (lo, hi) = span(&p.v);
+                        let i = p.i.as_ref().map(|i| json!({"end": i.last(), "peak": i.iter().copied().fold(0.0f64, |m, x| if x.abs() > m.abs() { x } else { m })}));
+                        json!({"pin": pin_name(&links, &p.probe), "net_a": p.probe.net_a, "net_b": p.probe.net_b, "v_end": p.v.last(), "v_min": lo, "v_max": hi, "current_a_to_b": i})
+                    })
+                    .collect();
+                Ok(obj(json!({"tstop": r.time.last(), "points": r.time.len(), "pins": list, "warnings": r.warnings})))
+            }
+            "ac" => {
+                let r = sim_core::system::system_ac(&designs, &links, number(&kv, "fstart", 10.0)?, number(&kv, "fstop", 1e6)?)?;
+                let list: Vec<Value> = r
+                    .pins
+                    .iter()
+                    .map(|p| {
+                        // the first frequency 3 dB below the gain at the start of the sweep (a low pass's corner)
+                        let f3 = p.db.first().and_then(|&d0| p.db.iter().position(|&d| d < d0 - 3.0).map(|k| r.freq[k]));
+                        json!({"pin": pin_name(&links, &p.probe), "net_a": p.probe.net_a, "net_b": p.probe.net_b, "db_start": p.db.first(), "db_end": p.db.last(), "f_minus_3db": f3})
+                    })
+                    .collect();
+                Ok(obj(json!({"fstart": r.freq.first(), "fstop": r.freq.last(), "pins": list, "warnings": r.warnings})))
             }
             "step" => {
                 let out = pos.get(2).ok_or(USAGE)?;

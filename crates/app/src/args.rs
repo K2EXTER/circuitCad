@@ -53,6 +53,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|x| x == "--system-dc") {
             app.run_system_dc();
         }
+        // --system-tran / --system-ac: the whole system's transient (the sample's 20 µs) or AC sweep in the window
+        if args.iter().any(|x| x == "--system-tran") {
+            app.run_system_wave(true);
+        }
+        if args.iter().any(|x| x == "--system-ac") {
+            app.run_system_wave(false);
+        }
         // with --3d: the main board's 3D view with the stacked sensor board in it
         if args.iter().any(|a| a == "--3d") {
             app.boards.open = false;

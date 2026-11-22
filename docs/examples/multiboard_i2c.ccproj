@@ -119,8 +119,9 @@
             },
             "refdes": "R1",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -138,8 +139,9 @@
             },
             "refdes": "R1",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -157,8 +159,9 @@
             },
             "refdes": "R2",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -176,8 +179,9 @@
             },
             "refdes": "R2",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -507,6 +511,32 @@
             "refdes": "R2",
             "rot": 1,
             "value": "4.7k"
+          },
+          {
+            "custom": null,
+            "footprint": "PinHeader_1x2_PM",
+            "kind": "VSource",
+            "pos": [
+              70,
+              40
+            ],
+            "refdes": "V2",
+            "rot": 0,
+            "sim_only": true,
+            "value": "PULSE(5 0 2u 10n 10n 5u 10u)"
+          },
+          {
+            "custom": null,
+            "footprint": "D_SOD-123",
+            "kind": "Diode",
+            "pos": [
+              70,
+              10
+            ],
+            "refdes": "D1",
+            "rot": 1,
+            "sim_only": true,
+            "value": "1N4148"
           }
         ],
         "labels": [
@@ -579,6 +609,34 @@
               20
             ],
             "text": "SCL"
+          },
+          {
+            "pos": [
+              70,
+              35
+            ],
+            "text": "SCLK"
+          },
+          {
+            "pos": [
+              70,
+              45
+            ],
+            "text": "GND"
+          },
+          {
+            "pos": [
+              70,
+              5
+            ],
+            "text": "SCL"
+          },
+          {
+            "pos": [
+              70,
+              15
+            ],
+            "text": "SCLK"
           }
         ],
         "layout_version": 1,
@@ -681,6 +739,46 @@
             "b": [
               40,
               20
+            ]
+          },
+          {
+            "a": [
+              70,
+              38
+            ],
+            "b": [
+              70,
+              35
+            ]
+          },
+          {
+            "a": [
+              70,
+              42
+            ],
+            "b": [
+              70,
+              45
+            ]
+          },
+          {
+            "a": [
+              70,
+              8
+            ],
+            "b": [
+              70,
+              5
+            ]
+          },
+          {
+            "a": [
+              70,
+              12
+            ],
+            "b": [
+              70,
+              15
             ]
           }
         ]
@@ -804,8 +902,9 @@
             },
             "refdes": "C1",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -823,8 +922,9 @@
             },
             "refdes": "C1",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -842,8 +942,9 @@
             },
             "refdes": "R1",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -861,8 +962,9 @@
             },
             "refdes": "R1",
             "shape": {
-              "Rect": {
+              "RoundRect": {
                 "h": 1.4,
+                "r": 0.25,
                 "w": 1.025
               }
             },
@@ -1179,6 +1281,19 @@
             "refdes": "R1",
             "rot": 1,
             "value": "1k"
+          },
+          {
+            "custom": null,
+            "footprint": "C_0805",
+            "kind": "Capacitor",
+            "pos": [
+              60,
+              0
+            ],
+            "refdes": "C2",
+            "rot": 1,
+            "sim_only": true,
+            "value": "200p"
           }
         ],
         "labels": [
@@ -1235,6 +1350,20 @@
             "pos": [
               40,
               20
+            ],
+            "text": "GND"
+          },
+          {
+            "pos": [
+              60,
+              -5
+            ],
+            "text": "SCL"
+          },
+          {
+            "pos": [
+              60,
+              5
             ],
             "text": "GND"
           }
@@ -1319,6 +1448,26 @@
             "b": [
               40,
               20
+            ]
+          },
+          {
+            "a": [
+              60,
+              -2
+            ],
+            "b": [
+              60,
+              -5
+            ]
+          },
+          {
+            "a": [
+              60,
+              2
+            ],
+            "b": [
+              60,
+              5
             ]
           }
         ]

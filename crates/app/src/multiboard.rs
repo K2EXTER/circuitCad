@@ -24,6 +24,27 @@ pub struct BoardsWindow {
     clashes: Option<Vec<(String, String, String, String)>>,
     /// The whole system's operating point, pin by pin (as of the last run).
     readings: Option<Result<Vec<sim_core::system::PinReading>, String>>,
+    /// The whole system's transient or AC run (as of the last run), its plot, and the boxes of its range (empty: the default).
+    wave: Option<Result<SystemWave, String>>,
+    plot: Option<crate::plot::PlotState>,
+    tstop: String,
+    fstart: String,
+    fstop: String,
+}
+
+/// A run of the whole system shown as curves in the boards window.
+pub enum SystemWave {
+    Tran(sim_core::system::SystemTran),
+    Ac(sim_core::system::SystemAc),
+}
+
+/// A box of the window as a value: the default when empty, an error naming the box when it is not a number.
+fn value_or(text: &str, default: f64, what: &str) -> Result<f64, String> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Ok(default);
+    }
+    sim_core::parse_value(t).ok_or_else(|| i18n::trf!("{what}「{t}」を数値にできません (例: 10m、1k、1Meg)"))
 }
 
 /// The connectors of a schematic (designators of J, P, CN ... and pin headers), for picking the ends of a link.
@@ -265,6 +286,94 @@ impl App {
         self.boards.readings = Some(sim_core::system::system_dc(&designs, &self.system.links));
     }
 
+    /// The whole system's transient run (`tran`) or AC sweep into the window, with a fresh plot over its range.
+    pub(crate) fn run_system_wave(&mut self, tran: bool) {
+        let designs = self.designs();
+        let b = &self.boards;
+        let r = if tran {
+            value_or(&b.tstop, 10e-3, i18n::tr("期間")).and_then(|t| sim_core::system::system_tran(&designs, &self.system.links, t).map(SystemWave::Tran))
+        } else {
+            value_or(&b.fstart, 10.0, i18n::tr("開始周波数"))
+                .and_then(|f0| value_or(&b.fstop, 1e6, i18n::tr("終了周波数")).map(|f1| (f0, f1)))
+                .and_then(|(f0, f1)| sim_core::system::system_ac(&designs, &self.system.links, f0, f1).map(SystemWave::Ac))
+        };
+        self.boards.plot = match &r {
+            Ok(SystemWave::Tran(t)) => Some(crate::plot::PlotState::new(t.time.last().copied().unwrap_or(1.0))),
+            Ok(SystemWave::Ac(a)) => Some(crate::plot::PlotState::log(a.freq.first().copied().unwrap_or(1.0), a.freq.last().copied().unwrap_or(10.0))),
+            Err(_) => None,
+        };
+        self.boards.wave = Some(r);
+    }
+
+    /// The curves of the whole system's last transient or AC run: a coloured name per pin, then voltage over current (transient) or gain
+    /// over phase (AC), x axis shared.
+    fn system_wave_ui(&mut self, ui: &mut egui::Ui) {
+        use crate::plot::{self, Style, Trace, PALETTE};
+        let Some(w) = &self.boards.wave else { return };
+        let w = match w {
+            Err(e) => {
+                ui.colored_label(crate::theme::ERROR, i18n::trf!("全体の回路を解けませんでした: {e}"));
+                return;
+            }
+            Ok(w) => w,
+        };
+        let Some(st) = self.boards.plot.as_mut() else { return };
+        let links = &self.system.links;
+        let name = |p: &sch_core::system::LinkProbe| {
+            let l = &links[p.link];
+            let net = p.net_a.split_once('.').map_or(p.net_a.as_str(), |(_, n)| n);
+            format!("{}.{}-{} {net}", l.a.design, l.a.refdes, p.pins.0)
+        };
+        let names: Vec<String> = match w {
+            SystemWave::Tran(t) => t.pins.iter().map(|p| name(&p.probe)).collect(),
+            SystemWave::Ac(a) => a.pins.iter().map(|p| name(&p.probe)).collect(),
+        };
+        if names.is_empty() {
+            ui.label(egui::RichText::new(i18n::tr("つないだピンに、どちらかの基板で何もつながっていません")).weak());
+            return;
+        }
+        let color = |k: usize| PALETTE[k % PALETTE.len()];
+        ui.horizontal_wrapped(|ui| {
+            for (k, n) in names.iter().enumerate() {
+                ui.colored_label(color(k), format!("━ {n}"));
+            }
+        });
+        let warnings = match w {
+            SystemWave::Tran(t) => &t.warnings,
+            SystemWave::Ac(a) => &a.warnings,
+        };
+        for m in warnings.iter().take(3) {
+            ui.colored_label(crate::theme::WARN, i18n::tr_dyn(m));
+        }
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width().max(300.0), 260.0), egui::Sense::hover());
+        let h = rect.height() / 2.0;
+        let top = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), h - 2.0));
+        let bottom = egui::Rect::from_min_size(egui::pos2(rect.left(), rect.top() + h), egui::vec2(rect.width(), h - 2.0));
+        match w {
+            SystemWave::Tran(t) => {
+                let v: Vec<Trace> = t.pins.iter().enumerate().map(|(k, p)| Trace { name: &names[k], color: color(k), t: &t.time, v: &p.v, dots: false }).collect();
+                let i: Vec<Trace> = t.pins.iter().enumerate().filter_map(|(k, p)| p.i.as_ref().map(|i| Trace { name: &names[k], color: color(k), t: &t.time, v: i, dots: false })).collect();
+                let vs = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false, db_ref: None };
+                let is = Style { unit: "A", x_unit: "s", x_name: "t", plain_y: false, db_ref: None };
+                plot::draw_group(ui, top, egui::Id::new("system_tran_v"), &v, st, 0, &vs, false);
+                plot::draw_group(ui, bottom, egui::Id::new("system_tran_i"), &i, st, 1, &is, true);
+            }
+            SystemWave::Ac(a) => {
+                let m: Vec<Trace> = a.pins.iter().enumerate().map(|(k, p)| Trace { name: &names[k], color: color(k), t: &a.freq, v: &p.db, dots: false }).collect();
+                let ph: Vec<Trace> = a.pins.iter().enumerate().map(|(k, p)| Trace { name: &names[k], color: color(k), t: &a.freq, v: &p.phase, dots: false }).collect();
+                let ms = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
+                let ps = Style { unit: "°", x_unit: "Hz", x_name: "f", plain_y: true, db_ref: None };
+                plot::draw_group(ui, top, egui::Id::new("system_ac_mag"), &m, st, 0, &ms, false);
+                plot::draw_group(ui, bottom, egui::Id::new("system_ac_phase"), &ph, st, 1, &ps, true);
+            }
+        }
+        let note = match w {
+            SystemWave::Tran(_) => i18n::tr("上: ピンの電圧 (A の側、GND から)。下: ピンを流れる電流 (A から B へが正)。ホイールで拡大、ドラッグで移動、ダブルクリックで全体"),
+            SystemWave::Ac(_) => i18n::tr("上: ピンの電圧の大きさ (dB、1 V が 0 dB)。下: 位相。入力の信号源は基板の電源の「AC 振幅」"),
+        };
+        ui.label(egui::RichText::new(note).weak().small());
+    }
+
     /// Opens the multi-board sample (two boards linked by their headers) with its window.
     pub(crate) fn open_multiboard_sample(&mut self) {
         match crate::project::parse(include_str!("../../../docs/examples/multiboard_i2c.ccproj")) {
@@ -278,6 +387,8 @@ impl App {
                 self.system_dirty = false;
                 self.project = None;
                 self.boards.open = true;
+                // the sample's I2C clock is 100 kHz: two periods to see the bus rise
+                self.boards.tstop = "20u".into();
                 self.mode = crate::Mode::Schematic;
                 self.refresh_stack();
             }
@@ -303,6 +414,7 @@ impl App {
         let mut step = false;
         let mut run = false;
         let mut merged = false;
+        let mut wave_run = None;
         egui::Window::new(i18n::tr("基板どうしのつなぎ")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(560.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(i18n::tr("ひとつのプロジェクトに、いくつかの基板 (回路図と基板の組) を入れて、コネクタどうしのつなぎを調べます。編集できるのは選んでいる 1 枚です (切り替えると、元に戻す履歴はそこから始まります)")).weak());
             ui.separator();
@@ -465,6 +577,24 @@ impl App {
                 }
                 None => {}
             }
+            // the transient and the AC sweep of the whole system, as curves pin by pin
+            let no_links = self.system.links.is_empty().then_some("基板どうしのつなぎがまだありません。上の表でつなぎを足すと押せます");
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut self.boards.tstop).hint_text("10m").desired_width(56.0)).on_hover_text(i18n::tr("過渡解析の期間 (秒。10m = 10 ms)。空なら 10 ms"));
+                ui.label("s");
+                if crate::widgets::unless(ui, no_links, egui::Button::new(i18n::tr("全体の過渡解析"))).on_hover_text(i18n::tr("すべての基板をつないだ 1 つの回路で過渡解析をして、つないだピンごとの電圧と、ピンを流れる電流の時間の変化をグラフにします。電源を入れたときの突入や、ほかの基板へ送るクロックの形が分かります")).clicked() {
+                    wave_run = Some(true);
+                }
+                ui.separator();
+                ui.add(egui::TextEdit::singleline(&mut self.boards.fstart).hint_text("10").desired_width(48.0)).on_hover_text(i18n::tr("AC 解析の開始周波数 (Hz)。空なら 10 Hz"));
+                ui.label("〜");
+                ui.add(egui::TextEdit::singleline(&mut self.boards.fstop).hint_text("1Meg").desired_width(48.0)).on_hover_text(i18n::tr("AC 解析の終了周波数 (Hz。1Meg = 1 MHz)。空なら 1 MHz"));
+                ui.label("Hz");
+                if crate::widgets::unless(ui, no_links, egui::Button::new(i18n::tr("全体の AC 解析"))).on_hover_text(i18n::tr("すべての基板をつないだ 1 つの回路で AC 解析をして、つないだピンごとの電圧の大きさと位相をグラフにします。どれかの基板の電源に「AC 振幅」(AC 1 など) が要ります。基板にまたがるフィルタや、ケーブルの先での信号の落ち方が分かります")).clicked() {
+                    wave_run = Some(false);
+                }
+            });
+            self.system_wave_ui(ui);
             ui.horizontal(|ui| {
                 if ui.button(i18n::tr("全体の部品表 (CSV) を保存…")).on_hover_text(i18n::tr("すべての基板の部品を、種類ごとに数えた表です (基板ごとの部品番号と、作る枚数を掛けた合計)。まとめて買うときに使います")).clicked() {
                     bom = true;
@@ -533,6 +663,9 @@ impl App {
         }
         if merged {
             self.save_merged();
+        }
+        if let Some(tran) = wave_run {
+            self.run_system_wave(tran);
         }
         if !open {
             self.boards.open = false;
