@@ -1868,6 +1868,8 @@ list
     assert_eq!(nets(lists[2]), nets(lists[0]));
     let t: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "tidy").collect();
     assert_eq!(t[0]["moved"], 4);
+    // VIN is a supply (a symbol on V1 and on R1) and MID and GND are on three pins: no net for a wire
+    assert_eq!(t[0]["wired"], 0);
     assert_eq!(t[1]["moved"], 1);
 }
 

@@ -857,7 +857,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let only: std::collections::BTreeSet<String> = args.iter().map(|a| a.to_string()).collect();
         let (s, r) = sch_core::tidy::tidy(&self.sch, (!only.is_empty()).then_some(&only))?;
         self.sch = s;
-        Ok(obj(json!({"moved": r.moved, "columns": r.columns})))
+        Ok(obj(json!({"moved": r.moved, "columns": r.columns, "wired": r.wired})))
     }
 
     pub fn erc(&self) -> Res {

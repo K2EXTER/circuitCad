@@ -72,7 +72,7 @@ impl SchEditor {
                 self.selected = None;
                 self.multi.clear();
                 self.fit_pending = true;
-                self.status = i18n::trf!("回路図を整えました: 部品 {} 個を {} 列に (つながりは同じ。元に戻すは Ctrl+Z)", r.moved, r.columns).to_string();
+                self.status = i18n::trf!("回路図を整えました: 部品 {} 個を {} 列に、線で結んだネット {} (つながりは同じ。元に戻すは Ctrl+Z)", r.moved, r.columns, r.wired).to_string();
             }
             Err(e) => self.status = i18n::tr_dyn(&e).to_string(),
         }
