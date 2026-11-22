@@ -105,6 +105,143 @@ fn ways(a: Pt, b: Pt) -> Vec<Vec<Pt>> {
     v
 }
 
+/// The grid points along the level and upright wires `segs`: (on a level one, on an upright one).
+fn along(segs: &[(Pt, Pt)]) -> std::collections::HashMap<Pt, (bool, bool)> {
+    let mut m: std::collections::HashMap<Pt, (bool, bool)> = std::collections::HashMap::new();
+    for (a, b) in segs {
+        let level = a.1 == b.1;
+        let (dx, dy) = ((b.0 - a.0).signum(), (b.1 - a.1).signum());
+        let mut p = *a;
+        loop {
+            let e = m.entry(p).or_default();
+            if level { e.0 = true } else { e.1 = true }
+            if p == *b || (dx == 0 && dy == 0) {
+                break;
+            }
+            p = (p.0 + dx, p.1 + dy);
+        }
+    }
+    m
+}
+
+/// The shortest way on the grid from pin `from` to one of `targets` (a maze search, Dijkstra's, where a corner costs 3 steps and
+/// crossing another wire 2): past the parts' bodies, through none of the `blocked` points (other nets' pins, labels, symbols and
+/// wire ends), never along another wire and never turning on one (either would join it). None when no way is found near the pins.
+fn maze(from: Pt, targets: &BTreeSet<Pt>, blocked: &BTreeSet<Pt>, wires: &std::collections::HashMap<Pt, (bool, bool)>, boxes: &[(i32, i32, i32, i32)]) -> Option<Vec<Pt>> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let all = targets.iter().chain(std::iter::once(&from));
+    let (x0, x1) = (all.clone().map(|p| p.0).min()? - 6, all.clone().map(|p| p.0).max()? + 6);
+    let (y0, y1) = (all.clone().map(|p| p.1).min()? - 6, all.map(|p| p.1).max()? + 6);
+    let (w, h) = ((x1 - x0 + 1) as usize, (y1 - y0 + 1) as usize);
+    if w * h > 40_000 {
+        return None;
+    }
+    let cell = |p: Pt| ((p.1 - y0) as usize) * w + (p.0 - x0) as usize;
+    // the grid: a point not to pass, a wire along it (level, upright), a target; a step to the right (down) from a cell across a body
+    let mut stop = vec![false; w * h];
+    let mut level = vec![false; w * h];
+    let mut upright = vec![false; w * h];
+    let mut goal = vec![false; w * h];
+    let mut right_cut = vec![false; w * h];
+    let mut down_cut = vec![false; w * h];
+    let inside = |p: &Pt| p.0 >= x0 && p.0 <= x1 && p.1 >= y0 && p.1 <= y1;
+    for p in blocked.iter().filter(|p| inside(p)) {
+        stop[cell(*p)] = true;
+    }
+    for (p, c) in wires.iter().filter(|(p, _)| inside(p)) {
+        level[cell(*p)] = c.0;
+        upright[cell(*p)] = c.1;
+    }
+    for p in targets.iter().filter(|p| inside(p)) {
+        goal[cell(*p)] = true;
+    }
+    for r in boxes.iter().filter(|r| r.2 >= x0 && r.0 <= x1 && r.3 >= y0 && r.1 <= y1) {
+        // a level step from x to x + 1 at a height strictly inside, an upright one likewise
+        for y in (r.1 + 1).max(y0)..=(r.3 - 1).min(y1) {
+            for x in r.0.max(x0)..=(r.2 - 1).min(x1) {
+                right_cut[cell((x, y))] = true;
+            }
+        }
+        for x in (r.0 + 1).max(x0)..=(r.2 - 1).min(x1) {
+            for y in r.1.max(y0)..=(r.3 - 1).min(y1) {
+                down_cut[cell((x, y))] = true;
+            }
+        }
+    }
+    const STEP: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    let mut dist = vec![i32::MAX; w * h * 5];
+    let mut prev = vec![u32::MAX; w * h * 5];
+    let mut heap = BinaryHeap::new();
+    let start = cell(from) * 5 + 4;
+    dist[start] = 0;
+    heap.push(Reverse((0, start as u32)));
+    while let Some(Reverse((d, k))) = heap.pop() {
+        let k = k as usize;
+        if dist[k] < d {
+            continue;
+        }
+        let (c, dir) = (k / 5, (k % 5) as u8);
+        let p = ((c % w) as i32 + x0, (c / w) as i32 + y0);
+        if p != from && goal[c] {
+            let mut way = vec![p];
+            let mut at = k;
+            while prev[at] != u32::MAX {
+                at = prev[at] as usize;
+                let c = at / 5;
+                way.push(((c % w) as i32 + x0, (c / w) as i32 + y0));
+            }
+            way.reverse();
+            // the corners only
+            let mut v: Vec<Pt> = vec![way[0]];
+            for k in 1..way.len() - 1 {
+                let (a, b, c) = (way[k - 1], way[k], way[k + 1]);
+                if (b.0 - a.0, b.1 - a.1) != (c.0 - b.0, c.1 - b.1) {
+                    v.push(b);
+                }
+            }
+            v.push(p);
+            return Some(v);
+        }
+        let on_wire = level[c] || upright[c];
+        for (nd, (dx, dy)) in STEP.iter().enumerate() {
+            let nd = nd as u8;
+            if dir != 4 && nd == dir ^ 1 {
+                continue;
+            }
+            let turn = dir != 4 && nd != dir;
+            if turn && on_wire {
+                continue;
+            }
+            let q = (p.0 + dx, p.1 + dy);
+            if !inside(&q) {
+                continue;
+            }
+            let qc = cell(q);
+            if stop[qc] || (nd < 2 && level[qc]) || (nd >= 2 && upright[qc]) {
+                continue;
+            }
+            let cut = match nd {
+                0 => right_cut[c],
+                1 => right_cut[qc],
+                2 => down_cut[c],
+                _ => down_cut[qc],
+            };
+            if cut {
+                continue;
+            }
+            let cost = d + 1 + if turn { 3 } else { 0 } + if level[qc] || upright[qc] { 2 } else { 0 };
+            let nk = qc * 5 + nd as usize;
+            if cost < dist[nk] {
+                dist[nk] = cost;
+                prev[nk] = k as u32;
+                heap.push(Reverse((cost, nk as u32)));
+            }
+        }
+    }
+    None
+}
+
 /// The most pins of a net drawn as a tree of wires (more: by its name on each pin).
 const TREE_PINS: usize = 5;
 /// The room between two columns (for the names written to the right of the pins), between two parts of a column, the width of a
@@ -230,6 +367,31 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
             None => break,
         }
     }
+    // shorter lines (what the network simplex of a layered drawing does, in its simplest form): a part, not an input, whose
+    // neighbours are all two columns or more to its right moves to the column just before them; the empty columns go
+    for _ in 0..3 {
+        let mut moved = false;
+        for &i in &main {
+            if input(&s.components[i]) {
+                continue;
+            }
+            let next: Vec<usize> = neighbours(i).into_iter().filter(|j| is_main(*j)).map(|j| col[&j]).collect();
+            if let Some(&m) = next.iter().min()
+                && m > col[&i] + 1
+            {
+                col.insert(i, m - 1);
+                moved = true;
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+    let used: BTreeSet<usize> = main.iter().map(|i| col[i]).collect();
+    let renumber: BTreeMap<usize, usize> = used.iter().enumerate().map(|(k, c)| (*c, k)).collect();
+    for i in &main {
+        col.insert(*i, renumber[&col[i]]);
+    }
     let columns = col.values().max().map_or(0, |m| m + 1);
     // a feedback part takes its part's column; a shunt the gap after the first column of the line parts on its net
     for (i, u) in &feedback {
@@ -240,30 +402,72 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
         let k = on_net.get(n).map(|v| v.iter().filter(|j| is_main(**j)).map(|j| col[j]).min().unwrap_or(0)).unwrap_or(0);
         col.insert(*i, k);
     }
-    // each column ordered after its neighbours in the column before (two sweeps)
+    // the order within the columns (the crossing reduction of a layered drawing): sweeps to the right and back, each column by the
+    // median of its neighbours' rows on the side swept from, then neighbours swapped where that crosses fewer lines; the order with
+    // the fewest crossings kept
     let mut order: Vec<Vec<usize>> = vec![vec![]; columns];
     for &i in &main {
         order[col[&i]].push(i);
     }
-    let mut row_of: BTreeMap<usize, f64> = BTreeMap::new();
-    for _ in 0..2 {
-        for (k, column) in order.iter_mut().enumerate() {
-            for (r, i) in column.iter().enumerate() {
-                row_of.entry(*i).or_insert(r as f64);
-            }
-            if k == 0 {
-                continue;
-            }
-            let key = |i: usize| -> f64 {
-                let v: Vec<f64> = neighbours(i).iter().filter(|j| col[j] < k).filter_map(|j| row_of.get(j).copied()).collect();
-                if v.is_empty() { row_of[&i] } else { v.iter().sum::<f64>() / v.len() as f64 }
-            };
-            column.sort_by(|a, b| key(*a).total_cmp(&key(*b)));
-            for (r, i) in column.iter().enumerate() {
-                row_of.insert(*i, r as f64);
+    let adj: BTreeMap<usize, Vec<usize>> = main.iter().map(|&i| (i, neighbours(i).into_iter().filter(|j| is_main(*j)).collect())).collect();
+    let rows = |order: &Vec<Vec<usize>>| -> BTreeMap<usize, usize> { order.iter().flat_map(|c| c.iter().enumerate().map(|(r, i)| (*i, r))).collect() };
+    let crossings = |order: &Vec<Vec<usize>>| -> usize {
+        let row = rows(order);
+        let mut n = 0;
+        for (k, column) in order.iter().enumerate().take(order.len().saturating_sub(1)) {
+            let e: Vec<(usize, usize)> = column.iter().flat_map(|i| adj[i].iter().filter(|j| col[j] == k + 1).map(|j| (row[i], row[j])).collect::<Vec<_>>()).collect();
+            for a in 0..e.len() {
+                for b in a + 1..e.len() {
+                    if (e[a].0 < e[b].0 && e[a].1 > e[b].1) || (e[a].0 > e[b].0 && e[a].1 < e[b].1) {
+                        n += 1;
+                    }
+                }
             }
         }
+        n
+    };
+    let mut best = (crossings(&order), order.clone());
+    for sweep in 0..6 {
+        let right = sweep % 2 == 0;
+        let ks: Vec<usize> = if right { (1..columns).collect() } else { (0..columns.saturating_sub(1)).rev().collect() };
+        for k in ks {
+            let row = rows(&order);
+            let key = |i: usize| -> f64 {
+                let mut v: Vec<f64> = adj[&i].iter().filter(|j| if right { col[*j] < k } else { col[*j] > k }).map(|j| row[j] as f64).collect();
+                if v.is_empty() {
+                    return row[&i] as f64;
+                }
+                v.sort_by(f64::total_cmp);
+                let m = v.len() / 2;
+                if v.len() % 2 == 1 { v[m] } else { (v[m - 1] + v[m]) / 2.0 }
+            };
+            order[k].sort_by(|a, b| key(*a).total_cmp(&key(*b)));
+        }
+        // neighbours swapped while that helps
+        let mut now = crossings(&order);
+        for _ in 0..3 {
+            let mut better = false;
+            for k in 0..columns {
+                for r in 0..order[k].len().saturating_sub(1) {
+                    order[k].swap(r, r + 1);
+                    let n = crossings(&order);
+                    if n < now {
+                        now = n;
+                        better = true;
+                    } else {
+                        order[k].swap(r, r + 1);
+                    }
+                }
+            }
+            if !better {
+                break;
+            }
+        }
+        if now < best.0 {
+            best = (now, order.clone());
+        }
     }
+    let order = best.1;
     // each part's turn: supply up, ground down, signal pins toward the columns they join
     let turn_of = |i: usize| -> u8 {
         let c = &s.components[i];
@@ -309,7 +513,6 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     let mut out = s.clone();
     let turns: BTreeMap<usize, u8> = parts.iter().map(|i| (*i, turn_of(*i))).collect();
     let power_refs: BTreeSet<&str> = s.components.iter().filter(|c| c.kind.is_power_symbol()).map(|c| c.refdes.as_str()).collect();
-    let pin_count: BTreeMap<&String, usize> = nets.iter().map(|n| (&n.name, n.pins.iter().filter(|p| !power_refs.contains(p.refdes.as_str())).count())).collect();
     // the gap a shunt hangs in: after the first column of the line parts on its net, or, on a net within one column, on the side of
     // the pin (a base on the left of its transistor: the gap before)
     let mut gap_of: BTreeMap<usize, usize> = BTreeMap::new();
@@ -335,9 +538,12 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     for (i, u) in &feedback {
         fb_of.entry(*u).or_default().push(*i);
     }
+    // the columns side by side, the parts of a column centred on one line
     let mut placed: BTreeSet<usize> = BTreeSet::new();
     let mut right_of: Vec<i32> = vec![];
     let mut x = origin.0;
+    // each part's reach above its position (room for the names and symbols above it, and its feedback parts) and below
+    let mut reach: BTreeMap<usize, (i32, i32)> = BTreeMap::new();
     for (k, column) in order.iter().enumerate() {
         let width = column.iter().map(|i| {
             let b = part_box(&s.components[*i], turns[i]);
@@ -346,36 +552,99 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
         let width = width.max().unwrap_or(0);
         let mut y = origin.1;
         for &i in column {
-            // room above for the part's feedback parts
-            y += fb_of.get(&i).map_or(0, |f| FEEDBACK_STEP * f.len() as i32 + 2);
             let b = part_box(&s.components[i], turns[&i]);
-            let mut c = out.components[i].clone();
+            let above = 3 + fb_of.get(&i).map_or(0, |f| FEEDBACK_STEP * f.len() as i32 + 2);
+            reach.insert(i, (b.1 - above, b.3));
+            let c = &mut out.components[i];
             c.rot = turns[&i];
-            // the column's parts centred on one line, each below the one before (room for the labels and symbols above)
-            c.pos = (x + (width - (b.2 - b.0)) / 2 - b.0, y + 3 - b.1);
-            if wires {
-                // lowered so a signal pin is level with the pin it joins in a column before (a straight wire), when there is room
-                let level = c.pins().into_iter().filter_map(|(p, at)| {
-                    let n = net_of.get(&(c.refdes.clone(), p))?;
-                    // a net drawn as a wire: two pins, or a signal on a few
-                    if !signal(n) || !pin_count.get(n).is_some_and(|c| *c <= TREE_PINS) {
-                        return None;
-                    }
-                    let j = on_net.get(n)?.iter().copied().find(|j| *j != i && placed.contains(j) && col[j] < col[&i])?;
-                    let there = out.components[j].pins().into_iter().find(|q| net_of.get(&(out.components[j].refdes.clone(), q.0.clone())) == Some(n))?.1;
-                    Some(there.1 - at.1)
-                });
-                if let Some(dy) = level.filter(|dy| *dy > -3 && c.pos.1 + dy + b.1 >= y).min() {
-                    c.pos.1 += dy;
-                }
-            }
+            c.pos = (x + (width - (b.2 - b.0)) / 2 - b.0, y - (b.1 - above));
             y = c.pos.1 + b.3 + ROW_GAP;
-            out.components[i] = c;
             placed.insert(i);
         }
         right_of.push(x + width);
         // room for the labels on the pins (written to the right of a pin) and for the shunts hung in the gap
         x += width + COLUMN_GAP + SHUNT_SLOT * by_gap.get(&k).map_or(0, |v| v.len() as i32);
+    }
+    // the heights (the coordinate assignment of a layered drawing): each part where its signal pins are level with the pins they
+    // join in the other columns (the median of those), the column kept in order and apart by the least squares fit that keeps the
+    // order (pool adjacent violators); sweeps to the right, back, and twice both ways
+    for sweep in 0..4 {
+        for k in 0..columns {
+            let k = if sweep == 1 { columns - 1 - k } else { k };
+            let column = &order[k];
+            if column.is_empty() {
+                continue;
+            }
+            // what each part would like: its position moved so a pin is level with a joined pin
+            let wish: Vec<(f64, f64)> = column
+                .iter()
+                .map(|&i| {
+                    let c = &out.components[i];
+                    let mut v: Vec<f64> = vec![];
+                    for (p, at) in c.pins() {
+                        let Some(n) = net_of.get(&(c.refdes.clone(), p)) else { continue };
+                        if !signal(n) {
+                            continue;
+                        }
+                        for j in on_net.get(n).into_iter().flatten() {
+                            let side = match sweep {
+                                0 => col[j] < k,
+                                1 => col[j] > k,
+                                _ => col[j] != k,
+                            };
+                            if *j == i || !is_main(*j) || !side {
+                                continue;
+                            }
+                            let oc = &out.components[*j];
+                            for (q, there) in oc.pins() {
+                                if net_of.get(&(oc.refdes.clone(), q)) == Some(n) {
+                                    v.push((c.pos.1 + there.1 - at.1) as f64);
+                                }
+                            }
+                        }
+                    }
+                    if v.is_empty() {
+                        (c.pos.1 as f64, 0.05)
+                    } else {
+                        v.sort_by(f64::total_cmp);
+                        let m = v.len() / 2;
+                        (if v.len() % 2 == 1 { v[m] } else { (v[m - 1] + v[m]) / 2.0 }, 1.0)
+                    }
+                })
+                .collect();
+            // the spacing each part needs after the one before: z = position - the sum of the spacings must not go down
+            let mut offset = vec![0i32; column.len()];
+            for r in 1..column.len() {
+                let (a, b) = (reach[&column[r - 1]], reach[&column[r]]);
+                offset[r] = offset[r - 1] + a.1 + ROW_GAP - b.0;
+            }
+            let mut pools: Vec<(f64, f64, usize)> = vec![];
+            for (r, (want, w)) in wish.iter().enumerate() {
+                pools.push((want - offset[r] as f64, *w, 1));
+                while pools.len() > 1 {
+                    let (m2, w2, n2) = pools[pools.len() - 1];
+                    let (m1, w1, n1) = pools[pools.len() - 2];
+                    if m1 <= m2 {
+                        break;
+                    }
+                    pools.pop();
+                    pools.pop();
+                    pools.push(((m1 * w1 + m2 * w2) / (w1 + w2), w1 + w2, n1 + n2));
+                }
+            }
+            let mut r = 0;
+            for (m, _, n) in pools {
+                for _ in 0..n {
+                    out.components[column[r]].pos.1 = m.round() as i32 + offset[r];
+                    r += 1;
+                }
+            }
+        }
+    }
+    // the whole block back to the top of its place
+    let top = main.iter().map(|i| out.components[*i].pos.1 + reach[i].0).min().unwrap_or(origin.1);
+    for i in &main {
+        out.components[*i].pos.1 += origin.1 - top;
     }
     // a shunt below its net (above it, to a supply), in its own slot of the gap: its signal pin a few steps from the pin of the line
     // nearest the gap
@@ -633,6 +902,17 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
                         }
                     }
                 }
+                // no plain way fits: the shortest way around on the grid (to a chip's pin, past other parts)
+                let best = best.or_else(|| {
+                    let mut targets: BTreeSet<Pt> = tree.iter().copied().collect();
+                    targets.extend(along(&tree_segs).into_keys());
+                    let blocked: BTreeSet<Pt> = points.iter().filter(|p| !mine.contains(p)).copied().collect();
+                    let wires = along(&segs);
+                    left.iter()
+                        .filter_map(|&p| maze(p, &targets, &blocked, &wires, &boxes).map(|w| (w.windows(2).map(|s| (s[1].0 - s[0].0).abs() + (s[1].1 - s[0].1).abs()).sum::<i32>() + 3 * w.len() as i32, 0, p, w)))
+                        .filter(|b| fits(&b.3, &mine))
+                        .min_by_key(|b| b.0)
+                });
                 let Some((_, _, p, w)) = best else { break };
                 // a way ending on a piece of the tree splits it there
                 let (first, last) = (w[0], w[w.len() - 1]);
