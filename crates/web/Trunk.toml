@@ -1,0 +1,9 @@
+# `trunk serve` (in crates/web) builds the browser version and serves it at http://127.0.0.1:8080; `trunk build --release` writes dist/
+[build]
+target = "index.html"
+dist = "dist"
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8080
+open = false

@@ -1,3 +1,6 @@
 target/
 # the Claude desktop app's preview servers (local to each machine)
 .claude/launch.json
+
+# the browser version as trunk builds it (crates/web)
+/crates/web/dist/

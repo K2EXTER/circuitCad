@@ -15,7 +15,7 @@ cargo run -p cli -- script.ccad   # 画面なしで実行 (docs/cli.md)
 cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj を開ける: args.rs apply_args)
 ```
 
-## クレート (依存: app → pcb-core, sch-core, sim-core, part-lib, datasheet) — 詳細: `docs/code-notes/crates.md`
+## クレート (依存: app → pcb-core, sch-core, sim-core, part-lib, datasheet / web → sch-core, sim-core, i18n) — 詳細: `docs/code-notes/crates.md`
 
 | クレート | 役割 |
 |---|---|
@@ -27,6 +27,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ・丸ごとの下書き `draft.rs`(パッケージ名・ピンの表・寸法表)・ピン配置の図 `pin_diagram.rs`・推奨ランドパターン `land.rs`・絶対最大定格 `absmax.rs`・グラフの軸と点と曲線の読み `graph.rs`(PDF の線・塗った輪郭から曲線を読む `vector_curves` も)・図の見出しと何のグラフか `figures.rs`・目盛りを図の数字から `axes.rs`・欄の曲線を選んでたどる `pick.rs`・絵の文字を Windows の OCR で `ocr.rs`・電気的特性の表の値 `spec_table.rs`・熱抵抗 (θJA・θJC・低減の行) `thermal.rs`・型番の一覧の表 (1 行 = 1 型番。電解コンデンサの値) `lineup.rs`・Unicode の無い字形の文字を OCR から決める `glyphs.rs`・推奨のコンデンサ (CIN = 1µF) `companions.rs`・番号の無いトランジスタ・MOSFET のピン (文・図の E・B・C や G・D・S の並び・よくある並び) `lead_pins.rs`・コマンドラインで調べる `examples/ds.rs`(`docs/datasheet-viewer-design.md`) |
 | `i18n` | 英語の画面。日本語の文を鍵にした表 `en/*.tsv`、`tr` / `trf!` / `tr_dyn`、`tools/i18n.py`(包む・未訳の一覧)。`docs/code-notes/i18n.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
+| `web` | ブラウザ版 (B9。学習の部分だけ。`crates/web` で `trunk serve`)。サンプル `samples.rs`・回路図の絵と DC の色 `view.rs`・狭い画面の割り付け `app.rs`。`docs/code-notes/web.md` |
 | `cli` | `ccad`: 画面なしの操作窓口(1行1コマンドのスクリプト。`ccad mcp` で MCP サーバー。`board/` は基板の命令を話題ごとのファイルに分けてある。`docs/cli.md`、`docs/code-notes/cli.md`) |
 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`(目次。ファイル一覧は `sim-core/files.md`)

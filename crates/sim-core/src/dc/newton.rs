@@ -111,6 +111,8 @@ impl Compiled {
         let saved = crate::options::options();
         crate::options::set_options(crate::options::SimOptions { max_iter: saved.max_iter.saturating_mul(40), ..saved });
         // a circuit that really has no solution must not keep the caller waiting: give up after a few seconds
+        // (not in the browser: `Instant::now` panics on wasm32-unknown-unknown, so there the iteration limit alone ends it)
+        #[cfg(not(target_arch = "wasm32"))]
         DEADLINE.with(|d| d.set(Some(std::time::Instant::now() + std::time::Duration::from_secs(4))));
         let r = self.newton(x0, vj0, ctx);
         DEADLINE.with(|d| d.set(None));
