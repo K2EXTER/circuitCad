@@ -14,6 +14,8 @@ const HIGH: Color32 = Color32::from_rgb(255, 96, 80);
 const LOW: Color32 = Color32::from_rgb(70, 140, 255);
 const MID: Color32 = Color32::from_rgb(235, 200, 60);
 const LED_ON: Color32 = Color32::from_rgb(255, 70, 40);
+/// A second press on the same switch sooner than this (seconds) belongs to the same tap.
+const TAP_ECHO: f64 = 0.3;
 const BG: Color32 = Color32::from_rgb(24, 26, 30);
 
 pub fn level_colour(l: Level) -> Color32 {
@@ -40,6 +42,9 @@ pub struct Sheet {
     pub live: Option<LiveLogic>,
     /// The clock of egui at the last frame (the running circuit's time follows it).
     last_frame: Option<f64>,
+    /// The switch pressed last and when (egui's clock): a phone delivers one tap as two presses (eframe 0.36 takes a finger as
+    /// pointer events and as touch events), and the second flipped a slide switch back at once.
+    last_press: Option<(usize, f64)>,
     /// Screen pixels per grid step, and where the grid's (0, 0) is relative to the canvas's top left.
     scale: f32,
     offset: Vec2,
@@ -64,6 +69,7 @@ impl Sheet {
             ok: false,
             live: None,
             last_frame: None,
+            last_press: None,
             scale: 12.0,
             offset: Vec2::ZERO,
             fitted: false,
@@ -272,7 +278,12 @@ impl Sheet {
                 && let Some(k) = nearest(at, &|c| ll.input_index(&c.refdes).is_some())
                 && let Some(i) = ll.input_index(&self.sch.components[k].refdes)
             {
-                ll.mouse_on_input(i, true, false);
+                // the same switch again within a moment is the second half of one tap, not a second tap
+                let now = ui.input(|inp| inp.time);
+                if !self.last_press.is_some_and(|(j, t)| j == i && now - t < TAP_ECHO) {
+                    ll.mouse_on_input(i, true, false);
+                }
+                self.last_press = Some((i, now));
                 ui.ctx().request_repaint();
                 return;
             }
