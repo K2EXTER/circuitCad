@@ -731,6 +731,16 @@ impl TranRun {
                 *bp_idx += 1;
             }
             let mut h = h_ctrl.min(s.tstep).min(t_end - *t);
+            // The first step of the run has no history to check its error against (`step_error_ratio` needs two points): a tenth
+            // of the usual, as SPICE does (ngspice: a tenth of a tenth of `tstep`). A tenth of `tstep` let a node that rises within
+            // the first microsecond after a start from zero read 10 % low at the end of a 2.5 us first step (`mixed_signal` against
+            // ngspice, D3). The steps after it start from the usual size again (`h_ctrl_before`): a digital circuit whose supply
+            // ramps up restarts its step at every point and would keep the short one through the whole ramp.
+            let first_step = *t <= 0.0;
+            let h_ctrl_before = *h_ctrl;
+            if first_step {
+                h = h.min(s.tstep / 100.0);
+            }
             let wanted = h;
             let mut lands_on_bp = false;
             if *bp_idx < bps.len() && *t + h >= bps[*bp_idx] - eps {
@@ -966,6 +976,10 @@ impl TranRun {
                 *h_ctrl = (h * growth).clamp(if *crawl { 0.0 } else { h_min }, s.tstep);
             }
             // else: the step was cut short by the end of the run (not by the error control); keep the controller's value
+            // (only when the cap set the step: a step that landed on a corner, on a digital event or was redone restarts as usual)
+            if first_step && !lands_on_bp && rejects == 0 && !retried && h >= s.tstep / 100.0 * (1.0 - 1e-9) {
+                *h_ctrl = h_ctrl.max(h_ctrl_before);
+            }
             for &k in &self.wiring_l {
                 self.abs_i[k] = self.abs_i[k].max(lte_rel * ind_i[k].abs());
             }

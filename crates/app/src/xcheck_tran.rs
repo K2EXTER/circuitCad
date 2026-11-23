@@ -132,13 +132,21 @@ pub fn edge_drift(ours: (&[f64], &[f64]), theirs: (&[f64], &[f64])) -> Result<f6
     }
     let level = (lo + hi) / 2.0;
     let (a, b) = (crossings(ours.0, ours.1, level), crossings(theirs.0, theirs.1, level));
-    if b.len() < 4 || a.len().abs_diff(b.len()) > 1 {
+    if a.len().abs_diff(b.len()) > 1 {
         return Err(format!("エッジの数が違う (自前{} ngspice{})", a.len(), b.len()));
     }
-    let n = a.len().min(b.len());
-    let mut gaps: Vec<f64> = (0..n - 2).map(|i| b[i + 2] - b[i]).collect();
-    gaps.sort_by(|x, y| x.total_cmp(y));
-    let period = gaps[gaps.len() / 2];
+    let period = if b.len() >= 4 {
+        let n = a.len().min(b.len());
+        let mut gaps: Vec<f64> = (0..n - 2).map(|i| b[i + 2] - b[i]).collect();
+        gaps.sort_by(|x, y| x.total_cmp(y));
+        gaps[gaps.len() / 2]
+    } else if b.len() >= 2 && a.len() == b.len() {
+        // too few edges for a period (a divided clock in a short run): twice the shortest gap between two edges stands in for
+        // it, which is the period of a square wave and shorter for any other duty (a stricter test)
+        2.0 * b.windows(2).map(|w| w[1] - w[0]).fold(f64::MAX, f64::min)
+    } else {
+        return Err(format!("エッジが少ない (自前{} ngspice{})", a.len(), b.len()));
+    };
     // each edge of theirs against the nearest edge of ours (an extra or missing edge at the ends must not shift the pairing)
     let drift = b.iter().map(|&x| a.iter().map(|&y| (x - y).abs()).fold(f64::MAX, f64::min)).fold(0.0, f64::max);
     Ok(drift / period)
@@ -670,6 +678,11 @@ mod tests {
         // a missing half of the edges, or a flat signal, cannot be judged by timing
         assert!(edge_drift((&t, &vec![5.0; t.len()]), (&t, &theirs)).is_err());
         assert!(edge_drift((&t, &theirs), (&t, &vec![0.1; t.len()])).is_err());
+        // two edges on each side: judged against twice the gap between them
+        let pulse = |d: f64| t.iter().map(|&x| if x > 1e-3 + d && x < 2e-3 + d { 5.0 } else { 0.0 }).collect::<Vec<f64>>();
+        let d = edge_drift((&t, &pulse(2e-5)), (&t, &pulse(0.0))).unwrap();
+        assert!((d - 0.01).abs() < 2e-3, "{d}");
+        assert!(edge_drift((&t, &pulse(0.0)), (&t, &vec![0.0; t.len()])).is_err());
         assert_eq!(crossings(&[0.0, 1.0, 2.0], &[0.0, 2.0, 0.0], 1.0), vec![0.5, 1.5]);
     }
 
