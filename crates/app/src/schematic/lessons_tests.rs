@@ -3026,3 +3026,39 @@ fn the_ac_run_selects_signals_that_respond_and_not_the_dc_supply() {
     // the node that answers (the capacitor's) is among them
     assert!(view.selected.len() >= 2, "{:?}", view.selected);
 }
+
+/// The ring oscillator lesson (D6): it runs from the supply's switch-on, the load capacitors slow it, smaller resistors speed it up,
+/// and each change ticks its step after a fresh run.
+#[test]
+fn the_ring_oscillator_lesson_slows_with_load_and_speeds_with_drive() {
+    let mut e = SchEditor::default();
+    let idx = lesson_titles().iter().position(|t| t.contains("リング発振器")).unwrap();
+    e.start_lesson(idx);
+    let freq = |e: &SchEditor| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal("V(N1)").unwrap().values;
+        let ups: Vec<f64> = (1..v.len()).filter(|&i| t.time[i] > 20e-6 && v[i - 1] < 1.65 && v[i] >= 1.65).map(|i| t.time[i]).collect();
+        assert!(ups.len() >= 3, "it runs");
+        (ups.len() - 1) as f64 / (ups[ups.len() - 1] - ups[0])
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let f0 = freq(&e);
+    assert!((150e3..250e3).contains(&f0), "about 200 kHz: {f0}");
+    for c in ["C1", "C2", "C3"] {
+        set_value(&mut e, c, "2.2n");
+    }
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let f1 = freq(&e);
+    assert!((60e3..110e3).contains(&f1), "about 87 kHz: {f1}");
+    for r in ["R1", "R2", "R3"] {
+        set_value(&mut e, r, "220");
+    }
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!(freq(&e) > f1 * 2.0, "faster with the stronger drive: {} vs {f1}", freq(&e));
+}

@@ -166,6 +166,7 @@ const LESSONS: &[Lesson] = &[
     digital::HALF_ADDER,
     digital::SR_LATCH,
     digital::COUNTER_LIVE,
+    digital::RING_OSCILLATOR,
 ];
 
 impl SchEditor {

@@ -2020,6 +2020,130 @@ fn write_pin_led_example() {
     std::fs::write(root.join("pin_led.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// One CMOS inverter of AO3401A (P, on top) and AO3400A (N) at `x`: gates on `input`, drains on `out` (pins: 1 = G, 2 = S, 3 = D).
+fn cmos_stage(s: &mut sch_core::Schematic, x: i32, input: &str, out: &str) {
+    let (p, n) = (library_part("AO3401A"), library_part("AO3400A"));
+    let qp = s.add_custom(p.symbol(), &p.default_value(), &p.footprint_name(), (x, -8), 0);
+    label(s, qp, "1", input);
+    label(s, qp, "2", "VDD");
+    label(s, qp, "3", out);
+    let qn = s.add_custom(n.symbol(), &n.default_value(), &n.footprint_name(), (x, 8), 0);
+    label(s, qn, "1", input);
+    label(s, qn, "3", out);
+    label(s, qn, "2", "GND");
+}
+
+/// The CMOS NAND sample: two AO3401A in parallel from VDD (either input low pulls OUT high), two AO3400A in series to GND (both high
+/// pull it low). A (V2) toggles every 1 µs and B (V3) every 2 µs, so OUT walks through the four rows of the truth table; C1 (100 pF)
+/// is the next gate's input. `cargo test -p app write_cmos_nand_example -- --ignored`
+fn cmos_nand_schematic() -> sch_core::Schematic {
+    let (p, n) = (library_part("AO3401A"), library_part("AO3400A"));
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "3.3".into();
+    label(&mut s, v1, "+", "VDD");
+    label(&mut s, v1, "-", "GND");
+    for (k, (pulse, net)) in [("PULSE(0 3.3 0.5u 5n 5n 1u 2u)", "A"), ("PULSE(0 3.3 0.5u 5n 5n 2u 4u)", "B")].into_iter().enumerate() {
+        let v = s.add(Kind::VSource, (0, 16 + 14 * k as i32), 0);
+        s.components[v].value = pulse.into();
+        label(&mut s, v, "+", net);
+        label(&mut s, v, "-", "GND");
+    }
+    // the pull-up: two P side by side
+    for (k, g) in ["A", "B"].into_iter().enumerate() {
+        let q = s.add_custom(p.symbol(), &p.default_value(), &p.footprint_name(), (20 + 14 * k as i32, -8), 0);
+        label(&mut s, q, "1", g);
+        label(&mut s, q, "2", "VDD");
+        label(&mut s, q, "3", "OUT");
+    }
+    // the pull-down: two N in a column, MID between them
+    let qa = s.add_custom(n.symbol(), &n.default_value(), &n.footprint_name(), (27, 10), 0);
+    label(&mut s, qa, "1", "A");
+    label(&mut s, qa, "3", "OUT");
+    label(&mut s, qa, "2", "MID");
+    let qb = s.add_custom(n.symbol(), &n.default_value(), &n.footprint_name(), (27, 26), 0);
+    label(&mut s, qb, "1", "B");
+    label(&mut s, qb, "3", "MID");
+    label(&mut s, qb, "2", "GND");
+    let c1 = s.add(Kind::Capacitor, (50, 2), 1);
+    s.components[c1].value = "100p".into();
+    label(&mut s, c1, "1", "OUT");
+    label(&mut s, c1, "2", "GND");
+    s
+}
+
+#[test]
+#[ignore]
+fn write_cmos_nand_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("cmos_nand.schjson"), serde_json::to_string_pretty(&cmos_nand_schematic()).unwrap()).unwrap();
+}
+
+/// The ring oscillator sample: three CMOS inverters in a loop (an odd number, so no state is stable), each driving the next through
+/// R1..R3 (1 kΩ, standing for a long track or a weak gate) into C1..C3 (100 pF) and the next gates. It starts by itself from 0 V
+/// as the supply comes on (V1 rises in 1 µs): the three nodes rise together, then the smallest difference grows and the ring runs. The delay of a stage is about the
+/// R × (C + the gates' capacitance), and f = 1 / (2 × 3 × delay). `cargo test -p app write_ring_oscillator_example -- --ignored`
+fn ring_oscillator_schematic() -> sch_core::Schematic {
+    let mut s = sch_core::Schematic::default();
+    // the supply switched on (0 -> 3.3 V in 1 µs): from the balanced point of a ring at rest (every node at half the supply) nothing
+    // would ever start
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "PULSE(0 3.3 0 1u 1u 1 2)".into();
+    label(&mut s, v1, "+", "VDD");
+    label(&mut s, v1, "-", "GND");
+    let nodes = ["N1", "N2", "N3"];
+    for k in 0..3 {
+        let x = 16 + 36 * k as i32;
+        let input = nodes[(k + 2) % 3];
+        let drive = format!("D{}", k + 1);
+        cmos_stage(&mut s, x, input, &drive);
+        let r = s.add(Kind::Resistor, (x + 14, 0), 0);
+        s.components[r].value = "1k".into();
+        label(&mut s, r, "1", &drive);
+        label(&mut s, r, "2", nodes[k]);
+        let c = s.add(Kind::Capacitor, (x + 26, 8), 1);
+        s.components[c].value = "100p".into();
+        label(&mut s, c, "1", nodes[k]);
+        label(&mut s, c, "2", "GND");
+    }
+    s
+}
+
+#[test]
+#[ignore]
+fn write_ring_oscillator_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("ring_oscillator.schjson"), serde_json::to_string_pretty(&ring_oscillator_schematic()).unwrap()).unwrap();
+}
+
+/// The NAND's output walks the truth table: high unless both A and B are high. The ring oscillator runs from 0 V, and more load
+/// capacitance makes it slower (D6).
+#[test]
+fn the_cmos_nand_and_the_ring_oscillator_work() {
+    let c = sim_core::from_schematic(&cmos_nand_schematic()).unwrap();
+    let t = sim_core::transient(&c, &sim_core::TranSettings { tstop: 4.5e-6, tstep: 5e-9, uic: true }).unwrap();
+    let out = t.signals.iter().find(|s| s.name == "V(OUT)").unwrap();
+    let at = |x: f64| out.values[t.time.iter().position(|&tt| tt >= x).unwrap()];
+    // A, B = 0,0 (0.2 µs) / 1,1 (1.3 µs: both high from 0.5 to 1.5) / 0,1 (1.8 µs) / 1,0 (3.0 µs: A high, B low)
+    assert!(at(0.3e-6) > 3.2 && at(1.4e-6) < 0.1 && at(2.4e-6) > 3.2 && at(3.0e-6) > 3.2, "{} {} {} {}", at(0.3e-6), at(1.4e-6), at(2.4e-6), at(3.0e-6));
+    let freq = |cap: &str| {
+        let mut s = ring_oscillator_schematic();
+        for c in s.components.iter_mut().filter(|c| c.kind == Kind::Capacitor) {
+            c.value = cap.into();
+        }
+        let c = sim_core::from_schematic(&s).unwrap();
+        let t = sim_core::transient(&c, &sim_core::TranSettings { tstop: 60e-6, tstep: 20e-9, uic: false }).unwrap();
+        let v = &t.signals.iter().find(|s| s.name == "V(N1)").unwrap().values;
+        // rising crossings of half the supply in the second half of the run
+        let ups: Vec<f64> = (1..v.len()).filter(|&i| t.time[i] > 30e-6 && v[i - 1] < 1.65 && v[i] >= 1.65).map(|i| t.time[i]).collect();
+        assert!(ups.len() >= 3, "it runs: {} crossings with {cap}", ups.len());
+        (ups.len() - 1) as f64 / (ups[ups.len() - 1] - ups[0])
+    };
+    let (f100, f470) = (freq("100p"), freq("2.2n"));
+    println!("ring: {f100:.0} Hz with 100 pF, {f470:.0} Hz with 2.2 nF");
+    assert!(f470 < f100 * 0.6, "more load, slower (the gates themselves are about 1 nF of it): {f100} {f470}");
+}
+
 /// Generates docs/examples/level_shift.schjson: a 5 V logic signal (V3, 0 - 5 V, 10 kHz, behind 100 ohm) brought down to 3.3 V
 /// two ways: a divider (R1 1k + R2 2k, net D33) and a BSS138 shifter (gate on 3.3 V, 10k pull-ups to 5 V on net H and to
 /// 3.3 V on net L): `cargo test -p app write_level_shift_example -- --ignored`

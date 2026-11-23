@@ -87,6 +87,9 @@ pub(crate) struct Dig {
     pub tightest: Option<(String, f64, f64)>,
     /// The state of the coin a flip-flop that broke its setup or hold time tosses for what it holds (the same tosses every run).
     pub coin: u64,
+    /// Per cell: the extra time its next output change takes after a broken setup or hold time (metastability: the flip-flop hangs
+    /// between 0 and 1 before it falls one way, D2), used up by that change.
+    pub meta: Vec<f64>,
     /// Per cell: whether its output is enabled (always, without an output enable).
     pub en: Vec<bool>,
     /// The cells whose output enable changed in the evaluation that is going on.
@@ -242,8 +245,9 @@ impl Compiled {
                         let le = d.last_edge[ci];
                         if te > le && te - le < c.th - 1e-15 {
                             self.note_violation(d, ci, crate::TimingKind::Hold, te, te - le, c.th);
-                            // what it took at the edge is not sure: a real one may go either way
+                            // what it took at the edge is not sure: a real one may go either way, after a while
                             d.st[ci] = toss(&mut d.coin);
+                            d.meta[ci] = resolve_time(&mut d.coin, c.tplh.max(c.tphl));
                         }
                     }
                     d.last_change[c.slot0 + k] = te;
@@ -349,6 +353,7 @@ impl Compiled {
                     // the two for a while); here it takes one of them by a coin that falls the same way every run
                     if unsure {
                         new = toss(&mut d.coin);
+                        d.meta[ci] = resolve_time(&mut d.coin, c.tplh.max(c.tphl));
                     }
                 }
                 d.st[ci] = new;
@@ -464,7 +469,9 @@ impl Compiled {
     fn emit(&self, d: &mut Dig, w: &mut Work, ci: usize, q: bool, te: f64, delays: bool, mem_next: &mut Vec<usize>) {
         let c = &self.cells[ci];
         let first = !d.done_first[ci];
-        let td = if !delays || first { 0.0 } else if q { c.tplh } else { c.tphl };
+        // a flip-flop that broke its timing takes longer to fall one way (once: the next change is on time again)
+        let meta = std::mem::take(&mut d.meta[ci]);
+        let td = if !delays || first { 0.0 } else if q { c.tplh + meta } else { c.tphl + meta };
         if td <= 0.0 {
             if d.pend[ci].take().is_some() {
                 d.ver[ci] += 1;
@@ -908,6 +915,21 @@ fn toss(state: &mut u64) -> bool {
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
     // the top bit: the lowest bit of splitmix64 merely alternates (1, 0, 1, 0, ...)
     (z ^ (z >> 31)) >> 63 == 1
+}
+
+/// How long a flip-flop that broke its setup or hold time hangs between 0 and 1 before it falls one way: exponentially distributed
+/// (the chance to be still undecided falls as e^(-t/tau)) with tau half its propagation delay `tpd` (2 ns without one), capped at 10
+/// tau. The same coin as the value, so a run is the same every time. Real parts give tau in their data sheets (tens to hundreds of ps
+/// for HC logic); this is an order of magnitude, enough to show that a broken timing also comes late.
+fn resolve_time(state: &mut u64, tpd: f64) -> f64 {
+    let tau = if tpd > 0.0 { tpd / 2.0 } else { 2e-9 };
+    // a uniform number in (0, 1] from the coin's next 53 bits
+    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut z = *state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    let u = (((z ^ (z >> 31)) >> 11) as f64 + 1.0) / (1u64 << 53) as f64;
+    (-u.ln() * tau).min(10.0 * tau)
 }
 
 /// The supply (volts) below which the timing of a cell is not checked.

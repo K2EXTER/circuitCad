@@ -1,0 +1,991 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(0 3.3 0 1u 1u 1 2)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "AO3401A",
+      "pos": [
+        16,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3401A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "bottom"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "M",
+          "name": "AO3401A",
+          "text": ".subckt AO3401A d g s\nRD1 d di 0.03698 TC1=0.004552 TC2=1.057e-05\nM1 di g s s MCH\n.model MCH PMOS(VTO=-0.8957 KP=27.62 CGS=5.9e-10 CGD=5.5e-11)\n.ends AO3401A",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。データシートとの比べは docs/models/transistors.md。",
+            "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (3 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+            "温度: Figure 4 (On-Resistance vs. Junction Temperature) の VGS = −4.5 V、ID = −3.5 A (上の曲線。PDF の曲線の線から読んだ) の 5 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.00455/°C、TC2 = 1.06e-05/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+            "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)"
+          }
+        },
+        "glyph": "pmos",
+        "shops": {
+          "lcsc": "C15127"
+        }
+      }
+    },
+    {
+      "refdes": "Q2",
+      "kind": "Custom",
+      "value": "AO3400A",
+      "pos": [
+        16,
+        8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3400A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "M",
+          "name": "AO3400A",
+          "text": ".subckt AO3400A d g s\nRD1 d di 0.01652 TC1=0.004998 TC2=4.851e-06\nM1 di g s s MCH\n.model MCH NMOS(VTO=1.048 KP=95.94 CGS=5.8e-10 CGD=5e-11)\n.ends AO3400A",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。データシートとの比べは docs/models/transistors.md。",
+            "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (3 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+            "温度: Figure 4 (On-Resistance vs. Junction Temperature) の VGS = 10 V、ID = 5.7 A (PDF の曲線の線から読んだ) の 5 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.005/°C、TC2 = 4.85e-06/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+            "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)"
+          }
+        },
+        "glyph": "nmos",
+        "shops": {
+          "lcsc": "C20917"
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "100p",
+      "pos": [
+        42,
+        8
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "Q3",
+      "kind": "Custom",
+      "value": "AO3401A",
+      "pos": [
+        52,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3401A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "bottom"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "M",
+          "name": "AO3401A",
+          "text": ".subckt AO3401A d g s\nRD1 d di 0.03698 TC1=0.004552 TC2=1.057e-05\nM1 di g s s MCH\n.model MCH PMOS(VTO=-0.8957 KP=27.62 CGS=5.9e-10 CGD=5.5e-11)\n.ends AO3401A",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。データシートとの比べは docs/models/transistors.md。",
+            "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (3 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+            "温度: Figure 4 (On-Resistance vs. Junction Temperature) の VGS = −4.5 V、ID = −3.5 A (上の曲線。PDF の曲線の線から読んだ) の 5 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.00455/°C、TC2 = 1.06e-05/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+            "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)"
+          }
+        },
+        "glyph": "pmos",
+        "shops": {
+          "lcsc": "C15127"
+        }
+      }
+    },
+    {
+      "refdes": "Q4",
+      "kind": "Custom",
+      "value": "AO3400A",
+      "pos": [
+        52,
+        8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3400A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "M",
+          "name": "AO3400A",
+          "text": ".subckt AO3400A d g s\nRD1 d di 0.01652 TC1=0.004998 TC2=4.851e-06\nM1 di g s s MCH\n.model MCH NMOS(VTO=1.048 KP=95.94 CGS=5.8e-10 CGD=5e-11)\n.ends AO3400A",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。データシートとの比べは docs/models/transistors.md。",
+            "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (3 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+            "温度: Figure 4 (On-Resistance vs. Junction Temperature) の VGS = 10 V、ID = 5.7 A (PDF の曲線の線から読んだ) の 5 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.005/°C、TC2 = 4.85e-06/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+            "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)"
+          }
+        },
+        "glyph": "nmos",
+        "shops": {
+          "lcsc": "C20917"
+        }
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        66,
+        0
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "100p",
+      "pos": [
+        78,
+        8
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "Q5",
+      "kind": "Custom",
+      "value": "AO3401A",
+      "pos": [
+        88,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3401A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "bottom"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "M",
+          "name": "AO3401A",
+          "text": ".subckt AO3401A d g s\nRD1 d di 0.03698 TC1=0.004552 TC2=1.057e-05\nM1 di g s s MCH\n.model MCH PMOS(VTO=-0.8957 KP=27.62 CGS=5.9e-10 CGD=5.5e-11)\n.ends AO3401A",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)。データシートとの比べは docs/models/transistors.md。",
+            "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (3 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+            "温度: Figure 4 (On-Resistance vs. Junction Temperature) の VGS = −4.5 V、ID = −3.5 A (上の曲線。PDF の曲線の線から読んだ) の 5 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.00455/°C、TC2 = 1.06e-05/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+            "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Alpha & Omega AO3401A データシート (Rev. 3.1, 2023-12)"
+          }
+        },
+        "glyph": "pmos",
+        "shops": {
+          "lcsc": "C15127"
+        }
+      }
+    },
+    {
+      "refdes": "Q6",
+      "kind": "Custom",
+      "value": "AO3400A",
+      "pos": [
+        88,
+        8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3400A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "M",
+          "name": "AO3400A",
+          "text": ".subckt AO3400A d g s\nRD1 d di 0.01652 TC1=0.004998 TC2=4.851e-06\nM1 di g s s MCH\n.model MCH NMOS(VTO=1.048 KP=95.94 CGS=5.8e-10 CGD=5e-11)\n.ends AO3400A",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)。データシートとの比べは docs/models/transistors.md。",
+            "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (3 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+            "温度: Figure 4 (On-Resistance vs. Junction Temperature) の VGS = 10 V、ID = 5.7 A (PDF の曲線の線から読んだ) の 5 点に、直列抵抗 RD・RS の温度係数 (TC1 = 0.005/°C、TC2 = 4.85e-06/°C²) を合わせました (チャネルの移動度 KP ∝ T^-1.5 と、しきい値の −2 mV/°C は、シミュレータが温度から決めます)。",
+            "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+            "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+          ],
+          "origin": {
+            "kind": "equivalent",
+            "source": "Alpha & Omega AO3400A データシート (Rev. 3.1, 2023-07)"
+          }
+        },
+        "glyph": "nmos",
+        "shops": {
+          "lcsc": "C20917"
+        }
+      }
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        102,
+        0
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C3",
+      "kind": "Capacitor",
+      "value": "100p",
+      "pos": [
+        114,
+        8
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        14,
+        -8
+      ],
+      "b": [
+        11,
+        -8
+      ]
+    },
+    {
+      "a": [
+        16,
+        -10
+      ],
+      "b": [
+        16,
+        -13
+      ]
+    },
+    {
+      "a": [
+        16,
+        -6
+      ],
+      "b": [
+        16,
+        -3
+      ]
+    },
+    {
+      "a": [
+        14,
+        8
+      ],
+      "b": [
+        11,
+        8
+      ]
+    },
+    {
+      "a": [
+        16,
+        6
+      ],
+      "b": [
+        16,
+        3
+      ]
+    },
+    {
+      "a": [
+        16,
+        10
+      ],
+      "b": [
+        16,
+        13
+      ]
+    },
+    {
+      "a": [
+        28,
+        0
+      ],
+      "b": [
+        25,
+        0
+      ]
+    },
+    {
+      "a": [
+        32,
+        0
+      ],
+      "b": [
+        35,
+        0
+      ]
+    },
+    {
+      "a": [
+        42,
+        6
+      ],
+      "b": [
+        42,
+        3
+      ]
+    },
+    {
+      "a": [
+        42,
+        10
+      ],
+      "b": [
+        42,
+        13
+      ]
+    },
+    {
+      "a": [
+        50,
+        -8
+      ],
+      "b": [
+        47,
+        -8
+      ]
+    },
+    {
+      "a": [
+        52,
+        -10
+      ],
+      "b": [
+        52,
+        -13
+      ]
+    },
+    {
+      "a": [
+        52,
+        -6
+      ],
+      "b": [
+        52,
+        -3
+      ]
+    },
+    {
+      "a": [
+        50,
+        8
+      ],
+      "b": [
+        47,
+        8
+      ]
+    },
+    {
+      "a": [
+        52,
+        6
+      ],
+      "b": [
+        52,
+        3
+      ]
+    },
+    {
+      "a": [
+        52,
+        10
+      ],
+      "b": [
+        52,
+        13
+      ]
+    },
+    {
+      "a": [
+        64,
+        0
+      ],
+      "b": [
+        61,
+        0
+      ]
+    },
+    {
+      "a": [
+        68,
+        0
+      ],
+      "b": [
+        71,
+        0
+      ]
+    },
+    {
+      "a": [
+        78,
+        6
+      ],
+      "b": [
+        78,
+        3
+      ]
+    },
+    {
+      "a": [
+        78,
+        10
+      ],
+      "b": [
+        78,
+        13
+      ]
+    },
+    {
+      "a": [
+        86,
+        -8
+      ],
+      "b": [
+        83,
+        -8
+      ]
+    },
+    {
+      "a": [
+        88,
+        -10
+      ],
+      "b": [
+        88,
+        -13
+      ]
+    },
+    {
+      "a": [
+        88,
+        -6
+      ],
+      "b": [
+        88,
+        -3
+      ]
+    },
+    {
+      "a": [
+        86,
+        8
+      ],
+      "b": [
+        83,
+        8
+      ]
+    },
+    {
+      "a": [
+        88,
+        6
+      ],
+      "b": [
+        88,
+        3
+      ]
+    },
+    {
+      "a": [
+        88,
+        10
+      ],
+      "b": [
+        88,
+        13
+      ]
+    },
+    {
+      "a": [
+        100,
+        0
+      ],
+      "b": [
+        97,
+        0
+      ]
+    },
+    {
+      "a": [
+        104,
+        0
+      ],
+      "b": [
+        107,
+        0
+      ]
+    },
+    {
+      "a": [
+        114,
+        6
+      ],
+      "b": [
+        114,
+        3
+      ]
+    },
+    {
+      "a": [
+        114,
+        10
+      ],
+      "b": [
+        114,
+        13
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        11,
+        -8
+      ],
+      "text": "N3"
+    },
+    {
+      "pos": [
+        16,
+        -13
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        16,
+        -3
+      ],
+      "text": "D1"
+    },
+    {
+      "pos": [
+        11,
+        8
+      ],
+      "text": "N3"
+    },
+    {
+      "pos": [
+        16,
+        3
+      ],
+      "text": "D1"
+    },
+    {
+      "pos": [
+        16,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        25,
+        0
+      ],
+      "text": "D1"
+    },
+    {
+      "pos": [
+        35,
+        0
+      ],
+      "text": "N1"
+    },
+    {
+      "pos": [
+        42,
+        3
+      ],
+      "text": "N1"
+    },
+    {
+      "pos": [
+        42,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        47,
+        -8
+      ],
+      "text": "N1"
+    },
+    {
+      "pos": [
+        52,
+        -13
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        52,
+        -3
+      ],
+      "text": "D2"
+    },
+    {
+      "pos": [
+        47,
+        8
+      ],
+      "text": "N1"
+    },
+    {
+      "pos": [
+        52,
+        3
+      ],
+      "text": "D2"
+    },
+    {
+      "pos": [
+        52,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        61,
+        0
+      ],
+      "text": "D2"
+    },
+    {
+      "pos": [
+        71,
+        0
+      ],
+      "text": "N2"
+    },
+    {
+      "pos": [
+        78,
+        3
+      ],
+      "text": "N2"
+    },
+    {
+      "pos": [
+        78,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        83,
+        -8
+      ],
+      "text": "N2"
+    },
+    {
+      "pos": [
+        88,
+        -13
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        88,
+        -3
+      ],
+      "text": "D3"
+    },
+    {
+      "pos": [
+        83,
+        8
+      ],
+      "text": "N2"
+    },
+    {
+      "pos": [
+        88,
+        3
+      ],
+      "text": "D3"
+    },
+    {
+      "pos": [
+        88,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        97,
+        0
+      ],
+      "text": "D3"
+    },
+    {
+      "pos": [
+        107,
+        0
+      ],
+      "text": "N3"
+    },
+    {
+      "pos": [
+        114,
+        3
+      ],
+      "text": "N3"
+    },
+    {
+      "pos": [
+        114,
+        13
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

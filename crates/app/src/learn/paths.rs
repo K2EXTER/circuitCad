@@ -431,6 +431,7 @@ pub(super) const PARTS_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["logic_basics"]), ..lesson("half_adder", "半加算器を動かす (スイッチで 0 と 1、真理値表を埋める)", "S = A XOR B、C = A AND B、真理値表、ゲートの伝搬遅延", Some("74HC86 と 74HC08 をブレッドボードに組み、スイッチ 4 通りで LED を真理値表と比べます")) },
                 Item { requires: Some(&["half_adder"]), ..lesson("sr_latch", "SR ラッチを動かす (2 つの NAND で 1 ビットを覚える)", "出力を入力に返すと覚える、セットとリセット、両方 Low は禁止", Some("74HC00 と押しボタン 2 個で組み、離しても LED が点いたままなのを確かめます")) },
                 Item { requires: Some(&["sr_latch"]), ..lesson("counter_live", "カウンタを動かす (クロックで 1 つずつ数える)", "クロックの立ち上がりで 1 増える、2 進数、ビットごとに周期が倍 (分周)", Some("74HC161 に 1Hz ほどのクロックを入れ、LED が 0 から 15 まで数えるのを見ます")) },
+                Item { requires: Some(&["counter_live"]), ..lesson("ring_oscillator", "MOSFET でロジックを組む (リング発振器で遅れを見る)", "CMOS は P と N の MOSFET の組、奇数個のインバータの輪は発振する、遅れは R × C (つなぐ先のゲートの容量)", Some("74HC04 の 3 つのインバータを輪にしてオシロで見ると、数十 MHz で振れます (プローブの容量で遅くなります)")) },
             ],
         },
     ],

@@ -1,6 +1,7 @@
 //! Lessons that run a digital circuit by hand (the live logic mode, `schematic/live_logic.rs`): the switches are clicked, the
 //! nets light High / Low, the truth table fills, the clock is stepped.
 
+use super::conditions::{ring_heavy_load, ring_strong_drive, tran_fresh};
 use super::*;
 
 /// The live logic mode is on and `f` holds for it.
@@ -38,6 +39,41 @@ const LIVE_LIMITS: &[&str] = &[
     "LED は、光っているか消えているかだけを見せます (明るさは表しません)。電流や電圧を数字で見るには、編集に戻って DC 動作点や過渡解析を使います。",
     "スイッチは、跳ね (チャタリング) のない理想のスイッチです。実物の押しボタンは、押した瞬間に数 ms のあいだ接点が何度も跳ねます。",
 ];
+
+pub(super) const RING_OSCILLATOR: Lesson = Lesson {
+    id: "ring_oscillator",
+    title: "90. MOSFET でロジックを組む (リング発振器で遅れを見る)",
+    goal: "ロジック IC の中身は MOSFET の組み合わせです。CMOS インバータを 3 つ輪につないだリング発振器を過渡解析で動かし、ゲートの遅れ (伝搬遅延) が、つないだ先の容量を充放電する時間で決まることを確かめます",
+    summary: "CMOS のインバータは、P チャネルの MOSFET (上、電源へ) と N チャネル (下、GND へ) のゲートを 1 つの入力にまとめたものです。入力が Low なら P がオンで出力は High、High なら N がオンで Low になります。片方は必ずオフなので、切り替わる瞬間以外は電源から GND へ電流が流れません (CMOS が電池で長く動く理由)。NAND は P を 2 つ並列、N を 2 つ直列にした形で、サンプル「CMOS の NAND」で見られます。インバータを奇数個 (3 つ) 輪にすると、どの点も「1 なら次は 0、その次は 1、その次は…」と自分の入力に戻ったとき逆になり、落ち着ける状態がありません。そのため信号がぐるぐる回り続けて発振します (リング発振器)。1 周で 2 回反転するので、周期は 2 × 段数 × 1 段の遅れ です。1 段の遅れは、出力が次の段の入力の容量 (C1〜C3 と、次のゲートの MOSFET そのものの容量) を、抵抗 R1〜R3 (長い配線や弱いゲートの代わり) を通して充放電する時間で決まります。だから、つなぐ先が多い (ファンアウト) ほど、配線が長いほど、デジタル回路は遅くなります。マイコンの最高クロックが決まるのも、同じ理由です。",
+    limits: &[
+        "MOSFET は、データシートの代表値に合わせた AO3400A・AO3401A のモデルです。IC の中の小さなトランジスタより、ゲートの容量がずっと大きい (約 1nF) ので、ここでは 1kΩ を入れて遅れを µs にしています。IC の中では同じことが ns より短い時間で起きます。",
+        "電源の配線の抵抗やインダクタンス、切り替わる瞬間の電源の揺れは入れていません。実物では、貫通電流で電源が揺れ、パスコンが要ります。",
+        "発振の始まりは、電源を入れた瞬間のわずかな差が育つことで決まります。シミュレーションでは計算の丸めの差で始まり、実物では雑音で始まるので、始まるまでの時間は実物と同じではありません。",
+    ],
+    real: &[],
+    circuit: include_str!("../../../../../docs/examples/ring_oscillator.schjson"),
+    setup: |e| e.set_tran_settings("60u", "20n"),
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "過渡解析で、3 つの点が順にずれて振れるのを見る",
+            detail: "「過渡解析を実行」を押し、N1・N2・N3 を選びます。電源が入ると (最初の 1µs)、3 つとも途中まで上がったあと、わずかな差が育って振れ始めます。N1 が下がると少し遅れて N2 が上がり、さらに遅れて N3 が下がる、と順にずれて約 5µs (約 200kHz) で回り続けます。周期 ÷ 6 (2 × 3 段) が 1 段の遅れ (約 0.85µs) です。",
+            done: tran_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "C1〜C3 を 2.2n にして、遅くなるのを見る",
+            detail: "C1・C2・C3 を 100p から 2.2n に変え (つなぐ先のゲートが増えたつもり)、「過渡解析を実行」。周期が約 11µs (約 87kHz) に延びます。容量が 22 倍なのに 2 倍ほどにしか遅くならないのは、次の段の MOSFET のゲートそのものが約 1nF の負荷で、もともと 100p より大きかったからです。ゲートの数を増やすと遅くなるのは、このゲートの容量が増えるためです。",
+            done: ring_heavy_load,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "R1〜R3 を 220 にして、速くなるのを見る",
+            detail: "R1・R2・R3 を 1k から 220 に下げ (強いゲート・短い配線のつもり)、「過渡解析を実行」。充放電が速くなるので、周期が短くなります。遅れは R × C で決まるので、抵抗を下げても容量を減らしても速くなります。IC では、トランジスタを大きくする (抵抗を下げる) と速くなる代わりに、ゲートが大きくなって前の段の負荷が増えるので、ちょうどよい大きさが決まります。",
+            done: ring_strong_drive,
+        },
+    ],
+};
 
 pub(super) const HALF_ADDER: Lesson = Lesson {
     id: "half_adder",

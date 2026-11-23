@@ -265,6 +265,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         viol: vec![],
         tightest: None,
         coin: 0,
+        meta: vec![0.0; cells.len()],
         seq: 0,
         t_prev: 0.0,
     });

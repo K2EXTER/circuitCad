@@ -815,3 +815,34 @@ fn the_adc4_sar_converts_the_voltage_held_when_start_falls() {
     assert!(at(&r, "EOC", 6.5e-6) > 2.5);
     assert_eq!(code, 5, "the held voltage is converted, not the one AIN jumped to");
 }
+
+/// The comparator of the ADC4_SAR (D5): its offset is a spread of the model (±20 mV), and an AIN 10 mV above a code's edge reads the
+/// upper code as designed but the lower one with the comparator 20 mV off (the offset moves every edge up).
+#[test]
+fn the_adc4_sar_comparator_has_an_offset_that_spreads_and_moves_the_edges() {
+    let convert = |offset: f64| -> usize {
+        let mut c = Circuit::new();
+        place(&mut c, "ADC4_SAR");
+        supply(&mut c, 5.0);
+        if let Some(Element::VSource { wave, .. }) = c.elements.iter_mut().find(|e| e.name().eq_ignore_ascii_case("U1.Voff")) {
+            *wave = crate::waveform::Waveform::Dc(offset);
+        } else {
+            panic!("the offset source");
+        }
+        // 10 mV above the edge between codes 7 and 8 (2.5 V)
+        source(&mut c, "Vin", "AIN", "2.51");
+        source(&mut c, "Vclk", "CLK", "PULSE(0 5 0.5u 1n 1n 0.5u 1u)");
+        source(&mut c, "Vst", "START", "PULSE(0 5 0.2u 1n 1n 0.6u 8u)");
+        for p in ["D0", "D1", "D2", "D3", "EOC"] {
+            load(&mut c, p);
+        }
+        let r = transient(&c, &TranSettings { tstop: 7e-6, tstep: 20e-9, uic: false }).unwrap();
+        (0..4).map(|k| usize::from(at(&r, &format!("D{k}"), 6.5e-6) > 2.5) << k).sum()
+    };
+    assert_eq!(convert(0.0), 8, "as designed");
+    assert_eq!(convert(0.02), 7, "20 mV of offset moves the edge past the input");
+    let mut c = Circuit::new();
+    place(&mut c, "ADC4_SAR");
+    let s = c.spreads.iter().find(|s| s.element.eq_ignore_ascii_case("U1.Voff")).expect("the offset spreads");
+    assert!((s.lo + 0.02).abs() < 1e-12 && (s.hi - 0.02).abs() < 1e-12, "{s:?}");
+}

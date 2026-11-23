@@ -558,3 +558,34 @@ fn a_lut_cell_with_a_bad_table_is_refused() {
     let nodes: Vec<usize> = ["vcc", "vss", "a", "y"].iter().map(|n| c.node(n)).collect();
     assert!(add_subckt_instance(&mut c, "U1", "CELLS", text, &nodes).is_err());
 }
+
+/// A flip-flop that broke its setup time also comes late (metastability, D2): with a 10 ns delay, the changes after the broken edges
+/// arrive 10 ns or more after them, some later than that, none past 10 ns + 10 tau (tau = 5 ns); the same every run.
+#[test]
+fn a_flip_flop_that_breaks_its_setup_time_takes_longer_to_settle() {
+    let run = || {
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss d clk q", "YF dff q 0 vss vcc 60 0.5 0 0 0 td=10n tsu=20n d clk 0 0");
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        let d = parse_source_full("PULSE(0 5 1u 1n 1n 1u 2u)").unwrap();
+        c.add(Element::VSource { name: "Vd".into(), p: n[2], n: 0, wave: d.wave, ac: d.ac });
+        let ck = parse_source_full("PULSE(0 5 1u 1n 1n 0.5u 1u)").unwrap();
+        c.add(Element::VSource { name: "Vck".into(), p: n[3], n: 0, wave: ck.wave, ac: ck.ac });
+        c.add(Element::Resistor { name: "Rl".into(), a: n[4], b: 0, r: 10e3 });
+        transient(&c, &TranSettings { tstop: 21.5e-6, tstep: 1e-9, uic: false }).unwrap()
+    };
+    let r = run();
+    let q = r.signals.iter().find(|s| s.name == "V(q)").unwrap();
+    // how long after its clock edge (every 1 us, from 1 us) each change of Q came
+    let lags: Vec<f64> = (1..q.values.len())
+        .filter(|&i| (q.values[i - 1] > 2.5) != (q.values[i] > 2.5) && r.time[i] > 1.0e-6)
+        .map(|i| r.time[i] - (r.time[i] * 1e6).floor() * 1e-6)
+        .collect();
+    assert!(!lags.is_empty(), "Q changes");
+    assert!(lags.iter().all(|l| *l >= 10e-9 - 2e-9 && *l <= 10e-9 + 50e-9 + 3e-9), "{lags:?}");
+    assert!(lags.iter().any(|l| *l > 13e-9), "some come late: {lags:?}");
+    let again = run();
+    let q2 = again.signals.iter().find(|s| s.name == "V(q)").unwrap();
+    assert_eq!(q.values.len(), q2.values.len(), "the same every run");
+}

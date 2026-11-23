@@ -647,6 +647,16 @@ pub(super) fn usb_one_line_big_noise(e: &SchEditor) -> bool {
     tran_fresh(e) && a.zip(b).is_some_and(|(a, b)| a >= 3.8 && b <= 0.1)
 }
 
+/// The ring oscillator lesson: C1..C3 all 1 nF or more, and a fresh run.
+pub(super) fn ring_heavy_load(e: &SchEditor) -> bool {
+    ["C1", "C2", "C3"].iter().all(|c| value_at_least(e, c, 1e-9)) && tran_fresh(e)
+}
+
+/// The ring oscillator lesson: R1..R3 all 330 Ω or less (back to light loads), and a fresh run.
+pub(super) fn ring_strong_drive(e: &SchEditor) -> bool {
+    ["R1", "R2", "R3"].iter().all(|r| value_at_most(e, r, 330.0)) && tran_fresh(e)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     fresh(e, "過渡解析を実行", e.tran.as_ref().map(|t| (t.outcome.is_ok(), t.signature == e.signature())))
 }
