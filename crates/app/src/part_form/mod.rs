@@ -327,6 +327,8 @@ pub struct PartForm {
     /// The boxes of the voltage reference and SET-pin LDO sections (`refldo.rs`).
     pub vref: refldo::ReferenceInput,
     pub setldo: refldo::SetLdoInput,
+    /// The boxes of the buck converter section (`buck_form.rs`).
+    pub buck: buck_form::BuckInput,
     pub xtal: simple_kinds::CrystalInput,
     pub tvs: simple_kinds::TvsInput,
     /// The library part being edited (None = a new part), see `edit.rs`.
@@ -505,6 +507,7 @@ impl Default for PartForm {
             relay: Default::default(),
             vref: Default::default(),
             setldo: Default::default(),
+            buck: Default::default(),
             xtal: Default::default(),
             tvs: Default::default(),
             orig: None,
@@ -531,6 +534,7 @@ mod elcap_lineup;
 mod coil_lineup;
 pub mod simple_kinds;
 pub mod refldo;
+pub mod buck_form;
 mod logic;
 mod pdf_check;
 mod pdf_input;

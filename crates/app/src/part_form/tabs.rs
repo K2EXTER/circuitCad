@@ -6,11 +6,13 @@ impl PartForm {
         self.model_box.take_if(|b| *b == id).map(|_| true)
     }
 
-    /// The voltage reference and SET-pin LDO boxes (`refldo.rs`), open when made.
+    /// The voltage reference, SET-pin LDO (`refldo.rs`) and buck converter (`buck_form.rs`) boxes, open when made.
     fn refldo_boxes(&mut self, ui: &mut egui::Ui) {
         let (vref, setldo) = (self.open_box("vref_box"), self.open_box("setldo_box"));
         egui::CollapsingHeader::new(i18n::tr("電圧基準 (REF50xx など、NR・TEMP ピンつき) のモデルを表の値から作る")).id_salt("vref_box").default_open(self.vref.result.is_some()).open(vref).show(ui, |ui| self.reference_ui(ui));
         egui::CollapsingHeader::new(i18n::tr("SET ピンの電流で出力を決める LDO (LT3045 など) のモデルを表の値から作る")).id_salt("setldo_box").default_open(self.setldo.result.is_some()).open(setldo).show(ui, |ui| self.setldo_ui(ui));
+        let buck = self.open_box("buck_box");
+        egui::CollapsingHeader::new(i18n::tr("スイッチ内蔵の降圧 DC-DC (TPS62933 など) のモデルを表の値から作る")).id_salt("buck_box").default_open(self.buck.result.is_some()).open(buck).show(ui, |ui| self.buck_ui(ui));
     }
 
     /// The ① basic information tab. What is offered depends on the kind chosen at the top: a capacitor, resistor or

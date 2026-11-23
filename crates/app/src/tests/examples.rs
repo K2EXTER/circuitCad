@@ -3813,6 +3813,71 @@ fn write_battery_life_example() {
     std::fs::write(root.join("battery_life.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/buck_tps62933.schjson: the TI TPS62933 synchronous buck from 12 V to 5 V at 1 A (a current source as the
+/// load), as the data sheet's design
+/// example (6.8 uH, 44 uF, RFBT 52.5 k and RFBB 10 k, RT open = 500 kHz, CSS 6.8 nF = 1 ms of soft start, 0.1 uF from BST to
+/// SW). EN and RT are left open (the part pulls EN up and runs at 500 kHz). The sheet opens with 1.5 ms of transient at a 40 ns
+/// step (a fiftieth of a cycle): `cargo test -p app write_buck_tps62933_example -- --ignored`
+#[test]
+#[ignore]
+fn write_buck_tps62933_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str| {
+        let (_, t) = part_lib::EXAMPLES.iter().find(|(k, _)| *k == n).unwrap_or_else(|| panic!("{n}"));
+        serde_json::from_str::<part_lib::PartDef>(t).unwrap()
+    };
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "VIN");
+    label(&mut s, v1, "-", "GND");
+    let cin = s.add(Kind::Capacitor, (15, 0), 1);
+    s.components[cin].value = "10u".into();
+    label(&mut s, cin, "1", "VIN");
+    label(&mut s, cin, "2", "GND");
+    let ic = find("TPS62933_SOT583");
+    let u = s.add_custom(ic.symbol(), &ic.default_value(), &ic.footprint_name(), (40, 0), 0);
+    for (pin, net) in [("3", "VIN"), ("4", "GND"), ("5", "SW"), ("6", "BST"), ("7", "SS"), ("8", "FB")] {
+        label(&mut s, u, pin, net);
+    }
+    let css = s.add(Kind::Capacitor, (25, 20), 1);
+    s.components[css].value = "6.8n".into();
+    label(&mut s, css, "1", "SS");
+    label(&mut s, css, "2", "GND");
+    let cbst = s.add(Kind::Capacitor, (60, -15), 0);
+    s.components[cbst].value = "100n".into();
+    label(&mut s, cbst, "1", "BST");
+    label(&mut s, cbst, "2", "SW");
+    let l1 = s.add(Kind::Inductor, (70, 0), 0);
+    s.components[l1].value = "6.8u".into();
+    label(&mut s, l1, "1", "SW");
+    label(&mut s, l1, "2", "OUT");
+    let cout = s.add(Kind::Capacitor, (90, 0), 1);
+    s.components[cout].value = "44u".into();
+    label(&mut s, cout, "1", "OUT");
+    label(&mut s, cout, "2", "GND");
+    let rt = s.add(Kind::Resistor, (105, 0), 1);
+    s.components[rt].value = "52.5k".into();
+    label(&mut s, rt, "1", "OUT");
+    label(&mut s, rt, "2", "FB");
+    let rb = s.add(Kind::Resistor, (105, 20), 1);
+    s.components[rb].value = "10k".into();
+    label(&mut s, rb, "1", "FB");
+    label(&mut s, rb, "2", "GND");
+    // the load: 1 A drawn from the output (a current source, as an electronic load)
+    let load = s.add(Kind::ISource, (120, 0), 1);
+    s.components[load].value = "1".into();
+    label(&mut s, load, "-", "OUT");
+    label(&mut s, load, "+", "GND");
+    // EN and RT open on purpose: EN is pulled up inside, RT open is 500 kHz
+    let refdes = s.components[u].refdes.clone();
+    s.no_connects = vec![(refdes.clone(), "1".into()), (refdes, "2".into())];
+    let mut v = serde_json::to_value(&s).unwrap();
+    let settings = crate::schematic::SheetSettings { tran_stop: "1.5m".into(), tran_step: "40n".into(), tran_uic: true, ..Default::default() };
+    crate::schematic::with_settings(&mut v, &settings);
+    std::fs::write(root.join("buck_tps62933.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}
+
 /// The sketch of the Arduino pot sample: the knob on A0 sets the LED on D9 (analogWrite), and the reading goes to the serial monitor.
 pub const ARDUINO_POT_SKETCH: &str = "// A0 につないだボリュームを読んで、D9 の LED の明るさにします
 void setup() {

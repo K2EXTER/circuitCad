@@ -1,0 +1,640 @@
+{
+  "analysis": {
+    "ac_ppd": "20",
+    "ac_start": "10",
+    "ac_stop": "1Meg",
+    "tran_step": "40n",
+    "tran_stop": "1.5m",
+    "tran_uic": true
+  },
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        0,
+        0
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "12"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        15,
+        0
+      ],
+      "refdes": "C1",
+      "rot": 1,
+      "value": "10u"
+    },
+    {
+      "custom": {
+        "name": "TPS62933",
+        "pins": [
+          {
+            "kind": "power_in",
+            "name": "VIN",
+            "number": "3",
+            "side": "left"
+          },
+          {
+            "kind": "input",
+            "name": "EN",
+            "number": "2",
+            "side": "left"
+          },
+          {
+            "kind": "passive",
+            "name": "RT",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "kind": "passive",
+            "name": "SS",
+            "number": "7",
+            "side": "left"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "4",
+            "side": "bottom"
+          },
+          {
+            "kind": "passive",
+            "name": "BST",
+            "number": "6",
+            "side": "right"
+          },
+          {
+            "kind": "power_out",
+            "name": "SW",
+            "number": "5",
+            "side": "right"
+          },
+          {
+            "kind": "input",
+            "name": "FB",
+            "number": "8",
+            "side": "right"
+          }
+        ],
+        "prefix": "U",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "TI TPS6293x データシート SLUSEA4D の 8.5 節・9.3 節 (RT・EN・SS・PFM) の表の typ から作った、実際にスイッチを入り切りする動作モデルです (基準電圧 0.8 V、オン抵抗 0.076 Ω と 0.032 Ω、電流制限 ピーク 5 A・谷 3.8 A、最小オン時間 70 ns・最小オフ時間 140 ns)。デューティ比、コイルのリップル電流、出力のリップル、スイッチの導通損失が波形に出ます。",
+            "表に無い値は図から: ループは図 10-7 (24 V から 5 V・3 A、6.8 µH・44 µF で帯域 49.4 kHz・位相余裕 57 度)、PFM の最小ピーク電流は表 (0.75 A)。",
+            "制御はピーク電流モードです。内部の補償 (誤差アンプ 300 µA/V・71.13 kΩ と 181 pF・電流の指令 4 A/V・スロープ補償 1 周期 1.5 A) はデータシートに無いので、データシートのループの図 (出力 5 V・実効の出力容量 44 µF で帯域 49.4 kHz・位相余裕 57 度) に合わせて決めました。ほかの出力電圧やコンデンサでは、帯域は出力電圧と容量に反比例して変わります。",
+            "軽い負荷では PFM (コイルの電流が逆になると下側のスイッチを切り、ピークは少なくとも 0.75 A、要らない周期は飛ばす) で、周波数が下がります。",
+            "上側のスイッチのゲートの電荷 (5 nC、データシートに無いので仮の値) を入るたびに BST から取り、内部の 5 V を通して VIN から補います。",
+            "扱わないもの: スイッチの切り替わりの時間と切り替え損失、下側のゲートを動かす電流、デッドタイム、周波数の拡散 (spread spectrum)、最小オン時間・オフ時間での周波数の折り返し (その代わり、そこでデューティが止まります)、過熱保護、出力の短絡でのヒカップ、温度による変化。",
+            "BST と SW の間に 0.1 µF のコンデンサを付けないと、上側のスイッチが入らず出力が出ません (実物と同じ)。",
+            "時間刻みは 1 周期の 1/50 以下 (500 kHz なら 40 ns) にしてください。粗いと、スイッチの切り替わりの位置がずれて出力の平均がずれます。計算に時間がかかるので、見る時間はソフトスタートが終わるまで (数 ms) から始めましょう。"
+          ],
+          "name": "TPS62933",
+          "origin": {
+            "kind": "equivalent",
+            "source": "TI TPS6293x データシート SLUSEA4D (2022-08 改訂) の 8.5 節 (電気的特性、TJ = 25 °C の typ)"
+          },
+          "params": {},
+          "pins": [
+            "3",
+            "4",
+            "5",
+            "6",
+            "8",
+            "2",
+            "1",
+            "7"
+          ],
+          "text": ".subckt TPS62933 vin gnd sw bst fb en rt ss\n* VIN under-voltage lockout (3.6 V rising, 3.3 V falling)\nBuv uv gnd V=step(V(vin,gnd)-3.6,0.02)+(1-step(V(vin,gnd)-3.6,0.02))*step(V(vin,gnd)-3.3,0.02)*V(uvd,gnd)\nRuv uv uvd 1k\nCuv uvd gnd 10p\n* EN: 1.21 V rising, 1.17 V falling; pulled up by 0.7 uA (and 1.4 uA more while on), so a floating EN turns the part on\nBeo eo gnd V=step(V(en,gnd)-1.21,0.005)+(1-step(V(en,gnd)-1.21,0.005))*step(V(en,gnd)-1.17,0.005)*V(eod,gnd)\nReo eo eod 1k\nCeo eod gnd 10p\nBen gnd en I=(7e-07+1.4e-06*V(eo,gnd))*limit((5-V(en,gnd))*2,0,1)*step(V(vin,gnd)-2,0.1)\nRen en gnd 1G\nBon on gnd V=V(uv,gnd)*V(eo,gnd)\n* supply current: 12 uA switching aside, 2 uA shut down (the gate drive's current is not counted)\nBq vin gnd I=(2e-06+1e-05*V(on,gnd))*tanh(V(vin,gnd))\n* internal 5 V (from VIN) charging the bootstrap capacitor through a diode while SW is low; the high side needs BST - SW > 2.5 V\nBvcc vc0 gnd V=limit(V(vin,gnd)-0.2,0,5)\nVvcc vc0 vcc DC 0\nBvm vin gnd I=I(Vvcc)\nDbst vcc bst DBST\nRbst bst sw 1Meg\nBbok bok gnd V=step(V(bst,sw)-2.5,0.2)\n* the high side's gate (5 nC at 4.4 V): the driver joins it to BST (on) or to SW (off) through 2 Ohm; without a bootstrap capacitor BST does not ride up with SW and the gate cannot hold the switch on\nBqn qn gnd V=1-V(q,gnd)\nSgu bst gate q gnd SWDRV\nSgd gate sw qn gnd SWDRV\nCgate gate sw 1.13636e-09\nRgate gate sw 1Meg\n* RT: 10 uA out of the pin, its voltage read as the resistance (kOhm); fsw = 16268.5 x RT^-0.927563 kHz through the table's points, 500 kHz open (> 280 kOhm), 1.2 MHz tied to GND (< 1 kOhm)\nBrt gnd rt I=10u*limit((3.2-V(rt,gnd))*5,0,1)\nRrtl rt gnd 1G\nBfs fs gnd V=if(V(rt,gnd)*100<1,1200,if(V(rt,gnd)*100>280,500,16268.5*pwr(max(V(rt,gnd)*100,1),-0.927563)))\n* the clock: a ramp from 0 to 1 over each cycle\nBr r gnd V=time*V(fs,gnd)*1e3-floor(time*V(fs,gnd)*1e3)\n* SS: 5.5 uA into the soft-start capacitor; the reference is the lower of 0.8 V and SS\nBss gnd ss I=5.5e-06*V(on,gnd)*limit((3-V(ss,gnd))*5,0,1)\nBssd ss gnd I=(1-V(on,gnd))*V(ss,gnd)/1k\nRssl ss gnd 1G\n* the reference's difference from part to part (0 V; the variation analyses move it over the data sheet's range)\nVtol vt gnd DC 0\n* spread Vtol -0.008 0.008 vout (data sheet: FB 0.792 to 0.808 V)\nBref ref gnd V=min(0.8+V(vt,gnd),V(ss,gnd))\n* error amplifier: 300 uA/V into COMP, the internal compensation 71.13 kΩ + 181 pF (set for the data sheet's loop: 49.4 kHz at Vout 5 V, Cout 44 uF)\nBea gnd comp I=limit(0.0003*(V(ref,gnd)-V(fb,gnd)),-100u,100u)\nRc comp cz 71130.9\nCc cz gnd 1.81174e-10\nRcl comp gnd 100Meg\nBcl comp gnd I=10*(max(V(comp,gnd)-2.05,0)+min(V(comp,gnd),0))+(1-V(on,gnd))*V(comp,gnd)*1m\nRfb fb gnd 100Meg\n* the peak current command: 4 A per volt of COMP above 0.5 V, from 0.75 A up to the high side's limit 5 A\nBic ic gnd V=limit((V(comp,gnd)-0.5)*4,0.75,5)\n* the high side: set at the start of each cycle (not while the low side's current is above its limit 3.8 A, nor while COMP asks for nothing: PFM, nor above the OVP), reset when its current plus the slope compensation (1.5 A a cycle) reaches the command, after the minimum on time 70 ns, or at the maximum duty (minimum off time 140 ns)\nBset set gnd V=(1-step(V(r,gnd)-max(7e-08*V(fs,gnd)*1e3,0.03),0.002))*V(on,gnd)*V(bok,gnd)*step(V(comp,gnd)-0.5,0.01)*step(0.92-V(fb,gnd),0.005)*step(3.8-I(Vls),0.05)\nBrst rst gnd V=max(step(I(Vhs)+1.5*V(r,gnd)-V(ic,gnd),0.01)*step(V(r,gnd)-max(7e-08*V(fs,gnd)*1e3,0.03),0.01),max(step(V(r,gnd)-(1-1.4e-07*V(fs,gnd)*1e3),0.01),1-V(on,gnd)*V(bok,gnd)))\nBq1 gnd q I=1m*(V(set,gnd)*(1-V(rst,gnd))*(1-V(q,gnd))-V(rst,gnd)*V(q,gnd))\nCq q gnd 20p\nRq q gnd 1G\n* the low side: on while the high side is off, until its current reverses (armed again by the high side)\nBzc gnd zc I=1m*(V(q,gnd)*(1-V(zc,gnd))-(1-V(q,gnd))*step(-I(Vls)-0.02,0.01)*V(zc,gnd))\nCzc zc gnd 20p\nRzc zc gnd 1G\nBlg lg gnd V=V(on,gnd)*(1-V(q,gnd))*V(zc,gnd)\n* the switches (0.076 Ω and 0.032 Ω) with their body diodes; Vhs and Vls carry the inductor's current\nVhs vin hsi DC 0\nShs hsi sw gate sw SWHS\nVls gnd lsi DC 0\nSls lsi sw lg gnd SWLS\nDhs sw vin DBODY\nDls gnd sw DBODY\n.model SWHS SW(RON=0.076 ROFF=1e7 VT=2.5 VW=0.5)\n.model SWDRV SW(RON=10 ROFF=1e9 VT=0.5 VW=0.1)\n.model SWLS SW(RON=0.032 ROFF=1e7 VT=0.5 VW=0.1)\n.model DBODY D(IS=1e-12 N=1.2 RS=0.05)\n.model DBST D(IS=1e-12 N=1 RS=2)\n.ends TPS62933"
+        }
+      },
+      "footprint": "SOT-583-8_1.6x2.1mm_P0.5mm",
+      "kind": "Custom",
+      "pos": [
+        40,
+        0
+      ],
+      "refdes": "U1",
+      "rot": 0,
+      "value": "TPS62933"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        25,
+        20
+      ],
+      "refdes": "C2",
+      "rot": 1,
+      "value": "6.8n"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        60,
+        -15
+      ],
+      "refdes": "C3",
+      "rot": 0,
+      "value": "100n"
+    },
+    {
+      "custom": null,
+      "footprint": "L_0805",
+      "kind": "Inductor",
+      "pos": [
+        70,
+        0
+      ],
+      "refdes": "L1",
+      "rot": 0,
+      "value": "6.8u"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        90,
+        0
+      ],
+      "refdes": "C4",
+      "rot": 1,
+      "value": "44u"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        105,
+        0
+      ],
+      "refdes": "R1",
+      "rot": 1,
+      "value": "52.5k"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        105,
+        20
+      ],
+      "refdes": "R2",
+      "rot": 1,
+      "value": "10k"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "ISource",
+      "pos": [
+        120,
+        0
+      ],
+      "refdes": "I1",
+      "rot": 1,
+      "sim_only": true,
+      "value": "1"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        15,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        15,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        -3
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        40,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        47,
+        0
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        47,
+        -2
+      ],
+      "text": "BST"
+    },
+    {
+      "pos": [
+        33,
+        3
+      ],
+      "text": "SS"
+    },
+    {
+      "pos": [
+        47,
+        2
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        25,
+        15
+      ],
+      "text": "SS"
+    },
+    {
+      "pos": [
+        25,
+        25
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        55,
+        -15
+      ],
+      "text": "BST"
+    },
+    {
+      "pos": [
+        65,
+        -15
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        65,
+        0
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        75,
+        0
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        90,
+        -5
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        90,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        105,
+        -5
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        105,
+        5
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        105,
+        15
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        105,
+        25
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        115,
+        0
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        125,
+        0
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "no_connects": [
+    [
+      "U1",
+      "1"
+    ],
+    [
+      "U1",
+      "2"
+    ]
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        15,
+        -2
+      ],
+      "b": [
+        15,
+        -5
+      ]
+    },
+    {
+      "a": [
+        15,
+        2
+      ],
+      "b": [
+        15,
+        5
+      ]
+    },
+    {
+      "a": [
+        36,
+        -3
+      ],
+      "b": [
+        33,
+        -3
+      ]
+    },
+    {
+      "a": [
+        40,
+        6
+      ],
+      "b": [
+        40,
+        9
+      ]
+    },
+    {
+      "a": [
+        44,
+        0
+      ],
+      "b": [
+        47,
+        0
+      ]
+    },
+    {
+      "a": [
+        44,
+        -2
+      ],
+      "b": [
+        47,
+        -2
+      ]
+    },
+    {
+      "a": [
+        36,
+        3
+      ],
+      "b": [
+        33,
+        3
+      ]
+    },
+    {
+      "a": [
+        44,
+        2
+      ],
+      "b": [
+        47,
+        2
+      ]
+    },
+    {
+      "a": [
+        25,
+        18
+      ],
+      "b": [
+        25,
+        15
+      ]
+    },
+    {
+      "a": [
+        25,
+        22
+      ],
+      "b": [
+        25,
+        25
+      ]
+    },
+    {
+      "a": [
+        58,
+        -15
+      ],
+      "b": [
+        55,
+        -15
+      ]
+    },
+    {
+      "a": [
+        62,
+        -15
+      ],
+      "b": [
+        65,
+        -15
+      ]
+    },
+    {
+      "a": [
+        68,
+        0
+      ],
+      "b": [
+        65,
+        0
+      ]
+    },
+    {
+      "a": [
+        72,
+        0
+      ],
+      "b": [
+        75,
+        0
+      ]
+    },
+    {
+      "a": [
+        90,
+        -2
+      ],
+      "b": [
+        90,
+        -5
+      ]
+    },
+    {
+      "a": [
+        90,
+        2
+      ],
+      "b": [
+        90,
+        5
+      ]
+    },
+    {
+      "a": [
+        105,
+        -2
+      ],
+      "b": [
+        105,
+        -5
+      ]
+    },
+    {
+      "a": [
+        105,
+        2
+      ],
+      "b": [
+        105,
+        5
+      ]
+    },
+    {
+      "a": [
+        105,
+        18
+      ],
+      "b": [
+        105,
+        15
+      ]
+    },
+    {
+      "a": [
+        105,
+        22
+      ],
+      "b": [
+        105,
+        25
+      ]
+    },
+    {
+      "a": [
+        118,
+        0
+      ],
+      "b": [
+        115,
+        0
+      ]
+    },
+    {
+      "a": [
+        122,
+        0
+      ],
+      "b": [
+        125,
+        0
+      ]
+    }
+  ]
+}

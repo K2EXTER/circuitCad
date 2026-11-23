@@ -258,6 +258,13 @@ impl SchEditor {
                     }
                 }
                 // the voltage reference and SET-pin LDO boxes with their example's pins, the model put into ②
+                "buck" => {
+                    f.buck_pins();
+                    f.buck_example_and_make();
+                    if let Err(e) = f.buck_apply() {
+                        eprintln!("not applied: {e}");
+                    }
+                }
                 "reference" | "setldo" => {
                     use crate::part_form::refldo::RefLdo;
                     let k = if what == "reference" { RefLdo::Reference } else { RefLdo::SetLdo };
