@@ -1,0 +1,71 @@
+{
+  "kind": "buck",
+  "part": "TPS62933_SOT583",
+  "name": "TPS62933",
+  "read": "2026-11-24",
+  "source": "TI TPS6293x データシート SLUSEA4D (2022-08 改訂) の 8.5 節 (電気的特性、TJ = 25 °C の typ)",
+  "cite": "TI TPS6293x データシート SLUSEA4D の 8.5 節・9.3 節 (RT・EN・SS・PFM)",
+  "url": "https://www.ti.com/lit/ds/symlink/tps62933.pdf",
+  "from_figures": "ループは図 10-7 (24 V から 5 V・3 A、6.8 µH・44 µF で帯域 49.4 kHz・位相余裕 57 度)、PFM の最小ピーク電流は表 (0.75 A)",
+  "vref": 0.8,
+  "vref_range": [
+    0.792,
+    0.808
+  ],
+  "iq": 1.2e-05,
+  "i_shdn": 2e-06,
+  "uvlo": [
+    3.6,
+    3.3
+  ],
+  "en": {
+    "rise": 1.21,
+    "fall": 1.17,
+    "ip": 7e-07,
+    "ih": 1.4e-06
+  },
+  "rds_hs": 0.076,
+  "rds_ls": 0.032,
+  "ihs_limit": 5.0,
+  "ils_limit": 3.8,
+  "ipeak_min": 0.75,
+  "iss": 5.5e-06,
+  "fsw": {
+    "rt": [
+      [
+        71.5,
+        310
+      ],
+      [
+        9.09,
+        2100
+      ]
+    ],
+    "open": 500,
+    "open_above": 280,
+    "short": 1200,
+    "short_below": 1
+  },
+  "ton_min": 7e-08,
+  "toff_min": 1.4e-07,
+  "ovp": 1.15,
+  "gm": 0.0003,
+  "gcs": 4.0,
+  "comp_offset": 0.5,
+  "slope": 1.5,
+  "loop_point": {
+    "vout": 5.0,
+    "cout": 4.4e-05,
+    "bw": 49400.0,
+    "pm": 57
+  },
+  "remarks": [
+    "VFB 800 mV typ, 792 to 808 mV at 25 C; IQ 12 uA (TPS62933, non-switching), ISHDN 2 uA",
+    "UVLO 3.6 V rising, 3.3 V falling; EN 1.21 V rising, 1.17 V falling, Ip 0.7 uA, Ih 1.4 uA (9.3.6)",
+    "RDSON 76 mOhm (HS, VBST-SW = 5 V) and 32 mOhm (LS); IHS_LIMIT 5 A, ILS_LIMIT 3.8 A, IPEAK_MIN 0.75 A (PFM)",
+    "ISS 5.5 uA (tSS = CSS x 0.8 V / 5.5 uA)",
+    "fSW 500 kHz with RT open (> 280 kOhm), 1200 kHz with RT to GND (< 1 kOhm), 310 kHz at 71.5 kOhm, 2100 kHz at 9.09 kOhm (table)",
+    "tON_MIN 70 ns, tOFF_MIN 140 ns; OVP 115 %",
+    "internal compensation not given: gm 300 uA/V, 4 A/V, 0.5 V offset and 1.5 A slope assumed; Rc set for the 49.4 kHz of figure 10-7 with 44 uF at 5 V"
+  ]
+}

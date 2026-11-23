@@ -414,6 +414,48 @@ fn the_lt3045_follows_its_set_resistor_and_limits() {
     assert!(loud > 50e-6, "without CSET: {loud}");
 }
 
+/// TI TPS62933 (synchronous buck, the data sheet's design example: 6.8 uH, 44 uF, RT open = 500 kHz): 12 V to 5 V at 2 A, the soft
+/// start (CSS 0.47 nF here: 68 us, to keep the test short), the switching frequency, and no 5 V without the bootstrap capacitor
+/// (the high side's gate rides on BST). The two runs in parallel: each cycle takes a few hundred steps.
+#[test]
+fn the_tps62933_steps_twelve_volts_down_to_five() {
+    let def = part("TPS62933");
+    let build = |cbst: bool| {
+        let mut c = Circuit::new();
+        vs(&mut c, "V1", "in", "0", 12.0);
+        place(&mut c, &def, "U1", &[("3", "in"), ("4", "0"), ("5", "sw"), ("6", "bst"), ("8", "fb"), ("2", "en"), ("1", "rt"), ("7", "ss")]);
+        let caps = [("CBST", "bst", "sw", if cbst { 0.1e-6 } else { 1e-15 }), ("CSS", "ss", "0", 0.47e-9), ("COUT", "out", "0", 44e-6)];
+        for (n, a, b, f) in caps {
+            let (a, b) = (c.node(a), c.node(b));
+            c.add(Element::Capacitor { name: n.into(), a, b, c: f });
+        }
+        let (a, b) = (c.node("sw"), c.node("out"));
+        c.add(Element::Inductor { name: "L1".into(), a, b, l: 6.8e-6 });
+        res(&mut c, "RFBT", "out", "fb", 52.5e3);
+        res(&mut c, "RFBB", "fb", "0", 10e3);
+        res(&mut c, "RL", "out", "0", 2.5);
+        c
+    };
+    let runs = par_map(&[true, false], |&cbst| transient(&build(cbst), &TranSettings { tstop: if cbst { 0.2e-3 } else { 0.1e-3 }, tstep: 20e-9, uic: true }).unwrap());
+    let t = &runs[0];
+    let (out, sw) = (t.signal("V(out)").unwrap(), t.signal("V(sw)").unwrap());
+    let at = |when: f64| out.values[t.time.iter().position(|x| *x >= when).unwrap()];
+    // soft start: 0.47 nF x 0.8 V / 5.5 uA = 68 us, the output half way at half of it
+    assert!((at(34e-6) - 2.5).abs() < 0.6, "soft start at 34 us: {}", at(34e-6));
+    // the average over the last 0.05 ms (weighted by the steps' lengths): 0.8 V x (1 + 52.5 k / 10 k) = 5 V
+    let k: Vec<usize> = (0..t.time.len()).filter(|&k| t.time[k] >= 0.15e-3).collect();
+    let area: f64 = k.windows(2).map(|w| out.values[w[0]] * (t.time[w[1]] - t.time[w[0]])).sum();
+    let vo = area / (t.time[k[k.len() - 1]] - t.time[k[0]]);
+    assert!((vo - 5.0).abs() < 0.03, "5 V: {vo}");
+    // RT open: 500 kHz (rising edges of SW over the same 0.05 ms)
+    let edges = k.windows(2).filter(|w| sw.values[w[0]] < 6.0 && sw.values[w[1]] >= 6.0).count();
+    assert!((edges as f64 / 0.05e-3 - 500e3).abs() < 25e3, "{edges} edges in 0.05 ms");
+    // without the bootstrap capacitor the gate stays near the internal 5 V and the high side is a source follower: SW and the
+    // output stop a threshold below it, far from 5 V
+    let worst = runs[1].signal("V(out)").unwrap().values.iter().cloned().fold(f64::MIN, f64::max);
+    assert!(worst < 3.5, "without CBST: {worst}");
+}
+
 #[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");

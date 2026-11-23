@@ -47,6 +47,14 @@ pub struct Band {
     pub p_max: Option<f64>,
 }
 
+/// One value of a series made only in listed values, with its own part number (ROHM GMR50: 18 values from 5 mΩ to 220 mΩ, the
+/// product and special codes in the part number changing from value to value).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Listed {
+    pub ohms: f64,
+    pub mpn: String,
+}
+
 /// One series file. Only resistors for now (P2 in docs/candidates.md); capacitors come with their own fields.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SeriesDef {
@@ -101,6 +109,10 @@ pub struct SeriesDef {
     /// The body drawn on the board's silkscreen and in 3D (a leaded part lying down: its length and diameter).
     #[serde(default)]
     pub outline: Option<pcb_core::body::BodySpec>,
+    /// The values the series is made in, each with its part number, when they are not an E series (`values.sets` empty;
+    /// `mpn` and `code` are then not used).
+    #[serde(default)]
+    pub list: Vec<Listed>,
 }
 
 /// The series that ship with the program (`crates/part-lib/series/`).
@@ -133,6 +145,7 @@ const BUNDLED: &[(&str, &str)] = &[
     ("RG2012", include_str!("../series/RG2012.series.json")),
     ("CF1/4", include_str!("../series/CF1_4.series.json")),
     ("MF1/4D", include_str!("../series/MF1_4D.series.json")),
+    ("GMR50", include_str!("../series/GMR50.series.json")),
 ];
 
 /// The bundled series, read once.
@@ -214,6 +227,11 @@ struct Varying {
 impl SeriesDef {
     /// Every value the series is made in, smallest first (the union of its E series, within its range).
     pub fn values(&self) -> Vec<f64> {
+        if !self.list.is_empty() {
+            let mut v: Vec<f64> = self.list.iter().map(|l| l.ohms).collect();
+            v.sort_by(f64::total_cmp);
+            return v;
+        }
         let mut mantissas: Vec<u16> = vec![];
         for set in &self.values.sets {
             match set.as_str() {
@@ -252,7 +270,15 @@ impl SeriesDef {
 
     /// The maker's part number of the value (`ERJ-3EKF1002V`).
     pub fn part_name(&self, v: f64) -> String {
+        if let Some(l) = self.listed(v) {
+            return l.mpn.clone();
+        }
         self.mpn.replace("{code}", &self.code(v).unwrap_or_else(|| ohms_text(v)))
+    }
+
+    /// The listed value `v` (within 0.05 %), for a series made in listed values.
+    fn listed(&self, v: f64) -> Option<&Listed> {
+        self.list.iter().find(|l| (l.ohms / v - 1.0).abs() < 5e-4)
     }
 
     /// The series' own value nearest to `v`, and whether it is exactly `v` (within 0.05 %).
@@ -272,6 +298,9 @@ impl SeriesDef {
     /// Is `v` one of the series' values?
     pub fn makes(&self, v: f64) -> bool {
         // without listing the values (the drum asks this for every row it draws): in range, and its figures in one of the sets
+        if !self.list.is_empty() {
+            return v.is_finite() && v > 0.0 && self.listed(v).is_some();
+        }
         if !(v.is_finite() && v > 0.0) || v < self.values.min * (1.0 - 1e-9) || v > self.values.max * (1.0 + 1e-9) {
             return false;
         }
@@ -298,7 +327,8 @@ impl SeriesDef {
 
     /// The rated continuous working voltage of the value: √(P·R), at most the limiting element voltage.
     pub fn rated_voltage(&self, v: f64) -> f64 {
-        (self.power_at(v) * v).sqrt().min(self.v_limit)
+        let v = (self.power_at(v) * v).sqrt();
+        if self.v_limit > 0.0 { v.min(self.v_limit) } else { v }
     }
 
     fn band(&self, v: f64) -> Option<&Band> {
@@ -330,7 +360,7 @@ impl SeriesDef {
         let sub = spice_name(&name);
         let quality = if self.quality.is_empty() { String::new() } else { format!("{}。", self.quality.join("・")) };
         let description = format!(
-            "{} {} {} {} ±{}%。{} W ({} ℃まで。それより高い周囲温度では直線で下げ、{} ℃で 0)、この値で使える電圧 {} V (√(電力×抵抗値) と素子の最高電圧 {} V の小さいほう)、温度係数 {} ppm/K、使える温度 {}〜{} ℃。{}{}。{}",
+            "{} {} {} {} ±{}%。{} W ({} ℃まで。それより高い周囲温度では直線で下げ、{} ℃で 0)、この値で使える電圧 {} V ({})、温度係数 {} ppm/K、使える温度 {}〜{} ℃。{}{}。{}",
             self.maker,
             self.series,
             self.summary,
@@ -340,7 +370,7 @@ impl SeriesDef {
             self.derate_from_c,
             self.derate_zero_c,
             trim3(self.rated_voltage(v)),
-            self.v_limit,
+            if self.v_limit > 0.0 { format!("√(電力×抵抗値) と素子の最高電圧 {} V の小さいほう", self.v_limit) } else { "√(電力×抵抗値)".into() },
             tc,
             self.temp_min_c,
             self.temp_max_c,
@@ -367,6 +397,8 @@ impl SeriesDef {
             sch_core::SpecRow { name: "素子の最高電圧".into(), value: format!("{} V", self.v_limit), condition: "定格電圧は √(電力×抵抗値) とこの値の小さいほう".into() },
             sch_core::SpecRow { name: "使える温度".into(), value: format!("{}〜{} ℃", self.temp_min_c, self.temp_max_c), condition: String::new() },
         ];
+        // no limiting element voltage (a metal plate shunt: only √(P·R))
+        let rows: Vec<_> = rows.into_iter().filter(|r| self.v_limit > 0.0 || r.name != "素子の最高電圧").collect();
         let rows = if self.v_overload > 0.0 {
             let mut r = rows;
             r.push(sch_core::SpecRow { name: "最大の過負荷電圧".into(), value: format!("{} V", self.v_overload), condition: "定格電圧 × 2.5 を 5 秒の試験".into() });
@@ -442,6 +474,10 @@ impl SeriesDef {
 
     /// The values in words: "E24・E96 の 10 Ω〜1 MΩ".
     pub fn range_text(&self) -> String {
+        if !self.list.is_empty() {
+            let v = self.values();
+            return format!("{} 個の値 ({}〜{})", v.len(), value_label(v[0]), value_label(v[v.len() - 1]));
+        }
         format!("{} の {}〜{}", self.values.sets.join("・"), value_label(self.values.min), value_label(self.values.max))
     }
 }
@@ -556,7 +592,7 @@ fn rkmt(v: f64) -> Option<String> {
 
 /// `10 kΩ`, `4.75 kΩ`, `1 MΩ`, `97.6 Ω`: the value in sentences.
 fn value_label(v: f64) -> String {
-    let (scale, p) = if v >= 1e6 { (1e6, " MΩ") } else if v >= 1e3 { (1e3, " kΩ") } else { (1.0, " Ω") };
+    let (scale, p) = if v >= 1e6 { (1e6, " MΩ") } else if v >= 1e3 { (1e3, " kΩ") } else if v >= 1.0 { (1.0, " Ω") } else { (1e-3, " mΩ") };
     format!("{}{p}", trim3(v / scale))
 }
 
@@ -884,6 +920,27 @@ mod tests {
         }
     }
 
+    /// ROHM GMR50: 18 values from 5 mΩ to 220 mΩ, each its own part number (the product code JA・JB・JC by the range, the custom
+    /// code A on some, the special code by the value), no limiting element voltage (√(P·R) only).
+    #[test]
+    fn a_series_in_listed_values_names_each_by_its_own_part_number() {
+        let s = by_name("GMR50").unwrap();
+        assert_eq!(s.values().len(), 18);
+        assert_eq!(s.part_name(0.005), "GMR50HJAAFD5L00");
+        assert_eq!(s.part_name(0.05), "GMR50HJBAFBR050");
+        assert_eq!(s.part_name(0.22), "GMR50HJCFIR220");
+        assert!(s.makes(0.04) && !s.makes(0.043) && !s.makes(0.0051));
+        assert_eq!(s.nearest(0.045), Some((0.047, false)));
+        assert_eq!(member("GMR50HJBFER015").map(|(_, v)| v), Some(0.015));
+        assert!((s.rated_voltage(0.1) - (0.4f64).sqrt()).abs() < 1e-12);
+        assert_eq!(s.tc_label(0.005), "0〜+25");
+        assert_eq!(s.tc_label(0.01), "±25");
+        assert_eq!(s.range_text(), "18 個の値 (5 mΩ〜220 mΩ)");
+        let p = s.part(0.015);
+        assert_eq!(p.value.as_deref(), Some("15m"));
+        assert!(!p.ratings.unwrap().rows.iter().any(|r| r.name == "素子の最高電圧"));
+    }
+
     #[test]
     fn a_value_splits_into_figures_and_a_decade_for_the_drum() {
         assert_eq!(split(4700.0), (470, 3));
@@ -902,7 +959,8 @@ mod tests {
         assert_eq!(s.decades(), vec![1, 2, 3, 4, 5, 6]);
         assert!(s.makes(2.2e6) && !s.makes(4.7e6) && !s.makes(4.8e3));
         // every value of every series is on the drum: its figures are in the fine list and its decade in the series' decades
-        for s in bundled() {
+        // (a series made in listed values has buttons instead)
+        for s in bundled().iter().filter(|s| s.list.is_empty()) {
             for v in s.values() {
                 let (m, d) = split(v);
                 assert!(mantissas(true).contains(&m) && s.decades().contains(&d), "{v}");

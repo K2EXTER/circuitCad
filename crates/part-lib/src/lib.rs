@@ -677,6 +677,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("LM317L_TO-92", include_str!("../examples/LM317L_TO-92.part.json")),
     ("LM324_SOIC-14", include_str!("../examples/LM324_SOIC-14.part.json")),
     ("LM339_SOIC-14", include_str!("../examples/LM339_SOIC-14.part.json")),
+    ("LM139_SOIC-14", include_str!("../examples/LM139_SOIC-14.part.json")),
     ("LM393_SOIC-8", include_str!("../examples/LM393_SOIC-8.part.json")),
     ("ULN2803A_DIP-18", include_str!("../examples/ULN2803A_DIP-18.part.json")),
     ("LM7812_TO-220", include_str!("../examples/LM7812_TO-220.part.json")),
@@ -756,6 +757,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("REF5025_SOIC-8", include_str!("../examples/REF5025_SOIC-8.part.json")),
     ("LP5907-4.5_SOT-23-5", include_str!("../examples/LP5907-4.5_SOT-23-5.part.json")),
     ("LT3045_MSOP-12", include_str!("../examples/LT3045_MSOP-12.part.json")),
+    ("TPS62933_SOT583", include_str!("../examples/TPS62933_SOT583.part.json")),
 ];
 
 /// Older bundled versions that are replaced when the user's copy is still unmodified:

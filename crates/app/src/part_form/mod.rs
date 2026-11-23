@@ -324,6 +324,9 @@ pub struct PartForm {
     /// The boxes of the thermistor, crystal and TVS sections (`simple_kinds.rs`).
     pub ntc: simple_kinds::NtcInput,
     pub relay: simple_kinds::RelayInput,
+    /// The boxes of the voltage reference and SET-pin LDO sections (`refldo.rs`).
+    pub vref: refldo::ReferenceInput,
+    pub setldo: refldo::SetLdoInput,
     pub xtal: simple_kinds::CrystalInput,
     pub tvs: simple_kinds::TvsInput,
     /// The library part being edited (None = a new part), see `edit.rs`.
@@ -500,6 +503,8 @@ impl Default for PartForm {
             batch: vec![],
             ntc: Default::default(),
             relay: Default::default(),
+            vref: Default::default(),
+            setldo: Default::default(),
             xtal: Default::default(),
             tvs: Default::default(),
             orig: None,
@@ -525,6 +530,7 @@ mod reg_fill;
 mod elcap_lineup;
 mod coil_lineup;
 pub mod simple_kinds;
+pub mod refldo;
 mod logic;
 mod pdf_check;
 mod pdf_input;

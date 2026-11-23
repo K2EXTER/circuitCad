@@ -257,6 +257,16 @@ impl SchEditor {
                         eprintln!("not applied: {e}");
                     }
                 }
+                // the voltage reference and SET-pin LDO boxes with their example's pins, the model put into ②
+                "reference" | "setldo" => {
+                    use crate::part_form::refldo::RefLdo;
+                    let k = if what == "reference" { RefLdo::Reference } else { RefLdo::SetLdo };
+                    f.refldo_pins(k);
+                    f.refldo_example_and_make(k);
+                    if let Err(e) = f.refldo_apply(k) {
+                        eprintln!("not applied: {e}");
+                    }
+                }
                 _ => {
                     f.glyph = "regulator".into();
                     f.regulator_example_and_make(what == "adj");

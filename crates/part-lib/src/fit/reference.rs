@@ -376,7 +376,7 @@ pub fn reference_limits(p: &ReferenceSpec) -> Vec<String> {
 }
 
 /// "10 kΩ", "1 kΩ", "60 kΩ", "470 Ω".
-fn ohm_text(r: f64) -> String {
+pub(super) fn ohm_text(r: f64) -> String {
     if r >= 1e6 {
         format!("{} MΩ", g(r / 1e6, 4))
     } else if r >= 1e3 {

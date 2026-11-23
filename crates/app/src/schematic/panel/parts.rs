@@ -535,6 +535,26 @@ fn quality_tip(q: &str) -> &'static str {
 fn series_value_ui(ui: &mut egui::Ui, s: &part_lib::series::SeriesDef, now: f64, text: &mut String) -> Option<f64> {
     use part_lib::series::{compose, decade_label, mantissas, ohms_text, split};
     let mut switch = None;
+    if !s.list.is_empty() {
+        // a series made only in listed values (ROHM GMR50, 5 mΩ to 220 mΩ): a button for each instead of the drums
+        ui.label(egui::RichText::new(format!("{}Ω", ohms_text(now))).size(18.0).strong());
+        ui.small(s.part_name(now));
+        ui.horizontal_wrapped(|ui| {
+            for v in s.values() {
+                let on = (v / now - 1.0).abs() < 1e-9;
+                if ui.selectable_label(on, format!("{}Ω", ohms_text(v))).on_hover_text(s.part_name(v)).clicked() && !on {
+                    switch = Some(v);
+                    *text = ohms_text(v);
+                }
+            }
+        })
+        .response
+        .on_hover_text(i18n::trf!("{} は E 系列でなく、データシートの表の {} だけです", s.series, s.range_text()));
+        for q in &s.quality {
+            ui.small(egui::RichText::new(i18n::trf!("品質: {}", q)).color(crate::theme::info())).on_hover_text(i18n::tr_dyn(quality_tip(q)));
+        }
+        return switch;
+    }
     let id = ui.make_persistent_id(("series_drum", &s.series));
     // the drums keep their own (figures, decade): a turn to a value the series does not make leaves the part as it was, and the
     // drum stays there until it is turned on. They start again from the part when the part changes from elsewhere.

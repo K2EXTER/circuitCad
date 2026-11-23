@@ -107,8 +107,9 @@ pub(super) fn apply(app: &mut App, a: &Args) {
         app.sch.lineup_in_form(a.after("--form-lineup").unwrap_or(""));
     }
     // --form-opto-example (--new-part ic) / --form-photodiode-example (--new-part diode) / --form-darlington-example (--new-part npn) /
-    // --form-ntc-example (--new-part resistor) / --form-crystal-example / --form-tvs-example (--new-part diode) / --form-tvs-pdf (its table) / --form-relay-example (--new-part ic)
-    for (flag, what) in [("--form-opto-example", "opto"), ("--form-photodiode-example", "photodiode"), ("--form-darlington-example", "darlington"), ("--form-ntc-example", "ntc"), ("--form-crystal-example", "crystal"), ("--form-tvs-example", "tvs"), ("--form-tvs-pdf", "tvs-pdf"), ("--form-relay-example", "relay")] {
+    // --form-ntc-example (--new-part resistor) / --form-crystal-example / --form-tvs-example (--new-part diode) / --form-tvs-pdf (its table) / --form-relay-example (--new-part ic) /
+    // --form-reference-example / --form-setldo-example (--new-part ic: the REF5025 or LT3045 example with its pins)
+    for (flag, what) in [("--form-opto-example", "opto"), ("--form-photodiode-example", "photodiode"), ("--form-darlington-example", "darlington"), ("--form-ntc-example", "ntc"), ("--form-crystal-example", "crystal"), ("--form-tvs-example", "tvs"), ("--form-tvs-pdf", "tvs-pdf"), ("--form-relay-example", "relay"), ("--form-reference-example", "reference"), ("--form-setldo-example", "setldo")] {
         if a.has(flag) {
             app.sch.linear_in_form(what);
         }

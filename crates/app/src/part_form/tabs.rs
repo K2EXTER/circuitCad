@@ -6,6 +6,13 @@ impl PartForm {
         self.model_box.take_if(|b| *b == id).map(|_| true)
     }
 
+    /// The voltage reference and SET-pin LDO boxes (`refldo.rs`), open when made.
+    fn refldo_boxes(&mut self, ui: &mut egui::Ui) {
+        let (vref, setldo) = (self.open_box("vref_box"), self.open_box("setldo_box"));
+        egui::CollapsingHeader::new(i18n::tr("電圧基準 (REF50xx など、NR・TEMP ピンつき) のモデルを表の値から作る")).id_salt("vref_box").default_open(self.vref.result.is_some()).open(vref).show(ui, |ui| self.reference_ui(ui));
+        egui::CollapsingHeader::new(i18n::tr("SET ピンの電流で出力を決める LDO (LT3045 など) のモデルを表の値から作る")).id_salt("setldo_box").default_open(self.setldo.result.is_some()).open(setldo).show(ui, |ui| self.setldo_ui(ui));
+    }
+
     /// The ① basic information tab. What is offered depends on the kind chosen at the top: a capacitor, resistor or
     /// coil can start from its data sheet numbers (below the name fields, which that fills in), an IC may start from
     /// the charger template, and the other kinds just get the fields.
@@ -101,12 +108,16 @@ impl PartForm {
                 // the op-amp and regulator boxes open by themselves for those symbols; for another IC they wait closed
                 match self.glyph.as_str() {
                     "opamp" => self.opamp_ui(ui),
-                    "regulator" => self.regulator_ui(ui),
+                    "regulator" => {
+                        self.regulator_ui(ui);
+                        self.refldo_boxes(ui);
+                    }
                     _ => {
                         let (opamp, opto, reg) = (self.open_box("opamp_box"), self.open_box("opto_box"), self.open_box("reg_box"));
                         egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").open(opamp).show(ui, |ui| self.opamp_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").open(reg).show(ui, |ui| self.regulator_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る")).id_salt("opto_box").default_open(self.opto.result.is_some()).open(opto).show(ui, |ui| self.opto_ui(ui));
+                        self.refldo_boxes(ui);
                         let relay = self.open_box("relay_box");
                         egui::CollapsingHeader::new(i18n::tr("リレー (コイル 1 つ・接点 1 つ) のモデルを表の値から作る")).id_salt("relay_box").default_open(self.relay.result.is_some()).open(relay).show(ui, |ui| self.relay_ui(ui));
                         if self.glyph != "crystal" {

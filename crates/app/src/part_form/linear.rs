@@ -335,7 +335,7 @@ fn rr_curve_of(text: &str) -> Result<Vec<[f64; 2]>, String> {
 }
 
 /// The temperature box: "°C percent" a line, 2 or more lines, lowest first; empty: none.
-fn temp_curve(text: &str) -> Result<Option<fit::TempCurve>, String> {
+pub(super) fn temp_curve(text: &str) -> Result<Option<fit::TempCurve>, String> {
     let how = "温度は 1 行に「温度 [℃] 25 ℃ からの変化 [%]」で、低い温度から 2 行以上入れてください (例: 0 0.15 と 125 -0.6)";
     let rows: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
     if rows.is_empty() {

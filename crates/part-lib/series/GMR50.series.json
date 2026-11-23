@@ -1,0 +1,143 @@
+{
+  "series": "GMR50",
+  "maker": "ROHM",
+  "category": "抵抗",
+  "summary": "金属板シャント抵抗 (電流検出) 4 W ±1% 2010 (5025)",
+  "size": "2010",
+  "datasheet": "https://fscdn.rohm.com/jp/products/databook/datasheet/passive/resistor/chip_resistor/gmr50-j.pdf",
+  "checked": "ROHM のデータシート GMR50 HJ シリーズ (2026.03.27 Rev. GMR50-IA-007J) の形名・表 1・表 2・定格・外形寸法・特性と、シリーズの一覧 GMR series (2026.03 Rev.002) で確かめた (2026-11-24)。推奨ランドはデータシートに無いので、寸法から計算した",
+  "values": {
+    "sets": [],
+    "min": 0.005,
+    "max": 0.22
+  },
+  "mpn": "GMR50HJBF{code}",
+  "code": "",
+  "tolerance_pct": 1.0,
+  "tc_ppm": 25.0,
+  "p_max": 4.0,
+  "v_limit": 0.0,
+  "v_overload": 0.0,
+  "derate_from_c": 90.0,
+  "derate_zero_c": 175.0,
+  "temp_min_c": -65.0,
+  "temp_max_c": 170.0,
+  "bands": [
+    {
+      "min": 0.005,
+      "max": 0.00999,
+      "tc_ppm": 25.0,
+      "tc_text": "0〜+25",
+      "p_max": null
+    }
+  ],
+  "quality": [
+    "AEC-Q200"
+  ],
+  "height": 0.4,
+  "footprint_name": "R_2010_ROHM_GMR50",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -1.715,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.53,
+        "h": 2.76,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 1.715,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.53,
+        "h": 2.76,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドはデータシートに推奨が無いので寸法から計算した: 外側は IPC-7351 の式 (L 4.75〜5.25・下面の電極 a 1.80〜2.30・W 2.25〜2.75、つま先 0.35 mm) で 5.96 mm、内側の間は電極の間 b の公称 0.90 mm (式のままでは電極の公差が大きく 0.14 mm になり、はんだがつながる): パッド 2.53 × 2.76 mm、中心の間 3.43 mm",
+  "body": "本体 5.00 × 2.50 mm、厚さ 0.40 mm (データシートの寸法)。上面に 4 桁の印字 (10 mΩ 以下は mΩ の小数点に L: 5L00、それより上は Ω の小数点に R: R015)。定格電力 4 W は端子の温度 (Tk) で 90 ℃まで (周囲の温度ではない。基板の銅で端子を冷やす)、175 ℃で 0。温度係数は 20〜60 ℃の値。値ごとに型番の製品仕様 (JA・JB・JC)・カスタム・特殊品番の記号が変わる (表 2)。包装は H (エンボステープ 4 mm ピッチ、2,000 個)。抵抗値は裏の電極に 4 端子で当てて測った値なので、2 端子のランドでは銅とはんだの抵抗が足される",
+  "list": [
+    {
+      "ohms": 0.005,
+      "mpn": "GMR50HJAAFD5L00"
+    },
+    {
+      "ohms": 0.01,
+      "mpn": "GMR50HJBFA10L0"
+    },
+    {
+      "ohms": 0.015,
+      "mpn": "GMR50HJBFER015"
+    },
+    {
+      "ohms": 0.018,
+      "mpn": "GMR50HJBFGR018"
+    },
+    {
+      "ohms": 0.02,
+      "mpn": "GMR50HJBFHR020"
+    },
+    {
+      "ohms": 0.022,
+      "mpn": "GMR50HJBFIR022"
+    },
+    {
+      "ohms": 0.027,
+      "mpn": "GMR50HJBFKR027"
+    },
+    {
+      "ohms": 0.033,
+      "mpn": "GMR50HJBFMR033"
+    },
+    {
+      "ohms": 0.039,
+      "mpn": "GMR50HJBFOR039"
+    },
+    {
+      "ohms": 0.04,
+      "mpn": "GMR50HJBAFAR040"
+    },
+    {
+      "ohms": 0.047,
+      "mpn": "GMR50HJBFQR047"
+    },
+    {
+      "ohms": 0.05,
+      "mpn": "GMR50HJBAFBR050"
+    },
+    {
+      "ohms": 0.056,
+      "mpn": "GMR50HJBFSR056"
+    },
+    {
+      "ohms": 0.082,
+      "mpn": "GMR50HJBFWR082"
+    },
+    {
+      "ohms": 0.1,
+      "mpn": "GMR50HJCFAR100"
+    },
+    {
+      "ohms": 0.15,
+      "mpn": "GMR50HJCFER150"
+    },
+    {
+      "ohms": 0.2,
+      "mpn": "GMR50HJCFHR200"
+    },
+    {
+      "ohms": 0.22,
+      "mpn": "GMR50HJCFIR220"
+    }
+  ]
+}

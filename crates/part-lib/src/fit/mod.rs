@@ -8,6 +8,7 @@
 //! Details: `docs/code-notes/part-lib.md`.
 
 mod bjt;
+pub mod buck;
 pub mod comparator;
 mod darlington;
 mod diode;
@@ -22,6 +23,7 @@ pub mod setldo;
 pub mod simple;
 
 pub use bjt::BjtSpec;
+pub use buck::BuckSpec;
 pub use comparator::ComparatorSpec;
 pub use darlington::DarlingtonSpec;
 pub use diode::DiodeSpec;
@@ -37,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt", "mos", "darlington", "photodiode",
-/// "optocoupler", "opamp", "comparator", "regulator", "shunt", "reference", "setldo", "ntc", "crystal", "tvs" or "relay".
+/// "optocoupler", "opamp", "comparator", "regulator", "shunt", "reference", "setldo", "buck", "ntc", "crystal", "tvs" or "relay".
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Spec {
@@ -53,6 +55,7 @@ pub enum Spec {
     Shunt(regulator::ShuntSpec),
     Reference(reference::ReferenceSpec),
     SetLdo(setldo::SetLdoSpec),
+    Buck(buck::BuckSpec),
     Ntc(simple::NtcSpec),
     Crystal(simple::CrystalSpec),
     Tvs(simple::TvsSpec),
@@ -155,6 +158,7 @@ impl Spec {
             Spec::Shunt(s) => &s.common,
             Spec::Reference(s) => &s.common,
             Spec::SetLdo(s) => &s.common,
+            Spec::Buck(s) => &s.common,
             Spec::Ntc(s) => &s.common,
             Spec::Crystal(s) => &s.common,
             Spec::Tvs(s) => &s.common,
@@ -242,6 +246,7 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
         Spec::Shunt(s) => regulator::fit_shunt(s)?,
         Spec::Reference(s) => reference::fit_reference(s)?,
         Spec::SetLdo(s) => setldo::fit_setldo(s)?,
+        Spec::Buck(s) => buck::fit_buck(s)?,
         Spec::Ntc(s) => simple::fit_ntc(s)?,
         Spec::Crystal(s) => simple::fit_crystal(s)?,
         Spec::Tvs(s) => simple::fit_tvs(s)?,
