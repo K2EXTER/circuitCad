@@ -150,6 +150,21 @@ const MCP600X: &[Row] = &[
     Row { item: Item::Noise1k, supply: s(5.5, false), min: None, typ: Some(28e-9), max: None, at: "AC: eni、f = 1 kHz" },
 ];
 
+/// ADA4522-1: Analog Devices ADA4522-1/ADA4522-2/ADA4522-4 Rev. I, Table 2 (VSY = 5 V, VCM = VSY/2, 25 °C). Read 2026-11-23.
+const ADA4522: &[Row] = &[
+    Row { item: Item::Aol { rl: 10e3 }, supply: s(5.0, false), min: Some(125.0), typ: Some(145.0), max: None, at: "表 2 AV: RL = 10 kΩ、VOUT = 0.5〜4.5 V" },
+    Row { item: Item::Gbw, supply: s(5.0, false), min: None, typ: Some(2.7e6), max: None, at: "表 2 GBP: RL = 10 kΩ、CL = 50 pF、AV = 100" },
+    Row { item: Item::PhaseMargin, supply: s(5.0, false), min: None, typ: Some(64.0), max: None, at: "表 2 ΦM: RL = 10 kΩ、CL = 50 pF、AV = 1" },
+    Row { item: Item::Slew { step: 1.0, rl: 10e3 }, supply: s(5.0, false), min: None, typ: Some(1.4), max: None, at: "表 2 SR+: RL = 10 kΩ、CL = 50 pF、AV = 1 (SR− は 1.3 V/µs)" },
+    Row { item: Item::Offset, supply: s(5.0, false), min: None, typ: Some(0.7e-6), max: Some(5e-6), at: "表 2 VOS: VCM = VSY/2" },
+    Row { item: Item::Bias, supply: s(5.0, false), min: None, typ: Some(50e-12), max: Some(150e-12), at: "表 2 IB" },
+    Row { item: Item::Supply, supply: s(5.0, false), min: None, typ: Some(840e-6), max: Some(910e-6), at: "表 2 ISY: ADA4522-1、IO = 0 mA" },
+    Row { item: Item::SwingHigh { rl: 10e3 }, supply: s(5.0, false), min: None, typ: Some(20e-3), max: Some(30e-3), at: "表 2 VOH: RL = 10 kΩ を VSY/2 へ、4.98 V typ・4.97 V min (電源からの距離に直した)" },
+    Row { item: Item::SwingLow { rl: 10e3, to_rail: false }, supply: s(5.0, false), min: None, typ: Some(20e-3), max: Some(30e-3), at: "表 2 VOL: RL = 10 kΩ を VSY/2 へ" },
+    Row { item: Item::Short, supply: s(5.0, false), min: None, typ: Some(22e-3), max: None, at: "表 2 ISC 吐き出し (吸い込みは 29 mA)" },
+    Row { item: Item::Noise1k, supply: s(5.0, false), min: None, typ: Some(5.8e-9), max: None, at: "表 2・特長 en: f = 1 kHz" },
+];
+
 const PARTS: &[Part] = &[
     Part { name: "LM358", vplus: "V+", vminus: "V-", source: "TI SLOS068AB(2024-10 改訂)", rows: LM358 },
     Part { name: "LM324", vplus: "V+", vminus: "V-", source: "TI SLOS066AE(2025-09 改訂)", rows: LM324 },
@@ -157,6 +172,7 @@ const PARTS: &[Part] = &[
     Part { name: "NE5532", vplus: "V+", vminus: "V-", source: "TI SLOS075K(2025-12 改訂)", rows: NE5532 },
     Part { name: "MCP6001", vplus: "VDD", vminus: "VSS", source: "Microchip DS20001733L", rows: MCP600X },
     Part { name: "MCP6002", vplus: "VDD", vminus: "VSS", source: "Microchip DS20001733L", rows: MCP600X },
+    Part { name: "ADA4522-1", vplus: "V+", vminus: "V-", source: "Analog Devices ADA4522 Rev. I (2025-03)", rows: ADA4522 },
 ];
 
 /// The op amp with its supplies, as a script whose nets are VCC, VEE and REF (the mid point every input source and load
@@ -219,8 +235,8 @@ fn measure(p: &Part, row: &Row) -> Option<f64> {
             let a = go(format!(
                 "add V 1 as=VI
 value VI DC 0 AC 1
-add L 1e9 as=LF
-add C 1 as=CF
+add L 1e12 as=LF
+add C 1000 as=CF
 add R {rl} as=RL
                  net IN VI.+ U1.IN+
 net REF VI.- CF.2 RL.2
@@ -239,8 +255,8 @@ net OUT U1.OUT LF.2 RL.1
                         let a = go(format!(
                             "add V 1 as=VI
 value VI DC 0 AC 1
-add L 1e9 as=LF
-add C 1 as=CF
+add L 1e12 as=LF
+add C 1000 as=CF
 add R {rl} as=RL
                              net IN VI.+ U1.IN+
 net REF VI.- CF.2 RL.2

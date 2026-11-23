@@ -74,6 +74,7 @@ fn rows() -> Vec<Row> {
     v.extend(tl431_rows());
     v.extend(temp_rows());
     v.extend(ripple_rows());
+    v.extend(lm317l_rows());
     // each part's rows together (the report makes a table per run of one part, and `checks::write` keeps one per part)
     let order: Vec<&str> = v.iter().map(|r| r.part).fold(vec![], |mut o, p| {
         if !o.contains(&p) {
@@ -456,6 +457,7 @@ fn source(part: &str) -> &'static str {
         "L78L05" => "TI UA78L データシート SLVS010X (2023-06 改訂) の 6.7 節 (UA78L05、新しいチップ)。VI = 10 V、IO = 40 mA",
         "AMS1117-3.3" | "AMS1117-5.0" => "Advanced Monolithic Systems AMS1117 データシートの ELECTRICAL CHARACTERISTICS。25 °C",
         "MCP1700-3302" => "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA",
+        "LM317L" => "TI LM317L データシート SLCS144G (2026-08 改訂) の 5.6 節 (新しいチップ CSO:RFB の値がある行はそれ)。VIN − VOUT = 5 V、IOUT = 40 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
         "LM317" => "TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節。VIN − VOUT = 5 V、IOUT = 10 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
         "TL431" => "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。25 °C",
         _ => "",
@@ -477,9 +479,14 @@ fn lm317(vin: f64, iload: f64) -> String {
 
 /// The LM317 with R2 = `r2` (output about `vo`).
 fn lm317_set(vin: f64, iload: f64, r2: f64, vo: f64) -> String {
+    adjustable("LM317", vin, iload, r2, vo)
+}
+
+/// An adjustable regulator (pins IN, OUT, ADJ) with R1 = 240 ohm and R2 = `r2` (output about `vo`).
+fn adjustable(part: &str, vin: f64, iload: f64, r2: f64, vo: f64) -> String {
     let rl = if iload > 0.0 { vo / iload } else { 1e9 };
     format!(
-        "new\nadd LM317 as=U1\nadd V {vin} as=VI\nadd R {rl} as=RL\nadd R 240 as=R1\nadd R {r2} as=R2\n\
+        "new\nadd {part} as=U1\nadd V {vin} as=VI\nadd R {rl} as=RL\nadd R 240 as=R1\nadd R {r2} as=R2\n\
          net VIN VI.+ U1.IN\nnet OUT U1.OUT RL.1 R1.1\nnet ADJ U1.ADJ R1.2 R2.1\nnet GND VI.- RL.2 R2.2\n"
     )
 }
@@ -668,6 +675,55 @@ fn linear_rows() -> Vec<Row> {
     rows.push(Row { part: p, item: "リップル除去", ds: [None, Some(65.0), None], unit: "dB", at: "f = 120 Hz、VOUT = 10 V (R2 = 1680 Ω、入力 15 V)、CADJ = 0 (新しいチップ)", measure: Box::new(|| ripple_db(lm317_set(15.0, 0.0, 1680.0, 10.0), 15.0, 120.0)), tol: Some(3.0) });
     rows.push(Row { part: p, item: "出力雑音", ds: [None, Some(150.0), None], unit: "µVrms", at: "0.003 % × 5 V、10 Hz〜10 kHz", measure: Box::new(|| noise_rms(lm317(10.0, 0.0), 10.0, 10e3) * 1e6), tol: Some(30.0) });
     rows
+}
+
+/// The LM317L (TO-92, 100 mA): its table's rows (2026-11-23), measured as the LM317's.
+fn lm317l_rows() -> Vec<Row> {
+    let p = "LM317L";
+    let set = |vin: f64, iload: f64| adjustable("LM317L", vin, iload, 720.0, 5.0);
+    vec![
+        Row {
+            part: p,
+            item: "基準電圧 (OUT − ADJ)",
+            ds: [Some(1.2), Some(1.25), Some(1.3)],
+            unit: "V",
+            at: "VREF、IO = 2.5〜100 mA (2.5 mA で測った。負荷で下がるのはロード・レギュレーション)",
+            measure: Box::new(move || {
+                let a = run(&format!("{}dc probe=V(out),V(adj)\n", set(10.0, 0.0025)));
+                let d = answers(&a, "dc")[0];
+                probe(d, "V(out)") - probe(d, "V(adj)")
+            }),
+            tol: Some(0.002),
+        },
+        Row {
+            part: p,
+            item: "ADJ ピンの電流",
+            ds: [None, Some(44.0), Some(57.0)],
+            unit: "µA",
+            at: "IADJ (新しいチップ)",
+            measure: Box::new(move || {
+                let a = run(&format!("{}dc probe=V(out),V(adj)\n", set(10.0, 0.04)));
+                let d = answers(&a, "dc")[0];
+                (probe(d, "V(adj)") / 720.0 - (probe(d, "V(out)") - probe(d, "V(adj)")) / 240.0) * 1e6
+            }),
+            tol: Some(5.0),
+        },
+        Row {
+            part: p,
+            item: "ライン・レギュレーション",
+            ds: [None, Some(0.006), Some(0.0275)],
+            unit: "%/V",
+            at: "VI − VO = 5〜35 V、IO = 2.5〜100 mA (新しいチップ。入力 10 V と 40 V で比べた)",
+            measure: Box::new(move || {
+                let (a, b) = (vout(set(10.0, 0.04)), vout(set(40.0, 0.04)));
+                (b - a) / a / 30.0 * 100.0
+            }),
+            tol: Some(0.002),
+        },
+        Row { part: p, item: "電流制限", ds: [Some(0.16), Some(0.29), None], unit: "A", at: "ピーク出力電流、VI − VO ≤ 35 V (新しいチップ。出力を 4.9 V に押さえ、入力 15 V)", measure: Box::new(move || into_held_output(set(15.0, 0.0), 4.9)), tol: Some(0.03) },
+        Row { part: p, item: "リップル除去", ds: [None, Some(55.0), None], unit: "dB", at: "VO = 10 V、f = 120 Hz、ADJ のコンデンサ無し (R2 = 1680 Ω、入力 15 V)", measure: Box::new(move || ripple_db(adjustable("LM317L", 15.0, 0.0, 1680.0, 10.0), 15.0, 120.0)), tol: Some(3.0) },
+        Row { part: p, item: "出力雑音", ds: [None, Some(50.0), None], unit: "µVrms", at: "10 µV/V × 5 V、10 Hz〜10 kHz", measure: Box::new(move || noise_rms(set(10.0, 0.0), 10.0, 10e3) * 1e6), tol: Some(10.0) },
+    ]
 }
 
 /// The TL431 with its cathode held at `vka` (source VK) and REF driven by VR = `vref`.

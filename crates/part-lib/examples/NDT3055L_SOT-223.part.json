@@ -1,5 +1,5 @@
 {
-  "name": "NDT3055L_SOT-223",
+  "name": "NDT3055L",
   "category": "MOSFET",
   "description": "NDT3055L N チャネル MOSFET 60V 4A ロジックレベル (SOT-223、ピン 1 = G・2 = D (タブも D)・3 = S)。4.5 V の駆動で 0.1 Ω 台。データシート (onsemi) の typ から作った等価モデル (レベル 1 + 直列抵抗)",
   "prefix": "Q",

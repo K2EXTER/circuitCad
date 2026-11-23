@@ -265,6 +265,37 @@ fn the_mf_msmf150_trips_over_its_trip_current_and_holds_below() {
     assert!(start > 4.5 && end < 0.3, "5 A trips: {start} A, then {end} A");
 }
 
+/// The supply currents of ADR4525 and LP5907-4.5 (formula elements: a 0 A source the variation analyses move) and the TL431's REF
+/// current (its resistor) spread between the data sheets' typ and max (M2); every other analysis takes the typ.
+#[test]
+fn supply_and_ref_currents_spread_up_to_their_data_sheet_max() {
+    for (name, nets, element, lo, hi) in [
+        ("ADR4525", vec![("VIN", "in"), ("GND", "0"), ("VOUT", "out")], "X1.Iqs", 0.0, 250e-6f64),
+        ("LP5907-4.5", vec![("IN", "in"), ("GND", "0"), ("OUT", "out"), ("EN", "in")], "X1.Iqs", 0.0, 13e-6),
+        ("TL431", vec![("CATHODE", "out"), ("REF", "out"), ("ANODE", "0")], "X1.Rref", 2.495 / 4e-6, 2.495 / 2e-6),
+    ] {
+        let def = part(name);
+        let numbers: Vec<(String, &str)> = nets.iter().map(|(pin, net)| (def.pins.iter().find(|p| p.name == *pin).unwrap_or_else(|| panic!("{name} {pin}")).number.clone(), *net)).collect();
+        let mut c = Circuit::new();
+        vs(&mut c, "V1", "in", "0", 5.0);
+        res(&mut c, "R1", "in", "out", 1e3);
+        place(&mut c, &def, "X1", &numbers.iter().map(|(n, net)| (n.as_str(), *net)).collect::<Vec<_>>());
+        assert!(c.warnings.is_empty(), "{name}: {:?}", c.warnings);
+        let s = c.spreads.iter().find(|s| s.element == element).unwrap_or_else(|| panic!("{name}: {:?}", c.spreads));
+        assert!((s.lo - lo).abs() <= 1e-9 * hi.abs().max(1.0) && (s.hi - hi).abs() <= 1e-9 * hi.abs().max(1.0), "{name}: {s:?}");
+    }
+    // the typ: ADR4525 draws 700 uA (no load) with its spread source at 0
+    let def = part("ADR4525");
+    let mut c = Circuit::new();
+    vs(&mut c, "V1", "in", "0", 5.0);
+    let pin = |n: &str| def.pins.iter().find(|p| p.name == n).unwrap().number.clone();
+    let (a, b, o) = (pin("VIN"), pin("GND"), pin("VOUT"));
+    place(&mut c, &def, "X1", &[(a.as_str(), "in"), (b.as_str(), "0"), (o.as_str(), "out")]);
+    res(&mut c, "RL", "out", "0", 1e9);
+    let r = dc_op(&c).unwrap();
+    assert!((-r.element("V1").unwrap().current - 700e-6).abs() < 2e-6, "{}", r.element("V1").unwrap().current);
+}
+
 #[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");

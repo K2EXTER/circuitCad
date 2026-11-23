@@ -1,5 +1,5 @@
 {
-  "name": "LM317L_TO-92",
+  "name": "LM317L",
   "category": "レギュレータ",
   "description": "LM317L 出力電圧を抵抗で決める 3 端子レギュレータ 1.25〜37 V・100 mA (TO-92、1 = ADJ・2 = OUT・3 = IN)。出力 = 1.25 V × (1 + R2 / R1)。データシート (TI SLCS144G) の表から作った等価モデル",
   "prefix": "U",

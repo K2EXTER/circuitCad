@@ -1,5 +1,5 @@
 {
-  "name": "NDS7002A_SOT-23",
+  "name": "NDS7002A",
   "category": "MOSFET",
   "description": "NDS7002A N チャネル MOSFET 60V 0.28A (SOT-23、ピン 1 = G・2 = S・3 = D)。2N7002 の改良品 (オン抵抗が小さい)。データシート (onsemi) の typ から作った等価モデル (レベル 1 + 直列抵抗)",
   "prefix": "Q",

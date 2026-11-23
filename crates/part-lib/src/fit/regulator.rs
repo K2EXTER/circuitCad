@@ -392,8 +392,10 @@ pub struct ShuntSpec {
     pub vref: f64,
     pub vref_min: f64,
     pub vref_max: f64,
-    /// REF input current (A).
+    /// REF input current (A), and its max (M2: the variation analyses move Rref between typ and max; none: no spread).
     pub iref: f64,
+    #[serde(default)]
+    pub iref_max: Option<f64>,
     /// ΔVref / ΔVKA (V/V, negative).
     pub dvref_dvka: f64,
     /// Dynamic impedance (Ω).
@@ -421,6 +423,10 @@ pub fn shunt_model(p: &ShuntSpec) -> String {
         format!(".subckt {n} cat ref an"),
         format!("* reference input current (typ, at {} V)", g(p.vref, 6)),
         format!("Rref ref an {}", g(p.vref / p.iref, 6)),
+        match p.iref_max.filter(|m| *m > p.iref) {
+            Some(m) => format!("* spread Rref {} {} iref (data sheet: typ {} uA, max {} uA; no min, so from typ)", g(p.vref / m, 6), g(p.vref / p.iref, 6), g(p.iref * 1e6, 6), g(m * 1e6, 6)),
+            None => String::new(),
+        },
         "* the cathode current rises with REF above the knee (slope 1 / dynamic impedance; a smooth knee 0.3 mV wide); REF moves with".into(),
         "* the cathode voltage by the data sheet's ratio; the cathode needs about 1.2 V".into(),
         format!("Bk cat an I={}*(0.5*({x}+abs({x}))+ln(1+exp(-abs({x}))))*step(V(cat,an)-1.2,0.2)", g(gk * w, 6)),
@@ -437,6 +443,9 @@ pub fn shunt_model(p: &ShuntSpec) -> String {
         ),
         format!(".ends {n}"),
     ]
+    .into_iter()
+    .filter(|l| !l.is_empty())
+    .collect::<Vec<_>>()
     .join("\n")
 }
 
@@ -451,7 +460,10 @@ pub fn shunt_limits(p: &ShuntSpec) -> Vec<String> {
             g(p.zka, 6),
             g(p.ioff * 1e6, 6)
         ),
-        format!("基準電圧の部品ごとの違い ({:.3}〜{:.3} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。", p.vref_min, p.vref_max),
+        match p.iref_max.filter(|m| *m > p.iref) {
+            Some(m) => format!("基準電圧の部品ごとの違い ({:.3}〜{:.3} V、データシートの min と max) と REF の入力電流の違い ({}〜{} µA、typ と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。", p.vref_min, p.vref_max, g(p.iref * 1e6, 6), g(m * 1e6, 6)),
+            None => format!("基準電圧の部品ごとの違い ({:.3}〜{:.3} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。", p.vref_min, p.vref_max),
+        },
         match &p.temp {
             Some(c) => format!("温度による基準電圧の変化 ({}): {}。温度を設定した解析・温度スイープ・自己発熱で効きます (27 ℃ でデータシートの 25 ℃ の値)。", c.from, c.span()),
             None => String::new(),

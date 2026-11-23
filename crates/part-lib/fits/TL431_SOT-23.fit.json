@@ -9,6 +9,7 @@
   "vref_min": 2.44,
   "vref_max": 2.55,
   "iref": 2e-06,
+  "iref_max": 4e-06,
   "dvref_dvka": -0.0014,
   "zka": 0.2,
   "ioff": 1e-07,

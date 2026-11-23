@@ -1179,8 +1179,114 @@
       }
     ]
   },
+  "ADA4522-1": {
+    "fingerprint": "f96613c9bbba1f8a",
+    "source": "Analog Devices ADA4522 Rev. I (2025-03)",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "開ループ利得",
+        "datasheet": "125.0 dB / 145.0 dB / —",
+        "target": "145.0 dB",
+        "condition": "表 2 AV: RL = 10 kΩ、VOUT = 0.5〜4.5 V",
+        "model": "144.9 dB",
+        "diff": "-0.1",
+        "tested": true
+      },
+      {
+        "item": "GBW(単位利得の周波数)",
+        "datasheet": "— / 2.700 MHz / —",
+        "target": "2.700 MHz",
+        "condition": "表 2 GBP: RL = 10 kΩ、CL = 50 pF、AV = 100",
+        "model": "2.700 MHz",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "位相余裕",
+        "datasheet": "— / 64° / —",
+        "target": "64°",
+        "condition": "表 2 ΦM: RL = 10 kΩ、CL = 50 pF、AV = 1",
+        "model": "64°",
+        "diff": "-0.0",
+        "tested": true
+      },
+      {
+        "item": "スルーレート",
+        "datasheet": "— / 1.40 V/µs / —",
+        "target": "1.40 V/µs",
+        "condition": "表 2 SR+: RL = 10 kΩ、CL = 50 pF、AV = 1 (SR− は 1.3 V/µs)",
+        "model": "1.30 V/µs",
+        "diff": "-7%",
+        "tested": true
+      },
+      {
+        "item": "入力オフセット電圧",
+        "datasheet": "— / 700 nV / 5 µV",
+        "target": "700 nV",
+        "condition": "表 2 VOS: VCM = VSY/2",
+        "model": "700.718 nV",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力バイアス電流",
+        "datasheet": "— / 50 pA / 150 pA",
+        "target": "50 pA",
+        "condition": "表 2 IB",
+        "model": "50 pA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "電源電流(1 回路)",
+        "datasheet": "— / 840 µA / 910 µA",
+        "target": "840 µA",
+        "condition": "表 2 ISY: ADA4522-1、IO = 0 mA",
+        "model": "840 µA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(正の電源から)",
+        "datasheet": "— / 20 mV / 30 mV",
+        "target": "20 mV",
+        "condition": "表 2 VOH: RL = 10 kΩ を VSY/2 へ、4.98 V typ・4.97 V min (電源からの距離に直した)",
+        "model": "19.245 mV",
+        "diff": "-4%",
+        "tested": true
+      },
+      {
+        "item": "出力の振れ幅(負の電源から)",
+        "datasheet": "— / 20 mV / 30 mV",
+        "target": "20 mV",
+        "condition": "表 2 VOL: RL = 10 kΩ を VSY/2 へ",
+        "model": "19.245 mV",
+        "diff": "-4%",
+        "tested": true
+      },
+      {
+        "item": "出力の短絡電流",
+        "datasheet": "— / 22 mA / —",
+        "target": "22 mA",
+        "condition": "表 2 ISC 吐き出し (吸い込みは 29 mA)",
+        "model": "22 mA",
+        "diff": "0%",
+        "tested": true
+      },
+      {
+        "item": "入力換算の雑音(1 kHz)",
+        "datasheet": "— / 5.800 nV/√Hz / —",
+        "target": "5.800 nV/√Hz",
+        "condition": "表 2・特長 en: f = 1 kHz",
+        "model": "5.800 nV/√Hz",
+        "diff": "0%",
+        "tested": true
+      }
+    ]
+  },
   "ADR4525": {
-    "fingerprint": "2d250030c8d25e78",
+    "fingerprint": "51c3028cc28a9677",
     "source": "ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0、表 4 (ADR4525)。VIN = 3〜15 V、IL = 0 mA、25 °C",
     "date": "2026-11-11",
     "rows": [
@@ -2586,6 +2692,67 @@
       }
     ]
   },
+  "LM317L": {
+    "fingerprint": "d74db9ec7dd294c0",
+    "source": "TI LM317L データシート SLCS144G (2026-08 改訂) の 5.6 節 (新しいチップ CSO:RFB の値がある行はそれ)。VIN − VOUT = 5 V、IOUT = 40 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
+    "date": "2026-11-11",
+    "rows": [
+      {
+        "item": "基準電圧 (OUT − ADJ)",
+        "datasheet": "1.200 / 1.250 / 1.300 V",
+        "target": "1.250 V",
+        "condition": "VREF、IO = 2.5〜100 mA (2.5 mA で測った。負荷で下がるのはロード・レギュレーション)",
+        "model": "1.250 V",
+        "diff": "-0.0005 V",
+        "tested": true
+      },
+      {
+        "item": "ADJ ピンの電流",
+        "datasheet": "— / 44.000 / 57.000 µA",
+        "target": "44.000 µA",
+        "condition": "IADJ (新しいチップ)",
+        "model": "44.004 µA",
+        "diff": "+0.0035 µA",
+        "tested": true
+      },
+      {
+        "item": "ライン・レギュレーション",
+        "datasheet": "— / 0.0060 / 0.0275 %/V",
+        "target": "0.0060 %/V",
+        "condition": "VI − VO = 5〜35 V、IO = 2.5〜100 mA (新しいチップ。入力 10 V と 40 V で比べた)",
+        "model": "0.0060 %/V",
+        "diff": "-0.0000 %/V",
+        "tested": true
+      },
+      {
+        "item": "電流制限",
+        "datasheet": "0.1600 / 0.2900 / — A",
+        "target": "0.2900 A",
+        "condition": "ピーク出力電流、VI − VO ≤ 35 V (新しいチップ。出力を 4.9 V に押さえ、入力 15 V)",
+        "model": "0.2856 A",
+        "diff": "-0.0044 A",
+        "tested": true
+      },
+      {
+        "item": "リップル除去",
+        "datasheet": "— / 55.000 / — dB",
+        "target": "55.000 dB",
+        "condition": "VO = 10 V、f = 120 Hz、ADJ のコンデンサ無し (R2 = 1680 Ω、入力 15 V)",
+        "model": "55.008 dB",
+        "diff": "+0.0079 dB",
+        "tested": true
+      },
+      {
+        "item": "出力雑音",
+        "datasheet": "— / 50.000 / — µVrms",
+        "target": "50.000 µVrms",
+        "condition": "10 µV/V × 5 V、10 Hz〜10 kHz",
+        "model": "49.958 µVrms",
+        "diff": "-0.0420 µVrms",
+        "tested": true
+      }
+    ]
+  },
   "LM324": {
     "fingerprint": "52870096407c2109",
     "source": "TI SLOS066AE(2025-09 改訂)",
@@ -2596,8 +2763,8 @@
         "datasheet": "88.0 dB / 100.0 dB / —",
         "target": "100.0 dB",
         "condition": "6.7 AVD: VCC = 15 V、VO = 1〜11 V、RL ≥ 2 kΩ。25 / 100 V/mV",
-        "model": "100.0 dB",
-        "diff": "+0.0",
+        "model": "99.8 dB",
+        "diff": "-0.2",
         "tested": true
       },
       {
@@ -2781,8 +2948,8 @@
         "datasheet": "88.0 dB / 100.0 dB / —",
         "target": "100.0 dB",
         "condition": "5.7 AOL: VS = 15 V, VO = 1〜11 V, RL ≥ 2 kΩ。25 / 100 V/mV",
-        "model": "100.0 dB",
-        "diff": "+0.0",
+        "model": "99.8 dB",
+        "diff": "-0.2",
         "tested": true
       },
       {
@@ -3221,7 +3388,7 @@
     ]
   },
   "LP5907-4.5": {
-    "fingerprint": "f0dd85072239781c",
+    "fingerprint": "9456edb5e77649d9",
     "source": "TI LP5907 データシート SNVS798Q (2025-07 改訂)、5.5 節。VIN = 5.5 V、VEN = 1.2 V、IOUT = 1 mA、CIN = COUT = 1 µF",
     "date": "2026-11-11",
     "rows": [
@@ -3496,8 +3663,8 @@
         "datasheet": "88.0 dB / 112.0 dB / —",
         "target": "112.0 dB",
         "condition": "DC: AOL、VOUT = 0.3 V〜VDD − 0.3 V",
-        "model": "112.9 dB",
-        "diff": "+0.9",
+        "model": "112.0 dB",
+        "diff": "-0.0",
         "tested": true
       },
       {
@@ -3602,8 +3769,8 @@
         "datasheet": "88.0 dB / 112.0 dB / —",
         "target": "112.0 dB",
         "condition": "DC: AOL、VOUT = 0.3 V〜VDD − 0.3 V",
-        "model": "112.9 dB",
-        "diff": "+0.9",
+        "model": "112.0 dB",
+        "diff": "-0.0",
         "tested": true
       },
       {
@@ -3992,8 +4159,8 @@
         "datasheet": "88.0 dB / 100.0 dB / —",
         "target": "100.0 dB",
         "condition": "5.5 AVD: RL ≥ 2 kΩ、VO = ±10 V。25 / 100 V/mV",
-        "model": "100.0 dB",
-        "diff": "+0.0",
+        "model": "99.8 dB",
+        "diff": "-0.2",
         "tested": true
       },
       {
@@ -4836,8 +5003,8 @@
         "datasheet": "88.0 dB / 106.0 dB / —",
         "target": "106.0 dB",
         "condition": "5.8 AOL: ±15 V(TL07xC)。25 / 200 V/mV",
-        "model": "106.0 dB",
-        "diff": "+0.0",
+        "model": "105.6 dB",
+        "diff": "-0.4",
         "tested": true
       },
       {
@@ -4915,7 +5082,7 @@
     ]
   },
   "TL431": {
-    "fingerprint": "b45797c619d6fb7d",
+    "fingerprint": "115ba8b8ea5ae7c9",
     "source": "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。25 °C",
     "date": "2026-11-11",
     "rows": [
