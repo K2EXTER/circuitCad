@@ -78,7 +78,7 @@ fn the_bundled_models_are_what_their_readings_give() {
 fn the_templates_give_the_bundled_op_amps_and_regulators_exactly() {
     let mut n = 0;
     for (spec, f, part) in bundled() {
-        if !matches!(spec, Spec::Opamp(_) | Spec::Regulator(_) | Spec::Shunt(_)) {
+        if !matches!(spec, Spec::Opamp(_) | Spec::Regulator(_) | Spec::Shunt(_) | Spec::Reference(_) | Spec::SetLdo(_)) {
             continue;
         }
         n += 1;
@@ -90,7 +90,7 @@ fn the_templates_give_the_bundled_op_amps_and_regulators_exactly() {
         }
         assert_eq!(&edit::edit_part(part, f).unwrap(), part, "{}: writing the model back changes the file", f.part);
     }
-    assert_eq!(n, 17, "7 op amps (ADA4522-1 since 2026-11-23), 9 regulators (LM317L) and the TL431");
+    assert_eq!(n, 19, "7 op amps (ADA4522-1 since 2026-11-23), 9 regulators (LM317L), the TL431, the REF5025 and the LT3045 (P6)");
 }
 
 #[test]
@@ -126,6 +126,9 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
             // built from typ values with a template, not fitted: nothing to compare here (the measuring tests in
             // crates/cli/tests/integration/{opamp,regulator}_models.rs compare them with their data sheets)
             Spec::Opamp(_) | Spec::Regulator(_) | Spec::Shunt(_) => 0,
+            // the PSRR shape against the table's and the graph's points
+            Spec::Reference(r) => r.psrr.len(),
+            Spec::SetLdo(r) => r.psrr.len(),
             // the template's own response times and VOL at the data sheet's conditions (comparator_models.rs measures them)
             Spec::Comparator(_) => 3,
             Spec::Ntc(n) => n.table.len(),

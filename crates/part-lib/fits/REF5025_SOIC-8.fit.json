@@ -1,0 +1,154 @@
+{
+  "kind": "reference",
+  "part": "REF5025_SOIC-8",
+  "name": "REF5025",
+  "read": "2026-11-23",
+  "source": "TI REF50 データシート SBOS410O (2025-10 改訂) の 6.5 節 (REF50xxI・REF50xxAI)。TA = 25 °C、ILOAD = 0、CL = 1 µF、VIN = VOUT + 0.2 V〜18 V",
+  "cite": "TI REF50 データシート SBOS410O (2025-10 改訂) の 6.5 節と 8.2 節のブロック図",
+  "url": "https://www.ti.com/lit/ds/symlink/ref5025.pdf",
+  "from_figures": "PSRR の周波数特性は図 6-5 (100 Hz 以下 140 dB、1 kHz 以上で下がる)、ドロップアウトは図 6-6 (25 ℃、無負荷 0.02 V・10 mA で約 0.56 V)、吸い込みの短絡電流は図 6-12 (25 ℃ で約 20 mA。表は吐き出しの 25 mA だけ)、出力電圧と温度は図 6-4 (10 ℃ ごとに画素から読んだ)、NR の内部抵抗とバンドギャップ 1.2 V はブロック図 (図 8-1)、1 µF で雑音が半分になるのは 8.3 節の文",
+  "vout": 2.5,
+  "vrange": [
+    2.49875,
+    2.50125
+  ],
+  "vin0": 4.5,
+  "line_ppm_v": 1.0,
+  "load_src_ppm_ma": 20.0,
+  "load_snk_ppm_ma": 20.0,
+  "iq": 0.0008,
+  "iq_max": 0.001,
+  "vdo0": 0.02,
+  "rdo": 54.0,
+  "isc_src": 0.025,
+  "isc_snk": 0.02,
+  "psrr": [
+    [
+      100,
+      140
+    ],
+    [
+      470.6,
+      137.3
+    ],
+    [
+      1361.6,
+      127.2
+    ],
+    [
+      3744.3,
+      109.2
+    ],
+    [
+      11099,
+      82.9
+    ],
+    [
+      32418,
+      54.3
+    ],
+    [
+      97074,
+      26.7
+    ]
+  ],
+  "noise": {
+    "rms": 2.25e-06,
+    "f_low": 10.0,
+    "f_high": 1000.0
+  },
+  "nr": {
+    "vbg": 1.2,
+    "r_bg": 10000.0,
+    "r_pin": 1000.0,
+    "noise_left": 0.5
+  },
+  "temp_pin": {
+    "v25": 0.575,
+    "slope": 0.00264,
+    "r_out": 60000.0
+  },
+  "temp": {
+    "points": [
+      [
+        -40,
+        0.0001113
+      ],
+      [
+        -30,
+        0.0001159
+      ],
+      [
+        -20,
+        0.0001101
+      ],
+      [
+        -10,
+        9.39e-05
+      ],
+      [
+        0,
+        5.72e-05
+      ],
+      [
+        10,
+        2.59e-05
+      ],
+      [
+        20,
+        6.2e-06
+      ],
+      [
+        25,
+        2.7e-06
+      ],
+      [
+        30,
+        3.5e-06
+      ],
+      [
+        40,
+        1.12e-05
+      ],
+      [
+        50,
+        2.47e-05
+      ],
+      [
+        60,
+        3.86e-05
+      ],
+      [
+        75,
+        6.1e-05
+      ],
+      [
+        90,
+        7.88e-05
+      ],
+      [
+        100,
+        8.73e-05
+      ],
+      [
+        110,
+        9.43e-05
+      ],
+      [
+        125,
+        0.0001043
+      ]
+    ],
+    "from": "TI の図 6-4、出力電圧の精度と温度を 10 ℃ ごとに画素から読み、直線でつないだ"
+  },
+  "remarks": [
+    "vrange = 2.5 V ± 0.05 % (high grade initial accuracy)",
+    "noise = 0.9 uVrms/V x 2.5 V, 10 Hz to 1 kHz (table); figure 6-14 shows about 28 nV/V/rtHz = 70 nV/rtHz",
+    "line 1 ppm/V typ (table; figure 6-11 shows 0.05 ppm/V at 25 C), load 20 ppm/mA typ both ways (table; figure 6-7 is smaller)",
+    "iq 0.8 mA typ, 1 mA max",
+    "dropout: figure 6-6, 25 C line from 0.02 V at 0 mA to about 0.56 V at 10 mA",
+    "PSRR points: ds pick on figure 6-5 (and 140 dB flat at 100 Hz)",
+    "TEMP: VTEMP = 509 mV + 2.64 mV x T (8.3.1), 575 mV at 25 C (table), about 60 kOhm (R5)",
+    "temperature curve: pixels of figure 6-4, 0.005 % per 64.7 px at scale 4"
+  ]
+}

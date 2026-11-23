@@ -21,7 +21,7 @@ pub enum Noise {
 }
 
 impl Noise {
-    fn density(&self) -> f64 {
+    pub fn density(&self) -> f64 {
         match *self {
             Noise::Rms { rms, f_low, f_high } => rms / (f_high - f_low).sqrt(),
             Noise::Density { density } => density,

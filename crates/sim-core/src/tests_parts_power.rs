@@ -296,6 +296,124 @@ fn supply_and_ref_currents_spread_up_to_their_data_sheet_max() {
     assert!((-r.element("V1").unwrap().current - 700e-6).abs() < 2e-6, "{}", r.element("V1").unwrap().current);
 }
 
+/// TI REF5025 (the reference template, P6): 2.5 V from 5 V, 20 ppm/mA under load, the TEMP pin at 575 mV + 2.64 mV/°C, the
+/// data sheet's trim circuit (figure 8-5: a 10 k pot over VOUT and 2 k, 1 M into TRIM/NR) moving the output by tens of mV, the
+/// short-circuit current, and a 1 µF on NR halving the output noise.
+#[test]
+fn the_ref5025_holds_two_and_a_half_volts_and_its_pins_work() {
+    let def = part("REF5025");
+    let build = |load: f64, nr: Option<&dyn Fn(&mut Circuit)>| {
+        let mut c = Circuit::new();
+        vs(&mut c, "V1", "in", "0", 5.0);
+        place(&mut c, &def, "U1", &[("2", "in"), ("4", "0"), ("6", "out"), ("5", "nr"), ("3", "tmp")]);
+        res(&mut c, "RL", "out", "0", load);
+        if let Some(f) = nr {
+            f(&mut c);
+        }
+        c
+    };
+    let r = dc_op(&build(1e9, None)).unwrap();
+    assert!((v(&r, "out") - 2.5).abs() < 2e-4, "2.5 V: {}", v(&r, "out"));
+    let spreads: Vec<_> = build(1e9, None).spreads.iter().map(|x| x.what.clone()).collect();
+    assert_eq!(spreads, ["iq", "vout"], "the supply current and the output vary from part to part");
+    // 27 °C: 575 + 2 x 2.64 mV
+    assert!((v(&r, "tmp") - 0.58028).abs() < 1e-4, "TEMP: {}", v(&r, "tmp"));
+    let loaded = v(&dc_op(&build(250.0, None)).unwrap(), "out");
+    assert!((v(&r, "out") - loaded - 0.5e-3).abs() < 0.05e-3, "10 mA drops 20 ppm/mA x 10 mA = 0.5 mV: {}", v(&r, "out") - loaded);
+    // the short circuit: the table's 25 mA
+    let short = v(&dc_op(&build(0.1, None)).unwrap(), "out") / 0.1;
+    assert!((short - 0.025).abs() < 1e-3, "short-circuit current {short}");
+    // the trim circuit: the wiper at VOUT raises the output, at the bottom of the pot (VOUT x 2k / 12k) lowers it
+    let trim = |top: bool| {
+        let c = build(1e9, Some(&|c: &mut Circuit| {
+            res(c, "R1a", "out", "w", if top { 1e-3 } else { 10e3 });
+            res(c, "R1b", "w", "b", if top { 10e3 } else { 1e-3 });
+            res(c, "R2", "b", "0", 2e3);
+            res(c, "R3", "w", "nr", 1e6);
+        }));
+        v(&dc_op(&c).unwrap(), "out") - 2.5
+    };
+    let (up, down) = (trim(true), trim(false));
+    assert!(up > 0.01 && up < 0.04 && down < -0.01 && down > -0.04, "trim range {up} .. {down} V (data sheet: about 15 mV)");
+    // the noise over 10 Hz to 1 kHz: the table's 0.9 uVrms/V (2.25 uVrms); with 1 uF on NR about half
+    let rms = |c: &Circuit| {
+        let st = NoiseSettings { sweep: AcSettings { fstart: 10.0, fstop: 1e3, sweep: AcSweep::Decade(20) }, output: "out".into(), output_ref: None, input: None, temp_c: 26.85 };
+        let r = noise_analysis(c, &st).unwrap();
+        integrate_psd(&r.freq, &r.out_psd).sqrt()
+    };
+    let plain = rms(&build(1e9, None));
+    let filtered = rms(&build(1e9, Some(&|c: &mut Circuit| {
+        let (a, b) = (c.node("nr"), c.node("0"));
+        c.add(Element::Capacitor { name: "CNR".into(), a, b, c: 1e-6 });
+    })));
+    assert!((plain - 2.25e-6).abs() < 0.1e-6, "noise {plain}");
+    assert!(filtered / plain > 0.45 && filtered / plain < 0.65, "1 uF on NR: {filtered} of {plain}");
+}
+
+/// ADI LT3045 (the SET-pin LDO template, P6): 100 uA into RSET sets the output, the dropout at 500 mA, the internal current limit
+/// folding back at a large input - output difference, ILIM's 150 mA.kOhm, EN/UV off, PG low while PGFB is below 300 mV, and the
+/// noise with CSET 4.7 uF (the data sheet's 0.8 uVrms over 10 Hz to 100 kHz).
+#[test]
+fn the_lt3045_follows_its_set_resistor_and_limits() {
+    let def = part("LT3045");
+    struct Opt {
+        vin: f64,
+        load: f64,
+        en: bool,
+        pgfb_low: bool,
+        rilim: Option<f64>,
+        cset: Option<f64>,
+    }
+    let build = |o: &Opt| {
+        let mut c = Circuit::new();
+        vs(&mut c, "V1", "in", "0", o.vin);
+        place(&mut c, &def, "U1", &[("1", "in"), ("9", "0"), ("11", "out"), ("10", "out"), ("8", "set"), ("4", "en"), ("5", "pg"), ("7", "pgfb"), ("6", "ilim")]);
+        res(&mut c, "RSET", "set", "0", 33.2e3);
+        res(&mut c, "RL", "out", "0", o.load);
+        res(&mut c, "REN", "in", "en", if o.en { 1.0 } else { 1e9 });
+        res(&mut c, "RENL", "en", "0", if o.en { 1e9 } else { 1.0 });
+        res(&mut c, "RPGFB", "pgfb", if o.pgfb_low { "0" } else { "in" }, 1.0);
+        res(&mut c, "RPG", "in", "pg", 100e3);
+        res(&mut c, "RILIM", "ilim", "0", o.rilim.unwrap_or(1e-3));
+        if let Some(cs) = o.cset {
+            let (a, b) = (c.node("set"), c.node("0"));
+            c.add(Element::Capacitor { name: "CSET".into(), a, b, c: cs });
+        }
+        c
+    };
+    let base = Opt { vin: 5.0, load: 33.0, en: true, pgfb_low: false, rilim: None, cset: None };
+    let r = dc_op(&build(&base)).unwrap();
+    assert!((v(&r, "out") - 3.32).abs() < 2e-3, "100 uA x 33.2 k: {}", v(&r, "out"));
+    let spreads: Vec<_> = build(&base).spreads.iter().map(|x| x.what.clone()).collect();
+    assert_eq!(spreads, ["iset", "offset"], "the SET current and the offset vary from part to part");
+    assert!(v(&r, "pg") > 4.9, "PG high with PGFB above 300 mV: {}", v(&r, "pg"));
+    // dropout: 3.4 V in, 500 mA out (6.6 ohm): 0.21 + 0.1 x 0.5 = 0.26 V
+    let d = v(&dc_op(&build(&Opt { vin: 3.4, load: 6.0, ..base })).unwrap(), "out");
+    assert!((3.4 - d - 0.27).abs() < 0.03, "dropout {} V", 3.4 - d);
+    // the internal limit into a short: 0.7 A from 5 V, folded back to 0.33 A from 20 V
+    let short = |vin: f64, rilim: Option<f64>| v(&dc_op(&build(&Opt { vin, load: 0.01, rilim, ..base })).unwrap(), "out") / 0.01;
+    assert!((short(5.0, None) - 0.7).abs() < 0.02, "{}", short(5.0, None));
+    assert!((short(20.0, None) - 0.33).abs() < 0.02, "{}", short(20.0, None));
+    // ILIM: 1 k programs 150 mA
+    assert!((short(5.0, Some(1e3)) - 0.15).abs() < 0.005, "{}", short(5.0, Some(1e3)));
+    // EN/UV low: off
+    let off = dc_op(&build(&Opt { en: false, ..base })).unwrap();
+    assert!(v(&off, "out").abs() < 1e-3, "off: {}", v(&off, "out"));
+    // PGFB below 300 mV: PG low (and the fast start-up current pushes the output to the dropout)
+    let low = dc_op(&build(&Opt { pgfb_low: true, ..base })).unwrap();
+    assert!(v(&low, "pg") < 0.05, "PG low: {}", v(&low, "pg"));
+    // noise, 10 Hz to 100 kHz: with CSET 4.7 uF the buffer's own (0.8 uVrms); without it the SET current's noise on RSET is far more
+    let rms = |c: &Circuit| {
+        let st = NoiseSettings { sweep: AcSettings { fstart: 10.0, fstop: 1e5, sweep: AcSweep::Decade(20) }, output: "out".into(), output_ref: None, input: None, temp_c: 26.85 };
+        let r = noise_analysis(c, &st).unwrap();
+        integrate_psd(&r.freq, &r.out_psd).sqrt()
+    };
+    let quiet = rms(&build(&Opt { cset: Some(4.7e-6), ..base }));
+    let loud = rms(&build(&base));
+    assert!((quiet - 0.8e-6).abs() < 0.1e-6, "with CSET 4.7 uF: {quiet}");
+    assert!(loud > 50e-6, "without CSET: {loud}");
+}
+
 #[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");

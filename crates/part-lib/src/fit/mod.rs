@@ -3,7 +3,8 @@
 //! (`sim.limits`) and a table of how far the model lands from each reading. [`write_part`] puts the model into the
 //! part's `.part.json`. The bundled diodes, transistors and MOSFETs are made this way (their readings are in
 //! `crates/part-lib/fits/`); `ccad fit FILE` runs it from the command line. Op amps, linear regulators and shunt
-//! references are not fitted but built from the data sheet's typ values with a template (`opamp`, `regulator`; M3).
+//! references are not fitted but built from the data sheet's typ values with a template (`opamp`, `regulator`; M3), and so
+//! are series references (`reference`) and SET-pin LDOs (`setldo`, P6).
 //! Details: `docs/code-notes/part-lib.md`.
 
 mod bjt;
@@ -15,7 +16,9 @@ mod mos;
 pub mod num;
 pub mod opamp;
 mod opto;
+pub mod reference;
 pub mod regulator;
+pub mod setldo;
 pub mod simple;
 
 pub use bjt::BjtSpec;
@@ -26,13 +29,15 @@ pub use edit::write_part;
 pub use mos::{Caps, MosSpec};
 pub use opamp::OpampSpec;
 pub use opto::{OptocouplerSpec, PhotodiodeSpec};
+pub use reference::ReferenceSpec;
 pub use regulator::{RegulatorSpec, ShuntSpec};
+pub use setldo::SetLdoSpec;
 pub use simple::{CrystalSpec, NtcSpec, RelaySpec, TvsSpec, ntc_b_from_table};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// What was read off one part's data sheet. `kind` picks the model: "diode", "bjt", "mos", "darlington", "photodiode",
-/// "optocoupler", "opamp", "comparator", "regulator", "shunt", "ntc", "crystal", "tvs" or "relay".
+/// "optocoupler", "opamp", "comparator", "regulator", "shunt", "reference", "setldo", "ntc", "crystal", "tvs" or "relay".
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Spec {
@@ -46,6 +51,8 @@ pub enum Spec {
     Comparator(comparator::ComparatorSpec),
     Regulator(regulator::RegulatorSpec),
     Shunt(regulator::ShuntSpec),
+    Reference(reference::ReferenceSpec),
+    SetLdo(setldo::SetLdoSpec),
     Ntc(simple::NtcSpec),
     Crystal(simple::CrystalSpec),
     Tvs(simple::TvsSpec),
@@ -146,6 +153,8 @@ impl Spec {
             Spec::Comparator(s) => &s.common,
             Spec::Regulator(s) => &s.common,
             Spec::Shunt(s) => &s.common,
+            Spec::Reference(s) => &s.common,
+            Spec::SetLdo(s) => &s.common,
             Spec::Ntc(s) => &s.common,
             Spec::Crystal(s) => &s.common,
             Spec::Tvs(s) => &s.common,
@@ -155,7 +164,7 @@ impl Spec {
 
     pub fn load(path: &Path) -> Result<Spec, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / comparator / regulator / shunt / ntc / crystal / tvs / relay。形は crates/part-lib/fits/ の例を見てください)", path.display()))
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / comparator / regulator / shunt / reference / setldo / ntc / crystal / tvs / relay。形は crates/part-lib/fits/ の例を見てください)", path.display()))
     }
 }
 
@@ -231,6 +240,8 @@ pub fn fit(spec: &Spec) -> Result<Fitted, String> {
         Spec::Comparator(s) => comparator::fit(s)?,
         Spec::Regulator(s) => regulator::fit_regulator(s)?,
         Spec::Shunt(s) => regulator::fit_shunt(s)?,
+        Spec::Reference(s) => reference::fit_reference(s)?,
+        Spec::SetLdo(s) => setldo::fit_setldo(s)?,
         Spec::Ntc(s) => simple::fit_ntc(s)?,
         Spec::Crystal(s) => simple::fit_crystal(s)?,
         Spec::Tvs(s) => simple::fit_tvs(s)?,

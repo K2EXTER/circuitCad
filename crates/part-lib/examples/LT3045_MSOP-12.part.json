@@ -1,0 +1,204 @@
+{
+  "name": "LT3045",
+  "category": "電源IC",
+  "description": "ADI (旧 LTC) LT3045 20 V・500 mA の超低雑音・高 PSRR の LDO (12 ピン MSOP、裏の放熱パッドは GND)。出力 = SET ピンの 100 µA × RSET (0〜15 V)、入力 1.8〜20 V、ドロップアウト 260 mV (500 mA)、雑音 0.8 µVrms (10 Hz〜100 kHz、CSET 4.7 µF)、PSRR 76 dB (1 MHz)、静止電流 2.2 mA。RSET に並べた CSET が雑音を下げる (起動は 2.3 × RSET × CSET)。OUTS は OUT のそばで出力に、EN/UV は使わなければ IN に、PGFB は使わなければ IN に、ILIM は使わなければ GND に (GND との抵抗で電流制限 = 150 mA·kΩ ÷ 抵抗)。出力には 10 µF 以上のセラミック・コンデンサ。IN (1・2・3) と OUT (11・12) は同じパッドのまとまり、放熱パッドはピン 9 (GND) につなぐ。",
+  "datasheet": "https://www.analog.com/media/en/technical-documentation/data-sheets/lt3045.pdf",
+  "prefix": "U",
+  "value": "LT3045",
+  "footprint_name": "MSOP-12-1EP_3x4mm_P0.65mm",
+  "height": 1.1,
+  "pins": [
+    {
+      "number": "1",
+      "name": "IN",
+      "side": "left",
+      "kind": "power_in"
+    },
+    {
+      "number": "4",
+      "name": "EN/UV",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "6",
+      "name": "ILIM",
+      "side": "left",
+      "kind": "passive"
+    },
+    {
+      "number": "9",
+      "name": "GND",
+      "side": "bottom",
+      "kind": "power_in"
+    },
+    {
+      "number": "11",
+      "name": "OUT",
+      "side": "right",
+      "kind": "power_out"
+    },
+    {
+      "number": "10",
+      "name": "OUTS",
+      "side": "right",
+      "kind": "input"
+    },
+    {
+      "number": "8",
+      "name": "SET",
+      "side": "right",
+      "kind": "passive"
+    },
+    {
+      "number": "7",
+      "name": "PGFB",
+      "side": "right",
+      "kind": "input"
+    },
+    {
+      "number": "5",
+      "name": "PG",
+      "side": "right",
+      "kind": "open_drain"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.105,
+        "y": 1.625,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "1",
+        "x": -2.105,
+        "y": 0.975,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "1",
+        "x": -2.105,
+        "y": 0.325,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "4",
+        "x": -2.105,
+        "y": -0.325,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "5",
+        "x": -2.105,
+        "y": -0.975,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "6",
+        "x": -2.105,
+        "y": -1.625,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "7",
+        "x": 2.105,
+        "y": -1.625,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "8",
+        "x": 2.105,
+        "y": -0.975,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "9",
+        "x": 2.105,
+        "y": -0.325,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "10",
+        "x": 2.105,
+        "y": 0.325,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "11",
+        "x": 2.105,
+        "y": 0.975,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "11",
+        "x": 2.105,
+        "y": 1.625,
+        "shape": "rect",
+        "w": 0.889,
+        "h": 0.42
+      },
+      {
+        "pin": "9",
+        "x": 0,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.651,
+        "h": 2.845
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "LT3045",
+    "text": ".subckt LT3045 in gnd out outs set en pg pgfb ilim\n* on: the input above its minimum (UVLO) and EN/UV above its threshold\nBon on gnd V=step(V(in,gnd)-1.78,0.05)*step(V(en,gnd)-1.24,0.01)\nRen en gnd 100Meg\n* the SET current (into the user's RSET and CSET)\n* the SET current's difference from part to part (0 V read as amps; the variation analyses move it between the data sheet's min and max)\nVsd isd gnd DC 0\n* spread Vsd -1e-06 1e-06 iset (data sheet: 99 to 101 uA)\nBset in set I=V(on,gnd)*(0.0001+V(isd,gnd)+5e-10*(V(in,gnd)-2))\nRnzi nzi gnd 1k\nGni gnd set nzi gnd 0.0046605\n* fast start-up: more current into SET while PGFB is below the power-good threshold\nBfs in set I=V(on,gnd)*0.0019*step(0.3-V(pgfb,gnd),0.005)\n* line regulation through a slow path (the data sheet's DC figure)\nElf lfa gnd in gnd 1\nRlf lfa lf 1.59Meg\nClf lf gnd 100n\n* the ripple rising with frequency: high-passes of a copy of the input (order 1, order 2), fitted to the data sheet's PSRR\nErh rh 0 in gnd 1\nCrh0_1 rh rx0_1 3.19922e-09\nRrh0_1 rx0_1 0 1k\nErh0_1 rh0_1 0 rx0_1 0 1\nCrh1_1 rh rx1_1 5.46607e-11\nRrh1_1 rx1_1 0 1k\nErh1_1 rh1_1 0 rx1_1 0 1\nCrh1_2 rh1_1 rx1_2 5.46607e-11\nRrh1_2 rx1_2 0 1k\nErh1_2 rh1_2 0 rx1_2 0 1\n* the offset VOUT - VSET from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVvos vos gnd DC 0\n* spread Vvos -0.001 0.001 offset (data sheet: -1 to 1 mV)\n* the buffer's target: SET, its offset, the line regulation and the ripple, with the buffer's own noise\nBtgt t0 gnd V=V(set,gnd)+V(vos,gnd)+-8.58555e-07*(V(lf,gnd)-2)+1.35856e-06*(V(in,gnd)-2)+0.000158994*V(rh0_1)+0.00227953*V(rh1_2)\nRnz nz gnd 1k\nEn tgt t0 nz gnd 0.621399\n* OUTS senses the output (a large resistor to OUT keeps it defined if left open)\nRouts outs out 1Meg\n* the pass device: what the buffer asks for (the load regulation), no more than the dropout and the internal current\n* limit (folding back at large input - output differences) allow, cut back when ILIM reaches its threshold; only from IN to OUT\nBpass in op I=V(on,gnd)*max(min(min((V(tgt,gnd)-V(outs,gnd))/0.0002,(V(in,gnd)-V(out,gnd)-0.21)/0.1),limit(0.7+-0.04625*(V(in,gnd)-V(out,gnd)-12),0.33,0.7)),0)*limit(1+(0.3-V(ilim,gnd))*1000,0,1)\nVs op out DC 0\n* ILIM sources the output current / 500 (a current monitor)\nBil in ilim I=I(Vs)/500\n* quiescent current: grows with the output current; a little in shutdown\nBq in gnd I=V(on,gnd)*(0.0022+0.02*I(Vs))+3e-07*tanh(V(in,gnd)/2)\n* PG: open collector, low while PGFB is below the threshold (and the part is on); PGFB itself draws next to nothing\nBpg pg gnd I=V(on,gnd)*step(0.3-V(pgfb,gnd),0.005)*V(pg,gnd)/300\nRpgfb pgfb gnd 1G\n.ends LT3045",
+    "pins": [
+      "1",
+      "9",
+      "11",
+      "10",
+      "8",
+      "4",
+      "5",
+      "7",
+      "6"
+    ],
+    "limits": [
+      "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: ADI LT3045 データシート Rev. D の電気的特性と、ピンの説明・応用の情報 (ILIM・PGFB・速い起動)。",
+      "再現しているもの: SET ピンの電流 100 µA (出力 = 電流 × RSET、起動は RSET と CSET の時定数)、出力のオフセット (VOUT − VSET) 0 V、ロード・レギュレーション 0.2 mΩ、ドロップアウト (0.21 V + 0.1 Ω × 電流)、内部の電流制限 (12 V の差で 0.7 A、20 V で 0.33 A。差が大きいと下げる)、電源電流 (2.2 mA + 出力電流の 2 %、停止中 0.3 µA)、最小の入力 1.78 V、PSRR (120 Hz で 117 dB、10 kHz で 90 dB、100 kHz で 77 dB、1 MHz で 76 dB、10 MHz で 53 dB)、雑音 (増幅器 2.53 nV/√Hz、SET の電流 19 pA/√Hz。どちらも平らとした)。",
+      "ピン: EN/UV (1.24 V で入る。ヒステリシスは扱わない)、PG (PGFB が 300 mV より下の間は低く引く。その間は SET に 1.9 mA 多く流して速く起動する)、ILIM (出力電流の 1/500 を流し出す。GND との抵抗で 0.3 V になると電流を制限: 150 mA·kΩ ÷ 抵抗)。",
+      "データシートの表に無い値: ドロップアウトは図 G14 (25 ℃ で 400 mA まで約 210 mV、表の 500 mA の 260 mV に合わせて 0.21 V + 0.1 Ω × 電流)、電源電流の出力電流による増え方は図 G16 (25 ℃、500 mA で約 12.5 mA、出力電流の 2 %)。PSRR は 120 Hz が CSET 4.7 µF、ほかは 0.47 µF の値で、CSET による違いは入れていない。",
+      "部品ごとの違い (SET の電流 99〜101 µA・オフセット -1〜1 mV、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。",
+      "扱わないもの: 温度による変化と熱による停止、1/f 雑音、逆の電圧の保護、出力のコンデンサによる安定性と負荷の急変の応答、EN/UV と PGFB のヒステリシス、ドロップアウトや電流制限の間も速い起動が続くこと (実物は止める)。",
+      "最終の確認は、メーカーの公式モデルで行ってください。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "ADI LT3045 データシート Rev. D の電気的特性 (TA = 25 °C、VIN = 2 V、ILOAD = 1 mA、VOUT = 1.3 V。雑音と PSRR は ILOAD = 500 mA、COUT = 10 µF)"
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "kind": "setldo",
+  "part": "LT3045_MSOP-12",
+  "name": "LT3045",
+  "read": "2026-11-23",
+  "source": "ADI LT3045 データシート Rev. D の電気的特性 (TA = 25 °C、VIN = 2 V、ILOAD = 1 mA、VOUT = 1.3 V。雑音と PSRR は ILOAD = 500 mA、COUT = 10 µF)",
+  "cite": "ADI LT3045 データシート Rev. D の電気的特性と、ピンの説明・応用の情報 (ILIM・PGFB・速い起動)",
+  "url": "https://www.analog.com/media/en/technical-documentation/data-sheets/lt3045.pdf",
+  "from_figures": "ドロップアウトは図 G14 (25 ℃ で 400 mA まで約 210 mV、表の 500 mA の 260 mV に合わせて 0.21 V + 0.1 Ω × 電流)、電源電流の出力電流による増え方は図 G16 (25 ℃、500 mA で約 12.5 mA、出力電流の 2 %)。PSRR は 120 Hz が CSET 4.7 µF、ほかは 0.47 µF の値で、CSET による違いは入れていない",
+  "iset": 0.0001,
+  "iset_range": [
+    9.9e-05,
+    0.000101
+  ],
+  "vos_range": [
+    -0.001,
+    0.001
+  ],
+  "vin0": 2.0,
+  "line_iset": 5e-10,
+  "line_vos": 5e-07,
+  "rout": 0.0002,
+  "vdo0": 0.21,
+  "rdo": 0.1,
+  "vin_min": 1.78,
+  "iq": 0.0022,
+  "iq_per_a": 0.02,
+  "iq_off": 3e-07,
+  "ilim": [
+    {
+      "diff": 12.0,
+      "amps": 0.7
+    },
+    {
+      "diff": 20.0,
+      "amps": 0.33
+    }
+  ],
+  "en_threshold": 1.24,
+  "ilim_pin": {
+    "ratio": 500.0,
+    "threshold": 0.3
+  },
+  "pg": {
+    "threshold": 0.3,
+    "r_on": 300.0,
+    "fast": 0.0019
+  },
+  "psrr": [
+    [
+      120,
+      117
+    ],
+    [
+      10000.0,
+      90
+    ],
+    [
+      100000.0,
+      77
+    ],
+    [
+      1000000.0,
+      76
+    ],
+    [
+      10000000.0,
+      53
+    ]
+  ],
+  "noise": {
+    "rms": 8e-07,
+    "f_low": 10.0,
+    "f_high": 100000.0
+  },
+  "iset_noise": {
+    "rms": 6e-09,
+    "f_low": 10.0,
+    "f_high": 100000.0
+  },
+  "remarks": [
+    "ISET 100 uA typ, 99 to 101 uA (25 C); VOS 0 typ, -1 to 1 mV",
+    "line: dISET 0.5 nA/V, dVOS 0.5 uV/V (VIN 2 to 20 V)",
+    "load: dVOS 0.1 mV for 1 mA to 500 mA -> 0.2 mOhm",
+    "internal current limit 710 mA at VIN 2 V, 700 mA at 12 V, 330 mA at 20 V (VOUT = 0): the foldback from 12 V of difference",
+    "GND pin current 2.2 mA at 10 uA; shutdown 0.3 uA",
+    "fast start-up: SET pin current 2 mA while PGFB < 300 mV (1.9 mA more than the 100 uA)",
+    "PG low 30 mV at 100 uA -> 300 Ohm",
+    "ILIM sources 1/500 of the output current; threshold 300 mV (150 mA kOhm)",
+    "noise: 0.8 uVrms 10 Hz to 100 kHz with CSET 4.7 uF (the buffer's own); reference current noise 6 nArms, same band",
+    "PSRR 117 dB at 120 Hz (CSET 4.7 uF), 90 / 77 / 76 / 53 dB at 10 k / 100 k / 1 M / 10 MHz (CSET 0.47 uF)",
+    "land: recommended solder pad layout of the MSE package (05-08-1666 Rev G)"
+  ]
+}

@@ -438,6 +438,7 @@ pub(super) fn varied_name(name: &str) -> String {
         "iq" => i18n::tr("電源電流"),
         "iadj" => i18n::tr("ADJ ピンの電流"),
         "iref" => i18n::tr("REF ピンの電流"),
+        "iset" => i18n::tr("SET ピンの電流"),
         "offset-drift" => i18n::tr("入力オフセットの温度ドリフト"),
         other => other,
     };
