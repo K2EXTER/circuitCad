@@ -818,24 +818,26 @@ mod tests {
         f.regulator_example_and_make(false);
         let s = |x: &str| x.to_string();
         f.reg.variants = vec![(5.0, s("MC7805CT")), (12.0, s("MC7812CT"))];
-        f.reg.parts = vec![(5.0, s("MC7805CT")), (5.0, s("MC7805BDT")), (12.0, s("MC7812CT"))];
-        f.reg.packages = vec![(s("MC7805CT"), s("TO-220")), (s("MC7805BDT"), s("DPAK")), (s("MC7812CT"), s("TO-220"))];
+        f.reg.parts = vec![(5.0, s("MC7805CT")), (5.0, s("MC7805BDT")), (5.0, s("MC7805YZ")), (12.0, s("MC7812CT"))];
+        f.reg.packages = vec![(s("MC7805CT"), s("TO-220")), (s("MC7805BDT"), s("DPAK")), (s("MC7805YZ"), s("DSBGA")), (s("MC7812CT"), s("TO-220"))];
         let before = (f.name.clone(), f.reg.vout.clone(), f.sim_text.clone(), f.fp_preset.clone());
         let (series, left) = f.reg_series().unwrap();
         assert_eq!(series.series, "MC78");
         let parts = series.expand();
         let names: Vec<&str> = parts.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, vec!["MC7805CT", "MC7812CT"], "{left:?}");
-        assert!(left.len() == 1 && left[0].contains("MC7805BDT") && left[0].contains("DPAK"), "{left:?}");
+        // DPAK has a built-in shape (TO-252, 候補 Q17); DSBGA has none, so that one is left out and said
+        assert_eq!(names, vec!["MC7805CT", "MC7805BDT", "MC7812CT"], "{left:?}");
+        assert_eq!(parts[1].footprint_name.as_deref(), Some("TO-252"));
+        assert!(left.len() == 1 && left[0].contains("MC7805YZ") && left[0].contains("DSBGA"), "{left:?}");
         assert_eq!(parts[0].footprint_name.as_deref(), Some("TO-220-3"));
-        assert_eq!(parts[1].value.as_deref(), Some("12V"));
-        let (a, b) = (parts[0].sim.as_ref().unwrap(), parts[1].sim.as_ref().unwrap());
+        assert_eq!(parts[2].value.as_deref(), Some("12V"));
+        let (a, b) = (parts[0].sim.as_ref().unwrap(), parts[2].sim.as_ref().unwrap());
         assert!(a.text.contains("MC7805CT") && b.text.contains("MC7812CT") && a.text != b.text);
-        assert!(parts[1].description.starts_with("MC78 の 出力 12 V、TO-220"), "{}", parts[1].description);
+        assert!(parts[2].description.starts_with("MC78 の 出力 12 V、TO-220"), "{}", parts[2].description);
         assert_eq!((f.name.clone(), f.reg.vout.clone(), f.sim_text.clone(), f.fp_preset.clone()), before, "the form put back");
         // the button hands them over for saving
         f.reg_make_all();
-        assert_eq!(f.batch.len(), 2);
+        assert_eq!(f.batch.len(), 3);
     }
 
     #[test]

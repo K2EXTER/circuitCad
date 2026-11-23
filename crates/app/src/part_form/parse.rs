@@ -441,6 +441,8 @@ impl PartForm {
             swap: None,
             programming: vec![],
             companions,
+            // the open PDF's edition, else the one the part was made from (候補 Q9)
+            sheet: self.sheet.sheet_record().or_else(|| self.orig.as_ref().and_then(|o| o.sheet.clone())),
         };
         self.keep_hidden(&mut def);
         Ok(def)

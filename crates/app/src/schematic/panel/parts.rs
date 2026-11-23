@@ -189,6 +189,7 @@ impl SchEditor {
             let recents: Vec<usize> = self.lib.prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
             let mut toggle_fav: Option<String> = None;
             let mut edit_part: Option<PartDef> = None;
+            let mut export_part: Option<PartDef> = None;
             let mut delete_part: Option<String> = None;
             let mut row = |ui: &mut egui::Ui, i: usize, selected: bool, prefs: &library::LibPrefs| {
                 let d = &self.library[i];
@@ -279,9 +280,14 @@ impl SchEditor {
                         switch_to = series_value_ui(ui, s, v, &mut self.series_value);
                     }
                     ui.small(i18n::trf!("パッケージ: {}", d.footprint_name()));
-                    if ui.small_button(i18n::tr("編集…")).on_hover_text(i18n::tr("この部品を部品作成の窓で開いて、ピン・部品の形・モデル・定格などを直します。保存すると書き換わります (名前を変えると別の部品として追加)")).clicked() {
-                        edit_part = Some(d.clone());
-                    }
+                    ui.horizontal(|ui| {
+                        if ui.small_button(i18n::tr("編集…")).on_hover_text(i18n::tr("この部品を部品作成の窓で開いて、ピン・部品の形・モデル・定格などを直します。保存すると書き換わります (名前を変えると別の部品として追加)")).clicked() {
+                            edit_part = Some(d.clone());
+                        }
+                        if ui.small_button(i18n::tr("1 ファイルで書き出す…")).on_hover_text(i18n::tr("ほかの人に渡すため、部品 (ピン・部品の形・モデル・定格・3D の形・メーカーの STEP・データシートの版と読んだ値) を 1 つの .ccpart ファイルにします。受け取った人は「部品を読み込む」で追加します。データシートの PDF は入りません")).clicked() {
+                            export_part = Some(d.clone());
+                        }
+                    });
                     if member.is_some() {
                         // a bundled series is not a file in the library folder: there is nothing to delete
                     } else if self.lib.delete.as_deref() == Some(d.name.as_str()) {
@@ -335,6 +341,9 @@ impl SchEditor {
             if let Some(n) = delete_part {
                 self.lib.delete = None;
                 self.delete_library_part(&n);
+            }
+            if let Some(d) = export_part {
+                self.export_part_bundle(&d);
             }
             if let Some(d) = edit_part {
                 self.status = format!("{} を編集します。保存すると書き換わります", d.name);

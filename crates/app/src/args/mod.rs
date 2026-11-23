@@ -1,4 +1,4 @@
-//! Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [options]`. Mostly useful for scripts, for screenshots and
+//! Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj | part.ccpart] [options]`. Mostly useful for scripts, for screenshots and
 //! for checking a build. The options are read in a fixed order (files are opened before the analyses on them, the part form's
 //! `--form-save` and the `--pdf` / `--svg` exports quit the app), so each topic has its own file and `apply_args` calls them in turn:
 //!
@@ -31,6 +31,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     sheet::apply(app, &a);
     board::apply_file(app, &a);
     proto::apply(app, &a);
+    // a part handed on as one file (候補 Q11): into the library, the library list opened
+    if let Some(f) = a.file(".ccpart") {
+        app.sch.import_part_file(std::path::Path::new(f));
+        app.sch.set_library_search("");
+    }
     export_sheet(app, &a);
 }
 

@@ -1,5 +1,11 @@
 # part-lib のメモ
 
+## `bundle.rs` — 部品を 1 ファイルで渡す (2026-11-23、候補 Q11)
+`write(def)` は部品の JSON に `model3d_src` の STEP の中身を base64 で入れた `.ccpart` の文 (STEP のパスはファイル名だけに)。`read(text, lib_dir)` は STEP を `lib_dir/step/` に書いて (同じ名前で中身が違えば `_2`) パスを向け、部品を返す。部品の JSON そのものも読む。base64 は自前 (依存を足さない)。アプリはライブラリの部品の「1 ファイルで書き出す…」(`schematic/library.rs` の `export_part_bundle`)、「部品を読み込む」と起動引数の `.ccpart` (`import_part_file`)。
+
+## `kicad.rs` のユニット (2026-11-23、候補 Q6)
+`.kicad_sym` の小さな記号の名前「LM358_2_1」(ユニット 2・形 1) と `.lib` の X 行の 10 番目の語がピンのユニット。`unit_map`: KiCad のユニット 1・2 … を A・B … に、全部のユニットに共通 (0) と電源のピンだけのユニット (LM358 の 3) は A。同じ番号のピンは 1 回。`to_part` の注は「ユニット A〜B として取り込みました」。
+
 ## `kicad_sch.rs` — KiCad の回路図 (`.kicad_sch`) の読み取り(2026-11-08、第1段階)
 
 `parse_schematic(text) -> KicadSch`。部品(`SchPart`: 参照名・値・`lib_id`・フットプリント・その他の欄・ピン)と、ネット(`SchNet`: 名前・つながるピン)を返す。絵は読まない(KiCad の記号とこのソフトの記号は形が違うので、部品は並べ直し、ネットラベルでつなぐ予定)。読まなかったもの(子シート・バス・定義のない記号・名前の違うラベルが同じ配線にあること)は `notes` に日本語で入る。

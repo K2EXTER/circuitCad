@@ -191,6 +191,12 @@ pub struct PartForm {
     pub pas_message: Option<Result<String, String>>,
     /// What 「データシートの寸法表から」 did (`chip_land.rs`).
     pub chip_land_msg: Option<Result<String, String>>,
+    /// The lines of 「作った元の版と表の値を比べる」 (`sheet_record.rs`).
+    pub sheet_diff: Option<Vec<String>>,
+    /// What 「ピン表のユニットから作る」 did (`unit_model.rs`).
+    pub unit_model_msg: Option<Result<String, String>>,
+    /// The output voltage of 「分圧の抵抗 R1・R2 を足す」 (`companion_fill.rs`).
+    pub companions_vout: String,
     /// The diode section: points read off the forward characteristics ("current voltage" per line), the reverse
     /// ratings, and the fitted (or slider-set) IS / N / RS.
     pub dio_points: String,
@@ -408,6 +414,9 @@ impl Default for PartForm {
             pas_sattable: String::new(),
             pas_message: None,
             chip_land_msg: None,
+            sheet_diff: None,
+            unit_model_msg: None,
+            companions_vout: String::new(),
             dio_points: String::new(),
             dio_vrrm: String::new(),
             dio_ir: String::new(),
@@ -525,6 +534,8 @@ mod kind;
 mod parse;
 mod chip;
 mod chip_land;
+mod sheet_record;
+mod unit_model;
 mod vendor;
 mod diode;
 mod edit;

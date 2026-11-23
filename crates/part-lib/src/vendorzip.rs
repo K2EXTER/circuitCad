@@ -453,6 +453,7 @@ impl VendorIndex {
             swap: None,
             programming: vec![],
             companions: vec![],
+            sheet: None,
             shops: Default::default(),
             land_unverified: false,
         };

@@ -123,7 +123,8 @@ pub struct KicadSymbol {
     /// Footprint the symbol asks for (`Library:Name`), if any.
     pub footprint: String,
     pub pins: Vec<PinDef>,
-    /// Number of units (gates) the KiCad symbol has; they are merged into one symbol.
+    /// Number of units (gates) the KiCad symbol has. Each pin keeps its unit (`PinDef::unit`, 候補 Q6): KiCad's units 1, 2 … are
+    /// A, B …; the pins every unit shares (unit 0) and a unit of power pins only (the LM358's third) go to A.
     pub units: usize,
 }
 
@@ -137,8 +138,8 @@ fn side_of(angle: f64) -> PinSide {
     }
 }
 
-/// A pin as read: (side, x, y, number, name, electrical type).
-type RawPin = (PinSide, f64, f64, String, String, Option<sch_core::PinKind>);
+/// A pin as read: (side, x, y, number, name, electrical type, KiCad's unit: 0 = in every unit).
+type RawPin = (PinSide, f64, f64, String, String, Option<sch_core::PinKind>, u32);
 
 /// KiCad's electrical type of a pin (`(pin power_in line …)`) as ours; None for "unspecified" and "free".
 fn kicad_kind(t: &str) -> Option<sch_core::PinKind> {
@@ -156,7 +157,7 @@ fn kicad_kind(t: &str) -> Option<sch_core::PinKind> {
     })
 }
 
-fn collect_pins(sym: &Node, out: &mut Vec<RawPin>) {
+fn collect_pins(sym: &Node, out: &mut Vec<RawPin>, unit: u32) {
     for n in sym.items().iter().skip(1) {
         match n.head() {
             Some("pin") => {
@@ -167,17 +168,38 @@ fn collect_pins(sym: &Node, out: &mut Vec<RawPin>) {
                 }
                 let name = n.find("name").and_then(|x| x.arg(0)).unwrap_or("~");
                 let name = if name == "~" || name.is_empty() { num } else { name };
-                out.push((side_of(at.num(2).unwrap_or(0.0)), at.num(0).unwrap_or(0.0), at.num(1).unwrap_or(0.0), num.to_string(), name.to_string(), n.arg(0).and_then(kicad_kind)));
+                out.push((side_of(at.num(2).unwrap_or(0.0)), at.num(0).unwrap_or(0.0), at.num(1).unwrap_or(0.0), num.to_string(), name.to_string(), n.arg(0).and_then(kicad_kind), unit));
             }
-            Some("symbol") => collect_pins(n, out),
+            // "LM358_2_1": unit 2 of body style 1
+            Some("symbol") => collect_pins(n, out, n.arg(0).and_then(|s| s.rsplit('_').nth(1)).and_then(|u| u.parse().ok()).unwrap_or(unit)),
             _ => {}
         }
     }
 }
 
+/// Our units of KiCad's (`KicadSymbol::units`): its units in order, a unit of power pins only and unit 0 (in every unit) to A.
+fn unit_map(raw: &[RawPin]) -> std::collections::HashMap<u32, u8> {
+    let mut units: Vec<u32> = raw.iter().map(|r| r.6).filter(|u| *u > 0).collect();
+    units.sort_unstable();
+    units.dedup();
+    let power_only = |u: u32| raw.iter().filter(|r| r.6 == u).all(|r| matches!(r.5, Some(sch_core::PinKind::PowerIn | sch_core::PinKind::PowerOut)));
+    let mut map = std::collections::HashMap::from([(0, 0)]);
+    let mut next = 0u8;
+    for u in units {
+        if power_only(u) {
+            map.insert(u, 0);
+        } else {
+            map.insert(u, next);
+            next = next.saturating_add(1);
+        }
+    }
+    map
+}
+
 /// Pins as (side, x, y, number, name): top to bottom on the left/right, left to right on the top/bottom, as the part file lists them.
-/// A pin number that came twice (another unit of the same part) is kept once.
+/// A pin number that came twice (another unit of the same part) is kept once. Each pin keeps its unit (`unit_map`).
 fn ordered_pins(raw: Vec<RawPin>) -> Vec<PinDef> {
+    let units = unit_map(&raw);
     let mut seen = std::collections::HashSet::new();
     let mut v: Vec<_> = raw.into_iter().filter(|r| seen.insert(r.3.clone())).collect();
     v.sort_by(|a, b| {
@@ -192,7 +214,7 @@ fn ordered_pins(raw: Vec<RawPin>) -> Vec<PinDef> {
             _ => a.1.total_cmp(&b.1),
         })
     });
-    v.into_iter().map(|(side, _, _, number, name, kind)| PinDef { unit: 0, number, name, side: Some(side), sim_only: false, gap: 0, kind }).collect()
+    v.into_iter().map(|(side, _, _, number, name, kind, u)| PinDef { unit: units.get(&u).copied().unwrap_or(0), number, name, side: Some(side), sim_only: false, gap: 0, kind }).collect()
 }
 
 fn prop<'a>(sym: &'a Node, key: &str) -> &'a str {
@@ -204,7 +226,7 @@ pub(crate) fn symbol_of(all: &[&Node], sym: &Node, depth: usize) -> Option<Kicad
     // `(extends "Parent")`: the pins live in the parent, the properties here.
     let parent = sym.find("extends").and_then(|e| e.arg(0)).filter(|_| depth < 8);
     let mut raw = vec![];
-    collect_pins(sym, &mut raw);
+    collect_pins(sym, &mut raw, 0);
     let mut parent_sym = None;
     if raw.is_empty()
         && let Some(p) = parent
@@ -347,7 +369,9 @@ pub fn parse_legacy_lib(text: &str) -> Result<Vec<KicadSymbol>, String> {
                     "N" => kicad_kind("no_connect"),
                     _ => None,
                 });
-                pins.push((side, x, y, number, name, kind));
+                // "X name number x y length orientation sizenum sizename unit convert type"
+                let unit = w.get(9).and_then(|u| u.parse().ok()).unwrap_or(0);
+                pins.push((side, x, y, number, name, kind, unit));
             }
             h if !in_draw && h.len() == 2 && h.starts_with('F') && w.len() >= 2 => {
                 let Some((sym, _)) = cur.as_mut() else { continue };
@@ -475,7 +499,10 @@ pub fn parse_footprint(text: &str) -> Result<KicadFootprint, String> {
 pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef, String> {
     let mut pins = sym.pins.clone();
     let mut notes = vec![];
-    if sym.units > 1 {
+    let drawn = pins.iter().map(|p| p.unit).max().unwrap_or(0);
+    if drawn > 0 {
+        notes.push(format!("{} ユニットの部品を、ユニット A〜{} として取り込みました (電源のピンはユニット A)。回路図で「次のユニットを置く」で置けます。", drawn + 1, (b'A' + drawn) as char));
+    } else if sym.units > 1 {
         notes.push(format!("{} ユニットの部品を 1 つの記号にまとめています。", sym.units));
     }
     // A two-pin R / C / L is drawn with the usual symbol.
@@ -560,6 +587,7 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
         swap: None,
         programming: vec![],
         companions: vec![],
+            sheet: None,
     })
 }
 

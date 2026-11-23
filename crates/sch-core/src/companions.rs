@@ -117,4 +117,24 @@ mod tests {
         let v = s.add_custom(bare, "REG", "SOT-223", (60, 20), 0);
         assert!(s.place_companions(v).unwrap_err().contains("推奨の周辺部品"));
     }
+
+    /// An adjustable regulator's divider (候補 Q5): R1 from OUT to ADJ, R2 from ADJ to GND; the nets join only where they should.
+    #[test]
+    fn a_divider_between_two_pins_and_ground() {
+        let mut sym = regulator();
+        sym.pins[1].name = "ADJ".into();
+        let r = |name: &str, value: &str, pin: &str, to: &str| Companion { name: name.into(), kind: "R".into(), value: value.into(), pin: pin.into(), to: to.into(), note: String::new() };
+        sym.companions = vec![r("R1", "240", "3", "2"), r("R2", "750", "2", "GND")];
+        let mut s = Schematic::default();
+        let u = s.add_custom(sym, "LM317", "SOT-223", (20, 20), 0);
+        assert_eq!(s.place_companions(u).unwrap(), ["R1", "R2"]);
+        let nets = extract(&s);
+        let net_of = |r: &str, p: &str| nets.iter().find(|n| n.pins.iter().any(|q| q.refdes == r && q.pin == p)).map(|n| n.name.clone());
+        assert_eq!(net_of("R1", "1"), net_of("U1", "3"));
+        assert_eq!(net_of("R1", "2"), net_of("U1", "2"));
+        assert_eq!(net_of("R2", "1"), net_of("U1", "2"));
+        assert_eq!(net_of("R2", "2").as_deref(), Some("GND"));
+        assert_ne!(net_of("U1", "2"), net_of("U1", "3"), "ADJ and OUT stay apart");
+        assert_ne!(net_of("U1", "2"), Some("GND".into()), "ADJ is not grounded");
+    }
 }

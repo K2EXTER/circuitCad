@@ -53,6 +53,7 @@ impl PartForm {
             ui.text_edit_singleline(&mut self.datasheet).on_hover_text(i18n::tr("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです"));
             ui.end_row();
         });
+        self.sheet_record_ui(ui);
         self.sheet_candidates(ui);
         let mosfet = self.ptype == Some(PartType::Transistor) && matches!(self.glyph.as_str(), "nmos" | "pmos");
         let bjt = self.ptype == Some(PartType::Transistor) && matches!(self.glyph.as_str(), "npn" | "pnp");
@@ -391,6 +392,7 @@ impl PartForm {
                     ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).min_size(egui::vec2(160.0, 0.0)).hint_text(i18n::tr("例: A K"))).on_hover_text(i18n::tr("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順"));
                 });
                 ui.small(i18n::tr("モデルの端子とピンの対応は、「③ ピン」の表の「モデルの端子」の列で選びます。"));
+                self.unit_model_ui(ui);
                 crate::icons::help_label(ui, "このモデルの限界", "このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
                 ui.add(
                     egui::TextEdit::multiline(&mut self.sim_limits)

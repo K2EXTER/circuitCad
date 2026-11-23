@@ -100,6 +100,45 @@ pub struct PartDef {
     /// The parts the data sheet recommends beside it (`sch_core::Companion`: a regulator's input and output capacitors).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub companions: Vec<sch_core::Companion>,
+    /// The data sheet the part was made from: its file, edition and fingerprint, and the table values read off it with their
+    /// pages (候補 Q9), to check the part against a newer edition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet: Option<SheetRecord>,
+}
+
+/// Which data sheet a part was made from (`PartDef::sheet`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SheetRecord {
+    /// The PDF's file name (not its path: the part may travel).
+    pub file: String,
+    /// The revision and date as printed ("Rev. 7", "April 2024"), when found.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub rev: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub date: String,
+    /// A fingerprint of the file's bytes (FNV-1a, 16 hex digits): another file has another one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fingerprint: String,
+    /// The table values read off it, each with its page.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<SheetValueRecord>,
+}
+
+/// One table value of a `SheetRecord`: symbol, conditions, min / typ / max in the table's unit, page (from 1).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SheetValueRecord {
+    pub symbol: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub conditions: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typ: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub unit: String,
+    pub page: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1042,6 +1081,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+pub mod bundle;
 pub mod coil;
 pub mod diode;
 pub mod elcap;

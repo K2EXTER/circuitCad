@@ -575,6 +575,7 @@ fn write_chip_examples() {
             swap: None,
             programming: vec![],
             companions: vec![],
+            sheet: None,
             shops: existing_shops(format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"))),
             land_unverified: false,
         };
@@ -604,6 +605,29 @@ const KICAD_SYM: &str = r##"(kicad_symbol_lib (version 20231120) (generator "kic
       (pin passive line (at 0 -3.81 90) (length 1.27) (name "~") (number "2"))))
   (symbol "R_Small" (extends "R") (property "Reference" "R") (property "Value" "R_Small"))
   (symbol "PWR_FLAG" (property "Reference" "#FLG") (symbol "PWR_FLAG_1_1" (pin power_out line (at 0 0 90) (length 0) (name "pwr") (number "1")))))"##;
+
+/// KiCad's dual op-amp: units 1 and 2 (the amplifiers) and 3 (the power pins), as its `LM358` is drawn (候補 Q6).
+#[test]
+fn kicad_units_become_ours() {
+    let text = r##"(kicad_symbol_lib (version 20231120)
+  (symbol "LM358" (property "Reference" "U") (property "Value" "LM358")
+    (symbol "LM358_1_1"
+      (pin output line (at 7.62 0 180) (length 2.54) (name "~") (number "1"))
+      (pin input line (at -7.62 2.54 0) (length 2.54) (name "-") (number "2"))
+      (pin input line (at -7.62 -2.54 0) (length 2.54) (name "+") (number "3")))
+    (symbol "LM358_2_1"
+      (pin input line (at -7.62 -2.54 0) (length 2.54) (name "+") (number "5"))
+      (pin input line (at -7.62 2.54 0) (length 2.54) (name "-") (number "6"))
+      (pin output line (at 7.62 0 180) (length 2.54) (name "~") (number "7")))
+    (symbol "LM358_3_1"
+      (pin power_in line (at -2.54 -7.62 90) (length 3.81) (name "V-") (number "4"))
+      (pin power_in line (at -2.54 7.62 270) (length 3.81) (name "V+") (number "8")))))"##;
+    let lm = &kicad::parse_symbols(text).unwrap()[0];
+    let unit = |n: &str| lm.pins.iter().find(|p| p.number == n).unwrap().unit;
+    assert_eq!([unit("1"), unit("2"), unit("3"), unit("4"), unit("5"), unit("6"), unit("7"), unit("8")], [0, 0, 0, 0, 1, 1, 1, 0], "the power unit goes to A");
+    let def = kicad::to_part(lm, None).unwrap();
+    assert!(def.description.contains("ユニット A〜B"), "{}", def.description);
+}
 
 const KICAD_MOD: &str = r#"(footprint "SOIC-8_3.9x4.9mm_P1.27mm" (version 20221018) (descr "SOIC, 8 Pin")
   (pad "1" smd roundrect (at -2.475 -1.905) (size 1.95 0.6) (layers "F.Cu" "F.Paste" "F.Mask"))

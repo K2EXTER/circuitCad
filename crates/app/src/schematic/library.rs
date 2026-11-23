@@ -79,9 +79,14 @@ impl SchEditor {
     }
 
     pub(super) fn import_part_json(&mut self) {
-        let Some(p) = rfd::FileDialog::new().add_filter("部品定義 JSON", &["json"]).pick_file() else { return };
-        let def: Result<PartDef, String> =
-            std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()));
+        let Some(p) = rfd::FileDialog::new().add_filter("部品 (1 ファイルのまとめ・部品定義 JSON)", &[part_lib::bundle::SUFFIX, "json"]).pick_file() else { return };
+        self.import_part_file(&p);
+    }
+
+    /// Adds the part of a `.ccpart` bundle (its STEP into the library's `step` folder) or of a part's JSON to the library.
+    pub fn import_part_file(&mut self, p: &std::path::Path) {
+        let lib_dir = self.lib.dir.clone();
+        let def: Result<PartDef, String> = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|s| part_lib::bundle::read(&s, &lib_dir));
         self.status = match def {
             Err(e) => format!("読み込み失敗: {e}"),
             Ok(d) => match d.validate().into_iter().find(|i| i.error) {
@@ -94,6 +99,16 @@ impl SchEditor {
                     Err(e) => format!("保存失敗: {e}"),
                 },
             },
+        };
+    }
+
+    /// Writes the part as one file to hand on (候補 Q11): its JSON with its maker's STEP inside (`part_lib::bundle`).
+    pub(super) fn export_part_bundle(&mut self, def: &PartDef) {
+        let file = format!("{}.{}", def.name.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_"), part_lib::bundle::SUFFIX);
+        let Some(p) = rfd::FileDialog::new().add_filter("部品のまとめ", &[part_lib::bundle::SUFFIX]).set_file_name(&file).save_file() else { return };
+        self.status = match std::fs::write(&p, part_lib::bundle::write(def)) {
+            Ok(()) => format!("{} を書き出しました: {} (部品・モデル・3D・データシートの版と値。PDF は入りません)", def.name, p.display()),
+            Err(e) => format!("書き出せませんでした: {e}"),
         };
     }
 

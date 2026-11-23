@@ -225,6 +225,7 @@ impl Session {
             swap: None,
             programming: vec![],
             companions: vec![],
+            sheet: None,
         };
         let path = part_lib::save(&self.lib_dir, &part).map_err(|e| format!("cannot write the part file: {e}"))?;
         let (lib, errors) = part_lib::load_library(&self.lib_dir);

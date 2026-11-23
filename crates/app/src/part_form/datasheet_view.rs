@@ -135,6 +135,8 @@ pub struct SheetView {
 
 struct Opened {
     ds: Datasheet,
+    /// The sheet's edition and table values as a part keeps them (`part_lib::SheetRecord`), made the first time it is asked for.
+    record: std::cell::OnceCell<part_lib::SheetRecord>,
     name: String,
     path: std::path::PathBuf,
     /// A PDF of pictures only (a scan) is read by the OCR, a page a frame: the next page to read.
@@ -219,6 +221,7 @@ impl SheetView {
                 ds.set_ocr(scan);
                 self.doc = Some(Opened {
                     ds,
+                    record: std::cell::OnceCell::new(),
                     name,
                     path: path.to_path_buf(),
                     ocr_next: scan.then_some(0),
@@ -433,6 +436,12 @@ impl SheetView {
     }
 
     /// The rows of `symbol` in the open PDF's electrical characteristics tables (none when no PDF is open).
+    /// The open PDF as a part records it (候補 Q9): its file name, revision and date, fingerprint and table values (made once).
+    pub fn sheet_record(&self) -> Option<part_lib::SheetRecord> {
+        let d = self.doc.as_ref()?;
+        Some(d.record.get_or_init(|| sheet_record_of(&d.ds, &d.name, std::fs::read(&d.path).ok().as_deref())).clone())
+    }
+
     /// The rows of the open PDF's chip dimension tables (`Datasheet::chip_sizes`).
     pub fn chip_sizes(&self) -> Vec<datasheet::land::ChipSize> {
         self.doc.as_ref().map(|d| d.ds.chip_sizes()).unwrap_or_default()
@@ -1247,5 +1256,20 @@ fn cut_drawing(ds: &Datasheet, page: usize, area: Rect, view: super::solidcraft:
     let px = |x: f32, y: f32| [x * scale - x0 as f32, y * scale - y0 as f32];
     d.numbers = ds.lengths_in(page, area).into_iter().filter(|n| n.text.contains(['.', ','])).map(|n| { let (a, b) = (px(n.rect.x0, n.rect.y0), px(n.rect.x1, n.rect.y1)); (n.value, n.inch, n.text, [a[0], a[1], b[0], b[1]]) }).collect();
     Some(d)
+}/// A sheet's record: its revision and date (`Datasheet::revision`), the fingerprint of the file's bytes, the key table values.
+pub fn sheet_record_of(ds: &Datasheet, file: &str, bytes: Option<&[u8]>) -> part_lib::SheetRecord {
+    let r = ds.revision();
+    part_lib::SheetRecord {
+        file: file.to_string(),
+        rev: r.rev.unwrap_or_default(),
+        date: r.date.unwrap_or_default(),
+        fingerprint: bytes.map(datasheet::revision::fingerprint).unwrap_or_default(),
+        values: ds
+            .key_values()
+            .into_iter()
+            .map(|v| part_lib::SheetValueRecord { symbol: v.symbol, conditions: v.conditions, min: v.min, typ: v.typ, max: v.max, unit: v.unit, page: v.page })
+            .collect(),
+    }
 }
+
 

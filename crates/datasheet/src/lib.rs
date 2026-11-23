@@ -24,6 +24,7 @@ pub mod ordering;
 pub mod lineup;
 pub mod pin_list;
 pub mod lead_pins;
+pub mod revision;
 mod glyphs;
 mod headings;
 mod pin_table;

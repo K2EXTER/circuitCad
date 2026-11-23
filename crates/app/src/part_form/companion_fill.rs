@@ -28,7 +28,43 @@ fn pin_for(cap: &str, pins: &[PinDef]) -> Option<(String, String)> {
     }
 }
 
+/// The divider that sets an adjustable output (候補 Q5): R1 from the output to the ADJ (or FB) pin, R2 from there to GND, for
+/// `vout` with the reference `vref` (VOUT = VREF × (1 + R2 / R1), the ADJ pin's current left out). R1 is `r1`, else 240 Ω on
+/// an ADJ pin (the LM317's application) and 10 kΩ on an FB pin; R2 the nearest E24. The two lines and the output they give.
+pub fn divider_lines(pins: &[PinDef], vout: f64, vref: f64, r1: Option<f64>) -> Result<(Vec<String>, f64), String> {
+    let find = |names: &[&str]| pins.iter().find(|p| names.iter().any(|n| p.name.eq_ignore_ascii_case(n)));
+    let out = find(&["VOUT", "OUT", "OUTPUT", "VO"]).ok_or("出力のピン (VOUT・OUT・OUTPUT) がピン表にありません")?;
+    let adj = find(&["ADJ", "ADJUST", "ADJUSTMENT", "FB", "SET", "VFB"]).ok_or("帰還のピン (ADJ・FB) がピン表にありません。出力電圧が決まった部品には分圧の抵抗は要りません")?;
+    if !(vref > 0.0 && vout > vref) {
+        return Err(format!("出力電圧 {vout} V は基準電圧 {vref} V より高くします"));
+    }
+    let fb = adj.name.to_ascii_uppercase().contains("FB");
+    let r1 = r1.filter(|r| *r > 0.0).unwrap_or(if fb { 10e3 } else { 240.0 });
+    let r2 = sim_core::e24(r1 * (vout / vref - 1.0), false);
+    let got = vref * (1.0 + r2 / r1);
+    let ohms = |r: f64| part_lib::passive::eng(r);
+    let note = format!("出力 {vout} V の分圧 (VREF {vref} V で {got:.3} V)");
+    Ok((vec![format!("R1 | R | {} | {} | {} | {note}", ohms(r1), out.name, adj.name), format!("R2 | R | {} | {} | GND | {note}", ohms(r2), adj.name)], got))
+}
+
 impl PartForm {
+    /// 「分圧の抵抗を足す」: R1 and R2 for the output voltage in its box (the reference from the open PDF's VREF / VFB row, else the
+    /// regulator box's), replacing lines named R1 and R2.
+    pub fn add_divider(&mut self) -> Result<String, String> {
+        let vout = sim_core::parse_value(self.companions_vout.trim().trim_end_matches(['V', 'v'])).ok_or("出力電圧を V で入れてください (例: 5)")?;
+        let vref = ["VREF", "Vref", "VFB", "VADJ"].iter().find_map(|s| self.sheet.spec_values(s).iter().find_map(|v| v.typ)).filter(|v| *v > 0.1 && *v < 5.0);
+        let (vref, from) = match vref {
+            Some(v) => (v, "データシートの表"),
+            None => (1.25, "表に無いので LM317 の 1.25 V"),
+        };
+        let pins = self.parse_pins()?;
+        let (lines, got) = divider_lines(&pins, vout, vref, None)?;
+        let mut keep: Vec<String> = self.companions_text.lines().filter(|l| !l.trim().is_empty() && !matches!(l.split('|').next().map(str::trim), Some("R1" | "R2"))).map(str::to_string).collect();
+        keep.extend(lines);
+        self.companions_text = keep.join("\n");
+        Ok(format!("R1・R2 を足しました: VREF {vref} V ({from}) で {got:.3} V。応用回路の図に R1 の値があれば、その値に直してください"))
+    }
+
     /// The companion lines as parts, with their pins as numbers (a pin may be written by its name).
     pub(super) fn parse_companions(&self, pins: &[PinDef]) -> Result<Vec<Companion>, String> {
         let pin_no = |t: &str, n: usize| -> Result<String, String> {
@@ -134,6 +170,17 @@ impl PartForm {
             {
                 self.fill_companions_from_pdf();
             }
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr("出力電圧 [V]")).on_hover_text(i18n::tr("出力電圧を抵抗で決める部品 (LM317 の ADJ、DC-DC の FB) の、作りたい出力電圧"));
+                ui.add(egui::TextEdit::singleline(&mut self.companions_vout).desired_width(50.0).hint_text("5"));
+                if ui.button(i18n::tr("分圧の抵抗 R1・R2 を足す")).on_hover_text(i18n::tr("出力と ADJ (FB) の間に R1、ADJ と GND の間に R2 を足します。基準電圧はデータシートの表の VREF (VFB)、R1 は ADJ なら 240 Ω、FB なら 10 kΩ、R2 は E24 のいちばん近い値")).clicked() {
+                    let m = self.add_divider();
+                    self.companions_msg = vec![match m {
+                        Ok(t) => (true, t),
+                        Err(e) => (false, e),
+                    }];
+                }
+            });
             for (ok, line) in &self.companions_msg {
                 ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::ok() } else { crate::theme::warn() }));
             }
@@ -144,6 +191,19 @@ impl PartForm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LM317 (OUTPUT, ADJUSTMENT, VREF 1.25 V) for 5 V: R1 240 Ω, R2 the E24 nearest 720 Ω (750 Ω: 5.16 V); an FB pin takes 10 kΩ.
+    #[test]
+    fn a_divider_for_an_adjustable_output() {
+        let pin = |n: &str, name: &str| PinDef { unit: 0, number: n.into(), name: name.into(), side: None, sim_only: false, gap: 0, kind: None };
+        let lm317 = [pin("1", "ADJUSTMENT"), pin("2", "OUTPUT"), pin("3", "INPUT")];
+        let (lines, got) = divider_lines(&lm317, 5.0, 1.25, None).unwrap();
+        assert!(lines[0].starts_with("R1 | R | 240 | OUTPUT | ADJUSTMENT") && lines[1].starts_with("R2 | R | 750 | ADJUSTMENT | GND"), "{lines:?}");
+        assert!((got - 5.156).abs() < 0.01);
+        let buck = [pin("1", "FB"), pin("2", "VOUT")];
+        assert!(divider_lines(&buck, 3.3, 0.8, None).unwrap().0[0].contains("| 10k |"));
+        assert!(divider_lines(&lm317[1..], 5.0, 1.25, None).is_err(), "no ADJ pin");
+    }
 
     #[test]
     fn the_lines_become_parts_on_pins_named_or_numbered() {

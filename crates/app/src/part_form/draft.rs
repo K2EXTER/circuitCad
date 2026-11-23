@@ -69,6 +69,12 @@ pub(super) fn builtin_footprint(p: &PackageName, pins: Option<&[String]>) -> Opt
     // the name as written, its family, and either with the pin count ("SOT-23" of a 5-pin part is the SOT-23-5); a diode's
     // outline by its "D_" name ("SOD-123" is the D_SOD-123)
     let mut wanted = vec![p.name.clone(), base.clone(), format!("D_{base}")];
+    // DPAK and D2PAK by their JEDEC names too
+    match p.family {
+        "dpak" => wanted.push("TO-252".into()),
+        "d2pak" => wanted.push("TO-263".into()),
+        _ => {}
+    }
     if let Some(n) = count {
         wanted.extend([format!("{}-{n}", p.name), format!("{base}-{n}")]);
     }

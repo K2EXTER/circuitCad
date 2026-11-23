@@ -124,7 +124,7 @@ fn wire_pads_sized(name: &str, pins: &[String], pad_d: f64, drill: f64) -> Footp
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
         "R_0603", "R_0805", "R_0805_Reflow", "R_1206", "R_2512", "C_0402", "C_0603", "C_0805", "C_0805_Reflow", "C_1206", "C_1210", "L_0805", "LED_0805", "D_SOD-123", "CT_3528-21", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
-        "D_DO-35_7.62", "LED_5mm", "TO-92", "TO-92-3", "SOT-23", "SOT-23-3", "SOT-23-5", "SOT-23-6", "SOT-223", "TO-220-3", "PinHeader_1x2_PM", "Pot_1x3_P2.54",
+        "D_DO-35_7.62", "LED_5mm", "TO-92", "TO-92-3", "SOT-23", "SOT-23-3", "SOT-23-5", "SOT-23-6", "SOT-223", "TO-252", "TO-263", "TO-220-3", "PinHeader_1x2_PM", "Pot_1x3_P2.54",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -229,6 +229,24 @@ pub fn get(name: &str) -> Option<Footprint> {
                 silk: vec![],
                 body: None,
                 pads: vec![pad("1", -3.15, 2.3, s, None), pad("2", -3.15, 0.0, s, None), pad("3", -3.15, -2.3, s, None), pad("2", 3.15, 0.0, PadShape::Rect { w: 2.0, h: 3.8 }, None)],
+            }
+        }
+        // DPAK (TO-252) and D2PAK (TO-263) lying down: the two outer leads and the tab, which is pin 2 (the middle lead is cut),
+        // as onsemi's recommended footprints (MC7800/D, CASE 369C and CASE 936, 候補 Q17): DPAK leads 1.60 × 3.00 with their
+        // outer edges 6.17 apart, 2.58 from the 5.80 × 6.20 tab; D2PAK leads 1.016 × 3.504 at a 5.080 pitch, the 10.490 × 8.380
+        // tab, 16.155 overall. The leads point left, as the SOT-223's.
+        "TO-252" | "DPAK" | "TO-263" | "D2PAK" => {
+            let (lead, pitch, gap, tab) = if matches!(name, "TO-252" | "DPAK") { ((3.00, 1.60), 4.57, 2.58, (6.20, 5.80)) } else { ((3.504, 1.016), 5.08, 16.155 - 3.504 - 8.380, (8.380, 10.490)) };
+            let half = (lead.0 + gap + tab.0) / 2.0;
+            let s = PadShape::Rect { w: lead.0, h: lead.1 };
+            let lx = -half + lead.0 / 2.0;
+            Footprint {
+                name: name.into(),
+                holes: vec![],
+                height: None,
+                silk: vec![],
+                body: None,
+                pads: vec![pad("1", lx, pitch / 2.0, s, None), pad("3", lx, -pitch / 2.0, s, None), pad("2", half - tab.0 / 2.0, 0.0, PadShape::Rect { w: tab.0, h: tab.1 }, None)],
             }
         }
         // TO-220 standing up: three leads 2.54 apart, pin 1 square (the bundled LM7805's)
@@ -372,6 +390,13 @@ mod wire_pad_tests {
         let tab = get("SOT-223").unwrap();
         assert_eq!(tab.pads.iter().filter(|p| p.pin == "2").count(), 2, "the tab is pin 2");
         assert!(get("TO-220-3").unwrap().pads.iter().all(|p| p.drill == Some(1.1)));
+        // onsemi's DPAK: the leads' outer edges 6.17 apart, 2.58 from the tab; its D2PAK 16.155 overall
+        let d = get("TO-252").unwrap();
+        let (l1, l3, t) = (&d.pads[0], &d.pads[1], &d.pads[2]);
+        assert!(((l1.pos.y - l3.pos.y).abs() + 1.6 - 6.17).abs() < 1e-9 && t.pin == "2");
+        assert!(((t.pos.x - 3.1) - (l1.pos.x + 1.5) - 2.58).abs() < 1e-9);
+        let d2 = get("D2PAK").unwrap();
+        assert!(((d2.pads[2].pos.x + 8.380 / 2.0) - (d2.pads[0].pos.x - 3.504 / 2.0) - 16.155).abs() < 1e-9);
         for n in ["SOT-23-5", "SOT-23-6", "SOT-223", "TO-220-3"] {
             assert!(names().iter().any(|m| m == n), "{n}");
         }

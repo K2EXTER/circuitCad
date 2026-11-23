@@ -144,6 +144,14 @@ fn main() -> Result<(), String> {
                 println!("{} {}{:.3e} F  x{}  p.{}", c.name, if c.at_least { ">= " } else { "" }, c.farads, c.count, c.page + 1);
             }
         }
+        "rev" => {
+            // ds rev FILE: the revision and date, and the table values a part keeps
+            let r = ds.revision();
+            println!("rev {:?} date {:?}", r.rev, r.date);
+            for v in ds.key_values() {
+                println!("  p.{} {} [{}] {}", v.page, v.symbol, v.conditions, v.shown());
+            }
+        }
         "chip" => {
             // ds chip FILE: the chip dimension tables (size, L, W, the terminal underneath)
             for c in ds.chip_sizes() {
