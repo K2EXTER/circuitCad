@@ -1,0 +1,36 @@
+{
+  "kind": "mos",
+  "part": "NDS7002A_SOT-23",
+  "name": "NDS7002A",
+  "pch": false,
+  "read": "2026-11-23",
+  "source": "onsemi 2N7000 / 2N7002 / NDS7002A データシート (2N7000/D) の電気的特性の表 (NDS7002A の行)",
+  "url": "https://www.onsemi.com/pdf/datasheet/nds7002a-d.pdf",
+  "description": "NDS7002A N チャネル MOSFET 60V 0.28A (SOT-23、ピン 1 = G・2 = S・3 = D)。2N7002 の改良品 (オン抵抗が小さい)。データシート (onsemi) の typ から作った等価モデル (レベル 1 + 直列抵抗)",
+  "vth": [
+    2.1,
+    0.00025
+  ],
+  "rds": [
+    [
+      10.0,
+      0.5,
+      1.2
+    ],
+    [
+      5.0,
+      0.05,
+      1.7
+    ]
+  ],
+  "caps": {
+    "ciss": 2e-11,
+    "coss": 1.1e-11,
+    "crss": 4e-12
+  },
+  "remarks": [
+    "vth: VGS(th) typ 2.1 V at ID = 250 uA (the 2N7002 / NDS7002A row, VDS = VGS)",
+    "rds: RDS(on) typ 1.2 ohm (VGS 10 V, 500 mA) and 1.7 ohm (5 V, 50 mA), the NDS7002A rows",
+    "caps: Ciss 20, Coss 11, Crss 4 pF typ (VDS = 25 V, VGS = 0, 1 MHz)"
+  ]
+}

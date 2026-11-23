@@ -65,7 +65,8 @@ pub struct SeriesDef {
     pub values: ValueRange,
     /// The part number with `{code}` where the value's code goes ("ERJ-3EKF{code}V").
     pub mpn: String,
-    /// How the value is written in the part number: "sig3" = three significant figures and the number of zeros, `R` for the
+    /// How the value is written in the part number ("sig23": an E-24 value as "sig2", another as "sig3": Susumu RG).
+    /// "sig3" = three significant figures and the number of zeros, `R` for the
     /// decimal point below 100 (`1002` = 10 kΩ, `10R0` = 10 Ω; Panasonic ERJ, KOA RK73H, ROHM MCR).
     pub code: String,
     pub tolerance_pct: f64,
@@ -124,6 +125,12 @@ const BUNDLED: &[(&str, &str)] = &[
     ("AC0603", include_str!("../series/AC0603.series.json")),
     ("AC0805", include_str!("../series/AC0805.series.json")),
     ("AC1206", include_str!("../series/AC1206.series.json")),
+    ("RT0402", include_str!("../series/RT0402.series.json")),
+    ("RT0603", include_str!("../series/RT0603.series.json")),
+    ("RT0805", include_str!("../series/RT0805.series.json")),
+    ("RG1005", include_str!("../series/RG1005.series.json")),
+    ("RG1608", include_str!("../series/RG1608.series.json")),
+    ("RG2012", include_str!("../series/RG2012.series.json")),
     ("CF1/4", include_str!("../series/CF1_4.series.json")),
     ("MF1/4D", include_str!("../series/MF1_4D.series.json")),
 ];
@@ -235,6 +242,8 @@ impl SeriesDef {
         match self.code.as_str() {
             "sig3" => sig3(v),
             "sig2" => sig2(v),
+            // Susumu RG: an E-24 value in three digits ("102"), another in four ("1021")
+            "sig23" => sig2(v).filter(|_| E24.contains(&split(v).0)).or_else(|| sig3(v)),
             "rkm4" => rkm4(v),
             "rkmt" => rkmt(v),
             _ => None,
@@ -830,6 +839,23 @@ mod tests {
             assert!(((r.pos.x - w / 2.0) - (l.pos.x + w / 2.0) - b).abs() < 1e-9, "{series} gap");
             assert!(((r.pos.x + w / 2.0) - (l.pos.x - w / 2.0) - a).abs() < 1e-9, "{series} overall");
             assert!((h - d).abs() < 1e-9, "{series} width");
+            for part in s.expand() {
+                assert!(part.validate().iter().all(|i| !i.error), "{}", part.name);
+            }
+        }
+    }
+
+    /// The precision thin film series (2026-11-23): Yageo RT writes the value as AC does; Susumu RG writes an E-24 value in three
+    /// digits and an E-96 one in four; both ±0.1 % and ±25 ppm/K, RG's power down from 85 °C.
+    #[test]
+    fn precision_thin_film_series() {
+        let rt = by_name("RT0603").unwrap();
+        assert_eq!((rt.part_name(10e3), rt.part_name(56.0)), ("RT0603BRD0710KL".to_string(), "RT0603BRD0756RL".to_string()));
+        assert_eq!((rt.tolerance_pct, rt.tc_ppm, rt.power_at(1e3)), (0.1, 25.0, 0.1));
+        let rg = by_name("RG1608").unwrap();
+        assert_eq!((rg.part_name(1e3), rg.part_name(1.02e3), rg.part_name(47.0), rg.part_name(49.9)), ("RG1608P-102-B-T5".to_string(), "RG1608P-1021-B-T5".to_string(), "RG1608P-470-B-T5".to_string(), "RG1608P-49R9-B-T5".to_string()));
+        assert_eq!((rg.values.min, rg.values.max, rg.derate_from_c), (47.0, 1e6, 85.0));
+        for s in ["RT0402", "RT0603", "RT0805", "RG1005", "RG1608", "RG2012"].map(|n| by_name(n).unwrap()) {
             for part in s.expand() {
                 assert!(part.validate().iter().all(|i| !i.error), "{}", part.name);
             }

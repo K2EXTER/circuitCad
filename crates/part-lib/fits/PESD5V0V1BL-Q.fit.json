@@ -1,0 +1,21 @@
+{
+  "kind": "tvs",
+  "part": "PESD5V0V1BL-Q",
+  "name": "PESD5V0V1BL_Q",
+  "read": "2026-11-23",
+  "source": "Nexperia PESD5V0V1BL-Q データシート (Product data sheet, v.1, September 2022) の電気的特性の表",
+  "url": "https://assets.nexperia.com/documents/data-sheet/PESD5V0V1BL-Q.pdf",
+  "description": "PESD5V0V1BL-Q 双方向の ESD 保護ダイオード 5 V (DFN1006-2 / SOD882、端子の間隔 0.65 mm、車載 AEC-Q101、ESD ±30 kV)。1 本の信号線を静電気とサージから守る。データシート (Nexperia) の表から作った等価モデル",
+  "vrwm": 5.0,
+  "ir": 1e-8,
+  "vbr": 5.8,
+  "it": 0.005,
+  "vc": 12.5,
+  "ipp": 4.8,
+  "cj": 11e-12,
+  "bidirectional": true,
+  "remarks": [
+    "VRWM 5 V, IRM max 10 nA at 5 V, VBR min 5.8 V at IR = 5 mA, VCL max 12.5 V at IPPM = 4.8 A (8/20 µs), Cd typ 11 pF at 0 V and 1 MHz (Table 7)",
+    "the bidirectional diode: two in series back to back, as the data sheet's V-I characteristic"
+  ]
+}

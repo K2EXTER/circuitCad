@@ -1,0 +1,118 @@
+{
+  "name": "MF-MSMF150/24X",
+  "category": "保護",
+  "description": "Bourns MF-MSMF150/24X 復帰形ヒューズ (PTC、1812 の面実装、24 V)。1.5 A までは流れ続け、3.0 A 以上で切れる (高い抵抗になる)。電流を切って冷えると元に戻る。8 A で 1.5 s 以内に切れる (表の最大)。抵抗 0.03〜0.12 Ω、切れているときの電力 1.0 W。USB の 5 V の口の保護などに。データシート (Bourns MF-MSMF Series) の表から作った等価モデル",
+  "datasheet": "https://www.bourns.com/docs/Product-Datasheets/mf-msmf.pdf",
+  "prefix": "F",
+  "value": "MF-MSMF150/24X",
+  "glyph": "resistor",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.39,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.68,
+        "h": 2.95,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 2.39,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.68,
+        "h": 2.95,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "Fuse_1812_Bourns_MF-MSMF",
+  "height": 1.6,
+  "body": {
+    "shape": "rect",
+    "w": 4.6,
+    "h": 3.24,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "none",
+    "mark_pin": ""
+  },
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "MF_MSMF150_24X",
+    "text": ".subckt MF_MSMF150_24X a b\n* heat x (volts) builds up from the power the part takes and leaks away (time constant 18.2 s); it trips at x = 1\n* (0.1519 W: between the hold current 1.5 A and the trip current 3.0 A at 0.03 ohm) and resets below x = 0.5\n* (the power taken away); tripped, the resistance rises to keep its power near 1 W (at least 0.12 ohm)\nVs a m DC 0\nB1 m b I=V(m,b)/(0.03+V(q)*(max(0.12,V(m,b)*V(m,b)/1.0)-0.03))\n* cold at the start (the DC operating point is the moment the power comes on): the heat counts from time 0\nBq 0 x I=V(m,b)*I(Vs)*min(time*1e6,1)\nCx x 0 2.765\nRl x 0 6.584\nBs s 0 V=0.75+(V(x)-1)\nBr r 0 V=0.75+(0.5-V(x))*2\nVh hi 0 1\nYlat srlatch q qb 0 hi 60 0.75 0 0 0 s r hi 0 0\n.ends MF_MSMF150_24X",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "電源を入れた瞬間 (DC の動作点) は冷えているものとし、熱は時刻 0 から溜まります。",
+      "熱の溜まり (時定数 18.2 s) で、保持電流 1.5 A と切れる電流 3.0 A の間で切れるようにした簡易モデルです。8 A で 1.5 s (表の最大) に合わせ、ほかの電流の切れる時間は時定数の式からの目安です (データシートの「切れる時間と電流」の図とは少しずれます)。",
+      "切れると、電力が 1.0 W 前後になる抵抗 (電圧の 2 乗 ÷ 1.0 W、0.12 Ω 以上) になります。電流を切る (電圧を外す) と冷えて、元の 0.03 Ω に戻ります。",
+      "周囲の温度による保持電流の変化 (高温で小さくなる) と、何度も切れたあとの抵抗の上がりは入っていません。",
+      "最終の確認は、メーカーのデータシートで行ってください。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Bourns MF-MSMF Series データシートの電気的特性の表 (MF-MSMF150/24X の行) と推奨パッド (Style 2)"
+    }
+  },
+  "ratings": {
+    "v_max": 24,
+    "i_max": 1.5,
+    "rows": [
+      {
+        "name": "保持電流 Ihold",
+        "value": "1.5 A",
+        "condition": "23 ℃、30 分で切れない"
+      },
+      {
+        "name": "切れる電流 Itrip",
+        "value": "3.0 A",
+        "condition": "23 ℃"
+      },
+      {
+        "name": "最大電流 Imax",
+        "value": "20 A",
+        "condition": "24 V"
+      },
+      {
+        "name": "切れる時間",
+        "value": "1.5 s 以下",
+        "condition": "8 A"
+      },
+      {
+        "name": "抵抗",
+        "value": "0.03〜0.12 Ω",
+        "condition": "最小・切れて戻ったあとの最大"
+      },
+      {
+        "name": "切れているときの電力",
+        "value": "1.0 W",
+        "condition": "typ"
+      }
+    ]
+  }
+}

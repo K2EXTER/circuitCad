@@ -224,8 +224,24 @@ fn main() -> Result<(), String> {
                         let out = format!("{dir}/pick_p{}_{c:?}{tag}.png", f.page + 1);
                         pic.save(&out).map_err(|e| e.to_string())?;
                     }
+                    // `pts=N`: N points of the curve taken, in the graph's units (the axis's prefix applied: "mA" → A)
+                    let values = match (&picked, arg(&args, "pts").and_then(|n| n.parse::<usize>().ok())) {
+                        (datasheet::pick::Pick::One { path, .. }, Some(n)) if n >= 2 => {
+                            let axis = |r: &datasheet::axes::ReadAxis| datasheet::graph::Axis { log: r.log, ticks: r.ticks.iter().filter_map(|(at, t)| datasheet::graph::tick_value(t).map(|v| datasheet::graph::Tick { at: *at, value: v })).collect() };
+                            let (ax, ay) = (axis(&a.x), axis(&a.y));
+                            let step = (path.len() - 1) as f32 / (n - 1) as f32;
+                            (0..n)
+                                .filter_map(|i| path.get((i as f32 * step).round() as usize))
+                                .filter_map(|&(x, y)| Some((ax.value(x)? * a.x.prefix, ay.value(y)? * a.y.prefix)))
+                                .map(|(x, y)| format!("[{x:.4e}, {y:.4e}]"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        }
+                        _ => String::new(),
+                    };
                     let what = match picked {
-                        datasheet::pick::Pick::One { path, by } => format!("one by {by:?}: x {:.0}..{:.0} y {:.0}..{:.0}", path[0].0, path[path.len() - 1].0, path[0].1, path[path.len() - 1].1),
+                        datasheet::pick::Pick::One { path, by } => format!("one by {by:?}: x {:.0}..{:.0} y {:.0}..{:.0}{}", path[0].0, path[path.len() - 1].0, path[0].1, path[path.len() - 1].1, if values.is_empty() { String::new() } else { format!("
+    {values}") }),
                         datasheet::pick::Pick::Several(c) => format!("{} curves, no label", c.len()),
                         datasheet::pick::Pick::None => "no curve".into(),
                     };

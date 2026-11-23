@@ -1,0 +1,98 @@
+{
+  "name": "NDS7002A_SOT-23",
+  "category": "MOSFET",
+  "description": "NDS7002A N チャネル MOSFET 60V 0.28A (SOT-23、ピン 1 = G・2 = S・3 = D)。2N7002 の改良品 (オン抵抗が小さい)。データシート (onsemi) の typ から作った等価モデル (レベル 1 + 直列抵抗)",
+  "prefix": "Q",
+  "footprint_name": "SOT-23_MOS",
+  "pins": [
+    {
+      "number": "1",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "D",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "S",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "M",
+    "name": "NDS7002A",
+    "text": ".model NDS7002A NMOS(VTO=2.066 KP=0.4319 RD=0.9054 CGS=1.6e-11 CGD=4e-12)",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "limits": [
+      "データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi 2N7000 / 2N7002 / NDS7002A データシート (2N7000/D) の電気的特性の表 (NDS7002A の行)。データシートとの比べは docs/models/transistors.md。",
+      "レベル1 (2乗則) に直列抵抗 RD を足し、しきい値 VGS(th) と、ゲート電圧ごとのオン抵抗 RDS(on) (2 点) に合わせました。ゲートの容量は Ciss・Crss の typ (CGS = Ciss − Crss、CGD = Crss) の一定の値です。",
+      "扱わないもの: ボディダイオード (ソースからドレインへの逆向きのダイオード)、出力容量 Coss のうちドレイン・ソース間の分、容量の電圧による変化、チャネル長変調 (LAMBDA。飽和領域の電流は VDS によらない)、温度によるオン抵抗の増加、耐圧・定格電流を超えたときの破壊。大電流の飽和領域では、2乗則なので実物より電流が大きく出ます。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "onsemi 2N7000 / 2N7002 / NDS7002A データシート (2N7000/D) の電気的特性の表 (NDS7002A の行)"
+    }
+  },
+  "ratings": {
+    "v_max": 60,
+    "i_max": 0.28,
+    "p_max": 0.3,
+    "rows": [
+      {
+        "name": "しきい値電圧",
+        "value": "1〜2.5V (代表 2.1V)",
+        "condition": "ID = 250µA"
+      },
+      {
+        "name": "オン抵抗",
+        "value": "2Ω (最大)",
+        "condition": "VGS = 10V, ID = 500mA"
+      },
+      {
+        "name": "オン抵抗",
+        "value": "3Ω (最大)",
+        "condition": "VGS = 5V, ID = 50mA"
+      }
+    ]
+  },
+  "datasheet": "https://www.onsemi.com/pdf/datasheet/nds7002a-d.pdf",
+  "value": "NDS7002A"
+}

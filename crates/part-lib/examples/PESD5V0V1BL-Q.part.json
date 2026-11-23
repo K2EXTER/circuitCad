@@ -1,0 +1,51 @@
+{
+  "name": "PESD5V0V1BL-Q",
+  "category": "保護",
+  "description": "PESD5V0V1BL-Q 双方向の ESD 保護ダイオード 5 V (DFN1006-2 / SOD882、端子の間隔 0.65 mm、車載 AEC-Q101、ESD ±30 kV)。1 本の信号線を静電気とサージから守る。データシート (Nexperia) の表から作った等価モデル",
+  "datasheet": "https://assets.nexperia.com/documents/data-sheet/PESD5V0V1BL-Q.pdf",
+  "prefix": "D",
+  "value": "PESD5V0V1BL-Q",
+  "pins": [
+    {"number": "1", "name": "1", "side": "left"},
+    {"number": "2", "name": "2", "side": "right"}
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {"pin": "1", "x": -0.35, "y": 0.0, "shape": "rect", "w": 0.4, "h": 0.7, "drill": null, "slot": 0.0, "slot_v": false},
+      {"pin": "2", "x": 0.35, "y": 0.0, "shape": "rect", "w": 0.4, "h": 0.7, "drill": null, "slot": 0.0, "slot_v": false}
+    ],
+    "holes": []
+  },
+  "footprint_name": "D_SOD-882_Nexperia",
+  "height": 0.5,
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "PESD5V0V1BL_Q",
+    "text": ".subckt PESD5V0V1BL_Q a k\nD1 m a PESD5V0V1BL_Q_D\nD2 m k PESD5V0V1BL_Q_D\n.model PESD5V0V1BL_Q_D D(IS=1e-12 N=1 RS=0.6358 BV=5.2227 IBV=0.005 NBV=2.358 CJO=1.1e-11 VJ=0.7 M=0.33)\n.ends PESD5V0V1BL_Q",
+    "pins": ["1", "2"],
+    "params": {},
+    "limits": [
+      "降伏 (BV = 5.223 V、IT = 5 mA で VBR) と、ピーク電流でのクランプ (直列抵抗 0.636 Ω) を合わせたモデルです。",
+      "ESD・サージのパルスの耐量 (ピーク電力・エネルギー) と、温度による降伏電圧の変化は入っていません。部品が壊れるかどうかはデータシートの定格で確かめます。",
+      "VBR は表の値 (多くは最小値) で、実物の降伏電圧はそれより少し高いことがあります。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Nexperia PESD5V0V1BL-Q データシート (Product data sheet, v.1, September 2022) の電気的特性の表"
+    }
+  },
+  "ratings": {
+    "v_max": 5.0,
+    "rows": [
+      {"name": "ピークパルス電流 IPPM", "value": "4.8 A", "condition": "8/20 µs"},
+      {"name": "ピークパルス電力 PPPM", "value": "45 W", "condition": "8/20 µs"},
+      {"name": "ESD", "value": "±30 kV (接触放電)", "condition": "IEC 61000-4-2"}
+    ],
+    "t_max": 150.0
+  },
+  "glyph": "tvs",
+  "body": {"shape": "rect", "w": 1.0, "h": 0.6, "x": 0.0, "y": 0.0, "mark": "none", "mark_pin": ""}
+}

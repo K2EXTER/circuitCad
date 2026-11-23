@@ -1,0 +1,104 @@
+{
+  "name": "B3F-1000",
+  "category": "スイッチ",
+  "description": "Omron B3F-1000 タクトスイッチ (6 × 6 mm、高さ 4.3 mm、押す力 0.98 N、押している間だけ閉じる)。ピン 1 と 2 は押すとつながる (基板では 1 と 2 がそれぞれ 2 本ずつ、6.5 × 4.5 mm の 4 つの穴 φ1.0)。定格 3〜24 V DC・1〜50 mA (抵抗負荷)、接触抵抗 100 mΩ 以下、はね 5 ms 以下、寿命 100 万回。データシート (Omron B3F) で確かめ (2026-11-23)。押す力違いは B3F-1002 (1.47 N)・1005 (2.55 N)、高さ違いは B3F-1020 (5.0 mm) など",
+  "prefix": "SW",
+  "glyph": "switch_push",
+  "footprint_name": "SW_Omron_B3F-1000",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -3.25,
+        "y": -2.25,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 1.0
+      },
+      {
+        "pin": "1",
+        "x": 3.25,
+        "y": -2.25,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 1.0
+      },
+      {
+        "pin": "2",
+        "x": -3.25,
+        "y": 2.25,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 1.0
+      },
+      {
+        "pin": "2",
+        "x": 3.25,
+        "y": 2.25,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 1.0
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "B3F_1000",
+    "text": ".subckt B3F_1000 1 2\n* pressed while Vpress is 1 V (0 V = released): the live logic view of the schematic sets it while the button is held down\nS1 1 2 press 0 SWB3F\nVpress press 0 0\n.model SWB3F SW(RON=0.1 ROFF=1G VT=0.5 VW=0.1)\n.ends B3F_1000",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "limits": [
+      "押していないときは 1GΩ、押したときは 0.05Ω の理想のスイッチです。実物は、押した瞬間と離した瞬間に接点が何度も跳ねて (チャタリング、数 ms)、ロジック IC には何回も押したように見えることがあります。このモデルは跳ねません。",
+      "ふつうの解析 (DC・過渡など) では、離したまま (開いた状態) で計算します。押した状態を調べるには、回路図の「デジタル回路を動かす」を使います。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "学習用の理想のスイッチ (6mm 角のタクトスイッチの足の位置)"
+    }
+  },
+  "ratings": {
+    "v_max": 24,
+    "i_max": 0.05,
+    "rows": [
+      {
+        "name": "定格",
+        "value": "3〜24V DC・1〜50mA",
+        "condition": "抵抗負荷"
+      },
+      {
+        "name": "接触抵抗",
+        "value": "100mΩ 以下",
+        "condition": "初期"
+      },
+      {
+        "name": "はね (バウンス)",
+        "value": "5ms 以下",
+        "condition": ""
+      },
+      {
+        "name": "寿命",
+        "value": "100 万回",
+        "condition": "押す力 0.98 N"
+      }
+    ]
+  },
+  "datasheet": "https://omronfs.omron.com/en_US/ecb/products/pdf/en-b3f.pdf",
+  "value": "B3F-1000",
+  "height": 4.3
+}

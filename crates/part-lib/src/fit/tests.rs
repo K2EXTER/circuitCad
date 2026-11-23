@@ -90,7 +90,7 @@ fn the_templates_give_the_bundled_op_amps_and_regulators_exactly() {
         }
         assert_eq!(&edit::edit_part(part, f).unwrap(), part, "{}: writing the model back changes the file", f.part);
     }
-    assert_eq!(n, 15, "6 op amps, 8 regulators and the TL431");
+    assert_eq!(n, 17, "7 op amps (ADA4522-1 since 2026-11-23), 9 regulators (LM317L) and the TL431");
 }
 
 #[test]

@@ -1,0 +1,76 @@
+{
+  "name": "SS32",
+  "category": "ショットキー",
+  "description": "SS32 ショットキーバリアダイオード 20V 3A (SMC/DO-214AB、帯の側がカソード K)。データシート (Vishay) の代表特性から作った等価モデル",
+  "datasheet": "https://www.vishay.com/docs/88751/ss32.pdf",
+  "prefix": "D",
+  "pins": [
+    {
+      "number": "1",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "A",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "chip2",
+    "pitch": 6.41,
+    "pad_len": 1.72,
+    "pad_width": 3.2
+  },
+  "footprint_name": "D_SMC",
+  "height": 2.62,
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "SS32",
+    "text": ".model SS32 D(IS=2.596e-06 N=1.046 RS=0.01396 BV=20 IBV=0.0005 EG=0.664 XTI=2 CJO=1.2e-09 VJ=1.2 M=0.58)",
+    "pins": [
+      "2",
+      "1"
+    ],
+    "params": {},
+    "limits": [
+      "データシートの代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: Vishay SS32〜SS36 データシート (Document Number 88751, Revision 23-Apr-2020)。データシートとの比べは docs/models/diodes.md。",
+      "順方向: 図 3 (順方向の代表特性。SS32〜SS34 の実線) の 25 °C を読んだ 8 点に、IS・N・RS を当てはめました (部品作成フォームのダイオードと同じ計算)。",
+      "接合容量: 図 5 (接合容量の代表特性。SS32〜SS34 の実線)。逆電圧で小さくなります。",
+      "降伏: 降伏はデータシートに無いので、繰り返しの最大逆電圧 VRRM 20 V に置いた (電流は表の IR の最大 0.5 mA。実物は、ふつうこれより高い電圧で降伏します)。",
+      "温度: 同じ図の 150 °C の曲線に、バンドギャップ EG を当てはめました (XTI = 2)。順方向電圧は、1 °C あたり約 1.1〜1.5 mV 下がります。",
+      "逆回復は扱いません (ショットキーは多数キャリアで動き、蓄積する電荷がほとんど無い。データシートにも trr は無い)。",
+      "扱わないもの: 逆方向の漏れ電流 (IS の分だけ。実物は電圧と温度で増えます)、自己発熱。耐圧や定格電流を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "Vishay SS32〜SS36 データシート (Document Number 88751, Revision 23-Apr-2020)"
+    }
+  },
+  "ratings": {
+    "v_max": 20.0,
+    "i_max": 3.0,
+    "rows": [
+      {
+        "name": "順方向電圧",
+        "value": "0.5V 以下",
+        "condition": "IF = 3A (最大)"
+      },
+      {
+        "name": "サージ電流",
+        "value": "100 A",
+        "condition": "8.3 ms の半波 1 回"
+      },
+      {
+        "name": "熱抵抗 θJA",
+        "value": "55 ℃/W",
+        "condition": "14 × 14 mm の銅箔に実装"
+      }
+    ],
+    "theta_ja": 55.0,
+    "t_max": 150.0
+  },
+  "glyph": "schottky"
+}

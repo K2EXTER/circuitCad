@@ -1,0 +1,49 @@
+{
+  "kind": "regulator",
+  "part": "LM317L_TO-92",
+  "name": "LM317L",
+  "read": "2026-11-23",
+  "source": "TI LM317L データシート SLCS144G (2026-08 改訂) の 5.6 節。VIN − VOUT = 5 V、IOUT = 40 mA。新しいチップ (CSO:RFB) の値がある行はそれ",
+  "cite": "TI LM317L データシート SLCS144G (2026-08 改訂) の 5.6 節 (新しいチップの値がある行はそれ)",
+  "from_figures": "ドロップアウトは表にも図にも無いので、LM317 と同じ 1.6 V + 0.4 Ω × 電流 (100 mA で約 1.64 V) とした。電流制限は表のピーク出力電流 290 mA (代表、VI − VO ≤ 35 V) を、差によらず一定にした。リップル除去は表の 55 dB (120 Hz、ADJ のコンデンサ無し) で、周波数特性は入れていない",
+  "adjustable": true,
+  "vout": 1.25,
+  "vrange": [
+    1.2,
+    1.3
+  ],
+  "line": 7.500000000000001e-05,
+  "rout": 0.06410256410256411,
+  "vdo0": 1.6,
+  "rdo": 0.4,
+  "iadj": 4.4e-05,
+  "iadj_max": 5.7e-05,
+  "min_load": 0.00128,
+  "ilim": [
+    {
+      "diff": 5.0,
+      "amps": 0.29
+    },
+    {
+      "diff": 35.0,
+      "amps": 0.29
+    }
+  ],
+  "rr": 55.0,
+  "rr_f": 120.0,
+  "rr_vout": 10.0,
+  "noise": {
+    "rms": 1.25e-05,
+    "f_low": 10.0,
+    "f_high": 10000.0
+  },
+  "remarks": [
+    "line = 0.006e-2 * 1.25 (new chip typ 0.006 %/V)",
+    "rout = 0.005 * 1.25 / 0.0975 (output regulation typically 0.5 % from 2.5 to 100 mA)",
+    "noise = 10 uV/V rms, 10 Hz to 10 kHz",
+    "iadj 44 uA typ, 57 uA max (new chip)",
+    "min load 1.28 mA typ (new chip)",
+    "peak output current 290 mA typ (new chip, VI - VO <= 35 V)"
+  ],
+  "url": "https://www.ti.com/lit/ds/symlink/lm317l.pdf"
+}

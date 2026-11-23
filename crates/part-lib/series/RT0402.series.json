@@ -1,0 +1,62 @@
+{
+  "series": "RT0402",
+  "maker": "Yageo",
+  "category": "抵抗",
+  "summary": "薄膜チップ抵抗 精密 ±0.1% ±25 ppm/℃ 0402 (1005)",
+  "size": "0402",
+  "datasheet": "https://www.yageogroup.com/content/datasheet/asset/file/PYU-RT_1-TO-0-01_ROHS_L",
+  "checked": "Yageo のデータシート RT series 0100 to 2512 (Product specification、Feb. 12, 2026 V.17) の電気的特性の表 (表 2) と寸法の表 (表 1) で確かめた (2026-11-23)。ランドは同じ大きさの AC と同じ Yageo の Chip resistors Mounting の推奨 (RT のデータシートはその資料を参照する)",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 4.7,
+    "max": 240000.0
+  },
+  "mpn": "RT0402BRD07{code}L",
+  "code": "rkmt",
+  "tolerance_pct": 0.1,
+  "tc_ppm": 25.0,
+  "p_max": 0.0625,
+  "v_limit": 50.0,
+  "v_overload": 100.0,
+  "derate_from_c": 70.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [],
+  "quality": [],
+  "height": 0.3,
+  "footprint_name": "R_0402_Yageo",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.5,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.5,
+        "h": 0.6,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.5,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.5,
+        "h": 0.6,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドは Yageo の推奨 (リフローの A 1.5・B 0.5・C 0.5・D 0.6 mm: A = 外側の端から端、B = パッドの内側の間、C = パッドの長さ、D = パッドの幅。RT も同じ資料の大きさごとの推奨)",
+  "body": "本体 1.00 × 0.50 mm、厚さ 0.30 mm (データシートの寸法)。型番の B は ±0.1 %、R は紙テープ、D は ±25 ppm/℃、07 は 7 インチのリール。同じ大きさで ±0.01〜±1 %、±5〜±50 ppm/℃ の品もある (値の範囲は組み合わせで違う)"
+}

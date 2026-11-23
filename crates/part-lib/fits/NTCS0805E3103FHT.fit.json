@@ -1,0 +1,18 @@
+{
+  "kind": "ntc",
+  "part": "NTCS0805E3103FHT",
+  "name": "NTCS0805E3103FHT",
+  "read": "2026-11-23",
+  "source": "Vishay NTCS0805E3 データシート (Document Number 29044, Revision 22-Jun-2026) の ELECTRICAL DATA AND ORDERING INFORMATION の表",
+  "url": "https://www.vishay.com/docs/29044/ntcs0805e3t.pdf",
+  "description": "NTC サーミスタ 10kΩ ±1 % (25 ℃)・B25/85 3940 K ±1 % (Vishay NTCS0805E3、0805 のチップ、ガラス保護)。温度が上がると抵抗が下がる。熱放散定数 3.5 mW/K、最大 210 mW (25 ℃)、使える温度 −55〜+150 ℃",
+  "r25": 10000.0,
+  "b": 3940.0,
+  "b_range": "B25/85",
+  "dissipation": 3.5,
+  "remarks": [
+    "R25 and B25/85 from the ordering table (the R-T table is only in Vishay's online calculator, not in the data sheet)",
+    "lands: Dimensions of the solder lands, 1.0 x 1.3 mm, 3.0 mm end to end",
+    "body 2.0 x 1.25 mm, 0.8 mm thick"
+  ]
+}

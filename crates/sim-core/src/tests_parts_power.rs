@@ -244,6 +244,27 @@ fn the_tq2_l2_5v_latches_on_a_pulse_and_stays() {
     assert!(at("set2", 4.5e-3) > 0.99 && at("rst2", 4.5e-3) < 1e-3, "the second contact moves with the first");
 }
 
+/// Bourns MF-MSMF150/24X (a PTC, resettable): 1 A (below its 1.5 A hold) flows on; 5 A (over its 3 A trip) trips it within a few
+/// seconds, and then only what keeps it near 1 W flows (about 0.2 A at 5 V).
+#[test]
+fn the_mf_msmf150_trips_over_its_trip_current_and_holds_below() {
+    let def = part("MF-MSMF150/24X");
+    let run = |load: f64| {
+        let mut c = Circuit::new();
+        vs(&mut c, "V1", "in", "0", 5.0);
+        place(&mut c, &def, "F1", &[("1", "in"), ("2", "out")]);
+        res(&mut c, "RL", "out", "0", load);
+        let t = transient(&c, &TranSettings { tstop: 20.0, tstep: 0.01, uic: false }).unwrap();
+        let v = t.signal("V(out)").unwrap();
+        let at = |when: f64| v.values[t.time.iter().position(|x| *x >= when).unwrap()] / load;
+        (at(0.05), at(19.9))
+    };
+    let (start, end) = run(5.0);
+    assert!((start - 1.0).abs() < 0.02 && (end - 1.0).abs() < 0.02, "1 A holds: {start} A, then {end} A");
+    let (start, end) = run(1.0);
+    assert!(start > 4.5 && end < 0.3, "5 A trips: {start} A, then {end} A");
+}
+
 #[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");

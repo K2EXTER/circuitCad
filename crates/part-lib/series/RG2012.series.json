@@ -1,0 +1,65 @@
+{
+  "series": "RG2012",
+  "maker": "Susumu",
+  "category": "抵抗",
+  "summary": "薄膜チップ抵抗 精密 ±0.1% ±25 ppm/℃ 0805 (2012)",
+  "size": "0805",
+  "datasheet": "https://www.susumu.co.jp/common/pdf/n_catalog_partition01_en.pdf",
+  "checked": "Susumu のカタログ「Metal thin film chip resistors (the highest precision) RG series」の電気的特性・寸法・低減曲線の表で確かめた (2026-11-23)。推奨ランドはカタログに無いので、寸法表 (L・W・下面の電極 b) から IPC-7351 の式で計算した",
+  "values": {
+    "sets": [
+      "E24",
+      "E96"
+    ],
+    "min": 47.0,
+    "max": 2700000.0
+  },
+  "mpn": "RG2012P-{code}-B-T5",
+  "code": "sig23",
+  "tolerance_pct": 0.1,
+  "tc_ppm": 25.0,
+  "p_max": 0.125,
+  "v_limit": 150.0,
+  "v_overload": 0.0,
+  "derate_from_c": 85.0,
+  "derate_zero_c": 155.0,
+  "temp_min_c": -55.0,
+  "temp_max_c": 155.0,
+  "bands": [],
+  "quality": [
+    "AEC-Q200",
+    "耐硫化"
+  ],
+  "height": 0.4,
+  "footprint_name": "R_0805_Susumu",
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.875,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.16,
+        "h": 1.47,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.875,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.16,
+        "h": 1.47,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "land": "ランドはカタログに推奨が無いので、寸法 (L 1.80〜2.20・W 1.05〜1.45・下面の電極 0.20〜0.60 mm) から IPC-7351 の式 (つま先 0.35 mm) で計算した: パッド 1.16 × 1.47 mm、中心の間 1.75 mm",
+  "body": "本体 2.00 × 1.25 mm、厚さ 0.40 mm (カタログの寸法)。型番の P は ±25 ppm/℃、B は ±0.1 %、T5 は包装。値の書き方は E-24 が 3 桁 (102 = 1 kΩ)、E-96 が 4 桁 (1021 = 1.02 kΩ)。定格電力は Regular (85 ℃まで、155 ℃で 0)。同じ大きさで ±0.02〜±0.5 %、±5〜±100 ppm/℃ の品もある"
+}

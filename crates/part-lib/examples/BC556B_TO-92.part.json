@@ -1,0 +1,98 @@
+{
+  "name": "BC556B",
+  "category": "トランジスタ",
+  "description": "PNP 汎用トランジスタ BC556B (TO-92, ピン1=C 2=B 3=E)。BC557B と同じ特性で耐圧が 65 V。2N3906 とピン配置が違うので注意。データシート (onsemi) の表と代表特性から作った等価モデル",
+  "prefix": "Q",
+  "footprint_name": "TO-92_inline",
+  "pins": [
+    {
+      "number": "2",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "1",
+      "name": "C",
+      "side": "bottom"
+    },
+    {
+      "number": "3",
+      "name": "E",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "Q",
+    "name": "BC556B",
+    "text": ".model BC556B PNP(IS=2.999e-14 BF=1264 NF=1.060 VAF=100 IKF=0.0372 ISE=1.77e-14 NE=1.359 BR=42.66 RB=2.642 RE=1.267 RC=0.7892 CJE=1.109e-11 VJE=0.9 MJE=0.26 CJC=1.339e-11 VJC=0.1 MJC=0.37 TF=5.684e-10)",
+    "pins": [
+      "1",
+      "2",
+      "3"
+    ],
+    "limits": [
+      "データシートの表と代表特性から作った等価モデルです (メーカーのモデルではありません)。出典: onsemi BC556B/BC557A,B,C/BC558B データシート (BC556B/D Rev. 3, 2007-03)。データシートとの比べは docs/models/transistors.md。",
+      "直流: 図 1 (hFE の電流による変化。相対値)・図 2 (VBE、VBE(sat)、VCE(sat)) に、IS・BF・NF (VBE の傾き)・ISE・NE・IKF・BR・RB・RE・RC を当てはめました。曲線の高さは、表の hFE の typ 290 (BC557B、2 mA、5 V) に、図 1 の 2 mA の値 0.998 を合わせて決めました (曲線の 1 が 291)。実物の hFE は、同じ B ランクでも 180〜460 と大きく違います。",
+      "容量: 図 5 の Cibo・Cobo に CJE・CJC を当てはめました。速さ: fT の typ 280 MHz から TF を決めました。Early 電圧 VAF 100 V は、データシートに出力の特性 (hoe や出力特性の図) が無いので、BC547 と同じく仮に 100 V としました (出力抵抗はこの値で決まります)。",
+      "扱わないもの: 蓄積時間 (逆方向の蓄積 TR は入れていない。飽和から抜ける速さは実物と違います)、雑音の 1/f 成分、温度によるパラメータの変化はシミュレータの標準の式、耐圧・定格電流・許容損失を超えても壊れません。",
+      "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "onsemi BC556B/BC557A,B,C/BC558B データシート (BC556B/D Rev. 3, 2007-03)"
+    }
+  },
+  "ratings": {
+    "v_max": 65,
+    "i_max": 0.1,
+    "p_max": 0.625,
+    "t_max": 150.0,
+    "theta_ja": 200.0,
+    "theta_jc": 83.3,
+    "rows": [
+      {
+        "name": "電流増幅率 hFE",
+        "value": "180〜460 (B ランク)",
+        "condition": "IC = 2mA, VCE = 5V"
+      },
+      {
+        "name": "VCEO",
+        "value": "−65V",
+        "condition": ""
+      }
+    ]
+  },
+  "datasheet": "https://www.onsemi.com/pdf/datasheet/bc556b-d.pdf",
+  "value": "BC556B"
+}

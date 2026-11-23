@@ -1,0 +1,42 @@
+{
+  "kind": "mos",
+  "part": "NDT3055L_SOT-223",
+  "name": "NDT3055L",
+  "pch": false,
+  "read": "2026-11-23",
+  "source": "onsemi NDT3055L データシート (NDT3055L/D) の電気的特性の表",
+  "url": "https://www.onsemi.com/pdf/datasheet/ndt3055l-d.pdf",
+  "description": "NDT3055L N チャネル MOSFET 60V 4A ロジックレベル (SOT-223、ピン 1 = G・2 = D (タブも D)・3 = S)。4.5 V の駆動で 0.1 Ω 台。データシート (onsemi) の typ から作った等価モデル (レベル 1 + 直列抵抗)",
+  "vth": [
+    1.6,
+    0.00025
+  ],
+  "rds": [
+    [
+      10.0,
+      4.0,
+      0.07
+    ],
+    [
+      4.5,
+      3.7,
+      0.103
+    ]
+  ],
+  "caps": {
+    "ciss": 3.45e-10,
+    "coss": 1.1e-10,
+    "crss": 3e-11
+  },
+  "gfs": [
+    7.0,
+    5.0,
+    4.0
+  ],
+  "remarks": [
+    "vth: VGS(th) typ 1.6 V at ID = 250 uA",
+    "rds: RDS(on) typ 0.07 ohm (10 V, 4 A) and 0.103 ohm (4.5 V, 3.7 A)",
+    "gfs: 7 S typ at VDS = 5 V, ID = 4 A",
+    "caps: Ciss 345, Coss 110, Crss 30 pF typ (VDS = 25 V, VGS = 0, 1 MHz)"
+  ]
+}
