@@ -6,7 +6,6 @@
   "prefix": "U",
   "footprint_name": "SOIC-20W_P1.27",
   "glyph": "ff_d",
-  "land_unverified": true,
   "pins": [
     {
       "number": "1",
@@ -113,14 +112,14 @@
     "type": "dual",
     "pins": 20,
     "pitch": 1.27,
-    "row_spacing": 9.4,
-    "pad_len": 1.9,
+    "row_spacing": 9.3,
+    "pad_len": 2.0,
     "pad_width": 0.6
   },
   "sim": {
     "kind": "subckt",
     "name": "74HC574",
-    "text": "* 74HC574 behavioural model: eight D flip-flops with a common clock and 3-state outputs (OE active low). Clock to Q 28 ns, setup 20 ns and hold 5 ns (the data sheet SCLS148, 4.5 V, 25 C); the enable and disable times are not modelled.\n.subckt 74HC574 oe 1d 2d 3d 4d 5d 6d 7d 8d gnd clk 8q 7q 6q 5q 4q 3q 2q 1q vcc\nYF1 dff 1q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 1d clk 0 0\nYF2 dff 2q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 2d clk 0 0\nYF3 dff 3q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 3d clk 0 0\nYF4 dff 4q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 4d clk 0 0\nYF5 dff 5q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 5d clk 0 0\nYF6 dff 6q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 6d clk 0 0\nYF7 dff 7q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 7d clk 0 0\nYF8 dff 8q 0 gnd vcc 60 0.5 0 0 0 td=28n tsu=20n th=5n oe=oe oel=1 8d clk 0 0\n.ends 74HC574",
+    "text": "* 74HC574 behavioural model: eight D flip-flops with a common clock and 3-state outputs (OE active low). Clock to Q 28 ns, OE to Q 26 ns on and 24 ns off, the clock high and low at least 16 ns, setup 20 ns and hold 5 ns (the data sheet SCLS148, 4.5 V, 25 C); the enable and disable times are not modelled.\n.subckt 74HC574 oe 1d 2d 3d 4d 5d 6d 7d 8d gnd clk 8q 7q 6q 5q 4q 3q 2q 1q vcc\nYF1 dff 1q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 1d clk 0 0\nYF2 dff 2q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 2d clk 0 0\nYF3 dff 3q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 3d clk 0 0\nYF4 dff 4q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 4d clk 0 0\nYF5 dff 5q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 5d clk 0 0\nYF6 dff 6q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 6d clk 0 0\nYF7 dff 7q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 7d clk 0 0\nYF8 dff 8q 0 gnd vcc 60 0.5 0 0 0 td=28n tw=16n ten=26n tdis=24n tsu=20n th=5n oe=oe oel=1 8d clk 0 0\n.ends 74HC574",
     "pins": [
       "1",
       "2",
@@ -146,8 +145,8 @@
     "params": {},
     "limits": [
       "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-      "遅延は、クロック→Q 28ns の代表値です (4.5V・25℃ のデータシートの値)。出力許可 (OE) の切り替えの遅れ (ten 26ns、tdis 24ns) は表しません。",
-      "セットアップ時間 (20ns) とホールド時間 (5ns) を点検し、足りないと過渡解析が警告を出します (出力の不定は表さず、古い値を取り込みます)。",
+      "遅延は、クロック→Q 28ns、出力許可 (OE) で出るまで 26ns、手放すまで 24ns の代表値です (4.5V・25℃ のデータシートの値)。",
+      "クロックの High・Low の幅 (最小 16ns)、セットアップ時間 (20ns) とホールド時間 (5ns) を点検し、足りないと過渡解析が警告を出します (出力の不定は表さず、どちらかに決めます)。",
       "使わない入力は、GND か電源につないでください (つながないと Low として扱い、OE は働いた状態になります)。"
     ],
     "origin": {

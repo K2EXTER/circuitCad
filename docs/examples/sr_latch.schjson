@@ -241,7 +241,7 @@
           "kind": "subckt",
           "element": "",
           "name": "74HC00",
-          "text": "* 74HC00 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. Propagation delay 8 ns.\n.subckt 74HC00 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nY1 nand y1 0 gnd vcc 60 0.5 0 0 0 td=8n a1 b1\nY2 nand y2 0 gnd vcc 60 0.5 0 0 0 td=8n a2 b2\nY3 nand y3 0 gnd vcc 60 0.5 0 0 0 td=8n a3 b3\nY4 nand y4 0 gnd vcc 60 0.5 0 0 0 td=8n a4 b4\n.ends 74HC00",
+          "text": "* 74HC00 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. Propagation delay 9 ns (TI data sheet SCLS181H, 25 C, 4.5 V, 50 pF typical; the same rising and falling).\n.subckt 74HC00 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nY1 nand y1 0 gnd vcc 60 0.5 0 0 0 td=9n a1 b1\nY2 nand y2 0 gnd vcc 60 0.5 0 0 0 td=9n a2 b2\nY3 nand y3 0 gnd vcc 60 0.5 0 0 0 td=9n a3 b3\nY4 nand y4 0 gnd vcc 60 0.5 0 0 0 td=9n a4 b4\n.ends 74HC00",
           "pins": [
             "1",
             "2",

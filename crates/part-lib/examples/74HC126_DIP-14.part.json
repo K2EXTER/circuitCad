@@ -90,7 +90,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC126",
-    "text": "* 74HC126 behavioural model: four non-inverting 3-state buffers, each with its own output enable (active high). Delay 14 ns (the data sheet, 4.5 V, 25 C typical); the enable and disable times are not modelled.\n.subckt 74HC126 1oe 1a 1y 2oe 2a 2y gnd 3y 3a 3oe 4y 4a 4oe vcc\nYb1 buf 1y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=1oe 1a\nYb2 buf 2y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=2oe 2a\nYb3 buf 3y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=3oe 3a\nYb4 buf 4y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=4oe 4a\n.ends 74HC126",
+    "text": "* 74HC126 behavioural model: four non-inverting 3-state buffers, each with its own output enable (active high). Delay 14 ns (the data sheet, 4.5 V, 25 C typical); OE to the outputs 16 ns on and 17 ns off (TI data sheet SCLS103F, 25 C, 4.5 V typical).\n.subckt 74HC126 1oe 1a 1y 2oe 2a 2y gnd 3y 3a 3oe 4y 4a 4oe vcc\nYb1 buf 1y 0 gnd vcc 60 0.5 0 0 0 td=14n ten=16n tdis=17n oe=1oe 1a\nYb2 buf 2y 0 gnd vcc 60 0.5 0 0 0 td=14n ten=16n tdis=17n oe=2oe 2a\nYb3 buf 3y 0 gnd vcc 60 0.5 0 0 0 td=14n ten=16n tdis=17n oe=3oe 3a\nYb4 buf 4y 0 gnd vcc 60 0.5 0 0 0 td=14n ten=16n tdis=17n oe=4oe 4a\n.ends 74HC126",
     "pins": [
       "1",
       "2",
@@ -110,7 +110,7 @@
     "params": {},
     "limits": [
       "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-      "遅延は、A→Y 14ns の代表値 1 つです (4.5V・25℃ のデータシートの値)。出力許可 (OE) の切り替えの遅れ (ten 16ns、tdis 17ns) は表しません。",
+      "遅延は、A→Y 14ns、出力許可 (OE) で出るまで 16ns、手放すまで 17ns の代表値です (4.5V・25℃ のデータシート SCLS103F の値)。",
       "扱わないもの: 入力容量、電源電流。",
       "使わない入力は、GND か電源につないでください (つながないと Low として扱います。OE は働かない状態になります)。"
     ],

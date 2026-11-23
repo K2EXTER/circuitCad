@@ -119,7 +119,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC373",
-    "text": "* 74HC373 behavioural model: eight transparent D latches (LE high: the latch follows D, LE low: it holds) with 3-state outputs (OE active low). Delay about 16 ns (the data sheet SCLS140, 4.5 V, 25 C typical: D to Q 15 ns, LE to Q 18 ns); the enable and disable times are not modelled.\n.subckt 74HC373 oe 1q 1d 2d 2q 3q 3d 4d 4q gnd le 5q 5d 6d 6q 7q 7d 8d 8q vcc\nYL1 dlatch 1q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 1d le 0 0\nYL2 dlatch 2q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 2d le 0 0\nYL3 dlatch 3q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 3d le 0 0\nYL4 dlatch 4q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 4d le 0 0\nYL5 dlatch 5q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 5d le 0 0\nYL6 dlatch 6q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 6d le 0 0\nYL7 dlatch 7q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 7d le 0 0\nYL8 dlatch 8q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 8d le 0 0\n.ends 74HC373",
+    "text": "* 74HC373 behavioural model: eight transparent D latches (LE high: the latch follows D, LE low: it holds) with 3-state outputs (OE active low). Delay about 16 ns (the data sheet SCLS140, 4.5 V, 25 C typical: D to Q 15 ns, LE to Q 18 ns); OE to Q 17 ns on and 15 ns off; LE high at least 16 ns, the data 10 ns before LE falls and 10 ns after (TI data sheet SCLS140G, 25 C, 4.5 V).\n.subckt 74HC373 oe 1q 1d 2d 2q 3q 3d 4d 4q gnd le 5q 5d 6d 6q 7q 7d 8d 8q vcc\nYL1 dlatch 1q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 1d le 0 0\nYL2 dlatch 2q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 2d le 0 0\nYL3 dlatch 3q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 3d le 0 0\nYL4 dlatch 4q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 4d le 0 0\nYL5 dlatch 5q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 5d le 0 0\nYL6 dlatch 6q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 6d le 0 0\nYL7 dlatch 7q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 7d le 0 0\nYL8 dlatch 8q 0 gnd vcc 60 0.5 0 0 0 td=16n tw=16n tsu=10n th=10n ten=17n tdis=15n oe=oe oel=1 8d le 0 0\n.ends 74HC373",
     "pins": [
       "1",
       "2",
@@ -145,8 +145,8 @@
     "params": {},
     "limits": [
       "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-      "遅延は 16ns の代表値 1 つです (4.5V・25℃ のデータシートの値は、D→Q 15ns、LE→Q 18ns)。出力許可 (OE) の切り替えの遅れは表しません。",
-      "扱わないもの: 入力容量、電源電流、LE に対するデータのセットアップ時間 (10ns)・ホールド時間 (10ns) の点検。",
+      "遅延は 16ns の代表値 1 つです (4.5V・25℃ のデータシートの値は、D→Q 15ns、LE→Q 18ns)。出力許可 (OE) で出るまで 17ns、手放すまで 15ns です。",
+      "扱わないもの: 入力容量、電源電流。LE の High の幅 (最小 16ns)、LE が下がる前のデータのセットアップ時間 (10ns) と後のホールド時間 (10ns) を点検し、足りないと過渡解析が警告を出します。",
       "使わない入力は、GND か電源につないでください (つながないと Low として扱い、OE は働いた状態になります)。"
     ],
     "origin": {

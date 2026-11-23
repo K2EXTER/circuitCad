@@ -100,7 +100,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC4040",
-    "text": "* 74HC4040 behavioural model: a 12-stage ripple counter. It counts on the falling edge of CP; MR high clears at once. Delays (the CD74HC4040 data sheet SCHS203, 5 V, 15 pF typical): CP to Q1 17 ns, one stage to the next 4 ns, MR to Q 17 ns.\n.subckt 74HC4040 q12 q6 q5 q7 q4 q3 q2 gnd q1 cp mr q9 q8 q10 q11 vcc\nYnp inv ncp 0 gnd vcc 60 0.5 0 0 0 cp\nYT1 tff q1 nq1 gnd vcc 60 0.5 0 0 0 td=17n vcc ncp 0 mr\nYT2 tff q2 nq2 gnd vcc 60 0.5 0 0 0 td=4n vcc nq1 0 mr\nYT3 tff q3 nq3 gnd vcc 60 0.5 0 0 0 td=4n vcc nq2 0 mr\nYT4 tff q4 nq4 gnd vcc 60 0.5 0 0 0 td=4n vcc nq3 0 mr\nYT5 tff q5 nq5 gnd vcc 60 0.5 0 0 0 td=4n vcc nq4 0 mr\nYT6 tff q6 nq6 gnd vcc 60 0.5 0 0 0 td=4n vcc nq5 0 mr\nYT7 tff q7 nq7 gnd vcc 60 0.5 0 0 0 td=4n vcc nq6 0 mr\nYT8 tff q8 nq8 gnd vcc 60 0.5 0 0 0 td=4n vcc nq7 0 mr\nYT9 tff q9 nq9 gnd vcc 60 0.5 0 0 0 td=4n vcc nq8 0 mr\nYT10 tff q10 nq10 gnd vcc 60 0.5 0 0 0 td=4n vcc nq9 0 mr\nYT11 tff q11 nq11 gnd vcc 60 0.5 0 0 0 td=4n vcc nq10 0 mr\nYT12 tff q12 nq12 gnd vcc 60 0.5 0 0 0 td=4n vcc nq11 0 mr\n.ends 74HC4040",
+    "text": "* 74HC4040 behavioural model: a 12-stage ripple counter. It counts on the falling edge of CP; MR high clears at once. Delays (the CD74HC4040 data sheet SCHS203, 5 V, 15 pF typical): CP to Q1 17 ns, one stage to the next 4 ns, MR to Q 17 ns.\n* the clock high and low at least 18 ns (TI data sheet SN74HC4040 SCLS160E, 25 C, 4.5 V); the width of MR is not checked\n.subckt 74HC4040 q12 q6 q5 q7 q4 q3 q2 gnd q1 cp mr q9 q8 q10 q11 vcc\nYnp inv ncp 0 gnd vcc 60 0.5 0 0 0 cp\nYT1 tff q1 nq1 gnd vcc 60 0.5 0 0 0 td=17n tw=18n vcc ncp 0 mr\nYT2 tff q2 nq2 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq1 0 mr\nYT3 tff q3 nq3 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq2 0 mr\nYT4 tff q4 nq4 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq3 0 mr\nYT5 tff q5 nq5 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq4 0 mr\nYT6 tff q6 nq6 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq5 0 mr\nYT7 tff q7 nq7 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq6 0 mr\nYT8 tff q8 nq8 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq7 0 mr\nYT9 tff q9 nq9 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq8 0 mr\nYT10 tff q10 nq10 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq9 0 mr\nYT11 tff q11 nq11 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq10 0 mr\nYT12 tff q12 nq12 gnd vcc 60 0.5 0 0 0 td=4n tw=18n vcc nq11 0 mr\n.ends 74HC4040",
     "pins": [
       "1",
       "2",
@@ -123,7 +123,7 @@
     "limits": [
       "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
       "遅延は、CP→Q1 17ns と、1 段ごとの 4ns です (CD74HC4040 のデータシートの 5V・負荷 15pF の代表値。4.5V・50pF では最大値だけで、CP→Q1 40ns、段→段 15ns)。",
-      "扱わないもの: 入力容量、電源電流、パルス幅の点検。",
+      "扱わないもの: 入力容量、電源電流、MR のパルス幅の点検。CP の High・Low の幅は、データシート (SN74HC4040、SCLS160E、4.5V) の最小 18ns より短いと警告します。",
       "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
     ],
     "origin": {

@@ -90,7 +90,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC164",
-    "text": "* 74HC164 behavioural model: an 8-bit serial-in parallel-out shift register. The serial input is A AND B; CLR low clears at once. Delay 23 ns (the data sheet SCLS115, 4.5 V, 25 C typical; CLR to Q 28 ns).\n.subckt 74HC164 a b qa qb qc qd gnd clk clr qe qf qg qh vcc\nYd0 and d0 0 gnd vcc 60 0.5 0 0 0 a b\nYF0 dff qa 0 gnd vcc 60 0.5 0 0 1 td=23n d0 clk 0 clr\nYF1 dff qb 0 gnd vcc 60 0.5 0 0 1 td=23n qa clk 0 clr\nYF2 dff qc 0 gnd vcc 60 0.5 0 0 1 td=23n qb clk 0 clr\nYF3 dff qd 0 gnd vcc 60 0.5 0 0 1 td=23n qc clk 0 clr\nYF4 dff qe 0 gnd vcc 60 0.5 0 0 1 td=23n qd clk 0 clr\nYF5 dff qf 0 gnd vcc 60 0.5 0 0 1 td=23n qe clk 0 clr\nYF6 dff qg 0 gnd vcc 60 0.5 0 0 1 td=23n qf clk 0 clr\nYF7 dff qh 0 gnd vcc 60 0.5 0 0 1 td=23n qg clk 0 clr\n.ends 74HC164",
+    "text": "* 74HC164 behavioural model: an 8-bit serial-in parallel-out shift register. The serial input is A AND B; CLR low clears at once. Delay 23 ns (the data sheet SCLS115, 4.5 V, 25 C typical; CLR to Q 28 ns).\n* the clock high and low at least 16 ns, A and B 20 ns before the rising edge and 5 ns after it (TI data sheet SCLS115G, 25 C, 4.5 V); the later stages are not checked (their inputs are the outputs before them)\n.subckt 74HC164 a b qa qb qc qd gnd clk clr qe qf qg qh vcc\nYd0 and d0 0 gnd vcc 60 0.5 0 0 0 a b\nYF0 dff qa 0 gnd vcc 60 0.5 0 0 1 td=23n tsu=20n th=5n tw=16n d0 clk 0 clr\nYF1 dff qb 0 gnd vcc 60 0.5 0 0 1 td=23n tw=16n qa clk 0 clr\nYF2 dff qc 0 gnd vcc 60 0.5 0 0 1 td=23n tw=16n qb clk 0 clr\nYF3 dff qd 0 gnd vcc 60 0.5 0 0 1 td=23n tw=16n qc clk 0 clr\nYF4 dff qe 0 gnd vcc 60 0.5 0 0 1 td=23n tw=16n qd clk 0 clr\nYF5 dff qf 0 gnd vcc 60 0.5 0 0 1 td=23n tw=16n qe clk 0 clr\nYF6 dff qg 0 gnd vcc 60 0.5 0 0 1 td=23n tw=16n qf clk 0 clr\nYF7 dff qh 0 gnd vcc 60 0.5 0 0 1 td=23n tw=16n qg clk 0 clr\n.ends 74HC164",
     "pins": [
       "1",
       "2",
@@ -111,7 +111,7 @@
     "limits": [
       "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
       "遅延は、クロック→Q 23ns の代表値です (4.5V・25℃ のデータシートの値。CLR→Q は 28ns ですが、同じ値で近似しています)。",
-      "扱わないもの: 入力容量、電源電流、セットアップ/ホールド時間の点検。",
+      "扱わないもの: 入力容量、電源電流、CLR のパルス幅の点検。CLK の High・Low の幅 (最小 16ns)、A・B のセットアップ時間 (20ns) とホールド時間 (5ns) を点検し、足りないと過渡解析が警告を出します (TI のデータシート SCLS115G、4.5V・25℃)。",
       "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
     ],
     "origin": {

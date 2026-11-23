@@ -6,7 +6,6 @@
   "prefix": "U",
   "footprint_name": "SOIC-20W_P1.27",
   "glyph": "gate_buffer",
-  "land_unverified": true,
   "pins": [
     {
       "number": "1",
@@ -113,14 +112,14 @@
     "type": "dual",
     "pins": 20,
     "pitch": 1.27,
-    "row_spacing": 9.4,
-    "pad_len": 1.9,
+    "row_spacing": 9.3,
+    "pad_len": 2.0,
     "pad_width": 0.6
   },
   "sim": {
     "kind": "subckt",
     "name": "74HC244",
-    "text": "* 74HC244 behavioural model: two groups of four non-inverting 3-state buffers, each group with its own output enable (active low). Delay 13 ns (the data sheet SCLS130, 4.5 V, 25 C typical); the enable and disable times are not modelled.\n.subckt 74HC244 1oe 1a1 2y4 1a2 2y3 1a3 2y2 1a4 2y1 gnd 2a1 1y4 2a2 1y3 2a3 1y2 2a4 1y1 2oe vcc\nYg1b1 buf 1y1 0 gnd vcc 60 0.5 0 0 0 td=13n oe=1oe oel=1 1a1\nYg1b2 buf 1y2 0 gnd vcc 60 0.5 0 0 0 td=13n oe=1oe oel=1 1a2\nYg1b3 buf 1y3 0 gnd vcc 60 0.5 0 0 0 td=13n oe=1oe oel=1 1a3\nYg1b4 buf 1y4 0 gnd vcc 60 0.5 0 0 0 td=13n oe=1oe oel=1 1a4\nYg2b1 buf 2y1 0 gnd vcc 60 0.5 0 0 0 td=13n oe=2oe oel=1 2a1\nYg2b2 buf 2y2 0 gnd vcc 60 0.5 0 0 0 td=13n oe=2oe oel=1 2a2\nYg2b3 buf 2y3 0 gnd vcc 60 0.5 0 0 0 td=13n oe=2oe oel=1 2a3\nYg2b4 buf 2y4 0 gnd vcc 60 0.5 0 0 0 td=13n oe=2oe oel=1 2a4\n.ends 74HC244",
+    "text": "* 74HC244 behavioural model: two groups of four non-inverting 3-state buffers, each group with its own output enable (active low). Delay 13 ns (the data sheet SCLS130, 4.5 V, 25 C typical); OE to the outputs 15 ns on and 15 ns off (TI data sheet SCLS130I, 25 C, 4.5 V typical).\n.subckt 74HC244 1oe 1a1 2y4 1a2 2y3 1a3 2y2 1a4 2y1 gnd 2a1 1y4 2a2 1y3 2a3 1y2 2a4 1y1 2oe vcc\nYg1b1 buf 1y1 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=1oe oel=1 1a1\nYg1b2 buf 1y2 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=1oe oel=1 1a2\nYg1b3 buf 1y3 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=1oe oel=1 1a3\nYg1b4 buf 1y4 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=1oe oel=1 1a4\nYg2b1 buf 2y1 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=2oe oel=1 2a1\nYg2b2 buf 2y2 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=2oe oel=1 2a2\nYg2b3 buf 2y3 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=2oe oel=1 2a3\nYg2b4 buf 2y4 0 gnd vcc 60 0.5 0 0 0 td=13n ten=15n tdis=15n oe=2oe oel=1 2a4\n.ends 74HC244",
     "pins": [
       "1",
       "2",
@@ -146,7 +145,7 @@
     "params": {},
     "limits": [
       "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-      "遅延は、A→Y 13ns の代表値 1 つです (4.5V・25℃ のデータシートの値)。出力許可 (OE) の切り替えの遅れ (ten 15ns、tdis 15ns) は表しません。",
+      "遅延は、A→Y 13ns、出力許可 (OE) で出るまで 15ns、手放すまで 15ns の代表値です (4.5V・25℃ のデータシート SCLS130I の値)。",
       "扱わないもの: 入力容量、電源電流。",
       "使わない入力は、GND か電源につないでください (つながないと Low として扱い、OE は働いた状態になります)。"
     ],
