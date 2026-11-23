@@ -559,6 +559,39 @@ pub fn script(t: Template, given: &BTreeMap<String, f64>, pads: &[Pad]) -> Resul
     Ok(Value::Array(s.cmds))
 }
 
+/// A drawing to model a part over (E7): seen from above (on the board's plane) or from the front (standing behind the part, its
+/// picture's up along +z), the PNG and its width in millimetres.
+pub struct Sketch {
+    pub side: bool,
+    pub path: String,
+    pub width: f64,
+}
+
+/// The SolidCraft script of a hand-made shape: the drawings as canvases, a starting body `[w, h, height]` standing on the board's
+/// face round the origin, and a leg in each through-hole of the footprint (E7 ②: through the board and 0.5 mm up into the body).
+pub fn sketch_script(drawings: &[Sketch], starter: Option<[f64; 3]>, pads: &[Pad]) -> Value {
+    let mut cmds = vec![];
+    // how far behind the part the side view stands: clear of the part and of the top view
+    let behind = drawings.iter().filter(|d| !d.side).map(|d| d.width / 2.0).fold(starter.map_or(10.0, |s| s[1] / 2.0 + 5.0), f64::max);
+    if let Some([w, h, height]) = starter {
+        cmds.push(json!({"command": "solid.box", "params": {"length": w, "width": h, "height": height, "corner": [-w / 2.0, -h / 2.0, 0.0], "body_name": "body"}}));
+        cmds.push(json!({"command": "appearance.assign", "params": {"bodies": ["body"], "color": "#3a3a3a", "opacity": 0.8}}));
+    }
+    for d in drawings {
+        cmds.push(if d.side {
+            json!({"command": "canvas.insert", "params": {
+                "path": d.path,
+                "plane": {"origin": [0.0, behind, 0.0], "x_dir": [1.0, 0.0, 0.0], "y_dir": [0.0, 0.0, 1.0]},
+                "center": [0.0, starter.map_or(d.width / 4.0, |s| s[2] / 2.0)],
+                "width": d.width, "opacity": 0.6, "name": "横から見た図"}})
+        } else {
+            json!({"command": "canvas.insert", "params": {"path": d.path, "plane": "XY", "center": [0.0, 0.0], "width": d.width, "opacity": 0.6, "name": "上から見た図"}})
+        });
+    }
+    cmds.extend(legs_commands(pads, 0.5));
+    Value::Array(cmds)
+}
+
 /// The mouth's direction from the `open` dimension (±1 along x, ±2 along y) and the direction across it.
 fn mouth_axes(open: f64) -> Result<([f64; 2], [f64; 2]), String> {
     match open.round() as i64 {
@@ -721,6 +754,21 @@ mod tests {
         // the terminal block: a well and a wire opening per pole
         let s = script(Template::Terminal, &BTreeMap::new(), &term).unwrap();
         assert_eq!(s.as_array().unwrap().iter().filter(|x| x["params"]["operation"] == "cut").count(), 6);
+    }
+
+    /// The sketch script: the top view on the board's plane, the side view standing behind the part and the starter, a leg in each
+    /// through-hole (E7 ②④).
+    #[test]
+    fn the_sketch_script_has_its_canvases_starter_and_legs() {
+        let pads = [hole("1", 0.0, 0.0, 0.8), hole("2", 2.54, 0.0, 0.8)];
+        let s = sketch_script(&[Sketch { side: false, path: "top.png".into(), width: 12.0 }, Sketch { side: true, path: "side.png".into(), width: 12.0 }], Some([6.0, 4.0, 3.0]), &pads);
+        let cmds = commands(&s);
+        assert_eq!(cmds.iter().filter(|c| **c == "canvas.insert").count(), 2);
+        assert!(cmds.contains(&"solid.box"));
+        let a = s.as_array().unwrap();
+        assert_eq!(a.iter().filter(|c| c["params"]["name"].as_str().is_some_and(|n| n.starts_with("Leg"))).count(), 2);
+        let side = a.iter().find(|c| c["params"]["name"] == "横から見た図").unwrap();
+        assert!(side["params"]["plane"]["origin"][1].as_f64().unwrap() > 6.0, "behind the part and the top view");
     }
 
     /// A misspelt dimension, sizes that do not fit and a part without pads are refused with the reason.

@@ -385,11 +385,67 @@ fn data_sheet_body(part: &Part, pads: &[&Pad], body: &crate::body::BodySpec, h: 
     let (w, l) = if circle { (body.w, body.w) } else { (body.w, body.h) };
     let (w, l) = if part.rot % 2 == 1 { (l, w) } else { (w, l) };
     let (cx, cy) = place(body.x, body.y);
-    // surface-mount parts sit a little above the pads, leaded ones on the board
-    let z0 = if pads.iter().any(|p| p.drill.is_some()) { 0.0 } else { 0.15 };
-    let top = z0 + h;
-    let main = solid([cx - w / 2.0, cy - l / 2.0, z0], [cx + w / 2.0, cy + l / 2.0, top], color, if circle { BodyShape::Cylinder(2) } else { BodyShape::Box });
-    let mut v = vec![main];
+    // the data sheet's height is the whole part's (A: from the board to the top). Surface-mount parts sit a little above the pads,
+    // a box-shaped leaded part (a DIP) on its standoffs, a round can on the board
+    let drilled = pads.iter().any(|p| p.drill.is_some());
+    let z0 = if !drilled { 0.15 } else if circle { 0.0 } else { 0.5 };
+    let top = h.max(z0 + 0.2);
+    let (bx0, bx1, by0, by1) = (cx - w / 2.0, cx + w / 2.0, cy - l / 2.0, cy + l / 2.0);
+    let mut v = vec![];
+    // the guess's details on the data sheet's body: a two-terminal chip's end caps, a leaded package's legs out of its sides, a box
+    // standing on its pins (the guessed shape fitted to the data sheet's size)
+    let chip = !drilled && !circle && pads.len() == 2 && matches!(part_kind(&part.refdes, &part.footprint), Kind::Chip);
+    if chip {
+        // the caps over the ends along the line between the two pads, the body between them
+        let along_x = (pads[0].pos.x - pads[1].pos.x).abs() >= (pads[0].pos.y - pads[1].pos.y).abs();
+        let len = if along_x { w } else { l };
+        let cap = (len * 0.2).clamp(0.1, 0.8);
+        if along_x {
+            v.push(solid([bx0 + cap, by0, z0], [bx1 - cap, by1, top], color, BodyShape::Box));
+            v.push(solid([bx0, by0, z0], [bx0 + cap, by1, top], SILVER, BodyShape::Box));
+            v.push(solid([bx1 - cap, by0, z0], [bx1, by1, top], SILVER, BodyShape::Box));
+        } else {
+            v.push(solid([bx0, by0 + cap, z0], [bx1, by1 - cap, top], color, BodyShape::Box));
+            v.push(solid([bx0, by0, z0], [bx1, by0 + cap, top], SILVER, BodyShape::Box));
+            v.push(solid([bx0, by1 - cap, z0], [bx1, by1, top], SILVER, BodyShape::Box));
+        }
+    } else {
+        v.push(solid([bx0, by0, z0], [bx1, by1, top], color, if circle { BodyShape::Cylinder(2) } else { BodyShape::Box }));
+    }
+    if !circle && !chip {
+        for pad in pads {
+            let (pw, ph) = pad.shape.size();
+            let (px0, px1, py0, py1) = (pad.pos.x - pw / 2.0, pad.pos.x + pw / 2.0, pad.pos.y - ph / 2.0, pad.pos.y + ph / 2.0);
+            if pad.drill.is_some() {
+                // a pin from the board up into the body
+                let r = (pad.drill.unwrap_or(0.8) * 0.3).clamp(0.2, 0.4);
+                v.push(solid([pad.pos.x - r, pad.pos.y - r, 0.0], [pad.pos.x + r, pad.pos.y + r, z0 + 0.6], SILVER, BodyShape::Box));
+                continue;
+            }
+            // a gull-wing leg: the foot on the pad outside the body, and a riser from it up the body's side
+            let out = |a0: f64, a1: f64, lo: f64, hi: f64| -> Option<(f64, f64)> {
+                if a1 <= lo + 1e-9 { Some((a0, a1.min(lo))) } else if a0 >= hi - 1e-9 { Some((a0.max(hi), a1)) } else if a0 < lo { Some((a0, lo)) } else if a1 > hi { Some((hi, a1)) } else { None }
+            };
+            let in_y = py1 > by0 && py0 < by1;
+            let in_x = px1 > bx0 && px0 < bx1;
+            let (wide, narrow) = ((pw.min(ph) * 0.6).max(0.15), 0.12);
+            let riser = (z0 + (top - z0) * 0.45).min(top);
+            if in_y && let Some((a, b)) = out(px0, px1, bx0, bx1) {
+                // the leg leaves the body's left or right side
+                let (yc, half) = (pad.pos.y.clamp(by0, by1), wide / 2.0);
+                v.push(solid([a, yc - half, 0.0], [b, yc + half, narrow], SILVER, BodyShape::Box));
+                let edge = if b <= bx0 + 1e-9 { bx0 } else { bx1 };
+                let (r0, r1) = if edge == bx0 { (edge - narrow * 2.0, edge) } else { (edge, edge + narrow * 2.0) };
+                v.push(solid([r0, yc - half, 0.0], [r1, yc + half, riser], SILVER, BodyShape::Box));
+            } else if in_x && let Some((a, b)) = out(py0, py1, by0, by1) {
+                let (xc, half) = (pad.pos.x.clamp(bx0, bx1), wide / 2.0);
+                v.push(solid([xc - half, a, 0.0], [xc + half, b, narrow], SILVER, BodyShape::Box));
+                let edge = if b <= by0 + 1e-9 { by0 } else { by1 };
+                let (r0, r1) = if edge == by0 { (edge - narrow * 2.0, edge) } else { (edge, edge + narrow * 2.0) };
+                v.push(solid([xc - half, r0, 0.0], [xc + half, r1, riser], SILVER, BodyShape::Box));
+            }
+        }
+    }
     let marked = pads.iter().copied().find(|p| body.mark_pin.is_empty() || p.pin == body.mark_pin).or(pads.first().copied());
     if let Some(m) = marked {
         let (dx, dy) = (m.pos.x - cx, m.pos.y - cy);
@@ -1142,8 +1198,8 @@ mod tests {
         let boxes = part_boxes(&b);
         let body = &boxes[0];
         assert!((body.hi[0] - body.lo[0] - 4.0).abs() < 1e-9 && (body.hi[1] - body.lo[1] - 3.0).abs() < 1e-9);
-        assert!((body.hi[2] - body.lo[2] - 2.0).abs() < 1e-9, "the height of the data sheet");
-        assert_eq!(boxes.len(), 2, "the body and the pin 1 dot");
+        assert!((body.hi[2] - BOARD_THICKNESS - 2.0).abs() < 1e-9, "the data sheet's height, from the board to the top");
+        assert_eq!(boxes.len(), 2, "the body and the pin 1 dot (the pads are under the body: no legs)");
         // turned a quarter: width and length swap
         b.set_part(Part { refdes: "U1".into(), value: "x".into(), footprint: "BODY".into(), pos: Point::new(10.0, 10.0), rot: 1, side: Side::Top }).unwrap();
         let turned = &part_boxes(&b)[0];
@@ -1157,6 +1213,44 @@ mod tests {
         let round = part_boxes(&b).into_iter().find(|p| p.refdes == "U2").unwrap();
         assert_eq!(round.shape, BodyShape::Cylinder(2));
         assert!((round.hi[0] - round.lo[0] - 5.0).abs() < 1e-9);
+    }
+
+    /// The data sheet's body gets the guess's details: an SOIC's legs out of its long sides (a foot and a riser for each of its 8
+    /// pads), a chip's two end caps, a DIP's pins under a body standing on its standoffs.
+    #[test]
+    fn a_data_sheet_body_gets_legs_caps_and_pins() {
+        use crate::body::{BodyMark, BodySpec};
+        let body = |w: f64, h: f64| Some(BodySpec { shape: "rect".into(), w, h, x: 0.0, y: 0.0, mark: BodyMark::None, mark_pin: String::new(), color_code: None });
+        let mut b = Board::new("t", 40.0, 40.0);
+        // SOIC-8: the body 3.9 wide (x) and 4.9 long, the pads at x = ±2.7
+        let mut fp = crate::package::PackageSpec::Dual { pins: 8, pitch: 1.27, row_spacing: 5.4, pad_len: 1.55, pad_width: 0.6, drill: None }.build("SOIC_DS").unwrap();
+        fp.height = Some(1.75);
+        fp.body = body(3.9, 4.9);
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "U1".into(), value: "x".into(), footprint: "SOIC_DS".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+        let u1: Vec<PartBox> = part_boxes(&b).into_iter().filter(|p| p.refdes == "U1").collect();
+        assert_eq!(u1.len(), 1 + 8 * 2, "the body and a foot and a riser for each pad");
+        assert!(u1.iter().skip(1).all(|p| p.color == SILVER && (p.lo[0] < 10.0 - 1.95 + 1e-6 || p.hi[0] > 10.0 + 1.95 - 1e-6)), "the legs stand out of the long sides");
+        // a 0805 chip with its data sheet size: the body between two silver caps
+        let mut fp = crate::footprints::get("R_0805").unwrap();
+        fp.name = "R_DS".into();
+        fp.height = Some(0.5);
+        fp.body = body(2.0, 1.25);
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_DS".into(), pos: Point::new(25.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+        let r1: Vec<PartBox> = part_boxes(&b).into_iter().filter(|p| p.refdes == "R1").collect();
+        assert_eq!(r1.iter().filter(|p| p.color == SILVER).count(), 2, "{r1:?}");
+        let span = r1.iter().fold((f64::MAX, f64::MIN), |(a, c), p| (a.min(p.lo[0]), c.max(p.hi[0])));
+        assert!((span.1 - span.0 - 2.0).abs() < 1e-9, "the caps are inside the data sheet's length");
+        // a DIP-8 standing on its pins
+        let mut fp = crate::package::PackageSpec::Dual { pins: 8, pitch: 2.54, row_spacing: 7.62, pad_len: 1.6, pad_width: 1.6, drill: Some(0.8) }.build("DIP_DS").unwrap();
+        fp.height = Some(4.5);
+        fp.body = body(6.35, 9.8);
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "U2".into(), value: "x".into(), footprint: "DIP_DS".into(), pos: Point::new(15.0, 28.0), rot: 0, side: Side::Top }).unwrap();
+        let u2: Vec<PartBox> = part_boxes(&b).into_iter().filter(|p| p.refdes == "U2").collect();
+        assert_eq!(u2.len(), 1 + 8);
+        assert!((u2[0].lo[2] - BOARD_THICKNESS - 0.5).abs() < 1e-9 && (u2[0].hi[2] - BOARD_THICKNESS - 4.5).abs() < 1e-9, "{:?}", u2[0]);
     }
 
     fn pad(refdes: &str, x: f64, y: f64, w: f64, h: f64, drill: Option<f64>) -> Pad {
@@ -1622,4 +1716,5 @@ mod tests {
         assert!(s[1].lo[0] > 15.0 + 3.15 - 0.5 && s[1].hi[0] > 15.0 + 3.15, "{:?}", (s[1].lo, s[1].hi));
     }
 }
+
 

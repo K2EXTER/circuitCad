@@ -1165,6 +1165,11 @@ fn cut_drawing(ds: &Datasheet, page: usize, area: Rect, view: super::solidcraft:
     for y in y0..y1 {
         rgba.extend_from_slice(&img.rgba[(y * img.width + x0) * 4..(y * img.width + x1) * 4]);
     }
-    Some(super::solidcraft::Drawing::new(view, page, rgba, [x1 - x0, y1 - y0], w))
+    let mut d = super::solidcraft::Drawing::new(view, page, rgba, [x1 - x0, y1 - y0], w);
+    // the dimensions' numbers in it, in the picture's pixels: those with a decimal point (a drawing's pin numbers and note numbers are
+    // whole numbers; a whole-number dimension is typed)
+    let px = |x: f32, y: f32| [x * scale - x0 as f32, y * scale - y0 as f32];
+    d.numbers = ds.lengths_in(page, area).into_iter().filter(|n| n.text.contains(['.', ','])).map(|n| { let (a, b) = (px(n.rect.x0, n.rect.y0), px(n.rect.x1, n.rect.y1)); (n.value, n.inch, n.text, [a[0], a[1], b[0], b[1]]) }).collect();
+    Some(d)
 }
 

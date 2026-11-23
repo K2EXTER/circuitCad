@@ -89,6 +89,13 @@ fn pick_area(ui: &mut egui::Ui, d: &mut Drawing, size: Vec2, big: bool) {
         && let Some(at) = resp.interact_pointer_pos()
     {
         let p = view.to_pixel(at);
+        // a click on a printed number takes it as the length (once a line is drawn); elsewhere it places a point
+        if d.b.is_some()
+            && let Some(k) = d.number_at(p, 2.0 / view.scale)
+        {
+            d.use_number(k);
+            return;
+        }
         match (d.a, d.b) {
             (Some(_), None) => d.b = Some(p),
             _ => {
@@ -96,6 +103,14 @@ fn pick_area(ui: &mut egui::Ui, d: &mut Drawing, size: Vec2, big: bool) {
                 d.b = None;
             }
         }
+    }
+    // the printed numbers: a light box round each, the one in use (or offered) bolder
+    let blue = Color32::from_rgb(40, 110, 220);
+    let near = d.nearest_number();
+    for (k, n) in d.numbers.iter().enumerate() {
+        let r = Rect::from_min_max(view.to_screen([n.3[0], n.3[1]]), view.to_screen([n.3[2], n.3[3]])).expand(1.5);
+        let on = d.b.is_some() && ((n.0 - d.dist).abs() < 1e-9 || Some(k) == near);
+        painter.rect_stroke(r, 1.5, Stroke::new(if on { 1.6 } else { 0.7 }, blue.gamma_multiply(if on { 1.0 } else { 0.5 })), egui::StrokeKind::Outside);
     }
     let red = Color32::from_rgb(230, 40, 40);
     if let (Some(a), Some(b)) = (d.a, d.b) {
@@ -134,7 +149,7 @@ fn pick_area(ui: &mut egui::Ui, d: &mut Drawing, size: Vec2, big: bool) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
     }
     if !big {
-        resp.on_hover_text(i18n::tr("寸法の分かる線 (寸法線の両端の矢印など) の、片方の端をクリックし、もう片方の端をクリックします。3 回目のクリックでやり直します。小さくて選びにくいときは「大きく開く」"));
+        resp.on_hover_text(i18n::tr("寸法の分かる線 (寸法線の両端の矢印など) の、片方の端をクリックし、もう片方の端をクリックします。2 点を置いたあと、青い枠の数字 (PDF の寸法の数字) をクリックすると、それがその長さになります。3 回目のクリックでやり直します。小さくて選びにくいときは「大きく開く」"));
     }
 }
 
@@ -148,6 +163,13 @@ fn length_row(ui: &mut egui::Ui, d: &mut Drawing) {
         ui.selectable_value(&mut d.inch, true, "inch").on_hover_text(i18n::tr("図の寸法の数字がインチのとき (1 inch = 25.4 mm。「0.100」のような数字や、mm の横の [ ] の中の数字)。数字はそのまま、単位だけが変わります"));
         if d.inch && d.dist > 0.0 {
             ui.small(format!("= {:.3} mm", d.dist_mm()));
+        }
+        // the printed number nearest the line, offered in one click
+        if let Some(k) = d.nearest_number()
+            && (d.numbers[k].0 - d.dist).abs() > 1e-9
+            && ui.small_button(i18n::trf!("近くの数字 {} を使う", d.numbers[k].2)).on_hover_text(i18n::tr("2 点の線のまん中にいちばん近い、PDF の寸法の数字です。違うときは、図の上の青い枠の数字をクリックします")).clicked()
+        {
+            d.use_number(k);
         }
     });
 }

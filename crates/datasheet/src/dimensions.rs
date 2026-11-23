@@ -49,6 +49,45 @@ pub fn lengths(words: &[Word]) -> Vec<PageLength> {
     out
 }
 
+/// A length written in a drawing, where it is printed (E7 ①: a dimension's number taken from the PDF instead of typed).
+#[derive(Clone, Debug, PartialEq)]
+pub struct DrawnLength {
+    /// The number as printed (the middle of a range such as "5.8~6.2").
+    pub value: f64,
+    pub text: String,
+    /// The unit printed with it: `Some(true)` inches, `Some(false)` millimetres, `None` none (the drawing's unit).
+    pub inch: Option<bool>,
+    /// Where the word stands on the page (points).
+    pub rect: crate::text::Rect,
+}
+
+/// The lengths printed inside `area` of a page (a number with a unit that is not a length is left out; a word counts when its middle
+/// is inside).
+pub fn lengths_in(words: &[Word], area: crate::text::Rect) -> Vec<DrawnLength> {
+    let mut out = vec![];
+    for w in words {
+        let (cx, cy) = ((w.rect.x0 + w.rect.x1) / 2.0, (w.rect.y0 + w.rect.y1) / 2.0);
+        if !(cx >= area.x0 && cx <= area.x1 && cy >= area.y0 && cy <= area.y1) {
+            continue;
+        }
+        for tok in w.tokens() {
+            let Some(v) = parse_value(tok) else { continue };
+            let unit = v.unit.clone().or_else(|| if w.text.ends_with(tok) { unit_after(words, w) } else { None });
+            let inch = match unit.as_deref().map(str::to_lowercase).as_deref() {
+                None => None,
+                Some("mm") => Some(false),
+                Some("in" | "inch" | "inches" | "\"" | "\u{2033}") => Some(true),
+                Some(_) => continue,
+            };
+            let value = v.ends.map_or(v.number, |(a, b)| (a + b) / 2.0);
+            if value > 0.0 && value < 1000.0 {
+                out.push(DrawnLength { value, text: tok.to_string(), inch, rect: w.rect });
+            }
+        }
+    }
+    out
+}
+
 /// A number that `mm` (a value from the form) is the same as, to the digits a person types: two decimals, or a
 /// small part of the value. A number that matches as it is comes before one that matches as inches.
 pub fn find_length(page: &[PageLength], mm: f64) -> Option<Found> {

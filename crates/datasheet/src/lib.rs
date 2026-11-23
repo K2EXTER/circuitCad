@@ -31,7 +31,7 @@ mod suggest;
 mod text;
 mod value;
 pub use headings::{HEADINGS, Heading};
-pub use dimensions::{Found, PageLength, find_length};
+pub use dimensions::{DrawnLength, Found, PageLength, find_length};
 pub use pin_table::{PinCompare, PinDiff, PinDiffKind, Table, compare_pins, guess_columns, io_cells, pin_lines, pins_from, read_table};
 pub use suggest::looks_like_part_number;
 pub use text::{Fill, Hit, Query, Rect, Stroke, Word, normalize};
@@ -223,6 +223,11 @@ impl Datasheet {
     /// The numbers of a page that can be lengths (in millimetres, or as inches when no unit is written).
     pub fn lengths_on(&self, page: usize) -> Vec<PageLength> {
         dimensions::lengths(self.words(page))
+    }
+
+    /// The lengths printed inside a rectangle of a page (a package drawing cut out: its dimensions' numbers and where they stand).
+    pub fn lengths_in(&self, page: usize, area: Rect) -> Vec<DrawnLength> {
+        dimensions::lengths_in(self.words(page), area)
     }
 
     /// The pages that have a drawing of the land pattern or of the package (not the table of contents).

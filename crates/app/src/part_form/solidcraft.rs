@@ -53,12 +53,44 @@ pub struct Drawing {
     pub zoom: f32,
     pub pan: egui::Vec2,
     pub dragging: Option<u8>,
+    /// The dimensions' numbers printed in the drawing (from the PDF's text): value as printed, unit if printed, and where (pixels:
+    /// left, top, right, bottom). A click on one makes it the length between the two points (E7 ①).
+    pub numbers: Vec<(f64, Option<bool>, String, [f32; 4])>,
     tex: Option<egui::TextureHandle>,
 }
 
 impl Drawing {
     pub fn new(view: View, page: usize, rgba: Vec<u8>, size: [usize; 2], width_pt: f64) -> Drawing {
-        Drawing { view, page, rgba, size, width_pt, a: None, b: None, dist: 0.0, inch: false, big: false, zoom: 1.0, pan: egui::Vec2::ZERO, dragging: None, tex: None }
+        Drawing { view, page, rgba, size, width_pt, a: None, b: None, dist: 0.0, inch: false, big: false, zoom: 1.0, pan: egui::Vec2::ZERO, dragging: None, numbers: vec![], tex: None }
+    }
+
+    /// Takes a printed number as the length between the two points (its unit too, when printed with it).
+    pub fn use_number(&mut self, k: usize) {
+        if let Some((v, unit, ..)) = self.numbers.get(k) {
+            self.dist = *v;
+            if let Some(inch) = unit {
+                self.inch = *inch;
+            }
+        }
+    }
+
+    /// The printed number at a pixel of the picture (within `slack` pixels of its box).
+    pub fn number_at(&self, p: [f32; 2], slack: f32) -> Option<usize> {
+        self.numbers.iter().position(|n| p[0] >= n.3[0] - slack && p[0] <= n.3[2] + slack && p[1] >= n.3[1] - slack && p[1] <= n.3[3] + slack)
+    }
+
+    /// The printed number nearest the middle of the line between the two points (a dimension's number stands by its line).
+    pub fn nearest_number(&self) -> Option<usize> {
+        let (a, b) = (self.a?, self.b?);
+        let m = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0];
+        let len = ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt();
+        self.numbers
+            .iter()
+            .enumerate()
+            .map(|(k, n)| (k, (((n.3[0] + n.3[2]) / 2.0 - m[0]).powi(2) + ((n.3[1] + n.3[3]) / 2.0 - m[1]).powi(2)).sqrt()))
+            .filter(|(_, d)| *d < len.max(40.0))
+            .min_by(|x, y| x.1.total_cmp(&y.1))
+            .map(|(k, _)| k)
     }
 
     /// The distance between the two points in millimetres.
@@ -131,30 +163,11 @@ pub struct Starter {
     pub height: f64,
 }
 
-/// The SolidCraft command script: the drawings as canvases (the top view on the board's plane, the side view standing behind the part,
-/// its picture's up along +z), the starting body, and a leg in each through-hole of the footprint (`pads`: the legs need not be drawn,
-/// E7 ②; through the board and 0.5 mm up into the body).
+/// The SolidCraft command script (`pcb_core::shape_script::sketch_script`): the drawings as canvases, the starting body, and a leg in
+/// each through-hole of the footprint (`pads`).
 pub fn script(drawings: &[(View, PathBuf, f64)], starter: Option<Starter>, pads: &[pcb_core::footprints::FpPad]) -> serde_json::Value {
-    let mut cmds = vec![];
-    // how far behind the part the side view stands: clear of the part and of the top view
-    let behind = drawings.iter().filter(|d| d.0 == View::Top).map(|d| d.2 / 2.0).fold(starter.map_or(10.0, |s| s.h / 2.0 + 5.0), f64::max);
-    if let Some(s) = starter {
-        cmds.push(serde_json::json!({"command": "solid.box", "params": {"length": s.w, "width": s.h, "height": s.height, "corner": [-s.w / 2.0, -s.h / 2.0, 0.0], "body_name": "body"}}));
-        cmds.push(serde_json::json!({"command": "appearance.assign", "params": {"bodies": ["body"], "color": "#3a3a3a", "opacity": 0.8}}));
-    }
-    for (view, path, width) in drawings {
-        let path = path.display().to_string();
-        cmds.push(match view {
-            View::Top => serde_json::json!({"command": "canvas.insert", "params": {"path": path, "plane": "XY", "center": [0.0, 0.0], "width": width, "opacity": 0.6, "name": "上から見た図"}}),
-            View::Side => serde_json::json!({"command": "canvas.insert", "params": {
-                "path": path,
-                "plane": {"origin": [0.0, behind, 0.0], "x_dir": [1.0, 0.0, 0.0], "y_dir": [0.0, 0.0, 1.0]},
-                "center": [0.0, starter.map_or(width / 4.0, |s| s.height / 2.0)],
-                "width": width, "opacity": 0.6, "name": "横から見た図"}}),
-        });
-    }
-    cmds.extend(pcb_core::shape_script::legs_commands(pads, 0.5));
-    serde_json::Value::Array(cmds)
+    let sketches: Vec<pcb_core::shape_script::Sketch> = drawings.iter().map(|(v, p, w)| pcb_core::shape_script::Sketch { side: *v == View::Side, path: p.display().to_string(), width: *w }).collect();
+    pcb_core::shape_script::sketch_script(&sketches, starter.map(|s| [s.w, s.h, s.height]), pads)
 }
 
 /// The folder a part's SolidCraft work goes in (one per part name, under the system's temporary folder).
@@ -438,6 +451,20 @@ mod tests {
         std::fs::write(&bad, "not a step").unwrap();
         assert!(tessellate_step(&bad).unwrap().is_err());
         let _ = std::fs::remove_file(&bad);
+    }
+
+    #[test]
+    fn printed_numbers_set_the_length() {
+        let mut d = Drawing::new(View::Top, 0, vec![255; 100 * 50 * 4], [100, 50], 72.0);
+        d.numbers = vec![(6.0, None, "6.0".into(), [45.0, 2.0, 55.0, 8.0]), (0.25, Some(true), "0.25in".into(), [80.0, 40.0, 95.0, 46.0])];
+        assert_eq!(d.nearest_number(), None, "no line yet");
+        (d.a, d.b) = (Some([10.0, 10.0]), Some([90.0, 10.0]));
+        assert_eq!(d.nearest_number(), Some(0), "the number over the line's middle");
+        d.use_number(0);
+        assert!(d.dist == 6.0 && !d.inch);
+        assert_eq!(d.number_at([85.0, 43.0], 1.0), Some(1));
+        d.use_number(1);
+        assert!(d.dist == 0.25 && d.inch && (d.dist_mm() - 6.35).abs() < 1e-9, "the unit printed with it");
     }
 
     #[test]
