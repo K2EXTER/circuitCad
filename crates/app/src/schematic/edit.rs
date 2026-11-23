@@ -228,11 +228,12 @@ impl SchEditor {
                 }
                 "darlington" => f.darlington_example_and_fit(),
                 // the thermistor (--new-part resistor), crystal and TVS (--new-part diode) boxes, the model put into ②
-                "ntc" | "crystal" | "tvs" | "tvs-pdf" => {
+                "ntc" | "crystal" | "tvs" | "tvs-pdf" | "relay" => {
                     use crate::part_form::simple_kinds::Simple;
                     let k = match what {
                         "ntc" => Simple::Ntc,
                         "crystal" => Simple::Crystal,
+                        "relay" => Simple::Relay,
                         _ => Simple::Tvs,
                     };
                     match what {
@@ -244,6 +245,7 @@ impl SchEditor {
 4 GND".into();
                         }
                         "tvs" | "tvs-pdf" => f.glyph = "tvs".into(),
+                        "relay" => f.relay_pins(),
                         _ => {}
                     }
                     if what == "tvs-pdf" {

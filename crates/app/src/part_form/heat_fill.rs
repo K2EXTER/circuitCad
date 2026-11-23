@@ -2,6 +2,8 @@
 //! self-heating run's θ of the part on its smallest pads), θjc, and the temperature the rated power starts to fall from.
 //! A θJA measured on a large board (JEDEC 2s2p, 1 in² of copper) is kept in the free rows instead: the board's copper is counted
 //! from the board, so the part's own θ must be the one on its smallest pads.
+//! A table with a column per package (TI's "Thermal Information") gives the column of the part's package (from its footprint's
+//! name, else the sheet's most written package), and its RθJB and ψJT・ψJB go to the free rows (候補 Q2).
 
 use super::PartForm;
 use super::graph_reader::short;
@@ -38,10 +40,14 @@ fn source(r: &ThermalRow) -> String {
     }
 }
 
-pub fn heat_from_rows(rows: &[ThermalRow]) -> HeatRead {
+/// The heat figures of the rows; `family` is the part's package ("soic"), to take its column of a table with one per package.
+pub fn heat_from_rows(rows: &[ThermalRow], family: Option<&str>) -> HeatRead {
     let mut h = HeatRead::default();
+    let chosen: Vec<ThermalRow> = rows.iter().map(|r| if r.per_package { family.and_then(|f| r.for_package(f)).unwrap_or_else(|| r.clone()) } else { r.clone() }).collect();
+    let rows = &chosen[..];
     match best(rows, To::Ambient) {
-        Some(r) if on_large_copper(&r.text) => {
+        // a table with a column per package is TI's "Thermal Information", on JEDEC's 2s2p board (its note's metrics)
+        Some(r) if on_large_copper(&r.text) || r.text.ends_with("の列]") => {
             h.rows.push(format!("RθJA | {} K/W | {}", short(r.k_per_w), r.text));
             h.lines.push((false, format!("θJA {} K/W は大きい基板 (銅を広げた基板) で測った値なので、部品だけの θ には入れず「そのほかの情報」に残しました。基板の銅の効きは、基板から計算します: {}", short(r.k_per_w), source(r))));
         }
@@ -50,7 +56,7 @@ pub fn heat_from_rows(rows: &[ThermalRow]) -> HeatRead {
             h.lines.push((true, format!("θJA {} K/W (接合部 → 空気): {}。自己発熱の計算で、この部品の θ になります", short(r.k_per_w), source(r))));
         }
         None => match per_package(rows, To::Ambient) {
-            Some(r) => h.lines.push((false, format!("θJA の行 (p.{}) は値がパッケージごとに {} 列あり、どれがこの部品か決められません。表の見出しで部品のパッケージの列を見て、手で入れてください: {}", r.page + 1, r.columns, r.text))),
+            Some(r) => h.lines.push((false, format!("θJA の行 (p.{}) は値がパッケージごとに {} 列あり、{}。表の見出しで部品のパッケージの列を見て、手で入れてください: {}", r.page + 1, r.columns, match family { Some(f) => format!("部品のパッケージ ({}) の列が見つかりません", f.to_uppercase()), None => "部品のパッケージが分からないので決められません (「④ 部品の形」でフットプリントを選ぶと、その列を取ります)".into() }, r.text))),
             None => h.lines.push((false, "θJA (Thermal Resistance, Junction-to-Ambient・RθJA) も、許容損失の低減 (Derate above … mW/°C) も見つかりません。θ はパッケージから推定します".into())),
         },
     }
@@ -62,9 +68,16 @@ pub fn heat_from_rows(rows: &[ThermalRow]) -> HeatRead {
         (None, Some(r)) => h.lines.push((false, format!("θjc の行 (p.{}) は値がパッケージごとに {} 列あり、決められません: {}", r.page + 1, r.columns, r.text))),
         (None, None) => {}
     }
-    if let Some(r) = best(rows, To::Lead) {
-        h.rows.push(format!("RθJL | {} K/W | {}", short(r.k_per_w), r.text));
-        h.lines.push((true, format!("θJL {} K/W (接合部 → リード) は「そのほかの情報」に入れました (自己発熱には使いません): {}", short(r.k_per_w), source(r))));
+    for (to, name, what) in [
+        (To::Lead, "RθJL", "接合部 → リード"),
+        (To::Board, "RθJB", "接合部 → 基板"),
+        (To::PsiTop, "ΨJT", "接合部と上面の温度の差 ÷ 電力。上面の温度を測って接合部の温度を出す目安"),
+        (To::PsiBoard, "ΨJB", "接合部と基板の温度の差 ÷ 電力"),
+    ] {
+        if let Some(r) = best(rows, to) {
+            h.rows.push(format!("{name} | {} K/W | {}", short(r.k_per_w), r.text));
+            h.lines.push((true, format!("{name} {} K/W ({what}) は「そのほかの情報」に入れました (自己発熱には使いません): {}", short(r.k_per_w), source(r))));
+        }
     }
     // the temperature the power starts to fall from: the derating to the air
     if let Some((r, t)) = rows.iter().filter(|r| r.from_derating && r.to == To::Ambient).find_map(|r| r.derate_from.map(|t| (r, t))) {
@@ -77,7 +90,7 @@ pub fn heat_from_rows(rows: &[ThermalRow]) -> HeatRead {
 impl PartForm {
     /// 「PDF の熱の表から読む」: the open PDF's thermal figures into the ratings fields (the ones found; the others stay).
     pub(super) fn fill_heat_from_pdf(&mut self) {
-        let h = heat_from_rows(&self.sheet.thermal());
+        let h = heat_from_rows(&self.sheet.thermal(), self.package_family().as_deref());
         if let Some(v) = h.ja {
             self.rt_ja = short(v);
         }
@@ -89,6 +102,15 @@ impl PartForm {
         }
         add_rows(&mut self.rt_rows, &h.rows);
         self.rt_heat_msg = h.lines;
+    }
+}
+
+impl PartForm {
+    /// The part's package family ("soic"): from its footprint's name (KiCad's "SOIC-8_3.9x4.9mm_P1.27mm"), else the open
+    /// data sheet's most written package.
+    pub(super) fn package_family(&self) -> Option<String> {
+        let from_fp = self.fp_preset.split([':', '_', ' ']).find_map(|t| datasheet::draft::package_of(t).map(|(f, _)| f.to_string()));
+        from_fp.or_else(|| self.sheet.package_names().first().map(|p| p.family.to_string()))
     }
 }
 
@@ -110,7 +132,7 @@ mod tests {
     use super::*;
 
     fn row(to: To, v: f64, text: &str, derating: Option<f64>) -> ThermalRow {
-        ThermalRow { page: 1, to, k_per_w: v, text: text.into(), from_derating: derating.is_some(), derate_from: derating, columns: 1, per_package: false }
+        ThermalRow { page: 1, to, k_per_w: v, text: text.into(), from_derating: derating.is_some(), derate_from: derating, columns: 1, per_package: false, cells: vec![] }
     }
 
     #[test]
@@ -122,26 +144,33 @@ mod tests {
             row(To::Case, 1.92, "thermal resistance, junction-to-case 1.92 °c/w", None),
             row(To::Ambient, 62.5, "thermal resistance, junction-to-ambient 62.5 °c/w", None),
         ];
-        let h = heat_from_rows(&rows);
+        let h = heat_from_rows(&rows, None);
         assert_eq!((h.ja, h.jc, h.derate_from), (Some(62.5), Some(1.92), Some(25.0)));
         assert!(h.lines.iter().all(|l| l.0) && h.lines[0].1.contains("熱の表"), "{:?}", h.lines);
         // a θJA on JEDEC's 2s2p board is not the part's own θ; a lead's goes to the rows
         let rows = [row(To::Ambient, 45.0, "junction-to-ambient (jedec 2s2p) 45 °c/w", None), row(To::Lead, 28.0, "rθjl 28", None)];
-        let h = heat_from_rows(&rows);
+        let h = heat_from_rows(&rows, None);
         assert_eq!(h.ja, None);
         assert_eq!(h.rows.len(), 2);
         assert!(!h.lines[0].0 && h.lines[0].1.contains("大きい基板"));
         // only a derating: θJA from it
-        let h = heat_from_rows(&[row(To::Ambient, 200.0, "derate above 25°c 5.0 mw/°c", Some(25.0))]);
+        let h = heat_from_rows(&[row(To::Ambient, 200.0, "derate above 25°c 5.0 mw/°c", Some(25.0))], None);
         assert_eq!(h.ja, Some(200.0));
         assert!(h.lines[0].1.contains("逆数"));
-        assert!(!heat_from_rows(&[]).lines[0].0, "nothing found says so");
+        assert!(!heat_from_rows(&[], None).lines[0].0, "nothing found says so");
         // TI's columns per package: not taken, and said why
         let mut ti = row(To::Ambient, 43.7, "rθja 97.1 96.5 98.18 51.5 44 43.7 °c/w", None);
         (ti.columns, ti.per_package) = (6, true);
-        let h = heat_from_rows(&[ti]);
+        let h = heat_from_rows(&[ti.clone()], None);
         assert_eq!(h.ja, None);
         assert!(h.lines[0].1.contains("パッケージごと"), "{:?}", h.lines);
+        // with the headings, the part's package's column: TI's is on the JEDEC board, so it goes to the free rows; ψJT too
+        ti.cells = vec![("D (SOIC)".into(), Some(97.1)), ("P (PDIP)".into(), Some(51.5))];
+        let mut jt = row(To::PsiTop, 0.0, "ψjt 19.2 40 °c/w", None);
+        (jt.per_package, jt.cells) = (true, vec![("D (SOIC)".into(), Some(19.2)), ("P (PDIP)".into(), Some(40.0))]);
+        let h = heat_from_rows(&[ti, jt], Some("soic"));
+        assert!(h.rows[0].starts_with("RθJA | 97.1 K/W") && h.rows[0].contains("D (SOIC) の列"), "{:?}", h.rows);
+        assert!(h.rows[1].starts_with("ΨJT | 19.2 K/W"), "{:?}", h.rows);
     }
 
     #[test]

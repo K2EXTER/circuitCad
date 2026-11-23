@@ -353,7 +353,124 @@ fn framed(img: &crate::PageImage, k: f32, r: &crate::Rect) -> bool {
     across(px(r.y0 - 6.0), px(r.y0 + 1.5)) && across(px(r.y1 - 1.5), px(r.y1 + 6.0)) && down(px(r.x0 - 8.0), px(r.x0) - 1) && down(px(r.x1) + 1, px(r.x1 + 8.0))
 }
 
+/// One row of a chip part's dimension table (候補 Q3): its size code as printed ("RT0603", "0603"), the body's length L and width
+/// W, and the terminal's length on the underside, each (min, max) in mm.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChipSize {
+    pub page: usize,
+    pub code: String,
+    pub len: (f64, f64),
+    pub width: (f64, f64),
+    /// The terminal under the body (Yageo's I2, Murata's e, TDK's B, ROHM's b …), or half of L less the gap between the two
+    /// (Murata's g) when only that is given.
+    pub term: Option<(f64, f64)>,
+    /// The column it was read from ("I2", "e", "(L − g) / 2").
+    pub term_from: String,
+}
+
+impl ChipSize {
+    /// The inch size code in it ("0603" of "RT0603", "0402(1005)"), when it has one of the usual ones.
+    pub fn inch_code(&self) -> Option<&'static str> {
+        const CODES: [&str; 11] = ["01005", "0201", "0402", "0603", "0805", "1206", "1210", "1812", "2010", "2512", "2220"];
+        CODES.into_iter().find(|c| self.code.contains(c))
+    }
+}
+
+/// A size with its tolerance, from one word or the words after it: "1.60±0.10", "1.60" "±0.10", "1.6" "±" "0.1", or a bare value.
+/// The value and how many words it took.
+fn toleranced(words: &[&Word], k: usize) -> Option<((f64, f64), usize)> {
+    let t = |i: usize| words.get(i).map(|w| normalize(&w.text).replace('+', "").replace(['−', '–'], "-"));
+    let first = t(k)?;
+    let (v, rest) = match first.split_once('±') {
+        Some((v, r)) => (v.parse::<f64>().ok()?, Some(r.to_string())),
+        None => (first.parse::<f64>().ok()?, None),
+    };
+    let (tol, used) = match rest {
+        Some(r) if !r.is_empty() => (r.parse::<f64>().ok()?, 1),
+        Some(_) => (t(k + 1)?.parse::<f64>().ok()?, 2),
+        None => match t(k + 1) {
+            // a minimum only (TDK's "0.10 min."): no top
+            Some(n) if matches!(n.as_str(), "min." | "min") => return (v > 0.0 && v < 20.0).then_some(((v, f64::INFINITY), 2)),
+            Some(n) if n.starts_with('±') && n.len() > '±'.len_utf8() => (n.trim_start_matches('±').parse::<f64>().ok()?, 2),
+            Some(n) if n == "±" => (t(k + 2)?.parse::<f64>().ok()?, 3),
+            _ => (0.0, 1),
+        },
+    };
+    (v > 0.0 && v < 20.0 && tol >= 0.0 && tol < v).then_some(((v - tol, v + tol), used))
+}
+
+/// The dimension table of a chip part's page: a heading line with the columns "L" and "W" (and others: "H", "T", "I1", "I2",
+/// "a", "b", "e", "g" …), then a row per size starting with its code, each cell a size with its tolerance. The cells are put in
+/// the column whose heading's centre is nearest.
+pub fn chip_sizes(page: usize, words: &[Word]) -> Vec<ChipSize> {
+    let lines = crate::figures::lines(words);
+    let centre = |w: &Word| (w.rect.x0 + w.rect.x1) / 2.0;
+    let head_name = |w: &Word| normalize(&w.text).trim_matches(|c: char| !c.is_alphanumeric()).to_string();
+    let mut out = vec![];
+    for (i, l) in lines.iter().enumerate() {
+        let names: Vec<(String, f32)> = l.iter().map(|w| (head_name(w), centre(w))).filter(|(n, _)| n.len() <= 2 && !n.is_empty() && n != "mm").collect();
+        let col = |n: &str| names.iter().find(|h| h.0 == n).map(|h| h.1);
+        let (Some(_), Some(_)) = (col("l"), col("w")) else { continue };
+        // the rows under it: a code and its sizes, or a code alone with the sizes on the next line (Yageo's RT0201)
+        let mut pending: Option<String> = None;
+        for row in lines[i + 1..].iter().take(30) {
+            let first = normalize(&row[0].text);
+            let (code, start) = if toleranced(row, 0).is_some() {
+                match pending.take() {
+                    Some(c) => (c, 0),
+                    None => continue,
+                }
+            } else if first.chars().any(|c| c.is_ascii_digit()) && !first.contains('.') {
+                (row[0].text.trim().to_string(), 1)
+            } else {
+                continue;
+            };
+            let mut cells: Vec<(String, (f64, f64))> = vec![];
+            let mut k = start;
+            while k < row.len() {
+                if let Some((v, used)) = toleranced(row, k) {
+                    let x = centre(row[k]);
+                    if let Some(h) = names.iter().min_by(|a, b| (a.1 - x).abs().total_cmp(&(b.1 - x).abs())).filter(|h| (h.1 - x).abs() < 30.0) {
+                        cells.push((h.0.clone(), v));
+                    }
+                    k += used;
+                } else {
+                    k += 1;
+                }
+            }
+            let get = |n: &str| cells.iter().find(|c| c.0 == n).map(|c| c.1);
+            let (Some(len), Some(width)) = (get("l"), get("w")) else {
+                if start == 1 {
+                    pending = Some(code);
+                }
+                continue;
+            };
+            // the terminal underneath: the bottom electrode first. A minimum only (TDK's "B 0.10 min."): its most is what the gap's
+            // minimum leaves ("G 0.30 min.": (L − G) / 2), else a quarter of L (said so)
+            let gap = get("g");
+            let (term, term_from) = match ["i2", "e", "b", "a", "i1", "c"].iter().find_map(|n| get(n).map(|v| (v, n.to_uppercase()))) {
+                Some((v, n)) if v.1.is_infinite() => match gap.map(|g| (len.1 - g.0) / 2.0).filter(|m| *m > v.0) {
+                    Some(most) => (Some((v.0, most)), format!("{n} (最小) と (L − G) / 2")),
+                    None => (Some((v.0, (len.1 / 4.0).max(v.0))), format!("{n} (最小) と L / 4 (推定)")),
+                },
+                Some((v, n)) if v.1 < len.0 / 2.0 => (Some(v), n),
+                _ => match gap {
+                    Some(g) if g.1 < len.0 => (Some(((len.0 - g.1) / 2.0, (len.1 - g.0) / 2.0)), "(L − g) / 2".into()),
+                    _ => (None, String::new()),
+                },
+            };
+            out.push(ChipSize { page, code, len, width, term, term_from });
+        }
+    }
+    out
+}
+
 impl crate::Datasheet {
+    /// The rows of the chip dimension tables of the whole sheet (`chip_sizes`).
+    pub fn chip_sizes(&self) -> Vec<ChipSize> {
+        (0..self.page_count()).flat_map(|p| chip_sizes(p, self.words(p))).collect()
+    }
+
     /// The land patterns of every page with a land pattern heading that has one.
     pub fn land_patterns(&self) -> Vec<LandPattern> {
         let q = crate::Heading::LandPattern.queries();
@@ -377,6 +494,41 @@ impl crate::Datasheet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Yageo's RT table: "TYPE L (mm) W (mm) H (mm) I1 I2", a size and its tolerance as two words; a row split over two lines
+    /// (the code alone with a letter of the figure beside it, the sizes on the next) is read; the bottom terminal is I2.
+    #[test]
+    fn a_chip_dimension_table() {
+        let at = |t: &str, x: f32, y: f32| Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0);
+        let mut words = vec![at("TYPE", 49.0, 614.0), at("L", 96.0, 614.0), at("(mm)", 103.0, 614.0), at("W", 133.0, 614.0), at("(mm)", 146.0, 614.0), at("H", 179.0, 614.0), at("I1", 224.0, 614.0), at("I2", 267.0, 614.0)];
+        for (y, code, v) in [(640.0, "RT0201", ["", "", "", "", "", "", "", "", "", ""]), (645.0, "", ["0.60", "±0.03", "0.30", "±0.03", "0.23", "±0.03", "0.10", "±0.05", "0.15", "±0.05"]), (658.0, "RT0402", ["1.00", "±0.10", "0.50", "±0.05", "0.30", "±0.05", "0.20", "±0.10", "0.25", "±0.10"]), (675.0, "RT0603", ["1.60", "±0.10", "0.80", "±0.10", "0.45", "±0.10", "0.25", "±0.15", "0.25", "±0.15"])] {
+            if !code.is_empty() {
+                words.push(at(code, 49.0, y));
+            }
+            if code == "RT0201" {
+                words.push(at("W", 318.0, y));
+            }
+            for (k, t) in v.iter().enumerate().filter(|(_, t)| !t.is_empty()) {
+                words.push(at(t, [88.0, 104.0, 131.0, 147.0, 174.0, 190.0, 217.0, 233.0, 260.0, 276.0][k], y));
+            }
+        }
+        let s = chip_sizes(3, &words);
+        assert_eq!(s.len(), 3, "{s:?}");
+        assert_eq!((s[0].code.as_str(), s[0].inch_code()), ("RT0201", Some("0201")));
+        let r = &s[2];
+        assert_eq!((r.inch_code(), r.term_from.as_str()), (Some("0603"), "I2"));
+        let near = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9;
+        assert!(near(r.len, (1.5, 1.7)) && near(r.width, (0.7, 0.9)) && near(r.term.unwrap(), (0.1, 0.4)), "{r:?}");
+        // a size in one word, and Murata's gap g instead of the terminal
+        let words = vec![at("L", 100.0, 100.0), at("W", 150.0, 100.0), at("g", 200.0, 100.0), at("GRM18", 40.0, 115.0), at("1.6±0.1", 95.0, 115.0), at("0.8±0.1", 145.0, 115.0), at("0.5", 200.0, 115.0)];
+        let s = chip_sizes(0, &words);
+        assert_eq!(s[0].term_from, "(L − g) / 2");
+        assert!((s[0].term.unwrap().0 - 0.5).abs() < 1e-9, "{:?}", s[0]);
+        // TDK's minimums: B 0.10 min., G 0.30 min. of a 1.00 ±0.05 long chip: the terminal 0.10 to (1.05 − 0.30) / 2
+        let words = vec![at("Type", 41.0, 516.0), at("L", 82.0, 516.0), at("W", 150.0, 516.0), at("B", 286.0, 516.0), at("G", 329.0, 516.0), at("CGA2", 41.0, 527.0), at("1.00±0.05", 82.0, 527.0), at("0.50±0.05", 150.0, 527.0), at("0.10", 286.0, 527.0), at("min.", 303.0, 527.0), at("0.30", 329.0, 527.0), at("min.", 345.0, 527.0)];
+        let s = chip_sizes(2, &words);
+        assert!((s[0].term.unwrap().0 - 0.1).abs() < 1e-9 && (s[0].term.unwrap().1 - 0.375).abs() < 1e-9, "{:?}", s[0]);
+    }
 
     fn w(t: &str, x: f32, y: f32) -> Word {
         Word::for_test(t, x, y, x + 5.0 * t.chars().count() as f32, y + 8.0)
@@ -568,6 +720,24 @@ mod real_pdf {
             let l = ds.land_patterns();
             let qfn = l.iter().find(|l| l.family == Some("wqfn")).unwrap();
             assert_eq!((qfn.pins, qfn.quad, qfn.pad_l, qfn.pad_w, qfn.pitch, qfn.row, qfn.ep), (16, true, 0.6, 0.24, Some(0.5), Some(2.8), Some((1.68, 1.68))), "{l:?}");
+        }
+    }
+
+    /// Chip dimension tables (skipped without the files): Yageo's RT (the 0603 row's bottom terminal I2) and TDK's CGA (the
+    /// terminal's minimum and the gap's).
+    #[test]
+    fn chip_dimension_tables() {
+        let open = |f: &str| crate::Datasheet::open_file(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter").join(f)).ok();
+        if let Some(ds) = open("PYU-RT_1-TO-0-01_ROHS_L.pdf") {
+            let s = ds.chip_sizes();
+            assert_eq!(s.len(), 9, "{s:?}");
+            let r = s.iter().find(|c| c.inch_code() == Some("0603")).unwrap();
+            assert!(r.term_from == "I2" && (r.term.unwrap().1 - 0.4).abs() < 1e-9, "{r:?}");
+        }
+        if let Some(ds) = open("mlcc_automotive_hightemp_ja.pdf") {
+            let s = ds.chip_sizes();
+            let r = s.iter().find(|c| c.code == "CGA2").unwrap();
+            assert!((r.term.unwrap().0 - 0.1).abs() < 1e-9 && (r.term.unwrap().1 - 0.375).abs() < 1e-9, "{r:?}");
         }
     }
 

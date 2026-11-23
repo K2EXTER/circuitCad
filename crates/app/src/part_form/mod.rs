@@ -189,6 +189,8 @@ pub struct PartForm {
     pub pas_ldrop: String,
     pub pas_sattable: String,
     pub pas_message: Option<Result<String, String>>,
+    /// What 「データシートの寸法表から」 did (`chip_land.rs`).
+    pub chip_land_msg: Option<Result<String, String>>,
     /// The diode section: points read off the forward characteristics ("current voltage" per line), the reverse
     /// ratings, and the fitted (or slider-set) IS / N / RS.
     pub dio_points: String,
@@ -315,6 +317,7 @@ pub struct PartForm {
     pub batch: Vec<PartDef>,
     /// The boxes of the thermistor, crystal and TVS sections (`simple_kinds.rs`).
     pub ntc: simple_kinds::NtcInput,
+    pub relay: simple_kinds::RelayInput,
     pub xtal: simple_kinds::CrystalInput,
     pub tvs: simple_kinds::TvsInput,
     /// The library part being edited (None = a new part), see `edit.rs`.
@@ -404,6 +407,7 @@ impl Default for PartForm {
             pas_ldrop: String::new(),
             pas_sattable: String::new(),
             pas_message: None,
+            chip_land_msg: None,
             dio_points: String::new(),
             dio_vrrm: String::new(),
             dio_ir: String::new(),
@@ -486,6 +490,7 @@ impl Default for PartForm {
             request: None,
             batch: vec![],
             ntc: Default::default(),
+            relay: Default::default(),
             xtal: Default::default(),
             tvs: Default::default(),
             orig: None,
@@ -519,6 +524,7 @@ pub use datasheet_view::Target as PickTarget;
 mod kind;
 mod parse;
 mod chip;
+mod chip_land;
 mod vendor;
 mod diode;
 mod edit;

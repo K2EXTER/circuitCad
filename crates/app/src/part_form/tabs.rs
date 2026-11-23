@@ -106,6 +106,8 @@ impl PartForm {
                         egui::CollapsingHeader::new(i18n::tr("オペアンプのモデルをデータシートの値から作る")).id_salt("opamp_box").open(opamp).show(ui, |ui| self.opamp_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("3 端子レギュレータのモデルをデータシートの値から作る")).id_salt("reg_box").open(reg).show(ui, |ui| self.regulator_ui(ui));
                         egui::CollapsingHeader::new(i18n::tr("フォトカプラ (PC817 など) のモデルをデータシートのグラフから作る")).id_salt("opto_box").default_open(self.opto.result.is_some()).open(opto).show(ui, |ui| self.opto_ui(ui));
+                        let relay = self.open_box("relay_box");
+                        egui::CollapsingHeader::new(i18n::tr("リレー (コイル 1 つ・接点 1 つ) のモデルを表の値から作る")).id_salt("relay_box").default_open(self.relay.result.is_some()).open(relay).show(ui, |ui| self.relay_ui(ui));
                         if self.glyph != "crystal" {
                             egui::CollapsingHeader::new(i18n::tr("水晶・セラミック発振子のモデルを表の値から作る (記号の形を「水晶」に)")).id_salt("xtal_box").default_open(self.xtal.result.is_some()).show(ui, |ui| {
                                 if ui.button(i18n::tr("記号を水晶にして始める")).on_hover_text(i18n::tr("記号の形を水晶にし、ピンを X1・GND・X2・GND の 4 つにします (2 端子のものは、③ ピンで 2 つにします)")).clicked() {
@@ -490,6 +492,7 @@ impl PartForm {
                     }
                 }).response.on_hover_text(i18n::tr("寸法から作るか、用意された標準の形を使うかを選びます"));
             });
+            self.chip_land_ui(ui);
             let preset = !self.fp_preset.is_empty();
             if preset {
                 ui.small(i18n::tr("標準の形を使っているので、下の寸法は使われません (「寸法で指定」を選ぶと、また効きます)"));

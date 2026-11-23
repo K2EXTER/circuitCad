@@ -144,10 +144,19 @@ fn main() -> Result<(), String> {
                 println!("{} {}{:.3e} F  x{}  p.{}", c.name, if c.at_least { ">= " } else { "" }, c.farads, c.count, c.page + 1);
             }
         }
+        "chip" => {
+            // ds chip FILE: the chip dimension tables (size, L, W, the terminal underneath)
+            for c in ds.chip_sizes() {
+                println!("p.{} {} ({:?}) L {:?} W {:?} terminal {:?} from {}", c.page + 1, c.code, c.inch_code(), c.len, c.width, c.term, c.term_from);
+            }
+        }
         "thermal" => {
             // ds thermal FILE: the thermal resistances (table rows and deratings)
             for r in ds.thermal() {
                 println!("p.{} {:?} {:.3} K/W cols={}{}{}  | {}", r.page + 1, r.to, r.k_per_w, r.columns, if r.from_derating { " (derating)" } else { "" }, r.derate_from.map_or(String::new(), |t| format!(" from {t} °C")), r.text);
+                if !r.cells.is_empty() {
+                    println!("    {}", r.cells.iter().map(|(h, v)| format!("{h}: {}", v.map_or("-".into(), |v| v.to_string()))).collect::<Vec<_>>().join(", "));
+                }
             }
         }
         "cond" => {

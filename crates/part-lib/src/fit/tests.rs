@@ -131,6 +131,7 @@ fn each_reading_has_a_row_and_the_rows_stay_near_the_readings() {
             Spec::Ntc(n) => n.table.len(),
             Spec::Crystal(c) => 1 + usize::from(c.cl.is_some()),
             Spec::Tvs(_) => 3,
+            Spec::Relay(_) => 2,
         };
         assert_eq!(f.rows.len(), n, "{}", f.part);
         // a reading the model's form cannot follow is said in a note (with its condition); the others stay near

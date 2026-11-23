@@ -38,6 +38,15 @@ pub fn no_lead(span: (f64, f64), foot: (f64, f64), lead_w: (f64, f64)) -> Option
     lands(span, foot, lead_w, (NL_TOE, NL_HEEL, NL_SIDE))
 }
 
+/// The lands of a two-terminal chip (resistor, capacitor, inductor: 0402, 0603 …, 候補 Q3) from the body's length `len` (L), its
+/// terminal's length on the underside `term` (the data sheet's a, b, e, I2 …) and its width `width` (W), each (min, max) in mm.
+/// IPC-7351's nominal goals: a toe of 0.35 for chips of 1.6 mm (0603) and longer, 0.15 for smaller ones, no heel or side.
+/// `row` is the distance between the two pads' centres, `pad_l` a pad's length along it, `pad_w` across.
+pub fn chip(len: (f64, f64), term: (f64, f64), width: (f64, f64)) -> Option<GullWing> {
+    let toe = if len.1 >= 1.5 { 0.35 } else { 0.15 };
+    lands(len, term, width, (toe, 0.0, 0.0))
+}
+
 fn lands(span: (f64, f64), foot: (f64, f64), lead_w: (f64, f64), (toe, heel, side): (f64, f64, f64)) -> Option<GullWing> {
     let ok = |r: (f64, f64)| r.0 > 0.0 && r.1 >= r.0;
     if !ok(span) || !ok(foot) || !ok(lead_w) {
@@ -59,6 +68,18 @@ fn lands(span: (f64, f64), foot: (f64, f64), lead_w: (f64, f64), (toe, heel, sid
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Yageo's RT0603 (L 1.60 ±0.10, W 0.80 ±0.10, the bottom terminal I2 0.25 ±0.15): near the usual library land (pads about
+    /// 0.8–0.9 × 0.95 mm, 1.55–1.65 mm apart). Its RT0402 (L 1.00 ±0.10, I2 0.25 ±0.10): the terminal's wide tolerance draws the
+    /// pads in, 0.8 mm apart (the library's are 1.0 mm apart).
+    #[test]
+    fn chip_lands() {
+        let g = chip((1.5, 1.7), (0.1, 0.4), (0.7, 0.9)).unwrap();
+        assert!((g.row - 1.56).abs() < 0.03 && (g.pad_l - 0.87).abs() < 0.03 && (g.pad_w - 0.93).abs() < 0.03, "{g:?}");
+        let g = chip((0.9, 1.1), (0.15, 0.35), (0.45, 0.55)).unwrap();
+        assert!((g.row - 0.81).abs() < 0.02 && (g.pad_l - 0.62).abs() < 0.02 && (g.pad_w - 0.6).abs() < 0.02, "{g:?}");
+        assert!(chip((1.6, 1.6), (0.9, 0.9), (0.8, 0.8)).is_none(), "terminals that meet leave no gap");
+    }
 
     /// SOIC-8 (JEDEC MS-012: E 5.80–6.20, L 0.40–1.27, b 0.31–0.51): near the usual library land (pads about 0.6 × 1.5–2.2 mm, rows
     /// 4.7–5.4 mm apart).

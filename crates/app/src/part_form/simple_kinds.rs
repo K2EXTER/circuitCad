@@ -1,6 +1,7 @@
 //! "かんたん作成" for three two-terminal kinds whose model follows from a few table values (Q1): an NTC thermistor (R25 and
 //! B: `fit::NtcSpec`), a crystal or ceramic resonator (frequency, ESR, C0, C1, CL: `fit::CrystalSpec`) and a TVS diode
-//! (VRWM, VBR at IT, VC at IPP: `fit::TvsSpec`). The boxes hold the fields' text; `spec()` reads them, `part_lib::fit`
+//! (VRWM, VBR at IT, VC at IPP: `fit::TvsSpec`), and a relay with one coil and one contact (coil voltage and resistance,
+//! operate and release voltages and times, contact resistance: `fit::RelaySpec`). The boxes hold the fields' text; `spec()` reads them, `part_lib::fit`
 //! makes the model, and 「② シミュレーション」に入れる puts it in as a `.subckt` with the pins found by name.
 
 use super::*;
@@ -46,15 +47,20 @@ impl NtcInput {
 
     pub fn spec(&self, part: &str, source: &str) -> Result<fit::NtcSpec, String> {
         let r25 = num("25 °C の抵抗", &self.r25, false)?;
-        let b = num("B 定数", &self.b, false)?;
         let mut table = vec![];
         for l in self.table.lines().filter(|l| !l.trim().is_empty()) {
             let f: Vec<&str> = l.split_whitespace().collect();
             let [t, r] = f[..] else { return Err(format!("抵抗-温度表の行「{l}」は「温度 抵抗」の 2 つの数で書きます (例: 100 680)")) };
             table.push([num("温度", t, false)?, num("抵抗", r, false)?]);
         }
-        let description = format!("NTC サーミスタ {}Ω (25 ℃)・B 定数 {} K。温度が上がると抵抗が下がる", part_lib::passive::eng(r25), self.b.trim());
-        Ok(fit::NtcSpec { common: common(part, source, description), r25, b, b_range: self.b_range.trim().into(), table, dissipation: opt("熱放散定数", &self.dissipation, false)? })
+        // no B: the one that fits the table
+        let (b, b_range) = if self.b.trim().is_empty() {
+            fit::ntc_b_from_table(r25, &table).ok_or("B 定数を入れるか、抵抗-温度表に 25 ℃ 以外の点を入れてください (表から B を求めます)")?
+        } else {
+            (num("B 定数", &self.b, false)?, self.b_range.trim().to_string())
+        };
+        let description = format!("NTC サーミスタ {}Ω (25 ℃)・B 定数 {} K。温度が上がると抵抗が下がる", part_lib::passive::eng(r25), b.round());
+        Ok(fit::NtcSpec { common: common(part, source, description), r25, b, b_range, table, dissipation: opt("熱放散定数", &self.dissipation, false)? })
     }
 }
 
@@ -166,6 +172,56 @@ impl TvsInput {
 }
 
 /// The current of a conditions text ("IR = 1 mA", "IPP = 5 A; tp = 8/20 µs"): the first number with an ampere unit.
+/// The relay's boxes.
+#[derive(Clone, Default)]
+pub struct RelayInput {
+    pub coil_v: String,
+    pub coil_r: String,
+    /// Volts, or a percentage of the rated voltage ("75%").
+    pub operate_v: String,
+    pub release_v: String,
+    pub contact_r: String,
+    pub operate_t: String,
+    pub release_t: String,
+    pub coil_l: String,
+    pub make_only: bool,
+    pub result: Option<Result<Fitted, String>>,
+    pub message: Option<(bool, String)>,
+}
+
+impl RelayInput {
+    /// Songle's SRD-05VDC-SL-C, the usual relay of hobby modules, as its table writes it: 5 V, 70 Ω, pull-in 75 % max,
+    /// drop-out 10 % min, operate 10 ms max, release 5 ms max, contact 100 mΩ max.
+    pub fn example() -> RelayInput {
+        RelayInput { coil_v: "5".into(), coil_r: "70".into(), operate_v: "75%".into(), release_v: "10%".into(), contact_r: "100m".into(), operate_t: "10m".into(), release_t: "5m".into(), ..Default::default() }
+    }
+
+    /// A voltage box: volts, or "75%" of the rated voltage.
+    fn volts(label: &str, t: &str, rated: f64) -> Result<f64, String> {
+        match t.trim().strip_suffix('%') {
+            Some(p) => p.trim().parse::<f64>().map(|p| p / 100.0 * rated).map_err(|_| format!("{label}「{}」を数で入れてください (例: 3.75 か 75%)", t.trim())),
+            None => num(label, t, false),
+        }
+    }
+
+    pub fn spec(&self, part: &str, source: &str) -> Result<fit::RelaySpec, String> {
+        let coil_v = num("コイルの定格電圧", &self.coil_v, false)?;
+        let description = format!("リレー (コイル {} V、{})", self.coil_v.trim(), if self.make_only { "メーク接点 1 つ" } else { "切り替え接点 1 つ" });
+        Ok(fit::RelaySpec {
+            common: common(part, source, description),
+            coil_v,
+            coil_r: num("コイルの抵抗", &self.coil_r, false)?,
+            operate_v: Self::volts("動作電圧", &self.operate_v, coil_v)?,
+            release_v: Self::volts("復帰電圧", &self.release_v, coil_v)?,
+            contact_r: opt("接点の抵抗", &self.contact_r, false)?,
+            operate_t: opt("動作時間", &self.operate_t, false)?,
+            release_t: opt("復帰時間", &self.release_t, false)?,
+            coil_l: opt("コイルのインダクタンス", &self.coil_l, false)?,
+            make_only: self.make_only,
+        })
+    }
+}
+
 fn condition_current(text: &str) -> Option<f64> {
     let words: Vec<&str> = text.split(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == '=').filter(|w| !w.is_empty()).collect();
     for (k, w) in words.iter().enumerate() {
@@ -186,6 +242,14 @@ fn condition_current(text: &str) -> Option<f64> {
 pub(super) const NTC_ROLES: &[(&str, &[&str])] = &[("端子 1", &["1", "A", "T1"]), ("端子 2", &["2", "B", "T2"])];
 pub(super) const XTAL_ROLES: &[(&str, &[&str])] = &[("端子 1", &["X1", "XIN", "1", "A"]), ("端子 2", &["X2", "XOUT", "3", "2", "B"])];
 pub(super) const TVS_ROLES: &[(&str, &[&str])] = &[("アノード", &["A", "ANODE", "1"]), ("カソード", &["K", "CATHODE", "2"])];
+/// A relay's coil ends and contacts (IEC numbers too: A1・A2, 11 / 14 / 12).
+pub(super) const RELAY_ROLES: &[(&str, &[&str])] = &[
+    ("コイル 1", &["A1", "COIL+", "COIL1", "COIL", "L1", "+"]),
+    ("コイル 2", &["A2", "COIL-", "COIL2", "L2", "-"]),
+    ("COM", &["COM", "C", "11"]),
+    ("NO", &["NO", "14"]),
+    ("NC", &["NC", "12"]),
+];
 
 /// Which of the three boxes.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -193,22 +257,25 @@ pub enum Simple {
     Ntc,
     Crystal,
     Tvs,
+    Relay,
 }
 
 impl PartForm {
     /// Makes the model of a box from its fields.
     pub(super) fn simple_make(&mut self, k: Simple) {
-        let (name, source) = (self.linear_name(match k { Simple::Ntc => "NTC", Simple::Crystal => "XTAL", Simple::Tvs => "TVS" }), self.linear_source());
+        let (name, source) = (self.linear_name(match k { Simple::Ntc => "NTC", Simple::Crystal => "XTAL", Simple::Tvs => "TVS", Simple::Relay => "RELAY" }), self.linear_source());
         let r = match k {
             Simple::Ntc => self.ntc.spec(&name, &source).map(fit::Spec::Ntc),
             Simple::Crystal => self.xtal.spec(&name, &source).map(fit::Spec::Crystal),
             Simple::Tvs => self.tvs.spec(&name, &source).map(fit::Spec::Tvs),
+            Simple::Relay => self.relay.spec(&name, &source).map(fit::Spec::Relay),
         }
         .and_then(|s| fit::fit(&s));
         let (result, message) = match k {
             Simple::Ntc => (&mut self.ntc.result, &mut self.ntc.message),
             Simple::Crystal => (&mut self.xtal.result, &mut self.xtal.message),
             Simple::Tvs => (&mut self.tvs.result, &mut self.tvs.message),
+            Simple::Relay => (&mut self.relay.result, &mut self.relay.message),
         };
         *result = Some(r);
         *message = None;
@@ -221,6 +288,7 @@ impl PartForm {
                 Simple::Ntc => "NTC_10k_B3950_2",
                 Simple::Crystal => "XTAL_12MHz_2",
                 Simple::Tvs => "SMBJ5.0A",
+                Simple::Relay => "SRD-05VDC-SL-C",
             }
             .into();
         }
@@ -228,6 +296,7 @@ impl PartForm {
             Simple::Ntc => self.ntc = NtcInput::example(),
             Simple::Crystal => self.xtal = CrystalInput::example(),
             Simple::Tvs => self.tvs = TvsInput::example(),
+            Simple::Relay => self.relay = RelayInput::example(),
         }
         self.simple_make(k);
     }
@@ -258,6 +327,8 @@ impl PartForm {
             Simple::Ntc => (&self.ntc.result, NTC_ROLES),
             Simple::Crystal => (&self.xtal.result, XTAL_ROLES),
             Simple::Tvs => (&self.tvs.result, TVS_ROLES),
+            // a make contact has no NC
+            Simple::Relay => (&self.relay.result, if self.relay.make_only { &RELAY_ROLES[..4] } else { RELAY_ROLES }),
         };
         let Some(Ok(f)) = result.clone() else { return Err("モデルができていません".into()) };
         self.linear_apply(&f, roles)
@@ -268,7 +339,7 @@ impl PartForm {
             if ui.button(i18n::tr("モデルを作ってずれを見る")).on_hover_text(i18n::tr("入れた値からモデルを作り、表の値とモデルの値を並べます")).clicked() {
                 self.simple_make(k);
             }
-            let made = matches!(match k { Simple::Ntc => &self.ntc.result, Simple::Crystal => &self.xtal.result, Simple::Tvs => &self.tvs.result }, Some(Ok(_)));
+            let made = matches!(match k { Simple::Ntc => &self.ntc.result, Simple::Crystal => &self.xtal.result, Simple::Tvs => &self.tvs.result, Simple::Relay => &self.relay.result }, Some(Ok(_)));
             if made && ui.button(i18n::tr("「② シミュレーション」に入れる")).on_hover_text(i18n::tr("作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します")).clicked() {
                 let m = self.simple_apply(k);
                 let msg = Some(match m {
@@ -279,6 +350,7 @@ impl PartForm {
                     Simple::Ntc => self.ntc.message = msg,
                     Simple::Crystal => self.xtal.message = msg,
                     Simple::Tvs => self.tvs.message = msg,
+                    Simple::Relay => self.relay.message = msg,
                 }
             }
         });
@@ -286,6 +358,7 @@ impl PartForm {
             Simple::Ntc => (&self.ntc.result, &self.ntc.message),
             Simple::Crystal => (&self.xtal.result, &self.xtal.message),
             Simple::Tvs => (&self.tvs.result, &self.tvs.message),
+            Simple::Relay => (&self.relay.result, &self.relay.message),
         };
         if let Some(Ok(f)) = result {
             super::mosfet::fit_table(ui, id, f);
@@ -312,7 +385,7 @@ impl PartForm {
         let n = &mut self.ntc;
         egui::Grid::new("ntc_inputs").num_columns(2).show(ui, |ui| {
             Self::simple_row(ui, "25 ℃ の抵抗 [Ω]", "R25。10k、4.7k のように", vec![(&mut n.r25, "10k", 80.0)]);
-            Self::simple_row(ui, "B 定数 [K]・その範囲", "表の B 定数と、どの 2 つの温度で決めたか (B25/50・B25/85)", vec![(&mut n.b, "3950", 80.0), (&mut n.b_range, "B25/50", 80.0)]);
+            Self::simple_row(ui, "B 定数 [K]・その範囲", "表の B 定数と、どの 2 つの温度で決めたか (B25/50・B25/85)。空にすると、下の抵抗-温度表に合う B を求めます (使う温度の範囲の点だけを入れると、その範囲で合います)", vec![(&mut n.b, "3950", 80.0), (&mut n.b_range, "B25/50", 80.0)]);
             Self::simple_row(ui, "熱放散定数 [mW/K]", "自己発熱の目安 (省略可。モデルには入らず、注記に書きます)", vec![(&mut n.dissipation, "2", 80.0)]);
         });
         ui.label(egui::RichText::new(i18n::tr("抵抗-温度表 (省略可、1 行に「温度 抵抗」)")).small());
@@ -360,6 +433,37 @@ impl PartForm {
         });
         self.simple_buttons(ui, Simple::Tvs, "tvs_rows");
     }
+
+    /// Puts the pins of a relay (coil A1・A2, COM, NO, NC) into 「③ ピン」, its pads a row of holes (an IC's two rows want an even
+    /// count; the relay's own pad places are drawn in 「④ 部品の形」).
+    pub fn relay_pins(&mut self) {
+        self.fp_preset.clear();
+        self.pkg = PkgKind::Row;
+        self.pins_text = if self.relay.make_only { "1 A1 left\n2 A2 left\n3 COM right\n4 NO right" } else { "1 A1 left\n2 A2 left\n3 COM right\n4 NO right\n5 NC right" }.into();
+        self.prefix = "K".into();
+    }
+
+    pub(super) fn relay_ui(&mut self, ui: &mut egui::Ui) {
+        crate::icons::help_small(ui, "コイルの値と接点の値から", "データシートのコイルの表 (定格電圧・コイル抵抗・動作電圧 (Pick-up / Must operate)・復帰電圧 (Drop-out / Must release)) と、接点の表 (接触抵抗・動作時間・復帰時間) を入れると、コイルの電圧で接点が切り替わるモデルを作ります (同梱の TQ2-L2-5V と同じ作り)。動作電圧と復帰電圧の間では前の状態のまま (ヒステリシス) です");
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(i18n::tr("SRD-05VDC-SL-C の例を入れる")).on_hover_text(i18n::tr("工作のリレーモジュールによく載っている 5 V のリレーの表の値を入れます")).clicked() {
+                self.simple_example_and_make(Simple::Relay);
+            }
+            ui.checkbox(&mut self.relay.make_only, i18n::tr("メーク接点だけ (1a)")).on_hover_text(i18n::tr("NC の無い、COM と NO だけのリレー (1 Form A)。チェックしないと切り替え接点 (1c: COM・NO・NC)"));
+            if ui.button(i18n::tr("ピンを A1・A2・COM・NO・NC にする")).on_hover_text(i18n::tr("「③ ピン」をリレーのピン名にし、部品の形を 1 列の穴にします (番号とパッドの位置は、データシートの図に合わせて「③ ピン」「④ 部品の形」で直してください)")).clicked() {
+                self.relay_pins();
+            }
+        });
+        let r = &mut self.relay;
+        egui::Grid::new("relay_inputs").num_columns(2).show(ui, |ui| {
+            Self::simple_row(ui, "コイル: 定格電圧 [V]・抵抗 [Ω]", "コイルの表の定格電圧 (Nominal voltage) とコイル抵抗 (Coil resistance)", vec![(&mut r.coil_v, "5", 60.0), (&mut r.coil_r, "70", 60.0)]);
+            Self::simple_row(ui, "動作電圧・復帰電圧 [V か %]", "これを超えると接点が動く電圧 (Pick-up、表の最大) と、これより下がると戻る電圧 (Drop-out、表の最小)。75% のように定格の割合でも書けます", vec![(&mut r.operate_v, "75%", 60.0), (&mut r.release_v, "10%", 60.0)]);
+            Self::simple_row(ui, "接点の抵抗 [Ω]", "接触抵抗 (Contact resistance、初期の最大)。空なら 100m", vec![(&mut r.contact_r, "100m", 60.0)]);
+            Self::simple_row(ui, "動作時間・復帰時間 [s]", "Operate time と Release time (表の最大)。空なら 0 (すぐ動く)", vec![(&mut r.operate_t, "10m", 60.0), (&mut r.release_t, "5m", 60.0)]);
+            Self::simple_row(ui, "コイルのインダクタンス [H]", "表にあれば (省略可)。入れると電流がゆっくり立ち上がり、切ったときに逆起電力が出ます", vec![(&mut r.coil_l, "", 60.0)]);
+        });
+        self.simple_buttons(ui, Simple::Relay, "relay_rows");
+    }
 }
 
 #[cfg(test)]
@@ -381,7 +485,7 @@ mod tests {
     /// names and the part saves.
     #[test]
     fn the_examples_make_parts() {
-        for (k, name, pins) in [(Simple::Ntc, "NTC10K", "1 1\n2 2"), (Simple::Crystal, "XTAL12", "1 X1\n2 GND\n3 X2\n4 GND"), (Simple::Tvs, "TVS5", "1 K\n2 A")] {
+        for (k, name, pins) in [(Simple::Ntc, "NTC10K", "1 1\n2 2"), (Simple::Crystal, "XTAL12", "1 X1\n2 GND\n3 X2\n4 GND"), (Simple::Tvs, "TVS5", "1 K\n2 A"), (Simple::Relay, "RLY5", "1 A1\n2 A2\n3 COM\n4 NO\n5 NC")] {
             let mut f = PartForm { name: name.into(), pins_text: pins.into(), ..Default::default() };
             f.simple_example_and_make(k);
             f.simple_apply(k).unwrap_or_else(|e| panic!("{k:?}: {e}"));
@@ -393,8 +497,47 @@ mod tests {
                 Simple::Ntc => vec!["1", "2"],
                 Simple::Crystal => vec!["1", "3"],
                 Simple::Tvs => vec!["2", "1"],
+                Simple::Relay => vec!["1", "2", "3", "4", "5"],
             };
             assert_eq!(sim.pins, want, "{k:?}");
+        }
+    }
+
+    /// No B but a table: B is the one that fits it, its range said.
+    #[test]
+    fn an_ntc_without_b_takes_it_from_its_table() {
+        let n = NtcInput { r25: "10k".into(), b: String::new(), table: "0 32.6k\n50 3.59k".into(), ..Default::default() };
+        let s = n.spec("NTC", "test").unwrap();
+        assert!((s.b - 3950.0).abs() < 60.0 && s.b_range.starts_with("B0/50"), "{} {}", s.b, s.b_range);
+        assert!(NtcInput { table: String::new(), ..n }.spec("NTC", "test").unwrap_err().contains("抵抗-温度表"));
+    }
+
+    /// SRD-05VDC-SL-C's model: 71 mA at 5 V; 3 V (below the 3.75 V operate voltage) does not move it, 5 V does 10 ms later,
+    /// 2 V (above the 0.5 V release voltage) keeps it, 0 V lets it go 5 ms later; the NC contact the other way round.
+    #[test]
+    fn a_relay_operates_and_releases_with_hysteresis_and_delay() {
+        let mut f = PartForm { name: "SRD5".into(), ..Default::default() };
+        f.simple_example_and_make(Simple::Relay);
+        let Some(Ok(m)) = f.relay.result.clone() else { panic!("{:?}", f.relay.result) };
+        assert!((m.rows[0].model - 71.43).abs() < 0.01, "{:?}", m.rows);
+        let mut c = sim_core::Circuit::new();
+        let n: Vec<usize> = ["coil", "com", "no", "nc"].iter().map(|x| c.node(x)).collect();
+        sim_core::add_subckt_instance(&mut c, "K1", "SRD5", &m.text, &[n[0], 0, n[1], n[2], n[3]]).unwrap();
+        // the coil: 3 V from 1 ms, 5 V from 10 ms, 2 V from 40 ms, 0 V from 60 ms
+        let edge = 1e-5;
+        let pwl = vec![(0.0, 0.0), (1e-3, 0.0), (1e-3 + edge, 3.0), (10e-3, 3.0), (10e-3 + edge, 5.0), (40e-3, 5.0), (40e-3 + edge, 2.0), (60e-3, 2.0), (60e-3 + edge, 0.0)];
+        c.add(sim_core::Element::VSource { name: "Vcoil".into(), p: n[0], n: 0, wave: sim_core::Waveform::Pwl(pwl), ac: None });
+        c.add(sim_core::Element::vdc("Vcom", n[1], 0, 1.0));
+        c.add(sim_core::Element::Resistor { name: "Rno".into(), a: n[2], b: 0, r: 1e3 });
+        c.add(sim_core::Element::Resistor { name: "Rnc".into(), a: n[3], b: 0, r: 1e3 });
+        let t = sim_core::transient(&c, &sim_core::TranSettings { tstop: 80e-3, tstep: 1e-4, uic: false }).unwrap();
+        let at = |node: &str, when: f64| {
+            let k = t.time.iter().position(|x| *x >= when).unwrap();
+            t.signal(&format!("V({node})")).unwrap().values[k]
+        };
+        for (when, on) in [(5e-3, false), (15e-3, false), (25e-3, true), (50e-3, true), (62e-3, true), (70e-3, false)] {
+            let (closed, open) = if on { ("no", "nc") } else { ("nc", "no") };
+            assert!(at(closed, when) > 0.99 && at(open, when) < 1e-3, "{} ms: {closed} {} V, {open} {} V", when * 1e3, at(closed, when), at(open, when));
         }
     }
 

@@ -433,6 +433,16 @@ impl SheetView {
     }
 
     /// The rows of `symbol` in the open PDF's electrical characteristics tables (none when no PDF is open).
+    /// The rows of the open PDF's chip dimension tables (`Datasheet::chip_sizes`).
+    pub fn chip_sizes(&self) -> Vec<datasheet::land::ChipSize> {
+        self.doc.as_ref().map(|d| d.ds.chip_sizes()).unwrap_or_default()
+    }
+
+    /// The packages the open PDF names, the most written first (`Datasheet::package_names`).
+    pub fn package_names(&self) -> Vec<datasheet::draft::PackageName> {
+        self.doc.as_ref().map(|d| d.ds.package_names()).unwrap_or_default()
+    }
+
     pub fn spec_values(&self, symbol: &str) -> Vec<datasheet::spec_table::SpecValue> {
         self.doc.as_ref().map(|d| d.ds.spec_values(symbol)).unwrap_or_default()
     }

@@ -1,7 +1,9 @@
 //! Two-terminal parts whose model follows from a few table values, no curve to fit (Q1): an NTC thermistor (R25 and B, the
 //! resistance following the simulation's temperature, as the bundled `NTC_10k_B3950`), a quartz crystal or ceramic resonator
 //! (the motional R-L-C with the shunt capacitance C0, as the bundled `XTAL_12MHz_3225`) and a TVS diode (its stand-off
-//! voltage, breakdown voltage at the test current and clamping voltage at the peak pulse current, a diode's breakdown).
+//! voltage, breakdown voltage at the test current and clamping voltage at the peak pulse current, a diode's breakdown) and a
+//! signal or power relay with one coil and one changeover (or make) contact (the coil's resistance, its operate and release
+//! voltages and times, the contact's resistance: a latch with hysteresis driving two switches, as the bundled `TQ2-L2-5V`).
 
 use super::{LAST_WORD, Out, Row, amps, num::g, row};
 use serde::Deserialize;
@@ -30,6 +32,19 @@ pub struct NtcSpec {
 /// R(T) of the B equation.
 pub fn ntc_r(r25: f64, b: f64, t_c: f64) -> f64 {
     r25 * (b * (1.0 / (t_c + 273.15) - 1.0 / 298.15)).exp()
+}
+
+/// The B constant that fits an R-T table best (least squares of ln(R / R25) against 1/T − 1/298.15 K, through R25 at 25 °C),
+/// with the table's range of temperatures ("B0/100"), for a data sheet that gives the table but not B, or B for another range
+/// than the one the circuit works in. None with fewer than one point away from 25 °C.
+pub fn ntc_b_from_table(r25: f64, table: &[[f64; 2]]) -> Option<(f64, String)> {
+    let pts: Vec<(f64, f64)> = table.iter().filter(|[t, r]| (t - 25.0).abs() > 0.5 && *r > 0.0).map(|[t, r]| (1.0 / (t + 273.15) - 1.0 / 298.15, (r / r25).ln())).collect();
+    if pts.is_empty() || r25.is_nan() || r25 <= 0.0 {
+        return None;
+    }
+    let b = pts.iter().map(|(x, y)| x * y).sum::<f64>() / pts.iter().map(|(x, _)| x * x).sum::<f64>();
+    let (lo, hi) = table.iter().fold((f64::MAX, f64::MIN), |(lo, hi), [t, _]| (lo.min(*t), hi.max(*t)));
+    Some((b, format!("B{}/{} (表から)", g(lo, 3), g(hi, 3))))
 }
 
 pub(super) fn fit_ntc(s: &NtcSpec) -> Result<Out, String> {
@@ -207,6 +222,106 @@ pub(super) fn fit_tvs(s: &TvsSpec) -> Result<Out, String> {
     Ok((text, limits, rows, notes))
 }
 
+/// A relay with one coil and one contact: a changeover (COM, NO, NC) or a make contact (COM, NO).
+#[derive(Clone, Debug, Deserialize)]
+pub struct RelaySpec {
+    #[serde(flatten)]
+    pub common: super::Common,
+    /// The rated coil voltage (V) and the coil's resistance (Ω).
+    pub coil_v: f64,
+    pub coil_r: f64,
+    /// The must-operate (pick-up) voltage (V, the table's max) and the must-release (drop-out) voltage (V, the table's min).
+    pub operate_v: f64,
+    pub release_v: f64,
+    /// The contact's resistance when closed (Ω, the table's initial max; none: 100 mΩ, said so).
+    #[serde(default)]
+    pub contact_r: Option<f64>,
+    /// The operate and release times (s, the table's max; none: 0).
+    #[serde(default)]
+    pub operate_t: Option<f64>,
+    #[serde(default)]
+    pub release_t: Option<f64>,
+    /// The coil's inductance (H): seldom in the table; with it the coil's current rises slowly and the coil kicks back when cut.
+    #[serde(default)]
+    pub coil_l: Option<f64>,
+    /// A make contact only (1 Form A: COM and NO); else a changeover (1 Form C).
+    #[serde(default)]
+    pub make_only: bool,
+}
+
+/// The contacts' model: closed by the latch's 1 V level, open below.
+const RELAY_ROFF: f64 = 1e9;
+
+pub(super) fn fit_relay(s: &RelaySpec) -> Result<Out, String> {
+    if !(s.coil_v > 0.0 && s.coil_r > 0.0) {
+        return Err("コイルの定格電圧と抵抗は 0 より大きい値にしてください".into());
+    }
+    if !(s.release_v > 0.0 && s.release_v < s.operate_v) {
+        return Err("復帰電圧 (これより下がると離れる) は 0 より大きく、動作電圧 (これを超えると動く) より小さいはずです".into());
+    }
+    if s.operate_v > s.coil_v * 1.001 {
+        return Err(format!("動作電圧 {} V が定格電圧 {} V を超えています (ふつう定格の 70〜80 %)。% で書かれた値は定格電圧を掛けて V にしてください", g(s.operate_v, 3), g(s.coil_v, 3)));
+    }
+    let mut notes = vec![];
+    let ron = match s.contact_r {
+        Some(r) if r > 0.0 && r < 10.0 => r,
+        Some(_) => return Err("接点の抵抗は Ω で入れてください (100 mΩ なら 100m)".into()),
+        None => {
+            notes.push("接点の抵抗が無いので 100 mΩ にしました (信号用・電力用のリレーの初期の最大値によくある値)".to_string());
+            0.1
+        }
+    };
+    let (top, trel) = (s.operate_t.unwrap_or(0.0).max(0.0), s.release_t.unwrap_or(0.0).max(0.0));
+    let name = &s.common.name;
+    let pins = if s.make_only { "a b com no" } else { "a b com no nc" };
+    // the latch sees the coil's current times its resistance: with an inductance that is the voltage across the resistor
+    let (coil, sense) = match s.coil_l.filter(|l| *l > 0.0) {
+        Some(l) => (format!("Rc a n {}\nLc n b {}", g(s.coil_r, 5), g(l, 4)), "abs(V(a,n))"),
+        None => (format!("Rc a b {}", g(s.coil_r, 5)), "abs(V(a,b))"),
+    };
+    let (op, rel) = (g(s.operate_v, 5), g(s.release_v, 5));
+    let delays = format!("{}{}", if top > 0.0 { format!(" tplh={}", g(top, 4)) } else { String::new() }, if trel > 0.0 { format!(" tphl={}", g(trel, 4)) } else { String::new() });
+    let nc = if s.make_only { String::new() } else { "Snc com nc qb 0 SWC\n".into() };
+    let text = format!(
+        ".subckt {name} {pins}\n* the coil (either polarity)\n{coil}\n* operates above {op} V on the coil, releases below {rel} V: a latch with that hysteresis (1 V levels, threshold 0.75)\n\
+         Bs s 0 V=0.75+({sense}-{op})/{op}\nBr r 0 V=0.75+({rel}-{sense})/{op}\nVh hi 0 1\nYlat srlatch q qb 0 hi 60 0.75 0 0 0{delays} s r hi 0 0\n\
+         * the contacts: closed {} ohm, open {} ohm\nSno com no q 0 SWC\n{nc}.model SWC SW(RON={} ROFF={} VT=0.5 VW=0.1)\n.ends {name}",
+        g(ron, 4),
+        g(RELAY_ROFF, 2),
+        g(ron, 4),
+        g(RELAY_ROFF, 2)
+    );
+    let i = s.coil_v / s.coil_r;
+    let rows = vec![
+        row("コイルの電流", format!("{} V", g(s.coil_v, 3)), i * 1e3, i * 1e3, "mA"),
+        Row { compare_only: true, ..row("コイルの電力", format!("{} V", g(s.coil_v, 3)), s.coil_v * i * 1e3, s.coil_v * i * 1e3, "mW") },
+    ];
+    let contacts = if s.make_only { "COM–NO (メーク接点)" } else { "COM–NO と COM–NC (切り替え接点)" };
+    let mut limits = vec![
+        format!(
+            "コイル {} Ω (定格 {} V で {} mA)。コイルの電圧が {} V (動作電圧) を超えると {contacts} が切り替わり、{} V (復帰電圧) より下がると戻ります。その間は前の状態のままです。閉じた接点は {} Ω、開いた接点は 1000 MΩ。",
+            g(s.coil_r, 4),
+            g(s.coil_v, 3),
+            g(i * 1e3, 3),
+            op,
+            rel,
+            g(ron, 3)
+        ),
+        if top > 0.0 || trel > 0.0 {
+            format!("接点が動くのは、コイルの電圧が動作・復帰電圧に届いてから {} ms・{} ms あと (表の最大値) です。", g(top * 1e3, 3), g(trel * 1e3, 3))
+        } else {
+            "動作時間・復帰時間は入っていません (接点はすぐ動きます)。".into()
+        },
+        "動作・復帰電圧は表の最大・最小 (保証の値) で、実物はその間のどこかで動きます。".into(),
+    ];
+    if s.coil_l.is_none_or(|l| l <= 0.0) {
+        limits.push("コイルのインダクタンスが無いので、切ったときの逆起電力は出ません。トランジスタで駆動するときの保護のダイオードは、このモデルで要らないように見えても付けます。".into());
+    }
+    limits.push("扱わないもの: 接点のはね、コイルの抵抗の温度変化、接点の定格 (電流・電圧) を超えたときの溶着。".into());
+    limits.push(LAST_WORD.into());
+    Ok((text, limits, rows, notes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{Common, Spec, fit};
@@ -226,6 +341,16 @@ mod tests {
         assert!((f.rows[1].model - 680.0).abs() / 680.0 < 0.05, "{:?}", f.rows[1]);
         assert!(f.limits.iter().any(|l| l.contains("2 mW/K")));
         assert!(fit(&Spec::Ntc(NtcSpec { b: 39.5, ..s })).is_err(), "B in the wrong unit");
+    }
+
+    /// B from an R-T table: the bundled thermistor's 0, 50 and 100 °C points (B25/50 3950) give a B near 3950; no point away
+    /// from 25 °C gives none.
+    #[test]
+    fn b_from_a_table() {
+        let table = [[0.0, ntc_r(10e3, 3950.0, 0.0)], [25.0, 10e3], [50.0, ntc_r(10e3, 3950.0, 50.0)], [100.0, ntc_r(10e3, 3950.0, 100.0)]];
+        let (b, range) = ntc_b_from_table(10e3, &table).unwrap();
+        assert!((b - 3950.0).abs() < 1e-6 && range.starts_with("B0/100"), "{b} {range}");
+        assert!(ntc_b_from_table(10e3, &[[25.0, 10e3]]).is_none());
     }
 
     /// The bundled 12 MHz crystal (40 Ω, 10 fF, 3 pF): Lm 17.59 mH; with a load capacitance the series resonance moves below the
