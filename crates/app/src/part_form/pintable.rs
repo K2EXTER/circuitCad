@@ -21,6 +21,8 @@ pub struct PinRow {
     pub sim: bool,
     /// The electrical kind (`kind=in` in the text); None = not said.
     pub kind: Option<sch_core::PinKind>,
+    /// The unit it is drawn on (`unit=B` in the text; 0 = A, Q6).
+    pub unit: u8,
 }
 
 /// The rows of a pin text (a line with only a number gives a row with an empty name).
@@ -28,11 +30,12 @@ pub(super) fn rows_of(text: &str) -> Vec<PinRow> {
     text.lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
-            let (t, gap, sim, kind) = pin_tokens(l);
+            let (t, gap, sim, kind, unit) = pin_tokens(l);
+            let unit = unit.and_then(super::parse::unit_of_word).unwrap_or(0);
             let kind = kind.and_then(sch_core::PinKind::from_word);
             let side = t.get(2).and_then(|s| parse_side(s)).map_or("", side_word);
             let gap = gap.and_then(|g| g.parse::<u8>().ok()).unwrap_or(0).min(MAX_GAP);
-            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into(), gap, sim, kind }
+            PinRow { number: t.first().copied().unwrap_or("").into(), name: t.get(1).copied().unwrap_or("").into(), side: side.into(), gap, sim, kind, unit }
         })
         .collect()
 }
@@ -51,6 +54,9 @@ pub(super) fn text_of(rows: &[PinRow]) -> String {
             }
             if let Some(k) = r.kind {
                 l.push_str(&format!(" kind={}", k.word()));
+            }
+            if r.unit > 0 {
+                l.push_str(&format!(" unit={}", sch_core::CustomSymbol::unit_letter(r.unit)));
             }
             l
         })
@@ -251,11 +257,12 @@ impl PartForm {
                 ui.small(i18n::tr("「モデルの端子」は、貼った SPICE モデルの端子が、どのピンにあたるかです (選ばないピンは、シミュレーションではどこにもつながりません)"));
             }
         });
-        egui::Grid::new("pin_table").num_columns(if roles.is_empty() { 7 } else { 8 }).spacing([8.0, 4.0]).striped(true).show(ui, |ui| {
+        egui::Grid::new("pin_table").num_columns(if roles.is_empty() { 8 } else { 9 }).spacing([8.0, 4.0]).striped(true).show(ui, |ui| {
             ui.small("");
             ui.small(i18n::tr("番号"));
             ui.small(i18n::tr("名前"));
             ui.small(i18n::tr("向き"));
+            ui.small(i18n::tr("ユニット")).on_hover_text(i18n::tr("1 つの IC の中の同じ回路 (デュアルのオペアンプの 1 つ目と 2 つ目) を別々の記号で置くとき、そのピンがどれ (A・B …) にあるか。電源のピンは A に。ふつうの部品は全部 A のまま"));
             ui.small(i18n::tr("種類")).on_hover_text(i18n::tr("ピンの電気的な種類 (入力・出力・電源など)。回路図の点検 (ERC) が、出力どうしのつながり・何も駆動しない入力・つないだ NC のピンを見つけるのに使います。「自動」は指定なし (名前による点検だけ)"));
             ui.small(i18n::tr("sim")).on_hover_text(i18n::tr("シミュレーション専用のピン (基板にパッドを出しません)"));
             if !roles.is_empty() {
@@ -297,6 +304,16 @@ impl PartForm {
                     })
                     .response
                     .on_hover_text(i18n::tr("記号のどちらの辺にこのピンを出すか。「自動」なら、前半が左、後半が右です"));
+                egui::ComboBox::from_id_salt(("pin_unit", i))
+                    .selected_text(sch_core::CustomSymbol::unit_letter(rows[i].unit).to_string())
+                    .width(36.0)
+                    .show_ui(ui, |ui| {
+                        for u in 0..8u8 {
+                            ui.selectable_value(&mut rows[i].unit, u, sch_core::CustomSymbol::unit_letter(u).to_string());
+                        }
+                    })
+                    .response
+                    .on_hover_text(i18n::tr("このピンを描くユニット。A のままなら、ふつうの 1 つの記号です"));
                 let guess = sch_core::PinKind::guess_from_name(&rows[i].name);
                 let shown = match (rows[i].kind, guess) {
                     (Some(k), _) => i18n::tr(k.label()).to_string(),

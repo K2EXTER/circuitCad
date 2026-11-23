@@ -52,6 +52,7 @@ impl PartForm {
                 };
                 let l = if p.gap > 0 { format!("{l} gap={}", p.gap) } else { l };
                 let l = if p.sim_only { format!("{l} sim") } else { l };
+                let l = if p.unit > 0 { format!("{l} unit={}", sch_core::CustomSymbol::unit_letter(p.unit)) } else { l };
                 match p.kind {
                     Some(k) => format!("{l} kind={}", k.word()),
                     None => l,
@@ -92,6 +93,7 @@ impl PartForm {
             f.sim_name = m.name.clone();
             f.sim_text = m.text.clone();
             f.sim_pins = m.pins.join(" ");
+            f.sim_units = m.units.clone();
             f.sim_limits = m.limits.join("\n");
             f.sim_origin = m.origin.clone().map(|o| (o, m.text.clone()));
         }

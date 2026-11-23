@@ -201,7 +201,7 @@ impl Session {
             if !seen.insert(num.clone()) {
                 return Err(format!("map= lists pin {num} twice"));
             }
-            pins.push(PinDef { number: num.clone(), name: n.clone(), side: side_for(n), sim_only: false, gap: 0, kind: None });
+            pins.push(PinDef { unit: 0, number: num.clone(), name: n.clone(), side: side_for(n), sim_only: false, gap: 0, kind: None });
         }
         let part = PartDef {
             name: name.clone(),
@@ -214,7 +214,7 @@ impl Session {
             package: donor.package.clone(),
             footprint_name: donor.footprint_name.clone(),
             height: None,
-            sim: Some(SimModel { kind: SimKind::Subckt, element: String::new(), name: sub.clone(), text: body, pins: numbers.clone(), params: Default::default(), limits: vec!["メーカーのモデルをそのまま使っています。モデルが扱う範囲・温度条件はメーカーの資料で確かめてください。".into()], origin: Some(sch_core::ModelOrigin::new(sch_core::OriginKind::Vendor, std::path::Path::new(file).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default())) }),
+            sim: Some(SimModel { units: vec![], kind: SimKind::Subckt, element: String::new(), name: sub.clone(), text: body, pins: numbers.clone(), params: Default::default(), limits: vec!["メーカーのモデルをそのまま使っています。モデルが扱う範囲・温度条件はメーカーの資料で確かめてください。".into()], origin: Some(sch_core::ModelOrigin::new(sch_core::OriginKind::Vendor, std::path::Path::new(file).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default())) }),
             ratings: None,
             glyph: String::new(),
             body: None,

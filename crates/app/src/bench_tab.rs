@@ -120,6 +120,8 @@ fn guide_fits(id: &str, board: &Board) -> bool {
         "solder" => board.pads.iter().any(|p| !p.refdes.is_empty() && p.drill.is_none()),
         "bootload" => board.parts.iter().any(|p| p.value.to_ascii_uppercase().starts_with("ATMEGA")),
         "solder_tqfp100" => board.parts.iter().any(|p| pads_of(&p.refdes) >= 100),
+        // reading a data sheet is not work on the board (it is in the learning path)
+        "datasheet_pdf" => false,
         _ => true,
     }
 }

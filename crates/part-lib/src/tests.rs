@@ -18,7 +18,8 @@ fn bundled_examples_are_valid() {
 fn lm358_example_warns_about_unused_pads_only() {
     let issues = example("LM358_SOIC-8").validate();
     assert!(issues.iter().all(|i| !i.error));
-    assert_eq!(issues.iter().filter(|i| !i.error).count(), 3); // pads 5,6,7 belong to channel 2
+    // pads 5, 6, 7 are the second channel's, unit B (Q6): none left over
+    assert_eq!(issues.iter().filter(|i| !i.error).count(), 0, "{issues:?}");
 }
 
 #[test]
@@ -55,8 +56,14 @@ fn validation_catches_datasheet_transcription_errors() {
     let mut q = example("LM358_SOIC-8");
     q.sim.as_mut().unwrap().pins.pop();
     assert!(q.validate().iter().any(|i| i.error && i.message.contains("ポート数")));
-    q.sim.as_mut().unwrap().pins.push("7".into()); // pin 7 is not on the symbol
+    q.sim.as_mut().unwrap().pins.push("9".into()); // pin 9 is not on the symbol
     assert!(q.validate().iter().any(|i| i.error && i.message.contains("記号のピンにありません")));
+    // a unit's model pins: as many as the model's, each on the symbol (Q6)
+    let mut u = example("LM358_SOIC-8");
+    u.sim.as_mut().unwrap().units[1][2] = "9".into();
+    assert!(u.validate().iter().any(|i| i.error && i.message.contains("ユニット B の 9")));
+    u.sim.as_mut().unwrap().units[1].pop();
+    assert!(u.validate().iter().any(|i| i.error && i.message.contains("ピンの数")));
 
     let mut d = example("1N4148");
     d.sim.as_mut().unwrap().name = "OTHER".into();
@@ -241,6 +248,44 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
         assert!(now.sim.unwrap().text.ends_with("* mine"), "{name}: the user's edit was overwritten");
         assert_eq!(now.description, "my op amp");
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A copy of a dual op amp from before its units (Q6): the current model, only unit A's pins. The pins of the further units
+/// arrive once; a copy whose pins the user changed keeps them.
+#[test]
+fn a_dual_op_amp_from_before_its_units_gets_its_second_channel() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_lib_units_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    install_examples(&dir).unwrap();
+    let name = "LM358_SOIC-8";
+    let current = example(name);
+    assert_eq!(current.symbol().units(), 2);
+    let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+    let forget = || {
+        let marker = dir.join(".bundled");
+        let kept: Vec<String> = std::fs::read_to_string(&marker).unwrap().lines().filter(|l| !l.contains("+model-")).map(str::to_string).collect();
+        std::fs::write(&marker, kept.join("
+")).unwrap();
+    };
+    let mut was = current.clone();
+    was.pins.retain(|p| p.unit == 0);
+    was.sim.as_mut().unwrap().units.clear();
+    std::fs::write(&file, serde_json::to_string_pretty(&was).unwrap()).unwrap();
+    forget();
+    install_examples(&dir).unwrap();
+    let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(now.pins, current.pins, "the second channel's pins arrived");
+    assert_eq!(now.sim, current.sim);
+    // pins the user renamed stay as they are
+    let mut mine = was.clone();
+    mine.pins[0].name = "PLUS".into();
+    std::fs::write(&file, serde_json::to_string_pretty(&mine).unwrap()).unwrap();
+    forget();
+    install_examples(&dir).unwrap();
+    let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(now.pins, mine.pins, "the user's pins were kept");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -512,6 +557,7 @@ fn write_chip_examples() {
                 _ => None,
             },
             sim: Some(sch_core::SimModel {
+                units: vec![],
                 kind: sch_core::SimKind::Subckt,
                 element: String::new(),
                 name: g.sim_name.clone(),

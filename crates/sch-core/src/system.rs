@@ -449,7 +449,7 @@ pub fn system_bom(designs: &[(&str, &Schematic)], copies: &[usize]) -> Vec<BomRo
     for (k, (name, sch)) in designs.iter().enumerate() {
         let n = copies.get(k).copied().unwrap_or(1).max(1);
         let flat = sch.flat();
-        for c in flat.components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only) {
+        for c in flat.placed_parts().filter(|c| !c.kind.is_power_symbol() && !c.sim_only) {
             let part = c.custom.as_ref().map_or_else(|| c.kind.label(), |s| s.name.clone());
             let key = (part.clone(), c.value.clone(), c.footprint.clone());
             let row = rows.entry(key).or_insert_with(|| BomRow { part, value: c.value.clone(), footprint: c.footprint.clone(), shops: c.custom.as_ref().map(|s| s.shops.clone()).unwrap_or_default(), per_board: vec![], total: 0, note: String::new() });

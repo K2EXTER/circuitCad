@@ -61,3 +61,10 @@
 - **電解コンデンサの型番の一覧** (候補 P4、2026-11-18): 「電解」のかんたん作成の下の「型番の一覧の表から作る (データシート)」(`elcap_lineup.rs`、PDF を開いているときだけ)。「表を読む」で `Datasheet::electrolytic_rows` を `LineupInput` に読み、型番・容量・電圧・大きさ・Z・リップルの表 (絞り込みの欄つき)。行の「フォームへ」は型番・容量・インピーダンスと ESR・高さを欄に入れる (どのシリーズでも)。型番の頭が同梱の `elcap::Series` (いまは UHE) なら、チェックした行を「まとめて作る」で `elcap::make` して `PartForm::batch` に置き、`panel_forms` がライブラリに保存する。起動引数 `--new-part electrolytic --form-pdf <pdf> --form-lineup [PN,PN]` (表を読んで型番にチェック)。
 - **パワーインダクタの型番の一覧** (候補 P5、2026-11-18): コイルのかんたん作成の飽和の欄の下の「型番の一覧の表から作る (データシート)」(`coil_lineup.rs`、PDF を開いているときだけ)。「表を読む」で `Datasheet::inductor_rows` を `CoilLineupInput` に読み、型番・L・DCR・定格電流・飽和電流・SRF の表。行の「フォームへ」は型番・値・DCR・Isat・低下の割合・SRF・最大電流 (定格電流)・高さを欄に入れる。型番の頭が同梱の `coil::Series` (いまは SRN6045) なら、チェックした行を「まとめて作る」で `coil::make` して `PartForm::batch` に。起動引数 `--new-part inductor --form-pdf <pdf> --form-lineup [PN,PN]` (コイルのフォームならコイルの表)。
 - MOSFET のかんたん作成の「温度: Tj 比」(2026-11-18): 1 行に「接合温度 25 °C との比」(データシートの Normalized On-Resistance の図の点、または表の 125 °C の行 ÷ 25 °C の行)。オン抵抗の 1 行目の VGS・ID の値として `rds_temp` に渡す。入れるとモデルは `.subckt` になり、「② シミュレーション」へもサブ回路として入れる (`mos_apply`)。「PDF の表から読む」は TJ = 125 °C の行があれば比を計算して入れる。「AO3400A の例を入れる」は図 4 の 5 点も入れ、同梱と同じモデルになる (テスト)。
+
+## データシートの読み方の案内 (2026-11-23、Q10) — `app/src/ds_reading.rs`
+- 手順は `ds_reading::STEPS` (8 つ: 表紙と特長・絶対最大定格・推奨動作条件・電気的特性・特性のグラフ・ピン配置・応用回路・外形とランドパターン)。それぞれ説明 (初学者向け: typ は保証でない、条件の行を読む、上から見た図か …)、見るところ (チェック)、見出しの語 (英語・日本語)。
+- データシートの窓 (`part_form/datasheet_view.rs`): 見出しのボタンの並びに「読み方の案内」(`Opened::guide`)。開くと `guide_ui` が手順の枠 (説明・見るところ・前へ・このページを探す・次へ・閉じる) を出し、手順を変えるとその見出しの語で全ページを探す (今の見出しの検索 `Search` をそのまま使う。目次の行でない最初の所へ飛ぶ)。`SheetView::open_guide`、撮影の引数 `--form-guide N` (`--form-pdf` のあと)。
+- 学習パス: 「3. 応用: 安定化のしくみ」の 78xx のあとに「データシートの PDF を読む」(`datasheet_pdf`、`Kind::Hands`)。実機の作業ガイド (`bench_guide::DATASHEET`) と同じ手順をチェックリストにし (`read_task`)、全部にチェックで済み。前からある回路図のレッスン「データシートの読み方」(`datasheet`、絶対最大定格と推奨動作条件の違い) とは別。
+- 同梱の部品の PDF は配れないので、利用者が開いた PDF の見出しをたどる。MC7800 で確かめた (2 は p.1 の MAXIMUM RATINGS、4 は p.3 の ELECTRICAL CHARACTERISTICS)。テスト `ds_reading.rs` (手順に語とチェックがある、語が検索になる)、`bench_guide` と `learn` の既存の点検。
+

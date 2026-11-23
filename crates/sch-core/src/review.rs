@@ -364,11 +364,11 @@ mod tests {
     use crate::*;
 
     fn pin(n: &str, name: &str, side: PinSide, kind: Option<PinKind>) -> SymPin {
-        SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind }
+        SymPin { unit: 0, number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind }
     }
 
     fn part(name: &str, prefix: &str, pins: Vec<SymPin>, companions: Vec<Companion>) -> CustomSymbol {
-        CustomSymbol { name: name.into(), prefix: prefix.into(), pins, sim: None, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![], companions }
+        CustomSymbol { unit: 0, name: name.into(), prefix: prefix.into(), pins, sim: None, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![], companions }
     }
 
     fn cap(name: &str, value: &str, pin: &str, to: &str) -> Companion {

@@ -320,6 +320,19 @@ impl Component {
         if self.footprint.is_empty() { self.kind.default_footprint() } else { self.footprint.clone() }
     }
 
+    /// The part number as drawn: with the unit's letter for a part of several units ("U1A", "U1B"; Q6).
+    pub fn shown_refdes(&self) -> String {
+        match &self.custom {
+            Some(s) if s.units() > 1 => format!("{}{}", self.refdes, CustomSymbol::unit_letter(s.unit)),
+            _ => self.refdes.clone(),
+        }
+    }
+
+    /// The unit this placement draws (0 = A), and how many the part has.
+    pub fn unit(&self) -> (u8, u8) {
+        self.custom.as_ref().map_or((0, 1), |s| (s.unit, s.units()))
+    }
+
     /// The name written for pin `pin` ("1", "2" ...) of a pin header, if there is one.
     pub fn pin_name(&self, pin: &str) -> Option<&str> {
         let k: usize = pin.parse::<usize>().ok()?.checked_sub(1)?;
@@ -677,6 +690,58 @@ impl Schematic {
     }
 
     /// Place a library part. `footprint` is the footprint name the part uses on the PCB.
+    /// Whether component `i` is a further unit of a part placed earlier (the same part number, Q6): it adds its pins to the
+    /// part's nets, but the part itself (its footprint, its line in the parts list, a model of the whole part) is the first's.
+    pub fn repeat_unit(&self, i: usize) -> bool {
+        let c = &self.components[i];
+        c.custom.as_ref().is_some_and(|s| s.units() > 1) && self.components[..i].iter().any(|o| o.refdes == c.refdes && o.custom.is_some())
+    }
+
+    /// After the part of placement `i` changed (its number, value, footprint, model): the same in its other units, which were
+    /// `old_refdes` and drew the same part (Q6). Each keeps its own unit and place.
+    pub fn sync_units(&mut self, i: usize, old_refdes: &str) {
+        let Some(src) = self.components.get(i).cloned() else { return };
+        let Some(sym) = src.custom.as_ref().filter(|s| s.units() > 1) else { return };
+        for (j, c) in self.components.iter_mut().enumerate() {
+            if j == i || c.refdes != old_refdes || c.custom.as_ref().is_none_or(|x| x.name != sym.name) {
+                continue;
+            }
+            let unit = c.unit().0;
+            c.refdes = src.refdes.clone();
+            c.value = src.value.clone();
+            c.footprint = src.footprint.clone();
+            let mut s = sym.clone();
+            s.unit = unit;
+            c.custom = Some(s);
+        }
+    }
+
+    /// The next unit of the part of placement `i` that is not placed yet, placed beside it (to the right, 12 grid steps on):
+    /// its index, or None when every unit is placed (Q6).
+    pub fn place_next_unit(&mut self, i: usize) -> Option<usize> {
+        let c = self.components.get(i)?.clone();
+        let sym = c.custom.as_ref().filter(|s| s.units() > 1)?;
+        let placed: Vec<u8> = self.components.iter().filter(|o| o.refdes == c.refdes && o.custom.as_ref().is_some_and(|x| x.name == sym.name)).map(|o| o.unit().0).collect();
+        let next = (0..sym.units()).find(|u| !placed.contains(u))?;
+        let mut n = c.clone();
+        if let Some(s) = n.custom.as_mut() {
+            s.unit = next;
+        }
+        // to the right, past whatever is already there
+        let mut x = c.pos.0 + 12;
+        while self.components.iter().any(|o| (o.pos.0 - x).abs() < 6 && (o.pos.1 - c.pos.1).abs() < 6) {
+            x += 12;
+        }
+        n.pos = (x, c.pos.1);
+        self.components.push(n);
+        Some(self.components.len() - 1)
+    }
+
+    /// The parts, each once: a part of several units by its first placement (Q6).
+    pub fn placed_parts(&self) -> impl Iterator<Item = &Component> {
+        self.components.iter().enumerate().filter(|(i, _)| !self.repeat_unit(*i)).map(|(_, c)| c)
+    }
+
     pub fn add_custom(&mut self, sym: CustomSymbol, value: &str, footprint: &str, pos: Pt, rot: u8) -> usize {
         let refdes = self.next_refdes(&sym.prefix);
         self.components.push(Component {
@@ -730,6 +795,10 @@ pub struct SymPin {
     /// What the pin does electrically, for the ERC (`PinKind`); None = not said (the checks by name only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<PinKind>,
+    /// The unit the pin is drawn on (Q6): 0 = A, 1 = B ... A part whose pins are all on A is one symbol, as before; a dual
+    /// op amp has its second channel on B (and the supply pins on A, as many libraries draw it).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub unit: u8,
 }
 
 fn is_zero_u8(v: &u8) -> bool {
@@ -758,6 +827,10 @@ pub struct SimModel {
     pub text: String,
     /// Symbol pin numbers in the node order the model expects.
     pub pins: Vec<String>,
+    /// A model of one unit (one channel of a dual op amp, Q6): per unit, its pin numbers in the model's node order (`pins` is
+    /// unit A's); each placed unit is an instance of the model. Empty: the model is the whole part, one instance per part.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub units: Vec<Vec<String>>,
     /// Characteristics for built-in simulators (gain, Vf, ... ); free form.
     #[serde(default)]
     pub params: BTreeMap<String, f64>,
@@ -1004,6 +1077,9 @@ pub struct CustomSymbol {
     /// The parts the data sheet says to put beside it (a regulator's input and output capacitors): placed with it on request.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub companions: Vec<Companion>,
+    /// Which unit this placement draws (Q6): 0 = A. The pins keep every unit's (`SymPin::unit`); the layout shows this one's.
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub unit: u8,
 }
 
 /// A part the data sheet recommends beside this one: `kind` ("C", "R", "L") of `value` between the pin `pin` (its number) and
@@ -1045,6 +1121,39 @@ pub struct SymLayout {
 }
 
 impl CustomSymbol {
+    /// How many units the part has (1 for a part drawn as one symbol).
+    pub fn units(&self) -> u8 {
+        self.pins.iter().map(|p| p.unit).max().map_or(1, |u| u + 1)
+    }
+
+    /// The letter of unit `u` (0 = A).
+    pub fn unit_letter(u: u8) -> char {
+        (b'A' + u.min(25)) as char
+    }
+
+    /// This placement's unit as a symbol of its own: only its pins (the layout, the glyph and the box size follow them).
+    pub fn unit_view(&self) -> std::borrow::Cow<'_, CustomSymbol> {
+        if self.units() <= 1 {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut s = self.clone();
+        s.pins.retain(|p| p.unit == self.unit);
+        for p in &mut s.pins {
+            p.unit = 0;
+        }
+        s.unit = 0;
+        std::borrow::Cow::Owned(s)
+    }
+
+    /// The model's pin numbers for this placement: its unit's, for a model of one unit; else the whole part's.
+    pub fn sim_pins(&self) -> Option<&[String]> {
+        let m = self.sim.as_ref()?;
+        Some(match m.units.get(self.unit as usize) {
+            Some(u) if !m.units.is_empty() => u,
+            _ => &m.pins,
+        })
+    }
+
     /// A capacitor / resistor / inductor glyph with one lead on each of the left and right.
     pub fn is_two_lead_glyph(&self) -> bool {
         matches!(self.glyph.as_str(), "capacitor" | "electrolytic" | "resistor" | "inductor")
@@ -1117,6 +1226,9 @@ impl CustomSymbol {
     /// Box symbol: pins on each side are spaced 2 grid steps apart, in the order given; a pin's `gap` leaves that many
     /// empty places before it.
     pub fn layout(&self) -> SymLayout {
+        if self.units() > 1 {
+            return self.unit_view().layout();
+        }
         // places on a side: its pins and the empty places between them
         let count = |s: PinSide| self.pins.iter().filter(|p| p.side == s).map(|p| 1 + p.gap as i32).sum::<i32>();
         let (hw, hh) = if self.is_two_lead_glyph() {

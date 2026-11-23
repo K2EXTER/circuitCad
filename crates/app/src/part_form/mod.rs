@@ -238,6 +238,8 @@ pub struct PartForm {
     pub sim_name: String,
     pub sim_text: String,
     pub sim_pins: String,
+    /// A model of one unit (Q6): per unit, its pins in the model's order, as the opened part had them (kept as they are).
+    pub sim_units: Vec<Vec<String>>,
     /// What the model leaves out, one note per line.
     pub sim_limits: String,
     /// Where the model comes from, and the model text it was recorded for: kept only while the text is unchanged.
@@ -438,6 +440,7 @@ impl Default for PartForm {
             sim_name: String::new(),
             sim_text: String::new(),
             sim_pins: String::new(),
+            sim_units: vec![],
             sim_limits: String::new(),
             sim_origin: None,
             rt_v: String::new(),

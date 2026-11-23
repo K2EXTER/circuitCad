@@ -789,7 +789,7 @@ fn tidy_with(s: &Schematic, only: Option<&BTreeSet<String>>, wires: bool) -> Res
     let mut joints: Vec<(Pt, String, Option<Kind>)> = vec![];
     let mut added: Vec<Wire> = vec![];
     for i in &parts {
-        let c = out.components.iter().find(|x| x.refdes == s.components[*i].refdes).expect("kept");
+        let c = out.components.iter().find(|x| x.refdes == s.components[*i].refdes && x.unit() == s.components[*i].unit()).expect("kept");
         let at = c.pins();
         let (top, bottom) = (at.iter().map(|p| p.1 .1).min().unwrap_or(0), at.iter().map(|p| p.1 .1).max().unwrap_or(0));
         let pins = pins_of(&s.components[*i]);

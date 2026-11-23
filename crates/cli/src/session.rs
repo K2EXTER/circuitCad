@@ -21,7 +21,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   lib [reload]                          the library folder and the number of parts; 'lib reload' reads it again (after part import or editing a file)
   libsync [apply=1] [parts=K1,U1]       the placed parts whose copy is older than the library (a model added or corrected since): listed, and
                                         brought up to date with apply=1 (place, reference and value kept; the copy's pins kept if the library's differ)
-  add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]
+  add TYPE [VALUE] [as=REF] [unit=A] [rot=0..3] [at=X,Y]
         TYPE: R C L D LED V I NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
   value REF VALUE                       change the value (a value with spaces, like PULSE(0 5 1m 1u), needs no quotes)
   nc REF.PIN [REF.PIN ...] [remove=1]    pins left unconnected on purpose (an unused output, a pin the data sheet says to leave open): ERC does not ask about them; no pins = the list

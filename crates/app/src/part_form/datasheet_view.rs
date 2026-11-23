@@ -174,6 +174,8 @@ struct Opened {
     snap: Option<(usize, datasheet::PageImage, f32)>,
     /// The graph captions of the whole PDF, read the first time a field asks for its graph.
     figures: Option<Vec<datasheet::figures::Figure>>,
+    /// The reading guide (Q10): the step shown, while it is open (`crate::ds_reading::STEPS`).
+    guide: Option<usize>,
 }
 
 /// A search that goes on a few pages per frame, so that a long data sheet does not freeze the window.
@@ -240,6 +242,7 @@ impl SheetView {
                     graph: None,
                     snap: None,
                     figures: None,
+                    guide: None,
                 });
                 self.msg.clear();
                 self.open = true;
@@ -599,6 +602,16 @@ impl SheetView {
         if let Some(d) = self.doc.as_mut() {
             d.page = page.min(d.ds.page_count().saturating_sub(1));
             d.panel = Some(TablePanel::new(d.page, area, d.ds.table_in(d.page, area)).with_drawing(drawing_pins(&d.ds, d.page, area)));
+        }
+    }
+
+    /// Opens the reading guide at step `k` (0 = the first) and searches its heading (Q10; `--form-guide`).
+    pub fn open_guide(&mut self, k: usize) {
+        if let Some(d) = self.doc.as_mut() {
+            let k = k.min(crate::ds_reading::STEPS.len() - 1);
+            let s = &crate::ds_reading::STEPS[k];
+            d.guide = Some(k);
+            d.search = Search::new(s.terms.iter().filter_map(|t| Query::new(t)).collect(), Some(s.title));
         }
     }
 
@@ -1047,6 +1060,44 @@ impl Opened {
         datasheet::graph::trace_curve(img, *k, (x, y), &skip)
     }
 
+    /// The reading guide (Q10): one step at a time, what to look at and why, and its heading searched in this PDF.
+    fn guide_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(k) = self.guide else { return };
+        let steps = crate::ds_reading::STEPS;
+        let step = &steps[k.min(steps.len() - 1)];
+        let mut go: Option<usize> = None;
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.strong(i18n::tr(step.title));
+                ui.small(format!("{}/{}", k + 1, steps.len()));
+            });
+            ui.label(crate::learn::spaced(step.detail));
+            ui.small(i18n::tr("見るところ:"));
+            for c in step.checks {
+                ui.small(format!("・{}", i18n::tr_dyn(c)));
+            }
+            ui.horizontal(|ui| {
+                if crate::widgets::unless(ui, (k == 0).then_some("いまが最初の手順です"), egui::Button::new(i18n::tr("◀ 前へ"))).on_hover_text(i18n::tr("前の手順")).clicked() {
+                    go = Some(k - 1);
+                }
+                if ui.button(i18n::tr("このページを探す")).on_hover_text(i18n::tr("この手順の見出しを、データシートの全ページから探して、そのページを出します (英語・日本語の見出し)")).clicked() {
+                    go = Some(k);
+                }
+                if crate::widgets::unless(ui, (k + 1 >= steps.len()).then_some("いまが最後の手順です"), egui::Button::new(i18n::tr("次へ ▶"))).on_hover_text(i18n::tr("次の手順に進み、その見出しを探します")).clicked() {
+                    go = Some(k + 1);
+                }
+                if ui.small_button(i18n::tr("閉じる")).on_hover_text(i18n::tr("読み方の案内を閉じます")).clicked() {
+                    self.guide = None;
+                }
+            });
+        });
+        if let Some(n) = go {
+            self.guide = Some(n);
+            let s = &steps[n];
+            self.search = Search::new(s.terms.iter().filter_map(|t| Query::new(t)).collect(), Some(s.title));
+        }
+    }
+
     /// The search box, the heading buttons, the hit counter and the list of hits.
     fn search_ui(&mut self, ui: &mut egui::Ui) {
         let pages = self.ds.page_count();
@@ -1077,6 +1128,18 @@ impl Opened {
                 self.selecting = false;
                 self.graph = Some(GraphReader::new(self.page, None));
             }
+            let guide_open = self.guide.is_some();
+            if ui
+                .selectable_label(guide_open, i18n::tr("読み方の案内"))
+                .on_hover_text(i18n::tr("データシートを、どの順に・どこを読めばよいかを、8 つの手順で案内します (絶対最大定格、推奨動作条件、min・typ・max と条件、グラフ …)。手順ごとに、このデータシートのその見出しのページへ飛びます"))
+                .clicked()
+            {
+                self.guide = if guide_open { None } else { Some(0) };
+                if !guide_open {
+                    let s = &crate::ds_reading::STEPS[0];
+                    self.search = Search::new(s.terms.iter().filter_map(|t| Query::new(t)).collect(), Some(s.title));
+                }
+            }
             ui.small(i18n::tr("見出しへ"));
             for h in HEADINGS {
                 if ui.small_button(h.label()).on_hover_text(i18n::trf!("{} (英語・日本語の見出しを探します)", h.help())).clicked() {
@@ -1084,6 +1147,7 @@ impl Opened {
                 }
             }
         });
+        self.guide_ui(ui);
         // a few pages per frame
         let mut picked = None;
         if let Some(s) = self.search.as_mut() {

@@ -100,8 +100,8 @@ impl Session {
     fn netlist_of(&self) -> (Vec<NetlistPart>, Vec<NetlistNet>) {
         let sch = &*self.sch.flat();
         let parts = sch
-            .components
-            .iter()
+            // a part of several units once (its first placement, Q6)
+            .placed_parts()
             .filter(|c| !c.kind.is_power_symbol() && !c.sim_only)
             .map(|c| NetlistPart { refdes: c.refdes.clone(), value: c.value.clone(), footprint: c.footprint_name() })
             .collect();

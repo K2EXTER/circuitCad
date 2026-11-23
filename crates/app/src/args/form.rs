@@ -26,6 +26,10 @@ pub(super) fn apply(app: &mut App, a: &Args) {
     if let Some(t) = a.val("--form-find") {
         app.sch.find_in_form_pdf(t);
     }
+    // --form-guide N: the data sheet window's reading guide at step N (from 1)
+    if let Some(k) = a.val("--form-guide").and_then(|k| k.parse::<usize>().ok()) {
+        app.sch.guide_in_form_pdf(k);
+    }
     // --kicad-lib <file>: the "KiCadから取り込み" window on that library
     if let Some(f) = a.val("--kicad-lib") {
         app.sch.open_kicad_import_file(std::path::Path::new(f));

@@ -519,9 +519,10 @@ mod tests {
 
     fn part(name: &str, glyph: &str, pins: &[(&str, &str, Option<PinKind>)]) -> CustomSymbol {
         CustomSymbol {
+            unit: 0,
             name: name.into(),
             prefix: "U".into(),
-            pins: pins.iter().map(|(n, nm, k)| SymPin { number: n.to_string(), name: nm.to_string(), side: PinSide::Left, sim_only: false, gap: 0, kind: *k }).collect(),
+            pins: pins.iter().map(|(n, nm, k)| SymPin { unit: 0, number: n.to_string(), name: nm.to_string(), side: PinSide::Left, sim_only: false, gap: 0, kind: *k }).collect(),
             sim: None,
             ratings: None,
             glyph: glyph.into(),

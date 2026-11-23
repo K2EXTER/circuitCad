@@ -150,7 +150,27 @@ pub const SOLDER_TQFP100: Guide = Guide {
     limits: "ここは、一般的な手順とコツです。部品・基板・道具によって、こて先の温度 (一般に 320〜350℃ くらい) や、はんだの量の加減は変わります。部品のデータシートの「はんだ付けの条件 (温度と時間)」と、はんだやフラックスの注意書きを、確かめてください。ピン番号は、ATmega2560 のデータシートと、基板の部品の向きで確かめます。",
 };
 
-pub const GUIDES: &[&Guide] = &[&SOLDER, &BOOTLOAD, &SOLDER_TQFP100];
+/// Reading a data sheet (Q10): the steps of `ds_reading` as a checklist; the data sheet window walks through them on an opened PDF.
+const fn read_task(k: usize) -> Task {
+    let s = &crate::ds_reading::STEPS[k];
+    Task { title: s.title, detail: s.detail, checks: s.checks }
+}
+
+pub const DATASHEET: Guide = Guide {
+    id: "datasheet_pdf",
+    title: "データシートの PDF を読む",
+    intro: "部品の使い方の正解は、メーカーのデータシート (PDF) に書いてあります。英語で数十ページあっても、読む順と見るところは、だいたい決まっています。使っている部品 (78xx・LM358 など) のデータシートを、メーカーのサイトからダウンロードして、circuitCad の部品作成フォーム (回路図の左パネル「＋ 部品を作る…」の「データシート (PDF) を開く」) で開き、上の「読み方の案内」を押すと、この手順のページへ順に飛べます。紙や PDF の閲覧ソフトで読んでもかまいません。",
+    safety: "安全 (確かめること): データシートは、型番 (末尾の文字まで) と版 (Rev) が合っているものを使います。同じ型番でもメーカーが違うと、ピン配置や値が違うことがあります。",
+    tasks: &[read_task(0), read_task(1), read_task(2), read_task(3), read_task(4), read_task(5), read_task(6), read_task(7)],
+    trouble: &[
+        ("見出しが見つからない", "メーカーによって見出しの書き方が違います (Specifications の中に表がある、など)。目次 (Table of Contents) から探すか、表の中の語 (VCC、IOUT) で検索します。"),
+        ("文字が選べない・検索できない (画像の PDF)", "古いデータシートは画像のことがあります。データシートの窓の「文字を読み取る (OCR)」で読めます。"),
+        ("min・typ・max の欄が空いている", "空欄はメーカーが決めていない (保証していない) という意味です。typ しかない値は、目安として使います。"),
+    ],
+    limits: "ここは、一般的な読み方です。メーカーや部品の種類 (センサ・マイコン・電源 IC) で、見出しや表の並びは違います。迷ったら、メーカーのアプリケーションノートも読みます。",
+};
+
+pub const GUIDES: &[&Guide] = &[&SOLDER, &BOOTLOAD, &SOLDER_TQFP100, &DATASHEET];
 
 pub fn guide(id: &str) -> Option<&'static Guide> {
     GUIDES.iter().copied().find(|g| g.id == id)

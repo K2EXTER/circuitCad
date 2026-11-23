@@ -67,12 +67,12 @@ mod tests {
     use sch_core::{CustomSymbol, PinSide, SimKind, SimModel, SymPin};
 
     fn part(name: &str, sim: Option<SimModel>) -> CustomSymbol {
-        let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false, gap: 0, kind: None };
-        CustomSymbol { name: name.into(), prefix: "U".into(), pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)], sim, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![], companions: vec![] }
+        let pin = |n: &str, side| SymPin { unit: 0, number: n.into(), name: n.into(), side, sim_only: false, gap: 0, kind: None };
+        CustomSymbol { unit: 0, name: name.into(), prefix: "U".into(), pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)], sim, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![], companions: vec![] }
     }
 
     fn model(limits: &[&str]) -> SimModel {
-        SimModel { kind: SimKind::Model, element: "D".into(), name: "X".into(), text: ".model X D".into(), pins: vec!["1".into(), "2".into()], params: Default::default(), limits: limits.iter().map(|s| s.to_string()).collect(), origin: None }
+        SimModel { units: vec![], kind: SimKind::Model, element: "D".into(), name: "X".into(), text: ".model X D".into(), pins: vec!["1".into(), "2".into()], params: Default::default(), limits: limits.iter().map(|s| s.to_string()).collect(), origin: None }
     }
 
     #[test]

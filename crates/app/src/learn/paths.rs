@@ -118,6 +118,7 @@ pub(super) const POWER_PATH: LearningPath = LearningPath {
                 Item { build: true, requires: Some(&["opamp_inv", "emitter_follower"]), ..lesson("series_regulator", "基準電圧と帰還で安定化する (直列レギュレータ)", "オペアンプ + 基準電圧 + パストランジスタで、自作の安定化電源を組む", Some("負荷を変えたとき (ロードレギュレーション)、入力を変えたとき (ラインレギュレーション) の出力電圧を測ります")) },
                 Item { build: true, requires: Some(&["emitter_follower"]), ..lesson("regulator_78xx", "三端子レギュレータ (78xx / LDO) を使う", "入出力のコンデンサ、ドロップアウト電圧、使い方と選び方", Some("7805 で 5V を作り、入力と負荷を変えて出力と温度を測ります")) },
                 Item { requires: Some(&["zener"]), ..lesson("tl431_ref", "TL431 (シャントレギュレータ): 好きな電圧の基準を作る", "REF を 2.495V に保つ部品。分圧の比で、出力を 2.5V 以上の好きな値にできる。負荷が重すぎると崩れる", Some("TL431 に 2 本の抵抗をつなぎ、出力が 2.495V × (1 + R2 ÷ R3) になるか測ります")) },
+                Item { id: "datasheet_pdf", title: "データシートの PDF を読む", about: "絶対最大定格・推奨動作条件・電気的特性の min・typ・max と条件・グラフの条件。部品の正しい使い方を、メーカーの PDF から読み取る順番", kind: Kind::Hands, build: false, requires: Some(&["regulator_78xx"]), real: Some("78xx か LM358 のデータシートをダウンロードして、部品作成フォームで開き、「読み方の案内」で読みます") },
                 Item { requires: Some(&["regulator_78xx"]), ..I_LDO },
                 Item { requires: Some(&["regulator_78xx"]), ..I_HEAT },
                 Item { requires: Some(&["diode_curve", "regulator_78xx"]), ..I_PROTECTION },

@@ -205,7 +205,7 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
     };
 
     let mut errors = vec![];
-    for comp in &s.components {
+    for (ci, comp) in s.components.iter().enumerate() {
         let r = comp.refdes.as_str();
         match comp.kind {
             Kind::Resistor | Kind::Capacitor | Kind::Inductor => {
@@ -322,14 +322,22 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
             }
             Kind::Header(_) | Kind::Ground | Kind::Power => {}
             Kind::Custom => {
-                let Some(sim) = comp.custom.as_ref().and_then(|x| x.sim.as_ref()) else {
+                // a model of one unit (a dual op amp's channel): every placed unit is an instance of it, named after the unit
+                // from B on (U1, U1B); a model of the whole part: once, by the part's first placement (Q6)
+                let per_unit = comp.custom.as_ref().and_then(|x| x.sim.as_ref()).is_some_and(|m| !m.units.is_empty());
+                if !per_unit && s.repeat_unit(ci) {
+                    continue;
+                }
+                let Some((sym, sim)) = comp.custom.as_ref().and_then(|x| Some((x, x.sim.as_ref()?))) else {
                     c.warnings.push(format!("{r} ({}): シミュレーションモデルがないため無視します", comp.value));
                     continue;
                 };
-                let nodes: Vec<usize> = sim.pins.iter().map(|p| node_of(&mut c, r, p)).collect();
+                let pins = sym.sim_pins().unwrap_or(&sim.pins);
+                let nodes: Vec<usize> = pins.iter().map(|p| node_of(&mut c, r, p)).collect();
+                let inst = if per_unit && sym.unit > 0 { comp.shown_refdes() } else { r.to_string() };
                 let res = match sim.kind {
-                    SimKind::Model => add_model_instance(&mut c, r, &sim.element, &sim.name, &sim.text, &nodes),
-                    SimKind::Subckt => add_subckt_instance(&mut c, r, &sim.name, &sim.text, &nodes),
+                    SimKind::Model => add_model_instance(&mut c, &inst, &sim.element, &sim.name, &sim.text, &nodes),
+                    SimKind::Subckt => add_subckt_instance(&mut c, &inst, &sim.name, &sim.text, &nodes),
                 };
                 if let Err(m) = res {
                     errors.push(err(r, m));

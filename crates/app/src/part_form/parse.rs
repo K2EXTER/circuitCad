@@ -35,12 +35,20 @@ pub(super) fn parse_ohm(t: &str) -> Option<f64> {
     sim_core::parse_value(l.trim_end_matches("ohm").trim_end_matches('ω').trim())
 }
 
+/// The unit of a pin line's `unit=B` (Q6): 0 for A; None when it is not a letter.
+pub(super) fn unit_of_word(w: &str) -> Option<u8> {
+    let w = w.trim();
+    let b = w.bytes().next()?.to_ascii_uppercase();
+    (w.len() == 1 && b.is_ascii_uppercase()).then_some(b - b'A')
+}
+
 /// The words of a pin line (`number name [side]`) without its `gap=N` word, and that N as typed: the empty places
-/// left before the pin on its side of the symbol.
-pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool, Option<&str>) {
+/// left before the pin on its side of the symbol. The last is its `unit=B` word as typed (Q6).
+pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool, Option<&str>, Option<&str>) {
     let mut gap = None;
     let mut sim = false;
     let mut kind = None;
+    let mut unit = None;
     let words = line
         .split(|c: char| c.is_whitespace() || c == ',')
         .filter(|s| !s.is_empty())
@@ -54,6 +62,11 @@ pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool, Option<&
                 kind = s.strip_prefix("kind=");
                 false
             }
+            // the unit it is drawn on (a dual op amp's second channel)
+            None if s.starts_with("unit=") => {
+                unit = s.strip_prefix("unit=");
+                false
+            }
             // a pin of the simulation model only (a photodiode's light input): no pad on the board
             None if s.eq_ignore_ascii_case("sim") => {
                 sim = true;
@@ -62,7 +75,7 @@ pub(super) fn pin_tokens(line: &str) -> (Vec<&str>, Option<&str>, bool, Option<&
             None => true,
         })
         .collect();
-    (words, gap, sim, kind)
+    (words, gap, sim, kind, unit)
 }
 
 /// The most empty places a pin may have before it (a bigger number is a typing mistake, not a layout).
@@ -196,7 +209,11 @@ impl PartForm {
     pub(super) fn parse_pins(&self) -> Result<Vec<PinDef>, String> {
         let mut out = vec![];
         for (n, line) in self.pins_text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
-            let (t, gap, sim_only, kind) = pin_tokens(line);
+            let (t, gap, sim_only, kind, unit) = pin_tokens(line);
+            let unit = match unit {
+                None => 0,
+                Some(u) => unit_of_word(u).ok_or_else(|| format!("{}行目: ユニット「unit={u}」は A〜Z の 1 文字にしてください (デュアルのオペアンプの 2 つ目は B)", n + 1))?,
+            };
             let kind = match kind {
                 None => None,
                 Some(k) => Some(sch_core::PinKind::from_word(k).ok_or_else(|| format!("{}行目: 種類「kind={k}」は {} のどれかです", n + 1, sch_core::PinKind::ALL.map(|k| k.word()).join(" / ")))?),
@@ -212,7 +229,7 @@ impl PartForm {
                 None => None,
                 Some(s) => Some(parse_side(s).ok_or_else(|| format!("{}行目: 向き「{s}」は left/right/top/bottom のいずれかです", n + 1))?),
             };
-            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only, gap, kind });
+            out.push(PinDef { unit, number: t[0].into(), name: t[1].into(), side, sim_only, gap, kind });
         }
         Ok(out)
     }
@@ -380,6 +397,7 @@ impl PartForm {
         let sim = match self.sim {
             SimChoice::None => None,
             k => Some(SimModel {
+                units: self.sim_units.clone(),
                 kind: if k == SimChoice::Model { SimKind::Model } else { SimKind::Subckt },
                 element: self.sim_element.trim().to_string(),
                 name: self.sim_name.trim().to_string(),

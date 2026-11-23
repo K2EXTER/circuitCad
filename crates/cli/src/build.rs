@@ -264,7 +264,7 @@ impl Session {
 
     pub fn add(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
-        let t = pos.first().ok_or("add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]")?;
+        let t = pos.first().ok_or("add TYPE [VALUE] [as=REF] [unit=A] [rot=0..3] [at=X,Y]")?;
         let rot: u8 = match opt(&kv, "rot") {
             Some(r) => r.parse::<u8>().ok().filter(|r| *r < 4).ok_or("rot must be 0, 1, 2 or 3 (quarter turns clockwise)")?,
             None => 0,
@@ -304,16 +304,38 @@ impl Session {
         {
             return Err(bad_number(v));
         }
-        if let Some(r) = opt(&kv, "as")
-            && self.sch.components.iter().any(|c| c.refdes.eq_ignore_ascii_case(r))
-        {
-            return Err(format!("{r} is already used"));
+        // unit=B: one unit of a part of several (a dual op amp's second channel, Q6); with as= it may share the number of the
+        // same part's other units
+        let unit = match opt(&kv, "unit") {
+            None => None,
+            Some(u) => {
+                let n = lib_part.as_ref().map_or(1, |d| d.symbol().units());
+                let k = u.trim().to_ascii_uppercase().bytes().next().filter(|b| b.is_ascii_uppercase() && u.trim().len() == 1).map(|b| b - b'A');
+                match k {
+                    Some(k) if k < n => Some(k),
+                    _ => return Err(format!("unit={u}: this part has {} (A{})", if n > 1 { format!("units A to {}", sch_core::CustomSymbol::unit_letter(n - 1)) } else { "one unit".into() }, if n > 1 { "..." } else { "" })),
+                }
+            }
+        };
+        if let Some(r) = opt(&kv, "as") {
+            let same_part = |c: &sch_core::Component| unit.is_some() && c.custom.as_ref().is_some_and(|x| lib_part.as_ref().is_some_and(|d| d.name == x.name));
+            if let Some(c) = self.sch.components.iter().find(|c| c.refdes.eq_ignore_ascii_case(r)) {
+                if !same_part(c) {
+                    return Err(format!("{r} is already used"));
+                }
+                if self.sch.components.iter().any(|o| o.refdes.eq_ignore_ascii_case(r) && Some(o.unit().0) == unit) {
+                    return Err(format!("{r} already has unit {}", sch_core::CustomSymbol::unit_letter(unit.unwrap_or(0))));
+                }
+            }
         }
         let idx = match (&lib_part, kind) {
             (Some(d), _) => self.sch.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), (0, 0), rot),
             (None, Some(k)) => self.sch.add(k, (0, 0), rot),
             _ => unreachable!(),
         };
+        if let (Some(u), Some(s)) = (unit, self.sch.components[idx].custom.as_mut()) {
+            s.unit = u;
+        }
         // find the room: the part's pins and body relative to its origin
         let c = &self.sch.components[idx];
         let mut xs: Vec<i32> = c.pins().iter().map(|(_, p)| p.0).collect();
@@ -353,6 +375,10 @@ impl Session {
         let c = &self.sch.components[idx];
         let pins: Vec<Value> = pin_names(c).iter().map(|(n, name)| json!({"pin": n, "name": name})).collect();
         let type_name = lib_part.as_ref().map(|d| d.name.clone()).unwrap_or_else(|| c.kind.label());
+        let (u, n) = c.unit();
+        if n > 1 {
+            return Ok(obj(json!({"ref": c.refdes, "unit": sch_core::CustomSymbol::unit_letter(u).to_string(), "units": n, "shown": c.shown_refdes(), "type": type_name, "value": c.value, "footprint": c.footprint_name(), "at": [c.pos.0, c.pos.1], "pins": pins})));
+        }
         Ok(obj(json!({"ref": c.refdes, "type": type_name, "value": c.value, "footprint": c.footprint_name(), "at": [c.pos.0, c.pos.1], "pins": pins})))
     }
 
@@ -688,12 +714,27 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
     /// The points of the pins `REF.PIN` stands for (a pin name shared by several pins means all of them).
     fn pin_points(&self, spec: &str) -> Result<Vec<Pt>, String> {
         let (r, p) = spec.split_once('.').ok_or_else(|| format!("'{spec}': write REF.PIN, for example R1.1 or U1.GND"))?;
-        let c = self.sch.components.iter().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
-        let pins = c.pins();
-        if let Some((_, pt)) = pins.iter().find(|(n, _)| n.eq_ignore_ascii_case(p)) {
-            return Ok(vec![*pt]);
+        // the placements REF stands for: one unit by its drawn name (U1B.IN+), else every unit of the part (Q6)
+        let parts = |want: &dyn Fn(&sch_core::Component) -> bool| -> Vec<&sch_core::Component> { self.sch.components.iter().filter(|c| !c.kind.is_power_symbol() && want(c)).collect() };
+        let mut cands = parts(&|c| c.unit().1 > 1 && c.shown_refdes().eq_ignore_ascii_case(r));
+        if cands.is_empty() {
+            cands = parts(&|c| c.refdes.eq_ignore_ascii_case(r));
         }
-        let by_name: Vec<Pt> = pins_named(c, p).iter().filter_map(|n| pins.iter().find(|(m, _)| m == n).map(|(_, pt)| *pt)).collect();
+        let c = *cands.first().ok_or_else(|| format!("no part {r}"))?;
+        // a pin number in any of them; a pin name in the first that has it (unit A before B)
+        for c in &cands {
+            if let Some((_, pt)) = c.pins().iter().find(|(n, _)| n.eq_ignore_ascii_case(p)) {
+                return Ok(vec![*pt]);
+            }
+        }
+        let by_name: Vec<Pt> = cands
+            .iter()
+            .map(|c| {
+                let pins = c.pins();
+                pins_named(c, p).iter().filter_map(|n| pins.iter().find(|(m, _)| m == n).map(|(_, pt)| *pt)).collect::<Vec<Pt>>()
+            })
+            .find(|v| !v.is_empty())
+            .unwrap_or_default();
         if by_name.is_empty() {
             let have: Vec<String> = pin_names(c).iter().map(|(n, name)| if n == name { n.clone() } else { format!("{n}={name}") }).collect();
             return Err(format!("{} has no pin '{p}' (pins: {})", c.refdes, have.join(" ")));

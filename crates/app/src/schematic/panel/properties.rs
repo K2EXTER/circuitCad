@@ -13,6 +13,12 @@ impl SchEditor {
         self.port_editor_ui(ui);
         let mut open_sheet: Option<usize> = None;
         let mut place_companions: Option<usize> = None;
+        // a part of several units (Q6): what this placement was before the panel, to carry an edit to its other units
+        let before = match self.selected {
+            Some(Sel::Comp(i)) => self.sch.components.get(i).filter(|c| c.unit().1 > 1).map(|c| (i, c.refdes.clone(), c.value.clone(), c.footprint.clone())),
+            _ => None,
+        };
+        let mut next_unit: Option<usize> = None;
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
                 let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());
@@ -33,6 +39,31 @@ impl SchEditor {
                         if has_value {
                             ui.label(i18n::tr("値"));
                             ui.add(egui::TextEdit::singleline(&mut c.value).desired_width(f32::INFINITY)).on_hover_text(value_hint(c.kind));
+                            ui.end_row();
+                        }
+                        // a part of several units (a dual op amp): which unit this placement draws, and the next one to place
+                        if let Some(sym) = c.custom.as_mut().filter(|s| s.units() > 1) {
+                            ui.label(i18n::tr("ユニット"));
+                            ui.horizontal(|ui| {
+                                let n = sym.units();
+                                egui::ComboBox::from_id_salt(("unit", i))
+                                    .selected_text(sch_core::CustomSymbol::unit_letter(sym.unit).to_string())
+                                    .width(48.0)
+                                    .show_ui(ui, |ui| {
+                                        for u in 0..n {
+                                            ui.selectable_value(&mut sym.unit, u, sch_core::CustomSymbol::unit_letter(u).to_string());
+                                        }
+                                    })
+                                    .response
+                                    .on_hover_text(i18n::tr("1 つの IC の中にある同じ回路 (デュアルのオペアンプの 1 つ目・2 つ目) のどれを、この記号で描くか。A に電源のピンがあります。番号は同じ (U1A・U1B) で、基板では 1 つの IC です"));
+                                if ui
+                                    .small_button(i18n::tr("次のユニットを置く"))
+                                    .on_hover_text(i18n::tr("まだ置いていないユニット (U1B など) を右に置きます。同じ IC の中の回路なので、番号・値・足の形は同じになり、どれかを変えると全部が変わります"))
+                                    .clicked()
+                                {
+                                    next_unit = Some(i);
+                                }
+                            });
                             ui.end_row();
                         }
                     });
@@ -267,6 +298,22 @@ impl SchEditor {
                 _ => None,
             };
             self.enter_sheet(k, via.as_deref());
+        }
+        // an edit of a unit's number, value or footprint: the same in the part's other units
+        if let Some((i, refdes, value, footprint)) = before
+            && let Some(c) = self.sch.components.get(i)
+            && (c.refdes != refdes || c.value != value || c.footprint != footprint)
+        {
+            self.sch.sync_units(i, &refdes);
+        }
+        if let Some(i) = next_unit {
+            match self.sch.place_next_unit(i) {
+                Some(k) => {
+                    self.status = i18n::trf!("{} を置きました", self.sch.components[k].shown_refdes());
+                    self.selected = Some(Sel::Comp(k));
+                }
+                None => self.status = i18n::tr("この部品のユニットは全部置いてあります").to_string(),
+            }
         }
         if let Some(k) = place_companions {
             self.status = match self.sch.place_companions(k) {

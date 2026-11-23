@@ -59,6 +59,13 @@ impl SchEditor {
     }
 
     /// Searches the data sheet window of the open new-part form (`--form-find <text>`).
+    /// The data sheet window's reading guide at step `k` (from 1; `--form-guide`, Q10).
+    pub fn guide_in_form_pdf(&mut self, k: usize) {
+        if let Some(f) = self.form.as_mut() {
+            f.sheet.open_guide(k.saturating_sub(1));
+        }
+    }
+
     pub fn find_in_form_pdf(&mut self, text: &str) {
         if let Some(f) = self.form.as_mut() {
             f.sheet.find(text);

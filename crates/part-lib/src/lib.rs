@@ -32,6 +32,9 @@ pub struct PinDef {
     /// What the pin does electrically (`sch_core::PinKind`), for the ERC; omitted = not said.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<sch_core::PinKind>,
+    /// The unit the pin is drawn on (`sch_core::SymPin::unit`, Q6): 0 = A; omitted = A.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub unit: u8,
 }
 
 fn is_zero(v: &u8) -> bool {
@@ -148,6 +151,7 @@ impl PartDef {
                     sim_only: p.sim_only,
                     gap: p.gap,
                     kind: p.kind,
+                    unit: p.unit,
                 })
                 .collect(),
             sim: self.sim.clone(),
@@ -156,6 +160,7 @@ impl PartDef {
             shops: self.shops.clone(),
             programming: self.programming.clone(),
             companions: self.companions.clone(),
+            unit: 0,
         }
     }
 
@@ -252,6 +257,21 @@ impl PartDef {
             for p in &sim.pins {
                 if !self.pins.iter().any(|d| &d.number == p) {
                     err(format!("sim.pins の {p} が記号のピンにありません"));
+                }
+            }
+            // a model of one unit (Q6): every unit's pins in the model's order, on the symbol, as many as the model's
+            let units = self.pins.iter().map(|p| p.unit).max().map_or(1, |u| u as usize + 1);
+            if !sim.units.is_empty() {
+                if sim.units.len() != units {
+                    err(format!("sim.units は {} 個 (ユニットの数) にしてください (今は {} 個)", units, sim.units.len()));
+                }
+                for (k, u) in sim.units.iter().enumerate() {
+                    if u.len() != sim.pins.len() {
+                        err(format!("sim.units のユニット {} のピンの数 {} が sim.pins の数 {} と違います", sch_core::CustomSymbol::unit_letter(k as u8), u.len(), sim.pins.len()));
+                    }
+                    for p in u.iter().filter(|p| !self.pins.iter().any(|d| &&d.number == p)) {
+                        err(format!("sim.units のユニット {} の {p} が記号のピンにありません", sch_core::CustomSymbol::unit_letter(k as u8)));
+                    }
                 }
             }
             let lower = sim.text.to_ascii_lowercase();
@@ -695,8 +715,11 @@ fn legacy_models() -> std::collections::HashMap<String, Shipped> {
 /// since only the earlier versions in `legacy_models.json` are replaced). Libraries offered the 2026-11 rebuild recorded
 /// `+model2026-11`; they get the new key on the next start without any change to their files.
 fn rebuilt_key(name: &str, bundled: &str) -> String {
-    let model = serde_json::from_str::<PartDef>(bundled).ok().and_then(|d| d.sim).map(|m| model_checks::fingerprint(&m.text)).unwrap_or_default();
-    format!("{name}+model-{model}")
+    let sim = serde_json::from_str::<PartDef>(bundled).ok().and_then(|d| d.sim);
+    let model = sim.as_ref().map(|m| model_checks::fingerprint(&m.text)).unwrap_or_default();
+    // the units of a dual op amp (Q6) are offered once more, to copies whose model was already the latest
+    let units = sim.as_ref().map_or(0, |m| m.units.len());
+    if units > 1 { format!("{name}+model-{model}+units-{units}") } else { format!("{name}+model-{model}") }
 }
 
 /// The user's copy with the rebuilt model: only when its model is one of the earlier bundled ones (never edited). The model
@@ -705,10 +728,17 @@ fn rebuilt_key(name: &str, bundled: &str) -> String {
 fn with_rebuilt_model(file: &Path, example: &str, bundled: &str) -> Option<PartDef> {
     let mut old = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok())?;
     let shipped = legacy_models().remove(example)?;
-    if !old.sim.as_ref().is_some_and(|m| shipped.texts.contains(&m.text)) {
+    let new = serde_json::from_str::<PartDef>(bundled).ok()?;
+    let same_model = old.sim.as_ref().zip(new.sim.as_ref()).is_some_and(|(o, n)| o.text == n.text);
+    if !old.sim.as_ref().is_some_and(|m| shipped.texts.contains(&m.text)) && !same_model {
         return None;
     }
-    let new = serde_json::from_str::<PartDef>(bundled).ok()?;
+    // the bundled part's further units (a dual op amp's second channel, Q6): taken when the copy's pins are the bundled unit A's
+    let unit_a: Vec<&PinDef> = new.pins.iter().filter(|p| p.unit == 0).collect();
+    let as_bundled = |a: &PinDef, b: &PinDef| a.number == b.number && a.name == b.name && a.side == b.side && a.unit == 0;
+    if new.pins.len() > old.pins.len() && old.pins.len() == unit_a.len() && old.pins.iter().zip(&unit_a).all(|(a, b)| as_bundled(a, b)) {
+        old.pins = new.pins.clone();
+    }
     old.sim = new.sim;
     if shipped.descriptions.contains(&old.description) {
         old.description = new.description;

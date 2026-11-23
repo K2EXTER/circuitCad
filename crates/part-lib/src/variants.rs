@@ -79,7 +79,7 @@ mod tests {
     fn versions_expand_into_parts_of_their_own() {
         let base = crate::series::by_name("ERJ-3EKF").unwrap().part(1000.0);
         let other = PackageSpec::Chip2 { pitch: 2.0, pad_len: 1.0, pad_width: 1.2 };
-        let sim = |n: &str| SimModel { kind: sch_core::SimKind::Subckt, element: String::new(), name: n.into(), text: format!(".subckt {n} 1 2\nR1 1 2 1\n.ends"), pins: vec!["1".into(), "2".into()], params: Default::default(), limits: vec![], origin: None };
+        let sim = |n: &str| SimModel { units: vec![], kind: sch_core::SimKind::Subckt, element: String::new(), name: n.into(), text: format!(".subckt {n} 1 2\nR1 1 2 1\n.ends"), pins: vec!["1".into(), "2".into()], params: Default::default(), limits: vec![], origin: None };
         let s = VariantSeries {
             series: "FAM".into(),
             base: base.clone(),

@@ -42,7 +42,7 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
     let mut npn_models = false;
     let mut included: BTreeSet<String> = BTreeSet::new();
     let mut model_text = String::new();
-    for c in &s.components {
+    for (ci, c) in s.components.iter().enumerate() {
         let r = &c.refdes;
         match c.kind {
             Kind::Resistor | Kind::Capacitor | Kind::Inductor => {
@@ -120,11 +120,19 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
                 let _ = writeln!(out, "{r} {} {} {} QNPN", nd(r, "C"), nd(r, "B"), nd(r, "E"));
             }
             Kind::Custom => {
-                let Some(sim) = c.custom.as_ref().and_then(|s| s.sim.as_ref()) else {
+                // a model of one unit: an instance per placed unit (XU1, XU1B); a model of the whole part: once (Q6)
+                let per_unit = c.custom.as_ref().and_then(|x| x.sim.as_ref()).is_some_and(|m| !m.units.is_empty());
+                if !per_unit && s.repeat_unit(ci) {
+                    continue;
+                }
+                let Some((sym, sim)) = c.custom.as_ref().and_then(|x| Some((x, x.sim.as_ref()?))) else {
                     let _ = writeln!(out, "* {r} ({}): シミュレーションモデルなし", c.value);
                     continue;
                 };
-                let mut nodes: Vec<String> = sim.pins.iter().map(|p| nd(r, p)).collect();
+                let shown = c.shown_refdes();
+                let r = if per_unit && sym.unit > 0 { &shown } else { r };
+                let pins = sym.sim_pins().unwrap_or(&sim.pins);
+                let mut nodes: Vec<String> = pins.iter().map(|p| nd(&c.refdes, p)).collect();
                 // a MOSFET card has four nodes (D G S B); the part has three, so the body goes to the source
                 if sim.kind == SimKind::Model && sim.element.eq_ignore_ascii_case("M") && nodes.len() == 3 {
                     nodes.push(nodes[2].clone());

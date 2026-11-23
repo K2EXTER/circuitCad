@@ -201,6 +201,8 @@ impl SchEditor {
                 }
             } else if let Some(f) = self.tier_font(painter, Tier::Sub, 0.5) {
                 let name_col = crate::canvas_theme::col(crate::canvas_theme::Role::PartName);
+                // a part of several units is named with its unit's letter (U1A, U1B; Q6)
+                let shown = c.shown_refdes();
                 // the part's box on the sheet after rotation; a part taller than wide has its pins at the top and bottom
                 let (bx0, bx1, by0, by1) = sheet_box(c.kind, (x0, x1, y0, y1), c.pos, c.rot)
                     .unwrap_or((c.pos.0 as f32 - 2.0, c.pos.0 as f32 + 2.0, c.pos.1 as f32 - 1.0, c.pos.1 as f32 + 1.0));
@@ -221,12 +223,12 @@ impl SchEditor {
                         let up = c.rot % 4 == 0;
                         let y = if up { name_y } else { value_y };
                         let (left, right) = if up { (Align2::RIGHT_BOTTOM, Align2::LEFT_BOTTOM) } else { (Align2::RIGHT_TOP, Align2::LEFT_TOP) };
-                        painter.text(self.to_screen(rect, (cx - 0.3, y)), left, &c.refdes, f.clone(), name_col);
+                        painter.text(self.to_screen(rect, (cx - 0.3, y)), left, &shown, f.clone(), name_col);
                         painter.text(self.to_screen(rect, (cx + 0.3, y)), right, &c.value, f.clone(), crate::canvas_theme::col(crate::canvas_theme::Role::Value));
                     } else if wire_at(by0) {
-                        painter.text(self.to_screen(rect, (cx - 0.4, name_y)), Align2::RIGHT_BOTTOM, &c.refdes, f.clone(), name_col);
+                        painter.text(self.to_screen(rect, (cx - 0.4, name_y)), Align2::RIGHT_BOTTOM, &shown, f.clone(), name_col);
                     } else {
-                        painter.text(self.to_screen(rect, (cx, name_y)), Align2::CENTER_BOTTOM, &c.refdes, f.clone(), name_col);
+                        painter.text(self.to_screen(rect, (cx, name_y)), Align2::CENTER_BOTTOM, &shown, f.clone(), name_col);
                     }
                     if !case_pins {
                         if wire_at(by1) {
@@ -239,7 +241,7 @@ impl SchEditor {
                     // name and value go left of the body, level with its middle, so they stay clear of the pin
                     // voltages (right of each pin) and the wires that run along the pins' line
                     let (left, mid) = (bx0 - 0.4, (by0 + by1) / 2.0);
-                    painter.text(self.to_screen(rect, (left, mid)), Align2::RIGHT_BOTTOM, &c.refdes, f.clone(), name_col);
+                    painter.text(self.to_screen(rect, (left, mid)), Align2::RIGHT_BOTTOM, &shown, f.clone(), name_col);
                     painter.text(self.to_screen(rect, (left, mid)), Align2::RIGHT_TOP, &c.value, f, crate::canvas_theme::col(crate::canvas_theme::Role::Value));
                 }
             }

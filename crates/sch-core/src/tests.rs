@@ -152,8 +152,9 @@ fn spice_deck() {
 }
 
 fn opamp() -> CustomSymbol {
-    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
+    let pin = |n: &str, name: &str, side| SymPin { unit: 0, number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
     CustomSymbol {
+        unit: 0,
         ratings: None,
         shops: Default::default(),
         programming: vec![],
@@ -170,6 +171,7 @@ fn opamp() -> CustomSymbol {
             pin("5", "NC", PinSide::Bottom),
         ],
         sim: Some(SimModel {
+            units: vec![],
             kind: SimKind::Subckt,
             element: String::new(),
             name: "LM358".into(),
@@ -456,8 +458,9 @@ fn labels_that_differ_only_in_case_are_a_warning() {
 
 #[test]
 fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
-    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
+    let pin = |n: &str, name: &str, side| SymPin { unit: 0, number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
     let fet = CustomSymbol {
+        unit: 0,
         ratings: None,
         shops: Default::default(),
         programming: vec![],
@@ -467,6 +470,7 @@ fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
         prefix: "Q".into(),
         pins: vec![pin("1", "G", PinSide::Left), pin("2", "S", PinSide::Top), pin("3", "D", PinSide::Bottom)],
         sim: Some(SimModel {
+            units: vec![],
             kind: SimKind::Model,
             element: "M".into(),
             name: "AO3401A".into(),
@@ -603,8 +607,9 @@ fn a_net_of_one_part_or_of_capacitors_and_inputs_only_is_reported() {
 #[test]
 fn old_two_lead_glyph_sheet_gets_short_leads() {
     // a version-0 sheet: electrolytic cap at (10,10) whose pins used to sit at +-4, wires on them
-    let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false, gap: 0, kind: None };
+    let pin = |n: &str, side| SymPin { unit: 0, number: n.into(), name: n.into(), side, sim_only: false, gap: 0, kind: None };
     let sym = CustomSymbol {
+        unit: 0,
         name: "CE".into(),
         prefix: "C".into(),
         pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)],
@@ -825,7 +830,7 @@ fn a_part_numbers_of_its_own_win_over_those_of_its_library_part_and_are_not_writ
     let old = serde_json::to_string(&Component { shops: Default::default(), ..c.clone() }).unwrap();
     assert!(serde_json::from_str::<Component>(&old).is_ok());
     // a blank number takes the library part's number away
-    let mut sym = CustomSymbol { name: "X".into(), prefix: "R".into(), pins: vec![], sim: None, ratings: None, shops: Default::default(), programming: vec![], glyph: String::new(), companions: vec![] };
+    let mut sym = CustomSymbol { unit: 0, name: "X".into(), prefix: "R".into(), pins: vec![], sim: None, ratings: None, shops: Default::default(), programming: vec![], glyph: String::new(), companions: vec![] };
     sym.shops.insert("lcsc".into(), "C1".into());
     sym.shops.insert("digikey".into(), "X".into());
     c.custom = Some(sym);

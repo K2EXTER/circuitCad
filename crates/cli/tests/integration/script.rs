@@ -2870,6 +2870,39 @@ worst out tol_r=0 tol_c=0 tol_l=0
 }
 
 #[test]
+fn both_channels_of_a_dual_op_amp_work_as_units_of_one_part() {
+    // an LM358 as two units of U1 (Q6): A follows 1 V, B (pins 5, 6, 7, placed with unit=B and the same number) follows 2 V; the
+    // supply is on unit A. One part for the ERC, the board and the SPICE netlist's model text, an instance per unit
+    let (a, ok) = run("new
+add LM358 as=U1
+add LM358 as=U1 unit=B
+add V 5 as=VP
+add V 1 as=VA
+add V 2 as=VB
+net VCC VP.+ U1.V+
+net GND VP.- VA.- VB.- U1.V-
+net INA VA.+ U1.IN+
+net OUTA U1.OUT U1.IN-
+net INB VB.+ U1B.IN+
+net OUTB U1.7 U1.6
+erc
+dc probe=V(outa),V(outb)
+spice
+");
+    assert!(ok, "{a:?}");
+    let added: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "add" && v["ref"] == "U1").collect();
+    assert_eq!(added[1]["shown"], "U1B", "{:?}", added[1]);
+    let erc = last(&a, "erc");
+    assert!(!erc.to_string().contains("重複"), "the units share U1 without a duplicate: {erc}");
+    let dc = last(&a, "dc");
+    let v = |n: &str| dc["probes"][n].as_f64().unwrap();
+    assert!((v("V(outa)") - 1.0).abs() < 0.01 && (v("V(outb)") - 2.0).abs() < 0.01, "each channel follows its input: {dc}");
+    let text = last(&a, "spice")["text"].as_str().unwrap().to_string();
+    assert!(text.contains("XU1 ") && text.contains("XU1B "), "an instance per unit: {text}");
+    assert_eq!(text.matches(".subckt LM358").count(), 1, "the model once: {text}");
+}
+
+#[test]
 fn worst_moves_an_op_amps_offset_drift_with_the_temperature() {
     // a TL072 follower at 2.5 V: the offset spreads ±10 mV; at 85 °C the drift (±18 µV/°C, the data sheet's typ either way)
     // adds ±58 × 18 µV = ±1.04 mV, and at 27 °C nothing (M8)

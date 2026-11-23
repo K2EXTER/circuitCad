@@ -239,7 +239,7 @@ impl Sheet {
         for (k, c) in self.sch.components.iter().enumerate() {
             let body = if self.selected == Some(k) { Color32::from_rgb(255, 210, 90) } else { Color32::from_gray(190) };
             let label_at = draw_part(&painter, c, s, origin, Stroke::new((s * 0.12).max(1.5), body));
-            let name = if c.kind.is_power_symbol() { c.value.clone() } else { format!("{} {}", c.refdes, c.value) };
+            let name = if c.kind.is_power_symbol() { c.value.clone() } else { format!("{} {}", c.shown_refdes(), c.value) };
             painter.text(label_at, Align2::LEFT_CENTER, name, text.clone(), Color32::from_gray(220));
         }
         for l in &self.sch.labels {

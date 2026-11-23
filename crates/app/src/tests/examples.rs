@@ -1230,6 +1230,78 @@ fn write_live_logic_more_examples() {
     std::fs::write(root.join("traffic_light.schjson"), serde_json::to_string_pretty(&traffic_light_schematic()).unwrap()).unwrap();
 }
 
+/// One LM358 as two amplifiers (Q6): unit A (U1A, with the supply pins) multiplies IN by 2 (non-inverting, 10k / 10k), unit B (U1B,
+/// pins 5, 6, 7) inverts it (-1, 10k / 10k). IN is SIN 0.5 V, 1 kHz; the supply +-5 V.
+fn dual_opamp_schematic() -> sch_core::Schematic {
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "LM358").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "SIN(0 0.5 1k) AC 1".into();
+    label(&mut s, v1, "+", "IN");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v2].value = "5".into();
+    label(&mut s, v2, "+", "VCC");
+    label(&mut s, v2, "-", "GND");
+    let v3 = s.add(Kind::VSource, (0, 48), 0);
+    s.components[v3].value = "5".into();
+    label(&mut s, v3, "+", "GND");
+    label(&mut s, v3, "-", "VEE");
+    // unit A: OUTA = 2 IN
+    let a = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, 0), 0);
+    s.components[a].refdes = "U1".into();
+    label(&mut s, a, "3", "IN");
+    label(&mut s, a, "2", "FBA");
+    label(&mut s, a, "1", "OUTA");
+    label(&mut s, a, "8", "VCC");
+    label(&mut s, a, "4", "VEE");
+    for (x, v, p1, p2) in [(50, "10k", "OUTA", "FBA"), (66, "10k", "FBA", "GND")] {
+        let r = s.add(Kind::Resistor, (x, 0), 1);
+        s.components[r].value = v.into();
+        label(&mut s, r, "1", p1);
+        label(&mut s, r, "2", p2);
+    }
+    // unit B: OUTB = -IN (the same part U1, its second channel)
+    let b = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, 28), 0);
+    s.components[b].refdes = "U1".into();
+    s.components[b].custom.as_mut().unwrap().unit = 1;
+    label(&mut s, b, "5", "GND");
+    label(&mut s, b, "6", "FBB");
+    label(&mut s, b, "7", "OUTB");
+    for (x, v, p1, p2) in [(50, "10k", "OUTB", "FBB"), (66, "10k", "FBB", "IN")] {
+        let r = s.add(Kind::Resistor, (x, 28), 1);
+        s.components[r].value = v.into();
+        label(&mut s, r, "1", p1);
+        label(&mut s, r, "2", p2);
+    }
+    s
+}
+
+/// Generates docs/examples/dual_opamp.schjson: `cargo test -p app write_dual_opamp_example -- --ignored`
+#[test]
+#[ignore]
+fn write_dual_opamp_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    std::fs::write(root.join("dual_opamp.schjson"), serde_json::to_string_pretty(&dual_opamp_schematic()).unwrap()).unwrap();
+}
+
+/// The two units of one LM358 work at once (Q6): at the sine's peak (0.25 ms) OUTA is 2 x 0.5 V and OUTB -0.5 V; the ERC sees one
+/// part U1 (no duplicate), the board one footprint.
+#[test]
+fn the_dual_opamp_sample_runs_both_units() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let file: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join("dual_opamp.schjson")).unwrap()).unwrap();
+    let s = dual_opamp_schematic();
+    assert_eq!(file, s, "regenerate with write_dual_opamp_example");
+    assert!(!sch_core::erc(&s).iter().any(|p| p.message.contains("重複") || p.message.contains("ユニット")), "{:?}", sch_core::erc(&s));
+    assert_eq!(s.placed_parts().filter(|c| c.refdes == "U1").count(), 1);
+    let c = sim_core::from_schematic(&s).unwrap();
+    let t = sim_core::transient(&c, &sim_core::TranSettings { tstop: 1e-3, tstep: 2e-6, uic: false }).unwrap();
+    let at = |n: &str, x: f64| t.signals.iter().find(|g| g.name == n).unwrap().values[t.time.iter().position(|&tt| tt >= x).unwrap()];
+    assert!((at("V(OUTA)", 0.25e-3) - 1.0).abs() < 0.03, "{}", at("V(OUTA)", 0.25e-3));
+    assert!((at("V(OUTB)", 0.25e-3) + 0.5).abs() < 0.03, "{}", at("V(OUTB)", 0.25e-3));
+}
+
 #[test]
 fn live_logic_more_samples_are_what_the_generator_makes() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");

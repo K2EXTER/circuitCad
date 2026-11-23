@@ -192,7 +192,7 @@ fn ordered_pins(raw: Vec<RawPin>) -> Vec<PinDef> {
             _ => a.1.total_cmp(&b.1),
         })
     });
-    v.into_iter().map(|(side, _, _, number, name, kind)| PinDef { number, name, side: Some(side), sim_only: false, gap: 0, kind }).collect()
+    v.into_iter().map(|(side, _, _, number, name, kind)| PinDef { unit: 0, number, name, side: Some(side), sim_only: false, gap: 0, kind }).collect()
 }
 
 fn prop<'a>(sym: &'a Node, key: &str) -> &'a str {

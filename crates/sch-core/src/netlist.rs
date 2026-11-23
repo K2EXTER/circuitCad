@@ -245,9 +245,36 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
     use Severity::{Error, Warning};
     let mut out = vec![];
     let mut seen: HashMap<&str, usize> = HashMap::new();
-    for c in &s.components {
-        if !c.kind.is_power_symbol() {
+    // the units of a part of several units share its number (U1A, U1B): counted once (Q6)
+    let mut units: std::collections::BTreeMap<&str, Vec<(u8, crate::Pt)>> = Default::default();
+    for (i, c) in s.components.iter().enumerate() {
+        if c.custom.as_ref().is_some_and(|x| x.units() > 1) {
+            units.entry(&c.refdes).or_default().push((c.unit().0, c.pos));
+        }
+        if !c.kind.is_power_symbol() && !s.repeat_unit(i) {
             *seen.entry(&c.refdes).or_default() += 1;
+        }
+    }
+    for (r, list) in &units {
+        let mut placed: Vec<u8> = list.iter().map(|u| u.0).collect();
+        placed.sort();
+        if let Some(w) = placed.windows(2).find(|w| w[0] == w[1]) {
+            let letter = crate::CustomSymbol::unit_letter(w[0]);
+            let at = list.iter().filter(|u| u.0 == w[0]).map(|u| u.1).nth(1);
+            out.push(Problem::new(
+                Error,
+                format!("{r} のユニット {letter} が 2 つあります"),
+                at,
+                "同じ部品の同じユニット (1 つの IC の中の同じ回路) は 1 つだけ置けます。片方を選んで、左の「ユニット」を別のユニットに変えるか、番号を別の部品に変えましょう",
+            ));
+        }
+        if !placed.contains(&0) {
+            out.push(Problem::new(
+                Warning,
+                format!("{r} のユニット A が置かれていません"),
+                list.first().map(|u| u.1),
+                "電源のピンはユニット A にあります。ユニット A を置いて電源につながないと、IC 全体が動きません (シミュレーションでも出力が出ません)。部品を選んで「次のユニットを置く」でユニット A を置きましょう",
+            ));
         }
     }
     let mut dups: Vec<&str> = seen.iter().filter(|(_, n)| **n > 1).map(|(r, _)| *r).collect();

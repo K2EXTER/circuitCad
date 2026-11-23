@@ -231,7 +231,11 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
             supplies.push(n.to_string());
         }
     };
-    for c in &flat.components {
+    for (ci, c) in flat.components.iter().enumerate() {
+        // a part of several units is one chip on the board: its first placement brings every lead (Q6)
+        if flat.repeat_unit(ci) {
+            continue;
+        }
         if matches!(c.kind, Kind::Ground | Kind::Power) {
             if c.kind == Kind::Power {
                 add_supply(&c.value, &mut supplies);

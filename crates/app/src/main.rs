@@ -18,6 +18,7 @@ mod help;
 mod icons;
 mod link;
 mod bench_guide;
+mod ds_reading;
 mod bench_tab;
 mod breadboard;
 mod power_on_guide;

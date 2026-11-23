@@ -239,7 +239,7 @@ impl SchEditor {
         for c in self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()) {
             let ext = comp_extents(c);
             let Some((bx0, bx1, by0, by1)) = sheet_box(c.kind, ext, c.pos, c.rot) else { continue };
-            let w = width(&c.refdes).max(width(&c.value));
+            let w = width(&c.shown_refdes()).max(width(&c.value));
             if by1 - by0 <= bx1 - bx0 || super::draw::side_pinned(c, bx0, bx1) {
                 // centred above and below the body
                 let cx = (bx0 + bx1) / 2.0;

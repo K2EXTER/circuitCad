@@ -77,9 +77,10 @@ mod tests {
     use crate::*;
 
     fn regulator() -> CustomSymbol {
-        let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
+        let pin = |n: &str, name: &str, side| SymPin { unit: 0, number: n.into(), name: name.into(), side, sim_only: false, gap: 0, kind: None };
         let c = |name: &str, value: &str, pin: &str| Companion { name: name.into(), kind: "C".into(), value: value.into(), pin: pin.into(), to: "GND".into(), note: String::new() };
         CustomSymbol {
+            unit: 0,
             name: "REG".into(),
             prefix: "U".into(),
             pins: vec![pin("1", "VIN", PinSide::Left), pin("2", "GND", PinSide::Bottom), pin("3", "VOUT", PinSide::Right)],
