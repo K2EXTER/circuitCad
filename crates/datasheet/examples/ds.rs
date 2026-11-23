@@ -144,6 +144,20 @@ fn main() -> Result<(), String> {
                 println!("{} {}{:.3e} F  x{}  p.{}", c.name, if c.at_least { ">= " } else { "" }, c.farads, c.count, c.page + 1);
             }
         }
+        "lineup" => {
+            // ds lineup FILE: the lineup tables (headers and the first rows) and the electrolytic capacitors read off them
+            let pages: Vec<&[datasheet::Word]> = (0..ds.page_count()).map(|p| ds.words(p)).collect();
+            let tables = datasheet::lineup::lineups(&pages);
+            for t in &tables {
+                println!("p.{} {} rows, headers {:?}", t.page + 1, t.rows.len(), t.headers);
+                for r in t.rows.iter().take(3) {
+                    println!("    {} [{}] {:?}", r.part, r.group, r.cells);
+                }
+            }
+            for r in datasheet::lineup::electrolytic(&tables).iter().take(12) {
+                println!("{} {}µF {:?}V {}x{} tanδ {:?} Z {:?} ripple {:?} A", r.part, r.cap_uf, r.volts, r.d_mm, r.l_mm, r.tan_d, r.impedance, r.ripple_a);
+            }
+        }
         "rev" => {
             // ds rev FILE: the revision and date, and the table values a part keeps
             let r = ds.revision();

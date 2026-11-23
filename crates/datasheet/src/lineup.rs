@@ -83,7 +83,8 @@ pub fn lineup_on(page: usize, words: &[Word]) -> Option<Lineup> {
     lineups_on(page, words).into_iter().next()
 }
 
-/// The lineup tables of one page (at least three rows each). Rows are lines with one part number and three or more
+/// The lineup tables of one page (at least three rows each). Rows are lines with a part number (the first, when a row has
+/// two: Panasonic FK's standard and vibration-proof ones) and three or more
 /// numbers; without such lines, a capacitor's table without part numbers: a row starts at a number followed by a case
 /// size ("100  5×11  150  0.90  3.6"), so that two tables side by side (Rubycon's) are two rows on a line, and the
 /// rows are sorted into tables by where they start.
@@ -93,7 +94,7 @@ pub fn lineups_on(page: usize, words: &[Word]) -> Vec<Lineup> {
     for (i, l) in ls.iter().enumerate() {
         let parts: Vec<&&Word> = l.iter().filter(|w| is_row_part(w.text.trim())).collect();
         let values: Vec<&Word> = l.iter().copied().filter(|w| is_cell_value(&w.text)).collect();
-        if parts.len() == 1 && values.len() >= 3 {
+        if !parts.is_empty() && values.len() >= 3 {
             rows.push((i, Some(parts[0]), values, String::new()));
         }
     }
@@ -226,6 +227,18 @@ fn build<'a>(page: usize, ls: &[Vec<&'a Word>], rows: Vec<Found<'a>>) -> Option<
         })
         .collect();
     rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // a cell written once for two rows, on a line of its own between them (Panasonic FK's capacitance "33" of two rows of
+    // other cases): the rows next to it (within 6 points) that have nothing in that column take it
+    let row_lines: std::collections::HashSet<*const Word> = ls.iter().flatten().filter(|w| rows.iter().any(|(y, _)| (center(w).1 - y).abs() < 2.0)).map(|w| *w as *const Word).collect();
+    for w in ls.iter().flatten().filter(|w| number(&w.text).is_some() && !row_lines.contains(&(**w as *const Word))) {
+        let Some(i) = col_of(center(w).0) else { continue };
+        let y = center(w).1;
+        for (ry, r) in rows.iter_mut() {
+            if (*ry - y).abs() < 6.0 && r.cells[i].is_empty() {
+                r.cells[i] = w.text.trim().to_string();
+            }
+        }
+    }
     // groups: the first column (the capacitance) goes up within a group and starts again at the next; the number
     // written left of the table (up to 60 points) within a group's height names it
     let labels: Vec<(f32, &str)> = ls
@@ -506,9 +519,17 @@ pub fn electrolytic(tables: &[Lineup]) -> Vec<ElcapRow> {
             let case = roles.iter().position(|r| *r == Role::Case)?;
             (0..case).rev().find(|&i| roles[i] == Role::Other && t.rows.iter().any(|r| number(&r.cells[i]).is_some()))
         });
-        let (Some(cap_col), Some(case_col)) = (cap_col, roles.iter().position(|r| *r == Role::Case)) else { continue };
+        // the case: one column "8×11.5", or a diameter column "øD" and the length column right of it (Panasonic FK)
+        let case_col = roles.iter().position(|r| *r == Role::Case);
+        let d_col = t.headers.iter().position(|h| matches!(squash(h).as_str(), "ød" | "φd" | "ϕd" | "d"));
+        let (Some(cap_col), true) = (cap_col, case_col.is_some() || d_col.is_some()) else { continue };
         for r in &t.rows {
-            let (Some(cap_uf), Some((d, l))) = (number(&r.cells[cap_col]), case_size(&r.cells[case_col])) else { continue };
+            let case = match (case_col, d_col) {
+                (Some(c), _) => case_size(&r.cells[c]),
+                (None, Some(d)) => number(&r.cells[d]).zip(r.cells.get(d + 1).and_then(|l| number(l))),
+                _ => None,
+            };
+            let (Some(cap_uf), Some((d, l))) = (number(&r.cells[cap_col]), case) else { continue };
             let mut row = ElcapRow {
                 page: t.page,
                 part: r.part.clone(),

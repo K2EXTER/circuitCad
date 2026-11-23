@@ -1,0 +1,38 @@
+{
+  "maker": "Panasonic",
+  "series": "FK",
+  "feature": "面実装 (V チップ)・低インピーダンス",
+  "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDE0000/ABA0000C1181.pdf",
+  "source": "データシート ABA0000C1181.pdf (FK series、10-Feb-26)",
+  "checked": "2026-11-23",
+  "temp": [-55, 105],
+  "tolerance_pct": 20,
+  "leak_k": 0.01,
+  "leak_min_ua": 3,
+  "coeff_freqs": [60, 120, 1000, 10000, 100000],
+  "coeffs": [
+    { "cap_max": 100000, "k": [0.70, 0.75, 0.90, 0.95, 1.00] }
+  ],
+  "life": [
+    { "d_min": 12.5, "hours": 5000 },
+    { "hours": 2000 }
+  ],
+  "smd": [
+    { "d": 4, "code": "B", "a": 1.0, "b": 2.5, "c": 1.6, "base": 4.3 },
+    { "d": 5, "code": "C", "a": 1.5, "b": 2.8, "c": 1.6, "base": 5.3 },
+    { "d": 6.3, "l_max": 6.5, "code": "D", "a": 1.8, "b": 3.2, "c": 1.6, "base": 6.6 },
+    { "d": 6.3, "l_min": 7, "code": "D8", "a": 1.8, "b": 3.2, "c": 1.6, "base": 6.6 },
+    { "d": 8, "l_max": 7, "code": "E", "a": 2.2, "b": 4.0, "c": 1.6, "base": 8.3 },
+    { "d": 8, "l_min": 9, "code": "F", "a": 3.1, "b": 4.0, "c": 2.0, "base": 8.3 },
+    { "d": 10, "code": "G", "a": 4.6, "b": 4.1, "c": 2.0, "base": 10.3 },
+    { "d": 12.5, "code": "H13", "a": 3.9, "b": 6.2, "c": 2.0, "base": 13.5 },
+    { "d": 16, "code": "J16", "a": 6.0, "b": 6.9, "c": 2.5, "base": 17.0 },
+    { "d": 18, "code": "K16", "a": 6.0, "b": 7.9, "c": 2.5, "base": 19.0 }
+  ],
+  "order_note": "型番の末尾の文字 (R・UR・P・XP・Q・M) は包装とケースの違い。振動に強い品 (末尾 V) は別の型番で、ランドも違います。",
+  "part_prefixes": ["EEEFK", "EEVFK"],
+  "bundle": [
+    "EEEFK1C100R", "EEEFK1E220R", "EEEFK1C470P", "EEEFK1E470P", "EEEFK1C101P", "EEEFK1E101P", "EEEFK1V101P",
+    "EEEFK1C221P", "EEEFK1E221P", "EEEFK1C471P", "EEEFK1A102P", "EEEFK1H100P", "EEVFK1E102Q"
+  ]
+}

@@ -253,6 +253,24 @@ mod real_pdf {
         }
     }
 
+    /// Panasonic FK (ABA0000C1181.pdf; skipped without the file in microohm-meter/): surface-mount, the case in two columns
+    /// (øD, L), rows with a vibration-proof part number beside the standard one, a capacitance written once for two rows.
+    #[test]
+    fn panasonic_fk_surface_mount() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter/ABA0000C1181.pdf");
+        let Ok(ds) = datasheet::Datasheet::open_file(&path) else { return };
+        let rows: Vec<elcap::Row> = ds.electrolytic_rows().iter().map(elcap_row).collect();
+        assert_eq!(rows.len(), 144);
+        let s = elcap::Series::for_table(&rows, std::iter::empty()).expect("FK");
+        // "33" once for the 5×5.8 and the 6.3×5.8 rows of 25 V
+        let r = rows.iter().find(|r| r.part == "EEEFK1E330P").unwrap();
+        assert_eq!((r.cap_uf, r.volts, r.d_mm, r.l_mm, r.ripple_a), (33.0, 25.0, 6.3, 5.8, 0.24));
+        assert_eq!(rows.iter().find(|r| r.part == "EEEFK1E330UR").map(|r| r.cap_uf), Some(33.0));
+        for b in &s.bundle {
+            assert!(rows.iter().any(|r| &r.part == b), "{b} in the table");
+        }
+    }
+
     /// Bourns SRN6045 (SRN6045.pdf; skipped without the file in microohm-meter/): a power inductor's table, with a
     /// figure of the drawing beside it on the 22 uH row's line.
     #[test]

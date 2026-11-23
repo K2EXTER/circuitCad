@@ -2,7 +2,8 @@
 //! impedance, ripple current, read by `datasheet::lineup`) and the series' tables that hold for every row (ripple current's
 //! frequency coefficients by capacitance, endurance by case size and voltage, lead spacing and diameter by case diameter),
 //! written once in a `*.elcap.json` (`crates/part-lib/elcaps/`). The model is Resr + C, ESR = √(Z² − Xc²) at the
-//! impedance's frequency; holes and pads as `thru_hole::radial`. `ccad lineup` and the part form's lineup picker use it.
+//! impedance's frequency; holes and pads as `thru_hole::radial`, or for a surface-mount series (Panasonic FK) the maker's
+//! board lands by case (`Series::smd`). `ccad lineup` and the part form's lineup picker use it.
 
 use crate::PartDef;
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,8 @@ pub struct Series {
     pub life: Vec<LifeRule>,
     /// Lead spacing and diameter by case diameter.
     pub leads: Vec<LeadRule>,
+    /// A surface-mount series' cases: the maker's board lands and the base plate by case (instead of `leads`).
+    pub smd: Vec<SmdRule>,
     /// How the part number is extended for cut or formed leads and tape (shown in the description).
     pub order_note: String,
     /// How a part number is made from the values, for a table without them (Rubycon: "{V}ZLJ{C}M{O}{D}X{L}" makes
@@ -53,6 +56,8 @@ pub struct Series {
     pub marks: std::collections::BTreeMap<String, String>,
     /// The part numbers bundled with the program.
     pub bundle: Vec<String>,
+    /// What the series' part numbers start with, when it is not the series' name (Panasonic FK: "EEEFK", "EEVFK").
+    pub part_prefixes: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -87,6 +92,21 @@ pub struct LeadRule {
     /// A longer case than this (mm) has `long_lead` leads.
     pub long_over: Option<f64>,
     pub long_lead: Option<f64>,
+}
+
+/// A surface-mount case (Panasonic's "board land size vs. capacitor size"): its diameter (and length range), the maker's
+/// case code, the lands' gap `a`, length `b` (along the line through the two) and width `c`, and the base plate's side (mm).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SmdRule {
+    pub d: f64,
+    pub l_min: Option<f64>,
+    pub l_max: Option<f64>,
+    pub code: String,
+    pub a: f64,
+    pub b: f64,
+    pub c: f64,
+    pub base: f64,
 }
 
 /// One row of the lineup table.
@@ -128,7 +148,7 @@ impl Series {
     pub fn for_part(part: &str) -> Option<Series> {
         let up = part.to_ascii_uppercase();
         let rest = up.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
-        Series::bundled().into_iter().find(|s| !s.series.is_empty() && rest.starts_with(&s.series.to_ascii_uppercase()))
+        Series::bundled().into_iter().find(|s| (!s.series.is_empty() && rest.starts_with(&s.series.to_ascii_uppercase())) || s.part_prefixes.iter().any(|p| up.starts_with(&p.to_ascii_uppercase())))
     }
 
     /// The bundled series of a table: the one its first part number belongs to, else the one whose name is a word of
@@ -157,6 +177,11 @@ impl Series {
     fn life_hours(&self, d: f64, l: f64, v: f64) -> Option<f64> {
         let within = |x: f64, lo: Option<f64>, hi: Option<f64>| lo.is_none_or(|lo| x >= lo - 1e-9) && hi.is_none_or(|hi| x <= hi + 1e-9);
         self.life.iter().find(|r| within(d, r.d_min, r.d_max) && within(l, r.l_min, r.l_max) && within(v, r.v_min, r.v_max)).map(|r| r.hours)
+    }
+
+    fn smd_case(&self, d: f64, l: f64) -> Option<&SmdRule> {
+        let within = |x: f64, lo: Option<f64>, hi: Option<f64>| lo.is_none_or(|lo| x >= lo - 1e-9) && hi.is_none_or(|hi| x <= hi + 1e-9);
+        self.smd.iter().find(|r| (r.d - d).abs() < 1e-6 && within(l, r.l_min, r.l_max))
     }
 
     fn lead(&self, d: f64, l: f64) -> Option<(f64, f64)> {
@@ -230,10 +255,37 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
     if !(r.cap_uf > 0.0 && r.volts > 0.0 && r.d_mm > 0.0 && r.l_mm > 0.0) {
         return Err(err("容量・定格電圧・大きさが読めていません"));
     }
-    let (pitch, lead) = s.lead(r.d_mm, r.l_mm).ok_or_else(|| err(&format!("φ{} mm のリードの間隔と径が、シリーズの表 (leads) にありません", g(r.d_mm))))?;
+    // the mounting: a surface-mount case's lands (the maker's), else the leads' holes; (pads, footprint, body, the
+    // description's words after the feature, which pin is +, the words after the polarity)
+    let (pads, footprint, body, mount, plus, mount_b) = match s.smd_case(r.d_mm, r.l_mm) {
+        Some(c) => {
+            let x = c.a / 2.0 + c.b / 2.0;
+            let pad = |pin: &str, x: f64| json!({"pin": pin, "x": x, "y": 0.0, "shape": "rect", "w": c.b, "h": c.c, "drill": null, "slot": 0.0, "slot_v": false});
+            (
+                vec![pad("1", -x), pad("2", x)],
+                format!("CP_Elec_{}x{}_{}", g(r.d_mm), g(r.l_mm), s.maker),
+                json!({"shape": "rect", "w": c.base, "h": c.base, "x": 0.0, "y": 0.0, "mark": "plus", "mark_pin": "1"}),
+                format!("本体 φ{} × {} mm (台座 {} mm 角、ケース記号 {})", g(r.d_mm), g(r.l_mm), g(c.base), c.code),
+                "1 番ピンが + (本体の上面の黒い印の側が −)".to_string(),
+                format!("ランドはメーカーの推奨 (ランドの間 {} mm・長さ {} mm・幅 {} mm)。", g(c.a), g(c.b), g(c.c)),
+            )
+        }
+        None => {
+            let (pitch, lead) = s.lead(r.d_mm, r.l_mm).ok_or_else(|| err(&format!("φ{} mm のリードの間隔と径が、シリーズの表 (leads) にありません", g(r.d_mm))))?;
+            let drill = up(lead + crate::thru_hole::HOLE_CLEARANCE, 0.1);
+            let pad = up(drill + 2.0 * crate::thru_hole::ANNULAR_RING, 0.1);
+            let hole = |pin: &str, x: f64, shape: &str| json!({"pin": pin, "x": x, "y": 0.0, "shape": shape, "w": pad, "h": pad, "drill": drill, "slot": 0.0, "slot_v": false});
+            (
+                vec![hole("1", -pitch / 2.0, "rect"), hole("2", pitch / 2.0, "circle")],
+                format!("CP_Radial_D{}_P{}_{}", g(r.d_mm), g(pitch), s.maker),
+                json!({"shape": "circle", "w": r.d_mm, "h": 0.0, "x": 0.0, "y": 0.0, "mark": "plus", "mark_pin": "1"}),
+                format!("本体 φ{} × {} mm、リード φ{} mm・間隔 {} mm", g(r.d_mm), g(r.l_mm), g(lead), g(pitch)),
+                "1 番ピン (四角いパッド) が +".to_string(),
+                format!("穴径 {drill:.1} mm・パッド径 {pad:.1} mm はリード径からの目安 (部品作成フォームのリード部品と同じ考え方。メーカーの推奨ランドではない)。"),
+            )
+        }
+    };
     let hours = s.life_hours(r.d_mm, r.l_mm, r.volts).ok_or_else(|| err("寿命の決まり (life) に合う行がありません"))?;
-    let drill = up(lead + crate::thru_hole::HOLE_CLEARANCE, 0.1);
-    let pad = up(drill + 2.0 * crate::thru_hole::ANNULAR_RING, 0.1);
     // the ESR: from the impedance (low impedance series), else from tan δ at 120 Hz (general purpose series, whose
     // tables have no impedance): (ESR, the description's words, the model's note, the first rating rows, what the
     // origin names)
@@ -281,7 +333,7 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
     let ripple_ma = g(r.ripple_a * 1000.0);
     let k120_text = k120.map(|k| format!("、120 Hz では ×{k:.2}")).unwrap_or_default();
     let desc = format!(
-        "{maker} {series} アルミ電解コンデンサ {cap} µF ±{tol} % {v} V ({tmax} ℃・{hours} 時間、{feature})。本体 φ{d} × {l} mm、リード φ{lead} mm・間隔 {pitch} mm。{basis}、許容リップル電流 {ripple_ma} mA rms ({rf}・{rt} ℃{k120_text})。極性があります: 1 番ピン (四角いパッド) が +。逆につなぐと壊れます。穴径 {drill:.1} mm・パッド径 {pad:.1} mm はリード径からの目安 (部品作成フォームのリード部品と同じ考え方。メーカーの推奨ランドではない)。{order}{source} で確かめた ({checked})",
+        "{maker} {series} アルミ電解コンデンサ {cap} µF ±{tol} % {v} V ({tmax} ℃・{hours} 時間、{feature})。{mount}。{basis}、許容リップル電流 {ripple_ma} mA rms ({rf}・{rt} ℃{k120_text})。極性があります: {plus}。逆につなぐと壊れます。{mount_b}{order}{source} で確かめた ({checked})",
         maker = s.maker,
         series = s.series,
         cap = g(r.cap_uf),
@@ -289,10 +341,6 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
         v = g(r.volts),
         hours = g(hours),
         feature = s.feature,
-        d = g(r.d_mm),
-        l = g(r.l_mm),
-        lead = g(lead),
-        pitch = g(pitch),
         rt = g(r.ripple_temp_c),
         order = s.order_note,
         source = s.source,
@@ -313,13 +361,10 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
         "prefix": "C",
         "value": value,
         "pins": [{"number": "1", "name": "1", "side": "left"}, {"number": "2", "name": "2", "side": "right"}],
-        "package": {"type": "explicit", "pads": [
-            {"pin": "1", "x": -pitch / 2.0, "y": 0.0, "shape": "rect", "w": pad, "h": pad, "drill": drill, "slot": 0.0, "slot_v": false},
-            {"pin": "2", "x": pitch / 2.0, "y": 0.0, "shape": "circle", "w": pad, "h": pad, "drill": drill, "slot": 0.0, "slot_v": false}
-        ], "holes": []},
-        "footprint_name": format!("CP_Radial_D{}_P{}_{}", g(r.d_mm), g(pitch), s.maker),
+        "package": {"type": "explicit", "pads": pads, "holes": []},
+        "footprint_name": footprint,
         "height": r.l_mm,
-        "body": {"shape": "circle", "w": r.d_mm, "h": 0.0, "x": 0.0, "y": 0.0, "mark": "plus", "mark_pin": "1"},
+        "body": body,
         "sim": {
             "kind": "subckt",
             "element": "",
@@ -372,7 +417,7 @@ pub fn leakage_mismatches<'a>(s: &Series, rows: &'a [Row]) -> Vec<&'a Row> {
     rows.iter().filter(|r| s.formula_for(r.volts) && r.leak_ua.is_some_and(|l| (l - s.leakage(r.cap_uf, r.volts)).abs() > 0.06 + 0.001 * l)).collect()
 }
 
-const BUNDLED: &[&str] = &[include_str!("../elcaps/UHE.elcap.json"), include_str!("../elcaps/ZLJ.elcap.json"), include_str!("../elcaps/UVR.elcap.json"), include_str!("../elcaps/UPW.elcap.json")];
+const BUNDLED: &[&str] = &[include_str!("../elcaps/UHE.elcap.json"), include_str!("../elcaps/ZLJ.elcap.json"), include_str!("../elcaps/UVR.elcap.json"), include_str!("../elcaps/UPW.elcap.json"), include_str!("../elcaps/FK.elcap.json")];
 
 #[cfg(test)]
 mod tests {
@@ -458,6 +503,25 @@ mod tests {
         assert!(leakage_mismatches(&s, std::slice::from_ref(&r)).is_empty());
         assert_eq!((s.life_hours(8.0, 11.5, 16.0), s.life_hours(12.5, 25.0, 50.0), s.life_hours(18.0, 40.0, 100.0)), (Some(3000.0), Some(7000.0), Some(8000.0)));
         assert!(s.bundle.iter().all(|b| crate::EXAMPLES.iter().any(|e| e.0 == b)), "every bundled UPW part is in EXAMPLES");
+    }
+
+    /// Panasonic FK (surface mount): the maker's lands by case (D: 1.8 apart, 3.2 long, 1.6 wide), the base plate, the life
+    /// by diameter; the bundled parts are `make`'s.
+    #[test]
+    fn the_bundled_fk_parts_are_surface_mount() {
+        let s = Series::named("FK").unwrap();
+        let r = row("EEEFK1C101P", 100.0, 16.0, (6.3, 5.8), (0.36, 0.0), 240.0);
+        let r = Row { impedance: vec![(20.0, 100e3, 0.36)], ..r };
+        let p = make(&s, &r).unwrap();
+        let bundled = crate::EXAMPLES.iter().find(|e| e.0 == r.part).unwrap().1;
+        assert_eq!(to_text(&p), bundled.replace("\r\n", "\n"));
+        let crate::PackageSpec::Explicit { pads, .. } = &p.package else { panic!("{:?}", p.package) };
+        assert!(pads.iter().all(|q| q.drill.is_none()) && (pads[1].x - 2.5).abs() < 1e-9 && (pads[0].w - 3.2).abs() < 1e-9, "{pads:?}");
+        assert_eq!(p.footprint_name.as_deref(), Some("CP_Elec_6.3x5.8_Panasonic"));
+        assert_eq!((s.life_hours(10.0, 10.2, 25.0), s.life_hours(12.5, 13.5, 25.0)), (Some(2000.0), Some(5000.0)));
+        assert_eq!((s.smd_case(6.3, 7.7).map(|c| c.code.as_str()), s.smd_case(8.0, 10.2).map(|c| c.code.as_str())), (Some("D8"), Some("F")));
+        assert!(Series::for_part("EEVFK1E102Q").is_some_and(|x| x.series == "FK"));
+        assert!(s.bundle.iter().all(|b| crate::EXAMPLES.iter().any(|e| e.0 == b)), "every bundled FK part is in EXAMPLES");
     }
 
     #[test]
