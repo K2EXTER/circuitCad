@@ -203,15 +203,25 @@ impl RegulatorInput {
             one("グラウンド電流", &["IB", "IQ", "Iq", "IGND", "Quiescent", "Ground", "Bias"], 1e-3, "mA", &mut self.iq, None, |v| v > 0.0 && v < 0.1);
         }
         // the current limit at one input-output difference a row (two rows: the limit falling with the difference)
+        const PEAK_DIFF: f64 = 10.0;
         let mut limits: Vec<(f64, f64, String)> = vec![];
-        for v in rows(&["ISC", "Isc", "Ipk", "IPK", "ILIM", "ICL", "Current"]) {
+        let mut peak: Option<(f64, String)> = None;
+        for v in rows(&["ISC", "Isc", "Ipk", "IPK", "Imax", "IMAX", "ILIM", "ICL", "Current"]) {
             let Some(a) = v.typ.or(v.min) else { continue };
             // the difference the row is at: the one voltage of its conditions, written as the difference ("VIN − VOUT =
-            // 40 V") or as the input voltage ("Vin = 35 Vdc": less the output voltage)
+            // 40 V") or as the input voltage ("Vin = 35 Vdc": less the output voltage, or all of it for a short circuit,
+            // whose output is at 0 V)
             let volts = with_units(&v.conditions, VOLTS);
             let c: String = datasheet::normalize(&v.conditions).chars().filter(|c| !c.is_whitespace()).collect();
+            let short = v.symbol.to_ascii_lowercase().starts_with("isc") || c.contains("short");
+            // a peak current with no voltage (onsemi's MC7800: "Peak Output Current (TJ = 25°C) Imax 2.2 A"), kept for later
+            if volts.is_empty() && ["ipk", "imax"].contains(&v.symbol.to_ascii_lowercase().as_str()) {
+                peak.get_or_insert((si(&v, a, 1.0), at(&v)));
+                continue;
+            }
             let diff = match volts.as_slice() {
                 [d] if c.contains("vin-vout") || c.contains("vi-vo") => Some(*d),
+                [d] if (c.contains("vin=") || c.contains("vi=")) && short => Some(*d),
                 // (the output voltage from the table, else from the part number: MC7805's table writes "Vdc", a family's name none)
                 [d] if c.contains("vin=") || c.contains("vi=") => self.vout.parse::<f64>().ok().or(want).map(|vo| d - vo).filter(|d| *d > 0.0),
                 // the row's own words with one voltage, the difference's name borrowed from the next row ("≤ 15V · (VIN −
@@ -226,6 +236,17 @@ impl RegulatorInput {
             }
         }
         limits.truncate(2);
+        // The peak current with no voltage: where the limit is highest, at a small difference. onsemi's MC7800 (figure 2, peak
+        // output current against the input-output difference) has its 25 C curve at its top between 8 and 10 V (2.45 A; 2.0 A
+        // at 4 V, 0.7 A at 35 V): taken at 10 V, as the bundled 78xx are, and said as an assumption (M11).
+        let mut peak_at = None;
+        if limits.len() < 2
+            && let Some((a, from)) = peak
+            && !limits.iter().any(|l| (l.0 - PEAK_DIFF).abs() < 1e-9)
+        {
+            limits.push((PEAK_DIFF, a, from));
+            peak_at = Some(PEAK_DIFF);
+        }
         // a short-circuit current with no voltage in its row (TI's LP5907: "TA = 25°C", the input in the table's heading "VIN =
         // VOUT(NOM) + 1V"): the output shorted to 0 V with the input 1 V over the output, said as an assumption
         let mut assumed = None;
@@ -244,6 +265,9 @@ impl RegulatorInput {
             self.ilim = limits.iter().map(|l| format!("{} {}", show(l.0), show(l.1))).collect::<Vec<_>>().join("\n");
             for l in &limits {
                 self.found.push((true, format!("電流制限 {} V で {} A: {}", show(l.0), show(l.1), l.2)));
+            }
+            if let Some(d) = peak_at {
+                self.found.push((false, format!("電流制限: ピーク電流の行に電圧が無いので、入出力の差 {} V の値として入れました (データシートの「出力電流と入出力の差」の図では、差が 8〜10 V のあたりで電流がいちばん大きい)。図があれば見比べてください", show(d))));
             }
             if let Some(d) = assumed {
                 self.found.push((false, format!("電流制限: 短絡電流の行に電圧が無いので、出力を 0 V に短絡し入力は出力 + 1 V (入出力の差 {} V) として入れました。表の上の共通の条件と見比べてください", show(d))));
@@ -683,7 +707,9 @@ mod tests {
         assert_eq!(r.load, "1.3m 995m");
         assert_eq!(r.iq, "3.2m");
         assert_eq!(r.vdo0, "2");
-        assert_eq!(r.ilim, "30 200m", "Vin = 35 V less the 5 V out; the peak current's row has no voltage");
+        assert_eq!(r.ilim, "10 2.2
+35 200m", "the peak current at 10 V; the short circuit's Vin = 35 V is all of the difference (the output at 0 V)");
+        assert!(r.found.iter().any(|(ok, l)| !ok && l.contains("ピーク電流")), "the 10 V is said to be assumed");
         assert_eq!(r.noise, "50u 10 100k", "10 µV per volt of output, over the band of its conditions");
         assert_eq!((r.rr.as_str(), r.rr_f.as_str()), ("83", "120"));
         assert!(r.found.iter().any(|(ok, l)| *ok && l.contains("リップル除去")));
@@ -721,12 +747,14 @@ mod tests {
         let t3 = [v(4, "Load", "IOUT = 1mA to 250mA", None, 0.001, None, Some("%/mA"))];
         r.fill_from_pdf("LP5907", |s| t3.iter().filter(|x| x.symbol == s).cloned().collect());
         assert_eq!(r.load, "0.249% 249m");
-        // onsemi's MC7805 writes its output in "Vdc"; the short-circuit row's "Vin = 35 Vdc" less it is the difference
-        let t4 = [v(2, "VO", "Output Voltage (TJ = 25°C)", Some(4.8), 5.0, Some(5.2), Some("Vdc")), v(2, "ISC", "Vin = 35 Vdc", None, 0.2, None, Some("A"))];
+        // onsemi's MC7805 writes its output in "Vdc"; a current limit's row at "Vin = 15 Vdc" less it is the difference, a short
+        // circuit's at "Vin = 35 Vdc" all of it
+        let t4 = [v(2, "VO", "Output Voltage (TJ = 25°C)", Some(4.8), 5.0, Some(5.2), Some("Vdc")), v(2, "ILIM", "Vin = 15 Vdc", None, 1.5, None, Some("A")), v(2, "ISC", "Vin = 35 Vdc", None, 0.2, None, Some("A"))];
         r.fill_from_pdf("MC7805BTG", |s| t4.iter().filter(|x| x.symbol == s).cloned().collect());
-        assert_eq!((r.vout.as_str(), r.ilim.as_str()), ("5", "30 200m"));
+        assert_eq!((r.vout.as_str(), r.ilim.as_str()), ("5", "10 1.5
+35 200m"));
         // without its output in the table, the part number's voltage (MC7812)
-        let t5 = [v(2, "ISC", "Vin = 35 Vdc", None, 0.2, None, Some("A"))];
+        let t5 = [v(2, "ILIM", "Vin = 35 Vdc", None, 0.2, None, Some("A"))];
         r.vout.clear();
         r.fill_from_pdf("MC7812BTG", |s| t5.iter().filter(|x| x.symbol == s).cloned().collect());
         assert_eq!(r.ilim, "23 200m");
