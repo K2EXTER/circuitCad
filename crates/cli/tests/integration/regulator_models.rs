@@ -137,6 +137,17 @@ fn temp_rows() -> Vec<Row> {
             tol: Some(0.05),
         });
     }
+    for (t, ds, at) in [(125.0, -200.0, "図 18 (B グレードの出力電圧と温度)、125 ℃"), (-40.0, -128.0, "図 18、−40 ℃"), (5.0, 32.0, "図 18、いちばん高い 5 ℃")] {
+        rows.push(Row {
+            part: "ADR4525",
+            item: if t > 25.0 { "出力の変化 (高温)" } else if t < 0.0 { "出力の変化 (低温)" } else { "出力の変化 (山)" },
+            ds: [None, Some(ds), None],
+            unit: "ppm",
+            at,
+            measure: Box::new(move || (vout_at(adr(5.0, 0.0), t) / vout_at(adr(5.0, 0.0), 25.0) - 1.0) * 1e6),
+            tol: Some(5.0),
+        });
+    }
     for (t, ds, at) in [(125.0, -0.8, "図 6-1 (Vref = 2495 mV の線)、125 ℃ (表の VI(dev) は 0〜70 ℃ で 6 mV)"), (-55.0, -0.96, "図 6-1、−55 ℃")] {
         rows.push(Row {
             part: "TL431",

@@ -1180,7 +1180,7 @@
     ]
   },
   "ADR4525": {
-    "fingerprint": "b54a8f354ce405e3",
+    "fingerprint": "2d250030c8d25e78",
     "source": "ADI ADR4520/4525/4530/4533/4540/4550 データシート Rev. 0、表 4 (ADR4525)。VIN = 3〜15 V、IL = 0 mA、25 °C",
     "date": "2026-11-11",
     "rows": [
@@ -1190,7 +1190,7 @@
         "target": "2.500 V",
         "condition": "VOUT。初期誤差 B グレード ±0.02% (500 µV)",
         "model": "2.500 V",
-        "diff": "-0.0000 V",
+        "diff": "+0.0000 V",
         "tested": true
       },
       {
@@ -1198,8 +1198,8 @@
         "datasheet": "— / 1.000 / 10.000 ppm/V",
         "target": "1.000 ppm/V",
         "condition": "ΔVOUT/ΔVIN (3 V と 15 V で比べた)",
-        "model": "1.0000 ppm/V",
-        "diff": "-0.0000 ppm/V",
+        "model": "1.000 ppm/V",
+        "diff": "+0.0000 ppm/V",
         "tested": true
       },
       {
@@ -1254,6 +1254,33 @@
         "condition": "eN、1 kHz",
         "model": "41.301 nV/√Hz",
         "diff": "+0.0010 nV/√Hz",
+        "tested": true
+      },
+      {
+        "item": "出力の変化 (高温)",
+        "datasheet": "— / -200.0 / — ppm",
+        "target": "-200.0 ppm",
+        "condition": "図 18 (B グレードの出力電圧と温度)、125 ℃",
+        "model": "-202.0 ppm",
+        "diff": "-1.999 ppm",
+        "tested": true
+      },
+      {
+        "item": "出力の変化 (低温)",
+        "datasheet": "— / -128.0 / — ppm",
+        "target": "-128.0 ppm",
+        "condition": "図 18、−40 ℃",
+        "model": "-130.0 ppm",
+        "diff": "-2.000 ppm",
+        "tested": true
+      },
+      {
+        "item": "出力の変化 (山)",
+        "datasheet": "— / 32.000 / — ppm",
+        "target": "32.000 ppm",
+        "condition": "図 18、いちばん高い 5 ℃",
+        "model": "30.000 ppm",
+        "diff": "-2.000 ppm",
         "tested": true
       }
     ]
