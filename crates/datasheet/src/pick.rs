@@ -202,6 +202,21 @@ fn goes_its_way(path: &[(f32, f32)], curve: Curve, axes: &ReadAxes) -> bool {
 
 /// The curve of the graph whose axes are `axes` that the form's field wants (`curve`, and the names its label may
 /// have: `["cob"]`). `img` is the page drawn at `px_per_pt`.
+/// The page's words for picking a curve on the graph with `axes`; when no written word in or around the plot names a curve (a
+/// graph that is a picture: TI's LM317, "CADJ = 0" and "CADJ = 10µF" on its scanned ripple rejection), with the words the plot
+/// draws, read by the OCR (候補 Q15).
+pub fn words_with_drawn_labels(ds: &crate::Datasheet, page: usize, axes: &ReadAxes) -> Vec<Word> {
+    let words = ds.words(page);
+    let Some(b) = plot(axes) else { return words.to_vec() };
+    let around = Rect { x0: b.x0 - 5.0, y0: b.y0 - 5.0, x1: b.x1 + 5.0, y1: b.y1 + 5.0 };
+    if lines_in(words, around).iter().any(|(t, _)| names_a_curve(t) || label_condition(t).is_some()) {
+        return words.to_vec();
+    }
+    let mut all = words.to_vec();
+    all.extend(ds.drawn_words_at(page, around, 4.0));
+    all
+}
+
 pub fn pick(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &ReadAxes, curve: Curve, names: &[&str]) -> Pick {
     pick_with(img, px_per_pt, words, axes, curve, names, &[])
 }
@@ -243,12 +258,14 @@ pub fn pick_with(img: &crate::PageImage, px_per_pt: f32, words: &[Word], axes: &
     // a quantity the curves differ in: labelled with two values or more in the plot ("IL = 500mA" … "IL = 1mA"); a box of
     // the graph's conditions has each quantity once ("VIN = 5V" over "IL = 500mA" over "COUT = 10µF") and names no curve
     let in_plot: Vec<(String, f64)> = lines_in(words, around).iter().filter_map(|(t, _)| label_condition(t)).collect();
-    let varies = |q: &str| {
-        let mut v: Vec<f64> = in_plot.iter().filter(|c| c.0 == q).map(|c| c.1).collect();
+    // (or one the table itself gives two values of, for its rows: TI's LM317 rows of "CADJ = 0" and "CADJ = 10µF", where the OCR reads
+    // only the graph's "CADJ = 0" label, 候補 Q15)
+    let distinct = |mut v: Vec<f64>| {
         v.sort_by(f64::total_cmp);
         v.dedup_by(|a, b| (*a - *b).abs() <= 0.01 * b.abs());
-        v.len() >= 2
+        v.len()
     };
+    let varies = |q: &str| distinct(in_plot.iter().filter(|c| c.0 == q).map(|c| c.1).collect()) >= 2 || distinct(want.iter().filter(|c| c.0 == q).map(|c| c.1).collect()) >= 2;
     // the labels of a quantity the table names: the one of the table's value is wanted, the others name other curves
     let conditioned = |t: &str| label_condition(t).filter(|(q, _)| varies(q) && want.iter().any(|w| w.0 == *q));
     let wanted = |t: &str| match conditioned(t) {
@@ -549,6 +566,19 @@ mod tests {
         assert_eq!(wanted(Curve::Capacitance, &["cob"], "Cobalt"), None);
         assert_eq!(wanted(Curve::Capacitance, &["cib"], "Cob"), None);
         assert_eq!(wanted(Curve::ThermalImpedance, &[], "SINGLE PULSE"), Some(0));
+    }
+
+    /// TI's LM317 ripple graph: the OCR reads its "CADJ = 0" label but not "CADJ = 10µF"; the table's rows give both values, so the
+    /// one label names its curve, not the "25°C" of the whole graph (候補 Q15).
+    #[test]
+    fn one_label_names_its_curve_when_the_table_varies_it() {
+        let img = page(&[(40.0, -0.2), (70.0, -0.2)]);
+        let mut log_axes = axes();
+        log_axes.x = ReadAxis { ticks: vec![(20.0, "10".to_string()), (100.0, "1k".to_string()), (180.0, "100k".to_string())], log: true, prefix: 1.0 };
+        let words = vec![label("CADJ=0", 30.0, 66.0), label("TJ = 25°C", 30.0, 36.0)];
+        let want = [("CADJ".to_string(), 10e-6), ("CADJ".to_string(), 0.0)];
+        let p = pick_with(&img, 2.0, &words, &log_axes, Curve::Ripple, &[], &want);
+        assert!(matches!(&p, Pick::One { by, .. } if by == "CADJ=0"), "{p:?}");
     }
 }
 

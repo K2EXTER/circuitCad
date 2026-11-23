@@ -250,6 +250,7 @@ impl PartForm {
                     datasheet::lead_pins::LeadPinsFrom::Text => "文",
                     datasheet::lead_pins::LeadPinsFrom::TopView => "上から見た図の文字",
                     datasheet::lead_pins::LeadPinsFrom::Stacked => "図の番号と名前",
+                    datasheet::lead_pins::LeadPinsFrom::Drawn => "図の文字 (OCR で読んだ)",
                     _ => "図の文字の並び",
                 };
                 pin_sources.push(FoundPins { page: p.page, area: p.area, num_col: 0, name_col: 0, pins: p.pins, io: vec![], from_drawing: true, package: Some(how.into()) });

@@ -20,6 +20,8 @@ pub enum LeadPinsFrom {
     Row,
     /// The numbers written over the lead names of a drawing (BSS138's marking diagram).
     Stacked,
+    /// The same, with the drawing's letters read by the OCR (they are lines or a picture, not text: IRF540N's "Pin 1").
+    Drawn,
     /// The letters around a SOT-23 drawn from the top (at a slant, AO3400A): the lone lead is 3, the other two 1 and 2 going
     /// counter-clockwise (Q13).
     TopView,
@@ -181,7 +183,11 @@ pub fn from_row(page: usize, words: &[Word], area: Rect) -> Option<LeadPins> {
 /// lead's letter with a digit beside it on its line (within 20 points: the IRLML6344's "G 1", "3 D"). Each of the leads once.
 pub fn from_stacked(page: usize, words: &[Word]) -> Option<LeadPins> {
     let centre = |r: &Rect| ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0);
-    let digit = |w: &Word| if w.text.trim().chars().count() == 1 { pin_number(&w.text).filter(|n| (1..=9).contains(n)) } else { None };
+    // a digit, with a full stop or comma after it as the OCR reads "Pin 2, Tab"
+    let digit = |w: &Word| {
+        let t = w.text.trim().trim_end_matches(['.', ',', ':']);
+        if t.chars().count() == 1 { pin_number(t).filter(|n| (1..=9).contains(n)) } else { None }
+    };
     // the numbers: a lone digit, or "Pin" and the digit after it on its line
     let mut numbers: Vec<(u32, Rect, usize)> = words.iter().enumerate().filter_map(|(k, w)| digit(w).map(|n| (n, w.rect, k))).collect();
     for (k, w) in words.iter().enumerate() {
@@ -337,6 +343,31 @@ impl Datasheet {
                 }
             }
         }
+        // the labels drawn rather than written (IRF540N: "Gate" over "Pin 1" in the symbol's outlines; IRLB8721: the "LEAD
+        // ASSIGNMENTS" of its TO-220AB outline, a picture): the first two pages and the last four (where the outlines are), read by
+        // the OCR, with the readers above (Q13). Only when nothing was written: a page takes the OCR about a second
+        let n = self.page_count();
+        let mut pages: Vec<usize> = (0..n.min(2)).chain(n.saturating_sub(4)..n).collect();
+        pages.dedup();
+        for page in pages {
+            let Some((w, h)) = self.page_size(page) else { continue };
+            // the whole page first (small: about 3 pixels a point), to find where lead names or "Pin" are drawn; then that part
+            // again at 4 pixels a point, where the 6-point digits are read
+            let first = self.drawn_words_in(page, Rect { x0: 0.0, y0: 0.0, x1: w, y1: h });
+            let names: Vec<&Word> = first.iter().filter(|x| role(&x.text, false).is_some() || normalize(&x.text).eq_ignore_ascii_case("pin")).collect();
+            if names.is_empty() {
+                continue;
+            }
+            let near = span(&names);
+            let drawn = self.drawn_words_at(page, Rect { x0: near.x0 - 40.0, y0: near.y0 - 30.0, x1: near.x1 + 40.0, y1: near.y1 + 30.0 }, 4.0);
+            let mut all = self.words(page).to_vec();
+            all.extend(drawn.iter().cloned());
+            let listed = || all_from_text(page, &drawn).into_iter().next();
+            if let Some(mut p) = from_stacked(page, &all).or_else(listed).or_else(|| family.is_some_and(one_and_two).then(|| from_top_view(page, &all)).flatten()) {
+                p.from = LeadPinsFrom::Drawn;
+                return Some(p);
+            }
+        }
         if !family.is_some_and(front_view) {
             return None;
         }
@@ -444,7 +475,7 @@ mod tests {
             assert_eq!((p.from, crate::pin_lines(&p.pins)), (LeadPinsFrom::Row, "1 G\n2 D\n3 S".to_string()));
         }
         // Q13: the letters around a SOT-23 seen from the top (AO3400A, AO3401A), the numbers by the names (BSS138's marking diagram,
-        // the IRLML6344's "G 1", MMBT3904's, the BC556B's TO-92), and the list by the package's name (2N7000 / 2N7002)
+        // the IRLML6344's "G 1", MMBT3904's, the BC556B's TO-92), and the list by the package's name (2N7000 / 2N7002), the drawn words (IRF540N, IRFZ44N)
         for (f, family, from, want) in [
             ("AO3400A_ds.pdf", "sot-23", LeadPinsFrom::TopView, "1 G
 2 S
@@ -470,6 +501,13 @@ mod tests {
             ("nds7002a.pdf", "to-92", LeadPinsFrom::Text, "1 S
 2 G
 3 D"),
+            // the outline's "Gate" over "Pin 1" drawn as lines, read by the OCR
+            ("irf540n.pdf", "to-220", LeadPinsFrom::Drawn, "1 G
+2 D
+3 S"),
+            ("irfz44n.pdf", "to-220", LeadPinsFrom::Drawn, "1 G
+2 D
+3 S"),
         ] {
             if let Some(ds) = open(f) {
                 let p = ds.lead_pins(Some(family)).unwrap_or_else(|| panic!("{f}"));

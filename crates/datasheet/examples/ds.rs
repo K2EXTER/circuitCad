@@ -177,7 +177,8 @@ fn main() -> Result<(), String> {
                 let names: Vec<(&str, &[&str])> = if f.curves.contains(&datasheet::figures::Curve::Capacitance) { vec![("Cob", &["cob", "cobo"]), ("Cib", &["cib", "cibo"]), ("", &[])] } else { vec![("", &[])] };
                 for (&c, (tag, names)) in f.curves.iter().flat_map(|c| names.iter().map(move |n| (c, n))) {
                     let want = ds.curve_conditions(c);
-                    let picked = datasheet::pick::pick_with(&img, k, ds.words(f.page), &a, c, names, &want);
+                    let words = datasheet::pick::words_with_drawn_labels(&ds, f.page, &a);
+                    let picked = datasheet::pick::pick_with(&img, k, &words, &a, c, names, &want);
                     // `save=DIR`: the page with the curve taken drawn in red, one picture a curve
                     if let (Some(dir), datasheet::pick::Pick::One { path, .. }) = (arg(&args, "save"), &picked) {
                         let mut pic = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.rgba.clone()).ok_or("picture")?;

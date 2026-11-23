@@ -366,14 +366,43 @@ impl Datasheet {
     /// The pins of the first pin drawing under a "Pin Configuration" heading (`pin_diagram`): for data sheets with no pin table, or to
     /// check one.
     pub fn find_pin_drawing(&self) -> Option<FoundPins> {
-        let queries = Heading::PinConfig.queries();
-        for page in 0..self.page_count() {
-            let Some((w, h)) = self.page_size(page) else { continue };
-            for hit in self.search_page_any(page, &queries).into_iter().filter(|h| !h.in_contents) {
-                let area = Rect { x0: 0.0, y0: hit.rect.y1, x1: w, y1: h * FOOT };
-                if let Some(pins) = crate::pin_diagram::pins_in_drawings(self.words(page), area).into_iter().find(|p| plausible_pins(p)) {
-                    return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, io: vec![], from_drawing: true, package: None });
+        // the usual names first, then the rare ones (`Heading::PIN_CONFIG_LATER`)
+        let (later, usual): (Vec<&str>, Vec<&str>) = Heading::PinConfig.terms().iter().partition(|t| Heading::PIN_CONFIG_LATER.contains(t));
+        for terms in [usual, later] {
+            let queries: Vec<_> = terms.iter().filter_map(|t| crate::text::Query::new(t)).collect();
+            for page in 0..self.page_count() {
+                let Some((w, h)) = self.page_size(page) else { continue };
+                for hit in self.search_page_any(page, &queries).into_iter().filter(|h| !h.in_contents) {
+                    let area = Rect { x0: 0.0, y0: hit.rect.y1, x1: w, y1: h * FOOT };
+                    if let Some(pins) = crate::pin_diagram::pins_in_drawings(self.words(page), area).into_iter().find(|p| plausible_pins(p)) {
+                        return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, io: vec![], from_drawing: true, package: None });
+                    }
                 }
+            }
+        }
+        self.find_pin_drawing_by_ocr()
+    }
+
+    /// A pin drawing that is a picture (Microchip's MCP6001 draws its packages on page 1 as images): the first three pages read by
+    /// the OCR, then the part with pin-like names (VDD, VOUT, IN+ …) again at 4 pixels a point for the small numbers, with the text
+    /// (候補 Q14). Only when nothing was written: a page takes the OCR about a second.
+    fn find_pin_drawing_by_ocr(&self) -> Option<FoundPins> {
+        let pin_like = |t: &str| {
+            let u = crate::text::normalize(t).to_ascii_uppercase();
+            ["VDD", "VSS", "VCC", "GND", "VOUT", "VIN", "OUT", "IN+", "IN-", "NC", "EN", "FB", "SW"].iter().any(|p| u.starts_with(p))
+        };
+        for page in 0..self.page_count().min(3) {
+            let Some((w, h)) = self.page_size(page) else { continue };
+            let first = self.drawn_words_in(page, Rect { x0: 0.0, y0: 0.0, x1: w, y1: h });
+            let names: Vec<&Word> = first.iter().filter(|x| pin_like(&x.text)).collect();
+            if names.len() < 2 {
+                continue;
+            }
+            let near = names.iter().fold(Rect { x0: f32::MAX, y0: f32::MAX, x1: f32::MIN, y1: f32::MIN }, |a, w| Rect { x0: a.x0.min(w.rect.x0), y0: a.y0.min(w.rect.y0), x1: a.x1.max(w.rect.x1), y1: a.y1.max(w.rect.y1) });
+            let area = Rect { x0: near.x0 - 60.0, y0: near.y0 - 40.0, x1: near.x1 + 60.0, y1: near.y1 + 40.0 };
+            let words = self.words_with_drawn_at(page, area);
+            if let Some(pins) = crate::pin_diagram::pins_in_drawings(&words, area).into_iter().find(|p| plausible_pins(p)) {
+                return Some(FoundPins { page, area, num_col: 0, name_col: 0, pins, io: vec![], from_drawing: true, package: Some("図の文字 (OCR で読んだ)".into()) });
             }
         }
         None

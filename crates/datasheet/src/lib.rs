@@ -198,6 +198,74 @@ impl Datasheet {
         out
     }
 
+    /// The words a page draws as a picture or as lines inside `area` (not as text: a scanned pin drawing, a graph's labels, the
+    /// "Pin 1" of a symbol drawn in outlines), read by the OCR (Windows; none elsewhere) at up to 4 pixels per point, in page
+    /// points. Words where the page has the same text already are left out (候補 Q13〜Q15).
+    pub fn drawn_words_in(&self, page: usize, area: Rect) -> Vec<Word> {
+        self.drawn_words_at(page, area, 4.0)
+    }
+
+    /// `drawn_words_in` at up to `px_per_pt` (small labels read better larger: 8 for 6-point ones).
+    pub fn drawn_words_at(&self, page: usize, area: Rect, px_per_pt: f32) -> Vec<Word> {
+        let Some((pw, ph)) = self.page_size(page) else { return vec![] };
+        if ocr::max_side().is_none() {
+            return vec![];
+        }
+        let area = Rect { x0: area.x0.max(0.0), y0: area.y0.max(0.0), x1: area.x1.min(pw), y1: area.y1.min(ph) };
+        if area.x1 - area.x0 < 4.0 || area.y1 - area.y0 < 4.0 {
+            return vec![];
+        }
+        let k = (2500.0 / (area.x1 - area.x0).max(area.y1 - area.y0)).min(px_per_pt);
+        let Ok(img) = self.render(page, k) else { return vec![] };
+        let k = img.width as f32 / pw;
+        let (cx0, cy0) = ((area.x0 * k) as usize, (area.y0 * k) as usize);
+        let (cw, ch) = ((((area.x1 - area.x0) * k) as usize).min(img.width - cx0), (((area.y1 - area.y0) * k) as usize).min(img.height - cy0));
+        let mut rgba = Vec::with_capacity(cw * ch * 4);
+        for y in cy0..cy0 + ch {
+            rgba.extend_from_slice(&img.rgba[(y * img.width + cx0) * 4..(y * img.width + cx0 + cw) * 4]);
+        }
+        let crop = PageImage { width: cw, height: ch, rgba };
+        let text = self.words(page);
+        let centre = |r: &Rect| ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0);
+        let inside = |p: (f32, f32), r: &Rect| p.0 >= r.x0 - 1.0 && p.0 <= r.x1 + 1.0 && p.1 >= r.y0 - 1.0 && p.1 <= r.y1 + 1.0;
+        ocr::joined(ocr::read(&crop).unwrap_or_default())
+            .into_iter()
+            .map(|w| {
+                // a value after "=" read as the letter O ("CADJ=O" for "CADJ = 0" on the LM317's ripple graph)
+                let mut t = ocr::fix_word(&w.text);
+                if t.ends_with("=O") || t.ends_with("=o") {
+                    t.pop();
+                    t.push('0');
+                }
+                Word::plain(&t, Rect { x0: area.x0 + w.x0 / k, y0: area.y0 + w.y0 / k, x1: area.x0 + w.x1 / k, y1: area.y0 + w.y1 / k })
+            })
+            // the page's own text read again: keep the text's
+            .filter(|w| !text.iter().any(|t| inside(centre(&w.rect), &t.rect) || inside(centre(&t.rect), &w.rect)))
+            .collect()
+    }
+
+    /// The page's words and, after them, the ones it draws inside `area` (`drawn_words_in`).
+    pub fn words_with_drawn(&self, page: usize, area: Rect) -> Vec<Word> {
+        let mut all = self.words(page).to_vec();
+        all.extend(self.drawn_words_in(page, area));
+        all
+    }
+
+    /// The same at 4 pixels a point whatever the area's size, in pieces of at most 600 points (small numbers by a drawing).
+    pub fn words_with_drawn_at(&self, page: usize, area: Rect) -> Vec<Word> {
+        let mut all = self.words(page).to_vec();
+        let (mut y, step) = (area.y0, 600.0f32);
+        while y < area.y1 {
+            let mut x = area.x0;
+            while x < area.x1 {
+                all.extend(self.drawn_words_at(page, Rect { x0: x, y0: y, x1: (x + step).min(area.x1), y1: (y + step).min(area.y1) }, 4.0));
+                x += step;
+            }
+            y += step;
+        }
+        all
+    }
+
     /// Where `query` is on a page.
     pub fn search_page(&self, page: usize, query: &Query) -> Vec<Hit> {
         text::search(page, self.words(page), query)

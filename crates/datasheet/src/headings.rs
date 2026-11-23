@@ -40,7 +40,7 @@ impl Heading {
     /// How data sheets write it, in English and in Japanese.
     pub fn terms(self) -> &'static [&'static str] {
         match self {
-            Heading::PinConfig => &["pin configuration", "pin assignment", "pin function", "pin description", "pinout", "ピン配置", "端子配列", "ピン構成", "端子構成", "ピン機能", "端子機能", "ピン説明", "端子説明"],
+            Heading::PinConfig => &["pin configuration", "pin assignment", "pin function", "pin description", "pinout", "pin diagram", "connection diagram", "package types", "terminal assignment", "terminal diagram", "ピン配置", "端子配列", "ピン構成", "端子構成", "ピン機能", "端子機能", "ピン説明", "端子説明"],
             Heading::LandPattern => &["land pattern", "recommended footprint", "recommended pad", "recommended solder", "soldering footprint", "ランドパターン", "ランド パターン", "ランド・パターン", "推奨パッド", "推奨ランド", "実装パターン", "パッド寸法", "推奨はんだ"],
             Heading::Package => &["package outline", "package dimensions", "mechanical data", "outline dimensions", "外形寸法", "外形図", "パッケージ寸法", "パッケージ外形", "パッケージ情報", "メカニカル", "機械的データ"],
             Heading::AbsMax => &["absolute maximum ratings", "absolute maximum rating", "maximum ratings", "絶対最大定格", "絶対最大"],
@@ -49,6 +49,12 @@ impl Heading {
     }
 
     /// The searches that find it (any of them).
+    /// Names a pin drawing has in a few data sheets only (Microchip's "Package Types", TI's CD4000 "Terminal Assignment", Analog
+    /// Devices' "Pin Connection Diagram"): looked for after the usual ones, since Analog Devices' front page draws the dual part
+    /// under its "Pin Connection Diagram", which the drawing reader reads wrong ("OUT A" as "A"), and the single's comes later
+    /// (候補 Q14).
+    pub const PIN_CONFIG_LATER: &'static [&'static str] = &["pin diagram", "connection diagram", "package types", "terminal assignment", "terminal diagram"];
+
     pub fn queries(self) -> Vec<Query> {
         self.terms().iter().filter_map(|t| Query::new(t)).collect()
     }
