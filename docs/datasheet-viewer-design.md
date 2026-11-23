@@ -475,3 +475,11 @@
 - `text.rs` の `flat`: 描く線・塗る形のどちらも、ベジェ曲線を 0.05 pt の細かさの折れ線にしてから持つ (`kurbo::flatten`)。
 - `graph::vector_curves`: 枠の外の点で線を切り、枠の中の続き (2 点以上) を残す。テストは `a_curve_running_past_the_frame_keeps_its_part_inside` と、実物の `real_pdf_beziers`。
 - 実物: IRLML6344・IRLML6401・IRLB8721 の図 3 (伝達特性)・図 7 (ボディダイオード)、IRLML6401 の図 1 (出力特性。目盛りの数字が縦と横で同じなので `xt=`・`yt=` で位置を渡した)。
+
+## 段階51: 番号の無い 3 本足のピンを図から (2026-11-23、候補 Q13・Q14) — `datasheet/lead_pins.rs`
+- **上から見た SOT-23 の文字** (`from_top_view`、`LeadPinsFrom::TopView`): 「Top View」(か「Bottom View」) の語の近く (150 pt 以内) の G・D・S (か B・C・E) を、種類ごとにいちばん近いものだけ取る (隣に描いた別の向きの図の文字は、その図の語のほうが近いので取らない)。いちばん近い 2 つが同じ辺 (ピン 1・2)、残りがピン 3。上から見るとピンは反時計回りに 1・2・3 なので、ページの y を上向きに直した外積の向きで 1 と 2 を決める (下から見た図は逆回り)。図が斜めでも、回っていても同じ。SOT-23 の仲間 (`one_and_two`: sot-23・sot-323・sc-70・sot-416・sc-59) で、文の次に試す。AO3400A・AO3401A が 1 G、2 S、3 D。
+- **名前のそばの番号** (`from_stacked`、`LeadPinsFrom::Stacked`): 名前の真上か真下 (中心が 12 pt 以内、16 pt 以内の次の行) の 1 けたの数か「Pin N」(onsemi の BSS138・MMBT3904 の捺印の図「3」の下に「Drain」、Infineon の IRF540N の「Gate」の下の「Pin 1」)、または 1 文字の G・D・S の同じ行の 20 pt 以内の数 (IRLML6344 の「G [1]」「[3] D」)。3 本とも 1 回ずつのときだけ。最初の 4 ページで、上から見た図の前に試す。
+- **1 ページに複数のリスト** (`all_from_text`): onsemi の 2N7000 / 2N7002 / NDS7002A は TO-92 の「1 − Source 2 − Gate 3 − Drain」と SOT-23 の「1 − Gate 2 − Source 3 − Drain」が 1 ページにある。今までは最初の (TO-92 の) を SOT-23 の部品にも使っていた。全部を集め、パッケージが分かっているときは、そのパッケージの名前の語にいちばん近いリストを取る。
+- **TO-126** (Q14): パッケージの名前の表 (`draft::FAMILIES`)、正面から見た図 (`front_view`)、よくある並び (バイポーラ 1 E、2 C、3 B: BD135〜BD140)。
+- 手元の PDF (`microohm-meter/`、`ds fet FILE FAMILY`): AO3400A・AO3401A (上から見た図)、BSS138・IRLML6344・IRLML6401・MMBT3904・MMBT3906・BC556B (名前のそばの番号)、NDS7002A の SOT-23 と TO-92、IRF9540N・IRLZ44N (文)、NDT3055L (正面の図) が正しい。読めないもの: IRF540N・IRFZ44N・IRLB8721 (「Pin 1」が文字でなく図の一部。OCR が要る)。試験 `lead_pins.rs` の `a_slanted_top_view_numbers_its_leads`・`numbers_by_the_names`・`every_list_of_a_page`、無視される `real_mosfets`、アプリの `a_draft_from_real_data_sheets` (AO3400A は「上から見た図の文字」で 1 G 2 S 3 D、チェックつき)。
+

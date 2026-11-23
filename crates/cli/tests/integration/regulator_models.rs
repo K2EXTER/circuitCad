@@ -73,6 +73,7 @@ fn rows() -> Vec<Row> {
     v.extend(linear_rows());
     v.extend(tl431_rows());
     v.extend(temp_rows());
+    v.extend(ripple_rows());
     // each part's rows together (the report makes a table per run of one part, and `checks::write` keeps one per part)
     let order: Vec<&str> = v.iter().map(|r| r.part).fold(vec![], |mut o, p| {
         if !o.contains(&p) {
@@ -82,6 +83,35 @@ fn rows() -> Vec<Row> {
     });
     v.sort_by_key(|r| order.iter().position(|p| *p == r.part));
     v
+}
+
+/// The ripple rejection at higher frequencies (Q16): the models' shelf against the points read off the data sheets' graphs (a
+/// single pole: within 6 dB).
+fn ripple_rows() -> Vec<Row> {
+    let mut rows: Vec<Row> = vec![];
+    for (f, ds) in [(1e3, 59.0), (10e3, 51.0), (100e3, 23.0)] {
+        rows.push(Row {
+            part: "LM317",
+            item: "リップル除去 (高い周波数)",
+            ds: [None, Some(ds), None],
+            unit: "dB",
+            at: if f < 5e3 { "図 6-14 (新しいチップ、CADJ = 0、VOUT = 10 V)、1 kHz" } else if f < 50e3 { "図 6-14、10 kHz" } else { "図 6-14、100 kHz" },
+            measure: Box::new(move || ripple_db(lm317_set(15.0, 0.0, 1680.0, 10.0), 15.0, f)),
+            tol: Some(6.0),
+        });
+    }
+    for (f, ds) in [(1e3, 27.0), (10e3, 12.5), (30e3, 5.0)] {
+        rows.push(Row {
+            part: "MCP1700-3302",
+            item: "リップル除去 (高い周波数)",
+            ds: [None, Some(ds), None],
+            unit: "dB",
+            at: if f < 5e3 { "図 2-14 (VR = 1.2 V)、1 kHz" } else if f < 20e3 { "図 2-14、10 kHz" } else { "図 2-14、30 kHz" },
+            measure: Box::new(move || ripple_db(fixed("MCP1700-3302", ("VIN", "GND", "VOUT"), 3.3, 4.3, 0.05), 4.3, f)),
+            tol: Some(6.0),
+        });
+    }
+    rows
 }
 
 /// V(out) with every part at `t` °C.

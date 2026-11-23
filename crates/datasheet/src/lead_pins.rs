@@ -18,6 +18,11 @@ pub enum LeadPinsFrom {
     Text,
     /// The letters of a pinout drawing of a package seen from the front, left to right.
     Row,
+    /// The numbers written over the lead names of a drawing (BSS138's marking diagram).
+    Stacked,
+    /// The letters around a SOT-23 drawn from the top (at a slant, AO3400A): the lone lead is 3, the other two 1 and 2 going
+    /// counter-clockwise (Q13).
+    TopView,
     /// The usual order of the package, not read from this data sheet.
     Usual,
 }
@@ -102,11 +107,18 @@ pub fn from_line(words: &[&str]) -> Vec<(u32, &'static str)> {
 
 /// The pins numbered by the text of a page: from one line, or from the lines of a list ("1. Gate" / "2. Drain" / "3. Source").
 pub fn from_text(page: usize, words: &[Word]) -> Option<LeadPins> {
+    all_from_text(page, words).into_iter().next()
+}
+
+/// Every list of the page that numbers the leads, in order down the page: a sheet of several packages has one each (onsemi's
+/// 2N7000 / 2N7002: "1 − Source 2 − Gate 3 − Drain" by its TO-92, "1 − Gate 2 − Source 3 − Drain" by its SOT-23; Q13).
+pub fn all_from_text(page: usize, words: &[Word]) -> Vec<LeadPins> {
     // a case outline's list of styles (onsemi: "STYLE 2: PIN 1. GATE 2. SOURCE …" for each style) names the leads of many
     // parts; which style is this part's is `Datasheet::find_pin_list`'s to say
     if words.iter().filter(|w| normalize(&w.text).starts_with("style")).count() >= 2 {
-        return None;
+        return vec![];
     }
+    let mut out = vec![];
     let mut found: Vec<(u32, &'static str)> = vec![];
     let mut area: Option<Rect> = None;
     for line in lines(words) {
@@ -116,22 +128,29 @@ pub fn from_text(page: usize, words: &[Word]) -> Option<LeadPins> {
             continue;
         }
         if complete(&got) {
-            return Some(LeadPins { pins: sorted(got), page, area: span(&line), from: LeadPinsFrom::Text });
+            out.push(LeadPins { pins: sorted(got), page, area: span(&line), from: LeadPinsFrom::Text });
+            found.clear();
+            area = None;
+            continue;
         }
         // a list over lines: the next numbers, none twice
         if got.iter().all(|g| !found.iter().any(|f| f.0 == g.0)) {
             found.extend(got);
             let r = span(&line);
             area = Some(area.map_or(r, |a| Rect { x0: a.x0.min(r.x0), y0: a.y0.min(r.y0), x1: a.x1.max(r.x1), y1: a.y1.max(r.y1) }));
-            if complete(&found) {
-                return Some(LeadPins { pins: sorted(found), page, area: area?, from: LeadPinsFrom::Text });
+            if complete(&found)
+                && let Some(a) = area
+            {
+                out.push(LeadPins { pins: sorted(std::mem::take(&mut found)), page, area: a, from: LeadPinsFrom::Text });
+                area = None;
             }
         } else {
-            found.clear();
-            area = None;
+            // this line may start the next list
+            found = got;
+            area = Some(span(&line));
         }
     }
-    None
+    out
 }
 
 fn span(line: &[&Word]) -> Rect {
@@ -157,9 +176,116 @@ pub fn from_row(page: usize, words: &[Word], area: Rect) -> Option<LeadPins> {
     None
 }
 
+/// The numbers written by the lead names of a drawing (Q13): over or under the name, a digit or "Pin N" in its column (centres within
+/// 12 points, the next line: onsemi's BSS138 marking diagram "3" over "Drain", Infineon's IRF540N "Gate" over "Pin 1"), or a
+/// lead's letter with a digit beside it on its line (within 20 points: the IRLML6344's "G 1", "3 D"). Each of the leads once.
+pub fn from_stacked(page: usize, words: &[Word]) -> Option<LeadPins> {
+    let centre = |r: &Rect| ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0);
+    let digit = |w: &Word| if w.text.trim().chars().count() == 1 { pin_number(&w.text).filter(|n| (1..=9).contains(n)) } else { None };
+    // the numbers: a lone digit, or "Pin" and the digit after it on its line
+    let mut numbers: Vec<(u32, Rect, usize)> = words.iter().enumerate().filter_map(|(k, w)| digit(w).map(|n| (n, w.rect, k))).collect();
+    for (k, w) in words.iter().enumerate() {
+        if normalize(&w.text).eq_ignore_ascii_case("pin")
+            && let Some((n, d)) = words.iter().filter_map(|d| digit(d).map(|n| (n, d))).find(|(_, d)| (centre(&d.rect).1 - centre(&w.rect).1).abs() < 4.0 && d.rect.x0 > w.rect.x1 - 1.0 && d.rect.x0 - w.rect.x1 < 8.0)
+        {
+            numbers.push((n, span(&[w, d]), k));
+        }
+    }
+    let mut pins: Vec<(u32, &'static str)> = vec![];
+    let mut ws: Vec<&Word> = vec![];
+    for name in words {
+        let letter = name.text.trim().chars().count() == 1;
+        let Some(r) = role(&name.text, letter) else { continue };
+        let (nc, nr) = (centre(&name.rect), &name.rect);
+        let found = numbers.iter().find(|(_, d, _)| {
+            let dc = centre(d);
+            if letter {
+                // beside it on its line
+                (dc.1 - nc.1).abs() < 4.0 && (d.x0 - nr.x1).max(nr.x0 - d.x1) < 20.0
+            } else {
+                // over or under it, in its column
+                (dc.0 - nc.0).abs() < 12.0 && ((nr.y0 - d.y1 >= -2.0 && nr.y0 - d.y1 < 16.0) || (d.y0 - nr.y1 >= -2.0 && d.y0 - nr.y1 < 16.0))
+            }
+        });
+        if let Some(&(n, _, k)) = found {
+            pins.push((n, r));
+            ws.push(name);
+            ws.push(&words[k]);
+        }
+    }
+    pins.sort();
+    pins.dedup();
+    (complete(&pins) && pins.len() == 3).then(|| LeadPins { pins: sorted(pins), page, area: span(&ws), from: LeadPinsFrom::Stacked })
+}
+
+/// Three-lead packages with one lead on one side and two on the other (SOT-23 and its smaller kin).
+pub fn one_and_two(family: &str) -> bool {
+    matches!(family, "sot-23" | "sot-323" | "sc-70" | "sot-416" | "sc-59")
+}
+
+/// The pins of a SOT-23 from the letters around its drawing seen from the top ("Top View"; a "Bottom View" counts the other
+/// way), wherever the drawing is turned (AO3400A draws it at a slant): the two letters closest together are on one side (pins 1
+/// and 2), the third is pin 3, and seen from the top the pins go 1, 2, 3 counter-clockwise. The letters taken are the nearest of
+/// each kind to the view's words (within 150 points), and none nearer to another view's words (Q13).
+pub fn from_top_view(page: usize, words: &[Word]) -> Option<LeadPins> {
+    let views: Vec<(Rect, bool)> = words
+        .windows(2)
+        .filter_map(|p| {
+            let (a, b) = (normalize(&p[0].text).to_ascii_lowercase(), normalize(&p[1].text).to_ascii_lowercase());
+            let top = a == "top";
+            (b.starts_with("view") && (top || a == "bottom")).then(|| (span(&[&p[0], &p[1]]), top))
+        })
+        .collect();
+    let centre = |r: &Rect| ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0);
+    let dist = |a: (f32, f32), b: (f32, f32)| ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt();
+    // a top view first (it needs no turning over), else a bottom view
+    let mut order: Vec<&(Rect, bool)> = views.iter().collect();
+    order.sort_by_key(|v| !v.1);
+    for (at, top) in order {
+        let here = centre(at);
+        let mut picked: Vec<(&Word, &'static str)> = vec![];
+        for kind in [["G", "D", "S"], ["B", "C", "E"]] {
+            picked.clear();
+            for want in kind {
+                let near = words
+                    .iter()
+                    .filter(|w| w.text.trim().chars().count() == 1 && role(&w.text, true) == Some(want))
+                    .filter(|w| dist(centre(&w.rect), here) < 150.0)
+                    // not a letter of another view drawn beside this one
+                    .filter(|w| views.iter().all(|(r, _)| std::ptr::eq(r, at) || dist(centre(&w.rect), centre(r)) >= dist(centre(&w.rect), here)))
+                    .min_by(|a, b| dist(centre(&a.rect), here).total_cmp(&dist(centre(&b.rect), here)));
+                if let Some(w) = near {
+                    picked.push((w, want));
+                }
+            }
+            if picked.len() == 3 {
+                break;
+            }
+        }
+        if picked.len() != 3 {
+            continue;
+        }
+        let pts: Vec<(f32, f32)> = picked.iter().map(|(w, _)| centre(&w.rect)).collect();
+        // the lone lead: the one not in the closest pair
+        let pair = [(0, 1, 2), (0, 2, 1), (1, 2, 0)].into_iter().min_by(|a, b| dist(pts[a.0], pts[a.1]).total_cmp(&dist(pts[b.0], pts[b.1]))).unwrap();
+        let (i, j, lone) = pair;
+        // 1 then 2 counter-clockwise (y up: the page's y goes down) on the top; clockwise drawn from the bottom
+        let cross = |a: (f32, f32), b: (f32, f32), c: (f32, f32)| (b.0 - a.0) * (-(c.1 - a.1)) - (-(b.1 - a.1)) * (c.0 - a.0);
+        let ccw = cross(pts[i], pts[j], pts[lone]) > 0.0;
+        let (one, two) = if ccw == *top { (i, j) } else { (j, i) };
+        let pins = vec![(1, picked[one].1), (2, picked[two].1), (3, picked[lone].1)];
+        if !complete(&pins) {
+            continue;
+        }
+        let ws: Vec<&Word> = picked.iter().map(|(w, _)| *w).collect();
+        return Some(LeadPins { pins: sorted(pins), page, area: span(&ws), from: LeadPinsFrom::TopView });
+    }
+    None
+}
+
 /// Packages drawn from the front with their leads numbered 1, 2, 3 from the left (the tab, if any, is the middle lead's).
 pub fn front_view(family: &str) -> bool {
-    matches!(family, "sot-223" | "to-220" | "to-252" | "to-263" | "dpak" | "d2pak" | "to-92")
+    matches!(family, "sot-223" | "to-220" | "to-126" | "to-252" | "to-263" | "dpak" | "d2pak" | "to-92")
 }
 
 /// The usual order of a MOSFET's (or, `bipolar`, a transistor's) leads in a package, and the parts it was seen on. Only a
@@ -175,6 +301,8 @@ pub fn usual(family: &str, bipolar: bool) -> Option<(Vec<(String, String)>, &'st
         ("sot-23" | "sot-323" | "sc-70", true) => (p(&[("1", "B"), ("2", "E"), ("3", "C")]), "MMBT3904・BC847"),
         ("sot-223" | "to-220" | "to-252" | "to-263" | "dpak" | "d2pak", true) => (p(&[("1", "B"), ("2", "C"), ("3", "E")]), "TIP120・BCP56・MJD31"),
         ("to-92", true) => (p(&[("1", "E"), ("2", "B"), ("3", "C")]), "2N3904・PN2222A (BC547 は逆の C B E)"),
+        // the BD135 to BD140's TO-126 (Q14): the emitter first, the collector (and the tab) in the middle
+        ("to-126", true) => (p(&[("1", "E"), ("2", "C"), ("3", "B")]), "BD135・BD139・BD140"),
         _ => return None,
     })
 }
@@ -185,8 +313,28 @@ impl Datasheet {
     /// name). The usual order (`usual`) is the caller's to offer.
     pub fn lead_pins(&self, family: Option<&str>) -> Option<LeadPins> {
         for page in 0..self.page_count() {
-            if let Some(p) = from_text(page, self.words(page)) {
+            let all = all_from_text(page, self.words(page));
+            // several lists (one per package): the one nearest the package's name
+            let names: Vec<Rect> = family.map_or(vec![], |f| self.words(page).iter().filter(|w| crate::draft::package_of(&w.text).is_some_and(|k| k.0 == f)).map(|w| w.rect).collect());
+            let gap = |p: &LeadPins| {
+                let c = ((p.area.x0 + p.area.x1) / 2.0, (p.area.y0 + p.area.y1) / 2.0);
+                names.iter().map(|r| ((r.x0 + r.x1) / 2.0 - c.0).hypot((r.y0 + r.y1) / 2.0 - c.1)).fold(f32::MAX, f32::min)
+            };
+            if let Some(p) = if all.len() > 1 && !names.is_empty() { all.into_iter().min_by(|a, b| gap(a).total_cmp(&gap(b))) } else { all.into_iter().next() } {
                 return Some(p);
+            }
+        }
+        for page in 0..self.page_count().min(4) {
+            if let Some(p) = from_stacked(page, self.words(page)) {
+                return Some(p);
+            }
+        }
+        // a SOT-23 drawn from the top (or the bottom) with its letters around it
+        if family.is_some_and(one_and_two) {
+            for page in 0..self.page_count().min(4) {
+                if let Some(p) = from_top_view(page, self.words(page)) {
+                    return Some(p);
+                }
             }
         }
         if !family.is_some_and(front_view) {
@@ -295,9 +443,91 @@ mod tests {
             let p = ds.lead_pins(Some("sot-223")).expect("NDT3055L's pinout");
             assert_eq!((p.from, crate::pin_lines(&p.pins)), (LeadPinsFrom::Row, "1 G\n2 D\n3 S".to_string()));
         }
-        if let Some(ds) = open("AO3400A_ds.pdf") {
-            // a top view of a SOT-23 is not read as a row: the usual order is offered instead
-            assert!(ds.lead_pins(Some("sot-23")).is_none());
+        // Q13: the letters around a SOT-23 seen from the top (AO3400A, AO3401A), the numbers by the names (BSS138's marking diagram,
+        // the IRLML6344's "G 1", MMBT3904's, the BC556B's TO-92), and the list by the package's name (2N7000 / 2N7002)
+        for (f, family, from, want) in [
+            ("AO3400A_ds.pdf", "sot-23", LeadPinsFrom::TopView, "1 G
+2 S
+3 D"),
+            ("AO3401A.pdf", "sot-23", LeadPinsFrom::TopView, "1 G
+2 S
+3 D"),
+            ("bss138.pdf", "sot-23", LeadPinsFrom::Stacked, "1 G
+2 S
+3 D"),
+            ("irlml6344.pdf", "sot-23", LeadPinsFrom::Stacked, "1 G
+2 S
+3 D"),
+            ("mmbt3904lt1-d.pdf", "sot-23", LeadPinsFrom::Stacked, "1 B
+2 E
+3 C"),
+            ("bc556b-d.pdf", "to-92", LeadPinsFrom::Stacked, "1 C
+2 B
+3 E"),
+            ("nds7002a.pdf", "sot-23", LeadPinsFrom::Text, "1 G
+2 S
+3 D"),
+            ("nds7002a.pdf", "to-92", LeadPinsFrom::Text, "1 S
+2 G
+3 D"),
+        ] {
+            if let Some(ds) = open(f) {
+                let p = ds.lead_pins(Some(family)).unwrap_or_else(|| panic!("{f}"));
+                assert_eq!((p.from, crate::pin_lines(&p.pins)), (from, want.to_string()), "{f} as {family}");
+            }
         }
+    }
+
+    /// A SOT-23 drawn at a slant from the top, with its bottom view beside it (as the AO3400A's page draws them): the closest pair
+    /// G, S is one side, the lone D is 3, and G comes before S going counter-clockwise; the bottom view's letters are not taken.
+    #[test]
+    fn a_slanted_top_view_numbers_its_leads() {
+        let words = vec![
+            w("Top", 160.0, 80.0), w("View", 182.0, 80.0), w("Bottom", 240.0, 80.0), w("View", 278.0, 80.0),
+            w("D", 155.0, 105.0), w("S", 212.0, 133.0), w("G", 185.0, 155.0),
+            w("D", 230.0, 100.0), w("G", 290.0, 132.0), w("S", 258.0, 152.0),
+        ];
+        let p = from_top_view(0, &words).expect("read");
+        assert_eq!(crate::pin_lines(&p.pins), "1 G
+2 S
+3 D");
+        // only the bottom view: counted the other way
+        let bottom: Vec<Word> = words.iter().filter(|x| x.rect.x0 >= 230.0).cloned().collect();
+        let p = from_top_view(0, &bottom).expect("read");
+        assert_eq!(crate::pin_lines(&p.pins), "1 G
+2 S
+3 D", "the bottom view's mirror image gives the same pins");
+    }
+
+    /// Numbers over names ("3" over "Drain", "1 2" over "Gate Source"), "Pin 1" under a name, and a letter beside its number.
+    #[test]
+    fn numbers_by_the_names() {
+        let over = vec![w("3", 120.0, 90.0), w("Drain", 110.0, 100.0), w("1", 104.0, 160.0), w("2", 143.0, 160.0), w("Gate", 98.0, 172.0), w("Source", 133.0, 172.0)];
+        assert_eq!(crate::pin_lines(&from_stacked(0, &over).expect("over").pins), "1 G
+2 S
+3 D");
+        let under = vec![w("Gate", 100.0, 100.0), w("Pin", 100.0, 111.0), w("1", 121.0, 111.0), w("Drain", 200.0, 60.0), w("Pin", 200.0, 71.0), w("2", 221.0, 71.0), w("Source", 200.0, 140.0), w("Pin", 205.0, 151.0), w("3", 226.0, 151.0)];
+        assert_eq!(crate::pin_lines(&from_stacked(0, &under).expect("Pin N").pins), "1 G
+2 D
+3 S");
+        let beside = vec![w("G", 100.0, 100.0), w("1", 110.0, 100.0), w("S", 100.0, 140.0), w("2", 110.0, 140.0), w("3", 170.0, 120.0), w("D", 180.0, 120.0)];
+        assert_eq!(crate::pin_lines(&from_stacked(0, &beside).expect("beside").pins), "1 G
+2 S
+3 D");
+        // two of the three: nothing
+        assert!(from_stacked(0, &beside[..4]).is_none());
+    }
+
+    /// Two numbered lists on a page (a TO-92 and a SOT-23 part on one sheet): both kept, in order down the page.
+    #[test]
+    fn every_list_of_a_page() {
+        let words = vec![w("1", 10.0, 10.0), w("Source", 20.0, 10.0), w("2", 10.0, 20.0), w("Gate", 20.0, 20.0), w("3", 10.0, 30.0), w("Drain", 20.0, 30.0),
+            w("1", 10.0, 200.0), w("Gate", 20.0, 200.0), w("2", 10.0, 210.0), w("Source", 20.0, 210.0), w("3", 10.0, 220.0), w("Drain", 20.0, 220.0)];
+        let all = all_from_text(0, &words);
+        assert_eq!(all.iter().map(|p| crate::pin_lines(&p.pins)).collect::<Vec<_>>(), ["1 S
+2 G
+3 D", "1 G
+2 S
+3 D"]);
     }
 }

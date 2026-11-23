@@ -2454,7 +2454,7 @@
     ]
   },
   "LM317": {
-    "fingerprint": "159b45291afae240",
+    "fingerprint": "324c6305dde91866",
     "source": "TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節。VIN − VOUT = 5 V、IOUT = 10 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
     "date": "2026-11-11",
     "rows": [
@@ -2526,8 +2526,8 @@
         "datasheet": "— / 65.000 / — dB",
         "target": "65.000 dB",
         "condition": "f = 120 Hz、VOUT = 10 V (R2 = 1680 Ω、入力 15 V)、CADJ = 0 (新しいチップ)",
-        "model": "64.978 dB",
-        "diff": "-0.0223 dB",
+        "model": "65.236 dB",
+        "diff": "+0.2361 dB",
         "tested": true
       },
       {
@@ -2536,7 +2536,7 @@
         "target": "150.0 µVrms",
         "condition": "0.003 % × 5 V、10 Hz〜10 kHz",
         "model": "150.0 µVrms",
-        "diff": "-0.0308 µVrms",
+        "diff": "-0.0464 µVrms",
         "tested": true
       },
       {
@@ -2555,6 +2555,33 @@
         "condition": "図 6-19、−50 ℃",
         "model": "-0.4208 %",
         "diff": "-0.0008 %",
+        "tested": true
+      },
+      {
+        "item": "リップル除去 (高い周波数)",
+        "datasheet": "— / 59.000 / — dB",
+        "target": "59.000 dB",
+        "condition": "図 6-14 (新しいチップ、CADJ = 0、VOUT = 10 V)、1 kHz",
+        "model": "59.913 dB",
+        "diff": "+0.9131 dB",
+        "tested": true
+      },
+      {
+        "item": "リップル除去 (高い周波数)",
+        "datasheet": "— / 51.000 / — dB",
+        "target": "51.000 dB",
+        "condition": "図 6-14、10 kHz",
+        "model": "45.972 dB",
+        "diff": "-5.028 dB",
+        "tested": true
+      },
+      {
+        "item": "リップル除去 (高い周波数)",
+        "datasheet": "— / 23.000 / — dB",
+        "target": "23.000 dB",
+        "condition": "図 6-14、100 kHz",
+        "model": "26.169 dB",
+        "diff": "+3.169 dB",
         "tested": true
       }
     ]
@@ -3336,7 +3363,7 @@
     ]
   },
   "MCP1700-3302": {
-    "fingerprint": "41c3ba1d2f15f407",
+    "fingerprint": "dd4a81ca68a54c0f",
     "source": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA",
     "date": "2026-11-11",
     "rows": [
@@ -3355,7 +3382,7 @@
         "target": "42.075 mV",
         "condition": "(VR + 1) V ≤ VIN ≤ 6 V。表は ±0.75 %/V (mV に直した)",
         "model": "42.075 mV",
-        "diff": "-0.0003 mV",
+        "diff": "-0.0002 mV",
         "tested": true
       },
       {
@@ -3390,8 +3417,8 @@
         "datasheet": "— / 44.000 / — dB",
         "target": "44.000 dB",
         "condition": "RR (表の条件の周波数。120 Hz か 100 Hz)",
-        "model": "44.011 dB",
-        "diff": "+0.0111 dB",
+        "model": "44.255 dB",
+        "diff": "+0.2549 dB",
         "tested": true
       },
       {
@@ -3428,6 +3455,33 @@
         "condition": "図 2-10・2-11 の −40 ℃",
         "model": "-0.2800 %",
         "diff": "+0.0000 %",
+        "tested": true
+      },
+      {
+        "item": "リップル除去 (高い周波数)",
+        "datasheet": "— / 27.000 / — dB",
+        "target": "27.000 dB",
+        "condition": "図 2-14 (VR = 1.2 V)、1 kHz",
+        "model": "26.116 dB",
+        "diff": "-0.8843 dB",
+        "tested": true
+      },
+      {
+        "item": "リップル除去 (高い周波数)",
+        "datasheet": "— / 12.500 / — dB",
+        "target": "12.500 dB",
+        "condition": "図 2-14、10 kHz",
+        "model": "12.353 dB",
+        "diff": "-0.1474 dB",
+        "tested": true
+      },
+      {
+        "item": "リップル除去 (高い周波数)",
+        "datasheet": "— / 5.000 / — dB",
+        "target": "5.000 dB",
+        "condition": "図 2-14、30 kHz",
+        "model": "5.161 dB",
+        "diff": "+0.1611 dB",
         "tested": true
       }
     ]

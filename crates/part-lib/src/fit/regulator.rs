@@ -85,11 +85,72 @@ pub struct RegulatorSpec {
     /// The output (adjustable: the reference) against the temperature (M8); none: the same at every temperature.
     #[serde(default)]
     pub temp: Option<super::TempCurve>,
+    /// Ripple rejection against frequency (Q16), read off the data sheet's graph: points (Hz, dB), at the same output as `rr`.
+    /// The model's ripple path is then a shelf fitted to them (and to `rr` at `rr_f`): the table's rejection at low frequencies,
+    /// falling 20 dB per decade above a corner towards a floor. Empty: the same at every frequency.
+    #[serde(default)]
+    pub rr_curve: Vec<[f64; 2]>,
 }
 
 /// Python's `repr` of a float: the shortest that reads back, with ".0" on whole numbers ("5.0", "1.25").
 fn repr(x: f64) -> String {
     format!("{x:?}")
+}
+
+/// The ripple path's shape (Q16): k_lo at low frequencies, plus high-passes of the input, each (gain, corner Hz). Two of them make a
+/// curve that falls gently and then steeply (the LM317's).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RippleShape {
+    pub k_lo: f64,
+    pub terms: Vec<(f64, f64)>,
+}
+
+impl RippleShape {
+    /// The ripple rejection (dB) at `f` Hz: -20 log |k_lo + sum a jx / (1 + jx)|, x = f / corner.
+    pub fn rejection(&self, f: f64) -> f64 {
+        let (mut re, mut im) = (self.k_lo, 0.0);
+        for &(a, fc) in &self.terms {
+            let x = f / fc;
+            let d = 1.0 + x * x;
+            re += a * x * x / d;
+            im += a * x / d;
+        }
+        -20.0 * (re * re + im * im).sqrt().log10()
+    }
+}
+
+/// The shape fitted to the graph's points and the table's `rr` at `rr_f` (that one weighted ten times, so that the model keeps the
+/// table's value), least squares in dB, from several starts (Q16). None without a graph.
+pub fn rr_shape(p: &RegulatorSpec) -> Option<RippleShape> {
+    if p.rr_curve.len() < 2 {
+        return None;
+    }
+    let mut pts: Vec<(f64, f64, f64)> = p.rr_curve.iter().map(|q| (q[0], q[1], 1.0)).collect();
+    pts.push((p.rr_f, p.rr, 10.0));
+    let (f0, f1) = (pts.iter().map(|q| q.0).fold(f64::MAX, f64::min), pts.iter().map(|q| q.0).fold(f64::MIN, f64::max));
+    let shape = |x: &[f64]| RippleShape { k_lo: 10f64.powf(x[0]), terms: x[1..].chunks(2).map(|c| (10f64.powf(c[0]), 10f64.powf(c[1]))).collect() };
+    let mut cost = |x: &[f64]| -> f64 {
+        let s = shape(x);
+        // the gains no more than the input itself (0 dB), the corners near the graph (else a gain and its corner run away together)
+        if s.k_lo + s.terms.iter().map(|t| t.0).sum::<f64>() > 1.0 || s.terms.iter().any(|t| t.1 < f0 / 10.0 || t.1 > f1 * 100.0) {
+            return 1e9;
+        }
+        pts.iter().map(|&(f, db, w)| w * (s.rejection(f) - db).powi(2)).sum()
+    };
+    let k0 = -p.rr / 20.0;
+    let (l0, l1) = (f0.log10(), f1.log10());
+    let mut best: Option<(Vec<f64>, f64)> = None;
+    // starts: the first corner low or in the middle, the second high; gains a decade above the table's
+    for a in [0.25, 0.5] {
+        for b in [0.75, 1.0, 1.5] {
+            let x0 = [k0, k0 + 1.0, l0 + a * (l1 - l0), -0.5, l0 + b * (l1 - l0)];
+            let (x, c) = super::num::nelder_mead(&mut cost, &x0, 6000, 12000, 1e-10, 1e-12);
+            if best.as_ref().is_none_or(|b| c < b.1) {
+                best = Some((x, c));
+            }
+        }
+    }
+    best.map(|(x, _)| shape(&x))
 }
 
 /// The `.subckt` (pins: in gnd out, or in adj out).
@@ -99,12 +160,20 @@ pub fn regulator_model(p: &RegulatorSpec) -> String {
     let r = if adj { "adj" } else { "gnd" };
     let head = if adj { format!(".subckt {n} in adj out") } else { format!(".subckt {n} in gnd out") };
     let vin0 = p.vin0.unwrap_or(6.25);
-    let mut k_rr = 10f64.powf(-p.rr / 20.0);
+    // the ripple path: flat (k_rr), or k_rr and high-passes of the input fitted to the graph (Q16)
+    let mut shape = rr_shape(p);
+    let mut k_rr = shape.as_ref().map_or(10f64.powf(-p.rr / 20.0), |s| s.k_lo);
     if adj {
         // the ripple rejection is given at the output set to rr_vout: on the reference it is that much smaller
-        k_rr *= p.vout / p.rr_vout.unwrap_or(p.vout);
+        let k = p.vout / p.rr_vout.unwrap_or(p.vout);
+        k_rr *= k;
+        if let Some(s) = shape.as_mut() {
+            for t in &mut s.terms {
+                t.0 *= k;
+            }
+        }
     }
-    // at DC the input reaches the output by the line regulation; above ~1 Hz only by the (flat) ripple rejection
+    // at DC the input reaches the output by the line regulation; above ~1 Hz only by the ripple rejection
     let k_dc = p.line - k_rr;
     let density = p.noise.density();
     let ro = p.rout;
@@ -116,9 +185,21 @@ pub fn regulator_model(p: &RegulatorSpec) -> String {
         format!("Elf lfa {r} in {r} 1"),
         "Rlf lfa lf 1.59Meg".into(),
         format!("Clf lf {r} 100n"),
+    ];
+    if let Some(sh) = &shape {
+        // the ripple rising with frequency: high-passes of the input (their corners fitted to the data sheet's graph, Q16)
+        // (from a copy of the input: a capacitor from the pin would push its current into ADJ, which an LM317's R2 turns into output)
+        l.push("* the ripple rising with frequency: high-passes of a copy of the input, fitted to the data sheet's ripple rejection graph".into());
+        l.push(format!("Erh rhi 0 in {r} 1"));
+        for (k, &(_, fc)) in sh.terms.iter().enumerate() {
+            l.push(format!("Crh{k} rhi rh{k} {}", g(1.0 / (2.0 * std::f64::consts::PI * fc * 1e3), 6)));
+            l.push(format!("Rrh{k} rh{k} 0 1k"));
+        }
+    }
+    l.extend([
         "* output noise (taken as flat over the data sheet's band): a 1 k resistor's noise, scaled".into(),
         format!("Rnz nz {r} 1k"),
-    ];
+    ]);
     if let Some([lo, hi]) = p.vrange {
         // the data sheet's min and max of the output (part to part), for the variation analyses; 0 V otherwise
         l.extend([
@@ -136,7 +217,8 @@ pub fn regulator_model(p: &RegulatorSpec) -> String {
             g(k_rr, 6),
             g(vin0, 6),
             if p.vrange.is_some() { format!("+V(vt,{r})") } else { String::new() }
-        ) + &p.temp.as_ref().map(|c| format!("+{}*{}", g(p.vout, 6), c.expr())).unwrap_or_default(),
+        ) + &p.temp.as_ref().map(|c| format!("+{}*{}", g(p.vout, 6), c.expr())).unwrap_or_default()
+            + &shape.as_ref().map(|sh| sh.terms.iter().enumerate().map(|(k, t)| format!("+{}*V(rh{k})", g(t.0, 6))).collect::<String>()).unwrap_or_default(),
         format!("En tgt t0 nz {r} {}", g(density / (K4T * 1e3).sqrt(), 6)),
     ]);
     // the ceiling the input leaves: in − dropout (the dropout grows with the output current; the output resistance already
@@ -208,10 +290,18 @@ pub fn regulator_limits(p: &RegulatorSpec) -> Vec<String> {
     let mut rows = vec![
         format!("データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/regulators.md。", p.cite),
         format!(
-            "再現しているもの: {out}、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、{}電流制限 (入出力の差で変わる)、リップル除去 {} dB ({} Hz{at10}。どの周波数でも同じとした)、出力雑音 {} nV/√Hz (平ら)。",
+            "再現しているもの: {out}、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、{}電流制限 (入出力の差で変わる)、リップル除去 {} dB ({} Hz{at10}。{})、出力雑音 {} nV/√Hz (平ら)。",
             if adj { String::new() } else { format!("グラウンド電流 {} mA (入力が数 V 以上で)、", g(p.iq * 1e3, 6)) },
             g(p.rr, 6),
             g(p.rr_f, 6),
+            match rr_shape(p) {
+                // the model's rejection at the decades of the graph
+                Some(sh) => format!(
+                    "高い周波数では、データシートのグラフに合わせて下がる: {}",
+                    [1e3, 1e4, 1e5].iter().filter(|f| **f <= p.rr_curve.iter().map(|q| q[0]).fold(0.0, f64::max) * 1.5).map(|&f| format!("{} kHz で {:.0} dB", g(f / 1e3, 3), sh.rejection(f))).collect::<Vec<_>>().join("、")
+                ),
+                None => "どの周波数でも同じとした".to_string(),
+            },
             g(density * 1e9, 6)
         ),
     ];

@@ -59,6 +59,8 @@ pub struct RegulatorInput {
     pub temp: String,
     pub rr: String,
     pub rr_f: String,
+    /// "Hz dB" lines: the ripple rejection against frequency (Q16), read off the data sheet's graph. Empty: the same at every frequency.
+    pub rr_curve: String,
     pub rr_vout: String,
     /// "rms f_low f_high" or a density.
     pub noise: String,
@@ -315,6 +317,23 @@ fn regulation(label: &str, t: &str, vout: f64, per_volt: bool) -> Result<f64, St
     }
 }
 
+/// The ripple box (Q16): "Hz dB" a line, 2 or more lines; empty: the same rejection at every frequency.
+fn rr_curve_of(text: &str) -> Result<Vec<[f64; 2]>, String> {
+    let how = "リップル除去の周波数特性は 1 行に「周波数 [Hz] リップル除去 [dB]」で、2 行以上入れてください (例: 1000 59 と 10000 51)";
+    let mut out = vec![];
+    for r in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let n: Vec<f64> = r.split_whitespace().map(|x| sim_core::parse_value(x).ok_or(())).collect::<Result<_, _>>().map_err(|_| how.to_string())?;
+        match n.as_slice() {
+            [f, db] if *f > 0.0 && *db > 0.0 => out.push([*f, *db]),
+            _ => return Err(how.into()),
+        }
+    }
+    if out.len() == 1 {
+        return Err(how.into());
+    }
+    Ok(out)
+}
+
 /// The temperature box: "°C percent" a line, 2 or more lines, lowest first; empty: none.
 fn temp_curve(text: &str) -> Result<Option<fit::TempCurve>, String> {
     let how = "温度は 1 行に「温度 [℃] 25 ℃ からの変化 [%]」で、低い温度から 2 行以上入れてください (例: 0 0.15 と 125 -0.6)";
@@ -374,6 +393,7 @@ impl RegulatorInput {
             rr_vout: if self.adjustable { opt("リップル除去を測った出力電圧", &self.rr_vout)? } else { None },
             noise,
             temp: temp_curve(&self.temp)?,
+            rr_curve: rr_curve_of(&self.rr_curve)?,
         };
         fit::regulator::check_regulator(&s)?;
         Ok(s)
@@ -397,6 +417,7 @@ impl RegulatorInput {
                 min_load: t("3.5m"),
                 ilim: t("15 2.2\n40 0.4"),
                 temp: t("-50 -0.424\n0 -0.08\n25 0\n50 -0.04\n75 -0.16\n100 -0.36\n125 -0.84\n150 -1.44"),
+                rr_curve: t("120 67.5\n300 64\n1000 59\n3000 56\n10000 51\n30000 38\n100000 23\n300000 13"),
                 rr: t("65"),
                 rr_f: t("120"),
                 rr_vout: t("10"),
@@ -704,6 +725,11 @@ impl PartForm {
                 "出力 (LM317 などは基準電圧) の温度による変化。1 行に「温度 [℃] 25 ℃ からの変化 [%]」を、低い温度から 2 行以上。データシートの「出力電圧と温度」の図から読むか、温度係数 (−0.3 mV/℃ なら 5 V の 0 ℃ で +0.15 %、125 ℃ で −0.6 %) から。点の間は直線でつなぎます。空なら温度で変わりません",
             ));
             ui.add(egui::TextEdit::multiline(&mut r.temp).desired_rows(2).desired_width(160.0).font(egui::TextStyle::Monospace).hint_text("0 0.15\n125 -0.6"));
+            ui.end_row();
+            ui.label(i18n::tr("リップル除去の周波数特性: Hz dB")).on_hover_text(i18n::tr(
+                "高い周波数でリップル除去が下がる様子。1 行に「周波数 [Hz] リップル除去 [dB]」を 2 行以上。データシートの「Ripple Rejection vs Frequency」の図から読みます (下の「グラフから読む」で入ります)。モデルは、表のリップル除去を守りながら、この点に合わせて高い周波数で下げます。空なら、どの周波数でも同じです",
+            ));
+            ui.add(egui::TextEdit::multiline(&mut r.rr_curve).desired_rows(2).desired_width(160.0).font(egui::TextStyle::Monospace).hint_text("1000 59\n10000 51"));
             ui.end_row();
             row(ui, "リップル除去 [dB]・周波数 [Hz]", "入力のリップルが出力でどれだけ小さくなるか", vec![(&mut r.rr, "83", 60.0), (&mut r.rr_f, "120", 60.0)]);
             if adj {

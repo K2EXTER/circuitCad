@@ -352,12 +352,31 @@ impl RegulatorInput {
                 if !(1.0..=200.0).contains(&db) {
                     return Err(format!("p.{p} の図の {} Hz の値 {db} dB はリップル除去らしくありません", show(f)));
                 }
+                // the curve's shape (Q16): its points at 1, 2, 5 of each decade from the table's frequency up
+                let (lo, hi) = (pts.iter().map(|q| q.0).fold(f64::MAX, f64::min), pts.iter().map(|q| q.0).fold(f64::MIN, f64::max));
+                let mut curve = vec![];
+                let mut dec = 10f64.powf(f.max(lo).log10().floor());
+                while dec <= hi {
+                    for m in [1.0, 2.0, 5.0] {
+                        let x = dec * m;
+                        if x >= f.max(lo) && x <= hi && let Some(v) = at_frequency(&pts, x, false) {
+                            curve.push(format!("{} {}", show(x), (v * 10.0).round() / 10.0));
+                        }
+                    }
+                    dec *= 10.0;
+                }
+                let shape = if curve.len() >= 3 {
+                    self.rr_curve = curve.join("\n");
+                    format!("、周波数特性 {} 点", curve.len())
+                } else {
+                    String::new()
+                };
                 if !self.rr.trim().is_empty() {
-                    return Ok(format!("リップル除去: 表の {} dB のまま (p.{p} の図では {} Hz で {db} dB)", self.rr.trim(), show(f)));
+                    return Ok(format!("リップル除去: 表の {} dB のまま (p.{p} の図では {} Hz で {db} dB{shape})", self.rr.trim(), show(f)));
                 }
                 self.rr = show(db);
                 self.rr_f = show(f);
-                Ok(format!("リップル除去: p.{p} の図から {} Hz で {db} dB", show(f)))
+                Ok(format!("リップル除去: p.{p} の図から {} Hz で {db} dB{shape}", show(f)))
             }
             Dest::RegNoise => {
                 let d = at_frequency(points, 1e3, true).ok_or_else(|| format!("p.{p} の図に 1 kHz がありません (図は {})", range_text(points)))?;
