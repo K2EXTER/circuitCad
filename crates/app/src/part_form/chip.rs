@@ -43,6 +43,16 @@ impl PartForm {
             if let Some(d) = self.pas_number("インダクタンスの低下", self.pas_ldrop.trim().trim_end_matches('%'), false)? {
                 t.ldrop = d / 100.0;
             }
+            if self.pas_sat_curve {
+                let pts = self.pas_sat_points()?;
+                if pts.len() < 2 {
+                    return Err("「曲線のとおりにする」には、インダクタンスと電流の表に 2 行以上要ります".into());
+                }
+                let mut curve: Vec<(f64, f64)> = pts.iter().map(|(i, p)| (*i, 1.0 + p / 100.0)).collect();
+                curve.sort_by(|a, b| a.0.total_cmp(&b.0));
+                sim_core::SatCurve::new(&curve).map_err(|e| format!("インダクタンスと電流の表: {e}"))?;
+                t.sat_curve = Some(curve);
+            }
         }
         t.tc1 = self.pas_ppm("温度係数 TC1", &self.pas_tc1)?;
         t.tc2 = self.pas_ppm("温度係数 TC2", &self.pas_tc2)?;

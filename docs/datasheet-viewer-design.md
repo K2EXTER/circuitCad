@@ -503,3 +503,11 @@
 - `read(words)`: 行の「Rev」「Rev.」「Revision:」の次の語 (日付でない 6 文字まで) が版、そのあとの日付 (なければ前: onsemi の「April, 2024 − Rev. 7」)。「REVISED APRIL 2025」(TI) の日付。TI の文献番号 (英大文字 4・数字 3・英大文字 1〜2: 「SLVS044Z」) と Microchip の「DS20001826E」(「-page」を外す) も版。Nexperia は「Product data sheet」「Date of release:」の日付と、改版履歴の最初の行の「v.2」(`edition`、最後の 4 ページ)。日付は 1 語 (2026-07-24・22-Jun-2026・3/25) か月と年 (Dec 2011)。`Datasheet::revision` は最初のページ、足りなければ最後のページ。手元で TI (LM317・LP5907・TL431)・onsemi (MC7800・BSS138)・Infineon・Vishay・AOS・ADI・LTC・Microchip・Nexperia が読める (Microchip の日付は無い)。`ds rev FILE`。
 - `fingerprint`: ファイルの中身の FNV-1a (16 桁の 16 進)。`KEY_SYMBOLS` (VF・VGS(th)・RDS(on)・VO・VREF・VOS など 39 個) の表の値を 1 つの記号に 3 行まで (`key_values`、`SheetValue` はページ付き)。`compare(old, new)`: 記号と条件 (空白を除いて同じ) で行を合わせ、記号が両方 1 行ずつならその 2 つ。変わった (`Changed`)・新しい版に無い (`Missing`)・新しい版だけ (`Added`)。
 - 部品 (`part_lib::SheetRecord`、`PartDef::sheet`): フォームの `SheetView::sheet_record` が PDF を開いて初めて聞かれたときに 1 回作る (`OnceCell`。`to_def` は毎フレーム呼ばれるので)。保存の時、開いている PDF のものを、無ければ元の部品のものを入れる。「① 基本」のデータシートの URL の下に、作った元の版と記録した値の数。開いた PDF の指紋が違えば「作った元の版と表の値を比べる」(`part_form/sheet_record.rs`)。
+
+## 段階55: コイルの飽和の図・図の下に長いグラフ・リード線の番号の OCR・数字の名前のピン (2026-11-24、候補 Q1・Q13・Q14・P5)
+- `figures::Curve::Inductance`: 見出しの「Inductance vs. Current」「L vs. DC current」「Inductance vs. DC Bias」(電流・直流重畳に対して) を飽和の図に。周波数に対するものは違う。`pick.rs` では下がる曲線。フォームの `graph_reader::Dest::CoilSat` (「コイルの『インダクタンスと電流の表』に入れる」) が読んだ点を、最初の点のインダクタンスに対する % で表に入れ、「曲線のとおりにする」にする (軸の単位 µH は軸の題が回っていて読めないことがあるので、割合だけを使い、値は「値」の欄に入れてもらう)。`--form-graph-all coil`。
+- 「vs.」の見出しの下の図の範囲 (`grow_down`): 見出しから 230 pt (`GRAPH_REACH`) で切っていたので、Würth の半ページの図 (目盛りの数字が 370 pt 下まで) の横軸が範囲の外で、軸が読めなかった。目盛りらしい数字が 60 pt 以内で続く間、下へ伸ばす。
+- リード線の番号の OCR (`lead_pins.rs`): 描かれた文字を 4 と 6 画素/pt で読んで合わせる (IRLB8721 の「LEAD ASSIGNMENTS」は 4 で「3.-」を、6 で「1.-」を落とす)。番号のあとに「.」「-」の付いた 1 文字の「l」「I」「|」を 1、「Z」を 2 に (`ocr_digit`)。IRLB8721 は p.8 の図から G・D・S と読める。ほかの TO-220・SOT-23 は前と同じ。
+- 数字の名前のピン (`pin_diagram.rs` の `digit_names`): ふつうに読んで図が 1 つも揃わないとき、1 ずつ数えるピン番号の列の行の横に、1 文字の数字が全部違って 3 つ以上並ぶ列があれば、それを名前に (Harris の CD74HC4017 は出力を「0」〜「9」と書く。「Q」の字形の問題ではなく、図に Q が無い)。`draft::plausible_pins` も、全部違う 1 文字の数字の名前 (3 つ以上) を誤読とみなさない。CD74HC4017 は 16 ピンが図のとおり読める。
+- 手元に無い PDF (LM358・LP5907・MCP6001・CD4511B) の残り (Q14・Q15) はそのまま。
+- `ds leads FILE [FAMILY]` (3 本足の部品のピン)。

@@ -282,6 +282,13 @@ impl SchEditor {
         }
     }
 
+    /// The form's op amp and regulator models measured against their boxes (`--form-measure`, M3).
+    pub fn measure_in_form(&mut self) {
+        if let Some(f) = self.form.as_mut() {
+            f.measure_models();
+        }
+    }
+
     /// The logic IC box with the half adder, applied (`--form-logic-example`, with `--new-part ic`).
     pub fn logic_in_form(&mut self, counter: bool) {
         if let Some(f) = self.form.as_mut() {

@@ -1,0 +1,112 @@
+{
+  "name": "CGA4J1X8L1H105K125AC",
+  "category": "コンデンサ",
+  "description": "TDK CGA 積層セラミックコンデンサ (車載・150 ℃品) 1µF ±10% 50 V X8L 0805 (2012)。直流電圧で容量が下がります (製品ページの DC バイアス特性): 定格 50 V の 25 % (12.5 V) で -14 %、50 % で -39 %、100 % で -70 %。ESR 約 6.25 mΩ・ESL 約 0.95 nH (自己共振 約 5.17 MHz)。温度特性 X8L (+15 / −40 %、−55〜150 ℃)、AEC-Q200。本体 2.0±0.2 × 1.25±0.2 mm、厚さ 1.25±0.2 mm。ランドは TDK の推奨 (リフロー: PA 0.9〜1.2・PB 0.7〜0.9・PC 0.9〜1.2 mm: PA = パッドの内側の間、PB = パッドの長さ、PC = パッドの幅) の真ん中。包装は 2000 個。TDK Product Center の製品ページ (生産中) の特性の図のデータ (CSV、2026 年 11 月時点) と、カタログ「積層セラミックチップコンデンサ CGA シリーズ 温度保証用」(2023 年 8 月) で確かめた (2026-11-24)",
+  "datasheet": "https://product.tdk.com/en/search/capacitor/ceramic/mlcc/info?part_no=CGA4J1X8L1H105K125AC",
+  "prefix": "C",
+  "value": "1u",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.925,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.8,
+        "h": 1.05,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.925,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.8,
+        "h": 1.05,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "C_0805_TDK",
+  "height": 1.25,
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "CGA4J1X8L1H105K125AC",
+    "text": ".subckt CGA4J1X8L1H105K125AC 1 2\nResr 1 n_esr 6.25m\nLesl n_esr n_c 949p\nC1 n_c 2 Q=1u*(1*33.6*atan(V(n_c,2)/33.6))\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "DC バイアスは C(V) = C0 × (0 + 1.00 / (1 + (V / 33.6 V)²)) を電荷の式にしたもので、製品ページの曲線との差は最大 3.6 ポイント (0〜50 V)。低い電圧で曲線が少し (2 % ほど) 上がるのは表していません。AC 解析でも、直流の動作点での容量が使われます。",
+      "ESR と ESL は、製品ページの |Z| の周波数特性 (CSV、バイアス無し) に、容量を公称のまま自己共振の 3 倍の周波数まで合わせた一定の値です (自己共振 約 5.17 MHz、ずれは最大 14 %)。実物の ESR は周波数で変わり (低い周波数ほど大きい)、自己共振の 3 倍より上では実物の |Z| がモデルとずれます。",
+      "容量の許容差 (±10%) と温度による変化 (X8L: +15 / −40 %、−55〜150 ℃) はモデルに入れていません。",
+      "直流の耐圧を超える電圧は、シミュレーションでは止まりません。定格電圧を守ってください。"
+    ],
+    "origin": {
+      "kind": "equivalent",
+      "source": "TDK CGA4J1X8L1H105K125AC の製品ページの特性の図のデータ (|Z|・ESR・DC バイアス特性の CSV、2026 年 11 月時点) から読み取った値"
+    }
+  },
+  "ratings": {
+    "v_max": 50.0,
+    "rows": [
+      {
+        "name": "容量",
+        "value": "1µF",
+        "condition": "±10%"
+      },
+      {
+        "name": "温度特性",
+        "value": "X8L",
+        "condition": "+15 / −40 %、−55〜150 ℃"
+      },
+      {
+        "name": "定格電圧",
+        "value": "50 V",
+        "condition": "直流"
+      },
+      {
+        "name": "DC バイアス",
+        "value": "-14 % / -39 % / -70 %",
+        "condition": "定格の 25 / 50 / 100 % (12.5 / 25 / 50 V)"
+      },
+      {
+        "name": "ESR",
+        "value": "約 6.25 mΩ",
+        "condition": "自己共振 約 5.17 MHz で"
+      },
+      {
+        "name": "ESL",
+        "value": "約 0.95 nH",
+        "condition": ""
+      },
+      {
+        "name": "使える温度",
+        "value": "−55〜150 ℃",
+        "condition": "AEC-Q200"
+      }
+    ]
+  },
+  "glyph": "capacitor"
+}

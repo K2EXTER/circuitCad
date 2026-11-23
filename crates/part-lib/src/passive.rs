@@ -71,6 +71,9 @@ pub struct PassiveTemplate {
     pub isat: Option<f64>,
     /// How far the inductance has fallen at `isat`, as a fraction (0.3 = 30 %, the usual definition).
     pub ldrop: f64,
+    /// Inductor: the data sheet's curve itself, (current A, ratio to the inductance at no current), used in place of `isat`
+    /// (written `LCURVE=`; straight lines between the points, flat beyond the last).
+    pub sat_curve: Option<Vec<(f64, f64)>>,
 }
 
 /// Temperature coefficient of copper (1/°C): the winding resistance of an inductor follows it.
@@ -89,7 +92,7 @@ fn tc_suffix(tc1: Option<f64>, tc2: Option<f64>) -> String {
 
 impl PassiveTemplate {
     pub fn new(kind: PassiveKind, value: f64) -> Self {
-        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0, tc1: None, tc2: None, isat: None, ldrop: 0.3 }
+        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0, tc1: None, tc2: None, isat: None, ldrop: 0.3, sat_curve: None }
     }
 }
 
@@ -214,16 +217,25 @@ impl PassiveTemplate {
                     l.push(format!("Rdcr 1 {m} {} TC1={COPPER_TC:.4e}", eng(dcr)));
                     parts.push(format!("DCR {}", eng(dcr)));
                 }
-                let sat = self.isat.map(|i| format!(" ISAT={i:.4e} LDROP={:.3}", self.ldrop)).unwrap_or_default();
+                let sat = match (&self.sat_curve, self.isat) {
+                    (Some(c), _) => format!(" LCURVE={}", lcurve_text(c)),
+                    (None, Some(i)) => format!(" ISAT={i:.4e} LDROP={:.3}", self.ldrop),
+                    _ => String::new(),
+                };
                 l.push(format!("L1 {node} 2 {}{tc}{sat}", eng(self.value)));
-                if let Some(i) = self.isat {
+                if let Some(c) = &self.sat_curve {
+                    parts.push(format!("飽和の曲線 {} 点", c.len()));
+                } else if let Some(i) = self.isat {
                     parts.push(format!("Isat {}A ({:.0}% 低下)", eng(i), self.ldrop * 100.0));
                 }
                 if let Some(cp) = self.cp {
                     l.push(format!("Cp 1 2 {}", eng(cp)));
                     parts.push(format!("並列容量 {}", eng(cp)));
                 }
-                if self.isat.is_some() {
+                if let Some(c) = &self.sat_curve {
+                    let last = c.last().map_or(0.0, |p| p.0);
+                    limits.push(format!("磁気飽和は、データシートの「インダクタンス - 電流」の曲線の {} 点のとおりに下がります (点の間は直線、{}A より大きい電流では最後の点の割合のまま)。温度による変化は扱いません。", c.len(), eng(last)));
+                } else if self.isat.is_some() {
                     limits.push(format!("磁気飽和は、インダクタンスが L / (1 + (電流 / i0)²) で下がる式で近似します (Isat で {:.0}% 低下)。実物の曲線の形とは少し違い、温度による Isat の変化は扱いません。", self.ldrop * 100.0));
                 } else {
                     limits.push("電流が大きいと起こる磁気飽和 (インダクタンスの低下) は扱いません (「飽和電流 Isat」を入れると反映できます)。".into());
@@ -465,6 +477,11 @@ pub fn fit_tempco(points: &[(f64, f64)]) -> Result<(f64, f64, f64), String> {
 
 /// `i0` of the saturation model `L(i) = L / (1 + (i/i0)²)` for a coil whose inductance has fallen by `drop`
 /// at the current `isat`.
+/// The `LCURVE=` text of a coil's curve: "0:1,1:0.99,2:0.94" (current, ratio; 4 digits).
+pub fn lcurve_text(c: &[(f64, f64)]) -> String {
+    c.iter().map(|(i, r)| format!("{}:{}", crate::fit::num::g(*i, 4), crate::fit::num::g(*r, 4))).collect::<Vec<_>>().join(",")
+}
+
 pub fn saturation_i0(isat: f64, drop: f64) -> f64 {
     isat * ((1.0 - drop) / drop).sqrt()
 }
@@ -634,6 +651,16 @@ mod tests {
         let mut l = PassiveTemplate::new(PassiveKind::Inductor, 1e-5);
         l.dcr = Some(0.1);
         assert!(l.generate("L").unwrap().sim_text.contains("Rdcr 1 n_dcr 100m TC1=3.9300e-3"));
+    }
+
+    #[test]
+    fn a_coil_with_its_data_sheet_curve_writes_lcurve_instead_of_isat() {
+        let mut l = PassiveTemplate::new(PassiveKind::Inductor, 3.3e-6);
+        l.isat = Some(5.45);
+        l.sat_curve = Some(vec![(0.0, 1.0), (3.0, 0.88), (6.0, 0.65)]);
+        let g = l.generate("L_TEST").unwrap();
+        assert!(g.sim_text.contains("L1 1 2 3.3u LCURVE=0:1,3:0.88,6:0.65") && !g.sim_text.contains("ISAT"), "{}", g.sim_text);
+        assert!(g.limits.iter().any(|x| x.contains("曲線の 3 点")), "{:?}", g.limits);
     }
 
     #[test]

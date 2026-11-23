@@ -178,7 +178,7 @@ fn joined(mut pieces: Vec<Vec<(f32, f32)>>) -> Vec<Vec<(f32, f32)>> {
 fn rising(curve: Curve) -> Option<bool> {
     match curve {
         Curve::Forward | Curve::LightCurrent | Curve::VbeOn | Curve::VbeSat | Curve::VceSat | Curve::ThermalImpedance | Curve::Dropout => Some(true),
-        Curve::Capacitance => Some(false),
+        Curve::Capacitance | Curve::Inductance => Some(false),
         // the ripple rejection falls with frequency but may rise first; a noise density falls then flattens, with peaks
         Curve::DcGain | Curve::Ctr | Curve::Ripple | Curve::NoiseDensity => None,
     }

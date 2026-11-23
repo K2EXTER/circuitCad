@@ -422,7 +422,17 @@ pub fn plausible_pins(pins: &[(String, String)]) -> bool {
             return false;
         }
     }
-    let short = pins.iter().filter(|(_, name)| name.chars().count() < 2 && !matches!(name.as_str(), "A" | "K" | "G" | "D" | "S" | "B" | "C" | "E")).count();
+    // names that are single digits, three or more and all different, are a counter's or a decoder's outputs ("0" … "9" of the
+    // CD74HC4017's drawing), not a misread
+    let mut digits: Vec<&str> = pins.iter().map(|(_, n)| n.as_str()).filter(|n| n.len() == 1 && n.chars().all(|c| c.is_ascii_digit())).collect();
+    let n_digits = digits.len();
+    digits.sort();
+    digits.dedup();
+    let outputs = n_digits >= 3 && digits.len() == n_digits;
+    let short = pins
+        .iter()
+        .filter(|(_, name)| name.chars().count() < 2 && !matches!(name.as_str(), "A" | "K" | "G" | "D" | "S" | "B" | "C" | "E") && !(outputs && name.chars().all(|c| c.is_ascii_digit())))
+        .count();
     short * 2 < pins.len()
 }
 

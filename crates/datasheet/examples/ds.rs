@@ -101,6 +101,13 @@ fn main() -> Result<(), String> {
                 None => println!("drawing: none"),
             }
         }
+        "leads" => {
+            // ds leads FILE [FAMILY]: a three-lead part's pins as `lead_pins` finds them (a text, a drawing, the OCR)
+            match ds.lead_pins(args.get(2).map(|s| s.as_str())) {
+                Some(p) => println!("p.{} {:?}: {:?}", p.page + 1, p.from, p.pins),
+                None => println!("none"),
+            }
+        }
         "lands" => {
             // ds lands FILE: the recommended land patterns read (`land::land_patterns`) and the pages with such a heading
             let q = datasheet::Heading::LandPattern.queries();

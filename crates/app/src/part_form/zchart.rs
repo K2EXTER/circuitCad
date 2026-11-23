@@ -272,9 +272,15 @@ impl PartForm {
         crate::icons::help_label(ui, "インダクタンスと電流の表", "インダクタンスと電流の表 (グラフから読んだ「電流 変化率(%)」を 1 行ずつ。マイナスで下がる)");
         ui.add(egui::TextEdit::multiline(&mut self.pas_sattable).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("1 -5\n3 -30\n6 -60"))
             .on_hover_text(i18n::tr("例: 3 -30 は、3A で L が 30% 下がる、という意味です。Isat より少し大きい電流までの点があると確かです"));
-        if ui.button(i18n::tr("表から Isat を求める")).on_hover_text(i18n::tr("表に合うように、Isat (30% 低下) を計算して上の欄に入れます")).clicked() {
-            self.pas_message = Some(self.fit_sat_from_table());
-        }
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(i18n::tr("表から Isat を求める")).on_hover_text(i18n::tr("表に合うように、Isat (30% 低下) を計算して上の欄に入れます")).clicked() {
+                self.pas_message = Some(self.fit_sat_from_table());
+            }
+            ui.checkbox(&mut self.pas_sat_curve, i18n::tr("曲線のとおりにする")).on_hover_text(i18n::tr("Isat の式の代わりに、表の点をそのままモデルの曲線にします (点の間は直線、最後の点より大きい電流ではその割合のまま)。急に飽和するコイルは、式より実物に近くなります"));
+            if self.sheet.has_doc() && ui.button(i18n::tr("グラフから読む")).on_hover_text(i18n::tr("データシートの「インダクタンス - 電流」(Inductance vs. Current・L vs. DC current) の図を開きます。曲線をクリックすると、表に入れます")).clicked() {
+                self.sheet.start_graph(Some(super::graph_reader::Dest::CoilSat));
+            }
+        });
         self.sat_chart(ui);
     }
 

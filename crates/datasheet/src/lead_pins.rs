@@ -59,6 +59,24 @@ fn role(word: &str, letters: bool) -> Option<&'static str> {
     })
 }
 
+/// A lead number the OCR read as a letter ("l." and "I.-" for "1.-", "Z-" for "2-"), as the digit: only a lone character with
+/// the full stop or dash a numbered list puts after it.
+fn ocr_digit(mut w: Word) -> Word {
+    let t = w.text.trim();
+    let core = t.trim_end_matches(['.', ',', '-']);
+    if core.chars().count() == 1 && core.len() < t.len() {
+        let digit = match core {
+            "l" | "I" | "|" => Some("1"),
+            "Z" | "z" => Some("2"),
+            _ => None,
+        };
+        if let Some(d) = digit {
+            w.text = format!("{d}{}", &t[core.len()..]);
+        }
+    }
+    w
+}
+
 /// A pin number of a three- or four-lead part written as a word ("1", "1.", "1:", "1)", "1=").
 fn pin_number(word: &str) -> Option<u32> {
     let t = word.trim_end_matches(['.', ':', ')', '=', ',', '-']);
@@ -359,7 +377,16 @@ impl Datasheet {
                 continue;
             }
             let near = span(&names);
-            let drawn = self.drawn_words_at(page, Rect { x0: near.x0 - 40.0, y0: near.y0 - 30.0, x1: near.x1 + 40.0, y1: near.y1 + 30.0 }, 4.0);
+            // read at 4 and at 6 pixels a point and joined: the OCR drops a different small digit at each (IRLB8721's "3.-" at 4,
+            // its "1.-" at 6), and reads a "1" as "l" and a "2" as "Z"
+            let around = Rect { x0: near.x0 - 40.0, y0: near.y0 - 30.0, x1: near.x1 + 40.0, y1: near.y1 + 30.0 };
+            let mut drawn: Vec<Word> = self.drawn_words_at(page, around, 4.0).into_iter().map(ocr_digit).collect();
+            for w in self.drawn_words_at(page, around, 6.0).into_iter().map(ocr_digit) {
+                let c = ((w.rect.x0 + w.rect.x1) / 2.0, (w.rect.y0 + w.rect.y1) / 2.0);
+                if !drawn.iter().any(|d| ((d.rect.x0 + d.rect.x1) / 2.0 - c.0).abs() < 3.0 && ((d.rect.y0 + d.rect.y1) / 2.0 - c.1).abs() < 2.0) {
+                    drawn.push(w);
+                }
+            }
             let mut all = self.words(page).to_vec();
             all.extend(drawn.iter().cloned());
             let listed = || all_from_text(page, &drawn).into_iter().next();
@@ -404,6 +431,14 @@ mod tests {
 
     fn w(t: &str, x: f32, y: f32) -> Word {
         Word::for_test(t, x, y, x + 6.0 * t.chars().count() as f32, y + 8.0)
+    }
+
+    /// The OCR's "l." and "Z-" by a lead's name are its numbers 1 and 2 (IRLB8721's lead assignments); a word is left alone.
+    #[test]
+    fn lead_numbers_read_as_letters_are_digits() {
+        let fix = |t: &str| ocr_digit(w(t, 0.0, 0.0)).text;
+        assert_eq!((fix("l.-"), fix("I."), fix("Z-"), fix("3.-")), ("1.-".into(), "1.".into(), "2-".into(), "3.-".into()));
+        assert_eq!((fix("l"), fix("Zener"), fix("ID")), ("l".into(), "Zener".into(), "ID".into()));
     }
 
     #[test]

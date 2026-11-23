@@ -27,6 +27,8 @@ pub enum Curve {
     Ripple,
     /// Output (or input-referred) noise spectral density against frequency.
     NoiseDensity,
+    /// A power inductor's inductance against its DC current (the saturation).
+    Inductance,
 }
 
 /// A graph's caption on a page.
@@ -67,6 +69,31 @@ fn sides(words: &[Word], caption: Rect) -> (Rect, Rect, (usize, usize)) {
             .count()
     };
     (above, below, (numbers(above.y0, caption.y0), numbers(caption.y1, below.y1)))
+}
+
+/// A graph taller than `GRAPH_REACH` (Würth's half-page graphs, 370 points from title to the current axis): the area goes
+/// on down while numbers (tick labels) keep coming within 60 points of each other, in the area's columns.
+fn grow_down(words: &[Word], area: Rect) -> Rect {
+    let mut ys: Vec<f32> = words
+        .iter()
+        .filter(|w| {
+            let cx = (w.rect.x0 + w.rect.x1) / 2.0;
+            cx > area.x0 && cx < area.x1 && w.rect.y0 > area.y0 && w.tokens().any(|t| crate::graph::tick_value(t).is_some())
+        })
+        .map(|w| (w.rect.y0 + w.rect.y1) / 2.0)
+        .collect();
+    ys.sort_by(|a, b| a.total_cmp(b));
+    let mut bottom = area.y1;
+    for y in ys {
+        if y <= bottom {
+            continue;
+        }
+        if y - bottom > 60.0 {
+            break;
+        }
+        bottom = y + 10.0;
+    }
+    Rect { y1: bottom.max(area.y1), ..area }
 }
 
 /// Puts each graph's area on the side of its caption the maker uses: the topmost caption of a page has a graph on
@@ -316,6 +343,7 @@ pub fn titled(page: usize, words: &[Word], captioned: &[Figure]) -> Vec<Figure> 
             if numbers.1 < 3 || named(&below) {
                 continue;
             }
+            let below = grow_down(words, below);
             let caption: String = part.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
             let curves = curves(&caption);
             out.push(Figure { page, rect, caption, curves, area: below, other: above, numbers: (0, 0) });
@@ -361,6 +389,11 @@ pub fn curves(caption: &str) -> Vec<Curve> {
     }
     if has(what, &[" noise spectral density", " noise density", " noise voltage density", "雑音密度"]) || (has(what, &[" noise", "雑音"]) && has(against, &[" frequency", "周波数"])) {
         return vec![Curve::NoiseDensity];
+    }
+    // a coil's inductance against the DC current through it (Würth's "Typical Inductance vs. Current Characteristics", the
+    // "L vs. DC current" or "DC bias" of others): its saturation
+    if has(what, &[" inductance", "インダクタンス"]) || (has(what, &[" l "]) && has(against, &[" dc", " current", " idc", "電流"])) {
+        return if has(against, &[" current", " idc", " dc bias", " dc superposition", "電流", "直流重畳"]) { vec![Curve::Inductance] } else { vec![] };
     }
     if has(what, &[" capacitance", "容量"]) && !has(what, &[" gate charge"]) {
         return vec![Curve::Capacitance];
@@ -629,6 +662,16 @@ mod tests {
         let f = titled(5, &words, &[]);
         assert_eq!(f.iter().map(|f| f.caption.as_str()).collect::<Vec<_>>(), vec!["Ripple Rejection vs. Current"]);
         assert!(f[0].area.y0 >= 290.0, "the graph is below the title");
+    }
+
+    /// A coil's inductance against its DC current, as Würth and others caption it; not the temperature rise beside it.
+    #[test]
+    fn a_coils_inductance_against_current_is_its_saturation() {
+        assert_eq!(curves("Typical Inductance vs. Current Characteristics:"), vec![Curve::Inductance]);
+        assert_eq!(curves("Inductance vs. DC Bias Current"), vec![Curve::Inductance]);
+        assert_eq!(curves("L vs. DC current"), vec![Curve::Inductance]);
+        assert!(curves("Inductance vs. Frequency").is_empty());
+        assert!(curves("Typical Temperature Rise vs. Current Characteristics:").is_empty());
     }
 
     #[test]

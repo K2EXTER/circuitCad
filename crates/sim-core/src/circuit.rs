@@ -384,6 +384,8 @@ pub struct Circuit {
     pub tempcos: Vec<(String, f64, f64)>,
     /// Saturating inductors by element name: `i0`, the current scale of the model `L(i) = L / (1 + (i/i0)²)`.
     pub saturations: Vec<(String, f64)>,
+    /// Inductors that saturate along a data sheet's curve (`LCURVE=`), by element name: takes the place of `saturations`.
+    pub sat_curves: Vec<(String, SatCurve)>,
     /// Where the DC solve should start (SPICE `.nodeset`): node name and voltage. A circuit with a latch built from gates has more than one
     /// solution; the nodes listed here are pulled towards these voltages while the solver steps gmin down, which picks the state.
     pub nodesets: Vec<(String, f64)>,
@@ -420,7 +422,7 @@ impl Default for Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![], nodesets: vec![], spreads: vec![] }
+        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![], sat_curves: vec![], nodesets: vec![], spreads: vec![] }
     }
 
     /// The index of an existing node (`0` and `GND` are ground), without adding one.
@@ -464,6 +466,12 @@ impl Circuit {
         self.saturations.push((name.to_string(), i0));
     }
 
+    /// Make inductor `name` saturate along a curve (the inductance's ratio to its value at no current, against the current).
+    pub fn set_sat_curve(&mut self, name: &str, curve: SatCurve) {
+        self.sat_curves.retain(|(n, _)| n != name);
+        self.sat_curves.push((name.to_string(), curve));
+    }
+
     /// `i0` of the saturation model of the inductor `isat` amperes at which the inductance has fallen by `drop` (0..1).
     pub fn saturation_scale(isat: f64, drop: f64) -> f64 {
         isat * ((1.0 - drop) / drop).sqrt()
@@ -497,3 +505,78 @@ impl Circuit {
         inner
     }
 }
+
+/// An inductor's saturation read off a data sheet's "inductance against DC current" graph: the ratio of the inductance to its
+/// value at no current, at currents from 0 up, joined by straight lines and flat beyond the last point (either sign of the
+/// current alike). The flux is the exact integral of that, so the transient and the operating point agree.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SatCurve {
+    /// (current A, ratio), currents rising from 0.
+    pts: Vec<(f64, f64)>,
+}
+
+impl SatCurve {
+    /// From (current, ratio) points, currents rising and positive, ratios above 0. The curve starts at 0 A with the first ratio when
+    /// the first point is above 0.
+    pub fn new(points: &[(f64, f64)]) -> Result<SatCurve, String> {
+        if points.is_empty() {
+            return Err("LCURVE には「電流:割合」の点が要ります (例: 0:1,3:0.88,6:0.65)".into());
+        }
+        if points.iter().any(|(i, r)| !(i.is_finite() && *i >= 0.0 && r.is_finite() && *r > 0.0)) {
+            return Err("LCURVE の電流は 0 以上、割合は 0 より大きい数にしてください".into());
+        }
+        if points.windows(2).any(|w| w[1].0 <= w[0].0) {
+            return Err("LCURVE の点は、電流の小さい順に並べてください".into());
+        }
+        let mut pts = points.to_vec();
+        if pts[0].0 > 0.0 {
+            pts.insert(0, (0.0, pts[0].1));
+        }
+        Ok(SatCurve { pts })
+    }
+
+    /// `LCURVE=0:1,3:0.88,6:0.65`: current A and ratio, a colon between, commas between the points.
+    pub fn parse(text: &str) -> Result<SatCurve, String> {
+        let mut pts = vec![];
+        for p in text.split(',').filter(|p| !p.is_empty()) {
+            let (i, r) = p.split_once(':').ok_or_else(|| format!("LCURVE の「{p}」は「電流:割合」(例 3:0.88) で書いてください"))?;
+            let num = |s: &str| crate::parse_value(s).ok_or_else(|| format!("LCURVE の「{s}」が数として読めません"));
+            pts.push((num(i)?, num(r)?));
+        }
+        SatCurve::new(&pts)
+    }
+
+    /// The ratio of the incremental inductance at the current `i`.
+    pub fn ratio(&self, i: f64) -> f64 {
+        let a = i.abs();
+        match self.pts.iter().position(|p| p.0 > a) {
+            None => self.pts[self.pts.len() - 1].1,
+            Some(0) => self.pts[0].1,
+            Some(k) => {
+                let ((i0, r0), (i1, r1)) = (self.pts[k - 1], self.pts[k]);
+                r0 + (r1 - r0) * (a - i0) / (i1 - i0)
+            }
+        }
+    }
+
+    /// The flux per henry at the current `i`: the integral of `ratio` from 0 (odd in `i`).
+    pub fn flux(&self, i: f64) -> f64 {
+        let a = i.abs();
+        let mut f = 0.0;
+        for w in self.pts.windows(2) {
+            let ((i0, r0), (i1, r1)) = (w[0], w[1]);
+            if a <= i0 {
+                break;
+            }
+            let top = a.min(i1);
+            let rt = r0 + (r1 - r0) * (top - i0) / (i1 - i0);
+            f += (top - i0) * (r0 + rt) / 2.0;
+        }
+        let last = self.pts[self.pts.len() - 1];
+        if a > last.0 {
+            f += (a - last.0) * last.1;
+        }
+        f * i.signum()
+    }
+}
+

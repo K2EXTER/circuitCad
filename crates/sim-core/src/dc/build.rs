@@ -58,7 +58,8 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
             Element::Inductor { name, a, b, l } => {
                 let i0 = c.saturations.iter().find(|(n, _)| n == name).map_or(0.0, |(_, i)| *i);
-                ce.push(Ce::L { name: name.clone(), p: *a, n: *b, l: *l, br: br_base + n_br, idx: n_inds, i0 });
+                let curve = c.sat_curves.iter().find(|(n, _)| n == name).map(|(_, k)| std::sync::Arc::new(k.clone()));
+                ce.push(Ce::L { name: name.clone(), p: *a, n: *b, l: *l, br: br_base + n_br, idx: n_inds, i0, curve });
                 n_br += 1;
                 n_inds += 1;
             }
@@ -173,7 +174,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             *c = compiled;
         }
     }
-    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. } | Ce::Cq { .. }) || matches!(e, Ce::L { i0, .. } if *i0 > 0.0));
+    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. } | Ce::Cq { .. }) || matches!(e, Ce::L { i0, curve, .. } if *i0 > 0.0 || curve.is_some()));
     let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
     // the stored states start at 0, unless the circuit says otherwise (`Circuit::initial` holds 1 / 0 under the element's name)
     let seq_state = std::cell::RefCell::new(seq_names.iter().map(|n| c.initial.iter().find(|(m, _)| m == n).map_or(0.0, |(_, v)| if *v > 0.5 { 1.0 } else { 0.0 })).collect::<Vec<f64>>());

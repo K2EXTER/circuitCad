@@ -37,6 +37,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - 熱: `selfheat.rs` 自己発熱 / `ambient.rs` 周囲の温度を振る(自己発熱込みの最悪ケース)/ `heat_tran.rs` 温度の時間変化 / `zth.rs` 過渡熱抵抗の段(データシートの曲線に当てはめ)
 - デジタル回路を動かしながら見る (B8) の動かす部分 `live_logic.rs`(app と web が共有。High/Low の判定 `logic_level.rs`)
 - 音: `audio.rs`(波形を WAV に・WAV を電源の波形 `WAV(…)` に。画面は過渡解析の表のタブ「音で聴く」`schematic/audio_ui.rs`)
+- 作ったオペアンプ・レギュレータのモデルを同梱と同じ回路で測る `model_meas.rs` (画面は `part_form/measure_model.rs`)
 - `designcalc.rs` 値の計算(足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)/ `filterdesign.rs` アクティブフィルタの段と部品(回路図に置くのは `schematic/filter_place.rs`)
 - `tests_*.rs` は機能別
 

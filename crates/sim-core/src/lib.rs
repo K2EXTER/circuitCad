@@ -7,6 +7,7 @@
 
 mod ac;
 pub mod system;
+pub mod model_meas;
 mod zth;
 mod chain;
 mod circuit;
@@ -82,7 +83,7 @@ pub use worstcase::{worst_case, WcPart, WcSettings, WorstCase};
 pub use poweron::{nice_up, power_on, runs_away_from_dc, steady_stats, PowerOn, Running as PowerOnRunning, PowerOnSettings, Reading as PowerOnReading, SupplyCurrent, LIMIT_FLOOR};
 pub use impedance::{character as z_character, impedance_analysis, z_extrema, ImpedanceResult, ZExtremum};
 pub use polezero::{pole_zero, transfer_function, PoleZero, Root, TransferFunction};
-pub use circuit::{BjtModel, CellKind, CellSupply, Circuit, DiodeModel, Element, MosModel, SeqKind, SeqLevels, Spread, SwitchModel};
+pub use circuit::{BjtModel, CellKind, CellSupply, Circuit, DiodeModel, Element, MosModel, SatCurve, SeqKind, SeqLevels, Spread, SwitchModel};
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};

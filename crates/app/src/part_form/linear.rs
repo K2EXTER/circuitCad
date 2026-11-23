@@ -33,6 +33,9 @@ pub struct OpampInput {
     pub found: Vec<(bool, String)>,
     pub result: Option<Result<Fitted, String>>,
     pub message: Option<(bool, String)>,
+    /// The model measured against the boxes (M3), and the supply it is measured on (V, empty: 5).
+    pub measured: Option<Result<Vec<super::measure_model::CompareRow>, String>>,
+    pub meas_vs: String,
 }
 
 /// The boxes of the regulator section.
@@ -78,6 +81,8 @@ pub struct RegulatorInput {
     /// the temperature range each part number is ordered for (part number, (low, high) °C).
     pub grades: Vec<String>,
     pub temps: Vec<(String, (f64, f64))>,
+    /// The model measured against the boxes (M3).
+    pub measured: Option<Result<Vec<super::measure_model::CompareRow>, String>>,
 }
 
 /// A number as typed, with an SI prefix and an optional unit after it ("700kHz", "-20nA", "2Meg").
@@ -616,6 +621,28 @@ impl PartForm {
             }
         });
         Self::result_box(ui, &self.opamp.result, &self.opamp.message);
+        if matches!(self.opamp.result, Some(Ok(_))) {
+            ui.horizontal(|ui| {
+                if ui.button(i18n::tr("モデルを測ってデータシートと比べる")).on_hover_text(i18n::tr("作ったモデルを、同梱のオペアンプと同じ回路 (ボルテージフォロワ・開ループ・段の応答・出力の短絡) で測り、入れた値と並べます。ずれが 5 % を超える所は橙色。数秒かかります")).clicked() {
+                    let (name, source) = (self.linear_name("OPAMP"), self.linear_source());
+                    let vs = sim_core::parse_value(self.opamp.meas_vs.trim()).filter(|v| *v > 0.0).unwrap_or(5.0);
+                    self.opamp.measured = Some(match (self.opamp.spec(&name, &source), &self.opamp.result) {
+                        (Ok(s), Some(Ok(f))) => super::measure_model::compare_opamp(&s, f, vs),
+                        (Err(e), _) => Err(e),
+                        _ => Err("モデルができていません".into()),
+                    });
+                }
+                ui.label(i18n::tr("電源 [V]")).on_hover_text(i18n::tr("測るときの電源電圧 (正と負の電源の間。空なら 5 V。データシートの表の条件に合わせます)"));
+                ui.add(egui::TextEdit::singleline(&mut self.opamp.meas_vs).desired_width(40.0).hint_text("5"));
+            });
+            match &self.opamp.measured {
+                Some(Ok(rows)) => super::measure_model::compare_table(ui, "opamp_measured", rows),
+                Some(Err(e)) => {
+                    ui.colored_label(crate::theme::error(), e);
+                }
+                None => {}
+            }
+        }
     }
 
     pub(super) fn regulator_ui(&mut self, ui: &mut egui::Ui) {
@@ -751,6 +778,23 @@ impl PartForm {
             }
         });
         Self::result_box(ui, &self.reg.result, &self.reg.message);
+        if matches!(self.reg.result, Some(Ok(_)))
+            && ui.button(i18n::tr("モデルを測ってデータシートと比べる")).on_hover_text(i18n::tr("作ったモデルを、同梱のレギュレータと同じ回路 (表の入力電圧・軽い負荷と 0.5 A・出力の短絡・入力の正弦波) で測り、入れた値と並べます。ずれが 5 % を超える所は橙色")).clicked()
+        {
+            let (name, source) = (self.linear_name("REG"), self.linear_source());
+            self.reg.measured = Some(match (self.reg.spec(&name, &source), &self.reg.result) {
+                (Ok(s), Some(Ok(f))) => super::measure_model::compare_regulator(&s, f),
+                (Err(e), _) => Err(e),
+                _ => Err("モデルができていません".into()),
+            });
+        }
+        match &self.reg.measured {
+            Some(Ok(rows)) if matches!(self.reg.result, Some(Ok(_))) => super::measure_model::compare_table(ui, "reg_measured", rows),
+            Some(Err(e)) => {
+                ui.colored_label(crate::theme::error(), e);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -780,6 +824,24 @@ mod tests {
             let f = fit::fit(&fit::Spec::Regulator(s)).unwrap();
             assert_eq!(f.text, bundled(part), "{part}");
         }
+    }
+
+    /// M3: the examples' models measured in the form agree with what was typed (the LM358 within 5 % at 5 V, but the input
+    /// bias current, the swing and the short-circuit current, which the data sheet gives on other conditions: ISC at 10 V;
+    /// the LM7805 within 5 %), as the bundled ones do in the CLI's comparison tables.
+    #[test]
+    fn the_examples_measure_close_to_their_boxes() {
+        let s = OpampInput::from_spec(&lm358()).spec("LM358", "s").unwrap();
+        let f = fit::fit(&fit::Spec::Opamp(s.clone())).unwrap();
+        let rows = super::super::measure_model::compare_opamp(&s, &f, 5.0).unwrap();
+        assert!(rows.len() >= 9, "{rows:?}");
+        let far: Vec<_> = rows.iter().filter(|r| (r.model / r.datasheet - 1.0).abs() > 0.05 && r.item != "入力バイアス電流" && !r.item.starts_with("出力の振れ幅") && r.item != "出力の短絡電流").collect();
+        assert!(far.is_empty(), "{far:#?}");
+        let s = RegulatorInput::example(false).spec("LM7805", "s").unwrap();
+        let f = fit::fit(&fit::Spec::Regulator(s.clone())).unwrap();
+        let rows = super::super::measure_model::compare_regulator(&s, &f).unwrap();
+        let far: Vec<_> = rows.iter().filter(|r| (r.model / r.datasheet - 1.0).abs() > 0.05).collect();
+        assert!(rows.len() >= 6 && far.is_empty(), "{rows:#?}");
     }
 
     #[test]

@@ -64,7 +64,7 @@ pub(super) fn apply(app: &mut App, a: &Args) {
     if let Some(t) = a.val("--form-graph-for") {
         app.sch.graph_for_in_form_pdf(t);
     }
-    // --form-graph-all bjt: a section's 「表とグラフから全部読む」 (bjt, darl, diode, opto, pd, reg)
+    // --form-graph-all bjt: a section's 「表とグラフから全部読む」 (bjt, darl, diode, opto, pd, reg, coil)
     let graph_all = a.val("--form-graph-all");
     if let Some(t) = graph_all {
         app.sch.graph_all_in_form_pdf(t);
@@ -113,6 +113,10 @@ pub(super) fn apply(app: &mut App, a: &Args) {
         if a.has(flag) {
             app.sch.linear_in_form(what);
         }
+    }
+    // --form-measure: the op amp and regulator models of the form measured against their boxes (after an example)
+    if a.has("--form-measure") {
+        app.sch.measure_in_form();
     }
     // --form-bjt-example: the transistor section with the 2N3904 example, fitted
     if a.has("--form-bjt-example") {

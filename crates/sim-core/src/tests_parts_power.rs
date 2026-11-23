@@ -469,6 +469,13 @@ fn the_tdk_cga_capacitors_follow_their_impedance_curves() {
         ("CGA3E2NP01H102J080AA", &[(1.8442e+07, 8.4661e+00), (1.8570e+08, 5.4809e-02), (3.7417e+08, 1.2826e+00)]),
         ("CGA3E2NP01H472J080AA", &[(8.1274e+06, 4.1158e+00), (8.1232e+07, 3.2811e-02), (1.6142e+08, 5.7355e-01)]),
         ("CGA3E2NP01H103J080AA", &[(6.1849e+06, 2.5168e+00), (6.1817e+07, 2.5459e-02), (1.2444e+08, 3.8467e-01)]),
+        // X8R and X8L (2026-11-24): fitted to within 10 to 17 % up to three times the resonance
+        ("CGA3E3X8R1H104K080AB", &[(2.0839e+06, 8.1407e-01), (2.0748e+07, 1.8951e-02), (4.1960e+07, 1.3208e-01)]),
+        ("CGA3E1X8L1C105K080AC", &[(7.5749e+05, 2.4202e-01), (7.5640e+06, 8.4306e-03), (1.5086e+07, 3.6703e-02)]),
+        ("CGA4J1X8L1H105K125AC", &[(5.0913e+05, 3.2155e-01), (5.0887e+06, 6.0742e-03), (1.0271e+07, 5.0169e-02)]),
+        ("CGA4J1X8L1E475K125AC", &[(2.6228e+05, 1.4580e-01), (2.6214e+06, 3.1267e-03), (5.2912e+06, 2.2780e-02)]),
+        ("CGA5L1X8L1H225K160AC", &[(3.4641e+05, 2.3760e-01), (3.4591e+06, 7.1190e-03), (6.8988e+06, 3.7326e-02)]),
+        ("CGA5L1X8L1C106K160AC", &[(1.3415e+05, 1.2847e-01), (1.3356e+06, 2.3409e-03), (2.7012e+06, 1.8054e-02)]),
     ];
     let mut bad = vec![];
     for (pn, points) in table {
@@ -481,12 +488,65 @@ fn the_tdk_cga_capacitors_follow_their_impedance_curves() {
             let r = ac_analysis(&c, &AcSettings { fstart: *f, fstop: *f, sweep: AcSweep::Decade(1) }).unwrap();
             let s = r.signal("V(a)").unwrap();
             let model = s.re[0].hypot(s.im[0]);
-            if (model / z - 1.0).abs() > 0.10 {
+            if (model / z - 1.0).abs() > if pn.contains("NP0") { 0.10 } else { 0.18 } {
                 bad.push(format!("{pn} at {f:.3e} Hz: model {model:.4} ohm, TDK {z:.4} ohm"));
             }
         }
     }
     assert!(bad.is_empty(), "{bad:#?}");
+}
+
+/// The TDK CGA X8R and X8L capacitors lose capacitance with DC voltage as their product pages' DC bias curves show: the small-signal
+/// capacitance (AC at 1 kHz over a DC bias) at half and at the full rated voltage, within 5 points of the curve.
+#[test]
+fn the_tdk_cga_x8r_and_x8l_lose_capacitance_with_dc_bias() {
+    let table: &[(&str, f64, &[(f64, f64)])] = &[
+        ("CGA3E3X8R1H104K080AB", 100e-9, &[(25.0, 8.5508e-08), (50.0, 5.67107e-08)]),
+        ("CGA3E1X8L1C105K080AC", 1e-6, &[(8.0, 7.58064e-07), (16.0, 4.47886e-07)]),
+        ("CGA4J1X8L1H105K125AC", 1e-6, &[(25.0, 6.07421e-07), (50.0, 2.96899e-07)]),
+        ("CGA4J1X8L1E475K125AC", 4.7e-6, &[(12.5, 2.93873e-06), (25.0, 1.41326e-06)]),
+        ("CGA5L1X8L1H225K160AC", 2.2e-6, &[(25.0, 1.47592e-06), (50.0, 7.58772e-07)]),
+        ("CGA5L1X8L1C106K160AC", 10e-6, &[(8.0, 7.75404e-06), (16.0, 4.61094e-06)]),
+    ];
+    let mut bad = vec![];
+    for (pn, c0, points) in table {
+        let def = part(pn);
+        for (v, want) in points.iter() {
+            let mut c = Circuit::new();
+            place(&mut c, &def, "C1", &[("1", "a"), ("2", "0")]);
+            let a = c.node("a");
+            c.add(Element::VSource { name: "V1".into(), p: a, n: 0, wave: Waveform::Dc(*v), ac: Some((1.0, 0.0)) });
+            let r = ac_analysis(&c, &AcSettings { fstart: 1e3, fstop: 1e3, sweep: AcSweep::Decade(1) }).unwrap();
+            let s = r.signal("I(V1)").unwrap();
+            let cap = s.re[0].hypot(s.im[0]) / (2.0 * std::f64::consts::PI * 1e3);
+            if ((cap - want) / c0).abs() > 0.05 {
+                bad.push(format!("{pn} at {v} V: model {cap:.4e} F, TDK {want:.4e} F"));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
+/// Würth 74437324033 (3.3 uH) saturates along its data sheet's "Typical Inductance vs. Current" curve: its AC inductance at a DC
+/// bias is 3.3 uH at none, 10 % less at 2.75 A and 30 % less at 5.45 A (the table's two saturation currents).
+#[test]
+fn the_wurth_coil_loses_inductance_as_its_data_sheet_shows() {
+    let def = part("74437324033");
+    let l_at = |bias: f64| {
+        let mut c = Circuit::new();
+        place(&mut c, &def, "L1", &[("1", "a"), ("2", "0")]);
+        let a = c.node("a");
+        c.add(Element::ISource { name: "Ib".into(), from: 0, to: a, wave: Waveform::Dc(bias), ac: None });
+        c.add(Element::ISource { name: "Iac".into(), from: 0, to: a, wave: Waveform::Dc(0.0), ac: Some((1.0, 0.0)) });
+        let r = ac_analysis(&c, &AcSettings { fstart: 1e5, fstop: 1e5, sweep: AcSweep::Decade(1) }).unwrap();
+        let s = r.signal("V(a)").unwrap();
+        // the imaginary part is w L (the DCR is the real part)
+        s.im[0] / (2.0 * std::f64::consts::PI * 1e5)
+    };
+    for (bias, want) in [(0.0, 3.3e-6), (2.75, 0.9 * 3.3e-6), (5.45, 0.7 * 3.3e-6)] {
+        let l = l_at(bias);
+        assert!((l / want - 1.0).abs() < 0.02, "{bias} A: {l} H, want {want}");
+    }
 }
 
 #[test]

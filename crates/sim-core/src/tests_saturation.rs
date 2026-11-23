@@ -62,3 +62,31 @@ L1 p q 10u ISAT=1 LDROP=0.5
     let w = 2.0 * std::f64::consts::PI * 1e5;
     assert!((v / (w * 5e-6) - 1.0).abs() < 1e-6, "{v} vs {}", w * 5e-6);
 }
+
+#[test]
+fn an_inductor_follows_the_curve_of_its_data_sheet() {
+    // a hard knee: full inductance to 1 A, then down to a fifth at 2 A and flat beyond. 1 V across 10 uH: the current rises at
+    // 0.1 A/us to 1 A (10 us), then faster as the inductance falls; at 2 A and beyond 2 uH makes 0.5 A/us
+    let k = SatCurve::parse("0:1,1:1,2:0.2").unwrap();
+    assert_eq!((k.ratio(0.5), k.ratio(1.5), k.ratio(-3.0)), (1.0, 0.6, 0.2));
+    // flux per henry: 1 up to 1 A, the trapezoid (1 + 0.2) / 2 from 1 to 2 A, 0.2 a A beyond
+    assert!((k.flux(2.0) - 1.6).abs() < 1e-12 && (k.flux(-3.0) + 1.8).abs() < 1e-12);
+    let r = ramp(".subckt T p gnd\nL1 p gnd 10u LCURVE=0:1,1:1,2:0.2\n.ends T", 20e-6);
+    // flux = V t: 10 us at 1 A; 16 us at 2 A; 18 us at 3 A
+    for (t, want) in [(5e-6, 0.5), (10e-6, 1.0), (16e-6, 2.0), (18e-6, 3.0)] {
+        let got = at(&r, "I(U1.L1)", t);
+        assert!((got - want).abs() < 0.03 * want, "t={t}: {got} vs {want}");
+    }
+    // the AC inductance at a 1.5 A bias: 0.6 of 10 uH
+    let mut c = Circuit::new();
+    let a = c.node("a");
+    add_subckt_instance(&mut c, "U1", "T", ".subckt T p q\nL1 p q 10u LCURVE=0:1,1:1,2:0.2\n.ends T", &[a, 0]).unwrap();
+    c.add(Element::ISource { name: "Ibias".into(), from: 0, to: a, wave: parse_source("1.5").unwrap(), ac: None });
+    c.add(Element::ISource { name: "Iac".into(), from: 0, to: a, wave: parse_source("0").unwrap(), ac: Some((1.0, 0.0)) });
+    let ac = ac_analysis(&c, &AcSettings { fstart: 1e5, fstop: 1e5, sweep: AcSweep::Linear(2) }).unwrap();
+    let s = ac.signal("V(a)").unwrap();
+    let l = s.re[0].hypot(s.im[0]) / (2.0 * std::f64::consts::PI * 1e5);
+    assert!((l - 6e-6).abs() < 0.05e-6, "{l}");
+    // a curve out of order says so
+    assert!(SatCurve::parse("0:1,2:0.5,1:0.8").unwrap_err().contains("小さい順"));
+}

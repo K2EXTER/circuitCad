@@ -188,6 +188,8 @@ pub struct PartForm {
     pub pas_isat: String,
     pub pas_ldrop: String,
     pub pas_sattable: String,
+    /// Use the L-versus-current table as the model's curve (`LCURVE`) instead of fitting an Isat to it.
+    pub pas_sat_curve: bool,
     pub pas_message: Option<Result<String, String>>,
     /// What 「データシートの寸法表から」 did (`chip_land.rs`).
     pub chip_land_msg: Option<Result<String, String>>,
@@ -417,6 +419,7 @@ impl Default for PartForm {
             pas_isat: String::new(),
             pas_ldrop: String::new(),
             pas_sattable: String::new(),
+            pas_sat_curve: false,
             pas_message: None,
             chip_land_msg: None,
             sheet_diff: None,
@@ -525,6 +528,7 @@ mod mosfet;
 mod bjt;
 mod darlington;
 mod linear;
+mod measure_model;
 mod opto;
 mod table_fill;
 mod heat_fill;

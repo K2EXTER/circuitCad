@@ -66,17 +66,71 @@ pub fn pins_in_drawings(words: &[Word], area: Rect) -> Vec<Vec<(String, String)>
 /// A drawing as it is gathered: its top, its left and its (number, name) pairs.
 type Drawing = (f32, f32, Vec<(u32, String)>);
 
-/// The drawings of one band.
+/// The drawings of one band. When none comes out whole, once more with the names that are digits (Harris' CD74HC4017 names
+/// its decoded outputs "0" … "9" beside the pin numbers' boxes): a column of single digits, each once, on the lines of a
+/// column of pin numbers counting by one.
 fn drawings_in(words: &[&Word]) -> Vec<Vec<(String, String)>> {
+    let found = drawings_with(words, &[]);
+    if !found.is_empty() {
+        return found;
+    }
+    let digits = digit_names(words);
+    if digits.is_empty() { found } else { drawings_with(words, &digits) }
+}
+
+/// The words that are names written as digits: a column (centres within 4 points) of single digits, all different, three or
+/// more, each on the line of a number of a column of pin numbers that counts up or down by one, beside it.
+fn digit_names(words: &[&Word]) -> Vec<usize> {
+    // numbers from 0 (a name "0"; a pin number is 1 or more)
+    let whole = |w: &Word| {
+        let t = w.text.trim();
+        (!t.is_empty() && t.chars().all(|c| c.is_ascii_digit()) && t.len() <= 3).then(|| t.parse::<u32>().ok()).flatten()
+    };
+    let nums: Vec<(usize, u32)> = words.iter().enumerate().filter_map(|(i, w)| whole(w).map(|n| (i, n))).collect();
+    let cx = |i: usize| centre(&words[i].rect).0;
+    // columns of numbers
+    let mut cols: Vec<Vec<(usize, u32)>> = vec![];
+    for &(i, n) in &nums {
+        match cols.iter_mut().find(|c| (cx(c[0].0) - cx(i)).abs() < 4.0) {
+            Some(c) => c.push((i, n)),
+            None => cols.push(vec![(i, n)]),
+        }
+    }
+    for c in cols.iter_mut() {
+        c.sort_by(|a, b| words[a.0].rect.y0.total_cmp(&words[b.0].rect.y0));
+    }
+    let counting = |c: &[(usize, u32)]| c.len() >= 3 && c.iter().all(|p| p.1 >= 1) && (c.windows(2).all(|w| w[1].1 == w[0].1 + 1) || c.windows(2).all(|w| w[0].1 == w[1].1 + 1));
+    let mut out = vec![];
+    for pins in cols.iter().filter(|c| counting(c)) {
+        for other in cols.iter().filter(|c| !counting(c) && c.len() >= 3) {
+            let single = other.iter().all(|&(i, _)| words[i].text.trim().chars().count() == 1);
+            let mut values: Vec<u32> = other.iter().map(|p| p.1).collect();
+            values.sort();
+            values.dedup();
+            // beside the pin numbers, on their lines
+            let beside = other.iter().all(|&(i, _)| pins.iter().any(|&(k, _)| (words[k].baseline() - words[i].baseline()).abs() < 2.5 && (cx(k) - cx(i)).abs() < 25.0));
+            if single && values.len() == other.len() && beside {
+                out.extend(other.iter().map(|p| p.0));
+            }
+        }
+    }
+    out
+}
+
+fn drawings_with(words: &[&Word], digit_names: &[usize]) -> Vec<Vec<(String, String)>> {
     // a figure's number printed turned on its side ("16570-001" as a column of single characters) is not a pin number
     let upright = |w: &Word| {
         let c = centre(&w.rect);
         !words.iter().any(|o| !std::ptr::eq(*o, w) && o.text.trim().chars().count() == 1 && (centre(&o.rect).0 - c.0).abs() < 1.5 && (centre(&o.rect).1 - c.1).abs() < 6.0)
     };
-    let nums: Vec<(usize, u32)> = words.iter().enumerate().filter_map(|(i, w)| number(w).filter(|_| upright(w)).map(|n| (i, n))).collect();
+    let nums: Vec<(usize, u32)> = words.iter().enumerate().filter(|(i, _)| !digit_names.contains(i)).filter_map(|(i, w)| number(w).filter(|_| upright(w)).map(|n| (i, n))).collect();
     // a word printed small under another ("IN" of "V" over "IN") is part of that name, not a name of its own
     let is_sub = |s: &Word| words.iter().any(|w| !std::ptr::eq(*w, s) && is_subscript_of(s, w));
-    let names: Vec<(usize, String)> = words.iter().enumerate().filter_map(|(i, w)| if number(w).is_some() || is_sub(w) { None } else { name(w).map(|n| (i, n)) }).collect();
+    let names: Vec<(usize, String)> = words
+        .iter()
+        .enumerate()
+        .filter_map(|(i, w)| if digit_names.contains(&i) { Some((i, w.text.trim().to_string())) } else if number(w).is_some() || is_sub(w) { None } else { name(w).map(|n| (i, n)) })
+        .collect();
     // every number with every name near enough, the nearest pairs taken first
     let mut edges: Vec<(f32, usize, usize)> = vec![];
     for (a, &(i, _)) in nums.iter().enumerate() {
@@ -180,6 +234,27 @@ mod tests {
     }
 
     /// An 8-pin dual drawing: names outside, numbers inside the outline, 1 to 4 down the left and 8 to 5 down the right.
+    /// Harris' CD74HC4017: the decoded outputs named by their digits beside the pin numbers' boxes ("5 [1]", "[11] 9").
+    #[test]
+    fn names_that_are_digits_beside_counting_pin_numbers() {
+        let mut words = vec![];
+        let left = ["5", "1", "0", "2", "6", "7", "3", "GND"];
+        let right = ["VCC", "MR", "CP", "CE", "TC", "9", "4", "8"];
+        for k in 0..8 {
+            let y = 100.0 + 14.0 * k as f32;
+            words.push(w(left[k], 40.0 - 6.0 * (left[k].len() as f32 - 1.0), y));
+            words.push(w(&(k + 1).to_string(), 50.0, y));
+            words.push(w(&(16 - k).to_string(), 110.0, y));
+            words.push(w(right[k], 123.0, y));
+        }
+        let area = Rect { x0: 0.0, y0: 0.0, x1: 300.0, y1: 300.0 };
+        let got = pins_in_drawings(&words, area);
+        let want: Vec<(String, String)> =
+            ["5", "1", "0", "2", "6", "7", "3", "GND", "8", "4", "9", "TC", "CE", "CP", "MR", "VCC"].iter().enumerate().map(|(k, n)| ((k + 1).to_string(), n.to_string())).collect();
+        assert_eq!(got.first(), Some(&want), "{got:?}");
+        assert!(crate::draft::plausible_pins(&want));
+    }
+
     #[test]
     fn a_dual_drawing() {
         let mut words = vec![];

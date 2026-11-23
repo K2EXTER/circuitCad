@@ -49,6 +49,8 @@ pub enum Dest {
     RegDropout,
     RegRipple,
     RegNoise,
+    /// A coil's inductance against its DC current (the table's "current percent" lines, from the first point's inductance).
+    CoilSat,
 }
 
 impl Dest {
@@ -74,10 +76,11 @@ impl Dest {
             Dest::RegDropout => "レギュレータの「ドロップアウト」に入れる",
             Dest::RegRipple => "レギュレータの「リップル除去」に入れる",
             Dest::RegNoise => "レギュレータの「出力雑音」に入れる",
+            Dest::CoilSat => "コイルの「インダクタンスと電流の表」に入れる",
         }
     }
 
-    pub const ALL: [Dest; 20] = [
+    pub const ALL: [Dest; 21] = [
         Dest::DiodeForward,
         Dest::DiodeCap,
         Dest::BjtHfe,
@@ -98,6 +101,7 @@ impl Dest {
         Dest::RegDropout,
         Dest::RegRipple,
         Dest::RegNoise,
+        Dest::CoilSat,
     ];
 
     /// The field by its name in the code ("DarlHfe"), for `--form-graph-for`.
@@ -121,6 +125,7 @@ impl Dest {
             Dest::RegDropout => Curve::Dropout,
             Dest::RegRipple => Curve::Ripple,
             Dest::RegNoise => Curve::NoiseDensity,
+            Dest::CoilSat => Curve::Inductance,
         }
     }
 
@@ -150,6 +155,7 @@ impl Dest {
             Curve::Dropout => "ドロップアウト",
             Curve::Ripple => "リップル除去",
             Curve::NoiseDensity => "雑音密度",
+            Curve::Inductance => "インダクタンス - 電流",
         }
     }
 
@@ -167,6 +173,7 @@ impl Dest {
             Dest::RegDropout => (false, false, false),
             Dest::RegRipple => (true, false, false),
             Dest::RegNoise => (true, true, false),
+            Dest::CoilSat => (false, false, false),
         }
     }
 }

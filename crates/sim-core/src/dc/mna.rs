@@ -213,11 +213,19 @@ impl Compiled {
                     m.branch(*p, *n, *br);
                     m.b[*br] += ctx.source(wave) * scale;
                 }
-                Ce::L { p, n, l, br, idx, i0, .. } => {
+                Ce::L { p, n, l, br, idx, i0, curve, .. } => {
                     // short circuit at DC; v = req*(i - i_old) [- v_old] in transient
                     m.branch(*p, *n, *br);
                     if let Some(d) = &ctx.dynamic {
-                        if *i0 > 0.0 {
+                        if let Some(k_curve) = curve {
+                            // saturating along the data sheet's curve: flux = l * curve.flux(i), linearised around the iterate i_k
+                            let ik = x[*br];
+                            let ld = l * k_curve.ratio(ik);
+                            let flux = |i: f64| l * k_curve.flux(i);
+                            let k = if d.trap { 2.0 } else { 1.0 };
+                            m.at(*br, *br, -k * ld / d.h);
+                            m.b[*br] += k * (flux(ik) - ld * ik - flux(d.ind_i[*idx])) / d.h - if d.trap { d.ind_v[*idx] } else { 0.0 };
+                        } else if *i0 > 0.0 {
                             // saturating: v = d(flux)/dt with flux = l*i0*atan(i/i0), linearised around the iterate i_k
                             let ik = x[*br];
                             let ld = l / (1.0 + (ik / i0) * (ik / i0));

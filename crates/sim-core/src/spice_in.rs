@@ -568,6 +568,11 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         }
                         c.set_saturation(&name, Circuit::saturation_scale(isat, drop));
                     }
+                    // the data sheet's curve: LCURVE=<current>:<ratio>,... (takes the place of ISAT)
+                    if let Some(text) = t[vi + 1..].iter().find_map(|w| (w.len() > 7 && w[..7].eq_ignore_ascii_case("LCURVE=")).then(|| &w[7..])) {
+                        c.saturations.retain(|(n, _)| n != &name);
+                        c.set_sat_curve(&name, crate::SatCurve::parse(text).map_err(|e| format!("{name}: {e}"))?);
+                    }
                 }
                 c.add(match head.chars().next().unwrap().to_ascii_uppercase() {
                     'R' => Element::Resistor { name, a, b, r: x },

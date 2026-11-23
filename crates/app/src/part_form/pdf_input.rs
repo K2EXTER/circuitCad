@@ -76,7 +76,7 @@ impl PartForm {
         self.take_read_curves(read);
     }
 
-    /// 「表とグラフから全部読む」 of a section by its name (`--form-graph-all`): bjt, darl, diode, opto, pd, reg.
+    /// 「表とグラフから全部読む」 of a section by its name (`--form-graph-all`): bjt, darl, diode, opto, pd, reg, coil.
     pub fn graph_all_for(&mut self, section: &str) {
         use super::graph_reader::Dest;
         let dests: &[Dest] = match section {
@@ -86,6 +86,7 @@ impl PartForm {
             "opto" => &[Dest::OptoLed, Dest::OptoCtr],
             "pd" => &[Dest::PdLight, Dest::PdCap],
             "reg" => &[Dest::RegDropout, Dest::RegRipple, Dest::RegNoise],
+            "coil" => &[Dest::CoilSat],
             _ => return,
         };
         self.read_all_graphs(dests);
@@ -156,6 +157,7 @@ impl PartForm {
                 let Some(Ok(f)) = self.reg.result.clone() else { return Err(not_made()) };
                 self.linear_apply(&f, self.reg_roles())?
             }
+            "coil" => self.apply_passive()?,
             // the part as the form has it
             "" => String::new(),
             _ => return Err(format!("知らない欄: {section}")),
@@ -280,7 +282,7 @@ impl PartForm {
             Dest::OptoLed | Dest::OptoCtr => self.opto_make(),
             Dest::PdLight | Dest::PdCap => self.pd_make(),
             Dest::RegDropout | Dest::RegRipple | Dest::RegNoise => self.regulator_make(),
-            Dest::Zth => {}
+            Dest::Zth | Dest::CoilSat => {}
         }
     }
 
@@ -315,6 +317,17 @@ impl PartForm {
                 self.dio_caps = out.points.iter().map(|(v, c)| format!("{} {}", short(v.abs()), short(c.abs()))).collect::<Vec<_>>().join("
 ");
                 self.dio_message = Some(Ok(format!("p.{} のグラフの {} 点を「容量の点」に入れました", out.page + 1, out.points.len())));
+            }
+            Dest::CoilSat => {
+                // percent from the first point (the inductance at the smallest current read)
+                let l0 = out.points.iter().map(|p| p.1.abs()).next().unwrap_or(0.0);
+                if l0 > 0.0 {
+                    self.pas_sattable = out.points.iter().map(|(i, l)| format!("{} {}", short(i.abs()), fit_pct(l.abs() / l0))).collect::<Vec<_>>().join("\n");
+                    self.pas_sat_curve = true;
+                    // only the ratios are taken: the graph's unit (µH) may not be read off its axis title
+                    let value = if self.pas_value.trim().is_empty() { "。インダクタンスの値は「値」の欄に入れてください" } else { "" };
+                    self.pas_message = Some(Ok(format!("p.{} のグラフの {} 点を「インダクタンスと電流の表」に入れ、「曲線のとおりにする」にしました{value}", out.page + 1, out.points.len())));
+                }
             }
             Dest::Zth => {
                 self.rt_zth_points = out.points.iter().map(|(t, z)| format!("{} {}", short(t.abs()), short(z.abs()))).collect::<Vec<_>>().join("\n");
@@ -557,4 +570,11 @@ mod tests {
     fn numbers_are_written_as_a_person_would() {
         assert_eq!((number_text(1.27), number_text(30.0), number_text(0.2), number_text(0.625)), ("1.27".into(), "30".into(), "0.2".into(), "0.625".into()));
     }
+}
+
+/// A ratio as the percent change the saturation table takes ("-30.2").
+fn fit_pct(ratio: f64) -> String {
+    let p = (ratio - 1.0) * 100.0;
+    let t = format!("{p:.1}");
+    if t == "-0.0" { "0".into() } else { t.trim_end_matches(".0").to_string() }
 }
