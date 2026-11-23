@@ -2870,6 +2870,37 @@ worst out tol_r=0 tol_c=0 tol_l=0
 }
 
 #[test]
+fn worst_moves_an_op_amps_offset_drift_with_the_temperature() {
+    // a TL072 follower at 2.5 V: the offset spreads ±10 mV; at 85 °C the drift (±18 µV/°C, the data sheet's typ either way)
+    // adds ±58 × 18 µV = ±1.04 mV, and at 27 °C nothing (M8)
+    let span = |temp: &str| {
+        let (a, ok) = run(&format!(
+            "new
+add TL072 as=U1
+add V 15 as=VP
+add V 15 as=VN
+add V 2.5 as=VI
+net VCC VP.+ U1.V+
+net VEE VN.- U1.V-
+net GND VP.- VN.+ VI.-
+             net IN VI.+ U1.IN+
+net OUT U1.OUT U1.IN-
+erc
+worst out tol_r=0 tol_c=0 tol_l=0 {temp}
+"
+        ));
+        assert!(ok, "{a:?}");
+        let w = a.iter().find(|v| v.get("min_corner").is_some()).unwrap().clone();
+        (w["max"].as_f64().unwrap() - w["min"].as_f64().unwrap(), w)
+    };
+    let (cold, w27) = span("");
+    let (hot, w85) = span("temp=85");
+    assert!((cold - 0.02).abs() < 2e-4, "only the offset's ±10 mV at 27 °C: {w27}");
+    assert!((hot - cold - 2.0 * 58.0 * 18e-6).abs() < 1e-4, "the drift's ±1.04 mV on top at 85 °C: {cold} → {hot}");
+    assert!(w85.to_string().contains("U1:offset-drift"), "{w85}");
+}
+
+#[test]
 fn a_makers_series_is_listed_once_and_placed_by_its_value() {
     // Panasonic ERJ-3EKF: 10 kΩ in E24/E96 is ERJ-3EKF1002V; 4.7 k and 4.7 k as a divider of 12 V gives 6 V
     let (a, ok) = run("new\nparts ERJ\nadd V 12 as=V1\nadd ERJ-3EKF 4.7k as=R1\nadd ERJ-3EKF 4k7 as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\ndc\n");

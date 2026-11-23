@@ -968,6 +968,11 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         let (pos, kv) = options(args);
         let full = pos.iter().any(|a| a.eq_ignore_ascii_case("full"));
         let mut c = self.circuit()?;
+        // temp=: the operating point with every part at that temperature (°C; the models' own terms and the semiconductors)
+        if let Some(t) = opt(&kv, "temp") {
+            let t = sim_core::parse_value(t).filter(|x| x.is_finite()).ok_or_else(|| format!("temp={t} is not a number"))?;
+            c = c.at_temperature(t);
+        }
         let ic = opt(&kv, "ic").map(|s| apply_ic(&mut c, s)).transpose()?;
         if let Some(spec) = opt(&kv, "guess") {
             apply_guess(&mut c, spec)?;

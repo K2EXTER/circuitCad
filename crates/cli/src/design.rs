@@ -206,13 +206,13 @@ impl Session {
     /// min / max from their data sheets (`* spread`: an op amp's offset, a regulator's output) take part unless `spread=off`.
     pub fn worst(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
-        let usage = "worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [spread=on|off] [f=10:1Meg] [tran=10m:10u] [top=8]   (tolerances in percent; NET is the net measured)";
+        let usage = "worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [spread=on|off] [temp=27] [f=10:1Meg] [tran=10m:10u] [top=8]   (tolerances in percent; NET is the net measured)";
         let net = pos.first().ok_or_else(|| usage.to_string())?.trim().to_string();
         let (tol_r, tol_c, tol_l, tol_v, measure) = tolerances_and_measure(&kv, 50)?;
         let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(1, 100);
         let spread = spread_option(&kv)?;
         let gate = self.erc_gate()?;
-        let mut c = self.circuit()?;
+        let mut c = at_temp_option(self.circuit()?, &kv)?;
         if !spread {
             c.spreads.clear();
         }
@@ -272,7 +272,7 @@ impl Session {
         let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(1, 100);
         let spread = spread_option(&kv)?;
         let gate = self.erc_gate()?;
-        let mut c = self.circuit()?;
+        let mut c = at_temp_option(self.circuit()?, &kv)?;
         if !spread {
             c.spreads.clear();
         }
@@ -707,5 +707,14 @@ fn spread_option(kv: &[(String, String)]) -> Result<bool, String> {
         None | Some("on") => Ok(true),
         Some("off") => Ok(false),
         Some(s) => Err(format!("spread={s}: on (the models' data sheet min / max take part) or off (the models' own values)")),
+    }
+}
+
+/// `temp=`: the circuit with every part at that temperature (°C), so that the models' temperature terms (an op-amp's offset
+/// drift, a regulator's output) take part in the variation analyses; none: as at 27 °C.
+fn at_temp_option(c: sim_core::Circuit, kv: &[(String, String)]) -> Result<sim_core::Circuit, String> {
+    match opt(kv, "temp") {
+        None => Ok(c),
+        Some(t) => sim_core::parse_value(t).filter(|x| x.is_finite()).map(|t| c.at_temperature(t)).ok_or_else(|| format!("temp={t} is not a number")),
     }
 }

@@ -51,6 +51,65 @@ pub enum Spec {
     Tvs(simple::TvsSpec),
 }
 
+/// The simulator's temperature at which the models hold their data sheets' typ values (the data sheets say 25 °C; the
+/// simulator's nominal is 27 °C, and a model's temperature terms are 0 there, so the nominal results stay as they were).
+pub const T_MODEL: f64 = 27.0;
+
+/// An output or reference voltage against the temperature, read off the data sheet's graph (M8): points (°C, relative
+/// deviation: 0.001 = +0.1 %), joined by straight lines and continued past the ends by the end segments' slopes. A data
+/// sheet's coefficient (onsemi's MC7805: −0.3 mV/°C) is two points.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TempCurve {
+    pub points: Vec<[f64; 2]>,
+    /// Where it was read (the figure, the table's row), for the notes.
+    pub from: String,
+}
+
+impl TempCurve {
+    /// The relative deviation at `t` (°C).
+    pub fn at(&self, t: f64) -> f64 {
+        let p = &self.points;
+        let k = (1..p.len() - 1).find(|&k| t < p[k][0]).unwrap_or(p.len() - 1);
+        let ([t0, y0], [t1, y1]) = (p[k - 1], p[k]);
+        y0 + (y1 - y0) / (t1 - t0) * (t - t0)
+    }
+
+    /// The same as an expression in `temp`, less its value at `T_MODEL` (0 there): the first segment carried on below its
+    /// start, the last above its end, the ones between clamped to their span.
+    pub fn expr(&self) -> String {
+        let p = &self.points;
+        let n = p.len();
+        let slope = |k: usize| (p[k + 1][1] - p[k][1]) / (p[k + 1][0] - p[k][0]);
+        let mut terms = vec![];
+        for k in 0..n - 1 {
+            let (a, b) = (num::g(p[k][0], 6), num::g(p[k + 1][0], 6));
+            let x = match (k == 0, k == n - 2) {
+                (true, true) => "temp".to_string(),
+                (true, false) => format!("min(temp,{b})"),
+                (false, true) => format!("max(temp,{a})"),
+                (false, false) => format!("limit(temp,{a},{b})"),
+            };
+            terms.push(format!("{}*({x}-{a})", num::g(slope(k), 6)));
+        }
+        format!("({}+{})", terms.join("+"), num::g(p[0][1] - self.at(T_MODEL), 6))
+    }
+
+    pub fn check(&self) -> Result<(), String> {
+        if self.points.len() < 2 || self.points.windows(2).any(|w| w[1][0] <= w[0][0]) {
+            return Err("temp.points: 2 つ以上の点を、温度の低い順に".into());
+        }
+        Ok(())
+    }
+
+    /// The deviation over the points' span, for the notes ("−40〜125 ℃ で −0.28〜+0.13 %").
+    pub fn span(&self) -> String {
+        let (lo, hi) = self.points.iter().fold((f64::MAX, f64::MIN), |(l, h), p| (l.min(p[1]), h.max(p[1])));
+        let (t0, t1) = (self.points[0][0], self.points[self.points.len() - 1][0]);
+        let base = self.at(25.0);
+        format!("{}〜{} ℃ で 25 ℃ から {:+.2}〜{:+.2} %", num::g(t0, 6), num::g(t1, 6), (lo - base) * 100.0, (hi - base) * 100.0)
+    }
+}
+
 /// The fields every kind has.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Common {

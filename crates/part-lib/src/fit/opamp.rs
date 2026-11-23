@@ -28,6 +28,10 @@ pub struct OpampSpec {
     /// Input offset voltage, typ (V; 0 when the data sheet has no typ) and max (either way).
     pub vos: f64,
     pub vos_max: f64,
+    /// The input offset voltage's drift with temperature, typ (V/°C, either way: its sign differs from part to part; M8). The
+    /// model's drift is 0; the variation analyses move it between ∓ this. None: not in the data sheet.
+    #[serde(default)]
+    pub vos_drift: Option<f64>,
     /// Input bias current, typ (A; negative out of the pins, as PNP inputs) and max (absolute; none: not given).
     pub ib: f64,
     #[serde(default)]
@@ -100,11 +104,26 @@ pub fn model(p: &OpampSpec) -> String {
         "* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance".into(),
         format!("Vos inp i1 DC {}", g(p.vos, 6)),
         format!("* spread Vos {} {} offset (data sheet: max {} mV either way)", g(-p.vos_max, 6), g(p.vos_max, 6), g(p.vos_max * 1e3, 6)),
-        format!("En i1 i2 nz 0 {}", g(en_gain, 6)),
-        "Rnz nz 0 1k".into(),
+    ];
+    match p.vos_drift {
+        None => l.push(format!("En i1 i2 nz 0 {}", g(en_gain, 6))),
+        Some(d) => {
+            // the offset's drift rides on the noise source (no node of its own: every node leaks gmin, picoamps at the input):
+            // 0 V/°C as made (its sign differs from part to part), V(dr) volts per °C away from 27 °C
+            l.extend([
+                "* the offset's drift with temperature, on the noise source (0 V/degree as made; the variation analyses move it".into(),
+                "* between the data sheet's typ either way): V(dr) volts per degree away from 27 C".into(),
+                format!("Ben i1 i2 V={}*V(nz)+V(dr)*(temp-{})", g(en_gain, 6), g(super::T_MODEL, 6)),
+                "Vdr dr 0 DC 0".into(),
+                format!("* spread Vdr {} {} offset-drift (data sheet: typ {} uV/C either way)", g(-d, 6), g(d, 6), g(d * 1e6, 6)),
+            ]);
+        }
+    }
+    l.push("Rnz nz 0 1k".into());
+    l.extend([
         format!("Ibp inp vn DC {}", g(p.ib, 6)),
         format!("Ibn inn vn DC {}", g(p.ib, 6)),
-    ];
+    ]);
     l.extend(bias_spread(p));
     l.extend([
         format!("Rin inp inn {}", p.rin),
@@ -192,13 +211,25 @@ pub fn limits(p: &OpampSpec) -> Vec<String> {
             eng(p.en, "V"),
             spreads(p)
         ),
+        match p.vos_drift {
+            Some(d) => format!(
+                "入力オフセットの温度ドリフト (データシートの typ ±{} µV/℃): 向きが部品ごとに違うので、ふだんの解析では 0 です。ばらつき・最悪ケースの解析で ±{} µV/℃ の間で動き、温度を 27 ℃ から変えたときに効きます。",
+                g(d * 1e6, 6),
+                g(d * 1e6, 6)
+            ),
+            None => String::new(),
+        },
         format!(
-            "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、温度による変化、電源電圧による GBW の変化、{}チャネル2。",
+            "扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、{}、電源電圧による GBW の変化、{}チャネル2。",
+            if p.vos_drift.is_some() { "オフセット以外の温度による変化" } else { "温度による変化" },
             if p.ib_max.is_none() { "バイアス電流のばらつき (データシートに max が無いので typ の値で固定)、" } else { "" }
         ),
         super::LAST_WORD.into(),
         "電源ピンをつながないと、出力は 0V に張り付きます。".into(),
     ]
+    .into_iter()
+    .filter(|r| !r.is_empty())
+    .collect()
 }
 
 pub(super) fn fit(p: &OpampSpec) -> Result<Out, String> {

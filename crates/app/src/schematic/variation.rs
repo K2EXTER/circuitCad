@@ -437,6 +437,7 @@ pub(super) fn varied_name(name: &str) -> String {
         "ib-" => i18n::tr("− 入力のバイアス電流"),
         "iq" => i18n::tr("電源電流"),
         "iadj" => i18n::tr("ADJ ピンの電流"),
+        "offset-drift" => i18n::tr("入力オフセットの温度ドリフト"),
         other => other,
     };
     i18n::trf!("{} の{} (データシートの min〜max)", part, what)

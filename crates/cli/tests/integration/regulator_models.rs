@@ -72,7 +72,94 @@ fn rows() -> Vec<Row> {
     let mut v = adr_ldo_rows();
     v.extend(linear_rows());
     v.extend(tl431_rows());
+    v.extend(temp_rows());
+    // each part's rows together (the report makes a table per run of one part, and `checks::write` keeps one per part)
+    let order: Vec<&str> = v.iter().map(|r| r.part).fold(vec![], |mut o, p| {
+        if !o.contains(&p) {
+            o.push(p);
+        }
+        o
+    });
+    v.sort_by_key(|r| order.iter().position(|p| *p == r.part));
     v
+}
+
+/// V(out) with every part at `t` °C.
+fn vout_at(script: String, t: f64) -> f64 {
+    probe(answers(&run(&format!("{script}dc temp={t} probe=V(out)
+")), "dc")[0], "V(out)")
+}
+
+/// The output's change with temperature (M8): from 25 °C to a hot or cold point, against the data sheet's coefficient or its
+/// graph (the models' terms are straight lines between points read off the graph, so these check the reading lands).
+fn temp_rows() -> Vec<Row> {
+    let mut rows: Vec<Row> = vec![];
+    // the 78xx: the table's average coefficient (mV/°C), over 25 → 125 °C
+    for (part, vo, vin, tc) in [("LM7805", 5.0, 10.0, -0.3), ("LM7809", 9.0, 15.0, -0.5), ("LM7812", 12.0, 19.0, -0.8)] {
+        rows.push(Row {
+            part,
+            item: "出力の温度係数",
+            ds: [None, Some(tc), None],
+            unit: "mV/°C",
+            at: "TCVO (25 → 125 ℃ の出力の変化 ÷ 100 ℃)",
+            measure: Box::new(move || {
+                let s = || fixed(part, ("IN", "GND", "OUT"), vo, vin, 0.5);
+                (vout_at(s(), 125.0) - vout_at(s(), 25.0)) / 100.0 * 1e3
+            }),
+            tol: Some(0.02),
+        });
+    }
+    // read off graphs: the change in percent of the output from 25 °C
+    let pct = |a: f64, b: f64| (b / a - 1.0) * 100.0;
+    for (part, t, ds, at) in [("L78L05", 125.0, -0.59, "図 6-1 (新しいチップ、IO = 1 mA)、125 ℃"), ("L78L05", -55.0, -0.48, "図 6-1、−55 ℃"), ("MCP1700-3302", 125.0, -0.59, "図 2-10・2-11 の 125 ℃ (2.8 V と 5.0 V の平均の割合)"), ("MCP1700-3302", -40.0, -0.28, "図 2-10・2-11 の −40 ℃")] {
+        let (pins, vo, vin, i0) = if part == "L78L05" { (("IN", "GND", "OUT"), 5.0, 10.0, 1e-3) } else { (("VIN", "GND", "VOUT"), 3.3, 4.3, 100e-6) };
+        rows.push(Row {
+            part,
+            item: if t > 25.0 { "出力の変化 (高温)" } else { "出力の変化 (低温)" },
+            ds: [None, Some(ds), None],
+            unit: "%",
+            at,
+            measure: Box::new(move || {
+                let s = || fixed(part, pins, vo, vin, i0);
+                pct(vout_at(s(), 25.0), vout_at(s(), t))
+            }),
+            tol: Some(0.05),
+        });
+    }
+    for (t, ds, at) in [(150.0, -1.44, "図 6-19 (Temperature Stability、新しいチップ)、150 ℃"), (-50.0, -0.42, "図 6-19、−50 ℃")] {
+        rows.push(Row {
+            part: "LM317",
+            item: if t > 25.0 { "基準電圧の変化 (高温)" } else { "基準電圧の変化 (低温)" },
+            ds: [None, Some(ds), None],
+            unit: "%",
+            at,
+            measure: Box::new(move || pct(vout_at(lm317(10.0, 0.0), 25.0), vout_at(lm317(10.0, 0.0), t))),
+            tol: Some(0.05),
+        });
+    }
+    for (t, ds, at) in [(125.0, -0.8, "図 6-1 (Vref = 2495 mV の線)、125 ℃ (表の VI(dev) は 0〜70 ℃ で 6 mV)"), (-55.0, -0.96, "図 6-1、−55 ℃")] {
+        rows.push(Row {
+            part: "TL431",
+            item: if t > 25.0 { "基準電圧の変化 (高温)" } else { "基準電圧の変化 (低温)" },
+            ds: [None, Some(ds), None],
+            unit: "%",
+            at,
+            measure: Box::new(move || pct(tl431_vref_at_temp(2.495, 10e-3, 25.0), tl431_vref_at_temp(2.495, 10e-3, t))),
+            tol: Some(0.05),
+        });
+    }
+    for (t, ds, at) in [(-40.0, -0.37, "図 5-7 (ΔVOUT と接合温度、VOUT = 2.8 V の割合)、−40 ℃"), (85.0, 0.12, "図 5-7、85 ℃")] {
+        rows.push(Row {
+            part: "LP5907-4.5",
+            item: if t > 25.0 { "出力の変化 (高温)" } else { "出力の変化 (低温)" },
+            ds: [None, Some(ds), None],
+            unit: "%",
+            at,
+            measure: Box::new(move || pct(vout_at(ldo("5.5", 4.5e3, None), 25.0), vout_at(ldo("5.5", 4.5e3, None), t))),
+            tol: Some(0.03),
+        });
+    }
+    rows
 }
 
 fn adr_ldo_rows() -> Vec<Row> {
@@ -549,7 +636,12 @@ fn tl431(vka: f64, vref: f64) -> String {
 
 /// The REF voltage that makes the cathode carry `ika` at `vka` (from two points on the straight part above the knee).
 fn tl431_vref_at(vka: f64, ika: f64) -> f64 {
-    let i = |vr: f64| -probe(answers(&run(&format!("{}dc probe=I(VK)\n", tl431(vka, vr))), "dc")[0], "I(VK)");
+    tl431_vref_at_temp(vka, ika, 27.0)
+}
+
+/// The same with the part at `t` °C.
+fn tl431_vref_at_temp(vka: f64, ika: f64, t: f64) -> f64 {
+    let i = |vr: f64| -probe(answers(&run(&format!("{}dc temp={t} probe=I(VK)\n", tl431(vka, vr))), "dc")[0], "I(VK)");
     // both above the knee (the knee is 2 mV below Vref at VKA = Vref, lower at a higher VKA)
     let (a, b) = (2.4945, 2.4960);
     let (ia, ib) = (i(a), i(b));

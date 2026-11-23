@@ -2330,7 +2330,7 @@
     ]
   },
   "L78L05": {
-    "fingerprint": "10e65ae18a35ee67",
+    "fingerprint": "b05a1bd2af3407ab",
     "source": "TI UA78L データシート SLVS010X (2023-06 改訂) の 6.7 節 (UA78L05、新しいチップ)。VI = 10 V、IO = 40 mA",
     "date": "2026-11-11",
     "rows": [
@@ -2405,11 +2405,29 @@
         "model": "124.8 µVrms",
         "diff": "-0.2048 µVrms",
         "tested": true
+      },
+      {
+        "item": "出力の変化 (高温)",
+        "datasheet": "— / -0.5900 / — %",
+        "target": "-0.5900 %",
+        "condition": "図 6-1 (新しいチップ、IO = 1 mA)、125 ℃",
+        "model": "-0.5900 %",
+        "diff": "+0.0000 %",
+        "tested": true
+      },
+      {
+        "item": "出力の変化 (低温)",
+        "datasheet": "— / -0.4800 / — %",
+        "target": "-0.4800 %",
+        "condition": "図 6-1、−55 ℃",
+        "model": "-0.4750 %",
+        "diff": "+0.0050 %",
+        "tested": true
       }
     ]
   },
   "LM317": {
-    "fingerprint": "19f3660e0815754b",
+    "fingerprint": "159b45291afae240",
     "source": "TI LM317 データシート SLVS044Z (2025-04 改訂) の 6.6 節。VIN − VOUT = 5 V、IOUT = 10 mA。R1 = 240 Ω (OUT−ADJ)、R2 = 720 Ω (ADJ−GND) で出力約 5 V",
     "date": "2026-11-11",
     "rows": [
@@ -2493,11 +2511,29 @@
         "model": "150.0 µVrms",
         "diff": "-0.0308 µVrms",
         "tested": true
+      },
+      {
+        "item": "基準電圧の変化 (高温)",
+        "datasheet": "— / -1.440 / — %",
+        "target": "-1.440 %",
+        "condition": "図 6-19 (Temperature Stability、新しいチップ)、150 ℃",
+        "model": "-1.429 %",
+        "diff": "+0.0109 %",
+        "tested": true
+      },
+      {
+        "item": "基準電圧の変化 (低温)",
+        "datasheet": "— / -0.4200 / — %",
+        "target": "-0.4200 %",
+        "condition": "図 6-19、−50 ℃",
+        "model": "-0.4208 %",
+        "diff": "-0.0008 %",
+        "tested": true
       }
     ]
   },
   "LM324": {
-    "fingerprint": "d3be34fa299db7ec",
+    "fingerprint": "52870096407c2109",
     "source": "TI SLOS066AE(2025-09 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -2682,7 +2718,7 @@
     ]
   },
   "LM358": {
-    "fingerprint": "2fb2969bbadc10ec",
+    "fingerprint": "c27921138995281f",
     "source": "TI SLOS068AB(2024-10 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -2867,7 +2903,7 @@
     ]
   },
   "LM7805": {
-    "fingerprint": "b3e657fabf56fcee",
+    "fingerprint": "26fb58053d0c7421",
     "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
     "date": "2026-11-11",
     "rows": [
@@ -2942,11 +2978,20 @@
         "model": "49.994 µVrms",
         "diff": "-0.0065 µVrms",
         "tested": true
+      },
+      {
+        "item": "出力の温度係数",
+        "datasheet": "— / -0.3000 / — mV/°C",
+        "target": "-0.3000 mV/°C",
+        "condition": "TCVO (25 → 125 ℃ の出力の変化 ÷ 100 ℃)",
+        "model": "-0.3000 mV/°C",
+        "diff": "+0.0000 mV/°C",
+        "tested": true
       }
     ]
   },
   "LM7809": {
-    "fingerprint": "72c9c54f3ca0fda0",
+    "fingerprint": "1efc102ccd5e5433",
     "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
     "date": "2026-11-11",
     "rows": [
@@ -3021,11 +3066,20 @@
         "model": "89.995 µVrms",
         "diff": "-0.0051 µVrms",
         "tested": true
+      },
+      {
+        "item": "出力の温度係数",
+        "datasheet": "— / -0.5000 / — mV/°C",
+        "target": "-0.5000 mV/°C",
+        "condition": "TCVO (25 → 125 ℃ の出力の変化 ÷ 100 ℃)",
+        "model": "-0.5000 mV/°C",
+        "diff": "+0.0000 mV/°C",
+        "tested": true
       }
     ]
   },
   "LM7812": {
-    "fingerprint": "20afc1d3fba01e52",
+    "fingerprint": "4da4af6c13168124",
     "source": "onsemi MC7800 シリーズ データシート MC7800/D Rev. 29 の MC78xxC の表 (MC7805C・MC7809C・MC7812C)。25 °C",
     "date": "2026-11-11",
     "rows": [
@@ -3062,7 +3116,7 @@
         "target": "3.400 mA",
         "condition": "IB・IQ (入力の電流 − 負荷の電流)",
         "model": "3.287 mA",
-        "diff": "-0.1128 mA",
+        "diff": "-0.1129 mA",
         "tested": true
       },
       {
@@ -3100,11 +3154,20 @@
         "model": "120.0 µVrms",
         "diff": "-0.0271 µVrms",
         "tested": true
+      },
+      {
+        "item": "出力の温度係数",
+        "datasheet": "— / -0.8000 / — mV/°C",
+        "target": "-0.8000 mV/°C",
+        "condition": "TCVO (25 → 125 ℃ の出力の変化 ÷ 100 ℃)",
+        "model": "-0.7998 mV/°C",
+        "diff": "+0.0002 mV/°C",
+        "tested": true
       }
     ]
   },
   "LP5907-4.5": {
-    "fingerprint": "e5e079a506791c99",
+    "fingerprint": "f0dd85072239781c",
     "source": "TI LP5907 データシート SNVS798Q (2025-07 改訂)、5.5 節。VIN = 5.5 V、VEN = 1.2 V、IOUT = 1 mA、CIN = COUT = 1 µF",
     "date": "2026-11-11",
     "rows": [
@@ -3221,14 +3284,32 @@
         "datasheet": "— / 80.000 / 150.0 µs",
         "target": "80.000 µs",
         "condition": "tON、VEN > VIH から VOUT = 95% まで (EN を 10 µs で 0 → 1.2 V)",
-        "model": "81.445 µs",
-        "diff": "+1.445 µs",
+        "model": "80.845 µs",
+        "diff": "+0.8453 µs",
+        "tested": true
+      },
+      {
+        "item": "出力の変化 (低温)",
+        "datasheet": "— / -0.3700 / — %",
+        "target": "-0.3700 %",
+        "condition": "図 5-7 (ΔVOUT と接合温度、VOUT = 2.8 V の割合)、−40 ℃",
+        "model": "-0.3700 %",
+        "diff": "-0.0000 %",
+        "tested": true
+      },
+      {
+        "item": "出力の変化 (高温)",
+        "datasheet": "— / 0.1200 / — %",
+        "target": "0.1200 %",
+        "condition": "図 5-7、85 ℃",
+        "model": "0.1230 %",
+        "diff": "+0.0030 %",
         "tested": true
       }
     ]
   },
   "MCP1700-3302": {
-    "fingerprint": "1b92995e3bf14f90",
+    "fingerprint": "41c3ba1d2f15f407",
     "source": "Microchip MCP1700 データシート DS20001826C の DC CHARACTERISTICS。VIN = VR + 1 V、ILOAD = 100 µA",
     "date": "2026-11-11",
     "rows": [
@@ -3303,11 +3384,29 @@
         "model": "4.226 µVrms",
         "diff": "-0.0169 µVrms",
         "tested": true
+      },
+      {
+        "item": "出力の変化 (高温)",
+        "datasheet": "— / -0.5900 / — %",
+        "target": "-0.5900 %",
+        "condition": "図 2-10・2-11 の 125 ℃ (2.8 V と 5.0 V の平均の割合)",
+        "model": "-0.5899 %",
+        "diff": "+0.0001 %",
+        "tested": true
+      },
+      {
+        "item": "出力の変化 (低温)",
+        "datasheet": "— / -0.2800 / — %",
+        "target": "-0.2800 %",
+        "condition": "図 2-10・2-11 の −40 ℃",
+        "model": "-0.2800 %",
+        "diff": "+0.0000 %",
+        "tested": true
       }
     ]
   },
   "MCP6001": {
-    "fingerprint": "2658c3336c33cd29",
+    "fingerprint": "9f2bec85de7e64a9",
     "source": "Microchip DS20001733L",
     "date": "2026-11-11",
     "rows": [
@@ -3413,7 +3512,7 @@
     ]
   },
   "MCP6002": {
-    "fingerprint": "553231f728ab9ae9",
+    "fingerprint": "6bfae502256c35c9",
     "source": "Microchip DS20001733L",
     "date": "2026-11-11",
     "rows": [
@@ -4647,7 +4746,7 @@
     ]
   },
   "TL072": {
-    "fingerprint": "c35bb5cdd2a67fea",
+    "fingerprint": "6718646ad20b0005",
     "source": "TI SLOS080W(2025-07 改訂)",
     "date": "2026-11-11",
     "rows": [
@@ -4735,7 +4834,7 @@
     ]
   },
   "TL431": {
-    "fingerprint": "5f55cb3b7d357cdf",
+    "fingerprint": "b45797c619d6fb7d",
     "source": "TI TL431/TL432 データシート SLVS543S (2024-05 改訂) の 6.5 節 (TL431C)。25 °C",
     "date": "2026-11-11",
     "rows": [
@@ -4782,6 +4881,24 @@
         "condition": "VKA = 36 V、Vref = 0",
         "model": "0.1000 µA",
         "diff": "+0.0000 µA",
+        "tested": true
+      },
+      {
+        "item": "基準電圧の変化 (高温)",
+        "datasheet": "— / -0.8000 / — %",
+        "target": "-0.8000 %",
+        "condition": "図 6-1 (Vref = 2495 mV の線)、125 ℃ (表の VI(dev) は 0〜70 ℃ で 6 mV)",
+        "model": "-0.7999 %",
+        "diff": "+0.0001 %",
+        "tested": true
+      },
+      {
+        "item": "基準電圧の変化 (低温)",
+        "datasheet": "— / -0.9600 / — %",
+        "target": "-0.9600 %",
+        "condition": "図 6-1、−55 ℃",
+        "model": "-0.9599 %",
+        "diff": "+0.0001 %",
         "tested": true
       }
     ]

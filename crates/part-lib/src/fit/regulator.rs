@@ -82,6 +82,9 @@ pub struct RegulatorSpec {
     #[serde(default)]
     pub rr_vout: Option<f64>,
     pub noise: Noise,
+    /// The output (adjustable: the reference) against the temperature (M8); none: the same at every temperature.
+    #[serde(default)]
+    pub temp: Option<super::TempCurve>,
 }
 
 /// Python's `repr` of a float: the shortest that reads back, with ".0" on whole numbers ("5.0", "1.25").
@@ -133,7 +136,7 @@ pub fn regulator_model(p: &RegulatorSpec) -> String {
             g(k_rr, 6),
             g(vin0, 6),
             if p.vrange.is_some() { format!("+V(vt,{r})") } else { String::new() }
-        ),
+        ) + &p.temp.as_ref().map(|c| format!("+{}*{}", g(p.vout, 6), c.expr())).unwrap_or_default(),
         format!("En tgt t0 nz {r} {}", g(density / (K4T * 1e3).sqrt(), 6)),
     ]);
     // the ceiling the input leaves: in − dropout (the dropout grows with the output current; the output resistance already
@@ -228,9 +231,18 @@ pub fn regulator_limits(p: &RegulatorSpec) -> Vec<String> {
             format!("出力電圧の部品ごとの違い ({}〜{} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。", g(lo, 6), g(hi, 6))
         });
     }
+    if let Some(c) = &p.temp {
+        rows.push(format!(
+            "温度による{}の変化 ({}): {}。温度を設定した解析・温度スイープ・自己発熱で効きます (27 ℃ でデータシートの 25 ℃ の値)。",
+            if adj { "基準電圧" } else { "出力電圧" },
+            c.from,
+            c.span()
+        ));
+    }
     rows.push(format!(
-        "扱わないもの: {}温度による変化と熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む){}。",
+        "扱わないもの: {}{}熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む){}。",
         if p.vrange.is_some() { "" } else { "出力電圧の誤差 (出力はちょうど公称値)、" },
+        if p.temp.is_some() { "出力電圧以外の温度による変化、" } else { "温度による変化と" },
         match (adj, p.min_load) {
             (true, Some(i)) => format!("、最小負荷電流 ({} mA)", g(i * 1e3, 6)),
             _ => String::new(),
@@ -257,6 +269,9 @@ pub fn check_regulator(p: &RegulatorSpec) -> Result<(), String> {
         if !(v.is_finite() && v > 0.0) {
             return Err(format!("{what}は 0 より大きい数にしてください"));
         }
+    }
+    if let Some(c) = &p.temp {
+        c.check()?;
     }
     if p.ilim.iter().any(|l| !(l.amps > 0.0)) {
         return Err("電流制限は 0 より大きい電流にしてください (データシートの「ピーク電流」「短絡電流」)".into());
@@ -298,6 +313,9 @@ pub struct ShuntSpec {
     pub ioff_v: f64,
     /// Minimum cathode current for regulation (A; said in the notes).
     pub imin: f64,
+    /// The reference against the temperature (M8); none: the same at every temperature.
+    #[serde(default)]
+    pub temp: Option<super::TempCurve>,
 }
 
 /// The `.subckt` (pins: cat ref an).
@@ -307,7 +325,8 @@ pub fn shunt_model(p: &ShuntSpec) -> String {
     let w = 0.3e-3;
     // the knee: below it the cathode carries almost nothing; above it gk A/V. At IKA = 10 mA, REF is the data sheet's Vref
     let th = p.vref - 10e-3 / gk;
-    let x = format!("((V(ref,an)-V(vt,an)-{}-{}*(V(cat,an)-{}))/{})", g(th, 6), g(p.dvref_dvka, 6), g(p.vref, 6), g(w, 6));
+    let tc = p.temp.as_ref().map(|c| format!("-{}*{}", g(p.vref, 6), c.expr())).unwrap_or_default();
+    let x = format!("((V(ref,an)-V(vt,an)-{}-{}*(V(cat,an)-{}){tc})/{})", g(th, 6), g(p.dvref_dvka, 6), g(p.vref, 6), g(w, 6));
     [
         format!(".subckt {n} cat ref an"),
         format!("* reference input current (typ, at {} V)", g(p.vref, 6)),
@@ -343,17 +362,28 @@ pub fn shunt_limits(p: &ShuntSpec) -> Vec<String> {
             g(p.ioff * 1e6, 6)
         ),
         format!("基準電圧の部品ごとの違い ({:.3}〜{:.3} V、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。", p.vref_min, p.vref_max),
+        match &p.temp {
+            Some(c) => format!("温度による基準電圧の変化 ({}): {}。温度を設定した解析・温度スイープ・自己発熱で効きます (27 ℃ でデータシートの 25 ℃ の値)。", c.from, c.span()),
+            None => String::new(),
+        },
         format!(
-            "扱わないもの: 温度による変化、最小カソード電流 ({} mA) より下で安定しなくなること (このモデルは小さな電流でも安定します)、周波数特性と容量負荷での発振、耐圧・最大電流を超えたときの破壊。",
+            "扱わないもの: {}最小カソード電流 ({} mA) より下で安定しなくなること (このモデルは小さな電流でも安定します)、周波数特性と容量負荷での発振、耐圧・最大電流を超えたときの破壊。",
+            if p.temp.is_some() { "" } else { "温度による変化、" },
             g(p.imin * 1e3, 6)
         ),
         "最終の確認は、メーカーの公式モデルで行ってください。".into(),
     ]
+    .into_iter()
+    .filter(|r| !r.is_empty())
+    .collect()
 }
 
 pub(super) fn fit_shunt(p: &ShuntSpec) -> Result<Out, String> {
     if !(p.vref > 0.0 && p.iref > 0.0 && p.zka > 0.0 && p.ioff > 0.0 && p.ioff_v > 0.0) {
         return Err("基準電圧・REF の電流・動的インピーダンス・停止中の電流は 0 より大きい数にしてください".into());
+    }
+    if let Some(c) = &p.temp {
+        c.check()?;
     }
     if !(p.vref_min <= p.vref && p.vref <= p.vref_max) {
         return Err("基準電圧の min・max の間に typ が入っていません".into());

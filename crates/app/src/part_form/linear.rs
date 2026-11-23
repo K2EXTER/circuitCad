@@ -16,6 +16,8 @@ pub struct OpampInput {
     pub sr: String,
     pub vos: String,
     pub vos_max: String,
+    /// The offset's drift (V/°C, typ; either way). Empty: none.
+    pub vos_drift: String,
     pub ib: String,
     pub ib_max: String,
     pub iq: String,
@@ -53,6 +55,8 @@ pub struct RegulatorInput {
     pub min_load: String,
     /// "difference current" lines (1 or 2).
     pub ilim: String,
+    /// "°C change-from-25-°C-in-percent" lines (2 or more; the output or the reference against the temperature). Empty: none.
+    pub temp: String,
     pub rr: String,
     pub rr_f: String,
     pub rr_vout: String,
@@ -132,6 +136,7 @@ impl OpampInput {
             sr: value("スルーレート", &self.sr)? * 1e6,
             vos: value("オフセット (typ)", &self.vos)?,
             vos_max: value("オフセット (max)", &self.vos_max)?.abs(),
+            vos_drift: opt("オフセットのドリフト", &self.vos_drift)?.map(f64::abs),
             ib: value("バイアス電流 (typ)", &self.ib)?,
             ib_max: opt("バイアス電流 (max)", &self.ib_max)?.map(f64::abs),
             iq: value("電源電流 (typ)", &self.iq)?,
@@ -161,6 +166,7 @@ impl OpampInput {
             sr: fit::num::g(s.sr / 1e6, 6),
             vos: show(s.vos),
             vos_max: show(s.vos_max),
+            vos_drift: o(s.vos_drift),
             ib: show(s.ib),
             ib_max: o(s.ib_max),
             iq: show(s.iq),
@@ -309,6 +315,24 @@ fn regulation(label: &str, t: &str, vout: f64, per_volt: bool) -> Result<f64, St
     }
 }
 
+/// The temperature box: "°C percent" a line, 2 or more lines, lowest first; empty: none.
+fn temp_curve(text: &str) -> Result<Option<fit::TempCurve>, String> {
+    let how = "温度は 1 行に「温度 [℃] 25 ℃ からの変化 [%]」で、低い温度から 2 行以上入れてください (例: 0 0.15 と 125 -0.6)";
+    let rows: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let mut points = vec![];
+    for r in rows {
+        let n: Vec<f64> = r.split_whitespace().map(|x| x.parse::<f64>()).collect::<Result<_, _>>().map_err(|_| how.to_string())?;
+        let [t, pct] = n.as_slice() else { return Err(how.into()) };
+        points.push([*t, pct / 100.0]);
+    }
+    let c = fit::TempCurve { points, from: "部品作成フォームで入れた点 (温度と 25 ℃ からの変化 %)".into() };
+    c.check().map_err(|_| how.to_string())?;
+    Ok(Some(c))
+}
+
 impl RegulatorInput {
     pub fn spec(&self, part: &str, source: &str) -> Result<fit::RegulatorSpec, String> {
         let vout = value(if self.adjustable { "基準電圧" } else { "出力電圧" }, &self.vout)?;
@@ -349,6 +373,7 @@ impl RegulatorInput {
             rr_f: value("リップル除去の周波数", &self.rr_f)?,
             rr_vout: if self.adjustable { opt("リップル除去を測った出力電圧", &self.rr_vout)? } else { None },
             noise,
+            temp: temp_curve(&self.temp)?,
         };
         fit::regulator::check_regulator(&s)?;
         Ok(s)
@@ -371,6 +396,7 @@ impl RegulatorInput {
                 iadj_max: t("100u"),
                 min_load: t("3.5m"),
                 ilim: t("15 2.2\n40 0.4"),
+                temp: t("-50 -0.424\n0 -0.08\n25 0\n50 -0.04\n75 -0.16\n100 -0.36\n125 -0.84\n150 -1.44"),
                 rr: t("65"),
                 rr_f: t("120"),
                 rr_vout: t("10"),
@@ -388,6 +414,7 @@ impl RegulatorInput {
                 rdo: t("0.4"),
                 iq: t("3.2m"),
                 ilim: t("10 2.2\n35 0.6"),
+                temp: t("0 0.15\n125 -0.6"),
                 rr: t("83"),
                 rr_f: t("120"),
                 noise: t("50u 10 100k"),
@@ -544,6 +571,7 @@ impl PartForm {
             row(ui, "GBW [Hz]", "利得帯域幅積。k は 1000 倍、Meg は 100 万倍 (700k = 700 kHz)", vec![(&mut o.gbw, "700k")]);
             row(ui, "スルーレート [V/µs]", "出力が 1 µs に動ける電圧", vec![(&mut o.sr, "0.3")]);
             row(ui, "オフセット typ・max [V]", "入力オフセット電圧。m は 1000 分の 1 (3m = 3 mV)。typ が無ければ 0", vec![(&mut o.vos, "3m"), (&mut o.vos_max, "7m")]);
+            row(ui, "オフセットのドリフト [V/℃]", "入力オフセットの温度ドリフト (表の typ。dVOS/dT・αVIO)。u は 100 万分の 1 (7u = 7 µV/℃)。向きは部品ごとに違うので大きさだけ入れます。ばらつき・最悪ケースの解析で ± の間で動き、温度を 27 ℃ から変えたときに効きます。空なら入れません", vec![(&mut o.vos_drift, "7u")]);
             row(ui, "バイアス電流 typ・max [A]", "入力に流れ込む電流。ピンから出ていく (PNP 入力の LM358 など) ならマイナス。max は空でも可", vec![(&mut o.ib, "-20n"), (&mut o.ib_max, "250n")]);
             row(ui, "電源電流 typ・min・max [A]", "1 回路あたりの電源電流。min は空でも可", vec![(&mut o.iq, "350u"), (&mut o.iq_min, ""), (&mut o.iq_max, "600u")]);
             row(ui, "出力の振れ幅 上・下 [V]", "出力が正の電源から・負の電源から、どこまで近づけるか", vec![(&mut o.hu, "1.4"), (&mut o.hl, "5m")]);
@@ -671,6 +699,11 @@ impl PartForm {
             }
             ui.label(i18n::tr("電流制限: 差 [V] 電流 [A]")).on_hover_text(i18n::tr("1 行に「入出力の差 電流」。1 行か 2 行 (差で変わる部品)"));
             ui.add(egui::TextEdit::multiline(&mut r.ilim).desired_rows(2).desired_width(160.0).font(egui::TextStyle::Monospace).hint_text("10 2.2\n35 0.6"));
+            ui.end_row();
+            ui.label(i18n::tr("温度: ℃ 変化 [%]")).on_hover_text(i18n::tr(
+                "出力 (LM317 などは基準電圧) の温度による変化。1 行に「温度 [℃] 25 ℃ からの変化 [%]」を、低い温度から 2 行以上。データシートの「出力電圧と温度」の図から読むか、温度係数 (−0.3 mV/℃ なら 5 V の 0 ℃ で +0.15 %、125 ℃ で −0.6 %) から。点の間は直線でつなぎます。空なら温度で変わりません",
+            ));
+            ui.add(egui::TextEdit::multiline(&mut r.temp).desired_rows(2).desired_width(160.0).font(egui::TextStyle::Monospace).hint_text("0 0.15\n125 -0.6"));
             ui.end_row();
             row(ui, "リップル除去 [dB]・周波数 [Hz]", "入力のリップルが出力でどれだけ小さくなるか", vec![(&mut r.rr, "83", 60.0), (&mut r.rr_f, "120", 60.0)]);
             if adj {

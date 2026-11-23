@@ -42,7 +42,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         read 'errors' (or run with --strict, which fails the script on an ERC error)
   spice                                 the SPICE netlist text
  Simulation
-  dc [full] [probe=V(out),I(R1)]        operating point: node voltages, element currents (probe= returns only those)
+  dc [full] [temp=27] [probe=V(out),I(R1)]  operating point: node voltages, element currents (probe= returns only those; temp= every part at that temperature)
                                         (elements inside a library part's macro model are hidden unless 'full')
                                         'ratings' lists parts over / near their package power limit (like the app);
                                         'warnings' also flags an op-amp whose IN+ and IN- differ (saturated output)
@@ -101,7 +101,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         sensitivity: moves each part's value by step % and says how far the probe moves (per_percent,
                                         elasticity), the biggest first; names the parts that decide an accuracy
                                         the DC point for a range of values of one part (a V source, R, C, L): one row per value; the part keeps its value
-  worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]
+  worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [temp=27] [f=10:1Meg] [tran=10m:10u] [top=8]
                                         worst case: the smallest and largest value of one result with every part at an end of its tolerance (%)
   breadboard                            the schematic on a solderless breadboard: the hole of each lead (a1..j30, rails 上+ 上− 下− 下+), the jumpers,
                                         the supplies off the board, and what the holes join that the schematic does not (problems)
@@ -140,7 +140,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   poweron [tol_r=5] [tol_v=0] [temp=25] [margin=1.5] [spread=on|off] [measured=12m] [supply=V1]
                                         first power-on of a built board: each supply's current at its printed values, the range a working
                                         board falls in (tolerances, data sheet min / max, self-heating), the current limit to set; measured= judges a reading
-  mc NET [measure=dc|cutoff|rise|...] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=]
+  mc NET [measure=dc|cutoff|rise|...] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [temp=27] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=]
                                         Monte Carlo: parts drawn at random inside their tolerance; mean, std, the 95 % range a few built
                                         boards should land in, a histogram, the parts that matter; lo=/hi= give the share inside the limits
   diagnose NET=V [NET=V ...] [rare] [top=8]
