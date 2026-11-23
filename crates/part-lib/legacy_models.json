@@ -478,5 +478,53 @@
    ".subckt ADA4522_1 inp inn out vp vn\n* input: offset (data sheet typ), voltage noise, bias currents (+ = into the pin), resistance\nVos inp i1 DC 7e-07\n* spread Vos -5e-06 5e-06 offset (data sheet: max 0.005 mV either way)\n* the offset's drift with temperature, on the noise source (0 V/degree as made; the variation analyses move it\n* between the data sheet's typ either way): V(dr) volts per degree away from 27 C\nBen i1 i2 V=1.42458*V(nz)+V(dr)*(temp-27)\nVdr dr 0 DC 0\n* spread Vdr -2.5e-09 2.5e-09 offset-drift (data sheet: typ 0.0025 uV/C either way)\nRnz nz 0 1k\nIbp inp vn DC 5e-11\nIbn inn vn DC 5e-11\n* spread Ibp 5e-11 1.5e-10 ib+ (data sheet: typ 50 pA, max 150 pA; no min, so from typ)\n* spread Ibn 5e-11 1.5e-10 ib- (data sheet: typ 50 pA, max 150 pA; no min, so from typ)\nRin inp inn 1e11\n* gain stage: gm into Cp || Rp; the current is limited to SR * Cp (slew rate)\nBgm 0 n0 I=limit(0.0188748*V(i2,inn),-0.0013,0.0013)\nRp n0 0 9.42142e+08\nCp n0 0 1e-09\n* second pole (phase margin)\nE2 p2a 0 n0 0 1\nR2 p2a p2 1k\nC2 p2 0 2.875e-11\n* output swing: clamped hu below vp and hl above vn\nEu u 0 vp 0 1\nVhu u uh DC 0.02\nEx1 x1 0 p2 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 p2 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\n* output: ro, current limited to the short-circuit current, taken from vp (source) and returned to vn (sink)\nBsrc vp out I=limit((V(n)-V(out))/100,-0.022,0.022)*step(limit((V(n)-V(out))/100,-0.022,0.022),1u)\nBsnk out vn I=-limit((V(n)-V(out))/100,-0.022,0.022)*step(-limit((V(n)-V(out))/100,-0.022,0.022),1u)\n* quiescent current of one amplifier\nIq vp vn DC 0.00084\n* spread Iq 0.00084 0.00091 iq (data sheet: typ 840 uA, max 910 uA; no min, so from typ)\n.model DLIM D(IS=1e-12 N=1)\n.ends ADA4522_1"
   ],
   "descriptions": []
+ },
+ "CGA3E2NP01H100D080AA": {
+  "texts": [
+   ".subckt CGA3E2NP01H100D080AA 1 2\nResr 1 n_esr 349m\nLesl n_esr n_c 644p\nC1 n_c 2 10p\n.ends"
+  ],
+  "descriptions": [
+   "TDK CGA 積層セラミックコンデンサ (車載・150 ℃品) 10pF ±0.5pF 50 V NP0 0603 (1608)。温度補償用 (NP0: 0±30 ppm/℃) で、直流電圧で容量はほとんど変わりません。ESR 約 349 mΩ・ESL 約 0.64 nH (自己共振 約 1.98 GHz)。AEC-Q200、−55〜150 ℃。本体 1.6±0.1 × 0.8±0.1 mm、厚さ 0.8±0.1 mm。ランドは TDK の推奨 (リフロー: PA 0.6〜0.8・PB 0.6〜0.8・PC 0.6〜0.8 mm: PA = パッドの内側の間、PB = パッドの長さ、PC = パッドの幅) の真ん中。型番の末尾 AA は包装 (紙テープ 180 mm リール、4000 個)。TDK Product Center の製品ページ (生産中) の特性の図のデータ (CSV、2026 年 11 月時点) と、カタログ「積層セラミックチップコンデンサ CGA シリーズ 温度保証用」(2023 年 8 月) で確かめた (2026-11-24)"
+  ]
+ },
+ "CGA3E2NP01H220J080AA": {
+  "texts": [
+   ".subckt CGA3E2NP01H220J080AA 1 2\nResr 1 n_esr 388m\nLesl n_esr n_c 735p\nC1 n_c 2 22p\n.ends"
+  ],
+  "descriptions": [
+   "TDK CGA 積層セラミックコンデンサ (車載・150 ℃品) 22pF ±5% 50 V NP0 0603 (1608)。温度補償用 (NP0: 0±30 ppm/℃) で、直流電圧で容量はほとんど変わりません。ESR 約 388 mΩ・ESL 約 0.73 nH (自己共振 約 1.25 GHz)。AEC-Q200、−55〜150 ℃。本体 1.6±0.1 × 0.8±0.1 mm、厚さ 0.8±0.1 mm。ランドは TDK の推奨 (リフロー: PA 0.6〜0.8・PB 0.6〜0.8・PC 0.6〜0.8 mm: PA = パッドの内側の間、PB = パッドの長さ、PC = パッドの幅) の真ん中。型番の末尾 AA は包装 (紙テープ 180 mm リール、4000 個)。TDK Product Center の製品ページ (生産中) の特性の図のデータ (CSV、2026 年 11 月時点) と、カタログ「積層セラミックチップコンデンサ CGA シリーズ 温度保証用」(2023 年 8 月) で確かめた (2026-11-24)"
+  ]
+ },
+ "CGA3E2NP01H101J080AA": {
+  "texts": [
+   ".subckt CGA3E2NP01H101J080AA 1 2\nResr 1 n_esr 204m\nLesl n_esr n_c 773p\nC1 n_c 2 100p\n.ends"
+  ],
+  "descriptions": [
+   "TDK CGA 積層セラミックコンデンサ (車載・150 ℃品) 100pF ±5% 50 V NP0 0603 (1608)。温度補償用 (NP0: 0±30 ppm/℃) で、直流電圧で容量はほとんど変わりません。ESR 約 204 mΩ・ESL 約 0.77 nH (自己共振 約 572 MHz)。AEC-Q200、−55〜150 ℃。本体 1.6±0.1 × 0.8±0.1 mm、厚さ 0.8±0.1 mm。ランドは TDK の推奨 (リフロー: PA 0.6〜0.8・PB 0.6〜0.8・PC 0.6〜0.8 mm: PA = パッドの内側の間、PB = パッドの長さ、PC = パッドの幅) の真ん中。型番の末尾 AA は包装 (紙テープ 180 mm リール、4000 個)。TDK Product Center の製品ページ (生産中) の特性の図のデータ (CSV、2026 年 11 月時点) と、カタログ「積層セラミックチップコンデンサ CGA シリーズ 温度保証用」(2023 年 8 月) で確かめた (2026-11-24)"
+  ]
+ },
+ "CGA3E2NP01H102J080AA": {
+  "texts": [
+   ".subckt CGA3E2NP01H102J080AA 1 2\nResr 1 n_esr 54.8m\nLesl n_esr n_c 735p\nC1 n_c 2 1n\n.ends"
+  ],
+  "descriptions": [
+   "TDK CGA 積層セラミックコンデンサ (車載・150 ℃品) 1000pF ±5% 50 V NP0 0603 (1608)。温度補償用 (NP0: 0±30 ppm/℃) で、直流電圧で容量はほとんど変わりません。ESR 約 54.8 mΩ・ESL 約 0.73 nH (自己共振 約 186 MHz)。AEC-Q200、−55〜150 ℃。本体 1.6±0.1 × 0.8±0.1 mm、厚さ 0.8±0.1 mm。ランドは TDK の推奨 (リフロー: PA 0.6〜0.8・PB 0.6〜0.8・PC 0.6〜0.8 mm: PA = パッドの内側の間、PB = パッドの長さ、PC = パッドの幅) の真ん中。型番の末尾 AA は包装 (紙テープ 180 mm リール、4000 個)。TDK Product Center の製品ページ (生産中) の特性の図のデータ (CSV、2026 年 11 月時点) と、カタログ「積層セラミックチップコンデンサ CGA シリーズ 温度保証用」(2023 年 8 月) で確かめた (2026-11-24)"
+  ]
+ },
+ "CGA3E2NP01H472J080AA": {
+  "texts": [
+   ".subckt CGA3E2NP01H472J080AA 1 2\nResr 1 n_esr 32.8m\nLesl n_esr n_c 817p\nC1 n_c 2 4.7n\n.ends"
+  ],
+  "descriptions": [
+   "TDK CGA 積層セラミックコンデンサ (車載・150 ℃品) 4700pF ±5% 50 V NP0 0603 (1608)。温度補償用 (NP0: 0±30 ppm/℃) で、直流電圧で容量はほとんど変わりません。ESR 約 32.8 mΩ・ESL 約 0.82 nH (自己共振 約 81.2 MHz)。AEC-Q200、−55〜150 ℃。本体 1.6±0.1 × 0.8±0.1 mm、厚さ 0.8±0.1 mm。ランドは TDK の推奨 (リフロー: PA 0.6〜0.8・PB 0.6〜0.8・PC 0.6〜0.8 mm: PA = パッドの内側の間、PB = パッドの長さ、PC = パッドの幅) の真ん中。型番の末尾 AA は包装 (紙テープ 180 mm リール、4000 個)。TDK Product Center の製品ページ (生産中) の特性の図のデータ (CSV、2026 年 11 月時点) と、カタログ「積層セラミックチップコンデンサ CGA シリーズ 温度保証用」(2023 年 8 月) で確かめた (2026-11-24)"
+  ]
+ },
+ "CGA3E2NP01H103J080AA": {
+  "texts": [
+   ".subckt CGA3E2NP01H103J080AA 1 2\nResr 1 n_esr 25.5m\nLesl n_esr n_c 663p\nC1 n_c 2 10n\n.ends"
+  ],
+  "descriptions": [
+   "TDK CGA 積層セラミックコンデンサ (車載・150 ℃品) 10000pF ±5% 50 V NP0 0603 (1608)。温度補償用 (NP0: 0±30 ppm/℃) で、直流電圧で容量はほとんど変わりません。ESR 約 25.5 mΩ・ESL 約 0.66 nH (自己共振 約 61.8 MHz)。AEC-Q200、−55〜150 ℃。本体 1.6±0.1 × 0.8±0.1 mm、厚さ 0.8±0.1 mm。ランドは TDK の推奨 (リフロー: PA 0.6〜0.8・PB 0.6〜0.8・PC 0.6〜0.8 mm: PA = パッドの内側の間、PB = パッドの長さ、PC = パッドの幅) の真ん中。型番の末尾 AA は包装 (紙テープ 180 mm リール、4000 個)。TDK Product Center の製品ページ (生産中) の特性の図のデータ (CSV、2026 年 11 月時点) と、カタログ「積層セラミックチップコンデンサ CGA シリーズ 温度保証用」(2023 年 8 月) で確かめた (2026-11-24)"
+  ]
  }
 }

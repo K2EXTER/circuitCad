@@ -456,6 +456,39 @@ fn the_tps62933_steps_twelve_volts_down_to_five() {
     assert!(worst < 3.5, "without CBST: {worst}");
 }
 
+/// The TDK CGA NP0 capacitors in an AC analysis (1 A of AC into the part: the voltage is |Z|) against the |Z| of TDK's product
+/// pages (the "Download data as CSV" of the Impedance graph, 2026-11): a tenth of the self-resonance, the CSV's lowest point and
+/// twice it (the 10 pF's CSV ends at 1.5 times). The models' ESR and ESL were fitted to the curve up to three times the
+/// resonance, within 9 % there.
+#[test]
+fn the_tdk_cga_capacitors_follow_their_impedance_curves() {
+    let table: &[(&str, &[(f64, f64)])] = &[
+        ("CGA3E2NP01H100D080AA", &[(1.9865e+08, 7.7139e+01), (1.9828e+09, 3.4925e-01), (3.0000e+09, 6.9017e+00)]),
+        ("CGA3E2NP01H220J080AA", &[(1.2539e+08, 5.7679e+01), (1.2515e+09, 3.8824e-01), (2.4957e+09, 8.2095e+00)]),
+        ("CGA3E2NP01H101J080AA", &[(5.7351e+07, 2.7755e+01), (5.7242e+08, 2.0391e-01), (1.1415e+09, 4.2114e+00)]),
+        ("CGA3E2NP01H102J080AA", &[(1.8442e+07, 8.4661e+00), (1.8570e+08, 5.4809e-02), (3.7417e+08, 1.2826e+00)]),
+        ("CGA3E2NP01H472J080AA", &[(8.1274e+06, 4.1158e+00), (8.1232e+07, 3.2811e-02), (1.6142e+08, 5.7355e-01)]),
+        ("CGA3E2NP01H103J080AA", &[(6.1849e+06, 2.5168e+00), (6.1817e+07, 2.5459e-02), (1.2444e+08, 3.8467e-01)]),
+    ];
+    let mut bad = vec![];
+    for (pn, points) in table {
+        let def = part(pn);
+        let mut c = Circuit::new();
+        place(&mut c, &def, "C1", &[("1", "a"), ("2", "0")]);
+        let a = c.node("a");
+        c.add(Element::ISource { name: "I1".into(), from: 0, to: a, wave: Waveform::Dc(0.0), ac: Some((1.0, 0.0)) });
+        for (f, z) in points.iter() {
+            let r = ac_analysis(&c, &AcSettings { fstart: *f, fstop: *f, sweep: AcSweep::Decade(1) }).unwrap();
+            let s = r.signal("V(a)").unwrap();
+            let model = s.re[0].hypot(s.im[0]);
+            if (model / z - 1.0).abs() > 0.10 {
+                bad.push(format!("{pn} at {f:.3e} Hz: model {model:.4} ohm, TDK {z:.4} ohm"));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
 #[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");
