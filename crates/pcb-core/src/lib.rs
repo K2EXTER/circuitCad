@@ -16,6 +16,7 @@ pub mod case;
 pub mod case_model;
 pub mod case_shape;
 pub mod trunk;
+pub mod tline;
 pub mod copper;
 pub mod current;
 pub mod diffpair;

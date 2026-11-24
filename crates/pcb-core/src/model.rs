@@ -540,6 +540,10 @@ pub struct NetClass {
     /// The slider of the net's width, "recommended width", the current check and the impedance check leave them alone.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub width_exceptions: Vec<WidthException>,
+    /// The rise time (ns) of the edges that drive these nets (the driver's datasheet): the check of which tracks act as transmission
+    /// lines (`tline`) compares the delay of a net's longest way with it. None: a rule of thumb for a signal net (`tline::DEFAULT_RISE_NS`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rise_ns: Option<f64>,
 }
 
 /// A stretch of track of one net that keeps its own width: the tracks that lie along the segment `a`–`b`.
@@ -673,7 +677,7 @@ impl NetClass {
 
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None, layers: vec![], max_length: 0.0, max_vias: 0, max_neck: 0.0, width_exceptions: vec![] }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None, layers: vec![], max_length: 0.0, max_vias: 0, max_neck: 0.0, width_exceptions: vec![], rise_ns: None }
     }
 }
 

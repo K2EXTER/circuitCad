@@ -4,14 +4,14 @@ use super::*;
 
 impl Session {
     pub(super) fn board_nets(&mut self, rest: &[String]) -> Res {
-        // board nets [sort=name|class|pads|length|detour|vias|width|current|open] [asc=1|desc=1] [csv=file]: one row per net (the editor's
+        // board nets [sort=name|class|pads|length|detour|vias|width|current|open|delay] [asc=1|desc=1] [csv=file]: one row per net (the editor's
         // "ネットの一覧"): class, pads, track length in all and per layer, detour, vias, thinnest / widest track, current and the width it needs, pours, open connections
         let (_, kv) = options(rest);
         let board = self.board_mut()?;
         let mut rows = pcb_core::nettable::net_table(board, None);
         let by = match opt(&kv, "sort") {
             None => pcb_core::nettable::SortBy::Name,
-            Some(s) => pcb_core::nettable::SortBy::parse(s).ok_or_else(|| format!("sort={s}: use name, class, pads, length, detour, vias, width, current or open"))?,
+            Some(s) => pcb_core::nettable::SortBy::parse(s).ok_or_else(|| format!("sort={s}: use name, class, pads, length, detour, vias, width, current, open or delay"))?,
         };
         let numeric = !matches!(by, pcb_core::nettable::SortBy::Name | pcb_core::nettable::SortBy::Class);
         let desc = if numeric { opt(&kv, "asc") != Some("1") } else { opt(&kv, "desc") == Some("1") };
@@ -26,7 +26,11 @@ impl Session {
                 json!({"net": r.net, "class": r.class, "pads": r.pads, "length_mm": r2(r.length),
                     "by_layer_mm": r.by_layer.iter().map(|(k, v)| (k.clone(), json!(r2(*v)))).collect::<serde_json::Map<String, Value>>(),
                     "detour": r.detour().map(r2), "vias": r.vias, "thinnest_mm": r2(r.thinnest), "widest_mm": r2(r.widest),
-                    "current_a": (r.current > 0.0).then_some(r.current), "recommended_mm": (r.current > 0.0).then(|| r2(r.needed)), "pours": r.pours, "open": r.open})
+                    "current_a": (r.current > 0.0).then_some(r.current), "recommended_mm": (r.current > 0.0).then(|| r2(r.needed)), "pours": r.pours, "open": r.open,
+                    // the transmission-line check (tline): the delay of the longest way, the rise time it is held against and the length past which it acts as a line
+                    "delay_ps": r.line.as_ref().map(|l| l.delay_ps.round()), "rise_ns": r.line.as_ref().map(|l| l.rise_ns),
+                    "rise_from": r.line.as_ref().map(|l| if l.from == pcb_core::tline::RiseFrom::Class { "class" } else { "default" }),
+                    "line_mm": r.line.as_ref().map(|l| r2(l.critical_mm)), "acts_as_line": r.line.as_ref().map(|l| l.is_line())})
             })
             .collect();
         Ok(obj(json!({"nets": list, "count": rows.len(), "open": rows.iter().map(|r| r.open).sum::<usize>()})))
@@ -223,6 +227,13 @@ impl Session {
         }
         if let Some(v) = opt(&kv, "max_length") {
             board.net_classes[k].max_length = v.parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(|| format!("max_length={v}: a number of 0 or more (mm)"))?;
+        }
+        if let Some(v) = opt(&kv, "rise") {
+            // the rise time (ns) of the edges on these nets, for the transmission-line check; 0 or `default` goes back to the rule of thumb
+            board.net_classes[k].rise_ns = match v {
+                "default" | "0" => None,
+                _ => Some(v.parse::<f64>().ok().filter(|x| x.is_finite() && *x > 0.0).ok_or_else(|| format!("rise={v}: a rise time in ns above 0, or `default`"))?),
+            };
         }
         if let Some(v) = opt(&kv, "max_vias") {
             board.net_classes[k].max_vias = v.parse::<u32>().map_err(|_| format!("max_vias={v}: a whole number of 0 or more (0 = no limit)"))?;

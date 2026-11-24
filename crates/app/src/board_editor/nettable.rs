@@ -138,6 +138,7 @@ impl BoardEditor {
                         ui.strong(i18n::tr("10 ms の最大")).on_hover_text(i18n::tr("短くても繰り返す山の熱"));
                         ui.strong(i18n::tr("ピーク")).on_hover_text(i18n::tr("一瞬の最大値。参考です"));
                     }
+                    self.sort_header(ui, "遅れ", SortBy::Delay, "パッドからパッドへのいちばん長い配線を、信号が伝わるのにかかる時間 (層と線幅から電界ソルバで)。立ち上がり時間の 1/6 を超えると伝送線路として振る舞い、端の跳ね返りで波形が揺れます (リンギング)。オレンジは超えているネット。立ち上がり時間は、ネットの設定の窓の「ルール」で変えられます (既定は速いマイコンのピンの目安 2 ns)。電源・GND・ベタのネットは出しません");
                     ui.strong(i18n::tr("ベタ")).on_hover_text(i18n::tr("このネットのベタ (銅箔ゾーン) がある層"));
                     self.sort_header(ui, "未配線", SortBy::Open, "まだ銅でつながっていない接続 (黄色の線) の数");
                     ui.end_row();
@@ -200,6 +201,23 @@ impl BoardEditor {
                                     ui.label("—");
                                     ui.label("—");
                                 }
+                            }
+                        }
+                        match &r.line {
+                            Some(l) => {
+                                let tip = i18n::trf!(
+                                    "{} → {} の {:.0} mm。立ち上がり {} ns{} の 1/6 は {:.0} ps (配線で約 {:.0} mm)",
+                                    l.ends.0, l.ends.1, l.length, l.rise_ns, if l.from == pcb_core::tline::RiseFrom::Default { i18n::tr(" (目安)") } else { "" }, l.rise_ns * 1000.0 * pcb_core::tline::FRACTION, l.critical_mm
+                                );
+                                let txt = format!("{:.0} ps", l.delay_ps);
+                                if l.is_line() {
+                                    ui.colored_label(crate::theme::warn(), format!("{txt} ⚠")).on_hover_text(format!("{tip}{}", i18n::tr("。超えています: 配線を短くするか、ドライバのそばに 22〜47 Ω の直列の抵抗 (ダンピング抵抗) を入れましょう")))
+                                } else {
+                                    ui.label(txt).on_hover_text(tip)
+                                };
+                            }
+                            None => {
+                                ui.label("—");
                             }
                         }
                         ui.label(if r.pours.is_empty() { "—".to_string() } else { r.pours.join("・") });

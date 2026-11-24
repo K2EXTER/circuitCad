@@ -347,6 +347,29 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         }
     }
 
+    // tracks long enough to act as transmission lines (the delay of the longest way against the edge's rise time)
+    let lines = crate::tline::long_lines(board);
+    if let Some(first) = lines.first() {
+        // a rise time the class gives is the designer's: a warning; the rule of thumb only says where to look
+        let level = if lines.iter().any(|l| l.from == crate::tline::RiseFrom::Class) { Level::Warn } else { Level::Info };
+        let rise = match first.from {
+            crate::tline::RiseFrom::Class => format!("ネットクラスの立ち上がり時間 {} ns", first.rise_ns),
+            crate::tline::RiseFrom::Default => format!("立ち上がり時間の目安 {} ns (速いマイコンのピン。ネットの設定の窓の「ルール」で、ドライバのデータシートの値に変えられます)", first.rise_ns),
+        };
+        out.push(
+            check(
+                level,
+                format!("伝送線路として振る舞う長さの配線があります: {}", lines.iter().take(4).map(|l| l.net.as_str()).collect::<Vec<_>>().join(", ")),
+                format!(
+                    "例: {} の {} から {} までは {:.0} mm で、信号が届くまで約 {:.0} ps かかります。{}の 1/6 ({:.0} ps、配線で約 {:.0} mm) を超えると、端で跳ね返った信号が重なり、波形が行き過ぎたり揺れたり (リンギング) します。クロックでは 2 回数えることもあります。配線を短くするか、ドライバのそばに 22〜47 Ω ほどの直列の抵抗 (ダンピング抵抗) を入れましょう",
+                    first.net, first.ends.0, first.ends.1, first.length, first.delay_ps, rise, first.rise_ns * 1000.0 * crate::tline::FRACTION, first.critical_mm
+                ),
+                Some(first.at),
+            )
+            .with_also(lines.iter().map(|l| l.at)),
+        );
+    }
+
     // silk screen
     let silk = drc::silk_checks(board);
     if let Some(first) = silk.first() {

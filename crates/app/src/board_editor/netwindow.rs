@@ -405,6 +405,17 @@ impl BoardEditor {
                                 ui.add(egui::DragValue::new(&mut c.via_drill).speed(0.05).range(0.2..=2.0).prefix(i18n::tr("穴 ")).suffix(" mm")).on_hover_text(i18n::tr("このクラスのビアの穴径"));
                             });
                             c.via_drill = c.via_drill.min(c.via_diameter - 0.1).max(0.2);
+                            // the rise time of the edges on these nets, for the transmission-line check (tline); 0 is the rule of thumb
+                            let mut rise = c.rise_ns.unwrap_or(0.0);
+                            ui.horizontal(|ui| {
+                                ui.label(i18n::tr("立ち上がり時間"));
+                                if ui.add(egui::DragValue::new(&mut rise).speed(0.1).range(0.0..=1000.0).suffix(" ns").custom_formatter(|v, _| if v == 0.0 { i18n::trf!("目安 ({} ns)", pcb_core::tline::DEFAULT_RISE_NS) } else { format!("{v}") }))
+                                    .on_hover_text(i18n::tr("このクラスのネットを駆動する出力の立ち上がり時間 (ドライバのデータシートの tr・tf)。配線を信号が伝わる時間がこの 1/6 を超えると、伝送線路として振る舞い反射で波形が揺れるので、ネットの一覧の「遅れ」と発注前チェックが知らせます。0 は目安の 2 ns (速いマイコンのピン)。74HC は約 6 ns、74LVC は約 1〜2 ns"))
+                                    .changed()
+                                {
+                                    c.rise_ns = (rise > 0.0).then_some(rise);
+                                }
+                            });
                             ui.small(i18n::trf!("線幅は「線幅」タブのスライダーで変えます (いま {:.2} mm)", c.track_width));
                         }
                         None => {

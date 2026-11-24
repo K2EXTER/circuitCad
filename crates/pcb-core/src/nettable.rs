@@ -30,6 +30,8 @@ pub struct NetRow {
     pub pours: Vec<String>,
     /// Connections not yet made of copper (yellow lines).
     pub open: usize,
+    /// The delay of the longest way against the rise time (`tline`); None for a rail, a power net or no copper way yet.
+    pub line: Option<crate::tline::LineCheck>,
 }
 
 impl NetRow {
@@ -51,6 +53,8 @@ pub enum SortBy {
     Thinnest,
     Current,
     Open,
+    /// The delay of the longest way as a part of the rise time (`tline`).
+    Delay,
 }
 
 impl SortBy {
@@ -65,6 +69,7 @@ impl SortBy {
             "width" | "thinnest" => SortBy::Thinnest,
             "current" => SortBy::Current,
             "open" => SortBy::Open,
+            "delay" => SortBy::Delay,
             _ => return None,
         })
     }
@@ -100,6 +105,7 @@ pub fn net_table(board: &Board, airwires: Option<&[Airwire]>) -> Vec<NetRow> {
                 needed: 0.0,
                 pours: vec![],
                 open: 0,
+                line: None,
             })
             .pads += 1;
     }
@@ -136,6 +142,11 @@ pub fn net_table(board: &Board, airwires: Option<&[Airwire]>) -> Vec<NetRow> {
             r.open += 1;
         }
     }
+    for c in crate::tline::check(board) {
+        if let Some(r) = rows.get_mut(&c.net) {
+            r.line = Some(c);
+        }
+    }
     rows.into_values().collect()
 }
 
@@ -150,6 +161,7 @@ pub fn sort_rows(rows: &mut [NetRow], by: SortBy, descending: bool) {
             SortBy::Thinnest => r.thinnest,
             SortBy::Current => r.current,
             SortBy::Open => r.open as f64,
+            SortBy::Delay => r.line.as_ref().map_or(0.0, |l| l.ratio()),
             SortBy::Name | SortBy::Class => 0.0,
         }
     };
@@ -180,7 +192,7 @@ pub fn table_csv(rows: &[NetRow]) -> String {
     for l in &layers {
         out.push_str(&format!(",{l}_mm"));
     }
-    out.push_str(",detour,vias,thinnest_mm,widest_mm,current_a,recommended_mm,pours,open\n");
+    out.push_str(",detour,vias,thinnest_mm,widest_mm,current_a,recommended_mm,pours,open,delay_ps,rise_ns,line_mm\n");
     for r in rows {
         out.push_str(&format!("{},{},{},{:.2}", quote(&r.net), quote(&r.class), r.pads, r.length));
         for l in &layers {
@@ -189,7 +201,9 @@ pub fn table_csv(rows: &[NetRow]) -> String {
         let detour = r.detour().map_or(String::new(), |d| format!("{d:.2}"));
         // no current: both left empty (not 0, which would read as "0 A, needs nothing")
         let (current, needed) = if r.current > 0.0 { (format!("{:.3}", r.current), format!("{:.2}", r.needed)) } else { (String::new(), String::new()) };
-        out.push_str(&format!(",{detour},{},{:.2},{:.2},{current},{needed},{},{}\n", r.vias, r.thinnest, r.widest, quote(&r.pours.join(" ")), r.open));
+        // the delay, the rise time it is held against and the length past which the net acts as a line (empty: not checked)
+        let line = r.line.as_ref().map_or(",,".to_string(), |l| format!("{:.0},{},{:.1}", l.delay_ps, l.rise_ns, l.critical_mm));
+        out.push_str(&format!(",{detour},{},{:.2},{:.2},{current},{needed},{},{},{line}\n", r.vias, r.thinnest, r.widest, quote(&r.pours.join(" ")), r.open));
     }
     out
 }
@@ -244,7 +258,7 @@ mod tests {
         assert_eq!(rows[0].net, "VCC");
         let csv = table_csv(&rows);
         assert!(csv.starts_with("net,class,pads,length_mm,表面_mm,detour"), "{csv}");
-        assert!(csv.contains("VCC,Power,2,0.00,0.00,,0,0.00,0.00,,,,1"), "{csv}");
+        assert!(csv.contains("VCC,Power,2,0.00,0.00,,0,0.00,0.00,,,,1,,,"), "{csv}");
     }
 
     /// A declared current is a column of the table and of its CSV, with the width it needs; a net without one leaves both empty.

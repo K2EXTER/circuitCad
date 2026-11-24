@@ -177,7 +177,7 @@ fn quality_json(q: &pcb_core::quality::Quality) -> Value {
 /// A net class as the commands answer it.
 fn class_json(c: &pcb_core::NetClass) -> Value {
     let exceptions: Vec<Value> = c.width_exceptions.iter().map(|e| json!({"net": e.net, "from": [e.a.x, e.a.y], "to": [e.b.x, e.b.y], "width": e.width})).collect();
-    json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length, "max_vias": c.max_vias, "max_neck": c.max_neck, "width_exceptions": exceptions})
+    json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length, "max_vias": c.max_vias, "max_neck": c.max_neck, "rise_ns": c.rise_ns, "width_exceptions": exceptions})
 }
 
 /// What the checks find, as the answers of `board break` and `board health` show it.
