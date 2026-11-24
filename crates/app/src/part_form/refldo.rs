@@ -82,6 +82,17 @@ fn temp_text(c: &fit::TempCurve) -> String {
     c.points.iter().map(|p| format!("{} {}", fit::num::g(p[0], 6), fit::num::g(p[1] * 100.0, 6))).collect::<Vec<_>>().join("\n")
 }
 
+/// A temperature box as a curve, with where it was read when the box is as it was filled.
+fn temp_of(text: &str, from: &str) -> Result<Option<fit::TempCurve>, String> {
+    let mut c = super::linear::temp_curve(text)?;
+    if let Some(c) = c.as_mut()
+        && !from.is_empty()
+    {
+        c.from = from.to_string();
+    }
+    Ok(c)
+}
+
 fn common(part: &str, source: &str) -> Result<fit::Common, String> {
     serde_json::from_value(serde_json::json!({"part": part, "name": part_lib::diode::model_name(part), "source": source})).map_err(|e| e.to_string())
 }
@@ -213,6 +224,12 @@ pub struct SetLdoInput {
     pub psrr: String,
     pub noise: String,
     pub iset_noise: String,
+    /// The SET current's and the quiescent current's change with the temperature ("°C percent" lines), and where they were
+    /// read (kept while the box is unchanged).
+    pub iset_temp: String,
+    pub iset_temp_from: String,
+    pub iq_temp: String,
+    pub iq_temp_from: String,
     pub from_figures: String,
     pub result: Option<Result<Fitted, String>>,
     pub message: Option<(bool, String)>,
@@ -237,6 +254,10 @@ impl SetLdoInput {
             psrr: psrr_text(&s.psrr),
             noise: noise_text(&s.noise),
             iset_noise: noise_text(&s.iset_noise),
+            iset_temp: s.iset_temp.as_ref().map(temp_text).unwrap_or_default(),
+            iset_temp_from: s.iset_temp.as_ref().map(|c| c.from.clone()).unwrap_or_default(),
+            iq_temp: s.iq_temp.as_ref().map(temp_text).unwrap_or_default(),
+            iq_temp_from: s.iq_temp.as_ref().map(|c| c.from.clone()).unwrap_or_default(),
             from_figures: s.from_figures.clone(),
             ..Default::default()
         }
@@ -298,6 +319,8 @@ impl SetLdoInput {
             psrr: psrr_of(&self.psrr)?,
             noise: noise_of("出力雑音", &self.noise)?,
             iset_noise: noise_of("SET の電流の雑音", &self.iset_noise)?,
+            iset_temp: temp_of(&self.iset_temp, &self.iset_temp_from)?,
+            iq_temp: temp_of(&self.iq_temp, &self.iq_temp_from)?,
         };
         fit::setldo::check_setldo(&s)?;
         Ok(s)
@@ -531,6 +554,18 @@ impl PartForm {
             changed |= Self::refldo_lines(ui, "PSRR: Hz dB", "1 行に「周波数 [Hz] 除去 [dB]」。表の周波数ごとの値を入れます", &mut r.psrr, "120 117\n10k 90");
             changed |= Self::refldo_row(ui, "出力雑音 (増幅器)", "「rms [V] 帯域の下 上 [Hz]」(0.8u 10 100k) か密度 1 つ。CSET を大きくしたときの値", vec![(&mut r.noise, "0.8u 10 100k", 130.0)]);
             changed |= Self::refldo_row(ui, "SET の電流の雑音", "「rms [A] 帯域の下 上 [Hz]」(6n 10 100k) か密度 1 つ [A/√Hz]。RSET に流れて出力の雑音になります", vec![(&mut r.iset_noise, "6n 10 100k", 130.0)]);
+            let t = Self::refldo_lines(ui, "SET の電流の温度: ℃ 変化 [%]", "SET の電流の温度による変化 (出力も同じ割合で動きます)。1 行に「温度 [℃] 25 ℃ からの変化 [%]」を、低い温度から 2 行以上 (図の「SET Pin Current vs Temperature」から)。空なら温度で変わりません", &mut r.iset_temp, "-50 -0.098
+150 0.13");
+            if t {
+                r.iset_temp_from.clear();
+            }
+            changed |= t;
+            let t = Self::refldo_lines(ui, "電源電流の温度: ℃ 変化 [%]", "動作中の電源電流の温度による変化。1 行に「温度 [℃] 25 ℃ からの変化 [%]」(図の「Quiescent Current vs Temperature」から)。空なら温度で変わりません", &mut r.iq_temp, "-50 -7.7
+150 24.9");
+            if t {
+                r.iq_temp_from.clear();
+            }
+            changed |= t;
         });
         if changed {
             r.from_figures.clear();

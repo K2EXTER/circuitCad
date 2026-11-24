@@ -83,6 +83,12 @@ pub struct SetLdoSpec {
     pub noise: Noise,
     /// The SET current's noise (rms A over a band, or a density A/√Hz).
     pub iset_noise: Noise,
+    /// The SET current against the temperature (M8; the output follows it through RSET), and the quiescent current's: relative
+    /// to 25 °C, read off the data sheet's figures. None: the same at every temperature.
+    #[serde(default)]
+    pub iset_temp: Option<super::TempCurve>,
+    #[serde(default)]
+    pub iq_temp: Option<super::TempCurve>,
 }
 
 /// The pins, in the order of `sim.pins`: in gnd out outs set, then en, pg pgfb, ilim when the part has them.
@@ -130,7 +136,11 @@ pub fn setldo_model(p: &SetLdoSpec) -> String {
         }
         None => "",
     };
-    l.push(format!("Bset in set I=V(on,gnd)*({}{spread}+{}*(V(in,gnd)-{}))", g(p.iset, 6), g(p.line_iset, 6), g(p.vin0, 6)));
+    let iset_tc = p.iset_temp.as_ref().map(|c| format!("+{}*{}", g(p.iset, 6), c.expr())).unwrap_or_default();
+    if p.iset_temp.is_some() {
+        l.push("* (with its change with the temperature, 0 at 27 C)".into());
+    }
+    l.push(format!("Bset in set I=V(on,gnd)*({}{spread}{iset_tc}+{}*(V(in,gnd)-{}))", g(p.iset, 6), g(p.line_iset, 6), g(p.vin0, 6)));
     let di = p.iset_noise.density();
     if di > 0.0 {
         l.extend(["Rnzi nzi gnd 1k".into(), format!("Gni gnd set nzi gnd {}", g(di / (K4T * 1e3).sqrt(), 6))]);
@@ -197,8 +207,14 @@ pub fn setldo_model(p: &SetLdoSpec) -> String {
         l.extend([format!("* ILIM sources the output current / {} (a current monitor)", g(il.ratio, 6)), format!("Bil in ilim I=I(Vs)/{}", g(il.ratio, 6))]);
     }
     l.extend([
-        "* quiescent current: grows with the output current; a little in shutdown".into(),
-        format!("Bq in gnd I=V(on,gnd)*({}+{}*I(Vs))+{}*tanh(V(in,gnd)/2)", g(p.iq, 6), g(p.iq_per_a, 6), g(p.iq_off, 6)),
+        format!("* quiescent current: grows with the output current{}; a little in shutdown", if p.iq_temp.is_some() { " and with the temperature" } else { "" }),
+        format!(
+            "Bq in gnd I=V(on,gnd)*({}{}+{}*I(Vs))+{}*tanh(V(in,gnd)/2)",
+            g(p.iq, 6),
+            p.iq_temp.as_ref().map(|c| format!("*(1+{})", c.expr())).unwrap_or_default(),
+            g(p.iq_per_a, 6),
+            g(p.iq_off, 6)
+        ),
     ]);
     if let Some(pg) = &p.pg {
         l.extend([
@@ -280,13 +296,26 @@ pub fn setldo_limits(p: &SetLdoSpec) -> Vec<String> {
     if !spread.is_empty() {
         rows.push(format!("部品ごとの違い ({}、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。", spread.join("・")));
     }
-    rows.push("扱わないもの: 温度による変化と熱による停止、1/f 雑音、逆の電圧の保護、出力のコンデンサによる安定性と負荷の急変の応答、EN/UV と PGFB のヒステリシス、ドロップアウトや電流制限の間も速い起動が続くこと (実物は止める)。".into());
+    let mut temps = vec![];
+    if let Some(c) = &p.iset_temp {
+        temps.push(format!("SET の電流 ({}。出力も同じ割合で動く。{})", c.span(), c.from));
+    }
+    if let Some(c) = &p.iq_temp {
+        temps.push(format!("電源電流 ({}。{})", c.span(), c.from));
+    }
+    if !temps.is_empty() {
+        rows.push(format!("温度による変化: {}。27 ℃ では表の typ のままです。", temps.join("、")));
+    }
+    rows.push(format!("扱わないもの: {}熱による停止、1/f 雑音、逆の電圧の保護、出力のコンデンサによる安定性と負荷の急変の応答、EN/UV と PGFB のヒステリシス、ドロップアウトや電流制限の間も速い起動が続くこと (実物は止める)。", if temps.is_empty() { "温度による変化と" } else { "ほかの温度による変化 (ドロップアウト・電流制限など) と" }));
     rows.push("最終の確認は、メーカーの公式モデルで行ってください。".into());
     rows
 }
 
 /// Values the template cannot use, with what to fix.
 pub fn check_setldo(p: &SetLdoSpec) -> Result<(), String> {
+    for c in [&p.iset_temp, &p.iq_temp].into_iter().flatten() {
+        c.check()?;
+    }
     for (what, v) in [("SET ピンの電流", p.iset), ("出力抵抗 (ロード・レギュレーション)", p.rout), ("最小の入力電圧", p.vin_min)] {
         if !(v.is_finite() && v > 0.0) {
             return Err(format!("{what}は 0 より大きい数にしてください"));

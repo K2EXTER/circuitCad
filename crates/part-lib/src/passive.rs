@@ -74,6 +74,11 @@ pub struct PassiveTemplate {
     /// Inductor: the data sheet's curve itself, (current A, ratio to the inductance at no current), used in place of `isat`
     /// (written `LCURVE=`; straight lines between the points, flat beyond the last).
     pub sat_curve: Option<Vec<(f64, f64)>>,
+    /// Inductor: a resistance across the part for the core's loss (P5): from the data sheet's Q at its test frequency
+    /// (`rp_from_q`), so that a buck's switching voltage across the coil warms it as V² / Rp.
+    pub rp: Option<f64>,
+    /// The Q and its frequency it came from, for the notes.
+    pub q_at: Option<(f64, f64)>,
 }
 
 /// Temperature coefficient of copper (1/°C): the winding resistance of an inductor follows it.
@@ -92,7 +97,7 @@ fn tc_suffix(tc1: Option<f64>, tc2: Option<f64>) -> String {
 
 impl PassiveTemplate {
     pub fn new(kind: PassiveKind, value: f64) -> Self {
-        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0, tc1: None, tc2: None, isat: None, ldrop: 0.3, sat_curve: None }
+        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0, tc1: None, tc2: None, isat: None, ldrop: 0.3, sat_curve: None, rp: None, q_at: None }
     }
 }
 
@@ -232,6 +237,15 @@ impl PassiveTemplate {
                     l.push(format!("Cp 1 2 {}", eng(cp)));
                     parts.push(format!("並列容量 {}", eng(cp)));
                 }
+                if let Some(rp) = self.rp {
+                    l.push(format!("Rcore 1 2 {}", eng(rp)));
+                    parts.push(format!("コアの損失 {}Ω", eng(rp)));
+                    let from = self.q_at.map(|(q, f)| format!("データシートの Q {} ({} MHz) から求めた", crate::fit::num::g(q, 4), crate::fit::num::g(f / 1e6, 4))).unwrap_or_else(|| "入れた".into());
+                    limits.push(format!(
+                        "コアの損失は、両端の間の抵抗 {}Ω ({from}) で表します: コイルにかかる電圧の 2 乗に比例して熱になります。実物のコアの損失は周波数と磁束の振れでも変わるので (スタインメッツの式)、Q を測った周波数から離れるほど目安になります。",
+                        eng(rp)
+                    ));
+                }
                 if let Some(c) = &self.sat_curve {
                     let last = c.last().map_or(0.0, |p| p.0);
                     limits.push(format!("磁気飽和は、データシートの「インダクタンス - 電流」の曲線の {} 点のとおりに下がります (点の間は直線、{}A より大きい電流では最後の点の割合のまま)。温度による変化は扱いません。", c.len(), eng(last)));
@@ -296,6 +310,25 @@ pub fn esl_from_srf(c: f64, f0: f64) -> Result<f64, String> {
 }
 
 /// Parallel capacitance of an inductor `l` that resonates by itself at `f0`.
+/// The resistance across an inductor (`l` with `dcr` in series and `cp` across) that gives the data sheet's `q` at `f` (P5:
+/// the core's loss at that frequency). None when the winding alone already gives no more than that Q, or above the
+/// self-resonance (the part is no longer an inductor there).
+pub fn rp_from_q(l: f64, dcr: f64, cp: f64, q: f64, f: f64) -> Option<f64> {
+    if !(l > 0.0 && q > 0.0 && f > 0.0) {
+        return None;
+    }
+    let w = 2.0 * PI * f;
+    // the winding's admittance 1 / (dcr + jωL), and the part's susceptance with the capacitance across
+    let d = dcr * dcr + (w * l).powi(2);
+    let (g_l, b) = (dcr / d, -w * l / d + w * cp);
+    if b >= 0.0 {
+        return None;
+    }
+    // Q = −B / G of the whole: the conductance it needs, less the winding's own
+    let g = -b / q - g_l;
+    (g > 0.0).then(|| 1.0 / g)
+}
+
 pub fn cp_from_srf(l: f64, f0: f64) -> Result<f64, String> {
     if l > 0.0 && f0 > 0.0 { Ok(1.0 / ((2.0 * PI * f0).powi(2) * l)) } else { Err("インダクタンスと自己共振周波数は 0 より大きい数にしてください".into()) }
 }

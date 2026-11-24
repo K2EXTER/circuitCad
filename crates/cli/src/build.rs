@@ -790,6 +790,10 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         }
         let name = if args[0].eq_ignore_ascii_case("gnd") { "GND".to_string() } else { args[0].clone() };
         let mut points: Vec<Pt> = vec![];
+        let mut placed_units = vec![];
+        for spec in &args[1..] {
+            placed_units.extend(self.place_unit_for(spec));
+        }
         for spec in &args[1..] {
             for p in self.pin_points(spec)? {
                 if !points.contains(&p) {
@@ -822,7 +826,44 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         if name == "GND" && !self.sch.components.iter().any(|c| c.kind == Kind::Ground) {
             self.sch.add(Kind::Ground, points[0], 0);
         }
-        Ok(obj(json!({"net": name, "pins": points.len(), "new": added})))
+        let mut out = json!({"net": name, "pins": points.len(), "new": added});
+        if !placed_units.is_empty() {
+            out["placed_units"] = json!(placed_units);
+        }
+        Ok(obj(out))
+    }
+
+    /// A pin of a part of several units whose unit is not on the sheet yet (`U1.4` of a 74HC00 with only gate A placed, or
+    /// `U1B.2A`): that unit is placed beside the part first (Q6), so that a script wires the gates as it did when the part was
+    /// one block. Returns the unit's shown name ("U1B").
+    fn place_unit_for(&mut self, spec: &str) -> Option<String> {
+        let (r, p) = spec.split_once('.')?;
+        let multi = |c: &sch_core::Component| !c.kind.is_power_symbol() && c.custom.as_ref().is_some_and(|s| s.units() > 1);
+        if self.sch.components.iter().any(|c| c.shown_refdes().eq_ignore_ascii_case(r) && multi(c)) {
+            return None;
+        }
+        // "U1B": the part U1, unit B
+        let by_letter = |s: &Self| -> Option<(usize, u8)> {
+            let last = r.chars().next_back()?.to_ascii_uppercase();
+            let base = &r[..r.len() - last.len_utf8()];
+            let i = s.sch.components.iter().position(|c| multi(c) && c.refdes.eq_ignore_ascii_case(base))?;
+            let u = (last as u8).checked_sub(b'A')?;
+            Some((i, u))
+        };
+        let (i, unit) = match self.sch.components.iter().position(|c| multi(c) && c.refdes.eq_ignore_ascii_case(r)) {
+            Some(i) => {
+                let sym = self.sch.components[i].custom.as_ref()?;
+                // the pin by number, else by a name only one pin has
+                let pin = sym.pins.iter().find(|q| q.number.eq_ignore_ascii_case(p)).or_else(|| {
+                    let named: Vec<_> = sym.pins.iter().filter(|q| q.name.eq_ignore_ascii_case(p)).collect();
+                    (named.len() == 1).then(|| named[0])
+                })?;
+                (i, pin.unit)
+            }
+            None => by_letter(self)?,
+        };
+        let k = self.sch.place_unit(i, unit)?;
+        Some(self.sch.components[k].shown_refdes())
     }
 
     pub fn remove(&mut self, args: &[String]) -> Res {

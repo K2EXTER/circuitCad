@@ -86,9 +86,26 @@ impl Schematic {
 
     /// Move the wire ends and labels on the tip of pin `S` to the tip of pin `P` for every `P -> S` of `map`. Returns how many were moved.
     fn trade_on_sheet(&mut self, k: usize, refdes: &str, map: &BTreeMap<&String, &String>) -> Result<usize, String> {
+        // a gate IC's gates are units (Q6): a trade onto a gate not on the sheet places that unit first (on the sheet shown)
+        if self.sheets.is_empty() || k == self.active_sheet {
+            for pin in map.iter().flat_map(|(p, s)| [*p, *s]) {
+                let placed = |c: &Component| c.refdes == refdes && c.pins().iter().any(|(n, _)| n == pin);
+                if self.components.iter().any(placed) {
+                    continue;
+                }
+                let Some(i) = self.components.iter().position(|c| c.refdes == refdes) else { continue };
+                let unit = self.components[i].custom.as_ref().and_then(|s| s.pins.iter().find(|q| &q.number == pin)).map(|q| q.unit);
+                if let Some(u) = unit {
+                    self.place_unit(i, u);
+                }
+            }
+        }
         let (comps, wires, labels) = self.sheet_fields_mut(k);
-        let Some(c) = comps.iter().find(|c| c.refdes == refdes) else { return Ok(0) };
-        let tips: BTreeMap<String, Pt> = c.pins().into_iter().collect();
+        if !comps.iter().any(|c| c.refdes == refdes) {
+            return Ok(0);
+        }
+        // the pins of every unit of the part on this sheet
+        let tips: BTreeMap<String, Pt> = comps.iter().filter(|c| c.refdes == refdes).flat_map(|c| c.pins()).collect();
         // from the tip of S to the tip of P
         let mut to: BTreeMap<Pt, Pt> = BTreeMap::new();
         for (p, s) in map {

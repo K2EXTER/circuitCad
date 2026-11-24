@@ -413,6 +413,9 @@ pub struct InductorRow {
     pub i_sat: Option<f64>,
     /// Self-resonant frequency (Hz).
     pub srf_hz: Option<f64>,
+    /// Q and the frequency it is measured at (Hz; Bourns: "Q (Ref.)" and "Test Freq. (MHz)").
+    pub q: Option<f64>,
+    pub q_hz: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -425,6 +428,9 @@ enum IndRole {
     Isat,
     /// in MHz
     Srf,
+    Q,
+    /// The test frequency of Q (in MHz unless the header says kHz)
+    TestFreq(bool),
     Other,
 }
 
@@ -446,7 +452,13 @@ fn ind_role(header: &str) -> IndRole {
     if h.contains("srf") || h.contains("self-resonant") || h.contains("selfresonant") {
         return IndRole::Srf;
     }
-    if h.contains("test") || h.contains("freq") || words.iter().any(|w| w == "q") {
+    if words.iter().any(|w| w == "q") {
+        return IndRole::Q;
+    }
+    if h.contains("freq") && !h.contains("inductance") {
+        return IndRole::TestFreq(h.contains("khz"));
+    }
+    if h.contains("test") || h.contains("freq") {
         return IndRole::Other;
     }
     if h.contains("inductance") || h.contains("µh") || h.contains("μh") || h.contains("uh") || words.iter().any(|w| w == "l") {
@@ -463,7 +475,7 @@ pub fn inductor(tables: &[Lineup]) -> Vec<InductorRow> {
         let Some(l_col) = roles.iter().position(|r| *r == IndRole::L) else { continue };
         for r in &t.rows {
             let Some(l_uh) = number(&r.cells[l_col]) else { continue };
-            let mut row = InductorRow { page: t.page, part: r.part.clone(), l_uh, tol_pct: None, dcr_ohm: None, dcr_max: false, i_rms: None, i_sat: None, srf_hz: None };
+            let mut row = InductorRow { page: t.page, part: r.part.clone(), l_uh, tol_pct: None, dcr_ohm: None, dcr_max: false, i_rms: None, i_sat: None, srf_hz: None, q: None, q_hz: None };
             for (i, role) in roles.iter().enumerate() {
                 let Some(v) = number(&r.cells[i]) else { continue };
                 match *role {
@@ -475,6 +487,8 @@ pub fn inductor(tables: &[Lineup]) -> Vec<InductorRow> {
                     IndRole::Irms => row.i_rms = Some(v),
                     IndRole::Isat => row.i_sat = Some(v),
                     IndRole::Srf => row.srf_hz = Some(v * 1e6),
+                    IndRole::Q => row.q = Some(v),
+                    IndRole::TestFreq(khz) => row.q_hz = Some(v * if khz { 1e3 } else { 1e6 }),
                     _ => {}
                 }
             }

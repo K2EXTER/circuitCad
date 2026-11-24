@@ -719,10 +719,29 @@ impl Schematic {
     /// The next unit of the part of placement `i` that is not placed yet, placed beside it (to the right, 12 grid steps on):
     /// its index, or None when every unit is placed (Q6).
     pub fn place_next_unit(&mut self, i: usize) -> Option<usize> {
+        let c = self.components.get(i)?;
+        let sym = c.custom.as_ref().filter(|s| s.units() > 1)?;
+        let placed = self.placed_units(i);
+        let next = (0..sym.units()).find(|u| !placed.contains(u))?;
+        self.place_unit(i, next)
+    }
+
+    /// The units of the part of placement `i` (same number, same part) that are on the sheet.
+    pub fn placed_units(&self, i: usize) -> Vec<u8> {
+        let Some(c) = self.components.get(i) else { return vec![] };
+        let name = c.custom.as_ref().map(|x| x.name.as_str());
+        self.components.iter().filter(|o| o.refdes == c.refdes && o.custom.as_ref().map(|x| x.name.as_str()) == name).map(|o| o.unit().0).collect()
+    }
+
+    /// Place the unit `unit` of the part of placement `i` (Q6), to its right; None when it is on the sheet already or the part
+    /// has no such unit. A script that wires a pin of a gate not yet placed (`net X U1.4`) places that gate this way.
+    pub fn place_unit(&mut self, i: usize, unit: u8) -> Option<usize> {
         let c = self.components.get(i)?.clone();
         let sym = c.custom.as_ref().filter(|s| s.units() > 1)?;
-        let placed: Vec<u8> = self.components.iter().filter(|o| o.refdes == c.refdes && o.custom.as_ref().is_some_and(|x| x.name == sym.name)).map(|o| o.unit().0).collect();
-        let next = (0..sym.units()).find(|u| !placed.contains(u))?;
+        if unit >= sym.units() || self.placed_units(i).contains(&unit) {
+            return None;
+        }
+        let next = unit;
         let mut n = c.clone();
         if let Some(s) = n.custom.as_mut() {
             s.unit = next;

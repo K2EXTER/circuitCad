@@ -83,7 +83,7 @@ impl PartForm {
         self.pas_kind = PassiveKind::Capacitor;
         // a maker's reader that knows the part is an electrolytic (no `+` / `-` choice left to the user)
         self.pas_polar |= e.meta.as_ref().is_some_and(|m| m.polar);
-        for s in [&mut self.pas_esr, &mut self.pas_esl, &mut self.pas_srf, &mut self.pas_bias, &mut self.pas_table, &mut self.pas_tc1, &mut self.pas_tc2, &mut self.pas_tctable] {
+        for s in [&mut self.pas_esr, &mut self.pas_esl, &mut self.pas_srf, &mut self.pas_q, &mut self.pas_bias, &mut self.pas_table, &mut self.pas_tc1, &mut self.pas_tc2, &mut self.pas_tctable] {
             s.clear();
         }
         self.name = e.part_number.clone();

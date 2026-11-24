@@ -188,3 +188,23 @@ fn write_comparator_model_report() {
     std::fs::write(&path, text).unwrap();
     println!("{body}");
 }
+
+/// M8: the offset's drift (±2 µV/°C, read off the data sheets' figures of 62 units) widens the worst case away from 27 °C:
+/// the open-collector output fed back to IN- holds it at the threshold, so OUT follows IN+ minus the offset.
+#[test]
+fn a_comparators_offset_drift_widens_the_worst_case_with_the_temperature() {
+    let span = |part: &str, temp: &str| {
+        let a = run(&format!(
+            "new\nadd {part} as=U1\nadd V 5 as=VCC\nadd V 0.5 as=VR\nadd R 5.1k as=RP\nnet VDD VCC.+ U1.VCC RP.1\nnet IN VR.+ U1.IN+\nnet OUT U1.OUT RP.2 U1.IN-\nnet GND VCC.- VR.- U1.GND\nworst out tol_r=0.0001 {temp}\n"
+        ));
+        let w = answer(&a, "worst");
+        (w["max"].as_f64().unwrap() - w["min"].as_f64().unwrap(), w.to_string())
+    };
+    for part in ["LM393", "LM339"] {
+        let (cold, w27) = span(part, "");
+        let (hot, w125) = span(part, "temp=125");
+        assert!((cold - 0.01).abs() < 1e-5, "{part}: only the offset's ±5 mV at 27 °C: {w27}");
+        assert!((hot - cold - 2.0 * 98.0 * 2e-6).abs() < 1e-5, "{part}: the drift's ±0.196 mV on top at 125 °C: {cold} → {hot}");
+        assert!(w125.contains("U1:offset-drift"), "{w125}");
+    }
+}

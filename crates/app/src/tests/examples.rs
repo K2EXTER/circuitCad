@@ -1091,11 +1091,11 @@ fn write_logic_basics_example() {
     label(&mut s, v3, "+", "VCC");
     label(&mut s, v3, "-", "GND");
     // U1: 74HC04, gate 1 = the input under test, gate 2 = the LED driver; pins 1A 1Y 2A 2Y 3A 3Y GND 4Y 4A 5Y 5A 6Y 6A VCC
-    let u1 = s.add_custom(hc04.symbol(), &hc04.default_value(), &hc04.footprint_name(), (40, 0), 0);
+    let u1 = s.add_custom(one_block(hc04.symbol()), &hc04.default_value(), &hc04.footprint_name(), (40, 0), 0);
     for (pin, net) in [("1", "IN"), ("2", "OUT1"), ("3", "GND"), ("4", "DRV"), ("5", "GND"), ("7", "GND"), ("9", "GND"), ("11", "GND"), ("13", "GND"), ("14", "VCC")] {
         label(&mut s, u1, pin, net);
     }
-    let u2 = s.add_custom(hc14.symbol(), &hc14.default_value(), &hc14.footprint_name(), (40, 50), 0);
+    let u2 = s.add_custom(one_block(hc14.symbol()), &hc14.default_value(), &hc14.footprint_name(), (40, 50), 0);
     for (pin, net) in [("1", "IN"), ("2", "OUT2"), ("3", "GND"), ("5", "GND"), ("7", "GND"), ("9", "GND"), ("11", "GND"), ("13", "GND"), ("14", "VCC")] {
         label(&mut s, u2, pin, net);
     }
@@ -1129,7 +1129,7 @@ fn live_base() -> (sch_core::Schematic, impl Fn(&mut sch_core::Schematic, &str, 
     side_label(&mut s, v1, "-", "GND");
     let place = |s: &mut sch_core::Schematic, name: &str, at: (i32, i32)| {
         let d = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == name).unwrap();
-        s.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), at, 0)
+        s.add_custom(one_block(d.symbol()), &d.default_value(), &d.footprint_name(), at, 0)
     };
     (s, place)
 }

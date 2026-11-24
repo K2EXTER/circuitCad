@@ -56,6 +56,9 @@ pub struct Row {
     pub i_rms: Option<f64>,
     pub i_sat: Option<f64>,
     pub srf_hz: Option<f64>,
+    /// The table's Q and the frequency it is measured at (Hz): the core's loss (P5).
+    pub q: Option<f64>,
+    pub q_hz: Option<f64>,
 }
 
 impl Series {
@@ -101,6 +104,10 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
     if let Some(f0) = r.srf_hz {
         t.cp = passive::cp_from_srf(l, f0).ok();
     }
+    if let (Some(q), Some(f)) = (r.q, r.q_hz) {
+        t.rp = passive::rp_from_q(l, r.dcr_ohm.unwrap_or(0.0), t.cp.unwrap_or(0.0), q, f);
+        t.q_at = t.rp.map(|_| (q, f));
+    }
     let made = t.generate(&r.part)?;
     let value = passive::eng(l);
     let drop_pct = t.ldrop * 100.0;
@@ -137,7 +144,7 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
     if r.dcr_max {
         limits.push("DCR はデータシートの最大値です。実物はこれより少し小さいことが多いです。".into());
     }
-    limits.push("インダクタンスの許容差、周波数による損失 (コアの損失) は入れていません。定格電流と飽和電流は、過渡解析のあと「部品の定格」で電流と比べます。".into());
+    limits.push(format!("インダクタンスの許容差{}は入れていません。定格電流と飽和電流は、過渡解析のあと「部品の定格」で電流と比べます。", if t.rp.is_some() { "" } else { "、周波数による損失 (コアの損失)" }));
     let mut rows = vec![];
     if let Some(dcr) = r.dcr_ohm {
         rows.push(json!({"name": "DCR", "value": format!("{} mΩ{}", g(dcr * 1000.0), if r.dcr_max { " 以下" } else { "" }), "condition": if r.dcr_max { "最大" } else { "typ" }}));
@@ -150,6 +157,9 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
     }
     if let Some(f) = r.srf_hz {
         rows.push(json!({"name": "自己共振周波数", "value": format!("{} MHz", g(f / 1e6)), "condition": "typ"}));
+    }
+    if let (Some(q), Some(f), Some(rp)) = (r.q, r.q_hz, t.rp) {
+        rows.push(json!({"name": "Q", "value": g(q), "condition": format!("{} MHz (コアの損失 {}Ω を並列に)", g(f / 1e6), passive::eng(rp))}));
     }
     rows.push(json!({"name": "使える温度", "value": format!("{}〜{} ℃", g(s.temp[0]).replace('-', "−"), g(s.temp[1])), "condition": "自分の温度上昇を含めて"}));
     let x = s.pad_pitch / 2.0;
@@ -176,7 +186,7 @@ pub fn make(s: &Series, r: &Row) -> Result<PartDef, String> {
             "pins": made.sim_pins,
             "params": {},
             "limits": limits,
-            "origin": {"kind": "equivalent", "source": format!("{} {} のデータシート ({}) のインダクタンス・DCR・飽和電流・自己共振周波数", s.maker, s.series, s.source)}
+            "origin": {"kind": "equivalent", "source": format!("{} {} のデータシート ({}) のインダクタンス・DCR・飽和電流・自己共振周波数{}", s.maker, s.series, s.source, if t.rp.is_some() { "・Q" } else { "" })}
         },
         "ratings": {
             "rows": rows,
@@ -199,7 +209,7 @@ mod tests {
     use super::*;
 
     fn row() -> Row {
-        Row { part: "SRN6045-100M".into(), l_uh: 10.0, tol_pct: Some(20.0), dcr_ohm: Some(0.0586), dcr_max: true, i_rms: Some(2.5), i_sat: Some(3.0), srf_hz: Some(15e6) }
+        Row { part: "SRN6045-100M".into(), l_uh: 10.0, tol_pct: Some(20.0), dcr_ohm: Some(0.0586), dcr_max: true, i_rms: Some(2.5), i_sat: Some(3.0), srf_hz: Some(15e6), q: Some(17.0), q_hz: Some(2.52e6) }
     }
 
     /// Bourns SRN6045-100M: the model carries the DCR, the saturation and the winding's capacitance, the ratings the

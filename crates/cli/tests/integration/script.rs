@@ -2902,6 +2902,31 @@ spice
     assert_eq!(text.matches(".subckt LM358").count(), 1, "the model once: {text}");
 }
 
+/// Q6: a gate IC's gates are units; a script that wires a pin of a gate not on the sheet yet (U1.4 of a 74HC00 with only gate A)
+/// places that gate beside the part, and the whole part's model still runs once: NAND(5, 5) = 0 and NAND(0, 0) = 1.
+#[test]
+fn wiring_a_pin_of_another_gate_places_that_gate() {
+    let (a, ok) = run("new
+add 74HC00 as=U1
+add V 5 as=V1
+add V 5 as=VA
+net VCC V1.+ U1.VCC
+net GND V1.- VA.- U1.GND U1.4 U1.5
+net A VA.+ U1.1 U1.2
+net Y1 U1.3
+net Y2 U1.6
+erc
+dc probe=V(Y1),V(Y2)
+");
+    assert!(ok, "{a:?}");
+    let placed: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "net" && v.get("placed_units").is_some()).collect();
+    assert_eq!(placed.len(), 1, "gate B placed once: {placed:?}");
+    assert_eq!(placed[0]["placed_units"][0], "U1B");
+    assert_eq!(last(&a, "erc")["errors"], 0, "{a:?}");
+    let dc = last(&a, "dc");
+    assert!(dc["probes"]["V(Y1)"].as_f64().unwrap() < 0.1 && dc["probes"]["V(Y2)"].as_f64().unwrap() > 4.9, "{dc}");
+}
+
 #[test]
 fn worst_moves_an_op_amps_offset_drift_with_the_temperature() {
     // a TL072 follower at 2.5 V: the offset spreads ±10 mV; at 85 °C the drift (±18 µV/°C, the data sheet's typ either way)

@@ -177,6 +177,8 @@ pub struct PartForm {
     pub pas_dcr: String,
     pub pas_cp: String,
     pub pas_srf: String,
+    /// Inductor: "Q frequency" (the data sheet's Q at its test frequency: the core's loss, P5).
+    pub pas_q: String,
     pub pas_bias: String,
     pub pas_table: String,
     /// Temperature coefficients typed in ppm (/°C and /°C²) and the table they can be fitted from ("°C percent" per line).
@@ -415,6 +417,7 @@ impl Default for PartForm {
             pas_dcr: String::new(),
             pas_cp: String::new(),
             pas_srf: String::new(),
+            pas_q: String::new(),
             pas_bias: String::new(),
             pas_table: String::new(),
             pas_tc1: String::new(),

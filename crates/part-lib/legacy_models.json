@@ -532,5 +532,92 @@
    ".subckt L74437324033 1 2\nRdcr 1 n_dcr 76m TC1=3.9300e-3\nL1 n_dcr 2 3.3u ISAT=5.4500e0 LDROP=0.300\nCp 1 2 4.797p\n.ends"
   ],
   "descriptions": []
+ },
+ "LM139_SOIC-14": {
+  "texts": [
+   ".subckt LM139 inp inn out vcc gnd\n* input: offset (data sheet typ), bias currents (+ = into the pin)\nVos inp i1 DC 0.002\n* spread Vos -0.005 0.005 offset (data sheet: max 5 mV either way)\nIbp inp gnd DC -2.5e-08\nIbn inn gnd DC -2.5e-08\n* spread Ibp -2.5e-08 -1e-07 ib+ (data sheet: typ 25 nA, max 100 nA; no min, so from typ)\n* spread Ibn -2.5e-08 -1e-07 ib- (data sheet: typ 25 nA, max 100 nA; no min, so from typ)\n* decision: gm into Cp || Rp (the response time to a small overdrive; Rp gives the gain), the current limited (a large step),\n* the node clamped to +-1 V\nBgm 0 n0 I=limit(0.146844*V(inn,i1),-0.00318162,0.00318162)\nRp n0 0 1.36199e+06\nCp n0 0 1e-09\nBcl n0 0 I=1000*(max(V(n0)-1,0)+min(V(n0)+1,0))\n* output: open collector, sinking when IN- is above IN+; tanh gives the table's VOL at its current, at most the sink current\nBout out gnd I=0.016*limit((V(n0)+0.05)/0.1,0,1)*tanh(V(out,gnd)/0.587285)\nRlk out gnd 5e+10\n* quiescent current of one comparator\nIq vcc gnd DC 0.0002\n* spread Iq 0.0002 0.0005 iq (data sheet: typ 200 uA, max 500 uA; no min, so from typ)\n.ends LM139"
+  ],
+  "descriptions": []
+ },
+ "LM339_SOIC-14": {
+  "texts": [
+   ".subckt LM339 inp inn out vcc gnd\n* input: offset (data sheet typ), bias currents (+ = into the pin)\nVos inp i1 DC 0.002\n* spread Vos -0.005 0.005 offset (data sheet: max 5 mV either way)\nIbp inp gnd DC -2.5e-08\nIbn inn gnd DC -2.5e-08\n* spread Ibp -2.5e-08 -2.5e-07 ib+ (data sheet: typ 25 nA, max 250 nA; no min, so from typ)\n* spread Ibn -2.5e-08 -2.5e-07 ib- (data sheet: typ 25 nA, max 250 nA; no min, so from typ)\n* decision: gm into Cp || Rp (the response time to a small overdrive; Rp gives the gain), the current limited (a large step),\n* the node clamped to +-1 V\nBgm 0 n0 I=limit(0.146844*V(inn,i1),-0.00318162,0.00318162)\nRp n0 0 1.36199e+06\nCp n0 0 1e-09\nBcl n0 0 I=1000*(max(V(n0)-1,0)+min(V(n0)+1,0))\n* output: open collector, sinking when IN- is above IN+; tanh gives the table's VOL at its current, at most the sink current\nBout out gnd I=0.016*limit((V(n0)+0.05)/0.1,0,1)*tanh(V(out,gnd)/0.587285)\nRlk out gnd 5e+10\n* quiescent current of one comparator\nIq vcc gnd DC 0.0002\n* spread Iq 0.0002 0.0005 iq (data sheet: typ 200 uA, max 500 uA; no min, so from typ)\n.ends LM339"
+  ],
+  "descriptions": []
+ },
+ "LM393_SOIC-8": {
+  "texts": [
+   "* LM393 comparator, one channel: open-collector output pulls low when IN- is above IN+\n.subckt LM393 inp inn out vcc gnd\nRin inp inn 10Meg\nSout out gnd inn inp SWC\nRiq vcc gnd 25k\n.model SWC SW(RON=50 ROFF=1G VT=0 VW=0.002)\n.ends LM393",
+   ".subckt LM393 inp inn out vcc gnd\n* input: offset (data sheet typ), bias currents (+ = into the pin)\nVos inp i1 DC 0.002\n* spread Vos -0.005 0.005 offset (data sheet: max 5 mV either way)\nIbp inp gnd DC -2.5e-08\nIbn inn gnd DC -2.5e-08\n* spread Ibp -2.5e-08 -2.5e-07 ib+ (data sheet: typ 25 nA, max 250 nA; no min, so from typ)\n* spread Ibn -2.5e-08 -2.5e-07 ib- (data sheet: typ 25 nA, max 250 nA; no min, so from typ)\n* decision: gm into Cp || Rp (the response time to a small overdrive; Rp gives the gain), the current limited (a large step),\n* the node clamped to +-1 V\nBgm 0 n0 I=limit(0.146838*V(inn,i1),-0.00318149,0.00318149)\nRp n0 0 1.36204e+06\nCp n0 0 1e-09\nBcl n0 0 I=1000*(max(V(n0)-1,0)+min(V(n0)+1,0))\n* output: open collector, sinking when IN- is above IN+; tanh gives the table's VOL at its current, at most the sink current\nBout out gnd I=0.016*limit((V(n0)+0.05)/0.1,0,1)*tanh(V(out,gnd)/0.50898)\nRlk out gnd 5e+10\n* quiescent current of one comparator\nIq vcc gnd DC 0.000225\n* spread Iq 0.000225 0.0005 iq (data sheet: typ 225 uA, max 500 uA; no min, so from typ)\n.ends LM393"
+  ],
+  "descriptions": [
+   "デュアルコンパレータ (SOIC-8)。チャネル1のみ記号化。オープンコレクタ出力なのでプルアップ抵抗が必要です (出力は IN- > IN+ のとき Low)。応答時間・入力オフセットは扱いません。簡易動作モデル(概算)"
+  ]
+ },
+ "LT3045_MSOP-12": {
+  "texts": [
+   ".subckt LT3045 in gnd out outs set en pg pgfb ilim\n* on: the input above its minimum (UVLO) and EN/UV above its threshold\nBon on gnd V=step(V(in,gnd)-1.78,0.05)*step(V(en,gnd)-1.24,0.01)\nRen en gnd 100Meg\n* the SET current (into the user's RSET and CSET)\n* the SET current's difference from part to part (0 V read as amps; the variation analyses move it between the data sheet's min and max)\nVsd isd gnd DC 0\n* spread Vsd -1e-06 1e-06 iset (data sheet: 99 to 101 uA)\nBset in set I=V(on,gnd)*(0.0001+V(isd,gnd)+5e-10*(V(in,gnd)-2))\nRnzi nzi gnd 1k\nGni gnd set nzi gnd 0.0046605\n* fast start-up: more current into SET while PGFB is below the power-good threshold\nBfs in set I=V(on,gnd)*0.0019*step(0.3-V(pgfb,gnd),0.005)\n* line regulation through a slow path (the data sheet's DC figure)\nElf lfa gnd in gnd 1\nRlf lfa lf 1.59Meg\nClf lf gnd 100n\n* the ripple rising with frequency: high-passes of a copy of the input (order 1, order 2), fitted to the data sheet's PSRR\nErh rh 0 in gnd 1\nCrh0_1 rh rx0_1 3.19922e-09\nRrh0_1 rx0_1 0 1k\nErh0_1 rh0_1 0 rx0_1 0 1\nCrh1_1 rh rx1_1 5.46607e-11\nRrh1_1 rx1_1 0 1k\nErh1_1 rh1_1 0 rx1_1 0 1\nCrh1_2 rh1_1 rx1_2 5.46607e-11\nRrh1_2 rx1_2 0 1k\nErh1_2 rh1_2 0 rx1_2 0 1\n* the offset VOUT - VSET from part to part (0 V; the variation analyses move it between the data sheet's min and max)\nVvos vos gnd DC 0\n* spread Vvos -0.001 0.001 offset (data sheet: -1 to 1 mV)\n* the buffer's target: SET, its offset, the line regulation and the ripple, with the buffer's own noise\nBtgt t0 gnd V=V(set,gnd)+V(vos,gnd)+-8.58555e-07*(V(lf,gnd)-2)+1.35856e-06*(V(in,gnd)-2)+0.000158994*V(rh0_1)+0.00227953*V(rh1_2)\nRnz nz gnd 1k\nEn tgt t0 nz gnd 0.621399\n* OUTS senses the output (a large resistor to OUT keeps it defined if left open)\nRouts outs out 1Meg\n* the pass device: what the buffer asks for (the load regulation), no more than the dropout and the internal current\n* limit (folding back at large input - output differences) allow, cut back when ILIM reaches its threshold; only from IN to OUT\nBpass in op I=V(on,gnd)*max(min(min((V(tgt,gnd)-V(outs,gnd))/0.0002,(V(in,gnd)-V(out,gnd)-0.21)/0.1),limit(0.7+-0.04625*(V(in,gnd)-V(out,gnd)-12),0.33,0.7)),0)*limit(1+(0.3-V(ilim,gnd))*1000,0,1)\nVs op out DC 0\n* ILIM sources the output current / 500 (a current monitor)\nBil in ilim I=I(Vs)/500\n* quiescent current: grows with the output current; a little in shutdown\nBq in gnd I=V(on,gnd)*(0.0022+0.02*I(Vs))+3e-07*tanh(V(in,gnd)/2)\n* PG: open collector, low while PGFB is below the threshold (and the part is on); PGFB itself draws next to nothing\nBpg pg gnd I=V(on,gnd)*step(0.3-V(pgfb,gnd),0.005)*V(pg,gnd)/300\nRpgfb pgfb gnd 1G\n.ends LT3045"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-100M": {
+  "texts": [
+   ".subckt SRN6045_100M 1 2\nRdcr 1 n_dcr 58.6m TC1=3.9300e-3\nL1 n_dcr 2 10u ISAT=3.0000e0 LDROP=0.300\nCp 1 2 11.258p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-101M": {
+  "texts": [
+   ".subckt SRN6045_101M 1 2\nRdcr 1 n_dcr 494m TC1=3.9300e-3\nL1 n_dcr 2 100u ISAT=8.0000e-1 LDROP=0.300\nCp 1 2 10.132p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-150M": {
+  "texts": [
+   ".subckt SRN6045_150M 1 2\nRdcr 1 n_dcr 95.8m TC1=3.9300e-3\nL1 n_dcr 2 15u ISAT=2.3000e0 LDROP=0.300\nCp 1 2 9.992p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-220M": {
+  "texts": [
+   ".subckt SRN6045_220M 1 2\nRdcr 1 n_dcr 142m TC1=3.9300e-3\nL1 n_dcr 2 22u ISAT=1.9000e0 LDROP=0.300\nCp 1 2 9.516p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-2R2Y": {
+  "texts": [
+   ".subckt SRN6045_2R2Y 1 2\nRdcr 1 n_dcr 25.1m TC1=3.9300e-3\nL1 n_dcr 2 2.2u ISAT=6.0000e0 LDROP=0.300\nCp 1 2 9.399p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-330M": {
+  "texts": [
+   ".subckt SRN6045_330M 1 2\nRdcr 1 n_dcr 188m TC1=3.9300e-3\nL1 n_dcr 2 33u ISAT=1.5000e0 LDROP=0.300\nCp 1 2 9.476p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-3R3Y": {
+  "texts": [
+   ".subckt SRN6045_3R3Y 1 2\nRdcr 1 n_dcr 30.2m TC1=3.9300e-3\nL1 n_dcr 2 3.3u ISAT=5.0000e0 LDROP=0.300\nCp 1 2 10.529p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-470M": {
+  "texts": [
+   ".subckt SRN6045_470M 1 2\nRdcr 1 n_dcr 257m TC1=3.9300e-3\nL1 n_dcr 2 47u ISAT=1.3000e0 LDROP=0.300\nCp 1 2 10.999p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-4R7Y": {
+  "texts": [
+   ".subckt SRN6045_4R7Y 1 2\nRdcr 1 n_dcr 37.6m TC1=3.9300e-3\nL1 n_dcr 2 4.7u ISAT=4.0000e0 LDROP=0.300\nCp 1 2 11.135p\n.ends"
+  ],
+  "descriptions": []
+ },
+ "SRN6045-6R8Y": {
+  "texts": [
+   ".subckt SRN6045_6R8Y 1 2\nRdcr 1 n_dcr 47.3m TC1=3.9300e-3\nL1 n_dcr 2 6.8u ISAT=3.8000e0 LDROP=0.300\nCp 1 2 9.313p\n.ends"
+  ],
+  "descriptions": []
  }
 }

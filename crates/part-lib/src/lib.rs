@@ -982,6 +982,23 @@ fn is_original_without_shops(file: &Path, bundled: &str) -> bool {
     !new.shops.is_empty() && old.shops.is_empty() && old == PartDef { shops: Default::default(), ..new }
 }
 
+fn units_key(name: &str) -> String {
+    format!("{name}+gate-units")
+}
+
+/// Is the file an unmodified copy of the bundled part from before its gates were units (Q6, 2026-11-24: a 74HC00's four NAND
+/// gates as units A to D)? Equal to the bundled part in every field once the pins' units are taken away.
+fn is_original_without_units(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(without_origin) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled).map(without_origin) else { return false };
+    if !new.pins.iter().any(|p| p.unit > 0) || old.pins.iter().any(|p| p.unit > 0) {
+        return false;
+    }
+    let mut flat = new.clone();
+    flat.pins.iter_mut().for_each(|p| p.unit = 0);
+    old == flat
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -1115,6 +1132,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if !fresh.contains(&file) && file.exists() && is_original_without_body3d(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
+    // gate ICs whose gates became units (Q6): replaced once while unmodified (the placed parts keep their own one-block copies)
+    for (name, text) in EXAMPLES {
+        let key = units_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if !fresh.contains(&file) && file.exists() && is_original_without_units(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);

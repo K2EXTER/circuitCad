@@ -172,3 +172,11 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 - ツールは同梱しない。`find_tool` が PATH (Windows は .exe・.cmd・.bat) から探し、`missing` が無いものと `install_hint` (arduino-cli の場所と core install、Pico setup for Windows、OSS CAD Suite) を返す。`start` が別スレッドで順に動かし (Windows はコンソールの窓を出さない)、標準出力と標準エラーを行ごとに `Run.lines` へ、失敗した段で止まり終了コードと `explain` のヒント (ボードの種類が入っていない・ライブラリが無い・ポートが開けない・PICO_SDK_PATH・FTDI・.pcf にない信号) を足す。`Run::stop` は今のプロセスを kill。CLI は `run_now`。
 - 画面: 「ピン定義…」の窓を「ピンとファーム…」(窓の名前「ピン定義とファーム」) にして、下に「ビルドと書き込み」(`schematic/firmware_ui.rs`)。種類で入力欄が変わり、無いツールは ▲ とホバーに入れ方、ボタンは「ビルド」「ビルドして書き込む」「書き込みだけ」(押せない理由つき、ホバーに実際のコマンド)、下に出力 (下に付いてスクロール)。動いている間は状態の行に「ファームの…を計算中」と「止める (Esc)」(`running.rs`)。サンプル `arduino_blink` に設定 (Nano、`firmware/blink/blink.ino`、ポートは空) を `write_arduino_examples` で入れた。
 - 試験: 種類ごとのコマンド (足りない設定・無いフォルダ・Verilog の集め方)、自分のコマンドを本当にシェルで動かす (出力の行・終了コード 3 で止まる・無いツールは動かす前に止まる)、設定の読み書き (空なら `{}`)。arduino-cli などは CI に無いので、本物のビルドは試していない。
+
+### ロジック IC のゲートごとのユニット (2026-11-24、候補 Q6 の続き)
+- 同梱の 74HC00・02・04・08・14 (DIP・SOIC)・32 (DIP・SOIC)・86 の 9 個は、ゲートごとにユニット (`swap.gates` の並び。74HC00 は 1・2・3 が A、4・5・6 が B …、74HC04 は 6 つ)。VCC と GND はユニット A。モデルは部品全体のまま (`sim.units` なし): 最初のユニットで 1 回置かれ、ほかのユニットのピンは (部品番号, ピン) のネットで届く。置いていないユニットの入力はつながらない (Low)。
+- 箱の中のゲートの印 (`overlay_glyph`) はユニットごとの箱にそのまま出る。
+- CLI: `net` で、まだ置いていないユニットのピン (`U1.4`、`U1B.2A`) を指すと、そのユニットを部品の右に置いてからつなぐ (`Schematic::place_unit`、答えに `placed_units`)。今までのスクリプトはそのまま動く。テスト `wiring_a_pin_of_another_gate_places_that_gate`。
+- 利用者のライブラリの写し: 手を入れていない写し (ユニットを除けば同梱と同じ) は 1 回だけ入れ替える (`.bundled` の鍵 `+gate-units`、`is_original_without_units`)。置いた部品は自分の写しを持つので、前に描いた回路は 1 つの箱のまま動く (「ライブラリの部品が新しくなっています」にピンの違いとして出る。`libsync` はピンを変えない)。テスト `a_gate_ic_from_before_its_units_gets_them_once`。
+- 基板のゲートの入れ替えを回路図へ (`board backannotate`、`backannotate.rs` の `trade_on_sheet`): ピンの先を、同じ部品番号の全部のユニットから探す。置いていないゲートへ入れ替えたときは、そのユニットを先に置く (見ているシートのとき)。テスト `a_gate_trade_goes_back_into_the_schematic`。
+- サンプル: 今のサンプル (logic_basics・seg7_counter・half_adder・sr_latch・mixed_signal) は 1 つの箱のまま。作るコードは `tests/mod.rs` の `one_block` で同じ絵を作る (ゲートごとに描き直すのは残り)。

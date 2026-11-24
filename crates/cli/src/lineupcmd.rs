@@ -30,7 +30,7 @@ pub fn elcap_row(r: &datasheet::lineup::ElcapRow) -> elcap::Row {
 
 /// An inductor's row read off the PDF as the part maker takes it.
 pub fn coil_row(r: &datasheet::lineup::InductorRow) -> coil::Row {
-    coil::Row { part: r.part.clone(), l_uh: r.l_uh, tol_pct: r.tol_pct, dcr_ohm: r.dcr_ohm, dcr_max: r.dcr_max, i_rms: r.i_rms, i_sat: r.i_sat, srf_hz: r.srf_hz }
+    coil::Row { part: r.part.clone(), l_uh: r.l_uh, tol_pct: r.tol_pct, dcr_ohm: r.dcr_ohm, dcr_max: r.dcr_max, i_rms: r.i_rms, i_sat: r.i_sat, srf_hz: r.srf_hz, q: r.q, q_hz: r.q_hz }
 }
 
 impl crate::session::Session {

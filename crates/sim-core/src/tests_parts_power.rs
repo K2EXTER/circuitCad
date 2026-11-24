@@ -412,6 +412,17 @@ fn the_lt3045_follows_its_set_resistor_and_limits() {
     let loud = rms(&build(&base));
     assert!((quiet - 0.8e-6).abs() < 0.1e-6, "with CSET 4.7 uF: {quiet}");
     assert!(loud > 50e-6, "without CSET: {loud}");
+    // M8: at 125 °C the SET current is up 0.094 % from 25 °C (figure G01; the output follows through RSET) and the quiescent
+    // current 19 % (figure G10), less what they already are at the model's 27 °C
+    let unloaded = Opt { load: 1e9, ..base };
+    let at = |t: f64| {
+        let r = dc_op(&build(&unloaded).at_temperature(t)).unwrap();
+        let supply = r.elements.iter().find(|e| e.name == "V1").unwrap().current.abs();
+        (v(&r, "out"), supply)
+    };
+    let ((out27, in27), (out125, in125)) = (at(27.0), at(125.0));
+    assert!((out125 / out27 - 1.0 - (0.000936 - 0.0000043)).abs() < 2e-5, "output {out27} -> {out125}");
+    assert!((in125 - in27 - 2.2e-3 * (0.192334 - 0.003284)).abs() < 0.01e-3, "supply current {in27} -> {in125}");
 }
 
 /// TI TPS62933 (synchronous buck, the data sheet's design example: 6.8 uH, 44 uF, RT open = 500 kHz): 12 V to 5 V at 2 A, the soft
@@ -494,6 +505,26 @@ fn the_tdk_cga_capacitors_follow_their_impedance_curves() {
         }
     }
     assert!(bad.is_empty(), "{bad:#?}");
+}
+
+/// P5: the Bourns SRN6045 coils' Q at the data sheet's test frequency (the table's "Q (Ref.)": 15 at 7.96 MHz, 17 at 2.52 MHz,
+/// 22 at 796 kHz), from the resistance across them for the core's loss.
+#[test]
+fn the_srn6045_coils_have_their_q_and_a_core_loss() {
+    for (pn, q, f) in [("SRN6045-2R2Y", 15.0, 7.96e6), ("SRN6045-150M", 17.0, 2.52e6), ("SRN6045-101M", 22.0, 796e3)] {
+        let def = part(pn);
+        let mut c = Circuit::new();
+        place(&mut c, &def, "L1", &[("1", "a"), ("2", "0")]);
+        let a = c.node("a");
+        c.add(Element::ISource { name: "I1".into(), from: 0, to: a, wave: Waveform::Dc(0.0), ac: Some((1.0, 0.0)) });
+        let r = ac_analysis(&c, &AcSettings { fstart: f, fstop: f, sweep: AcSweep::Decade(1) }).unwrap();
+        let s = r.signal("V(a)").unwrap();
+        let model = s.im[0] / s.re[0];
+        assert!((model / q - 1.0).abs() < 0.01, "{pn}: Q {model} at {f} Hz, data sheet {q}");
+    }
+    // the core's resistance is part of the model's text: 4.225 k for the 15 uH
+    let def = part("SRN6045-150M");
+    assert!(def.sim.as_ref().unwrap().text.contains("Rcore 1 2 4.225k"));
 }
 
 /// The TDK CGA X8R and X8L capacitors lose capacitance with DC voltage as their product pages' DC bias curves show: the small-signal

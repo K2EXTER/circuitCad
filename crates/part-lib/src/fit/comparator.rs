@@ -21,6 +21,12 @@ pub struct ComparatorSpec {
     /// Input offset voltage, typ (V) and max (either way).
     pub vos: f64,
     pub vos_max: f64,
+    /// The input offset's drift with temperature, typ (V/°C, either way; M8): 0 as made, the variation analyses move it
+    /// between ∓ this. None: not in the data sheet. `vos_drift_note`: where it was read (a figure of many units' lines).
+    #[serde(default)]
+    pub vos_drift: Option<f64>,
+    #[serde(default)]
+    pub vos_drift_note: String,
     /// Input bias current, typ (A; negative out of the pins, as PNP inputs) and max (absolute).
     pub ib: f64,
     #[serde(default)]
@@ -95,10 +101,24 @@ pub fn model(p: &ComparatorSpec) -> String {
             l.push(format!("* spread {el} {} {} {what} {note}", g(p.ib, 6), g(sign * max, 6)));
         }
     }
+    // the offset's drift (M8) rides on the decision stage's input (no node of its own on the input side): 0 V/°C as made
+    // (its sign differs from part to part), V(dr) volts per °C away from 27 °C
+    let drift = match p.vos_drift {
+        Some(d) => {
+            l.extend([
+                "* the offset's drift with temperature, in the decision stage (0 V/degree as made; the variation analyses move it".into(),
+                "* between the data sheet's typ either way): V(dr) volts per degree away from 27 C".into(),
+                "Vdr dr 0 DC 0".into(),
+                format!("* spread Vdr {} {} offset-drift (data sheet: typ {} uV/C either way)", g(-d, 6), g(d, 6), g(d * 1e6, 6)),
+            ]);
+            format!("-V(dr)*(temp-{})", g(super::T_MODEL, 6))
+        }
+        None => String::new(),
+    };
     l.extend([
         "* decision: gm into Cp || Rp (the response time to a small overdrive; Rp gives the gain), the current limited (a large step),".into(),
         "* the node clamped to +-1 V".into(),
-        format!("Bgm 0 n0 I=limit({}*V(inn,i1),{},{})", g(gm, 6), g(-imax, 6), g(imax, 6)),
+        format!("Bgm 0 n0 I=limit({}*(V(inn,i1){drift}),{},{})", g(gm, 6), g(-imax, 6), g(imax, 6)),
         format!("Rp n0 0 {}", g(rp, 6)),
         format!("Cp n0 0 {}", g(CP, 6)),
         format!("Bcl n0 0 I=1000*(max(V(n0)-{CLAMP},0)+min(V(n0)+{CLAMP},0))"),
@@ -120,7 +140,7 @@ pub fn model(p: &ComparatorSpec) -> String {
 /// What the model is made from and what it leaves out (`sim.limits`).
 pub fn limits(p: &ComparatorSpec) -> Vec<String> {
     let isink = if p.isink_note.is_empty() { format!("最大の吸い込み電流 {}", eng(p.isink, "A")) } else { format!("最大の吸い込み電流 {} ({})", eng(p.isink, "A"), p.isink_note) };
-    vec![
+    let mut v = vec![
         format!("データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。データシートとの比べは docs/models/comparators.md。", p.cite),
         format!(
             "再現しているもの: 応答時間 ({} のオーバードライブで {}、大きい入力で {}。出力を {} で {} に引き上げ、{} を越えるまで)、入力オフセット {}、入力バイアス電流 {}、利得 {} V/mV、出力の Low 電圧 {} ({} のとき)、{isink}、電源電流 {}/回路。部品ごとの違い (オフセット ±{}、電源電流 〜{}) は、ばらつき・最悪ケースの解析でだけ入ります。",
@@ -140,12 +160,21 @@ pub fn limits(p: &ComparatorSpec) -> Vec<String> {
             eng(p.iq_max, "A"),
         ),
         format!(
-            "出力はオープンコレクタです。High にするにはプルアップ抵抗が要ります (IN− が IN+ より高いとき Low)。入力の同相範囲は 0 V〜(電源 − {} V) で、超えたときの動きは扱いません。ヒステリシスはありません (要るなら外の抵抗で正帰還をかけます)。温度による変化、電源電圧による応答時間の変化、チャネルどうしの影響も扱いません (2 つ目以降のチャネルは、同じモデルをチャネル (ユニット) ごとに置きます)。",
-            g(p.vicr_head, 3)
+            "出力はオープンコレクタです。High にするにはプルアップ抵抗が要ります (IN− が IN+ より高いとき Low)。入力の同相範囲は 0 V〜(電源 − {} V) で、超えたときの動きは扱いません。ヒステリシスはありません (要るなら外の抵抗で正帰還をかけます)。{}、電源電圧による応答時間の変化、チャネルどうしの影響も扱いません (2 つ目以降のチャネルは、同じモデルをチャネル (ユニット) ごとに置きます)。",
+            g(p.vicr_head, 3),
+            if p.vos_drift.is_some() { "オフセット以外の温度による変化" } else { "温度による変化" }
         ),
         super::LAST_WORD.into(),
         "電源ピンをつながないと、電源電流が流れないだけで、比べる動きは変わりません。".into(),
-    ]
+    ];
+    if let Some(d) = p.vos_drift {
+        let from = if p.vos_drift_note.is_empty() { "データシートの typ".to_string() } else { p.vos_drift_note.clone() };
+        v.insert(
+            2,
+            format!("入力オフセットの温度ドリフト (±{} µV/℃、{from}): 向きが部品ごとに違うので、ふだんの解析では 0 です。ばらつき・最悪ケースの解析で ±{} µV/℃ の間で動き、温度を 27 ℃ から変えたときに効きます。", g(d * 1e6, 6), g(d * 1e6, 6)),
+        );
+    }
+    v
 }
 
 pub(super) fn fit(p: &ComparatorSpec) -> Result<Out, String> {

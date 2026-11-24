@@ -2851,7 +2851,7 @@
     ]
   },
   "LM339": {
-    "fingerprint": "d3a4c74e8f1f8aec",
+    "fingerprint": "31517ed4a0cfec52",
     "source": "TI LM139/LM239/LM339/LM2901 データシート (SLCS006Z、2025-05 改訂) の 6.10 節 (LM339) と 6.14 節。VCC = 5 V、25 °C",
     "date": "2026-11-18",
     "rows": [
@@ -2878,8 +2878,8 @@
         "datasheet": "— / 0.300 / — µs",
         "target": "0.300 µs",
         "condition": "TTL の入力 (0 ↔ 3 V、基準 1.4 V)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
-        "model": "0.314 µs",
-        "diff": "+0.014 µs",
+        "model": "0.313 µs",
+        "diff": "+0.013 µs",
         "tested": true
       },
       {
@@ -3036,7 +3036,7 @@
     ]
   },
   "LM393": {
-    "fingerprint": "33830aee849e1cf4",
+    "fingerprint": "c457bf0a723fac62",
     "source": "TI LMx93x・LM2903x データシート (JAJSIA8AH、2025-04 改訂) の 5.8 節 (LM393) と 5.11 節。VCC = 5 V、25 °C",
     "date": "2026-11-18",
     "rows": [
@@ -3063,8 +3063,8 @@
         "datasheet": "— / 0.300 / — µs",
         "target": "0.300 µs",
         "condition": "TTL の入力 (0 ↔ 3 V、基準 1.4 V)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
-        "model": "0.314 µs",
-        "diff": "+0.014 µs",
+        "model": "0.313 µs",
+        "diff": "+0.013 µs",
         "tested": true
       },
       {
@@ -3072,8 +3072,8 @@
         "datasheet": "— / 0.300 / — µs",
         "target": "0.300 µs",
         "condition": "TTL の入力 (0 ↔ 3 V、基準 1.4 V)。5.1 kΩ で 5 V に引き上げ、15 pF、出力が 1.4 V を越えるまで。表は向きを分けない",
-        "model": "0.352 µs",
-        "diff": "+0.052 µs",
+        "model": "0.351 µs",
+        "diff": "+0.051 µs",
         "tested": true
       },
       {

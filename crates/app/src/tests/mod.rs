@@ -8,6 +8,15 @@ mod sample_models;
 mod sim_snapshot;
 
 use super::*;
+
+/// A library part's symbol as one block: the samples drawn before the gate ICs' gates became units (Q6, 2026-11-24) keep the
+/// 74HC00 and the like as the one box with all fourteen pins they were drawn with.
+pub(crate) fn one_block(mut sym: sch_core::CustomSymbol) -> sch_core::CustomSymbol {
+    for p in &mut sym.pins {
+        p.unit = 0;
+    }
+    sym
+}
 use pcb_core::ratsnest::ratsnest;
 use pcb_core::{Point, Side, Track};
 use sch_core::{Kind, Wire};

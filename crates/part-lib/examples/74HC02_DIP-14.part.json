@@ -52,17 +52,20 @@
     {
       "number": "4",
       "name": "2Y",
-      "side": "right"
+      "side": "right",
+      "unit": 1
     },
     {
       "number": "5",
       "name": "2A",
-      "side": "left"
+      "side": "left",
+      "unit": 1
     },
     {
       "number": "6",
       "name": "2B",
-      "side": "left"
+      "side": "left",
+      "unit": 1
     },
     {
       "number": "7",
@@ -72,32 +75,38 @@
     {
       "number": "8",
       "name": "3A",
-      "side": "left"
+      "side": "left",
+      "unit": 2
     },
     {
       "number": "9",
       "name": "3B",
-      "side": "left"
+      "side": "left",
+      "unit": 2
     },
     {
       "number": "10",
       "name": "3Y",
-      "side": "right"
+      "side": "right",
+      "unit": 2
     },
     {
       "number": "11",
       "name": "4A",
-      "side": "left"
+      "side": "left",
+      "unit": 3
     },
     {
       "number": "12",
       "name": "4B",
-      "side": "left"
+      "side": "left",
+      "unit": 3
     },
     {
       "number": "13",
       "name": "4Y",
-      "side": "right"
+      "side": "right",
+      "unit": 3
     },
     {
       "number": "14",

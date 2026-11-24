@@ -20,7 +20,7 @@ pub struct CoilLineupInput {
 }
 
 fn row_of(r: &datasheet::lineup::InductorRow) -> coil::Row {
-    coil::Row { part: r.part.clone(), l_uh: r.l_uh, tol_pct: r.tol_pct, dcr_ohm: r.dcr_ohm, dcr_max: r.dcr_max, i_rms: r.i_rms, i_sat: r.i_sat, srf_hz: r.srf_hz }
+    coil::Row { part: r.part.clone(), l_uh: r.l_uh, tol_pct: r.tol_pct, dcr_ohm: r.dcr_ohm, dcr_max: r.dcr_max, i_rms: r.i_rms, i_sat: r.i_sat, srf_hz: r.srf_hz, q: r.q, q_hz: r.q_hz }
 }
 
 fn shown(v: f64) -> String {
@@ -66,6 +66,7 @@ impl PartForm {
         self.pas_isat = r.i_sat.map(passive::eng).unwrap_or_default();
         self.pas_ldrop = series.as_ref().filter(|s| s.sat_drop > 0.0).map_or("30".into(), |s| shown(s.sat_drop * 100.0));
         self.pas_srf = r.srf_hz.map(passive::eng).unwrap_or_default();
+        self.pas_q = r.q.zip(r.q_hz).map(|(q, f)| format!("{} {}", shown(q), passive::eng(f))).unwrap_or_default();
         if let Some(i) = r.i_rms {
             self.rt_i = shown(i);
         }
@@ -210,6 +211,8 @@ mod tests {
         assert!(f.coil_lineup.series.is_some());
         f.coil_lineup_fill("SRN6045-100M");
         assert_eq!((f.name.as_str(), f.pas_value.as_str(), f.pas_isat.as_str(), f.pas_ldrop.as_str(), f.rt_i.as_str(), f.height), ("SRN6045-100M", "10u", "3", "30", "2.5", 4.5));
+        // P5: the table's Q at its test frequency, for the core's loss
+        assert_eq!(f.pas_q, format!("17 {}", passive::eng(2.52e6)));
         f.coil_lineup_make();
         assert_eq!(f.batch.len(), 2, "{:?}", f.coil_lineup.message);
         let made = f.batch.iter().find(|p| p.name == "SRN6045-100M").unwrap();

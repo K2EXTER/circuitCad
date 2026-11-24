@@ -34,7 +34,7 @@ fn tie(s: &mut sch_core::Schematic, idx: usize, pins: &[&str], text: &str) {
 
 fn part_at(s: &mut sch_core::Schematic, name: &str, pos: (i32, i32), rot: u8) -> usize {
     let d = library_part(name);
-    s.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), pos, rot)
+    s.add_custom(one_block(d.symbol()), &d.default_value(), &d.footprint_name(), pos, rot)
 }
 
 fn two_pin(s: &mut sch_core::Schematic, kind: Kind, pos: (i32, i32), rot: u8, value: &str, a: &str, b: &str) {

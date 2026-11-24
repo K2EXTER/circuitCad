@@ -39,6 +39,24 @@ impl PartForm {
             t.bias_loss = bias.parse::<f64>().map_err(|_| format!("DCバイアスで下がる量「{bias}」を % の数で入力してください (例: 30)"))? / 100.0;
         }
         if t.kind == PassiveKind::Inductor {
+            // the core's loss from the data sheet's Q at its test frequency (P5)
+            let q: Vec<&str> = self.pas_q.split_whitespace().collect();
+            match q.as_slice() {
+                [] => {}
+                [qv, f] => {
+                    let qv = qv.parse::<f64>().ok().filter(|v| *v > 0.0).ok_or_else(|| format!("Q「{qv}」を 0 より大きい数で入れてください (例: 17 2.52M)"))?;
+                    let f = self.pas_number("Q の周波数", f, true)?.unwrap_or_default();
+                    match passive::rp_from_q(value, t.dcr.unwrap_or(0.0), t.cp.unwrap_or(0.0), qv, f) {
+                        Some(rp) => {
+                            t.rp = Some(rp);
+                            t.q_at = Some((qv, f));
+                            notes.push(format!("コアの損失は Q から {}Ω (並列) と求めました", passive::eng(rp)));
+                        }
+                        None => notes.push("Q の値では巻線の抵抗だけで足りるか、自己共振より上なので、コアの損失は入れませんでした".into()),
+                    }
+                }
+                _ => return Err("Q は「17 2.52M」(Q と、それを測った周波数) の 2 つで入れてください (空でも作れます)".into()),
+            }
             t.isat = self.pas_number("飽和電流 Isat", &self.pas_isat, false)?;
             if let Some(d) = self.pas_number("インダクタンスの低下", self.pas_ldrop.trim().trim_end_matches('%'), false)? {
                 t.ldrop = d / 100.0;
@@ -150,6 +168,7 @@ impl PartForm {
                         row(ui, i18n::tr("DCR (巻線抵抗)"), &mut self.pas_dcr, i18n::tr("巻線の直流抵抗。損失と発熱の元になります"), "100m");
                         row(ui, i18n::tr("並列容量 (F)"), &mut self.pas_cp, i18n::tr("巻線の間の容量。自己共振周波数から求めることもできます"), "1p");
                         row(ui, i18n::tr("自己共振周波数 (Hz)"), &mut self.pas_srf, i18n::tr("コイルがこれより高い周波数でコンデンサのようになる限界。並列容量が空のとき、ここから求めます。M は MHz"), "30M");
+                        row(ui, i18n::tr("Q と周波数"), &mut self.pas_q, i18n::tr("データシートの表の Q と、それを測った周波数 (Bourns は「Q (Ref.)」と「Test Freq.」)。コアの損失を、Q がその値になる並列の抵抗で入れます。DC-DC でコイルにかかる電圧の 2 乗に比例して熱になります。空なら入れません"), "17 2.52M");
                     }
                 }
             });

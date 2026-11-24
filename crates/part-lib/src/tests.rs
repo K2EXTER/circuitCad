@@ -211,7 +211,7 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
 ")).unwrap();
     };
     let old = legacy_models();
-    assert_eq!(old.len(), 61, "the Würth 74437324033 that follows its data sheet's inductance curve (2026-11-24), the six TDK CGA NP0 capacitors whose ESR and ESL were fitted to the whole curve (2026-11-24), ADA4522-1 (its output and offset set by the measured table, 2026-11-23), the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, the diodes 1N4148, 1N4001, 1N4007 and the transistors 2N3904, 2N7000, AO3400A, AO3401A, 2N3906, BSS138, BC547, PN2222A, BD139, BD140, IRF540N, IRFZ44N, IRLZ44N, IRF9540N, S8050, S8550 and the Darlingtons TIP120, TIP125, the Schottkys 1N5819, 1N5817, SS14, 1N5822, BAT54, the rectifiers 1N5408, UF4007, the zeners 1N4728A, 1N4733A, 1N4742A, the photodiode BPW34 and the optocoupler PC817 (M9), the TQ2-L2-5V that gained its latching contacts and the two ADS124S08 marked as ADCs (adc_bits) (2026-11-21)");
+    assert_eq!(old.len(), 75, "the ten Bourns SRN6045 that gained the core's loss from their Q, the comparators LM139, LM339 and LM393 that gained their offset drift and the LT3045 its SET and supply currents' change with the temperature (2026-11-24), the Würth 74437324033 that follows its data sheet's inductance curve (2026-11-24), the six TDK CGA NP0 capacitors whose ESR and ESL were fitted to the whole curve (2026-11-24), ADA4522-1 (its output and offset set by the measured table, 2026-11-23), the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, the diodes 1N4148, 1N4001, 1N4007 and the transistors 2N3904, 2N7000, AO3400A, AO3401A, 2N3906, BSS138, BC547, PN2222A, BD139, BD140, IRF540N, IRFZ44N, IRLZ44N, IRF9540N, S8050, S8550 and the Darlingtons TIP120, TIP125, the Schottkys 1N5819, 1N5817, SS14, 1N5822, BAT54, the rectifiers 1N5408, UF4007, the zeners 1N4728A, 1N4733A, 1N4742A, the photodiode BPW34 and the optocoupler PC817 (M9), the TQ2-L2-5V that gained its latching contacts and the two ADS124S08 marked as ADCs (adc_bits) (2026-11-21)");
     for (name, shipped) in &old {
         assert!(!shipped.texts.is_empty(), "{name}");
         let current: PartDef = example(name);
@@ -253,6 +253,43 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
 
 /// A copy of a dual op amp from before its units (Q6): the current model, only unit A's pins. The pins of the further units
 /// arrive once; a copy whose pins the user changed keeps them.
+/// Q6: the gate ICs' gates are units (a 74HC00's four NAND gates A to D, VCC and GND on A, from `swap.gates`); a library copy from
+/// before, unmodified, gets them once; one the user edited is left as it is.
+#[test]
+fn a_gate_ic_from_before_its_units_gets_them_once() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_lib_gates_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    install_examples(&dir).unwrap();
+    let name = "74HC00_DIP-14";
+    let current = example(name);
+    assert_eq!(current.symbol().units(), 4);
+    let unit_of = |n: &str| current.pins.iter().find(|p| p.number == n).unwrap().unit;
+    assert_eq!(["1", "3", "4", "6", "8", "13", "7", "14"].map(unit_of), [0, 0, 1, 1, 2, 3, 0, 0]);
+    let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+    let forget = || {
+        let marker = dir.join(".bundled");
+        let kept: Vec<String> = std::fs::read_to_string(&marker).unwrap().lines().filter(|l| !l.contains("+gate-units")).map(str::to_string).collect();
+        std::fs::write(&marker, kept.join("
+")).unwrap();
+    };
+    let mut was = current.clone();
+    was.pins.iter_mut().for_each(|p| p.unit = 0);
+    std::fs::write(&file, serde_json::to_string_pretty(&was).unwrap()).unwrap();
+    forget();
+    install_examples(&dir).unwrap();
+    let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(now.pins, current.pins, "the gates arrived as units");
+    let mut mine = was.clone();
+    mine.description = "my own".into();
+    std::fs::write(&file, serde_json::to_string_pretty(&mine).unwrap()).unwrap();
+    forget();
+    install_examples(&dir).unwrap();
+    let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert!(now.pins.iter().all(|p| p.unit == 0), "an edited copy is left alone");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_dual_op_amp_from_before_its_units_gets_its_second_channel() {
     let dir = std::env::temp_dir().join(format!("circuitcad_lib_units_{}", std::process::id()));
