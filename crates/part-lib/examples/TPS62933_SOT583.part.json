@@ -126,6 +126,79 @@
       }
     ]
   },
+  "companions": [
+    {
+      "name": "CIN",
+      "kind": "C",
+      "value": "10u",
+      "pin": "3",
+      "to": "GND",
+      "note": "入力のすぐそばに (データシートの設計例は 10 µF × 2 と 0.1 µF、50 V)"
+    },
+    {
+      "name": "CIN2",
+      "kind": "C",
+      "value": "100n",
+      "pin": "3",
+      "to": "GND",
+      "note": "高い周波数のための小さいコンデンサ (VIN と GND のすぐそば)"
+    },
+    {
+      "name": "CBST",
+      "kind": "C",
+      "value": "100n",
+      "pin": "6",
+      "to": "5",
+      "note": "ブートストラップ (無いと上側のスイッチが入らない)"
+    },
+    {
+      "name": "CSS",
+      "kind": "C",
+      "value": "33n",
+      "pin": "7",
+      "to": "GND",
+      "note": "ソフトスタート 約 5 ms (CSS × 0.8 V ÷ 5.5 µA、6.8 nF 以上)"
+    },
+    {
+      "name": "L1",
+      "kind": "L",
+      "value": "6.8u",
+      "pin": "5",
+      "to": "net:VOUT",
+      "note": "設計例 (12〜24 V → 5 V・3 A、500 kHz) の値。飽和電流は 4 A 以上の品を"
+    },
+    {
+      "name": "COUT",
+      "kind": "C",
+      "value": "22u",
+      "pin": "net:VOUT",
+      "to": "GND",
+      "note": "設計例は 22 µF × 2 (実効 44 µF)"
+    },
+    {
+      "name": "COUT2",
+      "kind": "C",
+      "value": "22u",
+      "pin": "net:VOUT",
+      "to": "GND"
+    },
+    {
+      "name": "RFBT",
+      "kind": "R",
+      "value": "52.5k",
+      "pin": "net:VOUT",
+      "to": "8",
+      "note": "出力 5 V の分圧 (0.8 V × (1 + 52.5k ÷ 10k))"
+    },
+    {
+      "name": "RFBB",
+      "kind": "R",
+      "value": "10k",
+      "pin": "8",
+      "to": "GND",
+      "note": "データシートの推奨 10 kΩ"
+    }
+  ],
   "sim": {
     "kind": "subckt",
     "element": "",

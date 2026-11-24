@@ -29,25 +29,106 @@ fn pin_for(cap: &str, pins: &[PinDef]) -> Option<(String, String)> {
 }
 
 /// The divider that sets an adjustable output (候補 Q5): R1 from the output to the ADJ (or FB) pin, R2 from there to GND, for
-/// `vout` with the reference `vref` (VOUT = VREF × (1 + R2 / R1), the ADJ pin's current left out). R1 is `r1`, else 240 Ω on
-/// an ADJ pin (the LM317's application) and 10 kΩ on an FB pin; R2 the nearest E24. The two lines and the output they give.
+/// `vout` with the reference `vref`. On an ADJ pin (LM317) the reference stands across R1: VOUT = VREF × (1 + R2 / R1), R1 `r1`
+/// or 240 Ω and R2 the nearest E24. On an FB pin (a DC-DC) it stands across R2: VOUT = VREF × (1 + R1 / R2), R2 `r1` or 10 kΩ
+/// (TI's RFBB) and R1 the nearest E24 (before 2026-11-24 the FB divider was worked out as the ADJ one: 5 V came out 0.96 V).
+/// Without an output pin (a DC-DC's output is after its coil) R1 goes to the net `net:VOUT`. The two lines and the output.
 pub fn divider_lines(pins: &[PinDef], vout: f64, vref: f64, r1: Option<f64>) -> Result<(Vec<String>, f64), String> {
     let find = |names: &[&str]| pins.iter().find(|p| names.iter().any(|n| p.name.eq_ignore_ascii_case(n)));
-    let out = find(&["VOUT", "OUT", "OUTPUT", "VO"]).ok_or("出力のピン (VOUT・OUT・OUTPUT) がピン表にありません")?;
     let adj = find(&["ADJ", "ADJUST", "ADJUSTMENT", "FB", "SET", "VFB"]).ok_or("帰還のピン (ADJ・FB) がピン表にありません。出力電圧が決まった部品には分圧の抵抗は要りません")?;
+    let fb = adj.name.to_ascii_uppercase().contains("FB");
+    let out = match find(&["VOUT", "OUT", "OUTPUT", "VO"]) {
+        Some(p) => p.name.clone(),
+        None if fb => "net:VOUT".to_string(),
+        None => return Err("出力のピン (VOUT・OUT・OUTPUT) がピン表にありません".into()),
+    };
     if !(vref > 0.0 && vout > vref) {
         return Err(format!("出力電圧 {vout} V は基準電圧 {vref} V より高くします"));
     }
-    let fb = adj.name.to_ascii_uppercase().contains("FB");
-    let r1 = r1.filter(|r| *r > 0.0).unwrap_or(if fb { 10e3 } else { 240.0 });
-    let r2 = sim_core::e24(r1 * (vout / vref - 1.0), false);
-    let got = vref * (1.0 + r2 / r1);
+    let (top, bottom, got) = if fb {
+        let bottom = r1.filter(|r| *r > 0.0).unwrap_or(10e3);
+        let top = sim_core::e24(bottom * (vout / vref - 1.0), false);
+        (top, bottom, vref * (1.0 + top / bottom))
+    } else {
+        let top = r1.filter(|r| *r > 0.0).unwrap_or(240.0);
+        let bottom = sim_core::e24(top * (vout / vref - 1.0), false);
+        (top, bottom, vref * (1.0 + bottom / top))
+    };
     let ohms = |r: f64| part_lib::passive::eng(r);
     let note = format!("出力 {vout} V の分圧 (VREF {vref} V で {got:.3} V)");
-    Ok((vec![format!("R1 | R | {} | {} | {} | {note}", ohms(r1), out.name, adj.name), format!("R2 | R | {} | {} | GND | {note}", ohms(r2), adj.name)], got))
+    Ok((vec![format!("R1 | R | {} | {out} | {} | {note}", ohms(top), adj.name), format!("R2 | R | {} | {} | GND | {note}", ohms(bottom), adj.name)], got))
+}
+
+/// The nearest E6 value (1, 1.5, 2.2, 3.3, 4.7, 6.8 a decade): coils and large capacitors come in them.
+fn e6(v: f64) -> f64 {
+    let d = 10f64.powf(v.log10().floor());
+    let m = [1.0, 1.5, 2.2, 3.3, 4.7, 6.8, 10.0].into_iter().min_by(|a, b| ((v / d) / a).ln().abs().total_cmp(&((v / d) / b).ln().abs())).unwrap_or(1.0);
+    m * d
+}
+
+/// A synchronous buck's parts (候補 Q5): the input capacitor, the bootstrap capacitor (BST to SW), the soft start's capacitor
+/// (1 ms, from the SS current), the coil (a 30 % ripple at `iout`), the output capacitor (the ripple at most 0.5 % of `vout`, 22 µF
+/// or more) and the divider; the lines and a sentence of how each was chosen.
+pub fn buck_lines(pins: &[PinDef], vin: f64, vout: f64, iout: f64, fsw: f64, vref: f64, iss: Option<f64>) -> Result<(Vec<String>, String), String> {
+    if !(vin > vout && vout > 0.0 && iout > 0.0 && fsw > 0.0) {
+        return Err("入力電圧 > 出力電圧 > 0、出力電流と周波数は 0 より大きくしてください".into());
+    }
+    let find = |names: &[&str]| pins.iter().find(|p| names.iter().any(|n| p.name.eq_ignore_ascii_case(n))).map(|p| p.name.clone());
+    let sw = find(&["SW", "LX", "PH"]).ok_or("スイッチのピン (SW・LX) がピン表にありません。降圧の DC-DC の部品で使います")?;
+    let vin_pin = find(&["VIN", "IN", "PVIN"]).ok_or("入力のピン (VIN) がピン表にありません")?;
+    let eng = part_lib::passive::eng;
+    let ripple = 0.3 * iout;
+    let l = e6((vin - vout) * vout / (vin * fsw * ripple));
+    let di = (vin - vout) * vout / (vin * fsw * l);
+    let cout = e6((di / (8.0 * fsw * 0.005 * vout)).max(22e-6));
+    let mut lines = vec![format!("CIN | C | 10u | {vin_pin} | GND | 入力のすぐそばに (セラミック、入力電圧の 1.5 倍以上の耐圧)")];
+    if let Some(bst) = find(&["BST", "BOOT", "CB", "CBOOT"]) {
+        lines.push(format!("CBST | C | 100n | {bst} | {sw} | ブートストラップ (無いと上側のスイッチが入らない)"));
+    }
+    if let Some(ss) = find(&["SS", "SS/TR", "TR"]) {
+        let i = iss.unwrap_or(5.5e-6);
+        let css = sim_core::e24(1e-3 * i / vref, false);
+        lines.push(format!("CSS | C | {} | {ss} | GND | ソフトスタート 約 {:.1} ms (CSS × {} V ÷ {} µA)", eng(css), css * vref / i * 1e3, crate::part_form::linear_show(vref), crate::part_form::linear_show(i * 1e6)));
+    }
+    lines.push(format!("L1 | L | {} | {sw} | net:VOUT | リップル電流 約 {di:.2} A (出力電流の {:.0} %)、飽和電流は {:.1} A 以上の品を", eng(l), di / iout * 100.0, iout + di / 2.0));
+    lines.push(format!("COUT | C | {} | net:VOUT | GND | 出力のリップル 約 {:.1} mV。セラミックは直流電圧で容量が減るので、実効でこれだけ残る品か 2 個に", eng(cout), di / (8.0 * fsw * cout) * 1e3));
+    let (div, got) = divider_lines(pins, vout, vref, None)?;
+    lines.extend(div);
+    let how = format!(
+        "入力 {} V → 出力 {} V・{} A・{} kHz: コイル {}H (リップル {:.2} A)、出力 {}F、分圧で {:.3} V",
+        crate::part_form::linear_show(vin),
+        crate::part_form::linear_show(vout),
+        crate::part_form::linear_show(iout),
+        crate::part_form::linear_show(fsw / 1e3),
+        eng(l),
+        di,
+        eng(cout),
+        got
+    );
+    Ok((lines, how))
 }
 
 impl PartForm {
+    /// 「DC-DC の周辺部品を足す」: the buck's lines from the boxes (the input, the output, its current, the frequency; the reference
+    /// and the SS current from the buck box when made, else the data sheet's VFB and 0.8 V), replacing lines of the same names.
+    pub fn add_buck_companions(&mut self) -> Result<String, String> {
+        let num = |label: &str, t: &str| sim_core::parse_value(t.trim().trim_end_matches(['V', 'v', 'A', 'a'])).filter(|v| *v > 0.0).ok_or(format!("{label}を入れてください"));
+        let vin = num("入力電圧", &self.companions_vin)?;
+        let vout = num("出力電圧", &self.companions_vout)?;
+        let iout = num("出力電流", &self.companions_iout)?;
+        let fsw = sim_core::parse_value(self.companions_fsw.trim().trim_end_matches("Hz")).filter(|v| *v > 0.0).unwrap_or(500e3);
+        let buck = self.buck.spec("X", "s").ok();
+        let vref = buck.as_ref().map(|b| b.vref).or_else(|| ["VFB", "VREF"].iter().find_map(|s| self.sheet.spec_values(s).iter().find_map(|v| v.typ)).filter(|v| *v > 0.1 && *v < 5.0)).unwrap_or(0.8);
+        let iss = buck.as_ref().and_then(|b| b.iss);
+        let pins = self.parse_pins()?;
+        let (lines, how) = buck_lines(&pins, vin, vout, iout, fsw, vref, iss)?;
+        let names: Vec<String> = lines.iter().filter_map(|l| l.split('|').next().map(|n| n.trim().to_string())).collect();
+        let mut keep: Vec<String> = self.companions_text.lines().filter(|l| !l.trim().is_empty() && !l.split('|').next().is_some_and(|n| names.iter().any(|x| x == n.trim()))).map(str::to_string).collect();
+        keep.extend(lines);
+        self.companions_text = keep.join("\n");
+        Ok(format!("{how}。データシートの応用回路の値があれば、それに直してください"))
+    }
+
     /// 「分圧の抵抗を足す」: R1 and R2 for the output voltage in its box (the reference from the open PDF's VREF / VFB row, else the
     /// regulator box's), replacing lines named R1 and R2.
     pub fn add_divider(&mut self) -> Result<String, String> {
@@ -88,15 +169,17 @@ impl PartForm {
             if sim_core::parse_value(f[2]).is_none() {
                 return Err(format!("推奨の周辺部品 {n} 行目: 値「{}」が読めません (例: 1u、100n、10k)", f[2]));
             }
-            let to = if f[4].eq_ignore_ascii_case("GND") { "GND".to_string() } else { pin_no(f[4], n)? };
-            out.push(Companion { name: f[0].to_string(), kind, value: f[2].to_string(), pin: pin_no(f[3], n)?, to, note: f.get(5).map(|s| s.to_string()).unwrap_or_default() });
+            // a net that is no pin of the part: "net:VOUT" (a buck's output, after its coil)
+            let end = |t: &str| -> Result<String, String> { if t.len() > 4 && t[..4].eq_ignore_ascii_case("net:") { Ok(format!("net:{}", &t[4..])) } else { pin_no(t, n) } };
+            let to = if f[4].eq_ignore_ascii_case("GND") { "GND".to_string() } else { end(f[4])? };
+            out.push(Companion { name: f[0].to_string(), kind, value: f[2].to_string(), pin: end(f[3])?, to, note: f.get(5).map(|s| s.to_string()).unwrap_or_default() });
         }
         Ok(out)
     }
 
     /// The lines of a saved part's companions, the pins by name.
     pub(super) fn companions_text_of(list: &[Companion], pins: &[PinDef]) -> String {
-        let name = |no: &str| pins.iter().find(|p| p.number == no).map_or(no.to_string(), |p| p.name.clone());
+        let name = |no: &str| if no.starts_with("net:") { no.to_string() } else { pins.iter().find(|p| p.number == no).map_or(no.to_string(), |p| p.name.clone()) };
         list.iter()
             .map(|c| {
                 let to = if c.to == "GND" { c.to.clone() } else { name(&c.to) };
@@ -181,6 +264,21 @@ impl PartForm {
                     }];
                 }
             });
+            ui.horizontal_wrapped(|ui| {
+                ui.label(i18n::tr("降圧 DC-DC: 入力 [V]")).on_hover_text(i18n::tr("スイッチ内蔵の降圧 DC-DC (SW・BST・FB のピン) の、入力電圧"));
+                ui.add(egui::TextEdit::singleline(&mut self.companions_vin).desired_width(40.0).hint_text("12"));
+                ui.label(i18n::tr("出力電流 [A]")).on_hover_text(i18n::tr("使う最大の出力電流。コイルのリップル電流をその 30 % にします"));
+                ui.add(egui::TextEdit::singleline(&mut self.companions_iout).desired_width(40.0).hint_text("2"));
+                ui.label(i18n::tr("周波数 [Hz]")).on_hover_text(i18n::tr("スイッチング周波数 (空なら 500k)"));
+                ui.add(egui::TextEdit::singleline(&mut self.companions_fsw).desired_width(50.0).hint_text("500k"));
+                if ui.button(i18n::tr("DC-DC の周辺部品を足す")).on_hover_text(i18n::tr("上の「出力電圧」とこの欄から、入力のコンデンサ・BST と SW の間の 100 nF・ソフトスタートのコンデンサ (1 ms)・コイル (リップル 30 %)・出力のコンデンサ (リップル 0.5 % 以下、22 µF 以上)・帰還の分圧を足します。コイルと出力のコンデンサは「net:VOUT」(コイルの先の出力) につながります")).clicked() {
+                    let m = self.add_buck_companions();
+                    self.companions_msg = vec![match m {
+                        Ok(t) => (true, t),
+                        Err(e) => (false, e),
+                    }];
+                }
+            });
             for (ok, line) in &self.companions_msg {
                 ui.label(egui::RichText::new(line).small().color(if *ok { crate::theme::ok() } else { crate::theme::warn() }));
             }
@@ -200,9 +298,39 @@ mod tests {
         let (lines, got) = divider_lines(&lm317, 5.0, 1.25, None).unwrap();
         assert!(lines[0].starts_with("R1 | R | 240 | OUTPUT | ADJUSTMENT") && lines[1].starts_with("R2 | R | 750 | ADJUSTMENT | GND"), "{lines:?}");
         assert!((got - 5.156).abs() < 0.01);
+        // an FB pin: 10 kΩ at the bottom, the top 31.25 kΩ → E24 30 kΩ (3.2 V); without an output pin, the top to net:VOUT
         let buck = [pin("1", "FB"), pin("2", "VOUT")];
-        assert!(divider_lines(&buck, 3.3, 0.8, None).unwrap().0[0].contains("| 10k |"));
+        let (lines, got) = divider_lines(&buck, 3.3, 0.8, None).unwrap();
+        assert!(lines[0].starts_with("R1 | R | 30k | VOUT | FB") && lines[1].starts_with("R2 | R | 10k | FB | GND"), "{lines:?}");
+        assert!((got - 3.2).abs() < 1e-9, "{got}");
+        let (lines, _) = divider_lines(&buck[..1], 5.0, 0.8, None).unwrap();
+        assert!(lines[0].starts_with("R1 | R | 51k | net:VOUT | FB"), "{lines:?}");
         assert!(divider_lines(&lm317[1..], 5.0, 1.25, None).is_err(), "no ADJ pin");
+    }
+
+    /// TPS62933 from 12 V to 5 V at 3 A, 500 kHz: a 30 % ripple asks 7.4 µH → E6 6.8 µH (the data sheet's design example has
+    /// 6.8 µH too), the ripple 0.98 A; the output 22 µF; CSS 6.8 nF for 1 ms at 5.5 µA; the coil and COUT on net:VOUT.
+    #[test]
+    fn a_bucks_parts_from_its_voltages_and_current() {
+        let pin = |n: &str, name: &str| PinDef { unit: 0, number: n.into(), name: name.into(), side: None, sim_only: false, gap: 0, kind: None };
+        let pins = [pin("1", "RT"), pin("2", "EN"), pin("3", "VIN"), pin("4", "GND"), pin("5", "SW"), pin("6", "BST"), pin("7", "SS"), pin("8", "FB")];
+        let (lines, how) = buck_lines(&pins, 12.0, 5.0, 3.0, 500e3, 0.8, Some(5.5e-6)).unwrap();
+        let line = |name: &str| lines.iter().find(|l| l.starts_with(&format!("{name} |"))).unwrap_or_else(|| panic!("{name}: {lines:?}")).clone();
+        assert!(line("CIN").starts_with("CIN | C | 10u | VIN | GND"));
+        assert!(line("CBST").starts_with("CBST | C | 100n | BST | SW"));
+        assert!(line("CSS").starts_with("CSS | C | 6.8n | SS | GND"), "{}", line("CSS"));
+        assert!(line("L1").starts_with("L1 | L | 6.8u | SW | net:VOUT"), "{}", line("L1"));
+        assert!(line("COUT").starts_with("COUT | C | 22u | net:VOUT | GND"), "{}", line("COUT"));
+        assert!(line("R1").starts_with("R1 | R | 51k | net:VOUT | FB") && line("R2").starts_with("R2 | R | 10k | FB | GND"));
+        assert!(how.contains("4.880"), "{how}");
+        // the lines become parts with the net ends
+        let mut f = PartForm::default();
+        f.pins_text = "1 RT\n2 EN\n3 VIN\n4 GND\n5 SW\n6 BST\n7 SS\n8 FB".into();
+        f.companions_text = lines.join("\n");
+        let list = f.parse_companions(&f.parse_pins().unwrap()).unwrap();
+        let l1 = list.iter().find(|c| c.name == "L1").unwrap();
+        assert_eq!((l1.pin.as_str(), l1.to.as_str()), ("5", "net:VOUT"));
+        assert!(buck_lines(&pins[..4], 12.0, 5.0, 3.0, 500e3, 0.8, None).unwrap_err().contains("SW"));
     }
 
     #[test]

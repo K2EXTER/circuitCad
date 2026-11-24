@@ -207,17 +207,35 @@ fn companions(x: &Ctx) -> Vec<Problem> {
         }
         for ((pin, to, kind), list) in groups {
             let Some(k) = kind.chars().next().map(|ch| ch.to_ascii_uppercase()).filter(|ch| matches!(ch, 'R' | 'C' | 'L')) else { continue };
-            let Some(p) = x.net(&c.refdes, pin) else { continue };
+            // an end may be a net that is no pin (`net:VOUT`, a buck's output): by its name; one the circuit names otherwise
+            // (its 5 V rail) is not found, and then a part of the kind on the pin's side is enough
+            let by_name = |n: &str| x.nets.iter().position(|q| q.name.eq_ignore_ascii_case(n));
+            let p = match pin.strip_prefix("net:") {
+                Some(n) => by_name(n),
+                None => x.net(&c.refdes, pin),
+            };
+            let Some(p) = p else { continue };
             if x.nets[p].pins.len() < 2 {
                 continue; // the pin is not wired yet: the ERC says so already
             }
-            let t = if to.eq_ignore_ascii_case("GND") { x.gnd } else { x.net(&c.refdes, to) };
+            let to_net = to.strip_prefix("net:");
+            let t = if to.eq_ignore_ascii_case("GND") { x.gnd } else if let Some(n) = to_net { by_name(n) } else { x.net(&c.refdes, to) };
             if t == Some(p) {
                 continue; // tied straight to its target (a reset pin on VCC): nothing is needed
             }
-            let present = t.map_or(vec![], |t| x.between(k, p, t));
+            let present = match t {
+                Some(t) => x.between(k, p, t),
+                None if to_net.is_some() => x.s.components.iter().filter(|q| role(q) == Some(k)).filter(|q| x.ends(q).is_some_and(|(a, b)| (a == p) != (b == p))).collect(),
+                None => vec![],
+            };
             let pin_name = x.lib_pin(&c.refdes, pin).map_or(String::new(), |(n, _)| format!(" ({n})"));
-            let to_name = if to.eq_ignore_ascii_case("GND") { "GND".to_string() } else { x.lib_pin(&c.refdes, to).map_or(format!("ピン{to}"), |(n, _)| n.to_string()) };
+            let to_name = if to.eq_ignore_ascii_case("GND") {
+                "GND".to_string()
+            } else if let Some(n) = to_net {
+                format!("出力の {n}")
+            } else {
+                x.lib_pin(&c.refdes, to).map_or(format!("ピン{to}"), |(n, _)| n.to_string())
+            };
             let names = list.iter().map(|q| q.name.as_str()).collect::<Vec<_>>().join("・");
             let values = list.iter().map(|q| q.value.as_str()).collect::<Vec<_>>().join(" + ");
             let word = match k {
@@ -393,6 +411,22 @@ mod tests {
 
     fn msgs(s: &Schematic) -> Vec<String> {
         erc(s).into_iter().map(|p| p.message).collect()
+    }
+
+    /// A buck's coil goes from SW to the output net (`net:VOUT`, no pin of the part): missing, it is pointed out; placed, not;
+    /// on an output the circuit names otherwise, any coil on SW will do.
+    #[test]
+    fn a_bucks_coil_to_its_output_net_is_checked() {
+        let coil = Companion { name: "L1".into(), kind: "L".into(), value: "6.8u".into(), pin: "2".into(), to: "net:VOUT".into(), note: String::new() };
+        let sym = part("BUCK", "U", vec![pin("1", "VIN", PinSide::Left, None), pin("2", "SW", PinSide::Right, None), pin("3", "GND", PinSide::Bottom, None)], vec![coil]);
+        let mut s = Schematic::default();
+        let u = s.add_custom(sym, "BUCK", "SOT", (20, 20), 0);
+        // SW wired to a load resistor, no coil
+        let r = s.add(Kind::Resistor, (40, 20), 1);
+        wire_pins(&mut s, (u, 1), (r, 0));
+        assert!(msgs(&s).iter().any(|m| m.contains("推奨のコイルがありません: L1") && m.contains("出力の VOUT")), "{:?}", msgs(&s));
+        s.place_companions(u).unwrap();
+        assert!(!msgs(&s).iter().any(|m| m.contains("推奨のコイル")), "{:?}", msgs(&s));
     }
 
     #[test]

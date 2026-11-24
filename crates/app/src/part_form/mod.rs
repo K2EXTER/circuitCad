@@ -199,6 +199,10 @@ pub struct PartForm {
     pub unit_model_msg: Option<Result<String, String>>,
     /// The output voltage of 「分圧の抵抗 R1・R2 を足す」 (`companion_fill.rs`).
     pub companions_vout: String,
+    /// The buck's boxes of 「DC-DC の周辺部品を足す」: input V, output current A, frequency Hz.
+    pub companions_vin: String,
+    pub companions_iout: String,
+    pub companions_fsw: String,
     /// The diode section: points read off the forward characteristics ("current voltage" per line), the reverse
     /// ratings, and the fitted (or slider-set) IS / N / RS.
     pub dio_points: String,
@@ -425,6 +429,9 @@ impl Default for PartForm {
             sheet_diff: None,
             unit_model_msg: None,
             companions_vout: String::new(),
+            companions_vin: String::new(),
+            companions_iout: String::new(),
+            companions_fsw: String::new(),
             dio_points: String::new(),
             dio_vrrm: String::new(),
             dio_ir: String::new(),
@@ -655,4 +662,9 @@ impl PartForm {
         });
         saved
     }
+}
+
+/// A number with an SI prefix, 6 digits (`linear::show`), for the other sections.
+pub(crate) fn linear_show(v: f64) -> String {
+    linear::show(v)
 }

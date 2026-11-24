@@ -317,6 +317,26 @@ impl RegulatorInput {
             }
             None => self.found.push((false, "雑音の typ が表に見つかりません".into())),
         }
+        // the output's temperature coefficient (M8, onsemi's "TCVO": mV/°C; ppm/°C; %/°C) into the temperature box as a straight
+        // line from 0 °C to 125 °C, when the box is empty (a figure read in it is not overwritten). Measured over the range: no 25 °C filter
+        let tc: Vec<SpecValue> = ["TCVO", "ΔVO/ΔT", "ΔVOUT/ΔT", "TCVOUT", "∆VO/∆T", "dVO/dT"].iter().flat_map(|s| values(s)).collect();
+        match (tc.iter().find(|v| v.typ.is_some()), sim_core::parse_value(self.vout.trim()).filter(|v| *v > 0.0)) {
+            (Some(v), Some(vo)) if self.temp.trim().is_empty() => {
+                let unit = v.unit.as_deref().unwrap_or("");
+                let x = v.typ.unwrap_or_default();
+                // percent of the output per degree
+                let pct = if unit.trim_start().starts_with("ppm") || unit.trim_start().starts_with('%') {
+                    x * super::linear::per_degree(unit).unwrap_or(1e-6) * 100.0
+                } else {
+                    x * super::linear::per_degree(unit).unwrap_or(1e-3) / vo * 100.0
+                };
+                let at_t = |t: f64| fit::num::g(pct * (t - 25.0), 4);
+                self.temp = format!("0 {}\n125 {}", at_t(0.0), at_t(125.0));
+                self.found.push((true, format!("出力の温度係数 {} {unit} を、0 ℃と 125 ℃の直線に: {}", fit::num::g(x, 4), at(v))));
+            }
+            (Some(_), _) if !self.temp.trim().is_empty() => self.found.push((true, "温度の欄はもう入っているので、表の温度係数では上書きしませんでした".into())),
+            _ => {}
+        }
         self.found.push((true, "表の行の読みは会社ごとにまちまちです。入れた値は表と見比べて確かめてください".into()));
     }
 

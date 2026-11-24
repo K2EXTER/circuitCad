@@ -316,6 +316,8 @@ impl PartForm {
                     ui.label(i18n::tr("コネクタは、ふつうシミュレーションのモデルが要りません。「なし」のままで保存できます"));
                 });
             }
+            // M3: every model made in the form against its data sheet
+            self.report_ui(ui);
             ui.label(i18n::tr("シミュレーションモデル (部品の特性)"));
             crate::icons::help_small(ui, "SPICE モデルを貼ると自動入力", "メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
             {

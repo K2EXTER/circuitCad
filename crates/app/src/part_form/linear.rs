@@ -36,6 +36,16 @@ pub struct OpampInput {
     /// The model measured against the boxes (M3), and the supply it is measured on (V, empty: 5).
     pub measured: Option<Result<Vec<super::measure_model::CompareRow>, String>>,
     pub meas_vs: String,
+    /// The supply the open-loop gain and the short-circuit current are measured on (empty: `meas_vs`).
+    pub meas_vs_hi: String,
+}
+
+impl OpampInput {
+    /// The supplies to measure on: the boxes, 5 V when empty, the second one the first when empty.
+    pub fn meas_supplies(&self) -> (f64, f64) {
+        let vs = sim_core::parse_value(self.meas_vs.trim()).filter(|v| *v > 0.0).unwrap_or(5.0);
+        (vs, sim_core::parse_value(self.meas_vs_hi.trim()).filter(|v| *v > 0.0).unwrap_or(vs))
+    }
 }
 
 /// The boxes of the regulator section.
@@ -110,6 +120,22 @@ pub(super) fn show(v: f64) -> String {
     }
     let (k, pre) = [(1e6, "Meg"), (1e3, "k"), (1.0, ""), (1e-3, "m"), (1e-6, "u"), (1e-9, "n"), (1e-12, "p")].into_iter().find(|(k, _)| v.abs() >= *k * 0.9999).unwrap_or((1e-12, "p"));
     format!("{}{pre}", fit::num::g(v / k, 6))
+}
+
+/// The symbols a table gives the offset's drift ("ΔVOS/ΔT", TI's "dVOS/dT", ADI's "ΔVOS/ΔT", others' "TCVOS", "αVIO").
+pub(super) const DRIFT_SYMBOLS: &[&str] = &["ΔVOS/ΔT", "dVOS/dT", "TCVOS", "TCVIO", "αVIO", "αVOS", "ΔVIO/ΔT", "dVIO/dT", "VOS TC", "∆VOS/∆T"];
+
+/// The SI factor of a per-degree unit: "µV/°C" → 1e-6, "mV/℃" → 1e-3, "nA/K" → 1e-9, "ppm/°C" → 1e-6 (of the value).
+pub(super) fn per_degree(unit: &str) -> Option<f64> {
+    let u = unit.trim();
+    let base = ["/°C", "/℃", "/oC", "/C", "/K", "/ °C"].iter().find_map(|s| u.strip_suffix(s))?.trim();
+    if base.eq_ignore_ascii_case("ppm") {
+        return Some(1e-6);
+    }
+    if base == "%" {
+        return Some(1e-2);
+    }
+    datasheet::spec_table::prefix(base)
 }
 
 /// Open-loop gain in dB from what the table prints: dB, or V/mV, V/µV, V/V.
@@ -268,6 +294,19 @@ impl OpampInput {
                 }
             }
             None => self.found.push((false, "開ループ利得の typ が表に見つかりません (dB か V/mV)".into())),
+        }
+        // the offset's drift (M8): its row is measured over the temperature range, so the 25 °C filter is not applied
+        let drift: Vec<SpecValue> = DRIFT_SYMBOLS.iter().flat_map(|s| values(s)).collect();
+        // only with a unit per degree read: zero-drift parts write nV/°C and the others µV/°C, so a guess may be 1000 times off
+        // (ADA4522: "TCVOS 2.5" with its unit not read)
+        match (drift.iter().find(|v| v.typ.is_some() && v.unit.as_deref().and_then(per_degree).is_some()), drift.iter().find(|v| v.typ.is_some())) {
+            (Some(v), _) => {
+                let k = v.unit.as_deref().and_then(per_degree).unwrap_or(1e-6);
+                self.vos_drift = show(v.typ.unwrap_or_default().abs() * k);
+                self.found.push((true, format!("オフセットのドリフト {}V/℃: {}", self.vos_drift, at(v))));
+            }
+            (None, Some(v)) => self.found.push((false, format!("オフセットのドリフトの行 {} ({}) は単位が読めません。µV/℃ か nV/℃ かを表で見て、自分で入れてください", at(v), fit::num::g(v.typ.unwrap_or_default(), 4)))),
+            (None, None) => self.found.push((false, "オフセットのドリフト (ΔVOS/ΔT) の typ が表に見つかりません (空なら温度で変わりません)".into())),
         }
         self.found.push((false, "出力の振れ幅 (電源からどこまで) は表の書き方がまちまちなので、自分で入れてください".into()));
         // values from several pages: a data sheet with one table per supply voltage gives each value from the first
@@ -625,15 +664,17 @@ impl PartForm {
             ui.horizontal(|ui| {
                 if ui.button(i18n::tr("モデルを測ってデータシートと比べる")).on_hover_text(i18n::tr("作ったモデルを、同梱のオペアンプと同じ回路 (ボルテージフォロワ・開ループ・段の応答・出力の短絡) で測り、入れた値と並べます。ずれが 5 % を超える所は橙色。数秒かかります")).clicked() {
                     let (name, source) = (self.linear_name("OPAMP"), self.linear_source());
-                    let vs = sim_core::parse_value(self.opamp.meas_vs.trim()).filter(|v| *v > 0.0).unwrap_or(5.0);
+                    let (vs, hi) = self.opamp.meas_supplies();
                     self.opamp.measured = Some(match (self.opamp.spec(&name, &source), &self.opamp.result) {
-                        (Ok(s), Some(Ok(f))) => super::measure_model::compare_opamp(&s, f, vs),
+                        (Ok(s), Some(Ok(f))) => super::measure_model::compare_opamp(&s, f, vs, hi),
                         (Err(e), _) => Err(e),
                         _ => Err("モデルができていません".into()),
                     });
                 }
                 ui.label(i18n::tr("電源 [V]")).on_hover_text(i18n::tr("測るときの電源電圧 (正と負の電源の間。空なら 5 V。データシートの表の条件に合わせます)"));
                 ui.add(egui::TextEdit::singleline(&mut self.opamp.meas_vs).desired_width(40.0).hint_text("5"));
+                ui.label(i18n::tr("AOL・ISC [V]")).on_hover_text(i18n::tr("開ループ利得と短絡電流を測る電源電圧。データシートはこの 2 つを高い電源で書くことが多いです (LM358: AOL は 15 V、ISC は 10 V)。空なら上と同じ"));
+                ui.add(egui::TextEdit::singleline(&mut self.opamp.meas_vs_hi).desired_width(40.0).hint_text("15"));
             });
             match &self.opamp.measured {
                 Some(Ok(rows)) => super::measure_model::compare_table(ui, "opamp_measured", rows),
@@ -833,15 +874,53 @@ mod tests {
     fn the_examples_measure_close_to_their_boxes() {
         let s = OpampInput::from_spec(&lm358()).spec("LM358", "s").unwrap();
         let f = fit::fit(&fit::Spec::Opamp(s.clone())).unwrap();
-        let rows = super::super::measure_model::compare_opamp(&s, &f, 5.0).unwrap();
+        let rows = super::super::measure_model::compare_opamp(&s, &f, 5.0, 5.0).unwrap();
         assert!(rows.len() >= 9, "{rows:?}");
         let far: Vec<_> = rows.iter().filter(|r| (r.model / r.datasheet - 1.0).abs() > 0.05 && r.item != "入力バイアス電流" && !r.item.starts_with("出力の振れ幅") && r.item != "出力の短絡電流").collect();
         assert!(far.is_empty(), "{far:#?}");
+        // the short-circuit current on the data sheet's 10 V: 40 mA (at 5 V it was 22 mA)
+        let rows = super::super::measure_model::compare_opamp(&s, &f, 5.0, 10.0).unwrap();
+        let isc = rows.iter().find(|r| r.item == "出力の短絡電流").unwrap();
+        assert!((isc.model / isc.datasheet - 1.0).abs() < 0.05, "{isc:?}");
         let s = RegulatorInput::example(false).spec("LM7805", "s").unwrap();
         let f = fit::fit(&fit::Spec::Regulator(s.clone())).unwrap();
         let rows = super::super::measure_model::compare_regulator(&s, &f).unwrap();
         let far: Vec<_> = rows.iter().filter(|r| (r.model / r.datasheet - 1.0).abs() > 0.05).collect();
         assert!(rows.len() >= 6 && far.is_empty(), "{rows:#?}");
+    }
+
+    /// M8: the offset's drift row (over the temperature range, so no 25 °C filter) into its box; the units per degree.
+    #[test]
+    fn the_offset_drift_row_is_read_with_its_unit() {
+        use datasheet::spec_table::SpecValue;
+        let row = SpecValue { page: 3, symbol: "ΔVOS/ΔT".into(), conditions: "TA = −40°C to +125°C".into(), min: None, typ: Some(7.0), max: None, unit: Some("µV/°C".into()), rect: datasheet::Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 } };
+        let mut o = OpampInput::default();
+        o.fill_from_pdf(|s| if s == "ΔVOS/ΔT" { vec![row.clone()] } else { vec![] });
+        assert_eq!(o.vos_drift, "7u");
+        // a unit not read: not filled, said
+        let mut bare = row.clone();
+        bare.unit = Some("?".into());
+        let mut o = OpampInput::default();
+        o.fill_from_pdf(|s| if s == "ΔVOS/ΔT" { vec![bare.clone()] } else { vec![] });
+        assert!(o.vos_drift.is_empty() && o.found.iter().any(|(ok, l)| !ok && l.contains("単位が読めません")), "{:?}", o.found);
+        assert_eq!((per_degree("mV/℃"), per_degree("nA/K"), per_degree("ppm/°C"), per_degree("V")), (Some(1e-3), Some(1e-9), Some(1e-6), None));
+    }
+
+    /// M8: onsemi's TCVO −0.3 mV/°C of a 5 V regulator: the temperature box 0 °C +0.15 %, 125 °C −0.6 % (the LM7805 example's
+    /// line); a box already filled (a figure read) stays.
+    #[test]
+    fn the_output_tempco_row_fills_the_temperature_box() {
+        use datasheet::spec_table::SpecValue;
+        let row = SpecValue { page: 4, symbol: "TCVO".into(), conditions: "IO = 5.0 mA".into(), min: None, typ: Some(-0.3), max: None, unit: Some("mV/°C".into()), rect: datasheet::Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 } };
+        let mut r = RegulatorInput { vout: "5".into(), ..Default::default() };
+        r.fill_from_pdf("X", |s| if s == "TCVO" { vec![row.clone()] } else { vec![] });
+        assert_eq!(r.temp, "0 0.15
+125 -0.6");
+        r.temp = "0 0.2
+125 -0.5".into();
+        r.fill_from_pdf("X", |s| if s == "TCVO" { vec![row.clone()] } else { vec![] });
+        assert_eq!(r.temp, "0 0.2
+125 -0.5", "not overwritten");
     }
 
     #[test]
@@ -913,6 +992,7 @@ mod tests {
         assert_eq!(o.pm, "64");
         assert_eq!(o.aol, "150");
         assert!(o.found.iter().any(|(ok, l)| !ok && l.contains("振れ幅")));
+        assert!(o.found.iter().any(|(ok, l)| !ok && l.contains("ドリフト")), "no drift row: said so");
         assert!(!o.found.iter().any(|(_, l)| l.contains("別々の表")), "all from p.8: no word about pages");
         let mut moved = table.to_vec();
         moved[4].page = 5;
