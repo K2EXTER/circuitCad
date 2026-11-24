@@ -143,7 +143,7 @@ impl BreadboardView {
     /// The button for "組む順と通電" and its window (the panel has no room left for a list this long).
     pub(super) fn build_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &StripLayout) {
         if ui
-            .selectable_label(self.build.open, i18n::tr("組む順と通電 (区画ごと)"))
+            .add(egui::Button::new(i18n::tr("組む順と通電 (区画ごと)")).selected(self.build.open))
             .on_hover_text(i18n::tr("区画を 1 つずつ組んで、そのたびに電源を入れて確かめる順と、各段で正常なら流れる電流・電流制限・測る電圧を、窓に出します"))
             .clicked()
         {

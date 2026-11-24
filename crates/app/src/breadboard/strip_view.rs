@@ -517,37 +517,32 @@ impl BreadboardView {
         if self.strip.back {
             ui.label(egui::RichText::new(i18n::tr("裏は見るだけです。並べ方を直すときは表に戻します")).color(NOTE));
         }
-        crate::widgets::unless_ui(ui, self.strip.back.then_some("裏は見るだけです。表に戻すと直せます"), |ui| ui.horizontal_wrapped(|ui| {
+        // one row of tools: the editing ones (on the parts' side only) and the meter and the scope (also from below, as the solder
+        // side is probed on a real board)
+        let back_only = self.strip.back.then_some("裏は見るだけです。表に戻すと直せます");
+        ui.horizontal_wrapped(|ui| {
             for (t, name, tip) in [
                 (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
                 (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行か列の穴をクリックします。右クリックした穴を通る手の線は消えます。線の両端と、途中で部品の足や別の線に重なる穴がつながります"),
+                (StripTool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます (裏から見た絵でも)。レンジは 電圧・電流・抵抗 から選びます。銅の帯・すずめっき線・表の線でつながったとおりの回路を測るので、帯の切り忘れやはんだのブリッジも、そのとおりに読めます"),
+                (StripTool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化が左に出ます (電源を入れて動かしているときは、動いている波形)"),
             ] {
                 // the stripboard cuts its strips; the perfboard (no strips) has bare wires drawn by hand
                 if (t == StripTool::Bare && strip) || (t == StripTool::Cut && !strip) {
                     continue;
                 }
-                if ui.selectable_label(self.strip.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
-                    self.strip.tool = t;
-                    self.strip.link_start = None;
-                }
-            }
-        }));
-        // the meter and the scope: on the parts' side or from below (as the solder side is probed on a real board)
-        ui.horizontal(|ui| {
-            for (t, name, tip) in [
-                (StripTool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます (裏から見た絵でも)。レンジは 電圧・電流・抵抗 から選びます。銅の帯・すずめっき線・表の線でつながったとおりの回路を測るので、帯の切り忘れやはんだのブリッジも、そのとおりに読めます"),
-                (StripTool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化が左に出ます (電源を入れて動かしているときは、動いている波形)"),
-            ] {
-                if ui.selectable_label(self.strip.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
-                    self.strip.tool = if self.strip.tool == t { StripTool::Move } else { t };
+                let probe = matches!(t, StripTool::Meter | StripTool::Scope);
+                let why_not = if probe { None } else { back_only };
+                if crate::widgets::unless(ui, why_not, egui::Button::selectable(self.strip.tool == t, i18n::tr(name))).on_hover_text(i18n::tr(tip)).clicked() {
+                    self.strip.tool = if probe && self.strip.tool == t { StripTool::Move } else { t };
                     self.strip.link_start = None;
                 }
             }
         });
         self.strip_history_check(sch);
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.strip.undo.is_empty(), "手で動かした・線を引いた・帯を切った・並べ直した操作を 1 つ取り消します (Ctrl+Z)").clicked() {
                 self.strip_undo(sch, true);
             }
@@ -555,19 +550,17 @@ impl BreadboardView {
                 self.strip_undo(sch, false);
             }
         });
-        ui.horizontal(|ui| {
-            if sch.stripboard.is_some() {
-                if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から並べ方を作り直します。手で動かした分は消えます (元に戻すで戻せます)")).clicked() {
-                    self.strip_set(sch, None);
-                    self.strip.sel = None;
-                    self.strip.picked_link = None;
-                }
-            } else {
-                ui.label(egui::RichText::new(i18n::tr("(自動で並べた形)")).color(NOTE)).on_hover_text(i18n::tr(
-                    "まだ手で動かしていないので、回路図を変えると並べ直されます。動かすと、その並べ方が回路図のファイルに入り、回路図を変えたときは、足した部品だけが基板の右に加わり、そのネットへの線も引かれます (帯の片に空いた穴が無くて引けない線は、照合が言います)",
-                ));
+        if sch.stripboard.is_some() {
+            if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から並べ方を作り直します。手で動かした分は消えます (元に戻すで戻せます)")).clicked() {
+                self.strip_set(sch, None);
+                self.strip.sel = None;
+                self.strip.picked_link = None;
             }
-        });
+        } else {
+            ui.label(egui::RichText::new(i18n::tr("(自動で並べた形)")).color(NOTE)).on_hover_text(i18n::tr(
+                "まだ手で動かしていないので、回路図を変えると並べ直されます。動かすと、その並べ方が回路図のファイルに入り、回路図を変えたときは、足した部品だけが基板の右に加わり、そのネットへの線も引かれます (帯の片に空いた穴が無くて引けない線は、照合が言います)",
+            ));
+        }
         // the parts in the picked box lined up (`strip_edit::parts_aligned`)
         if let Some((a, b)) = self.strip.sel {
             let picked = parts_in_box(l, a, b);
@@ -632,7 +625,12 @@ impl BreadboardView {
             });
             self.strip_lock_hints_ui(ui, l);
         }
-        let hint = match self.strip.tool {
+    }
+
+    /// What the tool does, on one line at the top of the board (as the breadboard has it).
+    fn strip_legend(&self) -> &'static str {
+        let strip = self.kind == BoardKind::Stripboard;
+        match self.strip.tool {
             StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
             StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
@@ -640,11 +638,9 @@ impl BreadboardView {
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
             StripTool::Meter => "穴をクリックして赤い棒、もう一度で黒い棒 (裏からも当てられます)",
             StripTool::Scope => "探り針を当てる穴をクリックします (裏からも当てられます)",
-        };
-        ui.label(egui::RichText::new(i18n::tr(hint)).color(NOTE).small());
+        }
     }
 
-    /// The left panel of the stripboard / perfboard views.
     /// The checks of `l` (`strip_check`, `strip_rules`, `strip_unjoined`), kept while the schematic and the layout stay the same.
     pub(super) fn strip_checks(&mut self, sch: &SchEditor, l: &StripLayout) -> StripChecks {
         if let Some((r, k, c)) = &self.strip.checks
@@ -659,18 +655,10 @@ impl BreadboardView {
         c
     }
 
+    /// The left panel of the stripboard / perfboard views (below the board kind; in the same order as the breadboard's).
     pub(super) fn strip_panel(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
         let l = self.strip_shown(sch);
         let strip = self.kind == BoardKind::Stripboard;
-        ui.label(
-            spaced(if strip {
-                "銅の帯が横に並んだ基板 (ストリップ基板) に組む並べ方です。IC の段の上と下に帯の組があり、1 本ずつ 1 つのネットです (左に名前)。2 本足の部品は、つなぐ 2 つの帯をまたいで縦に差します。IC は × の穴で帯を切って足ごとに分け、上半分の足は上の帯へ、下半分の足は下の帯へ色の線でつなぎます。同じネットの帯どうしは左の線でつなぎます。帯を切るのは、裏から穴の銅を削ります (ドリルの刃を手で回す・専用のカッター)"
-            } else {
-                "穴だけの基板 (ユニバーサル基板) に組む並べ方です。帯が無いので、部品はつなぐ相手の近くに置き (長いヘッダは上の縁に寝かせて)、ネットごとに灰色の線 (すずめっき線) を裏で縦・横にまっすぐはんだ付けします。ほかのネットの線とは触れません。裏で通れない所は、色の線 (表を通すビニール線) で飛び越えます"
-            })
-            .color(NOTE),
-        );
-        ui.add_space(4.0);
         if self.strip_busy().0 {
             ui.horizontal(|ui| {
                 ui.spinner();
@@ -685,10 +673,24 @@ impl BreadboardView {
             }
         }
         self.strip_around_done(sch);
-        self.strip_size_ui(ui, sch, &l);
-        self.strip_tools(ui, sch, &l);
-        self.build_ui(ui, sch, &l);
         let StripChecks { problems, rules, .. } = self.strip_checks(sch, &l);
+        Self::check_ui(ui, &problems);
+        // a perfboard's wires on top that lie along a chip's row of pins (the automatic layout lays one so where nothing else gets through)
+        if !strip {
+            for (k, part) in links_along_pins(&l) {
+                let w = &l.links[k];
+                ui.colored_label(crate::theme::warn(), i18n::trf!("▲ 表の線 {}–{} が {} の足の列の上を通ります", hole_name(w.a), hole_name(w.b), part)).on_hover_text(i18n::tr(
+                    "表の線が IC やヘッダの足の上に沿って走っていて、ソケットの上をまたぐ形になります。電気的には被覆があるのでつながりませんが、組みにくく、絵では足とつながって見えます。線の端をドラッグして足の列を避けるか、そのままにします (自動の並べ方は、ほかに通れる所が無いときにこう引きます)",
+                ));
+            }
+        }
+        crate::widgets::group_gap(ui);
+        self.strip_tools(ui, sch, &l);
+        crate::widgets::group_gap(ui);
+        ui.horizontal_wrapped(|ui| {
+            self.power_button(ui, "並べたとおりに組んだ基板に電源を入れて、時間とともに動かします (ブレッドボードと同じ)。計算するのは銅の帯・すずめっき線・表の線でつながったとおりの回路なので、帯の切り忘れや線の付け違いがあれば、そのとおりに動いたり壊れたりします。LED は流れる電流で光り、スイッチと押しボタンは基板の上でクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます");
+            self.build_ui(ui, sch, &l);
+        });
         self.strip_power_ui(ui, sch, &l, problems.is_empty());
         // the meter with the power off reads the schematic's DC point (what the board will read once it is switched on)
         if !self.powered && self.strip.tool == StripTool::Meter && sch.bench_voltages().is_none() && !self.dc_asked && problems.is_empty() {
@@ -712,51 +714,48 @@ impl BreadboardView {
             }
             _ => {}
         }
-        ui.add_space(4.0);
-        if problems.is_empty() {
-            ui.colored_label(crate::theme::ok(), i18n::tr("✔ 回路図どおりにつながっています"));
-        } else {
-            for p in &problems {
-                ui.colored_label(BAD, i18n::trf!("・{}", i18n::tr_dyn(p)));
+        crate::widgets::group_gap(ui);
+        // the size in the title, so it reads with the group folded
+        let size = i18n::trf!("基板の大きさ  {} × {} 穴 ({:.0} × {:.0} mm)", l.cols, l.rows, l.cols as f32 * 2.54, l.rows as f32 * 2.54);
+        Self::fold(ui, "strip_size", size, false, |ui| {
+            self.strip_size_ui(ui, sch, &l);
+            if ui
+                .button(i18n::tr("印刷用の図を保存 (表と裏)"))
+                .on_hover_text(i18n::tr("穴の格子に部品・線・切る穴を実寸で描いた図を、表 (部品の面) と裏 (銅の面。左右が逆) の 2 つの SVG に保存します。ブラウザで開いて 100 % (実寸) で印刷すると、図の穴が基板の穴に重なります。右下の 10 mm の線で大きさを確かめられます"))
+                .clicked()
+            {
+                self.save_strip_print(sch, &l);
             }
+        });
+        // a proposal just made is shown (the group opens for it)
+        if self.strip.plan.is_some() {
+            ui.data_mut(|d| d.insert_temp(egui::Id::new(("proto_fold", "strip_sections")), true));
         }
-        // a perfboard's wires on top that lie along a chip's row of pins (the automatic layout lays one so where nothing else gets through)
-        if !strip {
-            for (k, part) in links_along_pins(&l) {
-                let w = &l.links[k];
-                ui.colored_label(crate::theme::warn(), i18n::trf!("▲ 表の線 {}–{} が {} の足の列の上を通ります", hole_name(w.a), hole_name(w.b), part)).on_hover_text(i18n::tr(
-                    "表の線が IC やヘッダの足の上に沿って走っていて、ソケットの上をまたぐ形になります。電気的には被覆があるのでつながりませんが、組みにくく、絵では足とつながって見えます。線の端をドラッグして足の列を避けるか、そのままにします (自動の並べ方は、ほかに通れる所が無いときにこう引きます)",
+        let sections = if l.sections.is_empty() { i18n::tr("区画").to_string() } else { i18n::trf!("区画  {}", l.sections.len()) };
+        Self::fold(ui, "strip_sections", sections, false, |ui| {
+            if !l.sections.is_empty() || !rules.is_empty() {
+                ui.label(egui::RichText::new(i18n::tr("区画とつなぎ方の決まり")).strong()).on_hover_text(i18n::tr(
+                    "回路図の「設計の要件」の表から: 「近くに置く組」で「区画」に印を付けた組ごとにまとめて置き、区画の間は帯を切ります。GND は区画ごとに 1 本の線で、表のいちばん上の区画の GND の帯 (1 点) へ戻します。「離す」の行は、基板の上のいちばん近い穴どうしの距離で確かめます。「ケルビン」の行は、測定の「分かれ目」: 抵抗の足から電流の線とセンスの線への道が、帯の上を一緒に走る長さです (自動の並べ方は、足が 2 本の線の間に来るように部品や線の端をずらします)",
                 ));
+                if !l.sections.is_empty() {
+                    ui.small(l.sections.iter().map(|(n, a, b)| format!("{n} ({} – {})", hole_name(*a), hole_name(*b))).collect::<Vec<_>>().join("、"));
+                }
+                for r in &rules {
+                    ui.colored_label(if r.ok { crate::theme::ok() } else { crate::theme::warn() }, format!("{} {}", if r.ok { "✔" } else { "▲" }, i18n::tr_dyn(&r.message)));
+                }
+            } else {
+                crate::icons::help_small(
+                    ui,
+                    "区画はまだありません",
+                    "区画に分けるには、回路図の「設計の要件」→「近くに置く組」で組を作り、「区画」に印を付けます",
+                );
             }
-        }
-        if !l.sections.is_empty() || !rules.is_empty() {
-            ui.label(egui::RichText::new(i18n::tr("区画とつなぎ方の決まり")).strong()).on_hover_text(i18n::tr(
-                "回路図の「設計の要件」の表から: 「近くに置く組」で「区画」に印を付けた組ごとにまとめて置き、区画の間は帯を切ります。GND は区画ごとに 1 本の線で、表のいちばん上の区画の GND の帯 (1 点) へ戻します。「離す」の行は、基板の上のいちばん近い穴どうしの距離で確かめます。「ケルビン」の行は、測定の「分かれ目」: 抵抗の足から電流の線とセンスの線への道が、帯の上を一緒に走る長さです (自動の並べ方は、足が 2 本の線の間に来るように部品や線の端をずらします)",
-            ));
-            if !l.sections.is_empty() {
-                ui.small(l.sections.iter().map(|(n, a, b)| format!("{n} ({} – {})", hole_name(*a), hole_name(*b))).collect::<Vec<_>>().join("、"));
+            // no sections yet: the proposal (also when the table has other rules)
+            if l.sections.is_empty() {
+                self.strip_plan_ui(ui, sch);
             }
-            for r in &rules {
-                ui.colored_label(if r.ok { crate::theme::ok() } else { crate::theme::warn() }, format!("{} {}", if r.ok { "✔" } else { "▲" }, i18n::tr_dyn(&r.message)));
-            }
-        } else {
-            ui.small(i18n::tr("区画に分けるには、回路図の「設計の要件」→「近くに置く組」で組を作り、「区画」に印を付けます"));
-        }
-        // no sections yet: the proposal (also when the table has other rules)
-        if l.sections.is_empty() {
-            self.strip_plan_ui(ui, sch);
-        }
-        ui.small(i18n::trf!("大きさ: {} 列 × {} 行 (2.54mm の間隔で {:.0} × {:.0} mm)", l.cols, l.rows, l.cols as f32 * 2.54, l.rows as f32 * 2.54));
-        if ui
-            .button(i18n::tr("印刷用の図を保存 (表と裏)"))
-            .on_hover_text(i18n::tr("穴の格子に部品・線・切る穴を実寸で描いた図を、表 (部品の面) と裏 (銅の面。左右が逆) の 2 つの SVG に保存します。ブラウザで開いて 100 % (実寸) で印刷すると、図の穴が基板の穴に重なります。右下の 10 mm の線で大きさを確かめられます"))
-            .clicked()
-        {
-            self.save_strip_print(sch, &l);
-        }
-        ui.separator();
-        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            ui.label(egui::RichText::new(i18n::tr("部品と差す穴")).strong());
+        });
+        Self::fold(ui, "strip_parts", i18n::tr("部品と差す穴"), true, |ui| {
             for p in &l.parts {
                 ui.horizontal_top(|ui| {
                     ui.add_sized([44.0, 18.0], egui::Label::new(egui::RichText::new(&p.refdes).strong()));
@@ -831,13 +830,20 @@ impl BreadboardView {
         let left = 9.0;
         let w = left + l.cols as f32 + 1.0;
         let h = l.rows as f32 + 1.5;
-        let pitch = ((rect.width() - 40.0) / w).min((rect.height() - 40.0) / h).clamp(5.0, 30.0);
+        let pitch = ((rect.width() - 40.0) / w).min((rect.height() - 56.0) / h).clamp(5.0, 30.0);
         // (the copper side has the margin at the right: the board's left edge is there now)
         let back = self.strip.back;
-        let origin = Pos2::new(rect.left() + (rect.width() - w * pitch) / 2.0 + if back { 1.0 } else { left } * pitch, rect.top() + 30.0 + pitch);
+        let origin = Pos2::new(rect.left() + (rect.width() - w * pitch) / 2.0 + if back { 1.0 } else { left } * pitch, rect.top() + 46.0 + pitch);
         if response.hovered() && self.strip.drag.is_none() && !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.is_none()) {
             self.strip_flip(!back);
         }
+        // what the tool does, on one line at the top (the breadboard's place for it)
+        let legend = match self.strip.tool {
+            StripTool::Move | StripTool::Link | StripTool::Cut | StripTool::Bare if back => "裏 (はんだの面) から見た絵です。穴にカーソルを置くと、つながる穴と線が光ります。直すときは表に戻します (F)",
+            _ => self.strip_legend(),
+        };
+        let legend = painter.layout(i18n::tr(legend).to_string(), egui::FontId::proportional(13.0), Color32::from_gray(210), rect.width() - 24.0);
+        painter.galley(rect.left_top() + Vec2::new(12.0, 10.0), legend, Color32::from_gray(210));
         if self.strip.back {
             self.strip_back(sch, &l, &response, &painter, origin, pitch);
             return;
@@ -1062,17 +1068,9 @@ impl BreadboardView {
 }
 
 impl BreadboardView {
-    /// The power switch of a stripboard or perfboard, and the running circuit's panel (the time, the speed, the knobs, the parts
-    /// burnt): the circuit is the board's own (`strip_board_nets`), so a cut left out or a wire in the wrong hole runs as built.
+    /// The running circuit's panel of a stripboard or perfboard (the time, the speed, the knobs, the parts burnt; the switch is
+    /// `power_button`): the circuit is the board's own (`strip_board_nets`), so a cut left out or a wire in the wrong hole runs as built.
     pub(super) fn strip_power_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &StripLayout, matches: bool) {
-        let label = if self.powered { i18n::tr("電源を切る") } else { i18n::tr("電源を入れる") };
-        if ui
-            .selectable_label(self.powered, label)
-            .on_hover_text(i18n::tr("並べたとおりに組んだ基板に電源を入れて、時間とともに動かします (ブレッドボードと同じ)。計算するのは銅の帯・すずめっき線・表の線でつながったとおりの回路なので、帯の切り忘れや線の付け違いがあれば、そのとおりに動いたり壊れたりします。LED は流れる電流で光り、スイッチと押しボタンは基板の上でクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます"))
-            .clicked()
-        {
-            self.powered = !self.powered;
-        }
         self.live_frame(ui, sch, &RunBoard::Strip(l.clone()), matches);
         self.power_issues_ui(ui);
     }

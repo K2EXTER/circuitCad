@@ -43,7 +43,7 @@ impl BreadboardView {
     /// monitor and a run-time mistake.
     pub(super) fn sketch_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
         for refdes in boards(&sch.sch) {
-            ui.separator();
+            crate::widgets::group_gap(ui);
             ui.label(egui::RichText::new(i18n::trf!("スケッチ ({refdes})")).strong()).on_hover_text(i18n::tr(
                 "このマイコンで動かすプログラム (Arduino の C の小さな部分)。setup() は電源を入れたとき 1 回、loop() はそのあとずっと繰り返します。使えるもの: int・long・float・bool の変数と配列、if・for・while・関数、pinMode・digitalWrite・digitalRead・analogRead・analogWrite・delay・millis・Serial.print / println・map・constrain・random。電源を入れると、ブレッドボードの回路と一緒に動きます",
             ));
@@ -53,17 +53,20 @@ impl BreadboardView {
             if edit.changed() {
                 sch.sketches.insert(refdes.clone(), text.clone());
             }
-            match sim_core::sketch::compile(&text) {
-                Ok(_) => {
-                    ui.colored_label(crate::theme::ok(), i18n::tr("✔ 読めました。電源を入れると動きます"));
+            // whether it compiles, and the way back to the sample on the same row
+            ui.horizontal_wrapped(|ui| {
+                match sim_core::sketch::compile(&text) {
+                    Ok(_) => {
+                        ui.colored_label(crate::theme::ok(), i18n::tr("✔ 読めました。電源を入れると動きます"));
+                    }
+                    Err(e) => {
+                        ui.colored_label(crate::theme::error(), i18n::trf!("{} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
+                    }
                 }
-                Err(e) => {
-                    ui.colored_label(crate::theme::error(), i18n::trf!("{} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
+                if sch.sketches.contains_key(&refdes) && ui.small_button(i18n::tr("点滅の見本に戻す")).on_hover_text(i18n::tr("スケッチを、LED (D13) を点滅させる見本に戻します")).clicked() {
+                    sch.sketches.remove(&refdes);
                 }
-            }
-            if sch.sketches.contains_key(&refdes) && ui.small_button(i18n::tr("点滅の見本に戻す")).on_hover_text(i18n::tr("スケッチを、LED (D13) を点滅させる見本に戻します")).clicked() {
-                sch.sketches.remove(&refdes);
-            }
+            });
             let Some(m) = self.live.as_ref().and_then(|lv| lv.mcus.iter().find(|m| m.refdes == refdes)) else { continue };
             if let Some(e) = m.machine.as_ref().and_then(|x| x.error.as_ref()) {
                 ui.colored_label(crate::theme::error(), i18n::trf!("止まりました: {} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
