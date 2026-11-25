@@ -200,7 +200,8 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                 // (the groups past their farthest distance come after the nets left apart: a group kept close is no use on a board
                 // that does not work)
                 let over = crate::stripboard::group_spreads(s, &m).iter().filter(|g| g.1 > g.2 + 1e-9).count();
-                let key = (m.in_keepout().len(), apart.len(), over, m.links.len(), m.rows as usize * m.cols as usize);
+                // (a wire on top along a chip's row of pins counts three: it lies on the socket, L9)
+                let key = (m.in_keepout().len(), apart.len(), over, m.links.len() + 2 * links_along_pins(&m).len(), m.rows as usize * m.cols as usize);
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
                 if round == 0 && best.as_ref().is_some_and(|(b, _)| key.0 > b.0 || (key.0 == b.0 && (key.1 > b.1 + 1 || (key.1 >= b.1 && key.3 > b.3 + b.3 / 2 + 2)))) {
                     break;
@@ -1313,6 +1314,11 @@ const SHORT: usize = 10;
 const JUMP: i32 = 16;
 /// What a jump costs on top of its length: a way along the copper is taken unless it is much longer.
 const JUMP_COST: u32 = 30;
+/// What a jump costs more when it runs along a chip's (or a socket's, a header's) row of pins, over two of its pins one after the
+/// other (`links_along_pins`): such a wire on top lies on the socket and is hard to fit (L9). A way round by bare wires on the copper
+/// side, or a jump across the row, is taken first when it is not much longer.
+/// (60 kept as many such wires on the DMM's board and made 12 more wires on top elsewhere; 30 takes off most of them for about 5.)
+const ALONG_COST: u32 = 30;
 
 /// Wires every net: from the holes already joined, the cheapest way to the nearest lead not yet. A step to the next free hole is a
 /// bare wire on the copper side (2, a turn 3 more, so the wires run straight); a jump of 2 to `JUMP` holes along a row or a column,
@@ -1378,6 +1384,16 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         }
     }
     let lead_holes: BTreeSet<At> = leads.iter().map(|x| x.0).collect();
+    // each hole's chip (or row of leads) when it is one of its pins: a jump over two pins of one part in a row runs along its pins
+    let mut chip_of: Vec<u32> = vec![u32::MAX; rows * cols];
+    for (k, p) in l.parts.iter().enumerate().filter(|(_, p)| p.look != Look::TwoLead) {
+        for (_, a) in &p.leads {
+            if (a.0 as usize) < rows && (a.1 as usize) < cols {
+                chip_of[idx(*a)] = k as u32;
+            }
+        }
+    }
+    let along_extra = ALONG_COST;
     const DIRS: [(i32, i32); 4] = [(0, 1), (1, 0), (0, -1), (-1, 0)];
     let beside = |a: At| -> Vec<At> {
         DIRS.iter().map(|(dr, dc)| (a.0 as i32 + dr, a.1 as i32 + dc)).filter(|(r, cc)| *r >= 0 && *cc >= 0 && (*r as usize) < rows && (*cc as usize) < cols).map(|(r, cc)| (r as u16, cc as u16)).collect()
@@ -1568,6 +1584,8 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                     // over something in the way, to the first free hole past it (a jump over free holes is no better than steps, and
                     // past the first free hole the steps cost what a longer jump would)
                     let mut over = false;
+                    // whether the jump has gone over two pins of one chip one after the other (along its row of pins)
+                    let (mut last_chip, mut along) = (u32::MAX, false);
                     for k in 1..=JUMP {
                         let (r, cc) = (at.0 as i32 + dr * k, at.1 as i32 + dc * k);
                         if r < 0 || cc < 0 || r >= rows as i32 || cc >= cols as i32 {
@@ -1576,9 +1594,11 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                         let to = idx((r as u16, cc as u16));
                         let free = open[to] && !is_lead[to];
                         if k >= 2 && over && free {
-                            push((r as u16, cc as u16), 5, d + JUMP_COST + 2 * k as u32, &mut heap);
+                            push((r as u16, cc as u16), 5, d + JUMP_COST + 2 * k as u32 + if along { along_extra } else { 0 }, &mut heap);
                             break;
                         }
+                        along |= chip_of[to] != u32::MAX && chip_of[to] == last_chip;
+                        last_chip = chip_of[to];
                         over |= !free;
                     }
                 }
@@ -2107,6 +2127,15 @@ mod tests {
         s.requirements.groups[2].max_dist = 25.0;
         let kept = spread(&s);
         assert!(kept <= 25.0 && free > 25.0, "{free:.1} mm without the distance, {kept:.1} mm with it");
+    }
+
+    /// L9: the wires on top along a chip's row of pins (lying on its socket) are fewer: the Arduino Mega board had 50, 40 since a jump
+    /// along two pins of one chip costs more (`ALONG_COST`) and the layouts are compared with them counting three.
+    #[test]
+    fn fewer_wires_on_top_run_along_a_row_of_pins() {
+        let (l, _) = laid_out("arduino_mega_usb.schjson", StripOptions::default());
+        let along = links_along_pins(&l).len();
+        assert!(along <= 45, "{along} wires on top along a row of pins ({} in all)", l.links.len());
     }
 
     /// L11: with mounting holes in the corners of a board of a given size, the layout leaves the 3 × 3 holes of each corner free (no
