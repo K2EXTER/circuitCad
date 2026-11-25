@@ -1907,6 +1907,46 @@ project check {p}
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// L12: `mount` chooses a part's way on (a choice that does not fit is refused with the ones that do), and `proto perf` lays the board
+/// out with it: the chip with leads soldered on in the list of what to get, the part's holes, the drawing to print.
+#[test]
+fn mount_and_proto_lay_a_perfboard_out() {
+    let dir = std::env::temp_dir().join(format!("ccad_proto_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let svg = dir.join("board.svg").display().to_string();
+    let script = format!("new
+add V 5 as=V1
+add R 1k as=R1
+add LED as=D1
+add R 10k as=R2
+net VCC V1.+ R1.1 R2.1
+net A R1.2 D1.A
+net GND V1.- D1.K R2.2
+footprint R1 R_0805
+mount R1 wired
+mount R2 auto
+proto perf svg={svg}
+proto strip
+mount V1 wired
+");
+    let (a, _) = run(&script);
+    let mounts: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "mount").collect();
+    assert_eq!(mounts[0]["mount"], "wired", "{a:?}");
+    assert!(mounts[0]["how"].as_str().unwrap().contains("リード線"));
+    assert!(mounts[2]["error"].as_str().unwrap().contains("cannot go on as 'wired'"), "{:?}", mounts[2]);
+    let protos: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "proto").collect();
+    for p in &protos {
+        assert_eq!(p["problems"].as_array().unwrap().len(), 0, "{p}");
+        let r1 = p["parts"].as_array().unwrap().iter().find(|x| x["part"] == "R1").unwrap();
+        assert_eq!((r1["mount"].as_str(), r1["leads"].as_array().unwrap().len()), (Some("wired"), 2), "{r1}");
+        assert!(p["get"].to_string().contains("リード線を付ける"), "{}", p["get"]);
+    }
+    assert_eq!(protos[0]["board"], "perfboard");
+    assert!(protos[1]["cuts"].is_array());
+    assert!(std::fs::read_to_string(&svg).unwrap().starts_with("<svg"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The same pins as a Zephyr overlay and a chip's pins as FPGA constraints; the firmware checked and the file written are kept, and
 /// the ERC says when the firmware drives another pin and when the pins change after writing.
 #[test]

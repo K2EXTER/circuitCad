@@ -26,6 +26,7 @@ mod looks;
 mod strip_view;
 mod mate_ui;
 pub use strip_view::{BoardKind, StripTool};
+pub use mate_ui::mount_choice_ui;
 #[cfg(test)]
 pub use sketch_ui::BLINK;
 pub(crate) mod sound;

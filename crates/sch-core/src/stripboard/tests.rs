@@ -577,3 +577,32 @@ fn two_boards_connectors_are_matched_hole_by_hole() {
     assert!(strip_check(&sub, &l).is_empty(), "{:?}", strip_check(&sub, &l));
     assert!(mate_check(&row, &l, &links).ok(), "{:?}", mate_check(&row, &l, &links));
 }
+
+/// L12: the way on chosen part by part (`Component::mount`): on the active filter's perfboard and stripboard, R1 on the copper side
+/// without the board-wide setting, C1 a chip with leads soldered on (on the parts to get, not the leaded part), the other chips the
+/// leaded part as before; a choice that does not fit the part (a chip's leads on an op amp) is left out.
+#[test]
+fn each_parts_way_on_is_chosen_by_hand() {
+    use crate::mount::MountChoice;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/active_filter.schjson");
+    let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    for (r, m) in [("R1", MountChoice::Lands), ("C1", MountChoice::Wired), ("U1", MountChoice::Wired)] {
+        s.components.iter_mut().find(|c| c.refdes == r).unwrap().mount = Some(m);
+    }
+    for l in [crate::perfboard::perf_layout_with(&s, StripOptions::default()), strip_layout(&s)] {
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        let mount = |r: &str| l.parts.iter().find(|p| p.refdes == r).unwrap().mount.clone();
+        if l.perf {
+            assert!(matches!(mount("R1"), Mount::Back { .. }), "{:?}", mount("R1"));
+        }
+        assert_eq!(mount("C1"), Mount::Wired);
+        assert_eq!(mount("R2"), Mount::Leaded);
+        assert!(!matches!(mount("U1"), Mount::Wired), "a choice that does not fit is left out");
+        let list = crate::mount::shopping(&l.parts.iter().map(|p| (p.refdes.clone(), p.mount.clone())).collect::<Vec<_>>());
+        assert!(list.iter().any(|(item, _, parts)| item.contains("リード線を付ける") && parts == &["C1".to_string()]), "{list:?}");
+    }
+    // the choice is kept in the file, and an old file without it reads as before
+    let c = s.components.iter().find(|c| c.refdes == "C1").unwrap();
+    assert!(serde_json::to_string(c).unwrap().contains("\"mount\":\"wired\""));
+    assert!(!serde_json::to_string(s.components.iter().find(|c| c.refdes == "R2").unwrap()).unwrap().contains("mount"));
+}

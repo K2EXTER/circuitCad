@@ -72,3 +72,33 @@ impl BreadboardView {
         }
     }
 }
+
+/// The way a part goes onto a board built by hand (L12), as a box to choose from: 自動 (from the footprint) and the choices that fit
+/// the part (`MountChoice::fits`). Shown in the part's properties and in the prototype panel's list of parts.
+pub fn mount_choice_ui(ui: &mut egui::Ui, c: &mut sch_core::Component, id: impl std::hash::Hash + std::fmt::Debug) {
+    use sch_core::mount::{mount_of, MountChoice};
+    let leads = c.pins().len();
+    let fits: Vec<MountChoice> = MountChoice::ALL.into_iter().filter(|m| m.fits(c, leads)).collect();
+    let auto = mount_of(c, leads).describe();
+    // a part with nothing to choose (straight in already, no other way) shows nothing
+    if c.mount.is_none() && auto.is_empty() && fits.iter().all(|m| *m == MountChoice::Direct) {
+        return;
+    }
+    let auto_label = if auto.is_empty() { i18n::tr("自動 (そのまま差す)").to_string() } else { i18n::trf!("自動 ({})", i18n::tr_dyn(&auto)) };
+    let shown = match c.mount {
+        None => auto_label.clone(),
+        Some(m) => i18n::tr(m.label()).to_string(),
+    };
+    egui::ComboBox::from_id_salt(id).selected_text(shown).width(200.0).show_ui(ui, |ui| {
+        ui.selectable_value(&mut c.mount, None, auto_label);
+        for m in &fits {
+            let tip = match m {
+                MountChoice::Direct => "ソケットや変換基板を使わず、部品をそのまま基板にはんだ付けします",
+                MountChoice::Leaded => "チップ部品の代わりに、同じ値のリード部品を買って差します (購入リストにも出ます)",
+                MountChoice::Wired => "チップ部品の両端にリード線 (すずめっき線) をはんだ付けし、リード部品のように 2 つの穴に差します。部品表はチップ部品のままです",
+                MountChoice::Lands => "チップ部品を裏 (はんだの面) で、隣り合う 2 つの穴のランドにまたがせて直接はんだ付けします (1206・0805)",
+            };
+            ui.selectable_value(&mut c.mount, Some(*m), i18n::tr(m.label())).on_hover_text(i18n::tr(tip));
+        }
+    }).response.on_hover_text(i18n::tr("試作 (ブレッドボード・ストリップ基板・ユニバーサル基板) で、この部品をどう付けるか。自動はフットプリントから決めます (DIP の IC はソケット、SOP は変換基板、チップ部品は同じ値のリード部品)。組み立て表と買う物の一覧に出ます"));
+}

@@ -286,6 +286,10 @@ pub struct Component {
     /// capacitor (which has no library part to carry one); it wins over the numbers of the library part. See `shop_numbers`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub shops: std::collections::BTreeMap<String, String>,
+    /// How this part goes onto a board built by hand (a stripboard, a perfboard, a breadboard), chosen by the person; None: from its
+    /// footprint (`mount::mount_of`). See `mount::mount_for`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mount: Option<mount::MountChoice>,
 }
 
 impl Component {
@@ -663,6 +667,7 @@ impl Schematic {
             heatsink: 0.0,
             sub: None,
             shops: Default::default(),
+            mount: None,
         });
         self.components.len() - 1
     }
@@ -782,6 +787,7 @@ impl Schematic {
             heatsink: 0.0,
             sub: None,
             shops: Default::default(),
+            mount: None,
         });
         self.components.len() - 1
     }

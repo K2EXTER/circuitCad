@@ -20,6 +20,7 @@ mod batterycmd;
 mod budgetcmd;
 mod inrushcmd;
 mod breadboardcmd;
+mod protocmd;
 mod pinscmd;
 mod firmwarecmd;
 mod libsynccmd;

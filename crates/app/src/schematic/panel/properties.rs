@@ -246,6 +246,7 @@ impl SchEditor {
                         }
                         ui.checkbox(&mut c.sim_only, i18n::tr("シミュレーション専用 (基板に載せない)"))
                             .on_hover_text(i18n::tr("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)"));
+                        crate::breadboard::mount_choice_ui(ui, c, ("prop_mount", i));
                     }
                 }
                 // the parts its data sheet recommends beside it (a regulator's capacitors)

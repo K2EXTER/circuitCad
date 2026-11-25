@@ -11,8 +11,19 @@ use super::*;
 /// The strips of one net in different bands are joined by wires at the left, beside the wires of the supplies off the board.
 pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     let full = read(s);
+    // a chip the person put on the copper side (`MountChoice::Lands`) whose two strips are not side by side stands on top as the
+    // leaded part
+    let on_top_where_not_side_by_side = |mut l: StripLayout| {
+        for p in l.parts.iter_mut().filter(|p| matches!(p.mount, crate::mount::Mount::Back { .. })) {
+            let side_by_side = p.leads.len() == 2 && p.leads[0].1 .1 == p.leads[1].1 .1 && p.leads[0].1 .0.abs_diff(p.leads[1].1 .0) == 1;
+            if !side_by_side {
+                p.mount = crate::mount::Mount::Leaded;
+            }
+        }
+        l
+    };
     if !opt.chips_back {
-        return strip_lay(s, &full, opt);
+        return on_top_where_not_side_by_side(strip_lay(s, &full, opt));
     }
     // the chips on the copper side (`StripOptions::chips_back`), two ways, against the board with every part on top: (a) laid out with
     // the rest, each chip's two nets on strips side by side in its band (`pair_up`) and the chip across them on the copper side (no
@@ -22,8 +33,8 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
     // that joins everything as drawn.
     let on_back = |l: &StripLayout| l.parts.iter().filter(|p| matches!(p.mount, crate::mount::Mount::Back { .. })).count();
     let score = |l: &StripLayout| (l.rows as usize * l.cols as usize + 10 * l.links.len()) as i64 - 5 * on_back(l) as i64;
-    let mut found: Vec<StripLayout> = vec![strip_lay(s, &full, opt)];
-    let backs = crate::perfboard::back_chips(s, &full);
+    let mut found: Vec<StripLayout> = vec![on_top_where_not_side_by_side(strip_lay(s, &full, opt))];
+    let backs = crate::perfboard::back_chips(s, &full, true);
     if !backs.is_empty() {
         let mut c = full.clone();
         for (r, size) in &backs {

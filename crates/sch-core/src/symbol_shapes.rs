@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn every_basic_part_is_drawn_up_to_its_pins() {
         for kind in Kind::PALETTE.iter().copied() {
-            let c = Component { refdes: "X1".into(), kind, value: "5".into(), pos: (0, 0), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default() };
+            let c = Component { refdes: "X1".into(), kind, value: "5".into(), pos: (0, 0), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
             let shapes = component_shapes(&c);
             assert!(!shapes.is_empty(), "{kind:?}");
             for (pin, at) in kind.pins() {

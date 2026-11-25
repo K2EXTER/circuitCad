@@ -111,6 +111,13 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         worst case: the smallest and largest value of one result with every part at an end of its tolerance (%)
   breadboard                            the schematic on a solderless breadboard: the hole of each lead (a1..j30, rails 上+ 上− 下− 下+), the jumpers,
                                         the supplies off the board, and what the holes join that the schematic does not (problems)
+  proto perf|strip [cols=N] [rows=N] [holes=1] [back=1] [svg=FILE.svg] [face=parts|copper]
+                                        the schematic on a perfboard or a stripboard as the app lays it out: each part's holes and
+                                        way on, the wires on top, the bare wires (or cuts), what to get, the check and the rules,
+                                        the drawing to print (holes=1: mounting holes in the corners kept free)
+  mount REF auto|direct|leaded|wired|lands
+                                        how a part goes onto a board built by hand (wired: a chip with leads soldered on; lands:
+                                        a chip on the copper side across two holes)
   pins [export=FILE.h] [check=FILE.ino]   the signals on the microcontroller board's pins (a part's pins or a header's pin names D13, A0,
                                         GPIO2): listed, written as a C header for Arduino (#define PIN_X 13), or a firmware's pin constants
                                         checked against the schematic (findings: a constant on another pin than the schematic has)
@@ -212,8 +219,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
 ";
 
 /// The keys of a `.schjson` that belong to the app, not to the circuit (`specs`: the spec table, `bench`: measured curves,
-/// `tolerances`: the variation analysis's part tolerances, `analysis`: the transient / AC settings).
-const EXTRA_KEYS: [&str; 4] = ["specs", "bench", "tolerances", "analysis"];
+/// `tolerances`: the variation analysis's part tolerances, `analysis`: the transient / AC settings, and the prototype tab's: the battery
+/// settings, the layouts moved by hand, the board's size and mounting holes (`proto` reads these two), the sketches).
+const EXTRA_KEYS: [&str; 10] = ["specs", "bench", "tolerances", "analysis", "battery", "breadboard", "stripboard", "strip_size", "strip_mount_holes", "sketches"];
 
 pub struct Session {
     pub sch: Schematic,
@@ -430,6 +438,8 @@ impl Session {
             "budget" => self.budget(args),
             "inrush" => self.inrush(args),
             "breadboard" => self.breadboard(args),
+            "proto" => self.proto(args),
+            "mount" => self.mount(args),
             "pins" => self.pins(args),
             "firmware" => self.firmware(args),
             "libsync" => self.libsync(args),

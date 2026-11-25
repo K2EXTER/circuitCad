@@ -8,6 +8,69 @@
 use crate::{Component, Kind};
 use serde::{Deserialize, Serialize};
 
+/// How the person chose to put a part on a board built by hand (`Component::mount`), over what its footprint says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MountChoice {
+    /// Straight in, no socket or adapter (a chip soldered in).
+    Direct,
+    /// A surface-mount two-lead part built with the leaded part of the same value instead.
+    Leaded,
+    /// A surface-mount two-lead chip with a lead (tinned wire) soldered to each end, its leads put through the holes as a leaded part's.
+    Wired,
+    /// A surface-mount chip on the copper side across two holes side by side (`Mount::Back`).
+    Lands,
+}
+
+impl MountChoice {
+    pub const ALL: [MountChoice; 4] = [MountChoice::Direct, MountChoice::Leaded, MountChoice::Wired, MountChoice::Lands];
+
+    /// The word in a ccad script (`mount R11 wired`).
+    pub fn key(self) -> &'static str {
+        match self {
+            MountChoice::Direct => "direct",
+            MountChoice::Leaded => "leaded",
+            MountChoice::Wired => "wired",
+            MountChoice::Lands => "lands",
+        }
+    }
+
+    pub fn from_key(k: &str) -> Option<MountChoice> {
+        Self::ALL.into_iter().find(|m| m.key().eq_ignore_ascii_case(k))
+    }
+
+    /// The name on the screen.
+    pub fn label(self) -> &'static str {
+        match self {
+            MountChoice::Direct => "そのまま差す",
+            MountChoice::Leaded => "同じ値のリード部品に替える",
+            MountChoice::Wired => "チップにリード線を付けて差す",
+            MountChoice::Lands => "裏のランドに直接",
+        }
+    }
+
+    /// Whether this choice can be made for this part: the last three are for a two-lead surface-mount part only.
+    pub fn fits(self, c: &Component, leads: usize) -> bool {
+        match self {
+            MountChoice::Direct => true,
+            MountChoice::Leaded | MountChoice::Wired => leads == 2 && matches!(mount_of(c, leads), Mount::Leaded | Mount::Adapter { pins: 2, .. }),
+            MountChoice::Lands => leads == 2 && matches!(c.kind, Kind::Resistor | Kind::Capacitor) && matches!(mount_of(c, leads), Mount::Leaded),
+        }
+    }
+}
+
+/// How the part goes onto a board built by hand: the person's choice (`Component::mount`) where it fits the part, else from the
+/// footprint (`mount_of`).
+pub fn mount_for(c: &Component, leads: usize) -> Mount {
+    match c.mount.filter(|m| m.fits(c, leads)) {
+        None => mount_of(c, leads),
+        Some(MountChoice::Direct) => Mount::Direct,
+        Some(MountChoice::Leaded) => Mount::Leaded,
+        Some(MountChoice::Wired) => Mount::Wired,
+        Some(MountChoice::Lands) => Mount::Back { size: back_size(c).unwrap_or("0805").to_string() },
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mount {
     /// Leads straight into the board (a header, a TO-92 or TO-220 part, a leaded resistor).
@@ -17,6 +80,9 @@ pub enum Mount {
     Socket { pins: u16, width: u16 },
     /// A surface-mount two-lead part (a 0805 resistor, a SOD-123 diode) built with the leaded part of the same value instead.
     Leaded,
+    /// A surface-mount two-lead chip with a lead (tinned wire) soldered to each end, put through two holes as a leaded part (the
+    /// person's choice, `MountChoice::Wired`): on the parts list it stays the chip.
+    Wired,
     /// A surface-mount part soldered on an adapter board of `pins` pins: two rows `width` holes apart like a DIP, or one row (a SIP)
     /// when `width` is 0. Its pins go into turned-pin socket strips.
     Adapter { package: String, pins: u16, width: u16 },
@@ -177,6 +243,7 @@ impl Mount {
             Mount::Direct => String::new(),
             Mount::Socket { pins, width } => format!("丸ピン IC ソケット {pins} ピン ({}) に差す", inches(*width)),
             Mount::Leaded => "同じ値のリード部品で組む".into(),
+            Mount::Wired => "チップの両端にリード線 (すずめっき線) をはんだ付けして、穴に差す".into(),
             Mount::Adapter { package, pins, width: 0 } if *pins <= 2 => format!("{package} を 2 ピンの変換基板に載せる"),
             Mount::Adapter { package, pins, width: 0 } => format!("{package} を {pins} ピンの SIP 変換基板に載せ、丸ピンの連結ソケット 1×{pins} に差す"),
             Mount::Adapter { package, pins, width } => format!("{package} を DIP {pins} ピン ({}) の変換基板に載せ、丸ピンの連結ソケット 1×{} を 2 本に差す", inches(*width), pins / 2),
@@ -208,6 +275,7 @@ pub fn shopping(parts: &[(String, Mount)]) -> Vec<(String, usize, Vec<String>)> 
             Mount::Direct | Mount::Back { .. } => {}
             Mount::Socket { pins, width } => add(format!("丸ピン IC ソケット {pins} ピン ({})", inches(*width)), 1, r),
             Mount::Leaded => add("リード部品に替える (チップ部品の代わり)".into(), 1, r),
+            Mount::Wired => add("チップにリード線を付ける (すずめっき線 2 本ずつ)".into(), 1, r),
             Mount::Module { pins, .. } => add(format!("メスのピンヘッダ 1×{}", pins / 2), 2, r),
             Mount::Adapter { package, pins, width } => {
                 if *pins <= 2 {

@@ -822,6 +822,14 @@ impl BreadboardView {
                         if !how.is_empty() {
                             ui.small(egui::RichText::new(i18n::tr_dyn(&how)).color(NOTE));
                         }
+                        // the way on, chosen part by part (L12): the layout is made again with it
+                        if let Some(c) = sch.sch.components.iter_mut().find(|c| c.refdes == p.refdes) {
+                            let before = c.mount;
+                            crate::breadboard::mount_choice_ui(ui, c, ("strip_mount", &p.refdes));
+                            if c.mount != before && sch.stripboard.is_some() {
+                                sch.status = i18n::tr("付け方を変えました。手で動かした並べ方はそのままです。新しい付け方で並べるには「自動で並べ直す」を押します").to_string();
+                            }
+                        }
                     });
                 });
             }

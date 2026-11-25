@@ -117,7 +117,7 @@ pub fn perf_layout_around(s: &Schematic, opt: StripOptions, from: &StripLayout) 
 fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, boxes: BTreeMap<String, (At, u16)>) -> StripLayout {
     let c = read(s);
     // the chips going on the copper side are placed after the others (`with_back`): the placing sees the rest only
-    let backs = if opt.chips_back { back_chips(s, &c) } else { BTreeMap::new() };
+    let backs = back_chips(s, &c, opt.chips_back);
     let full = c.clone();
     let mut c = c;
     c.on.retain(|(r, _, _)| !backs.contains_key(r));
@@ -239,13 +239,19 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
     best.map(|b| b.1).unwrap_or_default()
 }
 
-/// The chips that go on the copper side (`StripOptions::chips_back`): the 1206 and 0805 resistors and capacitors built with the
-/// leaded part otherwise, by reference, with their size.
-pub(crate) fn back_chips(s: &Schematic, c: &Circuit) -> BTreeMap<String, String> {
+/// The chips that go on the copper side, by reference, with their size: those the person put there (`MountChoice::Lands`), and with
+/// `all` (`StripOptions::chips_back`) the 1206 and 0805 resistors and capacitors built with the leaded part otherwise whose way on
+/// the person did not choose.
+pub(crate) fn back_chips(s: &Schematic, c: &Circuit, all: bool) -> BTreeMap<String, String> {
     let flat = s.flat();
+    let comp = |r: &str| flat.components.iter().find(|x| x.refdes == r);
     c.on.iter()
-        .filter(|(r, _, pins)| pins.len() == 2 && matches!(c.mounts.get(r), Some(crate::mount::Mount::Leaded)))
-        .filter_map(|(r, _, _)| Some((r.clone(), crate::mount::back_size(flat.components.iter().find(|x| &x.refdes == r)?)?.to_string())))
+        .filter(|(_, _, pins)| pins.len() == 2)
+        .filter_map(|(r, _, _)| match c.mounts.get(r) {
+            Some(crate::mount::Mount::Back { size }) => Some((r.clone(), size.clone())),
+            Some(crate::mount::Mount::Leaded) if all && comp(r).is_some_and(|x| x.mount.is_none()) => Some((r.clone(), crate::mount::back_size(comp(r)?)?.to_string())),
+            _ => None,
+        })
         .collect()
 }
 

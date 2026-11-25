@@ -289,7 +289,7 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
             _ if pins.len().is_multiple_of(2) => Look::Dip,
             _ => Look::Row,
         };
-        mounts.insert(c.refdes.clone(), crate::mount::mount_of(c, pins.len()));
+        mounts.insert(c.refdes.clone(), crate::mount::mount_for(c, pins.len()));
         on.push((c.refdes.clone(), look, pins));
     }
     for n in &nets {

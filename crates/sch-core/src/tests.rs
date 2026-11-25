@@ -24,7 +24,7 @@ fn refdes_are_numbered_per_prefix() {
 
 #[test]
 fn rotation_moves_pins() {
-    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default() };
+    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
     let pins = c.pins();
     assert_eq!(pins[0].1, (10, 8));
     assert_eq!(pins[1].1, (10, 12));
@@ -620,7 +620,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         companions: vec![],
         glyph: "electrolytic".into(),
     };
-    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default() };
+    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
     let mut s = Schematic::default();
     s.components.push(c);
     assert_eq!(s.components[0].pins()[0].1, (8, 10)); // new leads are 2 long
@@ -819,7 +819,7 @@ fn buses_follow_their_sheet_and_survive_a_save() {
 
 #[test]
 fn a_part_numbers_of_its_own_win_over_those_of_its_library_part_and_are_not_written_when_empty() {
-    let mut c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default() };
+    let mut c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
     assert!(c.shop_numbers().is_empty());
     assert!(!serde_json::to_string(&c).unwrap().contains("shops"), "an empty map must not be written");
     c.shops.insert("digikey".into(), " RC0805FR-071KL ".into());

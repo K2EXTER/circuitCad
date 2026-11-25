@@ -545,7 +545,7 @@ mod tests {
     /// A schematic with a 4-pin header J1 whose pins are wired to labels `names` (empty: left open).
     fn board(header: &str, names: &[&str]) -> Schematic {
         let mut s = Schematic::default();
-        let c = Component { refdes: header.into(), kind: Kind::Header(names.len() as u8), value: String::new(), pos: (10, 10), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default() };
+        let c = Component { refdes: header.into(), kind: Kind::Header(names.len() as u8), value: String::new(), pos: (10, 10), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
         let pins = c.pins();
         s.components.push(c);
         for ((_, at), n) in pins.iter().zip(names) {
