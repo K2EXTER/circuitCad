@@ -299,6 +299,9 @@ pub struct SchEditor {
     pub(crate) strip_size: Option<(f32, f32)>,
     /// A perfboard's 0805 / 1206 chips go on the copper side (`StripOptions::chips_back`).
     pub(crate) strip_chips_back: bool,
+    /// The board of the project that gives this one its ground (set by the app for a project of several boards): the ERC does not ask
+    /// for a ground symbol then.
+    pub(crate) ground_from: Option<String>,
     /// The Arduino sketches of the microcontroller boards (refdes → text), saved with the sheet (`tolerance.rs`; B6 ⑤).
     pub(crate) sketches: std::collections::BTreeMap<String, String>,
     /// The roles of the part picked, as the bubble shows them, and the part whose bubble was closed (`roles_ui.rs`, B11).
@@ -813,6 +816,7 @@ impl Default for SchEditor {
             stripboard: None,
             strip_size: None,
             strip_chips_back: false,
+            ground_from: None,
             sketches: Default::default(),
             roles_cache: Default::default(),
             roles_hidden: None,

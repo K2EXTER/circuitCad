@@ -81,6 +81,10 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 ### schematic/erc_skip.rs — 描きかけの範囲
 `Schematic.erc_skip`(最小角・最大角の組)の中にある ERC の指摘は `sch_core::erc` が捨てる(画面・CLI・チャレンジ判定とも共通。場所のない指摘=GNDなしなどは残る)。ERC ボタンの下の「選択を描きかけにする」で、選択物を囲む範囲(2マス余白)を足す。灰色の枠で表示(`draw_problems`)、×で外す。ファイルに保存され、Undo の対象。
 
+### ERC の承知した例外・プロジェクトの GND (L7)
+設計の要件の表の「承知した例外」に種類 `erc` の行(`design_spec::Waiver`。`name` は指摘の文の一部、`note` は理由)があると、`sch_core::erc` の最後(`netlist::accept_waived`)で、その文を含むエラー・注意を情報にし、文の頭に「承知した例外: … (理由: …)」を付ける。理由が空の行は何もしない(理由が例外の意味なので)。画面では ERC の指摘を開いた所の「承知した例外にする…」が行を足して表を開く(`panel/mod.rs`)。CLI は `req waive erc 文 reason=…`。
+複数の基板のプロジェクトでは、GND 記号の無い基板が、つなぎをたどって GND のある基板に届けば `sch_core::system::ground_from` がその基板の名前を返し、「GNDシンボルがありません」(`NO_GROUND`)を情報「GND は基板「…」から」に替える(`ground_through_links`)。画面は `App` が毎フレーム `SchEditor.ground_from` を入れ(`project::System::ground_from`)、`run_erc` が使う。`ccad project check` の `boards` に基板ごとの `erc_errors` と `ground_from`(`erc_in_project`)。
+
 ### schematic/snippet.rs — スニペット
 選択を `.ccsnip`(クリップボードの `sch_core::Fragment` をそのまま JSON にしたもの)に保存し、別の回路で「スニペットを置く…」で貼り付ける。貼り付けは `paste_clipboard` と同じ(空き地を探す・部品番号を振り直す・ピン上のラベルも一緒)。自作部品は記号をファイルの中に持つので、ライブラリが無い回路でも置ける。基板の配置・配線のスニペットは未対応。
 

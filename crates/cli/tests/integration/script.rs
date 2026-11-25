@@ -1584,7 +1584,7 @@ fn a_pin_marked_nc_is_not_asked_about_by_erc_and_a_wire_on_it_is() {
     let asks = |v: &Value| v["problems"].as_array().unwrap().iter().filter(|p| p["message"].as_str().unwrap().contains("R1 ピン1")).count();
     assert_eq!((asks(ercs[0]), asks(ercs[1])), (1, 0), "R1.1 is open: asked before the mark, not after");
     // R1.2 is on net MID: marking it is a conflict that ERC reports
-    assert!(ercs[2]["problems"].as_array().unwrap().iter().any(|p| p["message"].as_str().unwrap().contains("NC")), "{}", ercs[2]);
+    assert!(ercs[2]["problems"].as_array().unwrap().iter().any(|p| p["message"].as_str().unwrap().contains("NC")), "{}", ercs[1]);
     let nc_lists: Vec<&Value> = a.iter().filter(|v| v.get("no_connects").is_some()).collect();
     assert_eq!(nc_lists[0]["changed"], serde_json::json!(["R1.1"]));
     assert_eq!(nc_lists[1]["no_connects"], serde_json::json!([]));
@@ -1865,6 +1865,45 @@ project link {p} main.J9 sub.P1
     assert!(last(&a, "project")["error"].as_str().unwrap().contains("no part J9"), "{a:?}");
     let text = std::fs::read_to_string(&p).unwrap();
     assert!(text.contains("\"cable\": 150") && text.contains("\"copies\": 2"), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// L7: an ERC finding accepted with its reason (`req waive erc`) is information, not an error; in a
+/// project, a sub-board that gets its ground from the main board is not asked for a ground symbol.
+#[test]
+fn erc_findings_are_accepted_with_a_reason_and_ground_comes_through_the_project() {
+    let dir = std::env::temp_dir().join(format!("ccad_ercwaive_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join("sys.ccproj").display().to_string();
+    let script = format!("project new {p}
+new
+add HEADER2 as=J1
+add R 1k as=R1
+add V 5 as=V1
+net VCC V1.+ R1.1 J1.1
+net GND V1.- R1.2
+project add {p} main
+new
+add HEADER2 as=P1
+add R 10k as=R2
+net VCC P1.1 R2.1
+net X P1.2 R2.2
+erc
+req waive erc GNDシンボル reason=the ground comes from the main board
+erc
+req waive erc GNDシンボル remove=1
+project add {p} sub
+project link {p} main.J1 sub.P1
+project check {p}
+");
+    let (a, _) = run(&script);
+    let ercs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "erc").collect();
+    assert_eq!(ercs.iter().map(|e| e["errors"].as_u64().unwrap()).collect::<Vec<_>>(), [1, 0], "{ercs:?}");
+    assert!(ercs[1]["problems"].to_string().contains("the ground comes from the main board"), "{}", ercs[2]);
+    let check = last(&a, "project");
+    let sub = &check["boards"][1];
+    assert_eq!(sub["ground_from"], "main", "{check}");
+    assert_eq!(sub["erc_errors"].as_array().unwrap().len(), 0, "{check}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

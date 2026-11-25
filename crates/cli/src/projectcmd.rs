@@ -246,7 +246,12 @@ impl crate::session::Session {
                     .collect();
                 let errors = findings.iter().filter(|f| f.severity == sch_core::Severity::Error).count();
                 Ok(obj(json!({
-                    "boards": boards.iter().map(|(n, c, s)| json!({"name": n, "copies": c, "parts": s.flat().components.len()})).collect::<Vec<_>>(),
+                    "boards": boards.iter().enumerate().map(|(k, (n, c, s))| {
+                        // each board's ERC judged with the whole project (a board that gets its ground from a linked one is not asked for one)
+                        let erc = sch_core::system::erc_in_project(&designs, &links, k);
+                        let erc_errors: Vec<&str> = erc.iter().filter(|p| p.severity == sch_core::Severity::Error).map(|p| p.message.as_str()).collect();
+                        json!({"name": n, "copies": c, "parts": s.flat().components.len(), "erc_errors": erc_errors, "ground_from": sch_core::system::ground_from(&designs, &links, k)})
+                    }).collect::<Vec<_>>(),
                     "links": links.iter().map(|l| format!("{}.{} <-> {}.{}", l.a.design, l.a.refdes, l.b.design, l.b.refdes)).collect::<Vec<_>>(),
                     "findings": list, "errors": errors, "ok": errors == 0,
                 })))

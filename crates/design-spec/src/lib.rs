@@ -155,9 +155,10 @@ impl Measure {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Waiver {
-    /// One of `WAIVER_KINDS` ("group", "apart", "bypass").
+    /// One of `WAIVER_KINDS` ("group", "apart", "bypass", ... "erc").
     pub kind: String,
-    /// The row it is about: the group, the distance to keep, or the IC of a bypass row.
+    /// The row it is about: the group, the distance to keep, or the IC of a bypass row; for "erc", words of the ERC finding's message
+    /// (every finding whose message contains them is accepted).
     pub name: String,
     /// A bypass row only: the capacitor ("" = every capacitor of the row).
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -196,7 +197,7 @@ fn is_zero(v: &f64) -> bool {
 }
 
 /// The kinds of a waiver: (key, what the table calls it).
-pub const WAIVER_KINDS: &[(&str, &str)] = &[("group", "組"), ("apart", "離す距離"), ("bypass", "バイパス"), ("measure", "測定"), ("net", "ネットの性質")];
+pub const WAIVER_KINDS: &[(&str, &str)] = &[("group", "組"), ("apart", "離す距離"), ("bypass", "バイパス"), ("measure", "測定"), ("net", "ネットの性質"), ("erc", "ERC")];
 
 impl Waiver {
     /// "組「名前」" and the like, for a sentence.

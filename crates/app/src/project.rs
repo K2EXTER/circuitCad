@@ -57,6 +57,17 @@ impl System {
     pub fn is_multi(&self) -> bool {
         self.names.len() > 1 || !self.links.is_empty()
     }
+
+    /// The linked board that gives the board in the editors (`current`) its ground, when it has none of its own: its ERC then does not
+    /// ask for a ground symbol (`sch_core::system::ground_from`).
+    pub fn ground_from(&self, current: &Schematic) -> Option<String> {
+        if !self.is_multi() || sch_core::has_ground(current) {
+            return None;
+        }
+        let designs: Vec<(&str, &Schematic)> = self.names.iter().enumerate().filter_map(|(k, n)| Some((n.as_str(), if k == self.active { current } else { &self.parked.get(k)?.as_ref()?.schematic }))).collect();
+        let k = designs.iter().position(|d| std::ptr::eq(d.1, current))?;
+        sch_core::system::ground_from(&designs, &self.links, k).map(str::to_string)
+    }
 }
 
 const VERSION: u64 = 2;

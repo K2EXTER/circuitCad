@@ -41,7 +41,7 @@ pub use hierarchy::{flat_refdes, Instance, PartPlace, PortDir, SheetPort, SubRef
 pub use sheets::{sheet_of, Sheet, SHEET_STRIDE};
 pub use design_spec::{matches_name, DesignSpec, KeepApart, NetRule, PlaceGroup, ROLES};
 
-pub use netlist::{erc, extract, net_at, Net, PinRef, Problem, Severity};
+pub use netlist::{erc, extract, has_ground, net_at, Net, PinRef, Problem, Severity, NO_GROUND};
 pub use ngspice::{find_ngspice, ngspice_examples, NGSPICE_MISSING};
 pub use spice::{node as spice_node, to_spice, to_spice_for, Dialect};
 

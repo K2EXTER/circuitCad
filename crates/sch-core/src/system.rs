@@ -185,6 +185,51 @@ pub fn same_signal(link: &BoardLink, m: &str, n: &str) -> bool {
 /// Checks every link: that both connectors exist and have as many pins, and pin by pin that the two sides carry the same net (by name),
 /// that power does not meet ground, that two crossed pins are not swapped, and that a signal does not end in a pin left open on the other
 /// side. `designs` are the boards' names and schematics.
+/// The board of the project that gives board `k` its 0 V reference: the first board with a ground that is reached from `k` through the
+/// links (a sub-board powered from the main board has no ground symbol of its own). None when `k` has its own ground or no linked board
+/// has one.
+pub fn ground_from<'a>(designs: &[(&'a str, &Schematic)], links: &[BoardLink], k: usize) -> Option<&'a str> {
+    if crate::netlist::has_ground(designs.get(k)?.1) {
+        return None;
+    }
+    let mut seen = vec![k];
+    let mut i = 0;
+    while let Some(&at) = seen.get(i) {
+        i += 1;
+        let name = designs[at].0;
+        for l in links {
+            let other = if l.a.design == name { &l.b.design } else if l.b.design == name { &l.a.design } else { continue };
+            let Some(j) = designs.iter().position(|d| d.0 == other.as_str()) else { continue };
+            if seen.contains(&j) {
+                continue;
+            }
+            if crate::netlist::has_ground(designs[j].1) {
+                return Some(designs[j].0);
+            }
+            seen.push(j);
+        }
+    }
+    None
+}
+
+/// The ERC of board `k` judged with the whole project: "no ground symbol" becomes information when a linked board gives the ground.
+pub fn erc_in_project(designs: &[(&str, &Schematic)], links: &[BoardLink], k: usize) -> Vec<crate::netlist::Problem> {
+    let mut out = crate::netlist::erc(designs[k].1);
+    if let Some(from) = ground_from(designs, links, k) {
+        ground_through_links(&mut out, from);
+    }
+    out
+}
+
+/// "No ground symbol" as information: the 0 V reference comes from board `from` of the project.
+pub fn ground_through_links(problems: &mut [crate::netlist::Problem], from: &str) {
+    for p in problems.iter_mut().filter(|p| p.message == crate::netlist::NO_GROUND) {
+        p.severity = Severity::Info;
+        p.message = format!("GND は基板「{from}」から (プロジェクトのつなぎで判定)");
+        p.hint = format!("この基板には GND 記号がありませんが、つないだ基板「{from}」の GND を基準にします。この基板だけでシミュレーションするときは、GND が要ります");
+    }
+}
+
 pub fn check(designs: &[(&str, &Schematic)], links: &[BoardLink]) -> Vec<Finding> {
     let mut out = vec![];
     let mut nets: HashMap<&str, HashMap<(String, String), String>> = HashMap::new();

@@ -222,7 +222,33 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
     (cn, nets)
 }
 
-/// Electrical rule check. Findings located inside a work-in-progress area (`Schematic::erc_skip`) are left out.
+/// The message of the finding that the circuit has no 0 V reference (`system::ground_through_links` turns it into information for a board
+/// of a project that gets its ground from another board).
+pub const NO_GROUND: &str = "GNDシンボルがありません";
+
+/// Whether the circuit has its 0 V reference: a ground symbol or a label named GND (the simulator treats a net of that name as 0 V),
+/// on any sheet.
+pub fn has_ground(s: &Schematic) -> bool {
+    let here = |cs: &[crate::Component], ls: &[crate::Label]| cs.iter().any(|c| c.kind == Kind::Ground) || ls.iter().any(|l| l.text.eq_ignore_ascii_case("GND"));
+    here(&s.components, &s.labels) || s.sheets.iter().any(|x| here(&x.components, &x.labels))
+}
+
+/// The findings accepted in the requirements table (a waiver of kind "erc" whose words are in the message, with its reason) stay in
+/// the list as information with the reason, so that they are not counted as errors and the next reader sees why. A waiver without a
+/// reason accepts nothing: the reason is the point of it.
+fn accept_waived(out: &mut [Problem], spec: &design_spec::DesignSpec) {
+    for p in out.iter_mut().filter(|p| p.severity != Severity::Info) {
+        if let Some(w) = spec.waivers.iter().find(|w| w.kind == "erc" && !w.name.trim().is_empty() && !w.note.trim().is_empty() && p.message.contains(w.name.trim())) {
+            p.severity = Severity::Info;
+            p.message = format!("承知した例外: {} (理由: {})", p.message, w.note.trim());
+        }
+    }
+    // the accepted ones after the rest
+    out.sort_by_key(|p| p.severity == Severity::Info);
+}
+
+/// Electrical rule check. Findings located inside a work-in-progress area (`Schematic::erc_skip`) are left out, and those accepted
+/// with a reason in the requirements table become information (`accept_waived`).
 pub fn erc(whole: &Schematic) -> Vec<Problem> {
     let s = &*whole.flat();
     let mut out = erc_all(s);
@@ -230,6 +256,7 @@ pub fn erc(whole: &Schematic) -> Vec<Problem> {
     // the information comes after the errors and warnings
     out.sort_by_key(|p| p.severity == Severity::Info);
     out.retain(|p| p.at.is_none_or(|a| !s.erc_skip.iter().any(|(lo, hi)| a.0 >= lo.0 && a.0 <= hi.0 && a.1 >= lo.1 && a.1 <= hi.1)));
+    accept_waived(&mut out, &whole.requirements);
     // findings are placed on their own sheet (a finding in a copy of a child sheet is shown on the child sheet)
     let copies = whole.instances();
     for p in &mut out {
@@ -671,11 +698,10 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
     }
 
     // a label named GND is the reference too (the simulator treats a net of that name as 0 V)
-    let has_ground = s.components.iter().any(|c| c.kind == Kind::Ground) || s.labels.iter().any(|l| l.text.eq_ignore_ascii_case("GND"));
-    if !has_ground && !s.components.is_empty() {
+    if !has_ground(s) && !s.components.is_empty() {
         out.push(Problem::new(
             Error,
-            "GNDシンボルがありません".into(),
+            NO_GROUND.into(),
             None,
             "電圧は「どこから測るか」の基準 (0V) が必要です。GND 記号を、電源の−側など基準にしたい所に置きましょう。これがないとシミュレーションできません",
         ));

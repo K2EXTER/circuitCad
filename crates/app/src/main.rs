@@ -352,6 +352,10 @@ impl eframe::App for App {
             let answer = self.sch.sch.apply_pin_trades(&trades);
             self.board_ed.trades_applied(answer);
         }
+        // a board of the project that gets its ground from a linked board: the ERC does not ask for a ground symbol (L7)
+        if self.system.is_multi() || self.sch.ground_from.is_some() {
+            self.sch.ground_from = self.system.ground_from(&self.sch.sch);
+        }
         // a finding accepted (or taken back) in the board's list goes into the schematic's table too
         if let Some((add, w)) = self.board_ed.waiver_request.take() {
             let list = &mut self.sch.sch.requirements.waivers;

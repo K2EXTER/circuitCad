@@ -80,6 +80,9 @@ impl SchEditor {
 
     pub(super) fn run_erc(&mut self) {
         self.problems = erc(&self.sch);
+        if let Some(from) = &self.ground_from {
+            sch_core::system::ground_through_links(&mut self.problems, from);
+        }
         self.problems.extend(self.conversion_problems());
         // the pin file written and the firmware checked, against the schematic's pins now
         self.problems.extend(sch_core::pindefs::firmware_problems(&self.sch, self.path.as_ref().and_then(|p| p.parent())));

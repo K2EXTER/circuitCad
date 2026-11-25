@@ -769,7 +769,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
             }
             if tab == ReqTab::Waivers {
                 ui.scope(|ui| {
-                    crate::icons::help_small(ui, "ここに書いた指摘は「違反」に数えず、理由つきで別に出ます", "基板の点検 (組の広がり・離す距離・バイパスの距離) の指摘のうち、ここに書いたものは「違反」に数えず、「承知した例外」として理由つきで別に出ます。あとで読む人が、直し忘れではなく承知の上だと分かります。基板の点検の一覧の「承知する」ボタンからも書き込めます");
+                    crate::icons::help_small(ui, "ここに書いた指摘は「違反」に数えず、理由つきで別に出ます", "基板の点検 (組の広がり・離す距離・バイパスの距離) の指摘のうち、ここに書いたものは「違反」に数えず、「承知した例外」として理由つきで別に出ます。あとで読む人が、直し忘れではなく承知の上だと分かります。基板の点検の一覧の「承知する」ボタンからも書き込めます。種類「ERC」の行は、ERC の指摘のうち行の名前の文を含むものを、理由つきの情報にします (ERC の一覧の「承知した例外にする…」から)");
                     let mut remove = None;
                     egui::Grid::new("req_waivers_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                         for h in ["種類", "行の名前", "コンデンサ", "理由", ""] {
@@ -786,7 +786,7 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                                     }
                                 }
                             });
-                            if let Some(t) = text_cell(ui, buf, (4, k, 0), &w.name, 160.0, "表の行の名前です。組なら組の名前、離す距離なら行の名前、バイパスなら IC の部品番号") {
+                            if let Some(t) = text_cell(ui, buf, (4, k, 0), &w.name, 160.0, "表の行の名前です。組なら組の名前、離す距離なら行の名前、バイパスなら IC の部品番号、ERC なら指摘の文 (その文を含む指摘をすべて承知します)") {
                                 w.name = t;
                                 changed = true;
                             }

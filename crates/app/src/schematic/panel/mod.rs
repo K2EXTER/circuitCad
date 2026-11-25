@@ -279,6 +279,7 @@ impl SchEditor {
         let mut jump = None;
         let mut jump_sheet = 0;
         let mut make_nc: Option<(String, String)> = None;
+        let mut waive: Option<String> = None;
         // the findings scroll in a box of their own: the checks stay at the bottom of the panel, and a long list must not cover it all
         let tall = (ui.ctx().content_rect().height() * 0.35).max(120.0);
         egui::ScrollArea::vertical().id_salt("erc_findings").max_height(tall).auto_shrink([false, true]).show(ui, |ui| {
@@ -304,6 +305,11 @@ impl SchEditor {
                     {
                         make_nc = Some((refdes.clone(), pin.clone()));
                     }
+                    if p.severity != Severity::Info
+                        && ui.small_button(i18n::tr("承知した例外にする…")).on_hover_text(i18n::tr("直さずにこのままにする理由があるときに押します (例: 電源と GND は本体の基板から受ける)。「設計の要件」の表の「承知した例外」に行が足されるので、理由を書いてください。理由を書くと、この指摘は ERC のエラーに数えず、理由つきの情報として出ます")).clicked()
+                    {
+                        waive = Some(p.message.clone());
+                    }
                 });
             }
         }
@@ -311,6 +317,15 @@ impl SchEditor {
         if let Some(at) = jump {
             self.show_sheet(jump_sheet);
             self.pan = Vec2::new(at.0 as f32, at.1 as f32);
+        }
+        if let Some(message) = waive {
+            let list = &mut self.sch.requirements.waivers;
+            if !list.iter().any(|w| w.kind == "erc" && w.name == message) {
+                list.push(design_spec::Waiver { kind: "erc".into(), name: message, ..Default::default() });
+            }
+            self.open_requirements();
+            self.req.tab = super::requirements::ReqTab::Waivers;
+            self.status = "「承知した例外」に行を足しました。理由を書くと、ERC のエラーに数えなくなります".into();
         }
         if let Some((refdes, pin)) = make_nc {
             self.sch.set_no_connect(&refdes, &pin, true);

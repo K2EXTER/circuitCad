@@ -38,10 +38,10 @@ fn note(pos: &[String], kv: &[(String, String)]) -> Option<String> {
 }
 
 impl Session {
-    /// `req waive group|apart|bypass NAME [item=CAP] reason=TEXT [remove=1]`: accept a finding of the check (the row `NAME`; for a bypass row,
+    /// `req waive group|apart|bypass|measure|net|erc NAME [item=CAP] reason=TEXT [remove=1]`: accept a finding of the check (the row `NAME`; for a bypass row,
     /// `item=` names one capacitor, else all of them). A new one needs its reason: the point of the table is that the next reader knows why.
     fn req_waive(&mut self, pos: &[String], kv: &[(String, String)]) -> Res {
-        let usage = "req waive group|apart|bypass NAME [item=CAP] reason=TEXT [remove=1]";
+        let usage = "req waive group|apart|bypass|measure|net|erc NAME [item=CAP] reason=TEXT [remove=1]";
         let kind = pos.get(1).map(|s| s.to_ascii_lowercase()).filter(|k| design_spec::WAIVER_KINDS.iter().any(|(x, _)| x == k)).ok_or(usage)?;
         let name = pos.get(2).ok_or(usage)?.clone();
         let item = opt(kv, "item").unwrap_or("").to_string();
