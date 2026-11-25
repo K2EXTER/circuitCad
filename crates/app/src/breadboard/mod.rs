@@ -33,6 +33,7 @@ mod canvas;
 mod draw;
 mod instruments;
 mod panel;
+mod zoom;
 mod power;
 use draw::*;
 use power::*;
@@ -75,6 +76,10 @@ pub struct BreadboardView {
     pub kind: BoardKind,
     /// The schematic in a small window beside the board (`SchEditor::preview`).
     pub show_schematic: bool,
+    /// The zoom and the shift of each kind's picture (`zoom.rs`), by `BoardKind` in order.
+    views: [zoom::ZoomPan; 3],
+    /// The pointer was over a knob of the running circuit last frame: the wheel turns it, not the zoom.
+    wheel_on_knob: bool,
     /// The stripboard / perfboard view's tools, drag and caches (`strip_view.rs`).
     pub strip: strip_view::StripState,
     /// "組む順と通電": the build one section at a time and the check after each (`build_steps.rs`).
@@ -342,3 +347,15 @@ fn short(s: &str, n: usize) -> String {
 
 #[cfg(test)]
 mod tests;
+
+impl BreadboardView {
+    /// The zoom and shift of the picture of the board kind shown.
+    fn view(&mut self) -> &mut zoom::ZoomPan {
+        let k = match self.kind {
+            BoardKind::Breadboard => 0,
+            BoardKind::Stripboard => 1,
+            BoardKind::Perfboard => 2,
+        };
+        &mut self.views[k]
+    }
+}

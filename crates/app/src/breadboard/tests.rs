@@ -825,3 +825,67 @@ fn the_tab_draws_a_sample_and_a_drag_is_kept_with_the_sheet() {
     empty.mode = Mode::Proto;
     run(&mut empty, vec![]);
 }
+
+/// The perfboard picture zooms with the wheel about the pointer (the hole under it stays there), and Home gives the whole board back.
+#[test]
+fn the_board_picture_zooms_about_the_pointer_and_home_fits_it_again() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("ne555_blinker.schjson"));
+    app.mode = Mode::Proto;
+    app.breadboard.kind = BoardKind::Perfboard;
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let mut run = |app: &mut App, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+        out.textures_delta.clear();
+    };
+    for _ in 0..3 {
+        run(&mut app, vec![]);
+    }
+    let (o0, p0) = app.breadboard.strip.drawn.expect("the board was drawn");
+    let hole = Vec2::new(4.0, 3.0);
+    let at = o0 + hole * p0;
+    run(&mut app, vec![egui::Event::PointerMoved(at)]);
+    for _ in 0..4 {
+        run(&mut app, vec![egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: Vec2::new(0.0, 1.0), phase: egui::TouchPhase::Move, modifiers: Default::default() }]);
+    }
+    for _ in 0..30 {
+        run(&mut app, vec![]);
+    }
+    let (o1, p1) = app.breadboard.strip.drawn.unwrap();
+    assert!(p1 > p0 * 1.2, "zoomed in: {p0} -> {p1}");
+    assert!((o1 + hole * p1).distance(at) < 1.0, "the hole stays under the pointer");
+    run(&mut app, vec![egui::Event::Key { key: egui::Key::Home, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    run(&mut app, vec![]);
+    assert_eq!(app.breadboard.strip.drawn.unwrap().1, p0, "Home: the whole board again");
+}
+
+/// With two sheets the schematic's small window has a tab for each, turns to the sheet of a part picked on the board, and leaves the
+/// sheet being edited (and the schematic) as they were.
+#[test]
+fn the_schematic_window_shows_the_sheet_of_the_part_picked() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("two_sheets.schjson"));
+    app.mode = Mode::Proto;
+    app.breadboard.show_schematic = true;
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let mut run = |app: &mut App, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+        out.textures_delta.clear();
+    };
+    run(&mut app, vec![]);
+    let active = app.sch.sch.active_sheet;
+    let before = app.sch.sch.clone();
+    assert!(app.sch.sch.components.iter().all(|c| c.refdes != "R1"), "R1 is on the other sheet");
+    app.breadboard.picked = Some("R1".into());
+    run(&mut app, vec![]);
+    run(&mut app, vec![]);
+    assert_eq!(app.sch.preview_shown_sheet(), Some(1), "the window turned to R1's sheet");
+    assert_eq!(app.sch.sch.active_sheet, active, "the sheet being edited is the same");
+    assert_eq!(app.sch.sch, before, "nothing changed in the schematic");
+}

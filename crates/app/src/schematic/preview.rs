@@ -31,8 +31,61 @@ impl SchEditor {
         Some((x0, x1, y0, y1))
     }
 
-    /// The shown sheet fitted into `ui`'s space, read-only, the part picked elsewhere (`linked`) ringed. Returns the part clicked.
+    /// A sheet fitted into `ui`'s space, read-only, the part picked elsewhere (`linked`) ringed. With several sheets a row of tabs
+    /// picks the sheet (the one being edited at first), and a part picked elsewhere that is on another sheet turns the window to it.
+    /// Returns the part clicked.
     pub fn preview(&mut self, ui: &mut egui::Ui) -> Option<String> {
+        let count = self.sch.sheets.len();
+        if count < 2 {
+            self.preview_sheet = None;
+            return self.preview_sheet_now(ui);
+        }
+        // a part newly picked on the board (or the 3D view) that lies on another sheet: show that sheet
+        let picked = self.linked.part.clone();
+        if picked != self.preview_followed {
+            if let Some(k) = picked.as_deref().and_then(|r| self.sheet_with_part(r)) {
+                self.preview_sheet = Some(k);
+            }
+            self.preview_followed = picked;
+        }
+        let active = self.sch.active_sheet;
+        let shown = self.preview_sheet.filter(|k| *k < count).unwrap_or(active);
+        ui.horizontal_wrapped(|ui| {
+            for k in 0..count {
+                let tip = if k == active { i18n::tr("このシートを小窓に出します (回路図の画面で開いているシート)") } else { i18n::tr("このシートを小窓に出します") };
+                if ui.selectable_label(k == shown, self.sch.sheet_name(k)).on_hover_text(tip).clicked() {
+                    self.preview_sheet = Some(k);
+                }
+            }
+        });
+        let shown = self.preview_sheet.filter(|k| *k < count).unwrap_or(active);
+        if shown == active {
+            return self.preview_sheet_now(ui);
+        }
+        // draw the other sheet by taking it into the editing fields for the moment (moves, no copies), and put the editor's back
+        self.sch.switch_sheet(shown);
+        let clicked = self.preview_sheet_now(ui);
+        self.sch.switch_sheet(active);
+        clicked
+    }
+
+    /// The sheet the small window shows when it is not the one being edited (for the tests).
+    #[cfg(test)]
+    pub fn preview_shown_sheet(&self) -> Option<usize> {
+        self.preview_sheet.filter(|k| *k != self.sch.active_sheet)
+    }
+
+    /// The sheet that holds part `refdes` (the one being edited first).
+    fn sheet_with_part(&self, refdes: &str) -> Option<usize> {
+        let has = |cs: &[Component]| cs.iter().any(|c| c.refdes == refdes);
+        if has(&self.sch.components) {
+            return Some(self.sch.active_sheet);
+        }
+        self.sch.sheets.iter().position(|s| has(&s.components))
+    }
+
+    /// The sheet in the editing fields, fitted into `ui`'s space (what `preview` shows).
+    fn preview_sheet_now(&mut self, ui: &mut egui::Ui) -> Option<String> {
         let (response, painter) = ui.allocate_painter(ui.available_size().max(Vec2::new(120.0, 80.0)), egui::Sense::click());
         let rect = response.rect;
         painter.rect_filled(rect, 0.0, crate::canvas_theme::col(crate::canvas_theme::Role::Bg));

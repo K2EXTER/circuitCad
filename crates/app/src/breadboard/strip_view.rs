@@ -834,6 +834,12 @@ impl BreadboardView {
         // (the copper side has the margin at the right: the board's left edge is there now)
         let back = self.strip.back;
         let origin = Pos2::new(rect.left() + (rect.width() - w * pitch) / 2.0 + if back { 1.0 } else { left } * pitch, rect.top() + 46.0 + pitch);
+        // the view: zoomed and moved from the fitted picture (not while a part is being dragged: the board stays put under it)
+        if self.strip.drag.is_none() {
+            self.view().input(ui, &response, rect, true);
+        }
+        let (pitch, origin) = self.view().apply(rect, pitch, origin);
+        let painter = painter.with_clip_rect(rect);
         if response.hovered() && self.strip.drag.is_none() && !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.is_none()) {
             self.strip_flip(!back);
         }
@@ -846,6 +852,7 @@ impl BreadboardView {
         painter.galley(rect.left_top() + Vec2::new(12.0, 10.0), legend, Color32::from_gray(210));
         if self.strip.back {
             self.strip_back(sch, &l, &response, &painter, origin, pitch);
+            self.view().buttons(ui, rect);
             return;
         }
         // while dragging, the board keeps the size and place it had when the drag began (it may grow under the pointer)
@@ -1064,6 +1071,7 @@ impl BreadboardView {
                 painter.line_segment([body.right_center(), to(*at)], Stroke::new(pitch * 0.12, net_colour(net)));
             }
         }
+        self.view().buttons(ui, rect);
     }
 }
 

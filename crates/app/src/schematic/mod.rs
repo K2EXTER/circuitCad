@@ -123,6 +123,9 @@ pub struct SchEditor {
     selected: Option<Sel>,
     /// What was picked in the board or the 3D view (`crate::link`), shown on the sheet; and the wires of its net, with the key they were found for.
     pub linked: crate::link::Focus,
+    /// The sheet the proto tab's small window shows (None: the one being edited), and the part picked elsewhere it last turned to.
+    preview_sheet: Option<usize>,
+    preview_followed: Option<String>,
     linked_cache: std::cell::RefCell<((String, u64, usize), Vec<usize>)>,
     /// Extra objects selected by a rubber band (when two or more are selected `selected` is empty).
     multi: Vec<Sel>,
@@ -875,6 +878,8 @@ impl Default for SchEditor {
             pending: None,
             selected: None,
             linked: Default::default(),
+            preview_sheet: None,
+            preview_followed: None,
             linked_cache: Default::default(),
             multi: vec![],
             boxsel: None,

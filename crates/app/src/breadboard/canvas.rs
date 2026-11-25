@@ -20,6 +20,12 @@ impl BreadboardView {
         let width = 5.0 + l.cols as f32 + 1.0;
         let pitch = ((rect.width() - 40.0) / width).min((rect.height() - 60.0) / (HEIGHT + 2.0)).clamp(6.0, 28.0);
         let origin = Pos2::new(rect.left() + (rect.width() - width * pitch) / 2.0, rect.top() + 40.0 + pitch);
+        // the view: zoomed and moved from the fitted picture (the wheel turns a knob instead while the pointer is on one)
+        let wheel = !self.wheel_on_knob;
+        self.view().input(ui, &response, rect, wheel);
+        let (pitch, origin) = self.view().apply(rect, pitch, origin);
+        let painter = painter.with_clip_rect(rect);
+        self.wheel_on_knob = false;
         let to = |h: Hole| origin + at(h) * pitch;
         let cols = l.cols;
         let hole_at = |p: Pos2| -> Option<Hole> {
@@ -84,6 +90,7 @@ impl BreadboardView {
             } else if let Some(p) = response.hover_pos()
                 && let Some(k) = pot_at(lv, p)
             {
+                self.wheel_on_knob = true;
                 // one step for each wheel event (a notch of a mouse wheel)
                 let notches: f32 = ui.input(|i| i.events.iter().filter_map(|e| if let egui::Event::MouseWheel { delta, .. } = e { Some(delta.y.signum()) } else { None }).sum());
                 if notches != 0.0 {
@@ -420,5 +427,6 @@ impl BreadboardView {
             Tool::Scope => i18n::tr("オシロ: 探り針を当てる穴をクリック。波形は左に出ます"),
         };
         painter.text(rect.left_top() + Vec2::new(12.0, 10.0), egui::Align2::LEFT_TOP, legend, egui::FontId::proportional(13.0), Color32::from_gray(210));
+        self.view().buttons(ui, rect);
     }
 }
