@@ -35,6 +35,8 @@ pub struct SheetSettings {
     pub stripboard: Option<sch_core::stripboard::StripLayout>,
     /// The stripboard / perfboard's size, width × height in mm (None: as big as the layout takes).
     pub strip_size: Option<(f32, f32)>,
+    /// Mounting holes in the four corners of the stripboard / perfboard (`StripOptions::mount_holes`).
+    pub strip_mount_holes: bool,
     /// The Arduino sketch of each microcontroller board on the sheet (refdes → its text), run beside the circuit (B6 ⑤).
     pub sketches: std::collections::BTreeMap<String, String>,
 }
@@ -60,6 +62,7 @@ impl Default for SheetSettings {
             breadboard: None,
             stripboard: None,
             strip_size: None,
+            strip_mount_holes: false,
             sketches: Default::default(),
         }
     }
@@ -110,6 +113,9 @@ pub fn with_settings(sheet: &mut serde_json::Value, t: &SheetSettings) {
     if let Some((w, h)) = t.strip_size {
         obj.insert("strip_size".into(), serde_json::json!([w, h]));
     }
+    if t.strip_mount_holes {
+        obj.insert("strip_mount_holes".into(), serde_json::json!(true));
+    }
     if !t.sketches.is_empty() {
         obj.insert("sketches".into(), serde_json::json!(t.sketches));
     }
@@ -143,6 +149,7 @@ pub fn take_settings(sheet: &mut serde_json::Value) -> SheetSettings {
     t.breadboard = obj.remove("breadboard").and_then(|v| serde_json::from_value(v).ok());
     t.stripboard = obj.remove("stripboard").and_then(|v| serde_json::from_value(v).ok());
     t.strip_size = obj.remove("strip_size").and_then(|v| serde_json::from_value(v).ok());
+    t.strip_mount_holes = obj.remove("strip_mount_holes").and_then(|v| v.as_bool()).unwrap_or(false);
     t.sketches = obj.remove("sketches").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     if let Some(v) = obj.remove("battery") {
         for (key, slot) in [("from", &mut t.bat_from), ("to", &mut t.bat_to), ("node", &mut t.bat_node), ("v_min", &mut t.bat_vmin)] {
@@ -175,6 +182,7 @@ impl SchEditor {
             breadboard: self.breadboard.clone(),
             stripboard: self.stripboard.clone(),
             strip_size: self.strip_size,
+            strip_mount_holes: self.strip_mount_holes,
             sketches: self.sketches.clone(),
         }
     }
@@ -199,6 +207,7 @@ impl SchEditor {
         self.breadboard = t.breadboard.clone();
         self.stripboard = t.stripboard.clone();
         self.strip_size = t.strip_size;
+        self.strip_mount_holes = t.strip_mount_holes;
         self.sketches = t.sketches.clone();
         self.saved_tol = t;
     }

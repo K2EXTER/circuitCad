@@ -225,7 +225,7 @@ impl BreadboardView {
     /// schematic since), or the last automatic one for this kind of board (the old schematic's: not to be edited), or none.
     pub(super) fn strip_shown(&mut self, sch: &SchEditor) -> StripLayout {
         let key = (sch.rev, sch.sch.components.len());
-        let opt = strip_options(sch.strip_size, sch.strip_chips_back);
+        let opt = strip_options(sch.strip_size, sch.strip_chips_back, sch.strip_mount_holes);
         // a perfboard has a layout of its own (no strips); a layout saved for the other kind of board is not shown on this one
         let perf = self.kind == BoardKind::Perfboard;
         let want = (key.0, key.1, opt, perf);
@@ -307,7 +307,7 @@ impl BreadboardView {
     /// "固定した部品のまわりを並べ直す": the layout round `l`'s locked parts, made on another thread (`strip_around_done` keeps it).
     pub(super) fn strip_relayout(&mut self, sch: &SchEditor, l: &StripLayout) {
         let (tx, rx) = std::sync::mpsc::channel();
-        let (s, from, opt) = (sch.sch.clone(), l.clone(), strip_options(sch.strip_size, sch.strip_chips_back));
+        let (s, from, opt) = (sch.sch.clone(), l.clone(), strip_options(sch.strip_size, sch.strip_chips_back, sch.strip_mount_holes));
         std::thread::spawn(move || {
             let _ = tx.send(perf_layout_around(&s, opt, &from));
         });
@@ -510,6 +510,15 @@ impl BreadboardView {
             }
         });
         {
+            let before = sch.strip_mount_holes;
+            ui.checkbox(&mut sch.strip_mount_holes, i18n::tr("四隅に取り付け穴 (M3)")).on_hover_text(i18n::tr(
+                "基板の四隅にスペーサーの取り付け穴 (M3) をあけるとき、隅の 3 × 3 穴 (穴とスペーサーの場所) に部品・線を置かないで並べます。右の隅は基板の横、下の隅は縦を決めたときだけ分かるので、大きさも選んでください。禁止の所は灰色の丸で出ます",
+            ));
+            if sch.strip_mount_holes != before && sch.stripboard.is_some() {
+                sch.status = i18n::tr("手で動かした並べ方はそのままです。取り付け穴をよけて並べるには「自動で並べ直す」を押します").to_string();
+            }
+        }
+        {
             let before = sch.strip_chips_back;
             ui.checkbox(&mut sch.strip_chips_back, i18n::tr("チップ部品を裏に付ける (慣れた人向け)")).on_hover_text(i18n::tr(
                 "0805・1206 のチップ抵抗・チップコンデンサを、裏 (はんだの面) で隣り合う 2 つの穴にまたがせてはんだ付けする並べ方にします。ユニバーサル基板では、片方の端を、つなぐ IC の足の穴に一緒にはんだ付けできるので、プルアップやパスコンを足のすぐそばに置けて、表の部品と線が減り、基板が小さくなります。ストリップ基板では、つなぐ 2 つのネットの帯が上下に隣り合う所にまたがせます (そういう所が無いチップは表のまま。全部を表にした並べ方より小さくならないときは、全部を表にした並べ方にします)。小さいチップを手ではんだ付けするのに慣れた人向けです (初めてなら、同じ値のリード部品を表に付ける今の形で)。リード部品は裏に付けません",
@@ -517,6 +526,13 @@ impl BreadboardView {
             if sch.strip_chips_back != before && sch.stripboard.is_some() {
                 sch.status = i18n::tr("手で動かした並べ方はそのままです。チップ部品を裏に付けて並べるには「自動で並べ直す」を押します").to_string();
             }
+        }
+        // what sits on the mounting holes' corners (the layout as it is: moved by hand, or laid out before the holes were asked for)
+        let keep = strip_options(sch.strip_size, false, sch.strip_mount_holes).keepout();
+        let on_holes = StripLayout { keepout: keep, ..l.clone() }.in_keepout();
+        if !on_holes.is_empty() {
+            let what: Vec<String> = on_holes.iter().map(|(a, w)| format!("{w} ({})", hole_name(*a))).take(6).collect();
+            ui.colored_label(crate::theme::warn(), i18n::trf!("取り付け穴の隅に {} か所: {}", on_holes.len(), what.join("、"))).on_hover_text(i18n::tr("隅の 3 × 3 穴は、取り付け穴とスペーサーの場所です。「自動で並べ直す」でよけるか、手で動かしてください"));
         }
         if let Some((w, h)) = sch.strip_size {
             let (cols, rows) = holes_of(w, h);
@@ -1112,6 +1128,14 @@ impl BreadboardView {
                 if h != a && (h.0 == a.0 || h.1 == a.1) {
                     painter.line_segment([to(a), to(h)], Stroke::new(pitch * 0.18, PICK.gamma_multiply(0.7)));
                 }
+            }
+        }
+        // the mounting holes' corners: kept free (a grey disc on each hole, the hole itself in the middle of its 3 × 3)
+        let keep = strip_options(sch.strip_size, false, sch.strip_mount_holes).keepout();
+        for a in &keep {
+            painter.circle_filled(to(*a), pitch * 0.48, Color32::from_rgba_unmultiplied(150, 150, 150, 70));
+            if keep.contains(&(a.0.wrapping_sub(1), a.1)) && keep.contains(&(a.0 + 1, a.1)) && keep.contains(&(a.0, a.1.wrapping_sub(1))) && keep.contains(&(a.0, a.1 + 1)) {
+                painter.circle_stroke(to(*a), pitch * 1.2, Stroke::new(1.5, Color32::from_gray(170)));
             }
         }
         for (k, (r, pins)) in l.off.iter().enumerate() {
@@ -1724,6 +1748,6 @@ fn holes_of(w: f32, h: f32) -> (u16, u16) {
 }
 
 /// The layout's options for a board of this size (None: one row of chips).
-fn strip_options(size: Option<(f32, f32)>, chips_back: bool) -> StripOptions {
-    StripOptions { cols: size.map(|(w, h)| holes_of(w, h).0), chips_back }
+fn strip_options(size: Option<(f32, f32)>, chips_back: bool, mount_holes: bool) -> StripOptions {
+    StripOptions { cols: size.map(|(w, h)| holes_of(w, h).0), rows: size.map(|(w, h)| holes_of(w, h).1), chips_back, mount_holes }
 }

@@ -110,6 +110,9 @@ pub struct StripLayout {
     /// boxes go round it.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub pinned: BTreeSet<String>,
+    /// The holes kept free round the mounting holes (`StripOptions::keepout`): the automatic layout puts nothing there.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub keepout: BTreeSet<At>,
 }
 
 impl StripLayout {
@@ -179,6 +182,24 @@ impl StripLayout {
     }
 
     /// Every hole used (a lead, a link's end, an off-board wire's end) and by what.
+    /// What sits on a hole kept free for a mounting hole (`keepout`): a lead, a wire's end, a bare wire, a cut.
+    pub fn in_keepout(&self) -> Vec<(At, String)> {
+        if self.keepout.is_empty() {
+            return vec![];
+        }
+        let mut v: Vec<(At, String)> = self.used().into_iter().filter(|(a, _)| self.keepout.contains(a)).collect();
+        for (a, b) in self.bare.iter().chain(self.perf_spans().iter()) {
+            for r in a.0.min(b.0)..=a.0.max(b.0) {
+                for c in a.1.min(b.1)..=a.1.max(b.1) {
+                    if self.keepout.contains(&(r, c)) && !v.iter().any(|x| x.0 == (r, c)) {
+                        v.push(((r, c), "bare".into()));
+                    }
+                }
+            }
+        }
+        v
+    }
+
     pub fn used(&self) -> Vec<(At, String)> {
         let mut v: Vec<(At, String)> = self.parts.iter().flat_map(|p| p.leads.iter().map(move |(pin, at)| (*at, format!("{}.{pin}", p.refdes)))).collect();
         for (k, l) in self.links.iter().enumerate() {
@@ -331,6 +352,46 @@ pub struct StripOptions {
     /// what they join, instead of the leaded part on top. For those used to it: off by default.
     #[serde(default)]
     pub chips_back: bool,
+    /// The board's height in holes (with `cols`, the board's size): where its bottom corners are.
+    #[serde(default)]
+    pub rows: Option<u16>,
+    /// Mounting holes (M3 with a spacer) in the four corners: the holes round them are kept free (`keepout`). The bottom corners
+    /// need `rows`, the right ones `cols`.
+    #[serde(default)]
+    pub mount_holes: bool,
+}
+
+/// How many holes from each corner the mounting hole and its spacer take (an M3 hole on the second hole in from both edges, about
+/// 3.8 mm, and a spacer of 6 mm round it): a square of 3 × 3 holes.
+pub const MOUNT_HOLE_HOLES: u16 = 3;
+
+impl StripOptions {
+    /// The holes kept free for the mounting holes in the corners (none without `mount_holes`).
+    pub fn keepout(&self) -> BTreeSet<At> {
+        let mut out = BTreeSet::new();
+        if !self.mount_holes {
+            return out;
+        }
+        let k = MOUNT_HOLE_HOLES;
+        let mut corners = vec![(0u16, 0u16)];
+        if let Some(c) = self.cols.filter(|c| *c > 2 * k) {
+            corners.push((0, c - k));
+        }
+        if let Some(r) = self.rows.filter(|r| *r > 2 * k) {
+            corners.push((r - k, 0));
+            if let Some(c) = self.cols.filter(|c| *c > 2 * k) {
+                corners.push((r - k, c - k));
+            }
+        }
+        for (r0, c0) in corners {
+            for r in r0..r0 + k {
+                for c in c0..c0 + k {
+                    out.insert((r, c));
+                }
+            }
+        }
+        out
+    }
 }
 
 /// Lays the schematic out on a stripboard, one row of chips.

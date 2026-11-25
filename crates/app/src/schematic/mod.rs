@@ -297,6 +297,8 @@ pub struct SchEditor {
     pub(crate) stripboard: Option<sch_core::stripboard::StripLayout>,
     /// The stripboard / perfboard's size chosen, width × height in mm (saved with the sheet); None = as big as the layout takes.
     pub(crate) strip_size: Option<(f32, f32)>,
+    /// Mounting holes in the corners of the stripboard / perfboard: the layout keeps them free (L11).
+    pub(crate) strip_mount_holes: bool,
     /// A perfboard's 0805 / 1206 chips go on the copper side (`StripOptions::chips_back`).
     pub(crate) strip_chips_back: bool,
     /// The board of the project that gives this one its ground (set by the app for a project of several boards): the ERC does not ask
@@ -815,6 +817,7 @@ impl Default for SchEditor {
             breadboard: None,
             stripboard: None,
             strip_size: None,
+            strip_mount_holes: false,
             strip_chips_back: false,
             ground_from: None,
             sketches: Default::default(),

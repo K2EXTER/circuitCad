@@ -124,14 +124,16 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
     let mut wants = Wants::read(s, &c);
     wants.keep = keep;
     wants.boxes = boxes;
+    wants.keepout = opt.keepout();
     let net_of_lead = |refdes: &str, pin: &str| lead_net(&full, refdes, pin);
     // each placement (the gaps between chips, the chips upright and turned a quarter turn, without and with annealing) wired the rails first and the small nets
     // first, without and then with a way out kept by each lead, every placement with one order before the next order (so each has its
     // turn within `BUDGET`); each again with the nets left apart wired first (a few rounds), and once all are joined with the nets
     // that needed wires on top first: the one with the fewest nets left apart, then the fewest wires on top, then the smallest board
-    let mut best: Option<(usize, usize, StripLayout)> = None;
+    // (what is left on the mounting holes' corners, the nets left apart, the wires on top, the board's holes) and the layout
+    let mut best: Option<((usize, usize, usize, usize), StripLayout)> = None;
     let start = std::time::Instant::now();
-    let done = |_: &Option<(usize, usize, StripLayout)>| start.elapsed() > BUDGET;
+    let done = |_: &Option<((usize, usize, usize, usize), StripLayout)>| start.elapsed() > BUDGET;
     // the shelves as placed, then the same made better by annealing (it helps small boards; on a crowded one the estimate it goes by
     // packs the parts too tight for the wires, and the shelves as placed win)
     // and each again with the chips where the springs and the spreading put them (`simpl`)
@@ -175,7 +177,8 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                 })
                 .clone();
             let Some(l) = l else { continue };
-            let l = if backs.is_empty() { l } else { with_back(&full, l, &backs) };
+            let mut l = if backs.is_empty() { l } else { with_back(&full, l, &backs) };
+            l.keepout = wants.keepout.clone();
             // the table's Kelvin forks where this placing put their leads
             let fork_at: Vec<[At; 3]> = s
                 .requirements
@@ -193,14 +196,14 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                 let mut m = l.clone();
                 route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
-                let key = (apart.len(), m.links.len(), m.rows as usize * m.cols as usize);
+                let key = (m.in_keepout().len(), apart.len(), m.links.len(), m.rows as usize * m.cols as usize);
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
-                if round == 0 && best.as_ref().is_some_and(|b| key.0 > b.0 + 1 || (key.0 >= b.0 && key.1 > b.1 + b.1 / 2 + 2)) {
+                if round == 0 && best.as_ref().is_some_and(|(b, _)| key.0 > b.0 || (key.0 == b.0 && (key.1 > b.1 + 1 || (key.1 >= b.1 && key.2 > b.2 + b.2 / 2 + 2)))) {
                     break;
                 }
                 let on_top: Vec<String> = m.links.iter().map(|k| k.net.clone()).collect();
-                if best.as_ref().is_none_or(|b| key < (b.0, b.1, b.2.rows as usize * b.2.cols as usize)) {
-                    best = Some((key.0, key.1, m));
+                if best.as_ref().is_none_or(|(b, _)| key < *b) {
+                    best = Some((key, m));
                 }
                 if apart.is_empty() {
                     if extra >= MORE_ROUNDS {
@@ -228,7 +231,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
             }
         }
     }
-    best.map(|b| b.2).unwrap_or_default()
+    best.map(|b| b.1).unwrap_or_default()
 }
 
 /// The chips that go on the copper side (`StripOptions::chips_back`): the 1206 and 0805 resistors and capacitors built with the
@@ -403,6 +406,8 @@ struct Wants {
     keep: Vec<StripPart>,
     /// The sections' boxes put by hand (`StripLayout::pinned`): each section's name, its top-left hole and its width.
     boxes: BTreeMap<String, (At, u16)>,
+    /// The holes kept free round the mounting holes (`StripOptions::keepout`), in the whole board's holes.
+    keepout: BTreeSet<At>,
 }
 
 impl Wants {
@@ -421,7 +426,7 @@ impl Wants {
                 groups.entry(p.clone()).or_default().push(i);
             }
         }
-        Wants { apart, groups, sections: crate::stripboard::sections(s, c), keep: vec![], boxes: BTreeMap::new() }
+        Wants { apart, groups, sections: crate::stripboard::sections(s, c), keep: vec![], boxes: BTreeMap::new(), keepout: BTreeSet::new() }
     }
 
     /// Whether a part is locked where it is.
@@ -541,6 +546,9 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
         for (_, _, a) in v {
             taken.insert(*a, usize::MAX);
         }
+    }
+    for a in &wants.keepout {
+        taken.insert(*a, usize::MAX);
     }
     let band_of = |a: At| bands.iter().copied().find(|(t, b)| a.0 >= *t && a.0 <= *b).unwrap_or((1, u16::MAX));
     let twos: Vec<usize> = (0..parts.len()).filter(|i| parts[*i].look == Look::TwoLead && parts[*i].leads.len() == 2 && !wants.kept(&parts[*i].refdes)).collect();
@@ -1009,7 +1017,9 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants
     let mut boxes: Vec<(String, At, At)> = vec![];
     let mut top = 1u16;
     // the locked parts first, where they are; the others keep `gap` holes off them
-    let kept_holes = wants.kept_holes();
+    // (the mounting holes' corners too: nothing is placed on them nor `gap` holes round them)
+    let kept_holes: BTreeSet<At> = wants.kept_holes().into_iter().chain(wants.keepout.iter().copied()).collect();
+    blocked.extend(wants.keepout.iter().copied());
     for p in &wants.keep {
         blocked.extend(outline(p));
         for (pin, a) in &p.leads {
@@ -1277,6 +1287,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             let i = id(n, &mut names);
             owner[idx(*a)] = Some(i);
             leads.push((*a, i));
+        }
+    }
+    // the holes kept free for the mounting holes: owned by no net that is wired, so no wire goes there
+    let keep_free = id("\u{0}keepout", &mut names);
+    for a in l.keepout.iter().filter(|a| (a.0 as usize) < rows && (a.1 as usize) < cols) {
+        if owner[idx(*a)].is_none() {
+            owner[idx(*a)] = Some(keep_free);
         }
     }
     let lead_holes: BTreeSet<At> = leads.iter().map(|x| x.0).collect();
@@ -1954,6 +1971,22 @@ mod tests {
         assert!(l.links.len() <= 18, "{} wires on top", l.links.len());
         let s = load("seg7_counter.schjson");
         assert!(!strip_layout_with(&s, StripOptions::default()).perf, "the stripboard keeps its strips");
+    }
+
+    /// L11: with mounting holes in the corners of a board of a given size, the layout leaves the 3 × 3 holes of each corner free (no
+    /// lead, no wire's end, no bare wire) and still joins what the schematic joins.
+    #[test]
+    fn the_mounting_holes_corners_are_kept_free() {
+        for name in ["attiny_blinker.schjson", "active_filter.schjson"] {
+            let opt = StripOptions { cols: Some(24), rows: Some(20), mount_holes: true, ..Default::default() };
+            assert_eq!(opt.keepout().len(), 36);
+            let (l, _) = laid_out(name, opt);
+            assert_eq!(l.keepout, opt.keepout());
+            assert!(l.in_keepout().is_empty(), "{name}: {:?}", l.in_keepout());
+        }
+        // only the top corners without the height
+        assert_eq!(StripOptions { cols: Some(24), mount_holes: true, ..Default::default() }.keepout().len(), 18);
+        assert!(StripOptions { cols: Some(24), ..Default::default() }.keepout().is_empty());
     }
 
     /// The seven-segment counter on a board 16 holes wide: kept to.

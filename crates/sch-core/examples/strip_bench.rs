@@ -39,7 +39,7 @@ fn main() {
                 continue;
             }
             let t = Instant::now();
-            let opt = StripOptions { cols: width, chips_back: back };
+            let opt = StripOptions { cols: width, chips_back: back, ..Default::default() };
             let l = if perf { sch_core::perfboard::perf_layout_with(&s, opt) } else { strip_layout_with(&s, opt) };
             let ms = t.elapsed().as_millis();
             let p = strip_check(&s, &l).len();
