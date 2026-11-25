@@ -96,6 +96,48 @@ impl App {
         self.board_ed.adopt(d.board, None);
     }
 
+    /// The other boards plugged into the one in the editors, for the prototype tab's check of the connectors' holes (L4): rebuilt when
+    /// the board in the editors, the boards or the links change. Each link to this board's connector gives its pin pairs, the other
+    /// board's side first.
+    pub(crate) fn update_mates(&mut self) {
+        let key = (self.system.active, self.system.names.len(), self.system.links.iter().map(|l| l.pairs.len() + 1).sum::<usize>());
+        if self.breadboard.mates_key == Some(key) {
+            return;
+        }
+        self.breadboard.mates_key = Some(key);
+        self.breadboard.mates.clear();
+        let here = self.system.names.get(self.system.active).cloned().unwrap_or_default();
+        for (k, name) in self.system.names.iter().enumerate() {
+            if k == self.system.active {
+                continue;
+            }
+            let Some(d) = self.system.parked.get(k).and_then(Option::as_ref) else { continue };
+            let mut links = vec![];
+            for l in &self.system.links {
+                let (mine, theirs, flip) = if l.a.design == here && l.b.design == *name {
+                    (&l.a, &l.b, false)
+                } else if l.b.design == here && l.a.design == *name {
+                    (&l.b, &l.a, true)
+                } else {
+                    continue;
+                };
+                let (Some(pa), Some(pb)) = (sch_core::system::pins_of(if flip { &d.schematic } else { &self.sch.sch }, &l.a.refdes), sch_core::system::pins_of(if flip { &self.sch.sch } else { &d.schematic }, &l.b.refdes)) else { continue };
+                let pairs = sch_core::system::pin_pairs(l, &pa, &pb);
+                // (the other board's pin, this board's pin)
+                let pairs = pairs.into_iter().map(|(x, y)| if flip { (x, y) } else { (y, x) }).collect();
+                links.push(sch_core::stripboard::MateLink { a: theirs.refdes.clone(), b: mine.refdes.clone(), pairs });
+            }
+            if links.is_empty() {
+                continue;
+            }
+            let holes = |v: f32| (v / 2.54).floor().max(1.0) as u16;
+            let s = &d.settings;
+            let opt = sch_core::stripboard::StripOptions { cols: s.strip_size.map(|x| holes(x.0)), rows: s.strip_size.map(|x| holes(x.1)), mount_holes: s.strip_mount_holes, ..Default::default() };
+            let layout = s.stripboard.clone().filter(|l| l.perf);
+            self.breadboard.mates.push(crate::breadboard::MateBoard { name: name.clone(), links, sch: d.schematic.clone(), layout, opt, found: None });
+        }
+    }
+
     /// The schematic of a board of the project (the one in the editors, or parked).
     pub(crate) fn design_schematic(&self, k: usize) -> Option<&Schematic> {
         if k == self.system.active { Some(&self.sch.sch) } else { self.system.parked.get(k)?.as_ref().map(|d| &d.schematic) }

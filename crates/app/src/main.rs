@@ -884,6 +884,7 @@ impl eframe::App for App {
             self.breadboard.silence();
         }
         if self.mode == Mode::Proto {
+            self.update_mates();
             egui::Panel::left("proto_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.breadboard.panel(ui, &mut self.sch));
             if std::mem::take(&mut self.breadboard.want_live_logic) {
                 if !self.sch.live_logic_active() {

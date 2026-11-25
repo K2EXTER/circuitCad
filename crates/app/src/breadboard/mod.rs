@@ -24,6 +24,7 @@ pub(crate) mod sketch_ui;
 mod build_steps;
 mod looks;
 mod strip_view;
+mod mate_ui;
 pub use strip_view::{BoardKind, StripTool};
 #[cfg(test)]
 pub use sketch_ui::BLINK;
@@ -150,6 +151,28 @@ pub struct BreadboardView {
     /// The buzzers' tone through the speakers, and whether the learner turned it off.
     beeper: sound::Beeper,
     sound_off: bool,
+    /// The other boards of the project plugged into this one (L4): set by the app when the board in the editors or the links change
+    /// (`App::update_mates`), with what the last check found.
+    pub mates: Vec<MateBoard>,
+    /// (the board in the editors, the links) the mates were made for.
+    pub mates_key: Option<(usize, usize, usize)>,
+    /// `--proto-mate`: check the connectors against every plugged board as soon as the panel shows (for screenshots).
+    pub mate_on_start: bool,
+}
+
+/// Another board of the project joined to this one by connectors, for matching the holes of the connectors (L4).
+#[derive(Clone)]
+pub struct MateBoard {
+    /// The other board's name.
+    pub name: String,
+    /// The connector pairs: `a` the other board's part, `b` this board's, with the pins joined.
+    pub links: Vec<sch_core::stripboard::MateLink>,
+    /// The other board's schematic and its perfboard layout as saved (None: laid out by itself, made when the check runs).
+    pub sch: sch_core::Schematic,
+    pub layout: Option<sch_core::stripboard::StripLayout>,
+    pub opt: sch_core::stripboard::StripOptions,
+    /// What the last check found (on this board's layout then).
+    pub found: Option<sch_core::stripboard::Mate>,
 }
 
 /// The DC point of the board's circuit: the current through each part, and the parts past (or near) their ratings.

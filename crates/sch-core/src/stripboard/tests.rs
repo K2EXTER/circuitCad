@@ -535,3 +535,45 @@ fn a_simulation_only_part_gets_no_wire_and_sits_on_the_terminals() {
     let nets = crate::breadboard::board_nets(&s, &b);
     assert_eq!(nets.pins.get(&(r_sim.clone(), "1".into())), nets.pins.get(&(j.clone(), "1".into())));
 }
+
+/// L4: the connectors of two boards plugged into each other: the same pattern of holes fits (turned too), a mirror image fits only
+/// upside down, another pattern (one row of 4 against 2 × 2) does not; and the second board laid out round its connector placed to
+/// match the first's fits.
+#[test]
+fn two_boards_connectors_are_matched_hole_by_hole() {
+    use crate::breadboard::Look;
+    let part = |r: &str, holes: &[At]| StripPart { refdes: r.into(), look: Look::Row, leads: holes.iter().enumerate().map(|(k, h)| ((k + 1).to_string(), *h)).collect(), mount: Mount::Direct };
+    let board = |p: StripPart| StripLayout { perf: true, rows: 20, cols: 20, parts: vec![p], ..Default::default() };
+    let links = vec![MateLink { a: "J1".into(), b: "P1".into(), pairs: (1..=4).map(|k| (k.to_string(), k.to_string())).collect() }];
+    // an L of four holes on the main board
+    let a = board(part("J1", &[(2, 2), (2, 3), (2, 4), (3, 2)]));
+    assert_eq!(mate_check(&a, &board(part("P1", &[(5, 7), (5, 8), (5, 9), (6, 7)])), &links), Mate::Fits { turn: 0 });
+    // the same L turned half a turn
+    assert_eq!(mate_check(&a, &board(part("P1", &[(6, 9), (6, 8), (6, 7), (5, 9)])), &links), Mate::Fits { turn: 2 });
+    // its mirror image: only upside down
+    assert!(matches!(mate_check(&a, &board(part("P1", &[(5, 9), (5, 8), (5, 7), (6, 9)])), &links), Mate::Flipped { .. }));
+    // one row against two
+    let row = board(part("J1", &[(2, 2), (2, 3), (2, 4), (2, 5)]));
+    let m = mate_check(&row, &board(part("P1", &[(1, 1), (1, 2), (2, 1), (2, 2)])), &links);
+    assert!(matches!(&m, Mate::Differs { a, b } if a.contains("1 行 × 4 列") && b.contains("2 行 × 2 列")), "{m:?}");
+    assert!(!m.ok() && m.message("本体", "小基板").contains("合いません"));
+    // a sub-board laid out round its header placed to match the main board's
+    let mut sub = Schematic::default();
+    let p = sub.add(crate::Kind::Header(4), (0, 0), 0);
+    sub.components[p].refdes = "P1".into();
+    for (k, x) in [(0usize, 20), (2, 40)] {
+        let r = sub.add(crate::Kind::Resistor, (x, 0), 0);
+        let pins = sub.components[r].pins();
+        let hp = sub.components[p].pins();
+        sub.labels.push(crate::Label { pos: pins[0].1, text: format!("N{k}") });
+        sub.labels.push(crate::Label { pos: hp[k].1, text: format!("N{k}") });
+        sub.labels.push(crate::Label { pos: pins[1].1, text: format!("M{k}") });
+        sub.labels.push(crate::Label { pos: hp[k + 1].1, text: format!("M{k}") });
+    }
+    let fixed = mate_parts(&row, &sub, &links, 2).unwrap();
+    assert_eq!(fixed[0].leads.iter().map(|x| x.1).collect::<Vec<_>>(), [(1, 2), (1, 3), (1, 4), (1, 5)]);
+    let from = StripLayout { perf: true, parts: fixed, locked: ["P1".to_string()].into(), ..Default::default() };
+    let l = crate::perfboard::perf_layout_around(&sub, StripOptions::default(), &from);
+    assert!(strip_check(&sub, &l).is_empty(), "{:?}", strip_check(&sub, &l));
+    assert!(mate_check(&row, &l, &links).ok(), "{:?}", mate_check(&row, &l, &links));
+}

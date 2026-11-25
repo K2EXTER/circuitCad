@@ -23,6 +23,7 @@ mod check;
 mod ends;
 mod forks;
 mod lay;
+mod mate;
 mod search;
 mod sections;
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod tests;
 
 pub use check::{group_spreads, strip_check, strip_rules, strip_unjoined, RuleCheck};
 pub use forks::strip_fork;
+pub use mate::{mate_check, mate_parts, Mate, MateLink};
 pub use search::strip_layout_with;
 use ends::{all_ends, between, end_at, other_end, set_end, share_rows, End};
 use forks::{forks, keep_forks};

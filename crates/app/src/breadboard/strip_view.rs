@@ -66,7 +66,7 @@ pub struct StripState {
     /// A layout being made on another thread (a perfboard's tries take up to 1.5 s: the window does not stop meanwhile).
     job: Option<StripJob>,
     /// "固定した部品のまわりを並べ直す" on another thread: the layout round the locked parts comes back here.
-    around: Option<std::sync::mpsc::Receiver<StripLayout>>,
+    pub(super) around: Option<std::sync::mpsc::Receiver<StripLayout>>,
     /// A section's box let go where it was dragged, drawn there until the layout round it comes back.
     put_box: Option<(At, At)>,
     pub(super) drag: Option<StripDrag>,
@@ -725,6 +725,9 @@ impl BreadboardView {
         self.strip_around_done(sch);
         let StripChecks { problems, rules, .. } = self.strip_checks(sch, &l);
         Self::check_ui(ui, &problems);
+        if !strip {
+            self.mate_ui(ui, sch, &l);
+        }
         // a perfboard's wires on top that lie along a chip's row of pins (the automatic layout lays one so where nothing else gets through)
         if !strip {
             for (k, part) in links_along_pins(&l) {

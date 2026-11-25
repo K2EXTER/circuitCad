@@ -66,6 +66,8 @@ fn proto_tab(app: &mut App, a: &Args) {
     if let Some((w, h)) = a.val("--proto-size").and_then(|s| s.split_once('x')).and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))) {
         app.sch.strip_size = Some((w, h));
     }
+    // `--proto-mate`: the connectors checked against the boards plugged into this one (a project of several boards)
+    bb.mate_on_start = a.has("--proto-mate");
     // `--proto-mount-holes`: mounting holes in the board's corners, kept free by the layout
     app.sch.strip_mount_holes = a.has("--proto-mount-holes");
     // `--proto-flip SW1,SW2`: those switches moved (push buttons held) once the circuit runs
