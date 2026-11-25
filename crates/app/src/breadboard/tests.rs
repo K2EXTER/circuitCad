@@ -38,6 +38,55 @@ fn the_copper_side_is_the_board_mirrored_and_a_lead_clicked_there_picks_its_part
     assert_eq!(app.sch.stripboard, before, "nothing is edited on the copper side");
 }
 
+/// From the copper side of a perfboard: the bare wire tool draws a bare wire between two holes of a row (without the layout being made
+/// again: the frame after the edit takes far less than the automatic layout's 1.5 s), a click with the move tool picks it, Delete takes
+/// it away; on the parts' side the hole under the pointer names its net.
+#[test]
+fn bare_wires_are_drawn_and_taken_away_from_the_copper_side() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("ne555_blinker.schjson"));
+    app.mode = Mode::Proto;
+    app.breadboard.kind = BoardKind::Perfboard;
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let mut run = |app: &mut App, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+        out.textures_delta.clear();
+    };
+    run(&mut app, vec![]);
+    let l = app.breadboard.strip_shown(&app.sch);
+    app.breadboard.strip.back = true;
+    app.breadboard.strip.tool = strip_view::StripTool::Bare;
+    run(&mut app, vec![]);
+    let (origin, pitch) = app.breadboard.strip.drawn.unwrap();
+    let below = |a: (u16, u16)| origin + Vec2::new((l.cols - 1 - a.1) as f32, a.0 as f32) * pitch;
+    let click = |app: &mut App, run: &mut dyn FnMut(&mut App, Vec<egui::Event>), at: Pos2| {
+        run(app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false] {
+            run(app, vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }]);
+        }
+    };
+    // the last row is free (the board keeps one past its parts): a wire from its column 1 to column 4
+    let row = l.rows - 1;
+    click(&mut app, &mut run, below((row, 1)));
+    let started = std::time::Instant::now();
+    click(&mut app, &mut run, below((row, 4)));
+    run(&mut app, vec![]);
+    let took = started.elapsed();
+    let m = app.sch.stripboard.clone().expect("the wire is kept with the sheet");
+    assert!(m.bare.contains(&((row, 1), (row, 4))), "{:?}", m.bare);
+    assert!(took < std::time::Duration::from_millis(900), "the layout was made again after the wire: {took:?}");
+    // picked with the move tool (a click on its middle), and Delete
+    app.breadboard.strip.tool = strip_view::StripTool::Move;
+    let mid = below((row, 2)) + Vec2::new(-pitch * 0.5, 0.0);
+    click(&mut app, &mut run, mid);
+    assert!(app.breadboard.strip.picked_bare.is_some(), "the wire is picked");
+    run(&mut app, vec![egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    assert!(!app.sch.stripboard.clone().unwrap().bare.contains(&((row, 1), (row, 4))), "Delete took it away");
+}
+
 #[test]
 fn the_checks_kept_between_frames_follow_an_edit_to_the_schematic() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");

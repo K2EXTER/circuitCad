@@ -530,12 +530,51 @@ pub fn cut_toggled(l: &StripLayout, at: At) -> StripLayout {
     grown(out)
 }
 
+/// The saved layout when the schematic has the same parts on the board (with the same pins) and off it as the layout, each part's
+/// way on brought up to date (a chip the layout put on the copper side stays there); None when a part came or went.
+fn same_parts(s: &Schematic, saved: &StripLayout) -> Option<StripLayout> {
+    let c = crate::breadboard::read(s);
+    let sorted = |mut v: Vec<String>| {
+        v.sort();
+        v
+    };
+    if c.on.len() != saved.parts.len() || c.off.len() != saved.off.len() {
+        return None;
+    }
+    for (r, _, pins) in &c.on {
+        let p = saved.parts.iter().find(|p| &p.refdes == r)?;
+        if sorted(pins.iter().map(|x| x.0.clone()).collect()) != sorted(p.leads.iter().map(|x| x.0.clone()).collect()) {
+            return None;
+        }
+    }
+    for (r, _) in &c.off {
+        saved.off.iter().find(|(x, _)| x == r)?;
+    }
+    let mut out = saved.clone();
+    for p in &mut out.parts {
+        if let Some(m) = c.mounts.get(&p.refdes) {
+            // (the automatic layout's chips on the copper side are leaded parts to the schematic)
+            let auto_back = matches!(p.mount, crate::mount::Mount::Back { .. }) && *m == crate::mount::Mount::Leaded;
+            if !auto_back {
+                p.mount = m.clone();
+            }
+        }
+    }
+    Some(out)
+}
+
 /// A saved layout in step with the schematic: the parts no longer in it (or whose pins changed) go, the parts new to it are laid out
 /// as the automatic layout would and put to the right of the board (a column between, cut on every row, and three spare holes
 /// either side), with the automatic layout's cuts among them, and every other part, link and cut stays where it was. The wires the
 /// new parts need are drawn: each line of the ratsnest that ends at a new part, between the free holes nearest its ends on their
 /// pieces of strip; a piece with no free hole leaves its net apart, which the check names.
 pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLayout {
+    // the same parts with the same pins and the same parts off the board (a hand edit of the layout, nothing new in the schematic):
+    // the saved layout as it is, the ways on from the schematic, without making the automatic layout (a perfboard's takes up to
+    // 1.5 s, and it was made after every wire drawn by hand)
+    if let Some(out) = same_parts(s, saved) {
+        return out;
+    }
     let auto = if saved.perf { crate::perfboard::perf_layout_with(s, opt) } else { strip_layout_with(s, opt) };
     let mut out = saved.clone();
     let pins = |leads: &[(String, At)]| {
