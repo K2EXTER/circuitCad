@@ -6,7 +6,7 @@ use super::*;
 use sch_core::mount::{shopping, Mount};
 use sch_core::perfboard::{links_along_pins, lock_first, perf_layout_around, perf_layout_with, LockWhy};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
-use sch_core::strip_edit::{area_moved, area_turned, turned_box, cut_toggled, link_end_moved, part_moved, part_turned, parts_aligned, parts_in_box, synced, with_bare, with_link, without_bare_at, without_link, StripAlign};
+use sch_core::strip_edit::{cut_toggled, picked_moved, picked_turned, parts_touching_box, link_end_moved, part_moved, part_turned, parts_aligned, parts_in_box, synced, with_bare, with_link, without_bare_at, without_link, StripAlign};
 use sch_core::stripboard::{hole_name, net_at, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
 
 /// What the person builds on.
@@ -41,13 +41,13 @@ pub enum StripTool {
 
 /// What is being dragged.
 #[derive(Clone, Debug)]
-enum StripDrag {
+pub(super) enum StripDrag {
     Part { refdes: String, from: At },
     LinkEnd { k: usize, end: usize },
-    /// The block in the box, from the hole the press was on.
+    /// The parts picked together (`StripState.chosen`), from the hole the press was on.
     Block { from: At },
-    /// A box being drawn from this hole.
-    Select { from: At },
+    /// A box being drawn from this hole to `now`: the left button picks what it encloses, the right (`touching`) what it touches.
+    Select { from: At, now: At, touching: bool },
     /// A section's box (perfboard) by its name, from the hole the press was on to the one the pointer is on: let go, the box stays
     /// there and the others are packed round it (`perf_layout_around`).
     Section { k: usize, from: At, now: At },
@@ -69,11 +69,15 @@ pub struct StripState {
     around: Option<std::sync::mpsc::Receiver<StripLayout>>,
     /// A section's box let go where it was dragged, drawn there until the layout round it comes back.
     put_box: Option<(At, At)>,
-    drag: Option<StripDrag>,
+    pub(super) drag: Option<StripDrag>,
     /// The size and place of the board when the drag began: it stays put while the board grows under the pointer.
     frozen: Option<(Pos2, f32)>,
-    /// The box picked (two corner holes).
-    pub(super) sel: Option<(At, At)>,
+    /// The parts picked together (two or more, as on the schematic; one alone is `BreadboardView.picked`), and the boxes drawn to pick
+    /// them: what lies in those boxes goes along when the parts are moved or turned (`strip_edit::picked_moved`).
+    pub(super) chosen: Vec<String>,
+    chosen_areas: Vec<(At, At)>,
+    /// A box to pick by the names of its corner holes once the layout is there (`--proto-sel`; a perfboard is laid out on another thread).
+    pending_box: Option<(String, String)>,
     link_start: Option<At>,
     picked_link: Option<usize>,
     /// Where hole (0, 0) was drawn and the pitch, last frame (for the tests' pointer).
@@ -178,7 +182,7 @@ type AlignButton = (StripAlign, crate::icons::Icon, &'static str, &'static str);
 const NET_ORDER: (&str, &str) = ("つながる順に並べる", "つながる相手の IC やヘッダの足の並びの順に、一列に並べます。ドライバ IC の出力の順にリレーを、ヘッダのピンの順に抵抗を、のように使います (相手の足が横に並んでいれば横一列、縦なら縦一列。列の真ん中は相手の足の真ん中の向かい)");
 
 /// What lining up does, on the label before the buttons.
-const ALIGN_HELP: &str = "四角で囲んだ部品を揃えて並べます。ユニバーサル基板では、揃えた部品はその穴に固定され、ほかの部品と線は自動で置き直されます。ストリップ基板では部品だけが動くので、帯の上のつながりが変わります (照合とラッツネストで確かめます)。元に戻すで戻せます";
+const ALIGN_HELP: &str = "選んだ部品 (囲むか Shift + クリックで 2 個以上) を揃えて並べます。ユニバーサル基板では、揃えた部品はその穴に固定され、ほかの部品と線は自動で置き直されます。ストリップ基板では部品だけが動くので、帯の上のつながりが変わります (照合とラッツネストで確かめます)。元に戻すで戻せます";
 
 impl BreadboardView {
     /// A hand edit (or "自動で並べ直す"): the layout before it goes on the undo list.
@@ -211,7 +215,7 @@ impl BreadboardView {
         let Some(m) = from.pop() else { return };
         to.push(std::mem::replace(&mut sch.stripboard, m));
         self.strip.last = Some(sch.stripboard.clone());
-        self.strip.sel = None;
+        self.strip_unpick();
         self.strip.picked_link = None;
         self.strip.drag = None;
     }
@@ -287,7 +291,7 @@ impl BreadboardView {
             Ok(m) => {
                 self.strip.around = None;
                 self.strip.put_box = None;
-                self.strip.sel = None;
+                self.strip_unpick();
                 self.strip.picked_link = None;
                 self.strip_set(sch, Some(m));
                 sch.status = i18n::tr("固定した部品・置いた区画の箱はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
@@ -382,14 +386,45 @@ impl BreadboardView {
         *l = m;
     }
 
-    /// Whether a box is picked (the tests).
-    #[cfg(test)]
-    pub(crate) fn strip_has_box(&self) -> bool {
-        self.strip.sel.is_some()
+    /// Lets go of the parts picked together.
+    pub(super) fn strip_unpick(&mut self) {
+        self.strip.chosen.clear();
+        self.strip.chosen_areas.clear();
+    }
+
+    /// Picks `parts` (a box drawn: `area`), or adds them to what is picked (`add`, Shift). One part alone is the picked part.
+    pub(super) fn strip_pick(&mut self, parts: Vec<String>, area: Option<(At, At)>, add: bool) {
+        let mut all: Vec<String> = if add { self.strip.chosen.iter().cloned().chain(self.picked.clone()).collect() } else { vec![] };
+        if !add {
+            self.strip.chosen_areas.clear();
+        }
+        for r in parts {
+            if !all.contains(&r) {
+                all.push(r);
+            }
+        }
+        self.strip.chosen_areas.extend(area);
+        if all.len() >= 2 {
+            self.picked = None;
+            self.strip.chosen = all;
+        } else {
+            self.strip_unpick();
+            self.picked = all.pop();
+        }
+    }
+
+    /// The parts picked together or the part picked, by name.
+    pub(super) fn strip_picked_parts(&self) -> Vec<String> {
+        if self.strip.chosen.is_empty() { self.picked.iter().cloned().collect() } else { self.strip.chosen.clone() }
+    }
+
+    /// The parts in a box picked by the names of the holes at two corners ("A1", "AB12"), once the layout is drawn.
+    pub(crate) fn strip_pick_box(&mut self, a: &str, b: &str) {
+        self.strip.pending_box = Some((a.to_string(), b.to_string()));
     }
 
     /// A box picked by the names of the holes at two corners ("A1", "AB12": `hole_name`); nothing when a name does not read.
-    pub(crate) fn strip_pick_box(&mut self, a: &str, b: &str) {
+    fn strip_pick_box_now(&mut self, l: &StripLayout, a: &str, b: &str) {
         let read = |s: &str| -> Option<At> {
             let letters: String = s.chars().take_while(|c| c.is_ascii_uppercase()).collect();
             let col: u16 = s[letters.len()..].parse().ok()?;
@@ -397,7 +432,7 @@ impl BreadboardView {
             Some((row as u16, col.checked_sub(1)?))
         };
         if let (Some(a), Some(b)) = (read(a), read(b)) {
-            self.strip.sel = Some((a, b));
+            self.strip_pick(parts_in_box(l, a, b), Some((a, b)), false);
         }
     }
 
@@ -407,9 +442,8 @@ impl BreadboardView {
     pub(super) fn strip_align(&mut self, sch: &mut SchEditor, l: &StripLayout, picked: &[String], how: StripAlign) {
         match parts_aligned(&sch.sch, l, picked, how, ALIGN_GAP) {
             Ok(m) => {
-                let holes: Vec<At> = m.parts.iter().filter(|p| picked.contains(&p.refdes)).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
-                let corner = |f: fn(u16, u16) -> u16, start: u16| holes.iter().fold((start, start), |c, a| (f(c.0, a.0), f(c.1, a.1)));
-                self.strip.sel = Some((corner(u16::min, u16::MAX), corner(u16::max, 0)));
+                // the same parts stay picked (the boxes drawn are left behind: the parts are somewhere else now)
+                self.strip.chosen_areas.clear();
                 self.strip_set(sch, Some(m.clone()));
                 if m.perf {
                     sch.status = i18n::trf!("{} 個を揃えて固定し、ほかの部品を並べ直しています…", picked.len());
@@ -522,7 +556,7 @@ impl BreadboardView {
         let back_only = self.strip.back.then_some("裏は見るだけです。表に戻すと直せます");
         ui.horizontal_wrapped(|ui| {
             for (t, name, tip) in [
-                (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。何も無い所からドラッグすると四角で囲み、囲んだ所をドラッグすると、中の部品・線の端・切る穴をまとめて動かし、R で回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線は Delete で消えます"),
+                (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。回路図と同じく、何も無い所から左ドラッグで囲むと囲んだ部品を、右ドラッグで触れた部品も選び (Shift で今の選択に足す・Shift + クリックで 1 個ずつ足す・外す)、選んだ部品のどれかをドラッグすると、まとめて動きます (囲んだ所の線の端・切る穴も一緒に)。R で選んだ部品をまとめて回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線は Delete で消えます"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
                 (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行か列の穴をクリックします。右クリックした穴を通る手の線は消えます。線の両端と、途中で部品の足や別の線に重なる穴がつながります"),
@@ -553,7 +587,7 @@ impl BreadboardView {
         if sch.stripboard.is_some() {
             if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から並べ方を作り直します。手で動かした分は消えます (元に戻すで戻せます)")).clicked() {
                 self.strip_set(sch, None);
-                self.strip.sel = None;
+                self.strip_unpick();
                 self.strip.picked_link = None;
             }
         } else {
@@ -561,13 +595,13 @@ impl BreadboardView {
                 "まだ手で動かしていないので、回路図を変えると並べ直されます。動かすと、その並べ方が回路図のファイルに入り、回路図を変えたときは、足した部品だけが基板の右に加わり、そのネットへの線も引かれます (帯の片に空いた穴が無くて引けない線は、照合が言います)",
             ));
         }
-        // the parts in the picked box lined up (`strip_edit::parts_aligned`)
-        if let Some((a, b)) = self.strip.sel {
-            let picked = parts_in_box(l, a, b);
+        // the parts picked together lined up (`strip_edit::parts_aligned`)
+        {
+            let picked = self.strip.chosen.clone();
             if picked.len() >= 2 {
                 let busy = self.strip.around.is_some();
                 let mut chosen: Option<StripAlign> = None;
-                ui.label(i18n::trf!("囲んだ {} 個を (?)", picked.len())).on_hover_text(i18n::tr(ALIGN_HELP));
+                ui.label(i18n::trf!("選んだ {} 個を (?)", picked.len())).on_hover_text(i18n::tr(ALIGN_HELP));
                 for (i, (name, buttons)) in ALIGNS.iter().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(i18n::tr(name));
@@ -631,8 +665,8 @@ impl BreadboardView {
     fn strip_legend(&self) -> &'static str {
         let strip = self.kind == BoardKind::Stripboard;
         match self.strip.tool {
-            StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で半回転 / R で部品を回す / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
-            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から四角で囲んでまとめて動かす・R で 90° 回す / R で部品を 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
+            StripTool::Move if strip => "部品・線の端をドラッグ / 何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)・選んだ部品をまとめて動かす・R で半回転 / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
+            StripTool::Move => "部品・線の端をドラッグ / 何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)・選んだ部品をまとめて動かす・R で 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
             StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
@@ -826,6 +860,9 @@ impl BreadboardView {
             painter.text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr(msg), egui::FontId::proportional(16.0), Color32::from_gray(200));
             return;
         }
+        if !busy && let Some((a, b)) = self.strip.pending_box.take() {
+            self.strip_pick_box_now(&l, &a, &b);
+        }
         // a margin on the left for the strips' names and the supplies off the board
         let left = 9.0;
         let w = left + l.cols as f32 + 1.0;
@@ -836,7 +873,8 @@ impl BreadboardView {
         let origin = Pos2::new(rect.left() + (rect.width() - w * pitch) / 2.0 + if back { 1.0 } else { left } * pitch, rect.top() + 46.0 + pitch);
         // the view: zoomed and moved from the fitted picture (not while a part is being dragged: the board stays put under it)
         if self.strip.drag.is_none() {
-            self.view().input(ui, &response, rect, true);
+            let right_pans = self.strip.back || self.strip.tool != StripTool::Move;
+            self.view().input(ui, &response, rect, true, right_pans);
         }
         let (pitch, origin) = self.view().apply(rect, pitch, origin);
         let painter = painter.with_clip_rect(rect);
@@ -1043,10 +1081,16 @@ impl BreadboardView {
         if let Some(k) = self.strip.picked_link.and_then(|k| l.links.get(k)) {
             painter.line_segment([to(k.a), to(k.b)], Stroke::new(pitch * 0.34, PICK.gamma_multiply(0.6)));
         }
-        if let Some((a, b)) = self.strip.sel {
-            let r = Rect::from_two_pos(to(a), to(b)).expand(pitch * 0.5);
-            painter.rect_filled(r, 2.0, PICK.gamma_multiply(0.12));
-            painter.rect_stroke(r, 2.0, Stroke::new(1.5, PICK), egui::StrokeKind::Inside);
+        for p in l.parts.iter().filter(|p| self.strip.chosen.contains(&p.refdes)) {
+            let pts: Vec<Pos2> = p.leads.iter().map(|(_, a)| to(*a)).collect();
+            painter.rect_stroke(Rect::from_points(&pts).expand(pitch * 0.6), 3.0, Stroke::new(2.0, PICK), egui::StrokeKind::Outside);
+        }
+        // a box being drawn: blue encloses (left button), green touches (right), as on the schematic
+        if let Some(StripDrag::Select { from, now, touching }) = &self.strip.drag {
+            let r = Rect::from_two_pos(to(*from), to(*now)).expand(pitch * 0.5);
+            let (fill, line) = if *touching { (Color32::from_rgba_unmultiplied(40, 160, 60, 40), Color32::from_rgb(30, 140, 50)) } else { (Color32::from_rgba_unmultiplied(40, 100, 230, 40), Color32::from_rgb(30, 80, 210)) };
+            painter.rect_filled(r, 0.0, fill);
+            painter.rect_stroke(r, 0.0, Stroke::new(1.2, line), egui::StrokeKind::Inside);
         }
         if let Some(a) = self.strip.link_start {
             painter.circle_stroke(to(a), pitch * 0.35, Stroke::new(2.0, PICK));
@@ -1216,7 +1260,7 @@ impl BreadboardView {
         self.strip.drag = None;
         self.strip.frozen = None;
         self.strip.link_start = None;
-        self.strip.sel = None;
+        self.strip_unpick();
     }
 
     /// The copper side, seen from below with left and right swapped (as the board is held to solder): the copper (the strips and
@@ -1416,7 +1460,6 @@ impl BreadboardView {
             let (r, c) = (v.y.round(), v.x.round());
             (r >= 0.0 && c >= 0.0 && r < 2000.0 && c < 2000.0).then_some((r as u16, c as u16))
         };
-        let in_box = |a: At, (p, q): (At, At)| a.0 >= p.0.min(q.0) && a.0 <= p.0.max(q.0) && a.1 >= p.1.min(q.1) && a.1 <= p.1.max(q.1);
         let link_end_at = |l: &StripLayout, p: Pos2| l.links.iter().enumerate().flat_map(|(k, w)| [(k, 0, w.a), (k, 1, w.b)]).find(|(_, _, h)| to(*h).distance(p) < pitch * 0.4).map(|(k, e, _)| (k, e));
         let part_at = |l: &StripLayout, p: Pos2| {
             l.parts
@@ -1437,28 +1480,35 @@ impl BreadboardView {
             })
         };
         let tool = self.strip.tool;
+        // the left button (not with Alt: that moves the picture) drags what is under it, or draws a box; the right button (or Shift)
+        // draws a box, the right one picking what it touches (as on the schematic)
+        let (alt, shift) = ui.input(|i| (i.modifiers.alt, i.modifiers.shift));
+        let left = response.drag_started_by(egui::PointerButton::Primary) && !alt;
+        let right = response.drag_started_by(egui::PointerButton::Secondary);
         if tool == StripTool::Move
-            && response.drag_started_by(egui::PointerButton::Primary)
+            && (left || right)
             // where the button went down (the drag starts a few points later)
             && let Some(p) = ui.input(|i| i.pointer.press_origin()).or(response.interact_pointer_pos())
             && let Some(h) = hole_at(p)
         {
             self.strip.frozen = Some((origin, pitch));
-            self.strip.drag = Some(if let Some((k, end)) = link_end_at(l, p) {
+            let under = if right || shift { None } else { part_at(l, p) };
+            self.strip.drag = Some(if right || shift {
+                StripDrag::Select { from: h, now: h, touching: right }
+            } else if let Some((k, end)) = link_end_at(l, p) {
                 self.strip.picked_link = Some(k);
                 StripDrag::LinkEnd { k, end }
-            } else if self.strip.sel.is_some_and(|b| in_box(h, b)) {
+            } else if under.as_ref().is_some_and(|r| self.strip.chosen.contains(r)) {
                 StripDrag::Block { from: h }
             } else if let Some(k) = section_at(l, p) {
-                self.strip.sel = None;
+                self.strip_unpick();
                 StripDrag::Section { k, from: h, now: h }
-            } else if let Some(r) = part_at(l, p) {
+            } else if let Some(r) = under {
                 self.picked = Some(r.clone());
-                self.strip.sel = None;
+                self.strip_unpick();
                 StripDrag::Part { refdes: r, from: h }
             } else {
-                self.strip.sel = None;
-                StripDrag::Select { from: h }
+                StripDrag::Select { from: h, now: h, touching: false }
             });
         }
         if let Some(d) = self.strip.drag.clone()
@@ -1473,10 +1523,17 @@ impl BreadboardView {
                 }
                 StripDrag::Block { from } => {
                     let (dr, dc) = delta(*from);
-                    self.strip.sel.and_then(|(a, b)| area_moved(l, a, b, dr, dc))
+                    picked_moved(l, &self.strip.chosen, &self.strip.chosen_areas, dr, dc)
                 }
-                StripDrag::Select { from } => {
-                    self.strip.sel = Some((*from, h));
+                StripDrag::Select { from, touching, .. } => {
+                    let (from, touching) = (*from, *touching);
+                    self.strip.drag = Some(StripDrag::Select { from, now: h, touching });
+                    if response.drag_stopped() {
+                        let parts = if touching { parts_touching_box(l, from, h) } else { parts_in_box(l, from, h) };
+                        let n = parts.len();
+                        self.strip_pick(parts, Some((from, h)), shift);
+                        sch.status = i18n::trf!("{} 個を選択 ({})", n, if touching { i18n::tr("触れた物を含む範囲") } else { i18n::tr("完全に囲んだ範囲") });
+                    }
                     None
                 }
                 StripDrag::Section { k, from, .. } => {
@@ -1491,8 +1548,8 @@ impl BreadboardView {
                 if response.drag_stopped() && m != *l {
                     if let StripDrag::Block { from } = d {
                         let (dr, dc) = delta(from);
-                        let shift = |a: At| ((a.0 as i32 + dr).max(0) as u16, (a.1 as i32 + dc).max(0) as u16);
-                        self.strip.sel = self.strip.sel.map(|(a, b)| (shift(a), shift(b)));
+                        let moved = |a: At| ((a.0 as i32 + dr).max(0) as u16, (a.1 as i32 + dc).max(0) as u16);
+                        self.strip.chosen_areas = self.strip.chosen_areas.iter().map(|(a, b)| (moved(*a), moved(*b))).collect();
                     }
                     self.strip_set(sch, Some(m.clone()));
                 }
@@ -1518,8 +1575,24 @@ impl BreadboardView {
                             (a + (b - a) * t).distance(p) < pitch * 0.3
                         })
                     });
-                    self.picked = if self.strip.picked_link.is_some() { None } else { part_at(l, p) };
-                    self.strip.sel = None;
+                    // (with Shift the part wins over a wire end on its lead: Shift picks parts)
+                    let under = if self.strip.picked_link.is_some() && !shift { None } else { part_at(l, p) };
+                    if shift && let Some(r) = under {
+                        self.strip.picked_link = None;
+                        // Shift + click adds the part to what is picked, or takes it out
+                        let mut now = self.strip_picked_parts();
+                        if let Some(k) = now.iter().position(|x| *x == r) {
+                            now.remove(k);
+                        } else {
+                            now.push(r);
+                        }
+                        let areas = std::mem::take(&mut self.strip.chosen_areas);
+                        self.strip_pick(now, None, false);
+                        self.strip.chosen_areas = areas;
+                    } else {
+                        self.picked = under;
+                        self.strip_unpick();
+                    }
                 }
                 StripTool::Link => match self.strip.link_start.take() {
                     None => self.strip.link_start = Some(h),
@@ -1566,7 +1639,7 @@ impl BreadboardView {
         // wire under it away instead (above)
         if tool != StripTool::Bare && response.secondary_clicked() {
             self.strip.link_start = None;
-            self.strip.sel = None;
+            self.strip_unpick();
             self.strip.picked_link = None;
             self.picked = None;
         }
@@ -1574,10 +1647,11 @@ impl BreadboardView {
         if response.hovered() {
             if tool == StripTool::Move
                 && ui.input(|i| i.key_pressed(egui::Key::R))
-                && let Some((a, b)) = self.strip.sel
+                && self.strip.chosen.len() >= 2
+                && let Some(m) = picked_turned(l, &self.strip.chosen, &self.strip.chosen_areas)
             {
-                let m = area_turned(l, a, b);
-                self.strip.sel = Some(turned_box(l, a, b));
+                // the boxes drawn are not where the parts are now
+                self.strip.chosen_areas.clear();
                 self.strip_set(sch, Some(m.clone()));
                 *l = m;
             } else if tool == StripTool::Move
@@ -1609,7 +1683,7 @@ impl BreadboardView {
         }
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.strip.link_start = None;
-            self.strip.sel = None;
+            self.strip_unpick();
         }
         // Ctrl+Z undoes a hand edit, Ctrl+Y (or Ctrl+Shift+Z) redoes it; the layout shown follows next frame
         if !ui.ctx().egui_wants_keyboard_input() && self.strip.drag.is_none() {

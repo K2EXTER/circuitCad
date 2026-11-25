@@ -38,6 +38,68 @@ pub fn part_moved(l: &StripLayout, refdes: &str, dr: i32, dc: i32) -> Option<Str
 /// something would leave the board at the top or the left.
 pub fn area_moved(l: &StripLayout, a: At, b: At, dr: i32, dc: i32) -> Option<StripLayout> {
     let inside = |at: At| at.0 >= a.0.min(b.0) && at.0 <= a.0.max(b.0) && at.1 >= a.1.min(b.1) && at.1 <= a.1.max(b.1);
+    region_moved(l, &inside, dr, dc)
+}
+
+/// The parts `refdes` moved `dr` rows and `dc` columns as one, with what lies among them (`Picked`): the links, cuts, bare wires and
+/// off-board wires within a hole of the box round their leads, or in one of the boxes `areas` drawn to pick them, go too (a link with
+/// one end outside stretches); the parts not picked stay, even inside those boxes, and so do the link ends on their leads. None when
+/// nothing is picked or something would leave the board at the top or the left.
+pub fn picked_moved(l: &StripLayout, refdes: &[String], areas: &[(At, At)], dr: i32, dc: i32) -> Option<StripLayout> {
+    let p = Picked::of(l, refdes, areas)?;
+    region_moved(l, &|at| p.inside(at), dr, dc)
+}
+
+/// The parts `refdes` turned as one about the box round their leads, with what lies among them (`Picked`), as `area_turned` turns a
+/// box: half a turn on a stripboard, a quarter turn clockwise on a perfboard. None when nothing is picked.
+pub fn picked_turned(l: &StripLayout, refdes: &[String], areas: &[(At, At)]) -> Option<StripLayout> {
+    let p = Picked::of(l, refdes, areas)?;
+    Some(region_turned(l, p.frame, &|at| p.inside(at)))
+}
+
+/// The parts with a lead in the rows and columns from `a` to `b`, or whose leads' box crosses it (a box drawn "touching": a chip whose
+/// pins are on both sides of it).
+pub fn parts_touching_box(l: &StripLayout, a: At, b: At) -> Vec<String> {
+    let (r0, r1, c0, c1) = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
+    l.parts
+        .iter()
+        .filter(|p| !p.leads.is_empty())
+        .filter(|p| {
+            let (pr0, pr1, pc0, pc1) = part_box(p);
+            pr0 <= r1 && pr1 >= r0 && pc0 <= c1 && pc1 >= c0
+        })
+        .map(|p| p.refdes.clone())
+        .collect()
+}
+
+/// What a pick of parts carries along: the box round their leads and one hole more, and the boxes drawn to pick them, less the holes of
+/// the leads of the parts not picked. `frame` is the box round all of it (what a turn turns about).
+struct Picked {
+    frame: (u16, u16, u16, u16),
+    boxes: Vec<(u16, u16, u16, u16)>,
+    others: std::collections::BTreeSet<At>,
+}
+
+impl Picked {
+    fn of(l: &StripLayout, refdes: &[String], areas: &[(At, At)]) -> Option<Picked> {
+        let picked: Vec<&StripPart> = l.parts.iter().filter(|p| refdes.contains(&p.refdes) && !p.leads.is_empty()).collect();
+        let first = part_box(picked.first()?);
+        let (r0, r1, c0, c1) = picked.iter().map(|p| part_box(p)).fold(first, |f, b| (f.0.min(b.0), f.1.max(b.1), f.2.min(b.2), f.3.max(b.3)));
+        // one hole round the leads: the cuts beside a chip's end pins and the short links off its pins belong to it
+        let mut boxes = vec![(r0.saturating_sub(1), r1 + 1, c0.saturating_sub(1), c1 + 1)];
+        boxes.extend(areas.iter().map(|(a, b)| (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1))));
+        let frame = boxes.iter().fold(boxes[0], |f, b| (f.0.min(b.0), f.1.max(b.1), f.2.min(b.2), f.3.max(b.3)));
+        let others = l.parts.iter().filter(|p| !refdes.contains(&p.refdes)).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+        Some(Picked { frame, boxes, others })
+    }
+
+    fn inside(&self, at: At) -> bool {
+        self.boxes.iter().any(|&(r0, r1, c0, c1)| at.0 >= r0 && at.0 <= r1 && at.1 >= c0 && at.1 <= c1) && !self.others.contains(&at)
+    }
+}
+
+/// Everything on the holes `inside` says moved `dr` rows and `dc` columns (`area_moved` with any shape of region).
+fn region_moved(l: &StripLayout, inside: &dyn Fn(At) -> bool, dr: i32, dc: i32) -> Option<StripLayout> {
     let mut out = l.clone();
     for p in &mut out.parts {
         if p.leads.iter().all(|(_, at)| inside(*at)) {
@@ -81,8 +143,15 @@ pub fn area_moved(l: &StripLayout, a: At, b: At, dr: i32, dc: i32) -> Option<Str
 /// so what was joined along a strip stays joined; a quarter turn would stand a chip's pins across them. On a perfboard (no strips)
 /// a quarter turn clockwise (`turned_box` is where the box then is).
 pub fn area_turned(l: &StripLayout, a: At, b: At) -> StripLayout {
-    let (r0, r1, c0, c1) = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
-    let inside = |at: At| at.0 >= r0 && at.0 <= r1 && at.1 >= c0 && at.1 <= c1;
+    let frame = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
+    let (r0, r1, c0, c1) = frame;
+    region_turned(l, frame, &|at: At| at.0 >= r0 && at.0 <= r1 && at.1 >= c0 && at.1 <= c1)
+}
+
+/// Everything on the holes `inside` says turned about the box `frame` (first row, last row, first column, last column), as
+/// `area_turned` turns a box.
+fn region_turned(l: &StripLayout, frame: (u16, u16, u16, u16), inside: &dyn Fn(At) -> bool) -> StripLayout {
+    let (r0, r1, c0, c1) = frame;
     // a perfboard turns a quarter turn clockwise about the box's top-left corner (the box then is as tall as it was wide)
     let turn = |at: At| match (inside(at), l.perf) {
         (false, _) => at,
@@ -618,6 +687,39 @@ mod tests {
         let side = part_moved(&l, "R2", a.0 as i32 - b.0 as i32, a.2 as i32 + 9 - b.2 as i32).unwrap();
         let err = parts_aligned(&s, &side, &["R1".to_string(), "R2".to_string()], StripAlign::Left, 1).unwrap_err();
         assert!(err.contains("R2 があります") || err.contains("R1 があります"), "{err}");
+    }
+
+    /// All the parts picked and moved together keep the board joined as drawn (the links among them go too); a pick of some leaves
+    /// the others where they were even inside the box round the pick; turning a pick of all keeps the stripboard joined; a box that
+    /// only crosses a chip still touches it.
+    #[test]
+    fn picked_parts_move_and_turn_as_one() {
+        let s = blinker();
+        let l = crate::stripboard::strip_layout(&s);
+        let all: Vec<String> = l.parts.iter().map(|p| p.refdes.clone()).collect();
+        // all of them, picked with a box round the whole board: as moving the board's box
+        let whole = [((0, 0), (l.rows - 1, l.cols - 1))];
+        let moved = picked_moved(&l, &all, &whole, 2, 3).unwrap();
+        assert_eq!(moved, area_moved(&l, whole[0].0, whole[0].1, 2, 3).unwrap());
+        assert!(crate::stripboard::strip_check(&s, &moved).is_empty(), "{:?}", crate::stripboard::strip_check(&s, &moved));
+        let turned = picked_turned(&l, &all, &whole).unwrap();
+        assert!(crate::stripboard::strip_check(&s, &turned).is_empty(), "half a turn keeps the strips: {:?}", crate::stripboard::strip_check(&s, &turned));
+        // the chip and one other part: the parts not picked stay
+        let chip = l.parts.iter().find(|p| p.leads.len() == 8).unwrap().refdes.clone();
+        let other = l.parts.iter().find(|p| p.refdes != chip).unwrap().refdes.clone();
+        let pick = vec![chip.clone(), other.clone()];
+        let m = picked_moved(&l, &pick, &[], 0, 1).unwrap();
+        for p in &l.parts {
+            let after = &m.parts.iter().find(|q| q.refdes == p.refdes).unwrap().leads;
+            let shifted = p.leads.iter().zip(after).all(|(a, b)| b.1 == (a.1 .0, a.1 .1 + 1));
+            assert_eq!(shifted, pick.contains(&p.refdes), "{}: {:?} -> {:?}", p.refdes, p.leads, after);
+        }
+        assert!(picked_moved(&l, &[], &whole, 0, 1).is_none(), "nothing picked");
+        // a box on one row through the middle of the chip touches it but does not enclose it
+        let (r0, r1, c0, _) = part_box(l.parts.iter().find(|p| p.refdes == chip).unwrap());
+        let mid = (r0 + r1) / 2;
+        assert!(parts_touching_box(&l, (mid, c0), (mid, c0)).contains(&chip));
+        assert!(!parts_in_box(&l, (mid, c0), (mid, c0)).contains(&chip));
     }
 
     fn blinker() -> Schematic {

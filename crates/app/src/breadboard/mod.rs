@@ -80,6 +80,12 @@ pub struct BreadboardView {
     views: [zoom::ZoomPan; 3],
     /// The pointer was over a knob of the running circuit last frame: the wheel turns it, not the zoom.
     wheel_on_knob: bool,
+    /// The breadboard's parts picked together (two or more, as on the schematic; one alone is `picked`), and a box being drawn to pick
+    /// them: where the press was and whether it picks what it touches (the right button) or what it encloses (the left).
+    chosen: Vec<String>,
+    pick_box: Option<(Pos2, bool)>,
+    /// Where the breadboard's origin was drawn and its pitch, last frame (for the tests' pointer).
+    bread_drawn: Option<(Pos2, f32)>,
     /// The stripboard / perfboard view's tools, drag and caches (`strip_view.rs`).
     pub strip: strip_view::StripState,
     /// "組む順と通電": the build one section at a time and the check after each (`build_steps.rs`).
@@ -295,7 +301,7 @@ impl BreadboardView {
     /// The status line's hint.
     pub fn hint(&self) -> String {
         if self.kind != BoardKind::Breadboard {
-            return "部品・線の端は穴ごとにドラッグで動かせます。何も無い所から四角で囲むと、中をまとめて動かせます。動かすたびに、左で回路図と照らし合わせます".into();
+            return "部品・線の端は穴ごとにドラッグで動かせます。何も無い所からドラッグで囲むと部品を選べ (右ドラッグは触れた物も、Shift で足す)、選んだ部品はまとめて動かせます。動かすたびに、左で回路図と照らし合わせます".into();
         }
         "縦の 5 つの穴は中でつながっています。ポインタを穴に合わせると、つながっている穴が光ります。部品をドラッグすると差し替えられ、回路図と違うつなぎ方は赤い丸と左の一覧で分かります".into()
     }
@@ -357,5 +363,16 @@ impl BreadboardView {
             BoardKind::Perfboard => 2,
         };
         &mut self.views[k]
+    }
+
+    /// The breadboard's parts picked: two or more are picked together, one alone is the picked part.
+    fn set_bread_pick(&mut self, mut parts: Vec<String>) {
+        if parts.len() >= 2 {
+            self.picked = None;
+            self.chosen = parts;
+        } else {
+            self.chosen.clear();
+            self.picked = parts.pop();
+        }
     }
 }

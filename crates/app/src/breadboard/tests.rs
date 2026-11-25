@@ -665,9 +665,9 @@ fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
     assert!(!app.breadboard.strip_shown(&app.sch).perf);
 }
 
-/// With the move tool on the perfboard, a right click lets go of the box picked (as Esc).
+/// With the move tool on the perfboard, a right click lets go of the parts picked (as Esc).
 #[test]
-fn a_right_click_lets_the_box_go() {
+fn a_right_click_lets_the_pick_go() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut app = App::default();
     app.sch.load_path(root.join("led.schjson"));
@@ -682,14 +682,15 @@ fn a_right_click_lets_the_box_go() {
     };
     run(&mut app, vec![]);
     let (origin, _) = app.breadboard.strip.drawn.expect("the board was drawn");
-    app.breadboard.strip_pick_box("A1", "C3");
-    assert!(app.breadboard.strip_has_box());
+    app.breadboard.strip_pick_box("A1", "Z60");
+    run(&mut app, vec![]);
+    assert!(app.breadboard.strip.chosen.len() >= 2, "the parts in the box are picked: {:?}", app.breadboard.strip.chosen);
     let p = origin;
     run(&mut app, vec![egui::Event::PointerMoved(p)]);
     for pressed in [true, false] {
         run(&mut app, vec![egui::Event::PointerButton { pos: p, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() }]);
     }
-    assert!(!app.breadboard.strip_has_box(), "a right click lets the box go");
+    assert!(app.breadboard.strip.chosen.is_empty() && app.breadboard.picked.is_none(), "a right click lets the pick go");
 }
 
 /// The schematic's small window on the proto tab: a click on a part in it picks that part on the board (and the board's pick is
@@ -921,8 +922,131 @@ fn a_middle_drag_moves_the_picture_and_selects_nothing() {
     let to = from + Vec2::new(120.0, 60.0);
     run(&mut app, vec![button(to, false)]);
     run(&mut app, vec![]);
-    assert!(app.breadboard.strip.sel.is_none(), "no selection box");
+    assert!(app.breadboard.strip.chosen.is_empty() && app.breadboard.picked.is_none(), "nothing picked");
     assert_eq!(app.sch.stripboard, before, "no part moved");
     let (o1, _) = app.breadboard.strip.drawn.unwrap();
     assert!((o1 - o0 - Vec2::new(120.0, 60.0)).length() < 30.0, "the picture moved with the pointer: {o0:?} -> {o1:?}");
+}
+
+/// As on the schematic: a left drag from an empty hole round the board picks the parts it encloses (the box goes when the button is
+/// let go and the parts are marked); a part of the pick dragged moves them all; Shift + click takes one out of the pick; a right drag
+/// picks what its box touches.
+#[test]
+fn parts_are_picked_with_a_box_and_moved_together() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("ne555_blinker.schjson"));
+    app.mode = Mode::Proto;
+    app.breadboard.kind = BoardKind::Perfboard;
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    // Shift is read from the frame's state (held for the frames `held` says)
+    let held = std::cell::Cell::new(egui::Modifiers::default());
+    let mut run = |app: &mut App, events: Vec<egui::Event>| {
+        let events = std::iter::once(egui::Event::ModifiersChanged(held.get())).chain(events).collect();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+        out.textures_delta.clear();
+    };
+    for _ in 0..3 {
+        run(&mut app, vec![]);
+    }
+    let l = app.breadboard.strip_shown(&app.sch);
+    let (o, p) = app.breadboard.strip.drawn.expect("the board was drawn");
+    let hole = |a: (u16, u16)| o + Vec2::new(a.1 as f32, a.0 as f32) * p;
+    let drag = |app: &mut App, run: &mut dyn FnMut(&mut App, Vec<egui::Event>), from: Pos2, to: Pos2, button: egui::PointerButton, modifiers: egui::Modifiers| {
+        run(app, vec![egui::Event::PointerMoved(from)]);
+        run(app, vec![egui::Event::PointerButton { pos: from, button, pressed: true, modifiers }]);
+        for k in 1..=8 {
+            run(app, vec![egui::Event::PointerMoved(from + (to - from) * (k as f32 / 8.0))]);
+        }
+        run(app, vec![egui::Event::PointerButton { pos: to, button, pressed: false, modifiers }]);
+        run(app, vec![]);
+    };
+    // round the whole board, from outside its corner (no part there)
+    let (from, to) = (hole((0, 0)) - Vec2::splat(p * 0.4), hole((l.rows - 1, l.cols - 1)));
+    drag(&mut app, &mut run, from, to, egui::PointerButton::Primary, Default::default());
+    let mut all: Vec<String> = l.parts.iter().map(|x| x.refdes.clone()).collect();
+    let mut chosen = app.breadboard.strip.chosen.clone();
+    all.sort();
+    chosen.sort();
+    assert_eq!(chosen, all, "every part is picked");
+    assert!(app.breadboard.strip.drag.is_none(), "the box is gone once let go");
+    // a part of the pick dragged one hole right: all of them go
+    let r1 = l.parts.iter().find(|x| x.refdes == "R1").unwrap();
+    let at = hole(r1.leads[0].1);
+    drag(&mut app, &mut run, at, at + Vec2::new(p, 0.0), egui::PointerButton::Primary, Default::default());
+    let m = app.sch.stripboard.clone().expect("the move is kept with the sheet");
+    for x in &l.parts {
+        let y = m.parts.iter().find(|y| y.refdes == x.refdes).unwrap();
+        assert!(x.leads.iter().zip(&y.leads).all(|(a, b)| b.1 == (a.1 .0, a.1 .1 + 1)), "{} moved with the rest: {:?} -> {:?}", x.refdes, x.leads, y.leads);
+    }
+    // Shift + click takes R1 out
+    let r1 = m.parts.iter().find(|x| x.refdes == "R1").unwrap();
+    let at = hole(r1.leads[0].1);
+    let shift = egui::Modifiers { shift: true, ..Default::default() };
+    held.set(shift);
+    run(&mut app, vec![egui::Event::PointerMoved(at)]);
+    for pressed in [true, false] {
+        run(&mut app, vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: shift }]);
+    }
+    held.set(Default::default());
+    assert!(!app.breadboard.strip.chosen.contains(&"R1".to_string()) && app.breadboard.strip.chosen.len() == all.len() - 1, "{:?}", app.breadboard.strip.chosen);
+    // a right drag over one hole of the chip's pins picks the chip, which it only touches (and what crosses that hole)
+    let u1 = m.parts.iter().find(|x| x.refdes == "U1").unwrap();
+    let pin = hole(u1.leads[0].1);
+    drag(&mut app, &mut run, pin - Vec2::splat(p * 0.2), pin + Vec2::splat(p * 0.2), egui::PointerButton::Secondary, Default::default());
+    let now = app.breadboard.strip_picked_parts();
+    assert!(now.contains(&"U1".to_string()), "the chip touched is picked: {now:?}");
+    assert!(now.len() < all.len(), "only what the small box touches: {now:?}");
+}
+
+/// On the breadboard too: a left drag from an empty spot round the parts picks them all, and one of them dragged a column takes the
+/// rest along.
+#[test]
+fn breadboard_parts_are_picked_with_a_box_and_moved_together() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("ne555_blinker.schjson"));
+    app.mode = Mode::Proto;
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let mut run = |app: &mut App, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+        out.textures_delta.clear();
+    };
+    for _ in 0..3 {
+        run(&mut app, vec![]);
+    }
+    let l = app.breadboard.layout(&app.sch);
+    let (o, p) = app.breadboard.bread_drawn.expect("the breadboard was drawn");
+    let hole = |h: Hole| o + at(h) * p;
+    let drag = |app: &mut App, run: &mut dyn FnMut(&mut App, Vec<egui::Event>), from: Pos2, to: Pos2| {
+        run(app, vec![egui::Event::PointerMoved(from)]);
+        run(app, vec![egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }]);
+        for k in 1..=8 {
+            run(app, vec![egui::Event::PointerMoved(from + (to - from) * (k as f32 / 8.0))]);
+        }
+        run(app, vec![egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }]);
+        run(app, vec![]);
+    };
+    // from beyond the last column at the bottom right, to above the first column at the top left
+    let last = l.cols - 1;
+    let (from, to) = (hole(Hole::Rail { rail: Rail::BottomPlus, col: last }) + Vec2::splat(p), hole(Hole::Rail { rail: Rail::TopPlus, col: 0 }) - Vec2::splat(p));
+    drag(&mut app, &mut run, from, to);
+    let mut all: Vec<String> = l.parts.iter().map(|x| x.refdes.clone()).collect();
+    let mut chosen = app.breadboard.chosen.clone();
+    all.sort();
+    chosen.sort();
+    assert_eq!(chosen, all, "every part is picked");
+    // R1 dragged one column right: all go
+    let r1 = l.parts.iter().find(|x| x.refdes == "R1").unwrap().leads[0].1;
+    let start = hole(r1);
+    drag(&mut app, &mut run, start, start + Vec2::new(p, 0.0));
+    let m = app.sch.breadboard.clone().expect("the move is kept with the sheet");
+    for x in &l.parts {
+        let y = m.parts.iter().find(|y| y.refdes == x.refdes).unwrap();
+        assert!(x.leads.iter().zip(&y.leads).all(|(a, b)| b.1.col() == a.1.col() + 1), "{} moved with the rest", x.refdes);
+    }
 }

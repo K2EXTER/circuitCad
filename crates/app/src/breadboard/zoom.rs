@@ -1,7 +1,8 @@
 //! Zooming and moving the board pictures (the breadboard, the stripboard, the perfboard): each picture works out the hole spacing and
-//! the place that fit the whole board in the window, and its view (`ZoomPan`, one per kind of board) scales and shifts that. The wheel
-//! zooms about the pointer, a drag with the middle or right button moves the picture, Home or the button at the bottom right goes back
-//! to the whole board. The left button stays the tools' (dragging parts, wires, cuts).
+//! the place that fit the whole board in the window, and its view (`ZoomPan`, one per kind of board) scales and shifts that. As on the
+//! schematic: the wheel zooms about the pointer, a drag with the middle button (or Alt + the left) moves the picture, and so does the
+//! right button in the tools that do not pick with it (the move tool draws a box with it); Home or the button at the bottom right goes
+//! back to the whole board.
 
 use super::*;
 
@@ -14,11 +15,13 @@ const ZOOM_OUT: f32 = 0.5;
 pub struct ZoomPan {
     pub zoom: f32,
     pub pan: Vec2,
+    /// A left drag begun with Alt held: it moves the picture until let go.
+    alt_pan: bool,
 }
 
 impl Default for ZoomPan {
     fn default() -> Self {
-        Self { zoom: 1.0, pan: Vec2::ZERO }
+        Self { zoom: 1.0, pan: Vec2::ZERO, alt_pan: false }
     }
 }
 
@@ -34,9 +37,16 @@ impl ZoomPan {
         (self.zoom - 1.0).abs() < 1e-4 && self.pan.length() < 0.5
     }
 
-    /// The wheel (when `wheel` may zoom: not while it turns a knob), the middle or right drag and Home. Applies from the next frame.
-    pub fn input(&mut self, ui: &egui::Ui, response: &egui::Response, rect: Rect, wheel: bool) {
-        if response.dragged_by(egui::PointerButton::Middle) || response.dragged_by(egui::PointerButton::Secondary) {
+    /// The wheel (when `wheel` may zoom: not while it turns a knob), the middle drag, Alt + the left drag, the right drag (when
+    /// `right_pans`: the tool does not pick with it) and Home. Applies from the next frame.
+    pub fn input(&mut self, ui: &egui::Ui, response: &egui::Response, rect: Rect, wheel: bool, right_pans: bool) {
+        if response.drag_started_by(egui::PointerButton::Primary) {
+            self.alt_pan = ui.input(|i| i.modifiers.alt);
+        }
+        if !response.dragged_by(egui::PointerButton::Primary) {
+            self.alt_pan = false;
+        }
+        if response.dragged_by(egui::PointerButton::Middle) || (right_pans && response.dragged_by(egui::PointerButton::Secondary)) || self.alt_pan {
             self.pan += response.drag_delta();
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         }
@@ -74,7 +84,7 @@ impl ZoomPan {
             if ui.button("＋").on_hover_text(i18n::tr("拡大します (ホイールでも。ポインタの所を中心に)")).clicked() {
                 self.zoom_about(rect, rect.center(), 1.25);
             }
-            if ui.button("－").on_hover_text(i18n::tr("縮小します (ホイールでも)。動かすのは中ボタンか右ボタンのドラッグ")).clicked() {
+            if ui.button("－").on_hover_text(i18n::tr("縮小します (ホイールでも)。絵を動かすのは、中ボタンか Alt + 左ボタンのドラッグ")).clicked() {
                 self.zoom_about(rect, rect.center(), 0.8);
             }
         });

@@ -22,8 +22,10 @@ impl BreadboardView {
         let origin = Pos2::new(rect.left() + (rect.width() - width * pitch) / 2.0, rect.top() + 40.0 + pitch);
         // the view: zoomed and moved from the fitted picture (the wheel turns a knob instead while the pointer is on one)
         let wheel = !self.wheel_on_knob;
-        self.view().input(ui, &response, rect, wheel);
+        let right_pans = self.tool != Tool::Move;
+        self.view().input(ui, &response, rect, wheel, right_pans);
         let (pitch, origin) = self.view().apply(rect, pitch, origin);
+        self.bread_drawn = Some((origin, pitch));
         let painter = painter.with_clip_rect(rect);
         self.wheel_on_knob = false;
         let to = |h: Hole| origin + at(h) * pitch;
@@ -106,20 +108,33 @@ impl BreadboardView {
         } else {
             self.knob_drag = None;
         }
-        // dragging (the move tool): a jumper's end, or the part, follows the pointer by whole holes; let go to keep it there
+        // dragging (the move tool): a jumper's end, or the part (or all the parts picked together), follows the pointer by whole holes;
+        // let go to keep it there. From an empty hole the left button draws a box that picks what it encloses, the right button (or
+        // Shift) one that picks what it touches too, as on the schematic. Alt + the left button moves the picture instead.
+        let (alt, shift) = ui.input(|i| (i.modifiers.alt, i.modifiers.shift));
+        let left = response.drag_started_by(egui::PointerButton::Primary) && !alt;
+        let right = response.drag_started_by(egui::PointerButton::Secondary);
         if self.tool == Tool::Move
             && !on_switch
-            && response.drag_started_by(egui::PointerButton::Primary)
-            && let Some(p) = response.interact_pointer_pos()
+            && (left || right)
+            && let Some(p) = ui.input(|i| i.pointer.press_origin()).or(response.interact_pointer_pos())
         {
-            if let Some(we) = wire_end_at(p) {
+            let under = l.parts.iter().find(|x| part_rect(x, to, pitch).expand(pitch * 0.6).contains(p)).map(|x| x.refdes.clone());
+            if right || shift {
+                self.pick_box = Some((p, right));
+            } else if let Some(we) = wire_end_at(p) {
                 self.wire_drag = Some(we);
                 self.picked_wire = Some(we.0);
-            } else if let Some(h) = hole_at(p)
-                && let Some(part) = l.parts.iter().find(|x| part_rect(x, to, pitch).expand(pitch * 0.6).contains(p))
+            } else if let Some(r) = under
+                && let Some(h) = hole_at(p)
             {
-                self.drag = Some(Drag { refdes: part.refdes.clone(), from: h });
-                self.picked = Some(part.refdes.clone());
+                if !self.chosen.contains(&r) {
+                    self.chosen.clear();
+                    self.picked = Some(r.clone());
+                }
+                self.drag = Some(Drag { refdes: r, from: h });
+            } else {
+                self.pick_box = Some((p, false));
             }
         }
         if let Some((k, end)) = self.wire_drag
@@ -156,6 +171,7 @@ impl BreadboardView {
         }
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.wire_start = None;
+            self.chosen.clear();
         }
         let mut dragging = false;
         if let Some(d) = &self.drag
@@ -168,7 +184,9 @@ impl BreadboardView {
                 (Hole::Strip { row: a, .. }, Hole::Strip { row: b, .. }) => b as i32 - a as i32,
                 _ => 0,
             };
-            if let Some(m) = moved(&l, &d.refdes, dcol, drow) {
+            // a part of the parts picked together takes them all along
+            let names = if self.chosen.contains(&d.refdes) { self.chosen.clone() } else { vec![d.refdes.clone()] };
+            if let Some(m) = names.iter().try_fold(l.clone(), |acc, r| moved(&acc, r, dcol, drow)) {
                 if response.drag_stopped() {
                     sch.breadboard = Some(m.clone());
                 } else {
@@ -338,7 +356,7 @@ impl BreadboardView {
             }
         }
         for p in &l.parts {
-            let lit = self.picked.as_deref() == Some(p.refdes.as_str()) || focus.as_deref() == Some(p.refdes.as_str()) || self.drag.as_ref().is_some_and(|d| d.refdes == p.refdes);
+            let lit = self.picked.as_deref() == Some(p.refdes.as_str()) || self.chosen.contains(&p.refdes) || focus.as_deref() == Some(p.refdes.as_str()) || self.drag.as_ref().is_some_and(|d| d.refdes == p.refdes);
             let comp = sch.sch.components.iter().find(|c| c.refdes == p.refdes);
             // a potentiometer turned while it runs shows its knob where it is now
             let turned = comp.filter(|c| c.kind == sch_core::Kind::Pot).and_then(|c| {
@@ -415,13 +433,48 @@ impl BreadboardView {
                 response.clone().on_hover_text(tip);
             }
         }
-        if response.clicked() && self.tool == Tool::Move {
+        if response.clicked() && self.tool == Tool::Move && shift {
+            // Shift + click adds the part to what is picked, or takes it out
+            if let Some((r, _)) = hovered_part {
+                let mut now: Vec<String> = if self.chosen.is_empty() { self.picked.iter().cloned().collect() } else { self.chosen.clone() };
+                if let Some(k) = now.iter().position(|x| *x == r) {
+                    now.remove(k);
+                } else {
+                    now.push(r);
+                }
+                self.set_bread_pick(now);
+            }
+        } else if response.clicked() && self.tool == Tool::Move {
+            self.chosen.clear();
             self.picked = hovered_part.map(|(r, _)| r);
             // a click on a jumper picks it (Delete removes it)
             self.picked_wire = response.interact_pointer_pos().and_then(|p| l.wires.iter().position(|w| wire_points(to(w.a), to(w.b), pitch).iter().any(|q| q.distance(p) < pitch * 0.35)));
         }
+        // a right click lets go of what is picked (as Esc)
+        if self.tool == Tool::Move && response.secondary_clicked() {
+            self.chosen.clear();
+            self.picked = None;
+            self.picked_wire = None;
+        }
+        // the box being drawn, and what it picks when let go
+        if let Some((from, touching)) = self.pick_box {
+            let now = ui.ctx().pointer_latest_pos().unwrap_or(from);
+            let r = Rect::from_two_pos(from, now);
+            let (fill, line) = if touching { (Color32::from_rgba_unmultiplied(40, 160, 60, 40), Color32::from_rgb(30, 140, 50)) } else { (Color32::from_rgba_unmultiplied(40, 100, 230, 40), Color32::from_rgb(30, 80, 210)) };
+            painter.rect_filled(r, 0.0, fill);
+            painter.rect_stroke(r, 0.0, Stroke::new(1.2, line), egui::StrokeKind::Inside);
+            if response.drag_stopped() || !ui.input(|i| i.pointer.any_down()) {
+                let got: Vec<String> = l.parts.iter().filter(|x| { let pr = part_rect(x, to, pitch); if touching { r.intersects(pr) } else { r.contains_rect(pr) } }).map(|x| x.refdes.clone()).collect();
+                let n = got.len();
+                let mut all: Vec<String> = if shift { self.chosen.iter().cloned().chain(self.picked.clone()).collect() } else { vec![] };
+                all.extend(got.into_iter().filter(|x| !all.contains(x)).collect::<Vec<_>>());
+                self.set_bread_pick(all);
+                self.pick_box = None;
+                sch.status = i18n::trf!("{} 個を選択 ({})", n, if touching { i18n::tr("触れた物を含む範囲") } else { i18n::tr("完全に囲んだ範囲") });
+            }
+        }
         let legend = match self.tool {
-            Tool::Move => i18n::tr("黄: ポインタの下の穴とつながっている穴　赤い丸: 回路図と違う足　部品・線の端はドラッグで差し替え (R で回す・Delete で線を消す)"),
+            Tool::Move => i18n::tr("黄: ポインタの下の穴とつながっている穴　赤い丸: 回路図と違う足　部品・線の端はドラッグで差し替え (R で回す・Delete で線を消す)　何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)"),
             Tool::Wire => i18n::tr("ジャンパー線: 穴をクリックして、つなぐ先の穴をクリック (Esc でやめる)"),
             Tool::Meter => i18n::tr("テスター: 赤い棒 → 黒い棒の順に穴をクリック。電圧は左に出ます"),
             Tool::Scope => i18n::tr("オシロ: 探り針を当てる穴をクリック。波形は左に出ます"),
