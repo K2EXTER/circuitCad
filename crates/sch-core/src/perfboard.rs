@@ -407,6 +407,11 @@ struct Wants {
     groups: BTreeMap<String, Vec<usize>>,
     /// Each group's farthest distance between two of its parts' centres, in holes (the table's `max_dist`; 0: none).
     group_max: Vec<f64>,
+    /// The parts of a group with a farthest distance whose other parts are in a section further down (`last`: placed at the bottom of
+    /// their own section) or further up (`early`: at its top, after the headers), so that the two halves of the group face each other
+    /// across the boundary of the two sections (L10).
+    last: BTreeSet<String>,
+    early: BTreeSet<String>,
     sections: Vec<(String, BTreeSet<String>)>,
     /// The parts locked where they are (`perf_layout_around`): placed first as they are, never moved.
     keep: Vec<StripPart>,
@@ -432,8 +437,21 @@ impl Wants {
                 groups.entry(p.clone()).or_default().push(i);
             }
         }
-        let group_max = s.requirements.groups.iter().map(|g| g.max_dist.max(0.0) / 2.54).collect();
-        Wants { apart, groups, group_max, sections: crate::stripboard::sections(s, c), keep: vec![], boxes: BTreeMap::new(), keepout: BTreeSet::new() }
+        let group_max: Vec<f64> = s.requirements.groups.iter().map(|g| g.max_dist.max(0.0) / 2.54).collect();
+        let sections = crate::stripboard::sections(s, c);
+        let (mut last, mut early) = (BTreeSet::new(), BTreeSet::new());
+        for (g, _) in group_max.iter().enumerate().filter(|(_, m)| **m > 0.0) {
+            let section_of = |r: &str| sections.iter().position(|(_, m)| m.contains(r));
+            let members: Vec<(String, usize)> = c.on.iter().filter(|p| groups.get(&p.0).is_some_and(|v| v.contains(&g))).filter_map(|p| Some((p.0.clone(), section_of(&p.0)?))).collect();
+            for (r, k) in &members {
+                if members.iter().any(|(_, j)| j > k) {
+                    last.insert(r.clone());
+                } else if members.iter().any(|(_, j)| j < k) {
+                    early.insert(r.clone());
+                }
+            }
+        }
+        Wants { apart, groups, group_max, last, early, sections, keep: vec![], boxes: BTreeMap::new(), keepout: BTreeSet::new() }
     }
 
     /// Whether a part is locked where it is.
@@ -463,6 +481,25 @@ impl Wants {
                 !pair || gap(p) >= *d
             })
         })
+    }
+
+    /// How far the groups with a farthest distance (`group_max`) are past it among `parts` (holes, summed; a group with fewer than two
+    /// of its parts there counts nothing).
+    fn group_over(&self, parts: &[StripPart]) -> f64 {
+        let mut over = 0.0;
+        for (g, limit) in self.group_max.iter().enumerate().filter(|(_, m)| **m > 0.0) {
+            let cs: Vec<(f64, f64)> = parts
+                .iter()
+                .filter(|p| !p.leads.is_empty() && self.groups.get(&p.refdes).is_some_and(|v| v.contains(&g)))
+                .map(|p| {
+                    let n = p.leads.len() as f64;
+                    (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n)
+                })
+                .collect();
+            let far = cs.iter().flat_map(|a| cs.iter().map(move |b| (a.0 - b.0).hypot(a.1 - b.1))).fold(0.0, f64::max);
+            over += (far - limit).max(0.0);
+        }
+        over
     }
 
     /// Whether two parts are in a group together.
@@ -818,18 +855,19 @@ fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool
         };
         widths.sort_unstable();
         widths.dedup();
-        let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), group_max: wants.group_max.clone(), ..Default::default() };
+        let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), group_max: wants.group_max.clone(), last: wants.last.clone(), early: wants.early.clone(), ..Default::default() };
         let mut ls: Vec<StripLayout> = widths.into_iter().map(|w| place(&sub, StripOptions { cols: Some(w), ..opt }, gap, turned, sa, &alone, None)).collect();
         ls.dedup_by_key(|l| (l.cols, l.rows));
         choices.push((i, ls));
     }
     // every mix of the widths packed; the one with the fewest rows (then the smallest board)
     let mut pick: Vec<usize> = vec![0; choices.len()];
-    let mut best: Option<((u16, u32), StripLayout)> = None;
+    let mut best: Option<((u32, u16, u32), StripLayout)> = None;
     loop {
         let blocks: Vec<(usize, &StripLayout)> = choices.iter().zip(&pick).map(|((i, ls), k)| (*i, &ls[*k])).collect();
         let l = pack(c, wants, &blocks, board, gap);
-        let key = (l.rows, l.rows as u32 * l.cols as u32);
+        // (the groups past their farthest distance in whole holes first, then the fewest rows, the smallest board)
+        let key = (wants.group_over(&l.parts).ceil() as u32, l.rows, l.rows as u32 * l.cols as u32);
         if best.as_ref().is_none_or(|b| key < b.0) {
             best = Some((key, l));
         }
@@ -1101,6 +1139,13 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants
             let s = rest.remove(i);
             seen.extend(nets_of(s));
             order.push(s);
+        }
+        // a group's parts whose other parts are in a section below go last (the bottom of this section), those whose others are above
+        // right after the headers (its top): the group then sits across the boundary (L10)
+        if !wants.last.is_empty() || !wants.early.is_empty() {
+            let name_of = |s: &Shape| c.on[s.k].0.clone();
+            let rank = |s: &Shape| if is_head(s) { 0 } else if wants.early.contains(&name_of(s)) { 1 } else if wants.last.contains(&name_of(s)) { 3 } else { 2 };
+            order.sort_by_key(|s| rank(s));
         }
         // the chips in rows (shelves), left to right; one kept apart from a part placed moves on along the row (or to the next)
         let (mut x, mut y, mut shelf) = (margin, top, 0u16);
@@ -2040,6 +2085,28 @@ mod tests {
         let after = crate::stripboard::group_spreads(&s, &l);
         assert!(after[0].1 <= max, "{pair:?}: {far:.1} mm alone, {:.1} mm with the rule (max {max:.1})", after[0].1);
         assert!(crate::stripboard::strip_rules(&s, &l).iter().any(|r| r.ok && r.message.contains("近くに置く「近く」")));
+    }
+
+    /// L10, across sections: a group with a farthest distance whose parts are in two sections (the two op amps of the active filter, one
+    /// in each) is laid out with the two halves facing each other across the sections' boundary (`Wants::last`/`early`, and the boxes'
+    /// mix with the least past the distance): within the distance, where without it they are further apart.
+    #[test]
+    fn a_group_across_two_sections_is_brought_together() {
+        let mut s = load("active_filter.schjson");
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("前段", &["U1", "R1", "R2", "C1", "C2"]), group("後段", &["U2", "R3", "R4", "C3", "C4"])];
+        s.requirements.groups.push(design_spec::PlaceGroup { name: "近く".into(), parts: vec!["U1".into(), "U2".into()], ..Default::default() });
+        let spread = |s: &Schematic| {
+            let l = perf_layout_with(s, StripOptions::default());
+            assert!(strip_check(s, &l).is_empty());
+            let mut t = s.clone();
+            t.requirements.groups[2].max_dist = 1.0;
+            crate::stripboard::group_spreads(&t, &l)[0].1
+        };
+        let free = spread(&s);
+        s.requirements.groups[2].max_dist = 25.0;
+        let kept = spread(&s);
+        assert!(kept <= 25.0 && free > 25.0, "{free:.1} mm without the distance, {kept:.1} mm with it");
     }
 
     /// L11: with mounting holes in the corners of a board of a given size, the layout leaves the 3 × 3 holes of each corner free (no
