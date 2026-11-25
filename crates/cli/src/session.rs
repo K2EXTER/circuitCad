@@ -74,6 +74,12 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         'pick' makes those parts with the series' tables (crates/part-lib/elcaps/), 'write' saves
                                         them into DIR (default: the library)
  Several boards in one project
+  project new FILE.ccproj               an empty project of several boards (written again if it is there)
+  project add FILE.ccproj NAME [SCH.schjson] [board=B.pcbjson] [copies=N]
+                                        a board into it: the session's circuit and board, or the files; a board of
+                                        the same name is replaced (its links and 3D place kept)
+  project link FILE.ccproj A.J4 B.P1 [cable=MM]
+                                        two connectors joined (plugged, or by a cable of MM); answers the check's count
   project check FILE.ccproj             the links between the boards' connectors checked pin by pin (the same net names on both sides,
                                         power not on ground, pins not crossed, a signal not ending in an open pin)
   project bom FILE.ccproj OUT.csv       the parts of all boards counted together (times the copies of each board), one column per board

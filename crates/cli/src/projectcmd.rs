@@ -8,7 +8,7 @@ use sch_core::Schematic;
 use sch_core::system::BoardLink;
 use serde_json::{Value, json};
 
-const USAGE: &str = "project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson | project alias FILE.ccproj LINK NET_A NET_B | project mirror FILE.ccproj LINK | project cable FILE.ccproj LINK [gap=20] | project harness FILE.ccproj OUT.svg|OUT.csv | project color FILE.ccproj LINK PIN COLOR   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic; alias, mirror and cable change link LINK (from 1) in the file: two names as one signal, the pins paired the other way round, the second board laid beside the first for a cable; harness draws every cable (the wires pin to pin, their colours, the mating housings and contacts) as SVG or lists its wires as CSV; color sets the wire on pin PIN of link LINK's first connector to black red orange yellow green blue violet grey white brown, or auto)";
+const USAGE: &str = "project new FILE.ccproj | project add FILE.ccproj NAME [SCHEMATIC.schjson] [board=BOARD.pcbjson] [copies=N] | project link FILE.ccproj BOARD.REF BOARD.REF [cable=MM] | project check FILE.ccproj | project bom FILE.ccproj OUT.csv | project step FILE.ccproj OUT.step | project dc FILE.ccproj | project tran FILE.ccproj [tstop=10m] | project ac FILE.ccproj [fstart=10] [fstop=1Meg] | project merge FILE.ccproj OUT.schjson | project alias FILE.ccproj LINK NET_A NET_B | project mirror FILE.ccproj LINK | project cable FILE.ccproj LINK [gap=20] | project harness FILE.ccproj OUT.svg|OUT.csv | project color FILE.ccproj LINK PIN COLOR   (a project of several boards: the links between their connectors checked pin by pin, the parts of all boards counted together, the boards placed in 3D as one STEP, the whole system's operating point pin by pin, its transient and AC sweep summed up pin by pin, the whole system as one schematic; alias, mirror and cable change link LINK (from 1) in the file: two names as one signal, the pins paired the other way round, the second board laid beside the first for a cable; harness draws every cable (the wires pin to pin, their colours, the mating housings and contacts) as SVG or lists its wires as CSV; color sets the wire on pin PIN of link LINK's first connector to black red orange yellow green blue violet grey white brown, or auto)";
 
 /// Lays the second board of link `k` (from 1) beside the first for a cable, in the file: the second board's `place` (the first's kept, or
 /// set at the origin) and the link's `cable` length.
@@ -94,10 +94,140 @@ fn read(file: &str) -> Result<Boards, String> {
     Ok((boards, links))
 }
 
+/// A project file as JSON, for `add` and `link` (format 2; a file of format 1 or none is refused, so a board is never lost).
+fn read_value(file: &str) -> Result<Value, String> {
+    let text = std::fs::read_to_string(file).map_err(|e| format!("{file}: {e} (make it with 'project new {file}')"))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("{file}: not a project ({e})"))?;
+    if !v.get("designs").is_some_and(Value::is_array) {
+        return Err(format!("{file}: a project of one board (format 1); open it in the app and add a board there, or make a new one with 'project new'"));
+    }
+    Ok(v)
+}
+
+fn write_value(file: &str, v: &Value) -> Result<(), String> {
+    std::fs::write(file, serde_json::to_string_pretty(v).map_err(|e| e.to_string())?).map_err(|e| format!("{file}: {e}"))
+}
+
+/// `BOARD.REF`: a connector on a board of the project.
+fn link_end(designs: &[Value], text: &str) -> Result<sch_core::system::LinkEnd, String> {
+    let (d, r) = text.rsplit_once('.').ok_or_else(|| format!("{text}: write BOARD.REF, for example main.J4"))?;
+    let design = designs.iter().find(|x| x.get("name").and_then(Value::as_str) == Some(d)).ok_or_else(|| {
+        let names: Vec<&str> = designs.iter().filter_map(|x| x.get("name").and_then(Value::as_str)).collect();
+        format!("{text}: no board {d} in the project (boards: {})", names.join(", "))
+    })?;
+    let s: Schematic = serde_json::from_value(design.get("schematic").cloned().unwrap_or_default()).map_err(|e| format!("{d}: the schematic could not be read: {e}"))?;
+    let c = s.flat().components.iter().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).map(|c| c.refdes.clone()).ok_or_else(|| format!("{text}: board {d} has no part {r}"))?;
+    Ok(sch_core::system::LinkEnd { design: d.to_string(), refdes: c })
+}
+
 impl crate::session::Session {
+    /// `project new FILE` / `project add FILE NAME [SCHEMATIC.schjson] [board=B.pcbjson] [copies=N]` / `project link FILE A.REF B.REF [cable=MM]`:
+    /// a project of several boards made from a script (L5). `add` without a file takes the session's schematic and board; a board of
+    /// the same name is replaced (a script run again gives the same file), and its links are kept.
+    fn project_make(&self, what: &str, file: &str, pos: &[String], kv: &[(String, String)]) -> Res {
+        match what {
+            "new" => {
+                let replaced = std::path::Path::new(file).exists();
+                write_value(file, &json!({"version": 2, "designs": [], "active": 0, "links": []}))?;
+                Ok(obj(json!({"file": file, "replaced": replaced})))
+            }
+            "add" => {
+                let name = pos.get(2).ok_or("project add FILE.ccproj NAME [SCHEMATIC.schjson] [board=BOARD.pcbjson] [copies=N]   (without a schematic file: the session's circuit and board)")?;
+                if name.is_empty() || name.contains('.') || name.contains(char::is_whitespace) {
+                    return Err(format!("{name}: a board's name has no dot or space (links write BOARD.REF)"));
+                }
+                let mut v = read_value(file)?;
+                let schematic: Value = match pos.get(3) {
+                    Some(f) => {
+                        let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
+                        let s: Value = serde_json::from_str(&text).map_err(|e| format!("{f}: not a schematic ({e})"))?;
+                        serde_json::from_value::<Schematic>(s.clone()).map_err(|e| format!("{f}: not a schematic ({e})"))?;
+                        s
+                    }
+                    None => {
+                        let mut s = serde_json::to_value(&self.sch).map_err(|e| e.to_string())?;
+                        if let Value::Object(m) = &mut s {
+                            m.extend(self.extras.clone());
+                        }
+                        s
+                    }
+                };
+                let board: Value = match opt(kv, "board") {
+                    Some(f) => {
+                        let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
+                        let b: pcb_core::Board = serde_json::from_str(&text).map_err(|e| format!("{f}: not a board ({e})"))?;
+                        serde_json::to_value(b).map_err(|e| e.to_string())?
+                    }
+                    None => match (&self.board, pos.get(3)) {
+                        (Some(b), None) => serde_json::to_value(b).map_err(|e| e.to_string())?,
+                        // the app needs a board: an empty one, made with `board import` there or here
+                        _ => serde_json::to_value(pcb_core::Board::new(name, 100.0, 80.0)).map_err(|e| e.to_string())?,
+                    },
+                };
+                let copies = match opt(kv, "copies") {
+                    Some(c) => c.parse::<u64>().ok().filter(|&c| c >= 1).ok_or_else(|| format!("copies={c}: how many are built, 1 or more"))?,
+                    None => 1,
+                };
+                let designs = v.get_mut("designs").and_then(Value::as_array_mut).ok_or("no designs")?;
+                let at = designs.iter().position(|d| d.get("name").and_then(Value::as_str) == Some(name.as_str()));
+                let mut d = json!({"name": name, "copies": copies, "place": null, "schematic": schematic, "board": board});
+                let replaced = at.is_some();
+                match at {
+                    Some(i) => {
+                        // keep where the board stands in 3D
+                        d["place"] = designs[i].get("place").cloned().unwrap_or(Value::Null);
+                        designs[i] = d;
+                    }
+                    None => designs.push(d),
+                }
+                let count = designs.len();
+                write_value(file, &v)?;
+                Ok(obj(json!({"file": file, "board": name, "replaced": replaced, "boards": count})))
+            }
+            "link" => {
+                let (Some(a), Some(b)) = (pos.get(2), pos.get(3)) else { return Err("project link FILE.ccproj BOARD.REF BOARD.REF [cable=MM]   (two connectors joined: plugged into each other, or by a cable of MM)".into()) };
+                let mut v = read_value(file)?;
+                let designs = v.get("designs").and_then(Value::as_array).cloned().unwrap_or_default();
+                let (ea, eb) = (link_end(&designs, a)?, link_end(&designs, b)?);
+                if ea.design == eb.design {
+                    return Err("both ends on the same board".into());
+                }
+                let cable = opt(kv, "cable").map(|c| sim_core::parse_value(c).filter(|x| *x > 0.0).ok_or_else(|| format!("cable={c}: the cable's length in mm"))).transpose()?;
+                let links = v.get_mut("links").and_then(Value::as_array_mut).ok_or("no links")?;
+                let same = |l: &Value| -> bool {
+                    serde_json::from_value::<BoardLink>(l.clone()).is_ok_and(|l| (l.a == ea && l.b == eb) || (l.a == eb && l.b == ea))
+                };
+                let existed = links.iter().position(same);
+                let n = match existed {
+                    Some(i) => {
+                        if cable.is_some() {
+                            links[i]["cable"] = json!(cable);
+                        }
+                        i + 1
+                    }
+                    None => {
+                        let l = BoardLink { a: ea, b: eb, cable, ..Default::default() };
+                        links.push(serde_json::to_value(l).map_err(|e| e.to_string())?);
+                        links.len()
+                    }
+                };
+                write_value(file, &v)?;
+                let (boards, links) = read(file)?;
+                let ds: Vec<(&str, &Schematic)> = boards.iter().map(|(n, _, s)| (n.as_str(), s)).collect();
+                let f = sch_core::system::check(&ds, &links);
+                let errors = f.iter().filter(|f| f.severity == sch_core::Severity::Error).count();
+                Ok(obj(json!({"file": file, "link": n, "existed": existed.is_some(), "findings": f.len(), "errors": errors, "check": format!("project check {file}")})))
+            }
+            _ => unreachable!(),
+        }
+    }
+
     pub fn project(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
         let (Some(what), Some(file)) = (pos.first(), pos.get(1)) else { return Err(USAGE.into()) };
+        if matches!(what.as_str(), "new" | "add" | "link") {
+            return self.project_make(what, file, &pos, &kv);
+        }
         let (boards, links) = read(file)?;
         let designs: Vec<(&str, &Schematic)> = boards.iter().map(|(n, _, s)| (n.as_str(), s)).collect();
         match what.as_str() {

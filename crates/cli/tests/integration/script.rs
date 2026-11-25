@@ -1826,6 +1826,48 @@ list
     assert!(!ok && last(&a, "add")["error"].as_str().unwrap().contains("HEADER2x1 to HEADER2x20"), "{a:?}");
 }
 
+/// A project of two boards made from a script: `project new`, `add` takes the session's circuit (again: replaced, not doubled), `link`
+/// joins two connectors and the check finds the pins carrying the same nets.
+#[test]
+fn a_project_is_made_from_a_script() {
+    let dir = std::env::temp_dir().join(format!("ccad_proj_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join("sys.ccproj").display().to_string();
+    let script = format!("project new {p}
+new
+add HEADER2x2 as=J4
+add R 1k as=R1
+add V 5 as=V1
+net VCC V1.+ R1.1 J4.1
+net GND V1.- R1.2 J4.2
+project add {p} main
+project add {p} main
+new
+add HEADER2x2 as=P1
+add R 10k as=R2
+net VCC P1.1 R2.1
+net GND P1.2 R2.2
+project add {p} sub copies=2
+project link {p} main.J4 sub.P1
+project link {p} main.J4 sub.P1 cable=150
+project check {p}
+project link {p} main.J9 sub.P1
+");
+    let (a, _) = run(&script);
+    let adds: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "project" && v["board"].is_string()).collect();
+    assert_eq!(adds.iter().map(|v| (v["replaced"].as_bool().unwrap(), v["boards"].as_u64().unwrap())).collect::<Vec<_>>(), [(false, 1), (true, 1), (false, 2)], "{a:?}");
+    let links: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "project" && v["link"].is_number()).collect();
+    assert_eq!(links.len(), 2, "{a:?}");
+    assert_eq!(links[1]["existed"], true);
+    let check = a.iter().find(|v| v["cmd"] == "project" && v["links"].is_array()).unwrap();
+    assert_eq!(check["links"][0], "main.J4 <-> sub.P1", "{check}");
+    assert_eq!(check["errors"], 0, "{check}");
+    assert!(last(&a, "project")["error"].as_str().unwrap().contains("no part J9"), "{a:?}");
+    let text = std::fs::read_to_string(&p).unwrap();
+    assert!(text.contains("\"cable\": 150") && text.contains("\"copies\": 2"), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The same pins as a Zephyr overlay and a chip's pins as FPGA constraints; the firmware checked and the file written are kept, and
 /// the ERC says when the firmware drives another pin and when the pins change after writing.
 #[test]
