@@ -270,35 +270,46 @@ pub(super) fn draw_requirement_frames(&self, painter: &egui::Painter, rect: Rect
         if !self.req.frames || self.sch.requirements.is_empty() {
             return;
         }
-        let tag = |at: Pos2, text: String, col: Color32| {
-            let galley = painter.layout_no_wrap(text, FontId::proportional(12.0), Color32::WHITE);
-            let size = galley.size() + Vec2::new(8.0, 3.0);
-            // (a tag at the right edge of the sheet is moved left so that it can be read)
-            let x = at.x.min(rect.right() - size.x - 2.0).max(rect.left());
-            let r = Rect::from_min_size(Pos2::new(x, at.y - galley.size().y - 5.0), size);
-            painter.rect_filled(r, 3.0, col);
-            painter.galley(r.min + Vec2::new(4.0, 1.5), galley, Color32::WHITE);
-        };
+        // every frame first (a group: filled; a side of a distance: doubled), then laid out together so that none hides another
+        struct Frame {
+            r: Rect,
+            text: String,
+            col: Color32,
+            filled: bool,
+        }
         let spec = &self.sch.requirements;
+        let mut frames: Vec<Frame> = vec![];
         for (k, g) in spec.groups.iter().enumerate() {
-            let col = FRAME_COLORS[k % FRAME_COLORS.len()];
             if let Some(r) = self.frame_of(rect, &g.parts).filter(|r| r.intersects(rect)) {
-                painter.rect_filled(r, 4.0, col.gamma_multiply(0.07));
-                painter.rect_stroke(r, 4.0, Stroke::new(1.5, col), egui::StrokeKind::Inside);
                 let text = if g.max_dist > 0.0 { format!("近くに置く: {} ({} mm 以内)", g.name, g.max_dist) } else { format!("近くに置く: {}", g.name) };
-                tag(r.left_top(), text, col);
+                frames.push(Frame { r, text, col: FRAME_COLORS[k % FRAME_COLORS.len()], filled: true });
             }
         }
         for (k, a) in spec.apart.iter().enumerate() {
             let col = FRAME_COLORS[(k + spec.groups.len() + 3) % FRAME_COLORS.len()];
             for (side, names) in [("A", &a.a), ("B", &a.b)] {
                 if let Some(r) = self.frame_of(rect, names).filter(|r| r.intersects(rect)) {
-                    painter.rect_stroke(r, 4.0, Stroke::new(1.5, col), egui::StrokeKind::Inside);
-                    // a dashed look: a second, thinner frame inside
-                    painter.rect_stroke(r.shrink(3.0), 3.0, Stroke::new(0.7, col.gamma_multiply(0.6)), egui::StrokeKind::Inside);
-                    tag(r.left_top(), format!("離す {side}: {} ({} mm 以上)", a.name, a.min_dist), col);
+                    frames.push(Frame { r, text: format!("離す {side}: {} ({} mm 以上)", a.name, a.min_dist), col, filled: false });
                 }
             }
+        }
+        let mut rects: Vec<Rect> = frames.iter().map(|f| f.r).collect();
+        spread_frames(&mut rects);
+        for (f, r) in frames.iter().zip(&rects) {
+            if f.filled {
+                painter.rect_filled(*r, 4.0, f.col.gamma_multiply(0.07));
+                painter.rect_stroke(*r, 4.0, Stroke::new(1.5, f.col), egui::StrokeKind::Inside);
+            } else {
+                painter.rect_stroke(*r, 4.0, Stroke::new(1.5, f.col), egui::StrokeKind::Inside);
+                // a dashed look: a second, thinner frame inside
+                painter.rect_stroke(r.shrink(3.0), 3.0, Stroke::new(0.7, f.col.gamma_multiply(0.6)), egui::StrokeKind::Inside);
+            }
+        }
+        let galleys: Vec<_> = frames.iter().map(|f| painter.layout_no_wrap(f.text.clone(), FontId::proportional(12.0), Color32::WHITE)).collect();
+        let sizes: Vec<Vec2> = galleys.iter().map(|g| g.size() + Vec2::new(8.0, 3.0)).collect();
+        for ((f, g), t) in frames.iter().zip(galleys).zip(place_tags(&rects, &sizes, rect)) {
+            painter.rect_filled(t, 3.0, f.col);
+            painter.galley(t.min + Vec2::new(4.0, 1.5), g, Color32::WHITE);
         }
 }
 
@@ -886,9 +897,96 @@ impl Default for ReqUi {
     }
 }
 
+/// How far (points) a frame steps out for each earlier frame whose edge it would lie on.
+const FRAME_STEP: f32 = 6.0;
+
+/// Frames that would draw an edge on another's (two groups starting at the same part, a group inside another) step out a little,
+/// one step for each earlier frame they share a side with, so that every border can be seen.
+fn spread_frames(frames: &mut [Rect]) {
+    let near = |a: f32, b: f32| (a - b).abs() < 2.5;
+    for k in 1..frames.len() {
+        let mut out = [0.0f32; 4]; // left, top, right, bottom
+        for j in 0..k {
+            let (a, b) = (frames[k], frames[j]);
+            // only frames that overlap share a border in a way that hides it
+            if !a.expand(3.0).intersects(b) {
+                continue;
+            }
+            if near(a.left(), b.left()) {
+                out[0] += FRAME_STEP;
+            }
+            if near(a.top(), b.top()) {
+                out[1] += FRAME_STEP;
+            }
+            if near(a.right(), b.right()) {
+                out[2] += FRAME_STEP;
+            }
+            if near(a.bottom(), b.bottom()) {
+                out[3] += FRAME_STEP;
+            }
+        }
+        let r = frames[k];
+        frames[k] = Rect::from_min_max(Pos2::new(r.left() - out[0], r.top() - out[1]), Pos2::new(r.right() + out[2], r.bottom() + out[3]));
+    }
+}
+
+/// Where each frame's name tag goes: on the frame's top edge, at its left, or else further right along that edge past the tags
+/// already placed, or else a row higher; kept within `view` so that it can be read. No two tags overlap while there is room.
+fn place_tags(frames: &[Rect], sizes: &[Vec2], view: Rect) -> Vec<Rect> {
+    let mut placed: Vec<Rect> = vec![];
+    for (f, size) in frames.iter().zip(sizes) {
+        let fit = |x: f32, y: f32| {
+            let x = x.min(view.right() - size.x - 2.0).max(view.left());
+            Rect::from_min_size(Pos2::new(x, y), *size)
+        };
+        let mut best = None;
+        'rows: for row in 0..6 {
+            let y = f.top() - size.y - 2.0 - row as f32 * (size.y + 2.0);
+            let mut x = f.left();
+            // step right past whatever is in the way, while the tag stays over its frame
+            for _ in 0..placed.len() + 1 {
+                let t = fit(x, y);
+                match placed.iter().filter(|p| p.expand(1.0).intersects(t)).map(|p| p.right()).reduce(f32::max) {
+                    None => {
+                        best = Some(t);
+                        break 'rows;
+                    }
+                    Some(right) if right + 4.0 + size.x <= f.right().max(f.left() + size.x) => x = right + 4.0,
+                    Some(_) => break,
+                }
+            }
+        }
+        let t = best.unwrap_or_else(|| fit(f.left(), f.top() - size.y - 2.0));
+        placed.push(t);
+    }
+    placed
+}
+
 #[cfg(test)]
 mod tests {
 use super::*;
+
+/// Two groups whose frames start at the same corner (a group inside another, as on the DMM's sheet): both borders show and the two
+/// names do not cover each other; a frame on its own keeps its place and its tag sits on its top left.
+#[test]
+fn frames_on_the_same_corner_show_both_borders_and_both_names() {
+        let outer = Rect::from_min_max(Pos2::new(100.0, 100.0), Pos2::new(700.0, 800.0));
+        let inner = Rect::from_min_max(Pos2::new(100.0, 100.0), Pos2::new(650.0, 500.0));
+        let alone = Rect::from_min_max(Pos2::new(900.0, 100.0), Pos2::new(1000.0, 200.0));
+        let mut frames = vec![inner, outer, alone];
+        spread_frames(&mut frames);
+        assert_eq!(frames[0], inner, "the first stays");
+        assert!(frames[1].left() < inner.left() && frames[1].top() < inner.top(), "the second steps out on the shared sides: {:?}", frames[1]);
+        assert_eq!(frames[1].right(), outer.right(), "not on the sides it does not share");
+        assert_eq!(frames[2], alone);
+        let view = Rect::from_min_max(Pos2::ZERO, Pos2::new(1600.0, 900.0));
+        let sizes = vec![Vec2::new(220.0, 18.0); 3];
+        let tags = place_tags(&frames, &sizes, view);
+        assert!(!tags[0].intersects(tags[1]), "{:?} {:?}", tags[0], tags[1]);
+        assert!(tags.iter().all(|t| view.contains_rect(*t)));
+        assert_eq!(tags[2].left(), alone.left(), "a frame on its own: the tag at its left");
+        assert!((tags[2].bottom() - (alone.top() - 2.0)).abs() < 1e-3, "just above its top edge");
+}
 
 #[test]
 fn a_list_is_read_back_without_blanks() {
