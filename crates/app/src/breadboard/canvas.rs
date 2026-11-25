@@ -109,7 +109,7 @@ impl BreadboardView {
         // dragging (the move tool): a jumper's end, or the part, follows the pointer by whole holes; let go to keep it there
         if self.tool == Tool::Move
             && !on_switch
-            && response.drag_started()
+            && response.drag_started_by(egui::PointerButton::Primary)
             && let Some(p) = response.interact_pointer_pos()
         {
             if let Some(we) = wire_end_at(p) {

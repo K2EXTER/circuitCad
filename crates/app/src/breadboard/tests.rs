@@ -889,3 +889,40 @@ fn the_schematic_window_shows_the_sheet_of_the_part_picked() {
     assert_eq!(app.sch.sch.active_sheet, active, "the sheet being edited is the same");
     assert_eq!(app.sch.sch, before, "nothing changed in the schematic");
 }
+
+/// A drag with the middle button moves the picture: it does not draw a selection box or move a part (the left button's work).
+#[test]
+fn a_middle_drag_moves_the_picture_and_selects_nothing() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("ne555_blinker.schjson"));
+    app.mode = Mode::Proto;
+    app.breadboard.kind = BoardKind::Perfboard;
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let mut run = |app: &mut App, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+        out.textures_delta.clear();
+    };
+    for _ in 0..3 {
+        run(&mut app, vec![]);
+    }
+    let (o0, p0) = app.breadboard.strip.drawn.expect("the board was drawn");
+    let before = app.sch.stripboard.clone();
+    let button = |pos: Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() };
+    // from a hole of a part across the board
+    let from = o0 + Vec2::new(3.0, 3.0) * p0;
+    run(&mut app, vec![egui::Event::PointerMoved(from)]);
+    run(&mut app, vec![button(from, true)]);
+    for k in 1..=6 {
+        run(&mut app, vec![egui::Event::PointerMoved(from + Vec2::new(20.0 * k as f32, 10.0 * k as f32))]);
+    }
+    let to = from + Vec2::new(120.0, 60.0);
+    run(&mut app, vec![button(to, false)]);
+    run(&mut app, vec![]);
+    assert!(app.breadboard.strip.sel.is_none(), "no selection box");
+    assert_eq!(app.sch.stripboard, before, "no part moved");
+    let (o1, _) = app.breadboard.strip.drawn.unwrap();
+    assert!((o1 - o0 - Vec2::new(120.0, 60.0)).length() < 30.0, "the picture moved with the pointer: {o0:?} -> {o1:?}");
+}

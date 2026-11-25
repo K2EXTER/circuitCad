@@ -73,7 +73,7 @@ pub struct StripState {
     /// The size and place of the board when the drag began: it stays put while the board grows under the pointer.
     frozen: Option<(Pos2, f32)>,
     /// The box picked (two corner holes).
-    sel: Option<(At, At)>,
+    pub(super) sel: Option<(At, At)>,
     link_start: Option<At>,
     picked_link: Option<usize>,
     /// Where hole (0, 0) was drawn and the pitch, last frame (for the tests' pointer).
@@ -1438,7 +1438,7 @@ impl BreadboardView {
         };
         let tool = self.strip.tool;
         if tool == StripTool::Move
-            && response.drag_started()
+            && response.drag_started_by(egui::PointerButton::Primary)
             // where the button went down (the drag starts a few points later)
             && let Some(p) = ui.input(|i| i.pointer.press_origin()).or(response.interact_pointer_pos())
             && let Some(h) = hole_at(p)
