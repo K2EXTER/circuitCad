@@ -284,18 +284,16 @@ pub fn strip_board_nets(s: &Schematic, l: &StripLayout) -> crate::breadboard::Bo
         }
         pins.insert((r, pin), names[&g].clone());
     }
-    // the simulation-only pins (a light sensor's light) are not leads: they keep the schematic's net, as the board names it
+    // the simulation-only pins (a light sensor's light) and the parts that stand in for what the board is joined to are not leads:
+    // they keep the schematic's net, as the board names it
     let board_name: BTreeMap<&str, &str> = names.iter().filter_map(|(g, n)| info.get(g).map(|(ns, _, _)| (ns, n))).flat_map(|(ns, n)| ns.iter().map(move |x| (x.as_str(), n.as_str()))).filter(|(x, n)| n.split('~').next() == Some(*x)).collect();
-    for c in &flat.components {
-        let Some(sym) = c.custom.as_ref() else { continue };
-        for sp in sym.pins.iter().filter(|p| p.sim_only) {
-            let key = (c.refdes.clone(), sp.number.clone());
-            if pins.contains_key(&key) {
-                continue;
-            }
-            if let Some(n) = net_of.get(&(c.refdes.as_str(), sp.number.as_str())) {
-                pins.insert(key, board_name.get(n).map(|x| x.to_string()).unwrap_or_else(|| n.to_string()));
-            }
+    for key in crate::breadboard::net_only_pins(&flat) {
+        if pins.contains_key(&key) {
+            continue;
+        }
+        if let Some(n) = net_of.get(&(key.0.as_str(), key.1.as_str())) {
+            let name = board_name.get(n).map(|x| x.to_string()).unwrap_or_else(|| n.to_string());
+            pins.insert(key, name);
         }
     }
     crate::breadboard::BoardNets::from_pins(pins, off_pins)

@@ -842,6 +842,15 @@ impl BreadboardView {
                     ui.small(format!("{r}  {}", pins.iter().map(|(pin, net, at)| format!("{pin} ({net}) → {}", hole_name(*at))).collect::<Vec<_>>().join("、")));
                 }
             }
+            // the simulation-only parts that stand in for what the board is joined to: not built, no wire
+            let stand_ins: Vec<String> = sch.sch.flat().components.iter().filter(|c| sch_core::breadboard::stands_in(c)).map(|c| c.refdes.clone()).collect();
+            if !stand_ins.is_empty() {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(i18n::tr("シミュレーション専用 (置かない・線なし)")).strong()).on_hover_text(i18n::tr(
+                    "回路図で「シミュレーション専用」にした部品 (測る相手や、別の基板に載る部品の代わり) は、この基板には置かず、線も引きません。電源を入れて動かすときは、同じ名前のネット (つないだ端子) につながっているものとして計算します",
+                ));
+                ui.small(stand_ins.join("、"));
+            }
         });
     }
 

@@ -153,9 +153,30 @@ impl Problem {
     }
 }
 
-/// The supplies and sources that stay off the board.
+/// The supplies and sources that stay off the board (a source marked simulation-only too: a bench supply is wired in).
 fn is_off_board(c: &Component) -> bool {
-    matches!(c.kind, Kind::VSource | Kind::ISource) || c.sim_only || c.custom.as_ref().is_some_and(|s| s.prefix.eq_ignore_ascii_case("BT") || s.prefix.eq_ignore_ascii_case("V"))
+    matches!(c.kind, Kind::VSource | Kind::ISource) || c.custom.as_ref().is_some_and(|s| s.prefix.eq_ignore_ascii_case("BT") || s.prefix.eq_ignore_ascii_case("V"))
+}
+
+/// A simulation-only part that is not a source: it stands in for what the board is joined to (the thing measured, a resistor on a
+/// sub-board). It is not built, so the prototype layouts give it no place and no wire; when the board runs, its pins join the
+/// board's nets of the same names (as a simulation-only pin does), so it sits on the board's terminals (L8).
+pub fn stands_in(c: &Component) -> bool {
+    c.sim_only && !is_off_board(c) && !matches!(c.kind, Kind::Ground | Kind::Power)
+}
+
+/// The pins that are not leads on the board but keep the schematic's net when it runs: a library part's simulation-only pins (a
+/// light sensor's light) and every pin of a part that stands in (`stands_in`).
+pub(crate) fn net_only_pins(flat: &Schematic) -> BTreeSet<(String, String)> {
+    let mut out = BTreeSet::new();
+    for c in &flat.components {
+        if stands_in(c) {
+            out.extend(c.pins().into_iter().map(|(p, _)| (c.refdes.clone(), p)));
+        } else if let Some(sym) = &c.custom {
+            out.extend(sym.pins.iter().filter(|p| p.sim_only).map(|p| (c.refdes.clone(), p.number.clone())));
+        }
+    }
+    out
 }
 
 /// The pins of a part that have a lead (library pins only for the simulation left out), in their order.
@@ -234,6 +255,9 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
     for (ci, c) in flat.components.iter().enumerate() {
         // a part of several units is one chip on the board: its first placement brings every lead (Q6)
         if flat.repeat_unit(ci) {
+            continue;
+        }
+        if stands_in(c) {
             continue;
         }
         if matches!(c.kind, Kind::Ground | Kind::Power) {
@@ -890,12 +914,7 @@ pub fn board_nets(s: &Schematic, l: &Layout) -> BoardNets {
     // the simulation-only pins (a light sensor's light, a motor's speed) are not leads on the board: they keep the schematic's net,
     // named as the board names it where a lead of the board carries that net
     let flat = s.flat();
-    let sim_only: BTreeSet<(String, String)> = flat
-        .components
-        .iter()
-        .filter_map(|c| c.custom.as_ref().map(|sym| (c, sym)))
-        .flat_map(|(c, sym)| sym.pins.iter().filter(|p| p.sim_only).map(move |p| (c.refdes.clone(), p.number.clone())))
-        .collect();
+    let sim_only = net_only_pins(&flat);
     let board_name: BTreeMap<String, String> = order_names(&names, &info);
     for n in crate::netlist::extract(&flat) {
         for p in n.pins {

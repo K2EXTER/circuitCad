@@ -498,3 +498,40 @@ mod fork_tests {
         }
     }
 }
+
+/// L8: a simulation-only part that is not a source (a resistor standing in for one on a sub-board) gets no place and no wire on a
+/// stripboard, a perfboard or a breadboard; when the board runs its pins sit on the board's nets of the same names (the header's).
+/// A simulation-only supply still comes in by its wires.
+#[test]
+fn a_simulation_only_part_gets_no_wire_and_sits_on_the_terminals() {
+    let mut s = Schematic::default();
+    use crate::Kind;
+    let put = |s: &mut Schematic, k: Kind, x: i32, nets: [&str; 2], sim_only: bool| {
+        let i = s.add(k, (x, 0), 0);
+        s.components[i].sim_only = sim_only;
+        for (p, n) in s.components[i].pins().into_iter().zip(nets) {
+            s.labels.push(crate::Label { pos: p.1, text: n.into() });
+        }
+        s.components[i].refdes.clone()
+    };
+    let j = put(&mut s, Kind::Header(2), 0, ["RB", "GND"], false);
+    let r_on = put(&mut s, Kind::Resistor, 20, ["VCC", "RB"], false);
+    let r_sim = put(&mut s, Kind::Resistor, 40, ["RB", "GND"], true);
+    let v = put(&mut s, Kind::VSource, 60, ["VCC", "GND"], true);
+    let _ = (&j, &r_on);
+    for l in [strip_layout(&s), crate::perfboard::perf_layout_with(&s, StripOptions::default())] {
+        assert!(!l.parts.iter().any(|p| p.refdes == r_sim), "not placed");
+        assert!(!l.off.iter().any(|(r, _)| *r == r_sim), "no wire");
+        assert!(l.off.iter().any(|(r, w)| *r == v && !w.is_empty()), "the supply is wired in");
+        assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+        let nets = strip_board_nets(&s, &l);
+        let at = |r: &str, p: &str| nets.pins.get(&(r.to_string(), p.to_string())).cloned();
+        assert_eq!(at(&r_sim, "1"), at(&j, "1"), "on the header's net");
+        assert_eq!(at(&r_sim, "2"), at(&j, "2"));
+    }
+    let b = crate::breadboard::auto_layout(&s);
+    assert!(!b.off_board.iter().any(|o| o.refdes == r_sim) && !b.parts.iter().any(|p| p.refdes == r_sim));
+    assert!(crate::breadboard::check(&s, &b).is_empty());
+    let nets = crate::breadboard::board_nets(&s, &b);
+    assert_eq!(nets.pins.get(&(r_sim.clone(), "1".into())), nets.pins.get(&(j.clone(), "1".into())));
+}
