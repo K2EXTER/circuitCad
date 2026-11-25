@@ -84,13 +84,25 @@ pub fn mount_choice_ui(ui: &mut egui::Ui, c: &mut sch_core::Component, id: impl 
     if c.mount.is_none() && auto.is_empty() && fits.iter().all(|m| *m == MountChoice::Direct) {
         return;
     }
-    let auto_label = if auto.is_empty() { i18n::tr("自動 (そのまま差す)").to_string() } else { i18n::trf!("自動 ({})", i18n::tr_dyn(&auto)) };
+    // a word for the automatic way (the sentence in the hover text: a long one in the box widened the left panel)
+    use sch_core::mount::Mount;
+    let short = match mount_of(c, leads) {
+        Mount::Direct => "そのまま",
+        Mount::Socket { .. } => "ソケット",
+        Mount::Leaded => "リード部品",
+        Mount::Wired => "リード線",
+        Mount::Adapter { .. } => "変換基板",
+        Mount::Module { .. } => "ピンヘッダ",
+        Mount::Back { .. } => "裏のランド",
+    };
+    let auto_label = i18n::trf!("自動 ({})", i18n::tr(short));
+    let auto_tip = if auto.is_empty() { i18n::tr("フットプリントから: そのまま差します").to_string() } else { i18n::trf!("フットプリントから: {}", i18n::tr_dyn(&auto)) };
     let shown = match c.mount {
         None => auto_label.clone(),
         Some(m) => i18n::tr(m.label()).to_string(),
     };
-    egui::ComboBox::from_id_salt(id).selected_text(shown).width(200.0).show_ui(ui, |ui| {
-        ui.selectable_value(&mut c.mount, None, auto_label);
+    egui::ComboBox::from_id_salt(id).selected_text(shown).width(180.0).show_ui(ui, |ui| {
+        ui.selectable_value(&mut c.mount, None, auto_label).on_hover_text(&auto_tip);
         for m in &fits {
             let tip = match m {
                 MountChoice::Direct => "ソケットや変換基板を使わず、部品をそのまま基板にはんだ付けします",
