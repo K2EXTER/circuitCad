@@ -20,9 +20,31 @@ fn basic_kind(t: &str) -> Option<Kind> {
         "I" | "ISOURCE" => Kind::ISource,
         "NPN" => Kind::Npn,
         "VR" | "POT" | "POTENTIOMETER" => Kind::Pot,
-        s if s.starts_with("HEADER") => Kind::Header(s["HEADER".len()..].parse().ok().filter(|n| (1..=40).contains(n))?),
+        s if s.starts_with("HEADER") && !s.starts_with("HEADER2X") => Kind::Header(s["HEADER".len()..].parse().ok().filter(|n| (1..=40).contains(n))?),
         _ => return None,
     })
+}
+
+/// `HEADER2xN` (N = 1..=20): a 2-row pin header, 2.54 mm both ways, numbered across the rows 1 2 / 3 4 / ... as a header
+/// is (the board's `PinHeader_2xN`). Made as a library part so that the board, the strip board and the system check
+/// (which knows `…2x…` connectors) see two rows.
+fn header_2xn(t: &str) -> Option<part_lib::PartDef> {
+    let up = t.to_ascii_uppercase();
+    let n: usize = up.strip_prefix("HEADER2X")?.parse().ok().filter(|n| (1..=20).contains(n))?;
+    let pins: Vec<Value> = (1..=2 * n).map(|i| json!({"number": i.to_string(), "name": i.to_string(), "side": if i % 2 == 1 { "left" } else { "right" }})).collect();
+    serde_json::from_value(json!({
+        "name": format!("HEADER2x{n}"),
+        "category": "コネクタ",
+        "description": format!("2列のピンヘッダ 2×{n} (ピッチ 2.54 mm)。番号は 1 2 / 3 4 / … と2つの列をまたいで振ります"),
+        "prefix": "J",
+        "value": format!("2x{n}"),
+        "footprint_name": format!("PinHeader_2x{n}"),
+        "pins": pins,
+        "package": { "type": "double_row", "pins": 2 * n, "pitch": 2.54, "row_spacing": 2.54, "pad_d": 1.7, "drill": 1.0 },
+        "height": 8.5,
+        "body": { "shape": "rect", "w": 5.04, "h": 2.54 * n as f64, "x": 1.27, "y": -1.27 * (n as f64 - 1.0), "mark": "dot", "mark_pin": "1" }
+    }))
+    .ok()
 }
 
 fn pin_names(c: &Component) -> Vec<(String, String)> {
@@ -231,7 +253,7 @@ impl Session {
             .iter()
             .map(|s| json!({"series": s.series, "maker": s.maker, "summary": s.summary, "values": s.range_text(), "quality": s.quality, "example": s.part_name(s.default_value()), "add": format!("add {} 4.7k", s.series)}))
             .collect();
-        obj(json!({"count": hits.len(), "shown": shown.len(), "parts": shown, "series": series, "basic": ["R", "C", "L", "D", "LED", "V", "NPN", "HEADERn"], "library_errors": self.lib_errors}))
+        obj(json!({"count": hits.len(), "shown": shown.len(), "parts": shown, "series": series, "basic": ["R", "C", "L", "D", "LED", "V", "NPN", "HEADERn", "HEADER2xN"], "library_errors": self.lib_errors}))
     }
 
     pub fn part(&self, args: &[String]) -> Res {
@@ -240,7 +262,11 @@ impl Session {
             let pins: Vec<Value> = k.pins().iter().map(|(n, _)| json!({"pin": n, "name": n})).collect();
             return Ok(obj(json!({"name": k.label(), "basic": true, "prefix": k.prefix(), "default_value": k.default_value(), "footprint": k.default_footprint(), "pins": pins, "simulates": true})));
         }
-        let d = self.find_part(name)?;
+        let header = header_2xn(name);
+        let d = match &header {
+            Some(h) => h,
+            None => self.find_part(name)?,
+        };
         let pins: Vec<Value> = d.pins.iter().map(|p| json!({"pin": p.number, "name": p.name})).collect();
         Ok(obj(json!({
             "name": d.name, "category": d.category, "description": d.description, "prefix": d.prefix,
@@ -296,7 +322,12 @@ impl Session {
             None
         };
         let t = series_part.as_ref().unwrap_or(t);
-        let lib_part = if kind.is_none() { Some(self.find_part(t)?.clone()) } else { None };
+        let lib_part = match (kind, header_2xn(t)) {
+            (Some(_), _) => None,
+            (None, Some(h)) => Some(h),
+            (None, None) if t.to_ascii_uppercase().starts_with("HEADER2X") => return Err(format!("{t}: a 2-row header is HEADER2x1 to HEADER2x20 (2 x N pins)")),
+            (None, None) => Some(self.find_part(t)?.clone()),
+        };
         let value = if series_part.is_some() { None } else { pos.get(1).cloned() };
         if let (Some(k), Some(v)) = (kind, &value)
             && matches!(k, Kind::Resistor | Kind::Capacitor | Kind::Inductor)
@@ -462,6 +493,18 @@ impl Session {
         let usage = "pinnames REF NAME1,NAME2,...   (the names of the pins of a pin header, pin 1 first; `-` clears them)";
         let [r, list] = args else { return Err(usage.into()) };
         let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        // a 2-row header (HEADER2xN) is a library part: the names go on its symbol's pins
+        if let Some(sym) = c.custom.as_mut().filter(|s| s.name.starts_with("HEADER2x")) {
+            let names: Vec<String> = if list == "-" { vec![] } else { list.split(',').map(|s| s.trim().to_string()).collect() };
+            let n = sym.pins.len();
+            if names.len() > n {
+                return Err(format!("{} has {n} pins, but {} names were given", c.refdes, names.len()));
+            }
+            for (i, p) in sym.pins.iter_mut().enumerate() {
+                p.name = names.get(i).filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| p.number.clone());
+            }
+            return Ok(obj(json!({"ref": c.refdes, "pins": n, "names": names})));
+        }
         let Kind::Header(n) = c.kind else { return Err(format!("{} is not a pin header (pinnames is for headers)", c.refdes)) };
         c.pin_names = if list == "-" { vec![] } else { list.split(',').map(|s| s.trim().to_string()).collect() };
         if c.pin_names.len() > n as usize {

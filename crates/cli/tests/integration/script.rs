@@ -1803,6 +1803,29 @@ pins export={} check={}
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `HEADER2xN` is a 2-row header: 2N pins numbered across the rows, the board's 2-row footprint, and `pinnames` names its pins.
+#[test]
+fn a_two_row_header_has_both_rows() {
+    let (a, ok) = run("new
+part HEADER2x6
+add HEADER2x6 as=J4
+pinnames J4 REF,GND
+add R 10k as=R1
+net REF J4.REF R1.1
+net GND J4.GND R1.2 J4.12
+board import
+list
+");
+    assert!(ok, "{a:?}");
+    let p = last(&a, "part");
+    assert_eq!(p["pins"].as_array().unwrap().len(), 12, "{p}");
+    assert_eq!(p["footprint"], "PinHeader_2x6", "{p}");
+    let l = last(&a, "list").to_string();
+    assert!(l.contains("PinHeader_2x6"), "{l}");
+    let (a, ok) = run("new\nadd HEADER2x30\n");
+    assert!(!ok && last(&a, "add")["error"].as_str().unwrap().contains("HEADER2x1 to HEADER2x20"), "{a:?}");
+}
+
 /// The same pins as a Zephyr overlay and a chip's pins as FPGA constraints; the firmware checked and the file written are kept, and
 /// the ERC says when the firmware drives another pin and when the pins change after writing.
 #[test]
