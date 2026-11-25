@@ -130,10 +130,11 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
     // first, without and then with a way out kept by each lead, every placement with one order before the next order (so each has its
     // turn within `BUDGET`); each again with the nets left apart wired first (a few rounds), and once all are joined with the nets
     // that needed wires on top first: the one with the fewest nets left apart, then the fewest wires on top, then the smallest board
-    // (what is left on the mounting holes' corners, the nets left apart, the wires on top, the board's holes) and the layout
-    let mut best: Option<((usize, usize, usize, usize), StripLayout)> = None;
+    // (what is left on the mounting holes' corners, the nets left apart, the groups past their distance, the wires on top, the board's
+    // holes) and the layout
+    let mut best: Option<((usize, usize, usize, usize, usize), StripLayout)> = None;
     let start = std::time::Instant::now();
-    let done = |_: &Option<((usize, usize, usize, usize), StripLayout)>| start.elapsed() > BUDGET;
+    let done = |_: &Option<((usize, usize, usize, usize, usize), StripLayout)>| start.elapsed() > BUDGET;
     // the shelves as placed, then the same made better by annealing (it helps small boards; on a crowded one the estimate it goes by
     // packs the parts too tight for the wires, and the shelves as placed win)
     // and each again with the chips where the springs and the spreading put them (`simpl`)
@@ -196,9 +197,12 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                 let mut m = l.clone();
                 route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
-                let key = (m.in_keepout().len(), apart.len(), m.links.len(), m.rows as usize * m.cols as usize);
+                // (the groups past their farthest distance come after the nets left apart: a group kept close is no use on a board
+                // that does not work)
+                let over = crate::stripboard::group_spreads(s, &m).iter().filter(|g| g.1 > g.2 + 1e-9).count();
+                let key = (m.in_keepout().len(), apart.len(), over, m.links.len(), m.rows as usize * m.cols as usize);
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
-                if round == 0 && best.as_ref().is_some_and(|(b, _)| key.0 > b.0 || (key.0 == b.0 && (key.1 > b.1 + 1 || (key.1 >= b.1 && key.2 > b.2 + b.2 / 2 + 2)))) {
+                if round == 0 && best.as_ref().is_some_and(|(b, _)| key.0 > b.0 || (key.0 == b.0 && (key.1 > b.1 + 1 || (key.1 >= b.1 && key.3 > b.3 + b.3 / 2 + 2)))) {
                     break;
                 }
                 let on_top: Vec<String> = m.links.iter().map(|k| k.net.clone()).collect();
@@ -401,6 +405,8 @@ fn lead_net(c: &Circuit, refdes: &str, pin: &str) -> String {
 struct Wants {
     apart: Vec<(BTreeSet<String>, BTreeSet<String>, f64)>,
     groups: BTreeMap<String, Vec<usize>>,
+    /// Each group's farthest distance between two of its parts' centres, in holes (the table's `max_dist`; 0: none).
+    group_max: Vec<f64>,
     sections: Vec<(String, BTreeSet<String>)>,
     /// The parts locked where they are (`perf_layout_around`): placed first as they are, never moved.
     keep: Vec<StripPart>,
@@ -426,7 +432,8 @@ impl Wants {
                 groups.entry(p.clone()).or_default().push(i);
             }
         }
-        Wants { apart, groups, sections: crate::stripboard::sections(s, c), keep: vec![], boxes: BTreeMap::new(), keepout: BTreeSet::new() }
+        let group_max = s.requirements.groups.iter().map(|g| g.max_dist.max(0.0) / 2.54).collect();
+        Wants { apart, groups, group_max, sections: crate::stripboard::sections(s, c), keep: vec![], boxes: BTreeMap::new(), keepout: BTreeSet::new() }
     }
 
     /// Whether a part is locked where it is.
@@ -513,7 +520,36 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
         }
     }
     let weight: Vec<f64> = net_ids.iter().map(|n| if is_ground_name(n) || c.supplies.contains(n) { 0.2 } else { 1.0 }).collect();
+    // the groups with a farthest distance (`max=`): each a cost after the nets' (index `net_ids.len() + k`), how far its two farthest
+    // parts' centres are past the distance, weighed heavily (L10)
+    let nn = net_ids.len();
+    let limited: Vec<(Vec<usize>, f64)> = wants
+        .group_max
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| **m > 0.0)
+        .map(|(g, m)| ((0..parts.len()).filter(|pi| wants.groups.get(&parts[*pi].refdes).is_some_and(|v| v.contains(&g))).collect::<Vec<usize>>(), *m))
+        .filter(|(v, _)| v.len() >= 2)
+        .collect();
+    for (k, (members, _)) in limited.iter().enumerate() {
+        for pi in members {
+            part_nets[*pi].push(nn + k);
+        }
+    }
+    let centre = |p: &StripPart| -> (f64, f64) {
+        let n = p.leads.len().max(1) as f64;
+        (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n)
+    };
+    let group_cost = |k: usize, parts: &[StripPart]| -> f64 {
+        let (members, limit) = &limited[k];
+        let cs: Vec<(f64, f64)> = members.iter().map(|pi| centre(&parts[*pi])).collect();
+        let far = cs.iter().flat_map(|a| cs.iter().map(move |b| (a.0 - b.0).hypot(a.1 - b.1))).fold(0.0, f64::max);
+        (far - limit).max(0.0) * 4.0
+    };
     let spread = |i: usize, parts: &[StripPart]| -> f64 {
+        if i >= nn {
+            return group_cost(i - nn, parts);
+        }
         let pts = leads_of[i].iter().map(|(p, l)| parts[*p].leads[*l].1).chain(fixed_of[i].iter().copied());
         let (mut r0, mut r1, mut c0, mut c1, mut n) = (u16::MAX, 0u16, u16::MAX, 0u16, 0);
         for a in pts {
@@ -782,7 +818,7 @@ fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool
         };
         widths.sort_unstable();
         widths.dedup();
-        let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), ..Default::default() };
+        let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), group_max: wants.group_max.clone(), ..Default::default() };
         let mut ls: Vec<StripLayout> = widths.into_iter().map(|w| place(&sub, StripOptions { cols: Some(w), ..opt }, gap, turned, sa, &alone, None)).collect();
         ls.dedup_by_key(|l| (l.cols, l.rows));
         choices.push((i, ls));
@@ -1971,6 +2007,39 @@ mod tests {
         assert!(l.links.len() <= 18, "{} wires on top", l.links.len());
         let s = load("seg7_counter.schjson");
         assert!(!strip_layout_with(&s, StripOptions::default()).perf, "the stripboard keeps its strips");
+    }
+
+    /// L10: a group with a farthest distance (`max=`) is judged on the board (`strip_rules`), and the layout keeps it: the two parts
+    /// farthest apart in the 555 blinker as laid out without the rule end up within half that distance.
+    #[test]
+    fn a_groups_farthest_distance_is_judged_and_kept() {
+        let mut s = load("ne555_blinker.schjson");
+        let free = perf_layout_with(&s, StripOptions::default());
+        let centre = |p: &StripPart| {
+            let n = p.leads.len() as f64;
+            (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n)
+        };
+        let (mut far, mut pair) = (0.0, (String::new(), String::new()));
+        for x in &free.parts {
+            for y in &free.parts {
+                let (a, b) = (centre(x), centre(y));
+                let d = (a.0 - b.0).hypot(a.1 - b.1) * 2.54;
+                if d > far {
+                    (far, pair) = (d, (x.refdes.clone(), y.refdes.clone()));
+                }
+            }
+        }
+        let max = (far / 2.0).max(8.0);
+        s.requirements.groups = vec![design_spec::PlaceGroup { name: "近く".into(), parts: vec![pair.0.clone(), pair.1.clone()], max_dist: max, ..Default::default() }];
+        // judged on the layout made without it
+        let before = crate::stripboard::strip_rules(&s, &free);
+        assert!(before.iter().any(|r| !r.ok && r.message.contains("近くに置く「近く」")), "{before:?}");
+        // kept by the layout made with it
+        let l = perf_layout_with(&s, StripOptions::default());
+        assert!(strip_check(&s, &l).is_empty() && crate::stripboard::strip_unjoined(&s, &l).is_empty());
+        let after = crate::stripboard::group_spreads(&s, &l);
+        assert!(after[0].1 <= max, "{pair:?}: {far:.1} mm alone, {:.1} mm with the rule (max {max:.1})", after[0].1);
+        assert!(crate::stripboard::strip_rules(&s, &l).iter().any(|r| r.ok && r.message.contains("近くに置く「近く」")));
     }
 
     /// L11: with mounting holes in the corners of a board of a given size, the layout leaves the 3 × 3 holes of each corner free (no

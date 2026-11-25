@@ -117,7 +117,32 @@ pub struct RuleCheck {
     pub message: String,
 }
 
-/// The requirements table's rules that a board built by hand can keep: the distances to keep (`KeepApart`: the closest two holes of
+/// The groups of the requirements table with a farthest distance (`max_dist` > 0) and how far apart their two farthest parts on the
+/// board are (the centres of their leads, mm): (the group's name, the distance, the most it may be). A group with fewer than two of its
+/// parts on the board is left out.
+pub fn group_spreads(s: &Schematic, l: &StripLayout) -> Vec<(String, f64, f64)> {
+    let mut out = vec![];
+    for g in s.requirements.groups.iter().filter(|g| g.max_dist > 0.0) {
+        let centres: Vec<(f64, f64)> = l
+            .parts
+            .iter()
+            .filter(|p| g.parts.iter().any(|it| design_spec::matches_name(it, &p.refdes)) && !p.leads.is_empty())
+            .map(|p| {
+                let n = p.leads.len() as f64;
+                (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n)
+            })
+            .collect();
+        if centres.len() < 2 {
+            continue;
+        }
+        let far = centres.iter().flat_map(|a| centres.iter().map(move |b| (a.0 - b.0).hypot(a.1 - b.1))).fold(0.0, f64::max) * 2.54;
+        let name = if g.name.is_empty() { g.parts.join(",") } else { g.name.clone() };
+        out.push((name, far, g.max_dist));
+    }
+    out
+}
+
+/// The requirements table's rules that a board built by hand can keep: the groups' farthest distances (`group_spreads`), the distances to keep (`KeepApart`: the closest two holes of
 /// the two sets, 2.54 mm a hole) and, with sections, the one ground point (every section's ground goes back to the first section's
 /// ground strip by a wire of its own).
 pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
@@ -142,6 +167,17 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
         }
         v
     };
+    for (name, far, max) in group_spreads(s, l) {
+        let ok = far <= max + 1e-9;
+        out.push(RuleCheck {
+            ok,
+            message: if ok {
+                format!("近くに置く「{name}」: いちばん離れた部品どうしが {far:.1} mm ({max:.1} mm 以内)")
+            } else {
+                format!("近くに置く「{name}」: いちばん離れた部品どうしが {far:.1} mm で、{max:.1} mm を超えます。組の部品を、四角で囲んで寄せてください")
+            },
+        });
+    }
     for rule in &s.requirements.apart {
         let (a, b) = (holes_of(&rule.a), holes_of(&rule.b));
         let closest = a.iter().flat_map(|x| b.iter().map(move |y| (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54)).filter(|d| *d > 0.0).fold(f64::INFINITY, f64::min);

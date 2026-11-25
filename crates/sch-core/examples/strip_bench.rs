@@ -51,6 +51,12 @@ fn main() {
             if !all && p > 0 {
                 eprintln!("{f} {}{:?}: {:?}", if perf { "perf" } else { "strip" }, width, strip_check(&s, &l).iter().take(5).collect::<Vec<_>>());
             }
+            // the requirements table's rules the board does not keep (distances to keep, groups' farthest distances, forks)
+            if !all {
+                for r in sch_core::stripboard::strip_rules(&s, &l).iter().filter(|r| !r.ok) {
+                    eprintln!("{f} {}{:?}: {}", if perf { "perf" } else { "strip" }, width, r.message);
+                }
+            }
             if !all {
                 line += &format!(" | {}{}: {}x{} links {} problems {} back {backs} ({ms} ms)", if perf { "perf" } else { "strip" }, width.map(|w| format!(" w{w}")).unwrap_or_default(), l.cols, l.rows, l.links.len(), p);
             }
