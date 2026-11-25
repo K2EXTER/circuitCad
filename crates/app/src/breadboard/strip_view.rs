@@ -797,13 +797,29 @@ impl BreadboardView {
         Self::fold(ui, "strip_sections", sections, false, |ui| {
             if !l.sections.is_empty() || !rules.is_empty() {
                 ui.label(egui::RichText::new(i18n::tr("区画とつなぎ方の決まり")).strong()).on_hover_text(i18n::tr(
-                    "回路図の「設計の要件」の表から: 「近くに置く組」で「区画」に印を付けた組ごとにまとめて置き、区画の間は帯を切ります。GND は区画ごとに 1 本の線で、表のいちばん上の区画の GND の帯 (1 点) へ戻します。「離す」の行は、基板の上のいちばん近い穴どうしの距離で確かめます。「ケルビン」の行は、測定の「分かれ目」: 抵抗の足から電流の線とセンスの線への道が、帯の上を一緒に走る長さです (自動の並べ方は、足が 2 本の線の間に来るように部品や線の端をずらします)",
+                    "回路図の「設計の要件」の表から: 「近くに置く組」で「区画」に印を付けた組ごとにまとめて置き、区画の間は帯を切ります。GND は区画ごとに 1 本の線で、表のいちばん上の区画の GND の帯 (1 点) へ戻します。「… mm 以内に集める」の行は、組の部品のうちいちばん遠い 2 つ (足の真ん中どうし) の距離、「… mm 以上離す」の行は、いちばん近い 2 つの穴どうしの距離で確かめ、その 2 つの名前と、あと何 mm かを出します。行をクリックすると、その 2 つの部品を選びます。「ケルビン」の行は、測定の「分かれ目」: 抵抗の足から電流の線とセンスの線への道が、帯の上を一緒に走る長さです (自動の並べ方は、足が 2 本の線の間に来るように部品や線の端をずらします)",
                 ));
                 if !l.sections.is_empty() {
                     ui.small(l.sections.iter().map(|(n, a, b)| format!("{n} ({} – {})", hole_name(*a), hole_name(*b))).collect::<Vec<_>>().join("、"));
                 }
                 for r in &rules {
-                    ui.colored_label(if r.ok { crate::theme::ok() } else { crate::theme::warn() }, format!("{} {}", if r.ok { "✔" } else { "▲" }, i18n::tr_dyn(&r.message)));
+                    let color = if r.ok { crate::theme::ok() } else { crate::theme::warn() };
+                    let text = egui::RichText::new(format!("{} {}", if r.ok { "✔" } else { "▲" }, i18n::tr_dyn(&r.message))).color(color);
+                    if r.parts.is_empty() {
+                        ui.label(text);
+                        continue;
+                    }
+                    // a click picks the parts the line names (the two too far apart, the two too near), to move them
+                    let resp = ui.add(egui::Label::new(text).sense(egui::Sense::click())).on_hover_text(i18n::trf!("クリックで {} を選びます (基板の上で光ります)", r.parts.join(" と ")));
+                    if resp.clicked() {
+                        if let [one] = r.parts.as_slice() {
+                            self.strip_unpick();
+                            self.picked = Some(one.clone());
+                        } else {
+                            self.picked = None;
+                            self.strip_pick(r.parts.clone(), None, false);
+                        }
+                    }
                 }
             } else {
                 crate::icons::help_small(

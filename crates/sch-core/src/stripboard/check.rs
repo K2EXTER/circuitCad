@@ -110,34 +110,44 @@ pub fn strip_check(s: &Schematic, l: &StripLayout) -> Vec<String> {
     problems
 }
 
-/// How a rule of the requirements table fares on the board: its line, and whether it holds.
-#[derive(Clone, Debug, PartialEq)]
+/// How a rule of the requirements table fares on the board: its line, whether it holds, and the parts it is about (the two farthest
+/// apart of a group, the two nearest of a distance to keep: picked when the line is clicked).
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct RuleCheck {
     pub ok: bool,
     pub message: String,
+    pub parts: Vec<String>,
 }
 
 /// The groups of the requirements table with a farthest distance (`max_dist` > 0) and how far apart their two farthest parts on the
-/// board are (the centres of their leads, mm): (the group's name, the distance, the most it may be). A group with fewer than two of its
-/// parts on the board is left out.
-pub fn group_spreads(s: &Schematic, l: &StripLayout) -> Vec<(String, f64, f64)> {
+/// board are (the centres of their leads, mm): (the group's name, the distance, the most it may be, the two parts that far apart). A
+/// group with fewer than two of its parts on the board is left out.
+pub fn group_spreads(s: &Schematic, l: &StripLayout) -> Vec<(String, f64, f64, (String, String))> {
     let mut out = vec![];
     for g in s.requirements.groups.iter().filter(|g| g.max_dist > 0.0) {
-        let centres: Vec<(f64, f64)> = l
+        let centres: Vec<(&str, (f64, f64))> = l
             .parts
             .iter()
             .filter(|p| g.parts.iter().any(|it| design_spec::matches_name(it, &p.refdes)) && !p.leads.is_empty())
             .map(|p| {
                 let n = p.leads.len() as f64;
-                (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n)
+                (p.refdes.as_str(), (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n))
             })
             .collect();
         if centres.len() < 2 {
             continue;
         }
-        let far = centres.iter().flat_map(|a| centres.iter().map(move |b| (a.0 - b.0).hypot(a.1 - b.1))).fold(0.0, f64::max) * 2.54;
+        let mut far = (0.0, (String::new(), String::new()));
+        for (i, (ra, a)) in centres.iter().enumerate() {
+            for (rb, b) in centres.iter().skip(i + 1) {
+                let d = (a.0 - b.0).hypot(a.1 - b.1) * 2.54;
+                if d > far.0 || far.1 .0.is_empty() {
+                    far = (d, (ra.to_string(), rb.to_string()));
+                }
+            }
+        }
         let name = if g.name.is_empty() { g.parts.join(",") } else { g.name.clone() };
-        out.push((name, far, g.max_dist));
+        out.push((name, far.0, g.max_dist, far.1));
     }
     out
 }
@@ -149,57 +159,70 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
     let mut out = vec![];
     let nets = extract(&s.flat());
     let net_of = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin)).map(|n| n.name.clone()).unwrap_or_default();
-    // the holes of an item: a part's leads, or everything on a net (leads, the ends of its wires)
-    let holes_of = |items: &[String]| -> Vec<At> {
+    // the holes of an item and what is on each (a part's leads; everything on a net: its leads, the ends of its wires on top)
+    let holes_of = |items: &[String]| -> Vec<(At, String)> {
         let mut v = vec![];
         for item in items {
             if let Some(p) = l.parts.iter().find(|p| &p.refdes == item) {
-                v.extend(p.leads.iter().map(|(_, a)| *a));
+                v.extend(p.leads.iter().map(|(_, a)| (*a, p.refdes.clone())));
                 continue;
             }
             for p in &l.parts {
-                v.extend(p.leads.iter().filter(|(pin, _)| design_spec::matches_name(item, &net_of(&p.refdes, pin))).map(|(_, a)| *a));
+                v.extend(p.leads.iter().filter(|(pin, _)| design_spec::matches_name(item, &net_of(&p.refdes, pin))).map(|(_, a)| (*a, p.refdes.clone())));
             }
             for k in l.links.iter().filter(|k| design_spec::matches_name(item, &k.net)) {
-                v.push(k.a);
-                v.push(k.b);
+                v.push((k.a, format!("{} の表の線", k.net)));
+                v.push((k.b, format!("{} の表の線", k.net)));
             }
         }
         v
     };
-    for (name, far, max) in group_spreads(s, l) {
+    // (the numbers as typed: 40 mm, 2.54 mm)
+    let mm = |x: f64| format!("{}", (x * 10.0).round() / 10.0);
+    // a group to keep together: what it must be within, then the two parts farthest apart and how much too far
+    for (name, far, max, (a, b)) in group_spreads(s, l) {
         let ok = far <= max + 1e-9;
         out.push(RuleCheck {
             ok,
             message: if ok {
-                format!("近くに置く「{name}」: いちばん離れた部品どうしが {far:.1} mm ({max:.1} mm 以内)")
+                format!("「{name}」を {} mm 以内に集める: できています (いちばん遠い {a} と {b} で {} mm)", mm(max), mm(far))
             } else {
-                format!("近くに置く「{name}」: いちばん離れた部品どうしが {far:.1} mm で、{max:.1} mm を超えます。組の部品を、四角で囲んで寄せてください")
+                format!("「{name}」を {} mm 以内に集める: {a} と {b} が {} mm 離れています ({} mm 遠すぎ)。どちらかを相手の方へ寄せてください", mm(max), mm(far), mm(far - max))
             },
+            parts: vec![a, b],
         });
     }
+    // a distance to keep: what it must be at least, then the two nearest and how much too near
     for rule in &s.requirements.apart {
-        let (a, b) = (holes_of(&rule.a), holes_of(&rule.b));
-        let closest = a.iter().flat_map(|x| b.iter().map(move |y| (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54)).filter(|d| *d > 0.0).fold(f64::INFINITY, f64::min);
-        if !closest.is_finite() {
-            continue;
+        let (xs, ys) = (holes_of(&rule.a), holes_of(&rule.b));
+        let mut near: Option<(f64, String, String)> = None;
+        for (x, wx) in &xs {
+            for (y, wy) in &ys {
+                let d = (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54;
+                if d > 0.0 && near.as_ref().is_none_or(|n| d < n.0) {
+                    near = Some((d, wx.clone(), wy.clone()));
+                }
+            }
         }
+        let Some((closest, a, b)) = near else { continue };
         let ok = closest >= rule.min_dist;
         let name = if rule.name.is_empty() { format!("{} と {}", rule.a.join(","), rule.b.join(",")) } else { rule.name.clone() };
+        let parts: Vec<String> = [a.clone(), b.clone()].into_iter().filter(|w| l.parts.iter().any(|p| p.refdes == *w)).collect();
         out.push(RuleCheck {
             ok,
             message: if ok {
-                format!("離す「{name}」: いちばん近い所で {closest:.1} mm ({:.1} mm 以上)", rule.min_dist)
+                format!("「{name}」を {} mm 以上離す: できています (いちばん近い {a} と {b} で {} mm)", mm(rule.min_dist), mm(closest))
             } else {
-                format!("離す「{name}」: いちばん近い所が {closest:.1} mm で、{:.1} mm に足りません。部品か線を、四角で囲んで離してください", rule.min_dist)
+                format!("「{name}」を {} mm 以上離す: {a} と {b} が {} mm しか離れていません ({} mm 足りない)。どちらかを遠ざけてください", mm(rule.min_dist), mm(closest), mm(rule.min_dist - closest))
             },
+            parts,
         });
     }
     for (m, _, v) in forks(s, l) {
         let name = if m.name.is_empty() { m.pads.join(",") } else { m.name.clone() };
         let (start, a, b) = (&m.pads[0], &m.pads[1], &m.pads[2]);
         let Some(v) = v else {
-            out.push(RuleCheck { ok: false, message: format!("ケルビン「{name}」: {start} から {a} か {b} へ、帯と線でつながっていません") });
+            out.push(RuleCheck { ok: false, message: format!("ケルビン「{name}」: {start} から {a} か {b} へ、帯と線でつながっていません"), ..Default::default() });
             continue;
         };
         let ok = if m.op == "min" { v >= m.limit } else { v <= m.limit + 1e-9 };
@@ -210,6 +233,7 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
             } else {
                 format!("ケルビン「{name}」: {a} と {b} への道が {start} の足から {v:.1} mm 一緒に走り、{:.1} mm を超えます。{start} の足を、帯の上で 2 本の線の間に置いてください (片方の電流が流れる帯から、もう片方の線を取らない)", m.limit)
             },
+            parts: m.pads.iter().filter_map(|p| p.split_once('.').map(|x| x.0.to_string())).take(1).collect(),
         });
     }
     if l.sections.len() > 1 {
@@ -249,6 +273,7 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
                     } else {
                         format!("GND: 「{}」の GND から「{}」の GND への線が {back} 本、ほかの区画への線が {other} 本あります。1 点へ 1 本で戻すと、ほかの区画の電流が GND を通りません", l.sections[k].0, l.sections[h].0)
                     },
+                    ..Default::default()
                 });
             }
         }

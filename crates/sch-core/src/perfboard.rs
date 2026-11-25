@@ -2110,13 +2110,13 @@ mod tests {
         s.requirements.groups = vec![design_spec::PlaceGroup { name: "近く".into(), parts: vec![pair.0.clone(), pair.1.clone()], max_dist: max, ..Default::default() }];
         // judged on the layout made without it
         let before = crate::stripboard::strip_rules(&s, &free);
-        assert!(before.iter().any(|r| !r.ok && r.message.contains("近くに置く「近く」")), "{before:?}");
+        assert!(before.iter().any(|r| !r.ok && r.message.starts_with("「近く」を") && r.message.contains("以内に集める") && r.parts.contains(&pair.0) && r.parts.contains(&pair.1)), "{before:?}");
         // kept by the layout made with it
         let l = perf_layout_with(&s, StripOptions::default());
         assert!(strip_check(&s, &l).is_empty() && crate::stripboard::strip_unjoined(&s, &l).is_empty());
         let after = crate::stripboard::group_spreads(&s, &l);
         assert!(after[0].1 <= max, "{pair:?}: {far:.1} mm alone, {:.1} mm with the rule (max {max:.1})", after[0].1);
-        assert!(crate::stripboard::strip_rules(&s, &l).iter().any(|r| r.ok && r.message.contains("近くに置く「近く」")));
+        assert!(crate::stripboard::strip_rules(&s, &l).iter().any(|r| r.ok && r.message.starts_with("「近く」を") && r.message.contains("できています")));
     }
 
     /// L10, across sections: a group with a farthest distance whose parts are in two sections (the two op amps of the active filter, one
