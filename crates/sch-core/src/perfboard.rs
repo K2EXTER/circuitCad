@@ -195,13 +195,9 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                     break;
                 }
                 let mut m = l.clone();
-                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at });
+                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
-                // (the groups past their farthest distance come after the nets left apart: a group kept close is no use on a board
-                // that does not work)
-                let over = crate::stripboard::group_spreads(s, &m).iter().filter(|g| g.1 > g.2 + 1e-9).count();
-                // (a wire on top along a chip's row of pins counts three: it lies on the socket, L9)
-                let key = (m.in_keepout().len(), apart.len(), over, m.links.len() + 2 * links_along_pins(&m).len(), m.rows as usize * m.cols as usize);
+                let key = rank(s, &m, apart.len());
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
                 if round == 0 && best.as_ref().is_some_and(|(b, _)| key.0 > b.0 || (key.0 == b.0 && (key.1 > b.1 + 1 || (key.1 >= b.1 && key.3 > b.3 + b.3 / 2 + 2)))) {
                     break;
@@ -237,6 +233,14 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
         }
     }
     best.map(|b| b.1).unwrap_or_default()
+}
+
+/// How good a wired layout is, the smaller the better: what is left on the mounting holes' corners, the nets left apart (`apart`),
+/// the groups past their farthest distance (after the nets left apart: a group kept close is no use on a board that does not work),
+/// the wires on top with each one along a chip's row of pins counting three (it lies on the socket, L9), the board's holes.
+fn rank(s: &Schematic, m: &StripLayout, apart: usize) -> (usize, usize, usize, usize, usize) {
+    let over = crate::stripboard::group_spreads(s, m).iter().filter(|g| g.1 > g.2 + 1e-9).count();
+    (m.in_keepout().len(), apart, over, m.links.len() + 2 * links_along_pins(m).len(), m.rows as usize * m.cols as usize)
 }
 
 /// The chips that go on the copper side, by reference, with their size: those the person put there (`MountChoice::Lands`), and with
@@ -1340,10 +1344,12 @@ struct Order<'a> {
     first: &'a [String],
     /// The requirements table's Kelvin forks (its lead, and the two leads its ways go to): the two ways part at the lead.
     forks: &'a [[At; 3]],
+    /// What a jump along a chip's row of pins costs more (`ALONG_COST`; 0 in a test to compare).
+    along: u32,
 }
 
 fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> String, order: Order) {
-    let Order { rails_first, escapes, first, forks } = order;
+    let Order { rails_first, escapes, first, forks, along: along_extra } = order;
     let (rows, cols) = (l.rows as usize, l.cols as usize);
     let idx = |a: At| a.0 as usize * cols + a.1 as usize;
     let hole = |h: usize| ((h / cols) as u16, (h % cols) as u16);
@@ -1399,7 +1405,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             }
         }
     }
-    let along_extra = ALONG_COST;
+
     const DIRS: [(i32, i32); 4] = [(0, 1), (1, 0), (0, -1), (-1, 0)];
     let beside = |a: At| -> Vec<At> {
         DIRS.iter().map(|(dr, dc)| (a.0 as i32 + dr, a.1 as i32 + dc)).filter(|(r, cc)| *r >= 0 && *cc >= 0 && (*r as usize) < rows && (*cc as usize) < cols).map(|(r, cc)| (r as u16, cc as u16)).collect()
@@ -2135,13 +2141,29 @@ mod tests {
         assert!(kept <= 25.0 && free > 25.0, "{free:.1} mm without the distance, {kept:.1} mm with it");
     }
 
-    /// L9: the wires on top along a chip's row of pins (lying on its socket) are fewer: the Arduino Mega board had 50, 40 since a jump
-    /// along two pins of one chip costs more (`ALONG_COST`) and the layouts are compared with them counting three.
+    /// L9: the wires on top along a chip's row of pins (lying on its socket) are fewer: of the same wired layouts of the Arduino Mega
+    /// board, the one `rank` keeps has fewer (37) than the one kept by the wires on top alone (49). (The whole layout stops at a time budget, so
+    /// how many layouts it tries, and its count, depends on the machine: 40 here, 49 on CI's slower runners, 50 before.)
     #[test]
     fn fewer_wires_on_top_run_along_a_row_of_pins() {
-        let (l, _) = laid_out("arduino_mega_usb.schjson", StripOptions::default());
-        let along = links_along_pins(&l).len();
-        assert!(along <= 45, "{along} wires on top along a row of pins ({} in all)", l.links.len());
+        let s = load("arduino_mega_usb.schjson");
+        let c = read(&s);
+        let wants = Wants::read(&s, &c);
+        let net_of_lead = |r: &str, pin: &str| lead_net(&c, r, pin);
+        let mut tried: Vec<StripLayout> = vec![];
+        for turned in [Turn::Up, Turn::All] {
+            let placed = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants, None);
+            for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
+                let mut m = placed.clone();
+                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST });
+                tried.push(m);
+            }
+        }
+        let apart = |m: &StripLayout| crate::stripboard::strip_unjoined(&s, m).len();
+        let kept = tried.iter().min_by_key(|m| rank(&s, m, apart(m))).unwrap();
+        let by_wires = tried.iter().min_by_key(|m| (apart(m), m.links.len(), m.rows as usize * m.cols as usize)).unwrap();
+        let n = |l: &StripLayout| links_along_pins(l).len();
+        assert!(n(kept) < n(by_wires) && apart(kept) == apart(by_wires), "{} along a row of pins in the layout kept, {} in the one with the fewest wires", n(kept), n(by_wires));
     }
 
     /// L11: with mounting holes in the corners of a board of a given size, the layout leaves the 3 × 3 holes of each corner free (no
