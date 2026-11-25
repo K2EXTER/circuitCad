@@ -14,13 +14,86 @@ fn shift(at: At, dr: i32, dc: i32) -> Option<At> {
     (r >= 0 && c >= 0 && r < u16::MAX as i32 && c < u16::MAX as i32).then_some((r as u16, c as u16))
 }
 
-/// The board made big enough for every hole in use (and the cuts), never smaller than it was.
+/// The board made big enough for every hole in use (and the cuts). A stripboard never gets smaller than it was (its strips run the
+/// whole width); a perfboard fits what is on it, with one free row and column past it as the automatic layout leaves, so it shrinks
+/// again when parts move back (the sections' boxes count too).
 fn grown(mut l: StripLayout) -> StripLayout {
     let mut far = l.used().into_iter().map(|(a, _)| a).chain(l.cuts.iter().copied()).chain(l.bare.iter().flat_map(|(a, b)| [*a, *b])).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
+    if l.perf {
+        // (a section's box already has its hole of room past its parts: the board ends right after it)
+        let boxes = l.sections.iter().fold((0u16, 0u16), |m, (_, _, b)| (m.0.max(b.0 + 1), m.1.max(b.1 + 1)));
+        (l.rows, l.cols) = ((far.0 + 2).max(boxes.0), (far.1 + 2).max(boxes.1));
+        return l;
+    }
     far = (far.0 + 1, far.1 + 1);
     l.rows = l.rows.max(far.0);
     l.cols = l.cols.max(far.1);
     l
+}
+
+/// The sections' boxes after a hand edit (`before` → `after`) follow their parts: a section whose parts all moved by the same rows
+/// and columns has its box moved with them; one whose parts moved otherwise gets a box round its parts' leads, a hole of room on each
+/// side. A section whose parts did not move keeps its box. The parts of a section are those of the requirements table's group
+/// (`stripboard::sections`).
+pub fn sections_followed(s: &Schematic, before: &StripLayout, after: StripLayout) -> StripLayout {
+    if after.sections.is_empty() {
+        return after;
+    }
+    let c = crate::breadboard::read(s);
+    let groups = crate::stripboard::sections(s, &c);
+    let leads = |l: &StripLayout, r: &str| -> Vec<At> { l.parts.iter().find(|p| p.refdes == r).map(|p| p.leads.iter().map(|x| x.1).collect()).unwrap_or_default() };
+    let mut out = after.clone();
+    for (name, a, b) in out.sections.iter_mut() {
+        let Some((_, members)) = groups.iter().find(|(n, _)| n == name) else { continue };
+        let moves: Vec<(Vec<At>, Vec<At>)> = members.iter().map(|r| (leads(before, r), leads(&after, r))).filter(|(x, y)| !x.is_empty() && x.len() == y.len()).collect();
+        if moves.iter().all(|(x, y)| x == y) {
+            continue;
+        }
+        let offsets: std::collections::BTreeSet<(i32, i32)> = moves.iter().map(|(x, y)| (y[0].0 as i32 - x[0].0 as i32, y[0].1 as i32 - x[0].1 as i32)).collect();
+        let rigid = moves.iter().all(|(x, y)| x.iter().zip(y).all(|(p, q)| (q.0 as i32 - p.0 as i32, q.1 as i32 - p.1 as i32) == (y[0].0 as i32 - x[0].0 as i32, y[0].1 as i32 - x[0].1 as i32)));
+        if offsets.len() == 1 && rigid {
+            let (dr, dc) = *offsets.iter().next().unwrap();
+            if let (Some(na), Some(nb)) = (shift(*a, dr, dc), shift(*b, dr, dc)) {
+                (*a, *b) = (na, nb);
+                continue;
+            }
+        }
+        let pts: Vec<At> = moves.iter().flat_map(|(_, y)| y.iter().copied()).collect();
+        let (r0, r1) = (pts.iter().map(|p| p.0).min().unwrap_or(0), pts.iter().map(|p| p.0).max().unwrap_or(0));
+        let (c0, c1) = (pts.iter().map(|p| p.1).min().unwrap_or(0), pts.iter().map(|p| p.1).max().unwrap_or(0));
+        (*a, *b) = ((r0.saturating_sub(1), c0.saturating_sub(1)), (r1 + 1, c1 + 1));
+    }
+    grown(out)
+}
+
+/// The layout without the links and the bare wires drawn by hand that lie wholly in one of the boxes `areas` (corners, inclusive);
+/// None when there is none.
+pub fn wires_in_boxes_removed(l: &StripLayout, areas: &[(At, At)]) -> Option<StripLayout> {
+    let inside = |h: At| areas.iter().any(|(a, b)| h.0 >= a.0.min(b.0) && h.0 <= a.0.max(b.0) && h.1 >= a.1.min(b.1) && h.1 <= a.1.max(b.1));
+    let mut out = l.clone();
+    out.links.retain(|k| !(inside(k.a) && inside(k.b)));
+    out.bare.retain(|(a, b)| !(inside(*a) && inside(*b)));
+    (out.links.len() + out.bare.len() < l.links.len() + l.bare.len()).then(|| grown(out))
+}
+
+/// The bare wire drawn by hand nearest point `p` (in holes, rows and columns as fractions), within `reach` holes of it.
+pub fn bare_near(l: &StripLayout, p: (f32, f32), reach: f32) -> Option<usize> {
+    let dist = |(a, b): &(At, At)| {
+        let (ar, ac, br, bc) = (a.0 as f32, a.1 as f32, b.0 as f32, b.1 as f32);
+        let (vr, vc) = (br - ar, bc - ac);
+        let t = (((p.0 - ar) * vr + (p.1 - ac) * vc) / (vr * vr + vc * vc).max(1e-6)).clamp(0.0, 1.0);
+        (p.0 - (ar + vr * t)).hypot(p.1 - (ac + vc * t))
+    };
+    l.bare.iter().enumerate().map(|(k, w)| (k, dist(w))).filter(|(_, d)| *d <= reach).min_by(|x, y| x.1.total_cmp(&y.1)).map(|(k, _)| k)
+}
+
+/// The layout without bare wire `k` drawn by hand.
+pub fn without_bare(l: &StripLayout, k: usize) -> StripLayout {
+    let mut out = l.clone();
+    if k < out.bare.len() {
+        out.bare.remove(k);
+    }
+    grown(out)
 }
 
 /// Part `refdes` moved `dr` rows and `dc` columns; None when it is not there or would leave the board at the top or the left.
@@ -942,5 +1015,43 @@ mod tests {
             }
         }
         assert!(n_left <= 1, "{n_left} lines left");
+    }
+
+    /// Edits by hand on a perfboard with sections: a section's parts moved together take its box with them; a part moved out of its
+    /// section stretches the box round it; moved back, the board shrinks again (it grew only to hold the part); Delete over a box takes
+    /// the wires wholly inside it; a bare wire is found under the pointer.
+    #[test]
+    fn hand_edits_keep_sections_and_size_in_step() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/active_filter.schjson");
+        let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
+        s.requirements.groups = vec![group("前段", &["U1", "R1", "R2", "C1", "C2"]), group("後段", &["U2", "R3", "R4", "C3", "C4"])];
+        let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+        let bx = |l: &StripLayout, n: &str| l.sections.iter().find(|x| x.0 == n).map(|x| (x.1, x.2)).unwrap();
+        // the whole first section moved 2 down and 3 right: its box with it, the other's left alone
+        let first: Vec<String> = ["U1", "R1", "R2", "C1", "C2"].map(String::from).to_vec();
+        let moved = sections_followed(&s, &l, picked_moved(&l, &first, &[], 2, 3).unwrap());
+        let ((a0, b0), (a1, b1)) = (bx(&l, "前段"), bx(&moved, "前段"));
+        assert_eq!((a1, b1), ((a0.0 + 2, a0.1 + 3), (b0.0 + 2, b0.1 + 3)));
+        assert_eq!(bx(&moved, "後段"), bx(&l, "後段"));
+        // one part of the second section taken far right: the box reaches it
+        let far = sections_followed(&s, &l, part_moved(&l, "R3", 0, 30).unwrap());
+        let r3 = far.parts.iter().find(|p| p.refdes == "R3").unwrap().leads.iter().map(|x| x.1 .1).max().unwrap();
+        assert!(bx(&far, "後段").1 .1 > r3, "{:?} {r3}", bx(&far, "後段"));
+        assert!(far.cols > l.cols);
+        // and back: the board is no wider than before
+        let back = sections_followed(&s, &far, part_moved(&far, "R3", 0, -30).unwrap());
+        assert!(back.cols <= l.cols, "{} > {}", back.cols, l.cols);
+        // Delete over the whole board: every wire on top and every bare wire goes
+        let all = [((0, 0), (l.rows, l.cols))];
+        let bare = wires_in_boxes_removed(&l, &all).unwrap();
+        assert!(bare.links.is_empty() && bare.bare.is_empty());
+        assert!(wires_in_boxes_removed(&bare, &all).is_none());
+        // a bare wire under the pointer (its middle)
+        if let Some((a, b)) = l.bare.first() {
+            let mid = ((a.0 + b.0) as f32 / 2.0, (a.1 + b.1) as f32 / 2.0);
+            assert!(bare_near(&l, mid, 0.3).is_some_and(|k| { let w = l.bare[k]; (w.0 .0 + w.1 .0) as f32 / 2.0 == mid.0 || (w.0 .1 + w.1 .1) as f32 / 2.0 == mid.1 }));
+            assert_eq!(without_bare(&l, 0).bare.len(), l.bare.len() - 1);
+        }
     }
 }

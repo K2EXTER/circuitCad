@@ -963,8 +963,8 @@ fn parts_are_picked_with_a_box_and_moved_together() {
         run(app, vec![egui::Event::PointerButton { pos: to, button, pressed: false, modifiers }]);
         run(app, vec![]);
     };
-    // round the whole board, from outside its corner (no part there)
-    let (from, to) = (hole((0, 0)) - Vec2::splat(p * 0.4), hole((l.rows - 1, l.cols - 1)));
+    // round the whole board, from outside its top-left corner (three holes left of and one above the first: the box starts at the edge)
+    let (from, to) = (hole((0, 0)) - Vec2::new(p * 3.0, p * 1.2), hole((l.rows - 1, l.cols - 1)));
     drag(&mut app, &mut run, from, to, egui::PointerButton::Primary, Default::default());
     let mut all: Vec<String> = l.parts.iter().map(|x| x.refdes.clone()).collect();
     let mut chosen = app.breadboard.strip.chosen.clone();
@@ -981,6 +981,10 @@ fn parts_are_picked_with_a_box_and_moved_together() {
         let y = m.parts.iter().find(|y| y.refdes == x.refdes).unwrap();
         assert!(x.leads.iter().zip(&y.leads).all(|(a, b)| b.1 == (a.1 .0, a.1 .1 + 1)), "{} moved with the rest: {:?} -> {:?}", x.refdes, x.leads, y.leads);
     }
+    // (the board keeps one free column past its parts: one wider now, drawn a little elsewhere)
+    run(&mut app, vec![]);
+    let (o, p) = app.breadboard.strip.drawn.expect("the board was drawn");
+    let hole = |a: (u16, u16)| o + Vec2::new(a.1 as f32, a.0 as f32) * p;
     // Shift + click takes R1 out
     let r1 = m.parts.iter().find(|x| x.refdes == "R1").unwrap();
     let at = hole(r1.leads[0].1);
@@ -999,6 +1003,16 @@ fn parts_are_picked_with_a_box_and_moved_together() {
     let now = app.breadboard.strip_picked_parts();
     assert!(now.contains(&"U1".to_string()), "the chip touched is picked: {now:?}");
     assert!(now.len() < all.len(), "only what the small box touches: {now:?}");
+    // the whole board boxed again and Delete: every wire on top and bare wire on the copper side goes (the parts stay)
+    let m = app.sch.stripboard.clone().unwrap();
+    assert!(m.links.len() + m.bare.len() > 0, "the blinker has wires to take away");
+    let from = hole((0, 0)) - Vec2::new(p * 3.0, p * 1.2);
+    drag(&mut app, &mut run, from, hole((m.rows - 1, m.cols - 1)) + Vec2::splat(p * 2.0), egui::PointerButton::Primary, Default::default());
+    let at = hole((m.rows / 2, m.cols / 2));
+    run(&mut app, vec![egui::Event::PointerMoved(at)]);
+    run(&mut app, vec![egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    let gone = app.sch.stripboard.clone().unwrap();
+    assert!(gone.links.is_empty() && gone.bare.is_empty() && gone.parts.len() == m.parts.len(), "{} links, {} bare wires left", gone.links.len(), gone.bare.len());
 }
 
 /// On the breadboard too: a left drag from an empty spot round the parts picks them all, and one of them dragged a column takes the

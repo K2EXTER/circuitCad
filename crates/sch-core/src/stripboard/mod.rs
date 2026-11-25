@@ -183,7 +183,6 @@ impl StripLayout {
         out
     }
 
-    /// Every hole used (a lead, a link's end, an off-board wire's end) and by what.
     /// What sits on a hole kept free for a mounting hole (`keepout`): a lead, a wire's end, a bare wire, a cut.
     pub fn in_keepout(&self) -> Vec<(At, String)> {
         if self.keepout.is_empty() {
@@ -202,6 +201,7 @@ impl StripLayout {
         v
     }
 
+    /// Every hole used (a lead, a link's end, an off-board wire's end) and by what.
     pub fn used(&self) -> Vec<(At, String)> {
         let mut v: Vec<(At, String)> = self.parts.iter().flat_map(|p| p.leads.iter().map(move |(pin, at)| (*at, format!("{}.{pin}", p.refdes)))).collect();
         for (k, l) in self.links.iter().enumerate() {
