@@ -420,6 +420,36 @@ impl SchEditor {
         }
     }
 
+    /// The net through the grid point under the pointer: its wires under a wide glow, a ring on each pin and label of it (on
+    /// this sheet; labels of the same name join the places they name), and its name by the pointer. Found again only when the
+    /// pointer moves to another grid point or the schematic changes.
+    pub(super) fn draw_net_glow(&mut self, painter: &egui::Painter, rect: Rect, snapped: Pt, sp: Pos2) {
+        if self.net_glow.as_ref().is_none_or(|(p, r, _)| *p != snapped || *r != self.rev) {
+            self.net_glow = Some((snapped, self.rev, sch_core::net_parts_at(&self.sch, snapped)));
+        }
+        let Some((_, _, Some(net))) = &self.net_glow else { return };
+        let col = crate::theme::highlight().gamma_multiply(0.45);
+        let to = |p: Pt| self.to_screen(rect, (p.0 as f32, p.1 as f32));
+        let w = (self.zoom * 0.35).clamp(4.0, 10.0);
+        for (a, b) in &net.wires {
+            painter.line_segment([to(*a), to(*b)], Stroke::new(w, col));
+        }
+        for p in net.pins.iter().chain(&net.labels) {
+            painter.circle_stroke(to(*p), (self.zoom * 0.4).clamp(5.0, 11.0), Stroke::new(2.0, crate::theme::highlight()));
+        }
+        // its name (and how far it reaches) beside the pointer
+        let places = net.labels.len();
+        let text = match &net.name {
+            Some(n) if places > 1 => i18n::trf!("ネット {}  (ラベル {} か所)", n, places),
+            Some(n) => i18n::trf!("ネット {}", n),
+            None => i18n::tr("(部品のピンにつながっていない線)").to_string(),
+        };
+        let g = painter.layout_no_wrap(text, self.main_font(painter), Color32::WHITE);
+        let r = Rect::from_min_size(sp + Vec2::new(14.0, 12.0), g.size()).expand(3.0);
+        painter.rect_filled(r, 3.0, Color32::from_rgba_unmultiplied(40, 40, 40, 220));
+        painter.galley(r.min + Vec2::new(3.0, 3.0), g, crate::theme::highlight());
+    }
+
     pub(super) fn draw_noise_hover(&mut self, painter: &egui::Painter, snapped: Pt, sp: Pos2) {
         if self.noise_pick {
             if self.pick_hover.as_ref().map(|(p, _)| *p) != Some(snapped) {

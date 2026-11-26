@@ -109,6 +109,34 @@ fn a_header_has_rows_and_a_socket_kept_in_its_footprint() {
     assert!(!pf.parts.iter().any(|p| p.refdes == jr));
 }
 
+/// The net under a point, with all it is made of on the sheet: on a schematic joined by labels only, the wires, pins and labels of
+/// every place of one name; nothing at a point where nothing is.
+#[test]
+fn the_net_under_a_point_takes_in_every_place_its_labels_name() {
+    let mut s = Schematic::default();
+    let r1 = s.add(Kind::Resistor, (0, 0), 0);
+    let r2 = s.add(Kind::Resistor, (20, 10), 0);
+    let r3 = s.add(Kind::Resistor, (40, 0), 0);
+    let (a, b) = (s.components[r1].pins()[1].1, s.components[r2].pins()[0].1);
+    // R1.2 → a short wire → label SIG; R2.1 → label SIG; R3 elsewhere on its own net
+    s.wires.push(Wire { a, b: (a.0 + 3, a.1) });
+    s.labels.push(Label { pos: (a.0 + 3, a.1), text: "SIG".into() });
+    s.labels.push(Label { pos: b, text: "SIG".into() });
+    s.labels.push(Label { pos: s.components[r3].pins()[0].1, text: "OTHER".into() });
+    let n = crate::net_parts_at(&s, (a.0 + 1, a.1)).expect("on the wire");
+    assert_eq!(n.name.as_deref(), Some("SIG"));
+    assert_eq!(n.wires, vec![(a, (a.0 + 3, a.1))]);
+    let mut pins = n.pins.clone();
+    pins.sort();
+    assert_eq!(pins, { let mut v = vec![a, b]; v.sort(); v }, "R1.2 and, through the label, R2.1");
+    assert_eq!(n.labels.len(), 2);
+    // from the other end (the label beside R2) the same net
+    assert_eq!(crate::net_parts_at(&s, b).map(|n| n.wires.len()), Some(1));
+    // the other net does not come in, and an empty point is no net
+    assert!(!n.pins.contains(&s.components[r3].pins()[0].1));
+    assert_eq!(crate::net_parts_at(&s, (100, 100)), None);
+}
+
 #[test]
 fn voltage_divider_netlist() {
     let mut s = divider();

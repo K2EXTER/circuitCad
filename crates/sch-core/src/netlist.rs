@@ -143,6 +143,59 @@ pub fn net_at(s: &Schematic, p: Pt) -> Option<String> {
     groups.into_iter().find(|(root, _)| *root == g).map(|(_, n)| n.name)
 }
 
+/// What a net is made of on the sheet shown: its name (as `extract` calls it), its wires, and where its pins and its labels are
+/// (the sheet's own grid). A net named on several places (labels of one name, power symbols) is one net here too: a schematic
+/// drawn with labels is followed by them.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NetParts {
+    pub name: Option<String>,
+    pub wires: Vec<(Pt, Pt)>,
+    pub pins: Vec<Pt>,
+    pub labels: Vec<Pt>,
+}
+
+/// The net through grid point `p` of the sheet shown (a pin, a wire, a label) and all it is made of there; None when nothing is
+/// connected at `p`.
+pub fn net_parts_at(s: &Schematic, p: Pt) -> Option<NetParts> {
+    // a child sheet is drawn in the place of its first copy (`net_at`)
+    let off = s.first_slot_of(s.active_sheet) as i32 * SHEET_STRIDE;
+    let q = (p.0 + off, p.1);
+    let mut probe = s.flat().into_owned();
+    probe.labels.push(Label { pos: q, text: String::new() });
+    let skip = probe.labels.len() - 1;
+    let (mut cn, groups) = extract_groups(&probe, Some(skip));
+    let g = cn.dsu.find(cn.ids[&q]);
+    // back to the sheet's grid; what lies on another sheet is left out
+    let back = |x: Pt| (x.0 - off).abs().lt(&(SHEET_STRIDE / 2)).then_some((x.0 - off, x.1));
+    let mut out = NetParts { name: groups.iter().find(|(r, _)| *r == g).map(|(_, n)| n.name.clone()), ..Default::default() };
+    for w in &probe.wires {
+        if cn.dsu.find(cn.ids[&w.a]) == g
+            && let (Some(a), Some(b)) = (back(w.a), back(w.b))
+        {
+            out.wires.push((a, b));
+        }
+    }
+    for c in &probe.components {
+        for (_, at) in c.pins() {
+            if cn.dsu.find(cn.ids[&at]) == g
+                && let Some(x) = back(at)
+            {
+                out.pins.push(x);
+            }
+        }
+    }
+    for (i, l) in probe.labels.iter().enumerate() {
+        if i != skip
+            && cn.dsu.find(cn.ids[&l.pos]) == g
+            && let Some(x) = back(l.pos)
+        {
+            out.labels.push(x);
+        }
+    }
+    // only the probe there: no net
+    (!(out.wires.is_empty() && out.pins.is_empty() && out.labels.is_empty())).then_some(out)
+}
+
 /// Nets together with the connectivity group each one belongs to. A label index in `skip` is
 /// ignored when naming (it is only a probe).
 fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)>) {

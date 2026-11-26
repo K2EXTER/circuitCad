@@ -363,6 +363,8 @@ pub struct SchEditor {
     pick_probe: bool,
     /// Net name under the cursor while picking, with the grid point it was computed for.
     pick_hover: Option<(Pt, Option<String>)>,
+    /// The net under the pointer, lit on the sheet (`draw_net_glow`): the grid point and the schematic's revision it was found for.
+    net_glow: Option<(Pt, u64, Option<sch_core::NetParts>)>,
     /// Grid points of the picked output / reference nodes, drawn as rings.
     noise_marks: Vec<(Pt, bool)>,
     wave_mode: WaveMode,
@@ -856,6 +858,7 @@ impl Default for SchEditor {
             noise_pick: false,
             pick_probe: false,
             pick_hover: None,
+            net_glow: None,
             noise_marks: vec![],
             wave_mode: WaveMode::Tran,
             fit_pending: false,

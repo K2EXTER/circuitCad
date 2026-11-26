@@ -118,6 +118,10 @@ impl SchEditor {
         let snapped: Pt = (g.0.round() as i32, g.1.round() as i32);
         let sp = self.to_screen(rect, (snapped.0 as f32, snapped.1 as f32));
         self.draw_noise_hover(&painter, snapped, sp);
+        // the net under the pointer lit through the sheet (in Select, nothing being moved): a sheet joined by labels is followed
+        if self.tool == Tool::Select && !self.noise_pick && self.drag.is_none() && !resp.dragged() {
+            self.draw_net_glow(&painter, rect, snapped, sp);
+        }
         self.rotation_follows_the_part();
         self.draw_tool_ghost(&painter, rect, snapped, sp);
         if !self.noise_pick {
