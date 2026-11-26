@@ -606,3 +606,37 @@ fn each_parts_way_on_is_chosen_by_hand() {
     assert!(serde_json::to_string(c).unwrap().contains("\"mount\":\"wired\""));
     assert!(!serde_json::to_string(s.components.iter().find(|c| c.refdes == "R2").unwrap()).unwrap().contains("mount"));
 }
+
+/// L17: a bypass row of the requirements table is judged on a board built by hand: each capacitor's lead farthest from the IC's
+/// nearest pin of its net, along the strips and wires. Within the row's limit it passes; with a limit below what the board has it is
+/// told with the lead, the pin and the distance; an accepted exception passes with its reason.
+#[test]
+fn a_bypass_capacitor_far_from_its_ic_is_told() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/attiny85_blink.schjson");
+    let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let found = s.bypass_suggestions();
+    assert!(!found.is_empty(), "the ATtiny85 has a capacitor on its supply");
+    for f in &found {
+        f.apply(&mut s.requirements);
+    }
+    for l in [strip_layout(&s), crate::perfboard::perf_layout_with(&s, StripOptions::default())] {
+        let spans = bypass_spans(&s, &l);
+        assert!(!spans.is_empty());
+        for sp in &spans {
+            assert!(sp.along.is_some(), "the lead and the pin are joined: {sp:?}");
+            assert!(sp.judged() + 1e-9 >= sp.straight, "the copper is never shorter than straight: {sp:?}");
+        }
+        let sp = spans.iter().max_by(|a, b| a.judged().total_cmp(&b.judged())).unwrap().clone();
+        let row = s.requirements.bypass.iter_mut().find(|b| b.ic == sp.ic).unwrap();
+        row.max_dist = sp.judged() + 1.0;
+        assert!(strip_rules(&s, &l).iter().any(|r| r.ok && r.message.starts_with(&format!("バイパス {} ", sp.cap))));
+        s.requirements.bypass.iter_mut().find(|b| b.ic == sp.ic).unwrap().max_dist = (sp.judged() - 1.0).max(0.01);
+        let rules = strip_rules(&s, &l);
+        let bad = rules.iter().find(|r| !r.ok && r.message.starts_with(&format!("バイパス {} ", sp.cap))).unwrap_or_else(|| panic!("{rules:?}"));
+        assert!(bad.message.contains(&format!("{} の足が {} から", sp.net, sp.pin)) && bad.parts == vec![sp.cap.clone(), sp.ic.clone()], "{bad:?}");
+        s.requirements.waivers.push(design_spec::Waiver { kind: "bypass".into(), name: sp.ic.clone(), item: sp.cap.clone(), note: "試し".into() });
+        assert!(strip_rules(&s, &l).iter().any(|r| r.ok && r.message.contains("承知した例外: 試し")));
+        s.requirements.waivers.clear();
+        s.requirements.bypass.iter_mut().for_each(|b| b.max_dist = 0.0);
+    }
+}

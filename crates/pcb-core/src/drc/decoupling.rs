@@ -2,7 +2,7 @@ use super::*;
 
 /// Farther than this (mm) from an IC supply pin, a bypass capacitor stops doing its job: the
 /// trace between them adds inductance that the fast current spikes cannot get through.
-pub const MAX_DECOUPLING_DISTANCE: f64 = 8.0;
+pub const MAX_DECOUPLING_DISTANCE: f64 = design_spec::DEFAULT_BYPASS_MM;
 
 pub use design_spec::netnames::{is_ground_net, is_negative_supply_net, is_supply_net};
 

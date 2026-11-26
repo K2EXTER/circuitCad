@@ -76,7 +76,7 @@ impl Session {
             "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "order": n.order, "vias": n.vias, "layers": n.layers, "max_length": n.max_length, "max_vias": n.max_vias, "max_neck": n.max_neck, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "section": g.section, "ground_point": g.ground_point, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
-            "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
+            "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "max": b.limit(), "note": b.note})).collect::<Vec<Value>>(),
             "measures": r.measures.iter().map(|m| json!({"name": m.name, "what": m.what, "pads": m.pads, "op": if m.is_min() { "min" } else { "max" }, "limit": m.limit, "reach": m.reach, "except": m.except, "note": m.note})).collect::<Vec<Value>>(),
             "waivers": r.waivers.iter().map(|w| json!({"kind": w.kind, "name": w.name, "item": w.item, "note": w.note})).collect::<Vec<Value>>(),
             "problems": self.sch.requirement_problems(),
@@ -285,14 +285,18 @@ impl Session {
                 let k = match req.bypass.iter().position(|b| b.ic == name) {
                     Some(k) => k,
                     None => {
-                        let caps = caps.clone().filter(|c| !c.is_empty()).ok_or("req bypass IC caps=C1,C2 [reason=...]  (a new row needs its capacitors)")?;
+                        let caps = caps.clone().filter(|c| !c.is_empty()).ok_or("req bypass IC caps=C1,C2 [max=mm] [reason=...]  (a new row needs its capacitors)")?;
                         req.bypass.push(Bypass { ic: name.clone(), caps, ..Default::default() });
                         req.bypass.len() - 1
                     }
                 };
+                let max = number(&kv, "max")?;
                 let b = &mut req.bypass[k];
                 if let Some(c) = caps {
                     b.caps = c;
+                }
+                if let Some(v) = max {
+                    b.max_dist = v;
                 }
                 if let Some(t) = text {
                     b.note = t;

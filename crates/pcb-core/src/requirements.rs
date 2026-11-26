@@ -660,14 +660,14 @@ fn check_core(board: &Board, model: Option<&crate::drc::CopperModel>, measured: 
             }
             let Some((_, _, d)) = bypass_pair(board, cap, &b.ic) else { continue };
             rep.checked += 1;
-            if d > crate::drc::MAX_DECOUPLING_DISTANCE {
+            if d > b.limit() {
                 rep.add(board, Finding {
                     kind: FindingKind::Bypass,
                     name: b.ic.clone(),
                     item: cap.clone(),
-                    message: format!("バイパスコンデンサ {cap} ({} 用): {} の電源ピンから {d:.1} mm 離れています (目安 {} mm 以内)", b.ic, b.ic, crate::drc::MAX_DECOUPLING_DISTANCE),
+                    message: format!("バイパスコンデンサ {cap} ({} 用): {} の電源ピンから {d:.1} mm 離れています (目安 {} mm 以内)", b.ic, b.ic, b.limit()),
                     actual: d,
-                    limit: crate::drc::MAX_DECOUPLING_DISTANCE,
+                    limit: b.limit(),
                 });
             }
         }
@@ -804,7 +804,7 @@ pub fn marks(board: &Board) -> Marks {
     for b in &board.bypass {
         for cap in &b.caps {
             if let Some((a, p, d)) = bypass_pair(board, cap, &b.ic) {
-                out.bypass.push(BypassMark { cap: cap.clone(), ic: b.ic.clone(), a, b: p, actual: d, ok: d <= crate::drc::MAX_DECOUPLING_DISTANCE, waived: board.waivers.iter().any(|w| w.kind == "bypass" && w.name == b.ic && (w.item.is_empty() || w.item == *cap)) });
+                out.bypass.push(BypassMark { cap: cap.clone(), ic: b.ic.clone(), a, b: p, actual: d, ok: d <= b.limit(), waived: board.waivers.iter().any(|w| w.kind == "bypass" && w.name == b.ic && (w.item.is_empty() || w.item == *cap)) });
             }
         }
     }

@@ -2,11 +2,9 @@
 
 use super::*;
 
-/// How far (mm) the ways along the copper from hole `s` to holes `a` and `b` run together before they part: the shortest ways along the
-/// strips (2.54 mm a hole) and the wires. `None` when `a` or `b` is not joined to `s`. A strip's current flows only between where it
-/// comes in and where it goes out, so a sense wire taken off the strip on the far side of the lead from the current's wire sees the
-/// lead's own voltage (0 mm together), and one taken off between them sees the drop along the strip as well.
-pub fn strip_fork(l: &StripLayout, s: At, a: At, b: At) -> Option<f64> {
+/// The shortest ways along the copper from hole `s`: the strips (2.54 mm a hole) and the wires. Each joined hole's distance (µm) and
+/// the hole before it on its way.
+pub(super) fn copper_ways(l: &StripLayout, s: At) -> (BTreeMap<At, u64>, BTreeMap<At, At>) {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
     let pieces = l.pieces();
@@ -45,6 +43,15 @@ pub fn strip_fork(l: &StripLayout, s: At, a: At, b: At) -> Option<f64> {
             }
         }
     }
+    (dist, prev)
+}
+
+/// How far (mm) the ways along the copper from hole `s` to holes `a` and `b` run together before they part: the shortest ways along the
+/// strips (2.54 mm a hole) and the wires. `None` when `a` or `b` is not joined to `s`. A strip's current flows only between where it
+/// comes in and where it goes out, so a sense wire taken off the strip on the far side of the lead from the current's wire sees the
+/// lead's own voltage (0 mm together), and one taken off between them sees the drop along the strip as well.
+pub fn strip_fork(l: &StripLayout, s: At, a: At, b: At) -> Option<f64> {
+    let (dist, prev) = copper_ways(l, s);
     if !dist.contains_key(&a) || !dist.contains_key(&b) {
         return None;
     }

@@ -105,7 +105,23 @@ pub struct Bypass {
     pub ic: String,
     /// The capacitors' reference designators.
     pub caps: Vec<String>,
+    /// The farthest (mm) a capacitor's pin may be from the IC's pin of the same net; 0 = `DEFAULT_BYPASS_MM`.
+    pub max_dist: f64,
     pub note: String,
+}
+
+/// How far (mm) a bypass capacitor may be from the pin it serves when its row does not say.
+pub const DEFAULT_BYPASS_MM: f64 = 8.0;
+
+impl Bypass {
+    /// The farthest a capacitor of this row may be from its IC's pin (mm).
+    pub fn limit(&self) -> f64 {
+        if self.max_dist > 0.0 {
+            self.max_dist
+        } else {
+            DEFAULT_BYPASS_MM
+        }
+    }
 }
 
 /// A measure of the copper of a connection that must stay within a limit: the length of the way from one pad to another, the vias on
@@ -357,7 +373,7 @@ mod tests {
     #[test]
     fn a_waiver_covers_its_row_and_is_checked_against_the_rows() {
         let mut spec = DesignSpec {
-            bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into(), "C2".into()], note: "n".into() }],
+            bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into(), "C2".into()], note: "n".into(), max_dist: 0.0 }],
             groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["R1".into()], max_dist: 5.0, note: "n".into(), ..Default::default() }],
             ..Default::default()
         };
@@ -554,7 +570,7 @@ impl Suggestion {
                 }
                 match spec.bypass.iter_mut().find(|b| &b.ic == ic) {
                     Some(b) => b.caps.push(cap.clone()),
-                    None => spec.bypass.push(Bypass { ic: ic.clone(), caps: vec![cap.clone()], note: String::new() }),
+                    None => spec.bypass.push(Bypass { ic: ic.clone(), caps: vec![cap.clone()], note: String::new(), max_dist: 0.0 }),
                 }
             }
         }
@@ -588,7 +604,7 @@ mod suggest_tests {
         assert!(by("C3").unwrap().1.contains("両側"));
         assert!(by("R1").is_none(), "a resistor is no bypass capacitor");
         // what the table says is left alone, and a suggestion that is applied joins the row of its IC
-        let mut spec = DesignSpec { bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into()], note: "手で".into() }], ..Default::default() };
+        let mut spec = DesignSpec { bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into()], note: "手で".into(), max_dist: 0.0 }], ..Default::default() };
         let rest = suggest_bypass(&spec, &parts);
         assert!(rest.iter().all(|s| !matches!(&s.fill, Fill::Bypass { cap, .. } if cap == "C1")));
         for s in &rest {
@@ -607,7 +623,7 @@ mod suggest_tests {
             ],
             groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["U1".into(), "L1".into()], ..Default::default() }],
             apart: vec![KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["L1".into()], min_dist: 6.0, note: "雑音".into() }],
-            bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into()], note: String::new() }],
+            bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into()], note: String::new(), max_dist: 0.0 }],
             ..Default::default()
         };
         assert_eq!(spec.unexplained(), vec!["ネットの役割「帰還」".to_string(), "近くに置く組「ループ」".to_string(), "バイパスの対応「U1」".to_string()]);

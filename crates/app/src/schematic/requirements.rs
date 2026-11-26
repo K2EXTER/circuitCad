@@ -596,10 +596,10 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
             let (bp, bp_msg) = (&mut self.req.bp_suggest, &self.req.bp_msg);
             if tab == ReqTab::Bypass {
                 ui.scope(|ui| {
-                    crate::icons::help_small(ui, "書くと、自動配置がそのコンデンサを、その IC の電源ピンのそばに置きます", "電源のネットが同じだと、回路図のつなぎ方だけでは、コンデンサがどの IC のためのものか分かりません (ラベルでつなぐと、置いた場所も当てになりません)。ここに書くと、基板の自動配置がそのコンデンサを、その IC の電源ピンのそばに置き、点検もその IC のピンからの距離を調べます。書いていないコンデンサは、これまでどおり自動で決めます");
+                    crate::icons::help_small(ui, "書くと、自動配置がそのコンデンサを、その IC の電源ピンのそばに置きます", "電源のネットが同じだと、回路図のつなぎ方だけでは、コンデンサがどの IC のためのものか分かりません (ラベルでつなぐと、置いた場所も当てになりません)。ここに書くと、基板の自動配置がそのコンデンサを、その IC の電源ピンのそばに置き、点検もその IC のピンからの距離を調べます (試作のストリップ基板・ユニバーサル基板でも、帯と線をたどった長さで)。書いていないコンデンサは、これまでどおり自動で決めます");
                     let mut remove = None;
-                    egui::Grid::new("req_bypass_grid").num_columns(4).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                        for h in ["IC", "コンデンサ (, 区切り)", "理由", ""] {
+                    egui::Grid::new("req_bypass_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
+                        for h in ["IC", "コンデンサ (, 区切り)", "距離", "理由", ""] {
                             ui.strong(i18n::tr(h));
                         }
                         ui.end_row();
@@ -612,6 +612,9 @@ pub fn requirements_window(&mut self, ctx: &egui::Context) {
                                 b.caps = list(&t);
                                 changed = true;
                             }
+                            let before = b.max_dist;
+                            number_cell(ui, &mut b.max_dist, " mm", 0.5, &i18n::trf!("コンデンサの足から、IC の同じネットのピンまでの距離の上限。基板と試作の基板 (ストリップ・ユニバーサル) の点検が見ます。0 は既定の {} mm", design_spec::DEFAULT_BYPASS_MM));
+                            changed |= before != b.max_dist;
                             if let Some(t) = reason_cell(ui, buf, (3, k, 2), &b.note, 440.0, "なぜそのコンデンサがその IC のものか (例: 同じシートで、U3 の電源ピン 8 の隣に置く)") {
                                 b.note = t;
                                 changed = true;

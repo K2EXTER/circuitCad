@@ -153,7 +153,7 @@ pub fn group_spreads(s: &Schematic, l: &StripLayout) -> Vec<(String, f64, f64, (
 }
 
 /// The requirements table's rules that a board built by hand can keep: the groups' farthest distances (`group_spreads`), the distances to keep (`KeepApart`: the closest two holes of
-/// the two sets, 2.54 mm a hole) and, with sections, the one ground point (every section's ground goes back to the first section's
+/// the two sets, 2.54 mm a hole), the bypass capacitors' distances to their IC's pins (`bypass_spans`) and, with sections, the one ground point (every section's ground goes back to the first section's
 /// ground strip by a wire of its own).
 pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
     let mut out = vec![];
@@ -218,6 +218,31 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
             parts,
         });
     }
+    // a bypass capacitor: its farthest lead from the IC's nearest pin of the lead's net
+    for sp in bypass_spans(s, l) {
+        let (d, ic, cap) = (sp.judged(), &sp.ic, &sp.cap);
+        let along = sp.along.map(|a| format!(" (帯と線で {} mm)", mm(a))).unwrap_or_default();
+        let waived = s.requirements.waiver_for("bypass", ic, cap);
+        let ok = d <= sp.limit + 1e-9 || waived.is_some();
+        out.push(RuleCheck {
+            ok,
+            message: if d <= sp.limit + 1e-9 {
+                format!("バイパス {cap} ({ic} 用) を {} mm 以内に: できています (いちばん遠い {} の足も {} から {} mm)", mm(sp.limit), sp.net, sp.pin, mm(d))
+            } else if let Some(w) = waived {
+                format!("バイパス {cap} ({ic} 用): {} の足が {} から {} mm{along}。承知した例外: {}", sp.net, sp.pin, mm(sp.straight), w.note)
+            } else {
+                format!(
+                    "バイパス {cap} ({ic} 用) を {} mm 以内に: {} の足が {} から {} mm{along}。遠いと線のインダクタンスで速い電流に追いつけません。{cap} を {} のそばへ寄せてください",
+                    mm(sp.limit),
+                    sp.net,
+                    sp.pin,
+                    mm(sp.straight),
+                    sp.pin
+                )
+            },
+            parts: vec![cap.clone(), ic.clone()],
+        });
+    }
     for (m, _, v) in forks(s, l) {
         let name = if m.name.is_empty() { m.pads.join(",") } else { m.name.clone() };
         let (start, a, b) = (&m.pads[0], &m.pads[1], &m.pads[2]);
@@ -276,6 +301,72 @@ pub fn strip_rules(s: &Schematic, l: &StripLayout) -> Vec<RuleCheck> {
                     ..Default::default()
                 });
             }
+        }
+    }
+    out
+}
+
+/// How far a bypass capacitor of the requirements table is from the IC it serves, on a board built by hand: of the capacitor's leads,
+/// the one farthest from the IC's nearest pin of the same net (the supply side and the ground side are both looked at).
+#[derive(Clone, Debug, PartialEq)]
+pub struct BypassSpan {
+    pub cap: String,
+    pub ic: String,
+    /// The lead's net and the IC's pin it is measured to ("U1.26").
+    pub net: String,
+    pub pin: String,
+    /// Straight from hole to hole (mm), and along the strips and wires when they join them.
+    pub straight: f64,
+    pub along: Option<f64>,
+    /// The most it may be (mm): the row's, else `design_spec::DEFAULT_BYPASS_MM`.
+    pub limit: f64,
+}
+
+impl BypassSpan {
+    /// The distance judged: along the copper when joined (what the current runs), else straight.
+    pub fn judged(&self) -> f64 {
+        self.along.unwrap_or(self.straight)
+    }
+}
+
+/// The bypass rows' capacitors on the board and how far each is from its IC (`BypassSpan`). A part on an adapter board or a module has
+/// the adapter's holes as its leads, so those holes stand for the IC's pins. A capacitor or IC not on the board, or a capacitor with no
+/// lead on a net of the IC, is left out.
+pub fn bypass_spans(s: &Schematic, l: &StripLayout) -> Vec<BypassSpan> {
+    let nets = extract(&s.flat());
+    let net_of = |r: &str, pin: &str| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin)).map(|n| n.name.clone()).unwrap_or_default();
+    let mut out = vec![];
+    for b in &s.requirements.bypass {
+        let Some(ic) = l.parts.iter().find(|p| p.refdes == b.ic) else { continue };
+        for cap in &b.caps {
+            let Some(c) = l.parts.iter().find(|p| &p.refdes == cap) else { continue };
+            let mut worst: Option<BypassSpan> = None;
+            for (pin, at) in &c.leads {
+                let net = net_of(cap, pin);
+                if net.is_empty() {
+                    continue;
+                }
+                let targets: Vec<&(String, At)> = ic.leads.iter().filter(|(ip, _)| net_of(&ic.refdes, ip) == net).collect();
+                if targets.is_empty() {
+                    continue;
+                }
+                let (dist, _) = copper_ways(l, *at);
+                let mut best: Option<BypassSpan> = None;
+                for (ip, ia) in targets {
+                    let straight = (at.0 as f64 - ia.0 as f64).hypot(at.1 as f64 - ia.1 as f64) * 2.54;
+                    let along = dist.get(ia).map(|um| *um as f64 / 1000.0);
+                    let sp = BypassSpan { cap: cap.clone(), ic: b.ic.clone(), net: net.clone(), pin: format!("{}.{ip}", b.ic), straight, along, limit: b.limit() };
+                    if best.as_ref().is_none_or(|x| sp.judged() < x.judged()) {
+                        best = Some(sp);
+                    }
+                }
+                if let Some(sp) = best
+                    && worst.as_ref().is_none_or(|w| sp.judged() > w.judged())
+                {
+                    worst = Some(sp);
+                }
+            }
+            out.extend(worst);
         }
     }
     out
