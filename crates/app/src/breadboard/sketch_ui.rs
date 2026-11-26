@@ -141,32 +141,53 @@ impl BreadboardView {
         for refdes in boards(&sch.sch) {
             let board = board_of(&sch.sch, &refdes);
             crate::widgets::group_gap(ui);
-            ui.label(egui::RichText::new(i18n::trf!("スケッチ ({refdes})")).strong()).on_hover_text(i18n::tr(
-                "このマイコンで動かすプログラム (Arduino の C の小さな部分)。setup() は電源を入れたとき 1 回、loop() はそのあとずっと繰り返します。使えるもの: int・long・float・bool の変数と配列、if・for・while・関数、pinMode・digitalWrite・digitalRead・analogRead・analogWrite・delay・millis・Serial.print / println・map・constrain・random。電源を入れると、ブレッドボードの回路と一緒に動きます",
-            ));
             let mut text = sketch_of(sch, &refdes);
+            // the title, and on its right what is done to the whole sketch (the way back to the sample in a menu: it wipes the text)
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(i18n::trf!("スケッチ ({refdes})")).strong()).on_hover_text(i18n::tr(
+                    "このマイコンで動かすプログラム (Arduino の C の小さな部分)。setup() は電源を入れたとき 1 回、loop() はそのあとずっと繰り返します。使えるもの: int・long・float・bool の変数と配列、if・for・while・関数、pinMode・digitalWrite・digitalRead・analogRead・analogWrite・delay・millis・Serial.print / println・map・constrain・random。電源を入れると、ブレッドボードの回路と一緒に動きます",
+                ));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.menu_button("…", |ui| {
+                        let led = board.pin_name(board.led());
+                        let why_not = (!sch.sketches.contains_key(&refdes)).then_some("いまのスケッチが見本のままです");
+                        let back = crate::widgets::unless(ui, why_not, egui::Button::new(i18n::tr("点滅の見本に戻す")));
+                        if back.on_hover_text(i18n::trf!("スケッチを消して、LED ({led}) を点滅させる見本に戻します")).clicked() {
+                            sch.sketches.remove(&refdes);
+                            ui.close();
+                        }
+                    })
+                    .response
+                    .on_hover_text(i18n::tr("ほかの操作 (見本に戻す)"));
+                    if ui.small_button(i18n::tr("整形")).on_hover_text(i18n::tr("{ } の深さに合わせて行の頭の字下げをそろえます (2 文字ずつ)。言葉は変えません")).clicked() {
+                        let f = super::code_edit::format(&text);
+                        if f != text {
+                            text = f.clone();
+                            sch.sketches.insert(refdes.clone(), f);
+                        }
+                    }
+                    if ui.small_button(i18n::tr("別窓で開く")).on_hover_text(i18n::tr("スケッチを大きな窓で書きます (行番号つき)。ブレッドボードを見ながら書けます")).clicked() {
+                        self.sketch_window = Some(refdes.clone());
+                    }
+                });
+            });
             let real = sch.sketch_real.contains(&refdes);
             let marked = self.mistake_line(&text, board, real);
-            // as wide as the panel is, not wider (a box asking for all the width made the panel grow)
-            let edit = super::code_edit::code_box(ui, &mut text, 10, ui.available_width(), marked);
+            // as wide as the panel is, not wider; as tall as SKETCH_ROWS lines at most (a long sketch scrolls inside: the serial
+            // monitor below stays in sight while it runs; the window is for writing at length)
+            let max_h = ui.text_style_height(&egui::TextStyle::Monospace) * SKETCH_ROWS as f32 + 8.0;
+            let edit = egui::ScrollArea::vertical()
+                .id_salt(("sketch_box", &refdes))
+                .max_height(max_h)
+                .show(ui, |ui| super::code_edit::code_box(ui, &mut text, 10, ui.available_width(), marked))
+                .inner;
             if edit.changed() {
                 sch.sketches.insert(refdes.clone(), text.clone());
             }
-            ui.horizontal(|ui| {
-                if ui.small_button(i18n::tr("別窓で開く")).on_hover_text(i18n::tr("スケッチを大きな窓で書きます (行番号つき)。ブレッドボードを見ながら書けます")).clicked() {
-                    self.sketch_window = Some(refdes.clone());
-                }
-                if ui.small_button(i18n::tr("整形")).on_hover_text(i18n::tr("{ } の深さに合わせて行の頭の字下げをそろえます (2 文字ずつ)。言葉は変えません")).clicked() {
-                    let f = super::code_edit::format(&text);
-                    if f != text {
-                        sch.sketches.insert(refdes.clone(), f);
-                    }
-                }
-            });
             let mut real = real;
             if ui
                 .checkbox(&mut real, i18n::tr("本物のマイコンの命令で動かす (arduino-cli)"))
-                .on_hover_text(i18n::tr("スケッチを arduino-cli でコンパイルし、ボードのマイコン (Nano は ATmega328P、Mega は ATmega2560) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 arduino:avr が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします"))
+                .on_hover_text(i18n::tr("スケッチを arduino-cli でコンパイルし、ボードのマイコン (Nano は ATmega328P、Mega は ATmega2560、ATtiny85) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 (arduino:avr、ATtiny85 は ATTinyCore) が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします"))
                 .changed()
             {
                 if real {
@@ -175,13 +196,7 @@ impl BreadboardView {
                     sch.sketch_real.remove(&refdes);
                 }
             }
-            // whether it compiles, and the way back to the sample on the same row
-            ui.horizontal_wrapped(|ui| {
-                self.compile_status(ui, &text, board, real);
-                if sch.sketches.contains_key(&refdes) && ui.small_button(i18n::tr("点滅の見本に戻す")).on_hover_text(i18n::tr("スケッチを、LED (D13) を点滅させる見本に戻します")).clicked() {
-                    sch.sketches.remove(&refdes);
-                }
-            });
+            ui.horizontal_wrapped(|ui| self.compile_status(ui, &text, board, real));
             self.serial_ui(ui, &refdes, &text, SERIAL_PANEL_HEIGHT);
         }
         self.sketch_window_ui(ui.ctx(), sch);
@@ -334,6 +349,9 @@ impl BreadboardView {
         }
     }
 }
+
+/// The most lines the sketch box shows in the panel before it scrolls inside.
+const SKETCH_ROWS: usize = 14;
 
 /// How tall the serial monitor is in the panel (the sketch's window gives it the rest of its height).
 const SERIAL_PANEL_HEIGHT: f32 = 150.0;

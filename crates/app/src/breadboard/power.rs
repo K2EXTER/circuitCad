@@ -207,6 +207,17 @@ impl BreadboardView {
                 });
             }
         }
+        // the room's temperature: thermistors and temperature sensors follow it (the run starts again at the new temperature)
+        let mut t = self.temp_c.unwrap_or_else(|| sch.board_temp());
+        let mut restart = false;
+        ui.horizontal(|ui| {
+            ui.label(i18n::tr("周りの温度"));
+            let r = ui.add(egui::Slider::new(&mut t, -20.0..=100.0).suffix(" ℃").max_decimals(0)).on_hover_text(i18n::tr("サーミスタ・温度センサーなど、温度で値が変わる部品が変わります。放すと、その温度で計算し直します (回路の時間は 0 から)"));
+            if r.changed() {
+                self.temp_c = Some(t);
+                restart = r.drag_stopped() || !r.dragged();
+            }
+        });
         if !lv.sensors.is_empty() {
             let mut rh = lv.humidity;
             ui.horizontal(|ui| {
@@ -234,17 +245,6 @@ impl BreadboardView {
                 ui.label(egui::RichText::new(why).color(crate::theme::warn()));
             }
         }
-        // the room's temperature: thermistors and temperature sensors follow it (the run starts again at the new temperature)
-        let mut t = self.temp_c.unwrap_or_else(|| sch.board_temp());
-        let mut restart = false;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr("周りの温度"));
-            let r = ui.add(egui::Slider::new(&mut t, -20.0..=100.0).suffix(" ℃").max_decimals(0)).on_hover_text(i18n::tr("サーミスタ・温度センサーなど、温度で値が変わる部品が変わります。放すと、その温度で計算し直します (回路の時間は 0 から)"));
-            if r.changed() {
-                self.temp_c = Some(t);
-                restart = r.drag_stopped() || !r.dragged();
-            }
-        });
         if restart {
             self.restart = true;
         }

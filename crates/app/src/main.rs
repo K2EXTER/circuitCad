@@ -989,6 +989,11 @@ fn main() -> eframe::Result {
         },
         Box::new(move |cc| {
             install_japanese_font(&cc.egui_ctx);
+            // `--shot-zoom 0.55`: everything drawn smaller (a screenshot of a whole long panel)
+            let args: Vec<String> = std::env::args().collect();
+            if let Some(z) = args.iter().position(|a| a == "--shot-zoom").and_then(|i| args.get(i + 1)).and_then(|s| s.parse::<f32>().ok()) {
+                cc.egui_ctx.set_zoom_factor(z);
+            }
             // the 3D view draws on the GPU when the window is drawn with wgpu (the last pass draws into egui's own, multisampled or not)
             if let Some(rs) = &cc.wgpu_render_state {
                 board_editor::view3d_gpu_init(rs, if smooth_edges { 4 } else { 1 });

@@ -101,18 +101,22 @@ impl BreadboardView {
                     self.dc_asked = false;
                 }
             }
-        });
-        if sch.breadboard.is_some() {
-            if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から、部品の差し方を並べ直します (IC は中央の溝をまたぎ、電源とGNDは上下の列、同じネットの足は同じ縦の列)。手で動かした分は消えます")).clicked() {
-                sch.breadboard = Some(auto_layout(&sch.sch));
+            // how the parts are placed, at the end of the same row
+            if sch.breadboard.is_some() {
+                if ui.small_button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から、部品の差し方を並べ直します (IC は中央の溝をまたぎ、電源とGNDは上下の列、同じネットの足は同じ縦の列)。手で動かした分は消えます")).clicked() {
+                    sch.breadboard = Some(auto_layout(&sch.sch));
+                }
+            } else {
+                // whole on the next line when it does not fit (not broken in two)
+                ui.add(egui::Label::new(egui::RichText::new(i18n::tr("(自動で並べた形)")).color(NOTE)).extend()).on_hover_text(i18n::tr("まだ手で動かしていないので、回路図を変えると並べ直されます。部品を動かすと、その並べ方が回路図のファイルに入ります"));
             }
-        } else {
-            ui.label(egui::RichText::new(i18n::tr("(自動で並べた形)")).color(NOTE)).on_hover_text(i18n::tr("まだ手で動かしていないので、回路図を変えると並べ直されます。部品を動かすと、その並べ方が回路図のファイルに入ります"));
-        }
+        });
         crate::widgets::group_gap(ui);
         ui.horizontal_wrapped(|ui| {
             self.power_button(ui, "電源を入れると、回路が時間とともに動き出します (過渡解析を実時間で進め続けます)。計算するのはブレッドボードに差したとおりの回路なので、回路図と違う差し方なら、そのとおりに動いたり壊れたりします。LED は流れる電流で光り、スイッチと押しボタンはクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます (実物なら壊れるところ)");
-            if ui
+            // only for a circuit of logic chips (an Arduino's sketch is not shown there)
+            if sch.sch.components.iter().any(sim_core::live_logic::is_logic_part)
+                && ui
                 .button(i18n::tr("デジタル回路を回路図の上で動かす"))
                 .on_hover_text(i18n::tr("回路図のタブに移って、デジタル回路を動かしながら見ます。配線が High / Low の色になり、真理値表・ロジックアナライザ・フリップフロップの記憶・7 セグメントの表示・グリッチの印が出ます (ブレッドボードの絵より、信号の流れが追いやすい形)"))
                 .clicked()
