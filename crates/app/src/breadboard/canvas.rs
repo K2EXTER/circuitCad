@@ -292,8 +292,8 @@ impl BreadboardView {
         }
         let font = egui::FontId::proportional((pitch * 0.6).clamp(9.0, 14.0));
         for (k, o) in l.off_board.iter().enumerate() {
-            let center = origin + Vec2::new(2.0, 3.0 + 4.0 * k as f32) * pitch;
-            let r = Rect::from_center_size(center, Vec2::new(3.2, 2.4) * pitch);
+            let r = off_box(&l, k, origin, pitch);
+            let center = r.center();
             painter.rect(r, 3.0, Color32::from_rgb(60, 64, 72), Stroke::new(1.0, Color32::from_gray(160)), egui::StrokeKind::Middle);
             // a knob turned while it runs shows its value now
             let knob = self.live.as_ref().filter(|_| self.powered).and_then(|v| v.knob_index(&o.refdes).map(|k| v.knobs[k].value));
@@ -303,21 +303,20 @@ impl BreadboardView {
             };
             painter.text(center - Vec2::new(0.0, 0.4 * pitch), egui::Align2::CENTER_CENTER, &o.refdes, font.clone(), Color32::WHITE);
             painter.text(center + Vec2::new(0.0, 0.5 * pitch), egui::Align2::CENTER_CENTER, short(&value, 10), small.clone(), Color32::from_gray(200));
+            // a pin by its name where the part has one (D22 of a Mega beside the board), else its number (+, -)
+            let part = sch.sch.components.iter().find(|c| c.refdes == o.refdes);
             for (i, (pin, net, h)) in o.pins.iter().enumerate() {
-                let from = r.right_center() + Vec2::new(0.0, (i as f32 - 0.5) * 0.8 * pitch);
+                let from = off_pin(&l, k, i, origin, pitch);
                 draw_wire(&painter, from, to(*h), wire_colour(net, &l), pitch);
-                painter.text(from + Vec2::new(-0.2 * pitch, 0.0), egui::Align2::RIGHT_CENTER, pin, small.clone(), Color32::WHITE);
+                let name = part.and_then(|c| c.custom.as_ref()).and_then(|s| s.pins.iter().find(|q| q.number == *pin)).map_or(pin.as_str(), |q| q.name.as_str());
+                painter.text(from + Vec2::new(-0.2 * pitch, 0.0), egui::Align2::RIGHT_CENTER, name, small.clone(), Color32::WHITE);
             }
         }
         // with the power on: dots along the wires and strips with the current (under the parts)
         if let (true, Some(lv), Some(b)) = (crate::flow_dots::on() && self.powered, self.live.as_ref().filter(|v| v.error.is_none()), self.board.as_ref()) {
-            let off_pin = |k: usize, i: usize| {
-                let r = Rect::from_center_size(origin + Vec2::new(2.0, 3.0 + 4.0 * k as f32) * pitch, Vec2::new(3.2, 2.4) * pitch);
-                r.right_center() + Vec2::new(0.0, (i as f32 - 0.5) * 0.8 * pitch)
-            };
             let at_end = |e: flow_dots::End| match e {
                 flow_dots::End::Hole(h) => to(h),
-                flow_dots::End::Off(k, i) => off_pin(k, i),
+                flow_dots::End::Off(k, i) => off_pin(&l, k, i, origin, pitch),
             };
             let t = ui.input(|i| i.time);
             let col = Color32::from_rgb(255, 225, 90);
@@ -482,4 +481,20 @@ impl BreadboardView {
         painter.text(rect.left_top() + Vec2::new(12.0, 10.0), egui::Align2::LEFT_TOP, legend, egui::FontId::proportional(13.0), Color32::from_gray(210));
         self.view().buttons(ui, rect);
     }
+}
+
+/// The box of the `k`th part off the board (a supply, a source, a board beside it), left of the board: as tall as its pins need,
+/// the boxes one under the other.
+fn off_box(l: &Layout, k: usize, origin: Pos2, pitch: f32) -> Rect {
+    let height = |o: &sch_core::breadboard::OffBoard| (0.8 * o.pins.len() as f32 + 0.8).max(2.4);
+    let top = 1.8 + l.off_board.iter().take(k).map(|o| height(o) + 1.6).sum::<f32>();
+    let h = l.off_board.get(k).map_or(2.4, height);
+    Rect::from_min_size(origin + Vec2::new(2.0 - 1.6, top) * pitch, Vec2::new(3.2, h) * pitch)
+}
+
+/// Where the wire of the `i`th pin of the `k`th part off the board starts: on its box's right edge, the pins 0.8 pitch apart.
+fn off_pin(l: &Layout, k: usize, i: usize, origin: Pos2, pitch: f32) -> Pos2 {
+    let r = off_box(l, k, origin, pitch);
+    let n = l.off_board.get(k).map_or(1, |o| o.pins.len()) as f32;
+    r.right_center() + Vec2::new(0.0, (i as f32 - (n - 1.0) / 2.0) * 0.8 * pitch)
 }

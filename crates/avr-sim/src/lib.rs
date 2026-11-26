@@ -1,6 +1,6 @@
 //! The real instructions of an AVR microcontroller (candidate W5 (b)): the program built by avr-gcc (arduino-cli for a sketch) runs
 //! in simavr (bundled in simavr/, GPL-3.0, copied by tools/vendor_simavr.py), cycle by cycle, with its timers, UART, ADC and
-//! EEPROM. The circuit is solved beside it: [`Nano::advance`] runs the chip to a time with the pins' voltages of the circuit as its
+//! EEPROM. The circuit is solved beside it: [`Board::advance`] runs the chip to a time with the pins' voltages of the circuit as its
 //! inputs, and gives what each pin does for the circuit (an output's average level over the step: PWM and `tone` too).
 //!
 //! The ELF is read here ([`read_elf`]): the flash from the loadable segments, the EEPROM from the `.eeprom` one.
@@ -40,8 +40,8 @@ unsafe extern "C" {
 const CPU_DONE: i32 = 6;
 const CPU_CRASHED: i32 = 7;
 
-/// The ports read from the chip, in the order B, C, D.
-pub const PORTS: [char; 3] = ['B', 'C', 'D'];
+/// The ports read from the chip, in this order (the ATmega328 has B, C, D; the ATmega2560 all of them): as c/glue.c has them.
+pub const PORTS: [char; 11] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L'];
 
 /// One change of a pin the program drives: when (cycles from the start), which (port letter, bit), to what, and whether a timer's
 /// compare output (PWM, `tone` on a timer pin) set it.
@@ -54,12 +54,12 @@ pub struct PinEvent {
     pub timer: bool,
 }
 
-/// PORTx, DDRx, PINx of B, C, D.
+/// PORTx, DDRx, PINx of each port (`PORTS`; 0 for a port the chip lacks).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Ports {
-    pub port: [u8; 3],
-    pub ddr: [u8; 3],
-    pub pin: [u8; 3],
+    pub port: [u8; 11],
+    pub ddr: [u8; 11],
+    pub pin: [u8; 11],
 }
 
 fn port_index(p: char) -> usize {
@@ -100,7 +100,7 @@ impl Avr {
         let name = CString::new(mcu).map_err(|_| "マイコンの名前が読めません".to_string())?;
         let c = unsafe { ccavr_new(name.as_ptr(), freq as u32, (vcc * 1000.0).round() as u32) };
         if c.is_null() {
-            return Err(format!("マイコン {mcu} は、まだ動かせません (動かせるのは ATmega328P だけです)"));
+            return Err(format!("マイコン {mcu} は、まだ動かせません (動かせるのは ATmega328P と ATmega2560 です)"));
         }
         let me = Avr { c, freq, vcc, stopped: None };
         unsafe { ccavr_load(c, image.flash.as_ptr(), image.flash.len() as u32, image.eeprom.as_ptr(), image.eeprom.len() as u32) };
@@ -135,9 +135,13 @@ impl Avr {
     }
 
     pub fn ports(&self) -> Ports {
-        let mut b = [0u8; 9];
+        let mut b = [0u8; 33];
         unsafe { ccavr_ports(self.c, b.as_mut_ptr()) };
-        Ports { port: [b[0], b[3], b[6]], ddr: [b[1], b[4], b[7]], pin: [b[2], b[5], b[8]] }
+        let mut p = Ports::default();
+        for k in 0..PORTS.len() {
+            (p.port[k], p.ddr[k], p.pin[k]) = (b[k * 3], b[k * 3 + 1], b[k * 3 + 2]);
+        }
+        p
     }
 
     /// The level the circuit puts on a pin (read by the program while the pin is an input).
@@ -238,28 +242,78 @@ pub fn read_elf(b: &[u8]) -> Result<Image, String> {
     Ok(img)
 }
 
-/// Arduino Nano (ATmega328P, 16 MHz, 5 V): its pins D0..D13, A0..A7.
-pub mod nano {
-    pub const MCU: &str = "atmega328p";
-    pub const FREQ: u64 = 16_000_000;
-    pub const VCC: f64 = 5.0;
-    pub const PINS: usize = 22;
+/// An Arduino board: its chip, clock and supply, and its pins by Arduino's numbers (D0.., then A0..).
+pub struct BoardDef {
+    pub name: &'static str,
+    /// simavr's name of the chip.
+    pub mcu: &'static str,
+    pub freq: u64,
+    pub vcc: f64,
+    /// The port and bit of each pin (None: an ADC input only, A6 and A7 of the Nano).
+    pub ports: &'static [Option<(char, u8)>],
+    /// The number of the first analog pin (A0); A0.. are the ADC's channels 0.. in order.
+    pub a0: u8,
+}
 
-    /// The port and bit of a pin (A6 and A7 are only ADC inputs: None).
-    pub fn port_bit(pin: u8) -> Option<(char, u8)> {
-        match pin {
-            0..=7 => Some(('D', pin)),
-            8..=13 => Some(('B', pin - 8)),
-            14..=19 => Some(('C', pin - 14)),
-            _ => None,
-        }
+impl BoardDef {
+    pub fn pins(&self) -> usize {
+        self.ports.len()
     }
 
-    /// The ADC channel of a pin (A0..A7).
-    pub fn adc(pin: u8) -> Option<u8> {
-        (14..22).contains(&pin).then(|| pin - 14)
+    /// The port and bit of a pin.
+    pub fn port_bit(&self, pin: u8) -> Option<(char, u8)> {
+        self.ports.get(pin as usize).copied().flatten()
+    }
+
+    /// The ADC channel of a pin (A0..).
+    pub fn adc(&self, pin: u8) -> Option<u8> {
+        (pin >= self.a0 && (pin as usize) < self.pins()).then(|| pin - self.a0)
     }
 }
+
+const fn p(port: char, bit: u8) -> Option<(char, u8)> {
+    Some((port, bit))
+}
+
+/// Arduino Nano (ATmega328P, 16 MHz, 5 V): D0..D13, A0..A7 (A6 and A7 are only ADC inputs).
+pub static NANO: BoardDef = BoardDef {
+    name: "Arduino Nano",
+    mcu: "atmega328p",
+    freq: 16_000_000,
+    vcc: 5.0,
+    a0: 14,
+    ports: &[
+        p('D', 0), p('D', 1), p('D', 2), p('D', 3), p('D', 4), p('D', 5), p('D', 6), p('D', 7),
+        p('B', 0), p('B', 1), p('B', 2), p('B', 3), p('B', 4), p('B', 5),
+        p('C', 0), p('C', 1), p('C', 2), p('C', 3), p('C', 4), p('C', 5), None, None,
+    ],
+};
+
+/// Arduino Mega 2560 (ATmega2560, 16 MHz, 5 V): D0..D53, A0..A15 (Arduino's pins_arduino.h of the mega variant).
+pub static MEGA: BoardDef = BoardDef {
+    name: "Arduino Mega 2560",
+    mcu: "atmega2560",
+    freq: 16_000_000,
+    vcc: 5.0,
+    a0: 54,
+    ports: &[
+        // D0..D13
+        p('E', 0), p('E', 1), p('E', 4), p('E', 5), p('G', 5), p('E', 3), p('H', 3), p('H', 4), p('H', 5), p('H', 6),
+        p('B', 4), p('B', 5), p('B', 6), p('B', 7),
+        // D14..D21: the serial ports 3, 2, 1 and I2C
+        p('J', 1), p('J', 0), p('H', 1), p('H', 0), p('D', 3), p('D', 2), p('D', 1), p('D', 0),
+        // D22..D29, D30..D37
+        p('A', 0), p('A', 1), p('A', 2), p('A', 3), p('A', 4), p('A', 5), p('A', 6), p('A', 7),
+        p('C', 7), p('C', 6), p('C', 5), p('C', 4), p('C', 3), p('C', 2), p('C', 1), p('C', 0),
+        // D38..D41, D42..D49, D50..D53 (SPI)
+        p('D', 7), p('G', 2), p('G', 1), p('G', 0),
+        p('L', 7), p('L', 6), p('L', 5), p('L', 4), p('L', 3), p('L', 2), p('L', 1), p('L', 0),
+        p('B', 3), p('B', 2), p('B', 1), p('B', 0),
+        // A0..A15
+        p('F', 0), p('F', 1), p('F', 2), p('F', 3), p('F', 4), p('F', 5), p('F', 6), p('F', 7),
+        p('K', 0), p('K', 1), p('K', 2), p('K', 3), p('K', 4), p('K', 5), p('K', 6), p('K', 7),
+    ],
+};
 
 /// What a pin does for the circuit over a step.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -286,12 +340,13 @@ struct Edges {
     pwm: Option<(f64, f64)>,
 }
 
-/// An Arduino Nano running its program beside the circuit.
-pub struct Nano {
+/// An Arduino board running its program beside the circuit.
+pub struct Board {
+    pub def: &'static BoardDef,
     pub avr: Avr,
     /// What the program sent on Serial (the oldest cut off past `SERIAL_MAX`).
     pub serial: String,
-    edges: [Edges; nano::PINS],
+    edges: Vec<Edges>,
     /// What the serial monitor sent and the chip has not been given yet (`BYTES_PER_STEP` a step).
     input: std::collections::VecDeque<u8>,
 }
@@ -302,35 +357,37 @@ const SERIAL_MAX: usize = 20_000;
 /// The bytes of the serial monitor's text given to the chip each step.
 const BYTES_PER_STEP: usize = 8;
 
-impl Nano {
+impl Board {
     /// Text from the serial monitor to the program (`Serial.read`): given to the chip over the next steps.
     pub fn send_text(&mut self, text: &str) {
         self.input.extend(text.bytes());
     }
 
-    pub fn new(image: &Image) -> Result<Nano, String> {
-        Ok(Nano { avr: Avr::new(nano::MCU, nano::FREQ, nano::VCC, image)?, serial: String::new(), edges: [Edges::default(); nano::PINS], input: Default::default() })
+    pub fn new(def: &'static BoardDef, image: &Image) -> Result<Board, String> {
+        let avr = Avr::new(def.mcu, def.freq, def.vcc, image)?;
+        Ok(Board { def, avr, serial: String::new(), edges: vec![Edges::default(); def.pins()], input: Default::default() })
     }
 
     /// Runs the chip to the time `t` with the circuit's voltages on its pins now (`volts(pin)`: an input is High above half the
-    /// supply; A0..A7 also go to the ADC), and gives what each pin D0..D13, A0..A7 does for the circuit: an output switching
+    /// supply; A0.. also go to the ADC), and gives what each pin (D0.., A0..: `BoardDef`) does for the circuit: an output switching
     /// steadily at `PWM_MIN_HZ` or faster (PWM, `tone`) is `PinOut::Pwm` with its last whole period's duty and frequency (the
     /// circuit is given the pulses: the step is too long to follow them), any other output its level at the end of the step.
-    pub fn advance(&mut self, t: f64, volts: impl Fn(u8) -> f64) -> [PinOut; nano::PINS] {
+    pub fn advance(&mut self, t: f64, volts: impl Fn(u8) -> f64) -> Vec<PinOut> {
         // what the serial monitor sent, a few bytes a step (the chip's UART keeps 64; a byte takes 87 µs at 115200 baud)
         for _ in 0..BYTES_PER_STEP {
             let Some(b) = self.input.pop_front() else { break };
             self.avr.send(b);
         }
         let before = self.avr.ports();
-        for pin in 0..nano::PINS as u8 {
+        let def = self.def;
+        for pin in 0..def.pins() as u8 {
             let v = volts(pin);
-            if let Some((p, b)) = nano::port_bit(pin)
+            if let Some((p, b)) = def.port_bit(pin)
                 && !before.output(p, b)
             {
                 self.avr.set_pin(p, b, v > self.avr.vcc / 2.0);
             }
-            if let Some(ch) = nano::adc(pin) {
+            if let Some(ch) = def.adc(pin) {
                 self.avr.set_adc(ch, v);
             }
         }
@@ -350,9 +407,9 @@ impl Nano {
             }
         }
         let after = self.avr.ports();
-        let mut out = [PinOut::Input; nano::PINS];
+        let mut out = vec![PinOut::Input; def.pins()];
         for (pin, o) in out.iter_mut().enumerate() {
-            let Some((p, b)) = nano::port_bit(pin as u8) else { continue };
+            let Some((p, b)) = def.port_bit(pin as u8) else { continue };
             let edges = &mut self.edges[pin];
             // while a timer has the pin, only its changes count (simavr also passes on the writes of the port)
             let mine: Vec<&PinEvent> = events.iter().filter(|e| e.port == p && e.bit == b).collect();

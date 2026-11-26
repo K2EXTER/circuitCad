@@ -1,4 +1,4 @@
-"""Copy the part of simavr that crates/avr-sim builds (the simulator core `sim/` and the ATmega328 core) out of a simavr checkout, and
+"""Copy the part of simavr that crates/avr-sim builds (the simulator core `sim/` and the ATmega328 and ATmega2560 cores) out of a simavr checkout, and
 rewrite the few GCC-only bits so that MSVC compiles it too (gcc and clang take the rewritten text the same).
 
     git clone --depth 1 https://github.com/buserror/simavr.git <dir>
@@ -27,8 +27,8 @@ OUT = ROOT / "crates" / "avr-sim" / "simavr"
 # sim/ files left out: the gdb server (sockets), the ELF and DWARF readers (libelf: the ELF is read in Rust), the command-line
 # program, USB (not on the ATmega328)
 SKIP = {"sim_gdb.c", "sim_elf.c", "sim_dwarf.c", "run_avr.c", "avr_usb.c", "avr_usb.h"}
-CORES = ["sim_mega328.c", "sim_megax8.c", "sim_megax8.h", "sim_core_declare.h"]
-AVR_HEADERS = ["iom328p.h"]
+CORES = ["sim_mega328.c", "sim_megax8.c", "sim_megax8.h", "sim_mega2560.c", "sim_mega2560.h", "sim_core_declare.h"]
+AVR_HEADERS = ["iom328p.h", "iom2560.h", "iomxx0_1.h"]
 
 # (file, text, what it becomes)
 FIXES = [

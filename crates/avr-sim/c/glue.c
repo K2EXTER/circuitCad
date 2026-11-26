@@ -14,6 +14,10 @@
 typedef struct { uint64_t cycle; uint8_t port; uint8_t bit; uint8_t value; uint8_t timer; } ccavr_event_t;
 
 typedef struct ccavr_t ccavr_t;
+
+// the ports a chip may have (the ATmega328 has B, C, D; the ATmega2560 all but I): a port the chip lacks has no IRQs and reads 0
+#define NPORTS 11
+static const char PORTS[NPORTS] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L' };
 typedef struct { ccavr_t * c; uint8_t port; uint8_t bit; } ccavr_pin_t;
 
 struct ccavr_t {
@@ -24,10 +28,8 @@ struct ccavr_t {
 	uint32_t n_serial, cap_serial;
 	// set while we raise an input pin ourselves, so that our own change is not taken for the program's
 	int driving;
-	ccavr_pin_t pins[3 * 8];
+	ccavr_pin_t pins[NPORTS * 8];
 };
-
-static const char PORTS[3] = { 'B', 'C', 'D' };
 
 static void grow(void ** p, uint32_t * cap, uint32_t need, size_t size) {
 	if (need <= *cap) return;
@@ -65,7 +67,7 @@ ccavr_t * ccavr_new(const char * mcu, uint32_t freq, uint32_t vcc_mv) {
 	avr->sleep = no_wait;
 	ccavr_t * c = calloc(1, sizeof *c);
 	c->avr = avr;
-	for (int k = 0; k < 3; k++)
+	for (int k = 0; k < NPORTS; k++)
 		for (int b = 0; b < 8; b++) {
 			ccavr_pin_t * p = &c->pins[k * 8 + b];
 			p->c = c; p->port = (uint8_t)PORTS[k]; p->bit = (uint8_t)b;
@@ -117,9 +119,9 @@ int ccavr_run_until(ccavr_t * c, uint64_t until) {
 
 uint64_t ccavr_cycle(ccavr_t * c) { return c->avr->cycle; }
 
-// PORTx, DDRx and PINx of B, C and D, in that order (9 bytes)
+// PORTx, DDRx and PINx of each of the ports A..L (without I), in that order (33 bytes; 0 for a port the chip lacks)
 void ccavr_ports(ccavr_t * c, uint8_t * out) {
-	for (int k = 0; k < 3; k++) {
+	for (int k = 0; k < NPORTS; k++) {
 		avr_ioport_state_t s;
 		memset(&s, 0, sizeof s);
 		avr_ioctl(c->avr, AVR_IOCTL_IOPORT_GETSTATE(PORTS[k]), &s);

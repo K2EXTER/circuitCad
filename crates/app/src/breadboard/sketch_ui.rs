@@ -9,9 +9,18 @@ use sch_core::Schematic;
 /// What a new board's sketch starts as: the built-in LED (D13) blinking.
 pub const BLINK: &str = "// LED_BUILTIN (D13) を 0.5 秒ごとに点けたり消したりします\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(500);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(500);\n}\n";
 
-/// The microcontroller boards on the sheet: the parts whose model is a board the sketch runs on.
+/// The microcontroller boards on the sheet: the parts whose model is a board the sketch runs on (Nano, Mega).
 pub fn boards(sch: &Schematic) -> Vec<String> {
-    sch.components.iter().filter(|c| c.custom.as_ref().and_then(|s| s.sim.as_ref()).is_some_and(|m| m.name == "ARDUINO_NANO")).map(|c| c.refdes.clone()).collect()
+    sch.components.iter().filter(|c| model_board(c).is_some()).map(|c| c.refdes.clone()).collect()
+}
+
+fn model_board(c: &sch_core::Component) -> Option<sim_core::sketch::Board> {
+    c.custom.as_ref().and_then(|s| s.sim.as_ref()).and_then(|m| sim_core::sketch::Board::from_model(&m.name))
+}
+
+/// Which board a part is (the Nano when it is none).
+pub fn board_of(sch: &Schematic, refdes: &str) -> sim_core::sketch::Board {
+    sch.components.iter().find(|c| c.refdes == refdes).and_then(model_board).unwrap_or_default()
 }
 
 /// The text of a board's sketch (the blink one until the person writes their own).
@@ -19,12 +28,13 @@ pub fn sketch_of(sch: &SchEditor, refdes: &str) -> String {
     sch.sketches.get(refdes).cloned().unwrap_or_else(|| BLINK.to_string())
 }
 
-/// The nets of a board's pins D0..D13, A0..A7 on the breadboard (by the pins' names in its symbol).
+/// The nets of a board's pins (D0.., A0..) on the breadboard (by the pins' names in its symbol).
 pub fn pin_nets(sch: &Schematic, refdes: &str, nets: &BoardNets) -> Vec<Option<String>> {
     let sym = sch.components.iter().find(|c| c.refdes == refdes).and_then(|c| c.custom.as_ref());
-    (0..sim_core::sketch::PINS as u8)
+    let board = board_of(sch, refdes);
+    (0..board.pins() as u8)
         .map(|p| {
-            let name = sim_core::sketch::pin_name(p);
+            let name = board.pin_name(p);
             let number = sym?.pins.iter().find(|q| q.name == name)?.number.clone();
             nets.pins.get(&(refdes.to_string(), number)).cloned()
         })
@@ -43,25 +53,22 @@ pub fn sketches_key(sch: &SchEditor) -> u64 {
 /// A sketch being built by arduino-cli for the real chip on another thread: the chip's program when it is done (or why not).
 pub type RealBuild = std::sync::Arc<std::sync::Mutex<Option<Result<avr_sim::Image, String>>>>;
 
-/// The board arduino-cli builds for: the Nano (ATmega328P at 16 MHz).
-pub const NANO_FQBN: &str = "arduino:avr:nano";
-
-/// A number for a sketch's text (the builds are kept by it).
-pub fn text_key(text: &str) -> u64 {
+/// A number for a sketch's text and its board (the builds are kept by it).
+pub fn text_key(text: &str, board: sim_core::sketch::Board) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    text.hash(&mut h);
+    (text, board).hash(&mut h);
     h.finish()
 }
 
 impl BreadboardView {
     /// The build of a sketch for the real chip: started on another thread the first time it is asked for (None while it goes on).
-    pub(super) fn real_build(&mut self, text: &str) -> Option<Result<avr_sim::Image, String>> {
-        let slot = self.real_builds.entry(text_key(text)).or_insert_with(|| {
+    pub(super) fn real_build(&mut self, text: &str, board: sim_core::sketch::Board) -> Option<Result<avr_sim::Image, String>> {
+        let slot = self.real_builds.entry(text_key(text, board)).or_insert_with(|| {
             let slot = RealBuild::default();
             let (to, text) = (slot.clone(), text.to_string());
             std::thread::spawn(move || {
-                let r = sch_core::firmware::compile_sketch(&text, NANO_FQBN).and_then(|elf| avr_sim::read_elf(&elf));
+                let r = sch_core::firmware::compile_sketch(&text, board.fqbn()).and_then(|elf| avr_sim::read_elf(&elf));
                 *to.lock().unwrap() = Some(r);
             });
             slot
@@ -75,8 +82,8 @@ impl BreadboardView {
     }
 
     /// The build of a sketch if one was started (Some(None) while it goes on).
-    fn real_build_seen(&self, text: &str) -> Option<Option<Result<avr_sim::Image, String>>> {
-        self.real_builds.get(&text_key(text)).map(|b| b.lock().unwrap().clone())
+    fn real_build_seen(&self, text: &str, board: sim_core::sketch::Board) -> Option<Option<Result<avr_sim::Image, String>>> {
+        self.real_builds.get(&text_key(text, board)).map(|b| b.lock().unwrap().clone())
     }
 
     /// The boards waiting for their real chip's program get it when its build is done (each frame while the power is on).
@@ -84,13 +91,14 @@ impl BreadboardView {
         let waiting: Vec<String> = self.live.as_ref().map(|lv| lv.mcus.iter().filter(|m| m.waiting).map(|m| m.refdes.clone()).collect()).unwrap_or_default();
         for refdes in waiting {
             let text = sketch_of(sch, &refdes);
-            match self.real_build(&text) {
+            let board = board_of(&sch.sch, &refdes);
+            match self.real_build(&text, board) {
                 None => ctx.request_repaint_after(std::time::Duration::from_millis(250)),
                 Some(Ok(img)) => {
                     if let Some(lv) = self.live.as_mut()
                         && let Err(e) = lv.give_program(&refdes, &img)
                     {
-                        self.real_builds.insert(text_key(&text), std::sync::Arc::new(std::sync::Mutex::new(Some(Err(e)))));
+                        self.real_builds.insert(text_key(&text, board), std::sync::Arc::new(std::sync::Mutex::new(Some(Err(e)))));
                     }
                 }
                 // the build failed: the board stays still (the sketch box says why)
@@ -107,6 +115,7 @@ impl BreadboardView {
     /// monitor and a run-time mistake.
     pub(super) fn sketch_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
         for refdes in boards(&sch.sch) {
+            let board = board_of(&sch.sch, &refdes);
             crate::widgets::group_gap(ui);
             ui.label(egui::RichText::new(i18n::trf!("スケッチ ({refdes})")).strong()).on_hover_text(i18n::tr(
                 "このマイコンで動かすプログラム (Arduino の C の小さな部分)。setup() は電源を入れたとき 1 回、loop() はそのあとずっと繰り返します。使えるもの: int・long・float・bool の変数と配列、if・for・while・関数、pinMode・digitalWrite・digitalRead・analogRead・analogWrite・delay・millis・Serial.print / println・map・constrain・random。電源を入れると、ブレッドボードの回路と一緒に動きます",
@@ -120,7 +129,7 @@ impl BreadboardView {
             let mut real = sch.sketch_real.contains(&refdes);
             if ui
                 .checkbox(&mut real, i18n::tr("本物のマイコンの命令で動かす (arduino-cli)"))
-                .on_hover_text(i18n::tr("スケッチを arduino-cli でコンパイルし、Nano のマイコン (ATmega328P) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 arduino:avr が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします"))
+                .on_hover_text(i18n::tr("スケッチを arduino-cli でコンパイルし、ボードのマイコン (Nano は ATmega328P、Mega は ATmega2560) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 arduino:avr が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします"))
                 .changed()
             {
                 if real {
@@ -132,14 +141,14 @@ impl BreadboardView {
             // whether it compiles, and the way back to the sample on the same row
             ui.horizontal_wrapped(|ui| {
                 if real {
-                    match self.real_build_seen(&text) {
+                    match self.real_build_seen(&text, board) {
                         _ if sch_core::firmware::find_tool("arduino-cli").is_none() => {
                             ui.colored_label(crate::theme::error(), i18n::trf!("arduino-cli が見つかりません。{}", i18n::tr(sch_core::firmware::install_hint("arduino-cli"))));
                         }
                         None => {
                             ui.label(egui::RichText::new(i18n::tr("電源を入れるか「コンパイル」を押すと、arduino-cli がコンパイルします")).small().color(NOTE));
                             if ui.small_button(i18n::tr("コンパイル")).on_hover_text(i18n::tr("いまのスケッチを arduino-cli でコンパイルします (電源を入れる前に、誤りが無いか確かめられます)")).clicked() {
-                                self.real_build(&text);
+                                self.real_build(&text, board);
                             }
                         }
                         Some(None) => {
@@ -155,7 +164,7 @@ impl BreadboardView {
                         }
                     }
                 } else {
-                    match sim_core::sketch::compile(&text) {
+                    match sim_core::sketch::compile(&text, board) {
                         Ok(_) => {
                             ui.colored_label(crate::theme::ok(), i18n::tr("✔ 読めました。電源を入れると動きます"));
                         }

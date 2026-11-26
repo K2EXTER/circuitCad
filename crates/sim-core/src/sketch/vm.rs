@@ -115,21 +115,18 @@ fn builtin(name: &str) -> Option<(Bi, std::ops::RangeInclusive<usize>)> {
     })
 }
 
-/// The names Arduino gives to numbers.
-fn constant(name: &str) -> Option<i64> {
+/// The names Arduino gives to numbers (the analog pins A0.. by the board's numbers).
+fn constant(name: &str, board: super::Board) -> Option<i64> {
+    if let Some(k) = name.strip_prefix('A').and_then(|k| k.parse::<u8>().ok())
+        && k < board.analog_pins()
+    {
+        return Some((board.a0() + k) as i64);
+    }
     Some(match name {
         "HIGH" | "true" | "OUTPUT" => 1,
         "LOW" | "false" | "INPUT" => 0,
         "INPUT_PULLUP" => 2,
         "LED_BUILTIN" => 13,
-        "A0" => 14,
-        "A1" => 15,
-        "A2" => 16,
-        "A3" => 17,
-        "A4" => 18,
-        "A5" => 19,
-        "A6" => 20,
-        "A7" => 21,
         "DEC" => 10,
         "HEX" => 16,
         "BIN" => 2,
@@ -200,6 +197,7 @@ struct C<'a> {
     /// Open loops: where `continue` goes (patched later) and the jumps of `break`.
     loops: Vec<(Vec<usize>, Vec<usize>)>,
     ret: Ty,
+    board: super::Board,
 }
 
 impl<'a> C<'a> {
@@ -449,7 +447,7 @@ impl<'a> C<'a> {
                     self.emit(Op::Load(v));
                 }
                 Some(_) => return Err((self.line, format!("{n} は配列です。{n}[0] のように番号を付けます"))),
-                None => match constant(n) {
+                None => match constant(n, self.board) {
                     Some(c) => {
                         self.emit(Op::Push(Val::I(c)));
                     }
@@ -546,14 +544,14 @@ impl<'a> C<'a> {
 }
 
 /// Compiles the program: the global variables first, then `setup()` once and `loop()` for ever; then the functions.
-pub(super) fn compile(p: &Program) -> Res<Code> {
+pub(super) fn compile(p: &Program, board: super::Board) -> Res<Code> {
     let names: HashMap<&str, usize> = p.funcs.iter().enumerate().map(|(k, f)| (f.name.as_str(), k)).collect();
     for want in ["setup", "loop"] {
         if !names.contains_key(want) {
             return Err((1, format!("void {want}() {{ … }} がありません (Arduino のスケッチには setup と loop の 2 つが要ります)")));
         }
     }
-    let mut c = C { ops: vec![], lines: vec![], line: 1, globals: HashMap::new(), nglobals: 0, scopes: vec![], nlocals: 0, max_locals: 0, names, funcs: &p.funcs, loops: vec![], ret: Ty::Void };
+    let mut c = C { ops: vec![], lines: vec![], line: 1, globals: HashMap::new(), nglobals: 0, scopes: vec![], nlocals: 0, max_locals: 0, names, funcs: &p.funcs, loops: vec![], ret: Ty::Void, board };
     for g in &p.globals {
         let Stmt::Decl { ty, name, len, init, line } = g else { continue };
         c.line = *line;

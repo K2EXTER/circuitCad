@@ -85,11 +85,12 @@ impl BreadboardView {
                     // the microcontroller boards with their sketches (B6 ⑤)
                     for refdes in sketch_ui::boards(&sch.sch) {
                         let pins = sketch_ui::pin_nets(&sch.sch, &refdes, &nets);
+                        let board = sketch_ui::board_of(&sch.sch, &refdes);
                         if sch.sketch_real.contains(&refdes) {
                             // the real chip (W5 (b)): it starts when arduino-cli has built its program (`give_real_programs`)
-                            lv.add_real_mcu(refdes.clone(), pins);
+                            lv.add_real_mcu(refdes.clone(), board, pins);
                         } else {
-                            lv.add_mcu(refdes.clone(), sim_core::sketch::compile(&sketch_ui::sketch_of(sch, &refdes)), pins);
+                            lv.add_mcu(refdes.clone(), board, sim_core::sketch::compile(&sketch_ui::sketch_of(sch, &refdes), board), pins);
                         }
                     }
                     for (r, v) in &self.knob_values {

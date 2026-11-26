@@ -3893,6 +3893,68 @@ void loop() {
 }
 ";
 
+/// The sketch of the Mega sample: a light running along the LEDs on D22, D24, D26, D28, its pace set by the knob on A8.
+const ARDUINO_MEGA_SKETCH: &str = "// D22・D24・D26・D28 の LED を順に点ける流れる光。A8 のボリュームで速さが変わります
+void setup() {
+  Serial.begin(9600);
+  for (int k = 0; k < 4; k++) {
+    pinMode(22 + 2 * k, OUTPUT);
+  }
+}
+
+void loop() {
+  for (int k = 0; k < 4; k++) {
+    int wait = map(analogRead(A8), 0, 1023, 50, 500);
+    digitalWrite(22 + 2 * k, HIGH);
+    delay(wait);
+    digitalWrite(22 + 2 * k, LOW);
+  }
+  Serial.println(analogRead(A8));
+}
+";
+
+/// The Arduino Mega sample (W5 ③): four LEDs (330 ohm each) on D22, D24, D26, D28 and a potentiometer on A8, a light running
+/// along them. The Mega stays beside the breadboard, wired to it. `cargo test -p app write_arduino_mega_example -- --ignored`
+#[test]
+#[ignore]
+fn write_arduino_mega_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mega = library_part("ARDUINO_MEGA");
+    let mut s = sch_core::Schematic::default();
+    let u = s.add_custom(mega.symbol(), &mega.default_value(), &mega.footprint_name(), (20, 0), 0);
+    let number = |name: &str| mega.pins.iter().find(|p| p.name == name).map(|p| p.number.clone()).unwrap();
+    // a label out to the side of the pin (label_pin goes up or down from a pin far from the middle, through its neighbours)
+    let label_pin = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap();
+        let end = (pt.0 + 3 * (pt.0 - s.components[idx].pos.0).signum(), pt.1);
+        s.wires.push(sch_core::Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    label_pin(&mut s, u, &number("GND"), "GND");
+    label_pin(&mut s, u, &number("5V"), "5V");
+    for k in 0..4 {
+        let (pin, out, a) = (format!("D{}", 22 + 2 * k), format!("L{k}"), format!("A{k}"));
+        label_pin(&mut s, u, &number(&pin), &out);
+        let r = s.add(Kind::Resistor, (90, -30 + 20 * k), 1);
+        s.components[r].value = "330".into();
+        super::label_pin(&mut s, r, "1", &out);
+        super::label_pin(&mut s, r, "2", &a);
+        let d = s.add(Kind::Led, (110, -30 + 20 * k), 1);
+        super::label_pin(&mut s, d, "A", &a);
+        super::label_pin(&mut s, d, "K", "GND");
+    }
+    let vr = s.add(Kind::Pot, (-30, 0), 1);
+    s.components[vr].value = "10k POS=30".into();
+    super::label_pin(&mut s, vr, "1", "5V");
+    super::label_pin(&mut s, vr, "2", "KNOB");
+    super::label_pin(&mut s, vr, "3", "GND");
+    label_pin(&mut s, u, &number("A8"), "KNOB");
+    let mut v = serde_json::to_value(&s).unwrap();
+    let settings = crate::schematic::SheetSettings { sketches: [(s.components[u].refdes.clone(), ARDUINO_MEGA_SKETCH.to_string())].into_iter().collect(), ..Default::default() };
+    crate::schematic::with_settings(&mut v, &settings);
+    std::fs::write(root.join("arduino_mega.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}
+
 /// The Arduino samples (B6 ⑤): an Arduino Nano blinking an LED on D13 (through 330 ohm), and one reading a potentiometer on A0 to
 /// set an LED on D9. The Nano gives the 5 V from USB. `cargo test -p app write_arduino_examples -- --ignored`
 #[test]

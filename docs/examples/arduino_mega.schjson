@@ -1,0 +1,1184 @@
+{
+  "components": [
+    {
+      "custom": {
+        "name": "ARDUINO_MEGA",
+        "pins": [
+          {
+            "name": "SCL",
+            "number": "1",
+            "side": "right"
+          },
+          {
+            "name": "SDA",
+            "number": "2",
+            "side": "right"
+          },
+          {
+            "name": "AREF",
+            "number": "3",
+            "side": "right"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "4",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D13",
+            "number": "5",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D12",
+            "number": "6",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D11",
+            "number": "7",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D10",
+            "number": "8",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D9",
+            "number": "9",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D8",
+            "number": "10",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D7",
+            "number": "11",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D6",
+            "number": "12",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D5",
+            "number": "13",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D4",
+            "number": "14",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D3",
+            "number": "15",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D2",
+            "number": "16",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D1",
+            "number": "17",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D0",
+            "number": "18",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D14",
+            "number": "19",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D15",
+            "number": "20",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D16",
+            "number": "21",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D17",
+            "number": "22",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D18",
+            "number": "23",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D19",
+            "number": "24",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D20",
+            "number": "25",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D21",
+            "number": "26",
+            "side": "right"
+          },
+          {
+            "kind": "power_out",
+            "name": "5V",
+            "number": "27",
+            "side": "right"
+          },
+          {
+            "kind": "power_out",
+            "name": "5V",
+            "number": "28",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D22",
+            "number": "29",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D23",
+            "number": "30",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D24",
+            "number": "31",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D25",
+            "number": "32",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D26",
+            "number": "33",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D27",
+            "number": "34",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D28",
+            "number": "35",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D29",
+            "number": "36",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D30",
+            "number": "37",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D31",
+            "number": "38",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D32",
+            "number": "39",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D33",
+            "number": "40",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D34",
+            "number": "41",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D35",
+            "number": "42",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D36",
+            "number": "43",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D37",
+            "number": "44",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D38",
+            "number": "45",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D39",
+            "number": "46",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D40",
+            "number": "47",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D41",
+            "number": "48",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D42",
+            "number": "49",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D43",
+            "number": "50",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D44",
+            "number": "51",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D45",
+            "number": "52",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D46",
+            "number": "53",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D47",
+            "number": "54",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D48",
+            "number": "55",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D49",
+            "number": "56",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D50",
+            "number": "57",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D51",
+            "number": "58",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D52",
+            "number": "59",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "D53",
+            "number": "60",
+            "side": "right"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "61",
+            "side": "right"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "62",
+            "side": "right"
+          },
+          {
+            "kind": "nc",
+            "name": "NC",
+            "number": "63",
+            "side": "left"
+          },
+          {
+            "name": "IOREF",
+            "number": "64",
+            "side": "left"
+          },
+          {
+            "name": "RESET",
+            "number": "65",
+            "side": "left"
+          },
+          {
+            "kind": "power_out",
+            "name": "3V3",
+            "number": "66",
+            "side": "left"
+          },
+          {
+            "kind": "power_out",
+            "name": "5V",
+            "number": "67",
+            "side": "left"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "68",
+            "side": "left"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "69",
+            "side": "left"
+          },
+          {
+            "name": "VIN",
+            "number": "70",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A0",
+            "number": "71",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A1",
+            "number": "72",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A2",
+            "number": "73",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A3",
+            "number": "74",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A4",
+            "number": "75",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A5",
+            "number": "76",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A6",
+            "number": "77",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A7",
+            "number": "78",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A8",
+            "number": "79",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A9",
+            "number": "80",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A10",
+            "number": "81",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A11",
+            "number": "82",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A12",
+            "number": "83",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A13",
+            "number": "84",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A14",
+            "number": "85",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "A15",
+            "number": "86",
+            "side": "left"
+          }
+        ],
+        "prefix": "U",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "ピンごとに、スケッチ (またはマイコンの本物の命令) が決める電源と抵抗を入れただけのモデルです。出力は 25Ω の向こうの 0 V か 5 V (PWM はパルス)、入力は 1 GΩ、INPUT_PULLUP は 35 kΩ で 5 V に引きます。",
+            "扱わないもの: 3V3・AREF・IOREF・VIN・RESET のピン、ピンの電流の上限 (40 mA) の点検。circuitCad の読み方 (本物の命令でない方) では、命令にかかる時間・割り込み・ライブラリも扱いません。"
+          ],
+          "name": "ARDUINO_MEGA",
+          "origin": {
+            "kind": "generic",
+            "source": "Arduino Mega 2560 のピン配置と、ATmega2560 の出力抵抗・プルアップの代表値"
+          },
+          "params": {},
+          "pins": [
+            "18",
+            "17",
+            "16",
+            "15",
+            "14",
+            "13",
+            "12",
+            "11",
+            "10",
+            "9",
+            "8",
+            "7",
+            "6",
+            "5",
+            "19",
+            "20",
+            "21",
+            "22",
+            "23",
+            "24",
+            "25",
+            "26",
+            "29",
+            "30",
+            "31",
+            "32",
+            "33",
+            "34",
+            "35",
+            "36",
+            "37",
+            "38",
+            "39",
+            "40",
+            "41",
+            "42",
+            "43",
+            "44",
+            "45",
+            "46",
+            "47",
+            "48",
+            "49",
+            "50",
+            "51",
+            "52",
+            "53",
+            "54",
+            "55",
+            "56",
+            "57",
+            "58",
+            "59",
+            "60",
+            "71",
+            "72",
+            "73",
+            "74",
+            "75",
+            "76",
+            "77",
+            "78",
+            "79",
+            "80",
+            "81",
+            "82",
+            "83",
+            "84",
+            "85",
+            "86",
+            "27",
+            "28",
+            "67",
+            "4",
+            "61",
+            "62",
+            "68",
+            "69"
+          ],
+          "text": ".subckt ARDUINO_MEGA d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 d11 d12 d13 d14 d15 d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31 d32 d33 d34 d35 d36 d37 d38 d39 d40 d41 d42 d43 d44 d45 d46 d47 d48 d49 d50 d51 d52 d53 a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 v5_0 v5_1 v5_2 gnd gnd1 gnd2 gnd3 gnd4\n* Arduino Mega 2560 for the sketch beside the circuit, as the Nano's model: each of D0..D53 and A0..A15 is a source behind a\n* resistor that the sketch (or the real chip, avr-sim) sets: an output 0 or 5 V behind 25 ohm, an input 1 Gohm, INPUT_PULLUP 5 V\n* behind 35 kohm. 5V is the USB supply behind 0.2 ohm (each 5V pin); the board itself takes about 50 mA.\nVpD0 sd0 gnd DC 0\nRpD0 sd0 d0 1G\nVpD1 sd1 gnd DC 0\nRpD1 sd1 d1 1G\nVpD2 sd2 gnd DC 0\nRpD2 sd2 d2 1G\nVpD3 sd3 gnd DC 0\nRpD3 sd3 d3 1G\nVpD4 sd4 gnd DC 0\nRpD4 sd4 d4 1G\nVpD5 sd5 gnd DC 0\nRpD5 sd5 d5 1G\nVpD6 sd6 gnd DC 0\nRpD6 sd6 d6 1G\nVpD7 sd7 gnd DC 0\nRpD7 sd7 d7 1G\nVpD8 sd8 gnd DC 0\nRpD8 sd8 d8 1G\nVpD9 sd9 gnd DC 0\nRpD9 sd9 d9 1G\nVpD10 sd10 gnd DC 0\nRpD10 sd10 d10 1G\nVpD11 sd11 gnd DC 0\nRpD11 sd11 d11 1G\nVpD12 sd12 gnd DC 0\nRpD12 sd12 d12 1G\nVpD13 sd13 gnd DC 0\nRpD13 sd13 d13 1G\nVpD14 sd14 gnd DC 0\nRpD14 sd14 d14 1G\nVpD15 sd15 gnd DC 0\nRpD15 sd15 d15 1G\nVpD16 sd16 gnd DC 0\nRpD16 sd16 d16 1G\nVpD17 sd17 gnd DC 0\nRpD17 sd17 d17 1G\nVpD18 sd18 gnd DC 0\nRpD18 sd18 d18 1G\nVpD19 sd19 gnd DC 0\nRpD19 sd19 d19 1G\nVpD20 sd20 gnd DC 0\nRpD20 sd20 d20 1G\nVpD21 sd21 gnd DC 0\nRpD21 sd21 d21 1G\nVpD22 sd22 gnd DC 0\nRpD22 sd22 d22 1G\nVpD23 sd23 gnd DC 0\nRpD23 sd23 d23 1G\nVpD24 sd24 gnd DC 0\nRpD24 sd24 d24 1G\nVpD25 sd25 gnd DC 0\nRpD25 sd25 d25 1G\nVpD26 sd26 gnd DC 0\nRpD26 sd26 d26 1G\nVpD27 sd27 gnd DC 0\nRpD27 sd27 d27 1G\nVpD28 sd28 gnd DC 0\nRpD28 sd28 d28 1G\nVpD29 sd29 gnd DC 0\nRpD29 sd29 d29 1G\nVpD30 sd30 gnd DC 0\nRpD30 sd30 d30 1G\nVpD31 sd31 gnd DC 0\nRpD31 sd31 d31 1G\nVpD32 sd32 gnd DC 0\nRpD32 sd32 d32 1G\nVpD33 sd33 gnd DC 0\nRpD33 sd33 d33 1G\nVpD34 sd34 gnd DC 0\nRpD34 sd34 d34 1G\nVpD35 sd35 gnd DC 0\nRpD35 sd35 d35 1G\nVpD36 sd36 gnd DC 0\nRpD36 sd36 d36 1G\nVpD37 sd37 gnd DC 0\nRpD37 sd37 d37 1G\nVpD38 sd38 gnd DC 0\nRpD38 sd38 d38 1G\nVpD39 sd39 gnd DC 0\nRpD39 sd39 d39 1G\nVpD40 sd40 gnd DC 0\nRpD40 sd40 d40 1G\nVpD41 sd41 gnd DC 0\nRpD41 sd41 d41 1G\nVpD42 sd42 gnd DC 0\nRpD42 sd42 d42 1G\nVpD43 sd43 gnd DC 0\nRpD43 sd43 d43 1G\nVpD44 sd44 gnd DC 0\nRpD44 sd44 d44 1G\nVpD45 sd45 gnd DC 0\nRpD45 sd45 d45 1G\nVpD46 sd46 gnd DC 0\nRpD46 sd46 d46 1G\nVpD47 sd47 gnd DC 0\nRpD47 sd47 d47 1G\nVpD48 sd48 gnd DC 0\nRpD48 sd48 d48 1G\nVpD49 sd49 gnd DC 0\nRpD49 sd49 d49 1G\nVpD50 sd50 gnd DC 0\nRpD50 sd50 d50 1G\nVpD51 sd51 gnd DC 0\nRpD51 sd51 d51 1G\nVpD52 sd52 gnd DC 0\nRpD52 sd52 d52 1G\nVpD53 sd53 gnd DC 0\nRpD53 sd53 d53 1G\nVpA0 sa0 gnd DC 0\nRpA0 sa0 a0 1G\nVpA1 sa1 gnd DC 0\nRpA1 sa1 a1 1G\nVpA2 sa2 gnd DC 0\nRpA2 sa2 a2 1G\nVpA3 sa3 gnd DC 0\nRpA3 sa3 a3 1G\nVpA4 sa4 gnd DC 0\nRpA4 sa4 a4 1G\nVpA5 sa5 gnd DC 0\nRpA5 sa5 a5 1G\nVpA6 sa6 gnd DC 0\nRpA6 sa6 a6 1G\nVpA7 sa7 gnd DC 0\nRpA7 sa7 a7 1G\nVpA8 sa8 gnd DC 0\nRpA8 sa8 a8 1G\nVpA9 sa9 gnd DC 0\nRpA9 sa9 a9 1G\nVpA10 sa10 gnd DC 0\nRpA10 sa10 a10 1G\nVpA11 sa11 gnd DC 0\nRpA11 sa11 a11 1G\nVpA12 sa12 gnd DC 0\nRpA12 sa12 a12 1G\nVpA13 sa13 gnd DC 0\nRpA13 sa13 a13 1G\nVpA14 sa14 gnd DC 0\nRpA14 sa14 a14 1G\nVpA15 sa15 gnd DC 0\nRpA15 sa15 a15 1G\nVusb usb gnd DC 5\nRusb usb v5 0.2\nRv5_0 v5 v5_0 0.01\nRv5_1 v5 v5_1 0.01\nRv5_2 v5 v5_2 0.01\nRq v5 gnd 100\nRg1 gnd gnd1 0.01\nRg2 gnd gnd2 0.01\nRg3 gnd gnd3 0.01\nRg4 gnd gnd4 0.01\n.ends ARDUINO_MEGA"
+        }
+      },
+      "footprint": "ARDUINO_MEGA_HEADERS",
+      "kind": "Custom",
+      "pos": [
+        20,
+        0
+      ],
+      "refdes": "U1",
+      "rot": 0,
+      "value": "ARDUINO_MEGA"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        90,
+        -30
+      ],
+      "refdes": "R1",
+      "rot": 1,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "LED_0805",
+      "kind": "Led",
+      "pos": [
+        110,
+        -30
+      ],
+      "refdes": "D1",
+      "rot": 1,
+      "value": "LED"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        90,
+        -10
+      ],
+      "refdes": "R2",
+      "rot": 1,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "LED_0805",
+      "kind": "Led",
+      "pos": [
+        110,
+        -10
+      ],
+      "refdes": "D2",
+      "rot": 1,
+      "value": "LED"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        90,
+        10
+      ],
+      "refdes": "R3",
+      "rot": 1,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "LED_0805",
+      "kind": "Led",
+      "pos": [
+        110,
+        10
+      ],
+      "refdes": "D3",
+      "rot": 1,
+      "value": "LED"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        90,
+        30
+      ],
+      "refdes": "R4",
+      "rot": 1,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "LED_0805",
+      "kind": "Led",
+      "pos": [
+        110,
+        30
+      ],
+      "refdes": "D4",
+      "rot": 1,
+      "value": "LED"
+    },
+    {
+      "custom": null,
+      "footprint": "Pot_1x3_P2.54",
+      "kind": "Pot",
+      "pos": [
+        -30,
+        0
+      ],
+      "refdes": "VR1",
+      "rot": 1,
+      "value": "10k POS=30"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        27,
+        -55
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        -9
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        27,
+        -5
+      ],
+      "text": "L0"
+    },
+    {
+      "pos": [
+        90,
+        -35
+      ],
+      "text": "L0"
+    },
+    {
+      "pos": [
+        90,
+        -25
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        110,
+        -35
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        110,
+        -25
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        -1
+      ],
+      "text": "L1"
+    },
+    {
+      "pos": [
+        90,
+        -15
+      ],
+      "text": "L1"
+    },
+    {
+      "pos": [
+        90,
+        -5
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        110,
+        -15
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        110,
+        -5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        3
+      ],
+      "text": "L2"
+    },
+    {
+      "pos": [
+        90,
+        5
+      ],
+      "text": "L2"
+    },
+    {
+      "pos": [
+        90,
+        15
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        110,
+        5
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        110,
+        15
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        7
+      ],
+      "text": "L3"
+    },
+    {
+      "pos": [
+        90,
+        25
+      ],
+      "text": "L3"
+    },
+    {
+      "pos": [
+        90,
+        35
+      ],
+      "text": "A3"
+    },
+    {
+      "pos": [
+        110,
+        25
+      ],
+      "text": "A3"
+    },
+    {
+      "pos": [
+        110,
+        35
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        -30,
+        -5
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        -25,
+        0
+      ],
+      "text": "KNOB"
+    },
+    {
+      "pos": [
+        -30,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        13,
+        9
+      ],
+      "text": "KNOB"
+    }
+  ],
+  "layout_version": 1,
+  "sketches": {
+    "U1": "// D22・D24・D26・D28 の LED を順に点ける流れる光。A8 のボリュームで速さが変わります\nvoid setup() {\n  Serial.begin(9600);\n  for (int k = 0; k < 4; k++) {\n    pinMode(22 + 2 * k, OUTPUT);\n  }\n}\n\nvoid loop() {\n  for (int k = 0; k < 4; k++) {\n    int wait = map(analogRead(A8), 0, 1023, 50, 500);\n    digitalWrite(22 + 2 * k, HIGH);\n    delay(wait);\n    digitalWrite(22 + 2 * k, LOW);\n  }\n  Serial.println(analogRead(A8));\n}\n"
+  },
+  "wires": [
+    {
+      "a": [
+        24,
+        -55
+      ],
+      "b": [
+        27,
+        -55
+      ]
+    },
+    {
+      "a": [
+        24,
+        -9
+      ],
+      "b": [
+        27,
+        -9
+      ]
+    },
+    {
+      "a": [
+        24,
+        -5
+      ],
+      "b": [
+        27,
+        -5
+      ]
+    },
+    {
+      "a": [
+        90,
+        -32
+      ],
+      "b": [
+        90,
+        -35
+      ]
+    },
+    {
+      "a": [
+        90,
+        -28
+      ],
+      "b": [
+        90,
+        -25
+      ]
+    },
+    {
+      "a": [
+        110,
+        -32
+      ],
+      "b": [
+        110,
+        -35
+      ]
+    },
+    {
+      "a": [
+        110,
+        -28
+      ],
+      "b": [
+        110,
+        -25
+      ]
+    },
+    {
+      "a": [
+        24,
+        -1
+      ],
+      "b": [
+        27,
+        -1
+      ]
+    },
+    {
+      "a": [
+        90,
+        -12
+      ],
+      "b": [
+        90,
+        -15
+      ]
+    },
+    {
+      "a": [
+        90,
+        -8
+      ],
+      "b": [
+        90,
+        -5
+      ]
+    },
+    {
+      "a": [
+        110,
+        -12
+      ],
+      "b": [
+        110,
+        -15
+      ]
+    },
+    {
+      "a": [
+        110,
+        -8
+      ],
+      "b": [
+        110,
+        -5
+      ]
+    },
+    {
+      "a": [
+        24,
+        3
+      ],
+      "b": [
+        27,
+        3
+      ]
+    },
+    {
+      "a": [
+        90,
+        8
+      ],
+      "b": [
+        90,
+        5
+      ]
+    },
+    {
+      "a": [
+        90,
+        12
+      ],
+      "b": [
+        90,
+        15
+      ]
+    },
+    {
+      "a": [
+        110,
+        8
+      ],
+      "b": [
+        110,
+        5
+      ]
+    },
+    {
+      "a": [
+        110,
+        12
+      ],
+      "b": [
+        110,
+        15
+      ]
+    },
+    {
+      "a": [
+        24,
+        7
+      ],
+      "b": [
+        27,
+        7
+      ]
+    },
+    {
+      "a": [
+        90,
+        28
+      ],
+      "b": [
+        90,
+        25
+      ]
+    },
+    {
+      "a": [
+        90,
+        32
+      ],
+      "b": [
+        90,
+        35
+      ]
+    },
+    {
+      "a": [
+        110,
+        28
+      ],
+      "b": [
+        110,
+        25
+      ]
+    },
+    {
+      "a": [
+        110,
+        32
+      ],
+      "b": [
+        110,
+        35
+      ]
+    },
+    {
+      "a": [
+        -30,
+        -2
+      ],
+      "b": [
+        -30,
+        -5
+      ]
+    },
+    {
+      "a": [
+        -28,
+        0
+      ],
+      "b": [
+        -25,
+        0
+      ]
+    },
+    {
+      "a": [
+        -30,
+        2
+      ],
+      "b": [
+        -30,
+        5
+      ]
+    },
+    {
+      "a": [
+        16,
+        9
+      ],
+      "b": [
+        13,
+        9
+      ]
+    }
+  ]
+}

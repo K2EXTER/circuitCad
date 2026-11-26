@@ -14,24 +14,88 @@ use vm::{Bi, Code, Op, Val};
 
 /// The supply of the board's pins (volts).
 pub const VCC: f64 = 5.0;
-/// The pin numbers: D0..D13, then A0..A7.
-pub const PINS: usize = 22;
-/// The pins `analogWrite` gives pulses on (the others go High from 128).
-pub const PWM_PINS: [u8; 6] = [3, 5, 6, 9, 10, 11];
 
-/// The frequency of `analogWrite`'s pulses on a pin of the Nano: timer 0 (D5, D6) runs twice as fast as timers 1 and 2.
-pub fn pwm_hz(pin: u8) -> f64 {
-    if pin == 5 || pin == 6 { 980.0 } else { 490.0 }
+/// The microcontroller board a sketch runs on: its pins by Arduino's numbers (D0.., then A0..), the ones `analogWrite` pulses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum Board {
+    /// Arduino Nano (ATmega328P): D0..D13, A0..A7.
+    #[default]
+    Nano,
+    /// Arduino Mega 2560 (ATmega2560): D0..D53, A0..A15.
+    Mega,
+}
+
+impl Board {
+    pub const ALL: [Board; 2] = [Board::Nano, Board::Mega];
+
+    /// The part's model in the library (`ARDUINO_NANO`).
+    pub fn model(self) -> &'static str {
+        match self {
+            Board::Nano => "ARDUINO_NANO",
+            Board::Mega => "ARDUINO_MEGA",
+        }
+    }
+
+    pub fn from_model(name: &str) -> Option<Board> {
+        Board::ALL.into_iter().find(|b| b.model() == name)
+    }
+
+    /// arduino-cli's name of the board (W5 (b)).
+    pub fn fqbn(self) -> &'static str {
+        match self {
+            Board::Nano => "arduino:avr:nano",
+            Board::Mega => "arduino:avr:mega",
+        }
+    }
+
+    /// The number of the first analog pin.
+    pub fn a0(self) -> u8 {
+        match self {
+            Board::Nano => 14,
+            Board::Mega => 54,
+        }
+    }
+
+    /// How many analog pins (A0..).
+    pub fn analog_pins(self) -> u8 {
+        match self {
+            Board::Nano => 8,
+            Board::Mega => 16,
+        }
+    }
+
+    /// The number of pins: D0.., then A0...
+    pub fn pins(self) -> usize {
+        (self.a0() + self.analog_pins()) as usize
+    }
+
+    /// The name of a pin: D13, A0.
+    pub fn pin_name(self, pin: u8) -> String {
+        if pin < self.a0() { format!("D{pin}") } else { format!("A{}", pin - self.a0()) }
+    }
+
+    /// The pins `analogWrite` gives pulses on (the others go High from 128).
+    pub fn pwm_pins(self) -> &'static [u8] {
+        match self {
+            Board::Nano => &[3, 5, 6, 9, 10, 11],
+            Board::Mega => &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 44, 45, 46],
+        }
+    }
+
+    /// The frequency of `analogWrite`'s pulses on a pin: timer 0 (Nano D5, D6; Mega D4, D13) runs twice as fast as the others.
+    pub fn pwm_hz(self, pin: u8) -> f64 {
+        let fast = match self {
+            Board::Nano => pin == 5 || pin == 6,
+            Board::Mega => pin == 4 || pin == 13,
+        };
+        if fast { 980.0 } else { 490.0 }
+    }
 }
 /// Instructions one call of `run` may take before it gives the circuit its turn (a loop without `delay` goes on next frame).
 const BUDGET: usize = 200_000;
 /// The most text the serial window keeps.
 const SERIAL_MAX: usize = 20_000;
 
-/// The name of a pin: D0..D13, A0..A7.
-pub fn pin_name(pin: u8) -> String {
-    if pin < 14 { format!("D{pin}") } else { format!("A{}", pin - 14) }
-}
 
 /// What the sketch does with a pin.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -78,17 +142,18 @@ impl std::fmt::Display for SketchError {
     }
 }
 
-/// Compiles a sketch.
-pub fn compile(src: &str) -> Result<Sketch, SketchError> {
+/// Compiles a sketch for a board (its pin numbers: `A0` is 14 on the Nano, 54 on the Mega).
+pub fn compile(src: &str, board: Board) -> Result<Sketch, SketchError> {
     let err = |(line, message): (u32, String)| SketchError { line, message };
     let toks = lex::lex(src).map_err(err)?;
     let prog = parse::parse(toks).map_err(err)?;
-    let code = vm::compile(&prog).map_err(err)?;
-    Ok(Sketch { code })
+    let code = vm::compile(&prog, board).map_err(err)?;
+    Ok(Sketch { code, board })
 }
 
 pub struct Sketch {
     code: Code,
+    board: Board,
 }
 
 struct Frame {
@@ -106,7 +171,7 @@ pub struct Machine {
     frames: Vec<Frame>,
     /// It waits in `delay` until this simulated time.
     wake: f64,
-    pub drives: [Drive; PINS],
+    pub drives: Vec<Drive>,
     /// What the sketch wrote with `Serial.print` (the oldest cut off past `SERIAL_MAX`).
     pub serial: String,
     pub error: Option<SketchError>,
@@ -115,8 +180,8 @@ pub struct Machine {
 
 impl Machine {
     pub fn new(sketch: Sketch) -> Machine {
-        let g = sketch.code.globals;
-        Machine { sketch, pc: 0, stack: vec![], globals: vec![Val::I(0); g], locals: vec![], frames: vec![], wake: 0.0, drives: [Drive::Input; PINS], serial: String::new(), error: None, seed: 0x2545_F491_4F6C_DD1D }
+        let (g, pins) = (sketch.code.globals, sketch.board.pins());
+        Machine { sketch, pc: 0, stack: vec![], globals: vec![Val::I(0); g], locals: vec![], frames: vec![], wake: 0.0, drives: vec![Drive::Input; pins], serial: String::new(), error: None, seed: 0x2545_F491_4F6C_DD1D }
     }
 
     /// When the sketch is waiting in `delay` until (simulated seconds).
@@ -149,7 +214,12 @@ impl Machine {
 
     fn pin(&self, v: &Val) -> Result<u8, String> {
         let p = vm::val_i(v);
-        if (0..PINS as i64).contains(&p) { Ok(p as u8) } else { Err(format!("ピン {p} はありません (0〜13 と A0〜A7)")) }
+        let b = self.sketch.board;
+        if (0..b.pins() as i64).contains(&p) {
+            Ok(p as u8)
+        } else {
+            Err(format!("ピン {p} はありません (0〜{} と A0〜A{})", b.a0() - 1, b.analog_pins() - 1))
+        }
     }
 
     fn set(&mut self, pin: u8, d: Drive, io: &mut dyn Io) {
@@ -285,8 +355,9 @@ impl Machine {
                     Bi::AnalogRead => {
                         let mut pin = self.pin(&a(0))?;
                         // analogRead(0) means A0
-                        if pin < 8 && vm::val_i(&a(0)) < 8 {
-                            pin += 14;
+                        let b = self.sketch.board;
+                        if pin < b.analog_pins() && (vm::val_i(&a(0)) as u8) < b.analog_pins() {
+                            pin += b.a0();
                         }
                         Val::I(((io.volts(pin) / VCC * 1023.0).round() as i64).clamp(0, 1023))
                     }
@@ -297,7 +368,7 @@ impl Machine {
                         let d = match v {
                             0 => Drive::Out(0.0),
                             255 => Drive::Out(1.0),
-                            _ if PWM_PINS.contains(&pin) => Drive::Pwm { duty: v as f64 / 255.0, hz: pwm_hz(pin) },
+                            _ if self.sketch.board.pwm_pins().contains(&pin) => Drive::Pwm { duty: v as f64 / 255.0, hz: self.sketch.board.pwm_hz(pin) },
                             _ => Drive::Out(if v >= 128 { 1.0 } else { 0.0 }),
                         };
                         self.set(pin, d, io);
@@ -377,7 +448,7 @@ mod tests {
     /// A circuit of nothing but the pins: what is driven is read back; A0 is a fixed voltage.
     #[derive(Default)]
     struct Pins {
-        out: [Option<Drive>; PINS],
+        out: std::collections::BTreeMap<u8, Drive>,
         a0: f64,
         log: Vec<(u8, Drive)>,
     }
@@ -387,16 +458,16 @@ mod tests {
             if pin == 14 {
                 return self.a0;
             }
-            self.out[pin as usize].map_or(0.0, |d| d.average() * VCC)
+            self.out.get(&pin).map_or(0.0, |d| d.average() * VCC)
         }
         fn drive(&mut self, pin: u8, d: Drive) {
-            self.out[pin as usize] = Some(d);
+            self.out.insert(pin, d);
             self.log.push((pin, d));
         }
     }
 
     fn machine(src: &str) -> Machine {
-        Machine::new(compile(src).unwrap_or_else(|e| panic!("{e}")))
+        Machine::new(compile(src, Board::Nano).unwrap_or_else(|e| panic!("{e}")))
     }
 
     #[test]
@@ -448,22 +519,40 @@ mod tests {
         let mut io = Pins { a0: 2.5, ..Default::default() };
         m.run(0.0, &mut io);
         // 2.5 V of 5: 512 of 1023, 128 of 255: pulses of 490 Hz, High half the time
-        match io.out[9] {
+        match io.out.get(&9).copied() {
             Some(Drive::Pwm { duty, hz }) => assert!((duty - 0.5).abs() < 0.01 && hz == 490.0, "{duty} {hz}"),
             d => panic!("{d:?}"),
         }
     }
 
+    /// The Mega's own numbers: A8 is pin 62, D44 pulses with `analogWrite`, D53 is a pin and D70 is not.
+    #[test]
+    fn the_mega_has_its_own_pins() {
+        let b = Board::Mega;
+        assert_eq!((b.pins(), b.a0(), b.pin_name(62), b.pin_name(53)), (70, 54, "A8".to_string(), "D53".to_string()));
+        let mut m = Machine::new(compile("void setup() { pinMode(53, OUTPUT); digitalWrite(53, HIGH); analogWrite(44, 64); Serial.println(A8); }\nvoid loop() { delay(10); }", b).unwrap());
+        let mut io = Pins::default();
+        m.run(0.0, &mut io);
+        assert!(m.error.is_none(), "{:?}", m.error);
+        assert_eq!(m.serial, "62\n");
+        assert_eq!(m.drives[53], Drive::Out(1.0));
+        assert!(matches!(m.drives[44], Drive::Pwm { hz, .. } if hz == 490.0), "{:?}", m.drives[44]);
+        let e = Machine::new(compile("void setup() { pinMode(70, OUTPUT); }\nvoid loop() {}", b).unwrap());
+        let mut e = e;
+        e.run(0.0, &mut io);
+        assert!(e.error.as_ref().is_some_and(|x| x.message.contains("0〜53")), "{:?}", e.error);
+    }
+
     #[test]
     fn mistakes_say_where_and_why() {
-        let e = compile("void setup() { pinMode(13, OUTPUT) }\nvoid loop() {}").err().unwrap();
+        let e = compile("void setup() { pinMode(13, OUTPUT) }\nvoid loop() {}", Board::Nano).err().unwrap();
         assert_eq!(e.line, 1);
         assert!(e.message.contains(";"), "{e}");
-        let e = compile("void setup() { x = 1; }\nvoid loop() {}").err().unwrap();
+        let e = compile("void setup() { x = 1; }\nvoid loop() {}", Board::Nano).err().unwrap();
         assert!(e.message.contains("変数 x"), "{e}");
-        let e = compile("void setup() {}").err().unwrap();
+        let e = compile("void setup() {}", Board::Nano).err().unwrap();
         assert!(e.message.contains("loop"), "{e}");
-        let e = compile("void setup() {}\nvoid loop() {\n  digitalWrit(13, HIGH);\n}").err().unwrap();
+        let e = compile("void setup() {}\nvoid loop() {\n  digitalWrit(13, HIGH);\n}", Board::Nano).err().unwrap();
         assert_eq!(e.line, 3);
         // at run time: a pin that is not there, with its line
         let mut m = machine("void setup() {}\nvoid loop() {\n  pinMode(40, OUTPUT);\n}");

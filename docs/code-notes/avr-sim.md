@@ -4,7 +4,7 @@
 
 ## クレートの中身
 
-- **`simavr/`**: simavr の `sim/` (gdb・ELF・DWARF・コマンドの本体・USB を除く) と、ATmega328 のコア (`cores/sim_mega328.c`・`sim_megax8.*`・`sim_core_declare.h`・`cores/avr/iom328p.h`)。
+- **`simavr/`**: simavr の `sim/` (gdb・ELF・DWARF・コマンドの本体・USB を除く) と、ATmega328 のコア (`cores/sim_mega328.c`・`sim_megax8.*`・`sim_core_declare.h`・`cores/avr/iom328p.h`) と ATmega2560 のコア (`sim_mega2560.*`・`cores/avr/iom2560.h`・`iomxx0_1.h`、W5 ③)。
   - `COPYING` と、写した版の `VERSION` も入れてある。
   - 写すのは `python tools/vendor_simavr.py <simavr を clone したフォルダ>`。MSVC 向けの書き換え (下の表) もこれが当てる。手で直さない。
   - simavr の不具合の直しも、このスクリプトの `FIXES` が当てる (上流で直ったら消す。合わなくなったら止まる)。
@@ -14,13 +14,13 @@
   - `msvc_first.h`: `/FI` で全部の前に読ませる。`__attribute__`・`__sync_synchronize`・`strsep` の宣言。
   - `unistd.h`・`sys/time.h`・`strings.h`。
 - **`c/`**:
-  - Makefile が作るはずの `sim_core_config.h`・`sim_core_decl.h` (コアは mega328 だけ)。
+  - Makefile が作るはずの `sim_core_config.h`・`sim_core_decl.h` (コアは mega328 と mega2560)。
   - gdb の代わり `gdb_stub.c`。
   - MSVC だけで使う `posix_shim.c` (`strsep`・`clock_gettime`)。
   - Rust への窓口 `glue.c` (`ccavr_*`)。
 - **`glue.c` の中身**:
   - 作るとき (`ccavr_new`):
-    - B・C・D の 24 本のピンの変化を、記録に入れる通知を付ける (`on_pin`)。
+    - ポート A〜L (I を除く 11 個) の 88 本のピンの変化を、記録に入れる通知を付ける (`on_pin`。チップに無いポートは IRQ が無いので飛ばす)。`ccavr_ports` も 11 個のポートの PORT・DDR・PIN を返す。
     - UART0 の出力の通知を付ける (`on_byte`)。
     - UART の「コンソールに出す」と「待つ間 usleep」を切る。
     - `avr->sleep` を何もしない関数にする (SLEEP 命令で実時間を待たない)。
@@ -29,9 +29,9 @@
 - **`src/lib.rs`**:
   - `read_elf`: ELF32 の読み込み用のセグメントを、置く番地へ。0x810000 からは EEPROM、0x800000 からの RAM は捨てる。
   - `Avr`: `run_to`・`ports`・`set_pin`・`set_adc`・`send`・`take_events`・`take_serial`・`stopped`。
-  - `Nano::send_text`: シリアルモニタの文を待ち行列に入れ、1 ms ごとに 8 バイト (`BYTES_PER_STEP`) ずつチップに渡す (simavr の UART は 64 バイトしか持たない)。
-  - `nano` (ピン D0〜D13・A0〜A7 → ポートとビット、ADC の番号)。
-  - `Nano::advance(t, volts)`:
+  - `Board::send_text`: シリアルモニタの文を待ち行列に入れ、1 ms ごとに 8 バイト (`BYTES_PER_STEP`) ずつチップに渡す (simavr の UART は 64 バイトしか持たない)。
+  - `BoardDef` (ボード: チップの名前・クロック・電源と、Arduino のピン番号 → ポートとビットの表・A0 の番号): `NANO` (D0〜D13・A0〜A7。A6・A7 は ADC だけ) と `MEGA` (D0〜D53・A0〜A15。表は Arduino の pins_arduino.h の mega のとおり)。
+  - `Board::advance(t, volts)` (`Board::new(&NANO か &MEGA, image)`):
     1. 入力のピンに、回路の電圧 (電源の半分より上で High) を入れる。A0〜A7 は ADC にも入れる。
     2. `t` まで回す。
     3. 出力のピンは、終わりの値 `PinOut::Out` か、100 Hz 以上で続いて切り替わっていれば最後の 1 周期の `PinOut::Pwm { duty, hz }` を返す (`Edges`: ピンごとの最後の立ち上がり・立ち下がり)。
@@ -40,8 +40,9 @@
 - **試験** (`tests/nano.rs`): `tests/firmware/check.c` を avr-gcc でビルドした `check.elf` を入れてある。試験に avr-gcc は要らない。作り直すのは `build.sh`。
   - ELF とその EEPROM の読み。
   - D13 の反転、D2 → D11 の追従、A0 → D12、D9 のタイマーの PWM (25 %)、D4 のプルアップ。
-  - シリアルの `ee=42` と `a0=409`、受けた文字を送り返す。60 文字の行 (`Nano::send_text`) もそのまま返る。
+  - シリアルの `ee=42` と `a0=409`、受けた文字を送り返す。60 文字の行 (`Board::send_text`) もそのまま返る。
   - `adc_time.elf` (`adc_time.c`): ADC の変換時間が 200 µs (1 回目)・104 µs (2 回目から)。
+  - `mega.elf` (`mega.c`、ATmega2560): Mega のピン番号で、D13 (PB7) の反転・D2 (PE4) → D22 (PA0)・A8 (ADC8、MUX5) → D53 (PB0)・D11 (OC1A) の PWM・シリアル。
 
 ## はじめの試し (simavr を MSVC で通せるか)
 
@@ -106,5 +107,5 @@ exe の大きさは、試しのバイナリ全体で 283 KB (release)。simavr �
 
 ## 残り (候補表 W5)
 
-- ほかのチップ: Mega (ATmega2560)・ATtiny。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_decl.h` に並べる。
+- ほかのチップ: ATtiny など。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_config.h`・`sim_core_decl.h` に並べ、`BoardDef` を書く (Mega はこの形で 2026-11-26 に足した)。
 - ライブラリ (Servo・Wire) のスケッチ: arduino-cli でビルドできれば同じに動くはず。試していない。

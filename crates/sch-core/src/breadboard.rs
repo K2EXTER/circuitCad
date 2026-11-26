@@ -153,9 +153,20 @@ impl Problem {
     }
 }
 
-/// The supplies and sources that stay off the board (a source marked simulation-only too: a bench supply is wired in).
+/// The models of the boards too big for a breadboard (an Arduino Mega): they stay beside it, wired to it.
+const BOARDS_BESIDE: &[&str] = &["ARDUINO_MEGA"];
+
+/// A board that stays beside the breadboard (`BOARDS_BESIDE`): only its pins that are used get a wire.
+pub fn is_board_beside(c: &Component) -> bool {
+    c.custom.as_ref().and_then(|s| s.sim.as_ref()).is_some_and(|m| BOARDS_BESIDE.contains(&m.name.as_str()))
+}
+
+/// The supplies and sources that stay off the board (a source marked simulation-only too: a bench supply is wired in), and the
+/// boards too big for it (`is_board_beside`).
 fn is_off_board(c: &Component) -> bool {
-    matches!(c.kind, Kind::VSource | Kind::ISource) || c.custom.as_ref().is_some_and(|s| s.prefix.eq_ignore_ascii_case("BT") || s.prefix.eq_ignore_ascii_case("V"))
+    matches!(c.kind, Kind::VSource | Kind::ISource)
+        || c.custom.as_ref().is_some_and(|s| s.prefix.eq_ignore_ascii_case("BT") || s.prefix.eq_ignore_ascii_case("V"))
+        || is_board_beside(c)
 }
 
 /// A simulation-only part that is not a source: it stands in for what the board is joined to (the thing measured, a resistor on a
@@ -189,6 +200,11 @@ fn leads_of(c: &Component) -> Vec<String> {
         }
         None => c.kind.pins().into_iter().map(|(n, _)| n).collect(),
     }
+}
+
+/// The name of a library part's pin by its number ("27" → "5V"); the number itself for the others.
+fn pin_name_of(c: &Component, number: &str) -> String {
+    c.custom.as_ref().and_then(|s| s.pins.iter().find(|p| p.number == number)).map_or_else(|| number.to_string(), |p| p.name.clone())
 }
 
 /// A net whose name says it is a supply (VCC, VDD, VIN, VBAT, +5V, 3V3, 12V): a source that ramps up (PWL) still feeds the rails.
@@ -238,9 +254,12 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
     let flat = s.flat();
     let nets = extract(&flat);
     let mut net_of: BTreeMap<(String, String), String> = BTreeMap::new();
+    // the parts on each net (a board beside the breadboard is wired only where its pin meets another part)
+    let mut parts_on: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for n in &nets {
         for p in &n.pins {
             net_of.insert((p.refdes.clone(), p.pin.clone()), n.name.clone());
+            parts_on.entry(n.name.clone()).or_default().insert(p.refdes.clone());
         }
     }
     let (mut on, mut off) = (vec![], vec![]);
@@ -266,8 +285,21 @@ pub(crate) fn read(s: &Schematic) -> Circuit {
             }
             continue;
         }
-        let pins: Vec<(String, String)> = leads_of(c).into_iter().map(|p| { let n = net_of.get(&(c.refdes.clone(), p.clone())).cloned().unwrap_or_default(); (p, n) }).collect();
+        let mut pins: Vec<(String, String)> = leads_of(c).into_iter().map(|p| { let n = net_of.get(&(c.refdes.clone(), p.clone())).cloned().unwrap_or_default(); (p, n) }).collect();
+        if is_board_beside(c) {
+            pins.retain(|(_, n)| parts_on.get(n).is_some_and(|on| on.iter().any(|r| *r != c.refdes)));
+        }
         if pins.is_empty() {
+            continue;
+        }
+        if is_board_beside(c) {
+            // a board beside the breadboard feeds a rail from its 5V (and 3V3) pins
+            for (pin, net) in &pins {
+                if matches!(pin_name_of(c, pin).as_str(), "5V" | "3V3") {
+                    add_supply(net, &mut supplies);
+                }
+            }
+            off.push((c.refdes.clone(), pins));
             continue;
         }
         if is_off_board(c) {

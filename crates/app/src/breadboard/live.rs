@@ -78,22 +78,33 @@ pub struct Live {
 /// arduino-cli runs the chip's real instructions instead (`real`, W5 (b)): `waiting` until the build is done.
 pub struct Mcu {
     pub refdes: String,
+    /// Which board (Nano, Mega): its pins' numbers and names, the chip the real instructions run on.
+    pub board: sim_core::sketch::Board,
     pub machine: Option<sim_core::sketch::Machine>,
     nets: Vec<Option<String>>,
-    pub real: Option<avr_sim::Nano>,
+    pub real: Option<avr_sim::Board>,
     /// The real chip is waiting for its program (being built); the pins are inputs meanwhile.
     pub waiting: bool,
     /// The run's time when the real chip started (its own time counts from 0).
     real_from: f64,
     /// What the real chip's pins do now (set on the circuit when they change).
-    drives: [sim_core::sketch::Drive; sim_core::sketch::PINS],
+    drives: Vec<sim_core::sketch::Drive>,
+}
+
+/// The chip and pins avr-sim runs for a board.
+fn avr_board(b: sim_core::sketch::Board) -> &'static avr_sim::BoardDef {
+    match b {
+        sim_core::sketch::Board::Nano => &avr_sim::NANO,
+        sim_core::sketch::Board::Mega => &avr_sim::MEGA,
+    }
 }
 
 /// The circuit as a running sketch sees it: a pin's voltage is its net's now, a pin's drive sets the source and the resistance
-/// behind it inside the board's model (`ARDUINO_NANO`: `VpD13` and `RpD13`).
+/// behind it inside the board's model (`ARDUINO_NANO`, `ARDUINO_MEGA`: `VpD13` and `RpD13`).
 struct RunIo<'a> {
     run: &'a mut TranRun,
     refdes: &'a str,
+    board: sim_core::sketch::Board,
     nets: &'a [Option<String>],
 }
 
@@ -120,8 +131,8 @@ impl sim_core::sketch::Io for RunIo<'_> {
         }
     }
     fn drive(&mut self, pin: u8, d: sim_core::sketch::Drive) {
-        use sim_core::sketch::{pin_name, Drive, VCC};
-        let name = pin_name(pin);
+        use sim_core::sketch::{Drive, VCC};
+        let name = self.board.pin_name(pin);
         let (wave, r) = match d {
             Drive::Input => (Waveform::Dc(0.0), PIN_INPUT_OHM),
             Drive::Pullup => (Waveform::Dc(VCC), PIN_PULLUP_OHM),
@@ -187,16 +198,18 @@ impl Live {
 
     /// A microcontroller board with its sketch (or why it does not compile) and its pins' nets (D0..D13, A0..A7); its `setup` runs
     /// at once.
-    pub fn add_mcu(&mut self, refdes: String, sketch: Result<sim_core::sketch::Sketch, sim_core::sketch::SketchError>, nets: Vec<Option<String>>) {
+    pub fn add_mcu(&mut self, refdes: String, board: sim_core::sketch::Board, sketch: Result<sim_core::sketch::Sketch, sim_core::sketch::SketchError>, nets: Vec<Option<String>>) {
         let machine = sketch.ok().map(sim_core::sketch::Machine::new);
-        self.mcus.push(Mcu { refdes, machine, nets, real: None, waiting: false, real_from: 0.0, drives: [sim_core::sketch::Drive::Input; sim_core::sketch::PINS] });
+        let drives = vec![sim_core::sketch::Drive::Input; board.pins()];
+        self.mcus.push(Mcu { refdes, board, machine, nets, real: None, waiting: false, real_from: 0.0, drives });
         self.run_mcus();
         self.read_now();
     }
 
     /// A board that runs its program as the chip's real instructions (W5 (b)); it waits (pins as inputs) until `give_program`.
-    pub fn add_real_mcu(&mut self, refdes: String, nets: Vec<Option<String>>) {
-        self.mcus.push(Mcu { refdes, machine: None, nets, real: None, waiting: true, real_from: 0.0, drives: [sim_core::sketch::Drive::Input; sim_core::sketch::PINS] });
+    pub fn add_real_mcu(&mut self, refdes: String, board: sim_core::sketch::Board, nets: Vec<Option<String>>) {
+        let drives = vec![sim_core::sketch::Drive::Input; board.pins()];
+        self.mcus.push(Mcu { refdes, board, machine: None, nets, real: None, waiting: true, real_from: 0.0, drives });
     }
 
     /// The program of a waiting board has been built: the chip starts now (from its reset). An image the chip cannot take leaves it
@@ -205,7 +218,7 @@ impl Live {
         let now = self.time();
         let Some(m) = self.mcus.iter_mut().find(|m| m.refdes == refdes && m.waiting) else { return Ok(()) };
         m.waiting = false;
-        m.real = Some(avr_sim::Nano::new(image)?);
+        m.real = Some(avr_sim::Board::new(avr_board(m.board), image)?);
         m.real_from = now;
         self.run_mcus();
         self.read_now();
@@ -218,13 +231,13 @@ impl Live {
         let now = run.time();
         for m in &mut self.mcus {
             if let Some(machine) = m.machine.as_mut() {
-                machine.run(now, &mut RunIo { run, refdes: &m.refdes, nets: &m.nets });
+                machine.run(now, &mut RunIo { run, refdes: &m.refdes, board: m.board, nets: &m.nets });
             }
             if let Some(nano) = m.real.as_mut() {
                 use sim_core::sketch::{Drive, Io};
-                let mut io = RunIo { run, refdes: &m.refdes, nets: &m.nets };
+                let mut io = RunIo { run, refdes: &m.refdes, board: m.board, nets: &m.nets };
                 // the chip runs to now with the circuit's voltages as they are; what its pins did on the way drives the next step
-                let volts: Vec<f64> = (0..sim_core::sketch::PINS as u8).map(|p| io.volts(p)).collect();
+                let volts: Vec<f64> = (0..m.board.pins() as u8).map(|p| io.volts(p)).collect();
                 let outs = nano.advance(now - m.real_from, |p| volts[p as usize]);
                 for (pin, o) in outs.iter().enumerate() {
                     let d = match *o {
@@ -572,7 +585,8 @@ mod tests {
         let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, vec![], &pots);
         for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
             let pins = crate::breadboard::sketch_ui::pin_nets(&e.sch, &refdes, &nets);
-            live.add_mcu(refdes.clone(), sim_core::sketch::compile(&crate::breadboard::sketch_ui::sketch_of(e, &refdes)), pins);
+            let board = crate::breadboard::sketch_ui::board_of(&e.sch, &refdes);
+            live.add_mcu(refdes.clone(), board, sim_core::sketch::compile(&crate::breadboard::sketch_ui::sketch_of(e, &refdes), board), pins);
         }
         live
     }
@@ -624,7 +638,7 @@ mod tests {
         let image = avr_sim::read_elf(include_bytes!("../../../avr-sim/tests/firmware/check.elf")).unwrap();
         for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
             let pins = crate::breadboard::sketch_ui::pin_nets(&e.sch, &refdes, &nets);
-            live.add_real_mcu(refdes.clone(), pins);
+            live.add_real_mcu(refdes.clone(), crate::breadboard::sketch_ui::board_of(&e.sch, &refdes), pins);
             assert!(live.mcus.last().unwrap().waiting);
             live.give_program(&refdes, &image).unwrap();
         }
@@ -682,5 +696,32 @@ void loop() {{ delay(100); }}"));
         let net = live.mcus[0].nets[9].clone().expect("D9 is wired");
         let v = live.voltage(&net).unwrap();
         assert!((v - 1.25).abs() < 0.1, "D9 {v} V");
+    }
+
+    /// The Mega sample: the Mega stays beside the breadboard with wires from only the pins it uses, and the sketch (A8, D22..D28,
+    /// numbers of the Mega's own) runs a light along the four LEDs.
+    #[test]
+    fn the_mega_runs_a_light_along_its_leds() {
+        let e = sample("arduino_mega.schjson");
+        let l = sch_core::breadboard::auto_layout(&e.sch);
+        let beside = l.off_board.iter().find(|o| o.refdes == "U1").expect("the Mega beside the board");
+        // D22, D24, D26, D28, A8, 5V, GND: 7 of its 86 pins
+        assert_eq!(beside.pins.len(), 7, "{:?}", beside.pins);
+        assert!(!l.parts.iter().any(|p| p.refdes == "U1"));
+        let mut live = with_sketch(&e);
+        assert!(live.error.is_none(), "{:?}", live.error);
+        assert!(live.mcus[0].machine.as_ref().is_some_and(|m| m.error.is_none()));
+        let mut lit = std::collections::BTreeSet::new();
+        for _ in 0..40 {
+            live.advance(0.05);
+            for d in ["D1", "D2", "D3", "D4"] {
+                if live.current(d).unwrap_or(0.0) > 2e-3 {
+                    lit.insert(d);
+                }
+            }
+        }
+        assert_eq!(lit.len(), 4, "every LED lit in turn: {lit:?}");
+        let serial = &live.mcus[0].machine.as_ref().unwrap().serial;
+        assert!(serial.lines().count() >= 1, "{serial}");
     }
 }

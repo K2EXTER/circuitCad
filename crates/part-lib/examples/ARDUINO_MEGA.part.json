@@ -1,0 +1,1401 @@
+{
+  "name": "ARDUINO_MEGA",
+  "category": "マイコン",
+  "description": "Arduino Mega 2560 互換のマイコンボード (ATmega2560、5 V、USB 給電)。D0〜D53・A0〜A15。ブレッドボードには差さらないので、試作のタブではボードの外に置いてジャンパー線でつなぐ。試作のタブでスケッチを書くと、電源を入れたときに回路と一緒に動く (「本物のマイコンの命令で動かす」で arduino-cli のコンパイルと ATmega2560 の命令)。基板のフットプリントのヘッダの位置は実物に近い並べ方の概算 (発注前チェックが警告する)",
+  "prefix": "U",
+  "value": "ARDUINO_MEGA",
+  "footprint_name": "ARDUINO_MEGA_HEADERS",
+  "height": 15.0,
+  "land_unverified": true,
+  "pins": [
+    {
+      "number": "1",
+      "name": "SCL",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "SDA",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "AREF",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "GND",
+      "side": "right",
+      "kind": "power_in"
+    },
+    {
+      "number": "5",
+      "name": "D13",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "6",
+      "name": "D12",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "7",
+      "name": "D11",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "8",
+      "name": "D10",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "9",
+      "name": "D9",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "10",
+      "name": "D8",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "11",
+      "name": "D7",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "12",
+      "name": "D6",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "13",
+      "name": "D5",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "14",
+      "name": "D4",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "15",
+      "name": "D3",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "16",
+      "name": "D2",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "17",
+      "name": "D1",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "18",
+      "name": "D0",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "19",
+      "name": "D14",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "20",
+      "name": "D15",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "21",
+      "name": "D16",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "22",
+      "name": "D17",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "23",
+      "name": "D18",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "24",
+      "name": "D19",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "25",
+      "name": "D20",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "26",
+      "name": "D21",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "27",
+      "name": "5V",
+      "side": "right",
+      "kind": "power_out"
+    },
+    {
+      "number": "28",
+      "name": "5V",
+      "side": "right",
+      "kind": "power_out"
+    },
+    {
+      "number": "29",
+      "name": "D22",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "30",
+      "name": "D23",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "31",
+      "name": "D24",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "32",
+      "name": "D25",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "33",
+      "name": "D26",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "34",
+      "name": "D27",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "35",
+      "name": "D28",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "36",
+      "name": "D29",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "37",
+      "name": "D30",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "38",
+      "name": "D31",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "39",
+      "name": "D32",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "40",
+      "name": "D33",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "41",
+      "name": "D34",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "42",
+      "name": "D35",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "43",
+      "name": "D36",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "44",
+      "name": "D37",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "45",
+      "name": "D38",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "46",
+      "name": "D39",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "47",
+      "name": "D40",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "48",
+      "name": "D41",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "49",
+      "name": "D42",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "50",
+      "name": "D43",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "51",
+      "name": "D44",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "52",
+      "name": "D45",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "53",
+      "name": "D46",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "54",
+      "name": "D47",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "55",
+      "name": "D48",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "56",
+      "name": "D49",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "57",
+      "name": "D50",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "58",
+      "name": "D51",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "59",
+      "name": "D52",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "60",
+      "name": "D53",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "61",
+      "name": "GND",
+      "side": "right",
+      "kind": "power_in"
+    },
+    {
+      "number": "62",
+      "name": "GND",
+      "side": "right",
+      "kind": "power_in"
+    },
+    {
+      "number": "63",
+      "name": "NC",
+      "side": "left",
+      "kind": "nc"
+    },
+    {
+      "number": "64",
+      "name": "IOREF",
+      "side": "left"
+    },
+    {
+      "number": "65",
+      "name": "RESET",
+      "side": "left"
+    },
+    {
+      "number": "66",
+      "name": "3V3",
+      "side": "left",
+      "kind": "power_out"
+    },
+    {
+      "number": "67",
+      "name": "5V",
+      "side": "left",
+      "kind": "power_out"
+    },
+    {
+      "number": "68",
+      "name": "GND",
+      "side": "left",
+      "kind": "power_in"
+    },
+    {
+      "number": "69",
+      "name": "GND",
+      "side": "left",
+      "kind": "power_in"
+    },
+    {
+      "number": "70",
+      "name": "VIN",
+      "side": "left"
+    },
+    {
+      "number": "71",
+      "name": "A0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "72",
+      "name": "A1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "73",
+      "name": "A2",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "74",
+      "name": "A3",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "75",
+      "name": "A4",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "76",
+      "name": "A5",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "77",
+      "name": "A6",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "78",
+      "name": "A7",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "79",
+      "name": "A8",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "80",
+      "name": "A9",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "81",
+      "name": "A10",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "82",
+      "name": "A11",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "83",
+      "name": "A12",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "84",
+      "name": "A13",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "85",
+      "name": "A14",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "86",
+      "name": "A15",
+      "side": "left",
+      "kind": "bidir"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": 27.94,
+        "y": 50.8,
+        "shape": "rect",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "2",
+        "x": 30.48,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "3",
+        "x": 33.02,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "4",
+        "x": 35.56,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "5",
+        "x": 38.1,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "6",
+        "x": 40.64,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "7",
+        "x": 43.18,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "8",
+        "x": 45.72,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "9",
+        "x": 48.26,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "10",
+        "x": 50.8,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "11",
+        "x": 54.864,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "12",
+        "x": 57.404,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "13",
+        "x": 59.944,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "14",
+        "x": 62.484,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "15",
+        "x": 65.024,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "16",
+        "x": 67.564,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "17",
+        "x": 70.104,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "18",
+        "x": 72.644,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "19",
+        "x": 75.184,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "20",
+        "x": 77.724,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "21",
+        "x": 80.264,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "22",
+        "x": 82.804,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "23",
+        "x": 85.344,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "24",
+        "x": 87.884,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "25",
+        "x": 90.424,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "26",
+        "x": 92.964,
+        "y": 50.8,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "27",
+        "x": 95.25,
+        "y": 49.53,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "28",
+        "x": 97.79,
+        "y": 49.53,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "29",
+        "x": 95.25,
+        "y": 46.99,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "30",
+        "x": 97.79,
+        "y": 46.99,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "31",
+        "x": 95.25,
+        "y": 44.45,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "32",
+        "x": 97.79,
+        "y": 44.45,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "33",
+        "x": 95.25,
+        "y": 41.91,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "34",
+        "x": 97.79,
+        "y": 41.91,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "35",
+        "x": 95.25,
+        "y": 39.37,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "36",
+        "x": 97.79,
+        "y": 39.37,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "37",
+        "x": 95.25,
+        "y": 36.83,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "38",
+        "x": 97.79,
+        "y": 36.83,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "39",
+        "x": 95.25,
+        "y": 34.29,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "40",
+        "x": 97.79,
+        "y": 34.29,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "41",
+        "x": 95.25,
+        "y": 31.75,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "42",
+        "x": 97.79,
+        "y": 31.75,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "43",
+        "x": 95.25,
+        "y": 29.21,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "44",
+        "x": 97.79,
+        "y": 29.21,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "45",
+        "x": 95.25,
+        "y": 26.67,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "46",
+        "x": 97.79,
+        "y": 26.67,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "47",
+        "x": 95.25,
+        "y": 24.13,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "48",
+        "x": 97.79,
+        "y": 24.13,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "49",
+        "x": 95.25,
+        "y": 21.59,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "50",
+        "x": 97.79,
+        "y": 21.59,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "51",
+        "x": 95.25,
+        "y": 19.05,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "52",
+        "x": 97.79,
+        "y": 19.05,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "53",
+        "x": 95.25,
+        "y": 16.51,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "54",
+        "x": 97.79,
+        "y": 16.51,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "55",
+        "x": 95.25,
+        "y": 13.97,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "56",
+        "x": 97.79,
+        "y": 13.97,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "57",
+        "x": 95.25,
+        "y": 11.43,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "58",
+        "x": 97.79,
+        "y": 11.43,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "59",
+        "x": 95.25,
+        "y": 8.89,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "60",
+        "x": 97.79,
+        "y": 8.89,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "61",
+        "x": 95.25,
+        "y": 6.35,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "62",
+        "x": 97.79,
+        "y": 6.35,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "63",
+        "x": 27.94,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "64",
+        "x": 30.48,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "65",
+        "x": 33.02,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "66",
+        "x": 35.56,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "67",
+        "x": 38.1,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "68",
+        "x": 40.64,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "69",
+        "x": 43.18,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "70",
+        "x": 45.72,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "71",
+        "x": 49.784,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "72",
+        "x": 52.324,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "73",
+        "x": 54.864,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "74",
+        "x": 57.404,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "75",
+        "x": 59.944,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "76",
+        "x": 62.484,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "77",
+        "x": 65.024,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "78",
+        "x": 67.564,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "79",
+        "x": 70.104,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "80",
+        "x": 72.644,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "81",
+        "x": 75.184,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "82",
+        "x": 77.724,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "83",
+        "x": 80.264,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "84",
+        "x": 82.804,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "85",
+        "x": 85.344,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      },
+      {
+        "pin": "86",
+        "x": 87.884,
+        "y": 2.54,
+        "shape": "circle",
+        "w": 1.7,
+        "h": 1.7,
+        "drill": 1.0
+      }
+    ]
+  },
+  "body": {
+    "shape": "rect",
+    "w": 101.6,
+    "h": 53.3,
+    "mark": "dot",
+    "mark_pin": "1"
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "ARDUINO_MEGA",
+    "text": ".subckt ARDUINO_MEGA d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 d11 d12 d13 d14 d15 d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31 d32 d33 d34 d35 d36 d37 d38 d39 d40 d41 d42 d43 d44 d45 d46 d47 d48 d49 d50 d51 d52 d53 a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 v5_0 v5_1 v5_2 gnd gnd1 gnd2 gnd3 gnd4\n* Arduino Mega 2560 for the sketch beside the circuit, as the Nano's model: each of D0..D53 and A0..A15 is a source behind a\n* resistor that the sketch (or the real chip, avr-sim) sets: an output 0 or 5 V behind 25 ohm, an input 1 Gohm, INPUT_PULLUP 5 V\n* behind 35 kohm. 5V is the USB supply behind 0.2 ohm (each 5V pin); the board itself takes about 50 mA.\nVpD0 sd0 gnd DC 0\nRpD0 sd0 d0 1G\nVpD1 sd1 gnd DC 0\nRpD1 sd1 d1 1G\nVpD2 sd2 gnd DC 0\nRpD2 sd2 d2 1G\nVpD3 sd3 gnd DC 0\nRpD3 sd3 d3 1G\nVpD4 sd4 gnd DC 0\nRpD4 sd4 d4 1G\nVpD5 sd5 gnd DC 0\nRpD5 sd5 d5 1G\nVpD6 sd6 gnd DC 0\nRpD6 sd6 d6 1G\nVpD7 sd7 gnd DC 0\nRpD7 sd7 d7 1G\nVpD8 sd8 gnd DC 0\nRpD8 sd8 d8 1G\nVpD9 sd9 gnd DC 0\nRpD9 sd9 d9 1G\nVpD10 sd10 gnd DC 0\nRpD10 sd10 d10 1G\nVpD11 sd11 gnd DC 0\nRpD11 sd11 d11 1G\nVpD12 sd12 gnd DC 0\nRpD12 sd12 d12 1G\nVpD13 sd13 gnd DC 0\nRpD13 sd13 d13 1G\nVpD14 sd14 gnd DC 0\nRpD14 sd14 d14 1G\nVpD15 sd15 gnd DC 0\nRpD15 sd15 d15 1G\nVpD16 sd16 gnd DC 0\nRpD16 sd16 d16 1G\nVpD17 sd17 gnd DC 0\nRpD17 sd17 d17 1G\nVpD18 sd18 gnd DC 0\nRpD18 sd18 d18 1G\nVpD19 sd19 gnd DC 0\nRpD19 sd19 d19 1G\nVpD20 sd20 gnd DC 0\nRpD20 sd20 d20 1G\nVpD21 sd21 gnd DC 0\nRpD21 sd21 d21 1G\nVpD22 sd22 gnd DC 0\nRpD22 sd22 d22 1G\nVpD23 sd23 gnd DC 0\nRpD23 sd23 d23 1G\nVpD24 sd24 gnd DC 0\nRpD24 sd24 d24 1G\nVpD25 sd25 gnd DC 0\nRpD25 sd25 d25 1G\nVpD26 sd26 gnd DC 0\nRpD26 sd26 d26 1G\nVpD27 sd27 gnd DC 0\nRpD27 sd27 d27 1G\nVpD28 sd28 gnd DC 0\nRpD28 sd28 d28 1G\nVpD29 sd29 gnd DC 0\nRpD29 sd29 d29 1G\nVpD30 sd30 gnd DC 0\nRpD30 sd30 d30 1G\nVpD31 sd31 gnd DC 0\nRpD31 sd31 d31 1G\nVpD32 sd32 gnd DC 0\nRpD32 sd32 d32 1G\nVpD33 sd33 gnd DC 0\nRpD33 sd33 d33 1G\nVpD34 sd34 gnd DC 0\nRpD34 sd34 d34 1G\nVpD35 sd35 gnd DC 0\nRpD35 sd35 d35 1G\nVpD36 sd36 gnd DC 0\nRpD36 sd36 d36 1G\nVpD37 sd37 gnd DC 0\nRpD37 sd37 d37 1G\nVpD38 sd38 gnd DC 0\nRpD38 sd38 d38 1G\nVpD39 sd39 gnd DC 0\nRpD39 sd39 d39 1G\nVpD40 sd40 gnd DC 0\nRpD40 sd40 d40 1G\nVpD41 sd41 gnd DC 0\nRpD41 sd41 d41 1G\nVpD42 sd42 gnd DC 0\nRpD42 sd42 d42 1G\nVpD43 sd43 gnd DC 0\nRpD43 sd43 d43 1G\nVpD44 sd44 gnd DC 0\nRpD44 sd44 d44 1G\nVpD45 sd45 gnd DC 0\nRpD45 sd45 d45 1G\nVpD46 sd46 gnd DC 0\nRpD46 sd46 d46 1G\nVpD47 sd47 gnd DC 0\nRpD47 sd47 d47 1G\nVpD48 sd48 gnd DC 0\nRpD48 sd48 d48 1G\nVpD49 sd49 gnd DC 0\nRpD49 sd49 d49 1G\nVpD50 sd50 gnd DC 0\nRpD50 sd50 d50 1G\nVpD51 sd51 gnd DC 0\nRpD51 sd51 d51 1G\nVpD52 sd52 gnd DC 0\nRpD52 sd52 d52 1G\nVpD53 sd53 gnd DC 0\nRpD53 sd53 d53 1G\nVpA0 sa0 gnd DC 0\nRpA0 sa0 a0 1G\nVpA1 sa1 gnd DC 0\nRpA1 sa1 a1 1G\nVpA2 sa2 gnd DC 0\nRpA2 sa2 a2 1G\nVpA3 sa3 gnd DC 0\nRpA3 sa3 a3 1G\nVpA4 sa4 gnd DC 0\nRpA4 sa4 a4 1G\nVpA5 sa5 gnd DC 0\nRpA5 sa5 a5 1G\nVpA6 sa6 gnd DC 0\nRpA6 sa6 a6 1G\nVpA7 sa7 gnd DC 0\nRpA7 sa7 a7 1G\nVpA8 sa8 gnd DC 0\nRpA8 sa8 a8 1G\nVpA9 sa9 gnd DC 0\nRpA9 sa9 a9 1G\nVpA10 sa10 gnd DC 0\nRpA10 sa10 a10 1G\nVpA11 sa11 gnd DC 0\nRpA11 sa11 a11 1G\nVpA12 sa12 gnd DC 0\nRpA12 sa12 a12 1G\nVpA13 sa13 gnd DC 0\nRpA13 sa13 a13 1G\nVpA14 sa14 gnd DC 0\nRpA14 sa14 a14 1G\nVpA15 sa15 gnd DC 0\nRpA15 sa15 a15 1G\nVusb usb gnd DC 5\nRusb usb v5 0.2\nRv5_0 v5 v5_0 0.01\nRv5_1 v5 v5_1 0.01\nRv5_2 v5 v5_2 0.01\nRq v5 gnd 100\nRg1 gnd gnd1 0.01\nRg2 gnd gnd2 0.01\nRg3 gnd gnd3 0.01\nRg4 gnd gnd4 0.01\n.ends ARDUINO_MEGA",
+    "pins": [
+      "18",
+      "17",
+      "16",
+      "15",
+      "14",
+      "13",
+      "12",
+      "11",
+      "10",
+      "9",
+      "8",
+      "7",
+      "6",
+      "5",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45",
+      "46",
+      "47",
+      "48",
+      "49",
+      "50",
+      "51",
+      "52",
+      "53",
+      "54",
+      "55",
+      "56",
+      "57",
+      "58",
+      "59",
+      "60",
+      "71",
+      "72",
+      "73",
+      "74",
+      "75",
+      "76",
+      "77",
+      "78",
+      "79",
+      "80",
+      "81",
+      "82",
+      "83",
+      "84",
+      "85",
+      "86",
+      "27",
+      "28",
+      "67",
+      "4",
+      "61",
+      "62",
+      "68",
+      "69"
+    ],
+    "limits": [
+      "ピンごとに、スケッチ (またはマイコンの本物の命令) が決める電源と抵抗を入れただけのモデルです。出力は 25Ω の向こうの 0 V か 5 V (PWM はパルス)、入力は 1 GΩ、INPUT_PULLUP は 35 kΩ で 5 V に引きます。",
+      "扱わないもの: 3V3・AREF・IOREF・VIN・RESET のピン、ピンの電流の上限 (40 mA) の点検。circuitCad の読み方 (本物の命令でない方) では、命令にかかる時間・割り込み・ライブラリも扱いません。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "Arduino Mega 2560 のピン配置と、ATmega2560 の出力抵抗・プルアップの代表値"
+    }
+  }
+}

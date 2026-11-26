@@ -1,4 +1,4 @@
-//! Builds the bundled simavr (simavr/: the simulator core and the ATmega328 core, copied by tools/vendor_simavr.py) and the C glue
+//! Builds the bundled simavr (simavr/: the simulator core and the ATmega328 and ATmega2560 cores, copied by tools/vendor_simavr.py) and the C glue
 //! (c/glue.c) into a static library. With MSVC the GCC-only bits and the POSIX calls come from shim/ (read first with /FI).
 
 fn main() {
@@ -13,7 +13,7 @@ fn main() {
         .collect();
     files.sort();
     b.files(&files);
-    b.file(cores.join("sim_mega328.c")).file(cores.join("sim_megax8.c"));
+    b.file(cores.join("sim_mega328.c")).file(cores.join("sim_megax8.c")).file(cores.join("sim_mega2560.c"));
     b.file("c/glue.c").file("c/gdb_stub.c");
     if msvc {
         b.file("c/posix_shim.c");
