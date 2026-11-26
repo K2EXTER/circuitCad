@@ -700,15 +700,23 @@ fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
     let on_wire = |h: sch_core::stripboard::At| auto.bare.iter().any(|(p, q)| (p.0 == q.0 && h.0 == p.0 && h.1 >= p.1.min(q.1) && h.1 <= p.1.max(q.1)) || (p.1 == q.1 && h.1 == p.1 && h.0 >= p.0.min(q.0) && h.0 <= p.0.max(q.0)));
     let free = |h: sch_core::stripboard::At| !used.contains(&h) && !on_wire(h);
     let (r, c0) = (1..auto.rows).flat_map(|r| (0..auto.cols.saturating_sub(2)).map(move |c| (r, c))).find(|(r, c)| (0..3).all(|i| free((*r, c + i)))).expect("a free run");
-    let (a, b, off) = ((r, c0), (r, c0 + 2), (r - 1, c0 + 1));
+    // (a hole a row up and two along: not on the start's row or column, nor at 45 degrees)
+    let (a, b, off) = ((r, c0), (r, c0 + 2), (r - 1, c0 + 2));
     click(&mut app, &mut run, a, egui::PointerButton::Primary);
     click(&mut app, &mut run, off, egui::PointerButton::Primary);
-    assert!(app.sch.stripboard.is_none(), "not on the start's row or column: nothing drawn");
+    assert!(app.sch.stripboard.is_none(), "not on the start's row or column nor at 45 degrees: nothing drawn");
     click(&mut app, &mut run, b, egui::PointerButton::Primary);
     let drawn = app.sch.stripboard.clone().expect("kept with the sheet");
     assert!(drawn.perf && drawn.bare.len() == auto.bare.len() + 1 && drawn.bare.last() == Some(&(a, b)), "{:?}", drawn.bare.last());
     click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Secondary);
     assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len()), "a right click on it takes it away");
+    // drawn again, and taken away by the eraser: a click on it
+    click(&mut app, &mut run, a, egui::PointerButton::Primary);
+    click(&mut app, &mut run, b, egui::PointerButton::Primary);
+    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len() + 1));
+    app.breadboard.strip.tool = strip_view::StripTool::Erase;
+    click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Primary);
+    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len()), "the eraser's click takes it away");
     // the stripboard does not show a layout kept for the perfboard
     app.breadboard.kind = BoardKind::Stripboard;
     assert!(!app.breadboard.strip_shown(&app.sch).perf);

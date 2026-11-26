@@ -1793,7 +1793,7 @@ fn wire_try(l: &mut StripLayout, hole_nets: &BTreeMap<At, String>, pairs: &[(Str
         let (x, y) = (find(&mut parent, idx(k.a)), find(&mut parent, idx(k.b)));
         parent[x] = y;
     }
-    let along = |a: At, b: At| -> Vec<At> { if a.0 == b.0 { (a.1.min(b.1)..=a.1.max(b.1)).map(|c| (a.0, c)).collect() } else { (a.0.min(b.0)..=a.0.max(b.0)).map(|r| (r, a.1)).collect() } };
+    let along = crate::stripboard::bare_holes;
     for (a, b) in l.bare.clone() {
         let hs: Vec<At> = along(a, b).into_iter().filter(|h| fits(*h)).collect();
         for w in hs.windows(2) {

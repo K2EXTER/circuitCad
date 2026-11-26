@@ -62,6 +62,17 @@ fn proto_tab(app: &mut App, a: &Args) {
     }
     // `--proto-back`: the stripboard or perfboard seen from below (the copper side)
     bb.strip.back = a.has("--proto-back");
+    // `--proto-tool bare|erase|link|cut`: the stripboard or perfboard's tool
+    if let Some(t) = a.val("--proto-tool") {
+        use crate::breadboard::StripTool as T;
+        bb.strip.tool = match t {
+            "bare" => T::Bare,
+            "erase" => T::Erase,
+            "link" => T::Link,
+            "cut" => T::Cut,
+            _ => T::Move,
+        };
+    }
     // `--proto-schematic`: the schematic in its small window beside the board
     bb.show_schematic = a.has("--proto-schematic");
     // `--proto-size 100x75`: the stripboard's size in mm (the chips wrap to its width)

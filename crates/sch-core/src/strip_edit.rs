@@ -197,8 +197,8 @@ fn region_moved(l: &StripLayout, inside: &dyn Fn(At) -> bool, dr: i32, dc: i32) 
     }
     for w in &mut out.bare {
         let ends = (if inside(w.0) { shift(w.0, dr, dc)? } else { w.0 }, if inside(w.1) { shift(w.1, dr, dc)? } else { w.1 });
-        // a bare wire stays straight: with one end inside and the move off its row or column, it stays where it was
-        if ends.0 .0 == ends.1 .0 || ends.0 .1 == ends.1 .1 {
+        // a bare wire keeps its kind (straight, or at 45 degrees): with one end inside and a move that would change it, it stays
+        if same_way(*w, ends) {
             *w = ends;
         }
     }
@@ -251,7 +251,7 @@ fn region_turned(l: &StripLayout, frame: (u16, u16, u16, u16), inside: &dyn Fn(A
     out.cuts = l.cuts.iter().map(|c| turn(*c)).collect();
     for w in &mut out.bare {
         let ends = (turn(w.0), turn(w.1));
-        if ends.0 .0 == ends.1 .0 || ends.0 .1 == ends.1 .1 {
+        if same_way(*w, ends) {
             *w = ends;
         }
     }
@@ -479,20 +479,36 @@ pub fn with_link(s: &Schematic, l: &StripLayout, a: At, b: At) -> StripLayout {
     grown(out)
 }
 
-/// The layout with a bare wire drawn by hand on the copper side from `a` to `b` (a perfboard); None unless the two are apart on
-/// one row or one column.
-pub fn with_bare(l: &StripLayout, a: At, b: At) -> Option<StripLayout> {
-    if a == b || (a.0 != b.0 && a.1 != b.1) {
-        return None;
+/// Whether a bare wire moved from `was` to `now` is still the kind it was: straight along a row or a column, or at 45 degrees.
+fn same_way(was: (At, At), now: (At, At)) -> bool {
+    let straight = |(a, b): (At, At)| a.0 == b.0 || a.1 == b.1;
+    crate::stripboard::bare_way(now.0, now.1) && straight(was) == straight(now)
+}
+
+/// The layout with a bare wire drawn by hand on the copper side from `a` to `b` (a perfboard): along a row or a column, or at 45
+/// degrees; Err with why not otherwise, or when it would cross a wire slanting the other way between the holes (bare wires that
+/// cross there touch: a short no hole shows).
+pub fn with_bare(l: &StripLayout, a: At, b: At) -> Result<StripLayout, &'static str> {
+    let (dr, dc) = (b.0 as i32 - a.0 as i32, b.1 as i32 - a.1 as i32);
+    if a == b {
+        return Err("同じ穴です。別の穴をクリックします");
+    }
+    if dr != 0 && dc != 0 && dr.abs() != dc.abs() {
+        return Err("すずめっき線は、同じ行・同じ列か、ななめ 45° の穴へ引きます (途中の穴の真ん中を通る向き)");
+    }
+    let mine = crate::stripboard::bare_crossings(a, b);
+    let crosses = l.bare.iter().flat_map(|(x, y)| crate::stripboard::bare_crossings(*x, *y)).any(|(m, s)| mine.iter().any(|(n, t)| *n == m && *t != s));
+    if crosses {
+        return Err("ほかのななめのすずめっき線と、穴と穴の間で交わります (裸の線どうしが触れてショートします)。別の道を通します");
     }
     let mut out = l.clone();
     out.bare.push((a, b));
-    Some(grown(out))
+    Ok(grown(out))
 }
 
 /// The layout without the bare wires drawn by hand that run over hole `at` (ends included); None when there is none.
 pub fn without_bare_at(l: &StripLayout, at: At) -> Option<StripLayout> {
-    let on = |(a, b): &(At, At)| (a.0 == b.0 && at.0 == a.0 && at.1 >= a.1.min(b.1) && at.1 <= a.1.max(b.1)) || (a.1 == b.1 && at.1 == a.1 && at.0 >= a.0.min(b.0) && at.0 <= a.0.max(b.0));
+    let on = |(a, b): &(At, At)| crate::stripboard::bare_holes(*a, *b).contains(&at);
     let mut out = l.clone();
     out.bare.retain(|w| !on(w));
     (out.bare.len() < l.bare.len()).then_some(out)
@@ -931,7 +947,8 @@ mod tests {
     }
 
     /// Bare wires drawn by hand on a perfboard's copper side: one in place of a link joins the net again; one whose way runs over
-    /// another net's wire touches it (a short, as on the board). A wire is straight along a row or a column, a right click on it
+    /// another net's wire touches it (a short, as on the board). A wire is straight along a row or a column (or at 45 degrees:
+    /// `bare_wires_slant`), a right click on it
     /// takes it away, it is kept with the layout, and it is drawn among the perfboard's wires.
     #[test]
     fn bare_wires_by_hand() {
@@ -945,8 +962,9 @@ mod tests {
         let spans = l.perf_spans();
         let k = &l.links[crossing];
         assert!((k.a.0.min(k.b.0) + 1..k.a.0.max(k.b.0)).any(|r| spans.iter().any(|(p, q)| p.0 == r && k.a.1 >= p.1 && k.a.1 <= q.1)), "it runs over a wire");
-        // straight only; taken away by a hole on it; saved; drawn
-        assert!(with_bare(&l, (0, 0), (1, 1)).is_none() && with_bare(&l, (0, 0), (0, 0)).is_none());
+        // a row, a column or 45 degrees only; taken away by a hole on it; saved; drawn
+        assert!(with_bare(&l, (0, 0), (1, 2)).is_err() && with_bare(&l, (0, 0), (0, 0)).is_err());
+        assert!(with_bare(&l, (0, 0), (2, 2)).is_ok() && with_bare(&l, (2, 0), (0, 2)).is_ok());
         let m = bare_for(clean);
         let mid = l.links[clean].a;
         assert_eq!(without_bare_at(&m, mid).unwrap().bare, vec![]);
@@ -1092,5 +1110,34 @@ mod tests {
             assert!(bare_near(&l, mid, 0.3).is_some_and(|k| { let w = l.bare[k]; (w.0 .0 + w.1 .0) as f32 / 2.0 == mid.0 || (w.0 .1 + w.1 .1) as f32 / 2.0 == mid.1 }));
             assert_eq!(without_bare(&l, 0).bare.len(), l.bare.len() - 1);
         }
+    }
+
+    /// A bare wire at 45 degrees runs through the middle of each hole on its way: it joins what is on them (a lead, another wire),
+    /// as a straight one. Two slanting the other way cross either on a hole (they touch there: drawn and joined) or between four
+    /// holes (they would touch where no hole shows: the second is not drawn).
+    #[test]
+    fn bare_wires_slant() {
+        use crate::stripboard::{bare_holes, bare_way};
+        assert_eq!(bare_holes((1, 1), (4, 4)), vec![(1, 1), (2, 2), (3, 3), (4, 4)]);
+        assert_eq!(bare_holes((4, 1), (1, 4)), vec![(4, 1), (3, 2), (2, 3), (1, 4)]);
+        assert!(bare_way((0, 0), (3, 3)) && bare_way((0, 3), (0, 0)) && !bare_way((0, 0), (1, 3)));
+        let s = blinker();
+        let mut l = strip_layout(&s);
+        l.perf = true;
+        l.bare.clear();
+        let l = with_bare(&l, (10, 10), (13, 13)).unwrap();
+        // the other slant crossing at (11.5, 11.5), between the holes: refused
+        assert!(with_bare(&l, (13, 10), (10, 13)).is_err());
+        // the other slant crossing on the hole (11, 11): drawn, and the two touch there
+        let m = with_bare(&l, (12, 10), (10, 12)).unwrap();
+        assert!(m.bare_joins().iter().any(|(a, b)| *a == (12, 10) && *b == (11, 11)), "{:?}", m.bare_joins());
+        // one along a row through a hole of it touches it too
+        let m = with_bare(&l, (11, 8), (11, 14)).unwrap();
+        assert!(m.bare_joins().iter().any(|(a, b)| *a == (11, 8) && *b == (11, 11)), "{:?}", m.bare_joins());
+        // taken away by a hole on its way
+        assert!(without_bare_at(&l, (12, 12)).is_some_and(|x| x.bare.is_empty()));
+        // moved as a block it keeps its slant; turned it slants the other way
+        let all = area_moved(&l, (0, 0), (l.rows, l.cols), 1, 1).unwrap();
+        assert_eq!(all.bare, vec![((11, 11), (14, 14))]);
     }
 }

@@ -30,9 +30,11 @@ pub enum StripTool {
     Link,
     /// Click a hole: the strip is cut there, or joined again (on a perfboard: the automatic bare wire parts there).
     Cut,
-    /// Click a hole, then another on its row or column: a bare wire drawn on the copper side (perfboard only); a right click on one
-    /// takes it away.
+    /// Click a hole, then another on its row or column or at 45 degrees: a bare wire drawn on the copper side (perfboard only); a
+    /// right click on one takes it away.
     Bare,
+    /// Click a wire to take it away: a link on the parts' side, a bare wire drawn by hand on the copper side.
+    Erase,
     /// The meter's red probe on the hole clicked first, the black one on the next (on either side of the board).
     Meter,
     /// The scope's probe on the hole clicked.
@@ -586,25 +588,30 @@ impl BreadboardView {
                 (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。回路図と同じく、何も無い所から左ドラッグで囲むと囲んだ部品を、右ドラッグで触れた部品も選び (Shift で今の選択に足す・Shift + クリックで 1 個ずつ足す・外す)、選んだ部品のどれかをドラッグすると、まとめて動きます (囲んだ所の線の端・切る穴も一緒に)。R で選んだ部品をまとめて回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線 (表の線・裏のすずめっき線をクリック) は Delete で消えます。囲んでから Delete を押すと、囲んだ中の線をまとめて消します"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
-                (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行か列の穴をクリックします。右クリックした穴を通る手の線は消えます。線の両端と、途中で部品の足や別の線に重なる穴がつながります"),
+                (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行・同じ列か、ななめ 45° の穴をクリックします (45° なら途中の穴の真ん中を通ります)。ほかのななめの線と穴と穴の間で交わる線は引けません (裸の線どうしが触れてショートするため)。線の両端と、途中で部品の足や別の線に重なる穴がつながります。消すのは「消す」で (右クリックでも)"),
+                (StripTool::Erase, "消す", "クリックした線を消します。表から見ているときは表の線、裏から見ているときはすずめっき線 (手で引いたもの) です。消える線は、カーソルを当てると赤く光ります。元に戻す (Ctrl+Z) で戻せます"),
                 (StripTool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます (裏から見た絵でも)。レンジは 電圧・電流・抵抗 から選びます。銅の帯・すずめっき線・表の線でつながったとおりの回路を測るので、帯の切り忘れやはんだのブリッジも、そのとおりに読めます"),
                 (StripTool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化が左に出ます (電源を入れて動かしているときは、動いている波形)"),
             ];
             // the stripboard cuts its strips; the perfboard (no strips) has bare wires drawn by hand
             let tools: Vec<_> = tools.into_iter().filter(|(t, ..)| !((*t == StripTool::Bare && strip) || (*t == StripTool::Cut && !strip))).collect();
-            let items: Vec<(&str, Option<&str>)> = tools
-                .iter()
-                .map(|(t, name, _)| {
-                    let free = matches!(t, StripTool::Meter | StripTool::Scope | StripTool::Bare | StripTool::Cut | StripTool::Move);
-                    (*name, if free { None } else { back_only })
-                })
-                .collect();
-            let now = tools.iter().position(|(t, ..)| *t == self.strip.tool);
-            for (r, (t, _, tip)) in crate::widgets::segment_bar(ui, &items, now).into_iter().zip(tools) {
-                if r.on_hover_text(i18n::tr(tip)).clicked() {
-                    let probe = matches!(t, StripTool::Meter | StripTool::Scope);
-                    self.strip.tool = if probe && self.strip.tool == t { StripTool::Move } else { t };
-                    self.strip.link_start = None;
+            // two bands: the tools that change the board, and the ones that measure it (six in one band were cut short)
+            let probe = |t: &StripTool| matches!(t, StripTool::Meter | StripTool::Scope);
+            let (measure, edit): (Vec<_>, Vec<_>) = tools.into_iter().partition(|(t, ..)| probe(t));
+            for band in [edit, measure] {
+                let items: Vec<(&str, Option<&str>)> = band
+                    .iter()
+                    .map(|(t, name, _)| {
+                        let free = probe(t) || matches!(t, StripTool::Bare | StripTool::Cut | StripTool::Move | StripTool::Erase);
+                        (*name, if free { None } else { back_only })
+                    })
+                    .collect();
+                let now = band.iter().position(|(t, ..)| *t == self.strip.tool);
+                for (r, (t, _, tip)) in crate::widgets::segment_bar(ui, &items, now).into_iter().zip(band) {
+                    if r.on_hover_text(i18n::tr(tip)).clicked() {
+                        self.strip.tool = if probe(&t) && self.strip.tool == t { StripTool::Move } else { t };
+                        self.strip.link_start = None;
+                    }
                 }
             }
         }
@@ -702,7 +709,8 @@ impl BreadboardView {
             StripTool::Move => "部品・線の端をドラッグ / 何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)・選んだ部品をまとめて動かす・R で 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / 線をクリックして Delete で消す (囲んで Delete で中の線を全部) / 右クリックで選択を外す / Ctrl+Z で戻す",
             StripTool::Link => "穴をクリックして、つなぐ先の穴をクリックします",
             StripTool::Cut => "帯を切る穴をクリックします (切った穴はもう一度で戻ります)",
-            StripTool::Bare => "穴をクリックして、同じ行か列の穴をクリックします / 右クリックで手の線を消す",
+            StripTool::Bare => "穴をクリックして、同じ行・同じ列か、ななめ 45° の穴をクリックします / 消すのは「消す」で (右クリックでも)",
+            StripTool::Erase => "消す線をクリックします (表では表の線、裏ではすずめっき線)。消える線は赤く光ります / Ctrl+Z で戻せます",
             StripTool::Meter => "穴をクリックして赤い棒、もう一度で黒い棒 (裏からも当てられます)",
             StripTool::Scope => "探り針を当てる穴をクリックします (裏からも当てられます)",
         }
@@ -951,11 +959,13 @@ impl BreadboardView {
             self.strip_flip(!back);
         }
         // what the tool does, on one line at the top (the breadboard's place for it)
+        // (one line: from below it says first that the picture is the other way round)
         let legend = match self.strip.tool {
-            StripTool::Move | StripTool::Link | StripTool::Cut | StripTool::Bare if back => "裏 (はんだの面) から見た絵です。穴にカーソルを置くと、つながる穴と線が光ります。直すときは表に戻します (F)",
-            _ => self.strip_legend(),
+            StripTool::Move | StripTool::Link if back => i18n::tr("裏 (はんだの面) から見た絵です。左右が逆で、表の左の端がここでは右の端です。穴にカーソルを置くと、つながる穴と線が光ります。部品と表の線は表で直します (F)").to_string(),
+            _ if back => format!("{} {}", i18n::tr("裏 (はんだの面、左右が逆):"), i18n::tr(self.strip_legend())),
+            _ => i18n::tr(self.strip_legend()).to_string(),
         };
-        let legend = painter.layout(i18n::tr(legend).to_string(), egui::FontId::proportional(13.0), Color32::from_gray(210), rect.width() - 24.0);
+        let legend = painter.layout(legend, egui::FontId::proportional(13.0), Color32::from_gray(210), rect.width() - 24.0);
         painter.galley(rect.left_top() + Vec2::new(12.0, 10.0), legend, Color32::from_gray(210));
         if self.strip.back {
             self.strip_back(sch, &l, &response, &painter, origin, pitch, stale);
@@ -1197,6 +1207,15 @@ impl BreadboardView {
             painter.rect_filled(r, 0.0, fill);
             painter.rect_stroke(r, 0.0, Stroke::new(1.2, line), egui::StrokeKind::Inside);
         }
+        if self.strip.tool == StripTool::Erase
+            && let Some(w) = response.hover_pos().and_then(|p| erase_target(&l, p, origin, pitch))
+        {
+            let (a, b) = match w {
+                Wire::Link(k) => (l.links[k].a, l.links[k].b),
+                Wire::Bare(k) => l.bare[k],
+            };
+            painter.line_segment([to(a), to(b)], Stroke::new(pitch * 0.3, ERASE));
+        }
         if let Some(a) = self.strip.link_start {
             painter.circle_stroke(to(a), pitch * 0.35, Stroke::new(2.0, PICK));
             // the bare wire it would draw, while the pointer is on the start's row or column
@@ -1205,8 +1224,8 @@ impl BreadboardView {
             {
                 let v = (p - origin) / pitch;
                 let h = (v.y.round().max(0.0) as u16, v.x.round().max(0.0) as u16);
-                if h != a && (h.0 == a.0 || h.1 == a.1) {
-                    painter.line_segment([to(a), to(h)], Stroke::new(pitch * 0.18, PICK.gamma_multiply(0.7)));
+                if h != a {
+                    bare_preview(&painter, &l, a, h, to(a), to(h), pitch);
                 }
             }
         }
@@ -1396,7 +1415,6 @@ impl BreadboardView {
         let font = egui::FontId::monospace((pitch * 0.55).clamp(8.0, 13.0));
         let board = Rect::from_two_pos(to((0, 0)), to((l.rows.saturating_sub(1), last))).expand(pitch * 0.8);
         painter.rect_filled(board, 3.0, BOARD);
-        painter.text(response.rect.left_top() + Vec2::new(12.0, 6.0), egui::Align2::LEFT_TOP, i18n::tr("裏 (はんだの面): 左右が逆です。表の左の端が、ここでは右の端"), egui::FontId::proportional((pitch * 0.6).clamp(10.0, 14.0)), Color32::from_gray(200));
         // the copper: the strips and their cuts, or a perfboard's pads round every hole and its bare wires
         if strip {
             for (r, a, b) in l.pieces() {
@@ -1569,9 +1587,8 @@ impl BreadboardView {
             painter.circle_stroke(to(a), pitch * 0.35, Stroke::new(2.0, PICK));
             if let Some(h) = response.hover_pos().and_then(hole_at)
                 && h != a
-                && (h.0 == a.0 || h.1 == a.1)
             {
-                painter.line_segment([to(a), to(h)], Stroke::new(pitch * 0.18, PICK.gamma_multiply(0.7)));
+                bare_preview(painter, l, a, h, to(a), to(h), pitch);
             }
         }
         let mut edit: Option<StripLayout> = None;
@@ -1584,10 +1601,10 @@ impl BreadboardView {
                     None => self.strip.link_start = Some(h),
                     Some(a) if a == h => {}
                     Some(a) => match with_bare(l, a, h) {
-                        Some(m) => edit = Some(m),
-                        None => {
+                        Ok(m) => edit = Some(m),
+                        Err(why) => {
                             self.strip.link_start = Some(a);
-                            sch.status = i18n::tr("すずめっき線は、同じ行か同じ列の穴へまっすぐ引きます (曲げるときは 2 本に分けます)").to_string();
+                            sch.status = i18n::tr(why).to_string();
                         }
                     },
                 },
@@ -1608,6 +1625,22 @@ impl BreadboardView {
         {
             self.strip.link_start = None;
             edit = without_bare_at(l, h);
+        }
+        // the eraser from below: the bare wire drawn by hand nearest the pointer, lit red, gone with a click
+        if tool == StripTool::Erase && perf {
+            let o = to((0, l.cols.saturating_sub(1)));
+            let near = |p: Pos2| {
+                let v = (p - o) / pitch;
+                bare_near(l, (v.y, l.cols.saturating_sub(1) as f32 - v.x), 0.35)
+            };
+            if let Some(k) = response.hover_pos().and_then(near) {
+                let (a, b) = l.bare[k];
+                painter.line_segment([to(a), to(b)], Stroke::new(pitch * 0.3, ERASE));
+                if response.clicked() {
+                    edit = Some(without_bare(l, k));
+                    sch.status = i18n::tr("すずめっき線を 1 本消しました (元に戻すで戻せます)").to_string();
+                }
+            }
         }
         if response.hovered()
             && ui_key_delete(response)
@@ -1764,11 +1797,26 @@ impl BreadboardView {
             self.strip.frozen = None;
         }
         // clicks
+        if tool == StripTool::Erase
+            && response.clicked()
+            && let Some(w) = response.interact_pointer_pos().and_then(|p| erase_target(l, p, origin, pitch))
+        {
+            let (m, said) = match w {
+                Wire::Link(k) => (without_link(l, k), i18n::tr("表の線を 1 本消しました (元に戻すで戻せます)")),
+                Wire::Bare(k) => (without_bare(l, k), i18n::tr("すずめっき線を 1 本消しました (元に戻すで戻せます)")),
+            };
+            sch.status = said.to_string();
+            self.strip.picked_link = None;
+            self.strip.picked_bare = None;
+            self.strip_set(sch, Some(m.clone()));
+            *l = m;
+        }
         if response.clicked()
             && let Some(p) = response.interact_pointer_pos()
             && let Some(h) = hole_at(p)
         {
             match tool {
+                StripTool::Erase => {}
                 StripTool::Move => {
                     self.strip.picked_link = link_end_at(l, p).map(|(k, _)| k).or_else(|| {
                         // a click on a link's middle picks it too
@@ -1819,13 +1867,13 @@ impl BreadboardView {
                     None => self.strip.link_start = Some(h),
                     Some(a) if a == h => {}
                     Some(a) => match with_bare(l, a, h) {
-                        Some(m) => {
+                        Ok(m) => {
                             self.strip_set(sch, Some(m.clone()));
                             *l = m;
                         }
-                        None => {
+                        Err(why) => {
                             self.strip.link_start = Some(a);
-                            sch.status = i18n::tr("すずめっき線は、同じ行か同じ列の穴へまっすぐ引きます (曲げるときは 2 本に分けます)").to_string();
+                            sch.status = i18n::tr(why).to_string();
                         }
                     },
                 },
@@ -1941,4 +1989,37 @@ fn holes_of(w: f32, h: f32) -> (u16, u16) {
 /// The layout's options for a board of this size (None: one row of chips).
 fn strip_options(size: Option<(f32, f32)>, chips_back: bool, mount_holes: bool) -> StripOptions {
     StripOptions { cols: size.map(|(w, h)| holes_of(w, h).0), rows: size.map(|(w, h)| holes_of(w, h).1), chips_back, mount_holes }
+}
+
+/// The colour of the wire the eraser would take away.
+const ERASE: Color32 = Color32::from_rgb(235, 70, 60);
+
+/// The bare wire about to be drawn from `a` to `h` (`pa`, `ph` on the screen): as it will be when it can be drawn, a thin red line
+/// when not (not on a row, a column or 45 degrees, or crossing a slanting wire between the holes).
+fn bare_preview(painter: &egui::Painter, l: &StripLayout, a: At, h: At, pa: Pos2, ph: Pos2, pitch: f32) {
+    if with_bare(l, a, h).is_ok() {
+        painter.line_segment([pa, ph], Stroke::new(pitch * 0.18, PICK.gamma_multiply(0.7)));
+    } else {
+        painter.line_segment([pa, ph], Stroke::new(1.5, ERASE.gamma_multiply(0.8)));
+    }
+}
+
+/// A wire the eraser can take away: a link (on the parts' side), or a bare wire drawn by hand.
+#[derive(Clone, Copy)]
+enum Wire {
+    Link(usize),
+    Bare(usize),
+}
+
+/// The wire under the point `p` of the parts' side (the board drawn from `origin`, `pitch` a hole): a link along it (within a
+/// third of a hole), else a bare wire drawn by hand.
+fn erase_target(l: &StripLayout, p: Pos2, origin: Pos2, pitch: f32) -> Option<Wire> {
+    let to = |a: At| origin + Vec2::new(a.1 as f32, a.0 as f32) * pitch;
+    let link = l.links.iter().position(|k| {
+        let (a, b) = (to(k.a), to(k.b));
+        let t = ((p - a).dot(b - a) / (b - a).length_sq().max(1.0)).clamp(0.0, 1.0);
+        (a + (b - a) * t).distance(p) < pitch * 0.35
+    });
+    let v = (p - origin) / pitch;
+    link.map(Wire::Link).or_else(|| bare_near(l, (v.y, v.x), 0.35).map(Wire::Bare))
 }

@@ -96,7 +96,8 @@ pub struct StripLayout {
     /// The strips' names written where a section's strip starts (with sections, `homes` is empty: rows side by side differ).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub names: Vec<(At, String)>,
-    /// Bare wires drawn by hand on the copper side of a perfboard, each straight along a row or a column (`StripLayout::bare_joins`).
+    /// Bare wires drawn by hand on the copper side of a perfboard, each straight along a row or a column, or at 45 degrees
+    /// (`bare_holes`, `StripLayout::bare_joins`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bare: Vec<(At, At)>,
     /// Laid out for a perfboard (`perfboard::perf_layout_with`): no strips, every hole apart, joined only by the bare wires and the
@@ -115,6 +116,36 @@ pub struct StripLayout {
     /// The holes kept free round the mounting holes (`StripOptions::keepout`): the automatic layout puts nothing there.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub keepout: BTreeSet<At>,
+}
+
+/// The holes a bare wire from `a` to `b` runs over, from `a`: along a row or a column, or at 45 degrees (a step of a row and a
+/// column at a time: through the middle of each hole on the way). Only its ends for any other slant (no wire is drawn so).
+pub fn bare_holes(a: At, b: At) -> Vec<At> {
+    let (dr, dc) = (b.0 as i32 - a.0 as i32, b.1 as i32 - a.1 as i32);
+    if dr != 0 && dc != 0 && dr.abs() != dc.abs() {
+        return vec![a, b];
+    }
+    let n = dr.abs().max(dc.abs());
+    (0..=n).map(|k| ((a.0 as i32 + dr.signum() * k) as u16, (a.1 as i32 + dc.signum() * k) as u16)).collect()
+}
+
+/// Whether a bare wire may run from `a` to `b`: along a row or a column, or at 45 degrees.
+pub fn bare_way(a: At, b: At) -> bool {
+    let (dr, dc) = (b.0 as i32 - a.0 as i32, b.1 as i32 - a.1 as i32);
+    dr == 0 || dc == 0 || dr.abs() == dc.abs()
+}
+
+/// The middles of the squares of four holes a 45-degree bare wire crosses, each with the way it slants (doubled coordinates, so
+/// that a middle is whole): two wires slanting the other way through the same middle touch there, between the holes.
+pub fn bare_crossings(a: At, b: At) -> Vec<((i32, i32), bool)> {
+    let (dr, dc) = (b.0 as i32 - a.0 as i32, b.1 as i32 - a.1 as i32);
+    if dr == 0 || dc == 0 || dr.abs() != dc.abs() {
+        return vec![];
+    }
+    let holes = bare_holes(a, b);
+    // one slant: down-right (or up-left); the other: down-left (or up-right)
+    let slant = dr.signum() == dc.signum();
+    holes.windows(2).map(|w| ((w[0].0 as i32 + w[1].0 as i32, w[0].1 as i32 + w[1].1 as i32), slant)).collect()
 }
 
 impl StripLayout {
@@ -139,7 +170,7 @@ impl StripLayout {
         let spans = self.perf_spans();
         let used: BTreeSet<At> = self.used().into_iter().map(|(a, _)| a).collect();
         let on_span = |h: At| spans.iter().any(|(a, b)| a.0 == h.0 && h.1 >= a.1 && h.1 <= b.1);
-        let along = |a: At, b: At| -> Vec<At> { if a.0 == b.0 { (a.1.min(b.1)..=a.1.max(b.1)).map(|c| (a.0, c)).collect() } else { (a.0.min(b.0)..=a.0.max(b.0)).map(|r| (r, a.1)).collect() } };
+        let along = bare_holes;
         // how many bare wires run over each hole
         let mut wires: BTreeMap<At, usize> = BTreeMap::new();
         for (a, b) in &self.bare {
@@ -190,11 +221,9 @@ impl StripLayout {
         }
         let mut v: Vec<(At, String)> = self.used().into_iter().filter(|(a, _)| self.keepout.contains(a)).collect();
         for (a, b) in self.bare.iter().chain(self.perf_spans().iter()) {
-            for r in a.0.min(b.0)..=a.0.max(b.0) {
-                for c in a.1.min(b.1)..=a.1.max(b.1) {
-                    if self.keepout.contains(&(r, c)) && !v.iter().any(|x| x.0 == (r, c)) {
-                        v.push(((r, c), "bare".into()));
-                    }
+            for h in bare_holes(*a, *b) {
+                if self.keepout.contains(&h) && !v.iter().any(|x| x.0 == h) {
+                    v.push((h, "bare".into()));
                 }
             }
         }
