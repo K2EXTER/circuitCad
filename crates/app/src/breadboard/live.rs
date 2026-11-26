@@ -699,6 +699,15 @@ mod tests {
         assert!(t.windows(2).all(|w| w[1] >= w[0]));
     }
 
+    /// Runs on for `span` of the circuit's time however long it takes: one `advance` stops at a frame's worth of the computer's
+    /// time (on a slow machine, CI's, 0.5 s of a real chip is several frames).
+    fn run_for(live: &mut Live, span: f64) {
+        let until = live.time() + span;
+        while live.time() < until - 1e-9 && live.error.is_none() {
+            live.advance(until - live.time());
+        }
+    }
+
     /// The board running with its microcontroller and sketch (as the proto tab starts it).
     fn with_sketch(e: &crate::schematic::SchEditor) -> Live {
         let l = sch_core::breadboard::auto_layout(&e.sch);
@@ -746,7 +755,7 @@ mod tests {
         let at = |live: &mut Live, pos: f64| {
             live.set_knob(k, pos);
             // the sketch reads the knob every 200 ms: the LED is read over a frame after it has
-            live.advance(0.5);
+            run_for(live, 0.5);
             live.advance(0.05);
             live.current("D1").unwrap_or(0.0)
         };
@@ -791,7 +800,7 @@ mod tests {
         assert!(live.error.is_none(), "{:?}", live.error);
         let mut lit = vec![];
         for _ in 0..40 {
-            live.advance(0.005);
+            run_for(&mut live, 0.005);
             lit.push(live.current("D1").unwrap_or(0.0) > 2e-3);
         }
         let changes = lit.windows(2).filter(|w| w[0] != w[1]).count();
@@ -873,11 +882,11 @@ void loop() {{ delay(100); }}"));
         let mut live = with_program(&e, sht);
         assert_eq!(live.sensors.len(), 1);
         assert_eq!(live.sensors[0].on, [("U1".to_string(), 0x44)]);
-        live.advance(0.5);
+        run_for(&mut live, 0.5);
         let serial = |live: &Live| live.mcus[0].real.as_ref().unwrap().serial.clone();
         assert!(serial(&live).contains("status=10\r\nt=25.0 rh=50.0\r\n"), "{:?}", serial(&live));
         live.humidity = 72.5;
-        live.advance(0.5);
+        run_for(&mut live, 0.5);
         assert!(serial(&live).trim_end().ends_with("t=25.0 rh=72.5"), "{:?}", serial(&live));
 
         // SDA wired elsewhere: the sensor is not on the chip's bus
@@ -889,7 +898,7 @@ void loop() {{ delay(100); }}"));
         }
         let mut live = with_program(&e, sht);
         assert!(live.sensors[0].on.is_empty());
-        live.advance(0.3);
+        run_for(&mut live, 0.3);
         assert!(serial(&live).contains("no sensor") && !serial(&live).contains("t="), "{:?}", serial(&live));
     }
 
