@@ -36,6 +36,8 @@ fn proto_tab(app: &mut App, a: &Args) {
     bb.picked = a.after("--proto").map(String::from);
     // `--proto-power`: the supply switched on
     bb.powered = a.has("--proto-power");
+    // `--proto-sketch U1`: that board's sketch open in its own window
+    bb.sketch_window = a.val("--proto-sketch").map(String::from);
     // `--proto-kind strip|perf`: the stripboard or perfboard view (B5)
     match a.val("--proto-kind") {
         Some("strip") => bb.kind = BoardKind::Stripboard,

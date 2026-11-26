@@ -21,6 +21,7 @@ use std::collections::BTreeSet;
 mod live;
 mod flow_dots;
 pub(crate) mod sketch_ui;
+mod code_edit;
 mod build_steps;
 mod looks;
 mod strip_view;
@@ -143,6 +144,8 @@ pub struct BreadboardView {
     real_builds: std::collections::HashMap<u64, sketch_ui::RealBuild>,
     /// The line being typed in each board's serial monitor (sent to the real chip with Enter or 送る).
     serial_input: std::collections::HashMap<String, String>,
+    /// The board whose sketch is open in its own window (a bigger editor with line numbers), if any.
+    pub sketch_window: Option<String>,
     /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
     knob_values: std::collections::BTreeMap<String, f64>,
     /// A potentiometer being turned on the board: its knob, where the pointer went down and the knob's position then.

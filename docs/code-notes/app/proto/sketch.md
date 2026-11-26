@@ -7,6 +7,15 @@
 - 「部品と差す穴」の一覧は、表をやめて 1 部品 1 行の折り返し (30 ピンの板の 1 行がパネルを画面の大半まで広げた)。コードの欄も幅いっぱいを求めない。
 - サンプル `arduino_blink` (D13 → 330 Ω → LED) と `arduino_pot` (A0 のボリュームで D9 の LED の明るさ、シリアルに読んだ値)。生成 `write_arduino_examples`。テスト `the_arduino_sketch_blinks_the_led`・`the_arduino_reads_the_knob_and_sets_the_led` (`live.rs`)。
 
+## スケッチのエディタ (2026-11-26、`breadboard/code_edit.rs`)
+
+- 色分け: `pieces` が文を、コメント (`//`・`/* */`)・文字列と文字・数・`#` の行・型 (`int`・`byte`・`uint8_t`…)・語 (`if`・`HIGH`・`OUTPUT`・`A0`…)・Arduino の関数 (`digitalWrite`・`Serial`…)・呼ばれる名前 (後ろに `(`) に分ける。`layout` が egui の `LayoutJob` にして、誤りの行 (`marked`) に赤い地。暗い地と明るい地で色の組を変える。重い色分けのライブラリ (syntect) は使わない。
+- 誤りの行: 今の読み方は `SketchError::line`、本物のマイコンは arduino-cli の「スケッチ:12:5: error」から (`mistake_line`)。
+- 整形 (`format`): 行の頭の字下げだけを `{ }` の深さで 2 文字ずつにそろえる (文字列・コメントの中の括弧は数えない。`}` で始まる行は 1 段外、`#` の行は左端、`/* */` の中の行はそのまま、行末の空白を消す、空行は 2 つまで)。Arduino IDE の自動整形 (clang-format) と違い、1 行の中の空白や改行の位置は変えない。2 回かけても同じ。
+- 別窓 (`sketch_window_ui`、`BreadboardView::sketch_window`): パネルの右に開く (`beside_panel`)。整形・コンパイルの結果・行番号つきの欄 (`numbered_box`: 折り返さず、横にも縦にもスクロール)・動いている間はシリアルモニタ。パネルの欄と同じ文 (片方で書けばもう片方にも)。コンパイルの結果とシリアルモニタは `compile_status`・`serial_ui` に分けて両方で使う。
+- `--proto-sketch U1`: その板のスケッチを別窓で開いて起動 (撮影用)。
+- 試験 (`code_edit.rs`): 語の種類、誤りの行の地、整形 (散らかった文を整え、2 回目は変わらない)。
+
 ## ATtiny85 (W5 ③、2026-11-26)
 
 - 部品 `ATTINY85-20PU` (`part-lib/examples/ATTINY85_DIP-8.part.json`、DIP-8)。モデルは Nano と同じくピンごとの電源と抵抗だが、電源は VCC に比例する (`BpPBn = V(cn) × V(vcc)/5`): 電源の無いチップは何も出さない。既存の `ATtiny85` (SOIC-8) はモデル無しのまま。
