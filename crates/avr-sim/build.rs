@@ -1,5 +1,5 @@
 //! Builds the bundled simavr (simavr/: the simulator core and the ATmega328 and ATmega2560 cores, copied by tools/vendor_simavr.py) and the C glue
-//! (c/glue.c) into a static library. With MSVC the GCC-only bits and the POSIX calls come from shim/ (read first with /FI).
+//! (c/glue.c) into a static library. With MSVC the GCC-only bits and the POSIX calls come from shim/ (read first with /FI); with GCC and Clang only `_alloca` (shim/gcc_first.h, read first with -include).
 
 fn main() {
     let sim = std::path::Path::new("simavr/sim");
@@ -21,6 +21,7 @@ fn main() {
         b.define("_CRT_SECURE_NO_WARNINGS", None).define("WIN32_LEAN_AND_MEAN", None).define("NOMINMAX", None);
     } else {
         b.flag_if_supported("-std=gnu99");
+        b.flag("-include").flag("shim/gcc_first.h");
     }
     b.include("c").include(sim).include(cores);
     // simavr's own warnings are not ours to fix

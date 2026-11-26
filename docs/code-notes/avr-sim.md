@@ -12,6 +12,7 @@
     - 直しでは、`current_prescale` に ADC の 1 クロック (CPU のクロック数) を持たせる。標本は 2 クロック (1 回目は 14) あと、終わりは 11 クロックあと。合わせて 13 クロック・1 回目 25 クロックで、データシートどおり (104 µs・200 µs)。上流に報告した: https://github.com/buserror/simavr/issues/609 (2026-11-26)。
 - **`shim/`**: MSVC のときだけ使う代わりのヘッダ。
   - `msvc_first.h`: `/FI` で全部の前に読ませる。`__attribute__`・`__sync_synchronize`・`strsep` の宣言。
+  - `gcc_first.h`: GCC・Clang (Linux・macOS) で `-include` で全部の前に読ませる。写しの可変長の配列は MSVC の `_alloca` に書き換えてあるので、`alloca` に読み替えるだけ (2026-11-26 に CI の Linux・macOS がこれで落ちていた)。
   - `unistd.h`・`sys/time.h`・`strings.h`。
 - **`c/`**:
   - Makefile が作るはずの `sim_core_config.h`・`sim_core_decl.h` (コアは mega328 と mega2560)。

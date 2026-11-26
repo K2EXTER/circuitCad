@@ -27,7 +27,33 @@ fn bundled() -> &'static [(Spec, Fitted, String)] {
     })
 }
 
-/// `NAME=value` pairs of a `.model` card.
+/// The two texts are the same but for numbers that differ in their last digit (1e-5 of the number): the text cut into runs of
+/// the characters a number is written with, each run the same or both numbers that close.
+fn same_but_the_last_digit(a: &str, b: &str) -> bool {
+    let runs = |t: &str| {
+        let mut out: Vec<String> = Vec::new();
+        let mut num = None;
+        for c in t.chars() {
+            let n = c.is_ascii_digit() || ".eE+-".contains(c);
+            if num != Some(n) {
+                out.push(String::new());
+                num = Some(n);
+            }
+            out.last_mut().unwrap().push(c);
+        }
+        out
+    };
+    let (ra, rb) = (runs(a), runs(b));
+    ra.len() == rb.len()
+        && ra.iter().zip(&rb).all(|(x, y)| {
+            x == y
+                || match (x.parse::<f64>(), y.parse::<f64>()) {
+                    (Ok(p), Ok(q)) => (p - q).abs() <= 1e-5 * p.abs().max(q.abs()),
+                    _ => false,
+                }
+        })
+}
+
 /// `NAME=value` pairs of the `.model` cards in the text (a `.subckt` has two: the channel and the body diode; a
 /// name is prefixed with its model's name, `DBODY.RS`).
 fn params(text: &str) -> BTreeMap<String, f64> {
@@ -84,11 +110,16 @@ fn the_templates_give_the_bundled_op_amps_and_regulators_exactly() {
         n += 1;
         let d: crate::PartDef = serde_json::from_str(&part).unwrap();
         let sim = d.sim.unwrap();
-        assert_eq!(sim.text, f.text, "{}", f.part);
+        // to the character but the last digit of a number: a fit to a graph (the ripple's high-passes) lands a rounding apart on
+        // macOS (MCP1700's 7.62576e-08 for 7.62575e-08)
+        assert!(same_but_the_last_digit(&sim.text, &f.text), "{}:
+{}
+{}", f.part, sim.text, f.text);
         if matches!(spec, Spec::Opamp(_)) {
             assert_eq!(d.description, f.description, "{}", f.part);
         }
-        assert_eq!(&edit::edit_part(part, f).unwrap(), part, "{}: writing the model back changes the file", f.part);
+        let back = edit::edit_part(part, f).unwrap();
+        assert!(same_but_the_last_digit(&back, part), "{}: writing the model back changes the file", f.part);
     }
     assert_eq!(n, 20, "7 op amps (ADA4522-1 since 2026-11-23), 9 regulators (LM317L), the TL431, the REF5025, the LT3045 and the TPS62933 (P6)");
 }
@@ -169,4 +200,12 @@ fn one_on_resistance_is_all_channel() {
     assert!(f.text.contains("RD=0 "), "{}", f.text);
     let r = f.rows.iter().find(|r| r.item == "RDS(on)").unwrap();
     assert!(r.error_pct().abs() < 1e-6, "{r:?}");
+}
+
+#[test]
+fn a_last_digit_apart_is_the_same_text_but_a_changed_word_or_value_is_not() {
+    assert!(same_but_the_last_digit("Crh0 rhi rh0 7.62576e-08\n", "Crh0 rhi rh0 7.62575e-08\n"));
+    assert!(!same_but_the_last_digit("Rrh0 rh0 0 1k", "Rrh0 rh0 0 2k"));
+    assert!(!same_but_the_last_digit("C 7.6e-08", "C 7.7e-08"));
+    assert!(!same_but_the_last_digit("Elf lfa gnd in gnd 1", "Elf lfa gnd out gnd 1"));
 }
