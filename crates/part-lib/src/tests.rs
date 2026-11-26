@@ -212,39 +212,62 @@ fn op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model() {
     };
     let old = legacy_models();
     assert_eq!(old.len(), 75, "the ten Bourns SRN6045 that gained the core's loss from their Q, the comparators LM139, LM339 and LM393 that gained their offset drift and the LT3045 its SET and supply currents' change with the temperature (2026-11-24), the Würth 74437324033 that follows its data sheet's inductance curve (2026-11-24), the six TDK CGA NP0 capacitors whose ESR and ESL were fitted to the whole curve (2026-11-24), ADA4522-1 (its output and offset set by the measured table, 2026-11-23), the six op amps, eight regulators and the TL431 rebuilt in 2026-11, ADR4525 and LP5907-4.5 that gained their data sheet spread, the diodes 1N4148, 1N4001, 1N4007 and the transistors 2N3904, 2N7000, AO3400A, AO3401A, 2N3906, BSS138, BC547, PN2222A, BD139, BD140, IRF540N, IRFZ44N, IRLZ44N, IRF9540N, S8050, S8550 and the Darlingtons TIP120, TIP125, the Schottkys 1N5819, 1N5817, SS14, 1N5822, BAT54, the rectifiers 1N5408, UF4007, the zeners 1N4728A, 1N4733A, 1N4742A, the photodiode BPW34 and the optocoupler PC817 (M9), the TQ2-L2-5V that gained its latching contacts and the two ADS124S08 marked as ADCs (adc_bits) (2026-11-21)");
-    for (name, shipped) in &old {
-        assert!(!shipped.texts.is_empty(), "{name}");
-        let current: PartDef = example(name);
-        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
-        for text in &shipped.texts {
-            // a copy with an earlier model (any earlier one) gets the current model; the user's shop number stays
-            let mut was = current.clone();
-            was.sim.as_mut().unwrap().text = text.clone();
-            // (a part whose description never changed has no earlier one)
-            was.description = shipped.descriptions.first().cloned().unwrap_or_else(|| current.description.clone());
-            was.shops.insert("akizuki".into(), "I-mine".into());
-            std::fs::write(&file, serde_json::to_string_pretty(&was).unwrap()).unwrap();
-            forget_rebuild();
-            install_examples(&dir).unwrap();
-            let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    // every part at once, round by round (each part's file is handled on its own; one part at a time installed the whole library
+    // more than 150 times and took 10 s): round k gives each part with a k-th earlier model that one
+    let mut names: Vec<&String> = old.keys().collect();
+    names.sort();
+    let file = |name: &str| dir.join(format!("{name}{FILE_SUFFIX}"));
+    let rounds = old.values().map(|s| s.texts.len()).max().unwrap_or(0);
+    for k in 0..rounds {
+        let round: Vec<(&String, &String, PartDef, PartDef)> = names
+            .iter()
+            .filter_map(|name| {
+                let shipped = &old[*name];
+                assert!(!shipped.texts.is_empty(), "{name}");
+                let text = shipped.texts.get(k)?;
+                let current: PartDef = example(name);
+                // a copy with an earlier model (any earlier one) gets the current model; the user's shop number stays
+                let mut was = current.clone();
+                was.sim.as_mut().unwrap().text = text.clone();
+                // (a part whose description never changed has no earlier one)
+                was.description = shipped.descriptions.first().cloned().unwrap_or_else(|| current.description.clone());
+                was.shops.insert("akizuki".into(), "I-mine".into());
+                Some((*name, text, current, was))
+            })
+            .collect();
+        for (name, _, _, was) in &round {
+            std::fs::write(file(name), serde_json::to_string_pretty(was).unwrap()).unwrap();
+        }
+        forget_rebuild();
+        install_examples(&dir).unwrap();
+        for (name, _, current, _) in &round {
+            let now: PartDef = serde_json::from_str(&std::fs::read_to_string(file(name)).unwrap()).unwrap();
             assert_eq!(now.sim, current.sim, "{name}: an earlier model was left in place");
             assert_eq!(now.description, current.description, "{name}: the earlier description was left in place");
             assert_eq!(now.shops.get("akizuki").map(String::as_str), Some("I-mine"), "{name}: the user's shop number was lost");
-            // offered once: a later run leaves the file alone
-            std::fs::write(&file, serde_json::to_string_pretty(&was).unwrap()).unwrap();
-            install_examples(&dir).unwrap();
-            let again: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-            assert_eq!(again.sim.unwrap().text, *text, "{name}: replaced twice");
         }
-        // an edited model and the user's own description are kept
-        let mut edited = current.clone();
-        edited.sim.as_mut().unwrap().text = format!("{}
-* mine", shipped.texts[0]);
-        edited.description = "my op amp".into();
-        std::fs::write(&file, serde_json::to_string_pretty(&edited).unwrap()).unwrap();
-        forget_rebuild();
+        // offered once: a later run leaves the file alone
+        for (name, _, _, was) in &round {
+            std::fs::write(file(name), serde_json::to_string_pretty(was).unwrap()).unwrap();
+        }
         install_examples(&dir).unwrap();
-        let now: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        for (name, text, _, _) in &round {
+            let again: PartDef = serde_json::from_str(&std::fs::read_to_string(file(name)).unwrap()).unwrap();
+            assert_eq!(again.sim.unwrap().text, **text, "{name}: replaced twice");
+        }
+    }
+    // an edited model and the user's own description are kept
+    for name in &names {
+        let mut edited: PartDef = example(name);
+        edited.sim.as_mut().unwrap().text = format!("{}
+* mine", old[*name].texts[0]);
+        edited.description = "my op amp".into();
+        std::fs::write(file(name), serde_json::to_string_pretty(&edited).unwrap()).unwrap();
+    }
+    forget_rebuild();
+    install_examples(&dir).unwrap();
+    for name in &names {
+        let now: PartDef = serde_json::from_str(&std::fs::read_to_string(file(name)).unwrap()).unwrap();
         assert!(now.sim.unwrap().text.ends_with("* mine"), "{name}: the user's edit was overwritten");
         assert_eq!(now.description, "my op amp");
     }

@@ -7,7 +7,7 @@
 | いつ | どうする |
 |---|---|
 | 作業中 | 変えた所のテストだけ: `cargo test -p <クレート> <名前の一部>` |
-| コミットの前 | `python tools/test_changed.py`: 変わったファイルからクレートを選び、それを使うクレートも足して `cargo test -p …` と clippy。`--list` で選んだ理由だけ。比べる先は `--base`(既定は origin/main) |
+| コミットの前 | `python tools/test_changed.py`: 変わったファイルからクレートを選び、それを使うクレートも足して、テストの実行ファイルと clippy を同時に回す。`--list` で選んだ理由だけ。比べる先は `--base`(既定は origin/main) |
 | push の前・CI | 全体: `cargo test --workspace` と `cargo clippy --workspace --all-targets` |
 | ときどき(テストを足した後など) | `python tools/test_times.py`: 1 件ずつの時間、実行ファイルごとの時間、2 秒を超えたテスト。`--serial` で 1 件ずつ順に(ほかのテストに邪魔されない時間)、`-p` でクレートを絞る |
 
@@ -18,6 +18,8 @@
 2026-11-14 の時間(テストを回す時間の合計、ビルドは別): 整理の前 117 秒 → 約 20 秒。アプリ 6.7 秒・ccad の結合テスト 7 秒・sim-core 3 秒・part-lib 2.4 秒。
 
 2026-11-22: 51 秒に戻っていた → 約 26 秒。① ccad の結合テストは、ライブラリを読むのは 1 回でも、スクリプトごとに約 15 500 個を写していた (1 回 0.07 秒、スクリプトそのものの 70 倍。トランジスタのモデルの照合だけで 488 回)。`Session.lib` を `Arc<Vec<PartDef>>` にし、変えるコマンド (`fit write`・`lineup write`・`model`) だけ `Arc::make_mut` で写す。モデルの照合 5 本は 0.7〜7 秒 → 各 0.3 秒。② part-lib の `fit/tests.rs` は 4 つのテストがそれぞれ同梱の 63 個を順に当てはめ直していた (各 17 秒)。`bundled()` を `OnceLock` で 1 回にし `par_map` で並列に (4 本で 5.4 秒、いちばん遅い当てはめで決まる)。残りの 2 秒超え: アプリのレッスン・サンプルの過渡解析 (2〜4 秒)、`op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model` (4 秒。古いモデルが 1 回だけ置き換わることを確かめるため `install_examples` を約 150 回呼ぶ)。
+
+2026-11-26: sch-core を 1 つ変えたときの `test_changed.py` (sch-core・part-lib・sim-core・app・cli・web) が 79 秒 (ビルド 27・テスト 42・clippy 10) → 46 秒。① part-lib の `op_amps_with_an_earlier_bundled_model_get_the_data_sheet_model` は、古いモデルを持つ 75 個の部品を 1 つずつ、古いモデルごとにライブラリ全体を 2 回入れ直していた (150 回以上) → 全部の部品を一度に、何番目の古いモデルかの回ごとに (10.4 → 0.7 秒)。② `fit/tests.rs` の `bundled` (4 つの試験が待つ当てはめ。1 つずつなら 17 秒) を、遅い種類 (ダーリントン・トランジスタ・MOSFET。TIP120 だけで 3.6 秒) から始めるように (ファイル名の順では最後に始まり、ほかのコアが空いた)。part-lib の実行ファイルは 13.6 → 6.1 秒。4 つは今も 2 秒を超える (当てはめの CPU が 17 秒あり、この PC ではこれより縮まない。縮めるなら当てはめそのものを速く)。③ `test_changed.py` は実行ファイルを一度に作ってから同時に走らせ、clippy も横で (`run_tests`)。実行ファイルを同時にしても、どれも全部のコアを使うのでテストの時間はほぼ同じ (順に 29 秒・同時に 29 秒)。効くのは clippy を重ねた分 (53 → 46 秒)。
 
 アプリのテストのエディタ(`SchEditor::default`)は、ユーザーの部品フォルダではなく、テスト用のフォルダ(`%TEMP%/circuitCad-app-test-lib`、実行の最初に空にして同梱部品だけ)を一度だけ読む(`schematic/mod.rs` の `startup_library`、`#[cfg(test)]`)。部品の一覧は `Arc<Vec<PartDef>>` で、エディタごとに写さない。前は 1 つ作るたびにユーザーのフォルダを読んで約 15 000 個を写し 0.1 秒、アプリのテストは 24 秒かかっていた。
 

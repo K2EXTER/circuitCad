@@ -6,8 +6,10 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Every `fits/*.fit.json` with its fit and the bundled part file's text. The fits are worked out once for all the tests below and
-/// on all the cores (one after another they took 17 s, and each of four tests did them all again).
+/// Every `fits/*.fit.json` with its fit and the bundled part file's text, in the files' order. The fits are worked out once for all
+/// the tests below and on all the cores (one after another they take 17 s, and each of four tests did them all again), the slow
+/// kinds first (a Darlington's or a transistor's fit is a search in nine dimensions: TIP120's takes 3.6 s; started last, as the
+/// files' order has them, they left the other cores idle and the fits took 6.3 s).
 fn bundled() -> &'static [(Spec, Fitted, String)] {
     static FITS: std::sync::OnceLock<Vec<(Spec, Fitted, String)>> = std::sync::OnceLock::new();
     FITS.get_or_init(|| {
@@ -18,12 +20,22 @@ fn bundled() -> &'static [(Spec, Fitted, String)] {
             .collect();
         paths.sort();
         assert!(paths.len() >= 11, "{paths:?}");
-        pcb_core::par::par_map(&paths, |p| {
-            let s = Spec::load(p).unwrap();
-            let f = fit(&s).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
+        let specs: Vec<(usize, Spec)> = paths.iter().map(|p| Spec::load(p).unwrap()).enumerate().collect();
+        let slow = |s: &Spec| match s {
+            Spec::Darlington(_) => 0,
+            Spec::Bjt(_) => 1,
+            Spec::Mos(_) => 2,
+            _ => 3,
+        };
+        let mut order: Vec<&(usize, Spec)> = specs.iter().collect();
+        order.sort_by_key(|(k, s)| (slow(s), *k));
+        let mut done = pcb_core::par::par_map(&order, |(k, s)| {
+            let f = fit(s).unwrap_or_else(|e| panic!("{}: {e}", paths[*k].display()));
             let part = std::fs::read_to_string(root().join("examples").join(format!("{}.part.json", f.part))).unwrap();
-            (s, f, part)
-        })
+            (*k, s.clone(), f, part)
+        });
+        done.sort_by_key(|x| x.0);
+        done.into_iter().map(|(_, s, f, part)| (s, f, part)).collect()
     })
 }
 

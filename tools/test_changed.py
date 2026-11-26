@@ -9,7 +9,8 @@ A changed file elsewhere picks the crates whose sources name it: its file name, 
 it, written in a string of the source (`docs/examples` is read by app, sim-core and the cli tests). Cargo.toml, Cargo.lock, .cargo/ and the CI files pick
 everything. Anything else (most of docs/, tools/) picks nothing.
 
-This is for while working. Before a push, and in CI, the whole workspace still runs (`cargo test --workspace`).
+The test binaries are built once and then run at the same time, clippy beside them (`run_tests`): one line a binary, a failing
+one's whole output. This is for while working. Before a push, and in CI, the whole workspace still runs (`cargo test --workspace`).
 """
 
 import argparse
@@ -17,6 +18,7 @@ import json
 import os
 import re
 import subprocess
+import time
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -121,10 +123,40 @@ def main():
     if a.list:
         return
     ps = [x for c in sorted(crates) for x in ("-p", c)]
-    if subprocess.run(["cargo", "test", *ps], cwd=ROOT).returncode != 0:
+    if not run_tests(sorted(crates), ps, not a.no_clippy):
         sys.exit(1)
-    if not a.no_clippy and subprocess.run(["cargo", "clippy", *ps, "--all-targets"], cwd=ROOT).returncode != 0:
-        sys.exit(1)
+
+
+def run_tests(crates, ps, clippy):
+    """The test binaries built once, then all run at the same time (`cargo test` runs them one after another: the app's 850 tests,
+    then part-lib's, then sch-core's ...), clippy beside them. Each binary's result in a line; a failing one's whole output. The doc
+    tests are left to the full run (`cargo test --workspace`, CI): the crates have none."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_times import binaries
+
+    t0 = time.monotonic()
+    found = binaries(crates)
+    built = time.monotonic() - t0
+    print(f"built {len(found)} test binaries in {built:.0f} s")
+    jobs = [(target, subprocess.Popen([exe], cwd=folder, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")) for target, folder, exe in found]
+    lint = subprocess.Popen(["cargo", "clippy", *ps, "--all-targets", "--quiet"], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace") if clippy else None
+    ok = True
+    for target, job in jobs:
+        out, _ = job.communicate()
+        result = next((l for l in reversed(out.splitlines()) if l.startswith("test result:")), "(no result line)")
+        print(f"  {target:14} {result}")
+        if job.returncode != 0:
+            ok = False
+            print(out[-20000:])
+    print(f"tests done in {time.monotonic() - t0:.0f} s")
+    if lint:
+        out, _ = lint.communicate()
+        errors = [l for l in out.splitlines() if l.startswith("error")]
+        print(f"clippy: {len(errors)} error(s), {sum(1 for l in out.splitlines() if l.startswith('warning'))} warning line(s)")
+        if lint.returncode != 0:
+            ok = False
+            print(out[-20000:])
+    return ok
 
 
 if __name__ == "__main__":
