@@ -13,6 +13,7 @@ Fixes of simavr's own (`FIXES`, each must still be found in the file copied; dro
 - the ADC's conversion time: `current_prescale` was a uint8_t, so the prescaler of 128 (the one Arduino uses) times 2 wrapped to 0
   and the conversion ended as it was sampled (16 us instead of 104 us); and the end was 11 times the sampling delay after it. Now
   it holds the ADC clock and a conversion takes 13 ADC clocks (25 for the first), as the datasheet says.
+  Reported upstream: https://github.com/buserror/simavr/issues/609
 """
 import pathlib
 import re

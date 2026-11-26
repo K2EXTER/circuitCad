@@ -9,7 +9,7 @@
   - 写すのは `python tools/vendor_simavr.py <simavr を clone したフォルダ>`。MSVC 向けの書き換え (下の表) もこれが当てる。手で直さない。
   - simavr の不具合の直しも、このスクリプトの `FIXES` が当てる (上流で直ったら消す。合わなくなったら止まる)。
     - ADC の変換時間 (2026-11-26): `current_prescale` が `uint8_t` だった。Arduino の分周 128 × 2 = 256 が 0 にあふれ、変換の終わりが標本と同時 (16 µs) になっていた。しかも終わりは標本の遅れの 11 倍あと、という数え方だった。
-    - 直しでは、`current_prescale` に ADC の 1 クロック (CPU のクロック数) を持たせる。標本は 2 クロック (1 回目は 14) あと、終わりは 11 クロックあと。合わせて 13 クロック・1 回目 25 クロックで、データシートどおり (104 µs・200 µs)。
+    - 直しでは、`current_prescale` に ADC の 1 クロック (CPU のクロック数) を持たせる。標本は 2 クロック (1 回目は 14) あと、終わりは 11 クロックあと。合わせて 13 クロック・1 回目 25 クロックで、データシートどおり (104 µs・200 µs)。上流に報告した: https://github.com/buserror/simavr/issues/609 (2026-11-26)。
 - **`shim/`**: MSVC のときだけ使う代わりのヘッダ。
   - `msvc_first.h`: `/FI` で全部の前に読ませる。`__attribute__`・`__sync_synchronize`・`strsep` の宣言。
   - `unistd.h`・`sys/time.h`・`strings.h`。
