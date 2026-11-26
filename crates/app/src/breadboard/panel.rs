@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The width of the power's bar (切 | 入), beside the other buttons of its row.
+const POWER_BAR_WIDTH: f32 = 140.0;
+
 impl BreadboardView {
     /// The left panel: the board kind on top, then (scrolled as one) the check against the schematic, the tools, the actions and
     /// the lists. The three kinds share this order (`strip_panel` for the stripboard and the perfboard).
@@ -62,12 +65,16 @@ impl BreadboardView {
         }
     }
 
-    /// The power switch, the same button on the three kinds of board.
+    /// The power switch, the same bar on the three kinds of board: 電源 切 | 入.
     pub(super) fn power_button(&mut self, ui: &mut egui::Ui, tip: &str) {
-        let label = if self.powered { i18n::tr("電源を切る") } else { i18n::tr("電源を入れる") };
-        if ui.add(egui::Button::new(label).selected(self.powered)).on_hover_text(i18n::tr_dyn(tip)).clicked() {
-            self.powered = !self.powered;
-            self.dc_asked = false;
+        ui.label(i18n::tr("電源")).on_hover_text(i18n::tr_dyn(tip));
+        let size = egui::vec2(POWER_BAR_WIDTH, ui.spacing().interact_size.y);
+        let bar = ui.allocate_ui(size, |ui| crate::widgets::segment_bar(ui, &[("切", None), ("入", None)], Some(usize::from(self.powered)))).inner;
+        for (k, r) in bar.into_iter().enumerate() {
+            if r.on_hover_text(i18n::tr_dyn(tip)).clicked() && (k == 1) != self.powered {
+                self.powered = k == 1;
+                self.dc_asked = false;
+            }
         }
     }
 
@@ -88,20 +95,23 @@ impl BreadboardView {
         let problems: Vec<String> = self.board_check(sch, &l).iter().map(|p| p.message()).collect();
         Self::check_ui(ui, &problems);
         crate::widgets::group_gap(ui);
-        ui.horizontal_wrapped(|ui| {
-            for (t, name, tip) in [
+        const TOOLS: [(Tool, &str, &str); 4] = [
                 (Tool::Move, "動かす", "部品やジャンパー線の端をドラッグして差し替えます。選んだ部品は R で回り、選んだ線は Delete で消えます"),
                 (Tool::Wire, "ジャンパー線", "穴をクリックして、つなぐ先の穴をクリックすると、線を差します。Esc でやめます"),
                 (Tool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます。レンジは 電圧 (並列に当てる)・電流 (線を外して直列に入れる)・抵抗 (電源を切って測る) から選びます"),
                 (Tool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化 (過渡解析) が左に出ます"),
-            ] {
-                if ui.selectable_label(self.tool == t, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
-                    self.tool = t;
-                    self.wire_start = None;
-                    self.dc_asked = false;
-                }
+        ];
+        let items: Vec<(&str, Option<&str>)> = TOOLS.iter().map(|(_, name, _)| (*name, None)).collect();
+        let now = TOOLS.iter().position(|(t, ..)| *t == self.tool);
+        for (r, (t, _, tip)) in crate::widgets::segment_bar(ui, &items, now).into_iter().zip(TOOLS) {
+            if r.on_hover_text(i18n::tr(tip)).clicked() {
+                self.tool = t;
+                self.wire_start = None;
+                self.dc_asked = false;
             }
-            // how the parts are placed, at the end of the same row
+        }
+        // how the parts are placed, under the tools
+        ui.horizontal(|ui| {
             if sch.breadboard.is_some() {
                 if ui.small_button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から、部品の差し方を並べ直します (IC は中央の溝をまたぎ、電源とGNDは上下の列、同じネットの足は同じ縦の列)。手で動かした分は消えます")).clicked() {
                     sch.breadboard = Some(auto_layout(&sch.sch));

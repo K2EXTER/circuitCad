@@ -1,7 +1,7 @@
 {
   "name": "ARDUINO_NANO",
   "category": "マイコン",
-  "description": "Arduino Nano 互換のマイコンボード (ATmega328P、5 V、USB 給電)。ブレッドボードの中央の溝をまたいで差す。試作のタブでスケッチ (Arduino の C の小さな部分) を書くと、電源を入れたときに回路と一緒に動く: D0〜D13・A0〜A7 は出力 (25Ω で 0 / 5 V)・入力・INPUT_PULLUP (35 kΩ)、analogRead は 0〜1023、analogWrite は本物と同じ 490 Hz のパルス。5V のピンは USB から 5 V を出す。命令の時間・割り込み・ライブラリは、「本物のマイコンの命令で動かす」(arduino-cli と ATmega328P の命令) で扱う",
+  "description": "Arduino Nano 互換のマイコンボード (ATmega328P、5 V、USB 給電)。ブレッドボードの中央の溝をまたいで差す。試作のタブでスケッチ (Arduino の C の小さな部分) を書くと、電源を入れたときに回路と一緒に動く: D0〜D13・A0〜A7 は出力 (25Ω で 0 / 5 V)・入力・INPUT_PULLUP (35 kΩ)、analogRead は 0〜1023、analogWrite は本物と同じ 490 Hz のパルス。5V のピンは USB から 5 V を出す。命令の時間・割り込み・ライブラリは、「本物の命令で動かす」(arduino-cli と ATmega328P の命令) で扱う",
   "prefix": "U",
   "value": "ARDUINO_NANO",
   "footprint_name": "ARDUINO_NANO_DIP30",
@@ -233,7 +233,7 @@
     ],
     "limits": [
       "ピンごとに、スケッチが決める電源と抵抗を入れただけのモデルです。出力は 25Ω の向こうの 0 V か 5 V (analogWrite はパルス)、入力は 1 GΩ、INPUT_PULLUP は 35 kΩ で 5 V に引きます。",
-      "扱わないもの (circuitCad の読み方のとき): 命令にかかる時間 (delay の間以外は時間が進みません)、割り込み・タイマー・ライブラリ。「本物のマイコンの命令で動かす」ならこれらも動きます。3V3・AREF・VIN・RST のピンと、ピンの電流の上限 (40 mA) の点検は、どちらでも扱いません。"
+      "扱わないもの (circuitCad の読み方のとき): 命令にかかる時間 (delay の間以外は時間が進みません)、割り込み・タイマー・ライブラリ。「本物の命令で動かす」ならこれらも動きます。3V3・AREF・VIN・RST のピンと、ピンの電流の上限 (40 mA) の点検は、どちらでも扱いません。"
     ],
     "origin": {
       "kind": "generic",

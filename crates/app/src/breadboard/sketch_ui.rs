@@ -184,18 +184,19 @@ impl BreadboardView {
             if edit.changed() {
                 sch.sketches.insert(refdes.clone(), text.clone());
             }
-            let mut real = real;
-            if ui
-                .checkbox(&mut real, i18n::tr("本物のマイコンの命令で動かす (arduino-cli)"))
-                .on_hover_text(i18n::tr("スケッチを arduino-cli でコンパイルし、ボードのマイコン (Nano は ATmega328P、Mega は ATmega2560、ATtiny85) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 (arduino:avr、ATtiny85 は ATTinyCore) が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします"))
-                .changed()
-            {
-                if real {
-                    sch.sketch_real.insert(refdes.clone());
-                } else {
-                    sch.sketch_real.remove(&refdes);
+            // how it runs: circuitCad's own reading, or the chip's real instructions
+            let real_tip = i18n::tr("スケッチを arduino-cli でコンパイルし、ボードのマイコン (Nano は ATmega328P、Mega は ATmega2560、ATtiny85) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 (arduino:avr、ATtiny85 は ATTinyCore) が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします");
+            let own_tip = i18n::tr("circuitCad がスケッチを読んで動かします (Arduino の C の小さな部分: 変数・if・for・関数・pinMode・digitalWrite・analogRead・delay・Serial.print など)。arduino-cli が無くても、すぐに動きます。ライブラリ・割り込み・命令にかかる時間は扱いません");
+            for (k, r) in crate::widgets::segment_bar(ui, &[("circuitCad で読む", None), ("本物の命令で動かす", None)], Some(usize::from(real))).into_iter().enumerate() {
+                if r.on_hover_text(if k == 0 { own_tip } else { real_tip }).clicked() && (k == 1) != real {
+                    if k == 1 {
+                        sch.sketch_real.insert(refdes.clone());
+                    } else {
+                        sch.sketch_real.remove(&refdes);
+                    }
                 }
             }
+            let real = sch.sketch_real.contains(&refdes);
             ui.horizontal_wrapped(|ui| self.compile_status(ui, &text, board, real));
             self.serial_ui(ui, &refdes, &text, SERIAL_PANEL_HEIGHT);
         }

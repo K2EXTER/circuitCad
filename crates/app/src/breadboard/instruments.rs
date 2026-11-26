@@ -12,17 +12,20 @@ impl BreadboardView {
 
     /// The meter's ranges and its reading for the probes on the board (`board`: the breadboard, or a stripboard or perfboard).
     pub(super) fn meter_panel(&mut self, ui: &mut egui::Ui, sch: &SchEditor, board: &RunBoard, red: Option<Probe>, black: Option<Probe>, matches: bool) {
-        ui.horizontal(|ui| {
-            for (r, name, tip) in [
+        {
+            const RANGES: [(MeterRange, &str, &str); 3] = [
                 (MeterRange::Volts, "電圧 V", "2 本の棒の間の直流の電圧を読みます。部品の両端に当てます (並列)。黒い棒はふつう GND に"),
                 (MeterRange::Amps, "電流 A", "テスターに電流を通して読みます。回路の線を 1 か所外し、その両端に棒を当てます (直列)。電源の + と − に当てると、テスターがショートになってヒューズが切れます"),
                 (MeterRange::Ohms, "抵抗 Ω", "電源を切って、2 本の棒の間の抵抗を読みます。テスターが小さな電流を流して測るので、電源が入っていると正しく読めません。部品を回路につないだままだと、まわりの部品も一緒に測ります"),
-            ] {
-                if ui.selectable_label(self.meter_range == r, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+            ];
+            let items: Vec<(&str, Option<&str>)> = RANGES.iter().map(|(_, name, _)| (*name, None)).collect();
+            let now = RANGES.iter().position(|(r, ..)| *r == self.meter_range);
+            for (resp, (r, _, tip)) in crate::widgets::segment_bar(ui, &items, now).into_iter().zip(RANGES) {
+                if resp.on_hover_text(i18n::tr(tip)).clicked() {
                     self.meter_range = r;
                 }
             }
-        });
+        }
         if self.meter_range != MeterRange::Volts {
             self.meter_other_range(ui, sch, board, red, black);
             return;

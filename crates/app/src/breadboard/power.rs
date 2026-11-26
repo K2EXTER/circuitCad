@@ -161,11 +161,13 @@ impl BreadboardView {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(i18n::trf!("動いています  {} s", format!("{:.2}", lv.time()))).color(crate::theme::ok()));
             ui.label(i18n::tr("速さ")).on_hover_text(i18n::tr("回路の時間の進み方です。速い回路 (kHz の発振など) は、遅くすると目で追えます"));
-            egui::ComboBox::from_id_salt("bb_speed").selected_text(i18n::tr_dyn(live::SPEEDS.iter().find(|(v, _)| *v == lv.speed).map_or("実時間", |(_, n)| *n))).show_ui(ui, |ui| {
-                for (v, name) in live::SPEEDS {
-                    ui.selectable_value(&mut lv.speed, v, i18n::tr_dyn(name));
+            let items: Vec<(&str, Option<&str>)> = live::SPEEDS.iter().map(|(_, name)| (*name, None)).collect();
+            let now = live::SPEEDS.iter().position(|(v, _)| *v == lv.speed);
+            for (r, (v, _)) in crate::widgets::segment_bar(ui, &items, now).into_iter().zip(live::SPEEDS) {
+                if r.on_hover_text(i18n::tr("回路の時間の進み方です。速い回路 (kHz の発振など) は、遅くすると目で追えます")).clicked() {
+                    lv.speed = v;
                 }
-            });
+            }
         });
         if l.on().iter().any(|(r, _)| is_buzzer(sch, r)) {
             let mut on = !self.sound_off;
@@ -236,7 +238,7 @@ impl BreadboardView {
             let waiting = lv.mcus.iter().any(|m| m.waiting);
             for s in lv.sensors.iter().filter(|s| !read.contains(&s.refdes.as_str())) {
                 let why = if lv.mcus.iter().all(|m| m.real.is_none() && !m.waiting) {
-                    i18n::trf!("{} (SHT31) は I²C で読むセンサーです。読むには、スケッチの欄で「本物のマイコンの命令で動かす」を選んでください", s.refdes)
+                    i18n::trf!("{} (SHT31) は I²C で読むセンサーです。読むには、スケッチの欄で「本物の命令で動かす」を選んでください", s.refdes)
                 } else if waiting {
                     continue;
                 } else {

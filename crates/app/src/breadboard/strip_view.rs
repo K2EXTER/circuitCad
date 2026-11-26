@@ -559,16 +559,18 @@ impl BreadboardView {
         if (self.strip.tool == StripTool::Bare && strip) || (self.strip.tool == StripTool::Cut && !strip) {
             self.strip.tool = StripTool::Move;
         }
-        ui.horizontal(|ui| {
-            for (back, name, tip) in [
+        {
+            const SIDES: [(bool, &str, &str); 2] = [
                 (false, "表 (部品の面)", "部品を差す面から見た絵です。部品と線を動かして並べ方を直せます。穴にカーソルを置くと、そこにつながる穴と線が光ります (F で裏と切り替え)"),
                 (true, "裏 (はんだの面)", "基板を裏返して見た絵です (左右が逆)。はんだ付けする穴・すずめっき線・銅の帯と切る穴を、実物を裏返したときと同じ向きで見ます。穴にカーソルを置くと、そこにつながる穴と線が光ります。裏では、すずめっき線を引く・消す (ユニバーサル基板)、帯を切る (ストリップ基板) ができます。部品と表の線は表で動かします (F で切り替え)"),
-            ] {
-                if ui.selectable_label(self.strip.back == back, i18n::tr(name)).on_hover_text(i18n::tr(tip)).clicked() {
+            ];
+            let items: Vec<(&str, Option<&str>)> = SIDES.iter().map(|(_, name, _)| (*name, None)).collect();
+            for (r, (back, _, tip)) in crate::widgets::segment_bar(ui, &items, Some(usize::from(self.strip.back))).into_iter().zip(SIDES) {
+                if r.on_hover_text(i18n::tr(tip)).clicked() && back != self.strip.back {
                     self.strip_flip(back);
                 }
             }
-        });
+        }
         if self.strip.back {
             ui.label(egui::RichText::new(i18n::tr("裏では銅の面 (すずめっき線・帯を切る穴) を直せます。部品と表の線は表で動かします")).color(NOTE));
             // the tools of the parts' side are not used from below
@@ -579,27 +581,33 @@ impl BreadboardView {
         // one row of tools: the editing ones and the meter and the scope (also from below, as the solder side is probed on a real
         // board); from below, the copper's tools (the bare wire, the cut) and picking a bare wire to take it away
         let back_only = self.strip.back.then_some("表の部品と線は、表で直します (F で表に戻す)");
-        ui.horizontal_wrapped(|ui| {
-            for (t, name, tip) in [
+        {
+            let tools = [
                 (StripTool::Move, "動かす", "部品や線の端を穴ごとにドラッグして動かします。回路図と同じく、何も無い所から左ドラッグで囲むと囲んだ部品を、右ドラッグで触れた部品も選び (Shift で今の選択に足す・Shift + クリックで 1 個ずつ足す・外す)、選んだ部品のどれかをドラッグすると、まとめて動きます (囲んだ所の線の端・切る穴も一緒に)。R で選んだ部品をまとめて回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線 (表の線・裏のすずめっき線をクリック) は Delete で消えます。囲んでから Delete を押すと、囲んだ中の線をまとめて消します"),
                 (StripTool::Link, "線を引く", "穴をクリックして、つなぐ先の穴をクリックすると、表を通す線を足します。Esc でやめます"),
                 (StripTool::Cut, "帯を切る", "穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します"),
                 (StripTool::Bare, "すずめっき線", "裏 (銅の面) に引くすずめっき線を手で足します。穴をクリックして、同じ行か列の穴をクリックします。右クリックした穴を通る手の線は消えます。線の両端と、途中で部品の足や別の線に重なる穴がつながります"),
                 (StripTool::Meter, "テスター", "1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます (裏から見た絵でも)。レンジは 電圧・電流・抵抗 から選びます。銅の帯・すずめっき線・表の線でつながったとおりの回路を測るので、帯の切り忘れやはんだのブリッジも、そのとおりに読めます"),
                 (StripTool::Scope, "オシロ", "探り針を穴に当てると、そのネットの電圧の時間の変化が左に出ます (電源を入れて動かしているときは、動いている波形)"),
-            ] {
-                // the stripboard cuts its strips; the perfboard (no strips) has bare wires drawn by hand
-                if (t == StripTool::Bare && strip) || (t == StripTool::Cut && !strip) {
-                    continue;
-                }
-                let probe = matches!(t, StripTool::Meter | StripTool::Scope);
-                let why_not = if probe || matches!(t, StripTool::Bare | StripTool::Cut | StripTool::Move) { None } else { back_only };
-                if crate::widgets::unless(ui, why_not, egui::Button::selectable(self.strip.tool == t, i18n::tr(name))).on_hover_text(i18n::tr(tip)).clicked() {
+            ];
+            // the stripboard cuts its strips; the perfboard (no strips) has bare wires drawn by hand
+            let tools: Vec<_> = tools.into_iter().filter(|(t, ..)| !((*t == StripTool::Bare && strip) || (*t == StripTool::Cut && !strip))).collect();
+            let items: Vec<(&str, Option<&str>)> = tools
+                .iter()
+                .map(|(t, name, _)| {
+                    let free = matches!(t, StripTool::Meter | StripTool::Scope | StripTool::Bare | StripTool::Cut | StripTool::Move);
+                    (*name, if free { None } else { back_only })
+                })
+                .collect();
+            let now = tools.iter().position(|(t, ..)| *t == self.strip.tool);
+            for (r, (t, _, tip)) in crate::widgets::segment_bar(ui, &items, now).into_iter().zip(tools) {
+                if r.on_hover_text(i18n::tr(tip)).clicked() {
+                    let probe = matches!(t, StripTool::Meter | StripTool::Scope);
                     self.strip.tool = if probe && self.strip.tool == t { StripTool::Move } else { t };
                     self.strip.link_start = None;
                 }
             }
-        });
+        }
         self.strip_history_check(sch);
         ui.horizontal_wrapped(|ui| {
             if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.strip.undo.is_empty(), "手で動かした・線を引いた・帯を切った・並べ直した操作を 1 つ取り消します (Ctrl+Z)").clicked() {

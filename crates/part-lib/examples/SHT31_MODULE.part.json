@@ -1,7 +1,7 @@
 {
   "name": "SHT31_MODULE",
   "category": "センサ",
-  "description": "SHT31 温湿度センサーのモジュール (I²C、アドレス 0x44。ADR を VIN につなぐと 0x45。2.4〜5.5 V。SCL・SDA は基板の上の 10 kΩ で VIN へ引き上げ、ADR は 10 kΩ で GND へ。ピンは 1 列 2.54 mm で VIN・GND・SCL・SDA・ADR)。試作のタブで「本物のマイコンの命令で動かす」スケッチから Wire で読むと、周りの温度と、つまみの湿度を返す (コマンド・測定の時間・CRC はデータシートどおり)。チップそのもの (SHT31-DIS、DFN-8) ではなく、ブレッドボードに差せる基板の形",
+  "description": "SHT31 温湿度センサーのモジュール (I²C、アドレス 0x44。ADR を VIN につなぐと 0x45。2.4〜5.5 V。SCL・SDA は基板の上の 10 kΩ で VIN へ引き上げ、ADR は 10 kΩ で GND へ。ピンは 1 列 2.54 mm で VIN・GND・SCL・SDA・ADR)。試作のタブで「本物の命令で動かす」スケッチから Wire で読むと、周りの温度と、つまみの湿度を返す (コマンド・測定の時間・CRC はデータシートどおり)。チップそのもの (SHT31-DIS、DFN-8) ではなく、ブレッドボードに差せる基板の形",
   "prefix": "U",
   "value": "SHT31_MODULE",
   "footprint_name": "SHT31_MODULE_1x05",
