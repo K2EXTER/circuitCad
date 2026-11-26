@@ -71,6 +71,48 @@ pub struct Live {
     trace: VecDeque<(f64, f64)>,
     /// The microcontroller boards running their sketches (B6 ⑤).
     pub mcus: Vec<Mcu>,
+    /// The sensors a real chip reads over I2C (W5 ⑤): what they measure is the room's temperature and `humidity`.
+    pub sensors: Vec<I2cSensor>,
+    pub room_c: f64,
+    pub humidity: f64,
+}
+
+/// An SHT31 module on the board (`SHT31_MODULE`): the nets of its VIN, GND, SCL, SDA, ADR, and the real chips whose I2C bus it is
+/// on (the board's refdes and the address it answers at).
+pub struct I2cSensor {
+    pub refdes: String,
+    nets: [Option<String>; 5],
+    pub on: Vec<(String, u8)>,
+}
+
+/// The lowest supply an SHT3x runs on, and the most it is given before it is taken for dead (its rating, 5.5 V, is the watch's).
+const SHT_VMIN: f64 = 2.15;
+const SHT_VMAX: f64 = 6.0;
+
+/// A net's voltage now (ground 0 V, a pin on no net 0 V).
+fn net_volts(run: &TranRun, net: &Option<String>) -> f64 {
+    match net.as_deref() {
+        Some(n) if is_ground(n) => 0.0,
+        Some(n) => run.voltage(n).unwrap_or(0.0),
+        None => 0.0,
+    }
+}
+
+impl I2cSensor {
+    /// Whether it answers on its bus: powered, and SDA and SCL held high (pulled up) between the transfers.
+    fn answers(&self, run: &TranRun) -> bool {
+        let [vin, gnd, scl, sda, _] = &self.nets;
+        let v = net_volts(run, vin) - net_volts(run, gnd);
+        let high = |n: &Option<String>| net_volts(run, n) - net_volts(run, gnd) > 0.7 * v;
+        (SHT_VMIN..=SHT_VMAX).contains(&v) && high(sda) && high(scl)
+    }
+
+    /// The address it answers at: 0x45 with ADR high, else 0x44.
+    fn address(&self, run: &TranRun) -> u8 {
+        let [vin, gnd, _, _, adr] = &self.nets;
+        let g = net_volts(run, gnd);
+        if adr.is_some() && net_volts(run, adr) - g > 0.5 * (net_volts(run, vin) - g) { 0x45 } else { 0x44 }
+    }
 }
 
 /// A microcontroller board on the breadboard and its sketch: the machine running it (None when the sketch does not compile: the
@@ -124,11 +166,7 @@ fn pulses(now: f64, duty: f64, hz: f64) -> Waveform {
 
 impl sim_core::sketch::Io for RunIo<'_> {
     fn volts(&self, pin: u8) -> f64 {
-        match self.nets.get(pin as usize).and_then(|n| n.as_deref()) {
-            Some(n) if is_ground(n) => 0.0,
-            Some(n) => self.run.voltage(n).unwrap_or(0.0),
-            None => 0.0,
-        }
+        net_volts(self.run, self.nets.get(pin as usize).unwrap_or(&None))
     }
     fn drive(&mut self, pin: u8, d: sim_core::sketch::Drive) {
         use sim_core::sketch::{Drive, VCC};
@@ -184,6 +222,9 @@ impl Live {
             probe: None,
             trace: VecDeque::new(),
             mcus: vec![],
+            sensors: vec![],
+            room_c: 25.0,
+            humidity: 50.0,
         };
         let wanted: Vec<String> = currents.iter().map(|n| format!("I({n})")).collect();
         let keep = |n: &str| n.starts_with("V(") || wanted.iter().any(|w| w.eq_ignore_ascii_case(n));
@@ -212,13 +253,33 @@ impl Live {
         self.mcus.push(Mcu { refdes, board, machine: None, nets, real: None, waiting: true, real_from: 0.0, drives });
     }
 
+    /// An SHT31 module and the nets of its VIN, GND, SCL, SDA, ADR: a real chip whose SDA and SCL are on its SCL and SDA reads it
+    /// (from when its program starts).
+    pub fn add_sht31(&mut self, refdes: String, nets: [Option<String>; 5]) {
+        self.sensors.push(I2cSensor { refdes, nets, on: vec![] });
+    }
+
     /// The program of a waiting board has been built: the chip starts now (from its reset). An image the chip cannot take leaves it
     /// waiting no more, with the reason.
     pub fn give_program(&mut self, refdes: &str, image: &avr_sim::Image) -> Result<(), String> {
         let now = self.time();
         let Some(m) = self.mcus.iter_mut().find(|m| m.refdes == refdes && m.waiting) else { return Ok(()) };
         m.waiting = false;
-        m.real = Some(avr_sim::Board::new(avr_board(m.board), image)?);
+        let mut chip = avr_sim::Board::new(avr_board(m.board), image)?;
+        // the sensors on its I2C bus answer it
+        let (sda, scl) = m.board.i2c_pins();
+        let bus = (m.nets.get(sda as usize).cloned().flatten(), m.nets.get(scl as usize).cloned().flatten());
+        if let (Some(run), (Some(sda), Some(scl))) = (self.run.as_ref(), bus) {
+            for s in &mut self.sensors {
+                if s.nets[3].as_deref() == Some(sda.as_str()) && s.nets[2].as_deref() == Some(scl.as_str()) {
+                    let addr = s.address(run);
+                    if chip.avr.add_sht3x(addr) {
+                        s.on.push((m.refdes.clone(), addr));
+                    }
+                }
+            }
+        }
+        m.real = Some(chip);
         m.real_from = now;
         self.run_mcus();
         self.read_now();
@@ -229,12 +290,18 @@ impl Live {
     fn run_mcus(&mut self) {
         let Some(run) = self.run.as_mut() else { return };
         let now = run.time();
+        let (sensors, room, rh) = (&self.sensors, self.room_c, self.humidity);
         for m in &mut self.mcus {
             if let Some(machine) = m.machine.as_mut() {
                 machine.run(now, &mut RunIo { run, refdes: &m.refdes, board: m.board, nets: &m.nets });
             }
             if let Some(nano) = m.real.as_mut() {
                 use sim_core::sketch::{Drive, Io};
+                for s in sensors {
+                    for (_, addr) in s.on.iter().filter(|(r, _)| *r == m.refdes) {
+                        nano.avr.set_sht3x(*addr, s.answers(run), room, rh);
+                    }
+                }
                 let mut io = RunIo { run, refdes: &m.refdes, board: m.board, nets: &m.nets };
                 // the chip runs to now with the circuit's voltages as they are; what its pins did on the way drives the next step
                 let volts: Vec<f64> = (0..m.board.pins() as u8).map(|p| io.volts(p)).collect();
@@ -631,11 +698,17 @@ mod tests {
     /// The board running the real chip with a program (W5 (b)): avr-sim's test firmware (tests/firmware/check.c: D13 turns over
     /// every 10 ms, D9 is a 25 % PWM of 1 kHz).
     fn with_real(e: &crate::schematic::SchEditor) -> Live {
+        with_program(e, include_bytes!("../../../avr-sim/tests/firmware/check.elf"))
+    }
+
+    /// The board running the real chip with the program `elf`, the sensors on its I2C bus as the proto tab adds them.
+    fn with_program(e: &crate::schematic::SchEditor, elf: &[u8]) -> Live {
         let l = sch_core::breadboard::auto_layout(&e.sch);
         let nets = sch_core::breadboard::board_nets(&e.sch, &l);
         let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
         let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, vec![], &[]);
-        let image = avr_sim::read_elf(include_bytes!("../../../avr-sim/tests/firmware/check.elf")).unwrap();
+        crate::breadboard::power::add_sensors(&mut live, &e.sch, &nets);
+        let image = avr_sim::read_elf(elf).unwrap();
         for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
             let pins = crate::breadboard::sketch_ui::pin_nets(&e.sch, &refdes, &nets);
             live.add_real_mcu(refdes.clone(), crate::breadboard::sketch_ui::board_of(&e.sch, &refdes), pins);
@@ -723,5 +796,35 @@ void loop() {{ delay(100); }}"));
         assert_eq!(lit.len(), 4, "every LED lit in turn: {lit:?}");
         let serial = &live.mcus[0].machine.as_ref().unwrap().serial;
         assert!(serial.lines().count() >= 1, "{serial}");
+    }
+
+    /// The SHT31 sample (W5 ⑤): avr-sim's test firmware reading the sensor over I2C (tests/firmware/sht3x.ino: "t=… rh=…" every
+    /// 200 ms) hears the room's temperature and the humidity knob; with SDA off the chip's pin it hears nothing.
+    #[test]
+    fn the_real_chip_reads_the_sht31_on_its_bus() {
+        let sht = include_bytes!("../../../avr-sim/tests/firmware/sht3x.elf");
+        let e = sample("arduino_sht31.schjson");
+        assert!(e.sketch_real.contains("U1"), "the sample runs the real chip");
+        let mut live = with_program(&e, sht);
+        assert_eq!(live.sensors.len(), 1);
+        assert_eq!(live.sensors[0].on, [("U1".to_string(), 0x44)]);
+        live.advance(0.5);
+        let serial = |live: &Live| live.mcus[0].real.as_ref().unwrap().serial.clone();
+        assert!(serial(&live).contains("status=10\r\nt=25.0 rh=50.0\r\n"), "{:?}", serial(&live));
+        live.humidity = 72.5;
+        live.advance(0.5);
+        assert!(serial(&live).trim_end().ends_with("t=25.0 rh=72.5"), "{:?}", serial(&live));
+
+        // SDA wired elsewhere: the sensor is not on the chip's bus
+        let mut e = sample("arduino_sht31.schjson");
+        for l in e.sch.labels.iter_mut().filter(|l| l.text == "SDA") {
+            if l.pos.0 < 0 {
+                l.text = "SDA2".into();
+            }
+        }
+        let mut live = with_program(&e, sht);
+        assert!(live.sensors[0].on.is_empty());
+        live.advance(0.3);
+        assert!(serial(&live).contains("no sensor") && !serial(&live).contains("t="), "{:?}", serial(&live));
     }
 }

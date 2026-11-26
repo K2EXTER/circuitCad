@@ -147,6 +147,15 @@ fn bundled(program: &str) -> Option<PathBuf> {
     places.into_iter().map(|p| inner.iter().fold(p, |p, x| p.join(x)).join(name)).find(|f| f.is_file())
 }
 
+/// The settings file of the Arduino IDE 2 (`~/.arduinoIDE/arduino-cli.yaml`), given to arduino-cli when there is one: it says
+/// where the IDE keeps the libraries and boards installed in it. Without it arduino-cli looks in its own places (on Windows the
+/// Documents folder as the system names it, which OneDrive moves), and a library installed in the IDE is not found.
+pub fn ide_config() -> Option<PathBuf> {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })?;
+    let p = PathBuf::from(home).join(".arduinoIDE").join("arduino-cli.yaml");
+    p.is_file().then_some(p)
+}
+
 /// The ELF of a sketch built by arduino-cli for a board (`fqbn`: "arduino:avr:nano"), to run as the chip's real instructions
 /// (W5 (b)). The sketch is written to a folder of its own under the temporary folder (named after its text, so the same text is
 /// built once). Waits for arduino-cli (the first build of a board takes tens of seconds; later ones a few). The error says what
@@ -166,6 +175,9 @@ pub fn compile_sketch(text: &str, fqbn: &str) -> Result<Vec<u8>, String> {
     std::fs::write(dir.join("sketch.ino"), text).map_err(|e| format!("スケッチが書けません: {e}"))?;
     let mut cmd = Command::new(&tool);
     cmd.args(["compile", "--fqbn", fqbn, "--output-dir"]).arg(&out).arg(&dir);
+    if let Some(c) = ide_config() {
+        cmd.arg("--config-file").arg(c);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -296,7 +308,7 @@ pub fn explain(line: &str) -> Option<&'static str> {
     if l.contains("platform not installed") || l.contains("platform '") && l.contains("not found") {
         Some("ボードの種類が arduino-cli に入っていません。「arduino-cli core install arduino:avr」(Mega・UNO など) のように入れてください")
     } else if l.contains("no such file or directory") && l.contains(".h") {
-        Some("インクルードするファイル (ライブラリ) が見つかりません。arduino-cli lib install <名前> で入れるか、名前の綴りを確かめてください")
+        Some("インクルードするファイル (ライブラリ) が見つかりません。Arduino IDE のライブラリマネージャか「arduino-cli lib install <名前>」で入れるか、名前の綴りを確かめてください")
     } else if l.contains("access is denied") || l.contains("can't open device") || l.contains("could not open port") || l.contains("serial port busy") {
         Some("シリアルポートが開けません。ポートの名前を確かめ、ほかのソフト (シリアルモニタなど) がポートを使っていないか見てください")
     } else if l.contains("pico_sdk_path") || l.contains("pico_sdk_import") {
@@ -382,6 +394,11 @@ fn run_steps(run: &Run, steps: &[Step]) -> Result<(), String> {
         run.say(format!("▶ {}: {}", s.what, s.line()));
         let mut cmd = Command::new(find_tool(&s.program).unwrap_or_else(|| PathBuf::from(&s.program)));
         cmd.args(&s.args).current_dir(&s.dir).stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
+        if s.program == "arduino-cli"
+            && let Some(c) = ide_config()
+        {
+            cmd.arg("--config-file").arg(c);
+        }
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;

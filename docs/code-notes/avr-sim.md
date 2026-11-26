@@ -46,6 +46,12 @@
   - `mega.elf` (`mega.c`、ATmega2560): Mega のピン番号で、D13 (PB7) の反転・D2 (PE4) → D22 (PA0)・A8 (ADC8、MUX5) → D53 (PB0)・D11 (OC1A) の PWM・シリアル。
   - `libs.elf` (`libs.ino`、arduino-cli で `arduino-cli compile -b arduino:avr:nano --output-dir …` してできた ELF を写した。試験は `tests/libs.rs`): Arduino の AVR のコアに付いてくるライブラリ。EEPROM (書いて読む)・SPI (MISO の 5 V を 0xFF で読む)・Wire (相手のいないアドレスに 2 = アドレスに応答なし。止まらない)・SoftwareSerial (D7 に 9600 bps で "soft"。ピンの変化を試験が読み解く)・`attachInterrupt` (D2 を 2 回押して 2)・`tone(8, 1000)` (D8 が 1 kHz の PWM として出る)・`millis`。
 - **SPI** (W5 ⑤、2026-11-26): simavr の SPI はバイトだけを動かし、ピン (SCK・MOSI) は動かさない。相手がいないと、送ったバイトが SPDR に残る (MISO と MOSI をつないだのと同じ)。glue は、マスターが 1 バイト送り終えたとき (`SPI_IRQ_OUTPUT`) に、MISO のピン (328 は PB4、2560 は PB3) のレベルを 8 ビット分 (0xFF か 0x00) として返す (`SPI_IRQ_INPUT`)。回路の側に SPI の部品のモデルは無いので、それ以上は読めない。SCK・MOSI のピンが回路の中で動かないのも残り (D13 の LED が SPI の間に点かない)。
+- **I²C の相手の部品** (W5 ⑤、2026-11-26、`c/i2c_parts.c`): simavr の TWI は、バスの出来事を通知で出す (START とアドレスの 8 ビット・書いた 1 バイト・読む 1 バイト・STOP)。相手は、その通知の中で入力の IRQ に答えを返す (アドレスと書いたバイトには ACK、読むときはそのバイト)。答えなければ NACK になる。今の相手は Sensirion の **SHT3x** (温湿度センサー、アドレス 0x44 / 0x45):
+  - コマンド (データシート SHT3x-DIS の 4.3〜4.12): 単発の測定 0x2400・0x240B・0x2416 (測り終わりは typ の 12.5・4.5・2.5 ms のあと。それより前に読むアドレスには ACK しない)、クロックストレッチの 0x2C06・0x2C0D・0x2C10 (すぐ読める。本物は SCL を止めて待たせる)、周期の測定 0x20xx〜0x27xx と ART 0x2B32、取り出し 0xE000、止める 0x3093、ソフトリセット 0x30A2、ヒーター 0x306D / 0x3066 (温度を 3 ℃ 上げる)、ステータス 0xF32D (電源を入れたあとは 0x0010) と消す 0x3041、シリアル番号 0x3780 / 0x3682。
+  - 結果は温度・CRC・湿度・CRC の 6 バイト (CRC-8、多項式 0x31、初めの値 0xFF)。T = −45 + 175·S/65535、RH = 100·S/65535。読んだ結果は消える (読み途中で止めても)。
+  - ステータスのビット 6〜9: 古いデータシートでは予約だが、Sensirion の Arduino のドライバ (`SensirionI2cSht3x::blockingReadMeasurement`) は周期の測定でこれが 0 でなくなるのを待つ。周期の結果が取り出せるときはビット 6 を立てる。このドライバの 2 つの例 (周期・単発) が読めるのを確かめた (ライブラリは BSD なので、ELF はリポジトリに入れていない)。
+  - Rust の窓口: `Avr::add_sht3x(addr)` と `set_sht3x(addr, present, temp_c, rh)` (`present` が false なら何にも答えない: 電源が無い・バスにいない)。1 つのチップに 8 個まで。
+  - 試験: `tests/sht3x.rs` (`firmware/sht3x.ino` → `sht3x.elf`、Wire だけで読む。早すぎる読みは 0 バイト、ステータス 0x10、温度と湿度、居ない・アドレス違い・電源なしは「no sensor」)。
 
 ## はじめの試し (simavr を MSVC で通せるか)
 
@@ -111,4 +117,4 @@ exe の大きさは、試しのバイナリ全体で 283 KB (release)。simavr �
 ## 残り (候補表 W5)
 
 - ほかのチップ: ATtiny など。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_config.h`・`sim_core_decl.h` に並べ、`BoardDef` を書く (Mega はこの形で 2026-11-26 に足した)。
-- ライブラリ: Servo (ダウンロードが要る)。I²C・SPI の相手の部品 (センサー・EEPROM) のモデル: 今は Wire は「応答なし」、SPI は MISO のレベルしか返らない。SCK・MOSI・SDA・SCL のピンを回路の中で動かすこと。
+- ライブラリ: Servo (ダウンロードが要る)。I²C の相手は SHT3x だけ (ほかのセンサー・EEPROM は、`i2c_parts.c` に同じ形で足す)。SPI の相手の部品は無い (MISO のレベルしか返らない)。SCK・MOSI・SDA・SCL のピンを回路の中で動かすこと。

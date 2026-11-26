@@ -82,6 +82,10 @@ impl BreadboardView {
                     knobs.extend(l.on().into_iter().map(|(r, _)| r).filter(|r| kind_of(r) == Some(sch_core::Kind::Pot)));
                     let mut lv = Live::start(c, &leds, sch.live_switches(), &knobs);
                     lv.speed = speed;
+                    // the sensors a real chip reads over I2C (W5 ⑤): the room's temperature and the humidity knob
+                    lv.room_c = self.temp_c.unwrap_or_else(|| sch.board_temp());
+                    lv.humidity = self.humidity.unwrap_or(HUMIDITY);
+                    add_sensors(&mut lv, &sch.sch, &nets);
                     // the microcontroller boards with their sketches (B6 ⑤)
                     for refdes in sketch_ui::boards(&sch.sch) {
                         let pins = sketch_ui::pin_nets(&sch.sch, &refdes, &nets);
@@ -199,6 +203,33 @@ impl BreadboardView {
                 });
             }
         }
+        if !lv.sensors.is_empty() {
+            let mut rh = lv.humidity;
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr("周りの湿度"));
+                if ui
+                    .add(egui::Slider::new(&mut rh, 0.0..=100.0).suffix(" %RH").max_decimals(0))
+                    .on_hover_text(i18n::tr("湿度のセンサー (SHT31) が測る空気の湿度です。動かしたまま変えられます (温度は下の「周りの温度」)"))
+                    .changed()
+                {
+                    lv.humidity = rh;
+                    self.humidity = Some(rh);
+                }
+            });
+            // a sensor only the real chip reads: say so where it is not read
+            let read: Vec<&str> = lv.sensors.iter().filter(|s| !s.on.is_empty()).map(|s| s.refdes.as_str()).collect();
+            let waiting = lv.mcus.iter().any(|m| m.waiting);
+            for s in lv.sensors.iter().filter(|s| !read.contains(&s.refdes.as_str())) {
+                let why = if lv.mcus.iter().all(|m| m.real.is_none() && !m.waiting) {
+                    i18n::trf!("{} (SHT31) は I²C で読むセンサーです。読むには、スケッチの欄で「本物のマイコンの命令で動かす」を選んでください", s.refdes)
+                } else if waiting {
+                    continue;
+                } else {
+                    i18n::trf!("{} (SHT31) の SDA・SCL が、マイコンの SDA・SCL (Nano は A4・A5、Mega は D20・D21) につながっていません", s.refdes)
+                };
+                ui.label(egui::RichText::new(why).color(crate::theme::warn()));
+            }
+        }
         // the room's temperature: thermistors and temperature sensors follow it (the run starts again at the new temperature)
         let mut t = self.temp_c.unwrap_or_else(|| sch.board_temp());
         let mut restart = false;
@@ -310,4 +341,23 @@ pub(super) fn buzzer_volts(sch: &SchEditor, l: &RunBoard, nets: &BoardNets, lv: 
             Some((r, v))
         })
         .collect()
+}
+
+/// The air's humidity the sensors measure until the knob is turned (%RH).
+const HUMIDITY: f64 = 50.0;
+
+/// The SHT31 modules of the schematic, with the nets of their pins on the board, to the run (read by a real chip over I2C).
+pub(crate) fn add_sensors(lv: &mut Live, sch: &sch_core::Schematic, nets: &BoardNets) {
+    for c in sch.components.iter().filter(|c| is_sht31(c)) {
+        let pin = |name: &str| {
+            let number = c.custom.as_ref()?.pins.iter().find(|p| p.name == name)?.number.clone();
+            nets.pins.get(&(c.refdes.clone(), number)).cloned()
+        };
+        lv.add_sht31(c.refdes.clone(), ["VIN", "GND", "SCL", "SDA", "ADR"].map(pin));
+    }
+}
+
+/// An SHT31 module (`SHT31_MODULE`): a real chip reads it over I2C.
+fn is_sht31(c: &sch_core::Component) -> bool {
+    c.custom.as_ref().and_then(|s| s.sim.as_ref()).is_some_and(|m| m.name == "SHT31_MODULE")
 }

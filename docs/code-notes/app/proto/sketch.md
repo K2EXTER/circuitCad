@@ -7,6 +7,15 @@
 - 「部品と差す穴」の一覧は、表をやめて 1 部品 1 行の折り返し (30 ピンの板の 1 行がパネルを画面の大半まで広げた)。コードの欄も幅いっぱいを求めない。
 - サンプル `arduino_blink` (D13 → 330 Ω → LED) と `arduino_pot` (A0 のボリュームで D9 の LED の明るさ、シリアルに読んだ値)。生成 `write_arduino_examples`。テスト `the_arduino_sketch_blinks_the_led`・`the_arduino_reads_the_knob_and_sets_the_led` (`live.rs`)。
 
+## I²C のセンサー (SHT31、W5 ⑤、2026-11-26)
+
+- 部品 `SHT31_MODULE` (`part-lib/examples/`、1 列 5 ピン VIN・GND・SCL・SDA・ADR。回路のモデルはモジュールの上の 10 kΩ の引き上げ・ADR の引き下げ・待機の電流だけ)。測る値と I²C の応答は avr-sim の側 (`c/i2c_parts.c`、`docs/code-notes/avr-sim.md`)。
+- 試作のタブ: `power::add_sensors` が回路図の SHT31 を見つけ、ピンのネットを `Live::add_sht31` に。`Live::give_program` で、本物のチップの SDA・SCL (`sim_core::sketch::Board::i2c_pins`: Nano は A4・A5、Mega は D20・D21) のネットがセンサーの SDA・SCL と同じなら `avr.add_sht3x(アドレス)` (ADR が VIN の半分より高ければ 0x45)。`I2cSensor::on` にどのボードのどのアドレスか。
+- 動いている間、1 ms ごとに `set_sht3x(アドレス, 答えるか, 周りの温度, 湿度)`。答えるのは、VIN が 2.15〜6 V で、SDA・SCL が VIN の 70 % より高い (引き上げられている) とき。温度は「周りの温度」(`temp_c`。変えると計算をやり直す)、湿度は新しいつまみ「周りの湿度」(`BreadboardView.humidity`、50 %RH から。変えてもやり直さない)。
+- 読まれないセンサーには理由を出す: スケッチが今の読み方 (Wire が無い) なら「本物のマイコンの命令で動かす」を、本物でつながっていなければ「SDA・SCL がつながっていません」。
+- サンプル `arduino_sht31` (28 ℃ 以上で D13 の LED)。試験 `the_real_chip_reads_the_sht31_on_its_bus` (avr-sim の `sht3x.elf` で読む・湿度を変える・SDA を外すと応答なし)。サンプルのスケッチそのものは arduino-cli が要るので試験にせず、手で 27 ℃ で消え 30 ℃ で点く (8.6 mA) のを確かめた。
+- arduino-cli には Arduino IDE 2 の設定ファイル (`~/.arduinoIDE/arduino-cli.yaml`) を `--config-file` で渡す (`firmware::ide_config`)。渡さないと、arduino-cli は OneDrive が動かした「ドキュメント」の下を探し、IDE で入れたライブラリが見つからなかった。
+
 ## Arduino Mega (W5 ③、2026-11-26)
 
 - 部品 `ARDUINO_MEGA` (`part-lib/examples/`、86 ピン。モデルは Nano と同じ形で D0〜D53・A0〜A15 の `VpD22`・`RpD22`…、5V のピン 3 本、GND のピン 5 本)。基板のフットプリントは、ヘッダの並び (上の 10・8・8 ピン、右の 2 列 36 ピン、下の電源 8・アナログ 8・8 ピン) を実物に近く並べただけの概算で、`land_unverified` (発注前チェックが警告する)。

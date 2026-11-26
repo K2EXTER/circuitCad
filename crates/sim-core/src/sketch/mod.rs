@@ -74,6 +74,14 @@ impl Board {
         if pin < self.a0() { format!("D{pin}") } else { format!("A{}", pin - self.a0()) }
     }
 
+    /// The pins of the I2C bus (Wire): SDA and SCL (A4 and A5 on the Nano, D20 and D21 on the Mega).
+    pub fn i2c_pins(self) -> (u8, u8) {
+        match self {
+            Board::Nano => (18, 19),
+            Board::Mega => (20, 21),
+        }
+    }
+
     /// The pins `analogWrite` gives pulses on (the others go High from 128).
     pub fn pwm_pins(self) -> &'static [u8] {
         match self {

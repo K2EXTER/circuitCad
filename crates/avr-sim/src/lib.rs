@@ -34,6 +34,8 @@ unsafe extern "C" {
     fn ccavr_send(c: *mut CcAvr, byte: u8);
     fn ccavr_take_events(c: *mut CcAvr, out: *mut CcEvent, max: u32) -> u32;
     fn ccavr_take_serial(c: *mut CcAvr, out: *mut u8, max: u32) -> u32;
+    fn ccavr_sht3x_add(c: *mut CcAvr, addr: u8) -> i32;
+    fn ccavr_sht3x_set(c: *mut CcAvr, addr: u8, present: i32, temp_c: f64, rh: f64);
 }
 
 /// simavr's states of the core (`cpu_Done`, `cpu_Crashed`: it stopped).
@@ -157,6 +159,17 @@ impl Avr {
     /// A byte to the program's serial port (UART0).
     pub fn send(&mut self, byte: u8) {
         unsafe { ccavr_send(self.c, byte) }
+    }
+
+    /// An SHT3x temperature and humidity sensor on the chip's I2C bus at the 7-bit address (0x44 with its ADDR pin low, 0x45
+    /// high): it answers the program's commands as the real one (c/i2c_parts.c). False when the chip has no I2C or no room is left.
+    pub fn add_sht3x(&mut self, addr: u8) -> bool {
+        unsafe { ccavr_sht3x_add(self.c, addr) != 0 }
+    }
+
+    /// What the SHT3x at `addr` measures now, and whether it answers at all (`present`: powered, on the bus, the bus pulled up).
+    pub fn set_sht3x(&mut self, addr: u8, present: bool, temp_c: f64, rh: f64) {
+        unsafe { ccavr_sht3x_set(self.c, addr, present as i32, temp_c, rh.clamp(0.0, 100.0)) }
     }
 
     /// The pin changes since the last call, oldest first.

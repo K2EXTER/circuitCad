@@ -9,6 +9,7 @@
 #include "avr_uart.h"
 #include "avr_eeprom.h"
 #include "avr_spi.h"
+#include "i2c_parts.h"
 
 // one change of a pin: the cycle, the port's letter, the bit, the level, and whether a timer's compare output set it (simavr marks
 // those with AVR_IOPORT_OUTPUT; a write of the port reaches the pin too, which the chip would not let through while the timer has it)
@@ -33,6 +34,8 @@ struct ccavr_t {
 	// SPI: simavr moves the bytes, not the pins; the byte a master reads back is the MISO pin's level held through the transfer
 	avr_irq_t * spi_in;
 	uint8_t miso_bit;
+	// the parts on the I2C bus (i2c_parts.c)
+	ccavr_i2c_t * i2c;
 };
 
 static void grow(void ** p, uint32_t * cap, uint32_t need, size_t size) {
@@ -100,11 +103,13 @@ ccavr_t * ccavr_new(const char * mcu, uint32_t freq, uint32_t vcc_mv) {
 	c->spi_in = avr_io_getirq(avr, AVR_IOCTL_SPI_GETIRQ(0), SPI_IRQ_INPUT);
 	avr_irq_t * spi_out = avr_io_getirq(avr, AVR_IOCTL_SPI_GETIRQ(0), SPI_IRQ_OUTPUT);
 	if (spi_out && c->spi_in) avr_irq_register_notify(spi_out, on_spi, c);
+	c->i2c = i2c_parts_new(avr);
 	return c;
 }
 
 void ccavr_free(ccavr_t * c) {
 	if (!c) return;
+	i2c_parts_free(c->i2c);
 	avr_terminate(c->avr);
 	free(c->avr);
 	free(c->events);
@@ -184,3 +189,7 @@ uint32_t ccavr_take_serial(ccavr_t * c, uint8_t * out, uint32_t max) {
 	c->n_serial -= n;
 	return n;
 }
+
+// an SHT3x on the I2C bus at the 7-bit address (0 when the chip has no TWI or no room is left), and what it measures now
+int ccavr_sht3x_add(ccavr_t * c, uint8_t addr) { return i2c_sht3x_add(c->i2c, addr); }
+void ccavr_sht3x_set(ccavr_t * c, uint8_t addr, int present, double temp_c, double rh) { i2c_sht3x_set(c->i2c, addr, present, temp_c, rh); }

@@ -151,6 +151,8 @@ pub struct BreadboardView {
     /// leads), and the tests click on the board here.
     drawn: Vec<(String, Rect)>,
     temp_c: Option<f64>,
+    /// The air's humidity the SHT31 modules measure (%RH, None = 50 %): kept when the run starts again.
+    humidity: Option<f64>,
     /// Switches to move once the circuit starts running (`--proto-flip SW1,SW2`, for screenshots).
     pub flip_on_start: Vec<String>,
     /// The buzzers' tone through the speakers, and whether the learner turned it off.

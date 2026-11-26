@@ -3955,6 +3955,102 @@ fn write_arduino_mega_example() {
     std::fs::write(root.join("arduino_mega.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
 }
 
+/// The sketch of the SHT31 sample: the temperature and humidity read over I2C every second, the LED on D13 lit from 28 degrees.
+pub const ARDUINO_SHT31_SKETCH: &str = "// SHT31 (I2C、アドレス 0x44) で温度と湿度を測って、シリアルモニタに出します。
+// 28 ℃ 以上で D13 の LED を点けます (ファンを回す代わり)。試作のタブの「周りの温度」「周りの湿度」で変わります
+#include <Wire.h>
+
+const byte SHT = 0x44;
+
+// センサーが付けてくる CRC (データが壊れていないかの印) を計算します
+byte crc8(const byte *d, byte n) {
+  byte crc = 0xFF;
+  for (byte i = 0; i < n; i++) {
+    crc ^= d[i];
+    for (byte b = 0; b < 8; b++) crc = (crc & 0x80) ? (crc << 1) ^ 0x31 : crc << 1;
+  }
+  return crc;
+}
+
+// 1 回測ります。センサーが応答しないか、データが壊れていたら false
+bool readSht(float &t, float &rh) {
+  Wire.beginTransmission(SHT);
+  Wire.write(0x24);  // 測定のコマンド 0x2400 (繰り返し精度 高)
+  Wire.write(0x00);
+  if (Wire.endTransmission() != 0) return false;
+  delay(15);         // 測り終わるまで待つ
+  if (Wire.requestFrom(SHT, (byte)6) != 6) return false;
+  byte d[6];
+  for (byte i = 0; i < 6; i++) d[i] = Wire.read();
+  if (crc8(d, 2) != d[2] || crc8(d + 3, 2) != d[5]) return false;
+  t = -45 + 175.0 * ((word)d[0] << 8 | d[1]) / 65535.0;
+  rh = 100.0 * ((word)d[3] << 8 | d[4]) / 65535.0;
+  return true;
+}
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+  pinMode(13, OUTPUT);
+}
+
+void loop() {
+  float t, rh;
+  if (readSht(t, rh)) {
+    Serial.print(\"t=\");
+    Serial.print(t, 1);
+    Serial.print(\" C  rh=\");
+    Serial.print(rh, 1);
+    Serial.println(\" %\");
+    digitalWrite(13, t >= 28 ? HIGH : LOW);
+  } else {
+    Serial.println(\"no answer from SHT31 (wiring, supply, pull-ups?)\");
+  }
+  delay(1000);
+}
+";
+
+/// The SHT31 sample (W5 ⑤): an SHT31 module on the Nano's I2C bus (SDA A4, SCL A5, powered from its 5 V; the module's own
+/// pull-ups), read by the real chip's instructions; an LED on D13 (330 ohm) lit from 28 degrees.
+/// `cargo test -p app write_arduino_sht31_example -- --ignored`
+#[test]
+#[ignore]
+fn write_arduino_sht31_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let nano = library_part("ARDUINO_NANO");
+    let sht = library_part("SHT31_MODULE");
+    let mut s = sch_core::Schematic::default();
+    let u = s.add_custom(nano.symbol(), &nano.default_value(), &nano.footprint_name(), (20, 0), 0);
+    let number = |name: &str| nano.pins.iter().find(|p| p.name == name).map(|p| p.number.clone()).unwrap();
+    label_pin(&mut s, u, &number("D13"), "OUT");
+    label_pin(&mut s, u, "4", "GND");
+    label_pin(&mut s, u, "29", "GND");
+    label_pin(&mut s, u, &number("5V"), "5V");
+    label_pin(&mut s, u, &number("A4"), "SDA");
+    label_pin(&mut s, u, &number("A5"), "SCL");
+    let r = s.add(Kind::Resistor, (60, -10), 1);
+    s.components[r].value = "330".into();
+    label_pin(&mut s, r, "1", "OUT");
+    label_pin(&mut s, r, "2", "LEDA");
+    let d = s.add(Kind::Led, (60, 10), 1);
+    label_pin(&mut s, d, "A", "LEDA");
+    label_pin(&mut s, d, "K", "GND");
+    let m = s.add_custom(sht.symbol(), &sht.default_value(), &sht.footprint_name(), (-30, 0), 0);
+    label_pin(&mut s, m, "1", "5V");
+    label_pin(&mut s, m, "2", "GND");
+    label_pin(&mut s, m, "3", "SCL");
+    label_pin(&mut s, m, "4", "SDA");
+    let mut v = serde_json::to_value(&s).unwrap();
+    let refdes = s.components[u].refdes.clone();
+    let settings = crate::schematic::SheetSettings {
+        sketches: [(refdes.clone(), ARDUINO_SHT31_SKETCH.to_string())].into_iter().collect(),
+        sketch_real: [refdes].into_iter().collect(),
+        ..Default::default()
+    };
+    crate::schematic::with_settings(&mut v, &settings);
+    std::fs::write(root.join("arduino_sht31.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}
+
 /// The Arduino samples (B6 ⑤): an Arduino Nano blinking an LED on D13 (through 330 ohm), and one reading a potentiometer on A0 to
 /// set an LED on D9. The Nano gives the 5 V from USB. `cargo test -p app write_arduino_examples -- --ignored`
 #[test]

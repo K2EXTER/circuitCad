@@ -14,7 +14,7 @@ fn main() {
     files.sort();
     b.files(&files);
     b.file(cores.join("sim_mega328.c")).file(cores.join("sim_megax8.c")).file(cores.join("sim_mega2560.c"));
-    b.file("c/glue.c").file("c/gdb_stub.c");
+    b.file("c/glue.c").file("c/i2c_parts.c").file("c/gdb_stub.c");
     if msvc {
         b.file("c/posix_shim.c");
         b.include("shim").flag("/FImsvc_first.h").flag("/std:c11");

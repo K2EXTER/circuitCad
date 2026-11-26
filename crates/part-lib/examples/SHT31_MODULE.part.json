@@ -1,0 +1,92 @@
+{
+  "name": "SHT31_MODULE",
+  "category": "センサ",
+  "description": "SHT31 温湿度センサーのモジュール (I²C、アドレス 0x44。ADR を VIN につなぐと 0x45。2.4〜5.5 V。SCL・SDA は基板の上の 10 kΩ で VIN へ引き上げ、ADR は 10 kΩ で GND へ。ピンは 1 列 2.54 mm で VIN・GND・SCL・SDA・ADR)。試作のタブで「本物のマイコンの命令で動かす」スケッチから Wire で読むと、周りの温度と、つまみの湿度を返す (コマンド・測定の時間・CRC はデータシートどおり)。チップそのもの (SHT31-DIS、DFN-8) ではなく、ブレッドボードに差せる基板の形",
+  "prefix": "U",
+  "value": "SHT31_MODULE",
+  "footprint_name": "SHT31_MODULE_1x05",
+  "pins": [
+    {
+      "number": "1",
+      "name": "VIN",
+      "side": "top",
+      "kind": "power_in"
+    },
+    {
+      "number": "2",
+      "name": "GND",
+      "side": "bottom",
+      "kind": "power_in"
+    },
+    {
+      "number": "3",
+      "name": "SCL",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "4",
+      "name": "SDA",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "5",
+      "name": "ADR",
+      "side": "left",
+      "kind": "input"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 5,
+    "pitch": 2.54,
+    "pad_d": 1.7,
+    "drill": 1.0
+  },
+  "body": {
+    "shape": "rect",
+    "w": 14.0,
+    "h": 11.0
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "SHT31_MODULE",
+    "text": ".subckt SHT31_MODULE vin gnd scl sda adr\n* the sensor between measurements (about 2 uA); what it measures and says on the bus is the real chip's side (avr-sim's\n* c/i2c_parts.c), not the circuit's\nRq vin gnd 2.2Meg\n* the module's pull-ups on the bus, and ADDR held low (0x44)\nRpc scl vin 10k\nRpd sda vin 10k\nRad adr gnd 10k\n.ends SHT31_MODULE",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "limits": [
+      "温度と湿度は回路の計算ではなく、試作のタブで本物のマイコンの命令が I²C で読んだときに返します (周りの温度と、湿度のつまみ)。circuitCad の読み方のスケッチ (Wire が無い) からは読めません。",
+      "応答するのは、VIN が 2.15〜6 V で、SDA・SCL がマイコンの SDA・SCL (Nano は A4・A5、Mega は D20・D21) につながり、引き上げられているときです。アラートのピン・リセットのピン・測定の精度のばらつきは扱いません。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "モジュールの抵抗 (引き上げ 10 kΩ・ADR の引き下げ) と待機の電流だけの回路。I²C の応答は Sensirion のデータシート (SHT3x-DIS) のコマンド・測定の時間・CRC に合わせた avr-sim の側の動き"
+    }
+  },
+  "ratings": {
+    "v_max": 5.5,
+    "rows": [
+      {
+        "name": "温度",
+        "value": "±0.2 ℃ (typ)",
+        "condition": "0〜90 ℃"
+      },
+      {
+        "name": "湿度",
+        "value": "±2 %RH (typ)",
+        "condition": "0〜100 %RH"
+      },
+      {
+        "name": "測定の時間",
+        "value": "12.5 ms (typ)",
+        "condition": "繰り返し精度 高"
+      }
+    ]
+  }
+}
